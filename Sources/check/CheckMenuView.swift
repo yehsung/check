@@ -407,19 +407,11 @@ private struct FooterBar: View {
         HStack(spacing: 8) {
             SyncStatusView(message: store.syncMessage)
             Spacer(minLength: 6)
-            HStack(spacing: 5) {
-                Text("캐릭터")
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                Toggle("캐릭터 표시", isOn: Binding(
-                    get: { store.isOverlayEnabled },
-                    set: { store.setOverlayEnabled($0) }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .tint(CheckTheme.working)
-                .help("근무중일 때 화면 우상단 캐릭터 표시")
+            IconButton(
+                icon: store.isOverlayEnabled ? "person.fill" : "person.fill.xmark",
+                help: store.isOverlayEnabled ? "캐릭터 표시 중 — 누르면 숨김" : "캐릭터 숨김 — 누르면 표시"
+            ) {
+                store.toggleOverlayEnabled()
             }
             IconButton(icon: "arrow.clockwise", help: "새로고침") {
                 store.refreshTeamStatus()

@@ -28,9 +28,17 @@ struct MenuBarStatusLabel: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            Image(systemName: MenuBarStatusFormatter.symbolName(for: snapshot))
-                .symbolRenderingMode(.hierarchical)
-                .imageScale(.medium)
+            if let mascot = CheckMascotAssets.image(for: snapshot) {
+                Image(nsImage: mascot)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 18, height: 18)
+            } else {
+                Image(systemName: MenuBarStatusFormatter.symbolName(for: snapshot))
+                    .symbolRenderingMode(.hierarchical)
+                    .imageScale(.medium)
+            }
             Text(MenuBarStatusFormatter.title(for: snapshot))
                 .font(.system(.body, design: .rounded).weight(.medium))
                 .monospacedDigit()

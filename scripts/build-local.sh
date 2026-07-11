@@ -14,6 +14,16 @@ rm -rf "$APP_DIR"
 mkdir -p "$BIN_DIR" "$RES_DIR"
 cp "$ROOT/.build/release/check" "$BIN_DIR/check"
 
+# SwiftPM 리소스 번들(캐릭터 이미지)을 앱 번들 Resources로 복사한다.
+# Bundle.module 접근자가 Bundle.main.resourceURL 후보를 탐색하므로
+# codesign 이전에 Contents/Resources/ 아래에 있어야 한다.
+RESOURCE_BUNDLE="$ROOT/.build/release/check_check.bundle"
+if [[ -d "$RESOURCE_BUNDLE" ]]; then
+  cp -R "$RESOURCE_BUNDLE" "$RES_DIR/"
+else
+  echo "warning: resource bundle not found at $RESOURCE_BUNDLE" >&2
+fi
+
 if [[ -n "${CHECK_SUPABASE_ANON_KEY:-}" ]]; then
   CONFIG_PLIST="$RES_DIR/CheckConfig.plist"
   plutil -create xml1 "$CONFIG_PLIST"

@@ -5,18 +5,20 @@ check 를 팀원에게 배포하는 경로는 두 가지입니다.
 1. **zip 직접 전달** — `scripts/package-local.sh` 로 만든 `dist/check.zip` 을 사람에게 직접 보냄(기존 방식, [`docs/team-install.md`](team-install.md) 참고). 미공증 ad-hoc 서명이라 팀원이 `설치하기.command` 또는 격리 해제 절차를 거쳐야 합니다.
 2. **brew 배포** — 공증된 앱을 GitHub Releases 에 올리고, 별도 tap 저장소의 Homebrew Cask 로 설치/업데이트하는 방식. **이 문서가 다루는 내용입니다.** 최초 `brew tap`/`install` 한 번 이후로 팀원은 `brew upgrade` 만으로 최신 버전을 받습니다.
 
-> **GH_OWNER 는 자리표시자입니다.** GitHub 사용자/조직 이름이 아직 정해지지 않았기 때문에 이 문서와 스크립트·Cask 전체가 `GH_OWNER` 라는 자리표시자를 씁니다. 실제 계정이 정해지면 아래의 `GH_OWNER` 를 그 이름으로 바꾸면 됩니다.
+> 이 저장소의 owner 는 `yehsung` 으로 확정되어 있습니다. `release-brew.sh` 는 릴리즈·태그·tap 대상을 `GH_OWNER` 환경변수(또는 `.env.local` 의 `CHECK_GH_OWNER`)로 정하므로, 아래 실행 전에 `GH_OWNER=yehsung` 을 설정하면 됩니다.
+>
+> Cask 템플릿 `packaging/homebrew/check.rb` 의 `url`/`homepage` 는 `__GH_OWNER__` 자리표시자를 쓰고, `release-brew.sh` 가 `__VERSION__`·`__SHA256__` 과 함께 치환합니다. 현재는 공증(notarization) 전이라 brew 배포 자체가 아직 활성화되지 않았습니다(현 배포는 zip + `설치하기.command`).
 
 ## 구성 요소
 
 | 이름 | 역할 |
 | --- | --- |
-| `GH_OWNER/check` | 앱 소스 저장소 + GitHub Releases (공증된 `check.zip` 이 릴리즈 자산으로 올라감) |
-| `GH_OWNER/homebrew-check` | Homebrew **tap** 저장소. `Casks/check.rb` 하나가 들어 있고, 릴리즈마다 version/sha256 이 갱신됨 |
+| `yehsung/check` | 앱 소스 저장소 + GitHub Releases (공증된 `check.zip` 이 릴리즈 자산으로 올라감) |
+| `yehsung/homebrew-check` | Homebrew **tap** 저장소. `Casks/check.rb` 하나가 들어 있고, 릴리즈마다 version/sha256 이 갱신됨 |
 | `packaging/homebrew/check.rb` | Cask **템플릿**(`__VERSION__`, `__SHA256__` 자리표시자). 릴리즈 스크립트가 이 템플릿을 치환해 tap 저장소로 복사 |
 | `scripts/release-brew.sh` | 위 전 과정을 한 번에 처리하는 릴리즈 자동화 스크립트 |
 
-`brew tap GH_OWNER/check` 은 GitHub 저장소 `GH_OWNER/homebrew-check` 로 해석됩니다(tap 이름 규칙: `homebrew-` 접두사 생략). Cask 파일명이 `check.rb` 이므로 설치 명령은 `brew install --cask check` 입니다.
+`brew tap yehsung/check` 은 GitHub 저장소 `yehsung/homebrew-check` 로 해석됩니다(tap 이름 규칙: `homebrew-` 접두사 생략). Cask 파일명이 `check.rb` 이므로 설치 명령은 `brew install --cask check`(또는 tap 까지 한 번에 `brew install yehsung/check/check`)입니다.
 
 ## 최초 1회 세팅
 
@@ -30,19 +32,19 @@ check 를 팀원에게 배포하는 경로는 두 가지입니다.
 2. **GitHub 저장소 2개 준비**
    ```sh
    # 앱 소스 저장소 (이미 push 되어 있다면 생략)
-   gh repo create GH_OWNER/check --public --source=. --remote=origin --push
+   gh repo create yehsung/check --public --source=. --remote=origin --push
 
    # tap 저장소 (../homebrew-check 로 클론)
-   gh repo create GH_OWNER/homebrew-check --public --clone
+   gh repo create yehsung/homebrew-check --public --clone
    mv homebrew-check ../homebrew-check   # 저장소 루트 옆(../)에 두는 것이 기본 경로
    ```
    tap 저장소를 `../homebrew-check` 가 아닌 다른 경로에 두려면 `GH_TAP_DIR` 환경변수로 지정하세요.
-3. **GH_OWNER 설정** — 매번 export 하기 번거로우면 `.env.local` 에 넣어 둡니다(이 파일은 git 에서 제외됨).
+3. **GH_OWNER 설정 (`yehsung`)** — `release-brew.sh` 가 읽는 값입니다. 매번 export 하기 번거로우면 `.env.local` 에 넣어 둡니다(이 파일은 git 에서 제외됨).
    ```sh
    # 둘 중 하나
-   export GH_OWNER=<GitHub 사용자/조직>
+   export GH_OWNER=yehsung
    # 또는 .env.local 에 아래 줄 추가
-   # CHECK_GH_OWNER=<GitHub 사용자/조직>
+   # CHECK_GH_OWNER=yehsung
    ```
 
 ## 릴리즈 1회 순서 (파이프라인)
@@ -77,7 +79,7 @@ brew update && brew upgrade --cask check
 `--dry-run` 을 붙이면 태그/릴리즈/푸시를 실제로 실행하지 않고 각 단계에서 **무엇을 할지**만 출력합니다(생성될 Cask 내용 미리보기 포함). 사전점검이 어긋나도 종료하지 않고 경고만 남기므로, 흐름 전체를 미리 확인할 때 유용합니다.
 
 ```sh
-GH_OWNER=testowner ./scripts/release-brew.sh 0.2.0 --dry-run
+GH_OWNER=yehsung ./scripts/release-brew.sh 0.2.0 --dry-run
 ```
 
 ## 팀원 설치 / 업그레이드
@@ -86,8 +88,9 @@ GH_OWNER=testowner ./scripts/release-brew.sh 0.2.0 --dry-run
 
 ```sh
 # 최초 1회
-brew tap GH_OWNER/check
+brew tap yehsung/check
 brew install --cask check
+# (tap + 설치를 한 줄로: brew install yehsung/check/check)
 
 # 이후 업데이트
 brew update && brew upgrade --cask check

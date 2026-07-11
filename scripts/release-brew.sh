@@ -181,7 +181,7 @@ log "tap 저장소: $TAP_DIR"
 
 # 템플릿의 자리표시자를 치환해 지정 파일로 출력한다.
 generate_cask() {
-  sed -e "s|__VERSION__|$VERSION|g" -e "s|__SHA256__|$SHA256|g" "$CASK_TEMPLATE" > "$1"
+  sed -e "s|__VERSION__|$VERSION|g" -e "s|__SHA256__|$SHA256|g" -e "s|__GH_OWNER__|$GH_OWNER|g" "$CASK_TEMPLATE" > "$1"
 }
 
 # dry-run 미리보기.

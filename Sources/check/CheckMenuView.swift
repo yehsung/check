@@ -26,7 +26,7 @@ struct CheckMenuView: View {
     private var content: some View {
         if store.isSignedIn {
             // 헤더 카드·팀 카드 헤더/게이지·푸터는 고정, 팀 멤버 리스트만 남는 공간(TeamPanel maxHeight)을 채운다.
-            // 리그 페이지가 열리면 같은 자리(헤더/푸터 사이)를 리그 순위 카드로 대체한다 — 창 높이는 고정 유지.
+            // 팀별 현황 페이지가 열리면 같은 자리(헤더/푸터 사이)를 팀 목록 카드로 대체한다 — 창 높이는 고정 유지.
             VStack(spacing: 10) {
                 HeaderCard(store: store, previewLongSessionBanner: previewLongSessionBanner)
                 if store.isLeaderboardVisible {
@@ -152,7 +152,7 @@ private struct TeamPanel: View {
     var myUserID: String? = nil
     // 내 행 아바타 교체 시 다운스케일된 JPEG Data를 store.updateAvatar로 넘기는 콜백.
     var onUpdateAvatar: ((Data) -> Void)? = nil
-    // 트로피 버튼 액션. 팀 리그 페이지를 연다.
+    // 진입 버튼 액션. 팀별 현황 페이지를 연다.
     var onShowLeaderboard: (() -> Void)? = nil
 
     var body: some View {
@@ -168,7 +168,7 @@ private struct TeamPanel: View {
                 Spacer(minLength: 6)
                 CountChip(count: activeWorkingCount)
                 if let onShowLeaderboard {
-                    IconButton(icon: "trophy.fill", help: "팀 리그", tint: CheckTheme.pending, action: onShowLeaderboard)
+                    IconButton(icon: "chart.bar.xaxis", help: "팀별 현황", action: onShowLeaderboard)
                 }
             }
             TeamGoalGauge(goal: weeklyGoal)
@@ -315,18 +315,18 @@ private struct TeamPanel: View {
 
 // MARK: - Team league page
 
-/// 팀 카드 자리를 대체하는 리그 페이지. 헤더/푸터는 CheckMenuView 가 유지하고, 이 카드만 교체된다.
-/// 제목 + 뒤로 버튼 + 총시간 내림차순 순위 리스트(내 팀 하이라이트). 팀이 많으면 memberList 패턴으로 스크롤.
+/// 팀 카드 자리를 대체하는 팀별 현황 페이지. 헤더/푸터는 CheckMenuView 가 유지하고, 이 카드만 교체된다.
+/// 제목 + 뒤로 버튼 + 총시간 내림차순 팀 목록(우리 팀 칩). 팀이 많으면 memberList 패턴으로 스크롤.
 private struct LeaderboardPanel: View {
-    // 총시간 내림차순으로 정렬된 순위(store 에서 이미 정렬됨). 서버 정렬을 신뢰하지 않고 뷰에서도 다시 정렬한다.
+    // 총시간 내림차순으로 정렬된 팀 목록(store 에서 이미 정렬됨). 서버 정렬을 신뢰하지 않고 뷰에서도 다시 정렬한다.
     let entries: [TeamLeaderboardEntry]
-    // 내 팀 id(하이라이트 판정용). 무소속이면 nil 이라 어떤 행도 하이라이트되지 않는다.
+    // 우리 팀 id(칩 표시 판정용). 무소속이면 nil 이라 어떤 행에도 칩이 붙지 않는다.
     var myTeamID: String? = nil
-    // 아직 로드 전/실패 시 빈 순위 자리에 표시할 안내 문구.
+    // 아직 로드 전/실패 시 빈 목록 자리에 표시할 안내 문구.
     let fallbackStatus: String
     var onBack: () -> Void = {}
 
-    // 순위 행 고정 높이·간격. 팀원 행보다 높다(순위 배지 + 이름/시간 + 게이지 + 캡션 3단).
+    // 팀 행 고정 높이·간격. 팀원 행보다 높다(아바타 + 이름/시간 + 게이지 + 캡션 3단).
     private static let rowHeight: CGFloat = 58
     private static let rowSpacing: CGFloat = 10
 
@@ -334,10 +334,7 @@ private struct LeaderboardPanel: View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
                 IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
-                Image(systemName: "trophy.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(CheckTheme.pending)
-                Text("이번 주 팀 리그")
+                Text("팀별 이번 주")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
@@ -384,8 +381,8 @@ private struct LeaderboardPanel: View {
                     .foregroundStyle(CheckTheme.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
             } else {
-                ForEach(Array(sortedEntries.enumerated()), id: \.element.id) { index, entry in
-                    LeaderboardRow(rank: index + 1, entry: entry, isMyTeam: entry.id == myTeamID)
+                ForEach(sortedEntries, id: \.id) { entry in
+                    LeaderboardRow(entry: entry, isMyTeam: entry.id == myTeamID)
                         .frame(height: Self.rowHeight)
                 }
             }

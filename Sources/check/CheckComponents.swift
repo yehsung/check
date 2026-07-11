@@ -215,45 +215,11 @@ struct TeamMemberRow: View {
     }
 }
 
-// MARK: - Team league (leaderboard)
+// MARK: - Team weekly totals (per-team list)
 
-/// 순위 배지. 1·2·3위는 금/은/동 색 원에 어두운 숫자, 4위 이하는 회색(panelElevated) 원에 회색 숫자.
-struct RankBadge: View {
-    let rank: Int
-
-    private var isTopThree: Bool {
-        rank <= 3
-    }
-
-    private var fill: Color {
-        switch rank {
-        case 1: return Color(red: 1.0, green: 0.80, blue: 0.30)   // 금
-        case 2: return Color(red: 0.78, green: 0.80, blue: 0.86)  // 은
-        case 3: return Color(red: 0.85, green: 0.58, blue: 0.36)  // 동
-        default: return CheckTheme.panelElevated
-        }
-    }
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(fill)
-                .frame(width: 30, height: 30)
-                .overlay(
-                    Circle().stroke(Color.white.opacity(isTopThree ? 0.28 : 0.12), lineWidth: 1)
-                )
-            Text("\(rank)")
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
-                .foregroundStyle(isTopThree ? Color(red: 0.14, green: 0.11, blue: 0.05) : CheckTheme.secondaryText)
-                .monospacedDigit()
-        }
-    }
-}
-
-/// 리그 한 행: 순위 배지 + 팀명(+내 팀 배지) + 총시간 + 목표 대비 % 미니 게이지 + "N명 근무중" 캡션.
-/// 내 팀은 accent 테두리/배경으로 하이라이트한다. 높이는 LeaderboardPanel 이 고정으로 준다.
+/// 팀 한 행: 이니셜 아바타 + 팀명(+우리 팀 칩) + 총시간 + 목표 대비 % 미니 게이지 + "N명 근무중" 캡션.
+/// 우리 팀에는 은은한 "우리 팀" 칩만 붙고 행 배경 강조는 없다. 높이는 LeaderboardPanel 이 고정으로 준다.
 struct LeaderboardRow: View {
-    let rank: Int
     let entry: TeamLeaderboardEntry
     var isMyTeam: Bool = false
 
@@ -267,7 +233,8 @@ struct LeaderboardRow: View {
 
     var body: some View {
         HStack(spacing: 11) {
-            RankBadge(rank: rank)
+            // 팀명 해시색 이니셜 아바타(팀원 행 아바타와 같은 톤). 순위 배지 대신 담백한 표식.
+            CheckAvatarView(name: entry.name, size: 30)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(entry.name)
@@ -312,7 +279,6 @@ struct LeaderboardRow: View {
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(highlight)
     }
 
     private var miniGauge: some View {
@@ -326,18 +292,6 @@ struct LeaderboardRow: View {
             }
         }
         .frame(height: 6)
-    }
-
-    @ViewBuilder
-    private var highlight: some View {
-        if isMyTeam {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(CheckTheme.accent.opacity(0.12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(CheckTheme.accent.opacity(0.55), lineWidth: 1)
-                )
-        }
     }
 }
 

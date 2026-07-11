@@ -23,6 +23,9 @@ final class WorkTimerStore {
     var sessionGeneration = 0
     var currentSessionID: String?
 
+    /// 3D 캐릭터 오버레이 표시 여부 (사용자 토글, UserDefaults 유지).
+    var isOverlayEnabled: Bool = true
+
     var snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
     var displayNow = Date()
     var displayName: String
@@ -84,6 +87,7 @@ final class WorkTimerStore {
         hasAnonKey = SupabaseConfig.anonKey(environment: environment) != nil
         email = defaults.string(forKey: Self.emailKey) ?? ""
         displayName = defaults.string(forKey: Self.displayNameKey) ?? ""
+        isOverlayEnabled = defaults.object(forKey: Self.overlayEnabledKey) as? Bool ?? true
         let restoredSession = Self.restoredSession(from: defaults)
         session = restoredSession
         syncMessage = hasAnonKey ? (restoredSession == nil ? "로그인 필요" : "동기화됨") : "Supabase 키 필요"
@@ -349,6 +353,13 @@ final class WorkTimerStore {
 extension WorkTimerStore {
     static let emailKey = "check.userEmail"
     static let displayNameKey = "check.displayName"
+    static let overlayEnabledKey = "check.overlayEnabled"
+
+    /// 캐릭터 오버레이 표시를 토글하고 설정을 저장한다.
+    func toggleOverlayEnabled() {
+        isOverlayEnabled.toggle()
+        defaults.set(isOverlayEnabled, forKey: Self.overlayEnabledKey)
+    }
     static let accessTokenKey = "check.session.accessToken"
     static let refreshTokenKey = "check.session.refreshToken"
     static let userIDKey = "check.session.userID"

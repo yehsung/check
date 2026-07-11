@@ -20,9 +20,11 @@ final class CheckOverlayController {
 
     private let notificationCenter: NotificationCenter
     private var screenObserver: NSObjectProtocol?
+    private let store: WorkTimerStore
 
     init(store: WorkTimerStore, notificationCenter: NotificationCenter = .default) {
         self.notificationCenter = notificationCenter
+        self.store = store
         panel = Self.makePanel(size: Self.panelSize)
 
         let root = CheckOverlayRootView(store: store) { [weak self] working in
@@ -38,9 +40,11 @@ final class CheckOverlayController {
     }
 
     /// 근무 상태 변화에 따라 패널을 표시/숨김한다. 표시 직전 항상 우상단으로 재배치한다.
+    /// 사용자가 캐릭터 표시를 꺼두면(isOverlayEnabled=false) 근무중이어도 표시하지 않는다.
     func updateWorking(_ isWorking: Bool) {
-        shouldBeVisible = isWorking
-        if isWorking {
+        let visible = isWorking && store.isOverlayEnabled
+        shouldBeVisible = visible
+        if visible {
             reposition()
             panel.orderFrontRegardless()
         } else {

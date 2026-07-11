@@ -293,41 +293,68 @@ func menuBarStatusLabelFitsWithinBarHeight() throws {
     }
 }
 
-// MARK: - A2: 창 완전 고정 높이 — 모든 상태의 픽셀 높이가 정확히 동일해야 한다(창 튐 근절)
+// MARK: - A2: 콘텐츠 맞춤(동적) 창 높이 — 상태별 콘텐츠에 맞게 자라되 상한(≤700pt) 안에 머문다
 
 @MainActor
 @Test
-func windowHeightIsConstantAcrossAllStates() throws {
-    // 로그인/가입/오류 배너/메인(팀원 0·3명, stale 포함)/12h 배너 — 어느 상태든 창(뷰) 높이가
-    // windowHeight 상수로 고정돼 정확히 같은 픽셀 높이여야 한다. 이 단일 invariant가 이전
-    // 높이 안정성 테스트 3종(오류 배너·모드 전환·ASCII 캡션)과 12h 배너 안정성 테스트를 대체한다.
+func windowHeightAdaptsToContentWithinCap() throws {
+    // 창 높이는 이제 상태별 콘텐츠에 맞춰 변한다(고정 상수 폐기). 다음을 검증한다:
+    //  (a) 로그인(짧은 폼) < 메인(3명)
+    //  (b) 메인(2명) < 메인(5명) — 팀원 수에 비례해 성장
+    //  (c) 메인(10명) == 메인(7명) — maxVisibleRows(7) 스크롤 상한에서 높이 고정
+    //  (d) 모든 상태 ≤ 700pt 상한
+    // 픽셀 높이는 ImageRenderer 렌더 결과에서 읽는다(scale 2 → 포인트 높이 = 픽셀/2).
     let now = Date()
 
-    // 로그인 모드(별명 필드 숨김) — 별명 값이 있어도 로그인 모드 표시는 동일해야 한다.
-    let loginStore = makeLoginStore(syncMessage: "로그인 필요")
-    // 로그인 + 오류 배너.
-    let loginErrorStore = makeLoginStore(syncMessage: "로그인 정보 오류")
-    // 가입 모드(별명·팀 선택 노출). 팀 목록/선택까지 채워 실제 가입 카드 높이를 재현한다.
+    // 헤더 높이가 팀원 수와 무관하게 일정한 표본으로 리스트 성장/상한만 순수 비교한다(steadyMembers).
+    func mainHeight(_ count: Int) throws -> Int {
+        try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: steadyMembers(count: count), now: now))))
+    }
+
+    let login = try #require(renderedPixelHeight(CheckMenuView(store: makeLoginStore(syncMessage: "로그인 필요"))))
+    let main2 = try mainHeight(2)
+    let main3 = try mainHeight(3)
+    let main5 = try mainHeight(5)
+    let main7 = try mainHeight(7)
+    let main10 = try mainHeight(10)
+
+    // (a) 로그인 < 메인(3명): 로그인 폼이 팀 화면보다 짧다.
+    #expect(login < main3)
+    // (b) 팀원 수 비례 성장: 2명 < 5명.
+    #expect(main2 < main5)
+    // (c) 스크롤 상한: 7명 초과(10명)도 높이는 7행(maxVisibleRows)에서 고정된다.
+    #expect(main10 == main7)
+
+    // (d) 모든 상태 ≤ 700pt (scale 2 → 픽셀/2). 로그인/오류/가입/메인 각종/12h 배너/리더보드(3팀·상한) 포함.
     let signupStore = makeLoginStore(syncMessage: "로그인 필요")
     signupStore.displayName = "영식"
     signupStore.teamDirectory = sampleTeamDirectory
     signupStore.selectedSignupTeamID = sampleTeamDirectory.first?.id
 
-    let heights: [Int] = try [
-        renderedPixelHeight(CheckMenuView(store: loginStore)),
-        renderedPixelHeight(CheckMenuView(store: loginErrorStore, previewASCIIWarning: true)),
-        renderedPixelHeight(CheckMenuView(store: signupStore, initialAuthMode: .signUp)),
-        renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: [], now: now))),
-        renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now))),
-        // 팀원이 남는 공간을 초과(스크롤)해도 창(뷰) 높이는 절대 변하지 않아야 한다.
-        renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 8), now: now))),
-        renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewLongSessionBanner: true)),
-        // 팀별 현황 페이지(팀 카드를 대체)도 같은 창 높이를 유지해야 한다.
-        renderedPixelHeight(CheckMenuView(store: makeLeaderboardStore()))
-    ].map { try #require($0) }
+    // 리더보드 스크롤 상한(6팀 초과)까지 채운 상태 — 팀 행이 팀원 행보다 높으므로 상한 검증에 포함.
+    let cappedLeaderboardStore = makeTeamStore(members: [], now: now)
+    cappedLeaderboardStore.currentTeamID = URLProtocolStub.stubTeamID
+    cappedLeaderboardStore.leaderboard = manyLeaderboardEntries(count: 12)
+    cappedLeaderboardStore.isLeaderboardVisible = true
 
-    // 모든 상태의 픽셀 높이가 정확히 하나로 수렴해야 한다.
-    #expect(Set(heights).count == 1)
+    let allHeights: [Int] = try [
+        login,
+        try #require(renderedPixelHeight(CheckMenuView(store: makeLoginStore(syncMessage: "로그인 정보 오류"), previewASCIIWarning: true))),
+        try #require(renderedPixelHeight(CheckMenuView(store: signupStore, initialAuthMode: .signUp))),
+        try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: [], now: now)))),
+        try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now)))),
+        main10,
+        // 실데이터 톤의 10명(게이지 완료 라벨 포함) — 가장 큰 메인 상태.
+        try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 10), now: now)))),
+        try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewLongSessionBanner: true))),
+        try #require(renderedPixelHeight(CheckMenuView(store: makeLeaderboardStore()))),
+        try #require(renderedPixelHeight(CheckMenuView(store: cappedLeaderboardStore)))
+    ]
+
+    for pixelHeight in allHeights {
+        // scale 2 렌더 → 포인트 높이 = 픽셀/2. 700pt 상한.
+        #expect(Double(pixelHeight) / 2.0 <= 700.0)
+    }
 }
 
 // MARK: - A3: Enter-키 포커스 체이닝 순서
@@ -513,12 +540,17 @@ func dumpTrackFSnapshots() throws {
     signupAfter.selectedSignupTeamID = sampleTeamDirectory.first?.id
     try write(CheckMenuView(store: signupAfter, initialAuthMode: .signUp), "signup-after-selection.png")
 
-    // 메인: 0명 / 3명(presence) / 5·6명(스크롤 경계) / 8명(스크롤 필요, 창 고정 유지).
+    // 메인: 0명 / 2명 / 3명(presence) / 5명 / 10명(스크롤 상한).
+    // 창 높이는 이제 팀원 수에 비례(2<5<7)해 자라고 7행에서 상한. 10명은 previewClipsOverflowList로
+    // 보이는 첫 7행을 클립해 그린다(앱은 ScrollView지만 ImageRenderer는 NSScrollView 내용을 못 그리므로).
     try write(CheckMenuView(store: makeTeamStore(members: [], now: now)), "main-empty.png")
+    try write(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 2), now: now)), "main-two.png")
     try write(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now)), "main-three.png")
     try write(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 5), now: now)), "main-five.png")
-    try write(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 6), now: now)), "main-six.png")
-    try write(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 8), now: now)), "main-eight-scroll.png")
+    try write(
+        CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 10), now: now), previewClipsOverflowList: true),
+        "main-ten-scroll.png"
+    )
 
     // 팀별 이번 주 페이지: 3팀(총시간 내림차순), 우리 팀 2번째에 "우리 팀" 칩.
     try write(CheckMenuView(store: makeLeaderboardStore()), "leaderboard-three.png")
@@ -674,6 +706,30 @@ private func renderPNG(_ view: some View, width: CGFloat = 340) throws -> Data {
 
 private enum RenderError: Error {
     case failed
+}
+
+/// 총시간 내림차순 N팀 리더보드 표본(스크롤 상한 검증용). 우리 팀(stubTeamID)은 포함하지 않는다.
+private func manyLeaderboardEntries(count: Int) -> [TeamLeaderboardEntry] {
+    (0..<count).map { i in
+        TeamLeaderboardEntry(id: "bbbbbbbb-0000-0000-0000-\(String(format: "%012d", i))", name: "팀\(i)", weeklyGoalHours: 60, totalSeconds: (count - i) * 3_600, workingCount: i % 3)
+    }
+}
+
+/// 헤더(주간 게이지·근무중 카운트) 높이가 팀원 수와 무관하게 일정하도록 만든 N인 표본.
+/// 전원 근무종료 + 작은 고정 주간(1h)이라 목표(60h) 미달·근무중 0명으로 헤더가 불변 →
+/// 창 높이 차이가 오직 멤버 리스트(행 수 비례/스크롤 상한)에서만 나오게 해 높이 비교를 정확하게 한다.
+@MainActor
+private func steadyMembers(count: Int) -> [TeamMemberStatus] {
+    (0..<count).map { i in
+        TeamMemberStatus(
+            id: "aaaaaaaa-0000-0000-0000-\(String(format: "%012d", i))",
+            name: "멤버\(i)",
+            status: .offWork,
+            updatedAt: nil,
+            currentSessionStartedAt: nil,
+            weeklyDurationSeconds: 3_600
+        )
+    }
 }
 
 @MainActor

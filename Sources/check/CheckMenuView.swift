@@ -9,12 +9,15 @@ struct CheckMenuView: View {
     var previewASCIIWarning: Bool = false
     // 렌더 스냅샷에서 12시간 확인 배너가 떠 있는 상태를 재현하기 위한 미리보기 플래그. 앱에서는 항상 false.
     var previewLongSessionBanner: Bool = false
+    // 스냅샷 전용: 초과(스크롤) 리스트를 ScrollView 대신 "보이는 첫 maxVisibleRows행 클립"으로 그린다.
+    // ImageRenderer는 NSScrollView(=ScrollView) 내용을 못 그리므로, 육안 확인 스냅샷에서만 켠다. 앱은 항상 false(ScrollView).
+    var previewClipsOverflowList: Bool = false
 
     var body: some View {
         content
             .padding(12)
-            // 창 완전 고정 높이. 모든 상태를 windowHeight 상수 안에 수납해 MenuBarExtra 창 튐을 근절한다.
-            .frame(width: 340, height: CheckTheme.windowHeight)
+            // 폭만 고정(340). 높이는 상태별 콘텐츠에 맞춰 동적으로 잡는다(MenuBarExtra 창 크기 = 콘텐츠 크기).
+            .frame(width: 340)
             .background(CheckTheme.background)
             .foregroundStyle(CheckTheme.primaryText)
             .task {
@@ -25,8 +28,8 @@ struct CheckMenuView: View {
     @ViewBuilder
     private var content: some View {
         if store.isSignedIn {
-            // 헤더 카드·팀 카드 헤더/게이지·푸터는 고정, 팀 멤버 리스트만 남는 공간(TeamPanel maxHeight)을 채운다.
-            // 팀별 현황 페이지가 열리면 같은 자리(헤더/푸터 사이)를 팀 목록 카드로 대체한다 — 창 높이는 고정 유지.
+            // 헤더 카드·팀 카드(헤더/게이지)·푸터는 콘텐츠 natural 높이. 팀 멤버 리스트만 팀원 수에 비례해 자라고,
+            // maxVisibleRows를 넘으면 그 높이로 고정 후 스크롤한다. 팀별 현황 페이지도 같은 자리에서 동일 패턴.
             VStack(spacing: 10) {
                 HeaderCard(store: store, previewLongSessionBanner: previewLongSessionBanner)
                 if store.isLeaderboardVisible {
@@ -34,9 +37,9 @@ struct CheckMenuView: View {
                         entries: store.leaderboard,
                         myTeamID: store.currentTeamID,
                         fallbackStatus: store.syncMessage,
-                        onBack: { store.isLeaderboardVisible = false }
+                        onBack: { store.isLeaderboardVisible = false },
+                        clipsOverflowInsteadOfScroll: previewClipsOverflowList
                     )
-                    .frame(maxHeight: .infinity)
                 } else {
                     TeamPanel(
                         teamMembers: store.teamMembers,
@@ -46,19 +49,15 @@ struct CheckMenuView: View {
                         now: store.displayNow,
                         myUserID: store.session?.userID,
                         onUpdateAvatar: { store.updateAvatar(imageData: $0) },
-                        onShowLeaderboard: { store.toggleLeaderboard() }
+                        onShowLeaderboard: { store.toggleLeaderboard() },
+                        clipsOverflowInsteadOfScroll: previewClipsOverflowList
                     )
-                    .frame(maxHeight: .infinity)
                 }
                 FooterBar(store: store)
             }
         } else {
-            // 로그인/가입 카드는 고정 창 안에서 위아래 여백을 균등 배분해 세로 중앙 정렬한다.
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                LoginPanel(store: store, initialMode: initialAuthMode, previewWarning: previewASCIIWarning)
-                Spacer(minLength: 0)
-            }
+            // 로그인/가입 카드는 콘텐츠 natural 높이로만 그린다(세로 중앙정렬용 Spacer 제거 — 창을 짧게).
+            LoginPanel(store: store, initialMode: initialAuthMode, previewWarning: previewASCIIWarning)
         }
     }
 }
@@ -154,6 +153,8 @@ private struct TeamPanel: View {
     var onUpdateAvatar: ((Data) -> Void)? = nil
     // 진입 버튼 액션. 팀별 현황 페이지를 연다.
     var onShowLeaderboard: (() -> Void)? = nil
+    // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
+    var clipsOverflowInsteadOfScroll: Bool = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -176,38 +177,38 @@ private struct TeamPanel: View {
             memberList
         }
         .padding(12)
-        // 팀 카드는 헤더와 푸터 사이 남는 세로 공간을 모두 채운다(멤버 리스트 스크롤 영역 확보).
-        .frame(maxHeight: .infinity)
+        // 팀 카드 높이는 콘텐츠(멤버 리스트 포함)에 맞춘다 — 남는 공간 채우기(maxHeight:.infinity) 없음.
         .panelStyle()
     }
 
-    // 행 사이 간격. 리스트가 남는 공간에 들어가는지(스크롤 필요 여부) 계산에도 쓴다.
+    // 행 사이 간격. 리스트 총 높이(팀원 수 비례) 계산에도 쓴다.
     private static let rowSpacing: CGFloat = 10
+    // 스크롤 없이 그대로 보여 주는 최대 행 수. 이 수까지는 팀원 수에 비례해 자라고, 초과하면 이 높이로 고정 후 스크롤.
+    static let maxVisibleRows = 7
 
     // 표시할 행 개수(빈 팀은 안내용 1행).
     private var rowCount: Int {
         sortedMembers.isEmpty ? 1 : sortedMembers.count
     }
 
-    // 헤더/게이지/구분선 아래에서 남는 공간을 채우는 멤버 리스트.
-    // 남는 공간에 다 들어가면 스크롤 없이 위에서부터 자연 배치 + 하단 여백,
-    // 넘치면 ScrollView로 스크롤한다. 창 자체는 고정 높이라 어느 쪽이든 창이 튀지 않는다.
-    // (ImageRenderer는 NSScrollView 백킹인 ScrollView 내용을 못 그리므로, 들어가는 경우엔
-    //  스냅샷/육안 확인이 가능한 순수 VStack 경로를 탄다.)
+    // 멤버 리스트 높이 = 팀원 수 비례. maxVisibleRows까지는 rowHeight*count 그대로 자라고(스크롤 없음),
+    // 초과하면 maxVisibleRows 높이로 고정하고 ScrollView로 스크롤한다(창 높이 상한).
     @ViewBuilder
     private var memberList: some View {
-        GeometryReader { proxy in
-            if Self.listFits(rowCount: rowCount, available: proxy.size.height) {
-                rows
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            } else {
-                ScrollView(.vertical, showsIndicators: true) {
-                    rows.frame(maxWidth: .infinity)
-                }
+        let capHeight = Self.listContentHeight(rowCount: Self.maxVisibleRows)
+        if rowCount <= Self.maxVisibleRows {
+            rows.frame(maxWidth: .infinity, alignment: .top)
+        } else if clipsOverflowInsteadOfScroll {
+            // 스냅샷 전용: 보이는 첫 maxVisibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
+            rows.frame(maxWidth: .infinity, alignment: .top)
+                .frame(height: capHeight, alignment: .top)
+                .clipped()
+        } else {
+            ScrollView(.vertical, showsIndicators: true) {
+                rows.frame(maxWidth: .infinity)
             }
+            .frame(height: capHeight)
         }
-        // 리스트가 채우는 세로 공간을 확정해 스크롤/하단 여백이 성립하게 한다.
-        .frame(maxHeight: .infinity)
     }
 
     // 각 행은 memberRowHeight 상수로 고정 — 보조줄("마지막 확인 N분 전") 유무와 무관하게 동일 높이.
@@ -235,14 +236,10 @@ private struct TeamPanel: View {
         }
     }
 
-    // 고정 행 높이·간격으로 계산한 리스트 총 높이가 남는 공간(available) 이하이면 스크롤이 필요 없다.
+    // 고정 행 높이·간격으로 계산한 리스트 총 높이(팀원 수 비례). 스크롤 상한(maxVisibleRows) 높이 산정에도 쓴다.
     static func listContentHeight(rowCount: Int) -> CGFloat {
         guard rowCount > 0 else { return 0 }
         return CGFloat(rowCount) * CheckTheme.memberRowHeight + CGFloat(rowCount - 1) * rowSpacing
-    }
-
-    static func listFits(rowCount: Int, available: CGFloat) -> Bool {
-        listContentHeight(rowCount: rowCount) <= available
     }
 
     private var sortedMembers: [TeamMemberStatus] {
@@ -325,10 +322,14 @@ private struct LeaderboardPanel: View {
     // 아직 로드 전/실패 시 빈 목록 자리에 표시할 안내 문구.
     let fallbackStatus: String
     var onBack: () -> Void = {}
+    // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
+    var clipsOverflowInsteadOfScroll: Bool = false
 
     // 팀 행 고정 높이·간격. 팀원 행보다 높다(아바타 + 이름/시간 + 게이지 + 캡션 3단).
     private static let rowHeight: CGFloat = 58
     private static let rowSpacing: CGFloat = 10
+    // 스크롤 없이 그대로 보여 주는 최대 팀 수. 행이 팀원 행보다 높아 창 높이 상한(≤700pt)을 지키도록 6으로 둔다.
+    static let maxVisibleRows = 6
 
     var body: some View {
         VStack(spacing: 12) {
@@ -344,7 +345,6 @@ private struct LeaderboardPanel: View {
             entryList
         }
         .padding(12)
-        .frame(maxHeight: .infinity)
         .panelStyle()
     }
 
@@ -356,20 +356,23 @@ private struct LeaderboardPanel: View {
         sortedEntries.isEmpty ? 1 : sortedEntries.count
     }
 
-    // 남는 공간에 다 들어가면 순수 VStack(스냅샷/육안 확인 가능), 넘치면 ScrollView. 창은 고정 높이라 튀지 않는다.
+    // 리스트 높이 = 팀 수 비례. maxVisibleRows까지는 그대로 자라고(스크롤 없음), 초과하면 그 높이로 고정 후 스크롤.
     @ViewBuilder
     private var entryList: some View {
-        GeometryReader { proxy in
-            if Self.listFits(rowCount: rowCount, available: proxy.size.height) {
-                rows
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            } else {
-                ScrollView(.vertical, showsIndicators: true) {
-                    rows.frame(maxWidth: .infinity)
-                }
+        let capHeight = Self.listContentHeight(rowCount: Self.maxVisibleRows)
+        if rowCount <= Self.maxVisibleRows {
+            rows.frame(maxWidth: .infinity, alignment: .top)
+        } else if clipsOverflowInsteadOfScroll {
+            // 스냅샷 전용: 보이는 첫 maxVisibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
+            rows.frame(maxWidth: .infinity, alignment: .top)
+                .frame(height: capHeight, alignment: .top)
+                .clipped()
+        } else {
+            ScrollView(.vertical, showsIndicators: true) {
+                rows.frame(maxWidth: .infinity)
             }
+            .frame(height: capHeight)
         }
-        .frame(maxHeight: .infinity)
     }
 
     @ViewBuilder
@@ -393,10 +396,6 @@ private struct LeaderboardPanel: View {
         guard rowCount > 0 else { return 0 }
         return CGFloat(rowCount) * rowHeight + CGFloat(rowCount - 1) * rowSpacing
     }
-
-    static func listFits(rowCount: Int, available: CGFloat) -> Bool {
-        listContentHeight(rowCount: rowCount) <= available
-    }
 }
 
 // MARK: - Footer utility bar
@@ -408,6 +407,12 @@ private struct FooterBar: View {
         HStack(spacing: 8) {
             SyncStatusView(message: store.syncMessage)
             Spacer(minLength: 6)
+            IconButton(
+                icon: store.isOverlayEnabled ? "figure.wave" : "figure.stand",
+                help: store.isOverlayEnabled ? "캐릭터 숨기기" : "캐릭터 표시"
+            ) {
+                store.toggleOverlayEnabled()
+            }
             IconButton(icon: "arrow.clockwise", help: "새로고침") {
                 store.refreshTeamStatus()
             }

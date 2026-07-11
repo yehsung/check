@@ -68,9 +68,9 @@ enum CheckCharacter3DScene {
         camera.zFar = 1_000
         cameraNode.camera = camera
         // 카메라를 캐릭터 중심보다 바운딩 높이의 0.4배 위로 올려 살짝 내려다보게 둔다.
-        cameraNode.position = SCNVector3(center.x, center.y + extent * 0.4, CGFloat(maxB.z) + distance)
-        // 바라보는 지점을 중심보다 약간(0.08배) 아래로 내려 얼굴을 정면~살짝 위에서 내려다보는 구도.
-        let lookTarget = SCNVector3(center.x, center.y - extent * 0.08, center.z)
+        cameraNode.position = SCNVector3(center.x, center.y + extent * 0.55, CGFloat(maxB.z) + distance)
+        // 바라보는 지점을 중심보다 아래(0.16배)로 내려 위에서 내려다보는 구도.
+        let lookTarget = SCNVector3(center.x, center.y - extent * 0.16, center.z)
         cameraNode.look(at: lookTarget)
         scene.rootNode.addChildNode(cameraNode)
     }
@@ -162,10 +162,10 @@ struct CheckCharacter3DView: NSViewRepresentable {
     }
 }
 
-/// 3D 캐릭터 + 근무 시간 라벨 합성. 라벨은 얼굴 바로 아래 몸통 위치(세로 62%)에 얹는다.
+/// 3D 캐릭터 + 근무 시간 라벨 합성. 라벨은 얼굴(볼) 바로 아래 몸통 중상부에 얹는다.
 struct CheckOverlayCharacterView: View {
-    /// 근무 시간 라벨의 세로 위치 비율(0=상단, 1=하단). 얼굴 아래 몸통에 오도록 62%.
-    static let timerVerticalFraction: CGFloat = 0.62
+    /// 근무 시간 라벨의 세로 위치 비율(0=상단, 1=하단). 볼 아래 몸통 중상부(얼굴은 안 가림)에 오도록 54%.
+    static let timerVerticalFraction: CGFloat = 0.54
 
     let elapsedSeconds: Int
     let isActive: Bool
@@ -200,6 +200,10 @@ struct CheckOverlayRootView: View {
         )
         .onChange(of: store.snapshot.isWorking, initial: true) { _, working in
             onWorkingChange(working)
+        }
+        // 캐릭터 표시 토글이 근무 중에 바뀌어도 즉시 반영되도록 같은 콜백을 태운다.
+        .onChange(of: store.isOverlayEnabled) { _, _ in
+            onWorkingChange(store.snapshot.isWorking)
         }
     }
 }

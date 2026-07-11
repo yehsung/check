@@ -10,7 +10,7 @@ struct CheckApp: App {
     var body: some Scene {
         MenuBarExtra {
             CheckMenuView(store: appDelegate.store)
-                .frame(width: 340, height: CheckTheme.windowHeight)
+                .frame(width: 340)
         } label: {
             MenuBarStatusLabel(snapshot: appDelegate.store.snapshot)
         }

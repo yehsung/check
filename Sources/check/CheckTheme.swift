@@ -4,9 +4,9 @@ enum CheckTheme {
     // Window — 콘텐츠 맞춤(동적) 높이
     // 폭은 340으로 고정하되 높이는 상태별 콘텐츠에 맞춘다(MenuBarExtra(.window)가 콘텐츠 크기로 창을 잡음).
     // 메인 화면의 팀 멤버 리스트는 팀원 수에 비례해 자라고, maxVisibleRows를 넘으면 그 높이로 고정 후 스크롤한다.
-    // 팀 멤버 행 고정 높이. 보조줄("마지막 확인 N분 전") 유무와 무관하게 동일 높이로 두어
-    // 행 단위 높이 변화가 리스트 내부(스크롤 포함)에서 점프를 만들지 않게 한다.
-    static let memberRowHeight: CGFloat = 48
+    // 팀 멤버 행 고정 높이. 보조줄("마지막 확인 N분 전")·주간 목표 진행 바 유무와 무관하게 동일 높이로 두어
+    // 행 단위 높이 변화가 리스트 내부(스크롤 포함)에서 점프를 만들지 않게 한다. 행마다 바+캡션을 수납하도록 상향.
+    static let memberRowHeight: CGFloat = 58
 
     // Surfaces
     static let background = LinearGradient(

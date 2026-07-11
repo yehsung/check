@@ -173,6 +173,19 @@ struct TeamGoalGauge: View {
     }
 }
 
+// MARK: - Weekly goal percent
+
+/// 주간 목표 진행 퍼센트(정수). 실제 비율 기반이라 100%를 넘을 수 있고(상한 999%), 음수는 0으로 둔다.
+/// 헤더 목표 바 캡션과 단위 테스트가 같은 계산을 쓰도록 한곳에 둔다.
+enum GoalPercentFormatter {
+    static func percent(workedSeconds: Int, goalSeconds: Int) -> Int {
+        let worked = max(0, workedSeconds)
+        let goal = max(1, goalSeconds)
+        let raw = Int((Double(worked) / Double(goal) * 100).rounded())
+        return min(999, max(0, raw))
+    }
+}
+
 // MARK: - Team member row
 
 struct TeamMemberRow: View {
@@ -184,41 +197,76 @@ struct TeamMemberRow: View {
     var secondaryDetail: String? = nil
     /// 1인당 주간 목표 달성 여부. true면 주간 시간 옆에 은은한 ✓(working 그린)를 붙인다. 행 높이는 불변.
     var meetsWeeklyGoal: Bool = false
+    /// 이 팀원의 1인당 주간 목표 진행 비율(0~1 클램프). non-nil 이면 텍스트 칼럼 밑에 슬림 바 + 우측 %를 그린다.
+    /// nil(빈 팀 placeholder 등)이면 바를 그리지 않는다.
+    var goalFraction: Double? = nil
     /// 내 행 여부. true면 아바타에 hover 카메라 배지 + 파일 선택을 붙인다.
     var isMe: Bool = false
     /// 내 행 아바타 교체 시 다운스케일된 JPEG Data를 전달받는 콜백.
     var onPickAvatar: ((Data) -> Void)? = nil
 
+    // 아바타 칼럼(26) + 상단 HStack 간격(10). 목표 바를 텍스트 칼럼 시작점부터 그리도록 들여쓸 폭.
+    private static let textColumnInset: CGFloat = 26 + 10
+
     var body: some View {
-        HStack(spacing: 10) {
-            avatar
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(CheckTheme.primaryText)
-                    .lineLimit(1)
-                HStack(spacing: 4) {
-                    Text(primaryDetail)
-                        .font(.caption2)
-                        .foregroundStyle(CheckTheme.secondaryText)
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 10) {
+                avatar
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(CheckTheme.primaryText)
                         .lineLimit(1)
-                    if meetsWeeklyGoal {
-                        // 은은한 목표 달성 표식 — 주간 목표(1인당)를 채운 팀원. 과하지 않게 작은 체크만.
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(CheckTheme.working.opacity(0.9))
-                            .accessibilityLabel("주간 목표 달성")
+                    HStack(spacing: 4) {
+                        Text(primaryDetail)
+                            .font(.caption2)
+                            .foregroundStyle(CheckTheme.secondaryText)
+                            .lineLimit(1)
+                        if meetsWeeklyGoal {
+                            // 은은한 목표 달성 표식 — 주간 목표(1인당)를 채운 팀원. 과하지 않게 작은 체크만.
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(CheckTheme.working.opacity(0.9))
+                                .accessibilityLabel("주간 목표 달성")
+                        }
+                    }
+                    if let secondaryDetail {
+                        Text(secondaryDetail)
+                            .font(.caption2)
+                            .foregroundStyle(CheckTheme.pending)
+                            .lineLimit(1)
                     }
                 }
-                if let secondaryDetail {
-                    Text(secondaryDetail)
-                        .font(.caption2)
-                        .foregroundStyle(CheckTheme.pending)
-                        .lineLimit(1)
+                Spacer(minLength: 6)
+                PresenceChip(presence: presence)
+            }
+            if let goalFraction {
+                // 바는 아바타가 아니라 텍스트 칼럼 시작점부터 행 우측 끝까지. 위치가 "이 팀원의 진행률"임을 말한다.
+                goalBar(fraction: goalFraction)
+                    .padding(.leading, Self.textColumnInset)
+            }
+        }
+    }
+
+    // 슬림 진행 바(높이 3pt) + 우측 끝 % 캡션. 달성 시 working, 미달 시 accent 로 채운다(트랙은 기존 게이지 관례).
+    private func goalBar(fraction: Double) -> some View {
+        let clamped = min(1, max(0, fraction))
+        return HStack(spacing: 6) {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(CheckTheme.trackFill)
+                    Capsule()
+                        .fill(fraction >= 1.0 ? CheckTheme.working : CheckTheme.accent)
+                        .frame(width: max(0, proxy.size.width * clamped))
                 }
             }
-            Spacer(minLength: 6)
-            PresenceChip(presence: presence)
+            .frame(height: 3)
+            Text("\(Int((clamped * 100).rounded()))%")
+                .font(.caption2)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .monospacedDigit()
+                .fixedSize()
         }
     }
 

@@ -108,24 +108,28 @@ private struct HeaderCard: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            CheckMascotView(snapshot: store.snapshot)
-                .frame(width: 46, height: 46)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(store.snapshot.localizedStatus)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(statusTint)
-                // 큰 타이머·이번 주 줄은 매초 displayNow 에 의존하므로 잎 뷰로 격리한다 — 헤더 카드 본체가
-                // 매초 무효화되지 않게(무효화 반경을 이 두 텍스트로 한정).
-                TodayTimerText(store: store)
-                MyWeeklyLine(store: store)
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                CheckMascotView(snapshot: store.snapshot)
+                    .frame(width: 46, height: 46)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(store.snapshot.localizedStatus)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(statusTint)
+                    // 큰 타이머는 매초 displayNow 에 의존하므로 잎 뷰로 격리한다 — 헤더 카드 본체가
+                    // 매초 무효화되지 않게(무효화 반경을 이 텍스트로 한정).
+                    TodayTimerText(store: store)
+                }
+                Spacer(minLength: 8)
+                WorkTogglePill(
+                    isWorking: store.snapshot.isWorking,
+                    enabled: store.canSync,
+                    action: { store.toggle() }
+                )
             }
-            Spacer(minLength: 8)
-            WorkTogglePill(
-                isWorking: store.snapshot.isWorking,
-                enabled: store.canSync,
-                action: { store.toggle() }
-            )
+            // 내 주간 목표 진행 바 — 목표는 개인 약속이므로 "내" 접두어 없이 위치(내 박스)가 의미를 말한다.
+            // myLiveWeeklySeconds(displayNow 파생)를 읽으므로 잎 뷰로 격리해 헤더 본체가 매초 무효화되지 않게 한다.
+            HeaderGoalSection(store: store)
         }
         .padding(12)
         .panelStyle()
@@ -160,16 +164,40 @@ private struct TodayTimerText: View {
     }
 }
 
-/// 헤더 보조줄(내 이번 주 누적). store.myLiveWeeklySeconds(=displayNow 파생)만 읽어 이 줄만 무효화된다.
-private struct MyWeeklyLine: View {
+/// 헤더 하단 내 주간 목표 진행 섹션(슬림 바 + 캡션). store.myLiveWeeklySeconds(=displayNow 파생)만 읽어
+/// 이 섹션만 매초 무효화된다. 위치(내 박스) 자체가 "내 진행률"임을 말하므로 "내/각자" 접두어를 쓰지 않는다.
+private struct HeaderGoalSection: View {
     let store: WorkTimerStore
 
     var body: some View {
-        // 내 이번 주 누적. 목표(1인당)의 서술은 아래 게이지의 "/ 각자 N시간" 이 맡는다.
-        Text("이번 주 \(MenuBarStatusFormatter.hoursMinutes(store.myLiveWeeklySeconds))")
-            .font(.caption2)
-            .foregroundStyle(CheckTheme.secondaryText)
-            .lineLimit(1)
+        let worked = store.myLiveWeeklySeconds
+        let goalSeconds = store.teamGoalSeconds
+        let goal = TeamWeeklyGoal(workedSeconds: worked, goalSeconds: goalSeconds)
+        VStack(spacing: 4) {
+            // 슬림 진행 바(카드 폭 전체). 달성 시 working, 미달 시 accent 로 채운다(트랙은 기존 게이지 관례).
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(CheckTheme.trackFill)
+                    Capsule()
+                        .fill(goal.isComplete ? CheckTheme.working : CheckTheme.accent)
+                        .frame(width: max(0, proxy.size.width * goal.progress))
+                }
+            }
+            .frame(height: 5)
+            HStack(spacing: 4) {
+                // 좌측: 이번 주 누적 / 목표(시간 단위 정수). 우측: 실제 진행 퍼센트(100% 초과 가능, 상한 999%).
+                Text("이번 주 \(MenuBarStatusFormatter.hoursMinutes(worked)) / \(goalSeconds / 3600)시간")
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text("\(GoalPercentFormatter.percent(workedSeconds: worked, goalSeconds: goalSeconds))%")
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .monospacedDigit()
+            }
+        }
     }
 }
 
@@ -231,10 +259,7 @@ private struct TeamPanel: View {
             if canRevealCode, showsInviteCode, let inviteCode = store.myTeamInviteCode {
                 InviteCodeInlineRow(code: inviteCode)
             }
-            // 내 진행률 게이지 — 분자엔 "내"(나 한 사람의 주간 누적), 분모엔 "각자"(1인당 목표)를 붙여
-            // 팀 총합이 아니라 각자의 주간 약속 대비 내 진행률임을 드러낸다. myLiveWeeklySeconds 는 displayNow
-            // 파생이라 잎 뷰(MyWeeklyGauge)가 읽는다.
-            MyWeeklyGauge(store: store, teamGoalSeconds: store.teamGoalSeconds)
+            // 내 진행률은 헤더(내 박스)로 옮겼고, 팀원 각자의 진행률 바는 각 팀원 행 밑에 붙는다 — 단독 게이지 없음.
             PanelDivider()
             memberList
         }
@@ -246,7 +271,8 @@ private struct TeamPanel: View {
     // 행 사이 간격. 리스트 총 높이(팀원 수 비례) 계산에도 쓴다.
     private static let rowSpacing: CGFloat = 10
     // 스크롤 없이 그대로 보여 주는 최대 행 수. 이 수까지는 팀원 수에 비례해 자라고, 초과하면 이 높이로 고정 후 스크롤.
-    static let maxVisibleRows = 7
+    // 행 높이가 48→58(행마다 목표 바 수납)으로 커져 7행이면 창이 700pt 상한을 넘으므로(731pt) 6으로 내린다.
+    static let maxVisibleRows = 6
 
     // 표시할 행 개수(빈 팀은 안내용 1행).
     private var rowCount: Int {
@@ -356,6 +382,11 @@ private struct TeamMemberLiveRow: View {
     var body: some View {
         let now = store.displayNow
         let presence = member.presence(now: now)
+        // 이 팀원의 1인당 목표 진행 비율(0~1 클램프). 라이브 주간 누적/목표 — displayNow 파생이라 이 잎 뷰가 읽는다.
+        let goalFraction = TeamWeeklyGoal(
+            workedSeconds: member.liveWeeklyDurationSeconds(now: now),
+            goalSeconds: teamGoalSeconds
+        ).progress
         TeamMemberRow(
             name: member.name,
             avatarURL: member.avatarURL,
@@ -363,6 +394,7 @@ private struct TeamMemberLiveRow: View {
             primaryDetail: Self.primaryDetail(member, presence: presence, now: now),
             secondaryDetail: Self.secondaryDetail(member, presence: presence, now: now),
             meetsWeeklyGoal: member.hasMetWeeklyGoal(goalSeconds: teamGoalSeconds, now: now),
+            goalFraction: goalFraction,
             isMe: isMe,
             onPickAvatar: isMe ? onPickAvatar : nil
         )

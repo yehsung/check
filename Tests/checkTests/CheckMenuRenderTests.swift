@@ -407,6 +407,31 @@ func authFocusChainingFollowsFieldOrder() {
     #expect(AuthFocusField.displayName.nextField(mode: .signIn) == nil)
 }
 
+// MARK: - 목표 UI 재배치: 헤더 퍼센트 계산 + 팀원 행 목표 바 노출
+
+@Test
+func headerGoalPercentComputesActualRatioWithCap() {
+    // (a) 헤더 목표 퍼센트는 실제 비율 기반이라 100%를 넘을 수 있다(상한 999%). 0%/43%/100%/초과를 검증한다.
+    #expect(GoalPercentFormatter.percent(workedSeconds: 0, goalSeconds: 60 * 3600) == 0)
+    #expect(GoalPercentFormatter.percent(workedSeconds: 43, goalSeconds: 100) == 43)
+    #expect(GoalPercentFormatter.percent(workedSeconds: 60 * 3600, goalSeconds: 60 * 3600) == 100)
+    #expect(GoalPercentFormatter.percent(workedSeconds: 120 * 3600, goalSeconds: 60 * 3600) == 200)
+    // 상한: 목표의 100배를 넘어도 999% 로 클램프한다.
+    #expect(GoalPercentFormatter.percent(workedSeconds: 10_000 * 3600, goalSeconds: 60 * 3600) == 999)
+}
+
+@MainActor
+@Test
+func teamMemberRowDrawsGoalBarOnlyWhenFractionPresent() throws {
+    // (b) goalFraction 이 nil 이면 바를 그리지 않고(행이 낮음), non-nil 이면 바+캡션만큼 행이 높아진다.
+    // 두 행을 같은 폭으로 렌더해 픽셀 높이를 실측 비교한다(뷰 계층이 아니라 실제 렌더 결과로 검증).
+    let withBar = TeamMemberRow(name: "영식", presence: .offWork, primaryDetail: "주 12시간 30분", goalFraction: 0.5)
+    let noBar = TeamMemberRow(name: "영식", presence: .offWork, primaryDetail: "주 12시간 30분")
+    let withBarHeight = try #require(renderedPixelHeight(withBar))
+    let noBarHeight = try #require(renderedPixelHeight(noBar))
+    #expect(withBarHeight > noBarHeight)
+}
+
 // MARK: - E1: 팀원 3상태(active/stale/off) 표시
 
 @MainActor
@@ -472,8 +497,9 @@ func checkMenuViewRendersLeaderboardSnapshot() throws {
     }
 }
 
-/// 1인당 목표 교정 육안 확인용 스냅샷 2종을 CHECK_PERPERSON_SNAPSHOT_DIR 로 덤프한다(지정 시에만).
-///  - my-team-card.png: 내 진행률 게이지("내 12시간 30분 / 60시간 · 21%") + 멤버 ✓ 정확히 1명(목표 달성).
+/// 목표 UI 재배치 육안 확인용 스냅샷 2종을 CHECK_PERPERSON_SNAPSHOT_DIR 로 덤프한다(지정 시에만).
+///  - my-team-card.png: 헤더 내 목표 바("이번 주 12시간 30분 / 60시간 · 21%") + 팀원 행마다 목표 바.
+///    달성(✓·100%)/미달/스테일(보조줄+바 동시) 혼합 4명이 담긴다.
 ///  - leaderboard.png: 3팀(평균 역전, 우리 팀 2번째) 팀별 이번 주 페이지.
 @MainActor
 @Test
@@ -483,22 +509,32 @@ func dumpPerPersonGoalSnapshots() throws {
     try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
     let now = Date()
 
-    // 내 팀 카드: 목표 60시간(1인당). 내 행(userID ...002) 주간 12시간 30분 → 게이지 내 진행률 ≈ 21%.
-    // "성실"만 주간 61시간(≥60h)이라 ✓ 1명, "민수"는 30시간이라 ✓ 없음.
+    // 내 팀 카드: 목표 60시간(1인당). 내 행(userID ...002) 주간 12시간 30분 → 헤더 내 진행률 ≈ 21%.
+    // "성실"만 주간 61시간(≥60h)이라 ✓ + 바 100%, 나머지는 미달. "민수"는 스테일(보조줄+바 동시 케이스).
     let myID = "00000000-0000-0000-0000-000000000002"
     let members = [
+        // 내 행(off) — 12시간 30분/60시간 ≈ 21% 미달. 헤더 바와 별개로 행 밑에도 21% 바.
         TeamMemberStatus(
             id: myID, name: "영식", status: .offWork, updatedAt: nil,
             currentSessionStartedAt: nil, weeklyDurationSeconds: 12 * 3600 + 30 * 60,
             avatarURL: CheckMascotAssets.url(for: .neutral)
         ),
+        // 달성(active) — 61시간(≥60h) → ✓ + 바 100%(working 채움).
         TeamMemberStatus(
             id: "00000000-0000-0000-0000-000000000001", name: "성실", status: .working, updatedAt: nil,
             currentSessionStartedAt: now.addingTimeInterval(-3_600), weeklyDurationSeconds: 61 * 3600
         ),
+        // 스테일(연결 끊김) — "마지막 확인 N분 전" 보조줄 + 목표 바가 한 행에 함께 수납되는지 확인. ~53% 미달.
         TeamMemberStatus(
-            id: "00000000-0000-0000-0000-000000000003", name: "민수", status: .offWork, updatedAt: nil,
-            currentSessionStartedAt: nil, weeklyDurationSeconds: 30 * 3600
+            id: "00000000-0000-0000-0000-000000000003", name: "민수", status: .working,
+            updatedAt: now.addingTimeInterval(-420),
+            currentSessionStartedAt: now.addingTimeInterval(-7_620), weeklyDurationSeconds: 30 * 3600,
+            lastSeenAt: now.addingTimeInterval(-420)
+        ),
+        // 미달(off) — 48시간/60시간 → 80% 바.
+        TeamMemberStatus(
+            id: "00000000-0000-0000-0000-000000000004", name: "지현", status: .offWork, updatedAt: nil,
+            currentSessionStartedAt: nil, weeklyDurationSeconds: 48 * 3600
         )
     ]
     let cardStore = makeTeamStore(members: members, now: now)

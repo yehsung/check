@@ -194,6 +194,26 @@ enum AuthMode {
     case signUp
 }
 
+/// 로그인/가입 패널의 Enter-키 포커스 체이닝 대상 필드.
+enum AuthFocusField: Hashable {
+    case displayName
+    case email
+    case password
+
+    /// 이 필드에서 Enter를 눌렀을 때 옮겨 갈 다음 포커스 필드. nil이면 마지막 필드이므로 제출한다.
+    /// 로그인 모드엔 별명 필드가 없으므로 로그인 모드의 displayName은 제출로 취급한다.
+    func nextField(mode: AuthMode) -> AuthFocusField? {
+        switch (mode, self) {
+        case (.signUp, .displayName):
+            return .email
+        case (_, .email):
+            return .password
+        case (.signIn, .displayName), (_, .password):
+            return nil
+        }
+    }
+}
+
 /// syncMessage 배너의 성격 분류. AuthStatusLine 색/아이콘과 모드 전환 시 오류 리셋 판정에 공유한다.
 enum AuthMessageKind {
     case progress, info, error
@@ -215,6 +235,7 @@ private struct LoginPanel: View {
     @State private var mode: AuthMode
     // 렌더 스냅샷 전용: 비밀번호 필드의 안내 캡션을 켠 채로 그린다. 앱에서는 항상 false.
     private let previewWarning: Bool
+    @FocusState private var focus: AuthFocusField?
 
     init(store: WorkTimerStore, initialMode: AuthMode = .signIn, previewWarning: Bool = false) {
         self.store = store
@@ -227,23 +248,76 @@ private struct LoginPanel: View {
             BrandHeader(subtitle: mode == .signUp ? "sudo 박수 팀에 합류" : "sudo 박수 팀 근무 타이머")
             PanelDivider()
             VStack(spacing: 8) {
-                if mode == .signUp {
-                    CredentialField(title: "별명", icon: "person.text.rectangle.fill", text: $store.displayName)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-                CredentialField(title: "이메일", icon: "envelope.fill", text: $store.email, enforcesASCII: true, allowsSpace: false)
-                CredentialField(title: "비밀번호", icon: "lock.fill", text: $store.password, isSecure: true, enforcesASCII: true, warnsInitially: previewWarning)
+                // 별명 필드는 두 모드에서 항상 자리를 차지하고 로그인 모드에선 opacity/hit-test만 꺼 둔다.
+                // 조건부 삽입/삭제로 인한 카드 높이 변화(모드 전환 시 창 튐)를 없애기 위함이다.
+                CredentialField(
+                    title: "별명",
+                    icon: "person.text.rectangle.fill",
+                    text: $store.displayName,
+                    focus: $focus,
+                    fieldIdentifier: .displayName,
+                    submitLabel: .next,
+                    onSubmit: { advance(from: .displayName) }
+                )
+                .opacity(mode == .signUp ? 1 : 0)
+                .disabled(mode != .signUp)
+                .allowsHitTesting(mode == .signUp)
+                .accessibilityHidden(mode != .signUp)
+                CredentialField(
+                    title: "이메일",
+                    icon: "envelope.fill",
+                    text: $store.email,
+                    enforcesASCII: true,
+                    allowsSpace: false,
+                    focus: $focus,
+                    fieldIdentifier: .email,
+                    submitLabel: .next,
+                    onSubmit: { advance(from: .email) }
+                )
+                CredentialField(
+                    title: "비밀번호",
+                    icon: "lock.fill",
+                    text: $store.password,
+                    isSecure: true,
+                    enforcesASCII: true,
+                    warnsInitially: previewWarning,
+                    focus: $focus,
+                    fieldIdentifier: .password,
+                    submitLabel: .go,
+                    onSubmit: { advance(from: .password) }
+                )
             }
             primaryButton
                 .disabled(!store.canSync)
-            if store.syncMessage != "로그인 필요" {
-                AuthStatusLine(message: store.syncMessage)
-            }
+            // 상태 배너 슬롯은 항상 확보하고 메시지 유무는 opacity로만 토글한다 — 오류 배너 등장 시 창 튐 제거.
+            AuthStatusLine(message: store.syncMessage)
+                .opacity(store.syncMessage == "로그인 필요" ? 0 : 1)
+                .accessibilityHidden(store.syncMessage == "로그인 필요")
             switchLink
         }
         .padding(14)
         .panelStyle()
         .animation(.easeInOut(duration: 0.22), value: mode)
+    }
+
+    // 필드에서 Enter를 눌렀을 때: 다음 필드가 있으면 포커스를 옮기고, 없으면(마지막 필드) 제출한다.
+    private func advance(from field: AuthFocusField) {
+        if let next = field.nextField(mode: mode) {
+            focus = next
+        } else {
+            submitPrimary()
+        }
+    }
+
+    // Enter(제출) 시 로그인/가입 버튼과 동일하게 동작한다. canSync 가드로 키 없음 상태에선 무시한다.
+    private func submitPrimary() {
+        guard store.canSync else { return }
+        switch mode {
+        case .signIn:
+            store.signIn()
+        case .signUp:
+            store.signUp()
+        }
     }
 
     // 하나의 prominent 전체폭 버튼만 노출한다. 모드에 따라 로그인/가입으로 바뀐다.

@@ -8,6 +8,7 @@ struct TeamMemberStatus: Equatable, Identifiable {
     var currentSessionStartedAt: Date?
     var weeklyDurationSeconds: Int = 0
     var todayDurationSeconds: Int = 0
+    var avatarURL: URL? = nil
 
     func currentDurationSeconds(now: Date = Date()) -> Int {
         guard status == .working, let currentSessionStartedAt else {
@@ -124,6 +125,7 @@ struct AuthUser: Decodable {
 struct ProfileRow: Decodable {
     let displayName: String
     let email: String
+    let avatarUrl: String?
 }
 
 struct WorkStatusRow: Decodable {
@@ -170,6 +172,10 @@ struct StatusUpsertRequest: Encodable {
     let activeSessionId: String?
     let lastSeenAt: String
     let updatedAt: String
+}
+
+struct AvatarUpdateRequest: Encodable {
+    let avatarUrl: String
 }
 
 struct SupabaseErrorResponse: Decodable {

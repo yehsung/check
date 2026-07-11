@@ -71,7 +71,7 @@ actor SupabaseWorkService {
             path: "/rest/v1/work_statuses",
             method: "GET",
             queryItems: [
-                URLQueryItem(name: "select", value: "user_id,status,updated_at,active_session_id,profiles(display_name,email)"),
+                URLQueryItem(name: "select", value: "user_id,status,updated_at,active_session_id,profiles(display_name,email,avatar_url)"),
                 URLQueryItem(name: "team_id", value: "eq.\(SupabaseConfig.teamID)"),
                 URLQueryItem(name: "order", value: "updated_at.desc")
             ],
@@ -87,6 +87,7 @@ actor SupabaseWorkService {
         let todayByUser = todayDurations(from: weeklySessions, now: now)
         return rows.map { row in
             let activeStartedAt = activeByUser[row.userId]?.compactMap { parseDate($0.startedAt) }.min()
+            let avatarURL = (row.profiles?.avatarUrl).flatMap { URL(string: $0) }
             return TeamMemberStatus(
                 id: row.userId,
                 name: row.profiles?.displayName ?? row.profiles?.email ?? "팀원",
@@ -94,7 +95,8 @@ actor SupabaseWorkService {
                 updatedAt: row.updatedAt.flatMap(parseDate),
                 currentSessionStartedAt: activeStartedAt,
                 weeklyDurationSeconds: weeklyByUser[row.userId, default: 0],
-                todayDurationSeconds: todayByUser[row.userId, default: 0]
+                todayDurationSeconds: todayByUser[row.userId, default: 0],
+                avatarURL: avatarURL
             )
         }
     }
@@ -219,6 +221,28 @@ actor SupabaseWorkService {
             )
         }
         try await upsertStatus(accessToken: accessToken, userID: userID, status: "off_work", activeSessionID: nil)
+    }
+
+    func uploadAvatar(accessToken: String, userID: String, imageData: Data) async throws -> String {
+        _ = try await sendData(
+            path: "/storage/v1/object/avatars/\(userID).jpg",
+            method: "POST",
+            body: imageData,
+            contentType: "image/jpeg",
+            accessToken: accessToken,
+            extraHeaders: ["x-upsert": "true"]
+        )
+        let cacheBuster = Int(Date().timeIntervalSince1970)
+        let avatarURL = "\(projectURL.absoluteString)/storage/v1/object/public/avatars/\(userID).jpg?v=\(cacheBuster)"
+        try await sendNoBody(
+            path: "/rest/v1/profiles",
+            method: "PATCH",
+            queryItems: [URLQueryItem(name: "id", value: "eq.\(userID)")],
+            body: AvatarUpdateRequest(avatarUrl: avatarURL),
+            accessToken: accessToken,
+            prefer: "return=minimal"
+        )
+        return avatarURL
     }
 
     func signOut(accessToken: String) async {

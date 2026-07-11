@@ -62,6 +62,33 @@ final class WorkTimerStore {
         }
     }
 
+    /// 앱 종료 직전 근무를 마무리한다. 로그인 상태가 아니거나 근무중이 아니면 즉시 리턴(요청 0건).
+    /// 근무중이면 기존 stop()/enqueueSync 직렬 경로로 퇴근 upsert를 큐에 넣고, 그 sync 체인이
+    /// 끝나거나 timeout(초)이 지날 때까지만 기다린다. 타임아웃 시 서버에 열린 세션이 남을 수 있으나
+    /// 다음 실행의 refreshTeamStatus/applyRemoteOwnStatus 복구 경로가 이를 정리하므로 종료를 막지 않는다.
+    func finishWorkBeforeQuit(timeout: Double = 3) async {
+        guard session != nil, startedAt != nil else { return }
+        stop()
+        guard let syncTask else { return }
+        await Self.awaitFirst(of: syncTask, orTimeout: timeout)
+    }
+
+    /// task 완료 또는 timeout 중 먼저 오는 시점에 리턴한다. 진 쪽(타임아웃/미완료 sync)은 취소하지 않고
+    /// 백그라운드에 남겨 두어 종료 지연이 timeout을 넘지 않도록 한다.
+    private static func awaitFirst(of task: Task<Void, Never>, orTimeout timeout: Double) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let barrier = QuitBarrier(continuation)
+            Task { @MainActor in
+                await task.value
+                barrier.resume()
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(timeout))
+                barrier.resume()
+            }
+        }
+    }
+
     func start(now: Date = Date()) {
         guard startedAt == nil else { return }
         displayNow = now
@@ -203,5 +230,21 @@ extension WorkTimerStore {
         [Self.accessTokenKey, Self.refreshTokenKey, Self.userIDKey].forEach(defaults.removeObject)
         refreshTask?.cancel()
         refreshTask = nil
+    }
+}
+
+/// 종료 대기용 단일-resume 장벽. sync 완료와 타임아웃 두 경로가 경쟁하되 continuation은 정확히
+/// 한 번만 resume되도록 메인 액터에서 직렬화한다(nil로 만들어 재-resume을 무시).
+@MainActor
+private final class QuitBarrier {
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    init(_ continuation: CheckedContinuation<Void, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume() {
+        continuation?.resume()
+        continuation = nil
     }
 }

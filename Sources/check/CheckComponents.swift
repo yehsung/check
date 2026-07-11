@@ -224,6 +224,15 @@ struct CredentialField: View {
     var enforcesASCII = false
     /// 공백 허용 여부. 비밀번호는 허용, 이메일은 차단한다. `enforcesASCII`일 때만 의미가 있다.
     var allowsSpace = true
+    /// 외부(패널) 포커스 상태. Enter-키 체이닝을 위해 부모가 소유하고 각 필드가 자기 케이스로 바인딩한다.
+    /// nil이면 내부 isFocused만 쓰는 독립 필드(단위 테스트 등)로 동작한다.
+    var focus: FocusState<AuthFocusField?>.Binding?
+    /// 이 필드가 대응하는 포커스 케이스. `focus`와 함께 주어져야 체이닝이 활성화된다.
+    var fieldIdentifier: AuthFocusField?
+    /// 리턴 키 라벨. 다음 필드로 넘기는 필드는 `.next`, 제출 필드는 `.go`.
+    var submitLabel: SubmitLabel = .return
+    /// Enter(제출) 시 실행할 동작 — 다음 필드로의 포커스 이동 또는 로그인/가입 제출.
+    var onSubmit: (() -> Void)?
 
     @FocusState private var isFocused: Bool
     @State private var showWarning: Bool
@@ -236,7 +245,11 @@ struct CredentialField: View {
         isSecure: Bool = false,
         enforcesASCII: Bool = false,
         allowsSpace: Bool = true,
-        warnsInitially: Bool = false
+        warnsInitially: Bool = false,
+        focus: FocusState<AuthFocusField?>.Binding? = nil,
+        fieldIdentifier: AuthFocusField? = nil,
+        submitLabel: SubmitLabel = .return,
+        onSubmit: (() -> Void)? = nil
     ) {
         self.title = title
         self.icon = icon
@@ -246,6 +259,10 @@ struct CredentialField: View {
         self.allowsSpace = allowsSpace
         // warnsInitially는 렌더 스냅샷 등 미리보기에서 안내가 켜진 상태를 재현하기 위한 시드값이다.
         self._showWarning = State(initialValue: warnsInitially)
+        self.focus = focus
+        self.fieldIdentifier = fieldIdentifier
+        self.submitLabel = submitLabel
+        self.onSubmit = onSubmit
     }
 
     var body: some View {
@@ -264,12 +281,7 @@ struct CredentialField: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .allowsHitTesting(false)
                     }
-                    field
-                        .textFieldStyle(.plain)
-                        .foregroundStyle(CheckTheme.primaryText)
-                        .tint(CheckTheme.accent)
-                        .accessibilityLabel(title)
-                        .focused($isFocused)
+                    styledField
                 }
             }
             .font(.subheadline)
@@ -281,18 +293,27 @@ struct CredentialField: View {
                     // 안내가 떠 있는 동안엔 테두리를 danger로 물들여 레이아웃 밀림 없이도 상태를 알린다.
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(showWarning ? CheckTheme.danger : CheckTheme.border, lineWidth: 1))
             )
-            if showWarning {
+            if enforcesASCII {
+                // 안내 캡션은 항상 자리를 차지하고 보임/숨김만 opacity로 토글한다 — 등장/소멸로 인한
+                // 높이 변화(창 튐)를 원천 제거한다. ASCII 필드(이메일·비밀번호)만 슬롯을 확보한다.
                 Text("영어 문자만 입력할 수 있어요")
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(CheckTheme.danger)
                     .lineLimit(1)
-                    .transition(.opacity)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(showWarning ? 1 : 0)
+                    .accessibilityHidden(!showWarning)
                     .accessibilityLabel("영어 문자만 입력할 수 있어요")
             }
         }
         .onChange(of: isFocused) { _, focused in
-            // 포커스를 얻는 순간 영어 자판으로 전환한다. 실패는 필터가 뒤에서 잡아 준다.
+            // 외부 포커스를 안 쓰는 독립 필드 경로: 포커스를 얻는 순간 영어 자판으로 전환한다.
             guard focused, enforcesASCII else { return }
+            EnglishInputSource.activate()
+        }
+        .onChange(of: focus?.wrappedValue) { _, newValue in
+            // 외부 포커스 체이닝 경로: 이 필드로 포커스가 옮겨 오면 영어 자판으로 전환한다.
+            guard let fieldIdentifier, newValue == fieldIdentifier, enforcesASCII else { return }
             EnglishInputSource.activate()
         }
         .onChange(of: text) { _, newValue in
@@ -320,6 +341,24 @@ struct CredentialField: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 showWarning = false
             }
+        }
+    }
+
+    // 공통 스타일 + 제출/포커스 배선을 얹은 실제 입력 필드.
+    // 외부 포커스가 주어지면 자기 케이스로 바인딩(체이닝), 없으면 내부 isFocused로 동작한다.
+    @ViewBuilder
+    private var styledField: some View {
+        let base = field
+            .textFieldStyle(.plain)
+            .foregroundStyle(CheckTheme.primaryText)
+            .tint(CheckTheme.accent)
+            .accessibilityLabel(title)
+            .submitLabel(submitLabel)
+            .onSubmit { onSubmit?() }
+        if let focus, let fieldIdentifier {
+            base.focused(focus, equals: fieldIdentifier)
+        } else {
+            base.focused($isFocused)
         }
     }
 

@@ -178,3 +178,190 @@ private func expectedKoreanWeekStartString(for date: Date) -> String {
     let weekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
     return ISO8601DateFormatter().string(from: weekStart)
 }
+
+// MARK: - Avatar tests
+
+// 트랙 A 소유의 URLProtocolStub.swift 를 건드리지 않기 위해 아바타 전용 스텁을 여기서 정의한다.
+final class AvatarURLProtocol: URLProtocol {
+    nonisolated(unsafe) static var requests: [URLRequest] = []
+    nonisolated(unsafe) static var bodiesByHost: [String: [Data]] = [:]
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        Self.requests.append(request)
+        Self.bodiesByHost[request.url?.host ?? "", default: []].append(Self.bodyData(from: request))
+
+        let (statusCode, data) = Self.response(for: request)
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: statusCode,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+
+    static func session(forHost host: String) -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AvatarURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    static func requests(forHost host: String) -> [URLRequest] {
+        requests.filter { $0.url?.host == host }
+    }
+
+    static func bodies(forHost host: String) -> [Data] {
+        bodiesByHost[host, default: []]
+    }
+
+    private static func response(for request: URLRequest) -> (Int, Data) {
+        let host = request.url?.host ?? ""
+        let path = request.url?.path ?? ""
+
+        if path == "/rest/v1/work_statuses" {
+            return (200, workStatusesData(forHost: host))
+        }
+        if path == "/rest/v1/work_sessions" {
+            return (200, Data("[]".utf8))
+        }
+        // storage POST 및 profiles PATCH 는 본문을 사용하지 않으므로 빈 200 응답.
+        return (200, Data())
+    }
+
+    private static func workStatusesData(forHost host: String) -> Data {
+        let avatarField = host == "avatar-fetch-null-test"
+            ? "null"
+            : "\"https://cdn.example.com/avatars/user.jpg?v=123\""
+        return Data(
+            """
+            [
+              {
+                "user_id": "00000000-0000-0000-0000-000000000002",
+                "status": "off_work",
+                "updated_at": "2026-07-01T01:00:00Z",
+                "active_session_id": null,
+                "profiles": {
+                  "display_name": "영식",
+                  "email": "member@example.com",
+                  "avatar_url": \(avatarField)
+                }
+              }
+            ]
+            """.utf8
+        )
+    }
+
+    private static func bodyData(from request: URLRequest) -> Data {
+        if let body = request.httpBody {
+            return body
+        }
+        guard let stream = request.httpBodyStream else {
+            return Data()
+        }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        let bufferSize = 1024
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+        while stream.hasBytesAvailable {
+            let count = stream.read(buffer, maxLength: bufferSize)
+            if count <= 0 {
+                break
+            }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
+}
+
+@Test
+func uploadAvatarUploadsToStorageThenPatchesProfile() async throws {
+    let testHost = "avatar-upload-test"
+    let userID = "00000000-0000-0000-0000-000000000002"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: AvatarURLProtocol.session(forHost: testHost)
+    )
+
+    let imageData = Data([0xFF, 0xD8, 0xFF, 0xE0, 0x01, 0x02, 0x03])
+
+    let avatarURL = try await service.uploadAvatar(
+        accessToken: "access-token",
+        userID: userID,
+        imageData: imageData
+    )
+
+    let requests = AvatarURLProtocol.requests(forHost: testHost)
+    let storageIndex = try #require(requests.firstIndex {
+        $0.url?.path == "/storage/v1/object/avatars/\(userID).jpg"
+    })
+    let patchIndex = try #require(requests.firstIndex {
+        $0.url?.path == "/rest/v1/profiles" && $0.httpMethod == "PATCH"
+    })
+    // 스토리지 업로드가 프로필 PATCH 보다 먼저 전송되어야 한다.
+    #expect(storageIndex < patchIndex)
+
+    let storageRequest = requests[storageIndex]
+    #expect(storageRequest.httpMethod == "POST")
+    #expect(storageRequest.value(forHTTPHeaderField: "Authorization") == "Bearer access-token")
+    #expect(storageRequest.value(forHTTPHeaderField: "apikey") == "anon-test-key")
+    #expect(storageRequest.value(forHTTPHeaderField: "x-upsert") == "true")
+    #expect(storageRequest.value(forHTTPHeaderField: "Content-Type") == "image/jpeg")
+
+    // 스토리지 업로드 본문은 원본 이미지 바이트여야 한다.
+    #expect(AvatarURLProtocol.bodies(forHost: testHost).first == imageData)
+
+    let patchRequest = requests[patchIndex]
+    #expect(patchRequest.url?.query?.contains("id=eq.\(userID)") == true)
+    #expect(patchRequest.value(forHTTPHeaderField: "Authorization") == "Bearer access-token")
+
+    // 반환값 = public URL + 캐시 버스팅 쿼리, 그리고 PATCH 본문에 동일 값이 담긴다.
+    #expect(avatarURL.hasPrefix("http://\(testHost)/storage/v1/object/public/avatars/\(userID).jpg?v="))
+    let patchData = try #require(AvatarURLProtocol.bodies(forHost: testHost).last)
+    let patchFields = try JSONDecoder().decode([String: String].self, from: patchData)
+    #expect(patchFields["avatar_url"] == avatarURL)
+}
+
+@Test
+func fetchTeamStatusesParsesAvatarURL() async throws {
+    let testHost = "avatar-fetch-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: AvatarURLProtocol.session(forHost: testHost)
+    )
+
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token")
+
+    #expect(statuses.count == 1)
+    #expect(statuses.first?.avatarURL == URL(string: "https://cdn.example.com/avatars/user.jpg?v=123"))
+}
+
+@Test
+func fetchTeamStatusesLeavesAvatarURLNilWhenAbsent() async throws {
+    let testHost = "avatar-fetch-null-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: AvatarURLProtocol.session(forHost: testHost)
+    )
+
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token")
+
+    #expect(statuses.count == 1)
+    #expect(statuses.first?.avatarURL == nil)
+}

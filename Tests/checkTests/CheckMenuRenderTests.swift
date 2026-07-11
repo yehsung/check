@@ -257,6 +257,88 @@ func menuBarStatusLabelFitsWithinBarHeight() throws {
     }
 }
 
+// MARK: - A2: 창 튐 방지 — 상태 변화에도 팝오버 높이가 변하지 않아야 한다
+
+@MainActor
+@Test
+func loginPanelHeightIsStableAcrossErrorBanner() throws {
+    // 오류 배너(AuthStatusLine) 등장이 카드 높이를 밀어 창이 튀던 회귀를 막는다.
+    let noError = makeLoginStore(syncMessage: "로그인 필요")
+    let withError = makeLoginStore(syncMessage: "로그인 정보 오류")
+
+    let clean = try #require(renderedPixelHeight(CheckMenuView(store: noError)))
+    let errored = try #require(renderedPixelHeight(CheckMenuView(store: withError)))
+
+    #expect(clean == errored)
+}
+
+@MainActor
+@Test
+func loginAndSignupModesHaveEqualHeight() throws {
+    // 로그인 모드 ↔ 가입 모드 전환 시(별명 필드 등장) 높이가 같아야 창이 튀지 않는다.
+    let loginStore = makeLoginStore(syncMessage: "로그인 필요")
+    let signupStore = makeLoginStore(syncMessage: "로그인 필요")
+    signupStore.displayName = "영식"
+
+    let login = try #require(renderedPixelHeight(CheckMenuView(store: loginStore)))
+    let signup = try #require(renderedPixelHeight(CheckMenuView(store: signupStore, initialAuthMode: .signUp)))
+
+    #expect(login == signup)
+}
+
+@MainActor
+@Test
+func loginPanelHeightIsStableAcrossASCIIWarning() throws {
+    // "영어 문자만 입력할 수 있어요" 캡션 등장이 높이를 밀지 않아야 한다.
+    let plain = makeLoginStore(syncMessage: "로그인 필요")
+    let warned = makeLoginStore(syncMessage: "로그인 필요")
+
+    let quiet = try #require(renderedPixelHeight(CheckMenuView(store: plain)))
+    let warning = try #require(renderedPixelHeight(CheckMenuView(store: warned, previewASCIIWarning: true)))
+
+    #expect(quiet == warning)
+}
+
+// MARK: - A3: Enter-키 포커스 체이닝 순서
+
+@Test
+func authFocusChainingFollowsFieldOrder() {
+    // 가입: 별명 → 이메일 → 비밀번호 → 제출(nil)
+    #expect(AuthFocusField.displayName.nextField(mode: .signUp) == .email)
+    #expect(AuthFocusField.email.nextField(mode: .signUp) == .password)
+    #expect(AuthFocusField.password.nextField(mode: .signUp) == nil)
+    // 로그인: 이메일 → 비밀번호 → 제출(nil). 별명 필드는 로그인 모드에 없으므로 제출로 취급한다.
+    #expect(AuthFocusField.email.nextField(mode: .signIn) == .password)
+    #expect(AuthFocusField.password.nextField(mode: .signIn) == nil)
+    #expect(AuthFocusField.displayName.nextField(mode: .signIn) == nil)
+}
+
+@MainActor
+private func makeLoginStore(syncMessage: String) -> WorkTimerStore {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedRenderDefaults()
+    )
+    store.email = "member@example.com"
+    store.password = "team-password"
+    store.syncMessage = syncMessage
+    return store
+}
+
+/// 뷰를 340pt 폭 고정으로 렌더한 뒤 PNG 픽셀 높이를 돌려준다. 높이 동일성 비교 전용.
+@MainActor
+private func renderedPixelHeight(_ view: some View) -> Int? {
+    let renderer = ImageRenderer(content: view.frame(width: 340).fixedSize())
+    renderer.scale = 2
+    guard let image = renderer.nsImage,
+          let tiffData = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiffData)
+    else {
+        return nil
+    }
+    return bitmap.pixelsHigh
+}
+
 private func isolatedRenderDefaults() -> UserDefaults {
     let suiteName = "check-render-tests-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!

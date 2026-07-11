@@ -19,6 +19,40 @@ extension SupabaseWorkService {
         )
     }
 
+    func sendData(
+        path: String,
+        method: String,
+        queryItems: [URLQueryItem] = [],
+        body: Data,
+        contentType: String,
+        accessToken: String,
+        extraHeaders: [String: String] = [:]
+    ) async throws -> Data {
+        guard let anonKey else {
+            throw SupabaseWorkServiceError.missingAnonKey
+        }
+
+        var request = URLRequest(url: try url(path: path, queryItems: queryItems))
+        request.httpMethod = method
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        for (name, value) in extraHeaders {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
+        request.httpBody = body
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              200..<300 ~= httpResponse.statusCode
+        else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw serviceError(statusCode: statusCode, data: data)
+        }
+        return data
+    }
+
     func send<Body: Encodable>(
         path: String,
         method: String,

@@ -471,6 +471,112 @@ struct SyncRaceTests {
         #expect(completedSessionPosts.count <= 1)
         #expect(store.pendingOperation == nil)
     }
+
+    @Test
+    func finishWorkBeforeQuitReturnsWithinTimeoutWhenSyncStalls() async {
+        let testHost = "quit-timeout"
+        URLProtocolStub.delayedHosts = [testHost]
+        defer { URLProtocolStub.delayedHosts = [] }
+
+        let service = SupabaseWorkService(
+            projectURL: URL(string: "http://\(testHost)")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        )
+        let store = WorkTimerStore(
+            service: service,
+            environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+            defaults: isolatedDefaults()
+        )
+        defer {
+            store.tickerTask?.cancel()
+            store.refreshTask?.cancel()
+        }
+        store.session = SupabaseSession(
+            accessToken: "access-token",
+            refreshToken: nil,
+            userID: "00000000-0000-0000-0000-000000000002"
+        )
+        store.startedAt = Date(timeIntervalSinceNow: -30)
+        store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 30)
+
+        // 지연 스텁(요청당 0.15s)보다 짧은 타임아웃을 주면 sync 완료를 기다리지 않고 곧바로 리턴해야 한다.
+        let clock = ContinuousClock()
+        let start = clock.now
+        await store.finishWorkBeforeQuit(timeout: 0.05)
+        let elapsed = clock.now - start
+
+        #expect(elapsed < .seconds(3.5))
+        // stop()은 로컬 상태를 즉시 반영하지만(퇴근 표시), 네트워크 sync는 타임아웃으로 아직 미완료다.
+        #expect(store.startedAt == nil)
+        #expect(store.pendingOperation != nil)
+    }
+}
+
+// MARK: - 종료 시 자동 퇴근 (finishWorkBeforeQuit)
+
+@MainActor
+@Test
+func finishWorkBeforeQuitSyncsStopWhenWorking() async {
+    let testHost = "quit-sync"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(
+        accessToken: "access-token",
+        refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+    store.startedAt = Date(timeIntervalSinceNow: -120)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 120)
+
+    await store.finishWorkBeforeQuit()
+
+    #expect(store.startedAt == nil)
+    #expect(store.pendingOperation == nil)
+    let stopRequests = URLProtocolStub.requests(forHost: testHost)
+        .filter { $0.url?.path == "/rest/v1/work_sessions" && $0.httpMethod == "PATCH" }
+    #expect(!stopRequests.isEmpty)
+    #expect(URLProtocolStub.bodyText(forHost: testHost).contains(#""status":"off_work""#))
+}
+
+@MainActor
+@Test
+func finishWorkBeforeQuitReturnsImmediatelyWhenNotWorking() async {
+    let testHost = "quit-idle"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    store.session = SupabaseSession(
+        accessToken: "access-token",
+        refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+    // startedAt == nil → 근무중이 아니므로 어떤 요청도 보내지 않고 즉시 리턴해야 한다.
+
+    await store.finishWorkBeforeQuit()
+
+    #expect(store.startedAt == nil)
+    #expect(store.pendingOperation == nil)
+    #expect(URLProtocolStub.requests(forHost: testHost).isEmpty)
 }
 
 private func isolatedDefaults() -> UserDefaults {

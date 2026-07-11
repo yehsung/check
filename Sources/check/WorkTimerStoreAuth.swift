@@ -64,9 +64,9 @@ extension WorkTimerStore {
         }
     }
 
-    /// 로그인/세션복구/가입 성공 후 내 팀을 확정한다. 소속이 있으면 currentTeamID/teamName 을 채우고,
-    /// 없으면 무소속(currentTeamID=nil, teamName="팀")으로 둔다. 가입 직후에는 트리거 타이밍 때문에
-    /// 빈 값이면 1초 간격으로 3회까지 재시도한다.
+    /// 로그인/세션복구/가입 성공 후 내 팀을 확정한다. 소속이 있으면 currentTeamID/teamName/teamGoalSeconds 를
+    /// 서버 값으로 채우고, 없으면 무소속(currentTeamID=nil, teamName="팀", 목표=기본값)으로 둔다.
+    /// 가입 직후에는 트리거 타이밍 때문에 빈 값이면 1초 간격으로 3회까지 재시도한다.
     func confirmMembership(allowRetryForFreshSignup: Bool = false) async {
         guard session != nil else { return }
         let generation = sessionGeneration
@@ -79,6 +79,8 @@ extension WorkTimerStore {
             if let membership = membership ?? nil {
                 currentTeamID = membership.teamID
                 teamName = membership.teamName
+                // 목표시간은 DB 값(시간) 그대로 초로 환산해 반영한다(캐시/일회성 없음).
+                teamGoalSeconds = membership.goalHours * 3600
                 return
             }
             if attempt + 1 < attempts {
@@ -88,6 +90,7 @@ extension WorkTimerStore {
         }
         currentTeamID = nil
         teamName = "팀"
+        teamGoalSeconds = TeamWeeklyGoal.defaultGoalSeconds
     }
 
     func authMessage(for error: Error, fallback: String) -> String {
@@ -171,6 +174,7 @@ extension WorkTimerStore {
         teamMembers = []
         currentTeamID = nil
         teamName = "팀"
+        teamGoalSeconds = TeamWeeklyGoal.defaultGoalSeconds
         teamDirectory = []
         selectedSignupTeamID = nil
         pendingOperation = nil

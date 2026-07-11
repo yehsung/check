@@ -47,13 +47,20 @@ Supabase Dashboard의 SQL Editor에서 같은 SQL을 실행해도 됩니다: `su
 새 팀은 관리자가 Supabase 대시보드의 SQL Editor(또는 `psql`)에서 아래 한 줄을 실행해 추가합니다.
 
 ```sql
-insert into public.teams (name, invite_code) values ('팀이름', '코드');
+insert into public.teams (name, invite_code, weekly_goal_hours) values ('팀이름', '코드', 60);
 ```
 
 - `name`은 가입 화면 팀 목록에 표시되는 이름입니다.
 - `invite_code`는 팀마다 고유해야 하는 내부 식별용 코드입니다(`unique` 제약). 가입 화면에는 노출되지 않습니다.
+- `weekly_goal_hours`는 팀 주간 목표시간(1~168 시간, 기본 60)입니다. 앱의 주간 목표 게이지 분모로 쓰이며, 값의 출처는 오직 이 컬럼입니다(앱에는 목표 입력 UI가 없습니다). 생략하면 60이 들어갑니다.
 
-반영 원리: 가입 화면은 `team_directory()` RPC로 `public.teams`를 이름순으로 읽어 목록을 만듭니다. 따라서 위 SQL을 실행하면 앱을 다시 배포하지 않아도 다음 가입 화면 진입부터 새 팀이 선택지로 즉시 노출됩니다. `team_directory()`는 `id`와 `name`만 반환하므로 `invite_code`는 절대 노출되지 않습니다.
+이미 있는 팀의 목표시간을 바꾸려면 아래 한 줄을 실행합니다(다음 로그인/새로고침부터 게이지에 반영됩니다).
+
+```sql
+update public.teams set weekly_goal_hours = 40 where name = '팀이름';
+```
+
+반영 원리: 가입 화면은 `team_directory()` RPC로 `public.teams`를 이름순으로 읽어 목록을 만듭니다. 따라서 위 SQL을 실행하면 앱을 다시 배포하지 않아도 다음 가입 화면 진입부터 새 팀이 선택지로 즉시 노출됩니다. `team_directory()`는 `id`와 `name`만 반환하므로 `invite_code`와 `weekly_goal_hours`는 가입 화면에 노출되지 않습니다.
 
 ## 팀원 배포 패키지 만들기
 

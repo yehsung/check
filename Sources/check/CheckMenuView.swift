@@ -31,6 +31,7 @@ struct CheckMenuView: View {
                 TeamPanel(
                     teamMembers: store.teamMembers,
                     teamName: store.teamName,
+                    teamGoalSeconds: store.teamGoalSeconds,
                     fallbackStatus: store.syncMessage,
                     now: store.displayNow,
                     myUserID: store.session?.userID,
@@ -131,6 +132,8 @@ private struct TeamPanel: View {
     let teamMembers: [TeamMemberStatus]
     // 팀 카드 헤더 이름. 로그인 후 store.teamName(미확정 시 "팀")을 그대로 표시한다.
     let teamName: String
+    // 팀 주간 목표시간(초). 출처는 teams.weekly_goal_hours(store.teamGoalSeconds). 게이지 분모로만 쓴다.
+    let teamGoalSeconds: Int
     let fallbackStatus: String
     let now: Date
     // 내 행 판정용. store.session?.userID == member.id 인 행에만 아바타 편집을 붙인다.
@@ -245,8 +248,9 @@ private struct TeamPanel: View {
         teamMembers.reduce(0) { $0 + displayWeeklySeconds($1) }
     }
 
+    // 목표시간은 store.teamGoalSeconds(= teams.weekly_goal_hours)로만 결정된다. 앱엔 목표 입력 UI가 없다.
     private var weeklyGoal: TeamWeeklyGoal {
-        TeamWeeklyGoal(workedSeconds: weeklyTotal)
+        TeamWeeklyGoal(workedSeconds: weeklyTotal, goalSeconds: teamGoalSeconds)
     }
 
     // 상태별 표시용 현재 세션 시간. active는 라이브 틱, stale은 마지막 신호에서 동결, off는 0.

@@ -92,6 +92,42 @@ func checkMenuViewRendersCompletedWeeklyGoalSnapshot() throws {
 
 @MainActor
 @Test
+func checkMenuViewRendersFortyHourGoalSnapshot() throws {
+    // 팀 목표 40시간(teams.weekly_goal_hours=40 → store.teamGoalSeconds)이 게이지 분모로 반영된 메인 화면.
+    // 게이지 표기가 "/ 40시간 00분"으로 나오는지(기본 60시간이 아니라) 육안 확인용.
+    let now = Date()
+    let members = [
+        TeamMemberStatus(
+            id: "00000000-0000-0000-0000-000000000002",
+            name: "영식",
+            status: .offWork,
+            updatedAt: nil,
+            currentSessionStartedAt: nil,
+            weeklyDurationSeconds: 12 * 3600,
+            avatarURL: CheckMascotAssets.url(for: .neutral)
+        ),
+        TeamMemberStatus(
+            id: "00000000-0000-0000-0000-000000000001",
+            name: "민수",
+            status: .offWork,
+            updatedAt: nil,
+            currentSessionStartedAt: nil,
+            weeklyDurationSeconds: 8 * 3600
+        )
+    ]
+    let store = makeTeamStore(members: members, now: now)
+    // 목표시간은 store.teamGoalSeconds 로만 결정된다(앱엔 목표 입력 UI 없음). 40시간으로 고정해 렌더한다.
+    store.teamGoalSeconds = 40 * 3600
+
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    if let path = ProcessInfo.processInfo.environment["CHECK_GOAL_40H_SNAPSHOT_PATH"] {
+        try png.write(to: URL(fileURLWithPath: path))
+    }
+}
+
+@MainActor
+@Test
 func checkMenuViewRendersLoginModeSnapshot() throws {
     // 기본 진입 화면 = 로그인 모드. 별명 필드가 없어야 하고, 하단 "가입하기" 링크로만 가입에 접근한다.
     let store = WorkTimerStore(

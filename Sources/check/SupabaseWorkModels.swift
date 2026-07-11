@@ -72,6 +72,8 @@ struct TeamDirectoryEntry: Identifiable, Equatable {
 
 struct TeamWeeklyGoal: Equatable {
     static let defaultGoalSeconds = 60 * 60 * 60
+    // 목표시간 기본값(시간 단위). teams.weekly_goal_hours 누락/null 시 폴백에 쓴다.
+    static let defaultGoalHours = defaultGoalSeconds / 3600
     static let koreanTimeZone = TimeZone(identifier: "Asia/Seoul")!
 
     let workedSeconds: Int
@@ -191,14 +193,16 @@ struct TeamDirectoryRow: Decodable {
     let name: String
 }
 
-/// memberships?select=team_id,teams(name) 응답 행. teams 는 임베드 조인.
+/// memberships?select=team_id,teams(name,weekly_goal_hours) 응답 행. teams 는 임베드 조인.
 struct MembershipRow: Decodable {
     let teamId: String
     let teams: MembershipTeamRow?
 }
 
+/// 임베드된 teams 행. weeklyGoalHours 는 목표시간(시간 단위). 누락/null 이면 기본값으로 폴백한다.
 struct MembershipTeamRow: Decodable {
     let name: String
+    let weeklyGoalHours: Int?
 }
 
 struct StartSessionRequest: Encodable {

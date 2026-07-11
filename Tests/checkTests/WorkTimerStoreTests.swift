@@ -152,6 +152,70 @@ func loadTeamDirectoryPopulatesDirectory() async {
     ])
 }
 
+// MARK: - 팀별 주간 목표시간 (teams.weekly_goal_hours 읽기 전용)
+
+@MainActor
+@Test
+func confirmMembershipAppliesServerWeeklyGoal() async {
+    let testHost = "signin-goal-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.email = "member@example.com"
+    store.password = "team-password"
+
+    await store.signIn()?.value
+
+    #expect(store.isSignedIn)
+    // 서버 픽스처의 weekly_goal_hours=40 이 초 단위 목표로 반영되어야 한다.
+    #expect(store.teamGoalSeconds == 40 * 3600)
+    // 게이지 계산: 20시간 근무 / 40시간 목표 → 진행률 0.5, 미완료.
+    let gauge = TeamWeeklyGoal(workedSeconds: 20 * 3600, goalSeconds: store.teamGoalSeconds)
+    #expect(gauge.progress == 0.5)
+    #expect(!gauge.isComplete)
+}
+
+@MainActor
+@Test
+func confirmMembershipFallsBackToDefaultWeeklyGoalWhenFieldMissing() async {
+    let testHost = "membership-no-goal-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.email = "member@example.com"
+    store.password = "team-password"
+    // 폴백이 실제로 값을 덮어쓰는지 보이기 위해 다른 값으로 미리 오염시킨다.
+    store.teamGoalSeconds = 10 * 3600
+
+    await store.signIn()?.value
+
+    #expect(store.isSignedIn)
+    // weekly_goal_hours 누락 팀은 기본 목표(60시간)로 폴백한다.
+    #expect(store.teamGoalSeconds == TeamWeeklyGoal.defaultGoalSeconds)
+}
+
 @MainActor
 @Test
 func remoteWorkingMemberKeepsDisplayClockTimerRunning() {
@@ -415,6 +479,7 @@ func signOutClearsSessionStateAndCallsLogout() async {
     )
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.teamName = "sudo 박수"
+    store.teamGoalSeconds = 40 * 3600
     store.teamDirectory = [TeamDirectoryEntry(id: "t", name: "n")]
     store.selectedSignupTeamID = "t"
     store.startedAt = Date()
@@ -440,6 +505,7 @@ func signOutClearsSessionStateAndCallsLogout() async {
     #expect(store.teamMembers.isEmpty)
     #expect(store.currentTeamID == nil)
     #expect(store.teamName == "팀")
+    #expect(store.teamGoalSeconds == TeamWeeklyGoal.defaultGoalSeconds)
     #expect(store.teamDirectory.isEmpty)
     #expect(store.selectedSignupTeamID == nil)
     #expect(store.pendingOperation == nil)
@@ -576,7 +642,7 @@ struct SyncRaceTests {
         await store.syncTask?.value
 
         let requests = URLProtocolStub.requests(forHost: testHost)
-        let bodies = URLProtocolStub.bodiesByHost[testHost] ?? []
+        let bodies = URLProtocolStub.bodies(forHost: testHost)
         let statusUpsertBodies = zip(requests, bodies)
             .filter { $0.0.url?.path == "/rest/v1/work_statuses" && $0.0.httpMethod == "POST" }
             .map { $0.1 }
@@ -787,7 +853,7 @@ func heartbeatUpsertsLastSeenWhileWorking() async {
     await store.sendHeartbeatIfWorking()
 
     let requests = URLProtocolStub.requests(forHost: testHost)
-    let bodies = URLProtocolStub.bodiesByHost[testHost] ?? []
+    let bodies = URLProtocolStub.bodies(forHost: testHost)
     let upserts = zip(requests, bodies)
         .filter { $0.0.url?.path == "/rest/v1/work_statuses" && $0.0.httpMethod == "POST" }
         .map { $0.1 }

@@ -9,8 +9,11 @@ extension URLSessionConfiguration {
 }
 
 final class URLProtocolStub: URLProtocol {
-    nonisolated(unsafe) static var requests: [URLRequest] = []
-    nonisolated(unsafe) static var bodiesByHost: [String: [String]] = [:]
+    // 기록 버퍼(요청/본문)는 여러 URLSession 워커 스레드가 동시에 append 하고 테스트 스레드가 읽으므로
+    // 단일 NSLock 으로 모든 접근을 직렬화한다. 외부는 아래 정적 헬퍼로만 접근한다(직접 노출 금지).
+    private nonisolated(unsafe) static var requests: [URLRequest] = []
+    private nonisolated(unsafe) static var bodiesByHost: [String: [String]] = [:]
+    private static let stateLock = NSLock()
     nonisolated(unsafe) static var patchWorkSessionsShouldFail = false
     nonisolated(unsafe) static var delayedHosts: Set<String> = []
     nonisolated(unsafe) static var responseDelay: TimeInterval = 0.15
@@ -26,8 +29,7 @@ final class URLProtocolStub: URLProtocol {
     }
 
     override func startLoading() {
-        Self.requests.append(request)
-        Self.bodiesByHost[request.url?.host ?? "", default: []].append(Self.bodyText(from: request))
+        Self.record(request: request, bodyText: Self.bodyText(from: request))
 
         let responseData = Self.responseData(for: request)
         let response = HTTPURLResponse(
@@ -70,12 +72,31 @@ final class URLProtocolStub: URLProtocol {
         }
     }
 
+    // 기록 헬퍼. 요청과 그 본문을 잠금 아래에서 원자적으로 함께 적재한다(zip 정합성 유지).
+    private static func record(request: URLRequest, bodyText: String) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        requests.append(request)
+        bodiesByHost[request.url?.host ?? "", default: []].append(bodyText)
+    }
+
     static func requests(forHost host: String) -> [URLRequest] {
-        requests.filter { $0.url?.host == host }
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return requests.filter { $0.url?.host == host }
     }
 
     static func bodyText(forHost host: String) -> String {
-        bodiesByHost[host, default: []].joined(separator: "\n")
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return bodiesByHost[host, default: []].joined(separator: "\n")
+    }
+
+    // 호스트별 본문 배열. requests(forHost:)와 순서가 대응하므로 zip 으로 요청-본문을 짝지을 수 있다.
+    static func bodies(forHost host: String) -> [String] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return bodiesByHost[host, default: []]
     }
 
     private static func bodyText(from request: URLRequest) -> String {
@@ -231,10 +252,21 @@ final class URLProtocolStub: URLProtocol {
         if request.url?.host == "no-team-test" {
             return Data("[]".utf8)
         }
+        // 목표시간 폴백 검증 전용 호스트: weekly_goal_hours 필드를 아예 내려주지 않는다(누락 → 60h 폴백).
+        if request.url?.host == "membership-no-goal-test" {
+            return Data(
+                """
+                [
+                  {"team_id": "10000000-0000-0000-0000-000000000001", "teams": {"name": "sudo 박수"}}
+                ]
+                """.utf8
+            )
+        }
+        // 기본 픽스처는 팀 목표시간 40시간을 함께 내려준다(멤버십 조회 한 번으로 목표까지 확정).
         return Data(
             """
             [
-              {"team_id": "10000000-0000-0000-0000-000000000001", "teams": {"name": "sudo 박수"}}
+              {"team_id": "10000000-0000-0000-0000-000000000001", "teams": {"name": "sudo 박수", "weekly_goal_hours": 40}}
             ]
             """.utf8
         )

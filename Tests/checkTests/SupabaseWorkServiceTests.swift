@@ -311,10 +311,34 @@ func fetchOwnMembershipParsesTeamIDAndName() async throws {
 
     #expect(membership?.teamID == "10000000-0000-0000-0000-000000000001")
     #expect(membership?.teamName == "sudo 박수")
+    // 임베드된 teams.weekly_goal_hours 를 같은 쿼리로 함께 읽어 온다.
+    #expect(membership?.goalHours == 40)
     let request = try #require(URLProtocolStub.requests(forHost: testHost).first {
         $0.url?.path == "/rest/v1/memberships"
     })
     #expect(request.url?.query?.contains("user_id=eq.00000000-0000-0000-0000-000000000002") == true)
+    // select 가 teams(name,weekly_goal_hours)로 확장되어야 한다.
+    #expect(request.url?.query?.contains("weekly_goal_hours") == true)
+}
+
+@Test
+func fetchOwnMembershipFallsBackToDefaultGoalWhenFieldMissing() async throws {
+    let testHost = "membership-no-goal-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let membership = try await service.fetchOwnMembership(
+        accessToken: "access-token",
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+
+    #expect(membership?.teamID == "10000000-0000-0000-0000-000000000001")
+    // weekly_goal_hours 가 누락된 팀은 기본 목표(60시간)로 폴백한다.
+    #expect(membership?.goalHours == TeamWeeklyGoal.defaultGoalHours)
+    #expect(membership?.goalHours == 60)
 }
 
 @Test

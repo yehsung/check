@@ -37,6 +37,9 @@ final class WorkTimerStore {
     var selectedSignupTeamID: String?
     var teamName = "팀"
     var currentTeamID: String?
+    // 팀 주간 목표시간(초). 출처는 오직 teams.weekly_goal_hours(멤버십 조회 시 확정). 앱은 읽기 전용이다.
+    // confirmMembership 성공 시 서버 값으로 갱신하고, signOut/무소속이면 기본값으로 되돌린다.
+    var teamGoalSeconds = TeamWeeklyGoal.defaultGoalSeconds
     var pendingOperation: PendingWorkOperation?
     var pendingStopStartedAt: Date?
     var pendingStopEndedAt: Date?

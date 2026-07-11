@@ -303,12 +303,14 @@ actor SupabaseWorkService {
     }
 
     /// 로그인 후 내 팀을 확정한다. 소속이 없으면 nil.
-    func fetchOwnMembership(accessToken: String, userID: String) async throws -> (teamID: String, teamName: String)? {
+    /// 목표시간(goalHours)은 teams.weekly_goal_hours 를 그대로 읽어 온다(같은 쿼리라 추가 요청 없음).
+    /// 누락/null 이면 기본 목표(60시간)로 폴백한다.
+    func fetchOwnMembership(accessToken: String, userID: String) async throws -> (teamID: String, teamName: String, goalHours: Int)? {
         let data = try await send(
             path: "/rest/v1/memberships",
             method: "GET",
             queryItems: [
-                URLQueryItem(name: "select", value: "team_id,teams(name)"),
+                URLQueryItem(name: "select", value: "team_id,teams(name,weekly_goal_hours)"),
                 URLQueryItem(name: "user_id", value: "eq.\(userID)"),
                 URLQueryItem(name: "limit", value: "1")
             ],
@@ -320,7 +322,11 @@ actor SupabaseWorkService {
         guard let row = rows.first else {
             return nil
         }
-        return (teamID: row.teamId, teamName: row.teams?.name ?? "팀")
+        return (
+            teamID: row.teamId,
+            teamName: row.teams?.name ?? "팀",
+            goalHours: row.teams?.weeklyGoalHours ?? TeamWeeklyGoal.defaultGoalHours
+        )
     }
 
     private func upsertStatus(accessToken: String, teamID: String, userID: String, status: String, activeSessionID: String?) async throws {

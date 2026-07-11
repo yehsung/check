@@ -1,5 +1,0 @@
-zsh:1: no such file or directory: ./scripts/package-local.sh
-EXIT:127
-
-cleanup: tmux command finished; session ulw-qa-c003 will be killed by orchestrator
-cleanup: killed tmux session ulw-qa-c003

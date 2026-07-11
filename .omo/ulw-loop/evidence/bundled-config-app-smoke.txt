@@ -1,1 +1,0 @@
-app launched without env and stayed alive for 3s (pid=60017)

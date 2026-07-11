@@ -355,10 +355,15 @@ extension WorkTimerStore {
     static let displayNameKey = "check.displayName"
     static let overlayEnabledKey = "check.overlayEnabled"
 
+    /// 캐릭터 오버레이 표시 여부를 지정하고 설정을 저장한다.
+    func setOverlayEnabled(_ enabled: Bool) {
+        isOverlayEnabled = enabled
+        defaults.set(enabled, forKey: Self.overlayEnabledKey)
+    }
+
     /// 캐릭터 오버레이 표시를 토글하고 설정을 저장한다.
     func toggleOverlayEnabled() {
-        isOverlayEnabled.toggle()
-        defaults.set(isOverlayEnabled, forKey: Self.overlayEnabledKey)
+        setOverlayEnabled(!isOverlayEnabled)
     }
     static let accessTokenKey = "check.session.accessToken"
     static let refreshTokenKey = "check.session.refreshToken"

@@ -47,4 +47,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
+# Apple Silicon에서 미서명 번들은 실행이 막히거나 Gatekeeper 경험이 나빠지므로
+# ad-hoc 서명(--sign -)을 남긴다. Developer ID 서명/공증은 범위 밖(README 참고).
+codesign --force --deep --sign - "$APP_DIR" >&2
+codesign --verify --deep --strict "$APP_DIR" >&2
+
 echo "$APP_DIR"

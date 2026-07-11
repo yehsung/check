@@ -1,79 +1,124 @@
 import SwiftUI
 
-struct MetricRow: View {
-    let icon: String
-    let title: String
-    let value: String
-    let detail: String
-    let tint: Color
-    var showsProgress = false
+// MARK: - Start / Stop pill
+
+struct WorkTogglePill: View {
+    let isWorking: Bool
+    let enabled: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(title)
-                        .font(.caption)
-                        .foregroundStyle(CheckTheme.secondaryText)
-                    Spacer()
-                    Text(value)
-                        .font(.system(.body, design: .rounded).weight(.semibold))
-                        .foregroundStyle(CheckTheme.primaryText)
-                        .lineLimit(1)
-                }
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .lineLimit(1)
-                if showsProgress {
-                    Capsule()
-                        .fill(tint)
-                        .frame(height: 3)
-                }
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: isWorking ? "stop.fill" : "play.fill")
+                    .font(.system(size: 11, weight: .black))
+                Text(isWorking ? "근무 종료" : "근무 시작")
+                    .font(.subheadline.weight(.bold))
             }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18)
+            .frame(height: 40)
+            .background(
+                Capsule()
+                    .fill(isWorking ? CheckTheme.stopGradient : CheckTheme.startGradient)
+            )
+            .overlay(
+                Capsule().stroke(Color.white.opacity(0.22), lineWidth: 1)
+            )
+            .brightness(hovering ? 0.06 : 0)
+            .shadow(color: (isWorking ? CheckTheme.pending : CheckTheme.working).opacity(0.30), radius: 8, y: 2)
         }
-        .padding(10)
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .opacity(enabled ? 1 : 0.45)
+        .disabled(!enabled)
     }
 }
 
-struct TeamMemberRow: View {
-    let name: String
-    let status: String
-    let detail: String
-    let tint: Color
+// MARK: - Chips
+
+struct StatusChip: View {
+    let isWorking: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
+        Text(isWorking ? "근무중" : "근무종료")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(isWorking ? .white : CheckTheme.secondaryText)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background {
+                if isWorking {
+                    Capsule().fill(CheckTheme.working.opacity(0.85))
+                } else {
+                    Capsule().stroke(CheckTheme.border, lineWidth: 1)
+                }
+            }
+            .fixedSize()
+    }
+}
+
+struct CountChip: View {
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 4) {
             Circle()
-                .fill(tint)
-                .frame(width: 7, height: 7)
-                .padding(.top, 4)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name)
-                    .lineLimit(1)
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 6)
-            Text(status)
-                .foregroundStyle(CheckTheme.secondaryText)
-                .lineLimit(1)
+                .fill(CheckTheme.working)
+                .frame(width: 6, height: 6)
+            Text("\(count)명 근무중")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(CheckTheme.working)
         }
-        .font(.caption)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(CheckTheme.working.opacity(0.16)))
+        .fixedSize()
     }
 }
+
+// MARK: - Initial avatar
+
+struct InitialAvatar: View {
+    let name: String
+    var size: CGFloat = 30
+
+    private var initial: String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "?" : String(trimmed.prefix(1))
+    }
+
+    var body: some View {
+        let color = CheckTheme.avatarColor(for: name)
+        Text(initial)
+            .font(.system(size: size * 0.44, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(
+                Circle().fill(
+                    LinearGradient(
+                        colors: [color, color.opacity(0.72)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            )
+            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+    }
+}
+
+// MARK: - Weekly goal gauge
 
 struct TeamGoalGauge: View {
     let goal: TeamWeeklyGoal
 
+    private var percent: Int {
+        Int((goal.progress * 100).rounded())
+    }
+
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 7) {
             HStack(spacing: 6) {
                 Text("주간 목표")
                     .font(.caption.weight(.semibold))
@@ -89,41 +134,84 @@ struct TeamGoalGauge: View {
                         .foregroundStyle(CheckTheme.working)
                         .lineLimit(1)
                 } else {
-                    Text("\(MenuBarStatusFormatter.hoursMinutes(goal.remainingSeconds)) 남음")
-                        .font(.caption2)
-                        .foregroundStyle(CheckTheme.secondaryText)
-                        .lineLimit(1)
+                    Text("\(percent)%")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .monospacedDigit()
                 }
             }
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.black.opacity(0.22))
+                        .fill(CheckTheme.trackFill)
                     Capsule()
-                        .fill(CheckTheme.working)
-                        .frame(width: proxy.size.width * goal.progress)
+                        .fill(CheckTheme.gaugeGradient)
+                        .frame(width: max(8, proxy.size.width * goal.progress))
+                        .shadow(color: CheckTheme.working.opacity(0.35), radius: 4, y: 1)
                 }
             }
-            .frame(height: 7)
+            .frame(height: 8)
         }
-        .padding(.horizontal, 10)
-        .padding(.bottom, 10)
     }
 }
 
-struct CompactButton: View {
+// MARK: - Team member row
+
+struct TeamMemberRow: View {
+    let name: String
+    let detail: String
+    let isWorking: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            InitialAvatar(name: name, size: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            StatusChip(isWorking: isWorking)
+        }
+    }
+}
+
+// MARK: - Auth buttons + fields
+
+struct AuthButton: View {
     let title: String
     let icon: String
+    var prominent: Bool = false
     let action: () -> Void
+
+    @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: icon)
-                .font(.caption.weight(.semibold))
+                .font(.caption.weight(.bold))
+                .foregroundStyle(prominent ? .white : CheckTheme.primaryText)
                 .frame(maxWidth: .infinity)
+                .frame(height: 34)
+                .background {
+                    if prominent {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(CheckTheme.startGradient)
+                    } else {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.white.opacity(0.06))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(CheckTheme.border, lineWidth: 1))
+                    }
+                }
+                .brightness(hovering ? 0.05 : 0)
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.small)
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 
@@ -134,10 +222,11 @@ struct CredentialField: View {
     var isSecure = false
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 9) {
             Image(systemName: icon)
+                .font(.system(size: 12))
                 .foregroundStyle(CheckTheme.secondaryText)
-                .frame(width: 14)
+                .frame(width: 16)
             ZStack(alignment: .leading) {
                 Text(displayText)
                     .foregroundStyle(text.isEmpty ? CheckTheme.secondaryText : CheckTheme.primaryText)
@@ -150,13 +239,13 @@ struct CredentialField: View {
                     .opacity(0.001)
             }
         }
-        .font(.caption)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
+        .font(.subheadline)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.black.opacity(0.18))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(CheckTheme.border))
+            RoundedRectangle(cornerRadius: 8)
+                .fill(CheckTheme.fieldFill)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(CheckTheme.border, lineWidth: 1))
         )
     }
 
@@ -180,21 +269,99 @@ struct CredentialField: View {
     }
 }
 
+// MARK: - Brand header (login)
+
+struct BrandHeader: View {
+    var body: some View {
+        HStack(spacing: 11) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(CheckTheme.startGradient)
+                    .frame(width: 38, height: 38)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 18, weight: .black))
+                    .foregroundStyle(.white)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("check")
+                    .font(.system(.title3, design: .rounded).weight(.heavy))
+                    .foregroundStyle(CheckTheme.primaryText)
+                Text("sudo 박수 팀 근무 타이머")
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+// MARK: - Footer utility bar pieces
+
+struct SyncStatusView: View {
+    let message: String
+
+    private var isSynced: Bool {
+        message == "동기화됨"
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(isSynced ? CheckTheme.working : CheckTheme.pending)
+                .frame(width: 7, height: 7)
+                .shadow(color: (isSynced ? CheckTheme.working : CheckTheme.pending).opacity(0.5), radius: 3)
+            Text(message)
+                .font(.caption2)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .lineLimit(1)
+        }
+    }
+}
+
+struct IconButton: View {
+    let icon: String
+    let help: String
+    var tint: Color = CheckTheme.secondaryText
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(hovering ? CheckTheme.primaryText : tint)
+                .frame(width: 27, height: 27)
+                .background(
+                    Circle().fill(Color.white.opacity(hovering ? 0.14 : 0.06))
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+    }
+}
+
+// MARK: - Shared bits
+
 struct PanelDivider: View {
     var body: some View {
         Rectangle()
             .fill(CheckTheme.border)
             .frame(height: 1)
-            .padding(.horizontal, 8)
     }
 }
 
 extension View {
     func panelStyle() -> some View {
         background(
-            RoundedRectangle(cornerRadius: 7)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(CheckTheme.panel)
-                .overlay(RoundedRectangle(cornerRadius: 7).stroke(CheckTheme.border))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(CheckTheme.border, lineWidth: 1)
+                )
         )
     }
 }

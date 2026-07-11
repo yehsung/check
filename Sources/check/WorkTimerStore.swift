@@ -8,10 +8,13 @@ final class WorkTimerStore {
     var accumulatedSeconds: Int = 0
     var tickerTask: Task<Void, Never>?
     var refreshTask: Task<Void, Never>?
+    var syncTask: Task<Void, Never>?
     let service: SupabaseWorkService
     let hasAnonKey: Bool
     let defaults: UserDefaults
     var session: SupabaseSession?
+    var sessionGeneration = 0
+    var currentSessionID: String?
 
     var snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
     var displayNow = Date()
@@ -20,6 +23,9 @@ final class WorkTimerStore {
     var password = ""
     var syncMessage: String
     var teamMembers: [TeamMemberStatus] = []
+    var pendingOperation: PendingWorkOperation?
+    var pendingStopStartedAt: Date?
+    var pendingStopEndedAt: Date?
 
     var todayDuration: Int {
         accumulatedSeconds + (startedAt.map { Int(displayNow.timeIntervalSince($0)) } ?? 0)
@@ -60,6 +66,7 @@ final class WorkTimerStore {
         guard startedAt == nil else { return }
         displayNow = now
         startedAt = now
+        currentSessionID = UUID().uuidString
         snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
         startTimer()
         syncCurrentStatus()
@@ -69,11 +76,12 @@ final class WorkTimerStore {
         guard let startedAt else { return }
         displayNow = now
         let duration = max(0, Int(now.timeIntervalSince(startedAt)))
-        accumulatedSeconds += max(0, Int(now.timeIntervalSince(startedAt)))
+        let sessionStart = startedAt
+        accumulatedSeconds += duration
         self.startedAt = nil
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
         stopTimerIfIdle()
-        syncCurrentStatus(durationSeconds: duration)
+        syncCurrentStatus(durationSeconds: duration, sessionStartedAt: sessionStart, endedAt: now)
     }
 
     @discardableResult
@@ -136,6 +144,7 @@ final class WorkTimerStore {
         refreshTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
+                await self?.retryPendingSync()
                 await self?.refreshTeamStatus()
             }
         }

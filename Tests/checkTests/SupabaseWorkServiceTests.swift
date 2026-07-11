@@ -87,7 +87,8 @@ func startWorkEncodesRestBodiesAsSnakeCase() async throws {
 
     try await service.startWork(
         accessToken: "access-token",
-        userID: "00000000-0000-0000-0000-000000000002"
+        userID: "00000000-0000-0000-0000-000000000002",
+        sessionID: "30000000-0000-0000-0000-000000000009"
     )
 
     let bodyText = URLProtocolStub.bodyText(forHost: testHost)
@@ -113,6 +114,24 @@ func fetchTeamStatusesIncludesCurrentAndWeeklyDurations() async throws {
     #expect(statuses.first?.status == .working)
     #expect(statuses.first?.currentSessionStartedAt != nil)
     #expect(statuses.first?.weeklyDurationSeconds == 7200)
+}
+
+@Test
+func fetchTeamStatusesSumsOnlyTodaySessionsForTodayDuration() async throws {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://today-hours-test")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let now = ISO8601DateFormatter().date(from: "2026-07-10T12:00:00Z")!
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", now: now)
+
+    #expect(statuses.count == 1)
+    // Two completed sessions exist (3600s today + 1800s earlier this week).
+    #expect(statuses.first?.weeklyDurationSeconds == 5400)
+    // Only the session started on the Korean calendar day of `now` is counted.
+    #expect(statuses.first?.todayDurationSeconds == 3600)
 }
 
 @Test

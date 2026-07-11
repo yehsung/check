@@ -3,3 +3,4 @@
 dist/
 Config/Supabase.local.xcconfig
 .env.local
+.claude/

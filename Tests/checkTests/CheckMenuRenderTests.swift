@@ -123,6 +123,39 @@ func checkMenuViewRendersSignupNicknameSnapshot() throws {
     }
 }
 
+@MainActor
+@Test
+func checkMenuViewRendersLoginErrorSnapshot() throws {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedRenderDefaults()
+    )
+    store.email = "member@example.com"
+    store.password = "wrong-password"
+    store.syncMessage = "로그인 정보 오류"
+
+    let view = CheckMenuView(store: store)
+        .frame(width: 340)
+        .fixedSize()
+    let renderer = ImageRenderer(content: view)
+    renderer.scale = 2
+
+    guard let image = renderer.nsImage,
+          let tiffData = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiffData),
+          let pngData = bitmap.representation(using: .png, properties: [:])
+    else {
+        Issue.record("Login-error CheckMenuView should render to a PNG snapshot")
+        return
+    }
+
+    #expect(image.size.width > 0)
+    #expect(image.size.height > 0)
+    if let path = ProcessInfo.processInfo.environment["CHECK_LOGIN_ERROR_RENDER_SNAPSHOT_PATH"] {
+        try pngData.write(to: URL(fileURLWithPath: path))
+    }
+}
+
 private func isolatedRenderDefaults() -> UserDefaults {
     let suiteName = "check-render-tests-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!

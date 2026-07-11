@@ -66,7 +66,7 @@ actor SupabaseWorkService {
         return SupabaseSession(accessToken: response.accessToken, refreshToken: response.refreshToken, userID: response.user.id)
     }
 
-    func fetchTeamStatuses(accessToken: String) async throws -> [TeamMemberStatus] {
+    func fetchTeamStatuses(accessToken: String, now: Date = Date()) async throws -> [TeamMemberStatus] {
         let data = try await send(
             path: "/rest/v1/work_statuses",
             method: "GET",
@@ -84,6 +84,7 @@ actor SupabaseWorkService {
         let weeklySessions = try await fetchWeeklySessions(accessToken: accessToken)
         let activeByUser = Dictionary(grouping: activeSessions, by: \.userId)
         let weeklyByUser = weeklyDurations(from: weeklySessions)
+        let todayByUser = todayDurations(from: weeklySessions, now: now)
         return rows.map { row in
             let activeStartedAt = activeByUser[row.userId]?.compactMap { parseDate($0.startedAt) }.min()
             return TeamMemberStatus(
@@ -92,7 +93,8 @@ actor SupabaseWorkService {
                 status: row.status == "working" ? .working : .offWork,
                 updatedAt: row.updatedAt.flatMap(parseDate),
                 currentSessionStartedAt: activeStartedAt,
-                weeklyDurationSeconds: weeklyByUser[row.userId, default: 0]
+                weeklyDurationSeconds: weeklyByUser[row.userId, default: 0],
+                todayDurationSeconds: todayByUser[row.userId, default: 0]
             )
         }
     }
@@ -132,13 +134,30 @@ actor SupabaseWorkService {
 
     private func weeklyDurations(from rows: [WorkSessionRow]) -> [String: Int] {
         return rows.reduce(into: [:]) { totals, row in
-            guard let duration = row.durationSeconds ?? row.endedAt.flatMap(parseDate).map({
-                max(0, Int($0.timeIntervalSince(parseDate(row.startedAt) ?? $0)))
-            }) else {
+            guard let duration = sessionDuration(for: row) else {
                 return
             }
             totals[row.userId, default: 0] += duration
         }
+    }
+
+    private func todayDurations(from rows: [WorkSessionRow], now: Date) -> [String: Int] {
+        let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
+        return rows.reduce(into: [:]) { totals, row in
+            guard let started = parseDate(row.startedAt), started >= dayStart else {
+                return
+            }
+            guard let duration = sessionDuration(for: row) else {
+                return
+            }
+            totals[row.userId, default: 0] += duration
+        }
+    }
+
+    private func sessionDuration(for row: WorkSessionRow) -> Int? {
+        row.durationSeconds ?? row.endedAt.flatMap(parseDate).map({
+            max(0, Int($0.timeIntervalSince(parseDate(row.startedAt) ?? $0)))
+        })
     }
 
     private func weekStart() -> Date {
@@ -149,8 +168,7 @@ actor SupabaseWorkService {
         dateFormatter.date(from: value)
     }
 
-    func startWork(accessToken: String, userID: String) async throws {
-        let sessionID = UUID().uuidString
+    func startWork(accessToken: String, userID: String, sessionID: String) async throws {
         try await sendNoBody(
             path: "/rest/v1/work_sessions",
             method: "POST",
@@ -166,8 +184,8 @@ actor SupabaseWorkService {
         try await upsertStatus(accessToken: accessToken, userID: userID, status: "working", activeSessionID: sessionID)
     }
 
-    func stopWork(accessToken: String, userID: String, durationSeconds: Int) async throws {
-        try await sendNoBody(
+    func stopWork(accessToken: String, userID: String, startedAt: Date, endedAt: Date, durationSeconds: Int, fallbackSessionID: String) async throws {
+        let patched = try await send(
             path: "/rest/v1/work_sessions",
             method: "PATCH",
             queryItems: [
@@ -176,13 +194,41 @@ actor SupabaseWorkService {
                 URLQueryItem(name: "ended_at", value: "is.null")
             ],
             body: StopSessionRequest(
-                endedAt: dateFormatter.string(from: Date()),
+                endedAt: dateFormatter.string(from: endedAt),
                 durationSeconds: max(0, durationSeconds)
             ),
             accessToken: accessToken,
-            prefer: "return=minimal"
+            prefer: "return=representation"
         )
+        let updatedRows = (try? decoder.decode([WorkSessionRow].self, from: patched)) ?? []
+        if updatedRows.isEmpty {
+            try await sendNoBody(
+                path: "/rest/v1/work_sessions",
+                method: "POST",
+                queryItems: [URLQueryItem(name: "on_conflict", value: "id")],
+                body: CompletedSessionRequest(
+                    id: fallbackSessionID,
+                    teamId: SupabaseConfig.teamID,
+                    userId: userID,
+                    startedAt: dateFormatter.string(from: startedAt),
+                    endedAt: dateFormatter.string(from: endedAt),
+                    durationSeconds: max(0, durationSeconds)
+                ),
+                accessToken: accessToken,
+                prefer: "resolution=ignore-duplicates,return=minimal"
+            )
+        }
         try await upsertStatus(accessToken: accessToken, userID: userID, status: "off_work", activeSessionID: nil)
+    }
+
+    func signOut(accessToken: String) async {
+        _ = try? await send(
+            path: "/auth/v1/logout",
+            method: "POST",
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
     }
 
     private func upsertStatus(accessToken: String, userID: String, status: String, activeSessionID: String?) async throws {

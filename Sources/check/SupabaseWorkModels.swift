@@ -154,6 +154,15 @@ struct StopSessionRequest: Encodable {
     let durationSeconds: Int
 }
 
+struct CompletedSessionRequest: Encodable {
+    let id: String
+    let teamId: String
+    let userId: String
+    let startedAt: String
+    let endedAt: String
+    let durationSeconds: Int
+}
+
 struct StatusUpsertRequest: Encodable {
     let teamId: String
     let userId: String

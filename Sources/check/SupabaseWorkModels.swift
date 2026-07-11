@@ -70,6 +70,21 @@ struct TeamDirectoryEntry: Identifiable, Equatable {
     let name: String
 }
 
+/// 팀 리그(이번 주 팀별 총 근무시간 경쟁)의 한 행. team_weekly_leaderboard() RPC 로 받아 온다.
+/// id 는 팀 id(내 팀 하이라이트 판정에 쓴다). invite_code 는 RPC 가 반환하지 않으므로 노출되지 않는다.
+struct TeamLeaderboardEntry: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let weeklyGoalHours: Int
+    let totalSeconds: Int
+    let workingCount: Int
+
+    /// 목표 대비 진행률 게이지(주간 목표 게이지와 같은 규약: 0~1 클램프, 목표=weeklyGoalHours 시간).
+    var goal: TeamWeeklyGoal {
+        TeamWeeklyGoal(workedSeconds: totalSeconds, goalSeconds: weeklyGoalHours * 3600)
+    }
+}
+
 struct TeamWeeklyGoal: Equatable {
     static let defaultGoalSeconds = 60 * 60 * 60
     // 목표시간 기본값(시간 단위). teams.weekly_goal_hours 누락/null 시 폴백에 쓴다.
@@ -191,6 +206,15 @@ struct WorkSessionRow: Decodable {
 struct TeamDirectoryRow: Decodable {
     let id: String
     let name: String
+}
+
+/// team_weekly_leaderboard() RPC 응답 행. total_seconds 는 bigint(초)라 Int(64비트)로 받는다.
+struct TeamLeaderboardRow: Decodable {
+    let teamId: String
+    let teamName: String
+    let weeklyGoalHours: Int
+    let totalSeconds: Int
+    let workingCount: Int
 }
 
 /// memberships?select=team_id,teams(name,weekly_goal_hours) 응답 행. teams 는 임베드 조인.

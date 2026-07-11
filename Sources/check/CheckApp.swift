@@ -22,6 +22,13 @@ struct CheckApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = WorkTimerStore()
+    // 근무중 3D 캐릭터 오버레이. 패널은 여기서 1회 생성하고 숨김으로 시작하며, 루트 뷰가
+    // store.snapshot.isWorking을 관찰해 표시/숨김을 전환한다(store는 읽기 전용으로만 참조).
+    private var overlayController: CheckOverlayController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        overlayController = CheckOverlayController(store: store)
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // 로그인 안 됨/키 없음/근무중 아님 → 지연할 이유가 없으므로 즉시 종료.

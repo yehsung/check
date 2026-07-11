@@ -184,6 +184,9 @@ final class URLProtocolStub: URLProtocol {
         if request.url?.path == "/rest/v1/rpc/team_directory" {
             return teamDirectoryData()
         }
+        if request.url?.path == "/rest/v1/rpc/team_weekly_leaderboard" {
+            return teamLeaderboardData()
+        }
         if request.url?.path == "/rest/v1/memberships", request.httpMethod == "GET" {
             return membershipsData(for: request)
         }
@@ -242,6 +245,20 @@ final class URLProtocolStub: URLProtocol {
             [
               {"id": "10000000-0000-0000-0000-000000000001", "name": "sudo 박수"},
               {"id": "20000000-0000-0000-0000-000000000002", "name": "오목교 브라더스"}
+            ]
+            """.utf8
+        )
+    }
+
+    // 팀 리그 픽스처: 3팀, 내 팀(stubTeamID)이 총시간 2위. 클라 정렬이 실제로 동작하는지 보이려고
+    // 일부러 총시간 내림차순이 아닌 순서(작은→큰→중간)로 내려준다. 정렬 후 [90000, 72000(내 팀), 36000].
+    private static func teamLeaderboardData() -> Data {
+        Data(
+            """
+            [
+              {"team_id": "30000000-0000-0000-0000-000000000003", "team_name": "코드 크래프터", "weekly_goal_hours": 50, "total_seconds": 36000, "working_count": 0},
+              {"team_id": "20000000-0000-0000-0000-000000000002", "team_name": "오목교 브라더스", "weekly_goal_hours": 60, "total_seconds": 90000, "working_count": 1},
+              {"team_id": "10000000-0000-0000-0000-000000000001", "team_name": "sudo 박수", "weekly_goal_hours": 40, "total_seconds": 72000, "working_count": 3}
             ]
             """.utf8
         )

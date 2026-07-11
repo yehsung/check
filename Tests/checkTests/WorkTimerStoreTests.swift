@@ -152,6 +152,118 @@ func loadTeamDirectoryPopulatesDirectory() async {
     ])
 }
 
+// MARK: - K: 팀 리그 (로드/정렬/초기화)
+
+@MainActor
+@Test
+func loadLeaderboardSortsDescendingAndKeepsMyTeamSecond() async {
+    let testHost = "leaderboard-store-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(
+        accessToken: "access-token",
+        refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    await store.performLoadLeaderboard()
+
+    // 서버 픽스처는 총시간 내림차순이 아니지만, 클라에서 내림차순으로 정렬해야 한다.
+    #expect(store.leaderboard.count == 3)
+    #expect(store.leaderboard.map(\.totalSeconds) == [90000, 72000, 36000])
+    // 내 팀(stubTeamID)은 총시간 72000 으로 2위여야 한다.
+    #expect(store.leaderboard[1].id == URLProtocolStub.stubTeamID)
+}
+
+@MainActor
+@Test
+func toggleLeaderboardOpensAndClosesPage() async {
+    let testHost = "leaderboard-toggle-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(
+        accessToken: "access-token",
+        refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    #expect(!store.isLeaderboardVisible)
+
+    // 여는 순간 페이지가 노출되고 순위 로드(Task)가 발사된다.
+    store.toggleLeaderboard()
+    #expect(store.isLeaderboardVisible)
+    // loadLeaderboard 는 Task 를 발사하므로 목록이 채워질 때까지 폴링한다(로그아웃 폴링과 같은 패턴).
+    var loaded = false
+    for _ in 0..<200 {
+        if store.leaderboard.count == 3 {
+            loaded = true
+            break
+        }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(loaded)
+
+    // 다시 토글하면 페이지가 닫힌다.
+    store.toggleLeaderboard()
+    #expect(!store.isLeaderboardVisible)
+}
+
+@MainActor
+@Test
+func signOutClearsLeaderboardState() async {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://leaderboard-signout-test")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    store.session = SupabaseSession(
+        accessToken: "access-token",
+        refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.isLeaderboardVisible = true
+    store.leaderboard = [
+        TeamLeaderboardEntry(id: URLProtocolStub.stubTeamID, name: "sudo 박수", weeklyGoalHours: 40, totalSeconds: 72000, workingCount: 3)
+    ]
+
+    store.signOut()
+
+    // 로그아웃 시 리그 페이지 상태(목록·노출 플래그)가 초기화되어야 한다.
+    #expect(store.leaderboard.isEmpty)
+    #expect(!store.isLeaderboardVisible)
+}
+
 // MARK: - 팀별 주간 목표시간 (teams.weekly_goal_hours 읽기 전용)
 
 @MainActor

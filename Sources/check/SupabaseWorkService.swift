@@ -302,6 +302,28 @@ actor SupabaseWorkService {
         return rows.map { TeamDirectoryEntry(id: $0.id, name: $0.name) }
     }
 
+    /// 팀 리그(이번 주 팀별 총 근무시간). team_weekly_leaderboard() RPC 를 로그인 토큰으로 호출한다.
+    /// RPC 는 모든 팀의 총합/목표/근무중 인원만 반환하며 invite_code 는 노출하지 않는다.
+    func fetchTeamLeaderboard(accessToken: String) async throws -> [TeamLeaderboardEntry] {
+        let data = try await send(
+            path: "/rest/v1/rpc/team_weekly_leaderboard",
+            method: "POST",
+            body: EmptyBody(),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        let rows = try decoder.decode([TeamLeaderboardRow].self, from: data)
+        return rows.map {
+            TeamLeaderboardEntry(
+                id: $0.teamId,
+                name: $0.teamName,
+                weeklyGoalHours: $0.weeklyGoalHours,
+                totalSeconds: $0.totalSeconds,
+                workingCount: $0.workingCount
+            )
+        }
+    }
+
     /// 로그인 후 내 팀을 확정한다. 소속이 없으면 nil.
     /// 목표시간(goalHours)은 teams.weekly_goal_hours 를 그대로 읽어 온다(같은 쿼리라 추가 요청 없음).
     /// 누락/null 이면 기본 목표(60시간)로 폴백한다.

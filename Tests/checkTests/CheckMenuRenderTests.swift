@@ -321,7 +321,9 @@ func windowHeightIsConstantAcrossAllStates() throws {
         renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now))),
         // 팀원이 남는 공간을 초과(스크롤)해도 창(뷰) 높이는 절대 변하지 않아야 한다.
         renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 8), now: now))),
-        renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewLongSessionBanner: true))
+        renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewLongSessionBanner: true)),
+        // 리그 페이지(팀 카드를 대체)도 같은 창 높이를 유지해야 한다.
+        renderedPixelHeight(CheckMenuView(store: makeLeaderboardStore()))
     ].map { try #require($0) }
 
     // 모든 상태의 픽셀 높이가 정확히 하나로 수렴해야 한다.
@@ -386,6 +388,22 @@ func checkMenuViewRendersPresenceTeamSnapshot() throws {
     let png = try renderPNG(CheckMenuView(store: store))
     #expect(png.count > 0)
     if let path = ProcessInfo.processInfo.environment["CHECK_PRESENCE_TEAM_SNAPSHOT_PATH"] {
+        try png.write(to: URL(fileURLWithPath: path))
+    }
+}
+
+// MARK: - K: 팀 리그 페이지
+
+@MainActor
+@Test
+func checkMenuViewRendersLeaderboardSnapshot() throws {
+    // 리그 페이지: 3팀 순위(금·은·동 배지), 내 팀(2위) 하이라이트, 목표 대비 미니 게이지 + "N명 근무중" 캡션이
+    // 340pt 폭 안에서 잘림·겹침 없이 수납되는지 육안 확인한다.
+    let store = makeLeaderboardStore()
+
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    if let path = ProcessInfo.processInfo.environment["CHECK_LEADERBOARD_SNAPSHOT_PATH"] {
         try png.write(to: URL(fileURLWithPath: path))
     }
 }
@@ -501,6 +519,9 @@ func dumpTrackFSnapshots() throws {
     try write(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 5), now: now)), "main-five.png")
     try write(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 6), now: now)), "main-six.png")
     try write(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 8), now: now)), "main-eight-scroll.png")
+
+    // 리그 페이지: 3팀 순위(금·은·동), 내 팀 2위 하이라이트.
+    try write(CheckMenuView(store: makeLeaderboardStore()), "leaderboard-three.png")
 }
 
 // MARK: - E3: 다운스케일 순수 함수
@@ -610,6 +631,23 @@ private func manyMembers(now: Date, count: Int = 8) -> [TeamMemberStatus] {
             lastSeenAt: isStale ? now.addingTimeInterval(-420) : nil
         )
     }
+}
+
+/// 리그 페이지 스텁 표본. 총시간 내림차순, 내 팀(stubTeamID)이 2위.
+private let sampleLeaderboard: [TeamLeaderboardEntry] = [
+    TeamLeaderboardEntry(id: "20000000-0000-0000-0000-000000000002", name: "오목교 브라더스", weeklyGoalHours: 60, totalSeconds: 90_000, workingCount: 1),
+    TeamLeaderboardEntry(id: URLProtocolStub.stubTeamID, name: "sudo 박수", weeklyGoalHours: 40, totalSeconds: 72_000, workingCount: 3),
+    TeamLeaderboardEntry(id: "30000000-0000-0000-0000-000000000003", name: "코드 크래프터", weeklyGoalHours: 50, totalSeconds: 36_000, workingCount: 0)
+]
+
+/// 리그 페이지가 열린 로그인 스토어. 내 팀(currentTeamID=stubTeamID)이 하이라이트되도록 세팅한다.
+@MainActor
+private func makeLeaderboardStore() -> WorkTimerStore {
+    let store = makeTeamStore(members: [], now: Date())
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.leaderboard = sampleLeaderboard
+    store.isLeaderboardVisible = true
+    return store
 }
 
 /// 가입 화면 팀 선택 스텁 표본.

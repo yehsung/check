@@ -215,6 +215,132 @@ struct TeamMemberRow: View {
     }
 }
 
+// MARK: - Team league (leaderboard)
+
+/// 순위 배지. 1·2·3위는 금/은/동 색 원에 어두운 숫자, 4위 이하는 회색(panelElevated) 원에 회색 숫자.
+struct RankBadge: View {
+    let rank: Int
+
+    private var isTopThree: Bool {
+        rank <= 3
+    }
+
+    private var fill: Color {
+        switch rank {
+        case 1: return Color(red: 1.0, green: 0.80, blue: 0.30)   // 금
+        case 2: return Color(red: 0.78, green: 0.80, blue: 0.86)  // 은
+        case 3: return Color(red: 0.85, green: 0.58, blue: 0.36)  // 동
+        default: return CheckTheme.panelElevated
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(fill)
+                .frame(width: 30, height: 30)
+                .overlay(
+                    Circle().stroke(Color.white.opacity(isTopThree ? 0.28 : 0.12), lineWidth: 1)
+                )
+            Text("\(rank)")
+                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                .foregroundStyle(isTopThree ? Color(red: 0.14, green: 0.11, blue: 0.05) : CheckTheme.secondaryText)
+                .monospacedDigit()
+        }
+    }
+}
+
+/// 리그 한 행: 순위 배지 + 팀명(+내 팀 배지) + 총시간 + 목표 대비 % 미니 게이지 + "N명 근무중" 캡션.
+/// 내 팀은 accent 테두리/배경으로 하이라이트한다. 높이는 LeaderboardPanel 이 고정으로 준다.
+struct LeaderboardRow: View {
+    let rank: Int
+    let entry: TeamLeaderboardEntry
+    var isMyTeam: Bool = false
+
+    private var goal: TeamWeeklyGoal {
+        entry.goal
+    }
+
+    private var percent: Int {
+        Int((goal.progress * 100).rounded())
+    }
+
+    var body: some View {
+        HStack(spacing: 11) {
+            RankBadge(rank: rank)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Text(entry.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .lineLimit(1)
+                    if isMyTeam {
+                        Text("우리 팀")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(CheckTheme.accent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(CheckTheme.accent.opacity(0.18)))
+                            .fixedSize()
+                    }
+                    Spacer(minLength: 6)
+                    Text(MenuBarStatusFormatter.hoursMinutes(entry.totalSeconds))
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+                miniGauge
+                HStack(spacing: 6) {
+                    Text("\(percent)%")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .monospacedDigit()
+                    Text("·")
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                    Circle()
+                        .fill(CheckTheme.working)
+                        .frame(width: 5, height: 5)
+                    Text("\(entry.workingCount)명 근무중")
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(highlight)
+    }
+
+    private var miniGauge: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(CheckTheme.trackFill)
+                Capsule()
+                    .fill(CheckTheme.gaugeGradient)
+                    .frame(width: max(6, proxy.size.width * goal.progress))
+            }
+        }
+        .frame(height: 6)
+    }
+
+    @ViewBuilder
+    private var highlight: some View {
+        if isMyTeam {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(CheckTheme.accent.opacity(0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(CheckTheme.accent.opacity(0.55), lineWidth: 1)
+                )
+        }
+    }
+}
+
 // MARK: - Long-session (12h) confirmation banner
 
 /// 연속 12시간 근무 시 헤더에 덧씌우는 앰버 확인 배너.

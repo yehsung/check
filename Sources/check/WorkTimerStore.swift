@@ -44,6 +44,12 @@ final class WorkTimerStore {
     var pendingStopStartedAt: Date?
     var pendingStopEndedAt: Date?
 
+    // 팀 리그(이번 주 팀별 총 근무시간 경쟁) 페이지 상태.
+    // leaderboard: 총시간 내림차순으로 정렬한 팀 순위. isLeaderboardVisible: 리그 페이지 노출 여부.
+    // 페이지가 열려 있는 동안 30초 refresh 루프가 함께 갱신하고, signOut 시 둘 다 초기화한다.
+    var leaderboard: [TeamLeaderboardEntry] = []
+    var isLeaderboardVisible = false
+
     // 잠자기 정책: willSleep 시각을 기록해 didWake 에서 잠든 시간을 판정한다.
     var sleepBeganAt: Date?
     // 12시간 확인: 카운터 기준점(근무 시작 또는 마지막 "네, 근무 중이에요" 확인 시점).
@@ -278,6 +284,14 @@ final class WorkTimerStore {
         Task { @MainActor in await performLoadTeamDirectory() }
     }
 
+    /// 트로피 버튼 액션. 리그 페이지를 토글하고, 여는 순간 순위를 로드한다.
+    func toggleLeaderboard() {
+        isLeaderboardVisible.toggle()
+        if isLeaderboardVisible {
+            loadLeaderboard()
+        }
+    }
+
     func performLoadTeamDirectory() async {
         do {
             teamDirectory = try await service.fetchTeamDirectory()
@@ -314,6 +328,7 @@ final class WorkTimerStore {
                 await self?.retryPendingSync()
                 await self?.sendHeartbeatIfWorking()
                 await self?.refreshTeamStatus()
+                await self?.refreshLeaderboardIfVisible()
             }
         }
     }
@@ -370,6 +385,9 @@ extension WorkTimerStore {
     func clearPersistedSession() {
         session = nil
         [Self.accessTokenKey, Self.refreshTokenKey, Self.userIDKey].forEach(defaults.removeObject)
+        // 세션이 사라지면 리그 페이지 상태도 함께 초기화한다(signOut·토큰 만료 로그아웃 공통 경로).
+        leaderboard = []
+        isLeaderboardVisible = false
         refreshTask?.cancel()
         refreshTask = nil
     }

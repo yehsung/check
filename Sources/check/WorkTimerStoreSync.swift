@@ -37,6 +37,34 @@ extension WorkTimerStore {
         }
     }
 
+    /// 팀 리그 순위를 로드한다(Task 발사). 페이지를 여는 순간과 재조회 버튼에서 호출한다.
+    func loadLeaderboard() {
+        Task { @MainActor in await performLoadLeaderboard() }
+    }
+
+    /// 리그 페이지가 열려 있는 동안만 순위를 갱신한다(30초 refresh 루프에서 호출).
+    func refreshLeaderboardIfVisible() async {
+        guard isLeaderboardVisible else { return }
+        await performLoadLeaderboard()
+    }
+
+    /// team_weekly_leaderboard RPC 로 순위를 받아 총시간 내림차순으로 정렬해 반영한다.
+    /// 서버도 내림차순으로 정렬하지만 신뢰하지 않고 클라에서 다시 정렬한다. 실패 시 안내만 남긴다.
+    func performLoadLeaderboard() async {
+        guard session != nil else { return }
+        let generation = sessionGeneration
+        do {
+            let entries = try await withSessionRetry { activeSession in
+                try await service.fetchTeamLeaderboard(accessToken: activeSession.accessToken)
+            }
+            guard generation == sessionGeneration else { return }
+            leaderboard = entries.sorted { $0.totalSeconds > $1.totalSeconds }
+        } catch {
+            guard generation == sessionGeneration else { return }
+            syncMessage = "리그 불러오기 실패"
+        }
+    }
+
     /// 근무중일 때 서버에 생존신호(last_seen_at)를 보낸다. 근무중이 아니거나 세션 정보가 없으면 보내지 않는다.
     func sendHeartbeatIfWorking() async {
         guard startedAt != nil, session != nil, let sessionID = currentSessionID, let teamID = currentTeamID else {

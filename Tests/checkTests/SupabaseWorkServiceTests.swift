@@ -295,6 +295,35 @@ func fetchTeamDirectoryPostsRPCWithAnonBearer() async throws {
     #expect(rpcRequest.value(forHTTPHeaderField: "Authorization") == "Bearer anon-test-key")
 }
 
+// MARK: - K: 팀 리그
+
+@Test
+func fetchTeamLeaderboardDecodesEntriesWithBearer() async throws {
+    let testHost = "leaderboard-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let entries = try await service.fetchTeamLeaderboard(accessToken: "access-token")
+
+    // 3팀 픽스처가 그대로 디코드된다(서비스는 정렬하지 않고 원본 순서를 유지 — 정렬은 store 책임).
+    #expect(entries.count == 3)
+    let myTeam = try #require(entries.first { $0.id == URLProtocolStub.stubTeamID })
+    #expect(myTeam.name == "sudo 박수")
+    #expect(myTeam.weeklyGoalHours == 40)
+    #expect(myTeam.totalSeconds == 72000)
+    #expect(myTeam.workingCount == 3)
+
+    let rpcRequest = try #require(URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/rpc/team_weekly_leaderboard"
+    })
+    #expect(rpcRequest.httpMethod == "POST")
+    // 로그인 토큰을 Bearer 로 사용해 호출한다(anon 이 아니라 authenticated 전용 RPC).
+    #expect(rpcRequest.value(forHTTPHeaderField: "Authorization") == "Bearer access-token")
+}
+
 @Test
 func fetchOwnMembershipParsesTeamIDAndName() async throws {
     let testHost = "membership-test"

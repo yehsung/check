@@ -207,7 +207,9 @@ final class URLProtocolStub: URLProtocol {
     }
 
     private static func workStatusesData(for request: URLRequest) -> Data {
-        if request.url?.host == "today-hours-test" {
+        let host = request.url?.host
+
+        if host == "today-hours-test" {
             return Data(
                 """
                 [
@@ -215,7 +217,62 @@ final class URLProtocolStub: URLProtocol {
                     "user_id": "00000000-0000-0000-0000-000000000002",
                     "status": "off_work",
                     "updated_at": "2026-07-10T04:00:00Z",
+                    "last_seen_at": null,
                     "active_session_id": null,
+                    "profiles": { "display_name": "영식", "email": "member@example.com" }
+                  }
+                ]
+                """.utf8
+            )
+        }
+
+        // 경계 클리핑 검증 전용 호스트: 누적 계산은 완료 세션(work_sessions)에서 나오므로 상태는 off_work.
+        if host == "week-boundary-clip" || host == "day-boundary-clip" {
+            return Data(
+                """
+                [
+                  {
+                    "user_id": "00000000-0000-0000-0000-000000000002",
+                    "status": "off_work",
+                    "updated_at": "2026-07-08T12:00:00Z",
+                    "last_seen_at": null,
+                    "active_session_id": null,
+                    "profiles": { "display_name": "영식", "email": "member@example.com" }
+                  }
+                ]
+                """.utf8
+            )
+        }
+
+        // last_seen_at 파싱 검증 전용 호스트.
+        if host == "presence-fetch-test" {
+            return Data(
+                """
+                [
+                  {
+                    "user_id": "00000000-0000-0000-0000-000000000002",
+                    "status": "working",
+                    "updated_at": "2026-07-01T04:00:00Z",
+                    "last_seen_at": "2026-07-01T05:00:00Z",
+                    "active_session_id": "60000000-0000-0000-0000-000000000001",
+                    "profiles": { "display_name": "영식", "email": "member@example.com" }
+                  }
+                ]
+                """.utf8
+            )
+        }
+
+        // 자리 비움 자동 마감 검증 전용 호스트: 마지막 신호가 아주 오래되어(>90초) stale 로 판정된다.
+        if host == "abandoned-session-test" {
+            return Data(
+                """
+                [
+                  {
+                    "user_id": "00000000-0000-0000-0000-000000000002",
+                    "status": "working",
+                    "updated_at": "2026-01-01T00:00:00Z",
+                    "last_seen_at": "2026-01-01T00:01:00Z",
+                    "active_session_id": "50000000-0000-0000-0000-000000000001",
                     "profiles": { "display_name": "영식", "email": "member@example.com" }
                   }
                 ]
@@ -227,6 +284,7 @@ final class URLProtocolStub: URLProtocol {
             return Data("[]".utf8)
         }
 
+        // 팀 픽스처의 근무중 멤버는 생존신호(last_seen_at)를 현재 시각으로 둬 stale/자동 마감으로 오판되지 않게 한다.
         return Data(
             """
             [
@@ -234,6 +292,7 @@ final class URLProtocolStub: URLProtocol {
                 "user_id": "00000000-0000-0000-0000-000000000002",
                 "status": "working",
                 "updated_at": "2026-07-01T01:00:00Z",
+                "last_seen_at": "\(isoNow())",
                 "active_session_id": "30000000-0000-0000-0000-000000000001",
                 "profiles": { "display_name": "영식", "email": "member@example.com" }
               }
@@ -242,9 +301,16 @@ final class URLProtocolStub: URLProtocol {
         )
     }
 
+    private static func isoNow() -> String {
+        ISO8601DateFormatter().string(from: Date())
+    }
+
     private static func workSessionsData(for request: URLRequest) -> Data {
-        if request.url?.host == "today-hours-test" {
-            if request.url?.query?.contains("ended_at=is.null") == true {
+        let host = request.url?.host
+        let openQuery = request.url?.query?.contains("ended_at=is.null") == true
+
+        if host == "today-hours-test" {
+            if openQuery {
                 return Data("[]".utf8)
             }
             return Data(
@@ -269,11 +335,67 @@ final class URLProtocolStub: URLProtocol {
             )
         }
 
+        // 주 경계 걸침: 일요일 23시(KST)~월요일 1시(KST) 세션. 저장 duration 은 2시간이나 주 기여는 1시간이어야 한다.
+        if host == "week-boundary-clip" {
+            if openQuery { return Data("[]".utf8) }
+            return Data(
+                """
+                [
+                  {
+                    "id": "70000000-0000-0000-0000-000000000001",
+                    "user_id": "00000000-0000-0000-0000-000000000002",
+                    "started_at": "2026-07-05T14:00:00Z",
+                    "ended_at": "2026-07-05T16:00:00Z",
+                    "duration_seconds": 7200
+                  }
+                ]
+                """.utf8
+            )
+        }
+
+        // 하루 경계 걸침: 어제 23시(KST)~오늘 1시(KST) 세션. 저장 duration 은 2시간이나 오늘 기여는 1시간이어야 한다.
+        if host == "day-boundary-clip" {
+            if openQuery { return Data("[]".utf8) }
+            return Data(
+                """
+                [
+                  {
+                    "id": "70000000-0000-0000-0000-000000000002",
+                    "user_id": "00000000-0000-0000-0000-000000000002",
+                    "started_at": "2026-07-07T14:00:00Z",
+                    "ended_at": "2026-07-07T16:00:00Z",
+                    "duration_seconds": 7200
+                  }
+                ]
+                """.utf8
+            )
+        }
+
+        // 자리 비움 자동 마감 검증: 아주 오래 전 시작한 열린 세션만 존재(완료 세션은 없음).
+        if host == "abandoned-session-test" {
+            if openQuery {
+                return Data(
+                    """
+                    [
+                      {
+                        "id": "50000000-0000-0000-0000-000000000001",
+                        "user_id": "00000000-0000-0000-0000-000000000002",
+                        "started_at": "2026-01-01T00:00:00Z",
+                        "ended_at": null,
+                        "duration_seconds": null
+                      }
+                    ]
+                    """.utf8
+                )
+            }
+            return Data("[]".utf8)
+        }
+
         guard Self.hasTeamFixture(for: request) else {
             return Data("[]".utf8)
         }
 
-        if request.url?.query?.contains("ended_at=is.null") == true {
+        if openQuery {
             return Data(
                 """
                 [
@@ -289,14 +411,19 @@ final class URLProtocolStub: URLProtocol {
             )
         }
 
+        // 완료(주간) 세션은 현재 주 안에 들도록 now 기준 상대 시각으로 둔다(클리핑 후 2시간=7200 기여).
+        let formatter = ISO8601DateFormatter()
+        let now = Date()
+        let started = formatter.string(from: now.addingTimeInterval(-3 * 3600))
+        let ended = formatter.string(from: now.addingTimeInterval(-1 * 3600))
         return Data(
             """
             [
               {
                 "id": "30000000-0000-0000-0000-000000000000",
                 "user_id": "00000000-0000-0000-0000-000000000002",
-                "started_at": "2026-07-01T00:00:00Z",
-                "ended_at": "2026-07-01T02:00:00Z",
+                "started_at": "\(started)",
+                "ended_at": "\(ended)",
                 "duration_seconds": 7200
               }
             ]

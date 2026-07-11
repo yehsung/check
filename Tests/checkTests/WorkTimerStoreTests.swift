@@ -579,6 +579,362 @@ func finishWorkBeforeQuitReturnsImmediatelyWhenNotWorking() async {
     #expect(URLProtocolStub.requests(forHost: testHost).isEmpty)
 }
 
+// MARK: - D2: presence 판정 + 동결 클램프
+
+@MainActor
+@Test
+func presenceReportsOffWorkForNonWorkingMember() {
+    let member = TeamMemberStatus(
+        id: "u", name: "n", status: .offWork, updatedAt: Date(), currentSessionStartedAt: nil
+    )
+    #expect(member.presence(now: Date()) == .offWork)
+}
+
+@MainActor
+@Test
+func presenceReportsActiveWorkingWhenSignalFresh() {
+    let now = Date()
+    let member = TeamMemberStatus(
+        id: "u", name: "n", status: .working, updatedAt: nil,
+        currentSessionStartedAt: now.addingTimeInterval(-120),
+        lastSeenAt: now.addingTimeInterval(-30)
+    )
+    #expect(member.presence(now: now) == .activeWorking)
+    #expect(member.currentDurationSeconds(now: now) == 120)
+}
+
+@MainActor
+@Test
+func presenceTreatsMissingSignalAsActive() {
+    let now = Date()
+    let member = TeamMemberStatus(
+        id: "u", name: "n", status: .working, updatedAt: nil,
+        currentSessionStartedAt: now.addingTimeInterval(-50)
+    )
+    #expect(member.presence(now: now) == .activeWorking)
+    #expect(member.currentDurationSeconds(now: now) == 50)
+}
+
+@MainActor
+@Test
+func presenceFreezesStaleWorkingAtLastSignal() {
+    let now = Date()
+    let start = now.addingTimeInterval(-600)
+    let seen = now.addingTimeInterval(-200) // 마지막 신호 200초 전(>90초) → stale
+    let member = TeamMemberStatus(
+        id: "u", name: "n", status: .working, updatedAt: nil,
+        currentSessionStartedAt: start, weeklyDurationSeconds: 1_000,
+        lastSeenAt: seen
+    )
+    let frozen = Int(seen.timeIntervalSince(start)) // 400초
+
+    #expect(member.presence(now: now) == .staleWorking(frozenDurationSeconds: frozen))
+    // now(600초)가 아니라 마지막 신호 시각(400초)으로 동결되어 죽은 세션이 카운트를 부풀리지 않는다.
+    #expect(member.currentDurationSeconds(now: now) == frozen)
+    #expect(member.liveWeeklyDurationSeconds(now: now) == 1_000 + frozen)
+}
+
+@MainActor
+@Test
+func presenceFallsBackToUpdatedAtWhenLastSeenNil() {
+    let now = Date()
+    let start = now.addingTimeInterval(-1_000)
+    let updated = now.addingTimeInterval(-300) // >90초 → stale
+    let member = TeamMemberStatus(
+        id: "u", name: "n", status: .working, updatedAt: updated,
+        currentSessionStartedAt: start
+    )
+    #expect(member.presence(now: now) == .staleWorking(frozenDurationSeconds: Int(updated.timeIntervalSince(start))))
+}
+
+// MARK: - D1: 하트비트
+
+@MainActor
+@Test
+func heartbeatUpsertsLastSeenWhileWorking() async {
+    let testHost = "heartbeat-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.startedAt = Date()
+    store.currentSessionID = "hb-session"
+
+    await store.sendHeartbeatIfWorking()
+
+    let requests = URLProtocolStub.requests(forHost: testHost)
+    let bodies = URLProtocolStub.bodiesByHost[testHost] ?? []
+    let upserts = zip(requests, bodies)
+        .filter { $0.0.url?.path == "/rest/v1/work_statuses" && $0.0.httpMethod == "POST" }
+        .map { $0.1 }
+    #expect(upserts.count == 1)
+    #expect(upserts.first?.contains(#""status":"working""#) == true)
+    #expect(upserts.first?.contains(#""last_seen_at""#) == true)
+    #expect(upserts.first?.contains(#""active_session_id":"hb-session""#) == true)
+}
+
+@MainActor
+@Test
+func heartbeatSkippedWhenNotWorking() async {
+    let testHost = "heartbeat-idle-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.startedAt = nil
+    store.currentSessionID = "hb-session"
+
+    await store.sendHeartbeatIfWorking()
+
+    #expect(URLProtocolStub.requests(forHost: testHost).isEmpty)
+}
+
+// MARK: - D3: 본인 죽은 세션 자동 마감 + 되돌리기
+
+@MainActor
+@Test
+func abandonedOwnSessionIsAutoClosedAndUndoable() async {
+    let testHost = "abandoned-session-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    // 로컬 비근무 + 서버엔 오래된 신호의 열린 세션 → 자동 마감 조건.
+    #expect(store.startedAt == nil)
+    #expect(!store.canUndoAutoClose)
+
+    await store.refreshTeamStatus()
+
+    #expect(store.startedAt == nil)
+    #expect(store.syncMessage == "자리 비움으로 자동 근무종료됨")
+    #expect(store.canUndoAutoClose)
+    #expect(store.lastAutoClosedSessionID == "50000000-0000-0000-0000-000000000001")
+    let closedWithPatch = URLProtocolStub.requests(forHost: testHost).contains {
+        $0.url?.path == "/rest/v1/work_sessions" && $0.httpMethod == "PATCH"
+    }
+    #expect(closedWithPatch)
+
+    await store.performUndoAutoClose()
+
+    #expect(store.startedAt != nil)
+    #expect(store.currentSessionID == "50000000-0000-0000-0000-000000000001")
+    #expect(!store.canUndoAutoClose)
+    #expect(store.snapshot.isWorking)
+}
+
+@MainActor
+@Test
+func liveLocalSessionIsNeverAutoClosedOnRefresh() async {
+    // 네트워크가 끊긴 채 앱이 계속 살아 일하던 경우(로컬 startedAt != nil)는 자동 마감 금지.
+    let testHost = "abandoned-session-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    let localStart = Date().addingTimeInterval(-3600)
+    store.startedAt = localStart
+    store.currentSessionID = "50000000-0000-0000-0000-000000000001"
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3600)
+
+    await store.refreshTeamStatus()
+
+    #expect(store.startedAt == localStart)
+    #expect(!store.canUndoAutoClose)
+}
+
+// MARK: - D4: 잠자기 정책 (5분 유예)
+
+@MainActor
+@Test
+func wakeAfterLongSleepAutoStopsAtSleepMoment() async {
+    let testHost = "sleep-stop-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    let sleepAt = Date()
+    store.startedAt = sleepAt.addingTimeInterval(-3600)
+    store.currentSessionID = "sleep-session"
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3600)
+
+    store.handleSleep(at: sleepAt)
+    #expect(store.sleepBeganAt == sleepAt)
+
+    store.handleWake(at: sleepAt.addingTimeInterval(6 * 60)) // 6분 > 5분 유예
+
+    #expect(store.startedAt == nil)
+    #expect(store.sleepBeganAt == nil)
+    #expect(store.syncMessage == "잠자기로 자동 근무종료됨")
+    #expect(store.pendingOperation == .stop(durationSeconds: 3600))
+    #expect(store.pendingStopEndedAt == sleepAt) // 덮은 시각으로 마감
+}
+
+@MainActor
+@Test
+func wakeWithinGraceKeepsWorking() {
+    let store = makeStubStore(host: "sleep-grace-test")
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    let sleepAt = Date()
+    store.startedAt = sleepAt.addingTimeInterval(-3600)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3600)
+
+    store.handleSleep(at: sleepAt)
+    store.handleWake(at: sleepAt.addingTimeInterval(3 * 60)) // 3분 ≤ 5분 유예
+
+    #expect(store.startedAt != nil)
+    #expect(store.sleepBeganAt == nil)
+    #expect(store.pendingOperation == nil)
+}
+
+// MARK: - D5: 12시간 확인 (30분 무응답 자동 마감)
+
+@MainActor
+@Test
+func longSessionPromptAppearsAtTwelveHours() {
+    let store = makeStubStore(host: "long-session-prompt")
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    let t0 = Date()
+    store.startedAt = t0
+    store.longSessionAnchor = t0
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+
+    store.evaluateLongSession(now: t0.addingTimeInterval(12 * 3600 - 10))
+    #expect(!store.isLongSessionPromptActive)
+
+    store.evaluateLongSession(now: t0.addingTimeInterval(12 * 3600 + 1))
+    #expect(store.isLongSessionPromptActive)
+    #expect(store.promptShownAt != nil)
+}
+
+@MainActor
+@Test
+func longSessionAutoStopsAfterThirtyMinutesUnconfirmed() {
+    let store = makeStubStore(host: "long-session-autostop")
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    let t0 = Date()
+    store.startedAt = t0
+    store.longSessionAnchor = t0
+    store.currentSessionID = "long-session"
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+
+    store.evaluateLongSession(now: t0.addingTimeInterval(12 * 3600 + 1))
+    #expect(store.isLongSessionPromptActive)
+
+    store.evaluateLongSession(now: t0.addingTimeInterval(12 * 3600 + 30 * 60 + 2))
+
+    #expect(store.startedAt == nil)
+    #expect(store.syncMessage == "장시간 미확인으로 자동 근무종료됨")
+    // 12시간 시점으로 마감된다(30분치는 근무로 인정하지 않음).
+    #expect(store.pendingStopEndedAt == t0.addingTimeInterval(12 * 3600))
+}
+
+@MainActor
+@Test
+func confirmStillWorkingDismissesPromptAndKeepsWorking() {
+    let store = makeStubStore(host: "long-session-confirm")
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    let t0 = Date()
+    store.startedAt = t0
+    store.longSessionAnchor = t0
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+
+    store.evaluateLongSession(now: t0.addingTimeInterval(12 * 3600 + 1))
+    #expect(store.isLongSessionPromptActive)
+
+    store.confirmStillWorking()
+    #expect(!store.isLongSessionPromptActive)
+    #expect(store.startedAt != nil)
+
+    // 확인으로 카운터가 지금부터 리셋 → 방금 시점에서는 다시 뜨지 않고 마감되지도 않는다.
+    store.evaluateLongSession(now: Date())
+    #expect(!store.isLongSessionPromptActive)
+    #expect(store.startedAt != nil)
+}
+
+// MARK: - D7: 이중 시작 친화 문구
+
+@MainActor
+@Test
+func authMessageForSessionAlreadyOpenIsFriendly() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    #expect(store.authMessage(for: SupabaseWorkServiceError.sessionAlreadyOpen, fallback: "x") == "이미 다른 곳에서 근무 중이에요")
+}
+
+// MARK: - D8: 아바타 업데이트 계약
+
+@MainActor
+@Test
+func updateAvatarUploadsAndReportsSuccess() async {
+    let testHost = "avatar-store-update"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: AvatarURLProtocol.session(forHost: testHost)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(
+        accessToken: "access-token",
+        refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+
+    await store.performAvatarUpdate(imageData: Data([0xFF, 0xD8, 0xFF]))
+
+    #expect(store.syncMessage == "프로필 사진 변경됨")
+    let requests = AvatarURLProtocol.requests(forHost: testHost)
+    #expect(requests.contains {
+        $0.url?.path == "/storage/v1/object/avatars/00000000-0000-0000-0000-000000000002.jpg"
+            && $0.httpMethod == "POST"
+    })
+    #expect(requests.contains {
+        $0.url?.path == "/rest/v1/profiles" && $0.httpMethod == "PATCH"
+    })
+}
+
+@MainActor
+private func makeStubStore(host: String, userID: String = "00000000-0000-0000-0000-000000000002") -> WorkTimerStore {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(host)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: userID)
+    return store
+}
+
 private func isolatedDefaults() -> UserDefaults {
     let suiteName = "check-tests-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!

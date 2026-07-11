@@ -14,12 +14,152 @@ extension WorkTimerStore {
             }
             guard generation == sessionGeneration else { return }
             teamMembers = members
+            // 앱 시작 복구/폴링에서 서버상 내 세션은 열려 있으나 로컬은 비근무이고 마지막 신호 공백이 크면
+            // 그 세션을 마지막 신호 시각으로 자동 마감한다. 자동 마감이 일어나면 restore 로직은 건너뛴다.
+            if await autoCloseAbandonedOwnSessionIfNeeded() {
+                guard generation == sessionGeneration else { return }
+                stopTimerIfIdle()
+                return
+            }
+            guard generation == sessionGeneration else { return }
             applyRemoteOwnStatus()
             stopTimerIfIdle()
             syncMessage = "동기화됨"
         } catch {
             guard generation == sessionGeneration else { return }
             syncMessage = authMessage(for: error, fallback: "동기화 실패")
+        }
+    }
+
+    /// 근무중일 때 서버에 생존신호(last_seen_at)를 보낸다. 근무중이 아니거나 세션 정보가 없으면 보내지 않는다.
+    func sendHeartbeatIfWorking() async {
+        guard startedAt != nil, session != nil, let sessionID = currentSessionID else {
+            return
+        }
+        let generation = sessionGeneration
+        do {
+            try await withSessionRetry { activeSession in
+                try await service.heartbeat(
+                    accessToken: activeSession.accessToken,
+                    userID: activeSession.userID,
+                    sessionID: sessionID
+                )
+            }
+        } catch {
+            // 하트비트 실패는 조용히 무시하고 다음 주기에 재시도한다(표시 문구를 흔들지 않는다).
+            guard generation == sessionGeneration else { return }
+        }
+    }
+
+    /// 서버상 내 세션이 열려 있고 로컬은 비근무(startedAt==nil, pendingOperation==nil)이며 마지막 신호와의
+    /// 공백이 90초를 넘으면 그 세션을 마지막 신호 시각으로 마감한다. 마감했으면 true.
+    /// 네트워크가 끊긴 채 앱이 계속 살아 일하던 경우(startedAt != nil)는 절대 마감하지 않는다.
+    private func autoCloseAbandonedOwnSessionIfNeeded() async -> Bool {
+        guard startedAt == nil, pendingOperation == nil else { return false }
+        guard let session, let member = teamMembers.first(where: { $0.id == session.userID }) else {
+            return false
+        }
+        guard member.status == .working, let sessionStart = member.currentSessionStartedAt else {
+            return false
+        }
+        guard let seen = member.lastSeenAt ?? member.updatedAt, Date().timeIntervalSince(seen) > 90 else {
+            return false
+        }
+
+        accumulatedSeconds = member.todayDurationSeconds
+        let duration = max(0, Int(seen.timeIntervalSince(sessionStart)))
+        let generation = sessionGeneration
+        do {
+            try await withSessionRetry { activeSession in
+                try await service.stopWork(
+                    accessToken: activeSession.accessToken,
+                    userID: activeSession.userID,
+                    startedAt: sessionStart,
+                    endedAt: seen,
+                    durationSeconds: duration,
+                    fallbackSessionID: member.activeSessionID ?? currentSessionID ?? UUID().uuidString
+                )
+            }
+            guard generation == sessionGeneration else { return true }
+            lastAutoClosedSessionID = member.activeSessionID
+            lastAutoClosedStartedAt = sessionStart
+            startedAt = nil
+            currentSessionID = nil
+            snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
+            syncMessage = "자리 비움으로 자동 근무종료됨"
+        } catch {
+            guard generation == sessionGeneration else { return true }
+            syncMessage = authMessage(for: error, fallback: "동기화 실패")
+        }
+        return true
+    }
+
+    var canUndoAutoClose: Bool {
+        lastAutoClosedSessionID != nil
+    }
+
+    /// 자리 비움 자동 마감을 되돌린다(뷰 배선은 이번 웨이브 범위 밖 — 코어만 제공).
+    @discardableResult
+    func undoAutoClose() -> Task<Void, Never>? {
+        guard canUndoAutoClose else { return nil }
+        return Task { @MainActor in await performUndoAutoClose() }
+    }
+
+    func performUndoAutoClose() async {
+        guard let sessionID = lastAutoClosedSessionID, let restoredStart = lastAutoClosedStartedAt else {
+            return
+        }
+        let generation = sessionGeneration
+        do {
+            try await withSessionRetry { activeSession in
+                try await service.reopenSession(
+                    accessToken: activeSession.accessToken,
+                    userID: activeSession.userID,
+                    sessionID: sessionID
+                )
+            }
+            guard generation == sessionGeneration else { return }
+            startedAt = restoredStart
+            currentSessionID = sessionID
+            longSessionAnchor = restoredStart
+            displayNow = Date()
+            snapshot = WorkStatusSnapshot(
+                status: .working,
+                elapsedSeconds: max(0, Int(displayNow.timeIntervalSince(restoredStart)))
+            )
+            lastAutoClosedSessionID = nil
+            lastAutoClosedStartedAt = nil
+            startTimer()
+            syncMessage = "근무 재개됨"
+        } catch {
+            guard generation == sessionGeneration else { return }
+            syncMessage = authMessage(for: error, fallback: "재개 실패")
+        }
+    }
+
+    /// 아바타 업로드 + 프로필 갱신 + 팀 새로고침. 결과는 syncMessage 로 알린다.
+    func updateAvatar(imageData: Data) {
+        Task { @MainActor in await performAvatarUpdate(imageData: imageData) }
+    }
+
+    func performAvatarUpdate(imageData: Data) async {
+        guard session != nil else { return }
+        let generation = sessionGeneration
+        do {
+            _ = try await withSessionRetry { activeSession in
+                try await service.uploadAvatar(
+                    accessToken: activeSession.accessToken,
+                    userID: activeSession.userID,
+                    imageData: imageData
+                )
+            }
+            guard generation == sessionGeneration else { return }
+            await refreshTeamStatus()
+            guard generation == sessionGeneration else { return }
+            syncMessage = "프로필 사진 변경됨"
+        } catch {
+            guard generation == sessionGeneration else { return }
+            syncMessage = authMessage(for: error, fallback: "사진 업로드 실패")
         }
     }
 
@@ -122,6 +262,8 @@ extension WorkTimerStore {
             let restoredStart = ownMember.currentSessionStartedAt ?? Date()
             displayNow = Date()
             startedAt = restoredStart
+            currentSessionID = ownMember.activeSessionID ?? currentSessionID
+            longSessionAnchor = restoredStart
             snapshot = WorkStatusSnapshot(
                 status: .working,
                 elapsedSeconds: max(0, Int(displayNow.timeIntervalSince(restoredStart)))
@@ -129,6 +271,8 @@ extension WorkTimerStore {
             startTimer()
         case (.offWork, .some):
             startedAt = nil
+            longSessionAnchor = nil
+            clearLongSessionPrompt()
             snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
             stopTimerIfIdle()
         default:

@@ -81,6 +81,8 @@ extension WorkTimerStore {
             return "비밀번호 조건 확인"
         case .databaseSchemaMissing:
             return "DB 스키마 필요"
+        case .sessionAlreadyOpen:
+            return "이미 다른 곳에서 근무 중이에요"
         case .authMessage(let message):
             return message
         case .invalidResponse:
@@ -137,6 +139,11 @@ extension WorkTimerStore {
         pendingOperation = nil
         pendingStopStartedAt = nil
         pendingStopEndedAt = nil
+        longSessionAnchor = nil
+        clearLongSessionPrompt()
+        sleepBeganAt = nil
+        lastAutoClosedSessionID = nil
+        lastAutoClosedStartedAt = nil
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
         tickerTask?.cancel()
         tickerTask = nil

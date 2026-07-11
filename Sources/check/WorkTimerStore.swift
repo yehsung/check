@@ -1,9 +1,16 @@
+import AppKit
 import Foundation
 import Observation
 
 @Observable
 @MainActor
 final class WorkTimerStore {
+    // 연속 근무 확인/자동 마감 임계값. 12시간 도달 시 확인, 이후 30분 무응답이면 12시간 시점으로 마감.
+    static let longSessionThresholdSeconds: TimeInterval = 12 * 60 * 60
+    static let longSessionResponseWindowSeconds: TimeInterval = 30 * 60
+    // 잠자기 유예. 이 시간 이하 잠자기는 근무 연속으로 인정, 초과하면 덮은 시각으로 마감.
+    static let sleepGraceSeconds: TimeInterval = 5 * 60
+
     var startedAt: Date?
     var accumulatedSeconds: Int = 0
     var tickerTask: Task<Void, Never>?
@@ -27,6 +34,17 @@ final class WorkTimerStore {
     var pendingStopStartedAt: Date?
     var pendingStopEndedAt: Date?
 
+    // 잠자기 정책: willSleep 시각을 기록해 didWake 에서 잠든 시간을 판정한다.
+    var sleepBeganAt: Date?
+    // 12시간 확인: 카운터 기준점(근무 시작 또는 마지막 "네, 근무 중이에요" 확인 시점).
+    var longSessionAnchor: Date?
+    var isLongSessionPromptActive = false
+    var promptShownAt: Date?
+    // 자리 비움 자동 마감 되돌리기용: 마지막으로 자동 마감한 세션.
+    var lastAutoClosedSessionID: String?
+    var lastAutoClosedStartedAt: Date?
+
+
     var todayDuration: Int {
         accumulatedSeconds + (startedAt.map { Int(displayNow.timeIntervalSince($0)) } ?? 0)
     }
@@ -42,7 +60,8 @@ final class WorkTimerStore {
     init(
         service: SupabaseWorkService = SupabaseWorkService(),
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter
     ) {
         self.service = service
         self.defaults = defaults
@@ -52,6 +71,21 @@ final class WorkTimerStore {
         let restoredSession = Self.restoredSession(from: defaults)
         session = restoredSession
         syncMessage = hasAnonKey ? (restoredSession == nil ? "로그인 필요" : "동기화됨") : "Supabase 키 필요"
+        observeSleepWake(workspaceNotifications)
+    }
+
+    /// 잠자기/깨어남 노티를 구독한다. 클로저는 [weak self]로 스토어 수명을 넘겨 자동 무력화되므로
+    /// 별도 해제가 필요 없다(테스트는 handleSleep/handleWake 를 직접 호출한다).
+    private func observeSleepWake(_ center: NotificationCenter?) {
+        guard let center else { return }
+        center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: nil) { [weak self] _ in
+            let now = Date()
+            Task { @MainActor in self?.handleSleep(at: now) }
+        }
+        center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil) { [weak self] _ in
+            let now = Date()
+            Task { @MainActor in self?.handleWake(at: now) }
+        }
     }
 
     func toggle() {
@@ -94,6 +128,9 @@ final class WorkTimerStore {
         displayNow = now
         startedAt = now
         currentSessionID = UUID().uuidString
+        longSessionAnchor = now
+        clearLongSessionPrompt()
+        sleepBeganAt = nil
         snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
         startTimer()
         syncCurrentStatus()
@@ -106,9 +143,85 @@ final class WorkTimerStore {
         let sessionStart = startedAt
         accumulatedSeconds += duration
         self.startedAt = nil
+        longSessionAnchor = nil
+        clearLongSessionPrompt()
+        sleepBeganAt = nil
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
         stopTimerIfIdle()
         syncCurrentStatus(durationSeconds: duration, sessionStartedAt: sessionStart, endedAt: now)
+    }
+
+    // MARK: - 잠자기 정책 (5분 유예)
+
+    /// willSleep. 근무중이면 덮은 시각을 기록한다(깨어날 때 잠든 시간을 재기 위함).
+    func handleSleep(at date: Date = Date()) {
+        guard startedAt != nil else { return }
+        sleepBeganAt = date
+    }
+
+    /// didWake. 잠든 시간이 5분 이하면 근무 연속으로 인정, 초과하면 덮은 시각으로 자동 마감한다.
+    func handleWake(at date: Date = Date()) {
+        guard let sleepBeganAt, startedAt != nil else {
+            self.sleepBeganAt = nil
+            return
+        }
+        let asleep = date.timeIntervalSince(sleepBeganAt)
+        guard asleep > Self.sleepGraceSeconds else {
+            self.sleepBeganAt = nil
+            return
+        }
+        autoStop(endedAt: sleepBeganAt, message: "잠자기로 자동 근무종료됨")
+    }
+
+    // MARK: - 12시간 확인 (30분 무응답 자동 마감)
+
+    /// 근무 틱에서 호출. 12시간 도달 시 확인 배너를 띄우고, 배너 노출 후 30분 무응답이면 12시간 시점으로 마감한다.
+    func evaluateLongSession(now: Date) {
+        guard startedAt != nil, let anchor = longSessionAnchor else { return }
+
+        if isLongSessionPromptActive {
+            guard let promptShownAt, now.timeIntervalSince(promptShownAt) > Self.longSessionResponseWindowSeconds else {
+                return
+            }
+            autoStop(
+                endedAt: anchor.addingTimeInterval(Self.longSessionThresholdSeconds),
+                message: "장시간 미확인으로 자동 근무종료됨"
+            )
+            return
+        }
+
+        if now.timeIntervalSince(anchor) > Self.longSessionThresholdSeconds {
+            isLongSessionPromptActive = true
+            promptShownAt = now
+        }
+    }
+
+    /// 배너의 "네, 근무 중이에요" 액션. 배너를 닫고 12시간 카운터를 지금부터 다시 시작한다.
+    func confirmStillWorking() {
+        guard isLongSessionPromptActive else { return }
+        clearLongSessionPrompt()
+        longSessionAnchor = Date()
+    }
+
+    func clearLongSessionPrompt() {
+        isLongSessionPromptActive = false
+        promptShownAt = nil
+    }
+
+    /// 지정한 종료 시각으로 로컬 상태를 즉시 마감하고, 기존 직렬 sync 경로(enqueueSync)로 서버에 반영한다.
+    /// syncMessage 는 사유 문구로 세팅한다(이후 refresh 가 "동기화됨"으로 정규화할 수 있음 — 즉시 피드백 목적).
+    private func autoStop(endedAt: Date, message: String) {
+        guard let sessionStart = startedAt else { return }
+        let duration = max(0, Int(endedAt.timeIntervalSince(sessionStart)))
+        accumulatedSeconds += duration
+        startedAt = nil
+        longSessionAnchor = nil
+        clearLongSessionPrompt()
+        sleepBeganAt = nil
+        snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
+        stopTimerIfIdle()
+        syncCurrentStatus(durationSeconds: duration, sessionStartedAt: sessionStart, endedAt: endedAt)
+        syncMessage = message
     }
 
     @discardableResult
@@ -172,6 +285,7 @@ final class WorkTimerStore {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
                 await self?.retryPendingSync()
+                await self?.sendHeartbeatIfWorking()
                 await self?.refreshTeamStatus()
             }
         }
@@ -185,6 +299,7 @@ final class WorkTimerStore {
                 status: .working,
                 elapsedSeconds: max(0, Int(now.timeIntervalSince(startedAt)))
             )
+            evaluateLongSession(now: now)
         }
     }
 }

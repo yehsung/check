@@ -89,6 +89,15 @@ extension SupabaseWorkService {
     }
 
     func serviceError(statusCode: Int, data: Data) -> SupabaseWorkServiceError {
+        // Postgres 유니크 위반 코드(23505)는 GoTrue 의 정수 code 와 타입이 섞여 안전하게 디코드할 수 없으므로
+        // 원문 본문에서 직접 식별한다(제약명 또는 SQLSTATE). 디코드 성패와 무관하게 우선 판정한다.
+        let rawBody = String(decoding: data, as: UTF8.self).lowercased()
+        if rawBody.contains("work_sessions_one_open_per_user")
+            || rawBody.contains("23505")
+            || (rawBody.contains("duplicate key") && rawBody.contains("work_sessions")) {
+            return .sessionAlreadyOpen
+        }
+
         guard let response = try? decoder.decode(SupabaseErrorResponse.self, from: data) else {
             return statusCode == 401 ? .sessionExpired : .invalidResponse(statusCode)
         }

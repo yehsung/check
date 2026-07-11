@@ -1,5 +1,15 @@
 import Foundation
 
+/// 팀원 표시 3상태. 진실은 서버 원장(하트비트 last_seen_at)이고 초침은 클라 파생 표시다.
+/// - activeWorking: 마지막 생존신호가 신선함(≤90초). 라이브로 틱.
+/// - staleWorking: 신호가 끊김(>90초). 마지막 신호 시각으로 동결된 카운트(프론트 "연결 끊김").
+/// - offWork: 근무종료.
+enum MemberPresence: Equatable {
+    case activeWorking
+    case staleWorking(frozenDurationSeconds: Int)
+    case offWork
+}
+
 struct TeamMemberStatus: Equatable, Identifiable {
     let id: String
     var name: String
@@ -9,10 +19,33 @@ struct TeamMemberStatus: Equatable, Identifiable {
     var weeklyDurationSeconds: Int = 0
     var todayDurationSeconds: Int = 0
     var avatarURL: URL? = nil
+    var lastSeenAt: Date? = nil
+    var activeSessionID: String? = nil
+
+    /// 서버 하트비트를 기준으로 팀원의 생존 상태를 판정한다.
+    /// seen = lastSeenAt ?? updatedAt. seen이 없으면(신호 미상) 살아있다고 본다.
+    func presence(now: Date = Date()) -> MemberPresence {
+        guard status == .working else {
+            return .offWork
+        }
+        guard let seen = lastSeenAt ?? updatedAt else {
+            return .activeWorking
+        }
+        guard now.timeIntervalSince(seen) > 90 else {
+            return .activeWorking
+        }
+        let frozen = max(0, Int(seen.timeIntervalSince(currentSessionStartedAt ?? seen)))
+        return .staleWorking(frozenDurationSeconds: frozen)
+    }
 
     func currentDurationSeconds(now: Date = Date()) -> Int {
         guard status == .working, let currentSessionStartedAt else {
             return 0
+        }
+        // 생존신호가 끊긴(stale) 세션은 now가 아니라 마지막 신호 시각으로 클램프해 죽은 세션이
+        // 카운트를 부풀리지 않게 한다. 본인은 하트비트로 신호가 신선해 자연히 클램프 대상이 아니다.
+        if case .staleWorking(let frozen) = presence(now: now) {
+            return frozen
         }
         return max(0, Int(now.timeIntervalSince(currentSessionStartedAt)))
     }
@@ -85,6 +118,7 @@ enum SupabaseWorkServiceError: Error, Equatable {
     case signupDisabled
     case weakPassword
     case databaseSchemaMissing
+    case sessionAlreadyOpen
     case authMessage(String)
     case invalidResponse(Int)
 }
@@ -132,6 +166,7 @@ struct WorkStatusRow: Decodable {
     let userId: String
     let status: String
     let updatedAt: String?
+    let lastSeenAt: String?
     let activeSessionId: String?
     let profiles: ProfileRow?
 }
@@ -154,6 +189,21 @@ struct StartSessionRequest: Encodable {
 struct StopSessionRequest: Encodable {
     let endedAt: String
     let durationSeconds: Int
+}
+
+/// 자동 마감된 세션을 되돌릴 때 ended_at/duration_seconds 를 명시적으로 null 로 재개한다.
+/// (기본 합성 인코더는 nil Optional 을 생략하므로 encodeNil 로 서버에 null 을 확실히 보낸다.)
+struct ReopenSessionRequest: Encodable {
+    enum CodingKeys: String, CodingKey {
+        case endedAt
+        case durationSeconds
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeNil(forKey: .endedAt)
+        try container.encodeNil(forKey: .durationSeconds)
+    }
 }
 
 struct CompletedSessionRequest: Encodable {

@@ -7,12 +7,20 @@ struct CheckMenuView: View {
     var initialAuthMode: AuthMode = .signIn
     // 렌더 스냅샷에서 비밀번호 필드의 "영어만" 안내가 떠 있는 상태를 재현하기 위한 미리보기 플래그.
     var previewASCIIWarning: Bool = false
+    // 렌더 스냅샷에서 12시간 확인 배너가 떠 있는 상태를 재현하기 위한 미리보기 플래그. 앱에서는 항상 false.
+    var previewLongSessionBanner: Bool = false
 
     var body: some View {
         VStack(spacing: 10) {
             if store.isSignedIn {
-                HeaderCard(store: store)
-                TeamPanel(teamMembers: store.teamMembers, fallbackStatus: store.syncMessage, now: store.displayNow)
+                HeaderCard(store: store, previewLongSessionBanner: previewLongSessionBanner)
+                TeamPanel(
+                    teamMembers: store.teamMembers,
+                    fallbackStatus: store.syncMessage,
+                    now: store.displayNow,
+                    myUserID: store.session?.userID,
+                    onUpdateAvatar: { store.updateAvatar(imageData: $0) }
+                )
                 FooterBar(store: store)
             } else {
                 LoginPanel(store: store, initialMode: initialAuthMode, previewWarning: previewASCIIWarning)
@@ -52,6 +60,13 @@ struct MenuBarStatusLabel: View {
 
 private struct HeaderCard: View {
     @Bindable var store: WorkTimerStore
+    // 렌더 스냅샷 전용: 12시간 배너를 켠 채로 그린다. 앱에서는 store.isLongSessionPromptActive만 사용.
+    var previewLongSessionBanner: Bool = false
+
+    // 실제 활성화(store)든 미리보기 플래그든 하나라도 켜지면 배너를 노출한다.
+    private var showsLongSessionBanner: Bool {
+        store.isLongSessionPromptActive || previewLongSessionBanner
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -79,6 +94,12 @@ private struct HeaderCard: View {
         }
         .padding(12)
         .panelStyle()
+        // 배너는 헤더 카드 위 overlay로 얹어 카드 높이를 바꾸지 않는다(창 튐 방지).
+        .overlay {
+            if showsLongSessionBanner {
+                LongSessionBanner(onConfirm: { store.confirmStillWorking() })
+            }
+        }
     }
 
     private var statusTint: Color {
@@ -95,6 +116,10 @@ private struct TeamPanel: View {
     let teamMembers: [TeamMemberStatus]
     let fallbackStatus: String
     let now: Date
+    // 내 행 판정용. store.session?.userID == member.id 인 행에만 아바타 편집을 붙인다.
+    var myUserID: String? = nil
+    // 내 행 아바타 교체 시 다운스케일된 JPEG Data를 store.updateAvatar로 넘기는 콜백.
+    var onUpdateAvatar: ((Data) -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 12) {
@@ -107,19 +132,24 @@ private struct TeamPanel: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
                 Spacer(minLength: 6)
-                CountChip(count: workingCount)
+                CountChip(count: activeWorkingCount)
             }
             TeamGoalGauge(goal: weeklyGoal)
             PanelDivider()
             VStack(spacing: 12) {
                 if sortedMembers.isEmpty {
-                    TeamMemberRow(name: "팀원", detail: fallbackStatus, isWorking: false)
+                    TeamMemberRow(name: "팀원", presence: .offWork, primaryDetail: fallbackStatus)
                 } else {
                     ForEach(sortedMembers) { member in
+                        let isMe = myUserID != nil && member.id == myUserID
                         TeamMemberRow(
                             name: member.name,
-                            detail: memberDetail(member),
-                            isWorking: member.status == .working
+                            avatarURL: member.avatarURL,
+                            presence: member.presence(now: now),
+                            primaryDetail: primaryDetail(member),
+                            secondaryDetail: secondaryDetail(member),
+                            isMe: isMe,
+                            onPickAvatar: isMe ? onUpdateAvatar : nil
                         )
                     }
                 }
@@ -140,24 +170,59 @@ private struct TeamPanel: View {
         }
     }
 
-    private var workingCount: Int {
-        teamMembers.filter { $0.status == .working }.count
+    // 헤더 "N명 근무중" 카운트는 라이브 근무(activeWorking)만 집계한다. 연결 끊김은 제외.
+    private var activeWorkingCount: Int {
+        teamMembers.filter { $0.presence(now: now) == .activeWorking }.count
     }
 
     private var weeklyTotal: Int {
-        teamMembers.reduce(0) { $0 + $1.liveWeeklyDurationSeconds(now: now) }
+        teamMembers.reduce(0) { $0 + displayWeeklySeconds($1) }
     }
 
     private var weeklyGoal: TeamWeeklyGoal {
         TeamWeeklyGoal(workedSeconds: weeklyTotal)
     }
 
-    private func memberDetail(_ member: TeamMemberStatus) -> String {
-        let weekly = "주 \(MenuBarStatusFormatter.hoursMinutes(member.liveWeeklyDurationSeconds(now: now)))"
-        guard member.status == .working else {
-            return weekly
+    // 상태별 표시용 현재 세션 시간. active는 라이브 틱, stale은 마지막 신호에서 동결, off는 0.
+    private func displayCurrentSeconds(_ member: TeamMemberStatus) -> Int {
+        switch member.presence(now: now) {
+        case .activeWorking:
+            return member.currentDurationSeconds(now: now)
+        case .staleWorking(let frozen):
+            return frozen
+        case .offWork:
+            return 0
         }
-        return "현재 \(MenuBarStatusFormatter.duration(member.currentDurationSeconds(now: now))) · \(weekly)"
+    }
+
+    // 상태별 표시용 주간 누적. stale은 마지막 신호에서 동결된 현재 세션분까지만 더한다.
+    private func displayWeeklySeconds(_ member: TeamMemberStatus) -> Int {
+        switch member.presence(now: now) {
+        case .staleWorking(let frozen):
+            return member.weeklyDurationSeconds + frozen
+        default:
+            return member.liveWeeklyDurationSeconds(now: now)
+        }
+    }
+
+    private func primaryDetail(_ member: TeamMemberStatus) -> String {
+        let weekly = "주 \(MenuBarStatusFormatter.hoursMinutes(displayWeeklySeconds(member)))"
+        switch member.presence(now: now) {
+        case .offWork:
+            return weekly
+        case .activeWorking, .staleWorking:
+            return "현재 \(MenuBarStatusFormatter.duration(displayCurrentSeconds(member))) · \(weekly)"
+        }
+    }
+
+    // stale 상태에만 "마지막 확인 N분 전" 보조줄을 붙인다. 그 외엔 nil.
+    private func secondaryDetail(_ member: TeamMemberStatus) -> String? {
+        guard case .staleWorking = member.presence(now: now),
+              let seen = member.lastSeenAt else {
+            return nil
+        }
+        let minutes = max(1, Int(now.timeIntervalSince(seen) / 60))
+        return "마지막 확인 \(minutes)분 전"
     }
 }
 

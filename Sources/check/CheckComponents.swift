@@ -59,6 +59,48 @@ struct StatusChip: View {
     }
 }
 
+/// 팀원 3상태 칩. 라이브 근무(초록 "근무중"), 연결 끊김(앰버 "연결 끊김"), 근무종료(회색 테두리).
+struct PresenceChip: View {
+    let presence: MemberPresence
+
+    private var label: String {
+        switch presence {
+        case .activeWorking: return "근무중"
+        case .staleWorking: return "연결 끊김"
+        case .offWork: return "근무종료"
+        }
+    }
+
+    private var tint: Color {
+        switch presence {
+        case .activeWorking: return CheckTheme.working
+        case .staleWorking: return CheckTheme.pending
+        case .offWork: return CheckTheme.secondaryText
+        }
+    }
+
+    private var isOff: Bool {
+        if case .offWork = presence { return true }
+        return false
+    }
+
+    var body: some View {
+        Text(label)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(isOff ? CheckTheme.secondaryText : .white)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background {
+                if isOff {
+                    Capsule().stroke(CheckTheme.border, lineWidth: 1)
+                } else {
+                    Capsule().fill(tint.opacity(0.85))
+                }
+            }
+            .fixedSize()
+    }
+}
+
 struct CountChip: View {
     let count: Int
 
@@ -75,36 +117,6 @@ struct CountChip: View {
         .padding(.vertical, 4)
         .background(Capsule().fill(CheckTheme.working.opacity(0.16)))
         .fixedSize()
-    }
-}
-
-// MARK: - Initial avatar
-
-struct InitialAvatar: View {
-    let name: String
-    var size: CGFloat = 30
-
-    private var initial: String {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "?" : String(trimmed.prefix(1))
-    }
-
-    var body: some View {
-        let color = CheckTheme.avatarColor(for: name)
-        Text(initial)
-            .font(.system(size: size * 0.44, weight: .bold, design: .rounded))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(
-                Circle().fill(
-                    LinearGradient(
-                        colors: [color, color.opacity(0.72)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            )
-            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
     }
 }
 
@@ -159,25 +171,99 @@ struct TeamGoalGauge: View {
 
 struct TeamMemberRow: View {
     let name: String
-    let detail: String
-    let isWorking: Bool
+    var avatarURL: URL? = nil
+    let presence: MemberPresence
+    let primaryDetail: String
+    /// stale(연결 끊김) 상태의 "마지막 확인 N분 전" 보조줄. 그 외 상태에선 nil(한 줄만).
+    var secondaryDetail: String? = nil
+    /// 내 행 여부. true면 아바타에 hover 카메라 배지 + 파일 선택을 붙인다.
+    var isMe: Bool = false
+    /// 내 행 아바타 교체 시 다운스케일된 JPEG Data를 전달받는 콜백.
+    var onPickAvatar: ((Data) -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 10) {
-            InitialAvatar(name: name, size: 32)
+            avatar
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
-                Text(detail)
+                Text(primaryDetail)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+                if let secondaryDetail {
+                    Text(secondaryDetail)
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.pending)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 6)
+            PresenceChip(presence: presence)
+        }
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        if isMe, let onPickAvatar {
+            EditableAvatarView(name: name, avatarURL: avatarURL, size: 26, onPick: onPickAvatar)
+        } else {
+            CheckAvatarView(name: name, avatarURL: avatarURL, size: 26)
+        }
+    }
+}
+
+// MARK: - Long-session (12h) confirmation banner
+
+/// 연속 12시간 근무 시 헤더에 덧씌우는 앰버 확인 배너.
+/// "12시간 넘게 근무 중이에요 — 아직 근무 중이신가요?" + [네, 근무 중이에요] 액션.
+/// 헤더 카드 위 overlay로 얹혀 레이아웃 높이를 바꾸지 않는다(창 튐 방지).
+struct LongSessionBanner: View {
+    let onConfirm: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "hourglass")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(CheckTheme.pending)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("12시간 넘게 근무 중이에요")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                Text("아직 근무 중이신가요?")
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)
             }
             Spacer(minLength: 6)
-            StatusChip(isWorking: isWorking)
+            Button(action: onConfirm) {
+                Text("네, 근무 중이에요")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 11)
+                    .frame(height: 28)
+                    .background(Capsule().fill(CheckTheme.pending))
+                    .fixedSize()
+            }
+            .buttonStyle(.plain)
         }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(CheckTheme.pending.opacity(0.16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(CheckTheme.pending.opacity(0.55), lineWidth: 1)
+                )
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(CheckTheme.panel)
+                )
+        )
     }
 }
 

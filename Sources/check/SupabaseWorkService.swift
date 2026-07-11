@@ -71,7 +71,7 @@ actor SupabaseWorkService {
             path: "/rest/v1/work_statuses",
             method: "GET",
             queryItems: [
-                URLQueryItem(name: "select", value: "user_id,status,updated_at,active_session_id,profiles(display_name,email,avatar_url)"),
+                URLQueryItem(name: "select", value: "user_id,status,updated_at,last_seen_at,active_session_id,profiles(display_name,email,avatar_url)"),
                 URLQueryItem(name: "team_id", value: "eq.\(SupabaseConfig.teamID)"),
                 URLQueryItem(name: "order", value: "updated_at.desc")
             ],
@@ -81,9 +81,9 @@ actor SupabaseWorkService {
         )
         let rows = try decoder.decode([WorkStatusRow].self, from: data)
         let activeSessions = try await fetchActiveSessions(accessToken: accessToken)
-        let weeklySessions = try await fetchWeeklySessions(accessToken: accessToken)
+        let weeklySessions = try await fetchWeeklySessions(accessToken: accessToken, now: now)
         let activeByUser = Dictionary(grouping: activeSessions, by: \.userId)
-        let weeklyByUser = weeklyDurations(from: weeklySessions)
+        let weeklyByUser = weeklyDurations(from: weeklySessions, now: now)
         let todayByUser = todayDurations(from: weeklySessions, now: now)
         return rows.map { row in
             let activeStartedAt = activeByUser[row.userId]?.compactMap { parseDate($0.startedAt) }.min()
@@ -96,7 +96,9 @@ actor SupabaseWorkService {
                 currentSessionStartedAt: activeStartedAt,
                 weeklyDurationSeconds: weeklyByUser[row.userId, default: 0],
                 todayDurationSeconds: todayByUser[row.userId, default: 0],
-                avatarURL: avatarURL
+                avatarURL: avatarURL,
+                lastSeenAt: row.lastSeenAt.flatMap(parseDate),
+                activeSessionID: row.activeSessionId
             )
         }
     }
@@ -117,7 +119,7 @@ actor SupabaseWorkService {
         return try decoder.decode([WorkSessionRow].self, from: data)
     }
 
-    private func fetchWeeklySessions(accessToken: String) async throws -> [WorkSessionRow] {
+    private func fetchWeeklySessions(accessToken: String, now: Date) async throws -> [WorkSessionRow] {
         let data = try await send(
             path: "/rest/v1/work_sessions",
             method: "GET",
@@ -125,7 +127,9 @@ actor SupabaseWorkService {
                 URLQueryItem(name: "select", value: "id,user_id,started_at,ended_at,duration_seconds"),
                 URLQueryItem(name: "team_id", value: "eq.\(SupabaseConfig.teamID)"),
                 URLQueryItem(name: "ended_at", value: "not.is.null"),
-                URLQueryItem(name: "started_at", value: "gte.\(dateFormatter.string(from: weekStart()))")
+                // 경계 걸친 세션(예: 일요일 23시~월요일 1시)을 놓치지 않도록 '주와 겹침' 기준으로 조회한다.
+                // started_at gte 는 주 시작 이전에 시작한 세션을 통째로 누락시키는 실버그였다.
+                URLQueryItem(name: "ended_at", value: "gte.\(dateFormatter.string(from: weekStart(for: now)))")
             ],
             body: Optional<EmptyBody>.none,
             accessToken: accessToken,
@@ -134,36 +138,42 @@ actor SupabaseWorkService {
         return try decoder.decode([WorkSessionRow].self, from: data)
     }
 
-    private func weeklyDurations(from rows: [WorkSessionRow]) -> [String: Int] {
+    private func weeklyDurations(from rows: [WorkSessionRow], now: Date) -> [String: Int] {
+        let window = weekStart(for: now)
         return rows.reduce(into: [:]) { totals, row in
-            guard let duration = sessionDuration(for: row) else {
+            let contribution = clippedContribution(for: row, windowStart: window, now: now)
+            guard contribution > 0 else {
                 return
             }
-            totals[row.userId, default: 0] += duration
+            totals[row.userId, default: 0] += contribution
         }
     }
 
     private func todayDurations(from rows: [WorkSessionRow], now: Date) -> [String: Int] {
         let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
         return rows.reduce(into: [:]) { totals, row in
-            guard let started = parseDate(row.startedAt), started >= dayStart else {
+            let contribution = clippedContribution(for: row, windowStart: dayStart, now: now)
+            guard contribution > 0 else {
                 return
             }
-            guard let duration = sessionDuration(for: row) else {
-                return
-            }
-            totals[row.userId, default: 0] += duration
+            totals[row.userId, default: 0] += contribution
         }
     }
 
-    private func sessionDuration(for row: WorkSessionRow) -> Int? {
-        row.durationSeconds ?? row.endedAt.flatMap(parseDate).map({
-            max(0, Int($0.timeIntervalSince(parseDate(row.startedAt) ?? $0)))
-        })
+    /// 세션 구간 [started, ended] 를 [windowStart, now] 로 클리핑한 기여 시간(초).
+    /// 저장된 duration_seconds 가 아니라 타임스탬프 구간을 써서 경계에 걸친 세션의 부분만 귀속한다.
+    /// contribution = max(0, min(ended, now) − max(started, windowStart)).
+    private func clippedContribution(for row: WorkSessionRow, windowStart: Date, now: Date) -> Int {
+        guard let started = parseDate(row.startedAt), let ended = row.endedAt.flatMap(parseDate) else {
+            return 0
+        }
+        let clippedStart = max(started, windowStart)
+        let clippedEnd = min(ended, now)
+        return max(0, Int(clippedEnd.timeIntervalSince(clippedStart)))
     }
 
-    private func weekStart() -> Date {
-        TeamWeeklyGoal.koreanWeekStart(for: Date())
+    private func weekStart(for now: Date) -> Date {
+        TeamWeeklyGoal.koreanWeekStart(for: now)
     }
 
     private func parseDate(_ value: String) -> Date? {
@@ -221,6 +231,29 @@ actor SupabaseWorkService {
             )
         }
         try await upsertStatus(accessToken: accessToken, userID: userID, status: "off_work", activeSessionID: nil)
+    }
+
+    /// 근무중 생존신호. work_statuses.last_seen_at(+updated_at)을 현재 시각으로 갱신한다.
+    /// upsertStatus 를 재사용하므로 active_session_id 도 유지된다.
+    func heartbeat(accessToken: String, userID: String, sessionID: String) async throws {
+        try await upsertStatus(accessToken: accessToken, userID: userID, status: "working", activeSessionID: sessionID)
+    }
+
+    /// 자동 마감한 세션을 되돌린다. ended_at/duration_seconds 를 null 로 재개하고 상태를 working 으로 복구.
+    /// 유니크 인덱스(work_sessions_one_open_per_user)상 다른 열린 세션이 없을 때만 안전하다.
+    func reopenSession(accessToken: String, userID: String, sessionID: String) async throws {
+        try await sendNoBody(
+            path: "/rest/v1/work_sessions",
+            method: "PATCH",
+            queryItems: [
+                URLQueryItem(name: "team_id", value: "eq.\(SupabaseConfig.teamID)"),
+                URLQueryItem(name: "id", value: "eq.\(sessionID)")
+            ],
+            body: ReopenSessionRequest(),
+            accessToken: accessToken,
+            prefer: "return=minimal"
+        )
+        try await upsertStatus(accessToken: accessToken, userID: userID, status: "working", activeSessionID: sessionID)
     }
 
     func uploadAvatar(accessToken: String, userID: String, imageData: Data) async throws -> String {

@@ -159,6 +159,7 @@ func weeklySessionsQueryUsesKoreanMondayMidnight() async throws {
         session: URLSession(configuration: .stubbed)
     )
 
+    // 경계 걸친 세션을 놓치지 않도록 '주와 겹침'(ended_at >= 주 시작) 기준으로 조회해야 한다.
     let expectedStart = "gte.\(expectedKoreanWeekStartString(for: Date()))"
     _ = try await service.fetchTeamStatuses(accessToken: "access-token")
 
@@ -168,7 +169,9 @@ func weeklySessionsQueryUsesKoreanMondayMidnight() async throws {
     }
     let weeklyURL = try #require(weeklyRequest?.url)
     let queryItems = try #require(URLComponents(url: weeklyURL, resolvingAgainstBaseURL: false)?.queryItems)
-    #expect(queryItems.contains(URLQueryItem(name: "started_at", value: expectedStart)))
+    #expect(queryItems.contains(URLQueryItem(name: "ended_at", value: expectedStart)))
+    // 옛 필터(started_at gte)는 주 시작 이전에 시작한 경계 세션을 누락시키므로 더 이상 쓰지 않는다.
+    #expect(!queryItems.contains { $0.name == "started_at" })
 }
 
 private func expectedKoreanWeekStartString(for date: Date) -> String {
@@ -177,6 +180,81 @@ private func expectedKoreanWeekStartString(for date: Date) -> String {
     calendar.firstWeekday = 2
     let weekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
     return ISO8601DateFormatter().string(from: weekStart)
+}
+
+// MARK: - D6: 주간/오늘 경계 클리핑
+
+@Test
+func weeklyDurationClipsSessionCrossingWeekStart() async throws {
+    // 일요일 23시(KST)~월요일 1시(KST) 세션. 저장 duration 은 2시간이지만 이번 주 기여는 월요일 이후 1시간뿐.
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://week-boundary-clip")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let now = ISO8601DateFormatter().date(from: "2026-07-08T12:00:00Z")!
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", now: now)
+
+    #expect(statuses.count == 1)
+    #expect(statuses.first?.weeklyDurationSeconds == 3600)
+    // 세션이 오늘(수요일) 이전에 끝났으므로 오늘 기여는 0.
+    #expect(statuses.first?.todayDurationSeconds == 0)
+}
+
+@Test
+func todayDurationClipsSessionCrossingDayStart() async throws {
+    // 어제 23시(KST)~오늘 1시(KST) 세션. 저장 duration 은 2시간이지만 오늘 기여는 자정 이후 1시간뿐.
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://day-boundary-clip")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let now = ISO8601DateFormatter().date(from: "2026-07-08T12:00:00Z")!
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", now: now)
+
+    #expect(statuses.count == 1)
+    #expect(statuses.first?.todayDurationSeconds == 3600)
+    // 세션 전체가 이번 주 안에 있으므로 주간 기여는 2시간 전부.
+    #expect(statuses.first?.weeklyDurationSeconds == 7200)
+}
+
+// MARK: - D2: last_seen_at 파싱
+
+@Test
+func fetchTeamStatusesParsesLastSeenAndActiveSession() async throws {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://presence-fetch-test")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token")
+
+    #expect(statuses.count == 1)
+    #expect(statuses.first?.lastSeenAt == ISO8601DateFormatter().date(from: "2026-07-01T05:00:00Z"))
+    #expect(statuses.first?.activeSessionID == "60000000-0000-0000-0000-000000000001")
+}
+
+// MARK: - D7: 이중 시작 409 매핑
+
+@Test
+func serviceErrorMapsUniqueSessionViolationToSessionAlreadyOpen() async {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://map-test")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let byConstraint = Data(#"{"code":"23505","message":"duplicate key value violates unique constraint \"work_sessions_one_open_per_user\""}"#.utf8)
+    let mappedByConstraint = await service.serviceError(statusCode: 409, data: byConstraint)
+    #expect(mappedByConstraint == .sessionAlreadyOpen)
+
+    // 제약명 없이 코드만 와도 매핑된다.
+    let byCodeOnly = Data(#"{"code":"23505","message":"duplicate key value violates unique constraint"}"#.utf8)
+    let mappedByCode = await service.serviceError(statusCode: 409, data: byCodeOnly)
+    #expect(mappedByCode == .sessionAlreadyOpen)
 }
 
 // MARK: - Avatar tests

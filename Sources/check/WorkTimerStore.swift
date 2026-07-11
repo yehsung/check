@@ -26,6 +26,19 @@ final class WorkTimerStore {
     /// 3D 캐릭터 오버레이 표시 여부 (사용자 토글, UserDefaults 유지).
     var isOverlayEnabled: Bool = true
 
+    /// 팝오버(MenuBarExtra 창) 표시 여부. 표시 감지(onAppear/창 노티)가 setMenuPresented 로 알린다.
+    /// 관찰 대상이 아니다 — 티커/폴링 게이팅 판정에만 쓴다.
+    @ObservationIgnored var isMenuPresented = false
+    /// 실행당 1회 전체 활성화(토큰 회전+멤버십 확정) 플래그. signOut/clearPersistedSession 에서 리셋.
+    @ObservationIgnored var hasActivatedStoredSession = false
+    /// 메뉴바 라벨 텍스트. 문자열이 실제로 바뀔 때만 대입해 라벨 무효화를 최소화한다.
+    var menuBarTitle = "오프"
+
+    /// 팝오버 표시 상태를 반영한다(idempotent — 중복 신호 무해).
+    func setMenuPresented(_ presented: Bool) {
+        isMenuPresented = presented
+    }
+
     /// 리액션 트리거 싱크. 오버레이 컨트롤러가 연결해 마일스톤/팀원 인사를 엔진으로 흘린다(관찰 대상 아님).
     @ObservationIgnored var onReactionTrigger: ((ReactionKind) -> Void)?
     /// 마일스톤 1일 1회 기록기. init 에서 defaults 로 초기화한다.

@@ -182,7 +182,7 @@ actor SupabaseWorkService {
         dateFormatter.date(from: value)
     }
 
-    func startWork(accessToken: String, teamID: String, userID: String, sessionID: String) async throws {
+    func startWork(accessToken: String, teamID: String, userID: String, sessionID: String, startedAt: Date = Date()) async throws {
         try await sendNoBody(
             path: "/rest/v1/work_sessions",
             method: "POST",
@@ -190,7 +190,7 @@ actor SupabaseWorkService {
                 id: sessionID,
                 teamId: teamID,
                 userId: userID,
-                startedAt: dateFormatter.string(from: Date())
+                startedAt: dateFormatter.string(from: startedAt)
             ),
             accessToken: accessToken,
             prefer: "return=minimal"

@@ -9,6 +9,8 @@ extension WorkTimerStore {
         let generation = sessionGeneration
         await refreshPersistedSessionIfPossible()
         guard generation == sessionGeneration else { return }
+        await confirmMembership()
+        guard generation == sessionGeneration else { return }
         await refreshTeamStatus()
         guard generation == sessionGeneration else { return }
         startStatusRefreshLoop()
@@ -23,6 +25,8 @@ extension WorkTimerStore {
             session = signedInSession
             persistSession(signedInSession, email: email)
             self.password = ""
+            await confirmMembership()
+            guard generation == sessionGeneration else { return }
             syncMessage = "동기화됨"
             await refreshTeamStatus()
             guard generation == sessionGeneration else { return }
@@ -33,15 +37,18 @@ extension WorkTimerStore {
         }
     }
 
-    func signUp(email: String, password: String, displayName: String) async {
+    func signUp(email: String, password: String, displayName: String, teamID: String) async {
         syncMessage = "계정 생성 중"
         let generation = sessionGeneration
         do {
-            if let createdSession = try await service.signUp(email: email, password: password, displayName: displayName) {
+            if let createdSession = try await service.signUp(email: email, password: password, displayName: displayName, teamID: teamID) {
                 guard generation == sessionGeneration else { return }
                 session = createdSession
                 persistSession(createdSession, email: email, displayName: displayName)
                 self.password = ""
+                // 가입 직후 트리거가 membership 을 만들기까지 지연될 수 있으므로 재시도로 확정한다.
+                await confirmMembership(allowRetryForFreshSignup: true)
+                guard generation == sessionGeneration else { return }
                 syncMessage = "동기화됨"
                 await refreshTeamStatus()
                 guard generation == sessionGeneration else { return }
@@ -55,6 +62,32 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             syncMessage = authMessage(for: error, fallback: "계정 생성 실패")
         }
+    }
+
+    /// 로그인/세션복구/가입 성공 후 내 팀을 확정한다. 소속이 있으면 currentTeamID/teamName 을 채우고,
+    /// 없으면 무소속(currentTeamID=nil, teamName="팀")으로 둔다. 가입 직후에는 트리거 타이밍 때문에
+    /// 빈 값이면 1초 간격으로 3회까지 재시도한다.
+    func confirmMembership(allowRetryForFreshSignup: Bool = false) async {
+        guard session != nil else { return }
+        let generation = sessionGeneration
+        let attempts = allowRetryForFreshSignup ? 3 : 1
+        for attempt in 0..<attempts {
+            let membership = try? await withSessionRetry { activeSession in
+                try await service.fetchOwnMembership(accessToken: activeSession.accessToken, userID: activeSession.userID)
+            }
+            guard generation == sessionGeneration else { return }
+            if let membership = membership ?? nil {
+                currentTeamID = membership.teamID
+                teamName = membership.teamName
+                return
+            }
+            if attempt + 1 < attempts {
+                try? await Task.sleep(for: .seconds(1))
+                guard generation == sessionGeneration else { return }
+            }
+        }
+        currentTeamID = nil
+        teamName = "팀"
     }
 
     func authMessage(for error: Error, fallback: String) -> String {
@@ -136,6 +169,10 @@ extension WorkTimerStore {
         startedAt = nil
         accumulatedSeconds = 0
         teamMembers = []
+        currentTeamID = nil
+        teamName = "팀"
+        teamDirectory = []
+        selectedSignupTeamID = nil
         pendingOperation = nil
         pendingStopStartedAt = nil
         pendingStopEndedAt = nil

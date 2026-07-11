@@ -15,7 +15,8 @@ func signUpSendsEmailAndPasswordToSupabaseAuth() async throws {
     let session = try await service.signUp(
         email: "member@example.com",
         password: "team-password",
-        displayName: "영식"
+        displayName: "영식",
+        teamID: "10000000-0000-0000-0000-000000000001"
     )
 
     #expect(session?.userID == "00000000-0000-0000-0000-000000000002")
@@ -25,6 +26,8 @@ func signUpSendsEmailAndPasswordToSupabaseAuth() async throws {
     #expect(bodyText.contains("\"email\":\"member@example.com\""))
     #expect(bodyText.contains("\"password\":\"team-password\""))
     #expect(bodyText.contains("\"display_name\":\"영식\""))
+    // 선택한 팀이 가입 메타데이터로 전송되어야 한다(트리거가 이 팀으로 멤버십을 만든다).
+    #expect(bodyText.contains("\"team_id\":\"10000000-0000-0000-0000-000000000001\""))
 }
 
 @Test
@@ -68,7 +71,7 @@ func signUpReportsInvalidAPIKey() async throws {
     )
 
     do {
-        _ = try await service.signUp(email: "member@example.com", password: "team-password", displayName: "영식")
+        _ = try await service.signUp(email: "member@example.com", password: "team-password", displayName: "영식", teamID: "10000000-0000-0000-0000-000000000001")
         Issue.record("signUp should fail with invalidAPIKey")
     } catch let error as SupabaseWorkServiceError {
         #expect(error == .invalidAPIKey)
@@ -87,6 +90,7 @@ func startWorkEncodesRestBodiesAsSnakeCase() async throws {
 
     try await service.startWork(
         accessToken: "access-token",
+        teamID: "10000000-0000-0000-0000-000000000001",
         userID: "00000000-0000-0000-0000-000000000002",
         sessionID: "30000000-0000-0000-0000-000000000009"
     )
@@ -107,7 +111,7 @@ func fetchTeamStatusesIncludesCurrentAndWeeklyDurations() async throws {
         session: URLSession(configuration: .stubbed)
     )
 
-    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token")
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", teamID: URLProtocolStub.stubTeamID)
 
     #expect(statuses.count == 1)
     #expect(statuses.first?.name == "영식")
@@ -125,7 +129,7 @@ func fetchTeamStatusesSumsOnlyTodaySessionsForTodayDuration() async throws {
     )
 
     let now = ISO8601DateFormatter().date(from: "2026-07-10T12:00:00Z")!
-    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", now: now)
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", teamID: URLProtocolStub.stubTeamID, now: now)
 
     #expect(statuses.count == 1)
     // Two completed sessions exist (3600s today + 1800s earlier this week).
@@ -143,7 +147,7 @@ func fetchTeamStatusesReportsMissingDatabaseSchema() async throws {
     )
 
     do {
-        _ = try await service.fetchTeamStatuses(accessToken: "access-token")
+        _ = try await service.fetchTeamStatuses(accessToken: "access-token", teamID: URLProtocolStub.stubTeamID)
         Issue.record("fetchTeamStatuses should fail with databaseSchemaMissing")
     } catch let error as SupabaseWorkServiceError {
         #expect(error == .databaseSchemaMissing)
@@ -161,7 +165,7 @@ func weeklySessionsQueryUsesKoreanMondayMidnight() async throws {
 
     // 경계 걸친 세션을 놓치지 않도록 '주와 겹침'(ended_at >= 주 시작) 기준으로 조회해야 한다.
     let expectedStart = "gte.\(expectedKoreanWeekStartString(for: Date()))"
-    _ = try await service.fetchTeamStatuses(accessToken: "access-token")
+    _ = try await service.fetchTeamStatuses(accessToken: "access-token", teamID: URLProtocolStub.stubTeamID)
 
     let weeklyRequest = URLProtocolStub.requests(forHost: testHost).last {
         $0.url?.path == "/rest/v1/work_sessions"
@@ -194,7 +198,7 @@ func weeklyDurationClipsSessionCrossingWeekStart() async throws {
     )
 
     let now = ISO8601DateFormatter().date(from: "2026-07-08T12:00:00Z")!
-    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", now: now)
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", teamID: URLProtocolStub.stubTeamID, now: now)
 
     #expect(statuses.count == 1)
     #expect(statuses.first?.weeklyDurationSeconds == 3600)
@@ -212,7 +216,7 @@ func todayDurationClipsSessionCrossingDayStart() async throws {
     )
 
     let now = ISO8601DateFormatter().date(from: "2026-07-08T12:00:00Z")!
-    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", now: now)
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", teamID: URLProtocolStub.stubTeamID, now: now)
 
     #expect(statuses.count == 1)
     #expect(statuses.first?.todayDurationSeconds == 3600)
@@ -230,11 +234,104 @@ func fetchTeamStatusesParsesLastSeenAndActiveSession() async throws {
         session: URLSession(configuration: .stubbed)
     )
 
-    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token")
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", teamID: URLProtocolStub.stubTeamID)
 
     #expect(statuses.count == 1)
     #expect(statuses.first?.lastSeenAt == ISO8601DateFormatter().date(from: "2026-07-01T05:00:00Z"))
     #expect(statuses.first?.activeSessionID == "60000000-0000-0000-0000-000000000001")
+}
+
+// MARK: - G: 멀티팀 파라미터화 / 디렉터리 / 멤버십
+
+@Test
+func fetchTeamStatusesUsesProvidedTeamIDInQuery() async throws {
+    let testHost = "team-id-query-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let teamID = "22222222-3333-4444-5555-666666666666"
+
+    _ = try await service.fetchTeamStatuses(accessToken: "access-token", teamID: teamID)
+
+    // work_statuses 조회가 전달한 팀으로 스코프되어야 한다(더 이상 하드코딩 팀이 아님).
+    let statusRequest = URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/work_statuses"
+    }
+    let statusURL = try #require(statusRequest?.url)
+    let statusItems = try #require(URLComponents(url: statusURL, resolvingAgainstBaseURL: false)?.queryItems)
+    #expect(statusItems.contains(URLQueryItem(name: "team_id", value: "eq.\(teamID)")))
+
+    // 세션 조회들도 같은 팀으로 스코프되어야 한다.
+    let sessionRequest = URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/work_sessions"
+    }
+    let sessionURL = try #require(sessionRequest?.url)
+    let sessionItems = try #require(URLComponents(url: sessionURL, resolvingAgainstBaseURL: false)?.queryItems)
+    #expect(sessionItems.contains(URLQueryItem(name: "team_id", value: "eq.\(teamID)")))
+}
+
+@Test
+func fetchTeamDirectoryPostsRPCWithAnonBearer() async throws {
+    let testHost = "team-directory-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let directory = try await service.fetchTeamDirectory()
+
+    #expect(directory == [
+        TeamDirectoryEntry(id: "10000000-0000-0000-0000-000000000001", name: "sudo 박수"),
+        TeamDirectoryEntry(id: "20000000-0000-0000-0000-000000000002", name: "오목교 브라더스")
+    ])
+    let rpcRequest = try #require(URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/rpc/team_directory"
+    })
+    #expect(rpcRequest.httpMethod == "POST")
+    // accessToken 없이 anonKey 를 Bearer 로 사용해 호출한다.
+    #expect(rpcRequest.value(forHTTPHeaderField: "Authorization") == "Bearer anon-test-key")
+}
+
+@Test
+func fetchOwnMembershipParsesTeamIDAndName() async throws {
+    let testHost = "membership-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let membership = try await service.fetchOwnMembership(
+        accessToken: "access-token",
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+
+    #expect(membership?.teamID == "10000000-0000-0000-0000-000000000001")
+    #expect(membership?.teamName == "sudo 박수")
+    let request = try #require(URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/memberships"
+    })
+    #expect(request.url?.query?.contains("user_id=eq.00000000-0000-0000-0000-000000000002") == true)
+}
+
+@Test
+func fetchOwnMembershipReturnsNilWhenNoTeam() async throws {
+    let testHost = "no-team-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let membership = try await service.fetchOwnMembership(
+        accessToken: "access-token",
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+
+    #expect(membership == nil)
 }
 
 // MARK: - D7: 이중 시작 409 매핑
@@ -423,7 +520,7 @@ func fetchTeamStatusesParsesAvatarURL() async throws {
         session: AvatarURLProtocol.session(forHost: testHost)
     )
 
-    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token")
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", teamID: URLProtocolStub.stubTeamID)
 
     #expect(statuses.count == 1)
     #expect(statuses.first?.avatarURL == URL(string: "https://cdn.example.com/avatars/user.jpg?v=123"))
@@ -438,7 +535,7 @@ func fetchTeamStatusesLeavesAvatarURLNilWhenAbsent() async throws {
         session: AvatarURLProtocol.session(forHost: testHost)
     )
 
-    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token")
+    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", teamID: URLProtocolStub.stubTeamID)
 
     #expect(statuses.count == 1)
     #expect(statuses.first?.avatarURL == nil)

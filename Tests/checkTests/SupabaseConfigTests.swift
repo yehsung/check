@@ -9,7 +9,7 @@ func loadsProvidedProjectURL() {
 
 @Test
 func loadsProvidedTeamIdentity() {
-    #expect(SupabaseConfig.teamID == "10000000-0000-0000-0000-000000000001")
+    // 멀티팀 전환으로 teamID 하드코딩은 제거되었다. teamName 은 로그인 전 헤더 기본 표시로만 남아 있다.
     #expect(SupabaseConfig.teamName == "sudo 박수")
 }
 

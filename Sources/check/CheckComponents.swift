@@ -459,6 +459,79 @@ struct CredentialField: View {
     }
 }
 
+// MARK: - Team picker (signup)
+
+/// 가입 화면 팀 선택 컨트롤. CredentialField 톤(아이콘 + 값/플레이스홀더 + 테두리)과 어울리는 Menu.
+/// - 선택 전: "소속 팀을 선택하세요"
+/// - 목록 비어 있음(로딩 중/실패): "팀 목록 불러오는 중…"
+/// - 선택 후: 선택한 팀 이름
+/// 미선택 상태로 가입을 눌러도 버튼 disable 없이 store 검증이 syncMessage로 안내한다(계약).
+struct TeamPickerField: View {
+    let teams: [TeamDirectoryEntry]
+    @Binding var selectedTeamID: String?
+
+    private var selectedName: String? {
+        guard let selectedTeamID else { return nil }
+        return teams.first(where: { $0.id == selectedTeamID })?.name
+    }
+
+    private var labelText: String {
+        if let selectedName {
+            return selectedName
+        }
+        return teams.isEmpty ? "팀 목록 불러오는 중…" : "소속 팀을 선택하세요"
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(teams) { team in
+                Button(team.name) { selectedTeamID = team.id }
+            }
+        } label: {
+            // 라벨을 별도 뷰로 분리해 앱(Menu 라벨)과 스냅샷(직접 렌더)이 같은 모양을 공유하게 한다.
+            // Menu 자체는 AppKit 백킹이라 ImageRenderer가 못 그리지만, 이 라벨 뷰는 순수 SwiftUI라
+            // 단독 렌더로 육안 확인이 가능하다.
+            TeamPickerLabel(text: labelText, isPlaceholder: selectedName == nil)
+        }
+        .buttonStyle(.plain)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .accessibilityLabel("팀 선택")
+    }
+}
+
+/// 팀 선택 컨트롤의 시각 표현(아이콘 + 값/플레이스홀더 + 셰브론 + 필드 테두리). CredentialField 톤과 맞춘다.
+struct TeamPickerLabel: View {
+    let text: String
+    /// 미선택(플레이스홀더/로딩) 상태면 secondary 톤, 선택되면 primary 톤으로 표시한다.
+    let isPlaceholder: Bool
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "person.3.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(CheckTheme.secondaryText)
+                .frame(width: 16)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(isPlaceholder ? CheckTheme.secondaryText : CheckTheme.primaryText)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(CheckTheme.secondaryText)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(CheckTheme.fieldFill)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(CheckTheme.border, lineWidth: 1))
+        )
+        .contentShape(Rectangle())
+    }
+}
+
 // MARK: - Brand header (login)
 
 struct BrandHeader: View {

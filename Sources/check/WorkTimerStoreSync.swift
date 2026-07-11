@@ -6,11 +6,17 @@ extension WorkTimerStore {
         guard session != nil else {
             return
         }
+        guard let teamID = currentTeamID else {
+            // 무소속: 팀 데이터를 비우고 안내 문구만 남긴다.
+            teamMembers = []
+            syncMessage = "소속 팀이 없어요 — 관리자에게 문의"
+            return
+        }
         let generation = sessionGeneration
 
         do {
             let members = try await withSessionRetry { activeSession in
-                try await service.fetchTeamStatuses(accessToken: activeSession.accessToken)
+                try await service.fetchTeamStatuses(accessToken: activeSession.accessToken, teamID: teamID)
             }
             guard generation == sessionGeneration else { return }
             teamMembers = members
@@ -33,7 +39,7 @@ extension WorkTimerStore {
 
     /// 근무중일 때 서버에 생존신호(last_seen_at)를 보낸다. 근무중이 아니거나 세션 정보가 없으면 보내지 않는다.
     func sendHeartbeatIfWorking() async {
-        guard startedAt != nil, session != nil, let sessionID = currentSessionID else {
+        guard startedAt != nil, session != nil, let sessionID = currentSessionID, let teamID = currentTeamID else {
             return
         }
         let generation = sessionGeneration
@@ -41,6 +47,7 @@ extension WorkTimerStore {
             try await withSessionRetry { activeSession in
                 try await service.heartbeat(
                     accessToken: activeSession.accessToken,
+                    teamID: teamID,
                     userID: activeSession.userID,
                     sessionID: sessionID
                 )
@@ -56,6 +63,7 @@ extension WorkTimerStore {
     /// 네트워크가 끊긴 채 앱이 계속 살아 일하던 경우(startedAt != nil)는 절대 마감하지 않는다.
     private func autoCloseAbandonedOwnSessionIfNeeded() async -> Bool {
         guard startedAt == nil, pendingOperation == nil else { return false }
+        guard let teamID = currentTeamID else { return false }
         guard let session, let member = teamMembers.first(where: { $0.id == session.userID }) else {
             return false
         }
@@ -73,6 +81,7 @@ extension WorkTimerStore {
             try await withSessionRetry { activeSession in
                 try await service.stopWork(
                     accessToken: activeSession.accessToken,
+                    teamID: teamID,
                     userID: activeSession.userID,
                     startedAt: sessionStart,
                     endedAt: seen,
@@ -109,11 +118,13 @@ extension WorkTimerStore {
         guard let sessionID = lastAutoClosedSessionID, let restoredStart = lastAutoClosedStartedAt else {
             return
         }
+        guard let teamID = currentTeamID else { return }
         let generation = sessionGeneration
         do {
             try await withSessionRetry { activeSession in
                 try await service.reopenSession(
                     accessToken: activeSession.accessToken,
+                    teamID: teamID,
                     userID: activeSession.userID,
                     sessionID: sessionID
                 )
@@ -216,6 +227,10 @@ extension WorkTimerStore {
     }
 
     private func performPendingOperation(_ operation: PendingWorkOperation) async throws {
+        guard let teamID = currentTeamID else {
+            // 소속 팀이 없으면 근무 시작/종료를 서버에 반영할 수 없다.
+            throw SupabaseWorkServiceError.authMessage("소속 팀이 없어요 — 관리자에게 문의")
+        }
         switch operation {
         case .start:
             let sessionID = currentSessionID ?? UUID().uuidString
@@ -223,6 +238,7 @@ extension WorkTimerStore {
             try await withSessionRetry { activeSession in
                 try await service.startWork(
                     accessToken: activeSession.accessToken,
+                    teamID: teamID,
                     userID: activeSession.userID,
                     sessionID: sessionID
                 )
@@ -234,6 +250,7 @@ extension WorkTimerStore {
             try await withSessionRetry { activeSession in
                 try await service.stopWork(
                     accessToken: activeSession.accessToken,
+                    teamID: teamID,
                     userID: activeSession.userID,
                     startedAt: startedAt,
                     endedAt: endedAt,

@@ -160,6 +160,12 @@ final class URLProtocolStub: URLProtocol {
            request.value(forHTTPHeaderField: "Authorization") == "Bearer old-access-token" {
             return Data(#"{"code":"PGRST301","message":"JWT expired"}"#.utf8)
         }
+        if request.url?.path == "/rest/v1/rpc/team_directory" {
+            return teamDirectoryData()
+        }
+        if request.url?.path == "/rest/v1/memberships", request.httpMethod == "GET" {
+            return membershipsData(for: request)
+        }
         if request.url?.path == "/rest/v1/work_statuses" {
             return workStatusesData(for: request)
         }
@@ -202,6 +208,34 @@ final class URLProtocolStub: URLProtocol {
               "refresh_token": "signed-up-refresh-token",
               "user": { "id": "00000000-0000-0000-0000-000000000002" }
             }
+            """.utf8
+        )
+    }
+
+    // 스텁 팀 픽스처가 반환하는 기본 팀 id. 스토어 테스트가 currentTeamID 를 직접 세팅할 때도 사용한다.
+    static let stubTeamID = "10000000-0000-0000-0000-000000000001"
+
+    private static func teamDirectoryData() -> Data {
+        Data(
+            """
+            [
+              {"id": "10000000-0000-0000-0000-000000000001", "name": "sudo 박수"},
+              {"id": "20000000-0000-0000-0000-000000000002", "name": "오목교 브라더스"}
+            ]
+            """.utf8
+        )
+    }
+
+    private static func membershipsData(for request: URLRequest) -> Data {
+        // 무소속 로그인 검증 전용 호스트는 빈 배열(소속 없음)을 돌려준다.
+        if request.url?.host == "no-team-test" {
+            return Data("[]".utf8)
+        }
+        return Data(
+            """
+            [
+              {"team_id": "10000000-0000-0000-0000-000000000001", "teams": {"name": "sudo 박수"}}
+            ]
             """.utf8
         )
     }

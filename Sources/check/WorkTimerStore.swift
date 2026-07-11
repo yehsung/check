@@ -30,6 +30,13 @@ final class WorkTimerStore {
     var password = ""
     var syncMessage: String
     var teamMembers: [TeamMemberStatus] = []
+    // 멀티팀 상태.
+    // teamDirectory: 가입 화면 팀 목록. selectedSignupTeamID: 가입 시 선택한 팀.
+    // teamName: 로그인 후 내 팀 이름(미확정 시 "팀"). currentTeamID: 확정된 내 팀 id(무소속이면 nil).
+    var teamDirectory: [TeamDirectoryEntry] = []
+    var selectedSignupTeamID: String?
+    var teamName = "팀"
+    var currentTeamID: String?
     var pendingOperation: PendingWorkOperation?
     var pendingStopStartedAt: Date?
     var pendingStopEndedAt: Date?
@@ -246,9 +253,13 @@ final class WorkTimerStore {
             syncMessage = "이메일, 비밀번호, 별명 필요"
             return nil
         }
+        guard let teamID = selectedSignupTeamID else {
+            syncMessage = "팀을 선택해 주세요"
+            return nil
+        }
 
         let task = Task {
-            await signUp(email: trimmedEmail, password: password, displayName: trimmedDisplayName)
+            await signUp(email: trimmedEmail, password: password, displayName: trimmedDisplayName, teamID: teamID)
         }
         return task
     }
@@ -256,6 +267,19 @@ final class WorkTimerStore {
     func refreshTeamStatus() {
         Task {
             await refreshTeamStatus()
+        }
+    }
+
+    /// 가입 모드 진입 시 호출. 서버(team_directory RPC)에서 팀 목록을 로드한다(Task 발사).
+    func loadTeamDirectory() {
+        Task { @MainActor in await performLoadTeamDirectory() }
+    }
+
+    func performLoadTeamDirectory() async {
+        do {
+            teamDirectory = try await service.fetchTeamDirectory()
+        } catch {
+            // 목록 로드 실패는 조용히 무시한다(가입 버튼은 여전히 팀 미선택으로 거부됨).
         }
     }
 

@@ -1,6 +1,15 @@
 import SwiftUI
 
 enum CheckTheme {
+    // Window — 완전 고정 높이
+    // MenuBarExtra(.window)는 내용 높이가 변하면 창을 재배치해 위로 튄다. 로그인/가입/메인(팀원 0~N명)/
+    // 12시간 배너/동기화 메시지 등 모든 상태를 수납하는 단일 상수로 창 높이 자체를 못 박아 튐을 근절한다.
+    // 메인 화면은 이 높이 안에서 팀 멤버 리스트만 ScrollView로 남는 공간을 채운다(초과 시 스크롤).
+    static let windowHeight: CGFloat = 560
+    // 팀 멤버 행 고정 높이. 보조줄("마지막 확인 N분 전") 유무와 무관하게 동일 높이로 두어
+    // 행 단위 높이 변화가 리스트 내부(스크롤 포함)에서 점프를 만들지 않게 한다.
+    static let memberRowHeight: CGFloat = 48
+
     // Surfaces
     static let background = LinearGradient(
         colors: [

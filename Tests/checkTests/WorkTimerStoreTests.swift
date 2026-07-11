@@ -46,6 +46,112 @@ func signUpRequiresDisplayName() {
     #expect(store.syncMessage == "이메일, 비밀번호, 별명 필요")
 }
 
+// MARK: - G: 멀티팀 가입/무소속
+
+@MainActor
+@Test
+func signUpRequiresTeamSelection() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    store.email = "new@example.com"
+    store.password = "team-password"
+    store.displayName = "영식"
+    // selectedSignupTeamID 미설정 → 가입 거부.
+
+    let task = store.signUp()
+
+    #expect(task == nil)
+    #expect(store.syncMessage == "팀을 선택해 주세요")
+}
+
+@MainActor
+@Test
+func signUpSendsSelectedTeamIDInMetadata() async {
+    let testHost = "signup-team-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.email = "member@example.com"
+    store.password = "team-password"
+    store.displayName = "영식"
+    store.selectedSignupTeamID = "20000000-0000-0000-0000-000000000002"
+
+    await store.signUp()?.value
+
+    #expect(store.isSignedIn)
+    // 선택한 팀이 가입 메타데이터로 서버에 전달되어야 한다.
+    let bodyText = URLProtocolStub.bodyText(forHost: testHost)
+    #expect(bodyText.contains("\"team_id\":\"20000000-0000-0000-0000-000000000002\""))
+}
+
+@MainActor
+@Test
+func signInWithoutTeamShowsNoTeamMessage() async {
+    let testHost = "no-team-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.email = "member@example.com"
+    store.password = "team-password"
+
+    await store.signIn()?.value
+
+    // 소속 팀이 없는 계정은 로그인은 되지만 팀 데이터는 비고 안내 문구가 뜬다.
+    #expect(store.isSignedIn)
+    #expect(store.currentTeamID == nil)
+    #expect(store.teamName == "팀")
+    #expect(store.teamMembers.isEmpty)
+    #expect(store.syncMessage == "소속 팀이 없어요 — 관리자에게 문의")
+}
+
+@MainActor
+@Test
+func loadTeamDirectoryPopulatesDirectory() async {
+    let testHost = "team-directory-store-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    #expect(store.teamDirectory.isEmpty)
+
+    await store.performLoadTeamDirectory()
+
+    #expect(store.teamDirectory == [
+        TeamDirectoryEntry(id: "10000000-0000-0000-0000-000000000001", name: "sudo 박수"),
+        TeamDirectoryEntry(id: "20000000-0000-0000-0000-000000000002", name: "오목교 브라더스")
+    ])
+}
+
 @MainActor
 @Test
 func remoteWorkingMemberKeepsDisplayClockTimerRunning() {
@@ -115,6 +221,7 @@ func refreshTeamStatusRestoresRemoteOwnSessionStart() async throws {
         refreshToken: nil,
         userID: "00000000-0000-0000-0000-000000000002"
     )
+    store.currentTeamID = URLProtocolStub.stubTeamID
 
     await store.refreshTeamStatus()
 
@@ -200,6 +307,7 @@ func expiredAccessTokenRefreshesAndRetriesSync() async {
         refreshToken: "old-refresh-token",
         userID: "00000000-0000-0000-0000-000000000002"
     )
+    store.currentTeamID = URLProtocolStub.stubTeamID
 
     await store.refreshTeamStatus()
 
@@ -229,6 +337,7 @@ func failedStopSyncDoesNotReviveTimerOnRefresh() async {
         refreshToken: nil,
         userID: "00000000-0000-0000-0000-000000000002"
     )
+    store.currentTeamID = URLProtocolStub.stubTeamID
     let start = Date(timeIntervalSince1970: 1000)
     let end = Date(timeIntervalSince1970: 1100)
     store.startedAt = start
@@ -270,6 +379,7 @@ func retryPendingSyncClearsPendingOperationOnceServerRecovers() async {
         refreshToken: nil,
         userID: "00000000-0000-0000-0000-000000000002"
     )
+    store.currentTeamID = URLProtocolStub.stubTeamID
     store.pendingOperation = .stop(durationSeconds: 50)
     store.pendingStopStartedAt = Date(timeIntervalSince1970: 2000)
     store.pendingStopEndedAt = Date(timeIntervalSince1970: 2050)
@@ -303,6 +413,10 @@ func signOutClearsSessionStateAndCallsLogout() async {
         refreshToken: "refresh-token",
         userID: "00000000-0000-0000-0000-000000000002"
     )
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.teamName = "sudo 박수"
+    store.teamDirectory = [TeamDirectoryEntry(id: "t", name: "n")]
+    store.selectedSignupTeamID = "t"
     store.startedAt = Date()
     store.accumulatedSeconds = 500
     store.teamMembers = [
@@ -324,6 +438,10 @@ func signOutClearsSessionStateAndCallsLogout() async {
     #expect(store.startedAt == nil)
     #expect(store.accumulatedSeconds == 0)
     #expect(store.teamMembers.isEmpty)
+    #expect(store.currentTeamID == nil)
+    #expect(store.teamName == "팀")
+    #expect(store.teamDirectory.isEmpty)
+    #expect(store.selectedSignupTeamID == nil)
     #expect(store.pendingOperation == nil)
     #expect(store.snapshot == WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0))
     #expect(store.tickerTask == nil)
@@ -373,6 +491,7 @@ struct SyncRaceTests {
             refreshToken: nil,
             userID: "00000000-0000-0000-0000-000000000002"
         )
+        store.currentTeamID = URLProtocolStub.stubTeamID
 
         let refresh = Task { await store.refreshTeamStatus() }
         // 지연 응답이 도착하기 전에 로그아웃이 먼저 실행되도록 새로고침 Task가 네트워크 대기에 들어갈 시간을 준다.
@@ -448,6 +567,7 @@ struct SyncRaceTests {
             refreshToken: nil,
             userID: "00000000-0000-0000-0000-000000000002"
         )
+        store.currentTeamID = URLProtocolStub.stubTeamID
 
         store.start(now: Date(timeIntervalSince1970: 3000))
         store.stop(now: Date(timeIntervalSince1970: 3100))
@@ -497,6 +617,7 @@ struct SyncRaceTests {
             refreshToken: nil,
             userID: "00000000-0000-0000-0000-000000000002"
         )
+        store.currentTeamID = URLProtocolStub.stubTeamID
         store.startedAt = Date(timeIntervalSinceNow: -30)
         store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 30)
 
@@ -538,6 +659,7 @@ func finishWorkBeforeQuitSyncsStopWhenWorking() async {
         refreshToken: nil,
         userID: "00000000-0000-0000-0000-000000000002"
     )
+    store.currentTeamID = URLProtocolStub.stubTeamID
     store.startedAt = Date(timeIntervalSinceNow: -120)
     store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 120)
 
@@ -570,6 +692,7 @@ func finishWorkBeforeQuitReturnsImmediatelyWhenNotWorking() async {
         refreshToken: nil,
         userID: "00000000-0000-0000-0000-000000000002"
     )
+    store.currentTeamID = URLProtocolStub.stubTeamID
     // startedAt == nil → 근무중이 아니므로 어떤 요청도 보내지 않고 즉시 리턴해야 한다.
 
     await store.finishWorkBeforeQuit()
@@ -905,6 +1028,7 @@ func updateAvatarUploadsAndReportsSuccess() async {
         refreshToken: nil,
         userID: "00000000-0000-0000-0000-000000000002"
     )
+    store.currentTeamID = URLProtocolStub.stubTeamID
 
     await store.performAvatarUpdate(imageData: Data([0xFF, 0xD8, 0xFF]))
 
@@ -932,6 +1056,8 @@ private func makeStubStore(host: String, userID: String = "00000000-0000-0000-00
         defaults: isolatedDefaults()
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: userID)
+    // 세션을 직접 주입하는 테스트는 로그인 흐름(confirmMembership)을 건너뛰므로 팀도 직접 확정한다.
+    store.currentTeamID = URLProtocolStub.stubTeamID
     return store
 }
 

@@ -2,7 +2,8 @@ import Foundation
 
 enum SupabaseConfig {
     static let projectURL = URL(string: "https://xfnhfjvubetkdnfkfljg.supabase.co")!
-    static let teamID = "10000000-0000-0000-0000-000000000001"
+    // 멀티팀 전환: 팀 식별자(teamID) 하드코딩은 제거하고 서비스/스토어가 팀을 파라미터로 전달한다.
+    // teamName 은 로그인 전(비인증) 헤더의 기본 표시에만 남아 있는 뷰 소유 상수라 여기 유지한다.
     static let teamName = "sudo 박수"
     static let anonKeyEnvironmentName = "CHECK_SUPABASE_ANON_KEY"
 

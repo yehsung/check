@@ -257,46 +257,39 @@ func menuBarStatusLabelFitsWithinBarHeight() throws {
     }
 }
 
-// MARK: - A2: 창 튐 방지 — 상태 변화에도 팝오버 높이가 변하지 않아야 한다
+// MARK: - A2: 창 완전 고정 높이 — 모든 상태의 픽셀 높이가 정확히 동일해야 한다(창 튐 근절)
 
 @MainActor
 @Test
-func loginPanelHeightIsStableAcrossErrorBanner() throws {
-    // 오류 배너(AuthStatusLine) 등장이 카드 높이를 밀어 창이 튀던 회귀를 막는다.
-    let noError = makeLoginStore(syncMessage: "로그인 필요")
-    let withError = makeLoginStore(syncMessage: "로그인 정보 오류")
+func windowHeightIsConstantAcrossAllStates() throws {
+    // 로그인/가입/오류 배너/메인(팀원 0·3명, stale 포함)/12h 배너 — 어느 상태든 창(뷰) 높이가
+    // windowHeight 상수로 고정돼 정확히 같은 픽셀 높이여야 한다. 이 단일 invariant가 이전
+    // 높이 안정성 테스트 3종(오류 배너·모드 전환·ASCII 캡션)과 12h 배너 안정성 테스트를 대체한다.
+    let now = Date()
 
-    let clean = try #require(renderedPixelHeight(CheckMenuView(store: noError)))
-    let errored = try #require(renderedPixelHeight(CheckMenuView(store: withError)))
-
-    #expect(clean == errored)
-}
-
-@MainActor
-@Test
-func loginAndSignupModesHaveEqualHeight() throws {
-    // 로그인 모드 ↔ 가입 모드 전환 시(별명 필드 등장) 높이가 같아야 창이 튀지 않는다.
+    // 로그인 모드(별명 필드 숨김) — 별명 값이 있어도 로그인 모드 표시는 동일해야 한다.
     let loginStore = makeLoginStore(syncMessage: "로그인 필요")
+    // 로그인 + 오류 배너.
+    let loginErrorStore = makeLoginStore(syncMessage: "로그인 정보 오류")
+    // 가입 모드(별명·팀 선택 노출). 팀 목록/선택까지 채워 실제 가입 카드 높이를 재현한다.
     let signupStore = makeLoginStore(syncMessage: "로그인 필요")
     signupStore.displayName = "영식"
+    signupStore.teamDirectory = sampleTeamDirectory
+    signupStore.selectedSignupTeamID = sampleTeamDirectory.first?.id
 
-    let login = try #require(renderedPixelHeight(CheckMenuView(store: loginStore)))
-    let signup = try #require(renderedPixelHeight(CheckMenuView(store: signupStore, initialAuthMode: .signUp)))
+    let heights: [Int] = try [
+        renderedPixelHeight(CheckMenuView(store: loginStore)),
+        renderedPixelHeight(CheckMenuView(store: loginErrorStore, previewASCIIWarning: true)),
+        renderedPixelHeight(CheckMenuView(store: signupStore, initialAuthMode: .signUp)),
+        renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: [], now: now))),
+        renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now))),
+        // 팀원이 남는 공간을 초과(스크롤)해도 창(뷰) 높이는 절대 변하지 않아야 한다.
+        renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 8), now: now))),
+        renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewLongSessionBanner: true))
+    ].map { try #require($0) }
 
-    #expect(login == signup)
-}
-
-@MainActor
-@Test
-func loginPanelHeightIsStableAcrossASCIIWarning() throws {
-    // "영어 문자만 입력할 수 있어요" 캡션 등장이 높이를 밀지 않아야 한다.
-    let plain = makeLoginStore(syncMessage: "로그인 필요")
-    let warned = makeLoginStore(syncMessage: "로그인 필요")
-
-    let quiet = try #require(renderedPixelHeight(CheckMenuView(store: plain)))
-    let warning = try #require(renderedPixelHeight(CheckMenuView(store: warned, previewASCIIWarning: true)))
-
-    #expect(quiet == warning)
+    // 모든 상태의 픽셀 높이가 정확히 하나로 수렴해야 한다.
+    #expect(Set(heights).count == 1)
 }
 
 // MARK: - A3: Enter-키 포커스 체이닝 순서
@@ -417,17 +410,61 @@ func checkMenuViewRendersLongSessionBannerContextSnapshot() throws {
     }
 }
 
+// MARK: - F 스냅샷 덤프 (육안 확인용, CHECK_SNAPSHOT_DIR 지정 시에만 기록)
+
 @MainActor
 @Test
-func signedInHeightIsStableAcrossLongSessionBanner() throws {
-    // 12시간 배너는 헤더 카드 위 overlay로 얹혀 뷰 전체 높이를 바꾸지 않아야 한다(창 튐 방지).
-    let plain = makeSignedInStore()
-    let banner = makeSignedInStore()
+func dumpTrackFSnapshots() throws {
+    guard let dir = ProcessInfo.processInfo.environment["CHECK_SNAPSHOT_DIR"] else { return }
+    let base = URL(fileURLWithPath: dir, isDirectory: true)
+    try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+    let now = Date()
 
-    let quiet = try #require(renderedPixelHeight(CheckMenuView(store: plain)))
-    let withBanner = try #require(renderedPixelHeight(CheckMenuView(store: banner, previewLongSessionBanner: true)))
+    func write(_ view: some View, _ name: String, width: CGFloat = 340) throws {
+        let png = try renderPNG(view, width: width)
+        try png.write(to: base.appendingPathComponent(name))
+    }
 
-    #expect(quiet == withBanner)
+    // 로그인 모드(기본 진입).
+    let loginStore = makeLoginStore(syncMessage: "로그인 필요")
+    try write(CheckMenuView(store: loginStore), "login.png")
+
+    // 팀 선택 라벨(Menu는 AppKit 백킹이라 ImageRenderer가 못 그리므로 라벨만 단독 렌더로 확인).
+    try write(
+        TeamPickerLabel(text: "소속 팀을 선택하세요", isPlaceholder: true).padding(20).background(CheckTheme.panel),
+        "team-picker-placeholder.png", width: 316
+    )
+    try write(
+        TeamPickerLabel(text: "sudo 박수", isPlaceholder: false).padding(20).background(CheckTheme.panel),
+        "team-picker-selected.png", width: 316
+    )
+    try write(
+        TeamPickerLabel(text: "팀 목록 불러오는 중…", isPlaceholder: true).padding(20).background(CheckTheme.panel),
+        "team-picker-loading.png", width: 316
+    )
+
+    // 가입 모드: 팀 선택 전(플레이스홀더) / 후(선택된 팀 이름).
+    let signupBefore = makeLoginStore(syncMessage: "로그인 필요")
+    signupBefore.displayName = "영식"
+    signupBefore.email = "member@example.com"
+    signupBefore.password = "team-password"
+    signupBefore.teamDirectory = sampleTeamDirectory
+    try write(CheckMenuView(store: signupBefore, initialAuthMode: .signUp), "signup-before-selection.png")
+
+    let signupAfter = makeLoginStore(syncMessage: "로그인 필요")
+    signupAfter.displayName = "영식"
+    signupAfter.email = "member@example.com"
+    signupAfter.password = "team-password"
+    signupAfter.teamDirectory = sampleTeamDirectory
+    signupAfter.selectedSignupTeamID = sampleTeamDirectory.first?.id
+    try write(CheckMenuView(store: signupAfter, initialAuthMode: .signUp), "signup-after-selection.png")
+
+    // 메인: 0명 / 3명(presence) / 5·6명(스크롤 경계) / 8명(스크롤 필요, 창 고정 유지).
+    try write(CheckMenuView(store: makeTeamStore(members: [], now: now)), "main-empty.png")
+    try write(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now)), "main-three.png")
+    try write(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 5), now: now)), "main-five.png")
+    try write(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 6), now: now)), "main-six.png")
+    try write(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 8), now: now)), "main-eight-scroll.png")
 }
 
 // MARK: - E3: 다운스케일 순수 함수
@@ -469,6 +506,82 @@ private func makeSignedInStore() -> WorkTimerStore {
     ]
     return store
 }
+
+/// 로그인된 스토어에 임의의 팀원 목록/기준시각을 주입한다. 창 고정 높이 invariant·스냅샷 공용.
+@MainActor
+private func makeTeamStore(members: [TeamMemberStatus], now: Date = Date()) -> WorkTimerStore {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedRenderDefaults()
+    )
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.displayNow = now
+    store.teamMembers = members
+    // 팀 카드 헤더 이름이 "팀" 플레이스홀더가 아닌 실제 이름으로 나오도록 스텁 팀명을 확정한다.
+    store.teamDirectory = sampleTeamDirectory
+    store.selectedSignupTeamID = sampleTeamDirectory.first?.id
+    return store
+}
+
+/// active(라이브)·stale(연결 끊김·보조줄)·off 세 상태가 섞인 3인 팀원 표본.
+@MainActor
+private func presenceMembers(now: Date) -> [TeamMemberStatus] {
+    [
+        TeamMemberStatus(
+            id: "00000000-0000-0000-0000-000000000002",
+            name: "영식",
+            status: .working,
+            updatedAt: nil,
+            currentSessionStartedAt: now.addingTimeInterval(-3_661),
+            weeklyDurationSeconds: 14_400,
+            avatarURL: CheckMascotAssets.url(for: .neutral)
+        ),
+        TeamMemberStatus(
+            id: "00000000-0000-0000-0000-000000000003",
+            name: "민수",
+            status: .working,
+            updatedAt: now.addingTimeInterval(-420),
+            currentSessionStartedAt: now.addingTimeInterval(-7_620),
+            weeklyDurationSeconds: 28_800,
+            lastSeenAt: now.addingTimeInterval(-420)
+        ),
+        TeamMemberStatus(
+            id: "00000000-0000-0000-0000-000000000001",
+            name: "yesung",
+            status: .offWork,
+            updatedAt: nil,
+            currentSessionStartedAt: nil,
+            weeklyDurationSeconds: 7_200
+        )
+    ]
+}
+
+/// active/stale/off가 섞인 N인 팀원 표본. count가 창 고정 높이를 넘으면 리스트가 스크롤돼야 한다.
+@MainActor
+private func manyMembers(now: Date, count: Int = 8) -> [TeamMemberStatus] {
+    let names = ["영식", "민수", "지현", "서준", "하윤", "도현", "예린", "yesung", "태우", "보라"]
+    return Array(names.prefix(count)).enumerated().map { index, name in
+        let isOff = index % 3 == 2
+        let isStale = index % 3 == 1
+        return TeamMemberStatus(
+            id: "00000000-0000-0000-0000-00000000000\(index)",
+            name: name,
+            status: isOff ? .offWork : .working,
+            updatedAt: isStale ? now.addingTimeInterval(-420) : nil,
+            currentSessionStartedAt: isOff ? nil : now.addingTimeInterval(-3_600 - Double(index) * 600),
+            weeklyDurationSeconds: 7_200 + index * 3_600,
+            avatarURL: index == 0 ? CheckMascotAssets.url(for: .neutral) : nil,
+            lastSeenAt: isStale ? now.addingTimeInterval(-420) : nil
+        )
+    }
+}
+
+/// 가입 화면 팀 선택 스텁 표본.
+private let sampleTeamDirectory: [TeamDirectoryEntry] = [
+    TeamDirectoryEntry(id: "10000000-0000-0000-0000-000000000001", name: "sudo 박수"),
+    TeamDirectoryEntry(id: "10000000-0000-0000-0000-000000000002", name: "새벽 러너스"),
+    TeamDirectoryEntry(id: "10000000-0000-0000-0000-000000000003", name: "코드 크래프터")
+]
 
 /// 뷰를 지정 폭 고정으로 렌더해 PNG Data를 돌려준다. 스냅샷/카운트 확인 공용.
 @MainActor

@@ -36,8 +36,8 @@ actor SupabaseWorkService {
         return SupabaseSession(accessToken: response.accessToken, refreshToken: response.refreshToken, userID: response.user.id)
     }
 
-    func signUp(email: String, password: String, displayName: String) async throws -> SupabaseSession? {
-        let body = SignUpRequest(email: email, password: password, data: ["display_name": displayName])
+    func signUp(email: String, password: String, displayName: String, teamID: String) async throws -> SupabaseSession? {
+        let body = SignUpRequest(email: email, password: password, data: ["display_name": displayName, "team_id": teamID])
         let data = try await send(
             path: "/auth/v1/signup",
             method: "POST",
@@ -66,13 +66,13 @@ actor SupabaseWorkService {
         return SupabaseSession(accessToken: response.accessToken, refreshToken: response.refreshToken, userID: response.user.id)
     }
 
-    func fetchTeamStatuses(accessToken: String, now: Date = Date()) async throws -> [TeamMemberStatus] {
+    func fetchTeamStatuses(accessToken: String, teamID: String, now: Date = Date()) async throws -> [TeamMemberStatus] {
         let data = try await send(
             path: "/rest/v1/work_statuses",
             method: "GET",
             queryItems: [
                 URLQueryItem(name: "select", value: "user_id,status,updated_at,last_seen_at,active_session_id,profiles(display_name,email,avatar_url)"),
-                URLQueryItem(name: "team_id", value: "eq.\(SupabaseConfig.teamID)"),
+                URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
                 URLQueryItem(name: "order", value: "updated_at.desc")
             ],
             body: Optional<EmptyBody>.none,
@@ -80,8 +80,8 @@ actor SupabaseWorkService {
             prefer: nil
         )
         let rows = try decoder.decode([WorkStatusRow].self, from: data)
-        let activeSessions = try await fetchActiveSessions(accessToken: accessToken)
-        let weeklySessions = try await fetchWeeklySessions(accessToken: accessToken, now: now)
+        let activeSessions = try await fetchActiveSessions(accessToken: accessToken, teamID: teamID)
+        let weeklySessions = try await fetchWeeklySessions(accessToken: accessToken, teamID: teamID, now: now)
         let activeByUser = Dictionary(grouping: activeSessions, by: \.userId)
         let weeklyByUser = weeklyDurations(from: weeklySessions, now: now)
         let todayByUser = todayDurations(from: weeklySessions, now: now)
@@ -103,13 +103,13 @@ actor SupabaseWorkService {
         }
     }
 
-    private func fetchActiveSessions(accessToken: String) async throws -> [WorkSessionRow] {
+    private func fetchActiveSessions(accessToken: String, teamID: String) async throws -> [WorkSessionRow] {
         let data = try await send(
             path: "/rest/v1/work_sessions",
             method: "GET",
             queryItems: [
                 URLQueryItem(name: "select", value: "id,user_id,started_at,ended_at,duration_seconds"),
-                URLQueryItem(name: "team_id", value: "eq.\(SupabaseConfig.teamID)"),
+                URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
                 URLQueryItem(name: "ended_at", value: "is.null")
             ],
             body: Optional<EmptyBody>.none,
@@ -119,13 +119,13 @@ actor SupabaseWorkService {
         return try decoder.decode([WorkSessionRow].self, from: data)
     }
 
-    private func fetchWeeklySessions(accessToken: String, now: Date) async throws -> [WorkSessionRow] {
+    private func fetchWeeklySessions(accessToken: String, teamID: String, now: Date) async throws -> [WorkSessionRow] {
         let data = try await send(
             path: "/rest/v1/work_sessions",
             method: "GET",
             queryItems: [
                 URLQueryItem(name: "select", value: "id,user_id,started_at,ended_at,duration_seconds"),
-                URLQueryItem(name: "team_id", value: "eq.\(SupabaseConfig.teamID)"),
+                URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
                 URLQueryItem(name: "ended_at", value: "not.is.null"),
                 // 경계 걸친 세션(예: 일요일 23시~월요일 1시)을 놓치지 않도록 '주와 겹침' 기준으로 조회한다.
                 // started_at gte 는 주 시작 이전에 시작한 세션을 통째로 누락시키는 실버그였다.
@@ -180,28 +180,28 @@ actor SupabaseWorkService {
         dateFormatter.date(from: value)
     }
 
-    func startWork(accessToken: String, userID: String, sessionID: String) async throws {
+    func startWork(accessToken: String, teamID: String, userID: String, sessionID: String) async throws {
         try await sendNoBody(
             path: "/rest/v1/work_sessions",
             method: "POST",
             body: StartSessionRequest(
                 id: sessionID,
-                teamId: SupabaseConfig.teamID,
+                teamId: teamID,
                 userId: userID,
                 startedAt: dateFormatter.string(from: Date())
             ),
             accessToken: accessToken,
             prefer: "return=minimal"
         )
-        try await upsertStatus(accessToken: accessToken, userID: userID, status: "working", activeSessionID: sessionID)
+        try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
     }
 
-    func stopWork(accessToken: String, userID: String, startedAt: Date, endedAt: Date, durationSeconds: Int, fallbackSessionID: String) async throws {
+    func stopWork(accessToken: String, teamID: String, userID: String, startedAt: Date, endedAt: Date, durationSeconds: Int, fallbackSessionID: String) async throws {
         let patched = try await send(
             path: "/rest/v1/work_sessions",
             method: "PATCH",
             queryItems: [
-                URLQueryItem(name: "team_id", value: "eq.\(SupabaseConfig.teamID)"),
+                URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
                 URLQueryItem(name: "user_id", value: "eq.\(userID)"),
                 URLQueryItem(name: "ended_at", value: "is.null")
             ],
@@ -220,7 +220,7 @@ actor SupabaseWorkService {
                 queryItems: [URLQueryItem(name: "on_conflict", value: "id")],
                 body: CompletedSessionRequest(
                     id: fallbackSessionID,
-                    teamId: SupabaseConfig.teamID,
+                    teamId: teamID,
                     userId: userID,
                     startedAt: dateFormatter.string(from: startedAt),
                     endedAt: dateFormatter.string(from: endedAt),
@@ -230,30 +230,30 @@ actor SupabaseWorkService {
                 prefer: "resolution=ignore-duplicates,return=minimal"
             )
         }
-        try await upsertStatus(accessToken: accessToken, userID: userID, status: "off_work", activeSessionID: nil)
+        try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "off_work", activeSessionID: nil)
     }
 
     /// 근무중 생존신호. work_statuses.last_seen_at(+updated_at)을 현재 시각으로 갱신한다.
     /// upsertStatus 를 재사용하므로 active_session_id 도 유지된다.
-    func heartbeat(accessToken: String, userID: String, sessionID: String) async throws {
-        try await upsertStatus(accessToken: accessToken, userID: userID, status: "working", activeSessionID: sessionID)
+    func heartbeat(accessToken: String, teamID: String, userID: String, sessionID: String) async throws {
+        try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
     }
 
     /// 자동 마감한 세션을 되돌린다. ended_at/duration_seconds 를 null 로 재개하고 상태를 working 으로 복구.
     /// 유니크 인덱스(work_sessions_one_open_per_user)상 다른 열린 세션이 없을 때만 안전하다.
-    func reopenSession(accessToken: String, userID: String, sessionID: String) async throws {
+    func reopenSession(accessToken: String, teamID: String, userID: String, sessionID: String) async throws {
         try await sendNoBody(
             path: "/rest/v1/work_sessions",
             method: "PATCH",
             queryItems: [
-                URLQueryItem(name: "team_id", value: "eq.\(SupabaseConfig.teamID)"),
+                URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
                 URLQueryItem(name: "id", value: "eq.\(sessionID)")
             ],
             body: ReopenSessionRequest(),
             accessToken: accessToken,
             prefer: "return=minimal"
         )
-        try await upsertStatus(accessToken: accessToken, userID: userID, status: "working", activeSessionID: sessionID)
+        try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
     }
 
     func uploadAvatar(accessToken: String, userID: String, imageData: Data) async throws -> String {
@@ -288,13 +288,48 @@ actor SupabaseWorkService {
         )
     }
 
-    private func upsertStatus(accessToken: String, userID: String, status: String, activeSessionID: String?) async throws {
+    /// 가입 화면 팀 목록. team_directory() RPC 를 anon 토큰으로 호출한다(accessToken 없이 anonKey Bearer).
+    /// invite_code 는 RPC 가 반환하지 않으므로 노출되지 않는다.
+    func fetchTeamDirectory() async throws -> [TeamDirectoryEntry] {
+        let data = try await send(
+            path: "/rest/v1/rpc/team_directory",
+            method: "POST",
+            body: EmptyBody(),
+            accessToken: nil,
+            prefer: nil
+        )
+        let rows = try decoder.decode([TeamDirectoryRow].self, from: data)
+        return rows.map { TeamDirectoryEntry(id: $0.id, name: $0.name) }
+    }
+
+    /// 로그인 후 내 팀을 확정한다. 소속이 없으면 nil.
+    func fetchOwnMembership(accessToken: String, userID: String) async throws -> (teamID: String, teamName: String)? {
+        let data = try await send(
+            path: "/rest/v1/memberships",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "select", value: "team_id,teams(name)"),
+                URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                URLQueryItem(name: "limit", value: "1")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        let rows = try decoder.decode([MembershipRow].self, from: data)
+        guard let row = rows.first else {
+            return nil
+        }
+        return (teamID: row.teamId, teamName: row.teams?.name ?? "팀")
+    }
+
+    private func upsertStatus(accessToken: String, teamID: String, userID: String, status: String, activeSessionID: String?) async throws {
         try await sendNoBody(
             path: "/rest/v1/work_statuses",
             method: "POST",
             queryItems: [URLQueryItem(name: "on_conflict", value: "team_id,user_id")],
             body: StatusUpsertRequest(
-                teamId: SupabaseConfig.teamID,
+                teamId: teamID,
                 userId: userID,
                 status: status,
                 activeSessionId: activeSessionID,

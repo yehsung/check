@@ -64,6 +64,12 @@ enum PendingWorkOperation: Equatable {
     case stop(durationSeconds: Int)
 }
 
+/// 가입 화면 팀 목록의 한 항목. team_directory() RPC 로 받아 온다(invite_code 는 노출되지 않음).
+struct TeamDirectoryEntry: Identifiable, Equatable {
+    let id: String
+    let name: String
+}
+
 struct TeamWeeklyGoal: Equatable {
     static let defaultGoalSeconds = 60 * 60 * 60
     static let koreanTimeZone = TimeZone(identifier: "Asia/Seoul")!
@@ -177,6 +183,22 @@ struct WorkSessionRow: Decodable {
     let startedAt: String
     let endedAt: String?
     let durationSeconds: Int?
+}
+
+/// team_directory() RPC 응답 행. 계약상 TeamDirectoryEntry 선언은 고정이므로 파싱은 별도 행으로 한다.
+struct TeamDirectoryRow: Decodable {
+    let id: String
+    let name: String
+}
+
+/// memberships?select=team_id,teams(name) 응답 행. teams 는 임베드 조인.
+struct MembershipRow: Decodable {
+    let teamId: String
+    let teams: MembershipTeamRow?
+}
+
+struct MembershipTeamRow: Decodable {
+    let name: String
 }
 
 struct StartSessionRequest: Encodable {

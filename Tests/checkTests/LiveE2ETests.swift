@@ -40,6 +40,11 @@ private enum Emails {
     static let edgeDisplayName = "가나다라마바사아자차카타파하거너더러머버" + "🎉🚀✨🌟💪🔥😀🙌🐣🌈"
 }
 
+private enum Teams {
+    // 멀티팀 트리거 신동작: 가입 시 selectedSignupTeamID 로 팀을 명시해야 트리거가 그 팀 멤버십을 만든다.
+    static let sudoParkID = "10000000-0000-0000-0000-000000000001"
+}
+
 // MARK: - 키 로딩 (파일 → 값 주입)
 
 private enum LiveE2EEnv {
@@ -355,6 +360,7 @@ private func ensurePrimaryAccount(anonKey: String, admin: E2EAdmin) async throws
     store.email = Emails.primary
     store.displayName = "복구계정"
     store.password = Emails.password
+    store.selectedSignupTeamID = Teams.sudoParkID
     await store.signUp()?.value
     guard let userID = store.session?.userID else {
         throw E2EError("primary 계정 생성 실패: \(store.syncMessage)")
@@ -394,6 +400,7 @@ struct LiveE2ETests {
         store.email = Emails.primary
         store.displayName = "이서브영식"
         store.password = Emails.password
+        store.selectedSignupTeamID = Teams.sudoParkID
 
         await store.signUp()?.value
 
@@ -493,6 +500,7 @@ struct LiveE2ETests {
         store.email = Emails.primary
         store.displayName = "중복시도"
         store.password = Emails.password
+        store.selectedSignupTeamID = Teams.sudoParkID
 
         await store.signUp()?.value
 
@@ -706,6 +714,7 @@ struct LiveE2ETests {
         store.email = Emails.nickname
         store.displayName = edge
         store.password = Emails.password
+        store.selectedSignupTeamID = Teams.sudoParkID
 
         await store.signUp()?.value
         #expect(store.isSignedIn)

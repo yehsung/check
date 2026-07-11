@@ -11,26 +11,41 @@ struct CheckMenuView: View {
     var previewLongSessionBanner: Bool = false
 
     var body: some View {
-        VStack(spacing: 10) {
-            if store.isSignedIn {
+        content
+            .padding(12)
+            // 창 완전 고정 높이. 모든 상태를 windowHeight 상수 안에 수납해 MenuBarExtra 창 튐을 근절한다.
+            .frame(width: 340, height: CheckTheme.windowHeight)
+            .background(CheckTheme.background)
+            .foregroundStyle(CheckTheme.primaryText)
+            .task {
+                await store.activateStoredSession()
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if store.isSignedIn {
+            // 헤더 카드·팀 카드 헤더/게이지·푸터는 고정, 팀 멤버 리스트만 남는 공간(TeamPanel maxHeight)을 채운다.
+            VStack(spacing: 10) {
                 HeaderCard(store: store, previewLongSessionBanner: previewLongSessionBanner)
                 TeamPanel(
                     teamMembers: store.teamMembers,
+                    teamName: store.teamName,
                     fallbackStatus: store.syncMessage,
                     now: store.displayNow,
                     myUserID: store.session?.userID,
                     onUpdateAvatar: { store.updateAvatar(imageData: $0) }
                 )
+                .frame(maxHeight: .infinity)
                 FooterBar(store: store)
-            } else {
-                LoginPanel(store: store, initialMode: initialAuthMode, previewWarning: previewASCIIWarning)
             }
-        }
-        .padding(12)
-        .background(CheckTheme.background)
-        .foregroundStyle(CheckTheme.primaryText)
-        .task {
-            await store.activateStoredSession()
+        } else {
+            // 로그인/가입 카드는 고정 창 안에서 위아래 여백을 균등 배분해 세로 중앙 정렬한다.
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                LoginPanel(store: store, initialMode: initialAuthMode, previewWarning: previewASCIIWarning)
+                Spacer(minLength: 0)
+            }
         }
     }
 }
@@ -114,6 +129,8 @@ private struct HeaderCard: View {
 
 private struct TeamPanel: View {
     let teamMembers: [TeamMemberStatus]
+    // 팀 카드 헤더 이름. 로그인 후 store.teamName(미확정 시 "팀")을 그대로 표시한다.
+    let teamName: String
     let fallbackStatus: String
     let now: Date
     // 내 행 판정용. store.session?.userID == member.id 인 행에만 아바타 편집을 붙인다.
@@ -127,7 +144,7 @@ private struct TeamPanel: View {
                 Image(systemName: "person.2.fill")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(CheckTheme.secondaryText)
-                Text(SupabaseConfig.teamName)
+                Text(teamName)
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
@@ -136,27 +153,76 @@ private struct TeamPanel: View {
             }
             TeamGoalGauge(goal: weeklyGoal)
             PanelDivider()
-            VStack(spacing: 12) {
-                if sortedMembers.isEmpty {
-                    TeamMemberRow(name: "팀원", presence: .offWork, primaryDetail: fallbackStatus)
-                } else {
-                    ForEach(sortedMembers) { member in
-                        let isMe = myUserID != nil && member.id == myUserID
-                        TeamMemberRow(
-                            name: member.name,
-                            avatarURL: member.avatarURL,
-                            presence: member.presence(now: now),
-                            primaryDetail: primaryDetail(member),
-                            secondaryDetail: secondaryDetail(member),
-                            isMe: isMe,
-                            onPickAvatar: isMe ? onUpdateAvatar : nil
-                        )
-                    }
+            memberList
+        }
+        .padding(12)
+        // 팀 카드는 헤더와 푸터 사이 남는 세로 공간을 모두 채운다(멤버 리스트 스크롤 영역 확보).
+        .frame(maxHeight: .infinity)
+        .panelStyle()
+    }
+
+    // 행 사이 간격. 리스트가 남는 공간에 들어가는지(스크롤 필요 여부) 계산에도 쓴다.
+    private static let rowSpacing: CGFloat = 10
+
+    // 표시할 행 개수(빈 팀은 안내용 1행).
+    private var rowCount: Int {
+        sortedMembers.isEmpty ? 1 : sortedMembers.count
+    }
+
+    // 헤더/게이지/구분선 아래에서 남는 공간을 채우는 멤버 리스트.
+    // 남는 공간에 다 들어가면 스크롤 없이 위에서부터 자연 배치 + 하단 여백,
+    // 넘치면 ScrollView로 스크롤한다. 창 자체는 고정 높이라 어느 쪽이든 창이 튀지 않는다.
+    // (ImageRenderer는 NSScrollView 백킹인 ScrollView 내용을 못 그리므로, 들어가는 경우엔
+    //  스냅샷/육안 확인이 가능한 순수 VStack 경로를 탄다.)
+    @ViewBuilder
+    private var memberList: some View {
+        GeometryReader { proxy in
+            if Self.listFits(rowCount: rowCount, available: proxy.size.height) {
+                rows
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            } else {
+                ScrollView(.vertical, showsIndicators: true) {
+                    rows.frame(maxWidth: .infinity)
                 }
             }
         }
-        .padding(12)
-        .panelStyle()
+        // 리스트가 채우는 세로 공간을 확정해 스크롤/하단 여백이 성립하게 한다.
+        .frame(maxHeight: .infinity)
+    }
+
+    // 각 행은 memberRowHeight 상수로 고정 — 보조줄("마지막 확인 N분 전") 유무와 무관하게 동일 높이.
+    @ViewBuilder
+    private var rows: some View {
+        VStack(spacing: Self.rowSpacing) {
+            if sortedMembers.isEmpty {
+                TeamMemberRow(name: "팀원", presence: .offWork, primaryDetail: fallbackStatus)
+                    .frame(height: CheckTheme.memberRowHeight)
+            } else {
+                ForEach(sortedMembers) { member in
+                    let isMe = myUserID != nil && member.id == myUserID
+                    TeamMemberRow(
+                        name: member.name,
+                        avatarURL: member.avatarURL,
+                        presence: member.presence(now: now),
+                        primaryDetail: primaryDetail(member),
+                        secondaryDetail: secondaryDetail(member),
+                        isMe: isMe,
+                        onPickAvatar: isMe ? onUpdateAvatar : nil
+                    )
+                    .frame(height: CheckTheme.memberRowHeight)
+                }
+            }
+        }
+    }
+
+    // 고정 행 높이·간격으로 계산한 리스트 총 높이가 남는 공간(available) 이하이면 스크롤이 필요 없다.
+    static func listContentHeight(rowCount: Int) -> CGFloat {
+        guard rowCount > 0 else { return 0 }
+        return CGFloat(rowCount) * CheckTheme.memberRowHeight + CGFloat(rowCount - 1) * rowSpacing
+    }
+
+    static func listFits(rowCount: Int, available: CGFloat) -> Bool {
+        listContentHeight(rowCount: rowCount) <= available
     }
 
     private var sortedMembers: [TeamMemberStatus] {
@@ -328,6 +394,16 @@ private struct LoginPanel: View {
                 .disabled(mode != .signUp)
                 .allowsHitTesting(mode == .signUp)
                 .accessibilityHidden(mode != .signUp)
+                // 팀 선택은 가입 모드에만 노출한다. 창이 고정 높이라 모드 간 카드 높이 차이는 튐을 만들지 않는다.
+                if mode == .signUp {
+                    TeamPickerField(
+                        teams: store.teamDirectory,
+                        selectedTeamID: Binding(
+                            get: { store.selectedSignupTeamID },
+                            set: { store.selectedSignupTeamID = $0 }
+                        )
+                    )
+                }
                 CredentialField(
                     title: "이메일",
                     icon: "envelope.fill",
@@ -363,6 +439,12 @@ private struct LoginPanel: View {
         .padding(14)
         .panelStyle()
         .animation(.easeInOut(duration: 0.22), value: mode)
+        .onAppear {
+            // 가입 모드로 진입한 상태면 팀 목록을 로드한다(모드 전환 경로는 switchMode 에서 처리).
+            if mode == .signUp {
+                store.loadTeamDirectory()
+            }
+        }
     }
 
     // 필드에서 Enter를 눌렀을 때: 다음 필드가 있으면 포커스를 옮기고, 없으면(마지막 필드) 제출한다.
@@ -420,6 +502,10 @@ private struct LoginPanel: View {
             store.syncMessage = "로그인 필요"
         }
         mode = newMode
+        // 가입 모드로 전환하는 순간 팀 목록을 로드한다(진입 경로는 onAppear 에서 처리).
+        if newMode == .signUp {
+            store.loadTeamDirectory()
+        }
     }
 }
 

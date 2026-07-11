@@ -42,6 +42,19 @@ Supabase Dashboard의 SQL Editor에서 같은 SQL을 실행해도 됩니다: `su
 
 무료 플랜은 7일 동안 사용이 없으면 프로젝트가 자동으로 일시정지(pause)되고, 이 상태에서는 앱에 연결 오류가 나타납니다(이번에 실제로 겪은 상황입니다). 소유 계정으로 [supabase.com/dashboard](https://supabase.com/dashboard)에 접속해 해당 프로젝트의 **Restore** 버튼을 누르면 몇 분 뒤 다시 살아납니다. 복원 후에는 스키마와 데이터가 그대로 유지되므로 재적용은 필요 없습니다.
 
+## 팀 추가 방법
+
+새 팀은 관리자가 Supabase 대시보드의 SQL Editor(또는 `psql`)에서 아래 한 줄을 실행해 추가합니다.
+
+```sql
+insert into public.teams (name, invite_code) values ('팀이름', '코드');
+```
+
+- `name`은 가입 화면 팀 목록에 표시되는 이름입니다.
+- `invite_code`는 팀마다 고유해야 하는 내부 식별용 코드입니다(`unique` 제약). 가입 화면에는 노출되지 않습니다.
+
+반영 원리: 가입 화면은 `team_directory()` RPC로 `public.teams`를 이름순으로 읽어 목록을 만듭니다. 따라서 위 SQL을 실행하면 앱을 다시 배포하지 않아도 다음 가입 화면 진입부터 새 팀이 선택지로 즉시 노출됩니다. `team_directory()`는 `id`와 `name`만 반환하므로 `invite_code`는 절대 노출되지 않습니다.
+
 ## 팀원 배포 패키지 만들기
 
 ```sh

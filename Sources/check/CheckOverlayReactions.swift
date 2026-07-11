@@ -418,7 +418,7 @@ enum ReactionActions {
 
     /// 근무 종료: 앞으로 꾸벅 인사(x축 -20°) 후 복원.
     static func commuteEnd() -> SCNAction {
-        let bow = SCNAction.rotateTo(x: radians(-20), y: 0, z: 0, duration: 0.18)
+        let bow = SCNAction.rotateTo(x: radians(20), y: 0, z: 0, duration: 0.18)
         bow.timingMode = .easeOut
         let hold = SCNAction.wait(duration: 0.06)
         let up = SCNAction.rotateTo(x: 0, y: 0, z: 0, duration: 0.16)
@@ -450,7 +450,7 @@ enum ReactionActions {
     /// 밤샘 졸기: 앞으로 천천히 기울며 가라앉기(2s) → 유지(1s) → 화들짝 복원(0.15s 스냅 + 살짝 튀어오름).
     static func drowsy(tilt: CGFloat) -> SCNAction {
         let sink = SCNAction.group([
-            SCNAction.rotateTo(x: radians(-14), y: 0, z: 0, duration: 2.0),
+            SCNAction.rotateTo(x: radians(14), y: 0, z: 0, duration: 2.0),
             SCNAction.moveBy(x: 0, y: -tilt * 0.33, z: 0, duration: 2.0)
         ])
         sink.timingMode = .easeInEaseOut

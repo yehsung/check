@@ -13,9 +13,10 @@ struct CheckApp: App {
                 .frame(width: 340)
                 // 팝오버 창의 위쪽 모서리를 고정 — 콘텐츠 높이 변화 시 위로 튀어 상단이 잘리는 것을 막는다
                 // (동적 높이는 유지, 창은 아래로만 성장/수축). 그림은 그리지 않는 배경 뷰.
-                .background(WindowAnchorAccessor())
+                // 창 키 획득/상실도 setMenuPresented 로 흘려 티커/폴링 게이팅의 이중 안전망을 만든다.
+                .background(WindowAnchorAccessor(onVisibilityChange: { appDelegate.store.setMenuPresented($0) }))
         } label: {
-            MenuBarStatusLabel(snapshot: appDelegate.store.snapshot, todaySeconds: appDelegate.store.todayDuration)
+            MenuBarStatusLabel(snapshot: appDelegate.store.snapshot, title: appDelegate.store.menuBarTitle)
         }
         .menuBarExtraStyle(.window)
     }

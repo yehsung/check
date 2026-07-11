@@ -93,16 +93,31 @@ struct MilestoneTracker {
     static let hourFourKey = "hour4"
     static let teamGoalKey = "teamGoal"
 
+    /// KST(Asia/Seoul) 그레고리력. 매 호출마다 Calendar 를 새로 만들지 않도록 1회 생성해 공유한다.
+    static let kstCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = DrowsyWindow.timeZone
+        return calendar
+    }()
+
     let defaults: UserDefaults
     private var firedThisSession: Set<String> = []
+    /// 오늘 하루(KST)의 [시작, 다음날 시작) 구간과 그 dayKey. now 가 이 구간 안이면 재계산을 건너뛴다.
+    private var cachedDay: (start: Date, next: Date, key: String)?
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
     }
 
     static func dayKey(_ date: Date, timeZone: TimeZone = DrowsyWindow.timeZone) -> String {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
+        let calendar: Calendar
+        if timeZone == DrowsyWindow.timeZone {
+            calendar = kstCalendar
+        } else {
+            var c = Calendar(identifier: .gregorian)
+            c.timeZone = timeZone
+            calendar = c
+        }
         let c = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d%02d%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
@@ -111,9 +126,23 @@ struct MilestoneTracker {
         "check.milestone.\(key).\(day)"
     }
 
+    /// 자정 롤오버 전까지 dayKey 를 메모해, 근무 1h 후 매초 호출에서도 Calendar 계산을 반복하지 않는다.
+    /// now 가 캐시 구간을 벗어나면(하루가 지나면) 재계산해 자정 귀속 정확성을 유지한다.
+    private mutating func cachedDayKey(for now: Date) -> String {
+        if let cached = cachedDay, now >= cached.start, now < cached.next {
+            return cached.key
+        }
+        let calendar = Self.kstCalendar
+        let start = calendar.startOfDay(for: now)
+        let next = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+        let key = Self.dayKey(now)
+        cachedDay = (start, next, key)
+        return key
+    }
+
     /// 오늘(KST) 아직 안 터진 키면 기록하고 true, 이미 터졌으면 false. 하루가 지나면 다시 true 가 된다.
     mutating func fireIfNeeded(_ key: String, now: Date) -> Bool {
-        let dkey = Self.defaultsKey(key, day: Self.dayKey(now))
+        let dkey = Self.defaultsKey(key, day: cachedDayKey(for: now))
         if firedThisSession.contains(dkey) {
             return false
         }
@@ -193,6 +222,10 @@ final class ReactionEngine {
 
     static let hitCooldown: TimeInterval = 0.6
 
+    /// 렌더 FPS 정책: 유휴/졸기는 느린 모션이라 8fps 로 충분하고, 리액션 재생 중에만 30fps 로 올린다.
+    static let idleFPS = 8
+    static let activeFPS = 30
+
     /// 말풍선 지속시간(초) 사양. perform 과 테스트가 공유해 지속시간을 결정적으로 검증한다.
     static let hitBubbleSeconds: Double = 1.2
     static let commuteStartBubbleSeconds: Double = 5
@@ -216,8 +249,12 @@ final class ReactionEngine {
 
     @ObservationIgnored private weak var reactionNode: SCNNode?
     @ObservationIgnored private weak var sceneRoot: SCNNode?
+    /// 렌더 FPS 를 조절하기 위한 SCNView 참조(attach 에서 makeNSView 가 전달). 뷰 수명은 SwiftUI 소유라 weak.
+    @ObservationIgnored private weak var attachedView: SCNView?
     @ObservationIgnored private var modelExtent: CGFloat = 1
     @ObservationIgnored private var greetingClearTask: Task<Void, Never>?
+    /// 리액션 재생이 끝나면 FPS 를 유휴(8)로 되돌리는 태스크. 새 리액션이 들어오면 다시 스케줄된다.
+    @ObservationIgnored private var fpsResetTask: Task<Void, Never>?
     /// 자는 동안 💤 를 주기적으로 방출하는 반복 태스크(3.5초 주기). 깨거나 인터럽트되면 취소된다.
     @ObservationIgnored private var zzzTask: Task<Void, Never>?
 
@@ -230,12 +267,71 @@ final class ReactionEngine {
     }
 
     /// wrapper 노드와 씬 루트를 연결한다(makeNSView 에서 호출). modelExtent 로 동작 크기를 모델 규모에 맞춘다.
-    func attach(node: SCNNode, sceneRoot: SCNNode) {
+    ///
+    /// 지연 생성(래치) 때문에 attach 는 updateWorking(true) 의 `request(.commuteStart)` 보다 늦게 실행된다.
+    /// 그 사이 걸린 리액션의 SCNAction 을 여기서 재생해 첫 출근 폴짝이 소실되지 않게 하고(말풍선/색종이는
+    /// 이미 관찰 상태·자체 타이머로 살아 있어 재발화하지 않는다), sleeping 이면 가라앉은 포즈를 복원한다.
+    func attach(node: SCNNode, sceneRoot: SCNNode, view: SCNView?) {
         self.reactionNode = node
         self.sceneRoot = sceneRoot
+        self.attachedView = view
         let (minB, maxB) = node.boundingBox
         let extent = CGFloat(max(maxB.x - minB.x, max(maxB.y - minB.y, maxB.z - minB.z)))
         modelExtent = extent > 0 ? extent : 1
+
+        switch state {
+        case .playing(let kind):
+            if let action = reactionAction(for: kind) {
+                runReaction(action)
+            }
+            setRenderFPS(Self.activeFPS)
+        case .sleeping:
+            resetPose()
+            node.runAction(ReactionActions.drowsySink(tilt: modelExtent * 0.18), forKey: Self.reactionActionKey)
+            setRenderFPS(Self.idleFPS)
+        case .idle:
+            setRenderFPS(Self.idleFPS)
+        }
+    }
+
+    /// kind 별 이동/변형 SCNAction 을 만든다(말풍선·색종이 제외 — 순수 동작만). attach 재생·perform 이 공유한다.
+    private func reactionAction(for kind: ReactionKind) -> SCNAction? {
+        switch kind {
+        case .hit:
+            return ReactionActions.hit()
+        case .commuteStart:
+            return ReactionActions.commuteStart(hop: modelExtent * 0.32)
+        case .commuteEnd:
+            return ReactionActions.commuteEnd()
+        case .milestone:
+            return ReactionActions.milestone(hop: modelExtent * 0.28)
+        case .greeting:
+            return ReactionActions.greetingNod()
+        case .wake:
+            return ReactionActions.wake(tilt: modelExtent * 0.18)
+        case .drowsy:
+            return nil
+        }
+    }
+
+    /// 렌더 FPS 를 설정한다(뷰가 아직 attach 되지 않았으면 no-op — attach 시점에 상태에 맞춰 다시 잡힌다).
+    private func setRenderFPS(_ fps: Int) {
+        attachedView?.preferredFramesPerSecond = fps
+    }
+
+    /// `seconds` 뒤 상태가 여전히 idle/sleeping 이면 FPS 를 유휴(8)로 되돌린다. 리액션이 이어지면 새로 스케줄된다.
+    private func scheduleFPSReset(after seconds: TimeInterval) {
+        fpsResetTask?.cancel()
+        fpsResetTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard let self, !Task.isCancelled else { return }
+            switch self.state {
+            case .idle, .sleeping:
+                self.setRenderFPS(Self.idleFPS)
+            case .playing:
+                break
+            }
+        }
     }
 
     var hasAttachedNode: Bool {
@@ -296,7 +392,11 @@ final class ReactionEngine {
         }
 
         if let active = activeKind, kind.priority <= active.priority {
-            return false
+            // A6: 근무종료 인사(commuteEnd) 재생 중 즉시 재시작하면 동순위(3)라 등장 폴짝이 거부되고
+            //     "수고했어!" 말풍선이 잔류한다 — 이 방향만 우선순위 검사를 우회해 인터럽트 후 수용한다.
+            guard active == .commuteEnd, kind == .commuteStart else {
+                return false
+            }
         }
 
         if activeKind != nil {
@@ -315,6 +415,8 @@ final class ReactionEngine {
         activeKind = kind
         activeUntil = now.addingTimeInterval(kind.duration)
 
+        setRenderFPS(Self.activeFPS)
+        scheduleFPSReset(after: kind.duration + 0.1)
         perform(kind)
         return true
     }
@@ -373,6 +475,8 @@ final class ReactionEngine {
     private func beginSleep() {
         isSleeping = true
         activeKind = nil
+        fpsResetTask?.cancel()
+        setRenderFPS(Self.idleFPS)
         if let node = reactionNode {
             resetPose()
             node.runAction(ReactionActions.drowsySink(tilt: modelExtent * 0.18), forKey: Self.reactionActionKey)
@@ -395,6 +499,8 @@ final class ReactionEngine {
         endSleep()
         activeKind = .wake
         activeUntil = now.addingTimeInterval(ReactionKind.wake.duration)
+        setRenderFPS(Self.activeFPS)
+        scheduleFPSReset(after: 0.5)
         if let node = reactionNode {
             node.removeAction(forKey: Self.reactionActionKey)
             node.runAction(ReactionActions.wake(tilt: modelExtent * 0.18), forKey: Self.reactionActionKey)
@@ -617,8 +723,10 @@ enum ReactionActions {
         return system
     }
 
-    /// 💤 표현용 "Z" 텍스트 노드(흰색 반투명, unlit).
-    static func makeZNode(extent: CGFloat) -> SCNNode {
+    /// 💤 표현용 "Z" 텍스트 지오메트리(흰색 반투명, unlit). SCNGeometry 는 참조 타입이라 노드 간 공유해도
+    /// 안전하다(노드별 scale/opacity 는 노드 속성). 매 방출마다 SCNText 를 재테셀레이션하지 않도록 1회만 만든다.
+    /// 생성 후 읽기만 하며 모든 접근이 메인 스레드(ReactionEngine·테스트 모두 @MainActor)라 unsafe 공유가 안전하다.
+    nonisolated(unsafe) private static let sharedZText: SCNText = {
         let text = SCNText(string: "Z", extrusionDepth: 0)
         text.font = NSFont.systemFont(ofSize: 1, weight: .bold)
         text.flatness = 0.1
@@ -627,7 +735,12 @@ enum ReactionActions {
         material.diffuse.contents = NSColor.white.withAlphaComponent(0.85)
         material.isDoubleSided = true
         text.materials = [material]
-        let node = SCNNode(geometry: text)
+        return text
+    }()
+
+    /// 💤 표현용 "Z" 노드(흰색 반투명, unlit). 공유 지오메트리를 얹고 스케일만 노드별로 지정한다.
+    static func makeZNode(extent: CGFloat) -> SCNNode {
+        let node = SCNNode(geometry: sharedZText)
         let scale = extent * 0.12
         node.scale = SCNVector3(scale, scale, scale)
         return node

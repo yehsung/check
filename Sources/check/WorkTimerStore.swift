@@ -35,8 +35,17 @@ final class WorkTimerStore {
     var menuBarTitle = "오프"
 
     /// 팝오버 표시 상태를 반영한다(idempotent — 중복 신호 무해).
+    /// 열림: 낡은 초를 즉시 갱신하고 티커/리그를 재개. 닫힘: 티커 게이팅만 재평가.
     func setMenuPresented(_ presented: Bool) {
+        guard isMenuPresented != presented else { return }
         isMenuPresented = presented
+        if presented {
+            displayNow = Date()
+            stopTimerIfIdle()
+            if isLeaderboardVisible { loadLeaderboard() }
+        } else {
+            stopTimerIfIdle()
+        }
     }
 
     /// 리액션 트리거 싱크. 오버레이 컨트롤러가 연결해 마일스톤/팀원 인사를 엔진으로 흘린다(관찰 대상 아님).
@@ -47,6 +56,11 @@ final class WorkTimerStore {
     @ObservationIgnored var greetingDetector = TeammateGreetingDetector()
     /// 팀 주간 목표 완료 상태의 직전 관측값. nil=첫 로드(전이로 치지 않음). false→true 로 바뀌는 순간만 축하.
     @ObservationIgnored var teamGoalComplete: Bool?
+
+    // 잠자기/깨어남 옵저버 토큰. 보관해 두어 필요 시 해제할 수 있게 한다(클로저는 [weak self] 라 수명 자체는 안전).
+    @ObservationIgnored private var sleepObserverToken: NSObjectProtocol?
+    @ObservationIgnored private var wakeObserverToken: NSObjectProtocol?
+    @ObservationIgnored private var observedWorkspaceCenter: NotificationCenter?
 
     var snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
     var displayNow = Date()
@@ -84,9 +98,10 @@ final class WorkTimerStore {
     // 팀 주간 목표시간(초). 출처는 오직 teams.weekly_goal_hours(멤버십 조회 시 확정). 앱은 읽기 전용이다.
     // confirmMembership 성공 시 서버 값으로 갱신하고, signOut/무소속이면 기본값으로 되돌린다.
     var teamGoalSeconds = TeamWeeklyGoal.defaultGoalSeconds
-    var pendingOperation: PendingWorkOperation?
-    var pendingStopStartedAt: Date?
-    var pendingStopEndedAt: Date?
+    // 서버 미반영 근무 조작의 FIFO 큐. 단일 슬롯이 아니라 큐라, in-flight 중 들어온 반대 조작이나
+    // 오프라인에서 쌓인 여러 세션이 유실되지 않고 순서대로 재생된다. 각 항목은 자체 세션 정보를 동봉해
+    // currentSessionID 변화와 무관하게 정확히 재생된다.
+    var pendingItems: [PendingWorkItem] = []
 
     // 팀 리그(이번 주 팀별 근무시간) 페이지 상태.
     // leaderboard: 1인당 평균 근무시간 내림차순(동률 시 이름)으로 정렬한 팀 목록. isLeaderboardVisible: 리그 페이지 노출 여부.
@@ -106,7 +121,12 @@ final class WorkTimerStore {
 
 
     var todayDuration: Int {
-        accumulatedSeconds + (startedAt.map { Int(displayNow.timeIntervalSince($0)) } ?? 0)
+        guard let startedAt else { return accumulatedSeconds }
+        // 진행 세션 기여를 KST 자정으로 클리핑한다: 자정을 넘긴 세션이 오늘 표시를 부풀리거나 자정 직후
+        // 마일스톤이 오발화하지 않게 하고, 시계 되돌림으로 음수가 되면 0으로 클램프한다.
+        let dayStart = TeamWeeklyGoal.koreanDayStart(for: displayNow)
+        let effectiveStart = max(startedAt, dayStart)
+        return accumulatedSeconds + max(0, Int(displayNow.timeIntervalSince(effectiveStart)))
     }
 
     /// 내 이번 주 누적(초). 팀 목록에서 내 행의 라이브 주간값을 쓰고, 아직 못 받았으면 오늘 누적으로 대체한다.
@@ -155,17 +175,19 @@ final class WorkTimerStore {
         session = restoredSession
         syncMessage = hasAnonKey ? (restoredSession == nil ? "로그인 필요" : "동기화됨") : "Supabase 키 필요"
         observeSleepWake(workspaceNotifications)
+        refreshMenuBarTitle()
     }
 
     /// 잠자기/깨어남 노티를 구독한다. 클로저는 [weak self]로 스토어 수명을 넘겨 자동 무력화되므로
     /// 별도 해제가 필요 없다(테스트는 handleSleep/handleWake 를 직접 호출한다).
     private func observeSleepWake(_ center: NotificationCenter?) {
         guard let center else { return }
-        center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: nil) { [weak self] _ in
+        observedWorkspaceCenter = center
+        sleepObserverToken = center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: nil) { [weak self] _ in
             let now = Date()
             Task { @MainActor in self?.handleSleep(at: now) }
         }
-        center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil) { [weak self] _ in
+        wakeObserverToken = center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil) { [weak self] _ in
             let now = Date()
             Task { @MainActor in self?.handleWake(at: now) }
         }
@@ -216,6 +238,7 @@ final class WorkTimerStore {
         sleepBeganAt = nil
         snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
         startTimer()
+        refreshMenuBarTitle()
         syncCurrentStatus()
     }
 
@@ -231,6 +254,7 @@ final class WorkTimerStore {
         sleepBeganAt = nil
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
         stopTimerIfIdle()
+        refreshMenuBarTitle()
         syncCurrentStatus(durationSeconds: duration, sessionStartedAt: sessionStart, endedAt: now)
     }
 
@@ -303,6 +327,7 @@ final class WorkTimerStore {
         sleepBeganAt = nil
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
         stopTimerIfIdle()
+        refreshMenuBarTitle()
         syncCurrentStatus(durationSeconds: duration, sessionStartedAt: sessionStart, endedAt: endedAt)
         syncMessage = message
     }
@@ -388,14 +413,17 @@ final class WorkTimerStore {
         tickerTask?.cancel()
         tickerTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
+                // 표시값은 wall-clock 파생이라 누적 오차가 없어 tolerance 로 웨이크업을 병합해도 안전하다.
+                try? await Task.sleep(for: .seconds(1), tolerance: .milliseconds(200))
                 self?.tick()
             }
         }
     }
 
     func stopTimerIfIdle() {
-        guard startedAt == nil, !teamMembers.contains(where: { $0.status == .working }) else {
+        // 내가 근무중이면 티커를 항상 유지한다(12h 확인/마일스톤/라벨 갱신). 팀원 초침만 필요한 경우는
+        // 팝오버가 열려 있을 때만 티커를 돌린다 — 숨김 상태에선 매초 재평가가 낭비이므로 정지한다.
+        guard startedAt == nil, !(isMenuPresented && teamMembers.contains(where: { $0.status == .working })) else {
             startTimer()
             return
         }
@@ -403,11 +431,18 @@ final class WorkTimerStore {
         tickerTask = nil
     }
 
+    /// 30초 refresh 루프의 적응형 주기 판정. 근무중/팝오버 열림/미반영 큐가 있으면 빠른 주기(30s)로,
+    /// 그 외 유휴에선 느린 주기(300s)로 돈다. 팝오버를 여는 순간의 즉시 refresh(.task)가 감속 지연을 메운다.
+    var refreshLoopIsFast: Bool {
+        startedAt != nil || isMenuPresented || !pendingItems.isEmpty
+    }
+
     func startStatusRefreshLoop() {
         guard refreshTask == nil else { return }
         refreshTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(30))
+                let fast = self?.refreshLoopIsFast ?? false
+                try? await Task.sleep(for: .seconds(fast ? 30 : 300), tolerance: .seconds(fast ? 5 : 30))
                 await self?.retryPendingSync()
                 await self?.sendHeartbeatIfWorking()
                 await self?.refreshTeamStatus()
@@ -419,13 +454,25 @@ final class WorkTimerStore {
     private func tick() {
         let now = Date()
         displayNow = now
-        if let startedAt {
-            snapshot = WorkStatusSnapshot(
-                status: .working,
-                elapsedSeconds: max(0, Int(now.timeIntervalSince(startedAt)))
-            )
+        // snapshot 은 재대입하지 않는다 — 라벨/오버레이/헤더 전체 무효화를 막는다. 라이브 초는 todayDuration
+        // (잎 뷰)과 menuBarTitle 파생값으로 흐르고, 여기선 정책 평가와 라벨 문자열만 갱신한다.
+        if startedAt != nil {
             evaluateLongSession(now: now)
             evaluateTimeMilestones(now: now)
+            refreshMenuBarTitle()
+        }
+    }
+
+    /// 메뉴바 라벨 문자열을 현재 상태에서 다시 계산해, 문자열이 실제로 바뀔 때만 대입한다.
+    /// (@Observable 은 동일 값 대입도 관찰자를 발화시키므로 != 가드가 무효화 최소화의 핵심이다.)
+    func refreshMenuBarTitle() {
+        var derived = snapshot
+        if derived.isWorking {
+            derived.elapsedSeconds = todayDuration
+        }
+        let new = MenuBarStatusFormatter.title(for: derived)
+        if menuBarTitle != new {
+            menuBarTitle = new
         }
     }
 
@@ -496,6 +543,10 @@ extension WorkTimerStore {
     }
 
     func clearPersistedSession() {
+        // 세대를 올려 이 시점 이후 완료되는 낡은 Task 의 부수효과를 차단한다(토큰 만료 로그아웃 공통 경로).
+        sessionGeneration += 1
+        currentSessionID = nil
+        hasActivatedStoredSession = false
         session = nil
         [Self.accessTokenKey, Self.refreshTokenKey, Self.userIDKey].forEach(defaults.removeObject)
         // 세션이 사라지면 리그 페이지 상태도 함께 초기화한다(signOut·토큰 만료 로그아웃 공통 경로).
@@ -506,6 +557,7 @@ extension WorkTimerStore {
         teamGoalComplete = nil
         refreshTask?.cancel()
         refreshTask = nil
+        refreshMenuBarTitle()
     }
 }
 
@@ -523,4 +575,14 @@ private final class QuitBarrier {
         continuation?.resume()
         continuation = nil
     }
+}
+
+/// 서버 미반영 근무 조작 한 건. 조작 종류와 그 조작이 속한 세션 정보를 함께 담아, 큐가 나중에 드레인할 때
+/// currentSessionID/startedAt 의 이후 변화와 무관하게 정확히 재생되도록 한다(오프라인 복구 정합성).
+struct PendingWorkItem: Equatable {
+    let id: UUID
+    let operation: PendingWorkOperation
+    let sessionID: String
+    let sessionStartedAt: Date?
+    let endedAt: Date?
 }

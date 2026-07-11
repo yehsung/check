@@ -104,8 +104,9 @@ func startWorkEncodesRestBodiesAsSnakeCase() async throws {
 
 @Test
 func fetchTeamStatusesIncludesCurrentAndWeeklyDurations() async throws {
+    let testHost = "team-hours-test"
     let service = SupabaseWorkService(
-        projectURL: URL(string: "http://team-hours-test")!,
+        projectURL: URL(string: "http://\(testHost)")!,
         anonKey: "anon-test-key",
         session: URLSession(configuration: .stubbed)
     )
@@ -117,6 +118,12 @@ func fetchTeamStatusesIncludesCurrentAndWeeklyDurations() async throws {
     #expect(statuses.first?.status == .working)
     #expect(statuses.first?.currentSessionStartedAt != nil)
     #expect(statuses.first?.weeklyDurationSeconds == 7200)
+    // C1: 활성·주간·상태 세 GET을 병렬 발사한다 — 두 종류의 세션 조회가 모두 나가야 한다(직렬→병렬, 회수 불변).
+    let sessionRequests = URLProtocolStub.requests(forHost: testHost).filter {
+        $0.url?.path == "/rest/v1/work_sessions"
+    }
+    #expect(sessionRequests.contains { $0.url?.query?.contains("ended_at=is.null") == true })
+    #expect(sessionRequests.contains { $0.url?.query?.contains("ended_at=not.is.null") == true })
 }
 
 @Test
@@ -221,6 +228,37 @@ func todayDurationClipsSessionCrossingDayStart() async throws {
     #expect(statuses.first?.todayDurationSeconds == 3600)
     // 세션 전체가 이번 주 안에 있으므로 주간 기여는 2시간 전부.
     #expect(statuses.first?.weeklyDurationSeconds == 7200)
+}
+
+// MARK: - C4: 주간 라이브 클리핑(진행 세션의 주 경계 귀속)
+
+@Test
+func liveWeeklyDurationClipsCurrentSessionAtWeekStart() {
+    // now = 월요일 01:00 KST. 세션은 일요일 23:00 KST 시작(주 경계 전 1시간 포함, 총 2시간 진행).
+    // 이번 주 기여는 월요일 00:00 이후 1시간뿐이어야 한다(지난 주 1시간은 새 주로 새지 않는다).
+    let iso = ISO8601DateFormatter()
+    let now = iso.date(from: "2026-07-06T01:00:00+09:00")!
+    let started = iso.date(from: "2026-07-05T23:00:00+09:00")!
+    let member = TeamMemberStatus(
+        id: "u", name: "n", status: .working, updatedAt: nil,
+        currentSessionStartedAt: started, weeklyDurationSeconds: 0,
+        lastSeenAt: now
+    )
+    #expect(member.liveWeeklyDurationSeconds(now: now) == 3_600)
+}
+
+@Test
+func liveWeeklyDurationCountsFullSessionWhenWithinWeek() {
+    // 주 경계를 넘지 않은 진행 세션은 클리핑 없이 전부 이번 주 기여로 센다.
+    let iso = ISO8601DateFormatter()
+    let now = iso.date(from: "2026-07-08T12:00:00+09:00")!   // 수요일
+    let started = iso.date(from: "2026-07-08T10:00:00+09:00")! // 같은 날 2시간 전
+    let member = TeamMemberStatus(
+        id: "u", name: "n", status: .working, updatedAt: nil,
+        currentSessionStartedAt: started, weeklyDurationSeconds: 100,
+        lastSeenAt: now
+    )
+    #expect(member.liveWeeklyDurationSeconds(now: now) == 100 + 7_200)
 }
 
 // MARK: - D2: last_seen_at 파싱

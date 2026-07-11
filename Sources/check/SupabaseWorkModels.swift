@@ -51,11 +51,28 @@ struct TeamMemberStatus: Equatable, Identifiable {
     }
 
     func liveWeeklyDurationSeconds(now: Date = Date()) -> Int {
-        weeklyDurationSeconds + currentDurationSeconds(now: now)
+        weeklyDurationSeconds + currentWeeklyContributionSeconds(now: now)
     }
 
     func liveTodayDurationSeconds(now: Date = Date()) -> Int {
         todayDurationSeconds + currentDurationSeconds(now: now)
+    }
+
+    /// 진행 세션의 이번 주 기여(초). 주 시작(KST 월요일 00:00) 이전 구간은 이번 주에 귀속하지 않는다
+    /// — 월요일 경계에서 지난 주 근무가 새 주로 새던 버그 수정(서버 clippedContribution 과 동일 규약).
+    /// stale 세션은 now 가 아니라 마지막 신호 시각으로 클램프해 죽은 세션이 카운트를 부풀리지 않는다.
+    private func currentWeeklyContributionSeconds(now: Date) -> Int {
+        guard status == .working, let started = currentSessionStartedAt else {
+            return 0
+        }
+        let clippedStart = max(started, TeamWeeklyGoal.koreanWeekStart(for: now))
+        let end: Date
+        if case .staleWorking = presence(now: now) {
+            end = lastSeenAt ?? updatedAt ?? started
+        } else {
+            end = now
+        }
+        return max(0, Int(end.timeIntervalSince(clippedStart)))
     }
 
     /// 1인당 주간 목표(goalSeconds) 달성 여부. 팀 카드 멤버 행의 ✓ 노출 조건과 동일 식이다.
@@ -130,6 +147,14 @@ struct TeamWeeklyGoal: Equatable {
     // 목표시간 기본값(시간 단위). teams.weekly_goal_hours 누락/null 시 폴백에 쓴다.
     static let defaultGoalHours = defaultGoalSeconds / 3600
     static let koreanTimeZone = TimeZone(identifier: "Asia/Seoul")!
+    /// KST(월요일 주 시작) 그레고리력 1회 생성 재사용. todayDuration 이 매초 koreanDayStart/koreanWeekStart 를
+    /// 호출하므로 호출마다 Calendar 를 새로 만들지 않는다. startOfDay 는 firstWeekday 와 무관해 안전히 공유된다.
+    static let kstCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = koreanTimeZone
+        calendar.firstWeekday = 2
+        return calendar
+    }()
 
     let workedSeconds: Int
     let goalSeconds: Int
@@ -152,16 +177,11 @@ struct TeamWeeklyGoal: Equatable {
     }
 
     static func koreanWeekStart(for date: Date) -> Date {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = koreanTimeZone
-        calendar.firstWeekday = 2
-        return calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        kstCalendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
     }
 
     static func koreanDayStart(for date: Date) -> Date {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = koreanTimeZone
-        return calendar.startOfDay(for: date)
+        kstCalendar.startOfDay(for: date)
     }
 }
 

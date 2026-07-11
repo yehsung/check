@@ -52,15 +52,57 @@ enum CheckCharacter3DScene {
         return scene
     }
 
-    /// 모든 재질을 unlit(`.constant`)로 전환한다.
+    /// 모든 재질을 unlit(`.constant`)로 전환하고, 상주 텍스처를 다운스케일한다.
     ///
-    /// 기본 조명에서 텍스처가 허옇게 뜨는 것을 막아 마스코트 원색을 보존한다.
+    /// 기본 조명에서 텍스처가 허옇게 뜨는 것을 막아 마스코트 원색을 보존한다. 아울러 원본 텍스처(2048²)를
+    /// 패널 표시 크기(280×340@2x)에 맞춰 512px 로 줄여 상주 텍스처 메모리를 크게 절감한다(A8).
     static func applyUnlitMaterials(to root: SCNNode) {
         root.enumerateHierarchy { node, _ in
             node.geometry?.materials.forEach { material in
                 material.lightingModel = .constant
+                if let downscaled = downscaledTexture(material.diffuse.contents) {
+                    material.diffuse.contents = downscaled
+                }
             }
         }
+    }
+
+    /// 텍스처 콘텐츠를 최대 `maxDimension`px 로 리샘플한 CGImage 로 돌려준다.
+    /// NSImage/CGImage/파일 참조(URL·경로)만 처리하고, 이미 작거나 알 수 없는 타입이면 nil(교체하지 않음 — 무손실 no-op).
+    static func downscaledTexture(_ contents: Any?, maxDimension: CGFloat = 512) -> CGImage? {
+        let source: CGImage?
+        switch contents {
+        case let image as CGImage:
+            source = image
+        case let image as NSImage:
+            source = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        case let url as URL:
+            source = NSImage(contentsOf: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        case let path as String:
+            source = NSImage(contentsOfFile: path)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        default:
+            return nil
+        }
+        guard let cg = source else { return nil }
+        let maxSide = max(cg.width, cg.height)
+        guard maxSide > Int(maxDimension) else { return nil }
+        let scale = maxDimension / CGFloat(maxSide)
+        let newWidth = max(1, Int((CGFloat(cg.width) * scale).rounded()))
+        let newHeight = max(1, Int((CGFloat(cg.height) * scale).rounded()))
+        guard let context = CGContext(
+            data: nil,
+            width: newWidth,
+            height: newHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+        context.interpolationQuality = .high
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: newWidth, height: newHeight))
+        return context.makeImage()
     }
 
     /// 바운딩박스를 기준으로, 캐릭터를 살짝 내려다보는 구도로 프레임에 꽉 차게 카메라를 배치한다.
@@ -149,7 +191,7 @@ struct CheckOverlayTimerLabel: View {
 
 /// 3D 캐릭터를 그리는 SCNView 래퍼.
 ///
-/// 배경은 투명하고, 전력 배려를 위해 `preferredFramesPerSecond=20`·저(低) 안티에일리어싱으로 둔다.
+/// 배경은 투명하고, 전력 배려를 위해 유휴 8fps(리액션 재생 중에만 30fps)·저(低) 안티에일리어싱으로 둔다.
 /// `isActive == false`(패널 숨김)일 때는 `isPlaying=false`/`rendersContinuously=false`로 렌더 루프를 멈춘다.
 struct CheckCharacter3DView: NSViewRepresentable {
     /// true일 때만 렌더 루프/애니메이션을 돌린다. 패널 숨김 시 false → 정지(전력 절약).
@@ -164,15 +206,16 @@ struct CheckCharacter3DView: NSViewRepresentable {
         view.backgroundColor = .clear
         view.allowsCameraControl = false
         view.autoenablesDefaultLighting = false
-        // 전력 배려: 안티에일리어싱 최소(2X), 프레임 상한 20.
+        // 전력 배려: 안티에일리어싱 최소(2X). FPS 는 유휴(8) 기본값으로 시작하고, 엔진이 리액션 재생 중에만
+        // 30 으로 올렸다가 되돌린다(attach 가 뷰를 받아 상태에 맞춰 조절).
         view.antialiasingMode = .multisampling2X
-        view.preferredFramesPerSecond = 20
+        view.preferredFramesPerSecond = ReactionEngine.idleFPS
         view.isPlaying = isActive
         view.rendersContinuously = isActive
         if let engine,
            let root = scene?.rootNode,
            let wrapper = root.childNode(withName: CheckCharacter3DScene.reactionWrapperName, recursively: false) {
-            engine.attach(node: wrapper, sceneRoot: root)
+            engine.attach(node: wrapper, sceneRoot: root, view: view)
         }
         return view
     }
@@ -219,13 +262,22 @@ struct CheckOverlayCharacterView: View {
     let isActive: Bool
     var engine: ReactionEngine?
 
+    /// 3D 뷰 지연 생성 래치. 한 번이라도 표시된 뒤에는 계속 마운트해 둔다(파괴-재생성은 Metal 전역 메모리를
+    /// 거의 회수하지 못하므로). 첫 표시 전까지는 SCNView+USDZ+Metal 로드를 미뤄 유휴 RSS 를 절감한다.
+    @State private var hasEverShown = false
+
     var body: some View {
         GeometryReader { geo in
             // 렌더 루프는 엔진의 renderActive(패널 표시~근무종료 인사)로 몬다. 엔진이 없으면 isActive 로 폴백한다.
             let renderActive = engine?.renderActive ?? isActive
             ZStack(alignment: .topLeading) {
-                CheckCharacter3DView(isActive: renderActive, engine: engine)
-                    .frame(width: geo.size.width, height: geo.size.height)
+                if renderActive || hasEverShown {
+                    CheckCharacter3DView(isActive: renderActive, engine: engine)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                } else {
+                    Color.clear
+                        .frame(width: geo.size.width, height: geo.size.height)
+                }
                 CheckOverlayTimerLabel(text: CheckOverlayTimeFormatter.text(elapsedSeconds))
                     .position(
                         x: geo.size.width / 2,
@@ -240,6 +292,9 @@ struct CheckOverlayCharacterView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: engine?.greetingText)
+            .onChange(of: renderActive, initial: true) { _, active in
+                if active { hasEverShown = true }
+            }
         }
     }
 }
@@ -254,8 +309,11 @@ struct CheckOverlayRootView: View {
     var onWorkingChange: (Bool) -> Void
 
     var body: some View {
-        CheckOverlayCharacterView(
-            elapsedSeconds: store.todayDuration,
+        // 오버레이가 실제로 보일 때만 todayDuration 을 읽어 관찰을 건다. 꺼짐/숨김 상태에서 근무중이어도
+        // 매초 displayNow 변화로 body 가 재평가되던 낭비를 없앤다(보일 때만 라벨이 초 단위로 흐른다).
+        let showing = store.snapshot.isWorking && store.isOverlayEnabled
+        return CheckOverlayCharacterView(
+            elapsedSeconds: showing ? store.todayDuration : 0,
             isActive: store.snapshot.isWorking,
             engine: engine
         )

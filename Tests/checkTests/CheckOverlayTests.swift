@@ -261,6 +261,35 @@ func reactionEngineReplacesBubbleWhenInterruptedByReactionWithOwnBubble() {
     #expect(engine.greetingText == "아얏!")
 }
 
+// MARK: - A6: 근무종료 인사 중 즉시 재시작 시 등장 리액션 씹힘 수정
+
+@MainActor
+@Test
+func reactionEngineCommuteStartInterruptsCommuteEnd() {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 45_000) })
+
+    // 근무종료 인사("수고했어!") 재생 중.
+    #expect(engine.request(.commuteEnd))
+    #expect(engine.state == .playing(.commuteEnd))
+    #expect(engine.greetingText == "수고했어!")
+
+    // A6: 즉시 재시작하면 동순위(3)라도 등장 폴짝이 거부되지 않고 인터럽트 후 수용된다.
+    #expect(engine.request(.commuteStart))
+    #expect(engine.state == .playing(.commuteStart))
+    // 잔류하던 "수고했어!" 말풍선이 "오늘도 화이팅!"으로 교체된다.
+    #expect(engine.greetingText == "오늘도 화이팅!")
+}
+
+@MainActor
+@Test
+func reactionEngineCommuteEndDuringCommuteStartStaysRejected() {
+    // 반대 방향(commuteStart 중 commuteEnd)은 기존 동순위 거부 규칙을 유지한다(A6 우회는 한 방향만).
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 46_000) })
+    #expect(engine.request(.commuteStart))
+    #expect(engine.request(.commuteEnd) == false)
+    #expect(engine.state == .playing(.commuteStart))
+}
+
 // MARK: - Wave7: 마일스톤 1일 1회
 
 @Test

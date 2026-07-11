@@ -165,13 +165,12 @@ struct EditableAvatarView: View {
         panel.canChooseFiles = true
         panel.prompt = "선택"
         panel.message = "아바타로 사용할 이미지를 선택하세요"
-        guard panel.runModal() == .OK,
-              let url = panel.url,
-              let image = NSImage(contentsOf: url),
-              let data = CheckAvatarView.downscaledJPEGData(from: image) else {
-            return
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        // 원본 디코드+다운스케일은 무거워 메인 액터를 순간 멈출 수 있으므로 백그라운드에서 처리하고 결과만 메인에서 전달한다.
+        Task { @MainActor in
+            guard let data = await CheckAvatarView.decodeDownscaledJPEGData(from: url) else { return }
+            onPick(data)
         }
-        onPick(data)
     }
 }
 
@@ -181,7 +180,7 @@ extension CheckAvatarView {
     /// 원본 픽셀 크기를 최장변이 `maxDimension`을 넘지 않도록 종횡비를 유지해 축소한다.
     /// 최장변이 이미 `maxDimension` 이하면 원본 크기를 그대로 돌려준다(확대하지 않음).
     /// 순수 함수 — 그래픽 컨텍스트 없이 크기 계산만 하므로 단위 테스트 대상이다.
-    static func downscaledPixelSize(for source: CGSize, maxDimension: CGFloat = 256) -> CGSize {
+    nonisolated static func downscaledPixelSize(for source: CGSize, maxDimension: CGFloat = 256) -> CGSize {
         let longest = max(source.width, source.height)
         guard longest > maxDimension, longest > 0 else {
             return source
@@ -194,7 +193,8 @@ extension CheckAvatarView {
     }
 
     /// 이미지를 최장변 256px로 다운스케일한 JPEG(압축 0.85) Data로 변환한다. 실패 시 nil.
-    static func downscaledJPEGData(from image: NSImage, maxDimension: CGFloat = 256, compression: CGFloat = 0.85) -> Data? {
+    /// 백그라운드에서 호출 가능하도록 nonisolated — MainActor 상태를 건드리지 않는 순수 이미지 처리다.
+    nonisolated static func downscaledJPEGData(from image: NSImage, maxDimension: CGFloat = 256, compression: CGFloat = 0.85) -> Data? {
         guard let tiff = image.tiffRepresentation,
               let source = NSBitmapImageRep(data: tiff) else {
             return nil
@@ -229,5 +229,14 @@ extension CheckAvatarView {
         source.draw(in: NSRect(origin: .zero, size: target))
 
         return scaled.representation(using: .jpeg, properties: [.compressionFactor: compression])
+    }
+
+    /// 파일 URL 이미지를 백그라운드(detached)에서 디코드+다운스케일해 JPEG Data 로 돌려준다.
+    /// 무거운 디코드/재드로가 메인 액터를 막지 않도록 격리한다. 실패 시 nil.
+    nonisolated static func decodeDownscaledJPEGData(from url: URL, maxDimension: CGFloat = 256, compression: CGFloat = 0.85) async -> Data? {
+        await Task.detached(priority: .userInitiated) {
+            guard let image = NSImage(contentsOf: url) else { return nil }
+            return downscaledJPEGData(from: image, maxDimension: maxDimension, compression: compression)
+        }.value
     }
 }

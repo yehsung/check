@@ -156,7 +156,8 @@ final class CheckOverlayController {
             var rng = SystemRandomNumberGenerator()
             while !Task.isCancelled {
                 let interval = DrowsyWindow.nextInterval(using: &rng)
-                try? await Task.sleep(for: .seconds(interval))
+                // 졸기 진입은 정밀할 필요가 없으므로 tolerance 를 둬 타이머 coalescing(전력 절감)을 허용한다.
+                try? await Task.sleep(for: .seconds(interval), tolerance: .seconds(10))
                 guard let self, !Task.isCancelled else { return }
                 // 조건: 표시 중(근무중) && 다른 리액션 없음 — 시간대 제한 없이 조용하면 존다.
                 guard self.shouldBeVisible, self.engine.state == .idle else {

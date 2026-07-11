@@ -7,9 +7,11 @@ extension WorkTimerStore {
             return
         }
         guard let teamID = currentTeamID else {
-            // 무소속: 팀 데이터를 비우고 팀 코드 참여 안내 문구만 남긴다.
-            teamMembers = []
-            syncMessage = "소속 팀이 없어요 — 팀 코드로 참여해 주세요"
+            // 무소속: 팀 데이터를 비우고 팀 코드 참여 안내 문구만 남긴다. 내용이 같으면 재대입하지 않아
+            // 30초 폴링이 숨은 트리를 헛무효화하지 않게 한다.
+            if !teamMembers.isEmpty { teamMembers = [] }
+            let teamlessMessage = "소속 팀이 없어요 — 팀 코드로 참여해 주세요"
+            if syncMessage != teamlessMessage { syncMessage = teamlessMessage }
             return
         }
         let generation = sessionGeneration
@@ -19,7 +21,8 @@ extension WorkTimerStore {
                 try await service.fetchTeamStatuses(accessToken: activeSession.accessToken, teamID: teamID)
             }
             guard generation == sessionGeneration else { return }
-            teamMembers = members
+            // 등호 가드로 무효화를 줄이되, 전이 감지는 가드 밖에서 매 refresh 호출한다(대입이 스킵돼도 old==new 라 동작 동일).
+            if teamMembers != members { teamMembers = members }
             detectTeamReactions()
             // 앱 시작 복구/폴링에서 서버상 내 세션은 열려 있으나 로컬은 비근무이고 마지막 신호 공백이 크면
             // 그 세션을 마지막 신호 시각으로 자동 마감한다. 자동 마감이 일어나면 restore 로직은 건너뛴다.
@@ -31,7 +34,7 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             applyRemoteOwnStatus()
             stopTimerIfIdle()
-            syncMessage = "동기화됨"
+            if syncMessage != "동기화됨" { syncMessage = "동기화됨" }
         } catch {
             guard generation == sessionGeneration else { return }
             syncMessage = authMessage(for: error, fallback: "동기화 실패")
@@ -78,10 +81,11 @@ extension WorkTimerStore {
                 try await service.fetchTeamLeaderboard(accessToken: activeSession.accessToken)
             }
             guard generation == sessionGeneration else { return }
-            leaderboard = entries.sortedByAverageDescending()
+            let sorted = entries.sortedByAverageDescending()
+            if leaderboard != sorted { leaderboard = sorted }
         } catch {
             guard generation == sessionGeneration else { return }
-            syncMessage = "리그 불러오기 실패"
+            if syncMessage != "리그 불러오기 실패" { syncMessage = "리그 불러오기 실패" }
         }
     }
 
@@ -106,11 +110,11 @@ extension WorkTimerStore {
         }
     }
 
-    /// 서버상 내 세션이 열려 있고 로컬은 비근무(startedAt==nil, pendingOperation==nil)이며 마지막 신호와의
+    /// 서버상 내 세션이 열려 있고 로컬은 비근무(startedAt==nil, pendingItems 비어 있음)이며 마지막 신호와의
     /// 공백이 90초를 넘으면 그 세션을 마지막 신호 시각으로 마감한다. 마감했으면 true.
     /// 네트워크가 끊긴 채 앱이 계속 살아 일하던 경우(startedAt != nil)는 절대 마감하지 않는다.
     private func autoCloseAbandonedOwnSessionIfNeeded() async -> Bool {
-        guard startedAt == nil, pendingOperation == nil else { return false }
+        guard startedAt == nil, pendingItems.isEmpty else { return false }
         guard let teamID = currentTeamID else { return false }
         guard let session, let member = teamMembers.first(where: { $0.id == session.userID }) else {
             return false
@@ -143,6 +147,7 @@ extension WorkTimerStore {
             startedAt = nil
             currentSessionID = nil
             snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
+            refreshMenuBarTitle()
             syncMessage = "자리 비움으로 자동 근무종료됨"
         } catch {
             guard generation == sessionGeneration else { return true }
@@ -189,6 +194,7 @@ extension WorkTimerStore {
             lastAutoClosedSessionID = nil
             lastAutoClosedStartedAt = nil
             startTimer()
+            refreshMenuBarTitle()
             syncMessage = "근무 재개됨"
         } catch {
             guard generation == sessionGeneration else { return }
@@ -226,21 +232,39 @@ extension WorkTimerStore {
         guard session != nil else {
             snapshot.pendingSync = true
             syncMessage = "로그인 필요"
+            refreshMenuBarTitle()
             return
         }
 
-        let operation: PendingWorkOperation = snapshot.isWorking
-            ? .start
-            : .stop(durationSeconds: durationSeconds ?? todayDuration)
-        pendingOperation = operation
-        pendingStopStartedAt = sessionStartedAt
-        pendingStopEndedAt = endedAt
+        // 조작을 큐에 추가한다(덮어쓰지 않는다). 각 항목은 자체 세션 정보를 동봉해 나중 드레인에서 정확히 재생된다.
+        let item: PendingWorkItem
+        if snapshot.isWorking {
+            item = PendingWorkItem(
+                id: UUID(),
+                operation: .start,
+                sessionID: currentSessionID ?? UUID().uuidString,
+                sessionStartedAt: startedAt,
+                endedAt: nil
+            )
+        } else {
+            item = PendingWorkItem(
+                id: UUID(),
+                operation: .stop(durationSeconds: durationSeconds ?? todayDuration),
+                sessionID: currentSessionID ?? UUID().uuidString,
+                sessionStartedAt: sessionStartedAt,
+                endedAt: endedAt
+            )
+        }
+        // in-flight 동안 '대기' 표시를 켜지 않는다(정상 왕복마다 라벨이 깜빡이는 것 방지).
+        // 실패 시 runPendingSync 의 catch 가 pendingSync 를 켜고, 드레인 완료가 끈다.
+        pendingItems.append(item)
+        refreshMenuBarTitle()
 
         enqueueSync()
     }
 
     func retryPendingSync() async {
-        guard pendingOperation != nil, session != nil else {
+        guard !pendingItems.isEmpty, session != nil else {
             return
         }
         enqueueSync()
@@ -256,61 +280,68 @@ extension WorkTimerStore {
     }
 
     private func runPendingSync() async {
-        guard let operation = pendingOperation, session != nil else {
+        guard session != nil, !pendingItems.isEmpty else {
             return
         }
         let generation = sessionGeneration
 
-        do {
-            try await performPendingOperation(operation)
-            guard generation == sessionGeneration else { return }
-            pendingOperation = nil
-            snapshot.pendingSync = false
-            await refreshTeamStatus()
-        } catch {
-            guard generation == sessionGeneration else { return }
-            snapshot.pendingSync = true
-            syncMessage = authMessage(for: error, fallback: "동기화 실패")
+        // 큐를 순서대로 드레인한다. 한 항목이라도 실패하면 그 지점에서 멈춰(순서 보존) 다음 주기에 재시도한다.
+        while let item = pendingItems.first {
+            do {
+                try await performPendingOperation(item)
+                guard generation == sessionGeneration else { return }
+                if pendingItems.first?.id == item.id {
+                    pendingItems.removeFirst()
+                }
+            } catch {
+                guard generation == sessionGeneration else { return }
+                snapshot.pendingSync = true
+                syncMessage = authMessage(for: error, fallback: "동기화 실패")
+                refreshMenuBarTitle()
+                return
+            }
         }
+
+        guard generation == sessionGeneration else { return }
+        snapshot.pendingSync = false
+        refreshMenuBarTitle()
+        await refreshTeamStatus()
     }
 
-    private func performPendingOperation(_ operation: PendingWorkOperation) async throws {
+    private func performPendingOperation(_ item: PendingWorkItem) async throws {
         guard let teamID = currentTeamID else {
             // 소속 팀이 없으면 근무 시작/종료를 서버에 반영할 수 없다.
             throw SupabaseWorkServiceError.authMessage("소속 팀이 없어요 — 팀 코드로 참여해 주세요")
         }
-        switch operation {
+        switch item.operation {
         case .start:
-            let sessionID = currentSessionID ?? UUID().uuidString
-            currentSessionID = sessionID
+            // 항목이 동봉한 세션ID/시작시각을 쓴다 — 오프라인 복구 시 서버 started_at 이 실제 시작시각으로 기록된다.
             try await withSessionRetry { activeSession in
                 try await service.startWork(
                     accessToken: activeSession.accessToken,
                     teamID: teamID,
                     userID: activeSession.userID,
-                    sessionID: sessionID
+                    sessionID: item.sessionID,
+                    startedAt: item.sessionStartedAt ?? Date()
                 )
             }
         case .stop(let durationSeconds):
-            let startedAt = pendingStopStartedAt ?? Date()
-            let endedAt = pendingStopEndedAt ?? Date()
-            let fallbackSessionID = currentSessionID ?? UUID().uuidString
             try await withSessionRetry { activeSession in
                 try await service.stopWork(
                     accessToken: activeSession.accessToken,
                     teamID: teamID,
                     userID: activeSession.userID,
-                    startedAt: startedAt,
-                    endedAt: endedAt,
+                    startedAt: item.sessionStartedAt ?? Date(),
+                    endedAt: item.endedAt ?? Date(),
                     durationSeconds: durationSeconds,
-                    fallbackSessionID: fallbackSessionID
+                    fallbackSessionID: item.sessionID
                 )
             }
         }
     }
 
     private func applyRemoteOwnStatus() {
-        guard pendingOperation == nil else {
+        guard pendingItems.isEmpty else {
             return
         }
 
@@ -343,5 +374,7 @@ extension WorkTimerStore {
         default:
             snapshot.pendingSync = false
         }
+        // 세 분기 모두 snapshot/accumulated 를 건드리므로 라벨 문자열을 한곳에서 재계산한다(== 가드는 내부에서).
+        refreshMenuBarTitle()
     }
 }

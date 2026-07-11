@@ -152,3 +152,25 @@ func captureClampsAnchorToScreenTop() {
     #expect(anchor.anchorTopY == 600)
     #expect(anchor.anchorMaxX == 540)   // maxX는 클램프 대상 아님.
 }
+
+// MARK: - 7) 창 키 획득/상실 → 표시 감지 콜백 발화 (팝오버 게이팅 이중 안전망)
+
+@MainActor
+@Test
+func visibilityCallbackFiresOnKeyChanges() {
+    let center = NotificationCenter()
+    let window = UnconstrainedTestWindow(
+        contentRect: NSRect(x: 200, y: 300, width: 340, height: 200),
+        styleMask: [.borderless], backing: .buffered, defer: false
+    )
+    let anchor = WindowTopAnchor(notificationCenter: center)
+    var events: [Bool] = []
+    anchor.onVisibilityChange = { events.append($0) }
+    anchor.attach(to: window)
+
+    // 키 획득(창 표시)은 true, 키 상실(창 숨김)은 false 로 상위(setMenuPresented)에 전달돼야 한다.
+    center.post(name: NSWindow.didBecomeKeyNotification, object: window)
+    center.post(name: NSWindow.didResignKeyNotification, object: window)
+
+    #expect(events == [true, false])
+}

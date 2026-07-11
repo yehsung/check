@@ -6,6 +6,13 @@ extension WorkTimerStore {
         guard session != nil else {
             return
         }
+        // 실행당 1회만 전체 활성화(토큰 회전 + 멤버십 확정)한다. 이후 팝오버 여닫이에선 refresh 만 돌려
+        // refresh token 회전(+reuse-detection 리스크)을 없앤다. access token 만료는 401 재시도 경로가 담당한다.
+        if hasActivatedStoredSession {
+            await refreshTeamStatus()
+            return
+        }
+        hasActivatedStoredSession = true
         let generation = sessionGeneration
         await refreshPersistedSessionIfPossible()
         guard generation == sessionGeneration else { return }
@@ -111,11 +118,19 @@ extension WorkTimerStore {
         let generation = sessionGeneration
         let attempts = allowRetryForFreshSignup ? 3 : 1
         for attempt in 0..<attempts {
-            let membership = try? await withSessionRetry { activeSession in
-                try await service.fetchOwnMembership(accessToken: activeSession.accessToken, userID: activeSession.userID)
+            let membership: (teamID: String, teamName: String, goalHours: Int, role: String)?
+            do {
+                membership = try await withSessionRetry { activeSession in
+                    try await service.fetchOwnMembership(accessToken: activeSession.accessToken, userID: activeSession.userID)
+                }
+            } catch {
+                // 취소/네트워크 오류를 포함한 모든 throw 는 무소속 확정으로 이어지지 않는다. 기존 팀 상태를
+                // 유지한 채 조용히 빠져나간다('정상 응답 0행'일 때만 아래에서 무소속으로 확정한다).
+                guard generation == sessionGeneration else { return }
+                return
             }
             guard generation == sessionGeneration else { return }
-            if let membership = membership ?? nil {
+            if let membership {
                 currentTeamID = membership.teamID
                 teamName = membership.teamName
                 // 목표시간은 DB 값(시간) 그대로 초로 환산해 반영한다(캐시/일회성 없음).
@@ -213,6 +228,20 @@ extension WorkTimerStore {
         }
     }
 
+    /// 인증 경로 에러 처분. 취소는 아무 상태도 바꾸지 않고, 일시 네트워크 오류는 세션을 유지하며,
+    /// 진짜 만료(SupabaseWorkServiceError 등)만 로그아웃 대상이다. .task 취소로 강제 로그아웃되는 회귀를 막는다.
+    enum AuthErrorDisposition { case cancelled, transient, fatal }
+
+    func classifyAuthError(_ error: Error) -> AuthErrorDisposition {
+        if error is CancellationError || (error as? URLError)?.code == .cancelled {
+            return .cancelled
+        }
+        if error is URLError {
+            return .transient
+        }
+        return .fatal
+    }
+
     func authMessage(for error: Error, fallback: String) -> String {
         guard let serviceError = error as? SupabaseWorkServiceError else {
             return fallback
@@ -267,8 +296,12 @@ extension WorkTimerStore {
                 refreshedSession = try await service.refreshSession(refreshToken: refreshToken)
             } catch {
                 guard generation == sessionGeneration else { throw originalError }
-                clearPersistedSession()
-                syncMessage = "다시 로그인 필요"
+                // 취소/일시 네트워크 오류로 갱신이 실패했으면 세션을 유지한다(throw 는 유지 — 호출부가 재시도).
+                // 진짜 만료(refresh token 무효 등)만 로그아웃한다.
+                if classifyAuthError(error) == .fatal {
+                    clearPersistedSession()
+                    syncMessage = "다시 로그인 필요"
+                }
                 throw originalError
             }
 
@@ -306,9 +339,8 @@ extension WorkTimerStore {
         createTeamGoalHours = 60
         createdTeamCode = nil
         myTeamInviteCode = nil
-        pendingOperation = nil
-        pendingStopStartedAt = nil
-        pendingStopEndedAt = nil
+        currentSessionID = nil
+        pendingItems = []
         longSessionAnchor = nil
         clearLongSessionPrompt()
         sleepBeganAt = nil
@@ -317,6 +349,7 @@ extension WorkTimerStore {
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
         tickerTask?.cancel()
         tickerTask = nil
+        refreshMenuBarTitle()
         syncMessage = "로그인 필요"
     }
 
@@ -334,8 +367,16 @@ extension WorkTimerStore {
             syncMessage = "동기화됨"
         } catch {
             guard generation == sessionGeneration else { return }
-            clearPersistedSession()
-            syncMessage = authMessage(for: error, fallback: "다시 로그인 필요")
+            // .task 취소(팝오버 빨리 닫기)는 조용히, 일시 네트워크 오류는 세션 유지, 진짜 만료만 로그아웃한다.
+            switch classifyAuthError(error) {
+            case .cancelled:
+                return
+            case .transient:
+                if syncMessage != "동기화 실패" { syncMessage = "동기화 실패" }
+            case .fatal:
+                clearPersistedSession()
+                syncMessage = authMessage(for: error, fallback: "다시 로그인 필요")
+            }
         }
     }
 }

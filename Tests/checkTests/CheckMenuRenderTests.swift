@@ -271,7 +271,7 @@ func menuBarStatusLabelFitsWithinBarHeight() throws {
         (WorkStatusSnapshot(status: .working, elapsedSeconds: 3_661), "CHECK_MENUBAR_WORKING_SNAPSHOT_PATH"),
         (WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0), "CHECK_MENUBAR_OFFWORK_SNAPSHOT_PATH")
     ] {
-        let view = MenuBarStatusLabel(snapshot: snapshot)
+        let view = MenuBarStatusLabel(snapshot: snapshot, title: MenuBarStatusFormatter.title(for: snapshot))
             .frame(height: 22)
             .padding(.horizontal, 6)
             .background(Color(red: 0.12, green: 0.13, blue: 0.17))

@@ -25,6 +25,9 @@ final class WindowTopAnchor {
     /// 복원 setFrame이 didMove/didResize를 다시 유발해도 재귀 복원하지 않도록 막는 재진입 가드.
     private var isAdjusting = false
 
+    /// 창 표시/숨김(키 획득 true / 키 상실 false)을 상위로 전달하는 콜백. 팝오버 표시 감지(setMenuPresented) 배선용.
+    var onVisibilityChange: ((Bool) -> Void)?
+
     private let notificationCenter: NotificationCenter
     private var observers: [NSObjectProtocol] = []
     private let logger = Logger(subsystem: "kingcheck", category: "window")
@@ -116,7 +119,10 @@ final class WindowTopAnchor {
         let becomeKey = notificationCenter.addObserver(
             forName: NSWindow.didBecomeKeyNotification, object: window, queue: nil
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.scheduleCapture() }
+            MainActor.assumeIsolated {
+                self?.scheduleCapture()
+                self?.onVisibilityChange?(true)
+            }
         }
         // 콘텐츠 높이 변화(리사이즈) → maxY가 앵커에서 벗어났으면 복원(아래로만 성장/수축).
         let resize = notificationCenter.addObserver(
@@ -134,7 +140,10 @@ final class WindowTopAnchor {
         let resignKey = notificationCenter.addObserver(
             forName: NSWindow.didResignKeyNotification, object: window, queue: nil
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.clearAnchor() }
+            MainActor.assumeIsolated {
+                self?.clearAnchor()
+                self?.onVisibilityChange?(false)
+            }
         }
         observers = [becomeKey, resize, move, resignKey]
     }
@@ -157,6 +166,9 @@ final class WindowTopAnchor {
 /// CheckApp의 MenuBarExtra 콘텐츠 `.background(WindowAnchorAccessor())`로 부착한다. 코디네이터가
 /// 앵커 로직(`WindowTopAnchor`)을 소유하고, 뷰가 창 계층에 붙으면 그 창을 앵커에 연결한다.
 struct WindowAnchorAccessor: NSViewRepresentable {
+    /// 창 표시/숨김(키 획득/상실)을 상위로 알리는 콜백. 팝오버 표시 감지의 이중 안전망(onAppear/onDisappear 와 수렴).
+    var onVisibilityChange: ((Bool) -> Void)? = nil
+
     func makeCoordinator() -> WindowTopAnchor {
         WindowTopAnchor()
     }
@@ -167,6 +179,7 @@ struct WindowAnchorAccessor: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {
         let coordinator = context.coordinator
+        coordinator.onVisibilityChange = onVisibilityChange
         // 첫 update 시 뷰가 아직 창 계층에 붙기 전일 수 있으니 다음 턴에 창을 잡는다. attach는 멱등이라
         // 콘텐츠 변화로 update가 반복돼도 같은 창이면 즉시 반환한다(재캡처는 창 노티가 담당).
         Task { @MainActor in

@@ -22,6 +22,9 @@ struct CheckMenuView: View {
             .frame(width: 340)
             .background(CheckTheme.background)
             .foregroundStyle(CheckTheme.primaryText)
+            // 팝오버 표시/숨김을 스토어에 알려 티커/폴링 게이팅을 켠다(창 노티 콜백과 수렴 — 멱등이라 중복 무해).
+            .onAppear { store.setMenuPresented(true) }
+            .onDisappear { store.setMenuPresented(false) }
             .task {
                 await store.activateStoredSession()
             }
@@ -50,19 +53,11 @@ struct CheckMenuView: View {
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
                     } else {
+                        // store 를 통째로 내려보내 초단위(displayNow) 의존을 잎 뷰로 격리한다 — TeamPanel 본체는
+                        // displayNow 를 읽지 않으므로 매초 재정렬/재계산이 사라진다.
                         TeamPanel(
-                            teamMembers: store.teamMembers,
-                            teamName: store.teamName,
-                            teamGoalSeconds: store.teamGoalSeconds,
-                            myWeeklySeconds: store.myLiveWeeklySeconds,
-                            fallbackStatus: store.syncMessage,
-                            now: store.displayNow,
-                            myUserID: store.session?.userID,
-                            isOwner: store.isTeamOwner,
-                            inviteCode: store.myTeamInviteCode,
+                            store: store,
                             previewCodeRevealed: previewOwnerCodeRevealed,
-                            onUpdateAvatar: { store.updateAvatar(imageData: $0) },
-                            onShowLeaderboard: { store.toggleLeaderboard() },
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
                     }
@@ -77,17 +72,10 @@ struct CheckMenuView: View {
 }
 
 struct MenuBarStatusLabel: View {
+    // 아이콘 판정용 스냅샷(상태/대기). 텍스트는 스토어가 계산해 둔 파생 저장값(menuBarTitle)을 그대로 쓴다.
     let snapshot: WorkStatusSnapshot
-    // 근무중일 때 상단바에 보여줄 시간 = 오늘 누적(초). 세션 재개 시 0이 아니라 이어서 흐른다.
-    var todaySeconds: Int = 0
-
-    // 표시용 스냅샷: 근무중이면 경과값을 오늘 누적으로 치환한다(포맷 규칙은 기존 그대로).
-    private var displaySnapshot: WorkStatusSnapshot {
-        guard snapshot.isWorking else { return snapshot }
-        var adjusted = snapshot
-        adjusted.elapsedSeconds = todaySeconds
-        return adjusted
-    }
+    // 상단바에 표시할 라벨 텍스트. 스토어가 == 가드와 함께 갱신하므로 여기선 그리기만 한다(매초 재계산 없음).
+    let title: String
 
     var body: some View {
         HStack(spacing: 5) {
@@ -100,7 +88,7 @@ struct MenuBarStatusLabel: View {
                     .symbolRenderingMode(.hierarchical)
                     .imageScale(.medium)
             }
-            Text(MenuBarStatusFormatter.title(for: displaySnapshot))
+            Text(title)
                 .font(.system(.body, design: .rounded).weight(.medium))
                 .monospacedDigit()
         }
@@ -119,11 +107,6 @@ private struct HeaderCard: View {
         store.isLongSessionPromptActive || previewLongSessionBanner
     }
 
-    // 보조줄에 표시할 내 이번 주 누적(초). 팀 목록에서 내 행의 라이브 주간값(store 공유 계산).
-    private var myWeeklySeconds: Int {
-        store.myLiveWeeklySeconds
-    }
-
     var body: some View {
         HStack(spacing: 12) {
             CheckMascotView(snapshot: store.snapshot)
@@ -132,16 +115,10 @@ private struct HeaderCard: View {
                 Text(store.snapshot.localizedStatus)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(statusTint)
-                // 큰 타이머 = 오늘 누적. 쉬었다 재개해도 0이 아니라 오늘 총합에서 이어 흐른다.
-                Text(MenuBarStatusFormatter.duration(store.todayDuration))
-                    .font(.system(.title2, design: .monospaced).weight(.semibold))
-                    .foregroundStyle(CheckTheme.primaryText)
-                    .monospacedDigit()
-                // 내 이번 주 누적. 목표(1인당)의 서술은 바로 아래 게이지의 "/ 각자 N시간" 이 맡는다.
-                Text("이번 주 \(MenuBarStatusFormatter.hoursMinutes(myWeeklySeconds))")
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .lineLimit(1)
+                // 큰 타이머·이번 주 줄은 매초 displayNow 에 의존하므로 잎 뷰로 격리한다 — 헤더 카드 본체가
+                // 매초 무효화되지 않게(무효화 반경을 이 두 텍스트로 한정).
+                TodayTimerText(store: store)
+                MyWeeklyLine(store: store)
             }
             Spacer(minLength: 8)
             WorkTogglePill(
@@ -168,71 +145,66 @@ private struct HeaderCard: View {
     }
 }
 
+// MARK: - Header live leaves (초단위 격리)
+
+/// 큰 타이머(오늘 누적). store.todayDuration(=displayNow 파생)만 읽어 매초 이 텍스트만 무효화된다.
+private struct TodayTimerText: View {
+    let store: WorkTimerStore
+
+    var body: some View {
+        // 큰 타이머 = 오늘 누적. 쉬었다 재개해도 0이 아니라 오늘 총합에서 이어 흐른다.
+        Text(MenuBarStatusFormatter.duration(store.todayDuration))
+            .font(.system(.title2, design: .monospaced).weight(.semibold))
+            .foregroundStyle(CheckTheme.primaryText)
+            .monospacedDigit()
+    }
+}
+
+/// 헤더 보조줄(내 이번 주 누적). store.myLiveWeeklySeconds(=displayNow 파생)만 읽어 이 줄만 무효화된다.
+private struct MyWeeklyLine: View {
+    let store: WorkTimerStore
+
+    var body: some View {
+        // 내 이번 주 누적. 목표(1인당)의 서술은 아래 게이지의 "/ 각자 N시간" 이 맡는다.
+        Text("이번 주 \(MenuBarStatusFormatter.hoursMinutes(store.myLiveWeeklySeconds))")
+            .font(.caption2)
+            .foregroundStyle(CheckTheme.secondaryText)
+            .lineLimit(1)
+    }
+}
+
 // MARK: - Team card
 
 private struct TeamPanel: View {
-    let teamMembers: [TeamMemberStatus]
-    // 팀 카드 헤더 이름. 로그인 후 store.teamName(미확정 시 "팀")을 그대로 표시한다.
-    let teamName: String
-    // 1인당 주간 목표시간(초). 출처는 teams.weekly_goal_hours(store.teamGoalSeconds). 내 진행률 게이지 분모 +
-    // 멤버 행 ✓(목표 달성) 판정에 쓴다. weekly_goal_hours 는 팀 총합이 아니라 "각자 X시간" 약속이다.
-    let teamGoalSeconds: Int
-    // 내 이번 주 누적(초). 주간 목표 게이지의 분자(= 내 진행률). 데이터 못 받은 초기엔 0.
-    let myWeeklySeconds: Int
-    let fallbackStatus: String
-    let now: Date
-    // 내 행 판정용. store.session?.userID == member.id 인 행에만 아바타 편집을 붙인다.
-    var myUserID: String? = nil
-    // owner 여부. true 이고 inviteCode 가 있으면 헤더에 참여코드 보기(키) 버튼을 붙인다.
-    var isOwner: Bool = false
-    // 내 팀 참여코드(owner 에게만 전달됨). 키 버튼을 누르면 인라인 행으로 펼쳐 보여 준다.
-    var inviteCode: String? = nil
+    // store 를 통째로 받아 대부분의 값을 파생 읽기한다. 초단위(displayNow) 의존은 잎 뷰로 격리하므로
+    // 본체는 displayNow 를 읽지 않는다 — 매초 재정렬/재계산이 사라진다.
+    let store: WorkTimerStore
     // 스냅샷 전용: 참여코드 인라인 행이 펼쳐진 상태로 그린다(키 버튼 클릭을 대신). 앱은 false.
     var previewCodeRevealed: Bool = false
-    // 내 행 아바타 교체 시 다운스케일된 JPEG Data를 store.updateAvatar로 넘기는 콜백.
-    var onUpdateAvatar: ((Data) -> Void)? = nil
-    // 진입 버튼 액션. 팀별 현황 페이지를 연다.
-    var onShowLeaderboard: (() -> Void)? = nil
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
+    // 렌더 결정성용 시각 주입. nil 이면 잎 뷰가 store.displayNow 를 읽는다.
+    var nowOverride: Date? = nil
 
     // 키 버튼으로 토글하는 참여코드 인라인 노출 상태. 스냅샷은 previewCodeRevealed 로 시드된다.
     @State private var showsInviteCode: Bool
 
     init(
-        teamMembers: [TeamMemberStatus],
-        teamName: String,
-        teamGoalSeconds: Int,
-        myWeeklySeconds: Int,
-        fallbackStatus: String,
-        now: Date,
-        myUserID: String? = nil,
-        isOwner: Bool = false,
-        inviteCode: String? = nil,
+        store: WorkTimerStore,
         previewCodeRevealed: Bool = false,
-        onUpdateAvatar: ((Data) -> Void)? = nil,
-        onShowLeaderboard: (() -> Void)? = nil,
-        clipsOverflowInsteadOfScroll: Bool = false
+        clipsOverflowInsteadOfScroll: Bool = false,
+        nowOverride: Date? = nil
     ) {
-        self.teamMembers = teamMembers
-        self.teamName = teamName
-        self.teamGoalSeconds = teamGoalSeconds
-        self.myWeeklySeconds = myWeeklySeconds
-        self.fallbackStatus = fallbackStatus
-        self.now = now
-        self.myUserID = myUserID
-        self.isOwner = isOwner
-        self.inviteCode = inviteCode
+        self.store = store
         self.previewCodeRevealed = previewCodeRevealed
-        self.onUpdateAvatar = onUpdateAvatar
-        self.onShowLeaderboard = onShowLeaderboard
         self.clipsOverflowInsteadOfScroll = clipsOverflowInsteadOfScroll
+        self.nowOverride = nowOverride
         _showsInviteCode = State(initialValue: previewCodeRevealed)
     }
 
     // owner + 코드 보유 시에만 키 버튼/인라인 행을 노출한다.
     private var canRevealCode: Bool {
-        isOwner && inviteCode != nil
+        store.isTeamOwner && store.myTeamInviteCode != nil
     }
 
     var body: some View {
@@ -241,12 +213,13 @@ private struct TeamPanel: View {
                 Image(systemName: "person.2.fill")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(CheckTheme.secondaryText)
-                Text(teamName)
+                Text(store.teamName)
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
                 Spacer(minLength: 6)
-                CountChip(count: activeWorkingCount)
+                // "N명 근무중" 카운트는 presence(now:) 파생이라 잎 뷰로 격리(본체가 매초 무효화되지 않게).
+                TeamWorkingCountChip(store: store, nowOverride: nowOverride)
                 if canRevealCode {
                     IconButton(
                         icon: showsInviteCode ? "key.fill" : "key",
@@ -256,17 +229,16 @@ private struct TeamPanel: View {
                         showsInviteCode.toggle()
                     }
                 }
-                if let onShowLeaderboard {
-                    IconButton(icon: "chart.bar.xaxis", help: "팀별 현황", action: onShowLeaderboard)
-                }
+                IconButton(icon: "chart.bar.xaxis", help: "팀별 현황") { store.toggleLeaderboard() }
             }
             // 참여코드 인라인 행은 헤더 아래에만 나타나 상단 앵커 원칙(아래로만 성장)을 지킨다.
-            if canRevealCode, showsInviteCode, let inviteCode {
+            if canRevealCode, showsInviteCode, let inviteCode = store.myTeamInviteCode {
                 InviteCodeInlineRow(code: inviteCode)
             }
             // 내 진행률 게이지 — 분자엔 "내"(나 한 사람의 주간 누적), 분모엔 "각자"(1인당 목표)를 붙여
-            // 팀 총합이 아니라 각자의 주간 약속 대비 내 진행률임을 드러낸다.
-            TeamGoalGauge(goal: weeklyGoal, workedLabelPrefix: "내 ", goalLabelPrefix: "각자 ")
+            // 팀 총합이 아니라 각자의 주간 약속 대비 내 진행률임을 드러낸다. myLiveWeeklySeconds 는 displayNow
+            // 파생이라 잎 뷰(MyWeeklyGauge)가 읽는다.
+            MyWeeklyGauge(store: store, teamGoalSeconds: store.teamGoalSeconds)
             PanelDivider()
             memberList
         }
@@ -306,24 +278,24 @@ private struct TeamPanel: View {
     }
 
     // 각 행은 memberRowHeight 상수로 고정 — 보조줄("마지막 확인 N분 전") 유무와 무관하게 동일 높이.
+    // 행 내부의 시간/프레즌스는 displayNow 파생이라 TeamMemberLiveRow 잎 뷰가 읽는다(본체는 정렬만 담당).
     @ViewBuilder
     private var rows: some View {
+        let myUserID = store.session?.userID
         VStack(spacing: Self.rowSpacing) {
             if sortedMembers.isEmpty {
-                TeamMemberRow(name: "팀원", presence: .offWork, primaryDetail: fallbackStatus)
+                TeamMemberRow(name: "팀원", presence: .offWork, primaryDetail: store.syncMessage)
                     .frame(height: CheckTheme.memberRowHeight)
             } else {
                 ForEach(sortedMembers) { member in
                     let isMe = myUserID != nil && member.id == myUserID
-                    TeamMemberRow(
-                        name: member.name,
-                        avatarURL: member.avatarURL,
-                        presence: member.presence(now: now),
-                        primaryDetail: primaryDetail(member),
-                        secondaryDetail: secondaryDetail(member),
-                        meetsWeeklyGoal: member.hasMetWeeklyGoal(goalSeconds: teamGoalSeconds, now: now),
+                    TeamMemberLiveRow(
+                        store: store,
+                        member: member,
+                        teamGoalSeconds: store.teamGoalSeconds,
                         isMe: isMe,
-                        onPickAvatar: isMe ? onUpdateAvatar : nil
+                        onPickAvatar: isMe ? { store.updateAvatar(imageData: $0) } : nil,
+                        nowOverride: nowOverride
                     )
                     .frame(height: CheckTheme.memberRowHeight)
                 }
@@ -338,7 +310,7 @@ private struct TeamPanel: View {
     }
 
     private var sortedMembers: [TeamMemberStatus] {
-        teamMembers.sorted { lhs, rhs in
+        store.teamMembers.sorted { lhs, rhs in
             let lhsWorking = lhs.status == .working
             let rhsWorking = rhs.status == .working
             if lhsWorking != rhsWorking {
@@ -347,21 +319,65 @@ private struct TeamPanel: View {
             return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
         }
     }
+}
 
-    // 헤더 "N명 근무중" 카운트는 라이브 근무(activeWorking)만 집계한다. 연결 끊김은 제외.
-    private var activeWorkingCount: Int {
-        teamMembers.filter { $0.presence(now: now) == .activeWorking }.count
+// MARK: - Team card live leaves (초단위 격리)
+
+/// "N명 근무중" 카운트 칩. presence(now:) 파생이라 잎 뷰로 분리해 이 칩만 매초 무효화되게 한다.
+private struct TeamWorkingCountChip: View {
+    let store: WorkTimerStore
+    var nowOverride: Date? = nil
+
+    var body: some View {
+        let now = nowOverride ?? store.displayNow
+        // 라이브 근무(activeWorking)만 집계한다. 연결 끊김은 제외.
+        CountChip(count: store.teamMembers.filter { $0.presence(now: now) == .activeWorking }.count)
     }
+}
 
-    // 주간 목표 게이지 = 내 진행률(내 주간 누적 ÷ 1인당 목표). 목표는 store.teamGoalSeconds(= teams.weekly_goal_hours)
-    // 로만 결정된다(앱엔 목표 입력 UI 없음). 분자는 팀 총합이 아니라 나 한 사람의 주간 누적이다.
-    private var weeklyGoal: TeamWeeklyGoal {
-        TeamWeeklyGoal(workedSeconds: myWeeklySeconds, goalSeconds: teamGoalSeconds)
+/// 내 주간 진행률 게이지. myLiveWeeklySeconds(=displayNow 파생)만 읽어 게이지만 무효화되게 한다.
+private struct MyWeeklyGauge: View {
+    let store: WorkTimerStore
+    // 1인당 주간 목표시간(초). teams.weekly_goal_hours(store.teamGoalSeconds) — 팀 총합이 아니라 "각자 X시간".
+    let teamGoalSeconds: Int
+
+    var body: some View {
+        TeamGoalGauge(
+            goal: TeamWeeklyGoal(workedSeconds: store.myLiveWeeklySeconds, goalSeconds: teamGoalSeconds),
+            workedLabelPrefix: "내 ",
+            goalLabelPrefix: "각자 "
+        )
+    }
+}
+
+/// 팀원 한 행의 라이브 래퍼. store.displayNow(또는 nowOverride)를 읽어 시간/프레즌스를 계산하고
+/// TeamMemberRow 에 값으로 넘긴다 — presence(now:)를 행당 1회만 계산해 하위 파생에 재사용한다.
+private struct TeamMemberLiveRow: View {
+    let store: WorkTimerStore
+    let member: TeamMemberStatus
+    let teamGoalSeconds: Int
+    let isMe: Bool
+    var onPickAvatar: ((Data) -> Void)? = nil
+    var nowOverride: Date? = nil
+
+    var body: some View {
+        let now = nowOverride ?? store.displayNow
+        let presence = member.presence(now: now)
+        TeamMemberRow(
+            name: member.name,
+            avatarURL: member.avatarURL,
+            presence: presence,
+            primaryDetail: Self.primaryDetail(member, presence: presence, now: now),
+            secondaryDetail: Self.secondaryDetail(member, presence: presence, now: now),
+            meetsWeeklyGoal: member.hasMetWeeklyGoal(goalSeconds: teamGoalSeconds, now: now),
+            isMe: isMe,
+            onPickAvatar: isMe ? onPickAvatar : nil
+        )
     }
 
     // 상태별 표시용 현재 세션 시간. active는 라이브 틱, stale은 마지막 신호에서 동결, off는 0.
-    private func displayCurrentSeconds(_ member: TeamMemberStatus) -> Int {
-        switch member.presence(now: now) {
+    private static func displayCurrentSeconds(_ member: TeamMemberStatus, presence: MemberPresence, now: Date) -> Int {
+        switch presence {
         case .activeWorking:
             return member.currentDurationSeconds(now: now)
         case .staleWorking(let frozen):
@@ -372,8 +388,8 @@ private struct TeamPanel: View {
     }
 
     // 상태별 표시용 주간 누적. stale은 마지막 신호에서 동결된 현재 세션분까지만 더한다.
-    private func displayWeeklySeconds(_ member: TeamMemberStatus) -> Int {
-        switch member.presence(now: now) {
+    private static func displayWeeklySeconds(_ member: TeamMemberStatus, presence: MemberPresence, now: Date) -> Int {
+        switch presence {
         case .staleWorking(let frozen):
             return member.weeklyDurationSeconds + frozen
         default:
@@ -381,20 +397,19 @@ private struct TeamPanel: View {
         }
     }
 
-    private func primaryDetail(_ member: TeamMemberStatus) -> String {
-        let weekly = "주 \(MenuBarStatusFormatter.hoursMinutes(displayWeeklySeconds(member)))"
-        switch member.presence(now: now) {
+    private static func primaryDetail(_ member: TeamMemberStatus, presence: MemberPresence, now: Date) -> String {
+        let weekly = "주 \(MenuBarStatusFormatter.hoursMinutes(displayWeeklySeconds(member, presence: presence, now: now)))"
+        switch presence {
         case .offWork:
             return weekly
         case .activeWorking, .staleWorking:
-            return "현재 \(MenuBarStatusFormatter.duration(displayCurrentSeconds(member))) · \(weekly)"
+            return "현재 \(MenuBarStatusFormatter.duration(displayCurrentSeconds(member, presence: presence, now: now))) · \(weekly)"
         }
     }
 
     // stale 상태에만 "마지막 확인 N분 전" 보조줄을 붙인다. 그 외엔 nil.
-    private func secondaryDetail(_ member: TeamMemberStatus) -> String? {
-        guard case .staleWorking = member.presence(now: now),
-              let seen = member.lastSeenAt else {
+    private static func secondaryDetail(_ member: TeamMemberStatus, presence: MemberPresence, now: Date) -> String? {
+        guard case .staleWorking = presence, let seen = member.lastSeenAt else {
             return nil
         }
         let minutes = max(1, Int(now.timeIntervalSince(seen) / 60))

@@ -28,13 +28,12 @@ enum EnglishInputSource {
     /// 주어진 입력 소스 ID와 일치하는 `TISInputSource`를 찾는다. 없으면 nil.
     private static func inputSource(id: String) -> TISInputSource? {
         let filter = [kTISPropertyInputSourceID as String: id] as CFDictionary
-        guard let list = TISCreateInputSourceList(filter, false)?.takeRetainedValue(),
-              CFArrayGetCount(list) > 0,
-              let raw = CFArrayGetValueAtIndex(list, 0)
-        else {
+        // 배열은 retained 로 받고 요소는 Swift 배열로 브리징해 ARC 가 요소 수명을 잡게 한다.
+        // (CFArrayGetValueAtIndex + takeUnretainedValue 는 배열이 풀리는 순간 요소가 해제돼 UAF 가 된다.)
+        guard let sources = TISCreateInputSourceList(filter, false)?.takeRetainedValue() as? [TISInputSource] else {
             return nil
         }
-        return Unmanaged<TISInputSource>.fromOpaque(raw).takeUnretainedValue()
+        return sources.first
     }
     #endif
 }

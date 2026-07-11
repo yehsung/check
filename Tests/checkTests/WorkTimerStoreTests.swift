@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 @testable import check
 
@@ -599,7 +600,7 @@ func confirmMembershipFallsBackToDefaultWeeklyGoalWhenFieldMissing() async {
 
 @MainActor
 @Test
-func remoteWorkingMemberKeepsDisplayClockTimerRunning() {
+func teammateTickerRunsOnlyWhilePopoverPresented() {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
         defaults: isolatedDefaults()
@@ -618,14 +619,42 @@ func remoteWorkingMemberKeepsDisplayClockTimerRunning() {
         )
     ]
 
+    // 팝오버 닫힘: 팀원이 근무중이어도 초침 티커를 돌리지 않는다(숨김 상태 매초 재평가 낭비 방지).
     store.stopTimerIfIdle()
+    #expect(store.tickerTask == nil)
 
+    // 팝오버 열림: 팀원 초침을 위해 티커를 재개한다(setMenuPresented 가 내부에서 게이팅을 재평가).
+    store.setMenuPresented(true)
     #expect(store.tickerTask != nil)
 
+    // 팀원이 모두 근무종료면 팝오버가 열려 있어도 티커를 정지한다.
     store.teamMembers = []
     store.stopTimerIfIdle()
-
     #expect(store.tickerTask == nil)
+
+    // 팝오버가 닫히면 티커 재평가만 하고 계속 정지 상태를 유지한다.
+    store.setMenuPresented(false)
+    #expect(store.tickerTask == nil)
+}
+
+@MainActor
+@Test
+func selfWorkingKeepsTickerRegardlessOfPopover() {
+    // 내가 근무중이면 팝오버 상태와 무관하게 티커를 항상 유지한다(12h 확인/마일스톤/라벨).
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer { store.tickerTask?.cancel() }
+    store.startedAt = Date(timeIntervalSinceNow: -60)
+
+    store.stopTimerIfIdle()
+    #expect(store.tickerTask != nil)
+
+    // 팝오버가 닫혀 있어도 근무중이면 유지.
+    store.setMenuPresented(false)
+    store.stopTimerIfIdle()
+    #expect(store.tickerTask != nil)
 }
 
 @MainActor
@@ -791,12 +820,12 @@ func failedStopSyncDoesNotReviveTimerOnRefresh() async {
     store.stop(now: end)
 
     #expect(store.startedAt == nil)
-    #expect(store.pendingOperation == .stop(durationSeconds: 100))
+    #expect(store.pendingItems.map(\.operation) == [.stop(durationSeconds: 100)])
 
     await store.refreshTeamStatus()
 
     #expect(store.startedAt == nil)
-    #expect(store.pendingOperation == .stop(durationSeconds: 100))
+    #expect(store.pendingItems.map(\.operation) == [.stop(durationSeconds: 100)])
 }
 
 @MainActor
@@ -825,16 +854,22 @@ func retryPendingSyncClearsPendingOperationOnceServerRecovers() async {
         userID: "00000000-0000-0000-0000-000000000002"
     )
     store.currentTeamID = URLProtocolStub.stubTeamID
-    store.pendingOperation = .stop(durationSeconds: 50)
-    store.pendingStopStartedAt = Date(timeIntervalSince1970: 2000)
-    store.pendingStopEndedAt = Date(timeIntervalSince1970: 2050)
+    store.pendingItems = [
+        PendingWorkItem(
+            id: UUID(),
+            operation: .stop(durationSeconds: 50),
+            sessionID: "50000000-0000-0000-0000-0000000000aa",
+            sessionStartedAt: Date(timeIntervalSince1970: 2000),
+            endedAt: Date(timeIntervalSince1970: 2050)
+        )
+    ]
 
     await store.retryPendingSync()
-    #expect(store.pendingOperation == .stop(durationSeconds: 50))
+    #expect(store.pendingItems.map(\.operation) == [.stop(durationSeconds: 50)])
 
     URLProtocolStub.patchWorkSessionsShouldFail = false
     await store.retryPendingSync()
-    #expect(store.pendingOperation == nil)
+    #expect(store.pendingItems.isEmpty)
 }
 
 @MainActor
@@ -883,7 +918,9 @@ func signOutClearsSessionStateAndCallsLogout() async {
             currentSessionStartedAt: nil
         )
     ]
-    store.pendingOperation = .start
+    store.pendingItems = [
+        PendingWorkItem(id: UUID(), operation: .start, sessionID: "s", sessionStartedAt: Date(), endedAt: nil)
+    ]
     store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 120)
     store.startTimer()
 
@@ -907,7 +944,7 @@ func signOutClearsSessionStateAndCallsLogout() async {
     #expect(store.createTeamName == "")
     #expect(store.createTeamGoalHours == 60)
     #expect(store.createdTeamCode == nil)
-    #expect(store.pendingOperation == nil)
+    #expect(store.pendingItems.isEmpty)
     #expect(store.snapshot == WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0))
     #expect(store.tickerTask == nil)
     #expect(store.syncMessage == "로그인 필요")
@@ -1008,7 +1045,7 @@ struct SyncRaceTests {
     }
 
     @Test
-    func rapidStartStopSerializesToSingleOffWorkUpsert() async {
+    func rapidStartStopSerializesBothOperationsInOrder() async {
         let testHost = "start-stop-race"
         URLProtocolStub.delayedHosts = [testHost]
         defer { URLProtocolStub.delayedHosts = [] }
@@ -1047,14 +1084,18 @@ struct SyncRaceTests {
             .map { $0.1 }
         let workingUpserts = statusUpsertBodies.filter { $0.contains(#""status":"working""#) }
         let offWorkUpserts = statusUpsertBodies.filter { $0.contains(#""status":"off_work""#) }
-        let completedSessionPosts = requests.filter {
-            $0.url?.path == "/rest/v1/work_sessions" && $0.httpMethod == "POST"
-        }
 
-        #expect(workingUpserts.isEmpty)
+        // FIFO 큐는 빠른 시작→종료를 붕괴시키지 않고 순서대로 재생한다(단일 슬롯이 .start 를 삼키던 이전
+        // 동작을 대체 — in-flight 중 반대 조작/오프라인 세션 유실을 막기 위한 의도된 변경).
+        // 시작(working)과 종료(off_work) 상태 전이가 각각 정확히 한 번, 그 순서로 나가고 큐는 완전히 비워진다.
+        #expect(workingUpserts.count == 1)
         #expect(offWorkUpserts.count == 1)
-        #expect(completedSessionPosts.count <= 1)
-        #expect(store.pendingOperation == nil)
+        let firstWorking = statusUpsertBodies.firstIndex { $0.contains(#""status":"working""#) }
+        let firstOffWork = statusUpsertBodies.firstIndex { $0.contains(#""status":"off_work""#) }
+        if let firstWorking, let firstOffWork {
+            #expect(firstWorking < firstOffWork)
+        }
+        #expect(store.pendingItems.isEmpty)
     }
 
     @Test
@@ -1095,7 +1136,7 @@ struct SyncRaceTests {
         #expect(elapsed < .seconds(3.5))
         // stop()은 로컬 상태를 즉시 반영하지만(퇴근 표시), 네트워크 sync는 타임아웃으로 아직 미완료다.
         #expect(store.startedAt == nil)
-        #expect(store.pendingOperation != nil)
+        #expect(!store.pendingItems.isEmpty)
     }
 }
 
@@ -1131,7 +1172,7 @@ func finishWorkBeforeQuitSyncsStopWhenWorking() async {
     await store.finishWorkBeforeQuit()
 
     #expect(store.startedAt == nil)
-    #expect(store.pendingOperation == nil)
+    #expect(store.pendingItems.isEmpty)
     let stopRequests = URLProtocolStub.requests(forHost: testHost)
         .filter { $0.url?.path == "/rest/v1/work_sessions" && $0.httpMethod == "PATCH" }
     #expect(!stopRequests.isEmpty)
@@ -1163,7 +1204,7 @@ func finishWorkBeforeQuitReturnsImmediatelyWhenNotWorking() async {
     await store.finishWorkBeforeQuit()
 
     #expect(store.startedAt == nil)
-    #expect(store.pendingOperation == nil)
+    #expect(store.pendingItems.isEmpty)
     #expect(URLProtocolStub.requests(forHost: testHost).isEmpty)
 }
 
@@ -1358,8 +1399,8 @@ func wakeAfterLongSleepAutoStopsAtSleepMoment() async {
     #expect(store.startedAt == nil)
     #expect(store.sleepBeganAt == nil)
     #expect(store.syncMessage == "잠자기로 자동 근무종료됨")
-    #expect(store.pendingOperation == .stop(durationSeconds: 3600))
-    #expect(store.pendingStopEndedAt == sleepAt) // 덮은 시각으로 마감
+    #expect(store.pendingItems.map(\.operation) == [.stop(durationSeconds: 3600)])
+    #expect(store.pendingItems.first?.endedAt == sleepAt) // 덮은 시각으로 마감
 }
 
 @MainActor
@@ -1379,7 +1420,7 @@ func wakeWithinGraceKeepsWorking() {
 
     #expect(store.startedAt != nil)
     #expect(store.sleepBeganAt == nil)
-    #expect(store.pendingOperation == nil)
+    #expect(store.pendingItems.isEmpty)
 }
 
 // MARK: - D5: 12시간 확인 (30분 무응답 자동 마감)
@@ -1427,7 +1468,7 @@ func longSessionAutoStopsAfterThirtyMinutesUnconfirmed() {
     #expect(store.startedAt == nil)
     #expect(store.syncMessage == "장시간 미확인으로 자동 근무종료됨")
     // 12시간 시점으로 마감된다(30분치는 근무로 인정하지 않음).
-    #expect(store.pendingStopEndedAt == t0.addingTimeInterval(12 * 3600))
+    #expect(store.pendingItems.first?.endedAt == t0.addingTimeInterval(12 * 3600))
 }
 
 @MainActor
@@ -1521,7 +1562,8 @@ func timeMilestoneTriggersOnceWhenTodayCrossesOneHour() {
     var events: [ReactionKind] = []
     store.onReactionTrigger = { events.append($0) }
 
-    let now = Date()
+    // KST 자정 클리핑이 개입하지 않도록 정오(자정+12h)에 고정한다 — 세션 시작이 오늘 자정 이후임을 보장.
+    let now = TeamWeeklyGoal.koreanDayStart(for: Date()).addingTimeInterval(12 * 3600)
     store.startedAt = now.addingTimeInterval(-3_601) // 오늘 누적 1시간 1초
     store.displayNow = now
 
@@ -1543,7 +1585,8 @@ func timeMilestoneAtFourHoursSuppressesBelatedOneHour() {
     var events: [ReactionKind] = []
     store.onReactionTrigger = { events.append($0) }
 
-    let now = Date()
+    // KST 자정 클리핑이 개입하지 않도록 정오(자정+12h)에 고정한다 — 세션 시작이 오늘 자정 이후임을 보장.
+    let now = TeamWeeklyGoal.koreanDayStart(for: Date()).addingTimeInterval(12 * 3600)
     store.startedAt = now.addingTimeInterval(-(4 * 3_600 + 1)) // 이미 4시간 넘김
     store.displayNow = now
 
@@ -1623,6 +1666,185 @@ func detectTeamReactionsCelebratesTeamGoalCrossingOnce() {
     // 완료 유지 상태에선 재축하하지 않는다.
     store.detectTeamReactions()
     #expect(events.filter { $0 == .milestone }.count == 1)
+}
+
+// MARK: - 트랙 B: 저장 라벨 / 큐 정합성 / 자정 클리핑 / 취소 안전화
+
+@MainActor
+@Test
+func refreshMenuBarTitleGuardsRedundantAssignment() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer { store.tickerTask?.cancel() }
+
+    // 비근무 초기값은 "오프".
+    #expect(store.menuBarTitle == "오프")
+
+    // 상태가 그대로면 재계산해도 동일 문자열이라 대입을 스킵해 관찰자를 발화시키지 않는다.
+    let firedOnSame = ObservationFlag()
+    withObservationTracking { _ = store.menuBarTitle } onChange: { firedOnSame.value = true }
+    store.refreshMenuBarTitle()
+    #expect(!firedOnSame.value)
+
+    // 근무로 전이하면 문자열이 바뀌므로 관찰자가 발화하고, 라벨은 todayDuration 파생값이 된다.
+    let now = TeamWeeklyGoal.koreanDayStart(for: Date()).addingTimeInterval(12 * 3600)
+    store.startedAt = now.addingTimeInterval(-3_661) // 1시간 1분 1초
+    store.displayNow = now
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+
+    let firedOnChange = ObservationFlag()
+    withObservationTracking { _ = store.menuBarTitle } onChange: { firedOnChange.value = true }
+    store.refreshMenuBarTitle()
+    #expect(firedOnChange.value)
+    #expect(store.menuBarTitle == "01:01")
+}
+
+/// withObservationTracking 의 @Sendable onChange 에서 발화 여부를 기록하기 위한 참조 박스.
+/// 관찰 알림은 MainActor 의 willSet 에서 동기 발화하므로 실제 경합은 없다.
+private final class ObservationFlag: @unchecked Sendable {
+    var value = false
+}
+
+@MainActor
+@Test
+func todayDurationClipsAtKoreanMidnightAndClampsNegative() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer { store.tickerTask?.cancel() }
+
+    let midnight = TeamWeeklyGoal.koreanDayStart(for: Date())
+    let now = midnight.addingTimeInterval(30 * 60) // 오늘 KST 00:30
+    // 세션이 어제 22:00 에 시작됐어도 오늘 표시는 자정 이후 30분만 센다(부풀림/오발화 방지).
+    store.startedAt = midnight.addingTimeInterval(-2 * 3600)
+    store.displayNow = now
+    #expect(store.todayDuration == 30 * 60)
+
+    // 시계 되돌림(시작시각이 미래)이면 음수 대신 0 으로 클램프한다.
+    store.startedAt = now.addingTimeInterval(600)
+    #expect(store.todayDuration == 0)
+}
+
+@MainActor
+@Test
+func offlineQueueDrainsStartStopStartInOrder() async {
+    let testHost = "queue-drain-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    let t1 = Date(timeIntervalSince1970: 5_000)
+    let t2 = Date(timeIntervalSince1970: 5_100)
+    let t3 = Date(timeIntervalSince1970: 6_000)
+    let sessionA = "aaaaaaaa-0000-0000-0000-000000000001"
+    let sessionB = "bbbbbbbb-0000-0000-0000-000000000002"
+    // 오프라인에서 시작→종료→재시작이 쌓인 3항목(단일 슬롯이었다면 앞 두 개가 유실됐을 상황).
+    store.pendingItems = [
+        PendingWorkItem(id: UUID(), operation: .start, sessionID: sessionA, sessionStartedAt: t1, endedAt: nil),
+        PendingWorkItem(id: UUID(), operation: .stop(durationSeconds: 100), sessionID: sessionA, sessionStartedAt: t1, endedAt: t2),
+        PendingWorkItem(id: UUID(), operation: .start, sessionID: sessionB, sessionStartedAt: t3, endedAt: nil)
+    ]
+
+    await store.retryPendingSync()
+
+    #expect(store.pendingItems.isEmpty)
+
+    let requests = URLProtocolStub.requests(forHost: testHost)
+    let bodies = URLProtocolStub.bodies(forHost: testHost)
+    // 상태 전이가 start→stop→start 순서 그대로 재생된다.
+    let statusStream = zip(requests, bodies)
+        .filter { $0.0.url?.path == "/rest/v1/work_statuses" && $0.0.httpMethod == "POST" }
+        .map { $0.1.contains(#""status":"working""#) ? "working" : "off_work" }
+    #expect(statusStream == ["working", "off_work", "working"])
+    // 두 시작이 붕괴되지 않고 각자의 세션ID로 재생됐다(오프라인 복구 정합성).
+    let sessionPostBodies = zip(requests, bodies)
+        .filter { $0.0.url?.path == "/rest/v1/work_sessions" && $0.0.httpMethod == "POST" }
+        .map { $0.1 }
+    #expect(sessionPostBodies.contains { $0.contains(sessionA) })
+    #expect(sessionPostBodies.contains { $0.contains(sessionB) })
+}
+
+// 지연 응답 스텁은 프로세스 전역이라 서로 덮어쓴다. in-flight 레이스 재현 테스트는 직렬 스위트로 격리한다.
+@Suite(.serialized)
+@MainActor
+struct QueueInFlightTests {
+    @Test
+    func inFlightStopPreservesConcurrentRestart() async {
+        let testHost = "inflight-restart-race"
+        URLProtocolStub.delayedHosts = [testHost]
+        defer { URLProtocolStub.delayedHosts = [] }
+
+        let store = makeStubStore(host: testHost)
+        defer {
+            store.tickerTask?.cancel()
+            store.refreshTask?.cancel()
+        }
+        // 근무중 상태를 직접 세팅(초기 시작 sync 를 배제).
+        store.startedAt = Date(timeIntervalSince1970: 7_000)
+        store.currentSessionID = "70000000-0000-0000-0000-000000000001"
+        store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 100)
+
+        // 종료 → 종료 sync 가 지연으로 in-flight 인 사이에 재시작한다.
+        store.stop(now: Date(timeIntervalSince1970: 7_100))
+        try? await Task.sleep(for: .milliseconds(20))
+        store.start(now: Date(timeIntervalSince1970: 7_200))
+
+        await store.syncTask?.value
+
+        // 재시작이 유실되지 않아 큐가 완전히 비고 로컬은 근무중을 유지한다.
+        #expect(store.pendingItems.isEmpty)
+        #expect(store.startedAt != nil)
+
+        // 서버에도 off_work 다음 working 순서로 반영됐다(단일 슬롯이었다면 working 이 유실됐을 상황).
+        let requests = URLProtocolStub.requests(forHost: testHost)
+        let bodies = URLProtocolStub.bodies(forHost: testHost)
+        let statusStream = zip(requests, bodies)
+            .filter { $0.0.url?.path == "/rest/v1/work_statuses" && $0.0.httpMethod == "POST" }
+            .map { $0.1.contains(#""status":"working""#) ? "working" : "off_work" }
+        #expect(statusStream == ["off_work", "working"])
+    }
+
+    @Test
+    func cancelledActivationKeepsSessionSignedIn() async {
+        let testHost = "cancel-activation-race"
+        URLProtocolStub.delayedHosts = [testHost]
+        defer { URLProtocolStub.delayedHosts = [] }
+
+        let defaults = isolatedDefaults()
+        defaults.set("old-access-token", forKey: WorkTimerStore.accessTokenKey)
+        defaults.set("old-refresh-token", forKey: WorkTimerStore.refreshTokenKey)
+        defaults.set("00000000-0000-0000-0000-000000000002", forKey: WorkTimerStore.userIDKey)
+        let service = SupabaseWorkService(
+            projectURL: URL(string: "http://\(testHost)")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        )
+        let store = WorkTimerStore(
+            service: service,
+            environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+            defaults: defaults
+        )
+        defer {
+            store.tickerTask?.cancel()
+            store.refreshTask?.cancel()
+        }
+        #expect(store.isSignedIn)
+
+        // 활성화 도중 .task 취소(팝오버 빨리 닫기)를 재현한다.
+        let activate = Task { await store.activateStoredSession() }
+        try? await Task.sleep(for: .milliseconds(20))
+        activate.cancel()
+        await activate.value
+
+        // 취소(URLError.cancelled)는 조용히 무시 — 세션이 강제 로그아웃되지 않고 토큰도 유지된다.
+        #expect(store.isSignedIn)
+        #expect(defaults.string(forKey: WorkTimerStore.accessTokenKey) != nil)
+    }
 }
 
 @MainActor

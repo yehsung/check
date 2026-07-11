@@ -30,8 +30,8 @@ func menuBarImageIsSizedForMenuBar() throws {
         )
         // 논리 크기는 메뉴바 높이 안에 들어가도록 18×18pt여야 한다.
         #expect(image.size == NSSize(width: 18, height: 18))
-        // 비트맵 rep은 원본(640px) 그대로 유지되어 레티나에서 선명해야 한다.
-        let hasHighResRep = image.representations.contains { $0.pixelsWide >= 640 && $0.pixelsHigh >= 640 }
+        // 에셋이 640→192px 로 축소됐다. 비트맵 rep은 팝오버 표시 크기(46pt@2x=92px) 이상으로 유지되어야 선명하다.
+        let hasHighResRep = image.representations.contains { $0.pixelsWide >= 92 && $0.pixelsHigh >= 92 }
         #expect(hasHighResRep, "다운스케일용 고해상도 rep이 유지되어야 한다")
     }
 }

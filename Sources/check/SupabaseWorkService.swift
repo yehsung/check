@@ -8,10 +8,19 @@ actor SupabaseWorkService {
     let decoder: JSONDecoder
     let dateFormatter = ISO8601DateFormatter()
 
+    /// 폴링 전용 세션. 요청 15초/리소스 30초 타임아웃(30초 폴링·90초 신선도 규약과 정합).
+    /// 앱 전역 .shared 대신 전용 구성을 써 무한 대기·백그라운드 재시도가 티커/폴링 주기와 어긋나지 않게 한다.
+    static let defaultSession: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 30
+        return URLSession(configuration: configuration)
+    }()
+
     init(
         projectURL: URL = SupabaseConfig.projectURL,
         anonKey: String? = SupabaseConfig.anonKey(),
-        session: URLSession = .shared
+        session: URLSession = SupabaseWorkService.defaultSession
     ) {
         self.projectURL = projectURL
         self.anonKey = anonKey
@@ -69,7 +78,9 @@ actor SupabaseWorkService {
     }
 
     func fetchTeamStatuses(accessToken: String, teamID: String, now: Date = Date()) async throws -> [TeamMemberStatus] {
-        let data = try await send(
+        // work_statuses·활성·주간 세 GET을 병렬 발사한다. 각 요청은 network await 에서 액터를 놓으므로
+        // 직렬 3연속 왕복이 아니라 실제로 겹쳐 폴링 경로 지연을 줄인다.
+        async let statusBytes = send(
             path: "/rest/v1/work_statuses",
             method: "GET",
             queryItems: [
@@ -81,9 +92,12 @@ actor SupabaseWorkService {
             accessToken: accessToken,
             prefer: nil
         )
-        let rows = try decoder.decode([WorkStatusRow].self, from: data)
-        let activeSessions = try await fetchActiveSessions(accessToken: accessToken, teamID: teamID)
-        let weeklySessions = try await fetchWeeklySessions(accessToken: accessToken, teamID: teamID, now: now)
+        async let activeRows = fetchActiveSessions(accessToken: accessToken, teamID: teamID)
+        async let weeklyRows = fetchWeeklySessions(accessToken: accessToken, teamID: teamID, now: now)
+
+        let rows = try decoder.decode([WorkStatusRow].self, from: try await statusBytes)
+        let activeSessions = try await activeRows
+        let weeklySessions = try await weeklyRows
         let activeByUser = Dictionary(grouping: activeSessions, by: \.userId)
         let weeklyByUser = weeklyDurations(from: weeklySessions, now: now)
         let todayByUser = todayDurations(from: weeklySessions, now: now)

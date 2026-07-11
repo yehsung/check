@@ -84,7 +84,13 @@ update public.teams set weekly_goal_hours = 40 where name = '팀이름';
 unzip -t dist/check.zip
 ```
 
-번들은 ad-hoc(`codesign --sign -`) 서명만 합니다. 사내 배포에는 충분하지만, Gatekeeper 경고 없이 배포하려면 Apple Developer ID 서명과 공증(notarization)이 필요하며 이는 이 프로젝트 범위 밖입니다.
+번들은 ad-hoc(`codesign --sign -`) 서명만 합니다. 사내 배포에는 충분하지만, Gatekeeper 경고 없이 배포하려면 Apple Developer ID 서명과 공증(notarization)이 필요합니다.
+
+### brew 배포 (공증 필요, 선택)
+
+공증까지 마친 앱은 GitHub Releases + Homebrew tap 으로도 배포할 수 있어, 팀원이 `brew tap GH_OWNER/check && brew install --cask check` 로 설치하고 이후 `brew upgrade --cask check` 로 자동 업데이트합니다.
+배포 담당자는 `./scripts/package-notarized.sh` 로 공증 zip 을 만든 뒤 `./scripts/release-brew.sh <버전>` 한 번으로 태그·릴리즈·Cask 갱신을 끝냅니다.
+최초 세팅(gh 로그인·저장소 2개·`GH_OWNER` 설정), 전체 파이프라인, 공개 릴리즈 리스크는 [`docs/release.md`](docs/release.md) 참고.
 
 ## 팀원 설치 (전달받은 zip 기준)
 

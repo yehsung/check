@@ -181,8 +181,17 @@ final class URLProtocolStub: URLProtocol {
            request.value(forHTTPHeaderField: "Authorization") == "Bearer old-access-token" {
             return Data(#"{"code":"PGRST301","message":"JWT expired"}"#.utf8)
         }
-        if request.url?.path == "/rest/v1/rpc/team_directory" {
-            return teamDirectoryData()
+        if request.url?.path == "/rest/v1/rpc/lookup_team_by_code" {
+            return lookupTeamByCodeData(for: request)
+        }
+        if request.url?.path == "/rest/v1/rpc/join_team" {
+            return joinTeamData(for: request)
+        }
+        if request.url?.path == "/rest/v1/rpc/create_team" {
+            return createTeamData()
+        }
+        if request.url?.path == "/rest/v1/rpc/my_team_invite_code" {
+            return myInviteCodeData(for: request)
         }
         if request.url?.path == "/rest/v1/rpc/team_weekly_leaderboard" {
             return teamLeaderboardData()
@@ -239,15 +248,51 @@ final class URLProtocolStub: URLProtocol {
     // 스텁 팀 픽스처가 반환하는 기본 팀 id. 스토어 테스트가 currentTeamID 를 직접 세팅할 때도 사용한다.
     static let stubTeamID = "10000000-0000-0000-0000-000000000001"
 
-    private static func teamDirectoryData() -> Data {
-        Data(
+    // 코드 미리보기 픽스처. host 에 "miss" 가 들어가면 불일치(0행)로, 그 외에는 stubTeamID 팀을 돌려준다.
+    private static func lookupTeamByCodeData(for request: URLRequest) -> Data {
+        if request.url?.host?.contains("miss") == true {
+            return Data("[]".utf8)
+        }
+        return Data(
             """
             [
-              {"id": "10000000-0000-0000-0000-000000000001", "name": "sudo 박수"},
-              {"id": "20000000-0000-0000-0000-000000000002", "name": "오목교 브라더스"}
+              {"team_id": "10000000-0000-0000-0000-000000000001", "name": "sudo 박수", "weekly_goal_hours": 40, "member_count": 3}
             ]
             """.utf8
         )
+    }
+
+    // 코드 합류 픽스처. host 에 "miss" 가 들어가면 불일치(0행)로, 그 외에는 합류 성공 팀 정보를 돌려준다.
+    private static func joinTeamData(for request: URLRequest) -> Data {
+        if request.url?.host?.contains("miss") == true {
+            return Data("[]".utf8)
+        }
+        return Data(
+            """
+            [
+              {"team_id": "10000000-0000-0000-0000-000000000001", "name": "sudo 박수", "weekly_goal_hours": 40}
+            ]
+            """.utf8
+        )
+    }
+
+    // 팀 만들기 픽스처. 새로 만든 팀의 참여코드(8자)를 함께 돌려준다.
+    private static func createTeamData() -> Data {
+        Data(
+            """
+            [
+              {"team_id": "10000000-0000-0000-0000-000000000001", "name": "새로운 팀", "invite_code": "X7K2M9Q4", "weekly_goal_hours": 50}
+            ]
+            """.utf8
+        )
+    }
+
+    // owner 참여코드 픽스처. host 에 "member" 가 들어가면 owner 아님(0행)으로 둔다.
+    private static func myInviteCodeData(for request: URLRequest) -> Data {
+        if request.url?.host?.contains("member") == true {
+            return Data("[]".utf8)
+        }
+        return Data(#"[{"invite_code": "SUDOPARK"}]"#.utf8)
     }
 
     // 팀 리그 픽스처: 3팀, 내 팀(stubTeamID)이 총시간 2위. 클라 정렬이 실제로 동작하는지 보이려고
@@ -279,11 +324,21 @@ final class URLProtocolStub: URLProtocol {
                 """.utf8
             )
         }
-        // 기본 픽스처는 팀 목표시간 40시간을 함께 내려준다(멤버십 조회 한 번으로 목표까지 확정).
+        // owner 검증 전용 호스트: role=owner 를 함께 내려준다(confirmMembership 이 참여코드를 로드하도록).
+        if request.url?.host?.contains("owner") == true {
+            return Data(
+                """
+                [
+                  {"team_id": "10000000-0000-0000-0000-000000000001", "role": "owner", "teams": {"name": "sudo 박수", "weekly_goal_hours": 40}}
+                ]
+                """.utf8
+            )
+        }
+        // 기본 픽스처는 팀 목표시간 40시간과 member 역할을 함께 내려준다(멤버십 조회 한 번으로 목표까지 확정).
         return Data(
             """
             [
-              {"team_id": "10000000-0000-0000-0000-000000000001", "teams": {"name": "sudo 박수", "weekly_goal_hours": 40}}
+              {"team_id": "10000000-0000-0000-0000-000000000001", "role": "member", "teams": {"name": "sudo 박수", "weekly_goal_hours": 40}}
             ]
             """.utf8
         )

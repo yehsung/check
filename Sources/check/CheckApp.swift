@@ -15,7 +15,7 @@ struct CheckApp: App {
                 // (동적 높이는 유지, 창은 아래로만 성장/수축). 그림은 그리지 않는 배경 뷰.
                 .background(WindowAnchorAccessor())
         } label: {
-            MenuBarStatusLabel(snapshot: appDelegate.store.snapshot)
+            MenuBarStatusLabel(snapshot: appDelegate.store.snapshot, todaySeconds: appDelegate.store.todayDuration)
         }
         .menuBarExtraStyle(.window)
     }

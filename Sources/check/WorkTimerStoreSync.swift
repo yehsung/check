@@ -7,9 +7,9 @@ extension WorkTimerStore {
             return
         }
         guard let teamID = currentTeamID else {
-            // 무소속: 팀 데이터를 비우고 안내 문구만 남긴다.
+            // 무소속: 팀 데이터를 비우고 팀 코드 참여 안내 문구만 남긴다.
             teamMembers = []
-            syncMessage = "소속 팀이 없어요 — 관리자에게 문의"
+            syncMessage = "소속 팀이 없어요 — 팀 코드로 참여해 주세요"
             return
         }
         let generation = sessionGeneration
@@ -257,7 +257,7 @@ extension WorkTimerStore {
     private func performPendingOperation(_ operation: PendingWorkOperation) async throws {
         guard let teamID = currentTeamID else {
             // 소속 팀이 없으면 근무 시작/종료를 서버에 반영할 수 없다.
-            throw SupabaseWorkServiceError.authMessage("소속 팀이 없어요 — 관리자에게 문의")
+            throw SupabaseWorkServiceError.authMessage("소속 팀이 없어요 — 팀 코드로 참여해 주세요")
         }
         switch operation {
         case .start:

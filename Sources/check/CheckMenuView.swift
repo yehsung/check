@@ -12,6 +12,8 @@ struct CheckMenuView: View {
     // 스냅샷 전용: 초과(스크롤) 리스트를 ScrollView 대신 "보이는 첫 maxVisibleRows행 클립"으로 그린다.
     // ImageRenderer는 NSScrollView(=ScrollView) 내용을 못 그리므로, 육안 확인 스냅샷에서만 켠다. 앱은 항상 false(ScrollView).
     var previewClipsOverflowList: Bool = false
+    // 스냅샷 전용: owner 팀 카드에서 참여코드 인라인 행이 펼쳐진 상태를 강제로 그린다. 앱에서는 항상 false(키 버튼 토글).
+    var previewOwnerCodeRevealed: Bool = false
 
     var body: some View {
         content
@@ -28,32 +30,43 @@ struct CheckMenuView: View {
     @ViewBuilder
     private var content: some View {
         if store.isSignedIn {
-            // 헤더 카드·팀 카드(헤더/게이지)·푸터는 콘텐츠 natural 높이. 팀 멤버 리스트만 팀원 수에 비례해 자라고,
-            // maxVisibleRows를 넘으면 그 높이로 고정 후 스크롤한다. 팀별 현황 페이지도 같은 자리에서 동일 패턴.
-            VStack(spacing: 10) {
-                HeaderCard(store: store, previewLongSessionBanner: previewLongSessionBanner)
-                if store.isLeaderboardVisible {
-                    LeaderboardPanel(
-                        entries: store.leaderboard,
-                        myTeamID: store.currentTeamID,
-                        fallbackStatus: store.syncMessage,
-                        onBack: { store.isLeaderboardVisible = false },
-                        clipsOverflowInsteadOfScroll: previewClipsOverflowList
-                    )
-                } else {
-                    TeamPanel(
-                        teamMembers: store.teamMembers,
-                        teamName: store.teamName,
-                        teamGoalSeconds: store.teamGoalSeconds,
-                        fallbackStatus: store.syncMessage,
-                        now: store.displayNow,
-                        myUserID: store.session?.userID,
-                        onUpdateAvatar: { store.updateAvatar(imageData: $0) },
-                        onShowLeaderboard: { store.toggleLeaderboard() },
-                        clipsOverflowInsteadOfScroll: previewClipsOverflowList
-                    )
+            if store.isTeamless {
+                // 로그인은 됐지만 소속 팀이 없다 — 메인 대신 팀 코드 입력/새 팀 만들기 패널을 보여 준다.
+                VStack(spacing: 10) {
+                    TeamlessPanel(store: store)
+                    FooterBar(store: store)
                 }
-                FooterBar(store: store)
+            } else {
+                // 헤더 카드·팀 카드(헤더/게이지)·푸터는 콘텐츠 natural 높이. 팀 멤버 리스트만 팀원 수에 비례해 자라고,
+                // maxVisibleRows를 넘으면 그 높이로 고정 후 스크롤한다. 팀별 현황 페이지도 같은 자리에서 동일 패턴.
+                VStack(spacing: 10) {
+                    HeaderCard(store: store, previewLongSessionBanner: previewLongSessionBanner)
+                    if store.isLeaderboardVisible {
+                        LeaderboardPanel(
+                            entries: store.leaderboard,
+                            myTeamID: store.currentTeamID,
+                            fallbackStatus: store.syncMessage,
+                            onBack: { store.isLeaderboardVisible = false },
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList
+                        )
+                    } else {
+                        TeamPanel(
+                            teamMembers: store.teamMembers,
+                            teamName: store.teamName,
+                            teamGoalSeconds: store.teamGoalSeconds,
+                            fallbackStatus: store.syncMessage,
+                            now: store.displayNow,
+                            myUserID: store.session?.userID,
+                            isOwner: store.isTeamOwner,
+                            inviteCode: store.myTeamInviteCode,
+                            previewCodeRevealed: previewOwnerCodeRevealed,
+                            onUpdateAvatar: { store.updateAvatar(imageData: $0) },
+                            onShowLeaderboard: { store.toggleLeaderboard() },
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList
+                        )
+                    }
+                    FooterBar(store: store)
+                }
             }
         } else {
             // 로그인/가입 카드는 콘텐츠 natural 높이로만 그린다(세로 중앙정렬용 Spacer 제거 — 창을 짧게).
@@ -64,6 +77,16 @@ struct CheckMenuView: View {
 
 struct MenuBarStatusLabel: View {
     let snapshot: WorkStatusSnapshot
+    // 근무중일 때 상단바에 보여줄 시간 = 오늘 누적(초). 세션 재개 시 0이 아니라 이어서 흐른다.
+    var todaySeconds: Int = 0
+
+    // 표시용 스냅샷: 근무중이면 경과값을 오늘 누적으로 치환한다(포맷 규칙은 기존 그대로).
+    private var displaySnapshot: WorkStatusSnapshot {
+        guard snapshot.isWorking else { return snapshot }
+        var adjusted = snapshot
+        adjusted.elapsedSeconds = todaySeconds
+        return adjusted
+    }
 
     var body: some View {
         HStack(spacing: 5) {
@@ -76,7 +99,7 @@ struct MenuBarStatusLabel: View {
                     .symbolRenderingMode(.hierarchical)
                     .imageScale(.medium)
             }
-            Text(MenuBarStatusFormatter.title(for: snapshot))
+            Text(MenuBarStatusFormatter.title(for: displaySnapshot))
                 .font(.system(.body, design: .rounded).weight(.medium))
                 .monospacedDigit()
         }
@@ -95,6 +118,16 @@ private struct HeaderCard: View {
         store.isLongSessionPromptActive || previewLongSessionBanner
     }
 
+    // 보조줄에 표시할 내 이번 주 누적(초). 팀 목록에서 내 행의 라이브 주간값을 쓰고, 아직 못 받았으면 오늘 누적으로 대체.
+    private var myWeeklySeconds: Int {
+        guard let userID = store.session?.userID,
+              let mine = store.teamMembers.first(where: { $0.id == userID })
+        else {
+            return store.todayDuration
+        }
+        return mine.liveWeeklyDurationSeconds(now: store.displayNow)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             CheckMascotView(snapshot: store.snapshot)
@@ -103,11 +136,12 @@ private struct HeaderCard: View {
                 Text(store.snapshot.localizedStatus)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(statusTint)
-                Text(MenuBarStatusFormatter.duration(store.snapshot.elapsedSeconds))
+                // 큰 타이머 = 오늘 누적. 쉬었다 재개해도 0이 아니라 오늘 총합에서 이어 흐른다.
+                Text(MenuBarStatusFormatter.duration(store.todayDuration))
                     .font(.system(.title2, design: .monospaced).weight(.semibold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .monospacedDigit()
-                Text("오늘 누적 \(MenuBarStatusFormatter.hoursMinutes(store.todayDuration))")
+                Text("이번 주 \(MenuBarStatusFormatter.hoursMinutes(myWeeklySeconds))")
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)
@@ -149,12 +183,55 @@ private struct TeamPanel: View {
     let now: Date
     // 내 행 판정용. store.session?.userID == member.id 인 행에만 아바타 편집을 붙인다.
     var myUserID: String? = nil
+    // owner 여부. true 이고 inviteCode 가 있으면 헤더에 참여코드 보기(키) 버튼을 붙인다.
+    var isOwner: Bool = false
+    // 내 팀 참여코드(owner 에게만 전달됨). 키 버튼을 누르면 인라인 행으로 펼쳐 보여 준다.
+    var inviteCode: String? = nil
+    // 스냅샷 전용: 참여코드 인라인 행이 펼쳐진 상태로 그린다(키 버튼 클릭을 대신). 앱은 false.
+    var previewCodeRevealed: Bool = false
     // 내 행 아바타 교체 시 다운스케일된 JPEG Data를 store.updateAvatar로 넘기는 콜백.
     var onUpdateAvatar: ((Data) -> Void)? = nil
     // 진입 버튼 액션. 팀별 현황 페이지를 연다.
     var onShowLeaderboard: (() -> Void)? = nil
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
+
+    // 키 버튼으로 토글하는 참여코드 인라인 노출 상태. 스냅샷은 previewCodeRevealed 로 시드된다.
+    @State private var showsInviteCode: Bool
+
+    init(
+        teamMembers: [TeamMemberStatus],
+        teamName: String,
+        teamGoalSeconds: Int,
+        fallbackStatus: String,
+        now: Date,
+        myUserID: String? = nil,
+        isOwner: Bool = false,
+        inviteCode: String? = nil,
+        previewCodeRevealed: Bool = false,
+        onUpdateAvatar: ((Data) -> Void)? = nil,
+        onShowLeaderboard: (() -> Void)? = nil,
+        clipsOverflowInsteadOfScroll: Bool = false
+    ) {
+        self.teamMembers = teamMembers
+        self.teamName = teamName
+        self.teamGoalSeconds = teamGoalSeconds
+        self.fallbackStatus = fallbackStatus
+        self.now = now
+        self.myUserID = myUserID
+        self.isOwner = isOwner
+        self.inviteCode = inviteCode
+        self.previewCodeRevealed = previewCodeRevealed
+        self.onUpdateAvatar = onUpdateAvatar
+        self.onShowLeaderboard = onShowLeaderboard
+        self.clipsOverflowInsteadOfScroll = clipsOverflowInsteadOfScroll
+        _showsInviteCode = State(initialValue: previewCodeRevealed)
+    }
+
+    // owner + 코드 보유 시에만 키 버튼/인라인 행을 노출한다.
+    private var canRevealCode: Bool {
+        isOwner && inviteCode != nil
+    }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -168,9 +245,22 @@ private struct TeamPanel: View {
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 CountChip(count: activeWorkingCount)
+                if canRevealCode {
+                    IconButton(
+                        icon: showsInviteCode ? "key.fill" : "key",
+                        help: showsInviteCode ? "참여코드 숨기기" : "참여코드 보기",
+                        tint: showsInviteCode ? CheckTheme.accent : CheckTheme.secondaryText
+                    ) {
+                        showsInviteCode.toggle()
+                    }
+                }
                 if let onShowLeaderboard {
                     IconButton(icon: "chart.bar.xaxis", help: "팀별 현황", action: onShowLeaderboard)
                 }
+            }
+            // 참여코드 인라인 행은 헤더 아래에만 나타나 상단 앵커 원칙(아래로만 성장)을 지킨다.
+            if canRevealCode, showsInviteCode, let inviteCode {
+                InviteCodeInlineRow(code: inviteCode)
             }
             TeamGoalGauge(goal: weeklyGoal)
             PanelDivider()
@@ -486,13 +576,50 @@ private struct LoginPanel: View {
         self.previewWarning = previewWarning
     }
 
+    // 가입(create 모드)에 성공하면 참여코드 공유 카드로 화면을 대체한다.
+    private var showsCreatedCode: Bool {
+        mode == .signUp && store.createdTeamCode != nil
+    }
+
     var body: some View {
         VStack(spacing: 12) {
-            BrandHeader(subtitle: mode == .signUp ? "sudo 박수 팀에 합류" : "sudo 박수 팀 근무 타이머")
-            PanelDivider()
-            VStack(spacing: 8) {
-                // 별명 필드는 두 모드에서 항상 자리를 차지하고 로그인 모드에선 opacity/hit-test만 꺼 둔다.
-                // 조건부 삽입/삭제로 인한 카드 높이 변화(모드 전환 시 창 튐)를 없애기 위함이다.
+            if showsCreatedCode, let code = store.createdTeamCode {
+                BrandHeader(subtitle: "팀 생성 완료")
+                PanelDivider()
+                CreatedTeamCodeCard(code: code) { store.dismissCreatedTeamCode() }
+            } else {
+                BrandHeader(subtitle: subtitle)
+                PanelDivider()
+                credentialFields
+                primaryButton
+                    .disabled(!store.canSync)
+                // 상태 배너 슬롯은 항상 확보하고 메시지 유무는 opacity로만 토글한다 — 오류 배너 등장 시 창 튐 제거.
+                AuthStatusLine(message: store.syncMessage)
+                    .opacity(store.syncMessage == "로그인 필요" ? 0 : 1)
+                    .accessibilityHidden(store.syncMessage == "로그인 필요")
+                links
+            }
+        }
+        .padding(14)
+        .panelStyle()
+        .animation(.easeInOut(duration: 0.22), value: mode)
+        .animation(.easeInOut(duration: 0.22), value: store.isCreateTeamMode)
+    }
+
+    private var subtitle: String {
+        switch mode {
+        case .signIn:
+            return "sudo 박수 팀 근무 타이머"
+        case .signUp:
+            return store.isCreateTeamMode ? "새 팀을 만들어요" : "팀 코드로 합류해요"
+        }
+    }
+
+    // 별명(가입만) / 이메일 / 비밀번호 + 가입 모드의 팀 코드 또는 팀 만들기 폼.
+    @ViewBuilder
+    private var credentialFields: some View {
+        VStack(spacing: 8) {
+            if mode == .signUp {
                 CredentialField(
                     title: "별명",
                     icon: "person.text.rectangle.fill",
@@ -502,59 +629,47 @@ private struct LoginPanel: View {
                     submitLabel: .next,
                     onSubmit: { advance(from: .displayName) }
                 )
-                .opacity(mode == .signUp ? 1 : 0)
-                .disabled(mode != .signUp)
-                .allowsHitTesting(mode == .signUp)
-                .accessibilityHidden(mode != .signUp)
-                // 팀 선택은 가입 모드에만 노출한다. 창이 고정 높이라 모드 간 카드 높이 차이는 튐을 만들지 않는다.
-                if mode == .signUp {
-                    TeamPickerField(
-                        teams: store.teamDirectory,
-                        selectedTeamID: Binding(
-                            get: { store.selectedSignupTeamID },
-                            set: { store.selectedSignupTeamID = $0 }
-                        )
+            }
+            CredentialField(
+                title: "이메일",
+                icon: "envelope.fill",
+                text: $store.email,
+                enforcesASCII: true,
+                allowsSpace: false,
+                focus: $focus,
+                fieldIdentifier: .email,
+                submitLabel: .next,
+                onSubmit: { advance(from: .email) }
+            )
+            CredentialField(
+                title: "비밀번호",
+                icon: "lock.fill",
+                text: $store.password,
+                isSecure: true,
+                enforcesASCII: true,
+                warnsInitially: previewWarning,
+                focus: $focus,
+                fieldIdentifier: .password,
+                submitLabel: .go,
+                onSubmit: { advance(from: .password) }
+            )
+            if mode == .signUp {
+                if store.isCreateTeamMode {
+                    // 팀 이름은 한글 허용(ASCII 강제 없음). 주간 목표는 스테퍼(1~168시간).
+                    CredentialField(
+                        title: "팀 이름",
+                        icon: "person.3.fill",
+                        text: $store.createTeamName
+                    )
+                    WeeklyGoalStepper(hours: $store.createTeamGoalHours)
+                } else {
+                    TeamCodeField(
+                        code: $store.signupTeamCode,
+                        preview: store.joinPreview,
+                        message: store.joinPreviewMessage,
+                        onDebouncedChange: { store.previewTeamCode() }
                     )
                 }
-                CredentialField(
-                    title: "이메일",
-                    icon: "envelope.fill",
-                    text: $store.email,
-                    enforcesASCII: true,
-                    allowsSpace: false,
-                    focus: $focus,
-                    fieldIdentifier: .email,
-                    submitLabel: .next,
-                    onSubmit: { advance(from: .email) }
-                )
-                CredentialField(
-                    title: "비밀번호",
-                    icon: "lock.fill",
-                    text: $store.password,
-                    isSecure: true,
-                    enforcesASCII: true,
-                    warnsInitially: previewWarning,
-                    focus: $focus,
-                    fieldIdentifier: .password,
-                    submitLabel: .go,
-                    onSubmit: { advance(from: .password) }
-                )
-            }
-            primaryButton
-                .disabled(!store.canSync)
-            // 상태 배너 슬롯은 항상 확보하고 메시지 유무는 opacity로만 토글한다 — 오류 배너 등장 시 창 튐 제거.
-            AuthStatusLine(message: store.syncMessage)
-                .opacity(store.syncMessage == "로그인 필요" ? 0 : 1)
-                .accessibilityHidden(store.syncMessage == "로그인 필요")
-            switchLink
-        }
-        .padding(14)
-        .panelStyle()
-        .animation(.easeInOut(duration: 0.22), value: mode)
-        .onAppear {
-            // 가입 모드로 진입한 상태면 팀 목록을 로드한다(모드 전환 경로는 switchMode 에서 처리).
-            if mode == .signUp {
-                store.loadTeamDirectory()
             }
         }
     }
@@ -579,7 +694,7 @@ private struct LoginPanel: View {
         }
     }
 
-    // 하나의 prominent 전체폭 버튼만 노출한다. 모드에 따라 로그인/가입으로 바뀐다.
+    // 하나의 prominent 전체폭 버튼만 노출한다. 모드/서브모드에 따라 로그인/가입/팀 만들기로 바뀐다.
     @ViewBuilder
     private var primaryButton: some View {
         switch mode {
@@ -588,9 +703,31 @@ private struct LoginPanel: View {
                 store.signIn()
             }
         case .signUp:
-            AuthButton(title: "가입", icon: "person.badge.plus", prominent: true) {
-                store.signUp()
+            if store.isCreateTeamMode {
+                AuthButton(title: "팀 만들고 시작하기", icon: "flag.fill", prominent: true) {
+                    store.signUp()
+                }
+            } else {
+                AuthButton(title: "가입", icon: "person.badge.plus", prominent: true) {
+                    store.signUp()
+                }
             }
+        }
+    }
+
+    // 가입 모드엔 두 개의 링크: (1) 코드↔팀 만들기 전환, (2) 로그인 복귀. 로그인 모드엔 가입 전환 하나.
+    @ViewBuilder
+    private var links: some View {
+        VStack(spacing: 8) {
+            if mode == .signUp {
+                AuthLinkButton(
+                    prompt: store.isCreateTeamMode ? "" : "팀 코드가 없나요?",
+                    action: store.isCreateTeamMode ? "코드로 참여하기" : "새 팀 만들기"
+                ) {
+                    toggleCreateTeamMode()
+                }
+            }
+            switchLink
         }
     }
 
@@ -608,15 +745,109 @@ private struct LoginPanel: View {
         }
     }
 
-    // 입력값(별명/이메일/비밀번호)은 유지하되, 이전 모드의 오류 배너가 새 모드에서 혼동을 주지 않도록 리셋한다.
+    // 코드 입력 ↔ 팀 만들기 폼 전환. 이전 코드 미리보기 잔상을 지워 혼동을 막는다.
+    private func toggleCreateTeamMode() {
+        store.isCreateTeamMode.toggle()
+        store.joinPreview = nil
+        store.joinPreviewMessage = ""
+    }
+
+    // 입력값은 유지하되, 이전 모드의 오류 배너가 새 모드에서 혼동을 주지 않도록 리셋한다.
     private func switchMode(to newMode: AuthMode) {
         if AuthMessageKind(store.syncMessage) == .error {
             store.syncMessage = "로그인 필요"
         }
         mode = newMode
-        // 가입 모드로 전환하는 순간 팀 목록을 로드한다(진입 경로는 onAppear 에서 처리).
+        // 가입은 항상 코드 입력으로 시작한다(팀 만들기는 하단 링크로 전환).
         if newMode == .signUp {
-            store.loadTeamDirectory()
+            store.isCreateTeamMode = false
+        }
+    }
+}
+
+// MARK: - Teamless panel (signed in, no team)
+
+/// 로그인은 됐지만 소속 팀이 없을 때(무소속) 메인 대신 보여 주는 간단 패널.
+/// 코드로 참여(참여하기) ↔ 새 팀 만들기 폼을 오간다. 코드 미리보기 UX는 가입 화면과 동일하다.
+private struct TeamlessPanel: View {
+    @Bindable var store: WorkTimerStore
+
+    var body: some View {
+        VStack(spacing: 12) {
+            if let code = store.createdTeamCode {
+                // 팀을 막 만든 직후 — 참여코드 공유 카드로 대체한다.
+                BrandHeader(subtitle: "팀 생성 완료")
+                PanelDivider()
+                CreatedTeamCodeCard(code: code) { store.dismissCreatedTeamCode() }
+            } else {
+                BrandHeader(subtitle: store.isCreateTeamMode ? "새 팀을 만들어요" : "합류할 팀을 찾아요")
+                PanelDivider()
+                if store.isCreateTeamMode {
+                    createForm
+                } else {
+                    joinForm
+                }
+                AuthStatusLine(message: store.syncMessage)
+                    .opacity(store.syncMessage == "동기화됨" || store.syncMessage == "로그인 필요" ? 0 : 1)
+                    .accessibilityHidden(store.syncMessage == "동기화됨" || store.syncMessage == "로그인 필요")
+                modeLink
+            }
+        }
+        .padding(14)
+        .panelStyle()
+        .animation(.easeInOut(duration: 0.22), value: store.isCreateTeamMode)
+    }
+
+    // 코드로 참여: 안내 문구 + 팀 코드 필드(미리보기) + [참여하기].
+    @ViewBuilder
+    private var joinForm: some View {
+        VStack(spacing: 10) {
+            Text("소속된 팀이 없어요. 팀 코드를 입력해 합류하세요.")
+                .font(.caption)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            TeamCodeField(
+                code: $store.signupTeamCode,
+                preview: store.joinPreview,
+                message: store.joinPreviewMessage,
+                onDebouncedChange: { store.previewTeamCode() }
+            )
+            AuthButton(title: "참여하기", icon: "person.badge.plus", prominent: true) {
+                store.joinTeamWithCode()
+            }
+            .disabled(!store.canSync)
+        }
+    }
+
+    // 새 팀 만들기: 팀 이름 + 주간 목표 스테퍼 + [팀 만들고 시작하기]. 가입 화면 폼과 같은 컨트롤을 재사용한다.
+    @ViewBuilder
+    private var createForm: some View {
+        VStack(spacing: 8) {
+            CredentialField(
+                title: "팀 이름",
+                icon: "person.3.fill",
+                text: $store.createTeamName
+            )
+            WeeklyGoalStepper(hours: $store.createTeamGoalHours)
+            AuthButton(title: "팀 만들고 시작하기", icon: "flag.fill", prominent: true) {
+                // 팀 생성은 가입 화면과 동일한 진입점(signUp)을 쓴다 — create 모드면 create_team 을 실행한다.
+                store.signUp()
+            }
+            .disabled(!store.canSync)
+        }
+    }
+
+    // 코드 참여 ↔ 새 팀 만들기 전환 링크. 전환 시 이전 코드 미리보기 잔상을 지운다.
+    @ViewBuilder
+    private var modeLink: some View {
+        AuthLinkButton(
+            prompt: store.isCreateTeamMode ? "" : "팀 코드가 없나요?",
+            action: store.isCreateTeamMode ? "코드로 참여하기" : "새 팀 만들기"
+        ) {
+            store.isCreateTeamMode.toggle()
+            store.joinPreview = nil
+            store.joinPreviewMessage = ""
         }
     }
 }

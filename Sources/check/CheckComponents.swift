@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // MARK: - Start / Stop pill
@@ -390,6 +391,8 @@ struct CredentialField: View {
     var enforcesASCII = false
     /// 공백 허용 여부. 비밀번호는 허용, 이메일은 차단한다. `enforcesASCII`일 때만 의미가 있다.
     var allowsSpace = true
+    /// true면 입력값을 대문자로 정규화해 표시한다(팀 코드 필드용). ASCII 필터와 함께 쓸 수 있다.
+    var uppercases = false
     /// 외부(패널) 포커스 상태. Enter-키 체이닝을 위해 부모가 소유하고 각 필드가 자기 케이스로 바인딩한다.
     /// nil이면 내부 isFocused만 쓰는 독립 필드(단위 테스트 등)로 동작한다.
     var focus: FocusState<AuthFocusField?>.Binding?
@@ -411,6 +414,7 @@ struct CredentialField: View {
         isSecure: Bool = false,
         enforcesASCII: Bool = false,
         allowsSpace: Bool = true,
+        uppercases: Bool = false,
         warnsInitially: Bool = false,
         focus: FocusState<AuthFocusField?>.Binding? = nil,
         fieldIdentifier: AuthFocusField? = nil,
@@ -423,6 +427,7 @@ struct CredentialField: View {
         self.isSecure = isSecure
         self.enforcesASCII = enforcesASCII
         self.allowsSpace = allowsSpace
+        self.uppercases = uppercases
         // warnsInitially는 렌더 스냅샷 등 미리보기에서 안내가 켜진 상태를 재현하기 위한 시드값이다.
         self._showWarning = State(initialValue: warnsInitially)
         self.focus = focus
@@ -483,12 +488,25 @@ struct CredentialField: View {
             EnglishInputSource.activate()
         }
         .onChange(of: text) { _, newValue in
-            guard enforcesASCII else { return }
-            let cleaned = ASCIIInputFilter.filtered(newValue, allowsSpace: allowsSpace)
-            // filtered == text면 대입을 건너뛰어 IME 조합 중간 상태에서의 무한루프를 막는다.
-            guard cleaned != newValue else { return }
-            text = cleaned
-            triggerWarning()
+            guard enforcesASCII || uppercases else { return }
+            var cleaned = newValue
+            var asciiRemoved = false
+            if enforcesASCII {
+                let filtered = ASCIIInputFilter.filtered(cleaned, allowsSpace: allowsSpace)
+                asciiRemoved = filtered != cleaned
+                cleaned = filtered
+            }
+            if uppercases {
+                cleaned = cleaned.uppercased()
+            }
+            // cleaned == newValue면 대입을 건너뛰어 IME 조합 중간 상태에서의 무한루프를 막는다.
+            if cleaned != newValue {
+                text = cleaned
+            }
+            // 안내는 ASCII 필터가 실제로 문자를 제거했을 때만 띄운다(대문자화는 안내 대상이 아님).
+            if asciiRemoved {
+                triggerWarning()
+            }
         }
         .onDisappear {
             warningTask?.cancel()
@@ -539,76 +557,252 @@ struct CredentialField: View {
     }
 }
 
-// MARK: - Team picker (signup)
+// MARK: - Team code preview slot (signup / teamless)
 
-/// 가입 화면 팀 선택 컨트롤. CredentialField 톤(아이콘 + 값/플레이스홀더 + 테두리)과 어울리는 Menu.
-/// - 선택 전: "소속 팀을 선택하세요"
-/// - 목록 비어 있음(로딩 중/실패): "팀 목록 불러오는 중…"
-/// - 선택 후: 선택한 팀 이름
-/// 미선택 상태로 가입을 눌러도 버튼 disable 없이 store 검증이 syncMessage로 안내한다(계약).
-struct TeamPickerField: View {
-    let teams: [TeamDirectoryEntry]
-    @Binding var selectedTeamID: String?
-
-    private var selectedName: String? {
-        guard let selectedTeamID else { return nil }
-        return teams.first(where: { $0.id == selectedTeamID })?.name
-    }
-
-    private var labelText: String {
-        if let selectedName {
-            return selectedName
-        }
-        return teams.isEmpty ? "팀 목록 불러오는 중…" : "소속 팀을 선택하세요"
-    }
+/// 팀 코드 필드 아래 고정 높이 슬롯. 코드 미리보기 결과를 한 줄로 보여 준다.
+/// - 성공(joinPreview 있음): 그린 "✓ 팀 브라보 · 3명 · 주 60시간"
+/// - 실패/안내(joinPreviewMessage 있음): danger 문구
+/// - 미확인(둘 다 없음): 비어 있지만 높이는 항상 확보해 입력 중 점프를 없앤다.
+struct TeamCodePreviewSlot: View {
+    let preview: TeamJoinPreview?
+    let message: String
 
     var body: some View {
-        Menu {
-            ForEach(teams) { team in
-                Button(team.name) { selectedTeamID = team.id }
+        HStack(spacing: 6) {
+            if let preview {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("팀 \(preview.name) · \(preview.memberCount)명 · 주 \(preview.weeklyGoalHours)시간")
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+            } else if !message.isEmpty {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(message)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
             }
-        } label: {
-            // 라벨을 별도 뷰로 분리해 앱(Menu 라벨)과 스냅샷(직접 렌더)이 같은 모양을 공유하게 한다.
-            // Menu 자체는 AppKit 백킹이라 ImageRenderer가 못 그리지만, 이 라벨 뷰는 순수 SwiftUI라
-            // 단독 렌더로 육안 확인이 가능하다.
-            TeamPickerLabel(text: labelText, isPlaceholder: selectedName == nil)
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .accessibilityLabel("팀 선택")
+        .foregroundStyle(preview != nil ? CheckTheme.working : CheckTheme.danger)
+        // 결과 유무와 무관하게 슬롯 높이를 고정해 코드 입력 중 카드 높이가 튀지 않게 한다.
+        .frame(maxWidth: .infinity, minHeight: 18, alignment: .leading)
     }
 }
 
-/// 팀 선택 컨트롤의 시각 표현(아이콘 + 값/플레이스홀더 + 셰브론 + 필드 테두리). CredentialField 톤과 맞춘다.
-struct TeamPickerLabel: View {
-    let text: String
-    /// 미선택(플레이스홀더/로딩) 상태면 secondary 톤, 선택되면 primary 톤으로 표시한다.
-    let isPlaceholder: Bool
+// MARK: - Team code field (signup / teamless)
+
+/// 팀 코드 입력 필드 + 미리보기 슬롯 묶음. CredentialField(대문자·ASCII) + TeamCodePreviewSlot.
+/// 입력이 바뀌면 ~0.5초 디바운스 후 onDebouncedChange 로 미리보기 갱신을 요청한다(디바운스는 UI 몫).
+struct TeamCodeField: View {
+    @Binding var code: String
+    let preview: TeamJoinPreview?
+    let message: String
+    /// 디바운스가 끝난 뒤 호출된다(store.previewTeamCode() 배선용).
+    var onDebouncedChange: () -> Void = {}
+
+    @State private var debounceTask: Task<Void, Never>?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            CredentialField(
+                title: "팀 코드",
+                icon: "key.fill",
+                text: $code,
+                enforcesASCII: true,
+                allowsSpace: false,
+                uppercases: true
+            )
+            TeamCodePreviewSlot(preview: preview, message: message)
+        }
+        .onChange(of: code) { _, _ in
+            debounceTask?.cancel()
+            debounceTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(0.5))
+                guard !Task.isCancelled else { return }
+                onDebouncedChange()
+            }
+        }
+        .onDisappear { debounceTask?.cancel() }
+    }
+}
+
+// MARK: - Weekly goal stepper (create team)
+
+/// 팀 만들기 폼의 주간 목표 스테퍼. 필드 톤 + 순수 SwiftUI -/+ 버튼(ImageRenderer 렌더 가능).
+/// 범위 1~168시간, "N시간" 표기.
+struct WeeklyGoalStepper: View {
+    @Binding var hours: Int
+    let range: ClosedRange<Int> = 1...168
 
     var body: some View {
         HStack(spacing: 9) {
-            Image(systemName: "person.3.fill")
+            Image(systemName: "target")
                 .font(.system(size: 12))
                 .foregroundStyle(CheckTheme.secondaryText)
                 .frame(width: 16)
-            Text(text)
+            Text("주간 목표")
                 .font(.subheadline)
-                .foregroundStyle(isPlaceholder ? CheckTheme.secondaryText : CheckTheme.primaryText)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(CheckTheme.secondaryText)
+                .foregroundStyle(CheckTheme.primaryText)
+            Spacer(minLength: 6)
+            Text("\(hours)시간")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(CheckTheme.primaryText)
+                .monospacedDigit()
+            HStack(spacing: 0) {
+                stepButton(icon: "minus", enabled: hours > range.lowerBound) {
+                    hours = max(range.lowerBound, hours - 1)
+                }
+                Rectangle()
+                    .fill(CheckTheme.border)
+                    .frame(width: 1, height: 18)
+                stepButton(icon: "plus", enabled: hours < range.upperBound) {
+                    hours = min(range.upperBound, hours + 1)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(Color.white.opacity(0.06))
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(CheckTheme.border, lineWidth: 1))
+            )
         }
         .padding(.horizontal, 11)
-        .padding(.vertical, 9)
+        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(CheckTheme.fieldFill)
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(CheckTheme.border, lineWidth: 1))
         )
-        .contentShape(Rectangle())
+    }
+
+    private func stepButton(icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(enabled ? CheckTheme.primaryText : CheckTheme.secondaryText.opacity(0.4))
+                .frame(width: 28, height: 26)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+}
+
+// MARK: - Created-team invite code share card
+
+/// 팀 생성 직후 참여코드 공유 카드. 큰 모노스페이스 코드 + [복사] + 안내 + [확인].
+/// 로그인/무소속 패널이 createdTeamCode 존재 시 폼 대신 이 카드를 보여 준다.
+struct CreatedTeamCodeCard: View {
+    let code: String
+    var onConfirm: () -> Void = {}
+
+    @State private var copied = false
+
+    var body: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 4) {
+                Image(systemName: "party.popper.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(CheckTheme.working)
+                Text("팀이 만들어졌어요")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+            }
+            Text(code)
+                .font(.system(size: 30, weight: .heavy, design: .monospaced))
+                .foregroundStyle(CheckTheme.primaryText)
+                .tracking(4)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(CheckTheme.fieldFill)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(CheckTheme.border, lineWidth: 1))
+                )
+            Text("팀원에게 이 코드를 전달하세요")
+                .font(.caption)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .lineLimit(1)
+            HStack(spacing: 8) {
+                Button {
+                    CheckPasteboard.copy(code)
+                    copied = true
+                } label: {
+                    Label(copied ? "복사됨" : "복사", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 34)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.white.opacity(0.06))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(CheckTheme.border, lineWidth: 1))
+                        )
+                }
+                .buttonStyle(.plain)
+                AuthButton(title: "확인", icon: "checkmark.circle.fill", prominent: true, action: onConfirm)
+            }
+        }
+    }
+}
+
+// MARK: - Owner invite code reveal (team card header)
+
+/// 팀 카드 헤더에서 키 버튼을 눌렀을 때 인라인으로 펼쳐지는 참여코드 행.
+/// 모노스페이스 코드 + [복사] 버튼. 상단 앵커 원칙상 헤더 아래로만 자란다.
+struct InviteCodeInlineRow: View {
+    let code: String
+
+    @State private var copied = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "key.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(CheckTheme.accent)
+            Text("참여코드")
+                .font(.caption2)
+                .foregroundStyle(CheckTheme.secondaryText)
+            Text(code)
+                .font(.system(.subheadline, design: .monospaced).weight(.bold))
+                .foregroundStyle(CheckTheme.primaryText)
+                .tracking(2)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            Button {
+                CheckPasteboard.copy(code)
+                copied = true
+            } label: {
+                Label(copied ? "복사됨" : "복사", systemImage: copied ? "checkmark" : "doc.on.doc")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(CheckTheme.accent)
+                    .padding(.horizontal, 10)
+                    .frame(height: 26)
+                    .background(Capsule().fill(CheckTheme.accent.opacity(0.16)))
+                    .fixedSize()
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 9)
+                .fill(CheckTheme.accent.opacity(0.10))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(CheckTheme.accent.opacity(0.35), lineWidth: 1))
+        )
+    }
+}
+
+// MARK: - Pasteboard helper
+
+/// NSPasteboard 복사 래퍼. 참여코드 공유(복사 버튼)에 쓴다.
+enum CheckPasteboard {
+    static func copy(_ string: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(string, forType: .string)
     }
 }
 
@@ -656,8 +850,11 @@ struct AuthLinkButton: View {
     var body: some View {
         Button(action: perform) {
             HStack(spacing: 5) {
-                Text(prompt)
-                    .foregroundStyle(CheckTheme.secondaryText)
+                // 안내 문구가 비어 있으면(예: "코드로 참여하기" 단독) 링크 단어만 보인다.
+                if !prompt.isEmpty {
+                    Text(prompt)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                }
                 Text(action)
                     .foregroundStyle(CheckTheme.accent)
                     .underline(hovering)

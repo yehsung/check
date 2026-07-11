@@ -15,8 +15,7 @@ func signUpSendsEmailAndPasswordToSupabaseAuth() async throws {
     let session = try await service.signUp(
         email: "member@example.com",
         password: "team-password",
-        displayName: "영식",
-        teamID: "10000000-0000-0000-0000-000000000001"
+        displayName: "영식"
     )
 
     #expect(session?.userID == "00000000-0000-0000-0000-000000000002")
@@ -26,8 +25,8 @@ func signUpSendsEmailAndPasswordToSupabaseAuth() async throws {
     #expect(bodyText.contains("\"email\":\"member@example.com\""))
     #expect(bodyText.contains("\"password\":\"team-password\""))
     #expect(bodyText.contains("\"display_name\":\"영식\""))
-    // 선택한 팀이 가입 메타데이터로 전송되어야 한다(트리거가 이 팀으로 멤버십을 만든다).
-    #expect(bodyText.contains("\"team_id\":\"10000000-0000-0000-0000-000000000001\""))
+    // 가입은 이제 계정만 만든다 — 팀 메타데이터(team_id)는 보내지 않는다(트리거가 팀을 만들지 않으므로).
+    #expect(!bodyText.contains("\"team_id\""))
 }
 
 @Test
@@ -71,7 +70,7 @@ func signUpReportsInvalidAPIKey() async throws {
     )
 
     do {
-        _ = try await service.signUp(email: "member@example.com", password: "team-password", displayName: "영식", teamID: "10000000-0000-0000-0000-000000000001")
+        _ = try await service.signUp(email: "member@example.com", password: "team-password", displayName: "영식")
         Issue.record("signUp should fail with invalidAPIKey")
     } catch let error as SupabaseWorkServiceError {
         #expect(error == .invalidAPIKey)
@@ -273,26 +272,136 @@ func fetchTeamStatusesUsesProvidedTeamIDInQuery() async throws {
 }
 
 @Test
-func fetchTeamDirectoryPostsRPCWithAnonBearer() async throws {
-    let testHost = "team-directory-test"
+func lookupTeamByCodePostsRPCWithAnonBearerAndNormalizes() async throws {
+    let testHost = "lookup-code-test"
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(testHost)")!,
         anonKey: "anon-test-key",
         session: URLSession(configuration: .stubbed)
     )
 
-    let directory = try await service.fetchTeamDirectory()
+    // 소문자·공백 섞인 입력을 넣어도 정규화("X7K2M9Q4")된 코드만 서버로 나가야 한다.
+    let preview = try await service.lookupTeamByCode(code: "x7k2 m9q4")
 
-    #expect(directory == [
-        TeamDirectoryEntry(id: "10000000-0000-0000-0000-000000000001", name: "sudo 박수"),
-        TeamDirectoryEntry(id: "20000000-0000-0000-0000-000000000002", name: "오목교 브라더스")
-    ])
+    #expect(preview == TeamJoinPreview(
+        teamID: "10000000-0000-0000-0000-000000000001",
+        name: "sudo 박수",
+        weeklyGoalHours: 40,
+        memberCount: 3
+    ))
     let rpcRequest = try #require(URLProtocolStub.requests(forHost: testHost).first {
-        $0.url?.path == "/rest/v1/rpc/team_directory"
+        $0.url?.path == "/rest/v1/rpc/lookup_team_by_code"
     })
     #expect(rpcRequest.httpMethod == "POST")
-    // accessToken 없이 anonKey 를 Bearer 로 사용해 호출한다.
+    // 가입 전에도 쓰이므로 accessToken 없이 anonKey 를 Bearer 로 사용한다.
     #expect(rpcRequest.value(forHTTPHeaderField: "Authorization") == "Bearer anon-test-key")
+    // 전송 본문은 정규화된 코드여야 한다(대문자화 + 공백/하이픈 제거).
+    #expect(URLProtocolStub.bodyText(forHost: testHost).contains(#""code":"X7K2M9Q4""#))
+}
+
+@Test
+func lookupTeamByCodeReturnsNilOnMiss() async throws {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://lookup-code-miss")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let preview = try await service.lookupTeamByCode(code: "NOSUCHXX")
+
+    #expect(preview == nil)
+}
+
+@Test
+func joinTeamPostsRPCWithAccessTokenAndDecodesTeam() async throws {
+    let testHost = "join-code-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let joined = try await service.joinTeam(accessToken: "access-token", code: "sudo-park")
+
+    #expect(joined?.teamID == "10000000-0000-0000-0000-000000000001")
+    #expect(joined?.goalHours == 40)
+    let rpcRequest = try #require(URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/rpc/join_team"
+    })
+    #expect(rpcRequest.httpMethod == "POST")
+    // 로그인 토큰을 Bearer 로 사용한다(합류는 authenticated 전용).
+    #expect(rpcRequest.value(forHTTPHeaderField: "Authorization") == "Bearer access-token")
+    #expect(URLProtocolStub.bodyText(forHost: testHost).contains(#""code":"SUDOPARK""#))
+}
+
+@Test
+func joinTeamReturnsNilOnMiss() async throws {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://join-code-miss")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let joined = try await service.joinTeam(accessToken: "access-token", code: "NOSUCHXX")
+
+    #expect(joined == nil)
+}
+
+@Test
+func createTeamPostsRPCAndDecodesInviteCode() async throws {
+    let testHost = "create-team-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let created = try await service.createTeam(accessToken: "access-token", name: "새로운 팀", goalHours: 50)
+
+    #expect(created.teamID == "10000000-0000-0000-0000-000000000001")
+    #expect(created.inviteCode == "X7K2M9Q4")
+    #expect(created.goalHours == 50)
+    let rpcRequest = try #require(URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/rpc/create_team"
+    })
+    #expect(rpcRequest.httpMethod == "POST")
+    #expect(rpcRequest.value(forHTTPHeaderField: "Authorization") == "Bearer access-token")
+    // 팀명/목표시간이 snake_case 본문으로 전송되어야 한다.
+    let bodyText = URLProtocolStub.bodyText(forHost: testHost)
+    #expect(bodyText.contains("\"team_name\":\"새로운 팀\""))
+    #expect(bodyText.contains("\"goal_hours\":50"))
+}
+
+@Test
+func fetchMyInviteCodeDecodesCodeForOwner() async throws {
+    let testHost = "invite-code-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let code = try await service.fetchMyInviteCode(accessToken: "access-token")
+
+    #expect(code == "SUDOPARK")
+    let rpcRequest = try #require(URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/rpc/my_team_invite_code"
+    })
+    #expect(rpcRequest.httpMethod == "POST")
+    #expect(rpcRequest.value(forHTTPHeaderField: "Authorization") == "Bearer access-token")
+}
+
+@Test
+func fetchMyInviteCodeReturnsNilForNonOwner() async throws {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://invite-code-member")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let code = try await service.fetchMyInviteCode(accessToken: "access-token")
+
+    #expect(code == nil)
 }
 
 // MARK: - K: 팀 리그
@@ -342,12 +451,15 @@ func fetchOwnMembershipParsesTeamIDAndName() async throws {
     #expect(membership?.teamName == "sudo 박수")
     // 임베드된 teams.weekly_goal_hours 를 같은 쿼리로 함께 읽어 온다.
     #expect(membership?.goalHours == 40)
+    // 역할(role)도 같은 쿼리로 함께 읽어 온다(owner 판정 → 참여코드 로드에 쓴다).
+    #expect(membership?.role == "member")
     let request = try #require(URLProtocolStub.requests(forHost: testHost).first {
         $0.url?.path == "/rest/v1/memberships"
     })
     #expect(request.url?.query?.contains("user_id=eq.00000000-0000-0000-0000-000000000002") == true)
-    // select 가 teams(name,weekly_goal_hours)로 확장되어야 한다.
+    // select 가 role, teams(name,weekly_goal_hours)로 확장되어야 한다.
     #expect(request.url?.query?.contains("weekly_goal_hours") == true)
+    #expect(request.url?.query?.contains("role") == true)
 }
 
 @Test

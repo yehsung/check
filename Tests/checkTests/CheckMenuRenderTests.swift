@@ -10,6 +10,8 @@ func checkMenuViewRendersSnapshot() throws {
         "CHECK_SUPABASE_ANON_KEY": "local-test-key"
     ], defaults: isolatedRenderDefaults())
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    // 팀이 확정돼 있어야(currentTeamID != nil) 무소속 패널이 아닌 메인 팀 화면이 그려진다.
+    store.currentTeamID = URLProtocolStub.stubTeamID
     store.teamMembers = [
         TeamMemberStatus(
             id: "00000000-0000-0000-0000-000000000002",
@@ -58,6 +60,7 @@ func checkMenuViewRendersCompletedWeeklyGoalSnapshot() throws {
         defaults: isolatedRenderDefaults()
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.currentTeamID = URLProtocolStub.stubTeamID
     store.teamMembers = [
         TeamMemberStatus(
             id: "00000000-0000-0000-0000-000000000002",
@@ -325,11 +328,8 @@ func windowHeightAdaptsToContentWithinCap() throws {
     // (c) 스크롤 상한: 7명 초과(10명)도 높이는 7행(maxVisibleRows)에서 고정된다.
     #expect(main10 == main7)
 
-    // (d) 모든 상태 ≤ 700pt (scale 2 → 픽셀/2). 로그인/오류/가입/메인 각종/12h 배너/리더보드(3팀·상한) 포함.
-    let signupStore = makeLoginStore(syncMessage: "로그인 필요")
-    signupStore.displayName = "영식"
-    signupStore.teamDirectory = sampleTeamDirectory
-    signupStore.selectedSignupTeamID = sampleTeamDirectory.first?.id
+    // (d) 모든 상태 ≤ 700pt (scale 2 → 픽셀/2). 로그인/오류/가입(코드/만들기)/코드공유/무소속/owner/
+    //     메인 각종/12h 배너/리더보드(3팀·상한) 포함.
 
     // 리더보드 스크롤 상한(6팀 초과)까지 채운 상태 — 팀 행이 팀원 행보다 높으므로 상한 검증에 포함.
     let cappedLeaderboardStore = makeTeamStore(members: [], now: now)
@@ -340,7 +340,18 @@ func windowHeightAdaptsToContentWithinCap() throws {
     let allHeights: [Int] = try [
         login,
         try #require(renderedPixelHeight(CheckMenuView(store: makeLoginStore(syncMessage: "로그인 정보 오류"), previewASCIIWarning: true))),
-        try #require(renderedPixelHeight(CheckMenuView(store: signupStore, initialAuthMode: .signUp))),
+        // 가입(코드 모드) — 미리보기 성공/실패.
+        try #require(renderedPixelHeight(CheckMenuView(store: signupCodeStore(preview: true), initialAuthMode: .signUp))),
+        try #require(renderedPixelHeight(CheckMenuView(store: signupCodeStore(preview: false), initialAuthMode: .signUp))),
+        // 가입(팀 만들기 모드).
+        try #require(renderedPixelHeight(CheckMenuView(store: createTeamStore(), initialAuthMode: .signUp))),
+        // 가입 성공 직후 코드 공유 카드.
+        try #require(renderedPixelHeight(CheckMenuView(store: createdCodeStore(), initialAuthMode: .signUp))),
+        // 무소속 패널(코드 참여 / 새 팀 만들기).
+        try #require(renderedPixelHeight(CheckMenuView(store: teamlessStore(createMode: false)))),
+        try #require(renderedPixelHeight(CheckMenuView(store: teamlessStore(createMode: true)))),
+        // owner 팀 카드에서 참여코드 인라인 노출.
+        try #require(renderedPixelHeight(CheckMenuView(store: ownerCodeStore(now: now), previewOwnerCodeRevealed: true))),
         try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: [], now: now)))),
         try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now)))),
         main10,
@@ -510,35 +521,22 @@ func dumpTrackFSnapshots() throws {
     let loginStore = makeLoginStore(syncMessage: "로그인 필요")
     try write(CheckMenuView(store: loginStore), "login.png")
 
-    // 팀 선택 라벨(Menu는 AppKit 백킹이라 ImageRenderer가 못 그리므로 라벨만 단독 렌더로 확인).
-    try write(
-        TeamPickerLabel(text: "소속 팀을 선택하세요", isPlaceholder: true).padding(20).background(CheckTheme.panel),
-        "team-picker-placeholder.png", width: 316
-    )
-    try write(
-        TeamPickerLabel(text: "sudo 박수", isPlaceholder: false).padding(20).background(CheckTheme.panel),
-        "team-picker-selected.png", width: 316
-    )
-    try write(
-        TeamPickerLabel(text: "팀 목록 불러오는 중…", isPlaceholder: true).padding(20).background(CheckTheme.panel),
-        "team-picker-loading.png", width: 316
-    )
+    // 가입(코드 모드): 미리보기 성공 / 실패.
+    try write(CheckMenuView(store: signupCodeStore(preview: true), initialAuthMode: .signUp), "signup-code-success.png")
+    try write(CheckMenuView(store: signupCodeStore(preview: false), initialAuthMode: .signUp), "signup-code-fail.png")
 
-    // 가입 모드: 팀 선택 전(플레이스홀더) / 후(선택된 팀 이름).
-    let signupBefore = makeLoginStore(syncMessage: "로그인 필요")
-    signupBefore.displayName = "영식"
-    signupBefore.email = "member@example.com"
-    signupBefore.password = "team-password"
-    signupBefore.teamDirectory = sampleTeamDirectory
-    try write(CheckMenuView(store: signupBefore, initialAuthMode: .signUp), "signup-before-selection.png")
+    // 가입(팀 만들기 모드).
+    try write(CheckMenuView(store: createTeamStore(), initialAuthMode: .signUp), "signup-create-team.png")
 
-    let signupAfter = makeLoginStore(syncMessage: "로그인 필요")
-    signupAfter.displayName = "영식"
-    signupAfter.email = "member@example.com"
-    signupAfter.password = "team-password"
-    signupAfter.teamDirectory = sampleTeamDirectory
-    signupAfter.selectedSignupTeamID = sampleTeamDirectory.first?.id
-    try write(CheckMenuView(store: signupAfter, initialAuthMode: .signUp), "signup-after-selection.png")
+    // 가입 성공 직후 참여코드 공유 카드.
+    try write(CheckMenuView(store: createdCodeStore(), initialAuthMode: .signUp), "created-code-card.png")
+
+    // 무소속 패널: 코드 참여 / 새 팀 만들기.
+    try write(CheckMenuView(store: teamlessStore(createMode: false)), "teamless-join.png")
+    try write(CheckMenuView(store: teamlessStore(createMode: true)), "teamless-create.png")
+
+    // owner 팀 카드에서 참여코드 인라인 노출.
+    try write(CheckMenuView(store: ownerCodeStore(now: now), previewOwnerCodeRevealed: true), "owner-code-revealed.png")
 
     // 메인: 0명 / 2명 / 3명(presence) / 5명 / 10명(스크롤 상한).
     // 창 높이는 이제 팀원 수에 비례(2<5<7)해 자라고 7행에서 상한. 10명은 previewClipsOverflowList로
@@ -583,6 +581,8 @@ private func makeSignedInStore() -> WorkTimerStore {
         defaults: isolatedRenderDefaults()
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.teamName = "sudo 박수"
     store.teamMembers = [
         TeamMemberStatus(
             id: "00000000-0000-0000-0000-000000000002",
@@ -606,9 +606,9 @@ private func makeTeamStore(members: [TeamMemberStatus], now: Date = Date()) -> W
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
     store.displayNow = now
     store.teamMembers = members
-    // 팀 카드 헤더 이름이 "팀" 플레이스홀더가 아닌 실제 이름으로 나오도록 스텁 팀명을 확정한다.
-    store.teamDirectory = sampleTeamDirectory
-    store.selectedSignupTeamID = sampleTeamDirectory.first?.id
+    // 팀이 확정된 상태(무소속 아님) + 헤더 이름을 "팀" 플레이스홀더가 아닌 실제 이름으로 확정한다.
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.teamName = "sudo 박수"
     return store
 }
 
@@ -682,12 +682,71 @@ private func makeLeaderboardStore() -> WorkTimerStore {
     return store
 }
 
-/// 가입 화면 팀 선택 스텁 표본.
-private let sampleTeamDirectory: [TeamDirectoryEntry] = [
-    TeamDirectoryEntry(id: "10000000-0000-0000-0000-000000000001", name: "sudo 박수"),
-    TeamDirectoryEntry(id: "10000000-0000-0000-0000-000000000002", name: "새벽 러너스"),
-    TeamDirectoryEntry(id: "10000000-0000-0000-0000-000000000003", name: "코드 크래프터")
-]
+/// 가입(코드 모드) 스토어. preview=true 면 미리보기 성공(브라보 팀), false 면 실패 안내를 세팅한다.
+@MainActor
+private func signupCodeStore(preview: Bool) -> WorkTimerStore {
+    let store = makeLoginStore(syncMessage: "로그인 필요")
+    store.displayName = "영식"
+    store.isCreateTeamMode = false
+    if preview {
+        store.signupTeamCode = "BRAVO123"
+        store.joinPreview = TeamJoinPreview(teamID: URLProtocolStub.stubTeamID, name: "브라보", weeklyGoalHours: 60, memberCount: 3)
+        store.joinPreviewMessage = ""
+    } else {
+        store.signupTeamCode = "ZZZZ99"
+        store.joinPreview = nil
+        store.joinPreviewMessage = "팀 코드를 확인해 주세요"
+    }
+    return store
+}
+
+/// 가입(팀 만들기 모드) 스토어. 팀명 + 주간 목표 폼이 채워진 상태.
+@MainActor
+private func createTeamStore() -> WorkTimerStore {
+    let store = makeLoginStore(syncMessage: "로그인 필요")
+    store.displayName = "영식"
+    store.isCreateTeamMode = true
+    store.createTeamName = "새벽 러너스"
+    store.createTeamGoalHours = 72
+    return store
+}
+
+/// 가입 성공 직후 참여코드 공유 카드가 뜬 스토어.
+@MainActor
+private func createdCodeStore() -> WorkTimerStore {
+    let store = makeLoginStore(syncMessage: "동기화됨")
+    store.isCreateTeamMode = true
+    store.createTeamName = "새벽 러너스"
+    store.createdTeamCode = "BRAVO123"
+    return store
+}
+
+/// 무소속(로그인됨·팀 없음) 스토어. createMode=true 면 새 팀 만들기 폼, false 면 코드 참여 폼.
+@MainActor
+private func teamlessStore(createMode: Bool) -> WorkTimerStore {
+    let store = makeSignedInStore()
+    // 무소속으로 강제(currentTeamID=nil) → isTeamless == true.
+    store.currentTeamID = nil
+    store.teamMembers = []
+    store.syncMessage = "동기화됨"
+    store.isCreateTeamMode = createMode
+    if createMode {
+        store.createTeamName = "새벽 러너스"
+        store.createTeamGoalHours = 60
+    } else {
+        store.signupTeamCode = "BRAVO123"
+        store.joinPreview = TeamJoinPreview(teamID: URLProtocolStub.stubTeamID, name: "브라보", weeklyGoalHours: 60, memberCount: 3)
+    }
+    return store
+}
+
+/// owner 팀 카드(참여코드 인라인 노출)용 스토어. 3인 팀 + 초대코드 보유(→ isTeamOwner true).
+@MainActor
+private func ownerCodeStore(now: Date) -> WorkTimerStore {
+    let store = makeTeamStore(members: presenceMembers(now: now), now: now)
+    store.myTeamInviteCode = "BRAVO123"
+    return store
+}
 
 /// 뷰를 지정 폭 고정으로 렌더해 PNG Data를 돌려준다. 스냅샷/카운트 확인 공용.
 @MainActor

@@ -2,12 +2,16 @@ import Foundation
 import Testing
 @testable import check
 
-// 트랙 C — 라이브 E2E.
+// 트랙 A — 라이브 E2E(초대코드 흐름).
 // 실제 프로덕션 Supabase(xfnhfjvubetkdnfkfljg.supabase.co)에 실제 WorkTimerStore + 실제
 // SupabaseWorkService(URLSession.shared)를 연결해 스토어 레벨로 전체 흐름을 구동한다.
 // 게이팅: CHECK_E2E=1 일 때만 실행되며, 평소 swift test 에서는 전부 스킵된다.
+// 이 초대코드 마이그레이션은 아직 원격에 미적용이므로 라이브 실행은 하지 않는다(컴파일 + 게이트오프 스킵만).
 // anon key 는 /Users/yesung/check/.env.local 에서, 정리용 service_role 키는
 // CHECK_E2E_SR_KEY_FILE 이 가리키는 apikeys.json 에서 읽는다. 키 원문은 절대 출력하지 않는다.
+//
+// 안전 규칙: 이 스위트는 오직 E2E 전용 계정과 "E2E-" 로 시작하는 이름의 팀만 만들고 지운다.
+// 실팀(sudo 박수=SUDOPARK, 낭만러너 김유정=RUNNER01)과 그 소속 데이터는 절대 건드리지 않는다.
 
 // MARK: - 에러/관측
 
@@ -18,7 +22,10 @@ private struct E2EError: Error, CustomStringConvertible {
 }
 
 private enum LiveE2EState {
-    nonisolated(unsafe) static var primaryUserID: String?
+    nonisolated(unsafe) static var ownerUserID: String?
+    nonisolated(unsafe) static var joinerUserID: String?
+    nonisolated(unsafe) static var e2eTeamID: String?
+    nonisolated(unsafe) static var e2eTeamCode: String?
     nonisolated(unsafe) static var recordedDurationSeconds: Int?
     nonisolated(unsafe) static var observations: [String] = []
 }
@@ -31,7 +38,9 @@ private func obs(_ line: String) {
 // MARK: - 고정 QA 자격/문구
 
 private enum Emails {
-    static let primary = "check.e2e.livesuite@gmail.com"
+    // owner: E2E 전용 팀을 만드는 계정. joiner: 그 팀 코드로 합류하는 두 번째 계정.
+    static let owner = "check.e2e.owner@gmail.com"
+    static let joiner = "check.e2e.joiner@gmail.com"
     static let nickname = "check.e2e.nickname@gmail.com"
     static let ghost = "check.e2e.ghost.doesnotexist@gmail.com"
     static let password = "E2E-qa-Passw0rd!23"
@@ -40,9 +49,13 @@ private enum Emails {
     static let edgeDisplayName = "가나다라마바사아자차카타파하거너더러머버" + "🎉🚀✨🌟💪🔥😀🙌🐣🌈"
 }
 
-private enum Teams {
-    // 멀티팀 트리거 신동작: 가입 시 selectedSignupTeamID 로 팀을 명시해야 트리거가 그 팀 멤버십을 만든다.
-    static let sudoParkID = "10000000-0000-0000-0000-000000000001"
+private enum E2ETeam {
+    // 실팀과 절대 겹치지 않는 접두사. 생성/정리는 이 접두사로만 스코프한다.
+    static let namePrefix = "E2E-리그-테스트"
+    static let goalHours = 42
+    static func uniqueName() -> String {
+        "\(namePrefix)-\(UUID().uuidString.prefix(8))"
+    }
 }
 
 // MARK: - 키 로딩 (파일 → 값 주입)
@@ -248,17 +261,21 @@ private struct E2EAdmin: Sendable {
         ]).first?["display_name"] as? String
     }
 
-    func membershipCount(userID: String) async throws -> Int {
+    func membershipRows(userID: String) async throws -> [[String: Any]] {
         try await rows("memberships", [
             URLQueryItem(name: "user_id", value: "eq.\(userID)"),
-            URLQueryItem(name: "select", value: "user_id")
-        ]).count
+            URLQueryItem(name: "select", value: "team_id,role")
+        ])
+    }
+
+    func membershipCount(userID: String) async throws -> Int {
+        try await membershipRows(userID: userID).count
     }
 
     func statusRows(userID: String) async throws -> [[String: Any]] {
         try await rows("work_statuses", [
             URLQueryItem(name: "user_id", value: "eq.\(userID)"),
-            URLQueryItem(name: "select", value: "status,active_session_id")
+            URLQueryItem(name: "select", value: "status,active_session_id,team_id")
         ])
     }
 
@@ -293,6 +310,66 @@ private struct E2EAdmin: Sendable {
             }
         }
         return total
+    }
+
+    // MARK: 팀 헬퍼 (E2E 전용 팀만 스코프)
+
+    /// 이름이 접두사로 시작하는 팀들. 실팀은 이 접두사를 절대 쓰지 않으므로 안전하다.
+    func teams(namePrefix prefix: String) async throws -> [[String: Any]] {
+        try await rows("teams", [
+            URLQueryItem(name: "name", value: "like.\(prefix)*"),
+            URLQueryItem(name: "select", value: "id,name,invite_code")
+        ])
+    }
+
+    func teamName(id: String) async throws -> String? {
+        try await rows("teams", [
+            URLQueryItem(name: "id", value: "eq.\(id)"),
+            URLQueryItem(name: "select", value: "name")
+        ]).first?["name"] as? String
+    }
+
+    func teamExists(inviteCode: String) async throws -> Bool {
+        try await rows("teams", [
+            URLQueryItem(name: "invite_code", value: "eq.\(inviteCode)"),
+            URLQueryItem(name: "select", value: "id")
+        ]).isEmpty == false
+    }
+
+    func teamMemberCount(teamID: String) async throws -> Int {
+        try await rows("memberships", [
+            URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
+            URLQueryItem(name: "select", value: "user_id")
+        ]).count
+    }
+
+    /// 안전 삭제: 반드시 이름 접두사가 E2E 접두사여야 지운다(실팀 보호 이중 가드).
+    @discardableResult
+    func deleteTeamIfE2E(id: String) async throws -> Bool {
+        guard let name = try await teamName(id: id), name.hasPrefix(E2ETeam.namePrefix) else {
+            return false
+        }
+        let (data, code) = try await send(
+            path: "/rest/v1/teams",
+            method: "DELETE",
+            query: [URLQueryItem(name: "id", value: "eq.\(id)")]
+        )
+        guard code == 200 || code == 204 else {
+            throw E2EError("팀 삭제 HTTP \(code): \(String(decoding: data, as: UTF8.self))")
+        }
+        return true
+    }
+
+    /// E2E 접두사 팀 전체 삭제(멱등 정리). 삭제한 개수를 돌려준다.
+    @discardableResult
+    func deleteAllE2ETeams() async throws -> Int {
+        var deleted = 0
+        for team in try await teams(namePrefix: E2ETeam.namePrefix) {
+            if let id = team["id"] as? String, try await deleteTeamIfE2E(id: id) {
+                deleted += 1
+            }
+        }
+        return deleted
     }
 }
 
@@ -341,32 +418,83 @@ private func makeContext() throws -> (anonKey: String, admin: E2EAdmin) {
     return (anonKey, admin)
 }
 
-/// primary 계정이 반드시 존재하도록 보장하고 userID 를 돌려준다(순서 흔들림 대비 자가치유).
+/// 만들기 모드로 가입하며 E2E 전용 팀을 새로 만든다(계정 + owner 멤버십 + 참여코드).
 @MainActor
-private func ensurePrimaryAccount(anonKey: String, admin: E2EAdmin) async throws -> String {
-    if let cached = LiveE2EState.primaryUserID,
-       (try? await admin.profileCount(userID: cached)) == 1 {
-        return cached
+private func signUpCreatingE2ETeam(
+    store: WorkTimerStore,
+    email: String,
+    displayName: String,
+    teamName: String
+) async {
+    store.email = email
+    store.displayName = displayName
+    store.password = Emails.password
+    store.isCreateTeamMode = true
+    store.createTeamName = teamName
+    store.createTeamGoalHours = E2ETeam.goalHours
+    await store.signUp()?.value
+}
+
+/// 코드 모드로 가입하며 기존 팀에 합류한다(미리보기 확정 후 가입 → 자동 join_team).
+@MainActor
+private func signUpJoiningByCode(
+    store: WorkTimerStore,
+    email: String,
+    displayName: String,
+    code: String
+) async {
+    store.email = email
+    store.displayName = displayName
+    store.password = Emails.password
+    store.isCreateTeamMode = false
+    store.signupTeamCode = code
+    await store.performPreviewTeamCode()
+    await store.signUp()?.value
+}
+
+/// owner 계정과 E2E 팀이 반드시 존재하도록 보장하고 (userID, 팀코드) 를 돌려준다(순서 흔들림 대비 자가치유).
+@MainActor
+private func ensureOwnerAndTeam(anonKey: String, admin: E2EAdmin) async throws -> (userID: String, code: String) {
+    if let userID = LiveE2EState.ownerUserID,
+       let code = LiveE2EState.e2eTeamCode,
+       (try? await admin.profileCount(userID: userID)) == 1,
+       (try? await admin.teamExists(inviteCode: code)) == true {
+        return (userID, code)
     }
-    if let existing = try await admin.findUserID(email: Emails.primary) {
-        LiveE2EState.primaryUserID = existing
-        return existing
-    }
+
     let store = makeLiveStore(anonKey: anonKey, defaults: liveIsolatedDefaults())
     defer {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
     }
-    store.email = Emails.primary
-    store.displayName = "복구계정"
-    store.password = Emails.password
-    store.selectedSignupTeamID = Teams.sudoParkID
-    await store.signUp()?.value
-    guard let userID = store.session?.userID else {
-        throw E2EError("primary 계정 생성 실패: \(store.syncMessage)")
+    // 이미 계정이 있으면 로그인해 소유 팀 코드를 회수, 없으면 새로 만든다.
+    if try await admin.findUserID(email: Emails.owner) != nil {
+        store.email = Emails.owner
+        store.password = Emails.password
+        await store.signIn()?.value
+        if let code = store.myTeamInviteCode, let teamID = store.currentTeamID {
+            LiveE2EState.ownerUserID = store.session?.userID
+            LiveE2EState.e2eTeamID = teamID
+            LiveE2EState.e2eTeamCode = code
+            if let userID = store.session?.userID {
+                return (userID, code)
+            }
+        }
     }
-    LiveE2EState.primaryUserID = userID
-    return userID
+
+    await signUpCreatingE2ETeam(
+        store: store,
+        email: Emails.owner,
+        displayName: "E2E오너",
+        teamName: E2ETeam.uniqueName()
+    )
+    guard let userID = store.session?.userID, let code = store.createdTeamCode else {
+        throw E2EError("owner/E2E 팀 생성 실패: \(store.syncMessage)")
+    }
+    LiveE2EState.ownerUserID = userID
+    LiveE2EState.e2eTeamID = store.currentTeamID
+    LiveE2EState.e2eTeamCode = code
+    return (userID, code)
 }
 
 // MARK: - 시나리오 스위트 (직렬 실행, 게이트 오프 시 전부 스킵)
@@ -375,90 +503,120 @@ private func ensurePrimaryAccount(anonKey: String, admin: E2EAdmin) async throws
 @MainActor
 struct LiveE2ETests {
 
-    // 0. 시작 전 잔존 QA 계정 admin 삭제(멱등).
+    // 0. 시작 전 잔존 QA 계정 + E2E 팀 admin 정리(멱등).
     @Test(.enabled(if: LiveE2EEnv.enabled))
     func s00_preCleanup() async throws {
         let ctx = try makeContext()
-        for email in [Emails.primary, Emails.nickname] {
+        for email in [Emails.owner, Emails.joiner, Emails.nickname] {
             let removed = try await ctx.admin.deleteByEmail(email)
             obs("사전정리 \(email): \(removed ? "잔존 계정 삭제" : "없음")")
         }
-        for email in [Emails.primary, Emails.nickname] {
+        let deletedTeams = try await ctx.admin.deleteAllE2ETeams()
+        obs("사전정리 E2E 팀: \(deletedTeams)개 삭제")
+        for email in [Emails.owner, Emails.joiner, Emails.nickname] {
             #expect(try await ctx.admin.findUserID(email: email) == nil)
         }
+        #expect(try await ctx.admin.teams(namePrefix: E2ETeam.namePrefix).isEmpty)
     }
 
-    // 1. 가입 → 즉시 세션 + 트리거 3종 행 생성.
+    // 1. 가입(무소속) → create_team 으로 E2E 전용 팀 생성 + owner 행 3종 + 참여코드 수신.
     @Test(.enabled(if: LiveE2EEnv.enabled))
-    func s01_signUpCreatesSessionAndTriggerRows() async throws {
+    func s01_signUpCreatesE2ETeamAsOwner() async throws {
         let ctx = try makeContext()
         let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
         defer {
             store.tickerTask?.cancel()
             store.refreshTask?.cancel()
         }
-        store.email = Emails.primary
-        store.displayName = "이서브영식"
-        store.password = Emails.password
-        store.selectedSignupTeamID = Teams.sudoParkID
 
-        await store.signUp()?.value
+        await signUpCreatingE2ETeam(
+            store: store,
+            email: Emails.owner,
+            displayName: "E2E오너",
+            teamName: E2ETeam.uniqueName()
+        )
 
-        obs("가입 결과: isSignedIn=\(store.isSignedIn), syncMessage=\(store.syncMessage)")
+        obs("팀 생성 가입: isSignedIn=\(store.isSignedIn), owner=\(store.isTeamOwner), syncMessage=\(store.syncMessage)")
         #expect(store.isSignedIn)
         let userID = try #require(store.session?.userID)
-        LiveE2EState.primaryUserID = userID
+        let code = try #require(store.createdTeamCode)
+        LiveE2EState.ownerUserID = userID
+        LiveE2EState.e2eTeamID = store.currentTeamID
+        LiveE2EState.e2eTeamCode = code
+
+        // 참여코드는 8자, 헷갈리는 문자 제외 문자셋 사용.
+        #expect(code.count == 8)
+        #expect(store.myTeamInviteCode == code)
+        #expect(store.isTeamOwner)
 
         let profileReady = await waitUntil {
             (try? await ctx.admin.profileCount(userID: userID)) == 1
         }
         #expect(profileReady)
 
-        let membershipCount = try await ctx.admin.membershipCount(userID: userID)
+        let memberships = try await ctx.admin.membershipRows(userID: userID)
         let statusRows = try await ctx.admin.statusRows(userID: userID)
-        #expect(try await ctx.admin.profileCount(userID: userID) == 1)
-        #expect(membershipCount == 1)
+        #expect(memberships.count == 1)
+        #expect((memberships.first?["role"] as? String) == "owner")
         #expect(statusRows.count == 1)
         #expect((statusRows.first?["status"] as? String) == "off_work")
-        obs("트리거 행: profiles=1, memberships=\(membershipCount), work_statuses=\(statusRows.count)(off_work)")
+        #expect(try await ctx.admin.teamExists(inviteCode: code))
+        obs("owner 행: memberships=1(owner), work_statuses=1(off_work), 팀코드 존재=true")
     }
 
-    // 2. 로그아웃 → 올바른 비번 재로그인 → 세션 복원.
+    // 2. 두 번째 계정이 s01 코드로 join_team → 같은 팀 member 로 합류.
     @Test(.enabled(if: LiveE2EEnv.enabled))
-    func s02_signOutThenReSignIn() async throws {
+    func s02_secondAccountJoinsByCode() async throws {
         let ctx = try makeContext()
-        _ = try await ensurePrimaryAccount(anonKey: ctx.anonKey, admin: ctx.admin)
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+        // 깨끗한 재실행을 위해 joiner 를 정리(멱등).
+        try await ctx.admin.deleteByEmail(Emails.joiner)
+
         let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
         defer {
             store.tickerTask?.cancel()
             store.refreshTask?.cancel()
         }
-        store.email = Emails.primary
-        store.password = Emails.password
-        await store.signIn()?.value
-        #expect(store.isSignedIn)
 
-        store.signOut()
-        #expect(!store.isSignedIn)
+        await signUpJoiningByCode(
+            store: store,
+            email: Emails.joiner,
+            displayName: "E2E합류자",
+            code: owner.code
+        )
 
-        store.password = Emails.password
-        await store.signIn()?.value
+        obs("코드 합류 가입: isSignedIn=\(store.isSignedIn), teamID=\(store.currentTeamID ?? "nil"), owner=\(store.isTeamOwner)")
         #expect(store.isSignedIn)
-        #expect(store.session != nil)
-        obs("재로그인: isSignedIn=\(store.isSignedIn), syncMessage=\(store.syncMessage)")
+        let joinerID = try #require(store.session?.userID)
+        LiveE2EState.joinerUserID = joinerID
+
+        // 미리보기가 owner 팀을 정확히 가리켰어야 한다.
+        #expect(store.currentTeamID == LiveE2EState.e2eTeamID)
+        #expect(!store.isTeamOwner)
+
+        let memberships = try await ctx.admin.membershipRows(userID: joinerID)
+        #expect(memberships.count == 1)
+        #expect((memberships.first?["role"] as? String) == "member")
+        #expect((memberships.first?["team_id"] as? String) == LiveE2EState.e2eTeamID)
+
+        // 두 계정이 같은 팀에 있으므로 팀 인원은 2명.
+        let teamID = try #require(LiveE2EState.e2eTeamID)
+        let memberCount = try await ctx.admin.teamMemberCount(teamID: teamID)
+        #expect(memberCount == 2)
+        obs("합류 후 팀 인원=\(memberCount)(owner \(owner.userID.prefix(6))… + joiner \(joinerID.prefix(6))…)")
     }
 
     // 3. 틀린 비번 → 로그인 실패 + "로그인 정보 오류".
     @Test(.enabled(if: LiveE2EEnv.enabled))
     func s03_wrongPassword() async throws {
         let ctx = try makeContext()
-        _ = try await ensurePrimaryAccount(anonKey: ctx.anonKey, admin: ctx.admin)
+        _ = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
         let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
         defer {
             store.tickerTask?.cancel()
             store.refreshTask?.cancel()
         }
-        store.email = Emails.primary
+        store.email = Emails.owner
         store.password = Emails.wrongPassword
 
         await store.signIn()?.value
@@ -487,156 +645,94 @@ struct LiveE2ETests {
         #expect(store.syncMessage == "로그인 정보 오류")
     }
 
-    // 5. 중복 가입 → 실제 GoTrue(autoconfirm) 응답 기준 문구 확인/기록.
+    // 5. 중복 가입 → 실제 GoTrue(autoconfirm) 응답 기준 문구 확인. 계정/팀을 복제하지 않는다.
     @Test(.enabled(if: LiveE2EEnv.enabled))
     func s05_duplicateSignUp() async throws {
         let ctx = try makeContext()
-        let userID = try await ensurePrimaryAccount(anonKey: ctx.anonKey, admin: ctx.admin)
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+        let teamsBefore = try await ctx.admin.teams(namePrefix: E2ETeam.namePrefix).count
         let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
         defer {
             store.tickerTask?.cancel()
             store.refreshTask?.cancel()
         }
-        store.email = Emails.primary
-        store.displayName = "중복시도"
-        store.password = Emails.password
-        store.selectedSignupTeamID = Teams.sudoParkID
 
-        await store.signUp()?.value
+        // 이미 존재하는 owner 이메일로 팀 만들기 재시도 → 계정 생성 단계에서 막혀야 한다.
+        await signUpCreatingE2ETeam(
+            store: store,
+            email: Emails.owner,
+            displayName: "중복시도",
+            teamName: E2ETeam.uniqueName()
+        )
 
         let message = store.syncMessage
         obs("중복 가입: isSignedIn=\(store.isSignedIn), syncMessage=\(message)")
-        if message != "이미 가입된 이메일" {
-            obs("발견(시나리오5): 예상과 다른 중복 가입 문구 = \(message)")
-        }
-        // 견고한 불변식: 중복 가입은 새 세션을 만들지 않고 계정을 복제하지 않는다.
         #expect(!store.isSignedIn)
-        #expect(try await ctx.admin.profileCount(userID: userID) == 1)
-        #expect(try await ctx.admin.profileCount(byEmail: Emails.primary) == 1)
-        // 실측: autoconfirm 환경의 GoTrue 는 422 user_already_exists → "이미 가입된 이메일".
         #expect(message == "이미 가입된 이메일")
+        // 계정도 팀도 새로 만들어지지 않았다(중복 가입은 create_team 까지 도달하지 않는다).
+        #expect(try await ctx.admin.profileCount(byEmail: Emails.owner) == 1)
+        #expect(try await ctx.admin.teams(namePrefix: E2ETeam.namePrefix).count == teamsBefore)
+        _ = owner
     }
 
-    // 6. 근무 시작 → DB open 세션 + working 상태.
+    // 6. 리더보드 가드 → 팀 소속 계정은 리그 행을 보고, 그 안에 우리 E2E 팀이 있다.
     @Test(.enabled(if: LiveE2EEnv.enabled))
-    func s06_startWork() async throws {
+    func s06_leaderboardGuardForMember() async throws {
         let ctx = try makeContext()
-        let userID = try await ensurePrimaryAccount(anonKey: ctx.anonKey, admin: ctx.admin)
-        // 깨끗한 시작을 위해 잔존 open 세션 정리(멱등).
-        if try await ctx.admin.sessionRows(userID: userID, openOnly: true).isEmpty == false {
-            obs("s06 잔존 open 세션 존재 → 정리 시도")
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+        let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer {
+            store.tickerTask?.cancel()
+            store.refreshTask?.cancel()
         }
+        store.email = Emails.owner
+        store.password = Emails.password
+        await store.signIn()?.value
+        #expect(store.isSignedIn)
+
+        await store.performLoadLeaderboard()
+
+        // 소속이 있으므로 가드를 통과해 리그 행이 내려오고, 우리 팀이 포함된다.
+        obs("리더보드 가드(member): 행수=\(store.leaderboard.count)")
+        #expect(!store.leaderboard.isEmpty)
+        #expect(store.leaderboard.contains { $0.id == LiveE2EState.e2eTeamID })
+        _ = owner
+    }
+
+    // 7. 근무 시작/종료 → open→close 세션 + duration ±2초, off_work.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s07_startAndStopWork() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
 
         let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
         defer {
             store.tickerTask?.cancel()
             store.refreshTask?.cancel()
         }
-        store.email = Emails.primary
+        store.email = Emails.owner
         store.password = Emails.password
         await store.signIn()?.value
         #expect(store.isSignedIn)
 
-        // signIn 이 open 세션을 복원해 이미 working 이면 그 세션을 그대로 사용.
-        if store.startedAt == nil {
-            store.start()
-            await store.syncTask?.value
-        }
-
-        let openReady = await waitUntil {
-            ((try? await ctx.admin.sessionRows(userID: userID, openOnly: true).count) ?? 0) == 1
-        }
-        #expect(openReady)
-        let openCount = try await ctx.admin.sessionRows(userID: userID, openOnly: true).count
-        let statusRows = try await ctx.admin.statusRows(userID: userID)
-        #expect(openCount == 1)
-        #expect((statusRows.first?["status"] as? String) == "working")
-        obs("근무 시작: open 세션=\(openCount), 상태=\(statusRows.first?["status"] as? String ?? "nil")")
-    }
-
-    // 7. 이중 시작 방어 → 두 번째 스토어가 fresh start 시 서버 409, open 세션은 여전히 1개.
-    @Test(.enabled(if: LiveE2EEnv.enabled))
-    func s07_doubleStartDefense() async throws {
-        let ctx = try makeContext()
-        let userID = try await ensurePrimaryAccount(anonKey: ctx.anonKey, admin: ctx.admin)
-
-        // 방어 대상 open 세션이 있어야 의미가 있으므로, 없으면 하나 만든다(자가치유).
-        if try await ctx.admin.sessionRows(userID: userID, openOnly: true).isEmpty {
-            let seed = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
-            seed.email = Emails.primary
-            seed.password = Emails.password
-            await seed.signIn()?.value
-            if seed.startedAt == nil {
-                seed.start()
-                await seed.syncTask?.value
-            }
-            seed.tickerTask?.cancel()
-            seed.refreshTask?.cancel()
-        }
-
-        let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
-        defer {
-            store.tickerTask?.cancel()
-            store.refreshTask?.cancel()
-        }
-        store.email = Emails.primary
-        store.password = Emails.password
-        await store.signIn()?.value
-        #expect(store.isSignedIn)
-
-        // 두 번째 클라이언트가 자신이 오프인 줄 알고 새로 시작하는 상황을 재현.
-        store.startedAt = nil
-        store.currentSessionID = nil
-        store.snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
-
-        store.start()
-        await store.syncTask?.value
-
-        obs("이중 시작: pendingSync=\(store.snapshot.pendingSync), pendingOp=\(String(describing: store.pendingOperation)), syncMessage=\(store.syncMessage)")
-        #expect(store.snapshot.pendingSync)
-        #expect(store.pendingOperation == .start)
-
-        let openCount = try await ctx.admin.sessionRows(userID: userID, openOnly: true).count
-        #expect(openCount == 1)
-        obs("이중 시작 방어 후 open 세션=\(openCount)")
-    }
-
-    // 8. 근무 종료 → ended_at/duration 기록 + off_work, duration ±2초 정확도.
-    @Test(.enabled(if: LiveE2EEnv.enabled))
-    func s08_stopWork() async throws {
-        let ctx = try makeContext()
-        let userID = try await ensurePrimaryAccount(anonKey: ctx.anonKey, admin: ctx.admin)
-
-        let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
-        defer {
-            store.tickerTask?.cancel()
-            store.refreshTask?.cancel()
-        }
-        store.email = Emails.primary
-        store.password = Emails.password
-        await store.signIn()?.value
-        #expect(store.isSignedIn)
-
-        // open 세션이 없으면(순서 흔들림) 새로 시작.
         if store.startedAt == nil {
             store.start()
             await store.syncTask?.value
         }
         #expect(store.startedAt != nil)
 
-        // 실제 경과가 수 초가 되도록 잠깐 근무.
         try? await Task.sleep(nanoseconds: 3_000_000_000)
 
         store.stop()
         await store.syncTask?.value
 
         let closedReady = await waitUntil {
-            let rows = (try? await ctx.admin.sessionRows(userID: userID, openOnly: false)) ?? []
+            let rows = (try? await ctx.admin.sessionRows(userID: owner.userID, openOnly: false)) ?? []
             return rows.first?["ended_at"] is String
         }
         #expect(closedReady)
 
-        let sessions = try await ctx.admin.sessionRows(userID: userID, openOnly: false)
+        let sessions = try await ctx.admin.sessionRows(userID: owner.userID, openOnly: false)
         let latest = try #require(sessions.first)
         let duration = try #require(latest["duration_seconds"] as? Int)
         let startedString = try #require(latest["started_at"] as? String)
@@ -647,36 +743,32 @@ struct LiveE2ETests {
         )
 
         LiveE2EState.recordedDurationSeconds = duration
-        obs("근무 종료: duration_seconds=\(duration), 서버 타임스탬프 경과=\(serverElapsed)초")
+        obs("근무 종료: duration_seconds=\(duration), 서버 경과=\(serverElapsed)초")
 
         #expect(duration >= 1)
         #expect(abs(duration - serverElapsed) <= 2)
         #expect(store.accumulatedSeconds == duration)
 
-        let statusRows = try await ctx.admin.statusRows(userID: userID)
+        let statusRows = try await ctx.admin.statusRows(userID: owner.userID)
         #expect((statusRows.first?["status"] as? String) == "off_work")
-        let openCount = try await ctx.admin.sessionRows(userID: userID, openOnly: true).count
-        #expect(openCount == 0)
-        obs("종료 후 상태=off_work, open 세션=\(openCount)")
+        #expect(try await ctx.admin.sessionRows(userID: owner.userID, openOnly: true).count == 0)
     }
 
-    // 9. 재실행 복구 → 새 인스턴스에서 세션 복원(activateStoredSession) 후 오늘 누적이 8과 일치.
+    // 8. 재실행 복구 → 새 인스턴스에서 세션 복원 후 오늘 누적이 서버와 일치.
     @Test(.enabled(if: LiveE2EEnv.enabled))
-    func s09_relaunchRecovery() async throws {
+    func s08_relaunchRecovery() async throws {
         let ctx = try makeContext()
-        let userID = try await ensurePrimaryAccount(anonKey: ctx.anonKey, admin: ctx.admin)
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
 
-        // 로그인해 세션을 defaults 에 저장(재실행 시뮬레이션의 전제).
         let sharedDefaults = liveIsolatedDefaults()
         let loginStore = makeLiveStore(anonKey: ctx.anonKey, defaults: sharedDefaults)
-        loginStore.email = Emails.primary
+        loginStore.email = Emails.owner
         loginStore.password = Emails.password
         await loginStore.signIn()?.value
         #expect(loginStore.isSignedIn)
         loginStore.tickerTask?.cancel()
         loginStore.refreshTask?.cancel()
 
-        // 재실행: 저장된 세션으로 새 스토어 생성 → 생성자에서 세션 복원.
         let relaunchStore = makeLiveStore(anonKey: ctx.anonKey, defaults: sharedDefaults)
         defer {
             relaunchStore.tickerTask?.cancel()
@@ -686,21 +778,16 @@ struct LiveE2ETests {
 
         await relaunchStore.activateStoredSession()
 
-        let serverToday = try await ctx.admin.todayTotalDuration(userID: userID)
-        obs("재실행 복구: accumulatedSeconds=\(relaunchStore.accumulatedSeconds), 서버 오늘 누적=\(serverToday), 기록된 8 duration=\(String(describing: LiveE2EState.recordedDurationSeconds))")
-
+        let serverToday = try await ctx.admin.todayTotalDuration(userID: owner.userID)
+        obs("재실행 복구: accumulatedSeconds=\(relaunchStore.accumulatedSeconds), 서버 오늘 누적=\(serverToday)")
         #expect(relaunchStore.accumulatedSeconds == serverToday)
-        if let recorded = LiveE2EState.recordedDurationSeconds {
-            #expect(serverToday == recorded)
-            #expect(serverToday >= 1)
-        }
     }
 
-    // 10. 별명 엣지 → 30자 한글+이모지 display_name 이 트리거로 profiles 에 그대로 저장.
+    // 9. 별명 엣지 → 30자 한글+이모지 display_name 이 트리거로 profiles 에 그대로 저장(코드 합류 흐름).
     @Test(.enabled(if: LiveE2EEnv.enabled))
-    func s10_nicknameEdge() async throws {
+    func s09_nicknameEdge() async throws {
         let ctx = try makeContext()
-        // 독립 이메일 사용 — 시작 시 정리(멱등).
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
         try await ctx.admin.deleteByEmail(Emails.nickname)
 
         let edge = Emails.edgeDisplayName
@@ -711,12 +798,13 @@ struct LiveE2ETests {
             store.tickerTask?.cancel()
             store.refreshTask?.cancel()
         }
-        store.email = Emails.nickname
-        store.displayName = edge
-        store.password = Emails.password
-        store.selectedSignupTeamID = Teams.sudoParkID
 
-        await store.signUp()?.value
+        await signUpJoiningByCode(
+            store: store,
+            email: Emails.nickname,
+            displayName: edge,
+            code: owner.code
+        )
         #expect(store.isSignedIn)
         let userID = try #require(store.session?.userID)
 
@@ -724,44 +812,48 @@ struct LiveE2ETests {
             (try? await ctx.admin.profileDisplayName(userID: userID)) == edge
         }
         #expect(stored)
-        let displayName = try await ctx.admin.profileDisplayName(userID: userID)
-        #expect(displayName == edge)
-        obs("별명 엣지: 저장된 display_name 길이=\(displayName?.count ?? -1), 일치=\(displayName == edge)")
+        #expect(try await ctx.admin.profileDisplayName(userID: userID) == edge)
+        obs("별명 엣지: 저장 일치=\(try await ctx.admin.profileDisplayName(userID: userID) == edge)")
     }
 
-    // 11. 정리 → admin 삭제 후 4개 테이블 0건 확인. 실패 중단 시에도 반드시 실행되도록 마지막에 배치.
+    // 10. 정리 → E2E 계정 + E2E 팀 삭제 후 잔존 0 확인. 실팀(SUDOPARK/RUNNER01)은 그대로 살아 있어야 한다.
     @Test(.enabled(if: LiveE2EEnv.enabled))
-    func s11_cleanup() async throws {
+    func s10_cleanup() async throws {
         let ctx = try makeContext()
 
-        let primaryUserID = try? await ctx.admin.findUserID(email: Emails.primary)
+        let ownerUserID = try? await ctx.admin.findUserID(email: Emails.owner)
+        let joinerUserID = try? await ctx.admin.findUserID(email: Emails.joiner)
         let nicknameUserID = try? await ctx.admin.findUserID(email: Emails.nickname)
 
-        for email in [Emails.primary, Emails.nickname] {
+        for email in [Emails.owner, Emails.joiner, Emails.nickname] {
             let removed = try await ctx.admin.deleteByEmail(email)
             obs("정리 \(email): \(removed ? "admin 삭제" : "이미 없음")")
         }
 
-        // 이메일/auth 레벨 삭제 확인.
-        for email in [Emails.primary, Emails.nickname] {
+        // 계정 캐스케이드로 멤버십/상태/세션은 사라지지만, teams 행은 팀 삭제로 별도 정리한다(E2E 접두사만).
+        let deletedTeams = try await ctx.admin.deleteAllE2ETeams()
+        obs("정리 E2E 팀: \(deletedTeams)개 삭제")
+
+        for email in [Emails.owner, Emails.joiner, Emails.nickname] {
             #expect(try await ctx.admin.findUserID(email: email) == nil)
             #expect(try await ctx.admin.profileCount(byEmail: email) == 0)
         }
 
-        // 캐스케이드 확인: 알고 있던 userID 기준 4개 테이블 0건.
-        for userID in [primaryUserID, nicknameUserID, LiveE2EState.primaryUserID].compactMap({ $0 }) {
+        for userID in [ownerUserID, joinerUserID, nicknameUserID,
+                       LiveE2EState.ownerUserID, LiveE2EState.joinerUserID].compactMap({ $0 }) {
             let cascaded = await waitUntil {
                 let profiles = (try? await ctx.admin.profileCount(userID: userID)) ?? -1
                 let sessions = (try? await ctx.admin.sessionCount(userID: userID)) ?? -1
                 return profiles == 0 && sessions == 0
             }
             #expect(cascaded)
-            #expect(try await ctx.admin.profileCount(userID: userID) == 0)
             #expect(try await ctx.admin.membershipCount(userID: userID) == 0)
             #expect(try await ctx.admin.statusRows(userID: userID).count == 0)
-            #expect(try await ctx.admin.sessionCount(userID: userID) == 0)
-            obs("캐스케이드 확인(userID \(userID.prefix(8))…): profiles/memberships/work_statuses/work_sessions = 0")
         }
+
+        // E2E 팀은 모두 사라졌고, 실팀 코드는 여전히 살아 있다(정규화 조회 기준 존재).
+        #expect(try await ctx.admin.teams(namePrefix: E2ETeam.namePrefix).isEmpty)
+        #expect(try await ctx.admin.teamExists(inviteCode: "SUDOPARK"))
 
         print("E2E| ===== 관측 요약 =====")
         for line in LiveE2EState.observations {

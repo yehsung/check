@@ -64,7 +64,17 @@ enum PendingWorkOperation: Equatable {
     case stop(durationSeconds: Int)
 }
 
-/// 가입 화면 팀 목록의 한 항목. team_directory() RPC 로 받아 온다(invite_code 는 노출되지 않음).
+/// 팀 코드 미리보기 결과. lookup_team_by_code(code) RPC 로 받아 온다(가입 전에도 anon 으로 호출 가능).
+/// invite_code 는 담지 않는다(코드는 입력자가 이미 알고 있으므로 되돌려줄 이유가 없다).
+struct TeamJoinPreview: Equatable {
+    let teamID: String
+    let name: String
+    let weeklyGoalHours: Int
+    let memberCount: Int
+}
+
+/// (레거시 호환) 가입 화면 팀 선택 항목. 초대코드 흐름 전의 뷰/렌더 테스트가 아직 참조하므로 형만 유지한다.
+/// 새 가입 흐름은 팀 목록을 노출하지 않으며 이 타입을 채우지 않는다.
 struct TeamDirectoryEntry: Identifiable, Equatable {
     let id: String
     let name: String
@@ -159,6 +169,17 @@ struct SignUpRequest: Encodable {
     let data: [String: String]
 }
 
+/// lookup_team_by_code / join_team RPC 본문. code 는 클라에서 정규화(대문자·공백/하이픈 제거)한 값을 보낸다.
+struct InviteCodeRequest: Encodable {
+    let code: String
+}
+
+/// create_team RPC 본문. snake_case 인코딩으로 team_name, goal_hours 로 나간다.
+struct CreateTeamRequest: Encodable {
+    let teamName: String
+    let goalHours: Int
+}
+
 struct SignInResponse: Decodable {
     let accessToken: String
     let refreshToken: String?
@@ -202,10 +223,32 @@ struct WorkSessionRow: Decodable {
     let durationSeconds: Int?
 }
 
-/// team_directory() RPC 응답 행. 계약상 TeamDirectoryEntry 선언은 고정이므로 파싱은 별도 행으로 한다.
-struct TeamDirectoryRow: Decodable {
-    let id: String
+/// lookup_team_by_code(code) RPC 응답 행. security definer 함수라 team_id 는 uuid → 문자열로 받는다.
+struct TeamJoinPreviewRow: Decodable {
+    let teamId: String
     let name: String
+    let weeklyGoalHours: Int
+    let memberCount: Int
+}
+
+/// join_team(code) RPC 응답 행. 합류 성공 시 팀 정보를 돌려준다(불일치/비로그인은 0행).
+struct JoinTeamRow: Decodable {
+    let teamId: String
+    let name: String
+    let weeklyGoalHours: Int
+}
+
+/// create_team(team_name, goal_hours) RPC 응답 행. 새로 만든 팀의 참여코드를 함께 돌려준다.
+struct CreateTeamRow: Decodable {
+    let teamId: String
+    let name: String
+    let inviteCode: String
+    let weeklyGoalHours: Int
+}
+
+/// my_team_invite_code() RPC 응답 행(owner 전용). 아니면 0행.
+struct InviteCodeRow: Decodable {
+    let inviteCode: String
 }
 
 /// team_weekly_leaderboard() RPC 응답 행. total_seconds 는 bigint(초)라 Int(64비트)로 받는다.
@@ -217,9 +260,11 @@ struct TeamLeaderboardRow: Decodable {
     let workingCount: Int
 }
 
-/// memberships?select=team_id,teams(name,weekly_goal_hours) 응답 행. teams 는 임베드 조인.
+/// memberships?select=team_id,role,teams(name,weekly_goal_hours) 응답 행. teams 는 임베드 조인.
+/// role 은 owner/member. 누락 시 member 로 폴백한다.
 struct MembershipRow: Decodable {
     let teamId: String
+    let role: String?
     let teams: MembershipTeamRow?
 }
 

@@ -37,17 +37,21 @@ extension WorkTimerStore {
         }
     }
 
-    func signUp(email: String, password: String, displayName: String, teamID: String) async {
+    func signUp(email: String, password: String, displayName: String) async {
         syncMessage = "계정 생성 중"
         let generation = sessionGeneration
         do {
-            if let createdSession = try await service.signUp(email: email, password: password, displayName: displayName, teamID: teamID) {
+            if let createdSession = try await service.signUp(email: email, password: password, displayName: displayName) {
                 guard generation == sessionGeneration else { return }
                 session = createdSession
                 persistSession(createdSession, email: email, displayName: displayName)
                 self.password = ""
-                // 가입 직후 트리거가 membership 을 만들기까지 지연될 수 있으므로 재시도로 확정한다.
-                await confirmMembership(allowRetryForFreshSignup: true)
+                // 트리거는 더 이상 팀을 만들지 않으므로, 모드에 따라 팀을 만들거나(join 은 하지 않고) 코드로 합류한다.
+                if isCreateTeamMode {
+                    await createTeamAfterSignup()
+                } else {
+                    await joinTeamAfterSignup()
+                }
                 guard generation == sessionGeneration else { return }
                 syncMessage = "동기화됨"
                 await refreshTeamStatus()
@@ -62,6 +66,41 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             syncMessage = authMessage(for: error, fallback: "계정 생성 실패")
         }
+    }
+
+    /// 코드 모드 가입 성공 후. signupTeamCode 로 join_team 을 실행하고 confirmMembership 으로 팀을 확정한다.
+    private func joinTeamAfterSignup() async {
+        let generation = sessionGeneration
+        let code = signupTeamCode
+        do {
+            _ = try await withSessionRetry { activeSession in
+                try await service.joinTeam(accessToken: activeSession.accessToken, code: code)
+            }
+            guard generation == sessionGeneration else { return }
+        } catch {
+            // 합류 실패는 조용히 넘기고 confirmMembership 이 무소속으로 확정하게 둔다(문구는 이후 refresh 가 정리).
+            guard generation == sessionGeneration else { return }
+        }
+        // 가입 직후 확정은 트리거 지연이 없더라도(직접 upsert) 안전하게 재시도 경로를 재사용한다.
+        await confirmMembership(allowRetryForFreshSignup: true)
+    }
+
+    /// 만들기 모드 가입 성공 후. create_team 으로 팀을 만들고 참여코드를 안내용으로 보관한 뒤 팀을 확정한다.
+    private func createTeamAfterSignup() async {
+        let generation = sessionGeneration
+        let name = createTeamName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let goal = createTeamGoalHours
+        do {
+            let created = try await withSessionRetry { activeSession in
+                try await service.createTeam(accessToken: activeSession.accessToken, name: name, goalHours: goal)
+            }
+            guard generation == sessionGeneration else { return }
+            createdTeamCode = created.inviteCode
+        } catch {
+            guard generation == sessionGeneration else { return }
+            syncMessage = authMessage(for: error, fallback: "팀 생성 실패")
+        }
+        await confirmMembership(allowRetryForFreshSignup: true)
     }
 
     /// 로그인/세션복구/가입 성공 후 내 팀을 확정한다. 소속이 있으면 currentTeamID/teamName/teamGoalSeconds 를
@@ -81,6 +120,13 @@ extension WorkTimerStore {
                 teamName = membership.teamName
                 // 목표시간은 DB 값(시간) 그대로 초로 환산해 반영한다(캐시/일회성 없음).
                 teamGoalSeconds = membership.goalHours * 3600
+                teamRole = membership.role
+                // owner 면 팀 카드 공유용 참여코드를 로드하고, member 면 비운다.
+                if membership.role == "owner" {
+                    await loadMyInviteCode()
+                } else {
+                    myTeamInviteCode = nil
+                }
                 return
             }
             if attempt + 1 < attempts {
@@ -91,6 +137,80 @@ extension WorkTimerStore {
         currentTeamID = nil
         teamName = "팀"
         teamGoalSeconds = TeamWeeklyGoal.defaultGoalSeconds
+        teamRole = nil
+        myTeamInviteCode = nil
+    }
+
+    /// owner 확정 시 my_team_invite_code() RPC 로 참여코드를 로드한다. 실패/비owner 면 nil.
+    private func loadMyInviteCode() async {
+        let generation = sessionGeneration
+        let code = try? await withSessionRetry { activeSession in
+            try await service.fetchMyInviteCode(accessToken: activeSession.accessToken)
+        }
+        guard generation == sessionGeneration else { return }
+        myTeamInviteCode = code ?? nil
+    }
+
+    /// previewTeamCode() 의 실제 작업. signupTeamCode 를 lookup_team_by_code 로 조회해 미리보기를 갱신한다.
+    /// 세션이 아니라 previewGeneration 으로 마지막 요청만 반영한다(비로그인에서도 동작).
+    func performPreviewTeamCode() async {
+        let generation = previewGeneration
+        let code = signupTeamCode
+        let normalized = SupabaseWorkService.normalizeInviteCode(code)
+        guard !normalized.isEmpty else {
+            joinPreview = nil
+            joinPreviewMessage = ""
+            return
+        }
+        joinPreviewMessage = "확인 중"
+        do {
+            let preview = try await service.lookupTeamByCode(code: code)
+            guard generation == previewGeneration else { return }
+            if let preview {
+                joinPreview = preview
+                joinPreviewMessage = ""
+            } else {
+                joinPreview = nil
+                joinPreviewMessage = "코드를 확인해 주세요"
+            }
+        } catch {
+            guard generation == previewGeneration else { return }
+            joinPreview = nil
+            joinPreviewMessage = "코드를 확인해 주세요"
+        }
+    }
+
+    /// joinTeamWithCode() 의 실제 작업. 로그인 상태에서 signupTeamCode 로 join_team 을 실행하고 팀을 확정한다.
+    func performJoinTeamWithCode() async {
+        guard session != nil else { return }
+        let code = signupTeamCode
+        let normalized = SupabaseWorkService.normalizeInviteCode(code)
+        guard !normalized.isEmpty else {
+            joinPreviewMessage = "팀 코드를 확인해 주세요"
+            return
+        }
+        let generation = sessionGeneration
+        do {
+            let joined = try await withSessionRetry { activeSession in
+                try await service.joinTeam(accessToken: activeSession.accessToken, code: code)
+            }
+            guard generation == sessionGeneration else { return }
+            guard joined != nil else {
+                joinPreviewMessage = "코드를 확인해 주세요"
+                return
+            }
+            signupTeamCode = ""
+            joinPreview = nil
+            joinPreviewMessage = ""
+            await confirmMembership()
+            guard generation == sessionGeneration else { return }
+            await refreshTeamStatus()
+            guard generation == sessionGeneration else { return }
+            startStatusRefreshLoop()
+        } catch {
+            guard generation == sessionGeneration else { return }
+            syncMessage = authMessage(for: error, fallback: "합류 실패")
+        }
     }
 
     func authMessage(for error: Error, fallback: String) -> String {
@@ -175,8 +295,17 @@ extension WorkTimerStore {
         currentTeamID = nil
         teamName = "팀"
         teamGoalSeconds = TeamWeeklyGoal.defaultGoalSeconds
+        teamRole = nil
         teamDirectory = []
         selectedSignupTeamID = nil
+        signupTeamCode = ""
+        joinPreview = nil
+        joinPreviewMessage = ""
+        isCreateTeamMode = false
+        createTeamName = ""
+        createTeamGoalHours = 60
+        createdTeamCode = nil
+        myTeamInviteCode = nil
         pendingOperation = nil
         pendingStopStartedAt = nil
         pendingStopEndedAt = nil

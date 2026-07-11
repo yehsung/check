@@ -34,12 +34,31 @@ final class WorkTimerStore {
     var syncMessage: String
     var teamMembers: [TeamMemberStatus] = []
     // 멀티팀 상태.
-    // teamDirectory: 가입 화면 팀 목록. selectedSignupTeamID: 가입 시 선택한 팀.
     // teamName: 로그인 후 내 팀 이름(미확정 시 "팀"). currentTeamID: 확정된 내 팀 id(무소속이면 nil).
-    var teamDirectory: [TeamDirectoryEntry] = []
-    var selectedSignupTeamID: String?
+    // teamRole: 확정된 내 역할(owner/member, 무소속이면 nil).
     var teamName = "팀"
     var currentTeamID: String?
+    var teamRole: String?
+
+    // (레거시 호환) 초대코드 흐름 전의 가입 뷰/렌더 테스트가 아직 참조하는 팀 목록/선택 상태.
+    // 새 가입 흐름은 팀 목록을 노출하지 않으므로 이 값들은 채우지 않는다(형만 유지).
+    var teamDirectory: [TeamDirectoryEntry] = []
+    var selectedSignupTeamID: String?
+
+    // 초대코드 기반 가입/합류 상태.
+    // signupTeamCode: 코드 입력 바인딩. joinPreview: 미리보기 결과(nil=미확인/불일치). joinPreviewMessage: 상태 문구.
+    // isCreateTeamMode: 가입 화면 코드 입력 ↔ 팀 만들기 전환. createTeamName/createTeamGoalHours: 팀 만들기 폼.
+    // createdTeamCode: 방금 만든 팀의 참여코드(공유 안내용). myTeamInviteCode: owner 일 때만 채워짐.
+    var signupTeamCode = ""
+    var joinPreview: TeamJoinPreview?
+    var joinPreviewMessage = ""
+    var isCreateTeamMode = false
+    var createTeamName = ""
+    var createTeamGoalHours = 60
+    var createdTeamCode: String?
+    var myTeamInviteCode: String?
+    // 코드 미리보기 재입력 경합 방지용 세대 카운터(세션과 무관 — 비로그인에서도 쓰므로). 마지막 요청만 반영한다.
+    var previewGeneration = 0
     // 팀 주간 목표시간(초). 출처는 오직 teams.weekly_goal_hours(멤버십 조회 시 확정). 앱은 읽기 전용이다.
     // confirmMembership 성공 시 서버 값으로 갱신하고, signOut/무소속이면 기본값으로 되돌린다.
     var teamGoalSeconds = TeamWeeklyGoal.defaultGoalSeconds
@@ -74,6 +93,16 @@ final class WorkTimerStore {
 
     var isSignedIn: Bool {
         session != nil
+    }
+
+    /// 로그인은 되어 있으나 소속 팀이 없는 상태. 무소속 계정에 팀 코드 입력 패널을 띄우는 판정에 쓴다.
+    var isTeamless: Bool {
+        isSignedIn && currentTeamID == nil
+    }
+
+    /// 내가 현재 팀의 owner 인지. owner 여야 팀 카드에서 참여코드 보기/복사를 노출한다.
+    var isTeamOwner: Bool {
+        teamRole == "owner"
     }
 
     init(
@@ -266,15 +295,40 @@ final class WorkTimerStore {
             syncMessage = "이메일, 비밀번호, 별명 필요"
             return nil
         }
-        guard let teamID = selectedSignupTeamID else {
-            syncMessage = "팀을 선택해 주세요"
-            return nil
+        // 코드 모드: 미리보기가 확인되어야(joinPreview != nil) 가입 가능. 만들기 모드: 팀 이름 필수.
+        if isCreateTeamMode {
+            guard !createTeamName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                syncMessage = "팀 이름을 입력해 주세요"
+                return nil
+            }
+        } else {
+            guard joinPreview != nil else {
+                syncMessage = "팀 코드를 확인해 주세요"
+                return nil
+            }
         }
 
         let task = Task {
-            await signUp(email: trimmedEmail, password: password, displayName: trimmedDisplayName, teamID: teamID)
+            await signUp(email: trimmedEmail, password: password, displayName: trimmedDisplayName)
         }
         return task
+    }
+
+    /// 팀 코드 미리보기(가입 화면). signupTeamCode 를 검증해 joinPreview/joinPreviewMessage 를 갱신한다.
+    /// 디바운스는 UI 몫이고, 여기선 재입력 경합만 막는다(마지막 요청 우선). 비로그인에서도 호출 가능.
+    func previewTeamCode() {
+        previewGeneration &+= 1
+        Task { @MainActor in await performPreviewTeamCode() }
+    }
+
+    /// 무소속 계정 패널의 합류 액션. 로그인 상태에서 signupTeamCode 로 join_team 을 실행한다.
+    func joinTeamWithCode() {
+        Task { @MainActor in await performJoinTeamWithCode() }
+    }
+
+    /// 방금 만든 팀의 참여코드 안내를 닫는다.
+    func dismissCreatedTeamCode() {
+        createdTeamCode = nil
     }
 
     func refreshTeamStatus() {
@@ -283,24 +337,15 @@ final class WorkTimerStore {
         }
     }
 
-    /// 가입 모드 진입 시 호출. 서버(team_directory RPC)에서 팀 목록을 로드한다(Task 발사).
-    func loadTeamDirectory() {
-        Task { @MainActor in await performLoadTeamDirectory() }
-    }
+    /// (레거시 호환) 초대코드 흐름 전의 가입 뷰가 호출하던 팀 목록 로드. 팀 목록 공개를 폐기했으므로 no-op 이다.
+    /// 새 가입 흐름은 previewTeamCode()/createTeam 으로 대체됐다.
+    func loadTeamDirectory() {}
 
     /// 트로피 버튼 액션. 리그 페이지를 토글하고, 여는 순간 순위를 로드한다.
     func toggleLeaderboard() {
         isLeaderboardVisible.toggle()
         if isLeaderboardVisible {
             loadLeaderboard()
-        }
-    }
-
-    func performLoadTeamDirectory() async {
-        do {
-            teamDirectory = try await service.fetchTeamDirectory()
-        } catch {
-            // 목록 로드 실패는 조용히 무시한다(가입 버튼은 여전히 팀 미선택으로 거부됨).
         }
     }
 

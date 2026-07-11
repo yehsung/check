@@ -195,7 +195,7 @@ struct CheckOverlayRootView: View {
 
     var body: some View {
         CheckOverlayCharacterView(
-            elapsedSeconds: store.snapshot.elapsedSeconds,
+            elapsedSeconds: store.todayDuration,
             isActive: store.snapshot.isWorking
         )
         .onChange(of: store.snapshot.isWorking, initial: true) { _, working in

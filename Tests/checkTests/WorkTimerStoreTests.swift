@@ -46,11 +46,11 @@ func signUpRequiresDisplayName() {
     #expect(store.syncMessage == "이메일, 비밀번호, 별명 필요")
 }
 
-// MARK: - G: 멀티팀 가입/무소속
+// MARK: - G: 초대코드 가입/합류/무소속
 
 @MainActor
 @Test
-func signUpRequiresTeamSelection() {
+func signUpRequiresConfirmedTeamCode() {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
         defaults: isolatedDefaults()
@@ -58,18 +58,40 @@ func signUpRequiresTeamSelection() {
     store.email = "new@example.com"
     store.password = "team-password"
     store.displayName = "영식"
-    // selectedSignupTeamID 미설정 → 가입 거부.
+    // 코드 모드인데 joinPreview 미확인 → 가입 거부.
+    store.isCreateTeamMode = false
+    store.joinPreview = nil
 
     let task = store.signUp()
 
     #expect(task == nil)
-    #expect(store.syncMessage == "팀을 선택해 주세요")
+    #expect(store.syncMessage == "팀 코드를 확인해 주세요")
 }
 
 @MainActor
 @Test
-func signUpSendsSelectedTeamIDInMetadata() async {
-    let testHost = "signup-team-test"
+func signUpRequiresTeamNameInCreateMode() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    store.email = "new@example.com"
+    store.password = "team-password"
+    store.displayName = "영식"
+    // 만들기 모드인데 팀 이름 공백 → 가입 거부.
+    store.isCreateTeamMode = true
+    store.createTeamName = "   "
+
+    let task = store.signUp()
+
+    #expect(task == nil)
+    #expect(store.syncMessage == "팀 이름을 입력해 주세요")
+}
+
+@MainActor
+@Test
+func signUpAutoJoinsWithTeamCodeAfterAccount() async {
+    let testHost = "signup-join-test"
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(testHost)")!,
         anonKey: "anon-test-key",
@@ -87,19 +109,77 @@ func signUpSendsSelectedTeamIDInMetadata() async {
     store.email = "member@example.com"
     store.password = "team-password"
     store.displayName = "영식"
-    store.selectedSignupTeamID = "20000000-0000-0000-0000-000000000002"
+    store.isCreateTeamMode = false
+    store.signupTeamCode = "SUDOPARK"
+    // 미리보기가 확인된 상태(가입 버튼 활성 조건).
+    store.joinPreview = TeamJoinPreview(teamID: "10000000-0000-0000-0000-000000000001", name: "sudo 박수", weeklyGoalHours: 40, memberCount: 3)
 
     await store.signUp()?.value
 
     #expect(store.isSignedIn)
-    // 선택한 팀이 가입 메타데이터로 서버에 전달되어야 한다.
-    let bodyText = URLProtocolStub.bodyText(forHost: testHost)
-    #expect(bodyText.contains("\"team_id\":\"20000000-0000-0000-0000-000000000002\""))
+    #expect(store.currentTeamID == "10000000-0000-0000-0000-000000000001")
+
+    // 가입은 계정만 만들고 team_id 메타데이터는 보내지 않는다.
+    #expect(!URLProtocolStub.bodyText(forHost: testHost).contains("\"team_id\""))
+
+    // 요청 순서: 계정 가입(/auth/v1/signup) 이 먼저, 그 다음 자동 합류(/rest/v1/rpc/join_team).
+    let paths = URLProtocolStub.requests(forHost: testHost).compactMap { $0.url?.path }
+    let signupIndex = try? #require(paths.firstIndex(of: "/auth/v1/signup"))
+    let joinIndex = try? #require(paths.firstIndex(of: "/rest/v1/rpc/join_team"))
+    #expect(signupIndex != nil)
+    #expect(joinIndex != nil)
+    if let signupIndex, let joinIndex {
+        #expect(signupIndex < joinIndex)
+    }
+    // 합류 본문에 정규화된 코드가 담긴다.
+    #expect(URLProtocolStub.bodyText(forHost: testHost).contains(#""code":"SUDOPARK""#))
 }
 
 @MainActor
 @Test
-func signInWithoutTeamShowsNoTeamMessage() async {
+func signUpCreateModeSetsCreatedTeamCode() async {
+    let testHost = "signup-create-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.email = "founder@example.com"
+    store.password = "team-password"
+    store.displayName = "창립자"
+    store.isCreateTeamMode = true
+    store.createTeamName = "새로운 팀"
+    store.createTeamGoalHours = 50
+
+    await store.signUp()?.value
+
+    #expect(store.isSignedIn)
+    // create_team 이 돌려준 참여코드가 공유 안내용으로 보관된다.
+    #expect(store.createdTeamCode == "X7K2M9Q4")
+
+    // 요청 순서: 가입(/auth/v1/signup) → 팀 생성(/rest/v1/rpc/create_team). join_team 은 호출하지 않는다.
+    let paths = URLProtocolStub.requests(forHost: testHost).compactMap { $0.url?.path }
+    #expect(paths.contains("/auth/v1/signup"))
+    #expect(paths.contains("/rest/v1/rpc/create_team"))
+    #expect(!paths.contains("/rest/v1/rpc/join_team"))
+
+    // dismiss 로 안내를 닫을 수 있다.
+    store.dismissCreatedTeamCode()
+    #expect(store.createdTeamCode == nil)
+}
+
+@MainActor
+@Test
+func signInWithoutTeamShowsTeamCodePrompt() async {
     let testHost = "no-team-test"
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(testHost)")!,
@@ -120,18 +200,86 @@ func signInWithoutTeamShowsNoTeamMessage() async {
 
     await store.signIn()?.value
 
-    // 소속 팀이 없는 계정은 로그인은 되지만 팀 데이터는 비고 안내 문구가 뜬다.
+    // 소속 팀이 없는 계정은 로그인은 되지만 팀 데이터는 비고 팀 코드 참여 안내가 뜬다.
     #expect(store.isSignedIn)
+    #expect(store.isTeamless)
     #expect(store.currentTeamID == nil)
     #expect(store.teamName == "팀")
     #expect(store.teamMembers.isEmpty)
-    #expect(store.syncMessage == "소속 팀이 없어요 — 관리자에게 문의")
+    #expect(store.syncMessage == "소속 팀이 없어요 — 팀 코드로 참여해 주세요")
 }
 
 @MainActor
 @Test
-func loadTeamDirectoryPopulatesDirectory() async {
-    let testHost = "team-directory-store-test"
+func previewTeamCodeSuccessSetsJoinPreview() async {
+    let store = WorkTimerStore(
+        service: SupabaseWorkService(
+            projectURL: URL(string: "http://preview-code-test")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        ),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    store.signupTeamCode = "SUDOPARK"
+
+    await store.performPreviewTeamCode()
+
+    #expect(store.joinPreview == TeamJoinPreview(
+        teamID: "10000000-0000-0000-0000-000000000001",
+        name: "sudo 박수",
+        weeklyGoalHours: 40,
+        memberCount: 3
+    ))
+    #expect(store.joinPreviewMessage == "")
+}
+
+@MainActor
+@Test
+func previewTeamCodeMissSetsMessage() async {
+    let store = WorkTimerStore(
+        service: SupabaseWorkService(
+            projectURL: URL(string: "http://preview-code-miss")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        ),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    store.signupTeamCode = "NOSUCHXX"
+
+    await store.performPreviewTeamCode()
+
+    #expect(store.joinPreview == nil)
+    #expect(store.joinPreviewMessage == "코드를 확인해 주세요")
+}
+
+@MainActor
+@Test
+func previewTeamCodeNormalizesInputInRequest() async {
+    let testHost = "preview-normalize-test"
+    let store = WorkTimerStore(
+        service: SupabaseWorkService(
+            projectURL: URL(string: "http://\(testHost)")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        ),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    // 공백/소문자 섞인 입력이 정규화되어("X7K2M9Q4") 서버로 나가야 한다.
+    store.signupTeamCode = "x7k2 m9q4"
+
+    await store.performPreviewTeamCode()
+
+    #expect(store.joinPreview != nil)
+    #expect(URLProtocolStub.bodyText(forHost: testHost).contains(#""code":"X7K2M9Q4""#))
+}
+
+@MainActor
+@Test
+func joinTeamWithCodeJoinsWhenTeamless() async {
+    let testHost = "teamless-join-test"
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(testHost)")!,
         anonKey: "anon-test-key",
@@ -142,14 +290,93 @@ func loadTeamDirectoryPopulatesDirectory() async {
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
         defaults: isolatedDefaults()
     )
-    #expect(store.teamDirectory.isEmpty)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    // 무소속 로그인 상태를 직접 세팅.
+    store.session = SupabaseSession(
+        accessToken: "access-token",
+        refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+    store.currentTeamID = nil
+    #expect(store.isTeamless)
+    store.signupTeamCode = "SUDOPARK"
 
-    await store.performLoadTeamDirectory()
+    await store.performJoinTeamWithCode()
 
-    #expect(store.teamDirectory == [
-        TeamDirectoryEntry(id: "10000000-0000-0000-0000-000000000001", name: "sudo 박수"),
-        TeamDirectoryEntry(id: "20000000-0000-0000-0000-000000000002", name: "오목교 브라더스")
-    ])
+    // 합류 후 팀이 확정되고, 입력 코드/미리보기는 비워진다.
+    #expect(store.currentTeamID == "10000000-0000-0000-0000-000000000001")
+    #expect(!store.isTeamless)
+    #expect(store.signupTeamCode == "")
+    #expect(store.joinPreview == nil)
+    let paths = URLProtocolStub.requests(forHost: testHost).compactMap { $0.url?.path }
+    #expect(paths.contains("/rest/v1/rpc/join_team"))
+}
+
+@MainActor
+@Test
+func ownerMembershipLoadsInviteCode() async {
+    let testHost = "owner-code-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(
+        accessToken: "access-token",
+        refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+
+    await store.confirmMembership()
+
+    // owner 로 확정되면 팀 카드 공유용 참여코드를 로드한다.
+    #expect(store.isTeamOwner)
+    #expect(store.teamRole == "owner")
+    #expect(store.myTeamInviteCode == "SUDOPARK")
+}
+
+@MainActor
+@Test
+func memberMembershipLeavesInviteCodeNil() async {
+    let testHost = "team-hours-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(
+        accessToken: "access-token",
+        refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+
+    await store.confirmMembership()
+
+    // member 는 owner 가 아니므로 참여코드를 로드하지 않는다.
+    #expect(!store.isTeamOwner)
+    #expect(store.teamRole == "member")
+    #expect(store.myTeamInviteCode == nil)
 }
 
 // MARK: - K: 팀 리그 (로드/정렬/초기화)
@@ -592,8 +819,17 @@ func signOutClearsSessionStateAndCallsLogout() async {
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.teamName = "sudo 박수"
     store.teamGoalSeconds = 40 * 3600
+    store.teamRole = "owner"
+    store.myTeamInviteCode = "SUDOPARK"
     store.teamDirectory = [TeamDirectoryEntry(id: "t", name: "n")]
     store.selectedSignupTeamID = "t"
+    store.signupTeamCode = "SUDOPARK"
+    store.joinPreview = TeamJoinPreview(teamID: "t", name: "n", weeklyGoalHours: 40, memberCount: 1)
+    store.joinPreviewMessage = "확인 중"
+    store.isCreateTeamMode = true
+    store.createTeamName = "새 팀"
+    store.createTeamGoalHours = 30
+    store.createdTeamCode = "X7K2M9Q4"
     store.startedAt = Date()
     store.accumulatedSeconds = 500
     store.teamMembers = [
@@ -618,8 +854,17 @@ func signOutClearsSessionStateAndCallsLogout() async {
     #expect(store.currentTeamID == nil)
     #expect(store.teamName == "팀")
     #expect(store.teamGoalSeconds == TeamWeeklyGoal.defaultGoalSeconds)
+    #expect(store.teamRole == nil)
+    #expect(store.myTeamInviteCode == nil)
     #expect(store.teamDirectory.isEmpty)
     #expect(store.selectedSignupTeamID == nil)
+    #expect(store.signupTeamCode == "")
+    #expect(store.joinPreview == nil)
+    #expect(store.joinPreviewMessage == "")
+    #expect(!store.isCreateTeamMode)
+    #expect(store.createTeamName == "")
+    #expect(store.createTeamGoalHours == 60)
+    #expect(store.createdTeamCode == nil)
     #expect(store.pendingOperation == nil)
     #expect(store.snapshot == WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0))
     #expect(store.tickerTask == nil)

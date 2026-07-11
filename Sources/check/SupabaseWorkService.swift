@@ -36,8 +36,10 @@ actor SupabaseWorkService {
         return SupabaseSession(accessToken: response.accessToken, refreshToken: response.refreshToken, userID: response.user.id)
     }
 
-    func signUp(email: String, password: String, displayName: String, teamID: String) async throws -> SupabaseSession? {
-        let body = SignUpRequest(email: email, password: password, data: ["display_name": displayName, "team_id": teamID])
+    /// 계정만 만든다. 팀 합류/생성은 가입 성공 후 스토어가 join_team/create_team 을 명시적으로 호출한다
+    /// (트리거는 더 이상 팀을 만들지 않으므로 team_id 메타데이터를 보내지 않는다).
+    func signUp(email: String, password: String, displayName: String) async throws -> SupabaseSession? {
+        let body = SignUpRequest(email: email, password: password, data: ["display_name": displayName])
         let data = try await send(
             path: "/auth/v1/signup",
             method: "POST",
@@ -288,18 +290,76 @@ actor SupabaseWorkService {
         )
     }
 
-    /// 가입 화면 팀 목록. team_directory() RPC 를 anon 토큰으로 호출한다(accessToken 없이 anonKey Bearer).
-    /// invite_code 는 RPC 가 반환하지 않으므로 노출되지 않는다.
-    func fetchTeamDirectory() async throws -> [TeamDirectoryEntry] {
+    /// 팀 코드 정규화: 대문자화 후 공백/하이픈 제거. 클라에서도 적용해 정규화된 코드만 서버로 보낸다.
+    static func normalizeInviteCode(_ code: String) -> String {
+        code.uppercased().filter { !$0.isWhitespace && $0 != "-" }
+    }
+
+    /// 팀 코드 미리보기. lookup_team_by_code(code) RPC 를 anon Bearer(accessToken 없이)로 호출한다.
+    /// 가입 전에도 쓰이므로 로그인 토큰이 필요 없다. 못 찾으면 nil.
+    func lookupTeamByCode(code: String) async throws -> TeamJoinPreview? {
         let data = try await send(
-            path: "/rest/v1/rpc/team_directory",
+            path: "/rest/v1/rpc/lookup_team_by_code",
             method: "POST",
-            body: EmptyBody(),
+            body: InviteCodeRequest(code: Self.normalizeInviteCode(code)),
             accessToken: nil,
             prefer: nil
         )
-        let rows = try decoder.decode([TeamDirectoryRow].self, from: data)
-        return rows.map { TeamDirectoryEntry(id: $0.id, name: $0.name) }
+        let rows = try decoder.decode([TeamJoinPreviewRow].self, from: data)
+        guard let row = rows.first else {
+            return nil
+        }
+        return TeamJoinPreview(
+            teamID: row.teamId,
+            name: row.name,
+            weeklyGoalHours: row.weeklyGoalHours,
+            memberCount: row.memberCount
+        )
+    }
+
+    /// 코드로 팀 합류. join_team(code) RPC 를 로그인 토큰으로 호출한다. 불일치/비로그인은 0행 → nil.
+    func joinTeam(accessToken: String, code: String) async throws -> (teamID: String, name: String, goalHours: Int)? {
+        let data = try await send(
+            path: "/rest/v1/rpc/join_team",
+            method: "POST",
+            body: InviteCodeRequest(code: Self.normalizeInviteCode(code)),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        let rows = try decoder.decode([JoinTeamRow].self, from: data)
+        guard let row = rows.first else {
+            return nil
+        }
+        return (teamID: row.teamId, name: row.name, goalHours: row.weeklyGoalHours)
+    }
+
+    /// 새 팀 만들기. create_team(team_name, goal_hours) RPC 를 로그인 토큰으로 호출하고 참여코드를 함께 받는다.
+    func createTeam(accessToken: String, name: String, goalHours: Int) async throws -> (teamID: String, name: String, inviteCode: String, goalHours: Int) {
+        let data = try await send(
+            path: "/rest/v1/rpc/create_team",
+            method: "POST",
+            body: CreateTeamRequest(teamName: name, goalHours: goalHours),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        let rows = try decoder.decode([CreateTeamRow].self, from: data)
+        guard let row = rows.first else {
+            throw SupabaseWorkServiceError.invalidResponse(200)
+        }
+        return (teamID: row.teamId, name: row.name, inviteCode: row.inviteCode, goalHours: row.weeklyGoalHours)
+    }
+
+    /// 내 팀 참여코드(owner 전용). my_team_invite_code() RPC 를 로그인 토큰으로 호출한다. owner 아니면 nil.
+    func fetchMyInviteCode(accessToken: String) async throws -> String? {
+        let data = try await send(
+            path: "/rest/v1/rpc/my_team_invite_code",
+            method: "POST",
+            body: EmptyBody(),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        let rows = try decoder.decode([InviteCodeRow].self, from: data)
+        return rows.first?.inviteCode
     }
 
     /// 팀 리그(이번 주 팀별 총 근무시간). team_weekly_leaderboard() RPC 를 로그인 토큰으로 호출한다.
@@ -327,12 +387,12 @@ actor SupabaseWorkService {
     /// 로그인 후 내 팀을 확정한다. 소속이 없으면 nil.
     /// 목표시간(goalHours)은 teams.weekly_goal_hours 를 그대로 읽어 온다(같은 쿼리라 추가 요청 없음).
     /// 누락/null 이면 기본 목표(60시간)로 폴백한다.
-    func fetchOwnMembership(accessToken: String, userID: String) async throws -> (teamID: String, teamName: String, goalHours: Int)? {
+    func fetchOwnMembership(accessToken: String, userID: String) async throws -> (teamID: String, teamName: String, goalHours: Int, role: String)? {
         let data = try await send(
             path: "/rest/v1/memberships",
             method: "GET",
             queryItems: [
-                URLQueryItem(name: "select", value: "team_id,teams(name,weekly_goal_hours)"),
+                URLQueryItem(name: "select", value: "team_id,role,teams(name,weekly_goal_hours)"),
                 URLQueryItem(name: "user_id", value: "eq.\(userID)"),
                 URLQueryItem(name: "limit", value: "1")
             ],
@@ -347,7 +407,8 @@ actor SupabaseWorkService {
         return (
             teamID: row.teamId,
             teamName: row.teams?.name ?? "팀",
-            goalHours: row.teams?.weeklyGoalHours ?? TeamWeeklyGoal.defaultGoalHours
+            goalHours: row.teams?.weeklyGoalHours ?? TeamWeeklyGoal.defaultGoalHours,
+            role: row.role ?? "member"
         )
     }
 

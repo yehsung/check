@@ -1,0 +1,2 @@
+zsh:1: no matches found: supabase/migrations/*create_check_schema.sql
+cleanup: killed tmux session ulw-qa-c002

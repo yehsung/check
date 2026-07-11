@@ -1,0 +1,32 @@
+project_id = "xfnhfjvubetkdnfkfljg"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[storage]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "check://auth"
+additional_redirect_urls = ["check://auth"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false

@@ -1,0 +1,15 @@
+Thu Jul  2 00:40:44 KST 2026
+action: launch dist/check.app/Contents/MacOS/check for menu-bar runtime smoke test
+pid: 29490
+process:
+  PID STAT COMMAND
+29490 SN   dist/check.app/Contents/MacOS/check
+bundle-id:
+kingcheck
+activation-policy:
+true
+stdout:
+cleanup: kill launched check process
+remaining-process:
+  PID STAT COMMAND
+EXIT 0

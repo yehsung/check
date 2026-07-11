@@ -1,0 +1,14 @@
+POST /auth/v1/token?grant_type=password -> 200
+signed-in-user=00000000-0000-0000-0000-000000000002
+GET /rest/v1/work_statuses?select=user_id,status,updated_at,profiles(display_name,email)&team_id=eq.10000000-0000-0000-0000-000000000001&order=updated_at.desc -> 200
+status-count-before=2
+POST /rest/v1/work_sessions -> 201
+POST /rest/v1/work_statuses?on_conflict=team_id,user_id -> 200
+GET /rest/v1/work_statuses?select=user_id,status&team_id=eq.10000000-0000-0000-0000-000000000001&user_id=eq.00000000-0000-0000-0000-000000000002 -> 200
+status-after-start=working
+PATCH /rest/v1/work_sessions?team_id=eq.10000000-0000-0000-0000-000000000001&user_id=eq.00000000-0000-0000-0000-000000000002&id=eq.b70ce05c-62b1-4846-b869-b7e767fd060a -> 204
+POST /rest/v1/work_statuses?on_conflict=team_id,user_id -> 200
+GET /rest/v1/work_statuses?select=user_id,status&team_id=eq.10000000-0000-0000-0000-000000000001&user_id=eq.00000000-0000-0000-0000-000000000002 -> 200
+status-after-stop=off_work
+REST smoke ok
+EXIT 0

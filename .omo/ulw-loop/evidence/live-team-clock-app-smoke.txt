@@ -1,0 +1,1 @@
+app launched and stayed alive for 3s (pid=42650)

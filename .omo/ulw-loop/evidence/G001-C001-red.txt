@@ -1,0 +1,22 @@
+2026-07-02 00:13:31.828 xcodebuild[22196:178522]  DVTErrorPresenter: Unable to load simulator devices.
+Domain: DVTCoreSimulatorAdditionsErrorDomain
+Code: 3
+Failure Reason: The version of the CoreSimulator framework installed on this Mac is out-of-date and not supported by this version of Xcode.
+Recovery Suggestion: Please ensure that you have installed all available updates to your Mac's software, and that you are running the most recent version of Xcode supported by macOS.
+--
+CoreSimulator is out of date. Current version (1051.54.0) is older than build version (1051.55.0).
+Domain: DVTCoreSimulatorAdditionsErrorDomain
+Code: 3
+--
+
+2026-07-02 00:13:31.828 xcodebuild[22196:178522]  iOSSimulator: [SimServiceContext sharedServiceContextForDeveloperDir:error:] returned nil (Error Domain=DVTCoreSimulatorAdditionsErrorDomain Code=3 "CoreSimulator is out of date. Current version (1051.54.0) is older than build version (1051.55.0)." UserInfo={NSLocalizedDescription=CoreSimulator is out of date. Current version (1051.54.0) is older than build version (1051.55.0).}). Simulator device support disabled.
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test -scheme check -destination platform=macOS
+
+2026-07-02 00:13:31.846 xcodebuild[22196:178011] Writing error result bundle to /var/folders/7p/6yk62ngn06b7t5kjjlv_kxyr0000gn/T/ResultBundle_2026-02-07_00-13-0031.xcresult
+xcodebuild: error: The directory /Users/yesung/check does not contain an Xcode project, workspace or package.
+
+EXIT:66
+
+cleanup: tmux command finished; session ulw-qa-c001 will be killed by orchestrator
+cleanup: killed tmux session ulw-qa-c001

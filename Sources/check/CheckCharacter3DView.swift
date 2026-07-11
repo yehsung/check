@@ -70,20 +70,24 @@ enum CheckCharacter3DScene {
     /// 텍스처 콘텐츠를 최대 `maxDimension`px 로 리샘플한 CGImage 로 돌려준다.
     /// NSImage/CGImage/파일 참조(URL·경로)만 처리하고, 이미 작거나 알 수 없는 타입이면 nil(교체하지 않음 — 무손실 no-op).
     static func downscaledTexture(_ contents: Any?, maxDimension: CGFloat = 512) -> CGImage? {
+        guard let contents else { return nil }
         let source: CGImage?
-        switch contents {
-        case let image as CGImage:
-            source = image
-        case let image as NSImage:
+        // 주의: CF 불투명 타입(CGImage)으로의 `as?` 캐스트는 실제 타입과 무관하게 성공하므로
+        // (NSURL 도 삼켜 쓰레기 치수를 만든다) 반드시 CFGetTypeID 로 판별한다.
+        if CFGetTypeID(contents as CFTypeRef) == CGImage.typeID {
+            source = (contents as! CGImage)
+        } else if let image = contents as? NSImage {
             source = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        case let url as URL:
-            source = NSImage(contentsOf: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        case let path as String:
+        } else if let url = contents as? URL {
+            source = decodeTextureURL(url)
+        } else if let path = contents as? String {
             source = NSImage(contentsOfFile: path)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        default:
+        } else {
             return nil
         }
         guard let cg = source else { return nil }
+        // 디코드가 비정상 이미지(예: 아카이브 통짜 오독 → 1×512)를 내놓으면 교체하지 않는다(무손실 no-op).
+        guard cg.width >= 8, cg.height >= 8 else { return nil }
         let maxSide = max(cg.width, cg.height)
         guard maxSide > Int(maxDimension) else { return nil }
         let scale = maxDimension / CGFloat(maxSide)
@@ -103,6 +107,31 @@ enum CheckCharacter3DScene {
         context.interpolationQuality = .high
         context.draw(cg, in: CGRect(x: 0, y: 0, width: newWidth, height: newHeight))
         return context.makeImage()
+    }
+
+    /// SceneKit 이 USDZ 내부 텍스처를 가리킬 때 쓰는 `...aing.usdz?offset=N&size=M` 아카이브 참조 URL 을
+    /// 디코드한다. usdz 는 무압축(stored) zip 이라 해당 바이트 구간이 곧 이미지 파일 원본이다.
+    /// 일반 파일 URL(쿼리 없음)은 그대로 이미지로 읽는다. 실패 시 nil(교체하지 않음).
+    private static func decodeTextureURL(_ url: URL) -> CGImage? {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let items = components.queryItems,
+              let offset = items.first(where: { $0.name == "offset" })?.value.flatMap(Int.init),
+              let size = items.first(where: { $0.name == "size" })?.value.flatMap(Int.init)
+        else {
+            return NSImage(contentsOf: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        }
+        var fileComponents = components
+        fileComponents.queryItems = nil
+        guard let fileURL = fileComponents.url,
+              offset >= 0, size > 0,
+              let handle = try? FileHandle(forReadingFrom: fileURL),
+              let _ = try? handle.seek(toOffset: UInt64(offset)),
+              let data = try? handle.read(upToCount: size),
+              data.count == size
+        else {
+            return nil
+        }
+        return NSImage(data: data)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
     }
 
     /// 바운딩박스를 기준으로, 캐릭터를 살짝 내려다보는 구도로 프레임에 꽉 차게 카메라를 배치한다.

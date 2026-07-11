@@ -848,3 +848,49 @@ private func kstDate(year: Int, month: Int, day: Int, hour: Int, minute: Int = 0
 private func member(_ id: String, _ status: WorkStatus) -> TeamMemberStatus {
     TeamMemberStatus(id: id, name: "\(id)-name", status: status, updatedAt: nil, currentSessionStartedAt: nil)
 }
+
+// MARK: - 캐릭터 가시성 픽셀 회귀 (A8 텍스처 다운스케일이 재질을 깨면 렌더가 비어 버린다)
+
+@MainActor
+@Test
+func characterSceneRendersVisiblePixels() throws {
+    // 오프스크린 렌더 중앙 영역에 불투명·유채(비백색) 픽셀이 실제로 존재해야 한다.
+    // 텍스처 교체가 잘못되면(아카이브 URL 오독 → 1×512 쓰레기) 캐릭터가 투명/백색으로 사라져 실패한다.
+    let png = try #require(CheckCharacter3DScene.renderSnapshotPNG())
+    let image = try #require(NSImage(data: png))
+    let tiff = try #require(image.tiffRepresentation)
+    let bitmap = try #require(NSBitmapImageRep(data: tiff))
+    let w = bitmap.pixelsWide
+    let h = bitmap.pixelsHigh
+    var colored = 0
+    for x in stride(from: w / 3, to: 2 * w / 3, by: 4) {
+        for y in stride(from: h / 3, to: 2 * h / 3, by: 4) {
+            guard let raw = bitmap.colorAt(x: x, y: y),
+                  let c = raw.usingColorSpace(.deviceRGB) else { continue }
+            if c.alphaComponent > 0.5, c.brightnessComponent < 0.97 {
+                colored += 1
+            }
+        }
+    }
+    #expect(colored > 20)
+}
+
+@MainActor
+@Test
+func usdzArchiveTextureDownscalesToSaneDimensions() throws {
+    // 실제 usdz 의 아카이브 참조 텍스처(...usdz?offset=&size=)가 정상 치수(≥8px, ≤512px)로
+    // 다운스케일되는지 검증한다. 참조 해석이 깨지면 no-op(nil)으로 떨어져 found 가 false 가 된다.
+    let scene = try #require(CheckCharacter3DScene.loadModelScene())
+    var found = false
+    scene.rootNode.enumerateHierarchy { node, _ in
+        node.geometry?.materials.forEach { material in
+            if let cg = CheckCharacter3DScene.downscaledTexture(material.diffuse.contents) {
+                #expect(cg.width >= 8)
+                #expect(cg.height >= 8)
+                #expect(max(cg.width, cg.height) <= 512)
+                found = true
+            }
+        }
+    }
+    #expect(found)
+}

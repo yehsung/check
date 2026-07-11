@@ -26,6 +26,15 @@ final class WorkTimerStore {
     /// 3D 캐릭터 오버레이 표시 여부 (사용자 토글, UserDefaults 유지).
     var isOverlayEnabled: Bool = true
 
+    /// 리액션 트리거 싱크. 오버레이 컨트롤러가 연결해 마일스톤/팀원 인사를 엔진으로 흘린다(관찰 대상 아님).
+    @ObservationIgnored var onReactionTrigger: ((ReactionKind) -> Void)?
+    /// 마일스톤 1일 1회 기록기. init 에서 defaults 로 초기화한다.
+    @ObservationIgnored var milestoneTracker: MilestoneTracker!
+    /// 팀원 출근 인사(offWork→working) 전이 감지기. 로그아웃 시 reset.
+    @ObservationIgnored var greetingDetector = TeammateGreetingDetector()
+    /// 팀 주간 목표 완료 상태의 직전 관측값. nil=첫 로드(전이로 치지 않음). false→true 로 바뀌는 순간만 축하.
+    @ObservationIgnored var teamGoalComplete: Bool?
+
     var snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
     var displayNow = Date()
     var displayName: String
@@ -113,6 +122,7 @@ final class WorkTimerStore {
     ) {
         self.service = service
         self.defaults = defaults
+        milestoneTracker = MilestoneTracker(defaults: defaults)
         hasAnonKey = SupabaseConfig.anonKey(environment: environment) != nil
         email = defaults.string(forKey: Self.emailKey) ?? ""
         displayName = defaults.string(forKey: Self.displayNameKey) ?? ""
@@ -391,6 +401,24 @@ final class WorkTimerStore {
                 elapsedSeconds: max(0, Int(now.timeIntervalSince(startedAt)))
             )
             evaluateLongSession(now: now)
+            evaluateTimeMilestones(now: now)
+        }
+    }
+
+    /// 근무 중 오늘 누적이 1시간/4시간을 넘는 순간 마일스톤 축하를 트리거한다(마일스톤별 1일 1회).
+    /// 4시간을 이미 넘긴 채 관측되면 1시간 키는 조용히 소비해 뒤늦게 축하가 터지지 않게 한다.
+    func evaluateTimeMilestones(now: Date) {
+        guard startedAt != nil else { return }
+        let today = todayDuration
+        if today >= 4 * 3_600 {
+            if milestoneTracker.fireIfNeeded(MilestoneTracker.hourFourKey, now: now) {
+                onReactionTrigger?(.milestone)
+            }
+            _ = milestoneTracker.fireIfNeeded(MilestoneTracker.hourOneKey, now: now)
+        } else if today >= 3_600 {
+            if milestoneTracker.fireIfNeeded(MilestoneTracker.hourOneKey, now: now) {
+                onReactionTrigger?(.milestone)
+            }
         }
     }
 }
@@ -449,6 +477,9 @@ extension WorkTimerStore {
         // 세션이 사라지면 리그 페이지 상태도 함께 초기화한다(signOut·토큰 만료 로그아웃 공통 경로).
         leaderboard = []
         isLeaderboardVisible = false
+        // 팀원 인사/팀 목표 축하의 세션 상태도 비운다(다음 로그인의 첫 로드에서 인사 폭탄 금지).
+        greetingDetector.reset()
+        teamGoalComplete = nil
         refreshTask?.cancel()
         refreshTask = nil
     }

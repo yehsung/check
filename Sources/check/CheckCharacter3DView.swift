@@ -23,6 +23,10 @@ enum CheckCharacter3DScene {
         return try? SCNScene(url: url, options: nil)
     }
 
+    /// 리액션 wrapper 노드 이름. idle(부유/회전)은 wrapper 안쪽 캐릭터에, 리액션은 wrapper 에 걸어
+    /// 서로 간섭하지 않게 한다. makeNSView 가 이 이름으로 wrapper 를 찾아 리액션 엔진에 연결한다.
+    static let reactionWrapperName = "check.reactionWrapper"
+
     /// 오버레이용으로 완성된 씬(재질 unlit·투명 배경·카메라·애니메이션 포함). 로드 실패 시 nil.
     static func makeScene(animated: Bool = true) -> SCNScene? {
         guard let scene = loadModelScene() else { return nil }
@@ -32,6 +36,15 @@ enum CheckCharacter3DScene {
 
         // 임포트된 캐릭터 루트(첫 자식). 없으면 카메라/애니메이션 없이 씬만 돌려준다.
         guard let character = scene.rootNode.childNodes.first else { return scene }
+
+        // 캐릭터를 wrapper 로 감싼다: 리액션은 wrapper(바깥), idle 부유/회전은 캐릭터(안쪽)에 걸어
+        // 둘이 같은 트랜스폼을 두고 다투지 않게 분리한다.
+        let wrapper = SCNNode()
+        wrapper.name = reactionWrapperName
+        character.removeFromParentNode()
+        wrapper.addChildNode(character)
+        scene.rootNode.addChildNode(wrapper)
+
         addFramingCamera(to: scene)
         if animated {
             addIdleAnimations(to: character)
@@ -141,10 +154,13 @@ struct CheckOverlayTimerLabel: View {
 struct CheckCharacter3DView: NSViewRepresentable {
     /// true일 때만 렌더 루프/애니메이션을 돌린다. 패널 숨김 시 false → 정지(전력 절약).
     var isActive: Bool
+    /// 리액션 엔진. makeNSView 에서 wrapper 노드/씬 루트를 연결한다(없으면 리액션 없이 idle 만).
+    var engine: ReactionEngine?
 
     func makeNSView(context: Context) -> SCNView {
         let view = SCNView()
-        view.scene = CheckCharacter3DScene.makeScene()
+        let scene = CheckCharacter3DScene.makeScene()
+        view.scene = scene
         view.backgroundColor = .clear
         view.allowsCameraControl = false
         view.autoenablesDefaultLighting = false
@@ -153,6 +169,11 @@ struct CheckCharacter3DView: NSViewRepresentable {
         view.preferredFramesPerSecond = 20
         view.isPlaying = isActive
         view.rendersContinuously = isActive
+        if let engine,
+           let root = scene?.rootNode,
+           let wrapper = root.childNode(withName: CheckCharacter3DScene.reactionWrapperName, recursively: false) {
+            engine.attach(node: wrapper, sceneRoot: root)
+        }
         return view
     }
 
@@ -162,25 +183,63 @@ struct CheckCharacter3DView: NSViewRepresentable {
     }
 }
 
+/// 팀원 출근 인사 말풍선. 캐릭터 왼쪽 위에 뜨는 반투명 캡슐(꼬리 포함). 3초 후 엔진이 텍스트를 비우면 사라진다.
+struct CheckGreetingBubble: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(.caption2, design: .rounded).weight(.semibold))
+            .foregroundStyle(.black.opacity(0.85))
+            .lineLimit(2)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(0.92))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.black.opacity(0.10), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+            .frame(maxWidth: 110, alignment: .leading)
+    }
+}
+
 /// 3D 캐릭터 + 근무 시간 라벨 합성. 라벨은 얼굴(볼) 바로 아래 몸통 중상부에 얹는다.
+/// 리액션 엔진을 관찰해 팀원 출근 인사 말풍선을 캐릭터 왼쪽 위에 겹쳐 띄운다(패널 폭 안 수납).
 struct CheckOverlayCharacterView: View {
     /// 근무 시간 라벨의 세로 위치 비율(0=상단, 1=하단). 볼 아래 몸통 중상부(얼굴은 안 가림)에 오도록 54%.
     static let timerVerticalFraction: CGFloat = 0.49
 
     let elapsedSeconds: Int
     let isActive: Bool
+    var engine: ReactionEngine?
 
     var body: some View {
         GeometryReader { geo in
-            ZStack {
-                CheckCharacter3DView(isActive: isActive)
+            // 렌더 루프는 엔진의 renderActive(패널 표시~근무종료 인사)로 몬다. 엔진이 없으면 isActive 로 폴백한다.
+            let renderActive = engine?.renderActive ?? isActive
+            ZStack(alignment: .topLeading) {
+                CheckCharacter3DView(isActive: renderActive, engine: engine)
                     .frame(width: geo.size.width, height: geo.size.height)
                 CheckOverlayTimerLabel(text: CheckOverlayTimeFormatter.text(elapsedSeconds))
                     .position(
                         x: geo.size.width / 2,
                         y: geo.size.height * Self.timerVerticalFraction
                     )
+                if let engine, let greeting = engine.greetingText {
+                    CheckGreetingBubble(text: greeting)
+                        .padding(.leading, 4)
+                        .padding(.top, 8)
+                        .transition(.opacity)
+                        .id(greeting)
+                }
             }
+            .animation(.easeInOut(duration: 0.25), value: engine?.greetingText)
         }
     }
 }
@@ -191,12 +250,14 @@ struct CheckOverlayCharacterView: View {
 /// `elapsedSeconds`는 store의 1초 틱을 그대로 따라가므로 라벨이 실시간으로 흐른다.
 struct CheckOverlayRootView: View {
     let store: WorkTimerStore
+    var engine: ReactionEngine?
     var onWorkingChange: (Bool) -> Void
 
     var body: some View {
         CheckOverlayCharacterView(
             elapsedSeconds: store.todayDuration,
-            isActive: store.snapshot.isWorking
+            isActive: store.snapshot.isWorking,
+            engine: engine
         )
         .onChange(of: store.snapshot.isWorking, initial: true) { _, working in
             onWorkingChange(working)

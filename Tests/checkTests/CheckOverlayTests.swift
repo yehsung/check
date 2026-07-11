@@ -119,7 +119,7 @@ func overlayTimeFormatterFormatsHoursMinutesSeconds() {
 
 @MainActor
 @Test
-func overlayControllerTogglesVisibilityWithWorking() {
+func overlayControllerTogglesVisibilityWithWorking() async {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
         defaults: isolatedOverlayDefaults(),
@@ -138,9 +138,19 @@ func overlayControllerTogglesVisibilityWithWorking() {
 
     let becameVisible = controller.panel.isVisible
     controller.updateWorking(false)
+    // 숨김 의도는 즉시 뒤집힌다.
     #expect(controller.shouldBeVisible == false)
     if becameVisible {
-        #expect(controller.panel.isVisible == false)
+        // 근무 종료 인사(꾸벅) 후 패널을 내리므로 숨김은 비동기다. 최대 1초 내 반드시 숨겨져야 한다.
+        var hidden = false
+        for _ in 0..<200 {
+            if !controller.panel.isVisible {
+                hidden = true
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(hidden)
     }
 }
 
@@ -193,6 +203,286 @@ private func writeOverlayMock(seconds: Int, background: NSImage, to url: URL) th
     try png.write(to: url)
 }
 
+// MARK: - Wave7: 리액션 엔진 우선순위/쿨다운
+
+@MainActor
+@Test
+func reactionEnginePrioritizesHigherAndIgnoresLowerWhilePlaying() {
+    var now = Date(timeIntervalSince1970: 1_000)
+    let engine = ReactionEngine(clock: { now })
+
+    #expect(engine.state == .idle)
+
+    // 마일스톤(2) 재생 중: 인사(1)·졸기(0)는 무시, hit(3)은 인터럽트.
+    #expect(engine.request(.milestone))
+    #expect(engine.state == .playing(.milestone))
+    #expect(engine.request(.greeting(name: "철수")) == false)
+    #expect(engine.request(.drowsy) == false)
+    #expect(engine.state == .playing(.milestone))
+
+    #expect(engine.request(.hit))
+    #expect(engine.state == .playing(.hit))
+    // 동순위(출퇴근=hit=3)는 인터럽트하지 않는다.
+    #expect(engine.request(.commuteStart) == false)
+
+    // hit 재생 길이가 지나면 idle 로 복귀한다(clock 기반 만료).
+    now = now.addingTimeInterval(0.7)
+    #expect(engine.state == .idle)
+    #expect(engine.request(.drowsy))
+    #expect(engine.state == .playing(.drowsy))
+}
+
+@MainActor
+@Test
+func reactionEngineEnforcesHitCooldown() {
+    var now = Date(timeIntervalSince1970: 2_000)
+    let engine = ReactionEngine(clock: { now })
+
+    #expect(engine.request(.hit))
+    // 0.6초 이내 연타는 무시된다.
+    now = now.addingTimeInterval(0.5)
+    #expect(engine.request(.hit) == false)
+    // 0.6초를 넘기면 다시 허용된다.
+    now = now.addingTimeInterval(0.2) // 총 0.7초
+    #expect(engine.request(.hit))
+}
+
+@MainActor
+@Test
+func reactionEngineClearsGreetingBubbleWhenInterrupted() {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 3_000) })
+    #expect(engine.request(.greeting(name: "영희")))
+    #expect(engine.greetingText == "영희님 출근!")
+
+    // 더 높은 우선순위(hit)가 들어오면 말풍선도 함께 사라진다.
+    #expect(engine.request(.hit))
+    #expect(engine.greetingText == nil)
+}
+
+// MARK: - Wave7: 마일스톤 1일 1회
+
+@Test
+func milestoneTrackerFiresOncePerKoreanDay() {
+    let suiteName = "check-milestone-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defaults.removePersistentDomain(forName: suiteName)
+    var tracker = MilestoneTracker(defaults: defaults)
+
+    let day1 = kstDate(year: 2026, month: 7, day: 11, hour: 10)
+    #expect(tracker.fireIfNeeded(MilestoneTracker.hourOneKey, now: day1) == true)
+    #expect(tracker.fireIfNeeded(MilestoneTracker.hourOneKey, now: day1) == false)
+    // 같은 날 다른 키는 독립적으로 한 번 터진다.
+    #expect(tracker.fireIfNeeded(MilestoneTracker.hourFourKey, now: day1) == true)
+
+    // 하루가 지나면 다시 터진다.
+    let day2 = kstDate(year: 2026, month: 7, day: 12, hour: 1)
+    #expect(tracker.fireIfNeeded(MilestoneTracker.hourOneKey, now: day2) == true)
+
+    // 새 인스턴스(재실행)라도 UserDefaults 기록으로 같은 날은 중복되지 않는다.
+    var reopened = MilestoneTracker(defaults: defaults)
+    #expect(reopened.fireIfNeeded(MilestoneTracker.hourOneKey, now: day2) == false)
+}
+
+// MARK: - Wave7: 팀원 출근 인사 전이 감지
+
+@Test
+func greetingDetectorExcludesFirstLoadAndSelfAndAppliesCooldown() {
+    var detector = TeammateGreetingDetector()
+    let selfID = "00000000-0000-0000-0000-000000000002"
+    let t0 = Date(timeIntervalSince1970: 10_000)
+
+    // 첫 로드: 이미 근무 중인 팀원/본인 모두 인사하지 않는다(인사 폭탄 금지).
+    let first = detector.detect(
+        members: [member("a", .working), member(selfID, .working)],
+        selfID: selfID, now: t0
+    )
+    #expect(first.isEmpty)
+
+    // a 가 offWork 로 바뀐 뒤 working 으로 전이 → 인사.
+    _ = detector.detect(members: [member("a", .offWork)], selfID: selfID, now: t0.addingTimeInterval(10))
+    let greet1 = detector.detect(members: [member("a", .working)], selfID: selfID, now: t0.addingTimeInterval(20))
+    #expect(greet1 == ["a-name"])
+
+    // 10분 이내 재전이는 쿨다운으로 무시.
+    _ = detector.detect(members: [member("a", .offWork)], selfID: selfID, now: t0.addingTimeInterval(30))
+    let greet2 = detector.detect(members: [member("a", .working)], selfID: selfID, now: t0.addingTimeInterval(40))
+    #expect(greet2.isEmpty)
+
+    // 10분이 지나면 다시 인사.
+    _ = detector.detect(members: [member("a", .offWork)], selfID: selfID, now: t0.addingTimeInterval(650))
+    let greet3 = detector.detect(members: [member("a", .working)], selfID: selfID, now: t0.addingTimeInterval(660))
+    #expect(greet3 == ["a-name"])
+
+    // 본인이 offWork→working 으로 바뀌어도 인사하지 않는다.
+    _ = detector.detect(members: [member(selfID, .offWork)], selfID: selfID, now: t0.addingTimeInterval(700))
+    let greetSelf = detector.detect(members: [member(selfID, .working)], selfID: selfID, now: t0.addingTimeInterval(710))
+    #expect(greetSelf.isEmpty)
+}
+
+// MARK: - Wave7: 졸기 시간창 판정(시각 주입)
+
+@Test
+func drowsyWindowCoversNightHoursOnly() {
+    #expect(DrowsyWindow.contains(kstDate(year: 2026, month: 7, day: 11, hour: 23)))
+    #expect(DrowsyWindow.contains(kstDate(year: 2026, month: 7, day: 12, hour: 0)))
+    #expect(DrowsyWindow.contains(kstDate(year: 2026, month: 7, day: 12, hour: 2, minute: 30)))
+    #expect(DrowsyWindow.contains(kstDate(year: 2026, month: 7, day: 12, hour: 4, minute: 59)))
+    // 05:00 이후, 낮, 22:59 는 창 밖.
+    #expect(DrowsyWindow.contains(kstDate(year: 2026, month: 7, day: 12, hour: 5)) == false)
+    #expect(DrowsyWindow.contains(kstDate(year: 2026, month: 7, day: 12, hour: 13)) == false)
+    #expect(DrowsyWindow.contains(kstDate(year: 2026, month: 7, day: 11, hour: 22, minute: 59)) == false)
+}
+
+@Test
+func drowsyIntervalStaysWithin90Plus30Seconds() {
+    var rng = SystemRandomNumberGenerator()
+    for _ in 0..<50 {
+        let interval = DrowsyWindow.nextInterval(using: &rng)
+        #expect(interval >= 60)
+        #expect(interval <= 120)
+    }
+}
+
+@MainActor
+@Test
+func reactionParticleAndTextFactoriesAreConfigured() {
+    // 색종이 버스트: 버스트 방출(birthRate>0), 반복 없음(버스트 후 제거), 짧은 방출.
+    let confetti = ReactionActions.confettiSystem()
+    #expect(confetti.birthRate > 0)
+    #expect(confetti.loops == false)
+    #expect(confetti.emissionDuration > 0)
+    #expect(confetti.isLightingEnabled == false)
+
+    // 💤 Z: SCNText, unlit(마스코트 색과 무관하게 흰색 유지).
+    let z = ReactionActions.makeZNode(extent: 2)
+    #expect(z.geometry is SCNText)
+    #expect(z.geometry?.firstMaterial?.lightingModel == .constant)
+}
+
+// MARK: - Wave7: 때리면 아파하기 (클릭 프레임 판정)
+
+@MainActor
+@Test
+func overlayControllerReactsToClickInsidePanelOnly() {
+    var now = Date(timeIntervalSince1970: 20_000)
+    let engine = ReactionEngine(clock: { now })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(store: store, notificationCenter: NotificationCenter(), engine: engine)
+    controller.updateWorking(true)
+    // 표시 시 commuteStart 가 재생 중이므로, 그 길이를 넘겨 idle 로 만든 뒤 클릭을 판정한다.
+    now = now.addingTimeInterval(0.7)
+    #expect(engine.state == .idle)
+
+    let frame = controller.panel.frame
+    let outside = NSPoint(x: frame.minX - 500, y: frame.minY - 500)
+    controller.handleClick(at: outside)
+    #expect(engine.state == .idle)
+
+    let inside = NSPoint(x: frame.midX, y: frame.midY)
+    controller.handleClick(at: inside)
+    #expect(engine.state == .playing(.hit))
+
+    controller.updateWorking(false) // 전역 모니터 해제(정리).
+}
+
+// MARK: - Wave7: 시각 검증 스냅샷 덤프 (CHECK_REACTION_SNAPSHOT_DIR 지정 시에만 기록)
+
+@MainActor
+@Test
+func dumpReactionSnapshots() throws {
+    guard let dir = ProcessInfo.processInfo.environment["CHECK_REACTION_SNAPSHOT_DIR"] else { return }
+    let base = URL(fileURLWithPath: dir, isDirectory: true)
+    try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+
+    // (a) 찌부 순간(때리면 아파하기): scaleY 0.62 / scaleX·Z 1.28.
+    try writePosedSnapshot(to: base.appendingPathComponent("reaction-squash.png")) { wrapper, _ in
+        wrapper.scale = SCNVector3(1.28, 0.62, 1.28)
+    }
+    // (b) 꾸벅 순간(근무 종료 인사): x축 -20°.
+    try writePosedSnapshot(to: base.appendingPathComponent("reaction-bow.png")) { wrapper, _ in
+        wrapper.eulerAngles = SCNVector3(ReactionActions.radians(-20), 0, 0)
+    }
+    // (c) 폴짝 순간(근무 시작/마일스톤): 위로 점프.
+    try writePosedSnapshot(to: base.appendingPathComponent("reaction-hop.png")) { wrapper, extent in
+        wrapper.position = SCNVector3(0, extent * 0.32, 0)
+    }
+    // (d) 졸기 순간 + 💤 Z 노드(머리 위 오른쪽 빈 코너에서 위로 떠오르는 중간 프레임).
+    // Z 는 흰색 반투명이라 투명 배경에선 안 보이므로, 바탕화면을 흉내 낸 어두운 배경 위에서 확인한다.
+    try writePosedSnapshot(
+        to: base.appendingPathComponent("reaction-drowsy.png"),
+        background: NSColor(calibratedRed: 0.20, green: 0.24, blue: 0.34, alpha: 1)
+    ) { wrapper, extent in
+        wrapper.eulerAngles = SCNVector3(ReactionActions.radians(-14), 0, 0)
+        wrapper.position = SCNVector3(0, -extent * 0.06, 0)
+        if let root = wrapper.parent {
+            for i in 0..<3 {
+                let z = ReactionActions.makeZNode(extent: extent)
+                z.opacity = 0.85
+                z.position = SCNVector3(
+                    extent * (0.3 + Double(i) * 0.05),
+                    extent * (0.25 + Double(i) * 0.16),
+                    extent * 0.1
+                )
+                root.addChildNode(z)
+            }
+        }
+    }
+
+    // (e) 팀원 출근 인사 말풍선(SwiftUI 합성). 캐릭터 렌더를 배경으로 실제 말풍선 컴포넌트를 얹는다.
+    let scnPNG = try #require(CheckCharacter3DScene.renderSnapshotPNG())
+    let scnImage = try #require(NSImage(data: scnPNG))
+    let mock = ZStack(alignment: .topLeading) {
+        Image(nsImage: scnImage)
+            .resizable()
+            .scaledToFit()
+        CheckGreetingBubble(text: "지훈님 출근!")
+            .padding(.leading, 4)
+            .padding(.top, 8)
+    }
+    .frame(width: CheckOverlayController.panelSize.width, height: CheckOverlayController.panelSize.height)
+    let renderer = ImageRenderer(content: mock)
+    renderer.scale = 3
+    let image = try #require(renderer.nsImage)
+    let tiff = try #require(image.tiffRepresentation)
+    let bitmap = try #require(NSBitmapImageRep(data: tiff))
+    let png = try #require(bitmap.representation(using: .png, properties: [:]))
+    try png.write(to: base.appendingPathComponent("reaction-greeting.png"))
+}
+
+/// wrapper 노드에 정지 포즈를 적용한 SCN 오프스크린 렌더를 PNG 로 저장한다(리액션 중간 포즈 육안 확인용).
+@MainActor
+private func writePosedSnapshot(
+    to url: URL,
+    size: CGSize = CGSize(width: 280, height: 340),
+    background: NSColor? = nil,
+    pose: (_ wrapper: SCNNode, _ extent: CGFloat) -> Void
+) throws {
+    let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    if let background {
+        scene.background.contents = background
+    }
+    let wrapper = try #require(
+        scene.rootNode.childNode(withName: CheckCharacter3DScene.reactionWrapperName, recursively: false)
+    )
+    let (minB, maxB) = wrapper.boundingBox
+    let extent = CGFloat(max(maxB.x - minB.x, max(maxB.y - minB.y, maxB.z - minB.z)))
+    pose(wrapper, extent > 0 ? extent : 1)
+
+    let renderer = SCNRenderer(device: device, options: nil)
+    renderer.scene = scene
+    renderer.autoenablesDefaultLighting = false
+    let image = renderer.snapshot(atTime: 0, with: size, antialiasingMode: .multisampling4X)
+    let tiff = try #require(image.tiffRepresentation)
+    let bitmap = try #require(NSBitmapImageRep(data: tiff))
+    let png = try #require(bitmap.representation(using: .png, properties: [:]))
+    try png.write(to: url)
+}
+
 // MARK: - Helpers
 
 private func isolatedOverlayDefaults() -> UserDefaults {
@@ -200,4 +490,21 @@ private func isolatedOverlayDefaults() -> UserDefaults {
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return defaults
+}
+
+/// 지정한 KST 시각의 Date 를 만든다(시간창/1일1회 판정 테스트용).
+private func kstDate(year: Int, month: Int, day: Int, hour: Int, minute: Int = 0) -> Date {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Asia/Seoul")!
+    var components = DateComponents()
+    components.year = year
+    components.month = month
+    components.day = day
+    components.hour = hour
+    components.minute = minute
+    return calendar.date(from: components)!
+}
+
+private func member(_ id: String, _ status: WorkStatus) -> TeamMemberStatus {
+    TeamMemberStatus(id: id, name: "\(id)-name", status: status, updatedAt: nil, currentSessionStartedAt: nil)
 }

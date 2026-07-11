@@ -1466,6 +1466,123 @@ func updateAvatarUploadsAndReportsSuccess() async {
     })
 }
 
+// MARK: - Wave7: 리액션 트리거(스토어 감지)
+
+@MainActor
+@Test
+func timeMilestoneTriggersOnceWhenTodayCrossesOneHour() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer { store.tickerTask?.cancel() }
+    var events: [ReactionKind] = []
+    store.onReactionTrigger = { events.append($0) }
+
+    let now = Date()
+    store.startedAt = now.addingTimeInterval(-3_601) // 오늘 누적 1시간 1초
+    store.displayNow = now
+
+    store.evaluateTimeMilestones(now: now)
+    #expect(events == [.milestone])
+    // 같은 날 재평가해도 추가로 터지지 않는다(1일 1회).
+    store.evaluateTimeMilestones(now: now)
+    #expect(events == [.milestone])
+}
+
+@MainActor
+@Test
+func timeMilestoneAtFourHoursSuppressesBelatedOneHour() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer { store.tickerTask?.cancel() }
+    var events: [ReactionKind] = []
+    store.onReactionTrigger = { events.append($0) }
+
+    let now = Date()
+    store.startedAt = now.addingTimeInterval(-(4 * 3_600 + 1)) // 이미 4시간 넘김
+    store.displayNow = now
+
+    store.evaluateTimeMilestones(now: now)
+    // 4시간 축하 한 번만. 1시간 키는 조용히 소비되어 뒤늦게 터지지 않는다.
+    #expect(events == [.milestone])
+    store.evaluateTimeMilestones(now: now)
+    #expect(events == [.milestone])
+}
+
+@MainActor
+@Test
+func detectTeamReactionsEmitsGreetingOnOffToWorkingTransition() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer { store.tickerTask?.cancel() }
+    var events: [ReactionKind] = []
+    store.onReactionTrigger = { events.append($0) }
+    store.session = SupabaseSession(
+        accessToken: "access-token", refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+    store.currentTeamID = "team-id"
+    store.teamGoalSeconds = TeamWeeklyGoal.defaultGoalSeconds
+
+    // 첫 로드: 시드만, 인사 없음.
+    store.teamMembers = [
+        TeamMemberStatus(id: "other", name: "동료", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil)
+    ]
+    store.detectTeamReactions()
+    #expect(events.isEmpty)
+
+    // offWork→working 전이 → 인사 이벤트.
+    store.teamMembers = [
+        TeamMemberStatus(id: "other", name: "동료", status: .working, updatedAt: nil, currentSessionStartedAt: nil)
+    ]
+    store.detectTeamReactions()
+    #expect(events == [.greeting(name: "동료")])
+}
+
+@MainActor
+@Test
+func detectTeamReactionsCelebratesTeamGoalCrossingOnce() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer { store.tickerTask?.cancel() }
+    var events: [ReactionKind] = []
+    store.onReactionTrigger = { events.append($0) }
+    store.session = SupabaseSession(
+        accessToken: "access-token", refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+    store.currentTeamID = "team-id"
+    store.teamGoalSeconds = 40 * 3_600
+
+    func worked(_ seconds: Int) -> TeamMemberStatus {
+        TeamMemberStatus(
+            id: "x", name: "x", status: .offWork, updatedAt: nil,
+            currentSessionStartedAt: nil, weeklyDurationSeconds: seconds
+        )
+    }
+
+    // 첫 로드: 목표 미달(10h/40h) — 전이로 치지 않는다.
+    store.teamMembers = [worked(10 * 3_600)]
+    store.detectTeamReactions()
+    #expect(events.isEmpty)
+
+    // 목표 100% 돌파(41h) — 미완료→완료 전이 시 1회 축하.
+    store.teamMembers = [worked(41 * 3_600)]
+    store.detectTeamReactions()
+    #expect(events.filter { $0 == .milestone }.count == 1)
+
+    // 완료 유지 상태에선 재축하하지 않는다.
+    store.detectTeamReactions()
+    #expect(events.filter { $0 == .milestone }.count == 1)
+}
+
 @MainActor
 private func makeStubStore(host: String, userID: String = "00000000-0000-0000-0000-000000000002") -> WorkTimerStore {
     let service = SupabaseWorkService(

@@ -20,6 +20,7 @@ extension WorkTimerStore {
             }
             guard generation == sessionGeneration else { return }
             teamMembers = members
+            detectTeamReactions()
             // 앱 시작 복구/폴링에서 서버상 내 세션은 열려 있으나 로컬은 비근무이고 마지막 신호 공백이 크면
             // 그 세션을 마지막 신호 시각으로 자동 마감한다. 자동 마감이 일어나면 restore 로직은 건너뛴다.
             if await autoCloseAbandonedOwnSessionIfNeeded() {
@@ -34,6 +35,24 @@ extension WorkTimerStore {
         } catch {
             guard generation == sessionGeneration else { return }
             syncMessage = authMessage(for: error, fallback: "동기화 실패")
+        }
+    }
+
+    /// 팀 목록 반영 직후 호출. 팀원 출근 인사(offWork→working 전이)와 팀 주간 목표 100% 돌파를 감지해
+    /// 리액션을 트리거한다. 첫 로드는 전이로 치지 않는다(seed 만 하고 인사/축하 없음).
+    func detectTeamReactions() {
+        let now = Date()
+        let names = greetingDetector.detect(members: teamMembers, selfID: session?.userID, now: now)
+        for name in names {
+            onReactionTrigger?(.greeting(name: name))
+        }
+
+        let weeklyTotal = teamMembers.reduce(0) { $0 + $1.liveWeeklyDurationSeconds(now: now) }
+        let complete = TeamWeeklyGoal(workedSeconds: weeklyTotal, goalSeconds: teamGoalSeconds).isComplete
+        defer { teamGoalComplete = complete }
+        // 첫 관측(nil)은 전이로 치지 않는다. 미완료→완료 로 바뀌는 순간에만, 1일 1회 축하한다.
+        if teamGoalComplete == false, complete, milestoneTracker.fireIfNeeded(MilestoneTracker.teamGoalKey, now: now) {
+            onReactionTrigger?(.milestone)
         }
     }
 

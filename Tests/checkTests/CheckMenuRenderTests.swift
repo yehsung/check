@@ -192,6 +192,40 @@ func checkMenuViewRendersLoginErrorSnapshot() throws {
 
 @MainActor
 @Test
+func checkMenuViewRendersASCIIWarningSnapshot() throws {
+    // 비밀번호 필드에 "영어 문자만 입력할 수 있어요" 안내가 떠 있는 상태의 로그인 패널.
+    // 캡션/테두리 강조가 340pt 폭 안에서 잘림·밀림 없이 수납되는지 확인한다.
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedRenderDefaults()
+    )
+    store.email = "member@example.com"
+    store.password = "team-password"
+
+    let view = CheckMenuView(store: store, previewASCIIWarning: true)
+        .frame(width: 340)
+        .fixedSize()
+    let renderer = ImageRenderer(content: view)
+    renderer.scale = 2
+
+    guard let image = renderer.nsImage,
+          let tiffData = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiffData),
+          let pngData = bitmap.representation(using: .png, properties: [:])
+    else {
+        Issue.record("ASCII-warning CheckMenuView should render to a PNG snapshot")
+        return
+    }
+
+    #expect(image.size.width > 0)
+    #expect(image.size.height > 0)
+    if let path = ProcessInfo.processInfo.environment["CHECK_ASCII_WARNING_SNAPSHOT_PATH"] {
+        try pngData.write(to: URL(fileURLWithPath: path))
+    }
+}
+
+@MainActor
+@Test
 func menuBarStatusLabelFitsWithinBarHeight() throws {
     // 메뉴바(높이 ~22pt)에 라벨을 얹었을 때 캐릭터가 바 높이 안에 온전히 들어가야 한다.
     for (snapshot, envKey) in [

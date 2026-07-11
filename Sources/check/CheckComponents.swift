@@ -220,37 +220,107 @@ struct CredentialField: View {
     let icon: String
     @Binding var text: String
     var isSecure = false
+    /// true면 포커스 시 영어 자판으로 자동 전환하고, 비-ASCII 입력을 걸러 낸 뒤 안내를 띄운다.
+    var enforcesASCII = false
+    /// 공백 허용 여부. 비밀번호는 허용, 이메일은 차단한다. `enforcesASCII`일 때만 의미가 있다.
+    var allowsSpace = true
+
+    @FocusState private var isFocused: Bool
+    @State private var showWarning: Bool
+    @State private var warningTask: Task<Void, Never>?
+
+    init(
+        title: String,
+        icon: String,
+        text: Binding<String>,
+        isSecure: Bool = false,
+        enforcesASCII: Bool = false,
+        allowsSpace: Bool = true,
+        warnsInitially: Bool = false
+    ) {
+        self.title = title
+        self.icon = icon
+        self._text = text
+        self.isSecure = isSecure
+        self.enforcesASCII = enforcesASCII
+        self.allowsSpace = allowsSpace
+        // warnsInitially는 렌더 스냅샷 등 미리보기에서 안내가 켜진 상태를 재현하기 위한 시드값이다.
+        self._showWarning = State(initialValue: warnsInitially)
+    }
 
     var body: some View {
-        HStack(spacing: 9) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
-                .foregroundStyle(CheckTheme.secondaryText)
-                .frame(width: 16)
-            ZStack(alignment: .leading) {
-                // 플레이스홀더는 비었을 때만 깔고, 히트테스트 대상에서 제외한다.
-                if text.isEmpty {
-                    Text(title)
-                        .foregroundStyle(CheckTheme.secondaryText)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .allowsHitTesting(false)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 9) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .frame(width: 16)
+                ZStack(alignment: .leading) {
+                    // 플레이스홀더는 비었을 때만 깔고, 히트테스트 대상에서 제외한다.
+                    if text.isEmpty {
+                        Text(title)
+                            .foregroundStyle(CheckTheme.secondaryText)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .allowsHitTesting(false)
+                    }
+                    field
+                        .textFieldStyle(.plain)
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .tint(CheckTheme.accent)
+                        .accessibilityLabel(title)
+                        .focused($isFocused)
                 }
-                field
-                    .textFieldStyle(.plain)
-                    .foregroundStyle(CheckTheme.primaryText)
-                    .tint(CheckTheme.accent)
-                    .accessibilityLabel(title)
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(CheckTheme.fieldFill)
+                    // 안내가 떠 있는 동안엔 테두리를 danger로 물들여 레이아웃 밀림 없이도 상태를 알린다.
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(showWarning ? CheckTheme.danger : CheckTheme.border, lineWidth: 1))
+            )
+            if showWarning {
+                Text("영어 문자만 입력할 수 있어요")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(CheckTheme.danger)
+                    .lineLimit(1)
+                    .transition(.opacity)
+                    .accessibilityLabel("영어 문자만 입력할 수 있어요")
             }
         }
-        .font(.subheadline)
-        .padding(.horizontal, 11)
-        .padding(.vertical, 9)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(CheckTheme.fieldFill)
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(CheckTheme.border, lineWidth: 1))
-        )
+        .onChange(of: isFocused) { _, focused in
+            // 포커스를 얻는 순간 영어 자판으로 전환한다. 실패는 필터가 뒤에서 잡아 준다.
+            guard focused, enforcesASCII else { return }
+            EnglishInputSource.activate()
+        }
+        .onChange(of: text) { _, newValue in
+            guard enforcesASCII else { return }
+            let cleaned = ASCIIInputFilter.filtered(newValue, allowsSpace: allowsSpace)
+            // filtered == text면 대입을 건너뛰어 IME 조합 중간 상태에서의 무한루프를 막는다.
+            guard cleaned != newValue else { return }
+            text = cleaned
+            triggerWarning()
+        }
+        .onDisappear {
+            warningTask?.cancel()
+        }
+    }
+
+    // 안내 캡션을 띄우고 약 2.5초 뒤 자동으로 감춘다. 연속 트리거 시 이전 타이머를 리셋한다.
+    private func triggerWarning() {
+        warningTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showWarning = true
+        }
+        warningTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showWarning = false
+            }
+        }
     }
 
     @ViewBuilder

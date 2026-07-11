@@ -4,6 +4,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# 단독 실행 시에도 anon key가 번들에 주입되도록 .env.local을 읽는다 (package-local.sh와 동일 패턴).
+if [[ -z "${CHECK_SUPABASE_ANON_KEY:-}" && -f "$ROOT/.env.local" ]]; then
+  set -a
+  source "$ROOT/.env.local"
+  set +a
+fi
+
 swift build -c release >&2
 
 APP_DIR="$ROOT/dist/check.app"

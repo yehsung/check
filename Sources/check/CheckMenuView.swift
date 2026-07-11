@@ -5,6 +5,8 @@ struct CheckMenuView: View {
     @Bindable var store: WorkTimerStore
     // 렌더 스냅샷/미리보기에서 초기 인증 모드를 주입할 수 있게 열어 둔다. 앱은 기본값(로그인)으로 진입.
     var initialAuthMode: AuthMode = .signIn
+    // 렌더 스냅샷에서 비밀번호 필드의 "영어만" 안내가 떠 있는 상태를 재현하기 위한 미리보기 플래그.
+    var previewASCIIWarning: Bool = false
 
     var body: some View {
         VStack(spacing: 10) {
@@ -13,7 +15,7 @@ struct CheckMenuView: View {
                 TeamPanel(teamMembers: store.teamMembers, fallbackStatus: store.syncMessage, now: store.displayNow)
                 FooterBar(store: store)
             } else {
-                LoginPanel(store: store, initialMode: initialAuthMode)
+                LoginPanel(store: store, initialMode: initialAuthMode, previewWarning: previewASCIIWarning)
             }
         }
         .padding(12)
@@ -211,10 +213,13 @@ enum AuthMessageKind {
 private struct LoginPanel: View {
     @Bindable var store: WorkTimerStore
     @State private var mode: AuthMode
+    // 렌더 스냅샷 전용: 비밀번호 필드의 안내 캡션을 켠 채로 그린다. 앱에서는 항상 false.
+    private let previewWarning: Bool
 
-    init(store: WorkTimerStore, initialMode: AuthMode = .signIn) {
+    init(store: WorkTimerStore, initialMode: AuthMode = .signIn, previewWarning: Bool = false) {
         self.store = store
         _mode = State(initialValue: initialMode)
+        self.previewWarning = previewWarning
     }
 
     var body: some View {
@@ -226,8 +231,8 @@ private struct LoginPanel: View {
                     CredentialField(title: "별명", icon: "person.text.rectangle.fill", text: $store.displayName)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                CredentialField(title: "이메일", icon: "envelope.fill", text: $store.email)
-                CredentialField(title: "비밀번호", icon: "lock.fill", text: $store.password, isSecure: true)
+                CredentialField(title: "이메일", icon: "envelope.fill", text: $store.email, enforcesASCII: true, allowsSpace: false)
+                CredentialField(title: "비밀번호", icon: "lock.fill", text: $store.password, isSecure: true, enforcesASCII: true, warnsInitially: previewWarning)
             }
             primaryButton
                 .disabled(!store.canSync)

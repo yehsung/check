@@ -18,7 +18,16 @@ fi
 APP_PATH="$("$ROOT/scripts/build-local.sh" | tail -n 1)"
 mkdir -p "$ROOT/dist"
 rm -f "$ROOT/dist/check.zip"
-ditto -c -k --keepParent "$APP_PATH" "$ROOT/dist/check.zip"
+
+# zip에 앱 + 설치 도우미(격리 해제 포함)를 함께 담는다.
+STAGE="$ROOT/dist/.stage"
+rm -rf "$STAGE"
+mkdir -p "$STAGE/check"
+cp -R "$APP_PATH" "$STAGE/check/"
+cp "$ROOT/scripts/install-helper.command" "$STAGE/check/설치하기.command"
+chmod +x "$STAGE/check/설치하기.command"
+ditto -c -k --keepParent "$STAGE/check" "$ROOT/dist/check.zip"
+rm -rf "$STAGE"
 
 if command -v create-dmg >/dev/null 2>&1; then
   rm -f "$ROOT/dist/check.dmg"

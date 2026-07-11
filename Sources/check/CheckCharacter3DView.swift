@@ -165,7 +165,7 @@ struct CheckCharacter3DView: NSViewRepresentable {
 /// 3D 캐릭터 + 근무 시간 라벨 합성. 라벨은 얼굴(볼) 바로 아래 몸통 중상부에 얹는다.
 struct CheckOverlayCharacterView: View {
     /// 근무 시간 라벨의 세로 위치 비율(0=상단, 1=하단). 볼 아래 몸통 중상부(얼굴은 안 가림)에 오도록 54%.
-    static let timerVerticalFraction: CGFloat = 0.46
+    static let timerVerticalFraction: CGFloat = 0.49
 
     let elapsedSeconds: Int
     let isActive: Bool

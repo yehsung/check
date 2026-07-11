@@ -228,8 +228,9 @@ func reactionEnginePrioritizesHigherAndIgnoresLowerWhilePlaying() {
     // hit 재생 길이가 지나면 idle 로 복귀한다(clock 기반 만료).
     now = now.addingTimeInterval(0.7)
     #expect(engine.state == .idle)
+    // drowsy 는 일회성 재생이 아니라 지속 상태(sleeping)로 진입한다.
     #expect(engine.request(.drowsy))
-    #expect(engine.state == .playing(.drowsy))
+    #expect(engine.state == .sleeping)
 }
 
 @MainActor
@@ -249,14 +250,15 @@ func reactionEngineEnforcesHitCooldown() {
 
 @MainActor
 @Test
-func reactionEngineClearsGreetingBubbleWhenInterrupted() {
+func reactionEngineReplacesBubbleWhenInterruptedByReactionWithOwnBubble() {
     let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 3_000) })
     #expect(engine.request(.greeting(name: "영희")))
     #expect(engine.greetingText == "영희님 출근!")
 
-    // 더 높은 우선순위(hit)가 들어오면 말풍선도 함께 사라진다.
+    // 더 높은 우선순위(hit)가 들어오면 그 리액션이 자기 말풍선("아얏!")으로 교체한다
+    // (말풍선은 자체 타이머 소유 — 인터럽트가 강제로 비우지 않고, 새 리액션이 갈아끼운다).
     #expect(engine.request(.hit))
-    #expect(engine.greetingText == nil)
+    #expect(engine.greetingText == "아얏!")
 }
 
 // MARK: - Wave7: 마일스톤 1일 1회
@@ -338,8 +340,8 @@ func drowsyIntervalStaysWithin90Plus30Seconds() {
     var rng = SystemRandomNumberGenerator()
     for _ in 0..<50 {
         let interval = DrowsyWindow.nextInterval(using: &rng)
-        #expect(interval >= 60)
-        #expect(interval <= 120)
+        #expect(interval >= DrowsyWindow.minInterval)
+        #expect(interval <= DrowsyWindow.maxInterval)
     }
 }
 
@@ -389,6 +391,206 @@ func overlayControllerReactsToClickInsidePanelOnly() {
     controller.updateWorking(false) // 전역 모니터 해제(정리).
 }
 
+// MARK: - Wave8: 졸기 = 지속 상태(때려야 깸)
+
+@MainActor
+@Test
+func reactionEngineSleepPersistsUntilWoken() {
+    var now = Date(timeIntervalSince1970: 30_000)
+    let engine = ReactionEngine(clock: { now })
+
+    // drowsy 요청은 일회성 재생이 아니라 sleeping 지속 상태로 진입한다.
+    #expect(engine.request(.drowsy))
+    #expect(engine.state == .sleeping)
+
+    // 아무리 시간이 지나도 자동으로 깨지 않는다(만료 없음).
+    now = now.addingTimeInterval(3_600)
+    #expect(engine.state == .sleeping)
+    now = now.addingTimeInterval(24 * 3_600)
+    #expect(engine.state == .sleeping)
+}
+
+@MainActor
+@Test
+func reactionEngineWakesOnClickWithBubble() {
+    var now = Date(timeIntervalSince1970: 31_000)
+    let engine = ReactionEngine(clock: { now })
+
+    #expect(engine.request(.drowsy))
+    #expect(engine.state == .sleeping)
+
+    // 자는 중 클릭 → wake(화들짝) + "깜빡 졸았다!". hit 쿨다운과 무관하게 즉시 수용된다.
+    #expect(engine.request(.wake))
+    #expect(engine.state == .playing(.wake))
+    #expect(engine.greetingText == "깜빡 졸았다!")
+
+    // 화들짝 지속시간이 지나면 idle 로 복귀한다(깨어난 뒤 idle).
+    now = now.addingTimeInterval(0.5)
+    #expect(engine.state == .idle)
+}
+
+@MainActor
+@Test
+func reactionEngineIgnoresGreetingWhileSleeping() {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 32_000) })
+    #expect(engine.request(.drowsy))
+    #expect(engine.state == .sleeping)
+
+    // 자는데 팀원 인사는 하지 않는다 — 무시(재생 안 함), 상태·말풍선 불변.
+    #expect(engine.request(.greeting(name: "철수")) == false)
+    #expect(engine.state == .sleeping)
+    #expect(engine.greetingText == nil)
+}
+
+@MainActor
+@Test
+func reactionEngineCommuteEndInterruptsSleep() {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 33_000) })
+    #expect(engine.request(.drowsy))
+    #expect(engine.state == .sleeping)
+
+    // 근무 종료는 자는 중이어도 즉시 인터럽트 → 꾸벅 인사 + "수고했어!".
+    #expect(engine.request(.commuteEnd))
+    #expect(engine.state == .playing(.commuteEnd))
+    #expect(engine.greetingText == "수고했어!")
+}
+
+@MainActor
+@Test
+func reactionEngineMilestoneWakesAndPlays() {
+    var now = Date(timeIntervalSince1970: 34_000)
+    let engine = ReactionEngine(clock: { now })
+    #expect(engine.request(.drowsy))
+    #expect(engine.state == .sleeping)
+
+    // 축하는 자는 중이면 깨우면서 재생(인터럽트 허용).
+    #expect(engine.request(.milestone))
+    #expect(engine.state == .playing(.milestone))
+
+    // 마일스톤이 끝나면 idle 로 복귀한다(다시 졸 수 있게).
+    now = now.addingTimeInterval(1.7)
+    #expect(engine.state == .idle)
+}
+
+@MainActor
+@Test
+func reactionEngineReDrowsyWhileSleepingIsNoop() {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 35_000) })
+    #expect(engine.request(.drowsy))
+    #expect(engine.state == .sleeping)
+
+    // 자는 중 재-졸기 요청은 no-op(이미 자고 있음).
+    #expect(engine.request(.drowsy) == false)
+    #expect(engine.state == .sleeping)
+}
+
+@MainActor
+@Test
+func reactionEngineHitCooldownNormalAfterWake() {
+    var now = Date(timeIntervalSince1970: 36_000)
+    let engine = ReactionEngine(clock: { now })
+    #expect(engine.request(.drowsy))
+    #expect(engine.request(.wake))
+    #expect(engine.state == .playing(.wake))
+
+    // 화들짝이 끝나 idle 로 복귀. wake 는 hit 쿨다운을 소모하지 않는다.
+    now = now.addingTimeInterval(0.5)
+    #expect(engine.state == .idle)
+    #expect(engine.request(.hit))            // 첫 hit 즉시 허용.
+    now = now.addingTimeInterval(0.3)        // 쿨다운(0.6) 이내
+    #expect(engine.request(.hit) == false)
+    now = now.addingTimeInterval(0.5)        // 총 0.8 → 쿨다운 해제 + hit 만료(idle)
+    #expect(engine.request(.hit))
+}
+
+@MainActor
+@Test
+func overlayControllerWakesInsteadOfHitWhileSleeping() {
+    var now = Date(timeIntervalSince1970: 37_000)
+    let engine = ReactionEngine(clock: { now })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(store: store, notificationCenter: NotificationCenter(), engine: engine)
+    controller.updateWorking(true)
+    now = now.addingTimeInterval(0.7) // commuteStart 만료 → idle
+    #expect(engine.state == .idle)
+
+    // 자는 상태로 진입.
+    engine.request(.drowsy)
+    #expect(engine.state == .sleeping)
+
+    // 자는 중 패널 안 클릭 → handleClick 이 state 를 보고 hit 대신 wake 로 분기.
+    let frame = controller.panel.frame
+    controller.handleClick(at: NSPoint(x: frame.midX, y: frame.midY))
+    #expect(engine.state == .playing(.wake))
+    #expect(engine.greetingText == "깜빡 졸았다!")
+
+    controller.updateWorking(false) // 전역 모니터 해제(정리).
+}
+
+// MARK: - Wave8: 말풍선 4종(텍스트/지속시간/타이머)
+
+@MainActor
+@Test
+func reactionBubbleDurationsMatchSpec() {
+    // perform 이 참조하는 지속시간 상수(사용자 확정 사양)를 결정적으로 검증한다.
+    #expect(ReactionEngine.commuteStartBubbleSeconds == 5)   // 오늘도 화이팅!
+    #expect(ReactionEngine.hitBubbleSeconds == 1.2)          // 아얏!
+    #expect(ReactionEngine.commuteEndBubbleSeconds == 2)     // 수고했어!
+    #expect(ReactionEngine.greetingBubbleSeconds == 3)       // <이름>님 출근!
+    #expect(ReactionEngine.wakeBubbleSeconds == 2.5)         // 깜빡 졸았다!
+}
+
+@MainActor
+@Test
+func reactionBubblesShowExpectedText() {
+    // 시작: commuteStart → "오늘도 화이팅!".
+    let start = ReactionEngine(clock: { Date(timeIntervalSince1970: 40_000) })
+    #expect(start.request(.commuteStart))
+    #expect(start.greetingText == "오늘도 화이팅!")
+
+    // 평소 때리기: hit → "아얏!".
+    let hit = ReactionEngine(clock: { Date(timeIntervalSince1970: 41_000) })
+    #expect(hit.request(.hit))
+    #expect(hit.greetingText == "아얏!")
+
+    // 종료: commuteEnd → "수고했어!".
+    let end = ReactionEngine(clock: { Date(timeIntervalSince1970: 42_000) })
+    #expect(end.request(.commuteEnd))
+    #expect(end.greetingText == "수고했어!")
+
+    // 팀원 인사: greeting → "<이름>님 출근!".
+    let greet = ReactionEngine(clock: { Date(timeIntervalSince1970: 43_000) })
+    #expect(greet.request(.greeting(name: "지훈")))
+    #expect(greet.greetingText == "지훈님 출근!")
+}
+
+@MainActor
+@Test
+func showBubbleResetsTimerAndSelfExpires() async {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 44_000) })
+
+    // 긴 말풍선을 띄운 뒤 곧바로 짧은 말풍선으로 교체하면, 이전 타이머는 리셋되고 새 텍스트가 즉시 반영된다.
+    engine.showBubble("오래", seconds: 100)
+    #expect(engine.greetingText == "오래")
+    engine.showBubble("잠깐", seconds: 0.15)
+    #expect(engine.greetingText == "잠깐")
+
+    // 새 타이머(0.15s)만 살아 있어 그 뒤 자체 소멸한다(이전 100s 타이머가 살아 있었다면 계속 보였을 것).
+    var cleared = false
+    for _ in 0..<50 {
+        try? await Task.sleep(for: .milliseconds(20))
+        if engine.greetingText == nil {
+            cleared = true
+            break
+        }
+    }
+    #expect(cleared)
+}
+
 // MARK: - Wave7: 시각 검증 스냅샷 덤프 (CHECK_REACTION_SNAPSHOT_DIR 지정 시에만 기록)
 
 @MainActor
@@ -410,14 +612,15 @@ func dumpReactionSnapshots() throws {
     try writePosedSnapshot(to: base.appendingPathComponent("reaction-hop.png")) { wrapper, extent in
         wrapper.position = SCNVector3(0, extent * 0.32, 0)
     }
-    // (d) 졸기 순간 + 💤 Z 노드(머리 위 오른쪽 빈 코너에서 위로 떠오르는 중간 프레임).
+    // (d) 자는 유지 자세(sleeping) + 💤 Z 노드. drowsySink 의 정지 포즈(앞으로 +14° 숙임, y -tilt*0.33)를 재현.
     // Z 는 흰색 반투명이라 투명 배경에선 안 보이므로, 바탕화면을 흉내 낸 어두운 배경 위에서 확인한다.
     try writePosedSnapshot(
-        to: base.appendingPathComponent("reaction-drowsy.png"),
+        to: base.appendingPathComponent("reaction-sleeping.png"),
         background: NSColor(calibratedRed: 0.20, green: 0.24, blue: 0.34, alpha: 1)
     ) { wrapper, extent in
-        wrapper.eulerAngles = SCNVector3(ReactionActions.radians(-14), 0, 0)
-        wrapper.position = SCNVector3(0, -extent * 0.06, 0)
+        let tilt = extent * 0.18
+        wrapper.eulerAngles = SCNVector3(ReactionActions.radians(14), 0, 0) // 앞으로 숙임(forward lean).
+        wrapper.position = SCNVector3(0, -tilt * 0.33, 0)
         if let root = wrapper.parent {
             for i in 0..<3 {
                 let z = ReactionActions.makeZNode(extent: extent)
@@ -432,35 +635,41 @@ func dumpReactionSnapshots() throws {
         }
     }
 
-    // (e) 팀원 출근 인사 말풍선(SwiftUI 합성). 캐릭터 렌더를 배경으로 실제 말풍선 컴포넌트를 얹는다.
+    // (e) wake 순간(화들짝): 상체가 스냅으로 곧게 펴지며 살짝 튀어오른 프레임 + "깜빡 졸았다!" 말풍선.
+    let wakeImage = try posedSCNImage { wrapper, extent in
+        wrapper.eulerAngles = SCNVector3(0, 0, 0)
+        wrapper.position = SCNVector3(0, extent * 0.18 * 0.12, 0) // 튀어오름 정점(bounceUp).
+    }
+    try writeBubbleComposite(
+        background: wakeImage, bubbleText: "깜빡 졸았다!",
+        to: base.appendingPathComponent("reaction-wake.png")
+    )
+
+    // (f) 등장 포즈(commuteStart 폴짝) + "오늘도 화이팅!" 말풍선.
+    let hopImage = try posedSCNImage { wrapper, extent in
+        wrapper.position = SCNVector3(0, extent * 0.32, 0)
+    }
+    try writeBubbleComposite(
+        background: hopImage, bubbleText: "오늘도 화이팅!",
+        to: base.appendingPathComponent("reaction-fighting.png")
+    )
+
+    // (g) 팀원 출근 인사 말풍선(SwiftUI 합성). 기본 구도(idle) 렌더 위에 실제 말풍선 컴포넌트를 얹는다.
     let scnPNG = try #require(CheckCharacter3DScene.renderSnapshotPNG())
     let scnImage = try #require(NSImage(data: scnPNG))
-    let mock = ZStack(alignment: .topLeading) {
-        Image(nsImage: scnImage)
-            .resizable()
-            .scaledToFit()
-        CheckGreetingBubble(text: "지훈님 출근!")
-            .padding(.leading, 4)
-            .padding(.top, 8)
-    }
-    .frame(width: CheckOverlayController.panelSize.width, height: CheckOverlayController.panelSize.height)
-    let renderer = ImageRenderer(content: mock)
-    renderer.scale = 3
-    let image = try #require(renderer.nsImage)
-    let tiff = try #require(image.tiffRepresentation)
-    let bitmap = try #require(NSBitmapImageRep(data: tiff))
-    let png = try #require(bitmap.representation(using: .png, properties: [:]))
-    try png.write(to: base.appendingPathComponent("reaction-greeting.png"))
+    try writeBubbleComposite(
+        background: scnImage, bubbleText: "지훈님 출근!",
+        to: base.appendingPathComponent("reaction-greeting.png")
+    )
 }
 
-/// wrapper 노드에 정지 포즈를 적용한 SCN 오프스크린 렌더를 PNG 로 저장한다(리액션 중간 포즈 육안 확인용).
+/// wrapper 노드에 정지 포즈를 적용한 SCN 오프스크린 렌더 NSImage 를 만든다(리액션 중간 포즈 육안 확인용).
 @MainActor
-private func writePosedSnapshot(
-    to url: URL,
+private func posedSCNImage(
     size: CGSize = CGSize(width: 280, height: 340),
     background: NSColor? = nil,
     pose: (_ wrapper: SCNNode, _ extent: CGFloat) -> Void
-) throws {
+) throws -> NSImage {
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
     let device = try #require(MTLCreateSystemDefaultDevice())
     if let background {
@@ -476,7 +685,39 @@ private func writePosedSnapshot(
     let renderer = SCNRenderer(device: device, options: nil)
     renderer.scene = scene
     renderer.autoenablesDefaultLighting = false
-    let image = renderer.snapshot(atTime: 0, with: size, antialiasingMode: .multisampling4X)
+    return renderer.snapshot(atTime: 0, with: size, antialiasingMode: .multisampling4X)
+}
+
+/// posedSCNImage 렌더를 PNG 로 저장한다(리액션 중간 포즈 육안 확인용).
+@MainActor
+private func writePosedSnapshot(
+    to url: URL,
+    size: CGSize = CGSize(width: 280, height: 340),
+    background: NSColor? = nil,
+    pose: (_ wrapper: SCNNode, _ extent: CGFloat) -> Void
+) throws {
+    let image = try posedSCNImage(size: size, background: background, pose: pose)
+    let tiff = try #require(image.tiffRepresentation)
+    let bitmap = try #require(NSBitmapImageRep(data: tiff))
+    let png = try #require(bitmap.representation(using: .png, properties: [:]))
+    try png.write(to: url)
+}
+
+/// 캐릭터 렌더 이미지를 배경으로 두고 실제 말풍선 컴포넌트(CheckGreetingBubble)를 캐릭터 왼쪽 위에 얹어 저장한다.
+@MainActor
+private func writeBubbleComposite(background: NSImage, bubbleText: String, to url: URL) throws {
+    let mock = ZStack(alignment: .topLeading) {
+        Image(nsImage: background)
+            .resizable()
+            .scaledToFit()
+        CheckGreetingBubble(text: bubbleText)
+            .padding(.leading, 4)
+            .padding(.top, 8)
+    }
+    .frame(width: CheckOverlayController.panelSize.width, height: CheckOverlayController.panelSize.height)
+    let renderer = ImageRenderer(content: mock)
+    renderer.scale = 3
+    let image = try #require(renderer.nsImage)
     let tiff = try #require(image.tiffRepresentation)
     let bitmap = try #require(NSBitmapImageRep(data: tiff))
     let png = try #require(bitmap.representation(using: .png, properties: [:]))

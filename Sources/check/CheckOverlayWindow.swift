@@ -83,8 +83,11 @@ final class CheckOverlayController {
             removeClickMonitor()
             engine.greetingText = nil
             if wasVisible && panel.isVisible {
+                // 자는 중이어도 근무종료는 즉시 인터럽트되어 꾸벅 인사 + "수고했어!" 후 퇴장한다.
                 beginFarewellHide()
             } else {
+                // 표시된 적 없는 경로: 혹시 남아 있을 졸기 상태를 정리하고 렌더를 멈춘다.
+                engine.stopSleeping()
                 engine.renderActive = false
                 panel.orderOut(nil)
             }
@@ -134,10 +137,15 @@ final class CheckOverlayController {
         handleClick(at: NSEvent.mouseLocation)
     }
 
-    /// 클릭 좌표가 패널 프레임 안이면 아파하기 리액션을 요청한다(좌표 주입 가능 — 테스트용).
+    /// 클릭 좌표가 패널 프레임 안이면 리액션을 요청한다(좌표 주입 가능 — 테스트용).
+    /// 자는 중이면 hit 대신 wake(화들짝 + "깜빡 졸았다!")로 깨우고, 아니면 평소처럼 아파하기(hit).
     func handleClick(at location: NSPoint) {
         guard shouldBeVisible, panel.frame.contains(location) else { return }
-        engine.request(.hit)
+        if engine.state == .sleeping {
+            engine.request(.wake)
+        } else {
+            engine.request(.hit)
+        }
     }
 
     // MARK: - 밤샘 졸기 스케줄러
@@ -150,8 +158,8 @@ final class CheckOverlayController {
                 let interval = DrowsyWindow.nextInterval(using: &rng)
                 try? await Task.sleep(for: .seconds(interval))
                 guard let self, !Task.isCancelled else { return }
-                // 조건: 밤샘 시간창 && 표시 중(근무중) && 다른 리액션 없음.
-                guard self.shouldBeVisible, DrowsyWindow.contains(Date()), self.engine.state == .idle else {
+                // 조건: 표시 중(근무중) && 다른 리액션 없음 — 시간대 제한 없이 조용하면 존다.
+                guard self.shouldBeVisible, self.engine.state == .idle else {
                     continue
                 }
                 self.engine.request(.drowsy)

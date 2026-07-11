@@ -5,7 +5,10 @@ import SceneKit
 
 /// 아잉 캐릭터의 "생명력" 리액션 종류. 원본 모델에 리깅/클립이 없으므로 전부 프로그래매틱
 /// (SCNAction squash & stretch 계열)으로 표현한다. 한 번에 하나만 재생하며, 재생 중 낮은 우선순위
-/// 요청은 무시한다(우선순위: hit·출퇴근 > 마일스톤 > 인사 > 졸기).
+/// 요청은 무시한다(우선순위: hit·출퇴근·화들짝 > 마일스톤 > 인사 > 졸기).
+///
+/// `drowsy` 는 일회성 재생이 아니라 지속 상태(sleeping)로의 진입 요청이다(엔진이 State.sleeping 으로 전이).
+/// 잠에서 깨는 `wake` 는 자는 중 클릭으로만 발화한다.
 enum ReactionKind: Equatable {
     /// 패널을 때렸을 때(전역 클릭이 패널 프레임 안).
     case hit
@@ -17,13 +20,16 @@ enum ReactionKind: Equatable {
     case milestone
     /// 팀원이 offWork→working 으로 전이했을 때 — 까딱 인사 + 말풍선.
     case greeting(name: String)
-    /// 밤샘 졸기(KST 23:00~05:00) — 앞으로 기울며 가라앉았다가 화들짝 복원 + 💤.
+    /// 밤샘 졸기(KST 23:00~05:00) 진입 요청 — 앞으로 기울며 가라앉은 뒤 그 자세를 유지(sleeping 상태).
     case drowsy
+    /// 자는 중 클릭으로 깨어남 — 화들짝(스냅 복원 + 살짝 튀어오름) + "깜빡 졸았다!" 말풍선.
+    case wake
 
-    /// 우선순위(높을수록 우선). hit/출퇴근 > 마일스톤 > 인사 > 졸기.
+    /// 우선순위(높을수록 우선). hit/출퇴근/화들짝 > 마일스톤 > 인사 > 졸기.
+    /// (wake/drowsy 는 sleeping 상태 분기에서 직접 처리되어 우선순위 비교를 거의 타지 않는다.)
     var priority: Int {
         switch self {
-        case .hit, .commuteStart, .commuteEnd:
+        case .hit, .commuteStart, .commuteEnd, .wake:
             return 3
         case .milestone:
             return 2
@@ -35,6 +41,7 @@ enum ReactionKind: Equatable {
     }
 
     /// 재생 길이(초). 엔진은 이 길이 동안 재생 상태를 유지하고, 지나면 idle 로 복귀한다.
+    /// (drowsy 는 만료 없는 sleeping 상태라 이 값을 쓰지 않는다.)
     var duration: TimeInterval {
         switch self {
         case .hit:
@@ -47,19 +54,23 @@ enum ReactionKind: Equatable {
             return 1.6
         case .greeting:
             return 1.0
+        case .wake:
+            // 화들짝 모션(스냅 0.15 + 튀어오름 0.16)에 여유를 둔 길이. 이후 idle 복귀.
+            return 0.4
         case .drowsy:
-            return 3.35
+            // 지속 상태(sleeping)라 만료 판정에 쓰지 않는다. 참고용으로 진입 모션 길이를 둔다.
+            return 2.0
         }
     }
 }
 
-/// KST 23:00~05:00 밤샘 시간창 판정(순수 함수). 졸기 리액션은 이 창 안에서만 스케줄된다.
+/// 졸기 스케줄 파라미터(순수 함수). 시간대 제한 없이, 한동안 아무 리액션이 없으면 존다.
 enum DrowsyWindow {
     static let timeZone = TimeZone(identifier: "Asia/Seoul")!
 
-    /// 졸기 간격 하한/상한(초). 90±30초.
-    static let minInterval: TimeInterval = 60
-    static let maxInterval: TimeInterval = 120
+    /// 졸기 진입 간격 하한/상한(초). 10±4분 — 마지막 리액션 이후 이만큼 조용하면 꾸벅 잠든다.
+    static let minInterval: TimeInterval = 6 * 60
+    static let maxInterval: TimeInterval = 14 * 60
 
     /// 주어진 시각(기본 KST)이 밤샘 시간창(23:00~05:00) 안이면 true. 23,0,1,2,3,4시가 해당된다.
     static func contains(_ date: Date, timeZone: TimeZone = DrowsyWindow.timeZone) -> Bool {
@@ -176,11 +187,21 @@ final class ReactionEngine {
     enum State: Equatable {
         case idle
         case playing(ReactionKind)
+        /// 졸기 지속 상태. 자동으로 깨지 않으며(만료 없음), 클릭(wake)·마일스톤·근무종료로만 벗어난다.
+        case sleeping
     }
 
     static let hitCooldown: TimeInterval = 0.6
 
-    /// 팀원 인사 말풍선 텍스트(SwiftUI 관찰용). nil 이면 숨김.
+    /// 말풍선 지속시간(초) 사양. perform 과 테스트가 공유해 지속시간을 결정적으로 검증한다.
+    static let hitBubbleSeconds: Double = 1.2
+    static let commuteStartBubbleSeconds: Double = 5
+    static let commuteEndBubbleSeconds: Double = 2
+    static let greetingBubbleSeconds: Double = 3
+    static let wakeBubbleSeconds: Double = 2.5
+
+    /// 말풍선 텍스트(SwiftUI 관찰용). nil 이면 숨김. 각 리액션이 자기 텍스트/지속시간으로 교체한다.
+    /// (팀원 인사·시작 화이팅·때리기 아얏·종료 수고·깨우기 등 모두 이 한 채널을 자체 타이머로 공유.)
     var greetingText: String?
     /// SCNView 렌더 루프 활성 여부(SwiftUI 관찰용). 패널 표시~근무종료 인사까지 true 로 유지해
     /// 근무종료 꾸벅 인사가 렌더되게 하고, 숨김 시 false 로 내려 렌더를 멈춘다(전력 배려).
@@ -189,12 +210,16 @@ final class ReactionEngine {
     @ObservationIgnored private(set) var activeKind: ReactionKind?
     @ObservationIgnored private var activeUntil: Date = .distantPast
     @ObservationIgnored private var lastHitAt: Date?
+    /// 졸기 지속 상태 플래그. true 인 동안 state 는 .sleeping 이며 activeKind 는 nil 이다.
+    @ObservationIgnored private var isSleeping = false
     @ObservationIgnored private let clock: () -> Date
 
     @ObservationIgnored private weak var reactionNode: SCNNode?
     @ObservationIgnored private weak var sceneRoot: SCNNode?
     @ObservationIgnored private var modelExtent: CGFloat = 1
     @ObservationIgnored private var greetingClearTask: Task<Void, Never>?
+    /// 자는 동안 💤 를 주기적으로 방출하는 반복 태스크(3.5초 주기). 깨거나 인터럽트되면 취소된다.
+    @ObservationIgnored private var zzzTask: Task<Void, Never>?
 
     private static let reactionActionKey = "check.reaction"
     private static let confettiNodeName = "check.reaction.confetti"
@@ -218,8 +243,12 @@ final class ReactionEngine {
     }
 
     /// 현재 재생 상태. clock 으로 만료를 확인해 지난 리액션은 idle 로 본다.
+    /// sleeping 은 만료가 없어 클릭(wake)·마일스톤·근무종료 인터럽트 전까지 유지된다.
     var state: State {
         expireIfNeeded()
+        if isSleeping {
+            return .sleeping
+        }
         if let activeKind {
             return .playing(activeKind)
         }
@@ -234,10 +263,33 @@ final class ReactionEngine {
 
     /// 리액션 요청. 우선순위/쿨다운을 판정해 수용되면 true. 수용 시 SCNAction 을 wrapper 에 건다.
     /// 완료는 clock 기반 만료(상태)와 호출측 워치독(예: 근무종료 숨김)에 맡긴다.
+    ///
+    /// 자는 중(sleeping)에는 별도 라우팅을 탄다: 클릭(wake/hit)은 화들짝으로 깨우고, 마일스톤/근무종료/
+    /// 근무시작은 잠을 인터럽트하며, 재-졸기·인사는 무시된다("자는데 인사 안 함").
     @discardableResult
     func request(_ kind: ReactionKind) -> Bool {
         let now = clock()
         expireIfNeeded()
+
+        if isSleeping {
+            switch kind {
+            case .drowsy, .greeting:
+                // 재-졸기 요청·팀원 인사는 자는 동안 무시(자는데 깨우지도, 인사하지도 않는다).
+                return false
+            case .wake, .hit:
+                // 자는 중 클릭 → 화들짝 + "깜빡 졸았다!" 로 깨운다(hit 쿨다운과 무관하게 즉시).
+                beginWake(now: now)
+                return true
+            case .commuteStart, .commuteEnd, .milestone:
+                // 잠을 인터럽트하고 정상 재생으로 넘어간다(아래 일반 경로).
+                endSleep()
+            }
+        }
+
+        // wake 는 자는 중에만 유효(위 분기에서 처리). 깨어 있을 때 들어오면 재생할 것이 없다.
+        if case .wake = kind {
+            return false
+        }
 
         if case .hit = kind, let last = lastHitAt, now.timeIntervalSince(last) < Self.hitCooldown {
             return false
@@ -249,6 +301,12 @@ final class ReactionEngine {
 
         if activeKind != nil {
             interruptCurrent()
+        }
+
+        // drowsy 는 일회성 재생이 아니라 지속 상태(sleeping)로의 진입이다.
+        if case .drowsy = kind {
+            beginSleep()
+            return true
         }
 
         if case .hit = kind {
@@ -265,10 +323,8 @@ final class ReactionEngine {
         reactionNode?.removeAction(forKey: Self.reactionActionKey)
         resetPose()
         removeTransientNodes()
-        if case .greeting = activeKind {
-            greetingClearTask?.cancel()
-            greetingText = nil
-        }
+        // 말풍선은 자체 타이머를 소유하므로 여기서 강제로 지우지 않는다.
+        // (새 리액션이 자기 showBubble 로 교체하거나, 말풍선 없는 리액션이면 이전 타이머대로 소멸.)
     }
 
     private func resetPose() {
@@ -291,19 +347,76 @@ final class ReactionEngine {
         switch kind {
         case .hit:
             runReaction(ReactionActions.hit())
+            showBubble("아얏!", seconds: Self.hitBubbleSeconds)
         case .commuteStart:
             runReaction(ReactionActions.commuteStart(hop: modelExtent * 0.32))
+            showBubble("오늘도 화이팅!", seconds: Self.commuteStartBubbleSeconds)
         case .commuteEnd:
             runReaction(ReactionActions.commuteEnd())
+            showBubble("수고했어!", seconds: Self.commuteEndBubbleSeconds)
         case .milestone:
             runReaction(ReactionActions.milestone(hop: modelExtent * 0.28))
             emitConfetti()
         case .greeting(let name):
-            showGreeting(name)
+            showBubble("\(name)님 출근!", seconds: Self.greetingBubbleSeconds)
             runReaction(ReactionActions.greetingNod())
-        case .drowsy:
-            runReaction(ReactionActions.drowsy(tilt: modelExtent * 0.18))
-            emitZzz()
+        case .drowsy, .wake:
+            // drowsy/wake 는 request 에서 beginSleep/beginWake 로 직접 처리되어 이 경로로 오지 않는다.
+            break
+        }
+    }
+
+    // MARK: - 졸기 지속 상태(sleeping) / 깨우기(wake)
+
+    /// 졸기 진입: 앞으로 천천히 숙이며 가라앉은 자세로 전이하고, 그 자세를 유지한다(자동으로 깨지 않음).
+    /// 자는 동안 💤 를 주기적으로 방출한다(zzzTask).
+    private func beginSleep() {
+        isSleeping = true
+        activeKind = nil
+        if let node = reactionNode {
+            resetPose()
+            node.runAction(ReactionActions.drowsySink(tilt: modelExtent * 0.18), forKey: Self.reactionActionKey)
+        }
+        startZzzLoop()
+    }
+
+    /// 졸기 종료(잠 상태만 해제 — 포즈는 호출측이 처리). zzzTask 취소 + 💤 노드 정리.
+    /// 마일스톤/근무종료 인터럽트는 이후 runReaction(resetPose 포함)이 포즈를 복원한다.
+    private func endSleep() {
+        isSleeping = false
+        zzzTask?.cancel()
+        zzzTask = nil
+        removeTransientNodes()
+    }
+
+    /// 자는 중 클릭으로 깨우기: 화들짝(현재 숙인 자세에서 스냅 복원 + 살짝 튀어오름) + "깜빡 졸았다!".
+    /// resetPose 를 거치지 않고 현재(숙인) 트랜스폼에서 애니메이션해 자연스럽게 튀어오르게 한다.
+    private func beginWake(now: Date) {
+        endSleep()
+        activeKind = .wake
+        activeUntil = now.addingTimeInterval(ReactionKind.wake.duration)
+        if let node = reactionNode {
+            node.removeAction(forKey: Self.reactionActionKey)
+            node.runAction(ReactionActions.wake(tilt: modelExtent * 0.18), forKey: Self.reactionActionKey)
+        }
+        showBubble("깜빡 졸았다!", seconds: Self.wakeBubbleSeconds)
+    }
+
+    /// 외부(패널 숨김 등)에서 졸기 상태를 강제 종료한다. 포즈까지 identity 로 복원(잔상 방지).
+    func stopSleeping() {
+        guard isSleeping else { return }
+        endSleep()
+        resetPose()
+    }
+
+    private func startZzzLoop() {
+        zzzTask?.cancel()
+        zzzTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.isSleeping else { return }
+                self.spawnZzzBurst()
+                try? await Task.sleep(for: .seconds(3.5))
+            }
         }
     }
 
@@ -315,13 +428,15 @@ final class ReactionEngine {
         node.runAction(action, forKey: Self.reactionActionKey)
     }
 
-    // MARK: - 말풍선(팀원 인사)
+    // MARK: - 말풍선(공통)
 
-    private func showGreeting(_ name: String) {
+    /// 말풍선을 `text` 로 띄우고 `seconds` 뒤 자체 페이드로 소멸시킨다. 중복 호출 시 이전 타이머를 리셋한다
+    /// (새 리액션이 자기 텍스트/지속시간으로 즉시 교체). 텍스트 변화는 SwiftUI 가 관찰해 페이드한다.
+    func showBubble(_ text: String, seconds: Double) {
         greetingClearTask?.cancel()
-        greetingText = "\(name)님 출근!"
+        greetingText = text
         greetingClearTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
             self?.greetingText = nil
         }
@@ -343,9 +458,10 @@ final class ReactionEngine {
 
     // MARK: - 💤 Z 노드(졸기)
 
-    private func emitZzz() {
+    /// 💤 한 묶음(3개)을 머리 위 빈 코너에서 위로 떠오르게 방출한다. 각 묶음 컨테이너는 수명 후 자가 제거되며,
+    /// 자는 동안 zzzTask 가 주기적으로 다시 호출한다. 깨거나 인터럽트되면 removeTransientNodes 로 일괄 정리.
+    private func spawnZzzBurst() {
         guard let root = sceneRoot else { return }
-        removeTransientNodes()
         let container = SCNNode()
         container.name = Self.zzzNodeName
         // 머리 위 오른쪽 빈 코너에서 시작해 위로 떠오른다(캐릭터가 프레임을 꽉 채우므로 빈 코너를 쓴다).
@@ -447,23 +563,29 @@ enum ReactionActions {
         ])
     }
 
-    /// 밤샘 졸기: 앞으로 천천히 기울며 가라앉기(2s) → 유지(1s) → 화들짝 복원(0.15s 스냅 + 살짝 튀어오름).
-    static func drowsy(tilt: CGFloat) -> SCNAction {
+    /// 졸기 진입(가라앉기): 앞으로 천천히 숙이며 가라앉는다(2s). 끝난 뒤 그 자세(x +14°, y -tilt*0.33)를 유지한다.
+    /// 지속 상태(sleeping)의 정지 포즈이므로 복원 동작을 붙이지 않는다(깨우기는 wake 가 담당).
+    static func drowsySink(tilt: CGFloat) -> SCNAction {
         let sink = SCNAction.group([
             SCNAction.rotateTo(x: radians(14), y: 0, z: 0, duration: 2.0),
             SCNAction.moveBy(x: 0, y: -tilt * 0.33, z: 0, duration: 2.0)
         ])
         sink.timingMode = .easeInEaseOut
-        let hold = SCNAction.wait(duration: 1.0)
+        return sink
+    }
+
+    /// 화들짝 깨우기: 숙인 자세에서 identity 로 스냅 복원(0.15s) + 살짝 튀어오름. 현재 트랜스폼과 무관하게
+    /// 절대 위치(0)로 복원하므로 진입 모션 도중 깨워도 잔상이 남지 않는다.
+    static func wake(tilt: CGFloat) -> SCNAction {
         let snap = SCNAction.group([
             SCNAction.rotateTo(x: 0, y: 0, z: 0, duration: 0.15),
-            SCNAction.moveBy(x: 0, y: tilt * 0.33, z: 0, duration: 0.15)
+            SCNAction.move(to: SCNVector3(0, 0, 0), duration: 0.15)
         ])
         snap.timingMode = .easeOut
         // 살짝 튀어오름.
         let bounceUp = SCNAction.moveBy(x: 0, y: tilt * 0.12, z: 0, duration: 0.08)
         let bounceDown = SCNAction.moveBy(x: 0, y: -tilt * 0.12, z: 0, duration: 0.08)
-        return .sequence([sink, hold, snap, bounceUp, bounceDown])
+        return .sequence([snap, bounceUp, bounceDown])
     }
 
     /// 색종이 파티클(코드 생성). 작은 사각 다색, 짧은 버스트.

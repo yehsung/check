@@ -6,7 +6,7 @@ import SwiftUI
 /// 아잉 3D 캐릭터 씬 구성.
 ///
 /// 번들(`Bundle.module`)의 `aing.usdz`를 로드하고, 마스코트 원색(보라)이 살도록 모든 재질을
-/// unlit(`.constant`)로 바꾼 뒤, 바운딩박스를 기준으로 정면 살짝 위에서 캐릭터가 프레임에 꽉 차게
+/// unlit(`.constant`)로 바꾼 뒤, 바운딩박스를 기준으로 캐릭터를 살짝 내려다보는 구도로 프레임에 꽉 차게
 /// 카메라를 배치한다. 여기에 느린 상하 부유(bob)와 아주 느린 살랑 회전(sway) 애니메이션을 붙인다.
 ///
 /// 기본 PBR/조명에서는 텍스처가 허옇게 떠 마스코트 색이 사라지므로 반드시 `.constant`를 쓴다
@@ -50,13 +50,16 @@ enum CheckCharacter3DScene {
         }
     }
 
-    /// 바운딩박스를 기준으로 정면 살짝 위에서 캐릭터가 프레임에 꽉 차도록 카메라를 배치한다.
+    /// 바운딩박스를 기준으로, 캐릭터를 살짝 내려다보는 구도로 프레임에 꽉 차게 카메라를 배치한다.
+    ///
+    /// 카메라 Y를 캐릭터 중심보다 바운딩 높이의 0.4배 위로 올리고, 바라보는 지점(look target)은
+    /// 중심보다 약간 아래로 내려 얼굴이 정면~살짝 위에서 자연스럽게 내려다보이게 한다.
     private static func addFramingCamera(to scene: SCNScene) {
         let (minB, maxB) = scene.rootNode.boundingBox
         let center = SCNVector3((minB.x + maxB.x) / 2, (minB.y + maxB.y) / 2, (minB.z + maxB.z) / 2)
-        // 상하 부유·살랑 회전 여유를 두고 꽉 차게. 최장변 기준 거리 산정 후 1.25배 여유.
+        // 상하 부유·살랑 회전 + 내려다보는 각도로 잘리는 여유를 두고 꽉 차게. 최장변 기준 거리 산정 후 1.4배 여유.
         let extent = CGFloat(max(maxB.x - minB.x, maxB.y - minB.y))
-        let distance = extent / (2 * tan(fieldOfView / 2 * .pi / 180)) * 1.25
+        let distance = extent / (2 * tan(fieldOfView / 2 * .pi / 180)) * 1.4
 
         let cameraNode = SCNNode()
         let camera = SCNCamera()
@@ -64,9 +67,11 @@ enum CheckCharacter3DScene {
         camera.zNear = 0.01
         camera.zFar = 1_000
         cameraNode.camera = camera
-        // 정면에서 눈높이보다 조금 위(살짝 내려다보는 각도)로 둔다.
-        cameraNode.position = SCNVector3(center.x, center.y + extent * 0.12, CGFloat(maxB.z) + distance)
-        cameraNode.look(at: center)
+        // 카메라를 캐릭터 중심보다 바운딩 높이의 0.4배 위로 올려 살짝 내려다보게 둔다.
+        cameraNode.position = SCNVector3(center.x, center.y + extent * 0.4, CGFloat(maxB.z) + distance)
+        // 바라보는 지점을 중심보다 약간(0.08배) 아래로 내려 얼굴을 정면~살짝 위에서 내려다보는 구도.
+        let lookTarget = SCNVector3(center.x, center.y - extent * 0.08, center.z)
+        cameraNode.look(at: lookTarget)
         scene.rootNode.addChildNode(cameraNode)
     }
 

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// 근무중일 때만 화면 우하단에 떠 있는 3D 캐릭터 오버레이 패널과 그 표시/숨김·재배치를 관리한다.
+/// 근무중일 때만 화면 우상단(메뉴바 바로 아래)에 떠 있는 3D 캐릭터 오버레이 패널과 그 표시/숨김·재배치를 관리한다.
 ///
 /// 패널은 앱 시작 시 1회 생성해 숨김으로 시작한다. 루트 뷰(`CheckOverlayRootView`)가 store의
 /// `snapshot.isWorking`을 관찰하다가 변화를 콜백으로 전달하면 여기서 `orderFrontRegardless`/
@@ -37,7 +37,7 @@ final class CheckOverlayController {
         observeScreenChanges()
     }
 
-    /// 근무 상태 변화에 따라 패널을 표시/숨김한다. 표시 직전 항상 우하단으로 재배치한다.
+    /// 근무 상태 변화에 따라 패널을 표시/숨김한다. 표시 직전 항상 우상단으로 재배치한다.
     func updateWorking(_ isWorking: Bool) {
         shouldBeVisible = isWorking
         if isWorking {
@@ -48,14 +48,14 @@ final class CheckOverlayController {
         }
     }
 
-    /// 메인 스크린 visibleFrame 우하단(여백 `edgeMargin`)으로 패널을 옮긴다.
+    /// 메인 스크린 visibleFrame 우상단(여백 `edgeMargin`)으로 패널을 옮긴다.
     func reposition() {
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let frame = Self.overlayFrame(in: screen.visibleFrame, size: Self.panelSize, margin: Self.edgeMargin)
         panel.setFrame(frame, display: shouldBeVisible)
     }
 
-    /// 화면 구성 변경(해상도·배열·메뉴바 높이 등) 시 우하단 위치를 다시 잡는다.
+    /// 화면 구성 변경(해상도·배열·메뉴바 높이 등) 시 우상단 위치를 다시 잡는다.
     private func observeScreenChanges() {
         screenObserver = notificationCenter.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -66,10 +66,12 @@ final class CheckOverlayController {
         }
     }
 
-    /// visibleFrame 우하단에 `size` 크기, 가장자리 `margin` 여백으로 놓일 프레임을 계산한다(순수 함수).
+    /// visibleFrame 우상단에 `size` 크기, 가장자리 `margin` 여백으로 놓일 프레임을 계산한다(순수 함수).
+    ///
+    /// 맥 좌표계는 아래가 minY라 상단 정렬은 `maxY`(메뉴바 바로 아래) 기준으로 잡는다.
     nonisolated static func overlayFrame(in visibleFrame: NSRect, size: NSSize, margin: CGFloat) -> NSRect {
         let x = visibleFrame.maxX - size.width - margin
-        let y = visibleFrame.minY + margin
+        let y = visibleFrame.maxY - size.height - margin
         return NSRect(x: x, y: y, width: size.width, height: size.height)
     }
 

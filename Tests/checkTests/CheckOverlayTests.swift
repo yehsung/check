@@ -37,8 +37,8 @@ func overlayPanelIsConfiguredForClickThroughFloating() {
 }
 
 @Test
-func overlayFrameSitsAtBottomRightWithMargin() {
-    // 원점이 (100,50)이고 1440x900인 가상 visibleFrame에서 140x170 패널을 여백 24로 우하단에 놓는다.
+func overlayFrameSitsAtTopRightWithMargin() {
+    // 원점이 (100,50)이고 1440x900인 가상 visibleFrame에서 140x170 패널을 여백 24로 우상단에 놓는다.
     let visibleFrame = NSRect(x: 100, y: 50, width: 1_440, height: 900)
     let size = NSSize(width: 140, height: 170)
     let frame = CheckOverlayController.overlayFrame(in: visibleFrame, size: size, margin: 24)
@@ -46,8 +46,9 @@ func overlayFrameSitsAtBottomRightWithMargin() {
     // 우측 정렬: 오른쪽 끝에서 (패널폭 + 여백)만큼 안쪽.
     #expect(frame.maxX == visibleFrame.maxX - 24)
     #expect(frame.minX == visibleFrame.maxX - size.width - 24)
-    // 하단 정렬: visibleFrame 하단에서 여백만큼 위(맥 좌표계는 아래가 minY).
-    #expect(frame.minY == visibleFrame.minY + 24)
+    // 상단 정렬: visibleFrame 상단(메뉴바 바로 아래)에서 여백만큼 아래(맥 좌표계는 위가 maxY).
+    #expect(frame.maxY == visibleFrame.maxY - 24)
+    #expect(frame.minY == visibleFrame.maxY - size.height - 24)
     #expect(frame.size == size)
 }
 
@@ -152,18 +153,30 @@ func dumpOverlaySnapshots() throws {
     let base = URL(fileURLWithPath: dir, isDirectory: true)
     try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
 
-    // (1) 3D 뷰 구도·색 — SCNRenderer 오프스크린 렌더.
+    // (a) 새 카메라 구도(살짝 내려다보는 각도)의 3D 렌더 — SCNRenderer 오프스크린.
     let scnPNG = try #require(CheckCharacter3DScene.renderSnapshotPNG())
-    try scnPNG.write(to: base.appendingPathComponent("overlay-render.png"))
+    try scnPNG.write(to: base.appendingPathComponent("overlay-camera.png"))
 
-    // (2) 캐릭터 + 타이머 라벨 합성 목업 — SCN 렌더 이미지를 배경으로 두고 실제 라벨 컴포넌트를 얹는다
+    // 캐릭터 + 타이머 라벨 합성 목업 — SCN 렌더 이미지를 배경으로 두고 실제 라벨 컴포넌트를 얹는다
     // (SCNView는 AppKit 백킹이라 ImageRenderer가 직접 못 그리므로 렌더 이미지를 이미지로 합성한다).
     let scnImage = try #require(NSImage(data: scnPNG))
+
+    // (b) 분 단위 목업 — 05:07 (MM:SS).
+    try writeOverlayMock(seconds: 5 * 60 + 7, background: scnImage,
+                         to: base.appendingPathComponent("overlay-minutes.png"))
+    // (c) 장시간 목업 — 12:34:56 (HH:MM:SS). 캡슐 안에 잘림 없이 수납되는지 확인.
+    try writeOverlayMock(seconds: 12 * 3_600 + 34 * 60 + 56, background: scnImage,
+                         to: base.appendingPathComponent("overlay-hours.png"))
+}
+
+/// 캐릭터 렌더 이미지를 배경으로 두고 실제 타이머 라벨 컴포넌트를 얹어 PNG로 저장한다(시각 검증용).
+@MainActor
+private func writeOverlayMock(seconds: Int, background: NSImage, to url: URL) throws {
     let mock = ZStack {
-        Image(nsImage: scnImage)
+        Image(nsImage: background)
             .resizable()
             .scaledToFit()
-        CheckOverlayTimerLabel(text: CheckOverlayTimeFormatter.text(3_661))
+        CheckOverlayTimerLabel(text: CheckOverlayTimeFormatter.text(seconds))
             .position(
                 x: CheckOverlayController.panelSize.width / 2,
                 y: CheckOverlayController.panelSize.height * CheckOverlayCharacterView.timerVerticalFraction
@@ -173,12 +186,11 @@ func dumpOverlaySnapshots() throws {
 
     let renderer = ImageRenderer(content: mock)
     renderer.scale = 3
-    if let image = renderer.nsImage,
-       let tiff = image.tiffRepresentation,
-       let bitmap = NSBitmapImageRep(data: tiff),
-       let png = bitmap.representation(using: .png, properties: [:]) {
-        try png.write(to: base.appendingPathComponent("overlay-mock.png"))
-    }
+    let image = try #require(renderer.nsImage)
+    let tiff = try #require(image.tiffRepresentation)
+    let bitmap = try #require(NSBitmapImageRep(data: tiff))
+    let png = try #require(bitmap.representation(using: .png, properties: [:]))
+    try png.write(to: url)
 }
 
 // MARK: - Helpers

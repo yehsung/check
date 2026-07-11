@@ -54,6 +54,7 @@ struct CheckMenuView: View {
                             teamMembers: store.teamMembers,
                             teamName: store.teamName,
                             teamGoalSeconds: store.teamGoalSeconds,
+                            myWeeklySeconds: store.myLiveWeeklySeconds,
                             fallbackStatus: store.syncMessage,
                             now: store.displayNow,
                             myUserID: store.session?.userID,
@@ -118,14 +119,9 @@ private struct HeaderCard: View {
         store.isLongSessionPromptActive || previewLongSessionBanner
     }
 
-    // 보조줄에 표시할 내 이번 주 누적(초). 팀 목록에서 내 행의 라이브 주간값을 쓰고, 아직 못 받았으면 오늘 누적으로 대체.
+    // 보조줄에 표시할 내 이번 주 누적(초). 팀 목록에서 내 행의 라이브 주간값(store 공유 계산).
     private var myWeeklySeconds: Int {
-        guard let userID = store.session?.userID,
-              let mine = store.teamMembers.first(where: { $0.id == userID })
-        else {
-            return store.todayDuration
-        }
-        return mine.liveWeeklyDurationSeconds(now: store.displayNow)
+        store.myLiveWeeklySeconds
     }
 
     var body: some View {
@@ -141,6 +137,7 @@ private struct HeaderCard: View {
                     .font(.system(.title2, design: .monospaced).weight(.semibold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .monospacedDigit()
+                // 내 이번 주 누적. 목표(1인당)의 서술은 바로 아래 게이지의 "/ 각자 N시간" 이 맡는다.
                 Text("이번 주 \(MenuBarStatusFormatter.hoursMinutes(myWeeklySeconds))")
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
@@ -177,8 +174,11 @@ private struct TeamPanel: View {
     let teamMembers: [TeamMemberStatus]
     // 팀 카드 헤더 이름. 로그인 후 store.teamName(미확정 시 "팀")을 그대로 표시한다.
     let teamName: String
-    // 팀 주간 목표시간(초). 출처는 teams.weekly_goal_hours(store.teamGoalSeconds). 게이지 분모로만 쓴다.
+    // 1인당 주간 목표시간(초). 출처는 teams.weekly_goal_hours(store.teamGoalSeconds). 내 진행률 게이지 분모 +
+    // 멤버 행 ✓(목표 달성) 판정에 쓴다. weekly_goal_hours 는 팀 총합이 아니라 "각자 X시간" 약속이다.
     let teamGoalSeconds: Int
+    // 내 이번 주 누적(초). 주간 목표 게이지의 분자(= 내 진행률). 데이터 못 받은 초기엔 0.
+    let myWeeklySeconds: Int
     let fallbackStatus: String
     let now: Date
     // 내 행 판정용. store.session?.userID == member.id 인 행에만 아바타 편집을 붙인다.
@@ -203,6 +203,7 @@ private struct TeamPanel: View {
         teamMembers: [TeamMemberStatus],
         teamName: String,
         teamGoalSeconds: Int,
+        myWeeklySeconds: Int,
         fallbackStatus: String,
         now: Date,
         myUserID: String? = nil,
@@ -216,6 +217,7 @@ private struct TeamPanel: View {
         self.teamMembers = teamMembers
         self.teamName = teamName
         self.teamGoalSeconds = teamGoalSeconds
+        self.myWeeklySeconds = myWeeklySeconds
         self.fallbackStatus = fallbackStatus
         self.now = now
         self.myUserID = myUserID
@@ -262,7 +264,9 @@ private struct TeamPanel: View {
             if canRevealCode, showsInviteCode, let inviteCode {
                 InviteCodeInlineRow(code: inviteCode)
             }
-            TeamGoalGauge(goal: weeklyGoal)
+            // 내 진행률 게이지 — 분자엔 "내"(나 한 사람의 주간 누적), 분모엔 "각자"(1인당 목표)를 붙여
+            // 팀 총합이 아니라 각자의 주간 약속 대비 내 진행률임을 드러낸다.
+            TeamGoalGauge(goal: weeklyGoal, workedLabelPrefix: "내 ", goalLabelPrefix: "각자 ")
             PanelDivider()
             memberList
         }
@@ -317,6 +321,7 @@ private struct TeamPanel: View {
                         presence: member.presence(now: now),
                         primaryDetail: primaryDetail(member),
                         secondaryDetail: secondaryDetail(member),
+                        meetsWeeklyGoal: member.hasMetWeeklyGoal(goalSeconds: teamGoalSeconds, now: now),
                         isMe: isMe,
                         onPickAvatar: isMe ? onUpdateAvatar : nil
                     )
@@ -348,13 +353,10 @@ private struct TeamPanel: View {
         teamMembers.filter { $0.presence(now: now) == .activeWorking }.count
     }
 
-    private var weeklyTotal: Int {
-        teamMembers.reduce(0) { $0 + displayWeeklySeconds($1) }
-    }
-
-    // 목표시간은 store.teamGoalSeconds(= teams.weekly_goal_hours)로만 결정된다. 앱엔 목표 입력 UI가 없다.
+    // 주간 목표 게이지 = 내 진행률(내 주간 누적 ÷ 1인당 목표). 목표는 store.teamGoalSeconds(= teams.weekly_goal_hours)
+    // 로만 결정된다(앱엔 목표 입력 UI 없음). 분자는 팀 총합이 아니라 나 한 사람의 주간 누적이다.
     private var weeklyGoal: TeamWeeklyGoal {
-        TeamWeeklyGoal(workedSeconds: weeklyTotal, goalSeconds: teamGoalSeconds)
+        TeamWeeklyGoal(workedSeconds: myWeeklySeconds, goalSeconds: teamGoalSeconds)
     }
 
     // 상태별 표시용 현재 세션 시간. active는 라이브 틱, stale은 마지막 신호에서 동결, off는 0.
@@ -403,9 +405,9 @@ private struct TeamPanel: View {
 // MARK: - Team league page
 
 /// 팀 카드 자리를 대체하는 팀별 현황 페이지. 헤더/푸터는 CheckMenuView 가 유지하고, 이 카드만 교체된다.
-/// 제목 + 뒤로 버튼 + 총시간 내림차순 팀 목록(우리 팀 칩). 팀이 많으면 memberList 패턴으로 스크롤.
+/// 제목 + 뒤로 버튼 + 1인당 평균 내림차순 팀 목록(우리 팀 칩). 팀이 많으면 memberList 패턴으로 스크롤.
 private struct LeaderboardPanel: View {
-    // 총시간 내림차순으로 정렬된 팀 목록(store 에서 이미 정렬됨). 서버 정렬을 신뢰하지 않고 뷰에서도 다시 정렬한다.
+    // 1인당 평균 내림차순으로 정렬된 팀 목록(store 에서 이미 정렬됨). 서버 정렬을 신뢰하지 않고 뷰에서도 다시 정렬한다.
     let entries: [TeamLeaderboardEntry]
     // 우리 팀 id(칩 표시 판정용). 무소속이면 nil 이라 어떤 행에도 칩이 붙지 않는다.
     var myTeamID: String? = nil
@@ -439,7 +441,7 @@ private struct LeaderboardPanel: View {
     }
 
     private var sortedEntries: [TeamLeaderboardEntry] {
-        entries.sorted { $0.totalSeconds > $1.totalSeconds }
+        entries.sortedByAverageDescending()
     }
 
     private var rowCount: Int {

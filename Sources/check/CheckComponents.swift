@@ -125,6 +125,10 @@ struct CountChip: View {
 
 struct TeamGoalGauge: View {
     let goal: TeamWeeklyGoal
+    /// 진행 시간 앞에 붙이는 접두어. 내 팀 카드의 "내 진행률" 게이지는 "내 " 를 붙여 총합이 아님을 드러낸다.
+    var workedLabelPrefix: String = ""
+    /// 목표 시간 앞에 붙이는 접두어. "각자 " 를 붙여 목표가 팀 총합이 아니라 1인당임을 드러낸다.
+    var goalLabelPrefix: String = ""
 
     private var percent: Int {
         Int((goal.progress * 100).rounded())
@@ -136,10 +140,11 @@ struct TeamGoalGauge: View {
                 Text("주간 목표")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(CheckTheme.primaryText)
-                Text("\(MenuBarStatusFormatter.hoursMinutes(goal.workedSeconds)) / \(MenuBarStatusFormatter.hoursMinutes(goal.goalSeconds))")
+                Text("\(workedLabelPrefix)\(MenuBarStatusFormatter.hoursMinutes(goal.workedSeconds)) / \(goalLabelPrefix)\(MenuBarStatusFormatter.hoursMinutes(goal.goalSeconds))")
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Spacer(minLength: 4)
                 if goal.isComplete {
                     Label("완료", systemImage: "checkmark.seal.fill")
@@ -177,6 +182,8 @@ struct TeamMemberRow: View {
     let primaryDetail: String
     /// stale(연결 끊김) 상태의 "마지막 확인 N분 전" 보조줄. 그 외 상태에선 nil(한 줄만).
     var secondaryDetail: String? = nil
+    /// 1인당 주간 목표 달성 여부. true면 주간 시간 옆에 은은한 ✓(working 그린)를 붙인다. 행 높이는 불변.
+    var meetsWeeklyGoal: Bool = false
     /// 내 행 여부. true면 아바타에 hover 카메라 배지 + 파일 선택을 붙인다.
     var isMe: Bool = false
     /// 내 행 아바타 교체 시 다운스케일된 JPEG Data를 전달받는 콜백.
@@ -190,10 +197,19 @@ struct TeamMemberRow: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
-                Text(primaryDetail)
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(primaryDetail)
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                    if meetsWeeklyGoal {
+                        // 은은한 목표 달성 표식 — 주간 목표(1인당)를 채운 팀원. 과하지 않게 작은 체크만.
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(CheckTheme.working.opacity(0.9))
+                            .accessibilityLabel("주간 목표 달성")
+                    }
+                }
                 if let secondaryDetail {
                     Text(secondaryDetail)
                         .font(.caption2)
@@ -218,18 +234,26 @@ struct TeamMemberRow: View {
 
 // MARK: - Team weekly totals (per-team list)
 
-/// 팀 한 행: 이니셜 아바타 + 팀명(+우리 팀 칩) + 총시간 + 목표 대비 % 미니 게이지 + "N명 근무중" 캡션.
-/// 우리 팀에는 은은한 "우리 팀" 칩만 붙고 행 배경 강조는 없다. 높이는 LeaderboardPanel 이 고정으로 준다.
+/// 팀 한 행: 이니셜 아바타 + 팀명(+우리 팀 칩) + 1인당 평균 근무시간 + 평균/목표 미니 게이지·% +
+/// "각자 목표 G시간 · 총 X시간 · N명 · M명 근무중" 캡션. weekly_goal_hours 가 1인당 목표라 메인 숫자·게이지·%
+/// 는 모두 총합이 아니라 평균 기준이다. 우리 팀에는 은은한 "우리 팀" 칩만 붙고 순위/경쟁 표기는 없다.
+/// 높이는 LeaderboardPanel 이 고정으로 준다.
 struct LeaderboardRow: View {
     let entry: TeamLeaderboardEntry
     var isMyTeam: Bool = false
 
+    // 1인당 평균 대비 목표 진행률 게이지(entry.goal 이 평균 기준으로 계산됨).
     private var goal: TeamWeeklyGoal {
         entry.goal
     }
 
     private var percent: Int {
         Int((goal.progress * 100).rounded())
+    }
+
+    // "각자 목표 G시간 · 총 X시간 · N명 · M명 근무중" — 팀마다 목표가 다를 수 있어 각 행에 목표시간을 명시한다.
+    private var caption: String {
+        "각자 목표 \(entry.weeklyGoalHours)시간 · 총 \(MenuBarStatusFormatter.hoursMinutes(entry.totalSeconds)) · \(entry.memberCount)명 · \(entry.workingCount)명 근무중"
     }
 
     var body: some View {
@@ -252,30 +276,27 @@ struct LeaderboardRow: View {
                             .fixedSize()
                     }
                     Spacer(minLength: 6)
-                    Text(MenuBarStatusFormatter.hoursMinutes(entry.totalSeconds))
+                    // 메인 숫자 = 1인당 평균("평균 X시간 Y분") — 총합이 아니라 팀원 한 명 기준임을 문구로 드러낸다.
+                    Text("평균 \(MenuBarStatusFormatter.hoursMinutes(entry.averageSeconds))")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(CheckTheme.primaryText)
                         .monospacedDigit()
                         .lineLimit(1)
                 }
-                miniGauge
                 HStack(spacing: 6) {
+                    miniGauge
                     Text("\(percent)%")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(CheckTheme.secondaryText)
                         .monospacedDigit()
-                    Text("·")
-                        .font(.caption2)
-                        .foregroundStyle(CheckTheme.secondaryText)
-                    Circle()
-                        .fill(CheckTheme.working)
-                        .frame(width: 5, height: 5)
-                    Text("\(entry.workingCount)명 근무중")
-                        .font(.caption2)
-                        .foregroundStyle(CheckTheme.secondaryText)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
+                        .fixedSize()
                 }
+                Text(caption)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(.horizontal, 10)

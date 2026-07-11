@@ -383,7 +383,7 @@ func memberMembershipLeavesInviteCodeNil() async {
 
 @MainActor
 @Test
-func loadLeaderboardSortsDescendingAndKeepsMyTeamSecond() async {
+func loadLeaderboardSortsByAverageDescending() async {
     let testHost = "leaderboard-store-test"
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(testHost)")!,
@@ -408,11 +408,15 @@ func loadLeaderboardSortsDescendingAndKeepsMyTeamSecond() async {
 
     await store.performLoadLeaderboard()
 
-    // 서버 픽스처는 총시간 내림차순이 아니지만, 클라에서 내림차순으로 정렬해야 한다.
+    // 목표가 1인당이라 정렬은 총합이 아니라 1인당 평균(총합 ÷ 인원) 내림차순이어야 한다.
+    // 평균: 코드 36000/1=36000, 오목교 90000/3=30000, 내 팀 72000/3=24000 → [36000, 30000, 24000].
     #expect(store.leaderboard.count == 3)
-    #expect(store.leaderboard.map(\.totalSeconds) == [90000, 72000, 36000])
-    // 내 팀(stubTeamID)은 총시간 72000 으로 2위여야 한다.
-    #expect(store.leaderboard[1].id == URLProtocolStub.stubTeamID)
+    #expect(store.leaderboard.map(\.averageSeconds) == [36000, 30000, 24000])
+    // 총합 1위(오목교 90000)는 평균으로는 2위 — 평균 역전이 반영됐다.
+    #expect(store.leaderboard.map(\.totalSeconds) == [36000, 90000, 72000])
+    #expect(store.leaderboard[1].name == "오목교 브라더스")
+    // 내 팀(stubTeamID)은 평균 24000 으로 3위다.
+    #expect(store.leaderboard[2].id == URLProtocolStub.stubTeamID)
 }
 
 @MainActor
@@ -481,7 +485,7 @@ func signOutClearsLeaderboardState() async {
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.isLeaderboardVisible = true
     store.leaderboard = [
-        TeamLeaderboardEntry(id: URLProtocolStub.stubTeamID, name: "sudo 박수", weeklyGoalHours: 40, totalSeconds: 72000, workingCount: 3)
+        TeamLeaderboardEntry(id: URLProtocolStub.stubTeamID, name: "sudo 박수", weeklyGoalHours: 40, totalSeconds: 72000, workingCount: 3, memberCount: 3)
     ]
 
     store.signOut()
@@ -489,6 +493,44 @@ func signOutClearsLeaderboardState() async {
     // 로그아웃 시 리그 페이지 상태(목록·노출 플래그)가 초기화되어야 한다.
     #expect(store.leaderboard.isEmpty)
     #expect(!store.isLeaderboardVisible)
+}
+
+@MainActor
+@Test
+func myWeeklyGaugeUsesMyRowNotTeamTotal() {
+    // 주간 목표 게이지 분자는 팀 총합이 아니라 "내 행" 의 라이브 주간 누적이어야 한다(목표가 1인당이므로).
+    let now = Date()
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://my-weekly-gauge-test")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.displayNow = now
+    store.teamGoalSeconds = 60 * 3600
+    store.teamMembers = [
+        TeamMemberStatus(id: "me", name: "나", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil, weeklyDurationSeconds: 12 * 3600 + 30 * 60),
+        TeamMemberStatus(id: "other", name: "동료", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil, weeklyDurationSeconds: 40 * 3600)
+    ]
+
+    // 내 주간 = 내 행만(12시간 30분) — 팀 총합(52시간 30분)이 아니다.
+    #expect(store.myLiveWeeklySeconds == 12 * 3600 + 30 * 60)
+    // 게이지 = 내 주간 ÷ 목표(60시간) ≈ 0.208.
+    let goal = TeamWeeklyGoal(workedSeconds: store.myLiveWeeklySeconds, goalSeconds: store.teamGoalSeconds)
+    #expect(abs(goal.progress - Double(12 * 3600 + 30 * 60) / Double(60 * 3600)) < 1e-9)
+
+    // 내 행을 못 받은 초기엔 오늘 누적(0)으로 폴백한다.
+    store.teamMembers = []
+    #expect(store.myLiveWeeklySeconds == store.todayDuration)
 }
 
 // MARK: - 팀별 주간 목표시간 (teams.weekly_goal_hours 읽기 전용)

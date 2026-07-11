@@ -424,6 +424,9 @@ func fetchTeamLeaderboardDecodesEntriesWithBearer() async throws {
     #expect(myTeam.weeklyGoalHours == 40)
     #expect(myTeam.totalSeconds == 72000)
     #expect(myTeam.workingCount == 3)
+    // member_count 도 디코드되어 1인당 평균(총합 ÷ 인원)이 계산된다.
+    #expect(myTeam.memberCount == 3)
+    #expect(myTeam.averageSeconds == 24000)
 
     let rpcRequest = try #require(URLProtocolStub.requests(forHost: testHost).first {
         $0.url?.path == "/rest/v1/rpc/team_weekly_leaderboard"
@@ -431,6 +434,66 @@ func fetchTeamLeaderboardDecodesEntriesWithBearer() async throws {
     #expect(rpcRequest.httpMethod == "POST")
     // 로그인 토큰을 Bearer 로 사용해 호출한다(anon 이 아니라 authenticated 전용 RPC).
     #expect(rpcRequest.value(forHTTPHeaderField: "Authorization") == "Bearer access-token")
+}
+
+@Test
+func teamLeaderboardRowToleratesMissingMemberCount() throws {
+    // member_count 를 아직 안 내려주는 구버전 RPC(마이그레이션 미적용) 응답도 디코드되어야 한다.
+    // 누락 시 memberCount 는 0 으로 폴백하고 평균은 0명 가드로 0 이 된다(라이브 호환).
+    let json = Data(#"[{"team_id":"t","team_name":"레거시","weekly_goal_hours":60,"total_seconds":72000,"working_count":1}]"#.utf8)
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let rows = try decoder.decode([TeamLeaderboardRow].self, from: json)
+    let row = try #require(rows.first)
+    #expect(row.memberCount == nil)
+    let entry = TeamLeaderboardEntry(id: row.teamId, name: row.teamName, weeklyGoalHours: row.weeklyGoalHours, totalSeconds: row.totalSeconds, workingCount: row.workingCount, memberCount: row.memberCount ?? 0)
+    #expect(entry.memberCount == 0)
+    #expect(entry.averageSeconds == 0)
+    #expect(entry.goal.progress == 0)
+}
+
+@Test
+func leaderboardEntryAveragesTotalOverMembersAndGuardsZero() {
+    // 1인당 평균 = 총합 ÷ 인원. 게이지 분자·% 는 총합이 아니라 평균 ÷ 1인당 목표다.
+    let entry = TeamLeaderboardEntry(id: "t", name: "팀", weeklyGoalHours: 40, totalSeconds: 72000, workingCount: 2, memberCount: 3)
+    #expect(entry.averageSeconds == 24000) // 72000/3 = 6시간 40분
+    #expect(entry.goal.goalSeconds == 40 * 3600)
+    #expect(entry.goal.workedSeconds == 24000)
+    #expect(abs(entry.goal.progress - 24000.0 / (40.0 * 3600.0)) < 1e-9) // ≈ 0.1667
+
+    // 인원 0(가드): 0 으로 나누지 않고 평균·진행률 모두 0.
+    let empty = TeamLeaderboardEntry(id: "e", name: "빈팀", weeklyGoalHours: 60, totalSeconds: 90000, workingCount: 0, memberCount: 0)
+    #expect(empty.averageSeconds == 0)
+    #expect(empty.goal.progress == 0)
+}
+
+@Test
+func leaderboardSortsByAverageDescendingTieByName() {
+    // 정렬은 총합이 아니라 1인당 평균 내림차순, 동률이면 이름 오름차순.
+    let entries = [
+        TeamLeaderboardEntry(id: "a", name: "가팀", weeklyGoalHours: 60, totalSeconds: 90000, workingCount: 0, memberCount: 6), // 평균 15000
+        TeamLeaderboardEntry(id: "b", name: "나팀", weeklyGoalHours: 60, totalSeconds: 36000, workingCount: 0, memberCount: 1), // 평균 36000
+        TeamLeaderboardEntry(id: "c", name: "다팀", weeklyGoalHours: 60, totalSeconds: 30000, workingCount: 0, memberCount: 2)  // 평균 15000 (가팀과 동률)
+    ]
+    let sorted = entries.sortedByAverageDescending()
+    // 36000 먼저, 그 다음 동률 15000 은 이름순(가팀 < 다팀). 총합 1위(가팀 90000)가 평균으로는 아래로 내려간다.
+    #expect(sorted.map(\.id) == ["b", "a", "c"])
+}
+
+@Test
+func memberMeetsWeeklyGoalWhenLiveWeeklyReachesGoal() {
+    // 멤버 행 ✓ 노출 조건 = 라이브 주간 누적이 1인당 목표 이상.
+    let now = Date()
+    let goal = 40 * 3600
+    let met = TeamMemberStatus(id: "1", name: "달성", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil, weeklyDurationSeconds: 40 * 3600)
+    #expect(met.hasMetWeeklyGoal(goalSeconds: goal, now: now))
+    let below = TeamMemberStatus(id: "2", name: "미달", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil, weeklyDurationSeconds: 40 * 3600 - 1)
+    #expect(!below.hasMetWeeklyGoal(goalSeconds: goal, now: now))
+    // 근무중이면 현재 세션분까지 더한 라이브 주간으로 판정한다(39.5h + 1h ≥ 40h).
+    let working = TeamMemberStatus(id: "3", name: "근무중", status: .working, updatedAt: nil, currentSessionStartedAt: now.addingTimeInterval(-3600), weeklyDurationSeconds: 40 * 3600 - 1800)
+    #expect(working.hasMetWeeklyGoal(goalSeconds: goal, now: now))
+    // 목표 0(비정상)이면 항상 거짓 — 0 이상으로 잘못 참이 되지 않게 가드한다.
+    #expect(!met.hasMetWeeklyGoal(goalSeconds: 0, now: now))
 }
 
 @Test

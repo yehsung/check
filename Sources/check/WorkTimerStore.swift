@@ -75,8 +75,8 @@ final class WorkTimerStore {
     var pendingStopStartedAt: Date?
     var pendingStopEndedAt: Date?
 
-    // 팀 리그(이번 주 팀별 총 근무시간 경쟁) 페이지 상태.
-    // leaderboard: 총시간 내림차순으로 정렬한 팀 순위. isLeaderboardVisible: 리그 페이지 노출 여부.
+    // 팀 리그(이번 주 팀별 근무시간) 페이지 상태.
+    // leaderboard: 1인당 평균 근무시간 내림차순(동률 시 이름)으로 정렬한 팀 목록. isLeaderboardVisible: 리그 페이지 노출 여부.
     // 페이지가 열려 있는 동안 30초 refresh 루프가 함께 갱신하고, signOut 시 둘 다 초기화한다.
     var leaderboard: [TeamLeaderboardEntry] = []
     var isLeaderboardVisible = false
@@ -94,6 +94,17 @@ final class WorkTimerStore {
 
     var todayDuration: Int {
         accumulatedSeconds + (startedAt.map { Int(displayNow.timeIntervalSince($0)) } ?? 0)
+    }
+
+    /// 내 이번 주 누적(초). 팀 목록에서 내 행의 라이브 주간값을 쓰고, 아직 못 받았으면 오늘 누적으로 대체한다.
+    /// 헤더 보조 문구와 내 팀 카드의 "내 주간 목표 진행률" 게이지가 같은 값을 쓰도록 한곳에서 계산한다.
+    var myLiveWeeklySeconds: Int {
+        guard let userID = session?.userID,
+              let mine = teamMembers.first(where: { $0.id == userID })
+        else {
+            return todayDuration
+        }
+        return mine.liveWeeklyDurationSeconds(now: displayNow)
     }
 
     var canSync: Bool {

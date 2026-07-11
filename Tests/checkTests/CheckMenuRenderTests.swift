@@ -355,7 +355,7 @@ func windowHeightAdaptsToContentWithinCap() throws {
         try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: [], now: now)))),
         try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now)))),
         main10,
-        // 실데이터 톤의 10명(게이지 완료 라벨 포함) — 가장 큰 메인 상태.
+        // 실데이터 톤의 10명(active/stale/off 혼합) — 가장 큰 메인 상태.
         try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 10), now: now)))),
         try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewLongSessionBanner: true))),
         try #require(renderedPixelHeight(CheckMenuView(store: makeLeaderboardStore()))),
@@ -435,8 +435,9 @@ func checkMenuViewRendersPresenceTeamSnapshot() throws {
 @MainActor
 @Test
 func checkMenuViewRendersLeaderboardSnapshot() throws {
-    // 팀별 이번 주 페이지: 3팀(총시간 내림차순), 우리 팀(2번째)에 "우리 팀" 칩, 목표 대비 미니 게이지 + "N명 근무중"
-    // 캡션이 340pt 폭 안에서 잘림·겹침 없이 수납되는지 육안 확인한다. 메달·트로피·순위 숫자는 없어야 한다.
+    // 팀별 이번 주 페이지: 3팀(1인당 평균 내림차순), 우리 팀(2번째)에 "우리 팀" 칩, 평균/목표 미니 게이지·% +
+    // "각자 목표 G시간 · 총 X시간 · N명 · M명 근무중" 캡션이 340pt 폭 안에서 잘림·겹침 없이 수납되는지 육안
+    // 확인한다. 메인 숫자는 "평균 X시간 Y분", 메달·트로피·순위 숫자는 없어야 한다.
     let store = makeLeaderboardStore()
 
     let png = try renderPNG(CheckMenuView(store: store))
@@ -444,6 +445,44 @@ func checkMenuViewRendersLeaderboardSnapshot() throws {
     if let path = ProcessInfo.processInfo.environment["CHECK_LEADERBOARD_SNAPSHOT_PATH"] {
         try png.write(to: URL(fileURLWithPath: path))
     }
+}
+
+/// 1인당 목표 교정 육안 확인용 스냅샷 2종을 CHECK_PERPERSON_SNAPSHOT_DIR 로 덤프한다(지정 시에만).
+///  - my-team-card.png: 내 진행률 게이지("내 12시간 30분 / 60시간 · 21%") + 멤버 ✓ 정확히 1명(목표 달성).
+///  - leaderboard.png: 3팀(평균 역전, 우리 팀 2번째) 팀별 이번 주 페이지.
+@MainActor
+@Test
+func dumpPerPersonGoalSnapshots() throws {
+    guard let dir = ProcessInfo.processInfo.environment["CHECK_PERPERSON_SNAPSHOT_DIR"] else { return }
+    let base = URL(fileURLWithPath: dir, isDirectory: true)
+    try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+    let now = Date()
+
+    // 내 팀 카드: 목표 60시간(1인당). 내 행(userID ...002) 주간 12시간 30분 → 게이지 내 진행률 ≈ 21%.
+    // "성실"만 주간 61시간(≥60h)이라 ✓ 1명, "민수"는 30시간이라 ✓ 없음.
+    let myID = "00000000-0000-0000-0000-000000000002"
+    let members = [
+        TeamMemberStatus(
+            id: myID, name: "영식", status: .offWork, updatedAt: nil,
+            currentSessionStartedAt: nil, weeklyDurationSeconds: 12 * 3600 + 30 * 60,
+            avatarURL: CheckMascotAssets.url(for: .neutral)
+        ),
+        TeamMemberStatus(
+            id: "00000000-0000-0000-0000-000000000001", name: "성실", status: .working, updatedAt: nil,
+            currentSessionStartedAt: now.addingTimeInterval(-3_600), weeklyDurationSeconds: 61 * 3600
+        ),
+        TeamMemberStatus(
+            id: "00000000-0000-0000-0000-000000000003", name: "민수", status: .offWork, updatedAt: nil,
+            currentSessionStartedAt: nil, weeklyDurationSeconds: 30 * 3600
+        )
+    ]
+    let cardStore = makeTeamStore(members: members, now: now)
+    cardStore.teamGoalSeconds = 60 * 3600
+    let cardPNG = try renderPNG(CheckMenuView(store: cardStore))
+    try cardPNG.write(to: base.appendingPathComponent("my-team-card.png"))
+
+    let leaderboardPNG = try renderPNG(CheckMenuView(store: makeLeaderboardStore()))
+    try leaderboardPNG.write(to: base.appendingPathComponent("leaderboard.png"))
 }
 
 // MARK: - E2: 아바타(이미지 1 + 이니셜 2)
@@ -665,11 +704,12 @@ private func manyMembers(now: Date, count: Int = 8) -> [TeamMemberStatus] {
     }
 }
 
-/// 팀별 이번 주 스텁 표본. 총시간 내림차순, 우리 팀(stubTeamID)이 2번째.
+/// 팀별 이번 주 스텁 표본. member_count 로 평균 역전을 심었다 — 총합 순서(오목교>sudo>코드)와
+/// 1인당 평균 순서(코드 36000 > sudo 24000 > 오목교 15000)가 반대다. 평균 정렬 후 우리 팀(stubTeamID)이 2번째.
 private let sampleLeaderboard: [TeamLeaderboardEntry] = [
-    TeamLeaderboardEntry(id: "20000000-0000-0000-0000-000000000002", name: "오목교 브라더스", weeklyGoalHours: 60, totalSeconds: 90_000, workingCount: 1),
-    TeamLeaderboardEntry(id: URLProtocolStub.stubTeamID, name: "sudo 박수", weeklyGoalHours: 40, totalSeconds: 72_000, workingCount: 3),
-    TeamLeaderboardEntry(id: "30000000-0000-0000-0000-000000000003", name: "코드 크래프터", weeklyGoalHours: 50, totalSeconds: 36_000, workingCount: 0)
+    TeamLeaderboardEntry(id: "20000000-0000-0000-0000-000000000002", name: "오목교 브라더스", weeklyGoalHours: 60, totalSeconds: 90_000, workingCount: 1, memberCount: 6),
+    TeamLeaderboardEntry(id: URLProtocolStub.stubTeamID, name: "sudo 박수", weeklyGoalHours: 40, totalSeconds: 72_000, workingCount: 3, memberCount: 3),
+    TeamLeaderboardEntry(id: "30000000-0000-0000-0000-000000000003", name: "코드 크래프터", weeklyGoalHours: 50, totalSeconds: 36_000, workingCount: 0, memberCount: 1)
 ]
 
 /// 팀별 이번 주 페이지가 열린 로그인 스토어. 우리 팀(currentTeamID=stubTeamID)에 칩이 뜨도록 세팅한다.
@@ -767,10 +807,11 @@ private enum RenderError: Error {
     case failed
 }
 
-/// 총시간 내림차순 N팀 리더보드 표본(스크롤 상한 검증용). 우리 팀(stubTeamID)은 포함하지 않는다.
+/// 평균 내림차순 N팀 리더보드 표본(스크롤 상한 검증용). 우리 팀(stubTeamID)은 포함하지 않는다.
+/// member_count 1 이라 평균 = 총합이라 순서/상한 검증에 영향 없다.
 private func manyLeaderboardEntries(count: Int) -> [TeamLeaderboardEntry] {
     (0..<count).map { i in
-        TeamLeaderboardEntry(id: "bbbbbbbb-0000-0000-0000-\(String(format: "%012d", i))", name: "팀\(i)", weeklyGoalHours: 60, totalSeconds: (count - i) * 3_600, workingCount: i % 3)
+        TeamLeaderboardEntry(id: "bbbbbbbb-0000-0000-0000-\(String(format: "%012d", i))", name: "팀\(i)", weeklyGoalHours: 60, totalSeconds: (count - i) * 3_600, workingCount: i % 3, memberCount: 1)
     }
 }
 

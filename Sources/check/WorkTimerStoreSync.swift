@@ -67,8 +67,9 @@ extension WorkTimerStore {
         await performLoadLeaderboard()
     }
 
-    /// team_weekly_leaderboard RPC 로 순위를 받아 총시간 내림차순으로 정렬해 반영한다.
-    /// 서버도 내림차순으로 정렬하지만 신뢰하지 않고 클라에서 다시 정렬한다. 실패 시 안내만 남긴다.
+    /// team_weekly_leaderboard RPC 로 순위를 받아 1인당 평균 근무시간 내림차순(동률 시 이름)으로
+    /// 정렬해 반영한다. 목표가 1인당이라 정렬 기준도 총합이 아니라 평균이다. 서버 정렬은 신뢰하지 않고
+    /// 클라에서 다시 정렬한다. 실패 시 안내만 남긴다.
     func performLoadLeaderboard() async {
         guard session != nil else { return }
         let generation = sessionGeneration
@@ -77,7 +78,7 @@ extension WorkTimerStore {
                 try await service.fetchTeamLeaderboard(accessToken: activeSession.accessToken)
             }
             guard generation == sessionGeneration else { return }
-            leaderboard = entries.sorted { $0.totalSeconds > $1.totalSeconds }
+            leaderboard = entries.sortedByAverageDescending()
         } catch {
             guard generation == sessionGeneration else { return }
             syncMessage = "리그 불러오기 실패"

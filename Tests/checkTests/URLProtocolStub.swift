@@ -295,15 +295,17 @@ final class URLProtocolStub: URLProtocol {
         return Data(#"[{"invite_code": "SUDOPARK"}]"#.utf8)
     }
 
-    // 팀 리그 픽스처: 3팀, 내 팀(stubTeamID)이 총시간 2위. 클라 정렬이 실제로 동작하는지 보이려고
-    // 일부러 총시간 내림차순이 아닌 순서(작은→큰→중간)로 내려준다. 정렬 후 [90000, 72000(내 팀), 36000].
+    // 팀 리그 픽스처: 3팀. member_count 로 "평균 역전"을 심는다 — 총합 1위(오목교 90000)가 1인당 평균으로는
+    // 2위가 되도록(오목교 90000/3=30000 < 코드 크래프터 36000/1=36000) 인원을 준다. 정렬은 총합이 아니라
+    // 평균 내림차순이라, 정렬 후 평균 [36000(코드), 30000(오목교), 24000(내 팀 72000/3)] 순이어야 한다.
+    // 서버 정렬(총합 desc)을 신뢰하지 않고 클라가 평균으로 다시 정렬하는지 보이려 원본은 평균순이 아니다.
     private static func teamLeaderboardData() -> Data {
         Data(
             """
             [
-              {"team_id": "30000000-0000-0000-0000-000000000003", "team_name": "코드 크래프터", "weekly_goal_hours": 50, "total_seconds": 36000, "working_count": 0},
-              {"team_id": "20000000-0000-0000-0000-000000000002", "team_name": "오목교 브라더스", "weekly_goal_hours": 60, "total_seconds": 90000, "working_count": 1},
-              {"team_id": "10000000-0000-0000-0000-000000000001", "team_name": "sudo 박수", "weekly_goal_hours": 40, "total_seconds": 72000, "working_count": 3}
+              {"team_id": "30000000-0000-0000-0000-000000000003", "team_name": "코드 크래프터", "weekly_goal_hours": 50, "total_seconds": 36000, "working_count": 0, "member_count": 1},
+              {"team_id": "20000000-0000-0000-0000-000000000002", "team_name": "오목교 브라더스", "weekly_goal_hours": 60, "total_seconds": 90000, "working_count": 1, "member_count": 3},
+              {"team_id": "10000000-0000-0000-0000-000000000001", "team_name": "sudo 박수", "weekly_goal_hours": 40, "total_seconds": 72000, "working_count": 3, "member_count": 3}
             ]
             """.utf8
         )

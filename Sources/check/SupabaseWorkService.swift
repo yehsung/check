@@ -363,7 +363,7 @@ actor SupabaseWorkService {
     }
 
     /// 팀 리그(이번 주 팀별 총 근무시간). team_weekly_leaderboard() RPC 를 로그인 토큰으로 호출한다.
-    /// RPC 는 모든 팀의 총합/목표/근무중 인원만 반환하며 invite_code 는 노출하지 않는다.
+    /// RPC 는 모든 팀의 총합/목표/인원/근무중 인원만 반환하며 invite_code 는 노출하지 않는다.
     func fetchTeamLeaderboard(accessToken: String) async throws -> [TeamLeaderboardEntry] {
         let data = try await send(
             path: "/rest/v1/rpc/team_weekly_leaderboard",
@@ -379,7 +379,9 @@ actor SupabaseWorkService {
                 name: $0.teamName,
                 weeklyGoalHours: $0.weeklyGoalHours,
                 totalSeconds: $0.totalSeconds,
-                workingCount: $0.workingCount
+                workingCount: $0.workingCount,
+                // member_count 를 안 내려주는 구버전 RPC 는 nil → 0(평균 0명 가드).
+                memberCount: $0.memberCount ?? 0
             )
         }
     }

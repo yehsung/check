@@ -693,6 +693,8 @@ struct LiveE2ETests {
         await store.performLoadLeaderboard()
 
         // 소속이 있으므로 가드를 통과해 리그 행이 내려오고, 우리 팀이 포함된다.
+        // member_count 컬럼(20260712010000 마이그레이션)이 아직 라이브에 없어도 디코드는 호환된다
+        // (TeamLeaderboardRow.memberCount 는 optional → 누락 시 0, 평균은 0명 가드). 여기선 행 존재만 본다.
         obs("리더보드 가드(member): 행수=\(store.leaderboard.count)")
         #expect(!store.leaderboard.isEmpty)
         #expect(store.leaderboard.contains { $0.id == LiveE2EState.e2eTeamID })

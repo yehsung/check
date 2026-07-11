@@ -57,6 +57,13 @@ struct TeamMemberStatus: Equatable, Identifiable {
     func liveTodayDurationSeconds(now: Date = Date()) -> Int {
         todayDurationSeconds + currentDurationSeconds(now: now)
     }
+
+    /// 1인당 주간 목표(goalSeconds) 달성 여부. 팀 카드 멤버 행의 ✓ 노출 조건과 동일 식이다.
+    /// weekly_goal_hours 는 팀 총합이 아니라 "각자 이번 주 X시간 이상" 이라, 이 사람의 라이브 주간
+    /// 누적이 목표 이상이면 참이다. 목표가 0(비정상)이면 항상 거짓으로 둔다.
+    func hasMetWeeklyGoal(goalSeconds: Int, now: Date = Date()) -> Bool {
+        goalSeconds > 0 && liveWeeklyDurationSeconds(now: now) >= goalSeconds
+    }
 }
 
 enum PendingWorkOperation: Equatable {
@@ -80,18 +87,41 @@ struct TeamDirectoryEntry: Identifiable, Equatable {
     let name: String
 }
 
-/// 팀 리그(이번 주 팀별 총 근무시간 경쟁)의 한 행. team_weekly_leaderboard() RPC 로 받아 온다.
+/// 팀 리그(이번 주 팀별 근무시간)의 한 행. team_weekly_leaderboard() RPC 로 받아 온다.
 /// id 는 팀 id(내 팀 하이라이트 판정에 쓴다). invite_code 는 RPC 가 반환하지 않으므로 노출되지 않는다.
+/// weeklyGoalHours 는 팀 총합 목표가 아니라 팀원 1인당 주간 목표라, 게이지/정렬 기준은 총합이 아니라
+/// 평균(averageSeconds = 총합 ÷ 인원)이다.
 struct TeamLeaderboardEntry: Identifiable, Equatable {
     let id: String
     let name: String
     let weeklyGoalHours: Int
     let totalSeconds: Int
     let workingCount: Int
+    let memberCount: Int
 
-    /// 목표 대비 진행률 게이지(주간 목표 게이지와 같은 규약: 0~1 클램프, 목표=weeklyGoalHours 시간).
+    /// 팀원 1인당 평균 근무시간(초). 인원 0(가드)이면 0. 정렬·게이지·%의 단일 기준이다.
+    var averageSeconds: Int {
+        guard memberCount > 0 else { return 0 }
+        return totalSeconds / memberCount
+    }
+
+    /// 1인당 목표 대비 진행률 게이지(주간 목표 게이지와 같은 규약: 0~1 클램프, 목표=weeklyGoalHours 시간).
+    /// 분자는 총합이 아니라 평균이다(목표가 1인당이므로).
     var goal: TeamWeeklyGoal {
-        TeamWeeklyGoal(workedSeconds: totalSeconds, goalSeconds: weeklyGoalHours * 3600)
+        TeamWeeklyGoal(workedSeconds: averageSeconds, goalSeconds: weeklyGoalHours * 3600)
+    }
+}
+
+extension Array where Element == TeamLeaderboardEntry {
+    /// 팀별 리그 정렬 단일 규약: 1인당 평균 근무시간 내림차순, 동률이면 팀 이름 오름차순.
+    /// 스토어(반영)와 뷰(재정렬)가 같은 결과를 내도록 공유한다.
+    func sortedByAverageDescending() -> [TeamLeaderboardEntry] {
+        sorted { lhs, rhs in
+            if lhs.averageSeconds != rhs.averageSeconds {
+                return lhs.averageSeconds > rhs.averageSeconds
+            }
+            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
     }
 }
 
@@ -252,12 +282,15 @@ struct InviteCodeRow: Decodable {
 }
 
 /// team_weekly_leaderboard() RPC 응답 행. total_seconds 는 bigint(초)라 Int(64비트)로 받는다.
+/// memberCount 는 member_count 를 아직 안 내려주는 구버전 RPC(마이그레이션 미적용)와도 호환되게
+/// optional 로 두고, 디코드 시 누락되면 0 으로 폴백한다(평균 계산은 0명 가드로 안전하다).
 struct TeamLeaderboardRow: Decodable {
     let teamId: String
     let teamName: String
     let weeklyGoalHours: Int
     let totalSeconds: Int
     let workingCount: Int
+    let memberCount: Int?
 }
 
 /// memberships?select=team_id,role,teams(name,weekly_goal_hours) 응답 행. teams 는 임베드 조인.

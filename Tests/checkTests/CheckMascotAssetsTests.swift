@@ -22,6 +22,42 @@ func mascotResourcesResolveAndLoad() throws {
 }
 
 @Test
+func menuBarImageIsSizedForMenuBar() throws {
+    for mood in [CheckMascotAssets.Mood.neutral, .negative] {
+        let image = try #require(
+            CheckMascotAssets.menuBarImage(for: mood),
+            "메뉴바용 캐릭터 이미지가 로드되어야 한다"
+        )
+        // 논리 크기는 메뉴바 높이 안에 들어가도록 18×18pt여야 한다.
+        #expect(image.size == NSSize(width: 18, height: 18))
+        // 비트맵 rep은 원본(640px) 그대로 유지되어 레티나에서 선명해야 한다.
+        let hasHighResRep = image.representations.contains { $0.pixelsWide >= 640 && $0.pixelsHigh >= 640 }
+        #expect(hasHighResRep, "다운스케일용 고해상도 rep이 유지되어야 한다")
+    }
+}
+
+@Test
+func menuBarImageIsCachedAndDistinctFromBaseImage() throws {
+    let first = try #require(CheckMascotAssets.menuBarImage(for: .neutral))
+    let second = try #require(CheckMascotAssets.menuBarImage(for: .neutral))
+    // 같은 mood는 캐시된 동일 인스턴스를 돌려준다.
+    #expect(first === second)
+
+    // 원본 이미지의 크기는 메뉴바 크기 조정에 영향받지 않아야 한다.
+    let base = try #require(CheckMascotAssets.image(for: .neutral))
+    #expect(base !== first)
+    #expect(base.size != NSSize(width: 18, height: 18))
+}
+
+@Test
+func menuBarImageFollowsSnapshotMood() throws {
+    let working = WorkStatusSnapshot(status: .working, elapsedSeconds: 60)
+    let off = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
+    #expect(CheckMascotAssets.menuBarImage(for: working) === CheckMascotAssets.menuBarImage(for: .neutral))
+    #expect(CheckMascotAssets.menuBarImage(for: off) === CheckMascotAssets.menuBarImage(for: .negative))
+}
+
+@Test
 func mascotMoodFollowsIsWorkingOnly() {
     // 판단 기준은 isWorking 하나만 사용한다 (pendingSync 여부와 무관).
     let workingPending = WorkStatusSnapshot(status: .working, elapsedSeconds: 120, pendingSync: true)

@@ -228,15 +228,19 @@ struct CredentialField: View {
                 .foregroundStyle(CheckTheme.secondaryText)
                 .frame(width: 16)
             ZStack(alignment: .leading) {
-                Text(displayText)
-                    .foregroundStyle(text.isEmpty ? CheckTheme.secondaryText : CheckTheme.primaryText)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // 플레이스홀더는 비었을 때만 깔고, 히트테스트 대상에서 제외한다.
+                if text.isEmpty {
+                    Text(title)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .allowsHitTesting(false)
+                }
                 field
                     .textFieldStyle(.plain)
-                    .foregroundStyle(.clear)
+                    .foregroundStyle(CheckTheme.primaryText)
                     .tint(CheckTheme.accent)
-                    .opacity(0.001)
+                    .accessibilityLabel(title)
             }
         }
         .font(.subheadline)
@@ -249,22 +253,13 @@ struct CredentialField: View {
         )
     }
 
-    private var displayText: String {
-        if text.isEmpty {
-            return title
-        }
-        if isSecure {
-            return String(repeating: "•", count: max(6, min(text.count, 16)))
-        }
-        return text
-    }
-
     @ViewBuilder
     private var field: some View {
+        // 플레이스홀더는 위 Text 오버레이가 담당하므로 라벨은 비운다.
         if isSecure {
-            SecureField(title, text: $text)
+            SecureField("", text: $text)
         } else {
-            TextField(title, text: $text)
+            TextField("", text: $text)
         }
     }
 }
@@ -272,6 +267,9 @@ struct CredentialField: View {
 // MARK: - Brand header (login)
 
 struct BrandHeader: View {
+    // 부제는 화면(로그인/가입)에 따라 달라진다. 기본값은 로그인 화면 문구.
+    var subtitle: String = "sudo 박수 팀 근무 타이머"
+
     var body: some View {
         HStack(spacing: 11) {
             ZStack {
@@ -286,13 +284,43 @@ struct BrandHeader: View {
                 Text("check")
                     .font(.system(.title3, design: .rounded).weight(.heavy))
                     .foregroundStyle(CheckTheme.primaryText)
-                Text("sudo 박수 팀 근무 타이머")
+                Text(subtitle)
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
+    }
+}
+
+// MARK: - Auth mode switch link
+
+/// 로그인 ↔ 가입 화면을 전환하는 텍스트 링크 버튼.
+/// 안내 문구는 secondary, 실제 링크 단어는 accent + hover 시 밑줄/밝기로 버튼임을 드러낸다.
+struct AuthLinkButton: View {
+    let prompt: String
+    let action: String
+    let perform: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: perform) {
+            HStack(spacing: 5) {
+                Text(prompt)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                Text(action)
+                    .foregroundStyle(CheckTheme.accent)
+                    .underline(hovering)
+                    .brightness(hovering ? 0.12 : 0)
+            }
+            .font(.caption.weight(.medium))
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 

@@ -3,6 +3,8 @@ import SwiftUI
 
 struct CheckMenuView: View {
     @Bindable var store: WorkTimerStore
+    // 렌더 스냅샷/미리보기에서 초기 인증 모드를 주입할 수 있게 열어 둔다. 앱은 기본값(로그인)으로 진입.
+    var initialAuthMode: AuthMode = .signIn
 
     var body: some View {
         VStack(spacing: 10) {
@@ -11,7 +13,7 @@ struct CheckMenuView: View {
                 TeamPanel(teamMembers: store.teamMembers, fallbackStatus: store.syncMessage, now: store.displayNow)
                 FooterBar(store: store)
             } else {
-                LoginPanel(store: store)
+                LoginPanel(store: store, initialMode: initialAuthMode)
             }
         }
         .padding(12)
@@ -28,12 +30,10 @@ struct MenuBarStatusLabel: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            if let mascot = CheckMascotAssets.image(for: snapshot) {
+            if let mascot = CheckMascotAssets.menuBarImage(for: snapshot) {
+                // 이미 18×18pt로 크기를 지정한 이미지라 .resizable()/.frame() 불필요.
+                // MenuBarExtra 라벨이 intrinsic size를 써도 바 높이 안에 온전히 들어간다.
                 Image(nsImage: mascot)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .frame(width: 18, height: 18)
             } else {
                 Image(systemName: MenuBarStatusFormatter.symbolName(for: snapshot))
                     .symbolRenderingMode(.hierarchical)
@@ -186,53 +186,103 @@ private struct FooterBar: View {
 
 // MARK: - Login panel
 
+/// 로그인/가입을 오가는 뷰 로컬 UI 상태. store가 아니라 뷰에서만 관리한다.
+enum AuthMode {
+    case signIn
+    case signUp
+}
+
+/// syncMessage 배너의 성격 분류. AuthStatusLine 색/아이콘과 모드 전환 시 오류 리셋 판정에 공유한다.
+enum AuthMessageKind {
+    case progress, info, error
+
+    init(_ message: String) {
+        switch message {
+        case "로그인 중", "계정 생성 중":
+            self = .progress
+        case "확인 메일 필요", "이메일 확인 필요":
+            self = .info
+        default:
+            self = .error
+        }
+    }
+}
+
 private struct LoginPanel: View {
     @Bindable var store: WorkTimerStore
+    @State private var mode: AuthMode
+
+    init(store: WorkTimerStore, initialMode: AuthMode = .signIn) {
+        self.store = store
+        _mode = State(initialValue: initialMode)
+    }
 
     var body: some View {
         VStack(spacing: 12) {
-            BrandHeader()
+            BrandHeader(subtitle: mode == .signUp ? "sudo 박수 팀에 합류" : "sudo 박수 팀 근무 타이머")
             PanelDivider()
             VStack(spacing: 8) {
-                CredentialField(title: "별명", icon: "person.text.rectangle.fill", text: $store.displayName)
+                if mode == .signUp {
+                    CredentialField(title: "별명", icon: "person.text.rectangle.fill", text: $store.displayName)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
                 CredentialField(title: "이메일", icon: "envelope.fill", text: $store.email)
                 CredentialField(title: "비밀번호", icon: "lock.fill", text: $store.password, isSecure: true)
             }
-            HStack(spacing: 8) {
-                AuthButton(title: "로그인", icon: "person.crop.circle.badge.checkmark", prominent: true) {
-                    store.signIn()
-                }
-                AuthButton(title: "가입", icon: "person.badge.plus") {
-                    store.signUp()
-                }
-            }
-            .disabled(!store.canSync)
+            primaryButton
+                .disabled(!store.canSync)
             if store.syncMessage != "로그인 필요" {
                 AuthStatusLine(message: store.syncMessage)
             }
+            switchLink
         }
         .padding(14)
         .panelStyle()
+        .animation(.easeInOut(duration: 0.22), value: mode)
+    }
+
+    // 하나의 prominent 전체폭 버튼만 노출한다. 모드에 따라 로그인/가입으로 바뀐다.
+    @ViewBuilder
+    private var primaryButton: some View {
+        switch mode {
+        case .signIn:
+            AuthButton(title: "로그인", icon: "person.crop.circle.badge.checkmark", prominent: true) {
+                store.signIn()
+            }
+        case .signUp:
+            AuthButton(title: "가입", icon: "person.badge.plus", prominent: true) {
+                store.signUp()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var switchLink: some View {
+        switch mode {
+        case .signIn:
+            AuthLinkButton(prompt: "계정이 없나요?", action: "가입하기") {
+                switchMode(to: .signUp)
+            }
+        case .signUp:
+            AuthLinkButton(prompt: "이미 계정이 있나요?", action: "로그인") {
+                switchMode(to: .signIn)
+            }
+        }
+    }
+
+    // 입력값(별명/이메일/비밀번호)은 유지하되, 이전 모드의 오류 배너가 새 모드에서 혼동을 주지 않도록 리셋한다.
+    private func switchMode(to newMode: AuthMode) {
+        if AuthMessageKind(store.syncMessage) == .error {
+            store.syncMessage = "로그인 필요"
+        }
+        mode = newMode
     }
 }
 
 private struct AuthStatusLine: View {
     let message: String
 
-    private enum Kind {
-        case progress, info, error
-    }
-
-    private var kind: Kind {
-        switch message {
-        case "로그인 중", "계정 생성 중":
-            return .progress
-        case "확인 메일 필요", "이메일 확인 필요":
-            return .info
-        default:
-            return .error
-        }
-    }
+    private var kind: AuthMessageKind { AuthMessageKind(message) }
 
     private var tint: Color {
         switch kind {

@@ -11,6 +11,9 @@
 --   contribution = greatest(0, extract(epoch from (effective_end - max(started_at, week_start))))
 --   - 완료 세션 effective_end = least(ended_at, now())
 --   - 열린 세션 effective_end = least(coalesce(last_seen_at, now()), now())  (하트비트 상한)
+-- 반환 컬럼 추가는 create or replace 로 불가(42P13) — 기존 함수를 먼저 제거한다.
+drop function if exists public.team_weekly_leaderboard();
+
 create or replace function public.team_weekly_leaderboard()
 returns table(
   team_id uuid,

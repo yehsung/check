@@ -36,6 +36,8 @@ extension WorkTimerStore {
             stopTimerIfIdle()
             if syncMessage != "동기화됨" { syncMessage = "동기화됨" }
         } catch {
+            // 취소(.task 취소/팝오버 빨리 닫기)는 실패 문구를 남기지 않고 조용히 빠져나간다(사용자 헛경보 금지).
+            if case .cancelled = classifyAuthError(error) { return }
             guard generation == sessionGeneration else { return }
             syncMessage = authMessage(for: error, fallback: "동기화 실패")
         }
@@ -84,6 +86,8 @@ extension WorkTimerStore {
             let sorted = entries.sortedByAverageDescending()
             if leaderboard != sorted { leaderboard = sorted }
         } catch {
+            // 취소는 실패 문구를 남기지 않고 조용히 빠져나간다.
+            if case .cancelled = classifyAuthError(error) { return }
             guard generation == sessionGeneration else { return }
             if syncMessage != "리그 불러오기 실패" { syncMessage = "리그 불러오기 실패" }
         }
@@ -127,6 +131,7 @@ extension WorkTimerStore {
         }
 
         accumulatedSeconds = member.todayDurationSeconds
+        accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: Date())
         let duration = max(0, Int(seen.timeIntervalSince(sessionStart)))
         let generation = sessionGeneration
         do {
@@ -289,10 +294,12 @@ extension WorkTimerStore {
         while let item = pendingItems.first {
             do {
                 try await performPendingOperation(item)
-                guard generation == sessionGeneration else { return }
+                // 서버 실행이 끝난 항목은 세대와 무관하게 큐에서 제거한다 — 큐는 clearPersistedSession 을 살아남는
+                // 로컬 장부라, 완료 항목이 세대 증가로 잔류하면 재로그인 후 같은 sessionID 로 이중 재생(409)된다.
                 if pendingItems.first?.id == item.id {
                     pendingItems.removeFirst()
                 }
+                guard generation == sessionGeneration else { return }
             } catch {
                 guard generation == sessionGeneration else { return }
                 snapshot.pendingSync = true
@@ -352,6 +359,7 @@ extension WorkTimerStore {
         }
 
         accumulatedSeconds = ownMember.todayDurationSeconds
+        accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: Date())
 
         switch (ownMember.status, startedAt) {
         case (.working, nil):

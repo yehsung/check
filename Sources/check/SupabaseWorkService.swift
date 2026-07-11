@@ -197,9 +197,12 @@ actor SupabaseWorkService {
     }
 
     func startWork(accessToken: String, teamID: String, userID: String, sessionID: String, startedAt: Date = Date()) async throws {
+        // 큐 재재생으로 이미 닫힌 동일 id 세션에 다시 POST 돼도 무해하도록 멱등화한다(stopWork fallback 과 동일 패턴).
+        // on_conflict=id + resolution=ignore-duplicates 로 중복 id 는 서버가 조용히 무시한다(409 소멸).
         try await sendNoBody(
             path: "/rest/v1/work_sessions",
             method: "POST",
+            queryItems: [URLQueryItem(name: "on_conflict", value: "id")],
             body: StartSessionRequest(
                 id: sessionID,
                 teamId: teamID,
@@ -207,7 +210,7 @@ actor SupabaseWorkService {
                 startedAt: dateFormatter.string(from: startedAt)
             ),
             accessToken: accessToken,
-            prefer: "return=minimal"
+            prefer: "resolution=ignore-duplicates,return=minimal"
         )
         try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
     }

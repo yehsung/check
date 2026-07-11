@@ -13,6 +13,9 @@ final class WorkTimerStore {
 
     var startedAt: Date?
     var accumulatedSeconds: Int = 0
+    /// accumulatedSeconds 가 귀속하는 KST 하루의 시작 시각. 대입/가산 지점마다 그 시점의 dayStart 로 스탬프해,
+    /// 자정을 넘겨 어제 누적이 오늘 표시를 부풀리거나 새 날 마일스톤을 오발화시키지 않게 한다.
+    @ObservationIgnored var accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: Date())
     var tickerTask: Task<Void, Never>?
     var refreshTask: Task<Void, Never>?
     var syncTask: Task<Void, Never>?
@@ -31,6 +34,9 @@ final class WorkTimerStore {
     @ObservationIgnored var isMenuPresented = false
     /// 실행당 1회 전체 활성화(토큰 회전+멤버십 확정) 플래그. signOut/clearPersistedSession 에서 리셋.
     @ObservationIgnored var hasActivatedStoredSession = false
+    /// 멤버십이 확정적으로 판정된 적 있는지(소속 확인 성공 또는 정상 0행 무소속 확정). 첫 활성화가 오프라인/취소로
+    /// 실패하면 false 로 남아, 재오픈 시 activateStoredSession 이 멤버십을 재확정하게 한다. signOut/clearPersistedSession 에서 리셋.
+    @ObservationIgnored var membershipConfirmed = false
     /// 메뉴바 라벨 텍스트. 문자열이 실제로 바뀔 때만 대입해 라벨 무효화를 최소화한다.
     var menuBarTitle = "오프"
 
@@ -121,12 +127,15 @@ final class WorkTimerStore {
 
 
     var todayDuration: Int {
-        guard let startedAt else { return accumulatedSeconds }
+        let dayStart = TeamWeeklyGoal.koreanDayStart(for: displayNow)
+        // 누적 기여는 그 값이 '오늘' 것일 때만 센다: 스탬프(accumulatedDayStart)가 오늘 자정 이후면 유효,
+        // 아니면 0. 자정을 넘겨 어제 누적이 오늘 표시를 부풀리거나 새 날 마일스톤을 오발화시키지 않게 한다.
+        let accumulatedContribution = accumulatedDayStart >= dayStart ? accumulatedSeconds : 0
+        guard let startedAt else { return accumulatedContribution }
         // 진행 세션 기여를 KST 자정으로 클리핑한다: 자정을 넘긴 세션이 오늘 표시를 부풀리거나 자정 직후
         // 마일스톤이 오발화하지 않게 하고, 시계 되돌림으로 음수가 되면 0으로 클램프한다.
-        let dayStart = TeamWeeklyGoal.koreanDayStart(for: displayNow)
         let effectiveStart = max(startedAt, dayStart)
-        return accumulatedSeconds + max(0, Int(displayNow.timeIntervalSince(effectiveStart)))
+        return accumulatedContribution + max(0, Int(displayNow.timeIntervalSince(effectiveStart)))
     }
 
     /// 내 이번 주 누적(초). 팀 목록에서 내 행의 라이브 주간값을 쓰고, 아직 못 받았으면 오늘 누적으로 대체한다.
@@ -245,9 +254,12 @@ final class WorkTimerStore {
     func stop(now: Date = Date()) {
         guard let startedAt else { return }
         displayNow = now
+        // 서버 전송 duration 은 세션 전체를 유지한다(서버가 타임스탬프로 클리핑). 로컬 누적 가산만 오늘 자정으로
+        // 클리핑해, 자정을 넘긴 세션이 '오늘 누적'에 통째로 더해져 표시가 점프하는 것을 막는다.
         let duration = max(0, Int(now.timeIntervalSince(startedAt)))
         let sessionStart = startedAt
-        accumulatedSeconds += duration
+        accumulatedSeconds += max(0, Int(now.timeIntervalSince(max(sessionStart, TeamWeeklyGoal.koreanDayStart(for: now)))))
+        accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: now)
         self.startedAt = nil
         longSessionAnchor = nil
         clearLongSessionPrompt()
@@ -319,8 +331,10 @@ final class WorkTimerStore {
     /// syncMessage 는 사유 문구로 세팅한다(이후 refresh 가 "동기화됨"으로 정규화할 수 있음 — 즉시 피드백 목적).
     private func autoStop(endedAt: Date, message: String) {
         guard let sessionStart = startedAt else { return }
+        // 서버 전송 duration 은 세션 전체(서버가 클리핑). 로컬 누적 가산만 종료일 자정으로 클리핑해 표시 점프를 막는다.
         let duration = max(0, Int(endedAt.timeIntervalSince(sessionStart)))
-        accumulatedSeconds += duration
+        accumulatedSeconds += max(0, Int(endedAt.timeIntervalSince(max(sessionStart, TeamWeeklyGoal.koreanDayStart(for: endedAt)))))
+        accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: endedAt)
         startedAt = nil
         longSessionAnchor = nil
         clearLongSessionPrompt()
@@ -415,7 +429,10 @@ final class WorkTimerStore {
             while !Task.isCancelled {
                 // 표시값은 wall-clock 파생이라 누적 오차가 없어 tolerance 로 웨이크업을 병합해도 안전하다.
                 try? await Task.sleep(for: .seconds(1), tolerance: .milliseconds(200))
-                self?.tick()
+                // 스토어가 해제됐으면 루프를 빠져나간다 — weak self 라 tick 는 no-op 이 되지만 루프 자체는 계속
+                // 돌아 좀비가 되므로 self 소멸 시 명시적으로 탈출한다.
+                guard let self else { return }
+                self.tick()
             }
         }
     }
@@ -437,12 +454,29 @@ final class WorkTimerStore {
         startedAt != nil || isMenuPresented || !pendingItems.isEmpty
     }
 
+    /// refresh 루프의 슬라이스 주기(초). fast 모드는 이 값 1회(기본 30s)를 자고, slow 유휴 모드는 이 값의
+    /// 10슬라이스(기본 300s)로 나눠 자며 매 슬라이스마다 fast 전이를 재확인한다. 테스트에서 짧게 줄여 검증한다.
+    @ObservationIgnored var refreshLoopSliceSeconds: Double = 30
+
     func startStatusRefreshLoop() {
         guard refreshTask == nil else { return }
         refreshTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                let fast = self?.refreshLoopIsFast ?? false
-                try? await Task.sleep(for: .seconds(fast ? 30 : 300), tolerance: .seconds(fast ? 5 : 30))
+                let slice = self?.refreshLoopSliceSeconds ?? 30
+                let tolerance = Duration.seconds(slice / 6)
+                if self?.refreshLoopIsFast ?? false {
+                    // 빠른 주기: 슬라이스 1회(기본 30s)를 잔다.
+                    try? await Task.sleep(for: .seconds(slice), tolerance: tolerance)
+                } else {
+                    // 느린 유휴 주기(기본 300s=슬라이스×10)를 10슬라이스로 쪼갠다. 유휴→근무 전이가 다음 본문까지
+                    // 최대 5분 넘게 지연돼 하트비트 신선도(90초)를 어기던 결함을 막는다: 매 슬라이스 후 fast 로
+                    // 바뀌었으면 즉시 본문으로 넘어간다(슬라이스 wakeup 은 플래그 확인뿐이라 유휴 비용은 무시 가능).
+                    for _ in 0..<10 {
+                        try? await Task.sleep(for: .seconds(slice), tolerance: tolerance)
+                        if Task.isCancelled { return }
+                        if self?.refreshLoopIsFast ?? false { break }
+                    }
+                }
                 await self?.retryPendingSync()
                 await self?.sendHeartbeatIfWorking()
                 await self?.refreshTeamStatus()
@@ -454,6 +488,13 @@ final class WorkTimerStore {
     private func tick() {
         let now = Date()
         displayNow = now
+        // 자정을 넘겼으면 어제 스탬프의 누적을 0으로 리셋하고 스탬프를 오늘로 갱신한다(하우스키핑). 표시/마일스톤은
+        // todayDuration 의 자정 클리핑이 이미 막지만, 누적 원장 자체도 새 날에 맞춘다(이후 refresh 가 서버값 복원).
+        let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
+        if accumulatedDayStart < dayStart {
+            accumulatedSeconds = 0
+            accumulatedDayStart = dayStart
+        }
         // snapshot 은 재대입하지 않는다 — 라벨/오버레이/헤더 전체 무효화를 막는다. 라이브 초는 todayDuration
         // (잎 뷰)과 menuBarTitle 파생값으로 흐르고, 여기선 정책 평가와 라벨 문자열만 갱신한다.
         if startedAt != nil {
@@ -547,6 +588,7 @@ extension WorkTimerStore {
         sessionGeneration += 1
         currentSessionID = nil
         hasActivatedStoredSession = false
+        membershipConfirmed = false
         session = nil
         [Self.accessTokenKey, Self.refreshTokenKey, Self.userIDKey].forEach(defaults.removeObject)
         // 세션이 사라지면 리그 페이지 상태도 함께 초기화한다(signOut·토큰 만료 로그아웃 공통 경로).

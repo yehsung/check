@@ -1847,6 +1847,274 @@ struct QueueInFlightTests {
     }
 }
 
+// MARK: - FIX-B: 적대적 검증 후속 수정 회귀 테스트
+
+// B-F1: 유휴 refresh 루프가 유휴→근무 전이에 다음 슬라이스에서 즉시 깨어나 하트비트를 보낸다.
+@MainActor
+@Test
+func idleRefreshLoopWakesWithinOneSliceWhenWorkStarts() async {
+    let testHost = "idle-to-working-wake"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    // 유휴(비근무·팝오버 닫힘·큐 없음)라 refresh 루프는 느린 주기로 진입한다.
+    #expect(!store.refreshLoopIsFast)
+    // 느린 주기(300s=10×30s)를 짧은 슬라이스로 축소해 실시간 대기 없이 슬라이스-깨어남을 검증한다.
+    store.refreshLoopSliceSeconds = 0.05
+
+    store.startStatusRefreshLoop()
+    // 루프가 느린 슬라이스 sleep 에 먼저 진입하도록 한 슬라이스보다 짧게 양보한다.
+    try? await Task.sleep(for: .milliseconds(10))
+
+    // 유휴 중 근무 시작(startedAt 주입) → 다음 슬라이스 경계에서 fast 로 감지되어 즉시 하트비트가 나가야 한다.
+    store.startedAt = Date()
+    store.currentSessionID = "wake-session"
+    #expect(store.refreshLoopIsFast)
+
+    // 전이 후 ≤1슬라이스 안에 working 하트비트 upsert 가 나타나는지 폴링한다(수정 전엔 최대 300s 지연).
+    var heartbeatSent = false
+    for _ in 0..<200 {
+        let sent = zip(URLProtocolStub.requests(forHost: testHost), URLProtocolStub.bodies(forHost: testHost))
+            .contains {
+                $0.0.url?.path == "/rest/v1/work_statuses"
+                    && $0.0.httpMethod == "POST"
+                    && $0.1.contains(#""active_session_id":"wake-session""#)
+            }
+        if sent {
+            heartbeatSent = true
+            break
+        }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(heartbeatSent)
+}
+
+// B-F3: 첫 활성화가 confirmMembership 실패(네트워크/취소)로 끝난 뒤, 재오픈 activateStoredSession 이 멤버십을 재확정한다.
+@MainActor
+@Test
+func reopenReconfirmsMembershipWhenFirstActivationFailed() async {
+    let testHost = "team-hours-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(
+        accessToken: "access-token",
+        refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+    // 첫 활성화가 confirmMembership 실패로 끝난 상태를 재현한다: hasActivatedStoredSession 은 이미 래치됐지만
+    // 멤버십은 미확정이고 팀이 비어 있다(팀 있는 유저가 TeamlessPanel 로 갇히던 결함의 전제).
+    store.hasActivatedStoredSession = true
+    store.membershipConfirmed = false
+    store.currentTeamID = nil
+
+    // 팝오버 재오픈 → activateStoredSession fast path. 미확정 멤버십을 재확정해 팀을 복원해야 한다.
+    await store.activateStoredSession()
+
+    #expect(store.membershipConfirmed)
+    #expect(store.currentTeamID == "10000000-0000-0000-0000-000000000001")
+    #expect(store.teamRole == "member")
+}
+
+// B-F4: refresh grant 5xx/429 는 일시 장애(.transient)로 분류해 세션을 유지한다. 400/401 계열은 fatal 유지.
+@MainActor
+@Test
+func classifyAuthErrorTreatsServerErrorsAsTransientAndClientErrorsAsFatal() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    func isTransient(_ error: SupabaseWorkServiceError) -> Bool {
+        if case .transient = store.classifyAuthError(error) { return true }
+        return false
+    }
+    func isFatal(_ error: SupabaseWorkServiceError) -> Bool {
+        if case .fatal = store.classifyAuthError(error) { return true }
+        return false
+    }
+    // Supabase 무료플랜 일시정지(5xx)/레이트리밋(429)은 일시 장애 → 세션 유지(재시도).
+    #expect(isTransient(.invalidResponse(500)))
+    #expect(isTransient(.invalidResponse(503)))
+    #expect(isTransient(.invalidResponse(429)))
+    // 400/401 계열은 fatal 유지(진짜 만료·잘못된 요청은 로그아웃 대상).
+    #expect(isFatal(.invalidResponse(400)))
+    #expect(isFatal(.invalidResponse(401)))
+    #expect(isFatal(.sessionExpired))
+}
+
+// B-F5: 어제 누적 + 자정 넘긴 세션이 오늘 표시를 부풀리거나 새 날 마일스톤을 오발화시키지 않는다.
+@MainActor
+@Test
+func accumulatedFromPreviousDayDoesNotInflateTodayAfterMidnight() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer { store.tickerTask?.cancel() }
+    var events: [ReactionKind] = []
+    store.onReactionTrigger = { events.append($0) }
+
+    let todayMidnight = TeamWeeklyGoal.koreanDayStart(for: Date())
+    let yesterdayMidnight = TeamWeeklyGoal.koreanDayStart(for: todayMidnight.addingTimeInterval(-3600))
+    // 어제 3시간 근무를 누적하고 스탬프는 어제로.
+    store.accumulatedSeconds = 3 * 3600
+    store.accumulatedDayStart = yesterdayMidnight
+    // 어제 23:00 재출근한 세션이 자정을 넘겨 이어지고, 지금은 오늘 00:00:05 첫 틱 상황.
+    store.startedAt = todayMidnight.addingTimeInterval(-3600)
+    store.displayNow = todayMidnight.addingTimeInterval(5)
+
+    // 어제 누적(3h)은 오늘 표시에 섞이지 않는다 — 자정 이후 경과분(5초)만 오늘로 센다.
+    #expect(store.todayDuration == 5)
+
+    // 자정 첫 틱 상황에서 마일스톤이 오발화하지 않는다(오늘 누적이 1h 미만).
+    store.evaluateTimeMilestones(now: store.displayNow)
+    #expect(events.isEmpty)
+}
+
+// B-F6: 자정 넘김 stop() 은 로컬 누적에 오늘분만 가산하고(표시 점프 방지), 서버 전송 duration 은 세션 전체를 유지한다.
+@MainActor
+@Test
+func stopAcrossMidnightAddsOnlyTodayPortionLocally() {
+    let store = makeStubStore(host: "stop-midnight-clip")
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    let todayMidnight = TeamWeeklyGoal.koreanDayStart(for: Date())
+    let startYesterday = todayMidnight.addingTimeInterval(-3600) // 어제 23:00
+    let stopToday = todayMidnight.addingTimeInterval(3600)       // 오늘 01:00
+    store.startedAt = startYesterday
+    store.currentSessionID = "midnight-session"
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3599)
+
+    store.stop(now: stopToday)
+
+    // 로컬 누적은 오늘 자정 이후분(1시간=3600초)만 더해 표시가 세션 전체(7200)로 점프하지 않는다.
+    #expect(store.accumulatedSeconds == 3600)
+    #expect(store.snapshot.elapsedSeconds == 3600)
+    #expect(store.accumulatedDayStart == todayMidnight)
+    // 서버 전송 duration 은 세션 전체(2시간=7200)를 유지한다(서버가 타임스탬프로 클리핑).
+    #expect(store.pendingItems.map(\.operation) == [.stop(durationSeconds: 7200)])
+}
+
+// B-F7: 스토어가 해제되면 티커 루프가 좀비로 남지 않고 다음 웨이크에서 종료된다.
+@MainActor
+@Test
+func tickerLoopTerminatesWhenStoreDeallocated() async {
+    final class DoneFlag: @unchecked Sendable { var done = false }
+    let flag = DoneFlag()
+    weak var weakStore: WorkTimerStore?
+
+    var task: Task<Void, Never>?
+    do {
+        let store = WorkTimerStore(
+            environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+            defaults: isolatedDefaults()
+        )
+        weakStore = store
+        store.startTimer()
+        task = store.tickerTask
+    }
+    #expect(task != nil)
+
+    // 티커 완료를 감시(좀비면 영영 완료 안 됨 — 누수되지만 테스트를 막지 않는다).
+    Task { @MainActor in
+        await task?.value
+        flag.done = true
+    }
+
+    // 마지막 강참조가 사라졌으므로 스토어는 해제됐어야 한다(좀비 판정의 전제부터 검증).
+    #expect(weakStore == nil)
+
+    // guard let self 패턴이면 self 소멸 후 다음 웨이크(≤~1.2s)에서 루프가 종료된다. 좀비면 완료되지 않아 타임아웃.
+    var terminated = false
+    for _ in 0..<60 {
+        if flag.done {
+            terminated = true
+            break
+        }
+        try? await Task.sleep(for: .milliseconds(100))
+    }
+    #expect(terminated)
+}
+
+// 지연 응답 스텁은 프로세스 전역이라 서로 덮어쓴다. in-flight 레이스 재현 테스트는 직렬 스위트로 격리한다.
+@Suite(.serialized)
+@MainActor
+struct FixBSyncRaceTests {
+    // B-F2: 드레인 in-flight 중 clearPersistedSession(세대+1) 이 와도, 서버 실행이 끝난 항목은 큐에서 제거된다
+    // (수정 전엔 세대 가드가 removeFirst 앞이라 완료 항목이 잔류 → 재로그인 후 이중 재생 409).
+    @Test
+    func drainedItemIsRemovedEvenIfSessionClearedMidFlight() async {
+        let testHost = "drain-clear-race"
+        URLProtocolStub.delayedHosts = [testHost]
+        defer { URLProtocolStub.delayedHosts = [] }
+
+        let store = makeStubStore(host: testHost)
+        defer {
+            store.tickerTask?.cancel()
+            store.refreshTask?.cancel()
+        }
+        store.pendingItems = [
+            PendingWorkItem(
+                id: UUID(),
+                operation: .stop(durationSeconds: 50),
+                sessionID: "aaaaaaaa-0000-0000-0000-000000000001",
+                sessionStartedAt: Date(timeIntervalSince1970: 2000),
+                endedAt: Date(timeIntervalSince1970: 2050)
+            )
+        ]
+
+        // 드레인을 발사하고 서버 실행이 in-flight 인 사이에 세션을 비운다(세대+1).
+        store.enqueueSync()
+        try? await Task.sleep(for: .milliseconds(60))
+        store.clearPersistedSession()
+
+        await store.syncTask?.value
+
+        // 서버 실행이 완료된 항목은 세대 증가와 무관하게 큐에서 제거되어, 재로그인 후 이중 재생되지 않는다.
+        #expect(store.pendingItems.isEmpty)
+    }
+
+    // B-F8: refreshTeamStatus 취소는 syncMessage='동기화 실패' 헛경보를 남기지 않는다.
+    @Test
+    func cancelledTeamRefreshDoesNotLeaveFailureMessage() async {
+        let testHost = "cancel-refresh-msg"
+        URLProtocolStub.delayedHosts = [testHost]
+        defer { URLProtocolStub.delayedHosts = [] }
+
+        let store = makeStubStore(host: testHost)
+        defer {
+            store.tickerTask?.cancel()
+            store.refreshTask?.cancel()
+        }
+        store.syncMessage = "동기화됨"
+
+        let refresh = Task { await store.refreshTeamStatus() }
+        // 요청이 in-flight 인 사이에 취소한다(팝오버 빨리 닫기 재현).
+        try? await Task.sleep(for: .milliseconds(20))
+        refresh.cancel()
+        await refresh.value
+
+        // 취소는 실패 문구를 남기지 않는다(수정 전엔 authMessage 폴백으로 '동기화 실패' 표기).
+        #expect(store.syncMessage != "동기화 실패")
+    }
+}
+
 @MainActor
 private func makeStubStore(host: String, userID: String = "00000000-0000-0000-0000-000000000002") -> WorkTimerStore {
     let service = SupabaseWorkService(

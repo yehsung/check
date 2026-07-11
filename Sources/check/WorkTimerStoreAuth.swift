@@ -9,6 +9,9 @@ extension WorkTimerStore {
         // 실행당 1회만 전체 활성화(토큰 회전 + 멤버십 확정)한다. 이후 팝오버 여닫이에선 refresh 만 돌려
         // refresh token 회전(+reuse-detection 리스크)을 없앤다. access token 만료는 401 재시도 경로가 담당한다.
         if hasActivatedStoredSession {
+            // 첫 활성화가 오프라인/취소로 멤버십 확정에 실패했으면(membershipConfirmed==false) 재오픈 때 재확정한다 —
+            // hasActivatedStoredSession 조기 래치로 확정 경로가 영구 소멸하던 결함을 막는다. 토큰 회전은 여전히 1회다.
+            if !membershipConfirmed { await confirmMembership() }
             await refreshTeamStatus()
             return
         }
@@ -131,6 +134,8 @@ extension WorkTimerStore {
             }
             guard generation == sessionGeneration else { return }
             if let membership {
+                // 소속 확인 성공 — 확정적 결과. throw(취소/네트워크)로는 여기 오지 않는다.
+                membershipConfirmed = true
                 currentTeamID = membership.teamID
                 teamName = membership.teamName
                 // 목표시간은 DB 값(시간) 그대로 초로 환산해 반영한다(캐시/일회성 없음).
@@ -149,6 +154,8 @@ extension WorkTimerStore {
                 guard generation == sessionGeneration else { return }
             }
         }
+        // 정상 응답 0행 — 무소속으로 확정한다(이 역시 확정적 결과다).
+        membershipConfirmed = true
         currentTeamID = nil
         teamName = "팀"
         teamGoalSeconds = TeamWeeklyGoal.defaultGoalSeconds
@@ -239,6 +246,11 @@ extension WorkTimerStore {
         if error is URLError {
             return .transient
         }
+        // Supabase 무료플랜 일시정지(5xx)·레이트리밋(429)은 알려진 운영 이슈다. refresh grant 실패로 강제
+        // 로그아웃하지 않고 세션을 유지한 채 다음 주기에 재시도한다. 400/401 계열(만료 등)은 fatal 로 남긴다.
+        if case let SupabaseWorkServiceError.invalidResponse(code) = error, (500...599).contains(code) || code == 429 {
+            return .transient
+        }
         return .fatal
     }
 
@@ -324,6 +336,7 @@ extension WorkTimerStore {
         clearPersistedSession()
         startedAt = nil
         accumulatedSeconds = 0
+        accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: Date())
         teamMembers = []
         currentTeamID = nil
         teamName = "팀"

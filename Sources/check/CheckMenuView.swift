@@ -183,8 +183,6 @@ private struct TeamPanel: View {
     var previewCodeRevealed: Bool = false
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
-    // 렌더 결정성용 시각 주입. nil 이면 잎 뷰가 store.displayNow 를 읽는다.
-    var nowOverride: Date? = nil
 
     // 키 버튼으로 토글하는 참여코드 인라인 노출 상태. 스냅샷은 previewCodeRevealed 로 시드된다.
     @State private var showsInviteCode: Bool
@@ -192,13 +190,11 @@ private struct TeamPanel: View {
     init(
         store: WorkTimerStore,
         previewCodeRevealed: Bool = false,
-        clipsOverflowInsteadOfScroll: Bool = false,
-        nowOverride: Date? = nil
+        clipsOverflowInsteadOfScroll: Bool = false
     ) {
         self.store = store
         self.previewCodeRevealed = previewCodeRevealed
         self.clipsOverflowInsteadOfScroll = clipsOverflowInsteadOfScroll
-        self.nowOverride = nowOverride
         _showsInviteCode = State(initialValue: previewCodeRevealed)
     }
 
@@ -219,7 +215,7 @@ private struct TeamPanel: View {
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 // "N명 근무중" 카운트는 presence(now:) 파생이라 잎 뷰로 격리(본체가 매초 무효화되지 않게).
-                TeamWorkingCountChip(store: store, nowOverride: nowOverride)
+                TeamWorkingCountChip(store: store)
                 if canRevealCode {
                     IconButton(
                         icon: showsInviteCode ? "key.fill" : "key",
@@ -294,8 +290,7 @@ private struct TeamPanel: View {
                         member: member,
                         teamGoalSeconds: store.teamGoalSeconds,
                         isMe: isMe,
-                        onPickAvatar: isMe ? { store.updateAvatar(imageData: $0) } : nil,
-                        nowOverride: nowOverride
+                        onPickAvatar: isMe ? { store.updateAvatar(imageData: $0) } : nil
                     )
                     .frame(height: CheckTheme.memberRowHeight)
                 }
@@ -326,10 +321,9 @@ private struct TeamPanel: View {
 /// "N명 근무중" 카운트 칩. presence(now:) 파생이라 잎 뷰로 분리해 이 칩만 매초 무효화되게 한다.
 private struct TeamWorkingCountChip: View {
     let store: WorkTimerStore
-    var nowOverride: Date? = nil
 
     var body: some View {
-        let now = nowOverride ?? store.displayNow
+        let now = store.displayNow
         // 라이브 근무(activeWorking)만 집계한다. 연결 끊김은 제외.
         CountChip(count: store.teamMembers.filter { $0.presence(now: now) == .activeWorking }.count)
     }
@@ -350,7 +344,7 @@ private struct MyWeeklyGauge: View {
     }
 }
 
-/// 팀원 한 행의 라이브 래퍼. store.displayNow(또는 nowOverride)를 읽어 시간/프레즌스를 계산하고
+/// 팀원 한 행의 라이브 래퍼. store.displayNow 를 읽어 시간/프레즌스를 계산하고
 /// TeamMemberRow 에 값으로 넘긴다 — presence(now:)를 행당 1회만 계산해 하위 파생에 재사용한다.
 private struct TeamMemberLiveRow: View {
     let store: WorkTimerStore
@@ -358,10 +352,9 @@ private struct TeamMemberLiveRow: View {
     let teamGoalSeconds: Int
     let isMe: Bool
     var onPickAvatar: ((Data) -> Void)? = nil
-    var nowOverride: Date? = nil
 
     var body: some View {
-        let now = nowOverride ?? store.displayNow
+        let now = store.displayNow
         let presence = member.presence(now: now)
         TeamMemberRow(
             name: member.name,
@@ -387,14 +380,11 @@ private struct TeamMemberLiveRow: View {
         }
     }
 
-    // 상태별 표시용 주간 누적. stale은 마지막 신호에서 동결된 현재 세션분까지만 더한다.
+    // 상태별 표시용 주간 누적. 항상 모델의 liveWeeklyDurationSeconds 를 쓴다 — stale 동결(마지막 신호 시각
+    // 클램프)과 주 시작 클리핑을 모델이 모두 처리하므로, 뷰에서 weeklyDurationSeconds+frozen 을 다시 조립하면
+    // 주 경계에서 모델 공식과 어긋난다(주 시작 이전 구간을 이중 계상해 2h 어긋남).
     private static func displayWeeklySeconds(_ member: TeamMemberStatus, presence: MemberPresence, now: Date) -> Int {
-        switch presence {
-        case .staleWorking(let frozen):
-            return member.weeklyDurationSeconds + frozen
-        default:
-            return member.liveWeeklyDurationSeconds(now: now)
-        }
+        member.liveWeeklyDurationSeconds(now: now)
     }
 
     private static func primaryDetail(_ member: TeamMemberStatus, presence: MemberPresence, now: Date) -> String {

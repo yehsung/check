@@ -102,6 +102,38 @@ func startWorkEncodesRestBodiesAsSnakeCase() async throws {
     #expect(!bodyText.contains("\"userId\""))
 }
 
+// MARK: - ACD-F2: startWork 멱등화(큐 재재생 409 소멸)
+
+@Test
+func startWorkPostsIdempotentlyWithOnConflictAndIgnoreDuplicates() async throws {
+    // 재현: 큐 재재생으로 이미 닫힌 동일 id 세션에 다시 POST 되면 유니크 위반(409)이 났다.
+    // work_sessions POST 는 on_conflict=id 쿼리 + Prefer: resolution=ignore-duplicates 로 멱등해야
+    // 이미 있는 id 를 서버가 조용히 무시한다(stopWork fallback 과 동일 패턴).
+    let testHost = "start-work-idempotent-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    try await service.startWork(
+        accessToken: "access-token",
+        teamID: "10000000-0000-0000-0000-000000000001",
+        userID: "00000000-0000-0000-0000-000000000002",
+        sessionID: "30000000-0000-0000-0000-000000000009"
+    )
+
+    let sessionPost = try #require(URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/work_sessions" && $0.httpMethod == "POST"
+    })
+    let postURL = try #require(sessionPost.url)
+    let queryItems = try #require(URLComponents(url: postURL, resolvingAgainstBaseURL: false)?.queryItems)
+    #expect(queryItems.contains(URLQueryItem(name: "on_conflict", value: "id")))
+    let prefer = try #require(sessionPost.value(forHTTPHeaderField: "Prefer"))
+    #expect(prefer.contains("resolution=ignore-duplicates"))
+    #expect(prefer.contains("return=minimal"))
+}
+
 @Test
 func fetchTeamStatusesIncludesCurrentAndWeeklyDurations() async throws {
     let testHost = "team-hours-test"

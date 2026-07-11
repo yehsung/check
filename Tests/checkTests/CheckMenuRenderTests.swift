@@ -9,6 +9,8 @@ func checkMenuViewRendersSnapshot() throws {
     let store = WorkTimerStore(environment: [
         "CHECK_SUPABASE_ANON_KEY": "local-test-key"
     ], defaults: isolatedRenderDefaults())
+    // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(티커 미발사).
+    store.isMenuPresented = true
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
     // 팀이 확정돼 있어야(currentTeamID != nil) 무소속 패널이 아닌 메인 팀 화면이 그려진다.
     store.currentTeamID = URLProtocolStub.stubTeamID
@@ -71,6 +73,8 @@ func checkMenuViewRendersCompletedWeeklyGoalSnapshot() throws {
             weeklyDurationSeconds: 62 * 60 * 60
         )
     ]
+    // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(티커 미발사).
+    store.isMenuPresented = true
     let view = CheckMenuView(store: store)
         .frame(width: 340)
         .fixedSize()
@@ -368,6 +372,27 @@ func windowHeightAdaptsToContentWithinCap() throws {
     }
 }
 
+// MARK: - ACD-F4: 렌더 결정성(onAppear 가 고정 now 를 덮거나 티커를 발사하지 않음)
+
+@MainActor
+@Test
+func renderingMenuKeepsFixedDisplayNowAndDoesNotStartTicker() {
+    // 재현: ImageRenderer 가 onAppear 를 실행하면 setMenuPresented(true) 가 호출되어, 고정 displayNow 가
+    // Date() 로 덮이고 스토어당 티커가 시작·영구 잔존했다. 헬퍼가 isMenuPresented 를 미리 true 로 둬
+    // 세터의 != 가드로 onAppear 가 no-op 이 되면 고정 now 가 보존되고 티커도 발사되지 않아야 한다.
+    let fixed = Date(timeIntervalSince1970: 1_000_000)
+    let store = makeTeamStore(members: steadyMembers(count: 2), now: fixed)
+    #expect(store.isMenuPresented)
+    #expect(store.tickerTask == nil)
+
+    _ = renderedPixelHeight(CheckMenuView(store: store))
+
+    // onAppear 가 no-op → 고정 displayNow 가 Date() 로 덮이지 않는다.
+    #expect(store.displayNow == fixed)
+    // onAppear 가 no-op → stopTimerIfIdle/startTimer 경로를 타지 않아 티커가 시작되지 않는다.
+    #expect(store.tickerTask == nil)
+}
+
 // MARK: - A3: Enter-키 포커스 체이닝 순서
 
 @Test
@@ -619,6 +644,8 @@ private func makeSignedInStore() -> WorkTimerStore {
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
         defaults: isolatedRenderDefaults()
     )
+    // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(고정 displayNow 보존·티커 미발사).
+    store.isMenuPresented = true
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.teamName = "sudo 박수"
@@ -642,6 +669,8 @@ private func makeTeamStore(members: [TeamMemberStatus], now: Date = Date()) -> W
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
         defaults: isolatedRenderDefaults()
     )
+    // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(고정 displayNow 보존·티커 미발사).
+    store.isMenuPresented = true
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
     store.displayNow = now
     store.teamMembers = members
@@ -838,6 +867,8 @@ private func makeLoginStore(syncMessage: String) -> WorkTimerStore {
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
         defaults: isolatedRenderDefaults()
     )
+    // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(티커 미발사).
+    store.isMenuPresented = true
     store.email = "member@example.com"
     store.password = "team-password"
     store.syncMessage = syncMessage

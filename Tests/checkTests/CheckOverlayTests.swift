@@ -154,6 +154,76 @@ func overlayControllerTogglesVisibilityWithWorking() async {
     }
 }
 
+// MARK: - ACD-F1: 근무종료 인사 렌더 중 타이머 라벨 00:00 플래시 방지
+
+@MainActor
+@Test
+func overlayTimerStaysVisibleDuringFarewellRender() {
+    // 재현: 근무 종료 인사(commuteEnd) 0.55초 동안 isWorking 은 이미 false 지만 renderActive 는 true 다.
+    // 이때 elapsedSeconds 를 0 으로 떨궈 라벨이 00:00 으로 플래시되던 결함 — renderActive 를 표시 판정에
+    // 포함해 실제 오늘 누적을 계속 보여 줘야 한다.
+    #expect(CheckOverlayRootView.showsTimer(isWorking: false, isOverlayEnabled: true, renderActive: true))
+    // 근무 중에는 당연히 보인다.
+    #expect(CheckOverlayRootView.showsTimer(isWorking: true, isOverlayEnabled: true, renderActive: false))
+    // 오버레이가 꺼져(숨김) 있으면 renderActive 는 항상 false → 표시하지 않는다(A3 유휴 차단 목표 보존).
+    #expect(CheckOverlayRootView.showsTimer(isWorking: false, isOverlayEnabled: false, renderActive: false) == false)
+    // 완전 유휴(근무 아님·인사 렌더 아님)엔 표시하지 않아 매초 재평가 낭비를 만들지 않는다.
+    #expect(CheckOverlayRootView.showsTimer(isWorking: false, isOverlayEnabled: true, renderActive: false) == false)
+}
+
+// MARK: - ACD-F5: attach 재생(지연 생성 래치로 attach 가 request 보다 늦게 실행돼도 소실 없음)
+
+@MainActor
+@Test
+func attachReplaysPlayingReactionAndSetsActiveFPS() throws {
+    // 재현: 지연 생성(래치)으로 attach 가 request(.commuteStart) 보다 늦게 실행된다. attach 시점에 아직
+    // 재생 중(만료 전)이면 걸린 리액션 SCNAction 을 노드에 재생하고 FPS 를 활성(30)으로 올려야 한다.
+    let now = Date(timeIntervalSince1970: 50_000)
+    let engine = ReactionEngine(clock: { now }) // 고정 clock → commuteStart(0.6s) 만료 전 유지.
+    #expect(engine.request(.commuteStart))
+    #expect(engine.state == .playing(.commuteStart))
+
+    let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
+    let root = scene.rootNode
+    let wrapper = try #require(
+        root.childNode(withName: CheckCharacter3DScene.reactionWrapperName, recursively: false)
+    )
+    let view = SCNView()
+
+    engine.attach(node: wrapper, sceneRoot: root, view: view)
+
+    // 걸린 리액션이 노드에 재생된다(reactionActionKey="check.reaction" 액션이 걸림).
+    #expect(wrapper.action(forKey: "check.reaction") != nil)
+    // 재생 중이므로 FPS 를 활성(30)으로 올린다.
+    #expect(view.preferredFramesPerSecond == ReactionEngine.activeFPS)
+}
+
+@MainActor
+@Test
+func attachAppliesDrowsyPoseAndIdleFPSWhileSleeping() throws {
+    // 재현: sleeping 상태에서 attach 하면 가라앉은(drowsy) 포즈를 노드에 적용하고 FPS 는 유휴(8)로 둔다.
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 51_000) })
+    #expect(engine.request(.drowsy))
+    #expect(engine.state == .sleeping)
+
+    let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
+    let root = scene.rootNode
+    let wrapper = try #require(
+        root.childNode(withName: CheckCharacter3DScene.reactionWrapperName, recursively: false)
+    )
+    let view = SCNView()
+
+    engine.attach(node: wrapper, sceneRoot: root, view: view)
+
+    // 자는 포즈(drowsySink)가 노드에 걸린다.
+    #expect(wrapper.action(forKey: "check.reaction") != nil)
+    // 졸기는 느린 모션이라 유휴 FPS(8)를 유지한다.
+    #expect(view.preferredFramesPerSecond == ReactionEngine.idleFPS)
+    #expect(engine.state == .sleeping)
+
+    engine.stopSleeping() // 정리: zzzTask 취소.
+}
+
 // MARK: - 시각 검증 스냅샷 덤프 (CHECK_OVERLAY_SNAPSHOT_DIR 지정 시에만 기록)
 
 @MainActor

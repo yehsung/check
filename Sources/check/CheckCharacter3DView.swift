@@ -308,10 +308,21 @@ struct CheckOverlayRootView: View {
     var engine: ReactionEngine?
     var onWorkingChange: (Bool) -> Void
 
+    /// 타이머 라벨을 실제 오늘 누적으로 보여줄지 판정한다. 근무 중이거나, 근무를 막 멈췄어도 근무종료 인사가
+    /// 아직 렌더 중(renderActive)이면 실제 시간을 유지해 인사 0.55초 동안 라벨이 00:00 으로 플래시되지 않게 한다.
+    /// renderActive 는 숨김 시 항상 false 라, 유휴에서 body 가 매초 재평가되던 낭비를 없애는 목표는 보존된다.
+    static func showsTimer(isWorking: Bool, isOverlayEnabled: Bool, renderActive: Bool) -> Bool {
+        isOverlayEnabled && (isWorking || renderActive)
+    }
+
     var body: some View {
         // 오버레이가 실제로 보일 때만 todayDuration 을 읽어 관찰을 건다. 꺼짐/숨김 상태에서 근무중이어도
         // 매초 displayNow 변화로 body 가 재평가되던 낭비를 없앤다(보일 때만 라벨이 초 단위로 흐른다).
-        let showing = store.snapshot.isWorking && store.isOverlayEnabled
+        let showing = Self.showsTimer(
+            isWorking: store.snapshot.isWorking,
+            isOverlayEnabled: store.isOverlayEnabled,
+            renderActive: engine?.renderActive == true
+        )
         return CheckOverlayCharacterView(
             elapsedSeconds: showing ? store.todayDuration : 0,
             isActive: store.snapshot.isWorking,

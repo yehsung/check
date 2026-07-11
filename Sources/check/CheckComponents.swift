@@ -892,7 +892,7 @@ struct BrandHeader: View {
                     .foregroundStyle(.white)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("check")
+                Text("aing-check")
                     .font(.system(.title3, design: .rounded).weight(.heavy))
                     .foregroundStyle(CheckTheme.primaryText)
                 Text(subtitle)

@@ -13,7 +13,7 @@ fi
 
 swift build -c release >&2
 
-APP_DIR="$ROOT/dist/check.app"
+APP_DIR="$ROOT/dist/aing-check.app"
 BIN_DIR="$APP_DIR/Contents/MacOS"
 RES_DIR="$APP_DIR/Contents/Resources"
 
@@ -47,9 +47,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIdentifier</key>
   <string>kingcheck</string>
   <key>CFBundleName</key>
-  <string>check</string>
+  <string>aing-check</string>
   <key>CFBundleDisplayName</key>
-  <string>check</string>
+  <string>aing-check</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

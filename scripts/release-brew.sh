@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# check brew 릴리즈 자동화.
+# aing-check brew 릴리즈 자동화.
 #
 # 사용법: ./scripts/release-brew.sh <버전> [--dry-run]
 #   예:   ./scripts/release-brew.sh 0.2.0
 #         ./scripts/release-brew.sh 0.2.0 --dry-run   # 실제 실행 없이 각 단계만 출력
 #
 # 하는 일:
-#   1) 사전점검 — gh 로그인, GH_OWNER, 공증된 dist/check.zip(스테이플 검증)
+#   1) 사전점검 — gh 로그인, GH_OWNER, 공증된 dist/aing-check.zip(스테이플 검증)
 #   2) git 태그 v<버전> 생성/푸시, GitHub 릴리즈 생성 + zip 자산 업로드
-#   3) sha256 계산 → packaging/homebrew/check.rb 치환본을 tap 저장소에 커밋/푸시
+#   3) sha256 계산 → packaging/homebrew/aing-check.rb 치환본을 tap 저장소에 커밋/푸시
 #   4) 팀원 설치/업그레이드 명령 출력
 #
 # 최초 1회 세팅과 전체 파이프라인은 docs/release.md 를 참고하세요.
@@ -117,24 +117,24 @@ elif ! gh auth status >/dev/null 2>&1; then
   missing "gh CLI 에 로그인되어 있지 않습니다. 'gh auth login' 을 먼저 실행하세요."
 fi
 
-ZIP="$ROOT/dist/check.zip"
+ZIP="$ROOT/dist/aing-check.zip"
 log "사전점검: 공증된 배포 zip — $ZIP"
 if [[ ! -f "$ZIP" ]]; then
   missing "$ZIP 이 없습니다. 먼저 './scripts/package-notarized.sh' 로 공증된 배포 zip 을 만드세요."
 else
-  # zip 안 check/check.app 의 공증 스테이플을 검증한다.
+  # zip 안 aing-check/aing-check.app 의 공증 스테이플을 검증한다.
   STAPLE_TMP="$(mktemp -d)"
   STAPLE_OK=0
-  if unzip -q "$ZIP" -d "$STAPLE_TMP" >/dev/null 2>&1 && [[ -d "$STAPLE_TMP/check/check.app" ]]; then
-    if xcrun stapler validate "$STAPLE_TMP/check/check.app" >/dev/null 2>&1; then
+  if unzip -q "$ZIP" -d "$STAPLE_TMP" >/dev/null 2>&1 && [[ -d "$STAPLE_TMP/aing-check/aing-check.app" ]]; then
+    if xcrun stapler validate "$STAPLE_TMP/aing-check/aing-check.app" >/dev/null 2>&1; then
       STAPLE_OK=1
     fi
   fi
   rm -rf "$STAPLE_TMP"
   if [[ "$STAPLE_OK" -eq 1 ]]; then
-    log "공증 스테이플 확인됨 (check/check.app)"
+    log "공증 스테이플 확인됨 (aing-check/aing-check.app)"
   else
-    missing "check.app 의 공증 스테이플 검증에 실패했습니다. './scripts/package-notarized.sh' 로 공증/스테이플된 zip 을 다시 만드세요."
+    missing "aing-check.app 의 공증 스테이플 검증에 실패했습니다. './scripts/package-notarized.sh' 로 공증/스테이플된 zip 을 다시 만드세요."
   fi
 fi
 
@@ -153,27 +153,27 @@ log "git 태그 $TAG 생성/푸시"
 if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
   warn "태그 $TAG 이(가) 이미 존재합니다. 태그 생성을 건너뜁니다 (멱등)."
 else
-  run git tag -a "$TAG" -m "check $VERSION"
+  run git tag -a "$TAG" -m "aing-check $VERSION"
 fi
 run git push origin "$TAG"
 
-log "GitHub 릴리즈 $TAG (자산: check.zip)"
+log "GitHub 릴리즈 $TAG (자산: aing-check.zip)"
 REPO="$GH_OWNER/check"
-RELEASE_NOTES="check $VERSION 배포. 설치: brew tap $GH_OWNER/check && brew install --cask check"
+RELEASE_NOTES="aing-check $VERSION 배포. 설치: brew tap $GH_OWNER/check && brew install --cask aing-check"
 if [[ "$DRY_RUN" -eq 0 ]] && gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
   warn "릴리즈 $TAG 이(가) 이미 존재합니다. 자산만 덮어씁니다 (멱등)."
   run gh release upload "$TAG" "$ZIP" --repo "$REPO" --clobber
 else
   run gh release create "$TAG" "$ZIP" \
     --repo "$REPO" \
-    --title "check $VERSION" \
+    --title "aing-check $VERSION" \
     --notes "$RELEASE_NOTES"
 fi
 
 # ---------------------------------------------------------------------------
 # (c) Cask 갱신 + tap 저장소 커밋/푸시
 # ---------------------------------------------------------------------------
-CASK_TEMPLATE="$ROOT/packaging/homebrew/check.rb"
+CASK_TEMPLATE="$ROOT/packaging/homebrew/aing-check.rb"
 [[ -f "$CASK_TEMPLATE" ]] || die "Cask 템플릿이 없습니다: $CASK_TEMPLATE"
 
 TAP_DIR="${GH_TAP_DIR:-$ROOT/../homebrew-check}"
@@ -188,7 +188,7 @@ generate_cask() {
 preview_cask() {
   local tmp; tmp="$(mktemp)"
   generate_cask "$tmp"
-  echo "  [dry-run] 생성될 Cask 내용 (-> $TAP_DIR/Casks/check.rb):" >&2
+  echo "  [dry-run] 생성될 Cask 내용 (-> $TAP_DIR/Casks/aing-check.rb):" >&2
   sed 's/^/    | /' "$tmp" >&2
   rm -f "$tmp"
 }
@@ -209,14 +209,14 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 elif [[ -d "$TAP_DIR/.git" ]]; then
   CASK_DIR="$TAP_DIR/Casks"
   mkdir -p "$CASK_DIR"
-  generate_cask "$CASK_DIR/check.rb"
+  generate_cask "$CASK_DIR/aing-check.rb"
   (
     cd "$TAP_DIR"
-    git add "Casks/check.rb"
+    git add "Casks/aing-check.rb"
     if git diff --cached --quiet; then
       warn "Cask 에 변경 사항이 없습니다. 커밋을 건너뜁니다 (멱등)."
     else
-      git commit -m "check $VERSION"
+      git commit -m "aing-check $VERSION"
       git push
     fi
   )
@@ -226,13 +226,13 @@ fi
 # ---------------------------------------------------------------------------
 # (d) 팀원 안내 출력
 # ---------------------------------------------------------------------------
-log "완료: check $VERSION"
+log "완료: aing-check $VERSION"
 {
   echo ""
   echo "팀원 최초 설치:"
-  echo "  brew tap $GH_OWNER/check && brew install --cask check"
+  echo "  brew tap $GH_OWNER/check && brew install --cask aing-check"
   echo ""
   echo "이미 설치한 팀원 업그레이드:"
-  echo "  brew update && brew upgrade --cask check"
+  echo "  brew update && brew upgrade --cask aing-check"
   echo ""
 } >&2

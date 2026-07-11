@@ -684,7 +684,7 @@ private func makeSignedInStore() -> WorkTimerStore {
     store.isMenuPresented = true
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
     store.currentTeamID = URLProtocolStub.stubTeamID
-    store.teamName = "sudo 박수"
+    store.teamName = "아잉팀"
     store.teamMembers = [
         TeamMemberStatus(
             id: "00000000-0000-0000-0000-000000000002",
@@ -712,7 +712,7 @@ private func makeTeamStore(members: [TeamMemberStatus], now: Date = Date()) -> W
     store.teamMembers = members
     // 팀이 확정된 상태(무소속 아님) + 헤더 이름을 "팀" 플레이스홀더가 아닌 실제 이름으로 확정한다.
     store.currentTeamID = URLProtocolStub.stubTeamID
-    store.teamName = "sudo 박수"
+    store.teamName = "아잉팀"
     return store
 }
 
@@ -773,7 +773,7 @@ private func manyMembers(now: Date, count: Int = 8) -> [TeamMemberStatus] {
 /// 1인당 평균 순서(코드 36000 > sudo 24000 > 오목교 15000)가 반대다. 평균 정렬 후 우리 팀(stubTeamID)이 2번째.
 private let sampleLeaderboard: [TeamLeaderboardEntry] = [
     TeamLeaderboardEntry(id: "20000000-0000-0000-0000-000000000002", name: "오목교 브라더스", weeklyGoalHours: 60, totalSeconds: 90_000, workingCount: 1, memberCount: 6),
-    TeamLeaderboardEntry(id: URLProtocolStub.stubTeamID, name: "sudo 박수", weeklyGoalHours: 40, totalSeconds: 72_000, workingCount: 3, memberCount: 3),
+    TeamLeaderboardEntry(id: URLProtocolStub.stubTeamID, name: "아잉팀", weeklyGoalHours: 40, totalSeconds: 72_000, workingCount: 3, memberCount: 3),
     TeamLeaderboardEntry(id: "30000000-0000-0000-0000-000000000003", name: "코드 크래프터", weeklyGoalHours: 50, totalSeconds: 36_000, workingCount: 0, memberCount: 1)
 ]
 

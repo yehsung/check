@@ -26,7 +26,7 @@ codesign --force --deep --options runtime --timestamp --sign "$IDENTITY" "$APP_P
 codesign --verify --deep --strict "$APP_PATH" >&2
 
 # 공증 제출용 zip → 제출 --wait → 앱에 스테이플
-NOTARIZE_ZIP="$ROOT/dist/check-notarize.zip"
+NOTARIZE_ZIP="$ROOT/dist/aing-check-notarize.zip"
 rm -f "$NOTARIZE_ZIP"
 ditto -c -k --keepParent "$APP_PATH" "$NOTARIZE_ZIP"
 echo "공증 제출 중 (보통 2~10분)..." >&2
@@ -37,9 +37,9 @@ spctl --assess --type execute -v "$APP_PATH" >&2 || true
 
 # 배포 zip (공증된 앱은 도우미 불필요하지만, 구버전 macOS 대비 동봉 유지)
 STAGE="$ROOT/dist/.stage"
-rm -rf "$STAGE" "$ROOT/dist/check.zip"
-mkdir -p "$STAGE/check"
-cp -R "$APP_PATH" "$STAGE/check/"
-ditto -c -k --keepParent "$STAGE/check" "$ROOT/dist/check.zip"
+rm -rf "$STAGE" "$ROOT/dist/aing-check.zip"
+mkdir -p "$STAGE/aing-check"
+cp -R "$APP_PATH" "$STAGE/aing-check/"
+ditto -c -k --keepParent "$STAGE/aing-check" "$ROOT/dist/aing-check.zip"
 rm -rf "$STAGE"
-echo "$ROOT/dist/check.zip"
+echo "$ROOT/dist/aing-check.zip"

@@ -17,21 +17,21 @@ fi
 
 APP_PATH="$("$ROOT/scripts/build-local.sh" | tail -n 1)"
 mkdir -p "$ROOT/dist"
-rm -f "$ROOT/dist/check.zip"
+rm -f "$ROOT/dist/aing-check.zip"
 
 # zip에 앱 + 설치 도우미(격리 해제 포함)를 함께 담는다.
 STAGE="$ROOT/dist/.stage"
 rm -rf "$STAGE"
-mkdir -p "$STAGE/check"
-cp -R "$APP_PATH" "$STAGE/check/"
-cp "$ROOT/scripts/install-helper.command" "$STAGE/check/설치하기.command"
-chmod +x "$STAGE/check/설치하기.command"
-ditto -c -k --keepParent "$STAGE/check" "$ROOT/dist/check.zip"
+mkdir -p "$STAGE/aing-check"
+cp -R "$APP_PATH" "$STAGE/aing-check/"
+cp "$ROOT/scripts/install-helper.command" "$STAGE/aing-check/설치하기.command"
+chmod +x "$STAGE/aing-check/설치하기.command"
+ditto -c -k --keepParent "$STAGE/aing-check" "$ROOT/dist/aing-check.zip"
 rm -rf "$STAGE"
 
 if command -v create-dmg >/dev/null 2>&1; then
-  rm -f "$ROOT/dist/check.dmg"
+  rm -f "$ROOT/dist/aing-check.dmg"
   create-dmg "$APP_PATH" "$ROOT/dist" >/dev/null
 fi
 
-echo "$ROOT/dist/check.zip"
+echo "$ROOT/dist/aing-check.zip"

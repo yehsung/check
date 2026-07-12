@@ -4,15 +4,25 @@
 
 ## 1. 설치하기
 
-1. 전달받은 `aing-check.zip`을 더블클릭해 압축을 풉니다. `aing-check` 폴더 안에 `aing-check.app`과 `설치하기.command` 두 개가 나옵니다.
-2. **`설치하기.command`를 더블클릭**합니다 — 앱을 응용 프로그램 폴더로 복사하고 보안 잠금을 풀어 바로 실행까지 해줍니다.
-   - `설치하기.command`가 경고로 안 열리면: **우클릭(control+클릭) → 열기 → 열기**로 실행합니다.
-3. 그래도 안 되거나 앱 실행 시 **"손상되었기 때문에 열 수 없습니다"** 가 뜨면 (인터넷으로 받은 미공증 앱에 macOS가 붙이는 보안 잠금 때문이며 실제 손상이 아닙니다):
-   - `aing-check.app`을 응용 프로그램 폴더로 옮긴 뒤, **터미널**(Spotlight에서 "터미널" 검색)을 열고 아래 한 줄을 붙여넣고 엔터:
+### 방법 A — brew (권장)
+
+**터미널**(Spotlight에서 "터미널" 검색)을 열고 아래 한 줄을 붙여넣고 엔터:
+
+```sh
+brew install yehsung/check/aing-check
+```
+
+앱은 Apple 공증이 되어 있어 경고 없이 바로 열립니다. 나중에 새 버전이 나오면 `brew upgrade --cask aing-check` 한 줄로 업데이트됩니다.
+(brew 가 없다면 [brew.sh](https://brew.sh) 의 한 줄 설치를 먼저 실행하거나, 아래 방법 B를 쓰세요.)
+
+### 방법 B — zip 직접 받기
+
+1. [GitHub Releases](https://github.com/yehsung/check/releases)에서 최신 `aing-check.zip`을 받거나 전달받은 zip을 더블클릭해 풉니다.
+2. `aing-check` 폴더 안의 `aing-check.app`을 **응용 프로그램** 폴더로 옮기고 더블클릭하면 열립니다(공증되어 있어 보안 경고 없음).
+3. 혹시 예전에 전달받은 미공증 zip이라 **"손상되었기 때문에 열 수 없습니다"** 가 뜨면: 동봉된 `설치하기.command`를 더블클릭하거나(경고로 안 열리면 우클릭 → 열기), 터미널에서 아래 한 줄을 실행합니다.
    ```
    xattr -dr com.apple.quarantine /Applications/aing-check.app
    ```
-   - 그 다음 `aing-check.app`을 더블클릭하면 열립니다. 이 작업은 최초 1회만 필요합니다.
 
 설치가 끝나면 화면 오른쪽 위 상단바에 aing-check 아이콘이 나타납니다. 아이콘을 클릭하면 작은 창(팝오버)이 열립니다.
 

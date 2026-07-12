@@ -15,13 +15,13 @@
 
 ## 설치
 
-**brew** (공증 완료 후 활성화 예정):
-
 ```sh
 brew install yehsung/check/aing-check
 ```
 
-지금은 zip 배포입니다 — 전달받은 `aing-check.zip`을 풀고 `설치하기.command`를 더블클릭하면 끝. 처음이면 별명·이메일·비밀번호와 팀 코드로 가입하고(팀이 없으면 "새 팀 만들기"), 이후엔 근무 시작 버튼만 누르면 됩니다. 자세한 안내: [docs/team-install.md](docs/team-install.md)
+앱은 Apple 공증(notarized)이 되어 있어 경고 없이 바로 열립니다. 이후 업데이트는 `brew upgrade --cask aing-check`. (brew 가 없다면 [GitHub Releases](https://github.com/yehsung/check/releases)에서 `aing-check.zip`을 받아 풀고 앱을 응용 프로그램 폴더로 옮겨도 됩니다.)
+
+처음이면 별명·이메일·비밀번호와 팀 코드로 가입하고(팀이 없으면 "새 팀 만들기"), 이후엔 근무 시작 버튼만 누르면 됩니다. 자세한 안내: [docs/team-install.md](docs/team-install.md)
 
 ## 문서
 

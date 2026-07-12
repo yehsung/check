@@ -11,7 +11,10 @@ if [[ -z "${CHECK_SUPABASE_ANON_KEY:-}" && -f "$ROOT/.env.local" ]]; then
   set +a
 fi
 
-swift build -c release >&2
+# 유니버설(arm64+x86_64) 빌드 — 인텔 맥 팀원도 실행 가능해야 한다.
+# --arch 를 두 개 주면 산출물이 .build/apple/Products/Release/ 로 들어간다(단일 arch 경로와 다름).
+swift build -c release --arch arm64 --arch x86_64 >&2
+BUILD_PRODUCTS="$ROOT/.build/apple/Products/Release"
 
 APP_DIR="$ROOT/dist/aing-check.app"
 BIN_DIR="$APP_DIR/Contents/MacOS"
@@ -19,12 +22,13 @@ RES_DIR="$APP_DIR/Contents/Resources"
 
 rm -rf "$APP_DIR"
 mkdir -p "$BIN_DIR" "$RES_DIR"
-cp "$ROOT/.build/release/check" "$BIN_DIR/check"
+cp "$BUILD_PRODUCTS/check" "$BIN_DIR/check"
+lipo -info "$BIN_DIR/check" >&2
 
 # SwiftPM 리소스 번들(캐릭터 이미지)을 앱 번들 Resources로 복사한다.
 # Bundle.module 접근자가 Bundle.main.resourceURL 후보를 탐색하므로
 # codesign 이전에 Contents/Resources/ 아래에 있어야 한다.
-RESOURCE_BUNDLE="$ROOT/.build/release/check_check.bundle"
+RESOURCE_BUNDLE="$BUILD_PRODUCTS/check_check.bundle"
 if [[ -d "$RESOURCE_BUNDLE" ]]; then
   cp -R "$RESOURCE_BUNDLE" "$RES_DIR/"
 else
@@ -58,9 +62,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.2</string>
+  <string>0.1.3</string>
   <key>CFBundleVersion</key>
-  <string>3</string>
+  <string>4</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>

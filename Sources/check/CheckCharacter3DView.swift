@@ -5,7 +5,7 @@ import SwiftUI
 
 /// 아잉 3D 캐릭터 씬 구성.
 ///
-/// 번들(`Bundle.module`)의 `aing.usdz`를 로드하고, 마스코트 원색(보라)이 살도록 모든 재질을
+/// 리소스 번들(`CheckResources.bundle`)의 `aing.usdz`를 로드하고, 마스코트 원색(보라)이 살도록 모든 재질을
 /// unlit(`.constant`)로 바꾼 뒤, 바운딩박스를 기준으로 캐릭터를 살짝 내려다보는 구도로 프레임에 꽉 차게
 /// 카메라를 배치한다. 여기에 느린 상하 부유(bob)와 아주 느린 살랑 회전(sway) 애니메이션을 붙인다.
 ///
@@ -17,7 +17,7 @@ enum CheckCharacter3DScene {
 
     /// 번들에서 `aing.usdz`를 SCNScene으로 로드한다. 실패 시 nil.
     static func loadModelScene() -> SCNScene? {
-        guard let url = Bundle.module.url(forResource: "aing", withExtension: "usdz") else {
+        guard let url = CheckResources.bundle.url(forResource: "aing", withExtension: "usdz") else {
             return nil
         }
         return try? SCNScene(url: url, options: nil)

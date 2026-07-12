@@ -1,6 +1,23 @@
 import AppKit
 import Foundation
 
+/// SwiftPM 리소스 번들(check_check.bundle) 위치 해석기.
+///
+/// 실행파일 타깃의 `Bundle.module` 생성 코드는 앱 번들의 `Contents/Resources` 를 보지 않고
+/// (.app 루트와 **빌드 머신의 절대경로**만 확인) 실패 시 fatalError 로 즉사한다 — 개발 머신에서는
+/// 빌드 경로가 실존해 가려지지만 배포된 다른 맥에서는 앱이 시작하자마자 죽는다.
+/// 그래서 배포 앱의 실제 위치(Contents/Resources)를 먼저 보고, 개발/테스트 환경(swift run/test —
+/// 빌드 디렉토리가 실존)에서만 Bundle.module 로 폴백한다.
+enum CheckResources {
+    static let bundle: Bundle = {
+        if let url = Bundle.main.resourceURL?.appendingPathComponent("check_check.bundle"),
+           let bundled = Bundle(url: url) {
+            return bundled
+        }
+        return Bundle.module
+    }()
+}
+
 /// 번들에 포함된 캐릭터 이미지("아잉") 로딩·캐싱 헬퍼.
 ///
 /// 근무 상태에 따라 두 가지 표정을 노출한다.
@@ -17,7 +34,7 @@ enum CheckMascotAssets {
 
     /// 캐릭터 이미지가 담긴 리소스 번들. 테스트에서 접근성 검증에 사용한다.
     static var bundle: Bundle {
-        Bundle.module
+        CheckResources.bundle
     }
 
     static func resourceName(for mood: Mood) -> String {
@@ -99,7 +116,7 @@ enum CheckMascotAssets {
             if let cached = storage[name] {
                 return cached
             }
-            guard let url = Bundle.module.url(forResource: name, withExtension: "png"),
+            guard let url = CheckResources.bundle.url(forResource: name, withExtension: "png"),
                   let image = NSImage(contentsOf: url) else {
                 return nil
             }

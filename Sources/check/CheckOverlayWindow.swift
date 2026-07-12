@@ -13,6 +13,10 @@ final class CheckOverlayController {
     static let panelSize = NSSize(width: 140, height: 170)
     /// 화면 가장자리 여백(pt).
     static let edgeMargin: CGFloat = 24
+    /// 클릭(때리기)과 드래그(이동)를 가르는 이동 임계(pt). 이보다 적게 움직이면 클릭으로 본다.
+    static let dragThreshold: CGFloat = 4
+    /// 드래그로 옮긴 위치(우상단 앵커 오프셋 [dx, dy])를 저장하는 UserDefaults 키.
+    static let overlayOffsetKey = "check.overlayOffset"
 
     /// 근무 종료 인사(꾸벅, 0.4s) 후 패널을 숨기기까지의 상한(초). 인사가 끝난 직후 내려가고, 최대 1초를 넘지 않는다.
     static let farewellHideDeadline: TimeInterval = ReactionKind.commuteEnd.duration + 0.15
@@ -26,17 +30,31 @@ final class CheckOverlayController {
     private let notificationCenter: NotificationCenter
     private var screenObserver: NSObjectProtocol?
     private let store: WorkTimerStore
+    /// 드래그로 옮긴 위치를 영속하는 저장소(테스트 격리를 위해 주입 가능).
+    private let defaults: UserDefaults
 
-    // 때리면 아파하기: 패널 표시 중에만 켜지는 전역 좌클릭 모니터(이벤트를 소비하지 않아 클릭 통과 유지).
-    private var clickMonitor: Any?
+    // 때리면 아파하기·드래그 이동: 패널 표시 중에만 켜지는 전역 좌클릭 모니터 3종(down/dragged/up).
+    // 전역 모니터는 이벤트를 소비하지 않으므로 클릭 통과가 유지된다.
+    private var mouseMonitors: [Any] = []
+    // 드래그 임시 상태(다운~업 사이에만 유효).
+    private var dragAnchor: NSPoint = .zero        // 좌클릭 다운 시점의 마우스 좌표.
+    private var originAtDragStart: NSPoint = .zero // 다운 시점의 패널 origin.
+    private var isDragCandidate = false            // 패널 안에서 다운되어 드래그 후보가 됨.
+    private var didDrag = false                    // 임계를 넘겨 실제 이동으로 확정됨.
     // 근무 종료 인사 후 숨김을 보장하는 워치독.
     private var farewellTask: Task<Void, Never>?
     // 밤샘 졸기 스케줄러(패널 표시 중에만 90±30초 간격으로 시간창을 확인).
     private var drowsyTask: Task<Void, Never>?
 
-    init(store: WorkTimerStore, notificationCenter: NotificationCenter = .default, engine: ReactionEngine? = nil) {
+    init(
+        store: WorkTimerStore,
+        notificationCenter: NotificationCenter = .default,
+        engine: ReactionEngine? = nil,
+        defaults: UserDefaults = .standard
+    ) {
         self.notificationCenter = notificationCenter
         self.store = store
+        self.defaults = defaults
         self.engine = engine ?? ReactionEngine()
         panel = Self.makePanel(size: Self.panelSize)
 
@@ -75,12 +93,12 @@ final class CheckOverlayController {
             engine.renderActive = true
             reposition()
             panel.orderFrontRegardless()
-            installClickMonitor()
+            installMouseMonitors()
             startDrowsyScheduler()
             engine.request(.commuteStart)
         } else {
             stopDrowsyScheduler()
-            removeClickMonitor()
+            removeMouseMonitors()
             engine.greetingText = nil
             if wasVisible && panel.isVisible {
                 // 자는 중이어도 근무종료는 즉시 인터럽트되어 꾸벅 인사 + "수고했어!" 후 퇴장한다.
@@ -114,27 +132,68 @@ final class CheckOverlayController {
         panel.orderOut(nil)
     }
 
-    // MARK: - 때리면 아파하기 (전역 클릭 모니터)
+    // MARK: - 때리면 아파하기 · 드래그 이동 (전역 마우스 모니터)
 
-    /// 전역 좌클릭 모니터를 켠다. 전역 모니터는 이벤트를 소비하지 않으므로 클릭 통과(작업 방해 0)가 유지된다.
-    /// 마우스 이벤트 전역 모니터는 손쉬운 제어(Accessibility) 권한이 필요 없다(키보드 모니터만 필요).
-    private func installClickMonitor() {
-        guard clickMonitor == nil else { return }
-        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
-            Task { @MainActor in self?.handleGlobalClick() }
+    /// 전역 좌클릭 모니터 3종(down/dragged/up)을 켠다. 전역 모니터는 이벤트를 소비하지 않으므로
+    /// 클릭 통과(작업 방해 0)가 유지되고, 손쉬운 제어(Accessibility) 권한도 필요 없다.
+    private func installMouseMonitors() {
+        guard mouseMonitors.isEmpty else { return }
+        let down = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
+            Task { @MainActor in self?.handleMouseDown(at: NSEvent.mouseLocation) }
         }
+        let dragged = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDragged) { [weak self] _ in
+            Task { @MainActor in self?.handleMouseDragged(at: NSEvent.mouseLocation) }
+        }
+        let up = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] _ in
+            Task { @MainActor in self?.handleMouseUp(at: NSEvent.mouseLocation) }
+        }
+        mouseMonitors = [down, dragged, up].compactMap { $0 }
     }
 
-    private func removeClickMonitor() {
-        if let clickMonitor {
-            NSEvent.removeMonitor(clickMonitor)
-            self.clickMonitor = nil
+    /// 전역 마우스 모니터를 끄고 드래그 상태를 리셋한다(숨김 중 mouseUp 유실 대비).
+    private func removeMouseMonitors() {
+        for monitor in mouseMonitors {
+            NSEvent.removeMonitor(monitor)
         }
+        mouseMonitors = []
+        isDragCandidate = false
+        didDrag = false
     }
 
-    /// 전역 클릭 좌표(마우스 위치)를 판정한다.
-    func handleGlobalClick() {
-        handleClick(at: NSEvent.mouseLocation)
+    /// 좌클릭 다운: 표시 중이고 패널 안이면 드래그 후보로 삼는다(리액션은 아직 발화하지 않고 업 시점에 판정).
+    func handleMouseDown(at location: NSPoint) {
+        guard shouldBeVisible, panel.frame.contains(location) else { return }
+        isDragCandidate = true
+        didDrag = false
+        dragAnchor = location
+        originAtDragStart = panel.frame.origin
+    }
+
+    /// 좌클릭 드래그: 후보일 때 이동량을 반영한다. 임계를 넘기면 이동 확정(didDrag)하고 패널을 따라 옮긴다
+    /// (클램프로 화면 밖 이탈은 막는다).
+    func handleMouseDragged(at location: NSPoint) {
+        guard isDragCandidate else { return }
+        let delta = NSPoint(x: location.x - dragAnchor.x, y: location.y - dragAnchor.y)
+        if !didDrag, hypot(delta.x, delta.y) > Self.dragThreshold {
+            didDrag = true
+        }
+        guard didDrag else { return }
+        let proposed = NSPoint(x: originAtDragStart.x + delta.x, y: originAtDragStart.y + delta.y)
+        let visible = currentVisibleFrame(near: location)
+        panel.setFrameOrigin(Self.clampedOrigin(proposed, panelSize: Self.panelSize, in: visible))
+    }
+
+    /// 좌클릭 업: 드래그 후보를 종료한다. 이동이 없었으면(클릭) 기존 handleClick 판정, 이동이 있었으면
+    /// 위치만 옮기고 우상단 오프셋으로 영속한다.
+    func handleMouseUp(at location: NSPoint) {
+        guard isDragCandidate else { return }
+        isDragCandidate = false
+        if didDrag {
+            saveOffset()
+        } else {
+            handleClick(at: location)
+        }
+        didDrag = false
     }
 
     /// 클릭 좌표가 패널 프레임 안이면 리액션을 요청한다(좌표 주입 가능 — 테스트용).
@@ -173,11 +232,58 @@ final class CheckOverlayController {
         drowsyTask = nil
     }
 
-    /// 메인 스크린 visibleFrame 우상단(여백 `edgeMargin`)으로 패널을 옮긴다.
+    /// 저장된 우상단 오프셋이 있으면 그 위치(클램프 보정)로, 없으면 메인 스크린 visibleFrame 우상단
+    /// (여백 `edgeMargin`)으로 패널을 옮긴다.
     func reposition() {
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
-        let frame = Self.overlayFrame(in: screen.visibleFrame, size: Self.panelSize, margin: Self.edgeMargin)
+        let frame = Self.overlayFrame(
+            offset: loadOffset(),
+            in: screen.visibleFrame,
+            size: Self.panelSize,
+            margin: Self.edgeMargin
+        )
         panel.setFrame(frame, display: shouldBeVisible)
+    }
+
+    // MARK: - 위치 영속 (우상단 앵커 오프셋)
+
+    /// 현재 패널 위치를 '패널이 놓인 화면 visibleFrame 우상단으로부터의 오프셋'으로 저장한다.
+    /// 우상단 기준이라 해상도·배열이 바뀌어도 '우상단 근처' 의미가 보존된다.
+    private func saveOffset() {
+        let frame = panel.frame
+        let visible = currentVisibleFrame(near: NSPoint(x: frame.midX, y: frame.midY))
+        let dx = Double(visible.maxX - frame.maxX)
+        let dy = Double(visible.maxY - frame.maxY)
+        defaults.set([dx, dy], forKey: Self.overlayOffsetKey)
+    }
+
+    /// 저장된 우상단 오프셋([dx, dy])을 읽는다. 없거나 형식이 어긋나면 nil(기본 위치로 폴백).
+    private func loadOffset() -> [Double]? {
+        guard let raw = defaults.array(forKey: Self.overlayOffsetKey) as? [Double], raw.count == 2 else {
+            return nil
+        }
+        return raw
+    }
+
+    /// 커서(또는 패널)가 놓인 화면의 visibleFrame 을 고른다. 커서가 어느 화면에도 없으면 패널과 가장 많이
+    /// 겹치는 화면을, 그것도 없으면 메인 화면을 쓴다.
+    private func currentVisibleFrame(near point: NSPoint) -> NSRect {
+        let screens = NSScreen.screens
+        if let hit = screens.first(where: { $0.frame.contains(point) }) {
+            return hit.visibleFrame
+        }
+        let panelFrame = panel.frame
+        var best: NSScreen?
+        var bestArea: CGFloat = -1
+        for screen in screens {
+            let inter = screen.frame.intersection(panelFrame)
+            let area = inter.isNull ? 0 : inter.width * inter.height
+            if area > bestArea {
+                bestArea = area
+                best = screen
+            }
+        }
+        return (best ?? NSScreen.main ?? screens.first)?.visibleFrame ?? panelFrame
     }
 
     /// 화면 구성 변경(해상도·배열·메뉴바 높이 등) 시 우상단 위치를 다시 잡는다.
@@ -198,6 +304,33 @@ final class CheckOverlayController {
         let x = visibleFrame.maxX - size.width - margin
         let y = visibleFrame.maxY - size.height - margin
         return NSRect(x: x, y: y, width: size.width, height: size.height)
+    }
+
+    /// 저장된 우상단 오프셋(`offset`=[dx, dy])이 있으면 visibleFrame 우상단에서 그만큼 안쪽에 놓고 클램프한다.
+    /// 오프셋이 없거나 형식이 어긋나면 기본 우상단(여백 `margin`)으로 떨어진다(순수 함수).
+    nonisolated static func overlayFrame(
+        offset: [Double]?,
+        in visibleFrame: NSRect,
+        size: NSSize,
+        margin: CGFloat
+    ) -> NSRect {
+        guard let offset, offset.count == 2 else {
+            return overlayFrame(in: visibleFrame, size: size, margin: margin)
+        }
+        let x = visibleFrame.maxX - CGFloat(offset[0]) - size.width
+        let y = visibleFrame.maxY - CGFloat(offset[1]) - size.height
+        let origin = clampedOrigin(NSPoint(x: x, y: y), panelSize: size, in: visibleFrame)
+        return NSRect(origin: origin, size: size)
+    }
+
+    /// `origin`(패널 좌하단)으로 놓인 패널 프레임 전체가 visibleFrame 안에 들도록 min/max 로 당긴 origin 을
+    /// 돌려준다(순수 함수). 패널이 화면보다 큰 극단에서는 좌하단 정렬(minX/minY)을 우선한다.
+    nonisolated static func clampedOrigin(_ origin: NSPoint, panelSize: NSSize, in visibleFrame: NSRect) -> NSPoint {
+        let maxX = max(visibleFrame.minX, visibleFrame.maxX - panelSize.width)
+        let maxY = max(visibleFrame.minY, visibleFrame.maxY - panelSize.height)
+        let x = min(max(origin.x, visibleFrame.minX), maxX)
+        let y = min(max(origin.y, visibleFrame.minY), maxY)
+        return NSPoint(x: x, y: y)
     }
 
     /// 클릭 통과·항상 위·전(全) Space/전체화면 유지·투명 배경으로 설정된 오버레이 패널을 만든다.

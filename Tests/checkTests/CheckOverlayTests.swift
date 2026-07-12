@@ -490,6 +490,189 @@ func overlayControllerReactsToClickInsidePanelOnly() {
     controller.updateWorking(false) // 전역 모니터 해제(정리).
 }
 
+// MARK: - 드래그 이동: 클릭 vs 드래그 판정 / 클램프 / 오프셋 영속
+
+@Test
+func clampedOriginKeepsPanelInsideVisibleFrame() {
+    let visible = NSRect(x: 0, y: 0, width: 1_000, height: 800)
+    let size = NSSize(width: 140, height: 170)
+
+    // 좌하단 밖으로 나간 origin 은 (minX, minY) 로 당겨진다.
+    let low = CheckOverlayController.clampedOrigin(NSPoint(x: -50, y: -50), panelSize: size, in: visible)
+    #expect(low.x == 0)
+    #expect(low.y == 0)
+
+    // 우상단 밖으로 나간 origin 은 (maxX-width, maxY-height) 로 당겨진다(패널 전체가 안에 들도록).
+    let high = CheckOverlayController.clampedOrigin(NSPoint(x: 5_000, y: 5_000), panelSize: size, in: visible)
+    #expect(high.x == visible.maxX - size.width)
+    #expect(high.y == visible.maxY - size.height)
+
+    // 이미 안쪽이면 그대로.
+    let inside = CheckOverlayController.clampedOrigin(NSPoint(x: 300, y: 200), panelSize: size, in: visible)
+    #expect(inside.x == 300)
+    #expect(inside.y == 200)
+}
+
+@Test
+func overlayFrameAppliesSavedTopRightOffset() {
+    let visible = NSRect(x: 0, y: 0, width: 1_000, height: 800)
+    let size = NSSize(width: 140, height: 170)
+
+    // 오프셋 없음(nil) → 기존 기본 우상단(여백 24)과 동일.
+    let none = CheckOverlayController.overlayFrame(offset: nil, in: visible, size: size, margin: 24)
+    #expect(none == CheckOverlayController.overlayFrame(in: visible, size: size, margin: 24))
+
+    // 오프셋 [100, 60] → 우상단에서 dx=100, dy=60 만큼 안쪽.
+    let framed = CheckOverlayController.overlayFrame(offset: [100, 60], in: visible, size: size, margin: 24)
+    #expect(framed.maxX == visible.maxX - 100)
+    #expect(framed.maxY == visible.maxY - 60)
+    #expect(framed.size == size)
+
+    // 화면 밖으로 나가는 오프셋은 클램프되어 프레임 전체가 visibleFrame 안에 남는다.
+    let clamped = CheckOverlayController.overlayFrame(offset: [-500, -500], in: visible, size: size, margin: 24)
+    #expect(clamped.minX >= visible.minX)
+    #expect(clamped.minY >= visible.minY)
+    #expect(clamped.maxX <= visible.maxX)
+    #expect(clamped.maxY <= visible.maxY)
+}
+
+@MainActor
+@Test
+func overlaySmallMoveIsTreatedAsClick() {
+    var now = Date(timeIntervalSince1970: 60_000)
+    let engine = ReactionEngine(clock: { now })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine, defaults: isolatedOverlayDefaults()
+    )
+    controller.updateWorking(true)
+    now = now.addingTimeInterval(0.7) // commuteStart 만료 → idle
+    #expect(engine.state == .idle)
+
+    let frame = controller.panel.frame
+    let center = NSPoint(x: frame.midX, y: frame.midY)
+    let nudged = NSPoint(x: center.x + 3, y: center.y) // 3pt < 4pt 임계 → 클릭.
+    controller.handleMouseDown(at: center)
+    controller.handleMouseDragged(at: nudged)
+    controller.handleMouseUp(at: nudged)
+
+    // 임계 미만 이동 → 업 시점에 hit 발화, 위치 불변.
+    #expect(engine.state == .playing(.hit))
+    #expect(controller.panel.frame.origin == frame.origin)
+
+    controller.updateWorking(false)
+}
+
+@MainActor
+@Test
+func overlayLargeMoveDragsWithoutHit() {
+    var now = Date(timeIntervalSince1970: 61_000)
+    let engine = ReactionEngine(clock: { now })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine, defaults: isolatedOverlayDefaults()
+    )
+    controller.updateWorking(true)
+    now = now.addingTimeInterval(0.7) // commuteStart 만료 → idle
+    #expect(engine.state == .idle)
+
+    let frame = controller.panel.frame
+    let center = NSPoint(x: frame.midX, y: frame.midY)
+    // 화면 안쪽(좌하단)으로 30pt 이동 → 임계 초과, 클램프 없음.
+    let moved = NSPoint(x: center.x - 30, y: center.y - 30)
+    controller.handleMouseDown(at: center)
+    controller.handleMouseDragged(at: moved)
+    controller.handleMouseUp(at: moved)
+
+    // 임계 초과 → hit 미발화(여전히 idle), origin 이 delta 만큼 이동.
+    #expect(engine.state == .idle)
+    #expect(controller.panel.frame.origin.x == frame.origin.x - 30)
+    #expect(controller.panel.frame.origin.y == frame.origin.y - 30)
+
+    controller.updateWorking(false)
+}
+
+@MainActor
+@Test
+func overlayWakesOnDownUpClickWhileSleeping() {
+    var now = Date(timeIntervalSince1970: 62_000)
+    let engine = ReactionEngine(clock: { now })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine, defaults: isolatedOverlayDefaults()
+    )
+    controller.updateWorking(true)
+    now = now.addingTimeInterval(0.7)
+    #expect(engine.state == .idle)
+
+    engine.request(.drowsy)
+    #expect(engine.state == .sleeping)
+
+    // 자는 중 이동 없는 클릭(down→up) → wake 유지(회귀 확인).
+    let frame = controller.panel.frame
+    let center = NSPoint(x: frame.midX, y: frame.midY)
+    controller.handleMouseDown(at: center)
+    controller.handleMouseUp(at: center)
+    #expect(engine.state == .playing(.wake))
+    #expect(engine.greetingText == "깜빡 졸았다!")
+
+    controller.updateWorking(false)
+}
+
+@MainActor
+@Test
+func overlayDragOffsetRoundTripsAcrossControllers() {
+    let shared = isolatedOverlayDefaults()
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 63_000) })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine, defaults: shared
+    )
+    controller.updateWorking(true)
+
+    let frame = controller.panel.frame
+    let center = NSPoint(x: frame.midX, y: frame.midY)
+    let moved = NSPoint(x: center.x - 40, y: center.y - 25)
+    controller.handleMouseDown(at: center)
+    controller.handleMouseDragged(at: moved)
+    controller.handleMouseUp(at: moved)
+
+    // 드래그 종료 → 우상단 오프셋 2개가 저장된다.
+    let saved = shared.array(forKey: CheckOverlayController.overlayOffsetKey) as? [Double]
+    #expect(saved?.count == 2)
+
+    let draggedOrigin = controller.panel.frame.origin
+    controller.updateWorking(false)
+
+    // 같은 defaults 로 만든 새 컨트롤러는 init 의 reposition 에서 같은 위치를 복원한다.
+    let store2 = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let restored = CheckOverlayController(
+        store: store2, notificationCenter: NotificationCenter(), defaults: shared
+    )
+    #expect(abs(restored.panel.frame.origin.x - draggedOrigin.x) < 0.5)
+    #expect(abs(restored.panel.frame.origin.y - draggedOrigin.y) < 0.5)
+}
+
 // MARK: - Wave8: 졸기 = 지속 상태(때려야 깸)
 
 @MainActor

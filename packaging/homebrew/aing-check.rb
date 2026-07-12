@@ -11,7 +11,7 @@ cask "aing-check" do
   desc "Menu bar work-status and timer utility for small Mac teams"
   homepage "https://github.com/__GH_OWNER__/check"
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   # 배포 zip 은 aing-check/ 폴더 아래에 aing-check.app 을 담는다 (설치하기.command 동봉).
   app "aing-check/aing-check.app"

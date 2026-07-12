@@ -18,6 +18,9 @@ cask "aing-check" do
 
   # 앱은 Developer ID 서명 + 공증 + 스테이플되어 있으므로 quarantine 조치 불필요.
 
+  # 삭제/업그레이드 시 실행 중인 앱을 먼저 종료한다(앱의 종료 훅이 근무중이면 퇴근 동기화 후 종료).
+  uninstall quit: "kingcheck"
+
   # 삭제 시 정리: Bundle ID 는 kingcheck.
   zap trash: [
     "~/Library/Preferences/kingcheck.plist",

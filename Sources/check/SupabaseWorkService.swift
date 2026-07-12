@@ -258,6 +258,21 @@ actor SupabaseWorkService {
         try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
     }
 
+    /// 방치 세션 서버 자동 마감 RPC. close_abandoned_work_sessions() 를 로그인 토큰으로 호출하고
+    /// 마감된 세션 수(int)를 돌려받는다. 서버 cron 이 주 경로이고 이건 클라 스캐빈저 폴백에서 쓴다.
+    /// 스칼라 int 반환 RPC 라 PostgREST 가 본문에 숫자 하나(예: 3)를 준다 — 그대로 파싱한다(빈/비정상 응답은 0).
+    func closeAbandonedSessions(accessToken: String) async throws -> Int {
+        let data = try await send(
+            path: "/rest/v1/rpc/close_abandoned_work_sessions",
+            method: "POST",
+            body: EmptyBody(),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        return Int(text) ?? 0
+    }
+
     /// 자동 마감한 세션을 되돌린다. ended_at/duration_seconds 를 null 로 재개하고 상태를 working 으로 복구.
     /// 유니크 인덱스(work_sessions_one_open_per_user)상 다른 열린 세션이 없을 때만 안전하다.
     func reopenSession(accessToken: String, teamID: String, userID: String, sessionID: String) async throws {

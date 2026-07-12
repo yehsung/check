@@ -838,3 +838,68 @@ func fetchTeamStatusesLeavesAvatarURLNilWhenAbsent() async throws {
     #expect(statuses.count == 1)
     #expect(statuses.first?.avatarURL == nil)
 }
+
+// MARK: - 방치 세션 서버 자동 마감 RPC
+
+// close_abandoned_work_sessions RPC 는 스칼라 int 를 반환하므로 본문에 숫자 하나만 온다.
+// 트랙 소유의 URLProtocolStub.swift 를 건드리지 않도록 스칼라 응답 전용 스텁을 여기서 정의한다.
+final class RPCScalarURLProtocol: URLProtocol {
+    nonisolated(unsafe) static var requests: [URLRequest] = []
+    nonisolated(unsafe) static var responseBody = "0"
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        Self.requests.append(request)
+        let data = Data(Self.responseBody.utf8)
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+
+    static func session() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RPCScalarURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    static func requests(forHost host: String) -> [URLRequest] {
+        requests.filter { $0.url?.host == host }
+    }
+}
+
+@Test
+func closeAbandonedSessionsPostsRPCWithBearerAndDecodesCount() async throws {
+    let testHost = "close-abandoned-test"
+    RPCScalarURLProtocol.responseBody = "3"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: RPCScalarURLProtocol.session()
+    )
+
+    let closed = try await service.closeAbandonedSessions(accessToken: "access-token")
+
+    // 서버가 돌려준 마감 건수(스칼라 int)가 그대로 디코드된다.
+    #expect(closed == 3)
+    let rpcRequest = try #require(RPCScalarURLProtocol.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/rpc/close_abandoned_work_sessions"
+    })
+    #expect(rpcRequest.httpMethod == "POST")
+    // 로그인 토큰을 Bearer 로 사용한다(authenticated 전용 RPC — 클라 스캐빈저 폴백).
+    #expect(rpcRequest.value(forHTTPHeaderField: "Authorization") == "Bearer access-token")
+}

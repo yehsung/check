@@ -34,6 +34,7 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             applyRemoteOwnStatus()
             stopTimerIfIdle()
+            scavengeAbandonedTeamSessionsIfNeeded()
             if syncMessage != "동기화됨" { syncMessage = "동기화됨" }
         } catch {
             // 취소(.task 취소/팝오버 빨리 닫기)는 실패 문구를 남기지 않고 조용히 빠져나간다(사용자 헛경보 금지).
@@ -58,6 +59,38 @@ extension WorkTimerStore {
         // 첫 관측(nil)은 전이로 치지 않는다. 미완료→완료 로 바뀌는 순간에만, 1일 1회 축하한다.
         if teamGoalComplete == false, complete, milestoneTracker.fireIfNeeded(MilestoneTracker.teamGoalKey, now: now) {
             onReactionTrigger?(.milestone)
+        }
+    }
+
+    /// 10분 넘게 하트비트가 끊긴(방치) 팀원이 있으면 서버 스캐빈저 RPC(close_abandoned_work_sessions)를
+    /// 발사해 그 세션들을 마지막 신호 시각으로 마감하게 한다. 서버 cron 이 주 경로이고, 이건 "누군가
+    /// 팝오버를 보고 있는 동안 더 빨리" 정리해 주는 보정이다. 5분 스로틀로 폴링마다 난사하지 않는다.
+    /// stale 판정은 자기/타인을 가리지 않고 동일 규칙(신호 공백 > 10분)으로 본다 — 살아 있는 내 앱은
+    /// 하트비트가 가므로 정상적으론 대상이 되지 않는다. 성공하면 정리 결과를 반영하려 팀을 한 번 더 새로고침한다.
+    func scavengeAbandonedTeamSessionsIfNeeded(now: Date = Date()) {
+        let hasAbandoned = teamMembers.contains { member in
+            guard case .staleWorking = member.presence(now: now),
+                  let seen = member.lastSeenAt ?? member.updatedAt
+            else {
+                return false
+            }
+            return now.timeIntervalSince(seen) > Self.abandonedSessionThresholdSeconds
+        }
+        guard hasAbandoned, now.timeIntervalSince(lastScavengeAt) >= Self.scavengeThrottleSeconds else {
+            return
+        }
+        lastScavengeAt = now
+        let generation = sessionGeneration
+        Task { @MainActor in
+            do {
+                _ = try await withSessionRetry { activeSession in
+                    try await service.closeAbandonedSessions(accessToken: activeSession.accessToken)
+                }
+                guard generation == sessionGeneration else { return }
+                await refreshTeamStatus()
+            } catch {
+                // 실패는 조용히 무시한다(서버 cron 이 주 경로 — 다음 주기에 자연히 재시도).
+            }
         }
     }
 

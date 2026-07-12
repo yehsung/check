@@ -1375,6 +1375,170 @@ func liveLocalSessionIsNeverAutoClosedOnRefresh() async {
     #expect(!store.canUndoAutoClose)
 }
 
+// MARK: - 방치 세션 서버 자동 마감(클라 스캐빈저 폴백)
+
+@MainActor
+@Test
+func scavengerFiresRPCWhenTeamMemberStaleOverTenMinutes() async {
+    let testHost = "scavenge-fire-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    let now = Date()
+    // 다른 팀원이 11분째 신호 끊김 → stale(>90초)이면서 방치(>10분) 조건 충족.
+    store.teamMembers = [
+        TeamMemberStatus(
+            id: "other", name: "동료", status: .working, updatedAt: nil,
+            currentSessionStartedAt: now.addingTimeInterval(-3600),
+            lastSeenAt: now.addingTimeInterval(-11 * 60)
+        )
+    ]
+    store.lastScavengeAt = .distantPast
+
+    store.scavengeAbandonedTeamSessionsIfNeeded(now: now)
+
+    // 스로틀 타임스탬프가 즉시 갱신되고, 정리 RPC 가 fire-and-forget 으로 발사된다.
+    #expect(store.lastScavengeAt == now)
+    var fired = false
+    for _ in 0..<200 {
+        if URLProtocolStub.requests(forHost: testHost).contains(where: {
+            $0.url?.path == "/rest/v1/rpc/close_abandoned_work_sessions" && $0.httpMethod == "POST"
+        }) {
+            fired = true
+            break
+        }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(fired)
+}
+
+@MainActor
+@Test
+func scavengerRespectsFiveMinuteThrottle() async {
+    let testHost = "scavenge-throttle-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    let now = Date()
+    store.teamMembers = [
+        TeamMemberStatus(
+            id: "other", name: "동료", status: .working, updatedAt: nil,
+            currentSessionStartedAt: now.addingTimeInterval(-3600),
+            lastSeenAt: now.addingTimeInterval(-11 * 60)
+        )
+    ]
+    // 마지막 발사가 4분 전 → 5분 스로틀 안이라 재발사하지 않는다.
+    let lastFire = now.addingTimeInterval(-4 * 60)
+    store.lastScavengeAt = lastFire
+
+    store.scavengeAbandonedTeamSessionsIfNeeded(now: now)
+
+    // 스로틀에 막혀 타임스탬프도 그대로고 RPC 요청도 나가지 않는다.
+    #expect(store.lastScavengeAt == lastFire)
+    try? await Task.sleep(for: .milliseconds(30))
+    #expect(!URLProtocolStub.requests(forHost: testHost).contains {
+        $0.url?.path == "/rest/v1/rpc/close_abandoned_work_sessions"
+    })
+}
+
+@MainActor
+@Test
+func scavengerDoesNotFireWithoutStaleMember() async {
+    let testHost = "scavenge-fresh-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    let now = Date()
+    // 신호가 신선한 근무중 팀원(활성) → 발사 대상 아님.
+    store.teamMembers = [
+        TeamMemberStatus(
+            id: "other", name: "동료", status: .working, updatedAt: nil,
+            currentSessionStartedAt: now.addingTimeInterval(-3600),
+            lastSeenAt: now.addingTimeInterval(-30)
+        )
+    ]
+    store.lastScavengeAt = .distantPast
+
+    store.scavengeAbandonedTeamSessionsIfNeeded(now: now)
+
+    #expect(store.lastScavengeAt == .distantPast)
+    try? await Task.sleep(for: .milliseconds(30))
+    #expect(!URLProtocolStub.requests(forHost: testHost).contains {
+        $0.url?.path == "/rest/v1/rpc/close_abandoned_work_sessions"
+    })
+}
+
+@MainActor
+@Test
+func scavengerDoesNotFireForStaleUnderTenMinutes() async {
+    let testHost = "scavenge-under-threshold-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    let now = Date()
+    // 신호가 5분 끊겨 stale(연결 끊김 칩)이긴 하지만 방치 임계(10분)에는 못 미친다 → 발사 대상 아님.
+    store.teamMembers = [
+        TeamMemberStatus(
+            id: "other", name: "동료", status: .working, updatedAt: nil,
+            currentSessionStartedAt: now.addingTimeInterval(-3600),
+            lastSeenAt: now.addingTimeInterval(-5 * 60)
+        )
+    ]
+    store.lastScavengeAt = .distantPast
+
+    store.scavengeAbandonedTeamSessionsIfNeeded(now: now)
+
+    #expect(store.lastScavengeAt == .distantPast)
+    try? await Task.sleep(for: .milliseconds(30))
+    #expect(!URLProtocolStub.requests(forHost: testHost).contains {
+        $0.url?.path == "/rest/v1/rpc/close_abandoned_work_sessions"
+    })
+}
+
+@MainActor
+@Test
+func scavengerJudgesSelfStaleBySameRule() async {
+    let testHost = "scavenge-self-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    let now = Date()
+    // 자기 자신이 다른 기기에서 11분째 신호 끊김 — 자기/타인을 가리지 않고 동일 규칙으로 발사 대상이다.
+    store.teamMembers = [
+        TeamMemberStatus(
+            id: "00000000-0000-0000-0000-000000000002", name: "나", status: .working, updatedAt: nil,
+            currentSessionStartedAt: now.addingTimeInterval(-3600),
+            lastSeenAt: now.addingTimeInterval(-11 * 60)
+        )
+    ]
+    store.lastScavengeAt = .distantPast
+
+    store.scavengeAbandonedTeamSessionsIfNeeded(now: now)
+
+    #expect(store.lastScavengeAt == now)
+    var fired = false
+    for _ in 0..<200 {
+        if URLProtocolStub.requests(forHost: testHost).contains(where: {
+            $0.url?.path == "/rest/v1/rpc/close_abandoned_work_sessions" && $0.httpMethod == "POST"
+        }) {
+            fired = true
+            break
+        }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(fired)
+}
+
 // MARK: - D4: 잠자기 정책 (5분 유예)
 
 @MainActor

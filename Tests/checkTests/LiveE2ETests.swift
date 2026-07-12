@@ -371,6 +371,92 @@ private struct E2EAdmin: Sendable {
         }
         return deleted
     }
+
+    // MARK: 방치 세션 자동 마감 셋업/검증 (E2E owner 계정만 조작)
+
+    /// owner 의 열린(ended_at null) 세션을 모두 닫는다(방치 세션 셋업 전 유니크 제약 충돌 방지, 멱등).
+    func closeOpenSessions(userID: String) async throws {
+        let iso = ISO8601DateFormatter()
+        let body = try JSONSerialization.data(withJSONObject: [
+            "ended_at": iso.string(from: Date()),
+            "duration_seconds": 0
+        ])
+        let (data, code) = try await send(
+            path: "/rest/v1/work_sessions",
+            method: "PATCH",
+            query: [
+                URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                URLQueryItem(name: "ended_at", value: "is.null")
+            ],
+            body: body,
+            prefer: "return=minimal"
+        )
+        guard code == 200 || code == 204 else {
+            throw E2EError("열린 세션 정리 HTTP \(code): \(String(decoding: data, as: UTF8.self))")
+        }
+    }
+
+    /// admin 으로 열린 세션을 삽입하고 id 를 돌려준다(자동 마감 함수 검증용 셋업).
+    func insertOpenSession(teamID: String, userID: String, startedAt: Date) async throws -> String {
+        let iso = ISO8601DateFormatter()
+        let body = try JSONSerialization.data(withJSONObject: [
+            "team_id": teamID,
+            "user_id": userID,
+            "started_at": iso.string(from: startedAt)
+        ])
+        let (data, code) = try await send(
+            path: "/rest/v1/work_sessions",
+            method: "POST",
+            body: body,
+            prefer: "return=representation"
+        )
+        guard code == 201 || code == 200 else {
+            throw E2EError("세션 삽입 HTTP \(code): \(String(decoding: data, as: UTF8.self))")
+        }
+        let rows = (try JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
+        guard let id = rows.first?["id"] as? String else {
+            throw E2EError("세션 삽입 응답에 id 없음")
+        }
+        return id
+    }
+
+    /// admin 으로 work_status 를 upsert 한다(마지막 신호 시각을 과거로 조작해 방치 상태를 만든다).
+    func upsertWorkStatus(teamID: String, userID: String, status: String, activeSessionID: String?, lastSeenAt: Date) async throws {
+        let iso = ISO8601DateFormatter()
+        let sessionValue: Any = activeSessionID ?? NSNull()
+        let body = try JSONSerialization.data(withJSONObject: [
+            "team_id": teamID,
+            "user_id": userID,
+            "status": status,
+            "active_session_id": sessionValue,
+            "last_seen_at": iso.string(from: lastSeenAt),
+            "updated_at": iso.string(from: lastSeenAt)
+        ])
+        let (data, code) = try await send(
+            path: "/rest/v1/work_statuses",
+            method: "POST",
+            query: [URLQueryItem(name: "on_conflict", value: "team_id,user_id")],
+            body: body,
+            prefer: "resolution=merge-duplicates,return=minimal"
+        )
+        guard code == 200 || code == 201 || code == 204 else {
+            throw E2EError("work_status upsert HTTP \(code): \(String(decoding: data, as: UTF8.self))")
+        }
+    }
+
+    /// service_role 로 close_abandoned_work_sessions() RPC 를 호출하고 마감 건수를 돌려준다.
+    func callCloseAbandonedSessions() async throws -> Int {
+        let (data, code) = try await send(
+            path: "/rest/v1/rpc/close_abandoned_work_sessions",
+            method: "POST",
+            body: Data("{}".utf8)
+        )
+        guard code == 200 else {
+            throw E2EError("close_abandoned RPC HTTP \(code): \(String(decoding: data, as: UTF8.self))")
+        }
+        let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        return Int(text) ?? 0
+    }
 }
 
 // MARK: - 스토어/유틸 헬퍼
@@ -819,6 +905,48 @@ struct LiveE2ETests {
         #expect(stored)
         #expect(try await ctx.admin.profileDisplayName(userID: userID) == edge)
         obs("별명 엣지: 저장 일치=\(try await ctx.admin.profileDisplayName(userID: userID) == edge)")
+    }
+
+    // 9b. 방치 세션 서버 자동 마감(RPC 직접 검증, cron 대기 없이 함수 자체를 검증).
+    // admin 으로 owner 의 열린 세션 + last_seen_at 을 11분 전으로 조작 → service_role 로 RPC 직접 호출 →
+    // 세션이 마지막 신호 시각으로 마감되고(off_work) 열린 세션이 사라졌는지 검증. E2E 접두사 스코프 밖 접근 금지.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s09b_autoCloseAbandonedSessionViaRPC() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+        let teamID = try #require(LiveE2EState.e2eTeamID)
+
+        // 방치 상황 셋업: 2시간 전 시작한 열린 세션 + 마지막 신호 11분 전(>10분) working 상태.
+        // 기존 열린 세션이 있으면 유니크 제약(one_open_per_user)에 걸리므로 먼저 정리한다(멱등).
+        try await ctx.admin.closeOpenSessions(userID: owner.userID)
+        let startedAt = Date().addingTimeInterval(-2 * 3600)
+        let staleSignal = Date().addingTimeInterval(-11 * 60)
+        let sessionID = try await ctx.admin.insertOpenSession(teamID: teamID, userID: owner.userID, startedAt: startedAt)
+        try await ctx.admin.upsertWorkStatus(
+            teamID: teamID, userID: owner.userID, status: "working",
+            activeSessionID: sessionID, lastSeenAt: staleSignal
+        )
+
+        // service_role 로 RPC 직접 호출 — cron 을 기다리지 않고 함수 자체를 검증한다.
+        let closed = try await ctx.admin.callCloseAbandonedSessions()
+        obs("방치 자동마감 RPC: 마감 건수=\(closed)")
+        #expect(closed >= 1)
+
+        // 세션이 마지막 신호 시각으로 마감됐다: ended_at ≈ staleSignal, duration ≈ (마지막신호 - 시작).
+        let sessions = try await ctx.admin.sessionRows(userID: owner.userID, openOnly: false)
+        let closedSession = try #require(sessions.first { ($0["id"] as? String) == sessionID })
+        let endedString = try #require(closedSession["ended_at"] as? String)
+        let endedDate = try #require(parseSupabaseDate(endedString))
+        #expect(abs(endedDate.timeIntervalSince(staleSignal)) <= 2)
+        let duration = try #require(closedSession["duration_seconds"] as? Int)
+        let expectedDuration = Int(staleSignal.timeIntervalSince(startedAt))
+        #expect(abs(duration - expectedDuration) <= 2)
+
+        // 상태가 off_work 로 바뀌고 열린 세션이 없다.
+        let statusRows = try await ctx.admin.statusRows(userID: owner.userID)
+        #expect((statusRows.first?["status"] as? String) == "off_work")
+        #expect(try await ctx.admin.sessionRows(userID: owner.userID, openOnly: true).count == 0)
+        obs("방치 자동마감 검증: ended_at≈마지막신호, duration≈\(expectedDuration)초, status=off_work")
     }
 
     // 10. 정리 → E2E 계정 + E2E 팀 삭제 후 잔존 0 확인. E2E 접두사 밖(실사용) 팀 수는 변하지 않아야 한다.

@@ -10,6 +10,10 @@ final class WorkTimerStore {
     static let longSessionResponseWindowSeconds: TimeInterval = 30 * 60
     // 잠자기 유예. 이 시간 이하 잠자기는 근무 연속으로 인정, 초과하면 덮은 시각으로 마감.
     static let sleepGraceSeconds: TimeInterval = 5 * 60
+    // 방치 세션 자동 마감 임계(초). 하트비트가 이 시간 넘게 끊긴 세션을 방치로 본다(서버 함수와 동일 10분).
+    static let abandonedSessionThresholdSeconds: TimeInterval = 10 * 60
+    // 클라 스캐빈저 스로틀(초). 폴링마다 정리 RPC 를 난사하지 않도록 마지막 발사 후 이 시간은 재발사하지 않는다.
+    static let scavengeThrottleSeconds: TimeInterval = 5 * 60
 
     var startedAt: Date?
     var accumulatedSeconds: Int = 0
@@ -124,6 +128,8 @@ final class WorkTimerStore {
     // 자리 비움 자동 마감 되돌리기용: 마지막으로 자동 마감한 세션.
     var lastAutoClosedSessionID: String?
     var lastAutoClosedStartedAt: Date?
+    // 클라 스캐빈저(방치 세션 서버 자동 마감 폴백) 마지막 발사 시각. 5분 스로틀 판정에 쓴다(관찰 대상 아님).
+    @ObservationIgnored var lastScavengeAt: Date = .distantPast
 
 
     var todayDuration: Int {

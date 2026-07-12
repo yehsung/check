@@ -111,9 +111,9 @@ func signUpAutoJoinsWithTeamCodeAfterAccount() async {
     store.password = "team-password"
     store.displayName = "영식"
     store.isCreateTeamMode = false
-    store.signupTeamCode = "SUDOPARK"
+    store.signupTeamCode = "AINGTEAM"
     // 미리보기가 확인된 상태(가입 버튼 활성 조건).
-    store.joinPreview = TeamJoinPreview(teamID: "10000000-0000-0000-0000-000000000001", name: "sudo 박수", weeklyGoalHours: 40, memberCount: 3)
+    store.joinPreview = TeamJoinPreview(teamID: "10000000-0000-0000-0000-000000000001", name: "아잉팀", weeklyGoalHours: 40, memberCount: 3)
 
     await store.signUp()?.value
 
@@ -133,7 +133,7 @@ func signUpAutoJoinsWithTeamCodeAfterAccount() async {
         #expect(signupIndex < joinIndex)
     }
     // 합류 본문에 정규화된 코드가 담긴다.
-    #expect(URLProtocolStub.bodyText(forHost: testHost).contains(#""code":"SUDOPARK""#))
+    #expect(URLProtocolStub.bodyText(forHost: testHost).contains(#""code":"AINGTEAM""#))
 }
 
 @MainActor
@@ -222,13 +222,13 @@ func previewTeamCodeSuccessSetsJoinPreview() async {
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
         defaults: isolatedDefaults()
     )
-    store.signupTeamCode = "SUDOPARK"
+    store.signupTeamCode = "AINGTEAM"
 
     await store.performPreviewTeamCode()
 
     #expect(store.joinPreview == TeamJoinPreview(
         teamID: "10000000-0000-0000-0000-000000000001",
-        name: "sudo 박수",
+        name: "아잉팀",
         weeklyGoalHours: 40,
         memberCount: 3
     ))
@@ -303,7 +303,7 @@ func joinTeamWithCodeJoinsWhenTeamless() async {
     )
     store.currentTeamID = nil
     #expect(store.isTeamless)
-    store.signupTeamCode = "SUDOPARK"
+    store.signupTeamCode = "AINGTEAM"
 
     await store.performJoinTeamWithCode()
 
@@ -345,7 +345,7 @@ func ownerMembershipLoadsInviteCode() async {
     // owner 로 확정되면 팀 카드 공유용 참여코드를 로드한다.
     #expect(store.isTeamOwner)
     #expect(store.teamRole == "owner")
-    #expect(store.myTeamInviteCode == "SUDOPARK")
+    #expect(store.myTeamInviteCode == "AINGTEAM")
 }
 
 @MainActor
@@ -486,7 +486,7 @@ func signOutClearsLeaderboardState() async {
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.isLeaderboardVisible = true
     store.leaderboard = [
-        TeamLeaderboardEntry(id: URLProtocolStub.stubTeamID, name: "sudo 박수", weeklyGoalHours: 40, totalSeconds: 72000, workingCount: 3, memberCount: 3)
+        TeamLeaderboardEntry(id: URLProtocolStub.stubTeamID, name: "아잉팀", weeklyGoalHours: 40, totalSeconds: 72000, workingCount: 3, memberCount: 3)
     ]
 
     store.signOut()
@@ -894,13 +894,13 @@ func signOutClearsSessionStateAndCallsLogout() async {
         userID: "00000000-0000-0000-0000-000000000002"
     )
     store.currentTeamID = URLProtocolStub.stubTeamID
-    store.teamName = "sudo 박수"
+    store.teamName = "아잉팀"
     store.teamGoalSeconds = 40 * 3600
     store.teamRole = "owner"
-    store.myTeamInviteCode = "SUDOPARK"
+    store.myTeamInviteCode = "AINGTEAM"
     store.teamDirectory = [TeamDirectoryEntry(id: "t", name: "n")]
     store.selectedSignupTeamID = "t"
-    store.signupTeamCode = "SUDOPARK"
+    store.signupTeamCode = "AINGTEAM"
     store.joinPreview = TeamJoinPreview(teamID: "t", name: "n", weeklyGoalHours: 40, memberCount: 1)
     store.joinPreviewMessage = "확인 중"
     store.isCreateTeamMode = true

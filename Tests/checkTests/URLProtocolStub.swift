@@ -256,7 +256,7 @@ final class URLProtocolStub: URLProtocol {
         return Data(
             """
             [
-              {"team_id": "10000000-0000-0000-0000-000000000001", "name": "sudo 박수", "weekly_goal_hours": 40, "member_count": 3}
+              {"team_id": "10000000-0000-0000-0000-000000000001", "name": "아잉팀", "weekly_goal_hours": 40, "member_count": 3}
             ]
             """.utf8
         )
@@ -270,7 +270,7 @@ final class URLProtocolStub: URLProtocol {
         return Data(
             """
             [
-              {"team_id": "10000000-0000-0000-0000-000000000001", "name": "sudo 박수", "weekly_goal_hours": 40}
+              {"team_id": "10000000-0000-0000-0000-000000000001", "name": "아잉팀", "weekly_goal_hours": 40}
             ]
             """.utf8
         )
@@ -292,7 +292,7 @@ final class URLProtocolStub: URLProtocol {
         if request.url?.host?.contains("member") == true {
             return Data("[]".utf8)
         }
-        return Data(#"[{"invite_code": "SUDOPARK"}]"#.utf8)
+        return Data(#"[{"invite_code": "AINGTEAM"}]"#.utf8)
     }
 
     // 팀 리그 픽스처: 3팀. member_count 로 "평균 역전"을 심는다 — 총합 1위(오목교 90000)가 1인당 평균으로는
@@ -305,7 +305,7 @@ final class URLProtocolStub: URLProtocol {
             [
               {"team_id": "30000000-0000-0000-0000-000000000003", "team_name": "코드 크래프터", "weekly_goal_hours": 50, "total_seconds": 36000, "working_count": 0, "member_count": 1},
               {"team_id": "20000000-0000-0000-0000-000000000002", "team_name": "오목교 브라더스", "weekly_goal_hours": 60, "total_seconds": 90000, "working_count": 1, "member_count": 3},
-              {"team_id": "10000000-0000-0000-0000-000000000001", "team_name": "sudo 박수", "weekly_goal_hours": 40, "total_seconds": 72000, "working_count": 3, "member_count": 3}
+              {"team_id": "10000000-0000-0000-0000-000000000001", "team_name": "아잉팀", "weekly_goal_hours": 40, "total_seconds": 72000, "working_count": 3, "member_count": 3}
             ]
             """.utf8
         )
@@ -321,7 +321,7 @@ final class URLProtocolStub: URLProtocol {
             return Data(
                 """
                 [
-                  {"team_id": "10000000-0000-0000-0000-000000000001", "teams": {"name": "sudo 박수"}}
+                  {"team_id": "10000000-0000-0000-0000-000000000001", "teams": {"name": "아잉팀"}}
                 ]
                 """.utf8
             )
@@ -331,7 +331,7 @@ final class URLProtocolStub: URLProtocol {
             return Data(
                 """
                 [
-                  {"team_id": "10000000-0000-0000-0000-000000000001", "role": "owner", "teams": {"name": "sudo 박수", "weekly_goal_hours": 40}}
+                  {"team_id": "10000000-0000-0000-0000-000000000001", "role": "owner", "teams": {"name": "아잉팀", "weekly_goal_hours": 40}}
                 ]
                 """.utf8
             )
@@ -340,7 +340,7 @@ final class URLProtocolStub: URLProtocol {
         return Data(
             """
             [
-              {"team_id": "10000000-0000-0000-0000-000000000001", "role": "member", "teams": {"name": "sudo 박수", "weekly_goal_hours": 40}}
+              {"team_id": "10000000-0000-0000-0000-000000000001", "role": "member", "teams": {"name": "아잉팀", "weekly_goal_hours": 40}}
             ]
             """.utf8
         )

@@ -1,3 +1,2 @@
-insert into public.teams (id, name, invite_code) values
-  ('10000000-0000-0000-0000-000000000001', 'sudo 박수', 'SUDOPARK')
-on conflict (id) do nothing;
+-- 시드 없음: 팀은 앱의 create_team RPC(초대코드 자동 발급)로 만든다.
+-- (구버전의 기본 팀 시드는 멀티팀 전환으로 폐기 — 20260712090000_remove_legacy_seed_team.sql 참고)

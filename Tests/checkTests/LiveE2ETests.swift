@@ -11,7 +11,7 @@ import Testing
 // CHECK_E2E_SR_KEY_FILE 이 가리키는 apikeys.json 에서 읽는다. 키 원문은 절대 출력하지 않는다.
 //
 // 안전 규칙: 이 스위트는 오직 E2E 전용 계정과 "E2E-" 로 시작하는 이름의 팀만 만들고 지운다.
-// 실팀(sudo 박수=SUDOPARK, 낭만러너 김유정=RUNNER01)과 그 소속 데이터는 절대 건드리지 않는다.
+// E2E 접두사가 아닌 데이터(실사용 계정/팀)는 절대 건드리지 않는다.
 
 // MARK: - 에러/관측
 
@@ -821,7 +821,7 @@ struct LiveE2ETests {
         obs("별명 엣지: 저장 일치=\(try await ctx.admin.profileDisplayName(userID: userID) == edge)")
     }
 
-    // 10. 정리 → E2E 계정 + E2E 팀 삭제 후 잔존 0 확인. 실팀(SUDOPARK/RUNNER01)은 그대로 살아 있어야 한다.
+    // 10. 정리 → E2E 계정 + E2E 팀 삭제 후 잔존 0 확인. E2E 접두사 밖(실사용) 팀 수는 변하지 않아야 한다.
     @Test(.enabled(if: LiveE2EEnv.enabled))
     func s10_cleanup() async throws {
         let ctx = try makeContext()
@@ -856,9 +856,8 @@ struct LiveE2ETests {
             #expect(try await ctx.admin.statusRows(userID: userID).count == 0)
         }
 
-        // E2E 팀은 모두 사라졌고, 실팀 코드는 여전히 살아 있다(정규화 조회 기준 존재).
+        // E2E 팀은 모두 사라졌다(실사용 팀은 접두사 스코프 밖이라 애초에 건드리지 않는다).
         #expect(try await ctx.admin.teams(namePrefix: E2ETeam.namePrefix).isEmpty)
-        #expect(try await ctx.admin.teamExists(inviteCode: "SUDOPARK"))
 
         print("E2E| ===== 관측 요약 =====")
         for line in LiveE2EState.observations {

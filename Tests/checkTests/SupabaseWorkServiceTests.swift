@@ -355,7 +355,7 @@ func lookupTeamByCodePostsRPCWithAnonBearerAndNormalizes() async throws {
 
     #expect(preview == TeamJoinPreview(
         teamID: "10000000-0000-0000-0000-000000000001",
-        name: "sudo 박수",
+        name: "아잉팀",
         weeklyGoalHours: 40,
         memberCount: 3
     ))
@@ -391,7 +391,7 @@ func joinTeamPostsRPCWithAccessTokenAndDecodesTeam() async throws {
         session: URLSession(configuration: .stubbed)
     )
 
-    let joined = try await service.joinTeam(accessToken: "access-token", code: "sudo-park")
+    let joined = try await service.joinTeam(accessToken: "access-token", code: "aing-team")
 
     #expect(joined?.teamID == "10000000-0000-0000-0000-000000000001")
     #expect(joined?.goalHours == 40)
@@ -401,7 +401,7 @@ func joinTeamPostsRPCWithAccessTokenAndDecodesTeam() async throws {
     #expect(rpcRequest.httpMethod == "POST")
     // 로그인 토큰을 Bearer 로 사용한다(합류는 authenticated 전용).
     #expect(rpcRequest.value(forHTTPHeaderField: "Authorization") == "Bearer access-token")
-    #expect(URLProtocolStub.bodyText(forHost: testHost).contains(#""code":"SUDOPARK""#))
+    #expect(URLProtocolStub.bodyText(forHost: testHost).contains(#""code":"AINGTEAM""#))
 }
 
 @Test
@@ -453,7 +453,7 @@ func fetchMyInviteCodeDecodesCodeForOwner() async throws {
 
     let code = try await service.fetchMyInviteCode(accessToken: "access-token")
 
-    #expect(code == "SUDOPARK")
+    #expect(code == "AINGTEAM")
     let rpcRequest = try #require(URLProtocolStub.requests(forHost: testHost).first {
         $0.url?.path == "/rest/v1/rpc/my_team_invite_code"
     })
@@ -490,7 +490,7 @@ func fetchTeamLeaderboardDecodesEntriesWithBearer() async throws {
     // 3팀 픽스처가 그대로 디코드된다(서비스는 정렬하지 않고 원본 순서를 유지 — 정렬은 store 책임).
     #expect(entries.count == 3)
     let myTeam = try #require(entries.first { $0.id == URLProtocolStub.stubTeamID })
-    #expect(myTeam.name == "sudo 박수")
+    #expect(myTeam.name == "아잉팀")
     #expect(myTeam.weeklyGoalHours == 40)
     #expect(myTeam.totalSeconds == 72000)
     #expect(myTeam.workingCount == 3)
@@ -581,7 +581,7 @@ func fetchOwnMembershipParsesTeamIDAndName() async throws {
     )
 
     #expect(membership?.teamID == "10000000-0000-0000-0000-000000000001")
-    #expect(membership?.teamName == "sudo 박수")
+    #expect(membership?.teamName == "아잉팀")
     // 임베드된 teams.weekly_goal_hours 를 같은 쿼리로 함께 읽어 온다.
     #expect(membership?.goalHours == 40)
     // 역할(role)도 같은 쿼리로 함께 읽어 온다(owner 판정 → 참여코드 로드에 쓴다).

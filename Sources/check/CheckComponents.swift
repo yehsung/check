@@ -879,7 +879,7 @@ enum CheckPasteboard {
 
 struct BrandHeader: View {
     // 부제는 화면(로그인/가입)에 따라 달라진다. 기본값은 로그인 화면 문구.
-    var subtitle: String = "sudo 박수 팀 근무 타이머"
+    var subtitle: String = "팀 근무 타이머"
 
     var body: some View {
         HStack(spacing: 11) {

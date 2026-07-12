@@ -648,7 +648,7 @@ private struct LoginPanel: View {
     private var subtitle: String {
         switch mode {
         case .signIn:
-            return "sudo 박수 팀 근무 타이머"
+            return "팀 근무 타이머"
         case .signUp:
             return store.isCreateTeamMode ? "새 팀을 만들어요" : "팀 코드로 합류해요"
         }

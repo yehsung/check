@@ -769,8 +769,8 @@ private func manyMembers(now: Date, count: Int = 8) -> [TeamMemberStatus] {
     }
 }
 
-/// 팀별 이번 주 스텁 표본. member_count 로 평균 역전을 심었다 — 총합 순서(오목교>sudo>코드)와
-/// 1인당 평균 순서(코드 36000 > sudo 24000 > 오목교 15000)가 반대다. 평균 정렬 후 우리 팀(stubTeamID)이 2번째.
+/// 팀별 이번 주 스텁 표본. member_count 로 평균 역전을 심었다 — 총합 순서(오목교>아잉>코드)와
+/// 1인당 평균 순서(코드 36000 > 아잉 24000 > 오목교 15000)가 반대다. 평균 정렬 후 우리 팀(stubTeamID)이 2번째.
 private let sampleLeaderboard: [TeamLeaderboardEntry] = [
     TeamLeaderboardEntry(id: "20000000-0000-0000-0000-000000000002", name: "오목교 브라더스", weeklyGoalHours: 60, totalSeconds: 90_000, workingCount: 1, memberCount: 6),
     TeamLeaderboardEntry(id: URLProtocolStub.stubTeamID, name: "아잉팀", weeklyGoalHours: 40, totalSeconds: 72_000, workingCount: 3, memberCount: 3),

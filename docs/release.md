@@ -2,12 +2,12 @@
 
 aing-check 를 팀원에게 배포하는 경로는 두 가지입니다.
 
-1. **zip 직접 전달** — `scripts/package-local.sh` 로 만든 `dist/aing-check.zip` 을 사람에게 직접 보냄(기존 방식, [`docs/team-install.md`](team-install.md) 참고). 미공증 ad-hoc 서명이라 팀원이 `설치하기.command` 또는 격리 해제 절차를 거쳐야 합니다.
-2. **brew 배포** — 공증된 앱을 GitHub Releases 에 올리고, 별도 tap 저장소의 Homebrew Cask 로 설치/업데이트하는 방식. **이 문서가 다루는 내용입니다.** 최초 `brew tap`/`install` 한 번 이후로 팀원은 `brew upgrade` 만으로 최신 버전을 받습니다.
+1. **brew 배포 (기본)** — 공증된 앱을 GitHub Releases 에 올리고, tap 저장소의 Homebrew Cask 로 설치/업데이트하는 방식. **이 문서가 다루는 내용이며, v0.1.0 부터 라이브입니다.** 최초 `brew install` 한 번 이후로 팀원은 `brew upgrade` 만으로 최신 버전을 받습니다.
+2. **zip 직접 전달 (비상용)** — `package-notarized.sh` 산출물 `dist/aing-check.zip` 을 직접 보내는 방법(공증본이라 그대로 열림). brew 를 못 쓰는 환경에서만 쓰면 됩니다. (`package-local.sh` 의 ad-hoc 서명본은 개발 확인용 — 배포에 쓰지 말 것.)
 
 > 이 저장소의 owner 는 `yehsung` 으로 확정되어 있습니다. `release-brew.sh` 는 릴리즈·태그·tap 대상을 `GH_OWNER` 환경변수(또는 `.env.local` 의 `CHECK_GH_OWNER`)로 정하므로, 아래 실행 전에 `GH_OWNER=yehsung` 을 설정하면 됩니다.
 >
-> Cask 템플릿 `packaging/homebrew/aing-check.rb` 의 `url`/`homepage` 는 `__GH_OWNER__` 자리표시자를 쓰고, `release-brew.sh` 가 `__VERSION__`·`__SHA256__` 과 함께 치환합니다. 현재는 공증(notarization) 전이라 brew 배포 자체가 아직 활성화되지 않았습니다(현 배포는 zip + `설치하기.command`).
+> Cask 템플릿 `packaging/homebrew/aing-check.rb` 의 `url`/`homepage` 는 `__GH_OWNER__` 자리표시자를 쓰고, `release-brew.sh` 가 `__VERSION__`·`__SHA256__` 과 함께 치환합니다. 공증·brew 배포는 활성 상태입니다 — Developer ID 서명 + 공증 프로파일은 키체인 `check-notary`, 산출 앱은 유니버설(arm64+x86_64)입니다.
 
 ## 구성 요소
 

@@ -2,11 +2,11 @@ import AppKit
 import Foundation
 
 /// SwiftPM 리소스 번들(check_check.bundle) 위치 해석기.
-///
+///s
 /// 실행파일 타깃의 `Bundle.module` 생성 코드는 앱 번들의 `Contents/Resources` 를 보지 않고
 /// (.app 루트와 **빌드 머신의 절대경로**만 확인) 실패 시 fatalError 로 즉사한다 — 개발 머신에서는
 /// 빌드 경로가 실존해 가려지지만 배포된 다른 맥에서는 앱이 시작하자마자 죽는다.
-/// 그래서 배포 앱의 실제 위치(Contents/Resources)를 먼저 보고, 개발/테스트 환경(swift run/test —
+/// 그래서 배포 앱의 실제 위치(Contents/Resources)를 먼저 보고, 개발/테스트 환경(swift run/test —ㅇ
 /// 빌드 디렉토리가 실존)에서만 Bundle.module 로 폴백한다.
 enum CheckResources {
     static let bundle: Bundle = {

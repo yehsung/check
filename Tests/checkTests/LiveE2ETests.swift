@@ -949,6 +949,89 @@ struct LiveE2ETests {
         obs("방치 자동마감 검증: ended_at≈마지막신호, duration≈\(expectedDuration)초, status=off_work")
     }
 
+    // 9c. 좀비 '근무중' 부활 차단(하트비트 부활 → before-trigger 강등, 20260717040000 마이그레이션 검증).
+    // E2E owner 로 근무 시작(열린 세션 생성) → admin 으로 그 세션을 강제 마감(ended_at 세팅) →
+    // 같은 계정 토큰으로 service.heartbeat(status='working') 부활 시도 → 열린 세션이 없으므로
+    // work_statuses 가 트리거로 off_work 로 강등되고 active_session_id 가 비워졌는지 단언.
+    // E2E 접두사 스코프 밖 접근 금지, 키 원문 출력 금지.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s09c_blockZombieWorkingRevivalViaTrigger() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+        let teamID = try #require(LiveE2EState.e2eTeamID)
+
+        let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer {
+            store.tickerTask?.cancel()
+            store.refreshTask?.cancel()
+        }
+        store.email = Emails.owner
+        store.password = Emails.password
+        await store.signIn()?.value
+        #expect(store.isSignedIn)
+        let accessToken = try #require(store.session?.accessToken)
+
+        // 결정적 셋업: 앞 시나리오가 남긴 잔존 열린 세션과 refresh 복원 개입을 제거한다.
+        // (1) 복원 루프를 start() 전에 멈추고, (2) admin 으로 열린 세션을 선제 정리해
+        // startWork 의 one_open_per_user 유니크 충돌(409 sessionAlreadyOpen)을 막는다.
+        store.refreshTask?.cancel()
+        try await ctx.admin.closeOpenSessions(userID: owner.userID)
+
+        // 복원으로 이미 근무중(startedAt != nil)이면 먼저 종료한다 — stop 이 서버 work_statuses 를 off_work 로
+        // 내려 좀비 상태를 지우므로, 이후 항상 새 세션으로 깨끗이 시작한다.
+        if store.startedAt != nil {
+            store.stop()
+            await store.syncTask?.value
+        }
+
+        // 근무 시작 → 새 열린 세션 생성 + status=working(이 시점엔 세션이 열려 있어 트리거 통과).
+        store.start()
+        await store.syncTask?.value
+        // 시작 동기화가 실제 성공했는지 확인 — startWork 가 409 등으로 실패하면 항목이 pendingItems 에 잔류한다.
+        #expect(store.pendingItems.isEmpty)
+
+        // 배경 하트비트 루프(startedAt != nil 이면 계속 working 송신)를 멈춰, 부활 시도를 딱 한 번으로 격리한다.
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+
+        let sessionID = try #require(store.currentSessionID)
+        let openReady = await waitUntil {
+            let rows = (try? await ctx.admin.sessionRows(userID: owner.userID, openOnly: true)) ?? []
+            // Postgres uuid 는 소문자로 정규화되고 앱의 UUID().uuidString 은 대문자다 — 대소문자 무시 비교.
+            return rows.contains { ($0["id"] as? String)?.lowercased() == sessionID.lowercased() }
+        }
+        if !openReady {
+            // 실패 진단(개인정보/키 미출력: id 접두 8자 + 마감 여부만 남긴다).
+            obs("s09c openReady 실패 — currentSessionID=\(String(sessionID.prefix(8)))…, pendingItems=\(store.pendingItems.count)")
+            let recent = (try? await ctx.admin.sessionRows(userID: owner.userID, openOnly: false)) ?? []
+            for row in recent.prefix(2) {
+                let idHead = (row["id"] as? String).map { String($0.prefix(8)) } ?? "nil"
+                let ended = row["ended_at"] is String ? "closed" : "open"
+                obs("s09c 세션 디버그: id=\(idHead)… \(ended)")
+            }
+        }
+        #expect(openReady)
+
+        // admin 으로 그 세션을 강제 마감(ended_at 세팅) — 자동마감이 방치 세션을 닫은 상황을 재현한다.
+        try await ctx.admin.closeOpenSessions(userID: owner.userID)
+        #expect(try await ctx.admin.sessionRows(userID: owner.userID, openOnly: true).count == 0)
+
+        // 좀비 부활 시도: 같은 계정 토큰으로 하트비트(status='working', active_session_id=닫힌 세션).
+        // 열린 세션이 없으므로 before-trigger 가 off_work 로 강등해야 한다(하트비트 부활 좀비 차단).
+        try await store.service.heartbeat(
+            accessToken: accessToken, teamID: teamID, userID: owner.userID, sessionID: sessionID
+        )
+
+        // 트리거 검증: status 는 off_work 로 강등, active_session_id 는 null.
+        let statusRows = try await ctx.admin.statusRows(userID: owner.userID)
+        let statusRow = try #require(statusRows.first)
+        #expect((statusRow["status"] as? String) == "off_work")
+        #expect(statusRow["active_session_id"] is NSNull)
+        // 부활은 세션을 되살리지 않는다 — 열린 세션은 여전히 없다.
+        #expect(try await ctx.admin.sessionRows(userID: owner.userID, openOnly: true).count == 0)
+        obs("좀비 부활 차단: 하트비트(working) → 트리거 강등 status=off_work, active_session_id=null")
+    }
+
     // 10. 정리 → E2E 계정 + E2E 팀 삭제 후 잔존 0 확인. E2E 접두사 밖(실사용) 팀 수는 변하지 않아야 한다.
     @Test(.enabled(if: LiveE2EEnv.enabled))
     func s10_cleanup() async throws {

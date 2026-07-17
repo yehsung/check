@@ -239,6 +239,9 @@ final class ReactionEngine {
     /// SCNView 렌더 루프 활성 여부(SwiftUI 관찰용). 패널 표시~근무종료 인사까지 true 로 유지해
     /// 근무종료 꾸벅 인사가 렌더되게 하고, 숨김 시 false 로 내려 렌더를 멈춘다(전력 배려).
     var renderActive = false
+    /// 근무 시작 제안(넛지) 말풍선 표시 여부(SwiftUI 관찰용). greetingText 채널과 별개로, 클릭 가능한
+    /// "근무 시작할까요?" 버튼형 말풍선을 띄운다. 컨트롤러가 showNudge/dismissNudge 에서 직접 토글한다.
+    var nudgePromptActive = false
 
     @ObservationIgnored private(set) var activeKind: ReactionKind?
     @ObservationIgnored private var activeUntil: Date = .distantPast
@@ -513,6 +516,16 @@ final class ReactionEngine {
         guard isSleeping else { return }
         endSleep()
         resetPose()
+    }
+
+    /// 넛지 등장 시선끌기: 인사(greetingNod)만 1회 재생한다(말풍선은 nudgePromptActive 가 담당). 상태 기계
+    /// (activeKind)는 건드리지 않아 이어질 리액션과 경합하지 않는다. 노드가 아직 없으면(첫 표시) 조용히 넘어간다.
+    func playNudgeNod() {
+        guard let node = reactionNode else { return }
+        resetPose()
+        node.runAction(ReactionActions.greetingNod(), forKey: Self.reactionActionKey)
+        setRenderFPS(Self.activeFPS)
+        scheduleFPSReset(after: ReactionKind.greeting(name: "").duration + 0.1)
     }
 
     private func startZzzLoop() {

@@ -21,6 +21,9 @@ final class CheckOverlayController {
     /// 근무 종료 인사(꾸벅, 0.4s) 후 패널을 숨기기까지의 상한(초). 인사가 끝난 직후 내려가고, 최대 1초를 넘지 않는다.
     static let farewellHideDeadline: TimeInterval = ReactionKind.commuteEnd.duration + 0.15
 
+    /// 넛지 말풍선 클릭 없이 자동으로 사라지기까지의 상한(초). 테스트는 짧은 값을 주입한다.
+    static let defaultNudgeTimeout: TimeInterval = 25
+
     let panel: NSPanel
     /// 리액션 조율기. 표시 중일 때만 이벤트를 받아 캐릭터 wrapper 에 SCNAction 을 건다.
     let engine: ReactionEngine
@@ -32,6 +35,19 @@ final class CheckOverlayController {
     private let store: WorkTimerStore
     /// 드래그로 옮긴 위치를 영속하는 저장소(테스트 격리를 위해 주입 가능).
     private let defaults: UserDefaults
+
+    // MARK: - 근무 시작 제안(넛지)
+    /// 넛지 감지 스케줄러(비근무·로그인 상태일 때만 가동). onNudge → showNudge.
+    private var nudgeScheduler: NudgeScheduler!
+    /// 넛지 말풍선을 현재 표시 중인지. 헤드리스 검증 지점(자격 판정·중복 표시 방지에 쓴다).
+    private(set) var isShowingNudge = false
+    /// 넛지 자동 사라짐 워치독.
+    private var nudgeTimeoutTask: Task<Void, Never>?
+    /// 넛지 자동 사라짐 상한(초). 주입 가능.
+    private let nudgeTimeout: TimeInterval
+    /// 넛지 말풍선 부분만 클릭을 받는 hitTest 호스팅 뷰(패널 contentView). 클릭 영역 갱신에 참조한다.
+    /// (자기 참조 클로저를 담은 루트 뷰를 얹은 뒤 대입하므로 init 순서상 IUO var 로 둔다.)
+    private var contentHostingView: BubbleHitTestingView<CheckOverlayRootView>!
 
     // 때리면 아파하기·드래그 이동: 패널 표시 중에만 켜지는 전역 좌클릭 모니터 3종(down/dragged/up).
     // 전역 모니터는 이벤트를 소비하지 않으므로 클릭 통과가 유지된다.
@@ -50,21 +66,29 @@ final class CheckOverlayController {
         store: WorkTimerStore,
         notificationCenter: NotificationCenter = .default,
         engine: ReactionEngine? = nil,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        nudgeTimeout: TimeInterval = CheckOverlayController.defaultNudgeTimeout,
+        workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter
     ) {
         self.notificationCenter = notificationCenter
         self.store = store
         self.defaults = defaults
+        self.nudgeTimeout = nudgeTimeout
         self.engine = engine ?? ReactionEngine()
         panel = Self.makePanel(size: Self.panelSize)
 
         let engineRef = self.engine
-        let root = CheckOverlayRootView(store: store, engine: engineRef) { [weak self] working in
-            self?.updateWorking(working)
-        }
-        let hosting = NSHostingView(rootView: root)
+        let root = CheckOverlayRootView(
+            store: store,
+            engine: engineRef,
+            onWorkingChange: { [weak self] working in self?.updateWorking(working) },
+            onNudgeTap: { [weak self] in self?.acceptNudge() },
+            onNudgeBubbleFrame: { [weak self] rect in self?.setNudgeBubbleFrame(rect) }
+        )
+        let hosting = BubbleHitTestingView(rootView: root)
         hosting.frame = NSRect(origin: .zero, size: Self.panelSize)
         hosting.autoresizingMask = [.width, .height]
+        contentHostingView = hosting
         panel.contentView = hosting
 
         // 스토어(소유 파일)가 감지한 마일스톤/팀원 인사 트리거를 엔진으로 흘린다. 표시 중일 때만 반응한다
@@ -74,8 +98,24 @@ final class CheckOverlayController {
             self.engine.request(kind)
         }
 
+        // 넛지 스케줄러: 자격은 store 로 구성(로그인·팀·비근무·오버레이 켜짐·표시중 아님), 발동은 showNudge 로.
+        nudgeScheduler = NudgeScheduler(
+            isEligible: { [weak self] in self?.isNudgeEligible ?? false },
+            onNudge: { [weak self] in self?.showNudge() },
+            workspaceNotifications: workspaceNotifications
+        )
+
         reposition()
         observeScreenChanges()
+    }
+
+    /// 넛지를 띄워도 되는 상태인지: 로그인됨·팀 있음·비근무·오버레이 켜짐·현재 넛지 표시 중 아님.
+    private var isNudgeEligible: Bool {
+        store.isSignedIn
+            && store.currentTeamID != nil
+            && store.snapshot.isWorking == false
+            && store.isOverlayEnabled
+            && isShowingNudge == false
     }
 
     /// 근무 상태 변화에 따라 패널을 표시/숨김한다. 표시 직전 항상 우상단으로 재배치한다.
@@ -84,9 +124,12 @@ final class CheckOverlayController {
     /// 표시 시: 폴짝 점프+스핀(commuteStart). 숨김 시: 앞으로 꾸벅 인사(commuteEnd) 후 패널을 내린다.
     /// 인사 완료 콜백은 렌더 루프가 돌 때 오고, 워치독이 최대 `farewellHideDeadline` 내 숨김을 보장한다.
     func updateWorking(_ isWorking: Bool) {
+        // 넛지 중 근무 상태/자격 변화가 오면 먼저 넛지를 정리한다(근무 시작이면 아래에서 패널을 그대로 유지).
+        if isShowingNudge { dismissNudge() }
         let visible = isWorking && store.isOverlayEnabled
         let wasVisible = shouldBeVisible
         shouldBeVisible = visible
+        defer { syncNudgeScheduler() }
         if visible {
             farewellTask?.cancel()
             farewellTask = nil
@@ -130,6 +173,81 @@ final class CheckOverlayController {
         guard !shouldBeVisible else { return }
         engine.renderActive = false
         panel.orderOut(nil)
+    }
+
+    // MARK: - 근무 시작 제안(넛지)
+
+    /// 넛지 스케줄러를 현재 store 상태에 맞춰 가동/정지한다(비근무·로그인이면 가동, 아니면 정지·카운트 리셋).
+    private func syncNudgeScheduler() {
+        if store.isSignedIn && store.snapshot.isWorking == false {
+            nudgeScheduler.start()
+        } else {
+            nudgeScheduler.stop()
+        }
+    }
+
+    /// 넛지 말풍선을 띄운다(스케줄러 발동 콜백). 우상단 재배치 후 패널을 올리고, 클릭을 받도록 통과를 잠시 해제한다
+    /// (hitTest 는 말풍선 프레임 안으로만 제한). 가벼운 인사 모션으로 시선을 끌고, 상한(nudgeTimeout) 뒤 자동으로 사라진다.
+    func showNudge() {
+        guard isShowingNudge == false, store.snapshot.isWorking == false, store.isOverlayEnabled else { return }
+        isShowingNudge = true
+        reposition()
+        engine.renderActive = true
+        engine.nudgePromptActive = true
+        panel.orderFrontRegardless()
+        // 넛지 동안만 클릭 통과 해제(말풍선 안만 hitTest 로 받고 나머지는 통과 — clickableRect 갱신 전엔 nil 이라 통과).
+        panel.ignoresMouseEvents = false
+        engine.playNudgeNod()
+        let timeout = nudgeTimeout
+        nudgeTimeoutTask?.cancel()
+        nudgeTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(timeout))
+            guard let self, !Task.isCancelled else { return }
+            self.dismissNudge()
+        }
+    }
+
+    /// dismissNudge/acceptNudge 가 공유하는 넛지 상태 정리. 말풍선/타임아웃/클릭 영역/클릭 통과를 원복한다.
+    private func clearNudgeState() {
+        isShowingNudge = false
+        nudgeTimeoutTask?.cancel()
+        nudgeTimeoutTask = nil
+        engine.nudgePromptActive = false
+        contentHostingView.clickableRect = nil
+        panel.ignoresMouseEvents = true
+    }
+
+    /// 넛지를 거둔다(타임아웃/자격 상실/근무 상태 변화). 근무중이 아니면 렌더를 멈추고 패널을 내린다
+    /// (근무 시작으로 인한 정리라면 이후 updateWorking(true) 가 패널을 그대로 유지하므로 여기서 내리지 않는다).
+    func dismissNudge() {
+        guard isShowingNudge else { return }
+        clearNudgeState()
+        if store.snapshot.isWorking == false {
+            engine.stopSleeping()
+            engine.renderActive = false
+            panel.orderOut(nil)
+        }
+    }
+
+    /// 말풍선 탭 → 명시적 근무 시작. 먼저 store.start() 로 근무를 시작하면 isWorking 이 true 가 되어, 이어지는
+    /// dismissNudge 가 패널을 내리지 않고 넛지 상태만 정리한다(이후 updateWorking(true) 가 등장 폴짝을 자연 처리).
+    func acceptNudge() {
+        guard isShowingNudge else { return }
+        store.start()
+        dismissNudge()
+    }
+
+    /// 넛지 말풍선 프레임(SwiftUI 좌표)을 받아 AppKit 좌표(y 반전)로 뒤집어 hitTest 클릭 영역을 갱신한다.
+    /// nil 이면 클릭 영역 제거(말풍선 없음).
+    func setNudgeBubbleFrame(_ swiftUIRect: CGRect?) {
+        guard let swiftUIRect else {
+            contentHostingView.clickableRect = nil
+            return
+        }
+        contentHostingView.clickableRect = BubbleHitGeometry.appKitRect(
+            fromSwiftUI: swiftUIRect,
+            containerHeight: contentHostingView.bounds.height
+        )
     }
 
     // MARK: - 때리면 아파하기 · 드래그 이동 (전역 마우스 모니터)
@@ -354,5 +472,31 @@ final class CheckOverlayController {
         // Space 전환/전체화면 앱 위에서도 유지, 창 순환(⌘`)에서 제외.
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         return panel
+    }
+}
+
+/// 넛지 말풍선 부분만 클릭을 받는 NSHostingView 서브클래스.
+///
+/// `clickableRect`(뷰 좌표계, bottom-left)가 설정돼 있고 클릭 지점이 그 안이면 SwiftUI(super)로 넘겨 말풍선
+/// 버튼이 눌리게 하고, 밖이면 nil 을 돌려 클릭을 뒤(작업 창)로 통과시킨다. 넛지가 아닐 때는 clickableRect=nil
+/// 이라 항상 통과하며, 패널 `ignoresMouseEvents=true`(넛지 아닐 때)와 이중 안전을 이룬다.
+final class BubbleHitTestingView<Content: View>: NSHostingView<Content> {
+    /// 클릭을 받을 영역(뷰 좌표계). nil 이면 모든 클릭을 통과시킨다.
+    var clickableRect: NSRect?
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let clickableRect else { return nil }
+        // point 는 superview 좌표계 → 내 좌표계로 변환해 클릭 영역과 비교한다.
+        let local = convert(point, from: superview)
+        return clickableRect.contains(local) ? super.hitTest(point) : nil
+    }
+
+    required init(rootView: Content) {
+        super.init(rootView: rootView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }

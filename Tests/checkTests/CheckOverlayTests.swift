@@ -169,6 +169,144 @@ func overlayTimerStaysVisibleDuringFarewellRender() {
     #expect(CheckOverlayRootView.showsTimer(isWorking: false, isOverlayEnabled: false, renderActive: false) == false)
     // 완전 유휴(근무 아님·인사 렌더 아님)엔 표시하지 않아 매초 재평가 낭비를 만들지 않는다.
     #expect(CheckOverlayRootView.showsTimer(isWorking: false, isOverlayEnabled: true, renderActive: false) == false)
+
+    // 넛지 중(비근무·nudgeActive)에는 아직 근무 전이라 캡슐이 00:00 으로 뜨지 않게 숨긴다(렌더는 켜져 있어도).
+    #expect(CheckOverlayRootView.showsTimer(isWorking: false, isOverlayEnabled: true, renderActive: true, nudgeActive: true) == false)
+    // 근무 중이면 nudge 여부와 무관하게 실제 시간을 보여 준다(공존하지 않는 상태지만 방어).
+    #expect(CheckOverlayRootView.showsTimer(isWorking: true, isOverlayEnabled: true, renderActive: false, nudgeActive: true))
+}
+
+// MARK: - 넛지 좌표 변환(SwiftUI top-left → AppKit bottom-left) 순수 함수
+
+@Test
+func bubbleHitGeometryFlipsSwiftUIRectToAppKit() {
+    // 높이 170 컨테이너에서 top-left (x=4, y=8, 100x30) 사각형은 AppKit(y-up)에서 minY = 170 - (8+30) = 132.
+    let swiftUI = CGRect(x: 4, y: 8, width: 100, height: 30)
+    let appKit = BubbleHitGeometry.appKitRect(fromSwiftUI: swiftUI, containerHeight: 170)
+    #expect(appKit.minX == 4)
+    #expect(appKit.width == 100)
+    #expect(appKit.height == 30)
+    #expect(appKit.minY == 132) // 170 - (8 + 30)
+    #expect(appKit.maxY == 162) // 170 - 8
+}
+
+// MARK: - 넛지 표시/해제/클릭/타임아웃 (컨트롤러)
+
+@MainActor
+@Test
+func overlayShowNudgeEnablesClicksBubbleAndClearsOnDismiss() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 70_000) })
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine,
+        defaults: isolatedOverlayDefaults(), workspaceNotifications: nil
+    )
+
+    // 넛지 전: 클릭 통과(방해 0), 표시 아님.
+    #expect(controller.isShowingNudge == false)
+    #expect(controller.panel.ignoresMouseEvents == true)
+
+    controller.showNudge()
+    #expect(controller.isShowingNudge == true)
+    #expect(engine.nudgePromptActive == true)
+    #expect(engine.renderActive == true)
+    // 넛지 동안만 클릭을 받도록 통과를 해제한다(hitTest 가 말풍선 안으로 제한).
+    #expect(controller.panel.ignoresMouseEvents == false)
+
+    // 말풍선 프레임 전달 → hitTest 클릭 영역이 잡힌다.
+    controller.setNudgeBubbleFrame(CGRect(x: 4, y: 8, width: 100, height: 30))
+    let hitView = controller.panel.contentView as? BubbleHitTestingView<CheckOverlayRootView>
+    #expect(hitView?.clickableRect != nil)
+
+    // 해제: 클릭 통과 복원 + 말풍선/클릭 영역 제거.
+    controller.dismissNudge()
+    #expect(controller.isShowingNudge == false)
+    #expect(engine.nudgePromptActive == false)
+    #expect(controller.panel.ignoresMouseEvents == true)
+    #expect(hitView?.clickableRect == nil)
+}
+
+@MainActor
+@Test
+func overlayAcceptNudgeStartsWorkAndRestoresClickThrough() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(),
+        defaults: isolatedOverlayDefaults(), workspaceNotifications: nil
+    )
+    controller.showNudge()
+    #expect(controller.isShowingNudge == true)
+    #expect(store.snapshot.isWorking == false)
+
+    // 헤드리스: 말풍선 탭 콜백을 직접 호출 → 명시적 클릭만 근무 시작으로 이어진다.
+    controller.acceptNudge()
+    #expect(store.snapshot.isWorking == true)
+    #expect(controller.isShowingNudge == false)
+    #expect(controller.panel.ignoresMouseEvents == true)
+
+    store.stop() // 정리(티커 중지).
+}
+
+@MainActor
+@Test
+func overlayNudgeAutoDismissesAfterTimeout() async {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(),
+        defaults: isolatedOverlayDefaults(), nudgeTimeout: 0.05, workspaceNotifications: nil
+    )
+    controller.showNudge()
+    #expect(controller.isShowingNudge == true)
+
+    // 클릭 없이 상한(주입 0.05초)이 지나면 자동으로 사라진다.
+    var dismissed = false
+    for _ in 0..<100 {
+        if controller.isShowingNudge == false {
+            dismissed = true
+            break
+        }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(dismissed)
+    #expect(controller.panel.ignoresMouseEvents == true)
+}
+
+@MainActor
+@Test
+func overlayWorkStartDuringNudgeClearsNudgeAndKeepsPanel() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 71_000) })
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine,
+        defaults: isolatedOverlayDefaults(), workspaceNotifications: nil
+    )
+    controller.showNudge()
+    #expect(controller.isShowingNudge == true)
+
+    // 근무가 다른 경로(팝오버 버튼)로 시작되면 updateWorking(true) 가 넛지를 즉시 정리하고 근무 오버레이로 유지한다.
+    controller.updateWorking(true)
+    #expect(controller.isShowingNudge == false)
+    #expect(engine.nudgePromptActive == false)
+    #expect(controller.panel.ignoresMouseEvents == true)
+    #expect(controller.shouldBeVisible == true)
+
+    controller.updateWorking(false) // 정리(전역 모니터 해제).
 }
 
 // MARK: - ACD-F5: attach 재생(지연 생성 래치로 attach 가 request 보다 늦게 실행돼도 소실 없음)

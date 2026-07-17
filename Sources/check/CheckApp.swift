@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import SwiftUI
 
 @main
@@ -32,6 +33,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         overlayController = CheckOverlayController(store: store)
+        // 로그인 시 자동 실행을 1회만 등록한다(사용자가 시스템 설정에서 끄면 다시 끼어들지 않는다).
+        LoginItemRegistrar.registerIfNeeded(
+            defaults: .standard,
+            isNotRegistered: { SMAppService.mainApp.status == .notRegistered },
+            register: { try? SMAppService.mainApp.register() }
+        )
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -46,5 +53,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
+    }
+}
+
+/// 로그인 자동 실행(SMAppService.mainApp) 1회 등록 결정. SMAppService 호출은 주입 클로저 뒤에 두어
+/// 테스트가 UserDefaults 와 클로저만으로 no-op/1회성을 검증하고, 실제 시스템 등록은 건드리지 않게 한다.
+enum LoginItemRegistrar {
+    /// 등록 시도 여부를 기록하는 플래그 키(있으면 다시 시도하지 않는다 — 사용자 수동 제거 존중).
+    static let registeredKey = "check.loginItemRegistered"
+
+    /// 플래그가 없고 아직 미등록일 때만 register 를 호출하고, 성공/실패와 무관하게 플래그를 남긴다.
+    /// 이미 플래그가 있으면 아무것도 하지 않는다(재등록 강제 금지). 실제 등록 시도를 했으면 true.
+    @discardableResult
+    static func registerIfNeeded(
+        defaults: UserDefaults,
+        isNotRegistered: () -> Bool,
+        register: () -> Void
+    ) -> Bool {
+        guard defaults.object(forKey: registeredKey) == nil else { return false }
+        if isNotRegistered() { register() }
+        defaults.set(true, forKey: registeredKey)
+        return true
     }
 }

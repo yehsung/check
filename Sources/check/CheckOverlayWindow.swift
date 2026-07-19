@@ -22,7 +22,8 @@ final class CheckOverlayController {
     static let farewellHideDeadline: TimeInterval = ReactionKind.commuteEnd.duration + 0.15
 
     /// 넛지 말풍선 클릭 없이 자동으로 사라지기까지의 상한(초). 테스트는 짧은 값을 주입한다.
-    static let defaultNudgeTimeout: TimeInterval = 25
+    /// 25초는 구석에 떠서 놓치기 쉽다는 실사용 피드백으로 60초로 늘렸다(쿨다운 60분은 그대로).
+    static let defaultNudgeTimeout: TimeInterval = 60
 
     let panel: NSPanel
     /// 리액션 조율기. 표시 중일 때만 이벤트를 받아 캐릭터 wrapper 에 SCNAction 을 건다.

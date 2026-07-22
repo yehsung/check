@@ -27,6 +27,10 @@ enum CheckCharacter3DScene {
     /// 서로 간섭하지 않게 한다. makeNSView 가 이 이름으로 wrapper 를 찾아 리액션 엔진에 연결한다.
     static let reactionWrapperName = "check.reactionWrapper"
 
+    /// 드래그 방향 바라보기 전용 노드 이름. 리액션 wrapper(바깥, resetPose 가 euler 를 0 으로 리셋)와 idle
+    /// 캐릭터(안쪽, 부유/살랑) 사이에 끼워, facing 회전이 리액션 resetPose·commuteStart y스핀과 충돌하지 않게 한다.
+    static let facingWrapperName = "check.facingWrapper"
+
     /// 오버레이용으로 완성된 씬(재질 unlit·투명 배경·카메라·애니메이션 포함). 로드 실패 시 nil.
     static func makeScene(animated: Bool = true) -> SCNScene? {
         guard let scene = loadModelScene() else { return nil }
@@ -38,18 +42,93 @@ enum CheckCharacter3DScene {
         guard let character = scene.rootNode.childNodes.first else { return scene }
 
         // 캐릭터를 wrapper 로 감싼다: 리액션은 wrapper(바깥), idle 부유/회전은 캐릭터(안쪽)에 걸어
-        // 둘이 같은 트랜스폼을 두고 다투지 않게 분리한다.
+        // 둘이 같은 트랜스폼을 두고 다투지 않게 분리한다. 그 사이에 facing 노드를 끼워 드래그 방향 바라보기
+        // 회전을 리액션/idle 과 독립시킨다(wrapper → facing → character).
         let wrapper = SCNNode()
         wrapper.name = reactionWrapperName
+        let facing = SCNNode()
+        facing.name = facingWrapperName
         character.removeFromParentNode()
-        wrapper.addChildNode(character)
+        facing.addChildNode(character)
+        wrapper.addChildNode(facing)
         scene.rootNode.addChildNode(wrapper)
 
         addFramingCamera(to: scene)
+        addClosedEyeNodes(to: character)
         if animated {
             addIdleAnimations(to: character)
         }
         return scene
+    }
+
+    // MARK: - 감은 눈 오버레이 노드(sleeping 시 얼굴 눈 자리에 얹는 얇은 감은 선)
+
+    /// 감은 눈 선 노드 이름(좌/우). 엔진이 sleeping 진입/이탈 시 이 노드의 isHidden 을 토글한다.
+    static let closedEyeLeftName = "check.closedEye.L"
+    static let closedEyeRightName = "check.closedEye.R"
+
+    /// 두 눈의 얼굴 표면 3D 좌표(캐릭터 로컬). 오프스크린 hitTest 로 실측한 고정값(에셋 고정 배포물).
+    /// 화면 왼눈 ← (-0.277,0.418,0.531), 오른눈 ← (0.250,0.434,0.526).
+    static let closedEyeAnchors: [(name: String, position: SCNVector3)] = [
+        (closedEyeLeftName, SCNVector3(-0.277, 0.418, 0.531)),
+        (closedEyeRightName, SCNVector3(0.250, 0.434, 0.526))
+    ]
+
+    /// 감은 눈 선 노드 2개를 캐릭터(안쪽, idle 부유/살랑과 함께 움직임)에 자식으로 붙인다. 기본 숨김.
+    /// UV 아틀라스가 저폴리로 눈을 여러 조각으로 흩어 텍스처에 깔끔한 감은 선을 그리기 어려우므로, 선은 얼굴
+    /// 표면 바로 앞에 얹는 얇은 평면(빌보드 아닌 +Z 정면 — 칠해진 듯 자연스럽게)으로 그린다. 커버(텍스처)로 뜬 눈을
+    /// 지우고 그 위에 이 선을 얹어 "감은 눈"을 완성한다.
+    static func addClosedEyeNodes(to character: SCNNode) {
+        let image = closedEyeLineImage()
+        for (name, pos) in closedEyeAnchors {
+            let node = makeClosedEyeNode(image: image)
+            node.name = name
+            // 표면보다 살짝 앞(+z)에 둬 z-파이팅/가림을 피한다.
+            node.position = SCNVector3(pos.x, pos.y, pos.z + 0.035)
+            node.isHidden = true
+            character.addChildNode(node)
+        }
+    }
+
+    /// 감은 선 평면 노드(unlit·알파·깊이버퍼 무시로 항상 위에). 정면(+Z)을 향해 얹혀 선이 화면상 수평으로 보인다.
+    static func makeClosedEyeNode(image: NSImage, width: CGFloat = 0.34, height: CGFloat = 0.2) -> SCNNode {
+        let plane = SCNPlane(width: width, height: height)
+        let material = SCNMaterial()
+        material.lightingModel = .constant
+        material.diffuse.contents = image
+        material.isDoubleSided = true
+        material.blendMode = .alpha
+        // 얼굴 돌출(코/볼)에 가리지 않게 깊이 테스트를 끄고 렌더 순서를 뒤로 미룬다.
+        material.readsFromDepthBuffer = false
+        material.writesToDepthBuffer = false
+        plane.materials = [material]
+        let node = SCNNode(geometry: plane)
+        node.renderingOrder = 20
+        return node
+    }
+
+    /// 감은 눈 선 이미지(투명 배경 + 진한 곡선). 가운데가 살짝 내려앉은 잔잔한 눈웃음(ᵕ) 느낌의 감은 눈.
+    static func closedEyeLineImage(width: Int = 160, height: Int = 96) -> NSImage {
+        let cs = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return NSImage(size: NSSize(width: width, height: height)) }
+        ctx.clear(CGRect(x: 0, y: 0, width: width, height: height))
+        let w = CGFloat(width), h = CGFloat(height)
+        // CGContext 는 bottom-left 원점(y 위로 증가). 가운데가 아래로 내려앉은 곡선(ᵕ): 양 끝이 위, 중앙이 아래.
+        let inset = w * 0.16
+        let endY = h * 0.62, midY = h * 0.34
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: inset, y: endY))
+        path.addQuadCurve(to: CGPoint(x: w - inset, y: endY), control: CGPoint(x: w / 2, y: midY))
+        ctx.setStrokeColor(CGColor(red: 0.19, green: 0.12, blue: 0.17, alpha: 1)) // 속눈썹처럼 진한 자주-검정.
+        ctx.setLineWidth(h * 0.16)
+        ctx.setLineCap(.round)
+        ctx.addPath(path)
+        ctx.strokePath()
+        guard let cg = ctx.makeImage() else { return NSImage(size: NSSize(width: width, height: height)) }
+        return NSImage(cgImage: cg, size: NSSize(width: width, height: height))
     }
 
     /// 모든 재질을 unlit(`.constant`)로 전환하고, 상주 텍스처를 다운스케일한다.
@@ -194,6 +273,217 @@ enum CheckCharacter3DScene {
     }
 }
 
+/// 자는(sleeping) 동안 쓰는 "감은 눈" 텍스처 생성기 — **눈을 피부로 덮는 부분**만 담당한다
+/// (감은 선은 3D 오버레이 노드 `CheckCharacter3DScene.makeClosedEyeNode` 가 얹는다).
+///
+/// 아잉은 리깅/블렌드셰이프가 없어 눈꺼풀을 애니메이트할 수 없다. 그래서 sleeping 진입 시 디퓨즈 텍스처의 두 눈을
+/// 주변 피부색(라벤더)으로 덮은 버전으로 통째로 교체하고, 깨면 원복한다.
+///
+/// 왜 ROI 가 아니라 전역 검출인가: 이 에셋(aing.usdz)의 UV 는 저폴리라 **한 눈이 아틀라스 여러 조각으로 심하게
+/// 흩어져** 있다(왼눈은 아틀라스 상단·하단·우하단에 파편으로 분산, 오른눈과 입 조각까지 서로 얽힘). 오프스크린
+/// 검수 결과 `isEye`(피부·분홍 아님) 픽셀은 화면상 **두 눈과 입에만** 존재하고 몸/귀 그림자는 전부 피부로
+/// 분류되므로, "isEye 전역 검출 + 입 보호"가 파편을 일일이 ROI 로 쫓는 것보다 견고하다.
+///
+/// 커버 품질 핵심:
+/// 1) 채우기는 경계(피부)에서 안쪽으로 번지는 **반복 평균 인페인트** — 국소 피부 그라디언트에 자연히 맞물려
+///    이음새·흰 끼가 없다(단색 중앙값을 통째로 붓지 않는다).
+/// 2) 입은 **진한 빨강(입 안쪽) 근처 보호막**으로 지킨다(볼터치 분홍은 밝아 보호 대상에서 빠지므로 눈 커버를
+///    방해하지 않는다). 3) 안티에일리어싱 눈 테두리까지 살아남지 않게 커버 마스크를 공격적으로 팽창한다.
+enum SleepEyeTexture {
+    /// 원본 디퓨즈 CGImage 로부터 "눈을 덮은" 버전을 만든다. 해상도 무관. 실패 시 nil(교체 안 함).
+    static func closedEyesImage(from original: CGImage) -> CGImage? {
+        let w = original.width, h = original.height
+        guard w >= 64, h >= 64 else { return nil }
+        let bytesPerRow = w * 4
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: h * bytesPerRow)
+        defer { buffer.deallocate() }
+        guard let ctx = CGContext(
+            data: buffer, width: w, height: h, bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        ctx.draw(original, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var buf = PixelBuffer(data: buffer, width: w, height: h)
+        coverEyes(in: &buf)
+        return ctx.makeImage()
+    }
+
+    // MARK: - 픽셀 버퍼 래퍼(RGBA8, premultipliedLast). 좌표는 CGImage 와 동일(원점 좌상단).
+
+    struct PixelBuffer {
+        let data: UnsafeMutablePointer<UInt8>
+        let width: Int
+        let height: Int
+        @inline(__always) func index(_ x: Int, _ y: Int) -> Int { (y * width + x) * 4 }
+        @inline(__always) func rgb(_ x: Int, _ y: Int) -> (Int, Int, Int) {
+            let i = index(x, y); return (Int(data[i]), Int(data[i + 1]), Int(data[i + 2]))
+        }
+        @inline(__always) func set(_ x: Int, _ y: Int, _ r: Int, _ g: Int, _ b: Int) {
+            let i = index(x, y)
+            data[i] = UInt8(clamping: r); data[i + 1] = UInt8(clamping: g)
+            data[i + 2] = UInt8(clamping: b); data[i + 3] = 255
+        }
+    }
+
+    // MARK: - 색 분류(실측 색값 기반)
+
+    @inline(__always) static func luma(_ r: Int, _ g: Int, _ b: Int) -> Int {
+        (r * 299 + g * 587 + b * 114) / 1000
+    }
+    /// 라벤더 피부: 파랑>=빨강>초록의 시원한 보라빛에 충분히 밝다. (예: 223,208,253)
+    @inline(__always) static func isSkin(_ r: Int, _ g: Int, _ b: Int) -> Bool {
+        b >= r && r > g && b > g + 18 && luma(r, g, b) > 120
+    }
+    /// 볼터치 분홍: 빨강>파랑의 따뜻한 밝은 색. (예: 250,171,200) — 눈으로 오검출하지 않게 제외.
+    @inline(__always) static func isPink(_ r: Int, _ g: Int, _ b: Int) -> Bool {
+        r > b && r > g + 40 && r > 200 && luma(r, g, b) > 120
+    }
+    /// 눈 픽셀(iris/흰자/하이라이트/속눈썹): 피부도 분홍도 아닌 것. 어둡거나(눈동자·속눈썹) 중성 흰색(흰자)이다.
+    @inline(__always) static func isEye(_ r: Int, _ g: Int, _ b: Int) -> Bool {
+        !isSkin(r, g, b) && !isPink(r, g, b)
+    }
+    /// 입 안쪽 진한 빨강(예: 150,12,47 / 181,39,84). **초록이 매우 낮은** 채도 높은 붉은색이라, 갈색빛 눈동자·
+    /// 속눈썹(초록 68~76)과 구분된다(실측: 입/머리 빨강 g≤61, iris 오검출 g≥68). 이 근처를 보호막으로 삼아
+    /// 입(어두운 입술 라인 포함)이 눈 커버에 지워지지 않게 한다. (추가로 커버 단계에서 '큰 덩어리'만 보호에 쓴다.)
+    @inline(__always) static func isMouthRed(_ r: Int, _ g: Int, _ b: Int) -> Bool {
+        r > 120 && g < 66 && b < 150 && r >= g + 55
+    }
+
+    // MARK: - 전역 눈 커버(입 보호 + 반복 인페인트)
+
+    static func coverEyes(in buf: inout PixelBuffer) {
+        let w = buf.width, h = buf.height, n = w * h
+        var eye = [Bool](repeating: false, count: n)
+        var red = [Bool](repeating: false, count: n)
+        for y in 0..<h {
+            for x in 0..<w {
+                let (r, g, b) = buf.rgb(x, y)
+                let idx = y * w + x
+                if isMouthRed(r, g, b) { red[idx] = true }
+                else if isEye(r, g, b) { eye[idx] = true }
+            }
+        }
+        // 입 보호막: 진한 빨강 중 '큰 덩어리'(입·머리)만 남겨(흩어진 iris 오검출 제거) 반경 R 팽창.
+        // 이 안의 눈 픽셀은 덮지 않는다(입 손상 금지).
+        let minRedComponent = max(30, w * h / 6000)
+        let redBlobs = largeComponents(red, rw: w, rh: h, minSize: minRedComponent)
+        let protectR = max(3, Int((CGFloat(w) * 0.012).rounded()))
+        let protected = dilateMask(redBlobs, rw: w, rh: h, radius: protectR)
+        // 커버 마스크 = 눈 & 보호막 밖. 안티에일리어싱 눈 테두리까지 공격적으로 팽창.
+        var cover = [Bool](repeating: false, count: n)
+        for i in 0..<n { cover[i] = eye[i] && !protected[i] }
+        let dilateR = max(2, Int((CGFloat(w) * 0.008).rounded()))
+        cover = dilateMask(cover, rw: w, rh: h, radius: dilateR)
+        // 팽창이 입 보호막을 다시 침범하지 않게 한 번 더 뺀다.
+        for i in 0..<n where protected[i] { cover[i] = false }
+        inpaint(&buf, cover: cover)
+    }
+
+    /// 반복 평균 인페인트: 커버 픽셀을 '미지'로 두고, **피부색으로 분류된** 이웃(원 피부/이미 채운 픽셀)의 평균으로
+    /// 경계부터 안쪽으로 번져 채운다. 어두운(눈동자·속눈썹)·보호된(입) 이웃은 소스에서 배제해 어두운 색이 번지지
+    /// 않게 한다. 국소 피부색을 확산시키므로 그라디언트에 자연히 맞물려 이음새가 없다. 끝까지 못 채운 소수 픽셀은
+    /// 전역 피부 중앙값으로 마감한다(어두운 잔존 0 보장).
+    static func inpaint(_ buf: inout PixelBuffer, cover: [Bool]) {
+        let w = buf.width, h = buf.height
+        var unknown = cover
+        var indices = [Int]()
+        for i in 0..<(w * h) where unknown[i] { indices.append(i) }
+        guard !indices.isEmpty else { return }
+        var guardIter = 0
+        while !indices.isEmpty && guardIter < 8192 {
+            guardIter += 1
+            var updates = [(Int, Int, Int, Int)]()
+            updates.reserveCapacity(indices.count)
+            for idx in indices {
+                let x = idx % w, y = idx / w
+                var sr = 0, sg = 0, sb = 0, cnt = 0
+                var dy = -1
+                while dy <= 1 {
+                    var dx = -1
+                    while dx <= 1 {
+                        if !(dx == 0 && dy == 0) {
+                            let nx = x + dx, ny = y + dy
+                            if nx >= 0, nx < w, ny >= 0, ny < h, !unknown[ny * w + nx] {
+                                let (r, g, b) = buf.rgb(nx, ny)
+                                // 피부색 소스만 확산(어두운·붉은 이웃 배제 → 어두운 번짐 0).
+                                if isSkin(r, g, b) { sr += r; sg += g; sb += b; cnt += 1 }
+                            }
+                        }
+                        dx += 1
+                    }
+                    dy += 1
+                }
+                if cnt > 0 { updates.append((idx, sr / cnt, sg / cnt, sb / cnt)) }
+            }
+            if !updates.isEmpty {
+                for (idx, r, g, b) in updates { buf.set(idx % w, idx / w, r, g, b); unknown[idx] = false }
+                indices = indices.filter { unknown[$0] }
+            } else {
+                break // 더 번질 피부 소스가 없다 — 남은 픽셀은 아래 중앙값으로 마감.
+            }
+        }
+        // 마감: 끝까지 못 채운 픽셀은 전역 피부 중앙값으로(어두운 잔존 방지).
+        if !indices.isEmpty {
+            var rs = [Int](), gs = [Int](), bs = [Int]()
+            for i in stride(from: 0, to: w * h, by: 7) {
+                let x = i % w, y = i / w
+                let (r, g, b) = buf.rgb(x, y)
+                if !cover[i], isSkin(r, g, b) { rs.append(r); gs.append(g); bs.append(b) }
+            }
+            if !rs.isEmpty {
+                rs.sort(); gs.sort(); bs.sort()
+                let mr = rs[rs.count / 2], mg = gs[gs.count / 2], mb = bs[bs.count / 2]
+                for idx in indices { buf.set(idx % w, idx / w, mr, mg, mb) }
+            }
+        }
+    }
+
+    /// 체비셰프 반경 `radius` 팽창(사각 구조요소, 분리형 수평→수직). 마스크를 새 마스크로.
+    static func dilateMask(_ mask: [Bool], rw: Int, rh: Int, radius: Int) -> [Bool] {
+        guard radius > 0 else { return mask }
+        var horiz = [Bool](repeating: false, count: rw * rh)
+        for y in 0..<rh {
+            for x in 0..<rw where mask[y * rw + x] {
+                let x0 = max(0, x - radius), x1 = min(rw - 1, x + radius)
+                for nx in x0...x1 { horiz[y * rw + nx] = true }
+            }
+        }
+        var out = [Bool](repeating: false, count: rw * rh)
+        for y in 0..<rh {
+            for x in 0..<rw where horiz[y * rw + x] {
+                let y0 = max(0, y - radius), y1 = min(rh - 1, y + radius)
+                for ny in y0...y1 { out[ny * rw + x] = true }
+            }
+        }
+        return out
+    }
+
+    /// 4-이웃 연결요소 중 크기 `minSize` 이상만 남긴 마스크(작고 흩어진 오검출 덩어리 제거). BFS.
+    static func largeComponents(_ mask: [Bool], rw: Int, rh: Int, minSize: Int) -> [Bool] {
+        let n = rw * rh
+        var label = [Int](repeating: 0, count: n)
+        var out = [Bool](repeating: false, count: n)
+        var stack = [Int]()
+        var cur = 0
+        for start in 0..<n where mask[start] && label[start] == 0 {
+            cur += 1
+            label[start] = cur
+            stack.removeAll(keepingCapacity: true)
+            stack.append(start)
+            var members = [Int]()
+            while let p = stack.popLast() {
+                members.append(p)
+                let x = p % rw, y = p / rw
+                if x > 0, mask[p - 1], label[p - 1] == 0 { label[p - 1] = cur; stack.append(p - 1) }
+                if x < rw - 1, mask[p + 1], label[p + 1] == 0 { label[p + 1] = cur; stack.append(p + 1) }
+                if y > 0, mask[p - rw], label[p - rw] == 0 { label[p - rw] = cur; stack.append(p - rw) }
+                if y < rh - 1, mask[p + rw], label[p + rw] == 0 { label[p + rw] = cur; stack.append(p + rw) }
+            }
+            if members.count >= minSize { for m in members { out[m] = true } }
+        }
+        return out
+    }
+}
+
 /// 근무 시간 라벨(캡슐). 모노스페이스 숫자에 반투명 캡슐 배경을 얹어 캐릭터 위에서도 읽히게 한다.
 struct CheckOverlayTimerLabel: View {
     let text: String
@@ -281,17 +571,57 @@ struct CheckGreetingBubble: View {
     }
 }
 
+/// 근무 시작 제안(넛지) 말풍선. 인사 말풍선(CheckGreetingBubble) 스타일을 그대로 재사용하되, 탭하면 근무를
+/// 시작하는 버튼이다. 캐릭터 왼쪽 위(인사 위치)에 뜬다.
+struct CheckNudgePromptBubble: View {
+    static let text = "근무 시작할까요?"
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            CheckGreetingBubble(text: Self.text)
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+    }
+}
+
+/// 넛지 말풍선의 실제 프레임(SwiftUI 좌표, top-left)을 상위로 올리는 PreferenceKey. 컨트롤러가 이 값을
+/// AppKit 좌표로 뒤집어 hitTest 클릭 영역으로 쓴다. nil 이면 말풍선 없음(클릭 영역 제거).
+struct NudgeBubbleFramePreferenceKey: PreferenceKey {
+    static let defaultValue: CGRect? = nil
+    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+        value = nextValue() ?? value
+    }
+}
+
+/// SwiftUI↔AppKit 사각형 좌표 변환(순수 함수). 부분 클릭 영역 계산의 결정적 검증 지점.
+enum BubbleHitGeometry {
+    /// SwiftUI 좌표(top-left 원점, y 아래로 증가)의 사각형을, 높이 `containerHeight` 인 AppKit 좌표
+    /// (bottom-left 원점, y 위로 증가)로 y 반전 변환한다.
+    static func appKitRect(fromSwiftUI rect: CGRect, containerHeight: CGFloat) -> CGRect {
+        CGRect(x: rect.minX, y: containerHeight - rect.maxY, width: rect.width, height: rect.height)
+    }
+}
+
 /// 3D 캐릭터 + 근무 시간 라벨 합성. 라벨은 얼굴(볼) 바로 아래 몸통 중상부에 얹는다.
-/// 리액션 엔진을 관찰해 팀원 출근 인사·근무 시작 안내 등 말풍선을 캐릭터 왼쪽 위에 겹쳐 띄운다.
+/// 리액션 엔진을 관찰해 팀원 출근 인사 말풍선(및 근무 시작 제안 넛지 말풍선)을 캐릭터 왼쪽 위에 겹쳐 띄운다.
 struct CheckOverlayCharacterView: View {
     /// 근무 시간 라벨의 세로 위치 비율(0=상단, 1=하단). 볼 아래 몸통 중상부(얼굴은 안 가림)에 오도록 54%.
     static let timerVerticalFraction: CGFloat = 0.49
+    /// 넛지 말풍선 프레임 측정용 좌표 공간 이름(콘텐츠 top-left 기준).
+    static let nudgeCoordinateSpace = "check.nudgePanel"
 
     let elapsedSeconds: Int
     let isActive: Bool
-    /// 타이머 라벨 표시 여부. 루트 뷰가 showsTimer 로 판정해 넘긴다.
+    /// 타이머 라벨 표시 여부(넛지 중에는 false — 00:00 캡슐이 뜨지 않게). 루트 뷰가 showsTimer 로 판정해 넘긴다.
     var showsTimer: Bool = true
     var engine: ReactionEngine?
+    /// 넛지 말풍선 탭 콜백(컨트롤러가 store.start 로 잇는다).
+    var onNudgeTap: (() -> Void)?
+    /// 넛지 말풍선 프레임(SwiftUI 좌표) 변화 콜백. @MainActor 클로저라 @Sendable 경계(onPreferenceChange)를
+    /// 넘어 안전하게 캡처된다.
+    var onNudgeBubbleFrame: (@MainActor (CGRect?) -> Void)?
 
     /// 3D 뷰 지연 생성 래치. 한 번이라도 표시된 뒤에는 계속 마운트해 둔다(파괴-재생성은 Metal 전역 메모리를
     /// 거의 회수하지 못하므로). 첫 표시 전까지는 SCNView+USDZ+Metal 로드를 미뤄 유휴 RSS 를 절감한다.
@@ -301,6 +631,7 @@ struct CheckOverlayCharacterView: View {
         GeometryReader { geo in
             // 렌더 루프는 엔진의 renderActive(패널 표시~근무종료 인사)로 몬다. 엔진이 없으면 isActive 로 폴백한다.
             let renderActive = engine?.renderActive ?? isActive
+            let nudgeActive = engine?.nudgePromptActive == true
             ZStack(alignment: .topLeading) {
                 if renderActive || hasEverShown {
                     CheckCharacter3DView(isActive: renderActive, engine: engine)
@@ -316,7 +647,20 @@ struct CheckOverlayCharacterView: View {
                             y: geo.size.height * Self.timerVerticalFraction
                         )
                 }
-                if let engine, let greeting = engine.greetingText {
+                if nudgeActive {
+                    CheckNudgePromptBubble(onTap: { onNudgeTap?() })
+                        .background(
+                            GeometryReader { bubbleGeo in
+                                Color.clear.preference(
+                                    key: NudgeBubbleFramePreferenceKey.self,
+                                    value: bubbleGeo.frame(in: .named(Self.nudgeCoordinateSpace))
+                                )
+                            }
+                        )
+                        .padding(.leading, 4)
+                        .padding(.top, 8)
+                        .transition(.opacity)
+                } else if let engine, let greeting = engine.greetingText {
                     CheckGreetingBubble(text: greeting)
                         .padding(.leading, 4)
                         .padding(.top, 8)
@@ -324,9 +668,17 @@ struct CheckOverlayCharacterView: View {
                         .id(greeting)
                 }
             }
+            .coordinateSpace(name: Self.nudgeCoordinateSpace)
             .animation(.easeInOut(duration: 0.25), value: engine?.greetingText)
+            .animation(.easeInOut(duration: 0.25), value: nudgeActive)
             .onChange(of: renderActive, initial: true) { _, active in
                 if active { hasEverShown = true }
+            }
+            .onPreferenceChange(NudgeBubbleFramePreferenceKey.self) { [onNudgeBubbleFrame] rect in
+                // onPreferenceChange 액션은 @Sendable — @MainActor 클로저(onNudgeBubbleFrame)와 CGRect 만
+                // 캡처(둘 다 Sendable)해 MainActor 로 넘긴다.
+                guard let onNudgeBubbleFrame else { return }
+                Task { @MainActor in onNudgeBubbleFrame(rect) }
             }
         }
     }
@@ -340,12 +692,17 @@ struct CheckOverlayRootView: View {
     let store: WorkTimerStore
     var engine: ReactionEngine?
     var onWorkingChange: (Bool) -> Void
+    /// 넛지 말풍선 탭 콜백(컨트롤러가 store.start 로 잇는다).
+    var onNudgeTap: (() -> Void)?
+    /// 넛지 말풍선 프레임 변화 콜백(컨트롤러가 hitTest 클릭 영역으로 잇는다).
+    var onNudgeBubbleFrame: (@MainActor (CGRect?) -> Void)?
 
     /// 타이머 라벨을 실제 오늘 누적으로 보여줄지 판정한다. 근무 중이거나, 근무를 막 멈췄어도 근무종료 인사가
     /// 아직 렌더 중(renderActive)이면 실제 시간을 유지해 인사 0.55초 동안 라벨이 00:00 으로 플래시되지 않게 한다.
     /// renderActive 는 숨김 시 항상 false 라, 유휴에서 body 가 매초 재평가되던 낭비를 없애는 목표는 보존된다.
-    static func showsTimer(isWorking: Bool, isOverlayEnabled: Bool, renderActive: Bool) -> Bool {
-        isOverlayEnabled && (isWorking || renderActive)
+    /// 넛지 중(비근무·nudgeActive)에는 아직 근무 전이라 캡슐이 00:00 으로 뜨지 않게 숨긴다.
+    static func showsTimer(isWorking: Bool, isOverlayEnabled: Bool, renderActive: Bool, nudgeActive: Bool = false) -> Bool {
+        isOverlayEnabled && (isWorking || renderActive) && !(nudgeActive && !isWorking)
     }
 
     var body: some View {
@@ -354,13 +711,16 @@ struct CheckOverlayRootView: View {
         let showing = Self.showsTimer(
             isWorking: store.snapshot.isWorking,
             isOverlayEnabled: store.isOverlayEnabled,
-            renderActive: engine?.renderActive == true
+            renderActive: engine?.renderActive == true,
+            nudgeActive: engine?.nudgePromptActive == true
         )
         return CheckOverlayCharacterView(
             elapsedSeconds: showing ? store.todayDuration : 0,
             isActive: store.snapshot.isWorking,
             showsTimer: showing,
-            engine: engine
+            engine: engine,
+            onNudgeTap: onNudgeTap,
+            onNudgeBubbleFrame: onNudgeBubbleFrame
         )
         .onChange(of: store.snapshot.isWorking, initial: true) { _, working in
             onWorkingChange(working)

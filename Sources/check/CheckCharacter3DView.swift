@@ -74,17 +74,25 @@ enum CheckCharacter3DScene {
         (closedEyeRightName, SCNVector3(0.250, 0.434, 0.526))
     ]
 
+    /// 감은 선을 눈 앵커(눈 세로 중앙)에서 아래로 내리는 로컬 Y 오프셋. 앵커는 뜬 눈의 세로 중앙이라, 그대로
+    /// 얹으면 감은 선이 눈 한가운데에 떠 부자연스럽다. 감은 눈꺼풀이 내려온 모습이 되도록 눈 영역 세로 높이의
+    /// 절반가량(하단 경계)만큼 내린다. 값은 오프스크린 렌더 육안 반복으로 잡았다: 280×340 렌더에서 뜬 눈 세로
+    /// span≈[92..121]px(≈29px), 선 중앙이 하단 1/3(y≥111)에 앉도록 조정. 1px ≈ 0.0084 로컬유닛이라 앵커
+    /// 중앙(선 y≈104) 대비 약 11px 하강해 선 중앙 y≈116(하단 경계)에 위치한다.
+    static let closedEyeLowering: CGFloat = 0.095
+
     /// 감은 눈 선 노드 2개를 캐릭터(안쪽, idle 부유/살랑과 함께 움직임)에 자식으로 붙인다. 기본 숨김.
     /// UV 아틀라스가 저폴리로 눈을 여러 조각으로 흩어 텍스처에 깔끔한 감은 선을 그리기 어려우므로, 선은 얼굴
     /// 표면 바로 앞에 얹는 얇은 평면(빌보드 아닌 +Z 정면 — 칠해진 듯 자연스럽게)으로 그린다. 커버(텍스처)로 뜬 눈을
-    /// 지우고 그 위에 이 선을 얹어 "감은 눈"을 완성한다.
+    /// 지우고 그 위에 이 선을 얹어 "감은 눈"을 완성한다. 선은 앵커(눈 세로 중앙)에서 `closedEyeLowering` 만큼
+    /// 아래로 내려 눈 하단 경계(내려온 눈꺼풀)에 앉힌다.
     static func addClosedEyeNodes(to character: SCNNode) {
         let image = closedEyeLineImage()
         for (name, pos) in closedEyeAnchors {
             let node = makeClosedEyeNode(image: image)
             node.name = name
-            // 표면보다 살짝 앞(+z)에 둬 z-파이팅/가림을 피한다.
-            node.position = SCNVector3(pos.x, pos.y, pos.z + 0.035)
+            // 표면보다 살짝 앞(+z)에 둬 z-파이팅/가림을 피하고, 눈 세로 중앙에서 하단 경계로 내린다(-y).
+            node.position = SCNVector3(pos.x, pos.y - closedEyeLowering, pos.z + 0.035)
             node.isHidden = true
             character.addChildNode(node)
         }

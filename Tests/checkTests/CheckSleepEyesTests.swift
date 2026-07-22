@@ -174,6 +174,19 @@ func sceneAddsHiddenClosedEyeNodes() throws {
     // 얼굴 표면 앞(대략 좌우 대칭, 위쪽)에 놓였는지 개략 검증.
     #expect(left.position.x < 0 && right.position.x > 0)
     #expect(left.position.y > 0 && right.position.y > 0)
+
+    // 감은 선은 눈 앵커(뜬 눈 세로 중앙)에서 `closedEyeLowering` 만큼 아래(-y)로 내려앉는다 — 눈꺼풀이
+    // 하단 경계로 내려온 자연스러운 모습. 실제 배치 y 가 앵커 y 보다 정확히 그만큼 낮은지 검증한다.
+    let lowering = CheckCharacter3DScene.closedEyeLowering
+    #expect(lowering > 0) // 반드시 아래로 내려야 한다(눈 중앙에 뜨지 않게).
+    let anchors = Dictionary(uniqueKeysWithValues:
+        CheckCharacter3DScene.closedEyeAnchors.map { ($0.name, $0.position) })
+    let leftAnchorY = try #require(anchors[CheckCharacter3DScene.closedEyeLeftName]).y
+    let rightAnchorY = try #require(anchors[CheckCharacter3DScene.closedEyeRightName]).y
+    #expect(abs(left.position.y - (leftAnchorY - lowering)) < 1e-4)
+    #expect(abs(right.position.y - (rightAnchorY - lowering)) < 1e-4)
+    // 내려앉은 뒤에도 여전히 앵커보다 낮아야 한다(중앙→하단 이동 방향 고정).
+    #expect(left.position.y < leftAnchorY && right.position.y < rightAnchorY)
 }
 
 // MARK: 엔진 — sleeping 진입/이탈 시 감은 눈 텍스처·선 토글

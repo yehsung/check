@@ -1117,13 +1117,13 @@ private func makeTokenBoardStore(memberCount: Int = 7) -> WorkTimerStore {
 @MainActor
 @Test
 func checkMenuViewRendersTokenBoardSnapshot() throws {
-    // 전체 공개 시나리오: 타팀 이름 포함 7명(maxVisibleRows=7 정확히 채운 상한). 육안 확인 PNG 저장.
+    // 카드 리디자인 시나리오: 타팀 이름 포함 7명(maxVisibleRows=7 정확히 채운 상한), 내 카드(u-me·"나" 칩) 포함. 육안 확인 PNG 저장.
     let png = try renderPNG(CheckMenuView(store: makeTokenBoardStore(memberCount: 7)))
     #expect(png.count > 0)
     // 육안 확인용 아티팩트를 스크래치 디렉터리에 저장한다(디렉터리 없으면 만들고, 실패는 무시).
     let dir = URL(fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad", isDirectory: true)
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    try? png.write(to: dir.appendingPathComponent("token-board-global.png"))
+    try? png.write(to: dir.appendingPathComponent("token-board-cards.png"))
 }
 
 @MainActor
@@ -1135,7 +1135,7 @@ func checkMenuViewRendersTokenBoardScrollCapSnapshot() throws {
     #expect(png.count > 0)
     let dir = URL(fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad", isDirectory: true)
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    try? png.write(to: dir.appendingPathComponent("token-board-global-scroll.png"))
+    try? png.write(to: dir.appendingPathComponent("token-board-cards-scroll.png"))
 }
 
 @MainActor

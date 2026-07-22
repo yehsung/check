@@ -686,10 +686,11 @@ private struct TokenBoardPanel: View {
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
 
-    // 토큰 행은 한 줄(아바타 + 이름 + 숫자)이라 팀원 카드 행보다 낮다. 창 높이 상한(≤700pt)은 리그(58pt·6행)보다 여유롭다.
-    private static let rowHeight: CGFloat = 44
-    private static let rowSpacing: CGFloat = 10
-    // 스크롤 없이 보여 주는 최대 인원. 행이 낮아 7행이어도 리그 상한 높이보다 낮다.
+    // 토큰 행은 프로필 카드(RoundedRectangle 테두리 + 내부 패딩 + 좌측 악센트 바)라 밋밋한 한 줄보다 높다.
+    // 카드가 아바타(30pt)를 위아래 여백과 함께 수납하도록 50pt로 둔다. 카드 간 간격은 사양대로 8.
+    private static let rowHeight: CGFloat = 50
+    private static let rowSpacing: CGFloat = 8
+    // 스크롤 없이 보여 주는 최대 인원. 카드화로 행이 높아졌지만(50pt·7행) 리스트 높이 398pt로 창 높이 상한(≤700pt) 안이다.
     static let maxVisibleRows = 7
 
     var body: some View {
@@ -762,14 +763,25 @@ private struct TokenBoardPanel: View {
     }
 }
 
-/// 토큰 보드 한 행: 이니셜/원격 아바타 + 이름(+내 행 "나" 칩) + 우측 이번 달 총합(전체 숫자, 콤마 구분·monospacedDigit).
-/// 등수 배지 없이 담백하게 — 정렬 순서가 곧 순위다. "나" 칩은 리그 "우리 팀" 칩과 같은 톤(accent). 높이는 패널이 고정으로 준다.
+/// 토큰 보드 한 행 = 유저 프로필 카드: 좌측 세로 악센트 바(유저 해시색) + 이니셜/원격 아바타 + 이름(+내 행 "나" 칩)
+/// + 우측 이번 달 총합("숫자 토큰"). 등수 배지 없이 담백하게 — 정렬 순서가 곧 순위다. 카드는 fieldFill 채움 + 1px 테두리
+/// (내 카드는 테두리를 accent 은은하게)로 유저 간 분리를 준다. 악센트 바 색은 CheckTheme.avatarColor 로 아바타 이니셜과
+/// 같은 이름 해시색을 공유해 유저마다 자연스러운 컬러 포인트를 만든다(등수 뉘앙스 아님). 높이는 패널이 고정으로 준다.
 private struct TokenBoardRowView: View {
     let entry: TokenBoardEntry
     var isMe: Bool = false
 
+    // 좌측 악센트 바 색 — 아바타 이니셜과 동일한 이름 해시색(CheckTheme.avatarColor 공유). 유저별 컬러 포인트.
+    private var accentColor: Color { CheckTheme.avatarColor(for: entry.name) }
+
     var body: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 10) {
+            // 좌측 세로 악센트 바(3pt 캡슐): 유저 해시색. 카드 안에서 위아래 살짝 띄워 유저 구분 컬러 포인트를 준다.
+            Capsule()
+                .fill(accentColor)
+                .frame(width: 3)
+                .frame(maxHeight: .infinity)
+                .padding(.vertical, 3)
             CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: 30)
             Text(entry.name)
                 .font(.subheadline.weight(.semibold))
@@ -785,15 +797,33 @@ private struct TokenBoardRowView: View {
                     .fixedSize()
             }
             Spacer(minLength: 6)
-            // 축약(B/M/K) 없이 1의 자리까지 전체 숫자를 콤마로 끊어 보여 준다(계약: TokenNumberFormatter.grouped).
-            Text(TokenNumberFormatter.grouped(entry.total))
-                .font(.caption.weight(.bold))
-                .foregroundStyle(CheckTheme.primaryText)
-                .monospacedDigit()
-                .lineLimit(1)
+            // 총합 + 단위: 축약(B/M/K) 없이 전체 숫자를 콤마로 끊고(굵게·monospacedDigit) 오른쪽에 " 토큰"(caption2·secondary)을 붙인다.
+            // 숫자+단위를 한 Text 로 이어(concat) minimumScaleFactor 가 단위째로 균일 축소되게 해 좁을 때도 한 줄을 지킨다.
+            (
+                Text(TokenNumberFormatter.grouped(entry.total))
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(CheckTheme.primaryText)
+                    .monospacedDigit()
+                + Text(" 토큰")
+                    .font(.caption2)
+                    .foregroundColor(CheckTheme.secondaryText)
+            )
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
         }
-        .padding(.horizontal, 10)
+        .padding(.leading, 8)
+        .padding(.trailing, 12)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // 유저별 프로필 카드: fieldFill 채움 + 1px 테두리. 내 카드는 테두리를 accent(은은한 0.45)로 바꿔 한눈에 띄운다.
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(CheckTheme.fieldFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(isMe ? CheckTheme.accent.opacity(0.45) : CheckTheme.border, lineWidth: 1)
+        )
     }
 }
 

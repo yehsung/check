@@ -62,6 +62,7 @@ struct CheckMenuView: View {
                         )
                     }
                     FooterBar(store: store)
+                    CheckTokenUsageRow()
                 }
             }
         } else {

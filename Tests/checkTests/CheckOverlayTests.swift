@@ -195,10 +195,8 @@ func overlayNudgeAutoStartsWorkAndConsumesOverride() {
     controller.nudgeAutoStart()
     #expect(store.startedAt != nil)
     #expect(store.snapshot.isWorking == true)
-    #expect(engine.commuteStartBubbleOverride == ReactionEngine.CommuteStartOverride(
-        text: CheckOverlayController.nudgeAutoStartText,
-        seconds: CheckOverlayController.nudgeAutoStartBubbleSeconds
-    ))
+    #expect(engine.commuteStartBubbleOverride?.text == CheckOverlayController.nudgeAutoStartText)
+    #expect(engine.commuteStartBubbleOverride?.seconds == CheckOverlayController.nudgeAutoStartBubbleSeconds)
 
     // store 관찰 경로(SwiftUI)를 헤드리스로 모사: updateWorking(true) 가 등장 리액션을 처리하며 오버라이드를 소비한다.
     controller.updateWorking(true)
@@ -243,6 +241,29 @@ func overlayNudgeAutoStartIneligibleDoesNothing() {
     controller.nudgeAutoStart()
     #expect(engine.commuteStartBubbleOverride == nil)
     store.stop()
+}
+
+@MainActor
+@Test
+func staleCommuteStartOverrideFallsBackToDefaultBubble() {
+    // 넛지 직후 곧바로 근무종료하면 SwiftUI onChange 병합으로 commuteStart 가 오지 않아 오버라이드가
+    // 미소비로 남는다 — 다음 수동 출근에서 낡은 오버라이드(수명 초과)는 버려지고 평소 문구가 떠야 한다.
+    var now = Date(timeIntervalSince1970: 80_000)
+    let engine = ReactionEngine(clock: { now })
+    engine.setCommuteStartBubbleOverride(text: "일하는 것 같아서 근무 시작했어요!", seconds: 8)
+
+    // 수명(10초)을 넘긴 뒤의 수동 출근.
+    now = now.addingTimeInterval(ReactionEngine.commuteStartOverrideLifetime + 1)
+    engine.request(.commuteStart)
+    #expect(engine.greetingText == "오늘도 화이팅!")
+    #expect(engine.commuteStartBubbleOverride == nil) // 낡은 오버라이드도 반드시 비워진다.
+
+    // 신선한 오버라이드는 그대로 소비된다(대조군).
+    engine.setCommuteStartBubbleOverride(text: "안내", seconds: 8)
+    now = now.addingTimeInterval(1)
+    engine.request(.commuteStart)
+    #expect(engine.greetingText == "안내")
+    #expect(engine.commuteStartBubbleOverride == nil)
 }
 
 // MARK: - ACD-F5: attach 재생(지연 생성 래치로 attach 가 request 보다 늦게 실행돼도 소실 없음)

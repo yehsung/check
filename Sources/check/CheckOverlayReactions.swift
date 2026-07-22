@@ -278,11 +278,22 @@ final class ReactionEngine {
 
     /// A3: 넛지 자동 근무 시작 시 다음 commuteStart 말풍선을 1회 덮어쓰는 오버라이드. perform(.commuteStart)이
     /// 소비하며 nil 로 비워, 뒤이은 수동 시작은 평소 "오늘도 화이팅!"으로 돌아간다. 관찰 대상 아님(설정→소비만).
+    /// setAt 스탬프로 수명을 묶는다: 넛지 직후 곧바로 근무종료하면(SwiftUI onChange 가 false→true→false 를
+    /// 병합해 commuteStart 자체가 안 옴) 오버라이드가 미소비로 남아 다음 수동 출근 문구를 오염시키므로,
+    /// 소비 시점에 낡은 것(수명 초과)은 버리고 평소 문구로 돌아간다.
     struct CommuteStartOverride: Equatable {
         let text: String
         let seconds: Double
+        let setAt: Date
     }
+    /// 오버라이드 유효 수명(초). 정상 경로는 세팅→소비가 같은 런루프 턴 안이라 넉넉한 상한이다.
+    static let commuteStartOverrideLifetime: TimeInterval = 10
     @ObservationIgnored var commuteStartBubbleOverride: CommuteStartOverride?
+
+    /// 넛지 자동 시작용 오버라이드 세팅(자체 clock 스탬프 — 만료 판정과 같은 시계로 결정적).
+    func setCommuteStartBubbleOverride(text: String, seconds: Double) {
+        commuteStartBubbleOverride = CommuteStartOverride(text: text, seconds: seconds, setAt: clock())
+    }
 
     // MARK: - A1 히트 영역(캐릭터 몸체 투영 rect 캐시)
     /// 캐릭터 노드 bbox 8코너를 뷰로 투영해 만든 몸체 화면영역(뷰 로컬, 12pt 인플레이트). attach 시 무효화하고
@@ -536,8 +547,14 @@ final class ReactionEngine {
             runReaction(ReactionActions.commuteStart(hop: modelExtent * 0.32))
             if let override = commuteStartBubbleOverride {
                 // A3: 넛지 자동 시작이면 안내 문구/시간으로 1회 교체하고 오버라이드를 소비한다.
-                showBubble(override.text, seconds: override.seconds)
+                // 어떤 경로든 여기서 반드시 비운다(소비/폐기 모두) — 잔류가 다음 출근을 오염시키지 않게.
                 commuteStartBubbleOverride = nil
+                if clock().timeIntervalSince(override.setAt) <= Self.commuteStartOverrideLifetime {
+                    showBubble(override.text, seconds: override.seconds)
+                } else {
+                    // 낡은 오버라이드(세팅 후 commuteStart 가 오지 않고 세션이 끝났던 것) — 평소 문구로.
+                    showBubble("오늘도 화이팅!", seconds: Self.commuteStartBubbleSeconds)
+                }
             } else {
                 showBubble("오늘도 화이팅!", seconds: Self.commuteStartBubbleSeconds)
             }

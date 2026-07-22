@@ -192,7 +192,7 @@ final class CheckOverlayController {
     /// 패널 표시 + commuteStart 리액션을 자연 처리하고, perform(.commuteStart)이 오버라이드를 소비한다.
     func nudgeAutoStart() {
         guard isNudgeEligible else { return }
-        engine.commuteStartBubbleOverride = ReactionEngine.CommuteStartOverride(
+        engine.setCommuteStartBubbleOverride(
             text: Self.nudgeAutoStartText,
             seconds: Self.nudgeAutoStartBubbleSeconds
         )

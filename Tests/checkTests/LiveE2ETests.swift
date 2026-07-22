@@ -329,6 +329,13 @@ private struct E2EAdmin: Sendable {
         ]).first?["name"] as? String
     }
 
+    func teamWeeklyGoalHours(id: String) async throws -> Int? {
+        try await rows("teams", [
+            URLQueryItem(name: "id", value: "eq.\(id)"),
+            URLQueryItem(name: "select", value: "weekly_goal_hours")
+        ]).first?["weekly_goal_hours"] as? Int
+    }
+
     func teamExists(inviteCode: String) async throws -> Bool {
         try await rows("teams", [
             URLQueryItem(name: "invite_code", value: "eq.\(inviteCode)"),
@@ -1030,6 +1037,64 @@ struct LiveE2ETests {
         // 부활은 세션을 되살리지 않는다 — 열린 세션은 여전히 없다.
         #expect(try await ctx.admin.sessionRows(userID: owner.userID, openOnly: true).count == 0)
         obs("좀비 부활 차단: 하트비트(working) → 트리거 강등 status=off_work, active_session_id=null")
+    }
+
+    // 9d. 팀원 목표 수정 + 참여코드 팀원 공개(20260722090000 마이그레이션 검증).
+    // B(joiner, member)가 my_team_invite_code 로 참여코드를 조회(성공) → set_team_weekly_goal(37) 로 팀 목표를
+    // 바꾼다 → SR 키 REST 로 teams.weekly_goal_hours==37 을 확인한다. member 역할도 코드 조회·목표 수정이 가능하다.
+    // 이 시나리오는 마이그레이션 push 전이라 서버에 RPC 가 없다 — 작성만 하고 실행은 오케스트레이터가 push 후 담당한다.
+    // E2E 접두사 스코프 밖 접근 금지, 키 원문 출력 금지.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s09d_memberReadsInviteCodeAndUpdatesGoal() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+        let teamID = try #require(LiveE2EState.e2eTeamID)
+
+        // B(joiner) 가 팀 member 로 존재하도록 보장한다(있으면 로그인, 없으면 코드로 합류 가입 — 자가치유).
+        let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer {
+            store.tickerTask?.cancel()
+            store.refreshTask?.cancel()
+        }
+        if try await ctx.admin.findUserID(email: Emails.joiner) != nil {
+            store.email = Emails.joiner
+            store.password = Emails.password
+            await store.signIn()?.value
+        }
+        if !store.isSignedIn || store.currentTeamID == nil {
+            await signUpJoiningByCode(
+                store: store,
+                email: Emails.joiner,
+                displayName: "E2E합류자",
+                code: owner.code
+            )
+        }
+        #expect(store.isSignedIn)
+        #expect(store.currentTeamID == teamID)
+        // B 는 member 다(owner 아님) — 그래도 아래에서 코드 조회·목표 수정이 가능해야 한다.
+        #expect(!store.isTeamOwner)
+
+        // B2: member 도 참여코드를 조회·노출한다(owner 전용 아님).
+        #expect(store.myTeamInviteCode == owner.code)
+        obs("팀원 참여코드 공개: member 코드 조회=\(store.myTeamInviteCode == owner.code)")
+
+        // B3: member 가 주간 목표를 37시간으로 바꾼다.
+        let changed = await store.updateTeamGoal(hours: 37)
+        obs("팀원 목표 수정: updateTeamGoal(37)=\(changed), syncMessage=\(store.syncMessage)")
+        #expect(changed)
+        #expect(store.teamGoalSeconds == 37 * 3600)
+        #expect(store.syncMessage == "주간 목표 변경됨")
+
+        // SR 키 REST 로 서버 반영(teams.weekly_goal_hours==37)을 확인한다.
+        let serverApplied = await waitUntil {
+            (try? await ctx.admin.teamWeeklyGoalHours(id: teamID)) == 37
+        }
+        #expect(serverApplied)
+        #expect(try await ctx.admin.teamWeeklyGoalHours(id: teamID) == 37)
+        obs("서버 반영 확인: teams.weekly_goal_hours=37")
+
+        // 정리: 다음 실행 결정성을 위해 목표를 E2E 기본값(42)으로 되돌린다(팀/계정 최종 삭제는 s10 담당).
+        _ = await store.updateTeamGoal(hours: E2ETeam.goalHours)
     }
 
     // 10. 정리 → E2E 계정 + E2E 팀 삭제 후 잔존 0 확인. E2E 접두사 밖(실사용) 팀 수는 변하지 않아야 한다.

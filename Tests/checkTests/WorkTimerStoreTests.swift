@@ -350,7 +350,8 @@ func ownerMembershipLoadsInviteCode() async {
 
 @MainActor
 @Test
-func memberMembershipLeavesInviteCodeNil() async {
+func memberMembershipAlsoLoadsInviteCode() async {
+    // B2: 참여코드는 이제 owner 뿐 아니라 소속 팀원 누구나 로드한다(코드가 곧 열쇠 — 팀원도 새 동료 초대).
     let testHost = "team-hours-test"
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(testHost)")!,
@@ -374,10 +375,10 @@ func memberMembershipLeavesInviteCodeNil() async {
 
     await store.confirmMembership()
 
-    // member 는 owner 가 아니므로 참여코드를 로드하지 않는다.
+    // 역할은 member 지만(owner 아님) 참여코드는 로드된다.
     #expect(!store.isTeamOwner)
     #expect(store.teamRole == "member")
-    #expect(store.myTeamInviteCode == nil)
+    #expect(store.myTeamInviteCode == "AINGTEAM")
 }
 
 // MARK: - K: 팀 리그 (로드/정렬/초기화)
@@ -596,6 +597,172 @@ func confirmMembershipFallsBackToDefaultWeeklyGoalWhenFieldMissing() async {
     #expect(store.isSignedIn)
     // weekly_goal_hours 누락 팀은 기본 목표(60시간)로 폴백한다.
     #expect(store.teamGoalSeconds == TeamWeeklyGoal.defaultGoalSeconds)
+}
+
+// MARK: - B3: 팀 목표 팀원 수정 (updateTeamGoal / 팀 메타 스로틀)
+
+@MainActor
+@Test
+func updateTeamGoalSucceedsAndAppliesServerValue() async {
+    let testHost = "update-goal-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: GoalRPCURLProtocol.session()
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    // 서버 반영값으로 덮이는지 보이려 다른 값으로 미리 오염시킨다.
+    store.teamGoalSeconds = 10 * 3600
+
+    let ok = await store.updateTeamGoal(hours: 37)
+
+    #expect(ok)
+    // 서버가 에코한 새 목표(37시간)가 초 단위로 반영된다.
+    #expect(store.teamGoalSeconds == 37 * 3600)
+    #expect(store.syncMessage == "주간 목표 변경됨")
+    // 중복 방지 플래그는 완료 후 해제된다.
+    #expect(!store.isUpdatingTeamGoal)
+    let paths = GoalRPCURLProtocol.requests(forHost: testHost).compactMap { $0.url?.path }
+    #expect(paths.contains("/rest/v1/rpc/set_team_weekly_goal"))
+}
+
+@MainActor
+@Test
+func updateTeamGoalRejectsOutOfRangeWithoutRequest() async {
+    let testHost = "update-goal-range-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: GoalRPCURLProtocol.session()
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.teamGoalSeconds = 40 * 3600
+
+    let tooHigh = await store.updateTeamGoal(hours: 200)
+    let tooLow = await store.updateTeamGoal(hours: 0)
+
+    #expect(!tooHigh)
+    #expect(!tooLow)
+    // 범위(1~168) 밖은 네트워크로 나가지 않고 목표도 그대로 유지된다.
+    #expect(store.teamGoalSeconds == 40 * 3600)
+    #expect(GoalRPCURLProtocol.requests(forHost: testHost).isEmpty)
+}
+
+@MainActor
+@Test
+func updateTeamGoalReportsFailureAndKeepsGoalOnServerError() async {
+    // host 에 "fail" 이 들어가면 GoalRPCURLProtocol 이 500(본문 없음) 을 돌려 실패 경로를 재현한다.
+    let testHost = "update-goal-fail-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: GoalRPCURLProtocol.session()
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.teamGoalSeconds = 40 * 3600
+
+    let ok = await store.updateTeamGoal(hours: 50)
+
+    #expect(!ok)
+    // 실패 시 목표는 그대로 유지되고, 변경 실패 안내가 뜬다.
+    #expect(store.teamGoalSeconds == 40 * 3600)
+    #expect(store.syncMessage == "목표 변경 실패")
+    #expect(!store.isUpdatingTeamGoal)
+}
+
+@MainActor
+@Test
+func refreshTeamMetaIfStaleThrottlesWithinWindow() async {
+    // 팝오버 열 때 60초 스로틀로 멤버십을 재조회해 팀원이 바꾼 목표를 반영한다.
+    // team-hours-test 픽스처는 목표 40시간(member)을 돌려준다.
+    let store = makeStubStore(host: "team-hours-test")
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    // 재조회로 덮이는지 보이려 다른 값으로 오염시킨다.
+    store.teamGoalSeconds = 10 * 3600
+    let t0 = Date(timeIntervalSince1970: 100_000)
+
+    // 첫 호출: distantPast 이후라 발사된다(스로틀 시각이 t0 로 갱신).
+    store.refreshTeamMetaIfStale(now: t0)
+    #expect(store.lastTeamMetaRefreshAt == t0)
+    var applied = false
+    for _ in 0..<200 {
+        if store.teamGoalSeconds == 40 * 3600 { applied = true; break }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(applied)
+
+    // 스로틀 안(30초 뒤): 재발사하지 않는다 — 타임스탬프도 목표도 그대로.
+    store.teamGoalSeconds = 99
+    store.refreshTeamMetaIfStale(now: t0.addingTimeInterval(30))
+    #expect(store.lastTeamMetaRefreshAt == t0)
+    try? await Task.sleep(for: .milliseconds(30))
+    #expect(store.teamGoalSeconds == 99)
+
+    // 스로틀 지난 뒤(61초): 다시 발사되어 서버 목표(40시간)로 재수렴한다.
+    store.refreshTeamMetaIfStale(now: t0.addingTimeInterval(61))
+    #expect(store.lastTeamMetaRefreshAt == t0.addingTimeInterval(61))
+    var reapplied = false
+    for _ in 0..<200 {
+        if store.teamGoalSeconds == 40 * 3600 { reapplied = true; break }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(reapplied)
+}
+
+@MainActor
+@Test
+func refreshTeamMetaIfStaleSkipsWhenSignedOutOrTeamless() {
+    // 로그인 안 됨/무소속이면 재조회를 발사하지 않는다(스로틀 시각도 건드리지 않는다).
+    let signedOut = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer { signedOut.tickerTask?.cancel() }
+    signedOut.refreshTeamMetaIfStale(now: Date())
+    #expect(signedOut.lastTeamMetaRefreshAt == .distantPast)
+
+    let teamless = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer { teamless.tickerTask?.cancel() }
+    teamless.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "u")
+    teamless.currentTeamID = nil
+    teamless.refreshTeamMetaIfStale(now: Date())
+    #expect(teamless.lastTeamMetaRefreshAt == .distantPast)
 }
 
 @MainActor

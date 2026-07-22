@@ -141,12 +141,8 @@ extension WorkTimerStore {
                 // 목표시간은 DB 값(시간) 그대로 초로 환산해 반영한다(캐시/일회성 없음).
                 teamGoalSeconds = membership.goalHours * 3600
                 teamRole = membership.role
-                // owner 면 팀 카드 공유용 참여코드를 로드하고, member 면 비운다.
-                if membership.role == "owner" {
-                    await loadMyInviteCode()
-                } else {
-                    myTeamInviteCode = nil
-                }
+                // 참여코드는 소속 팀원 누구나 공유할 수 있게 항상 로드한다(코드가 곧 열쇠 — 팀원도 새 동료를 초대).
+                await loadMyInviteCode()
                 return
             }
             if attempt + 1 < attempts {
@@ -163,7 +159,7 @@ extension WorkTimerStore {
         myTeamInviteCode = nil
     }
 
-    /// owner 확정 시 my_team_invite_code() RPC 로 참여코드를 로드한다. 실패/비owner 면 nil.
+    /// 소속 팀원이면 my_team_invite_code() RPC 로 참여코드를 로드한다. 실패/무소속이면 nil.
     private func loadMyInviteCode() async {
         let generation = sessionGeneration
         let code = try? await withSessionRetry { activeSession in
@@ -171,6 +167,69 @@ extension WorkTimerStore {
         }
         guard generation == sessionGeneration else { return }
         myTeamInviteCode = code ?? nil
+    }
+
+    /// 팀 주간 목표시간을 바꾼다(팀원 누구나). 범위(1~168) 밖이거나 이미 변경 중이면 즉시 false 로 무시한다.
+    /// 성공 시 목표를 서버 반영값으로 갱신하고 안내 문구를 남기며, 리그 페이지가 열려 있으면 새로고침한다.
+    /// 취소(빠른 닫기)는 조용히 넘기고(문구 유지), 그 외 실패는 authMessage 로 알린다.
+    /// 반환값(성공 여부)으로 뷰가 편집 행을 닫을지 결정한다(실패 시 값 유지·재시도 가능).
+    @discardableResult
+    func updateTeamGoal(hours: Int) async -> Bool {
+        guard (1...168).contains(hours) else { return false }
+        guard !isUpdatingTeamGoal else { return false }
+        isUpdatingTeamGoal = true
+        defer { isUpdatingTeamGoal = false }
+        let generation = sessionGeneration
+        do {
+            let newGoalHours = try await withSessionRetry { activeSession in
+                try await service.setTeamWeeklyGoal(accessToken: activeSession.accessToken, goalHours: hours)
+            }
+            guard generation == sessionGeneration else { return false }
+            teamGoalSeconds = newGoalHours * 3600
+            syncMessage = "주간 목표 변경됨"
+            // 리그 페이지가 열려 있으면 바뀐 목표가 게이지/퍼센트에 즉시 반영되도록 새로고침한다(내부에서 노출 가드).
+            await refreshLeaderboardIfVisible()
+            return true
+        } catch {
+            guard generation == sessionGeneration else { return false }
+            // 취소(.task 취소/빠른 닫기)는 헛경보 문구를 남기지 않고 조용히 넘긴다.
+            if case .cancelled = classifyAuthError(error) { return false }
+            syncMessage = authMessage(for: error, fallback: "목표 변경 실패")
+            return false
+        }
+    }
+
+    /// 팝오버를 열 때 60초 스로틀로 팀 메타(목표/이름/역할/참여코드)를 재조회한다. 팀원이 바꾼 목표가
+    /// 내 팝오버에 최대 1분 안에 반영되게 한다. 스로틀 시각은 관찰 대상이 아니라 무효화를 유발하지 않는다.
+    /// 로그인·소속 상태에서만 동작하고, 무소속 확정은 여기서 하지 않는다(refreshTeamStatus 담당).
+    func refreshTeamMetaIfStale(now: Date = Date()) {
+        guard session != nil, currentTeamID != nil else { return }
+        guard now.timeIntervalSince(lastTeamMetaRefreshAt) >= Self.teamMetaRefreshThrottleSeconds else { return }
+        lastTeamMetaRefreshAt = now
+        Task { @MainActor in await refreshTeamMeta() }
+    }
+
+    /// 멤버십을 재조회해 팀 메타(목표/이름/역할)와 참여코드를 갱신한다. == 가드로 값이 실제로 바뀔 때만
+    /// 대입해 폴링이 숨은 잎 뷰를 헛무효화하지 않게 한다. 취소/네트워크 오류는 조용히 넘긴다(다음 기회 재시도).
+    func refreshTeamMeta() async {
+        guard session != nil else { return }
+        let generation = sessionGeneration
+        let membership: (teamID: String, teamName: String, goalHours: Int, role: String)?
+        do {
+            membership = try await withSessionRetry { activeSession in
+                try await service.fetchOwnMembership(accessToken: activeSession.accessToken, userID: activeSession.userID)
+            }
+        } catch {
+            return
+        }
+        // 정상 0행(무소속 확정)은 여기서 처리하지 않는다 — 팀 메타 갱신만이 목적이라 기존 팀 상태를 유지한다.
+        guard generation == sessionGeneration, let membership else { return }
+        if currentTeamID != membership.teamID { currentTeamID = membership.teamID }
+        if teamName != membership.teamName { teamName = membership.teamName }
+        let newGoal = membership.goalHours * 3600
+        if teamGoalSeconds != newGoal { teamGoalSeconds = newGoal }
+        if teamRole != membership.role { teamRole = membership.role }
+        await loadMyInviteCode()
     }
 
     /// previewTeamCode() 의 실제 작업. signupTeamCode 를 lookup_team_by_code 로 조회해 미리보기를 갱신한다.

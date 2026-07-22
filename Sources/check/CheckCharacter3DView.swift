@@ -281,57 +281,17 @@ struct CheckGreetingBubble: View {
     }
 }
 
-/// 근무 시작 제안(넛지) 말풍선. 인사 말풍선(CheckGreetingBubble) 스타일을 그대로 재사용하되, 탭하면 근무를
-/// 시작하는 버튼이다. 캐릭터 왼쪽 위(인사 위치)에 뜬다.
-struct CheckNudgePromptBubble: View {
-    static let text = "근무 시작할까요?"
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            CheckGreetingBubble(text: Self.text)
-        }
-        .buttonStyle(.plain)
-        .contentShape(Rectangle())
-    }
-}
-
-/// 넛지 말풍선의 실제 프레임(SwiftUI 좌표, top-left)을 상위로 올리는 PreferenceKey. 컨트롤러가 이 값을
-/// AppKit 좌표로 뒤집어 hitTest 클릭 영역으로 쓴다. nil 이면 말풍선 없음(클릭 영역 제거).
-struct NudgeBubbleFramePreferenceKey: PreferenceKey {
-    static let defaultValue: CGRect? = nil
-    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
-        value = nextValue() ?? value
-    }
-}
-
-/// SwiftUI↔AppKit 사각형 좌표 변환(순수 함수). 부분 클릭 영역 계산의 결정적 검증 지점.
-enum BubbleHitGeometry {
-    /// SwiftUI 좌표(top-left 원점, y 아래로 증가)의 사각형을, 높이 `containerHeight` 인 AppKit 좌표
-    /// (bottom-left 원점, y 위로 증가)로 y 반전 변환한다.
-    static func appKitRect(fromSwiftUI rect: CGRect, containerHeight: CGFloat) -> CGRect {
-        CGRect(x: rect.minX, y: containerHeight - rect.maxY, width: rect.width, height: rect.height)
-    }
-}
-
 /// 3D 캐릭터 + 근무 시간 라벨 합성. 라벨은 얼굴(볼) 바로 아래 몸통 중상부에 얹는다.
-/// 리액션 엔진을 관찰해 팀원 출근 인사 말풍선(및 근무 시작 제안 넛지 말풍선)을 캐릭터 왼쪽 위에 겹쳐 띄운다.
+/// 리액션 엔진을 관찰해 팀원 출근 인사·근무 시작 안내 등 말풍선을 캐릭터 왼쪽 위에 겹쳐 띄운다.
 struct CheckOverlayCharacterView: View {
     /// 근무 시간 라벨의 세로 위치 비율(0=상단, 1=하단). 볼 아래 몸통 중상부(얼굴은 안 가림)에 오도록 54%.
     static let timerVerticalFraction: CGFloat = 0.49
-    /// 넛지 말풍선 프레임 측정용 좌표 공간 이름(콘텐츠 top-left 기준).
-    static let nudgeCoordinateSpace = "check.nudgePanel"
 
     let elapsedSeconds: Int
     let isActive: Bool
-    /// 타이머 라벨 표시 여부(넛지 중에는 false — 00:00 캡슐이 뜨지 않게). 루트 뷰가 showsTimer 로 판정해 넘긴다.
+    /// 타이머 라벨 표시 여부. 루트 뷰가 showsTimer 로 판정해 넘긴다.
     var showsTimer: Bool = true
     var engine: ReactionEngine?
-    /// 넛지 말풍선 탭 콜백(컨트롤러가 store.start 로 잇는다).
-    var onNudgeTap: (() -> Void)?
-    /// 넛지 말풍선 프레임(SwiftUI 좌표) 변화 콜백. @MainActor 클로저라 @Sendable 경계(onPreferenceChange)를
-    /// 넘어 안전하게 캡처된다.
-    var onNudgeBubbleFrame: (@MainActor (CGRect?) -> Void)?
 
     /// 3D 뷰 지연 생성 래치. 한 번이라도 표시된 뒤에는 계속 마운트해 둔다(파괴-재생성은 Metal 전역 메모리를
     /// 거의 회수하지 못하므로). 첫 표시 전까지는 SCNView+USDZ+Metal 로드를 미뤄 유휴 RSS 를 절감한다.
@@ -341,7 +301,6 @@ struct CheckOverlayCharacterView: View {
         GeometryReader { geo in
             // 렌더 루프는 엔진의 renderActive(패널 표시~근무종료 인사)로 몬다. 엔진이 없으면 isActive 로 폴백한다.
             let renderActive = engine?.renderActive ?? isActive
-            let nudgeActive = engine?.nudgePromptActive == true
             ZStack(alignment: .topLeading) {
                 if renderActive || hasEverShown {
                     CheckCharacter3DView(isActive: renderActive, engine: engine)
@@ -357,20 +316,7 @@ struct CheckOverlayCharacterView: View {
                             y: geo.size.height * Self.timerVerticalFraction
                         )
                 }
-                if nudgeActive {
-                    CheckNudgePromptBubble(onTap: { onNudgeTap?() })
-                        .background(
-                            GeometryReader { bubbleGeo in
-                                Color.clear.preference(
-                                    key: NudgeBubbleFramePreferenceKey.self,
-                                    value: bubbleGeo.frame(in: .named(Self.nudgeCoordinateSpace))
-                                )
-                            }
-                        )
-                        .padding(.leading, 4)
-                        .padding(.top, 8)
-                        .transition(.opacity)
-                } else if let engine, let greeting = engine.greetingText {
+                if let engine, let greeting = engine.greetingText {
                     CheckGreetingBubble(text: greeting)
                         .padding(.leading, 4)
                         .padding(.top, 8)
@@ -378,17 +324,9 @@ struct CheckOverlayCharacterView: View {
                         .id(greeting)
                 }
             }
-            .coordinateSpace(name: Self.nudgeCoordinateSpace)
             .animation(.easeInOut(duration: 0.25), value: engine?.greetingText)
-            .animation(.easeInOut(duration: 0.25), value: nudgeActive)
             .onChange(of: renderActive, initial: true) { _, active in
                 if active { hasEverShown = true }
-            }
-            .onPreferenceChange(NudgeBubbleFramePreferenceKey.self) { [onNudgeBubbleFrame] rect in
-                // onPreferenceChange 액션은 @Sendable — @MainActor 클로저(onNudgeBubbleFrame)와 CGRect 만
-                // 캡처(둘 다 Sendable)해 MainActor 로 넘긴다.
-                guard let onNudgeBubbleFrame else { return }
-                Task { @MainActor in onNudgeBubbleFrame(rect) }
             }
         }
     }
@@ -402,17 +340,12 @@ struct CheckOverlayRootView: View {
     let store: WorkTimerStore
     var engine: ReactionEngine?
     var onWorkingChange: (Bool) -> Void
-    /// 넛지 말풍선 탭 콜백(컨트롤러가 store.start 로 잇는다).
-    var onNudgeTap: (() -> Void)?
-    /// 넛지 말풍선 프레임 변화 콜백(컨트롤러가 hitTest 클릭 영역으로 잇는다).
-    var onNudgeBubbleFrame: (@MainActor (CGRect?) -> Void)?
 
     /// 타이머 라벨을 실제 오늘 누적으로 보여줄지 판정한다. 근무 중이거나, 근무를 막 멈췄어도 근무종료 인사가
     /// 아직 렌더 중(renderActive)이면 실제 시간을 유지해 인사 0.55초 동안 라벨이 00:00 으로 플래시되지 않게 한다.
     /// renderActive 는 숨김 시 항상 false 라, 유휴에서 body 가 매초 재평가되던 낭비를 없애는 목표는 보존된다.
-    /// 넛지 중(비근무·nudgeActive)에는 아직 근무 전이라 캡슐이 00:00 으로 뜨지 않게 숨긴다.
-    static func showsTimer(isWorking: Bool, isOverlayEnabled: Bool, renderActive: Bool, nudgeActive: Bool = false) -> Bool {
-        isOverlayEnabled && (isWorking || renderActive) && !(nudgeActive && !isWorking)
+    static func showsTimer(isWorking: Bool, isOverlayEnabled: Bool, renderActive: Bool) -> Bool {
+        isOverlayEnabled && (isWorking || renderActive)
     }
 
     var body: some View {
@@ -421,16 +354,13 @@ struct CheckOverlayRootView: View {
         let showing = Self.showsTimer(
             isWorking: store.snapshot.isWorking,
             isOverlayEnabled: store.isOverlayEnabled,
-            renderActive: engine?.renderActive == true,
-            nudgeActive: engine?.nudgePromptActive == true
+            renderActive: engine?.renderActive == true
         )
         return CheckOverlayCharacterView(
             elapsedSeconds: showing ? store.todayDuration : 0,
             isActive: store.snapshot.isWorking,
             showsTimer: showing,
-            engine: engine,
-            onNudgeTap: onNudgeTap,
-            onNudgeBubbleFrame: onNudgeBubbleFrame
+            engine: engine
         )
         .onChange(of: store.snapshot.isWorking, initial: true) { _, working in
             onWorkingChange(working)

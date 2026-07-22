@@ -94,6 +94,27 @@ func nudgeCooldownBlocksForOneHour() {
 
 @MainActor
 @Test
+func nudgeCooldownSurvivesWorkStopStart() {
+    // A3: 넛지 자동 시작 직후 근무를 끝내면(컨트롤러가 stop→start 로 스케줄러를 재무장) 쿨다운이 남아 재발동하지
+    // 않아야 한다. stop() 은 활성 누적만 리셋하고 cooldownUntil 은 보존하며, start() 는 이를 건드리지 않는다.
+    let h = NudgeHarness()
+    h.run(5)
+    #expect(h.nudgeCount == 1)
+    let cooldownUntil = h.scheduler.cooldownUntil
+
+    // 근무 시작→종료 모사: 근무 중엔 정지(stop), 종료 후 재가동(start). 쿨다운은 그대로 유지된다.
+    h.scheduler.stop()
+    h.scheduler.start()
+    #expect(h.scheduler.cooldownUntil == cooldownUntil)
+
+    // 쿨다운 내에는 활성이어도 재발동하지 않는다.
+    h.run(5)
+    #expect(h.nudgeCount == 1)
+    #expect(h.now < cooldownUntil)
+}
+
+@MainActor
+@Test
 func nudgeWakeResetsActiveMinutes() {
     let h = NudgeHarness()
     h.run(3)

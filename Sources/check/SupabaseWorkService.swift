@@ -381,7 +381,8 @@ actor SupabaseWorkService {
         return (teamID: row.teamId, name: row.name, inviteCode: row.inviteCode, goalHours: row.weeklyGoalHours)
     }
 
-    /// 내 팀 참여코드(owner 전용). my_team_invite_code() RPC 를 로그인 토큰으로 호출한다. owner 아니면 nil.
+    /// 내 팀 참여코드(소속 팀원 전체 공개). my_team_invite_code() RPC 를 로그인 토큰으로 호출한다.
+    /// 코드가 곧 열쇠이므로 owner 뿐 아니라 팀원 누구나 조회해 새 동료를 초대할 수 있다. 무소속이면 nil.
     func fetchMyInviteCode(accessToken: String) async throws -> String? {
         let data = try await send(
             path: "/rest/v1/rpc/my_team_invite_code",
@@ -392,6 +393,23 @@ actor SupabaseWorkService {
         )
         let rows = try decoder.decode([InviteCodeRow].self, from: data)
         return rows.first?.inviteCode
+    }
+
+    /// 팀 주간 목표시간 변경(팀원 누구나). set_team_weekly_goal(goal_hours) RPC 를 로그인 토큰으로 호출하고
+    /// 서버가 반영한 새 목표시간(정수, 시간)을 돌려받는다. 범위(1~168) 최종 검증은 서버가 담당한다.
+    func setTeamWeeklyGoal(accessToken: String, goalHours: Int) async throws -> Int {
+        let data = try await send(
+            path: "/rest/v1/rpc/set_team_weekly_goal",
+            method: "POST",
+            body: SetTeamGoalRequest(goalHours: goalHours),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        let rows = try decoder.decode([SetTeamGoalRow].self, from: data)
+        guard let row = rows.first else {
+            throw SupabaseWorkServiceError.invalidResponse(200)
+        }
+        return row.weeklyGoalHours
     }
 
     /// 팀 리그(이번 주 팀별 총 근무시간). team_weekly_leaderboard() RPC 를 로그인 토큰으로 호출한다.

@@ -14,6 +14,9 @@ final class WorkTimerStore {
     static let abandonedSessionThresholdSeconds: TimeInterval = 10 * 60
     // 클라 스캐빈저 스로틀(초). 폴링마다 정리 RPC 를 난사하지 않도록 마지막 발사 후 이 시간은 재발사하지 않는다.
     static let scavengeThrottleSeconds: TimeInterval = 5 * 60
+    // 팝오버를 열 때 팀 메타(목표/이름/역할/참여코드)를 재조회하는 스로틀(초). 팀원이 바꾼 주간 목표가
+    // 내 팝오버에 최대 이 시간 안에 반영되게 한다. 여닫이마다 멤버십을 난사하지 않도록 스로틀을 건다.
+    static let teamMetaRefreshThrottleSeconds: TimeInterval = 60
 
     var startedAt: Date?
     var accumulatedSeconds: Int = 0
@@ -53,6 +56,8 @@ final class WorkTimerStore {
             displayNow = Date()
             stopTimerIfIdle()
             if isLeaderboardVisible { loadLeaderboard() }
+            // 팀원이 바꾼 주간 목표/이름/역할/참여코드를 팝오버 열 때 60초 스로틀로 재조회해 반영한다.
+            refreshTeamMetaIfStale()
         } else {
             stopTimerIfIdle()
         }
@@ -130,6 +135,10 @@ final class WorkTimerStore {
     var lastAutoClosedStartedAt: Date?
     // 클라 스캐빈저(방치 세션 서버 자동 마감 폴백) 마지막 발사 시각. 5분 스로틀 판정에 쓴다(관찰 대상 아님).
     @ObservationIgnored var lastScavengeAt: Date = .distantPast
+    /// 팀 메타(목표/이름/역할/참여코드) 마지막 재조회 시각. 팝오버 열 때 60초 스로틀 판정에 쓴다(관찰 대상 아님).
+    @ObservationIgnored var lastTeamMetaRefreshAt: Date = .distantPast
+    /// 팀 목표 변경 중복 호출 방지 플래그(관찰 대상 아님). 저장 버튼 연타/재진입을 막는다.
+    @ObservationIgnored var isUpdatingTeamGoal = false
 
 
     var todayDuration: Int {

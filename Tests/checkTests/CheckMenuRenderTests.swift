@@ -362,6 +362,9 @@ func windowHeightAdaptsToContentWithinCap() throws {
         // 실데이터 톤의 10명(active/stale/off 혼합) — 가장 큰 메인 상태.
         try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 10), now: now)))),
         try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewLongSessionBanner: true))),
+        // 헤더 주간 목표 편집 행이 펼쳐진 상태(스테퍼 + 저장 버튼) — 편집은 헤더 아래로 자라므로 대형 팀에선
+        // 상한을 넘을 수 있는 일시 상태다. 상시 노출 상태만 상한을 보장하고, 편집은 보통 팀 규모(3명)로 검증한다.
+        try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 3), now: now), previewGoalEditing: true))),
         try #require(renderedPixelHeight(CheckMenuView(store: makeLeaderboardStore()))),
         try #require(renderedPixelHeight(CheckMenuView(store: cappedLeaderboardStore)))
     ]
@@ -493,6 +496,70 @@ func checkMenuViewRendersLeaderboardSnapshot() throws {
     let png = try renderPNG(CheckMenuView(store: store))
     #expect(png.count > 0)
     if let path = ProcessInfo.processInfo.environment["CHECK_LEADERBOARD_SNAPSHOT_PATH"] {
+        try png.write(to: URL(fileURLWithPath: path))
+    }
+}
+
+// MARK: - B1: 리그 0시간 팀 숨김 렌더
+
+@MainActor
+@Test
+func checkMenuViewRendersFilteredLeaderboardSnapshot() throws {
+    // 0시간 타팀은 리그에서 숨고, 0시간이어도 내 팀(우리 팀 칩)은 유지된다. 표시 필터는 뷰 호출부에서만 적용하고
+    // 스토어 원본 leaderboard 는 보존한다. 숨김/유지가 340pt 폭 안에서 잘림·겹침 없이 그려지는지 확인한다.
+    let store = makeTeamStore(members: [], now: Date())
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.leaderboard = [
+        // 우리 팀 — 0시간이어도 유지(우리 팀 칩).
+        TeamLeaderboardEntry(id: URLProtocolStub.stubTeamID, name: "아잉팀", weeklyGoalHours: 40, totalSeconds: 0, workingCount: 0, memberCount: 3),
+        // 0시간 타팀 — 숨겨져야 한다.
+        TeamLeaderboardEntry(id: "20000000-0000-0000-0000-000000000002", name: "잠든 팀", weeklyGoalHours: 60, totalSeconds: 0, workingCount: 0, memberCount: 2),
+        // 근무한 팀들 — 표시.
+        TeamLeaderboardEntry(id: "30000000-0000-0000-0000-000000000003", name: "코드 크래프터", weeklyGoalHours: 50, totalSeconds: 36000, workingCount: 1, memberCount: 1),
+        TeamLeaderboardEntry(id: "40000000-0000-0000-0000-000000000004", name: "오목교 브라더스", weeklyGoalHours: 60, totalSeconds: 90000, workingCount: 2, memberCount: 3)
+    ]
+    store.isLeaderboardVisible = true
+
+    // 렌더 결과의 필터링을 눈으로 확인하되, 필터 규약 자체는 모델 단위 테스트가 보장한다.
+    #expect(store.leaderboard.filteredForDisplay(myTeamID: store.currentTeamID).map(\.name) == ["코드 크래프터", "오목교 브라더스", "아잉팀"])
+
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    if let path = ProcessInfo.processInfo.environment["CHECK_FILTERED_LEADERBOARD_SNAPSHOT_PATH"] {
+        try png.write(to: URL(fileURLWithPath: path))
+    }
+}
+
+// MARK: - B2: 참여코드 팀원 공개 렌더
+
+@MainActor
+@Test
+func checkMenuViewRendersMemberInviteCodeSnapshot() throws {
+    // member 역할이어도 참여코드가 로드되면 키 버튼/인라인 행이 노출된다(owner 전용 아님).
+    let store = makeTeamStore(members: presenceMembers(now: Date()), now: Date())
+    store.teamRole = "member"
+    store.myTeamInviteCode = "BRAVO123"
+
+    let png = try renderPNG(CheckMenuView(store: store, previewOwnerCodeRevealed: true))
+    #expect(png.count > 0)
+    if let path = ProcessInfo.processInfo.environment["CHECK_MEMBER_CODE_SNAPSHOT_PATH"] {
+        try png.write(to: URL(fileURLWithPath: path))
+    }
+}
+
+// MARK: - B3: 헤더 주간 목표 편집 행 렌더
+
+@MainActor
+@Test
+func checkMenuViewRendersGoalEditingSnapshot() throws {
+    // 캡션 % 옆 연필로 여는 목표 편집 행(스테퍼 + 저장 버튼)이 헤더 아래로 펼쳐진 상태.
+    // 편집 행이 340pt 폭 안에서 잘림·겹침 없이 수납되는지 확인한다.
+    let store = makeSignedInStore()
+    store.teamGoalSeconds = 42 * 3600
+
+    let png = try renderPNG(CheckMenuView(store: store, previewGoalEditing: true))
+    #expect(png.count > 0)
+    if let path = ProcessInfo.processInfo.environment["CHECK_GOAL_EDITING_SNAPSHOT_PATH"] {
         try png.write(to: URL(fileURLWithPath: path))
     }
 }

@@ -550,6 +550,77 @@ func leaderboardSortsByAverageDescendingTieByName() {
     #expect(sorted.map(\.id) == ["b", "a", "c"])
 }
 
+// MARK: - B1: 리그 0시간 팀 숨김 (filteredForDisplay)
+
+@Test
+func filteredForDisplayHidesZeroHourOtherTeams() {
+    // 0시간 타팀은 리그에서 숨긴다. 근무한 팀만 남고 정렬(1인당 평균 내림차순)은 그대로.
+    let entries = [
+        TeamLeaderboardEntry(id: "a", name: "가팀", weeklyGoalHours: 60, totalSeconds: 0, workingCount: 0, memberCount: 3),
+        TeamLeaderboardEntry(id: "b", name: "나팀", weeklyGoalHours: 60, totalSeconds: 36000, workingCount: 1, memberCount: 1),
+        TeamLeaderboardEntry(id: "c", name: "다팀", weeklyGoalHours: 60, totalSeconds: 30000, workingCount: 0, memberCount: 2)
+    ]
+    let shown = entries.filteredForDisplay(myTeamID: nil)
+    // 0시간 가팀은 빠지고, 평균 내림차순(나팀 36000 > 다팀 15000)으로 정렬된다.
+    #expect(shown.map(\.id) == ["b", "c"])
+}
+
+@Test
+func filteredForDisplayKeepsMyTeamEvenAtZeroHours() {
+    // 내 팀은 0시간이어도 리그에 유지한다(내 팀이 사라지는 혼란 방지). 0시간 타팀만 숨긴다.
+    let entries = [
+        TeamLeaderboardEntry(id: "mine", name: "우리팀", weeklyGoalHours: 60, totalSeconds: 0, workingCount: 0, memberCount: 3),
+        TeamLeaderboardEntry(id: "other", name: "남팀", weeklyGoalHours: 60, totalSeconds: 0, workingCount: 0, memberCount: 2),
+        TeamLeaderboardEntry(id: "busy", name: "일하는팀", weeklyGoalHours: 60, totalSeconds: 36000, workingCount: 1, memberCount: 1)
+    ]
+    let shown = entries.filteredForDisplay(myTeamID: "mine")
+    // 0시간 남팀은 빠지고, 0시간이어도 내 팀은 남는다. 정렬: 일하는팀(36000) > 우리팀(0).
+    #expect(shown.map(\.id) == ["busy", "mine"])
+}
+
+@Test
+func filteredForDisplayWithAllZeroKeepsOnlyMyTeamAndDropsAllWhenTeamless() {
+    // 전부 0: 내 팀만 남는다. 무소속(myTeamID nil)이면 전부 숨겨 빈 배열.
+    let entries = [
+        TeamLeaderboardEntry(id: "mine", name: "우리팀", weeklyGoalHours: 60, totalSeconds: 0, workingCount: 0, memberCount: 3),
+        TeamLeaderboardEntry(id: "other", name: "남팀", weeklyGoalHours: 60, totalSeconds: 0, workingCount: 0, memberCount: 2)
+    ]
+    #expect(entries.filteredForDisplay(myTeamID: "mine").map(\.id) == ["mine"])
+    #expect(entries.filteredForDisplay(myTeamID: nil).isEmpty)
+}
+
+@Test
+func filteredForDisplayOnEmptyReturnsEmpty() {
+    let entries: [TeamLeaderboardEntry] = []
+    #expect(entries.filteredForDisplay(myTeamID: "mine").isEmpty)
+    #expect(entries.filteredForDisplay(myTeamID: nil).isEmpty)
+}
+
+// MARK: - B3: 팀 주간 목표 수정 (set_team_weekly_goal RPC)
+
+@Test
+func setTeamWeeklyGoalPostsRPCWithBearerAndDecodesNewGoal() async throws {
+    let testHost = "set-goal-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: GoalRPCURLProtocol.session()
+    )
+
+    let newGoal = try await service.setTeamWeeklyGoal(accessToken: "access-token", goalHours: 37)
+
+    // 서버가 반영한 새 목표시간(에코)이 그대로 디코드된다.
+    #expect(newGoal == 37)
+    let rpcRequest = try #require(GoalRPCURLProtocol.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/rpc/set_team_weekly_goal"
+    })
+    #expect(rpcRequest.httpMethod == "POST")
+    // 로그인 토큰을 Bearer 로 사용한다(authenticated 전용 RPC).
+    #expect(rpcRequest.value(forHTTPHeaderField: "Authorization") == "Bearer access-token")
+    // 목표시간이 snake_case 본문(goal_hours)으로 전송된다.
+    #expect(GoalRPCURLProtocol.bodyText(forHost: testHost).contains(#""goal_hours":37"#))
+}
+
 @Test
 func memberMeetsWeeklyGoalWhenLiveWeeklyReachesGoal() {
     // 멤버 행 ✓ 노출 조건 = 라이브 주간 누적이 1인당 목표 이상.
@@ -879,6 +950,96 @@ final class RPCScalarURLProtocol: URLProtocol {
 
     static func requests(forHost host: String) -> [URLRequest] {
         requests.filter { $0.url?.host == host }
+    }
+}
+
+// set_team_weekly_goal RPC 는 [{"weekly_goal_hours": N}] 배열을 반환한다. URLProtocolStub(트랙 A 소유)이
+// 이 경로를 다루지 않으므로(빈 200 → 디코드 실패), 요청 goal_hours 를 그대로 에코하는 전용 스텁을 여기 둔다.
+// host 에 "fail" 이 들어가면 500 을 돌려 실패 경로를 재현한다(전역 mutable config 없이 host 로만 분기).
+final class GoalRPCURLProtocol: URLProtocol {
+    nonisolated(unsafe) static var requests: [URLRequest] = []
+    nonisolated(unsafe) static var bodiesByHost: [String: [String]] = [:]
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        let host = request.url?.host ?? ""
+        let bodyText = Self.bodyText(from: request)
+        Self.requests.append(request)
+        Self.bodiesByHost[host, default: []].append(bodyText)
+
+        let (statusCode, data) = Self.response(host: host, bodyText: bodyText)
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: statusCode,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+
+    static func session() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [GoalRPCURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    static func requests(forHost host: String) -> [URLRequest] {
+        requests.filter { $0.url?.host == host }
+    }
+
+    static func bodyText(forHost host: String) -> String {
+        bodiesByHost[host, default: []].joined(separator: "\n")
+    }
+
+    private static func response(host: String, bodyText: String) -> (Int, Data) {
+        if host.contains("fail") {
+            // 본문 없는 5xx(Supabase 일시 장애 톤) → serviceError 가 .invalidResponse 로 매핑 → authMessage 는 fallback 사용.
+            return (500, Data())
+        }
+        // 요청 본문의 goal_hours 를 그대로 weekly_goal_hours 로 에코한다(서버 검증·반영을 모사).
+        let goal = parseGoalHours(from: bodyText) ?? 37
+        return (200, Data("[{\"weekly_goal_hours\": \(goal)}]".utf8))
+    }
+
+    private static func parseGoalHours(from bodyText: String) -> Int? {
+        guard let data = bodyText.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return nil
+        }
+        return object["goal_hours"] as? Int
+    }
+
+    private static func bodyText(from request: URLRequest) -> String {
+        if let body = request.httpBody {
+            return String(decoding: body, as: UTF8.self)
+        }
+        guard let stream = request.httpBodyStream else {
+            return ""
+        }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        let bufferSize = 1024
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+        while stream.hasBytesAvailable {
+            let count = stream.read(buffer, maxLength: bufferSize)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return String(decoding: data, as: UTF8.self)
     }
 }
 

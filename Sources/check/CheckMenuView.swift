@@ -14,6 +14,8 @@ struct CheckMenuView: View {
     var previewClipsOverflowList: Bool = false
     // 스냅샷 전용: owner 팀 카드에서 참여코드 인라인 행이 펼쳐진 상태를 강제로 그린다. 앱에서는 항상 false(키 버튼 토글).
     var previewOwnerCodeRevealed: Bool = false
+    // 스냅샷 전용: 헤더 주간 목표 편집 행이 펼쳐진 상태를 강제로 그린다. 앱에서는 항상 false(연필 버튼 토글).
+    var previewGoalEditing: Bool = false
 
     var body: some View {
         content
@@ -43,10 +45,15 @@ struct CheckMenuView: View {
                 // 헤더 카드·팀 카드(헤더/게이지)·푸터는 콘텐츠 natural 높이. 팀 멤버 리스트만 팀원 수에 비례해 자라고,
                 // maxVisibleRows를 넘으면 그 높이로 고정 후 스크롤한다. 팀별 현황 페이지도 같은 자리에서 동일 패턴.
                 VStack(spacing: 10) {
-                    HeaderCard(store: store, previewLongSessionBanner: previewLongSessionBanner)
+                    HeaderCard(
+                        store: store,
+                        previewLongSessionBanner: previewLongSessionBanner,
+                        previewGoalEditing: previewGoalEditing
+                    )
                     if store.isLeaderboardVisible {
                         LeaderboardPanel(
-                            entries: store.leaderboard,
+                            // 원본 leaderboard 는 스토어에 보존하고, 표시 시점에 0시간 타팀만 숨긴다(내 팀은 0이어도 유지).
+                            entries: store.leaderboard.filteredForDisplay(myTeamID: store.currentTeamID),
                             myTeamID: store.currentTeamID,
                             fallbackStatus: store.syncMessage,
                             onBack: { store.isLeaderboardVisible = false },
@@ -102,6 +109,8 @@ private struct HeaderCard: View {
     @Bindable var store: WorkTimerStore
     // 렌더 스냅샷 전용: 12시간 배너를 켠 채로 그린다. 앱에서는 store.isLongSessionPromptActive만 사용.
     var previewLongSessionBanner: Bool = false
+    // 렌더 스냅샷 전용: 헤더 주간 목표 편집 행을 펼친 채로 그린다. 앱에서는 항상 false(연필 버튼 토글).
+    var previewGoalEditing: Bool = false
 
     // 실제 활성화(store)든 미리보기 플래그든 하나라도 켜지면 배너를 노출한다.
     private var showsLongSessionBanner: Bool {
@@ -130,7 +139,7 @@ private struct HeaderCard: View {
             }
             // 내 주간 목표 진행 바 — 목표는 개인 약속이므로 "내" 접두어 없이 위치(내 박스)가 의미를 말한다.
             // myLiveWeeklySeconds(displayNow 파생)를 읽으므로 잎 뷰로 격리해 헤더 본체가 매초 무효화되지 않게 한다.
-            HeaderGoalSection(store: store)
+            HeaderGoalSection(store: store, previewGoalEditing: previewGoalEditing)
         }
         .padding(12)
         .panelStyle()
@@ -169,36 +178,99 @@ private struct TodayTimerText: View {
 /// 이 섹션만 매초 무효화된다. 위치(내 박스) 자체가 "내 진행률"임을 말하므로 "내/각자" 접두어를 쓰지 않는다.
 private struct HeaderGoalSection: View {
     let store: WorkTimerStore
+    // 렌더 스냅샷 전용: 목표 편집 행이 펼쳐진 상태로 그린다(연필 버튼 클릭 대신). 앱에서는 항상 false.
+    var previewGoalEditing: Bool = false
+
+    // 연필 버튼으로 토글하는 목표 편집 인라인 노출 상태. 스냅샷은 previewGoalEditing 로 시드된다.
+    @State private var isEditingGoal: Bool
+    // 편집 중 스테퍼가 바인딩하는 목표시간(시간 단위). 편집을 여는 순간 현재 목표로 초기화한다.
+    @State private var editingHours: Int
+
+    init(store: WorkTimerStore, previewGoalEditing: Bool = false) {
+        self.store = store
+        self.previewGoalEditing = previewGoalEditing
+        _isEditingGoal = State(initialValue: previewGoalEditing)
+        _editingHours = State(initialValue: Self.hours(from: store.teamGoalSeconds))
+    }
 
     var body: some View {
         let worked = store.myLiveWeeklySeconds
         let goalSeconds = store.teamGoalSeconds
         let goal = TeamWeeklyGoal(workedSeconds: worked, goalSeconds: goalSeconds)
-        VStack(spacing: 4) {
-            // 슬림 진행 바(카드 폭 전체). 달성 시 working, 미달 시 accent 로 채운다(트랙은 기존 게이지 관례).
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(CheckTheme.trackFill)
-                    Capsule()
-                        .fill(goal.isComplete ? CheckTheme.working : CheckTheme.accent)
-                        .frame(width: max(0, proxy.size.width * goal.progress))
+        // 편집 행은 캡션 아래로만 자란다(상단 앵커 원칙 — 위 콘텐츠를 밀지 않는다).
+        VStack(spacing: 8) {
+            VStack(spacing: 4) {
+                // 슬림 진행 바(카드 폭 전체). 달성 시 working, 미달 시 accent 로 채운다(트랙은 기존 게이지 관례).
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(CheckTheme.trackFill)
+                        Capsule()
+                            .fill(goal.isComplete ? CheckTheme.working : CheckTheme.accent)
+                            .frame(width: max(0, proxy.size.width * goal.progress))
+                    }
+                }
+                .frame(height: 5)
+                HStack(spacing: 4) {
+                    // 좌측: 이번 주 누적 / 목표(시간 단위 정수). 우측: 실제 진행 퍼센트(100% 초과 가능, 상한 999%).
+                    Text("이번 주 \(MenuBarStatusFormatter.hoursMinutes(worked)) / \(goalSeconds / 3600)시간")
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text("\(GoalPercentFormatter.percent(workedSeconds: worked, goalSeconds: goalSeconds))%")
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .monospacedDigit()
+                    // 주간 목표는 팀원 누구나 바꿀 수 있다 — 캡션 % 옆 작은 연필로 편집 행을 연다.
+                    IconButton(
+                        icon: "pencil",
+                        help: "주간 목표 수정",
+                        tint: isEditingGoal ? CheckTheme.accent : CheckTheme.secondaryText
+                    ) {
+                        toggleEditing()
+                    }
                 }
             }
-            .frame(height: 5)
-            HStack(spacing: 4) {
-                // 좌측: 이번 주 누적 / 목표(시간 단위 정수). 우측: 실제 진행 퍼센트(100% 초과 가능, 상한 999%).
-                Text("이번 주 \(MenuBarStatusFormatter.hoursMinutes(worked)) / \(goalSeconds / 3600)시간")
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                Text("\(GoalPercentFormatter.percent(workedSeconds: worked, goalSeconds: goalSeconds))%")
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .monospacedDigit()
+            if isEditingGoal {
+                goalEditor
             }
         }
+    }
+
+    // 스테퍼(1~168) + 저장 버튼. 저장은 스토어 RPC 로 위임하고, 성공했을 때만 편집 행을 닫는다.
+    @ViewBuilder
+    private var goalEditor: some View {
+        VStack(spacing: 8) {
+            WeeklyGoalStepper(hours: $editingHours)
+            AuthButton(title: "목표 저장", icon: "checkmark.circle.fill", prominent: true) {
+                saveGoal()
+            }
+            .disabled(!store.canSync)
+        }
+    }
+
+    // 편집을 여는 순간 현재 목표(시간)로 스테퍼를 맞춰, 팀원이 방금 바꾼 최신 목표에서 이어 편집하게 한다.
+    private func toggleEditing() {
+        if !isEditingGoal {
+            editingHours = Self.hours(from: store.teamGoalSeconds)
+        }
+        isEditingGoal.toggle()
+    }
+
+    // 저장 성공 시에만 편집 행을 닫는다(실패 시 입력값을 유지해 바로 재시도할 수 있게 한다).
+    private func saveGoal() {
+        let hours = editingHours
+        Task { @MainActor in
+            if await store.updateTeamGoal(hours: hours) {
+                isEditingGoal = false
+            }
+        }
+    }
+
+    // 초 단위 목표를 스테퍼 범위(1~168시간)로 클램프한 시간값.
+    private static func hours(from goalSeconds: Int) -> Int {
+        max(1, min(168, goalSeconds / 3600))
     }
 }
 
@@ -227,9 +299,9 @@ private struct TeamPanel: View {
         _showsInviteCode = State(initialValue: previewCodeRevealed)
     }
 
-    // owner + 코드 보유 시에만 키 버튼/인라인 행을 노출한다.
+    // 참여코드를 보유(소속 팀원이면 로드됨)했을 때 키 버튼/인라인 행을 노출한다 — owner 뿐 아니라 팀원 누구나.
     private var canRevealCode: Bool {
-        store.isTeamOwner && store.myTeamInviteCode != nil
+        store.myTeamInviteCode != nil
     }
 
     var body: some View {

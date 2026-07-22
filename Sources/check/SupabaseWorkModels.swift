@@ -140,6 +140,15 @@ extension Array where Element == TeamLeaderboardEntry {
             return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
         }
     }
+
+    /// 리그 표시용 필터. 이번 주 총합이 0인 팀은 리그에서 숨긴다(아직 아무도 근무하지 않은 팀이 목록을
+    /// 채워 어수선해지지 않게). 단, 내 팀(id==myTeamID)은 0이어도 유지한다 — 내 팀이 리그에서 사라지면
+    /// "왜 우리 팀이 안 보이지?" 하는 혼란을 준다. 정렬은 기존 sortedByAverageDescending 규약 그대로다.
+    /// 원본 leaderboard 는 스토어에 보존하고, 이 필터는 표시 시점에서만 적용한다.
+    func filteredForDisplay(myTeamID: String?) -> [TeamLeaderboardEntry] {
+        filter { $0.totalSeconds != 0 || $0.id == myTeamID }
+            .sortedByAverageDescending()
+    }
 }
 
 struct TeamWeeklyGoal: Equatable {
@@ -230,6 +239,11 @@ struct CreateTeamRequest: Encodable {
     let goalHours: Int
 }
 
+/// set_team_weekly_goal RPC 본문. snake_case 인코딩으로 goal_hours 로 나간다.
+struct SetTeamGoalRequest: Encodable {
+    let goalHours: Int
+}
+
 struct SignInResponse: Decodable {
     let accessToken: String
     let refreshToken: String?
@@ -296,9 +310,14 @@ struct CreateTeamRow: Decodable {
     let weeklyGoalHours: Int
 }
 
-/// my_team_invite_code() RPC 응답 행(owner 전용). 아니면 0행.
+/// my_team_invite_code() RPC 응답 행(소속 팀원 전체 공개). 무소속이면 0행.
 struct InviteCodeRow: Decodable {
     let inviteCode: String
+}
+
+/// set_team_weekly_goal RPC 응답 행. 서버가 반영한 새 주간 목표시간(시간 단위)을 돌려준다.
+struct SetTeamGoalRow: Decodable {
+    let weeklyGoalHours: Int
 }
 
 /// team_weekly_leaderboard() RPC 응답 행. total_seconds 는 bigint(초)라 Int(64비트)로 받는다.

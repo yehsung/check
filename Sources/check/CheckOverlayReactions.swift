@@ -239,9 +239,6 @@ final class ReactionEngine {
     /// SCNView 렌더 루프 활성 여부(SwiftUI 관찰용). 패널 표시~근무종료 인사까지 true 로 유지해
     /// 근무종료 꾸벅 인사가 렌더되게 하고, 숨김 시 false 로 내려 렌더를 멈춘다(전력 배려).
     var renderActive = false
-    /// 근무 시작 제안(넛지) 말풍선 표시 여부(SwiftUI 관찰용). greetingText 채널과 별개로, 클릭 가능한
-    /// "근무 시작할까요?" 버튼형 말풍선을 띄운다. 컨트롤러가 showNudge/dismissNudge 에서 직접 토글한다.
-    var nudgePromptActive = false
 
     @ObservationIgnored private(set) var activeKind: ReactionKind?
     @ObservationIgnored private var activeUntil: Date = .distantPast
@@ -260,6 +257,30 @@ final class ReactionEngine {
     @ObservationIgnored private var fpsResetTask: Task<Void, Never>?
     /// 자는 동안 💤 를 주기적으로 방출하는 반복 태스크(3.5초 주기). 깨거나 인터럽트되면 취소된다.
     @ObservationIgnored private var zzzTask: Task<Void, Never>?
+
+    /// A3: 넛지 자동 근무 시작 시 다음 commuteStart 말풍선을 1회 덮어쓰는 오버라이드. perform(.commuteStart)이
+    /// 소비하며 nil 로 비워, 뒤이은 수동 시작은 평소 "오늘도 화이팅!"으로 돌아간다. 관찰 대상 아님(설정→소비만).
+    struct CommuteStartOverride: Equatable {
+        let text: String
+        let seconds: Double
+    }
+    @ObservationIgnored var commuteStartBubbleOverride: CommuteStartOverride?
+
+    // MARK: - A2 잘 때 감은 눈(재질 텍스처 교체)
+    /// 캐릭터 diffuse 재질 참조(attach 시 확보). 재질은 지오메트리(→노드→씬)가 소유하므로 weak.
+    @ObservationIgnored private weak var eyeMaterial: SCNMaterial?
+    /// 평상시(눈 뜬) diffuse 콘텐츠 원본. setEyesClosed(false) 에서 이 값으로 원복한다.
+    @ObservationIgnored private var eyeOpenContents: Any?
+    /// 눈 감은 텍스처 생성의 입력이 되는 원본 CGImage(다운스케일된 512²). 첫 sleeping 진입 시 1회 변형에 쓴다.
+    @ObservationIgnored private var eyeSourceImage: CGImage?
+    /// 1회 생성·캐시한 "감은 눈" 변형 텍스처. sleeping 동안 재질에 얹고, 깨면 eyeOpenContents 로 원복한다.
+    @ObservationIgnored private var closedEyesImage: CGImage?
+
+    // MARK: - A1 히트 영역(캐릭터 몸체 투영 rect 캐시)
+    /// 캐릭터 노드 bbox 8코너를 뷰로 투영해 만든 몸체 화면영역(뷰 로컬, 12pt 인플레이트). attach 시 무효화하고
+    /// 첫 조회 때 지연 계산한다. 뷰 로컬 투영은 패널 위치와 무관하게 안정적이라(카메라·모델 고정) 재배치/드래그로는
+    /// 바뀌지 않는다 — 그래서 프레임당 재계산 없이 캐시 1개면 충분하다(관찰 무효화 최소화 규약).
+    @ObservationIgnored private var cachedBodyViewRect: NSRect?
 
     private static let reactionActionKey = "check.reaction"
     private static let confettiNodeName = "check.reaction.confetti"
@@ -281,6 +302,8 @@ final class ReactionEngine {
         let (minB, maxB) = node.boundingBox
         let extent = CGFloat(max(maxB.x - minB.x, max(maxB.y - minB.y, maxB.z - minB.z)))
         modelExtent = extent > 0 ? extent : 1
+        captureEyeMaterial(in: node) // A2: 눈 감은 텍스처 교체를 위해 diffuse 재질 참조 확보.
+        cachedBodyViewRect = nil     // A1: 새 뷰/노드 → 몸체 투영 캐시 무효화(다음 조회에 지연 계산).
 
         switch state {
         case .playing(let kind):
@@ -291,6 +314,7 @@ final class ReactionEngine {
         case .sleeping:
             resetPose()
             node.runAction(ReactionActions.drowsySink(tilt: modelExtent * 0.18), forKey: Self.reactionActionKey)
+            setEyesClosed(true) // 복원된 sleeping 이면 감은 눈 상태를 유지한다.
             setRenderFPS(Self.idleFPS)
         case .idle:
             setRenderFPS(Self.idleFPS)
@@ -455,7 +479,13 @@ final class ReactionEngine {
             showBubble("아얏!", seconds: Self.hitBubbleSeconds)
         case .commuteStart:
             runReaction(ReactionActions.commuteStart(hop: modelExtent * 0.32))
-            showBubble("오늘도 화이팅!", seconds: Self.commuteStartBubbleSeconds)
+            if let override = commuteStartBubbleOverride {
+                // A3: 넛지 자동 시작이면 안내 문구/시간으로 1회 교체하고 오버라이드를 소비한다.
+                showBubble(override.text, seconds: override.seconds)
+                commuteStartBubbleOverride = nil
+            } else {
+                showBubble("오늘도 화이팅!", seconds: Self.commuteStartBubbleSeconds)
+            }
         case .commuteEnd:
             runReaction(ReactionActions.commuteEnd())
             showBubble("수고했어!", seconds: Self.commuteEndBubbleSeconds)
@@ -484,16 +514,18 @@ final class ReactionEngine {
             resetPose()
             node.runAction(ReactionActions.drowsySink(tilt: modelExtent * 0.18), forKey: Self.reactionActionKey)
         }
+        setEyesClosed(true) // A2: 잠들면 눈을 감는다(첫 진입 시 변형 텍스처를 1회 지연 생성·캐시).
         startZzzLoop()
     }
 
-    /// 졸기 종료(잠 상태만 해제 — 포즈는 호출측이 처리). zzzTask 취소 + 💤 노드 정리.
+    /// 졸기 종료(잠 상태만 해제 — 포즈는 호출측이 처리). zzzTask 취소 + 💤 노드 정리 + 감은 눈 원복.
     /// 마일스톤/근무종료 인터럽트는 이후 runReaction(resetPose 포함)이 포즈를 복원한다.
     private func endSleep() {
         isSleeping = false
         zzzTask?.cancel()
         zzzTask = nil
         removeTransientNodes()
+        setEyesClosed(false) // A2: 깨거나 인터럽트되면 눈을 다시 뜬다(모든 sleep 이탈 경로 공통).
     }
 
     /// 자는 중 클릭으로 깨우기: 화들짝(현재 숙인 자세에서 스냅 복원 + 살짝 튀어오름) + "깜빡 졸았다!".
@@ -518,14 +550,108 @@ final class ReactionEngine {
         resetPose()
     }
 
-    /// 넛지 등장 시선끌기: 인사(greetingNod)만 1회 재생한다(말풍선은 nudgePromptActive 가 담당). 상태 기계
-    /// (activeKind)는 건드리지 않아 이어질 리액션과 경합하지 않는다. 노드가 아직 없으면(첫 표시) 조용히 넘어간다.
-    func playNudgeNod() {
-        guard let node = reactionNode else { return }
-        resetPose()
-        node.runAction(ReactionActions.greetingNod(), forKey: Self.reactionActionKey)
-        setRenderFPS(Self.activeFPS)
-        scheduleFPSReset(after: ReactionKind.greeting(name: "").duration + 0.1)
+    // MARK: - A2 잘 때 감은 눈(재질 텍스처 교체)
+
+    /// attach 시 캐릭터 지오메트리에서 diffuse 텍스처를 가진 첫 재질을 찾아 참조/원본을 확보한다.
+    /// (단일 메시·단일 재질 모델이지만 방어적으로 순회한다.) 텍스처가 없으면 조용히 넘어간다(감은 눈 비활성).
+    private func captureEyeMaterial(in node: SCNNode) {
+        guard eyeMaterial == nil else { return } // 첫 attach 에서만 확보(재-attach 시 원복 상태 보존).
+        var found: SCNMaterial?
+        node.enumerateHierarchy { child, stop in
+            for material in child.geometry?.materials ?? [] {
+                if Self.cgImage(from: material.diffuse.contents) != nil {
+                    found = material
+                    stop.pointee = true
+                    return
+                }
+            }
+        }
+        guard let material = found else { return }
+        eyeMaterial = material
+        eyeOpenContents = material.diffuse.contents
+        eyeSourceImage = Self.cgImage(from: material.diffuse.contents)
+    }
+
+    /// 잠들 때/깰 때 diffuse 텍스처를 감은 눈 변형본↔원본으로 교체한다. 재질 미확보(헤드리스)면 no-op.
+    /// 변형본은 첫 호출 시 1회 생성해 캐시한다(512²라 수십 ms — 메인 스레드 허용).
+    func setEyesClosed(_ closed: Bool) {
+        guard let material = eyeMaterial else { return }
+        if closed {
+            if closedEyesImage == nil, let source = eyeSourceImage {
+                closedEyesImage = SleepEyeTexture.makeClosedEyes(from: source)
+            }
+            if let closedEyesImage {
+                material.diffuse.contents = closedEyesImage
+            }
+        } else if let eyeOpenContents {
+            material.diffuse.contents = eyeOpenContents
+        }
+    }
+
+    /// 재질 콘텐츠(CGImage/NSImage/파일·아카이브 URL/경로)를 CGImage 로 정규화한다. 알 수 없으면 nil.
+    /// 아카이브 URL 디코딩·다운스케일은 CheckCharacter3DScene 이 이미 처리하므로 여기선 CGImage/NSImage 위주다.
+    static func cgImage(from contents: Any?) -> CGImage? {
+        guard let contents else { return nil }
+        if CFGetTypeID(contents as CFTypeRef) == CGImage.typeID {
+            return (contents as! CGImage)
+        }
+        if let image = contents as? NSImage {
+            return image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        }
+        // URL/경로 등은 씬 로드 시 이미 CGImage 로 다운스케일되므로 일반 경로에선 도달하지 않는다.
+        return CheckCharacter3DScene.downscaledTexture(contents, maxDimension: 512)
+    }
+
+    // MARK: - A1 캐릭터 몸체 히트 판정(투영 프리체크 + 지오메트리 hitTest)
+
+    /// 몸체 히트 판정을 할 수 있는 상태인지: 뷰가 attach 되고 창에 올라와 있어야 한다(지연 마운트 전엔 false → 통과).
+    var hasAttachedView: Bool {
+        attachedView?.window != nil
+    }
+
+    /// 화면 좌표 `screenPoint` 가 캐릭터 "몸체"(실제 지오메트리) 위인지. 2단 판정:
+    /// (1) 캐시된 투영 bbox(뷰 로컬, 12pt 인플레이트) 프리체크 — 화면 어디를 움직여도 값싼 rect 검사로 걸러
+    ///     대부분의 이동에서 hitTest 를 피한다. (2) 통과한 점만 SCNView.hitTest 로 지오메트리 정밀 확정.
+    /// 뷰가 없거나(지연 마운트) 창이 없으면 항상 false(완전 통과).
+    func isBodyAtScreenPoint(_ screenPoint: NSPoint) -> Bool {
+        guard let view = attachedView, let window = view.window else { return false }
+        let windowPoint = window.convertPoint(fromScreen: screenPoint)
+        let local = view.convert(windowPoint, from: nil)
+        if let rect = projectedBodyViewRect(in: view), rect.contains(local) == false {
+            return false // 프리체크 탈락(투영 rect 계산 실패 시엔 통과시켜 hitTest 로 확정).
+        }
+        let hits = view.hitTest(local, options: [
+            .rootNode: reactionNode as Any,      // 캐릭터 서브트리만(색종이·💤 노드 제외).
+            .boundingBoxOnly: false,             // 지오메트리 정밀.
+            .ignoreHiddenNodes: true
+        ])
+        return hits.isEmpty == false
+    }
+
+    /// 캐릭터 노드 bbox 8코너를 뷰로 투영해 만든 몸체 영역(뷰 로컬, bob/sway 대비 12pt 인플레이트). 1회 계산 후 캐시.
+    /// 투영은 카메라·모델이 고정이라 패널 위치와 무관하게 안정적이므로 재배치/드래그로 무효화할 필요가 없다.
+    private func projectedBodyViewRect(in view: SCNView) -> NSRect? {
+        if let cachedBodyViewRect { return cachedBodyViewRect }
+        guard let node = reactionNode, view.bounds.width > 1, view.bounds.height > 1 else { return nil }
+        let (minB, maxB) = node.boundingBox
+        let corners = [
+            SCNVector3(minB.x, minB.y, minB.z), SCNVector3(maxB.x, minB.y, minB.z),
+            SCNVector3(minB.x, maxB.y, minB.z), SCNVector3(maxB.x, maxB.y, minB.z),
+            SCNVector3(minB.x, minB.y, maxB.z), SCNVector3(maxB.x, minB.y, maxB.z),
+            SCNVector3(minB.x, maxB.y, maxB.z), SCNVector3(maxB.x, maxB.y, maxB.z)
+        ]
+        var minX = CGFloat.greatestFiniteMagnitude, minY = CGFloat.greatestFiniteMagnitude
+        var maxX = -CGFloat.greatestFiniteMagnitude, maxY = -CGFloat.greatestFiniteMagnitude
+        for corner in corners {
+            let world = node.convertPosition(corner, to: nil)
+            let projected = view.projectPoint(world)
+            minX = min(minX, CGFloat(projected.x)); maxX = max(maxX, CGFloat(projected.x))
+            minY = min(minY, CGFloat(projected.y)); maxY = max(maxY, CGFloat(projected.y))
+        }
+        guard maxX > minX, maxY > minY else { return nil }
+        let rect = NSRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY).insetBy(dx: -12, dy: -12)
+        cachedBodyViewRect = rect
+        return rect
     }
 
     private func startZzzLoop() {
@@ -790,5 +916,414 @@ extension SCNAction {
         case .easeInEaseOut:
             return t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2
         }
+    }
+}
+
+/// A2: 캐릭터 diffuse 텍스처(512²)로부터 "감은 눈" 변형 텍스처를 만드는 순수 이미지 처리기.
+///
+/// USDZ 파일은 절대 건드리지 않고, 로드된 텍스처(CGImage)만 오프스크린으로 변형한다. 눈 조각은 UV 차트에서
+/// 2~4개로 흩어져 있어(실측: 큰 눈 + 우하단·우상단 파편) 좌표를 하드코딩하지 않고 "어두운·비적색 픽셀" 시드로
+/// connected-components 탐지한다. 각 눈 클러스터를 주변 피부색으로 인페인트한 뒤, 클러스터 픽셀 분포의
+/// PCA 주축을 따라 직선 "감은 선"을 그린다(호가 아닌 직선인 이유: UV 차트 회전 부호가 모호해 호 방향을
+/// 정할 수 없고, 140pt 패널 표시 크기에선 직선이 감은 눈으로 충분히 읽힌다).
+enum SleepEyeTexture {
+    /// 눈 시드 판정 파라미터. 이 캐릭터의 눈은 "브라운 홍채 + 검은 동공/외곽"이라, 순수 어두움(max<90)만
+    /// 보면 홍채를 놓쳐(적갈로 걸러져) 감은 눈이 거의 읽히지 않았다(오프스크린 렌더로 확인). 그래서
+    /// "어두운 편(max<brightMax)이며 (따뜻한 브라운: r>b+warmMargin  또는  아주 어두운 검정: max<blackMax)"으로
+    /// 눈을 잡되, 라벤더 피부(b가 우세)·밝은 분홍 볼(max 큼)은 배제한다.
+    private static let brightMax = 150     // max(r,g,b) < 150 이면 어두운 편(밝은 볼·피부 배제).
+    private static let warmMargin = 8      // r > b + 8 이면 따뜻한 브라운(홍채) — 라벤더(b 우세) 배제.
+    private static let blackMax = 70       // max(r,g,b) < 70 이면 검은 픽셀(동공/외곽) — 색과 무관하게 포함.
+    private static let alphaMin = 40       // 투명 영역 제외.
+    private static let dilateRadius = 3    // 클러스터 bbox 확장(내부 흰 하이라이트 포함 + 인페인트 여유).
+
+    /// 원본 diffuse CGImage 로부터 감은 눈 변형본을 만든다. 눈을 못 찾거나 실패하면 nil(재질 원복 유지).
+    static func makeClosedEyes(from source: CGImage) -> CGImage? {
+        let width = source.width, height = source.height
+        guard width >= 32, height >= 32 else { return nil }
+        let count = width * height * 4
+        let ptr = UnsafeMutablePointer<UInt8>.allocate(capacity: count)
+        defer { ptr.deallocate() }
+        ptr.initialize(repeating: 0, count: count)
+        guard let ctx = CGContext(
+            data: ptr, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        ctx.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        let buffer = UnsafeMutableBufferPointer(start: ptr, count: count)
+        // 눈은 UV 아틀라스에서 여러 조각으로 흩어져 있다. 검출된 모든 눈 조각(라벤더 얼굴에 박힌 어두운·브라운)을 모아
+        // 팽창(dilate)한 마스크를 피부색으로 덮어 눈을 통째로 지운다(작은 조각·외곽선까지 확실히 — 기울인 포즈에서
+        // "뜬 눈" 잔여가 안 남게). 그 뒤 큰 그룹(=실제 눈)마다 PCA 감은 선을 한 번씩 그린다.
+        let allClusters = detectClusters(buffer, width: width, height: height)
+        guard allClusters.isEmpty == false else { return nil }
+        // 전역 라벤더 피부색: 눈이 아틀라스 모서리에 있으면 지역 링이 텍스처 밖(투명)이라 못 구한다 → 전체 중앙값으로 덮는다.
+        let globalSkin = globalSkinColor(buffer, width: width, height: height) ?? (r: 200, g: 190, b: 230, a: 255)
+        // 감은 선 색(눈의 어두운 중앙값)은 지우기 전에 미리 읽는다.
+        let groups = eyeGroups(allClusters, gap: max(8, max(width, height) / 24), imagePixelCount: width * height)
+        let lineColors = groups.map { medianColor(of: $0.pixels, buffer: buffer, width: width) }
+        // 1) 지우기: 모든 눈 조각의 합집합을 팽창해 피부색으로 덮는다.
+        fillEyeMask(buffer, width: width, height: height, clusters: allClusters,
+                    skin: globalSkin, radius: max(4, max(width, height) / 64))
+        // 2) 감은 선: 주요 눈 그룹마다 PCA 주축을 따라 직선.
+        for (group, dark) in zip(groups, lineColors) {
+            drawClosedLine(buffer, width: width, height: height, cluster: group,
+                           color: dark ?? (r: 60, g: 50, b: 70, a: 255))
+        }
+        return ctx.makeImage()
+    }
+
+    // MARK: - 클러스터 탐지 (테스트도 사용)
+
+    struct Cluster {
+        var pixels: [(x: Int, y: Int)]
+        var minX: Int, minY: Int, maxX: Int, maxY: Int
+        var centroid: (x: Double, y: Double)
+    }
+
+    /// 어두운·비적색 시드를 connected-components(8-이웃)로 묶어 노이즈(면적 하한 미만)를 걸러 돌려준다.
+    static func detectClusters(in image: CGImage) -> [Cluster] {
+        let width = image.width, height = image.height
+        guard width >= 32, height >= 32 else { return [] }
+        let count = width * height * 4
+        let ptr = UnsafeMutablePointer<UInt8>.allocate(capacity: count)
+        defer { ptr.deallocate() }
+        ptr.initialize(repeating: 0, count: count)
+        guard let ctx = CGContext(
+            data: ptr, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return [] }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return detectClusters(UnsafeMutableBufferPointer(start: ptr, count: count), width: width, height: height)
+    }
+
+    private static func detectClusters(_ buffer: UnsafeMutableBufferPointer<UInt8>, width: Int, height: Int) -> [Cluster] {
+        let pixelCount = width * height
+        var seed = [Bool](repeating: false, count: pixelCount)
+        for i in 0..<pixelCount {
+            let r = Int(buffer[i * 4]), g = Int(buffer[i * 4 + 1]), b = Int(buffer[i * 4 + 2]), a = Int(buffer[i * 4 + 3])
+            guard a > alphaMin else { continue }
+            let maxc = max(r, max(g, b))
+            // 어두운 편 && (아주 어두운 검정  ||  따뜻한 브라운 홍채). 브라운은 r>b 이면서 g가 b 밑으로
+            // 크게 내려가지 않는다(g+4>=b) — 이 조건이 라벤더 피부(b 우세)와 채도 높은 빨강 파편(g<b)을 함께 배제한다.
+            if maxc < brightMax, maxc < blackMax || (r > b + warmMargin && g + 4 >= b) {
+                seed[i] = true
+            }
+        }
+        // 면적 하한: 이미지 크기에 비례(512² 기준 ~21px). 눈 조각을 넉넉히 잡아 꽉 덮되 점 노이즈는 거른다.
+        let minArea = max(8, pixelCount / 12_000)
+        var visited = [Bool](repeating: false, count: pixelCount)
+        var clusters: [Cluster] = []
+        var stack: [Int] = []
+        for start in 0..<pixelCount where seed[start] && !visited[start] {
+            stack.removeAll(keepingCapacity: true)
+            stack.append(start)
+            visited[start] = true
+            var pixels: [(x: Int, y: Int)] = []
+            var minX = width, minY = height, maxX = 0, maxY = 0
+            while let idx = stack.popLast() {
+                let x = idx % width, y = idx / width
+                pixels.append((x, y))
+                minX = min(minX, x); maxX = max(maxX, x)
+                minY = min(minY, y); maxY = max(maxY, y)
+                for dy in -1...1 {
+                    for dx in -1...1 where !(dx == 0 && dy == 0) {
+                        let nx = x + dx, ny = y + dy
+                        guard nx >= 0, nx < width, ny >= 0, ny < height else { continue }
+                        let nIdx = ny * width + nx
+                        if seed[nIdx], !visited[nIdx] {
+                            visited[nIdx] = true
+                            stack.append(nIdx)
+                        }
+                    }
+                }
+            }
+            guard pixels.count >= minArea else { continue }
+            // 눈만 남긴다: 클러스터를 둘러싼 링이 라벤더 피부(파랑 우세)일 때만 채택한다. 눈은 얼굴(라벤더)에
+            // 박혀 있지만, UV 아틀라스 위쪽의 빨강·흰 파편(머리 위·등)은 라벤더에 둘러싸이지 않는다 —
+            // 좌표를 하드코딩하지 않고 "얼굴 위 눈"만 고르는 판별식이다.
+            let ex0 = max(0, minX - dilateRadius), ey0 = max(0, minY - dilateRadius)
+            let ex1 = min(width - 1, maxX + dilateRadius), ey1 = min(height - 1, maxY + dilateRadius)
+            guard let ring = medianRingColor(buffer, width: width, height: height, x0: ex0, y0: ey0, x1: ex1, y1: ey1, ring: 4),
+                  ring.b > ring.r + 4, ring.b > ring.g + 4 else { continue }
+            let sx = pixels.reduce(0.0) { $0 + Double($1.x) }
+            let sy = pixels.reduce(0.0) { $0 + Double($1.y) }
+            let n = Double(pixels.count)
+            clusters.append(Cluster(
+                pixels: pixels, minX: minX, minY: minY, maxX: maxX, maxY: maxY,
+                centroid: (sx / n, sy / n)
+            ))
+        }
+        return clusters
+    }
+
+    /// 눈 조각을 그룹으로 합친 뒤(mergedGroups), "눈 최소 면적"(512² 기준 ~105px) 미만인 고립 스펙만 버린다.
+    /// 상대(최대 대비) 기준은 아틀라스에 비정상적으로 큰 눈 조각이 하나 있으면 임계를 밀어 올려 다른 눈 조각까지
+    /// 버리므로, 절대 하한을 쓴다(눈은 이 크기 이상, 점 노이즈·눈썹 파편은 미만). 낮은 검출 하한(꽉 덮기)과
+    /// 적은 변경 덩어리 수를 동시에 만족시키는 지점이다.
+    static func eyeGroups(_ clusters: [Cluster], gap: Int, imagePixelCount: Int) -> [Cluster] {
+        let groups = mergedGroups(clusters, gap: gap)
+        let threshold = max(24, imagePixelCount / 2_500)
+        return groups.filter { $0.pixels.count >= threshold }
+    }
+
+    /// 서로 bbox 가 `gap` 이내로 가까운 눈 조각을 한 눈으로 합친다(union-find). 흩어진 UV 조각을 하나의
+    /// 감은 눈으로 렌더해 변경 덩어리가 과하게 늘지 않게 한다.
+    static func mergedGroups(_ clusters: [Cluster], gap: Int) -> [Cluster] {
+        guard clusters.isEmpty == false else { return [] }
+        var parent = Array(0..<clusters.count)
+        func find(_ x: Int) -> Int {
+            var r = x
+            while parent[r] != r { parent[r] = parent[parent[r]]; r = parent[r] }
+            return r
+        }
+        for i in 0..<clusters.count {
+            for j in (i + 1)..<clusters.count where bboxGap(clusters[i], clusters[j]) <= gap {
+                parent[find(i)] = find(j)
+            }
+        }
+        var byRoot: [Int: [Int]] = [:]
+        for i in 0..<clusters.count { byRoot[find(i), default: []].append(i) }
+        return byRoot.values.map { indices in
+            var pixels: [(x: Int, y: Int)] = []
+            var minX = Int.max, minY = Int.max, maxX = 0, maxY = 0
+            for k in indices {
+                let c = clusters[k]
+                pixels.append(contentsOf: c.pixels)
+                minX = min(minX, c.minX); minY = min(minY, c.minY)
+                maxX = max(maxX, c.maxX); maxY = max(maxY, c.maxY)
+            }
+            let n = Double(max(1, pixels.count))
+            let sx = pixels.reduce(0.0) { $0 + Double($1.x) }
+            let sy = pixels.reduce(0.0) { $0 + Double($1.y) }
+            return Cluster(pixels: pixels, minX: minX, minY: minY, maxX: maxX, maxY: maxY, centroid: (sx / n, sy / n))
+        }
+    }
+
+    /// 두 클러스터 bbox 사이의 최소 간격(겹치면 0). x·y 간격 중 큰 값을 쓴다(대각으로만 가까운 것은 안 합침).
+    private static func bboxGap(_ a: Cluster, _ b: Cluster) -> Int {
+        let dx = max(0, max(a.minX - b.maxX, b.minX - a.maxX))
+        let dy = max(0, max(a.minY - b.maxY, b.minY - a.maxY))
+        return max(dx, dy)
+    }
+
+    // MARK: - 지우기(인페인트) + 감은 선 그리기
+
+    /// 검출된 모든 눈 조각의 bbox 를 `pad` 만큼 넓혀 피부색으로 덮는다(조각 내부의 성긴 틈까지 통째로 — 흩어진
+    /// seed 를 픽셀 단위로만 지우면 사이에 남는 홍채·중간톤이 기울인 포즈에서 "뜬 눈"으로 드러나기 때문). 작은
+    /// 조각까지 모두 포함하고 얼굴이 균일한 라벤더라, 사각 채움이라도 경계가 티 나지 않는다.
+    private static func fillEyeMask(_ buffer: UnsafeMutableBufferPointer<UInt8>, width: Int, height: Int, clusters: [Cluster], skin globalSkin: RGBA, radius pad: Int) {
+        for cluster in clusters {
+            let x0 = max(0, cluster.minX - pad), y0 = max(0, cluster.minY - pad)
+            let x1 = min(width - 1, cluster.maxX + pad), y1 = min(height - 1, cluster.maxY + pad)
+            // 지역 라벤더 피부색(bbox 바깥 링에서 라벤더만 골라 중앙값)으로 채워 주변 음영과 맞춘다 → 사각 패치가
+            // 덜 튄다. 라벤더 이웃이 없으면(아틀라스 모서리) 전역 라벤더로 폴백한다.
+            let skin = localLavenderSkin(buffer, width: width, height: height, x0: x0, y0: y0, x1: x1, y1: y1) ?? globalSkin
+            for y in y0...y1 {
+                for x in x0...x1 {
+                    setPixel(buffer, index: y * width + x, color: skin)
+                }
+            }
+        }
+    }
+
+    /// bbox 바깥 링(폭 6)에서 "라벤더 피부"(파랑 우세·중간 밝기) 픽셀만 골라 중앙값 색을 구한다. 없으면 nil.
+    private static func localLavenderSkin(_ buffer: UnsafeMutableBufferPointer<UInt8>, width: Int, height: Int, x0: Int, y0: Int, x1: Int, y1: Int) -> RGBA? {
+        var rs = [Int](), gs = [Int](), bs = [Int]()
+        let ring = 6
+        let rx0 = max(0, x0 - ring), ry0 = max(0, y0 - ring)
+        let rx1 = min(width - 1, x1 + ring), ry1 = min(height - 1, y1 + ring)
+        for y in ry0...ry1 {
+            for x in rx0...rx1 where (x < x0 || x > x1 || y < y0 || y > y1) {
+                let i = (y * width + x) * 4
+                let r = Int(buffer[i]), g = Int(buffer[i + 1]), b = Int(buffer[i + 2]), a = Int(buffer[i + 3])
+                let maxc = max(r, max(g, b))
+                if a > alphaMin, b > r + 2, b > g - 4, maxc > 110 { // 라벤더만.
+                    rs.append(r); gs.append(g); bs.append(b)
+                }
+            }
+        }
+        guard rs.count >= 8 else { return nil }
+        rs.sort(); gs.sort(); bs.sort()
+        let m = rs.count / 2
+        return (rs[m], gs[m], bs[m], 255)
+    }
+
+    /// 클러스터 픽셀 분포의 PCA 주축을 따라 중심에 직선 "감은 선"(둥근 캡)을 그린다. 호가 아닌 직선인 이유:
+    /// UV 차트 회전 부호가 모호해 호 방향을 정할 수 없고, 140pt 패널 크기에선 직선이 감은 눈으로 충분히 읽힌다.
+    private static func drawClosedLine(_ buffer: UnsafeMutableBufferPointer<UInt8>, width: Int, height: Int, cluster: Cluster, color: RGBA) {
+        let pca = principalAxis(of: cluster.pixels, centroid: cluster.centroid)
+        // 선 길이·두께 상한: 아틀라스에서 비정상적으로 큰 눈 조각(작은 화면 눈에 매핑)은 PCA span 이 커서 두꺼운
+        // 막대가 되어 "뜬 눈"처럼 보인다. 텍스처 대비 작은 절대 상한(길이 ≤ maxSpan, 두께 ≤ maxThick)으로 캡해
+        // 어느 조각이든 화면에서 가느다란 감은 선으로 읽히게 한다.
+        let maxSpan = Double(max(width, height)) / 13      // 512 기준 ~39px.
+        let span = min(pca.principalSpan, maxSpan)
+        let half = span / 2
+        let ax = cluster.centroid.x - pca.dir.0 * half, ay = cluster.centroid.y - pca.dir.1 * half
+        let bx = cluster.centroid.x + pca.dir.0 * half, by = cluster.centroid.y + pca.dir.1 * half
+        let halfT = min(3.5, max(2.0, pca.minorSpan * 0.30) / 2)
+        let margin = Int(halfT.rounded(.up)) + 1
+        let lx0 = max(0, cluster.minX - margin), ly0 = max(0, cluster.minY - margin)
+        let lx1 = min(width - 1, cluster.maxX + margin), ly1 = min(height - 1, cluster.maxY + margin)
+        for y in ly0...ly1 {
+            for x in lx0...lx1 where distanceToSegment(px: Double(x), py: Double(y), ax: ax, ay: ay, bx: bx, by: by) <= halfT {
+                setPixel(buffer, index: y * width + x, color: color)
+            }
+        }
+    }
+
+    private typealias RGBA = (r: Int, g: Int, b: Int, a: Int)
+
+    private static func setPixel(_ buffer: UnsafeMutableBufferPointer<UInt8>, index: Int, color: RGBA) {
+        buffer[index * 4] = UInt8(clamping: color.r)
+        buffer[index * 4 + 1] = UInt8(clamping: color.g)
+        buffer[index * 4 + 2] = UInt8(clamping: color.b)
+        buffer[index * 4 + 3] = UInt8(clamping: color.a)
+    }
+
+    private static func medianColor(of pixels: [(x: Int, y: Int)], buffer: UnsafeMutableBufferPointer<UInt8>, width: Int) -> RGBA? {
+        guard pixels.isEmpty == false else { return nil }
+        var rs = [Int](), gs = [Int](), bs = [Int]()
+        rs.reserveCapacity(pixels.count); gs.reserveCapacity(pixels.count); bs.reserveCapacity(pixels.count)
+        for p in pixels {
+            let i = (p.y * width + p.x) * 4
+            rs.append(Int(buffer[i])); gs.append(Int(buffer[i + 1])); bs.append(Int(buffer[i + 2]))
+        }
+        rs.sort(); gs.sort(); bs.sort()
+        let m = rs.count / 2
+        return (rs[m], gs[m], bs[m], 255)
+    }
+
+    /// 텍스처 전체에서 라벤더 피부(파랑 우세·중간 밝기) 픽셀의 중앙값 색을 구한다(모서리 눈 인페인트 폴백).
+    private static func globalSkinColor(_ buffer: UnsafeMutableBufferPointer<UInt8>, width: Int, height: Int) -> RGBA? {
+        var rs = [Int](), gs = [Int](), bs = [Int]()
+        let pixelCount = width * height
+        for i in stride(from: 0, to: pixelCount, by: 4) { // 4픽셀 간격 샘플(충분·빠름).
+            let r = Int(buffer[i * 4]), g = Int(buffer[i * 4 + 1]), b = Int(buffer[i * 4 + 2]), a = Int(buffer[i * 4 + 3])
+            guard a > alphaMin else { continue }
+            let maxc = max(r, max(g, b))
+            if b > r + 4, b > g + 4, maxc > 120, maxc < 245 {
+                rs.append(r); gs.append(g); bs.append(b)
+            }
+        }
+        guard rs.isEmpty == false else { return nil }
+        rs.sort(); gs.sort(); bs.sort()
+        let m = rs.count / 2
+        return (rs[m], gs[m], bs[m], 255)
+    }
+
+    /// 확장 bbox 바깥 한 겹(ring 폭)에서 불투명 픽셀의 중앙값 색(피부 라벤더)을 구한다.
+    private static func medianRingColor(_ buffer: UnsafeMutableBufferPointer<UInt8>, width: Int, height: Int, x0: Int, y0: Int, x1: Int, y1: Int, ring: Int) -> RGBA? {
+        var rs = [Int](), gs = [Int](), bs = [Int]()
+        let rx0 = max(0, x0 - ring), ry0 = max(0, y0 - ring)
+        let rx1 = min(width - 1, x1 + ring), ry1 = min(height - 1, y1 + ring)
+        for y in ry0...ry1 {
+            for x in rx0...rx1 where (x < x0 || x > x1 || y < y0 || y > y1) {
+                let i = (y * width + x) * 4
+                guard Int(buffer[i + 3]) > alphaMin else { continue }
+                rs.append(Int(buffer[i])); gs.append(Int(buffer[i + 1])); bs.append(Int(buffer[i + 2]))
+            }
+        }
+        guard rs.isEmpty == false else { return nil }
+        rs.sort(); gs.sort(); bs.sort()
+        let m = rs.count / 2
+        return (rs[m], gs[m], bs[m], 255)
+    }
+
+    /// 클러스터 픽셀 분포의 PCA 주축 방향과 주축/부축 span.
+    private static func principalAxis(of pixels: [(x: Int, y: Int)], centroid: (x: Double, y: Double)) -> (dir: (Double, Double), principalSpan: Double, minorSpan: Double) {
+        var sxx = 0.0, syy = 0.0, sxy = 0.0
+        for p in pixels {
+            let dx = Double(p.x) - centroid.x, dy = Double(p.y) - centroid.y
+            sxx += dx * dx; syy += dy * dy; sxy += dx * dy
+        }
+        let n = Double(max(1, pixels.count))
+        sxx /= n; syy /= n; sxy /= n
+        let theta = 0.5 * atan2(2 * sxy, sxx - syy)
+        let dir = (cos(theta), sin(theta))
+        let perp = (-sin(theta), cos(theta))
+        var minP = Double.greatestFiniteMagnitude, maxP = -Double.greatestFiniteMagnitude
+        var minQ = Double.greatestFiniteMagnitude, maxQ = -Double.greatestFiniteMagnitude
+        for p in pixels {
+            let dx = Double(p.x) - centroid.x, dy = Double(p.y) - centroid.y
+            let projP = dx * dir.0 + dy * dir.1
+            let projQ = dx * perp.0 + dy * perp.1
+            minP = min(minP, projP); maxP = max(maxP, projP)
+            minQ = min(minQ, projQ); maxQ = max(maxQ, projQ)
+        }
+        return (dir, max(2, maxP - minP), max(1, maxQ - minQ))
+    }
+
+    private static func distanceToSegment(px: Double, py: Double, ax: Double, ay: Double, bx: Double, by: Double) -> Double {
+        let dx = bx - ax, dy = by - ay
+        let len2 = dx * dx + dy * dy
+        guard len2 > 1e-9 else { return hypot(px - ax, py - ay) }
+        var t = ((px - ax) * dx + (py - ay) * dy) / len2
+        t = max(0, min(1, t))
+        return hypot(px - (ax + t * dx), py - (ay + t * dy))
+    }
+
+    // MARK: - 변경 통계 (결정적 검증)
+
+    /// 원본과 변형본의 픽셀 차이를 마스크로 만들고, connected-components(변경 덩어리 수)와 변경 픽셀 비율을 돌려준다.
+    /// 감은 눈 변형이 과소/과대가 아닌지(클러스터 2~5개, 변경 면적 0.2~6%)를 결정적으로 검증하는 데 쓴다.
+    static func changeStats(original: CGImage, modified: CGImage) -> (clusterCount: Int, changedFraction: Double)? {
+        let width = original.width, height = original.height
+        guard modified.width == width, modified.height == height, width * height > 0 else { return nil }
+        guard let a = rgbaBuffer(original), let b = rgbaBuffer(modified) else { return nil }
+        defer { a.deallocate(); b.deallocate() }
+        let pixelCount = width * height
+        var changed = [Bool](repeating: false, count: pixelCount)
+        var changedCount = 0
+        for i in 0..<pixelCount {
+            let dr = abs(Int(a[i * 4]) - Int(b[i * 4]))
+            let dg = abs(Int(a[i * 4 + 1]) - Int(b[i * 4 + 1]))
+            let db = abs(Int(a[i * 4 + 2]) - Int(b[i * 4 + 2]))
+            if max(dr, max(dg, db)) > 10 {
+                changed[i] = true
+                changedCount += 1
+            }
+        }
+        // 변경 마스크 8-이웃 CC.
+        var visited = [Bool](repeating: false, count: pixelCount)
+        var clusterCount = 0
+        var stack: [Int] = []
+        for start in 0..<pixelCount where changed[start] && !visited[start] {
+            clusterCount += 1
+            stack.removeAll(keepingCapacity: true)
+            stack.append(start)
+            visited[start] = true
+            while let idx = stack.popLast() {
+                let x = idx % width, y = idx / width
+                for dy in -1...1 {
+                    for dx in -1...1 where !(dx == 0 && dy == 0) {
+                        let nx = x + dx, ny = y + dy
+                        guard nx >= 0, nx < width, ny >= 0, ny < height else { continue }
+                        let nIdx = ny * width + nx
+                        if changed[nIdx], !visited[nIdx] {
+                            visited[nIdx] = true
+                            stack.append(nIdx)
+                        }
+                    }
+                }
+            }
+        }
+        return (clusterCount, Double(changedCount) / Double(pixelCount))
+    }
+
+    private static func rgbaBuffer(_ image: CGImage) -> UnsafeMutableBufferPointer<UInt8>? {
+        let width = image.width, height = image.height
+        let count = width * height * 4
+        let ptr = UnsafeMutablePointer<UInt8>.allocate(capacity: count)
+        ptr.initialize(repeating: 0, count: count)
+        guard let ctx = CGContext(
+            data: ptr, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            ptr.deallocate()
+            return nil
+        }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return UnsafeMutableBufferPointer(start: ptr, count: count)
     }
 }

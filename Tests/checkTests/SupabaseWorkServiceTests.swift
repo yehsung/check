@@ -664,6 +664,9 @@ func fetchOwnMembershipParsesTeamIDAndName() async throws {
     // select 가 role, teams(name,weekly_goal_hours)로 확장되어야 한다.
     #expect(request.url?.query?.contains("weekly_goal_hours") == true)
     #expect(request.url?.query?.contains("role") == true)
+    // 다중 소속 시 '주 팀' 선택을 서버 함수와 통일: joined_at 먼저, team_id 로 타이브레이크(콤마는 인코딩될 수 있어 조각으로 검사).
+    #expect(request.url?.query?.contains("order=joined_at.asc") == true)
+    #expect(request.url?.query?.contains("team_id.asc") == true)
 }
 
 @Test

@@ -530,6 +530,31 @@ func checkMenuViewRendersFilteredLeaderboardSnapshot() throws {
     }
 }
 
+// FIX: 리그 빈-필터 문구 — 원본에 팀이 있으나 이번 주 아무도 근무 안 해 필터로 전부 숨겨지면 중립 문구를 쓰고,
+// 로드 전/실패(원본 0)면 fallbackStatus(동기화 상태)를 쓴다. '동기화됨'이 본문에 뜨는 어색함을 없앤다.
+@MainActor
+@Test
+func leaderboardEmptyFilterUsesNeutralMessageDistinctFromFallback() throws {
+    // 순수 판정 지점: 원본 팀 있음(>0)+표시 비면 중립 문구, 원본 없음(0)이면 fallbackStatus 그대로.
+    #expect(LeaderboardEmptyMessage.text(unfilteredCount: 2, fallbackStatus: "동기화됨") == "아직 이번 주 근무한 팀이 없어요")
+    #expect(LeaderboardEmptyMessage.text(unfilteredCount: 0, fallbackStatus: "동기화됨") == "동기화됨")
+    #expect(LeaderboardEmptyMessage.text(unfilteredCount: 0, fallbackStatus: "로그인 필요") == "로그인 필요")
+
+    // 렌더 경로 실증: 내 팀은 목록에 없고 타팀은 전부 0시간 → 필터 후 표시 목록이 비지만 원본은 2팀(중립 문구 경로).
+    let store = makeTeamStore(members: [], now: Date())
+    store.syncMessage = "동기화됨"
+    store.leaderboard = [
+        TeamLeaderboardEntry(id: "20000000-0000-0000-0000-000000000002", name: "잠든 팀", weeklyGoalHours: 60, totalSeconds: 0, workingCount: 0, memberCount: 2),
+        TeamLeaderboardEntry(id: "30000000-0000-0000-0000-000000000003", name: "쉬는 팀", weeklyGoalHours: 50, totalSeconds: 0, workingCount: 0, memberCount: 1)
+    ]
+    store.isLeaderboardVisible = true
+    #expect(store.leaderboard.filteredForDisplay(myTeamID: store.currentTeamID).isEmpty) // 표시 목록은 빔
+    #expect(store.leaderboard.count == 2)                                                 // 원본은 2팀
+
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+}
+
 // MARK: - B2: 참여코드 팀원 공개 렌더
 
 @MainActor

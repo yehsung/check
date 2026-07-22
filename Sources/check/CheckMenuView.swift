@@ -56,6 +56,7 @@ struct CheckMenuView: View {
                             entries: store.leaderboard.filteredForDisplay(myTeamID: store.currentTeamID),
                             myTeamID: store.currentTeamID,
                             fallbackStatus: store.syncMessage,
+                            unfilteredCount: store.leaderboard.count,
                             onBack: { store.isLeaderboardVisible = false },
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
@@ -516,6 +517,16 @@ private struct TeamMemberLiveRow: View {
 
 /// 팀 카드 자리를 대체하는 팀별 현황 페이지. 헤더/푸터는 CheckMenuView 가 유지하고, 이 카드만 교체된다.
 /// 제목 + 뒤로 버튼 + 1인당 평균 내림차순 팀 목록(우리 팀 칩). 팀이 많으면 memberList 패턴으로 스크롤.
+/// 리그 빈 목록 자리 문구 선택(순수 로직, 결정적 검증 지점). 필터 전 원본에 팀이 있었는데(unfilteredCount>0)
+/// 표시 목록이 비면 '0시간 필터로 전부 숨겨진' 것이므로 중립 문구를 쓴다. 원본도 비면(0) 로드 전/실패로 보고
+/// fallbackStatus(동기화 상태 문구)를 그대로 노출한다 — 성공 동기화("동기화됨")가 본문에 뜨는 어색함과 구분.
+enum LeaderboardEmptyMessage {
+    static let filteredOut = "아직 이번 주 근무한 팀이 없어요"
+    static func text(unfilteredCount: Int, fallbackStatus: String) -> String {
+        unfilteredCount > 0 ? filteredOut : fallbackStatus
+    }
+}
+
 private struct LeaderboardPanel: View {
     // 1인당 평균 내림차순으로 정렬된 팀 목록(store 에서 이미 정렬됨). 서버 정렬을 신뢰하지 않고 뷰에서도 다시 정렬한다.
     let entries: [TeamLeaderboardEntry]
@@ -523,6 +534,9 @@ private struct LeaderboardPanel: View {
     var myTeamID: String? = nil
     // 아직 로드 전/실패 시 빈 목록 자리에 표시할 안내 문구.
     let fallbackStatus: String
+    // 필터 전(원본) 팀 수. >0 인데 표시 목록이 비면 '0시간 필터로 전부 숨겨진' 것이므로 중립 문구를 쓴다(아래).
+    // 0 이면 로드 전/실패로 보고 fallbackStatus 를 쓴다 — 둘을 구분해 성공 동기화("동기화됨")가 본문에 뜨지 않게.
+    var unfilteredCount: Int = 0
     var onBack: () -> Void = {}
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
@@ -581,7 +595,9 @@ private struct LeaderboardPanel: View {
     private var rows: some View {
         VStack(spacing: Self.rowSpacing) {
             if sortedEntries.isEmpty {
-                Text(fallbackStatus)
+                // 원본에 팀이 있었는데 표시 목록이 비면 필터로 전부 숨겨진 것 — 중립 문구. 원본도 비면 로드 전/실패로
+                // 보고 fallbackStatus(동기화 상태 문구)를 쓴다(결정적 판정은 LeaderboardEmptyMessage 로 격리).
+                Text(LeaderboardEmptyMessage.text(unfilteredCount: unfilteredCount, fallbackStatus: fallbackStatus))
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)

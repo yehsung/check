@@ -150,6 +150,11 @@ final class URLProtocolStub: URLProtocol {
            request.httpMethod == "PATCH" {
             return 500
         }
+        // 참여코드 RPC 만 일시 실패(500)시키는 호스트 — loadMyInviteCode do/catch 가 기존 코드를 지우지 않는지 검증용.
+        if request.url?.host == "invite-code-fails",
+           request.url?.path == "/rest/v1/rpc/my_team_invite_code" {
+            return 500
+        }
         if request.url?.host == "retry-toggle",
            request.url?.path == "/rest/v1/work_sessions",
            request.httpMethod == "PATCH" {

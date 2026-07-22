@@ -239,9 +239,6 @@ final class ReactionEngine {
     /// SCNView 렌더 루프 활성 여부(SwiftUI 관찰용). 패널 표시~근무종료 인사까지 true 로 유지해
     /// 근무종료 꾸벅 인사가 렌더되게 하고, 숨김 시 false 로 내려 렌더를 멈춘다(전력 배려).
     var renderActive = false
-    /// 근무 시작 제안(넛지) 말풍선 표시 여부(SwiftUI 관찰용). greetingText 채널과 별개로, 클릭 가능한
-    /// "근무 시작할까요?" 버튼형 말풍선을 띄운다. 컨트롤러가 showNudge/dismissNudge 에서 직접 토글한다.
-    var nudgePromptActive = false
 
     @ObservationIgnored private(set) var activeKind: ReactionKind?
     @ObservationIgnored private var activeUntil: Date = .distantPast
@@ -275,6 +272,23 @@ final class ReactionEngine {
     /// 감은 눈 선 오버레이 노드(좌/우). sleeping 시 보이고 평상시 숨긴다.
     @ObservationIgnored private weak var closedEyeLeft: SCNNode?
     @ObservationIgnored private weak var closedEyeRight: SCNNode?
+    /// 감은 눈 재질/디퓨즈를 마지막으로 캡처한 씬 루트. 같은 씬 재-attach 면 캐시를 재사용하고, 씬이 교체되면
+    /// 죽은 재질 참조를 버리고 새로 캡처한다(재-attach 감은눈 캐시 고착 방지).
+    @ObservationIgnored private weak var eyeCacheSceneRoot: SCNNode?
+
+    /// A3: 넛지 자동 근무 시작 시 다음 commuteStart 말풍선을 1회 덮어쓰는 오버라이드. perform(.commuteStart)이
+    /// 소비하며 nil 로 비워, 뒤이은 수동 시작은 평소 "오늘도 화이팅!"으로 돌아간다. 관찰 대상 아님(설정→소비만).
+    struct CommuteStartOverride: Equatable {
+        let text: String
+        let seconds: Double
+    }
+    @ObservationIgnored var commuteStartBubbleOverride: CommuteStartOverride?
+
+    // MARK: - A1 히트 영역(캐릭터 몸체 투영 rect 캐시)
+    /// 캐릭터 노드 bbox 8코너를 뷰로 투영해 만든 몸체 화면영역(뷰 로컬, 12pt 인플레이트). attach 시 무효화하고
+    /// 첫 조회 때 지연 계산한다. 뷰 로컬 투영은 패널 위치와 무관하게 안정적이라(카메라·모델 고정) 재배치/드래그로는
+    /// 바뀌지 않는다 — 그래서 프레임당 재계산 없이 캐시 1개면 충분하다(관찰 무효화 최소화 규약).
+    @ObservationIgnored private var cachedBodyViewRect: NSRect?
 
     private static let reactionActionKey = "check.reaction"
     private static let confettiNodeName = "check.reaction.confetti"
@@ -294,6 +308,7 @@ final class ReactionEngine {
         self.facingNode = node.childNode(withName: CheckCharacter3DScene.facingWrapperName, recursively: false)
         self.sceneRoot = sceneRoot
         self.attachedView = view
+        cachedBodyViewRect = nil // A1: 새 뷰/노드 → 몸체 투영 캐시 무효화(다음 조회에 지연 계산).
         let (minB, maxB) = node.boundingBox
         let extent = CGFloat(max(maxB.x - minB.x, max(maxB.y - minB.y, maxB.z - minB.z)))
         modelExtent = extent > 0 ? extent : 1
@@ -320,7 +335,13 @@ final class ReactionEngine {
     private func locateSleepEyeTargets(in sceneRoot: SCNNode) {
         closedEyeLeft = sceneRoot.childNode(withName: CheckCharacter3DScene.closedEyeLeftName, recursively: true)
         closedEyeRight = sceneRoot.childNode(withName: CheckCharacter3DScene.closedEyeRightName, recursively: true)
-        guard faceMaterial == nil else { return }
+        // 같은 씬으로의 재-attach 면 값비싼 재질 탐색·텍스처 생성을 건너뛰고 캐시를 재사용한다. 씬이 교체됐으면
+        // (다른 sceneRoot) 이전 얼굴 재질·디퓨즈는 죽은 참조이므로 캐시를 버리고 새 얼굴에서 다시 캡처한다.
+        if faceMaterial != nil, eyeCacheSceneRoot === sceneRoot { return }
+        eyeCacheSceneRoot = sceneRoot
+        faceMaterial = nil
+        awakeDiffuse = nil
+        sleepDiffuse = nil
         var found: (material: SCNMaterial, image: CGImage)?
         sceneRoot.enumerateHierarchy { node, stop in
             for material in node.geometry?.materials ?? [] {
@@ -513,7 +534,13 @@ final class ReactionEngine {
             showBubble("아얏!", seconds: Self.hitBubbleSeconds)
         case .commuteStart:
             runReaction(ReactionActions.commuteStart(hop: modelExtent * 0.32))
-            showBubble("오늘도 화이팅!", seconds: Self.commuteStartBubbleSeconds)
+            if let override = commuteStartBubbleOverride {
+                // A3: 넛지 자동 시작이면 안내 문구/시간으로 1회 교체하고 오버라이드를 소비한다.
+                showBubble(override.text, seconds: override.seconds)
+                commuteStartBubbleOverride = nil
+            } else {
+                showBubble("오늘도 화이팅!", seconds: Self.commuteStartBubbleSeconds)
+            }
         case .commuteEnd:
             runReaction(ReactionActions.commuteEnd())
             showBubble("수고했어!", seconds: Self.commuteEndBubbleSeconds)
@@ -578,16 +605,6 @@ final class ReactionEngine {
         resetPose()
     }
 
-    /// 넛지 등장 시선끌기: 인사(greetingNod)만 1회 재생한다(말풍선은 nudgePromptActive 가 담당). 상태 기계
-    /// (activeKind)는 건드리지 않아 이어질 리액션과 경합하지 않는다. 노드가 아직 없으면(첫 표시) 조용히 넘어간다.
-    func playNudgeNod() {
-        guard let node = reactionNode else { return }
-        resetPose()
-        node.runAction(ReactionActions.greetingNod(), forKey: Self.reactionActionKey)
-        setRenderFPS(Self.activeFPS)
-        scheduleFPSReset(after: ReactionKind.greeting(name: "").duration + 0.1)
-    }
-
     // MARK: - 드래그 방향 바라보기
 
     /// facing 노드 y축 최대 회전각(라디안). ±40° — 드래그 방향을 향하되 과하지 않게.
@@ -610,6 +627,58 @@ final class ReactionEngine {
 
     /// 헤드리스 검증 지점: 현재 바라보는 방향.
     var currentDragFacing: Int { dragFacing }
+
+    // MARK: - A1 캐릭터 몸체 히트 판정(투영 프리체크 + 지오메트리 hitTest)
+
+    /// 몸체 히트 판정을 할 수 있는 상태인지: 뷰가 attach 되고 창에 올라와 있어야 한다(지연 마운트 전엔 false → 통과).
+    var hasAttachedView: Bool {
+        attachedView?.window != nil
+    }
+
+    /// 화면 좌표 `screenPoint` 가 캐릭터 "몸체"(실제 지오메트리) 위인지. 2단 판정:
+    /// (1) 캐시된 투영 bbox(뷰 로컬, 12pt 인플레이트) 프리체크 — 화면 어디를 움직여도 값싼 rect 검사로 걸러
+    ///     대부분의 이동에서 hitTest 를 피한다. (2) 통과한 점만 SCNView.hitTest 로 지오메트리 정밀 확정.
+    /// 뷰가 없거나(지연 마운트) 창이 없으면 항상 false(완전 통과).
+    func isBodyAtScreenPoint(_ screenPoint: NSPoint) -> Bool {
+        guard let view = attachedView, let window = view.window else { return false }
+        let windowPoint = window.convertPoint(fromScreen: screenPoint)
+        let local = view.convert(windowPoint, from: nil)
+        if let rect = projectedBodyViewRect(in: view), rect.contains(local) == false {
+            return false // 프리체크 탈락(투영 rect 계산 실패 시엔 통과시켜 hitTest 로 확정).
+        }
+        let hits = view.hitTest(local, options: [
+            .rootNode: reactionNode as Any,      // 캐릭터 서브트리만(색종이·💤 노드 제외).
+            .boundingBoxOnly: false,             // 지오메트리 정밀.
+            .ignoreHiddenNodes: true
+        ])
+        return hits.isEmpty == false
+    }
+
+    /// 캐릭터 노드 bbox 8코너를 뷰로 투영해 만든 몸체 영역(뷰 로컬, bob/sway 대비 12pt 인플레이트). 1회 계산 후 캐시.
+    /// 투영은 카메라·모델이 고정이라 패널 위치와 무관하게 안정적이므로 재배치/드래그로 무효화할 필요가 없다.
+    private func projectedBodyViewRect(in view: SCNView) -> NSRect? {
+        if let cachedBodyViewRect { return cachedBodyViewRect }
+        guard let node = reactionNode, view.bounds.width > 1, view.bounds.height > 1 else { return nil }
+        let (minB, maxB) = node.boundingBox
+        let corners = [
+            SCNVector3(minB.x, minB.y, minB.z), SCNVector3(maxB.x, minB.y, minB.z),
+            SCNVector3(minB.x, maxB.y, minB.z), SCNVector3(maxB.x, maxB.y, minB.z),
+            SCNVector3(minB.x, minB.y, maxB.z), SCNVector3(maxB.x, minB.y, maxB.z),
+            SCNVector3(minB.x, maxB.y, maxB.z), SCNVector3(maxB.x, maxB.y, maxB.z)
+        ]
+        var minX = CGFloat.greatestFiniteMagnitude, minY = CGFloat.greatestFiniteMagnitude
+        var maxX = -CGFloat.greatestFiniteMagnitude, maxY = -CGFloat.greatestFiniteMagnitude
+        for corner in corners {
+            let world = node.convertPosition(corner, to: nil)
+            let projected = view.projectPoint(world)
+            minX = min(minX, CGFloat(projected.x)); maxX = max(maxX, CGFloat(projected.x))
+            minY = min(minY, CGFloat(projected.y)); maxY = max(maxY, CGFloat(projected.y))
+        }
+        guard maxX > minX, maxY > minY else { return nil }
+        let rect = NSRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY).insetBy(dx: -12, dy: -12)
+        cachedBodyViewRect = rect
+        return rect
+    }
 
     private func startZzzLoop() {
         zzzTask?.cancel()

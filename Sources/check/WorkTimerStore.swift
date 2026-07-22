@@ -113,6 +113,10 @@ final class WorkTimerStore {
     // 팀 주간 목표시간(초). 출처는 오직 teams.weekly_goal_hours(멤버십 조회 시 확정). 앱은 읽기 전용이다.
     // confirmMembership 성공 시 서버 값으로 갱신하고, signOut/무소속이면 기본값으로 되돌린다.
     var teamGoalSeconds = TeamWeeklyGoal.defaultGoalSeconds
+    // 목표 write 세대 토큰. updateTeamGoal 성공 시 +1 한다. refreshTeamMeta/confirmMembership 은 fetch 발사 전
+    // 이 값을 캡처하고, 응답 반영 시 값이 바뀌었으면(그 사이 새 목표를 write) teamGoalSeconds 대입만 건너뛴다 —
+    // 이미 in-flight 였던 낡은 멤버십 응답이 방금 바꾼 목표를 되돌리는 스냅백(80h→40h)을 막는다. 관찰 대상 아님.
+    @ObservationIgnored var teamGoalWriteGeneration = 0
     // 서버 미반영 근무 조작의 FIFO 큐. 단일 슬롯이 아니라 큐라, in-flight 중 들어온 반대 조작이나
     // 오프라인에서 쌓인 여러 세션이 유실되지 않고 순서대로 재생된다. 각 항목은 자체 세션 정보를 동봉해
     // currentSessionID 변화와 무관하게 정확히 재생된다.

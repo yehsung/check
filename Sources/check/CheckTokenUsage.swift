@@ -97,6 +97,8 @@ struct FileProgress: Equatable, Sendable {
 
 /// Claude 한 라인의 집계값 + 창 판정용 타임스탬프(YYYYMMDDHHMMSS 정수 = 고정폭 UTC 라 사전식==시간순).
 struct ClaudeEntry: Equatable, Sendable {
+    /// 창/퇴거 판정용 ts14 = 이 dedupe 키에서 '관측한 최대 ts14'. max-output 이 이긴 레코드의 ts 가 아니라
+    /// 관측 최대치를 유지해, 창밖의 옛 큰-output 스냅샷이 창 안(더 최신)의 같은 키를 통째로 탈락시키지 않게 한다.
     var ts14: Int
     var input: Int
     var output: Int
@@ -314,7 +316,30 @@ enum TokenUsageIncrementalScanner {
         // 무관하게 결정적이다 — 어느 순서로 들어와도 최대 output 이 이기므로 결과가 같다.
         // (증분 일관: 1차에 [output=2]를 캐시에 넣었어도 다음 tail 에서 같은 키 [output=688]을 만나면 교체된다.)
         let output = intField(usageObject["output_tokens"])
-        if let existing = cache.claudeEntries[key], existing.output >= output { return }
+        // 창/퇴거 판정 ts 는 이 키에서 '관측한 최대 ts14'를 유지한다(max-output 이 이긴 레코드의 ts 가 아니라).
+        // 트레이드오프: max-output 값이 창밖 라인에서 왔더라도, 같은 키의 더 최신 라인이 창 안이면 그 값을 창 안으로
+        // 계상한다(드문 reverse-straddle 에서 소폭 과다). 창밖 옛 스냅샷이 창 안 키를 통째로 탈락시키는
+        // 과소집계보다 안전한 쪽을 택한다. 어느 순서로 들어와도 max(output)·max(ts) 라 결과는 결정적이다.
+        if var existing = cache.claudeEntries[key] {
+            let windowTs14 = max(existing.ts14, ts)
+            if existing.output >= output {
+                // output 은 안 바뀌어도 더 최신 라인을 봤으면 창 판정 ts 만 끌어올린다(대입만, 값은 유지).
+                if windowTs14 != existing.ts14 {
+                    existing.ts14 = windowTs14
+                    cache.claudeEntries[key] = existing
+                }
+                return
+            }
+            // max-output 교체: 값(input/cache 포함)은 이 레코드로, 창 판정 ts 는 관측 최대치로.
+            cache.claudeEntries[key] = ClaudeEntry(
+                ts14: windowTs14,
+                input: intField(usageObject["input_tokens"]),
+                output: output,
+                cacheRead: intField(usageObject["cache_read_input_tokens"]),
+                cacheCreation: intField(usageObject["cache_creation_input_tokens"])
+            )
+            return
+        }
         cache.claudeEntries[key] = ClaudeEntry(
             ts14: ts,
             input: intField(usageObject["input_tokens"]),

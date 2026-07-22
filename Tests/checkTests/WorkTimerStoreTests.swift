@@ -381,6 +381,27 @@ func memberMembershipAlsoLoadsInviteCode() async {
     #expect(store.myTeamInviteCode == "AINGTEAM")
 }
 
+// FIX: loadMyInviteCode 일시 실패(취소/네트워크)는 try? 로 nil 을 삼켜 코드 버튼을 깜빡 지우지 않는다 —
+// throw 시 기존 myTeamInviteCode 를 유지(대입 스킵)하고, 정상 0행일 때만 nil 로 확정한다.
+@MainActor
+@Test
+func inviteCodeFetchFailureKeepsExistingCode() async {
+    let testHost = "invite-code-fails"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.myTeamInviteCode = "OLDCODE1" // 이미 로드돼 있던 참여코드.
+
+    // refreshTeamMeta: 멤버십은 정상(member/40h)이지만 my_team_invite_code RPC 는 500 으로 throw 한다.
+    await store.refreshTeamMeta()
+
+    // 일시 실패라 기존 코드를 유지한다(nil 로 깜빡 지우지 않음). 팀 목표 등 나머지는 정상 반영.
+    #expect(store.myTeamInviteCode == "OLDCODE1")
+    #expect(store.teamGoalSeconds == 40 * 3600)
+}
+
 // MARK: - K: 팀 리그 (로드/정렬/초기화)
 
 @MainActor
@@ -623,6 +644,7 @@ func updateTeamGoalSucceedsAndAppliesServerValue() async {
     store.currentTeamID = URLProtocolStub.stubTeamID
     // 서버 반영값으로 덮이는지 보이려 다른 값으로 미리 오염시킨다.
     store.teamGoalSeconds = 10 * 3600
+    let genBefore = store.teamGoalWriteGeneration
 
     let ok = await store.updateTeamGoal(hours: 37)
 
@@ -630,6 +652,8 @@ func updateTeamGoalSucceedsAndAppliesServerValue() async {
     // 서버가 에코한 새 목표(37시간)가 초 단위로 반영된다.
     #expect(store.teamGoalSeconds == 37 * 3600)
     #expect(store.syncMessage == "주간 목표 변경됨")
+    // 성공 시 목표 write 세대가 +1 되어, 이후 도착하는 낡은 멤버십 응답이 목표를 되돌리지 못한다.
+    #expect(store.teamGoalWriteGeneration == genBefore + 1)
     // 중복 방지 플래그는 완료 후 해제된다.
     #expect(!store.isUpdatingTeamGoal)
     let paths = GoalRPCURLProtocol.requests(forHost: testHost).compactMap { $0.url?.path }
@@ -2175,6 +2199,44 @@ struct QueueInFlightTests {
         // 취소(URLError.cancelled)는 조용히 무시 — 세션이 강제 로그아웃되지 않고 토큰도 유지된다.
         #expect(store.isSignedIn)
         #expect(defaults.string(forKey: WorkTimerStore.accessTokenKey) != nil)
+    }
+
+    // FIX: 목표 write 세대 토큰 — updateTeamGoal 성공 뒤 도착하는 '낡은' in-flight 멤버십 응답이 새 목표를
+    // 되돌리지 않는다(실증 스냅백 80h→40h 차단). refreshTeamMeta 가 fetch 발사 전 세대를 캡처하고, 응답 반영 시
+    // 세대가 바뀌었으면 teamGoalSeconds 대입만 스킵하는지 검증한다.
+    @Test
+    func delayedMembershipDoesNotRevertNewlyWrittenGoal() async {
+        let testHost = "goal-write-generation-race"
+        URLProtocolStub.delayedHosts = [testHost]
+        URLProtocolStub.responseDelay = 0.2
+        defer {
+            URLProtocolStub.delayedHosts = []
+            URLProtocolStub.responseDelay = 0.15
+        }
+
+        let store = makeStubStore(host: testHost)
+        defer {
+            store.tickerTask?.cancel()
+            store.refreshTask?.cancel()
+        }
+        // 서버가 곧 되돌리려 할 옛 목표(기본 멤버십 응답도 40h 를 돌려준다).
+        store.teamGoalSeconds = 40 * 3600
+
+        // 1) 멤버십 재조회를 in-flight 로 띄운다(응답 0.2s 지연). 이 fetch 는 발사 시점의 목표 write 세대(0)를 캡처한다.
+        let refresh = Task { await store.refreshTeamMeta() }
+        try? await Task.sleep(for: .milliseconds(40)) // fetch 가 발사되어 세대 0 을 캡처하도록 양보.
+
+        // 2) 그 사이 사용자가 목표를 80h 로 바꿔 성공한다(updateTeamGoal 성공 효과 = teamGoalSeconds 갱신 + 세대 +1).
+        //    지연 멤버십(40h)이 write '뒤에' 도착하는 순서를 결정적으로 재현하려, 같은 지연 호스트로 나가는 write 효과를 직접 반영한다.
+        store.teamGoalSeconds = 80 * 3600
+        store.teamGoalWriteGeneration += 1
+
+        // 3) 지연된 멤버십 응답(40h)이 도착한다. 세대가 바뀌었으므로 teamGoalSeconds 대입만 스킵되어야 한다(스냅백 없음).
+        await refresh.value
+        #expect(store.teamGoalSeconds == 80 * 3600)
+        // 목표만 스킵하고 팀명/역할은 최신 서버값으로 반영한다(부분 반영).
+        #expect(store.teamName == "아잉팀")
+        #expect(store.teamRole == "member")
     }
 }
 

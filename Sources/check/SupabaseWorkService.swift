@@ -446,6 +446,8 @@ actor SupabaseWorkService {
             queryItems: [
                 URLQueryItem(name: "select", value: "team_id,role,teams(name,weekly_goal_hours)"),
                 URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                // 다중 소속일 때 '주 팀' 선택 규칙을 서버 함수(가입 먼저 → team_id 순)와 통일한다.
+                URLQueryItem(name: "order", value: "joined_at.asc,team_id.asc"),
                 URLQueryItem(name: "limit", value: "1")
             ],
             body: Optional<EmptyBody>.none,

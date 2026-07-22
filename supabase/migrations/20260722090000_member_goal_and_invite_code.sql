@@ -19,7 +19,7 @@ as $$
   from public.teams t
   join public.memberships m on m.team_id = t.id
   where m.user_id = auth.uid()
-  order by m.joined_at
+  order by m.joined_at, m.team_id
   limit 1;
 $$;
 
@@ -52,7 +52,7 @@ begin
   select m.team_id into target_team
   from public.memberships m
   where m.user_id = uid
-  order by m.joined_at
+  order by m.joined_at, m.team_id
   limit 1;
   if not found then
     raise exception 'no team membership';

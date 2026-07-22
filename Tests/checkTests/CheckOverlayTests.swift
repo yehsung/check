@@ -585,6 +585,53 @@ func overlayControllerReactsToClickInsidePanelOnly() {
     controller.updateWorking(false) // 전역 모니터 해제(정리).
 }
 
+// MARK: - 업데이트 넛지 말풍선 (패널 표시 중 감지 시 버전당 1회)
+
+@MainActor
+@Test
+func overlayShowsUpdateBubbleOncePerVersionWhileVisibleAndIdle() async {
+    var now = Date(timeIntervalSince1970: 90_000)
+    let engine = ReactionEngine(clock: { now })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    // 업데이트 가용 상태를 만든다: 현재 0.0.0 < 최신 v9.9.9. 스텁 fetch 로 latestVersion 을 채운다(네트워크 미접촉).
+    let update = UpdateCheckStore(
+        currentVersion: "0.0.0",
+        fetcher: { _ in Data(#"{"tag_name":"v9.9.9"}"#.utf8) },
+        clock: { now },
+        defaults: isolatedOverlayDefaults()
+    )
+    await update.checkIfStale()
+    #expect(update.isUpdateAvailable)
+
+    let controller = CheckOverlayController(
+        store: store,
+        notificationCenter: NotificationCenter(),
+        engine: engine,
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil,
+        updateCheck: update
+    )
+
+    // 미표시(패널 숨김) 상태에선 말풍선을 띄우지 않는다.
+    #expect(controller.showUpdateBubbleIfNeeded() == false)
+
+    controller.updateWorking(true)
+    now = now.addingTimeInterval(0.7) // commuteStart 만료 → idle
+    #expect(engine.state == .idle)
+
+    // 표시 중 + idle + 업데이트 가용 + 미표시 → 말풍선 1회(문구·버전당 1회 확인).
+    #expect(controller.showUpdateBubbleIfNeeded() == true)
+    #expect(engine.greetingText == CheckOverlayController.updateBubbleText)
+    // 같은 버전 재요청은 무시(영속 기록으로 도배 금지).
+    #expect(controller.showUpdateBubbleIfNeeded() == false)
+
+    controller.updateWorking(false) // 전역 모니터 해제(정리).
+}
+
 // MARK: - 드래그 이동: 클릭 vs 드래그 판정 / 클램프 / 오프셋 영속
 
 @Test

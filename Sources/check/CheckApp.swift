@@ -10,7 +10,7 @@ struct CheckApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            CheckMenuView(store: appDelegate.store)
+            CheckMenuView(store: appDelegate.store, updateCheck: appDelegate.updateCheck)
                 .frame(width: 340)
                 // 팝오버 창의 위쪽 모서리를 고정 — 콘텐츠 높이 변화 시 위로 튀어 상단이 잘리는 것을 막는다
                 // (동적 높이는 유지, 창은 아래로만 성장/수축). 그림은 그리지 않는 배경 뷰.
@@ -27,12 +27,15 @@ struct CheckApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = WorkTimerStore()
+    // 업데이트 감지 스토어(1개). 팝오버 배너(CheckMenuView)와 근무중 오버레이 말풍선(컨트롤러)이 같은
+    // 상태를 공유하도록 델리게이트가 단일 소유한다 — 하루 1회 체크/버전당 1회 말풍선 기록이 두 표면에 일관된다.
+    let updateCheck = UpdateCheckStore()
     // 근무중 3D 캐릭터 오버레이. 패널은 여기서 1회 생성하고 숨김으로 시작하며, 루트 뷰가
     // store.snapshot.isWorking을 관찰해 표시/숨김을 전환한다(store는 읽기 전용으로만 참조).
     private var overlayController: CheckOverlayController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        overlayController = CheckOverlayController(store: store)
+        overlayController = CheckOverlayController(store: store, updateCheck: updateCheck)
         // 로그인 시 자동 실행을 1회만 등록한다(사용자가 시스템 설정에서 끄면 다시 끼어들지 않는다).
         LoginItemRegistrar.registerIfNeeded(
             defaults: .standard,

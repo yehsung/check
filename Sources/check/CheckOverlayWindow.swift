@@ -25,6 +25,10 @@ final class CheckOverlayController {
     static let nudgeAutoStartText = "일하는 것 같아서 근무 시작했어요!"
     static let nudgeAutoStartBubbleSeconds: Double = 8
 
+    /// 새 버전 감지 시 캐릭터가 띄우는 말풍선 문구/지속시간. 버전당 1회만(도배 금지).
+    static let updateBubbleText = "새 업데이트가 있어요!"
+    static let updateBubbleSeconds: Double = 6
+
     let panel: NSPanel
     /// 리액션 조율기. 표시 중일 때만 이벤트를 받아 캐릭터 wrapper 에 SCNAction 을 건다.
     let engine: ReactionEngine
@@ -36,6 +40,10 @@ final class CheckOverlayController {
     private let store: WorkTimerStore
     /// 드래그로 옮긴 위치를 영속하는 저장소(테스트 격리를 위해 주입 가능).
     private let defaults: UserDefaults
+    /// 업데이트 감지 스토어(주입, 옵셔널). 패널 표시 중 새 버전이 감지돼 있으면 버전당 1회 말풍선을 띄운다.
+    /// 네트워크 체크는 여기서 새로 치지 않는다 — 하루 1회 킥은 팝오버(CheckMenuView `.task`)가 담당하고,
+    /// 컨트롤러는 이미 채워진 공유 상태를 읽어 표시만 한다(유휴 0% 불변 · 상시 루프 신설 금지).
+    private let updateCheck: UpdateCheckStore?
 
     // MARK: - 근무 시작 제안(넛지) — 안내만 하고 즉시 자동 시작(A3)
     /// 넛지 감지 스케줄러(비근무·로그인 상태일 때만 가동). onNudge → nudgeAutoStart.
@@ -64,11 +72,13 @@ final class CheckOverlayController {
         notificationCenter: NotificationCenter = .default,
         engine: ReactionEngine? = nil,
         defaults: UserDefaults = .standard,
-        workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter
+        workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter,
+        updateCheck: UpdateCheckStore? = nil
     ) {
         self.notificationCenter = notificationCenter
         self.store = store
         self.defaults = defaults
+        self.updateCheck = updateCheck
         self.engine = engine ?? ReactionEngine()
         panel = Self.makePanel(size: Self.panelSize)
 
@@ -319,6 +329,10 @@ final class CheckOverlayController {
                 // 졸기 진입은 정밀할 필요가 없으므로 tolerance 를 둬 타이머 coalescing(전력 절감)을 허용한다.
                 try? await Task.sleep(for: .seconds(interval), tolerance: .seconds(10))
                 guard let self, !Task.isCancelled else { return }
+                // 업데이트 감지 편승: 팝오버가 하루 1회 킥해 채워 둔 공유 상태를 읽어, 표시 중 새 버전이면
+                // 버전당 1회 말풍선을 띄운다(네트워크는 새로 치지 않음 — 상시 루프/유휴 타이머 신설 금지).
+                // 이번 tick 에 업데이트 말풍선을 띄웠으면 졸기는 건너뛴다(말풍선 채널 충돌 방지).
+                if self.showUpdateBubbleIfNeeded() { continue }
                 // 조건: 표시 중(근무중) && 다른 리액션 없음 — 시간대 제한 없이 조용하면 존다.
                 guard self.shouldBeVisible, self.engine.state == .idle else {
                     continue
@@ -331,6 +345,19 @@ final class CheckOverlayController {
     private func stopDrowsyScheduler() {
         drowsyTask?.cancel()
         drowsyTask = nil
+    }
+
+    // MARK: - 업데이트 넛지 말풍선 (버전당 1회)
+
+    /// 표시 중(근무중)·idle 이고, 감지된 새 버전에 대해 아직 말풍선을 안 띄웠으면 1회 띄우고 true 를 돌려준다.
+    /// 조건 미충족이면 false(졸기 등 다음 로직으로 진행). shouldShowBubble 은 영속 기록으로 버전당 1회를 보장한다.
+    @discardableResult
+    func showUpdateBubbleIfNeeded() -> Bool {
+        guard let updateCheck, shouldBeVisible, engine.state == .idle else { return false }
+        guard updateCheck.shouldShowBubble() else { return false }
+        updateCheck.markBubbleShown()
+        engine.showBubble(Self.updateBubbleText, seconds: Self.updateBubbleSeconds)
+        return true
     }
 
     /// 저장된 우상단 오프셋이 있으면 그 위치(클램프 보정)로, 없으면 메인 스크린 visibleFrame 우상단

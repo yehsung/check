@@ -367,6 +367,8 @@ func windowHeightAdaptsToContentWithinCap() throws {
         // 실데이터 톤의 10명(active/stale/off 혼합) — 가장 큰 메인 상태.
         try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 10), now: now)))),
         try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewLongSessionBanner: true))),
+        // 새 버전 안내 배너가 최상단에 얹힌 상태(HeaderCard 위) — 배너 포함해도 상한(≤700pt) 안에 머문다.
+        try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewUpdateBanner: true))),
         // 헤더 주간 목표 편집 행이 펼쳐진 상태(스테퍼 + 저장 버튼) — 편집은 헤더 아래로 자라므로 대형 팀에선
         // 상한을 넘을 수 있는 일시 상태다. 상시 노출 상태만 상한을 보장하고, 편집은 보통 팀 규모(3명)로 검증한다.
         try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 3), now: now), previewGoalEditing: true))),
@@ -575,6 +577,22 @@ func checkMenuViewRendersMemberInviteCodeSnapshot() throws {
     if let path = ProcessInfo.processInfo.environment["CHECK_MEMBER_CODE_SNAPSHOT_PATH"] {
         try png.write(to: URL(fileURLWithPath: path))
     }
+}
+
+// MARK: - 업데이트 배너 렌더 (새 버전 안내 + 원클릭/명령 복사)
+
+@MainActor
+@Test
+func checkMenuViewRendersUpdateBannerSnapshot() throws {
+    // 팝오버 최상단 새 버전 안내 배너([지금 업데이트]+[명령 복사])가 340pt 폭 안에서 잘림·겹침 없이
+    // 그려지는지 육안 확인용. previewUpdateBanner 로 강제 노출한다(앱에선 감지 시에만).
+    let store = makeSignedInStore()
+    let png = try renderPNG(CheckMenuView(store: store, previewUpdateBanner: true))
+    #expect(png.count > 0)
+    // 지정 경로에 항상 저장해 육안 확인(존재하지 않는 디렉터리면 조용히 스킵). env 로 재정의 가능.
+    let path = ProcessInfo.processInfo.environment["CHECK_UPDATE_BANNER_SNAPSHOT_PATH"]
+        ?? "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/update-banner.png"
+    try? png.write(to: URL(fileURLWithPath: path))
 }
 
 // MARK: - B3: 헤더 주간 목표 편집 행 렌더

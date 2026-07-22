@@ -3,6 +3,9 @@ import SwiftUI
 
 struct CheckMenuView: View {
     @Bindable var store: WorkTimerStore
+    // 업데이트 감지 스토어(주입, 옵셔널). 팝오버 열림 시 하루 1회 체크를 킥하고, 새 버전이면 최상단 배너를 띄운다.
+    // nil 이면(기존 렌더 테스트 등) 체크도 배너도 없다 — 기존 스냅샷/높이는 그대로 유지된다.
+    var updateCheck: UpdateCheckStore? = nil
     // 렌더 스냅샷/미리보기에서 초기 인증 모드를 주입할 수 있게 열어 둔다. 앱은 기본값(로그인)으로 진입.
     var initialAuthMode: AuthMode = .signIn
     // 렌더 스냅샷에서 비밀번호 필드의 "영어만" 안내가 떠 있는 상태를 재현하기 위한 미리보기 플래그.
@@ -16,9 +19,28 @@ struct CheckMenuView: View {
     var previewOwnerCodeRevealed: Bool = false
     // 스냅샷 전용: 헤더 주간 목표 편집 행이 펼쳐진 상태를 강제로 그린다. 앱에서는 항상 false(연필 버튼 토글).
     var previewGoalEditing: Bool = false
+    // 스냅샷 전용: 새 버전 안내 배너가 떠 있는 상태를 강제로 그린다. 앱에서는 updateCheck?.isUpdateAvailable 로만 결정.
+    var previewUpdateBanner: Bool = false
+
+    // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너를 노출한다.
+    private var showsUpdateBanner: Bool {
+        previewUpdateBanner || (updateCheck?.isUpdateAvailable ?? false)
+    }
+
+    // 배너 표시용 버전 문자열("v" 접두 정규화). 실 감지가 없으면(미리보기) 폴백 버전으로 렌더한다.
+    private var updateBannerVersionText: String {
+        let raw = updateCheck?.latestVersion ?? "v0.3.0"
+        return (raw.hasPrefix("v") || raw.hasPrefix("V")) ? raw : "v\(raw)"
+    }
 
     var body: some View {
-        content
+        VStack(spacing: 10) {
+            // 팝오버 최상단: 새 버전 안내 배너([지금 업데이트] 원클릭 + [명령 복사] 폴백). HeaderCard 위에 얹는다.
+            if showsUpdateBanner {
+                UpdateBanner(versionText: updateBannerVersionText)
+            }
+            content
+        }
             .padding(12)
             // 폭만 고정(340). 높이는 상태별 콘텐츠에 맞춰 동적으로 잡는다(MenuBarExtra 창 크기 = 콘텐츠 크기).
             .frame(width: 340)
@@ -36,6 +58,11 @@ struct CheckMenuView: View {
                 // 표시 중 이 루프가 값을 채운다. 스캔 대상은 주입된 store.tokenUsage 다 — 프로덕션은 전역 .shared,
                 // 렌더 테스트는 격리 인스턴스라, ImageRenderer 가 이 .task 를 돌려도 실홈 스캔이 테스트 .standard 를 오염시키지 않는다.
                 await store.tokenUsage.runRefreshLoop()
+            }
+            .task {
+                // 업데이트 감지의 유일한 네트워크 킥 지점(팝오버 열림 경로). 24h 스로틀이라 대부분 즉시 no-op 이고,
+                // 하루 첫 오픈에서만 GitHub 최신 릴리스를 1회 조회한다(유휴 0% 불변 — 상시 타이머 없음). nil 이면 no-op.
+                await updateCheck?.checkIfStale()
             }
     }
 
@@ -119,6 +146,102 @@ struct MenuBarStatusLabel: View {
                 .font(.system(.body, design: .rounded).weight(.medium))
                 .monospacedDigit()
         }
+    }
+}
+
+// MARK: - Update banner (새 버전 안내 + 원클릭/명령 복사)
+
+/// 팝오버 최상단 슬림 배너(accent 톤). 새 버전을 안내하고 [지금 업데이트] 원클릭 + [명령 복사] 폴백을 제공한다.
+/// 원클릭은 UpdateRunner 로 분리 프로세스를 띄우며, running 중엔 "업데이트 중…"으로 바뀌고 [지금 업데이트]가 비활성된다.
+/// brew 미탐지(unavailable)/스폰 실패(failed) 시 명령 복사 폴백 안내 줄을 노출한다. 복사 문자열은 정확히 `brew upgrade aing-check`.
+private struct UpdateBanner: View {
+    /// 표시용 버전 문자열("v0.3.0" — 상위에서 "v" 정규화).
+    let versionText: String
+    // runner 는 이 배너가 소유한다(AppDelegate 배선 불요). 테스트는 상태/스폰을 주입한 runner 를 넘겨 검증한다.
+    @State private var runner: UpdateRunner
+    @State private var copied = false
+
+    init(versionText: String, runner: UpdateRunner = UpdateRunner()) {
+        self.versionText = versionText
+        _runner = State(initialValue: runner)
+    }
+
+    // 실행 실패/미탐지 시에만 폴백 안내를 띄운다(정상 경로는 군더더기 없이 두 버튼만).
+    private var fallbackHint: String? {
+        switch runner.status {
+        case .unavailable: return "brew를 찾지 못했어요 — 아래 명령을 복사해 실행하세요"
+        case .failed: return "자동 실행에 실패했어요 — 아래 명령을 복사해 실행하세요"
+        case .idle, .running: return nil
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(CheckTheme.accent)
+                Text(runner.status == .running ? "업데이트 중…" : "새 버전 \(versionText)가 나왔어요")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Spacer(minLength: 4)
+            }
+            HStack(spacing: 8) {
+                // [지금 업데이트] — 원클릭(accent fill). running 중엔 "업데이트 중…"으로 바뀌고 비활성.
+                Button {
+                    copied = false
+                    runner.runUpgrade()
+                } label: {
+                    Text(runner.status == .running ? "업데이트 중…" : "지금 업데이트")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(CheckTheme.accent))
+                        .opacity(runner.status == .running ? 0.7 : 1)
+                }
+                .buttonStyle(.plain)
+                .disabled(runner.status == .running)
+
+                // [명령 복사] — 폴백. 복사 후 "복사됨"으로 토글(CheckPasteboard 재사용).
+                Button {
+                    CheckPasteboard.copy(UpdateRunner.copyCommand)
+                    copied = true
+                } label: {
+                    Label(copied ? "복사됨" : "명령 복사", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(CheckTheme.accent)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(CheckTheme.accent.opacity(0.14))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(CheckTheme.accent.opacity(0.35), lineWidth: 1))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            if let fallbackHint {
+                Text(fallbackHint)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(CheckTheme.accent.opacity(0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(CheckTheme.accent.opacity(0.40), lineWidth: 1)
+                )
+        )
     }
 }
 

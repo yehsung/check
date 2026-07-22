@@ -81,6 +81,24 @@ enum CheckCharacter3DScene {
     /// 중앙(선 y≈104) 대비 약 11px 하강해 선 중앙 y≈116(하단 경계)에 위치한다.
     static let closedEyeLowering: CGFloat = 0.095
 
+    /// 감은 눈 커버 시, 눈 앵커(3D) 근처 삼각형을 UV 로 채워 '눈 표면' 마스크를 만들 때의 반경(캐릭터-로컬 유닛).
+    /// 눈 하나를 넉넉히 감싸되 코/볼로 넘치지 않는 값 — 오프스크린 렌더 육안 반복으로 튜닝(눈 반경 여유 포함).
+    /// 0.24 에서 선 없는 렌더의 유령 눈두덩이 사실상 사라진다(더 작으면 눈두덩 링 잔존, 더 크면 과커버).
+    static let eyeCoverRadius: Float = 0.24
+
+    /// 얼굴 디퓨즈의 눈을 피부로 덮은 "감은 눈" 텍스처를 만든다. 메시 지오메트리로 눈 표면 UV 마스크를 산출해
+    /// `SleepEyeTexture` 에 넘긴다(색 분류가 놓치는 눈두덩/안구 하이라이트까지 덮어 유령 눈두덩 제거). 지오메트리가
+    /// 없거나 마스크 산출 실패면 nil 마스크로 넘어가 색 기반 폴백으로 동작한다. 엔진·테스트가 공통으로 쓴다.
+    static func makeClosedEyesImage(faceImage: CGImage, geometry: SCNGeometry?) -> CGImage? {
+        let mask = geometry.flatMap {
+            SleepEyeTexture.eyeUVCoverMask(
+                geometry: $0, anchors: closedEyeAnchors.map { $0.position },
+                width: faceImage.width, height: faceImage.height, radius: eyeCoverRadius
+            )
+        }
+        return SleepEyeTexture.closedEyesImage(from: faceImage, eyeMask: mask)
+    }
+
     /// 감은 눈 선 노드 2개를 캐릭터(안쪽, idle 부유/살랑과 함께 움직임)에 자식으로 붙인다. 기본 숨김.
     /// UV 아틀라스가 저폴리로 눈을 여러 조각으로 흩어 텍스처에 깔끔한 감은 선을 그리기 어려우므로, 선은 얼굴
     /// 표면 바로 앞에 얹는 얇은 평면(빌보드 아닌 +Z 정면 — 칠해진 듯 자연스럽게)으로 그린다. 커버(텍스처)로 뜬 눈을
@@ -299,7 +317,11 @@ enum CheckCharacter3DScene {
 ///    방해하지 않는다). 3) 안티에일리어싱 눈 테두리까지 살아남지 않게 커버 마스크를 공격적으로 팽창한다.
 enum SleepEyeTexture {
     /// 원본 디퓨즈 CGImage 로부터 "눈을 덮은" 버전을 만든다. 해상도 무관. 실패 시 nil(교체 안 함).
-    static func closedEyesImage(from original: CGImage) -> CGImage? {
+    ///
+    /// `eyeMask`(선택): 메시 지오메트리로 산출한 '눈 표면' UV 마스크(아틀라스 크기와 동일). 주면 색 분류 대신
+    /// 이 영역을 덮는다 — 저폴리 UV 로 흩어진 눈 조각과, **색으로는 피부로 분류돼 놓치던 눈두덩/안구 하이라이트**
+    /// 까지 정확히 포함해 감은 상태에서 '유령 눈두덩'이 남지 않는다. 없으면(nil) 색 기반 폴백(구버전).
+    static func closedEyesImage(from original: CGImage, eyeMask: [Bool]? = nil) -> CGImage? {
         let w = original.width, h = original.height
         guard w >= 64, h >= 64 else { return nil }
         let bytesPerRow = w * 4
@@ -311,7 +333,7 @@ enum SleepEyeTexture {
         ) else { return nil }
         ctx.draw(original, in: CGRect(x: 0, y: 0, width: w, height: h))
         var buf = PixelBuffer(data: buffer, width: w, height: h)
-        coverEyes(in: &buf)
+        coverEyes(in: &buf, eyeMask: eyeMask)
         return ctx.makeImage()
     }
 
@@ -358,32 +380,261 @@ enum SleepEyeTexture {
 
     // MARK: - 전역 눈 커버(입 보호 + 반복 인페인트)
 
-    static func coverEyes(in buf: inout PixelBuffer) {
+    static func coverEyes(in buf: inout PixelBuffer, eyeMask: [Bool]? = nil) {
         let w = buf.width, h = buf.height, n = w * h
+        // 보호막(입·볼)은 항상 색으로 검출 — 눈 커버가 이들을 지우지 않게.
         var eye = [Bool](repeating: false, count: n)
         var red = [Bool](repeating: false, count: n)
+        var pink = [Bool](repeating: false, count: n)
         for y in 0..<h {
             for x in 0..<w {
                 let (r, g, b) = buf.rgb(x, y)
                 let idx = y * w + x
                 if isMouthRed(r, g, b) { red[idx] = true }
+                else if isPink(r, g, b) { pink[idx] = true }
                 else if isEye(r, g, b) { eye[idx] = true }
             }
         }
         // 입 보호막: 진한 빨강 중 '큰 덩어리'(입·머리)만 남겨(흩어진 iris 오검출 제거) 반경 R 팽창.
-        // 이 안의 눈 픽셀은 덮지 않는다(입 손상 금지).
         let minRedComponent = max(30, w * h / 6000)
         let redBlobs = largeComponents(red, rw: w, rh: h, minSize: minRedComponent)
         let protectR = max(3, Int((CGFloat(w) * 0.012).rounded()))
-        let protected = dilateMask(redBlobs, rw: w, rh: h, radius: protectR)
-        // 커버 마스크 = 눈 & 보호막 밖. 안티에일리어싱 눈 테두리까지 공격적으로 팽창.
-        var cover = [Bool](repeating: false, count: n)
-        for i in 0..<n { cover[i] = eye[i] && !protected[i] }
-        let dilateR = max(2, Int((CGFloat(w) * 0.008).rounded()))
-        cover = dilateMask(cover, rw: w, rh: h, radius: dilateR)
-        // 팽창이 입 보호막을 다시 침범하지 않게 한 번 더 뺀다.
+        let mouthProtect = dilateMask(redBlobs, rw: w, rh: h, radius: protectR)
+        // 보호막 = 입(진빨강) ∪ 볼터치(분홍). 커버/페더가 볼을 지우거나 붉은/분홍을 번지게 하지 않게 뺀다.
+        var protected = mouthProtect
+        for i in 0..<n where pink[i] { protected[i] = true }
+
+        // 커버 영역 결정.
+        var cover: [Bool]
+        let baseR = max(2, Int((CGFloat(w) * 0.008).rounded()))
+        let meshBased = (eyeMask?.count == n)
+        if let eyeMask, meshBased {
+            // 메시 기반(정공법): 눈 앵커 근처 삼각형의 UV 를 채운 영역이 곧 '눈 표면'. 색 분류로는 피부색이라
+            // 놓치던 눈두덩/안구 하이라이트까지 포함한다. 단, 화면 눈이 심하게 미니피케이션돼 한 화면 픽셀이
+            // 여러 텍셀에 대응 → 삼각형 래스터가 텍셀 단위 '레이스 홀'을 남기고, 그 틈이 렌더에서 유령으로 비친다.
+            // 그래서 닫힘(작은 틈 메움) → 구멍 채움(둘러싸인 홀 완전 제거) → 팽창(경계 여유)으로 **솔리드**하게 만든다.
+            let solidR = max(3, Int((CGFloat(w) * 0.014).rounded()))
+            cover = closeMask(eyeMask, rw: w, rh: h, radius: solidR)
+            cover = fillHoles(cover, rw: w, rh: h)
+            cover = dilateMask(cover, rw: w, rh: h, radius: baseR)
+            // 하이브리드 보강: 삼각형 래스터가 놓친 **떠도는 눈 텍셀**(안구 하이라이트/속눈썹 등 isEye)이 눈 영역
+            // 근처에 남아 밝은 유령 호(arc)로 비칠 수 있다. 메시 영역을 넓게 팽창한 '눈 근방' 안의 isEye 텍셀을
+            // 커버에 합쳐 잡는다(근방 한정이라 화면 밖 머리카락 isEye 는 안 건드림). 구멍도 다시 채운다.
+            let nearR = max(6, Int((CGFloat(w) * 0.028).rounded()))
+            let nearEye = dilateMask(cover, rw: w, rh: h, radius: nearR)
+            for i in 0..<n where nearEye[i] && eye[i] { cover[i] = true }
+            cover = fillHoles(cover, rw: w, rh: h)
+        } else {
+            // 폴백(지오메트리 없음): 색 기반 isEye + 음영 링 기하 확장(구버전 — 유령이 일부 남을 수 있음).
+            cover = [Bool](repeating: false, count: n)
+            for i in 0..<n { cover[i] = eye[i] && !protected[i] }
+            cover = dilateMask(cover, rw: w, rh: h, radius: baseR)
+            let ringR = max(4, Int((CGFloat(w) * 0.032).rounded()))
+            cover = dilateMask(cover, rw: w, rh: h, radius: ringR)
+        }
         for i in 0..<n where protected[i] { cover[i] = false }
-        inpaint(&buf, cover: cover)
+        // 채우기.
+        if meshBased {
+            // 메시 커버는 '눈 표면' 전체(눈두덩 음영 텍셀 포함)를 덮는다. 이때 인페인트(이웃 확산)를 쓰면 커버 안
+            // 텍셀이 아틀라스상 인접한 **어두운 눈두덩 텍셀**(같은 유령의 다른 조각)을 평균해 다시 어두워져 유령이
+            // 되살아난다. 그래서 커버 전체를 **전역 피부 중앙값(밝은 이마/볼 피부)** 으로 평탄 채움한 뒤 페더로 경계만
+            // 주변에 녹인다 — 눈 자리가 균일한 밝은 피부가 된다.
+            let (mr, mg, mb) = skinMedian(in: buf, exclude: cover)
+            for i in 0..<n where cover[i] { buf.set(i % w, i / w, mr, mg, mb) }
+        } else {
+            // 폴백: 커버를 '미지'로 두고 주변 피부색을 경계에서 안쪽으로 번져 채운다(그라디언트에 자연히 맞물림).
+            inpaint(&buf, cover: cover)
+        }
+        // 페더링(부드러운 블렌딩): 커버 + 바깥 밴드를 반복 박스 블러로 확산해 이음새/잔여 그라데이션을 주변
+        // 밝은 피부색으로 수렴시켜 '딱딱한 경계' 대신 매끄러운 전환을 만든다. 입/볼(보호막)은 소스·대상에서 제외.
+        let featherR = max(3, Int((CGFloat(w) * 0.020).rounded()))
+        var feather = dilateMask(cover, rw: w, rh: h, radius: featherR)
+        for i in 0..<n where protected[i] { feather[i] = false }
+        featherBlur(&buf, region: feather, skip: protected, kernelRadius: 2, iterations: 6)
+    }
+
+    // MARK: - 메시 기반 눈 UV 커버 마스크(색 분류가 놓치는 눈두덩/안구 하이라이트까지 정확히 덮는다)
+
+    /// 눈 앵커(3D, 캐릭터-로컬) 근처 삼각형들의 UV 를 아틀라스 픽셀에 래스터화해 '눈 표면' 마스크를 만든다.
+    ///
+    /// 왜 메시인가: 이 저폴리 UV 는 한 눈이 아틀라스 여러 조각으로 흩어지고, 화면상 눈 영역이 심하게 미니피케이션
+    /// 돼(한 화면 픽셀이 여러 텍셀에 대응) 색·화면샘플 기반 마스크로는 조각을 다 못 잡는다. 반면 눈 앵커 3D 근처
+    /// 삼각형을 UV 공간에서 **통짜로 채우면** 눈 표면의 모든 텍셀(피부색으로 분류돼 놓치던 눈두덩/안구 하이라이트
+    /// 포함)을 빠짐없이 덮는다 → 감은 상태 유령 눈두덩이 사라진다. 지오메트리 소스는 노드 포즈와 무관(앵커와 같은
+    /// 로컬 좌표계)하므로 변환 없이 그대로 쓴다. 실패(소스 없음/삼각형 아님) 시 nil → 색 기반 폴백.
+    static func eyeUVCoverMask(geometry: SCNGeometry, anchors: [SCNVector3],
+                              width: Int, height: Int, radius: Float) -> [Bool]? {
+        guard let vsrc = geometry.sources(for: .vertex).first,
+              let tsrc = geometry.sources(for: .texcoord).first,
+              let element = geometry.elements.first,
+              element.primitiveType == .triangles else { return nil }
+        let verts = readFloat3(vsrc)
+        let uvs = readFloat2(tsrc)
+        guard !verts.isEmpty, uvs.count == verts.count else { return nil }
+        let indices = readTriangleIndices(element)
+        guard indices.count >= 3 else { return nil }
+        var mask = [Bool](repeating: false, count: width * height)
+        let anch = anchors.map { (Float($0.x), Float($0.y), Float($0.z)) }
+        let r2 = radius * radius
+        let triCount = indices.count / 3
+        for t in 0..<triCount {
+            let i0 = indices[t * 3], i1 = indices[t * 3 + 1], i2 = indices[t * 3 + 2]
+            guard i0 < verts.count, i1 < verts.count, i2 < verts.count else { continue }
+            let v0 = verts[i0], v1 = verts[i1], v2 = verts[i2]
+            // 삼각형 정점 중 하나라도 어느 앵커 반경 내면 포함(경계 삼각형까지 빠짐없이).
+            var near = false
+            for a in anch where dist2(v0, a) <= r2 || dist2(v1, a) <= r2 || dist2(v2, a) <= r2 {
+                near = true; break
+            }
+            if !near { continue }
+            let p0 = uvPixel(uvs[i0], width, height)
+            let p1 = uvPixel(uvs[i1], width, height)
+            let p2 = uvPixel(uvs[i2], width, height)
+            // UV 시접(seam)을 가로지르는 비정상적으로 큰 삼각형은 건너뛴다(아틀라스 넓은 span 오염 방지).
+            let spanX = max(p0.0, p1.0, p2.0) - min(p0.0, p1.0, p2.0)
+            let spanY = max(p0.1, p1.1, p2.1) - min(p0.1, p1.1, p2.1)
+            if spanX > width / 4 || spanY > height / 4 { continue }
+            fillTriangle(p0, p1, p2, into: &mask, width: width, height: height)
+        }
+        return mask
+    }
+
+    @inline(__always)
+    private static func dist2(_ a: (Float, Float, Float), _ b: (Float, Float, Float)) -> Float {
+        let dx = a.0 - b.0, dy = a.1 - b.1, dz = a.2 - b.2
+        return dx * dx + dy * dy + dz * dz
+    }
+
+    /// UV(0..1) → 아틀라스 픽셀. V 는 뒤집지 않는다(실측: v·h 가 CGImage 행 원점 좌상단과 일치). 밖은 클램프.
+    @inline(__always)
+    private static func uvPixel(_ uv: (Float, Float), _ w: Int, _ h: Int) -> (Int, Int) {
+        let u = min(max(uv.0, 0), 1), v = min(max(uv.1, 0), 1)
+        return (min(w - 1, Int(u * Float(w))), min(h - 1, Int(v * Float(h))))
+    }
+
+    /// 삼각형 채우기(스캔라인 + 바리센트릭). 아주 작은 삼각형도 놓치지 않게 세 꼭짓점 픽셀은 항상 찍는다.
+    private static func fillTriangle(_ a: (Int, Int), _ b: (Int, Int), _ c: (Int, Int),
+                                     into mask: inout [Bool], width: Int, height: Int) {
+        for p in [a, b, c] where p.0 >= 0 && p.0 < width && p.1 >= 0 && p.1 < height {
+            mask[p.1 * width + p.0] = true
+        }
+        let minx = max(0, min(a.0, b.0, c.0)), maxx = min(width - 1, max(a.0, b.0, c.0))
+        let miny = max(0, min(a.1, b.1, c.1)), maxy = min(height - 1, max(a.1, b.1, c.1))
+        if minx > maxx || miny > maxy { return }
+        let denom = (b.1 - c.1) * (a.0 - c.0) + (c.0 - b.0) * (a.1 - c.1)
+        if denom == 0 { return } // 퇴화 삼각형은 꼭짓점만(위에서 처리).
+        let fd = Float(denom)
+        for y in miny...maxy {
+            for x in minx...maxx {
+                let w0 = Float((b.1 - c.1) * (x - c.0) + (c.0 - b.0) * (y - c.1)) / fd
+                let w1 = Float((c.1 - a.1) * (x - c.0) + (a.0 - c.0) * (y - c.1)) / fd
+                let w2 = 1 - w0 - w1
+                if w0 >= 0, w1 >= 0, w2 >= 0 { mask[y * width + x] = true }
+            }
+        }
+    }
+
+    /// SCNGeometrySource(float3)를 [(x,y,z)] 로 읽는다(stride/offset 준수).
+    private static func readFloat3(_ src: SCNGeometrySource) -> [(Float, Float, Float)] {
+        let stride = src.dataStride, offset = src.dataOffset, cnt = src.vectorCount
+        var out = [(Float, Float, Float)](); out.reserveCapacity(cnt)
+        src.data.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress else { return }
+            for i in 0..<cnt {
+                let p = base.advanced(by: offset + i * stride).assumingMemoryBound(to: Float.self)
+                out.append((p[0], p[1], p[2]))
+            }
+        }
+        return out
+    }
+
+    /// SCNGeometrySource(float2 texcoord)를 [(u,v)] 로 읽는다.
+    private static func readFloat2(_ src: SCNGeometrySource) -> [(Float, Float)] {
+        let stride = src.dataStride, offset = src.dataOffset, cnt = src.vectorCount
+        var out = [(Float, Float)](); out.reserveCapacity(cnt)
+        src.data.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress else { return }
+            for i in 0..<cnt {
+                let p = base.advanced(by: offset + i * stride).assumingMemoryBound(to: Float.self)
+                out.append((p[0], p[1]))
+            }
+        }
+        return out
+    }
+
+    /// 삼각형 요소의 인덱스를 [Int] 로 읽는다(UInt32/UInt16 지원).
+    private static func readTriangleIndices(_ e: SCNGeometryElement) -> [Int] {
+        let count = e.primitiveCount * 3
+        var out = [Int](); out.reserveCapacity(count)
+        e.data.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress else { return }
+            if e.bytesPerIndex == 4 {
+                let p = base.assumingMemoryBound(to: UInt32.self)
+                for i in 0..<count { out.append(Int(p[i])) }
+            } else if e.bytesPerIndex == 2 {
+                let p = base.assumingMemoryBound(to: UInt16.self)
+                for i in 0..<count { out.append(Int(p[i])) }
+            }
+        }
+        return out
+    }
+
+    /// 커버 경계 페더링 — `region` 픽셀을 반복 박스 블러(±`kernelRadius`)로 확산해 남은 눈두덩 음영/이음새가
+    /// 주변 밝은 피부색으로 수렴하게 한다. 각 반복은 현재 버퍼를 읽어 새 값을 한꺼번에 반영(제자리 갱신 편향 방지).
+    /// `skip` 이웃(입·볼)은 평균에서 빼 붉은/분홍이 번지지 않게 하고, region 은 skip 을 이미 제외했으므로
+    /// 대상으로도 안 쓴다. region 바깥 밝은 피부(원본)를 소스로 끌어와 반복할수록 부드러운 그라데이션이 된다.
+    /// 반복·커널은 커버 영역 한정이라 512² 전체가 아닌 수천 픽셀만 돌아 비용이 작다(1회 생성 규약 유지).
+    static func featherBlur(_ buf: inout PixelBuffer, region: [Bool], skip: [Bool],
+                            kernelRadius: Int = 1, iterations: Int) {
+        let w = buf.width, h = buf.height
+        let kr = max(1, kernelRadius)
+        var targets = [Int]()
+        for i in 0..<(w * h) where region[i] { targets.append(i) }
+        guard !targets.isEmpty, iterations > 0 else { return }
+        for _ in 0..<iterations {
+            var updates = [(Int, Int, Int, Int)]()
+            updates.reserveCapacity(targets.count)
+            for idx in targets {
+                let x = idx % w, y = idx / w
+                var sr = 0, sg = 0, sb = 0, cnt = 0
+                var dy = -kr
+                while dy <= kr {
+                    var dx = -kr
+                    while dx <= kr {
+                        let nx = x + dx, ny = y + dy
+                        if nx >= 0, nx < w, ny >= 0, ny < h {
+                            let ni = ny * w + nx
+                            if !skip[ni] {
+                                let (r, g, b) = buf.rgb(nx, ny)
+                                sr += r; sg += g; sb += b; cnt += 1
+                            }
+                        }
+                        dx += 1
+                    }
+                    dy += 1
+                }
+                if cnt > 0 { updates.append((idx, sr / cnt, sg / cnt, sb / cnt)) }
+            }
+            for (idx, r, g, b) in updates { buf.set(idx % w, idx / w, r, g, b) }
+        }
+    }
+
+    /// 커버 밖 '피부' 픽셀의 전역 중앙값(밝은 이마/볼 피부색). 어두운 눈두덩·눈·입·볼 색에 오염되지 않게
+    /// isSkin 만 표본으로 삼는다. 표본이 없으면 안전한 라벤더 기본값.
+    static func skinMedian(in buf: PixelBuffer, exclude cover: [Bool]) -> (Int, Int, Int) {
+        let w = buf.width, h = buf.height
+        var rs = [Int](), gs = [Int](), bs = [Int]()
+        var i = 0
+        while i < w * h {
+            if !cover[i] {
+                let (r, g, b) = buf.rgb(i % w, i / w)
+                if isSkin(r, g, b) { rs.append(r); gs.append(g); bs.append(b) }
+            }
+            i += 3 // 3픽셀 간격 표본(비용 절감, 중앙값엔 충분).
+        }
+        guard !rs.isEmpty else { return (207, 186, 254) }
+        rs.sort(); gs.sort(); bs.sort()
+        return (rs[rs.count / 2], gs[gs.count / 2], bs[bs.count / 2])
     }
 
     /// 반복 평균 인페인트: 커버 픽셀을 '미지'로 두고, **피부색으로 분류된** 이웃(원 피부/이미 채운 픽셀)의 평균으로
@@ -462,6 +713,56 @@ enum SleepEyeTexture {
                 for ny in y0...y1 { out[ny * rw + x] = true }
             }
         }
+        return out
+    }
+
+    /// 체비셰프 반경 `radius` 침식(팽창의 쌍대 — 여집합을 팽창 후 다시 여집합).
+    /// 이미지 경계 밖은 전경으로 간주해(dilateMask 가 클램프) 경계에 닿은 마스크는 안 깎인다 — 눈 블롭은
+    /// 아틀라스 내부라 무관하고, 닫힘(팽창→침식)에서 내부 작은 구멍만 메우려는 목적에 맞다.
+    static func erodeMask(_ mask: [Bool], rw: Int, rh: Int, radius: Int) -> [Bool] {
+        guard radius > 0 else { return mask }
+        var comp = [Bool](repeating: false, count: rw * rh)
+        for i in 0..<(rw * rh) { comp[i] = !mask[i] }
+        let grown = dilateMask(comp, rw: rw, rh: rh, radius: radius)
+        var out = [Bool](repeating: false, count: rw * rh)
+        for i in 0..<(rw * rh) { out[i] = !grown[i] }
+        return out
+    }
+
+    /// 닫힘(팽창→침식): 마스크의 작은 구멍/틈(레이스)을 메워 솔리드하게. 전체 크기는 거의 안 키운다.
+    static func closeMask(_ mask: [Bool], rw: Int, rh: Int, radius: Int) -> [Bool] {
+        guard radius > 0 else { return mask }
+        return erodeMask(dilateMask(mask, rw: rw, rh: rh, radius: radius), rw: rw, rh: rh, radius: radius)
+    }
+
+    /// 마스크 내부 구멍 채우기: 테두리에서 4-이웃 BFS 로 '바깥 배경'을 표시하고, 배경도 마스크도 아닌(둘러싸인)
+    /// 픽셀을 마스크로 채운다. 눈 블롭 속 미니피케이션 레이스 홀을 완전히 메운다.
+    static func fillHoles(_ mask: [Bool], rw: Int, rh: Int) -> [Bool] {
+        let n = rw * rh
+        var outside = [Bool](repeating: false, count: n)
+        var stack = [Int]()
+        // 테두리의 비마스크 픽셀에서 시작.
+        for x in 0..<rw {
+            for y in [0, rh - 1] {
+                let i = y * rw + x
+                if !mask[i], !outside[i] { outside[i] = true; stack.append(i) }
+            }
+        }
+        for y in 0..<rh {
+            for x in [0, rw - 1] {
+                let i = y * rw + x
+                if !mask[i], !outside[i] { outside[i] = true; stack.append(i) }
+            }
+        }
+        while let p = stack.popLast() {
+            let x = p % rw, y = p / rw
+            if x > 0 { let q = p - 1; if !mask[q], !outside[q] { outside[q] = true; stack.append(q) } }
+            if x < rw - 1 { let q = p + 1; if !mask[q], !outside[q] { outside[q] = true; stack.append(q) } }
+            if y > 0 { let q = p - rw; if !mask[q], !outside[q] { outside[q] = true; stack.append(q) } }
+            if y < rh - 1 { let q = p + rw; if !mask[q], !outside[q] { outside[q] = true; stack.append(q) } }
+        }
+        var out = mask
+        for i in 0..<n where !mask[i] && !outside[i] { out[i] = true } // 둘러싸인 구멍 = 채움.
         return out
     }
 

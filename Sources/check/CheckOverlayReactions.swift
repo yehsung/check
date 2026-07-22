@@ -353,7 +353,7 @@ final class ReactionEngine {
         faceMaterial = nil
         awakeDiffuse = nil
         sleepDiffuse = nil
-        var found: (material: SCNMaterial, image: CGImage)?
+        var found: (material: SCNMaterial, image: CGImage, geometry: SCNGeometry?)?
         sceneRoot.enumerateHierarchy { node, stop in
             for material in node.geometry?.materials ?? [] {
                 let contents = material.diffuse.contents
@@ -361,16 +361,18 @@ final class ReactionEngine {
                 guard CFGetTypeID(contents as CFTypeRef) == CGImage.typeID else { continue }
                 let cg = contents as! CGImage
                 if cg.width >= 256 {
-                    found = (material, cg)
+                    // 얼굴 지오메트리를 함께 잡아 눈 표면 UV 마스크(메시 기반 커버)에 넘긴다.
+                    found = (material, cg, node.geometry)
                     stop.pointee = true
                     return
                 }
             }
         }
-        guard let (material, cg) = found else { return }
+        guard let (material, cg, geometry) = found else { return }
         faceMaterial = material
         awakeDiffuse = cg
-        sleepDiffuse = SleepEyeTexture.closedEyesImage(from: cg)
+        // 메시 기반 눈 커버(색 분류가 놓치는 눈두덩/안구 하이라이트까지 덮어 유령 눈두덩 제거). 1회 생성·캐시.
+        sleepDiffuse = CheckCharacter3DScene.makeClosedEyesImage(faceImage: cg, geometry: geometry)
     }
 
     /// 감은 눈 적용: 얼굴 디퓨즈를 눈 덮은 버전으로 교체하고 감은 선 노드를 보인다.
@@ -637,9 +639,10 @@ final class ReactionEngine {
         guard dir != dragFacing else { return }
         dragFacing = dir
         guard let facing = facingNode else { return }
-        let action = SCNAction.rotateTo(x: 0, y: CGFloat(dir) * Self.dragFacingAngle, z: 0, duration: dir == 0 ? 0.2 : 0.15)
-        action.timingMode = .easeOut
-        facing.runAction(action, forKey: Self.facingActionKey)
+        // 애니메이션 없이 즉시 스냅한다: 드래그 중 렌더는 유휴 8fps 라 0.15s 회전이 한두 프레임으로 쪼개져
+        // "뚝뚝 끊기는" 느낌을 준다는 실사용 피드백 — 방향 전환은 그 프레임에 한 번에 돌아보는 게 낫다.
+        facing.removeAction(forKey: Self.facingActionKey)
+        facing.eulerAngles = SCNVector3(0, CGFloat(dir) * Self.dragFacingAngle, 0)
     }
 
     /// 헤드리스 검증 지점: 현재 바라보는 방향.

@@ -103,7 +103,8 @@ func closedEyesTextureCoversEyesAndKeepsMouth() throws {
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
     let material = try #require(SleepEyeExplore.faceMaterial(in: scene))
     let openCG = try #require(SleepEyeExplore.cgImage(from: material.diffuse.contents))
-    let closedCG = try #require(SleepEyeTexture.closedEyesImage(from: openCG))
+    let closedCG = try #require(CheckCharacter3DScene.makeClosedEyesImage(
+        faceImage: openCG, geometry: SleepEyeExplore.faceGeometry(in: scene)))
     #expect(closedCG.width == openCG.width && closedCG.height == openCG.height)
 
     let open = SleepEyeExplore.rgbaBuffer(openCG)
@@ -126,18 +127,21 @@ func closedEyesTextureCoversEyesAndKeepsMouth() throws {
         if SleepEyeTexture.isMouthRed(r1, g1, b1) { mouthClosed += 1 }
     }
 
-    // 눈이 실제로 피부로 덮였다: '눈→피부' 변화 픽셀이 의미 있는 면적(전체 0.2% 이상)이고, 변경의 큰 몫이다.
+    // 눈이 실제로 피부로 덮였다: '눈→피부' 변화 픽셀이 의미 있는 면적(전체 0.2% 이상)이고, 변경의 유의한 몫이다.
+    // (메시 기반 커버는 눈 표면 전체 — 눈두덩/안구 하이라이트 등 원래 '피부'로 분류되던 텍셀까지 — 를 밝은 피부
+    //  중앙값으로 평탄화하므로, 변경의 상당수가 '피부→피부'다. 그래서 '눈→피부' 비율은 0.2 이상이면 충분히 유의.)
     #expect(Double(eyeToSkin) > Double(total) * 0.002)
-    #expect(Double(eyeToSkin) >= Double(changed) * 0.4)
+    #expect(Double(eyeToSkin) >= Double(changed) * 0.2)
 
     // 입(진한 빨강)은 손상 금지: 개수 90%+ 유지 + 입 픽셀 변경은 극소(15% 미만).
     #expect(mouthOpen > 0)
     #expect(Double(mouthClosed) >= Double(mouthOpen) * 0.90)
     #expect(Double(mouthChanged) < Double(mouthOpen) * 0.15)
 
-    // 변경 면적은 국소적(눈 자리)이어야 한다 — 전체의 0.3%~12% 범위(전면 재도색/무작위 변형이 아님).
+    // 변경 면적은 국소적(눈 표면)이어야 한다 — 전체의 0.3%~14% 범위(전면 재도색/무작위 변형이 아님).
+    // 메시 커버가 눈두덩까지 넉넉히 덮어 색 기반보다 넓지만 여전히 두 눈 자리에 국한된다(≈9.5%).
     let frac = Double(changed) / Double(total)
-    #expect(frac > 0.003 && frac < 0.12)
+    #expect(frac > 0.003 && frac < 0.14)
 }
 
 // MARK: 씬 구조 (facing 노드 삽입 + 감은 눈 선 노드)
@@ -302,11 +306,13 @@ func dumpSleepEyeRenders() throws {
     let sleepScene = try #require(CheckCharacter3DScene.makeScene(animated: false))
     let material = try #require(SleepEyeExplore.faceMaterial(in: sleepScene))
     let openCG = try #require(SleepEyeExplore.cgImage(from: material.diffuse.contents))
-    let closedCG = try #require(SleepEyeTexture.closedEyesImage(from: openCG))
-    if let rep = NSBitmapImageRep(cgImage: closedCG).representation(using: .png, properties: [:]) {
-        try? rep.write(to: base.appendingPathComponent("closed-atlas-\(closedCG.width).png"))
-    }
+    // 감은 눈 텍스처는 엔진·프로덕션과 동일 경로(메시 기반 눈 표면 UV 마스크로 눈두덩/안구 하이라이트까지 커버).
+    let closedCG = try #require(CheckCharacter3DScene.makeClosedEyesImage(
+        faceImage: openCG, geometry: SleepEyeExplore.faceGeometry(in: sleepScene)))
     material.diffuse.contents = closedCG
+    // 커버 품질 판정용: 감은 선을 숨긴 채(선이 흔적을 가리지 않도록) 정면 렌더 — 눈 자리가 주변 피부와
+    // 구분되지 않아야 합격(유령 눈두덩/링 금지).
+    try renderScene(sleepScene, device: device, to: base.appendingPathComponent("sleep-eyes-cover-only.png"))
     sleepScene.rootNode.childNode(withName: CheckCharacter3DScene.closedEyeLeftName, recursively: true)?.isHidden = false
     sleepScene.rootNode.childNode(withName: CheckCharacter3DScene.closedEyeRightName, recursively: true)?.isHidden = false
     try renderScene(sleepScene, device: device, to: base.appendingPathComponent("sleep-eyes-closed-v2.png"))
@@ -342,6 +348,18 @@ enum SleepEyeExplore {
         scene.rootNode.enumerateHierarchy { node, _ in
             node.geometry?.materials.forEach { m in
                 if found == nil, let cg = cgImage(from: m.diffuse.contents), cg.width >= 256 { found = m }
+            }
+        }
+        return found
+    }
+
+    /// 얼굴 재질을 소유한 지오메트리(메시 기반 눈 커버 마스크 산출용).
+    static func faceGeometry(in scene: SCNScene) -> SCNGeometry? {
+        var found: SCNGeometry?
+        scene.rootNode.enumerateHierarchy { node, stop in
+            guard let geo = node.geometry else { return }
+            if geo.materials.contains(where: { (cgImage(from: $0.diffuse.contents)?.width ?? 0) >= 256 }) {
+                found = geo; stop.pointee = true
             }
         }
         return found

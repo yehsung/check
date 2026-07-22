@@ -151,6 +151,95 @@ extension Array where Element == TeamLeaderboardEntry {
     }
 }
 
+// MARK: - 팀원 이번 달 AI 토큰 보드
+
+/// 이번 달 AI 토큰 사용량 조회월 키(KST 'YYYY-MM'). D1 의 TokenUsageMonthly.month 와 같은 Asia/Seoul 규약이라
+/// 업로드한 행과 같은 월로 조회된다(월이 바뀌면 새 키 → 자연히 매달 초기화). 순수 함수라 테스트로 고정 검증한다.
+enum TokenUsageMonthKey {
+    static func current(_ now: Date = Date()) -> String {
+        let c = TeamWeeklyGoal.kstCalendar.dateComponents([.year, .month], from: now)
+        return String(format: "%04d-%02d", c.year ?? 1970, c.month ?? 1)
+    }
+}
+
+/// token_usage_monthly 조회 행(snake_case 디코드용). month 는 eq 필터로 이미 고정하므로 담지 않는다.
+struct TokenBoardRow: Decodable, Equatable {
+    let userId: String
+    let claudeInput: Int
+    let claudeOutput: Int
+    let claudeCacheRead: Int
+    let claudeCacheCreation: Int
+    let codexInput: Int
+    let codexOutput: Int
+    let total: Int
+}
+
+/// 팀원 토큰 보드 한 행(표시용). 숫자는 서버 행에서, 이름/아바타는 팀원 목록(TeamMemberStatus)에서 온다.
+/// 팀원인데 행이 없으면 total 0 엔트리로 만든다("다들 0부터"). 등수 배지 없이 정렬 순서가 곧 순위다.
+struct TokenBoardEntry: Identifiable, Equatable {
+    let userID: String
+    var name: String
+    var avatarURL: URL?
+    let total: Int
+    let claudeInput: Int
+    let claudeOutput: Int
+    let claudeCacheRead: Int
+    let claudeCacheCreation: Int
+    let codexInput: Int
+    let codexOutput: Int
+
+    var id: String { userID }
+}
+
+extension Array where Element == TeamMemberStatus {
+    /// 팀원 목록과 서버 토큰 행을 결합해 팀원 전원의 이번 달 엔트리를 만든다(정렬은 하지 않음 — sortedByTotalDescending 별도).
+    /// 행이 없는 팀원은 total 0 으로 채운다("다들 0부터" — 아직 안 올린 사람도 목록에 보이게). 순수 함수라 결정적으로 검증한다.
+    func combinedTokenBoard(rows: [TokenBoardRow]) -> [TokenBoardEntry] {
+        // 같은 user_id 가 여러 행일 리 없으나(PK), 방어적으로 첫 행을 채택한다.
+        let byUser = Dictionary(rows.map { ($0.userId, $0) }, uniquingKeysWith: { first, _ in first })
+        return map { member in
+            let r = byUser[member.id]
+            return TokenBoardEntry(
+                userID: member.id,
+                name: member.name,
+                avatarURL: member.avatarURL,
+                total: r?.total ?? 0,
+                claudeInput: r?.claudeInput ?? 0,
+                claudeOutput: r?.claudeOutput ?? 0,
+                claudeCacheRead: r?.claudeCacheRead ?? 0,
+                claudeCacheCreation: r?.claudeCacheCreation ?? 0,
+                codexInput: r?.codexInput ?? 0,
+                codexOutput: r?.codexOutput ?? 0
+            )
+        }
+    }
+}
+
+extension Array where Element == TokenBoardEntry {
+    /// 토큰 보드 정렬 단일 규약: 이번 달 총합 내림차순, 동률이면 이름 오름차순. 스토어(반영)와 뷰(재정렬)가 공유한다.
+    func sortedByTotalDescending() -> [TokenBoardEntry] {
+        sorted { lhs, rhs in
+            if lhs.total != rhs.total {
+                return lhs.total > rhs.total
+            }
+            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
+    }
+}
+
+/// token_usage_monthly upsert 본문(snake_case 인코딩). D1 의 TokenUsageMonthly 에서 서비스가 값을 옮겨 담는다.
+struct TokenUsageUpsertRequest: Encodable {
+    let userId: String
+    let month: String
+    let claudeInput: Int
+    let claudeOutput: Int
+    let claudeCacheRead: Int
+    let claudeCacheCreation: Int
+    let codexInput: Int
+    let codexOutput: Int
+    let total: Int
+}
+
 struct TeamWeeklyGoal: Equatable {
     static let defaultGoalSeconds = 60 * 60 * 60
     // 목표시간 기본값(시간 단위). teams.weekly_goal_hours 누락/null 시 폴백에 쓴다.

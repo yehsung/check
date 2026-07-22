@@ -1023,3 +1023,50 @@ private func isolatedRenderDefaults() -> UserDefaults {
     defaults.removePersistentDomain(forName: suiteName)
     return defaults
 }
+
+// MARK: - D2: 팀원 이번 달 AI 토큰 보드 렌더
+
+/// 토큰 보드 페이지가 열린 로그인 스토어. 내 행("나" 칩)이 뜨도록 session.userID 를 한 엔트리와 맞춘다.
+@MainActor
+private func makeTokenBoardStore() -> WorkTimerStore {
+    let store = makeTeamStore(members: [], now: Date())
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "u-me")
+    // 축약 없는 전체 숫자 표기(콤마)와 정렬 순서(등수 배지 없음)를 함께 보이도록 큰 값/0 을 섞는다.
+    store.tokenBoard = [
+        TokenBoardEntry(userID: "u1", name: "영식", avatarURL: nil, total: 4_564_338_243, claudeInput: 4_000_000_000, claudeOutput: 500_000_000, claudeCacheRead: 60_000_000, claudeCacheCreation: 4_338_243, codexInput: 0, codexOutput: 0),
+        TokenBoardEntry(userID: "u-me", name: "yesung", avatarURL: nil, total: 1_234_567_890, claudeInput: 1_000_000_000, claudeOutput: 200_000_000, claudeCacheRead: 34_000_000, claudeCacheCreation: 567_890, codexInput: 0, codexOutput: 0),
+        TokenBoardEntry(userID: "u3", name: "민수", avatarURL: nil, total: 89_000, claudeInput: 80_000, claudeOutput: 9_000, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
+        TokenBoardEntry(userID: "u4", name: "지현", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
+    ]
+    store.isTokenBoardVisible = true
+    return store
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersTokenBoardSnapshot() throws {
+    let png = try renderPNG(CheckMenuView(store: makeTokenBoardStore()))
+    #expect(png.count > 0)
+    // 육안 확인용 아티팩트를 스크래치 디렉터리에 저장한다(디렉터리 없으면 만들고, 실패는 무시).
+    let dir = URL(fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try? png.write(to: dir.appendingPathComponent("token-board.png"))
+}
+
+@MainActor
+@Test
+func tokenBoardWindowHeightWithinCap() throws {
+    // 토큰 보드 페이지도 창 높이 상한(≤700pt) 안에 머문다. 스크롤 상한(maxVisibleRows 초과)까지 채운 최악을 검증한다.
+    let store = makeTeamStore(members: [], now: Date())
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "u-me")
+    store.tokenBoard = (0..<12).map { i in
+        TokenBoardEntry(userID: "u\(i)", name: "멤버\(i)", avatarURL: nil, total: (12 - i) * 1_000_000, claudeInput: (12 - i) * 1_000_000, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
+    }
+    store.isTokenBoardVisible = true
+
+    let pixelHeight = try #require(renderedPixelHeight(CheckMenuView(store: store)))
+    // scale 2 렌더 → 포인트 높이 = 픽셀/2. 700pt 상한.
+    #expect(Double(pixelHeight) / 2.0 <= 700.0)
+}

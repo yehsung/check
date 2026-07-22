@@ -60,6 +60,14 @@ struct CheckMenuView: View {
                             onBack: { store.isLeaderboardVisible = false },
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
+                    } else if store.isTokenBoardVisible {
+                        // 팀원 이번 달 AI 토큰 순위 페이지. 리그와 같은 뼈대(뒤로 + 제목 + 고정 행높이 리스트/스크롤).
+                        TokenBoardPanel(
+                            entries: store.tokenBoard,
+                            myUserID: store.session?.userID,
+                            onBack: { store.isTokenBoardVisible = false },
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList
+                        )
                     } else {
                         // store 를 통째로 내려보내 초단위(displayNow) 의존을 잎 뷰로 격리한다 — TeamPanel 본체는
                         // displayNow 를 읽지 않으므로 매초 재정렬/재계산이 사라진다.
@@ -70,7 +78,8 @@ struct CheckMenuView: View {
                         )
                     }
                     FooterBar(store: store)
-                    CheckTokenUsageRow()
+                    // 슬림 토큰 사용량 행. 탭하면 팀원 이번 달 AI 토큰 순위 페이지를 연다(리그 트로피와 같은 진입 톤).
+                    CheckTokenUsageRow(onOpenBoard: { store.toggleTokenBoard() })
                 }
             }
         } else {
@@ -613,6 +622,134 @@ private struct LeaderboardPanel: View {
     static func listContentHeight(rowCount: Int) -> CGFloat {
         guard rowCount > 0 else { return 0 }
         return CGFloat(rowCount) * rowHeight + CGFloat(rowCount - 1) * rowSpacing
+    }
+}
+
+// MARK: - Team monthly token board page
+
+/// 팀 카드 자리를 대체하는 "이번 달 AI 토큰" 순위 페이지. 리그 페이지와 같은 뼈대다:
+/// 뒤로 버튼 + 제목 + 고정 행높이 리스트(maxVisibleRows 초과 시 스크롤). 등수 숫자/메달 배지는 없다 — 정렬 순서가 곧 순위.
+/// 행은 아바타 + 이름(+내 행 "나" 칩) + 우측 전체 숫자(콤마 구분·monospacedDigit). 팀원 전원 표시라(행 없으면 0)
+/// 목록이 비는 경우는 데이터 로드 전뿐이고, 그때만 로딩 중립 문구를 보인다.
+private struct TokenBoardPanel: View {
+    // total 내림차순(동률 이름)으로 정렬된 팀원 엔트리(store 에서 이미 정렬됨). 뷰에서도 같은 규약으로 다시 정렬한다.
+    let entries: [TokenBoardEntry]
+    // 내 user_id(내 행 "나" 칩 판정용). nil 이면 어떤 행에도 칩이 붙지 않는다.
+    var myUserID: String? = nil
+    var onBack: () -> Void = {}
+    // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
+    var clipsOverflowInsteadOfScroll: Bool = false
+
+    // 데이터 로드 전(목록 비었을 때)만 보이는 중립 문구 — 전원 0이어도 팀원이 있으면 전원 표시라 평소엔 비지 않는다.
+    private static let loadingMessage = "불러오는 중…"
+
+    // 토큰 행은 한 줄(아바타 + 이름 + 숫자)이라 팀원 카드 행보다 낮다. 창 높이 상한(≤700pt)은 리그(58pt·6행)보다 여유롭다.
+    private static let rowHeight: CGFloat = 44
+    private static let rowSpacing: CGFloat = 10
+    // 스크롤 없이 보여 주는 최대 인원. 행이 낮아 7행이어도 리그 상한 높이보다 낮다.
+    static let maxVisibleRows = 7
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
+                Text("이번 달 AI 토큰 소모량")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+            }
+            PanelDivider()
+            entryList
+        }
+        .padding(12)
+        .panelStyle()
+    }
+
+    // 서버 정렬을 신뢰하지 않고 뷰에서도 total 내림차순(동률 이름)으로 다시 정렬한다.
+    private var sortedEntries: [TokenBoardEntry] {
+        entries.sortedByTotalDescending()
+    }
+
+    private var rowCount: Int {
+        sortedEntries.isEmpty ? 1 : sortedEntries.count
+    }
+
+    // 리스트 높이 = 인원 비례. maxVisibleRows까지는 그대로 자라고(스크롤 없음), 초과하면 그 높이로 고정 후 스크롤.
+    @ViewBuilder
+    private var entryList: some View {
+        let capHeight = Self.listContentHeight(rowCount: Self.maxVisibleRows)
+        if rowCount <= Self.maxVisibleRows {
+            rows.frame(maxWidth: .infinity, alignment: .top)
+        } else if clipsOverflowInsteadOfScroll {
+            // 스냅샷 전용: 보이는 첫 maxVisibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
+            rows.frame(maxWidth: .infinity, alignment: .top)
+                .frame(height: capHeight, alignment: .top)
+                .clipped()
+        } else {
+            ScrollView(.vertical, showsIndicators: true) {
+                rows.frame(maxWidth: .infinity)
+            }
+            .frame(height: capHeight)
+        }
+    }
+
+    @ViewBuilder
+    private var rows: some View {
+        VStack(spacing: Self.rowSpacing) {
+            if sortedEntries.isEmpty {
+                // 데이터 로드 전 — 중립 로딩 문구. 팀원이 있으면(전원 0이어도) 목록이 채워져 이 자리에 오지 않는다.
+                Text(Self.loadingMessage)
+                    .font(.caption)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
+            } else {
+                ForEach(sortedEntries) { entry in
+                    TokenBoardRowView(entry: entry, isMe: myUserID != nil && entry.userID == myUserID)
+                        .frame(height: Self.rowHeight)
+                }
+            }
+        }
+    }
+
+    static func listContentHeight(rowCount: Int) -> CGFloat {
+        guard rowCount > 0 else { return 0 }
+        return CGFloat(rowCount) * rowHeight + CGFloat(rowCount - 1) * rowSpacing
+    }
+}
+
+/// 토큰 보드 한 행: 이니셜/원격 아바타 + 이름(+내 행 "나" 칩) + 우측 이번 달 총합(전체 숫자, 콤마 구분·monospacedDigit).
+/// 등수 배지 없이 담백하게 — 정렬 순서가 곧 순위다. "나" 칩은 리그 "우리 팀" 칩과 같은 톤(accent). 높이는 패널이 고정으로 준다.
+private struct TokenBoardRowView: View {
+    let entry: TokenBoardEntry
+    var isMe: Bool = false
+
+    var body: some View {
+        HStack(spacing: 11) {
+            CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: 30)
+            Text(entry.name)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(CheckTheme.primaryText)
+                .lineLimit(1)
+            if isMe {
+                Text("나")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(CheckTheme.accent)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(CheckTheme.accent.opacity(0.18)))
+                    .fixedSize()
+            }
+            Spacer(minLength: 6)
+            // 축약(B/M/K) 없이 1의 자리까지 전체 숫자를 콤마로 끊어 보여 준다(계약: TokenNumberFormatter.grouped).
+            Text(TokenNumberFormatter.grouped(entry.total))
+                .font(.caption.weight(.bold))
+                .foregroundStyle(CheckTheme.primaryText)
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

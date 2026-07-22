@@ -2532,3 +2532,173 @@ private func isolatedDefaults() -> UserDefaults {
     defaults.removePersistentDomain(forName: suiteName)
     return defaults
 }
+
+// MARK: - D2: 팀원 이번 달 AI 토큰 보드 (토글/로드/업로드 게이트/초기화)
+
+@MainActor
+@Test
+func toggleTokenBoardOpensClosesAndIsMutuallyExclusiveWithLeaderboard() {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://token-toggle-test")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    // 리그가 열린 상태에서 토큰 보드를 열면 리그가 닫힌다(상호 배타).
+    store.isLeaderboardVisible = true
+    store.toggleTokenBoard()
+    #expect(store.isTokenBoardVisible)
+    #expect(!store.isLeaderboardVisible)
+
+    // 반대로 리그를 열면 토큰 보드가 닫힌다.
+    store.toggleLeaderboard()
+    #expect(store.isLeaderboardVisible)
+    #expect(!store.isTokenBoardVisible)
+
+    // 다시 토큰 보드를 토글하면 닫힌다.
+    store.toggleTokenBoard()   // open (leaderboard closes)
+    store.toggleTokenBoard()   // close
+    #expect(!store.isTokenBoardVisible)
+}
+
+@MainActor
+@Test
+func performLoadTokenBoardCombinesRowsWithTeamMembersSortedByTotal() async {
+    let testHost = "token-board-load-test"
+    TokenBoardURLProtocol.setResponse(
+        """
+        [
+          {"user_id": "u1", "claude_input": 100, "claude_output": 0, "claude_cache_read": 0, "claude_cache_creation": 0, "codex_input": 0, "codex_output": 0, "total": 100}
+        ]
+        """,
+        forHost: testHost
+    )
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "u1")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    // 팀원 2명 — 서버 행은 u1만. u2 는 0 으로 채워지고, total 내림차순이라 u1(100) → u2(0).
+    store.teamMembers = [
+        TeamMemberStatus(id: "u1", name: "영식", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil),
+        TeamMemberStatus(id: "u2", name: "민수", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil)
+    ]
+
+    await store.performLoadTokenBoard()
+
+    #expect(store.tokenBoard.count == 2)
+    #expect(store.tokenBoard.map(\.userID) == ["u1", "u2"])
+    #expect(store.tokenBoard[0].total == 100)
+    #expect(store.tokenBoard[1].total == 0)
+}
+
+@MainActor
+@Test
+func uploadTokenUsageGateThrottlesAndChangeGates() async {
+    let testHost = "token-upload-gate-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    func postCount() -> Int {
+        URLProtocolStub.requests(forHost: testHost).filter {
+            $0.url?.path == "/rest/v1/token_usage_monthly" && $0.httpMethod == "POST"
+        }.count
+    }
+
+    let t0 = Date(timeIntervalSince1970: 1_000_000)
+    let usageA = TokenUsageMonthly(month: "2026-07", claudeInput: 100)
+    let usageB = TokenUsageMonthly(month: "2026-07", claudeInput: 200)
+    let usageZero = TokenUsageMonthly(month: "2026-07")  // total 0
+
+    // 1) 최초: 변경(nil→A) + distantPast 대비 60초 경과 → 업로드.
+    await store.uploadTokenUsageIfNeeded(usage: usageA, now: t0)
+    #expect(postCount() == 1)
+
+    // 2) 같은 값 + 30초(<60) → 스킵.
+    await store.uploadTokenUsageIfNeeded(usage: usageA, now: t0.addingTimeInterval(30))
+    #expect(postCount() == 1)
+
+    // 3) 값이 바뀌었지만 여전히 <60초 → 스킵(두 조건 모두 필요).
+    await store.uploadTokenUsageIfNeeded(usage: usageB, now: t0.addingTimeInterval(30))
+    #expect(postCount() == 1)
+
+    // 4) 값 변경 + 60초 경과 → 업로드.
+    await store.uploadTokenUsageIfNeeded(usage: usageB, now: t0.addingTimeInterval(70))
+    #expect(postCount() == 2)
+
+    // 5) 60초 지났어도 값이 안 바뀌면 → 스킵.
+    await store.uploadTokenUsageIfNeeded(usage: usageB, now: t0.addingTimeInterval(140))
+    #expect(postCount() == 2)
+
+    // 6) nil / 총합 0 은 올리지 않는다(빈 행을 만들 필요 없음 — 보드가 0 으로 채운다).
+    await store.uploadTokenUsageIfNeeded(usage: nil, now: t0.addingTimeInterval(200))
+    await store.uploadTokenUsageIfNeeded(usage: usageZero, now: t0.addingTimeInterval(300))
+    #expect(postCount() == 2)
+}
+
+@MainActor
+@Test
+func signOutClearsTokenBoardState() {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://token-signout-test")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.isTokenBoardVisible = true
+    store.tokenBoard = [
+        TokenBoardEntry(userID: "u1", name: "영식", avatarURL: nil, total: 100, claudeInput: 100, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
+    ]
+    store.lastUploadedUsage = TokenUsageMonthly(month: "2026-07", claudeInput: 100)
+    store.lastTokenUploadAt = Date()
+
+    store.signOut()
+
+    // 로그아웃 시 보드 상태와 업로드 게이트가 모두 초기화되어야 한다(리그와 동일 규약).
+    #expect(store.tokenBoard.isEmpty)
+    #expect(!store.isTokenBoardVisible)
+    #expect(store.lastUploadedUsage == nil)
+    #expect(store.lastTokenUploadAt == .distantPast)
+}

@@ -56,8 +56,11 @@ final class WorkTimerStore {
             displayNow = Date()
             stopTimerIfIdle()
             if isLeaderboardVisible { loadLeaderboard() }
+            if isTokenBoardVisible { loadTokenBoard() }
             // 팀원이 바꾼 주간 목표/이름/역할/참여코드를 팝오버 열 때 60초 스로틀로 재조회해 반영한다.
             refreshTeamMetaIfStale()
+            // 팝오버 열림 시점에 내 월간 토큰을 게이트/스로틀 하에 1회 올린다(대부분 즉시 반환 — Task 남발 아님).
+            Task { @MainActor [weak self] in await self?.uploadTokenUsageIfNeeded() }
         } else {
             stopTimerIfIdle()
         }
@@ -127,6 +130,16 @@ final class WorkTimerStore {
     // 페이지가 열려 있는 동안 30초 refresh 루프가 함께 갱신하고, signOut 시 둘 다 초기화한다.
     var leaderboard: [TeamLeaderboardEntry] = []
     var isLeaderboardVisible = false
+
+    // 팀원 이번 달 AI 토큰 순위 페이지 상태. isLeaderboardVisible 과 상호 배타(하나 열면 다른 것 닫기).
+    // tokenBoard: total 내림차순(동률 이름)으로 정렬한 팀원 엔트리. 페이지가 열려 있는 동안 30초 refresh 루프가 갱신하고,
+    // signOut 시 함께 초기화한다. 업로드 게이트 상태(마지막 업로드 값/시각)는 관찰 대상이 아니다.
+    var tokenBoard: [TokenBoardEntry] = []
+    var isTokenBoardVisible = false
+    /// 마지막으로 서버에 올린 월간 사용량. 변경 게이트 기준(같은 값이면 재업로드 안 함). 관찰 대상 아님.
+    @ObservationIgnored var lastUploadedUsage: TokenUsageMonthly?
+    /// 마지막 업로드 시도 시각. 60초 스로틀 기준(난사 방지). 관찰 대상 아님.
+    @ObservationIgnored var lastTokenUploadAt: Date = .distantPast
 
     // 잠자기 정책: willSleep 시각을 기록해 didWake 에서 잠든 시간을 판정한다.
     var sleepBeganAt: Date?
@@ -433,11 +446,21 @@ final class WorkTimerStore {
     /// 새 가입 흐름은 previewTeamCode()/createTeam 으로 대체됐다.
     func loadTeamDirectory() {}
 
-    /// 트로피 버튼 액션. 리그 페이지를 토글하고, 여는 순간 순위를 로드한다.
+    /// 트로피 버튼 액션. 리그 페이지를 토글하고, 여는 순간 순위를 로드한다. 토큰 보드와 상호 배타.
     func toggleLeaderboard() {
         isLeaderboardVisible.toggle()
         if isLeaderboardVisible {
+            isTokenBoardVisible = false
             loadLeaderboard()
+        }
+    }
+
+    /// 토큰 사용량 행 액션. 팀원 이번 달 AI 토큰 순위 페이지를 토글하고, 여는 순간 보드를 로드한다. 리그와 상호 배타.
+    func toggleTokenBoard() {
+        isTokenBoardVisible.toggle()
+        if isTokenBoardVisible {
+            isLeaderboardVisible = false
+            loadTokenBoard()
         }
     }
 
@@ -500,6 +523,13 @@ final class WorkTimerStore {
                 await self?.sendHeartbeatIfWorking()
                 await self?.refreshTeamStatus()
                 await self?.refreshLeaderboardIfVisible()
+                await self?.refreshTokenBoardIfVisible()
+                // 내 월간 토큰 사용량을 변경 게이트+60초 스로틀로 서버에 올린다(팀원 보드 최신화). 대부분 게이트에서 즉시 반환.
+                // 팝오버가 열려 있을 때만 부른다 — 토큰 스캔은 행이 처음 그려질 때(팝오버 열림) 지연 시작되므로(D1 규약),
+                // 닫힌 상태에서 TokenUsageStore.shared 를 건드려 앱 시작부터 스캔이 도는 것을 막는다.
+                if self?.isMenuPresented == true {
+                    await self?.uploadTokenUsageIfNeeded()
+                }
             }
         }
     }
@@ -613,6 +643,11 @@ extension WorkTimerStore {
         // 세션이 사라지면 리그 페이지 상태도 함께 초기화한다(signOut·토큰 만료 로그아웃 공통 경로).
         leaderboard = []
         isLeaderboardVisible = false
+        // 토큰 보드 상태와 업로드 게이트도 함께 비운다(리그와 동일 규약). 다음 로그인은 처음부터 다시 올린다.
+        tokenBoard = []
+        isTokenBoardVisible = false
+        lastUploadedUsage = nil
+        lastTokenUploadAt = .distantPast
         // 팀원 인사/팀 목표 축하의 세션 상태도 비운다(다음 로그인의 첫 로드에서 인사 폭탄 금지).
         greetingDetector.reset()
         teamGoalComplete = nil

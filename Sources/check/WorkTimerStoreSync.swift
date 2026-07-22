@@ -126,6 +126,73 @@ extension WorkTimerStore {
         }
     }
 
+    // MARK: - 팀원 이번 달 AI 토큰 보드
+
+    /// 토큰 보드를 로드한다(Task 발사). 페이지를 여는 순간과 팝오버 재오픈에서 호출한다.
+    func loadTokenBoard() {
+        Task { @MainActor in await performLoadTokenBoard() }
+    }
+
+    /// 토큰 보드 페이지가 열려 있는 동안만 보드를 갱신한다(30초 refresh 루프에서 호출).
+    func refreshTokenBoardIfVisible() async {
+        guard isTokenBoardVisible else { return }
+        await performLoadTokenBoard()
+    }
+
+    /// 팀원 이번 달 토큰 행을 조회해 팀원 목록과 결합·정렬(total 내림차순, 동률 이름)해 반영한다.
+    /// 팀원인데 행이 없으면 total 0 으로 채워 전원을 보여 준다("다들 0부터"). 팀원 목록이 아직 없으면 비운다(로딩 중립).
+    /// 서버 정렬은 신뢰하지 않고 클라에서 다시 정렬한다. 실패는 조용히 — 다음 주기/재오픈에서 다시 시도한다.
+    func performLoadTokenBoard() async {
+        guard session != nil, currentTeamID != nil else { return }
+        let members = teamMembers
+        let memberIDs = members.map(\.id)
+        guard !memberIDs.isEmpty else {
+            if !tokenBoard.isEmpty { tokenBoard = [] }
+            return
+        }
+        let month = TokenUsageMonthKey.current()
+        let generation = sessionGeneration
+        do {
+            let rows = try await withSessionRetry { activeSession in
+                try await service.fetchTokenBoard(accessToken: activeSession.accessToken, memberIDs: memberIDs, month: month)
+            }
+            guard generation == sessionGeneration else { return }
+            let entries = members.combinedTokenBoard(rows: rows).sortedByTotalDescending()
+            if tokenBoard != entries { tokenBoard = entries }
+        } catch {
+            // 취소는 조용히 빠져나간다. 그 외 실패도 문구를 흔들지 않고 다음 주기/재오픈에서 재시도한다.
+            if case .cancelled = classifyAuthError(error) { return }
+        }
+    }
+
+    /// 팝오버 열림/refresh 루프에서 부르는 업로드 진입점. D1 의 로컬 월간 사용량을 읽어 게이트 판정 후 upsert 한다.
+    /// (TokenUsageStore.shared 의존은 이 얇은 래퍼에만 둔다 — 결정 로직/테스트는 usage 주입 오버로드가 담당.)
+    func uploadTokenUsageIfNeeded(now: Date = Date()) async {
+        await uploadTokenUsageIfNeeded(usage: TokenUsageStore.shared.currentMonthUsage, now: now)
+    }
+
+    /// 변경 게이트 + 60초 스로틀. 마지막 업로드 값과 다르고 60초 지났을 때만 upsert 한다.
+    /// nil/총합 0 은 올리지 않는다(보드는 행 없는 팀원을 0 으로 채우므로 빈 행을 만들 필요가 없다).
+    /// 실패는 조용히 — lastUploadedUsage 를 성공 시에만 갱신해 다음 주기에 재시도된다.
+    func uploadTokenUsageIfNeeded(usage: TokenUsageMonthly?, now: Date) async {
+        guard session != nil else { return }
+        guard let usage, usage.total > 0 else { return }
+        guard usage != lastUploadedUsage, now.timeIntervalSince(lastTokenUploadAt) >= 60 else { return }
+        // 시도 시각을 먼저 스탬프해, 실패하더라도 60초 안에는 재시도하지 않는다(난사 방지).
+        lastTokenUploadAt = now
+        let generation = sessionGeneration
+        do {
+            try await withSessionRetry { activeSession in
+                try await service.upsertTokenUsage(accessToken: activeSession.accessToken, userID: activeSession.userID, usage: usage)
+            }
+            guard generation == sessionGeneration else { return }
+            // 성공 시에만 마지막 업로드 값을 갱신한다 — 실패면 값이 그대로라 다음 60초 후 변경 게이트가 다시 통과한다.
+            lastUploadedUsage = usage
+        } catch {
+            // 조용히 무시하고 다음 주기에 재시도한다(표시 문구를 흔들지 않는다).
+        }
+    }
+
     /// 근무중일 때 서버에 생존신호(last_seen_at)를 보낸다. 근무중이 아니거나 세션 정보가 없으면 보내지 않는다.
     func sendHeartbeatIfWorking() async {
         guard startedAt != nil, session != nil, let sessionID = currentSessionID, let teamID = currentTeamID else {

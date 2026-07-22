@@ -1067,3 +1067,201 @@ func closeAbandonedSessionsPostsRPCWithBearerAndDecodesCount() async throws {
     // 로그인 토큰을 Bearer 로 사용한다(authenticated 전용 RPC — 클라 스캐빈저 폴백).
     #expect(rpcRequest.value(forHTTPHeaderField: "Authorization") == "Bearer access-token")
 }
+
+// MARK: - D2: 팀원 이번 달 AI 토큰 보드 (upsert / fetch / 결합·정렬 / 월 키)
+
+@Test
+func upsertTokenUsagePostsMergeDuplicatesWithSnakeCasePayload() async throws {
+    let testHost = "token-upsert-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let usage = TokenUsageMonthly(
+        month: "2026-07",
+        claudeInput: 11, claudeOutput: 22, claudeCacheRead: 33, claudeCacheCreation: 44,
+        codexInput: 55, codexOutput: 66
+    )
+    try await service.upsertTokenUsage(accessToken: "access-token", userID: "00000000-0000-0000-0000-000000000002", usage: usage)
+
+    let post = try #require(URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/token_usage_monthly" && $0.httpMethod == "POST"
+    })
+    // on_conflict=user_id,month 로 (user_id,month) 충돌 시 merge 갱신.
+    let postURL = try #require(post.url)
+    let queryItems = try #require(URLComponents(url: postURL, resolvingAgainstBaseURL: false)?.queryItems)
+    #expect(queryItems.contains(URLQueryItem(name: "on_conflict", value: "user_id,month")))
+    let prefer = try #require(post.value(forHTTPHeaderField: "Prefer"))
+    #expect(prefer.contains("resolution=merge-duplicates"))
+    #expect(prefer.contains("return=minimal"))
+
+    let bodyText = URLProtocolStub.bodyText(forHost: testHost)
+    // snake_case 인코딩 + month + total(=6필드 합 231).
+    #expect(bodyText.contains("\"user_id\":\"00000000-0000-0000-0000-000000000002\""))
+    #expect(bodyText.contains("\"month\":\"2026-07\""))
+    #expect(bodyText.contains("\"claude_input\":11"))
+    #expect(bodyText.contains("\"claude_output\":22"))
+    #expect(bodyText.contains("\"claude_cache_read\":33"))
+    #expect(bodyText.contains("\"claude_cache_creation\":44"))
+    #expect(bodyText.contains("\"codex_input\":55"))
+    #expect(bodyText.contains("\"codex_output\":66"))
+    #expect(bodyText.contains("\"total\":231"))
+    // camelCase 가 새어 나가지 않는다.
+    #expect(!bodyText.contains("\"claudeInput\""))
+}
+
+@Test
+func fetchTokenBoardQueriesMonthAndMembersInFilterAndDecodes() async throws {
+    let testHost = "token-fetch-test"
+    TokenBoardURLProtocol.setResponse(
+        """
+        [
+          {"user_id": "aaaa", "claude_input": 100, "claude_output": 200, "claude_cache_read": 300, "claude_cache_creation": 400, "codex_input": 500, "codex_output": 600, "total": 2100},
+          {"user_id": "bbbb", "claude_input": 1, "claude_output": 2, "claude_cache_read": 3, "claude_cache_creation": 4, "codex_input": 5, "codex_output": 6, "total": 21}
+        ]
+        """,
+        forHost: testHost
+    )
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+
+    let rows = try await service.fetchTokenBoard(
+        accessToken: "access-token",
+        memberIDs: ["aaaa", "bbbb"],
+        month: "2026-07"
+    )
+
+    // 디코드: 두 행 + 총합 그대로.
+    #expect(rows.count == 2)
+    #expect(rows.first { $0.userId == "aaaa" }?.total == 2100)
+    #expect(rows.first { $0.userId == "bbbb" }?.codexOutput == 6)
+
+    // 쿼리: month=eq.2026-07 + user_id=in.(aaaa,bbbb) + select 필드.
+    let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
+    let query = try #require(url.query)
+    #expect(query.contains("month=eq.2026-07"))
+    // in.(…) 는 퍼센트 인코딩될 수 있으므로 원본 queryItems 로 확인한다(자동 디코드).
+    let items = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+    #expect(items.contains(URLQueryItem(name: "user_id", value: "in.(aaaa,bbbb)")))
+    #expect(items.contains { $0.name == "select" && $0.value?.contains("claude_cache_creation") == true })
+}
+
+@Test
+func fetchTokenBoardWithNoMembersSkipsRequest() async throws {
+    let testHost = "token-fetch-empty-test"
+    TokenBoardURLProtocol.setResponse("[]", forHost: testHost)
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+
+    let rows = try await service.fetchTokenBoard(accessToken: "access-token", memberIDs: [], month: "2026-07")
+
+    // 조회할 대상이 없으면 요청 없이 빈 배열(불필요한 왕복 회피).
+    #expect(rows.isEmpty)
+    #expect(TokenBoardURLProtocol.lastURL(forHost: testHost) == nil)
+}
+
+@Test
+func combinedTokenBoardFillsMissingMembersWithZero() {
+    // 팀원 3명, 서버 행은 2명치만 — 행 없는 팀원(민수)은 total 0 으로 채워 전원이 목록에 남아야 한다("다들 0부터").
+    let members = [
+        TeamMemberStatus(id: "u1", name: "영식", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil),
+        TeamMemberStatus(id: "u2", name: "민수", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil),
+        TeamMemberStatus(id: "u3", name: "지현", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil, avatarURL: URL(string: "https://example.com/u3.jpg"))
+    ]
+    let rows = [
+        TokenBoardRow(userId: "u1", claudeInput: 10, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, total: 10),
+        TokenBoardRow(userId: "u3", claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 5, total: 5)
+    ]
+
+    let entries = members.combinedTokenBoard(rows: rows)
+
+    #expect(entries.count == 3)
+    #expect(entries.first { $0.userID == "u1" }?.total == 10)
+    // 행 없는 민수는 0.
+    #expect(entries.first { $0.userID == "u2" }?.total == 0)
+    // 이름/아바타는 팀원 목록에서 온다.
+    #expect(entries.first { $0.userID == "u3" }?.name == "지현")
+    #expect(entries.first { $0.userID == "u3" }?.avatarURL == URL(string: "https://example.com/u3.jpg"))
+}
+
+@Test
+func sortedByTotalDescendingBreaksTiesByName() {
+    // total 내림차순, 동률이면 이름 오름차순. 등수 배지 없이 이 순서가 곧 순위다.
+    let entries = [
+        TokenBoardEntry(userID: "u1", name: "나나", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
+        TokenBoardEntry(userID: "u2", name: "가가", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
+        TokenBoardEntry(userID: "u3", name: "다다", avatarURL: nil, total: 100, claudeInput: 100, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
+    ]
+
+    let sorted = entries.sortedByTotalDescending()
+
+    // 100(다다) 먼저, 그 다음 동률 0 은 이름순(가가 < 나나).
+    #expect(sorted.map(\.userID) == ["u3", "u2", "u1"])
+}
+
+@Test
+func tokenUsageMonthKeyIsKSTYearMonth() {
+    // 2026-07-31 15:00 UTC = 2026-08-01 00:00 KST → 월 키는 UTC 가 아니라 KST 기준 "2026-08".
+    let utcBoundary = ISO8601DateFormatter().date(from: "2026-07-31T15:00:00Z")!
+    #expect(TokenUsageMonthKey.current(utcBoundary) == "2026-08")
+    // 한낮은 자명하게 그 달.
+    let midJuly = ISO8601DateFormatter().date(from: "2026-07-15T03:00:00Z")!
+    #expect(TokenUsageMonthKey.current(midJuly) == "2026-07")
+}
+
+/// 팀 토큰 보드 조회 응답을 호스트별로 캔에 담아 돌려주는 전용 URLProtocol. 호스트 키 + 잠금으로
+/// 병렬 테스트가 서로 간섭하지 않게 한다(각 테스트가 고유 호스트를 쓴다). 요청 URL 도 호스트별로 마지막 것만 보관한다.
+final class TokenBoardURLProtocol: URLProtocol {
+    private static let lock = NSLock()
+    private nonisolated(unsafe) static var responsesByHost: [String: String] = [:]
+    private nonisolated(unsafe) static var lastURLByHost: [String: URL] = [:]
+
+    static func setResponse(_ json: String, forHost host: String) {
+        lock.lock(); defer { lock.unlock() }
+        responsesByHost[host] = json
+        lastURLByHost[host] = nil
+    }
+
+    static func lastURL(forHost host: String) -> URL? {
+        lock.lock(); defer { lock.unlock() }
+        return lastURLByHost[host]
+    }
+
+    static func session() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TokenBoardURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let host = request.url?.host ?? ""
+        Self.lock.lock()
+        Self.lastURLByHost[host] = request.url
+        let json = Self.responsesByHost[host] ?? "[]"
+        Self.lock.unlock()
+
+        let data = Data(json.utf8)
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}

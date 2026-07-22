@@ -466,6 +466,48 @@ actor SupabaseWorkService {
         )
     }
 
+    /// 내 이번 달 AI 토큰 사용량을 서버 원장에 upsert 한다. (user_id, month) 충돌 시 merge-duplicates 로 갱신한다.
+    /// 반환 없음(return=minimal) — 표시는 별도 fetchTokenBoard 로 다시 읽는다. usage.month 는 D1 이 계산한 KST 'YYYY-MM'.
+    func upsertTokenUsage(accessToken: String, userID: String, usage: TokenUsageMonthly) async throws {
+        try await sendNoBody(
+            path: "/rest/v1/token_usage_monthly",
+            method: "POST",
+            queryItems: [URLQueryItem(name: "on_conflict", value: "user_id,month")],
+            body: TokenUsageUpsertRequest(
+                userId: userID,
+                month: usage.month,
+                claudeInput: usage.claudeInput,
+                claudeOutput: usage.claudeOutput,
+                claudeCacheRead: usage.claudeCacheRead,
+                claudeCacheCreation: usage.claudeCacheCreation,
+                codexInput: usage.codexInput,
+                codexOutput: usage.codexOutput,
+                total: usage.total
+            ),
+            accessToken: accessToken,
+            prefer: "resolution=merge-duplicates,return=minimal"
+        )
+    }
+
+    /// 팀원들의 이번 달 토큰 사용량 행을 조회한다. RLS(같은 팀 멤버만 select)로 타팀은 0행이라 memberIDs 만으로 안전하다.
+    /// memberIDs 가 비면 요청 없이 빈 배열(조회할 대상이 없음). month=eq. + user_id=in.(…) 필터.
+    func fetchTokenBoard(accessToken: String, memberIDs: [String], month: String) async throws -> [TokenBoardRow] {
+        guard !memberIDs.isEmpty else { return [] }
+        let data = try await send(
+            path: "/rest/v1/token_usage_monthly",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "select", value: "user_id,claude_input,claude_output,claude_cache_read,claude_cache_creation,codex_input,codex_output,total"),
+                URLQueryItem(name: "month", value: "eq.\(month)"),
+                URLQueryItem(name: "user_id", value: "in.(\(memberIDs.joined(separator: ",")))")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode([TokenBoardRow].self, from: data)
+    }
+
     private func upsertStatus(accessToken: String, teamID: String, userID: String, status: String, activeSessionID: String?) async throws {
         try await sendNoBody(
             path: "/rest/v1/work_statuses",

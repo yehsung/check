@@ -2574,12 +2574,15 @@ func toggleTokenBoardOpensClosesAndIsMutuallyExclusiveWithLeaderboard() {
 
 @MainActor
 @Test
-func performLoadTokenBoardCombinesRowsWithTeamMembersSortedByTotal() async {
+func performLoadTokenBoardLoadsRPCRowsSortedByTotal() async {
     let testHost = "token-board-load-test"
+    // 전체 공개 RPC 응답: 이름/아바타 포함(행 자체 완결). 타팀 사용자(u2)도 포함돼 팀 무관 전체가 보인다.
+    // 서버 정렬을 신뢰하지 않는지 보이려 원본은 total 오름차순(u2 50 → u1 100)으로 준다 — 클라가 내림차순으로 재정렬해야 한다.
     TokenBoardURLProtocol.setResponse(
         """
         [
-          {"user_id": "u1", "claude_input": 100, "claude_output": 0, "claude_cache_read": 0, "claude_cache_creation": 0, "codex_input": 0, "codex_output": 0, "total": 100}
+          {"user_id": "u2", "display_name": "타팀민수", "avatar_url": null, "claude_input": 50, "claude_output": 0, "claude_cache_read": 0, "claude_cache_creation": 0, "codex_input": 0, "codex_output": 0, "total": 50},
+          {"user_id": "u1", "display_name": "영식", "avatar_url": "https://example.com/u1.jpg", "claude_input": 100, "claude_output": 0, "claude_cache_read": 0, "claude_cache_creation": 0, "codex_input": 0, "codex_output": 0, "total": 100}
         ]
         """,
         forHost: testHost
@@ -2600,18 +2603,20 @@ func performLoadTokenBoardCombinesRowsWithTeamMembersSortedByTotal() async {
     }
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "u1")
     store.currentTeamID = URLProtocolStub.stubTeamID
-    // 팀원 2명 — 서버 행은 u1만. u2 는 0 으로 채워지고, total 내림차순이라 u1(100) → u2(0).
-    store.teamMembers = [
-        TeamMemberStatus(id: "u1", name: "영식", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil),
-        TeamMemberStatus(id: "u2", name: "민수", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil)
-    ]
+    // 팀원 목록과 무관하게(전체 공개) RPC 행만으로 보드가 채워진다.
+    #expect(store.tokenBoardLoaded == false)
 
     await store.performLoadTokenBoard()
 
+    // RPC 두 행 그대로, total 내림차순(u1 100 → u2 50). 이름/아바타는 행에서 온다.
     #expect(store.tokenBoard.count == 2)
     #expect(store.tokenBoard.map(\.userID) == ["u1", "u2"])
     #expect(store.tokenBoard[0].total == 100)
-    #expect(store.tokenBoard[1].total == 0)
+    #expect(store.tokenBoard[0].name == "영식")
+    #expect(store.tokenBoard[0].avatarURL == URL(string: "https://example.com/u1.jpg"))
+    #expect(store.tokenBoard[1].total == 50)
+    // 성공 로드 후 플래그가 서 빈 목록 문구 판정(로드 전/실패와 구분)이 가능해진다.
+    #expect(store.tokenBoardLoaded)
 }
 
 @MainActor
@@ -2688,6 +2693,7 @@ func signOutClearsTokenBoardState() {
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.isTokenBoardVisible = true
+    store.tokenBoardLoaded = true
     store.tokenBoard = [
         TokenBoardEntry(userID: "u1", name: "영식", avatarURL: nil, total: 100, claudeInput: 100, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
     ]
@@ -2699,6 +2705,7 @@ func signOutClearsTokenBoardState() {
     // 로그아웃 시 보드 상태와 업로드 게이트가 모두 초기화되어야 한다(리그와 동일 규약).
     #expect(store.tokenBoard.isEmpty)
     #expect(!store.isTokenBoardVisible)
+    #expect(!store.tokenBoardLoaded)
     #expect(store.lastUploadedUsage == nil)
     #expect(store.lastTokenUploadAt == .distantPast)
 }

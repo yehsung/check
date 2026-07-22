@@ -489,19 +489,14 @@ actor SupabaseWorkService {
         )
     }
 
-    /// 팀원들의 이번 달 토큰 사용량 행을 조회한다. RLS(같은 팀 멤버만 select)로 타팀은 0행이라 memberIDs 만으로 안전하다.
-    /// memberIDs 가 비면 요청 없이 빈 배열(조회할 대상이 없음). month=eq. + user_id=in.(…) 필터.
-    func fetchTokenBoard(accessToken: String, memberIDs: [String], month: String) async throws -> [TokenBoardRow] {
-        guard !memberIDs.isEmpty else { return [] }
+    /// 이번 달 토큰 사용량 순위를 조회한다(앱 사용자 전체 공개). token_usage_board(p_month) RPC 를 로그인 토큰으로
+    /// 호출한다 — 팀 무관 전체 사용자 행을 profiles 와 조인해 이름/아바타까지 담아 돌려주므로(행 자체 완결), 팀원 목록
+    /// 결합이 필요 없다. 서버가 총합 내림차순으로 정렬해 주지만 신뢰하지 않고 클라가 다시 정렬한다.
+    func fetchTokenBoard(accessToken: String, month: String) async throws -> [TokenBoardRow] {
         let data = try await send(
-            path: "/rest/v1/token_usage_monthly",
-            method: "GET",
-            queryItems: [
-                URLQueryItem(name: "select", value: "user_id,claude_input,claude_output,claude_cache_read,claude_cache_creation,codex_input,codex_output,total"),
-                URLQueryItem(name: "month", value: "eq.\(month)"),
-                URLQueryItem(name: "user_id", value: "in.(\(memberIDs.joined(separator: ",")))")
-            ],
-            body: Optional<EmptyBody>.none,
+            path: "/rest/v1/rpc/token_usage_board",
+            method: "POST",
+            body: TokenBoardRequest(pMonth: month),
             accessToken: accessToken,
             prefer: nil
         )

@@ -29,6 +29,10 @@ final class WorkTimerStore {
     let service: SupabaseWorkService
     let hasAnonKey: Bool
     let defaults: UserDefaults
+    /// 월간 AI 토큰 사용량 스토어. 프로덕션은 전역 공유(.shared)라 토큰 행/업로드 트랙이 같은 집계를 읽는다.
+    /// 테스트(특히 ImageRenderer 렌더)는 격리 인스턴스를 주입해, 뷰 .task 가 도는 렌더 중에도 실홈 스캔이
+    /// 테스트 러너의 .standard 를 오염시키지 않게 한다(감지 대신 의존성 주입으로 격리 — 구조적 결정성).
+    let tokenUsage: TokenUsageStore
     var session: SupabaseSession?
     var sessionGeneration = 0
     var currentSessionID: String?
@@ -136,6 +140,8 @@ final class WorkTimerStore {
     // signOut 시 함께 초기화한다. 업로드 게이트 상태(마지막 업로드 값/시각)는 관찰 대상이 아니다.
     var tokenBoard: [TokenBoardEntry] = []
     var isTokenBoardVisible = false
+    // 보드 첫 성공 로드 여부. 빈 목록일 때 '아직 아무도 안 올림'(로드 완료) 과 '로드 전/실패'(fallbackStatus) 를 구분한다.
+    var tokenBoardLoaded = false
     /// 마지막으로 서버에 올린 월간 사용량. 변경 게이트 기준(같은 값이면 재업로드 안 함). 관찰 대상 아님.
     @ObservationIgnored var lastUploadedUsage: TokenUsageMonthly?
     /// 마지막 업로드 시도 시각. 60초 스로틀 기준(난사 방지). 관찰 대상 아님.
@@ -203,10 +209,12 @@ final class WorkTimerStore {
         service: SupabaseWorkService = SupabaseWorkService(),
         environment: [String: String] = ProcessInfo.processInfo.environment,
         defaults: UserDefaults = .standard,
-        workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter
+        workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter,
+        tokenUsage: TokenUsageStore = .shared
     ) {
         self.service = service
         self.defaults = defaults
+        self.tokenUsage = tokenUsage
         milestoneTracker = MilestoneTracker(defaults: defaults)
         hasAnonKey = SupabaseConfig.anonKey(environment: environment) != nil
         email = defaults.string(forKey: Self.emailKey) ?? ""
@@ -646,6 +654,7 @@ extension WorkTimerStore {
         // 토큰 보드 상태와 업로드 게이트도 함께 비운다(리그와 동일 규약). 다음 로그인은 처음부터 다시 올린다.
         tokenBoard = []
         isTokenBoardVisible = false
+        tokenBoardLoaded = false
         lastUploadedUsage = nil
         lastTokenUploadAt = .distantPast
         // 팀원 인사/팀 목표 축하의 세션 상태도 비운다(다음 로그인의 첫 로드에서 인사 폭탄 금지).

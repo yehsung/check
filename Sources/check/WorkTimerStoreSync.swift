@@ -139,26 +139,23 @@ extension WorkTimerStore {
         await performLoadTokenBoard()
     }
 
-    /// 팀원 이번 달 토큰 행을 조회해 팀원 목록과 결합·정렬(total 내림차순, 동률 이름)해 반영한다.
-    /// 팀원인데 행이 없으면 total 0 으로 채워 전원을 보여 준다("다들 0부터"). 팀원 목록이 아직 없으면 비운다(로딩 중립).
-    /// 서버 정렬은 신뢰하지 않고 클라에서 다시 정렬한다. 실패는 조용히 — 다음 주기/재오픈에서 다시 시도한다.
+    /// 이번 달 토큰 순위를 조회해(앱 사용자 전체 공개 RPC) 정렬(total 내림차순, 동률 이름)해 반영한다.
+    /// 행이 자체 완결(이름/아바타 포함)이라 팀원 목록 결합이 없다 — 업로드한 사용자만 뜬다(월초엔 각자 앱이 열리며 자연 등장).
+    /// 서버 정렬은 신뢰하지 않고 클라에서 다시 정렬한다. 성공하면 tokenBoardLoaded 를 세워 빈 목록의 '아직 없음' 문구를
+    /// 로드 전/실패와 구분한다. 실패는 조용히 — 다음 주기/재오픈에서 다시 시도한다.
     func performLoadTokenBoard() async {
-        guard session != nil, currentTeamID != nil else { return }
-        let members = teamMembers
-        let memberIDs = members.map(\.id)
-        guard !memberIDs.isEmpty else {
-            if !tokenBoard.isEmpty { tokenBoard = [] }
-            return
-        }
+        guard session != nil else { return }
         let month = TokenUsageMonthKey.current()
         let generation = sessionGeneration
         do {
             let rows = try await withSessionRetry { activeSession in
-                try await service.fetchTokenBoard(accessToken: activeSession.accessToken, memberIDs: memberIDs, month: month)
+                try await service.fetchTokenBoard(accessToken: activeSession.accessToken, month: month)
             }
             guard generation == sessionGeneration else { return }
-            let entries = members.combinedTokenBoard(rows: rows).sortedByTotalDescending()
+            let entries = rows.toTokenBoardEntries().sortedByTotalDescending()
             if tokenBoard != entries { tokenBoard = entries }
+            // 성공 로드 완료 표시(빈 목록이어도 '아직 아무도 안 올림'과 로드 전/실패를 구분하기 위함).
+            if !tokenBoardLoaded { tokenBoardLoaded = true }
         } catch {
             // 취소는 조용히 빠져나간다. 그 외 실패도 문구를 흔들지 않고 다음 주기/재오픈에서 재시도한다.
             if case .cancelled = classifyAuthError(error) { return }
@@ -166,9 +163,9 @@ extension WorkTimerStore {
     }
 
     /// 팝오버 열림/refresh 루프에서 부르는 업로드 진입점. D1 의 로컬 월간 사용량을 읽어 게이트 판정 후 upsert 한다.
-    /// (TokenUsageStore.shared 의존은 이 얇은 래퍼에만 둔다 — 결정 로직/테스트는 usage 주입 오버로드가 담당.)
+    /// (토큰 스토어 의존은 이 얇은 래퍼에만 둔다 — 주입된 tokenUsage 를 읽어, 결정 로직/테스트는 usage 주입 오버로드가 담당.)
     func uploadTokenUsageIfNeeded(now: Date = Date()) async {
-        await uploadTokenUsageIfNeeded(usage: TokenUsageStore.shared.currentMonthUsage, now: now)
+        await uploadTokenUsageIfNeeded(usage: tokenUsage.currentMonthUsage, now: now)
     }
 
     /// 변경 게이트 + 60초 스로틀. 마지막 업로드 값과 다르고 60초 지났을 때만 upsert 한다.

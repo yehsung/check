@@ -1113,13 +1113,13 @@ func upsertTokenUsagePostsMergeDuplicatesWithSnakeCasePayload() async throws {
 }
 
 @Test
-func fetchTokenBoardQueriesMonthAndMembersInFilterAndDecodes() async throws {
+func fetchTokenBoardCallsRPCWithMonthAndDecodesNamedRows() async throws {
     let testHost = "token-fetch-test"
     TokenBoardURLProtocol.setResponse(
         """
         [
-          {"user_id": "aaaa", "claude_input": 100, "claude_output": 200, "claude_cache_read": 300, "claude_cache_creation": 400, "codex_input": 500, "codex_output": 600, "total": 2100},
-          {"user_id": "bbbb", "claude_input": 1, "claude_output": 2, "claude_cache_read": 3, "claude_cache_creation": 4, "codex_input": 5, "codex_output": 6, "total": 21}
+          {"user_id": "aaaa", "display_name": "영식", "avatar_url": "https://example.com/aaaa.jpg", "claude_input": 100, "claude_output": 200, "claude_cache_read": 300, "claude_cache_creation": 400, "codex_input": 500, "codex_output": 600, "total": 2100},
+          {"user_id": "bbbb", "display_name": "민수", "avatar_url": null, "claude_input": 1, "claude_output": 2, "claude_cache_read": 3, "claude_cache_creation": 4, "codex_input": 5, "codex_output": 6, "total": 21}
         ]
         """,
         forHost: testHost
@@ -1130,29 +1130,26 @@ func fetchTokenBoardQueriesMonthAndMembersInFilterAndDecodes() async throws {
         session: TokenBoardURLProtocol.session()
     )
 
-    let rows = try await service.fetchTokenBoard(
-        accessToken: "access-token",
-        memberIDs: ["aaaa", "bbbb"],
-        month: "2026-07"
-    )
+    let rows = try await service.fetchTokenBoard(accessToken: "access-token", month: "2026-07")
 
-    // 디코드: 두 행 + 총합 그대로.
+    // 디코드: 두 행 + 총합/이름/아바타(전체 공개 행은 자체 완결).
     #expect(rows.count == 2)
     #expect(rows.first { $0.userId == "aaaa" }?.total == 2100)
+    #expect(rows.first { $0.userId == "aaaa" }?.displayName == "영식")
+    #expect(rows.first { $0.userId == "aaaa" }?.avatarUrl == "https://example.com/aaaa.jpg")
+    #expect(rows.first { $0.userId == "bbbb" }?.avatarUrl == nil)  // null → nil
     #expect(rows.first { $0.userId == "bbbb" }?.codexOutput == 6)
 
-    // 쿼리: month=eq.2026-07 + user_id=in.(aaaa,bbbb) + select 필드.
+    // 요청: POST /rest/v1/rpc/token_usage_board + body {p_month:"2026-07"}(memberIDs 없음).
     let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
-    let query = try #require(url.query)
-    #expect(query.contains("month=eq.2026-07"))
-    // in.(…) 는 퍼센트 인코딩될 수 있으므로 원본 queryItems 로 확인한다(자동 디코드).
-    let items = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
-    #expect(items.contains(URLQueryItem(name: "user_id", value: "in.(aaaa,bbbb)")))
-    #expect(items.contains { $0.name == "select" && $0.value?.contains("claude_cache_creation") == true })
+    #expect(url.path == "/rest/v1/rpc/token_usage_board")
+    #expect(TokenBoardURLProtocol.lastMethod(forHost: testHost) == "POST")
+    let body = try #require(TokenBoardURLProtocol.lastBody(forHost: testHost))
+    #expect(body.contains("\"p_month\":\"2026-07\""))
 }
 
 @Test
-func fetchTokenBoardWithNoMembersSkipsRequest() async throws {
+func fetchTokenBoardEmptyResponseDecodesToNoRows() async throws {
     let testHost = "token-fetch-empty-test"
     TokenBoardURLProtocol.setResponse("[]", forHost: testHost)
     let service = SupabaseWorkService(
@@ -1161,35 +1158,30 @@ func fetchTokenBoardWithNoMembersSkipsRequest() async throws {
         session: TokenBoardURLProtocol.session()
     )
 
-    let rows = try await service.fetchTokenBoard(accessToken: "access-token", memberIDs: [], month: "2026-07")
+    let rows = try await service.fetchTokenBoard(accessToken: "access-token", month: "2026-07")
 
-    // 조회할 대상이 없으면 요청 없이 빈 배열(불필요한 왕복 회피).
+    // 전체 공개라 대상 열거 없이 항상 RPC 를 호출한다 — 아무도 안 올렸으면 빈 배열(요청은 실제로 나간다).
     #expect(rows.isEmpty)
-    #expect(TokenBoardURLProtocol.lastURL(forHost: testHost) == nil)
+    #expect(TokenBoardURLProtocol.lastURL(forHost: testHost) != nil)
 }
 
 @Test
-func combinedTokenBoardFillsMissingMembersWithZero() {
-    // 팀원 3명, 서버 행은 2명치만 — 행 없는 팀원(민수)은 total 0 으로 채워 전원이 목록에 남아야 한다("다들 0부터").
-    let members = [
-        TeamMemberStatus(id: "u1", name: "영식", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil),
-        TeamMemberStatus(id: "u2", name: "민수", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil),
-        TeamMemberStatus(id: "u3", name: "지현", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil, avatarURL: URL(string: "https://example.com/u3.jpg"))
-    ]
+func toTokenBoardEntriesMapsRowsWithNameAndAvatar() {
+    // 전체 공개 행은 자체 완결 — 이름/아바타가 행에서 온다(팀원 목록 결합 없음). URL 파싱과 nil 아바타를 함께 검증한다.
     let rows = [
-        TokenBoardRow(userId: "u1", claudeInput: 10, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, total: 10),
-        TokenBoardRow(userId: "u3", claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 5, total: 5)
+        TokenBoardRow(userId: "u1", displayName: "영식", avatarUrl: "https://example.com/u1.jpg", claudeInput: 10, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, total: 10),
+        TokenBoardRow(userId: "u3", displayName: "지현", avatarUrl: nil, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 5, total: 5)
     ]
 
-    let entries = members.combinedTokenBoard(rows: rows)
+    let entries = rows.toTokenBoardEntries()
 
-    #expect(entries.count == 3)
+    #expect(entries.count == 2)
+    #expect(entries.first { $0.userID == "u1" }?.name == "영식")
+    #expect(entries.first { $0.userID == "u1" }?.avatarURL == URL(string: "https://example.com/u1.jpg"))
     #expect(entries.first { $0.userID == "u1" }?.total == 10)
-    // 행 없는 민수는 0.
-    #expect(entries.first { $0.userID == "u2" }?.total == 0)
-    // 이름/아바타는 팀원 목록에서 온다.
-    #expect(entries.first { $0.userID == "u3" }?.name == "지현")
-    #expect(entries.first { $0.userID == "u3" }?.avatarURL == URL(string: "https://example.com/u3.jpg"))
+    // 아바타 null 행은 avatarURL nil.
+    #expect(entries.first { $0.userID == "u3" }?.avatarURL == nil)
+    #expect(entries.first { $0.userID == "u3" }?.codexOutput == 5)
 }
 
 @Test
@@ -1223,16 +1215,30 @@ final class TokenBoardURLProtocol: URLProtocol {
     private static let lock = NSLock()
     private nonisolated(unsafe) static var responsesByHost: [String: String] = [:]
     private nonisolated(unsafe) static var lastURLByHost: [String: URL] = [:]
+    private nonisolated(unsafe) static var lastMethodByHost: [String: String] = [:]
+    private nonisolated(unsafe) static var lastBodyByHost: [String: String] = [:]
 
     static func setResponse(_ json: String, forHost host: String) {
         lock.lock(); defer { lock.unlock() }
         responsesByHost[host] = json
         lastURLByHost[host] = nil
+        lastMethodByHost[host] = nil
+        lastBodyByHost[host] = nil
     }
 
     static func lastURL(forHost host: String) -> URL? {
         lock.lock(); defer { lock.unlock() }
         return lastURLByHost[host]
+    }
+
+    static func lastMethod(forHost host: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return lastMethodByHost[host]
+    }
+
+    static func lastBody(forHost host: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return lastBodyByHost[host]
     }
 
     static func session() -> URLSession {
@@ -1244,10 +1250,32 @@ final class TokenBoardURLProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
+    /// 요청 본문을 문자열로. URLSession 이 httpBody 를 스트림으로 바꿔 넘겨도 읽을 수 있게 스트림 폴백을 둔다.
+    private static func bodyText(from request: URLRequest) -> String {
+        if let body = request.httpBody {
+            return String(data: body, encoding: .utf8) ?? ""
+        }
+        guard let stream = request.httpBodyStream else { return "" }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        let bufferSize = 1024
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+        while stream.hasBytesAvailable {
+            let count = stream.read(buffer, maxLength: bufferSize)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
     override func startLoading() {
         let host = request.url?.host ?? ""
         Self.lock.lock()
         Self.lastURLByHost[host] = request.url
+        Self.lastMethodByHost[host] = request.httpMethod
+        Self.lastBodyByHost[host] = Self.bodyText(from: request)
         let json = Self.responsesByHost[host] ?? "[]"
         Self.lock.unlock()
 

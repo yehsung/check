@@ -162,9 +162,13 @@ enum TokenUsageMonthKey {
     }
 }
 
-/// token_usage_monthly 조회 행(snake_case 디코드용). month 는 eq 필터로 이미 고정하므로 담지 않는다.
+/// token_usage_board RPC 응답 행(snake_case 디코드용). 전체 공개 전환으로 행이 자체 완결이라
+/// display_name/avatar_url 을 함께 담는다(더는 팀원 목록과 결합하지 않는다). month 는 RPC 인자로 고정하므로 담지 않는다.
+/// display_name 은 RPC 가 coalesce(…, '사용자')로 이미 폴백하므로 non-null, avatar_url 은 nullable.
 struct TokenBoardRow: Decodable, Equatable {
     let userId: String
+    let displayName: String
+    let avatarUrl: String?
     let claudeInput: Int
     let claudeOutput: Int
     let claudeCacheRead: Int
@@ -174,8 +178,8 @@ struct TokenBoardRow: Decodable, Equatable {
     let total: Int
 }
 
-/// 팀원 토큰 보드 한 행(표시용). 숫자는 서버 행에서, 이름/아바타는 팀원 목록(TeamMemberStatus)에서 온다.
-/// 팀원인데 행이 없으면 total 0 엔트리로 만든다("다들 0부터"). 등수 배지 없이 정렬 순서가 곧 순위다.
+/// 토큰 보드 한 행(표시용). 전체 공개 전환으로 숫자·이름·아바타가 모두 서버 행(RPC)에서 온다 — 행 자체가 완결이다
+/// (팀원 목록과의 결합 불필요). 등수 배지 없이 정렬 순서가 곧 순위다.
 struct TokenBoardEntry: Identifiable, Equatable {
     let userID: String
     var name: String
@@ -191,25 +195,22 @@ struct TokenBoardEntry: Identifiable, Equatable {
     var id: String { userID }
 }
 
-extension Array where Element == TeamMemberStatus {
-    /// 팀원 목록과 서버 토큰 행을 결합해 팀원 전원의 이번 달 엔트리를 만든다(정렬은 하지 않음 — sortedByTotalDescending 별도).
-    /// 행이 없는 팀원은 total 0 으로 채운다("다들 0부터" — 아직 안 올린 사람도 목록에 보이게). 순수 함수라 결정적으로 검증한다.
-    func combinedTokenBoard(rows: [TokenBoardRow]) -> [TokenBoardEntry] {
-        // 같은 user_id 가 여러 행일 리 없으나(PK), 방어적으로 첫 행을 채택한다.
-        let byUser = Dictionary(rows.map { ($0.userId, $0) }, uniquingKeysWith: { first, _ in first })
-        return map { member in
-            let r = byUser[member.id]
-            return TokenBoardEntry(
-                userID: member.id,
-                name: member.name,
-                avatarURL: member.avatarURL,
-                total: r?.total ?? 0,
-                claudeInput: r?.claudeInput ?? 0,
-                claudeOutput: r?.claudeOutput ?? 0,
-                claudeCacheRead: r?.claudeCacheRead ?? 0,
-                claudeCacheCreation: r?.claudeCacheCreation ?? 0,
-                codexInput: r?.codexInput ?? 0,
-                codexOutput: r?.codexOutput ?? 0
+extension Array where Element == TokenBoardRow {
+    /// 전체 공개 RPC 행(이미 이름/아바타 포함)을 표시 엔트리로 변환한다. 결합 불필요 — 행 자체가 완결이다.
+    /// 정렬은 여기서 하지 않는다(sortedByTotalDescending 별도). 순수 함수라 결정적으로 검증한다.
+    func toTokenBoardEntries() -> [TokenBoardEntry] {
+        map { row in
+            TokenBoardEntry(
+                userID: row.userId,
+                name: row.displayName,
+                avatarURL: row.avatarUrl.flatMap { URL(string: $0) },
+                total: row.total,
+                claudeInput: row.claudeInput,
+                claudeOutput: row.claudeOutput,
+                claudeCacheRead: row.claudeCacheRead,
+                claudeCacheCreation: row.claudeCacheCreation,
+                codexInput: row.codexInput,
+                codexOutput: row.codexOutput
             )
         }
     }
@@ -225,6 +226,11 @@ extension Array where Element == TokenBoardEntry {
             return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
         }
     }
+}
+
+/// token_usage_board(p_month) RPC 본문(snake_case 인코딩 → p_month). 앱이 계산한 KST 'YYYY-MM' 를 보낸다.
+struct TokenBoardRequest: Encodable {
+    let pMonth: String
 }
 
 /// token_usage_monthly upsert 본문(snake_case 인코딩). D1 의 TokenUsageMonthly 에서 서비스가 값을 옮겨 담는다.

@@ -8,7 +8,7 @@ import Testing
 func checkMenuViewRendersSnapshot() throws {
     let store = WorkTimerStore(environment: [
         "CHECK_SUPABASE_ANON_KEY": "local-test-key"
-    ], defaults: isolatedRenderDefaults())
+    ], defaults: isolatedRenderDefaults(), tokenUsage: inertTokenStore())
     // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(티커 미발사).
     store.isMenuPresented = true
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
@@ -59,7 +59,8 @@ func checkMenuViewRendersSnapshot() throws {
 func checkMenuViewRendersCompletedWeeklyGoalSnapshot() throws {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults()
+        defaults: isolatedRenderDefaults(),
+        tokenUsage: inertTokenStore()
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
     store.currentTeamID = URLProtocolStub.stubTeamID
@@ -139,7 +140,8 @@ func checkMenuViewRendersLoginModeSnapshot() throws {
     // 기본 진입 화면 = 로그인 모드. 별명 필드가 없어야 하고, 하단 "가입하기" 링크로만 가입에 접근한다.
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults()
+        defaults: isolatedRenderDefaults(),
+        tokenUsage: inertTokenStore()
     )
     store.email = "member@example.com"
     store.password = "team-password"
@@ -172,7 +174,8 @@ func checkMenuViewRendersSignupNicknameSnapshot() throws {
     // 가입 모드 렌더: 별명 필드 + "이미 계정이 있나요? 로그인" 복귀 링크가 보여야 한다.
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults()
+        defaults: isolatedRenderDefaults(),
+        tokenUsage: inertTokenStore()
     )
     store.displayName = "영식"
     store.email = "member@example.com"
@@ -205,7 +208,8 @@ func checkMenuViewRendersSignupNicknameSnapshot() throws {
 func checkMenuViewRendersLoginErrorSnapshot() throws {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults()
+        defaults: isolatedRenderDefaults(),
+        tokenUsage: inertTokenStore()
     )
     store.email = "member@example.com"
     store.password = "wrong-password"
@@ -240,7 +244,8 @@ func checkMenuViewRendersASCIIWarningSnapshot() throws {
     // 캡션/테두리 강조가 340pt 폭 안에서 잘림·밀림 없이 수납되는지 확인한다.
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults()
+        defaults: isolatedRenderDefaults(),
+        tokenUsage: inertTokenStore()
     )
     store.email = "member@example.com"
     store.password = "team-password"
@@ -770,7 +775,8 @@ func downscaledPixelSizeKeepsSmallImagesUnchanged() {
 private func makeSignedInStore() -> WorkTimerStore {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults()
+        defaults: isolatedRenderDefaults(),
+        tokenUsage: inertTokenStore()
     )
     // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(고정 displayNow 보존·티커 미발사).
     store.isMenuPresented = true
@@ -795,7 +801,8 @@ private func makeSignedInStore() -> WorkTimerStore {
 private func makeTeamStore(members: [TeamMemberStatus], now: Date = Date()) -> WorkTimerStore {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults()
+        defaults: isolatedRenderDefaults(),
+        tokenUsage: inertTokenStore()
     )
     // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(고정 displayNow 보존·티커 미발사).
     store.isMenuPresented = true
@@ -993,7 +1000,8 @@ private func steadyMembers(count: Int) -> [TeamMemberStatus] {
 private func makeLoginStore(syncMessage: String) -> WorkTimerStore {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults()
+        defaults: isolatedRenderDefaults(),
+        tokenUsage: inertTokenStore()
     )
     // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(티커 미발사).
     store.isMenuPresented = true
@@ -1024,21 +1032,43 @@ private func isolatedRenderDefaults() -> UserDefaults {
     return defaults
 }
 
-// MARK: - D2: 팀원 이번 달 AI 토큰 보드 렌더
-
-/// 토큰 보드 페이지가 열린 로그인 스토어. 내 행("나" 칩)이 뜨도록 session.userID 를 한 엔트리와 맞춘다.
+/// 렌더 테스트용 격리 토큰 스토어. 실홈 대신 빈 임시 홈 + 격리 defaults 를 준다 — CheckMenuView 의 .task 갱신 루프가
+/// ImageRenderer 렌더 중에 돌더라도(ImageRenderer 는 .task 를 실행한다) 실홈 스캔이나 테스트 러너 .standard 오염이
+/// 일어나지 않는다. 빈 홈이라 집계는 0 → 토큰 행은 EmptyView(높이 0)로 결정적이다.
 @MainActor
-private func makeTokenBoardStore() -> WorkTimerStore {
+private func inertTokenStore() -> TokenUsageStore {
+    let tmp = FileManager.default.temporaryDirectory
+    let id = UUID().uuidString
+    return TokenUsageStore(
+        defaults: isolatedRenderDefaults(),
+        homeDirectory: tmp.appendingPathComponent("check-render-token-home-\(id)", isDirectory: true),
+        cacheURL: tmp.appendingPathComponent("check-render-token-cache-\(id).json", isDirectory: false)
+    )
+}
+
+// MARK: - D2: 이번 달 AI 토큰 보드 렌더 (전체 공개)
+
+/// 토큰 보드 페이지가 열린 로그인 스토어. 전체 공개라 행이 자체 완결(이름/아바타)이고 팀 무관이다 —
+/// 타팀 사용자 이름도 섞어 6~8명을 채운다. 내 행("나" 칩)이 뜨도록 session.userID 를 한 엔트리와 맞춘다.
+@MainActor
+private func makeTokenBoardStore(memberCount: Int = 7) -> WorkTimerStore {
     let store = makeTeamStore(members: [], now: Date())
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "u-me")
-    // 축약 없는 전체 숫자 표기(콤마)와 정렬 순서(등수 배지 없음)를 함께 보이도록 큰 값/0 을 섞는다.
-    store.tokenBoard = [
+    // 축약 없는 전체 숫자 표기(콤마)와 정렬 순서(등수 배지 없음)·"나" 칩을 함께 보이도록 큰 값/0 과 타팀 이름을 섞는다.
+    // 이름은 팀을 넘나든다(전체 공개) — 같은 팀/타팀 구분 없이 이번 달 소모량 순위로 한데 모인다.
+    let pool: [TokenBoardEntry] = [
         TokenBoardEntry(userID: "u1", name: "영식", avatarURL: nil, total: 4_564_338_243, claudeInput: 4_000_000_000, claudeOutput: 500_000_000, claudeCacheRead: 60_000_000, claudeCacheCreation: 4_338_243, codexInput: 0, codexOutput: 0),
+        TokenBoardEntry(userID: "u2", name: "타팀 김서연", avatarURL: nil, total: 2_100_000_000, claudeInput: 1_800_000_000, claudeOutput: 250_000_000, claudeCacheRead: 50_000_000, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
         TokenBoardEntry(userID: "u-me", name: "yesung", avatarURL: nil, total: 1_234_567_890, claudeInput: 1_000_000_000, claudeOutput: 200_000_000, claudeCacheRead: 34_000_000, claudeCacheCreation: 567_890, codexInput: 0, codexOutput: 0),
-        TokenBoardEntry(userID: "u3", name: "민수", avatarURL: nil, total: 89_000, claudeInput: 80_000, claudeOutput: 9_000, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
-        TokenBoardEntry(userID: "u4", name: "지현", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
+        TokenBoardEntry(userID: "u4", name: "타팀 박도윤", avatarURL: nil, total: 640_000_000, claudeInput: 600_000_000, claudeOutput: 40_000_000, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
+        TokenBoardEntry(userID: "u5", name: "민수", avatarURL: nil, total: 89_000, claudeInput: 80_000, claudeOutput: 9_000, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
+        TokenBoardEntry(userID: "u6", name: "타팀 이하은", avatarURL: nil, total: 12_345, claudeInput: 12_345, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
+        TokenBoardEntry(userID: "u7", name: "지현", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
+        TokenBoardEntry(userID: "u8", name: "타팀 최시우", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
     ]
+    store.tokenBoard = Array(pool.prefix(memberCount))
+    store.tokenBoardLoaded = true
     store.isTokenBoardVisible = true
     return store
 }
@@ -1046,12 +1076,25 @@ private func makeTokenBoardStore() -> WorkTimerStore {
 @MainActor
 @Test
 func checkMenuViewRendersTokenBoardSnapshot() throws {
-    let png = try renderPNG(CheckMenuView(store: makeTokenBoardStore()))
+    // 전체 공개 시나리오: 타팀 이름 포함 7명(maxVisibleRows=7 정확히 채운 상한). 육안 확인 PNG 저장.
+    let png = try renderPNG(CheckMenuView(store: makeTokenBoardStore(memberCount: 7)))
     #expect(png.count > 0)
     // 육안 확인용 아티팩트를 스크래치 디렉터리에 저장한다(디렉터리 없으면 만들고, 실패는 무시).
     let dir = URL(fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad", isDirectory: true)
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    try? png.write(to: dir.appendingPathComponent("token-board.png"))
+    try? png.write(to: dir.appendingPathComponent("token-board-global.png"))
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersTokenBoardScrollCapSnapshot() throws {
+    // 스크롤 상한 케이스: 8명(maxVisibleRows=7 초과)을 클립 모드로 그려(ImageRenderer 는 ScrollView 미지원) 상한 클립을 보인다.
+    let store = makeTokenBoardStore(memberCount: 8)
+    let png = try renderPNG(CheckMenuView(store: store, previewClipsOverflowList: true))
+    #expect(png.count > 0)
+    let dir = URL(fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try? png.write(to: dir.appendingPathComponent("token-board-global-scroll.png"))
 }
 
 @MainActor
@@ -1064,6 +1107,7 @@ func tokenBoardWindowHeightWithinCap() throws {
     store.tokenBoard = (0..<12).map { i in
         TokenBoardEntry(userID: "u\(i)", name: "멤버\(i)", avatarURL: nil, total: (12 - i) * 1_000_000, claudeInput: (12 - i) * 1_000_000, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
     }
+    store.tokenBoardLoaded = true
     store.isTokenBoardVisible = true
 
     let pixelHeight = try #require(renderedPixelHeight(CheckMenuView(store: store)))

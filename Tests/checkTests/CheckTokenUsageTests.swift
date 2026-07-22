@@ -619,7 +619,7 @@ func rowAcceptsOptionalOnOpenBoardCallback() {
     #expect(withBoard.onOpenBoard != nil)
 }
 
-// MARK: - 스토어 (churn 가드/영속/부트스트랩/월 리셋)
+// MARK: - 스토어 (churn 가드/영속/첫 스캔 트리거/월 리셋)
 
 @MainActor
 @Test
@@ -636,8 +636,8 @@ func refreshIfStaleSkipsWithinMinIntervalThenScansAfter() async {
     let store = TokenUsageStore(
         defaults: defaults, homeDirectory: home, cacheURL: cacheURL, clock: { clockBox.now }
     )
-    // init 부트스트랩(currentMonthUsage nil)이 1회 스캔을 킥한다(lastRefreshAt = fixedNow).
-    await store.awaitScanCompletion()
+    // init 은 더 이상 스캔을 킥하지 않는다 — 뷰(.task)의 첫 트리거를 모사해 refreshIfStale 로 첫 스캔을 돌린다(lastRefreshAt = fixedNow).
+    await store.refreshIfStale()
     #expect(store.scanCount == 1)
 
     // 같은 시각 refreshIfStale → 0초 경과(<3초) → 스킵.
@@ -699,12 +699,13 @@ func storeIgnoresPersistedUsageFromDifferentMonthAndRescans() async {
     defaults.set(try! JSONEncoder().encode(stale), forKey: TokenUsageStore.snapshotKey)
 
     let store = TokenUsageStore(defaults: defaults, homeDirectory: home, cacheURL: cacheURL, clock: { fixedNow })
-    await store.awaitScanCompletion()
+    // 월 불일치라 init 복원은 없다(currentMonthUsage nil). 첫 스캔을 뷰 트리거(refreshIfStale)로 돌려 현재 월로 리셋한다.
+    await store.refreshIfStale()
 
     // 지난달 숫자가 새 달 프레임에 새지 않는다: 재스캔이 현재 월로 리셋(0), month 는 2026-07.
     #expect(store.currentMonthUsage?.month == "2026-07")
     #expect(store.currentMonthUsage?.total == 0)
-    #expect(store.scanCount == 1)   // 월 불일치 → 부트스트랩 재스캔이 돌았다
+    #expect(store.scanCount == 1)   // 월 불일치 → 재스캔이 돌았다
 
     defaults.removePersistentDomain(forName: suiteName)
     try? FileManager.default.removeItem(at: home)
@@ -726,11 +727,10 @@ func storeBootstrapsScanAndPersistsNonZeroResult() async {
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
 
-    // 영속 스냅샷이 없으므로 init 이 1회 부트스트랩 스캔을 킥한다.
+    // 영속 스냅샷이 없어 init 복원은 없다. 첫 스캔을 뷰 트리거(refreshIfStale)로 돌린다(백그라운드 완료까지 await).
     let store = TokenUsageStore(defaults: defaults, homeDirectory: home, cacheURL: cacheURL, clock: { fixedNow })
 
-    // 백그라운드 스캔 완료를 결정적으로 기다린다(고정 시간 폴링은 전체 스위트 병렬 부하에서 플레이크).
-    await store.awaitScanCompletion()
+    await store.refreshIfStale()
     #expect(store.currentMonthUsage?.claudeInput == 123)
     #expect(store.currentMonthUsage?.total == 130)
     #expect(store.currentMonthUsage?.month == "2026-07")
@@ -755,12 +755,13 @@ func storeDoesNotPersistZeroResultSoNextLaunchRescans() async {
 
     let store = TokenUsageStore(defaults: defaults, homeDirectory: home, cacheURL: cacheURL, clock: { fixedNow })
 
-    await store.awaitScanCompletion()
+    // 첫 스캔을 뷰 트리거(refreshIfStale)로 돌린다 — 로그 부재라 0 집계.
+    await store.refreshIfStale()
     #expect(store.isScanning == false)
     #expect(store.currentMonthUsage?.total == 0)  // 인메모리 0 집계(뷰는 total>0 이 아니라 EmptyView)
-    #expect(defaults.data(forKey: TokenUsageStore.snapshotKey) == nil)  // 영속 안 함 → 재실행 시 재부트스트랩
+    #expect(defaults.data(forKey: TokenUsageStore.snapshotKey) == nil)  // 영속 안 함 → 재실행 시 첫 스캔에서 다시 채운다
 
-    // 같은 defaults 로 새 스토어를 만들면(재실행 모사) 영속본이 없어 currentMonthUsage 는 nil 로 시작한다.
+    // 같은 defaults 로 새 스토어를 만들면(재실행 모사) 영속본이 없고 init 이 스캔하지 않아 currentMonthUsage 는 nil 로 시작한다.
     let relaunched = TokenUsageStore(defaults: defaults, homeDirectory: home, cacheURL: makeTempCacheURL(), clock: { fixedNow })
     #expect(relaunched.currentMonthUsage == nil)
 

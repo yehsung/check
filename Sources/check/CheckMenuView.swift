@@ -30,6 +30,13 @@ struct CheckMenuView: View {
             .task {
                 await store.activateStoredSession()
             }
+            .task {
+                // 토큰 사용량 갱신 루프를 팝오버 표시 동안만 돌린다(즉시 1회 + 30초 주기, 뷰 사라지면 자동 취소).
+                // 첫 스캔 트리거를 여기로 일원화한다 — 토큰 스토어는 init 에서 스캔을 킥하지 않으므로(영속 스냅샷 복원만),
+                // 표시 중 이 루프가 값을 채운다. 스캔 대상은 주입된 store.tokenUsage 다 — 프로덕션은 전역 .shared,
+                // 렌더 테스트는 격리 인스턴스라, ImageRenderer 가 이 .task 를 돌려도 실홈 스캔이 테스트 .standard 를 오염시키지 않는다.
+                await store.tokenUsage.runRefreshLoop()
+            }
     }
 
     @ViewBuilder
@@ -61,10 +68,12 @@ struct CheckMenuView: View {
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
                     } else if store.isTokenBoardVisible {
-                        // 팀원 이번 달 AI 토큰 순위 페이지. 리그와 같은 뼈대(뒤로 + 제목 + 고정 행높이 리스트/스크롤).
+                        // 이번 달 AI 토큰 순위 페이지(앱 사용자 전체 공개). 리그와 같은 뼈대(뒤로 + 제목 + 고정 행높이 리스트/스크롤).
                         TokenBoardPanel(
                             entries: store.tokenBoard,
                             myUserID: store.session?.userID,
+                            hasLoaded: store.tokenBoardLoaded,
+                            fallbackStatus: store.syncMessage,
                             onBack: { store.isTokenBoardVisible = false },
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
@@ -78,8 +87,9 @@ struct CheckMenuView: View {
                         )
                     }
                     FooterBar(store: store)
-                    // 슬림 토큰 사용량 행. 탭하면 팀원 이번 달 AI 토큰 순위 페이지를 연다(리그 트로피와 같은 진입 톤).
-                    CheckTokenUsageRow(onOpenBoard: { store.toggleTokenBoard() })
+                    // 슬림 토큰 사용량 행. 탭하면 이번 달 AI 토큰 순위 페이지를 연다(리그 트로피와 같은 진입 톤).
+                    // 주입된 store.tokenUsage 를 읽어(프로덕션 .shared, 테스트 격리) .task 루프와 같은 인스턴스를 본다.
+                    CheckTokenUsageRow(store: store.tokenUsage, onOpenBoard: { store.toggleTokenBoard() })
                 }
             }
         } else {
@@ -627,21 +637,32 @@ private struct LeaderboardPanel: View {
 
 // MARK: - Team monthly token board page
 
-/// 팀 카드 자리를 대체하는 "이번 달 AI 토큰" 순위 페이지. 리그 페이지와 같은 뼈대다:
+/// 토큰 보드 빈 목록 자리 문구 선택(순수 로직, 결정적 검증 지점). 전체 공개라 '행 없는 사용자 0 채움'은 폐기됐고,
+/// 목록이 비면 두 경우다: (1) 로드가 성공했는데 아직 아무도 이번 달 소모량을 올리지 않음(hasLoaded=true) → 안내 문구,
+/// (2) 아직 로드 전이거나 실패(hasLoaded=false) → fallbackStatus(동기화 상태 문구). 리그의 LeaderboardEmptyMessage 와 같은 패턴.
+enum TokenBoardEmptyMessage {
+    static let noUploads = "아직 이번 달 소모량을 올린 사용자가 없어요"
+    static func text(hasLoaded: Bool, fallbackStatus: String) -> String {
+        hasLoaded ? noUploads : fallbackStatus
+    }
+}
+
+/// 팀 카드 자리를 대체하는 "이번 달 AI 토큰" 순위 페이지(앱 사용자 전체 공개). 리그 페이지와 같은 뼈대다:
 /// 뒤로 버튼 + 제목 + 고정 행높이 리스트(maxVisibleRows 초과 시 스크롤). 등수 숫자/메달 배지는 없다 — 정렬 순서가 곧 순위.
-/// 행은 아바타 + 이름(+내 행 "나" 칩) + 우측 전체 숫자(콤마 구분·monospacedDigit). 팀원 전원 표시라(행 없으면 0)
-/// 목록이 비는 경우는 데이터 로드 전뿐이고, 그때만 로딩 중립 문구를 보인다.
+/// 행은 아바타 + 이름(+내 행 "나" 칩) + 우측 전체 숫자(콤마 구분·monospacedDigit). 업로드한 사용자만 뜬다(행 없으면
+/// 목록에 없음). 목록이 비면 로드 성공 여부에 따라 '아직 없음' 또는 fallbackStatus 를 보인다.
 private struct TokenBoardPanel: View {
-    // total 내림차순(동률 이름)으로 정렬된 팀원 엔트리(store 에서 이미 정렬됨). 뷰에서도 같은 규약으로 다시 정렬한다.
+    // total 내림차순(동률 이름)으로 정렬된 엔트리(store 에서 이미 정렬됨). 뷰에서도 같은 규약으로 다시 정렬한다.
     let entries: [TokenBoardEntry]
     // 내 user_id(내 행 "나" 칩 판정용). nil 이면 어떤 행에도 칩이 붙지 않는다.
     var myUserID: String? = nil
+    // 보드 첫 성공 로드 여부. 빈 목록 문구를 '아직 없음'(true) vs 로드 전/실패 fallbackStatus(false) 로 가른다.
+    var hasLoaded: Bool = false
+    // 아직 로드 전/실패 시 빈 목록 자리에 표시할 안내 문구(동기화 상태 문구).
+    var fallbackStatus: String = ""
     var onBack: () -> Void = {}
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
-
-    // 데이터 로드 전(목록 비었을 때)만 보이는 중립 문구 — 전원 0이어도 팀원이 있으면 전원 표시라 평소엔 비지 않는다.
-    private static let loadingMessage = "불러오는 중…"
 
     // 토큰 행은 한 줄(아바타 + 이름 + 숫자)이라 팀원 카드 행보다 낮다. 창 높이 상한(≤700pt)은 리그(58pt·6행)보다 여유롭다.
     private static let rowHeight: CGFloat = 44
@@ -698,8 +719,9 @@ private struct TokenBoardPanel: View {
     private var rows: some View {
         VStack(spacing: Self.rowSpacing) {
             if sortedEntries.isEmpty {
-                // 데이터 로드 전 — 중립 로딩 문구. 팀원이 있으면(전원 0이어도) 목록이 채워져 이 자리에 오지 않는다.
-                Text(Self.loadingMessage)
+                // 로드 성공했는데 비면 '아직 아무도 안 올림', 로드 전/실패면 fallbackStatus(동기화 상태 문구).
+                // 결정적 판정은 TokenBoardEmptyMessage 로 격리한다.
+                Text(TokenBoardEmptyMessage.text(hasLoaded: hasLoaded, fallbackStatus: fallbackStatus))
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)

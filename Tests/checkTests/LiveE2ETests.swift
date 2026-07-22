@@ -1097,13 +1097,14 @@ struct LiveE2ETests {
         _ = await store.updateTeamGoal(hours: E2ETeam.goalHours)
     }
 
-    // s09e. 팀원 이번 달 AI 토큰 보드 RLS: 같은 팀 두 계정(A owner, B joiner)이 각자 token_usage_monthly 를
-    // upsert 하면 서로의 이번 달 사용량을 조회할 수 있어야 하고(같은 팀 select 정책), 타팀 계정(C)은 A/B 의
-    // 행을 조회할 수 없어야 한다(0행 — shares_team_with 교집합 없음).
-    // 이 시나리오는 마이그레이션(20260722130000_token_usage_monthly) push 전이라 서버에 테이블이 없다 —
+    // s09e. 이번 달 AI 토큰 보드 전체 공개(token_usage_board RPC): 각 계정이 token_usage_monthly 를 upsert 하면
+    // 팀과 무관하게 모두 이번 달 순위를 조회할 수 있어야 한다 — 같은 팀 A/B 뿐 아니라 타팀 C 도 A/B 를 본다(전체 공개).
+    // 자기 upsert 가 자기 조회에 반영되는지, 이름이 행에 담겨 오는지(이메일 비노출)도 확인한다.
+    // 테이블 직접 select 는 RLS 로 잠겨 있고 조회는 RPC(security definer)로만 이뤄진다.
+    // 이 시나리오는 마이그레이션(20260722130000_token_usage_monthly) push 전이라 서버에 RPC/테이블이 없다 —
     // 작성만 하고 실행(push 후)은 오케스트레이터가 담당한다. E2E 접두사 스코프 밖 접근 금지, 키 원문 출력 금지.
     @Test(.enabled(if: LiveE2EEnv.enabled))
-    func s09e_tokenBoardRLSTeamScoped() async throws {
+    func s09e_tokenBoardGlobalPublic() async throws {
         let ctx = try makeContext()
         let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
         let teamID = try #require(LiveE2EState.e2eTeamID)
@@ -1132,31 +1133,7 @@ struct LiveE2ETests {
         let sessionB = try #require(storeB.session)
         #expect(storeB.currentTeamID == teamID)
 
-        // A, B 가 각자 이번 달 사용량을 upsert 한다(값은 서로 다르게 둬 조회로 구분한다).
-        let usageA = TokenUsageMonthly(month: month, claudeInput: 1_111, claudeOutput: 2_222)
-        let usageB = TokenUsageMonthly(month: month, claudeInput: 3_333, codexOutput: 4_444)
-        try await storeA.service.upsertTokenUsage(accessToken: sessionA.accessToken, userID: sessionA.userID, usage: usageA)
-        try await storeB.service.upsertTokenUsage(accessToken: sessionB.accessToken, userID: sessionB.userID, usage: usageB)
-
-        // A 가 팀 보드(자기+B)를 조회하면 두 행이 모두 보여야 한다(같은 팀 select 정책).
-        let boardFromA = try await storeA.service.fetchTokenBoard(
-            accessToken: sessionA.accessToken,
-            memberIDs: [sessionA.userID, sessionB.userID],
-            month: month
-        )
-        #expect(boardFromA.contains { $0.userId == sessionA.userID && $0.total == usageA.total })
-        #expect(boardFromA.contains { $0.userId == sessionB.userID && $0.total == usageB.total })
-        obs("토큰 보드 같은 팀 상호 조회: A 가 본 행 수=\(boardFromA.count)")
-
-        // B 도 A 를 조회할 수 있어야 한다(대칭).
-        let boardFromB = try await storeB.service.fetchTokenBoard(
-            accessToken: sessionB.accessToken,
-            memberIDs: [sessionA.userID, sessionB.userID],
-            month: month
-        )
-        #expect(boardFromB.contains { $0.userId == sessionA.userID })
-
-        // C(nickname) 를 자기 소유의 다른 E2E 팀에 둔다(있으면 로그인, 없으면 새 팀 생성 — 자가치유).
+        // C(nickname) 를 자기 소유의 다른 E2E 팀에 둔다(있으면 로그인, 없으면 새 팀 생성 — 자가치유). 타팀 조회 검증용.
         let storeC = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
         defer { storeC.tickerTask?.cancel(); storeC.refreshTask?.cancel() }
         if try await ctx.admin.findUserID(email: Emails.nickname) != nil {
@@ -1169,18 +1146,36 @@ struct LiveE2ETests {
         }
         let sessionC = try #require(storeC.session)
 
-        // 타팀이어야 의미 있는 검증이다 — C 가 어쩌다 T1 에 있으면(방어) 교차 검증은 건너뛴다.
+        // A, B, C 가 각자 이번 달 사용량을 upsert 한다(값은 서로 다르게 둬 조회로 구분한다).
+        let usageA = TokenUsageMonthly(month: month, claudeInput: 1_111, claudeOutput: 2_222)
+        let usageB = TokenUsageMonthly(month: month, claudeInput: 3_333, codexOutput: 4_444)
+        let usageC = TokenUsageMonthly(month: month, claudeInput: 5_555, codexInput: 6_666)
+        try await storeA.service.upsertTokenUsage(accessToken: sessionA.accessToken, userID: sessionA.userID, usage: usageA)
+        try await storeB.service.upsertTokenUsage(accessToken: sessionB.accessToken, userID: sessionB.userID, usage: usageB)
+        try await storeC.service.upsertTokenUsage(accessToken: sessionC.accessToken, userID: sessionC.userID, usage: usageC)
+
+        // A 가 전체 보드를 조회하면 자기(반영)·같은 팀 B·타팀 C 가 모두 보여야 한다(전체 공개 RPC).
+        let boardFromA = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
+        #expect(boardFromA.contains { $0.userId == sessionA.userID && $0.total == usageA.total })  // 자기 upsert 반영
+        #expect(boardFromA.contains { $0.userId == sessionB.userID && $0.total == usageB.total })  // 같은 팀
+        // 이름이 행에 담겨 오고(이메일이 아니라 표시 이름), 이메일이 새지 않는다.
+        let selfRow = boardFromA.first { $0.userId == sessionA.userID }
+        #expect(selfRow?.displayName.isEmpty == false)
+        #expect(selfRow?.displayName.contains("@") == false)
+        obs("토큰 보드 전체 공개: A 가 본 행 수=\(boardFromA.count)")
+
+        // 타팀이어야 의미 있는 교차 조회 검증이다 — C 가 어쩌다 T1 에 있으면(방어) 그 부분은 건너뛴다.
         if storeC.currentTeamID != teamID {
-            let boardFromC = try await storeC.service.fetchTokenBoard(
-                accessToken: sessionC.accessToken,
-                memberIDs: [sessionA.userID, sessionB.userID],
-                month: month
-            )
-            // 타팀 계정은 A/B 행을 볼 수 없다(RLS: 팀 교집합 없음 → 0행).
-            #expect(boardFromC.isEmpty)
-            obs("토큰 보드 타팀 차단: C 가 본 A/B 행 수=\(boardFromC.count)(0 이어야 함)")
+            #expect(boardFromA.contains { $0.userId == sessionC.userID && $0.total == usageC.total })  // 타팀도 보인다
+
+            // C(타팀) 도 A/B 를 조회할 수 있어야 한다(예전 RLS 팀 차단과 정반대 — 전체 공개).
+            let boardFromC = try await storeC.service.fetchTokenBoard(accessToken: sessionC.accessToken, month: month)
+            #expect(boardFromC.contains { $0.userId == sessionA.userID })
+            #expect(boardFromC.contains { $0.userId == sessionB.userID })
+            #expect(boardFromC.contains { $0.userId == sessionC.userID && $0.total == usageC.total })  // 자기 upsert 반영
+            obs("토큰 보드 타팀 조회 허용: C 가 본 행 수=\(boardFromC.count)(A·B·C 포함이어야 함)")
         } else {
-            obs("s09e: C 가 우연히 같은 팀 — 교차 차단 검증 건너뜀")
+            obs("s09e: C 가 우연히 같은 팀 — 타팀 교차 조회 검증 건너뜀")
         }
     }
 

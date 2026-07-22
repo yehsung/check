@@ -607,37 +607,24 @@ enum TokenUsageScanner {
 // MARK: - 스토어 (@MainActor · 표시/영속/증분 갱신 게이팅)
 
 /// 토큰 사용량의 표시·영속·증분 갱신을 담당한다. 스캔은 백그라운드(Task.detached)에서 캐시를 이어받아 돌고,
-/// 메인 액터엔 결과만 반영한다. 상시 타이머/앱 전역 루프 없음 — 갱신은 팝오버 표시 중 뷰의 .task 루프에서만 일어난다.
+/// 메인 액터엔 결과만 반영한다. 상시 타이머/앱 전역 루프 없음 — 스캔은 init 이 아니라 팝오버 표시 중 뷰(.task) 루프에서만 시작된다.
 ///
-/// 공유 인스턴스(shared): 지연 생성이라 앱 시작만으로는 스캔하지 않고, 행이 처음 그려질 때 최초 접근되어 만들어진다.
-/// 다른 트랙(팀 토큰 업로드)도 같은 인스턴스의 currentMonthUsage 를 읽으므로 뷰가 개인 소유하지 않는다.
+/// 공유 인스턴스(shared): init 은 스캔을 킥하지 않고 영속 스냅샷만 복원한다. 첫 스캔은 CheckMenuView 의 .task 가 부르는
+/// runRefreshLoop 로 일원화된다. 다른 트랙(팀 토큰 업로드)도 같은 인스턴스의 currentMonthUsage 를 읽으므로 뷰가 개인 소유하지 않는다.
 ///
 /// 정책(30분 스로틀 대체): 팝오버 표시 즉시 1회 갱신 + 열려 있는 동안 30초 주기. 빠른 여닫이 churn 방지로
 /// 마지막 갱신 후 minRefreshInterval(3초) 미만이면 스킵한다.
 @Observable
 @MainActor
 final class TokenUsageStore {
-    /// 공유 인스턴스(지연 — 첫 접근 = 행이 처음 표시될 때). static let 은 스레드 세이프 1회 초기화다.
+    /// 공유 인스턴스. 다른 트랙(팀 토큰 업로드)도 같은 인스턴스의 currentMonthUsage 를 읽으므로 뷰가 개인 소유하지 않는다.
     ///
-    /// 테스트(XCTest 링크됨) 환경에서는 '무해한 빈 인스턴스'로 만든다 — 실홈을 스캔하지도, 표준 defaults 를 건드리지도 않게.
-    /// 렌더 테스트(CheckMenuView)가 CheckTokenUsageRow 를 마운트하면 이 공유 인스턴스를 접근하는데, 프로덕션 경로라면
-    /// 실홈 전체 스캔(수백 MB)이 백그라운드에서 돌아 완료되면 currentMonthUsage 가 실값으로 채워지고 .standard 에 영속된다.
-    /// 그러면 이후 어떤 렌더 테스트든 이 행이 실제로 그려져 창 높이·레이아웃을 오염시킨다(교차 테스트 플레이크). 빈 홈 + 격리
-    /// defaults + 부트스트랩 없음이면 currentMonthUsage 는 nil 로 남아 행은 EmptyView(높이 0) — 다른 트랙 렌더 테스트에 무해하다.
-    /// 실제 스캔/영속 로직은 주입 init 을 쓰는 이 파일의 스토어 테스트가 결정적으로 검증한다.
-    static let shared: TokenUsageStore = {
-        if NSClassFromString("XCTestCase") != nil {
-            let tmp = FileManager.default.temporaryDirectory
-            return TokenUsageStore(
-                // .standard 대신 미사용 격리 suite — 지난 실행이 남긴 실값 스냅샷을 복원해 버리지 않게.
-                defaults: UserDefaults(suiteName: "check.tokenUsage.inert") ?? .standard,
-                homeDirectory: tmp.appendingPathComponent("check-token-inert-home", isDirectory: true),
-                cacheURL: tmp.appendingPathComponent("check-token-inert-cache.json", isDirectory: false),
-                bootstrap: false
-            )
-        }
-        return TokenUsageStore()
-    }()
+    /// 구조적 결정성(감지-기반 땜질 제거): init 은 절대 스캔을 킥하지 않는다(영속 스냅샷 복원만). 첫 스캔은 팝오버 표시 중
+    /// 뷰(CheckMenuView)의 .task 루프가 일원화한다. ImageRenderer 는 .task 를 실행하지 않으므로, 렌더 테스트가 이 공유
+    /// 인스턴스를 접근해도 스캔이 돌지 않아 currentMonthUsage 는(영속 스냅샷이 없으면) nil 로 남고 행은 EmptyView(높이 0)다.
+    /// 예전엔 XCTest 감지로 무해 인스턴스를 만들었으나, 감지가 일부 테스트 프로세스에서 실패해 프로덕션 경로가 실홈을
+    /// 백그라운드 스캔→테스트 러너 .standard 에 영속→다음 실행 렌더 높이 오염(730pt)을 일으켰다. 감지 대신 구조로 고쳤다.
+    static let shared = TokenUsageStore()
 
     nonisolated static let snapshotKey = "check.tokenUsage.snapshot"
     /// 갱신 루프 주기(초). 팝오버가 열려 있는 동안만 이 주기로 돈다.
@@ -664,14 +651,13 @@ final class TokenUsageStore {
     // 진행 중 스캔 핸들(재진입 방지). 관찰 대상 아님.
     @ObservationIgnored private var scanTask: Task<Void, Never>?
 
-    /// bootstrap: 복원값이 없을 때 init 에서 1회 부트스트랩 스캔을 킥할지. 프로덕션 shared 는 true(첫 페인트용),
-    /// 테스트용 무해 인스턴스는 false(실홈 스캔 금지). 주입 init 을 쓰는 스토어 테스트는 기본 true 로 기존 동작을 유지한다.
+    /// init 은 스캔을 절대 킥하지 않는다(부트스트랩 개념 제거). 영속 스냅샷 복원만 하고, 첫 스캔은 뷰(.task) 루프가 맡는다.
+    /// 이로써 ImageRenderer(.task 미실행) 렌더 테스트가 결정적이 되고, 실홈 백그라운드 스캔이 테스트 러너 defaults 를 오염시키지 않는다.
     init(
         defaults: UserDefaults = .standard,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         cacheURL: URL = TokenUsageCacheStore.defaultURL(),
-        clock: @escaping () -> Date = { Date() },
-        bootstrap: Bool = true
+        clock: @escaping () -> Date = { Date() }
     ) {
         self.defaults = defaults
         self.homeDirectory = homeDirectory
@@ -683,11 +669,6 @@ final class TokenUsageStore {
            let restored = try? JSONDecoder().decode(TokenUsageMonthly.self, from: data),
            restored.month == TokenUsageIncrementalScanner.kstMonthString(clock()) {
             currentMonthUsage = restored
-        }
-        // 표시할 행이 없으면(월 리셋·최초 실행) 뷰의 .task 를 신뢰할 수 없으므로, 첫 페인트를 위해 여기서 1회
-        // 부트스트랩 스캔을 킥한다. 값이 잡히면 행이 뜨고, 이후 갱신은 그 행의 .task 루프가 맡는다.
-        if bootstrap, currentMonthUsage == nil {
-            startScan()
         }
     }
 
@@ -755,13 +736,13 @@ final class TokenUsageStore {
 
 /// 팝오버 하단 슬림 행. 현재 월 사용량이 없거나 집계 0 이면 아무것도 그리지 않는다(EmptyView — 빈 자리/간격 없음).
 /// 값이 있으면 FooterBar 톤(panelStyle · 가로 12/세로 8)의 한 줄: sparkles + "N월 AI 토큰" + 우측 총합(굵게, 전체 숫자).
-/// onOpenBoard 가 주어지면 우측에 팀 순위로 가는 아이콘 버튼을 붙인다(페이지 자체는 다른 트랙 소관).
-/// 공유 스토어(TokenUsageStore.shared)를 쓴다 — 뷰 개인 소유(@State) 없이 다른 트랙과 같은 인스턴스를 읽는다.
+/// onOpenBoard 가 주어지면 우측에 순위로 가는 아이콘 버튼을 붙인다(페이지 자체는 다른 트랙 소관).
+/// 주입된 토큰 스토어(기본 .shared)를 읽는다 — 뷰 개인 소유(@State) 없이 다른 트랙/갱신 루프와 같은 인스턴스를 본다.
 struct CheckTokenUsageRow: View {
+    // 표시할 토큰 스토어. 기본은 전역 공유(.shared)라 다른 트랙과 같은 집계를 읽는다. 테스트는 격리 인스턴스를 주입한다
+    // (렌더 결정성 — 실홈 스캔이 테스트 .standard 를 건드리지 않게). CheckMenuView 는 store.tokenUsage 를 넘긴다.
+    var store: TokenUsageStore = .shared
     var onOpenBoard: (() -> Void)? = nil
-
-    // 공유 인스턴스 접근. 이 행이 처음 그려질 때 최초 접근되어 지연 생성된다(앱 시작만으론 스캔하지 않음).
-    private var store: TokenUsageStore { .shared }
 
     var body: some View {
         content
@@ -770,10 +751,9 @@ struct CheckTokenUsageRow: View {
     @ViewBuilder
     private var content: some View {
         if let usage = store.currentMonthUsage, usage.total > 0 {
+            // 행은 표시만 한다 — 갱신 루프는 CheckMenuView 의 .task 가 일원화해 돌린다(행이 EmptyView 라 자체 .task 가
+            // 애초에 안 돌던 순환 문제를 없앤다). ImageRenderer 가 .task 를 실행하지 않아 렌더 테스트도 결정적이다.
             slimRow(usage)
-                // 표시 중에만 도는 구조적 루프(즉시 1회 + 30초 주기). 팝오버가 닫혀 행이 사라지면 자동 취소된다.
-                // EmptyView(집계 0) 브랜치엔 걸지 않는다 — 라이프사이클을 못 믿는 대신 부트스트랩 스캔이 첫 행을 띄운다.
-                .task { await store.runRefreshLoop() }
         } else {
             // 표시할 사용량 없음(로그 부재/집계 0/월 리셋 대기) — 행을 아예 그리지 않는다.
             EmptyView()

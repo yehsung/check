@@ -798,11 +798,15 @@ private func makeSignedInStore() -> WorkTimerStore {
 
 /// 로그인된 스토어에 임의의 팀원 목록/기준시각을 주입한다. 창 고정 높이 invariant·스냅샷 공용.
 @MainActor
-private func makeTeamStore(members: [TeamMemberStatus], now: Date = Date()) -> WorkTimerStore {
+private func makeTeamStore(
+    members: [TeamMemberStatus],
+    now: Date = Date(),
+    tokenUsage: TokenUsageStore? = nil
+) -> WorkTimerStore {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
         defaults: isolatedRenderDefaults(),
-        tokenUsage: inertTokenStore()
+        tokenUsage: tokenUsage ?? inertTokenStore()
     )
     // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(고정 displayNow 보존·티커 미발사).
     store.isMenuPresented = true
@@ -1044,6 +1048,43 @@ private func inertTokenStore() -> TokenUsageStore {
         homeDirectory: tmp.appendingPathComponent("check-render-token-home-\(id)", isDirectory: true),
         cacheURL: tmp.appendingPathComponent("check-render-token-cache-\(id).json", isDirectory: false)
     )
+}
+
+/// 토큰 소모량 행이 실제로 그려지는 상태의 토큰 스토어. 스캔 없이 영속 스냅샷 복원 경로(init)로
+/// currentMonthUsage 를 채운다 — month 가 현재 KST 월이어야 복원되므로 TokenUsageMonthKey.current() 를 쓴다.
+@MainActor
+private func seededTokenStore() -> TokenUsageStore {
+    let defaults = isolatedRenderDefaults()
+    let usage = TokenUsageMonthly(
+        month: TokenUsageMonthKey.current(),
+        claudeInput: 8_460_869, claudeOutput: 35_849_782,
+        claudeCacheRead: 4_165_692_507, claudeCacheCreation: 200_802_730,
+        codexInput: 145_068_307, codexOutput: 623_160
+    )
+    if let data = try? JSONEncoder().encode(usage) {
+        defaults.set(data, forKey: TokenUsageStore.snapshotKey)
+    }
+    let tmp = FileManager.default.temporaryDirectory
+    let id = UUID().uuidString
+    return TokenUsageStore(
+        defaults: defaults,
+        homeDirectory: tmp.appendingPathComponent("check-render-token-home-\(id)", isDirectory: true),
+        cacheURL: tmp.appendingPathComponent("check-render-token-cache-\(id).json", isDirectory: false)
+    )
+}
+
+/// 토큰 소모량 행(악센트 미광 박스)이 헤더와 팀 카드 "사이"에 놓인 배치 렌더 — 위치·강조 스타일 회귀 지점.
+@MainActor
+@Test
+func checkMenuViewRendersTokenRowBetweenHeaderAndTeamSnapshot() throws {
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+    let store = makeTeamStore(members: presenceMembers(now: now), now: now, tokenUsage: seededTokenStore())
+
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    if let path = ProcessInfo.processInfo.environment["CHECK_TOKEN_ROW_SNAPSHOT_PATH"] {
+        try png.write(to: URL(fileURLWithPath: path))
+    }
 }
 
 // MARK: - D2: 이번 달 AI 토큰 보드 렌더 (전체 공개)

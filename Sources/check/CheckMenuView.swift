@@ -57,6 +57,8 @@ struct CheckMenuView: View {
                         previewLongSessionBanner: previewLongSessionBanner,
                         previewGoalEditing: previewGoalEditing
                     )
+                    // 토큰 소모량 행은 내 근무 박스와 팀원 현황 사이(사용자 지정 위치). 탭하면 순위 페이지.
+                    CheckTokenUsageRow(store: store.tokenUsage, onOpenBoard: { store.toggleTokenBoard() })
                     if store.isLeaderboardVisible {
                         LeaderboardPanel(
                             // 원본 leaderboard 는 스토어에 보존하고, 표시 시점에 0시간 타팀만 숨긴다(내 팀은 0이어도 유지).
@@ -87,9 +89,6 @@ struct CheckMenuView: View {
                         )
                     }
                     FooterBar(store: store)
-                    // 슬림 토큰 사용량 행. 탭하면 이번 달 AI 토큰 순위 페이지를 연다(리그 트로피와 같은 진입 톤).
-                    // 주입된 store.tokenUsage 를 읽어(프로덕션 .shared, 테스트 격리) .task 루프와 같은 인스턴스를 본다.
-                    CheckTokenUsageRow(store: store.tokenUsage, onOpenBoard: { store.toggleTokenBoard() })
                 }
             }
         } else {
@@ -243,11 +242,9 @@ private struct HeaderGoalSection: View {
                         .foregroundStyle(CheckTheme.secondaryText)
                         .monospacedDigit()
                     // 주간 목표는 팀원 누구나 바꿀 수 있다 — 캡션 % 옆 작은 연필로 편집 행을 연다.
-                    IconButton(
-                        icon: "pencil",
-                        help: "주간 목표 수정",
-                        tint: isEditingGoal ? CheckTheme.accent : CheckTheme.secondaryText
-                    ) {
+                    // 표준 IconButton(27pt)은 caption2 행 높이를 홀로 키워 캡션 줄 간격이 어색해지므로,
+                    // 캡션 높이에 맞춘 소형(18pt) 버튼을 쓴다.
+                    GoalEditPencilButton(isActive: isEditingGoal) {
                         toggleEditing()
                     }
                 }
@@ -291,6 +288,31 @@ private struct HeaderGoalSection: View {
     // 초 단위 목표를 스테퍼 범위(1~168시간)로 클램프한 시간값.
     private static func hours(from goalSeconds: Int) -> Int {
         max(1, min(168, goalSeconds / 3600))
+    }
+}
+
+/// 헤더 목표 캡션 행 전용 소형 연필 버튼(18pt). 캡션(caption2) 행 높이를 키우지 않으면서 hover 배경과
+/// 툴팁으로 버튼임을 드러낸다 — 표준 IconButton(27pt)을 쓰면 이 행만 세로로 부풀어 배치가 어색해진다.
+private struct GoalEditPencilButton: View {
+    let isActive: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "pencil")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(isActive || hovering ? CheckTheme.accent : CheckTheme.secondaryText)
+                .frame(width: 18, height: 18)
+                .background(
+                    Circle().fill(Color.white.opacity(hovering ? 0.14 : 0.06))
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("주간 목표 수정")
     }
 }
 

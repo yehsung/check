@@ -782,7 +782,17 @@ struct CheckTokenUsageRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .panelStyle()
+        // 일반 panelStyle 대신 악센트 미광(테두리 + 부드러운 외곽광)으로 포인트를 준다 — 헤더/팀 카드 사이에서
+        // 이 행이 묻히지 않게. 그림자는 레이아웃에 영향이 없어 창 높이 계산은 그대로다.
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(CheckTheme.panel)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(CheckTheme.accent.opacity(0.45), lineWidth: 1)
+                )
+                .shadow(color: CheckTheme.accent.opacity(0.35), radius: 7)
+        )
         // 스캔 중엔 살짝 흐리게(절제된 진행 표시). 값은 이전 집계를 유지하다 완료 시 교체된다.
         .opacity(store.isScanning ? 0.55 : 1)
         .help(usage.detailTooltip)

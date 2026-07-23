@@ -331,6 +331,74 @@ func codexFileInPreviousMonthIsNotCountedInCurrentMonth() {
     try? FileManager.default.removeItem(at: home)
 }
 
+// MARK: - 오늘(KST 자정 이후) 증가량 (todayTotal / todayDate)
+
+@Test
+func todayFilterCountsOnlyKSTTodayEntriesForClaude() {
+    let home = makeTempHome()
+    // fixedNow = 2026-07-14 12:33:20 KST. 오늘 = [UTC 07-13 15:00, UTC 07-14 15:00). 어제(07-13) 엔트리는 월 합계엔 들되 오늘엔 제외.
+    let todayLine = claudeLine(id: "t", requestId: "t", timestamp: fixedNow,
+        usage: "{\"input_tokens\":100,\"output_tokens\":50,\"cache_read_input_tokens\":10,\"cache_creation_input_tokens\":5}")
+    let yesterday = fixedNow.addingTimeInterval(-86_400)   // 2026-07-13 → 어제(같은 달)
+    let yesterdayLine = claudeLine(id: "y", requestId: "y", timestamp: yesterday, usage: "{\"input_tokens\":999}")
+    writeFile("\(todayLine)\n\(yesterdayLine)\n", to: claudeURL(home, project: "p", file: "s.jsonl"))
+
+    let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
+
+    #expect(usage.todayDate == "2026-07-14")
+    #expect(usage.todayTotal == 165)     // 오늘 엔트리 4필드 합(100+50+10+5), 어제 999 제외
+    #expect(usage.claudeInput == 1099)   // 월 합계엔 어제도 포함(100+999)
+    try? FileManager.default.removeItem(at: home)
+}
+
+@Test
+func todayFilterBoundaryAtKSTMidnightUTC1500() {
+    let home = makeTempHome()
+    // 오늘 경계: KST 07-14 00:00 == UTC 07-13 15:00. 이 순간(이상)은 오늘, 1초 전은 어제여야 한다.
+    let boundaryIn = utcDate("2026-07-13T15:00:00Z")    // = KST 07-14 00:00 → 오늘(포함)
+    let boundaryOut = utcDate("2026-07-13T14:59:59Z")   // = KST 07-13 23:59:59 → 어제(제외)
+    let keep = claudeLine(id: "in", requestId: "in", timestamp: boundaryIn, usage: "{\"input_tokens\":500}")
+    let drop = claudeLine(id: "out", requestId: "out", timestamp: boundaryOut, usage: "{\"input_tokens\":700}")
+    writeFile("\(keep)\n\(drop)\n", to: claudeURL(home, project: "p", file: "s.jsonl"))
+
+    let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
+
+    #expect(usage.todayTotal == 500)   // 경계 정각만 오늘, 1초 전은 어제라 제외
+    try? FileManager.default.removeItem(at: home)
+}
+
+@Test
+func todayFilterCountsCodexFilesByMtimeDayApproximation() {
+    let home = makeTempHome()
+    // Codex 는 파일 mtime 의 KST 날짜로 오늘 귀속(파일 단위 근사). 오늘 mtime 파일만 todayTotal 에, 어제 파일은 월 합계에만.
+    writeFile("\(codexTokenCountLine(input: 1000, cached: 800, output: 50))\n",
+              to: codexURL(home, path: "2026/07/14/rollout-2026-07-14T00-00-00-aaaa.jsonl"), modified: fixedNow)
+    writeFile("\(codexTokenCountLine(input: 200, cached: 100, output: 5))\n",
+              to: codexURL(home, path: "2026/07/13/rollout-2026-07-13T00-00-00-bbbb.jsonl"), modified: fixedNow.addingTimeInterval(-86_400))
+
+    let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
+
+    #expect(usage.todayTotal == 1050)   // 오늘 파일 input(1000)+output(50); 어제 파일 제외
+    #expect(usage.codexInput == 1200)   // 월 합계엔 어제 파일도(1000+200)
+    try? FileManager.default.removeItem(at: home)
+}
+
+@Test
+func todayTotalCombinesClaudeAndCodexForToday() {
+    let home = makeTempHome()
+    // 오늘 Claude 엔트리 + 오늘 Codex 파일이 함께 todayTotal 에 합산된다(month 부분집합).
+    let claudeToday = claudeLine(id: "c", requestId: "c", timestamp: fixedNow,
+        usage: "{\"input_tokens\":10,\"output_tokens\":20,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}")
+    writeFile("\(claudeToday)\n", to: claudeURL(home, project: "p", file: "s.jsonl"))
+    writeFile("\(codexTokenCountLine(input: 3, cached: 1, output: 4))\n",
+              to: codexURL(home, path: "2026/07/14/rollout-2026-07-14T00-00-00-cccc.jsonl"), modified: fixedNow)
+
+    let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
+
+    #expect(usage.todayTotal == 37)   // Claude(10+20) + Codex(3+4)
+    try? FileManager.default.removeItem(at: home)
+}
+
 // MARK: - 소스 결합/부재
 
 @Test
@@ -605,6 +673,42 @@ func monthlySurvivesCodableRoundTrip() {
     let data = try! JSONEncoder().encode(original)
     let decoded = try! JSONDecoder().decode(TokenUsageMonthly.self, from: data)
     #expect(decoded == original)
+}
+
+@Test
+func monthlyRoundTripPreservesTodayFields() {
+    // 새 필드(todayTotal/todayDate)도 인코드→디코드 왕복에서 보존된다(커스텀 Codable 정확성).
+    let original = TokenUsageMonthly(month: "2026-07", claudeInput: 1, todayTotal: 12_345, todayDate: "2026-07-14")
+    let data = try! JSONEncoder().encode(original)
+    let decoded = try! JSONDecoder().decode(TokenUsageMonthly.self, from: data)
+    #expect(decoded == original)
+    #expect(decoded.todayTotal == 12_345)
+    #expect(decoded.todayDate == "2026-07-14")
+}
+
+@Test
+func monthlyDecodesLegacySnapshotWithoutTodayFieldsAsDefaults() {
+    // 하위호환: 옛 영속 스냅샷엔 todayTotal/todayDate 키가 없다 — decodeIfPresent 로 0/"" 폴백해 디코드 실패(재스캔) 없이 복원.
+    let legacyJSON = """
+    {"month":"2026-07","claudeInput":10,"claudeOutput":20,"claudeCacheRead":30,"claudeCacheCreation":40,"codexInput":50,"codexOutput":60}
+    """
+    let decoded = try! JSONDecoder().decode(TokenUsageMonthly.self, from: Data(legacyJSON.utf8))
+    #expect(decoded.month == "2026-07")
+    #expect(decoded.claudeInput == 10)
+    #expect(decoded.codexOutput == 60)
+    #expect(decoded.total == 210)
+    #expect(decoded.todayTotal == 0)    // 하위호환 폴백
+    #expect(decoded.todayDate == "")    // 하위호환 폴백
+}
+
+@Test
+func monthlyTooltipAppendsTodayWhenPresent() {
+    // 내 박스 툴팁 끝에 "오늘 +N" 한 줄이 붙는다(값이 있을 때만 — 없으면 기존 문구 그대로).
+    let usage = TokenUsageMonthly(month: "2026-07", claudeInput: 100, todayTotal: 1_234_567, todayDate: "2026-07-14")
+    #expect(usage.detailTooltip == "Claude 100 (입력 100 · 출력 0 · 캐시읽기 0 · 캐시생성 0) · 오늘 +1,234,567")
+    // 오늘분 0 이면 기존 문구 불변(하위호환).
+    let noToday = TokenUsageMonthly(month: "2026-07", codexInput: 1_500_000, codexOutput: 500_000)
+    #expect(noToday.detailTooltip == "Codex 2,000,000")
 }
 
 // MARK: - 뷰 시그니처 (onOpenBoard 유무)

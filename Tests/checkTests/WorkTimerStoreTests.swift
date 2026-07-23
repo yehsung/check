@@ -2675,6 +2675,12 @@ func uploadTokenUsageGateThrottlesAndChangeGates() async {
     await store.uploadTokenUsageIfNeeded(usage: nil, now: t0.addingTimeInterval(200))
     await store.uploadTokenUsageIfNeeded(usage: usageZero, now: t0.addingTimeInterval(300))
     #expect(postCount() == 2)
+
+    // 7) 6필드 총합(=200)은 그대로여도 오늘분(todayTotal)만 바뀌면 변경으로 감지해 업로드한다.
+    //    게이트는 TokenUsageMonthly 전체 Equatable 비교라 todayTotal/todayDate 변화도 자동으로 잡힌다(설계 5 확인).
+    let usageBToday = TokenUsageMonthly(month: "2026-07", claudeInput: 200, todayTotal: 5, todayDate: "2026-07-14")
+    await store.uploadTokenUsageIfNeeded(usage: usageBToday, now: t0.addingTimeInterval(360))
+    #expect(postCount() == 3)
 }
 
 @MainActor

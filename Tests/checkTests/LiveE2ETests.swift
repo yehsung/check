@@ -1147,9 +1147,11 @@ struct LiveE2ETests {
         let sessionC = try #require(storeC.session)
 
         // A, B, C 가 각자 이번 달 사용량을 upsert 한다(값은 서로 다르게 둬 조회로 구분한다).
-        let usageA = TokenUsageMonthly(month: month, claudeInput: 1_111, claudeOutput: 2_222)
-        let usageB = TokenUsageMonthly(month: month, claudeInput: 3_333, codexOutput: 4_444)
-        let usageC = TokenUsageMonthly(month: month, claudeInput: 5_555, codexInput: 6_666)
+        // 오늘분(todayTotal/todayDate)도 함께 올려 순위판 "오늘 +N" 왕복을 검증한다(마이그레이션 20260723060000 push 후).
+        let today = TokenUsageDayKey.current()
+        let usageA = TokenUsageMonthly(month: month, claudeInput: 1_111, claudeOutput: 2_222, todayTotal: 1_100, todayDate: today)
+        let usageB = TokenUsageMonthly(month: month, claudeInput: 3_333, codexOutput: 4_444, todayTotal: 2_200, todayDate: today)
+        let usageC = TokenUsageMonthly(month: month, claudeInput: 5_555, codexInput: 6_666, todayTotal: 3_300, todayDate: today)
         try await storeA.service.upsertTokenUsage(accessToken: sessionA.accessToken, userID: sessionA.userID, usage: usageA)
         try await storeB.service.upsertTokenUsage(accessToken: sessionB.accessToken, userID: sessionB.userID, usage: usageB)
         try await storeC.service.upsertTokenUsage(accessToken: sessionC.accessToken, userID: sessionC.userID, usage: usageC)
@@ -1158,6 +1160,9 @@ struct LiveE2ETests {
         let boardFromA = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
         #expect(boardFromA.contains { $0.userId == sessionA.userID && $0.total == usageA.total })  // 자기 upsert 반영
         #expect(boardFromA.contains { $0.userId == sessionB.userID && $0.total == usageB.total })  // 같은 팀
+        // 오늘분 왕복: 업로드한 today_total/today_date 가 RPC 반환 행에 그대로 담겨 온다("오늘 +N" 원천).
+        #expect(boardFromA.contains { $0.userId == sessionA.userID && $0.todayTotal == usageA.todayTotal && $0.todayDate == today })
+        #expect(boardFromA.contains { $0.userId == sessionB.userID && $0.todayTotal == usageB.todayTotal })
         // 이름이 행에 담겨 오고(이메일이 아니라 표시 이름), 이메일이 새지 않는다.
         let selfRow = boardFromA.first { $0.userId == sessionA.userID }
         #expect(selfRow?.displayName.isEmpty == false)

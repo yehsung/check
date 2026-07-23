@@ -162,6 +162,15 @@ enum TokenUsageMonthKey {
     }
 }
 
+/// 오늘(KST) 날짜 키 'YYYY-MM-DD'. 순위판이 서버 행의 todayDate 와 이 값을 비교해 "오늘 +N" 표시 여부를 가른다
+/// (스캐너의 dayBounds date 와 같은 Asia/Seoul 규약 — 둘 다 DST 없는 +9 라 항상 일치). 순수 함수라 테스트로 고정한다.
+enum TokenUsageDayKey {
+    static func current(_ now: Date = Date()) -> String {
+        let c = TeamWeeklyGoal.kstCalendar.dateComponents([.year, .month, .day], from: now)
+        return String(format: "%04d-%02d-%02d", c.year ?? 1970, c.month ?? 1, c.day ?? 1)
+    }
+}
+
 /// token_usage_board RPC 응답 행(snake_case 디코드용). 전체 공개 전환으로 행이 자체 완결이라
 /// display_name/avatar_url 을 함께 담는다(더는 팀원 목록과 결합하지 않는다). month 는 RPC 인자로 고정하므로 담지 않는다.
 /// display_name 은 RPC 가 coalesce(…, '사용자')로 이미 폴백하므로 non-null, avatar_url 은 nullable.
@@ -176,6 +185,38 @@ struct TokenBoardRow: Decodable, Equatable {
     let codexInput: Int
     let codexOutput: Int
     let total: Int
+    /// 오늘(KST) 증가량과 그 귀속 날짜 'YYYY-MM-DD'. var + 기본값이라 마이그레이션 전 옛 RPC(컬럼 누락)와 호환된다.
+    var todayTotal: Int = 0
+    var todayDate: String = ""
+}
+
+// TokenBoardRow 커스텀 디코드: 서버가 아직 옛 token_usage_board RPC(today_total/today_date 컬럼 없음)여도
+// decodeIfPresent 로 0/"" 폴백해 마이그레이션 전 클라가 안전히 디코드한다(합성 디코더는 기본값을 무시하고 required 로 요구함).
+// 키는 프로퍼티명(camelCase) — 서비스 디코더의 convertFromSnakeCase 가 today_total → todayTotal 로 맞춘다.
+extension TokenBoardRow {
+    enum CodingKeys: String, CodingKey {
+        case userId, displayName, avatarUrl
+        case claudeInput, claudeOutput, claudeCacheRead, claudeCacheCreation
+        case codexInput, codexOutput, total
+        case todayTotal, todayDate
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try c.decode(String.self, forKey: .userId)
+        displayName = try c.decode(String.self, forKey: .displayName)
+        avatarUrl = try c.decodeIfPresent(String.self, forKey: .avatarUrl)
+        claudeInput = try c.decode(Int.self, forKey: .claudeInput)
+        claudeOutput = try c.decode(Int.self, forKey: .claudeOutput)
+        claudeCacheRead = try c.decode(Int.self, forKey: .claudeCacheRead)
+        claudeCacheCreation = try c.decode(Int.self, forKey: .claudeCacheCreation)
+        codexInput = try c.decode(Int.self, forKey: .codexInput)
+        codexOutput = try c.decode(Int.self, forKey: .codexOutput)
+        total = try c.decode(Int.self, forKey: .total)
+        // 마이그레이션 전 호환: 옛 RPC 는 이 컬럼을 안 내려주므로 없으면 0/"".
+        todayTotal = try c.decodeIfPresent(Int.self, forKey: .todayTotal) ?? 0
+        todayDate = try c.decodeIfPresent(String.self, forKey: .todayDate) ?? ""
+    }
 }
 
 /// 토큰 보드 한 행(표시용). 전체 공개 전환으로 숫자·이름·아바타가 모두 서버 행(RPC)에서 온다 — 행 자체가 완결이다
@@ -191,8 +232,17 @@ struct TokenBoardEntry: Identifiable, Equatable {
     let claudeCacheCreation: Int
     let codexInput: Int
     let codexOutput: Int
+    /// 오늘(KST) 증가량과 그 귀속 날짜 'YYYY-MM-DD'. 서버 행에서 온다(마이그레이션 전엔 0/"").
+    var todayTotal: Int = 0
+    var todayDate: String = ""
 
     var id: String { userID }
+
+    /// 표시할 오늘 증가량. todayDate 가 현재 KST 날짜(currentDate)와 같을 때만 todayTotal 을, 어제 이후로 스테일이면
+    /// 0 을 돌려준다 — 어제 이후 안 연 사람도 "오늘 +0"으로 균일하게 표시되도록(행 높이/레이아웃 일관). 순수 함수라 테스트로 고정한다.
+    func todayDelta(currentDate: String) -> Int {
+        todayDate == currentDate ? todayTotal : 0
+    }
 }
 
 extension Array where Element == TokenBoardRow {
@@ -210,7 +260,9 @@ extension Array where Element == TokenBoardRow {
                 claudeCacheRead: row.claudeCacheRead,
                 claudeCacheCreation: row.claudeCacheCreation,
                 codexInput: row.codexInput,
-                codexOutput: row.codexOutput
+                codexOutput: row.codexOutput,
+                todayTotal: row.todayTotal,
+                todayDate: row.todayDate
             )
         }
     }
@@ -244,6 +296,9 @@ struct TokenUsageUpsertRequest: Encodable {
     let codexInput: Int
     let codexOutput: Int
     let total: Int
+    // 오늘(KST) 증가량과 귀속 날짜 — 서버 행에 함께 저장돼 순위판 "오늘 +N" 에 쓰인다.
+    let todayTotal: Int
+    let todayDate: String
 }
 
 struct TeamWeeklyGoal: Equatable {

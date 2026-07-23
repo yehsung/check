@@ -806,15 +806,19 @@ private struct TokenBoardPanel: View {
     // 아직 로드 전/실패 시 빈 목록 자리에 표시할 안내 문구(동기화 상태 문구).
     var fallbackStatus: String = ""
     var onBack: () -> Void = {}
+    // 현재 KST 날짜 'YYYY-MM-DD'. 행이 서버의 todayDate 와 비교해 "오늘 +N"(오늘분) 표시 여부를 가른다.
+    // 기본은 실시간 계산 — 렌더 테스트는 픽스처와 같은 오늘 키를 쓰도록 주입한다(결정성). 렌더 시점에 1회 평가된다.
+    var todayKey: String = TokenUsageDayKey.current()
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
 
     // 토큰 행은 프로필 카드(RoundedRectangle 테두리 + 내부 패딩 + 좌측 악센트 바)라 밋밋한 한 줄보다 높다.
-    // 카드가 아바타(30pt)를 위아래 여백과 함께 수납하도록 50pt로 둔다. 카드 간 간격은 사양대로 8.
-    private static let rowHeight: CGFloat = 50
+    // 우측이 "이번 달 총량 + 오늘 +N" 2줄로 커져(카드당 한 줄 추가) 아바타(30pt) 위아래 여백과 함께 수납하도록 62pt로 둔다.
+    private static let rowHeight: CGFloat = 62
     private static let rowSpacing: CGFloat = 8
-    // 스크롤 없이 보여 주는 최대 인원. 카드화로 행이 높아졌지만(50pt·7행) 리스트 높이 398pt로 창 높이 상한(≤700pt) 안이다.
-    static let maxVisibleRows = 7
+    // 스크롤 없이 보여 주는 최대 인원. 2줄 카드로 행이 62pt로 높아져 7행이면 창이 700pt 상한을 넘으므로 6으로 내린다
+    // (리스트 높이 6*62 + 5*8 = 412pt — 창 높이 상한 ≤700pt 안).
+    static let maxVisibleRows = 6
 
     var body: some View {
         VStack(spacing: 12) {
@@ -873,7 +877,7 @@ private struct TokenBoardPanel: View {
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
             } else {
                 ForEach(sortedEntries) { entry in
-                    TokenBoardRowView(entry: entry, isMe: myUserID != nil && entry.userID == myUserID)
+                    TokenBoardRowView(entry: entry, isMe: myUserID != nil && entry.userID == myUserID, todayKey: todayKey)
                         .frame(height: Self.rowHeight)
                 }
             }
@@ -893,9 +897,14 @@ private struct TokenBoardPanel: View {
 private struct TokenBoardRowView: View {
     let entry: TokenBoardEntry
     var isMe: Bool = false
+    // 현재 KST 날짜 'YYYY-MM-DD'. entry.todayDate 와 같을 때만 오늘 증가량을 노출한다(어제 이후 스테일이면 0).
+    var todayKey: String = TokenUsageDayKey.current()
 
     // 좌측 악센트 바 색 — 아바타 이니셜과 동일한 이름 해시색(CheckTheme.avatarColor 공유). 유저별 컬러 포인트.
     private var accentColor: Color { CheckTheme.avatarColor(for: entry.name) }
+
+    // 표시할 오늘 증가량. 날짜가 오늘이 아니면 0("오늘 +0 토큰"으로 균일 표시 — 어제 이후 안 연 사람도 행 형태 동일).
+    private var todayValue: Int { entry.todayDelta(currentDate: todayKey) }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -920,19 +929,29 @@ private struct TokenBoardRowView: View {
                     .fixedSize()
             }
             Spacer(minLength: 6)
-            // 총합 + 단위: 축약(B/M/K) 없이 전체 숫자를 콤마로 끊고(굵게·monospacedDigit) 오른쪽에 " 토큰"(caption2·secondary)을 붙인다.
-            // 숫자+단위를 한 Text 로 이어(concat) minimumScaleFactor 가 단위째로 균일 축소되게 해 좁을 때도 한 줄을 지킨다.
-            (
-                Text(TokenNumberFormatter.grouped(entry.total))
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(CheckTheme.primaryText)
-                    .monospacedDigit()
-                + Text(" 토큰")
+            // 우측 2줄(오른쪽 정렬): 위 = 이번 달 총량("숫자 토큰"), 아래 = 오늘 증가량("오늘 +숫자 토큰").
+            VStack(alignment: .trailing, spacing: 1) {
+                // 총합 + 단위: 축약(B/M/K) 없이 전체 숫자를 콤마로 끊고(굵게·monospacedDigit) 오른쪽에 " 토큰"(caption2·secondary)을 붙인다.
+                // 숫자+단위를 한 Text 로 이어(concat) minimumScaleFactor 가 단위째로 균일 축소되게 해 좁을 때도 한 줄을 지킨다.
+                (
+                    Text(TokenNumberFormatter.grouped(entry.total))
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(CheckTheme.primaryText)
+                        .monospacedDigit()
+                    + Text(" 토큰")
+                        .font(.caption2)
+                        .foregroundColor(CheckTheme.secondaryText)
+                )
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                // 오늘(KST 자정 이후) 증가량 — 누가 오늘 열심히 작업 중인지 한눈에. 작게(caption2·secondary·monospacedDigit).
+                Text("오늘 +\(TokenNumberFormatter.grouped(todayValue)) 토큰")
                     .font(.caption2)
-                    .foregroundColor(CheckTheme.secondaryText)
-            )
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
         }
         .padding(.leading, 8)
         .padding(.trailing, 12)

@@ -1116,15 +1116,18 @@ private func makeTokenBoardStore(memberCount: Int = 7) -> WorkTimerStore {
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "u-me")
     // 축약 없는 전체 숫자 표기(콤마)와 정렬 순서(등수 배지 없음)·"나" 칩을 함께 보이도록 큰 값/0 과 타팀 이름을 섞는다.
     // 이름은 팀을 넘나든다(전체 공개) — 같은 팀/타팀 구분 없이 이번 달 소모량 순위로 한데 모인다.
+    // 오늘분: 대부분 오늘 키(today)로 "오늘 +N" 이 뜨고, 한 명(u4)은 스테일 날짜(어제)라 "오늘 +0"으로 균일 표시된다.
+    let today = TokenUsageDayKey.current()
+    let stale = "2020-01-01"  // 오늘이 아닌 날짜 — "오늘 +0 토큰"으로 균일하게 표시되는지 확인.
     let pool: [TokenBoardEntry] = [
-        TokenBoardEntry(userID: "u1", name: "영식", avatarURL: nil, total: 4_564_338_243, claudeInput: 4_000_000_000, claudeOutput: 500_000_000, claudeCacheRead: 60_000_000, claudeCacheCreation: 4_338_243, codexInput: 0, codexOutput: 0),
-        TokenBoardEntry(userID: "u2", name: "타팀 김서연", avatarURL: nil, total: 2_100_000_000, claudeInput: 1_800_000_000, claudeOutput: 250_000_000, claudeCacheRead: 50_000_000, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
-        TokenBoardEntry(userID: "u-me", name: "yesung", avatarURL: nil, total: 1_234_567_890, claudeInput: 1_000_000_000, claudeOutput: 200_000_000, claudeCacheRead: 34_000_000, claudeCacheCreation: 567_890, codexInput: 0, codexOutput: 0),
-        TokenBoardEntry(userID: "u4", name: "타팀 박도윤", avatarURL: nil, total: 640_000_000, claudeInput: 600_000_000, claudeOutput: 40_000_000, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
-        TokenBoardEntry(userID: "u5", name: "민수", avatarURL: nil, total: 89_000, claudeInput: 80_000, claudeOutput: 9_000, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
-        TokenBoardEntry(userID: "u6", name: "타팀 이하은", avatarURL: nil, total: 12_345, claudeInput: 12_345, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
-        TokenBoardEntry(userID: "u7", name: "지현", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0),
-        TokenBoardEntry(userID: "u8", name: "타팀 최시우", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
+        TokenBoardEntry(userID: "u1", name: "영식", avatarURL: nil, total: 4_564_338_243, claudeInput: 4_000_000_000, claudeOutput: 500_000_000, claudeCacheRead: 60_000_000, claudeCacheCreation: 4_338_243, codexInput: 0, codexOutput: 0, todayTotal: 123_456_789, todayDate: today),
+        TokenBoardEntry(userID: "u2", name: "타팀 김서연", avatarURL: nil, total: 2_100_000_000, claudeInput: 1_800_000_000, claudeOutput: 250_000_000, claudeCacheRead: 50_000_000, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 42_000_000, todayDate: today),
+        TokenBoardEntry(userID: "u-me", name: "yesung", avatarURL: nil, total: 1_234_567_890, claudeInput: 1_000_000_000, claudeOutput: 200_000_000, claudeCacheRead: 34_000_000, claudeCacheCreation: 567_890, codexInput: 0, codexOutput: 0, todayTotal: 7_654_321, todayDate: today),
+        TokenBoardEntry(userID: "u4", name: "타팀 박도윤", avatarURL: nil, total: 640_000_000, claudeInput: 600_000_000, claudeOutput: 40_000_000, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 5_000_000, todayDate: stale),
+        TokenBoardEntry(userID: "u5", name: "민수", avatarURL: nil, total: 89_000, claudeInput: 80_000, claudeOutput: 9_000, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 1_234, todayDate: today),
+        TokenBoardEntry(userID: "u6", name: "타팀 이하은", avatarURL: nil, total: 12_345, claudeInput: 12_345, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 0, todayDate: today),
+        TokenBoardEntry(userID: "u7", name: "지현", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 0, todayDate: today),
+        TokenBoardEntry(userID: "u8", name: "타팀 최시우", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 0, todayDate: today)
     ]
     store.tokenBoard = Array(pool.prefix(memberCount))
     store.tokenBoardLoaded = true
@@ -1135,8 +1138,9 @@ private func makeTokenBoardStore(memberCount: Int = 7) -> WorkTimerStore {
 @MainActor
 @Test
 func checkMenuViewRendersTokenBoardSnapshot() throws {
-    // 카드 리디자인 시나리오: 타팀 이름 포함 7명(maxVisibleRows=7 정확히 채운 상한), 내 카드(u-me·"나" 칩) 포함. 육안 확인 PNG 저장.
-    let png = try renderPNG(CheckMenuView(store: makeTokenBoardStore(memberCount: 7)))
+    // 카드 리디자인 시나리오: 타팀 이름 포함 6명(maxVisibleRows=6 정확히 채운 상한), 내 카드(u-me·"나" 칩) 포함.
+    // 각 카드에 "이번 달 총량 + 오늘 +N 토큰" 2줄이 보인다. 육안 확인 PNG 저장.
+    let png = try renderPNG(CheckMenuView(store: makeTokenBoardStore(memberCount: 6)))
     #expect(png.count > 0)
     // 육안 확인용 아티팩트를 스크래치 디렉터리에 저장한다(디렉터리 없으면 만들고, 실패는 무시).
     let dir = URL(fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad", isDirectory: true)
@@ -1146,8 +1150,19 @@ func checkMenuViewRendersTokenBoardSnapshot() throws {
 
 @MainActor
 @Test
+func checkMenuViewRendersTokenBoardTodaySnapshot() throws {
+    // "오늘 +N" 표시 육안 확인 전용: 오늘 값이 담긴 6명(u4 는 스테일 날짜라 "오늘 +0"). 지정 경로에 PNG 저장 후 직접 Read 확인.
+    let png = try renderPNG(CheckMenuView(store: makeTokenBoardStore(memberCount: 6)))
+    #expect(png.count > 0)
+    let dir = URL(fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try? png.write(to: dir.appendingPathComponent("token-board-today.png"))
+}
+
+@MainActor
+@Test
 func checkMenuViewRendersTokenBoardScrollCapSnapshot() throws {
-    // 스크롤 상한 케이스: 8명(maxVisibleRows=7 초과)을 클립 모드로 그려(ImageRenderer 는 ScrollView 미지원) 상한 클립을 보인다.
+    // 스크롤 상한 케이스: 8명(maxVisibleRows=6 초과)을 클립 모드로 그려(ImageRenderer 는 ScrollView 미지원) 상한 클립을 보인다.
     let store = makeTokenBoardStore(memberCount: 8)
     let png = try renderPNG(CheckMenuView(store: store, previewClipsOverflowList: true))
     #expect(png.count > 0)

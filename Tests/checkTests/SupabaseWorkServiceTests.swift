@@ -1082,7 +1082,8 @@ func upsertTokenUsagePostsMergeDuplicatesWithSnakeCasePayload() async throws {
     let usage = TokenUsageMonthly(
         month: "2026-07",
         claudeInput: 11, claudeOutput: 22, claudeCacheRead: 33, claudeCacheCreation: 44,
-        codexInput: 55, codexOutput: 66
+        codexInput: 55, codexOutput: 66,
+        todayTotal: 77, todayDate: "2026-07-14"
     )
     try await service.upsertTokenUsage(accessToken: "access-token", userID: "00000000-0000-0000-0000-000000000002", usage: usage)
 
@@ -1108,8 +1109,12 @@ func upsertTokenUsagePostsMergeDuplicatesWithSnakeCasePayload() async throws {
     #expect(bodyText.contains("\"codex_input\":55"))
     #expect(bodyText.contains("\"codex_output\":66"))
     #expect(bodyText.contains("\"total\":231"))
+    // 오늘분(오늘 +N 표시용)도 snake_case 로 함께 올라간다.
+    #expect(bodyText.contains("\"today_total\":77"))
+    #expect(bodyText.contains("\"today_date\":\"2026-07-14\""))
     // camelCase 가 새어 나가지 않는다.
     #expect(!bodyText.contains("\"claudeInput\""))
+    #expect(!bodyText.contains("\"todayTotal\""))
 }
 
 @Test
@@ -1207,6 +1212,59 @@ func tokenUsageMonthKeyIsKSTYearMonth() {
     // 한낮은 자명하게 그 달.
     let midJuly = ISO8601DateFormatter().date(from: "2026-07-15T03:00:00Z")!
     #expect(TokenUsageMonthKey.current(midJuly) == "2026-07")
+}
+
+@Test
+func tokenUsageDayKeyIsKSTYearMonthDay() {
+    // 2026-07-13 15:00 UTC = 2026-07-14 00:00 KST → 날짜 키는 UTC 가 아니라 KST 기준 "2026-07-14".
+    let utcBoundary = ISO8601DateFormatter().date(from: "2026-07-13T15:00:00Z")!
+    #expect(TokenUsageDayKey.current(utcBoundary) == "2026-07-14")
+    // 1초 전은 아직 KST 07-13.
+    let beforeBoundary = ISO8601DateFormatter().date(from: "2026-07-13T14:59:59Z")!
+    #expect(TokenUsageDayKey.current(beforeBoundary) == "2026-07-13")
+}
+
+@Test
+func tokenBoardRowDecodesTodayFieldsAndFallsBackWhenAbsent() throws {
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    // 새 RPC(마이그레이션 후): today_total/today_date 포함 → 그대로 디코드.
+    let withToday = """
+    [{"user_id":"a","display_name":"영","avatar_url":null,"claude_input":1,"claude_output":0,"claude_cache_read":0,"claude_cache_creation":0,"codex_input":0,"codex_output":0,"total":1,"today_total":123,"today_date":"2026-07-14"}]
+    """
+    let rows = try decoder.decode([TokenBoardRow].self, from: Data(withToday.utf8))
+    #expect(rows.first?.todayTotal == 123)
+    #expect(rows.first?.todayDate == "2026-07-14")
+
+    // 옛 RPC(마이그레이션 전): today 컬럼 없음 → decodeIfPresent 로 0/"" 폴백(디코드 실패 없이 호환).
+    let withoutToday = """
+    [{"user_id":"b","display_name":"민","avatar_url":null,"claude_input":1,"claude_output":0,"claude_cache_read":0,"claude_cache_creation":0,"codex_input":0,"codex_output":0,"total":1}]
+    """
+    let legacyRows = try decoder.decode([TokenBoardRow].self, from: Data(withoutToday.utf8))
+    #expect(legacyRows.first?.todayTotal == 0)
+    #expect(legacyRows.first?.todayDate == "")
+}
+
+@Test
+func toTokenBoardEntriesCarriesTodayFields() {
+    // 오늘분(todayTotal/todayDate)이 서버 행 → 표시 엔트리로 그대로 옮겨진다.
+    let rows = [
+        TokenBoardRow(userId: "u1", displayName: "영", avatarUrl: nil, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, total: 0, todayTotal: 555, todayDate: "2026-07-14")
+    ]
+    let entries = rows.toTokenBoardEntries()
+    #expect(entries.first?.todayTotal == 555)
+    #expect(entries.first?.todayDate == "2026-07-14")
+}
+
+@Test
+func tokenBoardEntryTodayDeltaShowsOnlyWhenDateMatches() {
+    // 판정: todayDate == 현재 KST 날짜면 todayTotal, 아니면 0(어제 이후 안 연 사람도 "오늘 +0"으로 균일 표시).
+    let e = TokenBoardEntry(userID: "u", name: "영", avatarURL: nil, total: 100, claudeInput: 100, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 42, todayDate: "2026-07-14")
+    #expect(e.todayDelta(currentDate: "2026-07-14") == 42)   // 오늘 일치 → 노출
+    #expect(e.todayDelta(currentDate: "2026-07-15") == 0)    // 스테일 날짜 → 0
+    // 오늘분 미상(빈 날짜)도 0.
+    let empty = TokenBoardEntry(userID: "u2", name: "민", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
+    #expect(empty.todayDelta(currentDate: "2026-07-14") == 0)
 }
 
 /// 팀 토큰 보드 조회 응답을 호스트별로 캔에 담아 돌려주는 전용 URLProtocol. 호스트 키 + 잠금으로

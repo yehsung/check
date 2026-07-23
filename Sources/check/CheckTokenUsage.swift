@@ -19,6 +19,13 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     var codexInput: Int = 0
     var codexOutput: Int = 0
 
+    /// 오늘(KST 자정 이후) 늘어난 토큰량 = "오늘 +N" 표시의 원천. 각 앱이 자기 로컬 로그에서 계산해 서버 행에 함께 올린다.
+    /// 산식: Claude 는 엔트리 ts14 의 KST 날짜 == 오늘인 것의 (입력+출력+캐시읽기+캐시생성) 합, Codex 는 파일 mtime 의
+    /// KST 날짜 == 오늘인 파일의 누적치(입력+출력) 합 — 파일 단위 근사(장기 세션은 mtime 날짜에 통째 귀속). total 의 부분집합.
+    var todayTotal: Int = 0
+    /// todayTotal 이 귀속된 KST 날짜 'YYYY-MM-DD'. 표시 측이 현재 KST 날짜와 다르면(어제 이후 안 연 스냅샷) 오늘분을 0 으로 본다.
+    var todayDate: String = ""
+
     /// 화면 우측에 굵게 뜨는 총합 = 여섯 필드의 단순 합. (Codex input 은 cached 를 이미 포함한 누적치라 그대로 더한다.)
     var total: Int {
         claudeInput + claudeOutput + claudeCacheRead + claudeCacheCreation + codexInput + codexOutput
@@ -46,7 +53,50 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
         if codexTotal > 0 {
             parts.append("Codex \(TokenNumberFormatter.grouped(codexTotal))")
         }
+        // 내 박스 툴팁 끝에 "오늘 +N" 한 줄을 덧붙인다(값이 있을 때만 — 없으면 기존 문구 그대로라 하위 호환).
+        // 내 박스 usage 는 매번 갓 스캔한 값이라 todayDate 는 항상 오늘이므로 여기선 날짜 가드 없이 노출한다.
+        if todayTotal > 0 {
+            parts.append("오늘 +\(TokenNumberFormatter.grouped(todayTotal))")
+        }
         return parts.joined(separator: " · ")
+    }
+}
+
+// TokenUsageMonthly Codable 하위호환: 옛 영속 스냅샷엔 today 필드가 없다 — decodeIfPresent 로 0/"" 폴백해
+// 디코드 실패(nil 처리 → 재스캔) 없이 우아하게 복원한다. 키는 옛 스냅샷과 동일한 프로퍼티명(camelCase, 스네이크 변환 없음).
+extension TokenUsageMonthly {
+    enum CodingKeys: String, CodingKey {
+        case month
+        case claudeInput, claudeOutput, claudeCacheRead, claudeCacheCreation
+        case codexInput, codexOutput
+        case todayTotal, todayDate
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        month = try c.decode(String.self, forKey: .month)
+        claudeInput = try c.decodeIfPresent(Int.self, forKey: .claudeInput) ?? 0
+        claudeOutput = try c.decodeIfPresent(Int.self, forKey: .claudeOutput) ?? 0
+        claudeCacheRead = try c.decodeIfPresent(Int.self, forKey: .claudeCacheRead) ?? 0
+        claudeCacheCreation = try c.decodeIfPresent(Int.self, forKey: .claudeCacheCreation) ?? 0
+        codexInput = try c.decodeIfPresent(Int.self, forKey: .codexInput) ?? 0
+        codexOutput = try c.decodeIfPresent(Int.self, forKey: .codexOutput) ?? 0
+        // 하위호환 핵심: 옛 스냅샷엔 없는 필드 — 없으면 0/"" 로 본다(오늘분 미상 → 표시 0).
+        todayTotal = try c.decodeIfPresent(Int.self, forKey: .todayTotal) ?? 0
+        todayDate = try c.decodeIfPresent(String.self, forKey: .todayDate) ?? ""
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(month, forKey: .month)
+        try c.encode(claudeInput, forKey: .claudeInput)
+        try c.encode(claudeOutput, forKey: .claudeOutput)
+        try c.encode(claudeCacheRead, forKey: .claudeCacheRead)
+        try c.encode(claudeCacheCreation, forKey: .claudeCacheCreation)
+        try c.encode(codexInput, forKey: .codexInput)
+        try c.encode(codexOutput, forKey: .codexOutput)
+        try c.encode(todayTotal, forKey: .todayTotal)
+        try c.encode(todayDate, forKey: .todayDate)
     }
 }
 
@@ -232,6 +282,18 @@ enum TokenUsageIncrementalScanner {
     /// 주어진 시각의 KST 달력 월 'YYYY-MM'. 스토어가 복원 스냅샷의 월 일치 판정에 쓴다.
     static func kstMonthString(_ date: Date) -> String { monthBounds(now: date).month }
 
+    /// 주어진 시각이 속한 KST 달력 '하루'의 경계(절대 시각)와 'YYYY-MM-DD' 문자열.
+    /// start = 오늘 0시 KST, end = 내일 0시 KST. (KST 자정 = UTC 전날 15:00 — "오늘 +N" 창의 하한/상한.)
+    /// 오늘은 항상 현재 월의 부분집합이라, 오늘 합은 월 필터 루프 안에서 겹쳐 계산된다.
+    static func dayBounds(now: Date) -> (start: Date, end: Date, date: String) {
+        let cal = kstCalendar
+        let start = cal.startOfDay(for: now)
+        let end = cal.date(byAdding: .day, value: 1, to: start)!
+        let comps = cal.dateComponents([.year, .month, .day], from: now)
+        let date = String(format: "%04d-%02d-%02d", comps.year ?? 0, comps.month ?? 0, comps.day ?? 0)
+        return (start, end, date)
+    }
+
     /// 증분 갱신 계측(테스트/실증용). 재읽기 바이트·읽은 파일 수와 캐시 변경 여부를 보고한다.
     struct Stats: Equatable, Sendable {
         var claudeFilesStatted = 0
@@ -270,6 +332,13 @@ enum TokenUsageIncrementalScanner {
         let monthEndMicros = micros(from: monthEnd)
         let prevMonthStartMicros = micros(from: prevMonthStart)
 
+        // 오늘(KST) 창 = [오늘 0시, 내일 0시). "오늘 +N" 표시용 — 월 창의 부분집합이라 합계 루프 안에서 함께 센다.
+        let (todayStart, todayEnd, todayDate) = dayBounds(now: now)
+        let todayStartTs14 = ts14(from: todayStart)
+        let todayEndTs14 = ts14(from: todayEnd)
+        let todayStartMicros = micros(from: todayStart)
+        let todayEndMicros = micros(from: todayEnd)
+
         // 1) 퇴거(로드 시점): 직전 월 시작 밖 엔트리/파일상태 제거. 무언가 지워지면 캐시 변경으로 표시(저장 유도).
         evict(&cache, evictTs14: prevMonthStartTs14, evictMicros: prevMonthStartMicros, changed: &stats.cacheChanged)
 
@@ -277,11 +346,13 @@ enum TokenUsageIncrementalScanner {
         scanClaude(&cache, homeDirectory: homeDirectory, cutoff: monthStart, evictTs14: prevMonthStartTs14, stats: &stats)
         scanCodex(&cache, homeDirectory: homeDirectory, cutoff: monthStart, stats: &stats)
 
-        // 3) 합계 재계산(엔트리 맵 현재-월 필터 + codex 파일상태 현재-월 필터).
+        // 3) 합계 재계산(엔트리 맵 현재-월 필터 + codex 파일상태 현재-월 필터). 오늘 창은 같은 순회에서 겹쳐 센다.
         let usage = totals(
             cache, month: monthString,
             monthStartTs14: monthStartTs14, monthEndTs14: monthEndTs14,
-            monthStartMicros: monthStartMicros, monthEndMicros: monthEndMicros
+            monthStartMicros: monthStartMicros, monthEndMicros: monthEndMicros,
+            todayStartTs14: todayStartTs14, todayEndTs14: todayEndTs14,
+            todayStartMicros: todayStartMicros, todayEndMicros: todayEndMicros, todayDate: todayDate
         )
         return Result(cache: cache, usage: usage, stats: stats)
     }
@@ -430,21 +501,35 @@ enum TokenUsageIncrementalScanner {
     // MARK: 합계 / 퇴거
 
     /// 엔트리 맵을 현재 월 [start,end) 로 필터해 Claude 합계를, codex 파일상태를 현재 월(파일 mtime)로 필터해 Codex 합계를 낸다.
+    /// 오늘 창([todayStart,todayEnd)) 은 월 창의 부분집합이라 같은 순회 안에서 오늘분(todayTotal)을 겹쳐 누적한다:
+    /// Claude 는 오늘 엔트리의 4필드 합, Codex 는 mtime 이 오늘인 파일의 누적치(입력+출력) 합(파일 단위 근사).
     private static func totals(
         _ cache: TokenUsageCache, month: String,
-        monthStartTs14: Int, monthEndTs14: Int, monthStartMicros: Int, monthEndMicros: Int
+        monthStartTs14: Int, monthEndTs14: Int, monthStartMicros: Int, monthEndMicros: Int,
+        todayStartTs14: Int, todayEndTs14: Int, todayStartMicros: Int, todayEndMicros: Int, todayDate: String
     ) -> TokenUsageMonthly {
         var usage = TokenUsageMonthly(month: month)
+        var todayTotal = 0
         for (_, e) in cache.claudeEntries where e.ts14 >= monthStartTs14 && e.ts14 < monthEndTs14 {
             usage.claudeInput += e.input
             usage.claudeOutput += e.output
             usage.claudeCacheRead += e.cacheRead
             usage.claudeCacheCreation += e.cacheCreation
+            // 오늘분: 엔트리 ts14 의 KST 날짜가 오늘이면 그 4필드를 오늘 합에 더한다(월 부분집합).
+            if e.ts14 >= todayStartTs14, e.ts14 < todayEndTs14 {
+                todayTotal += e.input + e.output + e.cacheRead + e.cacheCreation
+            }
         }
         for (_, s) in cache.codexFileStates where s.mtimeMicros >= monthStartMicros && s.mtimeMicros < monthEndMicros {
             usage.codexInput += s.input
             usage.codexOutput += s.output
+            // 오늘분(파일 단위 근사): 파일 mtime 이 오늘이면 그 세션 누적치(입력+출력)를 통째로 오늘 합에 더한다.
+            if s.mtimeMicros >= todayStartMicros, s.mtimeMicros < todayEndMicros {
+                todayTotal += s.input + s.output
+            }
         }
+        usage.todayTotal = todayTotal
+        usage.todayDate = todayDate
         return usage
     }
 

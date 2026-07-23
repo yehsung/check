@@ -482,7 +482,9 @@ actor SupabaseWorkService {
                 claudeCacheCreation: usage.claudeCacheCreation,
                 codexInput: usage.codexInput,
                 codexOutput: usage.codexOutput,
-                total: usage.total
+                total: usage.total,
+                todayTotal: usage.todayTotal,
+                todayDate: usage.todayDate
             ),
             accessToken: accessToken,
             prefer: "resolution=merge-duplicates,return=minimal"

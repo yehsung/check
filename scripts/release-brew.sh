@@ -136,6 +136,16 @@ else
   else
     missing "aing-check.app 의 공증 스테이플 검증에 실패했습니다. './scripts/package-notarized.sh' 로 공증/스테이플된 zip 을 다시 만드세요."
   fi
+
+  # zip 내부 앱 버전 == 릴리스 버전 게이트. v0.2.3 사고(패키징이 키체인 잠금으로 실패했는데 파이프가 exit 를
+  # 삼켜, 낡은 0.2.2 zip 이 그대로 태깅됨) 재발 방지 — 스테이플이 유효해도 버전이 다르면 낡은 산출물이다.
+  ZIP_VERSION="$(unzip -p "$ZIP" "aing-check/aing-check.app/Contents/Info.plist" 2>/dev/null \
+    | plutil -extract CFBundleShortVersionString raw - 2>/dev/null || true)"
+  if [[ "$ZIP_VERSION" == "$VERSION" ]]; then
+    log "zip 내부 앱 버전 확인됨 ($ZIP_VERSION)"
+  else
+    missing "zip 내부 앱 버전($ZIP_VERSION)이 릴리스 버전($VERSION)과 다릅니다 — 낡은 산출물입니다. './scripts/package-notarized.sh' 를 다시 실행하세요."
+  fi
 fi
 
 # sha256 계산 (zip 이 없으면 dry-run 자리표시자).

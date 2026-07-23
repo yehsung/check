@@ -378,9 +378,53 @@ enum SleepEyeTexture {
         r > 120 && g < 66 && b < 150 && r >= g + 55
     }
 
-    // MARK: - 전역 눈 커버(입 보호 + 반복 인페인트)
+    // MARK: - 전역 눈 커버(입 보호 + 국소 링 채움)
 
     static func coverEyes(in buf: inout PixelBuffer, eyeMask: [Bool]? = nil) {
+        let w = buf.width, h = buf.height, n = w * h
+        let (cover, protected, meshBased) = computeCoverMask(in: buf, eyeMask: eyeMask)
+        // 채우기.
+        let ringRadius = 3
+        var brightThreshold = 0
+        if meshBased {
+            // 메시 커버는 '눈 표면' 전체(눈두덩 음영 텍셀 포함)를 덮는다. 커버를 조각(연결요소)별로 **바로 바깥
+            // 링의 진짜 밝은 피부색**으로 채운다. 전역 피부 중앙값은 턱/볼 그림자까지 섞여 눈 주변 밝은 얼굴보다
+            // 어두워 커버 패치가 진한 보라로 떠 보였다(실물 확인). 조각 링 중 밝은 피부만(어두운 눈두덩 텍셀 배제)
+            // 취해 채우면 모든 조각이 주변 얼굴과 사실상 같은 밝은 피부가 된다.
+            let (bt, ref) = eyeRegionBrightSkin(in: buf, cover: cover, ringRadius: ringRadius)
+            brightThreshold = bt
+            fillCoverFromLocalRing(&buf, cover: cover, brightThreshold: bt, fallback: ref, ringRadius: ringRadius)
+        } else {
+            // 폴백: 커버를 '미지'로 두고 주변 피부색을 경계에서 안쪽으로 번져 채운다(그라디언트에 자연히 맞물림).
+            inpaint(&buf, cover: cover)
+        }
+        // 페더링(이음새만 녹임): 국소 링 채움이 경계색을 이미 링에 맞춰 두므로, 커버 **전체**가 아니라
+        // 경계 밴드(annulus)만 박스 블러해 남은 1px 이음새·에일리어싱을 녹인다. 커버 전체를 페더하면 바깥
+        // 넓은 밴드까지 섞여 조각 내부가 국소 링보다 어두워진다(실측 4↑). 깊은 내부는 채움값(≈링)을 유지.
+        // **어두운 텍셀 배제(skip)가 핵심**: skip 에 입·볼뿐 아니라 커버 밖 **어두운(밝은 피부 임계 미만) 텍셀**
+        // (눈두덩/속눈썹)을 넣는다. 안 그러면 아틀라스상 얇은 조각이 페더 밴드에 통째로 들어가 인접 어두운 눈
+        // 텍셀과 평균돼 다시 어두워진다(실측: skip 누락 시 조각이 채움 후에도 5↓ 어두워짐).
+        let featherR = max(2, Int((CGFloat(w) * 0.010).rounded()))
+        let seamOuter = dilateMask(cover, rw: w, rh: h, radius: featherR)
+        let deepInner = erodeMask(cover, rw: w, rh: h, radius: featherR)
+        var skip = protected
+        if meshBased {
+            for i in 0..<n where !cover[i] && !protected[i] {
+                let (r, g, b) = buf.rgb(i % w, i / w)
+                if luma(r, g, b) < brightThreshold { skip[i] = true }   // 어두운 눈두덩/속눈썹 텍셀 배제.
+            }
+        }
+        var feather = [Bool](repeating: false, count: n)
+        // 타깃: 경계 밴드 중 (커버 ∪ 밝은 피부)만 — 어두운 텍셀은 밝히지 않는다(배경/머리 오염 방지).
+        for i in 0..<n where seamOuter[i] && !deepInner[i] && !skip[i] { feather[i] = true }
+        featherBlur(&buf, region: feather, skip: skip, kernelRadius: 2, iterations: 3)
+    }
+
+    /// coverEyes 가 채우기 전에 쓰는 커버/보호 마스크를 산출한다(색 검출 → 보호막 → 커버 결정까지).
+    /// 채우기·페더와 분리해 테스트가 '조각별 색차'를 재려고 같은 커버 마스크를 재사용할 수 있게 노출한다.
+    /// 반환: (cover=피부로 덮을 텍셀, protected=입·볼 보호 텍셀, meshBased=메시 마스크 사용 여부).
+    static func computeCoverMask(in buf: PixelBuffer, eyeMask: [Bool]? = nil)
+        -> (cover: [Bool], protected: [Bool], meshBased: Bool) {
         let w = buf.width, h = buf.height, n = w * h
         // 보호막(입·볼)은 항상 색으로 검출 — 눈 커버가 이들을 지우지 않게.
         var eye = [Bool](repeating: false, count: n)
@@ -433,24 +477,141 @@ enum SleepEyeTexture {
             cover = dilateMask(cover, rw: w, rh: h, radius: ringR)
         }
         for i in 0..<n where protected[i] { cover[i] = false }
-        // 채우기.
-        if meshBased {
-            // 메시 커버는 '눈 표면' 전체(눈두덩 음영 텍셀 포함)를 덮는다. 이때 인페인트(이웃 확산)를 쓰면 커버 안
-            // 텍셀이 아틀라스상 인접한 **어두운 눈두덩 텍셀**(같은 유령의 다른 조각)을 평균해 다시 어두워져 유령이
-            // 되살아난다. 그래서 커버 전체를 **전역 피부 중앙값(밝은 이마/볼 피부)** 으로 평탄 채움한 뒤 페더로 경계만
-            // 주변에 녹인다 — 눈 자리가 균일한 밝은 피부가 된다.
-            let (mr, mg, mb) = skinMedian(in: buf, exclude: cover)
-            for i in 0..<n where cover[i] { buf.set(i % w, i / w, mr, mg, mb) }
-        } else {
-            // 폴백: 커버를 '미지'로 두고 주변 피부색을 경계에서 안쪽으로 번져 채운다(그라디언트에 자연히 맞물림).
-            inpaint(&buf, cover: cover)
+        return (cover, protected, meshBased)
+    }
+
+    // MARK: - 국소 링 기반 커버 채움(조각별 조화 확산)
+
+    /// 눈 주변 '진짜 밝은 피부'를 추정한다. 커버 바로 바깥 링(dilate `ringRadius`, 커버 제외)의 isSkin 텍셀 중
+    /// **루마 임계값 이상**만 취한다. 임계값 = 링 피부 루마 중앙값 − 12: 저폴리 UV 상 눈두덩/속눈썹이 링에
+    /// 새어든 어두운 텍셀(isSkin 은 통과하나 실제 피부보다 12↑ 어두움)을 배제하고 진짜 얼굴 피부만 남긴다.
+    /// 반환: (임계 루마, 임계 이상 피부 평균색=폴백). 임계 이상 피부가 없으면 전역 피부 중앙값 폴백(임계 0).
+    static func eyeRegionBrightSkin(in buf: PixelBuffer, cover: [Bool], ringRadius: Int)
+        -> (threshold: Int, ref: (Int, Int, Int)) {
+        let w = buf.width, h = buf.height, n = w * h
+        let band = dilateMask(cover, rw: w, rh: h, radius: max(1, ringRadius))
+        var lumas = [Int]()
+        for i in 0..<n where band[i] && !cover[i] {
+            let (r, g, b) = buf.rgb(i % w, i / w)
+            if isSkin(r, g, b) { lumas.append(luma(r, g, b)) }
         }
-        // 페더링(부드러운 블렌딩): 커버 + 바깥 밴드를 반복 박스 블러로 확산해 이음새/잔여 그라데이션을 주변
-        // 밝은 피부색으로 수렴시켜 '딱딱한 경계' 대신 매끄러운 전환을 만든다. 입/볼(보호막)은 소스·대상에서 제외.
-        let featherR = max(3, Int((CGFloat(w) * 0.020).rounded()))
-        var feather = dilateMask(cover, rw: w, rh: h, radius: featherR)
-        for i in 0..<n where protected[i] { feather[i] = false }
-        featherBlur(&buf, region: feather, skip: protected, kernelRadius: 2, iterations: 6)
+        guard !lumas.isEmpty else { return (0, skinMedian(in: buf, exclude: cover)) }
+        lumas.sort()
+        let threshold = lumas[lumas.count / 2] - 12
+        var sr = 0, sg = 0, sb = 0, c = 0
+        for i in 0..<n where band[i] && !cover[i] {
+            let (r, g, b) = buf.rgb(i % w, i / w)
+            if isSkin(r, g, b) && luma(r, g, b) >= threshold { sr += r; sg += g; sb += b; c += 1 }
+        }
+        guard c > 0 else { return (0, skinMedian(in: buf, exclude: cover)) }
+        return (threshold, (sr / c, sg / c, sb / c))
+    }
+
+    /// 커버를 조각(아틀라스에 흩어진 연결요소)별로, 그 조각 **바로 바깥 링의 '진짜 밝은 피부' 텍셀 평균색**으로
+    /// 평탄 채움한다(조각마다 국소 밝은 피부색 — 눈 주변 얼굴색). 마감 이음새는 coverEyes 의 경계 페더가 녹인다.
+    ///
+    /// 왜 국소 링인가: 전역 피부 중앙값 평면 채움은 턱/볼 그림자까지 섞여 눈 주변 밝은 얼굴보다 어두워, 커버
+    /// 패치가 주변보다 진한 보라로 떠 보였다(실물 확인). 각 조각 바로 바깥 링은 그 조각이 화면에서 얹히는 눈
+    /// 자리의 **주변 얼굴 피부**이므로, 그 링 평균으로 조각을 채우면 주변과 사실상 같은 색이 된다.
+    ///
+    /// **밝기 필터가 핵심**: 저폴리 UV 라 한 눈이 아틀라스 여러 조각으로 흩어지는데, 작은 조각의 링에는
+    /// 눈두덩/속눈썹의 **어두운 텍셀이 섞여 든다**(isSkin 은 루마>120 이라 이들도 '피부'로 통과 — 실측 루마 121~190).
+    /// 이걸 링 시드로 쓰면 그 조각만 어둡게 채워져 화면 눈 자리에 **진한 보라 얼룩**이 남는다(실측: 렌더에서
+    /// 주변보다 14↓). 그래서 링 시드를 `eyeRegionBrightSkin` 이 구한 **밝기 임계값 이상의 피부만**으로 거른다 —
+    /// 진짜 눈 주변 얼굴 피부(루마 195~237)만 남아 모든 조각이 주변과 일치하는 밝은 피부로 채워진다.
+    /// 밝은 피부 시드가 없는 조각만 전역 밝은 피부(fallback) 폴백.
+    ///
+    /// (조화 확산이 아니라 조각 평탄 채움인 이유: 이 UV 는 아틀라스 인접≠화면 인접이라 조각 내부로 확산하면
+    ///  인접 어두운 텍셀 쪽으로 경계값이 끌려 조각 평균이 링보다 어두워졌다(실측 5↓). 조각은 화면상 좁아
+    ///  내부 그라디언트가 거의 없으므로 링 평균 평탄 채움이 색 일치·검증(내부평균≈링평균)에 모두 유리하다.)
+    ///
+    /// `pullToRef`: 조각 링 평균을 전역 밝은 피부(fallback)로 당기는 비율. 같은 UV 인접≠화면 인접 문제로,
+    /// 아틀라스에서 어두운 이웃을 링으로 갖는 조각이 화면상 밝은 눈 자리에 얹혀 국소 링만 쓰면 주변보다 어둡게
+    /// 남는다(실측 렌더 3↓). 전역 밝은 눈주변 피부로 절반 당기면 화면 눈 자리가 주변과 더 균일해진다(실측 렌더
+    /// 3↓→2↓). 1.0(완전 전역)이면 화면은 완벽하나 조각-링 정량검증이 흩어진 조각에서 4↑로 깨져, 0.5 로 둔다.
+    ///
+    /// 성능: 커버 텍셀(수천) 한정 스캔이라 512² 에서도 수 ms. 지오메트리당 1회 생성 규약 유지.
+    static func fillCoverFromLocalRing(_ buf: inout PixelBuffer, cover: [Bool],
+                                       brightThreshold: Int, fallback: (Int, Int, Int),
+                                       ringRadius: Int = 3, pullToRef: Float = 0.5) {
+        let w = buf.width, h = buf.height, n = w * h
+        // 링에 밝은 피부가 없는 조각용 폴백색(전역 밝은 피부).
+        let (gmr, gmg, gmb) = fallback
+        let comps = connectedComponents(cover, rw: w, rh: h)
+        var isRing = [Bool](repeating: false, count: n)   // 조각마다 재사용(끝에 리셋 — 링 텍셀 중복 집계 방지).
+        let rr = max(1, ringRadius)
+        for members in comps {
+            // 1) 링 시드 수집: 멤버의 ringRadius 체비셰프 이웃 중 커버 아님 & **밝은 피부**(임계 이상).
+            //    (링 텍셀은 항상 커버 밖 → 다른 조각을 채워도 값이 안 바뀌므로 조각 처리 순서와 무관.)
+            var ringList = [Int]()
+            for p in members {
+                let px = p % w, py = p / w
+                var dy = -rr
+                while dy <= rr {
+                    let ny = py + dy
+                    if ny >= 0 && ny < h {
+                        var dx = -rr
+                        while dx <= rr {
+                            let nx = px + dx
+                            if nx >= 0 && nx < w {
+                                let q = ny * w + nx
+                                if !cover[q] && !isRing[q] {
+                                    let (r, g, b) = buf.rgb(nx, ny)
+                                    if isSkin(r, g, b) && luma(r, g, b) >= brightThreshold {
+                                        isRing[q] = true; ringList.append(q)
+                                    }
+                                }
+                            }
+                            dx += 1
+                        }
+                    }
+                    dy += 1
+                }
+            }
+            // 2) 링에 밝은 피부가 없으면 그 조각만 전역 밝은 피부 폴백.
+            if ringList.isEmpty {
+                for p in members { buf.set(p % w, p / w, gmr, gmg, gmb) }
+                continue
+            }
+            // 3) 밝은 링 평균으로 조각 전체를 평탄 채움(반올림).
+            var sr = 0, sg = 0, sb = 0
+            for q in ringList { let (r, g, b) = buf.rgb(q % w, q / w); sr += r; sg += g; sb += b }
+            let rc = ringList.count
+            let lr = Float(sr) / Float(rc), lg = Float(sg) / Float(rc), lb = Float(sb) / Float(rc)
+            // 전역 밝은 피부(fallback)로 pullToRef 만큼 당긴다: 저폴리 UV 는 아틀라스 인접≠화면 인접이라, 화면상
+            // 밝은 눈 자리에 얹히는 조각이 아틀라스에선 어두운 이웃을 링으로 갖는 경우가 있다(국소 링만 쓰면 그
+            // 조각이 화면에서 주변보다 어둡게 남음). 전역 밝은 눈주변 피부로 조금 당겨 화면 균일도를 높인다.
+            let f = min(max(pullToRef, 0), 1)
+            let mr = Int((lr * (1 - f) + Float(gmr) * f).rounded())
+            let mg = Int((lg * (1 - f) + Float(gmg) * f).rounded())
+            let mb = Int((lb * (1 - f) + Float(gmb) * f).rounded())
+            for p in members { buf.set(p % w, p / w, mr, mg, mb) }
+            for q in ringList { isRing[q] = false }
+        }
+    }
+
+    /// 4-이웃 연결요소들을 각 요소의 픽셀 인덱스 배열로 반환(BFS). 조각별 처리(국소 링 채움·색차 검증)에 쓴다.
+    static func connectedComponents(_ mask: [Bool], rw: Int, rh: Int) -> [[Int]] {
+        let n = rw * rh
+        var label = [Bool](repeating: false, count: n) // 방문 표시.
+        var comps = [[Int]]()
+        var stack = [Int]()
+        for start in 0..<n where mask[start] && !label[start] {
+            label[start] = true
+            stack.removeAll(keepingCapacity: true)
+            stack.append(start)
+            var members = [Int]()
+            while let p = stack.popLast() {
+                members.append(p)
+                let x = p % rw, y = p / rw
+                if x > 0, mask[p - 1], !label[p - 1] { label[p - 1] = true; stack.append(p - 1) }
+                if x < rw - 1, mask[p + 1], !label[p + 1] { label[p + 1] = true; stack.append(p + 1) }
+                if y > 0, mask[p - rw], !label[p - rw] { label[p - rw] = true; stack.append(p - rw) }
+                if y < rh - 1, mask[p + rw], !label[p + rw] { label[p + rw] = true; stack.append(p + rw) }
+            }
+            comps.append(members)
+        }
+        return comps
     }
 
     // MARK: - 메시 기반 눈 UV 커버 마스크(색 분류가 놓치는 눈두덩/안구 하이라이트까지 정확히 덮는다)

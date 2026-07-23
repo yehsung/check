@@ -128,8 +128,8 @@ func closedEyesTextureCoversEyesAndKeepsMouth() throws {
     }
 
     // 눈이 실제로 피부로 덮였다: '눈→피부' 변화 픽셀이 의미 있는 면적(전체 0.2% 이상)이고, 변경의 유의한 몫이다.
-    // (메시 기반 커버는 눈 표면 전체 — 눈두덩/안구 하이라이트 등 원래 '피부'로 분류되던 텍셀까지 — 를 밝은 피부
-    //  중앙값으로 평탄화하므로, 변경의 상당수가 '피부→피부'다. 그래서 '눈→피부' 비율은 0.2 이상이면 충분히 유의.)
+    // (메시 기반 커버는 눈 표면 전체 — 눈두덩/안구 하이라이트 등 원래 '피부'로 분류되던 텍셀까지 — 를 조각별
+    //  국소 밝은 피부색으로 평탄화하므로, 변경의 상당수가 '피부→피부'다. 그래서 '눈→피부' 비율은 0.2 이상이면 충분히 유의.)
     #expect(Double(eyeToSkin) > Double(total) * 0.002)
     #expect(Double(eyeToSkin) >= Double(changed) * 0.2)
 
@@ -142,6 +142,91 @@ func closedEyesTextureCoversEyesAndKeepsMouth() throws {
     // 메시 커버가 눈두덩까지 넉넉히 덮어 색 기반보다 넓지만 여전히 두 눈 자리에 국한된다(≈9.5%).
     let frac = Double(changed) / Double(total)
     #expect(frac > 0.003 && frac < 0.14)
+}
+
+// MARK: 국소 링 채움 — 각 커버 조각 내부색이 그 조각 바깥 링(피부)색과 사실상 일치
+
+// 전역 평면 채움은 눈 주변 밝은 얼굴보다 어두워 커버 패치가 진한 보라로 떴다(실물 확인). 국소 링 기반
+// 채움으로 각 조각을 '바로 바깥 링의 국소 피부색'에 맞춘다. 이 테스트는 최종 텍스처에서 각 커버 조각
+// 내부 평균색 vs 그 조각 링(2~4px, 피부 텍셀) 평균색의 채널별 차이가 ≤ 4/255 임을 고정한다.
+@MainActor
+@Test
+func coverPiecesMatchLocalRingColorWithinTolerance() throws {
+    let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
+    let material = try #require(SleepEyeExplore.faceMaterial(in: scene))
+    let openCG = try #require(SleepEyeExplore.cgImage(from: material.diffuse.contents))
+    let geo = try #require(SleepEyeExplore.faceGeometry(in: scene))
+    let w = openCG.width, h = openCG.height
+
+    // 프로덕션과 동일한 앵커·반경으로 메시 눈 표면 UV 마스크 산출.
+    let eyeMask = try #require(SleepEyeTexture.eyeUVCoverMask(
+        geometry: geo, anchors: CheckCharacter3DScene.closedEyeAnchors.map { $0.position },
+        width: w, height: h, radius: CheckCharacter3DScene.eyeCoverRadius))
+
+    // 원본 버퍼로 커버 마스크(채우기 전 단계) 산출 — 프로덕션 coverEyes 와 같은 경로.
+    var openBytes = SleepEyeExplore.rgbaBuffer(openCG)
+    let (cover, _, meshBased): ([Bool], [Bool], Bool) = openBytes.withUnsafeMutableBufferPointer { p in
+        let buf = SleepEyeTexture.PixelBuffer(data: p.baseAddress!, width: w, height: h)
+        return SleepEyeTexture.computeCoverMask(in: buf, eyeMask: eyeMask)
+    }
+    #expect(meshBased) // 메시 마스크가 실제로 쓰였는지(폴백 아님) 확인.
+
+    // 최종 텍스처(엔진·프로덕션과 동일 경로).
+    let closedCG = try #require(CheckCharacter3DScene.makeClosedEyesImage(faceImage: openCG, geometry: geo))
+    let closed = SleepEyeExplore.rgbaBuffer(closedCG)
+    @inline(__always) func rgb(_ i: Int) -> (Int, Int, Int) {
+        (Int(closed[i * 4]), Int(closed[i * 4 + 1]), Int(closed[i * 4 + 2]))
+    }
+
+    let comps = SleepEyeTexture.connectedComponents(cover, rw: w, rh: h)
+    #expect(comps.count >= 2) // 최소 두 눈 조각.
+
+    // 프로덕션 채움과 동일한 '진짜 밝은 피부' 임계 루마 — 링에서 어두운 눈두덩/속눈썹 텍셀(isSkin 은 통과하나
+    // 실제 피부보다 어두움)을 배제해, 판정 기준(링색)이 진짜 얼굴 피부가 되게 한다. 원본 버퍼로 산출.
+    let ringR = 3
+    let brightThreshold: Int = openBytes.withUnsafeMutableBufferPointer { p in
+        let buf = SleepEyeTexture.PixelBuffer(data: p.baseAddress!, width: w, height: h)
+        return SleepEyeTexture.eyeRegionBrightSkin(in: buf, cover: cover, ringRadius: ringR).threshold
+    }
+    #expect(brightThreshold > 120) // 임계가 isSkin 하한(120)보다 위 — 어두운 텍셀을 실제로 걸러낸다.
+
+    var testedPieces = 0
+    for members in comps {
+        // 육안에 유의미한 조각만 판정(수 px 잡티는 페더 잔여로 노이즈가 크다). 최소 30px.
+        guard members.count >= 30 else { continue }
+        // 내부 평균(최종 텍스처).
+        var ir = 0, ig = 0, ib = 0
+        for p in members { let (r, g, b) = rgb(p); ir += r; ig += g; ib += b }
+        let ic = members.count
+        let iar = Double(ir) / Double(ic), iag = Double(ig) / Double(ic), iab = Double(ib) / Double(ic)
+        // 링 평균(조각 바로 바깥 2~4px, 커버 아님 & **밝은 피부** 텍셀만) — 최종 텍스처.
+        var seen = Set<Int>()
+        var rr = 0, rg = 0, rb = 0, rcnt = 0
+        for p in members {
+            let px = p % w, py = p / w
+            for dy in -ringR...ringR {
+                let ny = py + dy; if ny < 0 || ny >= h { continue }
+                for dx in -ringR...ringR {
+                    let nx = px + dx; if nx < 0 || nx >= w { continue }
+                    let q = ny * w + nx
+                    if cover[q] || seen.contains(q) { continue }
+                    let (r, g, b) = rgb(q)
+                    if SleepEyeTexture.isSkin(r, g, b) && SleepEyeTexture.luma(r, g, b) >= brightThreshold {
+                        seen.insert(q); rr += r; rg += g; rb += b; rcnt += 1
+                    }
+                }
+            }
+        }
+        guard rcnt > 0 else { continue } // 링에 밝은 피부 없는 조각은 전역 폴백 — 링 기준 판정 대상 아님.
+        let rar = Double(rr) / Double(rcnt), rag = Double(rg) / Double(rcnt), rab = Double(rb) / Double(rcnt)
+        let dr = abs(iar - rar), dg = abs(iag - rag), db = abs(iab - rab)
+        // 진단 출력(필터 실행 시 로그에 보임): 조각크기 / 내부색 / 링색 / 채널차.
+        print(String(format: "piece n=%d interior=(%.1f,%.1f,%.1f) ring=(%.1f,%.1f,%.1f) diff=(%.2f,%.2f,%.2f)",
+                     members.count, iar, iag, iab, rar, rag, rab, dr, dg, db))
+        #expect(dr <= 4.0 && dg <= 4.0 && db <= 4.0)
+        testedPieces += 1
+    }
+    #expect(testedPieces >= 2) // 두 눈 조각은 반드시 판정됐다.
 }
 
 // MARK: 씬 구조 (facing 노드 삽입 + 감은 눈 선 노드)

@@ -60,8 +60,9 @@ enum ReactionKind: Equatable {
             // 화들짝 모션(스냅 0.15 + 튀어오름 0.16)에 여유를 둔 길이. 이후 idle 복귀.
             return 0.4
         case .poked:
-            // 잘게 떠는 움찔 모션(약 1.15s)에 여유를 둔 길이. 이후 idle 복귀(말풍선은 자체 6s 타이머).
-            return 1.3
+            // 화들짝 대소동 모션(≈2.35s: 도약+공중 스핀+착지 바운스+잔떨림)에 여유를 둔 길이. 이후 idle 복귀
+            // (말풍선은 자체 6s 타이머, peek 창 8s 안에 모션·말풍선 모두 끝난다).
+            return 2.5
         case .drowsy:
             // 지속 상태(sleeping)라 만료 판정에 쓰지 않는다. 참고용으로 진입 모션 길이를 둔다.
             return 2.0
@@ -237,7 +238,7 @@ final class ReactionEngine {
     static let commuteEndBubbleSeconds: Double = 2
     static let greetingBubbleSeconds: Double = 3
     static let wakeBubbleSeconds: Double = 2.5
-    /// 콕찌르기 말풍선 지속(초). 움찔 모션(≈1.15s)보다 충분히 길게 둬 누가 찔렀는지 읽을 시간을 준다.
+    /// 콕찌르기 말풍선 지속(초). 화들짝 대소동 모션(≈2.35s)보다 충분히 길게 둬 누가 찔렀는지 읽을 시간을 준다.
     static let pokedBubbleSeconds: Double = 6
 
     /// 말풍선 텍스트(SwiftUI 관찰용). nil 이면 숨김. 각 리액션이 자기 텍스트/지속시간으로 교체한다.
@@ -833,40 +834,73 @@ enum ReactionActions {
         return .group([scaleSeq, shudder])
     }
 
-    /// 콕 찔려 움찔(간지럼): 옆구리를 콕 찔린 듯 순간 움츠림(hit 보다 얕은 squash) + 좌우로 잘게 부르르 떨다
-    /// 원복. hit(아파하기 — 큰 찌부 + 굵은 부르르)와 달리 얕고 잦게 떠는 느낌으로 총 ≈1.15s, identity 로 끝난다.
+    /// 콕 찔려 지랄발광(화들짝 대소동): 콕 찔린 순간 크게 움츠렸다가 위로 펄쩍 뛰어오르고, 공중에서 몸을
+    /// 좌우로 마구 흔들며(z ±26°) 반 바퀴 스핀(y 0→180→0)으로 어질어질 돌다, 착지 바운스(작은 재점프)를
+    /// 거쳐 잔떨림으로 잦아든다. hit(제자리 아파하기)와 달리 실제로 뛰어오르며 난리치는 큰 모션이다.
+    /// 총 ≈2.35s, scale·euler·position 모두 identity 로 끝난다(이동 합계 0 — 수직 점프만, 수평 드리프트 없음).
     static func poked(extent: CGFloat) -> SCNAction {
         let identity = SCNVector3(1, 1, 1)
-        // 얕은 움츠림: x·z 살짝 팽창 + y 수축(hit 의 0.62 보다 훨씬 얕은 0.90).
-        let squashed = SCNVector3(1.12, 0.90, 1.12)
-        let over = SCNVector3(0.96, 1.05, 0.96)
-        let squashPose = SCNAction.scaleKeyframe(from: identity, to: squashed, duration: 0.06, timing: .easeOut)
-        let rebound = SCNAction.scaleKeyframe(from: squashed, to: over, duration: 0.10, timing: .easeInEaseOut)
-        let settle = SCNAction.scaleKeyframe(from: over, to: identity, duration: 0.12, timing: .easeInEaseOut)
-        let scaleSeq = SCNAction.sequence([squashPose, rebound, settle])
+        // 점프 높이: 검증된 commuteStart(0.32)보다 살짝 큰 0.38(창 클리핑 여유 안).
+        let hop = extent * 0.38
 
-        // 좌우로 잘게 부르르(간지럼): z축 ±7° 를 감쇠하며 여러 번 떨고 0 복귀. hit(3회, 큰 진폭)보다 잦고 작다.
-        let a = radians(7)
-        let shudder = SCNAction.sequence([
-            .rotateTo(x: 0, y: 0, z: a, duration: 0.08),
-            .rotateTo(x: 0, y: 0, z: -a, duration: 0.12),
-            .rotateTo(x: 0, y: 0, z: a * 0.8, duration: 0.12),
-            .rotateTo(x: 0, y: 0, z: -a * 0.7, duration: 0.13),
-            .rotateTo(x: 0, y: 0, z: a * 0.55, duration: 0.13),
-            .rotateTo(x: 0, y: 0, z: -a * 0.4, duration: 0.14),
-            .rotateTo(x: 0, y: 0, z: a * 0.25, duration: 0.14),
-            .rotateTo(x: 0, y: 0, z: -a * 0.12, duration: 0.14),
-            .rotateTo(x: 0, y: 0, z: 0, duration: 0.15)
+        // 1) 화들짝 스케일: 순간 크게 움츠림(y 0.72) → 도약하며 위로 크게 스트레치(y 1.22).
+        //    2~3) 공중 난리 스케일 흔들림 → 착지 앞뒤 squash → 잔떨림 없이 identity 로 정착.
+        let crouch = SCNVector3(1.18, 0.72, 1.18)     // 화들짝 움츠림
+        let launch = SCNVector3(0.90, 1.22, 0.90)     // 도약 스트레치
+        let airA = SCNVector3(1.08, 0.94, 1.08)       // 공중 wobble 1
+        let airB = SCNVector3(0.94, 1.08, 0.94)       // 공중 wobble 2
+        let landSquash = SCNVector3(1.16, 0.80, 1.16) // 1차 착지 찌부
+        let rebUp = SCNVector3(0.94, 1.10, 0.94)      // 재점프 스트레치
+        let rebSquash = SCNVector3(1.10, 0.90, 1.10)  // 2차 착지 찌부
+        let scaleSeq = SCNAction.sequence([
+            .scaleKeyframe(from: identity, to: crouch, duration: 0.08, timing: .easeOut),
+            .scaleKeyframe(from: crouch, to: launch, duration: 0.24, timing: .easeOut),
+            .scaleKeyframe(from: launch, to: airA, duration: 0.42, timing: .easeInEaseOut),
+            .scaleKeyframe(from: airA, to: airB, duration: 0.42, timing: .easeInEaseOut),
+            .scaleKeyframe(from: airB, to: landSquash, duration: 0.20, timing: .easeInEaseOut),
+            .scaleKeyframe(from: landSquash, to: rebUp, duration: 0.13, timing: .easeOut),
+            .scaleKeyframe(from: rebUp, to: rebSquash, duration: 0.13, timing: .easeInEaseOut),
+            .scaleKeyframe(from: rebSquash, to: identity, duration: 0.73, timing: .easeInEaseOut)
         ])
 
-        // 찔린 쪽으로 살짝 밀렸다 돌아오는 미세 이동(모델 크기 비례). 합이 0 이라 identity 위치로 복귀한다.
-        let nudge = extent * 0.04
-        let poke = SCNAction.sequence([
-            .moveBy(x: nudge, y: 0, z: 0, duration: 0.06),
-            .moveBy(x: -nudge * 1.6, y: 0, z: 0, duration: 0.12),
-            .moveBy(x: nudge * 0.6, y: 0, z: 0, duration: 0.12)
+        // 회전: z축 플레일(±26°, 여러 번)과 y축 반 바퀴 스핀(0→180→0)을 한 rotateTo 스트림에 합쳐 절대각으로
+        //   보간한다(euler 두 축을 group 으로 동시에 돌리면 서로 덮어써 어긋나므로 단일 시퀀스로 묶는다).
+        //   반 바퀴만 나갔다 되돌아와 어지럽지 않게 정확히 euler 0 으로 끝난다.
+        let z = radians(26)
+        let rotSeq = SCNAction.sequence([
+            .rotateTo(x: 0, y: 0, z: 0, duration: 0.32),                              // 화들짝·도약 중 정자세
+            .rotateTo(x: 0, y: radians(60), z: z, duration: 0.16),                    // 공중 난리 시작
+            .rotateTo(x: 0, y: radians(120), z: -z * 0.92, duration: 0.16),
+            .rotateTo(x: 0, y: radians(180), z: z * 0.85, duration: 0.18),            // 스핀 정점(반 바퀴)
+            .rotateTo(x: 0, y: radians(120), z: -z * 0.77, duration: 0.17),
+            .rotateTo(x: 0, y: radians(60), z: z * 0.62, duration: 0.17),
+            .rotateTo(x: 0, y: 0, z: -z * 0.46, duration: 0.20),                      // 착지·스핀 복귀
+            .rotateTo(x: 0, y: 0, z: z * 0.35, duration: 0.13),                       // 재점프 흔들림
+            .rotateTo(x: 0, y: 0, z: -z * 0.23, duration: 0.13),
+            .rotateTo(x: 0, y: 0, z: z * 0.15, duration: 0.16),                       // 잔떨림 감쇠
+            .rotateTo(x: 0, y: 0, z: -z * 0.11, duration: 0.16),
+            .rotateTo(x: 0, y: 0, z: z * 0.07, duration: 0.14),
+            .rotateTo(x: 0, y: 0, z: 0, duration: 0.27)                              // identity 정지
         ])
-        return .group([scaleSeq, shudder, poke])
+        rotSeq.timingMode = .easeInEaseOut
+
+        // 수직 점프(위로만, 수평 드리프트 없음). 큰 도약 → 공중 체공 → 착지 → 작은 재점프(첫 점프의 40%) → 착지.
+        //   moveBy 합이 0 이라 원위치로 복귀한다(+hop -hop +0.4hop -0.4hop = 0).
+        let up = SCNAction.moveBy(x: 0, y: hop, z: 0, duration: 0.24); up.timingMode = .easeOut
+        let down = SCNAction.moveBy(x: 0, y: -hop, z: 0, duration: 0.20); down.timingMode = .easeIn
+        let reUp = SCNAction.moveBy(x: 0, y: hop * 0.40, z: 0, duration: 0.13); reUp.timingMode = .easeOut
+        let reDown = SCNAction.moveBy(x: 0, y: -hop * 0.40, z: 0, duration: 0.13); reDown.timingMode = .easeIn
+        let moveSeq = SCNAction.sequence([
+            .wait(duration: 0.08),   // 움츠림(지면)
+            up,                      // 도약
+            .wait(duration: 0.84),   // 공중 체공(난리)
+            down,                    // 1차 착지
+            reUp,                    // 작은 재점프
+            reDown,                  // 2차 착지
+            .wait(duration: 0.73)    // 잔떨림(지면)
+        ])
+
+        return .group([scaleSeq, rotSeq, moveSeq])
     }
 
     /// 근무 시작: 폴짝 점프(+hop) + y축 360° 스핀.

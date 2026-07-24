@@ -1136,9 +1136,9 @@ func pokeBubbleTextFormatsSingleAndMultipleNames() {
 func pokedReactionKindMatchesHitPriorityAndBoundedDuration() {
     // 즉시성: 찌름은 hit 와 동급 우선순위(3).
     #expect(ReactionKind.poked(bubbleText: "").priority == ReactionKind.hit.priority)
-    // 모션 길이에 맞춘 duration(약 1.2~1.5s).
+    // 화들짝 대소동 모션(≈2.35s)에 여유를 둔 duration. peek 창(8s) 안에 모션·말풍선이 모두 끝난다.
     let d = ReactionKind.poked(bubbleText: "").duration
-    #expect(d >= 1.2 && d <= 1.5)
+    #expect(d >= 2.2 && d <= 2.6)
 }
 
 @MainActor

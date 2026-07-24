@@ -98,12 +98,30 @@ struct CheckMenuView: View {
                         )
                     } else if store.isTokenBoardVisible {
                         // 이번 달 AI 토큰 순위 페이지(앱 사용자 전체 공개). 리그와 같은 뼈대(뒤로 + 제목 + 고정 행높이 리스트/스크롤).
+                        // 헤더 끝에 내 사용량 공개/비공개 토글(eye/eye.slash)을 얹는다 — 비공개면 남들 보드에서 내 행이 숨겨진다.
                         TokenBoardPanel(
                             entries: store.tokenBoard,
                             myUserID: store.session?.userID,
                             hasLoaded: store.tokenBoardLoaded,
                             fallbackStatus: store.syncMessage,
+                            isMyUsagePublic: store.tokenUsagePublic,
+                            onToggleMyUsagePublic: { store.setTokenUsagePublic(!store.tokenUsagePublic) },
                             onBack: { store.isTokenBoardVisible = false },
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList
+                        )
+                    } else if store.isPokePanelVisible {
+                        // 콕찌르기 페이지(앱 사용자 전체 목록). 리그/토큰 보드와 같은 뼈대. store 값을 값+클로저로만 넘겨
+                        // PokePanel 을 렌더 테스트 친화적으로 유지한다(쿨타임 잔여는 displayNow 기준 클로저로 매초 갱신).
+                        PokePanel(
+                            entries: store.pokeDirectory,
+                            isMyselfWorking: store.snapshot.isWorking,
+                            hasLoaded: store.pokeDirectoryLoaded,
+                            fallbackStatus: store.syncMessage,
+                            notice: store.pokeNotice,
+                            now: store.displayNow,
+                            cooldownRemaining: { store.pokeCooldownRemaining(for: $0, now: store.displayNow) },
+                            onPoke: { store.sendPoke(to: $0) },
+                            onBack: { store.togglePokePanel() },
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
                     } else {
@@ -491,6 +509,7 @@ private struct TeamPanel: View {
                         showsInviteCode.toggle()
                     }
                 }
+                IconButton(icon: "hand.point.right.fill", help: "콕 찌르기") { store.togglePokePanel() }
                 IconButton(icon: "chart.bar.xaxis", help: "팀별 현황") { store.toggleLeaderboard() }
             }
             // 참여코드 인라인 행은 헤더 아래에만 나타나 상단 앵커 원칙(아래로만 성장)을 지킨다.
@@ -805,6 +824,10 @@ private struct TokenBoardPanel: View {
     var hasLoaded: Bool = false
     // 아직 로드 전/실패 시 빈 목록 자리에 표시할 안내 문구(동기화 상태 문구).
     var fallbackStatus: String = ""
+    // 내 토큰 사용량 공개 여부. 헤더 눈 버튼 아이콘/툴팁과 내 행 "비공개" 미니 칩 노출을 가른다.
+    var isMyUsagePublic: Bool = true
+    // 공개/비공개 토글 액션. nil 이면 헤더에 눈 버튼을 그리지 않는다(렌더 테스트에서 토글 없는 상태 재현).
+    var onToggleMyUsagePublic: (() -> Void)? = nil
     var onBack: () -> Void = {}
     // 현재 KST 날짜 'YYYY-MM-DD'. 행이 서버의 todayDate 와 비교해 "오늘 +N"(오늘분) 표시 여부를 가른다.
     // 기본은 실시간 계산 — 렌더 테스트는 픽스처와 같은 오늘 키를 쓰도록 주입한다(결정성). 렌더 시점에 1회 평가된다.
@@ -829,6 +852,15 @@ private struct TokenBoardPanel: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
                 Spacer(minLength: 6)
+                // 내 사용량 공개/비공개 토글 — 토글 액션이 있을 때만 노출한다. 비공개면 남들 보드에서 내 행이 숨겨진다.
+                if let onToggleMyUsagePublic {
+                    IconButton(
+                        icon: isMyUsagePublic ? "eye" : "eye.slash",
+                        help: isMyUsagePublic ? "내 사용량 공개 중 — 누르면 나만 보기" : "내 사용량 비공개 중 — 누르면 공개",
+                        tint: isMyUsagePublic ? CheckTheme.secondaryText : CheckTheme.accent,
+                        action: onToggleMyUsagePublic
+                    )
+                }
             }
             PanelDivider()
             entryList
@@ -877,7 +909,9 @@ private struct TokenBoardPanel: View {
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
             } else {
                 ForEach(sortedEntries) { entry in
-                    TokenBoardRowView(entry: entry, isMe: myUserID != nil && entry.userID == myUserID, todayKey: todayKey)
+                    let isMe = myUserID != nil && entry.userID == myUserID
+                    // 내 행이면서 비공개일 때만 "비공개" 미니 칩을 붙인다 — 남들 보드엔 내 행이 안 보인다는 표시.
+                    TokenBoardRowView(entry: entry, isMe: isMe, showsPrivateChip: isMe && !isMyUsagePublic, todayKey: todayKey)
                         .frame(height: Self.rowHeight)
                 }
             }
@@ -897,6 +931,8 @@ private struct TokenBoardPanel: View {
 private struct TokenBoardRowView: View {
     let entry: TokenBoardEntry
     var isMe: Bool = false
+    // 내 행이 비공개일 때만 "나" 칩 옆에 회색 "비공개" 미니 칩을 붙인다 — 남들 보드엔 내 행이 안 보인다는 표시.
+    var showsPrivateChip: Bool = false
     // 현재 KST 날짜 'YYYY-MM-DD'. entry.todayDate 와 같을 때만 오늘 증가량을 노출한다(어제 이후 스테일이면 0).
     var todayKey: String = TokenUsageDayKey.current()
 
@@ -926,6 +962,16 @@ private struct TokenBoardRowView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(CheckTheme.accent.opacity(0.18)))
+                    .fixedSize()
+            }
+            if showsPrivateChip {
+                // 회색 "비공개" 미니 칩 — 남들 보드엔 내 행이 안 보인다는 표시(내 행에만, 비공개일 때만).
+                Text("비공개")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.white.opacity(0.10)))
                     .fixedSize()
             }
             Spacer(minLength: 6)
@@ -966,6 +1012,241 @@ private struct TokenBoardRowView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(isMe ? CheckTheme.accent.opacity(0.45) : CheckTheme.border, lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Poke directory page
+
+/// 콕찌르기 빈 목록 자리 문구 선택(순수 로직, 결정적 검증 지점). 리그/토큰 보드의 EmptyMessage 와 같은 패턴이다:
+/// 로드 성공했는데 비면 '아직 아무도 없음'(true), 로드 전/실패면 fallbackStatus(동기화 상태 문구)(false).
+enum PokeDirectoryEmptyMessage {
+    static let noOthers = "아직 다른 사용자가 없어요"
+    static func text(hasLoaded: Bool, fallbackStatus: String) -> String {
+        hasLoaded ? noOthers : fallbackStatus
+    }
+}
+
+/// 팀 카드 자리를 대체하는 콕찌르기 페이지(앱 로그인 사용자 전체). 리그/토큰 보드와 같은 뼈대다:
+/// 뒤로 버튼 + 제목 + (조건부 안내줄) + 고정 행높이 리스트(maxVisibleRows 초과 시 스크롤). 행은 아바타 + 이름 +
+/// 상태 칩(근무중/자리비움) + 우측 찌르기 버튼(쿨타임/비근무/가능 3상태). store 값을 값+클로저로만 받아
+/// 렌더 테스트 친화적으로 유지한다 — 쿨타임 잔여는 displayNow 기준 클로저로 매초 갱신된다.
+private struct PokePanel: View {
+    // 근무중 먼저·이름순으로 정렬된 사용자 목록(store 에서 이미 정렬됨). 뷰에서도 같은 규약으로 다시 정렬한다.
+    let entries: [PokeDirectoryEntry]
+    // 내가 근무중인지. 비근무면 어떤 대상도 찌를 수 없다(서버 강제) — 안내줄 + 버튼 비활성으로 반영한다.
+    let isMyselfWorking: Bool
+    // 디렉토리 첫 성공 로드 여부. 빈 목록 문구를 '아직 없음'(true) vs 로드 전/실패 fallbackStatus(false)로 가른다.
+    let hasLoaded: Bool
+    // 아직 로드 전/실패 시 빈 목록 자리에 표시할 안내 문구(동기화 상태 문구).
+    let fallbackStatus: String
+    // 상단 1줄 안내(찌르기 실패 사유 등). 있으면 우선 노출한다(주황 계열).
+    let notice: String?
+    // 렌더 기준 시각(결정성). 카운트다운은 cooldownRemaining 클로저가 displayNow 로 계산하므로 참조용이다.
+    let now: Date
+    // 대상별 쿨타임 잔여 초(0이면 찌르기 가능). displayNow 기준으로 매초 줄어든다.
+    let cooldownRemaining: (String) -> Int
+    let onPoke: (String) -> Void
+    let onBack: () -> Void
+    // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
+    var clipsOverflowInsteadOfScroll: Bool = false
+
+    // 행 고정 높이·간격. 아바타(26pt) + 이름/상태 칩 한 줄이라 팀원 행보다 낮게 둔다.
+    private static let rowHeight: CGFloat = 48
+    private static let rowSpacing: CGFloat = 8
+    // 스크롤 없이 그대로 보여 주는 최대 인원. 행이 낮아(48pt) 7행까지 창 높이 상한(≤700pt) 안에 든다
+    // (리스트 높이 7*48 + 6*8 = 384pt).
+    static let maxVisibleRows = 7
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
+                Text("콕 찌르기")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+            }
+            PanelDivider()
+            // 안내줄: notice 우선(주황), 없고 내가 비근무면 안내(회색), 근무중+notice nil 이면 생략(상단 앵커 유지).
+            if let noticeLine {
+                Text(noticeLine.text)
+                    .font(.caption2)
+                    .foregroundStyle(noticeLine.isWarning ? CheckTheme.pending : CheckTheme.secondaryText)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            entryList
+        }
+        .padding(12)
+        .panelStyle()
+    }
+
+    // 안내줄 내용/톤. notice 가 있으면 그것을(주황), 없고 비근무면 근무 안내(회색), 근무중+notice nil 이면 nil(생략).
+    private var noticeLine: (text: String, isWarning: Bool)? {
+        if let notice, !notice.isEmpty {
+            return (notice, true)
+        }
+        if !isMyselfWorking {
+            return ("근무 중일 때만 콕 찌를 수 있어요", false)
+        }
+        return nil
+    }
+
+    // 서버 정렬을 신뢰하지 않고 뷰에서도 근무중 먼저·이름순으로 다시 정렬한다.
+    private var sortedEntries: [PokeDirectoryEntry] {
+        entries.sortedForPokeDisplay()
+    }
+
+    private var rowCount: Int {
+        sortedEntries.isEmpty ? 1 : sortedEntries.count
+    }
+
+    // 리스트 높이 = 인원 비례. maxVisibleRows까지는 그대로 자라고(스크롤 없음), 초과하면 그 높이로 고정 후 스크롤.
+    @ViewBuilder
+    private var entryList: some View {
+        let capHeight = Self.listContentHeight(rowCount: Self.maxVisibleRows)
+        if rowCount <= Self.maxVisibleRows {
+            rows.frame(maxWidth: .infinity, alignment: .top)
+        } else if clipsOverflowInsteadOfScroll {
+            // 스냅샷 전용: 보이는 첫 maxVisibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
+            rows.frame(maxWidth: .infinity, alignment: .top)
+                .frame(height: capHeight, alignment: .top)
+                .clipped()
+        } else {
+            ScrollView(.vertical, showsIndicators: true) {
+                rows.frame(maxWidth: .infinity)
+            }
+            .frame(height: capHeight)
+        }
+    }
+
+    @ViewBuilder
+    private var rows: some View {
+        VStack(spacing: Self.rowSpacing) {
+            if sortedEntries.isEmpty {
+                // 로드 성공했는데 비면 '아직 아무도 없음', 로드 전/실패면 fallbackStatus(동기화 상태 문구).
+                Text(PokeDirectoryEmptyMessage.text(hasLoaded: hasLoaded, fallbackStatus: fallbackStatus))
+                    .font(.caption)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
+            } else {
+                ForEach(sortedEntries) { entry in
+                    PokeDirectoryRowView(
+                        entry: entry,
+                        remainingCooldown: cooldownRemaining(entry.userID),
+                        canPoke: isMyselfWorking,
+                        onPoke: { onPoke(entry.userID) }
+                    )
+                    .frame(height: Self.rowHeight)
+                }
+            }
+        }
+    }
+
+    static func listContentHeight(rowCount: Int) -> CGFloat {
+        guard rowCount > 0 else { return 0 }
+        return CGFloat(rowCount) * rowHeight + CGFloat(rowCount - 1) * rowSpacing
+    }
+}
+
+/// 콕찌르기 한 행 = 좌측 세로 해시색 바(유저 컬러 포인트) + 아바타 + 이름 + 상태 칩(근무중/자리비움) + 우측 찌르기 버튼.
+/// 상태 칩은 근무중이면 초록 점+"근무중", 아니면 회색 "자리비움". 찌르기 버튼은 3상태: 쿨타임 중(잔여 초 카운트다운·비활성),
+/// 내가 비근무(흐린 "콕!"·비활성), 가능(accent "콕!"). 대상이 자리비움이어도 찌르기는 허용된다(서버에 쌓였다가 복귀 시 전달).
+private struct PokeDirectoryRowView: View {
+    let entry: PokeDirectoryEntry
+    // 이 대상 쿨타임 잔여 초(0이면 쿨타임 아님). 패널이 displayNow 기준으로 계산해 넘긴다.
+    let remainingCooldown: Int
+    // 내가 근무중이라 찌를 수 있는지. false면 버튼이 흐려지고 비활성된다.
+    let canPoke: Bool
+    let onPoke: () -> Void
+
+    // 좌측 세로 바 색 — 아바타 이니셜과 동일한 이름 해시색(유저별 컬러 포인트).
+    private var accentColor: Color { CheckTheme.avatarColor(for: entry.name) }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Capsule()
+                .fill(accentColor)
+                .frame(width: 3)
+                .frame(maxHeight: .infinity)
+                .padding(.vertical, 3)
+            CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: 26)
+            Text(entry.name)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(CheckTheme.primaryText)
+                .lineLimit(1)
+            statusChip
+            Spacer(minLength: 6)
+            pokeButton
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 12)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(CheckTheme.fieldFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(CheckTheme.border, lineWidth: 1)
+        )
+    }
+
+    // 상태 칩: 근무중이면 초록 점+"근무중", 아니면 회색 "자리비움"(caption2).
+    @ViewBuilder
+    private var statusChip: some View {
+        if entry.isWorking {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(CheckTheme.working)
+                    .frame(width: 6, height: 6)
+                Text("근무중")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(CheckTheme.working)
+            }
+            .fixedSize()
+        } else {
+            Text("자리비움")
+                .font(.caption2)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .fixedSize()
+        }
+    }
+
+    // 찌르기 버튼 3상태. 쿨타임 중이면 잔여 초 카운트다운(비활성), 내가 비근무면 흐린 "콕!"(비활성), 가능이면 accent "콕!".
+    @ViewBuilder
+    private var pokeButton: some View {
+        if remainingCooldown > 0 {
+            // 쿨타임 중 — 잔여 초 카운트다운(비활성). 같은 대상 60초 쿨타임을 서버가 강제하고 여기선 미러링만 한다.
+            pokeCapsuleLabel(label: "\(remainingCooldown)초", foreground: CheckTheme.secondaryText, fill: Color.white.opacity(0.08))
+                .help("잠시 후 다시 찌를 수 있어요")
+        } else if !canPoke {
+            // 내가 비근무 — 찌를 수 없다(서버 강제). 흐린 "콕!"으로 비활성 표시.
+            pokeCapsuleLabel(label: "콕!", foreground: CheckTheme.secondaryText.opacity(0.6), fill: Color.white.opacity(0.06))
+                .help("내가 근무 중일 때만 콕 찌를 수 있어요")
+        } else {
+            // 가능 — accent 배경. 대상이 자리비움이어도 허용(서버에 쌓였다가 상대가 돌아오면 전달됨).
+            Button(action: onPoke) {
+                pokeCapsuleLabel(label: "콕!", foreground: .white, fill: CheckTheme.accent)
+            }
+            .buttonStyle(.plain)
+            .help(entry.isWorking ? "콕 찌르기" : "콕 찌르기 — 지금 자리비움이라 돌아오면 전달돼요")
+        }
+    }
+
+    // 캡슐 라벨 공통 스타일(버튼/비활성 공유). monospacedDigit 로 쿨타임 카운트다운의 자리 흔들림을 막는다.
+    private func pokeCapsuleLabel(label: String, foreground: Color, fill: Color) -> some View {
+        Text(label)
+            .font(.caption2.weight(.bold))
+            .monospacedDigit()
+            .foregroundStyle(foreground)
+            .frame(minWidth: 34)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(fill))
     }
 }
 

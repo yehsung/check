@@ -24,12 +24,14 @@ enum ReactionKind: Equatable {
     case drowsy
     /// 자는 중 클릭으로 깨어남 — 화들짝(스냅 복원 + 살짝 튀어오름) + "깜빡 졸았다!" 말풍선.
     case wake
+    /// 콕찌르기 수신 — 옆구리를 콕 찔린 듯 잘게 움찔 + 말풍선. 문구는 컨트롤러가 완성해 넘긴다(엔진은 그대로 표시).
+    case poked(bubbleText: String)
 
-    /// 우선순위(높을수록 우선). hit/출퇴근/화들짝 > 마일스톤 > 인사 > 졸기.
+    /// 우선순위(높을수록 우선). hit/출퇴근/화들짝/찌름 > 마일스톤 > 인사 > 졸기.
     /// (wake/drowsy 는 sleeping 상태 분기에서 직접 처리되어 우선순위 비교를 거의 타지 않는다.)
     var priority: Int {
         switch self {
-        case .hit, .commuteStart, .commuteEnd, .wake:
+        case .hit, .commuteStart, .commuteEnd, .wake, .poked:
             return 3
         case .milestone:
             return 2
@@ -57,6 +59,9 @@ enum ReactionKind: Equatable {
         case .wake:
             // 화들짝 모션(스냅 0.15 + 튀어오름 0.16)에 여유를 둔 길이. 이후 idle 복귀.
             return 0.4
+        case .poked:
+            // 잘게 떠는 움찔 모션(약 1.15s)에 여유를 둔 길이. 이후 idle 복귀(말풍선은 자체 6s 타이머).
+            return 1.3
         case .drowsy:
             // 지속 상태(sleeping)라 만료 판정에 쓰지 않는다. 참고용으로 진입 모션 길이를 둔다.
             return 2.0
@@ -232,6 +237,8 @@ final class ReactionEngine {
     static let commuteEndBubbleSeconds: Double = 2
     static let greetingBubbleSeconds: Double = 3
     static let wakeBubbleSeconds: Double = 2.5
+    /// 콕찌르기 말풍선 지속(초). 움찔 모션(≈1.15s)보다 충분히 길게 둬 누가 찔렀는지 읽을 시간을 준다.
+    static let pokedBubbleSeconds: Double = 6
 
     /// 말풍선 텍스트(SwiftUI 관찰용). nil 이면 숨김. 각 리액션이 자기 텍스트/지속시간으로 교체한다.
     /// (팀원 인사·시작 화이팅·때리기 아얏·종료 수고·깨우기 등 모두 이 한 채널을 자체 타이머로 공유.)
@@ -404,6 +411,8 @@ final class ReactionEngine {
             return ReactionActions.greetingNod()
         case .wake:
             return ReactionActions.wake(tilt: modelExtent * 0.18)
+        case .poked:
+            return ReactionActions.poked(extent: modelExtent)
         case .drowsy:
             return nil
         }
@@ -471,8 +480,10 @@ final class ReactionEngine {
                 // 자는 중 클릭 → 화들짝 + "깜빡 졸았다!" 로 깨운다(hit 쿨다운과 무관하게 즉시).
                 beginWake(now: now)
                 return true
-            case .commuteStart, .commuteEnd, .milestone:
-                // 잠을 인터럽트하고 정상 재생으로 넘어간다(아래 일반 경로).
+            case .commuteStart, .commuteEnd, .milestone, .poked:
+                // 잠을 인터럽트하고 정상 재생으로 넘어간다(아래 일반 경로). .poked 는 잠을 깨운 뒤 이어서
+                // 움찔+말풍선이 보이도록 endSleep 후 통상 경로로 흘린다(runReaction 이 resetPose 로 숙인
+                // 포즈를 identity 로 스냅해 잔상 없이 움찔로 이어진다 — beginWake 의 화들짝과 구분).
                 endSleep()
             }
         }
@@ -489,7 +500,12 @@ final class ReactionEngine {
         if let active = activeKind, kind.priority <= active.priority {
             // A6: 근무종료 인사(commuteEnd) 재생 중 즉시 재시작하면 동순위(3)라 등장 폴짝이 거부되고
             //     "수고했어!" 말풍선이 잔류한다 — 이 방향만 우선순위 검사를 우회해 인터럽트 후 수용한다.
-            guard active == .commuteEnd, kind == .commuteStart else {
+            let commuteRestart = (active == .commuteEnd && kind == .commuteStart)
+            // 찌름(poked)은 곁가지 반응이라 어떤 동순위 요청에도 자리를 내준다: 재-찌름은 새 움찔+문구로
+            // 갱신하고(배치마다 리액션 1회), 정상 리액션(출근/인사/축하 등)은 진행 중 찌름을 인터럽트한다.
+            var activeIsPoked = false
+            if case .poked = active { activeIsPoked = true }
+            guard commuteRestart || activeIsPoked else {
                 return false
             }
         }
@@ -569,6 +585,11 @@ final class ReactionEngine {
         case .greeting(let name):
             showBubble("\(name)님 출근!", seconds: Self.greetingBubbleSeconds)
             runReaction(ReactionActions.greetingNod())
+        case .poked(let bubbleText):
+            // 옆구리 콕 움찔 + 컨트롤러가 완성해 넘긴 문구. 노드 미연결(attach 전 수신)이면 runReaction 은
+            // 자연 no-op 이고 showBubble 만 떠(peek 폴백 요구 충족).
+            runReaction(ReactionActions.poked(extent: modelExtent))
+            showBubble(bubbleText, seconds: Self.pokedBubbleSeconds)
         case .drowsy, .wake:
             // drowsy/wake 는 request 에서 beginSleep/beginWake 로 직접 처리되어 이 경로로 오지 않는다.
             break
@@ -810,6 +831,42 @@ enum ReactionActions {
             .rotateTo(x: 0, y: 0, z: 0, duration: 0.10)
         ])
         return .group([scaleSeq, shudder])
+    }
+
+    /// 콕 찔려 움찔(간지럼): 옆구리를 콕 찔린 듯 순간 움츠림(hit 보다 얕은 squash) + 좌우로 잘게 부르르 떨다
+    /// 원복. hit(아파하기 — 큰 찌부 + 굵은 부르르)와 달리 얕고 잦게 떠는 느낌으로 총 ≈1.15s, identity 로 끝난다.
+    static func poked(extent: CGFloat) -> SCNAction {
+        let identity = SCNVector3(1, 1, 1)
+        // 얕은 움츠림: x·z 살짝 팽창 + y 수축(hit 의 0.62 보다 훨씬 얕은 0.90).
+        let squashed = SCNVector3(1.12, 0.90, 1.12)
+        let over = SCNVector3(0.96, 1.05, 0.96)
+        let squashPose = SCNAction.scaleKeyframe(from: identity, to: squashed, duration: 0.06, timing: .easeOut)
+        let rebound = SCNAction.scaleKeyframe(from: squashed, to: over, duration: 0.10, timing: .easeInEaseOut)
+        let settle = SCNAction.scaleKeyframe(from: over, to: identity, duration: 0.12, timing: .easeInEaseOut)
+        let scaleSeq = SCNAction.sequence([squashPose, rebound, settle])
+
+        // 좌우로 잘게 부르르(간지럼): z축 ±7° 를 감쇠하며 여러 번 떨고 0 복귀. hit(3회, 큰 진폭)보다 잦고 작다.
+        let a = radians(7)
+        let shudder = SCNAction.sequence([
+            .rotateTo(x: 0, y: 0, z: a, duration: 0.08),
+            .rotateTo(x: 0, y: 0, z: -a, duration: 0.12),
+            .rotateTo(x: 0, y: 0, z: a * 0.8, duration: 0.12),
+            .rotateTo(x: 0, y: 0, z: -a * 0.7, duration: 0.13),
+            .rotateTo(x: 0, y: 0, z: a * 0.55, duration: 0.13),
+            .rotateTo(x: 0, y: 0, z: -a * 0.4, duration: 0.14),
+            .rotateTo(x: 0, y: 0, z: a * 0.25, duration: 0.14),
+            .rotateTo(x: 0, y: 0, z: -a * 0.12, duration: 0.14),
+            .rotateTo(x: 0, y: 0, z: 0, duration: 0.15)
+        ])
+
+        // 찔린 쪽으로 살짝 밀렸다 돌아오는 미세 이동(모델 크기 비례). 합이 0 이라 identity 위치로 복귀한다.
+        let nudge = extent * 0.04
+        let poke = SCNAction.sequence([
+            .moveBy(x: nudge, y: 0, z: 0, duration: 0.06),
+            .moveBy(x: -nudge * 1.6, y: 0, z: 0, duration: 0.12),
+            .moveBy(x: nudge * 0.6, y: 0, z: 0, duration: 0.12)
+        ])
+        return .group([scaleSeq, shudder, poke])
     }
 
     /// 근무 시작: 폴짝 점프(+hop) + y축 360° 스핀.

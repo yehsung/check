@@ -29,6 +29,10 @@ final class CheckOverlayController {
     static let updateBubbleText = "새 업데이트가 있어요!"
     static let updateBubbleSeconds: Double = 6
 
+    /// 숨김 상태(비근무·오버레이 꺼짐)에서 찔림을 받으면 잠깐 나타났다 사라지는 peek 노출 시간(초).
+    /// 움찔 모션(≈1.15s) + 말풍선(6s) 을 다 보여줄 만큼 두고 여유를 더한 값.
+    static let pokePeekSeconds: Double = 8
+
     let panel: NSPanel
     /// 리액션 조율기. 표시 중일 때만 이벤트를 받아 캐릭터 wrapper 에 SCNAction 을 건다.
     let engine: ReactionEngine
@@ -66,6 +70,8 @@ final class CheckOverlayController {
     private var farewellTask: Task<Void, Never>?
     // 밤샘 졸기 스케줄러(패널 표시 중에만 90±30초 간격으로 시간창을 확인).
     private var drowsyTask: Task<Void, Never>?
+    // 숨김 상태에서 찔림을 peek 로 보여주는 동안만 유효한 자동 퇴장 태스크. updateWorking 양쪽에서 취소한다.
+    private var pokePeekTask: Task<Void, Never>?
 
     init(
         store: WorkTimerStore,
@@ -112,6 +118,11 @@ final class CheckOverlayController {
             self.engine.request(kind)
         }
 
+        // 수신 찔림 싱크. onReactionTrigger 와 달리 shouldBeVisible 게이트를 걸지 않는다 — 숨김 상태에서도
+        // peek(잠깐 나타나 움찔+말풍선 후 사라짐)로 전달하는 것이 핵심 요구다. 폴링/신선도 필터는 스토어가
+        // 끝냈으므로 여기선 받은 배치를 그대로 표시만 한다.
+        store.onPokesReceived = { [weak self] pokes in self?.handleReceivedPokes(pokes) }
+
         // 넛지 스케줄러: 자격은 store 로 구성(로그인·팀·비근무·오버레이 켜짐), 발동은 자동 근무 시작(안내만)으로.
         nudgeScheduler = NudgeScheduler(
             isEligible: { [weak self] in self?.isNudgeEligible ?? false },
@@ -141,6 +152,10 @@ final class CheckOverlayController {
         let wasVisible = shouldBeVisible
         shouldBeVisible = visible
         defer { syncNudgeScheduler() }
+        // 진행 중이던 찔림 peek 는 어느 방향 전이에도 승격/무효화된다: (true) 정상 표시가 소유권을 가져가고,
+        // (false) 정상 숨김 경로가 퇴장을 처리하므로 peek 의 지연 orderOut 이 뒤늦게 끼어들지 않게 취소한다.
+        pokePeekTask?.cancel()
+        pokePeekTask = nil
         if visible {
             farewellTask?.cancel()
             farewellTask = nil
@@ -358,6 +373,56 @@ final class CheckOverlayController {
         updateCheck.markBubbleShown()
         engine.showBubble(Self.updateBubbleText, seconds: Self.updateBubbleSeconds)
         return true
+    }
+
+    // MARK: - 콕찌르기 수신(움찔 + 말풍선, 숨김 시 peek)
+
+    /// 수신 찔림 배치를 하나의 말풍선 문구로 조합한다(순수 함수 — 테스트 가능). 1명이면 "…님이 콕 찔렀어요!",
+    /// 2명 이상이면 "<첫이름>님 외 N명이 콕 찔렀어요!"(중복 이름은 유지, 첫 번째는 배치 순서 첫 이름).
+    nonisolated static func pokeBubbleText(names: [String]) -> String {
+        guard let first = names.first else { return "" }
+        if names.count == 1 {
+            return "\(first)님이 콕 찔렀어요!"
+        }
+        return "\(first)님 외 \(names.count - 1)명이 콕 찔렀어요!"
+    }
+
+    /// 스토어가 신선도 필터를 끝내 전달한 수신 찔림 배치를 표시한다(배치당 움찔 1회 + 말풍선 1개).
+    /// 표시 중이면 즉시 움찔, 숨김이면 peek(잠깐 나타났다 사라짐).
+    func handleReceivedPokes(_ pokes: [ReceivedPoke]) {
+        guard !pokes.isEmpty else { return } // 빈 배치 무시.
+        let text = Self.pokeBubbleText(names: pokes.map { $0.fromName })
+        if shouldBeVisible && panel.isVisible {
+            // 정상 표시 중: 움찔+말풍선만(정상 경로가 창 수명을 소유). request 는 진행 중 찌름을 인터럽트해 갱신한다.
+            engine.request(.poked(bubbleText: text))
+        } else {
+            beginPokePeek(text: text)
+        }
+    }
+
+    /// 숨김 상태(비근무이거나 오버레이 꺼짐)에서 찔림을 잠깐 보여준다: 렌더를 켜고 우상단에 띄워 움찔+말풍선을
+    /// 재생한 뒤, pokePeekSeconds 후 그 사이 정상 표시로 승격되지 않았으면 말풍선을 정리하고 다시 숨긴다.
+    ///
+    /// updateWorking 경로를 타지 않으므로 mouseMove 모니터/졸기·넛지 스케줄러가 켜지지 않는다 — peek 는 마우스를
+    /// 받지 않는 순수 시각 토스트다. peek 도중 또 배치가 오면 기존 타이머를 리셋하고 새 움찔+문구로 갱신한다.
+    /// engine 미-attach(12시간 미접속 후 실행 직후 등) 상태여도 request(.poked)→perform 이 말풍선은 띄우고
+    /// 움찔(runReaction)만 자연 no-op 이 된다.
+    private func beginPokePeek(text: String) {
+        pokePeekTask?.cancel()
+        engine.renderActive = true
+        reposition()
+        panel.orderFrontRegardless()
+        engine.request(.poked(bubbleText: text))
+        pokePeekTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.pokePeekSeconds))
+            guard let self, !Task.isCancelled else { return }
+            self.pokePeekTask = nil
+            // 그 사이 근무 시작 등으로 정상 표시가 됐으면 정상 경로가 창을 소유하므로 아무것도 하지 않는다.
+            guard !self.shouldBeVisible else { return }
+            self.engine.greetingText = nil
+            self.engine.renderActive = false
+            self.panel.orderOut(nil)
+        }
     }
 
     /// 저장된 우상단 오프셋이 있으면 그 위치(클램프 보정)로, 없으면 메인 스크린 visibleFrame 우상단

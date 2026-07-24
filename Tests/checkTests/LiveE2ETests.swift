@@ -1184,6 +1184,138 @@ struct LiveE2ETests {
         }
     }
 
+    // s09f. 콕찌르기 왕복: owner 가 근무중일 때 joiner 를 찌르면 ok, 즉시 재찌르기는 서버 쿨타임(cooldown+retry_after).
+    // joiner 가 take_pokes 로 owner 찔림을 원자 수신+소비하고(표시명 포함), 재호출 시 빈 배열(소비 완료).
+    // owner 가 근무종료하면 not_working 게이트가 걸린다. 마이그레이션(20260724020000_pokes) push 후 오케스트레이터가 실행한다.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s09f_pokeRoundTrip() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+        let teamID = try #require(LiveE2EState.e2eTeamID)
+
+        // A(owner) 로그인.
+        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { storeA.tickerTask?.cancel(); storeA.refreshTask?.cancel() }
+        storeA.email = Emails.owner
+        storeA.password = Emails.password
+        await storeA.signIn()?.value
+        let sessionA = try #require(storeA.session)
+        #expect(sessionA.userID == owner.userID)
+
+        // B(joiner) 가 같은 팀 member 로 존재하도록 보장(있으면 로그인, 없으면 코드로 합류 — 자가치유).
+        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { storeB.tickerTask?.cancel(); storeB.refreshTask?.cancel() }
+        if try await ctx.admin.findUserID(email: Emails.joiner) != nil {
+            storeB.email = Emails.joiner
+            storeB.password = Emails.password
+            await storeB.signIn()?.value
+        }
+        if !storeB.isSignedIn || storeB.currentTeamID != teamID {
+            await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: "E2E합류자", code: owner.code)
+        }
+        let sessionB = try #require(storeB.session)
+        #expect(storeB.currentTeamID == teamID)
+
+        // owner 를 근무중으로(열린 세션) — 찌르기 게이트 통과 조건.
+        if storeA.startedAt == nil {
+            storeA.start()
+            await storeA.syncTask?.value
+        }
+        #expect(storeA.startedAt != nil)
+
+        // 남은 미소비 찔림이 다음 검증을 흔들지 않게 B 의 수신함을 먼저 비운다(멱등).
+        _ = try await storeB.service.takePokes(accessToken: sessionB.accessToken)
+
+        // 1) owner → joiner 찌르기 = ok.
+        let first = try await storeA.service.sendPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
+        #expect(first.status == "ok")
+        obs("콕찌르기: owner→joiner 첫 시도 status=\(first.status)")
+
+        // 2) 즉시 재찌르기 = 서버 쿨타임(cooldown + retry_after 1...60).
+        let second = try await storeA.service.sendPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
+        #expect(second.status == "cooldown")
+        let retry = try #require(second.retryAfterSeconds)
+        #expect(retry >= 1 && retry <= 60)
+        obs("콕찌르기: 즉시 재시도 status=\(second.status), retry_after=\(retry)")
+
+        // 3) joiner 가 take_pokes 로 owner 찔림을 원자 수신+소비한다(보낸이 표시명 포함).
+        let taken = try await storeB.service.takePokes(accessToken: sessionB.accessToken)
+        #expect(taken.contains { $0.fromUser == sessionA.userID })
+        let ownerPoke = taken.first { $0.fromUser == sessionA.userID }
+        #expect(ownerPoke?.fromDisplayName.isEmpty == false)
+        #expect(ownerPoke?.fromDisplayName.contains("@") == false)  // 이메일 비노출.
+        obs("콕찌르기 수신: joiner 가 받은 행 수=\(taken.count)")
+
+        // 4) 재호출 시 빈 배열(이미 소비됨).
+        let takenAgain = try await storeB.service.takePokes(accessToken: sessionB.accessToken)
+        #expect(takenAgain.contains { $0.fromUser == sessionA.userID } == false)
+
+        // 5) owner 근무종료 후 찌르기 = not_working 게이트(세션 정리 겸).
+        storeA.stop()
+        await storeA.syncTask?.value
+        let closedReady = await waitUntil {
+            (try? await ctx.admin.sessionRows(userID: owner.userID, openOnly: true))?.isEmpty == true
+        }
+        #expect(closedReady)
+        let afterStop = try await storeA.service.sendPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
+        #expect(afterStop.status == "not_working")
+        obs("콕찌르기: 근무종료 후 status=\(afterStop.status)")
+    }
+
+    // s09g. 토큰 사용량 공개/비공개: joiner 가 비공개로 두면 owner 보드에서 사라지되(타인 숨김) 자기 보드에는 남고,
+    // 다시 공개로 되돌리면 owner 보드에 재등장한다. 마이그레이션(20260724010000_token_usage_privacy) push 후 실행한다.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s09g_tokenPrivacyBoard() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+        let teamID = try #require(LiveE2EState.e2eTeamID)
+        let month = TokenUsageMonthKey.current()
+
+        // A(owner) 로그인.
+        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { storeA.tickerTask?.cancel(); storeA.refreshTask?.cancel() }
+        storeA.email = Emails.owner
+        storeA.password = Emails.password
+        await storeA.signIn()?.value
+        let sessionA = try #require(storeA.session)
+        #expect(sessionA.userID == owner.userID)
+
+        // B(joiner) 가 같은 팀 member 로 존재하도록 보장.
+        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { storeB.tickerTask?.cancel(); storeB.refreshTask?.cancel() }
+        if try await ctx.admin.findUserID(email: Emails.joiner) != nil {
+            storeB.email = Emails.joiner
+            storeB.password = Emails.password
+            await storeB.signIn()?.value
+        }
+        if !storeB.isSignedIn || storeB.currentTeamID != teamID {
+            await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: "E2E합류자", code: owner.code)
+        }
+        let sessionB = try #require(storeB.session)
+
+        // joiner 가 이번 달 사용량을 올려 보드에 뜰 조건을 만든다.
+        let usageB = TokenUsageMonthly(month: month, claudeInput: 7_777, codexOutput: 8_888)
+        try await storeB.service.upsertTokenUsage(accessToken: sessionB.accessToken, userID: sessionB.userID, usage: usageB)
+
+        // 기본 공개 상태를 보장(이전 실행 잔류 대비) — 시작점을 true 로 맞춘다.
+        try await storeB.service.updateTokenUsagePublic(accessToken: sessionB.accessToken, userID: sessionB.userID, isPublic: true)
+        let boardPublic = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
+        #expect(boardPublic.contains { $0.userId == sessionB.userID })  // 공개면 owner 보드에 보인다.
+
+        // 비공개로 전환 → owner 보드에서 사라진다(타인 숨김). joiner 자기 보드에는 남는다(auth.uid() 유지).
+        try await storeB.service.updateTokenUsagePublic(accessToken: sessionB.accessToken, userID: sessionB.userID, isPublic: false)
+        let boardHidden = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
+        #expect(boardHidden.contains { $0.userId == sessionB.userID } == false)  // owner 에겐 숨김.
+        let selfBoard = try await storeB.service.fetchTokenBoard(accessToken: sessionB.accessToken, month: month)
+        #expect(selfBoard.contains { $0.userId == sessionB.userID })  // 본인에겐 보인다.
+        obs("토큰 비공개: owner 보드 숨김=\(boardHidden.contains { $0.userId == sessionB.userID } == false), 본인 보드 유지=\(selfBoard.contains { $0.userId == sessionB.userID })")
+
+        // 다시 공개로 되돌리면 owner 보드에 재등장.
+        try await storeB.service.updateTokenUsagePublic(accessToken: sessionB.accessToken, userID: sessionB.userID, isPublic: true)
+        let boardRestored = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
+        #expect(boardRestored.contains { $0.userId == sessionB.userID })  // 공개 복원 → 다시 보인다.
+    }
+
     // 10. 정리 → E2E 계정 + E2E 팀 삭제 후 잔존 0 확인. E2E 접두사 밖(실사용) 팀 수는 변하지 않아야 한다.
     @Test(.enabled(if: LiveE2EEnv.enabled))
     func s10_cleanup() async throws {

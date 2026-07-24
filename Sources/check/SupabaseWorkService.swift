@@ -505,6 +505,75 @@ actor SupabaseWorkService {
         return try decoder.decode([TokenBoardRow].self, from: data)
     }
 
+    // MARK: - 콕찌르기 / 토큰 사용량 공개 설정
+
+    /// 대상에게 콕 찌르기. poke_user(p_to) RPC 를 로그인 토큰으로 호출한다. 근무중 게이트·60초 쿨타임은 서버가 강제한다.
+    /// 반환은 jsonb 단일 객체(배열 아님)라 PokeSendResponse 로 직접 디코드한다({status, retry_after_seconds?}).
+    func sendPoke(accessToken: String, to userID: String) async throws -> PokeSendResponse {
+        let data = try await send(
+            path: "/rest/v1/rpc/poke_user",
+            method: "POST",
+            body: PokeSendRequest(pTo: userID),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode(PokeSendResponse.self, from: data)
+    }
+
+    /// 내게 온 미소비 찔림을 원자적으로 수신+소비한다. take_pokes() RPC 를 로그인 토큰으로 호출한다(인자 없음 → EmptyBody).
+    /// 반환 행은 보낸이 표시명/아바타 + 찔린 시각 epoch 초를 담는다(클라가 Date 로 복원해 신선도 필터).
+    func takePokes(accessToken: String) async throws -> [TakenPokeRow] {
+        let data = try await send(
+            path: "/rest/v1/rpc/take_pokes",
+            method: "POST",
+            body: EmptyBody(),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode([TakenPokeRow].self, from: data)
+    }
+
+    /// 콕찌르기 대상 디렉토리(앱 사용자 전체, 본인 제외 + 근무중 여부). app_user_directory() RPC 를 로그인 토큰으로 호출한다.
+    func fetchPokeDirectory(accessToken: String) async throws -> [PokeDirectoryRow] {
+        let data = try await send(
+            path: "/rest/v1/rpc/app_user_directory",
+            method: "POST",
+            body: EmptyBody(),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode([PokeDirectoryRow].self, from: data)
+    }
+
+    /// 내 토큰 사용량 공개 여부 조회. profiles 자기 행의 token_usage_public 을 GET 한다. 행/컬럼 누락 시 기본 공개(true) 폴백.
+    func fetchTokenUsagePublic(accessToken: String, userID: String) async throws -> Bool {
+        let data = try await send(
+            path: "/rest/v1/profiles",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "id", value: "eq.\(userID)"),
+                URLQueryItem(name: "select", value: "token_usage_public")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        let rows = try decoder.decode([ProfilePrivacyRow].self, from: data)
+        return rows.first?.tokenUsagePublic ?? true
+    }
+
+    /// 내 토큰 사용량 공개 여부 갱신. profiles 자기 행을 PATCH 한다(RLS 로 본인 행만 허용). 반환 없음(return=minimal).
+    func updateTokenUsagePublic(accessToken: String, userID: String, isPublic: Bool) async throws {
+        try await sendNoBody(
+            path: "/rest/v1/profiles",
+            method: "PATCH",
+            queryItems: [URLQueryItem(name: "id", value: "eq.\(userID)")],
+            body: ProfilePrivacyUpdateRequest(tokenUsagePublic: isPublic),
+            accessToken: accessToken,
+            prefer: "return=minimal"
+        )
+    }
+
     private func upsertStatus(accessToken: String, teamID: String, userID: String, status: String, activeSessionID: String?) async throws {
         try await sendNoBody(
             path: "/rest/v1/work_statuses",

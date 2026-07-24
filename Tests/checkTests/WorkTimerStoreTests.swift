@@ -2715,3 +2715,247 @@ func signOutClearsTokenBoardState() {
     #expect(store.lastUploadedUsage == nil)
     #expect(store.lastTokenUploadAt == .distantPast)
 }
+
+// MARK: - 콕찌르기 / 토큰 사용량 공개 설정 (스토어 계층)
+
+@MainActor
+@Test
+func togglePokePanelIsMutuallyExclusiveWithLeaderboardAndTokenBoard() {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://poke-toggle-test")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    // 리그가 열린 상태에서 콕찌르기를 열면 리그·토큰 보드가 닫힌다(3자 상호 배타).
+    store.isLeaderboardVisible = true
+    store.isTokenBoardVisible = true
+    store.togglePokePanel()
+    #expect(store.isPokePanelVisible)
+    #expect(!store.isLeaderboardVisible)
+    #expect(!store.isTokenBoardVisible)
+
+    // 반대로 리그를 열면 콕찌르기가 닫힌다.
+    store.toggleLeaderboard()
+    #expect(store.isLeaderboardVisible)
+    #expect(!store.isPokePanelVisible)
+
+    // 토큰 보드를 열어도 콕찌르기는 닫힌 상태 유지.
+    store.togglePokePanel()   // open (리그 닫힘)
+    #expect(store.isPokePanelVisible)
+    store.toggleTokenBoard()
+    #expect(store.isTokenBoardVisible)
+    #expect(!store.isPokePanelVisible)
+
+    // 다시 토글하면 닫히고 안내가 비워진다.
+    store.togglePokePanel()   // open
+    store.pokeNotice = "무언가"
+    store.togglePokePanel()   // close
+    #expect(!store.isPokePanelVisible)
+    #expect(store.pokeNotice == nil)
+}
+
+@MainActor
+@Test
+func sendPokeGatesWhenNotWorkingAndFiresNoRequest() {
+    let testHost = "poke-gate-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    // startedAt == nil(비근무) → 선게이트로 요청 없이 안내만.
+    store.sendPoke(to: "target")
+
+    #expect(store.pokeNotice == "근무 중일 때만 콕 찌를 수 있어요")
+    #expect(store.pokeCooldownUntil["target"] == nil)
+    // poke_user RPC 요청이 실제로 나가지 않았다(클라 선게이트).
+    let pokeRequests = URLProtocolStub.requests(forHost: testHost).filter {
+        $0.url?.path == "/rest/v1/rpc/poke_user"
+    }
+    #expect(pokeRequests.isEmpty)
+}
+
+@MainActor
+@Test
+func sendPokeOkMirrorsCooldownWindow() async {
+    let testHost = "poke-ok-test"
+    TokenBoardURLProtocol.setResponse(#"{"status":"ok"}"#, forHost: testHost)
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    // 근무중으로 두어 선게이트를 통과시킨다(sync 는 발사하지 않도록 startedAt 만 직접 세팅).
+    store.startedAt = Date()
+    store.pokeNotice = "이전 안내"
+
+    store.sendPoke(to: "target")
+
+    // 응답(ok) 반영은 Task 라 pokeCooldownUntil 이 채워질 때까지 폴링한다.
+    var mirrored = false
+    for _ in 0..<200 {
+        if store.pokeCooldownUntil["target"] != nil {
+            mirrored = true
+            break
+        }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(mirrored)
+    #expect(store.pokeNotice == nil)  // ok → 안내 해제
+    // 쿨타임 잔여는 대략 60초(방금 now+60 미러). 표시 계산이 창 안에 든다.
+    let remaining = store.pokeCooldownRemaining(for: "target", now: Date())
+    #expect(remaining >= 58 && remaining <= 60)
+}
+
+@MainActor
+@Test
+func sendPokeCooldownResponseMirrorsRetryAfter() async {
+    let testHost = "poke-cooldown-test"
+    TokenBoardURLProtocol.setResponse(#"{"status":"cooldown","retry_after_seconds":25}"#, forHost: testHost)
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.startedAt = Date()
+
+    store.sendPoke(to: "target")
+
+    var mirrored = false
+    for _ in 0..<200 {
+        if store.pokeCooldownUntil["target"] != nil {
+            mirrored = true
+            break
+        }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(mirrored)
+    // 서버가 준 retry_after_seconds(25) 만큼 쿨타임을 미러링한다.
+    let remaining = store.pokeCooldownRemaining(for: "target", now: Date())
+    #expect(remaining >= 23 && remaining <= 25)
+}
+
+@MainActor
+@Test
+func setTokenUsagePublicRevertsOnFailure() async {
+    let testHost = "privacy-toggle-fail-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: PokeFailingURLProtocol.session()
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    #expect(store.tokenUsagePublic == true)  // 기본 공개.
+
+    // 비공개로 낙관 대입 → PATCH 500 실패 → 이전 값(true)으로 원복.
+    store.setTokenUsagePublic(false)
+    #expect(store.tokenUsagePublic == false)  // 낙관 대입 즉시 반영.
+
+    var reverted = false
+    for _ in 0..<200 {
+        if store.tokenUsagePublic == true {
+            reverted = true
+            break
+        }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(reverted)
+}
+
+@Test
+func freshReceivedPokesFiltersByHourFreshnessBoundary() {
+    // 기준 now.
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let epoch = Int(now.timeIntervalSince1970)
+    let rows = [
+        // 방금(신선) — 표시.
+        TakenPokeRow(id: "fresh", fromUser: "u1", fromDisplayName: "영식", fromAvatarUrl: nil, createdEpoch: epoch - 10),
+        // 정확히 1시간 경계(<=3600) — 포함.
+        TakenPokeRow(id: "edge", fromUser: "u2", fromDisplayName: "민수", fromAvatarUrl: nil, createdEpoch: epoch - 3600),
+        // 1시간 하고 1초 지남(>3600) — 제외.
+        TakenPokeRow(id: "stale", fromUser: "u3", fromDisplayName: "지현", fromAvatarUrl: nil, createdEpoch: epoch - 3601)
+    ]
+
+    let fresh = WorkTimerStore.freshReceivedPokes(rows: rows, now: now)
+
+    #expect(fresh.map(\.id) == ["fresh", "edge"])
+    #expect(fresh.first?.fromName == "영식")
+    #expect(fresh.first?.createdAt == Date(timeIntervalSince1970: TimeInterval(epoch - 10)))
+}
+
+/// setTokenUsagePublic 실패(원복) 검증 전용 프로토콜: 모든 요청에 500 을 돌려준다(PATCH profiles 를 실패시킨다).
+final class PokeFailingURLProtocol: URLProtocol {
+    static func session() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [PokeFailingURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 500,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data())
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}

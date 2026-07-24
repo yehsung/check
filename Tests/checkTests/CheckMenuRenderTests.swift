@@ -1188,3 +1188,84 @@ func tokenBoardWindowHeightWithinCap() throws {
     // scale 2 렌더 → 포인트 높이 = 픽셀/2. 700pt 상한.
     #expect(Double(pixelHeight) / 2.0 <= 700.0)
 }
+
+// MARK: - U: 콕찌르기 패널 + 토큰 공개/비공개 토글 렌더
+
+/// 콕찌르기 패널이 열린 로그인 스토어. 앱 사용자 전체 목록(본인 제외)이라 팀 무관 — 근무중/자리비움, 아바타 nil 섞기.
+/// myselfWorking 으로 내 근무 상태를(찌르기 가능/안내줄) 시드하고, 한 명(u2)은 쿨타임 중(now+37)으로 카운트다운을 재현한다.
+@MainActor
+private func makePokePanelStore(memberCount: Int = 5, myselfWorking: Bool = true, now: Date = Date()) -> WorkTimerStore {
+    let store = makeTeamStore(members: [], now: now)
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "u-me")
+    // 내 근무 상태 — snapshot.isWorking 으로 PokePanel 의 isMyselfWorking(안내줄/버튼 활성)을 시드한다.
+    store.snapshot = WorkStatusSnapshot(status: myselfWorking ? .working : .offWork, elapsedSeconds: myselfWorking ? 3_600 : 0)
+    let avatar = CheckMascotAssets.url(for: .neutral)
+    // 근무중 2(영식·민수) + 자리비움 다수, 아바타는 첫 명만 이미지·나머지 이니셜. 이름은 팀을 넘나든다(전체 공개).
+    let pool: [PokeDirectoryEntry] = [
+        PokeDirectoryEntry(userID: "u1", name: "영식", avatarURL: avatar, isWorking: true),
+        PokeDirectoryEntry(userID: "u2", name: "민수", avatarURL: nil, isWorking: true),
+        PokeDirectoryEntry(userID: "u3", name: "지현", avatarURL: nil, isWorking: false),
+        PokeDirectoryEntry(userID: "u4", name: "타팀 김서연", avatarURL: nil, isWorking: false),
+        PokeDirectoryEntry(userID: "u5", name: "서준", avatarURL: nil, isWorking: false),
+        PokeDirectoryEntry(userID: "u6", name: "하윤", avatarURL: nil, isWorking: true),
+        PokeDirectoryEntry(userID: "u7", name: "타팀 박도윤", avatarURL: nil, isWorking: false),
+        PokeDirectoryEntry(userID: "u8", name: "도현", avatarURL: nil, isWorking: false),
+        PokeDirectoryEntry(userID: "u9", name: "예린", avatarURL: nil, isWorking: true),
+        PokeDirectoryEntry(userID: "u10", name: "타팀 최시우", avatarURL: nil, isWorking: false)
+    ]
+    store.pokeDirectory = Array(pool.prefix(memberCount))
+    store.pokeDirectoryLoaded = true
+    store.isPokePanelVisible = true
+    // 한 명(u2)은 쿨타임 중 — now+37 → 잔여 37초 카운트다운("37초" 비활성)이 뜬다.
+    store.pokeCooldownUntil = ["u2": now.addingTimeInterval(37)]
+    return store
+}
+
+/// 콕찌르기/토큰 토글 육안 확인 PNG 를 스크래치 디렉터리에 poke-ui-<이름>.png 로 저장한다(실행은 통합 단계가 한다).
+@MainActor
+private func savePokeUISnapshot(_ png: Data, _ name: String) {
+    let dir = URL(fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try? png.write(to: dir.appendingPathComponent("\(name).png"))
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersPokePanelSnapshot() throws {
+    // 콕찌르기 패널: 근무중 2·자리비움 3(내가 근무중이라 안내줄 없음), 한 명(민수)은 쿨타임 "37초" 카운트다운.
+    // 아바타(이미지 1 + 이니셜) · 상태 칩(근무중/자리비움) · 찌르기 버튼(accent "콕!" / "37초" 비활성)이 함께 보인다.
+    let now = Date()
+    let png = try renderPNG(CheckMenuView(store: makePokePanelStore(memberCount: 5, myselfWorking: true, now: now)))
+    #expect(png.count > 0)
+    savePokeUISnapshot(png, "poke-ui-panel")
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersPokePanelOffWorkSnapshot() throws {
+    // 내가 비근무 — "근무 중일 때만 콕 찌를 수 있어요" 안내줄이 뜨고 모든 찌르기 버튼이 흐린 "콕!"(비활성)로 보인다.
+    let png = try renderPNG(CheckMenuView(store: makePokePanelStore(memberCount: 5, myselfWorking: false)))
+    #expect(png.count > 0)
+    savePokeUISnapshot(png, "poke-ui-offwork")
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersTokenBoardPrivateSnapshot() throws {
+    // 토큰 보드 비공개 상태: 헤더 눈 버튼이 eye.slash(비공개)로 바뀌고, 내 행(yesung·"나" 칩) 옆에 회색 "비공개" 칩이 붙는다.
+    let store = makeTokenBoardStore(memberCount: 6)
+    store.tokenUsagePublic = false
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    savePokeUISnapshot(png, "poke-ui-token-private")
+}
+
+@MainActor
+@Test
+func pokePanelWindowHeightWithinCap() throws {
+    // 콕찌르기 패널도 창 높이 상한(≤700pt) 안에 머문다. 스크롤 상한(maxVisibleRows=7 초과)까지 채운 10인을 검증한다.
+    let store = makePokePanelStore(memberCount: 10)
+    let pixelHeight = try #require(renderedPixelHeight(CheckMenuView(store: store)))
+    // scale 2 렌더 → 포인트 높이 = 픽셀/2. 700pt 상한.
+    #expect(Double(pixelHeight) / 2.0 <= 700.0)
+}

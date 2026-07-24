@@ -1116,6 +1116,108 @@ func showBubbleResetsTimerAndSelfExpires() async {
     #expect(cleared)
 }
 
+// MARK: - 콕찌르기 수신: 움찔 모션 + 말풍선 + peek
+
+@Test
+func pokeBubbleTextFormatsSingleAndMultipleNames() {
+    // 1명: "…님이 콕 찔렀어요!".
+    #expect(CheckOverlayController.pokeBubbleText(names: ["이유성"]) == "이유성님이 콕 찔렀어요!")
+    // 3명: 첫 이름 + "외 N명"(N=count-1). 첫 번째는 배치 순서 첫 이름.
+    #expect(
+        CheckOverlayController.pokeBubbleText(names: ["이유성", "김철수", "박영희"])
+            == "이유성님 외 2명이 콕 찔렀어요!"
+    )
+    // 중복 이름도 카운트에 유지된다(2명 → 외 1명).
+    #expect(CheckOverlayController.pokeBubbleText(names: ["이유성", "이유성"]) == "이유성님 외 1명이 콕 찔렀어요!")
+}
+
+@MainActor
+@Test
+func pokedReactionKindMatchesHitPriorityAndBoundedDuration() {
+    // 즉시성: 찌름은 hit 와 동급 우선순위(3).
+    #expect(ReactionKind.poked(bubbleText: "").priority == ReactionKind.hit.priority)
+    // 모션 길이에 맞춘 duration(약 1.2~1.5s).
+    let d = ReactionKind.poked(bubbleText: "").duration
+    #expect(d >= 1.2 && d <= 1.5)
+}
+
+@MainActor
+@Test
+func reactionEngineAcceptsPokedFromIdleAndExpires() {
+    var now = Date(timeIntervalSince1970: 39_000)
+    let engine = ReactionEngine(clock: { now })
+    #expect(engine.state == .idle)
+
+    // idle 에서 찌름 수락 → playing(.poked) + 말풍선 표시.
+    let text = "이유성님이 콕 찔렀어요!"
+    #expect(engine.request(.poked(bubbleText: text)))
+    #expect(engine.state == .playing(.poked(bubbleText: text)))
+    #expect(engine.greetingText == text)
+
+    // 재생 길이가 지나면 idle 로 복귀(clock 기반 만료).
+    now = now.addingTimeInterval(ReactionKind.poked(bubbleText: text).duration + 0.1)
+    #expect(engine.state == .idle)
+}
+
+@MainActor
+@Test
+func reactionEnginePokedWakesFromSleeping() {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 38_000) })
+    #expect(engine.request(.drowsy))
+    #expect(engine.state == .sleeping)
+
+    // 자는 중 찔림 → 잠이 풀리고 이어서 움찔+말풍선이 재생된다(beginWake 화들짝이 아니라 통상 poked 경로).
+    let text = "콕!"
+    #expect(engine.request(.poked(bubbleText: text)))
+    #expect(engine.state == .playing(.poked(bubbleText: text)))
+    #expect(engine.greetingText == text)
+}
+
+@MainActor
+@Test
+func reactionEngineRepokeInterruptsAndRefreshesBubble() {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 47_000) })
+    #expect(engine.request(.poked(bubbleText: "이유성님이 콕 찔렀어요!")))
+    #expect(engine.greetingText == "이유성님이 콕 찔렀어요!")
+
+    // 진행 중 찌름은 동순위(3)라도 새 찌름이 인터럽트해 새 문구로 갱신한다(배치마다 리액션 1회).
+    #expect(engine.request(.poked(bubbleText: "김철수님이 콕 찔렀어요!")))
+    #expect(engine.state == .playing(.poked(bubbleText: "김철수님이 콕 찔렀어요!")))
+    #expect(engine.greetingText == "김철수님이 콕 찔렀어요!")
+}
+
+@MainActor
+@Test
+func overlayHandleReceivedPokesShowsBubbleForNonEmptyBatch() {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 100_000) })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine,
+        defaults: isolatedOverlayDefaults(), workspaceNotifications: nil
+    )
+
+    // 빈 배치는 무시(말풍선 없음).
+    controller.handleReceivedPokes([])
+    #expect(engine.greetingText == nil)
+
+    // 숨김(비근무) 상태에서 수신 → peek 경로. 노드 미연결이라 움찔은 no-op 이지만 말풍선은 뜬다.
+    let names = ["이유성", "김철수"]
+    let pokes = [
+        ReceivedPoke(id: "1", fromName: names[0], createdAt: Date(timeIntervalSince1970: 100_000)),
+        ReceivedPoke(id: "2", fromName: names[1], createdAt: Date(timeIntervalSince1970: 99_999))
+    ]
+    controller.handleReceivedPokes(pokes)
+    let expected = CheckOverlayController.pokeBubbleText(names: names)
+    #expect(engine.greetingText == expected)
+    #expect(engine.state == .playing(.poked(bubbleText: expected)))
+
+    controller.updateWorking(false) // peek 태스크 취소 + 렌더 정리.
+}
+
 // MARK: - Wave7: 시각 검증 스냅샷 덤프 (CHECK_REACTION_SNAPSHOT_DIR 지정 시에만 기록)
 
 @MainActor

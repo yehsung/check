@@ -1351,3 +1351,161 @@ final class TokenBoardURLProtocol: URLProtocol {
 
     override func stopLoading() {}
 }
+
+// MARK: - 콕찌르기 / 토큰 사용량 공개 설정 (서비스 계층)
+
+@Test
+func sendPokeCallsRPCWithTargetAndDecodesOk() async throws {
+    let testHost = "poke-send-ok-test"
+    // jsonb 단일 객체 응답(배열 아님) — PokeSendResponse 로 직접 디코드.
+    TokenBoardURLProtocol.setResponse(#"{"status":"ok"}"#, forHost: testHost)
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+
+    let response = try await service.sendPoke(accessToken: "access-token", to: "target-user-id")
+
+    #expect(response.status == "ok")
+    #expect(response.retryAfterSeconds == nil)
+    #expect(PokeSendOutcome(response: response) == .ok)
+
+    // 요청: POST /rest/v1/rpc/poke_user + body {p_to:"target-user-id"}(snake_case).
+    let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
+    #expect(url.path == "/rest/v1/rpc/poke_user")
+    #expect(TokenBoardURLProtocol.lastMethod(forHost: testHost) == "POST")
+    let body = try #require(TokenBoardURLProtocol.lastBody(forHost: testHost))
+    #expect(body.contains("\"p_to\":\"target-user-id\""))
+    #expect(!body.contains("\"pTo\""))
+}
+
+@Test
+func sendPokeDecodesCooldownWithRetryAfter() async throws {
+    let testHost = "poke-send-cooldown-test"
+    TokenBoardURLProtocol.setResponse(#"{"status":"cooldown","retry_after_seconds":42}"#, forHost: testHost)
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+
+    let response = try await service.sendPoke(accessToken: "access-token", to: "target-user-id")
+
+    #expect(response.status == "cooldown")
+    #expect(response.retryAfterSeconds == 42)
+    #expect(PokeSendOutcome(response: response) == .cooldown(retryAfterSeconds: 42))
+}
+
+@Test
+func takePokesDecodesReceivedRows() async throws {
+    let testHost = "poke-take-test"
+    TokenBoardURLProtocol.setResponse(
+        """
+        [
+          {"id": "p1", "from_user": "u1", "from_display_name": "영식", "from_avatar_url": "https://example.com/u1.jpg", "created_epoch": 1721000000},
+          {"id": "p2", "from_user": "u2", "from_display_name": "민수", "from_avatar_url": null, "created_epoch": 1721000123}
+        ]
+        """,
+        forHost: testHost
+    )
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+
+    let rows = try await service.takePokes(accessToken: "access-token")
+
+    #expect(rows.count == 2)
+    #expect(rows.first { $0.id == "p1" }?.fromDisplayName == "영식")
+    #expect(rows.first { $0.id == "p1" }?.createdEpoch == 1721000000)
+    #expect(rows.first { $0.id == "p2" }?.fromAvatarUrl == nil)
+
+    let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
+    #expect(url.path == "/rest/v1/rpc/take_pokes")
+    #expect(TokenBoardURLProtocol.lastMethod(forHost: testHost) == "POST")
+}
+
+@Test
+func fetchPokeDirectoryDecodesRows() async throws {
+    let testHost = "poke-directory-test"
+    TokenBoardURLProtocol.setResponse(
+        """
+        [
+          {"user_id": "u1", "display_name": "영식", "avatar_url": "https://example.com/u1.jpg", "is_working": true},
+          {"user_id": "u2", "display_name": "민수", "avatar_url": null, "is_working": false}
+        ]
+        """,
+        forHost: testHost
+    )
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+
+    let rows = try await service.fetchPokeDirectory(accessToken: "access-token")
+
+    #expect(rows.count == 2)
+    #expect(rows.first { $0.userId == "u1" }?.isWorking == true)
+    #expect(rows.first { $0.userId == "u2" }?.avatarUrl == nil)
+
+    let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
+    #expect(url.path == "/rest/v1/rpc/app_user_directory")
+}
+
+@Test
+func fetchTokenUsagePublicDefaultsToTrueOnEmptyResponse() async throws {
+    let testHost = "privacy-fetch-empty-test"
+    TokenBoardURLProtocol.setResponse("[]", forHost: testHost)
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+
+    // 행 누락(빈 배열) → 기본 공개(true) 폴백.
+    let isPublic = try await service.fetchTokenUsagePublic(accessToken: "access-token", userID: "u1")
+    #expect(isPublic == true)
+
+    let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
+    #expect(url.path == "/rest/v1/profiles")
+    #expect(url.query?.contains("id=eq.u1") == true)
+    #expect(url.query?.contains("select=token_usage_public") == true)
+}
+
+@Test
+func fetchTokenUsagePublicDecodesFalse() async throws {
+    let testHost = "privacy-fetch-false-test"
+    TokenBoardURLProtocol.setResponse(#"[{"token_usage_public": false}]"#, forHost: testHost)
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+
+    let isPublic = try await service.fetchTokenUsagePublic(accessToken: "access-token", userID: "u1")
+    #expect(isPublic == false)
+}
+
+@Test
+func updateTokenUsagePublicPatchesProfileRow() async throws {
+    let testHost = "privacy-update-test"
+    TokenBoardURLProtocol.setResponse("", forHost: testHost)  // return=minimal → 본문 무시.
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+
+    try await service.updateTokenUsagePublic(accessToken: "access-token", userID: "u1", isPublic: false)
+
+    let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
+    #expect(url.path == "/rest/v1/profiles")
+    #expect(url.query?.contains("id=eq.u1") == true)
+    #expect(TokenBoardURLProtocol.lastMethod(forHost: testHost) == "PATCH")
+    let body = try #require(TokenBoardURLProtocol.lastBody(forHost: testHost))
+    #expect(body.contains("\"token_usage_public\":false"))
+    #expect(!body.contains("\"tokenUsagePublic\""))
+}

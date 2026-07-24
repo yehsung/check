@@ -20,8 +20,9 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     var codexOutput: Int = 0
 
     /// 오늘(KST 자정 이후) 늘어난 토큰량 = "오늘 +N" 표시의 원천. 각 앱이 자기 로컬 로그에서 계산해 서버 행에 함께 올린다.
-    /// 산식: Claude 는 엔트리 ts14 의 KST 날짜 == 오늘인 것의 (입력+출력+캐시읽기+캐시생성) 합, Codex 는 파일 mtime 의
-    /// KST 날짜 == 오늘인 파일의 누적치(입력+출력) 합 — 파일 단위 근사(장기 세션은 mtime 날짜에 통째 귀속). total 의 부분집합.
+    /// 산식(Claude·Codex 로 다름): Claude 는 엔트리 ts14 의 KST 날짜 == 오늘인 것의 (입력+출력+캐시읽기+캐시생성) 합.
+    /// Codex 는 파일별 '오늘 시작 기준선(dayBaselineTotal)' 대비 실제 증가분 Σ max(0, 현재누적(입력+출력) − 기준선) —
+    /// mtime 날짜에 통째 귀속하던 옛 근사(며칠 이어 쓴 resume 세션이 오늘에 통째로 잡혀 +수십억 이상치)를 대체한다. total 의 부분집합.
     var todayTotal: Int = 0
     /// todayTotal 이 귀속된 KST 날짜 'YYYY-MM-DD'. 표시 측이 현재 KST 날짜와 다르면(어제 이후 안 연 스냅샷) 오늘분을 0 으로 본다.
     var todayDate: String = ""
@@ -164,6 +165,13 @@ struct CodexFileProgress: Equatable, Sendable {
     var input: Int
     var output: Int
     var cached: Int
+    /// "오늘 +N"(일 증가분) 산정용 일 기준선. dayKey = 이 기준선이 귀속된 KST 'YYYY-MM-DD',
+    /// dayBaselineTotal = 그 날 시작 시점의 누적 input+output. 오늘 기여 = max(0, 현재(input+output) − dayBaselineTotal).
+    /// 왜 필요: rollout 은 세션 누적치라, mtime 이 오늘인 파일 전체를 오늘로 귀속하면 며칠 이어 쓴(resume) 세션의
+    /// 지난날 누적이 통째로 오늘에 잡힌다(+수십억 이상치). 월 집계는 파일 누적치 전체를 쓰므로 이 필드와 무관(일/월 산식 다름).
+    /// 기본값 ""/0 — 옛 6필드 캐시(이 필드 없음)를 unkeyed decodeIfPresent 로 폴백 디코드할 때의 값이기도 하다.
+    var dayKey: String = ""
+    var dayBaselineTotal: Int = 0
 }
 
 // 압축 인코딩(배열 튜플). 이름키 JSON 대비 절반 크기 — 3만 엔트리 캐시를 수 MB 이내로 유지한다.
@@ -205,11 +213,17 @@ extension CodexFileProgress: Codable {
         input = try c.decode(Int.self)
         output = try c.decode(Int.self)
         cached = try c.decode(Int.self)
+        // 하위호환: 옛 6필드 캐시엔 dayKey/dayBaselineTotal 이 없다. unkeyed decodeIfPresent 는
+        // at-end(원소 소진)면 nil 을 돌려주므로 ""/0 으로 폴백한다 — 디코드 실패(→ 캐시 폐기·전체 재스캔) 없이
+        // 우아하게 복원(기존 손상-캐시 폴백 규약 유지). 새 캐시는 항상 8원소라 값이 그대로 들어온다.
+        dayKey = try c.decodeIfPresent(String.self) ?? ""
+        dayBaselineTotal = try c.decodeIfPresent(Int.self) ?? 0
     }
     func encode(to encoder: Encoder) throws {
         var c = encoder.unkeyedContainer()
         try c.encode(size); try c.encode(mtimeMicros); try c.encode(consumedOffset)
         try c.encode(input); try c.encode(output); try c.encode(cached)
+        try c.encode(dayKey); try c.encode(dayBaselineTotal)
     }
 }
 
@@ -332,27 +346,26 @@ enum TokenUsageIncrementalScanner {
         let monthEndMicros = micros(from: monthEnd)
         let prevMonthStartMicros = micros(from: prevMonthStart)
 
-        // 오늘(KST) 창 = [오늘 0시, 내일 0시). "오늘 +N" 표시용 — 월 창의 부분집합이라 합계 루프 안에서 함께 센다.
+        // 오늘(KST) 창. Claude 는 ts14 범위([오늘 0시, 내일 0시))로 오늘분을 가르고, Codex 는 파일별 일 기준선(dayKey)으로
+        // 가르므로 todayDate 문자열이 두 트랙 공통 열쇠다(Codex 스캔에도 넘겨 파일별 dayKey 를 오늘로 세팅·비교).
         let (todayStart, todayEnd, todayDate) = dayBounds(now: now)
         let todayStartTs14 = ts14(from: todayStart)
         let todayEndTs14 = ts14(from: todayEnd)
-        let todayStartMicros = micros(from: todayStart)
-        let todayEndMicros = micros(from: todayEnd)
 
         // 1) 퇴거(로드 시점): 직전 월 시작 밖 엔트리/파일상태 제거. 무언가 지워지면 캐시 변경으로 표시(저장 유도).
         evict(&cache, evictTs14: prevMonthStartTs14, evictMicros: prevMonthStartMicros, changed: &stats.cacheChanged)
 
-        // 2) 소스별 증분 스캔(프리필터 컷오프 = 현재 월 시작).
+        // 2) 소스별 증분 스캔(프리필터 컷오프 = 현재 월 시작). Codex 는 파일별 일 기준선(오늘분) 갱신을 위해 todayDate 를 받는다.
         scanClaude(&cache, homeDirectory: homeDirectory, cutoff: monthStart, evictTs14: prevMonthStartTs14, stats: &stats)
-        scanCodex(&cache, homeDirectory: homeDirectory, cutoff: monthStart, stats: &stats)
+        scanCodex(&cache, homeDirectory: homeDirectory, cutoff: monthStart, todayDate: todayDate, stats: &stats)
 
-        // 3) 합계 재계산(엔트리 맵 현재-월 필터 + codex 파일상태 현재-월 필터). 오늘 창은 같은 순회에서 겹쳐 센다.
+        // 3) 합계 재계산(엔트리 맵 현재-월 필터 + codex 파일상태 현재-월 필터). 오늘분은 같은 순회에서 겹쳐 센다
+        //    (Claude 는 ts14 오늘 범위, Codex 는 파일별 dayKey==오늘 의 기준선 대비 증가분).
         let usage = totals(
             cache, month: monthString,
             monthStartTs14: monthStartTs14, monthEndTs14: monthEndTs14,
             monthStartMicros: monthStartMicros, monthEndMicros: monthEndMicros,
-            todayStartTs14: todayStartTs14, todayEndTs14: todayEndTs14,
-            todayStartMicros: todayStartMicros, todayEndMicros: todayEndMicros, todayDate: todayDate
+            todayStartTs14: todayStartTs14, todayEndTs14: todayEndTs14, todayDate: todayDate
         )
         return Result(cache: cache, usage: usage, stats: stats)
     }
@@ -452,8 +465,9 @@ enum TokenUsageIncrementalScanner {
     // MARK: Codex
 
     /// ~/.codex/sessions/**/rollout-*.jsonl. 각 파일(세션)의 마지막 유효 token_count 누적치를 파일 단위 캐시에 담아 합산.
+    /// 아울러 파일별 '오늘 시작 기준선(dayKey/dayBaselineTotal)'을 관리한다 — 오늘분은 이 기준선 대비 증가분으로만 계상한다.
     private static func scanCodex(
-        _ cache: inout TokenUsageCache, homeDirectory: URL, cutoff: Date, stats: inout Stats
+        _ cache: inout TokenUsageCache, homeDirectory: URL, cutoff: Date, todayDate: String, stats: inout Stats
     ) {
         let root = homeDirectory.appendingPathComponent(".codex/sessions", isDirectory: true)
         let files = recentFiles(
@@ -464,7 +478,20 @@ enum TokenUsageIncrementalScanner {
             stats.codexFilesStatted += 1
             let path = f.url.path
             let prior = cache.codexFileStates[path]
-            if let p = prior, p.size == f.size, p.mtimeMicros == f.mtimeMicros { continue }
+
+            // 무변경(크기·mtime 동일): 파일 재읽기는 없다. 다만 '오늘 기준선'은 날이 바뀌었으면 반드시 갱신해야 한다 —
+            // 안 그러면 어제까지의 누적이 오늘분으로 샌다. dayKey==오늘이면 완전 무변경이라 스킵(캐시 변경 없음).
+            if let p = prior, p.size == f.size, p.mtimeMicros == f.mtimeMicros {
+                if p.dayKey == todayDate { continue }
+                // (b) 날 넘어감/옛 캐시: 직전 관측 누적치(input+output)를 기준선으로 이월하고 dayKey=오늘(재읽기 0). 이후 증가분만 오늘로.
+                var rolled = p
+                rolled.dayBaselineTotal = p.input + p.output
+                rolled.dayKey = todayDate
+                cache.codexFileStates[path] = rolled
+                stats.cacheChanged = true
+                continue
+            }
+
             // 성장이면 이어읽기 + 직전 누적치를 시작값으로(꼬리에 새 token_count 없으면 유지). 그 외면 처음부터.
             let startOffset: Int
             var accInput = 0, accOutput = 0, accCached = 0
@@ -490,9 +517,28 @@ enum TokenUsageIncrementalScanner {
             }) else { continue }
             stats.codexFilesRead += 1
             stats.codexBytesRead += read.bytesRead
+
+            // 일 기준선 산정(월 집계와 독립 — 오늘분 = max(0, 현재누적 − 기준선)). 세 경우:
+            let dayBaseline: Int
+            if let p = prior {
+                if p.dayKey == todayDate {
+                    dayBaseline = p.dayBaselineTotal          // (a) 오늘 기준선 유지(오늘 안에서 계속 자라는 세션).
+                } else {
+                    dayBaseline = p.input + p.output          // (b) 날 넘어감: 직전 관측 누적치(이 스캔의 재읽기 이전 값)를 기준선으로.
+                }
+            } else {
+                // (c) 캐시에 없던 새 파일: 생성시각(birthtime, 실패 시 mtime)의 KST 날짜가 오늘이면 0(오늘 만든 세션은 전액 오늘분),
+                // 아니면 현재 누적(과거 세션을 오늘 처음 관측 — 첫 관측분은 오늘 아님, 이후 증가분만 오늘로).
+                // birthtime 조회는 신규 파일에만(최초 1회) — 이미 stat 한 파일이라 비용은 stat 한 번.
+                let birth = (try? f.url.resourceValues(forKeys: [.creationDateKey]))?.creationDate
+                    ?? Date(timeIntervalSince1970: Double(f.mtimeMicros) / 1_000_000)
+                dayBaseline = (dayBounds(now: birth).date == todayDate) ? 0 : (accInput + accOutput)
+            }
+
             cache.codexFileStates[path] = CodexFileProgress(
                 size: f.size, mtimeMicros: f.mtimeMicros, consumedOffset: read.consumedOffset,
-                input: accInput, output: accOutput, cached: accCached
+                input: accInput, output: accOutput, cached: accCached,
+                dayKey: todayDate, dayBaselineTotal: dayBaseline
             )
             stats.cacheChanged = true
         }
@@ -501,12 +547,15 @@ enum TokenUsageIncrementalScanner {
     // MARK: 합계 / 퇴거
 
     /// 엔트리 맵을 현재 월 [start,end) 로 필터해 Claude 합계를, codex 파일상태를 현재 월(파일 mtime)로 필터해 Codex 합계를 낸다.
-    /// 오늘 창([todayStart,todayEnd)) 은 월 창의 부분집합이라 같은 순회 안에서 오늘분(todayTotal)을 겹쳐 누적한다:
-    /// Claude 는 오늘 엔트리의 4필드 합, Codex 는 mtime 이 오늘인 파일의 누적치(입력+출력) 합(파일 단위 근사).
+    /// 오늘분(todayTotal)은 같은 순회에서 겹쳐 센다. 단 트랙마다 산식이 다르다:
+    /// - Claude: 오늘 창([todayStartTs14, todayEndTs14)) 안의 엔트리 4필드 합(엔트리 단위, ts14 기반 — 정확).
+    /// - Codex: 파일별 '오늘 시작 기준선' 대비 증가분 max(0, 현재누적(input+output) − dayBaselineTotal). 파일 mtime 이
+    ///   오늘인지와 무관하게 dayKey==오늘 인 모든 파일을 본다(어제 시작·오늘 성장 세션도 포함). 월 집계(입력·출력)는
+    ///   파일 누적치 전체를 그대로 더하는 기존 규약 불변 — 일/월 산식이 다른 이유는 rollout 이 세션 누적치이기 때문.
     private static func totals(
         _ cache: TokenUsageCache, month: String,
         monthStartTs14: Int, monthEndTs14: Int, monthStartMicros: Int, monthEndMicros: Int,
-        todayStartTs14: Int, todayEndTs14: Int, todayStartMicros: Int, todayEndMicros: Int, todayDate: String
+        todayStartTs14: Int, todayEndTs14: Int, todayDate: String
     ) -> TokenUsageMonthly {
         var usage = TokenUsageMonthly(month: month)
         var todayTotal = 0
@@ -521,11 +570,13 @@ enum TokenUsageIncrementalScanner {
             }
         }
         for (_, s) in cache.codexFileStates where s.mtimeMicros >= monthStartMicros && s.mtimeMicros < monthEndMicros {
+            // 월 집계(규약 불변): 파일 누적치 전체(input 은 cached 포함)를 그대로 더한다 — 파일 mtime 의 KST 월 귀속.
             usage.codexInput += s.input
             usage.codexOutput += s.output
-            // 오늘분(파일 단위 근사): 파일 mtime 이 오늘이면 그 세션 누적치(입력+출력)를 통째로 오늘 합에 더한다.
-            if s.mtimeMicros >= todayStartMicros, s.mtimeMicros < todayEndMicros {
-                todayTotal += s.input + s.output
+            // 오늘분(개편): 그 날 시작 기준선 대비 실제 증가분만. dayKey==오늘 인 파일만(스캔이 오늘 기준선을 세팅한 파일 —
+            // readTail 실패 등으로 dayKey 가 이월 못 된 예외 파일은 오늘분에서 제외해 지난날 누적 누출을 막는다).
+            if s.dayKey == todayDate {
+                todayTotal += max(0, (s.input + s.output) - s.dayBaselineTotal)
             }
         }
         usage.todayTotal = todayTotal

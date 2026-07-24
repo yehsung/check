@@ -552,3 +552,118 @@ struct SupabaseErrorResponse: Decodable {
     let errorDescription: String?
     let errorCode: String?
 }
+
+// MARK: - 콕찌르기 / 토큰 사용량 공개 설정 (계약 타입)
+
+/// app_user_directory RPC 응답 행. 앱 사용자 전체(본인 제외) + 근무중 여부.
+struct PokeDirectoryRow: Decodable, Equatable {
+    let userId: String
+    let displayName: String
+    let avatarUrl: String?
+    let isWorking: Bool
+}
+
+/// 콕찌르기 패널 표시용 엔트리.
+struct PokeDirectoryEntry: Identifiable, Equatable {
+    let userID: String
+    var name: String
+    var avatarURL: URL?
+    var isWorking: Bool
+
+    var id: String { userID }
+}
+
+extension [PokeDirectoryRow] {
+    /// RPC 행 → 표시 엔트리. 스토어(반영)와 테스트가 공유하는 순수 변환.
+    func toPokeDirectoryEntries() -> [PokeDirectoryEntry] {
+        map { row in
+            PokeDirectoryEntry(
+                userID: row.userId,
+                name: row.displayName,
+                avatarURL: row.avatarUrl.flatMap(URL.init(string:)),
+                isWorking: row.isWorking
+            )
+        }
+    }
+}
+
+extension [PokeDirectoryEntry] {
+    /// 근무중 먼저, 그 안에서 이름 오름차순. 서버 정렬과 동일 규약(클라 재정렬로 안정 표시).
+    func sortedForPokeDisplay() -> [PokeDirectoryEntry] {
+        sorted { lhs, rhs in
+            if lhs.isWorking != rhs.isWorking { return lhs.isWorking }
+            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
+    }
+}
+
+/// poke_user RPC 요청. { p_to: 대상 user id }
+struct PokeSendRequest: Encodable {
+    let pTo: String
+}
+
+/// poke_user RPC 응답: { status: "ok"|"cooldown"|"not_working"|"invalid", retry_after_seconds? }
+struct PokeSendResponse: Decodable, Equatable {
+    let status: String
+    var retryAfterSeconds: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case retryAfterSeconds
+    }
+
+    init(status: String, retryAfterSeconds: Int? = nil) {
+        self.status = status
+        self.retryAfterSeconds = retryAfterSeconds
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        status = try container.decode(String.self, forKey: .status)
+        retryAfterSeconds = try container.decodeIfPresent(Int.self, forKey: .retryAfterSeconds)
+    }
+}
+
+/// 찌르기 결과의 도메인 표현(스토어/UI 공유).
+enum PokeSendOutcome: Equatable {
+    case ok
+    case cooldown(retryAfterSeconds: Int)
+    case notWorking
+    case invalid
+
+    init(response: PokeSendResponse) {
+        switch response.status {
+        case "ok": self = .ok
+        case "cooldown": self = .cooldown(retryAfterSeconds: max(1, response.retryAfterSeconds ?? 60))
+        case "not_working": self = .notWorking
+        default: self = .invalid
+        }
+    }
+}
+
+/// take_pokes RPC 응답 행(수신 즉시 서버에서 소비 완료된 찔림).
+struct TakenPokeRow: Decodable, Equatable {
+    let id: String
+    let fromUser: String
+    let fromDisplayName: String
+    let fromAvatarUrl: String?
+    /// 찔린 시각의 epoch 초(서버가 extract(epoch ...)::bigint 로 내려줌 — ISO 소수초 파싱 함정 회피).
+    let createdEpoch: Int
+}
+
+/// 오버레이로 전달되는 수신 찔림 한 건.
+struct ReceivedPoke: Equatable {
+    let id: String
+    let fromName: String
+    let createdAt: Date
+}
+
+/// profiles.token_usage_public 자기 행 조회 응답.
+struct ProfilePrivacyRow: Decodable, Equatable {
+    let tokenUsagePublic: Bool?
+}
+
+/// profiles.token_usage_public 자기 행 갱신 요청(PATCH).
+struct ProfilePrivacyUpdateRequest: Encodable {
+    let tokenUsagePublic: Bool
+}

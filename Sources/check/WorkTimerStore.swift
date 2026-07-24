@@ -61,6 +61,7 @@ final class WorkTimerStore {
             stopTimerIfIdle()
             if isLeaderboardVisible { loadLeaderboard() }
             if isTokenBoardVisible { loadTokenBoard() }
+            if isPokePanelVisible { loadPokeDirectory() }
             // 팀원이 바꾼 주간 목표/이름/역할/참여코드를 팝오버 열 때 60초 스로틀로 재조회해 반영한다.
             refreshTeamMetaIfStale()
             // 팝오버 열림 시점에 내 월간 토큰을 게이트/스로틀 하에 1회 올린다(대부분 즉시 반환 — Task 남발 아님).
@@ -146,6 +147,24 @@ final class WorkTimerStore {
     @ObservationIgnored var lastUploadedUsage: TokenUsageMonthly?
     /// 마지막 업로드 시도 시각. 60초 스로틀 기준(난사 방지). 관찰 대상 아님.
     @ObservationIgnored var lastTokenUploadAt: Date = .distantPast
+
+    // 콕찌르기 페이지 상태. 리그/토큰 보드와 3자 상호 배타(하나 열면 나머지 닫기).
+    // pokeDirectory: 앱 사용자 전체(본인 제외), 근무중 먼저·이름순. 페이지가 열려 있는 동안 refresh 루프가 갱신.
+    var pokeDirectory: [PokeDirectoryEntry] = []
+    var isPokePanelVisible = false
+    // 디렉토리 첫 성공 로드 여부('아직 아무도 없음' vs '로드 전/실패' 구분 — tokenBoardLoaded 와 동일 규약).
+    var pokeDirectoryLoaded = false
+    // 대상별 쿨타임 만료 시각. 성공/서버 cooldown 응답 시 갱신. 표시 카운트다운은 displayNow 기준.
+    var pokeCooldownUntil: [String: Date] = [:]
+    // 패널 상단 1줄 안내(찌르기 실패 사유 등). 패널 닫기/성공 시 nil.
+    var pokeNotice: String?
+    // 내 토큰 사용량 공개 여부(profiles.token_usage_public 미러). 로그인 후 서버값 1회 로드, 토글은 낙관 반영.
+    var tokenUsagePublic = true
+    @ObservationIgnored var tokenUsagePublicLoaded = false
+    // 수신 찔림 폴링 태스크(로그인 중 상시 15초). refresh 루프와 별도 — 유휴 300초로는 전달이 너무 늦다.
+    var pokePollTask: Task<Void, Never>?
+    /// 수신 찔림 싱크. 오버레이 컨트롤러가 연결해 움찔+말풍선(숨김 시 peek)으로 표시한다(관찰 대상 아님).
+    @ObservationIgnored var onPokesReceived: (([ReceivedPoke]) -> Void)?
 
     // 잠자기 정책: willSleep 시각을 기록해 didWake 에서 잠든 시간을 판정한다.
     var sleepBeganAt: Date?
@@ -454,21 +473,35 @@ final class WorkTimerStore {
     /// 새 가입 흐름은 previewTeamCode()/createTeam 으로 대체됐다.
     func loadTeamDirectory() {}
 
-    /// 트로피 버튼 액션. 리그 페이지를 토글하고, 여는 순간 순위를 로드한다. 토큰 보드와 상호 배타.
+    /// 트로피 버튼 액션. 리그 페이지를 토글하고, 여는 순간 순위를 로드한다. 토큰 보드/콕찌르기와 상호 배타.
     func toggleLeaderboard() {
         isLeaderboardVisible.toggle()
         if isLeaderboardVisible {
             isTokenBoardVisible = false
+            isPokePanelVisible = false
             loadLeaderboard()
         }
     }
 
-    /// 토큰 사용량 행 액션. 팀원 이번 달 AI 토큰 순위 페이지를 토글하고, 여는 순간 보드를 로드한다. 리그와 상호 배타.
+    /// 토큰 사용량 행 액션. 이번 달 AI 토큰 순위 페이지를 토글하고, 여는 순간 보드를 로드한다. 리그/콕찌르기와 상호 배타.
     func toggleTokenBoard() {
         isTokenBoardVisible.toggle()
         if isTokenBoardVisible {
             isLeaderboardVisible = false
+            isPokePanelVisible = false
             loadTokenBoard()
+        }
+    }
+
+    /// 콕찌르기 버튼 액션. 사용자 목록 페이지를 토글하고, 여는 순간 디렉토리를 로드한다. 리그/토큰 보드와 상호 배타.
+    func togglePokePanel() {
+        isPokePanelVisible.toggle()
+        if isPokePanelVisible {
+            isLeaderboardVisible = false
+            isTokenBoardVisible = false
+            loadPokeDirectory()
+        } else {
+            pokeNotice = nil
         }
     }
 
@@ -509,6 +542,8 @@ final class WorkTimerStore {
     @ObservationIgnored var refreshLoopSliceSeconds: Double = 30
 
     func startStatusRefreshLoop() {
+        // 수신 찔림 폴링은 refresh 루프와 수명을 같이한다(로그인/활성화 지점에서 함께 시작, 자체 idempotent 가드).
+        startPokePolling()
         guard refreshTask == nil else { return }
         refreshTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -532,6 +567,7 @@ final class WorkTimerStore {
                 await self?.refreshTeamStatus()
                 await self?.refreshLeaderboardIfVisible()
                 await self?.refreshTokenBoardIfVisible()
+                await self?.refreshPokeDirectoryIfVisible()
                 // 내 월간 토큰 사용량을 변경 게이트+60초 스로틀로 서버에 올린다(팀원 보드 최신화). 대부분 게이트에서 즉시 반환.
                 // 팝오버가 열려 있을 때만 부른다 — 토큰 스캔은 행이 처음 그려질 때(팝오버 열림) 지연 시작되므로(D1 규약),
                 // 닫힌 상태에서 TokenUsageStore.shared 를 건드려 앱 시작부터 스캔이 도는 것을 막는다.
@@ -657,6 +693,16 @@ extension WorkTimerStore {
         tokenBoardLoaded = false
         lastUploadedUsage = nil
         lastTokenUploadAt = .distantPast
+        // 콕찌르기/공개 설정 상태도 함께 비운다(리그·토큰 보드와 동일 규약).
+        pokeDirectory = []
+        isPokePanelVisible = false
+        pokeDirectoryLoaded = false
+        pokeCooldownUntil = [:]
+        pokeNotice = nil
+        tokenUsagePublic = true
+        tokenUsagePublicLoaded = false
+        pokePollTask?.cancel()
+        pokePollTask = nil
         // 팀원 인사/팀 목표 축하의 세션 상태도 비운다(다음 로그인의 첫 로드에서 인사 폭탄 금지).
         greetingDetector.reset()
         teamGoalComplete = nil

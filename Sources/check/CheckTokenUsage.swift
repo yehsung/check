@@ -21,13 +21,13 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
 
     /// 오늘(KST 자정 이후) 늘어난 토큰량 = "오늘 +N" 표시의 원천. 각 앱이 자기 로컬 로그에서 계산해 서버 행에 함께 올린다.
     /// 산식(Claude·Codex 로 다름): Claude 는 엔트리 ts14 의 KST 날짜 == 오늘인 것의 (입력+출력+캐시읽기+캐시생성) 합.
-    /// Codex 는 파일별 '오늘 시작 기준선(dayBaselineTotal)' 대비 실제 증가분 Σ max(0, 현재누적(입력+출력) − 기준선) —
-    /// mtime 날짜에 통째 귀속하던 옛 근사(며칠 이어 쓴 resume 세션이 오늘에 통째로 잡혀 +수십억 이상치)를 대체한다. total 의 부분집합.
+    /// Codex 는 token_count 이벤트마다 그 이벤트 timestamp(→KST)가 오늘인 delta(=Σ max(0, 현재누적(입력+출력) − 직전누적))의 합 —
+    /// mtime 날짜에 세션 누적치를 통째 귀속하던 옛 근사(며칠 이어 쓴 resume 세션이 오늘에 통째로 잡혀 +수십억 이상치)를 대체한다. total 의 부분집합.
     var todayTotal: Int = 0
     /// todayTotal 이 귀속된 KST 날짜 'YYYY-MM-DD'. 표시 측이 현재 KST 날짜와 다르면(어제 이후 안 연 스냅샷) 오늘분을 0 으로 본다.
     var todayDate: String = ""
 
-    /// 화면 우측에 굵게 뜨는 총합 = 여섯 필드의 단순 합. (Codex input 은 cached 를 이미 포함한 누적치라 그대로 더한다.)
+    /// 화면 우측에 굵게 뜨는 총합 = 여섯 필드의 단순 합. (Codex 는 이벤트-귀속 델타(입력+출력 합산)를 codexInput 에 담고 codexOutput 은 0 이다 — codexTotal 은 조합값으로 정확.)
     var total: Int {
         claudeInput + claudeOutput + claudeCacheRead + claudeCacheCreation + codexInput + codexOutput
     }
@@ -129,14 +129,55 @@ enum TokenNumberFormatter {
 /// - claudeFileStates: 경로 → (size, mtime, consumedOffset). 파일이 안 변했는지(스킵)·어디까지 읽었는지(이어읽기) 판단.
 /// - claudeEntries: dedupe 키(=id\0requestId) → 엔트리. 라인 단위 usage 를 dedupe 해 월 필터로 합계를 낸다.
 ///   append-only 로그라 파일이 커져도 새 바이트만 이어읽어 엔트리를 추가한다.
-/// - codexFileStates: 경로 → (size, mtime, offset, totals). rollout 파일은 "마지막 token_count 누적치"가 세션값이라
-///   파일 단위로 그 값을 캐시한다(꼬리에서 더 최신 token_count 를 만나면 덮어씀).
+/// - codexFileStates: 경로 → (offset, size, mtime, prevCumulative, month/day 귀속 상태). rollout 은 token_count 이벤트마다
+///   그 이벤트 timestamp(→KST)로 delta 를 월/일에 정확히 귀속한다(파일 mtime 월에 세션 누적치를 통째 귀속하던 옛 근사 폐기).
 ///
 /// 압축: 엔트리/상태는 이름키 대신 배열 튜플로 인코딩한다(3만 엔트리 ≈ 수 MB → 이름키면 배로 커진다).
-struct TokenUsageCache: Codable, Equatable, Sendable {
+///
+/// 하위호환: codexSchemaVersion 으로 codex 상태의 스키마 세대를 표기한다. 이벤트-귀속 재설계로 옛 codexFileStates 는
+/// 델타 이력이 없어 재활용 불가 — 로드 시 버전이 현재와 다르면 codexFileStates 만 버리고(Claude 상태는 유지) 전체 재파싱을
+/// 1회 유발한다(과거 귀속이 소급 교정된다). 아래 커스텀 Codable 이 이 게이트를 수행한다.
+struct TokenUsageCache: Equatable, Sendable {
     var claudeFileStates: [String: FileProgress] = [:]
     var claudeEntries: [String: ClaudeEntry] = [:]
     var codexFileStates: [String: CodexFileProgress] = [:]
+    /// codex 상태 스키마 버전. 로드 시 currentCodexSchemaVersion 과 다르면 codexFileStates 를 폐기해 재파싱을 유발한다.
+    var codexSchemaVersion: Int = TokenUsageCache.currentCodexSchemaVersion
+
+    /// 현재 codex 상태 스키마 버전(이벤트-타임스탬프 귀속). 옛 mtime-월/dayBaseline 캐시는 이 키가 없어 버전 0 으로 취급된다.
+    static let currentCodexSchemaVersion = 2
+}
+
+// TokenUsageCache 커스텀 Codable(스키마 게이트 + 압축 딕셔너리 왕복). 옛 캐시(codexSchemaVersion 부재/불일치)는
+// codexFileStates 를 통째로 버려(Claude 상태는 보존) 다음 스캔에서 codex 를 전체 재파싱하게 만든다. 이렇게 하면 옛 6/8필드
+// codex 튜플(숫자열)을 새 8필드(문자열 섞임) 형식으로 억지 디코드하다 던지는 실패(→ 전체 캐시 폐기, Claude 재스캔)를 피한다.
+extension TokenUsageCache: Codable {
+    enum CodingKeys: String, CodingKey {
+        case claudeFileStates, claudeEntries, codexFileStates, codexSchemaVersion
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        claudeFileStates = try c.decodeIfPresent([String: FileProgress].self, forKey: .claudeFileStates) ?? [:]
+        claudeEntries = try c.decodeIfPresent([String: ClaudeEntry].self, forKey: .claudeEntries) ?? [:]
+        let version = try c.decodeIfPresent(Int.self, forKey: .codexSchemaVersion) ?? 0
+        if version == Self.currentCodexSchemaVersion {
+            codexFileStates = try c.decodeIfPresent([String: CodexFileProgress].self, forKey: .codexFileStates) ?? [:]
+        } else {
+            // 스키마 불일치(옛 세대): 델타 이력 없는 codex 상태는 재활용 불가 — 버리고(빈 맵) 전체 재파싱 유발. Claude 는 위에서 이미 유지.
+            codexFileStates = [:]
+        }
+        // 인메모리 버전은 항상 현재로. 다음 저장 시 새 형식·현재 버전으로 기록된다(1회 재파싱 후 정착).
+        codexSchemaVersion = Self.currentCodexSchemaVersion
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(claudeFileStates, forKey: .claudeFileStates)
+        try c.encode(claudeEntries, forKey: .claudeEntries)
+        try c.encode(codexFileStates, forKey: .codexFileStates)
+        try c.encode(codexSchemaVersion, forKey: .codexSchemaVersion)
+    }
 }
 
 /// Claude/Codex 공통 파일 진행 상태. consumedOffset 은 "마지막 완결 라인의 끝"(개행 다음 바이트) — 이어읽기 시작점.
@@ -157,21 +198,24 @@ struct ClaudeEntry: Equatable, Sendable {
     var cacheCreation: Int
 }
 
-/// Codex 파일(세션)의 진행 상태 + 그 세션의 마지막 유효 token_count 누적치.
+/// Codex 파일(세션)의 증분 진행 상태 + 이벤트-타임스탬프 귀속 누적. 파일 mtime 월에 세션 누적치를 통째 귀속하던 옛 근사
+/// (지난달 시작 세션을 이번 달 resume 하면 과거 누적 전체가 이번 달로 편입 → +수십억 이상치)를 버리고, token_count
+/// 이벤트마다 그 이벤트 timestamp(→KST)로 delta 를 월/일에 정확히 귀속한다. resume/fork 파일은 카운터가 0에서 새로
+/// 시작하므로(이월 없음) 파일 간 중복합산 걱정이 없다.
 struct CodexFileProgress: Equatable, Sendable {
     var size: Int
     var mtimeMicros: Int
     var consumedOffset: Int
-    var input: Int
-    var output: Int
-    var cached: Int
-    /// "오늘 +N"(일 증가분) 산정용 일 기준선. dayKey = 이 기준선이 귀속된 KST 'YYYY-MM-DD',
-    /// dayBaselineTotal = 그 날 시작 시점의 누적 input+output. 오늘 기여 = max(0, 현재(input+output) − dayBaselineTotal).
-    /// 왜 필요: rollout 은 세션 누적치라, mtime 이 오늘인 파일 전체를 오늘로 귀속하면 며칠 이어 쓴(resume) 세션의
-    /// 지난날 누적이 통째로 오늘에 잡힌다(+수십억 이상치). 월 집계는 파일 누적치 전체를 쓰므로 이 필드와 무관(일/월 산식 다름).
-    /// 기본값 ""/0 — 옛 6필드 캐시(이 필드 없음)를 unkeyed decodeIfPresent 로 폴백 디코드할 때의 값이기도 하다.
-    var dayKey: String = ""
-    var dayBaselineTotal: Int = 0
+    /// 파일별 마지막 유효 token_count 의 누적치(input_tokens + output_tokens). 다음 이벤트 delta 의 기준선.
+    /// info null·timestamp 결손 이벤트는 이 값을 갱신하지 않는다 — 건너뛴 토큰은 다음 유효 이벤트의 delta 에 자연 흡수(유실 없음).
+    var prevCumulative: Int
+    /// 이 파일 상태가 마지막으로 갱신된 KST 'YYYY-MM'. monthContribTotal = 그 월에 귀속된 이벤트 delta 의 합.
+    /// 표시 총합은 monthKey == 현재 월 인 파일의 monthContribTotal 만 더한다(월 롤오버 시 0 리셋 → 과거분 자연 탈락).
+    var monthKey: String
+    var monthContribTotal: Int
+    /// 오늘(KST) 'YYYY-MM-DD' 와 그 날 귀속 delta 의 합("오늘 +N"). dayKey == 오늘 인 파일만 더한다(일 롤오버 시 0 리셋).
+    var dayKey: String
+    var dayContribTotal: Int
 }
 
 // 압축 인코딩(배열 튜플). 이름키 JSON 대비 절반 크기 — 3만 엔트리 캐시를 수 MB 이내로 유지한다.
@@ -204,26 +248,27 @@ extension ClaudeEntry: Codable {
     }
 }
 
+// 압축 배열-튜플 인코딩(8원소): [size, mtime, offset, prevCumulative, monthKey, monthContribTotal, dayKey, dayContribTotal].
+// 옛 세대 튜플(숫자열)은 TokenUsageCache 의 스키마 게이트가 애초에 이 디코더로 오지 못하게 막으므로, 여기의 decodeIfPresent 는
+// 새 형식의 잘린 튜플에 대한 방어일 뿐이다(at-end → 기본값). monthKey/dayKey 위치에 숫자를 억지 디코드하는 일은 없다.
 extension CodexFileProgress: Codable {
     init(from decoder: Decoder) throws {
         var c = try decoder.unkeyedContainer()
         size = try c.decode(Int.self)
         mtimeMicros = try c.decode(Int.self)
         consumedOffset = try c.decode(Int.self)
-        input = try c.decode(Int.self)
-        output = try c.decode(Int.self)
-        cached = try c.decode(Int.self)
-        // 하위호환: 옛 6필드 캐시엔 dayKey/dayBaselineTotal 이 없다. unkeyed decodeIfPresent 는
-        // at-end(원소 소진)면 nil 을 돌려주므로 ""/0 으로 폴백한다 — 디코드 실패(→ 캐시 폐기·전체 재스캔) 없이
-        // 우아하게 복원(기존 손상-캐시 폴백 규약 유지). 새 캐시는 항상 8원소라 값이 그대로 들어온다.
+        prevCumulative = try c.decodeIfPresent(Int.self) ?? 0
+        monthKey = try c.decodeIfPresent(String.self) ?? ""
+        monthContribTotal = try c.decodeIfPresent(Int.self) ?? 0
         dayKey = try c.decodeIfPresent(String.self) ?? ""
-        dayBaselineTotal = try c.decodeIfPresent(Int.self) ?? 0
+        dayContribTotal = try c.decodeIfPresent(Int.self) ?? 0
     }
     func encode(to encoder: Encoder) throws {
         var c = encoder.unkeyedContainer()
         try c.encode(size); try c.encode(mtimeMicros); try c.encode(consumedOffset)
-        try c.encode(input); try c.encode(output); try c.encode(cached)
-        try c.encode(dayKey); try c.encode(dayBaselineTotal)
+        try c.encode(prevCumulative)
+        try c.encode(monthKey); try c.encode(monthContribTotal)
+        try c.encode(dayKey); try c.encode(dayContribTotal)
     }
 }
 
@@ -260,7 +305,8 @@ enum TokenUsageCacheStore {
 ///
 /// 월 귀속(핵심 개편):
 /// - Claude: 엔트리 ts14(UTC 초) 를 KST(UTC+9)로 본 달력 월에 귀속. 현재 월 = [이번달 1일 0시 KST, 다음달 1일 0시 KST).
-/// - Codex: 파일 mtime 의 KST 월로 '파일 단위' 귀속(장기 세션이 월을 걸치는 극단은 mtime 월 귀속으로 수용).
+/// - Codex: token_count 이벤트마다 그 이벤트 timestamp(→KST)로 delta 를 월/일에 귀속(파일 mtime 월 통째 귀속 폐기 —
+///   resume 세션이 지난달 누적을 이번 달로 편입하던 +수십억 이상치를 근절). 파일별 prevCumulative 로 delta 를 잇는다.
 /// - 집계는 현재 KST 월만. 엔트리 보관은 현재+직전 월(월초 지연 기록·시계 오차 대비), 그 이전은 퇴거.
 ///
 /// 증분 절차(파일마다):
@@ -278,6 +324,13 @@ enum TokenUsageIncrementalScanner {
     private static let kstCalendar: Calendar = {
         var c = Calendar(identifier: .gregorian)
         c.timeZone = TimeZone(secondsFromGMT: 9 * 3600)!
+        return c
+    }()
+
+    /// UTC 고정 캘린더. Codex 이벤트 timestamp(UTC ISO)를 컴포넌트로 조립해 절대 Date 로 만들 때 쓴다(그 뒤 KST 로 재해석).
+    private static let utcCalendar: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
         return c
     }()
 
@@ -342,12 +395,10 @@ enum TokenUsageIncrementalScanner {
         let monthStartTs14 = ts14(from: monthStart)
         let monthEndTs14 = ts14(from: monthEnd)
         let prevMonthStartTs14 = ts14(from: prevMonthStart)
-        let monthStartMicros = micros(from: monthStart)
-        let monthEndMicros = micros(from: monthEnd)
         let prevMonthStartMicros = micros(from: prevMonthStart)
 
-        // 오늘(KST) 창. Claude 는 ts14 범위([오늘 0시, 내일 0시))로 오늘분을 가르고, Codex 는 파일별 일 기준선(dayKey)으로
-        // 가르므로 todayDate 문자열이 두 트랙 공통 열쇠다(Codex 스캔에도 넘겨 파일별 dayKey 를 오늘로 세팅·비교).
+        // 오늘(KST) 창. Claude 는 ts14 범위([오늘 0시, 내일 0시))로 오늘분을 가르고, Codex 는 이벤트 timestamp 의 KST 일키로
+        // 가르므로 todayDate 문자열이 두 트랙 공통 열쇠다(Codex 스캔에 넘겨 이벤트 일키와 비교·파일 dayKey 를 오늘로 세팅).
         let (todayStart, todayEnd, todayDate) = dayBounds(now: now)
         let todayStartTs14 = ts14(from: todayStart)
         let todayEndTs14 = ts14(from: todayEnd)
@@ -355,16 +406,15 @@ enum TokenUsageIncrementalScanner {
         // 1) 퇴거(로드 시점): 직전 월 시작 밖 엔트리/파일상태 제거. 무언가 지워지면 캐시 변경으로 표시(저장 유도).
         evict(&cache, evictTs14: prevMonthStartTs14, evictMicros: prevMonthStartMicros, changed: &stats.cacheChanged)
 
-        // 2) 소스별 증분 스캔(프리필터 컷오프 = 현재 월 시작). Codex 는 파일별 일 기준선(오늘분) 갱신을 위해 todayDate 를 받는다.
+        // 2) 소스별 증분 스캔(프리필터 컷오프 = 현재 월 시작). Codex 는 이벤트 월/일 귀속을 위해 현재 월키·오늘 일키를 받는다.
         scanClaude(&cache, homeDirectory: homeDirectory, cutoff: monthStart, evictTs14: prevMonthStartTs14, stats: &stats)
-        scanCodex(&cache, homeDirectory: homeDirectory, cutoff: monthStart, todayDate: todayDate, stats: &stats)
+        scanCodex(&cache, homeDirectory: homeDirectory, cutoff: monthStart, monthString: monthString, todayDate: todayDate, stats: &stats)
 
-        // 3) 합계 재계산(엔트리 맵 현재-월 필터 + codex 파일상태 현재-월 필터). 오늘분은 같은 순회에서 겹쳐 센다
-        //    (Claude 는 ts14 오늘 범위, Codex 는 파일별 dayKey==오늘 의 기준선 대비 증가분).
+        // 3) 합계 재계산(엔트리 맵 현재-월 필터 + codex 파일상태 monthKey==현재월 필터). 오늘분은 같은 순회에서 겹쳐 센다
+        //    (Claude 는 ts14 오늘 범위, Codex 는 파일별 dayKey==오늘 의 dayContribTotal).
         let usage = totals(
             cache, month: monthString,
             monthStartTs14: monthStartTs14, monthEndTs14: monthEndTs14,
-            monthStartMicros: monthStartMicros, monthEndMicros: monthEndMicros,
             todayStartTs14: todayStartTs14, todayEndTs14: todayEndTs14, todayDate: todayDate
         )
         return Result(cache: cache, usage: usage, stats: stats)
@@ -464,10 +514,13 @@ enum TokenUsageIncrementalScanner {
 
     // MARK: Codex
 
-    /// ~/.codex/sessions/**/rollout-*.jsonl. 각 파일(세션)의 마지막 유효 token_count 누적치를 파일 단위 캐시에 담아 합산.
-    /// 아울러 파일별 '오늘 시작 기준선(dayKey/dayBaselineTotal)'을 관리한다 — 오늘분은 이 기준선 대비 증가분으로만 계상한다.
+    /// ~/.codex/sessions/**/rollout-*.jsonl. 각 파일을 줄 단위로 이어읽으며 token_count 이벤트마다 delta 를 그 이벤트의
+    /// timestamp(→KST) 월/일에 귀속한다. delta = max(0, cum − prevCumulative), cum = total_token_usage.(input+output).
+    /// info null·total 결손·timestamp 파싱 실패 이벤트는 건너뛰되 prevCumulative 를 갱신하지 않는다 — 건너뛴 토큰은 다음
+    /// 유효 이벤트의 delta 에 자연 흡수(유실 없음). 누적이 줄면 max(0,…) 로 클램프(리셋 방어). 월/일 롤오버 시 해당 contrib 0 리셋.
     private static func scanCodex(
-        _ cache: inout TokenUsageCache, homeDirectory: URL, cutoff: Date, todayDate: String, stats: inout Stats
+        _ cache: inout TokenUsageCache, homeDirectory: URL, cutoff: Date,
+        monthString: String, todayDate: String, stats: inout Stats
     ) {
         let root = homeDirectory.appendingPathComponent(".codex/sessions", isDirectory: true)
         let files = recentFiles(
@@ -479,28 +532,41 @@ enum TokenUsageIncrementalScanner {
             let path = f.url.path
             let prior = cache.codexFileStates[path]
 
-            // 무변경(크기·mtime 동일): 파일 재읽기는 없다. 다만 '오늘 기준선'은 날이 바뀌었으면 반드시 갱신해야 한다 —
-            // 안 그러면 어제까지의 누적이 오늘분으로 샌다. dayKey==오늘이면 완전 무변경이라 스킵(캐시 변경 없음).
-            if let p = prior, p.size == f.size, p.mtimeMicros == f.mtimeMicros {
-                if p.dayKey == todayDate { continue }
-                // (b) 날 넘어감/옛 캐시: 직전 관측 누적치(input+output)를 기준선으로 이월하고 dayKey=오늘(재읽기 0). 이후 증가분만 오늘로.
-                var rolled = p
-                rolled.dayBaselineTotal = p.input + p.output
-                rolled.dayKey = todayDate
-                cache.codexFileStates[path] = rolled
-                stats.cacheChanged = true
-                continue
+            // 파일별 상태 시작값. 이어읽기면 직전 상태를 잇고, 신규/축소/역행이면 처음부터(0). 월/일 롤오버는 키가 바뀐
+            // contrib 를 0 으로 리셋하되 prevCumulative 는 유지(누적 카운터는 파일 안에서 계속 이어진다).
+            var startOffset = 0
+            var prevCumulative = 0
+            var monthContrib = 0
+            var dayContrib = 0
+
+            if let p = prior {
+                let rolledMonthContrib = (p.monthKey == monthString) ? p.monthContribTotal : 0
+                let rolledDayContrib = (p.dayKey == todayDate) ? p.dayContribTotal : 0
+                let rolled = (p.monthKey != monthString) || (p.dayKey != todayDate)
+
+                // 무변경(크기·mtime 동일): 파일 재읽기는 없다. 다만 월/일이 넘어갔으면 해당 contrib 를 0 리셋하고 키만 갱신한다
+                // (안 그러면 지난달·어제 누적이 이번달·오늘 표시로 샌다). 키가 그대로면 완전 무변경이라 스킵(캐시 변경 없음).
+                if p.size == f.size, p.mtimeMicros == f.mtimeMicros {
+                    if rolled {
+                        cache.codexFileStates[path] = CodexFileProgress(
+                            size: p.size, mtimeMicros: p.mtimeMicros, consumedOffset: p.consumedOffset,
+                            prevCumulative: p.prevCumulative,
+                            monthKey: monthString, monthContribTotal: rolledMonthContrib,
+                            dayKey: todayDate, dayContribTotal: rolledDayContrib
+                        )
+                        stats.cacheChanged = true
+                    }
+                    continue
+                }
+                // 성장(append)이면 이어읽기 + 직전 상태 이월, 그 외(축소/역행)면 전체 재파싱(offset 0 + contrib/prevCumulative 리셋).
+                if f.size >= p.size, f.mtimeMicros >= p.mtimeMicros {
+                    startOffset = p.consumedOffset
+                    prevCumulative = p.prevCumulative
+                    monthContrib = rolledMonthContrib
+                    dayContrib = rolledDayContrib
+                }
             }
 
-            // 성장이면 이어읽기 + 직전 누적치를 시작값으로(꼬리에 새 token_count 없으면 유지). 그 외면 처음부터.
-            let startOffset: Int
-            var accInput = 0, accOutput = 0, accCached = 0
-            if let p = prior, f.size >= p.size, f.mtimeMicros >= p.mtimeMicros {
-                startOffset = p.consumedOffset
-                accInput = p.input; accOutput = p.output; accCached = p.cached
-            } else {
-                startOffset = 0
-            }
             guard let read = readTail(at: f.url, from: startOffset, { line in
                 guard contains(line, tokenCountPattern) else { return }
                 guard let base = line.baseAddress,
@@ -509,36 +575,24 @@ enum TokenUsageIncrementalScanner {
                       payload["type"] as? String == "token_count",
                       let info = payload["info"] as? [String: Any],
                       let total = info["total_token_usage"] as? [String: Any]
-                else { return }
-                // 마지막 유효 token_count 로 덮어쓴다 — 누적치라 파일(꼬리) 최종값이 세션 전체 사용량.
-                accInput = intField(total["input_tokens"])
-                accOutput = intField(total["output_tokens"])
-                accCached = intField(total["cached_input_tokens"])
+                else { return }   // info null·total 결손: 건너뛰되 prevCumulative 갱신 안 함(다음 유효 이벤트가 흡수).
+                // 이벤트 timestamp(UTC ISO)를 KST 월키/일키로. 파싱 실패도 동일하게 건너뜀(prevCumulative 불변 → 흡수).
+                guard let ts = object["timestamp"] as? String,
+                      let keys = kstMonthDayKeys(fromTimestamp: ts) else { return }
+                let cum = intField(total["input_tokens"]) + intField(total["output_tokens"])
+                let delta = max(0, cum - prevCumulative)   // 누적 감소(리셋)면 0 으로 클램프.
+                prevCumulative = cum
+                if keys.month == monthString { monthContrib += delta }
+                if keys.day == todayDate { dayContrib += delta }
             }) else { continue }
             stats.codexFilesRead += 1
             stats.codexBytesRead += read.bytesRead
 
-            // 일 기준선 산정(월 집계와 독립 — 오늘분 = max(0, 현재누적 − 기준선)). 세 경우:
-            let dayBaseline: Int
-            if let p = prior {
-                if p.dayKey == todayDate {
-                    dayBaseline = p.dayBaselineTotal          // (a) 오늘 기준선 유지(오늘 안에서 계속 자라는 세션).
-                } else {
-                    dayBaseline = p.input + p.output          // (b) 날 넘어감: 직전 관측 누적치(이 스캔의 재읽기 이전 값)를 기준선으로.
-                }
-            } else {
-                // (c) 캐시에 없던 새 파일: 생성시각(birthtime, 실패 시 mtime)의 KST 날짜가 오늘이면 0(오늘 만든 세션은 전액 오늘분),
-                // 아니면 현재 누적(과거 세션을 오늘 처음 관측 — 첫 관측분은 오늘 아님, 이후 증가분만 오늘로).
-                // birthtime 조회는 신규 파일에만(최초 1회) — 이미 stat 한 파일이라 비용은 stat 한 번.
-                let birth = (try? f.url.resourceValues(forKeys: [.creationDateKey]))?.creationDate
-                    ?? Date(timeIntervalSince1970: Double(f.mtimeMicros) / 1_000_000)
-                dayBaseline = (dayBounds(now: birth).date == todayDate) ? 0 : (accInput + accOutput)
-            }
-
             cache.codexFileStates[path] = CodexFileProgress(
                 size: f.size, mtimeMicros: f.mtimeMicros, consumedOffset: read.consumedOffset,
-                input: accInput, output: accOutput, cached: accCached,
-                dayKey: todayDate, dayBaselineTotal: dayBaseline
+                prevCumulative: prevCumulative,
+                monthKey: monthString, monthContribTotal: monthContrib,
+                dayKey: todayDate, dayContribTotal: dayContrib
             )
             stats.cacheChanged = true
         }
@@ -546,15 +600,14 @@ enum TokenUsageIncrementalScanner {
 
     // MARK: 합계 / 퇴거
 
-    /// 엔트리 맵을 현재 월 [start,end) 로 필터해 Claude 합계를, codex 파일상태를 현재 월(파일 mtime)로 필터해 Codex 합계를 낸다.
+    /// 엔트리 맵을 현재 월 [start,end) 로 필터해 Claude 합계를, codex 파일상태를 monthKey==현재월 로 필터해 Codex 합계를 낸다.
     /// 오늘분(todayTotal)은 같은 순회에서 겹쳐 센다. 단 트랙마다 산식이 다르다:
     /// - Claude: 오늘 창([todayStartTs14, todayEndTs14)) 안의 엔트리 4필드 합(엔트리 단위, ts14 기반 — 정확).
-    /// - Codex: 파일별 '오늘 시작 기준선' 대비 증가분 max(0, 현재누적(input+output) − dayBaselineTotal). 파일 mtime 이
-    ///   오늘인지와 무관하게 dayKey==오늘 인 모든 파일을 본다(어제 시작·오늘 성장 세션도 포함). 월 집계(입력·출력)는
-    ///   파일 누적치 전체를 그대로 더하는 기존 규약 불변 — 일/월 산식이 다른 이유는 rollout 이 세션 누적치이기 때문.
+    /// - Codex: 이벤트-귀속 delta 의 합. 월 = monthKey==현재월 인 파일의 monthContribTotal 을, 오늘 = dayKey==오늘 인 파일의
+    ///   dayContribTotal 을 더한다. 델타는 입출력을 합쳐 다루므로 전액을 codexInput 에 담고 codexOutput 은 0 이다(codexTotal 은 정확).
     private static func totals(
         _ cache: TokenUsageCache, month: String,
-        monthStartTs14: Int, monthEndTs14: Int, monthStartMicros: Int, monthEndMicros: Int,
+        monthStartTs14: Int, monthEndTs14: Int,
         todayStartTs14: Int, todayEndTs14: Int, todayDate: String
     ) -> TokenUsageMonthly {
         var usage = TokenUsageMonthly(month: month)
@@ -569,15 +622,11 @@ enum TokenUsageIncrementalScanner {
                 todayTotal += e.input + e.output + e.cacheRead + e.cacheCreation
             }
         }
-        for (_, s) in cache.codexFileStates where s.mtimeMicros >= monthStartMicros && s.mtimeMicros < monthEndMicros {
-            // 월 집계(규약 불변): 파일 누적치 전체(input 은 cached 포함)를 그대로 더한다 — 파일 mtime 의 KST 월 귀속.
-            usage.codexInput += s.input
-            usage.codexOutput += s.output
-            // 오늘분(개편): 그 날 시작 기준선 대비 실제 증가분만. dayKey==오늘 인 파일만(스캔이 오늘 기준선을 세팅한 파일 —
-            // readTail 실패 등으로 dayKey 가 이월 못 된 예외 파일은 오늘분에서 제외해 지난날 누적 누출을 막는다).
-            if s.dayKey == todayDate {
-                todayTotal += max(0, (s.input + s.output) - s.dayBaselineTotal)
-            }
+        for (_, s) in cache.codexFileStates {
+            // 월 집계: 이 파일 상태의 monthKey 가 현재 월일 때만 그 월 delta 합을 더한다(월 롤오버로 키가 어긋난 파일은 자연 탈락).
+            if s.monthKey == month { usage.codexInput += s.monthContribTotal }
+            // 오늘분: dayKey==오늘 인 파일의 오늘 delta 합. 파일 mtime 월과 무관(어제 시작·오늘 성장 세션도 포함).
+            if s.dayKey == todayDate { todayTotal += s.dayContribTotal }
         }
         usage.todayTotal = todayTotal
         usage.todayDate = todayDate
@@ -728,6 +777,32 @@ enum TokenUsageIncrementalScanner {
     /// Date 를 마이크로초 정수로(파일 mtime 의 == 비교/월 필터용 — 부동소수 왕복 오차 회피).
     private static func micros(from date: Date) -> Int {
         Int((date.timeIntervalSince1970 * 1_000_000).rounded())
+    }
+
+    /// Codex 이벤트 timestamp(UTC ISO8601, 예 "2026-07-24T07:17:35.634Z")를 KST(+9)로 본 (월키 'YYYY-MM', 일키 'YYYY-MM-DD').
+    /// 앞 19자(YYYY-MM-DDTHH:MM:SS, UTC)만 정수 컴포넌트로 읽어 UTC Date 를 만들고 KST 캘린더로 월/일을 뽑는다 — 단순 +9h
+    /// 문자열 산술의 자릿수 올림(일·월·연 경계) 버그를 피한다. 소수초·타임존 표기 변형에 견고(앞 19자 고정폭만 사용). 실패 시 nil.
+    private static func kstMonthDayKeys(fromTimestamp s: String) -> (month: String, day: String)? {
+        let b = Array(s.utf8)
+        guard b.count >= 19 else { return nil }
+        // 연(0..3) 월(5,6) 일(8,9) 시(11,12) 분(14,15) 초(17,18) — 나머지는 구분자('-' 'T' ':').
+        let digitIdx = [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18]
+        for i in digitIdx {
+            let c = b[i]
+            guard c >= 48, c <= 57 else { return nil }
+        }
+        func num(_ start: Int, _ len: Int) -> Int {
+            var v = 0
+            for k in start..<(start + len) { v = v * 10 + Int(b[k] - 48) }
+            return v
+        }
+        var comps = DateComponents()
+        comps.year = num(0, 4); comps.month = num(5, 2); comps.day = num(8, 2)
+        comps.hour = num(11, 2); comps.minute = num(14, 2); comps.second = num(17, 2)
+        guard let date = utcCalendar.date(from: comps) else { return nil }
+        let k = kstCalendar.dateComponents([.year, .month, .day], from: date)
+        let y = k.year ?? 0, mo = k.month ?? 0, d = k.day ?? 0
+        return (String(format: "%04d-%02d", y, mo), String(format: "%04d-%02d-%02d", y, mo, d))
     }
 }
 

@@ -87,9 +87,13 @@ private func claudeLine(id: String, requestId: String, timestamp: Date, usage: S
     + "\"requestId\":\"\(requestId)\",\"message\":{\"id\":\"\(id)\",\"usage\":\(usage)}}"
 }
 
-/// Codex token_count 라인 한 줄(JSON, total_token_usage 포함, 개행 미포함). 월 귀속은 라인이 아니라 파일 mtime 이 정한다.
-private func codexTokenCountLine(input: Int, cached: Int, output: Int) -> String {
-    "{\"timestamp\":\"2026-07-01T00:00:00.000Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\","
+/// Codex token_count 라인 한 줄(JSON, total_token_usage 포함, 개행 미포함). 이벤트-귀속 재설계 후 월/일 귀속은 파일 mtime 이
+/// 아니라 이 라인의 timestamp(UTC → KST)가 정한다. 기본 timestamp 는 현재 월(하지만 오늘 아님)의 임의 시각.
+private func codexTokenCountLine(
+    input: Int, cached: Int, output: Int,
+    timestamp: Date = fixedNow.addingTimeInterval(-3 * 86_400)
+) -> String {
+    "{\"timestamp\":\"\(iso8601(timestamp))\",\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\","
     + "\"info\":{\"total_token_usage\":{\"input_tokens\":\(input),\"cached_input_tokens\":\(cached),"
     + "\"output_tokens\":\(output),\"total_tokens\":0}}}}"
 }
@@ -277,28 +281,29 @@ func mtimePrefilterSkipsFilesUntouchedSinceMonthStart() {
     try? FileManager.default.removeItem(at: home)
 }
 
-// MARK: - Codex 파서 (파일 mtime 의 KST 월로 파일 단위 귀속)
+// MARK: - Codex 파서 (token_count 이벤트 timestamp 의 KST 월/일로 delta 귀속)
 
 @Test
-func codexAdoptsLastValidTokenCountPerFileAndSumsAcrossFiles() {
+func codexSumsEventDeltasAcrossFilesAndAbsorbsInvalidLine() {
     let home = makeTempHome()
-    // 파일1: token_count 여러 줄 — 마지막 "유효" 누적치(1000/800/50)를 채택해야 한다(합산 아님, 첫 줄 아님).
-    // 마지막 줄은 total_token_usage 없는 무효 라인이라 무시되고, 직전 유효 라인이 채택된다.
+    // 파일1: token_count 여러 줄. cum=input+output. delta = max(0, cum − 직전누적). 마지막 줄은 total_token_usage 없는
+    // 무효 라인이라 건너뛰고 직전 유효 누적(prevCumulative)을 갱신하지 않는다 → 다음 유효 이벤트가 있으면 흡수(여기선 없음).
+    // 이벤트1 cum=520 delta 520, 이벤트2 cum=1050 delta 530 → 파일1 = 1050(=최종 누적, 단조라 델타합=최종).
     let file1 = [
         codexTokenCountLine(input: 500, cached: 400, output: 20),
         codexTokenCountLine(input: 1000, cached: 800, output: 50),
         codexInvalidTokenCountLine
     ].joined(separator: "\n")
-    // 파일2: 다른 세션 누적치(200/100/5). 둘 다 mtime=fixedNow(현재 월)이라 합산된다.
+    // 파일2: 다른 세션. cum=205 delta 205. 둘 다 현재 월(기본 timestamp)이라 합산된다.
     let file2 = codexTokenCountLine(input: 200, cached: 100, output: 5)
     writeFile("\(file1)\n", to: codexURL(home, path: "2026/07/01/rollout-2026-07-01T00-00-00-aaaa.jsonl"))
     writeFile("\(file2)\n", to: codexURL(home, path: "2026/07/02/rollout-2026-07-02T00-00-00-bbbb.jsonl"))
 
     let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
 
-    #expect(usage.codexInput == 1200)   // 1000 + 200 (파일 단위 최종 누적치 합)
-    #expect(usage.codexOutput == 55)    // 50 + 5
-    #expect(usage.codexTotal == 1255)   // input(캐시 포함) + output
+    #expect(usage.codexInput == 1255)   // 1050 + 205 (이벤트 delta 합, 입력+출력 합산)
+    #expect(usage.codexOutput == 0)     // 이벤트-귀속 델타는 입출력을 합쳐 codexInput 에 담는다
+    #expect(usage.codexTotal == 1255)   // 조합 총합은 옛 mtime 방식과 동일
     try? FileManager.default.removeItem(at: home)
 }
 
@@ -319,9 +324,9 @@ func codexSkipsFilesUntouchedSinceMonthStart() {
 @Test
 func codexFileInPreviousMonthIsNotCountedInCurrentMonth() {
     let home = makeTempHome()
-    // mtime 이 지난달(현재 월 시작 이전)인 codex 파일은 현재 월 합계에서 빠진다(파일 단위 월 귀속).
-    // -20일(2026-06-24)은 지난달이라 프리필터(현재 월 시작=UTC 06-30 15:00)에서 아예 열리지 않는다.
-    let line = codexTokenCountLine(input: 5000, cached: 0, output: 100)
+    // mtime 이 지난달(현재 월 시작 이전)인 codex 파일은 프리필터에서 아예 열리지 않는다.
+    // -20일(2026-06-24)은 지난달이라 프리필터(현재 월 시작=UTC 06-30 15:00)에서 스킵된다. 이벤트도 6월이라 이중 안전.
+    let line = codexTokenCountLine(input: 5000, cached: 0, output: 100, timestamp: utcDate("2026-06-20T00:00:00Z"))
     writeFile("\(line)\n", to: codexURL(home, path: "2026/06/24/rollout-2026-06-24T00-00-00-dddd.jsonl"),
               modified: fixedNow.addingTimeInterval(-20 * 86_400))
 
@@ -367,111 +372,158 @@ func todayFilterBoundaryAtKSTMidnightUTC1500() {
     try? FileManager.default.removeItem(at: home)
 }
 
-// (a) 어제부터 이어진 세션(resume): 어제 관측 누적 5000 이 오늘 8000 으로 성장 → 오늘분은 증가분 3000(누적 8000 아님).
-// 옛 파일-단위 근사(mtime 이 오늘이면 세션 누적 통째 귀속)의 +수십억 이상치 결함을 이 케이스가 직접 짚는다.
+// (a·핵심 결함 근절) resume 세션: 어제까지 누적 5000, 오늘 8000 으로 성장. 두 이벤트가 한 파일에 섞여 있어도
+// 오늘분은 오늘 이벤트 delta(3000)만 — 어제 누적 5000 은 오늘로 새지 않는다(옛 mtime 통째 귀속의 +수십억 이상치 근절).
 @Test
-func codexTodayCountsGrowthAgainstYesterdayBaselineNotFullCumulative() {
+func codexAttributesTodayByEventTimestampNotSessionCumulative() {
     let home = makeTempHome()
-    let yesterday = fixedNow.addingTimeInterval(-86_400)   // 2026-07-13 (같은 달)
-    let url = codexURL(home, path: "2026/07/13/rollout-2026-07-13T00-00-00-aaaa.jsonl")
+    let yesterdayEvt = utcDate("2026-07-13T06:00:00Z")   // KST 2026-07-13 15:00 → 어제(현재 월)
+    let todayEvt = utcDate("2026-07-14T02:00:00Z")       // KST 2026-07-14 11:00 → 오늘
+    let lines = [
+        codexTokenCountLine(input: 5000, cached: 0, output: 0, timestamp: yesterdayEvt),  // cum 5000, delta 5000 (어제)
+        codexTokenCountLine(input: 8000, cached: 0, output: 0, timestamp: todayEvt)        // cum 8000, delta 3000 (오늘)
+    ].joined(separator: "\n")
+    // mtime=fixedNow(프리필터 통과). 파일에 어제·오늘 이벤트가 섞여 있다.
+    writeFile("\(lines)\n", to: codexURL(home, path: "2026/07/13/rollout-2026-07-13T00-00-00-aaaa.jsonl"))
 
-    // 1) 어제 관측(now=어제): 누적 input 5000 → dayKey="2026-07-13", 누적 5000.
-    writeFile("\(codexTokenCountLine(input: 5000, cached: 0, output: 0))\n", to: url, modified: yesterday)
-    let r1 = TokenUsageIncrementalScanner.update(TokenUsageCache(), homeDirectory: home, now: yesterday)
-    #expect(r1.usage.codexInput == 5000)
+    let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
 
-    // 2) 오늘 이어감(append, mtime=오늘), now=오늘로 재스캔: 누적 8000 으로 성장.
-    appendFile("\(codexTokenCountLine(input: 8000, cached: 0, output: 0))\n", to: url, modified: fixedNow)
-    let r2 = TokenUsageIncrementalScanner.update(r1.cache, homeDirectory: home, now: fixedNow)
-
-    #expect(r2.usage.todayDate == "2026-07-14")
-    #expect(r2.usage.todayTotal == 3000)   // 8000 − 어제까지 누적 5000 = 오늘 증가분(누적 8000 아님)
-    #expect(r2.usage.codexInput == 8000)   // 월 집계는 최종 누적치 전체(규약 불변)
-    // 날 넘어가며 기준선이 어제 누적치(5000)로 이월되고 dayKey 가 오늘로 갱신됨.
-    #expect(r2.cache.codexFileStates.values.first?.dayKey == "2026-07-14")
-    #expect(r2.cache.codexFileStates.values.first?.dayBaselineTotal == 5000)
+    #expect(usage.todayDate == "2026-07-14")
+    #expect(usage.todayTotal == 3000)   // 오늘 이벤트 delta(8000-5000)만 — 어제 누적 5000 은 오늘에 안 샌다
+    #expect(usage.codexInput == 8000)   // 월 집계 = 어제(5000)+오늘(3000) delta 합
+    #expect(usage.codexOutput == 0)
+    #expect(usage.codexTotal == 8000)
     try? FileManager.default.removeItem(at: home)
 }
 
-// (b) 오늘 새로 만든 파일 → 전액 오늘분(기준선 0). birthtime 은 조작 불가하므로 실시간(now=Date())으로만 재현 가능하다
-// — 방금 만든 파일의 birthtime KST 날짜 == 오늘이라 case(c) 의 '오늘 생성' 분기(기준선 0)를 탄다.
+// (b) 오늘 일 경계: KST 07-14 00:00 == UTC 07-13 15:00. 경계 정각(이상) 이벤트는 오늘, 1초 전은 어제.
 @Test
-func codexTodayCountsFullAmountForFileCreatedToday() {
+func codexTodayBoundaryAtKSTMidnightUTC1500() {
     let home = makeTempHome()
-    let now = Date()   // 실시간 오늘 — 방금 만든 파일 birthtime 과 같은 KST 날짜여야 기준선 0.
-    writeFile("\(codexTokenCountLine(input: 1000, cached: 0, output: 50))\n",
-              to: codexURL(home, path: "live/rollout-today.jsonl"), modified: now)
+    let boundaryIn = utcDate("2026-07-13T15:00:00Z")    // = KST 07-14 00:00 → 오늘(포함)
+    let boundaryOut = utcDate("2026-07-13T14:59:59Z")   // = KST 07-13 23:59:59 → 어제(제외)
+    // 어제 이벤트 cum 700 → delta 700(월엔 들되 오늘 아님). 경계 정각 이벤트 cum 1200 → delta 500(오늘).
+    let lines = [
+        codexTokenCountLine(input: 700, cached: 0, output: 0, timestamp: boundaryOut),
+        codexTokenCountLine(input: 1200, cached: 0, output: 0, timestamp: boundaryIn)
+    ].joined(separator: "\n")
+    writeFile("\(lines)\n", to: codexURL(home, path: "2026/07/13/rollout-2026-07-13T00-00-00-bbbb.jsonl"))
 
-    let usage = TokenUsageScanner.scan(homeDirectory: home, now: now)
+    let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
 
-    #expect(usage.todayTotal == 1050)   // 오늘 만든 세션은 기준선 0 → 전액(1000+50) 오늘분
-    #expect(usage.codexInput == 1000)
-    #expect(usage.codexOutput == 50)
+    #expect(usage.todayTotal == 500)    // 경계 정각 delta 만 오늘, 1초 전(700)은 어제라 제외
+    #expect(usage.codexInput == 1200)   // 월 집계엔 둘 다(700+500)
     try? FileManager.default.removeItem(at: home)
 }
 
-// (c) 과거 파일을 오늘 처음 관측 → 첫 관측 누적은 오늘분 아님(기준선=현재 누적), 이후 증가분만 오늘로.
-// birthtime 조작 불가라, 실시간 birthtime(≠ fixedNow 기준일)로 '오늘 생성 아님' 분기를 모사한다.
+// (a) 월 경계: 한 파일에 6월 말 이벤트 + 7월 이벤트가 섞여 있어도 현재 월(7월) delta 만 집계된다.
+// (6월 이벤트도 prevCumulative 는 갱신하므로 7월 delta 가 6월분만큼 부풀지 않는다.)
 @Test
-func codexTodayCountsOnlyIncrementsForPastFileFirstObservedToday() {
+func codexMonthBoundaryCountsOnlyCurrentMonthEventDeltas() {
     let home = makeTempHome()
-    let url = codexURL(home, path: "2026/07/10/rollout-2026-07-10T00-00-00-eeee.jsonl")
-    // mtime 은 며칠 전(프리필터 통과). birthtime(실시간)은 기준일(2026-07-14)과 달라 case(c) 기준선=현재 누적.
-    writeFile("\(codexTokenCountLine(input: 2000, cached: 0, output: 100))\n",
-              to: url, modified: fixedNow.addingTimeInterval(-4 * 86_400))
+    let juneEvt = utcDate("2026-06-30T14:00:00Z")       // KST 06-30 23:00 → 6월(현재 월 밖)
+    let julyBoundary = utcDate("2026-06-30T15:00:00Z")  // KST 07-01 00:00 → 7월(경계 포함)
+    let julyEvt = utcDate("2026-07-05T00:00:00Z")       // KST 07-05 09:00 → 7월
+    let lines = [
+        codexTokenCountLine(input: 1000, cached: 0, output: 0, timestamp: juneEvt),      // cum 1000, delta 1000 (6월 → 제외)
+        codexTokenCountLine(input: 3000, cached: 0, output: 0, timestamp: julyBoundary), // cum 3000, delta 2000 (7월)
+        codexTokenCountLine(input: 5000, cached: 0, output: 0, timestamp: julyEvt)       // cum 5000, delta 2000 (7월)
+    ].joined(separator: "\n")
+    // mtime=fixedNow(7월)이라 프리필터 통과.
+    writeFile("\(lines)\n", to: codexURL(home, path: "2026/06/30/rollout-2026-06-30T00-00-00-ffff.jsonl"))
 
-    let r1 = TokenUsageIncrementalScanner.update(TokenUsageCache(), homeDirectory: home, now: fixedNow)
-    #expect(r1.usage.codexInput == 2000)   // 월 집계엔 전액
-    #expect(r1.usage.todayTotal == 0)      // 과거 세션 첫 관측분은 오늘분 아님(기준선=현재 누적 2100)
+    let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
 
-    // 오늘 이어감: 누적 2650 으로 성장(append, mtime=오늘).
-    appendFile("\(codexTokenCountLine(input: 2500, cached: 0, output: 150))\n", to: url, modified: fixedNow)
-    let r2 = TokenUsageIncrementalScanner.update(r1.cache, homeDirectory: home, now: fixedNow)
-
-    #expect(r2.usage.todayTotal == 550)    // 관측 후 증가분만(2650 − 2100), 누적 2650 아님
-    #expect(r2.usage.codexInput == 2500)
+    #expect(usage.codexInput == 4000)   // 7월 delta 합(2000+2000), 6월 1000 제외
+    #expect(usage.codexTotal == 4000)
     try? FileManager.default.removeItem(at: home)
 }
 
-// (d) 자정 넘김(파일 무변경): 재읽기 없이 기준선이 어제 누적치로 이월되고 dayKey 가 오늘로 갱신된다 → 오늘분 0.
+// (c) info null / timestamp 결손 이벤트는 건너뛰되 prevCumulative 를 갱신하지 않아, 다음 유효 이벤트의 delta 에 흡수된다(유실 없음).
 @Test
-func codexDayRolloverCarriesBaselineForwardOnUnchangedFile() {
+func codexAbsorbsSkippedEventsIntoNextValidDelta() {
     let home = makeTempHome()
-    let yesterday = fixedNow.addingTimeInterval(-86_400)   // 2026-07-13
+    let evt = utcDate("2026-07-05T00:00:00Z")   // 7월(현재 월), 오늘 아님
+    // 이벤트1 cum 1000 delta 1000. 중간에 total_token_usage 없는 무효 라인(건너뜀, prevCumulative 유지 1000).
+    // 이벤트2 cum 3000 → delta 2000(건너뛴 중간분까지 흡수). timestamp 없는 라인도 하나 끼워 건너뜀을 검증.
+    let noTimestamp = "{\"type\":\"event_msg\",\"payload\":{\"type\":\"token_count\","
+        + "\"info\":{\"total_token_usage\":{\"input_tokens\":9999,\"cached_input_tokens\":0,\"output_tokens\":0,\"total_tokens\":0}}}}"
+    let lines = [
+        codexTokenCountLine(input: 1000, cached: 0, output: 0, timestamp: evt),
+        codexInvalidTokenCountLine,   // info 에 total_token_usage 없음 → 건너뜀
+        noTimestamp,                  // total 은 있으나 timestamp 결손 → 건너뜀(prevCumulative 불변)
+        codexTokenCountLine(input: 3000, cached: 0, output: 0, timestamp: evt)
+    ].joined(separator: "\n")
+    writeFile("\(lines)\n", to: codexURL(home, path: "2026/07/05/rollout-2026-07-05T00-00-00-cccc.jsonl"))
+
+    let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
+
+    #expect(usage.codexInput == 3000)   // 1000 + 2000(흡수) — 건너뛴 이벤트로 토큰 유실 없음
+    #expect(usage.codexTotal == 3000)
+    try? FileManager.default.removeItem(at: home)
+}
+
+// (d) 누적이 줄어드는 리셋 이벤트는 delta 를 max(0,…) 로 클램프한다(음수 델타 없음).
+@Test
+func codexClampsCumulativeResetToZeroDelta() {
+    let home = makeTempHome()
+    let evt = utcDate("2026-07-05T00:00:00Z")   // 7월
+    let lines = [
+        codexTokenCountLine(input: 5000, cached: 0, output: 0, timestamp: evt),  // cum 5000, delta 5000
+        codexTokenCountLine(input: 3000, cached: 0, output: 0, timestamp: evt),  // cum 3000(리셋), delta max(0,-2000)=0
+        codexTokenCountLine(input: 4000, cached: 0, output: 0, timestamp: evt)   // cum 4000, delta 1000
+    ].joined(separator: "\n")
+    writeFile("\(lines)\n", to: codexURL(home, path: "2026/07/05/rollout-2026-07-05T00-00-00-dddd.jsonl"))
+
+    let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
+
+    #expect(usage.codexInput == 6000)   // 5000 + 0(클램프) + 1000 — 리셋이 음수로 깎지 않음
+    try? FileManager.default.removeItem(at: home)
+}
+
+// (b·자정 넘김) 무변경 파일에서 날이 바뀌면 재읽기 없이 dayContribTotal 을 0 리셋하고 dayKey 를 오늘로 갱신한다.
+// 월(monthKey)은 그대로라 월 집계는 유지된다. 어제 누적이 오늘로 새지 않는다.
+@Test
+func codexDayRolloverResetsDayContribOnUnchangedFile() {
+    let home = makeTempHome()
+    let yesterdayEvt = utcDate("2026-07-13T06:00:00Z")   // KST 07-13 15:00
+    let yScanNow = utcDate("2026-07-13T12:00:00Z")       // 어제 스캔 시각(KST 07-13 21:00) → 그날이 "오늘"
     let url = codexURL(home, path: "2026/07/13/rollout-2026-07-13T00-00-00-dddd.jsonl")
 
-    // 어제 관측: 누적 5000, dayKey="2026-07-13".
-    writeFile("\(codexTokenCountLine(input: 5000, cached: 0, output: 0))\n", to: url, modified: yesterday)
-    let r1 = TokenUsageIncrementalScanner.update(TokenUsageCache(), homeDirectory: home, now: yesterday)
+    // 어제 스캔: 이벤트 일키(07-13)==그날 오늘 → dayContrib=5000, dayKey=07-13.
+    writeFile("\(codexTokenCountLine(input: 5000, cached: 0, output: 0, timestamp: yesterdayEvt))\n",
+              to: url, modified: yScanNow)
+    let r1 = TokenUsageIncrementalScanner.update(TokenUsageCache(), homeDirectory: home, now: yScanNow)
+    #expect(r1.usage.todayDate == "2026-07-13")
+    #expect(r1.usage.todayTotal == 5000)
     #expect(r1.cache.codexFileStates.values.first?.dayKey == "2026-07-13")
 
-    // 자정 넘김: 파일은 그대로(크기·mtime 불변). now=오늘로 재스캔 → 재읽기 없이 기준선만 이월, dayKey=오늘.
+    // 자정 넘김: 파일 무변경(크기·mtime 불변). now=오늘(fixedNow) 재스캔 → 재읽기 0, dayContrib 0 리셋, dayKey=오늘.
     let r2 = TokenUsageIncrementalScanner.update(r1.cache, homeDirectory: home, now: fixedNow)
 
     #expect(r2.stats.codexBytesRead == 0)   // 무변경 파일 — 재읽기 0
-    #expect(r2.stats.cacheChanged == true)  // 기준선·dayKey 이월은 캐시 변경(저장 유도)
+    #expect(r2.stats.cacheChanged == true)  // 일 롤오버 리셋은 캐시 변경(저장 유도)
     #expect(r2.cache.codexFileStates.values.first?.dayKey == "2026-07-14")
-    #expect(r2.cache.codexFileStates.values.first?.dayBaselineTotal == 5000)   // 어제 누적치가 기준선으로 이월
-    #expect(r2.usage.todayTotal == 0)       // 오늘 성장 0 → 오늘분 0(어제 누적 5000 이 오늘로 새지 않음)
+    #expect(r2.cache.codexFileStates.values.first?.dayContribTotal == 0)
+    #expect(r2.usage.todayTotal == 0)       // 어제 누적 5000 이 오늘로 새지 않음
+    #expect(r2.usage.codexInput == 5000)    // 월(7월) 집계는 유지(monthKey 그대로 7월)
     try? FileManager.default.removeItem(at: home)
 }
 
 @Test
 func todayTotalCombinesClaudeAndCodexForToday() {
     let home = makeTempHome()
-    // 오늘 Claude 엔트리 + 오늘 Codex 파일이 함께 todayTotal 에 합산된다(month 부분집합).
-    // Codex 오늘분은 파일 birthtime 기반 기준선(0)에 걸리므로 '오늘 생성'을 재현하려면 실시간(now=Date())이어야 한다
-    // — 그래서 Claude 엔트리 ts 도 now 로 맞춰 둘 다 오늘로 계상되게 한다.
-    let now = Date()
-    let claudeToday = claudeLine(id: "c", requestId: "c", timestamp: now,
+    // 오늘 Claude 엔트리 + 오늘 Codex 이벤트가 함께 todayTotal 에 합산된다(month 부분집합). 둘 다 이벤트 timestamp 로 오늘 귀속.
+    let today = utcDate("2026-07-14T02:00:00Z")   // KST 07-14 11:00
+    let claudeToday = claudeLine(id: "c", requestId: "c", timestamp: today,
         usage: "{\"input_tokens\":10,\"output_tokens\":20,\"cache_read_input_tokens\":0,\"cache_creation_input_tokens\":0}")
-    writeFile("\(claudeToday)\n", to: claudeURL(home, project: "p", file: "s.jsonl"), modified: now)
-    writeFile("\(codexTokenCountLine(input: 3, cached: 1, output: 4))\n",
-              to: codexURL(home, path: "live/rollout-today.jsonl"), modified: now)
+    writeFile("\(claudeToday)\n", to: claudeURL(home, project: "p", file: "s.jsonl"))
+    writeFile("\(codexTokenCountLine(input: 3, cached: 1, output: 4, timestamp: today))\n",
+              to: codexURL(home, path: "2026/07/14/rollout-today.jsonl"))
 
-    let usage = TokenUsageScanner.scan(homeDirectory: home, now: now)
+    let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
 
-    #expect(usage.todayTotal == 37)   // Claude(10+20) + Codex(3+4, 오늘 생성이라 기준선 0)
+    #expect(usage.todayTotal == 37)   // Claude(10+20) + Codex delta(3+4)
     try? FileManager.default.removeItem(at: home)
 }
 
@@ -652,24 +704,52 @@ func claudeReplacesCachedEntryWhenLargerOutputArrivesOnLaterUpdate() {
     try? FileManager.default.removeItem(at: home)
 }
 
+// (e) 증분 이어읽기: append 후 재스캔은 새 바이트만 읽고, prevCumulative 를 이어받아 그 사이 delta 만 정확히 가산한다.
 @Test
-func codexTailAdoptsNewerCumulativeTokenCountOnAppend() {
+func codexTailAddsDeltaOfAppendedCumulativeOnReRead() {
     let home = makeTempHome()
-    let l1 = codexTokenCountLine(input: 100, cached: 50, output: 10) + "\n"
+    let evt = utcDate("2026-07-05T00:00:00Z")   // 7월(현재 월), 오늘 아님
+    let l1 = codexTokenCountLine(input: 100, cached: 50, output: 10, timestamp: evt) + "\n"   // cum 110
     let url = codexURL(home, path: "2026/07/01/rollout-2026-07-01T00-00-00-aaaa.jsonl")
     writeFile(l1, to: url)
 
     let r1 = TokenUsageIncrementalScanner.update(TokenUsageCache(), homeDirectory: home, now: fixedNow)
-    #expect(r1.usage.codexInput == 100)
-    #expect(r1.usage.codexOutput == 10)
+    #expect(r1.usage.codexInput == 110)   // delta 110 (input+output 합)
+    #expect(r1.usage.codexOutput == 0)
 
-    // 세션이 이어져 더 큰 누적치가 append 됨 — tail 로 새 바이트만 읽어 최신 token_count 를 채택(합산 아님).
-    let l2 = codexTokenCountLine(input: 300, cached: 150, output: 40) + "\n"
+    // 세션이 이어져 더 큰 누적치가 append 됨 — tail 로 새 바이트만 읽어 delta(340-110=230)만 가산.
+    let l2 = codexTokenCountLine(input: 300, cached: 150, output: 40, timestamp: evt) + "\n"   // cum 340
     appendFile(l2, to: url, modified: fixedNow.addingTimeInterval(1))
     let r2 = TokenUsageIncrementalScanner.update(r1.cache, homeDirectory: home, now: fixedNow)
     #expect(r2.stats.codexBytesRead == l2.utf8.count)   // 새 바이트만
-    #expect(r2.usage.codexInput == 300)                 // 최신 누적치로 갱신
-    #expect(r2.usage.codexOutput == 40)
+    #expect(r2.usage.codexInput == 340)                 // 110 + 230(이어읽기 delta) = 최종 누적
+    #expect(r2.cache.codexFileStates.values.first?.prevCumulative == 340)
+    try? FileManager.default.removeItem(at: home)
+}
+
+// (g) 파일 축소(로테이션/절단): size 감소 → offset 0 전체 재파싱 + contrib/prevCumulative 리셋 후 재누적.
+@Test
+func codexShrunkFileResetsAndFullyReparses() {
+    let home = makeTempHome()
+    let evt = utcDate("2026-07-05T00:00:00Z")   // 7월
+    let url = codexURL(home, path: "2026/07/05/rollout-2026-07-05T00-00-00-eeee.jsonl")
+    // 초기: 누적 2000 까지.
+    let big = [
+        codexTokenCountLine(input: 1000, cached: 0, output: 0, timestamp: evt),
+        codexTokenCountLine(input: 2000, cached: 0, output: 0, timestamp: evt)
+    ].joined(separator: "\n") + "\n"
+    writeFile(big, to: url)
+    let r1 = TokenUsageIncrementalScanner.update(TokenUsageCache(), homeDirectory: home, now: fixedNow)
+    #expect(r1.usage.codexInput == 2000)
+
+    // 더 작은 내용으로 덮어씀(축소) — 새 세션이 누적 500 에서 시작. 전체 재파싱으로 delta/prevCumulative 리셋.
+    let small = codexTokenCountLine(input: 500, cached: 0, output: 0, timestamp: evt) + "\n"
+    writeFile(small, to: url)
+    let r2 = TokenUsageIncrementalScanner.update(r1.cache, homeDirectory: home, now: fixedNow)
+    #expect(r2.stats.codexBytesRead == small.utf8.count)   // 처음부터 재읽기(테일 아님)
+    #expect(r2.usage.codexInput == 500)                    // 이전 2000 잔류 없이 새 누적 500 만
+    #expect(r2.cache.codexFileStates.values.first?.prevCumulative == 500)
+    #expect(r2.cache.codexFileStates.values.first?.consumedOffset == small.utf8.count)
     try? FileManager.default.removeItem(at: home)
 }
 
@@ -680,44 +760,48 @@ func cacheSurvivesCompactCodableRoundTripIncludingNulKeys() {
     var cache = TokenUsageCache()
     cache.claudeEntries["msg_1\u{0}req_1"] = ClaudeEntry(ts14: 20_260_722_103_000, input: 1, output: 2, cacheRead: 3, cacheCreation: 4)
     cache.claudeFileStates["/a/b.jsonl"] = FileProgress(size: 10, mtimeMicros: 999, consumedOffset: 8)
-    cache.codexFileStates["/c/rollout.jsonl"] = CodexFileProgress(size: 20, mtimeMicros: 111, consumedOffset: 15, input: 5, output: 6, cached: 7)
+    cache.codexFileStates["/c/rollout.jsonl"] = CodexFileProgress(
+        size: 20, mtimeMicros: 111, consumedOffset: 15, prevCumulative: 340,
+        monthKey: "2026-07", monthContribTotal: 300, dayKey: "2026-07-14", dayContribTotal: 42)
 
     let data = try! JSONEncoder().encode(cache)
     let decoded = try! JSONDecoder().decode(TokenUsageCache.self, from: data)
-    #expect(decoded == cache)   // NUL 구분자 키 포함 배열튜플 인코딩이 정확히 왕복.
+    #expect(decoded == cache)   // NUL 구분자 키 + codex 8필드(문자열 섞임) 배열튜플이 정확히 왕복.
 }
 
-// (e) 하위호환: 옛 6필드 codex 배열튜플 캐시(dayKey/dayBaselineTotal 없음)를 디코드하면 ""/0 폴백한다
-// (unkeyed decodeIfPresent 가 at-end 에서 nil 을 주므로 디코드 실패·캐시 폐기 없이 우아하게 복원).
+// (f) 하위호환: 구버전 캐시(codexSchemaVersion 부재 + 옛 codex 튜플)를 로드하면 codexFileStates 만 폐기하고 Claude 상태는
+// 보존한다 — 스키마 게이트가 옛 숫자열 튜플을 새 형식으로 억지 디코드하다 던지는 실패(→ 전체 캐시 폐기)를 막는다.
+// codexFileStates 가 비면 다음 스캔이 codex 를 offset 0 전체 재파싱해 과거 귀속을 소급 교정한다.
 @Test
-func codexFileProgressDecodesLegacySixFieldTupleAsBaselineDefaults() {
+func legacyCacheDropsCodexStatesButKeepsClaudeAndTriggersReparse() {
+    // 옛 codex 튜플 [10,20,30,40,50,60] 은 새 형식으로 디코드하면 monthKey(문자열) 위치에 숫자 50 이 와 실패하지만,
+    // codexSchemaVersion 부재(→ 버전 0, 현재≠0) 게이트가 애초에 codexFileStates 디코드를 건너뛴다.
     let legacyJSON = """
-    {"claudeFileStates":{},"claudeEntries":{},"codexFileStates":{"/p/rollout.jsonl":[10,20,30,40,50,60]}}
+    {"claudeFileStates":{"/a/b.jsonl":[10,999,8]},"claudeEntries":{"msg\\u0000req":[20260722103000,1,2,3,4]},"codexFileStates":{"/p/rollout.jsonl":[10,20,30,40,50,60]}}
     """
     let decoded = try! JSONDecoder().decode(TokenUsageCache.self, from: Data(legacyJSON.utf8))
-    let s = decoded.codexFileStates["/p/rollout.jsonl"]!
-    #expect(s.size == 10)
-    #expect(s.mtimeMicros == 20)
-    #expect(s.consumedOffset == 30)
-    #expect(s.input == 40)
-    #expect(s.output == 50)
-    #expect(s.cached == 60)
-    #expect(s.dayKey == "")            // 옛 캐시엔 없어 폴백
-    #expect(s.dayBaselineTotal == 0)   // 옛 캐시엔 없어 폴백
+    #expect(decoded.codexFileStates.isEmpty)                       // 옛 codex 상태 폐기(재파싱 유발)
+    #expect(decoded.claudeFileStates["/a/b.jsonl"] != nil)         // Claude 파일상태 보존
+    #expect(decoded.claudeEntries["msg\u{0}req"]?.input == 1)      // Claude 엔트리 보존
+    #expect(decoded.codexSchemaVersion == TokenUsageCache.currentCodexSchemaVersion)  // 인메모리 버전은 현재로 승격
 }
 
-// 새 8필드(기준선 포함) codex 배열튜플이 정확히 왕복한다(기존 6필드 왕복 불변 + 신규 필드 보존).
+// 새 8필드(이벤트-귀속) codex 배열튜플이 정확히 왕복한다(prevCumulative·month/day 귀속 보존).
 @Test
-func codexFileProgressRoundTripsDayBaselineFields() {
+func codexFileProgressRoundTripsEventAttributionFields() {
     var cache = TokenUsageCache()
     cache.codexFileStates["/c/rollout.jsonl"] = CodexFileProgress(
-        size: 20, mtimeMicros: 111, consumedOffset: 15, input: 5, output: 6, cached: 7,
-        dayKey: "2026-07-14", dayBaselineTotal: 9)
+        size: 20, mtimeMicros: 111, consumedOffset: 15, prevCumulative: 340,
+        monthKey: "2026-07", monthContribTotal: 300, dayKey: "2026-07-14", dayContribTotal: 42)
     let data = try! JSONEncoder().encode(cache)
     let decoded = try! JSONDecoder().decode(TokenUsageCache.self, from: data)
     #expect(decoded == cache)
-    #expect(decoded.codexFileStates["/c/rollout.jsonl"]?.dayKey == "2026-07-14")
-    #expect(decoded.codexFileStates["/c/rollout.jsonl"]?.dayBaselineTotal == 9)
+    let s = decoded.codexFileStates["/c/rollout.jsonl"]!
+    #expect(s.prevCumulative == 340)
+    #expect(s.monthKey == "2026-07")
+    #expect(s.monthContribTotal == 300)
+    #expect(s.dayKey == "2026-07-14")
+    #expect(s.dayContribTotal == 42)
 }
 
 // MARK: - 숫자 포맷 (콤마 전체 숫자)

@@ -2879,6 +2879,60 @@ func sendPokeCooldownResponseMirrorsRetryAfter() async {
 
 @MainActor
 @Test
+func sendPokeTargetNotWorkingShowsNoticeAndReloadsDirectory() async {
+    let testHost = "poke-target-off-test"
+    TokenBoardURLProtocol.setResponse(#"{"status":"target_not_working"}"#, forHost: testHost)
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    // 내가 근무중이라 선게이트를 통과한다(대상 자리비움은 서버가 최종 판정).
+    store.startedAt = Date()
+
+    store.sendPoke(to: "target")
+
+    // target_not_working 응답 → 안내 문구 + 디렉토리 재조회(app_user_directory) 발사(낡은 근무중 배지 교정).
+    var noticed = false
+    var reloaded = false
+    for _ in 0..<400 {
+        if store.pokeNotice == "자리비움 상태에는 찌를 수 없어요" { noticed = true }
+        if TokenBoardURLProtocol.lastURL(forHost: testHost)?.path == "/rest/v1/rpc/app_user_directory" {
+            reloaded = true
+        }
+        if noticed && reloaded { break }
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(noticed)
+    #expect(reloaded)
+    // 대상 자리비움은 쿨타임과 무관하므로 쿨타임 미러링이 없다.
+    #expect(store.pokeCooldownUntil["target"] == nil)
+}
+
+@Test
+func pokeSendOutcomeMapsAllStatuses() {
+    #expect(PokeSendOutcome(response: PokeSendResponse(status: "ok")) == .ok)
+    #expect(PokeSendOutcome(response: PokeSendResponse(status: "cooldown", retryAfterSeconds: 25))
+        == .cooldown(retryAfterSeconds: 25))
+    #expect(PokeSendOutcome(response: PokeSendResponse(status: "not_working")) == .notWorking)
+    #expect(PokeSendOutcome(response: PokeSendResponse(status: "target_not_working")) == .targetNotWorking)
+    #expect(PokeSendOutcome(response: PokeSendResponse(status: "invalid")) == .invalid)
+    // 미지의 status 는 안전하게 invalid 로 폴백한다.
+    #expect(PokeSendOutcome(response: PokeSendResponse(status: "누락된값")) == .invalid)
+}
+
+@MainActor
+@Test
 func setTokenUsagePublicRevertsOnFailure() async {
     let testHost = "privacy-toggle-fail-test"
     let service = SupabaseWorkService(

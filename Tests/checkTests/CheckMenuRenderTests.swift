@@ -1192,7 +1192,8 @@ func tokenBoardWindowHeightWithinCap() throws {
 // MARK: - U: 콕찌르기 패널 + 토큰 공개/비공개 토글 렌더
 
 /// 콕찌르기 패널이 열린 로그인 스토어. 앱 사용자 전체 목록(본인 제외)이라 팀 무관 — 근무중/자리비움, 아바타 nil 섞기.
-/// myselfWorking 으로 내 근무 상태를(찌르기 가능/안내줄) 시드하고, 한 명(u2)은 쿨타임 중(now+37)으로 카운트다운을 재현한다.
+/// myselfWorking 으로 내 근무 상태를(찌르기 가능/안내줄) 시드하고, 한 명(u2)은 쿨타임 중(now+37)으로 비활성(흐린 아이콘) 상태를 재현한다.
+/// 자리비움(isWorking==false) 엔트리는 대상 게이트로 찌르기 버튼이 비활성(흐린 아이콘)으로 그려진다.
 @MainActor
 private func makePokePanelStore(memberCount: Int = 5, myselfWorking: Bool = true, now: Date = Date()) -> WorkTimerStore {
     let store = makeTeamStore(members: [], now: now)
@@ -1216,7 +1217,7 @@ private func makePokePanelStore(memberCount: Int = 5, myselfWorking: Bool = true
     store.pokeDirectory = Array(pool.prefix(memberCount))
     store.pokeDirectoryLoaded = true
     store.isPokePanelVisible = true
-    // 한 명(u2)은 쿨타임 중 — now+37 → 잔여 37초 카운트다운("37초" 비활성)이 뜬다.
+    // 한 명(u2)은 쿨타임 중 — now+37 → 숫자 없이 흐린 비활성 아이콘으로 그려진다(잔여 초 미표시).
     store.pokeCooldownUntil = ["u2": now.addingTimeInterval(37)]
     return store
 }
@@ -1232,8 +1233,9 @@ private func savePokeUISnapshot(_ png: Data, _ name: String) {
 @MainActor
 @Test
 func checkMenuViewRendersPokePanelSnapshot() throws {
-    // 콕찌르기 패널: 근무중 2·자리비움 3(내가 근무중이라 안내줄 없음), 한 명(민수)은 쿨타임 "37초" 카운트다운.
-    // 아바타(이미지 1 + 이니셜) · 상태 칩(근무중/자리비움) · 찌르기 버튼(accent "콕!" / "37초" 비활성)이 함께 보인다.
+    // 콕찌르기 패널: 근무중 2·자리비움 3(내가 근무중이라 안내줄 없음), 한 명(민수)은 쿨타임 중(흐린 비활성 아이콘).
+    // 자리비움 3인(지현·타팀 김서연·서준)은 대상 게이트로 찌르기 버튼이 흐린 비활성으로 그려진다(근무중 영식만 accent 활성).
+    // 아바타(이미지 1 + 이니셜) · 상태 칩(근무중/자리비움) · 찌르기 버튼(accent 손가락 원형 / 흐린 비활성)이 함께 보인다.
     let now = Date()
     let png = try renderPNG(CheckMenuView(store: makePokePanelStore(memberCount: 5, myselfWorking: true, now: now)))
     #expect(png.count > 0)
@@ -1243,7 +1245,7 @@ func checkMenuViewRendersPokePanelSnapshot() throws {
 @MainActor
 @Test
 func checkMenuViewRendersPokePanelOffWorkSnapshot() throws {
-    // 내가 비근무 — "근무 중일 때만 콕 찌를 수 있어요" 안내줄이 뜨고 모든 찌르기 버튼이 흐린 "콕!"(비활성)로 보인다.
+    // 내가 비근무 — "근무 중일 때만 콕 찌를 수 있어요" 안내줄이 뜨고 모든 찌르기 버튼이 흐린 비활성 손가락 아이콘으로 보인다.
     let png = try renderPNG(CheckMenuView(store: makePokePanelStore(memberCount: 5, myselfWorking: false)))
     #expect(png.count > 0)
     savePokeUISnapshot(png, "poke-ui-offwork")

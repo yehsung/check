@@ -1184,9 +1184,12 @@ struct LiveE2ETests {
         }
     }
 
-    // s09f. 콕찌르기 왕복: owner 가 근무중일 때 joiner 를 찌르면 ok, 즉시 재찌르기는 서버 쿨타임(cooldown+retry_after).
-    // joiner 가 take_pokes 로 owner 찔림을 원자 수신+소비하고(표시명 포함), 재호출 시 빈 배열(소비 완료).
-    // owner 가 근무종료하면 not_working 게이트가 걸린다. 마이그레이션(20260724020000_pokes) push 후 오케스트레이터가 실행한다.
+    // s09f. 콕찌르기 왕복 + 대상 게이트: 나도 대상도 근무중이어야 찌를 수 있다.
+    //  (a) owner·joiner 모두 근무중 → owner→joiner ok, 즉시 재찌르기 = 쿨타임(cooldown+retry_after),
+    //      joiner 가 take_pokes 로 원자 수신+소비(표시명 포함), 재호출 시 빈 배열.
+    //  (b) joiner 근무종료 후 owner→joiner = target_not_working(쿨타임 60초가 안 지났어도 대상 체크가 먼저라 결정적).
+    //  (c) owner 근무종료 후 owner→joiner = not_working(보낸이 체크가 대상 체크보다 먼저).
+    // 마이그레이션(20260724030000_poke_target_working) push 후 오케스트레이터가 실행한다. 열린 세션 잔존 금지.
     @Test(.enabled(if: LiveE2EEnv.enabled))
     func s09f_pokeRoundTrip() async throws {
         let ctx = try makeContext()
@@ -1216,29 +1219,34 @@ struct LiveE2ETests {
         let sessionB = try #require(storeB.session)
         #expect(storeB.currentTeamID == teamID)
 
-        // owner 를 근무중으로(열린 세션) — 찌르기 게이트 통과 조건.
+        // owner·joiner 모두 근무중으로(열린 세션) — 새 정책상 양쪽 모두 게이트 통과 조건.
         if storeA.startedAt == nil {
             storeA.start()
             await storeA.syncTask?.value
         }
         #expect(storeA.startedAt != nil)
+        if storeB.startedAt == nil {
+            storeB.start()
+            await storeB.syncTask?.value
+        }
+        #expect(storeB.startedAt != nil)
 
         // 남은 미소비 찔림이 다음 검증을 흔들지 않게 B 의 수신함을 먼저 비운다(멱등).
         _ = try await storeB.service.takePokes(accessToken: sessionB.accessToken)
 
-        // 1) owner → joiner 찌르기 = ok.
+        // (a-1) owner → joiner 찌르기 = ok(둘 다 근무중).
         let first = try await storeA.service.sendPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
         #expect(first.status == "ok")
         obs("콕찌르기: owner→joiner 첫 시도 status=\(first.status)")
 
-        // 2) 즉시 재찌르기 = 서버 쿨타임(cooldown + retry_after 1...60).
+        // (a-2) 즉시 재찌르기 = 서버 쿨타임(cooldown + retry_after 1...60).
         let second = try await storeA.service.sendPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
         #expect(second.status == "cooldown")
         let retry = try #require(second.retryAfterSeconds)
         #expect(retry >= 1 && retry <= 60)
         obs("콕찌르기: 즉시 재시도 status=\(second.status), retry_after=\(retry)")
 
-        // 3) joiner 가 take_pokes 로 owner 찔림을 원자 수신+소비한다(보낸이 표시명 포함).
+        // (a-3) joiner 가 take_pokes 로 owner 찔림을 원자 수신+소비한다(보낸이 표시명 포함).
         let taken = try await storeB.service.takePokes(accessToken: sessionB.accessToken)
         #expect(taken.contains { $0.fromUser == sessionA.userID })
         let ownerPoke = taken.first { $0.fromUser == sessionA.userID }
@@ -1246,20 +1254,36 @@ struct LiveE2ETests {
         #expect(ownerPoke?.fromDisplayName.contains("@") == false)  // 이메일 비노출.
         obs("콕찌르기 수신: joiner 가 받은 행 수=\(taken.count)")
 
-        // 4) 재호출 시 빈 배열(이미 소비됨).
+        // (a-4) 재호출 시 빈 배열(이미 소비됨).
         let takenAgain = try await storeB.service.takePokes(accessToken: sessionB.accessToken)
         #expect(takenAgain.contains { $0.fromUser == sessionA.userID } == false)
 
-        // 5) owner 근무종료 후 찌르기 = not_working 게이트(세션 정리 겸).
+        // (b) joiner 근무종료 → owner→joiner = target_not_working. owner 는 여전히 근무중이고
+        //     (a) 로 60초 쿨타임이 남아 있지만, 서버가 대상 체크를 쿨타임보다 먼저 하므로 결정적으로 target_not_working 이다.
+        storeB.stop()
+        await storeB.syncTask?.value
+        let joinerClosed = await waitUntil {
+            (try? await ctx.admin.sessionRows(userID: sessionB.userID, openOnly: true))?.isEmpty == true
+        }
+        #expect(joinerClosed)
+        let afterTargetStop = try await storeA.service.sendPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
+        #expect(afterTargetStop.status == "target_not_working")
+        obs("콕찌르기: 대상(joiner) 근무종료 후 status=\(afterTargetStop.status)")
+
+        // (c) owner 근무종료 → 보낸이 체크가 대상 체크보다 먼저라 not_working(대상도 자리비움이지만 보낸이 게이트가 우선).
         storeA.stop()
         await storeA.syncTask?.value
-        let closedReady = await waitUntil {
+        let ownerClosed = await waitUntil {
             (try? await ctx.admin.sessionRows(userID: owner.userID, openOnly: true))?.isEmpty == true
         }
-        #expect(closedReady)
-        let afterStop = try await storeA.service.sendPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
-        #expect(afterStop.status == "not_working")
-        obs("콕찌르기: 근무종료 후 status=\(afterStop.status)")
+        #expect(ownerClosed)
+        let afterSenderStop = try await storeA.service.sendPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
+        #expect(afterSenderStop.status == "not_working")
+        obs("콕찌르기: 보낸이(owner) 근무종료 후 status=\(afterSenderStop.status)")
+
+        // 세션 정리 철저 — 열린 세션 잔존 금지(다음 시나리오/재실행 오염 방지, 멱등).
+        try await ctx.admin.closeOpenSessions(userID: owner.userID)
+        try await ctx.admin.closeOpenSessions(userID: sessionB.userID)
     }
 
     // s09g. 토큰 사용량 공개/비공개: joiner 가 비공개로 두면 owner 보드에서 사라지되(타인 숨김) 자기 보드에는 남고,

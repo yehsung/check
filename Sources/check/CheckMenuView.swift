@@ -1017,6 +1017,17 @@ private struct TokenBoardRowView: View {
 
 // MARK: - Poke directory page
 
+/// 콕 버튼 눌림 UX — isPressed 에서 살짝 축소(0.82) + 불투명도 다운으로 눌리는 느낌을 주고,
+/// 스프링으로 탄성 있게 복귀시킨다. accent 원형 찌르기 버튼에 적용한다.
+private struct PokePressButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.82 : 1.0)
+            .opacity(configuration.isPressed ? 0.82 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.55), value: configuration.isPressed)
+    }
+}
+
 /// 콕찌르기 빈 목록 자리 문구 선택(순수 로직, 결정적 검증 지점). 리그/토큰 보드의 EmptyMessage 와 같은 패턴이다:
 /// 로드 성공했는데 비면 '아직 아무도 없음'(true), 로드 전/실패면 fallbackStatus(동기화 상태 문구)(false).
 enum PokeDirectoryEmptyMessage {
@@ -1028,8 +1039,9 @@ enum PokeDirectoryEmptyMessage {
 
 /// 팀 카드 자리를 대체하는 콕찌르기 페이지(앱 로그인 사용자 전체). 리그/토큰 보드와 같은 뼈대다:
 /// 뒤로 버튼 + 제목 + (조건부 안내줄) + 고정 행높이 리스트(maxVisibleRows 초과 시 스크롤). 행은 아바타 + 이름 +
-/// 상태 칩(근무중/자리비움) + 우측 찌르기 버튼(쿨타임/비근무/가능 3상태). store 값을 값+클로저로만 받아
-/// 렌더 테스트 친화적으로 유지한다 — 쿨타임 잔여는 displayNow 기준 클로저로 매초 갱신된다.
+/// 상태 칩(근무중/자리비움) + 우측 찌르기 버튼(손가락 아이콘: 가능=accent 원형, 쿨타임/내 비근무/대상 자리비움=흐린 비활성).
+/// 자리비움 대상은 찌를 수 없다(서버 강제, 클라 선게이트). store 값을 값+클로저로만 받아 렌더 테스트 친화적으로 유지한다 —
+/// 쿨타임 잔여는 displayNow 기준 클로저로 매초 갱신된다.
 private struct PokePanel: View {
     // 근무중 먼저·이름순으로 정렬된 사용자 목록(store 에서 이미 정렬됨). 뷰에서도 같은 규약으로 다시 정렬한다.
     let entries: [PokeDirectoryEntry]
@@ -1152,8 +1164,8 @@ private struct PokePanel: View {
 }
 
 /// 콕찌르기 한 행 = 좌측 세로 해시색 바(유저 컬러 포인트) + 아바타 + 이름 + 상태 칩(근무중/자리비움) + 우측 찌르기 버튼.
-/// 상태 칩은 근무중이면 초록 점+"근무중", 아니면 회색 "자리비움". 찌르기 버튼은 3상태: 쿨타임 중(잔여 초 카운트다운·비활성),
-/// 내가 비근무(흐린 "콕!"·비활성), 가능(accent "콕!"). 대상이 자리비움이어도 찌르기는 허용된다(서버에 쌓였다가 복귀 시 전달).
+/// 상태 칩은 근무중이면 초록 점+"근무중", 아니면 회색 "자리비움". 찌르기 버튼은 손가락 아이콘: 가능(accent 원형·눌림 탄성),
+/// 쿨타임 중/내가 비근무/대상이 자리비움(흐린 비활성 아이콘, 숫자 없음). 자리비움 대상은 찌를 수 없다(서버 강제).
 private struct PokeDirectoryRowView: View {
     let entry: PokeDirectoryEntry
     // 이 대상 쿨타임 잔여 초(0이면 쿨타임 아님). 패널이 displayNow 기준으로 계산해 넘긴다.
@@ -1216,37 +1228,42 @@ private struct PokeDirectoryRowView: View {
         }
     }
 
-    // 찌르기 버튼 3상태. 쿨타임 중이면 잔여 초 카운트다운(비활성), 내가 비근무면 흐린 "콕!"(비활성), 가능이면 accent "콕!".
+    // 찌르기 버튼 — 손가락 아이콘. 여러 비활성 사유가 있지만 시각은 2가지: 가능(accent 원형·눌림 탄성)과 비활성(흐린 아이콘).
+    // 쿨타임 잔여 초는 숫자로 그리지 않고, 쿨타임 중/내가 비근무/대상 자리비움 모두 흐린 비활성 아이콘으로 같은 계열로 표시한다.
     @ViewBuilder
     private var pokeButton: some View {
         if remainingCooldown > 0 {
-            // 쿨타임 중 — 잔여 초 카운트다운(비활성). 같은 대상 60초 쿨타임을 서버가 강제하고 여기선 미러링만 한다.
-            pokeCapsuleLabel(label: "\(remainingCooldown)초", foreground: CheckTheme.secondaryText, fill: Color.white.opacity(0.08))
+            // 쿨타임 중 — 숫자 없이 흐린 비활성. 같은 대상 60초 쿨타임을 서버가 강제하고 여기선 미러링만 한다.
+            pokeIconLabel(active: false)
                 .help("잠시 후 다시 찌를 수 있어요")
         } else if !canPoke {
-            // 내가 비근무 — 찌를 수 없다(서버 강제). 흐린 "콕!"으로 비활성 표시.
-            pokeCapsuleLabel(label: "콕!", foreground: CheckTheme.secondaryText.opacity(0.6), fill: Color.white.opacity(0.06))
+            // 내가 비근무 — 찌를 수 없다(서버 강제). 쿨타임과 같은 흐린 비활성 아이콘으로 표시.
+            pokeIconLabel(active: false)
                 .help("내가 근무 중일 때만 콕 찌를 수 있어요")
+        } else if !entry.isWorking {
+            // 대상이 자리비움 — 찌를 수 없다(서버 강제). 쿨타임/내 비근무와 같은 흐린 비활성 아이콘으로 표시.
+            pokeIconLabel(active: false)
+                .help("자리비움 상태에는 찌를 수 없어요")
         } else {
-            // 가능 — accent 배경. 대상이 자리비움이어도 허용(서버에 쌓였다가 상대가 돌아오면 전달됨).
+            // 가능 — accent 원형 배경. 나도 대상도 근무중일 때만 여기 온다.
             Button(action: onPoke) {
-                pokeCapsuleLabel(label: "콕!", foreground: .white, fill: CheckTheme.accent)
+                pokeIconLabel(active: true)
             }
-            .buttonStyle(.plain)
-            .help(entry.isWorking ? "콕 찌르기" : "콕 찌르기 — 지금 자리비움이라 돌아오면 전달돼요")
+            .buttonStyle(PokePressButtonStyle())
+            .help("콕 찌르기")
         }
     }
 
-    // 캡슐 라벨 공통 스타일(버튼/비활성 공유). monospacedDigit 로 쿨타임 카운트다운의 자리 흔들림을 막는다.
-    private func pokeCapsuleLabel(label: String, foreground: Color, fill: Color) -> some View {
-        Text(label)
-            .font(.caption2.weight(.bold))
-            .monospacedDigit()
-            .foregroundStyle(foreground)
-            .frame(minWidth: 34)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(fill))
+    // 손가락 아이콘 라벨(활성/비활성 공유). 활성이면 accent 원형 배경·흰 아이콘, 비활성이면 흐린 아이콘만.
+    // 원형 지름 30 — IconButton 감각(27)과 비슷하게, 행 높이 48 안에 자연스럽게 들어간다.
+    private func pokeIconLabel(active: Bool) -> some View {
+        Image(systemName: "hand.point.right.fill")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(active ? .white : CheckTheme.secondaryText.opacity(0.45))
+            .frame(width: 30, height: 30)
+            .background(
+                Circle().fill(active ? CheckTheme.accent : Color.white.opacity(0.06))
+            )
     }
 }
 

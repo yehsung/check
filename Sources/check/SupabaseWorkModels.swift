@@ -602,7 +602,7 @@ struct PokeSendRequest: Encodable {
     let pTo: String
 }
 
-/// poke_user RPC 응답: { status: "ok"|"cooldown"|"not_working"|"invalid", retry_after_seconds? }
+/// poke_user RPC 응답: { status: "ok"|"cooldown"|"not_working"|"target_not_working"|"invalid", retry_after_seconds? }
 struct PokeSendResponse: Decodable, Equatable {
     let status: String
     var retryAfterSeconds: Int?
@@ -629,6 +629,7 @@ enum PokeSendOutcome: Equatable {
     case ok
     case cooldown(retryAfterSeconds: Int)
     case notWorking
+    case targetNotWorking
     case invalid
 
     init(response: PokeSendResponse) {
@@ -636,6 +637,7 @@ enum PokeSendOutcome: Equatable {
         case "ok": self = .ok
         case "cooldown": self = .cooldown(retryAfterSeconds: max(1, response.retryAfterSeconds ?? 60))
         case "not_working": self = .notWorking
+        case "target_not_working": self = .targetNotWorking
         default: self = .invalid
         }
     }

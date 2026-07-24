@@ -2,7 +2,7 @@ import Foundation
 
 // 콕찌르기 + 토큰 사용량 공개 설정의 스토어 계층.
 // 서버 계약:
-//  - poke_user(p_to uuid) RPC: 보낸이 근무중(열린 세션) 필수, 같은 대상 60초 쿨타임. 응답 {status, retry_after_seconds?}.
+//  - poke_user(p_to uuid) RPC: 보낸이·대상 모두 근무중(열린 세션) 필수, 같은 대상 60초 쿨타임. 응답 {status, retry_after_seconds?}.
 //  - take_pokes() RPC: 내 미소비 찔림을 원자적으로 소비하며 반환(보낸이 표시명 포함).
 //  - app_user_directory() RPC: 앱 사용자 전체(본인 제외) + is_working(열린 세션 존재).
 //  - profiles.token_usage_public: 본인 행 select/update(RLS). token_usage_board 는 비공개 유저를 타인에게 숨긴다(본인 행은 유지).
@@ -73,6 +73,11 @@ extension WorkTimerStore {
                     pokeCooldownUntil[userID] = Date().addingTimeInterval(TimeInterval(retryAfterSeconds))
                 case .notWorking:
                     pokeNotice = "근무 중일 때만 콕 찌를 수 있어요"
+                case .targetNotWorking:
+                    // 대상이 자리비움 — 서버가 거부했다. 내 디렉토리의 근무중 배지가 낡았다는 뜻이라
+                    // 즉시 재조회해 자리비움으로 갱신한다(다음 시도부터 버튼도 비활성으로 선게이트됨).
+                    pokeNotice = "자리비움 상태에는 찌를 수 없어요"
+                    loadPokeDirectory()
                 case .invalid:
                     pokeNotice = "지금은 찌를 수 없어요"
                 }

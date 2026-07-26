@@ -148,6 +148,33 @@ final class WorkTimerStore {
     /// 마지막 업로드 시도 시각. 60초 스로틀 기준(난사 방지). 관찰 대상 아님.
     @ObservationIgnored var lastTokenUploadAt: Date = .distantPast
 
+    // 토큰 순위판이 보고 있는 월(KST 'YYYY-MM'). 기본은 이번 달이고 ‹ › 로 과거 달을 볼 수 있다(미래로는 불가).
+    // 패널을 닫으면 이번 달로 되돌린다 — 다음에 열 때 늘 현재 달부터 보이게.
+    var tokenBoardMonth: String = TokenUsageMonthKey.current()
+
+    // 개인 기록(내 근무 리듬 히트맵 + 지난주 회고) 페이지 상태. 다른 패널들과 상호 배타.
+    // heatmap/retro 는 서버 원본 세션에서 순수 계산으로 파생한다(CheckWorkInsights).
+    var isInsightsPanelVisible = false
+    var insightsLoaded = false
+    var heatmap: WorkRhythmHeatmap = .empty
+    var retro: WeeklyRetro?
+    // 월요일 첫 팝오버에 지난주 회고를 한 번 안내하는 배너의 노출 여부(주당 1회, UserDefaults 로 기록).
+    var showsRetroBanner = false
+
+    // 근무 상태 write 세대 토큰. start/stop/autoStop/undo 성공 시 +1 한다. refreshTeamStatus 는 fetch 발사 전
+    // 이 값을 캡처하고, 응답 반영(applyRemoteOwnStatus) 시 값이 바뀌었으면 내 상태 흡수를 건너뛴다 —
+    // in-flight 였던 낡은 팀 상태 응답이 방금 누른 시작/종료를 되돌리는 스냅백을 막는다(팀 목표의 동일 패턴).
+    @ObservationIgnored var workStateWriteGeneration = 0
+
+    // 넛지 자동 근무 시작 사용 여부(사용자 토글, 기본 켬). 캐릭터 표시 설정과 분리해 독립적으로 끌 수 있다.
+    var isNudgeAutoStartEnabled = true
+    // 넛지가 자동으로 근무를 시작한 시각. 이 후 60초 동안 헤더에 [취소] 를 띄워 되돌릴 수 있게 한다.
+    var nudgeAutoStartedAt: Date?
+
+    // 이 맥의 기기 식별자(UserDefaults 영속, 최초 1회 생성). 토큰 사용량 원장이 (user_id, month, device_id)
+    // 단위라 여러 맥을 써도 서로 덮어쓰지 않고 서버에서 합산된다.
+    @ObservationIgnored var deviceID: String = ""
+
     // 콕찌르기 페이지 상태. 리그/토큰 보드와 3자 상호 배타(하나 열면 나머지 닫기).
     // pokeDirectory: 앱 사용자 전체(본인 제외), 근무중 먼저·이름순. 페이지가 열려 있는 동안 refresh 루프가 갱신.
     var pokeDirectory: [PokeDirectoryEntry] = []
@@ -493,15 +520,29 @@ final class WorkTimerStore {
         }
     }
 
-    /// 콕찌르기 버튼 액션. 사용자 목록 페이지를 토글하고, 여는 순간 디렉토리를 로드한다. 리그/토큰 보드와 상호 배타.
+    /// 콕찌르기 버튼 액션. 사용자 목록 페이지를 토글하고, 여는 순간 디렉토리를 로드한다. 다른 패널과 상호 배타.
     func togglePokePanel() {
         isPokePanelVisible.toggle()
         if isPokePanelVisible {
             isLeaderboardVisible = false
             isTokenBoardVisible = false
+            isInsightsPanelVisible = false
             loadPokeDirectory()
         } else {
             pokeNotice = nil
+        }
+    }
+
+    /// 개인 기록 버튼 액션. 내 근무 리듬/지난주 회고 페이지를 토글하고, 여는 순간 세션을 로드한다. 다른 패널과 상호 배타.
+    /// 회고 배너에서 들어오는 경로도 이 메서드를 쓴다(배너는 소비 처리).
+    func toggleInsightsPanel() {
+        isInsightsPanelVisible.toggle()
+        if isInsightsPanelVisible {
+            isLeaderboardVisible = false
+            isTokenBoardVisible = false
+            isPokePanelVisible = false
+            markRetroBannerSeen()
+            loadInsights()
         }
     }
 

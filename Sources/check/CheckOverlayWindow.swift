@@ -124,7 +124,7 @@ final class CheckOverlayController {
         // 폴링/신선도 필터는 스토어가 끝냈으므로 여기선 받은 배치를 그대로 표시만 한다.
         store.onPokesReceived = { [weak self] pokes in self?.handleReceivedPokes(pokes) }
 
-        // 넛지 스케줄러: 자격은 store 로 구성(로그인·팀·비근무·오버레이 켜짐), 발동은 자동 근무 시작(안내만)으로.
+        // 넛지 스케줄러: 자격은 store 로 구성(로그인·팀·비근무), 발동은 자동 근무 시작(안내만)으로.
         nudgeScheduler = NudgeScheduler(
             isEligible: { [weak self] in self?.isNudgeEligible ?? false },
             onNudge: { [weak self] in self?.nudgeAutoStart() },
@@ -135,19 +135,16 @@ final class CheckOverlayController {
         observeScreenChanges()
     }
 
-    /// 넛지 자동 시작 자격: 로그인됨·팀 있음·비근무·자동시작 토글 켜짐.
-    /// (표시중 조건은 소멸 — 안내만 하고 바로 시작.)
+    /// 넛지 자동 시작 자격: 로그인됨·팀 있음·비근무. (표시중 조건은 소멸 — 안내만 하고 바로 시작.)
     ///
-    /// 캐릭터 표시(`isOverlayEnabled`)는 자격에서 **뺀다**. 예전엔 AND 로 걸려 있어 캐릭터를 숨긴 사용자에게는
-    /// 헤더 캡션 행의 ⚡ 토글이 켜짐(accent)으로 보이고 툴팁이 "자리에 있으면 자동으로 근무 시작"이라 안내하는데도
-    /// 자동 시작이 영영 일어나지 않았다 — docs/privacy.md 가 약속한 "캐릭터 표시와는 별개 설정"과도 어긋났다.
-    /// 캐릭터가 숨겨져 있으면 등장 말풍선 대신 (a) 메뉴바 아이콘이 근무중으로 바뀌고 (b) 팝오버 상단에
-    /// "자동으로 근무를 시작했어요 [취소]" 배너가 60초간 떠서 알린다 — 알림 채널은 사라지지 않는다.
+    /// 자동 시작은 끌 수 있는 설정이 아니라 앱의 기본 동작이다 — 되돌리려면 평소처럼 '근무 종료'를 누르면 된다.
+    /// 캐릭터 표시(`isOverlayEnabled`)도 자격에서 **뺀다**. 예전엔 AND 로 걸려 있어 캐릭터를 숨긴 사용자에게는
+    /// 자동 시작이 영영 일어나지 않았다. 캐릭터가 숨겨져 있으면 등장 말풍선 대신 메뉴바 아이콘이 근무중으로
+    /// 바뀌어 알린다 — 알림 채널은 사라지지 않는다.
     private var isNudgeEligible: Bool {
         store.isSignedIn
             && store.currentTeamID != nil
             && store.snapshot.isWorking == false
-            && store.isNudgeAutoStartEnabled
     }
 
     /// 근무 상태 변화에 따라 패널을 표시/숨김한다. 표시 직전 항상 우상단으로 재배치한다.
@@ -213,9 +210,9 @@ final class CheckOverlayController {
 
     /// 넛지 스케줄러를 현재 store 상태에 맞춰 가동/정지한다(비근무·로그인이면 가동, 아니면 정지·카운트 리셋).
     ///
-    /// 자동시작 토글(`isNudgeAutoStartEnabled`)은 여기서 따로 배선하지 않는다 — 스케줄러는 매 tick 마다
-    /// `isEligible()` 을 다시 물어 자격 미달이면 활성 누적을 0 으로 리셋하므로, 토글을 끄는 즉시 발동이 막히고
-    /// 다시 켜면 0 분부터 새로 센다. 토글 변화마다 start/stop 을 흔들 이유가 없다(루프 1개는 60초 주기 유휴).
+    /// 팀 확정 여부는 여기서 따로 배선하지 않는다 — 스케줄러는 매 tick 마다 `isEligible()` 을 다시 물어
+    /// 자격 미달이면 활성 누적을 0 으로 리셋하므로, 자격을 잃는 즉시 발동이 막히고 되찾으면 0 분부터
+    /// 새로 센다. 자격 변화마다 start/stop 을 흔들 이유가 없다(루프 1개는 60초 주기 유휴).
     private func syncNudgeScheduler() {
         if store.isSignedIn && store.snapshot.isWorking == false {
             nudgeScheduler.start()
@@ -228,10 +225,7 @@ final class CheckOverlayController {
     /// 덮어쓸 오버라이드를 세팅하고 store.start() 를 호출한다. 이후 store 관찰 → updateWorking(true) 경로가
     /// 패널 표시 + commuteStart 리액션을 자연 처리하고, perform(.commuteStart)이 오버라이드를 소비한다.
     ///
-    /// 시작 직후 `nudgeAutoStartedAt` 에 시각을 찍는다 — 팝오버가 이 시각 기준 60초 동안 [취소] 를 띄워
-    /// "묻지 않고 시작한" 판단을 사용자가 되돌릴 수 있게 하는 유일한 근거다(결함5). 자격 미달로 되돌아가는
-    /// 경로에서는 시작 자체가 없으므로 찍지 않는다. store.start() 뒤에 찍어, 수동 시작 경로가 스탬프를
-    /// 비우더라도 자동 시작분만 남게 한다.
+    /// 원치 않는 시작을 되돌리는 수단은 평소와 같은 '근무 종료' 버튼 하나다 — 전용 되돌리기 UI 는 두지 않는다.
     func nudgeAutoStart() {
         guard isNudgeEligible else { return }
         // 말풍선 오버라이드는 캐릭터가 표시될 때만 세운다 — 숨김 상태에서 세워 두면 소비되지 않은 채 남아,
@@ -243,9 +237,6 @@ final class CheckOverlayController {
             )
         }
         store.start()
-        store.nudgeAutoStartedAt = Date()
-        // 스탬프를 찍은 뒤 배너 상태를 세운다(팝오버는 매초 판정하지 않고 이 상태만 읽는다 — 다음 틱까지 기다리지 않게).
-        store.refreshTimedBanner()
     }
 
     // MARK: - 때리면 아파하기 · 드래그 이동 · 클릭 통과 토글 (A1)

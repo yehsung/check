@@ -4083,64 +4083,7 @@ func staleTeamStatusResponseDoesNotUndoJustPressedStop() {
 
 @MainActor
 @Test
-func nudgeAutoStartInheritsOverlayOptOutOnFirstLaunchOfNewKey() {
-    // 회귀 지점(결함1): 새 키 check.nudgeAutoStartEnabled 를 무조건 true 로 시드했다. v0.2.10 까지는 넛지 자격이
-    // isOverlayEnabled 를 AND 로 걸고 있어 '캐릭터 숨김 = 자동 근무 시작 안 함'이었는데, 그 상태로 업데이트하면
-    // 묻지도 않고 자동 시작이 켜져 팀원 화면에 '근무중'으로 뜬다(캐릭터가 숨겨져 말풍선 안내도 없다).
-    func makeStore(defaults: UserDefaults) -> WorkTimerStore {
-        WorkTimerStore(
-            service: SupabaseWorkService(
-                projectURL: URL(string: "http://nudge-seed-test")!,
-                anonKey: "anon-test-key",
-                session: URLSession(configuration: .stubbed)
-            ),
-            environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-            defaults: defaults
-        )
-    }
-
-    // 1) v0.2.10 에서 캐릭터를 끈 사용자(overlayEnabled=false, 새 키 없음) → 자동시작도 꺼진 채 올라와야 한다.
-    let optedOut = isolatedDefaults()
-    optedOut.set(false, forKey: WorkTimerStore.overlayEnabledKey)
-    let inherited = makeStore(defaults: optedOut)
-    defer {
-        inherited.tickerTask?.cancel()
-        inherited.refreshTask?.cancel()
-    }
-    #expect(!inherited.isNudgeAutoStartEnabled)
-    // 승계는 한 번뿐 — 값이 실제로 저장돼 그 뒤로는 독립 토글로 굴러간다.
-    #expect(optedOut.object(forKey: WorkTimerStore.nudgeAutoStartEnabledKey) as? Bool == false)
-
-    // 2) 캐릭터를 다시 켜도 자동시작은 따라 켜지지 않는다(승계는 최초 1회, 이후 두 설정은 독립).
-    inherited.setOverlayEnabled(true)
-    let relaunched = makeStore(defaults: optedOut)
-    defer {
-        relaunched.tickerTask?.cancel()
-        relaunched.refreshTask?.cancel()
-    }
-    #expect(!relaunched.isNudgeAutoStartEnabled)
-
-    // 3) 캐릭터를 켜 둔(또는 손댄 적 없는) 사용자·신규 설치는 기본값 그대로 켬.
-    let fresh = makeStore(defaults: isolatedDefaults())
-    defer {
-        fresh.tickerTask?.cancel()
-        fresh.refreshTask?.cancel()
-    }
-    #expect(fresh.isNudgeAutoStartEnabled)
-
-    let keptOverlay = isolatedDefaults()
-    keptOverlay.set(true, forKey: WorkTimerStore.overlayEnabledKey)
-    let kept = makeStore(defaults: keptOverlay)
-    defer {
-        kept.tickerTask?.cancel()
-        kept.refreshTask?.cancel()
-    }
-    #expect(kept.isNudgeAutoStartEnabled)
-}
-
-@MainActor
-@Test
-func nudgeAutoStartToggleAndDeviceIDSurviveRelaunch() {
+func deviceIDSurvivesRelaunchAndSignOut() {
     let defaults = isolatedDefaults()
     func makeStore() -> WorkTimerStore {
         WorkTimerStore(
@@ -4159,69 +4102,21 @@ func nudgeAutoStartToggleAndDeviceIDSurviveRelaunch() {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
     }
-    // 자동 시작은 기본 켬, 기기 식별자는 최초 실행에서 생성된다.
-    #expect(store.isNudgeAutoStartEnabled)
+    // 기기 식별자는 최초 실행에서 생성된다(맥별 토큰 원장 분리 키).
     #expect(!store.deviceID.isEmpty)
     let firstDeviceID = store.deviceID
 
-    store.setNudgeAutoStartEnabled(false)
-    #expect(!store.isNudgeAutoStartEnabled)
-
-    // 재실행(같은 defaults)에서도 끈 상태와 기기 식별자가 그대로 유지돼야 한다.
+    // 재실행(같은 defaults)에서도 같은 값이 유지돼야 한다.
     let relaunched = makeStore()
     defer {
         relaunched.tickerTask?.cancel()
         relaunched.refreshTask?.cancel()
     }
-    #expect(!relaunched.isNudgeAutoStartEnabled)
     #expect(relaunched.deviceID == firstDeviceID)
 
-    // 로그아웃은 계정 상태만 지운다 — 기기 식별자/자동시작 설정은 이 맥의 것이라 살아남는다.
+    // 로그아웃은 계정 상태만 지운다 — 기기 식별자는 이 맥의 것이라 살아남는다.
     relaunched.signOut()
     #expect(relaunched.deviceID == firstDeviceID)
-    #expect(!relaunched.isNudgeAutoStartEnabled)
-}
-
-@MainActor
-@Test
-func cancelNudgeAutoStartOnlyWorksInsideGraceWindow() {
-    let store = WorkTimerStore(
-        service: SupabaseWorkService(
-            projectURL: URL(string: "http://nudge-cancel-test")!,
-            anonKey: "anon-test-key",
-            session: URLSession(configuration: .stubbed)
-        ),
-        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: isolatedDefaults()
-    )
-    defer {
-        store.tickerTask?.cancel()
-        store.refreshTask?.cancel()
-        store.syncTask?.cancel()
-    }
-    let now = Date()
-
-    // 유예(60초) 밖 — 취소 버튼이 뜨지도 않고, 눌러도 무동작이어야 한다.
-    store.startedAt = now.addingTimeInterval(-600)
-    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
-    store.nudgeAutoStartedAt = now.addingTimeInterval(-90)
-    #expect(!store.canCancelNudgeAutoStart(now: now))
-    store.cancelNudgeAutoStart()
-    #expect(store.startedAt != nil)
-    #expect(store.nudgeAutoStartedAt != nil)
-
-    // 유예 안 — 근무가 종료되고 스탬프가 비워지며 안내 문구가 남는다.
-    store.nudgeAutoStartedAt = Date().addingTimeInterval(-10)
-    #expect(store.canCancelNudgeAutoStart())
-    store.cancelNudgeAutoStart()
-    #expect(store.startedAt == nil)
-    #expect(store.nudgeAutoStartedAt == nil)
-    #expect(store.syncMessage == "자동 시작을 취소했어요")
-
-    // 수동 시작 경로는 자동시작 스탬프를 남기지 않는다(취소 버튼이 뒤늦게 뜨지 않게).
-    store.start()
-    #expect(store.nudgeAutoStartedAt == nil)
-    #expect(!store.canCancelNudgeAutoStart())
 }
 
 @MainActor
@@ -4876,8 +4771,8 @@ func signInLoadsInsightsSoRetroBannerShowsInTheSamePopoverSession() async {
 @MainActor
 @Test
 func timedBannerIsPushedByStoreInsteadOfBeingJudgedEverySecond() {
-    // 회귀 지점: 팝오버 body 가 canUndoAutoClose(now: displayNow)/canCancelNudgeAutoStart(now: displayNow) 를
-    // 직접 불러, 배너가 없는 평소 화면에서도 매초 갱신되는 displayNow 를 관찰 등록했다(전체 트리 매초 무효화).
+    // 회귀 지점: 팝오버 body 가 canUndoAutoClose(now: displayNow) 를 직접 불러, 배너가 없는 평소 화면에서도
+    // 매초 갱신되는 displayNow 를 관찰 등록했다(전체 트리 매초 무효화).
     // 이제 판정 결과만 스토어가 상태로 밀어 넣고, 뷰는 그 상태만 읽는다.
     let store = WorkTimerStore(
         service: SupabaseWorkService(
@@ -4916,21 +4811,8 @@ func timedBannerIsPushedByStoreInsteadOfBeingJudgedEverySecond() {
     store.start(now: now)
     #expect(store.timedBanner == nil)
 
-    // (3) 넛지 자동 시작 스탬프가 찍히면 취소 배너가 서고, 유예(60초)가 지나면 내려간다.
-    store.nudgeAutoStartedAt = now
-    store.refreshTimedBanner(now: now.addingTimeInterval(10))
-    #expect(store.timedBanner == .cancelNudgeAutoStart)
-    store.refreshTimedBanner(now: now.addingTimeInterval(WorkTimerStore.nudgeAutoStartCancelWindow + 1))
-    #expect(store.timedBanner == nil)
-
-    // (4) 근무를 끝내면(취소 포함) 스탬프와 배너가 함께 정리된다.
-    store.nudgeAutoStartedAt = now
-    store.refreshTimedBanner(now: now.addingTimeInterval(5))
-    #expect(store.timedBanner == .cancelNudgeAutoStart)
-    store.stop(now: now.addingTimeInterval(6))
-    #expect(store.timedBanner == nil)
-
-    // (5) 배너를 X 로 닫는 경로(clearAutoCloseUndo)도 상태를 즉시 내린다.
+    // (3) 배너를 X 로 닫는 경로(clearAutoCloseUndo)도 상태를 즉시 내린다(되돌리기는 비근무 전용이라 먼저 종료).
+    store.stop(now: now.addingTimeInterval(1))
     store.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
     store.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
     store.lastAutoClosedAt = Date()

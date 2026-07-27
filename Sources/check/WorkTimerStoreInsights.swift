@@ -1,18 +1,14 @@
 import Foundation
 
-// 개인 기록(히트맵·주간 회고) + 토큰 순위 월 이동 + 넛지 자동시작 취소의 스토어 계층.
+// 개인 기록(히트맵·주간 회고) + 토큰 순위 월 이동의 스토어 계층.
 // 데이터 출처는 서버 work_sessions 의 내 완료 세션뿐이고(타인 데이터 미조회), 요일/주 계산은 전부
 // CheckWorkInsights 의 순수 함수가 담당한다(스토어는 로딩·상태 반영만).
 @MainActor
 extension WorkTimerStore {
     /// 히트맵 집계 기간(주). 이 기간의 완료 세션만 서버에서 받아 온다.
     static let insightsWeeks = 8
-    /// 넛지 자동 시작을 취소할 수 있는 유예(초). 이 시간 안에는 헤더에 [취소] 가 뜬다.
-    static let nudgeAutoStartCancelWindow: TimeInterval = 60
     /// 이 주의 회고 배너를 이미 보여줬는지 기록하는 UserDefaults 키의 앞자리(계정별 접미사가 붙는다).
     static let retroBannerShownWeekKey = "check.retro.shownForWeek"
-    /// 넛지 자동시작 토글의 UserDefaults 키.
-    static let nudgeAutoStartEnabledKey = "check.nudgeAutoStartEnabled"
     /// 이 맥의 기기 식별자 UserDefaults 키(토큰 원장 분리용).
     static let deviceIDKey = "check.deviceID"
 
@@ -36,23 +32,6 @@ extension WorkTimerStore {
         let generated = UUID().uuidString
         defaults.set(generated, forKey: deviceIDKey)
         return generated
-    }
-
-    /// 넛지 자동시작 설정의 초기값을 정한다(결함1 — 업데이트만으로 기존 의사가 뒤집히지 않게).
-    /// 키 `check.nudgeAutoStartEnabled` 는 v0.2.11 에서 처음 생긴다. 없다고 무조건 true 로 시드하면,
-    /// v0.2.10 까지 넛지 자격이 `isOverlayEnabled` 를 AND 로 걸고 있어서 **캐릭터를 숨긴 사용자에게는
-    /// 자동 근무 시작이 아예 일어나지 않던** 사실이 무시된다 — 그들은 '캐릭터 끔 = 앱이 알아서 시작하지 않음'으로
-    /// 써 왔는데, 업데이트만으로 동의 없이 자동 시작이 켜지고(팀원 화면엔 '근무중'으로 노출), 하필 그 상태에선
-    /// 등장 말풍선도 안 뜨고 [취소] 배너는 60초 안에 팝오버를 열어야만 보여 통지가 가장 약하다.
-    /// 그래서 키가 없을 때 한 번만 캐릭터 표시 설정을 그대로 승계하고, 그 값을 즉시 저장해 그 뒤로는
-    /// 캐릭터를 다시 켜든 말든 흔들리지 않는 독립 토글로 운용한다.
-    static func resolveNudgeAutoStartEnabled(defaults: UserDefaults) -> Bool {
-        if let stored = defaults.object(forKey: nudgeAutoStartEnabledKey) as? Bool {
-            return stored
-        }
-        let inherited = defaults.object(forKey: overlayEnabledKey) as? Bool ?? true
-        defaults.set(inherited, forKey: nudgeAutoStartEnabledKey)
-        return inherited
     }
 
     /// 개인 기록 패널 로드 래퍼(Task 발사). 패널을 여는 순간·팝오버 재오픈에서 호출한다.
@@ -214,27 +193,5 @@ extension WorkTimerStore {
         // 직전 달에서 실패한 표시도 함께 내린다 — 새 달 조회의 첫 프레임에 남의 실패 문구를 물려주지 않는다.
         if tokenBoardFailed { tokenBoardFailed = false }
         loadTokenBoard()
-    }
-
-    /// 넛지 자동 시작 사용 여부를 지정하고 설정을 저장한다(결함5 — 자동시작을 캐릭터 표시와 분리해 끌 수 있게).
-    func setNudgeAutoStartEnabled(_ enabled: Bool) {
-        if isNudgeAutoStartEnabled != enabled { isNudgeAutoStartEnabled = enabled }
-        defaults.set(enabled, forKey: Self.nudgeAutoStartEnabledKey)
-    }
-
-    /// 자동 시작 취소 가능 여부(자동 시작 직후 유예 안, 아직 근무중).
-    func canCancelNudgeAutoStart(now: Date = Date()) -> Bool {
-        guard let startedAt = nudgeAutoStartedAt, startedAt != Date.distantPast else { return false }
-        guard self.startedAt != nil else { return false }
-        return now.timeIntervalSince(startedAt) <= Self.nudgeAutoStartCancelWindow
-    }
-
-    /// 넛지가 자동 시작한 근무를 취소한다(= 근무 종료 + 안내). 유예를 벗어났거나 이미 종료했으면 무동작.
-    /// stop() 이 세대 토큰을 올리고 서버 반영 큐까지 태우므로, "묻지 않고 시작한" 판단이 되돌려진다.
-    func cancelNudgeAutoStart() {
-        guard canCancelNudgeAutoStart() else { return }
-        stop()
-        nudgeAutoStartedAt = nil
-        syncMessage = "자동 시작을 취소했어요"
     }
 }

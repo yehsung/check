@@ -217,35 +217,22 @@ final class WorkTimerStore {
     // in-flight 였던 낡은 팀 상태 응답이 방금 누른 시작/종료를 되돌리는 스냅백을 막는다(팀 목표의 동일 패턴).
     @ObservationIgnored var workStateWriteGeneration = 0
 
-    // 넛지 자동 근무 시작 사용 여부(사용자 토글, 기본 켬). 캐릭터 표시 설정과 분리해 독립적으로 끌 수 있다.
-    var isNudgeAutoStartEnabled = true
-    // 넛지가 자동으로 근무를 시작한 시각. 이 후 60초 동안 헤더에 [취소] 를 띄워 되돌릴 수 있게 한다.
-    var nudgeAutoStartedAt: Date?
-
-    /// 유예가 끝나면 스스로 사라지는 인라인 배너(자리 비움 되돌리기 / 넛지 자동시작 취소) 중 지금 그릴 것.
-    /// 판정은 canUndoAutoClose·canCancelNudgeAutoStart 가 하되 **결과만** 이 상태로 밀어 넣는다 —
-    /// 뷰가 그 판정을 직접 부르려면 body 에서 매초 갱신되는 displayNow 를 읽어야 하고, 그러면 배너가
-    /// 뜨지 않는 평소 화면까지 팝오버 전체 서브트리가 매초 무효화돼 "초단위 의존은 잎 뷰로 격리한다"는
-    /// 이 앱의 불변식이 깨진다(회귀 지점). == 가드 대입이라 값이 실제로 바뀔 때만 뷰가 무효화된다.
+    /// 유예가 끝나면 스스로 사라지는 인라인 배너(자리 비움 되돌리기) 중 지금 그릴 것.
+    /// 판정은 canUndoAutoClose 가 하되 **결과만** 이 상태로 밀어 넣는다 — 뷰가 그 판정을 직접 부르려면
+    /// body 에서 매초 갱신되는 displayNow 를 읽어야 하고, 그러면 배너가 뜨지 않는 평소 화면까지 팝오버
+    /// 전체 서브트리가 매초 무효화돼 "초단위 의존은 잎 뷰로 격리한다"는 이 앱의 불변식이 깨진다(회귀 지점).
+    /// == 가드 대입이라 값이 실제로 바뀔 때만 뷰가 무효화된다.
     var timedBanner: TimedBanner?
 
-    /// 유예형 인라인 배너 종류. 둘은 근무 상태가 정반대라(되돌리기=비근무, 취소=근무중) 동시에 성립하지 않는다.
+    /// 유예형 인라인 배너 종류.
     enum TimedBanner: Equatable {
         case undoAutoClose
-        case cancelNudgeAutoStart
     }
 
     /// 유예형 배너 상태를 주어진 시각 기준으로 재평가한다. 티커(tick)와 상태 전이 지점(시작/종료/자동 마감/
     /// 되돌리기/원격 흡수/팝오버 열림)에서만 부르면 되고, 그 사이에는 값이 변할 이유가 없다.
     func refreshTimedBanner(now: Date = Date()) {
-        let next: TimedBanner?
-        if canUndoAutoClose(now: now) {
-            next = .undoAutoClose
-        } else if canCancelNudgeAutoStart(now: now) {
-            next = .cancelNudgeAutoStart
-        } else {
-            next = nil
-        }
+        let next: TimedBanner? = canUndoAutoClose(now: now) ? .undoAutoClose : nil
         if timedBanner != next { timedBanner = next }
     }
 
@@ -349,10 +336,6 @@ final class WorkTimerStore {
         email = defaults.string(forKey: Self.emailKey) ?? ""
         displayName = defaults.string(forKey: Self.displayNameKey) ?? ""
         isOverlayEnabled = defaults.object(forKey: Self.overlayEnabledKey) as? Bool ?? true
-        // 넛지 자동시작은 기본 켬이되 사용자가 끈 상태는 재실행에도 유지한다(결함5 — 독립 토글).
-        // 키가 아직 없는 첫 실행(=v0.2.10 이하에서 올라온 업데이트)에서는 캐릭터 표시 설정을 그대로 승계한다 —
-        // 그 전까지 '캐릭터 끔'이 곧 '자동 시작 안 함'이었기 때문이다(resolveNudgeAutoStartEnabled 주석 참조).
-        isNudgeAutoStartEnabled = Self.resolveNudgeAutoStartEnabled(defaults: defaults)
         // 기기 식별자는 최초 1회 생성 후 영속한다 — 맥 2대가 서로의 월 토큰 원장을 덮어쓰지 않게 하는 키(결함1).
         deviceID = Self.resolveDeviceID(defaults: defaults)
         let restoredSession = Self.restoredSession(from: defaults)
@@ -432,8 +415,6 @@ final class WorkTimerStore {
         workStateWriteGeneration &+= 1
         // 새 근무를 시작하면 직전 자동 마감 되돌리기는 무효다(옛 세션으로 현 세션을 덮어쓰지 못하게 즉시 끊는다).
         clearAutoCloseUndo()
-        // 수동 시작이면 자동시작 스탬프를 비운다(넛지 경로는 start() 뒤에 다시 찍어 자동 시작분만 남긴다).
-        nudgeAutoStartedAt = nil
         displayNow = now
         startedAt = now
         currentSessionID = UUID().uuidString
@@ -443,7 +424,7 @@ final class WorkTimerStore {
         snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
         startTimer()
         refreshMenuBarTitle()
-        // 근무 상태가 바뀌면 두 유예형 배너의 성립 조건이 함께 뒤집힌다(되돌리기는 비근무 전용).
+        // 근무 상태가 바뀌면 유예형 배너의 성립 조건도 뒤집힌다(되돌리기는 비근무 전용).
         refreshTimedBanner(now: now)
         syncCurrentStatus()
     }
@@ -454,7 +435,6 @@ final class WorkTimerStore {
         workStateWriteGeneration &+= 1
         // 서버 복구 경로(applyRemoteOwnStatus)로 시작된 세션이라 start() 를 안 탔을 수 있으므로 여기서도 끊는다.
         clearAutoCloseUndo()
-        nudgeAutoStartedAt = nil
         displayNow = now
         // 서버 전송 duration 은 세션 전체를 유지한다(서버가 타임스탬프로 클리핑). 로컬 누적 가산만 오늘 자정으로
         // 클리핑해, 자정을 넘긴 세션이 '오늘 누적'에 통째로 더해져 표시가 점프하는 것을 막는다.
@@ -469,7 +449,7 @@ final class WorkTimerStore {
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
         stopTimerIfIdle()
         refreshMenuBarTitle()
-        // 종료하면 자동시작 [취소] 배너는 근거를 잃는다(스탬프도 방금 비웠다).
+        // 근무를 마치면 되돌리기 배너의 성립 조건이 다시 열린다(비근무 전용).
         refreshTimedBanner(now: now)
         syncCurrentStatus(durationSeconds: duration, sessionStartedAt: sessionStart, endedAt: now)
     }
@@ -539,7 +519,6 @@ final class WorkTimerStore {
         workStateWriteGeneration &+= 1
         // 사유가 다른 이번 마감이 확정됐으므로 직전 자리 비움 되돌리기 대상은 무효다.
         clearAutoCloseUndo()
-        nudgeAutoStartedAt = nil
         // 서버 전송 duration 은 세션 전체(서버가 클리핑). 로컬 누적 가산만 종료일 자정으로 클리핑해 표시 점프를 막는다.
         let duration = max(0, Int(endedAt.timeIntervalSince(sessionStart)))
         accumulatedSeconds += max(0, Int(endedAt.timeIntervalSince(max(sessionStart, TeamWeeklyGoal.koreanDayStart(for: endedAt)))))
@@ -930,7 +909,7 @@ extension WorkTimerStore {
         pokePollTask?.cancel()
         pokePollTask = nil
         // 개인 기록(히트맵/회고)과 토큰 순위 월 위치도 함께 비운다(리그·토큰 보드와 동일 규약).
-        // 기기 식별자와 넛지 자동시작 토글은 계정이 아니라 이 맥의 설정이므로 남긴다. 회고 배너의 '이번 주 봤음'
+        // 기기 식별자는 계정이 아니라 이 맥의 설정이므로 남긴다. 회고 배너의 '이번 주 봤음'
         // 기록은 계정별 키(retroBannerShownWeekKeyForCurrentUser)라 지울 필요가 없다 — 다음 계정은 자기 키가
         // 비어 있어 그 주 회고를 정상적으로 받고, 원래 계정으로 돌아와도 같은 주에 두 번 뜨지 않는다.
         isInsightsPanelVisible = false
@@ -940,7 +919,6 @@ extension WorkTimerStore {
         heatmap = .empty
         retro = nil
         showsRetroBanner = false
-        nudgeAutoStartedAt = nil
         // 미반영 근무 큐(pendingItems)와 진행 중 근무(startedAt/accumulatedSeconds)는 여기서 비우지 않는다.
         // 이 함수는 토큰 만료 강제 로그아웃(refresh token 부재/무효, 저장 세션 재활성 실패)에서도 불리는데,
         // 큐는 UserDefaults 에 남지 않는 메모리 장부라 한 번 비우면 오프라인에서 쌓인 근무가 영구 소실된다.
@@ -949,7 +927,7 @@ extension WorkTimerStore {
         // 자리 비움 되돌리기 대상은 계정에 묶인 sessionID 라 함께 끊는다 — 남기면 재로그인한 다른 계정 화면에
         // 남의 [되돌리기] 배너가 뜨고, 눌러도 새 계정 자격으로 앞 계정 세션을 재개하려다 RLS 에서 거부된다.
         clearAutoCloseUndo()
-        // 스탬프를 비웠으니 유예형 배너 상태도 함께 내린다(로그아웃 후 재로그인에 낡은 배너가 남지 않게).
+        // 되돌리기 대상을 끊었으니 유예형 배너 상태도 함께 내린다(로그아웃 후 재로그인에 낡은 배너가 남지 않게).
         refreshTimedBanner()
         tokenBoardMonth = TokenUsageMonthKey.current()
         // 팀원 인사/팀 목표 축하의 세션 상태도 비운다(다음 로그인의 첫 로드에서 인사 폭탄 금지).

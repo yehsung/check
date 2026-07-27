@@ -43,8 +43,6 @@ struct CheckMenuView: View {
         case longSession
         /// 자리 비움 자동 마감 되돌리기(유예 10분).
         case undoAutoClose
-        /// 넛지 자동 시작 취소(유예 60초).
-        case cancelNudgeAutoStart
         /// 지난주 회고 안내(주 1회).
         case retro
         /// 새 버전 안내(상시라 가장 덜 급하다).
@@ -67,14 +65,13 @@ struct CheckMenuView: View {
     }
 
     /// 이번 렌더에서 실제로 그릴 배너 하나(없으면 nil). 위에서부터 급한 순서다.
-    /// 유예형 배너 둘은 store.timedBanner **상태**만 읽는다 — 여기서 canUndoAutoClose/canCancelNudgeAutoStart 를
-    /// 직접 부르면 인자로 줄 시각이 매초 갱신되는 store.displayNow 뿐이라, body 최상단인 이 프로퍼티가
-    /// displayNow 를 관찰 등록해 팝오버 전체 서브트리가 매초 무효화된다(잎 뷰 격리 불변식 위반 — 회귀 지점).
+    /// 유예형 배너는 store.timedBanner **상태**만 읽는다 — 여기서 canUndoAutoClose 를 직접 부르면 인자로 줄
+    /// 시각이 매초 갱신되는 store.displayNow 뿐이라, body 최상단인 이 프로퍼티가 displayNow 를 관찰 등록해
+    /// 팝오버 전체 서브트리가 매초 무효화된다(잎 뷰 격리 불변식 위반 — 회귀 지점).
     /// 만료 판정은 스토어의 티커/상태 전이가 refreshTimedBanner 로 밀어 넣는다.
     private var topBanner: TopBanner? {
         if isMainScreen, showsLongSessionBanner { return .longSession }
         if isMainScreen, store.timedBanner == .undoAutoClose { return .undoAutoClose }
-        if isMainScreen, store.timedBanner == .cancelNudgeAutoStart { return .cancelNudgeAutoStart }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
         if showsUpdateBanner { return .update }
         return nil
@@ -83,7 +80,7 @@ struct CheckMenuView: View {
     private var topBannerHeight: CGFloat {
         switch topBanner {
         case .longSession: return Self.longSessionBannerHeight
-        case .undoAutoClose, .cancelNudgeAutoStart, .retro: return Self.inlineBannerHeight
+        case .undoAutoClose, .retro: return Self.inlineBannerHeight
         case .update: return Self.updateBannerHeight
         case nil: return 0
         }
@@ -203,16 +200,6 @@ struct CheckMenuView: View {
                             tint: CheckTheme.pending,
                             action: { _ = store.undoAutoClose() },
                             onDismiss: { store.clearAutoCloseUndo() }
-                        )
-                    }
-                    // 넛지 자동 시작 취소 — 자동으로 시작한 뒤 60초 동안만 뜬다(그 뒤엔 스스로 사라진다).
-                    if topBanner == .cancelNudgeAutoStart {
-                        InlineActionBanner(
-                            icon: "bolt.fill",
-                            title: "자동으로 근무를 시작했어요",
-                            actionTitle: "취소",
-                            tint: CheckTheme.accent,
-                            action: { store.cancelNudgeAutoStart() }
                         )
                     }
                     // 토큰 소모량 행은 내 근무 박스와 팀원 현황 사이(사용자 지정 위치). 탭하면 순위 페이지.
@@ -530,20 +517,6 @@ private struct HeaderGoalSection: View {
                         .font(.caption2)
                         .foregroundStyle(CheckTheme.secondaryText)
                         .monospacedDigit()
-                    // 넛지 자동 근무 시작 토글. 캐릭터 표시(푸터 person 버튼)와 완전히 별개다 — 끄면 자동 시작이
-                    // 아예 멈추고, 켜져 있으면 캐릭터를 숨겨 둔 상태에서도 동작한다(CheckOverlayWindow.isNudgeEligible).
-                    // 자리는 푸터가 아니라 여기다: '자동으로 근무를 시작한다'는 내 근무 설정이고, 푸터에 다섯 번째
-                    // 버튼을 세우면 동기화 문구 슬롯이 125→90pt 로 줄어 "자리 비움으로 자동…" 처럼 핵심어가
-                    // 잘려 나갔다(FooterWidthBudget 의 회귀 상수 참고).
-                    HeaderCaptionIconButton(
-                        icon: store.isNudgeAutoStartEnabled ? "bolt.fill" : "bolt.slash",
-                        help: store.isNudgeAutoStartEnabled
-                            ? "자리에 있으면 자동으로 근무 시작 — 누르면 끔"
-                            : "자동 근무 시작 꺼짐 — 누르면 켬",
-                        isActive: store.isNudgeAutoStartEnabled
-                    ) {
-                        store.setNudgeAutoStartEnabled(!store.isNudgeAutoStartEnabled)
-                    }
                     // 내 기록(지난주 회고 + 근무 리듬 히트맵). 팀 카드 헤더가 아니라 **내 근무 박스**에 둔다 —
                     // 본인 데이터만 보는 개인 화면이라 자리가 여기가 맞고, 팀 헤더에 네 번째 버튼을 세우면
                     // 팀 이름이 2~3자로 잘렸다(v0.2.11 감사 지적). 캡션 행이라 연필과 같은 소형(18pt) 버튼을 쓴다.
@@ -1964,10 +1937,9 @@ private struct InsightsPanel: View {
 /// 푸터 동기화 문구(SyncStatusView)에 남는 텍스트 폭 예산(순수 계산 — 결정적 검증 지점).
 ///
 /// 푸터는 `[동기화 문구][Spacer][아이콘 버튼…]` 한 줄이고 팝오버 폭은 340 고정이다. 문구만 유연 요소라
-/// 버튼을 하나 더할 때마다 문구가 27+8pt 씩 먼저 잘린다. v0.2.11 초안이 여기에 다섯 번째 버튼(자동시작 토글)을
-/// 세워 "자리 비움으로 자동 근무종료됨"(121pt)이 "자리 비움으로 자동…"으로 잘리고(핵심어 '근무종료됨' 소실),
-/// 새 문구 "자동 시작을 취소했어요"(92pt)까지 잘렸던 회귀를 상수로 못 박아 둔다. 자동시작 토글은 헤더 캡션 행
-/// (내 근무 박스)으로 옮겨 4버튼 폭을 되찾았고, 그래도 넘치는 긴 문구는 minimumScaleFactor 로 줄여 담는다.
+/// 버튼을 하나 더할 때마다 문구가 27+8pt 씩 먼저 잘린다. v0.2.11 초안이 여기에 다섯 번째 버튼을 세워
+/// "자리 비움으로 자동 근무종료됨"(121pt)이 "자리 비움으로 자동…"으로 잘렸던(핵심어 '근무종료됨' 소실)
+/// 회귀를 상수로 못 박아 둔다. 4버튼이 상한이고, 그래도 넘치는 긴 문구는 minimumScaleFactor 로 줄여 담는다.
 enum FooterWidthBudget {
     /// 팝오버 340 - 바깥 padding 12*2 - 푸터 padding 12*2.
     static let contentWidth: CGFloat = 340 - 12 * 2 - 12 * 2
@@ -2004,7 +1976,7 @@ private struct FooterBar: View {
             SyncStatusView(message: store.syncMessage)
             Spacer(minLength: 6)
             // 버튼은 4개까지다(FooterWidthBudget). 하나 더 세우면 동기화 문구가 곧바로 말줄임된다 —
-            // 새 토글이 필요하면 푸터가 아니라 관련 카드(예: 자동시작 → 내 근무 박스 캡션)로 보낸다.
+            // 새 버튼이 필요하면 푸터가 아니라 관련 카드(예: 내 근무 박스 캡션 행)로 보낸다.
             IconButton(
                 icon: store.isOverlayEnabled ? "person.fill" : "person.fill.xmark",
                 help: store.isOverlayEnabled ? "캐릭터 표시 중 — 누르면 숨김" : "캐릭터 숨김 — 누르면 표시"

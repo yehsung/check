@@ -1479,23 +1479,20 @@ func checkMenuViewRendersInsightsFailureSnapshot() throws {
 }
 
 /// 푸터 동기화 문구 폭 예산(순수 계산) 회귀 고정.
-/// v0.2.11 초안이 푸터에 다섯 번째 버튼(자동시작 토글)을 세워 문구 슬롯이 125→90pt 로 줄었고,
-/// "자리 비움으로 자동 근무종료됨"(121pt)·"자동 시작을 취소했어요"(92pt)가 잘려 뜻을 잃었다.
-/// 토글을 헤더 캡션 행으로 옮겨 4버튼으로 되돌렸고, 그래도 넘치는 긴 문구는 축소로 담는다.
+/// v0.2.11 초안이 푸터에 다섯 번째 버튼을 세워 문구 슬롯이 125→90pt 로 줄었고,
+/// "자리 비움으로 자동 근무종료됨"(121pt)이 잘려 핵심어 '근무종료됨'을 잃었다.
+/// 4버튼으로 되돌렸고, 그래도 넘치는 긴 문구는 축소로 담는다.
 @MainActor
 @Test
 func footerSyncMessageFitsWithinButtonBudget() {
     // 실측(NSFont .caption2 = 10pt) 폭. 렌더 환경과 무관하게 상수로 못 박아 회귀를 잡는다.
     let autoCloseMessage: CGFloat = 121  // "자리 비움으로 자동 근무종료됨"
-    let cancelMessage: CGFloat = 93      // "자동 시작을 취소했어요"
 
-    // 5버튼(v0.2.11 초안)에서는 두 문구 모두 축소 없이는 들어가지 않았다 — 결함의 원인.
+    // 5버튼(v0.2.11 초안)에서는 축소 없이는 들어가지 않았다 — 결함의 원인.
     #expect(FooterWidthBudget.messageWidth(iconButtonCount: 5) < autoCloseMessage)
-    #expect(FooterWidthBudget.messageWidth(iconButtonCount: 5) < cancelMessage)
 
-    // 4버튼(현재)에서는 둘 다 축소 없이 온전히 들어간다.
+    // 4버튼(현재)에서는 축소 없이 온전히 들어간다.
     #expect(FooterWidthBudget.messageWidth(iconButtonCount: 4) >= autoCloseMessage)
-    #expect(FooterWidthBudget.messageWidth(iconButtonCount: 4) >= cancelMessage)
 
     // 실제로 쓰는 가장 긴 문구(무소속 안내 175.9pt)까지 축소 범위 안에서 말줄임 없이 담긴다.
     #expect(FooterWidthBudget.fittingMessageWidth(iconButtonCount: 4) >= FooterWidthBudget.longestMessageWidth)
@@ -1615,11 +1612,10 @@ func longSessionBannerSitsAboveHeaderWithoutCoveringStopButton() throws {
 @MainActor
 @Test
 func checkMenuViewRendersRecoveryBannersSnapshot() throws {
-    // 결함4·5 배선: 자리 비움 자동 마감 [되돌리기] 배너와 넛지 자동 시작 [취소] 배너가 헤더 아래에 인라인으로 뜬다.
-    // 둘은 근무 상태가 정반대라(되돌리기=비근무, 취소=근무중) 절대 함께 뜨지 않는다 — 각각 따로 그린다.
+    // 결함4 배선: 자리 비움 자동 마감 [되돌리기] 배너가 헤더 아래에 인라인으로 뜬다.
     let now = Date()
 
-    // (4) 자동 마감 직후 — 비근무 + 유예(10분) 안이라 [되돌리기] 가 뜬다.
+    // 자동 마감 직후 — 비근무 + 유예(10분) 안이라 [되돌리기] 가 뜬다.
     let undoStore = makeTeamStore(members: presenceMembers(now: now), now: now)
     undoStore.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
     undoStore.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
@@ -1634,20 +1630,13 @@ func checkMenuViewRendersRecoveryBannersSnapshot() throws {
     #expect(undoPNG.count > 0)
     saveV0211Snapshot(undoPNG, "recovery-banners")
 
-    // (5) 넛지 자동 시작 10초 경과 — 60초 유예 안이라 [취소] 가 떠 있어야 한다.
-    let cancelStore = makeTeamStore(members: presenceMembers(now: now), now: now)
-    cancelStore.startedAt = now.addingTimeInterval(-10)
-    cancelStore.nudgeAutoStartedAt = now.addingTimeInterval(-10)
-    cancelStore.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 10)
-    #expect(cancelStore.canCancelNudgeAutoStart(now: now))
-    // 근무를 시작한 순간 되돌리기 대상은 사라지므로 두 배너가 겹칠 수 없다.
-    #expect(!cancelStore.canUndoAutoClose(now: now))
-    cancelStore.refreshTimedBanner(now: now)
-    #expect(cancelStore.timedBanner == .cancelNudgeAutoStart)
-
-    let cancelPNG = try renderPNG(CheckMenuView(store: cancelStore))
-    #expect(cancelPNG.count > 0)
-    saveV0211Snapshot(cancelPNG, "nudge-cancel-banner")
+    // 근무를 시작하면 되돌리기 대상이 끊겨 배너가 함께 사라진다(유예형 배너는 비근무 전용).
+    let workingStore = makeTeamStore(members: presenceMembers(now: now), now: now)
+    workingStore.startedAt = now.addingTimeInterval(-10)
+    workingStore.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 10)
+    #expect(!workingStore.canUndoAutoClose(now: now))
+    workingStore.refreshTimedBanner(now: now)
+    #expect(workingStore.timedBanner == nil)
 
     // 배너는 헤더 아래로 자란다 — 배선 전(배너 0건) 대비 창이 높아지는지 실측한다.
     let plain = try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now))))
@@ -1695,7 +1684,7 @@ func listRowBudgetShrinksVisibleRowsByStackedChromeHeight() {
 }
 
 /// 배너/토큰 행/패널이 겹치는 조합에서도 팝오버가 700pt 상한을 넘지 않는지 실측한다.
-/// 회귀 지점: 예전엔 배너가 겹겹이 쌓이고(회고+되돌리기+자동시작취소) 목록 상한이 고정이라 최대 883pt 까지
+/// 회귀 지점: 예전엔 배너가 겹겹이 쌓이고(회고+되돌리기+…) 목록 상한이 고정이라 최대 883pt 까지
 /// 자라 13" 맥북에서 푸터(로그아웃/앱 종료)가 화면 밖으로 나갔다. 기존 높이 테스트가 못 잡은 이유는
 /// 전부 inertTokenStore(토큰 행 0pt)를 쓰고 배너·패널을 조합하지 않았기 때문이라, 여기서는 실제 토큰 행이
 /// 그려지는 seededTokenStore 로 최악 조합을 만든다.
@@ -1722,7 +1711,6 @@ func popoverStaysWithinHeightCapForWorstBannerAndPanelCombinations() throws {
     }
     func working(_ store: WorkTimerStore) {
         store.startedAt = now.addingTimeInterval(-10)
-        store.nudgeAutoStartedAt = now.addingTimeInterval(-10)
         store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 10)
         store.refreshTimedBanner(now: now)
     }
@@ -2116,8 +2104,8 @@ private final class ObservationFlag: @unchecked Sendable {
 @MainActor
 @Test
 func menuBodyDoesNotObserveDisplayNowOnHomeScreen() {
-    // 회귀 지점: topBanner 가 canUndoAutoClose(now: store.displayNow)/canCancelNudgeAutoStart(now: store.displayNow)
-    // 를 직접 불러, 배너가 하나도 없는 평소 홈 화면에서도 body 가 displayNow 를 관찰 등록했다. 티커는 근무중이면
+    // 회귀 지점: topBanner 가 canUndoAutoClose(now: store.displayNow) 를 직접 불러, 배너가 하나도 없는
+    // 평소 홈 화면에서도 body 가 displayNow 를 관찰 등록했다. 티커는 근무중이면
     // 항상(비근무여도 근무중 팀원이 있고 팝오버가 열려 있으면) 매초 displayNow 를 갱신하므로, 팝오버 전체
     // 서브트리(HeaderCard/TeamPanel/FooterBar/패널)가 매초 재구성됐다. 초단위 의존은 잎 뷰에만 있어야 한다.
     let now = Date()

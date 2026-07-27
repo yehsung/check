@@ -175,7 +175,7 @@ func overlayTimerStaysVisibleDuringFarewellRender() {
 
 @MainActor
 @Test
-func overlayNudgeAutoStartsWorkAndConsumesOverride() throws {
+func overlayNudgeAutoStartsWorkAndConsumesOverride() {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
         defaults: isolatedOverlayDefaults(),
@@ -197,9 +197,6 @@ func overlayNudgeAutoStartsWorkAndConsumesOverride() throws {
     #expect(store.snapshot.isWorking == true)
     #expect(engine.commuteStartBubbleOverride?.text == CheckOverlayController.nudgeAutoStartText)
     #expect(engine.commuteStartBubbleOverride?.seconds == CheckOverlayController.nudgeAutoStartBubbleSeconds)
-    // 결함5: 자동 시작 시각을 찍어야 팝오버가 60초 [취소] 를 띄울 수 있다(방금 시각이어야 함).
-    let stamp = try #require(store.nudgeAutoStartedAt)
-    #expect(abs(stamp.timeIntervalSinceNow) < 5)
 
     // store 관찰 경로(SwiftUI)를 헤드리스로 모사: updateWorking(true) 가 등장 리액션을 처리하며 오버라이드를 소비한다.
     controller.updateWorking(true)
@@ -246,8 +243,9 @@ func overlayNudgeAutoStartIneligibleDoesNothing() {
 
 @MainActor
 @Test
-func overlayNudgeRespectsAutoStartToggleIndependentlyOfCharacter() {
-    // 결함5: 캐릭터는 켜 두고 자동 시작만 끌 수 있어야 한다(두 설정은 독립).
+func overlayNudgeAutoStartRunsRegardlessOfCharacterVisibility() {
+    // 자동 시작은 끄고 켜는 설정이 아니라 앱의 기본 동작이다 — 캐릭터 표시(person 토글)를 어느 쪽으로 두든,
+    // 로그인·팀 확정·비근무이기만 하면 발동해야 한다. 캐릭터를 켠 상태에서 먼저 확인한다.
     let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 74_000) })
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
@@ -256,35 +254,31 @@ func overlayNudgeRespectsAutoStartToggleIndependentlyOfCharacter() {
     )
     store.session = SupabaseSession(accessToken: "t", refreshToken: nil, userID: "me")
     store.currentTeamID = "10000000-0000-0000-0000-000000000001"
-    store.setOverlayEnabled(true) // 캐릭터는 켜 둔 상태.
+    store.setOverlayEnabled(true) // 캐릭터 켬.
     let controller = CheckOverlayController(
         store: store, notificationCenter: NotificationCenter(), engine: engine,
         defaults: isolatedOverlayDefaults(), workspaceNotifications: nil
     )
 
-    // 자동 시작 토글만 끔 → 나머지 자격이 모두 충족돼도 무발동(근무 시작·오버라이드·스탬프 전부 없음).
-    store.isNudgeAutoStartEnabled = false
-    controller.nudgeAutoStart()
-    #expect(store.startedAt == nil)
-    #expect(store.snapshot.isWorking == false)
-    #expect(engine.commuteStartBubbleOverride == nil)
-    #expect(store.nudgeAutoStartedAt == nil)
-
-    // 다시 켜면 같은 상태에서 즉시 발동한다(토글 외 다른 조건은 그대로였음을 반증).
-    store.isNudgeAutoStartEnabled = true
     controller.nudgeAutoStart()
     #expect(store.startedAt != nil)
-    #expect(store.nudgeAutoStartedAt != nil)
     #expect(engine.commuteStartBubbleOverride?.text == CheckOverlayController.nudgeAutoStartText)
+    store.stop()
+
+    // 캐릭터를 끈 상태에서도 같은 자격이면 똑같이 발동한다(표시 설정은 자격에 섞이지 않는다).
+    engine.commuteStartBubbleOverride = nil
+    store.setOverlayEnabled(false)
+    controller.nudgeAutoStart()
+    #expect(store.startedAt != nil)
+    #expect(store.snapshot.isWorking == true)
     store.stop()
 }
 
 @MainActor
 @Test
 func overlayNudgeAutoStartWorksWhileCharacterIsHidden() {
-    // 회귀 지점: 자격이 `isOverlayEnabled && isNudgeAutoStartEnabled` 로 AND 돼 있어, 캐릭터를 숨기면(person 토글)
-    // 푸터의 ⚡ 는 켜짐(accent)으로 보이고 툴팁도 "자리에 있으면 자동으로 근무 시작"이라 안내하는데
-    // 자동 시작이 영영 일어나지 않았다. docs/privacy.md 가 약속한 "캐릭터 표시와는 별개 설정"을 실제로 지킨다.
+    // 회귀 지점: 자격이 `isOverlayEnabled` 를 AND 로 걸고 있어, 캐릭터를 숨기면(person 토글) 자동 근무 시작이
+    // 영영 일어나지 않았다. docs/privacy.md 가 약속한 "캐릭터 표시와는 별개"를 실제로 지킨다.
     let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 75_000) })
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
@@ -298,14 +292,11 @@ func overlayNudgeAutoStartWorksWhileCharacterIsHidden() {
         defaults: isolatedOverlayDefaults(), workspaceNotifications: nil
     )
 
-    // 캐릭터는 숨김, 자동 시작은 켬 — 토글이 약속한 대로 근무가 시작돼야 한다.
+    // 캐릭터는 숨김 — 그래도 근무가 시작돼야 한다.
     store.setOverlayEnabled(false)
-    store.isNudgeAutoStartEnabled = true
     controller.nudgeAutoStart()
     #expect(store.startedAt != nil)
     #expect(store.snapshot.isWorking == true)
-    // 60초 [취소] 배너가 알림 채널을 대신하므로 시각 스탬프는 반드시 찍힌다.
-    #expect(store.nudgeAutoStartedAt != nil)
     // 숨김 상태에서는 말풍선 오버라이드를 세우지 않는다 — 소비되지 않은 채 남아 있다가 몇 시간 뒤
     // 사용자가 캐릭터를 다시 켜는 순간 낡은 안내가 튀어나오면 안 된다.
     #expect(engine.commuteStartBubbleOverride == nil)

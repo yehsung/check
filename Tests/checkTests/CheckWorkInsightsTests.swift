@@ -36,15 +36,16 @@ private func sessionRow(_ start: Date, _ end: Date?, id: String = UUID().uuidStr
     )
 }
 
-// 기준 시각: 2026-07-22(수) 12:00 KST. 이 주의 시작은 2026-07-20(월), 8주 창 시작은 2026-06-01(월)이다.
+// 기준 시각: 2026-07-22(수) 12:00 KST. 이 주의 시작은 2026-07-20(월)이고,
+// 히트맵·회고가 함께 보는 '지난주'는 2026-07-13(월) 00:00 ~ 2026-07-20(월) 00:00, 그 전주 시작은 2026-07-06(월)이다.
 private let insightsNow = kst(2026, 7, 22, 12)
 
-// MARK: - 히트맵
+// MARK: - 히트맵(지난주 한 주)
 
 @Test
 func heatmapSplitsSessionAcrossHourAndMidnightBoundaries() {
-    // 화 23:30 → 수 01:10 (총 6000초). 한 칸에 몰지 않고 화23시 1800 / 수0시 3600 / 수1시 600 으로 쪼개져야 한다.
-    let sessions = [sessionRow(kst(2026, 7, 21, 23, 30), kst(2026, 7, 22, 1, 10))]
+    // 지난주 화 23:30 → 수 01:10 (총 6000초). 한 칸에 몰지 않고 화23시 1800 / 수0시 3600 / 수1시 600 으로 쪼개져야 한다.
+    let sessions = [sessionRow(kst(2026, 7, 14, 23, 30), kst(2026, 7, 15, 1, 10))]
 
     let map = WorkRhythmHeatmap.build(sessions: sessions, now: insightsNow)
 
@@ -63,9 +64,9 @@ func heatmapSplitsSessionAcrossHourAndMidnightBoundaries() {
 
 @Test
 func heatmapUsesMondayZeroWeekdayIndex() {
-    // 월요일(2026-07-20) 09시 1시간, 일요일(2026-07-19) 09시 1시간 → 0번과 6번 칸에 각각 들어가야 한다.
+    // 지난주 월요일(2026-07-13) 09시 1시간, 일요일(2026-07-19) 09시 1시간 → 0번과 6번 행에 각각 들어가야 한다.
     let sessions = [
-        sessionRow(kst(2026, 7, 20, 9), kst(2026, 7, 20, 10)),
+        sessionRow(kst(2026, 7, 13, 9), kst(2026, 7, 13, 10)),
         sessionRow(kst(2026, 7, 19, 9), kst(2026, 7, 19, 10))
     ]
 
@@ -77,45 +78,51 @@ func heatmapUsesMondayZeroWeekdayIndex() {
 }
 
 @Test
-func heatmapDropsSessionsOutsideWindowAndClipsCrossingOnes() {
-    // 8주 창 시작 = 2026-06-01(월) 00:00. 그 이전에 끝난 세션은 통째로 버리고,
-    // 창 시작에 걸친 세션은 창 안쪽 구간만 남긴다(05-31 23:00~06-01 01:00 → 월 0시 3600 만).
+func heatmapKeepsOnlyLastWeekAndClipsSessionsCrossingEitherEdge() {
+    // 창은 지난주 [07-13 00:00, 07-20 00:00) 하나뿐이다. 그 전주·이번 주 세션은 통째로 버리고,
+    // 양쪽 경계에 걸친 세션은 창 안쪽 구간만 남긴다.
     let sessions = [
-        sessionRow(kst(2026, 5, 20, 9), kst(2026, 5, 20, 18)),          // 창 밖 — 전부 제외
-        sessionRow(kst(2026, 5, 31, 23), kst(2026, 6, 1, 1))            // 창 경계 걸침 — 뒤쪽 1시간만
+        sessionRow(kst(2026, 7, 6, 9), kst(2026, 7, 6, 18)),        // 그 전주 — 전부 제외(회고 비교선에만 쓰인다)
+        sessionRow(kst(2026, 7, 12, 23), kst(2026, 7, 13, 1)),      // 앞 경계 걸침 — 뒤쪽 1시간만
+        sessionRow(kst(2026, 7, 19, 23), kst(2026, 7, 20, 1)),      // 뒤 경계 걸침 — 앞쪽 1시간만
+        sessionRow(kst(2026, 7, 20, 9), kst(2026, 7, 20, 18))       // 이번 주 — 전부 제외
     ]
 
     let map = WorkRhythmHeatmap.build(sessions: sessions, now: insightsNow)
 
-    #expect(map.totalSeconds == 3_600)
-    #expect(map.buckets[0][0] == 3_600)   // 2026-06-01 은 월요일 00시
-    #expect(map.buckets[6][23] == 0)      // 창 밖(일요일 23시)은 들어오지 않는다
+    #expect(map.totalSeconds == 7_200)
+    #expect(map.buckets[0][0] == 3_600)    // 07-13(월) 00시 — 앞 경계 세션의 안쪽 몫
+    // 07-19(일) 23시만 들어온다. 창 밖 일요일(07-12) 23시까지 새어 들어오면 이 칸이 7200이 된다.
+    #expect(map.buckets[6][23] == 3_600)
+    #expect(map.buckets[0][9] == 0)        // 이번 주 월요일 09시는 한 칸도 남기지 않는다
 }
 
 @Test
-func heatmapClipsFutureTailAtNowAndIgnoresOpenSessions() {
-    // now(수 12:00) 이후 구간은 세지 않고, 진행 중(ended_at 없음) 세션은 통째로 무시한다.
+func heatmapExcludesThisWeekAndIgnoresOpenSessions() {
+    // 이번 주 세션은 완료됐어도 히트맵에 들어오지 않고(대상은 지난주뿐), 진행 중(ended_at 없음) 행은 무시한다.
     let sessions = [
-        sessionRow(kst(2026, 7, 22, 11), kst(2026, 7, 22, 13)),
-        sessionRow(kst(2026, 7, 22, 8), nil)
+        sessionRow(kst(2026, 7, 22, 8), kst(2026, 7, 22, 11)),   // 이번 주 완료 — 제외
+        sessionRow(kst(2026, 7, 22, 8), nil),                    // 진행 중 — 제외
+        sessionRow(kst(2026, 7, 16, 9), nil),                    // 지난주 시작이지만 미완료 — 제외
+        sessionRow(kst(2026, 7, 16, 9), kst(2026, 7, 16, 10))    // 지난주 완료 — 유일하게 남는다
     ]
 
     let map = WorkRhythmHeatmap.build(sessions: sessions, now: insightsNow)
 
     #expect(map.totalSeconds == 3_600)
-    #expect(map.buckets[2][11] == 3_600)
-    #expect(map.buckets[2][12] == 0)
+    #expect(map.buckets[3][9] == 3_600)   // 목요일 09시
     #expect(map.buckets[2][8] == 0)
 }
 
 @Test
-func heatmapWithNoSessionsStillReportsWindowWeeks() {
-    let map = WorkRhythmHeatmap.build(sessions: [], now: insightsNow, weeks: 8)
+func heatmapWithNoSessionsIsAnEmptyGrid() {
+    // 지난주에 근무가 없으면 히트맵도 통째로 빈다(회고 카드가 "지난주 근무 기록이 없어요"라고 말하는 그 상태).
+    let map = WorkRhythmHeatmap.build(sessions: [], now: insightsNow)
 
+    #expect(map == .empty)
     #expect(map.totalSeconds == 0)
     #expect(map.maxBucketSeconds == 0)
     #expect(map.peakSlot == nil)
-    #expect(map.weeks == 8)
     #expect(map.buckets.count == WorkRhythmHeatmap.dayCount)
     #expect(map.buckets.allSatisfy { $0.count == WorkRhythmHeatmap.hourCount })
 }
@@ -126,16 +133,60 @@ func heatmapParsesFractionalSecondTimestamps() {
     let row = WorkSessionRow(
         id: "s1",
         userId: "u1",
-        startedAt: "2026-07-22T00:00:00.123456+00:00",
-        endedAt: "2026-07-22T01:00:00.654321+00:00",
+        startedAt: "2026-07-15T00:00:00.123456+00:00",
+        endedAt: "2026-07-15T01:00:00.654321+00:00",
         durationSeconds: 3_600
     )
 
     let map = WorkRhythmHeatmap.build(sessions: [row], now: insightsNow)
 
-    // 00:00 UTC = 09:00 KST(수요일).
+    // 00:00 UTC = 09:00 KST(지난주 수요일).
     #expect(map.buckets[2][9] == 3_600)
     #expect(map.totalSeconds == 3_600)
+}
+
+@Test
+func heatmapAndRetroCoverExactlyTheSameWeek() {
+    // 이 패널의 계약: 회고 카드의 "지난주 N시간"과 히트맵 칸 전체 합은 **같은 주, 같은 값**이어야 한다.
+    // 두 계산이 각자 주 경계를 세면 한쪽만 어긋나도 한 화면이 스스로를 반박한다 — 경계는 한 헬퍼에서만 나온다.
+    let sessions = [
+        sessionRow(kst(2026, 7, 12, 21), kst(2026, 7, 13, 3)),          // 앞 경계 걸침 — 지난주 몫 3h
+        sessionRow(kst(2026, 7, 15, 9), kst(2026, 7, 15, 18)),          // 수요일 9h
+        sessionRow(kst(2026, 7, 18, 13, 30), kst(2026, 7, 18, 17, 45)), // 토요일 4h15m
+        sessionRow(kst(2026, 7, 19, 21), kst(2026, 7, 20, 4)),          // 뒤 경계 걸침 — 지난주 몫 3h
+        sessionRow(kst(2026, 7, 7, 9), kst(2026, 7, 7, 17)),            // 그 전주 8h — 회고 비교선에만
+        sessionRow(kst(2026, 7, 21, 9), kst(2026, 7, 21, 17))           // 이번 주 — 양쪽 모두 제외
+    ]
+
+    let map = WorkRhythmHeatmap.build(sessions: sessions, now: insightsNow)
+    let retro = WeeklyRetro.build(sessions: sessions, now: insightsNow, goalSeconds: 40 * 3_600)
+    let bucketSum = map.buckets.reduce(0) { $0 + $1.reduce(0, +) }
+
+    #expect(bucketSum == map.totalSeconds)
+    #expect(retro?.totalSeconds == bucketSum)
+    #expect(bucketSum == 3 * 3_600 + 9 * 3_600 + 4 * 3_600 + 15 * 60 + 3 * 3_600)
+    #expect(retro?.weekStart == kst(2026, 7, 13))
+    // 그 전주 몫(8h + 앞 경계 세션의 바깥쪽 3h)은 회고 비교선에만 들어가고 히트맵에는 한 칸도 없다.
+    #expect(retro?.previousWeekSeconds == 8 * 3_600 + 3 * 3_600)
+    // 한 주만 보므로 어떤 칸도 한 시간을 넘을 수 없다 — 색 농도의 분모(3600)가 성립하는 근거다.
+    #expect(map.maxBucketSeconds <= 3_600)
+    #expect(map.buckets[5][13] == 1_800)   // 토요일 13:30 시작 → 반 칸
+    #expect(map.buckets[5][17] == 2_700)   // 17:45 종료 → 45분
+}
+
+@MainActor
+@Test
+func insightsFetchWindowCoversExactlyLastWeekAndTheWeekBefore() throws {
+    let window = try #require(WorkInsightsWeekWindow.lastWeek(now: insightsNow))
+
+    #expect(window.start == kst(2026, 7, 13))
+    #expect(window.end == kst(2026, 7, 20))
+    #expect(window.previousStart == kst(2026, 7, 6))
+
+    // 조회 창은 회고 비교선(그 전주 시작)에서 시작한다 — 더 짧으면 '전주 대비 증감'이 0으로 굳고,
+    // 더 길면 어느 계산도 쓰지 않는 페이로드만 커진다(히트맵이 8주 합산이던 시절의 잔재).
+    #expect(WorkTimerStore.insightsWindowStart(now: insightsNow) == window.previousStart)
+    #expect(WorkTimerStore.insightsWeeks == 2)
 }
 
 // MARK: - 지난주 회고
@@ -211,7 +262,7 @@ func insightsParseSessionsRunsOncePerRowAndKeepsBothCalculationsIdentical() {
     // parseSessions 가 행당 2회만 하고 두 계산이 그 결과를 나눠 쓴다 — 결과는 예전과 한 칸도 달라지면 안 된다.
     let rows = [
         sessionRow(kst(2026, 7, 15, 9), kst(2026, 7, 15, 18)),   // 지난주 완료
-        sessionRow(kst(2026, 6, 3, 9), kst(2026, 6, 3, 12)),     // 8주 창 안이지만 회고 창 밖
+        sessionRow(kst(2026, 6, 3, 9), kst(2026, 6, 3, 12)),     // 조회 창보다 오래된 행 → 두 계산 모두 제외
         sessionRow(kst(2026, 7, 16, 9), nil),                    // 진행 중 → 두 계산 모두 제외
         sessionRow(kst(2026, 7, 14, 10), kst(2026, 7, 14, 10)),  // 길이 0 → 어느 칸에도 안 들어간다
         WorkSessionRow(id: "bad", userId: "u1", startedAt: "not-a-date",
@@ -227,90 +278,92 @@ func insightsParseSessionsRunsOncePerRowAndKeepsBothCalculationsIdentical() {
     #expect(parsed.contains(WorkInsightsSession(start: kst(2026, 7, 15, 9), end: kst(2026, 7, 15, 18))))
 
     // 파싱본 경로와 원본 행 경로가 완전히 같은 값을 낸다.
-    #expect(WorkRhythmHeatmap.build(parsed: parsed, now: insightsNow, weeks: 8)
-        == WorkRhythmHeatmap.build(sessions: rows, now: insightsNow, weeks: 8))
+    #expect(WorkRhythmHeatmap.build(parsed: parsed, now: insightsNow)
+        == WorkRhythmHeatmap.build(sessions: rows, now: insightsNow))
     #expect(WeeklyRetro.build(parsed: parsed, now: insightsNow, goalSeconds: 40 * 3_600)
         == WeeklyRetro.build(sessions: rows, now: insightsNow, goalSeconds: 40 * 3_600))
 
     // 묶음 계산도 같은 답을 낸다(스토어가 실제로 부르는 경로).
-    let computed = WorkInsightsComputation.build(rows: rows, now: insightsNow, weeks: 8, goalSeconds: 40 * 3_600)
-    #expect(computed.heatmap == WorkRhythmHeatmap.build(sessions: rows, now: insightsNow, weeks: 8))
+    let computed = WorkInsightsComputation.build(rows: rows, now: insightsNow, goalSeconds: 40 * 3_600)
+    #expect(computed.heatmap == WorkRhythmHeatmap.build(sessions: rows, now: insightsNow))
     #expect(computed.retro == WeeklyRetro.build(sessions: rows, now: insightsNow, goalSeconds: 40 * 3_600))
     // 소수초 세션(7/14 09:00~11:00 KST)이 회고 최다 요일에 온전히 반영됐는지 — 파싱 경로 공유 후에도 유실 없음.
     #expect(computed.retro?.totalSeconds == 9 * 3_600 + 2 * 3_600)
+    // 지난주 두 세션(9h + 2h)은 히트맵에도 그대로 있다 — 같은 주를 보므로 합이 회고와 일치한다.
+    #expect(computed.heatmap.totalSeconds == computed.retro?.totalSeconds)
 }
 
-// MARK: - 진행 중 세션(첫 근무가 아직 안 끝난 신규 사용자)
+// MARK: - 진행 중 세션(주말을 넘겨 아직 끝나지 않은 근무)
 
 @Test
-func insightsCountTheSessionThatIsStillRunningSoTheFirstDayPanelIsNotEmpty() {
-    // 회귀 지점: 서버 조회는 완료 세션(ended_at not null)만 준다. 그래서 완료 세션이 0건인 계정
-    // (=가입 첫날, 첫 [근무 종료] 전)에서는 heatmap.totalSeconds 가 0이 되어 '내 기록' 패널이
-    // "아직 기록이 쌓이지 않았어요"라고 단정했는데, 같은 팝오버 헤더 캡션은 진행 중 세션 기여를 더한
-    // 이번 주 누적("3시간 00분 / 40시간")을 세고 있었다 — 한 화면 두 문장이 서로를 반박했다.
-    // 이제 진행 중 세션의 시작 시각을 넘기면 '지금까지'만 잘라 함께 집계한다.
-    let ongoingStart = kst(2026, 7, 22, 9)   // 수 09:00 KST 출근, insightsNow(수 12:00)까지 근무 중
+func insightsCountTheRunningSessionsLastWeekShareAndDropTheRest() {
+    // 서버 조회는 완료 세션(ended_at not null)만 준다. 주 경계를 넘겨 아직 끝나지 않은 근무
+    // (일요일 밤 시작 → 이번 주까지 진행 중)의 지난주 몫이 통째로 사라지지 않도록 진행 세션도 함께 태운다.
+    // 다만 창이 지난주뿐이라 이번 주로 넘어간 뒷부분은 잘린다 — 회고 합계와 한 칸도 어긋나면 안 된다.
+    let ongoingStart = kst(2026, 7, 19, 22)   // 지난주 일요일 22:00 출근, insightsNow(이번 주 수 12:00)까지 근무 중
 
     let computed = WorkInsightsComputation.build(
         rows: [],
         now: insightsNow,
-        weeks: 8,
         goalSeconds: 40 * 3_600,
         ongoingStart: ongoingStart
     )
 
-    #expect(computed.heatmap.totalSeconds == 3 * 3_600)
-    // 수요일(2) 09·10·11시 칸에 한 시간씩 — 한 칸에 몰리지 않고 시간 경계로 쪼개진다.
-    #expect(computed.heatmap.buckets[2][9] == 3_600)
-    #expect(computed.heatmap.buckets[2][10] == 3_600)
-    #expect(computed.heatmap.buckets[2][11] == 3_600)
-    // now 이후는 세지 않는다(미래 칸 0).
-    #expect(computed.heatmap.buckets[2][12] == 0)
-    // 지난주 회고는 이번 주 진행 세션에 영향을 받지 않는다(대상 주가 다르다).
-    #expect(computed.retro == nil)
-    // 패널이 더 이상 "기록 없음"으로 단정하지 않는다 — 헤더 캡션과 같은 사실을 말한다.
-    #expect(InsightsEmptyMessage.text(hasLoaded: true, totalSeconds: computed.heatmap.totalSeconds) == nil)
+    #expect(computed.heatmap.totalSeconds == 2 * 3_600)
+    // 일요일(6) 22·23시 칸에 한 시간씩 — 한 칸에 몰리지 않고 시간 경계로 쪼개진다.
+    #expect(computed.heatmap.buckets[6][22] == 3_600)
+    #expect(computed.heatmap.buckets[6][23] == 3_600)
+    // 이번 주로 넘어간 구간은 어느 칸에도 남지 않는다.
+    #expect(computed.heatmap.buckets[0][0] == 0)
+    // 회고도 같은 클리핑 규약이라 합이 정확히 일치한다.
+    #expect(computed.retro?.totalSeconds == computed.heatmap.totalSeconds)
+    #expect(computed.retro?.busiestDayIndex == 6)
+}
 
-    // 같은 시점 헤더 값과 자릿수가 맞는지: 진행 세션만 있는 계정의 라이브 주간 누적도 3시간이다.
-    let mine = TeamMemberStatus(
-        id: "00000000-0000-0000-0000-000000000002",
-        name: "나",
-        status: .working,
-        updatedAt: insightsNow,
-        currentSessionStartedAt: ongoingStart,
-        weeklyDurationSeconds: 0,
-        todayDurationSeconds: 0,
-        lastSeenAt: insightsNow
+@Test
+func insightsDropThisWeekWorkFromTheHeatmapEvenWhileItIsRunning() {
+    // 이번 주에만 근무한 사용자(가입 첫 주)의 히트맵은 비어 있는 게 맞다 — 대상이 지난주이기 때문이다.
+    // 그래서 자리 문구도 "아직 기록이 쌓이지 않았어요"(헤더가 세는 이번 주 누적과 모순)가 아니라
+    // 지난주 기준 문장이어야 한다(회고 카드의 빈 줄과 같은 문장 = 같은 사실).
+    let computed = WorkInsightsComputation.build(
+        rows: [sessionRow(kst(2026, 7, 20, 9), kst(2026, 7, 20, 18))],   // 이번 주 월요일 9시간
+        now: insightsNow,
+        goalSeconds: 40 * 3_600,
+        ongoingStart: kst(2026, 7, 22, 9)                                // 이번 주 수요일부터 근무 중
     )
-    #expect(mine.liveWeeklyDurationSeconds(now: insightsNow) == computed.heatmap.totalSeconds)
+
+    #expect(computed.heatmap == .empty)
+    #expect(computed.retro == nil)
+    #expect(InsightsEmptyMessage.text(hasLoaded: true, totalSeconds: 0) == InsightsEmptyMessage.noRetro)
 }
 
 @Test
 func insightsIgnoreOngoingStartThatIsNotInTheFutureOrAlreadyCoveredByCompletedRows() {
     // (a) ongoingStart 가 없으면 예전과 완전히 동일한 결과(하위호환 — 근무 중이 아닌 사용자).
-    let rows = [sessionRow(kst(2026, 7, 21, 9), kst(2026, 7, 21, 12))]
-    let base = WorkInsightsComputation.build(rows: rows, now: insightsNow, weeks: 8, goalSeconds: 40 * 3_600)
+    let rows = [sessionRow(kst(2026, 7, 14, 9), kst(2026, 7, 14, 12))]   // 지난주 화요일 3시간
+    let base = WorkInsightsComputation.build(rows: rows, now: insightsNow, goalSeconds: 40 * 3_600)
     #expect(base.heatmap.totalSeconds == 3 * 3_600)
 
     // (b) 시작이 now 이후(시계 되돌림 등)면 아무것도 더하지 않는다 — 음수/미래 칸 오염 금지.
     let future = WorkInsightsComputation.build(
-        rows: rows, now: insightsNow, weeks: 8, goalSeconds: 40 * 3_600,
+        rows: rows, now: insightsNow, goalSeconds: 40 * 3_600,
         ongoingStart: insightsNow.addingTimeInterval(600)
     )
     #expect(future.heatmap == base.heatmap)
 
-    // (c) 진행 세션이 주 경계를 넘겨 지난주에 걸쳐 있으면 그 몫만 회고에 들어간다(완료 세션과 같은 클리핑 규약).
+    // (c) 진행 세션이 주 경계를 넘겨 지난주에 걸쳐 있으면 그 몫만 두 계산에 들어간다(완료 세션과 같은 클리핑 규약).
     let acrossWeeks = WorkInsightsComputation.build(
-        rows: [], now: insightsNow, weeks: 8, goalSeconds: 40 * 3_600,
+        rows: [], now: insightsNow, goalSeconds: 40 * 3_600,
         ongoingStart: kst(2026, 7, 19, 22)   // 지난주 일요일 22:00 시작 → 지난주 몫 2시간
     )
     #expect(acrossWeeks.retro?.totalSeconds == 2 * 3_600)
+    #expect(acrossWeeks.heatmap.totalSeconds == 2 * 3_600)
     #expect(acrossWeeks.retro?.busiestDayIndex == 6)   // 일요일
 }
 
 @Test
 func retroSkipsSessionsOutsideItsTwoWeekWindowWithoutChangingTotals() {
-    // 회고는 '지난주 + 그 전주' 2주만 쓰는데도 8주치 전 행을 하루 경계로 쪼개고 있었다. 이제 창 밖 행은
+    // 회고는 '지난주 + 그 전주' 2주만 쓰는데도 예전엔 8주치 전 행을 하루 경계로 쪼개고 있었다. 이제 창 밖 행은
     // 먼저 걸러 내는데, 경계에 **걸친** 행까지 잘려 나가면 합이 줄어든다 — 그 경계를 고정한다.
     // 그 전주 시작 = 2026-07-06(월) 00:00, 이번 주 시작 = 2026-07-20(월) 00:00.
     let sessions = [
@@ -318,7 +371,7 @@ func retroSkipsSessionsOutsideItsTwoWeekWindowWithoutChangingTotals() {
         sessionRow(kst(2026, 7, 5, 22), kst(2026, 7, 6, 2)),      // 경계에 걸침 → 그 전주 몫 2h 만
         sessionRow(kst(2026, 7, 20, 0), kst(2026, 7, 20, 3)),     // 이번 주 → 제외
         sessionRow(kst(2026, 7, 14, 9), kst(2026, 7, 14, 13)),    // 지난주 4h
-        sessionRow(kst(2026, 6, 10, 9), kst(2026, 6, 10, 18))     // 8주 창 안이지만 회고 창 밖 → 제외
+        sessionRow(kst(2026, 6, 10, 9), kst(2026, 6, 10, 18))     // 조회 창보다 오래된 행이 섞여 와도 제외
     ]
 
     let retro = WeeklyRetro.build(sessions: sessions, now: insightsNow, goalSeconds: 40 * 3_600)
@@ -337,10 +390,10 @@ func insightsComputationRunsOffTheMainActor() async {
         let start = kst(2026, 7, 14, 1).addingTimeInterval(Double(index) * 600)
         return sessionRow(start, start.addingTimeInterval(300))
     }
-    let onMain = WorkInsightsComputation.build(rows: rows, now: insightsNow, weeks: 8, goalSeconds: 40 * 3_600)
+    let onMain = WorkInsightsComputation.build(rows: rows, now: insightsNow, goalSeconds: 40 * 3_600)
 
     let offMain = await Task.detached { () -> (WorkInsightsComputation, Bool) in
-        (WorkInsightsComputation.build(rows: rows, now: insightsNow, weeks: 8, goalSeconds: 40 * 3_600),
+        (WorkInsightsComputation.build(rows: rows, now: insightsNow, goalSeconds: 40 * 3_600),
          pthread_main_np() != 0)
     }.value
 

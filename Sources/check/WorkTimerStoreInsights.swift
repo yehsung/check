@@ -5,22 +5,19 @@ import Foundation
 // CheckWorkInsights 의 순수 함수가 담당한다(스토어는 로딩·상태 반영만).
 @MainActor
 extension WorkTimerStore {
-    /// 히트맵 집계 기간(주). 이 기간의 완료 세션만 서버에서 받아 온다.
-    static let insightsWeeks = 8
+    /// 개인 기록 조회 창의 폭(주). 지난주(히트맵·회고 본체) + 그 전주(회고의 '전주 대비 증감' 비교선) = 2주.
+    /// 히트맵이 최근 8주 합산이던 시절엔 8주치를 받아 왔지만, 이제 그보다 오래된 행은 어느 계산도 쓰지 않는다.
+    static let insightsWeeks = 2
     /// 이 주의 회고 배너를 이미 보여줬는지 기록하는 UserDefaults 키의 앞자리(계정별 접미사가 붙는다).
     static let retroBannerShownWeekKey = "check.retro.shownForWeek"
     /// 이 맥의 기기 식별자 UserDefaults 키(토큰 원장 분리용).
     static let deviceIDKey = "check.deviceID"
 
-    /// 개인 기록 조회 창의 시작(KST). 히트맵 8주 창의 첫 월요일 00:00 — 회고가 보는 '지난주+그 전주'(2주)를
-    /// 완전히 포함하므로 두 계산이 한 번의 조회를 나눠 쓴다.
+    /// 개인 기록 조회 창의 시작(KST) = **그 전주 월요일 00:00**. 히트맵·회고가 쓰는 주 창 계산기에서 그대로 얻어
+    /// 두 계산이 한 번의 조회를 나눠 쓴다(경계를 여기서 따로 세면 조회가 회고 비교선보다 짧아질 수 있다).
     static func insightsWindowStart(now: Date = Date()) -> Date {
-        let weekStart = TeamWeeklyGoal.koreanWeekStart(for: now)
-        return TeamWeeklyGoal.kstCalendar.date(
-            byAdding: .weekOfYear,
-            value: -(insightsWeeks - 1),
-            to: weekStart
-        ) ?? weekStart
+        WorkInsightsWeekWindow.lastWeek(now: now)?.previousStart
+            ?? TeamWeeklyGoal.koreanWeekStart(for: now)
     }
 
     /// 이 맥의 기기 식별자를 읽고, 없으면 한 번 만들어 저장한다(결함1 — 맥별 토큰 원장 분리 키).
@@ -62,18 +59,16 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             let now = Date()
             // 계산은 메인액터 밖에서 한다. 히트맵·회고는 세션마다 타임스탬프를 파싱하고 시간/일 경계로 쪼개는
-            // 순수 CPU 작업이라, 세션이 많은 계정(자리 비움 자동 마감이 잦으면 8주에 수백~수천 건)에서는
+            // 순수 CPU 작업이라, 세션이 많은 계정(자리 비움 자동 마감이 잦으면 수백~수천 건)에서는
             // 메인액터에 올려 두면 응답이 도착하는 순간 UI 가 통째로 멈춘다 — 서버 limit 상한인 2000행에서
             // 350ms(60Hz 기준 21프레임) 이상 점유했다. 결과만 받아 대입하므로 메인액터 점유는 상수 시간이다.
-            let weeks = Self.insightsWeeks
             let goalSeconds = teamGoalSeconds
-            // 진행 중인 내 세션은 서버 조회(ended_at not null)에 안 잡히므로 여기서 얹어 준다. 헤더 캡션이
-            // 진행분을 더한 이번 주 누적을 세는 동안 패널만 "아직 기록이 쌓이지 않았어요"라고 말하던
-            // 조합(=완료 세션 0건인 가입 첫날 근무 중)이 이 한 줄로 사라진다. 이 값을 넘겨도 이중 계상은
-            // 없다 — 그 세션이 끝나 완료 행이 되면 startedAt 은 이미 nil 이다.
+            // 진행 중인 내 세션은 서버 조회(ended_at not null)에 안 잡히므로 여기서 얹어 준다 — 주말을 넘겨
+            // 아직 끝나지 않은 근무(일요일 밤 시작)의 지난주 몫이 통째로 빠지지 않게. 이 값을 넘겨도 이중
+            // 계상은 없다 — 그 세션이 끝나 완료 행이 되면 startedAt 은 이미 nil 이다.
             let ongoingStart = startedAt
             let computed = await Task.detached(priority: .userInitiated) {
-                WorkInsightsComputation.build(rows: rows, now: now, weeks: weeks, goalSeconds: goalSeconds, ongoingStart: ongoingStart)
+                WorkInsightsComputation.build(rows: rows, now: now, goalSeconds: goalSeconds, ongoingStart: ongoingStart)
             }.value
             // 계산 동안 로그아웃/재로그인이 끼어들 수 있다 — 대입 직전에 세대를 한 번 더 확인한다.
             guard generation == sessionGeneration else { return }

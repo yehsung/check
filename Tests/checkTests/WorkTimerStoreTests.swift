@@ -4279,10 +4279,9 @@ func retroGoalFollowsTeamGoalConfirmedAfterInsightsLoad() async {
 
 @MainActor
 @Test
-func insightsIncludeTheRunningSessionSoTheFirstDayPanelMatchesTheHeader() async {
-    // 회귀 지점: 서버 조회는 완료 세션만 준다(ended_at not null). 가입 첫날 근무를 시작한 사용자는
-    // 완료 세션이 0건이라 heatmap.totalSeconds 가 0 → '내 기록' 패널이 "아직 기록이 쌓이지 않았어요"를
-    // 띄웠는데, 같은 팝오버 헤더는 진행분을 더한 이번 주 누적을 시간 단위로 세고 있었다(모순).
+func insightsIncludeTheRunningSessionThatCrossedTheWeekBoundary() async {
+    // 서버 조회는 완료 세션만 준다(ended_at not null). 주말을 넘겨 아직 끝나지 않은 근무(일요일 밤 시작 →
+    // 이번 주까지 진행 중)의 지난주 몫이 통째로 빠지면 패널이 지난주를 실제보다 짧게 말한다.
     // 이 호스트는 work_sessions GET 에 빈 배열을 준다 = 완료 세션 0건 계정.
     let testHost = "insights-first-day-test"
     let service = SupabaseWorkService(
@@ -4302,24 +4301,28 @@ func insightsIncludeTheRunningSessionSoTheFirstDayPanelMatchesTheHeader() async 
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
     store.currentTeamID = URLProtocolStub.stubTeamID
 
-    // (a) 근무 중이 아니면 예전 그대로 — 기록이 없으면 없다고 말한다.
+    // (a) 근무 중이 아니면 지난주 기록이 없다고 말한다(회고 카드와 같은 문장).
     await store.performLoadInsights()
     #expect(store.insightsLoaded)
     #expect(store.heatmap.totalSeconds == 0)
     #expect(
         InsightsEmptyMessage.text(hasLoaded: store.insightsLoaded, hasFailed: store.insightsFailed,
-                                  totalSeconds: store.heatmap.totalSeconds) == InsightsEmptyMessage.noData
+                                  totalSeconds: store.heatmap.totalSeconds) == InsightsEmptyMessage.noRetro
     )
 
-    // (b) 3시간 전 [근무 시작]을 누른 뒤 팝오버를 다시 열면(=재조회) 그 진행분이 집계에 들어온다.
-    let start = Date(timeIntervalSince1970: (Date().timeIntervalSince1970 - 3 * 3_600).rounded(.down))
-    store.startedAt = start
+    // (b) 지난주 마지막 한 시간(일요일 23:00)에 [근무 시작]을 눌러 아직 끝나지 않았다면, 그 한 시간만 들어온다.
+    //     실제 시계로 도는 경로라 주 경계에서 역산해 픽스처를 만든다(언제 돌려도 결과가 같다).
+    let weekBoundary = WorkInsightsWeekWindow.lastWeek(now: Date())!.end   // 이번 주 월요일 00:00
+    store.startedAt = weekBoundary.addingTimeInterval(-3_600)
     await store.performLoadInsights()
 
-    #expect(store.heatmap.totalSeconds >= 3 * 3_600)
-    // 진행 중이라 now 까지만 세므로 위로도 몇 초 안쪽이어야 한다(미래를 세지 않는다).
-    #expect(store.heatmap.totalSeconds < 3 * 3_600 + 60)
-    // 패널이 헤더와 같은 사실을 말한다 — 더 이상 "기록 없음"으로 단정하지 않는다.
+    #expect(store.heatmap.totalSeconds == 3_600)
+    #expect(store.heatmap.buckets[6][23] == 3_600)   // 일요일 23시 한 칸
+    // 이번 주로 넘어간 구간은 히트맵에 들어오지 않는다(창이 지난주뿐이다).
+    #expect(store.heatmap.buckets[0][0] == 0)
+    // 회고도 같은 주·같은 클리핑이라 합이 정확히 일치한다.
+    #expect(store.retro?.totalSeconds == store.heatmap.totalSeconds)
+    // 보여 줄 기록이 생겼으니 자리 문구가 아니라 본문을 그린다.
     #expect(
         InsightsEmptyMessage.text(hasLoaded: store.insightsLoaded, hasFailed: store.insightsFailed,
                                   totalSeconds: store.heatmap.totalSeconds) == nil
@@ -4416,9 +4419,10 @@ func insightsRetrySucceedsAndClearsFailure() async {
 @MainActor
 private func seedInsightsSnapshot(_ store: WorkTimerStore, weekKey: String) {
     var seeded = WorkRhythmHeatmap.empty
-    seeded.buckets[0][9] = 31_200
-    seeded.weeks = WorkTimerStore.insightsWeeks
-    seeded.totalSeconds = 31_200
+    // 지난주 월요일 09~16시를 꽉 채우고 17시엔 40분 — 한 주짜리 히트맵이라 한 칸은 3600초를 넘을 수 없다.
+    for hour in 9...16 { seeded.buckets[0][hour] = 3_600 }
+    seeded.buckets[0][17] = 2_400
+    seeded.totalSeconds = 8 * 3_600 + 2_400   // 8시간 40분
     store.heatmap = seeded
     store.retro = WeeklyRetro(
         weekStart: TeamWeeklyGoal.koreanWeekStart(for: Date()).addingTimeInterval(-14 * 86_400),

@@ -518,8 +518,9 @@ struct InlineActionBanner: View {
 
 // MARK: - Work rhythm heatmap grid (개인 기록)
 
-/// 개인 근무 리듬 히트맵 그리드 — 요일(월~일) 7행 × 시간(0~23) 24열.
-/// 칸 색은 CheckTheme.accent 를 maxBucketSeconds 기준 농도로 칠하고, 0인 칸은 아주 옅은 fieldFill 로 남긴다.
+/// 개인 근무 리듬 히트맵 그리드 — 요일(월~일) 7행 × 시간(0~23) 24열(지난주 한 주).
+/// 칸 색은 CheckTheme.accent 를 **한 시간(3600초) 고정 기준** 농도로 칠하고, 0인 칸은 아주 옅은 fieldFill 로 남긴다
+/// — 진하기가 곧 "그 시간대를 얼마나 채웠는지"라, 사람마다·주마다 기준이 흔들리지 않는다.
 /// 셀 10pt + 간격 1pt + 좌측 요일 라벨 20pt = 총 284pt 라 팝오버 폭(340 - 바깥 12*2 - 패널 12*2 = 292)에 들어간다.
 /// 시간 라벨은 0/6/12/18 만 표기한다(24개를 다 쓰면 10pt 칸 위에서 뭉갠다).
 struct WorkRhythmHeatmapGrid: View {
@@ -533,7 +534,6 @@ struct WorkRhythmHeatmapGrid: View {
     private static let markedHours: Set<Int> = [0, 6, 12, 18]
 
     var body: some View {
-        let maxSeconds = heatmap.maxBucketSeconds
         VStack(alignment: .leading, spacing: 3) {
             // 시간 라벨 행. 빈 슬롯은 폭만 차지하고, 표기 대상 라벨은 fixedSize 로 이상적 폭을 얻은 뒤
             // 10pt 슬롯 왼쪽에 걸어 둔다(옆 슬롯이 비어 있어 넘쳐도 겹치지 않는다).
@@ -556,7 +556,7 @@ struct WorkRhythmHeatmapGrid: View {
                         .frame(width: Self.labelWidth, alignment: .trailing)
                     ForEach(0..<WorkRhythmHeatmap.hourCount, id: \.self) { hour in
                         RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(Self.color(seconds: seconds(day: day, hour: hour), maxSeconds: maxSeconds))
+                            .fill(Self.color(seconds: seconds(day: day, hour: hour)))
                             .frame(width: Self.cellSize, height: Self.cellSize)
                     }
                 }
@@ -571,16 +571,22 @@ struct WorkRhythmHeatmapGrid: View {
         return heatmap.buckets[day][hour]
     }
 
-    /// 칸 농도(0~1, 최대 칸 기준 정규화). 0이면 그 시간대에 근무가 없었다는 뜻이다. 색 계산의 결정적 검증 지점.
-    /// 순수 함수라 nonisolated(그리기 없이 숫자만 다룬다 — 단위 테스트 대상).
-    nonisolated static func intensity(seconds: Int, maxSeconds: Int) -> Double {
-        guard seconds > 0, maxSeconds > 0 else { return 0 }
-        return min(1, max(0, Double(seconds) / Double(maxSeconds)))
+    /// 한 칸을 꽉 채운 근무(초). 지난주 한 주만 집계하므로 (요일, 시간) 한 칸의 최대는 정확히 이 값이다.
+    /// 색 계산이 nonisolated 라 상수도 함께 떼어 둔다(View 타입이라 기본은 MainActor 격리).
+    nonisolated static let fullCellSeconds = 3_600
+
+    /// 칸 농도(0~1). 분모는 3600초 **고정**이라 값이 곧 "그 시간대를 얼마나 채웠는지"다.
+    /// 예전에는 자기 최대 칸 기준 상대 농도라 같은 근무도 그 주 다른 칸에 따라 색이 달라졌다(회귀 지점).
+    /// 0이면 그 시간대에 근무가 없었다는 뜻이다. 순수 함수라 nonisolated(단위 테스트 대상).
+    nonisolated static func intensity(seconds: Int) -> Double {
+        guard seconds > 0 else { return 0 }
+        // 3600 을 넘는 입력(이론상 없지만 방어)이 와도 1.0 을 넘지 않게 클램프한다.
+        return min(1, max(0, Double(seconds) / Double(fullCellSeconds)))
     }
 
-    /// 칸 색: 0이면 아주 옅은 fieldFill, 그 외엔 최대 칸 대비 농도로 accent 를 입힌다(최소 0.20 — 1초라도 보이게).
-    nonisolated static func color(seconds: Int, maxSeconds: Int) -> Color {
-        let value = intensity(seconds: seconds, maxSeconds: maxSeconds)
+    /// 칸 색: 0이면 아주 옅은 fieldFill, 그 외엔 한 시간 대비 농도로 accent 를 입힌다(최소 0.20 — 1초라도 보이게).
+    nonisolated static func color(seconds: Int) -> Color {
+        let value = intensity(seconds: seconds)
         guard value > 0 else { return CheckTheme.fieldFill }
         return CheckTheme.accent.opacity(0.20 + 0.80 * value)
     }

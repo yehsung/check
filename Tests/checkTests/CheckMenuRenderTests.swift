@@ -1332,10 +1332,10 @@ private func saveV0211Snapshot(_ png: Data, _ name: String) {
     try? png.write(to: dir.appendingPathComponent("v0211-\(name).png"))
 }
 
-/// 히트맵 픽스처(결정적). 평일 10~19시가 진하고 저녁은 옅으며 주말은 낮 시간대만 얕게 깔린다 —
-/// 농도 대비(0/옅음/진함)와 peakSlot 문구가 한눈에 확인되도록 계단식으로 만든다.
-/// build(sessions:) 는 다른 웨이브가 구현하므로 여기선 순수 타입을 직접 조립한다(뷰 검증 목적).
-private func sampleWorkRhythmHeatmap(weeks: Int = 8) -> WorkRhythmHeatmap {
+/// 히트맵 픽스처(결정적) — **지난주 한 주** 분량이라 어떤 칸도 3600초(한 시간)를 넘지 않는다.
+/// 평일 10~18시는 시간을 꽉 채워 가장 진하고, 출근/점심 무렵은 반 칸, 저녁과 주말 낮은 얕게 깔린다 —
+/// 농도 대비(0/얕음/반 칸/꽉 참)와 peakSlot 문구가 한눈에 확인되도록 만든다.
+private func sampleWorkRhythmHeatmap() -> WorkRhythmHeatmap {
     var buckets = Array(
         repeating: Array(repeating: 0, count: WorkRhythmHeatmap.hourCount),
         count: WorkRhythmHeatmap.dayCount
@@ -1343,29 +1343,35 @@ private func sampleWorkRhythmHeatmap(weeks: Int = 8) -> WorkRhythmHeatmap {
     for day in 0..<WorkRhythmHeatmap.dayCount {
         let isWeekday = day < 5
         for hour in 0..<WorkRhythmHeatmap.hourCount {
-            if isWeekday, (10...19).contains(hour) {
-                buckets[day][hour] = 1_800 + (hour - 9) * 600 + day * 300
-            } else if isWeekday, (20...22).contains(hour) {
-                buckets[day][hour] = 900
-            } else if !isWeekday, (13...18).contains(hour) {
-                buckets[day][hour] = 600 + day * 120
+            if isWeekday, hour == 9 || hour == 12 || hour == 16 {
+                buckets[day][hour] = 1_800             // 출근/점심/퇴근 무렵 — 반 칸
+            } else if isWeekday, (10...11).contains(hour) || (13...15).contains(hour) {
+                buckets[day][hour] = 3_600             // 꽉 채운 한 시간 — 가장 진한 칸
+            } else if isWeekday, hour == 19 {
+                buckets[day][hour] = 900 - day * 150   // 저녁에 잠깐 — 요일마다 옅기가 다르다
+            } else if day == 5, (13...15).contains(hour) {
+                buckets[day][hour] = 900               // 토요일 낮만 얕게
+            } else if day == 6, (14...15).contains(hour) {
+                buckets[day][hour] = 600               // 일요일은 더 얕게
             }
         }
     }
     let total = buckets.reduce(0) { $0 + $1.reduce(0, +) }
-    return WorkRhythmHeatmap(buckets: buckets, weeks: weeks, totalSeconds: total)
+    return WorkRhythmHeatmap(buckets: buckets, totalSeconds: total)   // 34시간 25분
 }
 
-/// 회고 픽스처: 지난주 32시간 14분 / 목표 40시간(미달) / 전주 29시간 02분 → 전주 대비 +3시간 12분.
-private func sampleWeeklyRetro() -> WeeklyRetro {
+/// 회고 픽스처: 목표 40시간(미달) · 전주 대비 +3시간 12분 · 가장 많이 일한 날 월요일 6시간 45분.
+/// 총 근무시간은 **히트맵 픽스처의 칸 합과 같은 값**을 쓴다 — 이제 둘이 같은 주를 말하므로, 한 화면에
+/// 서로 다른 합이 나란히 놓이면(회고 32시간 · 히트맵 52시간) 그 자체가 결함으로 보인다.
+private func sampleWeeklyRetro(totalSeconds: Int = sampleWorkRhythmHeatmap().totalSeconds) -> WeeklyRetro {
     WeeklyRetro(
         weekStart: Date(timeIntervalSince1970: 1_784_000_000),
-        totalSeconds: 32 * 3_600 + 14 * 60,
+        totalSeconds: totalSeconds,
         goalSeconds: 40 * 3_600,
-        previousWeekSeconds: 29 * 3_600 + 2 * 60,
-        sessionCount: 11,
-        busiestDayIndex: 1,
-        busiestDaySeconds: 8 * 3_600 + 12 * 60
+        previousWeekSeconds: totalSeconds - (3 * 3_600 + 12 * 60),
+        sessionCount: 12,
+        busiestDayIndex: 0,
+        busiestDaySeconds: 6 * 3_600 + 45 * 60
     )
 }
 
@@ -1385,10 +1391,12 @@ private func makeInsightsStore(withData: Bool = true, loaded: Bool = true) -> Wo
 @MainActor
 @Test
 func checkMenuViewRendersInsightsPanelSnapshot() throws {
-    // 개인 기록 패널(데이터 있음): 회고 카드(지난주 32시간 14분 · 목표 40시간 중 80% · 전주 대비 +3시간 12분 ·
-    // 세션 11회 · 가장 많이 일한 날 화요일) + 요일×시간대 히트맵(월~일 7행 × 0/6/12/18 라벨) + "가장 활발한 시간".
-    // 340pt 폭 안에서 24열 격자가 잘림 없이 수납되는지 육안 확인한다.
+    // 개인 기록 패널(데이터 있음): 회고 카드(지난주 34시간 25분 · 목표 40시간 미달 · 전주 대비 +3시간 12분 ·
+    // 세션 12회 · 가장 많이 일한 날 월요일) + 지난주 요일×시간대 히트맵(월~일 7행 × 0/6/12/18 라벨) +
+    // "가장 활발한 시간". 340pt 폭 안에서 24열 격자가 잘림 없이 수납되는지, 그리고 회고 카드의 총합과
+    // 히트맵 칸 합이 같은 주를 말하는지 육안 확인한다.
     let store = makeInsightsStore()
+    #expect(store.retro?.totalSeconds == store.heatmap.totalSeconds)
     // 문구 규약(순수 판정)도 함께 고정한다 — 데이터가 있으면 자리 문구가 아니라 본문을 그린다.
     #expect(InsightsEmptyMessage.text(hasLoaded: true, totalSeconds: store.heatmap.totalSeconds) == nil)
     let png = try renderPNG(CheckMenuView(store: store))
@@ -1399,10 +1407,13 @@ func checkMenuViewRendersInsightsPanelSnapshot() throws {
 @MainActor
 @Test
 func checkMenuViewRendersInsightsEmptySnapshot() throws {
-    // 개인 기록 빈 상태: 로드는 끝났지만 누적이 0 → "아직 기록이 쌓이지 않았어요"(syncMessage 재사용 금지).
+    // 개인 기록 빈 상태: 로드는 끝났지만 지난주 누적이 0 → "지난주 근무 기록이 없어요"(syncMessage 재사용 금지).
     let store = makeInsightsStore(withData: false, loaded: true)
     store.syncMessage = "동기화됨"
     #expect(InsightsEmptyMessage.text(hasLoaded: true, totalSeconds: 0) == InsightsEmptyMessage.noData)
+    // 본문(회고 카드 + 히트맵)이 둘 다 지난주 기준이 된 뒤로, 자리 문구도 지난주를 말해야 한다 —
+    // 이번 주에만 근무한 사용자(가입 첫 주)에게 "아직 기록이 쌓이지 않았어요"는 거짓이다(헤더는 이번 주를 센다).
+    #expect(InsightsEmptyMessage.noData == InsightsEmptyMessage.noRetro)
     // 로드 전에는 동기화 문구가 아니라 "불러오는 중…" 이어야 한다(전면 감사 지적 반영).
     #expect(InsightsEmptyMessage.text(hasLoaded: false, totalSeconds: 0) == InsightsEmptyMessage.loading)
 
@@ -1418,25 +1429,27 @@ func checkMenuViewRendersInsightsEmptySnapshot() throws {
 
 @MainActor
 @Test
-func checkMenuViewRendersInsightsFirstDayWithRunningSessionSnapshot() throws {
-    // 회귀 지점: 가입 첫날 근무를 시작한 사용자의 '내 기록'이 "아직 기록이 쌓이지 않았어요"였다 — 완료 세션이
-    // 0건이라(서버는 ended_at 있는 행만 준다) heatmap 이 통째로 비었기 때문. 같은 팝오버 헤더는 진행분을 더한
-    // 이번 주 누적을 시간 단위로 세고 있어 한 화면이 스스로를 반박했다. 이제 진행 중 세션이 함께 집계된다.
+func checkMenuViewRendersInsightsRunningSessionThatCrossedTheWeekSnapshot() throws {
+    // 서버 조회는 완료 세션만 준다(ended_at not null). 주 경계를 넘겨 아직 끝나지 않은 근무(일요일 밤 시작)의
+    // 지난주 몫이 통째로 사라지지 않도록 진행 세션도 함께 집계한다 — 이번 주로 넘어간 뒷부분은 잘린다.
     let now = Date(timeIntervalSince1970: 1_784_000_000)   // 고정 시각(렌더 결정성)
+    let window = try #require(WorkInsightsWeekWindow.lastWeek(now: now))
     let computed = WorkInsightsComputation.build(
-        rows: [], now: now, weeks: 8, goalSeconds: 40 * 3_600,
-        ongoingStart: now.addingTimeInterval(-3 * 3_600)
+        rows: [], now: now, goalSeconds: 40 * 3_600,
+        ongoingStart: window.end.addingTimeInterval(-2 * 3_600)   // 지난주 일요일 22:00 출근 → 지난주 몫 2시간
     )
-    #expect(computed.heatmap.totalSeconds == 3 * 3_600)
+    #expect(computed.heatmap.totalSeconds == 2 * 3_600)
+    // 회고와 히트맵이 같은 주라 합도 같다.
+    #expect(computed.retro?.totalSeconds == computed.heatmap.totalSeconds)
     // 자리 문구가 아니라 본문(회고 카드 + 히트맵)을 그린다.
     #expect(InsightsEmptyMessage.text(hasLoaded: true, totalSeconds: computed.heatmap.totalSeconds) == nil)
 
     let store = makeInsightsStore(withData: false, loaded: true)
     store.heatmap = computed.heatmap
-    store.retro = computed.retro          // 첫 주라 지난주 회고는 없다 → 회고 자리는 "지난주 근무 기록이 없어요".
+    store.retro = computed.retro
     let png = try renderPNG(CheckMenuView(store: store))
     #expect(png.count > 0)
-    saveV0211Snapshot(png, "insights-first-day-running")
+    saveV0211Snapshot(png, "insights-running-across-week")
 }
 
 @MainActor
@@ -1649,14 +1662,24 @@ func checkMenuViewRendersRecoveryBannersSnapshot() throws {
 @MainActor
 @Test
 func heatmapCellColorScalesWithBucketDensity() {
-    // 히트맵 칸 농도 규약(순수 판정): 0초는 농도 0(→ 아주 옅은 fieldFill), 최대 칸은 1(가장 진한 accent).
-    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 0, maxSeconds: 9_000) == 0)
-    // 데이터가 아예 없으면(max 0) 모든 칸이 농도 0 — 0으로 나누지 않는다.
-    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 0, maxSeconds: 0) == 0)
-    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 4_500, maxSeconds: 9_000) == 0.5)
-    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 9_000, maxSeconds: 9_000) == 1)
-    // 최대를 넘는 이상값이 들어와도 1로 클램프한다.
-    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 90_000, maxSeconds: 9_000) == 1)
+    // 히트맵 칸 농도 규약(순수 판정): 분모는 **3600초 고정**이다. 지난주 한 주만 집계하므로 한 칸의 최대가
+    // 정확히 한 시간이고, 그래서 진하기가 곧 "그 시간대를 얼마나 채웠는지"다.
+    // 회귀 지점: 예전엔 자기 최대 칸(maxBucketSeconds) 대비 상대 농도라 8주 합산에서 다른 주 기여가 얹혀
+    // "하루 종일 일한 일요일인데 시간대마다 색이 다르다"가 됐고, 기준도 사람마다·주마다 흔들렸다.
+    #expect(WorkRhythmHeatmapGrid.fullCellSeconds == 3_600)
+    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 0) == 0)
+    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 1_800) == 0.5)
+    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 3_600) == 1)
+    // 1초라도 일했으면 0 칸과 구분돼야 한다(색은 최소 0.20 농도로 시작한다).
+    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 1) > 0)
+    // 3600 을 넘는 이상값이 들어와도 1로 클램프한다.
+    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 90_000) == 1)
+    // 색: 0초 칸만 fieldFill 이고, 근무가 있는 칸은 accent 농도로 갈린다(반 칸 ≠ 꽉 찬 칸).
+    #expect(WorkRhythmHeatmapGrid.color(seconds: 0) == CheckTheme.fieldFill)
+    #expect(WorkRhythmHeatmapGrid.color(seconds: 1_800) != CheckTheme.fieldFill)
+    #expect(WorkRhythmHeatmapGrid.color(seconds: 1_800) != WorkRhythmHeatmapGrid.color(seconds: 3_600))
+    // 클램프가 색에서도 성립한다 — 3600 초과 입력은 꽉 찬 칸과 같은 색이다(1.0 을 넘지 않는다).
+    #expect(WorkRhythmHeatmapGrid.color(seconds: 7_200) == WorkRhythmHeatmapGrid.color(seconds: 3_600))
     // 요일 라벨은 0=월 규약을 따른다(회고 busiestDayIndex 와 같은 인덱스).
     #expect(WorkRhythmHeatmapGrid.dayLabels.first == "월")
     #expect(WorkRhythmHeatmapGrid.dayLabels.last == "일")

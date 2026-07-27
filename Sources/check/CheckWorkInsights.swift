@@ -14,33 +14,51 @@ struct WorkInsightsSession: Equatable {
     let end: Date
 }
 
-/// 개인 근무 리듬 히트맵: 요일(0=월 … 6=일) × 시간대(0…23) 칸에 누적된 근무 초.
+/// 히트맵과 회고가 **정확히 같은 주**를 보도록 주 경계를 한곳에서만 정하는 계산기.
+/// 두 계산이 각자 경계를 세면 같은 패널 안에서 "지난주 32시간"(회고 카드)과 합이 다른 히트맵이 나란히 놓인다
+/// — 그런 어긋남이 생길 자리를 아예 없앤다(조회 창 계산도 이 값을 쓴다).
+enum WorkInsightsWeekWindow {
+    /// now 가 속한 KST 주의 **직전 주** 창.
+    /// - start: 지난주 월요일 00:00, - end: 이번 주 월요일 00:00(배타), - previousStart: 그 전주 월요일 00:00
+    ///   (회고의 '전주 대비 증감' 비교선이자 서버 조회 창의 시작).
+    static func lastWeek(now: Date) -> (start: Date, end: Date, previousStart: Date)? {
+        let calendar = TeamWeeklyGoal.kstCalendar
+        let thisWeekStart = TeamWeeklyGoal.koreanWeekStart(for: now)
+        guard let start = calendar.date(byAdding: .weekOfYear, value: -1, to: thisWeekStart),
+              let previousStart = calendar.date(byAdding: .weekOfYear, value: -2, to: thisWeekStart)
+        else {
+            return nil
+        }
+        return (start, thisWeekStart, previousStart)
+    }
+}
+
+/// 개인 근무 리듬 히트맵: 요일(0=월 … 6=일) × 시간대(0…23) 칸에 **지난주 한 주** 동안 근무한 초.
 /// 세션이 여러 시간대·여러 날에 걸치면 경계로 쪼개 각 칸에 실제로 머문 초만 넣는다.
 struct WorkRhythmHeatmap: Equatable {
     static let dayCount = 7
     static let hourCount = 24
 
-    /// buckets[요일][시간] = 누적 초.
+    /// buckets[요일][시간] = 누적 초. 한 주만 집계하므로 한 칸의 최대는 정확히 3600초다.
     var buckets: [[Int]]
-    /// 집계 대상 주 수(표시 문구용).
-    var weeks: Int
-    /// 전체 누적 초.
+    /// 전체 누적 초(= 지난주 총 근무 초. 회고 카드의 totalSeconds 와 같은 값이다).
     var totalSeconds: Int
 
     static var empty: WorkRhythmHeatmap {
         WorkRhythmHeatmap(
             buckets: Array(repeating: Array(repeating: 0, count: hourCount), count: dayCount),
-            weeks: 0,
             totalSeconds: 0
         )
     }
 
-    /// 색 농도 정규화 기준(가장 진한 칸). 0이면 데이터 없음.
+    /// 가장 진한 칸의 초(0이면 데이터 없음). 색 농도의 분모는 **이 값이 아니라** 3600초 고정이다
+    /// — 진하기가 "그 시간대를 얼마나 채웠는지"를 그대로 뜻하도록(사람마다·주마다 기준이 흔들리지 않게).
+    /// 여기 남은 건 요약/검증용 지표다.
     var maxBucketSeconds: Int {
         buckets.reduce(0) { partial, row in max(partial, row.max() ?? 0) }
     }
 
-    /// 가장 근무가 많았던 (요일, 시간) — 표시 문구용. 데이터가 없으면 nil.
+    /// 지난주 중 가장 근무가 많았던 (요일, 시간) — 표시 문구용. 데이터가 없으면 nil.
     var peakSlot: (day: Int, hour: Int)? {
         var best: (day: Int, hour: Int, seconds: Int)?
         for day in 0..<Self.dayCount {
@@ -54,36 +72,31 @@ struct WorkRhythmHeatmap: Equatable {
 
     /// 완료 세션 목록에서 히트맵을 만든다.
     /// - sessions: 완료(ended_at 있음) 세션 행. 미완료 행은 무시한다.
-    /// - now: 기준 시각(오늘 진행 중 세션은 포함하지 않는다 — 완료분만 집계).
-    /// - weeks: 최근 몇 주를 볼지(기본 8). 그 이전 세션은 버린다.
+    /// - now: 기준 시각. 이 시점이 속한 주의 **직전 주**가 집계 대상이다(같은 패널의 회고 카드와 같은 주).
     ///
-    /// 집계 창은 now 가 속한 KST 주의 시작에서 (weeks-1)주 전 월요일 00:00 ~ now 다. 창에 걸친 세션은
-    /// 겹치는 구간만 쓰고, 그 구간을 다시 KST 시간 경계로 쪼개 각 (요일, 시간) 칸에 실제로 머문 초만 더한다
-    /// — 자정/시각 경계를 넘긴 세션이 한 칸에 통째로 몰려 리듬을 왜곡하지 않게 하는 것이 이 함수의 존재 이유다.
-    static func build(sessions: [WorkSessionRow], now: Date, weeks: Int = 8) -> WorkRhythmHeatmap {
-        build(parsed: WorkInsightsDate.parseSessions(sessions), now: now, weeks: weeks)
+    /// 집계 창은 WorkInsightsWeekWindow.lastWeek 하나뿐이다(지난주 월요일 00:00 ~ 이번 주 월요일 00:00).
+    /// 창에 걸친 세션은 겹치는 구간만 쓰고, 그 구간을 다시 KST 시간 경계로 쪼개 각 (요일, 시간) 칸에 실제로
+    /// 머문 초만 더한다 — 자정/정시 경계를 넘긴 세션이 한 칸에 통째로 몰려 리듬을 왜곡하지 않게 하는 것이
+    /// 이 함수의 존재 이유다.
+    /// 예전에는 최근 8주를 합산했는데, 그러면 한 칸에 다른 주 기여가 겹겹이 얹혀 "어제 일요일에 쭉 일했는데
+    /// 왜 시간대마다 색이 다르냐"가 된다(회귀 지점). 한 주만 보면 한 칸의 최대가 정확히 3600초로 고정된다.
+    static func build(sessions: [WorkSessionRow], now: Date) -> WorkRhythmHeatmap {
+        build(parsed: WorkInsightsDate.parseSessions(sessions), now: now)
     }
 
     /// 파싱을 끝낸 세션으로 히트맵을 만든다(회고와 파싱 결과를 공유하는 실제 계산 경로).
-    static func build(parsed sessions: [WorkInsightsSession], now: Date, weeks: Int = 8) -> WorkRhythmHeatmap {
+    static func build(parsed sessions: [WorkInsightsSession], now: Date) -> WorkRhythmHeatmap {
         let calendar = TeamWeeklyGoal.kstCalendar
-        let effectiveWeeks = max(1, weeks)
-        let thisWeekStart = TeamWeeklyGoal.koreanWeekStart(for: now)
-        guard let windowStart = calendar.date(
-            byAdding: .weekOfYear,
-            value: -(effectiveWeeks - 1),
-            to: thisWeekStart
-        ) else {
-            return .empty
-        }
+        guard let window = WorkInsightsWeekWindow.lastWeek(now: now) else { return .empty }
 
         var buckets = Array(repeating: Array(repeating: 0, count: hourCount), count: dayCount)
         var total = 0
 
         for session in sessions {
-            // 창 밖(전체가 과거이거나 미래)이면 버리고, 걸치면 겹치는 구간만 남긴다.
-            var cursor = max(session.start, windowStart)
-            let end = min(session.end, now)
+            // 창 밖(그 전주 이전이거나 이번 주)이면 버리고, 걸치면 겹치는 구간만 남긴다.
+            // 창의 끝이 이미 과거(이번 주 월요일 00:00)라 진행 중 세션의 '지금 이후'가 새어 들어올 자리도 없다.
+            var cursor = max(session.start, window.start)
+            let end = min(session.end, window.end)
             guard cursor < end else { continue }
 
             while cursor < end {
@@ -104,7 +117,7 @@ struct WorkRhythmHeatmap: Equatable {
             }
         }
 
-        return WorkRhythmHeatmap(buckets: buckets, weeks: effectiveWeeks, totalSeconds: total)
+        return WorkRhythmHeatmap(buckets: buckets, totalSeconds: total)
     }
 }
 
@@ -162,12 +175,11 @@ struct WeeklyRetro: Equatable {
     /// 파싱을 끝낸 세션으로 회고를 만든다(히트맵과 파싱 결과를 공유하는 실제 계산 경로).
     static func build(parsed sessions: [WorkInsightsSession], now: Date, goalSeconds: Int) -> WeeklyRetro? {
         let calendar = TeamWeeklyGoal.kstCalendar
-        let thisWeekStart = TeamWeeklyGoal.koreanWeekStart(for: now)
-        guard let lastWeekStart = calendar.date(byAdding: .weekOfYear, value: -1, to: thisWeekStart),
-              let previousWeekStart = calendar.date(byAdding: .weekOfYear, value: -2, to: thisWeekStart)
-        else {
-            return nil
-        }
+        // 주 경계는 히트맵과 **같은 헬퍼**에서만 얻는다 — 두 곳이 각자 세면 회고 합계와 히트맵 합이 어긋난다.
+        guard let window = WorkInsightsWeekWindow.lastWeek(now: now) else { return nil }
+        let lastWeekStart = window.start
+        let thisWeekStart = window.end
+        let previousWeekStart = window.previousStart
 
         var dayTotals = Array(repeating: 0, count: WorkRhythmHeatmap.dayCount)
         var total = 0
@@ -177,8 +189,8 @@ struct WeeklyRetro: Equatable {
         for session in sessions {
             let started = session.start
             let ended = session.end
-            // 회고가 보는 창은 '지난주 + 그 전주' 2주뿐이다. 조회는 히트맵 때문에 8주치를 받아 오므로
-            // 대부분의 행은 여기서 걸러진다 — 남은 6주치까지 하루 경계로 쪼개 봐야 전부 버려질 뿐이다.
+            // 회고가 보는 창은 '지난주 + 그 전주' 2주뿐이다(조회 창도 딱 그만큼이지만, 이번 주 행과
+            // 경계에 맞닿기만 한 행은 여기서 걸러 낸다 — 하루 경계로 쪼개 봐야 전부 버려질 뿐이다).
             guard ended > previousWeekStart, started < thisWeekStart else { continue }
 
             // 지난주 [lastWeekStart, thisWeekStart) 와 겹치는 구간을 하루 경계로 쪼개 요일별로 더한다.
@@ -242,14 +254,11 @@ struct WorkInsightsComputation: Equatable {
 
     /// 순수 계산이라 어느 스레드에서 불러도 결과가 같다(전역 상태·시계 접근 없음 — now 는 인자로 받는다).
     /// - ongoingStart: **지금 진행 중인 내 세션**의 시작 시각(없으면 nil). 서버 조회는 완료 세션(ended_at not null)만
-    ///   주므로, 이 값을 주지 않으면 방금 시작한 근무가 히트맵에 한 칸도 남지 않는다. 완료 세션이 0건인 계정
-    ///   (=가입 첫날, 첫 [근무 종료] 전)에서는 그 결과가 heatmap.totalSeconds == 0 이라 '내 기록' 패널이
-    ///   "아직 기록이 쌓이지 않았어요"로 단정하는데, 같은 팝오버 헤더는 진행분을 더한 이번 주 누적을
-    ///   시간 단위로 세고 있었다(같은 화면 두 문장이 서로 모순 — 회귀 지점).
+    ///   주므로, 이 값을 주지 않으면 주말을 넘겨 아직 끝나지 않은 근무(일요일 밤 시작 → 월요일까지 진행 중)의
+    ///   지난주 몫이 히트맵·회고 양쪽에서 통째로 사라진다. 창이 지난주뿐이라 이번 주 진행분은 어차피 잘려 나간다.
     static func build(
         rows: [WorkSessionRow],
         now: Date,
-        weeks: Int,
         goalSeconds: Int,
         ongoingStart: Date? = nil
     ) -> WorkInsightsComputation {
@@ -259,7 +268,7 @@ struct WorkInsightsComputation: Equatable {
             parsed.append(WorkInsightsSession(start: ongoingStart, end: now))
         }
         return WorkInsightsComputation(
-            heatmap: WorkRhythmHeatmap.build(parsed: parsed, now: now, weeks: weeks),
+            heatmap: WorkRhythmHeatmap.build(parsed: parsed, now: now),
             retro: WeeklyRetro.build(parsed: parsed, now: now, goalSeconds: goalSeconds)
         )
     }

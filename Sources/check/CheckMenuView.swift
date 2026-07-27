@@ -1681,13 +1681,18 @@ enum InsightsPanelChromeBudget {
 
 /// 개인 기록 패널 본문 자리 문구 선택(순수 로직, 결정적 검증 지점).
 /// 세 상태를 명확히 가른다: (1) 아직 응답 전 → "불러오는 중…", (2) 조회 실패 → 실패 문구(+[다시 시도] 버튼),
-/// (3) 로드 완료인데 누적 0 → "아직 기록이 쌓이지 않았어요". 토큰 보드(TokenBoardEmptyMessage)와 같은 대칭이다 —
+/// (3) 로드 완료인데 지난주 누적 0 → "지난주 근무 기록이 없어요". 토큰 보드(TokenBoardEmptyMessage)와 같은 대칭이다 —
 /// 실패에 상태를 세우지 않던 시절엔 실패해도 "불러오는 중…"이 팝오버를 닫을 때까지 남아, 기다림과 실패를
 /// 구분할 수 없고 패널 안에서 재시도할 방법도 없었다(회귀 지점).
 enum InsightsEmptyMessage {
     static let loading = "불러오는 중…"
-    static let noData = "아직 기록이 쌓이지 않았어요"
+    /// 회고 카드가 비었을 때의 한 줄.
     static let noRetro = "지난주 근무 기록이 없어요"
+    /// 본문 전체를 대체하는 자리 문구. 패널 본문(회고 카드 + 히트맵)이 이제 **둘 다 지난주 기준**이라,
+    /// 지난주가 비면 그릴 것이 하나도 없다 — 그래서 회고 카드의 빈 줄과 같은 문장을 쓴다(자리 문구는 본문을
+    /// 통째로 대체하므로 두 문장이 함께 뜨는 일은 없다). 8주 합산 시절의 "아직 기록이 쌓이지 않았어요"는
+    /// 이번 주에만 근무한 사용자(=가입 첫 주)에게 거짓이 된다 — 헤더는 이번 주 누적을 시간 단위로 세고 있다.
+    static let noData = noRetro
     static let loadFailed = "기록을 불러오지 못했어요"
 
     /// 본문 대신 보여 줄 자리 문구. nil 이면 실제 내용(회고 카드 + 히트맵)을 그린다.
@@ -1696,14 +1701,15 @@ enum InsightsEmptyMessage {
         // 한 번이라도 성공한 뒤 마지막 조회가 실패했고 보여 줄 기록이 하나도 없으면 "기록이 없다"고 단정하지 않는다 —
         // insightsLoaded 는 성공 후 false 로 되돌아가지 않으므로(로드 완료 + 실패 + 누적 0) 조합이 성립하는데,
         // 이건 대개 '가입 첫날 0건으로 로드해 둔 스냅샷 + 이후 조회 실패'다(서버엔 한 주치 기록이 있는데 못 읽은 상태).
-        // 예전엔 이 조합에서 "아직 기록이 쌓이지 않았어요" 옆에 [다시 시도]가 함께 떠 서로 모순된 화면이 됐다(회귀 지점).
+        // 예전엔 이 조합에서 "기록이 없다"는 단정 옆에 [다시 시도]가 함께 떠 서로 모순된 화면이 됐다(회귀 지점).
         if totalSeconds == 0 { return hasFailed ? loadFailed : noData }
         return nil
     }
 }
 
 /// 팀 카드 자리를 대체하는 개인 기록 페이지. 리그/토큰/찌르기와 4자 상호 배타이며 본인 데이터만 쓴다.
-/// 위에서부터 (a) 지난주 회고 카드, (b) 요일×시간대 근무 리듬 히트맵. 값만 받아 그리므로(스토어 미참조)
+/// 위에서부터 (a) 지난주 회고 카드, (b) 요일×시간대 근무 리듬 히트맵 — **둘 다 같은 주(지난주)**를 그린다.
+/// 값만 받아 그리므로(스토어 미참조)
 /// 렌더 테스트가 픽스처만으로 모든 상태를 재현할 수 있다.
 private struct InsightsPanel: View {
     let heatmap: WorkRhythmHeatmap
@@ -1859,7 +1865,7 @@ private struct InsightsPanel: View {
         )
     }
 
-    // (b) 근무 리듬 히트맵 — 요일×시간대 격자 + 가장 활발한 시간/집계 주 수.
+    // (b) 근무 리듬 히트맵 — 지난주 요일×시간대 격자 + 가장 활발했던 시간.
     @ViewBuilder
     private var heatmapSection: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1871,7 +1877,9 @@ private struct InsightsPanel: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                 Spacer(minLength: 4)
-                Text("최근 \(heatmap.weeks)주")
+                // 위 회고 카드와 **같은 주**를 그린다는 사실이 드러나야 한다(예전엔 "최근 8주" 합산이라
+                // 두 칸이 서로 다른 기간을 말하면서도 나란히 놓여 있었다).
+                Text("지난주")
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .fixedSize()

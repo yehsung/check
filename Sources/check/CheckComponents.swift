@@ -184,6 +184,14 @@ enum GoalPercentFormatter {
         let raw = Int((Double(worked) / Double(goal) * 100).rounded())
         return min(999, max(0, raw))
     }
+
+    /// 목표 **미달**이라고 이미 판정된 곳에서 쓰는 표시 퍼센트. 반올림 때문에 99.5% 이상이 100 으로 올라가는데,
+    /// 미달 문구는 같은 줄에 부족분("N분 부족")을 함께 쓰므로 그대로 두면 "100% · 18분 부족"으로 자기모순이 된다.
+    /// (달성 판정은 totalSeconds >= goalSeconds 엄격 비교라 100 이어도 여전히 미달이다.)
+    /// 그래서 미달 문맥에서만 99 로 묶는다 — 퍼센트를 단독 표기하는 헤더 게이지는 percent 를 그대로 쓴다.
+    static func shortfallPercent(workedSeconds: Int, goalSeconds: Int) -> Int {
+        min(99, percent(workedSeconds: workedSeconds, goalSeconds: goalSeconds))
+    }
 }
 
 // MARK: - Team member row
@@ -367,41 +375,66 @@ struct LeaderboardRow: View {
 
 // MARK: - Long-session (12h) confirmation banner
 
-/// 연속 12시간 근무 시 헤더에 덧씌우는 앰버 확인 배너.
-/// "12시간 넘게 근무 중이에요 — 아직 근무 중이신가요?" + [네, 근무 중이에요] 액션.
-/// 헤더 카드 위 overlay로 얹혀 레이아웃 높이를 바꾸지 않는다(창 튐 방지).
+/// 연속 12시간 근무 시 헤더 카드 **위쪽 형제 뷰**로 뜨는 앰버 확인 배너(UpdateBanner 와 같은 배치).
+/// "12시간 넘게 근무 중이에요 — 아직 근무 중이신가요?" + [네, 근무 중이에요] / [지금 종료].
+/// 예전에는 헤더 카드 overlay 로 얹혀 카드 높이를 지켰지만, 그 바람에 '근무 종료' 버튼을 통째로 가려
+/// 배너가 떠 있는 동안 퇴근을 못 하는 결함이 있었다. 배너는 드물게 뜨므로 카드 높이 변화(창 튐)를 감수하고
+/// 형제로 올리며, 그 자리에서 바로 퇴근할 수 있게 [지금 종료] 보조 버튼을 함께 둔다.
 struct LongSessionBanner: View {
     let onConfirm: () -> Void
+    /// [지금 종료] 액션(store.stop()). nil 이면 보조 버튼을 그리지 않는다(컴포넌트 단독 렌더 등).
+    var onStopNow: (() -> Void)? = nil
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "hourglass")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(CheckTheme.pending)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("12시간 넘게 근무 중이에요")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(CheckTheme.primaryText)
-                    .lineLimit(1)
-                Text("아직 근무 중이신가요?")
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "hourglass")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(CheckTheme.pending)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("12시간 넘게 근무 중이에요")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .lineLimit(1)
+                    Text("아직 근무 중이신가요?")
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 6)
             }
-            Spacer(minLength: 6)
-            Button(action: onConfirm) {
-                Text("네, 근무 중이에요")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 11)
-                    .frame(height: 28)
-                    .background(Capsule().fill(CheckTheme.pending))
-                    .fixedSize()
+            HStack(spacing: 8) {
+                // 계속 근무 확인(주 액션) — 12시간 카운터 기준점을 지금으로 다시 잡는다.
+                Button(action: onConfirm) {
+                    Text("네, 근무 중이에요")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(CheckTheme.pending))
+                }
+                .buttonStyle(.plain)
+                if let onStopNow {
+                    // 보조 액션 — 배너가 헤더를 밀어낸 상태에서도 여기서 바로 퇴근할 수 있게 한다.
+                    Button(action: onStopNow) {
+                        Text("지금 종료")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(CheckTheme.pending)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 28)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(CheckTheme.pending.opacity(0.14))
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(CheckTheme.pending.opacity(0.45), lineWidth: 1))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(CheckTheme.pending.opacity(0.16))
@@ -409,11 +442,147 @@ struct LongSessionBanner: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(CheckTheme.pending.opacity(0.55), lineWidth: 1)
                 )
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(CheckTheme.panel)
+        )
+    }
+}
+
+// MARK: - Inline action banner (되돌리기 / 취소 / 회고 안내)
+
+/// 한 줄짜리 인라인 안내 배너 — 아이콘 + 문구(+보조문구) + 액션 버튼 + 선택적 닫기(X).
+/// 자리 비움 자동 마감 되돌리기, 넛지 자동 시작 취소, 지난주 회고 안내가 같은 계열을 공유한다.
+/// 상단 앵커 원칙대로 자기 자리에서 아래로만 자라고, 다른 컨트롤을 덮지 않는다(12시간 배너의 교훈).
+struct InlineActionBanner: View {
+    let icon: String
+    let title: String
+    var subtitle: String? = nil
+    let actionTitle: String
+    var tint: Color = CheckTheme.accent
+    let action: () -> Void
+    /// 닫기(X) 액션. nil 이면 X 를 그리지 않는다(되돌리기/취소처럼 스스로 사라지는 배너).
+    var onDismiss: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 6)
+            Button(action: action) {
+                Text(actionTitle)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 11)
+                    .frame(height: 26)
+                    .background(Capsule().fill(tint))
+                    .fixedSize()
+            }
+            .buttonStyle(.plain)
+            if let onDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("닫기")
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(tint.opacity(0.14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(tint.opacity(0.38), lineWidth: 1)
                 )
         )
+    }
+}
+
+// MARK: - Work rhythm heatmap grid (개인 기록)
+
+/// 개인 근무 리듬 히트맵 그리드 — 요일(월~일) 7행 × 시간(0~23) 24열.
+/// 칸 색은 CheckTheme.accent 를 maxBucketSeconds 기준 농도로 칠하고, 0인 칸은 아주 옅은 fieldFill 로 남긴다.
+/// 셀 10pt + 간격 1pt + 좌측 요일 라벨 20pt = 총 284pt 라 팝오버 폭(340 - 바깥 12*2 - 패널 12*2 = 292)에 들어간다.
+/// 시간 라벨은 0/6/12/18 만 표기한다(24개를 다 쓰면 10pt 칸 위에서 뭉갠다).
+struct WorkRhythmHeatmapGrid: View {
+    let heatmap: WorkRhythmHeatmap
+
+    static let cellSize: CGFloat = 10
+    static let cellGap: CGFloat = 1
+    static let labelWidth: CGFloat = 20
+    /// 0=월 … 6=일. WorkRhythmHeatmap.buckets 의 행 순서와 같다.
+    static let dayLabels = ["월", "화", "수", "목", "금", "토", "일"]
+    private static let markedHours: Set<Int> = [0, 6, 12, 18]
+
+    var body: some View {
+        let maxSeconds = heatmap.maxBucketSeconds
+        VStack(alignment: .leading, spacing: 3) {
+            // 시간 라벨 행. 빈 슬롯은 폭만 차지하고, 표기 대상 라벨은 fixedSize 로 이상적 폭을 얻은 뒤
+            // 10pt 슬롯 왼쪽에 걸어 둔다(옆 슬롯이 비어 있어 넘쳐도 겹치지 않는다).
+            HStack(spacing: Self.cellGap) {
+                Color.clear
+                    .frame(width: Self.labelWidth, height: 9)
+                ForEach(0..<WorkRhythmHeatmap.hourCount, id: \.self) { hour in
+                    Text(Self.markedHours.contains(hour) ? "\(hour)" : "")
+                        .font(.system(size: 8))
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .fixedSize()
+                        .frame(width: Self.cellSize, alignment: .leading)
+                }
+            }
+            ForEach(0..<WorkRhythmHeatmap.dayCount, id: \.self) { day in
+                HStack(spacing: Self.cellGap) {
+                    Text(Self.dayLabels[day])
+                        .font(.system(size: 9))
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .frame(width: Self.labelWidth, alignment: .trailing)
+                    ForEach(0..<WorkRhythmHeatmap.hourCount, id: \.self) { hour in
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(Self.color(seconds: seconds(day: day, hour: hour), maxSeconds: maxSeconds))
+                            .frame(width: Self.cellSize, height: Self.cellSize)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // 형이 어긋난 buckets(빈 배열 등)이 들어와도 인덱스 크래시 없이 0으로 읽는다.
+    private func seconds(day: Int, hour: Int) -> Int {
+        guard day < heatmap.buckets.count, hour < heatmap.buckets[day].count else { return 0 }
+        return heatmap.buckets[day][hour]
+    }
+
+    /// 칸 농도(0~1, 최대 칸 기준 정규화). 0이면 그 시간대에 근무가 없었다는 뜻이다. 색 계산의 결정적 검증 지점.
+    /// 순수 함수라 nonisolated(그리기 없이 숫자만 다룬다 — 단위 테스트 대상).
+    nonisolated static func intensity(seconds: Int, maxSeconds: Int) -> Double {
+        guard seconds > 0, maxSeconds > 0 else { return 0 }
+        return min(1, max(0, Double(seconds) / Double(maxSeconds)))
+    }
+
+    /// 칸 색: 0이면 아주 옅은 fieldFill, 그 외엔 최대 칸 대비 농도로 accent 를 입힌다(최소 0.20 — 1초라도 보이게).
+    nonisolated static func color(seconds: Int, maxSeconds: Int) -> Color {
+        let value = intensity(seconds: seconds, maxSeconds: maxSeconds)
+        guard value > 0 else { return CheckTheme.fieldFill }
+        return CheckTheme.accent.opacity(0.20 + 0.80 * value)
     }
 }
 
@@ -957,6 +1126,10 @@ struct SyncStatusView: View {
                 .font(.caption2)
                 .foregroundStyle(CheckTheme.secondaryText)
                 .lineLimit(1)
+                // 말줄임 전에 먼저 줄여 본다 — 잘리면 "자리 비움으로 자동…"처럼 핵심어('근무종료됨')가
+                // 사라져 무슨 일이 일어났는지 알 수 없다. 배율 상한은 FooterWidthBudget 이 지킨다.
+                .minimumScaleFactor(0.7)
+                .allowsTightening(true)
         }
     }
 }
@@ -965,6 +1138,9 @@ struct IconButton: View {
     let icon: String
     let help: String
     var tint: Color = CheckTheme.secondaryText
+    /// false 면 흐리게 그리고 눌리지 않는다(예: 토큰 순위판에서 현재 월보다 미래로는 갈 수 없음).
+    /// 자리를 유지한 채 비활성만 표시해, 버튼이 사라졌다 나타나며 헤더가 흔들리는 일을 막는다.
+    var enabled: Bool = true
     let action: () -> Void
 
     @State private var hovering = false
@@ -980,7 +1156,9 @@ struct IconButton: View {
                 )
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .onHover { hovering = enabled && $0 }
+        .opacity(enabled ? 1 : 0.32)
+        .disabled(!enabled)
         .help(help)
     }
 }

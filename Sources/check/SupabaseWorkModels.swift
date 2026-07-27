@@ -285,10 +285,13 @@ struct TokenBoardRequest: Encodable {
     let pMonth: String
 }
 
-/// token_usage_monthly upsert 본문(snake_case 인코딩). D1 의 TokenUsageMonthly 에서 서비스가 값을 옮겨 담는다.
+/// token_usage_device_monthly upsert 본문(snake_case 인코딩). D1 의 TokenUsageMonthly 에서 서비스가 값을 옮겨 담는다.
 struct TokenUsageUpsertRequest: Encodable {
     let userId: String
     let month: String
+    /// 이 기기의 안정 식별자. 원장 키가 (user_id, month, device_id) 라 맥 2대가 서로의 값을 덮어쓰지 않고
+    /// 각자 행을 유지하며, 월 총량 합산은 서버 보드(token_usage_board)가 user_id 로 묶어 수행한다.
+    let deviceId: String
     let claudeInput: Int
     let claudeOutput: Int
     let claudeCacheRead: Int
@@ -299,6 +302,28 @@ struct TokenUsageUpsertRequest: Encodable {
     // 오늘(KST) 증가량과 귀속 날짜 — 서버 행에 함께 저장돼 순위판 "오늘 +N" 에 쓰인다.
     let todayTotal: Int
     let todayDate: String
+}
+
+/// 옛 표 token_usage_monthly upsert 본문(= v0.2.10 이 쓰던 그 모양, device_id 없음).
+/// v0.2.11 도 이 표를 계속 갱신한다 — 이유는 SupabaseWorkService.upsertLegacyTokenUsage 주석 참조.
+struct TokenUsageLegacyUpsertRequest: Encodable {
+    let userId: String
+    let month: String
+    let claudeInput: Int
+    let claudeOutput: Int
+    let claudeCacheRead: Int
+    let claudeCacheCreation: Int
+    let codexInput: Int
+    let codexOutput: Int
+    let total: Int
+    let todayTotal: Int
+    let todayDate: String
+}
+
+/// 옛 표 token_usage_monthly 의 '지금 값' 조회 응답 한 줄(select=total 만). 덮어쓰기 전에 읽어,
+/// 그 행이 아직 v0.2.10 인 다른 맥의 더 큰 누적치일 때 내 값으로 깎아내리지 않기 위해 쓴다.
+struct TokenUsageLegacyTotalRow: Decodable {
+    let total: Int
 }
 
 struct TeamWeeklyGoal: Equatable {

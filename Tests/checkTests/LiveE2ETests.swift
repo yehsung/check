@@ -464,6 +464,119 @@ private struct E2EAdmin: Sendable {
         let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         return Int(text) ?? 0
     }
+
+    /// E2E 계정의 특정 월 토큰 원장 행을 전부 지운다(멱등 정리). 기기별 표와 옛 표(v0.2.10 폴백용) 양쪽을 비운다 —
+    /// 이전 실행이 남긴 다른 device_id 행이나 옛 표 행이 보드 합산/폴백에 섞여 기대값을 흔들 수 있기 때문이다.
+    /// E2E 전용 계정 user_id 로만 스코프한다 — 실사용 계정 데이터는 절대 건드리지 않는다.
+    func deleteTokenUsageRows(userID: String, month: String) async throws {
+        for table in ["token_usage_device_monthly", "token_usage_monthly"] {
+            let (data, code) = try await send(
+                path: "/rest/v1/\(table)",
+                method: "DELETE",
+                query: [
+                    URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                    URLQueryItem(name: "month", value: "eq.\(month)")
+                ],
+                prefer: "return=minimal"
+            )
+            guard code == 200 || code == 204 else {
+                throw E2EError("토큰 원장 정리(\(table)) HTTP \(code): \(String(decoding: data, as: UTF8.self))")
+            }
+        }
+    }
+
+    /// admin 으로 **옛 표**(token_usage_monthly)에 한 줄을 upsert 한다 — 아직 v0.2.10 인 맥이 올린 상태의 재현.
+    /// (v0.2.11 클라도 이 표에 쓰지만 '행을 깎지 않을 때만' 쓰므로, 더 큰 타 기기 값은 service_role 로 심는다.)
+    func upsertLegacyTokenUsage(userID: String, month: String, total: Int, todayTotal: Int, todayDate: String) async throws {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "user_id": userID,
+            "month": month,
+            "claude_input": total,
+            "total": total,
+            "today_total": todayTotal,
+            "today_date": todayDate
+        ])
+        let (data, code) = try await send(
+            path: "/rest/v1/token_usage_monthly",
+            method: "POST",
+            query: [URLQueryItem(name: "on_conflict", value: "user_id,month")],
+            body: body,
+            prefer: "resolution=merge-duplicates,return=minimal"
+        )
+        guard code == 200 || code == 201 || code == 204 else {
+            throw E2EError("옛 토큰 원장 upsert HTTP \(code): \(String(decoding: data, as: UTF8.self))")
+        }
+    }
+
+    /// 옛 표(token_usage_monthly)의 그 달 총량(행이 없으면 nil). v0.2.11 클라가 남의 더 큰 값을 깎지 않는지 실증용.
+    func legacyTokenUsageTotal(userID: String, month: String) async throws -> Int? {
+        try await rows("token_usage_monthly", [
+            URLQueryItem(name: "select", value: "total"),
+            URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+            URLQueryItem(name: "month", value: "eq.\(month)")
+        ]).first?["total"] as? Int
+    }
+
+    /// admin 으로 **옛 표** 행의 updated_at 을 과거로 민다 — '기기 행보다 먼저 쓰이고 그 뒤로 갱신이 끊긴 행'
+    /// (= 화석) 을 재현하는 유일한 수단이다. 마이그레이션의 touch 트리거는 **명시적으로 과거 시각을 실은 쓰기**만
+    /// 그 값을 보존하고 그 밖의 모든 쓰기는 now() 로 덮으므로, 앱(이 컬럼을 절대 보내지 않는다)의 동작은 그대로다.
+    /// 이 픽스처가 없으면 옛 행을 심는 순간 updated_at 이 now() 가 되어 화석 판정이 영원히 성립하지 않는다.
+    /// 달로 좁히지 않는다 — 보드의 '살아 있는 구버전 맥' 판정(legacy_live)이 달 무관이라, 다른 달에 남은 행이
+    /// 하나라도 최근 시각이면 재현이 흔들린다. E2E 전용 계정 user_id 로만 스코프한다.
+    func backdateLegacyTokenUsage(userID: String, updatedAt: Date) async throws {
+        let iso = ISO8601DateFormatter()
+        let body = try JSONSerialization.data(withJSONObject: ["updated_at": iso.string(from: updatedAt)])
+        let (data, code) = try await send(
+            path: "/rest/v1/token_usage_monthly",
+            method: "PATCH",
+            query: [URLQueryItem(name: "user_id", value: "eq.\(userID)")],
+            body: body,
+            prefer: "return=minimal"
+        )
+        guard code == 200 || code == 204 else {
+            throw E2EError("옛 토큰 원장 updated_at 백데이트 HTTP \(code): \(String(decoding: data, as: UTF8.self))")
+        }
+    }
+
+    /// admin 으로 기기별 원장 행의 created_at 을 과거로 민다 — 보드의 7일 유예(now() - first_at <= 7 days)를
+    /// 넘긴 상태(업그레이드한 지 오래된 계정)를 재현한다. 이 표에는 touch 트리거가 없어 값이 그대로 남는다.
+    /// 기준 시각 first_at 은 **달 무관 최솟값**이므로 그 계정의 기기 행 전체를 민다(달로 좁히면 다른 달의 행이
+    /// 최솟값을 '방금'으로 되돌려 유예가 계속 살아 있다).
+    func backdateDeviceTokenUsage(userID: String, createdAt: Date) async throws {
+        let iso = ISO8601DateFormatter()
+        let body = try JSONSerialization.data(withJSONObject: ["created_at": iso.string(from: createdAt)])
+        let (data, code) = try await send(
+            path: "/rest/v1/token_usage_device_monthly",
+            method: "PATCH",
+            query: [URLQueryItem(name: "user_id", value: "eq.\(userID)")],
+            body: body,
+            prefer: "return=minimal"
+        )
+        guard code == 200 || code == 204 else {
+            throw E2EError("기기 원장 created_at 백데이트 HTTP \(code): \(String(decoding: data, as: UTF8.self))")
+        }
+    }
+
+    /// 옛 표 행의 updated_at 이 기준 시각보다 과거로 **남아 있는지**(트리거가 now() 로 덮지 않았는지) 확인한다.
+    /// 백데이트 픽스처가 실제로 먹혔다는 전제를 단언으로 못 박는 데 쓴다.
+    func legacyTokenUsageOlder(userID: String, month: String, than: Date) async throws -> Bool {
+        let iso = ISO8601DateFormatter()
+        return try await rows("token_usage_monthly", [
+            URLQueryItem(name: "select", value: "user_id"),
+            URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+            URLQueryItem(name: "month", value: "eq.\(month)"),
+            URLQueryItem(name: "updated_at", value: "lt.\(iso.string(from: than))")
+        ]).isEmpty == false
+    }
+
+    /// 특정 계정의 그 달 기기별 원장 행 수(기기별로 쪼개졌는지 실증하는 관측용).
+    func tokenUsageRowCount(userID: String, month: String) async throws -> Int {
+        try await rows("token_usage_device_monthly", [
+            URLQueryItem(name: "select", value: "device_id"),
+            URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+            URLQueryItem(name: "month", value: "eq.\(month)")
+        ]).count
+    }
 }
 
 // MARK: - 스토어/유틸 헬퍼
@@ -1148,13 +1261,19 @@ struct LiveE2ETests {
 
         // A, B, C 가 각자 이번 달 사용량을 upsert 한다(값은 서로 다르게 둬 조회로 구분한다).
         // 오늘분(todayTotal/todayDate)도 함께 올려 순위판 "오늘 +N" 왕복을 검증한다(마이그레이션 20260723060000 push 후).
+        // 원장이 (user_id, month, device_id) 로 쪼개졌으므로(20260726010000) 기기별 잔여 행이 합산에 섞이지 않도록
+        // 먼저 그 달 행을 비우고 각자 기기 하나로만 올린다 — 아래 총합 등호 비교를 결정적으로 만든다.
         let today = TokenUsageDayKey.current()
+        let deviceE2E = "e2e-device-single"
+        for userID in [sessionA.userID, sessionB.userID, sessionC.userID] {
+            try await ctx.admin.deleteTokenUsageRows(userID: userID, month: month)
+        }
         let usageA = TokenUsageMonthly(month: month, claudeInput: 1_111, claudeOutput: 2_222, todayTotal: 1_100, todayDate: today)
         let usageB = TokenUsageMonthly(month: month, claudeInput: 3_333, codexOutput: 4_444, todayTotal: 2_200, todayDate: today)
         let usageC = TokenUsageMonthly(month: month, claudeInput: 5_555, codexInput: 6_666, todayTotal: 3_300, todayDate: today)
-        try await storeA.service.upsertTokenUsage(accessToken: sessionA.accessToken, userID: sessionA.userID, usage: usageA)
-        try await storeB.service.upsertTokenUsage(accessToken: sessionB.accessToken, userID: sessionB.userID, usage: usageB)
-        try await storeC.service.upsertTokenUsage(accessToken: sessionC.accessToken, userID: sessionC.userID, usage: usageC)
+        try await storeA.service.upsertTokenUsage(accessToken: sessionA.accessToken, userID: sessionA.userID, usage: usageA, deviceID: deviceE2E)
+        try await storeB.service.upsertTokenUsage(accessToken: sessionB.accessToken, userID: sessionB.userID, usage: usageB, deviceID: deviceE2E)
+        try await storeC.service.upsertTokenUsage(accessToken: sessionC.accessToken, userID: sessionC.userID, usage: usageC, deviceID: deviceE2E)
 
         // A 가 전체 보드를 조회하면 자기(반영)·같은 팀 B·타팀 C 가 모두 보여야 한다(전체 공개 RPC).
         let boardFromA = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
@@ -1317,9 +1436,10 @@ struct LiveE2ETests {
         }
         let sessionB = try #require(storeB.session)
 
-        // joiner 가 이번 달 사용량을 올려 보드에 뜰 조건을 만든다.
+        // joiner 가 이번 달 사용량을 올려 보드에 뜰 조건을 만든다(원장 기기 분리 후이므로 그 달 행을 비우고 기기 하나로).
+        try await ctx.admin.deleteTokenUsageRows(userID: sessionB.userID, month: month)
         let usageB = TokenUsageMonthly(month: month, claudeInput: 7_777, codexOutput: 8_888)
-        try await storeB.service.upsertTokenUsage(accessToken: sessionB.accessToken, userID: sessionB.userID, usage: usageB)
+        try await storeB.service.upsertTokenUsage(accessToken: sessionB.accessToken, userID: sessionB.userID, usage: usageB, deviceID: "e2e-device-single")
 
         // 기본 공개 상태를 보장(이전 실행 잔류 대비) — 시작점을 true 로 맞춘다.
         try await storeB.service.updateTokenUsagePublic(accessToken: sessionB.accessToken, userID: sessionB.userID, isPublic: true)
@@ -1338,6 +1458,152 @@ struct LiveE2ETests {
         try await storeB.service.updateTokenUsagePublic(accessToken: sessionB.accessToken, userID: sessionB.userID, isPublic: true)
         let boardRestored = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
         #expect(boardRestored.contains { $0.userId == sessionB.userID })  // 공개 복원 → 다시 보인다.
+    }
+
+    // s09h. 맥 2대 합산(결함1 회귀 방지): 같은 계정이 device_id 만 다른 두 행을 올리면 원장에 행이 둘로 남고,
+    // token_usage_board 는 user_id 로 묶어 **합산값** 한 행을 돌려줘야 한다.
+    // 예전 (user_id, month) 키에서는 두 번째 upsert 가 첫 번째를 통째로 덮어써 총량이 "마지막 기기 값"이었다 —
+    // 이 시나리오가 실패하면 그 회귀가 돌아온 것이다. today 도 서버가 KST 오늘을 계산해 그 날짜인 행만 합산한다:
+    // 기기1은 오늘분, 기기2는 어제 날짜로 올려 "오늘 것만" 더해지는지 함께 못 박는다.
+    // 마이그레이션(20260726010000_token_usage_device) push 후 오케스트레이터가 실행한다.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s09h_tokenBoardSumsDevices() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+        let month = TokenUsageMonthKey.current()
+        let today = TokenUsageDayKey.current()
+
+        // A(owner) 로그인.
+        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { storeA.tickerTask?.cancel(); storeA.refreshTask?.cancel() }
+        storeA.email = Emails.owner
+        storeA.password = Emails.password
+        await storeA.signIn()?.value
+        let sessionA = try #require(storeA.session)
+        #expect(sessionA.userID == owner.userID)
+
+        // 이전 실행 잔여 행(다른 device_id·'legacy')이 합산에 섞이지 않게 그 달 원장을 비운다.
+        try await ctx.admin.deleteTokenUsageRows(userID: sessionA.userID, month: month)
+
+        // 같은 계정 · 같은 달 · 다른 기기 두 행. 오늘분은 기기1만 오늘 날짜로, 기기2는 어제 날짜로 둔다.
+        let yesterday = TokenUsageDayKey.current(Date().addingTimeInterval(-24 * 3600))
+        let usageMac1 = TokenUsageMonthly(month: month, claudeInput: 1_000, claudeOutput: 2_000, todayTotal: 300, todayDate: today)
+        let usageMac2 = TokenUsageMonthly(month: month, claudeInput: 4_000, codexOutput: 8_000, todayTotal: 999, todayDate: yesterday)
+        try await storeA.service.upsertTokenUsage(accessToken: sessionA.accessToken, userID: sessionA.userID, usage: usageMac1, deviceID: "e2e-mac-1")
+        try await storeA.service.upsertTokenUsage(accessToken: sessionA.accessToken, userID: sessionA.userID, usage: usageMac2, deviceID: "e2e-mac-2")
+
+        // 원장은 기기별로 두 행(덮어쓰기 아님).
+        #expect(try await ctx.admin.tokenUsageRowCount(userID: sessionA.userID, month: month) == 2)
+
+        // 보드는 user_id 로 묶여 한 행 + 합산값.
+        let board = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
+        let myRows = board.filter { $0.userId == sessionA.userID }
+        #expect(myRows.count == 1)
+        let row = try #require(myRows.first)
+        #expect(row.total == usageMac1.total + usageMac2.total)          // 15,000 — 마지막 기기 값(12,000)이 아니다.
+        #expect(row.claudeInput == 5_000)                                 // 1,000 + 4,000
+        #expect(row.claudeOutput == 2_000)
+        #expect(row.codexOutput == 8_000)
+        // 오늘분은 서버가 계산한 KST 오늘 날짜인 행만 합산한다(어제 날짜 기기2의 999 는 제외).
+        #expect(row.todayTotal == 300)
+        #expect(row.todayDate == today)
+        obs("토큰 기기 합산: 원장 2행 → 보드 1행 total=\(row.total)(기대 \(usageMac1.total + usageMac2.total)), todayTotal=\(row.todayTotal)")
+
+        // 과도기(맥 A=v0.2.10 옛 표에만, 맥 B=v0.2.11 새 표에만): 옛 표 값이 훨씬 크면 그 값이 보드에 남아야 한다.
+        // 회귀 지점: "기기 행이 하나라도 있으면 옛 표를 통째로 버린다"는 초안이면, 보조 맥이 한 번 올리는 순간
+        // 주력 맥(아직 v0.2.10)의 사용량이 순위에서 영구 누락돼 total 이 15,000 에 고정된다.
+        let legacyTotal = 900_000
+        try await ctx.admin.upsertLegacyTokenUsage(
+            userID: sessionA.userID, month: month, total: legacyTotal, todayTotal: 4_321, todayDate: today
+        )
+        let mixedBoard = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
+        let mixedRows = mixedBoard.filter { $0.userId == sessionA.userID }
+        #expect(mixedRows.count == 1)                      // 두 출처를 더해 행이 둘로 늘어나지 않는다.
+        let mixedRow = try #require(mixedRows.first)
+        #expect(mixedRow.total == legacyTotal)             // 15,000 이 아니라 옛 표의 900,000(큰 쪽).
+        #expect(mixedRow.todayTotal == 4_321)              // today 도 채택된 쪽 값으로 일관되게 온다.
+        obs("토큰 과도기(옛 표 우세): total=\(mixedRow.total)(기대 \(legacyTotal), 기기합=\(row.total))")
+
+        // 결함1 의 핵심 재현 경로: v0.2.11 맥에서 팝오버를 열면 도는 **클라 업로드 전체 경로**를 실제로 태운다.
+        // 예전엔 이 경로가 옛 표를 무조건 자기 값으로 덮어써(merge-duplicates), 주력 맥(아직 v0.2.10)의 900,000 이
+        // 사라지고 보드가 이 맥의 값으로 떨어졌다 — 팝오버를 마지막에 연 맥의 값으로 널뛰던 그 증상이다.
+        let popoverUsage = TokenUsageMonthly(month: month, claudeInput: 2_000, todayTotal: 11, todayDate: today)
+        await storeA.uploadTokenUsageIfNeeded(usage: popoverUsage, now: Date())
+        #expect(try await ctx.admin.legacyTokenUsageTotal(userID: sessionA.userID, month: month) == legacyTotal)
+        let afterUploadBoard = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
+        let afterUploadRow = try #require(afterUploadBoard.first { $0.userId == sessionA.userID })
+        #expect(afterUploadRow.total == legacyTotal)       // 여전히 900,000 — 보조 맥 업로드가 주력 맥을 지우지 않는다.
+        obs("토큰 과도기(v0.2.11 업로드 후): 옛 표=\(String(describing: try await ctx.admin.legacyTokenUsageTotal(userID: sessionA.userID, month: month))), 보드 total=\(afterUploadRow.total)")
+
+        // 두 맥 모두 v0.2.11 이 되면 옛 행은 얼어붙고 기기 합산이 계속 자라 자동으로 합산이 이긴다(이중 계상 없음).
+        let usageMac1Grown = TokenUsageMonthly(month: month, claudeInput: 1_000_000, claudeOutput: 2_000, todayTotal: 300, todayDate: today)
+        try await storeA.service.upsertTokenUsage(accessToken: sessionA.accessToken, userID: sessionA.userID, usage: usageMac1Grown, deviceID: "e2e-mac-1")
+        let grownBoard = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
+        let grownRow = try #require(grownBoard.first { $0.userId == sessionA.userID })
+        // 기기 합산 = mac1(성장) + mac2 + 위 업로드가 만든 이 맥의 행. 옛 900,000 을 더하지 않는다.
+        #expect(grownRow.total == usageMac1Grown.total + usageMac2.total + popoverUsage.total)
+        obs("토큰 과도기 졸업(기기 합산 우세): total=\(grownRow.total)(기대 \(usageMac1Grown.total + usageMac2.total + popoverUsage.total))")
+
+        // 화석 무시(v0.2.9 이하 과다계상 정정 경로): 옛 행이 **기기 행보다 먼저** 만들어져 그 뒤로 갱신되지 않으면
+        // 아무도 쓰지 않는 잔재이므로 보드가 무시한다. 클라는 그 행을 덮어쓰지 않으니(위 게이트) 서버가 갈라 준다.
+        // 단 판정에는 **7일 유예**가 걸려 있다(업그레이드 직후에는 아직 v0.2.10 인 주력 맥의 옛 행도 똑같이
+        // '갱신 끊김'으로 보이기 때문 — 유예가 없으면 그 맥의 200M 이 보조 맥 첫 업로드에 폭락한다).
+        // 그래서 같은 픽스처를 두 국면으로 나눠 못 박는다: (a) 유예 중에는 옛 행이 살아 있고,
+        // (b) 유예가 지나면 화석이 무시된다. 두 단언 사이의 유일한 차이는 **시각**뿐이다.
+        //
+        // 회귀 지점: 예전 이 블록은 (a) 의 상태(첫 기기 행이 '방금')에서 곧바로 (b) 의 값을 기대했다.
+        // E2E 계정은 s10 정리로 매 실행 새로 만들어져 first_at 이 언제나 '방금'이라 유예가 항상 살아 있고,
+        // 단언은 구조적으로 통과 불가능했다(PostgreSQL 15 실측: 기대 7,000, 실제 5,000,000) —
+        // 마이그레이션 push 직후 이 릴리스 게이트가 100% 실패했다.
+        try await ctx.admin.deleteTokenUsageRows(userID: sessionA.userID, month: month)
+        let fossilTotal = 5_000_000
+        try await ctx.admin.upsertLegacyTokenUsage(
+            userID: sessionA.userID, month: month, total: fossilTotal, todayTotal: 0, todayDate: today
+        )
+        let correctedUsage = TokenUsageMonthly(month: month, claudeInput: 7_000, todayTotal: 3, todayDate: today)
+        storeA.lastUploadedUsage = nil
+        storeA.lastTokenUploadAt = .distantPast
+        await storeA.uploadTokenUsageIfNeeded(usage: correctedUsage, now: Date())
+
+        // (a) 유예(첫 기기 행 이후 7일) 안: 옛 행을 살려 둔다 — 아직 v0.2.10 인 주력 맥의 값일 수 있기 때문이다.
+        let graceBoard = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
+        let graceRow = try #require(graceBoard.first { $0.userId == sessionA.userID })
+        #expect(graceRow.total == fossilTotal)             // 유예 중에는 큰 쪽(옛 행)이 그대로 남는다.
+        obs("토큰 화석 유예 중: total=\(graceRow.total)(기대 \(fossilTotal), 기기 \(correctedUsage.total))")
+
+        // (b) 유예 만료: 시계를 감을 수 없으니 픽스처의 시각을 뒤로 민다.
+        //     첫 기기 행 8일 전 + 옛 행 마지막 쓰기 9일 전 = "업그레이드 뒤 아무도 옛 행을 갱신하지 않았다".
+        //     (옛 표 touch 트리거는 명시적 과거 시각만 보존한다 — 앱은 이 컬럼을 보내지 않아 실사용과 무관하다.
+        //      이 예외가 없으면 옛 행을 심는 순간 updated_at 이 now() 가 되어 화석을 재현할 방법이 아예 없다.)
+        let now = Date()
+        try await ctx.admin.backdateDeviceTokenUsage(
+            userID: sessionA.userID, createdAt: now.addingTimeInterval(-8 * 24 * 3600)
+        )
+        try await ctx.admin.backdateLegacyTokenUsage(
+            userID: sessionA.userID, updatedAt: now.addingTimeInterval(-9 * 24 * 3600)
+        )
+        // 백데이트가 트리거에 덮이지 않고 남았는지 먼저 확인한다(아래 단언의 전제).
+        #expect(try await ctx.admin.legacyTokenUsageOlder(
+            userID: sessionA.userID, month: month, than: now.addingTimeInterval(-8.5 * 24 * 3600)
+        ))
+        let fossilBoard = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
+        let fossilRow = try #require(fossilBoard.first { $0.userId == sessionA.userID })
+        #expect(fossilRow.total == correctedUsage.total)   // 5,000,000 이 아니라 정정된 기기 값.
+        #expect(fossilRow.todayTotal == correctedUsage.todayTotal)
+        obs("토큰 화석 무시(유예 만료): total=\(fossilRow.total)(기대 \(correctedUsage.total), 화석 \(fossilTotal))")
+
+        // (c) 아직 v0.2.10 인 맥이 다시 올리면(= 옛 행 갱신) 화석 판정이 풀려 그 값이 즉시 되살아난다.
+        //     트리거가 실사용 쓰기를 여전히 now() 로 스탬프한다는 것 — 위 예외가 판정을 무력화하지 않았다는 증거다.
+        try await ctx.admin.upsertLegacyTokenUsage(
+            userID: sessionA.userID, month: month, total: fossilTotal, todayTotal: 0, todayDate: today
+        )
+        let revivedBoard = try await storeA.service.fetchTokenBoard(accessToken: sessionA.accessToken, month: month)
+        let revivedRow = try #require(revivedBoard.first { $0.userId == sessionA.userID })
+        #expect(revivedRow.total == fossilTotal)
+        obs("토큰 화석 판정 복구(구버전 맥 재업로드): total=\(revivedRow.total)(기대 \(fossilTotal))")
+
+        // 정리: 다음 시나리오/재실행이 이 합산 픽스처에 오염되지 않게 그 달 행을 비운다(멱등).
+        try await ctx.admin.deleteTokenUsageRows(userID: sessionA.userID, month: month)
     }
 
     // 10. 정리 → E2E 계정 + E2E 팀 삭제 후 잔존 0 확인. E2E 접두사 밖(실사용) 팀 수는 변하지 않아야 한다.

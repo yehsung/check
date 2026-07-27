@@ -56,6 +56,10 @@ aing-check 를 팀원에게 배포하는 경로는 두 가지입니다.
 export CHECK_SUPABASE_ANON_KEY="<Supabase anon key>"   # 또는 .env.local
 swift test
 
+# 1-1) 이번 릴리즈에 새 마이그레이션이 있으면 **앱보다 먼저** 적용한다 (아래 "스키마 적용" 참고)
+git status --short supabase/migrations   # 이번 diff 에 새 SQL 파일이 있는지
+supabase db push                         # 있으면 배포 전에 적용
+
 # 2) Developer ID 서명 + 공증 + 스테이플된 배포 zip 생성 → dist/aing-check.zip
 ./scripts/package-notarized.sh
 
@@ -122,12 +126,15 @@ Project Settings > API 에서 현재 anon/public key 를 다시 가져와 주입
 
 ### 스키마 적용
 
-스키마는 이미 적용되어 정상 동작 중입니다. 앱에 `DB 스키마 필요`가 표시되는 경우에만 재적용합니다.
+기존 스키마는 이미 적용되어 정상 동작 중입니다. 다만 **새 마이그레이션 SQL 이 추가된 릴리즈는 앱을 올리기 전에 반드시 적용**해야 합니다(위 파이프라인 1-1 단계). 새 표를 쓰는 앱을 먼저 배포하면 그 표를 쓰는 기능(예: 토큰 사용량 업로드)이 조용히 실패한 채 돌아갑니다 — 앱은 `DB 스키마 필요`를 표시하지만 다음 동기화에서 문구가 갱신되므로 놓치기 쉽습니다. 적용이 늦어도 로컬 원장이 그 달치를 보관하므로 push 직후 값은 스스로 복구됩니다.
 
 ```sh
 supabase link --project-ref xfnhfjvubetkdnfkfljg
 supabase db push
 ```
+
+> `supabase db push` 는 아직 적용되지 않은 마이그레이션만 올리므로 여러 번 실행해도 안전합니다. 계정이 여러 개면
+> `supabase projects list` 로 위 project-ref 가 보이는 계정인지 먼저 확인하세요(다른 계정이면 403 이 납니다).
 
 Dashboard 의 SQL Editor 에서 직접 실행하려면 `supabase/migrations/` 아래 SQL 파일들을
 파일명(타임스탬프) 순서대로 실행합니다.

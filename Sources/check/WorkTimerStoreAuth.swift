@@ -34,6 +34,8 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             session = signedInSession
             persistSession(signedInSession, email: email)
+            // 강제 로그아웃이 남겨 둔 미반영 근무 큐/진행 중 근무의 주인을 확정한다(같은 계정이면 재생, 다른 계정이면 폐기).
+            adoptWorkStateOwner(signedInSession.userID)
             self.password = ""
             await confirmMembership()
             guard generation == sessionGeneration else { return }
@@ -41,6 +43,13 @@ extension WorkTimerStore {
             await refreshTeamStatus()
             guard generation == sessionGeneration else { return }
             startStatusRefreshLoop()
+            // 개인 기록(히트맵/회고)을 로그인 직후에 받아 온다. 자동 로드의 유일한 진입점이 팝오버 오픈 훅
+            // (setMenuPresented → needsInsightsReload)뿐이면, **팝오버를 연 채 로그인하는 정상 동선**에서는
+            // 그 훅이 이미 비로그인 시점에 지나가 버려(performLoadInsights 의 session 가드에서 즉시 반환)
+            // insights 가 그 팝오버 세션 내내 비어 있다. 리그/토큰보드/찌르기는 사용자가 직접 여는 패널이라
+            // 무관하지만, 지난주 회고 배너는 사용자가 열 수 없는 '자동 안내'라 이 경로가 없으면 팝오버를
+            // 닫았다 다시 열기 전까지 영영 뜨지 않는다(회귀 지점).
+            if needsInsightsReload { await performLoadInsights() }
         } catch {
             guard generation == sessionGeneration else { return }
             syncMessage = authMessage(for: error, fallback: "로그인 실패")
@@ -55,6 +64,8 @@ extension WorkTimerStore {
                 guard generation == sessionGeneration else { return }
                 session = createdSession
                 persistSession(createdSession, email: email, displayName: displayName)
+                // 새 계정이므로 앞 계정이 남긴 큐/진행 중 근무는 여기서 버려진다(오염 금지).
+                adoptWorkStateOwner(createdSession.userID)
                 self.password = ""
                 // 트리거는 더 이상 팀을 만들지 않으므로, 모드에 따라 팀을 만들거나(join 은 하지 않고) 코드로 합류한다.
                 if isCreateTeamMode {
@@ -145,6 +156,8 @@ extension WorkTimerStore {
                 // write 했으면(세대 변화) 이 응답은 낡은 값이므로 목표 대입만 건너뛴다(스냅백 방지).
                 if teamGoalWriteGeneration == goalWriteGen {
                     teamGoalSeconds = membership.goalHours * 3600
+                    // 이 응답이 인사이트 응답보다 늦게 왔다면 회고가 기본 목표로 굳어 있다 — 목표선만 바로잡는다.
+                    reconcileInsightsGoal()
                 }
                 teamRole = membership.role
                 // 참여코드는 소속 팀원 누구나 공유할 수 있게 항상 로드한다(코드가 곧 열쇠 — 팀원도 새 동료를 초대).
@@ -161,6 +174,7 @@ extension WorkTimerStore {
         currentTeamID = nil
         teamName = "팀"
         teamGoalSeconds = TeamWeeklyGoal.defaultGoalSeconds
+        reconcileInsightsGoal()
         teamRole = nil
         myTeamInviteCode = nil
     }
@@ -199,6 +213,8 @@ extension WorkTimerStore {
             }
             guard generation == sessionGeneration else { return false }
             teamGoalSeconds = newGoalHours * 3600
+            // 개인 기록 회고의 목표선도 새 목표를 따라간다(패널을 다시 열지 않아도 즉시 일치).
+            reconcileInsightsGoal()
             // 이 write 이후 도착하는 낡은 멤버십 응답(in-flight refreshTeamMeta/confirmMembership)이 목표를
             // 되돌리지 못하게 세대를 올린다.
             teamGoalWriteGeneration += 1
@@ -249,6 +265,7 @@ extension WorkTimerStore {
         if teamGoalWriteGeneration == goalWriteGen {
             let newGoal = membership.goalHours * 3600
             if teamGoalSeconds != newGoal { teamGoalSeconds = newGoal }
+            reconcileInsightsGoal()
         }
         if teamRole != membership.role { teamRole = membership.role }
         await loadMyInviteCode()
@@ -438,8 +455,8 @@ extension WorkTimerStore {
         longSessionAnchor = nil
         clearLongSessionPrompt()
         sleepBeganAt = nil
-        lastAutoClosedSessionID = nil
-        lastAutoClosedStartedAt = nil
+        clearAutoCloseUndo()
+        isEditingWeeklyGoal = false
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
         tickerTask?.cancel()
         tickerTask = nil

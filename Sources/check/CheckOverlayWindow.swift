@@ -119,8 +119,9 @@ final class CheckOverlayController {
         }
 
         // 수신 찔림 싱크. onReactionTrigger 와 달리 shouldBeVisible 게이트를 걸지 않는다 — 숨김 상태에서도
-        // peek(잠깐 나타나 움찔+말풍선 후 사라짐)로 전달하는 것이 핵심 요구다. 폴링/신선도 필터는 스토어가
-        // 끝냈으므로 여기선 받은 배치를 그대로 표시만 한다.
+        // peek(잠깐 나타나 움찔+말풍선 후 사라짐)로 전달하는 것이 핵심 요구다. 캐릭터 표시를 꺼 둔 사용자에게도
+        // 똑같이 peek 한다 — 서버가 이미 소비한 찔림이라 여기서 버리면 영영 전달되지 않는다.
+        // 폴링/신선도 필터는 스토어가 끝냈으므로 여기선 받은 배치를 그대로 표시만 한다.
         store.onPokesReceived = { [weak self] pokes in self?.handleReceivedPokes(pokes) }
 
         // 넛지 스케줄러: 자격은 store 로 구성(로그인·팀·비근무·오버레이 켜짐), 발동은 자동 근무 시작(안내만)으로.
@@ -134,12 +135,19 @@ final class CheckOverlayController {
         observeScreenChanges()
     }
 
-    /// 넛지 자동 시작 자격: 로그인됨·팀 있음·비근무·오버레이 켜짐. (표시중 조건은 소멸 — 안내만 하고 바로 시작.)
+    /// 넛지 자동 시작 자격: 로그인됨·팀 있음·비근무·자동시작 토글 켜짐.
+    /// (표시중 조건은 소멸 — 안내만 하고 바로 시작.)
+    ///
+    /// 캐릭터 표시(`isOverlayEnabled`)는 자격에서 **뺀다**. 예전엔 AND 로 걸려 있어 캐릭터를 숨긴 사용자에게는
+    /// 헤더 캡션 행의 ⚡ 토글이 켜짐(accent)으로 보이고 툴팁이 "자리에 있으면 자동으로 근무 시작"이라 안내하는데도
+    /// 자동 시작이 영영 일어나지 않았다 — docs/privacy.md 가 약속한 "캐릭터 표시와는 별개 설정"과도 어긋났다.
+    /// 캐릭터가 숨겨져 있으면 등장 말풍선 대신 (a) 메뉴바 아이콘이 근무중으로 바뀌고 (b) 팝오버 상단에
+    /// "자동으로 근무를 시작했어요 [취소]" 배너가 60초간 떠서 알린다 — 알림 채널은 사라지지 않는다.
     private var isNudgeEligible: Bool {
         store.isSignedIn
             && store.currentTeamID != nil
             && store.snapshot.isWorking == false
-            && store.isOverlayEnabled
+            && store.isNudgeAutoStartEnabled
     }
 
     /// 근무 상태 변화에 따라 패널을 표시/숨김한다. 표시 직전 항상 우상단으로 재배치한다.
@@ -204,6 +212,10 @@ final class CheckOverlayController {
     // MARK: - 근무 시작 제안(넛지) — 안내만 하고 즉시 자동 시작(A3)
 
     /// 넛지 스케줄러를 현재 store 상태에 맞춰 가동/정지한다(비근무·로그인이면 가동, 아니면 정지·카운트 리셋).
+    ///
+    /// 자동시작 토글(`isNudgeAutoStartEnabled`)은 여기서 따로 배선하지 않는다 — 스케줄러는 매 tick 마다
+    /// `isEligible()` 을 다시 물어 자격 미달이면 활성 누적을 0 으로 리셋하므로, 토글을 끄는 즉시 발동이 막히고
+    /// 다시 켜면 0 분부터 새로 센다. 토글 변화마다 start/stop 을 흔들 이유가 없다(루프 1개는 60초 주기 유휴).
     private func syncNudgeScheduler() {
         if store.isSignedIn && store.snapshot.isWorking == false {
             nudgeScheduler.start()
@@ -215,13 +227,25 @@ final class CheckOverlayController {
     /// 넛지 발동 콜백: 물어보지 않고 즉시 근무를 시작한다. 자격을 재확인한 뒤, 등장 말풍선을 안내 문구로 1회
     /// 덮어쓸 오버라이드를 세팅하고 store.start() 를 호출한다. 이후 store 관찰 → updateWorking(true) 경로가
     /// 패널 표시 + commuteStart 리액션을 자연 처리하고, perform(.commuteStart)이 오버라이드를 소비한다.
+    ///
+    /// 시작 직후 `nudgeAutoStartedAt` 에 시각을 찍는다 — 팝오버가 이 시각 기준 60초 동안 [취소] 를 띄워
+    /// "묻지 않고 시작한" 판단을 사용자가 되돌릴 수 있게 하는 유일한 근거다(결함5). 자격 미달로 되돌아가는
+    /// 경로에서는 시작 자체가 없으므로 찍지 않는다. store.start() 뒤에 찍어, 수동 시작 경로가 스탬프를
+    /// 비우더라도 자동 시작분만 남게 한다.
     func nudgeAutoStart() {
         guard isNudgeEligible else { return }
-        engine.setCommuteStartBubbleOverride(
-            text: Self.nudgeAutoStartText,
-            seconds: Self.nudgeAutoStartBubbleSeconds
-        )
+        // 말풍선 오버라이드는 캐릭터가 표시될 때만 세운다 — 숨김 상태에서 세워 두면 소비되지 않은 채 남아,
+        // 몇 시간 뒤 사용자가 캐릭터를 다시 켜는 순간(commuteStart) 낡은 안내가 뒤늦게 튀어나온다.
+        if store.isOverlayEnabled {
+            engine.setCommuteStartBubbleOverride(
+                text: Self.nudgeAutoStartText,
+                seconds: Self.nudgeAutoStartBubbleSeconds
+            )
+        }
         store.start()
+        store.nudgeAutoStartedAt = Date()
+        // 스탬프를 찍은 뒤 배너 상태를 세운다(팝오버는 매초 판정하지 않고 이 상태만 읽는다 — 다음 틱까지 기다리지 않게).
+        store.refreshTimedBanner()
     }
 
     // MARK: - 때리면 아파하기 · 드래그 이동 · 클릭 통과 토글 (A1)
@@ -388,7 +412,7 @@ final class CheckOverlayController {
     }
 
     /// 스토어가 신선도 필터를 끝내 전달한 수신 찔림 배치를 표시한다(배치당 움찔 1회 + 말풍선 1개).
-    /// 표시 중이면 즉시 움찔, 숨김이면 peek(잠깐 나타났다 사라짐).
+    /// 표시 중이면 즉시 움찔, 숨김이면 peek(잠깐 나타났다 사라짐 — 캐릭터 표시를 꺼 뒀어도 동일).
     func handleReceivedPokes(_ pokes: [ReceivedPoke]) {
         guard !pokes.isEmpty else { return } // 빈 배치 무시.
         let text = Self.pokeBubbleText(names: pokes.map { $0.fromName })
@@ -400,13 +424,17 @@ final class CheckOverlayController {
         }
     }
 
-    /// 숨김 상태(비근무이거나 오버레이 꺼짐)에서 찔림을 잠깐 보여준다: 렌더를 켜고 우상단에 띄워 움찔+말풍선을
-    /// 재생한 뒤, pokePeekSeconds 후 그 사이 정상 표시로 승격되지 않았으면 말풍선을 정리하고 다시 숨긴다.
+    /// 숨김 상태(비근무)에서 찔림을 잠깐 보여준다: 렌더를 켜고 우상단에 띄워 움찔+말풍선을 재생한 뒤,
+    /// pokePeekSeconds 후 그 사이 정상 표시로 승격되지 않았으면 말풍선을 정리하고 다시 숨긴다.
     ///
     /// updateWorking 경로를 타지 않으므로 mouseMove 모니터/졸기·넛지 스케줄러가 켜지지 않는다 — peek 는 마우스를
     /// 받지 않는 순수 시각 토스트다. peek 도중 또 배치가 오면 기존 타이머를 리셋하고 새 움찔+문구로 갱신한다.
     /// engine 미-attach(12시간 미접속 후 실행 직후 등) 상태여도 request(.poked)→perform 이 말풍선은 띄우고
     /// 움찔(runReaction)만 자연 no-op 이 된다.
+    ///
+    /// 캐릭터 표시를 꺼 둔 사용자(isOverlayEnabled=false)에게도 peek 는 그대로 재생한다(v0.2.7 계약).
+    /// take_pokes RPC 가 이미 원자적으로 소비한 찔림이라 여기서 버리면 영영 사라지고, 보낸 쪽은 성공 처리되어
+    /// 쿨타임만 태운 채 수신자에게는 아무 일도 일어나지 않는다 — 그래서 표시 설정과 무관하게 8초만 보여 준다.
     private func beginPokePeek(text: String) {
         pokePeekTask?.cancel()
         engine.renderActive = true

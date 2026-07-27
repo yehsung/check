@@ -1329,6 +1329,111 @@ struct SyncRaceTests {
         #expect(store.startedAt == nil)
         #expect(!store.pendingItems.isEmpty)
     }
+
+    /// 요청이 스텁에 기록될 때까지 기다린다(지연 응답 호스트에서 '왕복 중' 시점을 잡기 위한 동기화 지점).
+    /// 기록은 startLoading 에서 일어나고 응답 전달만 responseDelay 만큼 늦으므로, true 를 받은 직후가
+    /// 그 요청의 in-flight 구간 한복판이다.
+    private func waitForRequest(
+        host: String,
+        timeout: Duration = .seconds(3),
+        where predicate: @escaping (URLRequest) -> Bool
+    ) async -> Bool {
+        let deadline = ContinuousClock().now + timeout
+        while ContinuousClock().now < deadline {
+            if URLProtocolStub.requests(forHost: host).contains(where: predicate) { return true }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        return false
+    }
+
+    @Test
+    func autoCloseDoesNotOverwriteWorkStartedDuringItsRoundTrip() async {
+        // 회귀 지점: 자리 비움 자동 마감은 stopWork RPC **이전**에만 근무 상태 write 세대를 봤다. 왕복(수백 ms)
+        // 사이에 사용자가 [근무 시작]을 누르면 응답 도착 시 startedAt/currentSessionID 를 nil 로 되돌리고
+        // "자리 비움으로 자동 근무종료됨" + [되돌리기] 를 띄웠다 — 방금 만든 세션은 서버에 열린 채 추적을 잃고
+        // (팀원 화면 '근무중' 고착), 그 배너를 누르면 옛 세션으로 갈아치워져 타이머가 몇 시간 과거로 점프했다.
+        // 지연 접두어 호스트를 쓴다 — delayedHosts 는 다른 스위트가 defer 로 통째로 비워 in-flight 창이
+        // 소리 없이 0이 되고, 그러면 이 테스트가 '레이스를 재현하지 못한 채' 통과해 버린다.
+        let testHost = "delayed-abandoned-session-race"
+
+        let store = makeStubStore(host: testHost)
+        defer {
+            store.tickerTask?.cancel()
+            store.refreshTask?.cancel()
+            store.syncTask?.cancel()
+        }
+
+        let refresh = Task { await store.refreshTeamStatus() }
+        // 자동 마감 stopWork 의 첫 요청(열린 세션 PATCH)이 날아간 순간을 잡는다 — 응답은 아직 오지 않았다.
+        let sawStopPatch = await waitForRequest(host: testHost) {
+            $0.url?.path == "/rest/v1/work_sessions"
+                && $0.httpMethod == "PATCH"
+                && $0.url?.query?.contains("ended_at=is.null") == true
+        }
+        #expect(sawStopPatch)
+
+        // 사용자가 '오프' 표시를 보고 근무를 시작한다(세대 +1).
+        let manualStart = Date()
+        store.start(now: manualStart)
+        let newSessionID = store.currentSessionID
+        await refresh.value
+
+        // 자동 마감 응답이 도착해도 방금 시작한 근무를 되돌리지 않는다.
+        #expect(store.startedAt == manualStart)
+        #expect(store.currentSessionID == newSessionID)
+        #expect(store.snapshot.isWorking)
+        #expect(store.syncMessage != "자리 비움으로 자동 근무종료됨")
+        // 되돌리기 배너도 뜨지 않는다 — 뜨면 옛 세션으로 현 세션을 갈아치우는 두 번째 사고가 이어진다.
+        #expect(store.lastAutoClosedSessionID == nil)
+        #expect(!store.canUndoAutoClose())
+
+        await store.syncTask?.value
+    }
+
+    @Test
+    func undoAutoCloseDoesNotOverwriteWorkStartedDuringItsRoundTrip() async {
+        // 회귀 지점: performUndoAutoClose 의 startedAt 가드는 reopenSession RPC **이전**에만 있었다.
+        // 왕복 중 [근무 시작]을 누르면 응답 도착 시 startedAt/currentSessionID 가 자동 마감된 옛 세션으로
+        // 교체돼 큰 타이머가 몇 시간 전으로 점프하고, 방금 만든 세션은 서버에 열린 채 방치됐다.
+        let testHost = "delayed-abandoned-session-undo-race"
+
+        let store = makeStubStore(host: testHost)
+        defer {
+            store.tickerTask?.cancel()
+            store.refreshTask?.cancel()
+            store.syncTask?.cancel()
+        }
+
+        // 자동 마감이 끝나 되돌리기 대상이 준비된 상태를 만든다.
+        await store.refreshTeamStatus()
+        #expect(store.canUndoAutoClose())
+        let oldStart = store.lastAutoClosedStartedAt
+
+        let undo = Task { await store.performUndoAutoClose() }
+        // 재개 PATCH(id=eq.<옛 세션>)가 날아간 순간을 잡는다 — 응답은 아직 오지 않았다.
+        let sawReopenPatch = await waitForRequest(host: testHost) {
+            $0.url?.path == "/rest/v1/work_sessions"
+                && $0.httpMethod == "PATCH"
+                && $0.url?.query?.contains("id=eq.50000000-0000-0000-0000-000000000001") == true
+        }
+        #expect(sawReopenPatch)
+
+        let manualStart = Date()
+        store.start(now: manualStart)
+        let newSessionID = store.currentSessionID
+        await undo.value
+
+        // 재개 응답이 도착해도 옛 세션으로 갈아치우지 않는다(타이머가 과거로 점프하지 않는다).
+        #expect(store.startedAt == manualStart)
+        #expect(store.startedAt != oldStart)
+        #expect(store.currentSessionID == newSessionID)
+        #expect(store.snapshot.isWorking)
+        // 되돌리기 대상은 정리돼 배너가 남지 않는다.
+        #expect(store.lastAutoClosedSessionID == nil)
+        #expect(!store.canUndoAutoClose())
+
+        await store.syncTask?.value
+    }
 }
 
 // MARK: - 종료 시 자동 퇴근 (finishWorkBeforeQuit)
@@ -1438,7 +1543,9 @@ func presenceTreatsMissingSignalAsActive() {
 @MainActor
 @Test
 func presenceFreezesStaleWorkingAtLastSignal() {
-    let now = Date()
+    // 기준시각은 주 한복판(KST 화요일 낮)으로 고정한다 — 벽시계면 KST 월요일 00시대에 세션 구간이
+    // 주 시작으로 클리핑돼 라이브 주간 단언이 시각 의존으로 깨진다.
+    let now = URLProtocolStub.weeklyFixtureNow
     let start = now.addingTimeInterval(-600)
     let seen = now.addingTimeInterval(-200) // 마지막 신호 200초 전(>90초) → stale
     let member = TeamMemberStatus(
@@ -1511,6 +1618,63 @@ func heartbeatSkippedWhenNotWorking() async {
     #expect(URLProtocolStub.requests(forHost: testHost).isEmpty)
 }
 
+@MainActor
+@Test
+func reloginRestoresSessionIDSoHeartbeatResumes() async {
+    // 회귀 지점: 토큰 만료 강제 로그아웃은 currentSessionID 만 지우고 진행 중 근무(startedAt)와 큐는 일부러
+    // 남긴다(clearPersistedSession). 같은 계정으로 재로그인하면 서버는 여전히 '근무중', 로컬도 startedAt 이
+    // 살아 있어 applyRemoteOwnStatus 가 (.working, .some) → default 로 빠지며 세션ID 를 복원하지 않았다.
+    // 그러면 sendHeartbeatIfWorking 이 매 폴링마다 조용히 반환해 생존신호가 영영 끊기고(팀원 화면 '자리비움'),
+    // 10분 뒤 내 앱의 스캐빈저가 내 세션을 로그아웃 시각으로 마감해 그 뒤 근무가 통째로 유실됐다.
+    let testHost = "relogin-heartbeat-test"
+    let userID = "00000000-0000-0000-0000-000000000002"
+    let store = makeStubStore(host: testHost, userID: userID)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    let sessionStart = Date().addingTimeInterval(-3_600)
+    // 강제 로그아웃 직후의 로컬 상태: 근무는 그대로 흐르는데 세션ID 만 비어 있다.
+    store.startedAt = sessionStart
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3_600)
+    store.currentSessionID = nil
+    store.pendingItems = []
+    // 재로그인 후 첫 폴링이 가져온 서버 스냅샷: 내 세션은 여전히 열려 있다.
+    let serverSessionID = "30000000-0000-0000-0000-000000000009"
+    store.teamMembers = [
+        TeamMemberStatus(
+            id: userID,
+            name: "영식",
+            status: .working,
+            updatedAt: Date(),
+            currentSessionStartedAt: sessionStart,
+            weeklyDurationSeconds: 0,
+            todayDurationSeconds: 0,
+            avatarURL: nil,
+            lastSeenAt: Date(),
+            activeSessionID: serverSessionID
+        )
+    ]
+
+    store.applyRemoteOwnStatus(writeGeneration: store.workStateWriteGeneration)
+    // 진행 중 근무는 건드리지 않고 세션ID 만 되살린다.
+    #expect(store.startedAt == sessionStart)
+    #expect(store.currentSessionID == serverSessionID)
+
+    await store.sendHeartbeatIfWorking()
+    let bodies = zip(URLProtocolStub.requests(forHost: testHost), URLProtocolStub.bodies(forHost: testHost))
+        .filter { $0.0.url?.path == "/rest/v1/work_statuses" && $0.0.httpMethod == "POST" }
+        .map { $0.1 }
+    #expect(bodies.count == 1)
+    #expect(bodies.first?.contains(#""active_session_id":"\#(serverSessionID)""#) == true)
+
+    // 대조군: 로컬에 세션ID 가 이미 있으면 서버 값으로 갈아치우지 않는다(다른 맥이 연 세션 가로채기 금지).
+    store.currentSessionID = "local-session"
+    store.applyRemoteOwnStatus(writeGeneration: store.workStateWriteGeneration)
+    #expect(store.currentSessionID == "local-session")
+}
+
 // MARK: - D3: 본인 죽은 세션 자동 마감 + 되돌리기
 
 @MainActor
@@ -1524,13 +1688,13 @@ func abandonedOwnSessionIsAutoClosedAndUndoable() async {
     }
     // 로컬 비근무 + 서버엔 오래된 신호의 열린 세션 → 자동 마감 조건.
     #expect(store.startedAt == nil)
-    #expect(!store.canUndoAutoClose)
+    #expect(!store.canUndoAutoClose())
 
     await store.refreshTeamStatus()
 
     #expect(store.startedAt == nil)
     #expect(store.syncMessage == "자리 비움으로 자동 근무종료됨")
-    #expect(store.canUndoAutoClose)
+    #expect(store.canUndoAutoClose())
     #expect(store.lastAutoClosedSessionID == "50000000-0000-0000-0000-000000000001")
     let closedWithPatch = URLProtocolStub.requests(forHost: testHost).contains {
         $0.url?.path == "/rest/v1/work_sessions" && $0.httpMethod == "PATCH"
@@ -1541,7 +1705,7 @@ func abandonedOwnSessionIsAutoClosedAndUndoable() async {
 
     #expect(store.startedAt != nil)
     #expect(store.currentSessionID == "50000000-0000-0000-0000-000000000001")
-    #expect(!store.canUndoAutoClose)
+    #expect(!store.canUndoAutoClose())
     #expect(store.snapshot.isWorking)
 }
 
@@ -1563,7 +1727,169 @@ func liveLocalSessionIsNeverAutoClosedOnRefresh() async {
     await store.refreshTeamStatus()
 
     #expect(store.startedAt == localStart)
-    #expect(!store.canUndoAutoClose)
+    #expect(!store.canUndoAutoClose())
+}
+
+// MARK: - 되돌리기 배너 수명(유예 만료 · 새 근무 시작 · 근무중 되돌리기 금지)
+
+@MainActor
+@Test
+func autoCloseUndoExpiresAfterGraceWindow() async throws {
+    // 회귀 지점: canUndoAutoClose 가 lastAutoClosedSessionID != nil 하나뿐이던 시절엔 배너가 로그아웃 전까지
+    // 모든 팝오버에 상주했다. 이제는 자동 마감 후 유예(10분)가 지나면 스스로 사라진다.
+    let testHost = "abandoned-session-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    await store.refreshTeamStatus()
+    let closedAt = try #require(store.lastAutoClosedAt)
+
+    #expect(store.canUndoAutoClose(now: closedAt.addingTimeInterval(WorkTimerStore.autoCloseUndoWindowSeconds - 1)))
+    #expect(!store.canUndoAutoClose(now: closedAt.addingTimeInterval(WorkTimerStore.autoCloseUndoWindowSeconds + 1)))
+
+    // 유예를 넘겨 누르면 되돌리지 않고 잔여 대상만 정리한다(배너가 다음 렌더에서 사라진다).
+    store.lastAutoClosedAt = Date().addingTimeInterval(-(WorkTimerStore.autoCloseUndoWindowSeconds + 60))
+    #expect(store.undoAutoClose() == nil)
+    #expect(store.lastAutoClosedSessionID == nil)
+    #expect(store.lastAutoClosedStartedAt == nil)
+    #expect(store.lastAutoClosedAt == nil)
+}
+
+@MainActor
+@Test
+func startingNewWorkClearsAutoCloseUndo() async {
+    // 회귀 지점: 배너를 무시하고 새 근무를 시작한 뒤 [되돌리기]를 누르면 진행 중 세션이 옛 세션으로 갈아치워졌다.
+    // 이제 start() 가 되돌리기 대상을 즉시 끊고, 근무중에는 조건 자체가 거짓이다.
+    let testHost = "abandoned-session-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    await store.refreshTeamStatus()
+    #expect(store.canUndoAutoClose())
+
+    store.start()
+    #expect(store.lastAutoClosedSessionID == nil)
+    #expect(!store.canUndoAutoClose())
+    // 종료해도 되살아나지 않는다(옛 세션은 영구히 무효).
+    store.stop()
+    #expect(!store.canUndoAutoClose())
+}
+
+@MainActor
+@Test
+func undoAutoCloseRefusesWhileWorking() async {
+    // 회귀 지점: performUndoAutoClose 에 startedAt 가드가 없어 진행 중 세션의 startedAt/currentSessionID 를
+    // 옛 세션으로 덮었다(타이머가 과거로 점프 + 새 세션이 서버에 열린 채 방치).
+    let testHost = "abandoned-session-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    await store.refreshTeamStatus()
+    let oldSessionID = store.lastAutoClosedSessionID
+    #expect(oldSessionID != nil)
+
+    // 되돌리기 대상을 남긴 채로 근무를 시작한 상태를 인위적으로 만든다(서버 복구 경로 모사).
+    let liveStart = Date().addingTimeInterval(-120)
+    store.startedAt = liveStart
+    store.currentSessionID = "99999999-0000-0000-0000-000000000009"
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 120)
+
+    await store.performUndoAutoClose()
+
+    // 진행 중 세션은 그대로고, 되돌리기 대상만 정리된다.
+    #expect(store.startedAt == liveStart)
+    #expect(store.currentSessionID == "99999999-0000-0000-0000-000000000009")
+    #expect(store.lastAutoClosedSessionID == nil)
+    #expect(!store.canUndoAutoClose())
+}
+
+@MainActor
+@Test
+func undoAutoCloseSubtractsRestoredSessionFromTodayAccumulation() async {
+    // 회귀 지점: 자동 마감 뒤 정상 폴링 1회가 accumulatedSeconds 를 서버 오늘 합계(= 방금 마감된 세션 **포함**)로
+    // 채운 상태에서 [되돌리기]를 누르면, 그 세션이 다시 진행 세션이 되는데도 누적에서 빠지지 않아
+    // todayDuration 이 같은 구간을 두 번 셌다(메뉴바 라벨·팝오버 큰 타이머·캐릭터 오버레이가 일제히 약 2배).
+    let testHost = "abandoned-session-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    let now = Date()
+    // KST 자정 직후에 돌아도 클리핑에 걸리지 않게 시작점을 오늘 자정 이후로 고정한다.
+    let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
+    let sessionStart = max(dayStart, now.addingTimeInterval(-7_200))
+    let closedSeconds = max(0, Int(now.timeIntervalSince(sessionStart)))
+
+    // '자동 마감 → 폴링 1회 반영' 직후 상태: 누적이 방금 마감된 세션까지 포함한다.
+    store.startedAt = nil
+    store.accumulatedSeconds = closedSeconds
+    store.accumulatedDayStart = dayStart
+    store.snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: closedSeconds)
+    store.lastAutoClosedSessionID = "50000000-0000-0000-0000-000000000001"
+    store.lastAutoClosedStartedAt = sessionStart
+    store.lastAutoClosedAt = now
+    store.lastAutoClosedSeconds = closedSeconds
+
+    await store.performUndoAutoClose()
+
+    #expect(store.startedAt == sessionStart)
+    // 재개된 세션 몫은 진행분으로만 세어야 한다 — 누적에는 남지 않는다.
+    #expect(store.accumulatedSeconds == 0)
+    // 오늘 누적은 이어져야 한다(2배로 뛰면 안 된다). 테스트 전체 실행이 느려도 흔들리지 않게
+    // 스토어가 실제로 쓰는 표시 기준시각(displayNow)으로 기대값을 만든다.
+    #expect(store.todayDuration == max(0, Int(store.displayNow.timeIntervalSince(sessionStart))))
+    #expect(store.todayDuration < closedSeconds * 2 - 60)
+    #expect(store.lastAutoClosedSeconds == 0)
+}
+
+@MainActor
+@Test
+func autoCloseAddsClosedSessionToTodayAccumulationAndUndoRestoresIt() async {
+    // 자동 마감은 마감한 세션의 '오늘 몫'을 누적에 더해야 한다(서버 스냅샷의 today 는 마감 **전** 값이라
+    // 그 세션이 빠져 있다). 그래야 마감 직후 표시가 세션 몫만큼 꺼지지 않고, 이어서 도착할 폴링값과도 같아진다.
+    // 그리고 되돌리기는 그 몫을 정확히 도로 뺀다(폴링 전에 눌러도 이중 계상 없음).
+    let testHost = "stale-today-session-test"
+    let store = makeStubStore(host: testHost)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    await store.refreshTeamStatus()
+
+    #expect(store.startedAt == nil)
+    #expect(store.canUndoAutoClose())
+    // 2시간 전 시작 → 5분 전 마지막 신호 = 약 6900초(오늘 자정 클리핑 포함).
+    let now = Date()
+    let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
+    let expected = max(0, Int(now.addingTimeInterval(-300).timeIntervalSince(max(now.addingTimeInterval(-7_200), dayStart))))
+    #expect(abs(store.accumulatedSeconds - expected) <= 3)
+    #expect(abs(store.lastAutoClosedSeconds - expected) <= 3)
+    #expect(abs(store.todayDuration - expected) <= 3)
+
+    await store.performUndoAutoClose()
+
+    // 되돌리면 그 몫은 누적에서 빠지고 진행분으로만 센다 → 오늘 누적은 그대로 이어진다(2배 금지).
+    #expect(store.accumulatedSeconds == 0)
+    #expect(store.startedAt != nil)
+    let restored = store.startedAt ?? store.displayNow
+    let liveExpected = max(
+        0,
+        Int(store.displayNow.timeIntervalSince(max(restored, TeamWeeklyGoal.koreanDayStart(for: store.displayNow))))
+    )
+    #expect(store.todayDuration == liveExpected)
+    #expect(store.todayDuration < expected * 2 - 60)
 }
 
 // MARK: - 방치 세션 서버 자동 마감(클라 스캐빈저 폴백)
@@ -2019,6 +2345,50 @@ func detectTeamReactionsCelebratesTeamGoalCrossingOnce() {
     #expect(events.filter { $0 == .milestone }.count == 1)
 
     // 완료 유지 상태에선 재축하하지 않는다.
+    store.detectTeamReactions()
+    #expect(events.filter { $0 == .milestone }.count == 1)
+}
+
+/// 주간 목표는 1인당 약속이므로 축하도 1인당 평균으로 판정한다(리그 표시와 같은 규약).
+/// 회귀 방지: 예전엔 팀원 주간 "합계"를 1인당 목표와 견줘, 인원이 많을수록 일찍 축하가 터졌다
+/// (5명 × 12시간 = 60시간 합계 ≥ 40시간 목표 → 각자 12시간뿐인데 달성 축하).
+@MainActor
+@Test
+func teamGoalCelebrationUsesPerMemberAverageNotTeamTotal() {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer { store.tickerTask?.cancel() }
+    var events: [ReactionKind] = []
+    store.onReactionTrigger = { events.append($0) }
+    store.session = SupabaseSession(
+        accessToken: "access-token", refreshToken: nil,
+        userID: "00000000-0000-0000-0000-000000000002"
+    )
+    store.currentTeamID = "team-id"
+    store.teamGoalSeconds = 40 * 3_600
+
+    func member(_ id: String, _ seconds: Int) -> TeamMemberStatus {
+        TeamMemberStatus(
+            id: id, name: id, status: .offWork, updatedAt: nil,
+            currentSessionStartedAt: nil, weeklyDurationSeconds: seconds
+        )
+    }
+
+    // 첫 로드(전이 seed): 5명 각자 1시간.
+    store.teamMembers = (1...5).map { member("m\($0)", 3_600) }
+    store.detectTeamReactions()
+    #expect(events.isEmpty)
+
+    // 5명 각자 12시간 = 합계 60시간(> 목표 40시간)이지만 1인당 평균은 12시간이라 아직 미달 — 축하 없음.
+    store.teamMembers = (1...5).map { member("m\($0)", 12 * 3_600) }
+    store.detectTeamReactions()
+    #expect(store.teamWeeklyAverageSeconds() == 12 * 3_600)
+    #expect(events.filter { $0 == .milestone }.isEmpty)
+
+    // 각자 41시간이 되어 1인당 평균이 목표를 넘어서면 그때 1회 축하한다.
+    store.teamMembers = (1...5).map { member("m\($0)", 41 * 3_600) }
     store.detectTeamReactions()
     #expect(events.filter { $0 == .milestone }.count == 1)
 }
@@ -2642,7 +3012,7 @@ func uploadTokenUsageGateThrottlesAndChangeGates() async {
 
     func postCount() -> Int {
         URLProtocolStub.requests(forHost: testHost).filter {
-            $0.url?.path == "/rest/v1/token_usage_monthly" && $0.httpMethod == "POST"
+            $0.url?.path == "/rest/v1/token_usage_device_monthly" && $0.httpMethod == "POST"
         }.count
     }
 
@@ -2681,6 +3051,132 @@ func uploadTokenUsageGateThrottlesAndChangeGates() async {
     let usageBToday = TokenUsageMonthly(month: "2026-07", claudeInput: 200, todayTotal: 5, todayDate: "2026-07-14")
     await store.uploadTokenUsageIfNeeded(usage: usageBToday, now: t0.addingTimeInterval(360))
     #expect(postCount() == 3)
+}
+
+@MainActor
+@Test
+func uploadTokenUsageAlsoRewritesLegacyLedger() async {
+    // 옛 표(token_usage_monthly)도 함께 갱신한다 — 새 표 마이그레이션이 아직 적용되지 않은 사이에도 사용량이
+    // 멈추지 않게 하고(옛 표는 이미 있다), v0.2.10 으로 되돌아간 맥과 표시가 이어지게 하기 위함이다.
+    // 단 그 행을 **깎지 않을 때만** 쓴다 — 그래서 쓰기 전에 현재 값을 GET 으로 읽는다(아래 다른 테스트가 실증).
+    let testHost = "token-dual-write-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    let usage = TokenUsageMonthly(month: "2026-07", claudeInput: 12_000_000, todayTotal: 7, todayDate: "2026-07-26")
+    await store.uploadTokenUsageIfNeeded(usage: usage, now: Date(timeIntervalSince1970: 2_000_000))
+
+    let pairs = zip(URLProtocolStub.requests(forHost: testHost), URLProtocolStub.bodies(forHost: testHost))
+    let posts = pairs.filter { $0.0.httpMethod == "POST" }
+    let paths = posts.compactMap { $0.0.url?.path }
+    // 두 표 모두 갱신한다 — 옛 표를 먼저 보내, 새 표 마이그레이션이 아직 없더라도 사용량이 멈추지 않게 한다.
+    #expect(paths == ["/rest/v1/token_usage_monthly", "/rest/v1/token_usage_device_monthly"])
+    #expect(posts.first?.0.url?.query?.contains("on_conflict=user_id,month") == true)
+    // 덮어쓰기 전 현재 값을 읽는 GET 이 옛 표 POST 앞에 정확히 한 번 간다(깎기 금지 게이트).
+    let legacyGets = URLProtocolStub.requests(forHost: testHost).filter {
+        $0.url?.path == "/rest/v1/token_usage_monthly" && $0.httpMethod == "GET"
+    }
+    #expect(legacyGets.count == 1)
+
+    let legacyBody = posts.first?.1 ?? ""
+    // 옛 표 본문은 v0.2.10 과 같은 모양이어야 한다(device_id 없음 — 그 표의 키는 (user_id, month)).
+    #expect(!legacyBody.contains("device_id"))
+    #expect(legacyBody.contains("\"total\":12000000"))
+    #expect(legacyBody.contains("\"month\":\"2026-07\""))
+    #expect(legacyBody.contains("\"today_total\":7"))
+    // 새 표 본문에는 기기 식별자가 함께 실린다(합산 키).
+    #expect(posts.count >= 2 && posts[1].1.contains("\"device_id\":\"\(store.deviceID)\""))
+}
+
+@MainActor
+@Test
+func uploadTokenUsageKeepsBiggerLegacyLedgerOfAnotherMac() async {
+    // 회귀 지점(결함1 과도기): 옛 표는 키가 (user_id, month) 라 맥 2대가 한 행을 공유한다. 아직 v0.2.10 인
+    // 주력 맥이 그 달 200M 을 올려 둔 행을, v0.2.11 인 보조 맥이 팝오버를 열자마자 자기 2M 으로 덮어썼다.
+    // 그러면 보드의 '큰 쪽(기기 합산 vs 옛 행)' 비교에서 옛 값 자체가 2M 이 되어 주력 맥의 200M 이 순위에서
+    // 사라지고, 어느 맥을 마지막에 열었느냐에 따라 200M ↔ 2M 로 널뛴다(= v0.2.10 시절 증상 그대로).
+    // 이제는 쓰기 전에 현재 값을 읽어, 내 값이 더 작으면 옛 표를 건드리지 않는다.
+    let testHost = "legacy-bigger-token-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    // 이 맥(보조)의 이번 달 누적은 2M — 스텁이 돌려주는 옛 행(200M)보다 작다.
+    let usage = TokenUsageMonthly(month: "2026-07", claudeInput: 2_000_000, todayTotal: 4, todayDate: "2026-07-26")
+    await store.uploadTokenUsageIfNeeded(usage: usage, now: Date(timeIntervalSince1970: 4_000_000))
+
+    let requests = URLProtocolStub.requests(forHost: testHost)
+    // 옛 표에는 **쓰지 않는다**(읽기만) — 주력 맥의 200M 이 그대로 남는다.
+    #expect(!requests.contains { $0.url?.path == "/rest/v1/token_usage_monthly" && $0.httpMethod == "POST" })
+    #expect(requests.contains { $0.url?.path == "/rest/v1/token_usage_monthly" && $0.httpMethod == "GET" })
+    // 새 기기별 표에는 정상적으로 올린다(합산은 서버 보드가 한다) — 옛 표를 건너뛴다고 업로드가 멈추면 안 된다.
+    #expect(requests.contains { $0.url?.path == "/rest/v1/token_usage_device_monthly" && $0.httpMethod == "POST" })
+    // 업로드가 성공했으므로 게이트 값도 갱신된다(다음 주기에 같은 값으로 재시도하지 않는다).
+    #expect(store.lastUploadedUsage == usage)
+}
+
+@MainActor
+@Test
+func tokenUploadSurfacesMissingDeviceTableSchema() async {
+    // 회귀 지점(결함3): 마이그레이션을 적용하지 않은 채 v0.2.11 을 배포하면 새 표 업로드가 404(PGRST205)로
+    // 전량 실패하는데, 예전엔 모든 실패를 catch 가 조용히 삼켜 docs/release.md 가 지시한 신호("DB 스키마 필요")가
+    // 화면에 뜨는 경로 자체가 없었다(순위 조회는 옛 RPC 라 멀쩡해 실패를 시사하는 표시가 아무것도 없었다).
+    let testHost = "device-table-missing"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.syncMessage = "동기화됨"
+
+    let usage = TokenUsageMonthly(month: "2026-07", claudeInput: 100)
+    await store.uploadTokenUsageIfNeeded(usage: usage, now: Date(timeIntervalSince1970: 3_000_000))
+
+    #expect(store.syncMessage == "DB 스키마 필요")
+    // 옛 표 갱신은 먼저 성공했으므로 그 사이에도 사용량은 멈추지 않는다.
+    #expect(URLProtocolStub.requests(forHost: testHost).contains {
+        $0.url?.path == "/rest/v1/token_usage_monthly" && $0.httpMethod == "POST"
+    })
+    // 실패했으므로 마지막 업로드 값은 갱신되지 않는다 — 60초 뒤 같은 값으로 재시도되고, 뒤늦게 push 해도 자가 복구된다.
+    #expect(store.lastUploadedUsage == nil)
 }
 
 @MainActor
@@ -2766,6 +3262,54 @@ func togglePokePanelIsMutuallyExclusiveWithLeaderboardAndTokenBoard() {
     #expect(store.pokeNotice == nil)
 }
 
+/// 회귀: 콕찌르기 실패 안내는 **어느 경로로 나가든** 지워져야 한다. [내 기록]/리그/토큰 보드로 빠져나가면
+/// 예전엔 pokeNotice 가 남아, 콕찌르기로 되돌아온 새 화면 상단에 아무 것도 누르지 않았는데 낡은
+/// 주황 경고줄이 그대로 떴다(v0.2.11 에서 헤더에 [내 기록] 버튼이 생기며 처음 열린 경로).
+@MainActor
+@Test
+func leavingPokePanelByAnyRouteClearsNotice() {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://poke-notice-clear-test")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    // (1) [내 기록]으로 이탈 → 안내가 지워지고, 되돌아와도 깨끗하다.
+    store.togglePokePanel()
+    store.pokeNotice = "자리비움 상태에는 찌를 수 없어요"
+    store.toggleInsightsPanel()
+    #expect(!store.isPokePanelVisible)
+    #expect(store.pokeNotice == nil)
+    store.toggleInsightsPanel()   // 내 기록 닫기
+    store.togglePokePanel()       // 콕찌르기 재진입
+    #expect(store.isPokePanelVisible)
+    #expect(store.pokeNotice == nil)
+
+    // (2) 리그로 이탈.
+    store.pokeNotice = "지금은 찌를 수 없어요"
+    store.toggleLeaderboard()
+    #expect(!store.isPokePanelVisible)
+    #expect(store.pokeNotice == nil)
+
+    // (3) 토큰 보드로 이탈.
+    store.togglePokePanel()
+    store.pokeNotice = "연결이 불안정해요. 잠시 후 다시 시도해 주세요"
+    store.toggleTokenBoard()
+    #expect(!store.isPokePanelVisible)
+    #expect(store.pokeNotice == nil)
+}
+
 @MainActor
 @Test
 func sendPokeGatesWhenNotWorkingAndFiresNoRequest() {
@@ -2799,7 +3343,7 @@ func sendPokeGatesWhenNotWorkingAndFiresNoRequest() {
 
 @MainActor
 @Test
-func sendPokeOkMirrorsCooldownWindow() async {
+func sendPokeOkMirrorsCooldownWindow() async throws {
     let testHost = "poke-ok-test"
     TokenBoardURLProtocol.setResponse(#"{"status":"ok"}"#, forHost: testHost)
     let service = SupabaseWorkService(
@@ -2821,6 +3365,7 @@ func sendPokeOkMirrorsCooldownWindow() async {
     store.startedAt = Date()
     store.pokeNotice = "이전 안내"
 
+    let sentAt = Date()
     store.sendPoke(to: "target")
 
     // 응답(ok) 반영은 Task 라 pokeCooldownUntil 이 채워질 때까지 폴링한다.
@@ -2834,14 +3379,16 @@ func sendPokeOkMirrorsCooldownWindow() async {
     }
     #expect(mirrored)
     #expect(store.pokeNotice == nil)  // ok → 안내 해제
-    // 쿨타임 잔여는 대략 60초(방금 now+60 미러). 표시 계산이 창 안에 든다.
-    let remaining = store.pokeCooldownRemaining(for: "target", now: Date())
-    #expect(remaining >= 58 && remaining <= 60)
+    // 쿨타임 만료 시각은 응답 도착 시각 + 60초다. 벽시계 잔여로 재면 테스트 병렬 실행 지연에 그대로 흔들리므로
+    // (발사 시각 기준) 하한만 엄격히 보고 상한은 넉넉히 둔다 — 검증 대상은 '60초를 미러링했는가'다.
+    let until = try #require(store.pokeCooldownUntil["target"])
+    #expect(until.timeIntervalSince(sentAt) >= 60)
+    #expect(until.timeIntervalSince(sentAt) <= 60 + 300)
 }
 
 @MainActor
 @Test
-func sendPokeCooldownResponseMirrorsRetryAfter() async {
+func sendPokeCooldownResponseMirrorsRetryAfter() async throws {
     let testHost = "poke-cooldown-test"
     TokenBoardURLProtocol.setResponse(#"{"status":"cooldown","retry_after_seconds":25}"#, forHost: testHost)
     let service = SupabaseWorkService(
@@ -2861,6 +3408,7 @@ func sendPokeCooldownResponseMirrorsRetryAfter() async {
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
     store.startedAt = Date()
 
+    let sentAt = Date()
     store.sendPoke(to: "target")
 
     var mirrored = false
@@ -2872,9 +3420,11 @@ func sendPokeCooldownResponseMirrorsRetryAfter() async {
         try? await Task.sleep(for: .milliseconds(5))
     }
     #expect(mirrored)
-    // 서버가 준 retry_after_seconds(25) 만큼 쿨타임을 미러링한다.
-    let remaining = store.pokeCooldownRemaining(for: "target", now: Date())
-    #expect(remaining >= 23 && remaining <= 25)
+    // 서버가 준 retry_after_seconds(25) 만큼 쿨타임을 미러링한다. 벽시계 잔여가 아니라 만료 시각으로 본다 —
+    // 병렬 실행으로 응답 반영이 늦어져도 '25초를 미러링했는가'라는 검증 의도는 흔들리지 않는다.
+    let until = try #require(store.pokeCooldownUntil["target"])
+    #expect(until.timeIntervalSince(sentAt) >= 25)
+    #expect(until.timeIntervalSince(sentAt) <= 25 + 300)
 }
 
 @MainActor
@@ -3012,4 +3562,1521 @@ final class PokeFailingURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+}
+
+// MARK: - v0.2.11 개인 기록 / 토큰 월 이동 / 근무 write 세대 토큰 / 넛지 자동시작
+
+@MainActor
+@Test
+func toggleInsightsPanelIsMutuallyExclusiveWithOtherThreePanels() {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://insights-toggle-test")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    // 리그·토큰·찌르기가 모두 열린 상태에서 개인 기록을 열면 셋 다 닫힌다(4자 상호 배타).
+    store.isLeaderboardVisible = true
+    store.isTokenBoardVisible = true
+    store.isPokePanelVisible = true
+    store.toggleInsightsPanel()
+    #expect(store.isInsightsPanelVisible)
+    #expect(!store.isLeaderboardVisible)
+    #expect(!store.isTokenBoardVisible)
+    #expect(!store.isPokePanelVisible)
+
+    // 반대 방향도 각각 성립해야 한다.
+    store.toggleLeaderboard()
+    #expect(store.isLeaderboardVisible)
+    #expect(!store.isInsightsPanelVisible)
+
+    store.toggleInsightsPanel()
+    store.toggleTokenBoard()
+    #expect(store.isTokenBoardVisible)
+    #expect(!store.isInsightsPanelVisible)
+
+    store.toggleInsightsPanel()
+    #expect(!store.isTokenBoardVisible)
+    store.togglePokePanel()
+    #expect(store.isPokePanelVisible)
+    #expect(!store.isInsightsPanelVisible)
+
+    // 같은 버튼을 다시 누르면 닫힌다.
+    store.toggleInsightsPanel()
+    store.toggleInsightsPanel()
+    #expect(!store.isInsightsPanelVisible)
+}
+
+@MainActor
+@Test
+func retroBannerShowsOncePerWeekAndIsConsumedBySeenMark() {
+    let defaults = isolatedDefaults()
+    let store = WorkTimerStore(
+        service: SupabaseWorkService(
+            projectURL: URL(string: "http://retro-banner-test")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        ),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: defaults
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    // 회고가 없으면 배너도 없다.
+    store.evaluateRetroBanner()
+    #expect(!store.showsRetroBanner)
+
+    store.retro = WeeklyRetro(
+        weekStart: Date(timeIntervalSince1970: 1_800_000_000),
+        totalSeconds: 7_200,
+        goalSeconds: 40 * 3_600,
+        previousWeekSeconds: 3_600,
+        sessionCount: 2,
+        busiestDayIndex: 0,
+        busiestDaySeconds: 7_200
+    )
+    store.evaluateRetroBanner()
+    #expect(store.showsRetroBanner)
+
+    // 본 것으로 기록하면 즉시 내려가고, 이번 주에는 다시 뜨지 않는다(주당 1회).
+    store.markRetroBannerSeen()
+    #expect(!store.showsRetroBanner)
+    #expect(defaults.string(forKey: WorkTimerStore.retroBannerShownWeekKey) == RetroWeekKey.current())
+    store.evaluateRetroBanner()
+    #expect(!store.showsRetroBanner)
+}
+
+@MainActor
+@Test
+func retroBannerIsConsumedWhenDrawnSoItDoesNotReturnOnEveryPopoverOpen() {
+    // 회귀 지점: 배너를 띄우는 경로(evaluateRetroBanner)가 '이번 주 봤음' 키를 기록하지 않아, 사용자가 [보기]나
+    // X 를 누르지 않으면 팝오버를 열 때마다(setMenuPresented → evaluateRetroBanner) 같은 배너가 되살아났다.
+    // '주당 1회' 계약 위반일 뿐 아니라, '배너는 한 번에 하나(retro > update)' 규칙 때문에 회고가 상주하는 동안
+    // 새 버전 안내 배너(앱 안에서 업데이트로 가는 유일한 경로)가 그 주 내내 한 번도 뜨지 못했다.
+    let defaults = isolatedDefaults()
+    let store = WorkTimerStore(
+        service: SupabaseWorkService(
+            projectURL: URL(string: "http://retro-banner-once-test")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        ),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: defaults
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.retro = WeeklyRetro(
+        weekStart: Date(timeIntervalSince1970: 1_800_000_000),
+        totalSeconds: 7_200,
+        goalSeconds: 40 * 3_600,
+        previousWeekSeconds: 3_600,
+        sessionCount: 2,
+        busiestDayIndex: 0,
+        busiestDaySeconds: 7_200
+    )
+    // 개인 기록은 이미 이번 주 기준으로 받아 둔 상태(팝오버 오픈 훅이 재조회 대신 배너 판정만 하게 한다).
+    store.insightsLoaded = true
+    store.insightsWeekKey = RetroWeekKey.current()
+    #expect(!store.needsInsightsReload)
+
+    // 1) 월요일 첫 팝오버 — 배너가 뜬다. 아직 화면에 그려지기 전이라 이번 주 몫은 소비되지 않았다.
+    store.setMenuPresented(true)
+    #expect(store.showsRetroBanner)
+    #expect(defaults.string(forKey: store.retroBannerShownWeekKeyForCurrentUser) == nil)
+
+    // 뷰가 실제로 배너를 그리면(onAppear) 그때 이번 주 몫을 소비한다. 보고 있는 배너를 도중에 걷어내진 않는다.
+    store.markRetroBannerDisplayed()
+    #expect(store.showsRetroBanner)
+    #expect(defaults.string(forKey: store.retroBannerShownWeekKeyForCurrentUser) == RetroWeekKey.current())
+    store.evaluateRetroBanner()
+    #expect(store.showsRetroBanner)
+
+    // 2) 아무것도 누르지 않고 팝오버를 닫는다 → 배너는 이번 팝오버의 안내였으므로 내려간다.
+    store.setMenuPresented(false)
+    #expect(!store.showsRetroBanner)
+
+    // 3) 다시 열어도(몇 번을 반복해도) 같은 주에는 두 번 다시 뜨지 않는다 — 그 자리를 새 버전 안내가 쓴다.
+    for _ in 0..<3 {
+        store.setMenuPresented(true)
+        #expect(!store.showsRetroBanner)
+        store.setMenuPresented(false)
+        #expect(!store.showsRetroBanner)
+    }
+}
+
+@MainActor
+@Test
+func retroBannerSurvivesAPopoverWhereAMoreUrgentBannerTookItsPlace() {
+    // 소비는 '판정'이 아니라 '표시' 시점이다 — 더 급한 배너(12시간 확인 등)가 그 자리를 이겨 회고가 화면에
+    // 뜨지도 못한 팝오버에서 이번 주 안내를 잃으면 안 된다(밀린 배너는 다음 팝오버에 뜬다는 계약).
+    let defaults = isolatedDefaults()
+    let store = WorkTimerStore(
+        service: SupabaseWorkService(
+            projectURL: URL(string: "http://retro-banner-yield-test")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        ),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: defaults
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.retro = WeeklyRetro(
+        weekStart: Date(timeIntervalSince1970: 1_800_000_000),
+        totalSeconds: 7_200,
+        goalSeconds: 40 * 3_600,
+        previousWeekSeconds: 3_600,
+        sessionCount: 2,
+        busiestDayIndex: 0,
+        busiestDaySeconds: 7_200
+    )
+    store.insightsLoaded = true
+    store.insightsWeekKey = RetroWeekKey.current()
+
+    // 첫 팝오버: 자격은 갖췄지만 더 급한 배너에 밀려 뷰가 회고 배너를 그리지 않았다(onAppear 미호출).
+    store.setMenuPresented(true)
+    #expect(store.showsRetroBanner)
+    store.setMenuPresented(false)
+    #expect(defaults.string(forKey: store.retroBannerShownWeekKeyForCurrentUser) == nil)
+
+    // 다음 팝오버에서 다시 올라온다.
+    store.setMenuPresented(true)
+    #expect(store.showsRetroBanner)
+}
+
+@MainActor
+@Test
+func openingInsightsPanelBeforeRetroArrivesDoesNotBurnThisWeeksBanner() {
+    // 회귀 지점: [내 기록] 버튼(toggleInsightsPanel)이 회고 유무와 무관하게 markRetroBannerSeen() 을 불러,
+    // 첫 조회가 실패해 retro 가 아직 nil 인 상태에서 패널을 열기만 해도 이번 주 배너 키가 소진됐다.
+    // 그 뒤 네트워크가 복구돼 회고가 도착해도 그 주 내내 "지난주 기록이 준비됐어요" 배너가 뜨지 않았다.
+    let defaults = isolatedDefaults()
+    let store = WorkTimerStore(
+        service: SupabaseWorkService(
+            projectURL: URL(string: "http://retro-banner-empty-panel-test")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        ),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: defaults
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    // 아직 회고를 못 받은 상태(오프라인·첫 조회 실패)에서 [내 기록]을 열어 본다.
+    #expect(store.retro == nil)
+    store.toggleInsightsPanel()
+    #expect(store.isInsightsPanelVisible)
+    // 빈 패널을 열어 본 것만으로 이번 주 안내를 잃으면 안 된다.
+    #expect(defaults.string(forKey: WorkTimerStore.retroBannerShownWeekKey) == nil)
+
+    // 패널을 닫고 뒤늦게 회고가 도착하면 배너가 정상적으로 뜬다.
+    store.toggleInsightsPanel()
+    #expect(!store.isInsightsPanelVisible)
+    store.retro = WeeklyRetro(
+        weekStart: Date(timeIntervalSince1970: 1_800_000_000),
+        totalSeconds: 7_200,
+        goalSeconds: 40 * 3_600,
+        previousWeekSeconds: 3_600,
+        sessionCount: 2,
+        busiestDayIndex: 0,
+        busiestDaySeconds: 7_200
+    )
+    store.evaluateRetroBanner()
+    #expect(store.showsRetroBanner)
+
+    // 반대로 회고가 실제로 있을 때 패널을 열면 그때는 소비된다(패널 안 회고 카드와 중복 안내 방지).
+    store.toggleInsightsPanel()
+    #expect(store.isInsightsPanelVisible)
+    #expect(!store.showsRetroBanner)
+    #expect(defaults.string(forKey: WorkTimerStore.retroBannerShownWeekKey) == RetroWeekKey.current())
+}
+
+@MainActor
+@Test
+func retroBannerNeverStacksOnTopOfOpenInsightsPanelAndViewKeepsItOpen() {
+    // 회귀 지점: 개인 기록 패널을 연 채 새 주 첫 팝오버를 열면 배너가 그 위에 겹쳐 뜨고, [보기] 가 단순
+    // toggle 이라 보고 있던 패널을 오히려 닫아 버렸다(팀 목록으로 되돌아감).
+    let defaults = isolatedDefaults()
+    let store = WorkTimerStore(
+        service: SupabaseWorkService(
+            projectURL: URL(string: "http://retro-banner-open-panel-test")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        ),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: defaults
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.retro = WeeklyRetro(
+        weekStart: Date(timeIntervalSince1970: 1_800_000_000),
+        totalSeconds: 7_200,
+        goalSeconds: 40 * 3_600,
+        previousWeekSeconds: 3_600,
+        sessionCount: 2,
+        busiestDayIndex: 0,
+        busiestDaySeconds: 7_200
+    )
+    store.isInsightsPanelVisible = true
+
+    // 패널이 이미 열려 있으면 배너를 띄우지 않는다(회고 카드가 패널 안에 상시 있어 중복이다).
+    store.evaluateRetroBanner()
+    #expect(!store.showsRetroBanner)
+    #expect(defaults.string(forKey: WorkTimerStore.retroBannerShownWeekKey) == RetroWeekKey.current())
+
+    // 그래도 배너가 떠 있는 상태에서 [보기] 를 누르면(뷰의 액션 경로) 패널은 열린 채로 유지된다.
+    store.showsRetroBanner = true
+    store.openInsightsPanel()
+    #expect(store.isInsightsPanelVisible)
+    #expect(!store.showsRetroBanner)
+
+    // 닫혀 있을 때의 [보기] 는 평소대로 패널을 연다.
+    store.isInsightsPanelVisible = false
+    store.showsRetroBanner = true
+    store.openInsightsPanel()
+    #expect(store.isInsightsPanelVisible)
+    #expect(!store.showsRetroBanner)
+}
+
+@MainActor
+@Test
+func stepTokenBoardMonthReloadsBoardForMovedMonthAndClampsFuture() async {
+    let testHost = "token-month-step-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.tokenBoard = [
+        TokenBoardEntry(userID: "u1", name: "영식", avatarURL: nil, total: 100, claudeInput: 100, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
+    ]
+    store.tokenBoardLoaded = true
+
+    let currentMonth = TokenUsageMonthKey.current()
+    #expect(store.tokenBoardMonth == currentMonth)
+
+    // 현재 월에서 미래로는 못 간다 — 값도 안 바뀌고 요청도 발사되지 않는다.
+    let before = URLProtocolStub.requests(forHost: testHost).count
+    store.stepTokenBoardMonth(by: 1)
+    #expect(store.tokenBoardMonth == currentMonth)
+    #expect(URLProtocolStub.requests(forHost: testHost).count == before)
+    #expect(store.tokenBoardLoaded)
+
+    // 과거로 한 칸 — 보드를 비우고 로드 전 상태로 되돌린 뒤 그 달로 다시 조회한다.
+    let previousMonth = TokenUsageMonthKey.current(
+        TeamWeeklyGoal.kstCalendar.date(byAdding: .month, value: -1, to: Date())!
+    )
+    store.stepTokenBoardMonth(by: -1)
+    #expect(store.tokenBoardMonth == previousMonth)
+    #expect(store.tokenBoard.isEmpty)
+    #expect(!store.tokenBoardLoaded)
+
+    // 실제 조회가 이동한 달로 나가는지(하드코딩된 이번 달이 아닌지) 요청 본문으로 확인한다.
+    await store.performLoadTokenBoard()
+    let bodies = URLProtocolStub.bodies(forHost: testHost)
+    #expect(bodies.contains { $0.contains("\"p_month\":\"\(previousMonth)\"") })
+
+    // 패널을 닫으면 이번 달로 되돌아간다(다음에 열 때 늘 현재 달부터).
+    store.isTokenBoardVisible = true
+    store.toggleTokenBoard()
+    #expect(!store.isTokenBoardVisible)
+    #expect(store.tokenBoardMonth == currentMonth)
+    #expect(store.tokenBoard.isEmpty)
+    #expect(!store.tokenBoardLoaded)
+}
+
+@MainActor
+@Test
+func everyTokenBoardCloseRouteResetsMonthToCurrent() {
+    // 회귀 지점: 뷰의 뒤로 버튼과 다른 패널 열기가 isTokenBoardVisible 만 직접 껐던 탓에, 보던 과거 달이
+    // 남아 다음에 열면 과거 달이 그대로 떴다. 이제 모든 닫기 경로가 closeTokenBoard() 를 지난다.
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    let currentMonth = TokenUsageMonthKey.current()
+    let pastMonth = TokenBoardMonthNavigator.step(currentMonth, by: -2)
+
+    func openBoardOnPastMonth() {
+        store.isTokenBoardVisible = true
+        store.tokenBoardMonth = pastMonth
+        store.tokenBoard = [
+            TokenBoardEntry(userID: "u1", name: "영식", avatarURL: nil, total: 100, claudeInput: 100, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
+        ]
+        store.tokenBoardLoaded = true
+    }
+
+    // (1) 뒤로 버튼 경로.
+    openBoardOnPastMonth()
+    store.closeTokenBoard()
+    #expect(!store.isTokenBoardVisible)
+    #expect(store.tokenBoardMonth == currentMonth)
+    #expect(store.tokenBoard.isEmpty)
+    #expect(!store.tokenBoardLoaded)
+
+    // (2) 다른 패널로 넘어가는 경로 3종도 같은 정리를 거친다.
+    openBoardOnPastMonth()
+    store.toggleLeaderboard()
+    #expect(store.tokenBoardMonth == currentMonth)
+
+    openBoardOnPastMonth()
+    store.togglePokePanel()
+    #expect(store.tokenBoardMonth == currentMonth)
+
+    openBoardOnPastMonth()
+    store.toggleInsightsPanel()
+    #expect(store.tokenBoardMonth == currentMonth)
+}
+
+@MainActor
+@Test
+func tokenBoardOpenAfterMonthRolloverShowsCurrentMonth() async {
+    // 회귀 지점: tokenBoardMonth 는 스토어 init 때 한 번만 잡히고, 닫기 경로 closeTokenBoard() 는
+    // "이미 현재 달"이면 조기 반환해 아무것도 정리하지 않는다. 그래서 6월에 보드를 열었다 닫고
+    // 앱을 켜 둔 채 7월이 되면 (tokenBoardMonth=6월, tokenBoardLoaded=true, 6월 행) 이 그대로 살아,
+    // 다시 열 때 "불러오는 중…"조차 없이 지난달 순위가 그려지고 재조회마저 p_month=지난달로 나갔다.
+    // 이제 여는 경로도 현재 달로 재동기화한다.
+    let testHost = "token-board-month-rollover-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    let currentMonth = TokenUsageMonthKey.current()
+    let lastMonth = TokenBoardMonthNavigator.step(currentMonth, by: -1)
+
+    // 달이 바뀐 직후 상태를 그대로 만든다: 지난달에 열어 성공 로드하고 닫은 스토어(그 달엔 닫기가 조기 반환했다).
+    store.tokenBoardMonth = lastMonth
+    store.tokenBoard = [
+        TokenBoardEntry(userID: "u1", name: "지난달영식", avatarURL: nil, total: 100, claudeInput: 100, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
+    ]
+    store.tokenBoardLoaded = true
+    store.isTokenBoardVisible = false
+
+    store.toggleTokenBoard()
+
+    #expect(store.isTokenBoardVisible)
+    #expect(store.tokenBoardMonth == currentMonth)
+    #expect(store.tokenBoard.isEmpty)   // 지난달 행이 '이번 달인 척' 남지 않는다.
+    #expect(!store.tokenBoardLoaded)
+    #expect(store.tokenBoardLoading)    // 첫 프레임부터 "불러오는 중…"이 뜬다.
+
+    await store.performLoadTokenBoard()
+    let bodies = URLProtocolStub.bodies(forHost: testHost)
+    #expect(bodies.contains { $0.contains("\"p_month\":\"\(currentMonth)\"") })
+    #expect(!bodies.contains { $0.contains("\"p_month\":\"\(lastMonth)\"") })
+}
+
+@MainActor
+@Test
+func staleTeamStatusResponseDoesNotUndoJustPressedStop() {
+    let testHost = "work-write-generation-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+        store.syncTask?.cancel()
+    }
+    let userID = "00000000-0000-0000-0000-000000000002"
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: userID)
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    let sessionStart = Date().addingTimeInterval(-3_600)
+    // 이미 발사돼 날아오는 중인 팀 상태 응답의 내용: 서버는 아직 '근무중'으로 알고 있다.
+    store.teamMembers = [
+        TeamMemberStatus(
+            id: userID,
+            name: "영식",
+            status: .working,
+            updatedAt: Date(),
+            currentSessionStartedAt: sessionStart,
+            weeklyDurationSeconds: 0,
+            todayDurationSeconds: 0,
+            avatarURL: nil,
+            lastSeenAt: Date(),
+            activeSessionID: "30000000-0000-0000-0000-000000000001"
+        )
+    ]
+    // refreshTeamStatus 가 fetch 를 발사하기 직전에 캡처했을 세대 값.
+    let capturedGeneration = store.workStateWriteGeneration
+
+    // 응답이 도착하기 전에 사용자가 '근무 종료'를 눌렀다.
+    store.startedAt = sessionStart
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+    store.stop()
+    #expect(store.startedAt == nil)
+    #expect(store.workStateWriteGeneration == capturedGeneration + 1)
+    // 미반영 큐는 이미 드레인됐다고 두어 흡수 게이트가 아니라 세대 토큰만 검증하게 한다.
+    store.pendingItems = []
+
+    // 낡은 응답 반영: 세대가 어긋나므로 내 상태 흡수를 건너뛰어야 한다(근무가 되살아나면 결함 재발).
+    store.applyRemoteOwnStatus(writeGeneration: capturedGeneration)
+    #expect(store.startedAt == nil)
+    #expect(!store.snapshot.isWorking)
+
+    // 대조군: 최신 세대의 응답은 정상 흡수한다(가드가 복구 경로 자체를 막는 것이 아님).
+    store.applyRemoteOwnStatus(writeGeneration: store.workStateWriteGeneration)
+    #expect(store.startedAt == sessionStart)
+    #expect(store.snapshot.isWorking)
+}
+
+@MainActor
+@Test
+func nudgeAutoStartInheritsOverlayOptOutOnFirstLaunchOfNewKey() {
+    // 회귀 지점(결함1): 새 키 check.nudgeAutoStartEnabled 를 무조건 true 로 시드했다. v0.2.10 까지는 넛지 자격이
+    // isOverlayEnabled 를 AND 로 걸고 있어 '캐릭터 숨김 = 자동 근무 시작 안 함'이었는데, 그 상태로 업데이트하면
+    // 묻지도 않고 자동 시작이 켜져 팀원 화면에 '근무중'으로 뜬다(캐릭터가 숨겨져 말풍선 안내도 없다).
+    func makeStore(defaults: UserDefaults) -> WorkTimerStore {
+        WorkTimerStore(
+            service: SupabaseWorkService(
+                projectURL: URL(string: "http://nudge-seed-test")!,
+                anonKey: "anon-test-key",
+                session: URLSession(configuration: .stubbed)
+            ),
+            environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+            defaults: defaults
+        )
+    }
+
+    // 1) v0.2.10 에서 캐릭터를 끈 사용자(overlayEnabled=false, 새 키 없음) → 자동시작도 꺼진 채 올라와야 한다.
+    let optedOut = isolatedDefaults()
+    optedOut.set(false, forKey: WorkTimerStore.overlayEnabledKey)
+    let inherited = makeStore(defaults: optedOut)
+    defer {
+        inherited.tickerTask?.cancel()
+        inherited.refreshTask?.cancel()
+    }
+    #expect(!inherited.isNudgeAutoStartEnabled)
+    // 승계는 한 번뿐 — 값이 실제로 저장돼 그 뒤로는 독립 토글로 굴러간다.
+    #expect(optedOut.object(forKey: WorkTimerStore.nudgeAutoStartEnabledKey) as? Bool == false)
+
+    // 2) 캐릭터를 다시 켜도 자동시작은 따라 켜지지 않는다(승계는 최초 1회, 이후 두 설정은 독립).
+    inherited.setOverlayEnabled(true)
+    let relaunched = makeStore(defaults: optedOut)
+    defer {
+        relaunched.tickerTask?.cancel()
+        relaunched.refreshTask?.cancel()
+    }
+    #expect(!relaunched.isNudgeAutoStartEnabled)
+
+    // 3) 캐릭터를 켜 둔(또는 손댄 적 없는) 사용자·신규 설치는 기본값 그대로 켬.
+    let fresh = makeStore(defaults: isolatedDefaults())
+    defer {
+        fresh.tickerTask?.cancel()
+        fresh.refreshTask?.cancel()
+    }
+    #expect(fresh.isNudgeAutoStartEnabled)
+
+    let keptOverlay = isolatedDefaults()
+    keptOverlay.set(true, forKey: WorkTimerStore.overlayEnabledKey)
+    let kept = makeStore(defaults: keptOverlay)
+    defer {
+        kept.tickerTask?.cancel()
+        kept.refreshTask?.cancel()
+    }
+    #expect(kept.isNudgeAutoStartEnabled)
+}
+
+@MainActor
+@Test
+func nudgeAutoStartToggleAndDeviceIDSurviveRelaunch() {
+    let defaults = isolatedDefaults()
+    func makeStore() -> WorkTimerStore {
+        WorkTimerStore(
+            service: SupabaseWorkService(
+                projectURL: URL(string: "http://nudge-persist-test")!,
+                anonKey: "anon-test-key",
+                session: URLSession(configuration: .stubbed)
+            ),
+            environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+            defaults: defaults
+        )
+    }
+
+    let store = makeStore()
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    // 자동 시작은 기본 켬, 기기 식별자는 최초 실행에서 생성된다.
+    #expect(store.isNudgeAutoStartEnabled)
+    #expect(!store.deviceID.isEmpty)
+    let firstDeviceID = store.deviceID
+
+    store.setNudgeAutoStartEnabled(false)
+    #expect(!store.isNudgeAutoStartEnabled)
+
+    // 재실행(같은 defaults)에서도 끈 상태와 기기 식별자가 그대로 유지돼야 한다.
+    let relaunched = makeStore()
+    defer {
+        relaunched.tickerTask?.cancel()
+        relaunched.refreshTask?.cancel()
+    }
+    #expect(!relaunched.isNudgeAutoStartEnabled)
+    #expect(relaunched.deviceID == firstDeviceID)
+
+    // 로그아웃은 계정 상태만 지운다 — 기기 식별자/자동시작 설정은 이 맥의 것이라 살아남는다.
+    relaunched.signOut()
+    #expect(relaunched.deviceID == firstDeviceID)
+    #expect(!relaunched.isNudgeAutoStartEnabled)
+}
+
+@MainActor
+@Test
+func cancelNudgeAutoStartOnlyWorksInsideGraceWindow() {
+    let store = WorkTimerStore(
+        service: SupabaseWorkService(
+            projectURL: URL(string: "http://nudge-cancel-test")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        ),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+        store.syncTask?.cancel()
+    }
+    let now = Date()
+
+    // 유예(60초) 밖 — 취소 버튼이 뜨지도 않고, 눌러도 무동작이어야 한다.
+    store.startedAt = now.addingTimeInterval(-600)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+    store.nudgeAutoStartedAt = now.addingTimeInterval(-90)
+    #expect(!store.canCancelNudgeAutoStart(now: now))
+    store.cancelNudgeAutoStart()
+    #expect(store.startedAt != nil)
+    #expect(store.nudgeAutoStartedAt != nil)
+
+    // 유예 안 — 근무가 종료되고 스탬프가 비워지며 안내 문구가 남는다.
+    store.nudgeAutoStartedAt = Date().addingTimeInterval(-10)
+    #expect(store.canCancelNudgeAutoStart())
+    store.cancelNudgeAutoStart()
+    #expect(store.startedAt == nil)
+    #expect(store.nudgeAutoStartedAt == nil)
+    #expect(store.syncMessage == "자동 시작을 취소했어요")
+
+    // 수동 시작 경로는 자동시작 스탬프를 남기지 않는다(취소 버튼이 뒤늦게 뜨지 않게).
+    store.start()
+    #expect(store.nudgeAutoStartedAt == nil)
+    #expect(!store.canCancelNudgeAutoStart())
+}
+
+@MainActor
+@Test
+func signOutClearsInsightsAndTokenBoardMonth() {
+    let store = WorkTimerStore(
+        service: SupabaseWorkService(
+            projectURL: URL(string: "http://insights-signout-test")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        ),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.isInsightsPanelVisible = true
+    store.insightsLoaded = true
+    store.showsRetroBanner = true
+    store.retro = WeeklyRetro(
+        weekStart: Date(timeIntervalSince1970: 1_800_000_000),
+        totalSeconds: 7_200,
+        goalSeconds: 3_600,
+        previousWeekSeconds: 0,
+        sessionCount: 1,
+        busiestDayIndex: 0,
+        busiestDaySeconds: 7_200
+    )
+    store.heatmap = WorkRhythmHeatmap.build(
+        sessions: [
+            WorkSessionRow(
+                id: "s1",
+                userId: "me",
+                startedAt: ISO8601DateFormatter().string(from: Date().addingTimeInterval(-3_600)),
+                endedAt: ISO8601DateFormatter().string(from: Date()),
+                durationSeconds: 3_600
+            )
+        ],
+        now: Date()
+    )
+    store.tokenBoardMonth = TokenBoardMonthNavigator.step(TokenUsageMonthKey.current(), by: -2)
+
+    store.signOut()
+
+    // 세션이 사라지면 개인 기록/회고/월 위치도 초기화된다(리그·토큰 보드와 동일 규약).
+    #expect(!store.isInsightsPanelVisible)
+    #expect(!store.insightsLoaded)
+    #expect(!store.showsRetroBanner)
+    #expect(store.retro == nil)
+    #expect(store.heatmap == .empty)
+    #expect(store.tokenBoardMonth == TokenUsageMonthKey.current())
+}
+
+@MainActor
+@Test
+func insightsAreRecomputedWhenWeekRollsOverWhileAppStaysOpen() async {
+    // 회귀 지점: 첫 성공 로드에서 insightsLoaded 가 영구화돼, '내 기록' 패널을 직접 열지 않는 한 loadInsights 는
+    // 앱 실행당 딱 1회만 돌았다. WeeklyRetro 는 호출 시점의 now 로 '지난주'를 정하므로, 앱을 켜 둔 채 주가 바뀌면
+    // store.retro 가 이전 주에 고정되고 evaluateRetroBanner 는 그 고정값만 봐서 월요일 회고 배너가 영영 안 떴다.
+    let testHost = "insights-week-rollover-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    // 아직 한 번도 못 받았으면 당연히 재계산 대상.
+    #expect(store.needsInsightsReload)
+
+    // 성공 로드가 '어느 주 기준인지'를 남긴다(스텁 work_sessions 픽스처).
+    await store.performLoadInsights()
+    #expect(store.insightsLoaded)
+    #expect(store.insightsWeekKey == RetroWeekKey.current())
+
+    // 같은 주에 팝오버를 다시 열면 조용히 넘어간다(불필요한 재조회 없음).
+    #expect(!store.needsInsightsReload)
+
+    // 주가 넘어가면(앱을 켜 둔 채 월요일) 반드시 다시 계산한다 — 낡은 주의 retro 로 배너 판정이 굳지 않게.
+    store.insightsWeekKey = "2020-W01"
+    #expect(store.needsInsightsReload)
+
+    // 로그아웃은 주 키까지 비운다(다음 로그인의 첫 팝오버가 처음부터 다시 계산하도록).
+    store.signOut()
+    #expect(store.insightsWeekKey == nil)
+}
+
+@MainActor
+@Test
+func retroGoalFollowsTeamGoalConfirmedAfterInsightsLoad() async {
+    // 회귀 지점: teamGoalSeconds 는 영속되지 않아 기본값(40시간)으로 시작하고 confirmMembership 응답에서야
+    // 서버값이 된다. 콜드 런치 첫 팝오버에서는 인사이트 응답이 그보다 먼저 도착할 수 있는데, 그렇게 계산된
+    // retro 는 insightsWeekKey 가 찍혀 그 주 내내 재계산 대상에서 빠졌다 — 목표 20시간 팀에서 25시간을
+    // 일하고도 "목표 40시간 중 62% · 15시간 부족" 이 뜨는 이유였다.
+    let testHost = "retro-goal-late-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+
+    // 멤버십 확정 전(기본 목표 40시간) 상태에서 회고가 먼저 계산된 상황을 재현한다: 지난주 25시간.
+    store.insightsLoaded = true
+    store.retro = WeeklyRetro(
+        weekStart: TeamWeeklyGoal.koreanWeekStart(for: Date()).addingTimeInterval(-7 * 86_400),
+        totalSeconds: 25 * 3_600,
+        goalSeconds: TeamWeeklyGoal.defaultGoalSeconds,
+        previousWeekSeconds: 0,
+        sessionCount: 5,
+        busiestDayIndex: 1,
+        busiestDaySeconds: 8 * 3_600
+    )
+    #expect(store.retro?.metGoal == false)
+
+    // 뒤늦게 도착한 멤버십 응답이 팀 목표를 20시간으로 확정한다 → 회고 목표선도 함께 따라가야 한다.
+    store.teamGoalSeconds = 20 * 3_600
+    store.reconcileInsightsGoal()
+    #expect(store.retro?.goalSeconds == 20 * 3_600)
+    #expect(store.retro?.metGoal == true)
+    // 목표 외 집계는 그대로다(세션을 다시 받아 오지 않는다 — 사본으로 목표선만 갈아 끼운다).
+    #expect(store.retro?.totalSeconds == 25 * 3_600)
+    #expect(store.retro?.sessionCount == 5)
+    #expect(store.retro?.busiestDayIndex == 1)
+
+    // 값이 같으면 아무것도 하지 않는다(무의미한 재대입으로 뷰를 흔들지 않는다).
+    let before = store.retro
+    store.reconcileInsightsGoal()
+    #expect(store.retro == before)
+
+    // 실제 경로에서도 이어진다: 멤버십 응답(스텁 40시간)이 도착하면 회고가 그 목표로 정렬된다.
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    await store.confirmMembership()
+    #expect(store.teamGoalSeconds == 40 * 3_600)
+    #expect(store.retro?.goalSeconds == 40 * 3_600)
+    #expect(store.retro?.metGoal == false)
+}
+
+@MainActor
+@Test
+func insightsIncludeTheRunningSessionSoTheFirstDayPanelMatchesTheHeader() async {
+    // 회귀 지점: 서버 조회는 완료 세션만 준다(ended_at not null). 가입 첫날 근무를 시작한 사용자는
+    // 완료 세션이 0건이라 heatmap.totalSeconds 가 0 → '내 기록' 패널이 "아직 기록이 쌓이지 않았어요"를
+    // 띄웠는데, 같은 팝오버 헤더는 진행분을 더한 이번 주 누적을 시간 단위로 세고 있었다(모순).
+    // 이 호스트는 work_sessions GET 에 빈 배열을 준다 = 완료 세션 0건 계정.
+    let testHost = "insights-first-day-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    // (a) 근무 중이 아니면 예전 그대로 — 기록이 없으면 없다고 말한다.
+    await store.performLoadInsights()
+    #expect(store.insightsLoaded)
+    #expect(store.heatmap.totalSeconds == 0)
+    #expect(
+        InsightsEmptyMessage.text(hasLoaded: store.insightsLoaded, hasFailed: store.insightsFailed,
+                                  totalSeconds: store.heatmap.totalSeconds) == InsightsEmptyMessage.noData
+    )
+
+    // (b) 3시간 전 [근무 시작]을 누른 뒤 팝오버를 다시 열면(=재조회) 그 진행분이 집계에 들어온다.
+    let start = Date(timeIntervalSince1970: (Date().timeIntervalSince1970 - 3 * 3_600).rounded(.down))
+    store.startedAt = start
+    await store.performLoadInsights()
+
+    #expect(store.heatmap.totalSeconds >= 3 * 3_600)
+    // 진행 중이라 now 까지만 세므로 위로도 몇 초 안쪽이어야 한다(미래를 세지 않는다).
+    #expect(store.heatmap.totalSeconds < 3 * 3_600 + 60)
+    // 패널이 헤더와 같은 사실을 말한다 — 더 이상 "기록 없음"으로 단정하지 않는다.
+    #expect(
+        InsightsEmptyMessage.text(hasLoaded: store.insightsLoaded, hasFailed: store.insightsFailed,
+                                  totalSeconds: store.heatmap.totalSeconds) == nil
+    )
+    // (c) 근무를 끝내면(startedAt 이 nil) 진행분은 다시 빠진다 — 완료 행이 서버에서 오기 전 이중 계상 금지.
+    store.startedAt = nil
+    await store.performLoadInsights()
+    #expect(store.heatmap.totalSeconds == 0)
+}
+
+@MainActor
+@Test
+func insightsLoadFailureIsDistinguishableFromLoading() async {
+    // 회귀 지점: performLoadInsights 의 catch 가 아무 상태도 세우지 않아, 조회가 실패해도 패널이
+    // "불러오는 중…" 그대로 멈춰 있었다(진행중과 실패가 같은 문구 + 패널 안 재시도 경로 없음).
+    let testHost = "insights-fetch-fails"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    // 로드 전에는 실패 표시가 없다 — 첫 프레임은 "불러오는 중…".
+    #expect(!store.insightsFailed)
+    #expect(
+        InsightsEmptyMessage.text(hasLoaded: store.insightsLoaded, hasFailed: store.insightsFailed, totalSeconds: 0)
+            == InsightsEmptyMessage.loading
+    )
+
+    await store.performLoadInsights()
+
+    // 실패는 실패로 보인다(문구가 갈리고 재시도 버튼이 붙는다).
+    #expect(!store.insightsLoaded)
+    #expect(store.insightsFailed)
+    #expect(
+        InsightsEmptyMessage.text(hasLoaded: store.insightsLoaded, hasFailed: store.insightsFailed, totalSeconds: 0)
+            == InsightsEmptyMessage.loadFailed
+    )
+    // 실패해도 동기화 문구는 흔들지 않는다(패널 본문에서만 알린다 — 기존 규약 유지).
+    #expect(store.syncMessage != InsightsEmptyMessage.loadFailed)
+    // 실패 상태여도 다음 재오픈에서 다시 시도한다.
+    #expect(store.needsInsightsReload)
+
+    // 로그아웃은 실패 표시까지 비운다(다음 로그인의 첫 팝오버가 "불러오는 중…"부터 시작하도록).
+    store.signOut()
+    #expect(!store.insightsFailed)
+}
+
+@MainActor
+@Test
+func insightsRetrySucceedsAndClearsFailure() async {
+    // [다시 시도] 경로: 재시도가 시작되면 실패 표시가 즉시 내려가고(다시 "불러오는 중…"), 성공하면 그대로 유지된다.
+    let testHost = "insights-retry-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.insightsFailed = true
+
+    await store.performLoadInsights()
+
+    #expect(store.insightsLoaded)
+    #expect(!store.insightsFailed)
+    #expect(
+        InsightsEmptyMessage.text(hasLoaded: true, hasFailed: false, totalSeconds: store.heatmap.totalSeconds) == nil
+            || store.heatmap.totalSeconds == 0
+    )
+}
+
+/// 지난주 회고/히트맵 픽스처(주 경계 스테일 검증용) — 값 자체는 중요하지 않고 '비어 있지 않다'는 사실만 쓴다.
+@MainActor
+private func seedInsightsSnapshot(_ store: WorkTimerStore, weekKey: String) {
+    var seeded = WorkRhythmHeatmap.empty
+    seeded.buckets[0][9] = 31_200
+    seeded.weeks = WorkTimerStore.insightsWeeks
+    seeded.totalSeconds = 31_200
+    store.heatmap = seeded
+    store.retro = WeeklyRetro(
+        weekStart: TeamWeeklyGoal.koreanWeekStart(for: Date()).addingTimeInterval(-14 * 86_400),
+        totalSeconds: 31_200,
+        goalSeconds: 40 * 3_600,
+        previousWeekSeconds: 0,
+        sessionCount: 12,
+        busiestDayIndex: 1,
+        busiestDaySeconds: 8 * 3_600
+    )
+    store.insightsLoaded = true
+    store.insightsWeekKey = weekKey
+}
+
+@MainActor
+@Test
+func staleWeekInsightsAreDiscardedWhenReloadFails() async {
+    // 회귀 지점: 앱을 켜 둔 채 주가 바뀌면 store.retro 는 '지지난주' 집계로 고정된다. 재계산이 실패하면
+    // 예전엔 실패 플래그만 세우고 낡은 retro/heatmap 을 그대로 뒀는데, 뷰는 (로드 완료 + 누적>0) 이면
+    // 실패 문구도 [다시 시도]도 없이 본문을 그리고 회고 카드에는 대상 주 날짜가 없다 — 2주 전 합계가
+    // "지난주 8시간 40분 / 세션 12회"로 지난주인 척 표시됐고 사용자가 스테일임을 알 단서가 없었다.
+    let testHost = "insights-fetch-fails"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    // 지난주에 계산해 둔 스냅샷을 들고 주말을 넘긴 상태(주 키가 지금 주와 어긋난다).
+    seedInsightsSnapshot(store, weekKey: "2020-01-06")
+    store.showsRetroBanner = true
+    #expect(store.needsInsightsReload)
+
+    // 월요일 아침 첫 팝오버 — 네트워크 실패.
+    await store.performLoadInsights()
+
+    // 낡은 주 기준 값은 남지 않는다(지지난주 합계가 '지난주'로 그려질 여지 자체를 없앤다).
+    #expect(store.retro == nil)
+    #expect(store.heatmap.totalSeconds == 0)
+    #expect(store.insightsWeekKey == nil)
+    #expect(!store.insightsLoaded)
+    #expect(store.insightsFailed)
+    // 화면은 0건 실패와 같은 경로로 떨어진다 — 실패 문구 + [다시 시도].
+    #expect(
+        InsightsEmptyMessage.text(
+            hasLoaded: store.insightsLoaded,
+            hasFailed: store.insightsFailed,
+            totalSeconds: store.heatmap.totalSeconds
+        ) == InsightsEmptyMessage.loadFailed
+    )
+    // 보여 줄 회고가 없으니 "지난주 기록이 준비됐어요" 배너도 내린다(이번 주 키는 소비하지 않는다).
+    #expect(!store.showsRetroBanner)
+    #expect(store.defaults.string(forKey: store.retroBannerShownWeekKeyForCurrentUser) != RetroWeekKey.current())
+    #expect(store.needsInsightsReload)
+}
+
+@MainActor
+@Test
+func sameWeekInsightsSnapshotSurvivesLoadFailure() async {
+    // 반대 방향 고정: 주가 바뀌지 않았다면 실패가 직전 스냅샷을 지우지 않는다(같은 주 값이라 여전히 사실이다).
+    let testHost = "insights-fetch-fails"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    seedInsightsSnapshot(store, weekKey: RetroWeekKey.current())
+    let before = store.retro
+
+    await store.performLoadInsights()
+
+    #expect(store.retro == before)
+    #expect(store.heatmap.totalSeconds == 31_200)
+    #expect(store.insightsLoaded)
+    #expect(store.insightsFailed)
+    // 보여 줄 기록이 남아 있으므로 본문을 계속 그린다(기존 규약 유지).
+    #expect(
+        InsightsEmptyMessage.text(
+            hasLoaded: store.insightsLoaded,
+            hasFailed: store.insightsFailed,
+            totalSeconds: store.heatmap.totalSeconds
+        ) == nil
+    )
+}
+
+@MainActor
+@Test
+func stepTokenBoardMonthShowsLoadingTextInsteadOfSyncStatus() async {
+    // 회귀 지점: 월 이동이 tokenBoardLoaded 를 false 로 되돌리는 사이, 빈 목록 자리에 순위도 로딩 문구도 아닌
+    // store.syncMessage("동기화됨")가 떴다. 개인 기록 패널에서 이미 금지한 패턴인데 월 이동으로 반복 노출됐다.
+    let testHost = "token-month-loading-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.syncMessage = "동기화됨"
+    store.tokenBoardLoaded = true
+    store.isTokenBoardVisible = true
+
+    // 로드가 끝난 상태에서는 진행중 표시가 없다.
+    #expect(!store.tokenBoardLoading)
+
+    // ‹ 로 지난달 이동 — 목록을 비우는 그 프레임부터 진행중이어야 한다(Task 발사 전 동기 세팅).
+    store.stepTokenBoardMonth(by: -1)
+    #expect(!store.tokenBoardLoaded)
+    #expect(store.tokenBoardLoading)
+    #expect(
+        TokenBoardEmptyMessage.text(
+            hasLoaded: store.tokenBoardLoaded,
+            isLoading: store.tokenBoardLoading,
+            fallbackStatus: store.syncMessage,
+            isCurrentMonth: false
+        ) == TokenBoardEmptyMessage.loading
+    )
+
+    // 조회가 끝나면(성공이든 실패든) 진행중 표시는 반드시 내려간다.
+    await store.performLoadTokenBoard()
+    #expect(!store.tokenBoardLoading)
+
+    // 진행중이 아닌데도 비어 있으면(첫 오픈 실패 등) 기존대로 동기화 상태 문구를 쓴다 — 계약 불변.
+    #expect(
+        TokenBoardEmptyMessage.text(hasLoaded: false, isLoading: false, fallbackStatus: "동기화됨")
+            == "동기화됨"
+    )
+    // 로드 완료 후 문구는 달에 따라 갈린다(불변).
+    #expect(TokenBoardEmptyMessage.text(hasLoaded: true, isLoading: false, fallbackStatus: "동기화됨") == TokenBoardEmptyMessage.noUploads)
+    #expect(TokenBoardEmptyMessage.text(hasLoaded: true, isLoading: false, fallbackStatus: "동기화됨", isCurrentMonth: false) == TokenBoardEmptyMessage.noPastRecords)
+}
+
+@MainActor
+@Test
+func tokenBoardLoadFailureShowsFailureTextInsteadOfSyncMessage() async {
+    // 회귀 지점: 월 이동 중 조회가 실패하면 (로드 전 + 진행중 아님 + 빈 목록) 조합이 남아, 본문 자리에
+    // syncMessage("동기화됨"·"근무 재개됨" 등 무관한 문구)가 그대로 떴다(재시도 수단도 없었다).
+    let testHost = "token-board-fails"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.syncMessage = "동기화됨"
+    store.isTokenBoardVisible = true
+    store.tokenBoardLoaded = true
+    store.tokenBoard = [
+        TokenBoardEntry(userID: "u1", name: "영식", avatarURL: nil, total: 100, claudeInput: 100, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
+    ]
+
+    // ‹ 로 지난달 이동 — 첫 프레임은 "불러오는 중…"(기존 규약).
+    store.stepTokenBoardMonth(by: -1)
+    #expect(store.tokenBoardLoading)
+    #expect(!store.tokenBoardFailed)
+
+    await store.performLoadTokenBoard()
+
+    // 실패는 실패로 보인다 — 동기화 문구가 아니라 실패 문구 + [다시 시도].
+    #expect(!store.tokenBoardLoaded)
+    #expect(!store.tokenBoardLoading)
+    #expect(store.tokenBoardFailed)
+    #expect(
+        TokenBoardEmptyMessage.text(
+            hasLoaded: store.tokenBoardLoaded,
+            isLoading: store.tokenBoardLoading,
+            hasFailed: store.tokenBoardFailed,
+            fallbackStatus: store.syncMessage,
+            isCurrentMonth: false
+        ) == TokenBoardEmptyMessage.loadFailed
+    )
+    // 실패해도 동기화 문구 자체는 흔들지 않는다(패널 본문에서만 알린다 — 기존 규약 유지).
+    #expect(store.syncMessage == "동기화됨")
+
+    // 재조회가 시작되면 실패 표시가 즉시 내려가고 다시 "불러오는 중…"으로 돌아간다([다시 시도] 경로).
+    store.stepTokenBoardMonth(by: -1)
+    #expect(!store.tokenBoardFailed)
+    #expect(store.tokenBoardLoading)
+
+    // 로그아웃은 실패 표시까지 비운다(다음 로그인의 첫 오픈이 "불러오는 중…"부터 시작하도록).
+    store.tokenBoardFailed = true
+    store.signOut()
+    #expect(!store.tokenBoardFailed)
+
+    // 조회가 시작조차 되지 않은 상태(로그인 전 등)에서는 기존대로 상태 문구를 쓴다 — 계약 불변.
+    #expect(
+        TokenBoardEmptyMessage.text(hasLoaded: false, isLoading: false, hasFailed: false, fallbackStatus: "로그인 필요")
+            == "로그인 필요"
+    )
+}
+
+@MainActor
+@Test
+func retroBannerSeenMarkIsScopedToAccount() {
+    // 회귀 지점: '이번 주 봤음' 키가 계정과 무관한 전역 키라, 같은 맥에서 A 가 배너를 소비하고 로그아웃하면
+    // 같은 주에 로그인한 B 가 그 주 내내 회고 배너를 한 번도 못 받았다(로그아웃은 이 키를 지우지 않는다).
+    let defaults = isolatedDefaults()
+    func makeStore() -> WorkTimerStore {
+        WorkTimerStore(
+            service: SupabaseWorkService(
+                projectURL: URL(string: "http://retro-account-scope-test")!,
+                anonKey: "anon-test-key",
+                session: URLSession(configuration: .stubbed)
+            ),
+            environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+            defaults: defaults
+        )
+    }
+    let retro = WeeklyRetro(
+        weekStart: Date(timeIntervalSince1970: 1_800_000_000),
+        totalSeconds: 7_200,
+        goalSeconds: 40 * 3_600,
+        previousWeekSeconds: 3_600,
+        sessionCount: 2,
+        busiestDayIndex: 0,
+        busiestDaySeconds: 7_200
+    )
+
+    // A 계정: 배너를 받고 소비한다.
+    let storeA = makeStore()
+    defer {
+        storeA.tickerTask?.cancel()
+        storeA.refreshTask?.cancel()
+    }
+    storeA.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "user-a")
+    storeA.retro = retro
+    storeA.evaluateRetroBanner()
+    #expect(storeA.showsRetroBanner)
+    storeA.markRetroBannerSeen()
+    #expect(!storeA.showsRetroBanner)
+    // 기록은 계정별 키에 남는다(전역 키를 오염시키지 않는다).
+    #expect(defaults.string(forKey: "\(WorkTimerStore.retroBannerShownWeekKey).user-a") == RetroWeekKey.current())
+    storeA.evaluateRetroBanner()
+    #expect(!storeA.showsRetroBanner)
+
+    // 같은 맥·같은 주에 B 계정으로 갈아타면 B 는 자기 회고를 정상적으로 받는다.
+    storeA.signOut()
+    let storeB = makeStore()
+    defer {
+        storeB.tickerTask?.cancel()
+        storeB.refreshTask?.cancel()
+    }
+    storeB.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "user-b")
+    storeB.retro = retro
+    storeB.evaluateRetroBanner()
+    #expect(storeB.showsRetroBanner)
+    storeB.markRetroBannerSeen()
+    #expect(defaults.string(forKey: "\(WorkTimerStore.retroBannerShownWeekKey).user-b") == RetroWeekKey.current())
+
+    // A 로 되돌아와도 같은 주에 두 번 뜨지는 않는다(계정별 기록이 그대로 살아 있다).
+    let storeARelogin = makeStore()
+    defer {
+        storeARelogin.tickerTask?.cancel()
+        storeARelogin.refreshTask?.cancel()
+    }
+    storeARelogin.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "user-a")
+    storeARelogin.retro = retro
+    storeARelogin.evaluateRetroBanner()
+    #expect(!storeARelogin.showsRetroBanner)
+}
+
+@MainActor
+@Test
+func signInLoadsInsightsSoRetroBannerShowsInTheSamePopoverSession() async {
+    // 회귀 지점: 개인 기록(히트맵/회고) 자동 로드의 유일한 진입점이 팝오버 오픈 훅(setMenuPresented →
+    // needsInsightsReload)뿐이었다. 그런데 팝오버 표시 알림은 뷰 identity 1회(onAppear)라, **팝오버를 연 채
+    // 로그인하는 정상 동선**에서는 그 훅이 비로그인 시점에 이미 지나가 performLoadInsights 의 session 가드에서
+    // 즉시 반환된다. signIn 성공 경로도 insights 를 부르지 않고 30초 refresh 루프에도 항목이 없어,
+    // insightsLoaded 는 false 로 남고 evaluateRetroBanner 가 한 번도 호출되지 않았다 — 사용자가 스스로 열 수 없는
+    // '지난주 회고 배너'가 팝오버를 닫았다 다시 열기 전까지 뜨지 않았다.
+    let testHost = "signin-retro-banner-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    // 팝오버가 열린 채 로그인 화면을 보고 있는 상태(오픈 훅은 비로그인이라 아무것도 못 받는다).
+    store.setMenuPresented(true)
+    #expect(!store.insightsLoaded)
+    #expect(!store.showsRetroBanner)
+
+    store.email = "member@example.com"
+    store.password = "team-password"
+    await store.signIn()?.value
+
+    #expect(store.isSignedIn)
+    // 로그인 경로가 내 완료 세션 조회를 실제로 발사한다.
+    let sessionQueries = URLProtocolStub.requests(forHost: testHost)
+        .filter { $0.url?.path == "/rest/v1/work_sessions" }
+        .compactMap { $0.url?.query }
+    #expect(sessionQueries.contains { $0.contains("ended_at=not.is.null") })
+    #expect(store.insightsLoaded)
+    // 지난주 근무가 있는 계정이라 회고가 계산되고, 그 배너가 같은 팝오버 세션에서 바로 뜬다.
+    #expect(store.retro != nil)
+    #expect(store.showsRetroBanner)
+}
+
+@MainActor
+@Test
+func timedBannerIsPushedByStoreInsteadOfBeingJudgedEverySecond() {
+    // 회귀 지점: 팝오버 body 가 canUndoAutoClose(now: displayNow)/canCancelNudgeAutoStart(now: displayNow) 를
+    // 직접 불러, 배너가 없는 평소 화면에서도 매초 갱신되는 displayNow 를 관찰 등록했다(전체 트리 매초 무효화).
+    // 이제 판정 결과만 스토어가 상태로 밀어 넣고, 뷰는 그 상태만 읽는다.
+    let store = WorkTimerStore(
+        service: SupabaseWorkService(
+            projectURL: URL(string: "http://timed-banner-test")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        ),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+        store.syncTask?.cancel()
+    }
+    let now = Date()
+    #expect(store.timedBanner == nil)
+
+    // (1) 자리 비움 자동 마감 대상이 생기면 되돌리기 배너가 선다.
+    store.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
+    store.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
+    store.lastAutoClosedAt = now
+    store.refreshTimedBanner(now: now)
+    #expect(store.timedBanner == .undoAutoClose)
+
+    // 유예(10분)가 지나면 티커가 스스로 내린다 — 뷰가 매초 판정하지 않아도 사라진다.
+    store.refreshTimedBanner(now: now.addingTimeInterval(WorkTimerStore.autoCloseUndoWindowSeconds + 1))
+    #expect(store.timedBanner == nil)
+
+    // (2) 근무를 시작하면 되돌리기 대상 자체가 끊기고 배너도 함께 사라진다(start 가 되맞춘다).
+    store.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
+    store.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
+    store.lastAutoClosedAt = now
+    store.refreshTimedBanner(now: now)
+    #expect(store.timedBanner == .undoAutoClose)
+    store.start(now: now)
+    #expect(store.timedBanner == nil)
+
+    // (3) 넛지 자동 시작 스탬프가 찍히면 취소 배너가 서고, 유예(60초)가 지나면 내려간다.
+    store.nudgeAutoStartedAt = now
+    store.refreshTimedBanner(now: now.addingTimeInterval(10))
+    #expect(store.timedBanner == .cancelNudgeAutoStart)
+    store.refreshTimedBanner(now: now.addingTimeInterval(WorkTimerStore.nudgeAutoStartCancelWindow + 1))
+    #expect(store.timedBanner == nil)
+
+    // (4) 근무를 끝내면(취소 포함) 스탬프와 배너가 함께 정리된다.
+    store.nudgeAutoStartedAt = now
+    store.refreshTimedBanner(now: now.addingTimeInterval(5))
+    #expect(store.timedBanner == .cancelNudgeAutoStart)
+    store.stop(now: now.addingTimeInterval(6))
+    #expect(store.timedBanner == nil)
+
+    // (5) 배너를 X 로 닫는 경로(clearAutoCloseUndo)도 상태를 즉시 내린다.
+    store.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
+    store.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
+    store.lastAutoClosedAt = Date()
+    store.refreshTimedBanner()
+    #expect(store.timedBanner == .undoAutoClose)
+    store.clearAutoCloseUndo()
+    #expect(store.timedBanner == nil)
+}
+
+// MARK: - 강제 로그아웃과 계정에 묶인 로컬 상태(큐 보존 vs 다음 계정 오염 금지)
+
+@MainActor
+@Test
+func forcedLogoutKeepsPendingQueueForSameAccountRelogin() async {
+    // 회귀 지점: 토큰 만료 강제 로그아웃(refresh token 무효/부재)도 clearPersistedSession() 을 타는데, 이 함수가
+    // pendingItems/startedAt 을 비우면 오프라인에서 쌓아 둔 근무가 영구 소실된다(큐는 UserDefaults 에 남지 않는
+    // 메모리 장부라 복구 수단이 없다). 큐는 강제 로그아웃을 살아남아야 하고, 같은 계정으로 다시 로그인하면
+    // 순서대로 재생돼 서버에 기록돼야 한다.
+    let testHost = "forced-logout-queue"
+    let ownerID = "00000000-0000-0000-0000-000000000002"
+    let store = makeStubStore(host: testHost, userID: ownerID)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+        store.syncTask?.cancel()
+    }
+
+    // 오프라인 09:00~18:00 근무가 통째로 큐에 쌓인 상태(시작/종료 모두 미전송).
+    let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
+    let endedAt = startedAt.addingTimeInterval(9 * 3_600)
+    let sessionID = "aaaaaaaa-0000-0000-0000-00000000000a"
+    store.pendingItems = [
+        PendingWorkItem(
+            id: UUID(),
+            operation: .start,
+            sessionID: sessionID,
+            sessionStartedAt: startedAt,
+            endedAt: nil,
+            ownerUserID: ownerID
+        ),
+        PendingWorkItem(
+            id: UUID(),
+            operation: .stop(durationSeconds: 9 * 3_600),
+            sessionID: sessionID,
+            sessionStartedAt: startedAt,
+            endedAt: endedAt,
+            ownerUserID: ownerID
+        )
+    ]
+
+    // 강제 로그아웃 — 큐와 소유 계정이 그대로 남아야 한다.
+    store.clearPersistedSession()
+    #expect(store.pendingItems.count == 2)
+    #expect(store.workStateOwnerUserID == ownerID)
+
+    // 같은 계정으로 재로그인(세션 재주입 + 소유자 확정) → 큐가 살아 있고 드레인이 서버에 재생한다.
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: ownerID)
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.adoptWorkStateOwner(ownerID)
+    #expect(store.pendingItems.count == 2)
+
+    await store.retryPendingSync()
+    #expect(store.pendingItems.isEmpty)
+
+    let requests = URLProtocolStub.requests(forHost: testHost)
+    let bodies = URLProtocolStub.bodies(forHost: testHost)
+    let statusStream = zip(requests, bodies)
+        .filter { $0.0.url?.path == "/rest/v1/work_statuses" && $0.0.httpMethod == "POST" }
+        .map { $0.1.contains(#""status":"working""#) ? "working" : "off_work" }
+    #expect(statusStream == ["working", "off_work"])
+}
+
+@MainActor
+@Test
+func reloginWithDifferentAccountDiscardsPreviousOwnerWorkState() {
+    // 강제 로그아웃이 큐를 남기더라도, 같은 맥에서 다른 계정이 로그인하면 앞 계정의 근무가 새 계정 이름으로
+    // 기록돼선 안 된다(계정 오염). 폐기 시점은 '로그아웃'이 아니라 '다른 계정 로그인'이다.
+    let previousOwner = "00000000-0000-0000-0000-00000000000a"
+    let store = makeStubStore(host: "relogin-other-account", userID: previousOwner)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+        store.syncTask?.cancel()
+    }
+
+    store.pendingItems = [
+        PendingWorkItem(
+            id: UUID(),
+            operation: .stop(durationSeconds: 3_600),
+            sessionID: "aaaaaaaa-0000-0000-0000-00000000000a",
+            sessionStartedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            endedAt: Date(timeIntervalSince1970: 1_700_003_600),
+            ownerUserID: previousOwner
+        )
+    ]
+    store.startedAt = Date(timeIntervalSince1970: 1_700_000_000)
+    store.accumulatedSeconds = 4_242
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 4_242)
+
+    store.clearPersistedSession()
+
+    // 다른 계정으로 로그인 — 앞 계정에서 재전송될 수 있는 근거가 하나도 남지 않아야 한다.
+    let newOwner = "00000000-0000-0000-0000-00000000000b"
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: newOwner)
+    store.adoptWorkStateOwner(newOwner)
+
+    #expect(store.pendingItems.isEmpty)
+    #expect(store.startedAt == nil)
+    #expect(store.currentSessionID == nil)
+    #expect(store.accumulatedSeconds == 0)
+    #expect(store.snapshot.status == .offWork)
+    #expect(store.snapshot.elapsedSeconds == 0)
+    #expect(store.workStateOwnerUserID == newOwner)
+}
+
+@MainActor
+@Test
+func forcedLogoutClearsAutoCloseUndoTarget() {
+    // 회귀 지점: clearPersistedSession() 이 넛지 스탬프만 비우고 자리 비움 되돌리기 대상
+    // (lastAutoClosedSessionID/StartedAt/At)은 남겨, 유예 10분 안에 다른 계정으로 로그인하면 남의
+    // "자리 비움으로 근무를 종료했어요 [되돌리기]" 배너가 뜨고 누르면 새 계정 자격으로 앞 계정 세션을
+    // 재개하려다 RLS 에서 거부돼 "재개 실패"만 남았다. signOut() 은 clearAutoCloseUndo() 로 이미 막고 있었다.
+    let store = makeStubStore(host: "forced-logout-undo")
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+        store.syncTask?.cancel()
+    }
+
+    let now = Date()
+    store.lastAutoClosedSessionID = "aaaaaaaa-0000-0000-0000-00000000000b"
+    store.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
+    store.lastAutoClosedAt = now
+    store.refreshTimedBanner(now: now)
+    #expect(store.timedBanner == .undoAutoClose)
+
+    store.clearPersistedSession()
+
+    #expect(store.lastAutoClosedSessionID == nil)
+    #expect(store.lastAutoClosedStartedAt == nil)
+    #expect(store.lastAutoClosedAt == nil)
+    #expect(!store.canUndoAutoClose())
+    #expect(store.timedBanner == nil)
+
+    // 다른 계정으로 재로그인해도 배너가 되살아나지 않는다.
+    store.session = SupabaseSession(accessToken: "token-b", refreshToken: nil, userID: "00000000-0000-0000-0000-0000000000bb")
+    store.refreshTimedBanner()
+    #expect(store.timedBanner == nil)
 }

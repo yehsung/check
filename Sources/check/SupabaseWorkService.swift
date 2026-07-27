@@ -7,6 +7,14 @@ actor SupabaseWorkService {
     let encoder: JSONEncoder
     let decoder: JSONDecoder
     let dateFormatter = ISO8601DateFormatter()
+    /// 소수초까지 읽는 파싱 전용 포매터. Supabase timestamptz 는 소수초 유무가 섞여 내려오는데
+    /// 기본 ISO8601DateFormatter 는 "2026-07-26T04:15:35.634Z" 를 nil 로 돌려준다(실측 확인). 파싱은 이걸 1차로
+    /// 시도하고 실패 시 기본 포매터로 폴백한다(parseDate). 출력(string(from:))은 기존대로 dateFormatter 만 쓴다.
+    let fractionalDateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 
     /// 폴링 전용 세션. 요청 15초/리소스 30초 타임아웃(30초 폴링·90초 신선도 규약과 정합).
     /// 앱 전역 .shared 대신 전용 구성을 써 무한 대기·백그라운드 재시도가 티커/폴링 주기와 어긋나지 않게 한다.
@@ -192,8 +200,11 @@ actor SupabaseWorkService {
         TeamWeeklyGoal.koreanWeekStart(for: now)
     }
 
-    private func parseDate(_ value: String) -> Date? {
-        dateFormatter.date(from: value)
+    /// ISO8601 파싱 단일 창구. 소수초 포함("...35.634Z") → 소수초 없음("...35Z") 순으로 시도한다.
+    /// 예전엔 기본 포매터 하나만 써서 소수초가 붙은 timestamptz 를 통째로 nil 로 흘렸다(주간/오늘 누적이 조용히 0 이 되는
+    /// 잠복 지뢰였다). 테스트에서 직접 고정하려고 internal 로 둔다.
+    func parseDate(_ value: String) -> Date? {
+        fractionalDateFormatter.date(from: value) ?? dateFormatter.date(from: value)
     }
 
     func startWork(accessToken: String, teamID: String, userID: String, sessionID: String, startedAt: Date = Date()) async throws {
@@ -466,14 +477,99 @@ actor SupabaseWorkService {
         )
     }
 
-    /// 내 이번 달 AI 토큰 사용량을 서버 원장에 upsert 한다. (user_id, month) 충돌 시 merge-duplicates 로 갱신한다.
+    /// 개인 기록(근무 리듬 히트맵 · 지난주 회고)의 원천 데이터. 내 완료 세션만 since 이후로 읽는다.
+    /// RLS 는 같은 팀 세션 읽기를 허용하므로 본인 행은 당연히 읽히고, user_id 필터로 남의 행은 애초에 안 가져온다.
+    /// 시작 시각 오름차순 + 상한 2000행(8주치 개인 세션엔 넉넉하다)으로 응답 크기를 묶는다.
+    func fetchMySessions(accessToken: String, userID: String, since: Date) async throws -> [WorkSessionRow] {
+        let data = try await send(
+            path: "/rest/v1/work_sessions",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "select", value: "id,user_id,started_at,ended_at,duration_seconds"),
+                URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                URLQueryItem(name: "ended_at", value: "not.is.null"),
+                URLQueryItem(name: "ended_at", value: "gte.\(dateFormatter.string(from: since))"),
+                URLQueryItem(name: "order", value: "started_at.asc"),
+                URLQueryItem(name: "limit", value: "2000")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode([WorkSessionRow].self, from: data)
+    }
+
+    /// 내 이번 달 AI 토큰 사용량을 기기별 원장에 upsert 한다. (user_id, month, device_id) 충돌 시 merge-duplicates 로 갱신한다.
+    /// 원장을 기기별로 쪼갠 이유: 맥 2대에서 같은 계정을 쓰면 (user_id, month) 키로는 나중에 켠 맥이 앞선 맥의 값을
+    /// 통째로 덮어써 월 총량이 "합산"이 아니라 "마지막 기기 값"이 됐다. 기기별 행을 따로 두고 합산은 서버 보드가 한다.
+    /// 표를 새로 만든 이유(하위호환): 옛 표 token_usage_monthly 의 PK 를 바꾸면 (user_id, month) 유니크가 사라져
+    /// 아직 업데이트하지 않은 v0.2.10 클라의 `on_conflict=user_id,month` 업로드가 전부 42P10 으로 실패한다.
+    /// 옛 표는 스키마를 그대로 두고(구버전이 계속 정상 업로드), 보드 RPC 가 기기 합산과 옛 행 중 큰 쪽을 쓴다.
+    /// 이 앱도 옛 표를 함께 갱신하되 **그 행을 줄이지 않을 때만** 쓴다 — 아래 fetchLegacyTokenUsageTotal/upsertLegacyTokenUsage 참조.
     /// 반환 없음(return=minimal) — 표시는 별도 fetchTokenBoard 로 다시 읽는다. usage.month 는 D1 이 계산한 KST 'YYYY-MM'.
-    func upsertTokenUsage(accessToken: String, userID: String, usage: TokenUsageMonthly) async throws {
+    func upsertTokenUsage(accessToken: String, userID: String, usage: TokenUsageMonthly, deviceID: String) async throws {
+        try await sendNoBody(
+            path: "/rest/v1/token_usage_device_monthly",
+            method: "POST",
+            queryItems: [URLQueryItem(name: "on_conflict", value: "user_id,month,device_id")],
+            body: TokenUsageUpsertRequest(
+                userId: userID,
+                month: usage.month,
+                deviceId: deviceID,
+                claudeInput: usage.claudeInput,
+                claudeOutput: usage.claudeOutput,
+                claudeCacheRead: usage.claudeCacheRead,
+                claudeCacheCreation: usage.claudeCacheCreation,
+                codexInput: usage.codexInput,
+                codexOutput: usage.codexOutput,
+                total: usage.total,
+                todayTotal: usage.todayTotal,
+                todayDate: usage.todayDate
+            ),
+            accessToken: accessToken,
+            prefer: "resolution=merge-duplicates,return=minimal"
+        )
+    }
+
+    /// 옛 표 token_usage_monthly 의 내 이번 달 행 총량을 읽는다(없으면 nil). select=total 한 줄만 읽는다.
+    /// 쓰임: 옛 표를 덮어쓰기 **전** 게이트. 그 행이 아직 v0.2.10 인 다른 맥의 더 큰 누적치일 수 있어,
+    /// 그때 내 값으로 덮으면 그 맥의 사용량이 순위에서 사라진다(upsertLegacyTokenUsage 주석 참조).
+    /// 본인 행 select 는 RLS 정책으로 열려 있다(20260723010000 — upsert 충돌 읽기용으로 이미 필요했다).
+    func fetchLegacyTokenUsageTotal(accessToken: String, userID: String, month: String) async throws -> Int? {
+        let data = try await send(
+            path: "/rest/v1/token_usage_monthly",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "select", value: "total"),
+                URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                URLQueryItem(name: "month", value: "eq.\(month)"),
+                URLQueryItem(name: "limit", value: "1")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode([TokenUsageLegacyTotalRow].self, from: data).first?.total
+    }
+
+    /// 같은 사용량을 옛 표 token_usage_monthly((user_id, month))에도 그대로 올린다 — v0.2.10 과 완전히 같은 요청이다.
+    /// **호출 전 게이트 필수**: 이 표는 키에 device_id 가 없어 맥 2대가 한 행을 공유한다. 아직 v0.2.10 인 주력 맥이
+    ///   그 달 누적 200M 을 올려 둔 상태에서 v0.2.11 인 보조 맥이 자기 2M 으로 덮으면, 보드의 '큰 쪽' 규칙이
+    ///   비교할 옛 값 자체가 2M 으로 바뀌어(= 기기 합산과 같아져) 주력 맥의 200M 이 순위에서 사라진다.
+    ///   그래서 스토어는 fetchLegacyTokenUsageTotal 로 현재 행을 읽어 **줄어들지 않을 때만** 이 함수를 부른다.
+    /// 왜 새 표만 쓰지 않는가: 마이그레이션이 아직 적용되지 않은 사이에도 사용량이 멈추지 않게 하고(옛 표는 이미 있다),
+    ///   v0.2.10 으로 되돌아간 맥과 같은 행을 공유해 표시가 이어지게 하기 위함이다.
+    /// 이중 계상은 없다: 보드가 두 출처를 **더하지 않고** 큰 쪽만 고르며, 옛 행은 어느 기기의 그 달 누적치라
+    /// 항상 그 기기의 새 행 이하 ≤ 기기 합산이다(그래서 업로드가 끝난 뒤엔 합산이 이긴다).
+    /// v0.2.9 이하가 남긴 과다계상 옛 행(Codex resume 누적 편입)은 이제 클라가 덮어써 정정하지 않는다 —
+    /// 대신 보드 RPC 가 "이 사용자가 처음 기기별 행을 올린 시각 이후로 갱신되지 않은 옛 행"을 무시한다
+    /// (20260726010000 마이그레이션의 device_first 주석). 덮어쓰기로 정정하려 들면 위의 200M 소실이 되살아난다.
+    func upsertLegacyTokenUsage(accessToken: String, userID: String, usage: TokenUsageMonthly) async throws {
         try await sendNoBody(
             path: "/rest/v1/token_usage_monthly",
             method: "POST",
             queryItems: [URLQueryItem(name: "on_conflict", value: "user_id,month")],
-            body: TokenUsageUpsertRequest(
+            body: TokenUsageLegacyUpsertRequest(
                 userId: userID,
                 month: usage.month,
                 claudeInput: usage.claudeInput,

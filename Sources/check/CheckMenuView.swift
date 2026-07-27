@@ -22,9 +22,93 @@ struct CheckMenuView: View {
     // 스냅샷 전용: 새 버전 안내 배너가 떠 있는 상태를 강제로 그린다. 앱에서는 updateCheck?.isUpdateAvailable 로만 결정.
     var previewUpdateBanner: Bool = false
 
-    // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너를 노출한다.
+    // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
         previewUpdateBanner || (updateCheck?.isUpdateAvailable ?? false)
+    }
+
+    // 12시간 확인 배너 후보 여부. 실제 활성화(store)든 미리보기 플래그든 하나라도 켜지면 헤더 위 형제로 그린다.
+    private var showsLongSessionBanner: Bool {
+        store.isLongSessionPromptActive || previewLongSessionBanner
+    }
+
+    // MARK: - 창 높이 예산
+
+    /// 팝오버에 **동시에 그리는 배너는 하나뿐**이다. 창은 위 모서리가 메뉴바 아래에 고정되고 아래로만 자라므로
+    /// (CheckWindowAnchor) 배너가 겹쳐 쌓이면 총 높이가 상한(700pt)을 넘어 푸터(로그아웃/앱 종료)와 패널 하단이
+    /// 화면 밖으로 잘린다. 그래서 급한 순서대로 하나만 고르고 나머지는 다음 팝오버로 미룬다 — 상태는 소비하지
+    /// 않으므로(회고 주 키/업데이트 감지 모두 그대로) 밀린 배너는 사라지지 않고 다음에 뜬다.
+    enum TopBanner {
+        /// 12시간 확인 — 무응답 30분이면 자동 마감되므로 가장 급하다.
+        case longSession
+        /// 자리 비움 자동 마감 되돌리기(유예 10분).
+        case undoAutoClose
+        /// 넛지 자동 시작 취소(유예 60초).
+        case cancelNudgeAutoStart
+        /// 지난주 회고 안내(주 1회).
+        case retro
+        /// 새 버전 안내(상시라 가장 덜 급하다).
+        case update
+    }
+
+    /// 배너 1개가 차지하는 대략 높이(pt, 바깥 VStack spacing 10 포함). 목록 행수 예산 계산 전용 상수로,
+    /// ImageRenderer 실측(340pt 폭)에 맞춰 둔다 — 값이 어긋나면 상한 회귀 테스트가 먼저 잡는다.
+    static let inlineBannerHeight: CGFloat = 54
+    static let updateBannerHeight: CGFloat = 81
+    static let longSessionBannerHeight: CGFloat = 92
+    /// 토큰 소모량 행 높이(pt, spacing 포함).
+    static let tokenUsageRowHeight: CGFloat = 53
+    /// 헤더 주간 목표 편집 인라인 행 높이(pt). 배너는 아니지만 헤더를 그만큼 부풀리므로 같은 예산에 넣는다.
+    static let goalEditorHeight: CGFloat = 92
+
+    /// 로그인 + 소속 팀 확정 상태(헤더 카드/팀 카드가 그려지는 메인 화면). 배너 후보 판정에 쓴다.
+    private var isMainScreen: Bool {
+        store.isSignedIn && !store.isTeamless
+    }
+
+    /// 이번 렌더에서 실제로 그릴 배너 하나(없으면 nil). 위에서부터 급한 순서다.
+    /// 유예형 배너 둘은 store.timedBanner **상태**만 읽는다 — 여기서 canUndoAutoClose/canCancelNudgeAutoStart 를
+    /// 직접 부르면 인자로 줄 시각이 매초 갱신되는 store.displayNow 뿐이라, body 최상단인 이 프로퍼티가
+    /// displayNow 를 관찰 등록해 팝오버 전체 서브트리가 매초 무효화된다(잎 뷰 격리 불변식 위반 — 회귀 지점).
+    /// 만료 판정은 스토어의 티커/상태 전이가 refreshTimedBanner 로 밀어 넣는다.
+    private var topBanner: TopBanner? {
+        if isMainScreen, showsLongSessionBanner { return .longSession }
+        if isMainScreen, store.timedBanner == .undoAutoClose { return .undoAutoClose }
+        if isMainScreen, store.timedBanner == .cancelNudgeAutoStart { return .cancelNudgeAutoStart }
+        if store.isSignedIn, store.showsRetroBanner { return .retro }
+        if showsUpdateBanner { return .update }
+        return nil
+    }
+
+    private var topBannerHeight: CGFloat {
+        switch topBanner {
+        case .longSession: return Self.longSessionBannerHeight
+        case .undoAutoClose, .cancelNudgeAutoStart, .retro: return Self.inlineBannerHeight
+        case .update: return Self.updateBannerHeight
+        case nil: return 0
+        }
+    }
+
+    /// 하위 패널(리그/토큰/찌르기/개인 기록)이 열려 있는지. 열려 있으면 팀 카드 자리를 그 패널이 대신 쓴다.
+    private var isSubPanelOpen: Bool {
+        store.isLeaderboardVisible || store.isTokenBoardVisible || store.isPokePanelVisible || store.isInsightsPanelVisible
+    }
+
+    /// 토큰 소모량 행은 홈(팀 목록) 화면의 구성요소다 — 하위 패널이 열리면 감춘다. 패널이 쓸 세로 공간을
+    /// 되찾아 창 높이 상한을 지키고, 패널 안에서 이 행이 할 일도 없다(패널마다 뒤로 버튼이 있다).
+    private var showsTokenUsageRow: Bool {
+        !isSubPanelOpen
+    }
+
+    /// 목록 위쪽에서 선택적으로 자리를 먹는 높이(배너 1개 + 토큰 소모량 행). 목록 패널은 이만큼 무스크롤
+    /// 표시 행수를 줄여, 어떤 조합에서도 창이 상한을 넘지 않게 한다(줄어든 행은 스크롤로 밀릴 뿐 사라지지 않는다).
+    private var listExtraChromeHeight: CGFloat {
+        // 소모량이 0이어도 같은 높이의 순위판 진입 행(CheckTokenUsageRow.boardEntryRow)이 그려지므로
+        // 사용량 유무로 갈라 세지 않는다 — 예전 조건을 그대로 뒀다면 그 행이 예산에 안 잡혀 팀원이 많은
+        // 계정에서 목록이 한 행 더 남고 창이 상한을 넘었다.
+        let tokenRow = showsTokenUsageRow ? Self.tokenUsageRowHeight : 0
+        let goalEditor = (store.isEditingWeeklyGoal || previewGoalEditing) ? Self.goalEditorHeight : 0
+        return topBannerHeight + tokenRow + goalEditor
     }
 
     // 배너 표시용 버전 문자열("v" 접두 정규화). 실 감지가 없으면(미리보기) 폴백 버전으로 렌더한다.
@@ -36,8 +120,26 @@ struct CheckMenuView: View {
     var body: some View {
         VStack(spacing: 10) {
             // 팝오버 최상단: 새 버전 안내 배너([지금 업데이트] 원클릭 + [명령 복사] 폴백). HeaderCard 위에 얹는다.
-            if showsUpdateBanner {
+            // 더 급한 배너가 있으면 이번 팝오버에서는 양보한다(topBanner — 배너는 한 번에 하나만).
+            if topBanner == .update {
                 UpdateBanner(versionText: updateBannerVersionText)
+            }
+            // 그 아래: 지난주 회고 안내 배너(주당 1회, 월요일 첫 팝오버). [보기]로 개인 기록 패널을 열고,
+            // X 로 닫으면 이번 주는 다시 뜨지 않는다(markRetroBannerSeen 이 주 키를 기록).
+            if topBanner == .retro {
+                InlineActionBanner(
+                    icon: "calendar.badge.clock",
+                    title: "지난주 근무 기록이 준비됐어요",
+                    actionTitle: "보기",
+                    tint: CheckTheme.accent,
+                    // 토글이 아니라 '열기'다 — 이미 개인 기록을 보고 있는데 [보기]가 패널을 닫아 버리면 안 된다.
+                    action: { store.openInsightsPanel() },
+                    onDismiss: { store.markRetroBannerSeen() }
+                )
+                // 실제로 그려진 순간 이번 주 몫을 소비한다 — 판정 시점이 아니라 표시 시점이라, 더 급한 배너에
+                // 밀려 뜨지도 못한 팝오버에서는 소비되지 않는다. 이걸로 회고 배너가 팝오버를 열 때마다 되살아나
+                // 새 버전 안내 배너를 그 주 내내 가리던 문제가 사라진다.
+                .onAppear { store.markRetroBannerDisplayed() }
             }
             content
         }
@@ -79,13 +181,45 @@ struct CheckMenuView: View {
                 // 헤더 카드·팀 카드(헤더/게이지)·푸터는 콘텐츠 natural 높이. 팀 멤버 리스트만 팀원 수에 비례해 자라고,
                 // maxVisibleRows를 넘으면 그 높이로 고정 후 스크롤한다. 팀별 현황 페이지도 같은 자리에서 동일 패턴.
                 VStack(spacing: 10) {
+                    // 12시간 확인 배너는 헤더 카드 **위쪽 형제**다. 예전엔 카드 overlay 라 '근무 종료' 버튼을 통째로
+                    // 가려 배너가 뜬 동안 퇴근을 못 했다. 카드 높이 변화(창 튐)는 감수한다 — 배너는 드물게 뜬다.
+                    if topBanner == .longSession {
+                        LongSessionBanner(
+                            onConfirm: { store.confirmStillWorking() },
+                            onStopNow: { store.stop() }
+                        )
+                    }
                     HeaderCard(
                         store: store,
-                        previewLongSessionBanner: previewLongSessionBanner,
                         previewGoalEditing: previewGoalEditing
                     )
+                    // 자리 비움 자동 마감 되돌리기 — 자동 마감 직후 유예(10분) 안이고 아직 비근무일 때만 뜬다.
+                    // 근무를 다시 시작하면 즉시 사라지고(옛 세션으로 현 세션을 덮어쓸 수 없다), X 로 직접 닫을 수도 있다.
+                    if topBanner == .undoAutoClose {
+                        InlineActionBanner(
+                            icon: "arrow.uturn.backward.circle.fill",
+                            title: "자리 비움으로 근무를 종료했어요",
+                            actionTitle: "되돌리기",
+                            tint: CheckTheme.pending,
+                            action: { _ = store.undoAutoClose() },
+                            onDismiss: { store.clearAutoCloseUndo() }
+                        )
+                    }
+                    // 넛지 자동 시작 취소 — 자동으로 시작한 뒤 60초 동안만 뜬다(그 뒤엔 스스로 사라진다).
+                    if topBanner == .cancelNudgeAutoStart {
+                        InlineActionBanner(
+                            icon: "bolt.fill",
+                            title: "자동으로 근무를 시작했어요",
+                            actionTitle: "취소",
+                            tint: CheckTheme.accent,
+                            action: { store.cancelNudgeAutoStart() }
+                        )
+                    }
                     // 토큰 소모량 행은 내 근무 박스와 팀원 현황 사이(사용자 지정 위치). 탭하면 순위 페이지.
-                    CheckTokenUsageRow(store: store.tokenUsage, onOpenBoard: { store.toggleTokenBoard() })
+                    // 하위 패널이 열려 있으면 감춘다 — 그 자리는 패널이 쓰고, 창 높이 상한도 그만큼 여유가 생긴다.
+                    if showsTokenUsageRow {
+                        CheckTokenUsageRow(store: store.tokenUsage, onOpenBoard: { store.toggleTokenBoard() })
+                    }
                     if store.isLeaderboardVisible {
                         LeaderboardPanel(
                             // 원본 leaderboard 는 스토어에 보존하고, 표시 시점에 0시간 타팀만 숨긴다(내 팀은 0이어도 유지).
@@ -94,19 +228,29 @@ struct CheckMenuView: View {
                             fallbackStatus: store.syncMessage,
                             unfilteredCount: store.leaderboard.count,
                             onBack: { store.isLeaderboardVisible = false },
+                            extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
                     } else if store.isTokenBoardVisible {
-                        // 이번 달 AI 토큰 순위 페이지(앱 사용자 전체 공개). 리그와 같은 뼈대(뒤로 + 제목 + 고정 행높이 리스트/스크롤).
-                        // 헤더 끝에 내 사용량 공개/비공개 토글(eye/eye.slash)을 얹는다 — 비공개면 남들 보드에서 내 행이 숨겨진다.
+                        // AI 토큰 순위 페이지(앱 사용자 전체 공개). 리그와 같은 뼈대(뒤로 + 제목 + 고정 행높이 리스트/스크롤).
+                        // 제목 좌우 ‹ › 로 과거 달을 볼 수 있고(미래 불가), 헤더 끝 눈 버튼은 내 사용량 공개/비공개 토글이다.
                         TokenBoardPanel(
                             entries: store.tokenBoard,
                             myUserID: store.session?.userID,
                             hasLoaded: store.tokenBoardLoaded,
+                            isLoading: store.tokenBoardLoading,
+                            // 실패는 '진행중'과 다른 문구 + [다시 시도] 로 갈라 준다 — 본문 자리에 동기화 문구 금지.
+                            hasFailed: store.tokenBoardFailed,
+                            onRetry: { store.loadTokenBoard() },
                             fallbackStatus: store.syncMessage,
+                            month: store.tokenBoardMonth,
+                            canStepForward: TokenBoardMonthNavigator.canStepForward(from: store.tokenBoardMonth),
+                            onStepMonth: { store.stepTokenBoardMonth(by: $0) },
                             isMyUsagePublic: store.tokenUsagePublic,
                             onToggleMyUsagePublic: { store.setTokenUsagePublic(!store.tokenUsagePublic) },
-                            onBack: { store.isTokenBoardVisible = false },
+                            // 뒤로도 토글과 같은 닫기 경로를 타야 보던 과거 달이 남지 않는다(다음에 열면 늘 이번 달).
+                            onBack: { store.closeTokenBoard() },
+                            extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
                     } else if store.isPokePanelVisible {
@@ -122,7 +266,23 @@ struct CheckMenuView: View {
                             cooldownRemaining: { store.pokeCooldownRemaining(for: $0, now: store.displayNow) },
                             onPoke: { store.sendPoke(to: $0) },
                             onBack: { store.togglePokePanel() },
+                            extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
+                        )
+                    } else if store.isInsightsPanelVisible {
+                        // 개인 기록 페이지(지난주 회고 + 근무 리듬 히트맵). 내 데이터만 쓰고, 계산은 전부
+                        // CheckWorkInsights 순수 함수가 끝낸 뒤라 이 패널은 값만 그린다(렌더 테스트 친화적).
+                        InsightsPanel(
+                            heatmap: store.heatmap,
+                            retro: store.retro,
+                            hasLoaded: store.insightsLoaded,
+                            // 실패는 '진행중'과 다른 문구 + [다시 시도] 로 갈라 준다(패널 안에서 재시도 가능).
+                            hasFailed: store.insightsFailed,
+                            onRetry: { store.loadInsights() },
+                            // 행 기반이 아니라 줄일 행이 없는 패널이라, 같은 예산을 받아 본문 높이를 잘라 스크롤로 넘긴다.
+                            extraChromeHeight: listExtraChromeHeight,
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                            onBack: { store.toggleInsightsPanel() }
                         )
                     } else {
                         // store 를 통째로 내려보내 초단위(displayNow) 의존을 잎 뷰로 격리한다 — TeamPanel 본체는
@@ -130,6 +290,7 @@ struct CheckMenuView: View {
                         TeamPanel(
                             store: store,
                             previewCodeRevealed: previewOwnerCodeRevealed,
+                            extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
                     }
@@ -267,15 +428,8 @@ private struct UpdateBanner: View {
 
 private struct HeaderCard: View {
     @Bindable var store: WorkTimerStore
-    // 렌더 스냅샷 전용: 12시간 배너를 켠 채로 그린다. 앱에서는 store.isLongSessionPromptActive만 사용.
-    var previewLongSessionBanner: Bool = false
     // 렌더 스냅샷 전용: 헤더 주간 목표 편집 행을 펼친 채로 그린다. 앱에서는 항상 false(연필 버튼 토글).
     var previewGoalEditing: Bool = false
-
-    // 실제 활성화(store)든 미리보기 플래그든 하나라도 켜지면 배너를 노출한다.
-    private var showsLongSessionBanner: Bool {
-        store.isLongSessionPromptActive || previewLongSessionBanner
-    }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -303,12 +457,6 @@ private struct HeaderCard: View {
         }
         .padding(12)
         .panelStyle()
-        // 배너는 헤더 카드 위 overlay로 얹어 카드 높이를 바꾸지 않는다(창 튐 방지).
-        .overlay {
-            if showsLongSessionBanner {
-                LongSessionBanner(onConfirm: { store.confirmStillWorking() })
-            }
-        }
     }
 
     private var statusTint: Color {
@@ -341,15 +489,15 @@ private struct HeaderGoalSection: View {
     // 렌더 스냅샷 전용: 목표 편집 행이 펼쳐진 상태로 그린다(연필 버튼 클릭 대신). 앱에서는 항상 false.
     var previewGoalEditing: Bool = false
 
-    // 연필 버튼으로 토글하는 목표 편집 인라인 노출 상태. 스냅샷은 previewGoalEditing 로 시드된다.
-    @State private var isEditingGoal: Bool
+    // 연필 버튼으로 토글하는 목표 편집 인라인 노출 상태. 스토어가 소유한다 — 이 행이 헤더를 90pt 넘게 부풀려
+    // 창 높이 예산(CheckMenuView.listExtraChromeHeight)이 반드시 봐야 하기 때문이다. 스냅샷은 previewGoalEditing 로 강제한다.
+    private var isEditingGoal: Bool { store.isEditingWeeklyGoal || previewGoalEditing }
     // 편집 중 스테퍼가 바인딩하는 목표시간(시간 단위). 편집을 여는 순간 현재 목표로 초기화한다.
     @State private var editingHours: Int
 
     init(store: WorkTimerStore, previewGoalEditing: Bool = false) {
         self.store = store
         self.previewGoalEditing = previewGoalEditing
-        _isEditingGoal = State(initialValue: previewGoalEditing)
         _editingHours = State(initialValue: Self.hours(from: store.teamGoalSeconds))
     }
 
@@ -382,10 +530,34 @@ private struct HeaderGoalSection: View {
                         .font(.caption2)
                         .foregroundStyle(CheckTheme.secondaryText)
                         .monospacedDigit()
+                    // 넛지 자동 근무 시작 토글. 캐릭터 표시(푸터 person 버튼)와 완전히 별개다 — 끄면 자동 시작이
+                    // 아예 멈추고, 켜져 있으면 캐릭터를 숨겨 둔 상태에서도 동작한다(CheckOverlayWindow.isNudgeEligible).
+                    // 자리는 푸터가 아니라 여기다: '자동으로 근무를 시작한다'는 내 근무 설정이고, 푸터에 다섯 번째
+                    // 버튼을 세우면 동기화 문구 슬롯이 125→90pt 로 줄어 "자리 비움으로 자동…" 처럼 핵심어가
+                    // 잘려 나갔다(FooterWidthBudget 의 회귀 상수 참고).
+                    HeaderCaptionIconButton(
+                        icon: store.isNudgeAutoStartEnabled ? "bolt.fill" : "bolt.slash",
+                        help: store.isNudgeAutoStartEnabled
+                            ? "자리에 있으면 자동으로 근무 시작 — 누르면 끔"
+                            : "자동 근무 시작 꺼짐 — 누르면 켬",
+                        isActive: store.isNudgeAutoStartEnabled
+                    ) {
+                        store.setNudgeAutoStartEnabled(!store.isNudgeAutoStartEnabled)
+                    }
+                    // 내 기록(지난주 회고 + 근무 리듬 히트맵). 팀 카드 헤더가 아니라 **내 근무 박스**에 둔다 —
+                    // 본인 데이터만 보는 개인 화면이라 자리가 여기가 맞고, 팀 헤더에 네 번째 버튼을 세우면
+                    // 팀 이름이 2~3자로 잘렸다(v0.2.11 감사 지적). 캡션 행이라 연필과 같은 소형(18pt) 버튼을 쓴다.
+                    HeaderCaptionIconButton(
+                        icon: "chart.xyaxis.line",
+                        help: "내 기록",
+                        isActive: store.isInsightsPanelVisible
+                    ) {
+                        store.toggleInsightsPanel()
+                    }
                     // 주간 목표는 팀원 누구나 바꿀 수 있다 — 캡션 % 옆 작은 연필로 편집 행을 연다.
                     // 표준 IconButton(27pt)은 caption2 행 높이를 홀로 키워 캡션 줄 간격이 어색해지므로,
                     // 캡션 높이에 맞춘 소형(18pt) 버튼을 쓴다.
-                    GoalEditPencilButton(isActive: isEditingGoal) {
+                    HeaderCaptionIconButton(icon: "pencil", help: "주간 목표 수정", isActive: isEditingGoal) {
                         toggleEditing()
                     }
                 }
@@ -413,7 +585,7 @@ private struct HeaderGoalSection: View {
         if !isEditingGoal {
             editingHours = Self.hours(from: store.teamGoalSeconds)
         }
-        isEditingGoal.toggle()
+        store.isEditingWeeklyGoal.toggle()
     }
 
     // 저장 성공 시에만 편집 행을 닫는다(실패 시 입력값을 유지해 바로 재시도할 수 있게 한다).
@@ -421,7 +593,7 @@ private struct HeaderGoalSection: View {
         let hours = editingHours
         Task { @MainActor in
             if await store.updateTeamGoal(hours: hours) {
-                isEditingGoal = false
+                store.isEditingWeeklyGoal = false
             }
         }
     }
@@ -432,9 +604,12 @@ private struct HeaderGoalSection: View {
     }
 }
 
-/// 헤더 목표 캡션 행 전용 소형 연필 버튼(18pt). 캡션(caption2) 행 높이를 키우지 않으면서 hover 배경과
+/// 헤더 목표 캡션 행 전용 소형 아이콘 버튼(18pt). 캡션(caption2) 행 높이를 키우지 않으면서 hover 배경과
 /// 툴팁으로 버튼임을 드러낸다 — 표준 IconButton(27pt)을 쓰면 이 행만 세로로 부풀어 배치가 어색해진다.
-private struct GoalEditPencilButton: View {
+/// 목표 수정(연필)과 내 기록(그래프)이 같은 행에 나란히 서므로 아이콘/툴팁만 갈아 끼우는 공용 버튼으로 둔다.
+private struct HeaderCaptionIconButton: View {
+    let icon: String
+    let help: String
     let isActive: Bool
     let action: () -> Void
 
@@ -442,7 +617,7 @@ private struct GoalEditPencilButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "pencil")
+            Image(systemName: icon)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(isActive || hovering ? CheckTheme.accent : CheckTheme.secondaryText)
                 .frame(width: 18, height: 18)
@@ -453,11 +628,73 @@ private struct GoalEditPencilButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("주간 목표 수정")
+        .help(help)
     }
 }
 
 // MARK: - Team card
+
+/// 목록 패널의 '스크롤 없이 보여 주는 최대 행수'를, 목록 위쪽 선택 요소(배너 1개 + 토큰 소모량 행)가 먹은
+/// 높이만큼 줄이는 공용 계산(순수 함수 — 결정적 검증 지점).
+///
+/// 팝오버 창은 위 모서리가 메뉴바 아래에 고정돼 아래로만 자란다(CheckWindowAnchor). 그래서 상한(700pt)을
+/// 넘긴 만큼은 화면 아래로 잘려 푸터(로그아웃/앱 종료)와 패널 하단에 손이 닿지 않는다. 각 패널의 기본 상한
+/// (maxVisibleRows)은 '배너도 토큰 행도 없는 상태'로 맞춰 둔 값이라, 그 위에 무언가 얹히면 얹힌 높이를
+/// 행 단위로 환산해 그만큼 목록을 줄이는 것이 유일한 레버다 — 줄어든 행은 사라지지 않고 스크롤로 밀린다.
+enum ListRowBudget {
+    /// 아무리 좁아도 이 행수는 남긴다(목록이 목록으로 보이도록).
+    static let minVisibleRows = 2
+
+    static func visibleRows(
+        maxVisibleRows: Int,
+        rowHeight: CGFloat,
+        rowSpacing: CGFloat,
+        extraChromeHeight: CGFloat
+    ) -> Int {
+        guard extraChromeHeight > 0 else { return maxVisibleRows }
+        let unit = rowHeight + rowSpacing
+        guard unit > 0 else { return maxVisibleRows }
+        // 올림: 한 행보다 작게 먹었어도 한 행은 양보해야 상한 안에 확실히 들어간다.
+        let drop = Int((extraChromeHeight / unit).rounded(.up))
+        return max(minVisibleRows, maxVisibleRows - drop)
+    }
+}
+
+/// 팀 카드 헤더에서 팀 이름(Text)에 남는 유연 폭 예산(순수 계산 — 결정적 검증 지점).
+///
+/// 헤더는 `[팀 이름][Spacer][N명 근무중 칩][아이콘 버튼…]` 한 줄이고 팝오버 폭은 340 고정이다. 이름만 유연
+/// 요소라, 오른쪽에 버튼을 하나 더할 때마다 이름이 27+8pt 씩 먼저 잘린다(lineLimit(1)). v0.2.11 초안이
+/// 여기에 네 번째 버튼('내 기록')을 세워 "아잉체크 개발팀"이 "아잉…"으로 잘렸던 회귀를 상수로 못 박아 둔다.
+enum TeamHeaderWidthBudget {
+    /// 팝오버 340 - 바깥 padding 12*2 - 팀 카드 panelStyle padding 12*2.
+    static let contentWidth: CGFloat = 340 - 12 * 2 - 12 * 2
+    /// "N명 근무중" 칩의 대략 폭(두 자리 인원까지 여유 있게 본다).
+    static let countChipWidth: CGFloat = 88
+    /// IconButton 지름과 HStack 간격.
+    static let iconButtonWidth: CGFloat = 27
+    static let spacing: CGFloat = 8
+    /// Spacer(minLength:).
+    static let spacerMinWidth: CGFloat = 6
+    /// subheadline(13pt) 볼드 한글 한 글자의 대략 폭.
+    static let koreanGlyphWidth: CGFloat = 13
+    /// minimumScaleFactor — 잘리기 전에 이 배율까지 줄여 본다.
+    static let minimumScaleFactor: CGFloat = 0.75
+
+    /// 아이콘 버튼 N개일 때 팀 이름에 남는 폭(pt).
+    static func nameWidth(iconButtonCount: Int) -> CGFloat {
+        let buttons = CGFloat(iconButtonCount) * iconButtonWidth
+        // 간격 개수 = [이름][Spacer][칩][버튼…] 사이의 틈 = 버튼 수 + 1.
+        let gaps = CGFloat(iconButtonCount + 1) * spacing
+        return contentWidth - countChipWidth - buttons - gaps - spacerMinWidth
+    }
+
+    /// 그 폭에 말줄임 없이 들어가는 한글 글자 수(최소 축소 배율 반영).
+    static func fittingKoreanGlyphs(iconButtonCount: Int) -> Int {
+        let width = nameWidth(iconButtonCount: iconButtonCount)
+        guard width > 0 else { return 0 }
+        return Int(width / (koreanGlyphWidth * minimumScaleFactor))
+    }
+}
 
 private struct TeamPanel: View {
     // store 를 통째로 받아 대부분의 값을 파생 읽기한다. 초단위(displayNow) 의존은 잎 뷰로 격리하므로
@@ -465,6 +702,8 @@ private struct TeamPanel: View {
     let store: WorkTimerStore
     // 스냅샷 전용: 참여코드 인라인 행이 펼쳐진 상태로 그린다(키 버튼 클릭을 대신). 앱은 false.
     var previewCodeRevealed: Bool = false
+    // 목록 위쪽에서 배너/토큰 행이 먹은 높이(pt). 그만큼 무스크롤 표시 행수를 줄여 창 상한을 지킨다.
+    var extraChromeHeight: CGFloat = 0
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
 
@@ -474,10 +713,12 @@ private struct TeamPanel: View {
     init(
         store: WorkTimerStore,
         previewCodeRevealed: Bool = false,
+        extraChromeHeight: CGFloat = 0,
         clipsOverflowInsteadOfScroll: Bool = false
     ) {
         self.store = store
         self.previewCodeRevealed = previewCodeRevealed
+        self.extraChromeHeight = extraChromeHeight
         self.clipsOverflowInsteadOfScroll = clipsOverflowInsteadOfScroll
         _showsInviteCode = State(initialValue: previewCodeRevealed)
     }
@@ -489,14 +730,17 @@ private struct TeamPanel: View {
 
     var body: some View {
         VStack(spacing: 12) {
+            // 헤더 폭 예산(TeamHeaderWidthBudget)의 실물이다. 버튼을 하나 더하거나 장식을 되살리면 팀 이름이
+            // 먼저 잘리므로(4자 팀이 "아잉…"), 여기 구성을 바꿀 때는 그 순수 계산과 회귀 테스트도 함께 고쳐야 한다.
+            // v0.2.11 정정: 장식용 person.2.fill 아이콘(25pt)을 걷어내고 개인용 '내 기록' 버튼은 헤더 카드(내 근무 박스)로
+            // 옮겨, 팀 이름이 v0.2.10 보다 넓은 폭을 되찾았다. 남는 버튼은 전부 팀/전체 화면 전환용이다.
             HStack(spacing: 8) {
-                Image(systemName: "person.2.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(CheckTheme.secondaryText)
                 Text(store.teamName)
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
+                    // 그래도 긴 이름(공백 포함 8자 이상)은 잘리기 전에 먼저 줄여 본다 — 말줄임보다 식별이 우선.
+                    .minimumScaleFactor(0.75)
                 Spacer(minLength: 6)
                 // "N명 근무중" 카운트는 presence(now:) 파생이라 잎 뷰로 격리(본체가 매초 무효화되지 않게).
                 TeamWorkingCountChip(store: store)
@@ -531,20 +775,31 @@ private struct TeamPanel: View {
     // 행 높이가 48→58(행마다 목표 바 수납)으로 커져 7행이면 창이 700pt 상한을 넘으므로(731pt) 6으로 내린다.
     static let maxVisibleRows = 6
 
+    // 배너/토큰 행이 먹은 높이를 반영한 실제 무스크롤 표시 행수(기본은 maxVisibleRows).
+    private var visibleRows: Int {
+        ListRowBudget.visibleRows(
+            maxVisibleRows: Self.maxVisibleRows,
+            rowHeight: CheckTheme.memberRowHeight,
+            rowSpacing: Self.rowSpacing,
+            extraChromeHeight: extraChromeHeight
+        )
+    }
+
     // 표시할 행 개수(빈 팀은 안내용 1행).
     private var rowCount: Int {
         sortedMembers.isEmpty ? 1 : sortedMembers.count
     }
 
-    // 멤버 리스트 높이 = 팀원 수 비례. maxVisibleRows까지는 rowHeight*count 그대로 자라고(스크롤 없음),
-    // 초과하면 maxVisibleRows 높이로 고정하고 ScrollView로 스크롤한다(창 높이 상한).
+    // 멤버 리스트 높이 = 팀원 수 비례. visibleRows까지는 rowHeight*count 그대로 자라고(스크롤 없음),
+    // 초과하면 그 높이로 고정하고 ScrollView로 스크롤한다(창 높이 상한).
     @ViewBuilder
     private var memberList: some View {
-        let capHeight = Self.listContentHeight(rowCount: Self.maxVisibleRows)
-        if rowCount <= Self.maxVisibleRows {
+        let visibleRows = visibleRows
+        let capHeight = Self.listContentHeight(rowCount: visibleRows)
+        if rowCount <= visibleRows {
             rows.frame(maxWidth: .infinity, alignment: .top)
         } else if clipsOverflowInsteadOfScroll {
-            // 스냅샷 전용: 보이는 첫 maxVisibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
+            // 스냅샷 전용: 보이는 첫 visibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
             rows.frame(maxWidth: .infinity, alignment: .top)
                 .frame(height: capHeight, alignment: .top)
                 .clipped()
@@ -721,6 +976,8 @@ private struct LeaderboardPanel: View {
     // 0 이면 로드 전/실패로 보고 fallbackStatus 를 쓴다 — 둘을 구분해 성공 동기화("동기화됨")가 본문에 뜨지 않게.
     var unfilteredCount: Int = 0
     var onBack: () -> Void = {}
+    // 목록 위쪽에서 배너/토큰 행이 먹은 높이(pt). 그만큼 무스크롤 표시 행수를 줄여 창 상한을 지킨다.
+    var extraChromeHeight: CGFloat = 0
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
 
@@ -729,6 +986,16 @@ private struct LeaderboardPanel: View {
     private static let rowSpacing: CGFloat = 10
     // 스크롤 없이 그대로 보여 주는 최대 팀 수. 행이 팀원 행보다 높아 창 높이 상한(≤700pt)을 지키도록 6으로 둔다.
     static let maxVisibleRows = 6
+
+    // 배너/토큰 행이 먹은 높이를 반영한 실제 무스크롤 표시 행수(기본은 maxVisibleRows).
+    private var visibleRows: Int {
+        ListRowBudget.visibleRows(
+            maxVisibleRows: Self.maxVisibleRows,
+            rowHeight: Self.rowHeight,
+            rowSpacing: Self.rowSpacing,
+            extraChromeHeight: extraChromeHeight
+        )
+    }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -758,11 +1025,12 @@ private struct LeaderboardPanel: View {
     // 리스트 높이 = 팀 수 비례. maxVisibleRows까지는 그대로 자라고(스크롤 없음), 초과하면 그 높이로 고정 후 스크롤.
     @ViewBuilder
     private var entryList: some View {
-        let capHeight = Self.listContentHeight(rowCount: Self.maxVisibleRows)
-        if rowCount <= Self.maxVisibleRows {
+        let visibleRows = visibleRows
+        let capHeight = Self.listContentHeight(rowCount: visibleRows)
+        if rowCount <= visibleRows {
             rows.frame(maxWidth: .infinity, alignment: .top)
         } else if clipsOverflowInsteadOfScroll {
-            // 스냅샷 전용: 보이는 첫 maxVisibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
+            // 스냅샷 전용: 보이는 첫 visibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
             rows.frame(maxWidth: .infinity, alignment: .top)
                 .frame(height: capHeight, alignment: .top)
                 .clipped()
@@ -804,15 +1072,61 @@ private struct LeaderboardPanel: View {
 /// 토큰 보드 빈 목록 자리 문구 선택(순수 로직, 결정적 검증 지점). 전체 공개라 '행 없는 사용자 0 채움'은 폐기됐고,
 /// 목록이 비면 두 경우다: (1) 로드가 성공했는데 아직 아무도 이번 달 소모량을 올리지 않음(hasLoaded=true) → 안내 문구,
 /// (2) 아직 로드 전이거나 실패(hasLoaded=false) → fallbackStatus(동기화 상태 문구). 리그의 LeaderboardEmptyMessage 와 같은 패턴.
+/// 과거 달을 보고 있을 때는 '아직 아무도 안 올림'이 아니라 '그 달엔 기록 자체가 없음'이므로 문구를 나눈다.
+/// 월 이동(‹ ›)은 목록을 비우고 다시 로드하므로 이 '로드 전' 상태를 사용자가 반복해서 밟는다. 그동안 본문
+/// 자리에 동기화 문구("동기화됨")가 뜨면 무슨 뜻인지 알 수 없어(개인 기록 패널에서 이미 금지한 패턴),
+/// 로드가 진행 중이면 "불러오는 중…"을 쓴다. 조회가 실패로 끝났으면 실패 문구 + [다시 시도] 로 가른다 —
+/// 이 구분이 없던 시절엔 월 이동 중 실패가 (로드 전 + 진행중 아님) 조합을 남겨, 본문 자리에 "동기화됨"·
+/// "근무 재개됨" 같은 무관한 동기화 문구가 뜨고 재시도 수단도 없었다(개인 기록 패널에서 이미 금지한 패턴).
+/// 셋 다 아닌데 비었으면(로그인 전 등 조회 자체가 시작되지 않은 상태) 기존대로 상태 문구를 쓴다.
 enum TokenBoardEmptyMessage {
+    static let loading = "불러오는 중…"
     static let noUploads = "아직 이번 달 소모량을 올린 사용자가 없어요"
-    static func text(hasLoaded: Bool, fallbackStatus: String) -> String {
-        hasLoaded ? noUploads : fallbackStatus
+    static let noPastRecords = "이 달에는 기록이 없어요"
+    static let loadFailed = "순위를 불러오지 못했어요"
+    static func text(
+        hasLoaded: Bool,
+        isLoading: Bool = false,
+        hasFailed: Bool = false,
+        fallbackStatus: String,
+        isCurrentMonth: Bool = true
+    ) -> String {
+        guard hasLoaded else {
+            if isLoading { return loading }
+            return hasFailed ? loadFailed : fallbackStatus
+        }
+        return isCurrentMonth ? noUploads : noPastRecords
     }
 }
 
-/// 팀 카드 자리를 대체하는 "이번 달 AI 토큰" 순위 페이지(앱 사용자 전체 공개). 리그 페이지와 같은 뼈대다:
-/// 뒤로 버튼 + 제목 + 고정 행높이 리스트(maxVisibleRows 초과 시 스크롤). 등수 숫자/메달 배지는 없다 — 정렬 순서가 곧 순위.
+/// 패널 본문 자리 문구 옆에 붙는 [다시 시도] 버튼(토큰 순위판·개인 기록 공용). 실패했을 때만 그린다 —
+/// 없던 시절엔 팝오버를 닫았다 다시 여는 것 말고는 재시도 경로가 없었다.
+private struct PanelRetryButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label("다시 시도", systemImage: "arrow.clockwise")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(CheckTheme.accent)
+                .padding(.horizontal, 9)
+                .frame(height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(CheckTheme.accent.opacity(0.14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7)
+                                .stroke(CheckTheme.accent.opacity(0.35), lineWidth: 1)
+                        )
+                )
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// 팀 카드 자리를 대체하는 "N월 AI 토큰" 순위 페이지(앱 사용자 전체 공개). 리그 페이지와 같은 뼈대다:
+/// 뒤로 버튼 + ‹ 제목 › (월 이동) + 고정 행높이 리스트(maxVisibleRows 초과 시 스크롤). 등수 숫자/메달 배지는 없다 — 정렬 순서가 곧 순위.
 /// 행은 아바타 + 이름(+내 행 "나" 칩) + 우측 전체 숫자(콤마 구분·monospacedDigit). 업로드한 사용자만 뜬다(행 없으면
 /// 목록에 없음). 목록이 비면 로드 성공 여부에 따라 '아직 없음' 또는 fallbackStatus 를 보인다.
 private struct TokenBoardPanel: View {
@@ -822,8 +1136,20 @@ private struct TokenBoardPanel: View {
     var myUserID: String? = nil
     // 보드 첫 성공 로드 여부. 빈 목록 문구를 '아직 없음'(true) vs 로드 전/실패 fallbackStatus(false) 로 가른다.
     var hasLoaded: Bool = false
+    // 지금 조회가 날아가 있는지(월 이동 직후 포함). 로드 전 빈 목록 자리에 "불러오는 중…"을 쓰기 위한 구분.
+    var isLoading: Bool = false
+    // 마지막 조회가 실패로 끝났는지. true 면 동기화 문구 대신 실패 문구 + [다시 시도] 를 그린다.
+    var hasFailed: Bool = false
+    // [다시 시도] 액션. nil 이면 버튼을 그리지 않는다(값+클로저 규약 — 렌더 테스트가 스토어 없이 재현 가능).
+    var onRetry: (() -> Void)? = nil
     // 아직 로드 전/실패 시 빈 목록 자리에 표시할 안내 문구(동기화 상태 문구).
     var fallbackStatus: String = ""
+    // 보고 있는 월(KST 'YYYY-MM'). 제목("N월 AI 토큰 소모량")과 빈 목록 문구 분기에 쓴다.
+    var month: String = TokenUsageMonthKey.current()
+    // 다음 달(미래 방향)로 갈 수 있는지 — 현재 월이면 false 라 › 버튼이 비활성된다.
+    var canStepForward: Bool = false
+    // 월 이동 액션(-1=과거, +1=미래). 값+클로저로만 받아 렌더 테스트가 스토어 없이도 상태를 재현할 수 있게 한다.
+    var onStepMonth: (Int) -> Void = { _ in }
     // 내 토큰 사용량 공개 여부. 헤더 눈 버튼 아이콘/툴팁과 내 행 "비공개" 미니 칩 노출을 가른다.
     var isMyUsagePublic: Bool = true
     // 공개/비공개 토글 액션. nil 이면 헤더에 눈 버튼을 그리지 않는다(렌더 테스트에서 토글 없는 상태 재현).
@@ -832,6 +1158,8 @@ private struct TokenBoardPanel: View {
     // 현재 KST 날짜 'YYYY-MM-DD'. 행이 서버의 todayDate 와 비교해 "오늘 +N"(오늘분) 표시 여부를 가른다.
     // 기본은 실시간 계산 — 렌더 테스트는 픽스처와 같은 오늘 키를 쓰도록 주입한다(결정성). 렌더 시점에 1회 평가된다.
     var todayKey: String = TokenUsageDayKey.current()
+    // 목록 위쪽에서 배너/토큰 행이 먹은 높이(pt). 그만큼 무스크롤 표시 행수를 줄여 창 상한을 지킨다.
+    var extraChromeHeight: CGFloat = 0
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
 
@@ -843,15 +1171,35 @@ private struct TokenBoardPanel: View {
     // (리스트 높이 6*62 + 5*8 = 412pt — 창 높이 상한 ≤700pt 안).
     static let maxVisibleRows = 6
 
+    // 배너/토큰 행이 먹은 높이를 반영한 실제 무스크롤 표시 행수(기본은 maxVisibleRows).
+    private var visibleRows: Int {
+        ListRowBudget.visibleRows(
+            maxVisibleRows: Self.maxVisibleRows,
+            rowHeight: Self.rowHeight,
+            rowSpacing: Self.rowSpacing,
+            extraChromeHeight: extraChromeHeight
+        )
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
                 IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
-                Text("이번 달 AI 토큰 소모량")
+                // 뒤로(‹)와 월 이동 버튼을 세로 구분선으로 갈라 놓는다 — 같은 chevron 두 개가 4pt 간격으로
+                // 붙어 있으면 뒤로를 누르려다 지난달이 열리는(반대로 월을 넘기려다 패널이 닫히는) 오조작이 난다.
+                Capsule()
+                    .fill(CheckTheme.border)
+                    .frame(width: 1, height: 16)
+                // 월 이동: ◂ 는 언제나 과거로, ▸ 는 현재 월이면 비활성(미래는 볼 수 없다).
+                // 뒤로 버튼과 아이콘 모양(삼각 vs chevron)까지 달리해 툴팁 없이도 구분되게 한다.
+                IconButton(icon: "arrowtriangle.left.fill", help: "이전 달") { onStepMonth(-1) }
+                Text("\(TokenBoardMonthNavigator.displayTitle(month)) AI 토큰 소모량")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
-                Spacer(minLength: 6)
+                    .minimumScaleFactor(0.8)
+                IconButton(icon: "arrowtriangle.right.fill", help: "다음 달", enabled: canStepForward) { onStepMonth(1) }
+                Spacer(minLength: 2)
                 // 내 사용량 공개/비공개 토글 — 토글 액션이 있을 때만 노출한다. 비공개면 남들 보드에서 내 행이 숨겨진다.
                 if let onToggleMyUsagePublic {
                     IconButton(
@@ -874,6 +1222,10 @@ private struct TokenBoardPanel: View {
         entries.sortedByTotalDescending()
     }
 
+    // 보고 있는 달이 이번 달인지. 네비게이터가 미래로 못 가게 클램프하므로 '› 비활성 == 이번 달'이 성립한다.
+    // 빈 목록 문구와 행의 "오늘 +N" 줄이 같은 판정을 쓴다 — 6월 보드에 '오늘'이 붙는 모순을 막는다.
+    private var isCurrentMonth: Bool { !canStepForward }
+
     private var rowCount: Int {
         sortedEntries.isEmpty ? 1 : sortedEntries.count
     }
@@ -881,11 +1233,12 @@ private struct TokenBoardPanel: View {
     // 리스트 높이 = 인원 비례. maxVisibleRows까지는 그대로 자라고(스크롤 없음), 초과하면 그 높이로 고정 후 스크롤.
     @ViewBuilder
     private var entryList: some View {
-        let capHeight = Self.listContentHeight(rowCount: Self.maxVisibleRows)
-        if rowCount <= Self.maxVisibleRows {
+        let visibleRows = visibleRows
+        let capHeight = Self.listContentHeight(rowCount: visibleRows)
+        if rowCount <= visibleRows {
             rows.frame(maxWidth: .infinity, alignment: .top)
         } else if clipsOverflowInsteadOfScroll {
-            // 스냅샷 전용: 보이는 첫 maxVisibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
+            // 스냅샷 전용: 보이는 첫 visibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
             rows.frame(maxWidth: .infinity, alignment: .top)
                 .frame(height: capHeight, alignment: .top)
                 .clipped()
@@ -901,17 +1254,38 @@ private struct TokenBoardPanel: View {
     private var rows: some View {
         VStack(spacing: Self.rowSpacing) {
             if sortedEntries.isEmpty {
-                // 로드 성공했는데 비면 '아직 아무도 안 올림', 로드 전/실패면 fallbackStatus(동기화 상태 문구).
-                // 결정적 판정은 TokenBoardEmptyMessage 로 격리한다.
-                Text(TokenBoardEmptyMessage.text(hasLoaded: hasLoaded, fallbackStatus: fallbackStatus))
-                    .font(.caption)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
+                // 로드 성공했는데 비면 '아직 아무도 안 올림'(이번 달)/'기록 없음'(과거 달), 진행중이면 "불러오는 중…",
+                // 실패면 실패 문구 + [다시 시도]. 결정적 판정은 TokenBoardEmptyMessage 로 격리한다.
+                HStack(spacing: 8) {
+                    Text(TokenBoardEmptyMessage.text(
+                        hasLoaded: hasLoaded,
+                        isLoading: isLoading,
+                        hasFailed: hasFailed,
+                        fallbackStatus: fallbackStatus,
+                        isCurrentMonth: isCurrentMonth
+                    ))
+                        .font(.caption)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    // 실패했을 때만 재시도를 준다(월 이동 실패는 사용자가 반복해서 밟는 경로다).
+                    if hasFailed, !hasLoaded, let onRetry {
+                        PanelRetryButton(action: onRetry)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
             } else {
                 ForEach(sortedEntries) { entry in
                     let isMe = myUserID != nil && entry.userID == myUserID
                     // 내 행이면서 비공개일 때만 "비공개" 미니 칩을 붙인다 — 남들 보드엔 내 행이 안 보인다는 표시.
-                    TokenBoardRowView(entry: entry, isMe: isMe, showsPrivateChip: isMe && !isMyUsagePublic, todayKey: todayKey)
+                    TokenBoardRowView(
+                        entry: entry,
+                        isMe: isMe,
+                        showsPrivateChip: isMe && !isMyUsagePublic,
+                        showsToday: isCurrentMonth,
+                        todayKey: todayKey
+                    )
                         .frame(height: Self.rowHeight)
                 }
             }
@@ -928,11 +1302,15 @@ private struct TokenBoardPanel: View {
 /// + 우측 이번 달 총합("숫자 토큰"). 등수 배지 없이 담백하게 — 정렬 순서가 곧 순위다. 카드는 fieldFill 채움 + 1px 테두리
 /// (내 카드는 테두리를 accent 은은하게)로 유저 간 분리를 준다. 악센트 바 색은 CheckTheme.avatarColor 로 아바타 이니셜과
 /// 같은 이름 해시색을 공유해 유저마다 자연스러운 컬러 포인트를 만든다(등수 뉘앙스 아님). 높이는 패널이 고정으로 준다.
-private struct TokenBoardRowView: View {
+/// (렌더 테스트가 "오늘 +N" 줄 노출을 직접 검증할 수 있도록 internal 로 둔다 — 앱에서는 TokenBoardPanel 만 쓴다.)
+struct TokenBoardRowView: View {
     let entry: TokenBoardEntry
     var isMe: Bool = false
     // 내 행이 비공개일 때만 "나" 칩 옆에 회색 "비공개" 미니 칩을 붙인다 — 남들 보드엔 내 행이 안 보인다는 표시.
     var showsPrivateChip: Bool = false
+    // "오늘 +N 토큰" 줄 노출 여부. 이번 달 보드에서만 켠다 — 과거 달에는 '오늘'이 있을 수 없어(서버 today 합산이
+    // 항상 0) 전 행에 "오늘 +0 토큰"이 붙는 모순이 생긴다.
+    var showsToday: Bool = true
     // 현재 KST 날짜 'YYYY-MM-DD'. entry.todayDate 와 같을 때만 오늘 증가량을 노출한다(어제 이후 스테일이면 0).
     var todayKey: String = TokenUsageDayKey.current()
 
@@ -941,6 +1319,9 @@ private struct TokenBoardRowView: View {
 
     // 표시할 오늘 증가량. 날짜가 오늘이 아니면 0("오늘 +0 토큰"으로 균일 표시 — 어제 이후 안 연 사람도 행 형태 동일).
     private var todayValue: Int { entry.todayDelta(currentDate: todayKey) }
+
+    // 칩이 둘 붙는 내 비공개 행에서만 숫자 열에 씌우는 상한(pt). nil 이면 제한 없음(보통 행은 예전 그대로).
+    private var crowdedNumberColumnWidth: CGFloat? { showsPrivateChip ? 88 : nil }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -951,31 +1332,41 @@ private struct TokenBoardRowView: View {
                 .frame(maxHeight: .infinity)
                 .padding(.vertical, 3)
             CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: 30)
-            Text(entry.name)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(CheckTheme.primaryText)
-                .lineLimit(1)
-            if isMe {
-                Text("나")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(CheckTheme.accent)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(CheckTheme.accent.opacity(0.18)))
-                    .fixedSize()
+            // 이름 + 칩은 한 덩어리로 6pt 간격에 묶는다 — 균일 10pt 는 칩이 둘 붙는 내 행에서 이름 몫을 먼저 갉아먹는다.
+            HStack(spacing: 6) {
+                Text(entry.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                    // 폭이 모자라면 말줄임보다 먼저 살짝 줄여 이름을 끝까지 보여 준다(칩 두 개가 붙는 내 행 대비).
+                    .minimumScaleFactor(0.75)
+                if isMe {
+                    Text("나")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(CheckTheme.accent)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(CheckTheme.accent.opacity(0.18)))
+                        .fixedSize()
+                }
+                if showsPrivateChip {
+                    // 회색 "비공개" 미니 칩 — 남들 보드엔 내 행이 안 보인다는 표시(내 행에만, 비공개일 때만).
+                    Text("비공개")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.white.opacity(0.10)))
+                        .fixedSize()
+                }
             }
-            if showsPrivateChip {
-                // 회색 "비공개" 미니 칩 — 남들 보드엔 내 행이 안 보인다는 표시(내 행에만, 비공개일 때만).
-                Text("비공개")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.white.opacity(0.10)))
-                    .fixedSize()
-            }
-            Spacer(minLength: 6)
+            // 남는 폭은 전부 이름 덩어리가 가진다(예전엔 Spacer 가 유연 폭을 반씩 나눠 가져, 칩이 붙은 행에서
+            // 이름이 실제로 쓸 수 있는 폭이 절반으로 줄어 멀쩡히 들어갈 이름까지 말줄임됐다).
+            .frame(maxWidth: .infinity, alignment: .leading)
             // 우측 2줄(오른쪽 정렬): 위 = 이번 달 총량("숫자 토큰"), 아래 = 오늘 증가량("오늘 +숫자 토큰").
+            // layoutPriority(1): 숫자 블록이 먼저 필요한 폭을 가져간다. 내 행에 "나"+"비공개" 칩이 함께 붙으면
+            // 남는 폭이 부족해져 10자리 총량이 '4,564,338,24…' 로 잘려 자릿수가 통째로 오독됐다(회귀 지점) —
+            // 잘려도 되는 쪽은 이름이지 숫자가 아니다(아바타 이니셜·"나" 칩이 행 주인을 이미 알려 준다).
             VStack(alignment: .trailing, spacing: 1) {
                 // 총합 + 단위: 축약(B/M/K) 없이 전체 숫자를 콤마로 끊고(굵게·monospacedDigit) 오른쪽에 " 토큰"(caption2·secondary)을 붙인다.
                 // 숫자+단위를 한 Text 로 이어(concat) minimumScaleFactor 가 단위째로 균일 축소되게 해 좁을 때도 한 줄을 지킨다.
@@ -991,13 +1382,20 @@ private struct TokenBoardRowView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 // 오늘(KST 자정 이후) 증가량 — 누가 오늘 열심히 작업 중인지 한눈에. 작게(caption2·secondary·monospacedDigit).
-                Text("오늘 +\(TokenNumberFormatter.grouped(todayValue)) 토큰")
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                // 과거 달 보드에서는 통째로 생략한다('6월을 보는데 오늘'이라는 모순 제거).
+                if showsToday {
+                    Text("오늘 +\(TokenNumberFormatter.grouped(todayValue)) 토큰")
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
             }
+            .layoutPriority(1)
+            // 칩 두 개가 붙는 내 비공개 행은 폭 예산 자체가 모자라다 — 숫자 열 상한을 낮춰 minimumScaleFactor 가
+            // '전 자릿수 유지 + 균일 축소'로 처리하게 하고(0.78배, 말줄임 없음) 남는 폭은 이름에 돌려준다.
+            .frame(maxWidth: crowdedNumberColumnWidth, alignment: .trailing)
         }
         .padding(.leading, 8)
         .padding(.trailing, 12)
@@ -1059,6 +1457,8 @@ private struct PokePanel: View {
     let cooldownRemaining: (String) -> Int
     let onPoke: (String) -> Void
     let onBack: () -> Void
+    // 목록 위쪽에서 배너/토큰 행이 먹은 높이(pt). 그만큼 무스크롤 표시 행수를 줄여 창 상한을 지킨다.
+    var extraChromeHeight: CGFloat = 0
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
 
@@ -1068,6 +1468,16 @@ private struct PokePanel: View {
     // 스크롤 없이 그대로 보여 주는 최대 인원. 행이 낮아(48pt) 7행까지 창 높이 상한(≤700pt) 안에 든다
     // (리스트 높이 7*48 + 6*8 = 384pt).
     static let maxVisibleRows = 7
+
+    // 배너/토큰 행이 먹은 높이를 반영한 실제 무스크롤 표시 행수(기본은 maxVisibleRows).
+    private var visibleRows: Int {
+        ListRowBudget.visibleRows(
+            maxVisibleRows: Self.maxVisibleRows,
+            rowHeight: Self.rowHeight,
+            rowSpacing: Self.rowSpacing,
+            extraChromeHeight: extraChromeHeight
+        )
+    }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -1118,11 +1528,12 @@ private struct PokePanel: View {
     // 리스트 높이 = 인원 비례. maxVisibleRows까지는 그대로 자라고(스크롤 없음), 초과하면 그 높이로 고정 후 스크롤.
     @ViewBuilder
     private var entryList: some View {
-        let capHeight = Self.listContentHeight(rowCount: Self.maxVisibleRows)
-        if rowCount <= Self.maxVisibleRows {
+        let visibleRows = visibleRows
+        let capHeight = Self.listContentHeight(rowCount: visibleRows)
+        if rowCount <= visibleRows {
             rows.frame(maxWidth: .infinity, alignment: .top)
         } else if clipsOverflowInsteadOfScroll {
-            // 스냅샷 전용: 보이는 첫 maxVisibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
+            // 스냅샷 전용: 보이는 첫 visibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
             rows.frame(maxWidth: .infinity, alignment: .top)
                 .frame(height: capHeight, alignment: .top)
                 .clipped()
@@ -1267,7 +1678,323 @@ private struct PokeDirectoryRowView: View {
     }
 }
 
+// MARK: - Personal insights page (지난주 회고 + 근무 리듬 히트맵)
+
+/// 개인 기록 패널의 자리 문구 판정(순수 로직, 결정적 검증 지점). 로드 전에는 fallbackStatus(syncMessage) 를
+/// 재사용하지 않고 "불러오는 중…"을 쓴다 — 본문 자리에 "동기화됨"이 떠 있으면 무슨 뜻인지 알 수 없다는
+/// 전면 감사 지적을 반영한 것(리그/보드의 fallbackStatus 관례와 의도적으로 다르다).
+/// 개인 기록 패널의 본문 표시 높이 예산(순수 계산 — 결정적 검증 지점).
+///
+/// 리그/토큰/찌르기/팀 목록은 배너·목표 편집 행이 먹은 높이를 ListRowBudget 으로 **행수**에서 깎는다. 이 패널은
+/// 행 기반이 아니라(회고 카드 + 7×24 히트맵 고정 높이) 깎을 행이 없으므로, 대신 본문 표시 높이를 잘라
+/// 스크롤로 넘긴다. 팝오버는 위가 고정돼 아래로만 자라므로(CheckWindowAnchor) 상한(700pt)을 넘긴 만큼은
+/// 푸터(로그아웃/앱 종료)와 히트맵 하단이 화면 밖으로 잘려 손이 닿지 않는다.
+enum InsightsPanelChromeBudget {
+    /// 본문(회고 카드 + 구분선 + 히트맵)의 자연 높이(pt). 340pt 폭 ImageRenderer 실측값.
+    static let contentNaturalHeight: CGFloat = 307
+    /// 크롬이 하나도 없을 때 창 상한(700pt)까지 남는 여유(pt). 기본 상태 실측 577pt 기준 + 5pt 안전 여유.
+    /// 이 여유를 넘겨 먹은 만큼만 본문을 깎는다 — 배너 하나(≤92pt)만으로는 아무것도 줄이지 않는다.
+    static let chromeSlack: CGFloat = 118
+    /// 아무리 깎여도 본문에 남기는 최소 높이(회고 카드 한 장은 보이도록).
+    static let minContentHeight: CGFloat = 190
+
+    /// 크롬이 여유를 넘겨 먹었을 때만 본문 표시 높이를 돌려준다(nil 이면 자연 높이 그대로 — 스크롤 없음).
+    static func capHeight(extraChromeHeight: CGFloat) -> CGFloat? {
+        let overflow = extraChromeHeight - chromeSlack
+        guard overflow > 0 else { return nil }
+        return max(minContentHeight, contentNaturalHeight - overflow)
+    }
+}
+
+/// 개인 기록 패널 본문 자리 문구 선택(순수 로직, 결정적 검증 지점).
+/// 세 상태를 명확히 가른다: (1) 아직 응답 전 → "불러오는 중…", (2) 조회 실패 → 실패 문구(+[다시 시도] 버튼),
+/// (3) 로드 완료인데 누적 0 → "아직 기록이 쌓이지 않았어요". 토큰 보드(TokenBoardEmptyMessage)와 같은 대칭이다 —
+/// 실패에 상태를 세우지 않던 시절엔 실패해도 "불러오는 중…"이 팝오버를 닫을 때까지 남아, 기다림과 실패를
+/// 구분할 수 없고 패널 안에서 재시도할 방법도 없었다(회귀 지점).
+enum InsightsEmptyMessage {
+    static let loading = "불러오는 중…"
+    static let noData = "아직 기록이 쌓이지 않았어요"
+    static let noRetro = "지난주 근무 기록이 없어요"
+    static let loadFailed = "기록을 불러오지 못했어요"
+
+    /// 본문 대신 보여 줄 자리 문구. nil 이면 실제 내용(회고 카드 + 히트맵)을 그린다.
+    static func text(hasLoaded: Bool, hasFailed: Bool = false, totalSeconds: Int) -> String? {
+        if !hasLoaded { return hasFailed ? loadFailed : loading }
+        // 한 번이라도 성공한 뒤 마지막 조회가 실패했고 보여 줄 기록이 하나도 없으면 "기록이 없다"고 단정하지 않는다 —
+        // insightsLoaded 는 성공 후 false 로 되돌아가지 않으므로(로드 완료 + 실패 + 누적 0) 조합이 성립하는데,
+        // 이건 대개 '가입 첫날 0건으로 로드해 둔 스냅샷 + 이후 조회 실패'다(서버엔 한 주치 기록이 있는데 못 읽은 상태).
+        // 예전엔 이 조합에서 "아직 기록이 쌓이지 않았어요" 옆에 [다시 시도]가 함께 떠 서로 모순된 화면이 됐다(회귀 지점).
+        if totalSeconds == 0 { return hasFailed ? loadFailed : noData }
+        return nil
+    }
+}
+
+/// 팀 카드 자리를 대체하는 개인 기록 페이지. 리그/토큰/찌르기와 4자 상호 배타이며 본인 데이터만 쓴다.
+/// 위에서부터 (a) 지난주 회고 카드, (b) 요일×시간대 근무 리듬 히트맵. 값만 받아 그리므로(스토어 미참조)
+/// 렌더 테스트가 픽스처만으로 모든 상태를 재현할 수 있다.
+private struct InsightsPanel: View {
+    let heatmap: WorkRhythmHeatmap
+    let retro: WeeklyRetro?
+    // 첫 성공 로드 여부. false 면 "불러오는 중…"(syncMessage 재사용 금지).
+    let hasLoaded: Bool
+    // 마지막 조회가 실패로 끝났는지. true 면 로딩 문구 대신 실패 문구 + [다시 시도] 를 그린다.
+    var hasFailed: Bool = false
+    // [다시 시도] 액션. nil 이면 버튼을 그리지 않는다(값+클로저 규약 — 렌더 테스트가 스토어 없이 재현 가능).
+    var onRetry: (() -> Void)? = nil
+    // 목록 위쪽에서 배너/목표 편집 행이 먹은 높이(pt). 다른 네 패널은 이 값으로 무스크롤 행수를 줄이지만
+    // 이 패널은 행 기반이 아니므로(회고 카드 + 7×24 히트맵 고정 높이) 본문 표시 높이를 잘라 스크롤로 넘긴다.
+    var extraChromeHeight: CGFloat = 0
+    // 스냅샷 전용: 넘치는 본문을 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
+    var clipsOverflowInsteadOfScroll: Bool = false
+    let onBack: () -> Void
+
+    // 0=월 … 6=일. buckets 행 순서/회고 busiestDayIndex 와 같은 규약.
+    private static let dayNames = ["월", "화", "수", "목", "금", "토", "일"]
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
+                Text("내 기록")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+            }
+            PanelDivider()
+            if let placeholder = InsightsEmptyMessage.text(
+                hasLoaded: hasLoaded,
+                hasFailed: hasFailed,
+                totalSeconds: heatmap.totalSeconds
+            ) {
+                HStack(spacing: 8) {
+                    Text(placeholder)
+                        .font(.caption)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    // 실패했을 때만 재시도를 준다 — 팝오버를 닫았다 다시 여는 것 말고는 재시도 경로가 없었다.
+                    if hasFailed, let onRetry {
+                        PanelRetryButton(action: onRetry)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+            } else {
+                insightsBody
+            }
+        }
+        .padding(12)
+        .panelStyle()
+    }
+
+    /// 회고 카드 + 히트맵 본문. 배너/목표 편집 행이 창 여유를 다 먹었으면 그만큼 낮춰 스크롤로 넘긴다 —
+    /// 팝오버는 위가 고정되고 아래로만 자라므로(CheckWindowAnchor) 상한을 넘긴 만큼 푸터가 화면 밖으로 잘린다.
+    @ViewBuilder
+    private var insightsBody: some View {
+        let content = VStack(spacing: 12) {
+            retroCard
+            PanelDivider()
+            heatmapSection
+        }
+        if let cap = InsightsPanelChromeBudget.capHeight(extraChromeHeight: extraChromeHeight) {
+            if clipsOverflowInsteadOfScroll {
+                // 스냅샷 전용: 자연 높이로 그린 뒤 위에서부터 cap 만큼만 남기고 잘라 낸다(ScrollView 는 렌더 불가).
+                content
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, maxHeight: cap, alignment: .top)
+                    .clipped()
+            } else {
+                // 높이를 명시로 못 박는다(리그/토큰/찌르기 목록과 같은 관례) — ScrollView 의 ideal 높이 추론에
+                // 창 크기를 맡기지 않아야 팝오버 총높이가 상한 안에 결정적으로 들어온다.
+                ScrollView(.vertical, showsIndicators: true) {
+                    content.frame(maxWidth: .infinity)
+                }
+                .frame(height: cap)
+            }
+        } else {
+            content
+        }
+    }
+
+    // (a) 지난주 회고 카드 — 총 근무시간(크게) + 목표 대비 진행 + 전주 대비 증감 + 세션 수/가장 많이 일한 요일.
+    @ViewBuilder
+    private var retroCard: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                Text("지난주 회고")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                Spacer(minLength: 4)
+                if let retro, retro.metGoal {
+                    Label("목표 달성", systemImage: "checkmark.seal.fill")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(CheckTheme.working)
+                        .fixedSize()
+                }
+            }
+            if let retro {
+                Text("지난주 \(MenuBarStatusFormatter.hoursMinutes(retro.totalSeconds))")
+                    .font(.system(.title3, design: .rounded).weight(.heavy))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                // 목표 대비 진행 바 — 달성이면 working, 미달이면 accent(헤더 목표 바와 같은 관례).
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(CheckTheme.trackFill)
+                        Capsule()
+                            .fill(retro.metGoal ? CheckTheme.working : CheckTheme.accent)
+                            .frame(width: max(0, proxy.size.width * Self.progress(retro)))
+                    }
+                }
+                .frame(height: 5)
+                Text(Self.goalLine(retro))
+                    .font(.caption2)
+                    .foregroundStyle(retro.metGoal ? CheckTheme.working : CheckTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if let deltaLine = Self.deltaLine(retro) {
+                    Text(deltaLine)
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                }
+                Text(Self.detailLine(retro))
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            } else {
+                Text(InsightsEmptyMessage.noRetro)
+                    .font(.caption)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(CheckTheme.fieldFill)
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+        )
+    }
+
+    // (b) 근무 리듬 히트맵 — 요일×시간대 격자 + 가장 활발한 시간/집계 주 수.
+    @ViewBuilder
+    private var heatmapSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "square.grid.3x3.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                Text("근무 리듬")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                Spacer(minLength: 4)
+                Text("최근 \(heatmap.weeks)주")
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .fixedSize()
+            }
+            WorkRhythmHeatmapGrid(heatmap: heatmap)
+            if let peakText {
+                Text("가장 활발한 시간: \(peakText)")
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    // "화요일 15시" — peakSlot(가장 진한 칸)의 표시 문구. 데이터가 없으면 nil(줄 자체를 생략).
+    private var peakText: String? {
+        guard let peak = heatmap.peakSlot, peak.day >= 0, peak.day < Self.dayNames.count else { return nil }
+        return "\(Self.dayNames[peak.day])요일 \(peak.hour)시"
+    }
+
+    // 목표 대비 진행 비율(0~1 클램프). 게이지 폭 계산 전용 — 표시 퍼센트는 GoalPercentFormatter 를 쓴다.
+    private static func progress(_ retro: WeeklyRetro) -> Double {
+        let goal = max(1, retro.goalSeconds)
+        return min(1, max(0, Double(retro.totalSeconds) / Double(goal)))
+    }
+
+    // 목표 대비 한 줄. 달성이면 축하 톤, 미달이면 퍼센트와 부족분을 함께 알려 준다.
+    private static func goalLine(_ retro: WeeklyRetro) -> String {
+        let goalText = MenuBarStatusFormatter.hoursMinutes(retro.goalSeconds)
+        if retro.metGoal {
+            return "목표 \(goalText) 달성 — 잘하셨어요"
+        }
+        // 미달 문맥 전용 퍼센트(99 상한). 반올림 퍼센트를 그대로 쓰면 같은 줄의 부족분과 어긋나
+        // "100% · 0시간 18분 부족"이라는 자기모순 문장이 된다.
+        let percent = GoalPercentFormatter.shortfallPercent(workedSeconds: retro.totalSeconds, goalSeconds: retro.goalSeconds)
+        let remain = max(0, retro.goalSeconds - retro.totalSeconds)
+        return "목표 \(goalText) 중 \(percent)% · \(MenuBarStatusFormatter.hoursMinutes(remain)) 부족"
+    }
+
+    // 전주 대비 증감. 전주 기록이 아예 없으면(0) 비교가 의미 없어 줄을 생략한다.
+    private static func deltaLine(_ retro: WeeklyRetro) -> String? {
+        guard retro.previousWeekSeconds > 0 else { return nil }
+        let delta = retro.deltaSeconds
+        if delta == 0 {
+            return "전주와 같아요"
+        }
+        let sign = delta > 0 ? "+" : "-"
+        return "전주 대비 \(sign)\(MenuBarStatusFormatter.hoursMinutes(abs(delta)))"
+    }
+
+    // "세션 11회 · 가장 많이 일한 날 화요일 8시간 12분".
+    private static func detailLine(_ retro: WeeklyRetro) -> String {
+        var parts = ["세션 \(retro.sessionCount)회"]
+        if let day = retro.busiestDayIndex, day >= 0, day < dayNames.count, retro.busiestDaySeconds > 0 {
+            parts.append("가장 많이 일한 날 \(dayNames[day])요일 \(MenuBarStatusFormatter.hoursMinutes(retro.busiestDaySeconds))")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
 // MARK: - Footer utility bar
+
+/// 푸터 동기화 문구(SyncStatusView)에 남는 텍스트 폭 예산(순수 계산 — 결정적 검증 지점).
+///
+/// 푸터는 `[동기화 문구][Spacer][아이콘 버튼…]` 한 줄이고 팝오버 폭은 340 고정이다. 문구만 유연 요소라
+/// 버튼을 하나 더할 때마다 문구가 27+8pt 씩 먼저 잘린다. v0.2.11 초안이 여기에 다섯 번째 버튼(자동시작 토글)을
+/// 세워 "자리 비움으로 자동 근무종료됨"(121pt)이 "자리 비움으로 자동…"으로 잘리고(핵심어 '근무종료됨' 소실),
+/// 새 문구 "자동 시작을 취소했어요"(92pt)까지 잘렸던 회귀를 상수로 못 박아 둔다. 자동시작 토글은 헤더 캡션 행
+/// (내 근무 박스)으로 옮겨 4버튼 폭을 되찾았고, 그래도 넘치는 긴 문구는 minimumScaleFactor 로 줄여 담는다.
+enum FooterWidthBudget {
+    /// 팝오버 340 - 바깥 padding 12*2 - 푸터 padding 12*2.
+    static let contentWidth: CGFloat = 340 - 12 * 2 - 12 * 2
+    static let iconButtonWidth: CGFloat = 27
+    static let spacing: CGFloat = 8
+    static let spacerMinWidth: CGFloat = 6
+    /// 상태 원형 표시(7pt)와 그 옆 간격(6pt) — 문구가 쓸 수 없는 폭.
+    static let statusDotWidth: CGFloat = 7
+    static let statusDotSpacing: CGFloat = 6
+    /// 말줄임 전에 이 배율까지 줄여 본다(caption2 10pt → 7pt). 문구가 통째로 잘리는 것보다 낫다.
+    static let minimumScaleFactor: CGFloat = 0.7
+    /// 이 폭 안에 들어와야 하는, 실제로 쓰는 가장 긴 문구(무소속 안내 175.9pt · 장시간 미확인 마감 138.3pt).
+    static let longestMessageWidth: CGFloat = 176
+
+    /// 아이콘 버튼 N개일 때 문구에 남는 폭(pt).
+    static func messageWidth(iconButtonCount: Int) -> CGFloat {
+        let buttons = CGFloat(iconButtonCount) * iconButtonWidth
+        // 간격 개수 = [상태뷰][Spacer][버튼…] 사이의 틈 = 버튼 수 + 1.
+        let gaps = CGFloat(iconButtonCount + 1) * spacing
+        return contentWidth - buttons - gaps - spacerMinWidth - statusDotWidth - statusDotSpacing
+    }
+
+    /// 축소(minimumScaleFactor)까지 감안해 말줄임 없이 담을 수 있는 문구 폭 상한(pt).
+    static func fittingMessageWidth(iconButtonCount: Int) -> CGFloat {
+        max(0, messageWidth(iconButtonCount: iconButtonCount) / minimumScaleFactor)
+    }
+}
 
 private struct FooterBar: View {
     @Bindable var store: WorkTimerStore
@@ -1276,6 +2003,8 @@ private struct FooterBar: View {
         HStack(spacing: 8) {
             SyncStatusView(message: store.syncMessage)
             Spacer(minLength: 6)
+            // 버튼은 4개까지다(FooterWidthBudget). 하나 더 세우면 동기화 문구가 곧바로 말줄임된다 —
+            // 새 토글이 필요하면 푸터가 아니라 관련 카드(예: 자동시작 → 내 근무 박스 캡션)로 보낸다.
             IconButton(
                 icon: store.isOverlayEnabled ? "person.fill" : "person.fill.xmark",
                 help: store.isOverlayEnabled ? "캐릭터 표시 중 — 누르면 숨김" : "캐릭터 숨김 — 누르면 표시"

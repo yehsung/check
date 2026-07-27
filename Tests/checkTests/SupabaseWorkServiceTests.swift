@@ -143,7 +143,12 @@ func fetchTeamStatusesIncludesCurrentAndWeeklyDurations() async throws {
         session: URLSession(configuration: .stubbed)
     )
 
-    let statuses = try await service.fetchTeamStatuses(accessToken: "access-token", teamID: URLProtocolStub.stubTeamID)
+    // 픽스처와 같은 고정 기준시각을 주입한다 — 벽시계를 쓰면 KST 월요일 00~02시에 주 클리핑으로 0이 된다.
+    let statuses = try await service.fetchTeamStatuses(
+        accessToken: "access-token",
+        teamID: URLProtocolStub.stubTeamID,
+        now: URLProtocolStub.weeklyFixtureNow
+    )
 
     #expect(statuses.count == 1)
     #expect(statuses.first?.name == "영식")
@@ -624,7 +629,9 @@ func setTeamWeeklyGoalPostsRPCWithBearerAndDecodesNewGoal() async throws {
 @Test
 func memberMeetsWeeklyGoalWhenLiveWeeklyReachesGoal() {
     // 멤버 행 ✓ 노출 조건 = 라이브 주간 누적이 1인당 목표 이상.
-    let now = Date()
+    // 기준시각은 주 한복판(KST 화요일 낮)으로 고정한다 — 벽시계를 쓰면 KST 월요일 00~01시에 진행 세션이
+    // 주 시작으로 클리핑돼 '근무중 1시간'이 성립하지 않아 시각 의존 실패가 난다.
+    let now = URLProtocolStub.weeklyFixtureNow
     let goal = 40 * 3600
     let met = TeamMemberStatus(id: "1", name: "달성", status: .offWork, updatedAt: nil, currentSessionStartedAt: nil, weeklyDurationSeconds: 40 * 3600)
     #expect(met.hasMetWeeklyGoal(goalSeconds: goal, now: now))
@@ -1085,15 +1092,24 @@ func upsertTokenUsagePostsMergeDuplicatesWithSnakeCasePayload() async throws {
         codexInput: 55, codexOutput: 66,
         todayTotal: 77, todayDate: "2026-07-14"
     )
-    try await service.upsertTokenUsage(accessToken: "access-token", userID: "00000000-0000-0000-0000-000000000002", usage: usage)
+    try await service.upsertTokenUsage(
+        accessToken: "access-token",
+        userID: "00000000-0000-0000-0000-000000000002",
+        usage: usage,
+        deviceID: "mac-studio-1"
+    )
 
     let post = try #require(URLProtocolStub.requests(forHost: testHost).first {
-        $0.url?.path == "/rest/v1/token_usage_monthly" && $0.httpMethod == "POST"
+        $0.url?.path == "/rest/v1/token_usage_device_monthly" && $0.httpMethod == "POST"
     })
-    // on_conflict=user_id,month 로 (user_id,month) 충돌 시 merge 갱신.
+    // 이 메서드는 새 표만 담당한다 — 옛 표 갱신은 별도 upsertLegacyTokenUsage 의 몫이라 여기서 섞이면 안 된다
+    // (스키마가 아직 없어도 옛 표 갱신은 성공해야 하므로 두 요청은 분리돼 있어야 한다).
+    #expect(!URLProtocolStub.requests(forHost: testHost).contains { $0.url?.path == "/rest/v1/token_usage_monthly" })
+    // on_conflict=user_id,month,device_id — 기기별 행이라 다른 맥의 행을 덮어쓰지 않는다(합산은 서버 보드 몫).
     let postURL = try #require(post.url)
     let queryItems = try #require(URLComponents(url: postURL, resolvingAgainstBaseURL: false)?.queryItems)
-    #expect(queryItems.contains(URLQueryItem(name: "on_conflict", value: "user_id,month")))
+    #expect(queryItems.contains(URLQueryItem(name: "on_conflict", value: "user_id,month,device_id")))
+    #expect(!queryItems.contains(URLQueryItem(name: "on_conflict", value: "user_id,month")))
     let prefer = try #require(post.value(forHTTPHeaderField: "Prefer"))
     #expect(prefer.contains("resolution=merge-duplicates"))
     #expect(prefer.contains("return=minimal"))
@@ -1102,6 +1118,7 @@ func upsertTokenUsagePostsMergeDuplicatesWithSnakeCasePayload() async throws {
     // snake_case 인코딩 + month + total(=6필드 합 231).
     #expect(bodyText.contains("\"user_id\":\"00000000-0000-0000-0000-000000000002\""))
     #expect(bodyText.contains("\"month\":\"2026-07\""))
+    #expect(bodyText.contains("\"device_id\":\"mac-studio-1\""))
     #expect(bodyText.contains("\"claude_input\":11"))
     #expect(bodyText.contains("\"claude_output\":22"))
     #expect(bodyText.contains("\"claude_cache_read\":33"))
@@ -1115,6 +1132,94 @@ func upsertTokenUsagePostsMergeDuplicatesWithSnakeCasePayload() async throws {
     // camelCase 가 새어 나가지 않는다.
     #expect(!bodyText.contains("\"claudeInput\""))
     #expect(!bodyText.contains("\"todayTotal\""))
+    #expect(!bodyText.contains("\"deviceId\""))
+}
+
+@Test
+func fetchLegacyTokenUsageTotalReadsOwnMonthRow() async throws {
+    // 옛 표를 덮어쓰기 전 게이트가 읽는 요청. 아직 v0.2.10 인 다른 맥의 더 큰 누적치를 깎지 않으려면
+    // 그 행의 현재 총량을 먼저 알아야 한다(행이 없으면 nil → 덮어쓰기 허용).
+    let testHost = "legacy-bigger-total-read"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let total = try await service.fetchLegacyTokenUsageTotal(
+        accessToken: "access-token",
+        userID: "00000000-0000-0000-0000-000000000002",
+        month: "2026-07"
+    )
+    #expect(total == 200_000_000)
+
+    let get = try #require(URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/token_usage_monthly" && $0.httpMethod == "GET"
+    })
+    let getURL = try #require(get.url)
+    let queryItems = try #require(URLComponents(url: getURL, resolvingAgainstBaseURL: false)?.queryItems)
+    #expect(queryItems.contains(URLQueryItem(name: "select", value: "total")))
+    #expect(queryItems.contains(URLQueryItem(name: "user_id", value: "eq.00000000-0000-0000-0000-000000000002")))
+    #expect(queryItems.contains(URLQueryItem(name: "month", value: "eq.2026-07")))
+
+    // 행이 없는 서버(스텁 기본 픽스처 = 빈 목록)에서는 nil — 호출자는 그때 덮어써도 안전하다.
+    let emptyHost = "legacy-empty-total-read"
+    let emptyService = SupabaseWorkService(
+        projectURL: URL(string: "http://\(emptyHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let missing = try await emptyService.fetchLegacyTokenUsageTotal(
+        accessToken: "access-token",
+        userID: "00000000-0000-0000-0000-000000000002",
+        month: "2026-07"
+    )
+    #expect(missing == nil)
+}
+
+@Test
+func upsertLegacyTokenUsageKeepsV0210RequestShape() async throws {
+    // 옛 표는 마이그레이션 미적용 구간의 보루이자 v0.2.10 맥과 공유하는 행이라 v0.2.11 도 계속 쓰되,
+    // 요청 모양은 v0.2.10 과 정확히 같아야 한다(키가 (user_id, month) 라 device_id 를 실으면 그 표의
+    // 컬럼에 없어 400 이 난다). 언제 쓰는지(깎지 않을 때만)는 스토어 쪽 게이트가 정한다.
+    let testHost = "token-legacy-upsert-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let usage = TokenUsageMonthly(
+        month: "2026-07",
+        claudeInput: 11, claudeOutput: 22, claudeCacheRead: 33, claudeCacheCreation: 44,
+        codexInput: 55, codexOutput: 66,
+        todayTotal: 77, todayDate: "2026-07-14"
+    )
+    try await service.upsertLegacyTokenUsage(
+        accessToken: "access-token",
+        userID: "00000000-0000-0000-0000-000000000002",
+        usage: usage
+    )
+
+    let post = try #require(URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/token_usage_monthly" && $0.httpMethod == "POST"
+    })
+    let postURL = try #require(post.url)
+    let queryItems = try #require(URLComponents(url: postURL, resolvingAgainstBaseURL: false)?.queryItems)
+    #expect(queryItems.contains(URLQueryItem(name: "on_conflict", value: "user_id,month")))
+    let prefer = try #require(post.value(forHTTPHeaderField: "Prefer"))
+    #expect(prefer.contains("resolution=merge-duplicates"))
+    #expect(prefer.contains("return=minimal"))
+
+    let bodyText = URLProtocolStub.bodyText(forHost: testHost)
+    #expect(bodyText.contains("\"user_id\":\"00000000-0000-0000-0000-000000000002\""))
+    #expect(bodyText.contains("\"month\":\"2026-07\""))
+    #expect(bodyText.contains("\"total\":231"))
+    #expect(bodyText.contains("\"today_total\":77"))
+    #expect(bodyText.contains("\"today_date\":\"2026-07-14\""))
+    // 옛 표에는 device_id 컬럼이 없다 — 실어 보내면 그 표 업로드가 통째로 깨진다.
+    #expect(!bodyText.contains("device_id"))
+    #expect(!bodyText.contains("deviceId"))
 }
 
 @Test
@@ -1508,4 +1613,162 @@ func updateTokenUsagePublicPatchesProfileRow() async throws {
     let body = try #require(TokenBoardURLProtocol.lastBody(forHost: testHost))
     #expect(body.contains("\"token_usage_public\":false"))
     #expect(!body.contains("\"tokenUsagePublic\""))
+}
+
+// MARK: - 개인 기록(히트맵·회고) 원천 조회 + ISO8601 소수초 파싱
+
+@Test
+func fetchMySessionsRequestsOwnCompletedSessionsSinceWindow() async throws {
+    let testHost = "my-sessions-test"
+    TokenBoardURLProtocol.setResponse(
+        """
+        [
+          {"id": "s1", "user_id": "u1", "started_at": "2026-07-20T01:00:00.123Z", "ended_at": "2026-07-20T04:00:00.456Z", "duration_seconds": 10800},
+          {"id": "s2", "user_id": "u1", "started_at": "2026-07-21T02:00:00Z", "ended_at": "2026-07-21T03:00:00Z", "duration_seconds": 3600}
+        ]
+        """,
+        forHost: testHost
+    )
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+
+    let since = try #require(ISO8601DateFormatter().date(from: "2026-07-01T00:00:00Z"))
+    let rows = try await service.fetchMySessions(accessToken: "access-token", userID: "u1", since: since)
+
+    // 디코드: 완료 세션 두 건(히트맵/회고가 쓰는 타임스탬프 원문 그대로).
+    #expect(rows.count == 2)
+    #expect(rows.first { $0.id == "s1" }?.durationSeconds == 10800)
+    #expect(rows.first { $0.id == "s2" }?.endedAt == "2026-07-21T03:00:00Z")
+
+    // 요청: GET /rest/v1/work_sessions + 본인 필터 + 완료 세션 + since 창 + 시작순 + 상한.
+    let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
+    #expect(url.path == "/rest/v1/work_sessions")
+    #expect(TokenBoardURLProtocol.lastMethod(forHost: testHost) == "GET")
+    let items = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+    #expect(items.contains(URLQueryItem(name: "select", value: "id,user_id,started_at,ended_at,duration_seconds")))
+    #expect(items.contains(URLQueryItem(name: "user_id", value: "eq.u1")))
+    #expect(items.contains(URLQueryItem(name: "ended_at", value: "not.is.null")))
+    #expect(items.contains(URLQueryItem(name: "ended_at", value: "gte.2026-07-01T00:00:00Z")))
+    #expect(items.contains(URLQueryItem(name: "order", value: "started_at.asc")))
+    #expect(items.contains(URLQueryItem(name: "limit", value: "2000")))
+    // 팀 필터는 걸지 않는다(본인 세션만 보면 되고 RLS 가 나머지를 막는다).
+    #expect(!items.contains(where: { $0.name == "team_id" }))
+}
+
+@Test
+func parseDateAcceptsFractionalSecondsAndFallsBackToPlain() async throws {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://iso-parse-test")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+
+    let base = try #require(ISO8601DateFormatter().date(from: "2026-07-26T04:15:35Z"))
+    // 소수초 포함(프로덕션 timestamptz 의 실제 형태) — 기본 포매터 하나만 쓰던 시절엔 통째로 nil 이었다.
+    let fractionalParsed = await service.parseDate("2026-07-26T04:15:35.634Z")
+    let fractional = try #require(fractionalParsed)
+    #expect(abs(fractional.timeIntervalSince(base) - 0.634) < 0.005)
+    // 소수초 없는 형태도 그대로 폴백 파싱된다(기존 동작 불변).
+    let plain = await service.parseDate("2026-07-26T04:15:35Z")
+    #expect(plain == base)
+    // 형식이 아예 아닌 값은 여전히 nil.
+    let garbage = await service.parseDate("어제쯤")
+    #expect(garbage == nil)
+}
+
+@Test
+func fetchTeamStatusesParsesFractionalSecondTimestamps() async throws {
+    // 회귀 픽스처: 소수초가 붙은 started_at/last_seen_at 을 못 읽으면 진행 세션 누적이 조용히 0 이 된다.
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://fractional-seconds-test")!,
+        anonKey: "anon-test-key",
+        session: FractionalSecondsURLProtocol.session()
+    )
+
+    let now = Date()
+    let statuses = try await service.fetchTeamStatuses(
+        accessToken: "access-token",
+        teamID: URLProtocolStub.stubTeamID,
+        now: now
+    )
+
+    let member = try #require(statuses.first { $0.id == "00000000-0000-0000-0000-000000000002" })
+    // 소수초 타임스탬프가 nil 로 흐르지 않는다 — 진행 세션 시작/생존신호 모두 살아 있다.
+    #expect(member.currentSessionStartedAt != nil)
+    #expect(member.lastSeenAt != nil)
+    #expect(member.presence(now: now) == .activeWorking)
+    // 한 시간 전(소수초 포함) 시작한 진행 세션이므로 라이브 누적은 3600초 근방이어야 한다(파싱 실패 시 0).
+    let live = member.currentDurationSeconds(now: now)
+    #expect(live >= 3_590 && live <= 3_610)
+}
+
+/// 소수초가 붙은 timestamptz 픽스처 전용 스텁. 프로덕션 Supabase 는 "2026-07-26T04:15:35.634Z" 처럼
+/// 소수초를 붙여 내려주므로, 실제 디코드 경로(fetchTeamStatuses)로 파싱 회귀를 잡는다.
+/// 시각은 now 기준 상대값으로 만들어 stale(>90초) 오판 없이 결정적으로 검증한다.
+final class FractionalSecondsURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    static func session() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FractionalSecondsURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    /// 소수초 포함 ISO8601 문자열. 포매터는 Sendable 이 아니라 정적 보관 대신 호출마다 만든다(스텁이라 비용 무관).
+    private static func stamp(_ offset: TimeInterval) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: Date().addingTimeInterval(offset))
+    }
+
+    override func startLoading() {
+        let path = request.url?.path ?? ""
+        let isOpenSessionQuery = request.url?.query?.contains("ended_at=is.null") == true
+        let json: String
+        if path == "/rest/v1/work_statuses" {
+            json = """
+            [
+              {
+                "user_id": "00000000-0000-0000-0000-000000000002",
+                "status": "working",
+                "updated_at": "\(Self.stamp(-10))",
+                "last_seen_at": "\(Self.stamp(-5))",
+                "active_session_id": "80000000-0000-0000-0000-000000000001",
+                "profiles": { "display_name": "영식", "email": "member@example.com", "avatar_url": null }
+              }
+            ]
+            """
+        } else if path == "/rest/v1/work_sessions", isOpenSessionQuery {
+            json = """
+            [
+              {
+                "id": "80000000-0000-0000-0000-000000000001",
+                "user_id": "00000000-0000-0000-0000-000000000002",
+                "started_at": "\(Self.stamp(-3_600))",
+                "ended_at": null,
+                "duration_seconds": null
+              }
+            ]
+            """
+        } else {
+            json = "[]"
+        }
+
+        let data = Data(json.utf8)
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }

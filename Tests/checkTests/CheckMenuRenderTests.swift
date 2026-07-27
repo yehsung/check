@@ -430,6 +430,22 @@ func headerGoalPercentComputesActualRatioWithCap() {
     #expect(GoalPercentFormatter.percent(workedSeconds: 10_000 * 3600, goalSeconds: 60 * 3600) == 999)
 }
 
+@Test
+func shortfallPercentNeverReadsAsFullyMetWhileStillShort() {
+    // 회귀 지점: 지난주 회고 목표선이 반올림 퍼센트와 부족분을 한 문장에 붙여 쓰면서
+    // "목표 60시간 00분 중 100% · 0시간 18분 부족" 이라는 자기모순 문구를 냈다.
+    // 목표 60시간 / 지난주 59시간 42분 — 반올림하면 100 이지만 metGoal 은 엄격 비교(>=)라 여전히 미달이다.
+    #expect(GoalPercentFormatter.percent(workedSeconds: 214_920, goalSeconds: 216_000) == 100)
+    #expect(214_920 < 216_000)  // 실제로는 미달(1,080초 부족).
+    // 미달 문맥 전용 퍼센트는 99 로 묶여 문장이 스스로를 부정하지 않는다.
+    #expect(GoalPercentFormatter.shortfallPercent(workedSeconds: 214_920, goalSeconds: 216_000) == 99)
+    // 목표 40시간(39시간 48분)에서도 같은 구간이 존재한다.
+    #expect(GoalPercentFormatter.shortfallPercent(workedSeconds: 143_280, goalSeconds: 144_000) == 99)
+    // 미달이 아닌 값은 손대지 않는다(달성 분기는 이 함수를 타지 않지만 계산 자체가 왜곡되면 안 된다).
+    #expect(GoalPercentFormatter.shortfallPercent(workedSeconds: 108_000, goalSeconds: 216_000) == 50)
+    #expect(GoalPercentFormatter.shortfallPercent(workedSeconds: 0, goalSeconds: 216_000) == 0)
+}
+
 @MainActor
 @Test
 func teamMemberRowDrawsGoalBarOnlyWhenFractionPresent() throws {
@@ -696,8 +712,8 @@ func checkAvatarViewRendersMixedSnapshot() throws {
 @Test
 func longSessionBannerRendersSnapshot() throws {
     // 배너 컴포넌트를 직접 초기화해 렌더한다(스텁 store로는 활성화 불가). 잘림·겹침 없이 그려져야 한다.
-    let banner = LongSessionBanner(onConfirm: {})
-        .frame(width: 316, height: 88)
+    // 형제 뷰로 올라가며 높이가 콘텐츠 자연 높이가 됐으므로(고정 88 폐기) 폭만 고정해 그린다.
+    let banner = LongSessionBanner(onConfirm: {}, onStopNow: {})
     let png = try renderPNG(banner, width: 316)
     #expect(png.count > 0)
     if let path = ProcessInfo.processInfo.environment["CHECK_LONG_SESSION_BANNER_SNAPSHOT_PATH"] {
@@ -708,7 +724,7 @@ func longSessionBannerRendersSnapshot() throws {
 @MainActor
 @Test
 func checkMenuViewRendersLongSessionBannerContextSnapshot() throws {
-    // 배너가 헤더 카드 위 overlay로 얹힌 실제 배치를 확인한다(previewLongSessionBanner로 강제).
+    // 배너가 헤더 카드 "위쪽 형제"로 놓인 실제 배치를 확인한다(previewLongSessionBanner로 강제).
     let store = makeSignedInStore()
     let png = try renderPNG(CheckMenuView(store: store, previewLongSessionBanner: true))
     #expect(png.count > 0)
@@ -1056,7 +1072,8 @@ private func isolatedRenderDefaults() -> UserDefaults {
 
 /// 렌더 테스트용 격리 토큰 스토어. 실홈 대신 빈 임시 홈 + 격리 defaults 를 준다 — CheckMenuView 의 .task 갱신 루프가
 /// ImageRenderer 렌더 중에 돌더라도(ImageRenderer 는 .task 를 실행한다) 실홈 스캔이나 테스트 러너 .standard 오염이
-/// 일어나지 않는다. 빈 홈이라 집계는 0 → 토큰 행은 EmptyView(높이 0)로 결정적이다.
+/// 일어나지 않는다. 빈 홈이라 집계는 0 → 팝오버에서는 숫자 없는 순위판 진입 행(boardEntryRow)이,
+/// 콜백 없이 단독으로 쓰면 EmptyView 가 결정적으로 그려진다.
 @MainActor
 private func inertTokenStore() -> TokenUsageStore {
     let tmp = FileManager.default.temporaryDirectory
@@ -1103,6 +1120,39 @@ func checkMenuViewRendersTokenRowBetweenHeaderAndTeamSnapshot() throws {
     if let path = ProcessInfo.processInfo.environment["CHECK_TOKEN_ROW_SNAPSHOT_PATH"] {
         try png.write(to: URL(fileURLWithPath: path))
     }
+}
+
+@MainActor
+@Test
+func tokenUsageRowKeepsBoardEntryWhenMonthlyUsageIsZero() throws {
+    // 회귀 지점: 토큰 순위판으로 가는 유일한 버튼(person.2)이 '이번 달 내 소모량 > 0' 행 안에만 있어서,
+    // AI CLI 를 아직 쓰지 않는 팀원(디자이너·PM)·신규 설치는 팝오버 어디에서도 순위판에 들어갈 수 없었다.
+    // 순위판은 앱 사용자 전체 공개 보드인 데다, 월 이동(‹ ›)과 내 사용량 공개/비공개 토글은 **그 안에만**
+    // 있어서 README 가 조건 없이 안내하는 기능 두 개가 통째로 도달 불가였다.
+    let empty = inertTokenStore()
+    #expect((empty.currentMonthUsage?.total ?? 0) == 0)
+
+    // 소모량이 0이어도 순위판 진입 행이 그려진다(높이 > 0).
+    let entryHeight = try #require(renderedPixelHeight(CheckTokenUsageRow(store: empty, onOpenBoard: {})))
+    #expect(entryHeight > 0)
+    // 높이는 소모량 행과 같다 — 창 높이 예산(CheckMenuView.tokenUsageRowHeight)이 두 경우 모두 그대로 맞는다.
+    let usageHeight = try #require(renderedPixelHeight(CheckTokenUsageRow(store: seededTokenStore(), onOpenBoard: {})))
+    #expect(entryHeight == usageHeight)
+
+    // 콜백이 없는 단독 사용(순위판이 없는 문맥)에서는 예전처럼 아무것도 그리지 않는다.
+    #expect(CheckTokenUsageRow(store: empty).onOpenBoard == nil)
+
+    // 팝오버 홈에도 실제로 얹힌다(육안 확인 PNG). 이 자리를 눌러야 순위판 → 월 이동/공개 토글로 갈 수 있다.
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+    let home = makeTeamStore(members: presenceMembers(now: now), now: now, tokenUsage: inertTokenStore())
+    let png = try renderPNG(CheckMenuView(store: home))
+    #expect(png.count > 0)
+    saveV0211Snapshot(png, "token-board-entry-no-usage")
+
+    // 진입 행이 늘 그려지므로 창 높이 상한(≤700pt)도 함께 고정한다(목록이 큰 팀 조합).
+    let bigTeam = makeTeamStore(members: steadyMembers(count: 10), now: now, tokenUsage: inertTokenStore())
+    let pixelHeight = try #require(renderedPixelHeight(CheckMenuView(store: bigTeam)))
+    #expect(Double(pixelHeight) / 2.0 <= 700.0)
 }
 
 // MARK: - D2: 이번 달 AI 토큰 보드 렌더 (전체 공개)
@@ -1270,4 +1320,864 @@ func pokePanelWindowHeightWithinCap() throws {
     let pixelHeight = try #require(renderedPixelHeight(CheckMenuView(store: store)))
     // scale 2 렌더 → 포인트 높이 = 픽셀/2. 700pt 상한.
     #expect(Double(pixelHeight) / 2.0 <= 700.0)
+}
+
+// MARK: - v0.2.11 U: 개인 기록 패널 · 토큰 월 이동 · 배너 재배치/배선
+
+/// v0.2.11 육안 확인 PNG 를 스크래치 디렉터리에 v0211-<이름>.png 로 저장한다(실행은 통합 단계가 한다).
+@MainActor
+private func saveV0211Snapshot(_ png: Data, _ name: String) {
+    let dir = URL(fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try? png.write(to: dir.appendingPathComponent("v0211-\(name).png"))
+}
+
+/// 히트맵 픽스처(결정적). 평일 10~19시가 진하고 저녁은 옅으며 주말은 낮 시간대만 얕게 깔린다 —
+/// 농도 대비(0/옅음/진함)와 peakSlot 문구가 한눈에 확인되도록 계단식으로 만든다.
+/// build(sessions:) 는 다른 웨이브가 구현하므로 여기선 순수 타입을 직접 조립한다(뷰 검증 목적).
+private func sampleWorkRhythmHeatmap(weeks: Int = 8) -> WorkRhythmHeatmap {
+    var buckets = Array(
+        repeating: Array(repeating: 0, count: WorkRhythmHeatmap.hourCount),
+        count: WorkRhythmHeatmap.dayCount
+    )
+    for day in 0..<WorkRhythmHeatmap.dayCount {
+        let isWeekday = day < 5
+        for hour in 0..<WorkRhythmHeatmap.hourCount {
+            if isWeekday, (10...19).contains(hour) {
+                buckets[day][hour] = 1_800 + (hour - 9) * 600 + day * 300
+            } else if isWeekday, (20...22).contains(hour) {
+                buckets[day][hour] = 900
+            } else if !isWeekday, (13...18).contains(hour) {
+                buckets[day][hour] = 600 + day * 120
+            }
+        }
+    }
+    let total = buckets.reduce(0) { $0 + $1.reduce(0, +) }
+    return WorkRhythmHeatmap(buckets: buckets, weeks: weeks, totalSeconds: total)
+}
+
+/// 회고 픽스처: 지난주 32시간 14분 / 목표 40시간(미달) / 전주 29시간 02분 → 전주 대비 +3시간 12분.
+private func sampleWeeklyRetro() -> WeeklyRetro {
+    WeeklyRetro(
+        weekStart: Date(timeIntervalSince1970: 1_784_000_000),
+        totalSeconds: 32 * 3_600 + 14 * 60,
+        goalSeconds: 40 * 3_600,
+        previousWeekSeconds: 29 * 3_600 + 2 * 60,
+        sessionCount: 11,
+        busiestDayIndex: 1,
+        busiestDaySeconds: 8 * 3_600 + 12 * 60
+    )
+}
+
+/// 개인 기록 패널이 열린 로그인 스토어. withData=false 면 로드는 끝났지만 기록이 0인 빈 상태,
+/// loaded=false 면 아직 로딩 중("불러오는 중…") 상태를 재현한다.
+@MainActor
+private func makeInsightsStore(withData: Bool = true, loaded: Bool = true) -> WorkTimerStore {
+    let store = makeTeamStore(members: [], now: Date())
+    store.teamGoalSeconds = 40 * 3_600
+    store.heatmap = withData ? sampleWorkRhythmHeatmap() : .empty
+    store.retro = withData ? sampleWeeklyRetro() : nil
+    store.insightsLoaded = loaded
+    store.isInsightsPanelVisible = true
+    return store
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersInsightsPanelSnapshot() throws {
+    // 개인 기록 패널(데이터 있음): 회고 카드(지난주 32시간 14분 · 목표 40시간 중 80% · 전주 대비 +3시간 12분 ·
+    // 세션 11회 · 가장 많이 일한 날 화요일) + 요일×시간대 히트맵(월~일 7행 × 0/6/12/18 라벨) + "가장 활발한 시간".
+    // 340pt 폭 안에서 24열 격자가 잘림 없이 수납되는지 육안 확인한다.
+    let store = makeInsightsStore()
+    // 문구 규약(순수 판정)도 함께 고정한다 — 데이터가 있으면 자리 문구가 아니라 본문을 그린다.
+    #expect(InsightsEmptyMessage.text(hasLoaded: true, totalSeconds: store.heatmap.totalSeconds) == nil)
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    saveV0211Snapshot(png, "insights-panel")
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersInsightsEmptySnapshot() throws {
+    // 개인 기록 빈 상태: 로드는 끝났지만 누적이 0 → "아직 기록이 쌓이지 않았어요"(syncMessage 재사용 금지).
+    let store = makeInsightsStore(withData: false, loaded: true)
+    store.syncMessage = "동기화됨"
+    #expect(InsightsEmptyMessage.text(hasLoaded: true, totalSeconds: 0) == InsightsEmptyMessage.noData)
+    // 로드 전에는 동기화 문구가 아니라 "불러오는 중…" 이어야 한다(전면 감사 지적 반영).
+    #expect(InsightsEmptyMessage.text(hasLoaded: false, totalSeconds: 0) == InsightsEmptyMessage.loading)
+
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    saveV0211Snapshot(png, "insights-empty")
+
+    // 로딩 중 상태도 같은 자리에 그려지는지 확인한다.
+    let loadingPNG = try renderPNG(CheckMenuView(store: makeInsightsStore(withData: false, loaded: false)))
+    #expect(loadingPNG.count > 0)
+    saveV0211Snapshot(loadingPNG, "insights-loading")
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersInsightsFirstDayWithRunningSessionSnapshot() throws {
+    // 회귀 지점: 가입 첫날 근무를 시작한 사용자의 '내 기록'이 "아직 기록이 쌓이지 않았어요"였다 — 완료 세션이
+    // 0건이라(서버는 ended_at 있는 행만 준다) heatmap 이 통째로 비었기 때문. 같은 팝오버 헤더는 진행분을 더한
+    // 이번 주 누적을 시간 단위로 세고 있어 한 화면이 스스로를 반박했다. 이제 진행 중 세션이 함께 집계된다.
+    let now = Date(timeIntervalSince1970: 1_784_000_000)   // 고정 시각(렌더 결정성)
+    let computed = WorkInsightsComputation.build(
+        rows: [], now: now, weeks: 8, goalSeconds: 40 * 3_600,
+        ongoingStart: now.addingTimeInterval(-3 * 3_600)
+    )
+    #expect(computed.heatmap.totalSeconds == 3 * 3_600)
+    // 자리 문구가 아니라 본문(회고 카드 + 히트맵)을 그린다.
+    #expect(InsightsEmptyMessage.text(hasLoaded: true, totalSeconds: computed.heatmap.totalSeconds) == nil)
+
+    let store = makeInsightsStore(withData: false, loaded: true)
+    store.heatmap = computed.heatmap
+    store.retro = computed.retro          // 첫 주라 지난주 회고는 없다 → 회고 자리는 "지난주 근무 기록이 없어요".
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    saveV0211Snapshot(png, "insights-first-day-running")
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersInsightsFailureSnapshot() throws {
+    // 회귀 지점: 조회 실패에 상태가 없어 "불러오는 중…"이 팝오버를 닫을 때까지 남았다(진행중과 실패가 같은 문구).
+    // 이제 실패는 실패 문구 + [다시 시도] 로 갈라진다 — 토큰 보드(isLoading)와 같은 대칭.
+    #expect(InsightsEmptyMessage.text(hasLoaded: false, hasFailed: false, totalSeconds: 0) == InsightsEmptyMessage.loading)
+    #expect(InsightsEmptyMessage.text(hasLoaded: false, hasFailed: true, totalSeconds: 0) == InsightsEmptyMessage.loadFailed)
+    // 회귀 지점: (로드 완료 + 실패 + 누적 0) 조합에서 "아직 기록이 쌓이지 않았어요"를 사실처럼 단정하고
+    // 그 옆에 [다시 시도]까지 붙어 모순된 화면이 됐다. insightsLoaded 는 성공 후 false 로 돌아가지 않으므로
+    // 이 조합은 실제로 성립한다 — 가입 첫날 0건으로 성공 로드해 둔 뒤(스냅샷 유지) 며칠 뒤 조회가 실패한 경우다.
+    // 서버에는 한 주치 기록이 있는데 "기록 없음"으로 단정하면 안 된다 → 실패 문구로 갈라진다.
+    #expect(InsightsEmptyMessage.text(hasLoaded: true, hasFailed: true, totalSeconds: 0) == InsightsEmptyMessage.loadFailed)
+    // 실패하지 않은 로드 완료 + 0 은 그대로 "기록 없음"이다(정확한 단정).
+    #expect(InsightsEmptyMessage.text(hasLoaded: true, hasFailed: false, totalSeconds: 0) == InsightsEmptyMessage.noData)
+    // 보여 줄 기록이 남아 있으면 실패해도 자리 문구로 덮지 않는다(직전 스냅샷을 계속 보여 준다).
+    #expect(InsightsEmptyMessage.text(hasLoaded: true, hasFailed: true, totalSeconds: 3_600) == nil)
+
+    let store = makeInsightsStore(withData: false, loaded: false)
+    store.insightsFailed = true
+    store.syncMessage = "동기화됨"
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    saveV0211Snapshot(png, "insights-failed")
+
+    // 실패 자리 문구 + 재시도 버튼이 붙어도 창 높이 상한(≤700pt)은 지킨다.
+    let pixelHeight = try #require(renderedPixelHeight(CheckMenuView(store: store)))
+    #expect(Double(pixelHeight) / 2.0 <= 700.0)
+
+    // 첫 로드는 성공했지만(0건) 이후 조회가 실패한 상태 — 화면도 실패 문구여야 한다("기록 없음" 단정 금지).
+    let staleStore = makeInsightsStore(withData: false, loaded: true)
+    staleStore.insightsFailed = true
+    let stalePNG = try renderPNG(CheckMenuView(store: staleStore))
+    #expect(stalePNG.count > 0)
+    saveV0211Snapshot(stalePNG, "insights-loaded-then-failed")
+    // 같은 (loaded, 0건) 인데 실패 표시가 붙었으므로 성공 빈 상태와는 다른 그림이다(문구가 갈렸다는 증거).
+    let emptyPNG = try renderPNG(CheckMenuView(store: makeInsightsStore(withData: false, loaded: true)))
+    #expect(stalePNG != emptyPNG)
+}
+
+/// 푸터 동기화 문구 폭 예산(순수 계산) 회귀 고정.
+/// v0.2.11 초안이 푸터에 다섯 번째 버튼(자동시작 토글)을 세워 문구 슬롯이 125→90pt 로 줄었고,
+/// "자리 비움으로 자동 근무종료됨"(121pt)·"자동 시작을 취소했어요"(92pt)가 잘려 뜻을 잃었다.
+/// 토글을 헤더 캡션 행으로 옮겨 4버튼으로 되돌렸고, 그래도 넘치는 긴 문구는 축소로 담는다.
+@MainActor
+@Test
+func footerSyncMessageFitsWithinButtonBudget() {
+    // 실측(NSFont .caption2 = 10pt) 폭. 렌더 환경과 무관하게 상수로 못 박아 회귀를 잡는다.
+    let autoCloseMessage: CGFloat = 121  // "자리 비움으로 자동 근무종료됨"
+    let cancelMessage: CGFloat = 93      // "자동 시작을 취소했어요"
+
+    // 5버튼(v0.2.11 초안)에서는 두 문구 모두 축소 없이는 들어가지 않았다 — 결함의 원인.
+    #expect(FooterWidthBudget.messageWidth(iconButtonCount: 5) < autoCloseMessage)
+    #expect(FooterWidthBudget.messageWidth(iconButtonCount: 5) < cancelMessage)
+
+    // 4버튼(현재)에서는 둘 다 축소 없이 온전히 들어간다.
+    #expect(FooterWidthBudget.messageWidth(iconButtonCount: 4) >= autoCloseMessage)
+    #expect(FooterWidthBudget.messageWidth(iconButtonCount: 4) >= cancelMessage)
+
+    // 실제로 쓰는 가장 긴 문구(무소속 안내 175.9pt)까지 축소 범위 안에서 말줄임 없이 담긴다.
+    #expect(FooterWidthBudget.fittingMessageWidth(iconButtonCount: 4) >= FooterWidthBudget.longestMessageWidth)
+    // 버튼을 하나 더 세우면 그 보장이 곧바로 깨진다(이 테스트가 다섯 번째 버튼을 막는 장치다).
+    #expect(FooterWidthBudget.fittingMessageWidth(iconButtonCount: 5) < FooterWidthBudget.longestMessageWidth)
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersInsightsRetroBannerSnapshot() throws {
+    // 회고 배너: 팝오버 최상단(UpdateBanner 아래)에 "지난주 근무 기록이 준비됐어요" + [보기] + 닫기(X).
+    let store = makeTeamStore(members: presenceMembers(now: Date()), now: Date())
+    store.retro = sampleWeeklyRetro()
+    store.showsRetroBanner = true
+
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    saveV0211Snapshot(png, "retro-banner")
+}
+
+@MainActor
+@Test
+func updateBannerAppearsOnTheNextPopoverAfterTheRetroBannerWasShownOnce() throws {
+    // 회귀 지점: 회고 배너가 소비되지 않아 팝오버를 열 때마다 되살아났고, '배너는 한 번에 하나(retro > update)'
+    // 규칙 때문에 새 버전 안내 배너가 그 주 내내 한 번도 그려지지 않았다(앱 안에서 업데이트로 가는 유일한 경로).
+    let now = Date()
+    let store = makeTeamStore(members: steadyMembers(count: 4), now: now, tokenUsage: seededTokenStore())
+    store.retro = sampleWeeklyRetro()
+    store.showsRetroBanner = true
+
+    // 1) 첫 팝오버: 새 버전이 있어도 회고가 이긴다(높이는 회고 배너 하나만큼).
+    let withRetro = try #require(renderedPixelHeight(CheckMenuView(store: store, previewUpdateBanner: true)))
+
+    // 뷰가 배너를 그리며 이번 주 몫을 소비하고(onAppear), 사용자가 아무것도 누르지 않은 채 팝오버를 닫는다.
+    store.markRetroBannerDisplayed()
+    store.setMenuPresented(false)
+    #expect(!store.showsRetroBanner)
+
+    // 2) 다음 팝오버 오픈의 배너 판정 — 회고는 이번 주 몫을 이미 썼으므로 올라오지 않는다.
+    store.isMenuPresented = true
+    store.evaluateRetroBanner()
+    #expect(!store.showsRetroBanner)
+
+    // 그 자리를 새 버전 안내 배너가 쓴다(회고 배너 54pt 보다 높은 81pt 배너라 창이 더 자란다).
+    let withUpdate = try #require(renderedPixelHeight(CheckMenuView(store: store, previewUpdateBanner: true)))
+    #expect(withUpdate > withRetro)
+}
+
+@MainActor
+@Test
+func insightsPanelWindowHeightWithinCap() throws {
+    // 개인 기록 패널도 창 높이 상한(≤700pt) 안에 머문다. 회고 카드 + 7×24 히트맵이 모두 찬 최대 상태를 검증한다.
+    let pixelHeight = try #require(renderedPixelHeight(CheckMenuView(store: makeInsightsStore())))
+    // scale 2 렌더 → 포인트 높이 = 픽셀/2. 700pt 상한.
+    #expect(Double(pixelHeight) / 2.0 <= 700.0)
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersTokenBoardPastMonthSnapshot() throws {
+    // 토큰 순위판 과거 달: 제목이 "N월 AI 토큰 소모량"으로 바뀌고 › 는 비활성(미래 불가), ‹ 는 계속 가능.
+    let now = Date()
+    let currentMonth = TokenUsageMonthKey.current(now)
+    let pastMonth = TokenBoardMonthNavigator.step(currentMonth, by: -2, now: now)
+    #expect(pastMonth < currentMonth)
+    // 과거 달이면 앞으로 갈 수 있고(› 활성), 현재 달이면 갈 수 없다(› 비활성).
+    #expect(TokenBoardMonthNavigator.canStepForward(from: pastMonth, now: now))
+    #expect(!TokenBoardMonthNavigator.canStepForward(from: currentMonth, now: now))
+
+    let store = makeTokenBoardStore(memberCount: 5)
+    store.tokenBoardMonth = pastMonth
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    saveV0211Snapshot(png, "token-board-past-month")
+
+    // 현재 달(› 비활성) 상태도 같은 헤더 배치로 그려지는지 나란히 확인한다.
+    let currentStore = makeTokenBoardStore(memberCount: 5)
+    let currentPNG = try renderPNG(CheckMenuView(store: currentStore))
+    #expect(currentPNG.count > 0)
+    saveV0211Snapshot(currentPNG, "token-board-current-month")
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersTokenBoardPastMonthEmptySnapshot() throws {
+    // 과거 달에 기록이 없으면 '아직 아무도 안 올림'이 아니라 "이 달에는 기록이 없어요".
+    #expect(TokenBoardEmptyMessage.text(hasLoaded: true, fallbackStatus: "동기화됨", isCurrentMonth: false) == TokenBoardEmptyMessage.noPastRecords)
+    #expect(TokenBoardEmptyMessage.text(hasLoaded: true, fallbackStatus: "동기화됨", isCurrentMonth: true) == TokenBoardEmptyMessage.noUploads)
+    // 로드 전/실패면 월과 무관하게 동기화 상태 문구를 그대로 쓴다(기존 규약 유지).
+    #expect(TokenBoardEmptyMessage.text(hasLoaded: false, fallbackStatus: "로그인 필요", isCurrentMonth: false) == "로그인 필요")
+
+    let store = makeTokenBoardStore(memberCount: 5)
+    store.tokenBoard = []
+    store.tokenBoardLoaded = true
+    store.tokenBoardMonth = TokenBoardMonthNavigator.step(TokenUsageMonthKey.current(), by: -3)
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    saveV0211Snapshot(png, "token-board-past-empty")
+}
+
+@MainActor
+@Test
+func longSessionBannerSitsAboveHeaderWithoutCoveringStopButton() throws {
+    // 결함3 회귀 지점: 배너가 헤더 카드 overlay 였을 때는 카드 높이가 그대로라 '근무 종료' 버튼이 가려졌다.
+    // 형제 뷰로 올라간 지금은 배너만큼 창이 높아져야 한다(= 헤더를 덮지 않는다는 실측 증거).
+    let base = try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore())))
+    let withBanner = try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewLongSessionBanner: true)))
+    #expect(withBanner > base)
+    // 배너가 얹혀도 창 높이 상한(≤700pt)은 지킨다.
+    #expect(Double(withBanner) / 2.0 <= 700.0)
+
+    let png = try renderPNG(CheckMenuView(store: makeSignedInStore(), previewLongSessionBanner: true))
+    #expect(png.count > 0)
+    saveV0211Snapshot(png, "long-session-above-header")
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersRecoveryBannersSnapshot() throws {
+    // 결함4·5 배선: 자리 비움 자동 마감 [되돌리기] 배너와 넛지 자동 시작 [취소] 배너가 헤더 아래에 인라인으로 뜬다.
+    // 둘은 근무 상태가 정반대라(되돌리기=비근무, 취소=근무중) 절대 함께 뜨지 않는다 — 각각 따로 그린다.
+    let now = Date()
+
+    // (4) 자동 마감 직후 — 비근무 + 유예(10분) 안이라 [되돌리기] 가 뜬다.
+    let undoStore = makeTeamStore(members: presenceMembers(now: now), now: now)
+    undoStore.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
+    undoStore.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
+    undoStore.lastAutoClosedAt = now.addingTimeInterval(-30)
+    undoStore.syncMessage = "자리 비움으로 자동 근무종료됨"
+    #expect(undoStore.canUndoAutoClose(now: now))
+    // 뷰는 매초 판정하지 않고 스토어가 밀어 넣은 배너 상태만 읽는다(앱에서는 자동 마감/티커가 세운다).
+    undoStore.refreshTimedBanner(now: now)
+    #expect(undoStore.timedBanner == .undoAutoClose)
+
+    let undoPNG = try renderPNG(CheckMenuView(store: undoStore))
+    #expect(undoPNG.count > 0)
+    saveV0211Snapshot(undoPNG, "recovery-banners")
+
+    // (5) 넛지 자동 시작 10초 경과 — 60초 유예 안이라 [취소] 가 떠 있어야 한다.
+    let cancelStore = makeTeamStore(members: presenceMembers(now: now), now: now)
+    cancelStore.startedAt = now.addingTimeInterval(-10)
+    cancelStore.nudgeAutoStartedAt = now.addingTimeInterval(-10)
+    cancelStore.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 10)
+    #expect(cancelStore.canCancelNudgeAutoStart(now: now))
+    // 근무를 시작한 순간 되돌리기 대상은 사라지므로 두 배너가 겹칠 수 없다.
+    #expect(!cancelStore.canUndoAutoClose(now: now))
+    cancelStore.refreshTimedBanner(now: now)
+    #expect(cancelStore.timedBanner == .cancelNudgeAutoStart)
+
+    let cancelPNG = try renderPNG(CheckMenuView(store: cancelStore))
+    #expect(cancelPNG.count > 0)
+    saveV0211Snapshot(cancelPNG, "nudge-cancel-banner")
+
+    // 배너는 헤더 아래로 자란다 — 배선 전(배너 0건) 대비 창이 높아지는지 실측한다.
+    let plain = try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now))))
+    let withBanner = try #require(renderedPixelHeight(CheckMenuView(store: undoStore)))
+    #expect(withBanner > plain)
+    #expect(Double(withBanner) / 2.0 <= 700.0)
+}
+
+/// 히트맵 그리드는 View 라 타입 자체가 MainActor 로 추론된다 — 정적 상수(셀 크기/요일 라벨) 접근을 위해 @MainActor 로 둔다.
+@MainActor
+@Test
+func heatmapCellColorScalesWithBucketDensity() {
+    // 히트맵 칸 농도 규약(순수 판정): 0초는 농도 0(→ 아주 옅은 fieldFill), 최대 칸은 1(가장 진한 accent).
+    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 0, maxSeconds: 9_000) == 0)
+    // 데이터가 아예 없으면(max 0) 모든 칸이 농도 0 — 0으로 나누지 않는다.
+    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 0, maxSeconds: 0) == 0)
+    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 4_500, maxSeconds: 9_000) == 0.5)
+    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 9_000, maxSeconds: 9_000) == 1)
+    // 최대를 넘는 이상값이 들어와도 1로 클램프한다.
+    #expect(WorkRhythmHeatmapGrid.intensity(seconds: 90_000, maxSeconds: 9_000) == 1)
+    // 요일 라벨은 0=월 규약을 따른다(회고 busiestDayIndex 와 같은 인덱스).
+    #expect(WorkRhythmHeatmapGrid.dayLabels.first == "월")
+    #expect(WorkRhythmHeatmapGrid.dayLabels.last == "일")
+    // 격자 총 폭(요일 라벨 + 24열 + 간격)이 패널 콘텐츠 폭(340 - 12*2 - 12*2 = 292pt) 안에 들어간다.
+    let gridWidth = WorkRhythmHeatmapGrid.labelWidth
+        + WorkRhythmHeatmapGrid.cellGap
+        + CGFloat(WorkRhythmHeatmap.hourCount) * WorkRhythmHeatmapGrid.cellSize
+        + CGFloat(WorkRhythmHeatmap.hourCount - 1) * WorkRhythmHeatmapGrid.cellGap
+    #expect(gridWidth <= 292)
+}
+
+// MARK: - 창 높이 상한(≤700pt) — 배너·토큰 행·패널이 겹치는 최악 조합
+
+/// 목록 행수 예산(순수 계산) 규약. 위쪽에 얹힌 높이를 행 단위로 올림 환산해 그만큼 줄이고, 최소 2행은 남긴다.
+@Test
+func listRowBudgetShrinksVisibleRowsByStackedChromeHeight() {
+    // 아무것도 얹히지 않으면 기본 상한 그대로.
+    #expect(ListRowBudget.visibleRows(maxVisibleRows: 6, rowHeight: 58, rowSpacing: 10, extraChromeHeight: 0) == 6)
+    // 한 행(68pt)보다 작게 먹어도 한 행은 양보한다(올림).
+    #expect(ListRowBudget.visibleRows(maxVisibleRows: 6, rowHeight: 58, rowSpacing: 10, extraChromeHeight: 53) == 5)
+    #expect(ListRowBudget.visibleRows(maxVisibleRows: 6, rowHeight: 58, rowSpacing: 10, extraChromeHeight: 68) == 5)
+    #expect(ListRowBudget.visibleRows(maxVisibleRows: 6, rowHeight: 58, rowSpacing: 10, extraChromeHeight: 69) == 4)
+    // 아무리 많이 먹어도 최소 행수는 지킨다(목록이 목록으로 보이도록).
+    #expect(ListRowBudget.visibleRows(maxVisibleRows: 6, rowHeight: 58, rowSpacing: 10, extraChromeHeight: 10_000) == ListRowBudget.minVisibleRows)
+}
+
+/// 배너/토큰 행/패널이 겹치는 조합에서도 팝오버가 700pt 상한을 넘지 않는지 실측한다.
+/// 회귀 지점: 예전엔 배너가 겹겹이 쌓이고(회고+되돌리기+자동시작취소) 목록 상한이 고정이라 최대 883pt 까지
+/// 자라 13" 맥북에서 푸터(로그아웃/앱 종료)가 화면 밖으로 나갔다. 기존 높이 테스트가 못 잡은 이유는
+/// 전부 inertTokenStore(토큰 행 0pt)를 쓰고 배너·패널을 조합하지 않았기 때문이라, 여기서는 실제 토큰 행이
+/// 그려지는 seededTokenStore 로 최악 조합을 만든다.
+@MainActor
+@Test
+func popoverStaysWithinHeightCapForWorstBannerAndPanelCombinations() throws {
+    let now = Date()
+
+    func teamStore(members: Int = 8) -> WorkTimerStore {
+        let store = makeTeamStore(members: steadyMembers(count: members), now: now, tokenUsage: seededTokenStore())
+        store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "u-me")
+        return store
+    }
+    func addUndoBanner(_ store: WorkTimerStore) {
+        store.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
+        store.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
+        store.lastAutoClosedAt = now
+        // 배너 노출은 스토어가 밀어 넣는 상태값이다(뷰가 매초 판정하지 않는다).
+        store.refreshTimedBanner(now: now)
+    }
+    func addRetroBanner(_ store: WorkTimerStore) {
+        store.retro = sampleWeeklyRetro()
+        store.showsRetroBanner = true
+    }
+    func working(_ store: WorkTimerStore) {
+        store.startedAt = now.addingTimeInterval(-10)
+        store.nudgeAutoStartedAt = now.addingTimeInterval(-10)
+        store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 10)
+        store.refreshTimedBanner(now: now)
+    }
+
+    var cases: [(String, Int)] = []
+    func measure(_ label: String, _ view: some View) throws {
+        let pixels = try #require(renderedPixelHeight(view))
+        cases.append((label, pixels))
+        #expect(Double(pixels) / 2.0 <= 700.0, "\(label) 이 700pt 상한을 넘었습니다: \(Double(pixels) / 2.0)pt")
+    }
+
+    // (a) 홈: 토큰 행 + 회고/되돌리기 배너 + 새 버전 배너(가장 많이 겹치는 상황).
+    let home = teamStore()
+    addRetroBanner(home)
+    addUndoBanner(home)
+    try measure("home+banners", CheckMenuView(store: home, previewUpdateBanner: true))
+
+    // (b) 홈: 12시간 확인 배너 + 목표 편집 인라인 행(헤더가 가장 부푸는 조합).
+    let longSession = teamStore()
+    working(longSession)
+    longSession.isLongSessionPromptActive = true
+    try measure("home+longSession+goalEditor", CheckMenuView(store: longSession, previewGoalEditing: true))
+
+    // (c) 토큰 순위판(스크롤 상한 초과 12행) + 배너.
+    let board = teamStore()
+    addRetroBanner(board)
+    addUndoBanner(board)
+    board.tokenBoard = (0..<12).map { i in
+        TokenBoardEntry(userID: "u\(i)", name: "멤버\(i)", avatarURL: nil, total: (12 - i) * 1_000_000, claudeInput: (12 - i) * 1_000_000, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0)
+    }
+    board.tokenBoardLoaded = true
+    board.isTokenBoardVisible = true
+    try measure("tokenBoard+banners", CheckMenuView(store: board, previewUpdateBanner: true))
+
+    // (d) 콕찌르기 패널(10인) + 배너.
+    let poke = teamStore()
+    addRetroBanner(poke)
+    addUndoBanner(poke)
+    poke.pokeDirectory = (0..<10).map { i in
+        PokeDirectoryEntry(userID: "p\(i)", name: "사람\(i)", avatarURL: nil, isWorking: i % 2 == 0)
+    }
+    poke.pokeDirectoryLoaded = true
+    poke.isPokePanelVisible = true
+    poke.pokeNotice = "자리 비움 중인 사용자는 찌를 수 없어요"
+    try measure("poke+banners", CheckMenuView(store: poke, previewUpdateBanner: true))
+
+    // (e) 리그 패널(12팀) + 배너.
+    let league = teamStore()
+    addRetroBanner(league)
+    addUndoBanner(league)
+    league.leaderboard = manyLeaderboardEntries(count: 12)
+    league.isLeaderboardVisible = true
+    try measure("league+banners", CheckMenuView(store: league, previewUpdateBanner: true))
+
+    // (f) 개인 기록 패널(회고 카드 + 7×24 히트맵) + 되돌리기/새 버전 배너.
+    let insights = teamStore()
+    insights.teamGoalSeconds = 40 * 3_600
+    insights.heatmap = sampleWorkRhythmHeatmap()
+    insights.retro = sampleWeeklyRetro()
+    insights.insightsLoaded = true
+    insights.isInsightsPanelVisible = true
+    addUndoBanner(insights)
+    try measure("insights+banners", CheckMenuView(store: insights, previewUpdateBanner: true))
+
+    // 모든 조합이 측정됐는지(렌더 실패로 조용히 건너뛰지 않았는지) 확인한다.
+    #expect(cases.count == 6)
+}
+
+/// 배너는 한 번에 하나만 그린다 — 겹쳐 쌓이면 창이 상한을 넘기 때문. 회고 배너가 떠 있어도 12시간 확인
+/// 배너가 있으면 그쪽이 이기고, 창 높이는 배너 하나만큼만 자란다.
+@MainActor
+@Test
+func onlyOneBannerIsDrawnAtATime() throws {
+    let now = Date()
+    let base = makeTeamStore(members: steadyMembers(count: 4), now: now, tokenUsage: seededTokenStore())
+    let plain = try #require(renderedPixelHeight(CheckMenuView(store: base)))
+
+    let oneBanner = makeTeamStore(members: steadyMembers(count: 4), now: now, tokenUsage: seededTokenStore())
+    oneBanner.retro = sampleWeeklyRetro()
+    oneBanner.showsRetroBanner = true
+    let withOne = try #require(renderedPixelHeight(CheckMenuView(store: oneBanner)))
+    #expect(withOne > plain)
+
+    // 회고 + 새 버전 + 되돌리기 세 후보가 모두 자격을 갖춰도 실제로 그려지는 건 하나뿐이라
+    // 창 높이는 '가장 급한 배너 하나'만큼만 늘어난다(되돌리기가 회고/업데이트를 이긴다).
+    let manyCandidates = makeTeamStore(members: steadyMembers(count: 4), now: now, tokenUsage: seededTokenStore())
+    manyCandidates.retro = sampleWeeklyRetro()
+    manyCandidates.showsRetroBanner = true
+    manyCandidates.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
+    manyCandidates.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
+    manyCandidates.lastAutoClosedAt = now
+    manyCandidates.refreshTimedBanner(now: now)
+    let withMany = try #require(renderedPixelHeight(CheckMenuView(store: manyCandidates, previewUpdateBanner: true)))
+    #expect(withMany == withOne)
+}
+
+// MARK: - 과거 달 보드에는 "오늘 +N" 줄을 그리지 않는다
+
+@MainActor
+@Test
+func tokenBoardRowOmitsTodayLineOutsideCurrentMonth() throws {
+    // 회귀 지점: 행이 todayValue 를 무조건 그려, 6월 보드의 전 사용자 행에 "오늘 +0 토큰"이 붙었다
+    // (과거 달은 서버 today 합산이 항상 0이라 '6월을 보는데 오늘'이라는 모순만 남는다).
+    func entry(todayTotal: Int) -> TokenBoardEntry {
+        TokenBoardEntry(
+            userID: "u1", name: "영식", avatarURL: nil, total: 1_234_567,
+            claudeInput: 1_234_567, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0,
+            codexInput: 0, codexOutput: 0, todayTotal: todayTotal, todayDate: TokenUsageDayKey.current()
+        )
+    }
+    // 이번 달(showsToday=true)에는 오늘 값이 실제로 그려지므로 값이 달라지면 픽셀도 달라진다.
+    let currentA = try renderPNG(TokenBoardRowView(entry: entry(todayTotal: 4_321), showsToday: true).frame(height: 62))
+    let currentB = try renderPNG(TokenBoardRowView(entry: entry(todayTotal: 9_876), showsToday: true).frame(height: 62))
+    #expect(currentA != currentB)
+
+    // 과거 달(showsToday=false)에는 줄 자체가 없으므로 오늘 값이 무엇이든 렌더가 동일하다.
+    let pastA = try renderPNG(TokenBoardRowView(entry: entry(todayTotal: 4_321), showsToday: false).frame(height: 62))
+    let pastB = try renderPNG(TokenBoardRowView(entry: entry(todayTotal: 9_876), showsToday: false).frame(height: 62))
+    #expect(pastA == pastB)
+    // 그리고 같은 값이어도 '오늘 줄 있음'과는 다른 그림이다(줄이 빠졌다는 증거).
+    #expect(pastA != currentA)
+}
+
+// MARK: - 내 행에 "비공개" 칩이 붙어도 토큰 총량은 잘리지 않는다
+
+@MainActor
+@Test
+func tokenBoardRowKeepsFullNumbersWhenPrivateChipCrowdsTheRow() throws {
+    // 회귀 지점: 한 행의 폭 예산(패널 292pt)에서 [악센트바][아바타][이름]["나"]["비공개"] 가 앞자리를 다 먹어
+    // 우측 10자리 총량이 '4,564,338,24…' 로 말줄임됐다 — 45억이 45억2천만처럼 읽히는 자릿수 오독이고,
+    // 하필 사용자가 가장 주의 깊게 보는 '내 행'에서만 나타났다(비공개 칩은 내 행에만 붙는다).
+    func entry(total: Int, todayTotal: Int) -> TokenBoardEntry {
+        TokenBoardEntry(
+            userID: "u1", name: "타팀 김서연", avatarURL: nil, total: total,
+            claudeInput: total, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0,
+            codexInput: 0, codexOutput: 0, todayTotal: todayTotal, todayDate: TokenUsageDayKey.current()
+        )
+    }
+    func row(total: Int, todayTotal: Int) -> some View {
+        TokenBoardRowView(
+            entry: entry(total: total, todayTotal: todayTotal),
+            isMe: true,
+            showsPrivateChip: true,
+            showsToday: true
+        ).frame(height: 62)
+    }
+    // 실제 패널 행 폭(292pt = 팝오버 안쪽 폭)으로 그린다 — 340pt 보다 좁아 잘림이 먼저 드러나는 조건이다.
+    let rowWidth: CGFloat = 292
+    // 끝자리만 다른 두 총량. 말줄임되면 사라지는 자리라 잘린 렌더는 완전히 동일한 그림이 된다.
+    let a = try renderPNG(row(total: 4_564_338_243, todayTotal: 123_360_493), width: rowWidth)
+    let b = try renderPNG(row(total: 4_564_338_247, todayTotal: 123_360_493), width: rowWidth)
+    #expect(a != b)
+    // 둘째 줄("오늘 +N 토큰")도 같은 이유로 단위째 잘렸다 — 오늘 증가량의 끝자리 변화도 그림에 남아야 한다.
+    let c = try renderPNG(row(total: 4_564_338_243, todayTotal: 123_360_497), width: rowWidth)
+    #expect(a != c)
+    saveV0211Snapshot(a, "token-row-private-chip")
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersTokenBoardMonthNavSnapshot() throws {
+    // 결함5 회귀 지점(육안 확인): 헤더에 chevron.left 두 개가 4pt 간격으로 나란히 놓여 뒤로/이전 달이
+    // 구분되지 않았다. 이제 뒤로(‹)와 월 이동(◂ ▸) 사이에 세로 구분선이 있고 아이콘 모양도 다르다.
+    let store = makeTokenBoardStore(memberCount: 4)
+    store.tokenBoardMonth = TokenBoardMonthNavigator.step(TokenUsageMonthKey.current(), by: -1)
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    saveV0211Snapshot(png, "token-board-month-nav")
+
+    // 제목이 가장 길어지는 경우(작년 → "YYYY년 M월")에도 헤더 한 줄이 무너지지 않는지 함께 확인한다 —
+    // 구분선 + 월 이동 버튼이 늘어난 만큼 폭 여유가 줄었기 때문.
+    let lastYear = TeamWeeklyGoal.kstCalendar.component(.year, from: Date()) - 1
+    let yearStore = makeTokenBoardStore(memberCount: 4)
+    yearStore.tokenBoardMonth = "\(lastYear)-12"
+    #expect(TokenBoardMonthNavigator.displayTitle(yearStore.tokenBoardMonth) == "\(lastYear)년 12월")
+    let yearPNG = try renderPNG(CheckMenuView(store: yearStore))
+    #expect(yearPNG.count > 0)
+    saveV0211Snapshot(yearPNG, "token-board-year-title")
+}
+
+
+// MARK: - 이관 마이그레이션이 v0.2.10 클라를 깨지 않는지(하위호환 · 데이터 소실 금지)
+
+@Test
+func tokenUsageDeviceMigrationKeepsLegacyLedgerIntact() throws {
+    // 회귀 지점: 초안은 옛 표 token_usage_monthly 의 PK 를 (user_id, month, device_id) 로 바꾸고 legacy 행을
+    // 전량 삭제했다. 그러면 아직 업데이트하지 않은 v0.2.10 클라의 `on_conflict=user_id,month` 업로드가
+    // 42P10 으로 100% 실패하는데 그들의 이번 달 행은 이미 지워진 뒤라, 순위가 수일~수주간 어긋난다.
+    // 수정된 설계: 옛 표는 손대지 않고 기기별 표를 새로 만들며, 보드 RPC 가 기기별 행이 없는 사용자만 옛 표로 폴백한다.
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()  // checkTests
+        .deletingLastPathComponent()  // Tests
+        .deletingLastPathComponent()  // repo root
+    let sql = try String(
+        contentsOf: root.appendingPathComponent("supabase/migrations/20260726010000_token_usage_device.sql"),
+        encoding: .utf8
+    )
+
+    // (1) 기기별 표를 새로 만든다 — 키는 (user_id, month, device_id).
+    #expect(sql.contains("create table if not exists public.token_usage_device_monthly"))
+    #expect(sql.contains("primary key (user_id, month, device_id)"))
+
+    // (2) 옛 표는 한 줄도 건드리지 않는다(alter/delete/drop 금지) — v0.2.10 이 계속 정상 upsert 해야 한다.
+    #expect(!sql.contains("alter table public.token_usage_monthly"))
+    #expect(!sql.contains("delete from public.token_usage_monthly"))
+    #expect(!sql.contains("drop table public.token_usage_monthly"))
+
+    // (3) 과도기 손실 방지 + 이중 계상 금지: 두 출처를 사용자별로 짝지어 **큰 쪽 한 줄**만 쓴다.
+    //     회귀 지점: 초안은 "기기별 행이 하나라도 있으면 옛 표 행을 통째로 버린다"(not exists) 였다. 그러면
+    //     맥 A=v0.2.10(주력, 옛 표에만 씀) / 맥 B=v0.2.11(보조, 새 표에만 씀) 과도기에 B 가 한 번 올리는 순간
+    //     A 의 사용량이 순위에서 영구 누락된다(A 를 아무리 더 써도 보드는 B 값에 고정).
+    //     이제 옛 표는 사용자 전원에 대해 읽고(제외 조건 없음), 더하지 않고 총량이 큰 쪽을 고른다 —
+    //     업그레이드 직후 같은 누적치가 두 표에 겹쳐 있어도 두 번 세지 않는다.
+    // ("create table if not exists" 와 겹치지 않게 배제 서브쿼리 형태로만 본다.)
+    #expect(!sql.contains("not exists ("))
+    #expect(!sql.contains("union all"))  // 합치면 업그레이드 직후 이중 계상이 된다.
+    #expect(sql.contains("from public.token_usage_device_monthly d"))
+    #expect(sql.contains("from public.token_usage_monthly l"))
+    #expect(sql.contains("full outer join legacy_totals g on g.uid = d.uid"))
+    #expect(sql.contains("(d.uid is not null and coalesce(d.total, 0) >= coalesce(g.total, 0)) as prefer_device"))
+    // 월 누적 필드는 두 출처에서 뒤섞이지 않게 전부 같은 prefer_device 로 고른다.
+    for column in ["claude_input", "claude_output", "claude_cache_read", "claude_cache_creation",
+                   "codex_input", "codex_output", "total"] {
+        #expect(sql.contains("case when prefer_device then d_\(column) else g_\(column) end"))
+    }
+
+    // (3-1) '오늘 증가분'만은 행 단위 선택에서 떼어 두 출처의 큰 쪽을 쓴다.
+    //     회귀 지점: today_total 까지 prefer_device(=월 총량 비교 결과)를 따라가면, 옛 표 총량이 훨씬 큰
+    //     과도기(맥 A=v0.2.10 주력이지만 요즘 안 켬 / 맥 B=v0.2.11 오늘 종일 사용)에 옛 행이 선택되고
+    //     그 행의 today_date 가 과거라 today 가 0 으로 떨어진다 → 사용자는 '오늘 +0 토큰'을 수일간 본다.
+    //     두 출처 모두 서버 KST 오늘 필터를 이미 통과한 값이라 각각 참 오늘 총량 이하 → greatest 로도
+    //     과다계상이 구조적으로 불가능하다.
+    #expect(sql.contains("greatest(coalesce(d_today_total, 0), coalesce(g_today_total, 0))"))
+    #expect(!sql.contains("case when prefer_device then d_today_total else g_today_total end"))
+
+    // (4) 새 표에도 본인 행 select 정책이 있어야 PostgREST merge-duplicates upsert 가 403 나지 않는다.
+    #expect(sql.contains("users read own device token usage"))
+
+    // (5) 화석 제외는 **조회 중인 달에 기기 행이 있을 때만** 건다.
+    //     회귀 지점: 제외 조건이 `(f.first_at is null or l.updated_at > f.first_at)` 뿐이었다. first_at 은
+    //     달 무관 최솟값(= v0.2.11 로 올라온 시각)인데 앱은 **이번 달 기기 행만** 올리므로 지난달에는 기기 행이
+    //     영원히 안 생긴다 → 지난달 옛 행은 updated_at 이 언제나 first_at 보다 과거라 전원 탈락하고, ‹ 로
+    //     지난달을 보면 업그레이드한 사용자가 **본인 포함** 순위판에서 통째로 사라졌다(대체할 기기 합산이 없어
+    //     merged 에 행 자체가 없으니 `or m.uid = auth.uid()` 자기 노출 보장도 무력). PostgreSQL 15 실측:
+    //     6월 보드가 U1(6월 5억) 없이 U2 한 줄만 반환 → 수정 후 세 사용자 모두 반환, 7월 화석(9억) 제외는 유지.
+    #expect(sql.contains("left join device_totals dm on dm.uid = l.user_id"))
+    #expect(sql.contains("dm.uid is null"))
+    #expect(sql.contains("or l.updated_at > f.first_at"))
+
+    // (6) 화석 제외는 **이번 달에만**, 그리고 **첫 기기 행 이후 7일 유예를 지나서만** 건다.
+    //     회귀 지점: 제외 조건이 `(dm.uid is null or f.first_at is null or l.updated_at > f.first_at)` 뿐이었다.
+    //     판정식이 '옛 행이 first_at 이후로 갱신됐는가'인데, v0.2.11 클라는 옛 행이 자기 값보다 크면 옛 표를
+    //     아예 쓰지 않으므로(WorkTimerStoreSync 의 mayWriteLegacy 게이트) 보조 맥의 첫 업로드 순간에는 항상
+    //     l.updated_at < f.first_at 이 된다 → 아직 v0.2.10 인 주력 맥의 옛 행이 화석으로 오판돼 탈락하고,
+    //     보드 총량이 보조 맥 값으로 폭락한다(200M → 2M). 이 마이그레이션이 '큰 쪽' 규칙으로 지키겠다고
+    //     명시한 과도기 그 자체가 깨지는 것이다. 게다가 그 달이 지나면 옛 행은 다시 갱신될 일이 없어
+    //     ‹ 로 지난달을 볼 때 손실이 영구화됐다(dm.uid 가 not null 이라 과거달 예외에도 안 걸린다).
+    //     PostgreSQL 15 실측(수정 전 → 후): 이번 달 U1 2,000,000 → 200,000,000, 2026-06 U2 2,000,000 →
+    //     200,000,000, 화석 대조군(U3, 유예 지난 갱신 끊긴 9억)은 3,000,000 그대로 유지.
+    #expect(sql.contains("or now() - f.first_at <= interval '7 days'"))
+
+    // (7) 지난 달 예외는 '살아 있는 구버전 맥이 있을 때'로 좁힌다 — 무조건 살리면 화석 정정이 영구 무발화다.
+    //     회귀 지점: 조건이 `or p_month <> 이번 달` 이었다. 그러면 (6) 의 7일 유예 창과 월말에 이어 붙어
+    //     화석 판정식 `l.updated_at > f.first_at` 이 평가되는 순간이 **영원히 없다** — 7/27 에 v0.2.11 로
+    //     올라오면 유예가 8/3 까지 가고, 유예가 끝나는 순간 7월은 이미 '지난 달'이라 다시 통과한다.
+    //     v0.2.11 클라는 옛 행이 자기 값보다 크면 쓰지 않으므로(mayWriteLegacy) 클라 자가정정도 없어,
+    //     v0.2.9 의 과다계상(+수십억)이 그 달 순위판 1위에 영구히 박혔다(프로덕션 v0.2.10 대비 회귀 —
+    //     v0.2.10 은 게이트 없이 옛 행을 덮어써 업그레이드 첫 업로드에 스스로 정정됐다).
+    //     이제는 달로 가르지 않고 "그 계정에 기기 합산을 넘는 옛 행을 아직도 쓰는 맥이 있는가"로 가른다.
+    //     PostgreSQL 15 실측(수정 전 → 후, 유예 지난 6월 보드): 화석 U1 3,000,000,000 → 100,000,000(기기 합산),
+    //     과도기 U2(맥 A=v0.2.10 이 7월에도 계속 씀)는 200,000,000 그대로 보존, 그 달 기기 행이 없는 U3 의
+    //     5월 폴백 500,000,000 과 유예 중 U4 의 900,000,000 도 그대로.
+    #expect(!sql.contains("p_month <> to_char"))
+    #expect(sql.contains("or lv.uid is not null"))
+    #expect(sql.contains("left join legacy_live lv on lv.uid = l.user_id"))
+    //     증거 요건 (b): 그 달 기기 합산보다 큰 옛 행일 것. 이게 없으면 v0.2.11 이 **자기가** 다음 달 옛 행을
+    //     쓰는 순간(그 달엔 옛 행이 없어 게이트가 열린다) 스스로 증거를 만들어 자기 화석을 되살린다 —
+    //     PostgreSQL 15 실측: 이 조건만 뺀 판본에서 위 6월 보드의 U1 이 다시 3,000,000,000 으로 부활했다.
+    #expect(sql.contains("where l2.updated_at > f2.first_at"))
+    #expect(sql.contains("and l2.total > coalesce(t2.total, 0)"))
+
+    // (8) touch 트리거는 실사용 쓰기를 전부 now() 로 스탬프하되, **명시적으로 과거 시각을 실은 쓰기**만 보존한다.
+    //     회귀 지점: 무조건 `new.updated_at := now()` 였다. 그러면 '기기 행보다 먼저 쓰이고 그 뒤로 갱신이 끊긴
+    //     옛 행'(= 화석)을 service_role 로도 만들 수 없어, 위 (6)(7) 의 화석 정정 규칙이 라이브 E2E(s09h)에서
+    //     **영원히 검증 불가**가 된다 — 실제로 s09h 의 화석 단언은 옛 행을 심는 순간 updated_at 이 now() 로
+    //     덮여 항상 '살아 있는 구버전 맥' 취급을 받아 구조적으로 통과할 수 없었고, 마이그레이션 push 직후
+    //     릴리스 게이트가 100% 실패했다. PostgreSQL 15 실측(고치기 전 → 후): 화석 시나리오 보드 total
+    //     5,000,000(화석 그대로) → 7,000(정정된 기기 값). 앱은 이 컬럼을 요청 본문에 담지 않으므로
+    //     (TokenUsageLegacyUpsertRequest 에 필드가 없다) 실사용 경로의 동작은 완전히 같다.
+    #expect(sql.contains("new.updated_at := now();"))
+    //     insert 는 컬럼 기본값 now() 로 들어오고, PostgREST merge-duplicates update 는 old 값 그대로 들어온다 —
+    //     둘 다 여전히 실제 쓰기 시각으로 갱신돼야 판정('그 뒤로 갱신됐는가')의 전제가 유지된다.
+    #expect(sql.contains("or new.updated_at >= now()"))
+    #expect(sql.contains("or (tg_op = 'UPDATE' and new.updated_at is not distinct from old.updated_at)"))
+    //     미래 시각으로 갱신 시각을 앞당겨 화석 판정을 무한정 회피하는 길은 막혀 있어야 한다(>= now() 로 클램프).
+    #expect(!sql.contains("new.updated_at > now()"))
+}
+
+// MARK: - 팀 카드 헤더 폭 예산(아이콘 버튼이 늘면 팀 이름이 먼저 잘린다)
+
+@MainActor
+@Test
+func teamHeaderLeavesRoomForKoreanTeamName() throws {
+    // 회귀 지점: v0.2.11 초안이 팀 헤더에 네 번째 아이콘 버튼('내 기록')을 세워 "아잉체크 개발팀"이
+    // "아잉…"으로 잘렸다. 개인 화면 버튼은 헤더 카드(내 근무 박스)로 옮기고 장식 아이콘도 걷어냈다.
+    // 실제 헤더 구성은 버튼 3개(참여코드 / 콕찌르기 / 팀별 현황)다.
+    let budget3 = TeamHeaderWidthBudget.nameWidth(iconButtonCount: 3)
+    let budget4 = TeamHeaderWidthBudget.nameWidth(iconButtonCount: 4)
+    // 버튼 하나가 27 + 간격 8 = 35pt 를 통째로 이름에서 빼앗는다.
+    #expect(abs((budget3 - budget4) - 35) < 0.001)
+    // 3버튼이면 한글 8자(“아잉체크 개발팀”)가 말줄임 없이 들어간다. 4버튼이면 절반도 못 넣는다.
+    #expect(TeamHeaderWidthBudget.fittingKoreanGlyphs(iconButtonCount: 3) >= 8)
+    #expect(TeamHeaderWidthBudget.fittingKoreanGlyphs(iconButtonCount: 4) < 8)
+
+    // 육안 확인: 긴 팀 이름 + 근무중 인원이 많은(칩이 넓은) 최악 조합.
+    let now = Date()
+    let store = makeTeamStore(members: presenceMembers(now: now), now: now)
+    store.teamName = "아잉체크 개발팀"
+    store.myTeamInviteCode = "ABCD1234"  // 키 버튼까지 뜬 3버튼 상태(팀원 누구나 보이는 기본 상태).
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    saveV0211Snapshot(png, "team-header-long-name")
+}
+
+// MARK: - 개인 기록 패널이 배너/목표 편집 행과 겹쳐도 창 상한을 지키는지
+
+@MainActor
+@Test
+func insightsPanelWindowHeightWithinCapWithChrome() throws {
+    // 회귀 지점: 개인 기록 패널만 extraChromeHeight 배선에서 빠져 있었고, 회고 카드 + 7×24 히트맵이 전부
+    // 고정 높이라 줄일 수단도 없었다 — 목표 편집 행(92) + 12시간 배너(92)가 겹치면 761pt 로 상한을 넘겨
+    // 푸터(로그아웃/앱 종료)와 히트맵 하단이 화면 밖으로 잘렸다.
+    func measure(_ label: String, _ view: some View) throws -> Double {
+        let pixels = try #require(renderedPixelHeight(view))
+        let points = Double(pixels) / 2.0
+        #expect(points <= 700.0, "\(label) 이 700pt 상한을 넘었습니다: \(points)pt")
+        return points
+    }
+
+    // 예산 계산 자체를 못 박는다: 목표 편집 행(92) + 12시간 배너(92) = 184pt 는 여유(118)를 66pt 넘기므로
+    // 본문을 그만큼 깎아 스크롤로 넘긴다. 배너 하나만으로는 여유 안이라 아무것도 깎지 않는다.
+    let worstChrome = CheckMenuView.goalEditorHeight + CheckMenuView.longSessionBannerHeight
+    #expect(
+        InsightsPanelChromeBudget.capHeight(extraChromeHeight: worstChrome)
+            == InsightsPanelChromeBudget.contentNaturalHeight - (worstChrome - InsightsPanelChromeBudget.chromeSlack)
+    )
+    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: CheckMenuView.longSessionBannerHeight) == nil)
+
+    // (a) 목표 편집 행 + 12시간 확인 배너(가장 부푸는 조합).
+    let longSession = makeInsightsStore()
+    longSession.startedAt = Date().addingTimeInterval(-10)
+    longSession.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 10)
+    longSession.isLongSessionPromptActive = true
+    _ = try measure("insights+goalEditor+longSession", CheckMenuView(store: longSession, previewGoalEditing: true))
+
+    // (b) 목표 편집 행 + 새 버전 배너.
+    let update = makeInsightsStore()
+    _ = try measure("insights+goalEditor+updateBanner", CheckMenuView(store: update, previewGoalEditing: true, previewUpdateBanner: true))
+
+    // (c) 목표 편집 행만(여유 안이라 본문을 깎지 않는다 — 불필요한 스크롤을 만들지 않는다).
+    let goalOnly = try measure("insights+goalEditor", CheckMenuView(store: makeInsightsStore(), previewGoalEditing: true))
+    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: CheckMenuView.goalEditorHeight) == nil)
+
+    // (d) 크롬이 없으면 기본 상태 그대로(스크롤 없음).
+    let plain = try measure("insights", CheckMenuView(store: makeInsightsStore()))
+    #expect(goalOnly > plain)  // 목표 편집 행만큼만 자란다(본문은 그대로).
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersInsightsPanelCappedContentSnapshot() throws {
+    // 육안 확인: 목표 편집 행 + 12시간 배너가 겹친 최악 조합에서 본문(회고 카드 + 히트맵)이 잘려 스크롤로
+    // 넘어가는 모습. 앱은 ScrollView 지만 ImageRenderer 가 그리지 못하므로 클립 모드로 같은 높이를 그린다.
+    let store = makeInsightsStore()
+    store.startedAt = Date().addingTimeInterval(-10)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 10)
+    store.isLongSessionPromptActive = true
+    let png = try renderPNG(CheckMenuView(store: store, previewClipsOverflowList: true, previewGoalEditing: true))
+    #expect(png.count > 0)
+    saveV0211Snapshot(png, "insights-capped-content")
+}
+
+// MARK: - 초단위(displayNow) 의존은 잎 뷰에만 — 팝오버 body 는 매초 무효화되지 않는다
+
+/// withObservationTracking 의 onChange(@Sendable)에서 결과를 받아 두는 상자. 통지는 값을 바꾼 그 스레드에서
+/// 동기로 오므로(여기선 메인) 락 없이 안전하다.
+private final class ObservationFlag: @unchecked Sendable {
+    var value = false
+}
+
+@MainActor
+@Test
+func menuBodyDoesNotObserveDisplayNowOnHomeScreen() {
+    // 회귀 지점: topBanner 가 canUndoAutoClose(now: store.displayNow)/canCancelNudgeAutoStart(now: store.displayNow)
+    // 를 직접 불러, 배너가 하나도 없는 평소 홈 화면에서도 body 가 displayNow 를 관찰 등록했다. 티커는 근무중이면
+    // 항상(비근무여도 근무중 팀원이 있고 팝오버가 열려 있으면) 매초 displayNow 를 갱신하므로, 팝오버 전체
+    // 서브트리(HeaderCard/TeamPanel/FooterBar/패널)가 매초 재구성됐다. 초단위 의존은 잎 뷰에만 있어야 한다.
+    let now = Date()
+    let store = makeTeamStore(members: presenceMembers(now: now), now: now)
+    let view = CheckMenuView(store: store)
+
+    // onChange 는 @Sendable 클로저라 지역 var 를 직접 못 건드린다(변경 통지는 이 스레드에서 동기로 온다).
+    let invalidated = ObservationFlag()
+    withObservationTracking {
+        _ = view.body
+    } onChange: {
+        invalidated.value = true
+    }
+
+    // 티커 한 틱과 같은 변화 — 잎 뷰(TodayTimerText/TeamMemberLiveRow 등)만 무효화돼야 한다.
+    store.displayNow = now.addingTimeInterval(1)
+    #expect(!invalidated.value)
+
+    // 반대로 배너 상태가 실제로 바뀌면(유예형 배너 등장) body 는 반드시 다시 그려져야 한다 —
+    // 위에서 추적이 소진되지 않았기에 이 변화가 관찰 등록됐음을 확인할 수 있다.
+    store.timedBanner = .undoAutoClose
+    #expect(invalidated.value)
+}
+
+// MARK: - 토큰 순위판: 실패는 동기화 문구가 아니라 실패 문구 + [다시 시도]
+
+@MainActor
+@Test
+func checkMenuViewRendersTokenBoardLoadFailureSnapshot() throws {
+    // 회귀 지점: 월 이동 중 조회가 실패하면 본문 자리에 "동기화됨"("근무 재개됨" 등)이 그대로 떴다.
+    #expect(
+        TokenBoardEmptyMessage.text(hasLoaded: false, isLoading: false, hasFailed: true, fallbackStatus: "동기화됨")
+            == TokenBoardEmptyMessage.loadFailed
+    )
+    // 진행중이 실패보다 우선한다(재시도 중에는 다시 "불러오는 중…").
+    #expect(
+        TokenBoardEmptyMessage.text(hasLoaded: false, isLoading: true, hasFailed: true, fallbackStatus: "동기화됨")
+            == TokenBoardEmptyMessage.loading
+    )
+    // 조회가 시작조차 안 된 상태는 기존대로 상태 문구(계약 불변).
+    #expect(
+        TokenBoardEmptyMessage.text(hasLoaded: false, isLoading: false, hasFailed: false, fallbackStatus: "로그인 필요")
+            == "로그인 필요"
+    )
+
+    let store = makeTokenBoardStore(memberCount: 5)
+    store.syncMessage = "동기화됨"
+    store.tokenBoardMonth = TokenBoardMonthNavigator.step(TokenUsageMonthKey.current(), by: -1)
+    store.tokenBoard = []
+    store.tokenBoardLoaded = false
+    store.tokenBoardLoading = false
+    store.tokenBoardFailed = true
+
+    let failedPNG = try renderPNG(CheckMenuView(store: store))
+    #expect(failedPNG.count > 0)
+    saveV0211Snapshot(failedPNG, "token-board-load-failed")
+
+    // 실패 문구 + [다시 시도] 버튼이 실제로 그림에 반영된다(같은 빈 목록이라도 로딩 상태와 다른 그림).
+    store.tokenBoardFailed = false
+    store.tokenBoardLoading = true
+    let loadingPNG = try renderPNG(CheckMenuView(store: store))
+    #expect(loadingPNG != failedPNG)
 }

@@ -965,8 +965,14 @@ struct CheckTokenUsageRow: View {
             // 행은 표시만 한다 — 갱신 루프는 CheckMenuView 의 .task 가 일원화해 돌린다(행이 EmptyView 라 자체 .task 가
             // 애초에 안 돌던 순환 문제를 없앤다). ImageRenderer 가 .task 를 실행하지 않아 렌더 테스트도 결정적이다.
             slimRow(usage)
+        } else if let onOpenBoard {
+            // 내 소모량이 없어도(AI CLI 를 안 쓰는 팀원·신규 설치) 순위판으로 가는 길은 남긴다.
+            // 순위판은 앱 사용자 전체 공개 보드라 내 사용량이 0이어도 남의 순위를 볼 이유가 있고, 무엇보다
+            // 월 이동(‹ ›)과 내 사용량 공개/비공개 토글은 **그 패널 안에만** 있다 — 이 행이 사라지면
+            // person.2 버튼도 사라져 팝오버 어디에도 진입 경로가 없었다(회귀 지점).
+            boardEntryRow(onOpenBoard)
         } else {
-            // 표시할 사용량 없음(로그 부재/집계 0/월 리셋 대기) — 행을 아예 그리지 않는다.
+            // 표시할 사용량도 없고 순위판 콜백도 없다(행 단독 미리보기) — 아무것도 그리지 않는다.
             EmptyView()
         }
     }
@@ -1007,5 +1013,27 @@ struct CheckTokenUsageRow: View {
         // 스캔 중엔 살짝 흐리게(절제된 진행 표시). 값은 이전 집계를 유지하다 완료 시 교체된다.
         .opacity(store.isScanning ? 0.55 : 1)
         .help(usage.detailTooltip)
+    }
+
+    /// 내 소모량이 없을 때의 대체 행 — 숫자 없이 순위판 진입만 준다.
+    /// 톤은 일부러 조용하게(악센트 미광 없이 기본 panelStyle) 잡는다: 자랑할 내 숫자가 없는 사용자에게
+    /// 빛나는 행을 들이밀 이유는 없고, 높이는 slimRow 와 같아(아이콘 버튼 27 + 상하 8 패딩) 창 높이 예산
+    /// (CheckMenuView.tokenUsageRowHeight)이 두 경우 모두 그대로 맞는다.
+    private func boardEntryRow(_ onOpenBoard: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(CheckTheme.secondaryText)
+            Text("AI 토큰 순위")
+                .font(.caption2)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            IconButton(icon: "person.2", help: "AI 토큰 순위", action: onOpenBoard)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .panelStyle()
+        .help("앱 사용자 전체의 AI 토큰 순위를 봅니다")
     }
 }

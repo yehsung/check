@@ -57,9 +57,18 @@ final class UpdateCheckStore {
     nonisolated static let lastCheckedKey = "check.update.lastCheckedAt"
     /// 캐릭터 말풍선을 이미 띄운 버전 영속 키(버전당 1회 — 도배 금지).
     nonisolated static let bubbleShownKey = "check.update.bubbleShownFor"
+    /// 마지막으로 조회한 최신 태그 영속 키(노트와 한 쌍).
+    nonisolated static let latestVersionKey = "check.update.latestVersion"
+    /// 그 태그의 패치노트 줄들 영속 키(버전과 항상 함께 쓰고 함께 읽는다).
+    nonisolated static let latestNotesKey = "check.update.latestNotes"
+
+    /// 배너에 한 번에 보여 줄 패치노트 최대 줄 수(팝오버 높이 보호).
+    nonisolated static let maxNotes = 4
 
     /// 서버가 알려준 최신 태그("v0.2.1"). 아직 확인 전이면 nil. 관찰 대상 — 갱신되면 배너가 다시 그려진다.
     private(set) var latestVersion: String?
+    /// 그 버전의 패치노트(표시용 평문 줄, 최대 maxNotes개). 노트 없는 옛 릴리스면 빈 배열 — 배너는 노트 없이 그려진다.
+    private(set) var latestNotes: [String] = []
 
     private let currentVersion: String
     private let fetcher: (URL) async throws -> Data
@@ -84,6 +93,12 @@ final class UpdateCheckStore {
         self.fetcher = fetcher
         self.clock = clock
         self.defaults = defaults
+        // 지난 조회 결과(버전+노트)를 복원한다. 24h 스로틀이라 앱을 다시 켠 직후엔 대개 네트워크를 치지 않으므로,
+        // 복원이 없으면 배너가 조회한 그날에만 뜨고 재실행 후엔 사라진다. 버전과 노트는 한 쌍으로만 쓰고 쓴다.
+        if let stored = defaults.string(forKey: Self.latestVersionKey), !stored.isEmpty {
+            latestVersion = stored
+            latestNotes = defaults.stringArray(forKey: Self.latestNotesKey) ?? []
+        }
     }
 
     /// 번들 CFBundleShortVersionString(없으면 "0.0.0" — 개발 빌드 등에선 항상 업데이트 가용으로 보이지 않게 최저값).
@@ -126,14 +141,53 @@ final class UpdateCheckStore {
         guard let data = try? await fetcher(Self.latestReleaseURL) else { return }
         guard let tag = Self.parseTag(data) else { return }
         latestVersion = tag
+        latestNotes = Self.parseNotes(Self.parseBody(data))
+        // 버전과 노트를 한 번에 영속(재실행 후에도 같은 배너를 그대로 그린다).
+        defaults.set(tag, forKey: Self.latestVersionKey)
+        defaults.set(latestNotes, forKey: Self.latestNotesKey)
+    }
+
+    /// 릴리스 JSON 디코드 대상. body 는 옵셔널 — 노트 없이 만든 옛 릴리스/필드 누락에도 안전하다.
+    private struct Release: Decodable {
+        let tag_name: String
+        let body: String?
     }
 
     /// 릴리스 JSON 에서 tag_name 만 뽑는다(실패/빈 값이면 nil — 조용히). 실 API 응답과 필드명이 일치한다(v0.2.1 확인).
     /// 순수 파싱이라 nonisolated — 헤드리스 테스트가 동기로 검증한다.
     nonisolated static func parseTag(_ data: Data) -> String? {
-        struct Release: Decodable { let tag_name: String }
         guard let r = try? JSONDecoder().decode(Release.self, from: data), !r.tag_name.isEmpty else { return nil }
         return r.tag_name
+    }
+
+    /// 릴리스 JSON 에서 본문(body)만 뽑는다(없으면 nil). 표시용 정규화는 parseNotes 가 맡는다.
+    nonisolated static func parseBody(_ data: Data) -> String? {
+        try? JSONDecoder().decode(Release.self, from: data).body
+    }
+
+    /// 릴리스 본문을 배너 표시용 줄 배열로 정규화한다(순수 함수).
+    ///
+    /// 규칙: "- "/"* " 로 시작하는 줄만 항목으로 취하고(헤딩·빈 줄·설치 안내 같은 산문은 버린다), 불릿과
+    /// 마크다운 강조 기호(`**`, 백틱)를 떼어 평문으로 만든다. 항목이 maxNotes(4)를 넘으면 앞 3줄만 남기고
+    /// 마지막 줄을 "외 N건" 으로 대체한다 — 팝오버 높이를 지키면서 "더 있다"는 사실은 알려 준다.
+    nonisolated static func parseNotes(_ body: String?) -> [String] {
+        guard let body, !body.isEmpty else { return [] }
+        var items: [String] = []
+        // isNewline 으로 쪼갠다 — GitHub 본문은 CRLF 인데 Swift 에서 "\r\n" 은 "\n" 과 같지 않은 한 글자라,
+        // separator: "\n" 으로 나누면 줄이 하나도 안 갈라진다(항목 0개가 되는 함정).
+        for rawLine in body.split(whereSeparator: \.isNewline) {
+            var line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard line.hasPrefix("- ") || line.hasPrefix("* ") else { continue }
+            line.removeFirst(2)
+            line = line
+                .replacingOccurrences(of: "**", with: "")
+                .replacingOccurrences(of: "`", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { continue }
+            items.append(line)
+        }
+        guard items.count > maxNotes else { return items }
+        return Array(items.prefix(maxNotes - 1)) + ["외 \(items.count - (maxNotes - 1))건"]
     }
 
     // MARK: - 캐릭터 말풍선 버전당 1회 (영속 기록)

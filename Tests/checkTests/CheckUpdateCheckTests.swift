@@ -45,6 +45,89 @@ func parseTagExtractsTagNameFromReleaseJSON() {
     #expect(UpdateCheckStore.parseTag(Data(#"{"tag_name":""}"#.utf8)) == nil)
 }
 
+// MARK: - 패치노트 파싱 (불릿만 취함 · 마크다운 제거 · 4줄 상한)
+
+@Test
+func parseNotesKeepsOnlyBulletLinesAsPlainText() {
+    // GitHub 릴리스 본문 그대로(CRLF + 헤딩 + 설치 안내 산문). 불릿 줄만 항목이 되고 기호는 떨어진다.
+    let body = "## 0.2.14\r\n\r\n- 새 버전 안내에 **바뀐 내용**이 보여요\r\n* `brew upgrade` 없이 눌러서 업데이트해요\r\n\r\n설치: brew tap yehsung/check && brew install --cask aing-check\r\n"
+    #expect(UpdateCheckStore.parseNotes(body) == [
+        "새 버전 안내에 바뀐 내용이 보여요",
+        "brew upgrade 없이 눌러서 업데이트해요"
+    ])
+
+    // 노트가 없는 경우는 모두 빈 배열(옛 릴리스/필드 누락/산문만 있는 본문) — 배너는 노트 없이 그려진다.
+    #expect(UpdateCheckStore.parseNotes(nil).isEmpty)
+    #expect(UpdateCheckStore.parseNotes("").isEmpty)
+    #expect(UpdateCheckStore.parseNotes("aing-check 0.2.9 배포. 설치: brew tap ...").isEmpty)
+    // 불릿만 있고 내용이 비면 버린다(기호를 뗀 뒤 빈 줄).
+    #expect(UpdateCheckStore.parseNotes("- \n-  \n").isEmpty)
+}
+
+@Test
+func parseNotesCapsAtFourLinesWithRemainderCount() {
+    let five = (1...5).map { "- 항목\($0)" }.joined(separator: "\n")
+    // 4줄을 넘으면 앞 3줄 + 남은 개수(총 4줄) — 팝오버 높이 보호.
+    #expect(UpdateCheckStore.parseNotes(five) == ["항목1", "항목2", "항목3", "외 2건"])
+    // 정확히 4줄이면 그대로 4줄(대체 없음).
+    let four = (1...4).map { "- 항목\($0)" }.joined(separator: "\n")
+    #expect(UpdateCheckStore.parseNotes(four) == ["항목1", "항목2", "항목3", "항목4"])
+    #expect(UpdateCheckStore.parseNotes(five).count == UpdateCheckStore.maxNotes)
+}
+
+@Test
+func parseBodyReadsOptionalBodyFieldSafely() {
+    #expect(UpdateCheckStore.parseBody(Data(#"{"tag_name":"v0.3.0","body":"- 한 줄"}"#.utf8)) == "- 한 줄")
+    // body 누락(옛 릴리스)·형식 오류는 nil — parseTag 는 그대로 동작해야 한다(노트만 없는 상태).
+    #expect(UpdateCheckStore.parseBody(Data(#"{"tag_name":"v0.3.0"}"#.utf8)) == nil)
+    #expect(UpdateCheckStore.parseBody(Data("not json".utf8)) == nil)
+    #expect(UpdateCheckStore.parseTag(Data(#"{"tag_name":"v0.3.0"}"#.utf8)) == "v0.3.0")
+}
+
+// MARK: - 노트 영속 (버전과 한 쌍 · 재실행 복원)
+
+@MainActor
+@Test
+func latestNotesPersistWithVersionAndRestoreOnRelaunch() async {
+    let defaults = isolatedUpdateDefaults()
+    let base = Date(timeIntervalSince1970: 5_000_000)
+    let json = Data(#"{"tag_name":"v0.3.0","body":"- 첫 줄\n- 둘째 줄"}"#.utf8)
+
+    let store = UpdateCheckStore(
+        currentVersion: "0.2.1",
+        fetcher: FetchRecorder(.success(json)).fetch,
+        clock: { base },
+        defaults: defaults
+    )
+    await store.checkIfStale()
+    #expect(store.latestVersion == "v0.3.0")
+    #expect(store.latestNotes == ["첫 줄", "둘째 줄"])
+
+    // 앱 재실행 재현: 같은 defaults 로 새 스토어 + 24h 스로틀 안(네트워크 미접촉)에서도 배너 재료가 남아 있다.
+    let recorder = FetchRecorder(.success(json))
+    let relaunched = UpdateCheckStore(
+        currentVersion: "0.2.1",
+        fetcher: recorder.fetch,
+        clock: { base.addingTimeInterval(3_600) },
+        defaults: defaults
+    )
+    #expect(relaunched.latestVersion == "v0.3.0")
+    #expect(relaunched.latestNotes == ["첫 줄", "둘째 줄"])
+    #expect(relaunched.isUpdateAvailable)
+    await relaunched.checkIfStale()
+    #expect(recorder.count == 0) // 스로틀 유지 — 복원이 네트워크를 새로 유발하지 않는다.
+}
+
+@MainActor
+@Test
+func latestNotesAreEmptyForReleaseWithoutBody() async {
+    // 노트 없이 만든 옛 릴리스: 버전만 채워지고 노트는 빈 배열(배너는 예전 모습 그대로).
+    let store = makeUpdateStore(current: "0.2.1", tag: "v0.3.0")
+    await store.checkIfStale()
+    #expect(store.latestVersion == "v0.3.0")
+    #expect(store.latestNotes.isEmpty)
+}
+
 // MARK: - 24h 스로틀 (주입 clock)
 
 @MainActor

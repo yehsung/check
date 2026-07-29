@@ -369,6 +369,8 @@ func windowHeightAdaptsToContentWithinCap() throws {
         try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewLongSessionBanner: true))),
         // 새 버전 안내 배너가 최상단에 얹힌 상태(HeaderCard 위) — 배너 포함해도 상한(≤700pt) 안에 머문다.
         try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewUpdateBanner: true))),
+        // 같은 배너에 패치노트 4줄(파서 상한)까지 얹힌 상태 — 노트가 붙어도 상한 안이다.
+        try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewUpdateBanner: true, previewUpdateNotes: sampleUpdateNotes))),
         // 헤더 주간 목표 편집 행이 펼쳐진 상태(스테퍼 + 저장 버튼) — 편집은 헤더 아래로 자라므로 대형 팀에선
         // 상한을 넘을 수 있는 일시 상태다. 상시 노출 상태만 상한을 보장하고, 편집은 보통 팀 규모(3명)로 검증한다.
         try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: manyMembers(now: now, count: 3), now: now), previewGoalEditing: true))),
@@ -610,6 +612,54 @@ func checkMenuViewRendersUpdateBannerSnapshot() throws {
         ?? "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/update-banner.png"
     try? png.write(to: URL(fileURLWithPath: path))
 }
+
+/// 이번 버전 패치노트가 얹힌 배너(제목 → 노트 3줄 → [지금 업데이트]/[명령 복사]). 340pt 폭에서 노트 줄이
+/// 겹치거나 버튼을 밀어내지 않는지 육안 확인용.
+@MainActor
+@Test
+func checkMenuViewRendersUpdateBannerWithNotesSnapshot() throws {
+    let store = makeSignedInStore()
+    let png = try renderPNG(CheckMenuView(store: store, previewUpdateBanner: true, previewUpdateNotes: sampleUpdateNotes))
+    #expect(png.count > 0)
+    let path = ProcessInfo.processInfo.environment["CHECK_UPDATE_NOTES_SNAPSHOT_PATH"]
+        ?? "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/update-banner-notes.png"
+    try? png.write(to: URL(fileURLWithPath: path))
+}
+
+/// 배너 높이 예산 규약: 노트가 없으면 예전 높이 그대로(회귀 금지), 있으면 줄 수에 비례해서만 자란다.
+/// 이 델타가 CheckMenuView 의 예산 상수(updateNoteBlockPadding + 줄수 × updateNoteLineHeight)와 어긋나면
+/// 목록 행수 예산이 틀어져 창이 700pt 상한을 넘게 되므로 여기서 실측으로 묶어 둔다.
+@MainActor
+@Test
+func updateBannerGrowsOnlyByNoteLinesAndStaysUnchangedWithoutNotes() throws {
+    let plain = try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewUpdateBanner: true)))
+    // 빈 노트 배열은 노트 블록 자체를 그리지 않는다 — 옛 릴리스/파싱 실패에서 예전과 픽셀 단위로 같은 배너.
+    let emptyNotes = try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewUpdateBanner: true, previewUpdateNotes: [])))
+    #expect(emptyNotes == plain)
+
+    for count in 1...CheckUpdateStoreNoteCap {
+        let notes = Array(sampleUpdateNotes.prefix(count))
+        let withNotes = try #require(renderedPixelHeight(CheckMenuView(store: makeSignedInStore(), previewUpdateBanner: true, previewUpdateNotes: notes)))
+        let deltaPt = Double(withNotes - plain) / 2.0
+        let budget = Double(CheckMenuView.updateNoteBlockPadding + CGFloat(count) * CheckMenuView.updateNoteLineHeight)
+        #expect(deltaPt > 0, "노트 \(count)줄이 배너를 전혀 늘리지 않았습니다(노트가 안 그려졌을 수 있음).")
+        // 예산은 실측보다 모자라면 안 된다(모자라면 목록이 한 행 더 남아 상한을 넘는다). 과대 추정은 안전측.
+        #expect(budget >= deltaPt, "노트 \(count)줄 실측 \(deltaPt)pt 가 예산 \(budget)pt 를 넘었습니다.")
+        #expect(budget - deltaPt <= 8.0, "노트 \(count)줄 예산이 실측보다 과하게 큽니다(\(budget)pt vs \(deltaPt)pt).")
+    }
+}
+
+/// 배너에 보여 줄 수 있는 최대 노트 줄 수(파서 상한과 같은 값이어야 한다).
+private let CheckUpdateStoreNoteCap = UpdateCheckStore.maxNotes
+
+/// 실제 CHANGELOG 톤의 표본 노트(4줄 — 파서 상한과 같은 최악 줄 수). 마지막 줄은 일부러 길게 두어
+/// 폭을 넘는 문구가 줄바꿈으로 배너를 부풀리지 않고 한 줄로 잘리는지(lineLimit 1)까지 같이 잡는다.
+private let sampleUpdateNotes = [
+    "내 기록 패널에 근무 리듬·지난주 회고 추가",
+    "AI 토큰 순위를 지난달까지 넘겨봐요",
+    "맥을 여러 대 써도 토큰이 합산돼요",
+    "자리 비움으로 자동 종료된 근무를 되돌릴 수 있어요 — 폭을 넘는 아주 긴 문구"
+]
 
 // MARK: - B3: 헤더 주간 목표 편집 행 렌더
 
@@ -1749,7 +1799,7 @@ func popoverStaysWithinHeightCapForWorstBannerAndPanelCombinations() throws {
     let home = teamStore()
     addRetroBanner(home)
     addUndoBanner(home)
-    try measure("home+banners", CheckMenuView(store: home, previewUpdateBanner: true))
+    try measure("home+banners", CheckMenuView(store: home, previewUpdateBanner: true, previewUpdateNotes: sampleUpdateNotes))
 
     // (b) 홈: 12시간 확인 배너 + 목표 편집 인라인 행(헤더가 가장 부푸는 조합).
     let longSession = teamStore()
@@ -1766,7 +1816,7 @@ func popoverStaysWithinHeightCapForWorstBannerAndPanelCombinations() throws {
     }
     board.tokenBoardLoaded = true
     board.isTokenBoardVisible = true
-    try measure("tokenBoard+banners", CheckMenuView(store: board, previewUpdateBanner: true))
+    try measure("tokenBoard+banners", CheckMenuView(store: board, previewUpdateBanner: true, previewUpdateNotes: sampleUpdateNotes))
 
     // (d) 콕찌르기 패널(10인) + 배너.
     let poke = teamStore()
@@ -1778,7 +1828,7 @@ func popoverStaysWithinHeightCapForWorstBannerAndPanelCombinations() throws {
     poke.pokeDirectoryLoaded = true
     poke.isPokePanelVisible = true
     poke.pokeNotice = "자리 비움 중인 사용자는 찌를 수 없어요"
-    try measure("poke+banners", CheckMenuView(store: poke, previewUpdateBanner: true))
+    try measure("poke+banners", CheckMenuView(store: poke, previewUpdateBanner: true, previewUpdateNotes: sampleUpdateNotes))
 
     // (e) 리그 패널(12팀) + 배너.
     let league = teamStore()
@@ -1786,7 +1836,7 @@ func popoverStaysWithinHeightCapForWorstBannerAndPanelCombinations() throws {
     addUndoBanner(league)
     league.leaderboard = manyLeaderboardEntries(count: 12)
     league.isLeaderboardVisible = true
-    try measure("league+banners", CheckMenuView(store: league, previewUpdateBanner: true))
+    try measure("league+banners", CheckMenuView(store: league, previewUpdateBanner: true, previewUpdateNotes: sampleUpdateNotes))
 
     // (f) 개인 기록 패널(회고 카드 + 7×24 히트맵) + 되돌리기/새 버전 배너.
     let insights = teamStore()
@@ -1796,7 +1846,7 @@ func popoverStaysWithinHeightCapForWorstBannerAndPanelCombinations() throws {
     insights.insightsLoaded = true
     insights.isInsightsPanelVisible = true
     addUndoBanner(insights)
-    try measure("insights+banners", CheckMenuView(store: insights, previewUpdateBanner: true))
+    try measure("insights+banners", CheckMenuView(store: insights, previewUpdateBanner: true, previewUpdateNotes: sampleUpdateNotes))
 
     // 모든 조합이 측정됐는지(렌더 실패로 조용히 건너뛰지 않았는지) 확인한다.
     #expect(cases.count == 6)
@@ -2091,7 +2141,7 @@ func insightsPanelWindowHeightWithinCapWithChrome() throws {
 
     // (b) 목표 편집 행 + 새 버전 배너.
     let update = makeInsightsStore()
-    _ = try measure("insights+goalEditor+updateBanner", CheckMenuView(store: update, previewGoalEditing: true, previewUpdateBanner: true))
+    _ = try measure("insights+goalEditor+updateBanner", CheckMenuView(store: update, previewGoalEditing: true, previewUpdateBanner: true, previewUpdateNotes: sampleUpdateNotes))
 
     // (c) 목표 편집 행만(여유 안이라 본문을 깎지 않는다 — 불필요한 스크롤을 만들지 않는다).
     let goalOnly = try measure("insights+goalEditor", CheckMenuView(store: makeInsightsStore(), previewGoalEditing: true))

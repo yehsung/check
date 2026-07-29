@@ -6,7 +6,7 @@
 #         ./scripts/release-brew.sh 0.2.0 --dry-run   # 실제 실행 없이 각 단계만 출력
 #
 # 하는 일:
-#   1) 사전점검 — gh 로그인, GH_OWNER, 공증된 dist/aing-check.zip(스테이플 검증)
+#   1) 사전점검 — gh 로그인, CHANGELOG.md 의 이번 버전 패치노트, GH_OWNER, 공증된 dist/aing-check.zip(스테이플 검증)
 #   2) git 태그 v<버전> 생성/푸시, GitHub 릴리즈 생성 + zip 자산 업로드
 #   3) sha256 계산 → packaging/homebrew/aing-check.rb 치환본을 tap 저장소에 커밋/푸시
 #   4) 팀원 설치/업그레이드 명령 출력
@@ -117,6 +117,35 @@ elif ! gh auth status >/dev/null 2>&1; then
   missing "gh CLI 에 로그인되어 있지 않습니다. 'gh auth login' 을 먼저 실행하세요."
 fi
 
+# 패치노트: CHANGELOG.md 의 "## <버전>" 섹션이 곧 릴리스 노트이자 앱 업데이트 배너 문구다.
+# 이 게이트를 사전점검 맨 앞에 두는 이유: 노트가 비어 있으면 태그/푸시 같은 되돌리기 번거로운 부수효과가
+# 일어나기 전에 즉시 멈추기 위해서다(빈 패치노트 배포를 구조적으로 차단).
+CHANGELOG="$ROOT/CHANGELOG.md"
+log "사전점검: CHANGELOG.md 의 $VERSION 패치노트"
+
+# "## <버전>" 다음 줄부터 다음 "## " 직전까지. 빈 줄은 지워 앞뒤 공백을 정리한다(항목은 한 줄씩이라 무손실).
+extract_changelog_section() {
+  awk -v header="## $1" '
+    $0 == header { inside = 1; next }
+    inside && /^## / { exit }
+    inside { print }
+  ' "$CHANGELOG" | sed -e '/^[[:space:]]*$/d'
+}
+
+RELEASE_NOTES=""
+if [[ ! -f "$CHANGELOG" ]]; then
+  missing "$CHANGELOG 이 없습니다. 이번 버전의 변경 내용을 '## $VERSION' 섹션으로 먼저 적으세요."
+else
+  CHANGELOG_SECTION="$(extract_changelog_section "$VERSION")"
+  if [[ -z "$CHANGELOG_SECTION" ]]; then
+    missing "CHANGELOG.md 에 '## $VERSION' 섹션이 없거나 비어 있습니다. 이 섹션이 그대로 릴리스 노트가 되고 앱의 새 버전 배너에 뜨므로, 빈 패치노트로는 배포하지 않습니다 — 이번 버전에서 무엇이 바뀌었는지 사용자 문장으로 먼저 적으세요."
+  else
+    log "패치노트 확인됨:"
+    printf '%s\n' "$CHANGELOG_SECTION" | sed 's/^/    | /' >&2
+    RELEASE_NOTES="$CHANGELOG_SECTION"
+  fi
+fi
+
 ZIP="$ROOT/dist/aing-check.zip"
 log "사전점검: 공증된 배포 zip — $ZIP"
 if [[ ! -f "$ZIP" ]]; then
@@ -169,7 +198,11 @@ run git push origin "$TAG"
 
 log "GitHub 릴리즈 $TAG (자산: aing-check.zip)"
 REPO="$GH_OWNER/check"
-RELEASE_NOTES="aing-check $VERSION 배포. 설치: brew tap $GH_OWNER/check && brew install --cask aing-check"
+# 본문 = CHANGELOG 섹션(위 사전점검에서 확보) + 설치 안내 한 줄. 안내 줄은 "- " 로 시작하지 않으므로
+# 앱의 노트 파서가 항목으로 오해하지 않는다(배너에는 패치노트만 뜬다).
+RELEASE_NOTES="$RELEASE_NOTES
+
+설치: brew tap $GH_OWNER/check && brew install --cask aing-check"
 if [[ "$DRY_RUN" -eq 0 ]] && gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
   warn "릴리즈 $TAG 이(가) 이미 존재합니다. 자산만 덮어씁니다 (멱등)."
   run gh release upload "$TAG" "$ZIP" --repo "$REPO" --clobber

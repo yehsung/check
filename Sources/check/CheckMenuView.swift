@@ -21,6 +21,8 @@ struct CheckMenuView: View {
     var previewGoalEditing: Bool = false
     // 스냅샷 전용: 새 버전 안내 배너가 떠 있는 상태를 강제로 그린다. 앱에서는 updateCheck?.isUpdateAvailable 로만 결정.
     var previewUpdateBanner: Bool = false
+    // 스냅샷 전용: 배너에 얹을 패치노트 줄을 강제로 주입한다. 앱에서는 updateCheck?.latestNotes(릴리스 노트 파싱본)만 쓴다.
+    var previewUpdateNotes: [String] = []
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
@@ -52,7 +54,11 @@ struct CheckMenuView: View {
     /// 배너 1개가 차지하는 대략 높이(pt, 바깥 VStack spacing 10 포함). 목록 행수 예산 계산 전용 상수로,
     /// ImageRenderer 실측(340pt 폭)에 맞춰 둔다 — 값이 어긋나면 상한 회귀 테스트가 먼저 잡는다.
     static let inlineBannerHeight: CGFloat = 54
+    /// 새 버전 배너의 노트 없는 기본 높이(pt).
     static let updateBannerHeight: CGFloat = 81
+    /// 패치노트 한 줄이 배너를 늘리는 높이(pt, 줄 간격 포함). 첫 줄은 블록 간격까지 더해 조금 더 든다.
+    static let updateNoteLineHeight: CGFloat = 15
+    static let updateNoteBlockPadding: CGFloat = 8
     static let longSessionBannerHeight: CGFloat = 92
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
@@ -81,7 +87,11 @@ struct CheckMenuView: View {
         switch topBanner {
         case .longSession: return Self.longSessionBannerHeight
         case .undoAutoClose, .retro: return Self.inlineBannerHeight
-        case .update: return Self.updateBannerHeight
+        case .update:
+            // 노트가 있으면 줄 수만큼 배너가 자란다(없으면 예전과 같은 높이 — 목록 행수 예산도 그대로).
+            let notes = updateBannerNotes
+            guard !notes.isEmpty else { return Self.updateBannerHeight }
+            return Self.updateBannerHeight + Self.updateNoteBlockPadding + CGFloat(notes.count) * Self.updateNoteLineHeight
         case nil: return 0
         }
     }
@@ -114,12 +124,19 @@ struct CheckMenuView: View {
         return (raw.hasPrefix("v") || raw.hasPrefix("V")) ? raw : "v\(raw)"
     }
 
+    // 배너에 얹을 패치노트 줄(최신 릴리스 노트 파싱본). 감지가 없거나 노트 없는 옛 릴리스면 빈 배열 →
+    // 배너는 노트 줄 없이 예전 모습 그대로 그려진다(회귀 금지). 스냅샷은 previewUpdateNotes 로 주입한다.
+    private var updateBannerNotes: [String] {
+        let fetched = updateCheck?.latestNotes ?? []
+        return fetched.isEmpty ? previewUpdateNotes : fetched
+    }
+
     var body: some View {
         VStack(spacing: 10) {
             // 팝오버 최상단: 새 버전 안내 배너([지금 업데이트] 원클릭 + [명령 복사] 폴백). HeaderCard 위에 얹는다.
             // 더 급한 배너가 있으면 이번 팝오버에서는 양보한다(topBanner — 배너는 한 번에 하나만).
             if topBanner == .update {
-                UpdateBanner(versionText: updateBannerVersionText)
+                UpdateBanner(versionText: updateBannerVersionText, notes: updateBannerNotes)
             }
             // 그 아래: 지난주 회고 안내 배너(주당 1회, 월요일 첫 팝오버). [보기]로 개인 기록 패널을 열고,
             // X 로 닫으면 이번 주는 다시 뜨지 않는다(markRetroBannerSeen 이 주 키를 기록).
@@ -323,12 +340,15 @@ struct MenuBarStatusLabel: View {
 private struct UpdateBanner: View {
     /// 표시용 버전 문자열("v0.3.0" — 상위에서 "v" 정규화).
     let versionText: String
+    /// 이번 버전 패치노트(평문 줄, 최대 4). 비어 있으면 노트 줄 없이 예전 모습 그대로 그린다.
+    let notes: [String]
     // runner 는 이 배너가 소유한다(AppDelegate 배선 불요). 테스트는 상태/스폰을 주입한 runner 를 넘겨 검증한다.
     @State private var runner: UpdateRunner
     @State private var copied = false
 
-    init(versionText: String, runner: UpdateRunner = UpdateRunner()) {
+    init(versionText: String, notes: [String] = [], runner: UpdateRunner = UpdateRunner()) {
         self.versionText = versionText
+        self.notes = notes
         _runner = State(initialValue: runner)
     }
 
@@ -353,6 +373,26 @@ private struct UpdateBanner: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                 Spacer(minLength: 4)
+            }
+            // 이번 버전에서 뭐가 바뀌었는지 — 제목과 버튼 사이 작은 목록. 왜 업데이트하는지 알 수 있게 한다.
+            // 한 줄씩 말줄임(lineLimit 1)이라 문구가 길어도 배너 높이는 줄 수에 비례해 예측 가능하다.
+            if !notes.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    // 같은 문구가 두 줄일 수 있으므로 값이 아니라 순번으로 식별한다.
+                    ForEach(Array(notes.enumerated()), id: \.offset) { _, note in
+                        HStack(alignment: .firstTextBaseline, spacing: 5) {
+                            Text("·")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(CheckTheme.secondaryText)
+                            Text(note)
+                                .font(.caption2)
+                                .foregroundStyle(CheckTheme.secondaryText)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: 8) {
                 // [지금 업데이트] — 원클릭(accent fill). running 중엔 "업데이트 중…"으로 바뀌고 비활성.

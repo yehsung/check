@@ -52,6 +52,10 @@ aing-check 를 팀원에게 배포하는 경로는 두 가지입니다.
 버전을 올릴 때마다 아래 순서를 따릅니다. 예시 버전은 `0.2.0`.
 
 ```sh
+# 0) CHANGELOG.md 에 이번 버전 항목을 먼저 쓴다 (없으면 릴리즈가 실패한다)
+#    "## 0.2.0" 섹션에 사용자 문장으로 한 줄씩. 이 섹션이 그대로 GitHub 릴리즈 노트가 되고
+#    앱의 "새 버전이 나왔어요" 배너에 앞의 4줄까지 표시된다.
+
 # 1) 코드 수정 후 테스트 (반드시 통과 확인)
 export CHECK_SUPABASE_ANON_KEY="<Supabase anon key>"   # 또는 .env.local
 swift test
@@ -73,8 +77,8 @@ brew update && brew upgrade --cask aing-check
 
 `release-brew.sh` 가 순서대로 하는 일:
 
-1. **사전점검** — gh 로그인, `GH_OWNER`(또는 `.env.local` 의 `CHECK_GH_OWNER`), `dist/aing-check.zip` 존재 및 공증 스테이플(`stapler validate`) 확인. 하나라도 어긋나면 안내 메시지와 함께 실패합니다(zip 이 없으면 `package-notarized.sh` 를 먼저 돌리라고 안내).
-2. **git 태그 + 릴리즈** — `v0.2.0` 태그 생성/푸시 후 `gh release create` 로 릴리즈 생성 + `aing-check.zip` 업로드. 이미 있는 태그/릴리즈는 건너뛰거나 자산만 덮어써서 **다시 실행해도 안전(멱등)** 합니다.
+1. **사전점검** — gh 로그인, **`CHANGELOG.md` 의 `## <버전>` 패치노트**, `GH_OWNER`(또는 `.env.local` 의 `CHECK_GH_OWNER`), `dist/aing-check.zip` 존재 및 공증 스테이플(`stapler validate`) 확인. 하나라도 어긋나면 안내 메시지와 함께 실패합니다(zip 이 없으면 `package-notarized.sh` 를 먼저 돌리라고 안내). 패치노트 점검은 태그·푸시 같은 부수효과보다 **앞에** 있으므로, 노트를 안 썼으면 아무것도 건드리지 않고 즉시 멈춥니다.
+2. **git 태그 + 릴리즈** — `v0.2.0` 태그 생성/푸시 후 `gh release create` 로 릴리즈 생성 + `aing-check.zip` 업로드. 릴리즈 노트 본문은 CHANGELOG 의 해당 섹션 + 설치 안내 한 줄입니다. 이미 있는 태그/릴리즈는 건너뛰거나 자산만 덮어써서 **다시 실행해도 안전(멱등)** 합니다.
 3. **Cask 갱신** — zip 의 sha256 을 계산해 `packaging/homebrew/aing-check.rb` 의 version/sha256 을 치환한 뒤 tap 저장소의 `Casks/aing-check.rb` 로 복사·커밋·푸시. 변경이 없으면 커밋을 건너뜁니다.
 4. **안내 출력** — 팀원 최초 설치 명령과 업그레이드 명령을 출력합니다.
 
@@ -164,6 +168,7 @@ update public.teams set weekly_goal_hours = 40 where name = '팀이름';
 ## 트러블슈팅
 
 - **`stapler validate` 실패 / 스테이플 없음** — `dist/aing-check.zip` 이 공증 전(예: `package-local.sh` 산출물)일 때 발생합니다. `./scripts/package-notarized.sh` 로 다시 만드세요.
+- **`CHANGELOG.md 에 '## <버전>' 섹션이 없거나 비어 있습니다`** — 이번 버전의 변경 내용을 아직 안 적은 것입니다. `CHANGELOG.md` 맨 위에 `## <버전>` 을 만들고 사용자 문장으로 한 줄씩(2~4줄) 적은 뒤 다시 실행하세요. 앱 배너에 그대로 뜨는 문구이므로 내부 구조·파일명 대신 "무엇이 좋아졌는지"를 씁니다.
 - **`gh auth status` 실패** — `gh auth login` 을 다시 실행합니다.
 - **tap 저장소를 찾을 수 없음** — `../homebrew-check` 에 클론했는지, 아니면 `GH_TAP_DIR` 로 경로를 지정했는지 확인합니다. 저장소가 없으면 스크립트가 `gh repo create ...` 안내를 출력합니다.
 - **팀원이 옛 버전을 받음** — `brew update` 로 tap 을 먼저 갱신한 뒤 `brew upgrade --cask aing-check` 를 실행하도록 안내합니다.

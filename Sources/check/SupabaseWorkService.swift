@@ -102,13 +102,22 @@ actor SupabaseWorkService {
         )
         async let activeRows = fetchActiveSessions(accessToken: accessToken, teamID: teamID)
         async let weeklyRows = fetchWeeklySessions(accessToken: accessToken, teamID: teamID, now: now)
+        async let deviceRows = fetchStatusDevices(accessToken: accessToken, teamID: teamID)
 
         let rows = try decoder.decode([WorkStatusRow].self, from: try await statusBytes)
         let activeSessions = try await activeRows
         let weeklySessions = try await weeklyRows
+        // **이 조회의 실패만은 삼킨다.** work_status_devices 는 소유권 반납의 '증거'일 뿐이고, 증거의 부재는
+        // 아무것도 증명하지 않는다(앱은 그때 기존 백스톱 7분으로 되돌아간다). 반대로 이 실패를 그대로 던지면
+        // 마이그레이션이 아직 적용되지 않은 서버에서 팀 상태 폴링 **전체**가 죽어 팀 목록·내 세션 복구·
+        // 원격 종료 반영이 통째로 멈춘다 — 새 기능 하나를 위해 앱의 심장을 서버 배포 순서에 인질로 잡는 셈이다.
+        // (같은 이유로 임베딩(select=…,work_status_devices(…))도 쓰지 않는다: 표가 없으면 PostgREST 가 관계를
+        //  못 찾아 상태 GET 자체를 400 으로 거부한다.)
+        let devices = (try? await deviceRows) ?? []
         let activeByUser = Dictionary(grouping: activeSessions, by: \.userId)
         let weeklyByUser = weeklyDurations(from: weeklySessions, now: now)
         let todayByUser = todayDurations(from: weeklySessions, now: now)
+        let devicesByUser = Dictionary(grouping: devices, by: \.userId)
         return rows.map { row in
             let activeStartedAt = activeByUser[row.userId]?.compactMap { parseDate($0.startedAt) }.min()
             let avatarURL = (row.profiles?.avatarUrl).flatMap { URL(string: $0) }
@@ -122,9 +131,37 @@ actor SupabaseWorkService {
                 todayDurationSeconds: todayByUser[row.userId, default: 0],
                 avatarURL: avatarURL,
                 lastSeenAt: row.lastSeenAt.flatMap(parseDate),
-                activeSessionID: row.activeSessionId
+                activeSessionID: row.activeSessionId,
+                deviceClaims: (devicesByUser[row.userId] ?? []).map { device in
+                    StatusDeviceClaim(
+                        deviceID: device.deviceId,
+                        sessionID: device.sessionId,
+                        lastSeenAt: device.lastSeenAt.flatMap(parseDate),
+                        // 컬럼이 없는 서버/옛 행이면 nil 이다 → false(약함). 모르는 주장을 '이 맥이 세션을
+                        // 열었다'로 승격시키면 진짜 소유자가 그 앞에서 물러난다.
+                        openedSession: device.openedSession ?? false
+                    )
+                }
             )
         }
+    }
+
+    /// 팀의 기기별 소유 주장 행(work_status_devices)을 읽는다. 팀 범위인 이유는 판정 주체가 '내 행'이더라도
+    /// 같은 계정의 **다른 맥**이 남긴 행을 봐야 하기 때문이다(팀 전체라도 인당 1~2행이라 응답이 작다).
+    /// 호출자가 실패를 삼키므로(fetchTeamStatuses 주석) 표가 없는 서버에서도 폴링은 그대로 돈다.
+    private func fetchStatusDevices(accessToken: String, teamID: String) async throws -> [WorkStatusDeviceRow] {
+        let data = try await send(
+            path: "/rest/v1/work_status_devices",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "select", value: "user_id,device_id,session_id,last_seen_at,opened_session"),
+                URLQueryItem(name: "team_id", value: "eq.\(teamID)")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode([WorkStatusDeviceRow].self, from: data)
     }
 
     private func fetchActiveSessions(accessToken: String, teamID: String) async throws -> [WorkSessionRow] {
@@ -267,6 +304,44 @@ actor SupabaseWorkService {
     /// upsertStatus 를 재사용하므로 active_session_id 도 유지된다.
     func heartbeat(accessToken: String, teamID: String, userID: String, sessionID: String) async throws {
         try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
+    }
+
+    /// 이 맥이 이 세션의 소유자라는 **사실**을 기기별 행으로 남긴다(work_status_devices).
+    /// 위 heartbeat 와 별도 요청인 이유: upsertStatus 본문에 device 를 끼워 넣으면 v0.2.10 이 쓰는 그 표에
+    /// 새 컬럼이 생기고(구버전은 그 컬럼을 안 보내므로 내가 써 둔 값이 그대로 눌러앉아 "이 맥이 소유"라는
+    /// 거짓말을 서버가 하게 된다), 무엇보다 공유 셀은 내가 폴링 직전에 매번 덮어써 남의 흔적을 지운다.
+    /// 기기별 행은 내 upsert 가 남의 행을 건드릴 수 없어 증거가 보존된다.
+    /// 흡수 상태(다른 맥이 연 세션을 미러링 중)에서는 호출되지 않는다 — 호출부가 그 가드 뒤에 있으므로
+    /// 이 표에 행이 있다는 것 자체가 '살아 있는 소유 주장'이다. 반납/종료 시 삭제할 필요도 없다(전진이
+    /// 멈추면 자동으로 무효가 된다 — 판정이 신선도가 아니라 전진 여부이기 때문이다).
+    /// openedSession 은 '이 맥이 그 세션을 실제로 열었는가'(강한 소유)다. 매 하트비트에 실어 **덮어쓴다** —
+    /// 한 번 true 로 쓰고 마는 방식이면, 그 세션이 끝난 뒤 같은 맥이 백스톱으로 다른 세션을 약하게 주장할 때
+    /// 옛 true 가 남아 추측이 사실로 승격된다.
+    func upsertStatusDevice(
+        accessToken: String,
+        teamID: String,
+        userID: String,
+        deviceID: String,
+        sessionID: String,
+        openedSession: Bool
+    ) async throws {
+        let stamp = dateFormatter.string(from: Date())
+        try await sendNoBody(
+            path: "/rest/v1/work_status_devices",
+            method: "POST",
+            queryItems: [URLQueryItem(name: "on_conflict", value: "team_id,user_id,device_id")],
+            body: StatusDeviceUpsertRequest(
+                teamId: teamID,
+                userId: userID,
+                deviceId: deviceID,
+                sessionId: sessionID,
+                lastSeenAt: stamp,
+                updatedAt: stamp,
+                openedSession: openedSession
+            ),
+            accessToken: accessToken,
+            prefer: "resolution=merge-duplicates,return=minimal"
+        )
     }
 
     /// 방치 세션 서버 자동 마감 RPC. close_abandoned_work_sessions() 를 로그인 토큰으로 호출하고

@@ -1669,10 +1669,14 @@ func reloginRestoresSessionIDSoHeartbeatResumes() async {
     #expect(bodies.count == 1)
     #expect(bodies.first?.contains(#""active_session_id":"\#(serverSessionID)""#) == true)
 
-    // 대조군: 로컬에 세션ID 가 이미 있으면 서버 값으로 갈아치우지 않는다(다른 맥이 연 세션 가로채기 금지).
+    // 계약 변경(v0.2.15/D2): 로컬 세션ID 가 서버의 열린 세션과 다르면 **서버 쪽이 진실**이다. 부분 유니크 인덱스
+    // (work_sessions_one_open_per_user)상 사용자당 열린 세션은 하나뿐이라, 내 id 는 이미 닫힌 세션을 가리킨다.
+    // 예전엔 로컬 id 를 지켰는데(가로채기 금지), 그러면 하트비트가 닫힌 id 를 계속 갱신해 서버의 열린 세션은
+    // 신호가 끊긴 채 방치되고 타이머만 계속 흘렀다. 이제 재흡수하고 '내가 연 세션이 아님' 표식을 세운다.
     store.currentSessionID = "local-session"
     store.applyRemoteOwnStatus(writeGeneration: store.workStateWriteGeneration)
-    #expect(store.currentSessionID == "local-session")
+    #expect(store.currentSessionID == serverSessionID)
+    #expect(store.adoptedRemoteSession)
 }
 
 // MARK: - D3: 본인 죽은 세션 자동 마감 + 되돌리기
@@ -1707,6 +1711,92 @@ func abandonedOwnSessionIsAutoClosedAndUndoable() async {
     #expect(store.currentSessionID == "50000000-0000-0000-0000-000000000001")
     #expect(!store.canUndoAutoClose())
     #expect(store.snapshot.isWorking)
+}
+
+// MARK: - R1: 자리 비움 자동 마감 임계는 백스톱과 **같은 계약**에서 나온다
+
+@MainActor
+@Test
+func autoCloseFixturesStraddleTheContractThreshold() {
+    // 아래 두 호스트가 '계약 안/밖'을 실제로 가르는지 여기서 못 박는다. 스텁은 @MainActor 격리된 상수를
+    // 읽을 수 없어 리터럴을 쓰므로, 파생 관계는 이 테스트가 유일하게 지킨다 — 이게 없으면 임계가 바뀔 때
+    // 픽스처가 조용히 한쪽으로 넘어가 아래 두 테스트가 아무것도 검증하지 않게 된다.
+    #expect(URLProtocolStub.signalGapInsideContract < WorkTimerStore.adoptedReclaimStaleSeconds)
+    #expect(URLProtocolStub.signalGapOutsideContract > WorkTimerStore.adoptedReclaimStaleSeconds)
+    #expect(URLProtocolStub.staleTodaySessionSignalGap > WorkTimerStore.adoptedReclaimStaleSeconds)
+    // 3분 낮잠은 이 앱 자신의 잠자기 유예 계약 한가운데다 — "정상 근무"로 인정되는 구간이라는 뜻이다.
+    #expect(URLProtocolStub.ownerNapSignalGap < WorkTimerStore.sleepGraceSeconds)
+}
+
+@MainActor
+@Test
+func ownerMacTakingThreeMinuteNapIsNotAutoClosedByAnotherMac() async {
+    // **R1 의 재현 조건 그대로.** 맥 A 는 살아 있다 — 뚜껑을 3분 닫은 것뿐이고, 이 앱의 계약상 5분 이하
+    // 잠자기는 근무 연속으로 인정된다(sleepGraceSeconds). 그런데 자동 마감 임계만 90초로 하드코딩돼 있어
+    // **맥 B 를 켜는 것만으로** A 의 살아 있는 세션이 마감됐다(실측: PATCH 1건, ended_at = 180.9초 전,
+    // "자리 비움으로 자동 근무종료됨"). 그 뒤 A 의 근무는 통째로 유실된다.
+    // 이제 임계가 백스톱과 같은 상수(adoptedReclaimStaleSeconds = 7분)라 3분 낮잠은 계약 안이다.
+    let testHost = URLProtocolStub.ownerNapHost
+    let store = makeStubStore(host: testHost)
+    // 픽스처와 같은 '지금'을 주입한다. 이 호스트군은 신호 공백을 임계 바로 옆에 두므로, 픽스처 생성과
+    // 스토어 판정 사이의 지연(전체 스위트에선 60초를 넘는다)이 그대로 공백에 더해져 '계약 안'이 밖으로
+    // 넘어간다 — 시각을 고정하지 않으면 이 R1 단언이 무작위로 빨개진다.
+    pinClock(store, to: URLProtocolStub.ownerSignalFixture(forHost: testHost)!.now)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    await store.refreshTeamStatus()
+
+    // 마감이 일어나지 않았다 — 세션 쓰기(PATCH/POST)가 한 건도 없어야 한다.
+    let wroteSession = URLProtocolStub.requests(forHost: testHost).contains {
+        $0.url?.path == "/rest/v1/work_sessions" && $0.httpMethod != "GET"
+    }
+    #expect(!wroteSession)
+    #expect(store.syncMessage != "자리 비움으로 자동 근무종료됨")
+    #expect(store.lastAutoClosedSessionID == nil)
+    #expect(!store.canUndoAutoClose())
+
+    // 대신 정상 경로가 이어진다: B 는 A 의 세션을 흡수해 **미러링**한다(하트비트는 보내지 않는다).
+    #expect(store.startedAt != nil)
+    #expect(store.adoptedRemoteSession)
+    #expect(store.currentSessionID == "51000000-0000-0000-0000-000000000001")
+}
+
+@MainActor
+@Test
+func autoCloseThresholdFollowsTheBackstopContractOnBothSides() async {
+    // 두 임계(주장=백스톱 / 마감=여기)가 **한 상수에서** 나온다는 것을 경계 양쪽으로 고정한다.
+    // 임계를 다시 하드코딩으로 갈라 놓으면 이 두 단언 중 하나가 반드시 깨진다.
+    let underHost = URLProtocolStub.autoCloseUnderThresholdHost
+    let underStore = makeStubStore(host: underHost)
+    // 시각 고정(옆 R1 테스트와 같은 이유). 공백이 임계 -60초라, 메인 액터 점유로 판정이 60초만 밀려도
+    // '계약 안'이 '계약 밖'으로 넘어가 이 단언이 무작위로 빨개진다(실제로 관측했다).
+    pinClock(underStore, to: URLProtocolStub.ownerSignalFixture(forHost: underHost)!.now)
+    defer {
+        underStore.tickerTask?.cancel()
+        underStore.refreshTask?.cancel()
+    }
+    await underStore.refreshTeamStatus()
+    // 임계 -60초: 계약 안 = 살아 있는 근무다. 마감 금지.
+    #expect(underStore.lastAutoClosedSessionID == nil)
+    #expect(underStore.syncMessage != "자리 비움으로 자동 근무종료됨")
+
+    // **대조군**: 진짜 방치(임계 +60초)는 여전히 마감되고 되돌리기가 제공돼야 한다. 이 짝이 없으면
+    // "임계를 무한대로 키우면 통과"하는 가짜 수리를 걸러낼 수 없다.
+    let overHost = URLProtocolStub.autoCloseOverThresholdHost
+    let overStore = makeStubStore(host: overHost)
+    pinClock(overStore, to: URLProtocolStub.ownerSignalFixture(forHost: overHost)!.now)
+    defer {
+        overStore.tickerTask?.cancel()
+        overStore.refreshTask?.cancel()
+    }
+    await overStore.refreshTeamStatus()
+    #expect(overStore.syncMessage == "자리 비움으로 자동 근무종료됨")
+    #expect(overStore.lastAutoClosedSessionID == "51000000-0000-0000-0000-000000000001")
+    #expect(overStore.canUndoAutoClose())
+    #expect(overStore.startedAt == nil)
 }
 
 @MainActor
@@ -1825,8 +1915,12 @@ func undoAutoCloseSubtractsRestoredSessionFromTodayAccumulation() async {
         store.refreshTask?.cancel()
     }
 
-    let now = Date()
-    // KST 자정 직후에 돌아도 클리핑에 걸리지 않게 시작점을 오늘 자정 이후로 고정한다.
+    // **시각 고정(옆 테스트와 같은 이유).** 예전엔 벽시계 now 를 쓰고 시작점만 자정으로 clamp 했는데,
+    // 그러면 KST 00:00~00:01 에 돌 때 closedSeconds 가 60 미만이 되어 마지막 부등식
+    // (todayDuration < closedSeconds*2 − 60)이 **성립 불가**가 된다(우변이 todayDuration 이하로 내려간다).
+    // 계약은 멀쩡한데 하루 중 1분짜리 창에서만 빨개지는 잠복 지뢰였다 — 옆 테스트의 17분 창과 같은 부류다.
+    let now = URLProtocolStub.staleTodayFixture(forHost: URLProtocolStub.staleTodayNoonHost)!.now
+    pinClock(store, to: now)
     let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
     let sessionStart = max(dayStart, now.addingTimeInterval(-7_200))
     let closedSeconds = max(0, Int(now.timeIntervalSince(sessionStart)))
@@ -1853,14 +1947,40 @@ func undoAutoCloseSubtractsRestoredSessionFromTodayAccumulation() async {
     #expect(store.lastAutoClosedSeconds == 0)
 }
 
+/// 주입 시계를 세우는 **유일한 관용구**: clock 과 displayNow 를 함께 맞춘다.
+/// displayNow 는 티커가 clock() 으로 채우는 표시 캐시다. 시계만 갈아 끼우고 이 값을 실시각으로 두면
+/// todayDuration 의 '오늘' 판정(accumulatedDayStart >= koreanDayStart(displayNow))이 **다른 날**을 봐서
+/// 누적 기여가 통째로 0 이 된다 — 계약은 멀쩡한데 테스트만 거짓으로 빨개지는(또는 0==0 으로 조용히
+/// 통과해 버리는) 지점이라, 두 값을 한 곳에서 함께 세운다.
 @MainActor
-@Test
-func autoCloseAddsClosedSessionToTodayAccumulationAndUndoRestoresIt() async {
-    // 자동 마감은 마감한 세션의 '오늘 몫'을 누적에 더해야 한다(서버 스냅샷의 today 는 마감 **전** 값이라
-    // 그 세션이 빠져 있다). 그래야 마감 직후 표시가 세션 몫만큼 꺼지지 않고, 이어서 도착할 폴링값과도 같아진다.
-    // 그리고 되돌리기는 그 몫을 정확히 도로 뺀다(폴링 전에 눌러도 이중 계상 없음).
-    let testHost = "stale-today-session-test"
-    let store = makeStubStore(host: testHost)
+private func pinClock(_ store: WorkTimerStore, to now: Date) {
+    store.clock = { now }
+    store.displayNow = now
+}
+
+/// 자동 마감 '오늘 몫' 계약을 **고정된 시각**에서 통째로 검증한다(호스트별 배치만 다르다).
+///
+/// 시각을 주입하는 이유: 이 계약은 KST 자정 클리핑을 지나므로 결과가 "지금이 자정에서 얼마나 떨어졌는가"에
+/// 좌우된다. 예전엔 픽스처도 단언도 벽시계(Date())를 따로 읽어서, KST 00:00~02:00 에 돌리면
+///   (1) '2시간 전 시작'이 자정으로 잘려 기대 몫이 0 근처로 붕괴하고(→ `< 몫*2 − 60` 이 성립 불가),
+///   (2) 픽스처 생성 시각(워커 스레드)과 스토어 판정 시각(메인 액터, 전체 스위트에서 수십 초 밀린다)의
+///       차이가 클리핑이 걸린 순간 그대로 오차가 되어 ±3초 허용치를 넘겼다.
+/// 결과는 매일 밤 확정 실패였다(23:47 통과 / 00:13·00:14·00:20 실패). 시계를 주입하면 픽스처와 스토어가
+/// 같은 '지금'을 쓰므로 그 축이 사라지고, 허용치도 ±3초에서 **정확한 등호**로 조일 수 있다(단언 강화).
+/// - Parameter sessionLiesInsideToday: 마감된 세션 구간이 **오늘 안에** 있는 배치인가.
+///   `todayDuration < 몫*2 − 60` 은 그 배치에서만 뜻이 있는 **크기 위생 점검**이다(세션이 자정을 가로지르면
+///   '오늘 라이브'는 자정부터 재는데 '오늘 몫'은 자정 이후 조각만이라, 계약이 멀쩡해도 부등식이 성립하지
+///   않는다). 예전엔 이 구분 없이 모든 실행에 걸어 두어 매일 밤 00시대에 확정 실패했다 —
+///   부등식을 약화시키는 대신, **그것이 뜻을 갖는 배치**를 명시하고 거기서는 그대로 강하게 건다.
+@MainActor
+private func assertAutoCloseAddsClosedPortionAndUndoRestoresIt(
+    host: String,
+    sessionLiesInsideToday: Bool = true
+) async {
+    let fixture = URLProtocolStub.staleTodayFixture(forHost: host)!
+    let store = makeStubStore(host: host)
+    // 픽스처와 **같은** '지금'. 이 한 줄이 이 테스트의 벽시계 의존을 통째로 없앤다.
+    pinClock(store, to: fixture.now)
     defer {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
@@ -1870,13 +1990,14 @@ func autoCloseAddsClosedSessionToTodayAccumulationAndUndoRestoresIt() async {
 
     #expect(store.startedAt == nil)
     #expect(store.canUndoAutoClose())
-    // 2시간 전 시작 → 5분 전 마지막 신호 = 약 6900초(오늘 자정 클리핑 포함).
-    let now = Date()
-    let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
-    let expected = max(0, Int(now.addingTimeInterval(-300).timeIntervalSince(max(now.addingTimeInterval(-7_200), dayStart))))
-    #expect(abs(store.accumulatedSeconds - expected) <= 3)
-    #expect(abs(store.lastAutoClosedSeconds - expected) <= 3)
-    #expect(abs(store.todayDuration - expected) <= 3)
+    // 계약: 마감분의 '오늘 몫' = 마지막 신호 − max(세션 시작, KST 자정).
+    let expected = max(
+        0,
+        Int(fixture.lastSeenAt.timeIntervalSince(max(fixture.sessionStart, fixture.koreanDayStart)))
+    )
+    #expect(store.accumulatedSeconds == expected)
+    #expect(store.lastAutoClosedSeconds == expected)
+    #expect(store.todayDuration == expected)
 
     await store.performUndoAutoClose()
 
@@ -1889,7 +2010,86 @@ func autoCloseAddsClosedSessionToTodayAccumulationAndUndoRestoresIt() async {
         Int(store.displayNow.timeIntervalSince(max(restored, TeamWeeklyGoal.koreanDayStart(for: store.displayNow))))
     )
     #expect(store.todayDuration == liveExpected)
+    guard sessionLiesInsideToday else { return }
+    #expect(expected > 0, "이 배치는 '오늘 몫'이 0 이라 아래 크기 단언이 공허해진다")
     #expect(store.todayDuration < expected * 2 - 60)
+    // 이중 계상 회귀(되돌리기가 누적에서 몫을 빼지 않던 버그)가 만들던 **바로 그 값**을 못 박는다.
+    // 위 등호 단언과 겹치지만, 무엇이 틀렸을 때 이 테스트가 빨개지는지가 실패 메시지에 그대로 남는다.
+    #expect(store.todayDuration != expected + liveExpected)
+}
+
+@MainActor
+@Test
+func autoCloseAddsClosedSessionToTodayAccumulationAndUndoRestoresIt() async {
+    // 자동 마감은 마감한 세션의 '오늘 몫'을 누적에 더해야 한다(서버 스냅샷의 today 는 마감 **전** 값이라
+    // 그 세션이 빠져 있다). 그래야 마감 직후 표시가 세션 몫만큼 꺼지지 않고, 이어서 도착할 폴링값과도 같아진다.
+    // 그리고 되돌리기는 그 몫을 정확히 도로 뺀다(폴링 전에 눌러도 이중 계상 없음).
+    // 기준 배치: KST 정오 고정 — 자정 클리핑이 개입하지 않는다.
+    await assertAutoCloseAddsClosedPortionAndUndoRestoresIt(host: URLProtocolStub.staleTodayNoonHost)
+}
+
+@MainActor
+@Test
+func autoCloseAddsClosedSessionToTodayAccumulationJustAfterMidnight() async {
+    // **위 테스트가 매일 밤 무너지던 그 시간대에서, 같은 계약이 그대로 성립함을 보인다.**
+    // KST 00:45 고정 + 00:05 에 시작한 세션(= 자정 뒤 시작). 벽시계로 돌던 시절엔 이 시간대에
+    // '2시간 전 시작'이 자정으로 잘려 기대 몫이 붕괴했지만, 계약 자체는 아무 문제가 없었다 —
+    // 무너진 것은 테스트의 기대값 계산이었다는 사실을 이 테스트가 고정한다.
+    await assertAutoCloseAddsClosedPortionAndUndoRestoresIt(host: URLProtocolStub.staleTodayAfterMidnightHost)
+}
+
+/// **하루 전 구간 스윕.** 같은 시나리오(2시간 세션 + 8분 신호 두절)를 KST 자정으로부터 0분~1439분의
+/// 여러 지점에 놓고 계약이 **전부** 성립하는지 본다. 검증자가 실제로 실패를 관측한 분(13·14·20)과
+/// 통과를 관측한 분(1427 = 23:47)을 명시로 포함한다 — 이 스윕이 있으면 "그 시각에 돌려야만 드러나는"
+/// 회귀가 매 실행마다 잡힌다(벽시계로 돌던 시절엔 하루에 한 번, 그것도 밤에만 드러났다).
+/// 세션이 자정을 가로지르는 지점(0~119분)에서는 크기 위생 부등식이 뜻을 잃으므로 값 계약만 본다
+/// (그 배치의 크기 계약은 autoCloseTodayPortionIsClipped… 가 별도로 못 박는다).
+@MainActor
+@Test(arguments: [0, 5, 8, 13, 14, 20, 59, 119, 120, 121, 180, 360, 720, 1080, 1427, 1439])
+func autoCloseTodayPortionContractHoldsAtEveryPositionOfTheKoreanDay(minutesAfterMidnight: Int) async {
+    await assertAutoCloseAddsClosedPortionAndUndoRestoresIt(
+        host: URLProtocolStub.staleTodaySweepHost(minutesAfterMidnight: minutesAfterMidnight),
+        // 2시간 전 시작이 오늘 안에 온전히 들어오는 것은 02:00(=120분) 이후다.
+        sessionLiesInsideToday: minutesAfterMidnight >= 120
+    )
+}
+
+@MainActor
+@Test
+func autoCloseTodayPortionIsClippedToZeroWhenTheClosedRunBelongsToYesterday() async {
+    // KST 00:05 고정. 세션은 어제 22:05 에 시작했고 신호는 어제 23:57 에 끊겼다 —
+    // 마감된 구간이 **전부 어제**라 '오늘 몫'은 0 이 정답이다(클리핑 규칙 그 자체).
+    // 이 배치에서 클리핑이 없으면 어제 근무 1시간 52분이 통째로 오늘 표시에 얹힌다.
+    let host = URLProtocolStub.staleTodayMidnightHost
+    let fixture = URLProtocolStub.staleTodayFixture(forHost: host)!
+    let store = makeStubStore(host: host)
+    pinClock(store, to: fixture.now)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    await store.refreshTeamStatus()
+
+    // 전제: 이 배치는 실제로 자정을 가로지른다(픽스처가 조용히 바뀌면 아래 단언이 공허해진다).
+    #expect(fixture.sessionStart < fixture.koreanDayStart)
+    #expect(fixture.lastSeenAt < fixture.koreanDayStart)
+
+    #expect(store.startedAt == nil)
+    #expect(store.canUndoAutoClose())
+    #expect(store.accumulatedSeconds == 0)
+    #expect(store.lastAutoClosedSeconds == 0)
+    #expect(store.todayDuration == 0)
+
+    await store.performUndoAutoClose()
+
+    // 되돌리면 세션이 다시 흐르지만, 오늘 표시는 **자정 이후분만**이다(= 5분).
+    let sinceMidnight = Int(fixture.now.timeIntervalSince(fixture.koreanDayStart))
+    #expect(store.startedAt == fixture.sessionStart)
+    #expect(store.accumulatedSeconds == 0)
+    #expect(store.todayDuration == sinceMidnight)
+    // 클리핑이 빠지면 이 값이 된다(어제 몫까지 오늘로 계상) — 그 값이 아님을 못 박는다.
+    #expect(store.todayDuration < Int(fixture.now.timeIntervalSince(fixture.sessionStart)))
 }
 
 // MARK: - 방치 세션 서버 자동 마감(클라 스캐빈저 폴백)

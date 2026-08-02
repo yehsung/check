@@ -146,7 +146,10 @@ final class URLProtocolStub: URLProtocol {
         if request.url?.host == "schema-missing" && request.url?.path.hasPrefix("/rest/v1/") == true {
             return 404
         }
-        if request.url?.host == "expired-token",
+        // 만료 access token 재현. 정확 일치가 아니라 **접미어** 매칭인 이유는 지연 응답 규약(alwaysDelayedHostPrefix)
+        // 과 조합해야 하기 때문이다 — "delayed-expired-token" 처럼 접두어+접미어를 동시에 만족하는 호스트로만
+        // "grant 가 in-flight 인 사이에 낡은 토큰으로 요청이 나가면 두 번째 grant 가 터진다"를 재현할 수 있다.
+        if request.url?.host?.hasSuffix("expired-token") == true,
            request.url?.path.hasPrefix("/rest/v1/") == true,
            request.value(forHTTPHeaderField: "Authorization") == "Bearer old-access-token" {
             return 401
@@ -179,6 +182,12 @@ final class URLProtocolStub: URLProtocol {
            request.url?.path == "/rest/v1/token_usage_device_monthly" {
             return 404
         }
+        // 기기별 소유 주장 표만 없는 서버(= 이 릴리스의 마이그레이션 미적용) 재현 호스트.
+        // 팀 상태 폴링이 이 404 하나로 통째로 죽지 않는지(= 앱이 서버 배포 순서에 인질로 잡히지 않는지) 검증용.
+        if request.url?.host == "status-device-table-missing",
+           request.url?.path == "/rest/v1/work_status_devices" {
+            return 404
+        }
         if request.url?.host == "retry-toggle",
            request.url?.path == "/rest/v1/work_sessions",
            request.httpMethod == "PATCH" {
@@ -205,7 +214,7 @@ final class URLProtocolStub: URLProtocol {
         if request.url?.host == "schema-missing" && request.url?.path.hasPrefix("/rest/v1/") == true {
             return Data(#"{"code":"PGRST205","message":"Could not find the table 'public.work_statuses' in the schema cache"}"#.utf8)
         }
-        if request.url?.host == "expired-token",
+        if request.url?.host?.hasSuffix("expired-token") == true,
            request.url?.path.hasPrefix("/rest/v1/") == true,
            request.value(forHTTPHeaderField: "Authorization") == "Bearer old-access-token" {
             return Data(#"{"code":"PGRST301","message":"JWT expired"}"#.utf8)
@@ -215,6 +224,23 @@ final class URLProtocolStub: URLProtocol {
             return Data(
                 #"{"code":"PGRST205","message":"Could not find the table 'public.token_usage_device_monthly' in the schema cache"}"#.utf8
             )
+        }
+        if request.url?.host == "status-device-table-missing",
+           request.url?.path == "/rest/v1/work_status_devices" {
+            return Data(
+                #"{"code":"PGRST205","message":"Could not find the table 'public.work_status_devices' in the schema cache"}"#.utf8
+            )
+        }
+        // take_pokes 는 인자 없는 RPC 라 '받을 게 없음'의 정상 응답이 빈 배열이다. 미등록으로 두면 Data() 가
+        // 돌아가 [TakenPokeRow] 디코드가 조용히 throw 되는데, 스토어의 catch 가 그걸 삼켜 "요청은 나갔는데
+        // 전달 경로만 죽은" 상태가 테스트에 전혀 드러나지 않는다(건수만 세는 테스트는 통과해 버린다).
+        if request.url?.path == "/rest/v1/rpc/take_pokes" {
+            return Data("[]".utf8)
+        }
+        // 내 공개 설정 조회(profiles GET)도 정상 1행을 돌려준다. 미등록이면 loadTokenUsagePrivacyIfNeeded 의
+        // loaded 래치가 영영 안 서서 폴링 tick 마다 같은 GET 이 재발사되고, 요청 건수를 세는 테스트가 흔들린다.
+        if request.url?.path == "/rest/v1/profiles", request.httpMethod == "GET" {
+            return Data(#"[{"token_usage_public":true}]"#.utf8)
         }
         if request.url?.path == "/rest/v1/rpc/lookup_team_by_code" {
             return lookupTeamByCodeData(for: request)
@@ -236,6 +262,9 @@ final class URLProtocolStub: URLProtocol {
         }
         if request.url?.path == "/rest/v1/work_statuses" {
             return workStatusesData(for: request)
+        }
+        if request.url?.path == "/rest/v1/work_status_devices", request.httpMethod == "GET" {
+            return workStatusDevicesData(for: request)
         }
         if request.url?.path == "/rest/v1/work_sessions", request.httpMethod == "GET" {
             return workSessionsData(for: request)
@@ -453,18 +482,39 @@ final class URLProtocolStub: URLProtocol {
             )
         }
 
-        // 자리 비움 자동 마감 중 '오늘 시작한' 세션 전용 호스트: 2시간 전 시작, 5분 전 신호 두절(>90초).
-        // 마감 몫이 오늘 누적에 반영되는지(그리고 되돌리기가 그 몫을 도로 빼는지) 검증하는 데 쓴다.
-        if host == "stale-today-session-test" {
+        // 자리 비움 자동 마감 중 '오늘 시작한' 세션 전용 호스트군(자정 클리핑 계약).
+        // 시각은 **고정된 절대 시각**(staleTodayFixture)에서 파생한다 — 벽시계에서 파생하면 이 픽스처가
+        // 만들어지는 시각(URLProtocol 워커 스레드)과 스토어가 판정하는 시각이 달라 그 차이가 그대로 오차가
+        // 되고, KST 00시대에는 2시간 전 시작이 자정으로 잘려 기대값이 통째로 붕괴한다(매일 밤 빨간 테스트).
+        if let fixture = staleTodayFixture(forHost: host) {
             return Data(
                 """
                 [
                   {
                     "user_id": "00000000-0000-0000-0000-000000000002",
                     "status": "working",
-                    "updated_at": "\(iso(offset: -7_200))",
-                    "last_seen_at": "\(iso(offset: -300))",
+                    "updated_at": "\(iso(fixture.sessionStart))",
+                    "last_seen_at": "\(iso(fixture.lastSeenAt))",
                     "active_session_id": "50000000-0000-0000-0000-000000000002",
+                    "profiles": { "display_name": "영식", "email": "member@example.com" }
+                  }
+                ]
+                """.utf8
+            )
+        }
+
+        // R1 전용 호스트군: '맥 A 가 살아 있는데 맥 B 를 켠' 상황을 신호 공백 길이만 바꿔 재현한다.
+        // 전부 2시간 전 시작한 열린 세션 하나를 들고 있고, 다른 것은 마지막 신호 시각뿐이다.
+        if let fixture = ownerSignalFixture(forHost: host) {
+            return Data(
+                """
+                [
+                  {
+                    "user_id": "00000000-0000-0000-0000-000000000002",
+                    "status": "working",
+                    "updated_at": "\(iso(fixture.sessionStart))",
+                    "last_seen_at": "\(iso(fixture.lastSeenAt))",
+                    "active_session_id": "51000000-0000-0000-0000-000000000001",
                     "profiles": { "display_name": "영식", "email": "member@example.com" }
                   }
                 ]
@@ -513,13 +563,182 @@ final class URLProtocolStub: URLProtocol {
         )
     }
 
+    // R1 픽스처의 신호 공백(초). 자리 비움 자동 마감의 계약 임계(WorkTimerStore.adoptedReclaimStaleSeconds
+    // = sleepGraceSeconds + 4주기 = 7분)를 **사이에 두고** 양쪽에 하나씩 둔다.
+    // 상수를 여기서 직접 참조하지 않는 이유는 그 값이 @MainActor 격리라 URLProtocol 워커 스레드에서
+    // 읽을 수 없기 때문이다 — 대신 이 세 값이 실제로 임계를 감싸는지는
+    // autoCloseFixturesStraddleTheContractThreshold 가 @MainActor 에서 단언한다(파생 관계는 거기서 고정된다).
+    /// 맥 A 의 3분 낮잠. 이 앱의 잠자기 유예(5분) **안**이라 A 는 그대로 근무 중이다 — 마감 대상이 아니다.
+    static let ownerNapSignalGap: TimeInterval = 180
+    /// 임계 -60초. 계약 안이라 마감 금지.
+    static let signalGapInsideContract: TimeInterval = 360
+    /// 임계 +60초. 계약 밖이라 마감 + 되돌리기 제공.
+    static let signalGapOutsideContract: TimeInterval = 480
+    /// stale-today-session 호스트군의 신호 공백(초). 계약 임계 **밖**이어야 자동 마감이 성립한다.
+    static let staleTodaySessionSignalGap: TimeInterval = 480
+
+    // MARK: - 자정 클리핑 계약 호스트군(고정 시각)
+
+    /// 자동 마감의 '오늘 몫'(= seen − max(sessionStart, KST 자정))을 검증하는 호스트의 픽스처.
+    ///
+    /// **왜 벽시계가 아니라 고정 절대 시각인가**(이 구조체의 전부다): 이 계약은 KST 자정 클리핑을 지나므로
+    /// 결과가 "지금이 자정에서 얼마나 떨어졌는가"에 좌우된다. 벽시계로 픽스처를 만들면
+    ///   (1) KST 00:00~02:00 에는 '2시간 전 시작'이 자정으로 잘려 기대값이 붕괴하고,
+    ///   (2) 픽스처 생성(워커 스레드)과 스토어 판정(메인 액터, 전체 스위트에서 수십 초 밀릴 수 있다) 사이의
+    ///       지연이 클리핑이 걸린 순간 그대로 오차가 되며,
+    ///   (3) 자정 직전에 시작한 실행은 픽스처와 단언이 **서로 다른 날**의 자정을 쓰게 된다.
+    /// 절대 시각으로 못 박고 스토어의 주입 시계(store.clock)를 같은 값으로 맞추면 이 축이 통째로 사라진다.
+    struct StaleTodayFixture {
+        /// 이 시나리오의 '지금'. 테스트는 반드시 `store.clock = { fixture.now }` 로 같은 값을 주입한다.
+        let now: Date
+        /// 서버가 들고 있는 열린 세션의 시작 시각.
+        let sessionStart: Date
+        /// 마지막 생존신호. now 와의 공백이 계약 임계(7분) 밖이라 자동 마감이 성립한다.
+        let lastSeenAt: Date
+        /// 이 시나리오가 서 있는 KST 하루의 시작(자정). 클리핑 기대값 계산의 기준이다.
+        var koreanDayStart: Date { TeamWeeklyGoal.koreanDayStart(for: now) }
+    }
+
+    /// 정오 고정: 자정에서 12시간 떨어져 있어 클리핑이 개입하지 않는다(원래 계약의 기준 배치).
+    static let staleTodayNoonHost = "stale-today-session-test"
+    /// KST 00:05 고정: 마감된 세션의 구간이 **전부 어제**라 '오늘 몫'이 0 이어야 한다(클리핑 그 자체).
+    static let staleTodayMidnightHost = "stale-today-session-midnight-test"
+    /// KST 00:45 고정: 클리핑이 실제로 자르면서도 '오늘 몫'이 유의미한 크기다 —
+    /// 정오 배치와 **같은 형태의 단언**이 자정 창 안에서도 그대로 성립함을 보이는 배치.
+    static let staleTodayAfterMidnightHost = "stale-today-session-after-midnight-test"
+
+    /// 하루 스윕용 호스트 접두어. 뒤에 'KST 자정으로부터 몇 분'을 붙인다(예: stale-today-at-13 → 00:13).
+    /// 이 스윕이 있어야 "특정 시각에만 무너지는" 회귀가 **매 실행마다** 잡힌다 — 벽시계로 돌던 시절엔
+    /// 그 시각에 우연히 돌려야만 드러났고, 실제로 매일 밤 00시대에만 빨갛게 떴다.
+    static let staleTodaySweepHostPrefix = "stale-today-at-"
+    static func staleTodaySweepHost(minutesAfterMidnight: Int) -> String {
+        "\(staleTodaySweepHostPrefix)\(minutesAfterMidnight)"
+    }
+
+    static func staleTodayFixture(forHost host: String?) -> StaleTodayFixture? {
+        func make(minutesAfterMidnight: Int, sessionStartOffset: TimeInterval) -> StaleTodayFixture {
+            let now = kst(hour: 0, minute: 0).addingTimeInterval(Double(minutesAfterMidnight) * 60)
+            return StaleTodayFixture(
+                now: now,
+                sessionStart: now.addingTimeInterval(-sessionStartOffset),
+                lastSeenAt: now.addingTimeInterval(-staleTodaySessionSignalGap)
+            )
+        }
+        switch host {
+        case staleTodayNoonHost:
+            return make(minutesAfterMidnight: 12 * 60, sessionStartOffset: 7_200)
+        case staleTodayMidnightHost:
+            // 8분 전 신호가 어제 23:57 이라 '오늘 몫'은 0 이다(자정 직후엔 그것이 정답이다).
+            return make(minutesAfterMidnight: 5, sessionStartOffset: 7_200)
+        case staleTodayAfterMidnightHost:
+            // 00:05 시작 → 00:37 신호 두절 → 00:45 관측. 세션 시작이 자정 **뒤**라 클리핑이 자르지 않지만
+            // 2시간 전 시작이었다면 잘렸을 창이다(= 옛 픽스처가 매일 밤 무너지던 바로 그 시간대).
+            return make(minutesAfterMidnight: 45, sessionStartOffset: 2_400)
+        default:
+            guard let host, host.hasPrefix(staleTodaySweepHostPrefix),
+                  let minutes = Int(host.dropFirst(staleTodaySweepHostPrefix.count))
+            else {
+                return nil
+            }
+            return make(minutesAfterMidnight: minutes, sessionStartOffset: 7_200)
+        }
+    }
+
+    /// 고정 기준일(2026-01-15) KST 의 시각. 벽시계를 전혀 읽지 않으므로 실행 시각·날짜 경계와 무관하다.
+    private static func kst(hour: Int, minute: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TeamWeeklyGoal.koreanTimeZone
+        var components = DateComponents()
+        components.year = 2026
+        components.month = 1
+        components.day = 15
+        components.hour = hour
+        components.minute = minute
+        return calendar.date(from: components)!
+    }
+
+    private static func ownerSignalGap(for host: String?) -> TimeInterval? {
+        switch host {
+        case ownerNapHost: return ownerNapSignalGap
+        case autoCloseUnderThresholdHost: return signalGapInsideContract
+        case autoCloseOverThresholdHost: return signalGapOutsideContract
+        default: return nil
+        }
+    }
+
+    static let ownerNapHost = "owner-nap-test"
+    static let autoCloseUnderThresholdHost = "autoclose-under-threshold-test"
+    static let autoCloseOverThresholdHost = "autoclose-over-threshold-test"
+
+    /// R1 호스트군('맥 A 가 살아 있는데 맥 B 를 켠' 상황)의 고정 시각 픽스처.
+    ///
+    /// **왜 여기도 벽시계를 못 쓰는가**: 이 호스트군은 신호 공백을 계약 임계(7분) **바로 옆 ±60초**에 둔다.
+    /// 그런데 픽스처는 URLProtocol 워커 스레드가 만들고 판정은 메인 액터가 하는데, 전체 스위트에서는 메인
+    /// 액터가 60초 넘게 점유되는 일이 실제로 일어난다(같은 실행에서 여러 테스트가 "62.8초 후 통과"로 찍힌다).
+    /// 그 지연이 그대로 공백에 더해지므로 '계약 안(-60초)'이 '계약 밖'으로 넘어가, 살아 있는 맥의 낮잠을
+    /// 마감하지 말라는 R1 단언이 **무작위로** 빨개졌다(실측: `lastAutoClosedSessionID == nil` 실패).
+    /// 시각을 고정하고 스토어의 주입 시계를 같은 값으로 맞추면 지연이 판정에 들어오지 않는다.
+    static func ownerSignalFixture(forHost host: String?) -> StaleTodayFixture? {
+        guard let gap = ownerSignalGap(for: host) else { return nil }
+        let now = kst(hour: 12, minute: 0)
+        return StaleTodayFixture(
+            now: now,
+            sessionStart: now.addingTimeInterval(-7_200),
+            lastSeenAt: now.addingTimeInterval(-gap)
+        )
+    }
+
+    // 기기별 소유 주장 표(work_status_devices) 픽스처. 기본은 **빈 목록**이다 — 이 표를 모르는 서버/구버전
+    // 맥만 있는 상태와 같고, 앱은 그것을 '다른 맥 없음'이 아니라 '판정 불가'로 읽어야 한다.
+    // host 에 "device-claim" 이 들어가면 다른 맥이 남긴 주장 한 줄을 돌려준다(파싱·결합 검증용).
+    // host 에 "legacy-device-claim" 이 들어가면 **opened_session 키가 없는** 행을 돌려준다 —
+    // 그 컬럼이 아직 없는 서버에서 행 전체가 디코드 실패로 사라지지 않는지(= 반납 규칙이 조용히 죽지 않는지) 검증용.
+    private static func workStatusDevicesData(for request: URLRequest) -> Data {
+        let host = request.url?.host
+        if host?.contains("legacy-device-claim") == true {
+            return Data(
+                """
+                [
+                  {
+                    "user_id": "00000000-0000-0000-0000-000000000002",
+                    "device_id": "AAAA-OTHER-MAC",
+                    "session_id": "30000000-0000-0000-0000-000000000001",
+                    "last_seen_at": "\(isoNow())"
+                  }
+                ]
+                """.utf8
+            )
+        }
+        guard host?.contains("device-claim") == true else {
+            return Data("[]".utf8)
+        }
+        return Data(
+            """
+            [
+              {
+                "user_id": "00000000-0000-0000-0000-000000000002",
+                "device_id": "AAAA-OTHER-MAC",
+                "session_id": "30000000-0000-0000-0000-000000000001",
+                "last_seen_at": "\(isoNow())",
+                "opened_session": true
+              }
+            ]
+            """.utf8
+        )
+    }
+
     private static func isoNow() -> String {
         ISO8601DateFormatter().string(from: Date())
     }
 
-    /// 기준 시각(now)에서 offset 초 만큼 떨어진 ISO8601 문자열. '오늘' 안에 있어야 하는 픽스처에 쓴다.
-    private static func iso(offset: TimeInterval) -> String {
-        ISO8601DateFormatter().string(from: Date().addingTimeInterval(offset))
+    /// 절대 시각 픽스처용 ISO8601 문자열(벽시계를 읽지 않는다).
+    ///
+    /// 여기 있던 `iso(offset:)`(= Date() + offset)은 전부 제거했다. 임계 근처의 상대 시각 픽스처는
+    /// **픽스처를 만든 시각(워커 스레드)과 스토어가 판정한 시각(메인 액터)의 지연**을 그대로 오차로 흘려보내,
+    /// 전체 스위트에서 메인 액터가 60초 넘게 점유될 때 계약 안/밖이 뒤집혔다. 새 픽스처가 필요하면
+    /// staleTodayFixture / ownerSignalFixture 처럼 **고정 시각**을 쓰고 스토어에도 같은 값을 주입해라.
+    private static func iso(_ date: Date) -> String {
+        ISO8601DateFormatter().string(from: date)
     }
 
     private static func workSessionsData(for request: URLRequest) -> Data {
@@ -611,8 +830,9 @@ final class URLProtocolStub: URLProtocol {
             )
         }
 
-        // 오늘 2시간 전에 시작한 열린 세션만 존재(완료 세션 없음 → 서버 today 합계 0).
-        if host == "stale-today-session-test" {
+        // 자정 클리핑 계약 호스트군: 열린 세션 하나만 존재(완료 세션 없음 → 서버 today 합계 0).
+        // 완료 세션이 0건이어야 '오늘 누적'이 오직 이 마감분에서만 나와, 계약이 다른 값에 묻히지 않는다.
+        if let fixture = staleTodayFixture(forHost: host) {
             if openQuery {
                 return Data(
                     """
@@ -620,7 +840,27 @@ final class URLProtocolStub: URLProtocol {
                       {
                         "id": "50000000-0000-0000-0000-000000000002",
                         "user_id": "00000000-0000-0000-0000-000000000002",
-                        "started_at": "\(iso(offset: -7_200))",
+                        "started_at": "\(iso(fixture.sessionStart))",
+                        "ended_at": null,
+                        "duration_seconds": null
+                      }
+                    ]
+                    """.utf8
+                )
+            }
+            return Data("[]".utf8)
+        }
+
+        // R1 호스트군: 2시간 전 시작한 열린 세션 하나(완료 세션 없음 → 서버 today 합계 0).
+        if let fixture = ownerSignalFixture(forHost: host) {
+            if openQuery {
+                return Data(
+                    """
+                    [
+                      {
+                        "id": "51000000-0000-0000-0000-000000000001",
+                        "user_id": "00000000-0000-0000-0000-000000000002",
+                        "started_at": "\(iso(fixture.sessionStart))",
                         "ended_at": null,
                         "duration_seconds": null
                       }
@@ -699,6 +939,10 @@ final class URLProtocolStub: URLProtocol {
             || host == "expired-token"
             || host == "stop-fails"
             || host == "signout-refresh-race"
+            // 기기별 소유 주장 결합/스키마 부재 검증 호스트도 팀 픽스처가 필요하다(상태 행이 있어야
+            // 그 행에 주장을 붙일 수 있고, 404 를 삼킨 뒤 폴링이 살아남았는지도 확인할 수 있다).
+            || host?.contains("device-claim") == true
+            || host == "status-device-table-missing"
             || host?.hasPrefix("korean-week-") == true
     }
 }

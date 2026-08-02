@@ -35,6 +35,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: CheckOverlayController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 오버레이 컨트롤러를 **먼저** 만든다. 바로 아래 실행 킥이 서버에 열려 있던 세션을 흡수해 곧장 근무중으로
+        // 복구할 수 있는데, 그 순간 표시 전환과 리액션/찔림 싱크(store.onReactionTrigger / onPokesReceived)가
+        // 이미 배선돼 있어야 캐릭터 등장과 밀린 찔림이 통째로 유실되지 않는다.
         overlayController = CheckOverlayController(store: store, updateCheck: updateCheck)
         // 로그인 시 자동 실행을 1회만 등록한다(사용자가 시스템 설정에서 끄면 다시 끼어들지 않는다).
         LoginItemRegistrar.registerIfNeeded(
@@ -42,11 +45,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             isNotRegistered: { SMAppService.mainApp.status == .notRegistered },
             register: { try? SMAppService.mainApp.register() }
         )
+        // D1 실행 킥: 저장 세션을 실행당 1회 활성화한다(팝오버를 한 번도 열지 않아도).
+        //
+        // **이 한 줄이 없으면 무슨 일이 났는가**: MenuBarExtra(.window) 의 콘텐츠 뷰는 팝오버를 처음 열기 전까지
+        // 생성되지 않는다(최소 재현 앱으로 실증). 저장 세션 활성화의 유일한 진입점이 CheckMenuView 의
+        // `.task { await store.activateStoredSession() }` 였으므로, 메뉴바 아이콘을 한 번도 누르지 않으면 그 실행
+        // 내내 토큰 회전·팀 확정·상태 폴링·하트비트·자동 근무 시작(넛지)이 전부 0회였다. 바로 위 LoginItemRegistrar
+        // 로 로그인 자동 실행은 이미 켜져 있으니, 부팅 후 아이콘을 안 누르는 사용자에게는 "앱은 떠 있는데 근무가
+        // 하나도 기록되지 않는" 상태가 하루 종일 지속된다.
+        store.activateStoredSessionOnLaunch()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // 로그인 안 됨/키 없음/근무중 아님 → 지연할 이유가 없으므로 즉시 종료.
-        guard store.isSignedIn, store.startedAt != nil else {
+        // 흡수 세션(다른 맥이 연 세션)도 즉시 종료다: finishWorkBeforeQuit 이 같은 표식을 보고 즉시 반환하므로
+        // 여기서 걸러 내지 않으면 .terminateLater 를 돌려놓고 아무것도 안 하는 헛왕복이 되어 종료만 한 틱 늦는다.
+        guard store.isSignedIn, store.startedAt != nil, !store.adoptedRemoteSession else {
             return .terminateNow
         }
         // 근무중이면 종료 동기화를 시작하고, 마무리(최대 3초)될 때까지 종료를 늦춘다.

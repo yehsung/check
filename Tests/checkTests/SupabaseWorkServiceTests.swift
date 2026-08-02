@@ -347,6 +347,152 @@ func fetchTeamStatusesUsesProvidedTeamIDInQuery() async throws {
 }
 
 @Test
+func heartbeatKeepsTheLegacyStatusBodyByteIdenticalAndWritesDeviceClaimSeparately() async throws {
+    // **하위호환 제1원칙의 단일 고정점.** work_statuses 는 프로덕션에 아직 살아 있는 v0.2.10 클라가 쓰는 표다.
+    // 이번 수리로 기기 식별자를 **그 본문에 끼워 넣었다면** 두 가지가 동시에 깨졌다:
+    //   (1) 구버전이 device 를 안 보내므로 내가 써 둔 값이 그대로 눌러앉아 서버가 "이 맥이 소유"라고 거짓말하고,
+    //   (2) 폴링 직전에 내가 매번 덮어써 남의 흔적이 지워지는 문제(= 규칙이 죽는 진짜 원인)는 그대로 남는다.
+    // 그래서 기기 주장은 **다른 표·다른 요청**으로 나가고, 이 본문의 필드 집합은 한 글자도 바뀌지 않는다.
+    let testHost = "status-body-contract"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    // 스토어의 하트비트 한 주기가 서비스에 내리는 두 호출(sendHeartbeatIfWorking 과 같은 순서).
+    try await service.heartbeat(
+        accessToken: "access-token",
+        teamID: URLProtocolStub.stubTeamID,
+        userID: "00000000-0000-0000-0000-000000000002",
+        sessionID: "30000000-0000-0000-0000-000000000001"
+    )
+    try await service.upsertStatusDevice(
+        accessToken: "access-token",
+        teamID: URLProtocolStub.stubTeamID,
+        userID: "00000000-0000-0000-0000-000000000002",
+        deviceID: "THIS-MAC",
+        sessionID: "30000000-0000-0000-0000-000000000001",
+        openedSession: true
+    )
+
+    let paired = zip(URLProtocolStub.requests(forHost: testHost), URLProtocolStub.bodies(forHost: testHost))
+    let statusBody = try #require(paired.first { $0.0.url?.path == "/rest/v1/work_statuses" }?.1)
+    let json = try #require(
+        try JSONSerialization.jsonObject(with: Data(statusBody.utf8)) as? [String: Any]
+    )
+    // 필드 집합이 v0.2.10 이 보내던 그대로다 — 하나라도 늘면 구버전과 같은 행을 공유할 수 없게 된다.
+    #expect(
+        Set(json.keys) == ["team_id", "user_id", "status", "active_session_id", "last_seen_at", "updated_at"]
+    )
+    #expect(!statusBody.contains("device"))
+
+    // 기기 주장은 별도 표로 나가고, 충돌 키에 device_id 가 들어가야 맥 2대가 서로의 행을 덮지 않는다.
+    let claim = try #require(URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/work_status_devices" && $0.httpMethod == "POST"
+    })
+    #expect(claim.url?.query?.contains("on_conflict=team_id,user_id,device_id") == true)
+    // 주장 강도(이 맥이 세션을 직접 열었는가)는 **반드시 본문에 실린다**. 빠지면 PostgREST
+    // merge-duplicates 가 그 컬럼을 건드리지 않아 옛 값이 눌러앉고, 상대 맥은 낡은 강도로 반납을 판정한다.
+    let claimBody = try #require(paired.first { $0.0.url?.path == "/rest/v1/work_status_devices" }?.1)
+    #expect(claimBody.contains(#""opened_session":true"#))
+}
+
+@Test
+func fetchTeamStatusesAttachesDeviceClaimsToTheMatchingMember() async throws {
+    // 기기별 소유 주장(work_status_devices)이 팀 상태 행에 결합돼야 반납 규칙이 볼 것이 생긴다.
+    // 결합이 조용히 끊기면 규칙은 컴파일도 되고 테스트도 통과하는데 프로덕션에서만 영원히 침묵한다.
+    let testHost = "device-claim-join-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let members = try await service.fetchTeamStatuses(
+        accessToken: "access-token",
+        teamID: URLProtocolStub.stubTeamID
+    )
+
+    let mine = try #require(members.first { $0.id == "00000000-0000-0000-0000-000000000002" })
+    let claim = try #require(mine.deviceClaims.first)
+    #expect(mine.deviceClaims.count == 1)
+    #expect(claim.deviceID == "AAAA-OTHER-MAC")
+    // 세션 ID 가 함께 와야 '남의 맥이 살아 있다'와 '남의 맥이 **내 세션에** 살아 있다'를 가를 수 있다.
+    #expect(claim.sessionID == "30000000-0000-0000-0000-000000000001")
+    // 소수초가 붙는 timestamptz 도 읽혀야 한다(parseDate 경유 — 여기서 nil 이 되면 '전진' 판정이 통째로 죽는다).
+    #expect(claim.lastSeenAt != nil)
+    // 주장 강도도 함께 와야 한다. 이 결합이 끊기면 모든 주장이 '약함'으로 읽혀 반납이 다시 사전식
+    // device_id 동전 던지기로 되돌아간다(= 절반의 배치에서 진짜 소유자가 물러난다).
+    #expect(claim.openedSession)
+
+    // 조회 select 에 opened_session 이 들어가야 서버가 그 컬럼을 돌려준다(빠지면 항상 nil→약함이 된다).
+    let selectItem = try #require(
+        URLComponents(url: (URLProtocolStub.requests(forHost: testHost).first {
+            $0.url?.path == "/rest/v1/work_status_devices"
+        })!.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "select" }
+    )
+    #expect(selectItem.value?.contains("opened_session") == true)
+
+    // 조회는 팀 범위 GET 한 건이다(같은 계정의 **다른 맥** 행을 봐야 하므로 자기 행만으로는 부족하다).
+    let deviceRequest = try #require(URLProtocolStub.requests(forHost: testHost).first {
+        $0.url?.path == "/rest/v1/work_status_devices"
+    })
+    #expect(deviceRequest.httpMethod == "GET")
+    let items = try #require(URLComponents(url: deviceRequest.url!, resolvingAgainstBaseURL: false)?.queryItems)
+    #expect(items.contains(URLQueryItem(name: "team_id", value: "eq.\(URLProtocolStub.stubTeamID)")))
+}
+
+@Test
+func deviceClaimWithoutOpenedSessionColumnDecodesAsWeak() async throws {
+    // 컬럼이 아직 없는 서버(마이그레이션 적용 전/중)는 이 키를 아예 돌려주지 않는다. non-optional 로 받았다면
+    // **행 전체가 디코드 실패**로 사라져 기기 주장이 통째로 없어지고, 반납 규칙이 컴파일도 되고 테스트도
+    // 통과하면서 프로덕션에서만 영원히 침묵한다. 없으면 '모른다' = 약함으로 읽는 것이 유일하게 안전한 해석이다.
+    let testHost = "legacy-device-claim-no-column"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let members = try await service.fetchTeamStatuses(
+        accessToken: "access-token",
+        teamID: URLProtocolStub.stubTeamID
+    )
+
+    let mine = try #require(members.first { $0.id == "00000000-0000-0000-0000-000000000002" })
+    let claim = try #require(mine.deviceClaims.first)
+    #expect(claim.deviceID == "AAAA-OTHER-MAC")
+    #expect(!claim.openedSession)
+}
+
+@Test
+func missingDeviceTableDoesNotBreakTeamStatusPolling() async throws {
+    // **하위호환의 핵심.** 이 릴리스의 마이그레이션이 아직 적용되지 않은 서버에서 work_status_devices 는
+    // 404(PGRST205)다. 그 실패가 팀 상태 폴링 전체를 던지면 팀 목록·내 세션 복구·원격 종료 반영이 통째로
+    // 멈춰, 새 기능 하나를 위해 앱의 심장을 서버 배포 순서에 인질로 잡게 된다.
+    // 그래서 이 조회의 실패만은 삼키고 '주장 없음 = 판정 불가'로 떨어뜨린다(소유권은 백스톱 7분이 맡는다).
+    let testHost = "status-device-table-missing"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    let members = try await service.fetchTeamStatuses(
+        accessToken: "access-token",
+        teamID: URLProtocolStub.stubTeamID
+    )
+
+    // 폴링은 멀쩡하다 — 팀 행도, 진행 세션도 그대로 온다.
+    let mine = try #require(members.first { $0.id == "00000000-0000-0000-0000-000000000002" })
+    #expect(mine.status == .working)
+    #expect(mine.currentSessionStartedAt != nil)
+    // 다만 주장은 비어 있다. **빈 배열은 '다른 맥 없음'이 아니라 '모른다'** 다.
+    #expect(mine.deviceClaims.isEmpty)
+}
+
+@Test
 func lookupTeamByCodePostsRPCWithAnonBearerAndNormalizes() async throws {
     let testHost = "lookup-code-test"
     let service = SupabaseWorkService(

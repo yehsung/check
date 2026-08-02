@@ -38,6 +38,10 @@ final class CheckOverlayController {
     let engine: ReactionEngine
     /// 표시 의도 상태. 헤드리스 환경에서도 결정적으로 검증할 수 있는 지점(실제 표시 여부는 `panel.isVisible`).
     private(set) var shouldBeVisible = false
+    /// 넛지 스케줄러 가동 의도. NudgeScheduler 의 loopTask 는 private 이라 밖에서 볼 수 없으므로,
+    /// `syncNudgeScheduler` 의 판정 결과를 여기 남겨 "실행 직후부터 감지가 돌고 있는가"를 헤드리스로 검증한다
+    /// (shouldBeVisible 과 같은 성격의 검증 지점 — 실제 루프 존재가 아니라 이 클래스의 결정을 고정한다).
+    private(set) var nudgeSchedulerRunning = false
 
     private let notificationCenter: NotificationCenter
     private var screenObserver: NSObjectProtocol?
@@ -133,6 +137,13 @@ final class CheckOverlayController {
 
         reposition()
         observeScreenChanges()
+        // 넛지 스케줄러를 실행 시 여기서 한 번 가동한다. 이 줄이 없으면 유일한 기동 지점이 updateWorking 의
+        // defer 뿐이고, updateWorking 은 숨겨진 패널의 SwiftUI 루트 뷰가 `.onChange(initial: true)` 를 실제로
+        // 평가해 줄 때만 불린다 — 즉 자동 근무 시작 전체가 "숨긴 패널의 body 도 평가된다"는 검증 안 된 런타임
+        // 가정에 매달린다. MenuBarExtra(.window) 에서 똑같은 종류의 가정이 이미 한 번 틀려(팝오버를 열기 전엔
+        // 콘텐츠 뷰가 아예 생성되지 않았다) D1 킥을 만들게 했다. start() 는 loopTask 가드로 멱등이라 루트 뷰가
+        // 곧바로 한 번 더 불러도 루프가 두 개 생기지 않는다.
+        syncNudgeScheduler()
     }
 
     /// 넛지 자동 시작 자격: 로그인됨·팀 있음·비근무. (표시중 조건은 소멸 — 안내만 하고 바로 시작.)
@@ -216,8 +227,10 @@ final class CheckOverlayController {
     private func syncNudgeScheduler() {
         if store.isSignedIn && store.snapshot.isWorking == false {
             nudgeScheduler.start()
+            nudgeSchedulerRunning = true
         } else {
             nudgeScheduler.stop()
+            nudgeSchedulerRunning = false
         }
     }
 

@@ -10,6 +10,30 @@ enum MemberPresence: Equatable {
     case offWork
 }
 
+/// 한 대의 맥이 남긴 '이 세션은 지금 내가 쓰고 있다'는 주장(work_status_devices 한 행).
+///
+/// 왜 work_statuses 의 셀이 아니라 기기별 행인가: 앱은 폴링마다 하트비트를 **먼저** 쓰고 그 다음 읽으므로
+/// 공유 셀에서 읽히는 값은 언제나 방금 내가 쓴 내 값이다(실측 seen−mine ≈ -0.9초). 그 셀에 기기를 넣어도
+/// "기기 == 나"가 항상 참이라 정보량이 0 이다. 기기마다 자기 행을 가지면 내 upsert 가 남의 행을 건드릴 수
+/// 없어 증거가 지워지지 않는다 — 이것이 소유권을 시각 비교(추측)가 아닌 사실로 판정하는 유일한 축이다.
+struct StatusDeviceClaim: Equatable {
+    /// 주장한 맥의 식별자(UserDefaults 'check.deviceID'). 내 값과 같으면 이 행은 내가 쓴 것이다.
+    let deviceID: String
+    /// 그 맥이 소유를 주장하는 세션 ID. 이게 없으면 '다른 맥이 살아 있다'와 '다른 맥이 **내 세션에**
+    /// 살아 있다'를 못 가려, 정상적인 맥 간 인수인계에서 방금 연 내 세션을 남의 것으로 오인한다.
+    let sessionID: String?
+    /// 그 맥이 **자기 시계로** 찍은 마지막 신호. 신선도(절대값)가 아니라 폴링 간 전진 여부로만 쓴다 —
+    /// 두 맥의 시계 어긋남이 판정에 들어오지 않게 하기 위함이다.
+    let lastSeenAt: Date?
+    /// 그 맥이 이 세션을 **직접 열었는가**(강한 소유). true = start()/되돌리기 재개가 서버 왕복으로 확정한
+    /// 사실, false = 백스톱이 세운 추측. 반납 규칙의 유일한 결정자가 device_id 사전식 비교이던 시절,
+    /// device_id 는 랜덤 UUID 라 **정확히 절반의 배치에서 진짜 소유자가 물러났다**(= 살아 있는 세션이 마감되고
+    /// 그 뒤 근무가 통째로 유실). 기본값 false 는 판정 방향과 같다 — **모르면 약하다**(컬럼 없는 서버,
+    /// 이 필드를 안 싣는 옛 행, 파싱 실패가 전부 '추측'으로 떨어져야 진짜 소유자를 밀어내지 않는다).
+    /// 새 필드는 반드시 마지막에 둔다(위치 인자로 만드는 호출부가 그대로 컴파일되게).
+    var openedSession: Bool = false
+}
+
 struct TeamMemberStatus: Equatable, Identifiable {
     let id: String
     var name: String
@@ -21,6 +45,17 @@ struct TeamMemberStatus: Equatable, Identifiable {
     var avatarURL: URL? = nil
     var lastSeenAt: Date? = nil
     var activeSessionID: String? = nil
+    /// 이 사람의 계정으로 지금 소유를 주장하고 있는 맥들(work_status_devices). 서버에 표가 없거나
+    /// 구버전 맥만 쓰고 있으면 빈 배열이다 — **빈 배열은 '다른 맥 없음'이 아니라 '판정 불가'다**
+    /// (그 경우 소유권 판정은 기존 백스톱 7분으로 되돌아간다). 새 필드는 반드시 마지막에 둔다:
+    /// 위치 인자로 이 타입을 만드는 테스트/호출부가 그대로 컴파일되게 하기 위함이다.
+    var deviceClaims: [StatusDeviceClaim] = []
+
+    /// 생존신호가 끊겼다고 보는 임계(초). 하트비트 주기(30초)의 3배라 한두 번 실패해도 오판하지 않는다.
+    /// 상수로 뽑아 둔 이유: 흡수 세션 소유권 되찾기(WorkTimerStore.updateAdoptedPresenceTracking)가 같은
+    /// 기준으로 판정해야 하기 때문이다. 두 곳이 서로 다른 숫자를 들면 화면은 '연결 끊김'인데 소유권은
+    /// 아무도 되찾지 않는(또는 그 반대의) 상태가 생긴다.
+    static let stalePresenceSeconds: TimeInterval = 90
 
     /// 서버 하트비트를 기준으로 팀원의 생존 상태를 판정한다.
     /// seen = lastSeenAt ?? updatedAt. seen이 없으면(신호 미상) 살아있다고 본다.
@@ -31,7 +66,7 @@ struct TeamMemberStatus: Equatable, Identifiable {
         guard let seen = lastSeenAt ?? updatedAt else {
             return .activeWorking
         }
-        guard now.timeIntervalSince(seen) > 90 else {
+        guard now.timeIntervalSince(seen) > Self.stalePresenceSeconds else {
             return .activeWorking
         }
         let frozen = max(0, Int(seen.timeIntervalSince(currentSessionStartedAt ?? seen)))
@@ -564,6 +599,40 @@ struct StatusUpsertRequest: Encodable {
     let activeSessionId: String?
     let lastSeenAt: String
     let updatedAt: String
+}
+
+/// work_status_devices upsert 본문(on_conflict=team_id,user_id,device_id). 하트비트가 상태 upsert **뒤에**
+/// 한 번 더 보낸다 — 이 요청은 별도 경로라 위 StatusUpsertRequest 는 바이트 하나 달라지지 않는다
+/// (v0.2.10 이 계속 정상 upsert 해야 한다는 제1원칙).
+/// sessionId 를 Optional 로 두지 않는 이유: Swift 합성 Encodable 은 nil Optional 을 **생략**하고,
+/// PostgREST 의 merge-duplicates 는 본문에 없는 컬럼을 건드리지 않는다 → 옛 세션 ID 가 행에 그대로 남아
+/// "이 맥이 지금 그 세션을 쓰고 있다"는 거짓 주장이 된다. 호출부(sendHeartbeatIfWorking)가 세션 ID 가드를
+/// 이미 통과한 뒤라 non-optional 로 두는 것이 그 함정을 구조적으로 없앤다.
+struct StatusDeviceUpsertRequest: Encodable {
+    let teamId: String
+    let userId: String
+    let deviceId: String
+    let sessionId: String
+    let lastSeenAt: String
+    let updatedAt: String
+    /// 이 맥이 그 세션을 **직접 열었는가**. sessionId 와 같은 이유로 Optional 이 아니다 — nil 이면 Swift 합성
+    /// Encodable 이 키를 **생략**하고 PostgREST merge-duplicates 는 본문에 없는 컬럼을 건드리지 않아,
+    /// 백스톱으로 약하게 주장하는 맥의 행에 예전 true 가 그대로 눌러앉는다(= 추측이 사실로 승격되어
+    /// 진짜 소유자를 밀어낸다). 매 하트비트마다 지금의 강/약을 **덮어쓴다**.
+    let openedSession: Bool
+}
+
+/// work_status_devices 조회 응답 한 행. team_id 는 조회 필터로 이미 고정돼 있어 담지 않는다.
+/// lastSeenAt 은 문자열로 받아 서비스의 parseDate(소수초 있는/없는 timestamptz 양쪽) 로 해석한다.
+struct WorkStatusDeviceRow: Decodable, Equatable {
+    let userId: String
+    let deviceId: String
+    let sessionId: String?
+    let lastSeenAt: String?
+    /// Optional 로 받는 이유: 이 컬럼이 아직 없는 서버(마이그레이션 순서)에서 select 가 이 키를 빼고 오면
+    /// non-optional Bool 은 **행 전체의 디코드를 throw** 시키고, 그러면 기기 주장이 통째로 사라져 반납
+    /// 규칙이 조용히 죽는다. 없으면 nil → 호출부가 false(약함)로 읽는다 = 모르면 약하다.
+    let openedSession: Bool?
 }
 
 struct AvatarUpdateRequest: Encodable {

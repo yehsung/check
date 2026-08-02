@@ -12,6 +12,31 @@ final class WorkTimerStore {
     static let sleepGraceSeconds: TimeInterval = 5 * 60
     // 방치 세션 자동 마감 임계(초). 하트비트가 이 시간 넘게 끊긴 세션을 방치로 본다(서버 함수와 동일 10분).
     static let abandonedSessionThresholdSeconds: TimeInterval = 10 * 60
+    /// 하트비트/폴링 기본 주기(초). refreshLoopSliceSeconds 의 기본값이자 아래 백스톱 임계의 여유분 단위다.
+    /// (TeamMemberStatus.stalePresenceSeconds = 90 도 "이 주기의 3배"로 정의돼 있다.)
+    static let heartbeatIntervalSeconds: TimeInterval = 30
+    /// 흡수 세션 소유권 되찾기(백스톱)가 '전진 없음'을 방치로 단정하는 임계(초) = 7분.
+    ///
+    /// **이 앱 자신의 계약상 6분까지의 무신호는 정상 근무다.** sleepGraceSeconds(5분) 이하 잠자기는 근무
+    /// 연속으로 인정하고, 그 앞뒤로 하트비트 주기가 한 번씩 더 붙기 때문이다 —
+    /// 20260712120000_auto_close_stale_sessions.sql 의 근거 주석과 같은 계산이다:
+    /// "임계 10분 근거: 잠자기 5분 유예 + 하트비트 30초 주기 → 정상 복귀 시 최대 신호 공백 ~6분 < 10분."
+    /// 옛 임계(stalePresenceSeconds 90초)는 이 계약 한가운데를 잘랐다 — 맥 A 가 뚜껑을 3분만 닫아도
+    /// (A 자신은 유예 안이라 그대로 근무를 이어간다) 맥 B 가 +100초에 소유권을 뺏고, 그 뒤 B 의 잠자기가
+    /// A 의 **살아 있는** 세션을 B 의 덮은 시각으로 마감해 그 뒤 근무가 통째로 사라졌다.
+    /// 그래서 반드시 sleepGraceSeconds 에서 파생시킨다(한쪽만 바뀌어 어긋나는 일이 없게).
+    /// 여유분 4주기 = 잠들기 직전 1 + 깨어난 뒤 1 + 지터/재시도 2.
+    ///
+    /// 상한: 클라 스캐빈저/서버 cron 이 10분(abandonedSessionThresholdSeconds)이라 **반드시 그보다 앞서야**
+    /// 한다. 7분 + 관측 1주기(30초) = 최악 ~7.5분이라 스캐빈저까지 2.5분 여유가 남는다
+    /// (= 되찾은 뒤 하트비트를 두 번 보낼 시간). 이 상하한은 reclaimThreshold… 테스트가 고정한다.
+    static let adoptedReclaimStaleSeconds: TimeInterval = WorkTimerStore.sleepGraceSeconds
+        + 4 * WorkTimerStore.heartbeatIntervalSeconds
+    /// 백스톱이 소유권을 주장하기 전에 요구하는 **연속 '전진 없음' 관측 횟수**. 시간만 보면 안 되는 이유는
+    /// last_seen_at 을 상대가 **자기 시계로** 쓰기 때문이다(SupabaseWorkService.upsertStatus) — 두 맥의 시계가
+    /// 어긋나면 나이는 관측 즉시 임계를 넘은 것처럼 보인다. 내 시계로 잰 '정체 지속'과 관측 횟수를 함께
+    /// 요구하면, 값이 실제로 전진하는 한(= 상대가 살아 있는 한) 몇 번이고 장부가 초기화돼 주장이 성립하지 않는다.
+    static let adoptedReclaimMinObservations = 3
     // 클라 스캐빈저 스로틀(초). 폴링마다 정리 RPC 를 난사하지 않도록 마지막 발사 후 이 시간은 재발사하지 않는다.
     static let scavengeThrottleSeconds: TimeInterval = 5 * 60
     // 자리 비움 자동 마감 되돌리기 유예(초). 이 시간이 지나면 [되돌리기] 배너는 스스로 사라진다 —
@@ -39,7 +64,67 @@ final class WorkTimerStore {
     let tokenUsage: TokenUsageStore
     var session: SupabaseSession?
     var sessionGeneration = 0
+    /// 진행 중 세션의 ID. **불변식: 항상 정규화된(소문자) 형태다** — 대입하는 모든 경로가
+    /// canonicalSessionID 를 지난다(start / 서버 흡수 / 강제 로그아웃 복구 / 되돌리기 재개).
+    /// 새 대입 지점을 추가한다면 반드시 같은 규약을 지켜라: 대문자로 들어오는 순간 서버가 돌려주는
+    /// 소문자 값과의 비교가 전부 어긋나 내 세션이 내 앱에서 '남의 세션'이 된다.
     var currentSessionID: String?
+
+    /// 지금 진행 중인 세션(startedAt/currentSessionID)을 **이 앱 인스턴스가 열었는가**의 반대말.
+    /// true = 서버 스냅샷에서 흡수한 세션 — 다른 맥(또는 이 맥의 이전 실행)이 열었다.
+    /// 그래서 이 맥의 **자동** 마감 경로(잠자기·12시간·종료 동기화)와 **하트비트**는 이 세션을 건드리지 않는다.
+    /// 사용자가 직접 누른 종료(stop)는 그대로 허용한다 — 같은 사람의 명시적 의사이기 때문이다.
+    ///
+    /// 수명: startedAt 을 세우는 전이가 함께 확정하고, 내리는 전이가 false 로 되돌린다. 값 자체는 영속하지
+    /// 않지만, **판정 근거는 영속한다** — start() 가 만든 세션 ID 를 ownedWorkSessionIDKey 에 남겨 두므로
+    /// 재시작 후 서버가 든 세션이 그 ID 와 같으면 '내가 이전 실행에서 연 내 세션'으로 되찾는다
+    /// (isOwnedByThisMac / claimSessionOwnership). 이 근거가 없던 v0.2.15 이전 트리에서는 근무 중 재시작이
+    /// **반드시** 흡수로 판정돼 하트비트가 영구 정지했고, 10분 뒤 내 앱 자신의 스캐빈저가 내 살아 있는
+    /// 세션을 마감했다(되돌리기도 사유 문구도 없이). 관찰 대상 아님(뷰가 읽지 않는다).
+    ///
+    /// **남은 이중 소유 노출(정직하게)**: 소유권을 세우는 쪽(1차 판정 + 백스톱 7분)은 오판할 수 있고,
+    /// 그것을 되돌리는 쪽은 releaseOwnershipIfAnotherDeviceClaims 하나뿐이다. 그 규칙은 상대 맥이
+    /// work_status_devices 에 **행을 쓰고 있을 때만** 발화하므로, 상대가 v0.2.10~v0.2.16(이 표를 모르는
+    /// 버전)이면 침묵한다 — 혼합 함대 기간의 이중 소유 위험은 v0.2.14 와 정확히 같은 수준이고, 노출은
+    /// 백스톱 7분(살아 있는 맥은 last_seen_at 이 전진하므로 오판 자체가 성립하지 않는다)과 10분 스캐빈저가
+    /// 좁힌다. 두 맥이 모두 이 버전 이상으로 올라오면 서버 스위치 없이 그 순간부터 결정적 반납이 켜진다.
+    @ObservationIgnored var adoptedRemoteSession = false
+
+    /// 흡수 상태에서 마지막으로 관측한 서버의 생존신호(lastSeenAt ?? updatedAt).
+    /// 소유권 되찾기의 백스톱이 '신선도'가 아니라 **'전진 여부'**로 판정하기 위한 직전 관측값이다:
+    /// 살아 있는 소유 인스턴스가 있으면 30초마다 하트비트로 이 값이 전진하고, 없으면 굳는다.
+    /// 신선도만 보면 빠른 재시작(신호가 아직 신선함)과 진짜 남의 근무를 가를 수 없다. 관찰 대상 아님.
+    @ObservationIgnored var adoptedLastSeenAt: Date?
+    /// 위 관측값이 어느 세션의 것인지. 세션이 바뀌면 관측을 처음부터 다시 시작해야 한다 —
+    /// 남기면 이전 세션의 신호를 새 세션의 '전진 없음' 근거로 잘못 써서 남의 근무를 가로챈다. 관찰 대상 아님.
+    @ObservationIgnored var adoptedLastSeenSessionID: String?
+    /// '전진 없음'을 처음 관측한 시각 — **관측자(내) 시계**다. 나이(now - lastSeenAt)는 상대가 자기 시계로 쓴
+    /// 값과 내 시계를 빼는 것이라 시계 어긋남만큼 통째로 부풀지만, 이 값은 내가 직접 잰 '정체 지속'이라
+    /// 어긋남의 영향을 받지 않는다. 전진이 한 번이라도 관측되면 nil 로 되돌려 처음부터 다시 잰다. 관찰 대상 아님.
+    @ObservationIgnored var adoptedStallBeganAt: Date?
+    /// 연속으로 '전진 없음'을 본 횟수. 시간 조건과 **함께** 요구한다 — 폴링 한두 번의 관측만으로 소유권을
+    /// 넘기면 하트비트 재시도 실패 한 번이 곧 남의 근무 가로채기가 된다. 전진 관측에 0으로 되돌린다. 관찰 대상 아님.
+    @ObservationIgnored var adoptedStallObservations = 0
+
+    /// 릴리스 규칙(오판 자가정정)의 관측 장부: **남의 기기 행**을 직전 폴링에서 어떤 last_seen_at 으로
+    /// 봤는지(키 = device_id). 판정을 신선도가 아니라 **전진 여부**로 하기 위한 값이라, 두 맥의 시계
+    /// 어긋남이 판정에 들어오지 않는다(백스톱 updateAdoptedPresenceTracking 과 같은 규약).
+    ///
+    /// 이 자리에 예전엔 `lastHeartbeatSentAt`(내 마지막 하트비트 시각)이 있었고, 규칙은 "서버의
+    /// last_seen_at 이 내 하트비트보다 60초 앞서면 남이 쓰는 것"이었다. 그 규칙은 **구조적으로 죽어 있었다**:
+    /// 폴링 루프가 하트비트 → 상태 읽기 순서라 내가 읽는 값은 언제나 1초 전 내가 쓴 내 값이고
+    /// (실측 seen−mine = [-0.89, -0.89, -0.90]), 발화하려면 상대 시계가 내 앞에 있어야 했다
+    /// (= 시계가 맞을수록 규칙이 죽는다 — 방향이 거꾸로다). 관찰 대상 아님.
+    @ObservationIgnored var foreignDeviceLastSeenAt: [String: Date] = [:]
+    /// 위 장부가 어느 세션의 것인지. 세션이 바뀌면 통째로 비운다 — 남기면 이전 세션에서 본 남의 신호를
+    /// 새 세션의 '전진' 근거로 재활용해, 방금 내가 연 세션을 첫 폴링에 곧바로 반납한다. 관찰 대상 아님.
+    @ObservationIgnored var foreignDeviceTrackingSessionID: String?
+
+    /// 앱 종료 시퀀스 진입 플래그(finishWorkBeforeQuit 이 세운다). 종료 경로의 stop() 은 이 값을 보고
+    /// 찔림 꼬리 회수(flushPokesOnWorkEnd)를 건너뛴다 — take_pokes 는 서버에서 원자 소비라, 응답을 받기 전에
+    /// 프로세스가 죽으면 그 찔림이 영구 소실된다(다음 실행이 1시간 신선도 안에서 보여줄 수 있었던 것).
+    /// 종료 시점은 말풍선을 볼 사람이 없어 이득도 0이다. 되돌리지 않는다(프로세스가 끝나는 일방향 표식).
+    @ObservationIgnored var isTerminating = false
 
     /// 3D 캐릭터 오버레이 표시 여부 (사용자 토글, UserDefaults 유지).
     var isOverlayEnabled: Bool = true
@@ -49,6 +134,13 @@ final class WorkTimerStore {
     @ObservationIgnored var isMenuPresented = false
     /// 실행당 1회 전체 활성화(토큰 회전+멤버십 확정) 플래그. signOut/clearPersistedSession 에서 리셋.
     @ObservationIgnored var hasActivatedStoredSession = false
+    /// 실행 킥(activateStoredSessionOnLaunch)의 Task 핸들. 팝오버 `.task` 가 이 Task 를 먼저 기다리는 이유는
+    /// '활성화가 둘로 갈라져서'가 아니다 — hasActivatedStoredSession 이 첫 await 이전에 동기 래치되므로
+    /// 두 번째 진입자는 항상 fast path 다. 진짜 이유는 fast path 의 confirmMembership 이 **아직 회전 전인
+    /// 낡은 access token** 으로 나갔다가 401 을 만나면, withSessionRetry 가 킥과 **같은 낡은 refresh token 으로**
+    /// 두 번째 grant 를 치기 때문이다. GoTrue 의 reuse-detection 창을 벗어나면 그 순간 근무 중 강제 로그아웃이 된다.
+    /// 킥이 끝나면 스스로 nil 로 돌아간다(팝오버가 이미 끝난 Task 를 붙잡고 있을 이유가 없다).
+    @ObservationIgnored var launchActivationTask: Task<Void, Never>?
     /// 멤버십이 확정적으로 판정된 적 있는지(소속 확인 성공 또는 정상 0행 무소속 확정). 첫 활성화가 오프라인/취소로
     /// 실패하면 false 로 남아, 재오픈 시 activateStoredSession 이 멤버십을 재확정하게 한다. signOut/clearPersistedSession 에서 리셋.
     @ObservationIgnored var membershipConfirmed = false
@@ -115,6 +207,19 @@ final class WorkTimerStore {
     @ObservationIgnored private var observedWorkspaceCenter: NotificationCenter?
 
     var snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
+
+    /// 이 스토어의 '지금'. 프로덕션은 항상 `Date()` 라 동작이 바이트 하나 달라지지 않고, 테스트만 갈아 끼운다.
+    ///
+    /// 왜 필요한가(이 주입점의 전부다): 자리 비움 자동 마감과 되돌리기의 계약은 **KST 자정 클리핑**을 지난다
+    /// (마감분의 '오늘 몫' = seen − max(sessionStart, koreanDayStart)). 그래서 그 계약을 검증하는 테스트가
+    /// 벽시계 그대로 돌면 **하루 중 언제 실행되는가**에 따라 기대값이 무너진다: KST 00시대에는 2시간 전 시작이
+    /// 자정으로 잘려 '오늘 몫'이 0 근처로 붕괴하고, 픽스처를 만든 시각(URLProtocol 워커 스레드)과 스토어가
+    /// 판정한 시각 사이의 지연이 그대로 오차가 된다. 실제로 매일 밤 00:00~02:00 사이에 이 테스트가 빨갛게
+    /// 떴다(정오에 돌리면 통과 — 그게 시각 의존의 증거다).
+    /// 시계를 주입하면 픽스처와 스토어가 **같은 '지금'** 을 쓰게 되어 그 축이 통째로 사라진다.
+    /// 주입 범위는 이 계약이 지나는 경로(자동 마감 · 되돌리기 · 흡수 · 배너 유예 · 틱)로 한정한다.
+    @ObservationIgnored var clock: () -> Date = { Date() }
+
     var displayNow = Date()
     var displayName: String
     var email: String
@@ -231,7 +336,10 @@ final class WorkTimerStore {
 
     /// 유예형 배너 상태를 주어진 시각 기준으로 재평가한다. 티커(tick)와 상태 전이 지점(시작/종료/자동 마감/
     /// 되돌리기/원격 흡수/팝오버 열림)에서만 부르면 되고, 그 사이에는 값이 변할 이유가 없다.
-    func refreshTimedBanner(now: Date = Date()) {
+    /// now 를 Optional 로 두는 것은 Swift 제약 때문이다 — 인스턴스 메서드의 기본 인자는 self(clock)를 참조할 수
+    /// 없다. nil 이면 주입 시계로 채운다(호출부는 그대로 `refreshTimedBanner()` 로 쓴다).
+    func refreshTimedBanner(now: Date? = nil) {
+        let now = now ?? clock()
         let next: TimedBanner? = canUndoAutoClose(now: now) ? .undoAutoClose : nil
         if timedBanner != next { timedBanner = next }
     }
@@ -253,7 +361,8 @@ final class WorkTimerStore {
     // 내 토큰 사용량 공개 여부(profiles.token_usage_public 미러). 로그인 후 서버값 1회 로드, 토글은 낙관 반영.
     var tokenUsagePublic = true
     @ObservationIgnored var tokenUsagePublicLoaded = false
-    // 수신 찔림 폴링 태스크(로그인 중 상시 15초). refresh 루프와 별도 — 유휴 300초로는 전달이 너무 늦다.
+    // 수신 찔림 폴링 태스크(로그인 중 15초 타이머. 실제 take_pokes 는 근무중에만 나간다 — O1/takePokesIfWorking).
+    // refresh 루프와 별도인 이유는 유휴 주기(수백 초)로는 말풍선 전달이 너무 늦기 때문이다.
     var pokePollTask: Task<Void, Never>?
     /// 수신 찔림 싱크. 오버레이 컨트롤러가 연결해 움찔+말풍선(숨김 시 peek)으로 표시한다(관찰 대상 아님).
     @ObservationIgnored var onPokesReceived: (([ReceivedPoke]) -> Void)?
@@ -272,6 +381,9 @@ final class WorkTimerStore {
     /// 자동 마감이 accumulatedSeconds 에 더한 그 세션의 '오늘 몫'(초). 되돌리기가 이 값을 도로 빼서
     /// 재개된 세션 구간이 누적과 진행분에 이중 계상되는 것을 막는다.
     var lastAutoClosedSeconds: Int = 0
+    /// 마감 **직전에** 이 맥이 그 세션에 대해 들고 있던 소유 주장의 강도. 되돌리기가 그대로 물려받는다.
+    /// 기본이 .weak 인 이유는 규칙 전체와 같다 — 모르면 약하다. 관찰 대상 아님(뷰가 읽지 않는다).
+    @ObservationIgnored var lastAutoClosedClaimStrength: SessionClaimStrength = .weak
     // 클라 스캐빈저(방치 세션 서버 자동 마감 폴백) 마지막 발사 시각. 5분 스로틀 판정에 쓴다(관찰 대상 아님).
     @ObservationIgnored var lastScavengeAt: Date = .distantPast
     /// 팀 메타(목표/이름/역할/참여코드) 마지막 재조회 시각. 팝오버 열 때 60초 스로틀 판정에 쓴다(관찰 대상 아님).
@@ -374,8 +486,13 @@ final class WorkTimerStore {
     /// 근무중이면 기존 stop()/enqueueSync 직렬 경로로 퇴근 upsert를 큐에 넣고, 그 sync 체인이
     /// 끝나거나 timeout(초)이 지날 때까지만 기다린다. 타임아웃 시 서버에 열린 세션이 남을 수 있으나
     /// 다음 실행의 refreshTeamStatus/applyRemoteOwnStatus 복구 경로가 이를 정리하므로 종료를 막지 않는다.
+    /// 흡수 세션(다른 맥이 연 세션)은 종료 동기화 대상이 아니다 — 이 맥을 끄는 것이 저쪽 근무를 끝내지는
+    /// 않는데, 여기서 마감하면 상대가 지금도 일하는 세션이 내 종료 시각으로 잘린다(그 뒤 근무는 통째로 소실).
     func finishWorkBeforeQuit(timeout: Double = 3) async {
-        guard session != nil, startedAt != nil else { return }
+        // 아래 stop() 이 종료 경로에서 온 것임을 알린다(가드보다 앞이다 — 이 함수에 들어온 시점이
+        // 곧 종료 시퀀스 진입이고, 가드 순서가 바뀌어도 표식이 빠지지 않게).
+        isTerminating = true
+        guard session != nil, startedAt != nil, !adoptedRemoteSession else { return }
         stop()
         guard let syncTask else { return }
         await Self.awaitFirst(of: syncTask, orTimeout: timeout)
@@ -404,6 +521,9 @@ final class WorkTimerStore {
         if lastAutoClosedStartedAt != nil { lastAutoClosedStartedAt = nil }
         if lastAutoClosedAt != nil { lastAutoClosedAt = nil }
         if lastAutoClosedSeconds != 0 { lastAutoClosedSeconds = 0 }
+        // 되돌릴 대상이 사라졌으면 그 대상의 강도도 함께 잊는다 — 남기면 다음 자동 마감이 강도를 못 채운
+        // 경로에서 앞 세션의 strong 을 물려받아, 남이 연 세션에 대고 '내가 열었다'고 주장하게 된다.
+        if lastAutoClosedClaimStrength != .weak { lastAutoClosedClaimStrength = .weak }
         // 배너 상태는 판정값의 캐시라 판정 근거가 사라지면 즉시 따라 내려가야 한다(X 로 닫기/되돌리기 성공 경로).
         // start/stop/autoStop 은 이 함수를 먼저 부르고 근무 상태를 마저 바꾸므로, 그쪽에서 끝에 한 번 더 되맞춘다.
         refreshTimedBanner()
@@ -417,7 +537,22 @@ final class WorkTimerStore {
         clearAutoCloseUndo()
         displayNow = now
         startedAt = now
-        currentSessionID = UUID().uuidString
+        // 세션 ID 는 **만드는 순간 정규화**한다. Swift 의 UUID().uuidString 은 대문자인데 서버의
+        // work_sessions.id / work_statuses.active_session_id 는 Postgres uuid 네이티브 타입이라 소문자로
+        // 되돌아온다(입력은 대소문자 무관하게 받는다). 대문자로 들고 있으면 서버가 돌려준 **내 세션 ID** 와
+        // 원시 == 비교가 전부 실패해, 근무 시작 후 첫 폴링(≈30초)마다 내 세션이 '남의 세션'으로 재흡수되고
+        // 하트비트가 죽는다 — 그 창에서 뚜껑을 5분 넘게 닫거나 앱을 끄면 마감이 나가지 못해 스캐빈저가
+        // 시작 시각으로 마감, 그 근무가 0초로 기록된다.
+        currentSessionID = Self.canonicalSessionID(UUID().uuidString)
+        // 이 세션은 내가 열었다. startedAt == nil 가드를 지나 여기 왔으니 앞선 경로가 이미 표식을 내렸어야 하지만,
+        // 한 경로라도 리셋을 빠뜨리면 방금 만든 **내** 세션이 잠자기·12시간 마감과 하트비트에서 영구 제외돼
+        // 아무도 닫지 못하는 세션이 된다. 소유권을 확정하는 이 지점에서 무조건 내린다.
+        // 세션 ID 를 함께 영속하는 것이 핵심이다 — 이 값이 없으면 근무 중 앱이 재시작될 때(자동 업데이트·크래시·
+        // 사용자가 껐다 켬·재부팅) 서버에 열려 있는 **내** 세션이 남의 것으로 판정돼 하트비트가 끊긴다.
+        // **강한 소유**: 이 세션은 방금 이 맥이 만들었다. 부분 유니크 인덱스상 열린 세션은 사용자당 하나뿐이라
+        // 이 사실을 주장할 수 있는 맥은 최대 한 대다 — 반납 규칙이 동전 던지기(사전식 device_id)에서
+        // 결정적 판정으로 바뀌는 근거가 정확히 이 한 줄이다.
+        claimSessionOwnership(currentSessionID, strength: .strong)
         longSessionAnchor = now
         clearLongSessionPrompt()
         sleepBeganAt = nil
@@ -443,6 +578,11 @@ final class WorkTimerStore {
         accumulatedSeconds += max(0, Int(now.timeIntervalSince(max(sessionStart, TeamWeeklyGoal.koreanDayStart(for: now)))))
         accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: now)
         self.startedAt = nil
+        // 사용자가 직접 누른 종료는 흡수 세션이어도 서버에 쓴다(아래 syncCurrentStatus) — 같은 사람의 명시적
+        // 의사이기 때문이다. 그리고 그 세션은 여기서 끝나므로 표식도 영속된 소유 ID 도 함께 내린다.
+        // 남겨 두면 (1) 다음에 이 맥에서 시작하는 근무가 '남의 세션'으로 오인돼 자동 마감·하트비트에서
+        // 통째로 빠지고, (2) 이미 닫힌 ID 가 소유 표식으로 남아 다음 실행의 재시작 판정을 오염시킨다.
+        releaseSessionOwnership()
         longSessionAnchor = nil
         clearLongSessionPrompt()
         sleepBeganAt = nil
@@ -452,6 +592,14 @@ final class WorkTimerStore {
         // 근무를 마치면 되돌리기 배너의 성립 조건이 다시 열린다(비근무 전용).
         refreshTimedBanner(now: now)
         syncCurrentStatus(durationSeconds: duration, sessionStartedAt: sessionStart, endedAt: now)
+        // 수신 찔림 폴링이 '근무 중'으로 제한되므로(O1), 근무가 끝나는 이 순간 꼬리를 한 번 회수하지 않으면
+        // 마지막 폴링 이후 도착한 찔림이 다음 근무 시작 때까지 전달되지 못한다(신선도 1시간을 넘기면 영구 소실).
+        // 단, 종료 경로의 stop() 에서는 부르지 않는다 — take_pokes 는 서버에서 **원자 소비**라 응답 전에
+        // 프로세스가 죽으면 그 찔림은 영구 소실되고(다음 실행이 보여줄 수 있었던 것), 종료 시점엔 말풍선을
+        // 볼 사람도 없어 이득이 0이다.
+        if !isTerminating {
+            flushPokesOnWorkEnd()
+        }
     }
 
     // MARK: - 잠자기 정책 (5분 유예)
@@ -473,6 +621,14 @@ final class WorkTimerStore {
             self.sleepBeganAt = nil
             return
         }
+        // 흡수 세션은 이 맥의 것이 아니다 — 내 덮개를 닫은 시각으로 남의 근무를 마감하지 않고 **아무 것도 하지 않는다**.
+        // 로컬 표시만 내리는 것도 무의미하다: 다음 폴링(≤30초)이 (.working, nil) 로 즉시 재흡수해 되돌려 놓는다.
+        // 소유 맥이 진짜로 사라지면 스캐빈저가 마지막 신호 시각으로 마감하고, 그때 (.offWork,.some) 가지가
+        // 로컬을 정확히 내린다 — 화면이 영원히 '근무중'으로 남는 경로는 그 연쇄가 닫는다.
+        guard !adoptedRemoteSession else {
+            self.sleepBeganAt = nil
+            return
+        }
         autoStop(endedAt: sleepBeganAt, message: "잠자기로 자동 근무종료됨")
     }
 
@@ -480,6 +636,10 @@ final class WorkTimerStore {
 
     /// 근무 틱에서 호출. 12시간 도달 시 확인 배너를 띄우고, 배너 노출 후 30분 무응답이면 12시간 시점으로 마감한다.
     func evaluateLongSession(now: Date) {
+        // 흡수 세션의 '12시간'은 남의 맥이 잰 시간이다. autoStop 이 이미 막지만 여기서도 선두에서 끊는 이유는
+        // **배너** 때문이다 — 마감만 막으면 확인 배너가 뜨고, 사용자가 [네, 근무 중이에요] 를 눌러 앵커를
+        // 지금으로 되돌려도 그 세션은 여전히 남의 것이라 30분마다 되풀이되는 유령 배너가 된다.
+        guard !adoptedRemoteSession else { return }
         guard startedAt != nil, let anchor = longSessionAnchor else { return }
 
         if isLongSessionPromptActive {
@@ -515,6 +675,14 @@ final class WorkTimerStore {
     /// syncMessage 는 사유 문구로 세팅한다(이후 refresh 가 "동기화됨"으로 정규화할 수 있음 — 즉시 피드백 목적).
     private func autoStop(endedAt: Date, message: String) {
         guard let sessionStart = startedAt else { return }
+        // 흡수 세션(다른 맥이 연 세션)은 이 맥이 **자동으로** 마감하지 않는다. 상대는 지금도 일하고 있는데
+        // 내 잠자기·12시간 판정으로 과거 시각 마감을 써 버리면 그 뒤 근무가 통째로 사라진다.
+        // 호출자마다 가드를 흩뿌리지 않고 이 한 곳에서 막는 이유: 앞으로 추가될 자동 마감 경로도 자동으로
+        // 안전해지기 때문이다(호출자 쪽 가드는 새 경로가 생기면 조용히 빠진다).
+        // 로컬 표시를 여기서 내리지 않는 것도 의도다 — 다음 폴링(≤30초)이 즉시 재흡수해 되돌려 놓으므로
+        // 무의미하고, 소유 맥이 사라지면 스캐빈저 마감 → (.offWork,.some) 가지가 로컬을 정확히 내린다.
+        // 사용자가 직접 누른 종료는 이 경로가 아니라 stop() 이므로 영향받지 않는다.
+        guard !adoptedRemoteSession else { return }
         // 잠자기/장시간 미확인 자동 마감도 로컬이 확정한 근무 상태 변경이라 세대를 올린다(낡은 응답의 재개 금지).
         workStateWriteGeneration &+= 1
         // 사유가 다른 이번 마감이 확정됐으므로 직전 자리 비움 되돌리기 대상은 무효다.
@@ -524,6 +692,10 @@ final class WorkTimerStore {
         accumulatedSeconds += max(0, Int(endedAt.timeIntervalSince(max(sessionStart, TeamWeeklyGoal.koreanDayStart(for: endedAt)))))
         accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: endedAt)
         startedAt = nil
+        // 이 세션은 여기서 실제로 마감된다 — 영속된 소유 ID 를 남기면 다음 실행이 이미 닫힌 세션을
+        // '내 것'으로 되찾으려 들어(서버엔 없는 세션에) 하트비트를 쏘게 된다. 위 가드 덕에 흡수 세션은
+        // 이 지점에 오지 못하므로 남의 소유 표식을 지울 위험은 없다.
+        releaseSessionOwnership()
         longSessionAnchor = nil
         clearLongSessionPrompt()
         sleepBeganAt = nil
@@ -735,7 +907,18 @@ final class WorkTimerStore {
 
     /// refresh 루프의 슬라이스 주기(초). fast 모드는 이 값 1회(기본 30s)를 자고, slow 유휴 모드는 이 값의
     /// 10슬라이스(기본 300s)로 나눠 자며 매 슬라이스마다 fast 전이를 재확인한다. 테스트에서 짧게 줄여 검증한다.
-    @ObservationIgnored var refreshLoopSliceSeconds: Double = 30
+    /// (기본값을 상수에서 파생시킨다 — 이 주기가 곧 하트비트 주기이고, 백스톱 임계가 그 주기를 근거로
+    /// 계산되므로 둘이 따로 놀면 임계의 여유분 계산이 조용히 어긋난다.)
+    @ObservationIgnored var refreshLoopSliceSeconds: Double = WorkTimerStore.heartbeatIntervalSeconds
+
+    /// 멤버십이 한 번도 확정된 적 없으면 1회 재확정한다(확정됐으면 요청 0건이라 유휴 비용 불변).
+    /// 실행 킥(activateStoredSessionOnLaunch)이 오프라인 부팅으로 실패하면 currentTeamID 가 nil 로 남는데,
+    /// 그 상태에서는 큐 드레인(performPendingOperation)이 throw 하고 하트비트·넛지도 전부 죽는다.
+    /// 팝오버를 한 번도 열지 않는 사용자에게는 refresh 루프가 유일한 회복 경로다.
+    func confirmMembershipIfNeeded() async {
+        guard session != nil, !membershipConfirmed else { return }
+        await confirmMembership()
+    }
 
     func startStatusRefreshLoop() {
         // 수신 찔림 폴링은 refresh 루프와 수명을 같이한다(로그인/활성화 지점에서 함께 시작, 자체 idempotent 가드).
@@ -755,9 +938,16 @@ final class WorkTimerStore {
                     for _ in 0..<10 {
                         try? await Task.sleep(for: .seconds(slice), tolerance: tolerance)
                         if Task.isCancelled { return }
+                        // 멤버십 미확정(= 실행 킥이 Wi-Fi 결합 전에 실패)은 유휴 1주기를 기다리지 않는다.
+                        // 그동안 팀이 nil 이라 넛지·하트비트·큐 드레인이 전부 죽어 있기 때문이다.
+                        // 확정돼 있으면 요청 0건이라 유휴 비용은 그대로고, 회복 상한만 1슬라이스로 내려간다.
+                        await self?.confirmMembershipIfNeeded()
                         if self?.refreshLoopIsFast ?? false { break }
                     }
                 }
+                // 본문 맨 앞이어야 한다: performPendingOperation 은 teamID 가 없으면 throw 하므로,
+                // 팀 확정이 큐 드레인보다 앞서야 오프라인에서 쌓인 근무가 **같은 주기에** 재생된다.
+                await self?.confirmMembershipIfNeeded()
                 await self?.retryPendingSync()
                 await self?.sendHeartbeatIfWorking()
                 await self?.refreshTeamStatus()
@@ -775,7 +965,7 @@ final class WorkTimerStore {
     }
 
     private func tick() {
-        let now = Date()
+        let now = clock()
         displayNow = now
         // 자정을 넘겼으면 어제 스탬프의 누적을 0으로 리셋하고 스탬프를 오늘로 갱신한다(하우스키핑). 표시/마일스톤은
         // todayDuration 의 자정 클리핑이 이미 막지만, 누적 원장 자체도 새 날에 맞춘다(이후 refresh 가 서버값 복원).
@@ -845,6 +1035,145 @@ extension WorkTimerStore {
     static let accessTokenKey = "check.session.accessToken"
     static let refreshTokenKey = "check.session.refreshToken"
     static let userIDKey = "check.session.userID"
+    /// 이 맥이 **직접 연** 진행 중 근무 세션의 ID. start() 가 클라에서 만든 그 값(= work_sessions 행 id 이자
+    /// work_statuses.active_session_id)을 그대로 남긴다. 이 키가 재시작과 '남의 맥'을 가르는 유일한 결정적 근거다.
+    static let ownedWorkSessionIDKey = "check.session.ownedWorkSessionID"
+    /// 위 소유 ID 가 **사실**인지 **추측**인지(SessionClaimStrength.rawValue). ID 와 함께 영속하지 않으면
+    /// 백스톱이 추측으로 세운 소유가 재시작 한 번으로 '내가 연 세션'으로 세탁된다 — 그 순간 진짜 소유자가
+    /// 이 맥 앞에서 물러나므로, 고치려던 사고가 재시작을 통해 그대로 되살아난다.
+    static let ownedWorkSessionStrengthKey = "check.session.ownedWorkSessionStrength"
+
+    /// 세션 ID 정규화의 **유일한 지점**. 세션 ID 비교는 전부 이 함수를 거친다.
+    ///
+    /// 왜 필요한가: 앱은 UUID().uuidString(대문자)으로 세션 ID 를 만들고, 서버는 그 값을 Postgres uuid
+    /// 네이티브 컬럼에 넣었다가 **소문자**로 돌려준다(work_sessions.id / work_statuses.active_session_id,
+    /// 20260701000000_create_check_schema.sql). 같은 세션인데 문자열은 다르다. 원시 == 로 비교하면
+    ///   (1) 재시작 복구의 1차 판정(isOwnedByThisMac)이 항상 실패해 내 세션이 흡수로 떨어지고,
+    ///   (2) 재흡수 분기(applyRemoteOwnStatus)의 '서버 ID != 내 ID' 가 **항상 참**이 되어 근무 시작 직후
+    ///       첫 폴링에서 내 세션이 남의 것으로 뒤집힌다 → 하트비트 정지 → 그 근무가 0초로 기록된다.
+    /// LiveE2ETests 는 이 사실을 알고 이미 .lowercased() 비교를 했지만 Sources 쪽엔 정규화가 한 곳도 없었다.
+    /// 앞으로 갈라지지 않게 **여기 한 곳**에만 규칙을 둔다(대소문자 무시 == 를 곳곳에 흩뿌리지 않는다).
+    nonisolated static func canonicalSessionID(_ sessionID: String?) -> String? {
+        guard let sessionID else { return nil }
+        return sessionID.lowercased()
+    }
+
+    /// 이 맥이 연 진행 중 세션의 ID(없으면 nil). startedAt 은 영속되지 않으므로 재시작 직후의 소유권 판정은
+    /// 오직 이 값으로만 할 수 있다. 읽을 때도 정규화한다 — v0.2.15 이하가 **대문자로 영속해 둔 값**이
+    /// 그대로 남아 있는 맥(업그레이드 사용자)의 재시작 판정을 구제하는 지점이다.
+    var ownedWorkSessionID: String? {
+        Self.canonicalSessionID(defaults.string(forKey: Self.ownedWorkSessionIDKey))
+    }
+
+    /// 서버가 들고 있는 세션 ID 가 이 맥이 연 그 세션인지. 둘 중 하나라도 없으면 '모른다'이므로 거짓이다
+    /// (모를 때 소유를 주장하면 살아 있는 다른 맥의 근무를 가로챈다 — 그건 D2 가 막으려던 바로 그 사고다).
+    /// 비교는 반드시 정규화 경유다(대문자 로컬 ID vs 소문자 서버 ID 는 같은 세션이다).
+    func isOwnedByThisMac(_ sessionID: String?) -> Bool {
+        guard let sessionID = Self.canonicalSessionID(sessionID), let owned = ownedWorkSessionID else {
+            return false
+        }
+        return sessionID == owned
+    }
+
+    /// 이 맥의 소유 주장이 어디서 왔는가. **반납 규칙의 유일한 결정자**다.
+    /// - strong: 이 맥이 그 세션을 **실제로 열었다** — start() 가 만들었거나, 되돌리기 재개(reopen)를
+    ///   이 맥이 서버에 보내 성공했다. 부분 유니크 인덱스(work_sessions_one_open_per_user)상 사용자당 열린
+    ///   세션은 하나뿐이므로 **강한 소유자는 최대 한 명**이다(두 번째 start 는 23505 로 거절된다).
+    /// - weak: 백스톱(updateAdoptedPresenceTracking)이 '7분째 아무도 안 돌보는 것 같다'고 세운 **추측**이다.
+    ///   추측은 틀릴 수 있다(맥 A 의 네트워크가 잠깐 끊겼을 뿐일 수 있다).
+    ///
+    /// 모르는 값은 언제나 weak 로 읽는다 — 모를 때 '내가 열었다'고 우기면 진짜 소유자가 그 앞에서 물러난다.
+    enum SessionClaimStrength: String {
+        case strong
+        case weak
+    }
+
+    /// 영속된 소유 주장의 강도(없거나 해석 불가면 weak). 이 값은 ownedWorkSessionID 가 가리키는 **그 세션**에
+    /// 대한 것이다 — 다른 세션을 들고 있을 때 이 값을 그대로 쓰면 안 된다(ownsCurrentSessionStrongly 참조).
+    var ownedSessionClaimStrength: SessionClaimStrength {
+        SessionClaimStrength(rawValue: defaults.string(forKey: Self.ownedWorkSessionStrengthKey) ?? "") ?? .weak
+    }
+
+    /// 지금 들고 있는 세션(currentSessionID)에 대해 이 맥이 **강한 소유자**인가.
+    /// 소유 ID 일치까지 함께 요구하는 이유: 강제 로그아웃 재로그인 복구 분기는 소유 표식을 건드리지 않은 채
+    /// currentSessionID 만 서버 값으로 갈아 끼운다. 그때 옛 세션의 strong 을 새 세션에 그대로 적용하면
+    /// 남이 연 세션에 대고 '내가 열었다'고 방송해, 진짜 소유자가 내 앞에서 물러난다.
+    var ownsCurrentSessionStrongly: Bool {
+        isOwnedByThisMac(currentSessionID) && ownedSessionClaimStrength == .strong
+    }
+
+    /// 이 세션의 소유권이 이 앱 인스턴스에 있다고 확정한다(표식 내림 + 소유 ID·강도 영속 + 흡수 관측 초기화).
+    /// 소유권을 세우는 모든 경로(start / 되돌리기 재개 / 재시작 복구 / 백스톱 되찾기)가 여기를 지나야
+    /// 한 경로라도 영속을 빠뜨려 다음 재시작이 자기 세션을 남의 것으로 오인하는 일이 없다.
+    /// strength 에 기본값을 두지 않는 것은 의도다 — 새 경로가 생길 때 '이 소유는 사실인가 추측인가'를
+    /// 반드시 한 번 판단하게 강제한다(기본값이 있으면 조용히 잘못된 쪽으로 굳는다).
+    func claimSessionOwnership(_ sessionID: String?, strength: SessionClaimStrength) {
+        adoptedRemoteSession = false
+        resetAdoptedPresenceTracking()
+        // 소유를 새로 확정하는 순간, 릴리스 규칙의 관측 장부도 '아직 아무것도 못 봤음'이다. 앞 세션에서
+        // 본 남의 신호를 남기면 방금 되찾은(또는 방금 시작한) 세션을 첫 폴링에서 곧바로 도로 내려놓는다.
+        resetForeignDeviceTracking()
+        setOwnedWorkSessionID(sessionID, strength: strength)
+    }
+
+    /// 진행 중 세션이 끝났다(또는 이 맥의 것이 아니게 됐다). 표식과 영속된 소유 ID 를 함께 비운다.
+    func releaseSessionOwnership() {
+        adoptedRemoteSession = false
+        resetAdoptedPresenceTracking()
+        resetForeignDeviceTracking()
+        setOwnedWorkSessionID(nil)
+    }
+
+    /// 소유 세션 ID 와 그 주장의 강도를 영속한다(nil 이면 둘 다 제거). 값이 같으면 쓰지 않는다 — 30초 폴링이
+    /// 도는 경로라 매 주기 같은 값을 디스크에 쓰게 두지 않는다. **정규화해서 쓴다** — 저장 형태가 소문자로
+    /// 통일돼야 서버가 돌려주는 값과 그대로 == 비교된다(읽기 쪽 정규화는 옛 대문자 잔존 값 구제용이다).
+    ///
+    /// strength 기본값이 .weak 인 이유: 이 함수를 강도 없이 부르는 자리(테스트 픽스처, 옛 호출부)는 출처를
+    /// 밝히지 않은 주장이다. 모르는 주장을 strong 으로 두면 진짜 소유자가 그 앞에서 물러난다 — 기본값은
+    /// 반드시 안전한 쪽(약함)이어야 한다.
+    func setOwnedWorkSessionID(_ sessionID: String?, strength: SessionClaimStrength = .weak) {
+        let canonical = Self.canonicalSessionID(sessionID)
+        // 세션 ID 가 같아도 **강도는 바뀔 수 있다**(같은 세션을 백스톱으로 약하게 들고 있다가 되돌리기 재개로
+        // 강해지는 경로가 실재한다). 그래서 ID 조기 반환 안에 강도 쓰기를 가두지 않고 먼저 맞춘다.
+        let storedStrength = sessionID == nil ? nil : strength.rawValue
+        if defaults.string(forKey: Self.ownedWorkSessionStrengthKey) != storedStrength {
+            if let storedStrength {
+                defaults.set(storedStrength, forKey: Self.ownedWorkSessionStrengthKey)
+            } else {
+                defaults.removeObject(forKey: Self.ownedWorkSessionStrengthKey)
+            }
+        }
+        // 비교는 **저장된 원문**과 한다(정규화한 getter 가 아니라). 옛 버전이 대문자로 남긴 값은 getter 를
+        // 통과하면 이미 같은 값으로 보여 영영 갈아 끼워지지 않고, 그 맥은 계속 읽기 쪽 정규화에만 의존하게 된다.
+        // 여기서 한 번 이관해 두면 디스크 표현이 서버 표현과 같아진다(평상시엔 값이 같아 쓰기 0건 그대로).
+        guard defaults.string(forKey: Self.ownedWorkSessionIDKey) != canonical else { return }
+        if let canonical {
+            defaults.set(canonical, forKey: Self.ownedWorkSessionIDKey)
+        } else {
+            defaults.removeObject(forKey: Self.ownedWorkSessionIDKey)
+        }
+    }
+
+    /// 흡수 세션 생존신호 관측을 초기화한다. 흡수가 아니게 되는 모든 지점에서 부른다 —
+    /// 남겨 두면 다음 흡수가 **직전 세션의** 신호를 '전진 없음'의 근거로 삼아 첫 폴링에 곧장 소유권을
+    /// 주장해 버린다(살아 있는 다른 맥의 근무 가로채기).
+    func resetAdoptedPresenceTracking() {
+        adoptedLastSeenAt = nil
+        adoptedLastSeenSessionID = nil
+        // 정체 장부도 함께 비운다 — 남기면 새 세션의 첫 관측이 앞 세션에서 세어 둔 정체 시간/횟수를
+        // 물려받아 곧바로 임계를 통과한다(= 방금 다른 맥이 연 멀쩡한 세션을 첫 폴링에 가로챈다).
+        adoptedStallBeganAt = nil
+        adoptedStallObservations = 0
+    }
+
+    /// 릴리스 규칙의 '남의 기기 행' 관측 장부를 비운다(소유권이 바뀌는 모든 지점에서 부른다).
+    /// **resetAdoptedPresenceTracking 과 합치면 안 된다**: 그 함수는 흡수가 아닐 때 매 폴링 호출되는데
+    /// (updateAdoptedPresenceTracking 의 첫 가드), 릴리스 규칙이 살아 있어야 하는 상태가 바로 그 '흡수 아님'
+    /// 상태다. 합치면 장부가 매 폴링 비워져 '전진'을 영원히 관측하지 못한다 = 규칙이 다시 죽는다.
+    func resetForeignDeviceTracking() {
+        foreignDeviceLastSeenAt = [:]
+        foreignDeviceTrackingSessionID = nil
+    }
 
     static func restoredSession(from defaults: UserDefaults) -> SupabaseSession? {
         guard let accessToken = defaults.string(forKey: accessTokenKey),
@@ -886,6 +1215,11 @@ extension WorkTimerStore {
         hasActivatedStoredSession = false
         membershipConfirmed = false
         session = nil
+        // 소유 세션 ID(ownedWorkSessionIDKey)는 **일부러 남긴다**. 이 함수는 토큰 만료 강제 로그아웃도 타는데,
+        // 그 경로는 진행 중 근무(startedAt)와 큐를 일부러 보존한다(아래 주석) — 그 근무의 소유권 증거만 지우면
+        // 재로그인 후 재시작이 자기 세션을 남의 것으로 오인해 하트비트가 끊기고, 10분 뒤 스캐빈저가 마감한다.
+        // 세션 ID 는 UUID 라 다른 계정과 겹칠 수 없고, 계정이 실제로 바뀌면 adoptWorkStateOwner 가,
+        // 사용자가 직접 로그아웃하면 signOut 이 그 자리에서 지운다.
         [Self.accessTokenKey, Self.refreshTokenKey, Self.userIDKey].forEach(defaults.removeObject)
         // 세션이 사라지면 리그 페이지 상태도 함께 초기화한다(signOut·토큰 만료 로그아웃 공통 경로).
         leaderboard = []
@@ -953,6 +1287,10 @@ extension WorkTimerStore {
         accumulatedSeconds = 0
         accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: Date())
         currentSessionID = nil
+        // 진행 중 세션을 끊었으니 그 세션을 서술하던 흡수 표식과 영속된 소유 ID 도 함께 내린다. 남기면
+        // (1) 새 계정으로 시작하는 첫 근무가 (start() 가 다시 내리기 전까지) 남의 세션으로 취급돼 자동 마감·
+        // 하트비트에서 빠지고, (2) 앞 계정의 소유 ID 가 남아 새 계정 화면에서 소유권 판정에 쓰인다.
+        releaseSessionOwnership()
         longSessionAnchor = nil
         clearLongSessionPrompt()
         sleepBeganAt = nil

@@ -2,7 +2,34 @@ import Foundation
 
 @MainActor
 extension WorkTimerStore {
+    /// 실행 직후 저장 세션을 활성화해야 하는지(D1). 키가 없으면(canSync == false) **킥하지 않는다** —
+    /// missingAnonKey 는 classifyAuthError 에서 `.fatal` 이라 refreshPersistedSessionIfPossible 이 저장 세션을
+    /// 조용히 지운다(아래 clearPersistedSession 분기). 지금까진 팝오버를 직접 연 사람만 그 경로를 밟았지만
+    /// 킥은 화면 없이 도므로, 키 없이 `swift run` 한 개발 맥에서 실계정 세션이 아무 화면도 안 보인 채 날아간다.
+    var shouldActivateOnLaunch: Bool { isSignedIn && canSync && !hasActivatedStoredSession }
+
+    /// 실행당 1회 저장 세션 활성화를 발사하고 그 Task 를 돌려준다(테스트가 완료를 기다릴 수 있게).
+    /// 조건 미달이면 아무것도 하지 않고 nil — 비로그인/키 없음 실행에서 요청이 0건이어야 하는 계약이다.
+    @discardableResult
+    func activateStoredSessionOnLaunch() -> Task<Void, Never>? {
+        guard shouldActivateOnLaunch else { return nil }
+        let task = Task { @MainActor [weak self] in
+            await self?.performActivateStoredSession()
+            self?.launchActivationTask = nil
+        }
+        launchActivationTask = task
+        return task
+    }
+
+    /// 팝오버 오픈(.task) 진입점. 실행 킥이 아직 돌고 있으면 **그 완료를 먼저 기다린다** — 기다리지 않으면
+    /// 킥의 refresh grant 가 in-flight 인 사이에 fast path 의 confirmMembership 이 회전 전 access token 으로
+    /// 나갔다가 401 → 같은 낡은 refresh token 으로 두 번째 grant 를 치게 된다(launchActivationTask 주석 참조).
     func activateStoredSession() async {
+        if let launchActivationTask { await launchActivationTask.value }
+        await performActivateStoredSession()
+    }
+
+    private func performActivateStoredSession() async {
         guard session != nil else {
             return
         }
@@ -451,6 +478,11 @@ extension WorkTimerStore {
         createdTeamCode = nil
         myTeamInviteCode = nil
         currentSessionID = nil
+        // 흡수 표식과 영속된 소유 세션 ID 도 함께 내린다. 로그아웃은 startedAt 을 실제로 지우므로(강제 로그아웃의
+        // clearPersistedSession 과 달리 여기선 진행 중 근무를 남기지 않는다) 표식이 서술할 세션 자체가 사라진다.
+        // 남겨 두면 다음 로그인 후 **내가 직접 시작한** 근무가 흡수로 오인돼 자동 마감·하트비트가 통째로 죽고,
+        // 소유 ID 쪽은 이미 끝난 세션을 가리킨 채 다음 실행의 재시작 판정에 끼어든다.
+        releaseSessionOwnership()
         pendingItems = []
         longSessionAnchor = nil
         clearLongSessionPrompt()

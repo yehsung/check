@@ -64,6 +64,20 @@ swift test
 git status --short supabase/migrations   # 이번 diff 에 새 SQL 파일이 있는지
 supabase db push                         # 있으면 배포 전에 적용
 
+# 1-2) db push 를 했다면 **반드시** 기존 조회가 아직 살아 있는지 확인한다. 건너뛰지 말 것.
+#      표를 더하기만 해도 기존 조회가 깨진다 — PostgREST 는 두 표를 각각 가리키는 FK 를 가진 새 표를
+#      다대다 연결 표로 자동 해석해, 이미 있던 임베드에 경로를 하나 더 만들고 PGRST201 로 요청 전체를
+#      400 으로 거절한다. 이건 **서버만의 변경이라 앱 버전과 무관**해 구버전 사용자까지 동시에 죽는다.
+#      (2026-08-02 v0.2.15 실사고: work_status_devices 가 work_statuses→profiles 임베드를 깨뜨려
+#       팀 목록·세션 복구·원격 종료 반영이 전원 다운. 단위 테스트는 원리적으로 못 잡는다 —
+#       URLProtocolStub 은 보낸 select 를 해석하지 않고, 스토어 경로는 실패를 syncMessage 로 삼킨다.)
+CHECK_E2E=1 CHECK_E2E_SR_KEY_FILE=<apikeys.json> swift test --filter LiveE2E   # s09i 가 임베드를 실제로 검증
+#   e2e 키가 없으면 최소한 아래 두 줄이라도 실서버에 쏴 200 인지 확인한다(읽기 전용):
+#   curl -s -o /dev/null -w '%{http_code}\n' "$URL/rest/v1/work_statuses?select=user_id,profiles(display_name)&limit=1" \
+#        -H "apikey: $ANON" -H "Authorization: Bearer $TOKEN"
+#   curl -s -o /dev/null -w '%{http_code}\n' "$URL/rest/v1/memberships?select=team_id,teams(name)&limit=1" \
+#        -H "apikey: $ANON" -H "Authorization: Bearer $TOKEN"
+
 # 2) Developer ID 서명 + 공증 + 스테이플된 배포 zip 생성 → dist/aing-check.zip
 ./scripts/package-notarized.sh
 

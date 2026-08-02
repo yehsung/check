@@ -1606,6 +1606,70 @@ struct LiveE2ETests {
         try await ctx.admin.deleteTokenUsageRows(userID: sessionA.userID, month: month)
     }
 
+    // 9i. 앱이 쓰는 **모든 PostgREST 임베드 조회**가 실서버에서 실제로 해석되는지.
+    //
+    // 이 테스트가 없어서 v0.2.15 배포 당일 팀 기능이 전원 다운됐다(2026-08-02).
+    // 마이그레이션 20260801010000 이 work_status_devices 에 work_statuses·profiles 양쪽 FK 를 달았고,
+    // PostgREST 가 그 표를 **다대다 연결 표로 자동 해석**해 work_statuses→profiles 임베드에 경로가 둘이 됐다.
+    // 결과는 PGRST201 로 **팀 현황 GET 전체가 400** — 서버만의 변경이라 구버전 앱 사용자까지 함께 죽었다.
+    //
+    // 왜 기존 테스트가 전부 초록이었나(이 테스트의 존재 이유):
+    //   1) URLProtocolStub 은 보낸 select 를 해석하지 않고 준비된 JSON 을 돌려준다 —
+    //      PostgREST 의 관계 해석은 **실서버에서만** 일어나므로 단위 테스트로는 원리적으로 못 잡는다.
+    //   2) 스토어 경로(refreshTeamStatus)는 실패를 syncMessage 로 삼킨다 —
+    //      스토어를 구동하는 e2e 가 있어도 조용히 지나간다.
+    //   그래서 **service 를 직접 불러 throw 여부로** 판정한다. 삼키는 층을 건너뛰는 것이 핵심이다.
+    //
+    // 교훈: 표를 **더하기만 해도** 기존 조회가 깨질 수 있다. "순수 추가라 안전"은 PostgREST 에서 거짓이다.
+    // 마이그레이션을 push 한 뒤에는 앱을 배포하기 전에 반드시 이 시나리오를 돌린다(docs/release.md).
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s09i_postgrestEmbedsStayUnambiguous() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+
+        let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer {
+            store.tickerTask?.cancel()
+            store.refreshTask?.cancel()
+        }
+        store.email = Emails.owner
+        store.password = Emails.password
+        await store.signIn()?.value
+        let session = try #require(store.session)
+        let teamID = try #require(store.currentTeamID)
+
+        // (1) work_statuses?select=…,profiles(…) — 이번에 깨졌던 바로 그 조회.
+        //     throw 하지 않는 것 자체가 단언이다(PGRST201 이면 여기서 실패한다).
+        let members = try await store.service.fetchTeamStatuses(
+            accessToken: session.accessToken,
+            teamID: teamID
+        )
+        // 임베드가 실제로 **해석돼 값이 실려 왔는지**까지 본다. 400 이 아니어도 관계가 끊기면
+        // 이름이 통째로 폴백('팀원')이 되어 화면이 조용히 망가진다.
+        let me = try #require(members.first { $0.id == session.userID })
+        #expect(me.name != "팀원")
+        #expect(!me.name.isEmpty)
+        obs("임베드 해석 확인: work_statuses→profiles, 팀원 \(members.count)명, 내 표시명='\(me.name)'")
+
+        // (2) memberships?select=team_id,role,teams(…) — 팀 이름/목표를 가져오는 다른 임베드.
+        //     confirmMembership 이 이 조회를 쓰며, 실패하면 소속팀이 사라진 것처럼 보인다.
+        let membership = try await store.service.fetchOwnMembership(
+            accessToken: session.accessToken,
+            userID: session.userID
+        )
+        let confirmed = try #require(membership)
+        #expect(confirmed.teamID == teamID)
+        // 임베드가 끊기면 teams(...) 가 비어 teamName 이 폴백('팀')으로 조용히 내려앉는다 — 값까지 본다.
+        #expect(confirmed.teamName != "팀")
+        #expect(confirmed.goalHours > 0)
+        obs("임베드 해석 확인: memberships→teams, 팀='\(confirmed.teamName)' 목표=\(confirmed.goalHours)h")
+
+        // (3) 새 표의 조회가 기존 조회를 죽이지 않는지 — 별도 GET 이라 임베드는 아니지만,
+        //     이 표의 존재 자체가 (1)을 깨뜨린 전력이 있으므로 같은 시나리오에서 함께 확인한다.
+        _ = owner
+        #expect(members.allSatisfy { $0.weeklyDurationSeconds >= 0 })
+    }
+
     // 10. 정리 → E2E 계정 + E2E 팀 삭제 후 잔존 0 확인. E2E 접두사 밖(실사용) 팀 수는 변하지 않아야 한다.
     @Test(.enabled(if: LiveE2EEnv.enabled))
     func s10_cleanup() async throws {

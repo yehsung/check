@@ -213,6 +213,10 @@ extension WorkTimerStore {
     /// 예외로 '스키마 부재'만은 문구로 드러낸다(마이그레이션 미적용을 운영자가 알 방법이 그것뿐이다).
     func uploadTokenUsageIfNeeded(usage: TokenUsageMonthly?, now: Date) async {
         guard session != nil else { return }
+        // 수집 끔이면 아예 보내지 않는다. 서버 트리거가 어차피 조용히 버리므로 결과는 같지만,
+        // 그 사람 맥이 30초마다 헛왕복을 도는 것을 없앤다(설정이 서버에서 도착하기 전 기본값은 수집이라,
+        // 로그인 직후 한두 번은 나갈 수 있다 — 그건 서버가 막는다).
+        guard tokenUsageCollect else { return }
         guard let usage, usage.total > 0 else { return }
         guard usage != lastUploadedUsage, now.timeIntervalSince(lastTokenUploadAt) >= 60 else { return }
         // 시도 시각을 먼저 스탬프해, 실패하더라도 60초 안에는 재시도하지 않는다(난사 방지).

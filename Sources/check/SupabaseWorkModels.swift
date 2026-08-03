@@ -757,6 +757,9 @@ struct ReceivedPoke: Equatable {
 /// profiles.token_usage_public 자기 행 조회 응답.
 struct ProfilePrivacyRow: Decodable, Equatable {
     let tokenUsagePublic: Bool?
+    /// 토큰 사용량 수집 여부(20260803010000). 서버가 쓰기를 조용히 버리므로 앱 게이트는 통신 낭비를 줄이는
+    /// 부수적 장치다 — 컬럼/행이 없으면 수집(true)으로 본다(마이그레이션 미적용 서버에서 기존 동작 유지).
+    let tokenUsageCollect: Bool?
 }
 
 /// profiles.token_usage_public 자기 행 갱신 요청(PATCH).

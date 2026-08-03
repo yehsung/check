@@ -3253,6 +3253,51 @@ func uploadTokenUsageGateThrottlesAndChangeGates() async {
     #expect(postCount() == 3)
 }
 
+// 수집 끔(profiles.token_usage_collect=false)이면 앱이 아예 올리지 않는다.
+// 실효는 서버 트리거가 내지만(구버전 클라도 함께 막힌다), 이 게이트가 없으면 그 사람 맥이 30초마다
+// 서버가 버릴 값을 계속 왕복시킨다. 대조군으로 '수집 켬이면 그대로 올라간다'를 함께 고정해,
+// 게이트가 전원의 업로드를 죽이는 방향으로 잘못 서지 않게 한다.
+@MainActor
+@Test
+func uploadTokenUsageSkipsEntirelyWhenCollectionIsOff() async {
+    let testHost = "token-collect-off-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+
+    func postCount() -> Int {
+        URLProtocolStub.requests(forHost: testHost).filter {
+            $0.url?.path.hasPrefix("/rest/v1/token_usage") == true && $0.httpMethod == "POST"
+        }.count
+    }
+
+    let t0 = Date(timeIntervalSince1970: 2_000_000)
+    let usage = TokenUsageMonthly(month: "2026-08", claudeInput: 100)
+
+    // 수집 끔 → 옛 표·새 표 어느 쪽으로도 나가지 않는다.
+    store.tokenUsageCollect = false
+    await store.uploadTokenUsageIfNeeded(usage: usage, now: t0)
+    #expect(postCount() == 0)
+
+    // 대조군: 다시 켜면 그대로 올라간다(게이트가 한 방향으로만 막는다는 증거).
+    store.tokenUsageCollect = true
+    await store.uploadTokenUsageIfNeeded(usage: usage, now: t0.addingTimeInterval(70))
+    #expect(postCount() > 0)
+}
+
 @MainActor
 @Test
 func uploadTokenUsageAlsoRewritesLegacyLedger() async {

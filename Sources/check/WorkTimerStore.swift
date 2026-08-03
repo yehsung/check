@@ -361,6 +361,11 @@ final class WorkTimerStore {
     // 내 토큰 사용량 공개 여부(profiles.token_usage_public 미러). 로그인 후 서버값 1회 로드, 토글은 낙관 반영.
     var tokenUsagePublic = true
     @ObservationIgnored var tokenUsagePublicLoaded = false
+    // 내 토큰 사용량 **수집** 여부(profiles.token_usage_collect 미러). 공개 여부와 독립이다 —
+    // 공개는 '남의 순위판에 뜨는가', 수집은 '서버에 쌓이는가'. 앱에서 바꾸는 값이 아니라 서버가 정한다.
+    // 실효는 서버 트리거가 내고(구버전 클라도 함께 막힌다), 이 플래그는 헛업로드를 줄이는 부수 장치다.
+    // 뷰가 읽지 않으므로 관찰 대상에서 뺀다.
+    @ObservationIgnored var tokenUsageCollect = true
     // 수신 찔림 폴링 태스크(로그인 중 15초 타이머. 실제 take_pokes 는 근무중에만 나간다 — O1/takePokesIfWorking).
     // refresh 루프와 별도인 이유는 유휴 주기(수백 초)로는 말풍선 전달이 너무 늦기 때문이다.
     var pokePollTask: Task<Void, Never>?

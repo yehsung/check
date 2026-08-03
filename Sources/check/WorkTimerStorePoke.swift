@@ -204,11 +204,14 @@ extension WorkTimerStore {
         guard !tokenUsagePublicLoaded, session != nil else { return }
         let generation = sessionGeneration
         do {
-            let isPublic = try await withSessionRetry { activeSession in
-                try await service.fetchTokenUsagePublic(accessToken: activeSession.accessToken, userID: activeSession.userID)
+            let settings = try await withSessionRetry { activeSession in
+                try await service.fetchTokenUsageSettings(accessToken: activeSession.accessToken, userID: activeSession.userID)
             }
             guard generation == sessionGeneration else { return }
-            if tokenUsagePublic != isPublic { tokenUsagePublic = isPublic }
+            if tokenUsagePublic != settings.isPublic { tokenUsagePublic = settings.isPublic }
+            // 수집 설정은 사용자가 앱에서 바꾸는 값이 아니라 서버가 정하는 값이라 낙관 갱신도 토글도 없다.
+            // 앱 게이트는 통신 낭비를 줄이는 부수 장치일 뿐 — 실효는 서버 트리거가 낸다(구버전도 함께 막힌다).
+            if tokenUsageCollect != settings.collects { tokenUsageCollect = settings.collects }
             tokenUsagePublicLoaded = true
         } catch {
             // 조용히 무시한다 — loaded 는 성공 시에만 서므로 다음 폴링 tick 에 재시도된다.

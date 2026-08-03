@@ -1716,14 +1716,16 @@ func fetchTokenUsagePublicDefaultsToTrueOnEmptyResponse() async throws {
         session: TokenBoardURLProtocol.session()
     )
 
-    // 행 누락(빈 배열) → 기본 공개(true) 폴백.
-    let isPublic = try await service.fetchTokenUsagePublic(accessToken: "access-token", userID: "u1")
-    #expect(isPublic == true)
+    // 행 누락(빈 배열) → 기본값 폴백(공개 true / 수집 true).
+    let settings = try await service.fetchTokenUsageSettings(accessToken: "access-token", userID: "u1")
+    #expect(settings.isPublic == true)
+    #expect(settings.collects == true)
 
     let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
     #expect(url.path == "/rest/v1/profiles")
     #expect(url.query?.contains("id=eq.u1") == true)
-    #expect(url.query?.contains("select=token_usage_public") == true)
+    // 두 설정을 한 요청으로 가져온다(요청 수 불변). URLComponents 는 쉼표를 인코딩하지 않는다.
+    #expect(url.query?.contains("select=token_usage_public,token_usage_collect") == true)
 }
 
 @Test
@@ -1736,8 +1738,30 @@ func fetchTokenUsagePublicDecodesFalse() async throws {
         session: TokenBoardURLProtocol.session()
     )
 
-    let isPublic = try await service.fetchTokenUsagePublic(accessToken: "access-token", userID: "u1")
-    #expect(isPublic == false)
+    // token_usage_collect 키가 아예 없는 응답(마이그레이션 미적용 서버) → 수집은 기본 true 로 폴백해야 한다.
+    // 여기서 false 로 떨어지면 구서버에서 전원의 업로드가 조용히 멈춘다.
+    let settings = try await service.fetchTokenUsageSettings(accessToken: "access-token", userID: "u1")
+    #expect(settings.isPublic == false)
+    #expect(settings.collects == true)
+}
+
+@Test
+func fetchTokenUsageSettingsDecodesCollectFalse() async throws {
+    let testHost = "collect-fetch-false-test"
+    TokenBoardURLProtocol.setResponse(
+        #"[{"token_usage_public": true, "token_usage_collect": false}]"#,
+        forHost: testHost
+    )
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: TokenBoardURLProtocol.session()
+    )
+
+    // 공개는 켜져 있어도 수집만 따로 끌 수 있다(두 설정은 독립).
+    let settings = try await service.fetchTokenUsageSettings(accessToken: "access-token", userID: "u1")
+    #expect(settings.isPublic == true)
+    #expect(settings.collects == false)
 }
 
 @Test

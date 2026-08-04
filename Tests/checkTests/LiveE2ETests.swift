@@ -42,11 +42,39 @@ private enum Emails {
     static let owner = "check.e2e.owner@gmail.com"
     static let joiner = "check.e2e.joiner@gmail.com"
     static let nickname = "check.e2e.nickname@gmail.com"
+    // s09y 전용 일회성 계정 — 표시명 충돌 시 가입이 성공하는지만 본다. owner/joiner/nickname 셋 중
+    // 아무거나 재사용하면 그 계정의 표시명이 '-2' 로 바뀌어 뒤따르는 별명 시나리오의 기대값이 흔들린다.
+    static let dupName = "check.e2e.dupname@gmail.com"
     static let ghost = "check.e2e.ghost.doesnotexist@gmail.com"
     static let password = "E2E-qa-Passw0rd!23"
     static let wrongPassword = "E2E-qa-WRONG-Passw0rd!99"
     // 30자(그래핌 기준) 한글 20 + 이모지 10.
+    // 이 값을 ZWJ(U+200D) 포함 이모지로 바꿔도 서버는 U+200D 를 지우지 않는다(normalize_display_name 이
+    // 보존한다 — 지우면 "👨‍👩‍👧" 같은 결합 이름이 조각난다). 대신 유일성 키(display_name_key)에서는 무시된다.
+    // **무시 대상은 ZWJ 하나가 아니다** — 키는 U+115F/U+1160/U+180E/U+200D/U+2800/U+3164/U+FE0F 를 전부
+    // 지운다(20260804010000 의 2번 주석에 각각이 왜 필요한지 적혀 있다). 그래서 '이름+보이지 않는 한 글자'는
+    // 새 계정으로도 통과하지 못하고(taken), 그런 글자만으로 만든 이름은 invalid_empty 다.
     static let edgeDisplayName = "가나다라마바사아자차카타파하거너더러머버" + "🎉🚀✨🌟💪🔥😀🙌🐣🌈"
+    /// 이 스위트가 만들고 지우는 계정 전부. **새 E2E 계정을 더하면 반드시 여기에도 넣어라** —
+    /// 빠뜨리면 s00/s10 이 그 계정을 지우지 않아 다음 실행이 지난 실행의 표시명·쿨타임을 물려받는다.
+    static let managed: [String] = [owner, joiner, nickname, dupName]
+}
+
+/// v0.2.16 별명/울트라 시나리오가 공유하는 고정 문자열. 실사용자 26명의 이름과 절대 겹치지 않게 'E2E' 로 시작한다.
+private enum E2ENames {
+    static let ownerBase = "E2E오너"
+    static let joinerBase = "E2E합류자"
+    // 아래 넷은 전부 서버 max_len(12) 이하다 — 넘으면 invalid_long 이 나서 시나리오가 무의미해진다.
+    static let first = "E2E별명하나"      // 7자
+    static let second = "E2E별명둘"       // 6자
+    static let raceA = "E2E동시A"         // 6자
+    static let raceB = "E2E동시B"         // 6자
+    static let duplicate = "E2E중복이름"   // 7자
+    /// `first` 와 **유일성 키가 같은** 변형: 대문자→소문자 + 공백 삽입/앞뒤 공백.
+    /// display_name_key 는 lower + 모든 공백 제거이므로 둘 다 'e2e별명하나' 로 접힌다.
+    static let firstVariant = "  e2e  별명 하나  "
+    /// 13자 — 서버 max_len(12)를 정확히 1 넘긴다.
+    static let tooLong = "일이삼사오육칠팔구십일이삼"
 }
 
 private enum E2ETeam {
@@ -577,6 +605,142 @@ private struct E2EAdmin: Sendable {
             URLQueryItem(name: "month", value: "eq.\(month)")
         ]).count
     }
+
+    // MARK: 별명(표시명) 픽스처 — 20260804010000/20260804020000 검증용, E2E 계정 user_id 로만 스코프
+
+    /// admin 으로 profiles 한 행을 PATCH 한다. **service_role 이 필요한 이유가 이 설계의 전부다** —
+    /// 20260804020000 이 authenticated 의 표 단위 UPDATE 를 회수했으므로 사용자 토큰으로는
+    /// display_name 을 되돌릴 수 없다(그게 그 마이그레이션의 목적이다). 픽스처는 admin 만 만들 수 있다.
+    private func patchProfile(userID: String, body: [String: Any]) async throws {
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let (payload, code) = try await send(
+            path: "/rest/v1/profiles",
+            method: "PATCH",
+            query: [URLQueryItem(name: "id", value: "eq.\(userID)")],
+            body: data,
+            prefer: "return=minimal"
+        )
+        guard code == 200 || code == 204 else {
+            throw E2EError("profiles PATCH HTTP \(code): \(String(decoding: payload, as: UTF8.self))")
+        }
+    }
+
+    /// display_name_changed_at 을 null 로 지운다. **이 헬퍼가 s10 에만 있으면 안 되는 이유**:
+    /// release.md 의 확인 명령은 --filter 로 s09w/s09x/s09y 만 돌려 s10_cleanup 을 실행하지 않는다.
+    /// 그러면 같은 주에 두 번째 릴리스를 낼 때 s09w 가 cooldown 으로 빨개져 배포가 멈춘다
+    /// (그리고 원인이 '기능 고장'처럼 보인다).
+    func clearDisplayNameCooldown(userID: String) async throws {
+        try await patchProfile(userID: userID, body: ["display_name_changed_at": NSNull()])
+    }
+
+    /// 표시명을 admin 권한으로 되돌린다(RPC 쿨타임을 태우지 않는다 — set_display_name 을 거치지 않으므로).
+    func setDisplayName(userID: String, to name: String) async throws {
+        try await patchProfile(userID: userID, body: ["display_name": name])
+    }
+
+    /// display_name_changed_at 을 임의 시각으로 민다(쿨타임 만료 시뮬레이션). nil 이면 지운다.
+    func setDisplayNameChangedAt(userID: String, to date: Date?) async throws {
+        var body: [String: Any] = ["display_name_changed_at": NSNull()]
+        if let date {
+            body["display_name_changed_at"] = ISO8601DateFormatter().string(from: date)
+        }
+        try await patchProfile(userID: userID, body: body)
+    }
+
+    /// 현재 display_name_changed_at(없으면 nil). '실패한 시도가 쿨타임을 소모하지 않는다'를 단언하려면
+    /// 시도 전후를 비교해야 하는데, 이 값은 사용자 토큰으로 못 고치므로 admin 이 진실의 유일한 창구다.
+    func displayNameChangedAt(userID: String) async throws -> Date? {
+        let raw = try await rows("profiles", [
+            URLQueryItem(name: "id", value: "eq.\(userID)"),
+            URLQueryItem(name: "select", value: "display_name_changed_at")
+        ]).first?["display_name_changed_at"] as? String
+        return raw.flatMap(parseSupabaseDate)
+    }
+
+    /// 아바타 URL(없으면 nil). 원복 픽스처는 **원래 값을 알아야** 되돌릴 수 있다.
+    func profileAvatarURL(userID: String) async throws -> String? {
+        try await rows("profiles", [
+            URLQueryItem(name: "id", value: "eq.\(userID)"),
+            URLQueryItem(name: "select", value: "avatar_url")
+        ]).first?["avatar_url"] as? String
+    }
+
+    /// 토큰 공개 여부(행이 없으면 nil).
+    func profileTokenUsagePublic(userID: String) async throws -> Bool? {
+        try await rows("profiles", [
+            URLQueryItem(name: "id", value: "eq.\(userID)"),
+            URLQueryItem(name: "select", value: "token_usage_public")
+        ]).first?["token_usage_public"] as? Bool
+    }
+
+    /// 아바타 URL 원복(nil 이면 지운다). s09x 가 대조군으로 심은 가짜 URL 을 남기면 이후 관측이 흐려진다
+    /// (깨진 이미지가 뜨는 계정이 하나 생긴다).
+    func setAvatarURL(userID: String, to url: String?) async throws {
+        var body: [String: Any] = ["avatar_url": NSNull()]
+        if let url { body["avatar_url"] = url }
+        try await patchProfile(userID: userID, body: body)
+    }
+
+    /// 토큰 공개 설정 원복. s09x 가 대조군으로 false 를 심으므로 원래 값으로 되돌린다
+    /// (안 되돌리면 s09e/s09g 의 보드 기대값이 흔들린다).
+    func setTokenUsagePublic(userID: String, to isPublic: Bool) async throws {
+        try await patchProfile(userID: userID, body: ["token_usage_public": isPublic])
+    }
+
+    // MARK: 울트라 찌르기 픽스처 — 하루 한도 장부가 pokes 행 자체라 정리가 곧 리셋이다
+
+    private func deletePokes(fromUser userID: String, extraQuery: [URLQueryItem]) async throws {
+        let (data, code) = try await send(
+            path: "/rest/v1/pokes",
+            method: "DELETE",
+            query: [URLQueryItem(name: "from_user", value: "eq.\(userID)")] + extraQuery,
+            prefer: "return=minimal"
+        )
+        guard code == 200 || code == 204 else {
+            throw E2EError("pokes 정리 HTTP \(code): \(String(decoding: data, as: UTF8.self))")
+        }
+    }
+
+    /// 해당 계정이 **보낸** kind='ultra' 행만 지운다. from_user = <E2E 계정 uid> 로만 스코프한다 —
+    /// 실사용자 26명의 pokes 행은 절대 만지지 않는다(to_user 로는 절대 스코프하지 않는다).
+    func deleteUltraPokes(fromUser userID: String) async throws {
+        try await deletePokes(fromUser: userID, extraQuery: [URLQueryItem(name: "kind", value: "eq.ultra")])
+    }
+
+    /// 해당 계정이 보낸 찔림을 종류 무관 전부 지운다. 울트라 시나리오의 진입 정리에 필요하다 —
+    /// 하루 한도(울트라 행)뿐 아니라 **60초 쿨타임(일반 행 포함 max(created_at))** 까지 리셋해야
+    /// s09f 직후에 실행돼도 첫 울트라가 cooldown 이 아니라 ok 로 나온다.
+    func deleteAllPokes(fromUser userID: String) async throws {
+        try await deletePokes(fromUser: userID, extraQuery: [])
+    }
+
+    /// 해당 계정이 보낸 찔림의 created_at 을 과거로 민다 — **60초 쿨타임만 만료시키고 하루 한도는 그대로 두는**
+    /// 유일한 수단이다(행을 지우면 한도 장부까지 리셋된다). 대상 계정을 하나밖에 못 세운 환경에서
+    /// 울트라를 연속 두 번 보내려면 이게 필요하다. E2E 계정 from_user 로만 스코프한다.
+    func backdatePokes(fromUser userID: String, createdAt: Date) async throws {
+        let iso = ISO8601DateFormatter()
+        let body = try JSONSerialization.data(withJSONObject: ["created_at": iso.string(from: createdAt)])
+        let (data, code) = try await send(
+            path: "/rest/v1/pokes",
+            method: "PATCH",
+            query: [URLQueryItem(name: "from_user", value: "eq.\(userID)")],
+            body: body,
+            prefer: "return=minimal"
+        )
+        guard code == 200 || code == 204 else {
+            throw E2EError("pokes created_at 백데이트 HTTP \(code): \(String(decoding: data, as: UTF8.self))")
+        }
+    }
+
+    /// 해당 계정이 보낸 울트라 행 수. 하루 한도 장부가 별도 표가 아니라 pokes 행 자체라는 계약의 관측 창구다
+    /// (진입에서 전부 지우므로 시나리오 안에서는 곧 '오늘 쓴 횟수'다).
+    func ultraPokeCount(fromUser userID: String) async throws -> Int {
+        try await rows("pokes", [
+            URLQueryItem(name: "select", value: "id"),
+            URLQueryItem(name: "from_user", value: "eq.\(userID)"),
+            URLQueryItem(name: "kind", value: "eq.ultra")
+        ]).count
+    }
 }
 
 // MARK: - 스토어/유틸 헬퍼
@@ -615,6 +779,41 @@ private func waitUntil(
         try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
     }
     return await condition()
+}
+
+/// 사용자 **본인 JWT** 로 PostgREST 를 직접 호출한다(SupabaseWorkService 를 통째로 우회).
+/// 이 헬퍼가 필요한 이유는 하나뿐이다: 앱에는 display_name 을 PATCH 하는 함수가 **아예 없어서**,
+/// "우회 PATCH 가 서버 권한만으로 막히는가"를 우리 코드로는 원리적으로 실증할 수 없다.
+/// 악의적 클라(또는 curl)를 그대로 흉내 내야 (a) 컬럼 단위 UPDATE 잠금이 진짜로 작동하는지 알 수 있다.
+private func userRest(
+    anonKey: String,
+    accessToken: String,
+    path: String,
+    method: String,
+    query: [URLQueryItem] = [],
+    json: [String: Any]? = nil,
+    prefer: String? = "return=minimal"
+) async throws -> (status: Int, body: String) {
+    var components = URLComponents(
+        url: SupabaseConfig.projectURL.appending(path: path),
+        resolvingAgainstBaseURL: false
+    )!
+    components.queryItems = query.isEmpty ? nil : query
+    guard let url = components.url else { throw E2EError("잘못된 URL: \(path)") }
+    var request = URLRequest(url: url)
+    request.httpMethod = method
+    request.setValue(anonKey, forHTTPHeaderField: "apikey")
+    request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    if let prefer { request.setValue(prefer, forHTTPHeaderField: "Prefer") }
+    if let json {
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: json)
+    }
+    let session = URLSession(configuration: .ephemeral)
+    let (data, response) = try await session.data(for: request)
+    let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+    return (code, String(decoding: data, as: UTF8.self))
 }
 
 @MainActor
@@ -713,13 +912,13 @@ struct LiveE2ETests {
     @Test(.enabled(if: LiveE2EEnv.enabled))
     func s00_preCleanup() async throws {
         let ctx = try makeContext()
-        for email in [Emails.owner, Emails.joiner, Emails.nickname] {
+        for email in Emails.managed {
             let removed = try await ctx.admin.deleteByEmail(email)
             obs("사전정리 \(email): \(removed ? "잔존 계정 삭제" : "없음")")
         }
         let deletedTeams = try await ctx.admin.deleteAllE2ETeams()
         obs("사전정리 E2E 팀: \(deletedTeams)개 삭제")
-        for email in [Emails.owner, Emails.joiner, Emails.nickname] {
+        for email in Emails.managed {
             #expect(try await ctx.admin.findUserID(email: email) == nil)
         }
         #expect(try await ctx.admin.teams(namePrefix: E2ETeam.namePrefix).isEmpty)
@@ -1405,6 +1604,7 @@ struct LiveE2ETests {
         try await ctx.admin.closeOpenSessions(userID: sessionB.userID)
     }
 
+
     // s09g. 토큰 사용량 공개/비공개: joiner 가 비공개로 두면 owner 보드에서 사라지되(타인 숨김) 자기 보드에는 남고,
     // 다시 공개로 되돌리면 owner 보드에 재등장한다. 마이그레이션(20260724010000_token_usage_privacy) push 후 실행한다.
     @Test(.enabled(if: LiveE2EEnv.enabled))
@@ -1670,6 +1870,437 @@ struct LiveE2ETests {
         #expect(members.allSatisfy { $0.weeklyDurationSeconds >= 0 })
     }
 
+    // s09k. 울트라 찌르기 왕복 + 하루 한도(보낸이 기준, 대상 무관) + 게이트 순서.
+    // 서버가 지키는 계약 넷을 실서버에서 한 번에 못 박는다:
+    //  (a) 울트라가 kind='ultra' 로 저장되고 take_pokes 가 그 종류를 실어 온다(구버전은 이 키를 무시한다).
+    //  (b) 하루 한도는 **보낸 사람 기준**이다 — 대상을 바꿔도 같은 몫을 깎고, 다 쓰면 어느 대상에게도 못 보낸다.
+    //  (c) 남은 횟수(ultra_remaining)가 한도→…→0 으로 정확히 줄고, **실패는 몫을 태우지 않는다**(pokes 행 수 불변).
+    //  (d) 게이트 순서가 invalid → 보낸이근무 → 대상근무 → 하루한도 → 쿨타임 이다.
+    //      대상 근무종료 뒤 결과가 ultra_used_today 가 **아니라** target_not_working 이라는 사실이
+    //      '대상근무 > 하루한도' 를 결정적으로 증명한다(A 는 이미 오늘 몫을 다 썼는데도).
+    // 마이그레이션 20260804030000 push 후 실행한다. 열린 세션 잔존 금지.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s09k_ultraPokeRoundTrip() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+        let teamID = try #require(LiveE2EState.e2eTeamID)
+
+        // A(owner) 로그인.
+        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { storeA.tickerTask?.cancel(); storeA.refreshTask?.cancel() }
+        storeA.email = Emails.owner
+        storeA.password = Emails.password
+        await storeA.signIn()?.value
+        let sessionA = try #require(storeA.session)
+        #expect(sessionA.userID == owner.userID)
+
+        // B(joiner) 가 같은 팀 member 로 존재하도록 보장(있으면 로그인, 없으면 코드로 합류 — 자가치유).
+        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { storeB.tickerTask?.cancel(); storeB.refreshTask?.cancel() }
+        if try await ctx.admin.findUserID(email: Emails.joiner) != nil {
+            storeB.email = Emails.joiner
+            storeB.password = Emails.password
+            await storeB.signIn()?.value
+        }
+        if !storeB.isSignedIn || storeB.currentTeamID != teamID {
+            await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: E2ENames.joinerBase, code: owner.code)
+        }
+        let sessionB = try #require(storeB.session)
+        #expect(storeB.currentTeamID == teamID)
+
+        // C(nickname) — **두 번째 울트라를 다른 대상에게** 보내기 위한 계정. s09e 가 쓰는 계정을 그대로
+        // 재사용한다(있으면 로그인, 없으면 자기 팀 만들며 가입 — 자가치유). 팀이 달라도 울트라는 나간다.
+        let storeC = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { storeC.tickerTask?.cancel(); storeC.refreshTask?.cancel() }
+        if try await ctx.admin.findUserID(email: Emails.nickname) != nil {
+            storeC.email = Emails.nickname
+            storeC.password = Emails.password
+            await storeC.signIn()?.value
+        }
+        if !storeC.isSignedIn || storeC.currentTeamID == nil {
+            await signUpCreatingE2ETeam(store: storeC, email: Emails.nickname, displayName: "E2E타팀", teamName: E2ETeam.uniqueName())
+        }
+
+        // 진입 정리 — **이 두 줄이 없으면 스위트가 두 번째 실행부터 영구히 빨개진다.**
+        // 하루 한도 장부가 pokes 행 자체라 지난 실행의 울트라가 그대로 오늘 몫으로 남고,
+        // 60초 쿨타임도 직전 s09f 의 일반 찌르기가 그대로 물고 있다. 종류 무관 전부 지워 둘 다 리셋한다.
+        try await ctx.admin.deleteAllPokes(fromUser: sessionA.userID)
+        #expect(try await ctx.admin.ultraPokeCount(fromUser: sessionA.userID) == 0)
+
+        // A·B 근무중(양쪽 게이트 통과 조건).
+        if storeA.startedAt == nil { storeA.start(); await storeA.syncTask?.value }
+        #expect(storeA.startedAt != nil)
+        if storeB.startedAt == nil { storeB.start(); await storeB.syncTask?.value }
+        #expect(storeB.startedAt != nil)
+
+        // C 도 근무중으로 세워 둔다. 못 세우면(계정/팀 문제) 교차 대상 실증만 건너뛴다.
+        var thirdTargetID: String?
+        if let sessionC = storeC.session, storeC.currentTeamID != nil {
+            if storeC.startedAt == nil { storeC.start(); await storeC.syncTask?.value }
+            if storeC.startedAt != nil { thirdTargetID = sessionC.userID }
+        }
+
+        // B 의 수신함을 먼저 비운다(앞 시나리오가 남긴 미소비 찔림이 kind 단언을 흔들지 않게, 멱등).
+        _ = try await storeB.service.takePokes(accessToken: sessionB.accessToken)
+
+        // 클라 상수와 서버 상수가 같은 값이어야 "오늘 N번 남음" 안내가 서버 판정과 어긋나지 않는다.
+        let limit = WorkTimerStore.ultraPokeDailyLimit
+        #expect(limit == 2)
+
+        // (a-1) A→B 울트라 = ok. 남은 횟수가 한도-1 이라는 사실이 **서버가 2회 한도로 돌고 있다**의 증거다.
+        let first = try await storeA.service.sendUltraPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
+        #expect(first.status == "ok")
+        #expect(first.ultraRemaining == limit - 1)
+        obs("울트라 1발: status=\(first.status), 남은=\(first.ultraRemaining.map(String.init) ?? "nil")")
+
+        // (a-2) B 가 take_pokes 로 원자 수신+소비 — **kind 가 실려 온다**(6열로 늘어난 RETURNS TABLE 실증).
+        let taken = try await storeB.service.takePokes(accessToken: sessionB.accessToken)
+        let ultraRow = try #require(taken.first { $0.fromUser == sessionA.userID })
+        #expect(ultraRow.kind == "ultra")
+        #expect(ultraRow.fromDisplayName.isEmpty == false)
+        #expect(ultraRow.fromDisplayName.contains("@") == false)  // 이메일 비노출.
+        obs("울트라 수신: kind=\(ultraRow.kind ?? "nil"), 보낸이='\(ultraRow.fromDisplayName)'")
+
+        // (a-3) 재호출 시 빈 배열(원자 소비 불변 — kind 가 늘어도 소비 규약은 그대로다).
+        let takenAgain = try await storeB.service.takePokes(accessToken: sessionB.accessToken)
+        #expect(takenAgain.contains { $0.fromUser == sessionA.userID } == false)
+
+        // 두 번째 울트라의 대상. 원칙은 **다른 대상(C)** 이다 — 대상이 달라도 같은 몫이 깎인다는
+        // '보낸이 기준' 계약을 실증하는 유일한 지점이기 때문이다.
+        let secondTarget: String
+        if let thirdTargetID {
+            secondTarget = thirdTargetID
+        } else {
+            obs("s09k: 세 번째 계정(C)을 근무중으로 못 세워 '대상 무관' 교차 실증을 건너뜀 — 한도 자체만 검증한다")
+            // 같은 대상이면 60초 쿨타임이 먼저 걸린다. 행을 지우면 하루 한도까지 리셋되므로,
+            // created_at 만 61초 전으로 밀어 쿨타임만 만료시킨다(오늘 몫 1회 소모 상태는 유지).
+            try await ctx.admin.backdatePokes(fromUser: sessionA.userID, createdAt: Date().addingTimeInterval(-61))
+            secondTarget = sessionB.userID
+        }
+
+        // (b-1) 두 번째 울트라 = ok, 남은 0. 여기까지가 "하루 2회"다.
+        let second = try await storeA.service.sendUltraPoke(accessToken: sessionA.accessToken, to: secondTarget)
+        #expect(second.status == "ok")
+        #expect(second.ultraRemaining == 0)
+        #expect(try await ctx.admin.ultraPokeCount(fromUser: sessionA.userID) == limit)
+        obs("울트라 2발: status=\(second.status), 남은=\(second.ultraRemaining.map(String.init) ?? "nil"), 장부=\(limit)행")
+
+        // (b-2) 세 번째 시도 = ultra_used_today. 같은 대상이라 60초 쿨타임도 걸려 있지만
+        //       **하루한도가 쿨타임보다 앞**이라 cooldown 이 아니라 ultra_used_today 가 나온다(순서 실증).
+        let third = try await storeA.service.sendUltraPoke(accessToken: sessionA.accessToken, to: secondTarget)
+        #expect(third.status == "ultra_used_today")
+        #expect(third.ultraRemaining == 0)
+        let reset = try #require(third.resetAfterSeconds)
+        #expect(reset >= 1 && reset <= 86_400)
+        obs("울트라 소진: status=\(third.status), reset_after=\(reset)초")
+
+        // (b-3) 대상을 B 로 바꿔도 여전히 ultra_used_today — 한도는 대상별이 아니라 보낸이 하나로 센다.
+        //       그리고 실패한 두 번의 시도가 장부를 늘리지 않았다(실패는 몫을 태우지 않는다).
+        let fourth = try await storeA.service.sendUltraPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
+        #expect(fourth.status == "ultra_used_today")
+        #expect(fourth.ultraRemaining == 0)
+        #expect(try await ctx.admin.ultraPokeCount(fromUser: sessionA.userID) == limit)
+
+        // (c-1) 울트라 소진이 **일반** 찌르기를 막지 않는다(쿨타임이면 cooldown, 아니면 ok — 둘 다 정상).
+        let normal = try await storeA.service.sendPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
+        #expect(normal.status != "ultra_used_today")
+        obs("울트라 소진 후 일반 찌르기: status=\(normal.status)")
+
+        // (c-2) B 근무종료 → target_not_working. A 는 이미 오늘 몫을 다 썼는데도 ultra_used_today 가
+        //       아니라는 점이 **대상근무 게이트가 하루한도보다 앞**임을 결정적으로 증명한다.
+        storeB.stop()
+        await storeB.syncTask?.value
+        let joinerClosed = await waitUntil {
+            (try? await ctx.admin.sessionRows(userID: sessionB.userID, openOnly: true))?.isEmpty == true
+        }
+        #expect(joinerClosed)
+        let afterTargetStop = try await storeA.service.sendUltraPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
+        #expect(afterTargetStop.status == "target_not_working")
+        obs("울트라 게이트 순서: 대상 근무종료 후 status=\(afterTargetStop.status)(하루한도보다 앞)")
+
+        // (c-3) A 근무종료 → not_working(보낸이 게이트가 대상 게이트보다 앞).
+        storeA.stop()
+        await storeA.syncTask?.value
+        let ownerClosed = await waitUntil {
+            (try? await ctx.admin.sessionRows(userID: owner.userID, openOnly: true))?.isEmpty == true
+        }
+        #expect(ownerClosed)
+        let afterSenderStop = try await storeA.service.sendUltraPoke(accessToken: sessionA.accessToken, to: sessionB.userID)
+        #expect(afterSenderStop.status == "not_working")
+        obs("울트라 게이트 순서: 보낸이 근무종료 후 status=\(afterSenderStop.status)(대상 게이트보다 앞)")
+
+        // 후정리 — 한도 장부(=pokes 행)와 열린 세션을 남기지 않는다. 남기면 다음 실행의 첫 울트라가
+        // 곧바로 ultra_used_today 를 받아 스위트가 영구히 빨개진다.
+        try await ctx.admin.deleteAllPokes(fromUser: sessionA.userID)
+        try await ctx.admin.closeOpenSessions(userID: owner.userID)
+        try await ctx.admin.closeOpenSessions(userID: sessionB.userID)
+        if let thirdTargetID {
+            try await ctx.admin.closeOpenSessions(userID: thirdTargetID)
+        }
+    }
+
+    // s09w. 별명 변경 RPC: 성공 → 1주일 쿨타임 → 동시 요청 원자성 → 중복 거절.
+    // 마이그레이션 20260804010000/20260804020000 push 후 실행한다.
+    // **진입에서 쿨타임을 스스로 리셋한다** — ensureOwnerAndTeam 이 계정을 재사용하므로(:663-670)
+    // 지난 실행이 태운 1주일 쿨타임이 그대로 남아 있고, 리셋을 s10_cleanup 에만 두면 release.md 의
+    // --filter 확인 명령(s10 을 안 돌린다)에서 이 시나리오가 cooldown 으로 빨개져 배포가 멈춘다.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s09w_displayNameChangeCooldownAndUniqueness() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+        let teamID = try #require(LiveE2EState.e2eTeamID)
+        // 진입 정규화: 이름과 쿨타임을 **둘 다** 기준선으로 되돌린다. 이름을 안 되돌리면 앞 실행이
+        // 중간에 끊겨 owner 가 이미 E2E별명하나 인 상태에서 (1)이 ok 대신 unchanged 를 받아 빨개진다.
+        try await ctx.admin.setDisplayName(userID: owner.userID, to: E2ENames.ownerBase)
+        try await ctx.admin.clearDisplayNameCooldown(userID: owner.userID)
+
+        // owner 는 여러 시나리오가 공유하는 장기 계정이다. 이름을 남겨 두면 다음 실행의 중복 시나리오가
+        // 어떤 이름을 점유 중인지 예측 불가능해지고 '-2' 접미어가 누적된다.
+        // 정상 경로에서는 본문 끝에서 **await 로** 원복하고(그래야 다음 시나리오가 확정된 값을 본다),
+        // 아래 defer 는 throw 로 빠져나갈 때만 도는 최후 그물이다 — 정상 경로에서도 돌면 그 늦은 쓰기가
+        // 다음 시나리오 한복판에 착지해 s09y/s09z 의 기대값을 흔든다.
+        var restored = false
+        defer {
+            if !restored {
+                let admin = ctx.admin
+                let ownerID = owner.userID
+                Task {
+                    try? await admin.setDisplayName(userID: ownerID, to: E2ENames.ownerBase)
+                    try? await admin.clearDisplayNameCooldown(userID: ownerID)
+                }
+            }
+        }
+
+        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { storeA.tickerTask?.cancel(); storeA.refreshTask?.cancel() }
+        storeA.email = Emails.owner
+        storeA.password = Emails.password
+        await storeA.signIn()?.value
+        let sessionA = try #require(storeA.session)
+
+        // (1) 첫 변경은 즉시 허용된다(display_name_changed_at 이 null 이므로).
+        let okResult = try await storeA.service.setDisplayName(accessToken: sessionA.accessToken, name: E2ENames.first)
+        #expect(okResult.status == "ok")
+        #expect(okResult.displayName == E2ENames.first)
+        #expect(try await ctx.admin.profileDisplayName(userID: owner.userID) == E2ENames.first)
+        #expect(try await ctx.admin.displayNameChangedAt(userID: owner.userID) != nil)
+        obs("별명 변경: status=\(okResult.status), 저장='\(okResult.displayName ?? "nil")'")
+
+        // (2) 즉시 재변경 = 쿨타임. 남은 초는 6일 초과 7일 이하여야 한다(방금 태웠으므로).
+        let cooled = try await storeA.service.setDisplayName(accessToken: sessionA.accessToken, name: E2ENames.second)
+        #expect(cooled.status == "cooldown")
+        let retry = try #require(cooled.retryAfterSeconds)
+        #expect(retry > 518_400 && retry <= 604_800)
+        #expect(try await ctx.admin.profileDisplayName(userID: owner.userID) == E2ENames.first)
+        obs("별명 쿨타임: status=\(cooled.status), retry_after=\(retry)초")
+
+        // (3) 같은 사용자의 **맥 두 대**가 같은 순간에 서로 다른 이름을 저장한다. 서버가 쿨타임 판정을
+        //     UPDATE 안에 넣지 않았다면(밖에서 select 로 먼저 봤다면) 둘 다 통과해 한 창에서 두 번 바뀐다.
+        //     서비스는 actor 라 한 인스턴스로는 요청이 줄을 서므로, 기기 두 대를 흉내 내려면 인스턴스도 둘이어야 한다.
+        try await ctx.admin.clearDisplayNameCooldown(userID: owner.userID)
+        let deviceOne = SupabaseWorkService(projectURL: SupabaseConfig.projectURL, anonKey: ctx.anonKey, session: .shared)
+        let deviceTwo = SupabaseWorkService(projectURL: SupabaseConfig.projectURL, anonKey: ctx.anonKey, session: .shared)
+        let token = sessionA.accessToken
+        async let raceOne = deviceOne.setDisplayName(accessToken: token, name: E2ENames.raceA)
+        async let raceTwo = deviceTwo.setDisplayName(accessToken: token, name: E2ENames.raceB)
+        let (resultOne, resultTwo) = try await (raceOne, raceTwo)
+        let raceResults = [resultOne, resultTwo]
+        let okCount = raceResults.filter { $0.status == "ok" }.count
+        #expect(okCount == 1)
+        let loser = try #require(raceResults.first { $0.status != "ok" })
+        #expect(loser.status == "cooldown" || loser.status == "taken")
+        let winnerName = try #require(raceResults.first { $0.status == "ok" }?.displayName)
+        #expect(try await ctx.admin.profileDisplayName(userID: owner.userID) == winnerName)
+        obs("별명 동시 저장: ok=\(okCount)건, 진 쪽=\(loser.status), 최종='\(winnerName)'")
+
+        // (4) 중복 거절 + **실패는 쿨타임을 소모하지 않는다.**
+        //     owner 이름을 결정적 값으로 admin 이 세팅하고(RPC 를 안 거치므로 쿨타임을 안 태운다),
+        //     joiner 는 쿨타임이 만료된 상태에서 '대소문자·공백만 다른' 같은 이름을 시도한다.
+        try await ctx.admin.setDisplayName(userID: owner.userID, to: E2ENames.first)
+        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { storeB.tickerTask?.cancel(); storeB.refreshTask?.cancel() }
+        if try await ctx.admin.findUserID(email: Emails.joiner) != nil {
+            storeB.email = Emails.joiner
+            storeB.password = Emails.password
+            await storeB.signIn()?.value
+        }
+        if !storeB.isSignedIn || storeB.currentTeamID != teamID {
+            await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: E2ENames.joinerBase, code: owner.code)
+        }
+        let sessionB = try #require(storeB.session)
+
+        let expired = Date().addingTimeInterval(-8 * 24 * 3600)
+        try await ctx.admin.setDisplayNameChangedAt(userID: sessionB.userID, to: expired)
+        let joinerNameBefore = try #require(try await ctx.admin.profileDisplayName(userID: sessionB.userID))
+        let takenResult = try await storeB.service.setDisplayName(accessToken: sessionB.accessToken, name: E2ENames.firstVariant)
+        #expect(takenResult.status == "taken")
+        #expect(try await ctx.admin.profileDisplayName(userID: sessionB.userID) == joinerNameBefore)
+        // 실패가 몫을 태웠다면 changed_at 이 now() 로 튄다 — 8일 전 그대로여야 한다.
+        let joinerChangedAfter = try #require(try await ctx.admin.displayNameChangedAt(userID: sessionB.userID))
+        #expect(abs(joinerChangedAfter.timeIntervalSince(expired)) <= 2)
+        obs("별명 중복 거절: status=\(takenResult.status)(공백·대소문자 변형도 같은 이름으로 본다), 쿨타임 미소모")
+
+        // 원복(정상 경로) — 다음 시나리오가 확정된 상태를 보도록 여기서 await 로 끝낸다.
+        try await ctx.admin.setDisplayName(userID: owner.userID, to: E2ENames.ownerBase)
+        try await ctx.admin.clearDisplayNameCooldown(userID: owner.userID)
+        try await ctx.admin.clearDisplayNameCooldown(userID: sessionB.userID)
+        restored = true
+    }
+
+    // s09x. 이 웨이브의 핵심 회귀 — 별명 RPC 를 통째로 건너뛰는 직접 PATCH 가 서버 권한만으로 막히는가.
+    // 앱에는 display_name 을 PATCH 하는 함수가 없으므로 악의적 클라(=curl)를 그대로 흉내 내야 실증된다.
+    // **대조군이 절반이다**: 같은 토큰의 avatar_url·token_usage_public PATCH 는 여전히 2xx 여야 한다.
+    // 대조군이 없으면 '막긴 했는데 아바타 변경과 토큰 공개 토글을 같이 죽였다'를 프로덕션 전에 못 잡는다.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s09x_directDisplayNamePatchIsRejected() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+
+        let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { store.tickerTask?.cancel(); store.refreshTask?.cancel() }
+        store.email = Emails.owner
+        store.password = Emails.password
+        await store.signIn()?.value
+        let session = try #require(store.session)
+        #expect(session.userID == owner.userID)
+
+        let nameBefore = try #require(try await ctx.admin.profileDisplayName(userID: owner.userID))
+        let avatarBefore = try await ctx.admin.profileAvatarURL(userID: owner.userID)
+        let publicBefore = try await ctx.admin.profileTokenUsagePublic(userID: owner.userID) ?? true
+        let selfFilter = [URLQueryItem(name: "id", value: "eq.\(owner.userID)")]
+
+        // (1) 우회 시도 → 42501(권한 없음)이 403 으로 나와야 한다. 200 이면 즉시 배포 중단감이다:
+        //     길이·중복·쿨타임 판정 전부를 한 요청으로 건너뛸 수 있다는 뜻이다.
+        let bypass = try await userRest(
+            anonKey: ctx.anonKey, accessToken: session.accessToken,
+            path: "/rest/v1/profiles", method: "PATCH",
+            query: selfFilter, json: ["display_name": "우회"]
+        )
+        #expect((400..<500).contains(bypass.status))
+        #expect(bypass.status == 403)
+        #expect(try await ctx.admin.profileDisplayName(userID: owner.userID) == nameBefore)
+        obs("별명 직접 PATCH 차단: HTTP \(bypass.status), 이름 불변=\(try await ctx.admin.profileDisplayName(userID: owner.userID) == nameBefore)")
+
+        // (2) 대조군 A — 아바타 URL PATCH 는 계속 살아 있어야 한다(uploadAvatar 의 두 번째 단계).
+        let avatarPatch = try await userRest(
+            anonKey: ctx.anonKey, accessToken: session.accessToken,
+            path: "/rest/v1/profiles", method: "PATCH",
+            query: selfFilter, json: ["avatar_url": "https://example.com/e2e-avatar.jpg"]
+        )
+        #expect((200..<300).contains(avatarPatch.status))
+        let avatarAfter = try await ctx.admin.profileAvatarURL(userID: owner.userID)
+        #expect(avatarAfter == "https://example.com/e2e-avatar.jpg")
+
+        // (3) 대조군 B — 토큰 공개 토글 PATCH 도 계속 살아 있어야 한다(updateTokenUsagePublic).
+        let privacyPatch = try await userRest(
+            anonKey: ctx.anonKey, accessToken: session.accessToken,
+            path: "/rest/v1/profiles", method: "PATCH",
+            query: selfFilter, json: ["token_usage_public": !publicBefore]
+        )
+        #expect((200..<300).contains(privacyPatch.status))
+        let publicAfter = try await ctx.admin.profileTokenUsagePublic(userID: owner.userID)
+        #expect(publicAfter == !publicBefore)
+        obs("대조군: avatar_url HTTP \(avatarPatch.status), token_usage_public HTTP \(privacyPatch.status)(둘 다 2xx 여야 한다)")
+
+        // 원복 — 깨진 이미지 URL 과 뒤집힌 공개설정을 남기면 이후 시나리오의 보드 기대값이 흔들린다.
+        try await ctx.admin.setAvatarURL(userID: owner.userID, to: avatarBefore)
+        try await ctx.admin.setTokenUsagePublic(userID: owner.userID, to: publicBefore)
+    }
+
+    // s09y. 표시명이 이미 쓰이고 있어도 **가입은 성공한다**(충돌 시 접미어를 붙인다).
+    // 유일 인덱스만 넣고 가입 트리거를 안 고치면 두 번째 동명 가입의 profiles INSERT 가 죽고,
+    // 그 롤백이 auth.users INSERT 까지 되돌려 새 사람이 앱에 아예 못 들어온다 — 이 시나리오가 그 방어선이다.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s09y_signUpFallsBackWhenDisplayNameTaken() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+        try await ctx.admin.deleteByEmail(Emails.dupName)   // 깨끗한 재실행(멱등)
+        // 충돌 대상을 결정적으로 만든다. admin PATCH 라 owner 의 쿨타임을 태우지 않는다.
+        try await ctx.admin.setDisplayName(userID: owner.userID, to: E2ENames.duplicate)
+
+        var restored = false
+        defer {
+            if !restored {
+                let admin = ctx.admin
+                let ownerID = owner.userID
+                Task { try? await admin.setDisplayName(userID: ownerID, to: E2ENames.ownerBase) }
+            }
+        }
+
+        // 앱의 가입 HTTP 요청을 서비스로 직접 만든다. 스토어의 signUp() 은 코드 모드에서 joinPreview 를
+        // 요구하고 만들기 모드는 팀을 만들어 버려 **무소속 가입**을 만들 수 없는데, 아래 S1 회귀 단언
+        // (memberships 0행)은 무소속이어야 성립한다. 보내는 본문은 스토어 경로와 완전히 같다.
+        let service = SupabaseWorkService(projectURL: SupabaseConfig.projectURL, anonKey: ctx.anonKey, session: .shared)
+        let created = try await service.signUp(
+            email: Emails.dupName, password: Emails.password, displayName: E2ENames.duplicate
+        )
+        let newSession = try #require(created)   // 중복이어도 **성공**이다(실패로 바뀌지 않는 것이 핵심).
+        let newUserID = newSession.userID
+
+        let profileReady = await waitUntil {
+            (try? await ctx.admin.profileCount(userID: newUserID)) == 1
+        }
+        #expect(profileReady)
+        #expect(try await ctx.admin.profileDisplayName(userID: newUserID) == "\(E2ENames.duplicate)-2")
+        obs("동명 가입: 성공, 표시명='\(try await ctx.admin.profileDisplayName(userID: newUserID) ?? "nil")'")
+
+        // S1 이 가입 트리거를 20260701000000 본문으로 되돌리면 여기서 memberships 가 1행(레거시 팀)이 된다.
+        // 이 두 줄이 '신규 가입자 전원이 참여한 적 없는 팀에 자동 소속'을 프로덕션 전에 잡는 유일한 자동 검사다.
+        #expect(try await ctx.admin.membershipRows(userID: newUserID).isEmpty)
+        #expect(try await ctx.admin.statusRows(userID: newUserID).isEmpty)
+
+        // 만든 계정으로 실제 로그인까지 되는지 — '가입 성공'의 최종 의미는 그 사람이 앱을 쓸 수 있다는 것이다.
+        let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { store.tickerTask?.cancel(); store.refreshTask?.cancel() }
+        store.email = Emails.dupName
+        store.password = Emails.password
+        await store.signIn()?.value
+        #expect(store.isSignedIn)
+
+        try await ctx.admin.setDisplayName(userID: owner.userID, to: E2ENames.ownerBase)
+        restored = true
+    }
+
+    // s09z. 입력 거절 3종. 셋 다 **쿨타임을 소모하지 않는다** — 실패한 시도가 몫을 태우면
+    // 오타 한 번에 일주일 잠긴다.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s09z_setDisplayNameRejectsBlankAndTooLong() async throws {
+        let ctx = try makeContext()
+        let owner = try await ensureOwnerAndTeam(anonKey: ctx.anonKey, admin: ctx.admin)
+
+        let store = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        defer { store.tickerTask?.cancel(); store.refreshTask?.cancel() }
+        store.email = Emails.owner
+        store.password = Emails.password
+        await store.signIn()?.value
+        let session = try #require(store.session)
+
+        let nameBefore = try #require(try await ctx.admin.profileDisplayName(userID: owner.userID))
+        let changedBefore = try await ctx.admin.displayNameChangedAt(userID: owner.userID)
+
+        // 공백만 있는 이름 → 정규화 후 빈 문자열.
+        let blank = try await store.service.setDisplayName(accessToken: session.accessToken, name: "   ")
+        #expect(blank.status == "invalid_empty")
+
+        // 13자 → 서버 max_len(12)을 정확히 1 넘긴다. 서버가 돌려주는 max_length 가 클라 상수와 같아야
+        // "12자까지 쓸 수 있어요" 안내와 서버 판정이 어긋나지 않는다.
+        #expect(E2ENames.tooLong.unicodeScalars.count == WorkTimerStore.displayNameMaxLength + 1)
+        let tooLong = try await store.service.setDisplayName(accessToken: session.accessToken, name: E2ENames.tooLong)
+        #expect(tooLong.status == "invalid_long")
+        #expect(tooLong.maxLength == WorkTimerStore.displayNameMaxLength)
+
+        // 현재 이름 그대로 저장 → unchanged. 이 분기가 없으면 아무것도 안 바꾸고 저장만 눌러도
+        // 쿨타임 1주일이 헛되이 소모된다.
+        let unchanged = try await store.service.setDisplayName(accessToken: session.accessToken, name: nameBefore)
+        #expect(unchanged.status == "unchanged")
+        #expect(unchanged.displayName == nameBefore)
+
+        #expect(try await ctx.admin.profileDisplayName(userID: owner.userID) == nameBefore)
+        let changedAfter = try await ctx.admin.displayNameChangedAt(userID: owner.userID)
+        #expect(changedBefore == changedAfter)
+        obs("별명 입력 거절: 공백=\(blank.status), 13자=\(tooLong.status)(max=\(tooLong.maxLength.map(String.init) ?? "nil")), 동일=\(unchanged.status), 쿨타임 미소모")
+    }
+
     // 10. 정리 → E2E 계정 + E2E 팀 삭제 후 잔존 0 확인. E2E 접두사 밖(실사용) 팀 수는 변하지 않아야 한다.
     @Test(.enabled(if: LiveE2EEnv.enabled))
     func s10_cleanup() async throws {
@@ -1678,8 +2309,17 @@ struct LiveE2ETests {
         let ownerUserID = try? await ctx.admin.findUserID(email: Emails.owner)
         let joinerUserID = try? await ctx.admin.findUserID(email: Emails.joiner)
         let nicknameUserID = try? await ctx.admin.findUserID(email: Emails.nickname)
+        let dupNameUserID = try? await ctx.admin.findUserID(email: Emails.dupName)
 
-        for email in [Emails.owner, Emails.joiner, Emails.nickname] {
+        // 별명 쿨타임·울트라 장부 일괄 리셋(보조 방어선). 각 시나리오가 진입에서 스스로 리셋하므로 평소엔
+        // 잉여지만, 앞 단계가 throw 로 끊겨 계정이 남은 실행에서 다음 회차를 구해 준다.
+        // 계정 삭제가 성공하면 캐스케이드로 어차피 사라진다 — 실패했을 때를 위한 그물이다.
+        for userID in [ownerUserID, joinerUserID, nicknameUserID, dupNameUserID].compactMap({ $0 }) {
+            try? await ctx.admin.clearDisplayNameCooldown(userID: userID)
+            try? await ctx.admin.deleteUltraPokes(fromUser: userID)
+        }
+
+        for email in Emails.managed {
             let removed = try await ctx.admin.deleteByEmail(email)
             obs("정리 \(email): \(removed ? "admin 삭제" : "이미 없음")")
         }
@@ -1688,12 +2328,12 @@ struct LiveE2ETests {
         let deletedTeams = try await ctx.admin.deleteAllE2ETeams()
         obs("정리 E2E 팀: \(deletedTeams)개 삭제")
 
-        for email in [Emails.owner, Emails.joiner, Emails.nickname] {
+        for email in Emails.managed {
             #expect(try await ctx.admin.findUserID(email: email) == nil)
             #expect(try await ctx.admin.profileCount(byEmail: email) == 0)
         }
 
-        for userID in [ownerUserID, joinerUserID, nicknameUserID,
+        for userID in [ownerUserID, joinerUserID, nicknameUserID, dupNameUserID,
                        LiveE2EState.ownerUserID, LiveE2EState.joinerUserID].compactMap({ $0 }) {
             let cascaded = await waitUntil {
                 let profiles = (try? await ctx.admin.profileCount(userID: userID)) ?? -1

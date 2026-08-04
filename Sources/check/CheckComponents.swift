@@ -212,19 +212,39 @@ struct TeamMemberRow: View {
     var isMe: Bool = false
     /// 내 행 아바타 교체 시 다운스케일된 JPEG Data를 전달받는 콜백.
     var onPickAvatar: ((Data) -> Void)? = nil
+    /// 내 행 별명 편집 진입. non-nil 이면 이름 옆 18pt 자리를 **늘** 차지하고, hover 시에만 연필을 칠한다.
+    /// 파라미터는 반드시 맨 끝이다 — 위치 인자로 이 뷰를 만드는 렌더 테스트가 그대로 컴파일되어야 한다.
+    var onBeginEditName: (() -> Void)? = nil
 
     // 아바타 칼럼(26) + 상단 HStack 간격(10). 목표 바를 텍스트 칼럼 시작점부터 그리도록 들여쓸 폭.
     private static let textColumnInset: CGFloat = 26 + 10
+
+    // 별명 편집 배지 hover 상태. 평소엔 존재를 드러내지 않고, 마우스를 올렸을 때만 연필이 accent 로 떠오른다.
+    @State private var isNameBadgeHovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 10) {
                 avatar
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(name)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(CheckTheme.primaryText)
-                        .lineLimit(1)
+                    // 이름과 편집 배지는 **한 줄**이어야 한다. 예전엔 Text 하나가 VStack 직계 자식이었으므로,
+                    // 배지를 그냥 붙이면 세로로 쌓여 58pt 고정 행 안에서 상세줄/보조줄을 밀어낸다.
+                    HStack(spacing: MemberRowNameWidthBudget.editBadgeSpacing) {
+                        Text(name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(CheckTheme.primaryText)
+                            .lineLimit(1)
+                            // 12자 별명이 배지와 공존해도 말줄임 대신 먼저 줄여 본다(팀 헤더와 같은 관례).
+                            .minimumScaleFactor(MemberRowNameWidthBudget.minimumScaleFactor)
+                        if onBeginEditName != nil {
+                            editNameBadge
+                                // hover 때만 자리를 만들면 마우스가 지날 때마다 이름 폭이 튀어 글자가 밀린다.
+                                .frame(
+                                    width: MemberRowNameWidthBudget.editBadgeWidth,
+                                    height: MemberRowNameWidthBudget.editBadgeWidth
+                                )
+                        }
+                    }
                     HStack(spacing: 4) {
                         Text(primaryDetail)
                             .font(.caption2)
@@ -284,6 +304,84 @@ struct TeamMemberRow: View {
             EditableAvatarView(name: name, avatarURL: avatarURL, size: 26, onPick: onPickAvatar)
         } else {
             CheckAvatarView(name: name, avatarURL: avatarURL, size: 26)
+        }
+    }
+
+    // 별명 편집 진입 배지. EditableAvatarView(CheckAvatarView.swift)의 hover 규약을 그대로 따른다 —
+    // 평소엔 존재를 드러내지 않고, 마우스를 올리면 연필이 떠오르며 툴팁으로 무엇인지 말한다.
+    // Button 이 아니라 onTapGesture 인 이유: 기본 버튼 스타일이 caption 행 높이를 키워 58pt 고정 행 안에서
+    // 상세줄을 밀어낸다(헤더 캡션 소형 버튼과 같은 이유).
+    @ViewBuilder
+    private var editNameBadge: some View {
+        Image(systemName: "pencil")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(isNameBadgeHovering ? CheckTheme.accent : CheckTheme.secondaryText.opacity(0.45))
+            .contentShape(Rectangle())
+            .onHover { isNameBadgeHovering = $0 }
+            .onTapGesture { onBeginEditName?() }
+            .help("별명 변경")
+            .accessibilityLabel("별명 변경")
+    }
+}
+
+// MARK: - Display name inline editor row (팀 목록 내 행)
+
+/// 내 행을 **대체**하는 별명 인라인 편집 행.
+/// 높이가 TeamMemberRow 와 같은 memberRowHeight(58)로 호출부에서 고정되므로, 목록 행수·ListRowBudget·
+/// 스크롤 상한(maxVisibleRows)·창 높이 예산(listExtraChromeHeight)이 **하나도 움직이지 않는다**.
+/// 헤더 목표 편집기처럼 아래로 펼치는 방식이었다면 새 예산 상수와 최악 조합 상한 테스트를 다시 맞춰야 했다 —
+/// 이 저장소에서 가장 비싼 제약을 건드리지 않는 쪽을 택했다.
+///
+/// 높이 수납: 입력 행 ~24 + spacing 2 + 캡션 ~13 = ~39pt ≤ 58pt.
+struct DisplayNameEditorRow: View {
+    let avatarName: String
+    var avatarURL: URL? = nil
+    @Binding var text: String
+    /// 쿨타임 등으로 지금은 바꿀 수 없음 — 입력·저장을 잠그고 안내만 보여 준다.
+    let isLocked: Bool
+    let isSaving: Bool
+    /// 1줄 안내. 평소엔 도움말, 실패하면 사유, 잠겼으면 언제 가능한지.
+    /// 세 상태가 **같은 자리**를 써서 행 높이가 흔들리지 않는다(높이가 흔들리면 창 전체가 튄다).
+    let notice: String
+    /// 실패 사유일 때 danger 색으로 칠할지(도움말·쿨타임은 secondaryText).
+    /// notice != nil 로 추측하면 "일주일에 한 번" 쿨타임 안내까지 빨갛게 떠 사용자가 실패로 읽는다.
+    let isNoticeError: Bool
+    let onSave: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            CheckAvatarView(name: avatarName, avatarURL: avatarURL, size: 26)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    TextField("새 별명", text: $text)
+                        .textFieldStyle(.plain)
+                        .font(.subheadline)
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .tint(CheckTheme.accent)
+                        .lineLimit(1)
+                        .disabled(isLocked || isSaving)
+                        .accessibilityLabel("새 별명")
+                        // Enter 저장 — 헤더 목표 편집기와 같은 손맛.
+                        .onSubmit(onSave)
+                    Button("저장", action: onSave)
+                        .font(.caption2)
+                        // 저장 왕복 중에도 잠근다 — 연타로 두 번째 요청이 나가면 쿨타임을 태운 채 실패한다.
+                        .disabled(isLocked || isSaving)
+                    Button(action: onCancel) {
+                        Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .help("취소")
+                    .accessibilityLabel("별명 변경 취소")
+                }
+                Text(notice)
+                    .font(.caption2)
+                    .foregroundStyle(isNoticeError ? CheckTheme.danger : CheckTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
         }
     }
 }

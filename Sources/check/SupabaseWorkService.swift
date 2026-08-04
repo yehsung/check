@@ -691,6 +691,23 @@ actor SupabaseWorkService {
         return try decoder.decode(PokeSendResponse.self, from: data)
     }
 
+    /// 울트라 찌르기. ultra_poke_user(p_to) RPC 를 로그인 토큰으로 호출한다.
+    /// **poke_user 의 오버로드가 아니라 다른 이름의 새 함수다** — PostgREST 에서 같은 이름·같은 인자 이름의
+    /// 두 함수는 어느 쪽을 부를지 모호해져 요청이 300/404 로 떨어진다. 요청 본문은 poke_user 와 같은
+    /// PokeSendRequest({p_to}) 를 재사용하고, 응답도 같은 jsonb 규약(status + 선택 필드)이다.
+    /// 응답의 ultra_remaining(오늘 남은 횟수)은 PokeSendResponse 가 함께 디코드한다 — 남은 횟수를 알려고
+    /// 따로 GET 을 하나 더 내면 울트라를 안 쓰는 날에도 매 실행마다 왕복이 늘어난다(무료 플랜).
+    func sendUltraPoke(accessToken: String, to userID: String) async throws -> PokeSendResponse {
+        let data = try await send(
+            path: "/rest/v1/rpc/ultra_poke_user",
+            method: "POST",
+            body: PokeSendRequest(pTo: userID),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode(PokeSendResponse.self, from: data)
+    }
+
     /// 내게 온 미소비 찔림을 원자적으로 수신+소비한다. take_pokes() RPC 를 로그인 토큰으로 호출한다(인자 없음 → EmptyBody).
     /// 반환 행은 보낸이 표시명/아바타 + 찔린 시각 epoch 초를 담는다(클라가 Date 로 복원해 신선도 필터).
     func takePokes(accessToken: String) async throws -> [TakenPokeRow] {
@@ -745,6 +762,44 @@ actor SupabaseWorkService {
             accessToken: accessToken,
             prefer: "return=minimal"
         )
+    }
+
+    // MARK: - 별명(표시명) 변경
+
+    /// 별명 변경. set_display_name(p_name) RPC 를 로그인 토큰으로 호출한다.
+    /// 정규화·길이·중복·쿨타임 판정은 **전부 서버**가 한다(클라 사전 검증은 헛왕복을 줄이는 부수 장치일 뿐).
+    /// 반환은 jsonb 단일 객체(배열 아님)라 poke_user 와 같은 방식으로 직접 디코드한다.
+    func setDisplayName(accessToken: String, name: String) async throws -> DisplayNameChangeResponse {
+        let data = try await send(
+            path: "/rest/v1/rpc/set_display_name",
+            method: "POST",
+            body: SetDisplayNameRequest(pName: name),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode(DisplayNameChangeResponse.self, from: data)
+    }
+
+    /// 내 별명 쿨타임 기준 시각. **별도 GET 인 이유가 이 설계의 전부다** — 새 컬럼을 기존 설정 GET
+    /// (fetchTokenUsageSettings)의 select 에 끼워 넣으면 마이그레이션 미적용 서버에서 42703 이 나
+    /// 요청 전체가 400 이 되고, 새 기능 하나 때문에 토큰 공개/수집 설정까지 같이 못 읽는다
+    /// (fetchTeamStatuses:110-116 과 같은 규약). 호출부가 try? 로 삼키므로 컬럼이 없는 서버에서도
+    /// 아무 일도 일어나지 않는다.
+    func fetchDisplayNameChangedAt(accessToken: String, userID: String) async throws -> Date? {
+        let data = try await send(
+            path: "/rest/v1/profiles",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "id", value: "eq.\(userID)"),
+                URLQueryItem(name: "select", value: "display_name_changed_at")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        // 반드시 parseDate 다 — 기본 포매터만 쓰면 소수초가 붙은 timestamptz 를 통째로 nil 로 흘린다(:243).
+        return try decoder.decode([DisplayNameChangedAtRow].self, from: data)
+            .first?.displayNameChangedAt.flatMap(parseDate)
     }
 
     private func upsertStatus(accessToken: String, teamID: String, userID: String, status: String, activeSessionID: String?) async throws {

@@ -77,6 +77,10 @@ CHECK_E2E=1 CHECK_E2E_SR_KEY_FILE=<apikeys.json> swift test --filter LiveE2E   #
 #        -H "apikey: $ANON" -H "Authorization: Bearer $TOKEN"
 #   curl -s -o /dev/null -w '%{http_code}\n' "$URL/rest/v1/memberships?select=team_id,teams(name)&limit=1" \
 #        -H "apikey: $ANON" -H "Authorization: Bearer $TOKEN"
+#   (e) 울트라 RPC 가 실제로 살아 있고 남은 횟수를 싣는지(근무중이 아니면 not_working 이 정상).
+#       404/PGRST202 면 push 가 안 된 것이다.
+#   curl -s -X POST "$URL/rest/v1/rpc/ultra_poke_user" -H "apikey: $ANON" \
+#        -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"p_to":"<상대uid>"}'
 
 # 2) Developer ID 서명 + 공증 + 스테이플된 배포 zip 생성 → dist/aing-check.zip
 ./scripts/package-notarized.sh
@@ -156,6 +160,36 @@ supabase db push
 
 Dashboard 의 SQL Editor 에서 직접 실행하려면 `supabase/migrations/` 아래 SQL 파일들을
 파일명(타임스탬프) 순서대로 실행합니다.
+
+#### 별명·울트라 스키마에서 **지우면 안 되는 것** (v0.2.16)
+
+> **`grant execute on function public.display_name_key(text) to authenticated;` 를 지우지 마세요.**
+> 유니크 인덱스가 `display_name_key(display_name)` 식에 걸려 있어, profiles 에 인덱스 튜플이 새로 생길 때마다
+> 이 함수가 **호출자 권한으로** 평가됩니다(PostgreSQL 이 그 자리에서 EXECUTE 를 검사합니다). 회수하면 아바타
+> PATCH 가 HOT 갱신에 실패하는 순간에만 403 이 나는 **간헐적** 장애가 됩니다. `normalize_display_name` 도 같습니다.
+
+> **`display_name_key`/`normalize_display_name` 을 고칠 때는 같은 마이그레이션에서
+> `reindex index profiles_display_name_key_unique;` 를 함께 돌리세요.** PostgreSQL 은 함수를
+> `create or replace` 해도 인덱스를 재구축하지 않아, 인덱스가 옛 정의로 만든 키를 그대로 들고 있게 됩니다
+> (중복이 뚫리거나 멀쩡한 이름이 taken 이 됩니다). PG 메이저 업그레이드 후에도 같습니다.
+
+> **`revoke execute on function public.unique_display_name(text, uuid) from anon, authenticated;` 를
+> 되돌리지 마세요.** 이 함수는 가입 트리거 전용이고, 권한이 없어도 트리거는 멀쩡히 돕니다 —
+> 이 함수를 부르는 `handle_check_auth_user` 가 `security definer` 라 본문 실행 중 유효 사용자가 호출자가
+> 아니라 **소유자**이기 때문입니다. "권한이 없어서 가입이 죽나?" 싶어 다시 grant 하면
+> `POST /rest/v1/rpc/unique_display_name` 이 열려 **anon 키만으로 전 사용자 별명을 열거**할 수 있습니다
+> (응답이 `은호-2` 면 은호가 이미 있다는 뜻이라 존재 확인까지 공짜입니다).
+> `revoke all ... from public` 하나로는 못 닫습니다 — Supabase 의 기본권한이 EXECUTE 를 PUBLIC 이 아니라
+> 두 역할에 **직접** 붙이기 때문에 역할을 지목해 회수해야 합니다.
+
+> **울트라 하루 한도를 바꾸려면 두 곳입니다** — 서버 `supabase/migrations/20260804030000_ultra_poke.sql` 의
+> `ultra_poke_daily_limit constant int := 2` 와 클라 `Sources/check/WorkTimerStorePoke.swift:22` 의
+> `WorkTimerStore.ultraPokeDailyLimit`. 둘이 갈리면 "오늘 N번 남음" 안내가 서버 판정과 어긋납니다
+> (회귀 방어는 `s09k_ultraPokeRoundTrip` 의 `#expect(limit == 2)` + `ultraRemaining == limit - 1`).
+
+> **롤백 시 주의**: `drop function ultra_poke_user` 한 줄이면 울트라만 죽습니다. 다만 위 두 `grant execute`
+> 와 `grant update on public.profiles to service_role` 은 **남겨 두세요** — 지우면 아바타 PATCH 와
+> 운영자 수동 조치가 함께 죽습니다.
 
 ### 무료 플랜 일시정지 → Restore
 

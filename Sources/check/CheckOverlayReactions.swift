@@ -26,11 +26,17 @@ enum ReactionKind: Equatable {
     case wake
     /// 콕찌르기 수신 — 옆구리를 콕 찔린 듯 잘게 움찔 + 말풍선. 문구는 컨트롤러가 완성해 넘긴다(엔진은 그대로 표시).
     case poked(bubbleText: String)
+    /// 울트라 찌르기 수신 — 화면을 뒤덮은 거대 캐릭터가 5초 내내 격렬하게 떤다.
+    case ultraPoked(bubbleText: String)
 
-    /// 우선순위(높을수록 우선). hit/출퇴근/화들짝/찌름 > 마일스톤 > 인사 > 졸기.
+    /// 우선순위(높을수록 우선). 울트라 > hit/출퇴근/화들짝/찌름 > 마일스톤 > 인사 > 졸기.
     /// (wake/drowsy 는 sleeping 상태 분기에서 직접 처리되어 우선순위 비교를 거의 타지 않는다.)
     var priority: Int {
         switch self {
+        // 울트라는 유일하게 4다. 3(때리기/출퇴근/찌름)로 두면 재생 도중 팀원 인사·마일스톤·일반 찔림이
+        // 모션을 인터럽트해, **패널은 전체화면인데 캐릭터는 작은 까딱 인사를 하는** 기괴한 5초가 된다.
+        case .ultraPoked:
+            return 4
         case .hit, .commuteStart, .commuteEnd, .wake, .poked:
             return 3
         case .milestone:
@@ -63,6 +69,10 @@ enum ReactionKind: Equatable {
             // 화들짝 대소동 모션(≈2.35s: 도약+공중 스핀+착지 바운스+잔떨림)에 여유를 둔 길이. 이후 idle 복귀
             // (말풍선은 자체 6s 타이머, peek 창 8s 안에 모션·말풍선 모두 끝난다).
             return 2.5
+        case .ultraPoked:
+            // 요구 사양 그대로 5초. ReactionActions.ultraPoked 의 총 길이와 CheckOverlayController.ultraSeconds
+            // 셋이 같은 숫자여야 모션이 끝나는 순간 창도 접힌다 — 하나만 바꾸면 잔여 프레임이 남거나 잘린다.
+            return 5.0
         case .drowsy:
             // 지속 상태(sleeping)라 만료 판정에 쓰지 않는다. 참고용으로 진입 모션 길이를 둔다.
             return 2.0
@@ -240,10 +250,16 @@ final class ReactionEngine {
     static let wakeBubbleSeconds: Double = 2.5
     /// 콕찌르기 말풍선 지속(초). 화들짝 대소동 모션(≈2.35s)보다 충분히 길게 둬 누가 찔렀는지 읽을 시간을 준다.
     static let pokedBubbleSeconds: Double = 6
+    /// 울트라 말풍선 지속(초). 격발 길이와 같게 둬 창이 접히는 순간 말풍선도 함께 사라진다.
+    static let ultraPokedBubbleSeconds: Double = 5
 
     /// 말풍선 텍스트(SwiftUI 관찰용). nil 이면 숨김. 각 리액션이 자기 텍스트/지속시간으로 교체한다.
     /// (팀원 인사·시작 화이팅·때리기 아얏·종료 수고·깨우기 등 모두 이 한 채널을 자체 타이머로 공유.)
     var greetingText: String?
+    /// 울트라 격발 중 여부(SwiftUI 관찰용). 루트 뷰가 이 값으로 전체화면 레이아웃(중앙 정사각 + 큰 말풍선)
+    /// 으로 갈아탄다. 컨트롤러의 패널 프레임 확대와 반드시 짝을 이룬다 — 프레임만 키우면 SCNView 가
+    /// 화면 비율(가로로 긴 사각형)이 되어 카메라 FOV 가 어느 축에 걸리는지에 크기가 좌우된다.
+    var isUltraActive = false
     /// SCNView 렌더 루프 활성 여부(SwiftUI 관찰용). 패널 표시~근무종료 인사까지 true 로 유지해
     /// 근무종료 꾸벅 인사가 렌더되게 하고, 숨김 시 false 로 내려 렌더를 멈춘다(전력 배려).
     var renderActive = false
@@ -414,6 +430,8 @@ final class ReactionEngine {
             return ReactionActions.wake(tilt: modelExtent * 0.18)
         case .poked:
             return ReactionActions.poked(extent: modelExtent)
+        case .ultraPoked:
+            return ReactionActions.ultraPoked(extent: modelExtent)
         case .drowsy:
             return nil
         }
@@ -481,7 +499,7 @@ final class ReactionEngine {
                 // 자는 중 클릭 → 화들짝 + "깜빡 졸았다!" 로 깨운다(hit 쿨다운과 무관하게 즉시).
                 beginWake(now: now)
                 return true
-            case .commuteStart, .commuteEnd, .milestone, .poked:
+            case .commuteStart, .commuteEnd, .milestone, .poked, .ultraPoked:
                 // 잠을 인터럽트하고 정상 재생으로 넘어간다(아래 일반 경로). .poked 는 잠을 깨운 뒤 이어서
                 // 움찔+말풍선이 보이도록 endSleep 후 통상 경로로 흘린다(runReaction 이 resetPose 로 숙인
                 // 포즈를 identity 로 스냅해 잔상 없이 움찔로 이어진다 — beginWake 의 화들짝과 구분).
@@ -506,7 +524,11 @@ final class ReactionEngine {
             // 갱신하고(배치마다 리액션 1회), 정상 리액션(출근/인사/축하 등)은 진행 중 찌름을 인터럽트한다.
             var activeIsPoked = false
             if case .poked = active { activeIsPoked = true }
-            guard commuteRestart || activeIsPoked else {
+            // 울트라 재수신(격발 중 또 도착)은 자기 자신에게만 자리를 내준다 — 새 문구·새 모션으로 갱신하고
+            // 컨트롤러가 5초 타이머를 리셋한다. 이게 없으면 4 <= 4 에 걸려 두 번째 울트라가 조용히 씹힌다.
+            var ultraRestart = false
+            if case .ultraPoked = active, case .ultraPoked = kind { ultraRestart = true }
+            guard commuteRestart || activeIsPoked || ultraRestart else {
                 return false
             }
         }
@@ -591,6 +613,11 @@ final class ReactionEngine {
             // 자연 no-op 이고 showBubble 만 떠(peek 폴백 요구 충족).
             runReaction(ReactionActions.poked(extent: modelExtent))
             showBubble(bubbleText, seconds: Self.pokedBubbleSeconds)
+        case .ultraPoked(let bubbleText):
+            // 전체화면 격발. 노드 미연결(캐릭터를 꺼 둔 사용자에게 도착 등)이면 runReaction 은 자연 no-op 이고
+            // 말풍선만 뜬다 — peek 와 같은 계약이라 "보낸이의 몫이 무음으로 증발"하는 경로가 없다.
+            runReaction(ReactionActions.ultraPoked(extent: modelExtent))
+            showBubble(bubbleText, seconds: Self.ultraPokedBubbleSeconds)
         case .drowsy, .wake:
             // drowsy/wake 는 request 에서 beginSleep/beginWake 로 직접 처리되어 이 경로로 오지 않는다.
             break
@@ -638,6 +665,23 @@ final class ReactionEngine {
         }
         showBubble("깜빡 졸았다!", seconds: Self.wakeBubbleSeconds)
     }
+
+    /// 재생 중인 리액션을 즉시 끊고 idle 로 되돌린다. 울트라(우선순위 4)는 어떤 요청에도 자리를 내주지
+    /// 않으므로, 근무 종료처럼 반드시 이겨야 하는 경로가 이 문으로 명시적으로 취소한다. 이 API 가 없으면
+    /// 울트라 도중 근무를 끝냈을 때 꾸벅 인사(commuteEnd)가 조용히 거부되고 "수고했어!"가 안 뜬다.
+    func cancelActiveReaction() {
+        guard activeKind != nil else { return }
+        interruptCurrent()
+        activeKind = nil
+        activeUntil = .distantPast
+        // 이 두 줄이 없으면 울트라를 끊고 근무를 마친 뒤에도 30fps 렌더가 예약된 시각까지 계속 돈다.
+        fpsResetTask?.cancel()
+        setRenderFPS(Self.idleFPS)
+    }
+
+    /// 몸체 투영 캐시를 버린다. 캐시는 "카메라·모델이 고정이라 패널 위치와 무관"하다는 전제로 사는데,
+    /// 울트라는 **뷰 크기 자체**를 바꾸므로 그 전제가 깨진다 — 크기 변경 양끝에서 반드시 부른다.
+    func invalidateBodyHitCache() { cachedBodyViewRect = nil }
 
     /// 외부(패널 숨김 등)에서 졸기 상태를 강제 종료한다. 포즈까지 identity 로 복원(잔상 방지).
     func stopSleeping() {
@@ -901,6 +945,50 @@ enum ReactionActions {
         ])
 
         return .group([scaleSeq, rotSeq, moveSeq])
+    }
+
+    /// 울트라 찌르기 수신: 5초 내내 격렬하게 발광한다. poked(≈2.35s 도약형 대소동)의 상위 호환이지만
+    /// **제자리 초고주파 진동**으로 간다 — 전체화면에서는 캐릭터가 이미 화면을 꽉 채우므로 도약을 크게 주면
+    /// 몸통이 화면 밖으로 나가 잘린 덩어리만 보인다. 이동은 작게(±extent*0.06), 회전(z ±34°, x ±12°)과
+    /// 스케일 진동을 키운다. moveBy 쌍이 정확히 상쇄되므로 드리프트가 0 이다(poked 와 같은 규약) —
+    /// 안 그러면 5초 뒤 원래 자리로 못 돌아와 작은 패널로 복귀했을 때 캐릭터가 창 밖으로 나가 있다.
+    /// 총 0.36 + 4.16 + 0.48 = 5.00s, scale·euler·position 모두 identity 로 끝난다.
+    static func ultraPoked(extent: CGFloat) -> SCNAction {
+        let identity = SCNVector3(1, 1, 1)
+        let jitter = extent * 0.06
+        let z = radians(34), x = radians(12)
+        // 진동 양 끝 자세를 상수로 못 박는다. rage 는 반드시 minus 에서 끝나므로 settle 의 from 도 minus 다.
+        let plus  = SCNVector3(1.14, 0.88, 1.14)
+        let minus = SCNVector3(0.86, 1.12, 0.86)
+
+        // ① 임팩트 0.36s — 크게 찌부 → 크게 스트레치 → minus.
+        //    임팩트를 identity 가 아니라 minus 로 끝내 rage 첫 half(minus→plus)와 이음매 없이 붙인다.
+        let impact = SCNAction.sequence([
+            .scaleKeyframe(from: identity, to: SCNVector3(1.36, 0.68, 1.36), duration: 0.10, timing: .easeOut),
+            .scaleKeyframe(from: SCNVector3(1.36, 0.68, 1.36), to: SCNVector3(0.80, 1.32, 0.80), duration: 0.14, timing: .easeOut),
+            .scaleKeyframe(from: SCNVector3(0.80, 1.32, 0.80), to: minus, duration: 0.12, timing: .easeInEaseOut)
+        ])
+
+        // ② 발광 4.16s — 0.16s 주기 × 26회. 한 group 안에서 rotate/move/scale 은 **서로 다른 프로퍼티**라
+        //    충돌하지 않는다(같은 프로퍼티에 두 스트림을 걸면 서로 덮어써 어긋난다 — poked 주석의 그 함정).
+        //    scaleKeyframe 은 customAction 으로 node.scale 을 직접 대입한다 — from 을 매번 identity 로
+        //    두면 0.16s 마다 identity 로 스냅 복귀해 '진동'이 아니라 12.5Hz 스트로브가 된다. 직전 도달값에서 잇는다.
+        let half = { (from: SCNVector3, to: SCNVector3, sign: CGFloat) -> SCNAction in
+            SCNAction.group([
+                .rotateTo(x: x * sign, y: 0, z: z * sign, duration: 0.08),
+                .moveBy(x: jitter * sign, y: jitter * 0.6 * sign, z: 0, duration: 0.08),
+                .scaleKeyframe(from: from, to: to, duration: 0.08, timing: .linear)
+            ])
+        }
+        let rage = SCNAction.repeat(.sequence([half(minus, plus, 1), half(plus, minus, -1)]), count: 26)
+
+        // ③ 잦아듦 0.48s — rage 종료 자세는 결정적으로 minus 다. 여기서 절대각/절대 스케일로 identity 에
+        //    복귀해야 어떤 위상에서 창이 접혀도 기울고 찌부러진 잔상이 작은 패널로 따라오지 않는다.
+        let settle = SCNAction.group([
+            .rotateTo(x: 0, y: 0, z: 0, duration: 0.48),
+            .scaleKeyframe(from: minus, to: identity, duration: 0.48, timing: .easeOut)
+        ])
+        return .sequence([impact, rage, settle])
     }
 
     /// 근무 시작: 폴짝 점프(+hop) + y축 360° 스핀.

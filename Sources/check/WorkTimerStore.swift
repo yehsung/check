@@ -46,6 +46,16 @@ final class WorkTimerStore {
     // 팝오버를 열 때 팀 메타(목표/이름/역할/참여코드)를 재조회하는 스로틀(초). 팀원이 바꾼 주간 목표가
     // 내 팝오버에 최대 이 시간 안에 반영되게 한다. 여닫이마다 멤버십을 난사하지 않도록 스로틀을 건다.
     static let teamMetaRefreshThrottleSeconds: TimeInterval = 60
+    /// 별명 최대 길이. 서버 set_display_name 의 max_len(12)과 **반드시 같은 값**이다 — 어긋나면 클라가
+    /// 통과시킨 이름을 서버가 invalid_long 으로 거절하거나(사용자에겐 원인 불명), 반대로 화면 폭 예산을
+    /// 넘는 이름이 팀 목록에서 잘려 보인다. 12 인 근거는 팀 목록 내 행의 실측 폭 예산이다.
+    /// `nonisolated` 인 이유: 이 상수를 읽는 곳에 **메인 액터 밖**이 있다(순수 폭 예산 테스트의 `#expect`
+    /// 자동클로저는 nonisolated 로 합성된다). 액터에 묶어 두면 그 자리에서 컴파일이 깨지고, 그러면 상한의
+    /// 유일한 근거인 폭 예산 단언을 못 세운다. 값은 불변 상수라 액터 격리로 지킬 상태가 애초에 없다.
+    nonisolated static let displayNameMaxLength = 12
+    /// 별명 변경 쿨타임(초) = 1주일. 서버가 강제하고 클라는 버튼을 미리 잠그기 위한 거울만 갖는다
+    /// (콕찌르기 쿨타임과 같은 규약 — 최종 판정자는 언제나 서버다). `nonisolated` 근거는 위와 같다.
+    nonisolated static let displayNameCooldownSeconds: TimeInterval = 7 * 24 * 3600
 
     var startedAt: Date?
     var accumulatedSeconds: Int = 0
@@ -344,6 +354,73 @@ final class WorkTimerStore {
         if timedBanner != next { timedBanner = next }
     }
 
+    /// 지금 별명을 바꿀 수 있는지. 최종 판정자는 서버다(다른 맥에서 방금 바꿨으면 서버가 cooldown 을 준다).
+    /// 서버가 준 만료 시각(displayNameAvailableAt)을 우선하고, 없으면 변경 시각 + 쿨타임으로 판정한다.
+    func canChangeDisplayName(now: Date) -> Bool {
+        guard let availableAt = displayNameAvailableAt
+            ?? displayNameChangedAt?.addingTimeInterval(Self.displayNameCooldownSeconds) else { return true }
+        return now >= availableAt
+    }
+
+    /// 별명 편집 잠금 상태를 주어진 시각 기준으로 재평가한다. 잠금은 '주 단위' 경계라 매초 재평가할 이유가
+    /// 없으므로 티커에는 붙이지 않는다 — 편집을 여는 순간·서버 응답 반영 지점·폴링 1회 로드 직후 세 곳에서만
+    /// 부른다. now 를 Optional 로 두는 이유는 refreshTimedBanner 와 같다(인스턴스 메서드 기본 인자가 self 를
+    /// 참조할 수 없어 nil 이면 주입 시계로 채운다).
+    func refreshDisplayNameLock(now: Date? = nil) {
+        let now = now ?? clock()
+        let next = !canChangeDisplayName(now: now)
+        if isDisplayNameLocked != next { isDisplayNameLocked = next }
+    }
+
+    /// 서버 normalize_display_name() 의 거울. **서버가 최종 권한**이고 이건 헛왕복을 줄이는 사전 검증이다.
+    /// NFC 합성 → 제어·보이지 않는 서식문자 제거 → 연속 공백 1칸 → 앞뒤 공백 제거.
+    /// 길이를 그래핌이 아니라 unicodeScalars 로 세는 이유: 서버가 char_length(코드포인트)로 세므로,
+    /// 그래핌으로 세면 클라가 통과시킨 이름을 서버가 거절하는 어긋남이 생긴다(NFC 합성이 그 눈금을 맞춘다).
+    /// ZWJ(U+200D)는 **남긴다** — 서버와 같은 규칙이다(지우면 "👨‍👩‍👧" 같은 결합 이모지 이름이 조각난다).
+    /// 공백 판정은 서버(POSIX [[:space:]])보다 넓다 — Swift 의 isWhitespace 는 U+00A0·U+3000 도 접는다.
+    /// 클라가 **먼저** 접어 보내므로 서버가 더 지울 일이 없어 방향은 안전하다. 다만 가입 경로는 이 함수를
+    /// 거치지 않고 원문이 그대로 나간다 — 거긴 서버 규칙만 적용된다(가입에는 12자 상한도 없다).
+    nonisolated static func normalizedDisplayName(_ raw: String) -> String {
+        let composed = raw.precomposedStringWithCanonicalMapping
+        let kept = composed.unicodeScalars.filter { scalar in
+            if scalar == "\u{200D}" { return true }          // ZWJ 는 이모지 결합용이라 보존
+            let category = scalar.properties.generalCategory
+            return category != .control && category != .format
+        }
+        return String(String.UnicodeScalarView(kept))
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+    }
+
+    /// 쿨타임 안내 문구 — **화면에 나가는 문장 그대로**다. 날짜는 KST 기준이라 자정 근처에서 흔들리지 않는다.
+    nonisolated static func displayNameCooldownMessage(availableAt: Date) -> String {
+        let c = TeamWeeklyGoal.kstCalendar.dateComponents([.month, .day], from: availableAt)
+        return "일주일에 한 번만 바꿀 수 있어요 · \(c.month ?? 1)월 \(c.day ?? 1)일부터"
+    }
+
+    /// 편집을 연다. 지금 화면의 내 이름으로 입력을 채워, 다른 맥에서 방금 바꾼 이름 위에서 이어 고치게 한다
+    /// (헤더 목표 편집기가 여는 순간 현재 목표로 스테퍼를 맞추는 것과 같은 규약).
+    func beginEditingDisplayName(currentName: String) {
+        displayNameDraft = currentName
+        refreshDisplayNameLock()
+        if isDisplayNameLocked, let availableAt = displayNameAvailableAt
+            ?? displayNameChangedAt?.addingTimeInterval(Self.displayNameCooldownSeconds) {
+            // 잠겨 있으면 여는 그 자리에서 언제 가능한지 말해 준다. 버튼만 비활성화하면 왜 못 누르는지 모른다.
+            displayNameNotice = Self.displayNameCooldownMessage(availableAt: availableAt)
+            isDisplayNameNoticeError = false
+        } else {
+            displayNameNotice = nil
+            isDisplayNameNoticeError = false
+        }
+        isEditingDisplayName = true
+    }
+
+    func cancelEditingDisplayName() {
+        isEditingDisplayName = false
+        displayNameNotice = nil
+        isDisplayNameNoticeError = false
+    }
+
     // 이 맥의 기기 식별자(UserDefaults 영속, 최초 1회 생성). 토큰 사용량 원장이 (user_id, month, device_id)
     // 단위라 여러 맥을 써도 서로 덮어쓰지 않고 서버에서 합산된다.
     @ObservationIgnored var deviceID: String = ""
@@ -358,6 +435,20 @@ final class WorkTimerStore {
     var pokeCooldownUntil: [String: Date] = [:]
     // 패널 상단 1줄 안내(찌르기 실패 사유 등). 패널 닫기/성공 시 nil.
     var pokeNotice: String?
+    // 오늘(KST) 울트라 몫을 **다 썼는지**의 로컬 미러(dayKey 문자열, 없으면 아직 여유 있음).
+    // 뷰가 버튼 활성/툴팁으로 읽으므로 관찰 대상이다. UserDefaults 에 남기지 않는 이유: 영속이 사 주는 건
+    // '실행당 헛요청 1회 절약'뿐인데(26명·무료플랜 기준 무의미), 대신 계정 전환·기기 간 불일치라는 버그 종을
+    // 통째로 들여온다. 서버가 유일한 권위이고 이 값은 같은 세션에서의 헛시도를 막는 장치일 뿐이다.
+    var ultraPokeSpentDay: String?
+    /// 오늘(KST) **남은** 울트라 횟수. nil = 아직 모름(한 번도 응답을 못 받았거나 자정을 넘겼다).
+    /// 이 값을 위해 새 GET/RPC 를 만들지 않는다 — 울트라 응답이 실어 주는 값으로만 채운다. 그래서 모르는
+    /// 구간이 정상적으로 존재하고, 그때 UI 는 **아무 숫자도 말하지 않는다**(틀린 숫자보다 침묵이 낫다).
+    /// 관찰 대상에서 뺀 이유: 이 값이 바뀌는 순간은 항상 pokeNotice 대입과 같은 지점이고, 패널이 열려 있는
+    /// 동안엔 displayNow 티커가 매초 트리를 재평가하므로 화면이 낡은 숫자에 머무를 창이 없다.
+    @ObservationIgnored var ultraRemainingToday: Int?
+    /// ultraRemainingToday 가 귀속하는 KST 하루 키(accumulatedDayStart 와 같은 스탬프 규약).
+    /// 이 스탬프가 없으면 자정을 넘긴 뒤에도 어제의 '0번 남음'이 살아남아, 새 날인데 못 쓴다고 안내한다.
+    @ObservationIgnored var ultraRemainingDay: String?
     // 내 토큰 사용량 공개 여부(profiles.token_usage_public 미러). 로그인 후 서버값 1회 로드, 토글은 낙관 반영.
     var tokenUsagePublic = true
     @ObservationIgnored var tokenUsagePublicLoaded = false
@@ -371,6 +462,31 @@ final class WorkTimerStore {
     var pokePollTask: Task<Void, Never>?
     /// 수신 찔림 싱크. 오버레이 컨트롤러가 연결해 움찔+말풍선(숨김 시 peek)으로 표시한다(관찰 대상 아님).
     @ObservationIgnored var onPokesReceived: (([ReceivedPoke]) -> Void)?
+
+    // ── 별명(표시명) 변경 ──
+    /// 팀 목록 내 행의 별명 인라인 편집이 열려 있는지. 뷰 로컬 @State 가 아닌 이유: 30초 폴링이 teamMembers 를
+    /// 통째로 갈아 끼우면(WorkTimerStoreSync.refreshTeamStatus) ForEach 가 행을 재구성해 편집 상태가 날아간다.
+    var isEditingDisplayName = false
+    /// 편집 중 입력값. 스토어가 들고 있어야 렌더 스냅샷이 편집 상태를 주입할 수 있고, 폴링 재구성에도 살아남는다.
+    var displayNameDraft = ""
+    /// 편집 행 안 1줄 안내(중복/쿨타임/길이). 열기·성공·취소 시 nil.
+    var displayNameNotice: String?
+    /// displayNameNotice 가 실패 사유인지(true=danger). 쿨타임/도움말은 false —
+    /// 뷰가 notice != nil 로 추측하면 "일주일에 한 번" 안내가 빨갛게 뜬다.
+    var isDisplayNameNoticeError = false
+    /// 서버 profiles.display_name_changed_at 미러. **nil = 한 번도 안 바꿨다 = 지금 바로 가능**
+    /// (가입 시 자동 생성된 이름은 '변경'이 아니다).
+    var displayNameChangedAt: Date?
+    /// 서버가 알려 준 '다시 바꿀 수 있는 시각'. changedAt 로 역산했다가 다시 더하는 왕복을 하지 않는다 —
+    /// 그 왕복은 경계에서 화면의 월·일을 하루 밀어 버릴 여지만 키운다.
+    var displayNameAvailableAt: Date?
+    /// 지금은 바꿀 수 없는가(표시용). **뷰는 이 값만 읽는다** — canChangeDisplayName(now:)를 뷰가 직접 부르면
+    /// 그 인자로 줄 값이 매초 갱신되는 displayNow 뿐이라, 팀 카드 본체가 초당 1회 무효화되고 sortedMembers
+    /// 정렬이 초당 1회 다시 돈다(CheckMenuView 의 TeamPanel 이 금지한 바로 그 회귀).
+    var isDisplayNameLocked = false
+    /// 저장 왕복 중인지. isUpdatingTeamGoal 과 달리 **관찰 대상**이다 — 저장 버튼을 누른 동안 비활성으로
+    /// 잠가야 연타로 두 번째 요청이 나가지 않는다.
+    var isUpdatingDisplayName = false
 
     // 잠자기 정책: willSleep 시각을 기록해 didWake 에서 잠든 시간을 판정한다.
     var sleepBeganAt: Date?
@@ -1245,6 +1361,19 @@ extension WorkTimerStore {
         pokeNotice = nil
         tokenUsagePublic = true
         tokenUsagePublicLoaded = false
+        // 계정이 바뀌면 남의 쿨타임/남의 하루 몫을 물려받지 않게 반드시 비운다. 남기면 새 계정이 자기 울트라를
+        // 못 쓰거나(소진 미러 상속), 이미 다 쓴 사람이 "1번 남음"을 보고 눌러 서버 거절만 받는다.
+        ultraPokeSpentDay = nil
+        ultraRemainingToday = nil
+        ultraRemainingDay = nil
+        // 별명 편집/쿨타임도 계정에 묶인 상태다. 남기면 새 계정 화면에 앞 사람의 '언제부터 가능' 안내가 뜬다.
+        isEditingDisplayName = false
+        displayNameDraft = ""
+        displayNameNotice = nil
+        isDisplayNameNoticeError = false
+        displayNameChangedAt = nil
+        displayNameAvailableAt = nil
+        isDisplayNameLocked = false
         pokePollTask?.cancel()
         pokePollTask = nil
         // 개인 기록(히트맵/회고)과 토큰 순위 월 위치도 함께 비운다(리그·토큰 보드와 동일 규약).

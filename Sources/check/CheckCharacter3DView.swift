@@ -1041,11 +1041,59 @@ struct CheckGreetingBubble: View {
     }
 }
 
+/// 울트라 격발 전용 말풍선. 기존 CheckGreetingBubble 은 caption2·maxWidth 110 이라 전체화면에서는
+/// 화면 구석의 먼지처럼 보인다 — 같은 시각 언어(흰 캡슐 + 그림자)를 유지한 채 크기만 키운다.
+struct CheckUltraBubble: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(.title2, design: .rounded).weight(.bold))
+            .foregroundStyle(.black.opacity(0.88))
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(Color.white.opacity(0.94))
+            )
+            .shadow(color: .black.opacity(0.30), radius: 10, y: 3)
+            .frame(maxWidth: 520)
+    }
+}
+
 /// 3D 캐릭터 + 근무 시간 라벨 합성. 라벨은 얼굴(볼) 바로 아래 몸통 중상부에 얹는다.
 /// 리액션 엔진을 관찰해 팀원 출근 인사·근무 시작 안내 등 말풍선을 캐릭터 왼쪽 위에 겹쳐 띄운다.
 struct CheckOverlayCharacterView: View {
     /// 근무 시간 라벨의 세로 위치 비율(0=상단, 1=하단). 볼 아래 몸통 중상부(얼굴은 안 가림)에 오도록 54%.
     static let timerVerticalFraction: CGFloat = 0.49
+
+    /// 울트라 격발 시 캐릭터가 설 정사각형 한 변의 비율(뷰 짧은 변 기준).
+    static let ultraSideRatio: CGFloat = 0.98
+
+    /// 순수 함수 — 헤드리스로 고정한다.
+    /// **정사각인 이유**: SCNCamera.projectionDirection 이 .automatic 이라(씬은 fieldOfView 만 세운다),
+    /// 뷰가 가로로 길면 FOV(40°)가 가로축에 걸리는지 세로축에 걸리는지에 따라 캐릭터 크기가 달라진다
+    /// (모니터 비율마다 다른 크기). 정사각에서는 두 해석의 결과가 같아 어떤 화면에서도 같은 크기가 나온다.
+    /// 덤: drawable 이 1512x945 대신 945x945 라 5초간의 GPU/RSS 스파이크가 작다.
+    static func ultraSide(
+        viewSize: CGSize,
+        ratio: CGFloat = CheckOverlayCharacterView.ultraSideRatio
+    ) -> CGFloat {
+        max(1, min(viewSize.width, viewSize.height) * ratio)
+    }
+
+    /// 캐릭터 3D 상자의 크기(순수 함수). 평시엔 **뷰 크기 그대로**(지금과 완전히 동일한 값), 격발 중엔
+    /// 짧은 변의 98% 정사각. body 가 이 값만 갈아끼우고 **뷰 구조는 건드리지 않는다** — if/else 로 가르면
+    /// NSViewRepresentable 아이덴티티가 바뀌어 SCNView 가 파괴·재생성되고, makeNSView 가 USDZ 재로드 +
+    /// 전 재질 순회를, engine.attach 가 감은눈 텍스처(연결성분 라벨링)를 메인 스레드에서 다시 만든다 —
+    /// 5초 안에 두 번. 게다가 재-attach 가 .playing 을 보고 5초 액션을 t=0 부터 다시 걸어 잦아듦이 잘린다.
+    static func characterBoxSize(viewSize: CGSize, isUltra: Bool) -> CGSize {
+        guard isUltra else { return viewSize }
+        let side = ultraSide(viewSize: viewSize)
+        return CGSize(width: side, height: side)
+    }
 
     let elapsedSeconds: Int
     let isActive: Bool
@@ -1061,15 +1109,23 @@ struct CheckOverlayCharacterView: View {
         GeometryReader { geo in
             // 렌더 루프는 엔진의 renderActive(패널 표시~근무종료 인사)로 몬다. 엔진이 없으면 isActive 로 폴백한다.
             let renderActive = engine?.renderActive ?? isActive
+            let ultra = engine?.isUltraActive == true
+            // 격발 중엔 짧은 변의 98% 정사각, 평시엔 뷰 전체(= 지금과 완전히 동일한 값).
+            // **격발/평시를 구조로 가르지 말 것** — 이유는 characterBoxSize 주석에.
+            let charBox = Self.characterBoxSize(viewSize: geo.size, isUltra: ultra)
             ZStack(alignment: .topLeading) {
                 if renderActive || hasEverShown {
                     CheckCharacter3DView(isActive: renderActive, engine: engine)
+                        .frame(width: charBox.width, height: charBox.height)
+                        // 평시엔 안쪽 frame 과 같은 값이라 무영향, 격발 중엔 정사각을 화면 정중앙에 앉힌다.
                         .frame(width: geo.size.width, height: geo.size.height)
                 } else {
                     Color.clear
                         .frame(width: geo.size.width, height: geo.size.height)
                 }
-                if showsTimer {
+                // 타이머 라벨은 격발 중 숨긴다 — 전체화면 한복판의 작은 MM:SS 는 정보도 장식도 아니고,
+                // 라벨 위치가 높이의 49%라 거대 캐릭터의 배 한가운데 박힌다. 조건만 바뀌므로 안전하다.
+                if showsTimer && !ultra {
                     CheckOverlayTimerLabel(text: CheckOverlayTimeFormatter.text(elapsedSeconds))
                         .position(
                             x: geo.size.width / 2,
@@ -1077,11 +1133,21 @@ struct CheckOverlayCharacterView: View {
                         )
                 }
                 if let engine, let greeting = engine.greetingText {
-                    CheckGreetingBubble(text: greeting)
-                        .padding(.leading, 4)
-                        .padding(.top, 8)
-                        .transition(.opacity)
-                        .id(greeting)
+                    // 말풍선만은 if/else 로 갈라도 안전하다(순수 Text 뷰라 재생성 비용이 0).
+                    if ultra {
+                        CheckUltraBubble(text: greeting)
+                            .position(
+                                x: geo.size.width / 2,
+                                y: max(40, geo.size.height / 2 - charBox.height / 2 + 56)
+                            )
+                            .id(greeting)
+                    } else {
+                        CheckGreetingBubble(text: greeting)
+                            .padding(.leading, 4)
+                            .padding(.top, 8)
+                            .transition(.opacity)
+                            .id(greeting)
+                    }
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: engine?.greetingText)

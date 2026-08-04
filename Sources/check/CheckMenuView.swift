@@ -23,6 +23,8 @@ struct CheckMenuView: View {
     var previewUpdateBanner: Bool = false
     // 스냅샷 전용: 배너에 얹을 패치노트 줄을 강제로 주입한다. 앱에서는 updateCheck?.latestNotes(릴리스 노트 파싱본)만 쓴다.
     var previewUpdateNotes: [String] = []
+    // 스냅샷 전용: 팀 목록 내 행이 별명 편집 행으로 바뀐 상태를 강제로 그린다. 앱에서는 항상 false(연필 토글).
+    var previewEditingDisplayName: Bool = false
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
@@ -269,6 +271,15 @@ struct CheckMenuView: View {
                             now: store.displayNow,
                             cooldownRemaining: { store.pokeCooldownRemaining(for: $0, now: store.displayNow) },
                             onPoke: { store.sendPoke(to: $0) },
+                            onUltra: { store.sendUltraPoke(to: $0) },
+                            // 오늘 몫이 남았는가. 하루 한도는 서버가 최종 판정하고 여기선 로컬 미러만 읽는다.
+                            canUltra: !store.isUltraPokeSpent(now: store.displayNow),
+                            // 남은 횟수는 **울트라 응답으로만** 갱신된다(nil = 아직 모름). 시작 시점을 알기 위한
+                            // 추가 GET/RPC 를 만들지 않는다 — 모를 때는 아무 숫자도 보여 주지 않는 쪽을 택했다.
+                            // ultraRemainingToday 를 직접 읽지 않고 ultraRemaining(now:)를 거치는 이유:
+                            // 그 함수만 KST 하루 스탬프를 대조해, 자정을 넘긴 어제의 "0번 남음"이 남지 않게 한다.
+                            ultraRemainingText: WorkTimerStore.ultraRemainingText(remaining: store.ultraRemaining(now: store.displayNow)),
+                            onUltraBlocked: { store.pokeNotice = WorkTimerStore.ultraSpentNotice },
                             onBack: { store.togglePokePanel() },
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
@@ -294,6 +305,7 @@ struct CheckMenuView: View {
                         TeamPanel(
                             store: store,
                             previewCodeRevealed: previewOwnerCodeRevealed,
+                            previewEditingDisplayName: previewEditingDisplayName,
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
@@ -711,12 +723,54 @@ enum TeamHeaderWidthBudget {
     }
 }
 
+/// 팀원 행에서 이름(Text)에 남는 유연 폭 예산(순수 계산 — 결정적 검증 지점).
+///
+/// **실제 구조는 `[아바타][VStack{이름줄, 상세줄, 보조줄?}][Spacer][프레즌스 칩]` 이다**
+/// (CheckComponents.swift TeamMemberRow). 이름은 상세줄과 같은 VStack 을 공유하므로 여기 계산하는 것은
+/// 그 VStack 에 남는 폭이고, 이름줄은 그 안에서 편집 배지와 다시 나눠 쓴다. 별명 최대 길이(12자)를
+/// 정한 근거가 바로 이 계산이므로, 배지를 더하거나 칩 문구를 늘리면 이 상수와 회귀 테스트를 함께 고친다.
+enum MemberRowNameWidthBudget {
+    /// 팝오버 340 - 바깥 padding 12*2 - 팀 카드 panelStyle padding 12*2 = 292.
+    static let contentWidth: CGFloat = 340 - 12 * 2 - 12 * 2
+    /// 아바타 지름. TeamMemberRow.textColumnInset 의 26 과 같은 값이다.
+    static let avatarWidth: CGFloat = 26
+    /// 같은 줄의 HStack(spacing: 10).
+    static let hstackSpacing: CGFloat = 10
+    /// Spacer(minLength: 6).
+    static let spacerMinWidth: CGFloat = 6
+    /// PresenceChip 최장 문구("연결 끊김") 기준 폭. **이 값을 바꿀 땐 PresenceChip 정의를 함께 본다.**
+    static let presenceChipWidth: CGFloat = 73
+    static let editBadgeWidth: CGFloat = 18
+    static let editBadgeSpacing: CGFloat = 4
+    /// subheadline(13pt) semibold 한글 한 글자의 대략 폭.
+    static let koreanGlyphWidth: CGFloat = 13
+    /// minimumScaleFactor — 말줄임보다 먼저 이 배율까지 줄여 본다(팀 헤더 0.75 와 같은 관례).
+    static let minimumScaleFactor: CGFloat = 0.8
+
+    static func nameWidth(hasEditBadge: Bool) -> CGFloat {
+        let badge = hasEditBadge ? editBadgeWidth + editBadgeSpacing : 0
+        return contentWidth - avatarWidth - hstackSpacing - badge - spacerMinWidth - presenceChipWidth
+    }
+
+    /// 그 폭에 말줄임 없이 들어가는 한글 글자 수(최소 축소 배율 반영).
+    static func fittingKoreanGlyphs(hasEditBadge: Bool) -> Int {
+        let width = nameWidth(hasEditBadge: hasEditBadge)
+        guard width > 0 else { return 0 }
+        return Int(width / (koreanGlyphWidth * minimumScaleFactor))
+    }
+}
+// 실측 근거: 내 행(배지 있음) 292-26-10-22-6-73 = 155pt → 155/(13*0.8) = 14자 ≥ 12 ✓
+//          남의 행(배지 없음) 292-26-10-6-73 = 177pt → 17자 ✓
+
 private struct TeamPanel: View {
     // store 를 통째로 받아 대부분의 값을 파생 읽기한다. 초단위(displayNow) 의존은 잎 뷰로 격리하므로
     // 본체는 displayNow 를 읽지 않는다 — 매초 재정렬/재계산이 사라진다.
-    let store: WorkTimerStore
+    // @Bindable 인 이유: 별명 편집 입력이 $store.displayNameDraft 로 바인딩된다(HeaderCard 선례).
+    @Bindable var store: WorkTimerStore
     // 스냅샷 전용: 참여코드 인라인 행이 펼쳐진 상태로 그린다(키 버튼 클릭을 대신). 앱은 false.
     var previewCodeRevealed: Bool = false
+    // 스냅샷 전용: 내 행이 별명 편집 행으로 바뀐 상태로 그린다(연필 배지 클릭을 대신). 앱은 false.
+    var previewEditingDisplayName: Bool = false
     // 목록 위쪽에서 배너/토큰 행이 먹은 높이(pt). 그만큼 무스크롤 표시 행수를 줄여 창 상한을 지킨다.
     var extraChromeHeight: CGFloat = 0
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
@@ -728,11 +782,13 @@ private struct TeamPanel: View {
     init(
         store: WorkTimerStore,
         previewCodeRevealed: Bool = false,
+        previewEditingDisplayName: Bool = false,
         extraChromeHeight: CGFloat = 0,
         clipsOverflowInsteadOfScroll: Bool = false
     ) {
         self.store = store
         self.previewCodeRevealed = previewCodeRevealed
+        self.previewEditingDisplayName = previewEditingDisplayName
         self.extraChromeHeight = extraChromeHeight
         self.clipsOverflowInsteadOfScroll = clipsOverflowInsteadOfScroll
         _showsInviteCode = State(initialValue: previewCodeRevealed)
@@ -838,15 +894,58 @@ private struct TeamPanel: View {
             } else {
                 ForEach(sortedMembers) { member in
                     let isMe = myUserID != nil && member.id == myUserID
-                    TeamMemberLiveRow(
-                        store: store,
-                        member: member,
-                        teamGoalSeconds: store.teamGoalSeconds,
-                        isMe: isMe,
-                        onPickAvatar: isMe ? { store.updateAvatar(imageData: $0) } : nil
-                    )
+                    Group {
+                        if isMe, isEditingName {
+                            DisplayNameEditorRow(
+                                avatarName: member.name,
+                                avatarURL: member.avatarURL,
+                                text: $store.displayNameDraft,
+                                // displayNow 를 읽지 않는다 — 스토어가 refreshDisplayNameLock 으로 밀어 넣은
+                                // 결과만 본다. 여기서 store.displayNow 를 읽으면 팀 카드 서브트리 전체가
+                                // 매초 무효화된다(이 파일이 세 곳에 주석까지 남기며 금지한 회귀).
+                                isLocked: store.isDisplayNameLocked,
+                                isSaving: store.isUpdatingDisplayName,
+                                notice: noticeText(),
+                                isNoticeError: store.isDisplayNameNoticeError,
+                                onSave: { saveName() },
+                                onCancel: { store.cancelEditingDisplayName() }
+                            )
+                        } else {
+                            TeamMemberLiveRow(
+                                store: store,
+                                member: member,
+                                teamGoalSeconds: store.teamGoalSeconds,
+                                isMe: isMe,
+                                onPickAvatar: isMe ? { store.updateAvatar(imageData: $0) } : nil,
+                                // 내 행에만 편집 진입을 붙인다(아바타 편집이 이미 같은 조건으로 붙는다).
+                                // 별명 편집 진입점은 앱 전체에서 **여기 하나뿐**이다 — 헤더에 하나 더 세우면
+                                // listExtraChromeHeight 예산과 700pt 상한 테스트를 다시 맞춰야 한다.
+                                onBeginEditName: isMe ? { store.beginEditingDisplayName(currentName: member.name) } : nil
+                            )
+                        }
+                    }
+                    // 두 분기가 같은 58pt 를 쓰게 하는 것이 이 배선의 전부다. 높이를 분기 안으로 옮기면
+                    // 목록 총 높이가 편집 여부에 따라 달라져 창이 700pt 상한을 넘는다.
                     .frame(height: CheckTheme.memberRowHeight)
                 }
+            }
+        }
+    }
+
+    private var isEditingName: Bool { store.isEditingDisplayName || previewEditingDisplayName }
+
+    /// 안내 줄 우선순위: 스토어가 세운 notice(실패 사유 또는 쿨타임) > 기본 도움말.
+    /// 색은 store.isDisplayNameNoticeError 가 정한다 — notice != nil 로 추측하면 쿨타임 안내까지 빨갛게 뜬다.
+    private func noticeText() -> String {
+        store.displayNameNotice
+            ?? "\(WorkTimerStore.displayNameMaxLength)자까지 · 다른 사람과 겹칠 수 없어요"
+    }
+
+    /// 성공했을 때만 편집 행을 닫는다(실패 시 입력값을 유지해 바로 고쳐 재시도) — 헤더 목표 편집기와 같은 규약.
+    private func saveName() {
+        Task { @MainActor in
+            if await store.updateDisplayName(store.displayNameDraft) {
+                store.isEditingDisplayName = false
             }
         }
     }
@@ -905,6 +1004,8 @@ private struct TeamMemberLiveRow: View {
     let teamGoalSeconds: Int
     let isMe: Bool
     var onPickAvatar: ((Data) -> Void)? = nil
+    /// 내 행 별명 편집 진입(팀 목록의 유일한 진입점). 남의 행에서는 nil 이라 연필 자리조차 만들지 않는다.
+    var onBeginEditName: (() -> Void)? = nil
 
     var body: some View {
         let now = store.displayNow
@@ -923,7 +1024,8 @@ private struct TeamMemberLiveRow: View {
             meetsWeeklyGoal: member.hasMetWeeklyGoal(goalSeconds: teamGoalSeconds, now: now),
             goalFraction: goalFraction,
             isMe: isMe,
-            onPickAvatar: isMe ? onPickAvatar : nil
+            onPickAvatar: isMe ? onPickAvatar : nil,
+            onBeginEditName: isMe ? onBeginEditName : nil
         )
     }
 
@@ -1441,6 +1543,62 @@ private struct PokePressButtonStyle: ButtonStyle {
     }
 }
 
+/// 울트라 충전 시각 규약(순수 함수 — ImageRenderer 없이 값으로 검증한다).
+/// charge 0 = accent(파랑), 1 = 새빨강. **여기에 곡선을 넣지 마라** — withAnimation 은 body 를 프레임마다
+/// 재평가하지 않고 modifier 의 animatable data 를 두 끝점 사이에서 보간하므로, 이 함수는 0 과 1 에서만
+/// 호출된다. 곡선은 함수가 아니라 Animation 쪽(.easeOut)에 건다.
+/// 색만 쓰지 않고 크기도 함께 키우는 이유는 색약/흑백 대비다.
+enum UltraChargeStyle {
+    static let base = (r: 0.33, g: 0.67, b: 1.0)   // CheckTheme.accent 와 같은 값
+    static let full = (r: 1.0,  g: 0.18, b: 0.18)
+    /// 울트라가 나가기까지 꾹 눌러야 하는 시간(초). 링이 꽉 차는 시각과 발사 시각이 같아야 하므로
+    /// 애니메이션 길이와 Task.sleep 이 **같은 상수**를 봐야 한다 — 두 곳에 숫자를 흩뿌리면 언젠가 갈라진다.
+    static let holdSeconds: Double = 3.0
+
+    /// 화면 문구에 박히는 홀드 시간 표기("N초 꾹"의 그 N). 이 줄이 없으면 문구가 리터럴로 남아,
+    /// holdSeconds 를 2초로 줄인 날 버튼은 2초에 나가는데 힌트와 툴팁만 "3초"라고 거짓말한다.
+    /// 정수면 소수점을 뗀다 — 문자열 보간을 그냥 쓰면 "3.0초 꾹 = 울트라"가 된다.
+    /// 정수가 아닌 값으로 바꿔도(2.5) 그대로 읽히게 남겨 둔다.
+    static var holdSecondsText: String {
+        holdSeconds == holdSeconds.rounded() ? String(Int(holdSeconds)) : String(holdSeconds)
+    }
+
+    static func components(charge: CGFloat) -> (r: Double, g: Double, b: Double) {
+        let t = Double(min(max(charge, 0), 1))
+        return (base.r + (full.r - base.r) * t,
+                base.g + (full.g - base.g) * t,
+                base.b + (full.b - base.b) * t)
+    }
+
+    static func fillColor(charge: CGFloat) -> Color {
+        let c = components(charge: charge)
+        return Color(red: c.r, green: c.g, blue: c.b)
+    }
+
+    /// 눌린 순간 0.86 으로 움츠렸다가 충전이 찰수록 1.18 까지 자란다(PokePressButtonStyle 의 눌림감 계승).
+    static func scale(charge: CGFloat, isPressing: Bool) -> CGFloat {
+        guard isPressing else { return 1.0 }
+        return 0.86 + 0.32 * min(max(charge, 0), 1)
+    }
+}
+
+/// 콕찌르기 패널 제목 행의 울트라 힌트 문구(순수 로직 — 값으로 검증한다).
+///
+/// 울트라는 하루 **2회**라 "남은 횟수"가 비로소 뜻을 갖는다. 다만 그 숫자는 울트라 응답으로만 채워지므로
+/// (시작 시점을 알기 위한 추가 요청을 만들지 않는다는 결정) 앱을 켜자마자는 **모른다**.
+/// 모를 때는 아무 숫자도 만들지 않는다 — 틀린 숫자를 보여 주느니 발견성 문구를 그대로 둔다.
+enum PokeUltraHint {
+    /// 홀드 시간은 리터럴로 적지 않는다 — UltraChargeStyle.holdSeconds 가 발사 시각의 유일한 권위이고,
+    /// 그 숫자를 여기 베껴 두면 상수를 바꾼 날 화면만 옛 시간을 말한다(사용자는 문구대로 눌렀는데 안 나간다).
+    static let discover = "\(UltraChargeStyle.holdSecondsText)초 꾹 = 울트라"
+    static let spent = "울트라 소진"
+
+    static func text(canUltra: Bool, isCharging: Bool, remainingText: String?) -> String {
+        if isCharging, let remainingText { return remainingText }
+        return canUltra ? discover : spent
+    }
+}
+
 /// 콕찌르기 빈 목록 자리 문구 선택(순수 로직, 결정적 검증 지점). 리그/토큰 보드의 EmptyMessage 와 같은 패턴이다:
 /// 로드 성공했는데 비면 '아직 아무도 없음'(true), 로드 전/실패면 fallbackStatus(동기화 상태 문구)(false).
 enum PokeDirectoryEmptyMessage {
@@ -1471,11 +1629,23 @@ private struct PokePanel: View {
     // 대상별 쿨타임 잔여 초(0이면 찌르기 가능). displayNow 기준으로 매초 줄어든다.
     let cooldownRemaining: (String) -> Int
     let onPoke: (String) -> Void
+    // 울트라 발사(3초 꾹). 일반 찌르기와 **다른 RPC**라 콜백을 나눠 받는다.
+    let onUltra: (String) -> Void
+    // 오늘 울트라 몫이 남았는가. 남지 않았으면 3초를 다 눌러도 발사 대신 안내만 뜬다(숨은 규칙 금지).
+    let canUltra: Bool
+    // 남은 울트라 횟수 문구("오늘 N번 남음"). nil = 아직 모름 → 충전 중에도 아무 숫자를 말하지 않는다.
+    let ultraRemainingText: String?
+    // 오늘 몫이 없는데 3초를 다 눌렀을 때의 안내. 조용히 아무 일도 안 일어나면 고장으로 읽힌다.
+    let onUltraBlocked: () -> Void
     let onBack: () -> Void
     // 목록 위쪽에서 배너/토큰 행이 먹은 높이(pt). 그만큼 무스크롤 표시 행수를 줄여 창 상한을 지킨다.
     var extraChromeHeight: CGFloat = 0
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
+
+    // 지금 누군가를 꾹 누르는 중인지. **진행도(0~1)가 아니라 켜짐/꺼짐 한 비트만** 올라온다 —
+    // 진행도를 여기 두면 3초 동안 매 프레임 이 패널(목록 전체)이 재평가된다.
+    @State private var isChargingUltra = false
 
     // 행 고정 높이·간격. 아바타(26pt) + 이름/상태 칩 한 줄이라 팀원 행보다 낮게 둔다.
     private static let rowHeight: CGFloat = 48
@@ -1503,6 +1673,12 @@ private struct PokePanel: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
                 Spacer(minLength: 6)
+                // 발견성(+ 꾹 누르는 동안엔 남은 횟수). 새 줄이 아니라 제목 행의 남는 폭에 얹는다 —
+                // 줄을 하나 더하면 패널 높이가 커져 창 높이 상한(700pt) 예산을 갉아먹는다.
+                Text(PokeUltraHint.text(canUltra: canUltra, isCharging: isChargingUltra, remainingText: ultraRemainingText))
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText.opacity(canUltra ? 1.0 : 0.5))
+                    .fixedSize()
             }
             PanelDivider()
             // 안내줄: notice 우선(주황), 없고 내가 비근무면 안내(회색), 근무중+notice nil 이면 생략(상단 앵커 유지).
@@ -1575,7 +1751,11 @@ private struct PokePanel: View {
                         entry: entry,
                         remainingCooldown: cooldownRemaining(entry.userID),
                         canPoke: isMyselfWorking,
-                        onPoke: { onPoke(entry.userID) }
+                        canUltra: canUltra,
+                        onPoke: { onPoke(entry.userID) },
+                        onUltra: { onUltra(entry.userID) },
+                        onUltraBlocked: onUltraBlocked,
+                        onChargingChanged: { isChargingUltra = $0 }
                     )
                     .frame(height: Self.rowHeight)
                 }
@@ -1598,7 +1778,13 @@ private struct PokeDirectoryRowView: View {
     let remainingCooldown: Int
     // 내가 근무중이라 찌를 수 있는지. false면 버튼이 흐려지고 비활성된다.
     let canPoke: Bool
+    // 오늘 울트라 몫이 남았는지(툴팁/안내 분기용). 찌르기 자체의 활성 여부와는 무관하다.
+    let canUltra: Bool
     let onPoke: () -> Void
+    let onUltra: () -> Void
+    let onUltraBlocked: () -> Void
+    // 충전 시작/끝만 패널에 알린다(진행도는 버튼 안에 갇혀 있다).
+    var onChargingChanged: (Bool) -> Void = { _ in }
 
     // 좌측 세로 바 색 — 아바타 이니셜과 동일한 이름 해시색(유저별 컬러 포인트).
     private var accentColor: Color { CheckTheme.avatarColor(for: entry.name) }
@@ -1671,12 +1857,18 @@ private struct PokeDirectoryRowView: View {
             pokeIconLabel(active: false)
                 .help("자리비움 상태에는 찌를 수 없어요")
         } else {
-            // 가능 — accent 원형 배경. 나도 대상도 근무중일 때만 여기 온다.
-            Button(action: onPoke) {
-                pokeIconLabel(active: true)
-            }
-            .buttonStyle(PokePressButtonStyle())
-            .help("콕 찌르기")
+            // 가능 — 짧게 누르면 일반, 3초 꾹 누르면 울트라. 쿨타임 중·내가 비근무·대상 자리비움일 때는
+            // 위 분기에서 Button 이 아니라 흐린 라벨(pokeIconLabel)로 그려지므로 **제스처 대상 자체가 없다** —
+            // 그 상태의 꾹 누르기는 아무 일도 일어나지 않고 help 툴팁이 이유를 말한다(숨은 규칙을 만들지 않는다).
+            PokeChargeButton(
+                canUltra: canUltra,
+                onPoke: onPoke,
+                onUltra: onUltra,
+                onUltraBlocked: onUltraBlocked,
+                onChargingChanged: onChargingChanged
+            )
+            // 툴팁의 홀드 시간도 상수에서 만든다(힌트 문구와 같은 이유 — 두 곳에 숫자를 흩뿌리지 않는다).
+            .help(canUltra ? "콕 찌르기 (\(UltraChargeStyle.holdSecondsText)초 꾹 누르면 울트라)" : "콕 찌르기 (울트라는 오늘 다 썼어요)")
         }
     }
 
@@ -1690,6 +1882,121 @@ private struct PokeDirectoryRowView: View {
             .background(
                 Circle().fill(active ? CheckTheme.accent : Color.white.opacity(0.06))
             )
+    }
+}
+
+/// 콕 찌르기 버튼 — 짧게 누르면 일반, 3초 꾹 누르면 울트라. 누르는 동안 원형이 파랑→빨강으로 물들고
+/// 바깥 링이 시계방향으로 차오른다.
+///
+/// **진행도를 뷰 로컬 @State 에 가두는 이유**: store 는 @Observable 이라 값이 바뀔 때마다 그 값을 읽는
+/// 팝오버 트리 전체(팀 목록·리그·배너·타이머)가 재평가된다. 3초짜리 진행값을 거기 두면 그 재평가가
+/// 애니메이션 프레임마다 일어난다. 여기 State 에 두면 재평가 범위가 이 버튼 하나로 끝난다.
+/// 패널로 올려보내는 것도 진행도가 아니라 **켜짐/꺼짐 한 비트**뿐이다(누름당 2~3회).
+///
+/// **타이머로 진행도를 올리지 않는 이유**: withAnimation 한 번이면 SwiftUI 가 보간하므로 상태 변경은
+/// 시작 1회·종료 1회다. 타이머면 60Hz × 3초 = 180회다.
+///
+/// **LongPressGesture 를 쓰지 않는 이유**: 그건 최소 지속시간을 넘긴 '순간'만 알려 주고 경과 비율을 주지
+/// 않아 "점점 빨개짐"을 만들 수 없다. DragGesture(minimumDistance: 0) 은 마우스 다운 즉시 onChanged 가
+/// 한 번 오고 업에서 onEnded 가 온다. 대신 **커서가 뷰 밖으로 나가도 이벤트가 계속 오므로 취소는
+/// 우리가 좌표로 판정해야 한다**.
+private struct PokeChargeButton: View {
+    let canUltra: Bool                 // 오늘 울트라가 남았는가(툴팁/안내 분기용)
+    let onPoke: () -> Void
+    let onUltra: () -> Void
+    let onUltraBlocked: () -> Void
+    /// 충전 시작/끝 알림. 패널 제목 행이 이 동안에만 "오늘 N번 남음"을 말한다.
+    var onChargingChanged: (Bool) -> Void = { _ in }
+
+    @State private var charge: CGFloat = 0
+    @State private var isPressing = false
+    @State private var didFireUltra = false     // 발사 후 손을 뗄 때 일반 찌르기가 겹쳐 나가는 것을 막는 래치
+    @State private var isCancelled = false      // 버튼 밖으로 나간 누름. 되돌아와도 되살아나지 않는다
+    @State private var chargeTask: Task<Void, Never>?
+
+    static let ultraHoldSeconds: Double = UltraChargeStyle.holdSeconds
+    private static let diameter: CGFloat = 30
+    /// 커서가 이만큼 벗어나야 취소한다. 0 이면 1pt 손떨림에도 3초 충전이 날아간다.
+    private static let cancelSlop: CGFloat = 8
+
+    var body: some View {
+        Image(systemName: "hand.point.right.fill")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: Self.diameter, height: Self.diameter)
+            .background(Circle().fill(UltraChargeStyle.fillColor(charge: charge)))
+            .overlay(
+                Circle().trim(from: 0, to: charge)
+                    .stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .padding(-3)          // overlay 라 레이아웃 높이에 영향 없음(행 48pt 예산 불변)
+            )
+            .scaleEffect(UltraChargeStyle.scale(charge: charge, isPressing: isPressing))
+            .contentShape(Circle())
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel("콕 찌르기")
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { handleChanged(at: $0.location) }
+                .onEnded { _ in handleEnded() })
+            // 팝오버가 닫히거나 목록이 갱신돼 이 행이 사라지면 onEnded 가 영영 안 온다.
+            // 이 줄이 없으면 3초 Task 가 살아남아, 화면에 없는 버튼이 울트라를 발사한다(하루치 몫 소멸).
+            .onDisappear {
+                cancelCharge(animated: false)
+                isPressing = false
+                onChargingChanged(false)
+            }
+    }
+
+    private func handleChanged(at location: CGPoint) {
+        if !isPressing {
+            // 눌림 dip 은 자기 트랜잭션으로 분리한다. 같은 업데이트에 섞으면 3초짜리 트랜잭션이
+            // 1.0→0.86 까지 3초에 걸쳐 끌고 가 버튼이 죽은 것처럼 보인다.
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.55)) { isPressing = true }
+            didFireUltra = false
+            isCancelled = false
+            onChargingChanged(true)
+            beginCharge()
+            return
+        }
+        guard !isCancelled else { return }
+        let bounds = CGRect(x: 0, y: 0, width: Self.diameter, height: Self.diameter)
+            .insetBy(dx: -Self.cancelSlop, dy: -Self.cancelSlop)
+        if !bounds.contains(location) {
+            // 한 번 나가면 이번 누름은 끝이다 — 되돌아왔을 때 '이어서 충전'과 '처음부터'는 어느 쪽도
+            // 사용자가 예측할 수 없으므로 규칙을 하나로 못 박는다.
+            isCancelled = true
+            cancelCharge(animated: true)
+            onChargingChanged(false)
+        }
+    }
+
+    private func handleEnded() {
+        let cancelled = isCancelled, fired = didFireUltra
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.55)) { isPressing = false }
+        cancelCharge(animated: true)
+        onChargingChanged(false)
+        guard !cancelled, !fired else { return }
+        onPoke()          // 3초 전에 뗐다 → 평소의 일반 찌르기
+    }
+
+    private func beginCharge() {
+        chargeTask?.cancel()
+        // easeOut 은 3.0s 정확히에 1 에 도달하므로 Task.sleep(3s) 발사 시각과 링이 꽉 차는 시각이
+        // 일치하면서도 앞이 빠르다("점점 빨개짐"이 손에서 느껴진다).
+        withAnimation(.easeOut(duration: Self.ultraHoldSeconds)) { charge = 1 }
+        // 발사 시각의 권위는 이 Task 다. 애니메이션 완료 콜백에 기대면 창이 안 그려지는 동안 영영 안 온다.
+        chargeTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Self.ultraHoldSeconds))
+            guard !Task.isCancelled, isPressing, !isCancelled else { return }
+            didFireUltra = true
+            if canUltra { onUltra() } else { onUltraBlocked() }
+            withAnimation(.easeOut(duration: 0.2)) { charge = 0 }   // 손을 뗄 때까지 '다 참'이 남지 않게
+        }
+    }
+
+    private func cancelCharge(animated: Bool) {
+        chargeTask?.cancel(); chargeTask = nil
+        if animated { withAnimation(.easeOut(duration: 0.15)) { charge = 0 } } else { charge = 0 }
     }
 }
 

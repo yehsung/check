@@ -148,8 +148,13 @@ private func takePokesRequestCount(host: String) -> Int {
     URLProtocolStub.requests(forHost: host).filter { $0.url?.path == "/rest/v1/rpc/take_pokes" }.count
 }
 
+/// 이 카운터가 세려는 것은 '내 공개 설정 1회 로드'다. 별명 쿨타임(display_name_changed_at)도 같은
+/// 표를 GET 하므로 경로만 보면 2건이 되어, 검증 대상이 아닌 요청이 단언을 흔든다.
 private func tokenPrivacyRequestCount(host: String) -> Int {
     URLProtocolStub.requests(forHost: host)
-        .filter { $0.url?.path == "/rest/v1/profiles" && $0.httpMethod == "GET" }
+        .filter {
+            $0.url?.path == "/rest/v1/profiles" && $0.httpMethod == "GET"
+                && $0.url?.query?.contains("token_usage_public") == true
+        }
         .count
 }

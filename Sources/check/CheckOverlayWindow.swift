@@ -33,6 +33,15 @@ final class CheckOverlayController {
     /// 움찔 모션(≈1.15s) + 말풍선(6s) 을 다 보여줄 만큼 두고 여유를 더한 값.
     static let pokePeekSeconds: Double = 8
 
+    /// 울트라 격발 지속(초). ReactionKind.ultraPoked.duration · ReactionActions.ultraPoked 총 길이와
+    /// **같은 값**이어야 모션이 끝나는 순간 창도 접힌다.
+    static let ultraSeconds: Double = 5
+    /// 격발 복원 워치독의 여유(초). 정상 경로(ultraTask)가 취소·예외·런루프 지연으로 죽어도 이 시각을 넘겨
+    /// 화면이 덮인 채 남지 않도록, **메인 타이머와 독립된** 두 번째 태스크가 여기서 강제 원복한다.
+    /// 격발은 가리되 막지는 않지만(클릭 통과를 못 박는다), 원복이 실패하면 화면 전체가 영영 캐릭터에 덮이고
+    /// 패널 프레임이 전체화면인 채로 오염돼 다음 근무 시작 때까지 따라온다. 안전밸브다.
+    static let ultraWatchdogGrace: Double = 1.0
+
     let panel: NSPanel
     /// 리액션 조율기. 표시 중일 때만 이벤트를 받아 캐릭터 wrapper 에 SCNAction 을 건다.
     let engine: ReactionEngine
@@ -77,18 +86,61 @@ final class CheckOverlayController {
     // 숨김 상태에서 찔림을 peek 로 보여주는 동안만 유효한 자동 퇴장 태스크. updateWorking 양쪽에서 취소한다.
     private var pokePeekTask: Task<Void, Never>?
 
+    /// 울트라 격발 중에만 유효한 원복 상태. nil 이면 격발 중이 아니다(isUltraActive 의 근거).
+    private struct UltraRestoreState { let frame: NSRect; let hadMouseMonitor: Bool }
+    private var ultraRestoreState: UltraRestoreState?
+    /// 정상 원복 타이머(5초).
+    private var ultraTask: Task<Void, Never>?
+    /// ★ 안전밸브: 정상 원복과 **독립된** 워치독 태스크. ultraTask 가 어떤 이유로 죽어도(취소·스케줄 유실)
+    ///   deadline 이 지나면 여기서 강제로 원복한다. 격발 중 화면이 클릭을 먹으므로, 영원히 덮인 채 남으면
+    ///   사용자는 화면을 되찾을 수단이 없다(메뉴바와 ⌘⌥Esc 뿐이다).
+    private var ultraWatchdogTask: Task<Void, Never>?
+    /// 격발이 반드시 걷혀야 하는 시각. 헤드리스 검증 지점이자 워치독의 판정 근거(한 곳에서만 계산).
+    private(set) var ultraDeadline: Date?
+    /// 격발 세대. 재수신으로 5초를 리셋할 때마다 오른다. 취소된 옛 워치독이 즉시 깨어나 **방금 시작한**
+    /// 격발을 잘라먹는 것을 막는 유일한 수단이다(취소 여부만 봐서는 두 경우를 구분할 수 없다).
+    private var ultraGeneration = 0
+    /// 이 인스턴스의 격발 지속(초) = 정상 원복 타이머(ultraTask)가 자는 시간. 프로덕션은 언제나
+    /// `Self.ultraSeconds` 다. **테스트만** 짧게 주입해 "타이머가 스스로 깨어나 원복하는가"를 실시간으로
+    /// 검증한다. 이 주입 지점이 없으면 그 검증에 매번 5~6초가 들어 아무도 안 쓰게 되고, 실제로
+    /// `ultraTask`/`ultraWatchdogTask` **생성을 통째로 지워도 스위트가 초록인** 구멍이 있었다
+    /// (값 판정 함수 enforceUltraDeadline 만 밖에서 불러 검증했기 때문이다).
+    let ultraDurationSeconds: Double
+    /// 이 인스턴스의 강제 원복 상한(초) — **격발이 시작된 시각 기준**이다(마감 시각의 유일한 근거).
+    /// 프로덕션은 `ultraSeconds + ultraWatchdogGrace`. 위와 같은 이유로 테스트에서만 짧게 주입한다.
+    let ultraDeadlineSeconds: Double
+    /// 클릭 통과 값 못 박기. non-nil 인 동안 `setIgnoresMouseEvents` 는 어떤 호출자가 무엇을 요구하든
+    /// 이 값만 쓴다. 이게 없으면 히트-스루 기계(updateHitThrough / restorePassThroughAfterExit)가
+    /// 커서 위치에 따라 값을 뒤집어 5초 격발이 "막다 말다" 하는 최악의 상태가 된다.
+    private var pinnedIgnoresMouseEvents: Bool?
+    /// `updateWorking` 재진입 래치. AppKit 이 우리 자신의 프레임 변경 도중에 SwiftUI 를 평가해
+    /// `.onChange` → updateWorking 을 되부르는 것을 막는다(자세한 이유는 updateWorking 주석).
+    private var isUpdatingWorking = false
+    /// 헤드리스 검증 지점(shouldBeVisible·nudgeSchedulerRunning 과 같은 성격 — 실제 창 상태가 아니라
+    /// 이 클래스의 결정을 고정한다).
+    var isUltraActive: Bool { ultraRestoreState != nil }
+    /// 헤드리스 검증 지점. '이 클래스가 A1 히트-스루 기계를 떼었는가'를 고정한다.
+    var hasMouseMoveMonitor: Bool { mouseMoveMonitor != nil }
+    /// 헤드리스 검증 지점. '클릭 통과 값을 못 박았는가'(nil = 평시 자동 토글).
+    var pinnedIgnoresMouseEventsValue: Bool? { pinnedIgnoresMouseEvents }
+
     init(
         store: WorkTimerStore,
         notificationCenter: NotificationCenter = .default,
         engine: ReactionEngine? = nil,
         defaults: UserDefaults = .standard,
         workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter,
-        updateCheck: UpdateCheckStore? = nil
+        updateCheck: UpdateCheckStore? = nil,
+        ultraDurationSeconds: Double = CheckOverlayController.ultraSeconds,
+        ultraDeadlineSeconds: Double
+            = CheckOverlayController.ultraSeconds + CheckOverlayController.ultraWatchdogGrace
     ) {
         self.notificationCenter = notificationCenter
         self.store = store
         self.defaults = defaults
         self.updateCheck = updateCheck
+        self.ultraDurationSeconds = ultraDurationSeconds
+        self.ultraDeadlineSeconds = ultraDeadlineSeconds
         self.engine = engine ?? ReactionEngine()
         panel = Self.makePanel(size: Self.panelSize)
 
@@ -164,6 +216,16 @@ final class CheckOverlayController {
     /// 표시 시: 폴짝 점프+스핀(commuteStart). 숨김 시: 앞으로 꾸벅 인사(commuteEnd) 후 패널을 내린다.
     /// 인사 완료 콜백은 렌더 루프가 돌 때 오고, 워치독이 최대 `farewellHideDeadline` 내 숨김을 보장한다.
     func updateWorking(_ isWorking: Bool) {
+        // ★ 재진입 차단. 이 함수는 패널 프레임·표시를 바꾸고, 그 변경은 NSHostingView 가 SwiftUI 루트 뷰를
+        //   **그 자리에서** 다시 평가하게 만든다 → `.onChange(of: store.snapshot.isWorking)` 가 이 함수를
+        //   자기 실행 도중에 되부른다. 중첩 호출은 새 정보가 없다(우리 자신의 그리기가 만든 통지이고,
+        //   updateWorking 은 스토어를 건드리지 않으므로 인자 값도 바깥 호출과 같다).
+        //   그런데 그 중첩 호출이 먼저 끝까지 달려 orderOut 까지 해 버리면, 바깥 호출은 "이미 숨겨진 창"을
+        //   보고 `wasVisible && panel.isVisible` 을 놓쳐 **근무종료 인사를 통째로 건너뛴다** —
+        //   사용자는 "수고했어!" 없이 캐릭터가 사라지는 걸 본다(울트라 격발 중 종료에서 실제로 났다).
+        if isUpdatingWorking { return }
+        isUpdatingWorking = true
+        defer { isUpdatingWorking = false }
         let visible = isWorking && store.isOverlayEnabled
         let wasVisible = shouldBeVisible
         shouldBeVisible = visible
@@ -172,6 +234,22 @@ final class CheckOverlayController {
         // (false) 정상 숨김 경로가 퇴장을 처리하므로 peek 의 지연 orderOut 이 뒤늦게 끼어들지 않게 취소한다.
         pokePeekTask?.cancel()
         pokePeekTask = nil
+        // 격발 중 근무 상태가 바뀌면(직접 종료·자동 마감·표시 토글) 전체화면을 즉시 접는다. 이 줄이 없으면
+        // 화면을 덮은 채로 근무종료 인사가 재생되고, farewell 워치독이 orderOut 해도 **프레임이 전체화면인
+        // 채로 남아** 다음 근무 시작 때 캐릭터가 화면 전체로 뜬다(게다가 클릭을 먹는 채로 남는다).
+        // endUltraTakeover 가 내부에서 cancelActiveReaction 을 부르므로 울트라(우선순위 4)가 비켜나
+        // 아래 정상 분기의 commuteEnd(3)가 수용된다.
+        //
+        // **단, 실제 전이(wasVisible != visible)일 때만이다.** 이 함수는 SwiftUI 의 재통지로도 불린다 —
+        // `.onChange(of: store.isSignedIn)`·`.onChange(of: store.isOverlayEnabled)` 가 근무 상태는 그대로인 채
+        // onWorkingChange(store.snapshot.isWorking) 를 다시 흘린다(토큰 갱신 한 번이면 충분하다).
+        // 그 재통지까지 접어 버리면 5초 격발이 아무 이유 없이 사라지고 그 위에 commuteStart 점프가 얹힌다.
+        // 보낸 사람은 하루 몫을 이미 태웠으므로 이건 복구되지 않는 손실이다.
+        if isUltraActive && wasVisible != visible { endUltraTakeover(restoresVisibility: false) }
+        // 전이가 아닌 재통지는 여기서 물러난다. 아래 분기는 격발 중에 실행되면 안 된다 —
+        // 숨김 분기의 orderOut/renderActive=false 는 전체화면 격발을 그대로 지우고,
+        // 표시 분기의 reposition()+request(.commuteStart) 는 전체화면 프레임을 작은 기본 위치로 되돌린다.
+        if isUltraActive { return }
         if visible {
             farewellTask?.cancel()
             farewellTask = nil
@@ -282,33 +360,59 @@ final class CheckOverlayController {
 
     /// 커서(스크린 좌표)가 몸체 위면 클릭 통과를 해제(우리 창이 클릭을 받음), 아니면 통과로 되돌린다.
     /// 드래그 중(isDragCandidate)에는 토글하지 않는다(드래그 이벤트 수신이 끊기지 않게).
-    private func updateHitThrough(at screenPoint: NSPoint) {
+    ///
+    /// (테스트 진입점이라 internal 이다 — 격발 중 이 문을 두드려도 값이 안 흔들린다는 U3 못 박기를
+    ///  헤드리스로 실증하려면 밖에서 부를 수 있어야 한다.)
+    func updateHitThrough(at screenPoint: NSPoint) {
         guard shouldBeVisible, !isDragCandidate else { return }
         setIgnoresMouseEvents(!engine.isBodyAtScreenPoint(screenPoint))
     }
 
     /// 커서가 호스팅 뷰(패널) 밖으로 나갔을 때: 통과로 되돌린다(이후엔 전역 모니터가 다시 감지). 드래그 중엔 유지.
-    private func restorePassThroughAfterExit() {
+    func restorePassThroughAfterExit() {
         guard !isDragCandidate else { return }
         setIgnoresMouseEvents(true)
     }
 
     /// 클릭 통과 여부를 == 가드로만 바꾼다(불필요한 창 속성 변경 churn 방지).
+    ///
+    /// **못 박기(pin)가 걸려 있으면 인자를 무시한다.** 울트라 격발 5초 동안은 클릭을 우리가 먹어야
+    /// 화면이 실제로 막히는데(U3), 히트-스루 기계는 커서가 몸체 밖으로 나가는 순간 통과로 되돌리려 든다 —
+    /// 화면을 덮은 거대 몸체에서는 그 판정이 프레임마다 뒤집혀 "막다 말다" 하는 최악이 된다.
     private func setIgnoresMouseEvents(_ ignore: Bool) {
-        if panel.ignoresMouseEvents != ignore {
-            panel.ignoresMouseEvents = ignore
+        let value = pinnedIgnoresMouseEvents ?? ignore
+        if panel.ignoresMouseEvents != value {
+            panel.ignoresMouseEvents = value
+        }
+    }
+
+    /// 클릭 통과 값을 못 박고 즉시 적용한다(nil 이면 못 박기 해제 — 이후 평소 토글로 돌아간다).
+    private func pinIgnoresMouseEvents(_ value: Bool?) {
+        pinnedIgnoresMouseEvents = value
+        if let value, panel.ignoresMouseEvents != value {
+            panel.ignoresMouseEvents = value
         }
     }
 
     /// 클릭/드래그 판정의 이중 안전 가드. 뷰가 attach 된 실사용에선 몸체(지오메트리) 위인지로 강화하고,
     /// 뷰 미부착(헤드리스 테스트)에선 패널 프레임 안인지로 폴백한다. 로컬 이벤트 경로라 사실상 몸체에서만 온다.
+    ///
+    /// 울트라 격발 중에는 항상 거짓이다. 격발은 클릭 통과를 못 박으므로(ignoresMouseEvents=true) 애초에
+    /// 이벤트가 오지 않지만, 로컬 이벤트 경로가 한 프레임 먼저 도착하는 경우까지 막아 드래그 후보가
+    /// 서지 않게 한다 — 화면만 한 패널이 드래그되면 saveOffset 이 전체화면 기준 오프셋을 영속해
+    /// 사용자가 캐릭터를 두었던 자리가 영영 날아간다.
     private func withinBody(_ screenPoint: NSPoint) -> Bool {
-        engine.hasAttachedView ? engine.isBodyAtScreenPoint(screenPoint) : panel.frame.contains(screenPoint)
+        if isUltraActive { return false }
+        return engine.hasAttachedView ? engine.isBodyAtScreenPoint(screenPoint) : panel.frame.contains(screenPoint)
     }
 
     /// 좌클릭 다운: 표시 중이고 몸체 위면 드래그 후보로 삼는다(리액션은 아직 발화하지 않고 업 시점에 판정).
+    ///
+    /// 격발 중에는 아예 받지 않는다. 받으면 화면만 한 패널이 드래그 후보가 되어 마우스를 따라 움직이고,
+    /// 업 시점의 saveOffset 이 **전체화면 프레임 기준 오프셋**을 영속해 사용자가 캐릭터를 두었던 자리가
+    /// 영영 날아간다. 클릭은 패널이 먹되(막는 게 목적) 아무 일도 일어나지 않는 것이 맞다.
     func handleMouseDown(at location: NSPoint) {
-        guard shouldBeVisible, withinBody(location) else { return }
+        guard shouldBeVisible, !isUltraActive, withinBody(location) else { return }
         isDragCandidate = true
         didDrag = false
         dragAnchor = location
@@ -353,7 +457,8 @@ final class CheckOverlayController {
     /// 클릭 좌표가 몸체 위면 리액션을 요청한다(좌표 주입 가능 — 테스트용).
     /// 자는 중이면 hit 대신 wake(화들짝 + "깜빡 졸았다!")로 깨우고, 아니면 평소처럼 아파하기(hit).
     func handleClick(at location: NSPoint) {
-        guard shouldBeVisible, withinBody(location) else { return }
+        // 격발 중 클릭은 삼킨다(조기 해제도, 때리기도 없다 — 막는 게 목적인데 첫 클릭에 사라지면 의미가 없다).
+        guard shouldBeVisible, !isUltraActive, withinBody(location) else { return }
         if engine.state == .sleeping {
             engine.request(.wake)
         } else {
@@ -419,6 +524,14 @@ final class CheckOverlayController {
     /// 표시 중이면 즉시 움찔, 숨김이면 peek(잠깐 나타났다 사라짐 — 캐릭터 표시를 꺼 뒀어도 동일).
     func handleReceivedPokes(_ pokes: [ReceivedPoke]) {
         guard !pokes.isEmpty else { return } // 빈 배치 무시.
+        // 같은 폴링에 울트라가 2건 와도 격발은 1회다 — 첫 울트라가 배치 전체를 대표한다.
+        if let ultra = pokes.first(where: { $0.kind == .ultra }) {
+            beginUltraTakeover(text: Self.ultraBubbleText(name: ultra.fromName, otherCount: pokes.count - 1))
+            return
+        }
+        // 격발 중 도착한 일반 찔림은 여기서 삼킨다. 전체화면 발광 위에 작은 움찔·다른 말풍선을 겹치면
+        // 화면만 어지럽고, 엔진도 우선순위(4 > 3)로 어차피 거부한다 — 상태를 흔들기 전에 먼저 막는다.
+        if isUltraActive { return }
         let text = Self.pokeBubbleText(names: pokes.map { $0.fromName })
         if shouldBeVisible && panel.isVisible {
             // 정상 표시 중: 움찔+말풍선만(정상 경로가 창 수명을 소유). request 는 진행 중 찌름을 인터럽트해 갱신한다.
@@ -426,6 +539,189 @@ final class CheckOverlayController {
         } else {
             beginPokePeek(text: text)
         }
+    }
+
+    // MARK: - 울트라 찌르기 수신(전체화면 격발 5초)
+
+    /// 울트라 말풍선 문구(순수 함수). 같은 배치에 일반 찔림이 섞여 있으면 인원수만 덧붙인다.
+    nonisolated static func ultraBubbleText(name: String, otherCount: Int) -> String {
+        otherCount > 0 ? "\(name)님의 울트라 찌르기! (외 \(otherCount)명)" : "\(name)님의 울트라 찌르기!"
+    }
+
+    /// 울트라가 덮을 패널 프레임(순수 함수). **visibleFrame 이 아니라 frame 이다** — 요구는 "화면 정중앙을
+    /// 싹 덮는다"이고 visibleFrame 을 쓰면 메뉴바·독 자리만큼 중심이 밀려 정중앙에 안 선다.
+    /// 메뉴바/독은 우리(.floating)보다 높은 레벨이라 frame 을 써도 그것들을 '가리는' 부작용은 없고,
+    /// 오히려 메뉴바 아이콘이 살아 있어 클릭을 막는 5초 안에도 사용자의 탈출로가 남는다.
+    nonisolated static func ultraPanelFrame(in screenFrame: NSRect) -> NSRect { screenFrame }
+
+    /// 울트라 전 프레임으로 되돌릴 수 있는가(그 프레임이 아직 어떤 화면과 겹치는가). 5초 사이에 모니터를
+    /// 뽑거나 해상도가 바뀌면 저장 프레임이 허공을 가리키므로, 겹침이 없으면 기본 재배치로 떨어진다.
+    /// 이 판정이 없으면 캐릭터가 존재하지 않는 좌표로 복귀해 재실행 전까지 영영 안 보인다.
+    nonisolated static func canRestore(frame: NSRect, screens: [NSRect]) -> Bool {
+        screens.contains { $0.intersects(frame) }
+    }
+
+    /// 울트라 수신: 패널을 화면 전체로 넓히고 5초간 발광시킨 뒤 **정확히 원래대로** 되돌린다.
+    /// 캐릭터 표시를 꺼 둔 사용자에게도 재생한다 — peek 와 같은 계약(v0.2.7)이고, take_pokes 가 이미
+    /// 원자 소비한 데다 보낸이는 하루치 몫을 태웠으므로 여기서 버리면 영영 사라진다.
+    private func beginUltraTakeover(text: String) {
+        let isRefresh = isUltraActive
+        ultraTask?.cancel()
+        // peek 이 소유하던 지연 퇴장은 무효 — 울트라가 창 수명을 가져간다(안 끄면 8초 뒤 peek 의
+        // orderOut 이 뒤늦게 끼어들어 격발 중인 전체화면을 지운다).
+        pokePeekTask?.cancel(); pokePeekTask = nil
+        // ★ farewell 워치독도 반드시 끈다. 직접 누른 근무 종료는 flushPokesOnWorkEnd 로 꼬리 찔림을 한 번 더
+        //   회수하는데, 그 응답이 0.55초(farewellHideDeadline) 안에 오면 여기서 전체화면을 띄운 직후
+        //   finishHide 가 orderOut 해 5초짜리 울트라가 0.5초 만에 지워진다 — 보낸 사람의 몫이 그대로 증발한다.
+        farewellTask?.cancel(); farewellTask = nil
+        // 드래그 중에 울트라가 오면 아래 removeMouseMoveMonitor 가 isDragCandidate 를 내려 handleMouseUp
+        // 가드가 막히고 saveOffset 이 영영 안 불린다 → 방금 옮긴 자리가 영속되지 않아 다음 reposition 에서
+        // 원위치로 튄다.
+        if isDragCandidate && didDrag { saveOffset() }
+
+        // ★ 마감의 기준 시각은 화면을 덮기 **직전**에 잡는다. 아래 `panel.setFrame` 은 3D 뷰가 한 번도
+        //   마운트되지 않은 경로(캐릭터를 꺼 둔 사용자에게 울트라가 오는 배달 계약 — 바로 아래 doc 참고)에서
+        //   USDZ 로드 + 감은눈 텍스처 생성을 **동기로** 돌려 메인 스레드를 멈춘다(같은 머신 실측:
+        //   release 0.130s / debug 3.456s). 마감을 그 뒤에 잡으면 블로킹 시간만큼 상한이 통째로 밀려
+        //   실측 총 8.68초 — "격발은 최대 ultraSeconds + grace" 라는 계약이 느린 기기에서만 조용히 깨진다.
+        let takeoverStart = Date()
+
+        if !isRefresh {
+            ultraRestoreState = UltraRestoreState(frame: panel.frame, hadMouseMonitor: mouseMoveMonitor != nil)
+            // A1 히트-스루 기계를 떼고(60Hz 토글 중단) 클릭 통과를 **true 로 못 박는다** = 가리되 막지 않는다.
+            //
+            // 한때 false(패널이 클릭을 먹어 화면을 실제로 막음)로 두었다가 되돌렸다. 실사용 확인 결과
+            // 화면만 한 패널이 이벤트를 먹으면 **캐릭터 뒤만이 아니라 화면 전체**의 클릭과 **스크롤까지**
+            // 5초 동안 죽는다 — 연출 하나가 남의 작업을 통째로 멈추는 것은 과하다는 판단.
+            // 못 박기 자체는 그대로 필요하다: 화면을 덮은 거대 몸체 위에서 updateHitThrough 는 커서 위치마다
+            // 값을 뒤집어 "막다 말다" 하는 최악을 만든다. 값만 반대로, 고정은 유지한다.
+            removeMouseMoveMonitor()
+            pinIgnoresMouseEvents(true)
+            engine.invalidateBodyHitCache()   // 뷰 크기가 바뀌면 캐시된 투영 rect 는 옛 좌표계의 거짓말이다
+            engine.isUltraActive = true
+            engine.renderActive = true
+            // ★ display: **false** 여야 한다. true 면 AppKit 이 여기서 표시 패스를 강제하고, 그 패스가
+            //   SwiftUI 루트 뷰를 평가해 `.onChange(of: store.snapshot.isWorking, initial: true)` 를
+            //   **이 함수 한복판에서 되부른다** → onWorkingChange → updateWorking → endUltraTakeover.
+            //   즉 방금 세운 격발이 자기 자신의 그리기 때문에 즉시 철거되고(프레임·못박기·엔진 전부 원복),
+            //   보낸 사람은 하루 몫을 태운 채 아무 일도 일어나지 않는다. 프레임 값은 이 줄에서 이미
+            //   확정되고 다시 그리는 것만 다음 런루프로 밀리므로(한 프레임), 5초짜리 연출에는 무해하다.
+            panel.setFrame(Self.ultraPanelFrame(in: ultraScreenFrame()), display: false)
+            panel.orderFrontRegardless()
+        }
+        engine.request(.ultraPoked(bubbleText: text))
+        armUltraRestore(startedAt: takeoverStart)
+    }
+
+    /// 정상 원복 타이머 + **독립 워치독**을 함께 건다(재수신이면 둘 다 리셋 = 5초 재시작).
+    ///
+    /// 두 태스크를 나누는 이유: 격발은 화면을 막으므로 원복 실패가 곧 "사용자가 화면을 잃는" 사고다.
+    /// 한 태스크만 두면 그 태스크의 취소·유실이 곧 영구 차단이다. 워치독은 deadline 이라는 **값**을 보고
+    /// 판정하므로(태스크 상태가 아니라), 늦게 깨어나도 반드시 걷어낸다.
+    ///
+    /// `start` 는 **격발이 시작된 시각**이다(이 함수가 불린 시각이 아니다 — beginUltraTakeover 주석 참고).
+    ///
+    /// 재수신마다 마감이 뒤로 밀리는 것에 **총 상한을 두지 않는다**(예: 최초 시작 + 15초). 근거 셋:
+    ///  ① 격발은 가리기이지 막기가 아니다(클릭 통과를 true 로 못 박는다) — 오래 덮여도 사용자가 화면을
+    ///     잃지 않는다. 즉 상한이 막아 줄 '치명 사고'가 없다.
+    ///  ② 상한은 마지막 보낸이의 하루 몫을 0.x초로 잘라 **복구되지 않는 손실**을 만든다. 이 파일이
+    ///     재통지·farewell 워치독·peek 퇴장을 하나씩 막아 온 이유가 전부 그 손실을 막기 위해서였다.
+    ///  ③ 상한이 걷힌 직후 도착한 울트라는 **새 격발**을 시작하므로 릴레이 자체를 막지도 못한다 —
+    ///     얻는 것은 짧은 '숨' 한 번뿐이다.
+    /// 격발이 다시 클릭을 먹게 되면(=①이 무너지면) 그때는 총 상한을 반드시 둔다.
+    private func armUltraRestore(startedAt start: Date) {
+        ultraGeneration &+= 1
+        let generation = ultraGeneration
+        let deadline = start.addingTimeInterval(ultraDeadlineSeconds)
+        ultraDeadline = deadline
+        let duration = ultraDurationSeconds
+        // 워치독은 고정 상수가 아니라 **마감까지 남은 시간**만 잔다. 고정 상수로 자면 마감을 앞당겨 잡아 봐야
+        // 실제 원복은 (블로킹 시간 + 상수) 뒤라 상한이 그대로 밀린다 — 마감을 '기록'만 하고 '집행'하지 않는 꼴.
+        // 마운트 블로킹이 이미 마감을 넘겼다면 0 이 되어 즉시 걷는다. 그 지경이면 앱이 이미 수 초 얼어 있었고,
+        // "격발은 최대 6초"라는 계약이 연출보다 우선한다.
+        let remaining = max(0, deadline.timeIntervalSinceNow)
+
+        ultraTask?.cancel()
+        ultraTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(duration))
+            guard let self, !Task.isCancelled else { return }
+            self.endUltraTakeover()
+        }
+
+        ultraWatchdogTask?.cancel()
+        ultraWatchdogTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(remaining))
+            // 세대 검사가 취소 검사를 대신한다. 재수신으로 갈아탄 뒤 취소된 옛 워치독은 즉시 깨어나므로
+            // Task.isCancelled 를 무시하면 방금 시작한 격발을 잘라먹는다 — 세대가 다르면 조용히 물러난다.
+            guard let self, self.ultraGeneration == generation, self.isUltraActive else { return }
+            // 이 세대의 지속+여유는 (연속 시계 기준) 확실히 지났다. 마감 시각 판정을 먼저 태우고,
+            // 벽시계가 뒤로 조정된 극단에서 그 판정이 false 를 내더라도 **무조건** 걷어낸다 —
+            // 여기서 물러나면 화면이 영영 덮인 채 남는다(이 기능의 유일한 치명 사고 모드다).
+            if !self.enforceUltraDeadline(now: Date()) {
+                self.endUltraTakeover()
+            }
+        }
+    }
+
+    /// 마감 시각이 지났으면 격발을 강제로 걷는다(멱등, 순수 판정). 워치독이 부르고, 테스트가 '정상 타이머가
+    /// 죽은 세계'를 재현하려고 미래 시각으로 직접 부른다. 마감 전이면 아무것도 하지 않는다.
+    @discardableResult
+    func enforceUltraDeadline(now: Date) -> Bool {
+        guard let deadline = ultraDeadline, isUltraActive, now >= deadline else { return false }
+        endUltraTakeover()
+        return true
+    }
+
+    /// 격발을 끝내고 엔진 → 프레임 → 클릭통과 → 마우스 모니터 → 표시 여부 순으로 되돌린다.
+    /// **이 순서가 중요하다** — 프레임을 되돌리기 전에 모니터를 켜면 그 한 프레임 동안 거대 몸체 판정으로
+    /// 클릭을 먹는다. restoresVisibility=false 는 updateWorking 전용이다(그 직후 호출자가 표시 여부를 정한다).
+    func endUltraTakeover(restoresVisibility: Bool = true) {
+        ultraTask?.cancel(); ultraTask = nil
+        ultraWatchdogTask?.cancel(); ultraWatchdogTask = nil
+        ultraDeadline = nil
+        // ★ 안전밸브: 못 박기 해제는 **guard 보다 위**다. 못 박기만 걸린 채 복원 상태가 없어지는 경로가
+        //   하나라도 생기면 화면이 영영 클릭을 먹는다 — 격발의 유일한 치명 사고 모드다. 못 박기가
+        //   안 걸려 있으면 아무것도 하지 않는다(평시 히트-스루 값을 여기서 건드리면 커서가 몸체 위에
+        //   있는 동안의 클릭 수신이 깨진다).
+        if pinnedIgnoresMouseEvents != nil {
+            pinIgnoresMouseEvents(nil)
+            setIgnoresMouseEvents(true)
+        }
+        guard let restore = ultraRestoreState else { return }
+        ultraRestoreState = nil
+        // 프레임을 줄이기 **전에** 엔진을 idle 로 못 박는다. 5초 Task 깨어남과 clock 만료(expireIfNeeded)는
+        // 밀리초 차이라, 아직 .playing(.ultraPoked) 인 채로 뷰가 크기를 바꾸면 attach 의 .playing 분기가
+        // 5초짜리 격발을 작은 패널에서 처음부터 다시 재생한다.
+        // interruptCurrent 의 resetPose 가 포즈까지 identity 로 스냅해 잔상도 함께 지운다.
+        engine.cancelActiveReaction()
+        engine.isUltraActive = false
+        engine.invalidateBodyHitCache()
+
+        if Self.canRestore(frame: restore.frame, screens: NSScreen.screens.map(\.frame)) {
+            // display: false 인 이유는 beginUltraTakeover 와 같다 — 표시 패스를 여기서 강제하면 SwiftUI
+            // `.onChange` 가 원복 도중에 updateWorking 을 되불러, 방금 되돌린 프레임 위에 숨김 분기
+            // (removeMouseMoveMonitor·orderOut)가 겹친다. 프레임 값은 이 줄에서 확정된다.
+            panel.setFrame(restore.frame, display: false)
+        } else {
+            reposition()   // 5초 사이 모니터가 빠졌다 — 저장 오프셋으로 기본 위치 재계산.
+        }
+        guard restoresVisibility else { return }
+        if shouldBeVisible {
+            panel.orderFrontRegardless()
+            if restore.hadMouseMonitor { installMouseMoveMonitor() }   // 때리기·드래그 복원
+        } else {
+            // 울트라 전에 숨김이었다(비근무 또는 캐릭터 표시 꺼짐) → 그대로 다시 숨긴다. peek 퇴장과 동일 계약.
+            engine.greetingText = nil
+            engine.renderActive = false
+            panel.orderOut(nil)
+        }
+    }
+
+    /// 울트라를 어느 화면에 띄울지. **패널이 지금 놓인 화면**이다 — 사용자가 캐릭터를 끌어다 둔 그 화면이
+    /// 이 앱에 대한 시선의 기준점이고, NSScreen.main 은 키 윈도우가 없는 메뉴바 앱에서 무엇을 돌려줄지
+    /// 계약이 불분명하다(reposition 이 그걸 쓰는 건 '기본 위치'라는 약한 요구라 문제가 없었을 뿐이다).
+    private func ultraScreenFrame() -> NSRect {
+        currentScreen(near: NSPoint(x: panel.frame.midX, y: panel.frame.midY))?.frame ?? panel.frame
     }
 
     /// 숨김 상태(비근무)에서 찔림을 잠깐 보여준다: 렌더를 켜고 우상단에 띄워 움찔+말풍선을 재생한 뒤,
@@ -460,6 +756,19 @@ final class CheckOverlayController {
     /// 저장된 우상단 오프셋이 있으면 그 위치(클램프 보정)로, 없으면 메인 스크린 visibleFrame 우상단
     /// (여백 `edgeMargin`)으로 패널을 옮긴다.
     func reposition() {
+        // ★ 격발 중에는 절대 140×170 으로 줄이지 않는다. 이 함수는 화면 구성 변경 통지(모니터 연결·해상도
+        //   변경·독 자동숨김 토글)로도 불리는데, 그게 5초 안에 오면 패널만 구석으로 쪼그라들고
+        //   isUltraActive 는 true 로 남아 **작은 창에 거대 레이아웃과 큰 말풍선이 갇힌다**(실측 재현).
+        //   그냥 물러나지 않고 새 화면 기준으로 **다시 덮는** 이유: 모니터가 바뀌었다면 지금 캐릭터가 놓인
+        //   그 화면을 덮는 것이 원래 의도이고(ultraScreenFrame 이 폴백 사슬을 다시 태워 사라진 화면도 흡수),
+        //   물러나기만 하면 옛 화면 좌표에 걸친 프레임이 5초 내내 남는다.
+        //   display:false 인 이유는 beginUltraTakeover 와 같다 — 표시 패스를 강제하면 SwiftUI 재통지가
+        //   격발 한복판에서 updateWorking 을 되부른다.
+        if isUltraActive {
+            panel.setFrame(Self.ultraPanelFrame(in: ultraScreenFrame()), display: false)
+            engine.invalidateBodyHitCache()   // 뷰 크기가 바뀌면 캐시된 투영 rect 는 옛 좌표계의 거짓말이다
+            return
+        }
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let frame = Self.overlayFrame(
             offset: loadOffset(),
@@ -490,12 +799,15 @@ final class CheckOverlayController {
         return raw
     }
 
-    /// 커서(또는 패널)가 놓인 화면의 visibleFrame 을 고른다. 커서가 어느 화면에도 없으면 패널과 가장 많이
-    /// 겹치는 화면을, 그것도 없으면 메인 화면을 쓴다.
-    private func currentVisibleFrame(near point: NSPoint) -> NSRect {
+    /// 커서(또는 패널)가 놓인 화면을 고른다. 커서가 어느 화면에도 없으면 패널과 가장 많이 겹치는 화면을,
+    /// 그것도 없으면 메인 화면을 쓴다.
+    ///
+    /// 울트라가 '캐릭터가 있는 화면'을 찾을 때 같은 폴백 사슬을 쓰려고 `currentVisibleFrame` 에서 뽑아냈다.
+    /// **사슬을 한 글자도 바꾸지 않는다** — 바꾸면 드래그 클램프가 조용히 달라진다.
+    private func currentScreen(near point: NSPoint) -> NSScreen? {
         let screens = NSScreen.screens
         if let hit = screens.first(where: { $0.frame.contains(point) }) {
-            return hit.visibleFrame
+            return hit
         }
         let panelFrame = panel.frame
         var best: NSScreen?
@@ -508,7 +820,12 @@ final class CheckOverlayController {
                 best = screen
             }
         }
-        return (best ?? NSScreen.main ?? screens.first)?.visibleFrame ?? panelFrame
+        return best ?? NSScreen.main ?? screens.first
+    }
+
+    /// 커서(또는 패널)가 놓인 화면의 visibleFrame. 화면을 못 찾으면 패널 프레임으로 떨어진다.
+    private func currentVisibleFrame(near point: NSPoint) -> NSRect {
+        currentScreen(near: point)?.visibleFrame ?? panel.frame
     }
 
     /// 화면 구성 변경(해상도·배열·메뉴바 높이 등) 시 우상단 위치를 다시 잡는다.

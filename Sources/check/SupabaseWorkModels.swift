@@ -691,39 +691,74 @@ extension [PokeDirectoryEntry] {
     }
 }
 
-/// poke_user RPC 요청. { p_to: 대상 user id }
+/// 찌르기 종류. 서버 pokes.kind 문자열과 1:1. 미지 값·nil 은 전부 normal 로 접는다 —
+/// 마이그레이션 미적용 서버(kind 키 없음)와 미래에 추가될 종류 양쪽에서 말풍선은 뜨게 하기 위해서다.
+enum PokeKind: String, Equatable {
+    case normal, ultra
+
+    init(rawServerValue: String?) { self = (rawServerValue == "ultra") ? .ultra : .normal }
+}
+
+/// poke_user RPC 요청. { p_to: 대상 user id } — ultra_poke_user 도 같은 본문을 재사용한다(인자가 동일).
 struct PokeSendRequest: Encodable {
     let pTo: String
 }
 
-/// poke_user RPC 응답: { status: "ok"|"cooldown"|"not_working"|"target_not_working"|"invalid", retry_after_seconds? }
+/// poke_user / ultra_poke_user RPC 응답:
+/// { status: "ok"|"cooldown"|"not_working"|"target_not_working"|"ultra_used_today"|"invalid",
+///   retry_after_seconds?, reset_after_seconds?, ultra_remaining? }
 struct PokeSendResponse: Decodable, Equatable {
     let status: String
     var retryAfterSeconds: Int?
+    /// ultra_used_today 의 KST 자정까지 남은 초. **이 타입은 커스텀 init(from:) 를 갖고 있어**
+    /// CodingKey 만 더하면 값이 영원히 nil 이고, 그러면 안내 문구가 항상 폴백으로 굳는다.
+    var resetAfterSeconds: Int?
+    /// 오늘(KST) 울트라를 몇 번 더 쓸 수 있는가. 서버가 ok/ultra_used_today 응답에 실어 준다.
+    /// **nil 은 0 이 아니라 '모른다'** 이다 — 일반 poke_user 응답과 이 키를 안 보내는 구버전 서버가 여기로 온다.
+    /// 이 구분이 없으면 일반 찌르기 한 번에 화면이 "오늘 0번 남음"이라고 거짓말한다.
+    var ultraRemaining: Int?
 
     enum CodingKeys: String, CodingKey {
         case status
         case retryAfterSeconds
+        case resetAfterSeconds
+        case ultraRemaining
     }
 
-    init(status: String, retryAfterSeconds: Int? = nil) {
+    init(status: String, retryAfterSeconds: Int? = nil, resetAfterSeconds: Int? = nil, ultraRemaining: Int? = nil) {
         self.status = status
         self.retryAfterSeconds = retryAfterSeconds
+        self.resetAfterSeconds = resetAfterSeconds
+        self.ultraRemaining = ultraRemaining
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         status = try container.decode(String.self, forKey: .status)
         retryAfterSeconds = try container.decodeIfPresent(Int.self, forKey: .retryAfterSeconds)
+        // ↓ 아래 두 줄이 이 타입의 함정 전부다. 직접 생성(PokeSendResponse(status:…)) 테스트로는
+        //   커스텀 디코더의 누락을 원리적으로 못 잡으므로 JSON 을 실제로 통과시키는 테스트로 못 박는다.
+        resetAfterSeconds = try container.decodeIfPresent(Int.self, forKey: .resetAfterSeconds)
+        ultraRemaining = try container.decodeIfPresent(Int.self, forKey: .ultraRemaining)
     }
+
+    /// 스토어가 `ultraRemainingToday` 에 **그대로 대입할** 값(음수 방어만 한다). 상한 클램프를 여기서 하지 않는 이유는
+    /// 하루 한도(WorkTimerStore.ultraPokeDailyLimit)를 아는 쪽이 스토어이기 때문이다 — 모델이 그 상수를 알면
+    /// 한도를 바꿀 때 고쳐야 할 곳이 둘로 늘어난다.
+    /// nil 이면 **대입하지 마라**(모름 유지). 화면은 모를 때 아무 말도 하지 않는 쪽이 틀린 숫자보다 낫다.
+    var ultraRemainingForDisplay: Int? { ultraRemaining.map { max(0, $0) } }
 }
 
-/// 찌르기 결과의 도메인 표현(스토어/UI 공유).
+/// 찌르기 결과의 도메인 표현(스토어/UI 공유). **미지 status 는 반드시 .invalid 로 떨어진다** —
+/// 서버가 나중에 상태를 하나 더 늘려도(예: target_saturated) 옛 앱이 크래시하지 않고 안전한 문구로 수렴한다.
 enum PokeSendOutcome: Equatable {
     case ok
     case cooldown(retryAfterSeconds: Int)
     case notWorking
     case targetNotWorking
+    /// 오늘(KST) 울트라 몫을 다 썼다. **poke_user 는 이 status 를 절대 내지 않는다** —
+    /// 두 RPC 가 status 어휘를 공유하는 대신 enum 하나로 통일한 결과다(sendPoke 쪽은 도달 불가 분기로 남는다).
+    case ultraUsedToday(resetAfterSeconds: Int)
     case invalid
 
     init(response: PokeSendResponse) {
@@ -732,6 +767,7 @@ enum PokeSendOutcome: Equatable {
         case "cooldown": self = .cooldown(retryAfterSeconds: max(1, response.retryAfterSeconds ?? 60))
         case "not_working": self = .notWorking
         case "target_not_working": self = .targetNotWorking
+        case "ultra_used_today": self = .ultraUsedToday(resetAfterSeconds: max(1, response.resetAfterSeconds ?? 3600))
         default: self = .invalid
         }
     }
@@ -745,6 +781,12 @@ struct TakenPokeRow: Decodable, Equatable {
     let fromAvatarUrl: String?
     /// 찔린 시각의 epoch 초(서버가 extract(epoch ...)::bigint 로 내려줌 — ISO 소수초 파싱 함정 회피).
     let createdEpoch: Int
+    /// 찌르기 종류(20260804030000). **Optional 인 것이 핵심이다** — 앱을 먼저 배포하고 db push 가 늦은 창에서는
+    /// 서버가 이 키를 안 보내는데, 비옵셔널이면 [TakenPokeRow] 디코드가 통째로 throw 되어 그 사이 도착한
+    /// 모든 찔림이(일반 찌르기까지) 조용히 소멸한다. 합성 Decodable 은 Optional 에 decodeIfPresent 를 쓴다.
+    /// `let` 이 아니라 `var` 인 이유도 하나뿐이다: Optional `var` 만 멤버와이즈 init 에서 기본값 nil 을 받아
+    /// kind 를 모르던 기존 호출부(테스트 픽스처 포함)가 무수정으로 컴파일된다.
+    var kind: String?
 }
 
 /// 오버레이로 전달되는 수신 찔림 한 건.
@@ -752,6 +794,15 @@ struct ReceivedPoke: Equatable {
     let id: String
     let fromName: String
     let createdAt: Date
+    let kind: PokeKind
+
+    /// kind 기본값 .normal 은 하위호환용이다 — 이 인자를 모르는 기존 호출부가 그대로 컴파일된다.
+    init(id: String, fromName: String, createdAt: Date, kind: PokeKind = .normal) {
+        self.id = id
+        self.fromName = fromName
+        self.createdAt = createdAt
+        self.kind = kind
+    }
 }
 
 /// profiles.token_usage_public 자기 행 조회 응답.
@@ -765,4 +816,75 @@ struct ProfilePrivacyRow: Decodable, Equatable {
 /// profiles.token_usage_public 자기 행 갱신 요청(PATCH).
 struct ProfilePrivacyUpdateRequest: Encodable {
     let tokenUsagePublic: Bool
+}
+
+// MARK: - 별명(표시명) 변경 (계약 타입)
+
+/// set_display_name RPC 요청. { p_name: 사용자가 입력한 원문 } — 정규화의 최종 권한은 서버다.
+struct SetDisplayNameRequest: Encodable {
+    let pName: String
+}
+
+/// set_display_name RPC 응답(jsonb 단일 객체). PokeSendResponse 와 같은 이유로 커스텀 디코드를 쓴다 —
+/// 합성 디코더는 옵셔널 키가 빠진 응답에서도 안전하지만, 여기서는 키 집합이 status 별로 달라
+/// 명시 decodeIfPresent 로 의도를 못 박는 편이 다음 사람에게 정확하다.
+struct DisplayNameChangeResponse: Decodable, Equatable {
+    let status: String
+    var displayName: String?
+    var retryAfterSeconds: Int?
+    var maxLength: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case status, displayName, retryAfterSeconds, maxLength
+    }
+
+    init(status: String, displayName: String? = nil, retryAfterSeconds: Int? = nil, maxLength: Int? = nil) {
+        self.status = status
+        self.displayName = displayName
+        self.retryAfterSeconds = retryAfterSeconds
+        self.maxLength = maxLength
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        status = try c.decode(String.self, forKey: .status)
+        displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
+        retryAfterSeconds = try c.decodeIfPresent(Int.self, forKey: .retryAfterSeconds)
+        maxLength = try c.decodeIfPresent(Int.self, forKey: .maxLength)
+    }
+}
+
+/// 별명 변경 결과의 도메인 표현(스토어/UI 공유). **모르는 status 는 반드시 .invalid 로 떨어진다** —
+/// 서버가 나중에 상태를 하나 더 늘려도 옛 앱이 크래시하지 않고 안전한 문구로 수렴한다(PokeSendOutcome 규약).
+/// unauthorized·no_profile 도 여기로 접힌다.
+enum DisplayNameChangeOutcome: Equatable {
+    case ok(name: String)
+    case unchanged
+    case taken
+    case cooldown(retryAfterSeconds: Int)
+    case tooLong(maxLength: Int)
+    case empty
+    case invalid
+
+    init(response: DisplayNameChangeResponse) {
+        switch response.status {
+        case "ok":            self = .ok(name: response.displayName ?? "")
+        case "unchanged":     self = .unchanged
+        case "taken":         self = .taken
+        case "cooldown":      self = .cooldown(retryAfterSeconds: max(1, response.retryAfterSeconds ?? 604_800))
+        // max_length 를 안 실어 준 응답(옛 서버/잘린 JSON)에서만 쓰이는 폴백이다. 숫자를 여기 박아 두면
+        // 상한을 바꿀 때 **이 한 줄만 옛 값으로 남아**, 사용자는 "12자까지"라고 배운 화면을 보다가 거절 문구에서만
+        // 다른 숫자를 듣게 된다. 상한의 유일한 근거(WorkTimerStore.displayNameMaxLength)를 그대로 읽는다 —
+        // 그 상수는 nonisolated 라 모델의 비격리 init 에서 읽어도 액터 경계에 걸리지 않는다.
+        case "invalid_long":  self = .tooLong(maxLength: max(1, response.maxLength ?? WorkTimerStore.displayNameMaxLength))
+        case "invalid_empty": self = .empty
+        default:              self = .invalid
+        }
+    }
+}
+
+/// display_name_changed_at 전용 1컬럼 응답. 컬럼이 없는 서버에서는 이 GET 자체가 400 이 되고
+/// 호출부가 삼키므로, 옵셔널 폴백이 아니라 **요청 단위 격리**로 하위호환을 얻는다.
+struct DisplayNameChangedAtRow: Decodable, Equatable {
+    let displayNameChangedAt: String?
 }

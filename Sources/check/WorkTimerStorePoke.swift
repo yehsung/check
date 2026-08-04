@@ -16,6 +16,32 @@ extension WorkTimerStore {
     nonisolated static let pokeDisplayFreshnessSeconds: TimeInterval = 3600
     /// 찌르기 쿨타임(초). 서버가 강제하고 클라는 표시용 카운트다운만 미러링한다.
     static let pokeCooldownSeconds: TimeInterval = 60
+    /// 울트라 하루 한도(보낸 사람 기준·대상 무관·KST 자정 리셋). 서버 ultra_poke_user 의 ultra_poke_daily_limit 과
+    /// **같은 값이어야 한다** — 어긋나면 클라가 "1번 남음"이라 말한 뒤 서버가 거절하는 무언의 모순이 된다.
+    /// 한도를 바꿀 땐 서버 상수와 이 한 줄만 고치면 된다(안내 문구·게이트가 전부 여기서 파생된다).
+    nonisolated static let ultraPokeDailyLimit = 2
+    /// 울트라 표시 신선도(초). 일반 찔림의 1시간(pokeDisplayFreshnessSeconds)과 **일부러 다르다** —
+    /// 울트라는 화면 전체를 5초간 덮으므로, 맥이 잠들었다 깨어난 뒤 40분 전 울트라가 갑자기 터지면
+    /// 그건 알림이 아니라 습격이다. 정상 전달 지연 상한은 폴링 주기(15초)라 120초면 재시도·네트워크
+    /// 흔들림까지 덮는다.
+    nonisolated static let ultraDisplayFreshnessSeconds: TimeInterval = 120
+    /// 하루 한도 소진 안내. 문장을 한도 상수에서 만들어, 상수만 바꾸면 문구가 저절로 따라오게 한다.
+    nonisolated static let ultraSpentNotice = "울트라 찌르기는 하루에 \(WorkTimerStore.ultraPokeDailyLimit)번까지예요"
+
+    /// 남은 횟수 안내 문구. **모르면 nil** 이고, 그때 화면은 아무 숫자도 말하지 않는다 —
+    /// 남은 횟수는 울트라 응답으로만 알 수 있어서 '아직 모름' 구간이 정상적으로 존재하고,
+    /// 틀린 숫자를 보여주느니 침묵하는 편이 낫기 때문이다(그래서 이걸 알자고 새 GET 을 만들지 않는다).
+    /// 순수 함수라 UI 는 이 함수만 쓰고 자기 문장을 만들지 않는다(문구가 두 곳으로 갈라지지 않게).
+    nonisolated static func ultraRemainingText(remaining: Int?) -> String? {
+        guard let remaining, remaining >= 0 else { return nil }
+        return remaining == 0 ? "오늘 몫은 다 썼어요" : "오늘 \(remaining)번 남음"
+    }
+
+    /// 울트라 발사 직후 안내. 남은 횟수를 아는 경우에만 뒤에 덧붙인다.
+    nonisolated static func ultraSentNotice(remaining: Int?) -> String {
+        guard let tail = ultraRemainingText(remaining: remaining) else { return "울트라 찌르기 발사!" }
+        return "울트라 찌르기 발사! " + tail
+    }
 
     /// 콕찌르기 패널 열림/refresh 루프에서 부르는 디렉토리 로드 래퍼(Task 발사).
     func loadPokeDirectory() {
@@ -72,6 +98,10 @@ extension WorkTimerStore {
                     pokeNotice = nil
                 case .cooldown(let retryAfterSeconds):
                     pokeCooldownUntil[userID] = Date().addingTimeInterval(TimeInterval(retryAfterSeconds))
+                case .ultraUsedToday:
+                    // poke_user 는 이 status 를 절대 내지 않는다(두 RPC 가 status 어휘만 공유한다).
+                    // 컴파일 망라를 위한 도달 불가 분기 — 그래도 무음으로 삼키지는 않는다.
+                    pokeNotice = Self.ultraSpentNotice
                 case .notWorking:
                     pokeNotice = "근무 중일 때만 콕 찌를 수 있어요"
                 case .targetNotWorking:
@@ -85,6 +115,110 @@ extension WorkTimerStore {
             } catch {
                 if case .cancelled = classifyAuthError(error) { return }
                 guard generation == sessionGeneration else { return }
+                pokeNotice = "연결이 불안정해요. 잠시 후 다시 시도해 주세요"
+            }
+        }
+    }
+
+    /// 오늘(KST) 울트라 몫을 다 썼는가. MilestoneTracker.dayKey 와 같은 눈금(Asia/Seoul yyyyMMdd)을 써
+    /// 자정 롤오버가 리그·마일스톤과 어긋나지 않게 한다. 비교로 판정하므로 날이 바뀌면 저절로 풀린다.
+    func isUltraPokeSpent(now: Date) -> Bool { ultraPokeSpentDay == MilestoneTracker.dayKey(now) }
+
+    /// 오늘 남은 울트라 횟수(모르면 nil). 스탬프가 오늘이 아니면 어제 값이라 **모름으로 답한다** —
+    /// 이 비교가 없으면 자정을 넘긴 뒤에도 어제의 "0번 남음"이 화면에 남는다.
+    func ultraRemaining(now: Date) -> Int? {
+        guard ultraRemainingDay == MilestoneTracker.dayKey(now) else { return nil }
+        return ultraRemainingToday
+    }
+
+    /// 날이 바뀌었으면 어제의 남은 횟수를 '모름'으로 되돌린다(다음 울트라 응답이 진실을 채운다).
+    /// 남은 횟수를 알자고 새 요청을 만들지 않기로 했으므로, 로컬이 할 수 있는 정직한 일은 '버리는 것'뿐이다.
+    func refreshUltraQuota(now: Date) {
+        guard ultraRemainingDay != MilestoneTracker.dayKey(now) else { return }
+        if ultraRemainingToday != nil { ultraRemainingToday = nil }
+        if ultraRemainingDay != nil { ultraRemainingDay = nil }
+    }
+
+    /// 오늘 몫 소진 미러를 세운다(@Observable 동등성 가드 — 같은 값 재대입도 관찰자를 발화시킨다).
+    func markUltraSpent(now: Date) {
+        let key = MilestoneTracker.dayKey(now)
+        if ultraPokeSpentDay != key { ultraPokeSpentDay = key }
+    }
+
+    /// 서버가 실어 준 남은 횟수를 반영한다. **값이 없으면 '모름'(nil)으로 되돌린다** — 직전 숫자를 남기면
+    /// 방금 한 발 썼는데도 옛 숫자를 계속 보여준다(마이그레이션 전 서버는 이 필드를 아예 안 보낸다).
+    /// 0 이면 오늘 몫 소진이므로 소진 미러도 함께 세운다 — 그래야 다음 시도가 요청 없이 막힌다.
+    func applyUltraRemaining(_ value: Int?, now: Date) {
+        // 음수는 서버 버그이거나 미래 규약이다. 숫자로 말할 수 없는 값이므로 0 으로 접는다.
+        let normalized = value.map { max(0, $0) }
+        if ultraRemainingToday != normalized { ultraRemainingToday = normalized }
+        let stamp = normalized == nil ? nil : MilestoneTracker.dayKey(now)
+        if ultraRemainingDay != stamp { ultraRemainingDay = stamp }
+        if normalized == 0 { markUltraSpent(now: now) }
+    }
+
+    /// 울트라 찌르기. 일반 sendPoke 와 게이트는 같고(근무중 선게이트) 하루 한도 로컬 미러가 하나 더 붙는다.
+    /// 서버 게이트 순서는 invalid → 보낸이근무 → 대상근무 → 하루한도 → 쿨타임이고, 여기 매핑도 그 어휘를 따른다.
+    func sendUltraPoke(to userID: String) {
+        guard session != nil else { return }
+        guard startedAt != nil else {
+            pokeNotice = "근무 중일 때만 콕 찌를 수 있어요"
+            return
+        }
+        let sentAt = clock()
+        // 날이 바뀌었으면 어제의 남은 횟수부터 버린다 — 안 버리면 어제 "0번 남음"이 오늘 안내로 샌다.
+        refreshUltraQuota(now: sentAt)
+        // 이 맥이 이미 오늘 몫을 다 쓴 걸 알면 요청 자체를 안 낸다. 다른 맥에서 썼다면 미러가 비어 있으므로
+        // 서버가 ultra_used_today 로 가르쳐 주고, 그때 미러를 채워 다음 시도부터 막는다.
+        if isUltraPokeSpent(now: sentAt) {
+            pokeNotice = Self.ultraSpentNotice
+            return
+        }
+        let generation = sessionGeneration
+        Task { @MainActor in
+            do {
+                let response = try await withSessionRetry { activeSession in
+                    try await service.sendUltraPoke(accessToken: activeSession.accessToken, to: userID)
+                }
+                guard generation == sessionGeneration else { return }
+                let now = clock()
+                switch PokeSendOutcome(response: response) {
+                case .ok:
+                    // 울트라도 pokes 행을 남기므로 서버의 같은-대상 60초 쿨타임이 함께 시작된다.
+                    // 여기서 미러를 안 맞추면 버튼이 활성인 채로 남아 다음 탭이 확정 cooldown 을 받는다.
+                    //
+                    // withSessionRetry 가 토큰 갱신으로 이 RPC 를 재발사한 경우, 서버엔 이미 행이 있어
+                    // 두 번째 응답이 하루 한도를 하나 더 깎은 값으로 온다 — 남은 횟수는 서버 값이 진실이므로
+                    // 그대로 반영한다(로컬 추측으로 덮지 않는다).
+                    pokeCooldownUntil[userID] = Date().addingTimeInterval(Self.pokeCooldownSeconds)
+                    applyUltraRemaining(response.ultraRemainingForDisplay, now: now)
+                    pokeNotice = Self.ultraSentNotice(remaining: ultraRemaining(now: now))
+                case .ultraUsedToday:
+                    // status 자체가 '오늘 몫 없음'의 권위다 — 서버가 남은 횟수를 안 실어 줘도(구버전) 0 으로 본다.
+                    applyUltraRemaining(response.ultraRemainingForDisplay ?? 0, now: now)
+                    markUltraSpent(now: now)
+                    pokeNotice = Self.ultraSpentNotice
+                case .cooldown(let retryAfterSeconds):
+                    pokeCooldownUntil[userID] = Date().addingTimeInterval(TimeInterval(retryAfterSeconds))
+                    // 3초를 꾹 눌러 링을 다 채운 뒤 아무 문구도 안 뜨면, 버튼이 쿨타임으로 흐려지는 것과
+                    // 겹쳐 사용자는 '울트라가 나갔다'고 읽는다. 실제로는 안 나갔고 오늘 몫도 그대로다 —
+                    // 그 두 사실을 여기서 말하지 않으면 알 방법이 화면에 없다.
+                    pokeNotice = "방금 찌른 상대예요. 잠시 후 울트라를 쓸 수 있어요"
+                case .notWorking:
+                    pokeNotice = "근무 중일 때만 콕 찌를 수 있어요"
+                case .targetNotWorking:
+                    // 대상 자리비움은 몫을 태우지 않는다(서버가 행을 안 남긴다). 디렉토리 배지가 낡았다는
+                    // 뜻이므로 즉시 재조회해 다음 시도부터 버튼이 선게이트되게 한다.
+                    pokeNotice = "자리비움 상태에는 찌를 수 없어요"
+                    loadPokeDirectory()
+                case .invalid:
+                    pokeNotice = "지금은 찌를 수 없어요"
+                }
+            } catch {
+                if case .cancelled = classifyAuthError(error) { return }
+                guard generation == sessionGeneration else { return }
+                // 마이그레이션 미적용 서버(404/PGRST202)도 여기로 떨어진다 — 울트라만 조용히 못 쓰고
+                // 일반 찌르기는 그대로 산다.
                 pokeNotice = "연결이 불안정해요. 잠시 후 다시 시도해 주세요"
             }
         }
@@ -118,6 +252,10 @@ extension WorkTimerStore {
     /// 세션이 없으면 요청 0건으로 빠지고 루프는 다음 tick 을 계속 돈다(로그인 복구를 기다리는 것).
     func pokePollTick() async {
         guard session != nil else { return }
+        // 자정을 넘겼으면 어제의 울트라 남은 횟수를 여기서 버린다(요청 0건 — 순수 로컬 판정).
+        // 발사 시점에도 같은 판정을 하지만, 패널을 열어 둔 채 자정을 넘긴 사용자에게 "0번 남음"이
+        // 눌러 보기 전까지 남아 있는 것을 막으려면 상시 폴링에도 붙여야 한다.
+        refreshUltraQuota(now: clock())
         // 공개 설정 1회 로드는 아래 근무중 게이트보다 **앞**이다. 뒤로 내리면 근무를 한 번도 시작하지 않은 사용자가
         // 자기 token_usage_public 서버값을 영영 못 읽어, 로그인 직후의 낙관 기본값 true 가 교정되지 않는다
         // — 비공개로 꺼 둔 사람의 토큰 사용량이 다음 실행마다 공개로 되살아나 보인다.
@@ -193,8 +331,13 @@ extension WorkTimerStore {
     nonisolated static func freshReceivedPokes(rows: [TakenPokeRow], now: Date) -> [ReceivedPoke] {
         rows.compactMap { row in
             let createdAt = Date(timeIntervalSince1970: TimeInterval(row.createdEpoch))
-            guard now.timeIntervalSince(createdAt) <= pokeDisplayFreshnessSeconds else { return nil }
-            return ReceivedPoke(id: row.id, fromName: row.fromDisplayName, createdAt: createdAt)
+            let age = now.timeIntervalSince(createdAt)
+            guard age <= pokeDisplayFreshnessSeconds else { return nil }
+            var kind = PokeKind(rawServerValue: row.kind)
+            // 늦게 도착한 울트라는 전체화면 격발을 포기하고 평범한 움찔로 **강등**한다(버리지 않는다) —
+            // 보낸 사람이 하루 몇 번뿐인 몫을 이미 태웠으므로 최소한 누가 찔렀는지는 전해야 한다.
+            if kind == .ultra, age > ultraDisplayFreshnessSeconds { kind = .normal }
+            return ReceivedPoke(id: row.id, fromName: row.fromDisplayName, createdAt: createdAt, kind: kind)
         }
     }
 
@@ -212,6 +355,20 @@ extension WorkTimerStore {
             // 수집 설정은 사용자가 앱에서 바꾸는 값이 아니라 서버가 정하는 값이라 낙관 갱신도 토글도 없다.
             // 앱 게이트는 통신 낭비를 줄이는 부수 장치일 뿐 — 실효는 서버 트리거가 낸다(구버전도 함께 막힌다).
             if tokenUsageCollect != settings.collects { tokenUsageCollect = settings.collects }
+            // 별명 쿨타임 기준 시각. 실패해도 위 두 설정은 이미 반영됐다 — 쿨타임만 '아직 모름'으로 남고
+            // 서버가 최종 판정한다. 컬럼이 없는 서버(마이그레이션 전)에서는 이 GET 이 400 이지만 여기서
+            // try? 로 삼키므로 토큰 공개/수집 설정은 그대로 산다(요청을 하나로 합치면 그게 같이 죽는다).
+            let changedAt = try? await withSessionRetry { activeSession in
+                try await service.fetchDisplayNameChangedAt(
+                    accessToken: activeSession.accessToken, userID: activeSession.userID)
+            }
+            guard generation == sessionGeneration else { return }
+            if displayNameChangedAt != changedAt { displayNameChangedAt = changedAt }
+            if let changedAt {
+                let availableAt = changedAt.addingTimeInterval(Self.displayNameCooldownSeconds)
+                if displayNameAvailableAt != availableAt { displayNameAvailableAt = availableAt }
+            }
+            refreshDisplayNameLock()
             tokenUsagePublicLoaded = true
         } catch {
             // 조용히 무시한다 — loaded 는 성공 시에만 서므로 다음 폴링 tick 에 재시도된다.

@@ -561,6 +561,96 @@ extension WorkTimerStore {
         }
     }
 
+    /// 별명(표시명) 변경. 서버 set_display_name 이 정규화·길이·중복·쿨타임을 **전부** 판정하고 여기서는
+    /// 그 status 를 화면 문구로 옮기기만 한다. 반환값(성공 여부)으로 뷰가 편집 행을 닫을지 정한다
+    /// (실패면 입력을 유지해 바로 고쳐 재시도할 수 있게 한다).
+    ///
+    /// **문구(syncMessage)는 반드시 refreshTeamStatus 뒤에 세운다.** 그 함수가 성공 경로 끝에서 syncMessage 를
+    /// "동기화됨"으로 덮으므로 앞에 두면 안내가 즉시 사라진다 — 바로 위 performAvatarUpdate 가 같은 이유로
+    /// 같은 순서를 쓴다.
+    @discardableResult
+    func updateDisplayName(_ raw: String) async -> Bool {
+        // 연타 가드가 없으면 저장 버튼 두 번에 두 요청이 나가고, 첫 요청이 성공한 뒤 두 번째가 unchanged/cooldown 을
+        // 받아 방금 성공한 화면 위에 실패 문구를 덮는다.
+        guard session != nil, !isUpdatingDisplayName else { return false }
+        let name = Self.normalizedDisplayName(raw)
+        guard !name.isEmpty else {
+            displayNameNotice = "별명을 입력해 주세요"
+            isDisplayNameNoticeError = true
+            return false
+        }
+        guard name.unicodeScalars.count <= Self.displayNameMaxLength else {
+            displayNameNotice = "별명은 \(Self.displayNameMaxLength)자까지 쓸 수 있어요"
+            isDisplayNameNoticeError = true
+            return false
+        }
+        isUpdatingDisplayName = true
+        defer { isUpdatingDisplayName = false }
+        let generation = sessionGeneration
+        do {
+            let response = try await withSessionRetry { activeSession in
+                try await service.setDisplayName(accessToken: activeSession.accessToken, name: name)
+            }
+            guard generation == sessionGeneration else { return false }
+            switch DisplayNameChangeOutcome(response: response) {
+            case .ok(let applied):
+                // 서버가 실제로 저장한 값을 그대로 쓴다 — 클라 정규화와 한 글자라도 다르면 다음 폴링에서
+                // 이름이 눈앞에서 바뀌는 깜빡임이 된다(그래서 낙관 대입도 하지 않는다).
+                let stored = applied.isEmpty ? name : applied
+                if displayName != stored { displayName = stored }
+                defaults.set(stored, forKey: Self.displayNameKey)
+                let now = Date()
+                displayNameChangedAt = now
+                displayNameAvailableAt = now.addingTimeInterval(Self.displayNameCooldownSeconds)
+                displayNameNotice = nil
+                isDisplayNameNoticeError = false
+                refreshDisplayNameLock(now: now)
+                // 팀 목록 내 행 이름은 서버 응답에서 온다 — 낙관 대입 대신 왕복 후 갱신(아바타와 같은 규약).
+                await refreshTeamStatus()
+                guard generation == sessionGeneration else { return false }
+                syncMessage = "별명 변경됨"          // ← 반드시 refresh 뒤
+                return true
+            case .unchanged:
+                // 이미 같은 이름 — 서버가 아무것도 바꾸지 않았고 쿨타임도 소모되지 않았다. 조용히 닫는다.
+                displayNameNotice = nil
+                isDisplayNameNoticeError = false
+                return true
+            case .taken:
+                displayNameNotice = "이미 쓰고 있는 별명이에요"
+                isDisplayNameNoticeError = true
+                return false
+            case .cooldown(let retryAfterSeconds):
+                // 서버가 준 잔여 시간을 **그대로** 만료 시각으로 쓴다(기준 시각 역산 없음 — 왕복은 경계에서
+                // 화면의 월·일을 하루 밀어 버릴 여지만 키운다).
+                let availableAt = Date().addingTimeInterval(TimeInterval(retryAfterSeconds))
+                displayNameAvailableAt = availableAt
+                displayNameNotice = Self.displayNameCooldownMessage(availableAt: availableAt)
+                isDisplayNameNoticeError = false     // 쿨타임은 오류가 아니라 상태다.
+                refreshDisplayNameLock()
+                return false
+            case .tooLong(let maxLength):
+                displayNameNotice = "별명은 \(maxLength)자까지 쓸 수 있어요"
+                isDisplayNameNoticeError = true
+                return false
+            case .empty:
+                displayNameNotice = "별명을 입력해 주세요"
+                isDisplayNameNoticeError = true
+                return false
+            case .invalid:
+                // 마이그레이션 미적용 서버의 RPC 404(PGRST202)도 여기로 수렴한다.
+                displayNameNotice = "지금은 별명을 바꿀 수 없어요"
+                isDisplayNameNoticeError = true
+                return false
+            }
+        } catch {
+            guard generation == sessionGeneration else { return false }
+            if case .cancelled = classifyAuthError(error) { return false }
+            displayNameNotice = "연결이 불안정해요. 잠시 후 다시 시도해 주세요"
+            isDisplayNameNoticeError = true
+            return false
+        }
+    }
+
     func syncCurrentStatus(durationSeconds: Int? = nil, sessionStartedAt: Date? = nil, endedAt: Date? = nil) {
         guard session != nil else {
             snapshot.pendingSync = true

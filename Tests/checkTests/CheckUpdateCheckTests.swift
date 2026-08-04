@@ -264,8 +264,81 @@ func bubbleNeverShowsWhenNoUpdateAvailable() async {
 
 @Test
 func copyCommandIsExact() {
-    // 폴백 복사 문자열은 정확히 이 문자열이어야 한다.
-    #expect(UpdateRunner.copyCommand == "brew upgrade aing-check")
+    // 폴백 복사 문자열은 **원클릭이 실제로 실행하는 명령과 같아야 한다**.
+    // 예전 문자열(`brew upgrade aing-check`)은 탭이 낡았을 때 조용히 "이미 최신"으로 끝나
+    // 사용자가 손으로 실행해도 똑같이 실패했다 — 폴백이 폴백 구실을 못 했다.
+    #expect(UpdateRunner.copyCommand == "brew update && brew upgrade --cask aing-check")
+}
+
+// 원클릭이 실제로 던지는 명령이 (1) brew update 를 **먼저** 하고 (2) --cask 를 명시하는지 문자열로 못박는다.
+// (1)이 없으면 HOMEBREW_AUTO_UPDATE_SECS 스로틀 창 안에 있는 사용자는 낡은 탭으로 upgrade 를 돌려
+// 새 버전을 못 본 채 끝나고, 앱은 죽지 않아 배너가 "업데이트 중…"으로 굳는다(실사용 신고 증상).
+@Test
+func upgradeScriptUpdatesTapFirstAndTargetsTheCask() {
+    // 프로덕션 스폰이 만드는 **실제 스크립트 문자열**을 본다. 테스트가 문자열을 재조립하면
+    // 소스를 되돌려도 초록이라 아무것도 못 잡는다.
+    let script = UpdateRunner.upgradeScript(brew: "/opt/homebrew/bin/brew")
+
+    let updateAt = script.range(of: "brew\" update")
+    let upgradeAt = script.range(of: "brew\" upgrade")
+    #expect(updateAt != nil)
+    #expect(upgradeAt != nil)
+    // 순서가 뒤집히면 낡은 탭으로 upgrade 가 돌아 새 버전을 못 본다.
+    if let u = updateAt, let g = upgradeAt { #expect(u.lowerBound < g.lowerBound) }
+    // 이름만 주면 brew 가 포뮬러를 먼저 찾는다 — 동명 포뮬러가 생기면 엉뚱한 것을 올린다.
+    #expect(script.contains("upgrade --cask \(UpdateRunner.caskName)"))
+    // 실패 원인을 볼 수 있어야 한다 — /dev/null 로 버리면 지원이 불가능하다.
+    #expect(!script.contains("/dev/null"))
+    #expect(script.contains(UpdateRunner.logPath))
+    // 앱 종료에도 살아남아야 한다(cask 의 quit 스탠자가 이 앱을 죽인다).
+    #expect(script.hasPrefix("nohup "))
+    #expect(script.hasSuffix("&"))
+}
+
+// running 은 종착역이 아니다. 업그레이드가 실제로 일어나면 cask 의 quit 스탠자가 앱을 죽이므로
+// 감시가 발화할 기회가 없다 — 발화했다는 건 업그레이드가 안 일어났다는 뜻이고, 그때는 failed 로 내려
+// 폴백 안내 + 재시도를 열어 줘야 한다. 예전엔 running 을 벗어나는 경로가 하나도 없어 영구히 굳었다.
+@MainActor
+@Test
+func runningFallsBackToFailedWhenUpgradeNeverHappens() async {
+    let runner = UpdateRunner(
+        fileExists: { $0 == UpdateRunner.brewCandidates[0] },
+        spawn: { _ in true },
+        watchdogSleep: { _ in }          // 시한을 즉시 통과시킨다(150초를 실제로 자지 않는다).
+    )
+    let task = runner.runUpgrade()
+    #expect(runner.status == .running)
+    await task?.value
+    #expect(runner.status == .failed)
+
+    // 그리고 다시 누를 수 있어야 한다(재시도 가능 = 이 수리의 핵심).
+    var respawned = 0
+    let retry = UpdateRunner(
+        fileExists: { $0 == UpdateRunner.brewCandidates[0] },
+        spawn: { _ in respawned += 1; return true },
+        watchdogSleep: { _ in }
+    )
+    await retry.runUpgrade()?.value
+    #expect(retry.status == .failed)
+    await retry.runUpgrade()?.value      // failed 상태에서 재시도가 실제로 스폰된다
+    #expect(respawned == 2)
+}
+
+// 대조군: 업그레이드가 정상적으로 일어나 앱이 곧 종료될 경우, 감시가 성급하게 failed 로 내리면 안 된다.
+// (감시가 아직 안 끝난 동안에는 running 이 유지된다 — 배너가 깜빡이지 않는다.)
+@MainActor
+@Test
+func runningStaysWhileWatchdogHasNotElapsed() async {
+    let runner = UpdateRunner(
+        fileExists: { $0 == UpdateRunner.brewCandidates[0] },
+        spawn: { _ in true },
+        watchdogSleep: { _ in try? await Task.sleep(for: .seconds(60)) }   // 끝나지 않는다
+    )
+    let task = runner.runUpgrade()
+    defer { task?.cancel() }
+    #expect(runner.status == .running)
+    // 감시가 아직 안 끝났으므로 running 그대로.
+    #expect(runner.status == .running)
 }
 
 @MainActor

@@ -222,44 +222,94 @@ final class UpdateRunner {
     nonisolated static let brewCandidates = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
     nonisolated static let caskName = "aing-check"
     nonisolated static let appPath = "/Applications/aing-check.app"
-    /// 폴백 복사 문자열(사양상 정확히 이 문자열이어야 한다).
-    nonisolated static let copyCommand = "brew upgrade aing-check"
+    /// 폴백 복사 문자열. **원클릭이 실제로 실행하는 명령과 같아야 한다** — 예전엔 `brew upgrade aing-check` 였는데,
+    /// 그 명령은 탭이 낡았을 때 조용히 "이미 최신"으로 끝나 사용자가 손으로 실행해도 똑같이 실패했다.
+    nonisolated static let copyCommand = "brew update && brew upgrade --cask aing-check"
+
+    /// running 감시 시한(초). 이 시간이 지나도 여전히 running 이면 실패로 본다.
+    ///
+    /// 왜 필요한가: 업그레이드가 **실제로 일어나면** cask 의 `uninstall quit: "kingcheck"` 가 이 앱을 종료시키므로
+    /// (packaging/homebrew/aing-check.rb) 이 감시는 발화할 기회가 없다. 즉 감시가 발화했다는 것은
+    /// "명령은 떴는데 업그레이드가 일어나지 않았다"는 뜻이다. 예전엔 running 을 벗어나는 경로가 **하나도 없어서**
+    /// 그 경우 배너가 "업데이트 중…"으로 영원히 굳고 버튼도 비활성이라 재시도조차 못 했다(실사용 신고).
+    nonisolated static let watchdogSeconds: Double = 150
 
     /// brew 실행파일 존재 판정(주입 가능).
     private let fileExists: (String) -> Bool
     /// 분리 프로세스 스폰(주입 가능). 인자는 탐지된 brew 절대경로. 성공하면 true.
     private let spawn: (String) -> Bool
+    /// 감시 대기(주입 가능). 테스트가 150초를 실제로 자지 않게 한다.
+    private let watchdogSleep: @Sendable (Double) async -> Void
+    @ObservationIgnored private var watchdogTask: Task<Void, Never>?
 
     init(
         fileExists: @escaping (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) },
-        spawn: @escaping (String) -> Bool = UpdateRunner.detachedSpawn
+        spawn: @escaping (String) -> Bool = UpdateRunner.detachedSpawn,
+        watchdogSleep: @escaping @Sendable (Double) async -> Void = { try? await Task.sleep(for: .seconds($0)) }
     ) {
         self.fileExists = fileExists
         self.spawn = spawn
+        self.watchdogSleep = watchdogSleep
     }
 
     /// 탐지된 brew 경로(없으면 nil).
     var brewPath: String? { Self.brewCandidates.first(where: fileExists) }
 
-    /// 원클릭 업그레이드. brew 미탐지 → unavailable, 스폰 실패 → failed, 성공 → running.
+    /// 원클릭 업그레이드. brew 미탐지 → unavailable, 스폰 실패 → failed, 성공 → running(+감시 시작).
     /// running 중 재호출은 무시한다(중복 스폰 금지).
-    func runUpgrade() {
-        guard status != .running else { return }
+    @discardableResult
+    func runUpgrade() -> Task<Void, Never>? {
+        guard status != .running else { return nil }
         guard let brew = brewPath else {
             status = .unavailable
-            return
+            return nil
         }
-        status = spawn(brew) ? .running : .failed
+        guard spawn(brew) else {
+            status = .failed
+            return nil
+        }
+        status = .running
+        watchdogTask?.cancel()
+        let task = Task { @MainActor [weak self] in
+            guard let sleep = self?.watchdogSleep else { return }
+            await sleep(Self.watchdogSeconds)
+            guard !Task.isCancelled, let self, self.status == .running else { return }
+            // 여기 도달 = 앱이 살아 있는데 시한이 지났다 = 업그레이드가 일어나지 않았다.
+            // failed 로 내려 배너가 폴백 안내와 함께 재시도를 허용하게 한다.
+            self.status = .failed
+        }
+        watchdogTask = task
+        return task
     }
 
-    /// 기본 스폰: 앱 종료에도 살아남는 분리 프로세스로 `brew upgrade … && open -a …` 를 띄운다(성공 시 true).
+    /// 기본 스폰: 앱 종료에도 살아남는 분리 프로세스로 `brew update && brew upgrade --cask … && open -a …` 를 띄운다.
     ///
     /// 왜 nohup/이중 분리: brew cask 의 `quit` 스탠자가 업그레이드 도중 이 앱을 종료시킨다. 그래서 부모(앱)가 죽어도
     /// 명령이 이어지고 끝나면 앱을 다시 열도록, 세션에서 떼어(nohup) 백그라운드(&)로 던진다. 여기선 실행만 하고
     /// 완료를 기다리지 않으므로 UI 를 막지 않는다(Process.run 은 spawn 직후 반환).
+    ///
+    /// **왜 `brew update` 를 먼저 하는가(이 수리의 핵심)**: brew 의 자동 갱신은 `HOMEBREW_AUTO_UPDATE_SECS`
+    /// 로 스로틀된다(기본 하루). 최근에 다른 brew 명령을 쓴 사람은 그 창 안에서 자동 갱신이 **건너뛰어져** 탭이
+    /// 낡은 채로 남고, `brew upgrade` 는 새 버전을 못 본 채 "이미 최신"으로 조용히 끝난다. 그러면 앱은 죽지 않고
+    /// 배너만 "업데이트 중…"으로 굳는다 — 실사용에서 보고된 증상이 정확히 이것이다.
+    ///
+    /// **왜 `--cask` 를 명시하는가**: 이름만 주면 brew 가 포뮬러를 먼저 찾는다. 지금은 동명 포뮬러가 없어 우연히
+    /// 동작하지만, 언젠가 생기면 엉뚱한 것을 올린다. 문서·복사 명령과도 같은 형태로 맞춘다.
+    ///
+    /// **로그**: 예전엔 출력을 통째로 /dev/null 에 버려 실패 원인을 아무도 볼 수 없었다. 이제 파일에 남겨
+    /// 사용자가 붙여넣을 수 있게 한다(전송 없음 — 이 맥에만 남는다).
+    nonisolated static let logPath = NSString(string: "~/Library/Logs/aing-check-update.log").expandingTildeInPath
+
+    /// 스폰할 셸 스크립트 문자열. **테스트가 이 함수를 직접 검사한다** — 테스트가 문자열을 재조립하면
+    /// 소스를 되돌려도 초록이라 회귀를 못 잡는다.
+    nonisolated static func upgradeScript(brew: String) -> String {
+        let inner = "\"\(brew)\" update && \"\(brew)\" upgrade --cask \(caskName) && open -a \"\(appPath)\""
+        // 실패해도 로그가 남도록 파이프 전체를 파일로 리다이렉트한다(append — 직전 시도와 비교할 수 있게).
+        return "nohup zsh -c '\(inner)' >>\"\(logPath)\" 2>&1 &"
+    }
+
     nonisolated static func detachedSpawn(brew: String) -> Bool {
-        let inner = "\"\(brew)\" upgrade \(caskName) && open -a \"\(appPath)\""
-        let script = "nohup zsh -c '\(inner)' >/dev/null 2>&1 &"
+        let script = upgradeScript(brew: brew)
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
         proc.arguments = ["-c", script]

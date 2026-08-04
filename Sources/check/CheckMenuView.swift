@@ -356,7 +356,9 @@ private struct UpdateBanner: View {
     private var fallbackHint: String? {
         switch runner.status {
         case .unavailable: return "brew를 찾지 못했어요 — 아래 명령을 복사해 실행하세요"
-        case .failed: return "자동 실행에 실패했어요 — 아래 명령을 복사해 실행하세요"
+        // failed 는 두 경우다: 스폰 자체가 실패했거나, 명령은 떴는데 시한 안에 업데이트가 일어나지 않았거나.
+        // 후자가 훨씬 흔하므로(낡은 탭·권한 등) 원인을 단정하지 않는 문구를 쓴다.
+        case .failed: return "업데이트가 진행되지 않았어요 — 아래 명령을 복사해 실행하세요"
         case .idle, .running: return nil
         }
     }

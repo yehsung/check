@@ -530,16 +530,9 @@ final class CheckOverlayController {
     func handleReceivedPokes(_ pokes: [ReceivedPoke]) {
         guard !pokes.isEmpty else { return } // 빈 배치 무시.
         // 같은 폴링에 울트라가 2건 와도 격발은 1회다 — 첫 울트라가 배치 전체를 대표한다.
+        // 캐릭터 표시를 꺼 뒀어도 전체화면 격발은 그대로 재생한다(사용자 결정: 강등하지 않는다).
         if let ultra = pokes.first(where: { $0.kind == .ultra }) {
-            let bubble = Self.ultraBubbleText(name: ultra.fromName, otherCount: pokes.count - 1)
-            // 캐릭터 표시를 꺼 둔 사용자에게 전체화면 5초 격발은 그 사람의 명시적 '숨김'을 뒤엎는다. v0.2.7 peek
-            // 계약이 만들어질 때의 '찔림'은 작은 움찔이었고 지금은 전체화면이라 위험도 등급이 다르다 — 표시를
-            // 꺼 뒀으면 울트라도 peek 로 강등한다(수신 자체는 보존: take_pokes 는 이미 원자 소비했다).
-            if store.isOverlayEnabled {
-                beginUltraTakeover(text: bubble)
-            } else {
-                beginPokePeek(text: bubble)
-            }
+            beginUltraTakeover(text: Self.ultraBubbleText(name: ultra.fromName, otherCount: pokes.count - 1))
             return
         }
         // 격발 중 도착한 일반 찔림은 여기서 삼킨다. 전체화면 발광 위에 작은 움찔·다른 말풍선을 겹치면
@@ -575,8 +568,8 @@ final class CheckOverlayController {
     }
 
     /// 울트라 수신: 패널을 화면 전체로 넓히고 5초간 발광시킨 뒤 **정확히 원래대로** 되돌린다.
-    /// 캐릭터 표시를 꺼 둔 사용자에게는 이 전체화면 격발 대신 handleReceivedPokes 가 peek 로 강등한다
-    /// (수신 자체는 보존 — take_pokes 가 이미 원자 소비했다). 그래서 이 함수는 표시가 켜진 경우에만 온다.
+    /// 캐릭터 표시를 꺼 둔 사용자에게도 재생한다 — take_pokes 가 이미 원자 소비했고 보낸이는 하루치 몫을
+    /// 태웠으므로 여기서 버리면 영영 사라진다(강등하지 않는다는 사용자 결정).
     private func beginUltraTakeover(text: String) {
         let isRefresh = isUltraActive
         ultraTask?.cancel()

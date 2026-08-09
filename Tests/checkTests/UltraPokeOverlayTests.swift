@@ -476,10 +476,9 @@ func overlayUltraGrowsPanelToWholeScreen() {
 
 @MainActor
 @Test
-func overlayUltraDegradesToPeekWhenCharacterHidden() {
-    // v0.2.18 계약 변경: 캐릭터 표시를 꺼 둔 사용자에게 울트라는 **전체화면 격발이 아니라 peek 로 강등**된다.
-    // 예전(v0.2.7~v0.2.16)엔 숨겨도 격발이 그대로 떠, 그 사람의 명시적 '숨김'을 5초간 뒤엎고 화상회의·발표
-    // 위까지 덮었다. 수신 자체는 보존한다(take_pokes 는 이미 원자 소비 — 버리면 영영 사라진다).
+func overlayUltraPlaysEvenWhenCharacterHidden() {
+    // 캐릭터를 꺼 둔 사용자에게도 전체화면 격발이 그대로 뜬다(강등하지 않는다는 사용자 결정).
+    // take_pokes 가 이미 원자 소비했고 보낸이는 하루치 몫을 태웠으므로 여기서 버리면 영영 사라진다.
     let now = Date(timeIntervalSince1970: 604_000)
     let engine = ReactionEngine(clock: { now })
     let (store, controller) = makeUltraController(engine: engine)
@@ -488,15 +487,14 @@ func overlayUltraDegradesToPeekWhenCharacterHidden() {
     controller.handleReceivedPokes([ultraPoke(at: now)])
 
     let expected = CheckOverlayController.ultraBubbleText(name: "이유성", otherCount: 0)
-    // 전체화면 격발은 일어나지 않는다.
-    #expect(controller.isUltraActive == false)
-    #expect(engine.isUltraActive == false)
-    // 대신 일반 찔림 peek(움찔+말풍선)로 전달된다 — 문구는 울트라 문구 그대로.
-    #expect(engine.state == .playing(.poked(bubbleText: expected)))
-    // 상시 표시 자격은 그대로 꺼져 있다 — peek 는 일시 토스트다.
+    #expect(controller.isUltraActive)
+    #expect(engine.state == .playing(.ultraPoked(bubbleText: expected)))
+    #expect(engine.renderActive)
+    // 상시 표시 자격은 그대로 꺼져 있다 — 격발은 5초짜리 토스트이지 '캐릭터 켜기'가 아니다.
     #expect(controller.shouldBeVisible == false)
 
-    controller.updateWorking(false)   // peek 태스크 취소 + 렌더 정리.
+    controller.endUltraTakeover()
+    #expect(engine.renderActive == false)   // 꺼져 있던 상태로 정확히 되돌아간다.
     stopWorking(store, controller)
 }
 

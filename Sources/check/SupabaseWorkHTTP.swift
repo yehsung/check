@@ -125,6 +125,13 @@ extension SupabaseWorkService {
             || (statusCode == 401 && (lowercased.contains("jwt") || lowercased.contains("expired"))) {
             return .sessionExpired
         }
+        // 리프레시 토큰 만료/재사용은 "Invalid Refresh Token: Already Used" 로 오는데, 아래 "already" 가드가
+        // 이걸 먼저 삼켜 로그인 화면에 "이미 가입된 이메일"로 뜬다(사용자는 계정이 잠긴 줄 안다). 반드시 그 앞에서
+        // 세션 만료로 분류한다 — 가입 응답엔 refresh token 문구가 없으므로 중복 가입 분류는 그대로 살아 있다.
+        if lowercased.contains("refresh token") || lowercased.contains("refresh_token")
+            || lowercased.contains("invalid_grant") {
+            return .sessionExpired
+        }
         if lowercased.contains("invalid login credentials") {
             return .invalidLoginCredentials
         }

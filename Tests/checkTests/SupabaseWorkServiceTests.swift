@@ -1942,3 +1942,26 @@ final class FractionalSecondsURLProtocol: URLProtocol {
 
     override func stopLoading() {}
 }
+
+// MARK: - v0.2.18: 리프레시 토큰 만료가 "이미 가입된 이메일"로 오분류되지 않는다(D6-1)
+
+@Test
+func refreshTokenErrorClassifiesAsSessionExpiredNotAlreadyRegistered() async {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://classify-test")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+
+    // GoTrue 의 리프레시 실패 본문. "Already Used" 의 "already" 가 예전엔 중복 가입 가드에 먼저 걸렸다.
+    let refreshBody = #"{"error":"invalid_grant","error_description":"Invalid Refresh Token: Already Used"}"#
+        .data(using: .utf8)!
+    #expect(await service.serviceError(statusCode: 400, data: refreshBody) == .sessionExpired)
+
+    let refreshBody2 = #"{"message":"refresh_token_not_found"}"#.data(using: .utf8)!
+    #expect(await service.serviceError(statusCode: 401, data: refreshBody2) == .sessionExpired)
+
+    // 대조군: 진짜 중복 가입은 그대로 emailAlreadyRegistered 여야 한다(회귀 방지).
+    let dupBody = #"{"message":"User already registered"}"#.data(using: .utf8)!
+    #expect(await service.serviceError(statusCode: 422, data: dupBody) == .emailAlreadyRegistered)
+}

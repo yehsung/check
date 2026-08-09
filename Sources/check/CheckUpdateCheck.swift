@@ -232,7 +232,12 @@ final class UpdateRunner {
     /// (packaging/homebrew/aing-check.rb) 이 감시는 발화할 기회가 없다. 즉 감시가 발화했다는 것은
     /// "명령은 떴는데 업그레이드가 일어나지 않았다"는 뜻이다. 예전엔 running 을 벗어나는 경로가 **하나도 없어서**
     /// 그 경우 배너가 "업데이트 중…"으로 영원히 굳고 버튼도 비활성이라 재시도조차 못 했다(실사용 신고).
-    nonisolated static let watchdogSeconds: Double = 150
+    ///
+    /// **왜 150초가 아니라 600초인가**: 이 수리가 앞세운 `brew update` 는 탭이 몇 주 낡았거나 회선이 느리면
+    /// 단독으로도 150초를 넘긴다(git fetch + 수천 formula 재인덱싱). 150초이던 시절엔 **정상 진행 중인** 업그레이드를
+    /// 실패로 판정해 배너가 재시도를 열었고, 사용자가 다시 누르면 두 번째 brew 가 같은 락을 다퉈 둘 다 깨졌다.
+    /// 성공 경로는 앱이 종료돼 이 감시가 아예 발화하지 않으므로, 시한을 넉넉히 늘려도 '진짜 실패'의 안내만 늦어질 뿐이다.
+    nonisolated static let watchdogSeconds: Double = 600
 
     /// brew 실행파일 존재 판정(주입 가능).
     private let fileExists: (String) -> Bool

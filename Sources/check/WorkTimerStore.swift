@@ -100,6 +100,13 @@ final class WorkTimerStore {
     /// 좁힌다. 두 맥이 모두 이 버전 이상으로 올라오면 서버 스위치 없이 그 순간부터 결정적 반납이 켜진다.
     @ObservationIgnored var adoptedRemoteSession = false
 
+    /// 수동 [근무 종료] 후 자동 시작(넛지) 억제 중인가. 계약: **퇴근을 눌렀으면, 1시간 이상 완전히 자리를
+    /// 비웠다 돌아오기 전까지는 다시 자동 출근시키지 않는다.** 이 표식이 없던 시절, 종료 후 컴퓨터를 계속
+    /// 쓰면 5분 만에 근무가 저절로 재시작됐다(쿨다운은 '발동 후 1시간'뿐이라 저녁엔 이미 만료 — 프로브 실증).
+    /// 영속한다 — 업데이트 재실행·재부팅으로 억제가 사라지면 같은 유령 출근이 그대로 재현된다.
+    /// 뷰가 그리는 값이 아니므로 관찰 제외(자격 판정 클로저가 tick 마다 읽는다).
+    @ObservationIgnored private(set) var autoStartSuppressed = false
+
     /// 흡수 상태에서 마지막으로 관측한 서버의 생존신호(lastSeenAt ?? updatedAt).
     /// 소유권 되찾기의 백스톱이 '신선도'가 아니라 **'전진 여부'**로 판정하기 위한 직전 관측값이다:
     /// 살아 있는 소유 인스턴스가 있으면 30초마다 하트비트로 이 값이 전진하고, 없으면 굳는다.
@@ -569,6 +576,16 @@ final class WorkTimerStore {
         email = defaults.string(forKey: Self.emailKey) ?? ""
         displayName = defaults.string(forKey: Self.displayNameKey) ?? ""
         isOverlayEnabled = defaults.object(forKey: Self.overlayEnabledKey) as? Bool ?? true
+        // 수동 [근무 종료]의 자동 시작 억제를 복구한다. 단, 앱이 1시간 넘게 죽어 있었다면(밤새 꺼짐·재부팅)
+        // 그 공백 자체가 '부재'이므로 여기서 푼다 — 살아 있는 동안의 공백 관측(onAbsenceGap)은 스케줄러가
+        // 하지만, 앱이 꺼져 있던 시간은 마지막 생존 스탬프와의 차이로만 잴 수 있다.
+        autoStartSuppressed = defaults.bool(forKey: Self.autoStartSuppressedKey)
+        if autoStartSuppressed,
+           let lastAlive = defaults.object(forKey: Self.nudgeLastAliveAtKey) as? Date,
+           Date().timeIntervalSince(lastAlive) >= NudgeScheduler.rearmGapSeconds {
+            autoStartSuppressed = false
+            defaults.removeObject(forKey: Self.autoStartSuppressedKey)
+        }
         // 기기 식별자는 최초 1회 생성 후 영속한다 — 맥 2대가 서로의 월 토큰 원장을 덮어쓰지 않게 하는 키(결함1).
         deviceID = Self.resolveDeviceID(defaults: defaults)
         let restoredSession = Self.restoredSession(from: defaults)
@@ -652,6 +669,9 @@ final class WorkTimerStore {
 
     func start(now: Date = Date()) {
         guard startedAt == nil else { return }
+        // 어떤 경로로든 근무가 시작되면 억제는 끝이다 — 수동 시작은 명시적 의사이고, 넛지 시작은
+        // 억제 중엔 자격 미달이라 여기 오지 못하므로 이 한 줄이 억제를 세탁하는 일은 없다.
+        clearAutoStartSuppression()
         // 근무 상태를 내가 바꿨음을 세대 토큰으로 알린다 — in-flight 였던 낡은 팀 상태 응답이 이 시작을 되돌리지 못하게.
         workStateWriteGeneration &+= 1
         // 새 근무를 시작하면 직전 자동 마감 되돌리기는 무효다(옛 세션으로 현 세션을 덮어쓰지 못하게 즉시 끊는다).
@@ -687,6 +707,10 @@ final class WorkTimerStore {
 
     func stop(now: Date = Date()) {
         guard let startedAt else { return }
+        // stop() 의 호출자는 전부 사용자의 명시적 의사다(팝오버 토글·12시간 배너 [지금 종료]·앱 종료 시퀀스).
+        // 자동 마감은 autoStop/서버 경유라 이 함수를 타지 않는다. 그러므로 여기서 자동 시작을 억제한다 —
+        // "원치 않으면 근무 종료를 누르면 된다"(v0.2.12 계약)가 실제로 성립하려면 종료가 붙어 있어야 한다.
+        suppressAutoStart(now: now)
         // 종료도 내 write 다 — 세대를 올려 in-flight 낡은 응답의 '근무중' 흡수를 무력화한다.
         workStateWriteGeneration &+= 1
         // 서버 복구 경로(applyRemoteOwnStatus)로 시작된 세션이라 start() 를 안 탔을 수 있으므로 여기서도 끊는다.
@@ -721,6 +745,33 @@ final class WorkTimerStore {
         if !isTerminating {
             flushPokesOnWorkEnd()
         }
+    }
+
+    // MARK: - 수동 종료의 자동 시작 억제 (1시간 부재로 재무장)
+
+    /// 수동 [근무 종료]가 부른다. 자동 시작을 억제하고 그 사실을 영속한다.
+    /// 자동 마감(잠자기·12시간·자리 비움)은 부르지 않는다 — 그쪽은 사용자 의사 표현이 아니므로
+    /// 다음 사용 5분에 정상적으로 자동 시작되는 것이 맞다(이 기능의 존재 이유).
+    func suppressAutoStart(now: Date? = nil) {
+        autoStartSuppressed = true
+        defaults.set(true, forKey: Self.autoStartSuppressedKey)
+        // 생존 스탬프도 지금으로 찍는다 — 종료 직후 앱을 껐다 켜도(업데이트 재실행) '죽어 있던 1시간'이
+        // 아직 차지 않았음을 다음 실행의 init 재무장 판정이 알 수 있게.
+        defaults.set(now ?? clock(), forKey: Self.nudgeLastAliveAtKey)
+    }
+
+    /// 억제 해제(멱등). 수동 [근무 시작], 1시간+ 공백 관측(스케줄러 onAbsenceGap), 실행 시 재무장 판정이 부른다.
+    func clearAutoStartSuppression() {
+        guard autoStartSuppressed else { return }
+        autoStartSuppressed = false
+        defaults.removeObject(forKey: Self.autoStartSuppressedKey)
+    }
+
+    /// 스케줄러의 매 tick 생존 스탬프. 억제 중일 때만 영속한다(그 외엔 쓸 일도 읽을 일도 없다).
+    /// 다음 실행의 init 이 이 값과의 차이로 "앱이 죽어 있던 시간"을 재무장 공백으로 잰다.
+    func recordNudgeAlive(_ now: Date) {
+        guard autoStartSuppressed else { return }
+        defaults.set(now, forKey: Self.nudgeLastAliveAtKey)
     }
 
     // MARK: - 잠자기 정책 (5분 유예)
@@ -1142,6 +1193,10 @@ extension WorkTimerStore {
     static let emailKey = "check.userEmail"
     static let displayNameKey = "check.displayName"
     static let overlayEnabledKey = "check.overlayEnabled"
+    /// 수동 [근무 종료]의 자동 시작 억제 표식(Bool). 1시간 부재 재무장 판정과 함께 쓴다.
+    static let autoStartSuppressedKey = "check.nudge.autoStartSuppressed"
+    /// 억제 중 스케줄러의 마지막 생존 스탬프(Date). 실행 간 공백(앱이 죽어 있던 시간)을 재는 유일한 근거.
+    static let nudgeLastAliveAtKey = "check.nudge.lastAliveAt"
 
     /// 캐릭터 오버레이 표시 여부를 지정하고 설정을 저장한다.
     func setOverlayEnabled(_ enabled: Bool) {

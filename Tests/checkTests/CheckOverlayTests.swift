@@ -264,6 +264,9 @@ func overlayNudgeAutoStartRunsRegardlessOfCharacterVisibility() {
     #expect(store.startedAt != nil)
     #expect(engine.commuteStartBubbleOverride?.text == CheckOverlayController.nudgeAutoStartText)
     store.stop()
+    // 위 stop() 은 서브케이스 리셋이지 사용자 시나리오가 아니다 — v0.2.17부터 수동 종료는 자동 시작을
+    // 억제하므로(그게 계약이다), 표시 설정 무관성만 보는 이 테스트에서는 억제를 풀고 다음 케이스로 간다.
+    store.clearAutoStartSuppression()
 
     // 캐릭터를 끈 상태에서도 같은 자격이면 똑같이 발동한다(표시 설정은 자격에 섞이지 않는다).
     engine.commuteStartBubbleOverride = nil

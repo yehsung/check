@@ -1544,3 +1544,102 @@ func wakingFromLongSleepDoesNotClaimOnTheFirstPoll() {
     #expect(store.adoptedRemoteSession)
     #expect(store.ownedWorkSessionID == nil)
 }
+
+// MARK: - 백스톱 회수 차단(v0.2.17): 남의 기기가 주장한 세션은 되찾지 않는다
+
+@MainActor
+@Test
+func foreignDeviceClaimBlocksBackstopReclaim() async {
+    // 맥 A 가 연 세션을 미러링하던 맥 B. A 가 뚜껑을 닫고 사라져 신호가 굳어도, A 의 기기 행이
+    // "이 세션은 A 의 것"이라 말하는 한 B 는 되찾지 않는다 — 되찾아 하트비트를 재개하면 last_seen 이
+    // 계속 신선해져 10분 스캐빈저가 영영 발화하지 못하고, 퇴근한 사람의 타이머가 밤새 흐른다.
+    // 옳은 결말은 스캐빈저가 마지막 신호 시각으로 마감하는 것이다.
+    let host = "reclaim-blocked-by-foreign-claim"
+    let userID = "00000000-0000-0000-0000-000000000002"
+    let store = makeOwnershipStubStore(host: host, userID: userID)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+        store.syncTask?.cancel()
+    }
+
+    let sessionID = "e0000000-0000-0000-0000-000000000001"
+    let sessionStart = Date().addingTimeInterval(-4 * 3_600)
+    let frozenSeen = Date().addingTimeInterval(-20)
+    let ownerClaim = StatusDeviceClaim(
+        deviceID: "owner-mac-device-id",
+        sessionID: sessionID,
+        lastSeenAt: frozenSeen,
+        openedSession: true
+    )
+    store.teamMembers = [
+        workingMember(
+            userID: userID, startedAt: sessionStart, sessionID: sessionID,
+            lastSeenAt: frozenSeen, deviceClaims: [ownerClaim]
+        )
+    ]
+    store.applyRemoteOwnStatus(writeGeneration: store.workStateWriteGeneration)
+    #expect(store.adoptedRemoteSession)
+
+    // 신호가 굳은 채 20분(40폴링) — 7분 임계를 한참 넘겨도 주장하지 않는다.
+    let t0 = Date()
+    for step in 1...40 {
+        store.updateAdoptedPresenceTracking(
+            store.teamMembers[0],
+            now: t0.addingTimeInterval(Double(step) * 30)
+        )
+    }
+    #expect(store.adoptedRemoteSession)
+    #expect(store.ownedWorkSessionID == nil)
+
+    // 하트비트도 0건 — 이 맥은 그 세션을 되살리지 않는다(스캐빈저가 마감하도록 길을 비켜 준다).
+    await store.sendHeartbeatIfWorking()
+    #expect(statusUpsertCount(host: host) == 0)
+    #expect(deviceClaimCount(host: host) == 0)
+}
+
+@MainActor
+@Test
+func ownDeviceClaimDoesNotBlockBackstopReclaim() async {
+    // 대조군: 그 기기 행이 **내가** 남긴 것이면(이전 실행의 잔재 — defaults 는 남고 프로세스만 재시작)
+    // 차단 근거가 아니다. 소유 ID 를 잃은 재시작의 자기 구조(백스톱 회수)는 그대로 살아 있어야 한다.
+    let host = "reclaim-allowed-own-claim"
+    let userID = "00000000-0000-0000-0000-000000000002"
+    let store = makeOwnershipStubStore(host: host, userID: userID)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+        store.syncTask?.cancel()
+    }
+
+    let sessionID = "e0000000-0000-0000-0000-000000000002"
+    let sessionStart = Date().addingTimeInterval(-4 * 3_600)
+    let frozenSeen = Date().addingTimeInterval(-20)
+    let myOldClaim = StatusDeviceClaim(
+        deviceID: store.deviceID,
+        sessionID: sessionID,
+        lastSeenAt: frozenSeen,
+        openedSession: true
+    )
+    store.teamMembers = [
+        workingMember(
+            userID: userID, startedAt: sessionStart, sessionID: sessionID,
+            lastSeenAt: frozenSeen, deviceClaims: [myOldClaim]
+        )
+    ]
+    store.applyRemoteOwnStatus(writeGeneration: store.workStateWriteGeneration)
+    #expect(store.adoptedRemoteSession)
+
+    let t0 = Date()
+    for step in 1...30 where store.adoptedRemoteSession {
+        store.updateAdoptedPresenceTracking(
+            store.teamMembers[0],
+            now: t0.addingTimeInterval(Double(step) * 30)
+        )
+    }
+    #expect(!store.adoptedRemoteSession)
+    #expect(store.ownedWorkSessionID == sessionID)
+
+    await store.sendHeartbeatIfWorking()
+    #expect(statusUpsertCount(host: host) == 1)
+}

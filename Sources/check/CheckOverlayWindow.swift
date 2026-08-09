@@ -180,10 +180,13 @@ final class CheckOverlayController {
         // 폴링/신선도 필터는 스토어가 끝냈으므로 여기선 받은 배치를 그대로 표시만 한다.
         store.onPokesReceived = { [weak self] pokes in self?.handleReceivedPokes(pokes) }
 
-        // 넛지 스케줄러: 자격은 store 로 구성(로그인·팀·비근무), 발동은 자동 근무 시작(안내만)으로.
+        // 넛지 스케줄러: 자격은 store 로 구성(로그인·팀·비근무·억제 아님), 발동은 자동 근무 시작(안내만)으로.
+        // 공백 관측/생존 스탬프는 수동 종료 억제의 해제·영속 판정으로 잇는다(스케줄러는 store 를 모른다).
         nudgeScheduler = NudgeScheduler(
             isEligible: { [weak self] in self?.isNudgeEligible ?? false },
             onNudge: { [weak self] in self?.nudgeAutoStart() },
+            onAbsenceGap: { [weak self] in self?.store.clearAutoStartSuppression() },
+            onAliveTick: { [weak self] now in self?.store.recordNudgeAlive(now) },
             workspaceNotifications: workspaceNotifications
         )
 
@@ -208,6 +211,8 @@ final class CheckOverlayController {
         store.isSignedIn
             && store.currentTeamID != nil
             && store.snapshot.isWorking == false
+            // 수동 [근무 종료] 억제 중엔 자동 시작하지 않는다(1시간+ 부재 후 재무장 — store 가 관리).
+            && !store.autoStartSuppressed
     }
 
     /// 근무 상태 변화에 따라 패널을 표시/숨김한다. 표시 직전 항상 우상단으로 재배치한다.

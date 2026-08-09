@@ -2346,13 +2346,50 @@ private struct FooterBar: View {
             IconButton(icon: "rectangle.portrait.and.arrow.right", help: "로그아웃") {
                 store.signOut()
             }
-            IconButton(icon: "power", help: "앱 종료", tint: CheckTheme.danger) {
-                NSApplication.shared.terminate(nil)
-            }
+            // 전원 버튼: 클릭은 그대로 즉시 종료(primaryAction — 기존 근육기억 보존), 꾹 누르거나
+            // 화살표를 열면 '로그인 시 자동 실행' 토글이 나온다. 푸터는 4버튼이 상한이라(FooterWidthBudget)
+            // 다섯 번째 버튼 대신 기존 자리에 메뉴를 겹친다. "껐는데 다시 켜진다"는 불만의 해소 지점 —
+            // 자동 실행을 끄는 수단이 시스템 설정 밖으로 나와야 한다.
+            PowerMenuButton()
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .panelStyle()
+    }
+}
+
+/// 푸터의 전원 메뉴. IconButton 과 같은 시각 언어(12pt 세미볼드 아이콘, 27pt 원형 배경)를 유지한다.
+private struct PowerMenuButton: View {
+    @State private var hovering = false
+    @State private var launchAtLogin = true
+
+    var body: some View {
+        Menu {
+            Toggle("로그인 시 자동 실행", isOn: Binding(
+                get: { launchAtLogin },
+                set: { wanted in
+                    // 쓰기 실패(권한 등)면 실상태를 되읽어 UI 가 거짓말하지 않게 한다.
+                    launchAtLogin = LoginItemRegistrar.setLaunchAtLoginEnabled(wanted)
+                        ? wanted
+                        : LoginItemRegistrar.isLaunchAtLoginEnabled()
+                }
+            ))
+            Button("앱 종료") { NSApplication.shared.terminate(nil) }
+        } label: {
+            Image(systemName: "power")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(hovering ? CheckTheme.primaryText : CheckTheme.danger)
+                .frame(width: 27, height: 27)
+                .background(Circle().fill(Color.white.opacity(hovering ? 0.14 : 0.06)))
+        } primaryAction: {
+            NSApplication.shared.terminate(nil)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { hovering = $0 }
+        .help("클릭: 앱 종료 · 길게 누르기: 자동 실행 설정")
+        .onAppear { launchAtLogin = LoginItemRegistrar.isLaunchAtLoginEnabled() }
     }
 }
 

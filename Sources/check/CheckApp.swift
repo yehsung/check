@@ -79,6 +79,27 @@ enum LoginItemRegistrar {
     /// 등록 시도 여부를 기록하는 플래그 키(있으면 다시 시도하지 않는다 — 사용자 수동 제거 존중).
     static let registeredKey = "check.loginItemRegistered"
 
+    /// 현재 로그인 자동 실행 상태(주입 가능 — 테스트/프리뷰가 실제 SMAppService 를 건드리지 않게).
+    /// 푸터의 전원 메뉴가 읽는다. "껐는데 다시 켜진다"는 불만의 절반은 자동 실행을 끄는 수단이
+    /// 시스템 설정 깊숙이 숨어 있던 것이라, 앱 안에서 켜고 끌 수 있어야 한다.
+    @MainActor static var isLaunchAtLoginEnabled: () -> Bool = {
+        SMAppService.mainApp.status == .enabled
+    }
+
+    /// 로그인 자동 실행을 켜거나 끈다. 성공하면 true. 실패는 조용히 false(다음 열람 때 실상태가 다시 읽힌다).
+    @MainActor static var setLaunchAtLoginEnabled: (Bool) -> Bool = { enabled in
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     /// 플래그가 없고 아직 미등록일 때만 register 를 호출하고, 성공/실패와 무관하게 플래그를 남긴다.
     /// 이미 플래그가 있으면 아무것도 하지 않는다(재등록 강제 금지). 실제 등록 시도를 했으면 true.
     @discardableResult

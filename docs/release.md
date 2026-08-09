@@ -81,6 +81,21 @@ CHECK_E2E=1 CHECK_E2E_SR_KEY_FILE=<apikeys.json> swift test --filter LiveE2E   #
 #       404/PGRST202 면 push 가 안 된 것이다.
 #   curl -s -X POST "$URL/rest/v1/rpc/ultra_poke_user" -H "apikey: $ANON" \
 #        -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"p_to":"<상대uid>"}'
+#
+# 1-3) **RPC 실행권 유출 점검** (grant 변경 마이그레이션을 push 했거나, 새 RPC 를 추가했으면 반드시).
+#      Supabase 는 새 함수의 EXECUTE 를 anon/PUBLIC 에 자동 부여한다 — 앱 RPC 가 auth.uid() 가드 없이
+#      로그인 없이 데이터를 반환하면 공개 cask 의 anon 키만으로 전량 유출된다(2026-08-09 token_usage_board 실사고).
+#      (A) anon 이 실행 가능한 함수 목록을 뽑아, lookup_team_by_code·is_team_member 등 RLS/미리보기 헬퍼
+#          외에 **데이터 RPC 가 끼어 있으면 유출이다**(관리자 SQL — Supabase SQL editor):
+#      select p.proname from pg_proc p
+#        join aclexplode(coalesce(p.proacl, acldefault('f',p.proowner))) x on true
+#        join pg_roles r on r.oid=x.grantee
+#        where p.pronamespace='public'::regnamespace and r.rolname='anon' and x.privilege_type='EXECUTE'
+#        order by 1;
+#      (B) 익명 호출로 직접 확인 — 401/403 이어야 정상(200 에 행이 나오면 유출):
+#   curl -s -o /dev/null -w '%{http_code}\n' -X POST "$URL/rest/v1/rpc/token_usage_board" \
+#        -H "apikey: $ANON" -H 'Content-Type: application/json' -d '{"p_month":"2026-08"}'
+#      (s08b_anonRpcExposureIsLocked e2e 가 (B) 를 자동으로 검증한다.)
 
 # 2) Developer ID 서명 + 공증 + 스테이플된 배포 zip 생성 → dist/aing-check.zip
 ./scripts/package-notarized.sh

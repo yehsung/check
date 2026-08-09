@@ -823,6 +823,30 @@ private func makeContext() throws -> (anonKey: String, admin: E2EAdmin) {
     return (anonKey, admin)
 }
 
+/// **로그인 없이**(anon 키만, 사용자 JWT 없음) PostgREST 를 호출한다. 공개 cask 에서 anon 키를 꺼낸
+/// 익명 공격자를 그대로 흉내 낸다 — RPC 실행권이 anon 에서 회수됐는지는 이 경로로만 실증된다.
+private func anonRest(
+    anonKey: String,
+    path: String,
+    method: String = "POST",
+    json: [String: Any]? = nil
+) async throws -> (status: Int, body: String) {
+    let url = SupabaseConfig.projectURL.appending(path: path)
+    var request = URLRequest(url: url)
+    request.httpMethod = method
+    request.setValue(anonKey, forHTTPHeaderField: "apikey")
+    // Authorization 을 일부러 붙이지 않는다 → PostgREST 가 anon 역할로 실행한다.
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    if let json {
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: json)
+    }
+    let session = URLSession(configuration: .ephemeral)
+    let (data, response) = try await session.data(for: request)
+    let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+    return (code, String(decoding: data, as: UTF8.self))
+}
+
 /// 만들기 모드로 가입하며 E2E 전용 팀을 새로 만든다(계정 + owner 멤버십 + 참여코드).
 @MainActor
 private func signUpCreatingE2ETeam(
@@ -1191,6 +1215,36 @@ struct LiveE2ETests {
         obs("재실행 복구: accumulatedSeconds=\(relaunchStore.accumulatedSeconds), 서버 오늘 누적=\(serverToday)")
         // 재실행 복구값은 서버 기준으로 세팅되지만, s07 직후 로컬-서버 초 절삭 위상차가 남을 수 있어 ±2초 허용.
         #expect(abs(relaunchStore.accumulatedSeconds - serverToday) <= 2)
+    }
+
+    // 8b. anon 노출 회귀 방어 — 20260809120000 마이그레이션이 데이터 RPC 를 anon 에서 회수했는지 실서버로 확인.
+    // 회귀 지점: 공개 cask 의 anon 키만으로 로그인 없이 token_usage_board 를 호출하면 전 사용자 이름·아바타·
+    // 토큰이 그대로 반환됐다(2026-08-09 실증). 반대로 lookup_team_by_code(가입 전 팀코드 미리보기)는 anon 이
+    // 계속 실행할 수 있어야 한다 — 이 두 계약을 한 테스트로 고정한다.
+    @Test(.enabled(if: LiveE2EEnv.enabled))
+    func s08b_anonRpcExposureIsLocked() async throws {
+        let ctx = try makeContext()
+
+        // 유출됐던 데이터 RPC 들은 로그인 없이는 401/403 이어야 한다(실행권 없음 = permission denied).
+        let leaky: [(path: String, body: [String: Any])] = [
+            ("/rest/v1/rpc/token_usage_board", ["p_month": "2026-08"]),
+            ("/rest/v1/rpc/team_weekly_leaderboard", [:]),
+            ("/rest/v1/rpc/app_user_directory", [:]),
+        ]
+        for rpc in leaky {
+            let res = try await anonRest(anonKey: ctx.anonKey, path: rpc.path, json: rpc.body)
+            obs("anon \(rpc.path) → HTTP \(res.status)")
+            #expect(res.status == 401 || res.status == 403, "anon 이 \(rpc.path) 를 실행할 수 있으면 안 된다 (HTTP \(res.status))")
+        }
+
+        // 가입 전 팀코드 미리보기는 반대로 anon 이 실행 가능해야 한다(없는 코드라 0행이지만 200/2xx).
+        let lookup = try await anonRest(
+            anonKey: ctx.anonKey,
+            path: "/rest/v1/rpc/lookup_team_by_code",
+            json: ["code": "ZZZZZZZZ"]
+        )
+        obs("anon lookup_team_by_code → HTTP \(lookup.status)")
+        #expect(lookup.status == 200, "가입 전 팀코드 미리보기는 anon 이 실행할 수 있어야 한다 (HTTP \(lookup.status))")
     }
 
     // 9. 별명 엣지 → 30자 한글+이모지 display_name 이 트리거로 profiles 에 그대로 저장(코드 합류 흐름).

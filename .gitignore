@@ -6,3 +6,6 @@ Config/Supabase.local.xcconfig
 .claude/
 .DS_Store
 .omo/
+# 스키마/마이그레이션은 공개 저장소에서 제외한다(운영자 전용 서버 로직을 비공개로 유지).
+# 로컬 파일은 그대로 남아 `supabase db push` 는 정상 동작한다. 과거 히스토리는 별도 정리 필요.
+supabase/

@@ -84,9 +84,24 @@ enum ReactionKind: Equatable {
 enum DrowsyWindow {
     static let timeZone = TimeZone(identifier: "Asia/Seoul")!
 
-    /// 졸기 진입 간격 하한/상한(초). 10±4분 — 마지막 리액션 이후 이만큼 조용하면 꾸벅 잠든다.
-    static let minInterval: TimeInterval = 6 * 60
-    static let maxInterval: TimeInterval = 14 * 60
+    /// 졸기 진입 간격 하한/상한(초). 60±20분 — 마지막 리액션 이후 이만큼 조용하면 꾸벅 잠든다.
+    ///
+    /// 예전엔 10±4분이었는데, 졸기가 **스스로 깨지 않던 시절**(napSeconds 도입 전)과 겹쳐
+    /// "평소에 맨날 눈 감은 상태만 본다"가 됐다(실사용 신고). 자는 시간이 유한해진 지금도 간격이 짧으면
+    /// 캐릭터가 자는 모습이 기본값처럼 보이므로, 졸기는 **가끔 마주치는 사건**이어야 한다.
+    static let minInterval: TimeInterval = 40 * 60
+    static let maxInterval: TimeInterval = 80 * 60
+
+    /// 한 번 졸 때 자는 시간 하한/상한(초). 5~10분 — 이 시간이 지나면 조용히 눈을 뜬다.
+    ///
+    /// **이 값이 없던 시절 졸기는 만료가 없어**, 한 번 잠들면 클릭·찔림·마일스톤·근무종료 전까지
+    /// 영원히 눈을 감고 있었다. 조용히 일하는 사람에게는 그게 곧 상시 상태였다.
+    /// 깨어남은 '화들짝'이 아니라 무음 복귀다 — 아무도 안 건드렸는데 놀라는 건 이상하다.
+    ///
+    /// 간격(40~80분)과 합치면 자는 시간은 전체의 약 10%다 — 졸긴 조는데 그게 기본 모습은 아닌 비율.
+    /// 수십 초로 두면 "졸았나?" 싶게 스쳐 지나가 졸기라는 연출 자체가 안 읽힌다(사용자 판단).
+    static let minNapSeconds: TimeInterval = 5 * 60
+    static let maxNapSeconds: TimeInterval = 10 * 60
 
     /// 주어진 시각(기본 KST)이 밤샘 시간창(23:00~05:00) 안이면 true. 23,0,1,2,3,4시가 해당된다.
     static func contains(_ date: Date, timeZone: TimeZone = DrowsyWindow.timeZone) -> Bool {
@@ -96,9 +111,14 @@ enum DrowsyWindow {
         return hour >= 23 || hour < 5
     }
 
-    /// 90±30초 범위의 다음 졸기 간격을 뽑는다(난수 주입 가능).
+    /// 다음 졸기까지의 간격을 뽑는다(난수 주입 가능).
     static func nextInterval(using rng: inout some RandomNumberGenerator) -> TimeInterval {
         TimeInterval.random(in: minInterval...maxInterval, using: &rng)
+    }
+
+    /// 이번 잠의 길이를 뽑는다(난수 주입 가능). 매번 달라야 '타이머'가 아니라 '졸음'으로 보인다.
+    static func nextNapDuration(using rng: inout some RandomNumberGenerator) -> TimeInterval {
+        TimeInterval.random(in: minNapSeconds...maxNapSeconds, using: &rng)
     }
 }
 
@@ -291,6 +311,8 @@ final class ReactionEngine {
     @ObservationIgnored private var blinkTask: Task<Void, Never>?
     /// 자는 동안 💤 를 주기적으로 방출하는 반복 태스크(3.5초 주기). 깨거나 인터럽트되면 취소된다.
     @ObservationIgnored private var zzzTask: Task<Void, Never>?
+    /// 이번 잠의 자동 기상 타이머. 클릭·찔림 등으로 먼저 깨면 endSleep 이 취소한다.
+    @ObservationIgnored private var napTask: Task<Void, Never>?
 
     // MARK: - 감은 눈(sleeping) 자원. attach 에서 1회 찾아 캐시하고, 졸기 진입/이탈 시 텍스처·선을 토글한다.
     /// 얼굴 재질(큰 CGImage 디퓨즈). sleeping 시 디퓨즈를 감은 눈 텍스처로 교체하고 깨면 원복한다.
@@ -654,8 +676,11 @@ final class ReactionEngine {
 
     // MARK: - 졸기 지속 상태(sleeping) / 깨우기(wake)
 
-    /// 졸기 진입: 앞으로 천천히 숙이며 가라앉은 자세로 전이하고, 그 자세를 유지한다(자동으로 깨지 않음).
+    /// 졸기 진입: 앞으로 천천히 숙이며 가라앉은 자세로 전이하고, **한숨 자고 스스로 깬다**.
     /// 자는 동안 💤 를 주기적으로 방출한다(zzzTask).
+    ///
+    /// 자동 기상이 없던 시절엔 한 번 잠들면 클릭·찔림·마일스톤·근무종료 전까지 눈을 감고 있어서,
+    /// 조용히 일하는 사람에게는 감은 눈이 사실상 상시 상태였다(실사용 신고). 잠은 유한해야 한다.
     private func beginSleep() {
         isSleeping = true
         activeKind = nil
@@ -667,6 +692,31 @@ final class ReactionEngine {
         }
         applyClosedEyes()
         startZzzLoop()
+        scheduleSelfWake()
+    }
+
+    /// 이번 잠이 끝나면 **조용히** 눈을 뜬다(화들짝 wake 가 아니다 — 아무도 안 건드렸는데 놀라면 이상하다).
+    /// 자는 사이 클릭·찔림 등으로 이미 깼으면 아무 일도 하지 않는다(isSleeping 재확인).
+    private func scheduleSelfWake() {
+        napTask?.cancel()
+        var rng = SystemRandomNumberGenerator()
+        let nap = DrowsyWindow.nextNapDuration(using: &rng)
+        napTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(nap), tolerance: .seconds(2))
+            guard let self, !Task.isCancelled, self.isSleeping else { return }
+            self.wakeQuietly()
+        }
+    }
+
+    /// 스스로 깨어남: 숙인 자세를 원래대로 되돌리고 눈을 뜬다. 말풍선도 소리도 없다.
+    /// 헤드리스 테스트가 직접 부를 수 있게 internal 이다(napTask 를 실제로 재우지 않고 계약만 검증한다).
+    func wakeQuietly() {
+        guard isSleeping else { return }
+        endSleep()
+        if let node = reactionNode {
+            node.removeAction(forKey: Self.reactionActionKey)
+            node.runAction(ReactionActions.drowsyRise(), forKey: Self.reactionActionKey)
+        }
     }
 
     /// 졸기 종료(잠 상태만 해제 — 포즈는 호출측이 처리). zzzTask 취소 + 💤 노드 정리 + 감은 눈 원복.
@@ -675,6 +725,10 @@ final class ReactionEngine {
         isSleeping = false
         zzzTask?.cancel()
         zzzTask = nil
+        // 자동 기상 타이머도 함께 끊는다 — 안 끊으면 클릭으로 깬 뒤에 늦게 도착한 타이머가
+        // (그 사이 다시 잠들었을 경우) 남의 잠을 깨운다.
+        napTask?.cancel()
+        napTask = nil
         removeTransientNodes()
         restoreEyes()
     }
@@ -1070,6 +1124,18 @@ enum ReactionActions {
         ])
         sink.timingMode = .easeInEaseOut
         return sink
+    }
+
+    /// 조용히 깨어남: 숙였던 자세를 원래대로 **천천히** 되돌린다(0.9s). 화들짝(wake)과 달리 튀어오름도
+    /// 말풍선도 없다 — 아무도 안 건드렸는데 놀라는 건 이상하다. drowsySink 의 정확한 역동작이라
+    /// 진입 모션 도중 기상해도 절대 위치(0)로 수렴해 잔상이 남지 않는다.
+    static func drowsyRise() -> SCNAction {
+        let rise = SCNAction.group([
+            SCNAction.rotateTo(x: 0, y: 0, z: 0, duration: 0.9),
+            SCNAction.move(to: SCNVector3(0, 0, 0), duration: 0.9)
+        ])
+        rise.timingMode = .easeInEaseOut
+        return rise
     }
 
     /// 화들짝 깨우기: 숙인 자세에서 identity 로 스냅 복원(0.15s) + 살짝 튀어오름. 현재 트랜스폼과 무관하게

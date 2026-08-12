@@ -504,3 +504,59 @@ enum SleepEyeExplore {
         return (Int(buf[i]), Int(buf[i + 1]), Int(buf[i + 2]))
     }
 }
+
+// MARK: - 졸기: 스스로 깨어난다 (v0.2.22)
+//
+// 실사용 신고 — "캐릭터가 너무 자주 졸아. 평소에 맨날 눈 감은 상태만 보는 느낌이야."
+// 원인은 빈도가 아니라 **만료 부재**였다: 한 번 잠들면 클릭·찔림·마일스톤·근무종료 전까지
+// 눈을 감고 있었고, 조용히 일하는 사람에게는 그게 상시 상태였다.
+
+@MainActor
+@Test
+func sleepingEndsOnItsOwnWithoutBeingTouched() {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 500_000) })
+    #expect(engine.request(.drowsy))
+    #expect(engine.state == .sleeping)
+
+    // 아무도 안 건드렸는데 잠이 끝난다(자동 기상 타이머가 하는 일을 직접 부른다).
+    engine.wakeQuietly()
+    #expect(engine.state == .idle)
+
+    // 조용한 기상은 '화들짝'이 아니다 — 말풍선이 뜨지 않는다.
+    #expect(engine.greetingText == nil)
+}
+
+@MainActor
+@Test
+func quietWakeIsIdempotentAndOnlyAppliesWhileSleeping() {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 501_000) })
+    // 자고 있지 않을 때 불러도 아무 일도 없다(늦게 도착한 타이머가 멀쩡한 상태를 흔들지 않는다).
+    engine.wakeQuietly()
+    #expect(engine.state == .idle)
+
+    #expect(engine.request(.drowsy))
+    engine.wakeQuietly()
+    engine.wakeQuietly()          // 두 번 불러도 안전
+    #expect(engine.state == .idle)
+}
+
+@Test
+func drowsyIsRareAndNapsAreShort() {
+    // 졸기는 '가끔 마주치는 사건'이어야 한다. 간격이 짧으면 자는 모습이 기본값처럼 보인다.
+    #expect(DrowsyWindow.minInterval >= 30 * 60)
+    #expect(DrowsyWindow.maxInterval <= 120 * 60)
+    #expect(DrowsyWindow.minInterval < DrowsyWindow.maxInterval)
+
+    // 한 번 자는 시간은 유한하되 '졸기'로 읽힐 만큼은 돼야 한다(수십 초면 스쳐 지나가 연출이 안 읽힌다).
+    #expect(DrowsyWindow.minNapSeconds >= 3 * 60)
+    #expect(DrowsyWindow.maxNapSeconds <= 15 * 60)
+    #expect(DrowsyWindow.minNapSeconds < DrowsyWindow.maxNapSeconds)
+    // 그리고 자는 시간이 깨어 있는 시간을 넘지 않아야 한다 — 넘으면 다시 '눈 감은 캐릭터'가 기본이 된다.
+    #expect(DrowsyWindow.maxNapSeconds < DrowsyWindow.minInterval)
+
+    // 잠 길이는 매번 달라야 '타이머'가 아니라 '졸음'으로 보인다.
+    var rng = SystemRandomNumberGenerator()
+    let samples = (0..<40).map { _ in DrowsyWindow.nextNapDuration(using: &rng) }
+    #expect(samples.allSatisfy { $0 >= DrowsyWindow.minNapSeconds && $0 <= DrowsyWindow.maxNapSeconds })
+    #expect(Set(samples).count > 1)
+}

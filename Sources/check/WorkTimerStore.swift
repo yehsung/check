@@ -365,7 +365,7 @@ final class WorkTimerStore {
     /// 서버가 준 만료 시각(displayNameAvailableAt)을 우선하고, 없으면 변경 시각 + 쿨타임으로 판정한다.
     func canChangeDisplayName(now: Date) -> Bool {
         guard let availableAt = displayNameAvailableAt
-            ?? displayNameChangedAt?.addingTimeInterval(Self.displayNameCooldownSeconds) else { return true }
+            ?? displayNameChangedAt.map({ Self.displayNameUnlockDate(changedAt: $0) }) else { return true }
         return now >= availableAt
     }
 
@@ -399,7 +399,18 @@ final class WorkTimerStore {
             .joined(separator: " ")
     }
 
-    /// 쿨타임 안내 문구 — **화면에 나가는 문장 그대로**다. 날짜는 KST 기준이라 자정 근처에서 흔들리지 않는다.
+    /// 별명 변경이 다시 가능해지는 시각. 규칙은 **KST 자정 기준**이다 —
+    /// '마지막 변경 + 7일'이 속한 날짜의 00:00 이며, 그 날이 되는 순간 전원이 함께 풀린다.
+    ///
+    /// 시각 단위(정확히 7×24시간)이던 시절엔 해제 순간이 하루 중 임의의 시각이라(8/5 17:52 → 8/12 17:52)
+    /// "8월 12일부터"라는 안내가 그날 아침엔 거짓이었다(실사용 신고). 문구에 시각을 더하는 대신
+    /// **규칙을 문구에 맞췄다** — 서버(20260812110000)와 같은 계산이다.
+    nonisolated static func displayNameUnlockDate(changedAt: Date) -> Date {
+        TeamWeeklyGoal.koreanDayStart(for: changedAt.addingTimeInterval(displayNameCooldownSeconds))
+    }
+
+    /// 쿨타임 안내 문구 — **화면에 나가는 문장 그대로**다. 날짜는 KST 기준이라 자정 근처에서 흔들리지 않고,
+    /// 해제가 자정이므로 "N월 N일부터"는 그날 0시부터 문자 그대로 참이다.
     nonisolated static func displayNameCooldownMessage(availableAt: Date) -> String {
         let c = TeamWeeklyGoal.kstCalendar.dateComponents([.month, .day], from: availableAt)
         return "일주일에 한 번만 바꿀 수 있어요 · \(c.month ?? 1)월 \(c.day ?? 1)일부터"
@@ -411,7 +422,7 @@ final class WorkTimerStore {
         displayNameDraft = currentName
         refreshDisplayNameLock()
         if isDisplayNameLocked, let availableAt = displayNameAvailableAt
-            ?? displayNameChangedAt?.addingTimeInterval(Self.displayNameCooldownSeconds) {
+            ?? displayNameChangedAt.map({ Self.displayNameUnlockDate(changedAt: $0) }) {
             // 잠겨 있으면 여는 그 자리에서 언제 가능한지 말해 준다. 버튼만 비활성화하면 왜 못 누르는지 모른다.
             displayNameNotice = Self.displayNameCooldownMessage(availableAt: availableAt)
             isDisplayNameNoticeError = false

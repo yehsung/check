@@ -376,7 +376,9 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             if displayNameChangedAt != changedAt { displayNameChangedAt = changedAt }
             if let changedAt {
-                let availableAt = changedAt.addingTimeInterval(Self.displayNameCooldownSeconds)
+                // 해제는 KST 자정 기준이다(서버 20260812110000 과 같은 계산) — 시각 단위로 재면
+                // "N월 N일부터" 안내가 그날 아침에 거짓이 된다.
+                let availableAt = Self.displayNameUnlockDate(changedAt: changedAt)
                 if displayNameAvailableAt != availableAt { displayNameAvailableAt = availableAt }
             }
             refreshDisplayNameLock()

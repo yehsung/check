@@ -199,10 +199,12 @@ import Testing
         store.refreshDisplayNameLock(now: now)
         #expect(store.isDisplayNameLocked == false)
 
-        // 서버가 알려 준 변경 시각이 있으면 그로부터 1주일이 잠금 구간이다.
+        // 서버가 알려 준 변경 시각이 있으면 '7일 뒤 그 날짜의 KST 자정'까지가 잠금 구간이다
+        // (정확히 7×24시간이 아니다 — 규칙을 "N월 N일부터" 안내에 맞췄다).
         store.displayNameChangedAt = now
-        #expect(store.canChangeDisplayName(now: now.addingTimeInterval(WorkTimerStore.displayNameCooldownSeconds - 1)) == false)
-        #expect(store.canChangeDisplayName(now: now.addingTimeInterval(WorkTimerStore.displayNameCooldownSeconds)))
+        let unlock = WorkTimerStore.displayNameUnlockDate(changedAt: now)
+        #expect(store.canChangeDisplayName(now: unlock.addingTimeInterval(-1)) == false)
+        #expect(store.canChangeDisplayName(now: unlock))
     }
 
     /// 편집을 열면 잠금 상태를 그 자리에서 말해 준다(버튼만 비활성화하면 왜 못 누르는지 알 방법이 없다).
@@ -293,6 +295,53 @@ import Testing
         let justAfterMidnight = try #require(TeamWeeklyGoal.kstCalendar.date(from: components))
         #expect(WorkTimerStore.displayNameCooldownMessage(availableAt: justAfterMidnight)
             == "일주일에 한 번만 바꿀 수 있어요 · 8월 11일부터")
+    }
+
+    /// 회귀: 쿨타임 해제는 **KST 자정 기준**이다. "8월 12일부터"라는 안내가 12일 0시부터 문자 그대로 참이어야 한다.
+    ///
+    /// 실사용 신고 — 8/5 17:52 에 바꾼 사용자가 8/12 16:03 에 열었더니 "8월 12일부터"라고 안내가 떠 있는데
+    /// 실제로는 막혔다(옛 규칙은 정확히 7×24시간이라 해제가 8/12 17:52 였다). 규칙을 안내에 맞춘다.
+    @Test func displayNameUnlockFallsOnKSTMidnightOfTheSeventhDay() throws {
+        var changed = DateComponents()
+        changed.year = 2026; changed.month = 8; changed.day = 5
+        changed.hour = 17; changed.minute = 52
+        let changedAt = try #require(TeamWeeklyGoal.kstCalendar.date(from: changed))
+
+        let unlock = WorkTimerStore.displayNameUnlockDate(changedAt: changedAt)
+
+        // 해제는 8/12 00:00 KST — 그 시각 자체가 하루의 시작이어야 한다.
+        let parts = TeamWeeklyGoal.kstCalendar.dateComponents([.month, .day, .hour, .minute], from: unlock)
+        #expect(parts.month == 8)
+        #expect(parts.day == 12)
+        #expect(parts.hour == 0)
+        #expect(parts.minute == 0)
+
+        // 안내 문구와 해제 시각이 같은 날을 가리킨다(문구가 거짓이 될 수 없다).
+        #expect(WorkTimerStore.displayNameCooldownMessage(availableAt: unlock)
+            == "일주일에 한 번만 바꿀 수 있어요 · 8월 12일부터")
+    }
+
+    /// 신고자와 같은 상황: 12일 16:03 에는 **이미 풀려 있어야** 한다(옛 규칙에선 17:52 까지 막혔다).
+    @Test func displayNameIsUnlockedFromTheStartOfTheSeventhDay() throws {
+        let store = makeStore(host: "display-name-store-midnight-test", session: URLSession(configuration: .stubbed))
+        var changed = DateComponents()
+        changed.year = 2026; changed.month = 8; changed.day = 5
+        changed.hour = 17; changed.minute = 52
+        store.displayNameChangedAt = try #require(TeamWeeklyGoal.kstCalendar.date(from: changed))
+
+        // 2026-08 은 실재하는 달이라 이 조합은 항상 유효하다(구성 실패가 곧 테스트 버그이므로 강제 언랩).
+        func kst(_ day: Int, _ hour: Int, _ minute: Int) -> Date {
+            var c = DateComponents()
+            c.year = 2026; c.month = 8; c.day = day; c.hour = hour; c.minute = minute
+            return TeamWeeklyGoal.kstCalendar.date(from: c)!
+        }
+
+        // 11일 23:59 — 아직 잠김.
+        #expect(store.canChangeDisplayName(now: kst(11, 23, 59)) == false)
+        // 12일 00:00 — 그 순간 풀린다.
+        #expect(store.canChangeDisplayName(now: kst(12, 0, 0)))
+        // 12일 16:03 — 신고 시점. 옛 규칙이면 여기서 막혔다.
+        #expect(store.canChangeDisplayName(now: kst(12, 16, 3)))
     }
 
     // MARK: - 계정 전환

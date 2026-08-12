@@ -95,6 +95,25 @@ final class CheckOverlayController {
     // 숨김 상태에서 찔림을 peek 로 보여주는 동안만 유효한 자동 퇴장 태스크. updateWorking 양쪽에서 취소한다.
     private var pokePeekTask: Task<Void, Never>?
 
+    // MARK: - 할 일 보드 훅
+    //
+    // 오버레이는 보드를 **모른다**. 여기 뚫린 콜백으로 사실만 알리고 판단은 전부 보드 컨트롤러가 한다 —
+    // 그래야 캐릭터 패널의 프레임·클릭통과·울트라 복귀 같은 이미 아픈 기계에 새 조건이 섞이지 않는다.
+
+    /// 캐릭터 몸통을 눌렀다. **true 를 돌려주면 그 클릭은 보드가 가져간 것**이라 아파하기를 재생하지 않는다.
+    /// 할 일 기능이 꺼진 사용자에게는 배선이 false 를 돌려주므로 예전 동작(아얏)이 그대로 남는다.
+    var onCharacterTapped: (() -> Bool)?
+    /// 울트라 격발이 시작/종료됐다. 보드는 격발 동안 화면에서 비켜야 한다(전체화면 연출 위에 겹칠 수 없다).
+    var onUltraBegan: (() -> Void)?
+    /// restoresVisibility 가 false 면 근무 종료 경로라 보드를 되살리지 않는다(캐릭터와 같은 규약).
+    var onUltraEnded: ((Bool) -> Void)?
+    /// 근무가 끝났다(표시 → 숨김 전이). 보드는 인사를 기다리지 않고 즉시 닫고 저장한다.
+    var onWorkEnded: (() -> Void)?
+    /// 캐릭터 패널이 새 자리로 갔다(재배치·드래그 종료·화면 구성 변경). 보드가 따라와야 한다.
+    var onCharacterFrameChanged: ((NSRect) -> Void)?
+    /// 보드가 열려 있는가. 졸기 스케줄러가 물어본다 — 보드를 보며 생각하는 동안 잠들면 "얘 죽었나"로 읽힌다.
+    var isBoardOpen: (() -> Bool)?
+
     /// 울트라 격발 중에만 유효한 원복 상태. nil 이면 격발 중이 아니다(isUltraActive 의 근거).
     private struct UltraRestoreState { let frame: NSRect; let hadMouseMonitor: Bool }
     private var ultraRestoreState: UltraRestoreState?
@@ -283,6 +302,10 @@ final class CheckOverlayController {
             }
             engine.request(.commuteStart)
         } else {
+            // 근무가 끝났다. 보드는 인사(0.55초)를 기다리지 않고 **즉시** 닫고 저장한다 —
+            // 사라지는 캐릭터 옆에 남은 보드는 유령이고, 자동 마감·다른 맥 흡수처럼 사용자 조작 없이
+            // 오는 경로에서는 저장 시점이 특히 중요하다.
+            if wasVisible { onWorkEnded?() }
             stopDrowsyScheduler()
             stopBlinkScheduler()
             removeMouseMoveMonitor()
@@ -484,10 +507,16 @@ final class CheckOverlayController {
         // 격발 중 클릭은 삼킨다(조기 해제도, 때리기도 없다 — 막는 게 목적인데 첫 클릭에 사라지면 의미가 없다).
         guard shouldBeVisible, !isUltraActive, withinBody(location) else { return }
         if engine.state == .sleeping {
+            // 자는 애를 깨우는 건 그 자체로 완결된 상호작용이다. 깨우면서 보드까지 열면 두 연출이 겹치고,
+            // 사용자는 "깨우려던 것"과 "열려던 것" 중 무엇을 한 건지 알 수 없다. 다음 클릭이 보드를 연다.
             engine.request(.wake)
-        } else {
-            engine.request(.hit)
+            return
         }
+        // 할 일 기능을 켠 사람에게 클릭은 **보드 여닫기**이고, 끈 사람에게는 예전 그대로 **아파하기**다.
+        // 한 클릭에 두 뜻을 담으면 움찔과 '보드 쪽 돌아보기'가 같은 0.5초 안에서 부딪친다 —
+        // 설정으로 가르면 각자에게 클릭의 뜻은 언제나 하나뿐이라 헷갈릴 여지가 없다.
+        if onCharacterTapped?() == true { return }
+        engine.request(.hit)
     }
 
     // MARK: - 밤샘 졸기 스케줄러
@@ -505,13 +534,20 @@ final class CheckOverlayController {
                 // 버전당 1회 말풍선을 띄운다(네트워크는 새로 치지 않음 — 상시 루프/유휴 타이머 신설 금지).
                 // 이번 tick 에 업데이트 말풍선을 띄웠으면 졸기는 건너뛴다(말풍선 채널 충돌 방지).
                 if self.showUpdateBubbleIfNeeded() { continue }
-                // 조건: 표시 중(근무중) && 다른 리액션 없음 — 시간대 제한 없이 조용하면 존다.
-                guard self.shouldBeVisible, self.engine.state == .idle else {
-                    continue
-                }
+                // 판정은 아래 프로퍼티 하나로 모은다 — 40~80분마다 한 번 도는 루프 안에 조건을 묻어 두면
+                // 그 조건이 맞는지 아무도 검증할 수 없다(테스트가 그 루프를 기다릴 수 없으므로).
+                guard self.canEnterDrowsy else { continue }
                 self.engine.request(.drowsy)
             }
         }
+    }
+
+    /// 지금 졸아도 되는가(헤드리스 검증 지점). 조건은 셋이다:
+    ///  · 표시 중(근무중 + 캐릭터 켬) — 안 보이는데 자는 건 의미가 없다,
+    ///  · 다른 리액션이 없다 — 연출 도중 잠들면 그 연출이 끊긴다,
+    ///  · **보드가 닫혀 있다** — 할 일을 보며 생각하는 동안 눈을 감으면 "얘 죽었나"로 읽힌다.
+    var canEnterDrowsy: Bool {
+        shouldBeVisible && engine.state == .idle && !(isBoardOpen?() ?? false)
     }
 
     private func stopDrowsyScheduler() {
@@ -615,6 +651,9 @@ final class CheckOverlayController {
     /// 캐릭터 표시를 꺼 둔 사용자에게도 재생한다 — take_pokes 가 이미 원자 소비했고 보낸이는 하루치 몫을
     /// 태웠으므로 여기서 버리면 영영 사라진다(강등하지 않는다는 사용자 결정).
     private func beginUltraTakeover(text: String) {
+        // 보드는 격발 시작과 함께 화면에서 비킨다(전체화면 연출 위에 겹칠 수 없다). 입력 중이던 글은
+        // 보드 컨트롤러가 들고 있으므로 사라지지 않는다 — 그래서 여기서 닫아도 안전하다.
+        onUltraBegan?()
         let isRefresh = isUltraActive
         ultraTask?.cancel()
         // peek 이 소유하던 지연 퇴장은 무효 — 울트라가 창 수명을 가져간다(안 끄면 8초 뒤 peek 의
@@ -755,7 +794,11 @@ final class CheckOverlayController {
         } else {
             reposition()   // 5초 사이 모니터가 빠졌다 — 저장 오프셋으로 기본 위치 재계산.
         }
-        guard restoresVisibility else { return }
+        guard restoresVisibility else {
+            // 근무 종료 경로다. 캐릭터를 되살리지 않으므로 보드도 되살리지 않는다(호출자가 표시를 정한다).
+            onUltraEnded?(false)
+            return
+        }
         if shouldBeVisible {
             panel.orderFrontRegardless()
             if restore.hadMouseMonitor { installMouseMoveMonitor() }   // 때리기·드래그 복원
@@ -765,6 +808,8 @@ final class CheckOverlayController {
             engine.renderActive = false
             panel.orderOut(nil)
         }
+        // 복원 사슬의 **맨 끝**이다. 캐릭터 프레임이 제자리로 돌아온 뒤라야 보드가 그 옆 정확한 자리로 돌아간다.
+        onUltraEnded?(true)
     }
 
     /// 울트라를 어느 화면에 띄울지. **패널이 지금 놓인 화면**이다 — 사용자가 캐릭터를 끌어다 둔 그 화면이
@@ -827,6 +872,8 @@ final class CheckOverlayController {
             margin: Self.edgeMargin
         )
         panel.setFrame(frame, display: shouldBeVisible)
+        // 캐릭터가 움직였으면 보드도 따라온다. 여기서 알리지 않으면 모니터를 바꾼 뒤 보드만 옛 좌표에 남는다.
+        onCharacterFrameChanged?(frame)
     }
 
     // MARK: - 위치 영속 (우상단 앵커 오프셋)

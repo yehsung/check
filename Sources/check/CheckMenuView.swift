@@ -2374,7 +2374,7 @@ private struct FooterBar: View {
             // 화살표를 열면 '로그인 시 자동 실행' 토글이 나온다. 푸터는 4버튼이 상한이라(FooterWidthBudget)
             // 다섯 번째 버튼 대신 기존 자리에 메뉴를 겹친다. "껐는데 다시 켜진다"는 불만의 해소 지점 —
             // 자동 실행을 끄는 수단이 시스템 설정 밖으로 나와야 한다.
-            PowerMenuButton()
+            PowerMenuButton(store: store)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -2384,11 +2384,18 @@ private struct FooterBar: View {
 
 /// 푸터의 전원 메뉴. IconButton 과 같은 시각 언어(12pt 세미볼드 아이콘, 27pt 원형 배경)를 유지한다.
 private struct PowerMenuButton: View {
+    @Bindable var store: WorkTimerStore
     @State private var hovering = false
     @State private var launchAtLogin = true
 
     var body: some View {
         Menu {
+            // 할 일 기능. 끄면 캐릭터 클릭이 예전처럼 아파하기로 돌아간다 — 한 클릭에 두 뜻을 담지 않기 위한 설정이다.
+            Toggle("캐릭터를 눌러 할 일 열기", isOn: Binding(
+                get: { store.isTodoEnabled },
+                set: { store.setTodoEnabled($0) }
+            ))
+            Divider()
             Toggle("로그인 시 자동 실행", isOn: Binding(
                 get: { launchAtLogin },
                 set: { wanted in

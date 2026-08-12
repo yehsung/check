@@ -33,12 +33,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 근무중 3D 캐릭터 오버레이. 패널은 여기서 1회 생성하고 숨김으로 시작하며, 루트 뷰가
     // store.snapshot.isWorking을 관찰해 표시/숨김을 전환한다(store는 읽기 전용으로만 참조).
     private var overlayController: CheckOverlayController?
+    // 할 일 목록(로컬 전용)과 보드 창. 오버레이와 **형제**다 — 캐릭터 패널을 키워 보드를 담으면
+    // 울트라 프레임 복귀·드래그 위치 영속·클릭통과 기계가 전부 얽힌다.
+    private var todoStore: TodoListStore?
+    private var todoBoard: CheckTodoBoardController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 오버레이 컨트롤러를 **먼저** 만든다. 바로 아래 실행 킥이 서버에 열려 있던 세션을 흡수해 곧장 근무중으로
         // 복구할 수 있는데, 그 순간 표시 전환과 리액션/찔림 싱크(store.onReactionTrigger / onPokesReceived)가
         // 이미 배선돼 있어야 캐릭터 등장과 밀린 찔림이 통째로 유실되지 않는다.
         overlayController = CheckOverlayController(store: store, updateCheck: updateCheck)
+        wireTodoBoard()
         // 로그인 시 자동 실행을 1회만 등록한다(사용자가 시스템 설정에서 끄면 다시 끼어들지 않는다).
         LoginItemRegistrar.registerIfNeeded(
             defaults: .standard,
@@ -54,6 +59,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 로 로그인 자동 실행은 이미 켜져 있으니, 부팅 후 아이콘을 안 누르는 사용자에게는 "앱은 떠 있는데 근무가
         // 하나도 기록되지 않는" 상태가 하루 종일 지속된다.
         store.activateStoredSessionOnLaunch()
+    }
+
+    /// 할 일 보드를 만들고 오버레이 훅에 잇는다. **판단은 전부 여기서** 하고 오버레이는 사실만 알린다.
+    ///
+    /// 목록 파일은 계정별로 나눈다 — 한 맥을 여러 사람이 쓰거나 계정을 갈아탔을 때 남의 할 일이 보이면 안 된다.
+    /// 로그인 전에는 `todos.local.json` 을 쓰고, 이 실행에서 세션이 이미 복구돼 있으면 그 계정 파일로 연다.
+    private func wireTodoBoard() {
+        guard let overlay = overlayController else { return }
+        let listStore = TodoListStore(fileURL: TodoFileStore.defaultURL(userID: store.session?.userID))
+        let board = CheckTodoBoardController(store: listStore)
+        todoStore = listStore
+        todoBoard = board
+
+        // 클릭 → 보드 여닫기. **false 를 돌려주면 오버레이가 아파하기를 재생한다**(기능을 끈 사용자).
+        overlay.onCharacterTapped = { [weak self] in
+            guard let self, self.store.isTodoEnabled else { return false }
+            board.toggle(anchor: overlay.panel.frame, screenVisibleFrame: Self.visibleFrame(for: overlay.panel))
+            // 보드가 열린 동안 캐릭터가 그쪽을 바라본다(드래그 방향 전환 기계를 그대로 재사용).
+            overlay.engine.setDragFacing(board.isBoardOpen ? -1 : 0)
+            return true
+        }
+        overlay.onUltraBegan = { board.close() }
+        overlay.onUltraEnded = { _ in }   // 격발 뒤 자동 복원은 하지 않는다 — 사용자가 다시 열면 된다.
+        overlay.onWorkEnded = { [weak overlay] in
+            board.close()
+            overlay?.engine.setDragFacing(0)
+        }
+        overlay.onCharacterFrameChanged = { frame in
+            board.reposition(anchor: frame, screenVisibleFrame: Self.visibleFrame(for: overlay.panel))
+        }
+        overlay.isBoardOpen = { board.isBoardOpen }
+    }
+
+    /// 그 패널이 놓인 화면의 visibleFrame. 캐릭터를 끌어다 둔 화면이 기준이다 —
+    /// NSScreen.main 은 키 윈도우가 없는 메뉴바 앱에서 무엇을 돌려줄지 계약이 불분명하다.
+    private static func visibleFrame(for panel: NSPanel) -> NSRect {
+        let screens = NSScreen.screens
+        func overlap(_ screen: NSScreen) -> CGFloat {
+            let r = screen.frame.intersection(panel.frame)
+            return r.isNull ? 0 : r.width * r.height
+        }
+        let best = screens.max { overlap($0) < overlap($1) }
+        return (best ?? NSScreen.main ?? screens.first)?.visibleFrame ?? .zero
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

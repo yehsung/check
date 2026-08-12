@@ -145,6 +145,9 @@ final class WorkTimerStore {
 
     /// 3D 캐릭터 오버레이 표시 여부 (사용자 토글, UserDefaults 유지).
     var isOverlayEnabled: Bool = true
+    /// 할 일 기능이 켜져 있는가(기본 켬). 캐릭터 클릭의 뜻을 가르는 유일한 값이다 —
+    /// 켜면 보드 여닫기, 끄면 아파하기. 한 클릭에 두 뜻을 담지 않기 위한 설정이다.
+    var isTodoEnabled: Bool = true
 
     /// 팝오버(MenuBarExtra 창) 표시 여부. 표시 감지(onAppear/창 노티)가 setMenuPresented 로 알린다.
     /// 관찰 대상이 아니다 — 티커/폴링 게이팅 판정에만 쓴다.
@@ -590,6 +593,7 @@ final class WorkTimerStore {
         email = defaults.string(forKey: Self.emailKey) ?? ""
         displayName = defaults.string(forKey: Self.displayNameKey) ?? ""
         isOverlayEnabled = defaults.object(forKey: Self.overlayEnabledKey) as? Bool ?? true
+        isTodoEnabled = defaults.object(forKey: Self.todoEnabledKey) as? Bool ?? true
         // 수동 [근무 종료]의 자동 시작 억제를 복구한다. 단, 앱이 1시간 넘게 죽어 있었다면(밤새 꺼짐·재부팅)
         // 그 공백 자체가 '부재'이므로 여기서 푼다 — 살아 있는 동안의 공백 관측(onAbsenceGap)은 스케줄러가
         // 하지만, 앱이 꺼져 있던 시간은 마지막 생존 스탬프와의 차이로만 잴 수 있다.
@@ -1239,6 +1243,8 @@ extension WorkTimerStore {
     static let emailKey = "check.userEmail"
     static let displayNameKey = "check.displayName"
     static let overlayEnabledKey = "check.overlayEnabled"
+    /// 할 일 기능 사용 여부. 켜면 캐릭터 클릭이 보드를 여닫고, 끄면 예전처럼 아파하기가 나온다.
+    static let todoEnabledKey = "check.todoEnabled"
     /// 수동 [근무 종료]의 자동 시작 억제 표식(Bool). 1시간 부재 재무장 판정과 함께 쓴다.
     static let autoStartSuppressedKey = "check.nudge.autoStartSuppressed"
     /// 억제 중 스케줄러의 마지막 생존 스탬프(Date). 실행 간 공백(앱이 죽어 있던 시간)을 재는 유일한 근거.
@@ -1253,6 +1259,16 @@ extension WorkTimerStore {
     /// 캐릭터 오버레이 표시를 토글하고 설정을 저장한다.
     func toggleOverlayEnabled() {
         setOverlayEnabled(!isOverlayEnabled)
+    }
+
+    /// 할 일 기능을 켜고 끈다(영속). 끄면 캐릭터 클릭이 예전처럼 아파하기로 돌아간다.
+    func setTodoEnabled(_ enabled: Bool) {
+        if isTodoEnabled != enabled { isTodoEnabled = enabled }
+        defaults.set(enabled, forKey: Self.todoEnabledKey)
+    }
+
+    func toggleTodoEnabled() {
+        setTodoEnabled(!isTodoEnabled)
     }
     static let accessTokenKey = "check.session.accessToken"
     static let refreshTokenKey = "check.session.refreshToken"

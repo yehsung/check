@@ -391,6 +391,13 @@ final class ReactionEngine {
         case .idle:
             setRenderFPS(Self.idleFPS)
         }
+
+        // ☠︎ 새로 찾은 facing 노드에 **보관 중인 방향을 다시 적용한다.** 이 한 줄이 없으면 재-attach 가
+        // 한 번이라도 일어나는 순간 "값은 -1, 노드는 정면"으로 갈라지고, `setDragFacing` 의 `==` 가드가
+        // 같은 방향 재요청을 삼켜 **영구 고착**된다(보드를 열어도 캐릭터가 영원히 안 쳐다본다).
+        // 지금은 SCNView 아이덴티티를 고정해 둬(hasEverShown 래치 + 고정 characterBoxSize) 실행당 attach 가
+        // 1회뿐이라 발현하지 않지만, 그 래치는 이 결함과 무관한 이유(레이아웃·크기 변경)로 언제든 풀린다.
+        applyDragFacingToNode()
     }
 
     /// 얼굴 재질·감은 눈 선 노드를 찾고, 감은 눈 텍스처(눈을 피부로 덮은 버전)를 1회 생성해 캐시한다.
@@ -786,11 +793,20 @@ final class ReactionEngine {
         let dir = direction == 0 ? 0 : (direction > 0 ? 1 : -1)
         guard dir != dragFacing else { return }
         dragFacing = dir
+        applyDragFacingToNode()
+    }
+
+    /// 보관 중인 `dragFacing` 을 facing 노드에 실제로 반영한다. 노드가 아직 없으면 no-op —
+    /// 다음 `attach` 가 같은 함수로 밀어 넣으므로 방향이 유실되지 않는다.
+    ///
+    /// **각도 식은 여기 한 곳에만 둔다.** setDragFacing 과 attach 재적용이 각자 계산하면 언젠가 부호나
+    /// 각도가 갈려, 드래그로 돌아본 각도와 재-attach 후 각도가 다른 기괴한 상태가 된다.
+    private func applyDragFacingToNode() {
         guard let facing = facingNode else { return }
         // 애니메이션 없이 즉시 스냅한다: 드래그 중 렌더는 유휴 8fps 라 0.15s 회전이 한두 프레임으로 쪼개져
         // "뚝뚝 끊기는" 느낌을 준다는 실사용 피드백 — 방향 전환은 그 프레임에 한 번에 돌아보는 게 낫다.
         facing.removeAction(forKey: Self.facingActionKey)
-        facing.eulerAngles = SCNVector3(0, CGFloat(dir) * Self.dragFacingAngle, 0)
+        facing.eulerAngles = SCNVector3(0, CGFloat(dragFacing) * Self.dragFacingAngle, 0)
     }
 
     /// 헤드리스 검증 지점: 현재 바라보는 방향.

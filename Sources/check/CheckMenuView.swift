@@ -573,6 +573,22 @@ private struct HeaderGoalSection: View {
                         .font(.caption2)
                         .foregroundStyle(CheckTheme.secondaryText)
                         .monospacedDigit()
+                    // 할 일 기능 on/off. **눈에 보이는 자리**여야 한다 — 처음엔 푸터 전원 버튼 메뉴에, 다음엔
+                    // 캐릭터 버튼 메뉴에 넣었는데 둘 다 Menu 의 보조 화살표라 사실상 없는 것과 같았다
+                    // ("투두 온오프 버튼 대체 어디있어?" 실사용 신고). 푸터는 4버튼이 상한이므로(FooterWidthBudget)
+                    // 그 규칙이 스스로 지정한 넘침 자리인 **내 근무 박스 캡션 행**에 세운다 — 연필/그래프와 같은
+                    // 소형(18pt) 버튼이라 캡션 줄 높이도, 창 높이 예산(700pt 상한)도 1pt 도 늘지 않는다.
+                    // 켜짐이면 accent 로 물들어(isActive) 상태가 hover 없이도 읽힌다 — 기본값이 켜짐이라
+                    // 이 색이 곧 "여기 스위치가 있다"는 신호도 겸한다.
+                    // 자리는 그래프/연필의 **왼쪽**이다: 오른쪽 끝부터 세는 손버릇(끝=연필, 끝에서 둘째=내 기록)을
+                    // 건드리지 않아야, 목표를 고치려다 할 일 기능을 꺼 버리는 오클릭이 생기지 않는다.
+                    HeaderCaptionIconButton(
+                        icon: TodoToggleControl.icon,
+                        help: TodoToggleControl.help(isOn: store.isTodoEnabled),
+                        isActive: store.isTodoEnabled
+                    ) {
+                        TodoToggleControl.press(store)
+                    }
                     // 내 기록(지난주 회고 + 근무 리듬 히트맵). 팀 카드 헤더가 아니라 **내 근무 박스**에 둔다 —
                     // 본인 데이터만 보는 개인 화면이라 자리가 여기가 맞고, 팀 헤더에 네 번째 버튼을 세우면
                     // 팀 이름이 2~3자로 잘렸다(v0.2.11 감사 지적). 캡션 행이라 연필과 같은 소형(18pt) 버튼을 쓴다.
@@ -630,6 +646,33 @@ private struct HeaderGoalSection: View {
     // 초 단위 목표를 스테퍼 범위(1~168시간)로 클램프한 시간값.
     private static func hours(from goalSeconds: Int) -> Int {
         max(1, min(168, goalSeconds / 3600))
+    }
+}
+
+/// 할 일 기능 on/off 버튼의 아이콘·문구·동작 계약(결정적 검증 지점).
+///
+/// 버튼 자체는 SwiftUI 라 테스트에서 누를 수 없다 — 그래서 "누르면 무슨 일이 나는가"를 이 한 곳으로 빼
+/// 테스트가 같은 함수를 눌러 볼 수 있게 한다. 뷰는 이 값·함수를 **그대로만** 쓴다(여기서 갈라지면 회귀).
+///
+/// 문구는 상태 + 그 상태에서 캐릭터를 눌렀을 때 실제로 벌어지는 일 + 이 버튼을 누르면 할 일, 셋을 다 말한다.
+/// 예전 메뉴 문구("캐릭터를 눌러 할 일 열기")는 켠 상태만 서술해, 껐을 때 캐릭터가 아파하는 반응으로
+/// 돌아간다는 걸 아무도 몰랐다.
+enum TodoToggleControl {
+    static let icon = "checklist"
+
+    /// 두 문구 모두 서술어로 문장을 닫는다(같은 행의 선례: "캐릭터 표시 중 — 누르면 숨김").
+    /// "아파하기"를 쓰지 않는 이유: 그건 코드 주석/MARK 에만 살던 **내부 용어**라, 사용자는 그 리액션에
+    /// 이름이 있다는 것조차 모른다. 사용자가 실제로 보는 것(콕 찌르면 반응하는 캐릭터)으로 적는다.
+    static func help(isOn: Bool) -> String {
+        isOn
+            ? "할 일 켜짐 — 캐릭터를 누르면 할 일이 열려요 · 눌러서 끄기"
+            : "할 일 꺼짐 — 캐릭터를 누르면 콕 반응만 해요 · 눌러서 켜기"
+    }
+
+    /// 버튼을 누른 그 순간의 동작. 값은 스토어가 UserDefaults(check.todoEnabled)까지 함께 저장한다.
+    @MainActor
+    static func press(_ store: WorkTimerStore) {
+        store.toggleTodoEnabled()
     }
 }
 
@@ -2358,6 +2401,12 @@ private struct FooterBar: View {
             Spacer(minLength: 6)
             // 버튼은 4개까지다(FooterWidthBudget). 하나 더 세우면 동기화 문구가 곧바로 말줄임된다 —
             // 새 버튼이 필요하면 푸터가 아니라 관련 카드(예: 내 근무 박스 캡션 행)로 보낸다.
+            // 캐릭터 표시 on/off. **메뉴가 아니라 그냥 버튼**이다 — 여기에 Menu 를 씌워 '할 일' 스위치를
+            // 숨겨 봤지만, 전원 버튼 메뉴와 똑같이 아무도 못 여는 자리였다(보조 화살표는 hover 전엔 보이지도
+            // 않는다). 할 일 스위치는 내 근무 박스 캡션 행으로 올려 보냈고(HeaderGoalSection), 이 버튼은
+            // 아이콘 하나가 현재 상태를 그대로 말하는 원래의 단순한 토글로 되돌린다.
+            // 덤: Menu 는 ImageRenderer 가 그리지 못해(자리에 노란 경고 상자가 박힌다) 렌더 회귀 테스트의
+            // 사각지대였다 — 버튼으로 되돌리며 푸터 전체가 다시 픽셀로 검증된다.
             IconButton(
                 icon: store.isOverlayEnabled ? "person.fill" : "person.fill.xmark",
                 help: store.isOverlayEnabled ? "캐릭터 표시 중 — 누르면 숨김" : "캐릭터 숨김 — 누르면 표시"
@@ -2390,12 +2439,6 @@ private struct PowerMenuButton: View {
 
     var body: some View {
         Menu {
-            // 할 일 기능. 끄면 캐릭터 클릭이 예전처럼 아파하기로 돌아간다 — 한 클릭에 두 뜻을 담지 않기 위한 설정이다.
-            Toggle("캐릭터를 눌러 할 일 열기", isOn: Binding(
-                get: { store.isTodoEnabled },
-                set: { store.setTodoEnabled($0) }
-            ))
-            Divider()
             Toggle("로그인 시 자동 실행", isOn: Binding(
                 get: { launchAtLogin },
                 set: { wanted in

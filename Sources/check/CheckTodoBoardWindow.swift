@@ -65,6 +65,133 @@ enum TodoBoardAnchor {
     }
 }
 
+// MARK: - ⌥ + 스크롤(순수 누적기)
+
+/// 스크롤 이벤트 한 개에서 **판단에 필요한 네 가지만** 떼어 낸 값.
+///
+/// 왜 구조체로 가르는가: `NSEvent` 는 합성해도 오프스크린에서 우리가 보는 필드(창·페이즈·정밀 여부)가
+/// 비어 오거나 아예 만들어지지 않아 단언에 쓸 수 없다(실측 — `NSEvent.mouseEvent`/`otherEvent` 로는
+/// `.scrollWheel` 타입 자체를 만들 수 없다). 그래서 이벤트에서 값만 뽑아 내고, **누적 규칙 전체는
+/// 이 값 위에서** 헤드리스로 검증한다.
+struct TodoBoardScrollSample: Equatable, Sendable {
+    /// `NSEvent.scrollingDeltaY`. 부호는 손가락 방향이 아니라 **문서가 움직이는 방향**이다(`isInverted` 참고).
+    var deltaY: Double
+    /// `hasPreciseScrollingDeltas`. true = 트랙패드·매직마우스(연속 델타), false = 걸림쇠 있는 휠(이산).
+    var isPrecise: Bool
+    /// `isDirectionInvertedFromDevice`(="자연스러운 스크롤" 켜짐). true면 `deltaY` 가 **손가락 움직임의 반대**다.
+    var isInverted: Bool
+    /// 손을 뗀 뒤 관성으로 흘러오는 이벤트인가(`momentumPhase != []`).
+    var isMomentum: Bool
+}
+
+extension TodoBoardScrollSample {
+    /// 실제 이벤트에서 값만 뽑는다. **여기에는 판단이 없다** — 판단이 섞이는 순간 그 조각만 검증 밖으로 나간다.
+    init(event: NSEvent) {
+        self.init(
+            deltaY: event.scrollingDeltaY,
+            isPrecise: event.hasPreciseScrollingDeltas,
+            isInverted: event.isDirectionInvertedFromDevice,
+            isMomentum: event.momentumPhase != []
+        )
+    }
+}
+
+/// ⌥+스크롤 델타를 모아 **투명도 스텝 수**로 바꾸는 누적기. 창도 이벤트도 모르는 순수 값 로직이다.
+///
+/// 왜 누적이 필요한가: 트랙패드의 `scrollingDeltaY` 는 한 번 쓸어도 잘게 수십 번 온다. 매 이벤트마다
+/// `nudge(by: step)` 을 부르면 손가락을 조금만 움직여도 0.20↔0.95 를 순식간에 왕복한다(스텝 15개짜리 레일이다).
+/// 거리를 모아 문턱을 넘을 때만 한 스텝을 내보내면 "한 틱 = 한 스텝"으로 읽힌다.
+struct TodoBoardScrollOpacityGesture {
+    /// 트랙패드에서 **편하게 한 번 쓸었을 때** 쌓이는 델타(pt). 정밀 델타는 대체로 '문서가 움직이는 거리'와
+    /// 같은 단위라 한 번 쓸기는 200~300pt 다. 감도의 기준점은 이 숫자 하나뿐이고 나머지는 전부 여기서 나온다.
+    static let sweepDistance: Double = 240
+
+    /// 레일(0.20~0.95)을 몇 스텝에 훑는가. **설정 모델이 정한다** — 여기서 다시 세지 않는다.
+    static var railSteps: Double {
+        (TodoBoardAppearance.maxOpacity - TodoBoardAppearance.minOpacity) / TodoBoardAppearance.step
+    }
+
+    /// 한 스텝을 밀어내는 누적 거리(pt). **한 번 쓸기 = 레일의 절반**이 되도록 역산한다.
+    ///
+    /// 왜 상수로 박지 않는가: 스텝 크기(`TodoBoardAppearance.step`)는 설정 모델의 소유고 실제로 바뀐다.
+    /// 거리를 박아 두면 스텝이 잘아지는 순간 같은 손동작이 몇 배로 굼떠진다("한참 굴려도 안 움직인다").
+    /// 감도의 계약은 거리가 아니라 **"한 번 쓸어서 어느 만큼 가는가"** 라야 스텝 크기와 무관하게 유지된다.
+    /// 절반인 이유는 양끝 어느 쪽에서 시작해도 두 번이면 반대 끝에 닿으면서, 목록을 훑던 손버릇 그대로
+    /// 한 번 미끄러졌을 때 값이 끝까지 튀지는 않는 지점이기 때문이다.
+    /// 바닥값 8pt 는 한 틱이 손끝에 느껴지는 하한이다(그 아래면 조절이 아니라 미끄럼이 된다).
+    static var stepDistance: Double { max(8, sweepDistance / (railSteps / 2)) }
+
+    /// 한 이벤트가 낼 수 있는 최대 스텝 수(= 레일의 절반). 방어의 진짜 목적은 감도가 아니라
+    /// **`Int` 변환 붕괴**다 — 드라이버가 튀는 큰 델타를 흘리는 일이 실제로 있고(설정 모델이 `nudge` 에서
+    /// 무한대를 버리는 것과 같은 이유), 나눗셈 결과를 그대로 `Int(_:)` 에 넣으면 표현 범위를 넘는 순간 크래시다.
+    static var maxStepsPerEvent: Double { max(4, (railSteps / 2).rounded()) }
+
+    /// 아직 한 스텝에 못 미친 잔여 거리(pt). 부호는 '위로'가 양수다.
+    private var accumulated: Double = 0
+
+    /// 보드를 열고 닫을 때 잔여를 턴다. 어제 굴리다 만 20pt 가 남아 있으면 다음에 여는 순간
+    /// 손가락을 4pt 만 움직여도 값이 한 칸 튄다.
+    mutating func reset() {
+        accumulated = 0
+    }
+
+    /// 이벤트 하나를 먹고 **이번에 적용할 스텝 수**를 돌려준다(0이면 아직 문턱 미만).
+    ///
+    /// 방향: 반환값이 양수 = 더 불투명(값 증가)이고, 그 기준은 **손가락·휠의 물리적 위쪽**이다
+    /// (`isInverted` 면 `deltaY` 를 뒤집어 물리 방향으로 되돌린다). 문서 방향(deltaY 부호)을 그대로 쓰지 않는
+    /// 이유는 하나다 — 자연스러운 스크롤은 장치별로 따로 켜진다(트랙패드는 켜고 외장 마우스는 끄는 조합이
+    /// 흔하다). 문서 방향을 쓰면 **같은 맥에서 같은 손동작이 트랙패드와 마우스에서 반대로 동작한다.**
+    /// 물리 방향으로 고정하면 "위로 밀면 진해진다"가 장치와 설정에 상관없이 성립한다(슬라이더를 위로
+    /// 올리면 값이 커지는 것과 같은 은유).
+    ///
+    /// 관성(`isMomentum`)은 **버린다**. 손을 뗀 뒤에도 값이 혼자 흘러가면 멈출 방법이 없고, 사용자는
+    /// 자기가 놓은 자리가 아닌 곳에서 끝난 값을 보게 된다. 목록 스크롤과 달리 이건 되돌리기가 번거로운 설정값이다.
+    ///
+    /// 걸림쇠 휠(`isPrecise == false`)은 누적하지 않고 **이벤트 한 개 = 한 스텝**으로 센다. 장치가 이미
+    /// 이산적으로 끊어 주고 있고, 한 칸이 몇 '줄'로 오는지는 드라이버마다 다르다(1 또는 3) — 그 숫자를
+    /// 거리로 환산해 문턱과 견주는 순간 기기에 따라 한 칸이 한 스텝이 되기도 세 스텝이 되기도 한다.
+    mutating func steps(for sample: TodoBoardScrollSample) -> Int {
+        guard !sample.isMomentum else {
+            // 관성이 시작됐다는 건 제스처가 끝났다는 뜻이다 — 잔여도 같이 턴다.
+            accumulated = 0
+            return 0
+        }
+        guard sample.deltaY.isFinite, sample.deltaY != 0 else { return 0 }
+        let up = sample.isInverted ? -sample.deltaY : sample.deltaY
+
+        guard sample.isPrecise else {
+            accumulated = 0
+            return up > 0 ? 1 : -1
+        }
+
+        // 방향이 바뀌면 반대편 잔여를 버린다. 남겨 두면 "+20pt 쌓다가 반대로 꺾었더니 44pt 를 밀어야
+        // 한 칸 내려간다"가 되어, 되돌리는 조작만 유독 둔해진다.
+        if accumulated != 0, (up > 0) != (accumulated > 0) { accumulated = 0 }
+        accumulated += up
+
+        let raw = (accumulated / Self.stepDistance).rounded(.towardZero)
+        let bounded = min(max(raw, -Self.maxStepsPerEvent), Self.maxStepsPerEvent)
+        if bounded == raw {
+            accumulated -= bounded * Self.stepDistance
+        } else {
+            // 한도에 걸린 이벤트는 정상적인 손동작이 아니다 — 잔여를 남겨 다음 이벤트까지 끌고 가지 않는다.
+            accumulated = 0
+        }
+        return Int(bounded)
+    }
+}
+
+/// `NSEvent` 모니터 토큰을 담는 상자.
+///
+/// 왜 `Any?` 를 그냥 들고 있지 않은가 — 해제 경로가 두 곳이기 때문이다. 닫기는 메인 액터에서 오지만
+/// `deinit` 은 Swift 6 에서 **비격리**라 격리된 저장 프로퍼티를 읽지 못한다(`Any` 는 Sendable 이 아니다).
+/// 토큰을 Sendable 상자에 넣으면 deinit 도 토큰을 꺼낼 수 있고, `removeMonitor` 는 **등록한 스레드에서**
+/// 불러야 하므로(문서) 거기서 메인으로 한 번 건너뛴다.
+private final class TodoBoardScrollMonitorToken: @unchecked Sendable {
+    let raw: Any
+    init(_ raw: Any) { self.raw = raw }
+}
+
 // MARK: - 보드 UI 상태(컨트롤러 소유)
 
 /// 보드의 **입력 상태**. 뷰의 `@State` 가 아니라 컨트롤러가 소유해야 하는 값들만 모았다.
@@ -111,6 +238,11 @@ final class TodoBoardUIState {
 private struct TodoBoardRootView: View {
     let store: TodoListStore
     let ui: TodoBoardUIState
+    /// 투명도 설정의 주인. **값이 아니라 스토어를 들고 있는 것이 핵심이다** — `@Observable` 이라
+    /// body 에서 `appearance.appearance` 를 읽는 순간 관찰이 걸려, 슬라이더든 ⌥+스크롤이든 값이 바뀌면
+    /// 이 뷰가 스스로 다시 그려진다(컨트롤러가 뷰를 밀어 넣을 필요가 없다).
+    let appearance: TodoBoardAppearanceStore
+    let onOpacityChange: (Double) -> Void
     let onDraftChange: (String) -> Void
     let onSubmitDraft: () -> Void
     let onToggleDone: (UUID) -> Void
@@ -158,7 +290,9 @@ private struct TodoBoardRootView: View {
             onDelete: onDelete,
             onUndoDelete: onUndoDelete,
             onToggleOldSection: onToggleOldSection,
-            onClose: onClose
+            onClose: onClose,
+            appearance: appearance.appearance,
+            onOpacityChange: onOpacityChange
         )
     }
 }
@@ -175,11 +309,16 @@ final class CheckTodoBoardController {
     private(set) var isBoardOpen = false
 
     private let store: TodoListStore
+    /// 보드 투명도 설정의 주인(창 밖에서 산다 — 설정 UI 도 같은 인스턴스를 본다).
+    private let appearanceStore: TodoBoardAppearanceStore
     /// 보드 입력 상태의 주인. 패널을 내려도, 뷰가 다시 만들어져도 여기 남는다.
     private let ui: TodoBoardUIState
     /// 지연 생성된 패널. **닫을 때 파괴하지 않는다** — NSHostingView 를 다시 만드는 비용도 비용이지만,
     /// 재생성 과정에서 3D 캐릭터 옆에 한 프레임 빈 창이 스치고 포커스가 튀는 게 더 나쁘다.
     private var panelStorage: TodoBoardPanel?
+    /// 블러 뷰(패널을 만들 때 같이 선다). 투명도 통지가 왔을 때 **여기에만** 알파를 건다 —
+    /// 컨테이너나 패널에 걸면 글자까지 같이 흐려진다.
+    private var blurStorage: NSVisualEffectView?
     /// '삭제됨 [되돌리기]' 창을 닫는 타이머. 이 태스크가 끝나면 삭제가 확정된다.
     private var undoTask: Task<Void, Never>?
 
@@ -189,10 +328,28 @@ final class CheckTodoBoardController {
     ///  아무도 안 쓰게 되고, 결국 타이머 생성을 통째로 지워도 스위트가 초록인 구멍이 생긴다.)
     let undoSeconds: Double
 
-    init(store: TodoListStore, undoSeconds: Double = TodoRules.undoSeconds) {
+    /// `appearance` 에 기본값이 있는 이유는 **테스트 편의가 아니라 계약의 방향** 때문이다. 이 컨트롤러는
+    /// 설정 스토어의 소유자가 아니라 소비자다(설정 UI 도 같은 인스턴스를 본다) — 그래서 주입을 받되,
+    /// 안 주면 앱이 실제로 쓰는 표준 저장소를 그대로 쓴다.
+    init(
+        store: TodoListStore,
+        appearance: TodoBoardAppearanceStore = TodoBoardAppearanceStore(),
+        undoSeconds: Double = TodoRules.undoSeconds
+    ) {
         self.store = store
+        self.appearanceStore = appearance
         self.undoSeconds = undoSeconds
         self.ui = TodoBoardUIState(todayKey: store.todayKey)
+        // 콜백의 소비자는 **AppKit 쪽(블러 알파) 하나뿐**이다(SwiftUI 쪽은 @Observable 관찰로 따로 따라온다).
+        // 붙잡는 것은 weak self 뿐이라 컨트롤러가 죽으면 통지도 조용히 멎는다.
+        appearance.onChange = { [weak self] value in self?.applyBlurAlpha(value) }
+    }
+
+    deinit {
+        // 모니터 토큰의 주인은 NSEvent 다 — 컨트롤러가 죽어도 등록은 앱에 그대로 남아, 그 뒤로도
+        // 앱의 모든 스크롤이 죽은 클로저를 거쳐 간다. 닫기 경로가 한 번이라도 새면 여기가 마지막 문이다.
+        guard let scrollMonitor else { return }
+        Task { @MainActor in NSEvent.removeMonitor(scrollMonitor.raw) }
     }
 
     // MARK: - 패널
@@ -201,12 +358,92 @@ final class CheckTodoBoardController {
     var panel: TodoBoardPanel {
         if let panelStorage { return panelStorage }
         let created = Self.makePanel()
+        let bounds = NSRect(origin: .zero, size: TodoBoardAnchor.boardSize)
+
+        // ★ 계층은 **형제 배치**다: 투명 컨테이너 아래에 블러와 호스팅 뷰가 나란히 선다.
+        //
+        //   왜 자식이 아니라 형제인가 — 사용자 투명도가 `effect.alphaValue` 로 들어오는데, 호스팅 뷰가
+        //   블러의 자식이면 그 알파를 **글자·체크박스·버튼까지 그대로 먹는다**. "투명하게 했더니 글자가
+        //   안 보인다"가 정확히 그 그림이고, 설정 모델이 명시적으로 금지한 배치다.
+        //
+        //   형제로 옮겨도 behind-window 블렌딩은 **그대로 산다**(이게 유일한 걱정거리였다). 실측 —
+        //   같은 패널을 두 배치로 세워 레이어 트리를 덤프했을 때 둘 다 `CABackdropLayer` 가 섰고,
+        //   형제 배치에서 `effect.alphaValue = 0.3` 을 건 뒤에는 블러 뷰의 백킹 레이어만 opacity 0.3,
+        //   호스팅 뷰의 백킹 레이어는 1.0 그대로였다. 호스팅 뷰 백킹스토어 픽셀도 알파 0.549(=틴트 0.55)로
+        //   불투명(1.000)이 아니었다.
+        //
+        //   컨테이너는 **배경을 깔지 않는다**. 한 겹이라도 불투명한 판이 블러 위/아래에 끼면 창이
+        //   반투명이어도 사용자 눈에는 회색 판이다.
+        let container = NSView(frame: bounds)
+        container.wantsLayer = true
+        container.autoresizingMask = [.width, .height]
+
+        // ★ 블러는 **창의 콘텐츠 계층에 직접** 서야 한다. SwiftUI `.background(NSViewRepresentable)` 로 넣으면
+        //   호스팅 뷰가 자기 레이어에 합성해 버려 behind-window 블렌딩이 죽고, 보드가 뒤를 완전히 가리는
+        //   불투명 판이 된다(실사용 신고).
+        let effect = NSVisualEffectView(frame: bounds)
+        // 재질 선택 근거는 **실측한 틴트 두께**다. 같은 어두운 외관에서 각 재질이 백드롭 위에 얹는 틴트 알파는
+        // hudWindow 0.40 < popover 0.60 < menu 0.70 < sidebar·underWindowBackground 0.80 이었다
+        // (레이어 트리 덤프로 확인). 우리는 그 위에 대비용 틴트 0.55 를 한 겹 더 얹으므로, 뒤가 실제로
+        // 보이는 양은 hudWindow 가 (1-0.40)×(1-0.55)≈27%, underWindowBackground 는 ≈9% 다.
+        // "반투명하지 않다"는 신고를 받은 창에서 가장 얇은 재질을 고르는 건 자명하고, 의미상으로도
+        // hudWindow 는 '남의 앱 위에 떠 있는 보조 패널'용 재질이다(popover/menu 는 곧 사라지는 임시 표면,
+        // underWindowBackground/sidebar 는 자기 창 안의 영역용).
+        effect.material = .hudWindow
+        effect.blendingMode = .behindWindow
+        // .followsWindowActiveState 면 다른 앱을 클릭하는 순간 블러가 꺼져 회색 판으로 죽는다.
+        // 이 보드는 남의 앱 위에 계속 떠 있는 게 목적이라 항상 활성으로 고정한다.
+        //
+        // 이 한 줄이 실제로 뒤를 뚫는다는 증거: state 를 .inactive 로 두면 AppKit 이 레이어 트리에서
+        // CABackdropLayer(뒤 화면을 표본 삼는 레이어) 자체를 빼 버리고 **알파 1.0 짜리 단색 레이어**로
+        // 갈아치운다(실측). 즉 신고된 "뒤를 완전 가려버린다"와 정확히 같은 그림이 된다.
+        effect.state = .active
+        effect.wantsLayer = true
+        // ★ 모서리 클립은 **컨테이너가 아니라 블러 뷰에** 건다. 형제 배치가 되면서 후보가 둘로 늘었지만,
+        //   자를 것이 있는 쪽은 블러뿐이다 — 재질은 자기 bounds 를 꽉 채운 사각형으로 그려지므로 레이어가
+        //   깎지 않으면 네 귀퉁이가 각진 채 삐져나온다. 반대로 호스팅 뷰 쪽 그림(틴트·테두리·행)은 SwiftUI 가
+        //   이미 같은 반지름·같은 곡선으로 자르고 있고(`CheckTodoBoardView.body` 의 clipShape), 컨테이너에
+        //   masksToBounds 를 걸면 **두 자식을 전부** 담는 오프스크린 합성이 매 프레임 한 번 더 생긴다 —
+        //   이미 잘려 있는 그림을 다시 자르려고. 실측으로도 블러 쪽 클립만으로 호스팅 뷰의 모서리 픽셀이
+        //   비어 있었다(같은 지점 중앙은 틴트 알파 0.549, 모서리는 0.000).
+        effect.layer?.cornerRadius = CheckTodoBoardView.cornerRadius
+        // ★ SwiftUI 쪽은 `RoundedRectangle(style: .continuous)` 로 자른다. 레이어의 기본 곡률은 원호(.circular)라
+        //   같은 반지름이어도 **모서리 곡선이 다르다** — 재질(레이어가 자름)과 틴트·테두리(SwiftUI 가 자름)의
+        //   경계가 몇 px 어긋나 모서리에 지저분한 실선이 남는다. 두 클립을 같은 스퀘어클 곡선으로 맞춘다.
+        effect.layer?.cornerCurve = .continuous
+        // 이 한 줄은 **지금은 지워도 그림이 같다** — `cornerRadius` 를 넣는 순간 AppKit 이 백킹 레이어의
+        // masksToBounds 를 스스로 켠다(실측: 대입 전 false → cornerRadius 대입 직후 true. 그래서 이 줄만
+        // 지우는 뮤테이션은 어떤 테스트로도 못 죽인다). 그래도 남기는 이유는 그 켜짐이 문서화된 계약이
+        // 아니라 관찰된 동작이고, 위 두 줄이 언젠가 maskImage 같은 다른 방식으로 바뀌면 클립이 조용히
+        // 사라지기 때문이다(모서리는 각지는데 테스트는 초록인 상태).
+        effect.layer?.masksToBounds = true
+        effect.autoresizingMask = [.width, .height]
+        // 앱을 껐다 켠 뒤 **처음 여는 창**에도 저장값이 서 있어야 한다. 통지(onChange)는 값이 바뀔 때만
+        // 오므로, 여기서 한 번 읽지 않으면 사용자가 슬라이더를 만지기 전까지 창만 기본값으로 남는다.
+        effect.alphaValue = CGFloat(appearanceStore.appearance.blurAlpha)
+
         let hosting = NSHostingView(rootView: makeRootView())
-        hosting.frame = NSRect(origin: .zero, size: TodoBoardAnchor.boardSize)
+        hosting.frame = bounds
         hosting.autoresizingMask = [.width, .height]
-        created.contentView = hosting
+
+        container.addSubview(effect)
+        // 순서가 곧 계층이다 — 호스팅 뷰가 블러 **위**여야 글자가 재질에 묻히지 않는다.
+        container.addSubview(hosting, positioned: .above, relativeTo: effect)
+        created.contentView = container
         panelStorage = created
+        blurStorage = effect
         return created
+    }
+
+    /// 사용자 투명도를 창에 반영한다. **블러 뷰의 알파만 만진다** — 컨테이너나 패널에 걸면 그 아래
+    /// 호스팅 뷰까지 같이 흐려져 글자가 유령이 된다(형제 배치의 존재 이유가 여기다).
+    ///
+    /// **패널을 아직 안 만들었으면 아무 일도 하지 않는다.** 여기서 `panel` 을 읽으면 설정 슬라이더를
+    /// 움직이는 것만으로 열지도 않은 보드가 생겨 버린다(지연 생성 파괴). 반영할 창이 없으면 반영할 것도
+    /// 없고, 처음 만들 때 저장값을 그대로 읽어 세운다.
+    private func applyBlurAlpha(_ value: TodoBoardAppearance) {
+        guard let blurStorage else { return }
+        blurStorage.alphaValue = CGFloat(value.blurAlpha)
     }
 
     /// 헤드리스 검증 지점 — '패널을 이미 만들었는가'. 지연 생성(열기 전엔 없음)과 닫아도 살아 있음
@@ -245,6 +482,11 @@ final class CheckTodoBoardController {
         panel.sharingType = .none
         // 우리가 패널을 계속 붙들고 재사용하므로(닫기=orderOut) 닫힘에 딸린 해제가 끼어들면 안 된다.
         panel.isReleasedWhenClosed = false
+        // ★ 보드는 **어두운 테마 전용**으로 그려진다(CheckTheme.panel 틴트 + 흰 글자). 그런데 재질은
+        //   시스템 외관을 따라가므로, 밝은 테마에서는 같은 hudWindow 가 흰 틴트(0.965@0.48 + 0.96)로 바뀐다(실측).
+        //   그 위에 어두운 틴트 0.55 를 얹으면 중간 회색 판이 되어 흰 글자 대비가 무너지고, 스크롤바 같은
+        //   시스템 그림도 밝은 배경 기준으로 그려진다. 사용자 외관과 무관하게 창을 어둡게 고정한다.
+        panel.appearance = NSAppearance(named: .darkAqua)
         return panel
     }
 
@@ -253,6 +495,9 @@ final class CheckTodoBoardController {
         TodoBoardRootView(
             store: store,
             ui: ui,
+            appearance: appearanceStore,
+            // 뷰가 부르는 조절은 전부 스토어를 거친다(clamp·저장·중복 차단이 거기 한 곳에만 있다).
+            onOpacityChange: { [weak self] value in self?.appearanceStore.setOpacity(value) },
             onDraftChange: { [weak self] text in self?.setDraft(text) },
             onSubmitDraft: { [weak self] in self?.submitDraft() },
             onToggleDone: { [weak self] id in self?.toggleDone(id) },
@@ -293,6 +538,7 @@ final class CheckTodoBoardController {
         board.setFrame(TodoBoardAnchor.frame(anchor: anchor, in: screenVisibleFrame), display: false)
         board.orderFrontRegardless()
         isBoardOpen = true
+        installScrollMonitor()
     }
 
     /// 보드를 내린다(멱등). 패널과 입력 상태(초안·수정 중)는 **그대로 남는다** — 다시 열면 적다 만 글이
@@ -303,15 +549,115 @@ final class CheckTodoBoardController {
     /// 남겨 두면 다시 열었을 때 유령 '삭제됨' 행이 서 있거나, 보이지 않는 곳에서 항목이 사라진다.
     func close() {
         commitPendingDelete()
+        removeScrollMonitor()
         panelStorage?.orderOut(nil)
         isBoardOpen = false
     }
 
-    /// 캐릭터가 움직였을 때 보드를 따라 옮긴다. 닫혀 있으면 아무것도 하지 않는다 —
-    /// 특히 `panel` 을 건드리지 않는다(안 그러면 열지도 않은 창을 여기서 만들어 버린다).
+    // MARK: - ⌥ + 스크롤로 투명도 조절
+
+    /// 등록된 로컬 모니터 토큰. nil 이면 안 걸려 있다(헤드리스 검증 지점 `hasScrollMonitor` 가 이걸 본다).
+    private var scrollMonitor: TodoBoardScrollMonitorToken?
+    /// 델타 누적 상태. 창을 열고 닫을 때 턴다.
+    private var scrollGesture = TodoBoardScrollOpacityGesture()
+
+    /// 모니터가 걸려 있는가(헤드리스 검증 지점). 전역 훅을 앱 수명 내내 켜 두지 않는다는 계약을
+    /// 밖에서 값으로 확인하려면 이 문이 필요하다.
+    var hasScrollMonitor: Bool { scrollMonitor != nil }
+
+    /// ⌥+스크롤을 가로챌 로컬 모니터를 건다(**보드가 떠 있는 동안만**).
+    ///
+    /// 왜 뷰 계층 오버라이드(`scrollWheel(with:)`)가 아니라 모니터인가: 보드 안에는 SwiftUI `ScrollView` 가
+    /// 있고, 스크롤 이벤트는 그 안쪽 스크롤 뷰가 먼저 먹는다 — 우리 뷰의 오버라이드까지 올라오지 않는다.
+    /// 모니터는 이벤트가 창에 배달되기 **전에** 보므로 순서 싸움이 아예 없다.
+    ///
+    /// 대신 로컬 모니터는 **앱 전체**의 스크롤을 본다. 그래서 열려 있는 동안에만 걸고, 닫을 때 반드시 뗀다.
+    private func installScrollMonitor() {
+        guard scrollMonitor == nil else { return }
+        scrollGesture.reset()
+        // `[weak self]` 는 **바깥** 클로저에 있어야 한다. 안쪽(assumeIsolated)에만 걸면 바깥이 self 를
+        // 강하게 잡아 컨트롤러가 영영 안 죽고, 그러면 바로 위 `deinit` 의 removeMonitor 는 정의상
+        // 도달할 수 없는 죽은 코드가 된다(Swift 6 로 컴파일해 실증 — 유일한 강한 참조를 놓아도 deinit 이
+        // 돌지 않았고, 여기 weak 를 붙이자 즉시 돌았다). 실행당 컨트롤러가 1개라 새는 건 아니지만,
+        // "닫기가 새면 deinit 이 마지막 문"이라는 계약이 거짓이 된다.
+        let token = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            // 주인이 사라졌으면 **반드시 그대로 흘려보낸다**. 여기서 삼키면(nil) 등록만 남은 죽은
+            // 클로저가 앱의 모든 스크롤을 죽인다 — 로컬 모니터는 앱 전체를 본다.
+            guard let self else { return event }
+            // 모니터 콜백은 메인 런루프에서 온다(오버레이의 mouseMoved 모니터와 같은 계약).
+            // 경계 밖으로 내보내는 값이 Bool 인 이유: NSEvent 는 Sendable 이 아니라 액터 경계를 못 넘는다.
+            // 삼킬지 말지만 안에서 정하고, 이벤트 자체는 이 클로저 안에 그대로 둔 채 돌려준다.
+            let consumed = MainActor.assumeIsolated { self.handleScroll(event) }
+            return consumed ? nil : event
+        }
+        scrollMonitor = token.map(TodoBoardScrollMonitorToken.init)
+    }
+
+    private func removeScrollMonitor() {
+        if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor.raw) }
+        scrollMonitor = nil
+        scrollGesture.reset()
+    }
+
+    /// 스크롤 한 개를 보고 **삼킬지 흘려보낼지** 정한다. 반환값 true = 소비(이벤트를 죽인다).
+    ///
+    /// 우리 창 위의 ⌥+스크롤만 가져간다. 그 밖은 전부 그대로 흘려보내야 한다 — 여기서 잘못 삼키면
+    /// 보드 목록은 물론 **앱의 다른 창 스크롤까지** 죽는다(로컬 모니터는 앱 전체를 본다).
+    private func handleScroll(_ event: NSEvent) -> Bool {
+        guard let panelStorage, event.window === panelStorage,
+              Self.adjustsOpacity(modifiers: event.modifierFlags)
+        else { return false }
+
+        let steps = scrollGesture.steps(for: TodoBoardScrollSample(event: event))
+        if steps != 0 {
+            appearanceStore.nudge(by: Double(steps) * TodoBoardAppearance.step)
+        }
+        // 문턱을 못 넘은 이벤트도 삼킨다. 흘려보내면 ⌥ 를 쥔 채 굴리는 내내 목록이 같이 움직여,
+        // 투명도를 맞추고 나면 화면이 엉뚱한 곳에 가 있다.
+        return true
+    }
+
+    /// 이 조합이 투명도 조절인가. 조합 판정만 순수 함수로 떼어 낸 이유는 `.scrollWheel` NSEvent 를
+    /// 합성할 수 없어서다(오프스크린에서 만들 방법이 없다) — 규칙만이라도 값으로 검증한다.
+    ///
+    /// ⌘·⌃ 가 섞이면 물러난다: ⌃+스크롤은 **시스템 화면 확대**, ⌘+스크롤은 앱마다 확대·축소로 이미 쓰인다.
+    /// ⇧ 는 스크롤을 가로 방향으로 바꾸는 조합이라(그때 `scrollingDeltaY` 는 0으로 온다) 역시 뺀다.
+    /// CapsLock·Fn 같은 나머지 플래그는 **무시한다** — `flags == .option` 로 못 박으면 CapsLock 이 켜진
+    /// 사용자에게만 기능이 통째로 죽는다.
+    nonisolated static func adjustsOpacity(modifiers: NSEvent.ModifierFlags) -> Bool {
+        let flags = modifiers.intersection(.deviceIndependentFlagsMask)
+        return flags.contains(.option) && flags.isDisjoint(with: [.command, .control, .shift])
+    }
+
+    /// 실제로 창을 옮긴 횟수(헤드리스 검증 지점). 아래 조기 반환이 살아 있는지를 밖에서 값으로 확인하려면
+    /// 이 계수기가 필요하다 — 같은 자리로 다시 옮기는 호출은 AppKit 이 조용히 흡수해 버려서
+    /// 창 상태만 봐서는 "안 옮겼다"와 "옮겼는데 결과가 같다"를 구분할 수 없다.
+    private(set) var repositionAppliedCount = 0
+
+    /// 캐릭터가 움직였을 때 보드를 따라 옮긴다. **드래그 중 60Hz 로 불리는 경로다** — 여기서 하는 일은
+    /// 전부 그 빈도를 견뎌야 한다.
+    ///
+    /// · 닫혀 있으면 아무것도 하지 않는다. 특히 `panel` 을 건드리지 않는다(읽는 순간 만들어지므로,
+    ///   열지도 않은 창을 드래그만으로 생성해 버린다).
+    /// · **띄우거나 키를 가져오는 호출을 절대 넣지 않는다.** 매 프레임 `orderFront`/`makeKey` 가 돌면
+    ///   사용자가 쓰던 앱에서 포커스가 튀고, 마우스를 움직이는 내내 우리 창이 앞으로 튀어나온다.
+    ///   위치만 바꾸면 이미 떠 있는 창은 그대로 따라온다.
+    /// · 자리가 그대로면 조기 반환한다. 캐릭터는 픽셀 단위로 흔들려도 보드는 화면 클램프에 걸려
+    ///   같은 좌표에 머무는 구간이 길다 — 그 구간에서 매 프레임 창을 건드리면 값을 다시 쓰는 비용만 든다.
+    /// · 크기는 언제나 `boardSize` 로 고정이라 보통은 `setFrameOrigin` 으로 끝난다(`setFrame` 은 크기 변경과
+    ///   표시 패스까지 다루는 무거운 경로다). 크기가 다를 때만 `setFrame` 으로 떨어지되 `display: false` 다 —
+    ///   여기서 표시 패스를 강제하면 드래그 프레임마다 SwiftUI 평가가 끼어든다.
     func reposition(anchor: NSRect, screenVisibleFrame: NSRect) {
         guard isBoardOpen, let panelStorage else { return }
-        panelStorage.setFrame(TodoBoardAnchor.frame(anchor: anchor, in: screenVisibleFrame), display: false)
+        let target = TodoBoardAnchor.frame(anchor: anchor, in: screenVisibleFrame)
+        let current = panelStorage.frame
+        guard current != target else { return }
+        repositionAppliedCount += 1
+        if current.size == target.size {
+            panelStorage.setFrameOrigin(target.origin)
+        } else {
+            panelStorage.setFrame(target, display: false)
+        }
     }
 
     // MARK: - 입력 상태(컨트롤러가 소유)

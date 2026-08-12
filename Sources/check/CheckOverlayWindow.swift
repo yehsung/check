@@ -109,8 +109,14 @@ final class CheckOverlayController {
     var onUltraEnded: ((Bool) -> Void)?
     /// 근무가 끝났다(표시 → 숨김 전이). 보드는 인사를 기다리지 않고 즉시 닫고 저장한다.
     var onWorkEnded: (() -> Void)?
-    /// 캐릭터 패널이 새 자리로 갔다(재배치·드래그 종료·화면 구성 변경). 보드가 따라와야 한다.
-    var onCharacterFrameChanged: ((NSRect) -> Void)?
+    /// 캐릭터 패널이 새 자리로 갔다(드래그 중·드래그 종료·재배치). 보드가 따라와야 한다.
+    ///
+    /// 두 번째 인자는 **오버레이가 그 프레임을 클램프할 때 실제로 쓴 화면 visibleFrame** 이다. 받는 쪽이
+    /// 화면을 다시 찾게 두지 않는 이유는 둘이다: ① 60Hz 드래그 경로에서 NSScreen 순회가 한 번 더 도는 낭비,
+    /// ② 더 나쁜 것 — 두 판정이 **다른 화면을 고를 수 있다**. 오버레이는 커서가 놓인 화면으로 클램프하는데,
+    /// 받는 쪽이 '패널과 가장 많이 겹치는 화면'으로 다시 고르면 모니터 경계를 넘는 중(패널은 아직 옛 화면에
+    /// 절반 걸쳐 있고 커서만 새 화면)에 보드만 옛 화면 안으로 클램프되어 캐릭터와 갈라진다.
+    var onCharacterFrameChanged: ((NSRect, NSRect) -> Void)?
     /// 보드가 열려 있는가. 졸기 스케줄러가 물어본다 — 보드를 보며 생각하는 동안 잠들면 "얘 죽었나"로 읽힌다.
     var isBoardOpen: (() -> Bool)?
 
@@ -481,7 +487,21 @@ final class CheckOverlayController {
         let proposed = NSPoint(x: originAtDragStart.x + delta.x, y: originAtDragStart.y + delta.y)
         let visible = currentVisibleFrame(near: location)
         panel.setFrameOrigin(Self.clampedOrigin(proposed, panelSize: Self.panelSize, in: visible))
+        // 보드가 열려 있으면 캐릭터를 따라온다. 이 한 줄이 없으면 캐릭터만 움직이고 보드는 옛 자리에 남는다
+        // (실사용 신고). 60Hz 경로라 Task 를 만들지 않고 프레임만 넘긴다 — 받는 쪽도 setFrame 1회로 끝낸다.
+        // 화면 찾기(NSScreen 순회)는 바로 위에서 이미 한 번 했으므로 그 값을 그대로 넘겨 재탐색을 없앤다.
+        //
+        // **닫혀 있으면 아예 부르지 않는다.** 받는 쪽이 어차피 조기 반환하니 결과는 같지만, 이 경로는
+        // 프레임마다 돌고 배선은 프레임 통지마다 '보드 쪽 바라보기'를 다시 계산한다 — 보드가 닫혀 있으면
+        // 그게 매 프레임 setDragFacing(0) 이라, 바로 아래 드래그 방향(±1)과 번갈아 쓰이며 == 가드를 무력화하고
+        // facing 노드에 프레임당 두 번의 헛 회전을 남긴다(값은 마지막 것이라 보이는 결과만 우연히 맞다).
+        if isBoardOpen?() == true {
+            onCharacterFrameChanged?(panel.frame, visible)
+        }
         // 드래그 확정 후, 수평 이동 방향(히스테리시스)을 캐릭터가 바라보게 한다.
+        // ★ 위 통지보다 **뒤**여야 한다 — 드래그 중에는 '가는 방향'을 보는 것이 기존 계약이고(보드는 어차피
+        //   따라붙어 있다), 통지가 계산한 '보드 쪽'은 여기서 덮인다. 놓는 순간 handleMouseUp 의 마지막
+        //   통지가 방향을 다시 보드 쪽으로 돌려놓는다.
         engine.setDragFacing(facingHysteresis.update(x: location.x))
     }
 
@@ -492,13 +512,26 @@ final class CheckOverlayController {
         isDragCandidate = false
         if didDrag {
             saveOffset()
+            // 놓은 자리로 보드를 최종 정렬한다. **위치는 마지막 dragged 통지와 같은 값이라 중복이지만,
+            // 이 호출의 진짜 목적은 방향이다** — 드래그 중에는 위 handleMouseDragged 가 '가는 방향'으로
+            // facing 을 덮어써 왔으므로, 손을 뗀 지금 다시 '보드 쪽'으로 돌려놓을 사람이 여기밖에 없다.
+            // (보드가 좌↔우로 뒤집히는 드래그에서 특히 중요하다 — 뒤집힌 뒤의 방향은 여기서만 결정된다.)
+            if isBoardOpen?() == true {
+                let center = NSPoint(x: panel.frame.midX, y: panel.frame.midY)
+                onCharacterFrameChanged?(panel.frame, currentVisibleFrame(near: center))
+            }
         } else {
             handleClick(at: location)
         }
         didDrag = false
-        // 놓으면 정면 복귀.
-        engine.setDragFacing(0)
         facingHysteresis.reset()
+        // ★ 정면 복귀는 **보드가 닫혀 있을 때만**이다. 이 줄이 무조건 돌던 시절, 클릭으로 보드를 연
+        //   바로 그 순간(handleClick 안에서 보드 쪽을 바라보게 해 놓았는데) 여기서 즉시 0 으로 되돌려
+        //   "보드 쪽을 본다"가 한 프레임도 못 보고 사라졌다(실사용 신고). 보드가 열려 있으면 방향은
+        //   보드를 띄운 쪽(앱 배선)이 정하므로 여기서 손대지 않는다.
+        if !(isBoardOpen?() ?? false) {
+            engine.setDragFacing(0)
+        }
     }
 
     /// 클릭 좌표가 몸체 위면 리액션을 요청한다(좌표 주입 가능 — 테스트용).
@@ -873,7 +906,9 @@ final class CheckOverlayController {
         )
         panel.setFrame(frame, display: shouldBeVisible)
         // 캐릭터가 움직였으면 보드도 따라온다. 여기서 알리지 않으면 모니터를 바꾼 뒤 보드만 옛 좌표에 남는다.
-        onCharacterFrameChanged?(frame)
+        // 드래그 경로와 달리 **닫혀 있어도 부른다** — 60Hz 가 아니라 화면 구성 변경 때만 오는 통지이고,
+        // 배선이 이 기회에 방향까지 다시 맞춘다(보드가 닫혀 있으면 정면).
+        onCharacterFrameChanged?(frame, screen.visibleFrame)
     }
 
     // MARK: - 위치 영속 (우상단 앵커 오프셋)

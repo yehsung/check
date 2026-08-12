@@ -2242,3 +2242,382 @@ func checkMenuViewRendersTokenBoardLoadFailureSnapshot() throws {
     let loadingPNG = try renderPNG(CheckMenuView(store: store))
     #expect(loadingPNG != failedPNG)
 }
+
+// MARK: - 할 일 기능 on/off 스위치 — 팝오버 본문에 **보이는** 자리에 있어야 한다
+//
+// 배경: 이 스위치는 처음엔 푸터 전원 버튼 메뉴에, 다음엔 캐릭터 버튼 메뉴에 있었다. 둘 다 Menu 의 보조
+// 화살표(hover 전엔 보이지도 않는다) 뒤라 "투두 온오프 버튼 대체 어디있어?"라는 실사용 신고가 그대로 남았다.
+// 게다가 ImageRenderer 는 Menu 를 못 그린다(자리에 노란 경고 상자가 박힌다) — 메뉴 안에 넣는 순간
+// 렌더 회귀 테스트의 사각지대가 된다. 그래서 아래 테스트들은 "픽셀에 보이는가"를 판정 기준으로 삼는다.
+
+@MainActor
+@Test
+func todoToggleIsVisibleInPopoverBodyNotHiddenInAMenu() throws {
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+
+    func render(todo: Bool) throws -> NSBitmapImageRep {
+        let store = makeTeamStore(members: presenceMembers(now: now), now: now)
+        store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3_600)
+        store.setTodoEnabled(todo)
+        return try renderBitmap(CheckMenuView(store: store))
+    }
+
+    let on = try render(todo: true)
+    let off = try render(todo: false)
+
+    // (1) 상태가 픽셀에 드러난다 = 스위치가 본문에 그려져 있다. 메뉴 안에 숨기면 두 렌더가 같아진다.
+    let diff = try #require(bitmapDiffBounds(on, off), "할 일 on/off 가 팝오버 본문 픽셀에 드러나야 한다(메뉴 속에 숨기면 렌더가 같다)")
+
+    // (2) 그려진 자리가 내 근무 박스 안이다. 팝오버 340pt, scale 2 → 바깥 padding 12 + 카드 padding 12 = 48px.
+    //     이 범위를 벗어나면 카드 밖으로 삐져나갔거나 잘린 것이다.
+    #expect(diff.minX >= 48)
+    #expect(diff.maxX <= Int(340 * 2) - 48)
+    // (3) 헤더(내 근무 박스)는 팝오버 위쪽 150pt 안이다 — 푸터로 다시 내려가면 이 단언이 먼저 깨진다.
+    #expect(diff.maxY <= 150 * 2)
+    // (4) 18pt 소형 버튼 하나만큼만 달라져야 한다(레이아웃이 밀리면 훨씬 넓은 영역이 달라진다).
+    #expect(diff.maxX - diff.minX <= 60)
+    #expect(diff.maxY - diff.minY <= 60)
+}
+
+@MainActor
+@Test
+func todoTogglePressFlipsStoreAndSurvivesReopen() throws {
+    // 팝오버를 닫았다 열어도(=스토어를 새로 만들어도) 상태가 남아야 한다 → 같은 defaults 를 공유시켜 확인한다.
+    let defaults = isolatedRenderDefaults()
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: defaults,
+        tokenUsage: inertTokenStore()
+    )
+    #expect(store.isTodoEnabled)   // 기본은 켬(새 기능을 발견하게)
+
+    TodoToggleControl.press(store)
+    #expect(store.isTodoEnabled == false)
+    #expect(defaults.object(forKey: WorkTimerStore.todoEnabledKey) as? Bool == false)
+
+    // 다시 열기 = 같은 defaults 로 스토어 재생성.
+    let reopened = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: defaults,
+        tokenUsage: inertTokenStore()
+    )
+    #expect(reopened.isTodoEnabled == false)
+
+    TodoToggleControl.press(reopened)
+    #expect(reopened.isTodoEnabled)
+    #expect(defaults.object(forKey: WorkTimerStore.todoEnabledKey) as? Bool == true)
+}
+
+@MainActor
+@Test
+func todoTogglePressChangesWhatThePopoverDraws() throws {
+    // 누른 결과가 실제로 팝오버 그림을 바꾼다 — 스토어만 뒤집히고 화면은 그대로인 "먹통 스위치" 회귀 방지.
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+    let store = makeTeamStore(members: presenceMembers(now: now), now: now)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3_600)
+
+    let before = try renderPNG(CheckMenuView(store: store))
+    TodoToggleControl.press(store)
+    let after = try renderPNG(CheckMenuView(store: store))
+    #expect(before != after)
+}
+
+@Test
+func todoToggleHelpTextSaysWhatHappensInBothStates() {
+    // 예전 메뉴 문구("캐릭터를 눌러 할 일 열기")는 켠 상태만 서술했다 — 끄면 캐릭터가 아파하는 반응으로
+    // 돌아간다는 걸 아무도 몰랐다. 두 문구 모두 [현재 상태][캐릭터를 누르면 벌어지는 일][이 버튼을 누르면] 셋을 말한다.
+    let on = TodoToggleControl.help(isOn: true)
+    let off = TodoToggleControl.help(isOn: false)
+
+    #expect(on.contains("켜짐"))
+    #expect(on.contains("할 일이 열려요"))
+    #expect(on.contains("끄기"))
+
+    #expect(off.contains("꺼짐"))
+    // 껐을 때의 실제 동작(캐릭터가 콕 반응만 하는 것)이 문구에 있어야 한다.
+    #expect(off.contains("콕 반응만 해요"))
+    #expect(off.contains("켜기"))
+
+    // "아파하기"는 코드 주석에만 살던 내부 용어다 — 사용자 문구로 새어 나가면 안 된다.
+    #expect(!on.contains("아파"))
+    #expect(!off.contains("아파"))
+
+    #expect(on != off)
+}
+
+@MainActor
+@Test
+func goalCaptionRowKeepsSlackAfterAddingTheTodoButton() throws {
+    // 캡션 행은 [이번 주 X / Y시간][Spacer(minLength: 4)][%][할 일][내 기록][목표 수정] 한 줄이다.
+    // 버튼을 하나 더 세웠으므로 왼쪽 문구가 말줄임(lineLimit(1))될 위험이 생겼다. 행이 넘치면 Spacer 가
+    // 최소값(4pt=8px)까지 짜부라지므로, 캡션 띠에 남은 **가장 긴 빈 세로줄**이 여유의 척도가 된다.
+    // 실측: 지금 배치(버튼 3개)에서 최악값 문구(주 168시간 목표를 꽉 채운 100%)로도 122px(=61pt)가 남는다.
+    // 여기 60px(30pt) 밑으로 내려가면 다음 버튼 하나에 문구가 잘린다는 뜻이니, 그 전에 멈추라고 세워 둔 난간이다
+    // (버튼 4개를 더 세워 보면 32px 까지 떨어진다 — 그 상태가 곧 말줄임이다).
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+    let store = makeTeamStore(members: presenceMembers(now: now), now: now)
+    store.teamGoalSeconds = 168 * 3_600
+    store.teamMembers = [
+        TeamMemberStatus(
+            id: "00000000-0000-0000-0000-000000000002",
+            name: "영식",
+            status: .offWork,
+            updatedAt: nil,
+            currentSessionStartedAt: nil,
+            weeklyDurationSeconds: 168 * 3_600
+        )
+    ]
+
+    let bitmap = try renderBitmap(CheckMenuView(store: store))
+    // 캡션 띠의 세로 위치는 on/off 렌더가 달라지는 자리(=할 일 버튼)로 찾는다 — 상수로 박으면 헤더가
+    // 조금만 바뀌어도 엉뚱한 띠를 재게 된다.
+    let offStore = makeTeamStore(members: store.teamMembers, now: now)
+    offStore.teamGoalSeconds = 168 * 3_600
+    offStore.setTodoEnabled(false)
+    let band = try #require(bitmapDiffBounds(bitmap, try renderBitmap(CheckMenuView(store: offStore))))
+
+    let gap = longestBackgroundColumnRun(bitmap, top: band.minY, bottom: band.maxY, left: 48, right: 340 * 2 - 48)
+    #expect(gap > 60, "캡션 행 여유가 \(gap)px 뿐이다 — 버튼을 더 세우려면 문구부터 줄여야 한다.")
+}
+
+@MainActor
+@Test
+func footerCharacterButtonIsARealButtonNotAMenu() throws {
+    // 푸터 캐릭터 버튼을 Menu 로 감쌌더니 ImageRenderer 가 통째로 못 그렸다(노란 경고 상자). 즉 푸터가
+    // 렌더 회귀 테스트의 사각지대가 됐다. 다시 버튼으로 되돌린 뒤에는 캐릭터 표시 on/off 가 푸터 픽셀에 드러난다.
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+
+    func render(overlay: Bool) throws -> NSBitmapImageRep {
+        let store = makeTeamStore(members: presenceMembers(now: now), now: now)
+        store.setOverlayEnabled(overlay)
+        return try renderBitmap(CheckMenuView(store: store))
+    }
+
+    let shown = try render(overlay: true)
+    let hidden = try render(overlay: false)
+    let diff = try #require(bitmapDiffBounds(shown, hidden), "푸터 캐릭터 버튼이 표시 상태를 픽셀로 드러내야 한다")
+
+    // 푸터 안이다(맨 아래 60pt 띠) — 그리고 바깥 padding(12pt=24px) 안쪽에 온전히 들어간다(잘림 없음).
+    #expect(diff.minY >= shown.pixelsHigh - 60 * 2)
+    #expect(diff.minX >= 24)
+    #expect(diff.maxX <= 340 * 2 - 24)
+    #expect(diff.maxX - diff.minX <= 60)
+
+    // 그림이 달라진다는 것만으론 부족하다 — Menu 로 감싸도 "못 그림" 상자의 크기가 상태별로 달라져 통과해 버린다.
+    // ImageRenderer 는 Menu 자리에 **샛노란 경고 상자**를 박으므로, 그 상자가 푸터에 몇 개 있는지로 직접 센다.
+    // 지금 푸터에서 Menu 인 것은 맨 오른쪽 전원 버튼 하나뿐이다(클릭=즉시 종료라 메뉴가 불가피한 자리).
+    let footerTop = shown.pixelsHigh - 60 * 2
+    let placeholder = try #require(
+        unavailablePlaceholderBounds(shown, top: footerTop, bottom: shown.pixelsHigh - 1),
+        "전원 버튼(Menu)의 '못 그림' 상자는 반드시 잡혀야 한다 — 안 잡히면 이 검사가 헛돌고 있다는 뜻이다"
+    )
+    // 전원 버튼 슬롯: 콘텐츠 오른끝 316pt(=632px) 에서 버튼 하나(27pt=54px) 안쪽. 그 왼쪽에 또 하나 생기면 여기서 걸린다.
+    #expect(placeholder.minX >= 632 - 54 - 8)
+    #expect(placeholder.maxX <= 632 + 8)
+}
+
+@Test
+func powerAndFooterMenusNoLongerCarryTheTodoToggle() throws {
+    // 이건 픽셀로 증명할 수 없다 — ImageRenderer 가 Menu 내용을 아예 그리지 않기 때문이다. 그래서
+    // "할 일 스위치의 집은 한 곳뿐"이라는 불변식을 소스 구조로 못 박는다. 전원 버튼은 클릭하면 앱이
+    // 종료되는 자리라, 설정을 보러 눌러 볼 수조차 없다 — 여기로 되돌아가는 순간 이 테스트가 빨개진다.
+    let source = try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8)
+
+    let powerMenu = try #require(swiftStructBody(source, name: "PowerMenuButton"))
+    #expect(powerMenu.contains("로그인 시 자동 실행"))   // 제대로 된 블록을 잘라 왔는지 확인(문구가 바뀌면 여기부터 고친다)
+    #expect(!powerMenu.contains("Todo"))
+    #expect(!powerMenu.contains("할 일"))
+
+    let footer = try #require(swiftStructBody(source, name: "FooterBar"))
+    #expect(footer.contains("IconButton"))
+    #expect(!footer.contains("Todo"))
+    #expect(!footer.contains("할 일 켜짐"))
+
+    // 스위치를 실제로 누르는 자리는 팝오버 통틀어 한 곳뿐이다(중복 집 금지).
+    #expect(source.components(separatedBy: "TodoToggleControl.press(").count - 1 == 1)
+}
+
+// MARK: - 할 일 토글 육안 확인 덤프(스크래치패드)
+
+@MainActor
+@Test
+func dumpTodoToggleSnapshots() throws {
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+
+    func store(working: Bool, todo: Bool, overlay: Bool = true) -> WorkTimerStore {
+        let s = makeTeamStore(members: presenceMembers(now: now), now: now)
+        s.snapshot = WorkStatusSnapshot(status: working ? .working : .offWork, elapsedSeconds: working ? 3_600 : 0)
+        s.setTodoEnabled(todo)
+        s.setOverlayEnabled(overlay)
+        return s
+    }
+
+    try dumpTodoSnapshot(CheckMenuView(store: store(working: true, todo: true)), "todo-a-working-on")
+    try dumpTodoSnapshot(CheckMenuView(store: store(working: true, todo: false)), "todo-b-working-off")
+    try dumpTodoSnapshot(CheckMenuView(store: store(working: false, todo: true)), "todo-c-offwork")
+    try dumpTodoSnapshot(CheckMenuView(store: store(working: true, todo: true, overlay: false)), "todo-d-character-hidden")
+}
+
+// MARK: - 픽셀 비교 도우미
+
+/// 뷰를 지정 폭 고정으로 렌더한 비트맵. 픽셀 단위 비교(잘림/자리 검증)용.
+@MainActor
+private func renderBitmap(_ view: some View, width: CGFloat = 340, scale: CGFloat = 2) throws -> NSBitmapImageRep {
+    let renderer = ImageRenderer(content: view.frame(width: width).fixedSize())
+    renderer.scale = scale
+    guard let image = renderer.nsImage,
+          let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff)
+    else { throw RenderError.failed }
+    return bitmap
+}
+
+/// 두 렌더에서 서로 다른 픽셀이 이루는 사각형(픽셀 좌표, 원점 좌상단). 완전히 같으면 nil.
+private func bitmapDiffBounds(
+    _ a: NSBitmapImageRep,
+    _ b: NSBitmapImageRep
+) -> (minX: Int, minY: Int, maxX: Int, maxY: Int)? {
+    guard a.pixelsWide == b.pixelsWide, a.pixelsHigh == b.pixelsHigh,
+          let pa = a.bitmapData, let pb = b.bitmapData
+    else { return nil }
+    let bpr = a.bytesPerRow
+    let spp = a.samplesPerPixel
+    var minX = Int.max, minY = Int.max, maxX = -1, maxY = -1
+    for y in 0..<a.pixelsHigh {
+        for x in 0..<a.pixelsWide {
+            let offset = y * bpr + x * spp
+            var sample = 0
+            var differs = false
+            while sample < spp {
+                if pa[offset + sample] != pb[offset + sample] { differs = true; break }
+                sample += 1
+            }
+            guard differs else { continue }
+            minX = min(minX, x); maxX = max(maxX, x)
+            minY = min(minY, y); maxY = max(maxY, y)
+        }
+    }
+    guard maxX >= 0 else { return nil }
+    return (minX, minY, maxX, maxY)
+}
+
+/// [top, bottom] 띠에서 ImageRenderer 의 "못 그림" 표식(샛노란 경고 상자)이 차지한 사각형. 없으면 nil.
+/// Menu 처럼 ImageRenderer 가 그릴 수 없는 컨트롤이 어디에 몇 개 있는지를 재는 유일한 픽셀 근거다.
+/// 실측한 그 상자의 채움색은 (255, 204, 0) 이다. 파랑 성분이 0 인 게 결정적이라 — 동기화 상태 점의
+/// 주황(255, 184, 84)이나 그 가장자리 혼색은 파랑이 남아 걸리지 않는다.
+private func unavailablePlaceholderBounds(
+    _ bitmap: NSBitmapImageRep,
+    top: Int,
+    bottom: Int
+) -> (minX: Int, minY: Int, maxX: Int, maxY: Int)? {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return nil }
+    let bpr = bitmap.bytesPerRow
+    let spp = bitmap.samplesPerPixel
+    var minX = Int.max, minY = Int.max, maxX = -1, maxY = -1
+    for y in max(0, top)...min(bitmap.pixelsHigh - 1, bottom) {
+        for x in 0..<bitmap.pixelsWide {
+            let offset = y * bpr + x * spp
+            guard data[offset] >= 240, data[offset + 1] >= 195, data[offset + 2] <= 40 else { continue }
+            minX = min(minX, x); maxX = max(maxX, x)
+            minY = min(minY, y); maxY = max(maxY, y)
+        }
+    }
+    guard maxX >= 0 else { return nil }
+    return (minX, minY, maxX, maxY)
+}
+
+/// [top, bottom] 띠에서 "전부 배경색"인 세로줄이 연속으로 가장 길게 이어진 길이(px).
+/// 배경색은 그 띠에서 가장 흔한 픽셀로 잡는다 — 카드 채움색을 상수로 박지 않기 위해서다(panelStyle 은 단색).
+private func longestBackgroundColumnRun(
+    _ bitmap: NSBitmapImageRep,
+    top: Int,
+    bottom: Int,
+    left: Int,
+    right: Int
+) -> Int {
+    guard let data = bitmap.bitmapData else { return 0 }
+    let bpr = bitmap.bytesPerRow
+    let spp = bitmap.samplesPerPixel
+    let y0 = max(0, top), y1 = min(bitmap.pixelsHigh - 1, bottom)
+    let x0 = max(0, left), x1 = min(bitmap.pixelsWide - 1, right)
+    guard y0 <= y1, x0 <= x1 else { return 0 }
+
+    func pixel(_ x: Int, _ y: Int) -> [UInt8] {
+        let offset = y * bpr + x * spp
+        return (0..<spp).map { data[offset + $0] }
+    }
+
+    // 최빈 픽셀 = 카드 배경.
+    var histogram: [[UInt8]: Int] = [:]
+    for y in y0...y1 {
+        for x in x0...x1 { histogram[pixel(x, y), default: 0] += 1 }
+    }
+    guard let background = histogram.max(by: { $0.value < $1.value })?.key else { return 0 }
+
+    var best = 0, run = 0
+    for x in x0...x1 {
+        var empty = true
+        for y in y0...y1 where pixel(x, y) != background { empty = false; break }
+        if empty { run += 1; best = max(best, run) } else { run = 0 }
+    }
+    return best
+}
+
+/// `Sources/check/CheckMenuView.swift` 경로. 테스트 파일 위치(#filePath)에서 상대로 찾는다.
+private func checkMenuViewSourceURL() -> URL {
+    URL(fileURLWithPath: #filePath)          // Tests/checkTests/CheckMenuRenderTests.swift
+        .deletingLastPathComponent()          // Tests/checkTests
+        .deletingLastPathComponent()          // Tests
+        .deletingLastPathComponent()          // (repo root)
+        .appendingPathComponent("Sources/check/CheckMenuView.swift")
+}
+
+/// 소스에서 `struct <name>` 선언의 중괄호 본문만 잘라 낸다(중괄호 균형으로 끝을 찾는다).
+private func swiftStructBody(_ source: String, name: String) -> String? {
+    guard let declaration = source.range(of: "struct \(name):"),
+          let open = source.range(of: "{", range: declaration.upperBound..<source.endIndex)
+    else { return nil }
+    var depth = 0
+    var index = open.lowerBound
+    while index < source.endIndex {
+        let character = source[index]
+        if character == "{" { depth += 1 }
+        if character == "}" {
+            depth -= 1
+            if depth == 0 { return String(source[open.upperBound..<index]) }
+        }
+        index = source.index(after: index)
+    }
+    return nil
+}
+
+@MainActor
+private func dumpTodoSnapshot(_ view: some View, _ name: String) throws {
+    let dir = URL(
+        fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad",
+        isDirectory: true
+    )
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let renderer = ImageRenderer(content: view.frame(width: 340).fixedSize())
+    renderer.scale = 3
+    guard let image = renderer.nsImage,
+          let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff),
+          let png = bitmap.representation(using: .png, properties: [:]),
+          let cgImage = bitmap.cgImage
+    else { throw RenderError.failed }
+    // 파일 쓰기는 실패해도 넘어간다(saveV0211Snapshot 관례) — 덤프는 육안 확인용이지 판정 근거가 아니다.
+    // 판정은 위 guard(렌더 자체가 되는가)와 아래 픽셀 검사 테스트들이 한다.
+    try? png.write(to: dir.appendingPathComponent("\(name).png"))
+    // 헤더 확대(위 130pt) / 푸터 확대(아래 130pt) — 아이콘 배치·정렬·잘림을 눈으로 본다.
+    for (suffix, rect) in [
+        ("header", CGRect(x: 0, y: 0, width: cgImage.width, height: min(cgImage.height, 390))),
+        ("footer", CGRect(x: 0, y: cgImage.height - min(cgImage.height, 390), width: cgImage.width, height: min(cgImage.height, 390)))
+    ] {
+        guard let cropped = cgImage.cropping(to: rect) else { continue }
+        let rep = NSBitmapImageRep(cgImage: cropped)
+        if let croppedPNG = rep.representation(using: .png, properties: [:]) {
+            try? croppedPNG.write(to: dir.appendingPathComponent("\(name)-\(suffix).png"))
+        }
+    }
+}

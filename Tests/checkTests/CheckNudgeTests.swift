@@ -4,12 +4,17 @@ import Testing
 
 // MARK: - 넛지 스케줄러 (활성 5분 누적 발동 / idle 유지 / 쿨다운 / 깨어남·자격 리셋)
 
-/// clock/idle/eligible/onNudge 를 주입해 스케줄러를 결정적으로 구동하는 헬퍼(실제 시스템·타이머 없음).
+/// clock/idle/eligible/session/onNudge 를 주입해 스케줄러를 결정적으로 구동하는 헬퍼(실제 시스템·타이머 없음).
 @MainActor
 private final class NudgeHarness {
     var now = Date(timeIntervalSince1970: 100_000)
     var idle: TimeInterval = 10          // 기본은 "실제 사용 중"(임계 120 미만).
     var eligible = true
+    /// 세션 사용 가능 여부. **반드시 주입해야 한다** — 기본값 `consoleSessionUsable()` 은
+    /// `CGSessionCopyCurrentDictionary()` 로 실제 시스템을 읽어, 테스트를 돌리는 맥이 잠겨 있으면
+    /// (원격/CI/화면보호기) 모든 tick 이 적립 없이 통과해 넛지 테스트 전체가 빨개진다.
+    /// 프로덕션 결함이 아니라 하네스가 시스템에 의존했던 것이라, 기본을 true(사람이 앞에 있음)로 고정한다.
+    var sessionUsable = true
     private(set) var nudgeCount = 0
 
     lazy var scheduler = NudgeScheduler(
@@ -17,6 +22,7 @@ private final class NudgeHarness {
         clock: { [weak self] in self?.now ?? .distantPast },
         isEligible: { [weak self] in self?.eligible ?? false },
         onNudge: { [weak self] in self?.nudgeCount += 1 },
+        isSessionUsable: { [weak self] in self?.sessionUsable ?? false },
         workspaceNotifications: nil // 실제 wake 옵저버 미설치(테스트 격리).
     )
 
@@ -138,6 +144,36 @@ func nudgeIneligibleResetsAndNeverFires() {
     h.run(10)
     #expect(h.scheduler.activeMinutes == 0)
     #expect(h.nudgeCount == 0)
+}
+
+@MainActor
+@Test
+func nudgeLockedSessionNeverAccumulatesButResumesAfterUnlock() {
+    // 잠금/비콘솔 가드(tick 의 `guard isSessionUsable()`)를 지키는 유일한 테스트.
+    // 이게 없으면 가드를 통째로 지워도 스위트가 초록이라, 잠금 화면 비밀번호 타이핑이나
+    // 빠른 사용자 전환 중 남의 입력으로 이 사람의 근무가 자동 시작되는 회귀를 아무도 못 잡는다.
+    let h = NudgeHarness()
+
+    // 잠긴 동안엔 입력이 활발해도(idle 기본 10초 = 사용 중) 단 1분도 적립하지 않는다.
+    h.sessionUsable = false
+    h.run(4)
+    #expect(h.scheduler.activeMinutes == 0)
+
+    // 발동 요구치를 넘길 만큼 오래 잠겨 있어도 넛지는 뜨지 않는다.
+    h.run(6)
+    #expect(h.scheduler.activeMinutes == 0)
+    #expect(h.nudgeCount == 0)
+
+    // 잠금 해제 뒤에는 정상 적립으로 되돌아온다 — 가드는 영구 차단이 아니라 그 tick 만 건너뛴다.
+    h.sessionUsable = true
+    h.run(4)
+    #expect(h.scheduler.activeMinutes == 4)
+    #expect(h.nudgeCount == 0)
+
+    // 해제 후 5분째에 정상 발동(잠긴 동안의 10분은 창에 남아 있지 않다).
+    h.run(1)
+    #expect(h.nudgeCount == 1)
+    #expect(h.scheduler.activeMinutes == 0)
 }
 
 // MARK: - 로그인 자동 실행 등록 결정 (SMAppService 미호출 — 주입 클로저로 검증)

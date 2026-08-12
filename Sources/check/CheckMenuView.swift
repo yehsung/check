@@ -280,6 +280,8 @@ struct CheckMenuView: View {
                             // 그 함수만 KST 하루 스탬프를 대조해, 자정을 넘긴 어제의 "0번 남음"이 남지 않게 한다.
                             ultraRemainingText: WorkTimerStore.ultraRemainingText(remaining: store.ultraRemaining(now: store.displayNow)),
                             onUltraBlocked: { store.pokeNotice = WorkTimerStore.ultraSpentNotice },
+                            isFocusMode: store.focusMode,
+                            onToggleFocusMode: { store.toggleFocusMode() },
                             onBack: { store.togglePokePanel() },
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
@@ -1601,6 +1603,12 @@ enum PokeUltraHint {
 
 /// 콕찌르기 빈 목록 자리 문구 선택(순수 로직, 결정적 검증 지점). 리그/토큰 보드의 EmptyMessage 와 같은 패턴이다:
 /// 로드 성공했는데 비면 '아직 아무도 없음'(true), 로드 전/실패면 fallbackStatus(동기화 상태 문구)(false).
+/// 집중 모드가 켜져 있을 때 콕찌르기 패널이 알려 주는 사실(순수 값 — 문구를 값으로 검증한다).
+/// 토글이 아이콘 하나뿐이라, 켜 둔 것을 잊고 "왜 아무도 안 찌르지?" 하는 경로를 이 한 줄이 막는다.
+enum PokeFocusNotice {
+    static let text = "집중 모드 — 콕찌르기를 받지 않아요"
+}
+
 enum PokeDirectoryEmptyMessage {
     static let noOthers = "아직 다른 사용자가 없어요"
     static func text(hasLoaded: Bool, fallbackStatus: String) -> String {
@@ -1637,6 +1645,9 @@ private struct PokePanel: View {
     let ultraRemainingText: String?
     // 오늘 몫이 없는데 3초를 다 눌렀을 때의 안내. 조용히 아무 일도 안 일어나면 고장으로 읽힌다.
     let onUltraBlocked: () -> Void
+    // 집중 모드(내 수신 거부) 상태와 토글. 값+클로저로만 받아 이 패널을 렌더 테스트 친화적으로 유지한다.
+    var isFocusMode: Bool = false
+    var onToggleFocusMode: () -> Void = {}
     let onBack: () -> Void
     // 목록 위쪽에서 배너/토큰 행이 먹은 높이(pt). 그만큼 무스크롤 표시 행수를 줄여 창 상한을 지킨다.
     var extraChromeHeight: CGFloat = 0
@@ -1672,6 +1683,14 @@ private struct PokePanel: View {
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
+                // 집중 모드 토글(수신 거부). 보내는 화면에 두는 이유는 사람들이 '찌르기'를 떠올리는 자리가
+                // 여기뿐이라서다 — 설정을 따로 파면 켠 사실을 잊고, 끄는 길도 못 찾는다.
+                IconButton(
+                    icon: isFocusMode ? "moon.fill" : "moon",
+                    help: isFocusMode ? "집중 모드 켜짐 — 누르면 찌르기를 다시 받아요" : "집중 모드 — 누르면 찌르기를 안 받아요",
+                    tint: isFocusMode ? CheckTheme.accent : CheckTheme.secondaryText,
+                    action: onToggleFocusMode
+                )
                 Spacer(minLength: 6)
                 // 발견성(+ 꾹 누르는 동안엔 남은 횟수). 새 줄이 아니라 제목 행의 남는 폭에 얹는다 —
                 // 줄을 하나 더하면 패널 높이가 커져 창 높이 상한(700pt) 예산을 갉아먹는다.
@@ -1696,13 +1715,18 @@ private struct PokePanel: View {
         .panelStyle()
     }
 
-    // 안내줄 내용/톤. notice 가 있으면 그것을(주황), 없고 비근무면 근무 안내(회색), 근무중+notice nil 이면 nil(생략).
+    // 안내줄 내용/톤. notice 가 있으면 그것을(주황), 없고 비근무면 근무 안내(회색), 그다음 집중 모드 상태,
+    // 셋 다 아니면 nil(생략 — 상단 앵커 유지). 비근무 안내가 집중 모드보다 앞인 이유는 그것이 **지금 이 화면에서
+    // 하려는 일**(찌르기)의 차단 사유이기 때문이다. 집중 모드는 내 수신 설정이라 정보에 가깝다.
     private var noticeLine: (text: String, isWarning: Bool)? {
         if let notice, !notice.isEmpty {
             return (notice, true)
         }
         if !isMyselfWorking {
             return ("근무 중일 때만 콕 찌를 수 있어요", false)
+        }
+        if isFocusMode {
+            return (PokeFocusNotice.text, false)
         }
         return nil
     }

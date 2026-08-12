@@ -759,6 +759,8 @@ enum PokeSendOutcome: Equatable {
     /// 오늘(KST) 울트라 몫을 다 썼다. **poke_user 는 이 status 를 절대 내지 않는다** —
     /// 두 RPC 가 status 어휘를 공유하는 대신 enum 하나로 통일한 결과다(sendPoke 쪽은 도달 불가 분기로 남는다).
     case ultraUsedToday(resetAfterSeconds: Int)
+    /// 대상이 집중 모드다(20260812090000). 몫도 쿨타임도 소모되지 않는다 — 서버가 행을 안 남긴다.
+    case targetFocused
     case invalid
 
     init(response: PokeSendResponse) {
@@ -768,6 +770,7 @@ enum PokeSendOutcome: Equatable {
         case "not_working": self = .notWorking
         case "target_not_working": self = .targetNotWorking
         case "ultra_used_today": self = .ultraUsedToday(resetAfterSeconds: max(1, response.resetAfterSeconds ?? 3600))
+        case "target_focused": self = .targetFocused
         default: self = .invalid
         }
     }
@@ -811,11 +814,21 @@ struct ProfilePrivacyRow: Decodable, Equatable {
     /// 토큰 사용량 수집 여부(20260803010000). 서버가 쓰기를 조용히 버리므로 앱 게이트는 통신 낭비를 줄이는
     /// 부수적 장치다 — 컬럼/행이 없으면 수집(true)으로 본다(마이그레이션 미적용 서버에서 기존 동작 유지).
     let tokenUsageCollect: Bool?
+    /// 집중 모드(20260812090000). **Optional 이 핵심이다** — 앱을 먼저 배포하고 db push 가 늦은 창에서는
+    /// 서버가 이 키를 안 보내는데, 비옵셔널이면 행 디코드가 통째로 throw 되어 토큰 공개 설정까지 못 읽는다.
+    /// 컬럼이 없으면 꺼짐(false)으로 본다 = 기존 동작 유지.
+    let focusMode: Bool?
 }
 
 /// profiles.token_usage_public 자기 행 갱신 요청(PATCH).
 struct ProfilePrivacyUpdateRequest: Encodable {
     let tokenUsagePublic: Bool
+}
+
+/// profiles.focus_mode 자기 행 갱신 요청(PATCH). 토큰 공개와 **따로** 보내는 이유는 하나다 —
+/// 한 요청에 두 컬럼을 실으면 둘 중 하나만 컬럼 권한이 있는 서버에서 요청 전체가 403 이 된다.
+struct ProfileFocusModeUpdateRequest: Encodable {
+    let focusMode: Bool
 }
 
 // MARK: - 별명(표시명) 변경 (계약 타입)

@@ -27,6 +27,9 @@ extension WorkTimerStore {
     nonisolated static let ultraDisplayFreshnessSeconds: TimeInterval = 120
     /// 하루 한도 소진 안내. 문장을 한도 상수에서 만들어, 상수만 바꾸면 문구가 저절로 따라오게 한다.
     nonisolated static let ultraSpentNotice = "울트라 찌르기는 하루에 \(WorkTimerStore.ultraPokeDailyLimit)번까지예요"
+    /// 대상이 집중 모드일 때의 안내. 몫도 쿨타임도 소모되지 않았다는 사실까지 말해 준다 —
+    /// 안 그러면 사용자는 "한 번 날린 건가?" 하고 남은 횟수를 잘못 센다.
+    nonisolated static let targetFocusedNotice = "지금 집중 중이에요. 나중에 찔러 주세요"
 
     /// 남은 횟수 안내 문구. **모르면 nil** 이고, 그때 화면은 아무 숫자도 말하지 않는다 —
     /// 남은 횟수는 울트라 응답으로만 알 수 있어서 '아직 모름' 구간이 정상적으로 존재하고,
@@ -109,6 +112,8 @@ extension WorkTimerStore {
                     // 즉시 재조회해 자리비움으로 갱신한다(다음 시도부터 버튼도 비활성으로 선게이트됨).
                     pokeNotice = "자리비움 상태에는 찌를 수 없어요"
                     loadPokeDirectory()
+                case .targetFocused:
+                    pokeNotice = Self.targetFocusedNotice
                 case .invalid:
                     pokeNotice = "지금은 찌를 수 없어요"
                 }
@@ -211,6 +216,10 @@ extension WorkTimerStore {
                     // 뜻이므로 즉시 재조회해 다음 시도부터 버튼이 선게이트되게 한다.
                     pokeNotice = "자리비움 상태에는 찌를 수 없어요"
                     loadPokeDirectory()
+                case .targetFocused:
+                    // 집중 모드도 몫을 태우지 않는다 — 서버가 하루 한도 검사보다 **앞에서** 거절하므로
+                    // 여기서 남은 횟수를 건드리면 안 된다(멀쩡한 몫을 화면에서만 깎게 된다).
+                    pokeNotice = Self.targetFocusedNotice
                 case .invalid:
                     pokeNotice = "지금은 찌를 수 없어요"
                 }
@@ -355,6 +364,8 @@ extension WorkTimerStore {
             // 수집 설정은 사용자가 앱에서 바꾸는 값이 아니라 서버가 정하는 값이라 낙관 갱신도 토글도 없다.
             // 앱 게이트는 통신 낭비를 줄이는 부수 장치일 뿐 — 실효는 서버 트리거가 낸다(구버전도 함께 막힌다).
             if tokenUsageCollect != settings.collects { tokenUsageCollect = settings.collects }
+            // 집중 모드도 같은 GET 으로 받는다(요청 추가 0). 컬럼이 없는 서버에서는 false 로 와서 기존 동작이 유지된다.
+            if focusMode != settings.focusMode { focusMode = settings.focusMode }
             // 별명 쿨타임 기준 시각. 실패해도 위 두 설정은 이미 반영됐다 — 쿨타임만 '아직 모름'으로 남고
             // 서버가 최종 판정한다. 컬럼이 없는 서버(마이그레이션 전)에서는 이 GET 이 400 이지만 여기서
             // try? 로 삼키므로 토큰 공개/수집 설정은 그대로 산다(요청을 하나로 합치면 그게 같이 죽는다).
@@ -396,5 +407,37 @@ extension WorkTimerStore {
                 tokenUsagePublic = previous
             }
         }
+    }
+
+    /// 집중 모드 토글(낙관 반영 → PATCH, 실패 시 원복). 토큰 공개 토글과 같은 규약이다.
+    ///
+    /// 켜 두면 남이 나를 찌를 수 없다 — 판정은 **서버**가 한다(poke_user/ultra_poke_user 게이트).
+    /// 그래서 구버전 앱을 쓰는 팀원도 내 집중 모드를 존중하게 되고, 클라 미러는 화면 표시용일 뿐이다.
+    func setFocusMode(_ enabled: Bool) {
+        guard focusMode != enabled else { return }
+        let previous = focusMode
+        focusMode = enabled
+        guard session != nil else { return }
+        let generation = sessionGeneration
+        Task { @MainActor in
+            do {
+                try await withSessionRetry { activeSession in
+                    try await service.updateFocusMode(
+                        accessToken: activeSession.accessToken,
+                        userID: activeSession.userID,
+                        enabled: enabled
+                    )
+                }
+            } catch {
+                if case .cancelled = classifyAuthError(error) { return }
+                guard generation == sessionGeneration else { return }
+                focusMode = previous
+                pokeNotice = "집중 모드를 바꾸지 못했어요. 잠시 후 다시 시도해 주세요"
+            }
+        }
+    }
+
+    func toggleFocusMode() {
+        setFocusMode(!focusMode)
     }
 }

@@ -108,6 +108,8 @@ struct MilestoneTracker {
     static let hourOneKey = "hour1"
     static let hourFourKey = "hour4"
     static let teamGoalKey = "teamGoal"
+    /// 오늘 팀에서 내가 첫 출근일 때의 인사(하루 1회). 같은 날 껐다 켜도 다시 뜨지 않게 이 기록으로 묶는다.
+    static let firstArrivalKey = "firstArrival"
 
     /// KST(Asia/Seoul) 그레고리력. 매 호출마다 Calendar 를 새로 만들지 않도록 1회 생성해 공유한다.
     static let kstCalendar: Calendar = {
@@ -241,6 +243,8 @@ final class ReactionEngine {
     /// 렌더 FPS 정책: 유휴/졸기는 느린 모션이라 8fps 로 충분하고, 리액션 재생 중에만 30fps 로 올린다.
     static let idleFPS = 8
     static let activeFPS = 30
+    /// 눈 깜빡임 지속(초). 사람의 깜빡임(0.1~0.15초)에 맞춘다 — 더 길면 '조는 것'으로 읽힌다.
+    static let blinkSeconds: Double = 0.12
 
     /// 말풍선 지속시간(초) 사양. perform 과 테스트가 공유해 지속시간을 결정적으로 검증한다.
     static let hitBubbleSeconds: Double = 1.2
@@ -283,6 +287,8 @@ final class ReactionEngine {
     @ObservationIgnored private var greetingClearTask: Task<Void, Never>?
     /// 리액션 재생이 끝나면 FPS 를 유휴(8)로 되돌리는 태스크. 새 리액션이 들어오면 다시 스케줄된다.
     @ObservationIgnored private var fpsResetTask: Task<Void, Never>?
+    /// 진행 중인 깜빡임(재진입 시 취소 — 눈이 감긴 채 남는 경로를 없앤다).
+    @ObservationIgnored private var blinkTask: Task<Void, Never>?
     /// 자는 동안 💤 를 주기적으로 방출하는 반복 태스크(3.5초 주기). 깨거나 인터럽트되면 취소된다.
     @ObservationIgnored private var zzzTask: Task<Void, Never>?
 
@@ -411,6 +417,28 @@ final class ReactionEngine {
         if let awake = awakeDiffuse { faceMaterial?.diffuse.contents = awake }
         closedEyeLeft?.isHidden = true
         closedEyeRight?.isHidden = true
+    }
+
+    /// 눈 한 번 깜빡이기. 자는 눈 자산(캐시된 sleepDiffuse + 감은 선 노드)을 아주 짧게 켰다 끄는 것이 전부라
+    /// 새 에셋도 픽셀 연산도 없다 — 리깅이 없어 눈꺼풀을 못 움직이는 이 모델에서 '살아 있음'을 만드는 유일한 수단.
+    ///
+    /// idle 일 때만 깜빡인다: 자는 중엔 이미 같은 자산으로 눈이 감겨 있고(깜빡이면 오히려 눈을 뜬다),
+    /// 리액션 재생 중엔 그 연출이 표정을 쓰고 있다.
+    func blink() {
+        guard renderActive, sleepDiffuse != nil, state == .idle else { return }
+        blinkTask?.cancel()
+        blinkTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            // 유휴 8fps 에서 0.12초는 한 프레임도 안 잡혀 깜빡임이 통째로 보이지 않는다. 이 순간만 올리고
+            // 곧바로 되돌린다(scheduleFPSReset 이 재생 중이면 유지, 아니면 8fps 로 복귀).
+            self.setRenderFPS(Self.activeFPS)
+            self.applyClosedEyes()
+            try? await Task.sleep(for: .seconds(Self.blinkSeconds))
+            guard !Task.isCancelled else { return }
+            // 깜빡이는 사이 잠들었으면 눈을 뜨지 않는다 — 졸기 연출이 이 자산의 주인이다.
+            if !self.isSleeping { self.restoreEyes() }
+            self.scheduleFPSReset(after: 0)
+        }
     }
 
     /// kind 별 이동/변형 SCNAction 을 만든다(말풍선·색종이 제외 — 순수 동작만). attach 재생·perform 이 공유한다.

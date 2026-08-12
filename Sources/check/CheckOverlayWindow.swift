@@ -25,6 +25,14 @@ final class CheckOverlayController {
     static let nudgeAutoStartText = "일하는 것 같아서 근무 시작했어요!"
     static let nudgeAutoStartBubbleSeconds: Double = 8
 
+    /// 오늘 팀에서 1등으로 출근했을 때의 등장 말풍선(하루 1회, store 의 dayKey 장부가 보증).
+    static let firstArrivalText = "오늘 1등 출근이에요!"
+    static let firstArrivalBubbleSeconds: Double = 6
+
+    /// 깜빡임 간격(초) 범위. 사람의 자연스러운 깜빡임보다 성기게 둔다 — 메뉴바 옆 작은 캐릭터라
+    /// 너무 잦으면 '깜빡임'이 아니라 '떨림'으로 읽힌다.
+    static let blinkIntervalRange: ClosedRange<Double> = 3.0...7.0
+
     /// 새 버전 감지 시 캐릭터가 띄우는 말풍선 문구/지속시간. 버전당 1회만(도배 금지).
     static let updateBubbleText = "새 업데이트가 있어요!"
     static let updateBubbleSeconds: Double = 6
@@ -83,6 +91,7 @@ final class CheckOverlayController {
     private var farewellTask: Task<Void, Never>?
     // 밤샘 졸기 스케줄러(패널 표시 중에만 90±30초 간격으로 시간창을 확인).
     private var drowsyTask: Task<Void, Never>?
+    private var blinkTask: Task<Void, Never>?
     // 숨김 상태에서 찔림을 peek 로 보여주는 동안만 유효한 자동 퇴장 태스크. updateWorking 양쪽에서 취소한다.
     private var pokePeekTask: Task<Void, Never>?
 
@@ -263,9 +272,19 @@ final class CheckOverlayController {
             panel.orderFrontRegardless()
             installMouseMoveMonitor()
             startDrowsyScheduler()
+            startBlinkScheduler()
+            // 오늘 팀에서 1등 출근이면 등장 말풍선을 1회 갈아 끼운다. 넛지 자동 시작이 이미 오버라이드를
+            // 세워 뒀으면 건드리지 않는다 — 그쪽이 "왜 저절로 시작됐는지"를 설명하는 더 급한 문구다.
+            if engine.commuteStartBubbleOverride == nil, store.consumeFirstArrivalGreeting() {
+                engine.setCommuteStartBubbleOverride(
+                    text: Self.firstArrivalText,
+                    seconds: Self.firstArrivalBubbleSeconds
+                )
+            }
             engine.request(.commuteStart)
         } else {
             stopDrowsyScheduler()
+            stopBlinkScheduler()
             removeMouseMoveMonitor()
             engine.greetingText = nil
             if wasVisible && panel.isVisible {
@@ -498,6 +517,31 @@ final class CheckOverlayController {
     private func stopDrowsyScheduler() {
         drowsyTask?.cancel()
         drowsyTask = nil
+    }
+
+    // MARK: - 깜빡임 스케줄러
+
+    /// 표시 중일 때만 3~7초마다 한 번 깜빡인다. 엔진이 idle 이 아니면(자는 중·리액션 중) 스스로 물러나므로
+    /// 여기서는 표시/격발 여부만 본다. tolerance 를 크게 둬 타이머 coalescing(전력 절감)을 허용한다 —
+    /// 깜빡임은 정확한 시각이 의미 없는 앰비언트 연출이다.
+    private func startBlinkScheduler() {
+        guard blinkTask == nil else { return }
+        blinkTask = Task { @MainActor [weak self] in
+            var rng = SystemRandomNumberGenerator()
+            while !Task.isCancelled {
+                let interval = Double.random(in: CheckOverlayController.blinkIntervalRange, using: &rng)
+                try? await Task.sleep(for: .seconds(interval), tolerance: .seconds(1))
+                guard let self, !Task.isCancelled else { return }
+                // 전체화면 격발 중엔 깜빡이지 않는다 — 5초 연출의 표정을 건드리지 않는다.
+                guard self.shouldBeVisible, !self.isUltraActive else { continue }
+                self.engine.blink()
+            }
+        }
+    }
+
+    private func stopBlinkScheduler() {
+        blinkTask?.cancel()
+        blinkTask = nil
     }
 
     // MARK: - 업데이트 넛지 말풍선 (버전당 1회)

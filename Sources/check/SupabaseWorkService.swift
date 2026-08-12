@@ -736,20 +736,40 @@ actor SupabaseWorkService {
     /// 내 토큰 설정 조회. profiles 자기 행의 token_usage_public(공개 여부)과 token_usage_collect(수집 여부)를
     /// **한 번에** GET 한다 — 둘은 독립 설정이고 같은 시점에 필요하므로 요청을 나눌 이유가 없다.
     /// 행/컬럼 누락 시 각각 기본값(공개 true / 수집 true)으로 폴백한다.
-    func fetchTokenUsageSettings(accessToken: String, userID: String) async throws -> (isPublic: Bool, collects: Bool) {
+    func fetchTokenUsageSettings(
+        accessToken: String,
+        userID: String
+    ) async throws -> (isPublic: Bool, collects: Bool, focusMode: Bool) {
         let data = try await send(
             path: "/rest/v1/profiles",
             method: "GET",
             queryItems: [
                 URLQueryItem(name: "id", value: "eq.\(userID)"),
-                URLQueryItem(name: "select", value: "token_usage_public,token_usage_collect")
+                URLQueryItem(name: "select", value: "token_usage_public,token_usage_collect,focus_mode")
             ],
             body: Optional<EmptyBody>.none,
             accessToken: accessToken,
             prefer: nil
         )
         let rows = try decoder.decode([ProfilePrivacyRow].self, from: data)
-        return (rows.first?.tokenUsagePublic ?? true, rows.first?.tokenUsageCollect ?? true)
+        return (
+            rows.first?.tokenUsagePublic ?? true,
+            rows.first?.tokenUsageCollect ?? true,
+            rows.first?.focusMode ?? false
+        )
+    }
+
+    /// 집중 모드(콕찌르기 수신 거부) 갱신. profiles 자기 행을 PATCH 한다 —
+    /// 컬럼 단위 UPDATE 권한(20260812090000)이 있어야 통과한다.
+    func updateFocusMode(accessToken: String, userID: String, enabled: Bool) async throws {
+        try await sendNoBody(
+            path: "/rest/v1/profiles",
+            method: "PATCH",
+            queryItems: [URLQueryItem(name: "id", value: "eq.\(userID)")],
+            body: ProfileFocusModeUpdateRequest(focusMode: enabled),
+            accessToken: accessToken,
+            prefer: "return=minimal"
+        )
     }
 
     /// 내 토큰 사용량 공개 여부 갱신. profiles 자기 행을 PATCH 한다(RLS 로 본인 행만 허용). 반환 없음(return=minimal).

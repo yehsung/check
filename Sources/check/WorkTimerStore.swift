@@ -459,6 +459,9 @@ final class WorkTimerStore {
     // 내 토큰 사용량 공개 여부(profiles.token_usage_public 미러). 로그인 후 서버값 1회 로드, 토글은 낙관 반영.
     var tokenUsagePublic = true
     @ObservationIgnored var tokenUsagePublicLoaded = false
+    /// 집중 모드(콕찌르기 수신 거부, profiles.focus_mode 미러). 켜면 남이 나를 못 찌른다 — 판정은 서버가 한다.
+    /// 뷰가 토글 상태를 그리므로 관찰 대상이다. 로그인 후 1회 로드(토큰 설정과 같은 GET)하고 토글은 낙관 반영.
+    var focusMode = false
     // 내 토큰 사용량 **수집** 여부(profiles.token_usage_collect 미러). 공개 여부와 독립이다 —
     // 공개는 '남의 순위판에 뜨는가', 수집은 '서버에 쌓이는가'. 앱에서 바꾸는 값이 아니라 서버가 정한다.
     // 실효는 서버 트리거가 내고(구버전 클라도 함께 막힌다), 이 플래그는 헛업로드를 줄이는 부수 장치다.
@@ -745,6 +748,38 @@ final class WorkTimerStore {
         if !isTerminating {
             flushPokesOnWorkEnd()
         }
+    }
+
+    // MARK: - 첫 출근 인사 (오늘 팀에서 내가 1등)
+
+    /// 오늘 팀에서 내가 첫 출근인가. **이미 받아 둔 팀 상태만으로 판정한다**(새 요청 0).
+    ///
+    /// 네 조건을 모두 만족해야 한다:
+    ///  1. 팀원이 나 말고도 있다 — 나뿐인 팀에서 매일 "1등"은 축하가 아니라 소음이다.
+    ///  2. 남들은 오늘 근무 기록이 없고 지금 일하지도 않는다. (남이 밤샘 중이면 `.working` 으로,
+    ///     새벽에 끊었으면 자정~종료 몫이 그 사람의 todayDurationSeconds 에 잡혀 여기서 걸린다.)
+    ///  3. **나도 오늘 마친 근무가 없다.** 이 줄이 없으면 밤샘하다 새벽 3시에 끊고 3시 반에 다시 켠 사람에게
+    ///     "1등 출근"이 뜬다 — 그 사람은 도착한 적이 없고 밤새 앉아 있었다.
+    ///  4. **지금 세션이 오늘 시작됐다.** 어제 시작한 세션을 이어받은 것(자정 통과·밤샘 중 앱 재시작으로
+    ///     서버 세션 흡수)은 '출근'이 아니라 '이어서 일하는 중'이다. 3번만으로는 이 경로를 못 막는다 —
+    ///     진행 중 세션은 아직 누적에 들어가지 않아 '오늘 마친 근무'가 0으로 보이기 때문이다.
+    var isFirstArrivalToday: Bool {
+        guard let session else { return false }
+        let dayStart = TeamWeeklyGoal.koreanDayStart(for: clock())
+        // (4) 어제부터 이어지는 세션이면 출근이 아니다.
+        if let startedAt, startedAt < dayStart { return false }
+        // (3) 오늘 이미 마친 근무가 있으면 첫 출근이 아니다(누적 스탬프가 오늘 것일 때만 센다 — todayDuration 규약).
+        if accumulatedDayStart >= dayStart, accumulatedSeconds > 0 { return false }
+        let others = teamMembers.filter { $0.id != session.userID }
+        guard !others.isEmpty else { return false }
+        return others.allSatisfy { $0.todayDurationSeconds == 0 && $0.status != .working }
+    }
+
+    /// 오늘 첫 출근 인사를 아직 안 띄웠고 지금 내가 1등이면 true 를 돌려주며 하루치를 소비한다.
+    /// 기록은 마일스톤과 같은 KST dayKey 장부라, 같은 날 앱을 껐다 켜도 다시 뜨지 않는다.
+    func consumeFirstArrivalGreeting(now: Date? = nil) -> Bool {
+        guard isFirstArrivalToday else { return false }
+        return milestoneTracker.fireIfNeeded(MilestoneTracker.firstArrivalKey, now: now ?? clock())
     }
 
     // MARK: - 수동 종료의 자동 시작 억제 (1시간 부재로 재무장)

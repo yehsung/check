@@ -1114,3 +1114,102 @@ func todoBoardPanelStaysInvisibleToTheUserWhileTesting() throws {
                                          y: Int(hosting.bounds.height) / 2)
     #expect(center > 0.05 && center < 0.95, "cacheDisplay 픽셀 실측이 죽었다(alpha=\(center))")
 }
+
+// MARK: - orderFrontRegardless 가 조용히 실패했을 때: 창을 새로 만들어 되살린다
+
+/// **왜 이 테스트가 있는가 — 실사용에서 창이 안 뜨는 프로세스를 실측했다.**
+///
+/// v0.2.26 진단(9시간 돌아간 프로덕션 프로세스): 캐릭터 클릭 → `handleClick` → `onCharacterTapped` →
+/// `toggle` → `open` 이 전부 정상으로 돌고 `setFrame` 도 실제로 먹었는데(밖에서 창 프레임이 바뀌는 것을
+/// 관측했다), 바로 다음 줄 `orderFrontRegardless()` 뒤에도 창이 화면에 올라가지 않았다
+/// (`kCGWindowIsOnscreen` = false, 그 창의 Space 목록은 빈 배열, 같은 프로세스의 캐릭터 창은 Space 를
+/// 전부 갖고 있었다). AppKit 의 `isVisible` 은 true 라 앱은 "떠 있다"고 믿는다.
+///
+/// 그 상태의 사용자 경험이 신고 그대로다: 캐릭터는 보드 쪽을 돌아보는데(`isBoardOpen` 이 true 다)
+/// 보드가 없고, 다시 눌러도 그건 '닫기'라 영원히 안 열린다. 같은 창을 orderOut → orderFront 로 다시
+/// 태워도 안 살아난다(실측). 그래서 복구는 **창을 버리고 새로 만드는 것**뿐이다.
+///
+/// 헤드리스에서 윈도우 서버를 오염시킬 방법은 없으므로, "연 직후 창만 화면에서 내려간" 같은 결과를
+/// `panel.orderOut` 으로 만든다 — `close()` 를 거치지 않으므로 `isBoardOpen` 은 true 로 남아
+/// 실측한 어긋남과 같은 모양이 된다.
+@MainActor
+@Test
+func todoBoardRebuildsPanelWhenItNeverReachesTheScreen() async throws {
+    let appearance = makeTodoBoardAppearanceStore(opacity: 0.3)
+    let controller = CheckTodoBoardController(
+        store: makeTodoBoardStore(), appearance: appearance, stuckPanelCheckSeconds: 1.0
+    )
+    controller.open(anchor: todoBoardTestAnchor, screenVisibleFrame: todoBoardTestVisibleFrame)
+    controller.setDraft("적다 만 문장")
+    let stuck = controller.panel
+    #expect(CheckTodoBoardController.isOnScreen(stuck) != nil, "창 상태 질의 자체가 죽었다")
+
+    // 창만 화면에서 사라진다. 컨트롤러는 여전히 '열려 있다'고 믿는다 — 실측한 그 어긋남이다.
+    stuck.orderOut(nil)
+    #expect(controller.isBoardOpen, "테스트가 재현하려는 상태(열림 의도 + 안 보이는 창)가 아니다")
+
+    // 감시자가 **스스로** 깨어나 확인하고 되살릴 때까지 기다린다(아무도 밀어 주지 않는다).
+    var rebuilt = false
+    for _ in 0..<300 {
+        if controller.stuckPanelRebuilds == 1 {
+            rebuilt = true
+            break
+        }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(rebuilt, "감시자가 못 뜬 창을 못 알아챘다")
+    #expect(controller.panel !== stuck, "같은 창을 다시 주문했다 — 실측상 그걸로는 살아나지 않는다")
+    #expect(controller.isBoardOpen, "되살리는 동안 표시 의도가 뒤집혔다")
+    #expect(CheckTodoBoardController.isOnScreen(controller.panel) == true, "새 창도 화면에 못 올라갔다")
+    // 잃은 것이 없어야 한다 — 입력 상태는 창 밖(ui)에 살고, 투명도는 새 블러 뷰가 저장값을 다시 읽는다.
+    #expect(controller.draft == "적다 만 문장", "창을 새로 만들며 적던 글이 날아갔다")
+    #expect(
+        controller.panel.frame
+            == TodoBoardAnchor.frame(anchor: todoBoardTestAnchor, in: todoBoardTestVisibleFrame),
+        "새 창이 캐릭터 옆 제자리에 서지 않았다"
+    )
+    let (_, blur, _) = try todoBoardLayers(controller.panel)
+    #expect(
+        abs(Double(blur.alphaValue) - appearance.appearance.blurAlpha) < 0.001,
+        "새 블러 뷰가 저장된 투명도를 안 읽었다"
+    )
+
+    controller.close()
+}
+
+/// 되살리기에는 **상한이 있다**. 윈도우 서버가 어떤 창도 안 올려 주는 극단에서 상한이 없으면
+/// 열 때마다 창을 새로 만드는 무한 루프가 된다(안 보이는 창이 계속 쌓인다).
+@MainActor
+@Test
+func todoBoardStopsRebuildingAfterTheCap() {
+    let controller = CheckTodoBoardController(store: makeTodoBoardStore())
+    controller.open(anchor: todoBoardTestAnchor, screenVisibleFrame: todoBoardTestVisibleFrame)
+    var windows: [ObjectIdentifier] = []
+    for _ in 0..<(CheckTodoBoardController.maxStuckPanelRebuilds + 2) {
+        controller.rebuildStuckPanel(
+            anchor: todoBoardTestAnchor, screenVisibleFrame: todoBoardTestVisibleFrame
+        )
+        windows.append(ObjectIdentifier(controller.panel))
+    }
+    #expect(controller.stuckPanelRebuilds == CheckTodoBoardController.maxStuckPanelRebuilds)
+    // 상한을 넘긴 호출은 **아무 일도 하지 않는다** — 창이 계속 새로 생기면 상한이 이름뿐이다.
+    #expect(Set(windows).count == CheckTodoBoardController.maxStuckPanelRebuilds)
+    controller.close()
+}
+
+/// 그리고 **멀쩡히 뜬 창은 절대 다시 만들지 않는다.** 감시자가 조금이라도 성급하면 사용자는 열 때마다
+/// 보드가 한 번 깜빡이는 것을 보게 되고, 그 사이 키를 쥐고 있던 입력칸의 캐럿이 날아간다.
+@MainActor
+@Test
+func todoBoardDoesNotRebuildAPanelThatActuallyShowed() async {
+    let controller = CheckTodoBoardController(
+        store: makeTodoBoardStore(), stuckPanelCheckSeconds: 0.1
+    )
+    controller.open(anchor: todoBoardTestAnchor, screenVisibleFrame: todoBoardTestVisibleFrame)
+    let panel = controller.panel
+    try? await Task.sleep(for: .milliseconds(600))   // 확인 시각을 넉넉히 지나 보낸다
+    #expect(controller.stuckPanelRebuilds == 0, "멀쩡히 뜬 창을 다시 만들었다")
+    #expect(controller.panel === panel)
+    #expect(controller.isBoardOpen)
+    controller.close()
+}

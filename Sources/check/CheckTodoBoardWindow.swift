@@ -328,17 +328,24 @@ final class CheckTodoBoardController {
     ///  아무도 안 쓰게 되고, 결국 타이머 생성을 통째로 지워도 스위트가 초록인 구멍이 생긴다.)
     let undoSeconds: Double
 
+    /// 이 인스턴스의 '창이 실제로 떴는지' 확인 지연(초). 프로덕션은 언제나 `Self.stuckPanelCheckSeconds`.
+    /// **테스트만** 짧게 주입한다 — `undoSeconds` 와 같은 이유다(주입 지점이 없으면 감시자가 스스로 깨어나
+    ///  복구하는지를 실시간으로 볼 방법이 없어, 감시자 생성을 통째로 지워도 스위트가 초록인 구멍이 생긴다).
+    let stuckPanelCheckSeconds: Double
+
     /// `appearance` 에 기본값이 있는 이유는 **테스트 편의가 아니라 계약의 방향** 때문이다. 이 컨트롤러는
     /// 설정 스토어의 소유자가 아니라 소비자다(설정 UI 도 같은 인스턴스를 본다) — 그래서 주입을 받되,
     /// 안 주면 앱이 실제로 쓰는 표준 저장소를 그대로 쓴다.
     init(
         store: TodoListStore,
         appearance: TodoBoardAppearanceStore = TodoBoardAppearanceStore(),
-        undoSeconds: Double = TodoRules.undoSeconds
+        undoSeconds: Double = TodoRules.undoSeconds,
+        stuckPanelCheckSeconds: Double = CheckTodoBoardController.stuckPanelCheckSeconds
     ) {
         self.store = store
         self.appearanceStore = appearance
         self.undoSeconds = undoSeconds
+        self.stuckPanelCheckSeconds = stuckPanelCheckSeconds
         self.ui = TodoBoardUIState(todayKey: store.todayKey)
         // 콜백의 소비자는 **AppKit 쪽(블러 알파) 하나뿐**이다(SwiftUI 쪽은 @Observable 관찰로 따로 따라온다).
         // 붙잡는 것은 weak self 뿐이라 컨트롤러가 죽으면 통지도 조용히 멎는다.
@@ -542,6 +549,84 @@ final class CheckTodoBoardController {
         board.orderFrontRegardless()
         isBoardOpen = true
         installScrollMonitor()
+        armStuckPanelWatchdog(anchor: anchor, screenVisibleFrame: screenVisibleFrame)
+    }
+
+    // MARK: - 창이 화면에 못 올라갔을 때의 복구
+
+    /// `orderFrontRegardless()` 뒤 창이 실제로 떴는지 확인하기까지 두는 여유(초).
+    /// 실측: 주문 직후에는 아직 false 이고 ~50ms 안에 true 가 된다(같은 머신, 알파 0/1 양쪽 동일).
+    /// 그 10배를 둔다 — 멀쩡한 창을 성급하게 다시 만드는 쪽이 늦게 살리는 쪽보다 나쁘다.
+    static let stuckPanelCheckSeconds: Double = 0.5
+    /// 한 실행에서 허용하는 재생성 횟수. 상한이 없으면 윈도우 서버가 계속 거부하는 극단에서
+    /// 열 때마다 창을 새로 만드는 무한 루프가 된다.
+    static let maxStuckPanelRebuilds = 3
+
+    /// 이번 열기에 대한 확인 감시(열 때마다 갈아 끼운다).
+    private var stuckPanelWatchdog: Task<Void, Never>?
+    /// 이 실행에서 실제로 다시 만든 횟수(헤드리스 검증 지점 — 재생성이 일어났는지 밖에서 값으로 본다).
+    private(set) var stuckPanelRebuilds = 0
+
+    /// 이 창이 지금 **실제로** 화면에 올라가 있는가를 윈도우 서버에 직접 묻는다.
+    /// `NSWindow.isVisible` 로는 알 수 없다 — 아래 감시자 주석의 사고에서 그 값은 true 인 채 거짓말을 했다.
+    /// 질의가 실패하면 nil = "모른다"이고, 모를 때는 아무것도 하지 않는다(멀쩡한 창을 다시 만드는 쪽이 더 나쁘다).
+    /// (화면 녹화 권한이 필요 없는 질의다 — 창 메타데이터만 읽는다.)
+    @MainActor
+    static func isOnScreen(_ window: NSWindow) -> Bool? {
+        guard window.windowNumber > 0 else { return nil }
+        let id = CGWindowID(window.windowNumber)
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .optionIncludingWindow], id)
+                as? [[String: Any]]
+        else { return nil }
+        return list.contains { ($0[kCGWindowNumber as String] as? Int).map(CGWindowID.init) == id }
+    }
+
+    /// **`orderFrontRegardless()` 가 조용히 실패하는 일이 실제로 있다.** 그때 되살릴 유일한 문이 이 감시자다.
+    ///
+    /// 실사용 진단(v0.2.26, 9시간 돌아간 프로세스에서 실측): 클릭 → `handleClick` → `onCharacterTapped` →
+    /// `toggle` → `open` 이 전부 정상으로 돌고 `setFrame` 도 실제로 먹었는데(밖에서 창 프레임이 바뀌는 것을
+    /// 관측), 바로 다음 줄 `orderFrontRegardless()` 뒤에도 창이 **어느 Space 에도 올라가 있지 않았다**
+    /// (`CGSCopySpacesForWindows` = 빈 배열, `kCGWindowIsOnscreen` = false. 같은 프로세스의 캐릭터 창은
+    /// 그 시점에 Space 17개를 전부 갖고 있었다). AppKit 쪽 `isVisible` 은 true 라 앱은 "떠 있다"고 믿는다.
+    ///
+    /// 사용자가 보는 그림이 정확히 신고와 같다: 캐릭터는 보드 쪽을 돌아보는데(=`isBoardOpen` 이 true 다)
+    /// 보드가 없고, 다시 눌러도 그건 닫기라 아무 일도 안 일어난다. 그리고 **같은 창을 orderOut → orderFront 로
+    /// 다시 태워도 살아나지 않는다**(실측: 클릭 4회 = 여닫기 2회 왕복, 끝까지 안 떴다).
+    /// 그래서 복구는 "다시 주문"이 아니라 **창을 버리고 새로 만드는 것**이다.
+    private func armStuckPanelWatchdog(anchor: NSRect, screenVisibleFrame: NSRect) {
+        stuckPanelWatchdog?.cancel()
+        let delay = stuckPanelCheckSeconds
+        stuckPanelWatchdog = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            // 취소 검사가 없으면 cancel() 이 곧 즉시 실행이다(이 파일·오버레이의 다른 태스크와 같은 계약).
+            guard let self, !Task.isCancelled, self.isBoardOpen,
+                  let stuck = self.panelStorage, Self.isOnScreen(stuck) == false
+            else { return }
+            self.rebuildStuckPanel(anchor: anchor, screenVisibleFrame: screenVisibleFrame)
+        }
+    }
+
+    /// 못 뜨는 패널을 버리고 새로 만들어 같은 자리에 다시 연다(위 감시자의 유일한 복구 수단).
+    ///
+    /// 잃는 것은 없다: 초안·수정 중·삭제 대기는 컨트롤러의 `ui` 가 들고 있고(창 밖에서 산다), 투명도는
+    /// 새 블러 뷰가 저장값을 다시 읽는다. 원래 재생성을 피해 온 이유(한 프레임 빈 창이 스침)는 **이미
+    /// 아무것도 안 보이는 상태**에서는 비용이 아니다.
+    ///
+    /// 테스트 진입점이라 internal 이다 — 윈도우 서버를 헤드리스에서 오염시킬 방법이 없으므로 복구 자체는
+    /// 이 문으로만 검증할 수 있다.
+    func rebuildStuckPanel(anchor: NSRect, screenVisibleFrame: NSRect) {
+        // 상한은 **여기** 하나뿐이다(감시자 쪽에도 두면 언젠가 두 판정이 갈린다). 윈도우 서버가 어떤 창도
+        // 안 올려 주는 극단에서 상한이 없으면 열 때마다 창을 새로 만드는 무한 루프가 된다.
+        guard stuckPanelRebuilds < Self.maxStuckPanelRebuilds, let old = panelStorage else { return }
+        stuckPanelRebuilds += 1
+        old.orderOut(nil)
+        // 호스팅 뷰 → 루트 뷰 → 클로저가 컨트롤러를 도로 잡는 사슬을 여기서 끊는다(옛 창이 실제로 사라지도록).
+        old.contentView = nil
+        panelStorage = nil
+        blurStorage = nil
+        // `open` 은 멱등이지만 '열려 있으면 자리만 다시 잡는다'가 아니라 여기서는 **새 창을 띄우는** 호출이다.
+        // 표시 의도는 그대로 true 로 유지된다(아래 open 이 다시 세운다).
+        open(anchor: anchor, screenVisibleFrame: screenVisibleFrame)
     }
 
     /// 보드를 내린다(멱등). 패널과 입력 상태(초안·수정 중)는 **그대로 남는다** — 다시 열면 적다 만 글이
@@ -553,6 +638,10 @@ final class CheckTodoBoardController {
     func close() {
         commitPendingDelete()
         removeScrollMonitor()
+        // 열기 감시는 여기서 반드시 뗀다. 안 떼면 "닫자마자 다시 여는" 복구가 뒤늦게 끼어들 수 있다
+        // (감시자 안의 `isBoardOpen` 가드가 이미 막지만, 유예 중인 태스크를 남겨 둘 이유가 없다).
+        stuckPanelWatchdog?.cancel()
+        stuckPanelWatchdog = nil
         panelStorage?.orderOut(nil)
         isBoardOpen = false
     }

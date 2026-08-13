@@ -3161,7 +3161,10 @@ private func saveMessageSnapshot(_ png: Data, _ name: String) {
 private func makeMessagePanelStore(
     memberCount: Int = 5,
     myselfWorking: Bool = true,
-    now: Date = Date()
+    now: Date = Date(),
+    // 3글자 메시지를 못 받는(구버전 앱) 대상들. 서버가 대상의 app_build 로 판정해 내려 주는 값을
+    // 그대로 흉내 낸다 — **적지 않으면 true**(모르면 허용)라는 모델 규약을 픽스처도 따른다.
+    outdatedUserIDs: Set<String> = []
 ) -> WorkTimerStore {
     let store = makeTeamStore(members: [], now: now)
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "u-me")
@@ -3170,12 +3173,14 @@ private func makeMessagePanelStore(
                  "김서연", "박도윤", "최지우", "정하준", "강예은", "조민준", "윤서아", "장우진", "임채원", "한지호",
                  "오세훈", "신유나", "권도경", "황시윤", "배수아", "문지훈"]
     store.pokeDirectory = (0..<memberCount).map { index in
-        PokeDirectoryEntry(
-            userID: "u\(index + 1)",
+        let userID = "u\(index + 1)"
+        return PokeDirectoryEntry(
+            userID: userID,
             name: names[index % names.count],
             avatarURL: index == 0 ? CheckMascotAssets.url(for: .neutral) : nil,
             // 근무중이 앞에 오도록 3의 배수만 자리비움으로 둔다(대상 게이트 흐림도 함께 보이게).
-            isWorking: index % 3 != 2
+            isWorking: index % 3 != 2,
+            canReceiveMessage: !outdatedUserIDs.contains(userID)
         )
     }
     store.pokeDirectoryLoaded = true
@@ -3509,4 +3514,178 @@ func messageEntryPointCoversExactlyThePokeTargets() throws {
     let dead = accentPixelCount(offWork, top: band.top, bottom: band.bottom)
     #expect(live > dead * 3)
     saveMessageSnapshot(try #require(offWork.representation(using: .png, properties: [:])), "msg-offwork")
+}
+
+// MARK: - 구버전 상대 게이트 — 메시지만 잠그고 찌르기는 건드리지 않는다
+//
+// 실사용 신고: 구버전(≤0.2.27) 상대에게 메시지를 보내면 상대 화면에는 **그냥 콕 찔린 것**으로 뜬다.
+// 구버전 클라가 모르는 kind 를 normal 로 접고, take_pokes 는 서버 원자 소비라 그 3글자는 영영 사라진다.
+// 서버·스토어는 이미 막지만(구버전에겐 안 주고 서버에 남긴다), 화면 몫은 **보내기 전에 알게 하는 것**이다.
+
+/// 버전 게이트 육안 확인 PNG. 판정 근거는 아래 픽셀 테스트가 내고, 이 파일들은 눈으로 보기 위한 것이다.
+@MainActor
+private func saveVersionGateSnapshot(_ png: Data, _ name: String) {
+    let dir = URL(
+        fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/version-gate-ui",
+        isDirectory: true
+    )
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try? png.write(to: dir.appendingPathComponent("\(name).png"))
+}
+
+@MainActor
+@Test
+func outdatedTargetLosesOnlyTheMessageButtonNeverThePokeButton() throws {
+    // 세 렌더는 **한 사람(u4 서준)만** 다르다: 기준 / 구버전 / 찌르기 쿨타임.
+    let now = Date()
+    let base = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now)))
+    let outdated = try renderBitmap(
+        CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now, outdatedUserIDs: ["u4"]))
+    )
+    let coolingStore = makeMessagePanelStore(memberCount: 5, now: now)
+    coolingStore.pokeCooldownUntil = ["u4": now.addingTimeInterval(45)]
+    // 메시지 쿨타임은 **다른 사람(u2)** 에게 걸어 둔다. 이 줄이 있어도 아래 diff 사각형이 u4 의 찌르기 버튼
+    // 하나로 남는다는 것이 곧 "메시지 쿨타임은 행에서 아무것도 바꾸지 않는다"의 증거다 —
+    // 그건 의도된 설계다(쿨타임 중에도 펼칠 수 있어야 작성기가 남은 초를 말해 줄 수 있다).
+    coolingStore.messageCooldownUntil = ["u2": now.addingTimeInterval(45)]
+    #expect(coolingStore.pokeCooldownRemaining(for: "u4", now: now) > 0)
+    #expect(coolingStore.messageCooldownRemaining(for: "u2", now: now) > 0)
+    let cooling = try renderBitmap(CheckMenuView(store: coolingStore))
+    saveVersionGateSnapshot(try #require(cooling.representation(using: .png, properties: [:])), "gate-cooldown")
+
+    // 찌르기 버튼의 x 자리를 **렌더로 알아낸다**(좌표 상수를 손으로 적으면 행 배치가 바뀌는 날 조용히 거짓말한다).
+    // 쿨타임은 그 행에서 찌르기 버튼 하나만 흐리게 만드므로, 그 diff 사각형이 곧 찌르기 버튼의 자리다.
+    let pokeBox = try #require(bitmapDiffBounds(base, cooling), "쿨타임이 찌르기 버튼을 흐리게 바꿔야 한다")
+    let messageBox = try #require(
+        bitmapDiffBounds(base, outdated),
+        "구버전 상대의 메시지 버튼이 꺼져야 한다 — 픽셀이 그대로면 화면에 게이트가 없는 것이다"
+    )
+    // ★ 이 한 줄이 계약 전체다: 바뀐 자리가 찌르기 버튼보다 **왼쪽에서 끝난다** =
+    // 메시지 버튼만 죽었고 찌르기 버튼은 한 픽셀도 건드리지 않았다(구버전도 찔림은 그대로 받는다).
+    #expect(messageBox.maxX < pokeBox.minX)
+    // 두 사각형이 같은 행에서 나왔다는 확인 — 다른 사람 행을 재고 있으면 위 비교는 아무 뜻이 없다.
+    #expect(messageBox.minY < pokeBox.maxY && pokeBox.minY < messageBox.maxY)
+}
+
+@MainActor
+@Test
+func threeDisabledKindsStayApartOnScreen() throws {
+    // 정상 / 구버전 / 자리비움 세 행이 한 화면에 함께 그려진다(u4 서준만 구버전, u3 지현은 자리비움).
+    // 자리비움은 **두 버튼이 함께** 죽고 구버전은 메시지만 죽으므로, 찌르기 버튼(accent 원형)이
+    // 남아 있는 행의 개수가 곧 두 상태를 가르는 픽셀 근거다.
+    let now = Date()
+    let base = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now)))
+    let mixed = try renderBitmap(
+        CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now, outdatedUserIDs: ["u4"]))
+    )
+    // accent 가 있는 행 구간의 **개수**는 그대로다 = 구버전 행에도 살아 있는 찌르기 버튼이 남았다.
+    // (찌르기까지 같이 껐다면 그 행에서 accent 가 통째로 사라져 구간이 하나 줄고, 자리비움 행과 같은 모양이 된다.)
+    let baseRuns = accentRowRuns(base, top: 0, bottom: base.pixelsHigh - 1)
+    let mixedRuns = accentRowRuns(mixed, top: 0, bottom: mixed.pixelsHigh - 1)
+    #expect(mixedRuns.count == baseRuns.count)
+    // 그래도 화면은 달라졌다(메시지 버튼이 흐려졌다) — 개수만 같고 내용은 같지 않다.
+    #expect(bitmapDiffBounds(base, mixed) != nil)
+    saveVersionGateSnapshot(try #require(mixed.representation(using: .png, properties: [:])), "gate-three-states")
+    saveVersionGateSnapshot(try #require(base.representation(using: .png, properties: [:])), "gate-baseline")
+}
+
+@MainActor
+@Test
+func expandedComposerStaysOpenAndOnlyLocksWhenTheTargetTurnsOutOfDate() throws {
+    // 폴링이 펼쳐 둔 사람의 canReceiveMessage 를 false 로 뒤집는 순간. **접지 않는다** —
+    // 접으면 치던 글자가 이유 없이 사라지고, 폴링이 사용자의 화면을 여닫는 규칙이 새로 생긴다.
+    let now = Date()
+    let open = try renderBitmap(
+        CheckMenuView(
+            store: makeMessagePanelStore(memberCount: 5, now: now),
+            previewMessageComposerUserID: "u4",
+            previewMessageDraft: "수고"
+        )
+    )
+    let locked = try renderBitmap(
+        CheckMenuView(
+            store: makeMessagePanelStore(memberCount: 5, now: now, outdatedUserIDs: ["u4"]),
+            previewMessageComposerUserID: "u4",
+            previewMessageDraft: "수고"
+        )
+    )
+    // 입력칸(ImageRenderer 의 '못 그림' 노란 상자)은 여전히 목록 안에 정확히 1개 — 작성기가 살아 있다.
+    // (마지막 상자는 어느 화면에나 있는 푸터 Menu 자리다.)
+    let openBoxes = unavailablePlaceholderRowRuns(open, top: 0, bottom: open.pixelsHigh - 1)
+    let lockedBoxes = unavailablePlaceholderRowRuns(locked, top: 0, bottom: locked.pixelsHigh - 1)
+    #expect(openBoxes.dropLast().count == 1)
+    #expect(lockedBoxes.dropLast().count == 1)
+    // 창 높이도 그대로다 — 접혔다면 펼침 덩어리만큼 줄어든다.
+    #expect(locked.pixelsHigh == open.pixelsHigh)
+    // 대신 **보내기는 잠겼다**: 머리줄이 사유를 말하고 [보내기] 캡슐의 accent 가 빠진다(행의 메시지 버튼도 함께).
+    #expect(bitmapDiffBounds(open, locked) != nil)
+    #expect(
+        accentPixelCount(locked, top: 0, bottom: locked.pixelsHigh - 1)
+            < accentPixelCount(open, top: 0, bottom: open.pixelsHigh - 1)
+    )
+    saveVersionGateSnapshot(try #require(locked.representation(using: .png, properties: [:])), "gate-composer-locked")
+    saveVersionGateSnapshot(try #require(open.representation(using: .png, properties: [:])), "gate-composer-open")
+}
+
+// MARK: - 근무 시작/종료 알약의 키보드 포커스 링
+//
+// 실사용 신고: 팝오버를 열 때마다 근무 시작/종료 버튼 둘레에 파란 테두리가 생긴다 — 팝오버가 열리면서
+// 그 버튼이 첫 포커스를 받아 macOS 가 그리는 키보드 포커스 링이다.
+//
+// ⚠️ **이 링은 렌더로 검증할 수 없다.** ImageRenderer 는 키 윈도우도 first responder 도 없는 오프스크린
+// 그리기라 포커스 링을 애초에 그리지 않는다(고쳐도 안 고쳐도 픽셀이 같다). 그래서 판정 근거를
+// **소스 구조**로 세운다 — 어느 자리에 수식어가 붙었는지가 이 수정의 전부이기 때문이다.
+// 아래 렌더 테스트는 "그 수식어가 레이아웃을 흔들지 않았다"만 본다(그건 픽셀로 볼 수 있다).
+
+@Test
+func focusEffectsAreDisabledOnTheWorkTogglePillAndNowhereElse() throws {
+    let source = try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8)
+    // ★ 이 화면 전체에서 딱 **한 번**만 나온다. 두 번째가 생기는 순간 문제는 "어디에 걸렸는가"가 된다 —
+    // 이 수식어는 걸린 자리의 **하위 전체**를 덮으므로, 입력칸을 품은 컨테이너에 걸리면
+    // 로그인·재설정 코드·할 일·3글자 메시지의 커서 표시가 통째로 죽는다.
+    #expect(source.components(separatedBy: ".focusEffectDisabled()").count - 1 == 1)
+    // 그 한 번은 헤더 카드 안, 근무 시작/종료 알약 **뒤**에 붙어 있다(= 그 버튼 하나만 덮는다).
+    let header = try #require(swiftStructBody(source, name: "HeaderCard"))
+    let pill = try #require(header.range(of: "WorkTogglePill("), "헤더 카드가 근무 시작/종료 알약을 그린다")
+    let modifier = try #require(header.range(of: ".focusEffectDisabled()"), "링을 끄는 자리는 이 알약이다")
+    #expect(pill.upperBound < modifier.lowerBound)
+    // 입력칸이 사는 화면들은 이 수식어를 **받지 않는다**. 위 '한 번' 단언을 이름으로 못 박아,
+    // 나중에 루트로 올리는 수정이 들어와도 여기서 먼저 걸리게 한다.
+    for name in ["CheckMenuView", "PokeMessageComposer"] {
+        let body = try #require(swiftStructBody(source, name: name))
+        #expect(!body.contains("focusEffectDisabled"), "\(name) 가 포커스 표시를 끄면 지금 어디에 타이핑되는지 알 수 없어진다")
+    }
+    // .focusable(false) 로 도달 자체를 막지 않았다 — 그건 키보드만 쓰는 사람에게서 근무 시작/종료를 빼앗는다.
+    #expect(!header.contains(".focusable(false)"))
+}
+
+@MainActor
+@Test
+func theWorkTogglePillKeepsBothFacesAndItsLayoutAfterDisablingFocusEffects() throws {
+    // 같은 버튼의 두 얼굴(초록 [근무 시작] / 주황 [근무 종료])이 그대로 그려지는지 육안 + 픽셀 확인.
+    // 포커스 링 자체는 여기 안 나오지만(위 MARK 참고), **레이아웃이 흔들리지 않았다**는 것은 볼 수 있다.
+    let now = Date()
+    func headerStore(working: Bool) -> WorkTimerStore {
+        let store = makeTeamStore(members: [], now: now)
+        store.snapshot = WorkStatusSnapshot(status: working ? .working : .offWork, elapsedSeconds: working ? 3_600 : 0)
+        return store
+    }
+    let offWork = try renderBitmap(CheckMenuView(store: headerStore(working: false)))
+    let working = try renderBitmap(CheckMenuView(store: headerStore(working: true)))
+    // 두 얼굴은 서로 다르게 그려진다(같은 자리·같은 크기, 색과 글자만 바뀐다).
+    #expect(working.pixelsHigh == offWork.pixelsHigh)
+    let diff = try #require(bitmapDiffBounds(offWork, working))
+    // 알약은 헤더 카드 안이므로 그 차이는 화면 위쪽에서 시작한다(버튼이 사라지거나 밀려나지 않았다).
+    #expect(diff.minY < working.pixelsHigh / 3)
+    saveVersionGateSnapshot(try #require(offWork.representation(using: .png, properties: [:])), "focus-pill-offwork")
+    saveVersionGateSnapshot(try #require(working.representation(using: .png, properties: [:])), "focus-pill-working")
+}
+
+@Test
+func theOutdatedTooltipQuotesTheStoreNoticeInsteadOfInventingItsOwnWording() throws {
+    // 보내기 전(툴팁)과 보낸 뒤(안내줄)가 **같은 말**을 해야 한다. 리터럴을 베껴 두면 한쪽만 고쳐지는 날이 온다.
+    let source = try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8)
+    let body = try #require(swiftStructBody(source, name: "PokeDirectoryRowView"))
+    #expect(body.contains("WorkTimerStore.messageTargetOutdatedNotice"))
+    #expect(!body.contains(WorkTimerStore.messageTargetOutdatedNotice), "같은 문장을 리터럴로 다시 적어 두면 안 된다")
 }

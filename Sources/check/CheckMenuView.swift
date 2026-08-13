@@ -508,6 +508,18 @@ private struct HeaderCard: View {
                     enabled: store.canSync,
                     action: { store.toggle() }
                 )
+                // 팝오버가 열리면 이 버튼이 첫 포커스를 받아 macOS 키보드 포커스 링(파란 테두리 + 후광)이
+                // 주황 알약 둘레에 그려진다 — 사장님 신고. 알약은 자기 테두리·그림자를 이미 갖고 있어
+                // 그 링이 디자인 결함처럼 읽힌다.
+                //
+                // **여기(호출 자리)에 거는 이유**: 이 수식어는 걸린 자리와 그 **하위 전체**의 포커스 표시를 끈다.
+                // 팝오버 루트나 상위 컨테이너에 걸면 로그인 이메일/비밀번호·재설정 코드·할 일·3글자 메시지
+                // 입력칸의 커서 표시까지 함께 죽어, 지금 어디에 타이핑되는지 알 수 없는 화면이 된다.
+                // 이 한 줄이 딱 이 버튼 하나만 덮는다.
+                //
+                // focusable(false) 를 쓰지 않는 이유: 그건 표시가 아니라 **도달**을 막아 키보드만 쓰는 사람에게서
+                // 근무 시작/종료 자체를 빼앗는다. 링만 지우고 조작은 남기는 쪽이 맞다.
+                .focusEffectDisabled()
             }
             // 내 주간 목표 진행 바 — 목표는 개인 약속이므로 "내" 접두어 없이 위치(내 박스)가 의미를 말한다.
             // myLiveWeeklySeconds(displayNow 파생)를 읽으므로 잎 뷰로 격리해 헤더 본체가 매초 무효화되지 않게 한다.
@@ -2250,9 +2262,15 @@ private struct PokePanel: View {
                             targetName: entry.name,
                             text: draftBinding,
                             remainingCooldown: messageCooldownRemaining(entry.userID),
-                            // 행의 찌르기 버튼과 **같은 게이트**다(내 근무 + 대상 근무). 규칙이 갈라지면
-                            // 버튼은 흐린데 입력칸은 살아 있는 화면이 생기고, 그 차이를 설명할 방법이 없다.
-                            canSend: isMyselfWorking && entry.isWorking,
+                            // 행의 **메시지 버튼과 같은 게이트**다(내 근무 + 대상 근무 + 대상이 받을 수 있는 버전).
+                            // 규칙이 갈라지면 버튼은 흐린데 입력칸은 살아 있는 화면이 생기고, 그 차이를 설명할 방법이 없다.
+                            //
+                            // ★ 펼쳐 둔 사이 폴링으로 canReceiveMessage 가 false 로 바뀌면 **접지 않고 여기서 잠근다**:
+                            // 접으면 사용자가 치던 글자가 이유 없이 사라져 앱이 고장 난 것으로 읽히고, 폴링이 사용자의
+                            // 화면을 접었다 폈다 하는 규칙이 새로 생긴다. 자리비움이 같은 순간에 하는 일도 이것뿐이라
+                            // (이미 그렇게 돈다) 여기만 한 항 늘리면 두 사유가 같은 모양으로 멈춘다 — 머리줄이 사유를
+                            // 말하고, 닫는 길은 작성기의 [x] 로 남는다(행 버튼은 그 순간 흐린 라벨이라 토글이 안 된다).
+                            canSend: isMyselfWorking && entry.isWorking && entry.canReceiveMessage,
                             isSending: isSendingMessage,
                             onSend: { text in
                                 onSendMessage(entry.userID, text)
@@ -2401,7 +2419,8 @@ private struct PokeDirectoryRowView: View {
         }
     }
 
-    // 3글자 메시지 진입점 — 말풍선 아이콘. **찌르기와 같은 게이트**를 받는다(내 근무·대상 근무·쿨타임).
+    // 3글자 메시지 진입점 — 말풍선 아이콘. **찌르기와 같은 게이트**를 받는다(내 근무·대상 근무·쿨타임)
+    // + 메시지에만 걸리는 게이트 하나(대상이 받을 수 있는 버전인가).
     // 비활성이어도 자리를 지키고 흐리게만 그린다: 버튼이 사라졌다 나타나면 행이 흔들리고,
     // 무엇보다 "여기서 메시지를 보낼 수 있다"는 사실 자체가 안 보이면 기능이 없는 것과 같다.
     // 펼쳐 두는 것 자체는 아무것도 보내지 않으므로 **쿨타임 중에도 펼칠 수 있다** — 그래야 작성기가
@@ -2412,8 +2431,19 @@ private struct PokeDirectoryRowView: View {
             messageIconLabel(active: false)
                 .help("내가 근무 중일 때만 메시지를 보낼 수 있어요")
         } else if !entry.isWorking {
+            // 자리비움이 구버전보다 앞이다 — 이 사유는 **같은 행의 찌르기 버튼도 함께 막는** 사유라,
+            // 뒤로 밀면 한 행에서 두 버튼이 서로 다른 이유를 말한다(찌르기는 "자리비움", 메시지는 "업데이트").
+            // 자리비움이 풀리면 그때 구버전 사유가 드러난다 — 그 순서가 사용자가 겪는 순서와 같다.
             messageIconLabel(active: false)
                 .help("자리비움 상태에는 메시지를 보낼 수 없어요")
+        } else if !entry.canReceiveMessage {
+            // 대상이 구버전이라 3글자를 **받을 수 없다**. 보낸 뒤에 알려 주면 늦다 — 구버전 클라는 모르는
+            // kind 를 일반 찌르기로 접고, take_pokes 는 서버 원자 소비라 그 3글자가 영영 사라진다.
+            // 그래서 이 게이트는 화면에서 미리 잠그고, 찌르기는 **건드리지 않는다**(구버전도 찔림은 받는다).
+            // 문구는 스토어 상수를 그대로 쓴다 — 같은 사정을 설명하는 문장이 두 개가 되는 순간
+            // 보내기 전(툴팁)과 보낸 뒤(안내줄)가 서로 다른 말을 하게 된다.
+            messageIconLabel(active: false)
+                .help(WorkTimerStore.messageTargetOutdatedNotice)
         } else {
             Button(action: onToggleCompose) {
                 messageIconLabel(active: true)

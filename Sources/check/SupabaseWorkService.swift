@@ -747,16 +747,42 @@ actor SupabaseWorkService {
         }
     }
 
-    /// 내게 온 미소비 찔림을 원자적으로 수신+소비한다. take_pokes() RPC 를 로그인 토큰으로 호출한다(인자 없음 → EmptyBody).
-    /// 반환 행은 보낸이 표시명/아바타 + 찔린 시각 epoch 초를 담는다(클라가 Date 로 복원해 신선도 필터).
+    /// 내게 온 미소비 찔림을 원자적으로 수신+소비한다. take_pokes(p_message_capable) RPC 를 로그인 토큰으로 호출한다.
+    /// 반환 행은 보낸이 표시명/아바타 + 찔린 시각 epoch 초 + 종류/본문을 담는다(클라가 Date 로 복원해 신선도 필터).
+    ///
+    /// **p_message_capable: true 를 빼면 이 앱도 메시지를 못 받는다.** 서버 기본값이 false 라(구버전 보호)
+    /// 메시지 행은 소비되지 않고 서버에 남는다 — 즉 이 한 인자가 기능의 스위치다.
+    ///
+    /// ── 하위호환: 인자를 모르는 서버(마이그레이션 미적용) ──
+    /// PostgREST 는 본문의 키 집합으로 함수를 고르므로, 인자 없는 옛 take_pokes() 만 있는 서버에서는
+    /// 이 요청이 PGRST202("… in the schema cache") = .databaseSchemaMissing 으로 죽는다. 그대로 두면
+    /// 앱을 먼저 배포하고 db push 가 늦은 창에서 **찔림 수신 전체가 멈춘다**(메시지만이 아니다).
+    /// 그래서 그 오류에서만 옛 모양(인자 없음)으로 한 번 더 부른다.
+    ///
+    /// **성공을 캐시하지 않는 이유**(= 옛 서버로 판정한 뒤 계속 옛 모양만 부르지 않는 이유): 이 앱은
+    /// 메뉴바 상주라 몇 주씩 살아 있고, db push 는 그 사이 언제든 끝난다. 한 번의 실패로 옛 모양에
+    /// 눌러앉으면 서버가 고쳐진 뒤에도 재시작 전까지 메시지를 영영 못 받는다 — 그 대가가
+    /// '아직 안 고쳐진 짧은 창에서 폴링 1회당 요청 2건'보다 훨씬 크다.
     func takePokes(accessToken: String) async throws -> [TakenPokeRow] {
-        let data = try await send(
-            path: "/rest/v1/rpc/take_pokes",
-            method: "POST",
-            body: EmptyBody(),
-            accessToken: accessToken,
-            prefer: nil
-        )
+        let data: Data
+        do {
+            data = try await send(
+                path: "/rest/v1/rpc/take_pokes",
+                method: "POST",
+                body: TakePokesRequest(pMessageCapable: true),
+                accessToken: accessToken,
+                prefer: nil
+            )
+        } catch SupabaseWorkServiceError.databaseSchemaMissing {
+            // 옛 서버. 이 시점엔 아무것도 소비되지 않았다(함수를 못 찾아 실행 자체가 없었다)므로 재호출이 안전하다.
+            data = try await send(
+                path: "/rest/v1/rpc/take_pokes",
+                method: "POST",
+                body: EmptyBody(),
+                accessToken: accessToken,
+                prefer: nil
+            )
+        }
         return try decoder.decode([TakenPokeRow].self, from: data)
     }
 
@@ -806,6 +832,21 @@ actor SupabaseWorkService {
             method: "PATCH",
             queryItems: [URLQueryItem(name: "id", value: "eq.\(userID)")],
             body: ProfileFocusModeUpdateRequest(focusMode: enabled),
+            accessToken: accessToken,
+            prefer: "return=minimal"
+        )
+    }
+
+    /// 이 맥의 앱 버전을 서버에 남긴다. profiles 자기 행의 app_build/app_version 을 PATCH 한다 —
+    /// **남이 나에게 메시지를 보낼 수 있는지**를 서버가 이 값으로 판정하기 때문이다(send_message 의 target_outdated).
+    /// 컬럼 단위 UPDATE 권한이 있어야 통과한다(focus_mode 와 같은 함정 — 20260804020000 이 표 단위 update 를 회수했다).
+    /// 컬럼/권한이 없는 서버에서는 400/403 으로 죽고 호출부가 조용히 삼킨다(다음 기회에 재시도).
+    func updateAppVersion(accessToken: String, userID: String, report: AppVersionReport) async throws {
+        try await sendNoBody(
+            path: "/rest/v1/profiles",
+            method: "PATCH",
+            queryItems: [URLQueryItem(name: "id", value: "eq.\(userID)")],
+            body: ProfileAppVersionUpdateRequest(appBuild: report.build, appVersion: report.version),
             accessToken: accessToken,
             prefer: "return=minimal"
         )

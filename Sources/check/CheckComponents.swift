@@ -32,6 +32,16 @@ struct WorkTogglePill: View {
             .shadow(color: (isWorking ? CheckTheme.pending : CheckTheme.working).opacity(0.30), radius: 8, y: 2)
         }
         .buttonStyle(.plain)
+        // 팝오버가 열리면 이 버튼이 첫 포커스를 받아 macOS 가 파란 포커스 링을 그린다(실사용 신고:
+        // "자꾸 근무 시작 종료 버튼에 파란색 테두리가 생기는데"). 알약 위에 사각 링이 겹쳐 그려져
+        // 눌린 것처럼도, 고장난 것처럼도 보인다.
+        //
+        // **범위를 이 버튼 하나로 좁힌 것이 요점이다.** 팝오버 루트에 걸면 로그인 이메일·비밀번호,
+        // 비밀번호 재설정 코드, 할 일 입력, 메시지 3글자 입력의 포커스 표시까지 함께 죽는다 —
+        // 그것들은 지금 커서가 어디 있는지 보여야 쓸 수 있는 필드다.
+        // `focusable(false)` 가 아니라 `focusEffectDisabled()` 인 이유도 같다: 키보드로 도달하는
+        // 길은 남기고 **그리는 것만** 끈다.
+        .focusEffectDisabled()
         .onHover { hovering = $0 }
         .opacity(enabled ? 1 : 0.45)
         .disabled(!enabled)

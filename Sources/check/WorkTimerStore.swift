@@ -538,6 +538,23 @@ final class WorkTimerStore {
     /// 그 요청은 방금 자기가 만든 60초 쿨타임에 확정으로 거절당한다(isUpdatingDisplayName 과 같은 규약).
     var isSendingMessage = false
 
+    // ── 내 앱 버전 보고(profiles.app_build / app_version) ──
+    /// 이 프로세스가 읽어 올 버전. 기본은 번들이고 테스트가 갈아 끼운다 — Bundle.main 은 프로세스가 정하는
+    /// 값이라 주입하지 않으면 "심어지지 않은 빌드"와 "심어진 빌드"를 같은 러너에서 둘 다 실증할 수 없다.
+    @ObservationIgnored var appVersionProvider: () -> AppVersionReport? = {
+        AppVersionReport.fromInfoDictionary(Bundle.main.infoDictionary)
+    }
+    /// 이번 실행에서 **이미 보고한** (계정 + 버전) 도장. 같으면 다시 보내지 않는다(lastUploadedUsage 와 같은 변경 게이트).
+    ///
+    /// **UserDefaults 에 영속하지 않는 이유**는 ultraPokeSpentDay 가 적어 둔 그대로다: 영속이 사 주는 건
+    /// '실행당 헛요청 1회 절약'뿐인데(26명·무료 플랜에선 무의미), 대신 계정 전환·기기 간 불일치라는 버그 종을
+    /// 통째로 들여온다. 게다가 여기선 방향이 더 나쁘다 — 서버 값이 어떤 이유로든 비면(복구·수동 조치)
+    /// 영속 도장을 든 클라는 **영영 다시 안 보내고**, 그 사람은 아무에게도 메시지를 못 받는 상태로 굳는다.
+    /// 실행마다 한 번 다시 말하는 쪽이 자가치유한다.
+    ///
+    /// 계정 ID 를 도장에 섞는 이유: 로그아웃 없이 세션만 갈리는 경로가 있어도 도장이 달라져 새 계정으로 다시 보고한다.
+    @ObservationIgnored var reportedAppVersionStamp: String?
+
     // ── 별명(표시명) 변경 ──
     /// 팀 목록 내 행의 별명 인라인 편집이 열려 있는지. 뷰 로컬 @State 가 아닌 이유: 30초 폴링이 teamMembers 를
     /// 통째로 갈아 끼우면(WorkTimerStoreSync.refreshTeamStatus) ForEach 가 행을 재구성해 편집 상태가 날아간다.
@@ -1586,6 +1603,9 @@ extension WorkTimerStore {
         messageNotice = nil
         messageCooldownUntil = [:]
         isSendingMessage = false
+        // 버전 보고 도장도 계정에 묶인다. 남기면 다음 계정이 자기 프로필에 버전을 못 남겨,
+        // 그 사람은 근무 중인데도 아무에게서 메시지를 못 받는다(서버가 app_build 를 null 로 본다).
+        reportedAppVersionStamp = nil
         tokenUsagePublic = true
         tokenUsagePublicLoaded = false
         // 계정이 바뀌면 남의 쿨타임/남의 하루 몫을 물려받지 않게 반드시 비운다. 남기면 새 계정이 자기 울트라를

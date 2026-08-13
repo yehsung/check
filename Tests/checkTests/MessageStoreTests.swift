@@ -67,6 +67,15 @@ import Testing
         MessageURLProtocolStub.paths(forHost: host).filter { $0 == MessageURLProtocolStub.sendPath }.count
     }
 
+    /// 버전 보고 PATCH 의 본문들. 같은 표를 GET 하는 요청(공개 설정·별명 쿨타임)이 섞이지 않도록
+    /// **메서드까지** 좁힌다 — 경로만 보면 검증 대상이 아닌 요청이 건수를 흔든다.
+    /// 요청 배열과 본문 배열은 같은 순서로 적재되므로 zip 으로 짝지을 수 있다(URLProtocolStub 규약).
+    private func versionPatchBodies(host: String) -> [String] {
+        zip(URLProtocolStub.requests(forHost: host), URLProtocolStub.bodies(forHost: host))
+            .filter { $0.0.url?.path == "/rest/v1/profiles" && $0.0.httpMethod == "PATCH" }
+            .map(\.1)
+    }
+
     /// 보내고 결과 문구가 도착할 때까지 기다린다. 7종 분기가 전부 messageNotice 를 쓰므로 이 한 줄이면 된다.
     private func send(_ store: WorkTimerStore, to userID: String = "target", body: String = "굿") async {
         store.sendMessage(to: userID, body: body)
@@ -196,6 +205,39 @@ import Testing
         #expect(store.messageNotice == WorkTimerStore.messageTargetFocusedNotice)
         #expect(sendRequestCount(host: host) == 1)
         #expect(store.messageCooldownUntil["target"] == nil)
+    }
+
+    /// ⑤' target_outdated — 상대가 아직 메시지를 모르는 버전이다(v0.2.28 의 실사고 수습으로 생긴 status).
+    /// 다른 거절과 **다른 점 하나**: 사용자가 할 수 있는 일이 있다. 그래서 문구가 그 일을 가리켜야 하고
+    /// (상대의 업데이트), `.invalid` 의 "지금은 보낼 수 없어요"로 접히면 그 정보가 통째로 사라진다.
+    /// 쿨타임은 태우지 않고(서버가 행을 안 남긴다), 낡은 '메시지 가능' 배지를 고치려 디렉토리를 다시 읽는다.
+    @Test func sendMessageTargetOutdatedTellsWhoMustUpdate() async {
+        let host = "msg-send-outdated"
+        let store = makeStore(host: host)
+
+        await send(store)
+
+        #expect(store.messageNotice == WorkTimerStore.messageTargetOutdatedNotice)
+        #expect(store.messageNotice == "상대가 앱을 업데이트해야 받을 수 있어요")
+        // 두루뭉술한 문구로 접히지 않았다는 증거(두 문장이 같아지면 이 분기는 있으나 마나다).
+        #expect(store.messageNotice != WorkTimerStore.messageInvalidNotice)
+        #expect(store.messageNotice != WorkTimerStore.messageTargetNotWorkingNotice)
+        #expect(sendRequestCount(host: host) == 1)
+        // ★ 쿨타임 미소모: 받을 수 없는 사람에게 보낸 실패가 60초를 태우면 그건 벌이다.
+        #expect(store.messageCooldownUntil["target"] == nil)
+        #expect(store.messageCooldownRemaining(for: "target", now: Self.frozenNow) == 0)
+        // 찌르기 상태는 한 톨도 안 움직인다(구버전 상대에게도 찔림은 그대로 간다).
+        #expect(store.pokeCooldownUntil["target"] == nil)
+        #expect(store.pokeNotice == nil)
+        // 배지가 낡았다는 뜻이므로 디렉토리를 재조회한다(targetNotWorking 과 같은 규약).
+        await waitUntil {
+            URLProtocolStub.requests(forHost: host)
+                .contains { $0.url?.path == "/rest/v1/rpc/app_user_directory" }
+        }
+        #expect(
+            URLProtocolStub.requests(forHost: host)
+                .contains { $0.url?.path == "/rest/v1/rpc/app_user_directory" }
+        )
     }
 
     /// ⑥ too_long(서버 판정) — 3글자 이하를 보냈는데도 서버가 거절하면 그 답을 그대로 옮긴다.
@@ -364,17 +406,107 @@ import Testing
         #expect(messages.map(\.body) == ["굿"])
     }
 
-    /// 신선도는 찔림과 **같은 1시간**이다. 새 상수를 만들면 "언제까지 유효한가"의 답이 두 곳으로 갈린다.
-    @Test func staleMessagesAreDroppedAtTheSameHourBoundary() {
+    /// 메시지 신선도는 **5분**이다(사장님 확정: "5분 안에 도달 못 하면 그냥 안 전하는 게 자연스럽다").
+    /// 찔림의 1시간과 **일부러 다른 상수**라, 여기서 pokeDisplayFreshnessSeconds 를 쓰면 2시간 전에 보낸
+    /// "밥?"이 뜬다 — 그 순간의 말이라 늦게 도착하면 내용 자체가 거짓이 되는 종류의 알림이다.
+    @Test func staleMessagesAreDroppedAtTheFiveMinuteBoundary() {
         let now = Date(timeIntervalSince1970: 900_000)
-        let hour = Int(WorkTimerStore.pokeDisplayFreshnessSeconds)
+        let window = Int(WorkTimerStore.messageDisplayFreshnessSeconds)
         let rows = [
-            row(id: "edge", from: "경계", epoch: Int(now.timeIntervalSince1970) - hour, kind: "message", body: "굿"),
-            row(id: "stale", from: "새벽", epoch: Int(now.timeIntervalSince1970) - hour - 1, kind: "message", body: "굿"),
+            row(id: "edge", from: "경계", epoch: Int(now.timeIntervalSince1970) - window, kind: "message", body: "굿"),
+            row(id: "stale", from: "늦은", epoch: Int(now.timeIntervalSince1970) - window - 1, kind: "message", body: "굿"),
         ]
 
-        // 정확히 1시간은 살고 1초를 넘기면 죽는다(freshReceivedPokes 의 경계 규약과 동일).
+        // 정확히 5분은 살고 1초를 넘기면 죽는다(freshReceivedPokes 의 경계 규약과 같은 모양).
         #expect(WorkTimerStore.freshReceivedMessages(rows: rows, now: now).map(\.id) == ["edge"])
+        // 값 자체를 못 박는다 — 상수만 바꿔 놓고 서버(300초)와 어긋나는 것을 여기서 잡는다.
+        #expect(WorkTimerStore.messageDisplayFreshnessSeconds == 300)
+
+        // ★ 대조군: **찌르기는 5분 규칙에 영향받지 않는다.** 같은 나이의 찔림 행은 둘 다 살아야 한다
+        //   (찔림 창은 여전히 1시간). 이게 깨지면 메시지 수명을 줄이면서 찔림까지 같이 줄인 것이다.
+        let pokeRows = [
+            row(id: "p-edge", from: "경계", epoch: Int(now.timeIntervalSince1970) - window, kind: "normal"),
+            row(id: "p-late", from: "늦은", epoch: Int(now.timeIntervalSince1970) - window - 1, kind: nil),
+        ]
+        #expect(WorkTimerStore.freshReceivedPokes(rows: pokeRows, now: now).map(\.id) == ["p-edge", "p-late"])
+        #expect(WorkTimerStore.pokeDisplayFreshnessSeconds == 3600)
+    }
+
+    // MARK: - 큐 대기 중 만료(5분)
+
+    /// **도착 필터만으로는 부족하다**는 것이 이 그룹의 요점이다. 말풍선은 한 번에 하나뿐이라 다른 말풍선이
+    /// 떠 있거나 울트라가 격발 중이면 메시지는 양보하고 큐에 남고, 근무를 끝내면 더 오래 남는다.
+    /// 그 대기 구간에서 5분이 지나면 서버는 "안 전한다"고 정한 말을 화면만 뒤늦게 띄우게 된다.
+    @Test func queuedMessagesExpireAtFiveMinutesWhileWaitingToBeShown() {
+        let store = makeStore(host: "msg-queue-expiry")
+        let base = Self.frozenNow
+        let window = WorkTimerStore.messageDisplayFreshnessSeconds
+        store.enqueueReceivedMessages([
+            ReceivedMessage(id: "fresh", fromName: "A", body: "고고", createdAt: base.addingTimeInterval(-1)),
+            ReceivedMessage(id: "edge", fromName: "B", body: "ㅇㅋ", createdAt: base.addingTimeInterval(-window + 1)),
+            ReceivedMessage(id: "stale", fromName: "C", body: "밥?", createdAt: base.addingTimeInterval(-window - 1)),
+        ])
+
+        // 얼린 시계로 잰다 — 벽시계를 쓰면 부하 큰 병렬 실행에서 경계가 흔들린다(이 파일의 규약).
+        store.expireStaleMessages(now: base)
+
+        // 4분 59초는 살고 5분 1초는 죽는다. 섞여 있어도 신선한 것만 남고 **순서는 그대로**다.
+        #expect(store.receivedMessages.map(\.id) == ["fresh", "edge"])
+        #expect(store.currentMessage?.id == "fresh")
+        #expect(store.waitingMessageCount == 1)
+        // 버렸다고 사용자에게 알리지 않는다 — 내용을 모르는 알림은 할 수 있는 일 없는 불안만 남긴다.
+        #expect(store.messageNotice == nil)
+        #expect(store.pokeNotice == nil)
+
+        // 경계 항목도 5분을 넘기는 순간 죽는다(같은 큐, 시계만 2초 전진).
+        store.expireStaleMessages(now: base.addingTimeInterval(2))
+        #expect(store.receivedMessages.map(\.id) == ["fresh"])
+    }
+
+    /// 폴링 tick 이 그 만료를 돌린다 — **근무중 게이트 앞**이라 근무를 끝낸 뒤에도 돈다.
+    /// 게이트 뒤에 두면 큐가 가장 오래 밀리는 구간(캐릭터가 사라진 뒤)에 정확히 안 돈다.
+    @Test func pokePollTickExpiresQueuedMessagesEvenWhenNotWorking() async {
+        let store = makeStore(host: "msg-queue-expiry-tick")
+        let base = Self.frozenNow
+        store.enqueueReceivedMessages([
+            ReceivedMessage(
+                id: "stale",
+                fromName: "A",
+                body: "밥?",
+                createdAt: base.addingTimeInterval(-WorkTimerStore.messageDisplayFreshnessSeconds - 1)
+            ),
+            ReceivedMessage(id: "fresh", fromName: "B", body: "고고", createdAt: base.addingTimeInterval(-3)),
+        ])
+        store.startedAt = nil   // 비근무 — take_pokes 는 안 나가지만 만료는 돌아야 한다
+
+        await store.pokePollTick()
+
+        #expect(store.receivedMessages.map(\.id) == ["fresh"])
+        #expect(store.currentMessage?.body == "고고")
+    }
+
+    /// 만료는 **'이미 뜬 것을 다시 보는' 칸(lastShownMessage)을 건드리지 않는다.** 그쪽은 1시간이고,
+    /// 성격이 다르다 — 5분은 "지금 전할 것인가"의 전달 판정, 저기는 "못 본 것을 확인할 수 있는가"의 창이다.
+    /// 여기서 같이 지우면 자리를 비운 사이 6초 떴다 사라진 말을 확인할 방법이 앱 어디에도 없어진다.
+    @Test func fiveMinuteRuleDoesNotTouchTheReceipt() {
+        let store = makeStore(host: "msg-queue-expiry-receipt")
+        let base = Self.frozenNow
+        store.enqueueReceivedMessages([
+            ReceivedMessage(id: "a", fromName: "A", body: "밥?", createdAt: base),
+            ReceivedMessage(id: "b", fromName: "B", body: "고고", createdAt: base),
+        ])
+        store.consumeCurrentMessage()   // a 는 떴다 → 확인 칸으로 옮겨졌다(b 는 아직 큐에서 대기)
+
+        // 10분이 지나면(5분 창의 두 배) **큐의 b 는 버려지지만** 확인 칸의 a 는 살아 있다.
+        store.expireStaleMessages(now: base.addingTimeInterval(600))
+        #expect(store.receivedMessages.isEmpty)
+        #expect(store.lastShownMessage?.id == "a")
+
+        // 그 칸은 1시간 규칙이 따로 지운다(경계도 그대로다).
+        store.expireLastShownMessage(now: base.addingTimeInterval(WorkTimerStore.pokeDisplayFreshnessSeconds))
+        #expect(store.lastShownMessage?.id == "a")
+        store.expireLastShownMessage(now: base.addingTimeInterval(WorkTimerStore.pokeDisplayFreshnessSeconds + 1))
+        #expect(store.lastShownMessage == nil)
     }
 
     /// 서버 반환 순서를 신뢰하지 않고 **시각으로 다시 세운다** — 순서가 곧 사용자가 읽는 순서라
@@ -620,6 +752,90 @@ import Testing
         #expect(store.receivedMessages.isEmpty)
     }
 
+    // MARK: - 내 버전 보고(profiles.app_build / app_version)
+
+    /// 서버는 **대상의 app_build** 로 메시지 수신 가능 여부를 판정한다. 즉 이 PATCH 는 통계가 아니라
+    /// "남이 나에게 메시지를 보낼 수 있게 하는" 스위치다 — 안 보내면 나는 아무에게서도 메시지를 못 받는다.
+    ///
+    /// 이 테스트가 고정하는 것은 세 가지다:
+    ///  ① 근무중이 아니어도 보낸다(게이트 **앞**). 뒤면 근무를 한 번도 안 누른 사람이 영영 구버전으로 남는다.
+    ///  ② 같은 값이면 두 번 보내지 않는다. 15초 폴링에 그냥 얹으면 하루 3,840~5,760회의 PATCH 가 된다.
+    ///  ③ 값이 바뀌면 다시 보낸다. 게이트가 '한 번 보냈다'는 Bool 이면 앱 업데이트 후에도 옛 빌드가 남는다.
+    @Test func appVersionIsReportedOncePerValueEvenWhenNotWorking() async {
+        let host = "msg-version-report"
+        let store = makeStore(host: host)
+        store.startedAt = nil   // 근무 이력 없음 — ①의 증거
+        store.appVersionProvider = { AppVersionReport(build: 38, version: "0.2.29") }
+
+        await store.pokePollTick()
+        await store.pokePollTick()
+
+        // ②: tick 두 번에 PATCH 는 정확히 1건.
+        #expect(versionPatchBodies(host: host).count == 1)
+        let body = versionPatchBodies(host: host).first ?? ""
+        #expect(body.contains("\"app_build\":38"))
+        #expect(body.contains("\"app_version\":\"0.2.29\""))
+        // 요청은 내 행만 겨냥한다.
+        #expect(
+            URLProtocolStub.requests(forHost: host)
+                .contains { $0.httpMethod == "PATCH" && $0.url?.query?.contains("id=eq.me") == true }
+        )
+        // 근무중 게이트를 안 탔다는 대조군: take_pokes 는 이 tick 들에서 한 번도 안 나갔다.
+        #expect(MessageURLProtocolStub.paths(forHost: host).filter { $0 == MessageURLProtocolStub.takePath }.isEmpty)
+
+        // ③: 앱이 업데이트되면(같은 실행에서 재현) 다시 보낸다.
+        store.appVersionProvider = { AppVersionReport(build: 39, version: "0.2.30") }
+        await store.pokePollTick()
+
+        #expect(versionPatchBodies(host: host).count == 2)
+        #expect(versionPatchBodies(host: host).last?.contains("\"app_build\":39") == true)
+    }
+
+    /// 번들에 CFBundleVersion 이 없거나 이상한 개발 빌드에서는 **아무것도 보내지 않는다**.
+    /// 여기서 0 이나 폴백 숫자를 올리면 서버가 그 계정을 구버전으로 보고, 그 사람은 근무 중에도
+    /// 아무에게서 메시지를 못 받는 상태로 굳는다 — 모르면 침묵하는 쪽이 틀린 숫자보다 언제나 낫다.
+    @Test func appVersionIsNotReportedWhenBundleHasNoBuild() async {
+        let host = "msg-version-unplanted"
+        let store = makeStore(host: host)
+        store.appVersionProvider = { nil }
+
+        await store.pokePollTick()
+
+        #expect(versionPatchBodies(host: host).isEmpty)
+    }
+
+    /// 실패는 도장을 찍지 않는다 — 컬럼/권한이 없는 서버(마이그레이션 미적용)에서 한 번 실패했다고
+    /// 재시도를 접으면, db push 가 끝난 뒤에도 이 맥만 영영 구버전으로 남는다.
+    /// (반대로 성공 뒤에는 도장이 찍혀 조용해진다 — 위 테스트가 그쪽을 잡는다.)
+    @Test func appVersionRetriesAfterAFailedReport() async {
+        // 이 호스트는 공유 스텁이 /rest/v1/* 를 전부 404(PGRST205)로 돌려준다 = 스키마 부재 서버.
+        // **이 파일에서 유일하게 호스트가 고유하지 않은 테스트다**(그 규약은 스텁이 정해 둔 이름이라 못 바꾼다).
+        // 그래서 단언을 경로가 아니라 **경로+메서드**로 좁힌다 — 이 호스트를 쓰는 다른 테스트는 GET 만 낸다.
+        let host = "schema-missing"
+        let store = makeStore(host: host)
+        store.appVersionProvider = { AppVersionReport(build: 38, version: "0.2.29") }
+
+        await store.pokePollTick()
+        await store.pokePollTick()
+
+        // 두 번 다 시도했다(도장이 안 찍혔다). 실패가 화면에 새지도 않는다.
+        #expect(versionPatchBodies(host: host).count == 2)
+        #expect(store.reportedAppVersionStamp == nil)
+        #expect(store.messageNotice == nil)
+        #expect(store.pokeNotice == nil)
+    }
+
+    /// 계정이 바뀌면 도장도 비운다. 남기면 다음 계정이 자기 프로필에 버전을 못 남겨,
+    /// 그 사람은 근무 중인데도 아무에게서 메시지를 못 받는다(서버가 app_build 를 null 로 본다).
+    @Test func signOutClearsTheVersionStamp() {
+        let store = makeStore(host: "msg-version-signout")
+        store.reportedAppVersionStamp = "me|38|0.2.29"
+
+        store.clearPersistedSession()
+
+        #expect(store.reportedAppVersionStamp == nil)
+    }
+
     // MARK: - 회귀: 기존 찔림/울트라 경로 무변경
 
     /// 늦게 도착한 울트라의 **강등** 규약이 그대로다(120초를 넘으면 평범한 움찔로 내려앉되 버리지 않는다).
@@ -782,6 +998,7 @@ private final class MessageURLProtocolStub: URLProtocol {
         case "msg-send-not-working":    return (200, #"{"status":"not_working"}"#)
         case "msg-send-target-away":    return (200, #"{"status":"target_not_working"}"#)
         case "msg-send-focused":        return (200, #"{"status":"target_focused"}"#)
+        case "msg-send-outdated":       return (200, #"{"status":"target_outdated"}"#)
         case "msg-send-too-long":       return (200, #"{"status":"too_long"}"#)
         // 미래에 서버가 늘릴 status. 옛 앱이 크래시하지 않고 invalid 로 접히는지 보는 자다.
         case "msg-send-unknown-status": return (200, #"{"status":"target_saturated"}"#)

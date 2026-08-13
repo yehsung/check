@@ -684,12 +684,54 @@ struct SupabaseErrorResponse: Decodable {
 
 // MARK: - 콕찌르기 / 토큰 사용량 공개 설정 (계약 타입)
 
-/// app_user_directory RPC 응답 행. 앱 사용자 전체(본인 제외) + 근무중 여부.
+/// app_user_directory RPC 응답 행. 앱 사용자 전체(본인 제외) + 근무중 여부 + 메시지 수신 가능 여부.
+///
+/// **커스텀 init(from:) 을 쓰는 이유는 하나뿐이다** — 메시지 수신 가능 여부의 서버 컬럼 이름이
+/// 클라/SQL 두 트랙에서 동시에 정해졌기 때문이다. 어느 쪽 이름이 오든 읽는다:
+///   · `message_capable`     — RPC 인자(p_message_capable)와 같은 어휘
+///   · `can_receive_message` — 질문 그대로의 어휘
+/// 이름이 확정되면 안 쓰는 쪽 한 줄만 지우면 된다. **둘 다 없어도 디코드는 깨지지 않는다**(nil).
+/// 이 관용구가 없으면 이름이 갈리는 순간 사전 게이트가 조용히 죽고, 사용자는 보낸 뒤에야 거절을 본다.
+///
+/// ⚠️ 커스텀 디코더의 함정은 PokeSendResponse 주석이 적어 둔 그대로다 — 키를 더하고 여기에 줄을
+/// 안 더하면 값이 **영원히 nil** 이다. 그래서 아래 필드는 전부 명시적으로 읽는다.
 struct PokeDirectoryRow: Decodable, Equatable {
     let userId: String
     let displayName: String
     let avatarUrl: String?
     let isWorking: Bool
+    /// 이 사람이 3글자 메시지를 **받을 수 있는가**(서버가 대상의 app_build 로 판정한다).
+    /// **Optional 이 핵심이다** — 이 컬럼이 없는 서버(마이그레이션 순서)에서 비옵셔널이면 디렉토리
+    /// 디코드가 통째로 throw 되어 콕찌르기 목록이 전원 사라진다(찔림까지 같이 죽는다).
+    /// nil 은 "못 받는다"가 아니라 **"모른다"** 이고, 모를 때의 해석은 toPokeDirectoryEntries 에 있다.
+    let canReceiveMessage: Bool?
+
+    /// 키는 `.convertFromSnakeCase` 가 이미 카멜로 바꾼 뒤에 매칭되므로 **카멜로 적는다**
+    /// (`message_capable` → `messageCapable`). 스네이크로 적으면 어떤 키도 안 잡혀 전부 nil 이 된다.
+    enum CodingKeys: String, CodingKey {
+        case userId, displayName, avatarUrl, isWorking
+        case messageCapable, canReceiveMessage
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(String.self, forKey: .userId)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        avatarUrl = try container.decodeIfPresent(String.self, forKey: .avatarUrl)
+        isWorking = try container.decode(Bool.self, forKey: .isWorking)
+        canReceiveMessage = try container.decodeIfPresent(Bool.self, forKey: .messageCapable)
+            ?? container.decodeIfPresent(Bool.self, forKey: .canReceiveMessage)
+    }
+
+    /// 테스트/변환 픽스처용 직접 생성자. 커스텀 init(from:) 을 만든 순간 멤버와이즈 init 이 사라지므로
+    /// 명시한다(기본값은 '모름' — 서버가 말해 주지 않은 상태와 같은 뜻이다).
+    init(userId: String, displayName: String, avatarUrl: String?, isWorking: Bool, canReceiveMessage: Bool? = nil) {
+        self.userId = userId
+        self.displayName = displayName
+        self.avatarUrl = avatarUrl
+        self.isWorking = isWorking
+        self.canReceiveMessage = canReceiveMessage
+    }
 }
 
 /// 콕찌르기 패널 표시용 엔트리.
@@ -698,6 +740,14 @@ struct PokeDirectoryEntry: Identifiable, Equatable {
     var name: String
     var avatarURL: URL?
     var isWorking: Bool
+    /// 이 사람에게 **3글자 메시지를 보낼 수 있는가**(화면이 메시지 버튼을 미리 끄는 근거).
+    /// 찌르기는 이 값과 무관하다 — 구버전 앱도 찔림은 그대로 받는다.
+    ///
+    /// **모르면 true 인 이유**: 이 값은 판정이 아니라 예고다. 서버가 아직 이 컬럼을 안 보내는 구간에서
+    /// false 로 접으면 클라가 서버에 없는 금지를 발명해 **전원에게** 메시지 버튼이 꺼진다(기능 전체 정지).
+    /// 반대로 true 로 두면 최악이 "보낸 뒤 target_outdated 안내"이고, 그건 이 기능이 원래 감당하는 실패다.
+    /// 최종 판정은 언제나 서버다(messageTargetOutdatedNotice 가 그 답을 옮긴다).
+    var canReceiveMessage: Bool = true
 
     var id: String { userID }
 }
@@ -710,7 +760,9 @@ extension [PokeDirectoryRow] {
                 userID: row.userId,
                 name: row.displayName,
                 avatarURL: row.avatarUrl.flatMap(URL.init(string:)),
-                isWorking: row.isWorking
+                isWorking: row.isWorking,
+                // '모름(nil)'은 허용으로 읽는다 — 근거는 위 프로퍼티 주석에 있다.
+                canReceiveMessage: row.canReceiveMessage ?? true
             )
         }
     }
@@ -747,6 +799,16 @@ enum PokeKind: String, Equatable {
 /// poke_user RPC 요청. { p_to: 대상 user id } — ultra_poke_user 도 같은 본문을 재사용한다(인자가 동일).
 struct PokeSendRequest: Encodable {
     let pTo: String
+}
+
+/// take_pokes RPC 요청. { p_message_capable: 이 앱이 메시지를 표시할 수 있는가 }.
+///
+/// **이 인자가 존재하는 이유가 곧 이 릴리스의 사고다.** v0.2.28 이 pokes.kind 에 'message' 를 더했는데
+/// 구버전 클라(≤0.2.27)는 모르는 kind 를 normal 로 접는 규약이라 3글자 메시지를 평범한 찔림으로 표시했고,
+/// take_pokes 는 **서버 원자 소비**라 그 글자는 영영 사라졌다. 서버가 기본 false 로 메시지 행을 남겨 두고
+/// 새 클라만 true 를 실어 가져간다 — 그래서 이 앱은 **반드시 true** 다(빼면 우리도 메시지를 못 받는다).
+struct TakePokesRequest: Encodable {
+    let pMessageCapable: Bool
 }
 
 /// poke_user / ultra_poke_user RPC 응답:
@@ -980,7 +1042,10 @@ enum MessageSendOutcome: Equatable {
     case ok
     // ↓ 아래 거절 케이스들은 **서버 게이트가 판정하는 순서대로** 늘어놓았다. 세 함수(poke_user·ultra_poke_user·
     //   send_message)가 같은 순서를 공유하므로, 이 목록과 SQL 을 나란히 놓고 대조할 수 있게 유지해라.
-    //   invalid → not_working(보낸이) → 본문검증 → target_not_working(대상) → target_focused → cooldown
+    //   invalid → not_working(보낸이) → 본문검증 → target_not_working(대상) → target_focused →
+    //   target_outdated → cooldown
+    //   (target_outdated 의 정확한 자리는 SQL 이 확정한다. 쿨타임보다 **앞**이라는 것만이 계약이다 —
+    //    받을 수 없는 사람에게 보낸 실패가 60초를 태우면 그건 벌이다.)
     case invalid
     /// 보낸이가 근무중이 아니다.
     case notWorking
@@ -992,6 +1057,11 @@ enum MessageSendOutcome: Equatable {
     case targetNotWorking
     /// 대상이 집중 모드다. 쿨타임도 소모되지 않는다 — 서버가 행을 안 남긴다.
     case targetFocused
+    /// 대상의 앱이 메시지를 표시하지 못하는 버전이다(서버가 profiles.app_build 로 판정한다).
+    /// **`.invalid` 로 접으면 안 되는 이유**는 targetNotWorking 과 같지만 더 무겁다 — 사용자가 할 수 있는
+    /// 일이 "기다리기"가 아니라 **"상대에게 업데이트를 알리기"** 라, 두루뭉술한 문구는 그 행동을 통째로 지운다.
+    /// 쿨타임도 소모되지 않는다(서버가 행을 안 남긴다).
+    case targetOutdated
     case cooldown(retryAfterSeconds: Int)
 
     init(response: PokeSendResponse) {
@@ -1001,6 +1071,7 @@ enum MessageSendOutcome: Equatable {
         case "too_long":            self = .tooLong
         case "target_not_working":  self = .targetNotWorking
         case "target_focused":      self = .targetFocused
+        case "target_outdated":     self = .targetOutdated
         case "cooldown":            self = .cooldown(retryAfterSeconds: max(1, response.retryAfterSeconds ?? 60))
         default:                    self = .invalid
         }
@@ -1028,6 +1099,56 @@ struct ProfilePrivacyUpdateRequest: Encodable {
 /// 한 요청에 두 컬럼을 실으면 둘 중 하나만 컬럼 권한이 있는 서버에서 요청 전체가 403 이 된다.
 struct ProfileFocusModeUpdateRequest: Encodable {
     let focusMode: Bool
+}
+
+/// 이 맥이 돌고 있는 앱 버전. 서버가 **남이 나에게 메시지를 보낼 수 있는지**를 이 값으로 판정하므로
+/// (send_message 의 target_outdated), 이건 통계가 아니라 기능의 일부다.
+///
+/// build 가 정수인 것이 요점이다 — 판정은 크기 비교(app_build >= 37)이고, "0.2.29" 같은 문자열은
+/// 사전순 비교가 버전 순서와 어긋난다("0.2.9" > "0.2.29"). version 은 사람이 읽는 표시용이다.
+struct AppVersionReport: Equatable {
+    /// CFBundleVersion(정수). scripts/build-local.sh 가 빌드 때 심는다.
+    let build: Int
+    /// CFBundleShortVersionString("0.2.29").
+    let version: String
+
+    /// Info.plist 딕셔너리 → 보고값. **Bundle 을 인자로 받지 않고 딕셔너리를 받는 이유**는 테스트다 —
+    /// Bundle.main 은 프로세스마다 다르고(테스트 러너에는 이 키가 아예 없을 수 있다) 주입할 수도 없어서,
+    /// 순수 함수로 갈라 두지 않으면 파싱 규칙을 실증할 방법이 없다.
+    ///
+    /// **못 읽으면 nil 이고, nil 이면 아무것도 보내지 않는다.** 개발 빌드에는 이 키가 없거나 이상한 값이
+    /// 들어 있는데, 그때 0 이나 폴백 숫자를 올리면 서버가 나를 **구버전으로 보고** 남이 나에게 메시지를
+    /// 못 보내게 만든다 — 모르면 침묵하는 쪽이 틀린 숫자를 쓰는 쪽보다 언제나 낫다.
+    /// (CheckUpdateCheck.bundleShortVersion 의 "0.0.0" 폴백과 방향이 반대인 이유가 이것이다: 저건
+    ///  '업데이트 배너를 안 띄운다'로 수렴하지만, 여기서 폴백은 '남의 기능을 막는다'로 수렴한다.)
+    static func fromInfoDictionary(_ info: [String: Any]?) -> AppVersionReport? {
+        guard let info else { return nil }
+        // CFBundleVersion 은 plist 상 문자열이지만, 손으로 만든 plist 나 도구에 따라 숫자로 들어오기도 한다.
+        // 두 모양 다 받는다 — 못 읽는 것과 모양이 다른 것은 다른 사정이다.
+        let rawBuild: Int?
+        switch info["CFBundleVersion"] {
+        case let text as String: rawBuild = Int(text.trimmingCharacters(in: .whitespaces))
+        case let number as Int:  rawBuild = number
+        case let number as NSNumber: rawBuild = number.intValue
+        default: rawBuild = nil
+        }
+        // 0·음수는 '심지 않은 값'이다. 그대로 올리면 위 문단의 사고가 그대로 난다.
+        guard let build = rawBuild, build > 0 else { return nil }
+        let version = (info["CFBundleShortVersionString"] as? String)?
+            .trimmingCharacters(in: .whitespaces) ?? ""
+        // 표시 문자열이 비어도 **보고는 한다** — 게이트를 여는 것은 build 하나이고, 그걸 아는데
+        // 침묵하면 멀쩡한 앱이 구버전 취급을 받는다.
+        return AppVersionReport(build: build, version: version)
+    }
+}
+
+/// profiles.app_build / app_version 자기 행 갱신 요청(PATCH).
+/// **두 컬럼을 한 요청에 싣는다** — 집중 모드를 따로 보낸 이유(권한이 한쪽에만 있는 서버)가 여기엔 없다:
+/// 두 컬럼은 같은 마이그레이션이 함께 만들고 함께 grant 하므로 한쪽만 쓸 수 있는 서버가 존재하지 않는다.
+/// 나누면 같은 사실을 알리는 데 왕복이 두 배가 될 뿐이다(무료 플랜).
+struct ProfileAppVersionUpdateRequest: Encodable {
+    let appBuild: Int
+    let appVersion: String
 }
 
 // MARK: - 별명(표시명) 변경 (계약 타입)

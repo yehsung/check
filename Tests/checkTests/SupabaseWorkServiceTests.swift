@@ -2540,3 +2540,254 @@ func messageBodyAcceptsOnlyTextAndRejectsEmoji() throws {
         #expect(normalized.count == normalized.unicodeScalars.count, "자소 수와 코드포인트 수가 갈렸다: \(text)")
     }
 }
+
+// MARK: - 버전 게이트: take_pokes 인자 · 내 버전 보고 · 디렉토리 수신 가능 여부 (서비스 계층)
+//
+// v0.2.28 의 실사고에서 나온 트랙이다: 구버전 클라(≤0.2.27)는 모르는 kind 를 normal 로 접는 규약이라
+// 3글자 메시지를 평범한 찔림으로 표시했고, take_pokes 는 **서버 원자 소비**라 그 글자는 영영 사라졌다.
+// 서버가 메시지 행을 남겨 두고(p_message_capable 기본 false) 새 클라만 가져가는 것이 그 수습인데,
+// 그 대가로 **인자 하나를 빠뜨리면 이 앱도 메시지를 못 받는다**. 아래 테스트들이 그 한 인자를 고정한다.
+
+@Test
+func takePokesCarriesMessageCapableArgument() async throws {
+    let testHost = "take-msg-capable"
+    TokenBoardURLProtocol.setResponse("[]", forHost: testHost)
+
+    _ = try await messageService(host: testHost).takePokes(accessToken: "access-token")
+
+    let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
+    #expect(url.path == "/rest/v1/rpc/take_pokes")
+    let body = try #require(TokenBoardURLProtocol.lastBody(forHost: testHost))
+    // ★ 이 한 줄이 기능의 스위치다. 빠지면 서버가 메시지 행을 남겨 두고, 사용자는 아무 말도 못 받는다.
+    #expect(body.contains("\"p_message_capable\":true"))
+    // 카멜케이스가 그대로 나가면 PostgREST 는 그 인자를 모르는 함수로 판단해 404 를 낸다.
+    #expect(!body.contains("pMessageCapable"))
+    // false 로 나가면 증상이 '인자 누락'과 **똑같아서** 원인을 화면에서 구분할 수 없다.
+    #expect(!body.contains("\"p_message_capable\":false"))
+}
+
+@Test
+func takePokesFallsBackWhenServerDoesNotKnowTheArgument() async throws {
+    // ① 인자를 모르는 서버(db push 전). 새 모양이 PGRST202 로 죽어도 **찔림 수신 전체가 멈추면 안 된다** —
+    //    옛 모양으로 한 번 더 부른다. 이게 없으면 앱 배포와 마이그레이션 사이의 창에서 메시지가 아니라
+    //    콕찌르기까지 통째로 사라진다(그 사이 도착분은 서버에 남아 7일 cron 이 지운다).
+    let oldHost = "take-old-server"
+    let oldRows = try await messageService(host: oldHost, session: TakePokesArgumentURLProtocol.session())
+        .takePokes(accessToken: "access-token")
+
+    #expect(oldRows.map(\.id) == ["p1"])
+    let oldBodies = TakePokesArgumentURLProtocol.bodies(forHost: oldHost)
+    #expect(oldBodies.count == 2)                                  // 새 모양 1 + 폴백 1
+    #expect(oldBodies.first?.contains("p_message_capable") == true)
+    #expect(oldBodies.last?.contains("p_message_capable") == false) // 폴백은 인자 없는 옛 모양이다
+
+    // ② 인자를 아는 서버에서는 폴백이 **절대 돌지 않는다**. 여기서 2건이 되면 폴백 조건이 너무 넓다는 뜻이고,
+    //    그건 폴링마다 요청이 배로 나간다는 말이다(무료 플랜).
+    let newHost = "take-new-server"
+    let newRows = try await messageService(host: newHost, session: TakePokesArgumentURLProtocol.session())
+        .takePokes(accessToken: "access-token")
+
+    #expect(newRows.map(\.id) == ["m1"])
+    #expect(newRows.first?.body == "고고")
+    #expect(TakePokesArgumentURLProtocol.bodies(forHost: newHost).count == 1)
+
+    // ③ 폴백은 '함수를 못 찾음'에만 붙는다. 그 밖의 실패(권한·네트워크)는 그대로 던져야 한다 —
+    //    아니면 실패 한 번이 조용히 요청 두 번이 되고, 그 두 번째가 성공하면 문제가 숨는다.
+    let deniedHost = "take-denied"
+    await #expect(throws: (any Error).self) {
+        _ = try await messageService(host: deniedHost, session: TakePokesArgumentURLProtocol.session())
+            .takePokes(accessToken: "access-token")
+    }
+    #expect(TakePokesArgumentURLProtocol.bodies(forHost: deniedHost).count == 1)
+}
+
+@Test
+func updateAppVersionPatchesOwnProfileRow() async throws {
+    let testHost = "app-version-patch"
+    TokenBoardURLProtocol.setResponse("[]", forHost: testHost)
+
+    try await messageService(host: testHost).updateAppVersion(
+        accessToken: "access-token",
+        userID: "u1",
+        report: AppVersionReport(build: 38, version: "0.2.29")
+    )
+
+    let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
+    #expect(url.path == "/rest/v1/profiles")
+    // ?id=eq.<me> 가 없으면 **남의 행까지 대상**이 된다(RLS 가 막아 주지만 그건 두 번째 방어선이다).
+    #expect(url.query?.contains("id=eq.u1") == true)
+    #expect(TokenBoardURLProtocol.lastMethod(forHost: testHost) == "PATCH")
+
+    let body = try #require(TokenBoardURLProtocol.lastBody(forHost: testHost))
+    #expect(body.contains("\"app_build\":38"))
+    #expect(body.contains("\"app_version\":\"0.2.29\""))
+    // 카멜케이스로 나가면 PostgREST 는 '그런 컬럼 없음'으로 400 을 내고, 이 맥은 영영 구버전으로 남는다.
+    #expect(!body.contains("appBuild"))
+    #expect(!body.contains("appVersion"))
+}
+
+@Test
+func appVersionReportStaysSilentWhenBuildIsNotPlanted() {
+    // 정상 빌드(scripts/build-local.sh 가 심은 모양) — 문자열 정수 + 표시 버전.
+    #expect(AppVersionReport.fromInfoDictionary(
+        ["CFBundleVersion": "38", "CFBundleShortVersionString": "0.2.29"]
+    ) == AppVersionReport(build: 38, version: "0.2.29"))
+    // 도구에 따라 숫자로 들어오는 plist 도 받는다(못 읽는 것과 모양이 다른 것은 다른 사정이다).
+    #expect(AppVersionReport.fromInfoDictionary(["CFBundleVersion": 38]) == AppVersionReport(build: 38, version: ""))
+
+    // ★ 아래가 이 함수의 존재 이유다. **못 읽으면 침묵한다** — 여기서 0 이나 폴백 숫자를 만들어 올리면
+    //   서버가 나를 구버전으로 보고 **남이 나에게 메시지를 못 보내게** 만든다(개발 빌드에서 실제로 벌어진다).
+    #expect(AppVersionReport.fromInfoDictionary(nil) == nil)                                   // Info.plist 자체가 없음
+    #expect(AppVersionReport.fromInfoDictionary([:]) == nil)                                   // 키 없음
+    #expect(AppVersionReport.fromInfoDictionary(["CFBundleVersion": "dev"]) == nil)            // 정수가 아님
+    #expect(AppVersionReport.fromInfoDictionary(["CFBundleVersion": ""]) == nil)               // 빈 문자열
+    #expect(AppVersionReport.fromInfoDictionary(["CFBundleVersion": "0"]) == nil)              // 안 심은 값
+    #expect(AppVersionReport.fromInfoDictionary(["CFBundleVersion": "-3"]) == nil)             // 말이 안 되는 값
+}
+
+@Test
+func pokeDirectoryCarriesMessageCapabilityAndSurvivesItsAbsence() async throws {
+    let testHost = "poke-directory-capability"
+    // 세 행: (1) 서버 어휘 message_capable, (2) 대체 어휘 can_receive_message,
+    //        (3) **컬럼이 없는 서버** — 키 자체가 없다.
+    TokenBoardURLProtocol.setResponse(
+        """
+        [
+          {"user_id": "u1", "display_name": "영식", "avatar_url": null, "is_working": true,  "message_capable": true},
+          {"user_id": "u2", "display_name": "민수", "avatar_url": null, "is_working": true,  "can_receive_message": false},
+          {"user_id": "u3", "display_name": "지현", "avatar_url": null, "is_working": false}
+        ]
+        """,
+        forHost: testHost
+    )
+
+    let rows = try await messageService(host: testHost).fetchPokeDirectory(accessToken: "access-token")
+
+    // 세 행 모두 살아야 한다. 비옵셔널이었다면 (3) 하나 때문에 배열 전체가 throw 되어 **콕찌르기 목록이
+    // 전원 사라진다** — 새 기능 하나를 위해 기존 기능을 서버 배포 순서에 인질로 잡는 셈이다.
+    #expect(rows.count == 3)
+    #expect(rows.first { $0.userId == "u1" }?.canReceiveMessage == true)
+    #expect(rows.first { $0.userId == "u2" }?.canReceiveMessage == false)
+    #expect(rows.first { $0.userId == "u3" }?.canReceiveMessage == nil)   // 모른다 ≠ 못 받는다
+
+    // 표시 엔트리로 옮길 때 '모름'은 **허용**으로 읽는다. false 로 접으면 컬럼이 없는 서버에서 전원의
+    // 메시지 버튼이 꺼져 기능이 통째로 멈춘다(클라가 서버에 없는 금지를 발명하는 셈이다).
+    let entries = rows.toPokeDirectoryEntries()
+    #expect(entries.first { $0.userID == "u1" }?.canReceiveMessage == true)
+    #expect(entries.first { $0.userID == "u2" }?.canReceiveMessage == false)
+    #expect(entries.first { $0.userID == "u3" }?.canReceiveMessage == true)
+    // 기존 필드는 한 톨도 안 변했다(대조군).
+    #expect(entries.first { $0.userID == "u3" }?.isWorking == false)
+    #expect(entries.first { $0.userID == "u1" }?.name == "영식")
+}
+
+@Test
+func sendMessageClassifiesTargetOutdated() async throws {
+    let testHost = "msg-status-outdated"
+    TokenBoardURLProtocol.setResponse(#"{"status":"target_outdated"}"#, forHost: testHost)
+
+    let response = try await messageService(host: testHost)
+        .sendMessage(accessToken: "access-token", to: "target-user-id", body: "가나다")
+
+    // .invalid 로 접히면 사용자는 "지금은 보낼 수 없어요"만 보고 **할 수 있는 일이 없다고** 배운다.
+    // 실제로는 할 일이 있다: 상대에게 업데이트를 알리는 것.
+    #expect(MessageSendOutcome(response: response) == .targetOutdated)
+    #expect(MessageSendOutcome(response: response) != .invalid)
+
+    // 대조군: 기존 status 6종의 분류는 한 톨도 안 변했다(새 케이스가 남의 자리를 먹지 않았는지).
+    #expect(MessageSendOutcome(response: PokeSendResponse(status: "ok")) == .ok)
+    #expect(MessageSendOutcome(response: PokeSendResponse(status: "target_not_working")) == .targetNotWorking)
+    #expect(MessageSendOutcome(response: PokeSendResponse(status: "target_focused")) == .targetFocused)
+    #expect(MessageSendOutcome(response: PokeSendResponse(status: "too_long")) == .tooLong)
+    #expect(MessageSendOutcome(response: PokeSendResponse(status: "not_working")) == .notWorking)
+    #expect(MessageSendOutcome(response: PokeSendResponse(status: "뭔가또새로운것")) == .invalid)
+}
+
+/// 세션 주입형 오버로드. 기본 messageService 는 TokenBoardURLProtocol 을 쓰는데, 폴백 검증에는
+/// **요청마다 다른 응답**(첫 요청 404 → 둘째 200)이 필요해 전용 스텁을 꽂는다.
+private func messageService(host: String, session: URLSession) -> SupabaseWorkService {
+    SupabaseWorkService(
+        projectURL: URL(string: "http://\(host)")!,
+        anonKey: "anon-test-key",
+        session: session
+    )
+}
+
+/// take_pokes 인자 폴백 전용 스텁. 시나리오는 **호스트가 고르고**, 응답은 **요청 본문이 고른다** —
+/// 전역 가변 카운터로 "첫 요청/둘째 요청"을 나누면 병렬 스위트가 서로의 순번을 먹어 무음으로 뒤집힌다
+/// (URLProtocolStub.delayedHosts 주석의 그 사고). 본문 분기는 그 상태가 아예 없다.
+final class TakePokesArgumentURLProtocol: URLProtocol {
+    private nonisolated(unsafe) static var bodiesByHost: [String: [String]] = [:]
+    private static let stateLock = NSLock()
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    static func session() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TakePokesArgumentURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    static func bodies(forHost host: String) -> [String] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return bodiesByHost[host, default: []]
+    }
+
+    override func startLoading() {
+        let host = request.url?.host ?? ""
+        let body = Self.bodyText(from: request)
+        Self.stateLock.lock()
+        Self.bodiesByHost[host, default: []].append(body)
+        Self.stateLock.unlock()
+
+        let (statusCode, json) = Self.outcome(host: host, body: body)
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: statusCode,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(json.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+
+    private static func outcome(host: String, body: String) -> (Int, String) {
+        let carriesArgument = body.contains("p_message_capable")
+        switch host {
+        case "take-old-server":
+            // 실제 PGRST202 문구(인자 집합으로 함수를 못 찾은 경우). "schema cache" 를 포함하므로
+            // 공용 매핑이 .databaseSchemaMissing 으로 분류한다 — 폴백이 잡는 신호가 바로 이것이다.
+            if carriesArgument {
+                return (404, #"{"code":"PGRST202","message":"Could not find the function public.take_pokes(p_message_capable) in the schema cache","hint":"Perhaps you meant to call the function public.take_pokes"}"#)
+            }
+            return (200, #"[{"id":"p1","from_user":"u1","from_display_name":"영식","from_avatar_url":null,"created_epoch":1721000000,"kind":"normal","body":null}]"#)
+        case "take-denied":
+            // 함수는 있는데 실행 권한이 없는 서버. 폴백이 여기까지 번지면 안 된다.
+            return (403, #"{"code":"42501","message":"permission denied for function take_pokes"}"#)
+        default:
+            return (200, #"[{"id":"m1","from_user":"u1","from_display_name":"영식","from_avatar_url":null,"created_epoch":1721000000,"kind":"message","body":"고고"}]"#)
+        }
+    }
+
+    private static func bodyText(from request: URLRequest) -> String {
+        if let body = request.httpBody { return String(decoding: body, as: UTF8.self) }
+        guard let stream = request.httpBodyStream else { return "" }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        let bufferSize = 1024
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+        while stream.hasBytesAvailable {
+            let count = stream.read(buffer, maxLength: bufferSize)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return String(decoding: data, as: UTF8.self)
+    }
+}

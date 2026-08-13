@@ -3,8 +3,12 @@ import Foundation
 // 콕찌르기 + 토큰 사용량 공개 설정의 스토어 계층.
 // 서버 계약:
 //  - poke_user(p_to uuid) RPC: 보낸이·대상 모두 근무중(열린 세션) 필수, 같은 대상 60초 쿨타임. 응답 {status, retry_after_seconds?}.
-//  - take_pokes() RPC: 내 미소비 찔림을 원자적으로 소비하며 반환(보낸이 표시명 포함).
-//  - app_user_directory() RPC: 앱 사용자 전체(본인 제외) + is_working(열린 세션 존재).
+//  - take_pokes(p_message_capable) RPC: 내 미소비 찔림을 원자적으로 소비하며 반환(보낸이 표시명 포함).
+//    이 앱은 **항상 true** 를 보낸다 — 기본 false 는 메시지를 모르는 구버전 클라를 위한 것이라, 빼면 우리도 못 받는다.
+//  - app_user_directory() RPC: 앱 사용자 전체(본인 제외) + is_working(열린 세션 존재)
+//    + 메시지 수신 가능 여부(대상의 profiles.app_build 기준 — PokeDirectoryEntry.canReceiveMessage).
+//  - profiles.app_build / app_version: 이 맥이 자기 버전을 PATCH 한다(reportAppVersionIfNeeded).
+//    남이 나에게 메시지를 보낼 수 있는지의 근거라 통계가 아니라 수신 스위치다.
 //  - profiles.token_usage_public: 본인 행 select/update(RLS). token_usage_board 는 비공개 유저를 타인에게 숨긴다(본인 행은 유지).
 @MainActor
 extension WorkTimerStore {
@@ -265,14 +269,59 @@ extension WorkTimerStore {
         // 발사 시점에도 같은 판정을 하지만, 패널을 열어 둔 채 자정을 넘긴 사용자에게 "0번 남음"이
         // 눌러 보기 전까지 남아 있는 것을 막으려면 상시 폴링에도 붙여야 한다.
         refreshUltraQuota(now: clock())
+        // 표시를 기다리다 5분이 지난 메시지를 큐에서 버린다(요청 0건 — 순수 로컬 판정, 위 한 줄과 같은 이유).
+        // **근무중 게이트 앞이 핵심이다**: 근무를 끝내 캐릭터가 사라진 뒤가 바로 큐가 가장 오래 밀리는 구간이라,
+        // 게이트 뒤에 두면 정확히 필요한 때 안 돈다.
+        expireStaleMessages(now: clock())
         // 1시간 지난 '최근 표시 메시지'도 여기서 버린다(요청 0건 — 순수 로컬 판정, 위 한 줄과 같은 이유).
         // 근무중 게이트 앞에 두는 것이 핵심이다: 비근무 구간이야말로 자리를 비운 사이 받은 말이 낡는 구간이다.
+        // 위 5분과 **다른 상수인 것이 의도다** — 그 이유는 expireLastShownMessage 주석에 있다.
         expireLastShownMessage(now: clock())
         // 공개 설정 1회 로드는 아래 근무중 게이트보다 **앞**이다. 뒤로 내리면 근무를 한 번도 시작하지 않은 사용자가
         // 자기 token_usage_public 서버값을 영영 못 읽어, 로그인 직후의 낙관 기본값 true 가 교정되지 않는다
         // — 비공개로 꺼 둔 사람의 토큰 사용량이 다음 실행마다 공개로 되살아나 보인다.
         await loadTokenUsagePrivacyIfNeeded()
+        // 내 버전 보고도 근무중 게이트 **앞**이다(공개 설정 로드와 같은 자리·같은 이유). 뒤로 내리면 근무를
+        // 한 번도 시작하지 않은 사용자의 app_build 가 서버에서 영영 null 로 남고, 그 사람은 팀원 목록에서
+        // '메시지 못 받는 사람'으로 굳는다 — 정작 그가 근무를 시작하는 순간에도 그렇다(목록은 그 전에 그려진다).
+        // 평소 요청은 0건이다: 아래 변경 게이트가 실행당 한 번만 통과시킨다.
+        await reportAppVersionIfNeeded()
         await takePokesIfWorking()
+    }
+
+    /// 이 맥의 앱 버전을 서버 profiles 에 남긴다(실행당 1회). 서버가 이 값으로 **남이 나에게 메시지를 보낼 수
+    /// 있는지**를 판정하므로(send_message 의 target_outdated), 이건 통계 수집이 아니라 수신 스위치다.
+    ///
+    /// 게이트 3겹, 순서에 전부 이유가 있다:
+    ///  1. 세션 없음 → 0건. 보고할 프로필 자체가 없다.
+    ///  2. 번들에서 못 읽음 → 0건. 개발 빌드에는 CFBundleVersion 이 없거나 이상한 값이 들어 있는데,
+    ///     거기서 폴백 숫자를 올리면 서버가 나를 구버전으로 보고 **남의 전송을 막는다**(AppVersionReport 주석).
+    ///  3. 이번 실행에서 같은 (계정+버전)을 이미 보냈으면 → 0건. 15초 폴링에 그냥 얹으면 사용자당 하루
+    ///     3,840~5,760회의 PATCH 가 된다(takePokesIfWorking 주석이 센 그 숫자다).
+    ///
+    /// 실패는 조용히 삼킨다 — 도장을 **성공에만** 찍으므로 다음 tick 이 그대로 재시도한다(lastUploadedUsage 규약).
+    /// 컬럼/권한이 없는 서버(마이그레이션 미적용)에서는 매 tick 400/403 을 한 번씩 먹지만, 그 실패는 화면에도
+    /// 다른 기능에도 닿지 않는다. 여기서 도장을 미리 찍어 재시도를 막으면 db push 가 끝난 뒤에도 이 맥만
+    /// 영영 구버전으로 남는다.
+    func reportAppVersionIfNeeded() async {
+        guard let activeSession = session else { return }
+        guard let report = appVersionProvider() else { return }
+        let stamp = "\(activeSession.userID)|\(report.build)|\(report.version)"
+        guard reportedAppVersionStamp != stamp else { return }
+        let generation = sessionGeneration
+        do {
+            try await withSessionRetry { retrySession in
+                try await service.updateAppVersion(
+                    accessToken: retrySession.accessToken,
+                    userID: retrySession.userID,
+                    report: report
+                )
+            }
+            guard generation == sessionGeneration else { return }
+            reportedAppVersionStamp = stamp
+        } catch {
+            // 취소·네트워크·컬럼 부재 전부 여기로 온다. 도장을 안 찍었으므로 다음 폴링 tick 이 다시 시도한다.
+        }
     }
 
     /// 근무중일 때만 수신 찔림을 소비한다(O1). 게이트 기준을 snapshot.isWorking 이 아니라 startedAt != nil 로 잡은 이유는
@@ -377,6 +426,18 @@ extension WorkTimerStore {
     /// 표시 대기 큐 상한. 자리를 비운 사이 큐가 무한히 자라 화면이 몇 시간 전 대화를 순서대로 재생하는 것을 막는다.
     nonisolated static let messageQueueLimit = 20
 
+    /// **메시지 전달 창(초) = 5분.** 보낸 지 이 시간이 지나면 전하지 않는다 — 사장님 확정:
+    /// "2시간 전에 보낸 메시지가 뜨는 건 이상하다. 5분 안에 도달 못 하면 그냥 안 전하는 게 자연스럽다."
+    ///
+    /// **찔림의 1시간(pokeDisplayFreshnessSeconds)과 일부러 다른 상수인 이유**: 두 알림의 값이 다르다.
+    /// 찔림은 "누가 나를 불렀다"라 한참 뒤에 알아도 의미가 남지만, 3글자 메시지는 그 순간의 말이라
+    /// ("밥?" "고고") 늦게 도착하면 내용 자체가 거짓이 된다. 울트라가 같은 이유로 120초를 따로 가진다.
+    ///
+    /// **서버와 같은 값이어야 한다** — take_pokes 가 5분 지난 메시지를 아예 안 돌려주므로, 여기가 더 길면
+    /// 클라만 혼자 낡은 말을 띄우고(그럴 일은 큐 대기 구간에서 실제로 생긴다) 더 짧으면 서버가 원자 소비한
+    /// 멀쩡한 말을 클라가 버린다. 어느 쪽이든 두 규칙이 갈리는 순간이 곧 버그다.
+    nonisolated static let messageDisplayFreshnessSeconds: TimeInterval = 300
+
     // 전송 결과 7종의 안내 문구. **전송 결과를 쓰는 곳은 여기 하나뿐**이므로(messageNotice) 문구도 여기 산다 —
     // 뷰가 자기 표를 따로 들면 그중 한 벌은 반드시 낡는다(ultraSpentNotice 를 상수에서 파생시킨 것과 같은 규약).
     nonisolated static let messageSentNotice = "메시지를 보냈어요"
@@ -389,6 +450,11 @@ extension WorkTimerStore {
     /// 대상이 집중 모드일 때. 찌르기의 targetFocusedNotice 와 문장이 다른 이유는 하나뿐이다 — 그쪽은 "찔러 주세요"로
     /// 끝나는데, 여기서 재사용하면 메시지를 보내려던 사람에게 엉뚱한 동작을 안내한다.
     nonisolated static let messageTargetFocusedNotice = "지금 집중 중이에요. 나중에 보내 주세요"
+    /// 대상의 앱이 메시지를 모르는 버전일 때. 다른 거절 문구들과 **길이·말투는 같지만 하나가 다르다** —
+    /// 여기엔 사용자가 할 일이 있다. 자리비움·집중 모드는 기다리면 풀리지만 이건 상대가 앱을 올리기 전엔
+    /// 영영 안 풀리므로, "왜 안 됐는지"만 말하고 끝내면 사용자는 같은 시도를 반복한다.
+    /// 그래서 주어가 **상대**다: 고쳐야 할 쪽이 내가 아니라는 사실 자체가 이 문장이 전할 정보다.
+    nonisolated static let messageTargetOutdatedNotice = "상대가 앱을 업데이트해야 받을 수 있어요"
     /// 길이 초과 안내. 숫자는 **MessageBody.maxCharacters 에서 파생한다** — 서버 판정과 클라 사전 게이트가
     /// 이미 그 상수를 쓰므로, 여기서 리터럴 3을 다시 쓰면 한도를 바꿀 때 문구만 옛 숫자로 남는다.
     nonisolated static let messageTooLongNotice = "메시지는 \(MessageBody.maxCharacters)글자까지예요. 줄여서 보내 주세요"
@@ -454,6 +520,13 @@ extension WorkTimerStore {
                 case .targetFocused:
                     // 쿨타임도 소모되지 않았다 — 서버가 행을 안 남긴다. 그래서 미러를 건드리지 않는다.
                     messageNotice = Self.messageTargetFocusedNotice
+                case .targetOutdated:
+                    // 쿨타임은 태우지 않는다(서버가 행을 안 남긴다). 그리고 targetNotWorking 과 **같은 이유로**
+                    // 디렉토리를 다시 읽는다 — 이 거절이 왔다는 건 목록에 실린 '메시지 가능' 배지가 낡았다는
+                    // 뜻이고, 고치지 않으면 화면은 계속 보낼 수 있다고 말하면서 전송만 거절된다.
+                    // (상대가 방금 앱을 올린 반대 방향도 같은 재조회로 함께 풀린다.)
+                    messageNotice = Self.messageTargetOutdatedNotice
+                    loadPokeDirectory()
                 case .tooLong:
                     messageNotice = Self.messageTooLongNotice
                 case .invalid:
@@ -488,8 +561,34 @@ extension WorkTimerStore {
         lastShownMessage = receivedMessages.removeFirst()
     }
 
-    /// 나이가 지난 '최근 표시 메시지'를 버린다. 신선도는 도착 판정과 **같은 1시간**을 쓴다 —
-    /// 새 상수를 만들면 "언제까지 유효한가"의 답이 또 갈린다.
+    /// 표시를 기다리다 5분이 지난 메시지를 **큐에서 버린다**(알리지 않는다).
+    ///
+    /// **도착 필터(freshReceivedMessages)만으로는 부족한 이유가 이 함수의 존재 이유다.** 말풍선은 한 번에
+    /// 하나뿐이라, 다른 말풍선(자동 시작 안내·1등 출근·업데이트 알림)이 떠 있거나 울트라가 격발 중이면
+    /// 메시지는 **양보하고 큐에 남는다**. 근무를 끝내 캐릭터가 사라지면 더 오래 남는다. 그 대기 구간에서
+    /// 5분이 지나면 서버는 "안 전한다"고 정한 말을 화면만 뒤늦게 띄우게 된다 — 그게 어긋남이다.
+    ///
+    /// **버렸다고 사용자에게 알리지 않는다.** 보낸 사람은 전송 시점에 이미 답을 받았고(ok/target_outdated 등),
+    /// 못 받은 사람은 애초에 그런 말이 있었는지 모른다. 여기서 "놓친 메시지가 있어요"를 띄우면 내용을 모르는
+    /// 알림만 남아, 사용자가 할 수 있는 일이 없는 불안만 만든다.
+    ///
+    /// 요청 0건짜리 순수 로컬 판정이라 refreshUltraQuota/expireLastShownMessage 와 **같은 자리**(pokePollTick)에
+    /// 붙는다. 그래서 실제 정밀도는 **5분 + 최대 1폴링 주기(15초)** 다 — 표시 직전에 정확히 재고 싶으면
+    /// 화면이 currentMessage 를 읽기 전에 이 함수를 인자 없이 부르면 된다(now 는 주입 시계로 채워진다).
+    func expireStaleMessages(now: Date? = nil) {
+        guard !receivedMessages.isEmpty else { return }
+        let now = now ?? clock()
+        let fresh = receivedMessages.filter {
+            now.timeIntervalSince($0.createdAt) <= Self.messageDisplayFreshnessSeconds
+        }
+        // == 가드: 버릴 게 없는 평소엔 대입조차 하지 않는다(@Observable 은 같은 값 재대입도 관찰자를 깨운다).
+        if fresh.count != receivedMessages.count { receivedMessages = fresh }
+    }
+
+    /// 나이가 지난 '최근 표시 메시지'를 버린다. **여기만 1시간(pokeDisplayFreshnessSeconds)이다** —
+    /// 위 5분 규칙과 헷갈리지 마라. 성격이 다르다: 5분은 "아직 한 번도 안 뜬 말을 지금 전할 것인가"의
+    /// 전달 판정이고, 이 칸은 "이미 떴는데 못 본 것을 다시 볼 수 있는가"의 확인 창이다. 이미 화면에 나간
+    /// 말이라 늦게 다시 봐도 거짓이 되지 않고, 팝오버는 사용자가 직접 열어서 보는 자리다.
     ///
     /// 패널을 한 번도 안 열어 본 사용자에게는 closePokePanel 의 소비가 영영 안 오므로, 이 만료가 없으면
     /// 어제 받은 "밥?"이 다음 날 팝오버에 그대로 떠 있다. 요청 0건짜리 순수 로컬 판정이라
@@ -501,8 +600,11 @@ extension WorkTimerStore {
     }
 
     /// take_pokes 응답에서 **메시지 행만** 골라 신선분을 도착 순으로 돌려준다. 순수 static 이라 테스트로 고정한다.
-    /// 신선도는 찔림과 같은 1시간(pokeDisplayFreshnessSeconds)을 쓴다 — 새 상수를 만들면
-    /// "언제까지 유효한가"의 답이 두 곳으로 갈라진다. 서버 반환 순서는 신뢰하지 않고 시각으로 다시 세운다
+    /// 신선도는 **메시지 전용 5분**(messageDisplayFreshnessSeconds)이다 — 찔림의 1시간과 갈라 둔 근거는
+    /// 그 상수 주석에 있다. 서버 take_pokes 도 같은 5분으로 거르므로 정상 경로에서 이 필터는 거의 발화하지
+    /// 않는다. 그럼에도 두는 이유: 서버가 아직 그 규칙을 모르는 구간(마이그레이션 전)과 응답이 늦게 도착한
+    /// 경우가 남고, 그때 화면만 혼자 낡은 말을 띄우면 서버 규칙과 어긋난다.
+    /// 서버 반환 순서는 신뢰하지 않고 시각으로 다시 세운다
     /// (sortedForPokeDisplay 와 같은 규약) — 순서가 곧 사용자가 읽는 순서이기 때문이다.
     nonisolated static func freshReceivedMessages(rows: [TakenPokeRow], now: Date) -> [ReceivedMessage] {
         rows.compactMap { row -> ReceivedMessage? in
@@ -514,7 +616,7 @@ extension WorkTimerStore {
             let body = MessageBody.sanitized(row.body ?? "")
             guard !body.isEmpty else { return nil }
             let createdAt = Date(timeIntervalSince1970: TimeInterval(row.createdEpoch))
-            guard now.timeIntervalSince(createdAt) <= pokeDisplayFreshnessSeconds else { return nil }
+            guard now.timeIntervalSince(createdAt) <= messageDisplayFreshnessSeconds else { return nil }
             return ReceivedMessage(id: row.id, fromName: row.fromDisplayName, body: body, createdAt: createdAt)
         }
         .sorted { $0.createdAt < $1.createdAt }

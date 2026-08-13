@@ -359,6 +359,62 @@ func todoBoardDumpsReviewSnapshots() throws {
         ))
     }
 
+    // ── UI 개선 리뷰(v0.2.25 후보) ─────────────────────────────────────────────
+    // 전부 **밝은 사진 바탕 + 기본 진하기(0.55)** 다. 실제 사용 조건이고, 흰 여백 한 장만 보면
+    // "밝은 데서만 그렇다"로 착각한다. 하한(0.20)은 블러가 걷혀 바탕이 그대로 올라오는 최악이라 따로 뽑는다.
+    //
+    // 축 1 — 목록 면 처리(a 배경에 그냥 / b 카드 / c 행마다 면). 푸터는 출고안으로 고정한다.
+    for (name, surface) in [
+        ("list-a-plain", TodoBoardListSurface.plain),
+        ("list-b-card", .card),
+        ("list-c-rowtint", .rowTint)
+    ] {
+        try dump(variantBoard(listSurface: surface), to: dir, "\(name).png", boardSized: false)
+    }
+    // 축 2 — 하단 여백(a 그대로 / b 캡션을 목록 바로 아래로 / c 캡션 위에 바닥선). 목록은 출고안으로 고정.
+    for (name, placement) in [
+        ("footer-a-pinned", TodoBoardFooterPlacement.pinned),
+        ("footer-b-underlist", .underList),
+        ("footer-c-rule", .pinnedWithRule)
+    ] {
+        try dump(variantBoard(footerPlacement: placement), to: dir, "\(name).png", boardSized: false)
+    }
+    // 출고 조합을 세 상태 × 두 진하기로. 구분선이 하한에서도 보이는지는 이 짝을 나란히 봐야 판단이 된다.
+    for (name, opacity) in [("default", TodoBoardAppearance.defaultOpacity), ("op020", TodoBoardAppearance.minOpacity)] {
+        try dump(variantBoard(opacity: opacity), to: dir, "shipped-mixed-\(name).png", boardSized: false)
+        try dump(variantBoard(items: [], opacity: opacity), to: dir, "shipped-empty-\(name).png", boardSized: false)
+        try dump(
+            variantBoard(items: longTitledMixedItems, opacity: opacity),
+            to: dir,
+            "shipped-long-title-\(name).png",
+            boardSized: false
+        )
+    }
+    // 구분선 세기 후보 3종을 같은 그림 안에 세로로 쌓는다. 따로 뽑으면 눈이 앞 그림을 기억하지 못해
+    // "이게 더 진한가?"를 판단할 수 없다 — 세기 비교는 반드시 한 장 안에서 해야 한다.
+    for opacity in [TodoBoardAppearance.defaultOpacity, TodoBoardAppearance.minOpacity] {
+        try dump(
+            separatorCandidates(opacity: opacity),
+            to: dir,
+            "separator-alphas-\(opacity == TodoBoardAppearance.minOpacity ? "op020" : "default").png",
+            boardSized: false
+        )
+    }
+
+    // 좌표 진단: 행 세 상태의 실제 높이와, 표본이 겨누는 자리의 밝기를 숫자로 남긴다.
+    // 그림만으로는 "표본이 1pt 빗나갔다"를 볼 수 없다.
+    print(String(
+        format: "행 높이(평소/편집/삭제대기) = %@ / %@ / %@",
+        String(describing: renderedRowHeight(todoRow(mixedItems[0]))),
+        String(describing: renderedRowHeight(todoRow(mixedItems[0], isEditing: true))),
+        String(describing: renderedRowHeight(todoRow(mixedItems[0], isPendingDelete: true)))
+    ))
+    let probed = try boardSurfaceLevels(opacity: TodoBoardAppearance.defaultOpacity, backdrop: .black)
+    print(String(
+        format: "표본 밝기(검은 바탕) 바탕 %.3f · 입력창 %.3f · 배지 %.3f · 완료 %.3f · 되돌리기 %.3f",
+        probed.board, probed.field, probed.badge, probed.doneMark, probed.undo
+    ))
+
     // 조절 슬라이더: 접힘/펼침 두 상태. 펼친 행이 목록을 얼마나 먹는지는 이 두 장을 나란히 봐야 안다.
     try dump(board(items: mixedItems, oldItems: []), to: dir, "tuning-collapsed.png", boardSized: true)
     try dump(
@@ -451,6 +507,168 @@ func checkCircleStartsFlushWithTheRowsLeadingEdge() throws {
     // 행 왼쪽 끝에서 첫 1pt(= 2px) 안에 원의 선이 이미 찍혀 있어야 한다.
     // strokeBorder 는 16pt 상자 안쪽에 붙여 그리므로 x=0 열부터 선이 온전히 들어온다.
     #expect(pixels.paintedColumn(in: rowLeft..<(rowLeft + pixels.scale)) != nil)
+}
+
+// MARK: - 픽셀 단언 — 목록의 구조(구분선 · 배지 자리 · 완료 위계)
+//
+// ☠︎ 실사용 신고(v0.2.24): "투두 리스트 창 UI가 너무 가독성이 떨어져. **각각의 항목들끼리 구분되는 선도
+// 있으면 좋을 거 같고.** 전체적으로 좀 이상해."
+// 아래 세 테스트는 그 신고에 대한 답 셋을 각각 픽셀로 못 박는다.
+
+/// 행과 행 사이에 hairline 이 있고, 그 선이 **하한(0.20)에서도** 살아 있는가.
+///
+/// 두 진하기에서 다 재는 이유: 선은 흰색 알파라 진하기를 내리면(=뒤의 밝은 화면이 올라오면) 알파만으로는
+/// 먼저 사라진다. 살려 두는 건 헤일로이고, 헤일로는 `todoBoardInkHalo()` 를 **선에 직접** 걸었을 때만 붙는다.
+/// 배율(`todoBoardSurface`)을 실수로 곱해 두면 하한에서 선이 3분의 1로 옅어지는데, 검은 바탕 렌더에서는
+/// 그게 바로 픽셀로 나온다.
+@MainActor
+@Test
+func rowsAreSeparatedByAnIndentedHairlineAtEveryOpacity() throws {
+    for opacity in [TodoBoardAppearance.defaultOpacity, TodoBoardAppearance.minOpacity] {
+        let pixels = try renderPixels(
+            rowStack(items: mixedItems, oldItems: [])
+                .frame(width: boardContentWidth)
+                .fixedSize()
+                .background(Color.black)
+                .environment(\.todoBoardAppearance, TodoBoardAppearance(opacity: opacity))
+        )
+        let inset = Int(TodoBoardRowSeparator.leadingInset) * pixels.scale
+        // 들여쓴 구간(선이 지나가는 곳)이 거의 다 칠해진 가로줄을 센다. 임계 15 는 검은 바탕 위
+        // 흰색 0.06(=15)과 0.09(=23) 사이가 아니라 **잡음 위**에 있는 값이다(글자 안티에일리어싱은 산발적이라
+        // 한 줄을 통째로 채우지 못한다).
+        var separatorRows: [Int] = []
+        for y in 0..<pixels.height {
+            var lit = 0
+            for x in (inset + 2)..<(pixels.width - 2) where pixels.rgb(x: x, y: y).g >= 15 { lit += 1 }
+            if lit >= Int(Double(pixels.width - inset - 4) * 0.95) { separatorRows.append(y) }
+        }
+        // 1pt 선은 scale 2 에서 2px 이므로, 붙어 있는 줄을 한 덩어리로 묶어 개수를 센다.
+        var groups = 0
+        for (i, y) in separatorRows.enumerated() where i == 0 || y - separatorRows[i - 1] > 1 { groups += 1 }
+        // 항목 5개 → 선 4개. **마지막 행 아래에는 긋지 않는다** — 하나 더 있으면 아래에 뭔가 더 있다는 뜻이 된다.
+        #expect(groups == mixedItems.count - 1, "진하기 \(opacity): 구분선 \(groups)개")
+        // 들여쓰기: 선이 지나가는 줄이라도 체크 원 컬럼(0…24pt)은 비어 있어야 한다.
+        // 전체 폭으로 그으면 선이 원 아래를 지나 원을 칸막이 안에 가둔 것처럼 보인다.
+        for y in separatorRows {
+            let leading = (0..<(inset - 2)).contains { pixels.rgb(x: $0, y: y).g >= 15 }
+            #expect(!leading, "진하기 \(opacity): 구분선이 텍스트 컬럼 왼쪽까지 나갔다(y=\(y))")
+        }
+    }
+}
+
+/// 이월 배지("3일 전")가 행의 **오른쪽 끝**에 있어서 다섯 줄의 제목이 전부 같은 x 에서 시작하는가.
+///
+/// 배지를 체크 원과 제목 사이에 두면 그 줄의 제목만 배지 폭만큼 밀린다 — 목록을 훑는 눈은 왼쪽 세로선
+/// 하나를 따라 내려가므로 한 줄만 어긋나도 매번 거기서 걸린다. 그래서 재는 것은 배지의 좌표가 아니라
+/// **제목 시작 x 의 일치**다(배지를 앞으로 되돌리면 그 줄만 값이 달라진다).
+@MainActor
+@Test
+func everyTitleStartsAtTheSameXBecauseTheCarryBadgeMovedToTheTrailingEdge() throws {
+    let pixels = try renderPixels(
+        rowStack(items: mixedItems, oldItems: [])
+            .frame(width: boardContentWidth)
+            .fixedSize()
+            .background(Color.black)
+    )
+    let pitch = (Int(TodoBoardRowView.minHeight) + 1) * pixels.scale
+    let checkColumn = 20 * pixels.scale
+    // 글자만 고르는 임계 95: 완료 줄의 흐린 제목(흰 0.42 → 107)은 넘고, 배지 캡슐 채움(흰 0.10 → 26)과
+    // 구분선(흰 0.09 → 23)은 못 넘는다. 체크 원 컬럼은 아예 건너뛴다(원 자체가 잉크다).
+    var starts: [Int] = []
+    for index in mixedItems.indices {
+        let top = pitch * index
+        let rows = top..<(top + Int(TodoBoardRowView.minHeight) * pixels.scale)
+        var first: Int?
+        for x in checkColumn..<pixels.width where rows.contains(where: { pixels.rgb(x: x, y: $0).g >= 95 }) {
+            first = x
+            break
+        }
+        starts.append(try #require(first, "행 \(index): 제목 잉크를 못 찾았다"))
+    }
+    let spread = try #require(starts.max()) - (try #require(starts.min()))
+    // 허용 1pt 는 글리프 안티에일리어싱이 첫 열을 살짝 흐리게 시작하는 만큼이다.
+    // 배지가 앞으로 돌아가면 그 줄만 배지 폭(≈38pt)만큼 벌어져 여기서 죽는다.
+    #expect(spread <= pixels.scale, "제목 시작 x 가 줄마다 다르다: \(starts)")
+}
+
+/// 완료 항목의 체크 표시가 **자기 줄의 제목보다 밝지 않은가.**
+///
+/// 예전에는 완료 원이 CheckTheme.working(연두, 채도 100%)이라 화면에서 가장 밝은 것이 '끝난 일'이었다 —
+/// 제목은 흐리게(0.42) 하고 취소선까지 그어 물러나게 만들어 놓고 아이콘만 튀면 위계가 뒤집힌다.
+/// 밝기 비교와 색 비교를 **둘 다** 하는 이유: 알파만 낮춘 연두는 밝기 검사를 통과할 수 있고,
+/// 무채색이지만 밝은 회색은 색 검사를 통과할 수 있다.
+@MainActor
+@Test
+func theCompletedCheckMarkNeverOutshinesTheTitleItBelongsTo() throws {
+    let pixels = try renderPixels(
+        todoRow(mixedItems[4])
+            .frame(width: boardContentWidth)
+            .fixedSize()
+            .background(Color.black)
+    )
+    #expect(mixedItems[4].isDone)
+    func brightest(_ columns: Range<Int>) -> (level: Double, chroma: Int) {
+        var level = 0.0
+        var chroma = 0
+        for y in 0..<pixels.height {
+            for x in columns {
+                let p = pixels.rgb(x: x, y: y)
+                level = max(level, Double(p.r + p.g + p.b) / 3)
+                chroma = max(chroma, p.g - p.r)
+            }
+        }
+        return (level, chroma)
+    }
+    let mark = brightest(0..<(18 * pixels.scale))
+    let title = brightest((24 * pixels.scale)..<pixels.width)
+    // 연두 글리프는 평균 158, 흐린 제목은 107 이라 1.48배였다. 무채색으로 내린 지금은 117/107 = 1.09.
+    // 문턱 1.2 는 그 사이다(안티에일리어싱으로 양쪽이 함께 몇 % 흔들려도 판정이 안 뒤집힌다).
+    #expect(mark.level <= title.level * 1.2, "완료 체크 \(mark.level) vs 완료 제목 \(title.level)")
+    // 연두(0.35, 0.88, 0.63)는 초록−빨강이 135 다. 무채색 잉크는 0 이라 여유가 크다.
+    #expect(mark.chroma <= 20, "완료 체크에 색이 돌아왔다(g-r=\(mark.chroma))")
+}
+
+/// 목록을 카드로 감싸는 변형(`.card`)의 **면**도 진하기를 따라 옅어지는가.
+///
+/// 출고 기본은 `.plain` 이라 이 면은 지금 화면에 없다 — 그래서 기존 표면 테스트가 이 면을 못 본다.
+/// 그런데 이 축은 사용자가 고르면 그날로 출고가 되는 값이라, 고른 뒤에 "카드만 검은 판때기로 남는다"는
+/// 같은 신고를 다시 받게 두면 안 된다. 검은 바탕에서 재는 이유는 기존 surfaceFills… 와 같다:
+/// 밝은 바탕에서는 흰 채움의 알파를 바꿔도 픽셀이 거의 안 움직여, 배율을 빼먹은 구현이 그대로 통과한다.
+@MainActor
+@Test
+func theCardVariantsFillFadesWithTheSliderLikeEveryOtherSurface() throws {
+    func levels(opacity: Double) throws -> (card: Double, board: Double) {
+        let pixels = try renderPixels(
+            ZStack {
+                Color.black
+                board(items: mixedItems, oldItems: [], opacity: opacity, listSurface: .card)
+                    .frame(width: TodoBoardAnchor.boardSize.width, height: TodoBoardAnchor.boardSize.height)
+            }
+            .frame(width: TodoBoardAnchor.boardSize.width, height: TodoBoardAnchor.boardSize.height)
+        )
+        // 카드 안쪽의 빈 자리(마지막 행 아래)와, 카드 **밖**의 맨 보드(캡션 오른쪽).
+        return (pixels.meanLevel(in: (x: 150...250, y: 300...340)), pixels.meanLevel(in: (x: 200...260, y: 376...386)))
+    }
+    let shipped = try levels(opacity: TodoBoardAppearance.defaultOpacity)
+    let floor = try levels(opacity: TodoBoardAppearance.minOpacity)
+    // 카드가 실제로 보드보다 밝게 그려지긴 하는지부터(면이 아예 없으면 아래 비교가 무의미하다).
+    #expect(shipped.card > shipped.board * 1.1)
+    // 배율을 안 받으면 하한에서 카드/바탕 비가 1.37 → 2.06 으로 벌어진다(고정 알파는 바탕만 옅어지므로).
+    #expect(abs(floor.card / floor.board - shipped.card / shipped.board) <= 0.35)
+}
+
+/// 표본 좌표가 실제로 그 면 위에 있는가. **이 테스트가 없으면 나머지 표면 테스트가 조용히 무의미해진다** —
+/// 레이아웃이 바뀌어 표본이 빗나가면 그 자리는 그냥 보드 바탕이고, 바탕은 어느 투명도에서든 자기 자신과
+/// 같으므로 "면이 바탕을 따라간다"가 자동으로 참이 된다(v0.2.25 에서 행 높이와 배지 자리가 둘 다 움직였다).
+@MainActor
+@Test
+func surfaceProbesActuallyLandOnTheirSurfacesNotOnBareBoard() throws {
+    let m = try boardSurfaceLevels(opacity: TodoBoardAppearance.defaultOpacity, backdrop: .black)
+    // 입력창은 검정 채움이라 바탕보다 어둡고, 나머지 셋은 흰색·accent 채움이라 밝다.
+    #expect(m.field < m.board * 0.95, "입력창 표본이 빗나갔다(\(m.field) vs 바탕 \(m.board))")
+    #expect(m.badge > m.board * 1.15, "이월 캡슐 표본이 빗나갔다(\(m.badge) vs 바탕 \(m.board))")
+    #expect(m.doneMark > m.board * 1.15, "완료 표시 표본이 빗나갔다(\(m.doneMark) vs 바탕 \(m.board))")
+    #expect(m.undo > m.board * 1.15, "되돌리기 배지 표본이 빗나갔다(\(m.undo) vs 바탕 \(m.board))")
 }
 
 // MARK: - 픽셀 단언 — 빈 상태 정렬
@@ -1108,7 +1326,9 @@ private func board(
     oldItems: [TodoItem],
     opacity: Double = TodoBoardAppearance.defaultOpacity,
     expandsOpacityRow: Bool = false,
-    pendingDeleteID: UUID? = nil
+    pendingDeleteID: UUID? = nil,
+    listSurface: TodoBoardListSurface = .plain,
+    footerPlacement: TodoBoardFooterPlacement = .pinnedWithRule
 ) -> CheckTodoBoardView {
     CheckTodoBoardView(
         items: items,
@@ -1131,8 +1351,89 @@ private func board(
         onOpacityChange: { _ in },
         // ImageRenderer 는 ScrollView 안쪽을 그리지 못한다 — 스냅샷에서만 스크롤을 벗긴다.
         clipsOverflowInsteadOfScroll: true,
-        previewExpandsOpacityRow: expandsOpacityRow
+        previewExpandsOpacityRow: expandsOpacityRow,
+        // 기본값은 **출고 그림**과 같게 둔다(테스트가 앱과 다른 것을 재면 안 된다).
+        listSurface: listSurface,
+        footerPlacement: footerPlacement
     )
+}
+
+/// 변형 비교용 한 장: 밝은 사진 비슷한 바탕 위에 보드를 얹는다(실제 사용 조건).
+/// 판정에 필요한 건 보드 안쪽이지만 바탕을 함께 넣는 이유는, 반투명 판은 **뒤가 무엇이냐로 읽힘이 갈리기**
+/// 때문이다 — 검은 바탕에 얹어 놓고 고른 색은 밝은 화면에서 다른 것이 된다.
+@MainActor
+private func variantBoard(
+    items: [TodoItem] = mixedItems,
+    opacity: Double = TodoBoardAppearance.defaultOpacity,
+    listSurface: TodoBoardListSurface = .plain,
+    footerPlacement: TodoBoardFooterPlacement = .pinnedWithRule
+) -> some View {
+    ZStack {
+        LinearGradient(
+            colors: [
+                Color(red: 0.99, green: 0.96, blue: 0.86),
+                Color(red: 0.86, green: 0.93, blue: 1.0),
+                Color(red: 1.0, green: 0.98, blue: 0.98)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        board(
+            items: items,
+            oldItems: [],
+            opacity: opacity,
+            listSurface: listSurface,
+            footerPlacement: footerPlacement
+        )
+        .frame(width: TodoBoardAnchor.boardSize.width, height: TodoBoardAnchor.boardSize.height)
+    }
+    .frame(width: 360, height: 460)
+}
+
+/// 아주 긴 제목이 섞인 목록. 한 줄짜리 이웃이 있어야 '긴 제목만 2줄로 흐르고 나머지 줄의 시작점은 그대로'가
+/// 그림에서 확인된다(긴 제목 하나만 그리면 정렬이 깨졌는지 알 수 없다).
+private let longTitledMixedItems: [TodoItem] = [
+    mixedItems[0],
+    longTitledItem,
+    mixedItems[3]
+]
+
+/// 구분선 세기 후보 3종(0.06 / 0.09 / 0.14)을 한 장에 세로로 쌓는다. 같은 진하기·같은 바탕에서
+/// 나란히 놓아야 "안 보인다 / 딱 좋다 / 시끄럽다"가 갈린다.
+@MainActor
+private func separatorCandidates(opacity: Double) -> some View {
+    let appearance = TodoBoardAppearance(opacity: opacity)
+    func strip(_ alpha: Double) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(String(format: "흰색 %.2f", alpha))
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(CheckTheme.secondaryText)
+                .todoBoardInkHalo()
+                .padding(.bottom, 2)
+            todoRow(mixedItems[0])
+            TodoBoardRowSeparator(alpha: alpha)
+            todoRow(mixedItems[1])
+            TodoBoardRowSeparator(alpha: alpha)
+            todoRow(mixedItems[3])
+        }
+        .frame(width: boardContentWidth)
+    }
+    return ZStack {
+        LinearGradient(
+            colors: [Color(red: 0.99, green: 0.96, blue: 0.86), Color(red: 0.86, green: 0.93, blue: 1.0)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        VStack(alignment: .leading, spacing: 14) {
+            strip(0.06)
+            strip(TodoBoardRowSeparator.defaultAlpha)
+            strip(0.14)
+        }
+        .padding(12)
+        .background(CheckTheme.panel.opacity(appearance.tintAlpha))
+        .environment(\.todoBoardAppearance, appearance)
+    }
+    .frame(width: 340, height: 420)
 }
 
 @MainActor
@@ -1567,21 +1868,52 @@ private let sampledOpacities: [Double] = [
 ]
 
 /// 표본 자리(pt). 전부 **보드 한 장에서 같이** 재므로 좌표는 `board(items: mixedItems…)` 레이아웃에 묶여 있다:
-/// 헤더 12…36 · 구분선 44 · 입력 상자 53…85 · 목록 91 부터 36pt 간격 5행(…269) · 하단 캡션 ≈375.
+/// 헤더 12…36 · 구분선 44 · 입력 상자 53…85 · 목록 91 부터 **31pt 간격**(행 30 + 구분선 1) 5행(…245) ·
+/// 캡션 위 가로선 ≈367 · 하단 캡션 ≈374.
+///
+/// ☠︎ 이 좌표들은 UI 개선(v0.2.25 후보)에서 **따라 옮긴 것**이다. 두 가지가 움직였다:
+/// (1) 행 높이 36 → 31(행 30 + 구분선 1)이라 넷째 행의 체크 원이 15pt 올라왔고,
+/// (2) 이월 배지가 체크 원 옆에서 **행 오른쪽 끝**으로 갔다.
+/// 좌표를 안 옮기면 테스트가 조용히 통과한다 — 표본이 빗나가면 그 자리는 그냥 보드 바탕이고,
+/// 바탕은 어느 투명도에서든 자기 자신과 같으므로 "면이 바탕을 따라간다"가 자동으로 참이 된다.
+/// 그래서 아래 `probesActuallyLandOnTheirSurfaces` 가 표본이 실제로 면 위에 있는지를 먼저 확인한다.
+/// (@MainActor 인 이유는 순전히 배선이다 — 아래 rowPitch 가 뷰의 static 상수를 읽는데 그 뷰가 MainActor 다.
+///  상수를 여기 베껴 두면 행 높이를 바꿔도 표본이 안 따라와서, 이 파일이 막으려는 바로 그 상태가 된다.)
+@MainActor
 private enum BoardSurfaceProbe {
-    /// 목록이 끝난 뒤의 빈 바탕. 잉크도 헤일로도 닿지 않는 자리다.
+    /// 목록 첫 행의 위쪽 y(pt). 보드 패딩 12 + 헤더 24 + 구분선 17 + 입력 32 + 목록 위 여백 6.
+    static let firstRowTop = 91
+    /// 행 하나가 잡아먹는 세로 간격 = 행 높이 + 구분선 1px.
+    static let rowPitch = Int(TodoBoardRowView.minHeight) + 1
+
+    /// n번째 행(0부터)의 위쪽 y.
+    static func rowTop(_ index: Int) -> Int { firstRowTop + rowPitch * index }
+
+    /// 목록이 끝난 뒤의 빈 바탕. 잉크도 헤일로도 닿지 않는 자리다(마지막 행이 245pt 에서 끝난다).
     static let board = (x: 150...250, y: 300...340)
     /// 입력 상자의 **왼쪽 안쪽 띠**. 가운데를 못 쓰는 이유는 ImageRenderer 가 TextField 를 노란 상자로
     /// 그리기 때문이다(렌더 아티팩트). 상자 내용은 좌우 패딩 10pt 안쪽(x≥22)부터라, x 14…20 은
     /// 노란 상자가 아니라 채움 도형이다. ⚠︎ 그래도 노란 상자의 그림자가 옆으로 번져 오므로 이 값은
     /// 실제 앱보다 **어둡게** 나온다 — 판정에 유리한 쪽이 아니라 불리한 쪽으로 치우친 표본이다.
     static let field = (x: 14...20, y: 56...80)
-    /// 이월 캡슐(첫 행)의 글자 **위쪽 띠**. 캡슐이 작아 글자 헤일로를 완전히 피할 수는 없다.
-    static let badge = (x: 42...66, y: 99...102)
+    /// 이월 캡슐(첫 행)의 **오른쪽 끝 쪽** 띠. 배지가 행 오른쪽으로 옮겨 갔고, 그 오른쪽에는 ✕ 자리(16pt)가
+    /// 늘 비워져 있다. 캡슐이 작아 글자 헤일로를 완전히 피할 수는 없어 글자 **위쪽** 띠를 고른다.
+    ///
+    /// ⚠︎ y 를 옛 좌표(99…102)에서 두 칸 올린 이유는 캡슐이 옮겨 가서가 아니라 **행이 낮아져서**다.
+    /// 행 높이가 34→30 이 되며 안쪽 내용(29pt)이 가운데 정렬로 2.5pt → 0.5pt 만 내려오게 됐고,
+    /// 그만큼 캡슐 전체가 위로 올라왔다(실측: 캡슐 98…112, 글자 잉크 102…109).
+    /// 옛 띠를 그대로 두면 글자 잉크와 그 헤일로를 재게 되어, 재려던 것(캡슐 **채움**이 바탕을 따라 옅어지는가)
+    /// 대신 "글자 그림자가 얼마나 진한가"를 재게 된다.
+    ///
+    /// 새 띠는 옛 띠의 **구성**(위 1pt 는 맨 바탕, 아래 3pt 는 캡슐 채움)을 그대로 옮긴 것이다. 그 증거로
+    /// 검은 바탕에서 잰 캡슐/바탕 비가 이 변경 전후로 거의 같다: 기본값 1.582 → 1.635, 하한 1.372 → 1.361.
+    /// 즉 캡슐 자체는 한 톨도 안 바뀌었고 표본만 따라 옮겼다(띠를 1pt 만 올리면 채움만 재게 되어 같은 비가
+    /// 1.816 / 1.464 로 나온다 — 숫자가 달라지는 건 화면이 바뀌어서가 아니라 자를 바꿔서다).
+    static let badge = (x: 236...258, y: (rowTop(0) + 6)...(rowTop(0) + 10))
     /// 완료 표시(넷째 행)의 체크 원 전체.
-    static let doneMark = (x: 13...27, y: 206...220)
+    static let doneMark = (x: 13...27, y: (rowTop(3) + 8)...(rowTop(3) + 20))
     /// 되돌리기 배지(삭제 대기 행)의 오른쪽 캡슐. 첫 행을 삭제 대기로 두고 잰다.
-    static let undo = (x: 232...276, y: 100...116)
+    static let undo = (x: 232...276, y: (rowTop(0) + 9)...(rowTop(0) + 25))
 }
 
 @MainActor

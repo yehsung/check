@@ -214,6 +214,107 @@ extension Color {
     }
 }
 
+// MARK: - 목록 면 처리 / 푸터 배치(취향 축)
+
+/// 목록을 화면에서 어떻게 '한 덩어리'로 묶어 보일지. 값 타입으로 뽑아 둔 이유는 이게 **사용자가 고르는 축**이라
+/// 기본값 한 줄만 바꾸면 출고 그림이 통째로 바뀌어야 하기 때문이다(스냅샷은 세 안을 다 뽑는다).
+///
+/// 출고 기본은 `.card` 다 — 세 안을 렌더해 비교한 뒤 사용자가 골랐다. 결정 근거는 **하단 여백**이었다:
+/// 보드 높이는 400pt 고정인데 항목 수는 사용자 몫이라, 몇 개만 적어 두면 아래 절반이 빈 채로 남는다.
+/// `.plain` 에서 그 여백은 '아직 안 그린 자리'로 읽히고, 카드로 묶으면 같은 여백이 '카드 안쪽'이 된다.
+///
+/// 대신 카드는 두 가지를 내준다. 알고 고른 값이니 되돌리려 하지 마라 —
+/// (1) 판 테두리와 카드 테두리가 4pt 간격으로 두 줄 서고, 행이 8pt 들여써져 헤더·입력창·캡션의 왼쪽
+/// 기준선에서 목록만 어긋난다. (2) 카드 면은 계약상 `todoBoardSurface` 배율을 받으므로 진하기를 내릴수록
+/// 카드가 먼저 옅어진다. 그래서 **구조를 진하기와 무관하게 지키는 건 카드가 아니라 행 사이 구분선**이다
+/// (선은 잉크라 헤일로를 받아 하한 0.20 에서도 남는다). 카드를 지워도 목록은 여전히 목록으로 읽혀야 한다.
+enum TodoBoardListSurface: Equatable, Sendable {
+    /// 배경에 그냥 얹고 행 사이 hairline 으로만 구조를 만든다.
+    case plain
+    /// 목록 전체를 살짝 들어간 카드(면 + 테두리)로 감싼다(출고).
+    case card
+    /// 행마다 옅은 면을 깐다(구분선 없음 — 면 사이의 틈이 곧 구분이다).
+    case rowTint
+
+    /// 행 사이에 hairline 을 긋는가. `.rowTint` 는 면끼리 이미 떨어져 있어 선까지 그으면 잡음이다.
+    var drawsSeparators: Bool { self != .rowTint }
+
+    /// 행과 행 사이 간격. 선을 쓰는 안은 0(선이 곧 경계), 면을 쓰는 안은 면끼리 붙지 않게 3pt.
+    var rowSpacing: CGFloat { self == .rowTint ? 3 : 0 }
+}
+
+/// 하단 캡션을 어디에 두는가. 항목이 몇 개 없을 때 목록 아래로 남는 큰 여백을 어떻게 읽히게 할지의 축이다.
+///
+/// 출고 기본은 `.pinnedWithRule` 이다. 여백 자체는 못 없앤다(보드 높이는 패널이 정하고, 항목 수는 사용자
+/// 몫이다). 남은 선택은 **그 여백이 무엇으로 읽히는가**뿐인데, 캡션만 맨 아래에 떠 있으면 여백은 '아직 안 그린
+/// 자리'가 되고, 캡션 위에 선을 하나 그어 바닥을 만들면 같은 여백이 '목록이 숨 쉬는 자리'가 된다.
+/// `.underList` 는 캡션을 목록 바로 밑으로 끌어올리는데, 그러면 여백이 사라지는 게 아니라 **캡션 아래로**
+/// 옮겨 가고 캡션이 판 한가운데에 떠서 오히려 미완성으로 읽힌다(렌더 비교 결과).
+enum TodoBoardFooterPlacement: Equatable, Sendable {
+    /// 지금까지의 동작 — 목록이 남는 높이를 다 먹고 캡션은 맨 아래.
+    case pinned
+    /// 캡션 위에 가로 hairline 을 하나 더 그어 판의 바닥을 만든다(출고).
+    case pinnedWithRule
+    /// 목록이 자기 높이만 먹고 캡션이 그 바로 아래로 올라온다.
+    ///
+    /// ⚠︎ 앱 경로(ScrollView)에서는 스크롤 뷰가 세로로 탐욕적이라 `.pinned` 와 같아진다 —
+    /// 이 안은 스냅샷 경로(clipsOverflowInsteadOfScroll)에서만 그림이 다르다. 고르게 되면
+    /// 스크롤 영역에 최대 높이를 따로 물려야 한다.
+    case underList
+}
+
+// MARK: - 행 사이 구분선
+
+/// 항목과 항목 사이의 hairline. **선이므로 잉크다** — `todoBoardSurface` 배율을 받지 않고
+/// `todoBoardInkHalo()` 를 받는다. 이 구분이 여기서 특히 중요한 이유: 진하기를 내리면 뒤의 밝은 화면이
+/// 올라와 흰 선이 먼저 사라지는데, 그때 선을 살려 두는 건 알파가 아니라 헤일로(선 뒤에 깔리는 어두운 그림자)다.
+/// 배율을 곱해 버리면 하한에서 목록이 다시 '떠 있는 글자 뭉치'로 돌아간다.
+///
+/// 알파 0.09 는 렌더로 고른 값이다. 헤더 구분선(`CheckTheme.border`, 흰색 0.14)보다 **한 단계 아래**여야
+/// 한다 — 같은 세기로 그으면 행 사이 선 4개가 헤더 아래 구조선과 같은 무게로 서서, 목록이 아니라 표처럼 읽힌다.
+/// 0.06 은 기본값(0.55)에서 어두운 바탕화면 위에서는 거의 안 보였고, 0.14 는 다섯 줄짜리 목록에서 시끄러웠다.
+///
+/// 들여쓰기 24pt = 체크 원(16) + 행 간격(8). 선을 글자 컬럼에 맞춰 시작시키는 목록 관용구다 —
+/// 전체 폭으로 그으면 선이 체크 원 아래를 지나며 원을 '칸막이 안에 갇힌 것'처럼 보이게 만든다.
+struct TodoBoardRowSeparator: View {
+    static let leadingInset: CGFloat = 24
+    /// 출고 세기. 인스턴스 프로퍼티와 이름을 갈라 둔다 — 같은 이름이면 body 안의 `alpha` 가 어느 쪽인지
+    /// 읽는 사람이 매번 되짚어야 한다.
+    static let defaultAlpha: Double = 0.09
+
+    /// 후보 비교 렌더 전용. 기본값이 출고값이라 목록은 이 인자를 모른다 — 선의 세기는 눈으로 고르는 값이고,
+    /// 세기를 바꾼 그림을 실제로 못 뽑으면 고른 근거가 말뿐이 된다.
+    var alpha: Double = TodoBoardRowSeparator.defaultAlpha
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.white.opacity(alpha))
+            .frame(height: 1)
+            // 헤일로는 선(잉크)에 직접 건다. 패딩보다 **앞**이라 그림자 원본이 1px 선 자체다.
+            .todoBoardInkHalo()
+            .padding(.leading, Self.leadingInset)
+    }
+}
+
+/// 행 하나에 옅은 면을 까는 변형(`.rowTint`) 전용 수식자. ViewModifier 인 이유는 면 채움이
+/// `todoBoardSurface(appearance)` 를 거쳐야 하는데 그 값이 환경에 있기 때문이다.
+private struct TodoBoardRowTint: ViewModifier {
+    let isEnabled: Bool
+    @Environment(\.todoBoardAppearance) private var appearance
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.white.opacity(0.05).todoBoardSurface(appearance))
+            )
+        } else {
+            content
+        }
+    }
+}
+
 // MARK: - 슬라이더 행 펼침 상태(순수)
 
 /// 헤더의 투명도 조절 행이 펼쳐져 있는가. 뷰의 `@State` 안에 Bool 로 두지 않고 값 타입으로 뺀 이유는
@@ -287,6 +388,12 @@ struct CheckTodoBoardView: View {
     /// 실제 패널에 얹어 놓고 창을 내렸다 올려서 접혔는지를 그림으로 확인할 수 있다.
     /// 앱에서는 항상 false.
     var previewExpandsOpacityRow: Bool = false
+    /// 목록을 한 덩어리로 묶는 방식(취향 축 1). 기본값이 곧 출고 그림이다 — 사용자가 다른 안을 고르면
+    /// **여기 한 줄**만 바꾼다(호출부는 이 인자를 모른다). 근거는 TodoBoardListSurface 주석에 있다.
+    /// 사용자가 렌더 비교 후 `.card` 를 골랐다 — 하단 여백이 '카드 안쪽'으로 읽혀 덜 허전하다는 이유다.
+    var listSurface: TodoBoardListSurface = .card
+    /// 하단 캡션 배치(취향 축 2). 위와 같은 이유로 기본값 한 줄이 결정점이다.
+    var footerPlacement: TodoBoardFooterPlacement = .pinnedWithRule
 
     // 저장 프로퍼티는 위 계약이 전부다(포커스 상태는 TodoBoardDraftField 가 들고 있다).
     // 예외는 아래 조절 행 펼침 하나 — 이건 밖으로 새면 안 되는 값이다(보드를 닫으면 사라져야 한다).
@@ -307,7 +414,12 @@ struct CheckTodoBoardView: View {
             }
             PanelDivider().todoBoardInkHalo().padding(.vertical, 8)
             draftRow
-            list.padding(.top, 6)
+            listArea.padding(.top, 6)
+            // 캡션 위 가로선. 목록 아래로 남는 여백을 '아직 안 그린 자리'가 아니라 '판의 바닥과 목록 사이'로
+            // 읽히게 하는 게 전부다 — 여백의 크기는 그대로고 경계만 생긴다.
+            if footerPlacement == .pinnedWithRule {
+                PanelDivider().todoBoardInkHalo().padding(.top, 8)
+            }
             footer
         }
         .padding(12)
@@ -418,6 +530,32 @@ struct CheckTodoBoardView: View {
         )
     }
 
+    /// 목록 + 그 목록을 묶는 면(변형 축 1). 면은 여기서 두른다 — 목록 본문(TodoBoardRowStack)에 두르면
+    /// 행이 안쪽 패딩만큼 오른쪽으로 밀려, 행만 따로 그리는 테스트('원이 행 왼쪽 끝에 붙어 있는가')가
+    /// 실제 화면과 다른 것을 재게 된다.
+    @ViewBuilder
+    private var listArea: some View {
+        if listSurface == .card {
+            list
+                // 안쪽 패딩만큼 행이 들여쓰인다 — 카드 안이라는 뜻이므로 이 안에서는 그게 맞다.
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        // 면 → 배율. 이게 없으면 진하기를 내렸을 때 이 카드만 검은 판때기로 남는다.
+                        .fill(Color.white.opacity(0.04).todoBoardSurface(appearance))
+                )
+                .overlay(
+                    // 테두리는 선(잉크) → 배율 없이 헤일로만. strokeBorder 라 안쪽으로 그려 밖으로 안 샌다.
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(CheckTheme.border, lineWidth: 1)
+                        .todoBoardInkHalo()
+                )
+        } else {
+            list
+        }
+    }
+
     /// 목록은 스크롤 영역 안에 들어간다. 스크롤 밖으로 넘치는 만큼은 ImageRenderer 가 그리지 못하므로
     /// 그림으로 확인해야 할 알맹이는 TodoBoardRowStack 으로 빼 놨다(테스트는 그쪽을 직접 그린다).
     @ViewBuilder
@@ -435,7 +573,8 @@ struct CheckTodoBoardView: View {
             onCancelEdit: onCancelEdit,
             onDelete: onDelete,
             onUndoDelete: onUndoDelete,
-            onToggleOldSection: onToggleOldSection
+            onToggleOldSection: onToggleOldSection,
+            listSurface: listSurface
         )
         if stack.isEntirelyEmpty || clipsOverflowInsteadOfScroll {
             // 스크롤할 게 하나도 없으면 ScrollView 를 씌우지 않는다. 씌우면 세로로 무한 높이가 제안되어
@@ -443,8 +582,13 @@ struct CheckTodoBoardView: View {
             // 조용히 상단 붙임으로 되돌아간다. 스냅샷 경로(clipsOverflow…)도 같은 이유로 여기로 온다.
             // .clipped() 는 ScrollView 가 하던 자르기를 그대로 흉내 낸다 — 두 경로의 잘림 규칙이 갈라지면
             // 한쪽에서만 재현되는 잘림 버그가 다시 생긴다.
+            //
+            // maxHeight 를 nil 로 두는 건 `.underList` 변형 하나뿐이다(목록이 자기 높이만 먹어야 캡션이
+            // 바로 아래로 올라온다). **빈 목록에서는 절대 nil 이 아니다** — 빈 상태의 세로 가운데 정렬이
+            // 남는 높이를 다 받는 데 달려 있기 때문이다.
+            let hugs = footerPlacement == .underList && !stack.isEntirelyEmpty
             stack
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, maxHeight: hugs ? nil : .infinity, alignment: .top)
                 .clipped()
         } else {
             ScrollView(.vertical, showsIndicators: true) {
@@ -483,6 +627,9 @@ struct TodoBoardRowStack: View {
     let onDelete: (UUID) -> Void
     let onUndoDelete: (UUID) -> Void
     let onToggleOldSection: () -> Void
+    /// 목록을 묶는 방식(보드가 흘려준다). 기본값을 `.plain` 으로 두는 이유는 이 뷰를 따로 그리는 자리
+    /// (스냅샷 테스트)가 출고 그림을 얻어야 하기 때문이다 — 계약 맨 끝이라 기존 호출부는 흔들리지 않는다.
+    var listSurface: TodoBoardListSurface = .plain
     /// 스냅샷 전용: hover 로만 뜨는 ✕ 를 모든 행에 강제로 그린다. 앱에서는 항상 false.
     var previewHovering: Bool = false
 
@@ -497,7 +644,9 @@ struct TodoBoardRowStack: View {
             emptyState
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         } else {
-            VStack(alignment: .leading, spacing: 2) {
+            // 간격이 0 인 이유: 행 사이를 가르는 건 빈틈이 아니라 hairline 이다. 2pt 를 남겨 두면 선 위아래로
+            // 틈이 생겨 선이 행에 붙지 않고 혼자 떠 보인다(면 변형 `.rowTint` 만 3pt 를 쓴다 — 그쪽은 틈이 곧 경계).
+            VStack(alignment: .leading, spacing: listSurface.rowSpacing) {
                 if items.isEmpty {
                     // oldItems 가 있어도 빈 상태를 보인다 — '오늘 할 일'이 비었다는 건 사실이고,
                     // 아래 접힌 영역은 오늘의 목록이 아니라 따로 모아 둔 것이다.
@@ -505,15 +654,25 @@ struct TodoBoardRowStack: View {
                     // 가운데로 내리면 두 줄이 그 머리를 밀어내며 순서가 뒤엉킨 것처럼 보인다.
                     emptyState.padding(.vertical, 24)
                 } else {
-                    ForEach(items) { item in
-                        row(item)
-                    }
+                    rows(items)
                 }
                 if !oldItems.isEmpty {
                     oldSection
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// 행들 + 그 사이의 구분선. **마지막 행 아래에는 긋지 않는다** — 목록의 끝은 이미 여백이 말해 주고,
+    /// 거기 선을 하나 더 그으면 아래로 무언가 더 있다는 뜻이 되어 헛되이 스크롤을 시도하게 만든다.
+    @ViewBuilder
+    private func rows(_ list: [TodoItem]) -> some View {
+        ForEach(Array(list.enumerated()), id: \.element.id) { index, item in
+            row(item)
+            if listSurface.drawsSeparators && index < list.count - 1 {
+                TodoBoardRowSeparator()
+            }
         }
     }
 
@@ -531,6 +690,7 @@ struct TodoBoardRowStack: View {
             onUndoDelete: onUndoDelete,
             previewHovering: previewHovering
         )
+        .modifier(TodoBoardRowTint(isEnabled: listSurface == .rowTint))
     }
 
     /// 빈 상태 두 줄. 가로는 언제나 가운데다 — 목록이 없을 때 좌상단에 두 줄만 붙어 있으면 '로딩 실패'처럼 읽힌다.
@@ -554,7 +714,7 @@ struct TodoBoardRowStack: View {
     /// 7일 넘게 끌고 온 미완료를 조용히 모아 두는 자리. 지우거나 옮기지 않고 접기만 하는 이유는
     /// 사용자가 자동 삭제·자동 이동을 명시적으로 뺐기 때문이다 — 목록에서 시야만 덜어 준다.
     private var oldSection: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: listSurface.rowSpacing) {
             PanelDivider().todoBoardInkHalo().padding(.vertical, 4)
             Button(action: onToggleOldSection) {
                 HStack(spacing: 6) {
@@ -574,9 +734,7 @@ struct TodoBoardRowStack: View {
             .buttonStyle(.plain)
             .accessibilityLabel(TodoBoardStrings.oldSection(count: oldItems.count))
             if isOldSectionExpanded {
-                ForEach(oldItems) { item in
-                    row(item)
-                }
+                rows(oldItems)
             }
         }
         .padding(.top, 4)
@@ -792,7 +950,8 @@ struct TodoBoardCloseButton: View {
 
 /// 할 일 한 줄. 세 모습(평소 / 편집 중 / 삭제 대기)이 **같은 높이**를 쓰도록 숫자를 맞춰 놨다 —
 /// 상태가 바뀔 때마다 행이 커졌다 작아지면 아래 행들이 밀려 다음 클릭 목표가 손끝에서 도망간다.
-/// 내부 치수: 세로 패딩 6 + (체크 16 / 편집 필드 18 / 되돌리기 버튼 22) ≤ minHeight 34.
+/// 내부 치수: 평소·편집은 세로 패딩 6 + (체크 16 / 편집 필드 18), 삭제 대기는 패딩 4 + 되돌리기 버튼 22
+/// — 셋 다 30 이하라 minHeight 30 이 곧 세 상태의 공통 높이다.
 struct TodoBoardRowView: View {
     let item: TodoItem
     let todayKey: String
@@ -807,11 +966,32 @@ struct TodoBoardRowView: View {
     /// 스냅샷 전용: 마우스 없이도 hover ✕ 를 그린다(ImageRenderer 엔 포인터가 없다). 앱에서는 항상 false.
     var previewHovering: Bool = false
 
-    static let minHeight: CGFloat = 34
+    /// 행 높이. **34 → 30.** 마우스 타깃이라 손가락 기준(44)이 필요 없고, 실제로 눌러야 하는 것은 행 전체가
+    /// 아니라 그 안의 체크 원(16pt, 히트영역은 원 그대로)과 ✕(16pt)라 행 높이를 4pt 줄여도 목표 크기는
+    /// 한 톨도 안 줄어든다. 반대로 얻는 건 크다 — 5개짜리 목록에서 세로 20pt(행 하나의 3분의 2)를 회수하고,
+    /// 무엇보다 행 높이가 글자 높이(16)에 가까워져 줄과 줄이 **한 목록**으로 묶여 읽힌다(36pt 에서는
+    /// 줄 사이가 글자보다 넓어 각 줄이 따로 떠 있었다 — 사용자가 신고한 "떠 있는 글자 뭉치").
+    /// 28·32 도 렌더해서 비교했다. **28 은 취향이 아니라 계약에서 걸린다** — 실측(scale 2)으로 평소 56px,
+    /// 편집·삭제 대기 60px 로 세 상태의 높이가 갈렸다(편집 필드 18 + 패딩 12, 되돌리기 22 + 패딩 8 이 각각
+    /// 30 이라 28로는 안 들어간다). 그러면 삭제하거나 편집을 여는 순간 아래 행이 통째로 2pt 밀린다.
+    /// 32 는 세 상태가 다 맞지만(64px) 구분선과 글자 사이가 다시 벌어져 줄이 따로 떠 보였다.
+    /// 30 이 '세 상태가 같은 높이'와 '줄이 목록으로 묶여 보임'을 동시에 만족하는 유일한 값이다.
+    static let minHeight: CGFloat = 30
 
     /// 완료한 줄의 글자색. secondaryText(0.68)보다 더 흐리다 — 남아 있되 시선을 끌지 않는 게 목적이라
     /// 미완료(0.94)와 두 단계 벌려 놨다.
     private static let doneText = Color.white.opacity(0.42)
+
+    /// 완료 체크의 세 색. **초록(CheckTheme.working)에서 무채색으로 내렸다.**
+    ///
+    /// 왜: 완료 줄은 제목을 흐리게(0.42) 하고 취소선까지 그어 물러나게 만들어 놨는데, 정작 그 줄의 체크 원만
+    /// 채도 100% 의 연두(0.35, 0.88, 0.63)라 **화면에서 가장 밝은 것이 끝난 일**이었다. 시선이 먼저 가는 곳이
+    /// 남은 일이 아니라 끝난 일이면 목록의 위계가 뒤집힌다. 세 값 다 완료 글자(0.42)를 기준으로 잡았다 —
+    /// 테두리는 그보다 흐리게(미완료 테두리 0.32보다도 아래로) 두어 완료가 미완료보다 뒤로 물러나고,
+    /// 글리프만 0.46 으로 살짝 올려 원 안에서 체크 모양이 읽히게 한다.
+    private static let doneStroke = Color.white.opacity(0.22)
+    private static let doneGlyph = Color.white.opacity(0.46)
+    private static let doneFill = Color.white.opacity(0.08)
 
     @State private var hovering = false
     @Environment(\.todoBoardAppearance) private var appearance
@@ -835,9 +1015,6 @@ struct TodoBoardRowView: View {
     private var normalBody: some View {
         HStack(alignment: .top, spacing: 8) {
             checkButton
-            if let badge = carryBadge {
-                carryBadgeView(badge)
-            }
             if isEditing {
                 // 편집 필드는 남는 폭을 전부 먹는다. 여기에 Spacer 를 같이 두면 둘 다 '늘어나는 뷰'라
                 // HStack 이 남은 폭을 반씩 나눠 주고, 필드가 행의 절반으로 쪼그라든다.
@@ -849,6 +1026,13 @@ struct TodoBoardRowView: View {
             } else {
                 titleText
                 Spacer(minLength: 4)
+            }
+            // 배지는 **행의 오른쪽 끝**이다(체크 원과 제목 사이가 아니라). 사이에 두면 배지가 붙은 그 줄의
+            // 제목만 배지 폭(≈38pt)만큼 오른쪽으로 밀려, 다섯 줄의 시작점이 한 줄만 어긋난다 —
+            // 목록을 훑는 눈은 왼쪽 세로선 하나를 따라 내려가므로 그 한 줄에서 매번 걸린다.
+            // 오른쪽 끝은 '언제부터 있었나' 같은 메타 정보의 관용적 자리이기도 하다.
+            if let badge = carryBadge {
+                carryBadgeView(badge)
             }
             deleteButton
         }
@@ -889,7 +1073,9 @@ struct TodoBoardRowView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(TodoBoardStrings.undo)
         }
-        .padding(.vertical, 6)
+        // 여기만 4다(평소·편집은 6). 되돌리기 버튼이 22pt 라 6을 두면 34가 되어 이 상태에서만 행이
+        // 4pt 커지고, 그 순간 아래 행들이 통째로 밀린다 — 세 상태의 높이가 같아야 한다는 계약이 깨진다.
+        .padding(.vertical, 4)
     }
 
     private var checkButton: some View {
@@ -904,17 +1090,17 @@ struct TodoBoardRowView: View {
                 // 지키는 유일한 단서가 되기 때문이다(미완료는 흰색 0.32 라 원래도 가장 먼저 사라진다).
                 Circle()
                     .strokeBorder(
-                        item.isDone ? CheckTheme.working.opacity(0.75) : Color.white.opacity(0.32),
+                        item.isDone ? Self.doneStroke : Color.white.opacity(0.32),
                         lineWidth: 1.5
                     )
                     .todoBoardInkHalo()
                 if item.isDone {
                     // 완료 표시의 **면**만 배율을 받는다. 체크 글리프는 잉크라 그대로다 —
                     // 면과 글리프가 같이 옅어지면 완료/미완료 구분 자체가 사라진다.
-                    Circle().fill(CheckTheme.working.opacity(0.20).todoBoardSurface(appearance))
+                    Circle().fill(Self.doneFill.todoBoardSurface(appearance))
                     Image(systemName: "checkmark")
                         .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(CheckTheme.working)
+                        .foregroundStyle(Self.doneGlyph)
                         .todoBoardInkHalo()
                 }
             }
@@ -936,6 +1122,9 @@ struct TodoBoardRowView: View {
             .multilineTextAlignment(.leading)
             .todoBoardInkHalo()
             .fixedSize(horizontal: false, vertical: true)
+            // 제목이 폭을 먼저 가져간다. 이게 없으면 HStack 이 남는 폭을 배지와 나눠 주는 과정에서 긴 제목이
+            // 배지에 밀려 먼저 말줄임된다 — 정보의 우선순위가 거꾸로다(제목이 알맹이, 배지는 메타).
+            .layoutPriority(1)
             // 체크 원(16pt)의 중심과 첫 줄 글자의 중심을 맞추는 1pt. 이게 없으면 원이 글자보다 위로 뜬다.
             .padding(.top, 1)
             // 더블클릭만 편집으로 들어간다. 한 번 클릭으로 열리면 목록을 훑다가 눌린 손짓이 전부

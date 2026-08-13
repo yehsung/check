@@ -487,6 +487,9 @@ final class CheckTodoBoardController {
         //   그 위에 어두운 틴트 0.55 를 얹으면 중간 회색 판이 되어 흰 글자 대비가 무너지고, 스크롤바 같은
         //   시스템 그림도 밝은 배경 기준으로 그려진다. 사용자 외관과 무관하게 창을 어둡게 고정한다.
         panel.appearance = NSAppearance(named: .darkAqua)
+        // 테스트 실행일 때만 알파 0(프로덕션은 1 그대로 — 보드의 반투명은 블러 뷰 알파가 정한다).
+        // 캐릭터 패널과 **같은 한 지점**을 지난다. 근거는 CheckPanelVisibility 주석에 있다.
+        CheckPanelVisibility.apply(to: panel)
         return panel
     }
 

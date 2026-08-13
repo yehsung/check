@@ -841,3 +841,120 @@ actor SupabaseWorkService {
     }
 
 }
+
+// MARK: - 비밀번호 재설정 OTP
+
+/// 브라우저를 거치지 않는 재설정 3단계(recover → verify → PUT user).
+/// **왜 OTP 인가**: 재설정 메일의 링크는 `check://auth` 로 리다이렉트되는데 그 스킴을 등록한 앱이 없어
+/// 브라우저에 빈 화면만 뜬다(실측: `location: check://auth#error=...`). 링크를 살리려면 URL 스킴 등록 +
+/// 브라우저 왕복이 필요하지만, 6자리 코드는 앱 안에서 그대로 끝난다.
+extension SupabaseWorkService {
+    /// 재설정 코드를 메일로 보낸다. **계정이 없어도 성공한다** — GoTrue 가 계정 존재 여부를 흘리지 않으려고
+    /// 항상 200 을 준다. 그러니 "없는 이메일입니다" 같은 응답을 기대하지 마라(화면 문구도 "메일을 보냈어요"로
+    /// 통일해야 한다 — 성공/실패로 계정 유무를 추측하게 만들면 서버가 막아 둔 열거 공격을 앱이 다시 연다).
+    func sendPasswordResetCode(email: String) async throws {
+        do {
+            _ = try await send(
+                path: "/auth/v1/recover",
+                method: "POST",
+                body: PasswordResetRequest(email: email),
+                accessToken: nil,
+                prefer: nil
+            )
+        } catch let error as SupabaseWorkServiceError {
+            throw Self.passwordRecoveryError(error)
+        }
+    }
+
+    /// 6자리 코드를 검증하고 세션을 받는다. 응답이 로그인과 완전히 같은 모양이라
+    /// (`access_token`/`refresh_token`/`user.id`) SignInResponse 를 그대로 재사용한다 — 새 타입을 만들면
+    /// 토큰 필드가 하나 늘 때 두 곳을 고쳐야 하고, 안 고친 쪽은 조용히 nil 이 된다.
+    func verifyPasswordResetCode(email: String, code: String) async throws -> SupabaseSession {
+        do {
+            let data = try await send(
+                path: "/auth/v1/verify",
+                method: "POST",
+                body: VerifyOTPRequest(email: email, token: code, type: "recovery"),
+                accessToken: nil,
+                prefer: nil
+            )
+            let response = try decoder.decode(SignInResponse.self, from: data)
+            return SupabaseSession(
+                accessToken: response.accessToken,
+                refreshToken: response.refreshToken,
+                userID: response.user.id
+            )
+        } catch let error as SupabaseWorkServiceError {
+            throw Self.passwordRecoveryError(error)
+        }
+    }
+
+    /// 위에서 받은 accessToken 으로 새 비밀번호를 설정한다. 이 토큰은 **일반 로그인 세션과 같은 JWT** 라
+    /// 성공하면 그대로 로그인 상태로 이어 붙일 수 있다(스토어가 completeSignIn 으로 처리).
+    func updatePassword(accessToken: String, newPassword: String) async throws {
+        do {
+            _ = try await send(
+                path: "/auth/v1/user",
+                method: "PUT",
+                body: UpdatePasswordRequest(password: newPassword),
+                accessToken: accessToken,
+                prefer: nil
+            )
+        } catch let error as SupabaseWorkServiceError {
+            throw Self.passwordRecoveryError(error)
+        }
+    }
+
+    /// 재설정 흐름 전용 **재분류**. 공용 매핑(SupabaseWorkHTTP.serviceError)은 이 흐름의 오류를 모른다 —
+    /// 실측한 세 가지가 전부 `.authMessage(영문 원문)` 으로 흘러 메뉴바에 "Token has expired or is invalid"
+    /// 같은 영어가 그대로 뜬다. 그 파일은 이 트랙 소유가 아니므로 여기서 메시지 본문만 보고 한 번 더 좁힌다.
+    /// (그래서 판정 기준이 status 가 아니라 **문구**다 — 던져진 시점에 status 는 이미 사라졌다.)
+    static func passwordRecoveryError(_ error: SupabaseWorkServiceError) -> SupabaseWorkServiceError {
+        // 429 인데 본문이 비었거나 JSON 이 아니면 공용 매핑이 .invalidResponse(429) 로 준다.
+        // 이건 status 로만 알 수 있는 유일한 경우라 먼저 걷어낸다(남은 초는 알 길이 없으니 nil).
+        if case .invalidResponse(429) = error {
+            return .rateLimited(retryAfterSeconds: nil)
+        }
+        guard case let .authMessage(message) = error else {
+            return error
+        }
+        let lowercased = message.lowercased()
+        // "For security purposes, you can only request this after N seconds." / "Request rate limit reached"
+        // / "Email rate limit exceeded" — 셋 다 429 인데 앞의 하나만 초를 담고 있다.
+        if lowercased.contains("rate limit") || lowercased.contains("security purposes") {
+            return .rateLimited(retryAfterSeconds: retryAfterSeconds(in: lowercased))
+        }
+        // 403 otp_expired("Token has expired or is invalid") + 400 validation_failed("Verify requires either a
+        // token or a token hash"). 후자는 코드를 빈 값으로 보낸 경우인데, 사용자 입장에선 똑같이 "코드가 안 통했다"다.
+        if lowercased.contains("token has expired or is invalid")
+            || lowercased.contains("otp_expired")
+            || lowercased.contains("verify requires") {
+            return .otpInvalidOrExpired
+        }
+        // 403 bad_jwt("invalid JWT: ...", "invalid claim: missing sub claim"). recovery 토큰이 죽은 것이므로
+        // 사용자는 코드부터 다시 받아야 한다. 그냥 두면 영문 JWT 문구가 화면에 뜬다.
+        if lowercased.contains("invalid jwt") || lowercased.contains("bad_jwt")
+            || lowercased.contains("missing sub claim") {
+            return .sessionExpired
+        }
+        return error
+    }
+
+    /// "…after 51 seconds." 에서 51 을 뽑는다. **정규식 대신 뒤에서 훑는** 이유는 문구가 GoTrue 버전마다
+    /// 조금씩 달라져 왔기 때문이다("this after N seconds" / "N seconds"). "second" 바로 앞의 숫자 뭉치만
+    /// 취하고, 없으면 nil 이다 — 못 뽑았다고 0 을 돌려주면 곧바로 재시도가 열려 429 를 다시 부른다.
+    private static func retryAfterSeconds(in lowercasedMessage: String) -> Int? {
+        guard let secondRange = lowercasedMessage.range(of: "second") else {
+            return nil
+        }
+        var digits: [Character] = []
+        for character in lowercasedMessage[..<secondRange.lowerBound].reversed() {
+            if character.isNumber {
+                digits.append(character)
+            } else if !digits.isEmpty {
+                break
+            }
+        }
+        return digits.isEmpty ? nil : Int(String(digits.reversed()))
+    }
+}

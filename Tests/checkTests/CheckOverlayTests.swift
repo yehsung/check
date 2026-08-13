@@ -1520,3 +1520,65 @@ func usdzArchiveTextureDownscalesToSaneDimensions() throws {
     }
     #expect(found)
 }
+
+// MARK: - 스위트가 사용자 화면을 덮지 않는다
+
+/// ★ 이 파일이 검증하는 것 중 **유일하게 제품 동작이 아닌** 계약이다. 그래도 여기 있어야 한다 —
+///   깨지는 방식이 "테스트가 빨개진다"가 아니라 "개발자 데스크톱이 3D 캐릭터와 전체화면 울트라로
+///   도배된다"이고, 그건 아무도 자동으로 알아채지 못하기 때문이다(실사용 신고: "개발 과정 중에 계속
+///   캐릭터나 여러 요소들로 내 컴퓨터가 도배돼").
+///
+/// 왜 창을 안 만들거나 안 띄우는 길로 가지 않았는지, 왜 알파 0인지는 `CheckPanelVisibility` 주석에 있다.
+/// 여기서는 그 결정이 **실제로 서 있는지**만 값으로 확인한다. 판정(`isRunningTests`)이 조용히 false 가
+/// 되면 — 실행 방식이 바뀌어 표식이 사라지는 것이 가장 흔한 경로다 — 첫 줄에서 곧바로 빨개진다.
+@MainActor
+@Test
+func overlayPanelStaysInvisibleToTheUserWhileTesting() {
+    // 판정 자체. `swift test` 로 여기까지 왔다면 이건 반드시 참이다.
+    #expect(CheckPanelVisibility.isRunningTests, "테스트 판정이 죽었다 — 아래 창들이 전부 사용자 화면에 뜬다")
+    #expect(CheckPanelVisibility.panelAlpha == 0)
+    #expect(CheckPanelVisibility.productionAlpha == 1)   // 프로덕션 값은 손대지 않았다.
+
+    // 생성 경로가 하나뿐임을 확인한다(팩토리를 우회해 만든 패널이 있으면 여기서 안 걸리므로,
+    // 아래에서 컨트롤러가 실제로 쓰는 패널까지 함께 본다).
+    #expect(CheckOverlayController.makePanel(size: CheckOverlayController.panelSize).alphaValue == 0)
+
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 700_000) })
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine,
+        defaults: isolatedOverlayDefaults(), workspaceNotifications: nil
+    )
+    #expect(controller.panel.alphaValue == 0)
+
+    // ① 근무중 캐릭터 — 창은 실제로 화면에 올라가지만(orderFrontRegardless) 눈에는 안 보인다.
+    store.setOverlayEnabled(true)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+    controller.updateWorking(true)
+    #expect(controller.shouldBeVisible)
+    #expect(controller.panel.alphaValue == 0, "근무중 캐릭터가 사용자 화면에 보인다")
+
+    // ② 전체화면 울트라 — 사용자가 가장 크게 겪는 것이 이것이다(1920×1080 이 5초간 화면을 덮는다).
+    //    **기하는 그대로**여야 한다: 알파로 숨기기를 고른 이유가 바로 이 단언을 살려 두기 위해서다.
+    controller.handleReceivedPokes([
+        ReceivedPoke(id: "u1", fromName: "이유성", createdAt: Date(timeIntervalSince1970: 700_000), kind: .ultra)
+    ])
+    #expect(controller.isUltraActive)
+    #expect(NSScreen.screens.contains { $0.frame == controller.panel.frame })   // 기하는 진짜 그대로
+    #expect(controller.panel.alphaValue == 0, "전체화면 울트라가 사용자 화면을 덮었다")
+
+    controller.endUltraTakeover()
+    #expect(controller.panel.alphaValue == 0, "격발 원복이 알파를 되살렸다")
+
+    // ③ 숨김 상태 peek(비근무인데 찔림이 와서 잠깐 뜨는 경로)도 같다.
+    store.snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
+    controller.updateWorking(false)
+    controller.handleReceivedPokes([
+        ReceivedPoke(id: "n1", fromName: "김철수", createdAt: Date(timeIntervalSince1970: 700_000))
+    ])
+    #expect(controller.panel.alphaValue == 0, "peek 가 사용자 화면에 보인다")
+}

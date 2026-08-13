@@ -144,6 +144,13 @@ extension SupabaseWorkService {
         if lowercased.contains("signup") && lowercased.contains("disable") {
             return .signupDisabled
         }
+        // ★ 아래 "password" 가드보다 **먼저** 걸러야 한다. GoTrue 의 "New password should be different from
+        //   the old password." 도 password 를 포함하므로, 순서가 바뀌면 재사용 거절이 통째로 .weakPassword 로
+        //   뭉개져 사용자는 "예전과 같은 비밀번호는 안 돼요" 대신 "비밀번호 조건 확인"을 본다(무엇을 고쳐야
+        //   하는지 알 수 없는 안내다). 여기서 판정하지 못하면 페이로드가 사라져 사후 복구도 불가능하다.
+        if lowercased.contains("different from the old password") || lowercased.contains("same_password") {
+            return .samePasswordReuse
+        }
         if lowercased.contains("password") {
             return .weakPassword
         }

@@ -421,6 +421,20 @@ enum SupabaseWorkServiceError: Error, Equatable {
     case weakPassword
     case databaseSchemaMissing
     case sessionAlreadyOpen
+    /// GoTrue 재발송 제한(429). 실측 본문이 두 종류다 — 이메일 발송 간격 제한은
+    /// `{"error_code":"over_email_send_rate_limit","msg":"For security purposes, you can only request this after N seconds."}`,
+    /// IP 단위 요청 제한은 `{"error_code":"over_request_rate_limit","msg":"Request rate limit reached"}`(2026-08-13 실측, verify 40연타).
+    /// 뒤쪽엔 초가 아예 없으므로 **남은 초는 옵셔널이다** — nil 을 "0초"로 취급하면 재시도 버튼이 곧바로 열려 429 를 다시 부른다.
+    case rateLimited(retryAfterSeconds: Int?)
+    /// 재설정 코드가 틀렸거나 만료됐다. **둘을 나눌 수 없다** — GoTrue 는 계정/코드 존재 여부를 흘리지 않으려고
+    /// 두 경우 모두 같은 403 `{"error_code":"otp_expired","msg":"Token has expired or is invalid"}` 를 준다
+    /// (2026-08-13 실서버 실측: 존재하는 계정+틀린 코드, 없는 계정+아무 코드, 잘못된 type 까지 전부 동일 응답).
+    /// 그래서 화면 문구도 하나로 합쳐야 한다("코드가 맞지 않거나 만료됐어요 — 다시 받아 주세요").
+    case otpInvalidOrExpired
+    /// 새 비밀번호가 이전과 같다(GoTrue `same_password`). **아직 이 값으로 오지 않는다** — 공용 매핑
+    /// (SupabaseWorkHTTP.serviceError)이 "password" 를 포함한 모든 메시지를 .weakPassword 로 뭉개는데
+    /// 그 파일은 이 트랙 소유가 아니라 못 고쳤다. 매핑 한 줄이 들어오면 그때부터 살아난다(보고서 참조).
+    case samePasswordReuse
     case authMessage(String)
     case invalidResponse(Int)
 }
@@ -452,6 +466,27 @@ struct CreateTeamRequest: Encodable {
 /// set_team_weekly_goal RPC 본문. snake_case 인코딩으로 goal_hours 로 나간다.
 struct SetTeamGoalRequest: Encodable {
     let goalHours: Int
+}
+
+// MARK: - 비밀번호 재설정 OTP (브라우저·URL 스킴 없이 앱 안에서 끝내는 경로)
+
+/// POST /auth/v1/recover 본문. **계정이 없어도 200 이 온다** — GoTrue 가 계정 존재 여부를 흘리지 않는다.
+struct PasswordResetRequest: Encodable {
+    let email: String
+}
+
+/// POST /auth/v1/verify 본문. type 은 반드시 "recovery" 다 — 다른 값은 서버가 403 otp_expired 로 되돌려
+/// 사용자에게 "코드가 틀렸다"고 거짓말하게 된다(실측: type 만 바꿔도 같은 403).
+/// 필드명이 모두 한 단어라 convertToSnakeCase 로도 email/token/type 그대로 나간다.
+struct VerifyOTPRequest: Encodable {
+    let email: String
+    let token: String
+    let type: String
+}
+
+/// PUT /auth/v1/user 본문. Authorization 은 verify 로 받은 recovery accessToken 이다.
+struct UpdatePasswordRequest: Encodable {
+    let password: String
 }
 
 struct SignInResponse: Decodable {

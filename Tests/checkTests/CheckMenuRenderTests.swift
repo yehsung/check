@@ -2458,6 +2458,392 @@ func dumpTodoToggleSnapshots() throws {
     try dumpTodoSnapshot(CheckMenuView(store: store(working: true, todo: true, overlay: false)), "todo-d-character-hidden")
 }
 
+// MARK: - 비밀번호 재설정(OTP) 화면
+
+@Test
+func passwordResetResendStaysLockedUntilCooldownEnds() {
+    // 재발송 잠금은 순수 판정이라 화면 없이 단언한다. 쿨다운이 남아 있으면 잠기고, 남은 초가 글자에 보여야 한다.
+    let cooling = passwordResetModel(phase: .enterCode, resendSeconds: 47)
+    #expect(cooling.isResendEnabled == false)
+    #expect(cooling.resendTitle == "다시 받기 (47초)")
+
+    let ready = passwordResetModel(phase: .enterCode, resendSeconds: 0)
+    #expect(ready.isResendEnabled)
+    #expect(ready.resendTitle == "다시 받기")
+
+    // 왕복 중(verifying)이면 쿨다운이 끝나 있어도 잠근다 — 검증과 재발송이 겹치면 코드가 갈아엎힌다.
+    #expect(passwordResetModel(phase: .verifying, resendSeconds: 0).isResendEnabled == false)
+
+    // 재발송은 **코드 화면에만** 산다. 3단계에서는 코드가 이미 소모돼 다시 받아 봐야 쓸 곳이 없다.
+    #expect(passwordResetModel(phase: .enterCode, resendSeconds: 0).showsResend)
+    #expect(passwordResetModel(phase: .verifying, resendSeconds: 0).showsResend)
+    #expect(passwordResetModel(phase: .enterNewPassword, resendSeconds: 0).showsResend == false)
+    #expect(passwordResetModel(phase: .submitting, resendSeconds: 0).showsResend == false)
+    #expect(passwordResetModel(phase: .enterEmail, resendSeconds: 0).showsResend == false)
+}
+
+@Test
+func passwordResetKeepsThreeScreensAcrossSevenPhases() {
+    // 단계는 7가지지만 화면은 3개다. 왕복 중인 단계는 **직전 입력 화면에 머물러야** 한다 —
+    // 여기서 화면이 바뀌면 진행 문구가 뜨는 동안 방금 친 값이 눈앞에서 사라진다.
+    #expect(passwordResetModel(phase: .enterEmail).step == .email)
+    #expect(passwordResetModel(phase: .sending).step == .email)
+    #expect(passwordResetModel(phase: .enterCode).step == .code)
+    #expect(passwordResetModel(phase: .verifying).step == .code)
+    #expect(passwordResetModel(phase: .enterNewPassword).step == .newPassword)
+    #expect(passwordResetModel(phase: .submitting).step == .newPassword)
+
+    // 3단계 머리글은 "재설정"이 아니라 **이미 통과했다**를 알려야 한다. 2단계와 같은 부제면
+    // 사용자가 "왜 또 입력하지?"로 읽는다.
+    #expect(passwordResetModel(phase: .enterEmail).headerSubtitle == "비밀번호 재설정")
+    #expect(passwordResetModel(phase: .enterCode).headerSubtitle == "비밀번호 재설정")
+    #expect(passwordResetModel(phase: .enterNewPassword).headerSubtitle == "코드 확인 완료")
+
+    // 왕복 문구는 단계마다 다르다 — 셋이 같으면 "지금 뭘 기다리는지"를 화면이 못 말해 준다.
+    #expect(passwordResetModel(phase: .sending).noticeText == "코드 보내는 중")
+    #expect(passwordResetModel(phase: .verifying).noticeText == "코드 확인 중")
+    #expect(passwordResetModel(phase: .submitting).noticeText == "비밀번호 바꾸는 중")
+    #expect(passwordResetModel(phase: .verifying).noticeKind == .progress)
+}
+
+@Test
+func passwordResetMovesFocusToTheFieldOfEachStep() throws {
+    // 화면이 넘어갔는데 커서가 그대로면 사용자가 클릭부터 해야 한다. FocusState 는 오프스크린 렌더로
+    // 관측할 수 없으므로 "어디로 옮기는가"를 순수 값으로 빼서 단언하고, 배선은 소스로 못 박는다.
+    #expect(PasswordResetStep.email.focusField == .resetEmail)
+    #expect(PasswordResetStep.code.focusField == .resetCode)
+    #expect(PasswordResetStep.newPassword.focusField == .resetNewPassword)
+
+    let source = try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8)
+    let panel = try #require(swiftStructBody(source, name: "PasswordResetPanel"))
+    // 단계가 바뀔 때(onChange)와 화면에 처음 들어올 때(onAppear) 둘 다 옮겨야 한다 —
+    // onChange 만 있으면 1단계 진입 시 커서가 없고, onAppear 만 있으면 2·3단계 전환에서 멈춘다.
+    #expect(panel.contains("onChange(of: model.step)"))
+    #expect(panel.contains("focus = step.focusField"))
+    #expect(panel.contains("onAppear { focus = model.step.focusField }"))
+}
+
+// 스토어 문구 상수(WorkTimerStore.passwordReset*Message)는 @MainActor 타입의 멤버라 이 격리가 필요하다.
+@MainActor
+@Test
+func passwordResetPrimaryButtonCarriesWhatWasTyped() {
+    // 버튼 action 은 오프스크린에서 누를 수 없으므로, "눌리면 무슨 값이 나가는가"를 값으로 단언한다.
+    let step1 = passwordResetModel(phase: .enterEmail, email: "  member@example.com ")
+    #expect(step1.primaryTitle == "코드 받기")
+    // 앞뒤 공백을 뗀 주소가 나가야 한다(메일 앱에서 복사하면 공백이 붙어 온다).
+    #expect(step1.primaryAction == .requestCode(email: "member@example.com"))
+    #expect(step1.isPrimaryEnabled)
+
+    // 2단계는 **코드만** 싣는다. 비밀번호를 같이 보내면 서버가 무엇을 거절했는지 화면이 구분할 수 없다.
+    let step2 = passwordResetModel(phase: .enterCode, code: "482913", newPassword: "new-secret")
+    #expect(step2.primaryTitle == "코드 확인")
+    #expect(step2.primaryAction == .verifyCode(code: "482913"))
+    #expect(step2.isPrimaryEnabled)
+
+    // 3단계는 **새 비밀번호만** 싣는다(코드는 이미 소모됐다).
+    let step3 = passwordResetModel(phase: .enterNewPassword, code: "482913", newPassword: "new-secret")
+    #expect(step3.primaryTitle == "비밀번호 바꾸기")
+    #expect(step3.primaryAction == .submitNewPassword(newPassword: "new-secret"))
+    #expect(step3.isPrimaryEnabled)
+
+    // 2단계 열림 조건은 코드 6자리뿐이다 — 비밀번호가 비어 있어도 확인 버튼은 눌려야 한다.
+    #expect(passwordResetModel(phase: .enterCode, code: "482913", newPassword: "").isPrimaryEnabled)
+    #expect(passwordResetModel(phase: .enterCode, code: "4829", newPassword: "new-secret").isPrimaryEnabled == false)
+    // 3단계 열림 조건은 비밀번호 길이뿐이다 — 코드 칸이 없으므로 코드가 비어도 상관없다.
+    #expect(passwordResetModel(phase: .enterNewPassword, code: "", newPassword: "new-secret").isPrimaryEnabled)
+    #expect(passwordResetModel(phase: .enterNewPassword, newPassword: "abc").isPrimaryEnabled == false)
+    // 왕복 중에는 기본 버튼도 잠긴다(중복 제출 금지) + 문구가 비어도 진행 표시가 뜬다.
+    let sending = passwordResetModel(phase: .sending, email: "member@example.com")
+    #expect(sending.isPrimaryEnabled == false)
+    #expect(sending.noticeText == "코드 보내는 중")
+    #expect(sending.noticeKind == .progress)
+    // 안내(회색/주황)는 스토어의 **발송 관련 상수 세 개뿐**이고 나머지는 전부 오류(빨강)다.
+    // 거절 문구가 안내로 새면 사용자가 "고쳐야 한다"는 신호를 못 받는다 — 실제로 비밀번호 규칙 거절이
+    // 봉투 아이콘 달린 주황 안내로 그려지던 것을 이 방향으로 뒤집어 막았다.
+    #expect(passwordResetModel(phase: .enterCode, message: WorkTimerStore.passwordResetSentMessage).noticeKind == .info)
+    #expect(passwordResetModel(phase: .enterCode, message: WorkTimerStore.passwordResetAlreadySentMessage).noticeKind == .info)
+    #expect(passwordResetModel(phase: .enterCode, message: WorkTimerStore.passwordResetCooldownMessage).noticeKind == .info)
+    #expect(passwordResetModel(phase: .enterCode, message: WorkTimerStore.passwordResetCodeRejectedMessage).noticeKind == .error)
+    #expect(passwordResetModel(phase: .enterCode, message: WorkTimerStore.passwordResetInvalidCodeMessage).noticeKind == .error)
+    // 3단계 거절은 전부 비밀번호 문제다(코드는 이미 통과했다) — 반드시 빨강이어야 한다.
+    #expect(passwordResetModel(phase: .enterNewPassword, message: WorkTimerStore.passwordResetShortPasswordMessage).noticeKind == .error)
+    #expect(passwordResetModel(phase: .enterNewPassword, message: WorkTimerStore.passwordResetRejectedPasswordMessage).noticeKind == .error)
+    #expect(passwordResetModel(phase: .enterNewPassword, message: WorkTimerStore.passwordResetUpdateFailedMessage).noticeKind == .error)
+}
+
+@MainActor
+@Test
+func passwordResetEntryLinkHandsTheTypedEmailToTheStore() {
+    // 진입점의 존재 이유는 "지금 입력해 둔 이메일을 그대로 넘기는 것"이다 — 다시 타이핑시키면 안 된다.
+    // 버튼을 누를 수는 없으므로 같은 동작을 하는 press() 를 직접 부른다(TodoToggleControl.press 선례).
+    final class Box: @unchecked Sendable { var received: [String] = [] }
+    let box = Box()
+    let link = PasswordResetEntryLink(email: "  member@example.com\n") { box.received.append($0) }
+    link.press()
+    #expect(box.received == ["member@example.com"])
+    #expect(PasswordResetEntryLink.title == "비밀번호를 잊으셨나요?")
+}
+
+@MainActor
+@Test
+func loginFormShowsThePasswordResetEntryPointAboveTheLoginButton() throws {
+    // 로그인 폼에 진입점이 실제로 **그려지는지**를 픽셀로 본다. [로그인] 버튼(초록 그라디언트 전체폭)을
+    // 기준선으로 잡고, 그 바로 위 띠에 글자 픽셀이 있는지 확인한다 — 진입점이 사라지면 그 띠는 통짜 배경이 된다.
+    let bitmap = try renderBitmap(CheckMenuView(store: makeLoginStore(syncMessage: "로그인 필요")))
+    let buttonTop = try #require(
+        firstFullWidthGradientRow(bitmap),
+        "[로그인] 버튼(초록 그라디언트)을 못 찾으면 이 검사가 헛돌고 있다는 뜻이다"
+    )
+    // 버튼 위 [-54, -10]px 띠 = 비밀번호 필드의 ASCII 안내 슬롯 아래 ~ 버튼 사이. 진입점 링크가 사는 자리다.
+    // 링크는 accent(파랑) 글자다 — 그 색 픽셀이 이 띠에 얼마나 있는지로 "링크가 그려졌다"를 단언한다.
+    // 진입점이 빠지면 이 띠는 통짜 패널 배경이라 accent 픽셀이 0 이 된다.
+    let accent = accentPixelCount(bitmap, top: buttonTop - 54, bottom: buttonTop - 10)
+    #expect(accent > 100, "[로그인] 버튼 바로 위에 accent 색 링크 글자가 있어야 한다 (실측 \(accent)px)")
+
+    // 픽셀만으론 "그 글자가 재설정 진입점"이라는 것까지는 못 박지 못한다 — 로그인 폼이 이 컨트롤을
+    // 쓰고 있다는 구조를 소스로 고정한다(powerAndFooterMenus… 선례와 같은 이유).
+    let source = try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8)
+    let loginPanel = try #require(swiftStructBody(source, name: "LoginPanel"))
+    #expect(loginPanel.contains("PasswordResetEntryLink"))
+    #expect(loginPanel.contains("store.beginPasswordReset(email:"))
+}
+
+@MainActor
+@Test
+func passwordResetPutsExactlyOneInputBoxOnEveryScreen() throws {
+    // 이번 변경의 **핵심**: 코드와 새 비밀번호가 한 화면에 같이 있으면 안 된다.
+    // ImageRenderer 는 TextField/SecureField 를 못 그려 샛노란 상자를 박는다 — 그 상자 개수가 곧
+    // "이 화면에 입력칸이 몇 개인가"다. 화면마다 정확히 하나여야 한다.
+    func boxes(_ phase: PasswordResetPhase) throws -> Int {
+        let bitmap = try renderBitmap(passwordResetPanel(phase: phase, resendSeconds: 0))
+        return unavailablePlaceholderRowRuns(bitmap, top: 0, bottom: bitmap.pixelsHigh - 1).count
+    }
+    #expect(try boxes(.enterEmail) == 1, "1단계엔 이메일 칸 하나만 있어야 한다")
+    #expect(try boxes(.enterCode) == 1, "2단계엔 코드 칸 하나만 있어야 한다 — 새 비밀번호 칸이 남아 있으면 2다")
+    #expect(try boxes(.enterNewPassword) == 1, "3단계엔 새 비밀번호 칸 하나만 있어야 한다 — 코드 칸이 되살아나면 2다")
+    // 왕복 중에도 화면은 그대로다(입력칸이 사라지면 방금 친 값이 눈앞에서 없어진다).
+    #expect(try boxes(.verifying) == 1)
+    #expect(try boxes(.submitting) == 1)
+}
+
+@MainActor
+@Test
+func passwordResetCodeFieldKeepsTheASCIIGuard() throws {
+    // 이메일/코드/새 비밀번호는 영문 입력원에서만 쳐야 한다(한글 조합 문자가 섞이면 서버가 무조건 거절한다).
+    // ASCII 강제(enforcesASCII)를 건 필드만 아래에 "영어 문자만…" 안내 슬롯을 상시 확보하므로,
+    // 입력 상자 아래끝과 [코드 확인] 버튼 윗줄 사이 간격으로 그 슬롯의 존재를 잰다.
+    // (이제 화면당 상자가 하나뿐이라 예전처럼 상자 사이 간격으로는 못 잰다.)
+    let bitmap = try renderBitmap(passwordResetPanel(phase: .enterCode, resendSeconds: 0))
+    let boxes = unavailablePlaceholderRowRuns(bitmap, top: 0, bottom: bitmap.pixelsHigh - 1)
+    let boxEnd = try #require(boxes.first?.end)
+    let buttonTop = try #require(firstFullWidthGradientRow(bitmap, from: boxEnd))
+    let gap = buttonTop - boxEnd
+    // 실측(scale 2): ASCII 강제를 걸면 상자와 버튼 사이가 캡션 슬롯 때문에 벌어진다. 강제를 풀면
+    // 슬롯이 통째로 사라져 VStack 간격(8pt=16px) + 패널 간격만 남는다. 그 사이인 45px 을 문턱으로 둔다.
+    #expect(gap >= 45, "코드 필드 아래 ASCII 안내 슬롯이 자리를 잡고 있어야 한다 (실측 \(gap)px)")
+
+    // 세 필드 전부 같은 강제를 받는다 — 각각 다른 화면에 있어 한 렌더로는 못 재므로 소스로 못 박는다.
+    let source = try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8)
+    let panel = try #require(swiftStructBody(source, name: "PasswordResetPanel"))
+    #expect(panel.components(separatedBy: "enforcesASCII: true").count - 1 == 3)
+}
+
+@MainActor
+@Test
+func passwordResetShowsTheResendLinkOnlyOnTheCodeScreen() throws {
+    // 링크 글자는 accent(파랑)뿐이다. 그 색이 이루는 **행 구간 수** = 화면에 깔린 링크 줄 수다.
+    // 2단계는 [다시 받기] + [로그인으로 돌아가기] 로 두 줄, 1·3단계는 되돌아가기 한 줄이어야 한다.
+    func linkRows(_ phase: PasswordResetPhase) throws -> Int {
+        let bitmap = try renderBitmap(passwordResetPanel(phase: phase, resendSeconds: 0))
+        return accentRowRuns(bitmap, top: 0, bottom: bitmap.pixelsHigh - 1).count
+    }
+    #expect(try linkRows(.enterCode) == 2, "2단계엔 재전송 링크와 취소 링크가 함께 있어야 한다")
+    #expect(try linkRows(.enterNewPassword) == 1, "3단계엔 재전송 링크가 없어야 한다 — 코드는 이미 소모됐다")
+    #expect(try linkRows(.enterEmail) == 1, "1단계는 아직 보낸 코드가 없으니 재전송이 없다")
+
+    // 취소(로그인으로 돌아가기)는 **세 단계 전부**에 있어야 한다. 이게 빠지면 재설정 화면이 로그인 폼을
+    // 대체하고 있으므로 앱을 껐다 켜는 것 말고는 빠져나갈 길이 없다.
+    let source = try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8)
+    let panel = try #require(swiftStructBody(source, name: "PasswordResetPanel"))
+    let links = try #require(panel.range(of: "private var links:").map { String(panel[$0.lowerBound...]) })
+    // 취소 링크는 단계 분기(if) 바깥에 있어야 조건 없이 항상 그려진다.
+    #expect(links.contains("AuthLinkButton(prompt: \"\", action: \"로그인으로 돌아가기\")"))
+    #expect(links.components(separatedBy: "perform(.cancel)").count - 1 == 1)
+}
+
+@MainActor
+@Test
+func passwordResetSuccessNoticeLandsOnTheLoginScreenAsSuccess() throws {
+    // 성공하면 스토어가 idle 로 돌리고 안내를 **로그인 화면의 상태줄(syncMessage)** 로 옮겨 싣는다.
+    // 그 문구가 AuthMessageKind 표에 없으면 default 로 떨어져 성공을 빨간 경고로 그린다 — 그걸 막는다.
+    #expect(AuthMessageKind(WorkTimerStore.passwordResetChangedSignInMessage) == .success)
+    #expect(AuthMessageKind("로그인 실패") == .error)
+
+    // 실제로 로그인 화면에 **보이는지**를 픽셀로 본다. 상태줄은 "로그인 필요"일 때만 투명하므로,
+    // 성공 문구를 세우면 초록(CheckTheme.working) 배너가 [로그인] 버튼 아래 띠에 나타나야 한다.
+    // [로그인] 버튼도 같은 계열의 초록 그라디언트라, 그 버튼이 끝나는 행 **아래**만 본다.
+    func statusBandGreenPixels(_ store: WorkTimerStore) throws -> Int {
+        let bitmap = try renderBitmap(CheckMenuView(store: store))
+        let button = try #require(fullWidthGradientRowRun(bitmap))
+        return successTintPixelCount(
+            bitmap,
+            top: button.end + 1,
+            bottom: min(button.end + 120, bitmap.pixelsHigh - 1)
+        )
+    }
+    let store = makeLoginStore(syncMessage: WorkTimerStore.passwordResetChangedSignInMessage)
+    // 스토어는 이메일을 프리필하고 비밀번호는 비운다(남아 있는 건 방금 **바뀌기 전** 값이다).
+    store.password = ""
+    let successPixels = try statusBandGreenPixels(store)
+    #expect(successPixels > 60, "로그인 화면 상태줄에 초록 성공 안내가 보여야 한다 (실측 \(successPixels)px)")
+
+    // 같은 자리에 오류 문구를 세우면 초록이 없어야 한다 — 위 측정이 배경을 세고 있는 게 아니라는 대조군.
+    let failingGreen = try statusBandGreenPixels(makeLoginStore(syncMessage: "로그인 실패"))
+    #expect(failingGreen == 0, "오류 배너 자리에 초록이 섞이면 이 측정은 성공을 증명하지 못한다 (실측 \(failingGreen)px)")
+}
+
+@MainActor
+@Test
+func passwordResetScreensStayWithinPopoverHeightBudget() throws {
+    // 재설정 화면 7종이 팝오버 높이 상한(700pt)과 폭(340pt) 안에 잘림 없이 들어가는지 실측한다.
+    // 재설정은 로그인 폼을 **대체**하므로, 로그인 화면과 비슷한 키를 유지해야 창이 튀지 않는다.
+    func height(_ name: String, _ phase: PasswordResetPhase, _ message: String? = nil, _ seconds: Int = 0) throws -> (String, Int) {
+        let store = passwordResetStore(phase: phase, message: message, resendSeconds: seconds)
+        return (name, try #require(renderedPixelHeight(CheckMenuView(store: store))))
+    }
+    let heights: [(String, Int)] = try [
+        height("enterEmail", .enterEmail),
+        height("sending", .sending, nil, 0),
+        height("enterCode-cooldown", .enterCode, "메일을 보냈어요 · 오지 않으면 주소를 확인해주세요", 47),
+        height("enterCode-ready", .enterCode, nil, 0),
+        height("verifying", .verifying, nil, 0),
+        height("enterNewPassword", .enterNewPassword),
+        height("submitting", .submitting),
+        height("error", .enterCode, "코드가 맞지 않거나 만료됐어요 · 다시 받기를 눌러주세요", 12),
+        ("signed-out-success", try #require(renderedPixelHeight(CheckMenuView(
+            store: makeLoginStore(syncMessage: WorkTimerStore.passwordResetChangedSignInMessage)
+        ))))
+    ]
+    for (name, pixelHeight) in heights {
+        // scale 2 렌더 → 포인트 높이 = 픽셀/2.
+        #expect(Double(pixelHeight) / 2.0 <= 700.0, "\(name) 화면이 팝오버 높이 예산을 넘었다 (실측 \(Double(pixelHeight) / 2.0)pt)")
+    }
+    // 실측값을 보고서에 옮기기 위한 기록(실패해도 판정에는 안 쓴다).
+    for (name, pixelHeight) in heights {
+        print("[reset-height] \(name) = \(Double(pixelHeight) / 2.0)pt")
+    }
+}
+
+// MARK: - 비밀번호 재설정 육안 확인 덤프(스크래치패드)
+
+@MainActor
+@Test
+func dumpPasswordResetSnapshots() throws {
+    let dir = URL(
+        fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/reset-split-ui",
+        isDirectory: true
+    )
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    // 덤프는 육안 확인용이지 판정 근거가 아니다 — 쓰기 실패는 무시한다(dumpTodoSnapshots 관례).
+    func dump(_ view: some View, _ name: String) throws {
+        let png = try renderPNG(view)
+        try? png.write(to: dir.appendingPathComponent("\(name).png"))
+    }
+    try dump(CheckMenuView(store: makeLoginStore(syncMessage: "로그인 필요")), "reset-0-login-entry")
+    try dump(CheckMenuView(store: passwordResetStore(phase: .enterEmail)), "reset-1-enter-email")
+    try dump(CheckMenuView(store: passwordResetStore(phase: .sending)), "reset-2-sending")
+    // 첫 발송 뒤엔 5초, 재전송 뒤엔 60초라 같은 화면에서 숫자만 달라진다(판단은 스토어가 한다).
+    try dump(
+        CheckMenuView(store: passwordResetStore(
+            phase: .enterCode,
+            message: WorkTimerStore.passwordResetSentMessage,
+            resendSeconds: 4
+        )),
+        "reset-3-enter-code-cooldown"
+    )
+    try dump(CheckMenuView(store: passwordResetStore(phase: .enterCode, resendSeconds: 0)), "reset-4-enter-code-ready")
+    try dump(CheckMenuView(store: passwordResetStore(phase: .verifying, resendSeconds: 57)), "reset-5-verifying")
+    try dump(CheckMenuView(store: passwordResetStore(phase: .enterNewPassword)), "reset-6-enter-new-password")
+    try dump(CheckMenuView(store: passwordResetStore(phase: .submitting)), "reset-7-submitting")
+    try dump(
+        CheckMenuView(store: passwordResetStore(
+            phase: .enterCode,
+            message: WorkTimerStore.passwordResetCodeRejectedMessage,
+            resendSeconds: 12
+        )),
+        "reset-8-code-error"
+    )
+    try dump(
+        CheckMenuView(store: passwordResetStore(
+            phase: .enterNewPassword,
+            message: WorkTimerStore.passwordResetRejectedPasswordMessage
+        )),
+        "reset-9-password-error"
+    )
+    // 성공 직후: 재설정 화면이 사라지고 로그인 화면에 이메일 프리필 + 초록 안내가 선다.
+    let done = makeLoginStore(syncMessage: WorkTimerStore.passwordResetChangedSignInMessage)
+    done.password = ""
+    try dump(CheckMenuView(store: done), "reset-10-signed-out-success")
+    try dump(
+        CheckMenuView(store: passwordResetStore(phase: .enterCode, resendSeconds: 0), previewASCIIWarning: true),
+        "reset-11-ascii-warning"
+    )
+}
+
+// MARK: - 재설정 화면 테스트 도우미
+
+private func passwordResetModel(
+    phase: PasswordResetPhase,
+    email: String = "member@example.com",
+    code: String = "",
+    newPassword: String = "",
+    resendSeconds: Int = 0,
+    message: String? = nil
+) -> PasswordResetFormModel {
+    PasswordResetFormModel(
+        phase: phase,
+        email: email,
+        code: code,
+        newPassword: newPassword,
+        resendSeconds: resendSeconds,
+        message: message
+    )
+}
+
+/// 스토어 없이 재설정 패널만 그리는 표본(값 + 클로저 주입 패널이라 가능하다).
+@MainActor
+private func passwordResetPanel(
+    phase: PasswordResetPhase,
+    message: String? = nil,
+    resendSeconds: Int,
+    previewASCIIWarning: Bool = false
+) -> PasswordResetPanel {
+    PasswordResetPanel(
+        phase: phase,
+        message: message,
+        sentToEmail: "member@example.com",
+        resendSeconds: resendSeconds,
+        previewASCIIWarning: previewASCIIWarning,
+        perform: { _ in }
+    )
+}
+
+/// 재설정 단계를 강제로 세운 로그인 화면 스토어(팝오버 전체를 그리기 위한 것).
+@MainActor
+private func passwordResetStore(
+    phase: PasswordResetPhase,
+    message: String? = nil,
+    email: String = "member@example.com",
+    resendSeconds: Int = 0
+) -> WorkTimerStore {
+    let store = makeLoginStore(syncMessage: "로그인 필요")
+    store.passwordResetPhase = phase
+    store.passwordResetMessage = message
+    store.passwordResetEmail = email
+    store.passwordResetResendSeconds = resendSeconds
+    return store
+}
+
 // MARK: - 픽셀 비교 도우미
 
 /// 뷰를 지정 폭 고정으로 렌더한 비트맵. 픽셀 단위 비교(잘림/자리 검증)용.
@@ -2524,6 +2910,140 @@ private func unavailablePlaceholderBounds(
     }
     guard maxX >= 0 else { return nil }
     return (minX, minY, maxX, maxY)
+}
+
+/// [top, bottom] 띠에서 "못 그림" 표식(샛노란 상자)이 차지한 **행 구간들**(위에서 아래 순).
+/// unavailablePlaceholderBounds 는 합집합 사각형 하나만 주므로 상자가 몇 개인지·서로 얼마나 떨어졌는지를
+/// 못 잰다. 입력 필드가 몇 개 있고 그 사이 간격(= 캡션 슬롯 유무)이 얼마인지를 보려고 따로 둔다.
+private func unavailablePlaceholderRowRuns(
+    _ bitmap: NSBitmapImageRep,
+    top: Int,
+    bottom: Int
+) -> [(start: Int, end: Int)] {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return [] }
+    let bpr = bitmap.bytesPerRow
+    let spp = bitmap.samplesPerPixel
+    var runs: [(start: Int, end: Int)] = []
+    var current: (start: Int, end: Int)?
+    for y in max(0, top)...min(bitmap.pixelsHigh - 1, bottom) {
+        var hasYellow = false
+        for x in 0..<bitmap.pixelsWide {
+            let offset = y * bpr + x * spp
+            // unavailablePlaceholderBounds 와 같은 색 판정(255, 204, 0 — 파랑 성분이 0 인 게 결정적).
+            if data[offset] >= 240, data[offset + 1] >= 195, data[offset + 2] <= 40 { hasYellow = true; break }
+        }
+        if hasYellow {
+            if var run = current { run.end = y; current = run } else { current = (start: y, end: y) }
+        } else if let run = current {
+            runs.append(run)
+            current = nil
+        }
+    }
+    if let run = current { runs.append(run) }
+    return runs
+}
+
+/// [top, bottom] 띠에서 링크 글자색(CheckTheme.accent = 84,171,255)에 가까운 픽셀 수.
+/// 이 팝오버에서 파랑이 이만큼 진하게 나오는 것은 accent 뿐이라(패널 43,46,61 · 필드 채움은 더 어둡다)
+/// "그 자리에 링크 글자가 그려졌다"의 픽셀 근거로 쓴다.
+private func accentPixelCount(_ bitmap: NSBitmapImageRep, top: Int, bottom: Int) -> Int {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return 0 }
+    let bpr = bitmap.bytesPerRow
+    let spp = bitmap.samplesPerPixel
+    var count = 0
+    for y in max(0, top)...min(bitmap.pixelsHigh - 1, bottom) {
+        for x in 0..<bitmap.pixelsWide {
+            let offset = y * bpr + x * spp
+            let r = Int(data[offset]), g = Int(data[offset + 1]), b = Int(data[offset + 2])
+            if b >= 190, b > r + 80, g > r + 40, g < b { count += 1 }
+        }
+    }
+    return count
+}
+
+/// [top, bottom] 띠에서 링크 글자색(accent)이 차지한 **행 구간들**. accentPixelCount 는 합계만 주므로
+/// "링크가 몇 줄인가"를 못 센다 — 재발송 링크가 어느 화면에 있고 어느 화면에 없는지를 이걸로 가른다.
+/// 한 행에 3px 미만이면 안티에일리어싱 부스러기로 보고 버린다(글자 한 줄은 수십~수백 px 이다).
+private func accentRowRuns(
+    _ bitmap: NSBitmapImageRep,
+    top: Int,
+    bottom: Int
+) -> [(start: Int, end: Int)] {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return [] }
+    let bpr = bitmap.bytesPerRow
+    let spp = bitmap.samplesPerPixel
+    var runs: [(start: Int, end: Int)] = []
+    var current: (start: Int, end: Int)?
+    for y in max(0, top)...min(bitmap.pixelsHigh - 1, bottom) {
+        var accent = 0
+        for x in 0..<bitmap.pixelsWide {
+            let offset = y * bpr + x * spp
+            let r = Int(data[offset]), g = Int(data[offset + 1]), b = Int(data[offset + 2])
+            if b >= 190, b > r + 80, g > r + 40, g < b { accent += 1 }
+        }
+        if accent >= 3 {
+            if var run = current { run.end = y; current = run } else { current = (start: y, end: y) }
+        } else if let run = current {
+            runs.append(run)
+            current = nil
+        }
+    }
+    if let run = current { runs.append(run) }
+    return runs
+}
+
+/// [top, bottom] 띠에서 성공 톤(CheckTheme.working = 89,224,161)에 가까운 픽셀 수.
+/// [로그인] 버튼의 startGradient(최대 g=217)보다 **초록이 더 진한** 쪽만 세지만 그 차이는 얇으므로,
+/// 이 함수를 쓰는 쪽이 버튼 행을 띠에서 빼 주어야 한다(fullWidthGradientRowRun 참고).
+private func successTintPixelCount(_ bitmap: NSBitmapImageRep, top: Int, bottom: Int) -> Int {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return 0 }
+    let bpr = bitmap.bytesPerRow
+    let spp = bitmap.samplesPerPixel
+    var count = 0
+    for y in max(0, top)...min(bitmap.pixelsHigh - 1, bottom) {
+        for x in 0..<bitmap.pixelsWide {
+            let offset = y * bpr + x * spp
+            let r = Int(data[offset]), g = Int(data[offset + 1]), b = Int(data[offset + 2])
+            if g >= 200, r <= 140, b >= 120, g > b + 40 { count += 1 }
+        }
+    }
+    return count
+}
+
+/// 전체폭 prominent 버튼(AuthButton)의 첫 행. 그 버튼의 초록 그라디언트(startGradient)만 한 행에서
+/// 400px 넘게 이어진다 — 같은 그라디언트를 쓰는 BrandHeader 아이콘은 38pt(76px)라 걸리지 않는다.
+private func firstFullWidthGradientRow(_ bitmap: NSBitmapImageRep, from: Int = 0) -> Int? {
+    fullWidthGradientRowRun(bitmap, from: from)?.start
+}
+
+/// 전체폭 그라디언트 버튼이 차지한 첫 **행 구간**(시작·끝). 버튼 아래 띠만 보고 싶을 때 쓴다 —
+/// 버튼 초록과 성공 배너 초록이 색으로는 거의 안 갈려서, 자리로 갈라야 한다.
+private func fullWidthGradientRowRun(
+    _ bitmap: NSBitmapImageRep,
+    from: Int = 0
+) -> (start: Int, end: Int)? {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return nil }
+    let bpr = bitmap.bytesPerRow
+    let spp = bitmap.samplesPerPixel
+    var start: Int?
+    for y in max(0, from)..<bitmap.pixelsHigh {
+        var green = 0
+        for x in 0..<bitmap.pixelsWide {
+            let offset = y * bpr + x * spp
+            let r = Int(data[offset]), g = Int(data[offset + 1]), b = Int(data[offset + 2])
+            // startGradient 양끝: (82,217,148) ~ (46,173,158). 초록이 빨강보다 크게 앞서고 파랑보다 낮지 않다.
+            // **비활성 버튼도 잡아야 한다**: 재설정 화면의 기본 버튼은 입력이 덜 찼을 때 흐려져 실측 (50,86,84)
+            // 까지 내려간다 — 옛 문턱(g>=150)에 안 걸려 "버튼이 아예 없다"로 읽혔다.
+            // 패널 배경(43,46,61)은 g 가 70 에 못 미쳐 여기서 먼저 탈락한다.
+            if g >= 70, g > r + 25, g + 10 >= b { green += 1 }
+        }
+        if green >= 400 {
+            if start == nil { start = y }
+        } else if let first = start {
+            return (start: first, end: y - 1)
+        }
+    }
+    return start.map { (start: $0, end: bitmap.pixelsHigh - 1) }
 }
 
 /// [top, bottom] 띠에서 "전부 배경색"인 세로줄이 연속으로 가장 길게 이어진 길이(px).

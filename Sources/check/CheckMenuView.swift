@@ -2480,6 +2480,11 @@ enum AuthFocusField: Hashable {
     case displayName
     case email
     case password
+    // 비밀번호 재설정 화면 전용 필드. CredentialField.focus 의 타입이 이 열거형으로 고정돼 있어서
+    // (FocusState<AuthFocusField?>.Binding) 재설정 화면도 같은 컴포넌트를 쓰려면 케이스를 여기 둬야 한다.
+    case resetEmail
+    case resetCode
+    case resetNewPassword
 
     /// 이 필드에서 Enter를 눌렀을 때 옮겨 갈 다음 포커스 필드. nil이면 마지막 필드이므로 제출한다.
     /// 로그인 모드엔 별명 필드가 없으므로 로그인 모드의 displayName은 제출로 취급한다.
@@ -2491,13 +2496,16 @@ enum AuthFocusField: Hashable {
             return .password
         case (.signIn, .displayName), (_, .password):
             return nil
+        // 재설정 화면은 로그인 폼과 다른 체인(코드 → 새 비밀번호 → 제출)을 쓰므로 여기 체인에 끼지 않는다.
+        case (_, .resetEmail), (_, .resetCode), (_, .resetNewPassword):
+            return nil
         }
     }
 }
 
 /// syncMessage 배너의 성격 분류. AuthStatusLine 색/아이콘과 모드 전환 시 오류 리셋 판정에 공유한다.
 enum AuthMessageKind {
-    case progress, info, error
+    case progress, info, success, error
 
     init(_ message: String) {
         switch message {
@@ -2505,6 +2513,11 @@ enum AuthMessageKind {
             self = .progress
         case "확인 메일 필요", "이메일 확인 필요":
             self = .info
+        // 비밀번호 재설정을 마치면 재설정 화면이 통째로 사라지므로, "바꿨다 · 이제 로그인하라"는 안내는
+        // 로그인 화면의 상태줄로 넘어온다. 이 표에 없으면 default 로 떨어져 **성공을 빨간 경고로** 그린다 —
+        // 스토어 상수를 그대로 참조해 문구가 바뀌어도 분류가 어긋나지 않게 못 박는다.
+        case WorkTimerStore.passwordResetChangedSignInMessage:
+            self = .success
         default:
             self = .error
         }
@@ -2530,6 +2543,39 @@ private struct LoginPanel: View {
     }
 
     var body: some View {
+        // 재설정 화면은 로그인 폼을 **대체**한다(같이 띄우지 않는다) — 팝오버는 폭 340·높이 상한 700pt 예산이라
+        // 두 폼을 동시에 세우면 푸터까지 밀려 잘린다. 되돌아오는 길은 재설정 패널 안의 "로그인으로 돌아가기"다.
+        if store.passwordResetPhase != .idle {
+            PasswordResetPanel(
+                phase: store.passwordResetPhase,
+                message: store.passwordResetMessage,
+                sentToEmail: store.passwordResetEmail,
+                resendSeconds: store.passwordResetResendSeconds,
+                previewASCIIWarning: previewWarning,
+                perform: dispatchReset
+            )
+        } else {
+            loginCard
+        }
+    }
+
+    // 재설정 화면 버튼이 낸 동작을 스토어 호출로 옮기는 유일한 자리. 화면은 어떤 스토어 API 를 부를지 모른 채
+    // 값(PasswordResetAction)만 내보내므로, "무엇을 누르면 무엇이 나가는가"는 순수 값으로 단언할 수 있다.
+    private func dispatchReset(_ action: PasswordResetAction) {
+        switch action {
+        case .requestCode(let email):
+            Task { await store.requestPasswordResetCode(email: email) }
+        case .verifyCode(let code):
+            Task { await store.verifyPasswordResetCode(code: code) }
+        case .submitNewPassword(let newPassword):
+            Task { await store.submitNewPassword(newPassword) }
+        case .cancel:
+            store.cancelPasswordReset()
+        }
+    }
+
+    @ViewBuilder
+    private var loginCard: some View {
         VStack(spacing: 12) {
             if showsCreatedCode, let code = store.createdTeamCode {
                 BrandHeader(subtitle: "팀 생성 완료")
@@ -2601,6 +2647,11 @@ private struct LoginPanel: View {
                 submitLabel: .go,
                 onSubmit: { advance(from: .password) }
             )
+            // 비밀번호를 잊었을 때의 **유일한 출구**. 가입 폼엔 둘 이유가 없으므로 로그인 모드에만 붙인다.
+            // 지금 입력해 둔 이메일을 그대로 들고 넘어간다 — 재설정 화면에서 다시 타이핑시키지 않는다.
+            if mode == .signIn {
+                PasswordResetEntryLink(email: store.email) { store.beginPasswordReset(email: $0) }
+            }
             if mode == .signUp {
                 if store.isCreateTeamMode {
                     // 팀 이름은 한글 허용(ASCII 강제 없음). 주간 목표는 스테퍼(1~168시간).
@@ -2713,6 +2764,463 @@ private struct LoginPanel: View {
     }
 }
 
+// MARK: - Password reset (OTP) panel
+
+/// 재설정 화면의 버튼이 "눌리면 무슨 일이 나는가". 오프스크린 렌더에서는 버튼을 실제로 누를 수 없으므로
+/// (합성 NSEvent·accessibilityPerformPress 둘 다 이 코드베이스에서 안 먹는 게 실측됐다) 배선을 값으로 뺐다.
+/// 화면은 이 값을 만들어 내보내기만 하고, 스토어 호출은 LoginPanel.dispatchReset 한 곳에서만 한다.
+enum PasswordResetAction: Equatable {
+    case requestCode(email: String)
+    /// 코드만 보내 **검증까지만** 한다. 비밀번호를 같이 싣지 않는 게 핵심이다 — 코드가 틀렸을 때
+    /// 애써 정한 비밀번호까지 함께 튕겨 나오면 사용자는 무엇이 틀렸는지 알 수 없다.
+    case verifyCode(code: String)
+    /// 검증이 끝난 뒤 새 비밀번호만 보낸다(코드는 이미 소모됐다).
+    case submitNewPassword(newPassword: String)
+    case cancel
+}
+
+/// 재설정 화면이 지금 어느 칸에 서 있는가. 단계(phase)는 7가지지만 **화면은 3개**다 —
+/// 왕복 중(sending/verifying/submitting)은 직전 입력 화면을 그대로 유지해야 하기 때문에
+/// phase 를 그대로 분기 조건으로 쓰면 화면이 깜빡이며 사라진다.
+enum PasswordResetStep: Equatable {
+    case email
+    case code
+    case newPassword
+
+    /// 이 화면에 들어왔을 때 커서가 놓일 자리. 화면이 바뀌었는데 포커스가 그대로면 사용자는
+    /// 클릭부터 해야 한다 — 그래서 "어디로 옮기는가"를 순수 값으로 못 박아 두고 테스트가 단언한다.
+    var focusField: AuthFocusField {
+        switch self {
+        case .email: return .resetEmail
+        case .code: return .resetCode
+        case .newPassword: return .resetNewPassword
+        }
+    }
+}
+
+/// 재설정 안내 문구의 성격. 로그인 폼의 AuthMessageKind 와 판정 근거가 다르다 — 저쪽은 문구 전체
+/// 일치표를 쓰고, 이쪽은 단계(진행 중인가)를 먼저 보고 그다음에 **안내 상수 목록**으로 info 를 가린다.
+enum PasswordResetNoticeKind: Equatable {
+    case progress, info, error
+}
+
+/// 재설정 화면의 "지금 무엇을 보여 주고 무엇을 누를 수 있는가"를 뷰 밖에서 계산하는 순수 값.
+/// 쿨다운·검증·문구 결정이 전부 여기 있으므로 단위 테스트가 화면을 그리지 않고도 직접 단언한다.
+struct PasswordResetFormModel: Equatable {
+    let phase: PasswordResetPhase
+    let email: String
+    let code: String
+    let newPassword: String
+    let resendSeconds: Int
+    let message: String?
+
+    /// 메일로 오는 OTP 자릿수. Supabase 기본값이 6자리다.
+    static let codeLength = 6
+    /// Supabase 계정 비밀번호 최소 길이(그보다 짧으면 서버가 422 로 거절한다 — 왕복 전에 여기서 막는다).
+    static let minimumPasswordLength = 6
+
+    /// 지금 서 있는 화면. 왕복 중인 단계는 **직전 입력 화면에 머무른다**(sending→이메일, verifying→코드,
+    /// submitting→새 비밀번호). 그래야 진행 문구가 뜨는 동안 방금 친 값이 눈앞에 남는다.
+    var step: PasswordResetStep {
+        switch phase {
+        case .enterCode, .verifying:
+            return .code
+        case .enterNewPassword, .submitting:
+            return .newPassword
+        case .idle, .enterEmail, .sending:
+            return .email
+        }
+    }
+
+    /// 네트워크 왕복 중인가. 이때는 모든 버튼을 잠그고 진행 문구를 띄운다.
+    var isBusy: Bool { phase == .sending || phase == .verifying || phase == .submitting }
+
+    var trimmedEmail: String { email.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var primaryTitle: String {
+        switch step {
+        case .email: return "코드 받기"
+        case .code: return "코드 확인"
+        case .newPassword: return "비밀번호 바꾸기"
+        }
+    }
+
+    var primaryIcon: String {
+        switch step {
+        case .email: return "envelope.badge.fill"
+        case .code: return "checkmark.shield.fill"
+        case .newPassword: return "lock.rotation"
+        }
+    }
+
+    /// 기본 버튼을 눌렀을 때 나갈 동작. 화면마다 정확히 **그 화면에서 친 값 하나만** 실어 보낸다.
+    var primaryAction: PasswordResetAction {
+        switch step {
+        case .email: return .requestCode(email: trimmedEmail)
+        case .code: return .verifyCode(code: code)
+        case .newPassword: return .submitNewPassword(newPassword: newPassword)
+        }
+    }
+
+    /// 왕복 중이면 잠그고, 그 밖에는 서버에 보낼 값이 갖춰졌을 때만 연다(빈 요청으로 레이트리밋을 태우지 않는다).
+    var isPrimaryEnabled: Bool {
+        guard !isBusy else { return false }
+        switch step {
+        case .email: return Self.looksLikeEmail(trimmedEmail)
+        case .code: return code.count == Self.codeLength
+        case .newPassword: return newPassword.count >= Self.minimumPasswordLength
+        }
+    }
+
+    /// 재발송은 **코드 화면에만** 있다. 3단계에서는 코드가 이미 소모돼 다시 받아 봐야 쓸 곳이 없고,
+    /// 새로 받은 코드로 검증 상태를 갈아엎으면 지금 화면이 근거를 잃는다.
+    var showsResend: Bool { step == .code }
+    /// 재발송은 쿨다운이 끝나야 열린다 — 남은 초를 버튼 글자에 그대로 적어 "왜 안 눌리는지"를 보이게 한다.
+    var isResendEnabled: Bool { !isBusy && resendSeconds <= 0 }
+    var resendTitle: String { resendSeconds > 0 ? "다시 받기 (\(resendSeconds)초)" : "다시 받기" }
+
+    /// 헤더 부제. 3단계는 "재설정" 이 아니라 **이미 통과했다**는 사실을 먼저 알린다 —
+    /// 코드 화면과 같은 부제를 달아 두면 "왜 또 입력하지?"로 읽힌다.
+    var headerSubtitle: String {
+        switch step {
+        case .email, .code: return "비밀번호 재설정"
+        case .newPassword: return "코드 확인 완료"
+        }
+    }
+
+    /// 안내/오류 슬롯에 쓸 문구. 스토어 문구가 우선이고, 없을 때만 진행 상태를 대신 적는다
+    /// (sending/submitting 인데 문구가 비면 화면이 멈춘 것처럼 보인다).
+    var noticeText: String? {
+        if let message, !message.isEmpty { return message }
+        switch phase {
+        case .sending: return "코드 보내는 중"
+        case .verifying: return "코드 확인 중"
+        case .submitting: return "비밀번호 바꾸는 중"
+        default: return nil
+        }
+    }
+
+    var noticeKind: PasswordResetNoticeKind {
+        if isBusy { return .progress }
+        guard let text = noticeText else { return .info }
+        return Self.isInformational(text) ? .info : .error
+    }
+
+    /// 스토어는 안내와 오류를 문자열 하나로만 준다(구분 플래그가 계약에 없다). 낱말로 실패를 **추정**하지
+    /// 않고, 실패가 **아닌** 문구를 스토어 상수로 열거해 그 밖을 전부 오류로 본다.
+    ///
+    /// 방향이 중요하다: 낱말 추정("실패", "만료"…)은 새 거절 문구가 생길 때마다 조용히 회색 안내로 새 나갔다
+    /// — 실제로 "비밀번호 조건 확인 · 6자 이상…" 이 봉투 아이콘 달린 안내로 그려졌다. 반대로 짜 두면
+    /// 빠뜨렸을 때 안내가 빨갛게 나올 뿐이라, 사용자가 다음 행동을 놓치는 쪽으로는 틀리지 않는다.
+    /// (저장 프로퍼티가 아니라 함수인 이유: 스토어 상수는 @MainActor 타입의 멤버라 nonisolated 한
+    /// static 기본값 식에서 못 읽는다 — 함수 본문에서 읽는 건 된다.)
+    static func isInformational(_ text: String) -> Bool {
+        switch text {
+        case WorkTimerStore.passwordResetSentMessage,
+             WorkTimerStore.passwordResetAlreadySentMessage,
+             WorkTimerStore.passwordResetCooldownMessage:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// 서버에 던지기 전 최소 형태 검사. 엄밀한 RFC 검증이 아니라 "@ 앞뒤가 비지 않았는가"만 본다 —
+    /// 진짜 판정은 서버가 하고, 여기선 확실한 오타로 레이트리밋을 태우는 것만 막는다.
+    static func looksLikeEmail(_ text: String) -> Bool {
+        let parts = text.split(separator: "@", omittingEmptySubsequences: false)
+        return parts.count == 2 && !parts[0].isEmpty && parts[1].contains(".")
+    }
+}
+
+/// 로그인 폼의 "비밀번호를 잊으셨나요?" 진입점. 이 컨트롤의 존재 이유는 **지금 입력돼 있는 이메일을
+/// 그대로 넘기는 것**이다(재설정 화면에서 다시 타이핑시키지 않는다). 그 전달을 press() 순수 함수로 빼
+/// 버튼을 누르지 않고도 단언할 수 있게 했다 — 오프스크린에서 버튼 action 은 증명 불가다.
+struct PasswordResetEntryLink: View {
+    static let title = "비밀번호를 잊으셨나요?"
+
+    let email: String
+    let begin: (String) -> Void
+
+    @State private var hovering = false
+
+    /// 앞뒤 공백은 떼고 넘긴다 — 메일 앱에서 주소를 복사하면 공백이 붙어 오는 일이 흔하다.
+    static func emailToCarry(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 눌린 그 순간의 동작(TodoToggleControl.press 선례).
+    func press() {
+        begin(Self.emailToCarry(email))
+    }
+
+    var body: some View {
+        Button(action: press) {
+            // AuthLinkButton 과 같은 글자 톤(caption·accent·hover 밑줄)을 쓰되, 필드 바로 아래 달리는
+            // 보조 링크라 오른쪽 정렬로 둔다 — 가운데 정렬은 아래쪽 "가입하기" 링크와 한 덩어리로 보인다.
+            Text(Self.title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(CheckTheme.accent)
+                .underline(hovering)
+                .brightness(hovering ? 0.12 : 0)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+}
+
+/// 재설정 화면의 안내/오류 한 줄. AuthStatusLine 과 같은 형태(아이콘 + 문구 + 톤 배경)지만 성격을
+/// 문구 매칭이 아니라 바깥에서 받은 kind 로 정한다 — 재설정 문구는 AuthMessageKind 표에 없어 전부 빨강이 된다.
+private struct PasswordResetNoticeLine: View {
+    let text: String
+    let kind: PasswordResetNoticeKind
+
+    private var tint: Color {
+        switch kind {
+        case .progress: return CheckTheme.accent
+        case .info: return CheckTheme.pending
+        case .error: return CheckTheme.danger
+        }
+    }
+
+    private var icon: String {
+        switch kind {
+        case .progress: return "arrow.triangle.2.circlepath"
+        case .info: return "envelope.badge.fill"
+        case .error: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+            Text(text)
+                .font(.caption.weight(.medium))
+                // 서버 오류 문구는 한 줄을 넘길 수 있다. 로그인 배너와 달리 2줄까지 풀어 준다 —
+                // "코드가 만료됐어요. 다시 받아 주세요" 를 …으로 잘라 버리면 다음 행동을 알 수 없다.
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(tint.opacity(0.12))
+        )
+    }
+}
+
+/// 비밀번호 재설정(OTP) 화면. 브라우저를 열지 않고 앱 안에서 끝낸다 —
+/// 1단계: 이메일 → [코드 받기], 2단계: 6자리 코드 → [코드 확인], 3단계: 새 비밀번호 → [비밀번호 바꾸기].
+///
+/// 코드와 새 비밀번호를 **한 화면에 같이 두지 않는다**: 한 번에 제출하면 서버가 둘 중 무엇을 거절했는지
+/// 화면이 구분할 수 없어(코드 만료? 비밀번호 규칙?) 사용자가 애먼 값을 고치게 된다. 검증을 먼저 끝내면
+/// 3단계에서 나오는 실패는 반드시 비밀번호 문제다.
+///
+/// 스토어를 통째로 받지 않고 **값 + 클로저**로만 받는다(PokePanel/LeaderboardPanel 선례) —
+/// 렌더 테스트가 어떤 단계든 스토어 없이 그대로 그릴 수 있어야 하기 때문이다.
+struct PasswordResetPanel: View {
+    let phase: PasswordResetPhase
+    let message: String?
+    /// 스토어가 기억하는 "코드를 보낸 주소". 2단계 안내와 재발송 대상에 쓴다.
+    let sentToEmail: String
+    /// >0 이면 재발송 잠금 + 남은 초 표시.
+    let resendSeconds: Int
+    /// 렌더 스냅샷 전용: ASCII 안내 캡션이 떠 있는 상태를 재현한다. 앱에서는 항상 false.
+    var previewASCIIWarning: Bool = false
+    let perform: (PasswordResetAction) -> Void
+
+    // 코드·새 비밀번호는 스토어에 남기지 않는다(계약도 인자로만 받는다) — 화면을 벗어나면 사라지는 게 맞다.
+    @State private var email: String
+    @State private var code = ""
+    @State private var newPassword = ""
+    @FocusState private var focus: AuthFocusField?
+
+    init(
+        phase: PasswordResetPhase,
+        message: String?,
+        sentToEmail: String,
+        resendSeconds: Int,
+        previewASCIIWarning: Bool = false,
+        perform: @escaping (PasswordResetAction) -> Void
+    ) {
+        self.phase = phase
+        self.message = message
+        self.sentToEmail = sentToEmail
+        self.resendSeconds = resendSeconds
+        self.previewASCIIWarning = previewASCIIWarning
+        self.perform = perform
+        // 로그인 폼에서 들고 온 이메일을 그대로 채워 둔다 — 진입점이 beginPasswordReset(email:) 로 넘긴 값이다.
+        _email = State(initialValue: sentToEmail)
+    }
+
+    private var model: PasswordResetFormModel {
+        PasswordResetFormModel(
+            phase: phase,
+            email: email,
+            code: code,
+            newPassword: newPassword,
+            resendSeconds: resendSeconds,
+            message: message
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            BrandHeader(subtitle: model.headerSubtitle)
+            PanelDivider()
+            fields
+            AuthButton(title: model.primaryTitle, icon: model.primaryIcon, prominent: true) {
+                perform(model.primaryAction)
+            }
+            .disabled(!model.isPrimaryEnabled)
+            .opacity(model.isPrimaryEnabled ? 1 : 0.5)
+            // 안내 슬롯은 항상 자리를 잡고 문구 유무는 opacity 로만 토글한다(로그인 폼과 같은 관용구) — 창 튐 제거.
+            PasswordResetNoticeLine(text: model.noticeText ?? " ", kind: model.noticeKind)
+                .opacity(model.noticeText == nil ? 0 : 1)
+                .accessibilityHidden(model.noticeText == nil)
+            links
+        }
+        .padding(14)
+        .panelStyle()
+        .animation(.easeInOut(duration: 0.22), value: model.step)
+        // 화면에 처음 들어올 때와 단계가 넘어갈 때, 커서를 그 화면의 입력칸으로 옮긴다.
+        // 이게 없으면 코드 확인 직후 3단계가 떠도 커서가 사라진 코드 필드에 남아, 사용자가 클릭부터 해야 한다.
+        .onAppear { focus = model.step.focusField }
+        .onChange(of: model.step) { _, step in
+            focus = step.focusField
+        }
+    }
+
+    @ViewBuilder
+    private var fields: some View {
+        VStack(spacing: 8) {
+            switch model.step {
+            case .email:
+                Text("가입할 때 쓴 이메일로 6자리 코드를 보내 드려요.")
+                    .font(.caption)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                CredentialField(
+                    title: "이메일",
+                    icon: "envelope.fill",
+                    text: $email,
+                    enforcesASCII: true,
+                    allowsSpace: false,
+                    warnsInitially: previewASCIIWarning,
+                    focus: $focus,
+                    fieldIdentifier: .resetEmail,
+                    submitLabel: .go,
+                    onSubmit: { submitIfReady() }
+                )
+            case .code:
+                // 어디로 보냈는지 먼저 알린다 — 주소를 잘못 적었을 때 사용자가 스스로 알아챌 유일한 단서다.
+                //
+                // 주소를 문장 **안에** 끼워 넣지 않는다("…com 로/으로"). 조사는 앞 글자의 종성으로 갈리는데
+                // 이메일 도메인 끝은 매번 다르고(com·net → 으로, co·io·me → 로) 영문 철자의 한국어 발음
+                // 종성까지 판정하는 코드는 이 화면에 과하다. 안내 문장과 주소를 줄로 갈라 조사를 없앤다.
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("이 주소로 코드를 보냈어요")
+                        .font(.caption)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                    // 긴 주소는 가운데를 줄인다 — 뒤를 자르면 도메인이 사라져 "어느 주소인지" 확인이 안 된다.
+                    Text(sentToEmail)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // 코드는 숫자 6자리다. 한글 입력원에서 치면 조합 문자가 섞여 들어가므로 ASCII 강제가 필수다
+                // (enforcesASCII 는 포커스 시 영문 입력원 전환 + 비-ASCII 필터를 함께 건다).
+                CredentialField(
+                    title: "인증 코드 6자리",
+                    icon: "number",
+                    text: $code,
+                    enforcesASCII: true,
+                    allowsSpace: false,
+                    warnsInitially: previewASCIIWarning,
+                    focus: $focus,
+                    fieldIdentifier: .resetCode,
+                    submitLabel: .go,
+                    onSubmit: { submitIfReady() }
+                )
+            case .newPassword:
+                verifiedBanner
+                // 새 비밀번호만 남는다. 코드 필드는 여기 없다 — 이미 소모된 코드를 다시 보여 주면
+                // "또 쳐야 하나?"로 읽히고, 실제로 다시 보내 봐야 서버가 무조건 거절한다.
+                CredentialField(
+                    title: "새 비밀번호",
+                    icon: "lock.rotation",
+                    text: $newPassword,
+                    isSecure: true,
+                    enforcesASCII: true,
+                    allowsSpace: true,
+                    warnsInitially: previewASCIIWarning,
+                    focus: $focus,
+                    fieldIdentifier: .resetNewPassword,
+                    submitLabel: .go,
+                    onSubmit: { submitIfReady() }
+                )
+            }
+        }
+    }
+
+    /// 3단계 머리글. 화면이 또 바뀐 이유를 **먼저** 설명한다 — 초록 체크 + "코드 확인됐어요" 로
+    /// 방금 한 일이 성공했음을 못 박고, 그다음에 남은 할 일 하나를 알린다.
+    private var verifiedBanner: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(CheckTheme.working)
+                Text("코드 확인됐어요")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(CheckTheme.working)
+                Spacer(minLength: 0)
+            }
+            Text("새 비밀번호를 정해주세요 · 영문/숫자 6자 이상")
+                .font(.caption)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var links: some View {
+        VStack(spacing: 8) {
+            if model.showsResend {
+                // 재발송 대상은 사용자가 지금 보는 필드가 아니라 **실제로 보낸 주소**다 — 2단계에서 주소를
+                // 바꾸고 싶으면 취소하고 1단계로 돌아가야 한다(엉뚱한 주소로 조용히 재발송되는 걸 막는다).
+                AuthLinkButton(prompt: "코드가 안 왔나요?", action: model.resendTitle) {
+                    perform(.requestCode(email: sentToEmail))
+                }
+                .disabled(!model.isResendEnabled)
+                .opacity(model.isResendEnabled ? 1 : 0.45)
+            }
+            // 어느 단계에서든 로그인으로 돌아가는 길은 항상 보여야 한다(재설정 화면이 로그인 폼을 대체하므로
+            // 이 링크가 없으면 앱을 껐다 켜는 것 말고는 빠져나갈 방법이 없다).
+            AuthLinkButton(prompt: "", action: "로그인으로 돌아가기") {
+                perform(.cancel)
+            }
+        }
+    }
+
+    // Enter 제출은 버튼과 같은 게이트를 통과해야 한다 — 비활성 조건을 우회하는 뒷문을 만들지 않는다.
+    private func submitIfReady() {
+        guard model.isPrimaryEnabled else { return }
+        perform(model.primaryAction)
+    }
+}
+
 // MARK: - Teamless panel (signed in, no team)
 
 /// 로그인은 됐지만 소속 팀이 없을 때(무소속) 메인 대신 보여 주는 간단 패널.
@@ -2809,6 +3317,7 @@ private struct AuthStatusLine: View {
         switch kind {
         case .progress: return CheckTheme.accent
         case .info: return CheckTheme.pending
+        case .success: return CheckTheme.working
         case .error: return CheckTheme.danger
         }
     }
@@ -2817,6 +3326,7 @@ private struct AuthStatusLine: View {
         switch kind {
         case .progress: return "arrow.triangle.2.circlepath"
         case .info: return "envelope.badge.fill"
+        case .success: return "checkmark.seal.fill"
         case .error: return "exclamationmark.triangle.fill"
         }
     }
@@ -2827,7 +3337,10 @@ private struct AuthStatusLine: View {
                 .font(.system(size: 11, weight: .semibold))
             Text(message)
                 .font(.caption.weight(.medium))
-                .lineLimit(1)
+                // 재설정 성공 안내("비밀번호를 바꿨어요 · 새 비밀번호로 로그인해주세요")는 340pt 폭에서 한 줄을
+                // 넘긴다. 로그인/가입 오류는 전부 짧아 그대로 한 줄이고, 넘치는 문구만 둘째 줄로 풀린다.
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .foregroundStyle(tint)

@@ -1965,3 +1965,316 @@ func refreshTokenErrorClassifiesAsSessionExpiredNotAlreadyRegistered() async {
     let dupBody = #"{"message":"User already registered"}"#.data(using: .utf8)!
     #expect(await service.serviceError(statusCode: 422, data: dupBody) == .emailAlreadyRegistered)
 }
+
+// MARK: - 비밀번호 재설정 OTP (recover → verify → PUT user)
+
+/// 재설정 3경로 전용 스텁. URLProtocolStub(트랙 A 소유)은 /auth/v1/verify 를 모르고 빈 200 을 돌려줘
+/// 세션 디코드가 조용히 실패하므로, GoalRPCURLProtocol 과 같은 방식으로 여기 전용 스텁을 둔다.
+/// **응답 본문은 전부 2026-08-13 실서버(xfnhfjvubetkdnfkfljg) 실측값이다** — 딱 하나,
+/// over_email_send_rate_limit 만은 메일을 실제로 발송해야 재현되는 오류라 GoTrue 원문 문구를 그대로 썼다(보고서 참조).
+/// 정적 버퍼는 스위트가 병렬로 도는 동안 여러 워커가 동시에 append 하므로 잠금 아래에서만 만진다.
+final class RecoveryOTPURLProtocol: URLProtocol {
+    private nonisolated(unsafe) static var requests: [URLRequest] = []
+    private nonisolated(unsafe) static var bodiesByHost: [String: [String]] = [:]
+    private static let stateLock = NSLock()
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let host = request.url?.host ?? ""
+        Self.record(request: request, bodyText: Self.bodyText(from: request))
+
+        let (statusCode, json) = Self.response(host: host, path: request.url?.path ?? "")
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: statusCode,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(json.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+
+    static func session() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RecoveryOTPURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    static func requests(forHost host: String) -> [URLRequest] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return requests.filter { $0.url?.host == host }
+    }
+
+    static func bodyText(forHost host: String) -> String {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return bodiesByHost[host, default: []].joined(separator: "\n")
+    }
+
+    private static func record(request: URLRequest, bodyText: String) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        requests.append(request)
+        bodiesByHost[request.url?.host ?? "", default: []].append(bodyText)
+    }
+
+    private static func response(host: String, path: String) -> (Int, String) {
+        switch host {
+        case "otp-rate-seconds":
+            // 메일 발송 간격 제한. 유일하게 남은 초를 담고 있는 본문(미실측 — 실측하려면 메일이 실제로 나간다).
+            return (429, #"{"code":429,"error_code":"over_email_send_rate_limit","msg":"For security purposes, you can only request this after 51 seconds."}"#)
+        case "otp-rate-generic":
+            // 실측(verify 40연타): IP 단위 제한은 초가 **없다**.
+            return (429, #"{"code":429,"error_code":"over_request_rate_limit","msg":"Request rate limit reached"}"#)
+        case "otp-rate-nobody":
+            // 429 인데 JSON 이 아닌 경우(에지/프록시가 가로챈 응답). 공용 매핑이 .invalidResponse(429) 로 준다.
+            return (429, "")
+        case "otp-expired":
+            // 실측: 존재하는 계정+틀린 코드, 없는 계정+아무 코드, 잘못된 type 까지 전부 이 하나로 온다.
+            return (403, #"{"code":403,"error_code":"otp_expired","msg":"Token has expired or is invalid"}"#)
+        case "otp-empty-token":
+            return (400, #"{"code":400,"error_code":"validation_failed","msg":"Verify requires either a token or a token hash"}"#)
+        case "otp-weak-password":
+            return (422, #"{"code":422,"error_code":"weak_password","msg":"Password should be at least 6 characters.","weak_password":{"reasons":["length"]}}"#)
+        case "otp-same-password":
+            // 미실측(유효한 recovery 세션이 있어야 재현된다). GoTrue 원문 문구.
+            return (422, #"{"code":422,"error_code":"same_password","msg":"New password should be different from the old password."}"#)
+        case "otp-bad-jwt":
+            // 실측: 잘못된 Bearer 로 PUT /auth/v1/user.
+            return (403, #"{"code":403,"error_code":"bad_jwt","msg":"invalid JWT: unable to parse or verify signature, token is malformed: token contains an invalid number of segments"}"#)
+        default:
+            break
+        }
+        if path == "/auth/v1/verify" {
+            // 실측 성공 응답과 같은 모양(로그인 응답과 동일) — SignInResponse 재사용이 성립하는지의 근거.
+            return (200, """
+            {
+              "access_token": "recovery-access-token",
+              "refresh_token": "recovery-refresh-token",
+              "token_type": "bearer",
+              "expires_in": 3600,
+              "user": { "id": "00000000-0000-0000-0000-000000000002" }
+            }
+            """)
+        }
+        if path == "/auth/v1/user" {
+            return (200, #"{"id":"00000000-0000-0000-0000-000000000002","email":"member@example.com"}"#)
+        }
+        return (200, "{}")
+    }
+
+    private static func bodyText(from request: URLRequest) -> String {
+        if let body = request.httpBody {
+            return String(decoding: body, as: UTF8.self)
+        }
+        guard let stream = request.httpBodyStream else { return "" }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        let bufferSize = 1024
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+        while stream.hasBytesAvailable {
+            let count = stream.read(buffer, maxLength: bufferSize)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return String(decoding: data, as: UTF8.self)
+    }
+}
+
+private func recoveryService(host: String) -> SupabaseWorkService {
+    SupabaseWorkService(
+        projectURL: URL(string: "http://\(host)")!,
+        anonKey: "anon-test-key",
+        session: RecoveryOTPURLProtocol.session()
+    )
+}
+
+@Test
+func sendPasswordResetCodePostsRecoverWithAnonBearer() async throws {
+    let testHost = "otp-recover-ok"
+    let service = recoveryService(host: testHost)
+
+    try await service.sendPasswordResetCode(email: "member@example.com")
+
+    let request = try #require(RecoveryOTPURLProtocol.requests(forHost: testHost).first {
+        $0.url?.path == "/auth/v1/recover"
+    })
+    #expect(request.httpMethod == "POST")
+    #expect(request.value(forHTTPHeaderField: "apikey") == "anon-test-key")
+    // 로그인 전 경로라 유저 토큰이 없다 — anon 키가 Bearer 로 나가야 한다(다른 값이면 401 로 죽는다).
+    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer anon-test-key")
+    #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+    #expect(request.value(forHTTPHeaderField: "Prefer") == nil)
+    #expect(RecoveryOTPURLProtocol.bodyText(forHost: testHost) == #"{"email":"member@example.com"}"#)
+}
+
+@Test
+func sendPasswordResetCodeMapsEmailSendRateLimitWithRemainingSeconds() async {
+    let service = recoveryService(host: "otp-rate-seconds")
+
+    do {
+        try await service.sendPasswordResetCode(email: "member@example.com")
+        Issue.record("60초 재발송 제한은 성공으로 흘러선 안 된다")
+    } catch let error as SupabaseWorkServiceError {
+        // 남은 초를 못 뽑으면 화면이 "잠시 후"밖에 못 말하고, 사용자는 몇 초인지 몰라 계속 눌러 429 를 다시 부른다.
+        #expect(error == .rateLimited(retryAfterSeconds: 51))
+    } catch {
+        Issue.record("예상치 못한 오류: \(error)")
+    }
+}
+
+@Test
+func sendPasswordResetCodeMapsGenericRateLimitWithoutSeconds() async {
+    let service = recoveryService(host: "otp-rate-generic")
+
+    do {
+        try await service.sendPasswordResetCode(email: "member@example.com")
+        Issue.record("IP 단위 429 도 성공으로 흘러선 안 된다")
+    } catch let error as SupabaseWorkServiceError {
+        // 이 본문엔 초가 없다. 없는 걸 0 으로 지어내면 재시도 버튼이 곧바로 열린다.
+        #expect(error == .rateLimited(retryAfterSeconds: nil))
+    } catch {
+        Issue.record("예상치 못한 오류: \(error)")
+    }
+}
+
+@Test
+func sendPasswordResetCodeMapsBodylessRateLimit() async {
+    let service = recoveryService(host: "otp-rate-nobody")
+
+    do {
+        try await service.sendPasswordResetCode(email: "member@example.com")
+        Issue.record("본문 없는 429 도 성공으로 흘러선 안 된다")
+    } catch let error as SupabaseWorkServiceError {
+        // 본문이 JSON 이 아니면 공용 매핑이 .invalidResponse(429) 를 준다 — status 로만 알 수 있는 유일한 경우.
+        #expect(error == .rateLimited(retryAfterSeconds: nil))
+    } catch {
+        Issue.record("예상치 못한 오류: \(error)")
+    }
+}
+
+@Test
+func verifyPasswordResetCodePostsRecoveryTypeAndReturnsSession() async throws {
+    let testHost = "otp-verify-ok"
+    let service = recoveryService(host: testHost)
+
+    let session = try await service.verifyPasswordResetCode(email: "member@example.com", code: "123456")
+
+    // 응답이 로그인과 같은 모양이라 SignInResponse 를 재사용했다 — 토큰 3종이 그대로 살아 나와야 성립한다.
+    #expect(session.accessToken == "recovery-access-token")
+    #expect(session.refreshToken == "recovery-refresh-token")
+    #expect(session.userID == "00000000-0000-0000-0000-000000000002")
+
+    let request = try #require(RecoveryOTPURLProtocol.requests(forHost: testHost).first {
+        $0.url?.path == "/auth/v1/verify"
+    })
+    #expect(request.httpMethod == "POST")
+    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer anon-test-key")
+    let bodyText = RecoveryOTPURLProtocol.bodyText(forHost: testHost)
+    #expect(bodyText.contains(#""email":"member@example.com""#))
+    #expect(bodyText.contains(#""token":"123456""#))
+    // type 이 recovery 가 아니면 서버는 403 otp_expired 를 준다 — 화면엔 "코드가 틀렸다"고 뜨고 원인은 안 보인다.
+    #expect(bodyText.contains(#""type":"recovery""#))
+}
+
+@Test
+func verifyPasswordResetCodeMergesExpiredAndWrongCodeIntoOneError() async {
+    let service = recoveryService(host: "otp-expired")
+
+    do {
+        _ = try await service.verifyPasswordResetCode(email: "member@example.com", code: "000000")
+        Issue.record("틀린 코드는 세션을 내주면 안 된다")
+    } catch let error as SupabaseWorkServiceError {
+        // 만료와 불일치를 나눌 수 없다(실측: 두 경우 모두 같은 403 otp_expired). 그래서 케이스도 하나다.
+        #expect(error == .otpInvalidOrExpired)
+    } catch {
+        Issue.record("예상치 못한 오류: \(error)")
+    }
+}
+
+@Test
+func verifyPasswordResetCodeMapsEmptyTokenValidationFailure() async {
+    let service = recoveryService(host: "otp-empty-token")
+
+    do {
+        _ = try await service.verifyPasswordResetCode(email: "member@example.com", code: "")
+        Issue.record("빈 코드는 세션을 내주면 안 된다")
+    } catch let error as SupabaseWorkServiceError {
+        // 서버 문구는 다르지만("Verify requires either a token or a token hash") 사용자 입장에선 같은 사건이다.
+        #expect(error == .otpInvalidOrExpired)
+    } catch {
+        Issue.record("예상치 못한 오류: \(error)")
+    }
+}
+
+@Test
+func updatePasswordPutsUserWithRecoveryBearer() async throws {
+    let testHost = "otp-update-ok"
+    let service = recoveryService(host: testHost)
+
+    try await service.updatePassword(accessToken: "recovery-access-token", newPassword: "new-team-password")
+
+    let request = try #require(RecoveryOTPURLProtocol.requests(forHost: testHost).first {
+        $0.url?.path == "/auth/v1/user"
+    })
+    #expect(request.httpMethod == "PUT")
+    // verify 로 받은 토큰을 안 붙이면 서버는 403 bad_jwt 를 준다 — 비밀번호가 바뀌지 않은 채 흐름만 끝난다.
+    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer recovery-access-token")
+    #expect(request.value(forHTTPHeaderField: "apikey") == "anon-test-key")
+    #expect(RecoveryOTPURLProtocol.bodyText(forHost: testHost) == #"{"password":"new-team-password"}"#)
+}
+
+@Test
+func updatePasswordMapsWeakPasswordRule() async {
+    let service = recoveryService(host: "otp-weak-password")
+
+    do {
+        try await service.updatePassword(accessToken: "recovery-access-token", newPassword: "12")
+        Issue.record("6자 미만 비밀번호가 성공으로 흘러선 안 된다")
+    } catch let error as SupabaseWorkServiceError {
+        #expect(error == .weakPassword)
+    } catch {
+        Issue.record("예상치 못한 오류: \(error)")
+    }
+}
+
+@Test
+func updatePasswordMapsSamePasswordReuse() async {
+    let service = recoveryService(host: "otp-same-password")
+
+    do {
+        try await service.updatePassword(accessToken: "recovery-access-token", newPassword: "same-as-before")
+        Issue.record("같은 비밀번호 재사용이 성공으로 흘러선 안 된다")
+    } catch let error as SupabaseWorkServiceError {
+        // **지금은 .weakPassword 로 뭉개진다** — 공용 매핑(SupabaseWorkHTTP.serviceError)이 "password" 를
+        // 포함한 모든 메시지를 그리로 보내는데 그 파일은 이 트랙 소유가 아니다. 매핑 한 줄이 들어오면
+        // .samePasswordReuse 가 된다. 둘 다 "비밀번호를 바꿔야 한다"는 같은 계열이라 이 테스트는 양쪽을 통과시킨다
+        // (한쪽으로 못 박으면 매핑이 들어오는 순간 무관한 테스트가 빨개진다).
+        #expect(error == .weakPassword || error == .samePasswordReuse)
+    } catch {
+        Issue.record("예상치 못한 오류: \(error)")
+    }
+}
+
+@Test
+func updatePasswordMapsBadJWTToSessionExpired() async {
+    let service = recoveryService(host: "otp-bad-jwt")
+
+    do {
+        try await service.updatePassword(accessToken: "not-a-jwt", newPassword: "new-team-password")
+        Issue.record("죽은 토큰으로 비밀번호가 바뀌면 안 된다")
+    } catch let error as SupabaseWorkServiceError {
+        // 그냥 두면 "invalid JWT: unable to parse or verify signature…" 가 메뉴바에 영어 그대로 뜬다.
+        #expect(error == .sessionExpired)
+    } catch {
+        Issue.record("예상치 못한 오류: \(error)")
+    }
+}

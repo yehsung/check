@@ -2,6 +2,26 @@ import AppKit
 import Foundation
 import Observation
 
+/// 비밀번호 재설정(메일 OTP) 진행 단계. **화면 선택의 유일한 근거**라 별도 Bool 플래그를 두지 않는다 —
+/// "보내는 중"과 "입력 대기"를 각각의 Bool 로 표현하면 둘 다 true 인 불가능한 조합이 언제든 만들어진다.
+enum PasswordResetPhase: Equatable, Sendable {
+    /// 재설정 화면을 띄우지 않음(기본).
+    case idle
+    /// 이메일 입력 대기.
+    case enterEmail
+    /// 코드 발송 왕복 중(취소 가능).
+    case sending
+    /// 코드**만** 입력 대기. 새 비밀번호는 여기서 받지 않는다 — 한 화면에 둘 다 두면 코드가 틀렸을 때
+    /// 애써 입력한 새 비밀번호까지 같이 날아간다(사장님 실기에서 나온 요청의 실질 이유).
+    case enterCode
+    /// 코드 검증 왕복 중(취소 가능).
+    case verifying
+    /// 코드가 통과했다 — 새 비밀번호**만** 입력 대기. 이 단계에 있다는 것은 recovery 세션을 손에 쥐고 있다는 뜻이다.
+    case enterNewPassword
+    /// 비밀번호 설정 왕복 중(취소 가능).
+    case submitting
+}
+
 @Observable
 @MainActor
 final class WorkTimerStore {
@@ -511,6 +531,50 @@ final class WorkTimerStore {
     /// 저장 왕복 중인지. isUpdatingTeamGoal 과 달리 **관찰 대상**이다 — 저장 버튼을 누른 동안 비활성으로
     /// 잠가야 연타로 두 번째 요청이 나가지 않는다.
     var isUpdatingDisplayName = false
+
+    // ── 비밀번호 재설정(메일 OTP) ──
+    // 왜 앱 안에서 끝내는가: 재설정 메일의 링크는 `check://auth` 로 가는데 그 스킴을 등록한 앱이 없어
+    // 실사용자에게는 빈 화면만 떴다(운영자가 Admin API 로 직접 풀어 주는 것이 유일한 복구였다).
+    // 6자리 코드를 메일로 받아 앱에서 입력하면 브라우저·딥링크가 통째로 경로에서 빠진다.
+    /// 재설정 진행 단계. UI 는 이 값 하나로 화면을 고른다(idle = 재설정 화면을 아예 띄우지 않음).
+    var passwordResetPhase: PasswordResetPhase = .idle
+    /// 사용자에게 보일 한국어 안내/오류 한 줄. 단계 전이·사전 검증 실패·서버 응답 지점에서만 대입한다.
+    var passwordResetMessage: String?
+    /// 코드를 보낸 주소(코드 입력 화면의 "어디로 보냈는지" 표시). **정규화된 값**이다 —
+    /// 발송과 검증이 같은 문자열을 써야 GoTrue 가 같은 사용자로 본다(대소문자/앞뒤 공백이 갈리면 검증이 튕긴다).
+    var passwordResetEmail = ""
+    /// 재발송까지 남은 초. >0 이면 UI 가 [다시 받기]를 잠그고 이 숫자를 보여 준다. 0 이 곧 "지금 다시 받을 수 있다".
+    var passwordResetResendSeconds = 0
+
+    /// 지금 날아가 있는 재설정 왕복(발송 또는 검증·설정)의 Task. cancelPasswordReset 이 이걸 취소해
+    /// **URLSession 요청 자체**를 끊는다(세대 토큰만으로는 요청이 끝까지 살아 서버에 헛부하를 남긴다).
+    /// 관찰 대상 아님(뷰가 읽지 않는다 — 진행 표시는 phase 가 한다).
+    @ObservationIgnored var passwordResetTask: Task<Void, Never>?
+    /// 재발송 카운트다운 Task. 새 쿨다운을 걸 때/취소·성공으로 흐름이 끝날 때 교체·취소한다. 관찰 대상 아님.
+    @ObservationIgnored var passwordResetCooldownTask: Task<Void, Never>?
+    /// 재설정 흐름의 세대 토큰. 취소/새 시작마다 +1 한다. 모든 await 뒤에서 이 값을 다시 확인하므로
+    /// **늦게 도착한 응답이 이미 닫힌 흐름의 상태를 되살리지 못한다** — 이 코드베이스가 sessionGeneration/
+    /// previewGeneration 으로 반복해 쓰는 방어와 같은 규약이다(취소된 흐름이 사용자를 로그인시키는 사고 차단).
+    /// 관찰 대상 아님.
+    @ObservationIgnored var passwordResetGeneration = 0
+    /// 코드 검증에 성공해 손에 쥔 recovery 세션. `enterNewPassword` 단계의 **실체**이자, 비밀번호가 거절돼도
+    /// (6자 미만·이전과 동일) 버리지 않고 붙잡아 두는 값이다 — OTP 는 **1회용**이라 여기서 버리면 사용자는
+    /// 멀쩡한 코드를 다시 받아야 하고 재발송 쿨다운에 갇힌다. 재시도는 이 세션으로 곧장 설정만 다시 친다.
+    ///
+    /// **절대 영속하지 않는다**(persistSession 을 태우지 않는다). 재설정은 로그인이 아니라 비밀번호 교체이고,
+    /// 디스크에 남기면 다음 실행이 그 토큰으로 되살아나 "로그인한 적 없는데 로그인돼 있다"가 된다.
+    /// 흐름이 끝나면(성공/취소) 반드시 비운다. 관찰 대상 아님.
+    @ObservationIgnored var passwordResetVerifiedSession: SupabaseSession?
+    /// 이번 재설정 흐름에서 코드를 **몇 번 보냈는가**. 쿨다운 길이가 발송 차수에 따라 다르기 때문에 필요하다:
+    /// 첫 발송 뒤는 5초(맨 처음 메일이 실제로 안 갈 수 있어 바로 다시 눌러 볼 수 있어야 한다),
+    /// 그 뒤 재전송부터는 60초. 취소/재시작(clearPasswordResetState)에서 0 으로 되돌린다. 관찰 대상 아님.
+    @ObservationIgnored var passwordResetSendCount = 0
+    /// 카운트다운 대기(주입 가능). 프로덕션은 실제 1초 수면이고, 테스트만 갈아 끼워 60초를 실제로 자지 않게 한다
+    /// (CheckUpdateCheck.watchdogSleep 과 같은 주입 규약). 시각 판정은 주입 clock 이 하므로 이 둘을 함께
+    /// 바꾸면 카운트다운 전체가 결정적으로 돈다. 관찰 대상 아님.
+    @ObservationIgnored var passwordResetSleep: @Sendable (Double) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
 
     // 잠자기 정책: willSleep 시각을 기록해 didWake 에서 잠든 시간을 판정한다.
     var sleepBeganAt: Date?

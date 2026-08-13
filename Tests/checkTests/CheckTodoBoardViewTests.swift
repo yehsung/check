@@ -1142,6 +1142,12 @@ func hidingTheRealPanelCollapsesTheTuningRowBeforeItIsShownAgain() throws {
     panel.isOpaque = true
     // 앱과 같은 고정 외관. 이걸 빼면 시스템이 밝은 테마일 때 컨트롤이 밝은 배경 기준으로 그려진다.
     panel.appearance = NSAppearance(named: .darkAqua)
+    // ★ 이 창은 팩토리(CheckTodoBoardController.makePanel)를 거치지 않고 직접 만든 것이라, 테스트 중
+    //   창을 감추는 전환 지점을 지나가지 않는다. 이 한 줄이 없으면 `swift test` 를 돌릴 때마다 300×400
+    //   **불투명 검은 판**이 사용자 화면에 번쩍인다(실사용 신고: "테스트 돌리면 화면이 도배된다").
+    //   알파 0 은 합성 단계에서만 지우고 백킹스토어 그리기는 그대로라, 아래 cacheDisplay 잉크 판정에
+    //   영향이 없다(알파 1/0 에서 픽셀값이 소수점까지 동일함을 실측).
+    CheckPanelVisibility.apply(to: panel)
 
     // 보드 아래에 검정을 직접 깐다. 호스팅 뷰는 배경이 투명이라, cacheDisplay 로 뜬 비트맵에서는
     // 반투명 틴트가 알파를 그대로 달고 나와(합성 전 색) 잉크 판정이 통째로 흔들린다.

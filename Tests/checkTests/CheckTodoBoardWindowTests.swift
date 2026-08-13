@@ -518,7 +518,9 @@ func todoBoardBlurAndHostingAreSiblingsUnderTransparentContainer() throws {
     // 창 자체의 투명도 문도 열려 있어야 한다(하나라도 닫히면 아래 블러가 화면에 못 나온다).
     #expect(panel.isOpaque == false)
     #expect(panel.backgroundColor == NSColor.clear)
-    #expect(panel.alphaValue == 1)   // 창 전체를 흐리는 게 아니다 — 알파는 콘텐츠가 정한다
+    // 창 전체를 흐리는 게 아니다 — 알파는 콘텐츠(블러 뷰)가 정한다. 창 알파는 오직
+    // CheckPanelVisibility 만 정하고(테스트 0 / 프로덕션 1), 그 값이 여기 그대로 서 있어야 한다.
+    #expect(panel.alphaValue == CheckPanelVisibility.panelAlpha)
 
     // 블러 위 어디에도 보드를 통째로 덮는 불투명 배경이 없어야 한다.
     let culprits = todoBoardOpaqueCoveringViews(container, boardBounds: container.bounds)
@@ -828,7 +830,12 @@ func todoBoardOpacityDimsOnlyTheBlurNeverTheText() throws {
     #expect(todoBoardEffectiveAlpha(hosting, upTo: container) == 1.0, "글자가 흐려졌다")
     #expect(container.alphaValue == 1, "컨테이너에 알파가 걸렸다 — 글자까지 같이 흐려진다")
     #expect(hosting.alphaValue == 1)
-    #expect(controller.panel.alphaValue == 1, "패널에 알파가 걸렸다 — 창 전체가 유령이 된다")
+    // 창 알파를 만지는 곳은 CheckPanelVisibility 한 곳뿐이다(테스트 실행이라 0, 프로덕션은 1).
+    // 여기에 투명도 값(예: 0.55)이 새어 들어오면 그 순간 이 단언이 빨개진다 — "패널에 알파가 걸렸다 =
+    // 창 전체가 유령이 된다" 회귀는 그대로 잡히고, 스위트가 사용자 화면을 덮지 않는 것도 함께 지킨다.
+    #expect(controller.panel.alphaValue == CheckPanelVisibility.panelAlpha,
+            "패널에 알파가 걸렸다 — 창 전체가 유령이 된다")
+    #expect(CheckPanelVisibility.productionAlpha == 1)
 
     // 되돌리면 블러도 그대로 돌아온다(단방향으로 죽지 않는다).
     appearance.setOpacity(TodoBoardAppearance.maxOpacity)
@@ -1067,3 +1074,43 @@ func todoBoardScrollMonitorLivesOnlyWhileTheBoardIsOpen() {
 }
 
 
+
+
+// MARK: - 17) 스위트가 사용자 화면을 덮지 않는다
+
+/// 캐릭터 패널 쪽 짝(`overlayPanelStaysInvisibleToTheUserWhileTesting`)의 보드 버전이다.
+/// 보드는 캐릭터보다 더 자주 열리고(이 파일만 해도 수십 번), 300×400 짜리 불투명해 보이는 판이라
+/// 사용자 화면에 그대로 뜨면 눈에 가장 먼저 걸린다.
+///
+/// **핵심은 이 파일의 블러 검증이 여전히 산다는 것이다.** 알파 0 은 합성 단계에서만 지우므로
+/// `orderFrontRegardless` 로 창이 화면에 올라간 사실도, 그 위에 서는 `CABackdropLayer` 도,
+/// `cacheDisplay` 로 뜬 백킹스토어 픽셀도 그대로다(같은 머신 실측: 알파 1 일 때와 알파 0 일 때
+/// 중앙 0.5686 / 모서리 0.000 이 **소수점까지 동일**했고 backdrop 도 양쪽 다 존재했다).
+@MainActor
+@Test
+func todoBoardPanelStaysInvisibleToTheUserWhileTesting() throws {
+    #expect(CheckPanelVisibility.isRunningTests, "테스트 판정이 죽었다 — 보드가 사용자 화면에 뜬다")
+    #expect(CheckTodoBoardController.makePanel().alphaValue == 0)
+
+    let controller = CheckTodoBoardController(
+        store: makeTodoBoardStore(), appearance: makeTodoBoardAppearanceStore()
+    )
+    controller.open(anchor: todoBoardTestAnchor, screenVisibleFrame: todoBoardTestVisibleFrame)
+    defer { controller.close() }
+    todoBoardPump()
+
+    #expect(controller.isBoardOpen)
+    #expect(controller.panel.alphaValue == 0, "보드가 사용자 화면에 보인다")
+    // 창은 **실제로 화면에 올라가 있어야 한다** — 여기서 물러났다면 블러 검증이 함께 죽는다.
+    #expect(controller.panel.isVisible, "창을 아예 안 띄웠다 — CABackdropLayer 가 서지 않는다")
+    // 그리고 위치·크기는 한 톨도 안 건드렸다(화면 밖으로 밀어내는 방식을 배제한 이유).
+    #expect(controller.panel.frame
+        == TodoBoardAnchor.frame(anchor: todoBoardTestAnchor, in: todoBoardTestVisibleFrame))
+
+    // 블러 체인이 알파 0 아래에서도 그대로 산다는 것을 같은 테스트 안에서 확인한다.
+    let (_, blur, hosting) = try todoBoardLayers(controller.panel)
+    #expect(todoBoardHasBackdropLayer(try #require(blur.layer)))
+    let center = try todoBoardPixelAlpha(hosting, x: Int(hosting.bounds.width) / 2,
+                                         y: Int(hosting.bounds.height) / 2)
+    #expect(center > 0.05 && center < 0.95, "cacheDisplay 픽셀 실측이 죽었다(alpha=\(center))")
+}

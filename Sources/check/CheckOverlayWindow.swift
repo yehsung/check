@@ -1,5 +1,72 @@
 import AppKit
+import MachO
 import SwiftUI
+
+/// 우리가 만드는 패널을 **테스트 실행 중에만** 사용자 눈에서 지우는 단 하나의 전환 지점.
+///
+/// 왜 이런 게 필요한가 — 이 코드베이스의 창 검증은 **진짜 NSPanel** 위에서만 성립한다. 프레임 클램프와
+/// 화면 가장자리 뒤집힘은 실제 창 기하로 재고(멀티모니터 음수 좌표까지), 울트라는 실제 화면 프레임과
+/// 같은지를 보며, 보드 블러는 `orderFrontRegardless` 로 창이 실제로 화면에 올라가야 서는
+/// `CABackdropLayer` 를 본다. 즉 "창을 안 만든다 / 안 띄운다"는 선택지가 애초에 없다.
+/// 그런데 그대로 두면 `swift test` 한 번마다 사용자 데스크톱이 캐릭터·할 일 보드·전체화면 울트라로
+/// 도배된다(실사용 신고 — 전체 스위트를 하루에도 여러 번 돌린다).
+///
+/// 그래서 **기하는 한 톨도 건드리지 않고 알파만 0** 으로 만든다. 나머지 후보는 실측으로 배제했다:
+/// · 화면 밖 좌표로 옮기기 → 클램프·뒤집힘 단언이 통째로 깨진다(그 단언이 이 코드베이스의 핵심 자산이다).
+/// · `orderFrontRegardless` 를 테스트에서 건너뛰기 → 창이 화면에 안 올라가면 AppKit 이 백드롭 레이어를
+///   세우지 않아 보드 블러 검증(`todoBoardBackdropLayerExistsOnScreen`)이 죽는다.
+/// 알파 0 은 **합성 단계에서만** 지운다 — 뷰가 자기 백킹스토어에 그리는 일은 그대로라
+/// `cacheDisplay` 픽셀 실측도 살아 있다. 같은 머신에서 알파 1 과 알파 0 을 나란히 재 봤을 때
+/// 보드 호스팅 뷰의 중앙 픽셀 알파는 **양쪽 다 0.5686274509803921**, 모서리는 양쪽 다 0.000 이었고
+/// 블러 뷰의 `CABackdropLayer` 도 양쪽 다 서 있었다(`panel.isVisible` 도 양쪽 다 true).
+///
+/// **프로덕션에서는 이 판정이 언제나 false 다.** XCTest 가 로드된 프로세스에서만 참이 되고, 앱 번들에는
+/// XCTest 가 없다. 그래서 프로덕션 경로는 예전과 같은 `alphaValue = 1` 을 지난다.
+enum CheckPanelVisibility {
+    /// 이 프로세스가 테스트 실행인가. **판정은 여기 한 곳뿐이다** — 프로덕션 코드에 `#if DEBUG` 를
+    /// 흩뿌리면 어느 갈래가 배포되는지 아무도 추적하지 못한다.
+    ///
+    /// 묻는 것은 "테스트 번들이 이 프로세스에 로드되어 있는가" 하나다. 그게 정확히 우리가 알고 싶은
+    /// 사실이고, 실행 방식(Xcode / `swift test`)이 바뀌어도 변하지 않는 유일한 표식이다.
+    ///
+    /// 처음에 쓴 판정 둘은 **실측으로 탈락했다**(같은 머신에서 `swift test` 로 확인):
+    /// · `XCTestConfigurationFilePath`/`XCTestBundlePath` 환경변수 → **둘 다 비어 있다**.
+    /// · `NSClassFromString("XCTestCase")` → **nil 이다**. SwiftPM 은 swift-testing 을 XCTest 없이
+    ///   `swiftpm-testing-helper` 프로세스에서 돌리므로 XCTest 가 아예 안 실려 있다.
+    /// 그때 실제로 로드된 이미지는 `…/checkPackageTests.xctest/Contents/MacOS/checkPackageTests` 였다.
+    /// 그래서 dyld 이미지 목록에서 `.xctest` 번들을 찾는다. 환경변수 검사는 (Xcode 실행처럼) 값이 있는
+    /// 경우의 지름길로만 남긴다 — 없다고 물러나지 않는다.
+    ///
+    /// 이 판정이 조용히 거짓이 되면 창이 다시 사용자 화면에 뜬다. 그래서 그 순간 빨개지는 테스트를
+    /// 함께 두었다(`overlayPanelStaysInvisibleToTheUserWhileTesting` 등이 `isRunningTests` 자체를 단언한다).
+    static let isRunningTests: Bool = {
+        let env = ProcessInfo.processInfo.environment
+        if env["XCTestConfigurationFilePath"] != nil || env["XCTestBundlePath"] != nil { return true }
+        for index in 0..<_dyld_image_count() {
+            guard let raw = _dyld_get_image_name(index) else { continue }
+            if String(cString: raw).contains(".xctest/") { return true }
+        }
+        return false
+    }()
+
+    /// 프로덕션 패널 알파. **창은 알파를 정하지 않는다** — 보드의 반투명은 블러 뷰가 정하고(형제 배치의
+    /// 존재 이유), 창에 알파를 걸면 글자까지 유령이 된다. 그래서 프로덕션 값은 1 로 못 박는다.
+    static let productionAlpha: CGFloat = 1
+
+    /// 이 프로세스가 새로 만드는 패널에 걸 알파.
+    static var panelAlpha: CGFloat { isRunningTests ? 0 : productionAlpha }
+
+    /// 패널 생성 경로가 마지막에 부르는 한 줄. **창 알파를 만지는 곳은 여기뿐이어야 한다** —
+    /// 다른 곳에서 만지면 "투명하게 했더니 글자가 안 보인다" 신고가 그대로 되살아난다.
+    ///
+    /// `@MainActor` 인 이유는 `NSWindow.alphaValue` 가 메인 액터 격리라서다(두 호출자 모두 이미
+    /// 메인 액터의 `makePanel` 이다). 안 붙이면 Swift 6 가 경고만 내고 통과시키는데, 그 경고는
+    /// 언젠가 오류가 되는 종류다.
+    @MainActor
+    static func apply(to panel: NSPanel) {
+        panel.alphaValue = panelAlpha
+    }
+}
 
 /// 근무중일 때만 화면 우상단(메뉴바 바로 아래)에 떠 있는 3D 캐릭터 오버레이 패널과 그 표시/숨김·재배치를 관리한다.
 ///
@@ -143,6 +210,26 @@ final class CheckOverlayController {
     /// 이 인스턴스의 강제 원복 상한(초) — **격발이 시작된 시각 기준**이다(마감 시각의 유일한 근거).
     /// 프로덕션은 `ultraSeconds + ultraWatchdogGrace`. 위와 같은 이유로 테스트에서만 짧게 주입한다.
     let ultraDeadlineSeconds: Double
+    /// 정상 원복 타이머(`ultraTask`)의 수면. 프로덕션은 실제 `Task.sleep` 이고, **테스트만** 갈아 끼운다
+    /// (`WorkTimerStore.passwordResetSleep` 과 같은 주입 규약).
+    ///
+    /// 왜 지속(초) 주입만으로는 부족했는가 — "타이머가 스스로 깨어나는가"를 짧은 실시간 값(0.3초)으로 보던
+    /// 판은 **제품이 아니라 그날의 메인 액터 대기열**을 시험했다. 이 스위트는 다수가 `@MainActor` 이고
+    /// ImageRenderer 렌더·첫 3D 마운트 같은 **동기** 작업이 메인 스레드를 통째로 잡는다(실측: `Task.sleep(10ms)`
+    /// 한 번이 84.15초 뒤에 재개). 그래서 단독 실행은 초록, 전체 실행만 빨간불이 났다 — 원인을 엉뚱한 곳으로
+    /// 가리키는 최악의 실패다. 수면 자체를 쥐면 그 축이 사라진다: 테스트는 시간을 기다리는 대신
+    /// **깨울 사람을 고른다**.
+    ///
+    /// 워치독과 **따로** 두는 것이 핵심이다. 두 성질("정상 타이머가 스스로 깨어난다" / "워치독이 스스로
+    /// 깨어난다")은 서로를 가려 준다 — 한쪽을 재운 채 다른 한쪽만 시험할 수 있어야 각 태스크 생성을
+    /// 지우는 변이가 실제로 빨간불이 된다(한 지점으로 합치면 "둘 중 누군가 깨웠다"밖에 증명 못 한다).
+    var ultraSleep: @Sendable (Double) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
+    /// 워치독(`ultraWatchdogTask`)의 수면. 위와 같은 이유로 분리된 주입 지점이다. 프로덕션 기본값은 동일하다.
+    var ultraWatchdogSleep: @Sendable (Double) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
     /// 클릭 통과 값 못 박기. non-nil 인 동안 `setIgnoresMouseEvents` 는 어떤 호출자가 무엇을 요구하든
     /// 이 값만 쓴다. 이게 없으면 히트-스루 기계(updateHitThrough / restorePassThroughAfterExit)가
     /// 커서 위치에 따라 값을 뒤집어 5초 격발이 "막다 말다" 하는 최악의 상태가 된다.
@@ -335,6 +422,16 @@ final class CheckOverlayController {
         engine.request(.commuteEnd)
         farewellTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(Self.farewellHideDeadline))
+            // ★ 취소 검사가 없으면 **cancel() 이 곧 즉시 실행**이다. `Task.sleep` 은 취소되는 순간 throw 하고
+            //   `try?` 가 그걸 삼키므로, 잠들어 있던 태스크가 그 자리에서 다음 줄로 내려와 finishHide 를 부른다
+            //   — 취소한 쪽이 막으려던 바로 그 일을 취소가 앞당겨 일으킨다.
+            //   실측(단독 실행 재현): 근무 종료 인사 중 울트라가 도착해 beginUltraTakeover 가 이 태스크를
+            //   cancel 하면, 20ms 뒤 renderActive=false·panel.isVisible=false — 전체화면 격발이 뜨자마자
+            //   지워지고 남은 5초 동안 렌더까지 멈춘 채로 남았다(isUltraActive 만 true). 보낸 사람의
+            //   하루치 몫이 그대로 증발한다. beginUltraTakeover 의 farewell 취소 주석이 막겠다고 적어 둔
+            //   사고가 실제로는 그 취소 때문에 일어나고 있었다.
+            //   이 파일의 다른 태스크(drowsy·blink·pokePeek·ultra)는 전부 같은 가드를 이미 갖고 있다.
+            guard !Task.isCancelled else { return }
             self?.finishHide()
         }
     }
@@ -763,16 +860,21 @@ final class CheckOverlayController {
         // "격발은 최대 6초"라는 계약이 연출보다 우선한다.
         let remaining = max(0, deadline.timeIntervalSinceNow)
 
+        // 수면은 잠들기 **전에** 꺼내 둔다(자는 동안 컨트롤러를 붙들지 않게 — weak 로 끊는 이유가 사라진다).
+        // 보드 컨트롤러의 undoTask 가 유예 값을 먼저 꺼내는 것과 같은 이유다.
+        let sleep = ultraSleep
+        let watchdogSleep = ultraWatchdogSleep
+
         ultraTask?.cancel()
         ultraTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(duration))
+            await sleep(duration)
             guard let self, !Task.isCancelled else { return }
             self.endUltraTakeover()
         }
 
         ultraWatchdogTask?.cancel()
         ultraWatchdogTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(remaining))
+            await watchdogSleep(remaining)
             // 세대 검사가 취소 검사를 대신한다. 재수신으로 갈아탄 뒤 취소된 옛 워치독은 즉시 깨어나므로
             // Task.isCancelled 를 무시하면 방금 시작한 격발을 잘라먹는다 — 세대가 다르면 조용히 물러난다.
             guard let self, self.ultraGeneration == generation, self.isUltraActive else { return }
@@ -1030,6 +1132,9 @@ final class CheckOverlayController {
         // 화면 공유·녹화에서 제외한다. 울트라는 화면 전체를 5초 덮는데, 발표·화상회의 중 근무자라면 그 장면이
         // 상대(클라이언트 포함)에게 그대로 중계된다 — 수신자가 막을 수단이 없으므로 최소한 캡처에는 안 잡히게 한다.
         panel.sharingType = .none
+        // 테스트 실행일 때만 알파 0(프로덕션은 1 그대로). 창을 만들지도 띄우지도 않는 길은 없다 —
+        // 이 파일의 검증이 전부 진짜 창 기하와 실제 표시에 매달려 있기 때문이다(위 타입 주석 참고).
+        CheckPanelVisibility.apply(to: panel)
         return panel
     }
 }

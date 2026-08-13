@@ -13,7 +13,8 @@ import Testing
 //      독립된 워치독이 그것을 이중으로 보장하고, 패널은 계속 .nonactivatingPanel 이라 사용자가
 //      ⌘⌥Esc·⌘Tab·메뉴바로 스스로 빠져나갈 길이 남는다.
 //  (3) 그 두 타이머가 **스스로 깨어나는가** — 값 판정만 밖에서 불러 보면 태스크 생성을 통째로 지워도
-//      스위트가 초록이다(실제로 그랬다). 그래서 타이밍을 주입해 실시간으로 확인한다.
+//      스위트가 초록이다(실제로 그랬다). 그래서 **수면을 주입해** 한쪽만 깨우고 다른 쪽은 재워 둔 채
+//      확인한다(UltraSleepLog 참고 — 벽시계는 이 판정에서 완전히 빠졌다).
 //  (4) 5초 뒤 **정확히 원래대로** 돌아오는가 — 프레임·표시 여부·클릭 통과·드래그로 저장한 자리까지.
 //      격발 도중 화면 구성이 바뀌어도(모니터 연결/해상도 변경) 전체화면이 무너지지 않아야 한다.
 //
@@ -28,9 +29,12 @@ private func isolatedUltraDefaults() -> UserDefaults {
     return defaults
 }
 
-/// 격발 타이밍(초)은 **주입**한다. 기본값은 프로덕션 상수 그대로이고, 워치독/정상 타이머가 *스스로 깨어나는지*를
-/// 보는 테스트만 짧게 준다 — 실제 5~6초를 매번 기다리면 아무도 그 검증을 안 쓰게 되고, 그래서 태스크 생성이
-/// 통째로 사라져도 스위트가 초록인 구멍이 생겼다(아래 두 테스트가 그 구멍을 메운다).
+/// 격발 타이밍(초)은 **주입**한다. 기본값은 프로덕션 상수 그대로이고, 만료가 주제가 아닌 테스트만
+/// `ultraNeverExpires` 로 그 축을 못 박는다.
+///
+/// "타이머가 스스로 깨어나는가"는 **초가 아니라 수면**을 갈아 끼워 본다(`controller.ultraSleep` /
+/// `ultraWatchdogSleep`). 초를 짧게 주던 앞선 판은 제품이 아니라 그날의 메인 액터 대기열을 시험했다 —
+/// 자세한 실측은 `UltraSleepLog` 주석에 있다.
 @MainActor
 private func makeUltraController(
     engine: ReactionEngine,
@@ -89,55 +93,73 @@ private func startWorking(_ store: WorkTimerStore, _ controller: CheckOverlayCon
 /// 못 박아 두는 편이 테스트를 좁고 정확하게 만든다.
 private let ultraNeverExpires: Double = 600
 
+/// 격발 타이머 두 개에 주입할 수면. **벽시계를 테스트에서 도려내는 도구다.**
+///
+/// 앞선 판은 짧은 실시간 지속(0.3초)을 주입하고 "그 안에 걷히는가"를 벽시계로 기다렸다. 그건 제품이 아니라
+/// **그날의 메인 액터 대기열**을 시험한다 — 이 스위트는 다수가 `@MainActor` 이고 ImageRenderer 렌더·첫 3D
+/// 마운트 같은 **동기** 작업이 메인 스레드를 통째로 잡는다(실측: `Task.sleep(10ms)` 한 번이 84.15초 뒤 재개).
+/// 그래서 단독 실행은 초록, 전체 실행만 빨간불이었다.
+///
+/// 수면을 쥐면 그 축이 통째로 사라진다. `instant` 는 요청된 초를 기록만 하고 곧바로 돌려주므로
+/// **"타이머가 스스로 깨어나 원복하는가"** 라는 주장은 그대로 남고(아무도 밖에서 밀어 주지 않는다 —
+/// 태스크가 자기 몸통을 끝까지 달려야만 걷힌다), `blocked` 는 이 테스트 안에서 절대 깨지 않아
+/// **"걷은 것이 누구인가"** 를 산술적으로 못 박는다.
+private final class UltraSleepLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var seconds: [Double] = []
+
+    /// 요청된 수면(초) 기록. 기다림 없이 곧바로 반환한다.
+    var instant: @Sendable (Double) async -> Void {
+        { [self] seconds in record(seconds) }
+    }
+
+    /// 요청은 기록하되 **이 테스트 안에서는 영영 깨지 않는** 수면. 취소에는 정상적으로 반응한다
+    /// (컨트롤러가 태스크를 취소하면 곧바로 풀리고, 뒤따르는 가드가 물러남을 책임진다).
+    var blocked: @Sendable (Double) async -> Void {
+        { [self] seconds in
+            record(seconds)
+            try? await Task.sleep(for: .seconds(ultraNeverExpires))
+        }
+    }
+
+    private func record(_ value: Double) {
+        lock.lock(); defer { lock.unlock() }
+        seconds.append(value)
+    }
+
+    /// 이 수면에 들어온 요청들(초).
+    var requested: [Double] {
+        lock.lock(); defer { lock.unlock() }
+        return seconds
+    }
+}
+
 /// 조건이 참이 될 때까지 **메인 액터를 놓아 주며** 기다린다.
-/// 상한은 벽시계가 아니라 **'메인 액터가 나에게 제어를 돌려준 횟수'** 다.
 ///
-/// 왜 벽시계로는 안 되는가 — 계측해서 얻은 실측값이다(전체 654개 동시 실행 중 이 함수에 카운터를 심어
-/// 직접 쟀다): `Task.sleep(10ms)` 한 번이 재개되기까지 **84.15초**가 걸렸고 격발은 t+87.8초에야 걷혔다.
-/// 이 스위트는 다수가 `@MainActor` 이고 ImageRenderer 렌더·첫 3D 마운트 같은 **동기** 작업이 메인 스레드를
-/// 통째로 잡으므로, 총 119초 중 대부분 메인 액터가 한 줄로 밀려 있다. 그래서 "N초 안에 걷힌다"는 단정은
-/// 제품이 아니라 **그날의 큐 길이**를 시험한다 — 단독 실행은 통과하고 전체 실행만 빨간불인,
-/// 원인을 엉뚱한 곳으로 가리키는 최악의 실패다(실제로 그렇게 한 번 빨간불이 났고 여기까지 왔다).
+/// 위 주입 수면과 짝이다: 성공 경로에는 벽시계가 **없다**. 즉시 반환하는 수면을 쓰면 남은 일은
+/// "태스크가 실행될 차례를 얻는 것"뿐이라, 예산은 시간이 아니라 **기회 횟수**로 센다 — 메인 액터가 굶는
+/// 동안에는 예산이 줄지 않고, 폭풍이 지나가 제어가 돌아온 바로 그 순간 조건을 다시 본다.
+/// 평시에는 한두 바퀴 만에 돌아오므로 비용은 사실상 0이다.
 ///
-/// 횟수로 세면 굶는 동안에는 예산이 줄지 않는다: 폭풍이 지나가고 제어가 돌아온 **바로 그 순간** 조건을
-/// 다시 보므로 '늦게 깨어난 것'과 '영영 안 깨어난 것'을 구별한다. 메인 액터 큐는 FIFO 라 타이머가 먼저
-/// 큐에 들어갔다면 내 다음 차례보다 먼저 실행된다 — 기회 한 번이면 사실 충분하고 나머지는 여유다.
-///
-/// **다만 횟수만으로는 안 된다.** 상한을 기회 횟수 하나로만 잡았다가 한 번 더 틀렸다: 한산할 때는
-/// 12회 × 10ms = 0.12초 만에 예산이 바닥나, 0.3초짜리 타이머가 **울릴 때가 되기도 전에** 포기했다.
-/// 그래서 두 조건을 **모두** 만족해야 포기한다 —
-///   ① `minSeconds`: 기다리는 사건이 울릴 때가 지나고도 남을 만큼의 실제 시간(한산할 때의 하한),
-///   ② `opportunities`: 메인 액터가 실제로 돌려준 관찰 기회 수(굶을 때의 하한).
-/// 둘은 서로 다른 일을 한다. ①만 있으면 굶을 때 거짓 빨간불(그게 처음 겪은 실패다), ②만 있으면
-/// 한산할 때 조급한 빨간불이다. `hardLimitSeconds` 는 제품이 정말 고장 났을 때 스위트가 영영 멈추지
-/// 않게 하는 마지막 안전선이다. 조건이 참이 되면 언제든 즉시 반환하므로 평시 비용은 사건 시각 그대로다.
+/// `hardLimitSeconds` 는 제품이 정말 고장 났을 때(태스크 생성이 통째로 사라졌을 때) 스위트가 영영 멈추지
+/// 않게 하는 마지막 안전선이지 판정 기준이 아니다.
 @MainActor
 @discardableResult
 private func waitUntilUltra(
-    minSeconds: Double = 2,
-    opportunities: Int = 12,
-    hardLimitSeconds: Double = 150,
+    opportunities: Int = 300,
+    hardLimitSeconds: Double = 120,
     _ condition: () -> Bool
 ) async -> Bool {
     let hardLimit = Date().addingTimeInterval(hardLimitSeconds)
-    var served = 0
-    // ①의 예산은 **벽시계가 아니라 '실제로 관찰한 시간'** 이다. 굶은 구간을 빼지 않으면 긴 정체 하나가
-    // minSeconds 를 **스스로 채워** 포기 조건이 ② 하나로 붕괴한다 — 그러면 관측 0.12초 만에 포기해
-    // 0.3초짜리 타이머가 울릴 때가 되기도 전에 빨간불이 난다(실측: 45.9초 정체 → 포기 95ms 뒤 격발이 걷혔다).
-    // 굶는 동안엔 아무도 관찰하지 못했으므로 그 시간은 '기다려 준 시간'이 아니다.
-    var observed: Double = 0
-    var lastTick = Date()
-    while Date() < hardLimit {
+    for _ in 0..<opportunities {
         if condition() { return true }
-        if served >= opportunities && observed >= minSeconds { break }
-        try? await Task.sleep(for: .milliseconds(10))
-        let now = Date()
-        // sleep(10ms) 한 번이 이 임계를 넘겼다면 메인 액터에 밀린 것이지 내가 기다린 것이 아니다.
-        // 임계는 10ms 의 넉넉한 배수 — 평시 스케줄 지터는 통과시키고 정체만 걸러낸다.
-        let gap = now.timeIntervalSince(lastTick)
-        if gap <= 0.2 { observed += gap }
-        lastTick = now
-        served += 1
+        // 주입 수면은 비격리(nonisolated) async 라 협력 풀을 한 번 들렀다 온다. yield 만으로는 그 홉이
+        // 끝났음을 보장하지 못하므로 아주 짧은 실수면을 한 번 더 끼운다 — 시간이 판정에 들어가는 게
+        // 아니라 **다른 실행기에 한 바퀴 돌 틈을 주는 것**이 목적이다.
+        await Task.yield()
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(1))
+        if Date() >= hardLimit { break }
     }
     return condition()
 }
@@ -680,9 +702,28 @@ func overlayUltraSurvivesFarewellWatchdog() async {
     store.setOverlayEnabled(true)
     startWorking(store, controller)
     stopWorking(store, controller)   // beginFarewellHide 가동
+    // 인사 워치독이 실제로 걸린 실행에서만 이 테스트가 무언가를 시험한다(창이 화면에 안 올라갔으면
+    // updateWorking 이 else 분기로 빠져 farewellTask 가 아예 없다). 전제를 기록해 둔다.
+    let farewellArmed = controller.panel.isVisible
 
     controller.handleReceivedPokes([ultraPoke(at: now)])
     #expect(controller.isUltraActive)
+    #expect(engine.renderActive)
+
+    // ★ **여기가 실제로 났던 사고를 잡는 자리다.** beginUltraTakeover 의 `farewellTask?.cancel()` 은
+    //   막으려던 일을 오히려 **앞당겨** 일으켰다: `try? await Task.sleep` 은 취소되는 순간 throw 하고
+    //   `try?` 가 그걸 삼키므로, 잠들어 있던 태스크가 그 자리에서 finishHide 로 내려간다.
+    //   실측(단독 실행 재현): 격발 20ms 뒤 renderActive=false·panel.isVisible=false — 전체화면이 뜨자마자
+    //   지워지고 남은 5초 동안 렌더까지 멈춘 채 남았다(isUltraActive 만 true 라 아무도 못 알아챈다).
+    //   0.55초를 기다린 뒤에야 보는 아래 단언은 그 사고를 **가끔만** 잡았다(창이 실제로 떠 있는 실행에서만).
+    //   취소 직후의 한 바퀴를 여기서 먼저 본다 — 가드가 사라지면 이 줄이 매번 빨개진다.
+    for _ in 0..<20 { await Task.yield() }
+    try? await Task.sleep(for: .milliseconds(30))
+    #expect(controller.isUltraActive)
+    #expect(engine.renderActive, "인사 워치독 취소가 곧바로 finishHide 를 태웠다 — 격발이 뜨자마자 지워진다")
+    if farewellArmed {
+        #expect(controller.panel.isVisible, "격발 중인 전체화면이 orderOut 됐다")
+    }
 
     try? await Task.sleep(for: .seconds(CheckOverlayController.farewellHideDeadline + 0.2))
     #expect(controller.isUltraActive)          // 0.55초에 접히지 않았다.
@@ -750,30 +791,29 @@ func overlayUltraWatchdogTaskWakesItselfWithNoOnePushingIt() async throws {
     // ★ 커버리지 구멍 메우기. 기존 워치독 테스트는 enforceUltraDeadline 을 **밖에서 직접 부르는** 값 판정만
     //   본다 — armUltraRestore 에서 `ultraWatchdogTask = Task {...}` 생성을 통째로 지워도 초록이었다.
     //   안전밸브의 2차 방어선이 삭제돼도 무음이라는 뜻이다. 여기서는 아무도 밀어 주지 않는다:
-    //   정상 원복 타이머가 이 테스트 안에서는 영영 울리지 않는 세계(60초)를 만들고, 워치독만으로
-    //   마감(0.3초) 안에 전부 원복되는지 본다.
+    //   정상 원복 타이머는 이 테스트 안에서 영영 깨지 않게 재워 두고(blocked), 워치독의 수면만 즉시
+    //   돌려준다 — 그러면 걷을 수 있는 주체는 **워치독 하나뿐**이라 "걷혔다 = 워치독이 스스로 깨어났다"가
+    //   산술적으로 성립한다.
+    //
+    //   지속/마감은 **프로덕션 상수 그대로** 둔다. 앞선 판은 짧은 실시간 값(0.3초)을 주입하고 벽시계로
+    //   기다렸는데, 그건 제품이 아니라 그날의 메인 액터 대기열을 시험했다(UltraSleepLog 주석 참고).
+    //   수면을 쥐면 짧게 줄일 이유가 사라지고, 덤으로 **워치독이 실제로 몇 초를 요청했는가**까지 잴 수 있다.
     let now = Date(timeIntervalSince1970: 612_000)
     let engine = ReactionEngine(clock: { now })
-    let (store, controller) = makeUltraController(
-        engine: engine, ultraDurationSeconds: 60, ultraDeadlineSeconds: 0.3
-    )
+    let (store, controller) = makeUltraController(engine: engine)
+    let mainSleep = UltraSleepLog()
+    let watchdogSleep = UltraSleepLog()
+    controller.ultraSleep = mainSleep.blocked        // 정상 타이머는 이 테스트 안에서 영영 안 깬다.
+    controller.ultraWatchdogSleep = watchdogSleep.instant
     store.setOverlayEnabled(true)
     startWorking(store, controller)
     let before = controller.panel.frame
 
+    let t0 = Date()
     controller.handleReceivedPokes([ultraPoke(at: now)])
     #expect(controller.isUltraActive)
-    let deadline = try #require(controller.ultraDeadline)   // 이 세대의 강제 원복 시각(격발 시작 + 0.3초).
+    #expect(controller.ultraDeadline != nil)
 
-    // 마감 전에는 아무도 걷지 않는다(워치독을 앞당겨 정상 재생을 잘라먹는 회귀 방어).
-    // 판정을 **마감 시각으로 한 번 더 가둔다** — 깨어난 시점이 이미 마감 뒤라면 걷혀 있는 것이 정답이고,
-    // 그때 이 줄이 빨개지는 것은 '워치독이 일찍 걷었다'가 아니라 '메인 액터가 굶었다'는 뜻이다.
-    try? await Task.sleep(for: .milliseconds(120))
-    if Date() < deadline { #expect(controller.isUltraActive) }
-
-    // 마감을 넘기면 **워치독이 스스로 깨어나** 전부 되돌린다. 아무도 밀어 주지 않는다 —
-    // 정상 타이머는 60초라 이 테스트 안에서 영영 울리지 않으므로, 걷을 수 있는 주체는 워치독뿐이다.
-    // (여기서 상한을 다 쓰고 실패하면 그건 진짜로 워치독 태스크가 없다는 뜻이다.)
     let lifted = await waitUntilUltra { controller.isUltraActive == false }
     #expect(lifted)
     #expect(controller.ultraDeadline == nil)
@@ -781,6 +821,17 @@ func overlayUltraWatchdogTaskWakesItselfWithNoOnePushingIt() async throws {
     #expect(controller.pinnedIgnoresMouseEventsValue == nil)  // 못 박기 해제.
     #expect(controller.panel.ignoresMouseEvents)              // 클릭 통과 복원.
     #expect(engine.isUltraActive == false)
+
+    // 걷은 것은 워치독이다 — 정상 타이머의 수면은 요청만 되고 **한 번도 돌아오지 않았다**.
+    #expect(mainSleep.requested == [controller.ultraDurationSeconds])
+    // 그리고 워치독은 고정 상수가 아니라 **마감까지 남은 시간**을 잤다. 마운트 블로킹(실측 debug 3.4초)이
+    // 그만큼 깎아 내므로 상한은 마감 상수, 하한은 '그 블로킹을 뺀 나머지'다 — 누가 다시 고정 상수로
+    // 되돌리면(=elapsed 와 무관해지면) 위쪽이 빨개진다.
+    let elapsed = Date().timeIntervalSince(t0)
+    let requested = try #require(watchdogSleep.requested.first)
+    #expect(watchdogSleep.requested.count == 1)
+    #expect(requested <= controller.ultraDeadlineSeconds)
+    #expect(requested >= controller.ultraDeadlineSeconds - elapsed - 0.05)
     stopWorking(store, controller)
 }
 
@@ -791,36 +842,39 @@ func overlayUltraMainTimerWakesItselfWellBeforeWatchdog() async throws {
     // (워치독이 여유 뒤에 걷어 주니 '언젠가는' 원복되긴 한다 — 그래서 아무도 못 잡는다).
     // 정상 원복이 **스스로** 일어나는지는 여기서만 본다.
     //
-    // 워치독 마감을 이 테스트가 절대 닿을 수 없는 곳에 둔다. 앞선 판은 5초였는데, 그러면 기다림을 조금만
-    // 늘려도 워치독이 대신 걷어 주며 `ultraTask` 삭제를 **가려 준다** — 잡으려던 변이가 상한 뒤에서 조용히
-    // 살아남는다. 만료되지 않는 값을 주면 걷을 수 있는 주체가 정상 타이머 하나뿐이라
-    // "걷혔다 = 정상 타이머가 스스로 깨어났다"가 산술적으로 성립한다(앞선 판보다 강한 주장이다).
+    // 그래서 워치독을 이 테스트가 절대 닿을 수 없는 곳에 둔다. 앞선 판은 그걸 '만료되지 않는 초'로 했는데,
+    // 그러면 정상 타이머 쪽은 반대로 짧은 실시간 값이 되어 벽시계에 매달렸다(그 한 줄 때문에 전체 실행에서만
+    // 빨간불이었다 — UltraSleepLog 주석의 실측). 이제는 **수면 자체**를 가른다: 워치독은 영영 안 깨는
+    // 수면을 받고, 정상 타이머의 수면만 즉시 돌아온다. 걷을 수 있는 주체가 정상 타이머 하나뿐이라
+    // "걷혔다 = 정상 타이머가 스스로 깨어났다"가 시간과 무관하게 성립한다.
     let now = Date(timeIntervalSince1970: 613_000)
     let engine = ReactionEngine(clock: { now })
-    let (store, controller) = makeUltraController(
-        engine: engine, ultraDurationSeconds: 0.3, ultraDeadlineSeconds: ultraNeverExpires
-    )
+    let (store, controller) = makeUltraController(engine: engine)
+    let mainSleep = UltraSleepLog()
+    let watchdogSleep = UltraSleepLog()
+    controller.ultraSleep = mainSleep.instant
+    controller.ultraWatchdogSleep = watchdogSleep.blocked   // 워치독은 이 테스트 안에서 영영 안 깬다.
     store.setOverlayEnabled(true)
     startWorking(store, controller)
     let before = controller.panel.frame
 
     controller.handleReceivedPokes([ultraPoke(at: now)])
     #expect(controller.isUltraActive)
-    let deadline = try #require(controller.ultraDeadline)
+    #expect(controller.ultraDeadline != nil)
 
-    // 아무도 밀어 주지 않는다 — 걷힐 때까지 메인 액터를 놓아 주며 기다린다.
-    // 고정 sleep(700ms) 이던 판은 전체 스위트에서 이 테스트만 빨간불이었다(단독 실행은 통과).
-    // 제품이 아니라 메인 액터 대기열이 원인이었다 — 자세한 실측은 waitUntilUltra 주석에 있다.
     let lifted = await waitUntilUltra { controller.isUltraActive == false }
     #expect(lifted)
-    // 워치독 마감은 아직 한참 뒤다 = 걷은 것은 워치독이 아니라 정상 타이머다.
-    // (이 줄은 위 주입값이 나중에 상한 아래로 낮춰지면 곧바로 빨개져, 그 순간 이 테스트가 무엇을
-    //  증명하는지 다시 생각하게 만든다.)
-    #expect(Date() < deadline)
     #expect(controller.ultraDeadline == nil)
     #expect(controller.panel.frame == before)
     #expect(controller.panel.ignoresMouseEvents)
     #expect(engine.isUltraActive == false)
+
+    // 걷은 것은 정상 타이머다 — 워치독 수면은 요청만 되고 한 번도 돌아오지 않았다.
+    #expect(watchdogSleep.requested.count == 1)
+    // 그리고 정상 타이머가 잔 시간은 **주입값이 아니라 프로덕션 지속(5초)** 그대로다. 짧은 값을 심어야만
+    // 검증되던 시절이 끝났으므로, 이 줄이 그 상수까지 함께 못 박는다.
+    #expect(mainSleep.requested == [controller.ultraDurationSeconds])
+    #expect(controller.ultraDurationSeconds == CheckOverlayController.ultraSeconds)
     stopWorking(store, controller)
 }
 
@@ -859,3 +913,4 @@ func overlayUltraDeadlineIsAnchoredAtTakeoverStartNotAfterMount() throws {
     controller.endUltraTakeover()
     stopWorking(store, controller)
 }
+

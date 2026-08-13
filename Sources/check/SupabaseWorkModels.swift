@@ -730,8 +730,18 @@ extension [PokeDirectoryEntry] {
 /// 마이그레이션 미적용 서버(kind 키 없음)와 미래에 추가될 종류 양쪽에서 말풍선은 뜨게 하기 위해서다.
 enum PokeKind: String, Equatable {
     case normal, ultra
+    /// 3글자 메시지(같은 take_pokes 폴링으로 도착한다). **normal 로 접지 않고 케이스를 나눈 이유는 하나다** —
+    /// 화면이 보여줄 것이 다르다(찔림은 보낸 사람만, 메시지는 본문까지). 반대로 이 종류를 모르는 옛 앱에서는
+    /// 미지 값 규약대로 normal 로 접혀 **일반 찔림 말풍선이라도 뜬다** — 본문은 못 봐도 무음 소실보다는 낫다.
+    case message
 
-    init(rawServerValue: String?) { self = (rawServerValue == "ultra") ? .ultra : .normal }
+    init(rawServerValue: String?) {
+        switch rawServerValue {
+        case "ultra":   self = .ultra
+        case "message": self = .message
+        default:        self = .normal
+        }
+    }
 }
 
 /// poke_user RPC 요청. { p_to: 대상 user id } — ultra_poke_user 도 같은 본문을 재사용한다(인자가 동일).
@@ -825,6 +835,11 @@ struct TakenPokeRow: Decodable, Equatable {
     /// `let` 이 아니라 `var` 인 이유도 하나뿐이다: Optional `var` 만 멤버와이즈 init 에서 기본값 nil 을 받아
     /// kind 를 모르던 기존 호출부(테스트 픽스처 포함)가 무수정으로 컴파일된다.
     var kind: String?
+    /// 3글자 메시지 본문. **kind 와 정확히 같은 이유로 Optional 이고 var 다** — take_pokes 에 이 반환 컬럼을
+    /// 더하는 마이그레이션이 늦게 적용된 서버는 이 키를 안 보내는데, 비옵셔널이면 [TakenPokeRow] 디코드가
+    /// 통째로 throw 되어 그 사이 도착한 **모든** 찔림이(일반 찌르기까지) 조용히 소멸한다.
+    /// nil 은 "빈 본문"이 아니라 "본문이 없거나 모른다"이다 — 일반/울트라 찌르기는 애초에 본문이 없어 늘 nil 로 온다.
+    var body: String?
 }
 
 /// 오버레이로 전달되는 수신 찔림 한 건.
@@ -833,13 +848,162 @@ struct ReceivedPoke: Equatable {
     let fromName: String
     let createdAt: Date
     let kind: PokeKind
+    /// 메시지 본문(kind == .message 일 때만 값이 있다). 서버가 이미 정규화·검증한 문자열이지만
+    /// 표시 쪽은 이 값을 신뢰 대상이 아니라 **표시 대상**으로만 다뤄야 한다(길이 가정 금지 — 서버 상한이 바뀌면 늘어난다).
+    let body: String?
 
-    /// kind 기본값 .normal 은 하위호환용이다 — 이 인자를 모르는 기존 호출부가 그대로 컴파일된다.
-    init(id: String, fromName: String, createdAt: Date, kind: PokeKind = .normal) {
+    /// kind·body 기본값은 하위호환용이다 — 이 인자들을 모르는 기존 호출부가 그대로 컴파일된다.
+    init(id: String, fromName: String, createdAt: Date, kind: PokeKind = .normal, body: String? = nil) {
         self.id = id
         self.fromName = fromName
         self.createdAt = createdAt
         self.kind = kind
+        self.body = body
+    }
+}
+
+// MARK: - 3글자 메시지 (계약 타입)
+
+/// send_message RPC 요청. { p_to: 대상 user id, p_body: 보낼 본문 }.
+/// PokeSendRequest 를 재사용하지 못하는 이유는 인자가 하나 더 있다는 것뿐이다 — **응답 규약은 그대로 공유한다**
+/// (아래 sendMessage 주석 참고).
+struct SendMessageRequest: Encodable {
+    let pTo: String
+    let pBody: String
+}
+
+/// 보내기 전 클라 판정 결과. status 어휘를 서버와 맞춘 이유는 하나다 — 같은 실패를 두 어휘로 부르면
+/// 화면 문구가 두 벌이 되고, 그중 한 벌은 반드시 낡는다.
+enum MessageBodyValidation: Equatable {
+    /// 실제로 보낼 문자열(정규화 완료). 원문이 아니라 **이 값**을 서버로 보내야 한다.
+    case ok(String)
+    case empty
+    /// 글자·숫자·허용 문장부호가 아닌 것이 섞였다(이모지·기호·개행·탭·제어문자).
+    /// **`.empty`/`.tooLong` 에 접지 않고 케이스를 나눈 이유**: 화면이 "왜 안 되는지"를 말할 수 있어야 한다.
+    /// "3글자까지예요"를 이모지 하나에 대고 띄우면 사용자는 글자 수를 줄이려 들고, 줄여도 계속 거부당한다.
+    case unsupportedCharacters
+    case tooLong(maxCharacters: Int)
+}
+
+/// 3글자 메시지 본문의 정규화·글자수 판정. **모델에 둔 이유**: 입력 카운터(UI)·전송 게이트(스토어)·
+/// 네트워크 계층이 같은 답을 내야 하는데, 세 곳이 각자 세면 "3/3 인데 전송이 거부되는" 화면이 만들어진다.
+/// 판정의 최종 권위는 서버이고 여기 있는 것은 헛왕복을 줄이는 사전 게이트다(무료 플랜).
+enum MessageBody {
+    /// 사용자가 세는 글자 수 기준 상한. 서버 too_long 판정과 **같은 값이어야 한다**.
+    static let maxCharacters = 3
+
+    /// 공백 + 허용 ASCII 문장부호 20자. **서버(20260814015000)가 확정한 집합과 1:1이다** — 이 목록이 서버보다
+    /// 좁으면 사용자가 서버는 받아 줄 `^^` 를 못 치고, 넓으면 클라를 통과한 글자가 서버에서 not_text 로 거부된다.
+    /// 어느 쪽이든 "화면에선 쳐지는데 안 나가는" 증상이라, 두 집합은 갈리는 순간이 곧 버그다.
+    ///
+    /// **카테고리 판정으로는 이 집합을 만들 수 없다**(실측): `~` 는 구두점이 아니라 수학기호(Sm), `^` 는
+    /// 수식기호(Sk)라 "Symbol 거부" 규칙에 걸린다. 그래서 명시 목록이어야 한다.
+    ///
+    /// 빠진 12자는 `< > & \ $ % ` { } [ ] |` — 마크업·이스케이프·템플릿 의미가 있는 것만 골라 뺐다.
+    /// 반대로 `^^`(웃음)·`-_-`·`:)`·`...` 는 3글자 짧은 말에서 실제로 쓰이는 표현이라 **일부러 살렸다**.
+    static let allowedPunctuation: Set<Unicode.Scalar> = [
+        " ", "!", "\"", "#", "'", "(", ")", "*", "+", ",", "-", ".", "/",
+        ":", ";", "=", "?", "@", "^", "_", "~"
+    ]
+
+    /// 사용자 입력 → 실제로 보낼 문자열. 두 단계뿐이다:
+    /// 1) NFC 정규화. macOS 한글 입력기·파인더에서 붙여넣은 글자는 자모 분해(NFD)로 들어온다. Swift 는 이걸
+    ///    2글자로 세지만 Postgres char_length 는 6으로 세서, **클라가 통과시킨 "한글"이 서버에서 거부된다**
+    ///    (실측: NFD "한글" = count 2 / scalars 6, NFC 후 = count 2 / scalars 2).
+    /// 2) 앞뒤 공백·개행 trim. 붙여넣기에 딸려 온 여백으로 거부하면 불친절하다. 반면 **가운데** 개행·탭은
+    ///    지우지 않는다 — 지우면 "가\n나"가 조용히 "가나"로 바뀌어 사용자가 안 쓴 말이 나간다. 거부가 맞다.
+    ///
+    /// 예전에 여기 있던 제어문자·ZWJ·방향오버라이드 필터는 **통째로 지웠다**. 텍스트 전용 게이트(isTextOnly)가
+    /// 허용 목록으로 판정하면서, 그 문자들은 "지워야 할 것"이 아니라 "애초에 통과 못 하는 것"이 됐기 때문이다.
+    /// 지우는 방식이 필요했던 이유(ZWJ 를 지우면 이모지가 쪼개진다)도 이모지를 안 받는 순간 함께 사라졌다.
+    static func sanitized(_ raw: String) -> String {
+        raw.precomposedStringWithCanonicalMapping.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 텍스트 전용 게이트. **서버(20260814015000)의 허용 집합과 1:1인 코드포인트 범위**로 판정한다.
+    ///
+    /// **일반 카테고리(otherLetter 등)로 열면 안 된다** — 그러면 한자(中)·가나(あ)·전각(Ａ)·태국어까지
+    /// 통과해서 클라가 서버보다 넓어지고, 사용자는 화면에선 멀쩡히 쳐지는 글자가 전송에서만 거부되는
+    /// (서버 not_text) 경험을 한다. 좁아도 같은 크기의 버그다(서버는 받아 줄 `^^` 를 못 침). 그래서 범위를 못 박는다.
+    ///
+    /// **이 게이트가 이모지를 막는 것은 부작용이 아니라 목적이다.** 이모지를 받으면 Swift 의 자소 수와
+    /// Postgres 의 코드포인트 수가 갈리고(👨‍👩‍👧‍👦 = 1자소 / 7코드포인트), 그 간극은 "되는 이모지와 안 되는
+    /// 이모지"라는 설명 불가능한 증상으로 나타난다. 이 집합만 받으면 두 수가 **항상 일치**한다(실측).
+    ///
+    /// 자소가 아니라 **유니코드 스칼라 단위**로 검사한다: 이모지는 여러 스칼라의 조합이라 자소 단위로 보면
+    /// 그 안에 섞인 기호·ZWJ 를 못 본다.
+    static func isTextOnly(_ text: String) -> Bool {
+        text.unicodeScalars.allSatisfy { scalar in
+            switch scalar.value {
+            // 한글 음절 가~힣. 조합 자모(U+1100~)는 여기 없지만, sanitized 의 NFC 합성이 정상 입력을 이 범위로
+            // 옮겨 놓는다(옛한글처럼 합성되지 않는 것은 서버와 똑같이 거부된다).
+            case 0xAC00...0xD7A3: return true
+            // 한글 호환 자모 ㄱ~ㅣ. ★ 상한이 U+3163 인 것이 핵심이다 — 바로 다음 U+3164(한글 채움)는
+            //   **폭 0인데 글자 취급**이라, 열어 두면 빈 말풍선을 3개까지 보낼 수 있다. 같은 이유로 옛한글
+            //   조합 자모(U+115F 초성 채움·U+1160 중성 채움 포함)도 통째로 밖이다.
+            //   이 저장소는 바로 그 문자들로 **별명 사칭에 실제로 뚫린 적이 있다**
+            //   (20260804010000_display_name_change.sql:54-57 이 그 사고의 기록이다).
+            case 0x3131...0x3163: return true
+            // A-Z / a-z / 0-9. **아라비아-인도 숫자(٣ U+0663)는 여기 없다** — 카테고리로 열면 그것도
+            //   '숫자'라 통과하는데 서버는 거부한다.
+            case 0x41...0x5A, 0x61...0x7A, 0x30...0x39: return true
+            default: return allowedPunctuation.contains(scalar)
+            }
+        }
+    }
+
+    /// 사용자가 세는 글자 수(정규화 후). Character = 확장 자소 클러스터 단위라 이모지 가족·국기·스킨톤·결합 문자를
+    /// 전부 1로 센다(실측: 👨‍👩‍👧‍👦 = 1, 🇰🇷 = 1, 👍🏻 = 1). utf16/유니코드 스칼라로 세면 같은 것들이 2~11로 세어져
+    /// 사용자가 이모지 하나를 못 보낸다. 입력 카운터("N/3")도 이 값을 써야 화면과 게이트가 어긋나지 않는다.
+    static func characterCount(_ raw: String) -> Int { sanitized(raw).count }
+
+    /// **검사 순서가 문구를 정한다.** "👍👍👍👍" 는 길이도 문자도 둘 다 위반인데, 여기서 길이를 먼저 보면
+    /// 화면이 "3글자까지예요"라고 말하고 사용자는 이모지를 세 개로 줄인 뒤 또 거부당한다. 문자 검사가 먼저다.
+    static func validate(_ raw: String) -> MessageBodyValidation {
+        let normalized = sanitized(raw)
+        if normalized.isEmpty { return .empty }
+        if !isTextOnly(normalized) { return .unsupportedCharacters }
+        if normalized.count > maxCharacters { return .tooLong(maxCharacters: maxCharacters) }
+        return .ok(normalized)
+    }
+}
+
+/// 메시지 전송 결과의 도메인 표현(스토어/UI 공유). 미지 status 가 .invalid 로 접히는 규약은 PokeSendOutcome 과 같다.
+///
+/// **PokeSendOutcome 에 케이스를 더하지 않고 따로 만든 이유**: 두 RPC 의 status 어휘가 양방향으로 갈린다 —
+/// send_message 에만 too_long 이 있고, poke 에만 target_not_working·ultra_used_today 가 있다. 하나로 합치면
+/// 메시지 처리부는 절대 오지 않을 두 케이스를, 찌르기 처리부는 절대 오지 않을 too_long 을 각각 떠안는다.
+/// 이미 sendPoke 경로에 도달 불가 ultraUsedToday 분기가 하나 있고(WorkTimerStorePoke), 그건 본받을 전례가 아니라
+/// 갚아야 할 빚이다. 반대로 **전선 위 응답(PokeSendResponse)은 공유한다** — jsonb 규약이 {status, retry_after_seconds?}로
+/// 문자 그대로 같아서, DTO 를 복제하면 커스텀 디코더의 함정(옵셔널 키 누락)만 두 벌로 늘어난다.
+enum MessageSendOutcome: Equatable {
+    case ok
+    // ↓ 아래 거절 케이스들은 **서버 게이트가 판정하는 순서대로** 늘어놓았다. 세 함수(poke_user·ultra_poke_user·
+    //   send_message)가 같은 순서를 공유하므로, 이 목록과 SQL 을 나란히 놓고 대조할 수 있게 유지해라.
+    //   invalid → not_working(보낸이) → 본문검증 → target_not_working(대상) → target_focused → cooldown
+    case invalid
+    /// 보낸이가 근무중이 아니다.
+    case notWorking
+    /// 3글자를 넘었다. 서버 판정과 **클라 사전 게이트(MessageBody.validate)** 가 같은 이 status 를 쓴다.
+    case tooLong
+    /// 대상이 자리비움이다(v0.2.20 에서 빠졌다가 복원된 게이트). **`.invalid` 로 접으면 안 되는 이유**는
+    /// 빈도다 — 자리 비운 사람은 흔해서, 두루뭉술한 "지금은 보낼 수 없어요"를 가장 자주 보게 되는 경로가 이것이다.
+    /// 화면은 이걸 받으면 디렉토리의 근무중 배지가 낡았다는 뜻으로 읽고 재조회하는 편이 좋다(sendPoke 와 같은 규약).
+    case targetNotWorking
+    /// 대상이 집중 모드다. 쿨타임도 소모되지 않는다 — 서버가 행을 안 남긴다.
+    case targetFocused
+    case cooldown(retryAfterSeconds: Int)
+
+    init(response: PokeSendResponse) {
+        switch response.status {
+        case "ok":                  self = .ok
+        case "not_working":         self = .notWorking
+        case "too_long":            self = .tooLong
+        case "target_not_working":  self = .targetNotWorking
+        case "target_focused":      self = .targetFocused
+        case "cooldown":            self = .cooldown(retryAfterSeconds: max(1, response.retryAfterSeconds ?? 60))
+        default:                    self = .invalid
+        }
     }
 }
 

@@ -265,6 +265,9 @@ extension WorkTimerStore {
         // 발사 시점에도 같은 판정을 하지만, 패널을 열어 둔 채 자정을 넘긴 사용자에게 "0번 남음"이
         // 눌러 보기 전까지 남아 있는 것을 막으려면 상시 폴링에도 붙여야 한다.
         refreshUltraQuota(now: clock())
+        // 1시간 지난 '최근 표시 메시지'도 여기서 버린다(요청 0건 — 순수 로컬 판정, 위 한 줄과 같은 이유).
+        // 근무중 게이트 앞에 두는 것이 핵심이다: 비근무 구간이야말로 자리를 비운 사이 받은 말이 낡는 구간이다.
+        expireLastShownMessage(now: clock())
         // 공개 설정 1회 로드는 아래 근무중 게이트보다 **앞**이다. 뒤로 내리면 근무를 한 번도 시작하지 않은 사용자가
         // 자기 token_usage_public 서버값을 영영 못 읽어, 로그인 직후의 낙관 기본값 true 가 교정되지 않는다
         // — 비공개로 꺼 둔 사람의 토큰 사용량이 다음 실행마다 공개로 되살아나 보인다.
@@ -306,10 +309,15 @@ extension WorkTimerStore {
                 try await service.takePokes(accessToken: activeSession.accessToken)
             }
             guard generation == sessionGeneration else { return }
-            let batch = WorkTimerStore.freshReceivedPokes(rows: rows, now: Date())
+            let now = Date()
+            let batch = WorkTimerStore.freshReceivedPokes(rows: rows, now: now)
             if !batch.isEmpty {
                 onPokesReceived?(batch)
             }
+            // 같은 응답이 둘로 갈리는 **유일한 지점**. 메시지는 찔림 리액션(움찔·"콕 찔렀어요" 말풍선)을 타지 않고
+            // 자기 큐로 간다 — 위 batch 에는 메시지가 애초에 들어 있지 않으므로(freshReceivedPokes 의 kind 가드)
+            // 한 행이 두 경로를 동시에 타는 일은 없다.
+            enqueueReceivedMessages(WorkTimerStore.freshReceivedMessages(rows: rows, now: now))
         } catch {
             // 취소/일시 오류는 조용히 넘긴다(다음 tick 에 재시도).
         }
@@ -339,15 +347,200 @@ extension WorkTimerStore {
     /// 액터 상태를 건드리지 않는 순수 함수라 nonisolated — 테스트가 동기 컨텍스트에서 직접 호출한다.
     nonisolated static func freshReceivedPokes(rows: [TakenPokeRow], now: Date) -> [ReceivedPoke] {
         rows.compactMap { row in
+            var kind = PokeKind(rawServerValue: row.kind)
+            // 메시지 행은 여기서 **빠진다**. 이 한 줄이 없으면 "밥?" 하고 보낸 메시지가 평범한
+            // "…님이 콕 찔렀어요!" 말풍선으로 둔갑한다(본문은 어디에도 안 뜬 채 서버에서 소비만 된다).
+            // 갈라내는 지점은 여기 하나뿐이라, 찔림/울트라 처리는 아래 그대로 남는다.
+            guard kind != .message else { return nil }
             let createdAt = Date(timeIntervalSince1970: TimeInterval(row.createdEpoch))
             let age = now.timeIntervalSince(createdAt)
             guard age <= pokeDisplayFreshnessSeconds else { return nil }
-            var kind = PokeKind(rawServerValue: row.kind)
             // 늦게 도착한 울트라는 전체화면 격발을 포기하고 평범한 움찔로 **강등**한다(버리지 않는다) —
             // 보낸 사람이 하루 몇 번뿐인 몫을 이미 태웠으므로 최소한 누가 찔렀는지는 전해야 한다.
             if kind == .ultra, age > ultraDisplayFreshnessSeconds { kind = .normal }
             return ReceivedPoke(id: row.id, fromName: row.fromDisplayName, createdAt: createdAt, kind: kind)
         }
+    }
+
+    // MARK: - 짧은 메시지(최대 3글자)
+    //
+    // 찔림과 **같은 표·같은 RPC·같은 폴링**을 탄다(pokes.kind = "message", take_pokes 로 원자 소비).
+    // 갈라지는 곳은 정확히 두 군데다: 보낼 때 어느 RPC 를 부르는가, 받은 행을 어느 표시 경로로 보내는가.
+    // 그 외의 게이트(근무중 선게이트·세대 재확인·60초 쿨타임 미러·연결 실패 문구)는 전부 찌르기와 같은 관용구다.
+    //
+    // 등급(관리자 무제한 등)은 **여기 없다**. 판정이 전부 서버라 클라가 등급을 알면 두 판정이 언젠가 갈리고,
+    // 그때 화면은 서버가 허락한 일을 막거나 막을 일을 허락한다.
+
+    /// 메시지 쿨타임(초). 서버가 강제하고 클라는 표시용 카운트다운만 미러링한다.
+    /// pokeCooldownSeconds 와 값이 같지만 **다른 서버 규칙**이라 따로 둔다 — 한쪽만 바뀔 때 조용히 어긋나지 않게.
+    nonisolated static let messageCooldownSeconds: TimeInterval = 60
+    /// 표시 대기 큐 상한. 자리를 비운 사이 큐가 무한히 자라 화면이 몇 시간 전 대화를 순서대로 재생하는 것을 막는다.
+    nonisolated static let messageQueueLimit = 20
+
+    // 전송 결과 7종의 안내 문구. **전송 결과를 쓰는 곳은 여기 하나뿐**이므로(messageNotice) 문구도 여기 산다 —
+    // 뷰가 자기 표를 따로 들면 그중 한 벌은 반드시 낡는다(ultraSpentNotice 를 상수에서 파생시킨 것과 같은 규약).
+    nonisolated static let messageSentNotice = "메시지를 보냈어요"
+    nonisolated static let messageNotWorkingNotice = "근무 중일 때만 메시지를 보낼 수 있어요"
+    /// 대상이 자리비움일 때. 찌르기의 인라인 문구("자리비움 상태에는 찌를 수 없어요")와 **같은 문장에 동사만 바꿨다** —
+    /// 사정이 같으므로 설명도 같아야 하고(두 기능이 같은 일을 다르게 설명하면 사용자는 다른 일로 읽는다),
+    /// 동사만 다른 이유는 targetFocusedNotice 를 갈랐을 때와 똑같다: 그쪽 문장을 그대로 쓰면 메시지를 보내려던
+    /// 사람에게 "찌를 수 없어요"라고 엉뚱한 동작을 안내한다.
+    nonisolated static let messageTargetNotWorkingNotice = "자리비움 상태에는 보낼 수 없어요"
+    /// 대상이 집중 모드일 때. 찌르기의 targetFocusedNotice 와 문장이 다른 이유는 하나뿐이다 — 그쪽은 "찔러 주세요"로
+    /// 끝나는데, 여기서 재사용하면 메시지를 보내려던 사람에게 엉뚱한 동작을 안내한다.
+    nonisolated static let messageTargetFocusedNotice = "지금 집중 중이에요. 나중에 보내 주세요"
+    /// 길이 초과 안내. 숫자는 **MessageBody.maxCharacters 에서 파생한다** — 서버 판정과 클라 사전 게이트가
+    /// 이미 그 상수를 쓰므로, 여기서 리터럴 3을 다시 쓰면 한도를 바꿀 때 문구만 옛 숫자로 남는다.
+    nonisolated static let messageTooLongNotice = "메시지는 \(MessageBody.maxCharacters)글자까지예요. 줄여서 보내 주세요"
+    nonisolated static let messageInvalidNotice = "지금은 메시지를 보낼 수 없어요. 잠시 후 다시 시도해 주세요"
+    /// 쿨타임 거절. 찌르기는 여기서 침묵하지만(버튼이 흐려지는 것으로 말한다) 메시지는 사용자가 글자를 골라
+    /// 입력한 **뒤**라, 아무 말도 없으면 "보내진 건가?"가 남는다 — 안 나갔다는 사실은 반드시 문장으로 말한다.
+    nonisolated static func messageCooldownNotice(seconds: Int) -> String {
+        "방금 보낸 상대예요. \(max(1, seconds))초 뒤에 다시 보낼 수 있어요"
+    }
+
+    /// 대상에게 짧은 메시지 보내기. 게이트 순서·세대 재확인·쿨타임 미러는 sendPoke 와 **같은 관용구**다.
+    /// 다른 것은 두 가지뿐이다: ① 왕복 중 잠금(isSendingMessage) — 찌르기는 한 번 누르면 끝이지만 메시지는
+    /// 입력 뒤 [보내기]라 연타가 자연스럽고, 두 번째 요청은 방금 자기가 만든 쿨타임에 확정으로 거절당한다.
+    /// ② 결과를 성공에도 말한다 — 글자를 골라 넣은 뒤의 침묵은 "보내진 건가?"로 남는다.
+    ///
+    /// **집중 모드는 여기서 거르지 않는다.** 서버가 대상의 집중 모드를 보고 target_focused 로 거절한다
+    /// (poke 와 같은 게이트). 클라가 자기 미러로 한 번 더 판정하면 두 판정이 언젠가 갈리고, 그때 화면은
+    /// 서버가 허락한 전송을 막거나 막을 전송을 허락한다 — 그건 사용자가 원인을 알 수 없는 종류의 버그다.
+    ///
+    /// 빈 본문·3글자 초과도 여기서 판정하지 않는다. service.sendMessage 가 MessageBody 로 사전 판정해
+    /// **네트워크를 타지 않고** 서버와 같은 status 를 즉답하므로, 아래 switch 하나가 로컬 거절과 서버 거절을
+    /// 같은 문구로 다룬다(같은 실패를 catch 와 switch 두 곳에서 다루면 그 둘은 반드시 갈린다).
+    func sendMessage(to userID: String, body: String) {
+        guard session != nil else { return }
+        // 클라 선게이트: 근무중이 아니면 요청을 발사하지 않고 안내만 남긴다(sendPoke 와 같은 눈금 — startedAt).
+        guard startedAt != nil else {
+            messageNotice = Self.messageNotWorkingNotice
+            return
+        }
+        // 왕복이 이미 떠 있으면 두 번째를 만들지 않는다. 문구도 건드리지 않는다 — 방금 누른 것의 결과가
+        // 곧 도착하는데 여기서 다른 말을 쓰면 그 결과가 한 프레임 만에 덮인다.
+        guard !isSendingMessage else { return }
+        isSendingMessage = true
+        let generation = sessionGeneration
+        Task { @MainActor in
+            // 세대가 바뀐 뒤(로그아웃/재로그인)의 잠금 해제는 새 세션의 잠금을 푸는 짓이 된다 —
+            // 그쪽은 clearPersistedSession 이 이미 false 로 되돌려 놓았다.
+            defer { if generation == sessionGeneration { isSendingMessage = false } }
+            do {
+                let response = try await withSessionRetry { activeSession in
+                    try await service.sendMessage(accessToken: activeSession.accessToken, to: userID, body: body)
+                }
+                guard generation == sessionGeneration else { return }
+                switch MessageSendOutcome(response: response) {
+                case .ok:
+                    // 서버가 60초 쿨타임을 시작했다. 미러를 안 맞추면 버튼이 활성인 채 남아 다음 전송이
+                    // 확정 cooldown 을 받는다(sendPoke 의 ok 분기와 같은 이유).
+                    messageCooldownUntil[userID] = clock().addingTimeInterval(Self.messageCooldownSeconds)
+                    messageNotice = Self.messageSentNotice
+                case .cooldown(let retryAfterSeconds):
+                    // 서버가 알려 준 잔여로 미러를 **덮는다**(로컬 60초 추측보다 서버 값이 진실이다).
+                    messageCooldownUntil[userID] = clock().addingTimeInterval(TimeInterval(retryAfterSeconds))
+                    messageNotice = Self.messageCooldownNotice(seconds: retryAfterSeconds)
+                case .notWorking:
+                    messageNotice = Self.messageNotWorkingNotice
+                case .targetNotWorking:
+                    // 대상 자리비움은 쿨타임을 태우지 않는다(서버가 행을 안 남긴다).
+                    // 디렉토리의 '근무중' 배지가 낡았다는 뜻이므로 즉시 재조회한다 — 안 그러면 화면은 계속
+                    // "근무중"이라 말하는데 전송만 거절돼, 사용자는 왜 안 되는지 알 방법이 없다
+                    // (sendPoke/sendUltraPoke 의 같은 분기와 같은 처리다).
+                    messageNotice = Self.messageTargetNotWorkingNotice
+                    loadPokeDirectory()
+                case .targetFocused:
+                    // 쿨타임도 소모되지 않았다 — 서버가 행을 안 남긴다. 그래서 미러를 건드리지 않는다.
+                    messageNotice = Self.messageTargetFocusedNotice
+                case .tooLong:
+                    messageNotice = Self.messageTooLongNotice
+                case .invalid:
+                    messageNotice = Self.messageInvalidNotice
+                }
+            } catch {
+                if case .cancelled = classifyAuthError(error) { return }
+                guard generation == sessionGeneration else { return }
+                // 마이그레이션 미적용 서버(404/PGRST202)도 여기로 떨어진다 — 메시지만 조용히 못 쓰고
+                // 찌르기/울트라는 그대로 산다.
+                messageNotice = "연결이 불안정해요. 잠시 후 다시 시도해 주세요"
+            }
+        }
+    }
+
+    /// 지금 화면에 띄울 메시지 1건(없으면 nil). 말풍선은 한 번에 하나뿐이라 **큐의 맨 앞이 곧 화면**이다.
+    var currentMessage: ReceivedMessage? { receivedMessages.first }
+
+    /// 지금 것 뒤에 몇 건이 더 기다리는가. UI 가 "+2" 같은 표시로 '아직 남았다'를 알려 줄 수 있게 노출한다.
+    var waitingMessageCount: Int { max(0, receivedMessages.count - 1) }
+
+    /// 지금 것의 표시가 끝났음을 알리고 다음 건을 올린다.
+    /// **큐를 미는 권한이 UI 에 있는 이유**: 말풍선이 몇 초 떠 있는지를 아는 쪽이 표시 계층이다. 스토어가
+    /// 타이머로 자동 회전시키면 표시 시간과 회전 주기가 두 곳에서 따로 정해져, 언젠가 한 건이 뜨자마자 밀린다.
+    func consumeCurrentMessage() {
+        guard !receivedMessages.isEmpty else { return }
+        // 큐에서 빼되 **버리지 않고 옮겨 담는다**. 말풍선은 몇 초 만에 사라지므로 여기서 놓아 버리면
+        // 자리를 비운 사이 온 글자는 앱 어디에도 안 남는다(서버는 take_pokes 로 이미 원자 소비했다).
+        // 큐가 비어도 이 값은 남아 팝오버가 "놓친 것"을 보여줄 수 있다.
+        // 큐가 비어 있으면 위 가드에서 빠지므로 **직전 표시분이 그대로 유지된다** — 표시가 끝났다는 신호가
+        // 한 번 더 와도 화면이 갑자기 비지 않는다.
+        lastShownMessage = receivedMessages.removeFirst()
+    }
+
+    /// 나이가 지난 '최근 표시 메시지'를 버린다. 신선도는 도착 판정과 **같은 1시간**을 쓴다 —
+    /// 새 상수를 만들면 "언제까지 유효한가"의 답이 또 갈린다.
+    ///
+    /// 패널을 한 번도 안 열어 본 사용자에게는 closePokePanel 의 소비가 영영 안 오므로, 이 만료가 없으면
+    /// 어제 받은 "밥?"이 다음 날 팝오버에 그대로 떠 있다. 요청 0건짜리 순수 로컬 판정이라
+    /// refreshUltraQuota 와 **같은 자리**(pokePollTick)에 붙인다.
+    func expireLastShownMessage(now: Date) {
+        guard let last = lastShownMessage else { return }
+        guard now.timeIntervalSince(last.createdAt) > Self.pokeDisplayFreshnessSeconds else { return }
+        lastShownMessage = nil
+    }
+
+    /// take_pokes 응답에서 **메시지 행만** 골라 신선분을 도착 순으로 돌려준다. 순수 static 이라 테스트로 고정한다.
+    /// 신선도는 찔림과 같은 1시간(pokeDisplayFreshnessSeconds)을 쓴다 — 새 상수를 만들면
+    /// "언제까지 유효한가"의 답이 두 곳으로 갈라진다. 서버 반환 순서는 신뢰하지 않고 시각으로 다시 세운다
+    /// (sortedForPokeDisplay 와 같은 규약) — 순서가 곧 사용자가 읽는 순서이기 때문이다.
+    nonisolated static func freshReceivedMessages(rows: [TakenPokeRow], now: Date) -> [ReceivedMessage] {
+        rows.compactMap { row -> ReceivedMessage? in
+            guard PokeKind(rawServerValue: row.kind) == .message else { return nil }
+            // 본문 정규화는 **보낼 때와 같은 함수**(MessageBody.sanitized)를 쓴다 — 여기서 자체 trim 을 만들면
+            // 제어문자·방향 오버라이드가 말풍선 한 줄을 깨는 경로가 수신 쪽에만 남는다.
+            // 비면 버린다: 빈 말풍선은 "누가 뭘 보냈는데 내용이 없다"로 읽혀 사용자가 앱을 의심하게 만든다.
+            // 길이는 **재검사하지 않는다** — 서버 상한이 늘면 그건 새 진실이지 오류가 아니다.
+            let body = MessageBody.sanitized(row.body ?? "")
+            guard !body.isEmpty else { return nil }
+            let createdAt = Date(timeIntervalSince1970: TimeInterval(row.createdEpoch))
+            guard now.timeIntervalSince(createdAt) <= pokeDisplayFreshnessSeconds else { return nil }
+            return ReceivedMessage(id: row.id, fromName: row.fromDisplayName, body: body, createdAt: createdAt)
+        }
+        .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    /// 수신 메시지를 큐 뒤에 붙인다. 같은 id 는 무시한다 — take_pokes 는 원자 소비라 정상 경로에선 중복이 없지만,
+    /// withSessionRetry 가 토큰 갱신으로 같은 RPC 를 재발사한 창에서는 같은 행을 두 번 볼 수 있고
+    /// 그때 말풍선이 같은 말을 두 번 띄우면 사용자는 상대가 두 번 보냈다고 읽는다.
+    /// 상한을 넘으면 **오래된 쪽부터** 버린다 — 지금 부르는 사람을 놓치는 편이 더 나쁘다.
+    func enqueueReceivedMessages(_ messages: [ReceivedMessage]) {
+        guard !messages.isEmpty else { return }
+        let known = Set(receivedMessages.map(\.id))
+        let arrivals = messages.filter { !known.contains($0.id) }
+        guard !arrivals.isEmpty else { return }
+        var queue = receivedMessages + arrivals
+        if queue.count > Self.messageQueueLimit {
+            queue.removeFirst(queue.count - Self.messageQueueLimit)
+        }
+        receivedMessages = queue
+    }
+
+    /// 표시용 메시지 쿨타임 잔여 초(0이면 보낼 수 있다). pokeCooldownRemaining 과 같은 규약으로
+    /// displayNow 티커 기준으로 매초 줄어든다.
+    func messageCooldownRemaining(for userID: String, now: Date) -> Int {
+        guard let until = messageCooldownUntil[userID] else { return 0 }
+        return max(0, Int(until.timeIntervalSince(now).rounded(.up)))
     }
 
     /// 로그인 후 내 토큰 사용량 공개 여부를 서버값으로 1회 로드한다(폴링 첫 유효 tick 에서 부른다).
@@ -442,4 +635,17 @@ extension WorkTimerStore {
     func toggleFocusMode() {
         setFocusMode(!focusMode)
     }
+}
+
+/// 수신한 짧은 메시지 한 건. 찔림(ReceivedPoke)과 **다른 타입인 것이 요점**이다 — 같은 타입에 body 를
+/// 옵셔널로 얹으면 "본문이 nil 인 메시지"와 "본문이 딸린 찔림"이 타입상 가능해지고, 그 두 불가능한 상태를
+/// 표시 계층이 매번 다시 방어해야 한다. 갈라진 채로 두면 말풍선은 분기 없이 body 를 그린다.
+/// Identifiable 인 이유: 큐를 그대로 ForEach 에 태울 수 있게(id 는 서버 pokes 행 id 라 전역 유일).
+struct ReceivedMessage: Equatable, Identifiable {
+    let id: String
+    /// 보낸이 별명(서버가 실어 준 표시명).
+    let fromName: String
+    /// 정규화된 본문(앞뒤 공백 제거, 비어 있지 않음이 보장된다 — freshReceivedMessages 가 거른다).
+    let body: String
+    let createdAt: Date
 }

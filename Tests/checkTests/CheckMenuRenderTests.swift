@@ -3141,3 +3141,372 @@ private func dumpTodoSnapshot(_ view: some View, _ name: String) throws {
         }
     }
 }
+
+// MARK: - 3글자 메시지 UI (보내기 인라인 펼침 · 입력 필터 · 받은 메시지 표시)
+
+/// 메시지 UI 육안 확인 PNG 를 스크래치 하위 msg-ui/ 에 저장한다(판정 근거는 아래 픽셀/값 테스트가 낸다).
+@MainActor
+private func saveMessageSnapshot(_ png: Data, _ name: String) {
+    let dir = URL(
+        fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/msg-ui",
+        isDirectory: true
+    )
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try? png.write(to: dir.appendingPathComponent("\(name).png"))
+}
+
+/// 콕찌르기 패널이 열린 스토어(메시지 상태 주입 가능). 26명까지 늘릴 수 있게 이름을 생성한다 —
+/// 실제 팀 규모(26명)에서 목록이 스크롤로 넘어간 상태의 창 높이를 재는 것이 이 픽스처의 목적이다.
+@MainActor
+private func makeMessagePanelStore(
+    memberCount: Int = 5,
+    myselfWorking: Bool = true,
+    now: Date = Date()
+) -> WorkTimerStore {
+    let store = makeTeamStore(members: [], now: now)
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "u-me")
+    store.snapshot = WorkStatusSnapshot(status: myselfWorking ? .working : .offWork, elapsedSeconds: myselfWorking ? 3_600 : 0)
+    let names = ["영식", "민수", "지현", "서준", "하윤", "도현", "예린", "태우", "보라", "시우",
+                 "김서연", "박도윤", "최지우", "정하준", "강예은", "조민준", "윤서아", "장우진", "임채원", "한지호",
+                 "오세훈", "신유나", "권도경", "황시윤", "배수아", "문지훈"]
+    store.pokeDirectory = (0..<memberCount).map { index in
+        PokeDirectoryEntry(
+            userID: "u\(index + 1)",
+            name: names[index % names.count],
+            avatarURL: index == 0 ? CheckMascotAssets.url(for: .neutral) : nil,
+            // 근무중이 앞에 오도록 3의 배수만 자리비움으로 둔다(대상 게이트 흐림도 함께 보이게).
+            isWorking: index % 3 != 2
+        )
+    }
+    store.pokeDirectoryLoaded = true
+    store.isPokePanelVisible = true
+    return store
+}
+
+// MARK: 입력 필터 — 글자·숫자만 통과(이모지·기호 차단), 한글 자모는 반드시 통과
+
+@Test
+func messageInputFilterKeepsKoreanIncludingBareJamo() {
+    // 이 한 줄이 이 기능의 절반이다 — ㅇ(U+3147)·ㅋ 은 낱자모지만 실측상 otherLetter 라 통과해야 한다.
+    // 막히면 "ㅇㅋ"·"ㅠㅠ" 같은 3글자 말이 통째로 죽는다.
+    #expect(PokeMessageInputFilter.filtered("ㅇㅋ") == "ㅇㅋ")
+    #expect(PokeMessageInputFilter.filtered("ㅠㅠ") == "ㅠㅠ")
+    #expect(PokeMessageInputFilter.filtered("수고") == "수고")
+    #expect(PokeMessageInputFilter.filtered("고고1") == "고고1")
+    #expect(PokeMessageInputFilter.filtered("ok") == "ok")
+    // ★ 분해형(초성+중성+종성)은 **입력 필터를 통과해야 한다**. 파인더·한글 IME 에서 온 글자가 이 꼴이라,
+    // 여기서 지우면 "한"을 붙여넣었을 때 빈 칸이 된다. 합치는 일은 전송 직전 MessageBody.sanitized(NFC)가 한다.
+    #expect(PokeMessageInputFilter.filtered("\u{1112}\u{1161}\u{11AB}") == "\u{1112}\u{1161}\u{11AB}")
+    #expect(MessageBody.sanitized(PokeMessageInputFilter.filtered("\u{1112}\u{1161}\u{11AB}")) == "한")
+}
+
+@Test
+func messageInputFilterFollowsTheModelsAllowedSet() {
+    // 허용 집합의 권위는 MessageBody 다(뷰가 자기 표를 만들지 않는다) — 서버 정규식과 1:1인 그 표를
+    // 입력 필터가 그대로 따르는지 확인한다. 표가 넓어지면(예: `^^`) 이 테스트는 저절로 따라온다.
+    #expect(PokeMessageInputFilter.filtered("밥?") == "밥?")
+    #expect(PokeMessageInputFilter.filtered("굿!") == "굿!")
+    #expect(PokeMessageInputFilter.filtered("아~") == "아~")
+    #expect(PokeMessageInputFilter.filtered("가 나") == "가 나")   // 공백은 한글 IME 확정 키라 열려 있다
+    // 필터를 통과한 결과는 **반드시** 모델의 텍스트 전용 게이트를 통과한다(정규화 후 기준).
+    // 두 표가 갈라지면 "쳐지는데 전송만 거부" 또는 그 반대가 생기고, 이 등식이 그걸 먼저 잡는다.
+    for raw in ["밥?", "가,나", "1+1", "가-나", "굿👍", "ㅇㅋ", "★가", "가\n나"] {
+        let filtered = PokeMessageInputFilter.filtered(raw)
+        #expect(MessageBody.isTextOnly(MessageBody.sanitized(filtered)), "필터 통과분이 모델 게이트에 걸렸다: \(raw)")
+    }
+}
+
+@Test
+func messageInputFilterRemovesEmojiAndSymbols() {
+    // 서비스 계층 실측: Swift 는 👨‍👩‍👧‍👦 를 1글자로 세지만 Postgres char_length 는 7로 센다.
+    // 애초에 입력이 안 되면 그 어긋남 자체가 존재하지 않는다.
+    #expect(PokeMessageInputFilter.filtered("굿👍") == "굿")
+    #expect(PokeMessageInputFilter.filtered("👨‍👩‍👧‍👦") == "")       // ZWJ(Cf)·이모지(So) 전부 제거
+    #expect(PokeMessageInputFilter.filtered("🇰🇷") == "")            // 지역표시자(So)
+    #expect(PokeMessageInputFilter.filtered("👍🏻") == "")            // 스킨톤(Sk)
+    #expect(PokeMessageInputFilter.filtered("❤★→") == "")
+    #expect(PokeMessageInputFilter.filtered("가\n나\t다") == "가나다")   // 개행·탭(Cc)
+}
+
+@Test
+func messageInputFilterMakesSwiftAndPostgresCountsAgree() {
+    // 이 기능의 핵심 성질: **통과한 입력은 정규화 뒤 자소 수 == 코드포인트 수**다.
+    // Postgres char_length() 는 코드포인트를 세므로, 이 등식이 곧 "화면 글자수 == 서버 글자수"의 증명이다.
+    // (이모지를 열었다면 👍🏻 이 1 vs 2 로 갈려 화면만 통과시키는 상태가 생긴다.)
+    let inputs = ["ㅇㅋ", "수고", "가나다", "밥?", "아~", "ok1", "\u{1112}\u{1161}\u{11AB}", "漢字", " 굿 "]
+    for raw in inputs {
+        let normalized = MessageBody.sanitized(PokeMessageInputFilter.filtered(raw))
+        #expect(normalized.count == normalized.unicodeScalars.count, "불일치: \(raw)")
+    }
+}
+
+@Test
+func messageCounterSpeaksRemainingCharacters() {
+    #expect(PokeMessageCounter.text("") == "3자 남음")
+    #expect(PokeMessageCounter.text("수") == "2자 남음")
+    #expect(PokeMessageCounter.text("수고") == "1자 남음")
+    #expect(PokeMessageCounter.text("수고했") == "꽉 참")
+    #expect(PokeMessageCounter.text("수고했어") == "1자 초과")
+    // 길이 판정은 MessageBody 가 낸다(앞뒤 공백은 세지 않는다 — 전송값과 같은 눈금).
+    #expect(PokeMessageCounter.text(" 수고 ") == "1자 남음")
+    #expect(PokeMessageCounter.isSendable("수고했"))
+    #expect(!PokeMessageCounter.isSendable("수고했어"))
+    #expect(!PokeMessageCounter.isSendable("   "))
+}
+
+@Test
+func messageReceiptAgeReadsInPlainKorean() {
+    let now = Date()
+    #expect(PokeMessageReceiptStrip.ageText(receivedAt: now.addingTimeInterval(-5), now: now) == "방금")
+    #expect(PokeMessageReceiptStrip.ageText(receivedAt: now.addingTimeInterval(-181), now: now) == "3분 전")
+    #expect(PokeMessageReceiptStrip.ageText(receivedAt: now.addingTimeInterval(-7_200), now: now) == "2시간 전")
+}
+
+// MARK: 렌더 — 접힘/펼침/꽉 참/초과/쿨타임/결과 문구/받은 메시지
+
+@MainActor
+@Test
+func messageComposerRendersCollapsedAndExpanded() throws {
+    let now = Date()
+    // ImageRenderer 는 TextField/Menu 를 못 그려 **샛노란 상자**를 박는다. 이 팝오버의 맨 아래 상자는
+    // 푸터의 Menu 자리라 어느 화면에나 있는 상수다 — 그 마지막 하나를 뺀 나머지가 곧 "입력칸 수"다.
+    // 접힘: 행마다 [말풍선][손가락] 두 버튼만 있고 입력칸은 없다.
+    let collapsed = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now)))
+    let collapsedRuns = unavailablePlaceholderRowRuns(collapsed, top: 0, bottom: collapsed.pixelsHigh - 1)
+    #expect(collapsedRuns.dropLast().isEmpty)
+    saveMessageSnapshot(try #require(collapsed.representation(using: .png, properties: [:])), "msg-collapsed")
+
+    // 펼침: 그 행 아래로 작성기가 열린다 — 입력칸은 **정확히 1개**다(한 번에 한 행 규칙의 픽셀 근거).
+    let expanded = try renderBitmap(
+        CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now), previewMessageComposerUserID: "u1")
+    )
+    let expandedRuns = unavailablePlaceholderRowRuns(expanded, top: 0, bottom: expanded.pixelsHigh - 1)
+    #expect(expandedRuns.dropLast().count == 1)
+    // 그 입력칸은 목록 안(푸터 위)에 생겼다.
+    #expect(expandedRuns.first!.start < expandedRuns.last!.start)
+    saveMessageSnapshot(try #require(expanded.representation(using: .png, properties: [:])), "msg-expanded")
+}
+
+@MainActor
+@Test
+func messageComposerRendersLengthStates() throws {
+    let now = Date()
+    for (draft, name) in [("", "empty"), ("수고", "partial"), ("수고했", "full"), ("수고했어", "over")] {
+        let png = try renderPNG(
+            CheckMenuView(
+                store: makeMessagePanelStore(memberCount: 5, now: now),
+                previewMessageComposerUserID: "u1",
+                previewMessageDraft: draft
+            )
+        )
+        #expect(png.count > 0)
+        saveMessageSnapshot(png, "msg-len-\(name)")
+    }
+}
+
+@MainActor
+@Test
+func messageComposerShowsCooldownWhileExpanded() throws {
+    // 방금 보낸 상대를 다시 펼치면 **왜 안 되는지**(남은 초)가 펼친 자리에서 보여야 한다.
+    let now = Date()
+    let store = makeMessagePanelStore(memberCount: 5, now: now)
+    store.messageCooldownUntil = ["u1": now.addingTimeInterval(42)]
+    store.messageNotice = WorkTimerStore.messageCooldownNotice(seconds: 42)
+    #expect(store.messageCooldownRemaining(for: "u1", now: now) == 42)
+    let png = try renderPNG(CheckMenuView(store: store, previewMessageComposerUserID: "u1"))
+    #expect(png.count > 0)
+    saveMessageSnapshot(png, "msg-cooldown")
+}
+
+@MainActor
+@Test
+func messagePanelRendersAllSixOutcomeNotices() throws {
+    // 서버 status 6종 → 안내 문구 6종. 문구의 권위는 스토어이고(여기서 리터럴을 다시 쓰지 않는다),
+    // 이 테스트는 여섯이 서로 다르고 화면에 실제로 그려진다는 것만 픽셀로 확인한다.
+    let now = Date()
+    let notices: [(String, String)] = [
+        ("ok", WorkTimerStore.messageSentNotice),
+        ("not_working", WorkTimerStore.messageNotWorkingNotice),
+        ("target_focused", WorkTimerStore.messageTargetFocusedNotice),
+        ("too_long", WorkTimerStore.messageTooLongNotice),
+        ("invalid", WorkTimerStore.messageInvalidNotice),
+        ("cooldown", WorkTimerStore.messageCooldownNotice(seconds: 47))
+    ]
+    #expect(Set(notices.map(\.1)).count == 6)
+    for (name, text) in notices {
+        let store = makeMessagePanelStore(memberCount: 4, now: now)
+        store.messageNotice = text
+        let png = try renderPNG(CheckMenuView(store: store, previewMessageComposerUserID: "u1"))
+        #expect(png.count > 0)
+        saveMessageSnapshot(png, "msg-notice-\(name)")
+    }
+}
+
+@MainActor
+@Test
+func messageNoticeOutranksPokeNoticeInTheSharedLine() throws {
+    // 두 문구가 같은 줄을 쓰지만 상태는 스토어에서 나뉘어 있다 — 메시지 결과가 먼저다(사용자가 방금 한 일).
+    let now = Date()
+    let store = makeMessagePanelStore(memberCount: 4, now: now)
+    store.pokeNotice = "지금은 찌를 수 없어요"
+    store.messageNotice = WorkTimerStore.messageSentNotice
+    let withBoth = try renderBitmap(CheckMenuView(store: store))
+    let onlyPoke = makeMessagePanelStore(memberCount: 4, now: now)
+    onlyPoke.pokeNotice = "지금은 찌를 수 없어요"
+    let pokeOnly = try renderBitmap(CheckMenuView(store: onlyPoke))
+    // 같은 자리에 다른 글자가 그려졌다(줄 자체가 사라지거나 겹치지 않았다).
+    #expect(bitmapDiffBounds(withBoth, pokeOnly) != nil)
+    saveMessageSnapshot(try #require(withBoth.representation(using: .png, properties: [:])), "msg-notice-priority")
+}
+
+@MainActor
+@Test
+func messageReceiptStripRendersInsidePopover() throws {
+    let now = Date()
+    let store = makeMessagePanelStore(memberCount: 5, now: now)
+    store.receivedMessages = [
+        ReceivedMessage(id: "m1", fromName: "김서연", body: "밥?", createdAt: now.addingTimeInterval(-180)),
+        ReceivedMessage(id: "m2", fromName: "박도윤", body: "ㅇㅋ", createdAt: now.addingTimeInterval(-60))
+    ]
+    #expect(store.currentMessage?.body == "밥?")
+    #expect(store.waitingMessageCount == 1)
+    let png = try renderPNG(CheckMenuView(store: store))
+    #expect(png.count > 0)
+    saveMessageSnapshot(png, "msg-received")
+}
+
+// MARK: 창 높이 예산 — 26명 목록에서 펼쳐도 상한(700pt)을 넘지 않는다
+
+@MainActor
+@Test
+func messageComposerNeverGrowsWindowBeyondCap() throws {
+    let now = Date()
+    // 26명(실제 팀 규모) — 목록이 이미 스크롤 상한에 걸려 있다.
+    let collapsedHeight = try #require(renderedPixelHeight(CheckMenuView(store: makeMessagePanelStore(memberCount: 26, now: now))))
+    let expandedHeight = try #require(
+        renderedPixelHeight(
+            CheckMenuView(store: makeMessagePanelStore(memberCount: 26, now: now), previewMessageComposerUserID: "u1")
+        )
+    )
+    #expect(Double(collapsedHeight) / 2.0 <= 700.0)
+    #expect(Double(expandedHeight) / 2.0 <= 700.0)
+    // **펼쳐도 창이 자라지 않는다** — 펼침은 리스트 안에서 일어나고 리스트 상한은 펼침과 무관하다.
+    #expect(expandedHeight == collapsedHeight)
+}
+
+@MainActor
+@Test
+func messageComposerStaysWithinCapAtTheNoScrollBoundary() throws {
+    // 무스크롤 상한(7행)에서 펼치면 리스트가 상한을 넘어 스크롤로 전환된다 — 창 높이는 그대로여야 한다.
+    let now = Date()
+    let base = try #require(renderedPixelHeight(CheckMenuView(store: makeMessagePanelStore(memberCount: 7, now: now))))
+    let expanded = try #require(
+        renderedPixelHeight(
+            CheckMenuView(store: makeMessagePanelStore(memberCount: 7, now: now), previewMessageComposerUserID: "u1")
+        )
+    )
+    #expect(Double(base) / 2.0 <= 700.0)
+    #expect(Double(expanded) / 2.0 <= 700.0)
+    #expect(expanded == base)
+}
+
+@MainActor
+@Test
+func messagePanelStaysWithinCapWithBannerAndReceipt() throws {
+    // 최악 조합: 26명 + 최상단 배너 + 받은 메시지 줄 + 펼친 작성기.
+    let now = Date()
+    let store = makeMessagePanelStore(memberCount: 26, now: now)
+    store.receivedMessages = [ReceivedMessage(id: "m1", fromName: "김서연", body: "밥?", createdAt: now)]
+    let height = try #require(
+        renderedPixelHeight(
+            CheckMenuView(
+                store: store,
+                previewLongSessionBanner: true,
+                previewMessageComposerUserID: "u1"
+            )
+        )
+    )
+    #expect(Double(height) / 2.0 <= 700.0)
+}
+
+@MainActor
+@Test
+func messageComposerHeightMatchesItsDeclaredConstant() throws {
+    // 목록 높이 예산이 이 상수를 그대로 쓰므로, 실제 렌더 높이와 어긋나면 예산 계산이 근거를 잃는다.
+    let holder = MessageDraftHolder()
+    let composer = PokeMessageComposer(
+        targetName: "영식",
+        text: Binding(get: { holder.text }, set: { holder.text = $0 }),
+        onSend: { _ in },
+        onCancel: {}
+    )
+    let height = try #require(renderedPixelHeight(composer))
+    #expect(Double(height) / 2.0 == Double(PokeMessageComposer.height))
+}
+
+@Observable
+@MainActor
+final class MessageDraftHolder {
+    var text: String = ""
+}
+
+@MainActor
+@Test
+func messagePanelHeightMeasurementDump() throws {
+    // 26명(실제 팀 규모) 목록의 육안 확인 PNG + 창 상한 재확인. 스크롤 대신 클립으로 그린다
+    // (ImageRenderer 는 ScrollView 내용을 못 그린다). 실측: 세 경우 모두 654pt — 상한 700pt 안.
+    let now = Date()
+    // 26명은 이름순 정렬이라 u1(영식)이 화면 밖으로 밀린다 — 클립 스냅샷에서 작성기를 보려면
+    // 첫 화면에 남는 대상(u23 권도경)을 펼친다. 앱에서는 ScrollViewReader 가 펼친 자리로 끌어올린다.
+    for (count, target) in [(26, nil), (26, "u23"), (7, "u1")] as [(Int, String?)] {
+        let expanded = target != nil
+        let store = makeMessagePanelStore(memberCount: count, now: now)
+        let view = CheckMenuView(
+            store: store,
+            previewClipsOverflowList: true,
+            previewMessageComposerUserID: target
+        )
+        let height = try #require(renderedPixelHeight(view))
+        #expect(Double(height) / 2.0 <= 700.0)
+        saveMessageSnapshot(try renderPNG(view), "msg-\(count)명-\(expanded ? "펼침" : "접힘")")
+    }
+}
+
+@MainActor
+@Test
+func messageComposerWarnsWhenTheInputFilterRemovesSomething() throws {
+    // 붙여넣은 이모지가 그냥 사라지면 앱이 고장 난 것으로 읽힌다 — 사라진 이유를 머리줄이 2.5초간 말한다.
+    // (서비스 계층이 .unsupportedCharacters 를 invalid 로 접으며 이 설명을 입력 단계에 맡겼다.)
+    let holder = MessageDraftHolder()
+    holder.text = "굿"
+    let warned = PokeMessageComposer(
+        targetName: "영식",
+        text: Binding(get: { holder.text }, set: { holder.text = $0 }),
+        previewFilterWarning: true,
+        onSend: { _ in },
+        onCancel: {}
+    )
+    let png = try renderPNG(warned)
+    #expect(png.count > 0)
+    saveMessageSnapshot(png, "msg-filter-warning")
+    // 안내가 떠도 펼침 높이는 그대로다(높이가 흔들리면 목록 예산이 근거를 잃는다).
+    #expect(Double(try #require(renderedPixelHeight(warned))) / 2.0 == Double(PokeMessageComposer.height))
+    // 사유별로 다른 문구를 쓴다 — 이모지에 대고 "3글자까지"라고 하면 사용자는 줄이다가 계속 막힌다.
+    #expect(PokeMessageComposer.filterWarningText != WorkTimerStore.messageTooLongNotice)
+}
+
+@MainActor
+@Test
+func messageEntryPointCoversExactlyThePokeTargets() throws {
+    // 메시지 진입점은 찌르기와 **같은 목록·같은 게이트**를 쓴다. 내가 비근무면 두 버튼이 함께 흐려지고,
+    // 근무중이면 함께 살아난다 — 한쪽만 살아 있는 화면이 있으면 사용자가 규칙을 설명할 수 없다.
+    let now = Date()
+    let working = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 4, myselfWorking: true, now: now)))
+    let offWork = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 4, myselfWorking: false, now: now)))
+    // 목록 영역(패널 아래쪽 절반)에서 accent 픽셀이 크게 줄어든다 = 두 버튼이 함께 죽었다.
+    let band = (top: working.pixelsHigh / 2, bottom: working.pixelsHigh - 1)
+    let live = accentPixelCount(working, top: band.top, bottom: band.bottom)
+    let dead = accentPixelCount(offWork, top: band.top, bottom: band.bottom)
+    #expect(live > dead * 3)
+    saveMessageSnapshot(try #require(offWork.representation(using: .png, properties: [:])), "msg-offwork")
+}

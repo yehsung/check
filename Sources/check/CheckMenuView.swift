@@ -25,6 +25,10 @@ struct CheckMenuView: View {
     var previewUpdateNotes: [String] = []
     // 스냅샷 전용: 팀 목록 내 행이 별명 편집 행으로 바뀐 상태를 강제로 그린다. 앱에서는 항상 false(연필 토글).
     var previewEditingDisplayName: Bool = false
+    // 스냅샷 전용: 콕찌르기 목록에서 이 사용자의 메시지 작성기가 펼쳐진 상태로 그린다. 앱은 nil(말풍선 버튼 토글).
+    var previewMessageComposerUserID: String? = nil
+    // 스냅샷 전용: 펼친 작성기 입력칸에 미리 들어가 있는 값(글자수 카운터 상태 재현). 앱은 ""(빈 칸에서 시작).
+    var previewMessageDraft: String = ""
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
@@ -282,6 +286,17 @@ struct CheckMenuView: View {
                             onUltraBlocked: { store.pokeNotice = WorkTimerStore.ultraSpentNotice },
                             isFocusMode: store.focusMode,
                             onToggleFocusMode: { store.toggleFocusMode() },
+                            // 3글자 메시지 — 찌르기와 같은 표·같은 폴링을 타지만 RPC·쿨타임·결과 문구는 각자의 것이다.
+                            onSendMessage: { store.sendMessage(to: $0, body: $1) },
+                            messageCooldownRemaining: { store.messageCooldownRemaining(for: $0, now: store.displayNow) },
+                            isSendingMessage: store.isSendingMessage,
+                            messageNotice: store.messageNotice,
+                            // 큐의 맨 앞 = 아직 사용자에게 보여 주지 않은 가장 오래된 1건.
+                            // ⚠︎ 말풍선(오버레이 담당)이 consumeCurrentMessage 로 큐를 밀면 이 자리도 함께 비워진다.
+                            latestMessage: store.currentMessage,
+                            waitingMessageCount: store.waitingMessageCount,
+                            previewComposingUserID: previewMessageComposerUserID,
+                            previewMessageDraft: previewMessageDraft,
                             onBack: { store.togglePokePanel() },
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
@@ -1659,6 +1674,344 @@ enum PokeDirectoryEmptyMessage {
     }
 }
 
+// MARK: - 3글자 메시지 (콕 찌르기와 같은 폴링으로 도착한다)
+
+/// 입력칸 옆 글자수 표시의 규약(순수 — 화면 문구 전용).
+///
+/// **글자 수는 세지 않고 MessageBody 에 물어본다.** 세는 규칙(NFC 정규화·제어문자 제거·확장 자소 클러스터)은
+/// 전송 게이트와 서버 판정이 쓰는 그 함수 하나여야 한다 — 뷰가 String.count 로 따로 세면 붙여넣은 NFD 한글이
+/// 화면엔 "2자"인데 서버는 too_long 으로 거절하는, 사용자가 원인을 알 수 없는 화면이 만들어진다.
+///
+/// **입력 중에는 텍스트를 건드리지 않는다(자르지 않는다).** 조합 중인 글자를 코드가 바인딩에 되쓰면
+/// 마지막 글자가 씹히는 한글 IME 회귀를 부르는데, 그 동작은 오프스크린 렌더로 검증할 방법이 없다 —
+/// 검증할 수 없는 것에 이 기능의 핵심 입력(한글)을 걸지 않는다. 대신 **초과를 눈에 보이게 막는다**:
+/// 카운터가 danger 로 물들고, 테두리가 빨개지고, [보내기]와 Enter 가 잠긴다.
+enum PokeMessageCounter {
+    /// 사용자가 세는 글자 수(정규화 후) — MessageBody 가 유일한 권위.
+    static func length(_ text: String) -> Int { MessageBody.characterCount(text) }
+    static func remaining(_ text: String) -> Int { max(0, MessageBody.maxCharacters - length(text)) }
+    static func isFull(_ text: String) -> Bool { length(text) == MessageBody.maxCharacters }
+    static func isOverflowing(_ text: String) -> Bool { length(text) > MessageBody.maxCharacters }
+
+    /// 보낼 수 있는가. 빈 입력·초과는 요청을 만들지 않는다(같은 판정을 MessageBody.validate 가 낸다).
+    static func isSendable(_ text: String) -> Bool {
+        if case .ok = MessageBody.validate(text) { return true }
+        return false
+    }
+
+    /// 카운터 문구. **남은 수를 말한다** — "3/3"은 다 쓴 건지 세 글자가 남은 건지 읽는 사람마다 다르다.
+    static func text(_ text: String) -> String {
+        let over = length(text) - MessageBody.maxCharacters
+        if over > 0 { return "\(over)자 초과" }
+        let left = remaining(text)
+        return left == 0 ? "꽉 참" : "\(left)자 남음"
+    }
+}
+
+/// 3글자 메시지 입력칸의 **입력 시점 필터**(순수 — ASCIIInputFilter 와 같은 패턴, 허용 집합만 새로 정의한다).
+/// 그쪽을 그대로 쓰면 한글이 통째로 죽으므로(비-ASCII 제거) 패턴만 빌린다.
+///
+/// **왜 종류를 입력 시점에 막는가 — 이모지를 허용하면 두 계산이 갈라진다(실측):**
+/// Swift 는 확장 자소 클러스터로 세서 👨‍👩‍👧‍👦=1·🇰🇷=1·👍🏻=1 이지만 Postgres `char_length()` 는 코드포인트로 세서
+/// 각각 7·2·2 다. 그러면 화면은 "1자"라고 말하는데 서버만 too_long 으로 거절하는, 사용자가 원인을 알 수 없는
+/// 상태가 생긴다. **글자·숫자만 받으면 그 어긋남이 통째로 사라진다** — 허용 집합의 모든 문자는 NFC 정규화 뒤
+/// 자소 1개 = 코드포인트 1개라 두 계산이 반드시 일치한다(테스트가 그 성질을 직접 잰다).
+///
+/// **허용 여부는 MessageBody.isTextOnly 가 정한다 — 이 뷰는 자기 표를 만들지 않는다.** 전송 게이트가 쓰는
+/// 그 판정을 그대로 재사용해야, "입력은 됐는데 전송만 거부"나 그 반대가 원리적으로 불가능해진다.
+/// 여기가 하는 일은 판정이 아니라 **적용 시점**뿐이다: 거부가 아니라 입력 순간 제거.
+/// (허용 집합은 글자 L*·숫자 Nd·`  ? ! . , ~` 이고, 한글 자모 ㅇ(U+3147)이 otherLetter 로 통과하는 것이
+///  이 기능의 생명줄이다 — 테스트가 실측으로 못 박는다.)
+///
+/// **길이는 여기서 자르지 않는다.** 종류 필터는 한글 조합 중에 발동할 일이 없지만(조합 중 글자는 항상 letter라
+/// 필터가 손대지 않는다), 길이 자르기는 4번째 글자를 조합하는 순간 바인딩을 되써 마지막 글자가 씹히는
+/// IME 회귀를 부른다. 초과는 카운터·테두리·잠긴 [보내기]로 **보이게** 막는다.
+enum PokeMessageInputFilter {
+    /// **조합 자모(U+1100~)는 이 필터가 통과시켜야 한다.** MessageBody.isTextOnly 는 완성 음절(가~힣)과
+    /// 호환 자모(ㄱ~ㅣ)만 열어 두는데, 그건 그 판정이 **NFC 정규화를 끝낸 문자열**에 걸리기 때문이다
+    /// (MessageBody.validate → sanitized → isTextOnly). 반면 여기는 **정규화 전 원문**을 본다:
+    /// macOS 한글 입력기·파인더에서 온 글자는 분해형(ᄒ+ᅡ+ᆫ)으로 들어오므로, 원문에 그대로 isTextOnly 를
+    /// 걸면 합쳐지기도 전에 한글이 통째로 지워진다("한"을 붙여넣으면 빈 칸이 된다 — 실측으로 걸린 회귀다).
+    /// 그래서 조합 자모는 남기고, 합성은 전송 직전 MessageBody 가 한다. 합성되지 않는 옛한글은 거기서
+    /// .unsupportedCharacters 로 거절되고 [보내기] 툴팁이 이유를 말한다.
+    ///
+    /// **정규화를 여기서 하지 않는 이유**: 조합 중인 글자를 NFC 로 되쓰면 그게 곧 IME 마지막 글자 씹힘이다.
+    private static func isComposingHangulJamo(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x1100...0x11FF,     // 한글 자모(초·중·종성)
+             0xA960...0xA97F,     // 한글 자모 확장 A
+             0xD7B0...0xD7FF:     // 한글 자모 확장 B
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// 허용되지 않은 스칼라를 **제거**한다(치는 것도 ⌘V 로 붙여넣는 것도 같은 이 바인딩을 지나므로
+    /// 여기 한 곳이면 둘 다 막힌다). 스칼라 단위로 묻는 이유는 이모지가 여러 스칼라의 조합이라서다 —
+    /// 자소 단위로 보면 그 안에 섞인 기호·ZWJ 를 못 본다(MessageBody.isTextOnly 와 같은 이유).
+    static func filtered(_ text: String) -> String {
+        String(String.UnicodeScalarView(text.unicodeScalars.filter { scalar in
+            isComposingHangulJamo(scalar) || MessageBody.isTextOnly(String(scalar))
+        }))
+    }
+}
+
+/// 한 팀원 행 **바로 아래로** 펼쳐지는 3글자 메시지 작성기. 한 번에 한 행만 펼쳐진다(패널이 userID 하나로 소유).
+///
+/// 구성은 두 줄이 전부다: [누구에게 · 못 보내는 사유 · 닫기] + [입력칸 · 남은 글자 · 보내기].
+/// 프리셋(빠른 말 칩)은 **일부러 없다** — 사장님 결정이고, 없어야 "무슨 말을 보낼지"를 앱이 대신 정하지 않는다.
+///
+/// 높이를 상수로 못 박는 이유는 700pt 창 예산이다. 펼침 높이가 상태마다 달라지면(안내 유무 등) 목록 상한
+/// 계산이 근거를 잃는다 — 그래서 사유 문구도 새 줄이 아니라 머리줄의 남는 폭에 얹는다.
+struct PokeMessageComposer: View {
+    let targetName: String
+    @Binding var text: String
+    /// 이 대상 쿨타임 잔여 초(0이면 보낼 수 있다). 펼친 상태에서 **왜 안 되는지**를 여기서 말한다.
+    var remainingCooldown: Int = 0
+    /// 게이트 통과 여부(내가 근무중 + 대상이 근무중). 행의 찌르기 버튼과 **같은 판정**을 받는다.
+    var canSend: Bool = true
+    /// 전송 왕복 중. 연타로 두 번째 요청이 나가면 방금 자기가 만든 쿨타임에 확정으로 거절당한다.
+    var isSending: Bool = false
+    /// 스냅샷 전용: 필터 안내가 떠 있는 상태를 그대로 그린다(CredentialField.warnsInitially 선례). 앱은 false.
+    var previewFilterWarning: Bool = false
+    let onSend: (String) -> Void
+    let onCancel: () -> Void
+
+    /// 입력이 필터에 걸렸을 때의 안내. **이 문구의 자리는 응답 분기가 아니라 입력 단계다** —
+    /// 서비스 계층이 .unsupportedCharacters 를 invalid 로 접으며 그 이유를 여기 맡겼다(SupabaseWorkService.sendMessage).
+    /// 사용자 입장에서 벌어진 일은 "붙여넣은 게 사라졌다"이므로, 이 한 줄이 없으면 앱이 고장 난 것으로 읽힌다.
+    static let filterWarningText = "이모지는 보낼 수 없어요"
+
+    @State private var filterWarningActive = false
+    @State private var filterWarningTask: Task<Void, Never>?
+
+    private static let verticalPadding: CGFloat = 10
+    private static let headerHeight: CGFloat = 15
+    private static let blockSpacing: CGFloat = 7
+    private static let inputRowHeight: CGFloat = 28
+
+    /// 펼침 한 덩어리의 고정 높이(pt). 목록 높이 예산이 이 값을 그대로 쓴다.
+    static let height: CGFloat = verticalPadding * 2 + headerHeight + blockSpacing + inputRowHeight
+
+    /// 지금 보낼 수 있는가 — 게이트 + 쿨타임. 입력 내용(길이)은 [보내기]에서 따로 본다.
+    private var isOpen: Bool { canSend && remainingCooldown <= 0 }
+
+    /// 대상 이름 해시색. 위 행의 좌측 세로 바와 같은 색이라 "이 펼침은 그 사람 것"이 색으로 이어진다.
+    private var accentColor: Color { CheckTheme.avatarColor(for: targetName) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Self.blockSpacing) {
+            header
+            inputRow
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, Self.verticalPadding)
+        .frame(height: Self.height)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(CheckTheme.fieldFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(accentColor.opacity(0.55), lineWidth: 1)
+                )
+        )
+    }
+
+    // 누구에게 보내는지 + 지금 못 보내는 사유(쿨타임/게이트) + 닫기. 세 가지가 **같은 자리**를 쓴다.
+    private var header: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.turn.down.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(accentColor)
+            Text("\(targetName)님에게")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(CheckTheme.primaryText)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            if let blockedText {
+                Text(blockedText.text)
+                    .font(.caption2)
+                    .foregroundStyle(blockedText.isError ? CheckTheme.danger : CheckTheme.pending)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            Button(action: onCancel) {
+                Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(CheckTheme.secondaryText)
+            .help("닫기")
+            .accessibilityLabel("메시지 작성 닫기")
+        }
+        .frame(height: Self.headerHeight)
+    }
+
+    /// 머리줄 오른쪽 한 칸을 나눠 쓰는 사유들. 순서가 곧 우선순위다:
+    /// ① 방금 필터에 걸린 입력(사용자가 **지금 한 행동**의 결과라 가장 급하다 — 안 그러면 글자가 그냥 사라진 것으로 읽힌다),
+    /// ② 쿨타임 잔여(펼친 뒤에야 알 수 있어 여기서 말하지 않으면 알 방법이 없다),
+    /// ③ 게이트(행 버튼도 흐리게 말해 주므로 마지막).
+    /// 새 줄을 만들지 않고 한 칸을 나눠 쓰는 이유는 펼침 높이를 상수로 못 박아야 하기 때문이다(700pt 예산).
+    private var blockedText: (text: String, isError: Bool)? {
+        if filterWarningActive || previewFilterWarning { return (Self.filterWarningText, true) }
+        if remainingCooldown > 0 { return ("\(remainingCooldown)초 뒤 가능", false) }
+        if !canSend { return ("지금은 못 보내요", false) }
+        return nil
+    }
+
+    /// 필터가 실제로 문자를 지웠을 때만 2.5초간 안내를 띄운다(CredentialField 의 ASCII 안내와 같은 수명).
+    private func triggerFilterWarning() {
+        filterWarningTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.15)) { filterWarningActive = true }
+        filterWarningTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.15)) { filterWarningActive = false }
+        }
+    }
+
+    private var inputRow: some View {
+        HStack(spacing: 6) {
+            // ⚠︎ CredentialField(enforcesASCII:) 를 쓰면 안 된다 — 그건 이메일·비밀번호용이라 포커스 시
+            // 영문 자판으로 강제 전환하고 비-ASCII 를 걸러 낸다. 여기 핵심 용도가 바로 한글 3글자다.
+            TextField("3글자", text: $text)
+                .textFieldStyle(.plain)
+                .font(.subheadline)
+                .foregroundStyle(CheckTheme.primaryText)
+                .tint(CheckTheme.accent)
+                .lineLimit(1)
+                .disabled(!isOpen)
+                .accessibilityLabel("보낼 메시지")
+                .onSubmit(sendTyped)
+                // 입력 시점 필터. 타이핑도 ⌘V 붙여넣기도 결국 이 바인딩을 갱신하므로 여기 한 곳이면 둘 다 막힌다.
+                // 같을 때 대입을 건너뛰는 것이 핵심이다 — 안 그러면 한글 조합 중간 상태에서 되쓰기가 반복된다
+                // (CredentialField 의 ASCII 필터가 남긴 그 선례).
+                .onChange(of: text) { _, newValue in
+                    let cleaned = PokeMessageInputFilter.filtered(newValue)
+                    guard cleaned != newValue else { return }
+                    text = cleaned
+                    triggerFilterWarning()
+                }
+                .onDisappear { filterWarningTask?.cancel() }
+            Text(PokeMessageCounter.text(text))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(counterTint)
+                .monospacedDigit()
+                .fixedSize()
+            Button(action: sendTyped) {
+                Text("보내기")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .frame(height: 22)
+                    .background(Capsule().fill(CheckTheme.accent.opacity(canSendTyped ? 1 : 0.35)))
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSendTyped)
+            .help(sendHelp)
+        }
+        .padding(.horizontal, 9)
+        .frame(height: Self.inputRowHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(CheckTheme.fieldFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        // 초과는 테두리까지 빨갛게 — 카운터 글자만으로는 못 보고 지나친다.
+                        .stroke(PokeMessageCounter.isOverflowing(text) ? CheckTheme.danger : CheckTheme.border, lineWidth: 1)
+                )
+        )
+    }
+
+    private var counterTint: Color {
+        if PokeMessageCounter.isOverflowing(text) { return CheckTheme.danger }
+        return PokeMessageCounter.isFull(text) ? CheckTheme.pending : CheckTheme.secondaryText
+    }
+
+    private var canSendTyped: Bool { isOpen && !isSending && PokeMessageCounter.isSendable(text) }
+
+    /// 왜 못 보내는지를 사유별로 다르게 말한다. **.tooLong 과 .unsupportedCharacters 를 한 문구로 합치면 안 된다** —
+    /// 이모지 하나에 대고 "3글자까지예요"라고 하면 사용자는 글자를 줄이고, 줄여도 계속 막힌다.
+    private var sendHelp: String {
+        if !isOpen { return blockedText?.text ?? "지금은 보낼 수 없어요" }
+        switch MessageBody.validate(text) {
+        case .ok: return "보내기"
+        case .empty: return "보낼 말을 입력해 주세요"
+        case .unsupportedCharacters: return Self.filterWarningText
+        case .tooLong: return WorkTimerStore.messageTooLongNotice
+        }
+    }
+
+    /// 전송. **원문을 그대로 넘긴다** — 정규화(NFC)와 길이·문자 판정은 네트워크 계층의 MessageBody 가
+    /// 한 번만 한다(SupabaseWorkService.sendMessage). 여기서 미리 정규화해 넘기면 같은 일을 두 곳이 하게 되고,
+    /// 규칙이 바뀌는 날 뷰만 옛 규칙으로 남는다. 치는 동안 길이를 자르지 않는 것도 같은 이유의 연장이다(IME 안전).
+    private func sendTyped() {
+        guard canSendTyped else { return }
+        onSend(text)
+    }
+}
+
+/// 팝오버 안의 '최근 받은 메시지 1건' 표시. 보낸이 별명 + 본문 + 언제 (+ 뒤에 더 있으면 "+N").
+/// 캐릭터 말풍선(다른 담당)은 몇 초 뒤 사라지므로, 자리를 비운 사이 온 글자를 볼 수 있는 자리는 여기뿐이다.
+struct PokeMessageReceiptStrip: View {
+    let message: ReceivedMessage
+    let now: Date
+    /// 이 건 뒤에 대기 중인 건수(스토어 waitingMessageCount). 0이면 아무것도 그리지 않는다.
+    var waitingCount: Int = 0
+
+    static let height: CGFloat = 34
+
+    /// "방금 / N분 전 / N시간 전"(순수 — 팀원 행의 "마지막 확인 N분 전"과 같은 눈금).
+    static func ageText(receivedAt: Date, now: Date) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(receivedAt)))
+        if seconds < 60 { return "방금" }
+        if seconds < 3600 { return "\(seconds / 60)분 전" }
+        return "\(seconds / 3600)시간 전"
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            CheckAvatarView(name: message.fromName, size: 22)
+            Text("\(message.fromName)님")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(CheckTheme.primaryText)
+                .lineLimit(1)
+            // 본문 자체가 주인공이라 캡슐로 띄운다(이름·시각보다 한 급 크게).
+            Text(message.body)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(CheckTheme.accent)
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(CheckTheme.accent.opacity(0.16)))
+                .fixedSize()
+            if waitingCount > 0 {
+                Text("+\(waitingCount)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .fixedSize()
+            }
+            Spacer(minLength: 6)
+            Text(Self.ageText(receivedAt: message.createdAt, now: now))
+                .font(.caption2)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .fixedSize()
+        }
+        .padding(.horizontal, 10)
+        .frame(height: Self.height)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(CheckTheme.accent.opacity(0.10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(CheckTheme.accent.opacity(0.32), lineWidth: 1)
+                )
+        )
+    }
+}
+
 /// 팀 카드 자리를 대체하는 콕찌르기 페이지(앱 로그인 사용자 전체). 리그/토큰 보드와 같은 뼈대다:
 /// 뒤로 버튼 + 제목 + (조건부 안내줄) + 고정 행높이 리스트(maxVisibleRows 초과 시 스크롤). 행은 아바타 + 이름 +
 /// 상태 칩(근무중/자리비움) + 우측 찌르기 버튼(손가락 아이콘: 가능=accent 원형, 쿨타임/내 비근무/대상 자리비움=흐린 비활성).
@@ -1691,6 +2044,22 @@ private struct PokePanel: View {
     // 집중 모드(내 수신 거부) 상태와 토글. 값+클로저로만 받아 이 패널을 렌더 테스트 친화적으로 유지한다.
     var isFocusMode: Bool = false
     var onToggleFocusMode: () -> Void = {}
+    // 3글자 메시지 전송(대상 userID, 정규화된 본문).
+    var onSendMessage: (String, String) -> Void = { _, _ in }
+    // 대상별 메시지 쿨타임 잔여 초(0이면 보낼 수 있다). 찌르기와 **다른 서버 규칙**이라 클로저를 따로 받는다.
+    var messageCooldownRemaining: (String) -> Int = { _ in 0 }
+    // 전송 왕복 중(연타 잠금).
+    var isSendingMessage: Bool = false
+    // 메시지 전송 결과 1줄 안내. 찌르기 notice 와 **다른 칸**이라 따로 받는다(스토어가 상태를 나눠 둔 이유와 같다).
+    var messageNotice: String? = nil
+    // 최근 받은 메시지 1건. nil 이면 그 자리를 아예 만들지 않는다(빈 상자는 예산만 먹는다).
+    var latestMessage: ReceivedMessage? = nil
+    // 그 뒤로 대기 중인 수신 건수("+N" 표시용).
+    var waitingMessageCount: Int = 0
+    // 스냅샷 전용: 이 사용자의 작성기가 펼쳐진 상태로 그린다(버튼 클릭을 대신). 앱은 nil.
+    var previewComposingUserID: String? = nil
+    // 스냅샷 전용: 펼친 작성기의 입력칸에 미리 들어가 있는 값(글자 수 카운터 상태 재현). 앱은 "".
+    var previewMessageDraft: String = ""
     let onBack: () -> Void
     // 목록 위쪽에서 배너/토큰 행이 먹은 높이(pt). 그만큼 무스크롤 표시 행수를 줄여 창 상한을 지킨다.
     var extraChromeHeight: CGFloat = 0
@@ -1701,6 +2070,25 @@ private struct PokePanel: View {
     // 진행도를 여기 두면 3초 동안 매 프레임 이 패널(목록 전체)이 재평가된다.
     @State private var isChargingUltra = false
 
+    // 지금 메시지 작성기가 펼쳐진 대상(nil = 전부 접힘). **Optional 하나가 곧 "한 번에 한 행만" 규칙**이다 —
+    // 행마다 Bool 플래그를 두면 26행이 동시에 펼쳐질 수 있고, 그 순간 목록 높이가 700pt 예산을 넘긴다.
+    @State private var composingUserID: String?
+    // 직접 입력 초안. 대상을 바꾸면 비운다(앞사람에게 쓰던 말이 뒷사람 칸에 남아 오발송되지 않게).
+    @State private var draft: String = ""
+
+    // 스냅샷 미리보기가 켜져 있으면 그 값이 이긴다(TeamPanel 의 previewEditingDisplayName 선례 —
+    // @State 시드용 init 을 만들지 않고도 펼친 상태를 그대로 그릴 수 있다).
+    private var activeComposerUserID: String? { previewComposingUserID ?? composingUserID }
+
+    private var draftBinding: Binding<String> {
+        previewComposingUserID == nil ? $draft : .constant(previewMessageDraft)
+    }
+
+    /// 펼침 한 덩어리가 목록에서 차지하는 높이(행 간격 포함). 접혀 있으면 0.
+    private var composerBlockHeight: CGFloat {
+        activeComposerUserID == nil ? 0 : PokeMessageComposer.height + Self.rowSpacing
+    }
+
     // 행 고정 높이·간격. 아바타(26pt) + 이름/상태 칩 한 줄이라 팀원 행보다 낮게 둔다.
     private static let rowHeight: CGFloat = 48
     private static let rowSpacing: CGFloat = 8
@@ -1709,13 +2097,18 @@ private struct PokePanel: View {
     static let maxVisibleRows = 7
 
     // 배너/토큰 행이 먹은 높이를 반영한 실제 무스크롤 표시 행수(기본은 maxVisibleRows).
+    // 받은 메시지 줄도 목록 **위에** 얹히므로 같은 예산에 넣는다 — 안 넣으면 그 줄이 뜬 날만 창이 상한을 넘는다.
     private var visibleRows: Int {
         ListRowBudget.visibleRows(
             maxVisibleRows: Self.maxVisibleRows,
             rowHeight: Self.rowHeight,
             rowSpacing: Self.rowSpacing,
-            extraChromeHeight: extraChromeHeight
+            extraChromeHeight: extraChromeHeight + receiptStripHeight
         )
+    }
+
+    private var receiptStripHeight: CGFloat {
+        latestMessage == nil ? 0 : PokeMessageReceiptStrip.height + 12   // 바깥 VStack(spacing: 12) 포함
     }
 
     var body: some View {
@@ -1743,6 +2136,10 @@ private struct PokePanel: View {
                     .fixedSize()
             }
             PanelDivider()
+            // 최근 받은 메시지 1건. 목록 위·안내줄 위다 — 남이 나에게 한 말이 내가 하려던 일보다 먼저 눈에 든다.
+            if let latestMessage {
+                PokeMessageReceiptStrip(message: latestMessage, now: now, waitingCount: waitingMessageCount)
+            }
             // 안내줄: notice 우선(주황), 없고 내가 비근무면 안내(회색), 근무중+notice nil 이면 생략(상단 앵커 유지).
             if let noticeLine {
                 Text(noticeLine.text)
@@ -1762,6 +2159,12 @@ private struct PokePanel: View {
     // 셋 다 아니면 nil(생략 — 상단 앵커 유지). 비근무 안내가 집중 모드보다 앞인 이유는 그것이 **지금 이 화면에서
     // 하려는 일**(찌르기)의 차단 사유이기 때문이다. 집중 모드는 내 수신 설정이라 정보에 가깝다.
     private var noticeLine: (text: String, isWarning: Bool)? {
+        // 메시지 결과가 찌르기 결과보다 앞이다 — 메시지는 사용자가 글자를 골라 넣은 **뒤**의 답이라
+        // 그 답이 안 보이면 "보내진 건가?"가 남는다. 스토어가 두 문구를 다른 칸에 담아 둔 덕에
+        // 여기서 순서만 정하면 되고, 어느 쪽도 상대를 지우지 않는다.
+        if let messageNotice, !messageNotice.isEmpty {
+            return (messageNotice, true)
+        }
         if let notice, !notice.isEmpty {
             return (notice, true)
         }
@@ -1784,24 +2187,39 @@ private struct PokePanel: View {
     }
 
     // 리스트 높이 = 인원 비례. maxVisibleRows까지는 그대로 자라고(스크롤 없음), 초과하면 그 높이로 고정 후 스크롤.
+    // **펼친 작성기도 이 안에서 자란다** — 리스트 총 높이 상한(capHeight)은 펼침 여부와 무관하므로,
+    // 어떤 조합에서도 창 높이는 '접힌 7행'을 넘지 않는다(펼치면 보이는 행수가 줄고 나머지는 스크롤로 밀린다).
     @ViewBuilder
     private var entryList: some View {
-        let visibleRows = visibleRows
         let capHeight = Self.listContentHeight(rowCount: visibleRows)
-        if rowCount <= visibleRows {
+        let contentHeight = Self.listContentHeight(rowCount: rowCount) + composerBlockHeight
+        if contentHeight <= capHeight {
             rows.frame(maxWidth: .infinity, alignment: .top)
         } else if clipsOverflowInsteadOfScroll {
-            // 스냅샷 전용: 보이는 첫 visibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
+            // 스냅샷 전용: 보이는 첫 부분만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
             rows.frame(maxWidth: .infinity, alignment: .top)
                 .frame(height: capHeight, alignment: .top)
                 .clipped()
         } else {
-            ScrollView(.vertical, showsIndicators: true) {
-                rows.frame(maxWidth: .infinity)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: true) {
+                    rows.frame(maxWidth: .infinity)
+                }
+                .frame(height: capHeight)
+                // 26명 목록에서 아래쪽 행을 펼치면 작성기가 보이는 창 밖에 생긴다 — 방금 누른 사람에게는
+                // '아무 일도 안 일어난 것'과 구별되지 않는다. 펼친 덩어리를 스스로 끌어올린다.
+                .onChange(of: composingUserID) { _, newValue in
+                    guard let newValue else { return }
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo(Self.composerAnchorID(newValue), anchor: .bottom)
+                    }
+                }
             }
-            .frame(height: capHeight)
         }
     }
+
+    /// 펼친 작성기의 스크롤 앵커 id. 행 id 와 겹치지 않게 접두어를 붙인다.
+    private static func composerAnchorID(_ userID: String) -> String { "composer-\(userID)" }
 
     @ViewBuilder
     private var rows: some View {
@@ -1819,15 +2237,51 @@ private struct PokePanel: View {
                         remainingCooldown: cooldownRemaining(entry.userID),
                         canPoke: isMyselfWorking,
                         canUltra: canUltra,
+                        isComposing: activeComposerUserID == entry.userID,
                         onPoke: { onPoke(entry.userID) },
                         onUltra: { onUltra(entry.userID) },
                         onUltraBlocked: onUltraBlocked,
-                        onChargingChanged: { isChargingUltra = $0 }
+                        onChargingChanged: { isChargingUltra = $0 },
+                        onToggleCompose: { toggleCompose(entry.userID) }
                     )
                     .frame(height: Self.rowHeight)
+                    if activeComposerUserID == entry.userID {
+                        PokeMessageComposer(
+                            targetName: entry.name,
+                            text: draftBinding,
+                            remainingCooldown: messageCooldownRemaining(entry.userID),
+                            // 행의 찌르기 버튼과 **같은 게이트**다(내 근무 + 대상 근무). 규칙이 갈라지면
+                            // 버튼은 흐린데 입력칸은 살아 있는 화면이 생기고, 그 차이를 설명할 방법이 없다.
+                            canSend: isMyselfWorking && entry.isWorking,
+                            isSending: isSendingMessage,
+                            onSend: { text in
+                                onSendMessage(entry.userID, text)
+                                // 보낸 값은 비운다 — 남아 있으면 쿨타임이 풀리는 순간 같은 말이 또 나간다.
+                                draft = ""
+                            },
+                            onCancel: { closeCompose() }
+                        )
+                        .id(Self.composerAnchorID(entry.userID))
+                    }
                 }
             }
         }
+    }
+
+    /// 메시지 진입점 토글. 다른 사람을 펼치면 **앞사람 칸은 닫히고 초안도 비운다** —
+    /// 3글자는 짧아서, 남아 있던 말이 엉뚱한 사람에게 나가면 그게 곧 사고다.
+    private func toggleCompose(_ userID: String) {
+        if composingUserID == userID {
+            closeCompose()
+        } else {
+            composingUserID = userID
+            draft = ""
+        }
+    }
+
+    private func closeCompose() {
+        composingUserID = nil
+        draft = ""
     }
 
     static func listContentHeight(rowCount: Int) -> CGFloat {
@@ -1847,11 +2301,15 @@ private struct PokeDirectoryRowView: View {
     let canPoke: Bool
     // 오늘 울트라 몫이 남았는지(툴팁/안내 분기용). 찌르기 자체의 활성 여부와는 무관하다.
     let canUltra: Bool
+    // 이 행 아래 메시지 작성기가 펼쳐져 있는지(버튼을 켜진 상태로 그린다).
+    var isComposing: Bool = false
     let onPoke: () -> Void
     let onUltra: () -> Void
     let onUltraBlocked: () -> Void
     // 충전 시작/끝만 패널에 알린다(진행도는 버튼 안에 갇혀 있다).
     var onChargingChanged: (Bool) -> Void = { _ in }
+    // 메시지 작성기 펼침/접힘 토글. 펼침 자체는 아무것도 보내지 않는다(전송은 작성기 안에서만).
+    var onToggleCompose: () -> Void = {}
 
     // 좌측 세로 바 색 — 아바타 이니셜과 동일한 이름 해시색(유저별 컬러 포인트).
     private var accentColor: Color { CheckTheme.avatarColor(for: entry.name) }
@@ -1870,6 +2328,10 @@ private struct PokeDirectoryRowView: View {
                 .lineLimit(1)
             statusChip
             Spacer(minLength: 6)
+            // 메시지는 찌르기 **바로 왼쪽**, 같은 30pt 원형이다(같은 자리·같은 무게).
+            // 다만 채움은 한 급 낮춘다 — 둘 다 accent 원형이면 어느 쪽이 이 화면의 주 동작인지 사라지고,
+            // 손가락 아이콘의 '콕' 은 이 패널의 이름 그 자체다.
+            messageButton
             pokeButton
         }
         .padding(.leading, 8)
@@ -1937,6 +2399,45 @@ private struct PokeDirectoryRowView: View {
             // 툴팁의 홀드 시간도 상수에서 만든다(힌트 문구와 같은 이유 — 두 곳에 숫자를 흩뿌리지 않는다).
             .help(canUltra ? "콕 찌르기 (\(UltraChargeStyle.holdSecondsText)초 꾹 누르면 울트라)" : "콕 찌르기 (울트라는 오늘 다 썼어요)")
         }
+    }
+
+    // 3글자 메시지 진입점 — 말풍선 아이콘. **찌르기와 같은 게이트**를 받는다(내 근무·대상 근무·쿨타임).
+    // 비활성이어도 자리를 지키고 흐리게만 그린다: 버튼이 사라졌다 나타나면 행이 흔들리고,
+    // 무엇보다 "여기서 메시지를 보낼 수 있다"는 사실 자체가 안 보이면 기능이 없는 것과 같다.
+    // 펼쳐 두는 것 자체는 아무것도 보내지 않으므로 **쿨타임 중에도 펼칠 수 있다** — 그래야 작성기가
+    // 남은 초를 말해 줄 수 있다(닫힌 채로는 왜 못 보내는지 알 길이 없다).
+    @ViewBuilder
+    private var messageButton: some View {
+        if !canPoke {
+            messageIconLabel(active: false)
+                .help("내가 근무 중일 때만 메시지를 보낼 수 있어요")
+        } else if !entry.isWorking {
+            messageIconLabel(active: false)
+                .help("자리비움 상태에는 메시지를 보낼 수 없어요")
+        } else {
+            Button(action: onToggleCompose) {
+                messageIconLabel(active: true)
+            }
+            .buttonStyle(PokePressButtonStyle())
+            .help(isComposing ? "메시지 접기" : "\(MessageBody.maxCharacters)글자 메시지 보내기")
+            .accessibilityLabel("\(MessageBody.maxCharacters)글자 메시지 보내기")
+        }
+    }
+
+    // 말풍선 라벨. 활성은 accent 글자 + 옅은 accent 원형(찌르기의 꽉 찬 accent 보다 한 급 낮은 무게),
+    // 펼친 동안은 채움을 올려 '지금 이 행이 열려 있다'를 행에서도 읽히게 한다.
+    private func messageIconLabel(active: Bool) -> some View {
+        Image(systemName: "text.bubble.fill")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(active ? CheckTheme.accent : CheckTheme.secondaryText.opacity(0.45))
+            .frame(width: 30, height: 30)
+            .background(
+                Circle().fill(
+                    active
+                        ? CheckTheme.accent.opacity(isComposing ? 0.38 : 0.18)
+                        : Color.white.opacity(0.06)
+                )
+            )
     }
 
     // 손가락 아이콘 라벨(활성/비활성 공유). 활성이면 accent 원형 배경·흰 아이콘, 비활성이면 흐린 아이콘만.

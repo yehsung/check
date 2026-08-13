@@ -507,6 +507,37 @@ final class WorkTimerStore {
     /// 수신 찔림 싱크. 오버레이 컨트롤러가 연결해 움찔+말풍선(숨김 시 peek)으로 표시한다(관찰 대상 아님).
     @ObservationIgnored var onPokesReceived: (([ReceivedPoke]) -> Void)?
 
+    // ── 짧은 메시지(최대 3글자). 찔림과 **같은 표·같은 폴링**으로 도착한다(take_pokes 의 kind="message" 행). ──
+    /// 아직 사용자에게 보여주지 않은 수신 메시지 **큐**(도착 순 FIFO). 마지막 1건만 남기지 않는 이유는
+    /// 찔림과 메시지의 값이 다르기 때문이다 — 찔림은 "누가 불렀다"가 전부라 배치를 한 문장으로 합쳐도 손실이 없지만
+    /// (CheckOverlayWindow.pokeBubbleText), 메시지는 보낸 사람이 3글자를 골라 담은 내용이고 take_pokes 는 서버에서
+    /// **원자 소비**라 여기서 덮어쓰면 그 글자는 영영 복구할 수 없다. 15초 폴링이라 두 명이 동시에 보내면 한 틱에
+    /// 여러 건이 오는데, 표시 수단인 말풍선은 한 번에 하나뿐이므로 큐로 세워 두고 한 건씩 흘린다.
+    /// 찔림 싱크(onPokesReceived)처럼 콜백으로 흘리지 않는 이유도 같다 — 콜백은 배치를 통째로 던져
+    /// 이 순서 규약을 우회한다. 표시 권한은 이 큐 하나에만 둔다.
+    var receivedMessages: [ReceivedMessage] = []
+    /// **말풍선으로 이미 뜬** 마지막 메시지 1건(팝오버의 "놓친 것 확인"용). 큐에서 소비될 때 여기로 옮겨 담기므로
+    /// 큐가 비어도 남는다 — 이 칸이 없으면 자리를 비운 사이 온 "밥?"이 6초 뜨고 사라져, 서버가 이미 원자 소비한
+    /// 그 글자를 확인할 방법이 앱 어디에도 없다.
+    ///
+    /// **왜 1건인가**(N건 이력이 아니라): 큐 단계의 손실과 성격이 다르다. 큐에서 덮어쓰면 '한 번도 안 뜬 것'이
+    /// 사라지지만, 여기서 밀리는 것은 '떴는데 못 본 것'이다 — 앱은 찔림에 대해 이미 후자를 기록 없이 흘려보내고
+    /// 있고, 메시지만 대화 이력을 갖는 것은 다른 제품이다. 팝오버 높이 예산(26명 목록에서 이미 654/700pt)도
+    /// 목록을 감당하지 못한다. 한계는 분명하다: 한 틱에 여러 건이 와서 전부 표시되면 마지막 1건만 남는다.
+    /// 그게 실제 문제로 확인되면 링 버퍼로 늘리면 되고, 그때 이 이름은 그 목록의 첫 원소로 남는다.
+    ///
+    /// **영속하지 않는다.** 3글자 메시지는 휘발성이 성격에 맞고, 디스크에 남기면 계정 전환·기기 간 불일치라는
+    /// 버그 종을 통째로 들여온다(ultraPokeSpentDay 와 같은 판단).
+    var lastShownMessage: ReceivedMessage?
+    /// 메시지 전송 결과 1줄 안내. **pokeNotice 와 따로 둔다** — 두 동작이 같은 패널에 살아도 결과는 각자의 것이고,
+    /// 한 칸을 나눠 쓰면 찌르기 실패 문구가 메시지 성공 위에 남는다(displayNameNotice 를 따로 둔 것과 같은 규약).
+    var messageNotice: String?
+    /// 대상별 메시지 쿨타임 만료 시각(pokeCooldownUntil 과 같은 규약 — 서버가 강제하고 클라는 미러링만 한다).
+    var messageCooldownUntil: [String: Date] = [:]
+    /// 전송 왕복이 떠 있는지. **관찰 대상**이다 — 보내는 동안 버튼을 잠그지 않으면 연타가 두 번째 요청을 내고
+    /// 그 요청은 방금 자기가 만든 60초 쿨타임에 확정으로 거절당한다(isUpdatingDisplayName 과 같은 규약).
+    var isSendingMessage = false
+
     // ── 별명(표시명) 변경 ──
     /// 팀 목록 내 행의 별명 인라인 편집이 열려 있는지. 뷰 로컬 @State 가 아닌 이유: 30초 폴링이 teamMembers 를
     /// 통째로 갈아 끼우면(WorkTimerStoreSync.refreshTeamStatus) ForEach 가 행을 재구성해 편집 상태가 날아간다.
@@ -1118,6 +1149,14 @@ final class WorkTimerStore {
     func closePokePanel() {
         isPokePanelVisible = false
         pokeNotice = nil
+        // 메시지 결과 문구도 같은 이유로 여기서 죽인다(pokeNotice 주석의 그 회귀 — 나갔다 돌아오면 낡은 줄이 남는다).
+        // 수신 큐(receivedMessages)는 **건드리지 않는다**: 그건 패널이 아니라 말풍선의 것이고,
+        // 패널을 닫았다고 아직 한 번도 안 뜬 글자를 버리면 take_pokes 가 이미 소비한 그 글자는 영영 사라진다.
+        messageNotice = nil
+        // 반면 '이미 뜬' 마지막 메시지는 여기서 **소비**한다. 이 패널이 그걸 보여주는 유일한 화면이라
+        // 닫았다는 것이 곧 "봤다"의 증거다 — 안 지우면 5분 뒤 다시 열었을 때 같은 말이 새 메시지처럼 또 뜬다.
+        // (한 번도 안 열어 본 경우는 여기로 오지 않으므로, 나이 만료는 폴링이 따로 맡는다 — expireLastShownMessage.)
+        lastShownMessage = nil
     }
 
     /// 콕찌르기 버튼 액션. 사용자 목록 페이지를 토글하고, 여는 순간 디렉토리를 로드한다. 다른 패널과 상호 배타.
@@ -1540,6 +1579,13 @@ extension WorkTimerStore {
         pokeDirectoryLoaded = false
         pokeCooldownUntil = [:]
         pokeNotice = nil
+        // 메시지도 계정에 묶인 상태다. 큐를 남기면 새 계정 화면에 앞 사람에게 온 말이 뜨고,
+        // 쿨타임을 남기면 새 계정이 자기 첫 메시지를 못 보낸다(찔림과 같은 규약).
+        receivedMessages = []
+        lastShownMessage = nil
+        messageNotice = nil
+        messageCooldownUntil = [:]
+        isSendingMessage = false
         tokenUsagePublic = true
         tokenUsagePublicLoaded = false
         // 계정이 바뀌면 남의 쿨타임/남의 하루 몫을 물려받지 않게 반드시 비운다. 남기면 새 계정이 자기 울트라를

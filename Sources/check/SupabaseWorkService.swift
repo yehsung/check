@@ -708,6 +708,45 @@ actor SupabaseWorkService {
         return try decoder.decode(PokeSendResponse.self, from: data)
     }
 
+    /// 상대에게 3글자 메시지. send_message(p_to, p_body) RPC 를 로그인 토큰으로 호출한다.
+    /// 근무중 게이트·집중 모드·60초 쿨타임·3글자 상한은 **전부 서버**가 강제한다 — 아래 클라 게이트는 판정이 아니라
+    /// 헛왕복 절감 장치다(무료 플랜).
+    ///
+    /// 응답은 poke_user 와 **문자 그대로 같은 jsonb 규약**({status, retry_after_seconds?})이라 PokeSendResponse 를
+    /// 그대로 재사용한다 — ultra_remaining/reset_after_seconds 는 이 RPC 가 안 보내므로 nil 로 남을 뿐 해가 없다.
+    /// 갈리는 것은 도메인 어휘뿐이고 그건 MessageSendOutcome 이 맡는다(그 타입 주석에 이유가 있다).
+    ///
+    /// **빈 본문·3글자 초과는 요청을 아예 내지 않고** 서버와 같은 status 로 즉답한다. 로컬 거절만 throw 로 만들면
+    /// 호출부가 같은 실패를 catch 와 switch 두 곳에서 다뤄야 하고, 그 둘은 시간이 지나면 반드시 다른 문구를 낸다.
+    /// 보내는 문자열도 원문이 아니라 정규화된 값이다 — 서버도 정규화하지만, 클라가 먼저 하면 NFD 한글이
+    /// 서버에서만 6글자로 세어져 거절되는 사고가 사라진다(MessageBody.sanitized 주석의 실측 참고).
+    func sendMessage(accessToken: String, to userID: String, body: String) async throws -> PokeSendResponse {
+        switch MessageBody.validate(body) {
+        case .empty:
+            return PokeSendResponse(status: "invalid")
+        case .unsupportedCharacters:
+            // **MessageSendOutcome 에 전용 케이스를 만들지 않고 invalid 로 접는다.** 텍스트 전용은 서버가 아니라
+            // 클라가 강제하는 규칙이라(서버는 이모지를 허용하는 난간만 세운다) 서버는 이 status 를 영원히 안 낸다 —
+            // 여기에 케이스를 더하면 스토어의 응답 분기에 **서버에서 절대 오지 않는 가지**가 하나 늘 뿐이다.
+            // 사용자에게 이유를 말하는 자리는 응답 분기가 아니라 **입력 단계**다: 화면은 MessageBody.validate 를
+            // 직접 불러 .unsupportedCharacters 를 보고 "이모지는 보낼 수 없어요"를 즉시 띄우고 전송을 막는다
+            // (사장님 지시 "입력 자체가 애초에 텍스트만 되게"의 자리가 거기다). 여기까지 온 입력은 그 화면 게이트를
+            // 우회한 경로뿐이라 invalid 로 충분하다.
+            return PokeSendResponse(status: "invalid")
+        case .tooLong:
+            return PokeSendResponse(status: "too_long")
+        case .ok(let normalized):
+            let data = try await send(
+                path: "/rest/v1/rpc/send_message",
+                method: "POST",
+                body: SendMessageRequest(pTo: userID, pBody: normalized),
+                accessToken: accessToken,
+                prefer: nil
+            )
+            return try decoder.decode(PokeSendResponse.self, from: data)
+        }
+    }
+
     /// 내게 온 미소비 찔림을 원자적으로 수신+소비한다. take_pokes() RPC 를 로그인 토큰으로 호출한다(인자 없음 → EmptyBody).
     /// 반환 행은 보낸이 표시명/아바타 + 찔린 시각 epoch 초를 담는다(클라가 Date 로 복원해 신선도 필터).
     func takePokes(accessToken: String) async throws -> [TakenPokeRow] {

@@ -1,5 +1,6 @@
 import AppKit
 import MachO
+import Observation
 import SwiftUI
 
 /// 우리가 만드는 패널을 **테스트 실행 중에만** 사용자 눈에서 지우는 단 하나의 전환 지점.
@@ -108,6 +109,18 @@ final class CheckOverlayController {
     /// 움찔 모션(≈1.15s) + 말풍선(6s) 을 다 보여줄 만큼 두고 여유를 더한 값.
     static let pokePeekSeconds: Double = 8
 
+    /// 수신 메시지 큐를 다시 들여다보는 tick(초).
+    ///
+    /// **한 건이 몇 초 떠 있는지는 여기서 정하지 않는다.** 표시 시간의 주인은 기존 말풍선 타이머
+    /// (`ReactionEngine.pokedBubbleSeconds` = 6초)이고, 이 값은 "앞 말풍선이 스스로 꺼졌는가"를 다시 보는
+    /// 눈금일 뿐이다. 두 곳에서 시간을 정하면 언젠가 한 건이 뜨자마자 다음 건에 밀린다(스토어가 큐 회전
+    /// 권한을 표시 쪽에 넘긴 이유와 같은 사고 — WorkTimerStore.consumeCurrentMessage 주석).
+    ///
+    /// 1초인 근거: 6초 말풍선 뒤에 붙는 지연이 최대 1초라 사람 눈에는 '이어서 뜬다'로 읽히고, 루프는
+    /// **큐가 빌 때까지만** 도므로 총 깨어남이 (건수 × 약 7회)에 그친다. 메시지가 0건인 평시에는
+    /// 태스크 자체가 없다(상시 루프 신설 금지 규약).
+    static let messageBubbleTickSeconds: Double = 1.0
+
     /// 울트라 격발 지속(초). ReactionKind.ultraPoked.duration · ReactionActions.ultraPoked 총 길이와
     /// **같은 값**이어야 모션이 끝나는 순간 창도 접힌다.
     static let ultraSeconds: Double = 5
@@ -161,6 +174,8 @@ final class CheckOverlayController {
     private var blinkTask: Task<Void, Never>?
     // 숨김 상태에서 찔림을 peek 로 보여주는 동안만 유효한 자동 퇴장 태스크. updateWorking 양쪽에서 취소한다.
     private var pokePeekTask: Task<Void, Never>?
+    // 수신 메시지 큐를 한 건씩 흘리는 펌프. **큐가 비면 스스로 멈춘다**(nil 로 돌아온다) — 평시에는 없다.
+    private var messageDrainTask: Task<Void, Never>?
 
     // MARK: - 할 일 보드 훅
     //
@@ -230,6 +245,13 @@ final class CheckOverlayController {
     var ultraWatchdogSleep: @Sendable (Double) async -> Void = {
         try? await Task.sleep(for: .seconds($0))
     }
+    /// 메시지 펌프 tick 의 수면. 프로덕션은 실제 `Task.sleep` 이고 **테스트만** 갈아 끼운다(위 두 주입과 같은 규약).
+    /// 실시간 1초를 기다리는 판으로는 "여러 건이 순서대로 다 뜨는가"를 검증할 수 없다 — 이 스위트는 메인 액터가
+    /// 통째로 수십 초 밀리는 일이 있어(위 ultraSleep 주석의 84.15초 실측) 그런 판은 제품이 아니라 그날의 대기열을
+    /// 시험한다. 수면을 쥐면 테스트가 시간을 기다리는 대신 **깨울 사람을 고른다**.
+    var messageBubbleSleep: @Sendable (Double) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
     /// 클릭 통과 값 못 박기. non-nil 인 동안 `setIgnoresMouseEvents` 는 어떤 호출자가 무엇을 요구하든
     /// 이 값만 쓴다. 이게 없으면 히트-스루 기계(updateHitThrough / restorePassThroughAfterExit)가
     /// 커서 위치에 따라 값을 뒤집어 5초 격발이 "막다 말다" 하는 최악의 상태가 된다.
@@ -244,6 +266,9 @@ final class CheckOverlayController {
     var hasMouseMoveMonitor: Bool { mouseMoveMonitor != nil }
     /// 헤드리스 검증 지점. '클릭 통과 값을 못 박았는가'(nil = 평시 자동 토글).
     var pinnedIgnoresMouseEventsValue: Bool? { pinnedIgnoresMouseEvents }
+    /// 헤드리스 검증 지점. 메시지 펌프가 도는 중인가(shouldBeVisible·nudgeSchedulerRunning 과 같은 성격).
+    /// **평시 false 여야 한다** — 큐가 비었는데 true 면 상시 루프가 하나 남은 것이다.
+    var isDrainingMessages: Bool { messageDrainTask != nil }
 
     init(
         store: WorkTimerStore,
@@ -300,6 +325,10 @@ final class CheckOverlayController {
         // 똑같이 peek 한다 — 서버가 이미 소비한 찔림이라 여기서 버리면 영영 전달되지 않는다.
         // 폴링/신선도 필터는 스토어가 끝냈으므로 여기선 받은 배치를 그대로 표시만 한다.
         store.onPokesReceived = { [weak self] pokes in self?.handleReceivedPokes(pokes) }
+
+        // 3글자 메시지는 **콜백이 아니라 큐**로 온다(스토어 receivedMessages). 도착만 여기서 감지하고
+        // 표시 순서는 큐가 정한다 — 자세한 이유는 armMessageWatch 주석.
+        armMessageWatch()
 
         // 넛지 스케줄러: 자격은 store 로 구성(로그인·팀·비근무·억제 아님), 발동은 자동 근무 시작(안내만)으로.
         // 공백 관측/생존 스탬프는 수동 종료 억제의 해제·영속 판정으로 잇는다(스케줄러는 store 를 모른다).
@@ -754,6 +783,127 @@ final class CheckOverlayController {
             engine.request(.poked(bubbleText: text))
         } else {
             beginPokePeek(text: text)
+        }
+    }
+
+    // MARK: - 3글자 메시지 수신(말풍선 — 찔림과 **같은 채널·같은 peek**)
+    //
+    // 여기에 새 말풍선 장치는 없다. 문구를 만들어 기존 찔림 경로(`.poked` 리액션 → showBubble, 숨김이면
+    // beginPokePeek)에 태우는 것이 전부다. 그래서 지속시간(6초)·페이드·다음 리액션과의 인터럽트 규칙·
+    // peek 창(8초)·캐릭터 미-attach 폴백이 전부 찔림과 같은 기계에서 나온다 — 메시지만 따로 어긋날 여지가 없다.
+
+    /// 메시지 말풍선 문구(순수 함수 — 헤드리스로 고정한다). **보낸이와 본문이 둘 다** 들어간다:
+    /// 3글자만 떠 있으면 받는 쪽에서 아무 뜻도 없다.
+    ///
+    /// 양쪽을 여기서 자르는 이유는 **잘림의 방향** 때문이다. 말풍선은 `lineLimit(2)` 라 넘치면 SwiftUI 가
+    /// 꼬리를 지우는데, 이 문구의 꼬리는 정확히 본문이다 — 안 자르면 잘리는 쪽이 알맹이다. 별명도 본문도
+    /// **남이 정하는 문자열**이고 스토어는 길이를 일부러 재검사하지 않으므로(서버 상한이 늘면 그건 새 진실이라는
+    /// 판단 — WorkTimerStore.freshReceivedMessages), 폭 예산을 지키는 일은 표시 쪽 몫으로 남는다.
+    ///
+    /// 실측(같은 머신에서 NSLayoutManager 로 실제 줄 수를 셈. 폰트는 CheckGreetingBubble 그대로
+    /// `.caption2` rounded semibold = 10pt, 텍스트 가용 폭 94pt = 캡슐 110 − 좌우 패딩 8×2, lineLimit 2 → 예산 188pt):
+    ///  · 평상시 "이유성님: 화이팅" = 66.4pt **1줄**
+    ///  · 서버 상한 조합(별명 12자 + 본문 3자) = 144.2pt 2줄 — 기존 "이유성님 외 2명이 콕 찔렀어요!"(124.1pt 2줄)와
+    ///    같은 줄 수라 패널(140×170) 레이아웃이 지금과 달라지지 않는다.
+    ///  · 상한을 넘겨 양쪽 다 잘린 최악(별명 12+…, 이모지 3+…) = 177.1pt **2줄** ✓
+    ///  · 본문 상한이 **4로 늘면 그 최악이 191.1pt = 3줄**이 되어 꼬리(=본문)가 잘린다. 즉 상한을 올리는 변경은
+    ///    이 포맷을 함께 손봐야 한다 — 그 순간 빨개지는 테스트를 함께 뒀다(messageBubbleFitsTwoLineBudget).
+    nonisolated static func messageBubbleText(name: String, body: String) -> String {
+        let shortName = clippedForBubble(name, limit: WorkTimerStore.displayNameMaxLength)
+        let shortBody = clippedForBubble(body, limit: MessageBody.maxCharacters)
+        // 본문이 비면 콜론만 덩그러니 남는다("이유성님: "). 스토어가 빈 본문을 이미 거르지만, 그 계약에 기대어
+        // 깨진 문구를 만들 이유는 없다 — 보낸이는 어떤 경우에도 남긴다(누가 불렀는지가 이 기능의 절반이다).
+        guard !shortBody.isEmpty else { return "\(shortName)님이 메시지를 보냈어요!" }
+        return "\(shortName)님: \(shortBody)"
+    }
+
+    /// 글자수 기준 자르기 + 말줄임(순수 함수). 세는 단위가 `Character`(확장 자소 클러스터)라 이모지 가족·국기·
+    /// 스킨톤이 쪼개지지 않는다 — 보내는 쪽 글자수 판정(`MessageBody.characterCount`)과 같은 눈금이어야
+    /// "3글자를 보냈는데 잘려서 온다"가 없다.
+    nonisolated static func clippedForBubble(_ text: String, limit: Int) -> String {
+        guard limit > 0, text.count > limit else { return text }
+        return String(text.prefix(limit)) + "…"
+    }
+
+    /// 큐 맨 앞 메시지 1건을 말풍선으로 띄우고 큐에서 뺀다(띄웠으면 true).
+    ///
+    /// **못 띄우면 큐를 건드리지 않는 것이 이 함수의 핵심이다.** take_pokes 는 서버에서 원자 소비라 여기서
+    /// 흘린 글자는 영영 복구되지 않는다 — 그래서 "덮어쓸까 기다릴까"의 답은 언제나 **기다린다**이고,
+    /// 펌프가 tick 마다 다시 물어본다(늦게 뜨는 것은 손실이 아니지만 안 뜨는 것은 손실이다).
+    ///
+    /// 물러나는 조건 셋(전부 기존 상태를 읽기만 한다 — 새 상태를 만들지 않는다):
+    ///  · **울트라 격발 중** — 전체화면 발광 위에 작은 말풍선을 겹치지 않는다(handleReceivedPokes 와 같은 규약).
+    ///  · **말풍선이 이미 떠 있다** — 자동 시작 안내(8초)·1등 출근(6초)·업데이트 안내(6초)를 덮지 않는다.
+    ///    저 셋은 "왜 이런 일이 일어났는지"를 설명하는 문구라 지워지면 사용자가 상태를 이해할 길이 사라지고,
+    ///    업데이트 안내는 **버전당 1회**라 덮어쓰면 그 버전에 대해 영영 안 뜬다. 반대로 메시지는 몇 초 뒤에
+    ///    떠도 뜻이 그대로다 — 그래서 양보하는 쪽은 언제나 메시지다.
+    ///  · **리액션 재생 중** — 이때 `request(.poked)` 는 동순위(3)에 막혀 거부될 수 있는데, peek 경로는 거부를
+    ///    알 수단이 없어(beginPokePeek 이 반환값을 보지 않는다) 창만 떴다 지고 메시지는 소비된 뒤가 된다.
+    ///    재생이 끝나길 기다리면 그 창 자체가 없다. (자는 중은 막지 않는다 — `.poked` 가 잠을 깨워 이어서
+    ///    움찔+말풍선을 재생하는 것이 엔진의 기존 계약이고, 여기서 막으면 조는 5~10분 동안 메시지가 멎는다.)
+    @discardableResult
+    func showCurrentMessageBubble() -> Bool {
+        guard let message = store.currentMessage else { return false }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = Self.messageBubbleText(name: message.fromName, body: message.body)
+        if shouldBeVisible && panel.isVisible {
+            engine.request(.poked(bubbleText: text))
+        } else {
+            // 캐릭터를 꺼 둔 사용자·비근무 구간도 찔림과 **똑같이** 8초 peek 로 전달한다. 보낸 쪽은 이미
+            // 하루 몫과 쿨타임을 태웠고 서버는 원자 소비를 끝냈으므로, 여기서 강등하면 그 글자는 영영 사라진다.
+            beginPokePeek(text: text)
+        }
+        store.consumeCurrentMessage()
+        return true
+    }
+
+    /// 수신 메시지 큐를 한 건씩 말풍선으로 흘리는 펌프를 (없으면) 가동한다. 멱등이다.
+    ///
+    /// **마지막 1건만 띄우지 않고 큐로 도는 이유**: 찔림은 "누가 불렀다"가 전부라 배치를 한 문장으로 합쳐도
+    /// 잃는 게 없지만(pokeBubbleText 의 "외 N명"), 메시지는 보낸 사람이 3글자를 골라 담은 **내용**이라
+    /// 덮어쓰면 그 글자가 사라진다. 스토어도 같은 이유로 큐를 세웠고(receivedMessages) 미는 권한을 표시 쪽에
+    /// 줬다(consumeCurrentMessage) — 말풍선이 몇 초 떠 있는지 아는 쪽이 여기이기 때문이다. 두 쪽이 갈리면
+    /// 한 건이 뜨자마자 밀리거나 조용히 사라진다.
+    ///
+    /// 큐가 비면 루프가 끝나며 스스로 nil 로 돌아간다 — 메시지 0건인 평시에 남는 태스크는 없다.
+    func drainMessagesIfNeeded() {
+        guard messageDrainTask == nil, store.currentMessage != nil else { return }
+        // 수면은 잠들기 **전에** 꺼내 둔다(armUltraRestore 와 같은 이유 — 자는 동안 컨트롤러를 붙들지 않게).
+        let tick = messageBubbleSleep
+        messageDrainTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, self.store.currentMessage != nil else { break }
+                self.showCurrentMessageBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            // 마지막 검사와 이 대입 사이에는 await 이 없다 = 메인 액터에서 끼어들 틈이 없다.
+            // 그래서 "큐가 비었다고 판단한 뒤 새 메시지가 도착했는데 펌프는 이미 죽어 있다"는 창이 생기지 않는다.
+            self?.messageDrainTask = nil
+        }
+    }
+
+    /// 수신 메시지 큐를 뒤에서 관찰해 **도착만** 감지한다(표시 순서·건수는 큐가 정한다).
+    ///
+    /// 스토어에 콜백 구멍을 뚫지 않은 것은 스토어 쪽 판단을 그대로 따른 것이다 — 배치를 통째로 던지는
+    /// 콜백(`onPokesReceived`)은 "한 번에 한 건" 규약을 우회한다. 큐는 `@Observable` 이라 배선이 값 하나만
+    /// 뒤에서 추적할 수 있다(CheckApp 의 TodoDisableWatcher 와 같은 수법).
+    ///
+    /// **SwiftUI `.onChange` 로 잇지 않은 이유**: 루트 뷰 평가는 패널이 숨겨져 있을 때 보장되지 않는다
+    /// (init 의 syncNudgeScheduler 주석 — 같은 종류의 가정이 MenuBarExtra 에서 이미 한 번 틀렸다).
+    /// 그런데 캐릭터를 꺼 둔 사용자에게 메시지가 오는 경우가 정확히 그 상황이고, 그 사용자야말로 peek
+    /// 하나로만 전달받는다.
+    private func armMessageWatch() {
+        withObservationTracking {
+            _ = store.receivedMessages.count
+        } onChange: { [weak self] in
+            // onChange 는 값이 **바뀌기 직전**(willSet)에 온다 — 여기서 큐를 읽으면 방금 도착한 건이 안 보인다.
+            // 그래서 한 틱 뒤 메인 액터에서 다시 읽는다(TodoDisableWatcher 와 같은 이유).
+            Task { @MainActor in
+                guard let self else { return }
+                self.drainMessagesIfNeeded()
+                self.armMessageWatch()   // 관찰은 1회성이라 매번 다시 건다(주인이 사라지면 여기서 스스로 풀린다).
+            }
         }
     }
 

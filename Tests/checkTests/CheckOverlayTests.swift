@@ -1316,6 +1316,229 @@ func overlayPokePeekPlaysEvenWhenCharacterHidden() {
     controller.updateWorking(false) // peek 태스크 취소 + 렌더 정리.
 }
 
+// MARK: - 3글자 메시지 수신: 보낸이+본문 말풍선(찔림 채널 재사용) · 큐 순서 · 양보 규칙
+
+@Test
+func messageBubbleTextCarriesSenderAndBody() {
+    // 보낸이와 내용이 **둘 다** 있어야 한다 — 3글자만 떠 있으면 받는 쪽에서 아무 뜻도 없다.
+    #expect(CheckOverlayController.messageBubbleText(name: "이유성", body: "화이팅") == "이유성님: 화이팅")
+    // 이모지 3글자(확장 자소 클러스터 기준)는 그대로 실린다 — 스칼라로 세면 국기/스킨톤이 쪼개져 잘려 나간다.
+    #expect(CheckOverlayController.messageBubbleText(name: "김철수", body: "👍🏻🎉🇰🇷") == "김철수님: 👍🏻🎉🇰🇷")
+    // 별명이 서버 상한(12)을 넘겨 오면 **별명**을 자른다. 안 자르면 lineLimit(2) 꼬리 잘림이 본문을 지운다
+    // — 잘리는 쪽이 알맹이가 되는 것이 이 포맷의 유일한 함정이다.
+    #expect(
+        CheckOverlayController.messageBubbleText(name: String(repeating: "가", count: 20), body: "화이팅")
+            == String(repeating: "가", count: WorkTimerStore.displayNameMaxLength) + "…님: 화이팅"
+    )
+    // 본문이 표시 상한을 넘겨 와도(상대 클라가 무엇을 보내든) 잘라 낸다 — 우리 폭 예산을 남이 정하지 못하게 한다.
+    #expect(
+        CheckOverlayController.messageBubbleText(name: "이유성", body: "가나다라마바사")
+            == "이유성님: " + String("가나다라마바사".prefix(MessageBody.maxCharacters)) + "…"
+    )
+    // 본문이 비면 콜론만 남은 깨진 문구("이유성님: ") 대신 보낸이는 반드시 남긴다.
+    #expect(CheckOverlayController.messageBubbleText(name: "이유성", body: "") == "이유성님이 메시지를 보냈어요!")
+}
+
+@Test
+func messageBubbleFitsTwoLineBudget() {
+    // 실측 못 박기. 말풍선은 `lineLimit(2)` 라 3줄이 되는 순간 꼬리(=본문)가 잘린다.
+    // 현재 상한(별명 12 · 본문 MessageBody.maxCharacters=3)에서는 가장 넓은 조합도 2줄 안이지만
+    // (한글 161.1 / 이모지 177.1 / 라틴 164.7pt < 188pt 예산), 본문 상한이 4가 되면 이모지 최악이
+    // 191.1pt = 3줄로 넘어간다. 그때 이 테스트가 그 자리에서 빨개져 포맷을 함께 손보게 만든다.
+    let longName = String(repeating: "가", count: 30)
+    let worst = [
+        CheckOverlayController.messageBubbleText(name: longName, body: String(repeating: "뷁", count: 30)),
+        CheckOverlayController.messageBubbleText(name: longName, body: String(repeating: "🎉", count: 30)),
+        CheckOverlayController.messageBubbleText(name: longName, body: String(repeating: "W", count: 30)),
+        // 서버 상한을 그대로 지킨 정상 최악(별명 12 + 본문 3).
+        CheckOverlayController.messageBubbleText(
+            name: String(repeating: "가", count: WorkTimerStore.displayNameMaxLength), body: "화이팅")
+    ]
+    for text in worst {
+        #expect(overlayBubbleLineCount(text) <= 2, "말풍선이 3줄이 되면 꼬리(본문)가 잘린다: \(text)")
+    }
+    // 평상시 조합은 한 줄에 다 들어간다(66.4pt).
+    #expect(overlayBubbleLineCount(CheckOverlayController.messageBubbleText(name: "이유성", body: "화이팅")) == 1)
+}
+
+@MainActor
+@Test
+func overlayShowsQueuedMessageAsPokeBubbleAndConsumesOne() {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 120_000) })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine,
+        defaults: isolatedOverlayDefaults(), workspaceNotifications: nil
+    )
+
+    store.receivedMessages = [
+        ReceivedMessage(id: "m1", fromName: "이유성", body: "화이팅", createdAt: Date(timeIntervalSince1970: 120_000)),
+        ReceivedMessage(id: "m2", fromName: "김철수", body: "ㅇㅋ", createdAt: Date(timeIntervalSince1970: 120_001))
+    ]
+
+    #expect(controller.showCurrentMessageBubble())
+    // 새 말풍선 장치가 아니라 **찔림 리액션 그대로** 태운다 — 움찔 모션·6초 타이머·인터럽트 규칙을 함께 얻는다.
+    let expected = CheckOverlayController.messageBubbleText(name: "이유성", body: "화이팅")
+    #expect(engine.greetingText == expected)
+    #expect(engine.state == .playing(.poked(bubbleText: expected)))
+    // 한 폴링에 여러 건이 와도 **한 건만** 소비한다(나머지는 큐에 남아 자기 차례를 기다린다).
+    #expect(store.receivedMessages.map(\.id) == ["m2"])
+
+    store.receivedMessages = []
+    controller.updateWorking(false)
+}
+
+@MainActor
+@Test
+func overlayMessageWaitsInsteadOfOverwritingExistingBubble() {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 121_000) })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine,
+        defaults: isolatedOverlayDefaults(), workspaceNotifications: nil
+    )
+
+    // 업데이트 안내는 **버전당 1회**라 덮어쓰면 그 버전에 대해 영영 안 뜬다 — 메시지가 양보한다.
+    engine.showBubble(CheckOverlayController.updateBubbleText, seconds: CheckOverlayController.updateBubbleSeconds)
+    store.receivedMessages = [
+        ReceivedMessage(id: "m1", fromName: "이유성", body: "화이팅", createdAt: Date(timeIntervalSince1970: 121_000))
+    ]
+
+    #expect(controller.showCurrentMessageBubble() == false)
+    #expect(engine.greetingText == CheckOverlayController.updateBubbleText)
+    // ★ 핵심: 못 띄웠으면 **큐를 건드리지 않는다**. take_pokes 는 서버에서 원자 소비라 여기서 흘리면 영영 못 본다.
+    #expect(store.receivedMessages.map(\.id) == ["m1"])
+
+    // 말풍선이 스스로 꺼지면 그 다음 tick 에 뜬다(기다림은 손실이 아니다).
+    engine.greetingText = nil
+    #expect(controller.showCurrentMessageBubble())
+    #expect(engine.greetingText == CheckOverlayController.messageBubbleText(name: "이유성", body: "화이팅"))
+    #expect(store.receivedMessages.isEmpty)
+
+    controller.updateWorking(false)
+}
+
+@MainActor
+@Test
+func overlayMessagePeeksWhenCharacterHidden() {
+    // 캐릭터를 꺼 둔 사용자에게도 찔림과 **똑같이** peek 로 전달한다(v0.2.7 계약 그대로 — 강등하지 않는다).
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 122_000) })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine,
+        defaults: isolatedOverlayDefaults(), workspaceNotifications: nil
+    )
+    store.setOverlayEnabled(false)
+    store.receivedMessages = [
+        ReceivedMessage(id: "m1", fromName: "이유성", body: "화이팅", createdAt: Date(timeIntervalSince1970: 122_000))
+    ]
+
+    #expect(controller.showCurrentMessageBubble())
+    let expected = CheckOverlayController.messageBubbleText(name: "이유성", body: "화이팅")
+    #expect(engine.greetingText == expected)
+    #expect(engine.state == .playing(.poked(bubbleText: expected)))
+    #expect(engine.renderActive)                    // peek 동안만 렌더가 켜진다
+    #expect(controller.shouldBeVisible == false)    // 상시 표시 자격은 그대로 꺼져 있다
+    #expect(store.receivedMessages.isEmpty)
+
+    controller.updateWorking(false) // peek 태스크 취소 + 렌더 정리.
+}
+
+@MainActor
+@Test
+func overlayMessagePumpDrainsQueueInArrivalOrderThenStops() async {
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 123_000) })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine,
+        defaults: isolatedOverlayDefaults(), workspaceNotifications: nil
+    )
+
+    // tick 수면을 갈아 끼워 **말풍선이 스스로 꺼진 세계**를 만든다(프로덕션에선 엔진의 6초 타이머가 하는 일).
+    // 실시간 1초를 기다리는 판으로는 이 계약을 검증할 수 없다 — 이 스위트는 메인 액터가 통째로 밀린다.
+    let log = OverlayBubbleLog()
+    controller.messageBubbleSleep = { _ in
+        await MainActor.run {
+            if let text = engine.greetingText { log.texts.append(text) }
+            engine.greetingText = nil
+            engine.cancelActiveReaction()   // 고정 clock 이라 재생이 스스로 만료되지 않는다.
+        }
+    }
+
+    let base = Date(timeIntervalSince1970: 123_000)
+    store.receivedMessages = [
+        ReceivedMessage(id: "m1", fromName: "이유성", body: "화이팅", createdAt: base),
+        ReceivedMessage(id: "m2", fromName: "김철수", body: "ㅇㅋ", createdAt: base.addingTimeInterval(1)),
+        ReceivedMessage(id: "m3", fromName: "박영희", body: "굿", createdAt: base.addingTimeInterval(2))
+    ]
+    controller.drainMessagesIfNeeded()
+    // 시간을 기다리지 않고 **메인 액터를 양보하며** 펌프가 끝나기를 기다린다(주입한 tick 은 즉시 깨어난다).
+    for _ in 0..<200 {
+        if store.receivedMessages.isEmpty && !controller.isDrainingMessages { break }
+        await Task.yield()
+    }
+
+    // 한 건도 삼키지 않고 **도착 순서 그대로** 다 떴다(마지막 것만 띄우면 앞의 글자가 영영 사라진다).
+    #expect(log.texts == [
+        CheckOverlayController.messageBubbleText(name: "이유성", body: "화이팅"),
+        CheckOverlayController.messageBubbleText(name: "김철수", body: "ㅇㅋ"),
+        CheckOverlayController.messageBubbleText(name: "박영희", body: "굿")
+    ])
+    #expect(store.receivedMessages.isEmpty)
+    // 큐가 비면 펌프는 **스스로 멈춘다** — 상시 루프가 남으면 유휴 0% 규약이 깨진다.
+    #expect(controller.isDrainingMessages == false)
+
+    controller.updateWorking(false)
+}
+
+/// 펌프 tick 마다 그때 떠 있던 말풍선 문구를 모아 두는 상자(@Sendable 클로저에서 쓰려면 참조 타입이어야 한다).
+@MainActor
+final class OverlayBubbleLog {
+    var texts: [String] = []
+}
+
+/// CheckGreetingBubble 과 **같은 조건**으로 실제 줄 수를 센다: `.caption2` rounded semibold(10pt),
+/// 텍스트 가용 폭 94pt(= 캡슐 maxWidth 110 − 좌우 패딩 8×2). SwiftUI 레이아웃을 헤드리스로 재는 가장 가까운 대역이다.
+private func overlayBubbleLineCount(_ text: String, maxWidth: CGFloat = 94) -> Int {
+    let size = NSFont.preferredFont(forTextStyle: .caption2).pointSize
+    var font = NSFont.systemFont(ofSize: size, weight: .semibold)
+    if let descriptor = font.fontDescriptor.withDesign(.rounded) {
+        font = NSFont(descriptor: descriptor, size: size) ?? font
+    }
+    let storage = NSTextStorage(string: text, attributes: [.font: font])
+    let container = NSTextContainer(size: CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
+    container.lineFragmentPadding = 0
+    let layout = NSLayoutManager()
+    layout.addTextContainer(container)
+    storage.addLayoutManager(layout)
+    layout.ensureLayout(for: container)
+    var lines = 0
+    var index = 0
+    while index < layout.numberOfGlyphs {
+        var range = NSRange()
+        _ = layout.lineFragmentRect(forGlyphAt: index, effectiveRange: &range)
+        index = NSMaxRange(range)
+        lines += 1
+    }
+    return lines
+}
+
 // MARK: - Wave7: 시각 검증 스냅샷 덤프 (CHECK_REACTION_SNAPSHOT_DIR 지정 시에만 기록)
 
 @MainActor

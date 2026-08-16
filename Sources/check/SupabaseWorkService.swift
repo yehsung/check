@@ -582,7 +582,18 @@ actor SupabaseWorkService {
     /// 옛 표는 스키마를 그대로 두고(구버전이 계속 정상 업로드), 보드 RPC 가 기기 합산과 옛 행 중 큰 쪽을 쓴다.
     /// 이 앱도 옛 표를 함께 갱신하되 **그 행을 줄이지 않을 때만** 쓴다 — 아래 fetchLegacyTokenUsageTotal/upsertLegacyTokenUsage 참조.
     /// 반환 없음(return=minimal) — 표시는 별도 fetchTokenBoard 로 다시 읽는다. usage.month 는 D1 이 계산한 KST 'YYYY-MM'.
-    func upsertTokenUsage(accessToken: String, userID: String, usage: TokenUsageMonthly, deviceID: String) async throws {
+    ///
+    /// diagnostics 는 Codex 집계 진단(codex_diag_*)이고 **기본값 nil** 이다. 호출측(WorkTimerStoreSync)은
+    /// 앱 빌드당 1회만 값을 채워 보낸다 — nil 이면 본문에서 codex_diag_* 키가 통째로 빠지고, PostgREST 는
+    /// 본문에 없는 컬럼을 갱신하지 않으므로 서버에 이미 쌓인 진단값이 매 30초 업로드에 지워지지 않는다
+    /// (TokenUsageUpsertRequest 의 진단 필드 주석 참조). 진단값은 순위판 RPC 에 실리지 않는다 — 운영자만 DB 에서 본다.
+    func upsertTokenUsage(
+        accessToken: String,
+        userID: String,
+        usage: TokenUsageMonthly,
+        deviceID: String,
+        diagnostics: CodexUsageDiagnostics? = nil
+    ) async throws {
         try await sendNoBody(
             path: "/rest/v1/token_usage_device_monthly",
             method: "POST",
@@ -599,7 +610,8 @@ actor SupabaseWorkService {
                 codexOutput: usage.codexOutput,
                 total: usage.total,
                 todayTotal: usage.todayTotal,
-                todayDate: usage.todayDate
+                todayDate: usage.todayDate,
+                diagnostics: diagnostics
             ),
             accessToken: accessToken,
             prefer: "resolution=merge-duplicates,return=minimal"

@@ -220,7 +220,15 @@ extension WorkTimerStore {
         guard let usage, usage.total > 0 else { return }
         guard usage != lastUploadedUsage, now.timeIntervalSince(lastTokenUploadAt) >= 60 else { return }
         // 시도 시각을 먼저 스탬프해, 실패하더라도 60초 안에는 재시도하지 않는다(난사 방지).
+        // 이 한 줄이 아래 await 동안의 재진입도 함께 막는다 — 진단 계산을 기다리는 사이 다른 호출이 들어와도
+        // 이 스탬프에 걸려 되돌아가므로 같은 주기가 두 번 올라가지 않는다.
         lastTokenUploadAt = now
+        // Codex 집계 진단(앱 빌드당 1회). **이 줄이 수집 거부 가드 뒤에 있는 것이 요건이다** — 위
+        // `guard tokenUsageCollect` 에서 이미 빠져나가므로 거부자에게선 계산도 업로드도 일어나지 않는다.
+        // 이미 보고한 빌드면 nil 을 돌려주며 스캔 자체를 건너뛴다(전량 순회라 비싸다).
+        let diagnostics = await codexDiagnosticsIfUnreported(month: usage.month)
+        // 세대는 이 await 뒤에 잡는다 — 스캔을 기다리는 사이 계정이 갈렸다면 아래 요청은 새 세션으로 나가므로,
+        // 비교 대상도 그 시점의 세대여야 멀쩡한 업로드가 헛되이 버려지지 않는다.
         let generation = sessionGeneration
         do {
             try await withSessionRetry { activeSession in
@@ -260,7 +268,23 @@ extension WorkTimerStore {
                     accessToken: activeSession.accessToken,
                     userID: activeSession.userID,
                     usage: usage,
-                    deviceID: deviceID
+                    deviceID: deviceID,
+                    diagnostics: diagnostics
+                )
+            }
+            // 진단 '보고 완료' 도장은 서버 쓰기가 실제로 성공했을 때만 찍는다 — 실패하면 값이 그대로라
+            // 다음 기회에 다시 계산·전송된다. 세대 가드보다 **앞**인 이유: 도장의 근거는 "이 맥의 이 빌드가
+            // 이 달치 진단을 서버에 남겼다"는 사실이고, 응답을 기다리는 사이 계정이 갈렸더라도 그 사실은 변하지 않는다.
+            // (여기서 멈추면 다음 주기가 0.4초짜리 전량 스캔을 한 번 더 헛돌 뿐이라 손해도 크지 않지만,
+            //  같은 값을 두 번 올리는 것보다 한 번 올린 것을 정확히 기록하는 편이 낫다.)
+            // 한계 하나는 분명히 해 둔다: 이 도장이 증명하는 것은 **전송 성공**이지 **저장 확인**이 아니다.
+            // 서버의 수집 거부 트리거는 행을 조용히 버리고도 204 를 돌려주므로(설정이 아직 안 내려온 창에서
+            // 일어날 수 있다), 그 경우 이 달의 진단은 다시 시도되지 않는다 — 거부자에게는 그게 옳은 결과다.
+            // 도장에 쓰는 build/month 는 방금 보낸 값 그 자체다(진단이 잰 빌드 + 업로드한 행의 달).
+            if let diagnostics {
+                defaults.set(
+                    Self.codexDiagnosticsStamp(build: diagnostics.appBuild, month: usage.month),
+                    forKey: Self.codexDiagnosticsReportedStampKey
                 )
             }
             guard generation == sessionGeneration else { return }
@@ -276,6 +300,59 @@ extension WorkTimerStore {
                 if syncMessage != message { syncMessage = message }
             }
         }
+    }
+
+    /// 마지막으로 Codex 진단을 **서버에 올린** 시점의 도장(UserDefaults). 값은 "<CFBundleVersion>:<KST 월>"
+    /// 문자열이다(예 "39:2026-08"). 진단 관련 키는 이것 하나뿐이다 — 빌드만 담던 키는 남기지 않았다.
+    ///
+    /// **왜 빌드만으로는 안 되는가**(이 도장의 요점): 진단이 답해야 하는 질문은 "**이번 달**에 왜 부풀었나"다.
+    /// 빌드 단위 도장이면 한 달에 한 번이 아니라 **설치당 한 번**이 되어, 달 초에 찍힌 사람은 그 달 내내
+    /// 거의 빈 스냅샷을 서버에 고정해 둔 채 정작 사용량만 쌓는다(실측: 이 맥의 2026-08 은 전 필드 0,
+    /// 6·7월엔 실데이터). 다음 달에 같은 현상이 이어져도 관측되지 않는다. 월을 섞으면 그 두 구멍이 닫힌다.
+    ///
+    /// **UserDefaults 에 영속하는 이유**(reportedAppVersionStamp 는 일부러 메모리에만 둔다):
+    /// 저쪽은 못 보내면 남이 나에게 메시지를 못 보내는 **기능**이라 실행마다 다시 말해 자가치유해야 하지만,
+    /// 이쪽은 그 달에 한 번 받으면 그만인 **계측**이고 값을 만드는 데 전량 디스크 순회가 든다. 실행마다 다시 재면
+    /// 앱을 자주 켜는 사람에게만 반복 비용을 물리면서 서버에는 같은 숫자가 다시 쌓인다.
+    ///
+    /// 계정별 접미사가 없다: 진단은 이 **맥의 로그**를 잰 값이라 누가 로그인해 있든 같은 숫자가 나온다
+    /// (deviceIDKey 와 같은 성격 — 기기 단위 사실이다).
+    static let codexDiagnosticsReportedStampKey = "check.codexDiag.reportedStamp"
+
+    /// 도장 문자열의 **유일한** 산식. 건너뛸지 판정하는 곳(codexDiagnosticsIfUnreported)과 찍는 곳
+    /// (업로드 성공 지점)이 반드시 이 함수를 함께 쓴다 — 두 곳이 각자 문자열을 만들면 한 글자만 어긋나도
+    /// 판정이 영영 불일치해 30초마다 전량 스캔을 도는(정반대의) 사고가 된다.
+    /// month 는 업로드하는 행과 같은 KST 'YYYY-MM'(D1 이 계산한 usage.month)이라 도장과 데이터의 달이 어긋나지 않는다.
+    static func codexDiagnosticsStamp(build: Int, month: String) -> String {
+        "\(build):\(month)"
+    }
+
+    /// 이 빌드·이 달에 아직 진단을 보고하지 않았다면 계산해 돌려준다. 이미 보고했거나 빌드를 모르면 **nil**
+    /// (= 업로드 본문에 codex_diag_* 키가 붙지 않고, 서버의 기존 진단값이 그대로 보존된다).
+    ///
+    /// 호출 규약: **반드시 `guard tokenUsageCollect` 뒤에서 부를 것.** 수집을 거부한 사람에게선 업로드는 물론
+    /// 계산(홈 디렉터리 순회)도 일어나면 안 된다. 이 함수 자신은 그 플래그를 보지 않는다 — 가드는 호출부에 있다.
+    ///
+    /// 비싼 부분(전량 순회, 실측 0.39초/444파일)은 Task.detached(.utility) 에서 돈다. 메인 액터는 await 로
+    /// 비켜 주므로 화면은 멈추지 않는다. 30초마다 이 비용을 치르지 않게 막는 것이 위의 도장이다.
+    ///
+    /// 빌드를 모르면(개발 빌드 등 CFBundleVersion 미심음) 계산하지 않는다: 진단값은 **어느 산식이 만든
+    /// 숫자인가**와 짝일 때만 쓸모가 있어서, 출처 없는 숫자를 서버에 남기면 코호트 분석이 오히려 오염된다
+    /// (AppVersionReport 가 '모르면 침묵'을 택한 것과 같은 판단).
+    ///
+    /// 실패는 없다 — 스캐너는 던지지 않고, 홈에 ~/.codex 가 없으면 0으로 채운 스냅샷을 돌려준다
+    /// (그 0 도 "이 기기는 Codex 를 안 쓴다"는 유효한 관측이다). 이 함수가 어떤 값을 돌려주든 본 기능인
+    /// 토큰 업로드는 그대로 진행된다.
+    func codexDiagnosticsIfUnreported(month: String) async -> CodexUsageDiagnostics? {
+        guard let build = appVersionProvider()?.build, build > 0 else { return nil }
+        // 이 빌드 + 이 달로 이미 한 번 올렸으면 여기서 끝난다 — 스캔에 들어가지 않는다.
+        guard defaults.string(forKey: Self.codexDiagnosticsReportedStampKey)
+                != Self.codexDiagnosticsStamp(build: build, month: month) else { return nil }
+        // 홈은 메인 액터에서 미리 읽어 값으로 넘긴다(detached 클로저가 캡처하는 것은 Sendable 한 URL 뿐).
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return await Task.detached(priority: .utility) {
+            CodexUsageDiagnosticsScanner.compute(homeDirectory: home, month: month, appBuild: build)
+        }.value
     }
 
     /// 근무중일 때 서버에 생존신호(last_seen_at)를 보낸다. 근무중이 아니거나 세션 정보가 없으면 보내지 않는다.

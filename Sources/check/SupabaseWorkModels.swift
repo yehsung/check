@@ -337,6 +337,85 @@ struct TokenUsageUpsertRequest: Encodable {
     // 오늘(KST) 증가량과 귀속 날짜 — 서버 행에 함께 저장돼 순위판 "오늘 +N" 에 쓰인다.
     let todayTotal: Int
     let todayDate: String
+
+    // ── Codex 집계 진단(codex_diag_*, 전부 Int · 앱 빌드당 1회만 값이 실린다) ──
+    //
+    // **옵셔널인 것이 이 설계의 전부다.** 합성 Encodable 은 Optional 프로퍼티를 encodeIfPresent 로 내보내므로
+    // nil 이면 JSON 본문에 **키 자체가 없고**, PostgREST 의 upsert(INSERT … ON CONFLICT DO UPDATE)는
+    // 본문에 온 컬럼만 갱신한다 — 즉 서버에 이미 쌓인 진단값이 그대로 보존된다.
+    // 옵셔널이 아니면(Int 로 두면) 30초마다 도는 이 업로드가 매번 0 을 실어 보내 직전 진단값을 덮어써,
+    // 기능 전체가 무의미해진다. 실측으로 확인했다 — diagnostics 가 nil 인 본문에는 codex_diag_ 로 시작하는
+    // 키가 하나도 나오지 않는다(아래 init 주석의 인코딩 결과 참조).
+    //
+    // 중첩 객체가 아니라 13개를 **펼쳐** 담는 이유: 서버가 스칼라 컬럼 13개라 jsonb 하나로는 upsert 되지 않는다.
+    // 전 필드가 Int 인 것은 프라이버시의 구조적 보증이다(CodexUsageDiagnostics 주석) — 문자열을 더하지 마라.
+    var codexDiagFilesTotal: Int?
+    var codexDiagFilesMonth: Int?
+    var codexDiagEventsMonth: Int?
+    var codexDiagMaxDelta: Int?
+    var codexDiagCarryFiles: Int?
+    var codexDiagCarryTotal: Int?
+    var codexDiagDupEvents: Int?
+    var codexDiagDupTokens: Int?
+    var codexDiagFinalSum: Int?
+    var codexDiagDedupTotal: Int?
+    var codexDiagDrops: Int?
+    var codexDiagTopFile: Int?
+    var codexDiagBuild: Int?
+}
+
+extension TokenUsageUpsertRequest {
+    /// 진단 스냅샷을 13개 스칼라로 펼쳐 담는 생성자. **diagnostics 가 nil 이면 13개 필드가 전부 nil 로 남아**
+    /// 인코딩 결과에서 codex_diag_* 키가 통째로 사라진다(= 서버의 기존 진단값 보존).
+    ///
+    /// nil 로 인코딩한 실물(keyEncodingStrategy = .convertToSnakeCase):
+    /// {"user_id":"…","month":"2026-08","device_id":"…","claude_input":11,"claude_output":22,
+    ///  "claude_cache_read":33,"claude_cache_creation":44,"codex_input":55,"codex_output":66,
+    ///  "total":231,"today_total":77,"today_date":"2026-08-16"}
+    /// — codex_diag_ 키 0개. (본문 이전과 완전히 동일하므로 구서버·기존 테스트도 그대로 통과한다.)
+    init(
+        userId: String,
+        month: String,
+        deviceId: String,
+        claudeInput: Int,
+        claudeOutput: Int,
+        claudeCacheRead: Int,
+        claudeCacheCreation: Int,
+        codexInput: Int,
+        codexOutput: Int,
+        total: Int,
+        todayTotal: Int,
+        todayDate: String,
+        diagnostics: CodexUsageDiagnostics?
+    ) {
+        self.init(
+            userId: userId,
+            month: month,
+            deviceId: deviceId,
+            claudeInput: claudeInput,
+            claudeOutput: claudeOutput,
+            claudeCacheRead: claudeCacheRead,
+            claudeCacheCreation: claudeCacheCreation,
+            codexInput: codexInput,
+            codexOutput: codexOutput,
+            total: total,
+            todayTotal: todayTotal,
+            todayDate: todayDate,
+            codexDiagFilesTotal: diagnostics?.filesTotal,
+            codexDiagFilesMonth: diagnostics?.filesMonth,
+            codexDiagEventsMonth: diagnostics?.eventsMonth,
+            codexDiagMaxDelta: diagnostics?.maxDelta,
+            codexDiagCarryFiles: diagnostics?.carryFiles,
+            codexDiagCarryTotal: diagnostics?.carryTotal,
+            codexDiagDupEvents: diagnostics?.dupEvents,
+            codexDiagDupTokens: diagnostics?.dupTokens,
+            codexDiagFinalSum: diagnostics?.finalSum,
+            codexDiagDedupTotal: diagnostics?.dedupTotal,
+            codexDiagDrops: diagnostics?.drops,
+            codexDiagTopFile: diagnostics?.topFile,
+            codexDiagBuild: diagnostics?.appBuild
+        )
+    }
 }
 
 /// 옛 표 token_usage_monthly upsert 본문(= v0.2.10 이 쓰던 그 모양, device_id 없음).

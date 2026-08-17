@@ -2,6 +2,7 @@ import AppKit
 import Observation
 import ServiceManagement
 import SwiftUI
+import os
 
 @main
 struct CheckApp: App {
@@ -45,11 +46,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 이미 배선돼 있어야 캐릭터 등장과 밀린 찔림이 통째로 유실되지 않는다.
         overlayController = CheckOverlayController(store: store, updateCheck: updateCheck)
         wireTodoBoard()
-        // 로그인 시 자동 실행을 1회만 등록한다(사용자가 시스템 설정에서 끄면 다시 끼어들지 않는다).
+        // 로그인 시 자동 실행은 **전원의 기본값**이다. 매 실행마다 판단해서 등록이 사라져 있으면(brew 로
+        // .app 번들이 교체되면 실제로 사라진다) 되살린다. 사용자가 끈 것은 두 갈래 모두 존중한다 —
+        // 앱 토글로 끈 것은 userTurnedOffKey 로, 시스템 설정에서 끈 것은 .requiresApproval 상태로 걸러진다.
+        // 실패를 삼키지 않는다: 로그 + 진단 키에 남기고, 플래그가 없으니 다음 실행에서 자동으로 재시도된다.
         LoginItemRegistrar.registerIfNeeded(
             defaults: .standard,
-            isNotRegistered: { SMAppService.mainApp.status == .notRegistered },
-            register: { try? SMAppService.mainApp.register() }
+            status: { SMAppService.mainApp.status },
+            register: {
+                do {
+                    try SMAppService.mainApp.register()
+                    return true
+                } catch {
+                    Logger(subsystem: "kingcheck", category: "loginItem")
+                        .error("로그인 자동 실행 등록 실패: \(error.localizedDescription, privacy: .public)")
+                    return false
+                }
+            }
         )
         // D1 실행 킥: 저장 세션을 실행당 1회 활성화한다(팝오버를 한 번도 열지 않아도).
         //
@@ -285,11 +298,48 @@ final class TodoDisableWatcher {
     }
 }
 
-/// 로그인 자동 실행(SMAppService.mainApp) 1회 등록 결정. SMAppService 호출은 주입 클로저 뒤에 두어
-/// 테스트가 UserDefaults 와 클로저만으로 no-op/1회성을 검증하고, 실제 시스템 등록은 건드리지 않게 한다.
+/// 로그인 자동 실행(SMAppService.mainApp)을 **매 실행마다** 되살리는 결정부.
+///
+/// **왜 매번인가**: 예전 구현은 `check.loginItemRegistered` 플래그를 한 번 찍고 두 번 다시 시도하지 않았다.
+/// 그런데 이 앱은 brew cask 로 배포되고 `brew upgrade` 는 `.app` 번들을 통째로 갈아 끼운다(8월에만 8번).
+/// 번들이 교체되면 BTM(백그라운드 작업 관리) 레코드가 사라져 상태가 `.notRegistered` 로 떨어지는데,
+/// 플래그 때문에 복구가 영원히 일어나지 않았다 — 이 맥에서 실측한 그림이 정확히 그것이다:
+/// `backgroundtaskmanagementd` 가 `effectiveItemDisposition: record not found: appURL=/Applications/aing-check.app`
+/// 를 돌려주는데 `defaults read kingcheck check.loginItemRegistered` 는 1 이었다. 그래서 플래그를 버린다.
+///
+/// **그럼 사용자가 끈 건 어떻게 존중하나**: 두 갈래로 나눈다.
+/// - 앱 토글로 끈 것 → `userTurnedOffKey` 에 남기고, 그게 true 면 두 번 다시 자동 등록하지 않는다.
+/// - 시스템 설정에서 끈 것 → 레코드는 남고 상태가 `.requiresApproval` 이 된다(BTM disposition `[disabled, ...]`).
+///   `.notRegistered` 하고만 등록하므로 이 경우도 건드리지 않는다. **잃어버린 것과 일부러 끈 것을 가르는 건
+///   이 상태값이다** — 상태를 Bool 로 뭉개면 둘이 같아져 사용자와 싸우게 된다.
+///
+/// SMAppService 호출은 전부 주입 클로저 뒤에 둔다 — 판단부(`shouldRegister`)는 순수 함수라
+/// 실제 시스템 등록을 건드리지 않고 네 상태 전부를 검증할 수 있다.
 enum LoginItemRegistrar {
-    /// 등록 시도 여부를 기록하는 플래그 키(있으면 다시 시도하지 않는다 — 사용자 수동 제거 존중).
-    static let registeredKey = "check.loginItemRegistered"
+    /// **폐기된** 옛 1회성 플래그 키. 더 이상 **읽지 않는다** — 이 값이 1 로 박힌 기존 사용자 전원이
+    /// 다음 실행에서 복구돼야 하는 게 이 변경의 요점이다. 죽은 키가 `defaults read` 에서 거짓말을
+    /// 하지 않도록 매 실행 한 번 지운다(멱등).
+    static let legacyRegisteredKey = "check.loginItemRegistered"
+
+    /// 사용자가 **앱 토글로** 자동 실행을 끈 적이 있으면 true. 이게 없으면 끈 사용자를 다음 실행에서
+    /// 되살려 무한히 싸운다. 켤 때 false 로 되돌려 다시 자동 복구 대상이 된다.
+    static let userTurnedOffKey = "check.launchAtLogin.userTurnedOff"
+
+    /// 마지막 자동 등록 판단의 결과(진단용). `try?` 로 실패를 삼키던 자리의 대체물 —
+    /// `defaults read kingcheck check.launchAtLogin.lastAutoRegister` 한 줄로 무슨 일이 있었는지 보인다.
+    static let lastAutoRegisterKey = "check.launchAtLogin.lastAutoRegister"
+
+    /// 자동 등록 판단의 결말.
+    enum Outcome: String, Sendable {
+        /// 사용자가 앱 토글로 껐다 — 되살리지 않는다.
+        case skippedUserTurnedOff
+        /// `.enabled`(정상) / `.requiresApproval`(시스템 설정에서 끔) / `.notFound`(오류) — 손댈 이유가 없다.
+        case skippedByStatus
+        /// `.notRegistered` 였고 등록에 성공했다.
+        case registered
+        /// `.notRegistered` 였는데 등록이 실패했다. 플래그가 없으므로 **다음 실행에서 다시 시도된다.**
+        case registerFailed
+    }
 
     /// 현재 로그인 자동 실행 상태(주입 가능 — 테스트/프리뷰가 실제 SMAppService 를 건드리지 않게).
     /// 푸터의 전원 메뉴가 읽는다. "껐는데 다시 켜진다"는 불만의 절반은 자동 실행을 끄는 수단이
@@ -312,17 +362,52 @@ enum LoginItemRegistrar {
         }
     }
 
-    /// 플래그가 없고 아직 미등록일 때만 register 를 호출하고, 성공/실패와 무관하게 플래그를 남긴다.
-    /// 이미 플래그가 있으면 아무것도 하지 않는다(재등록 강제 금지). 실제 등록 시도를 했으면 true.
+    /// **순수 판단부.** 자동 등록을 시도해야 하는가? 오직 "앱 토글로 끈 적 없음 + `.notRegistered`" 뿐이다.
+    static func shouldRegister(userTurnedOff: Bool, status: SMAppService.Status) -> Bool {
+        guard !userTurnedOff else { return false }
+        return status == .notRegistered
+    }
+
+    /// 매 실행 1회 호출. 판단해서 필요하면 등록하고, 결과를 진단 키에 남긴다(성공/실패 모두).
+    /// 옛 1회성 플래그는 여기서 정리한다 — 읽지 않는 키가 남아 다음 사람을 헷갈리게 하지 않도록.
     @discardableResult
     static func registerIfNeeded(
         defaults: UserDefaults,
-        isNotRegistered: () -> Bool,
-        register: () -> Void
-    ) -> Bool {
-        guard defaults.object(forKey: registeredKey) == nil else { return false }
-        if isNotRegistered() { register() }
-        defaults.set(true, forKey: registeredKey)
-        return true
+        status: () -> SMAppService.Status,
+        register: () -> Bool
+    ) -> Outcome {
+        defaults.removeObject(forKey: legacyRegisteredKey)
+
+        let current = status()
+        let userTurnedOff = defaults.bool(forKey: userTurnedOffKey)
+        let outcome: Outcome
+        if !shouldRegister(userTurnedOff: userTurnedOff, status: current) {
+            outcome = userTurnedOff ? .skippedUserTurnedOff : .skippedByStatus
+        } else {
+            outcome = register() ? .registered : .registerFailed
+        }
+        defaults.set("\(outcome.rawValue):\(label(for: current))", forKey: lastAutoRegisterKey)
+        return outcome
+    }
+
+    /// 사용자가 앱 토글을 움직였다. 의도를 **먼저** 남기고(쓰기가 실패해도 "껐다"는 사실은 남아야 한다)
+    /// 실제 상태를 적용한 뒤, 토글이 표시할 **실상태**를 돌려준다.
+    @MainActor
+    @discardableResult
+    static func applyUserToggle(_ enabled: Bool, defaults: UserDefaults = .standard) -> Bool {
+        defaults.set(!enabled, forKey: userTurnedOffKey)
+        guard setLaunchAtLoginEnabled(enabled) else { return isLaunchAtLoginEnabled() }
+        return enabled
+    }
+
+    /// 진단 문자열용 상태 이름. `SMAppService.Status` 는 `CustomStringConvertible` 이 아니라 숫자로 찍힌다.
+    static func label(for status: SMAppService.Status) -> String {
+        switch status {
+        case .notRegistered: return "notRegistered"
+        case .enabled: return "enabled"
+        case .requiresApproval: return "requiresApproval"
+        case .notFound: return "notFound"
+        @unknown default: return "unknown(\(status.rawValue))"
+        }
     }
 }

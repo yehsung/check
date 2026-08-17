@@ -347,7 +347,7 @@ struct TokenUsageUpsertRequest: Encodable {
     // 기능 전체가 무의미해진다. 실측으로 확인했다 — diagnostics 가 nil 인 본문에는 codex_diag_ 로 시작하는
     // 키가 하나도 나오지 않는다(아래 init 주석의 인코딩 결과 참조).
     //
-    // 중첩 객체가 아니라 13개를 **펼쳐** 담는 이유: 서버가 스칼라 컬럼 13개라 jsonb 하나로는 upsert 되지 않는다.
+    // 중첩 객체가 아니라 18개를 **펼쳐** 담는 이유: 서버가 스칼라 컬럼 18개라 jsonb 하나로는 upsert 되지 않는다.
     // 전 필드가 Int 인 것은 프라이버시의 구조적 보증이다(CodexUsageDiagnostics 주석) — 문자열을 더하지 마라.
     var codexDiagFilesTotal: Int?
     var codexDiagFilesMonth: Int?
@@ -362,10 +362,25 @@ struct TokenUsageUpsertRequest: Encodable {
     var codexDiagDrops: Int?
     var codexDiagTopFile: Int?
     var codexDiagBuild: Int?
+
+    // ── 2차 진단(델타 분포): 단일 이벤트 델타 10.7억의 정체를 가르는 5개 ──
+    //
+    // 1차(위 13개)로 resume 카운터 이월은 확정됐지만 `codexDiagMaxDelta` 하나가 총합을 좌우하는 사례가 남았다.
+    // 그 델타가 (a) 앱을 오래 꺼 둔 사이 쌓인 정상 누적인지 (b) 산식이 만든 유령인지는 **분포와 시간 간격**으로만
+    // 갈린다 — 그래서 큰 델타의 개수·합(bigDelta*)과 그 앞뒤 공백(gap 초)을 함께 싣는다. legacyTotal 은
+    // 이월 수정 **전** 옛 산식의 총합이라, 같은 행에서 신·구 산식을 나란히 놓고 차이를 빼 볼 수 있게 한다.
+    //
+    // 위 13개와 완전히 같은 규약이다 — **옵셔널이 핵심**(nil = 키 생략 = 서버 값 보존), 전부 Int(문자열 금지),
+    // 새 필드는 마지막에. 이 5개도 앱 빌드당(정확히는 "<빌드>:<월>" 도장당) 1회만 값이 실린다.
+    var codexDiagLegacyTotal: Int?
+    var codexDiagBigDeltaCount: Int?
+    var codexDiagBigDeltaTotal: Int?
+    var codexDiagMaxDeltaGapS: Int?
+    var codexDiagBigGapMedianS: Int?
 }
 
 extension TokenUsageUpsertRequest {
-    /// 진단 스냅샷을 13개 스칼라로 펼쳐 담는 생성자. **diagnostics 가 nil 이면 13개 필드가 전부 nil 로 남아**
+    /// 진단 스냅샷을 18개 스칼라로 펼쳐 담는 생성자. **diagnostics 가 nil 이면 18개 필드가 전부 nil 로 남아**
     /// 인코딩 결과에서 codex_diag_* 키가 통째로 사라진다(= 서버의 기존 진단값 보존).
     ///
     /// nil 로 인코딩한 실물(keyEncodingStrategy = .convertToSnakeCase):
@@ -413,7 +428,12 @@ extension TokenUsageUpsertRequest {
             codexDiagDedupTotal: diagnostics?.dedupTotal,
             codexDiagDrops: diagnostics?.drops,
             codexDiagTopFile: diagnostics?.topFile,
-            codexDiagBuild: diagnostics?.appBuild
+            codexDiagBuild: diagnostics?.appBuild,
+            codexDiagLegacyTotal: diagnostics?.legacyTotal,
+            codexDiagBigDeltaCount: diagnostics?.bigDeltaCount,
+            codexDiagBigDeltaTotal: diagnostics?.bigDeltaTotal,
+            codexDiagMaxDeltaGapS: diagnostics?.maxDeltaGapSeconds,
+            codexDiagBigGapMedianS: diagnostics?.bigGapMedianSeconds
         )
     }
 }

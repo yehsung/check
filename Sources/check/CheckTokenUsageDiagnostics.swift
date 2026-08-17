@@ -10,6 +10,10 @@ import Foundation
 /// 대조 산식(세션 최종 누적치 합)을 나란히 담고, 둘이 갈리게 만드는 후보 원인(파일 간 중복 계상 · resume 카운터
 /// 이월 · 누적 리셋 · 단일 파일 편중)을 각각 세어 둔다.
 ///
+/// 이월이 확정된 뒤 남은 수수께끼는 "한 이벤트의 델타가 10억"이라는 값이었다. 한 턴으로는 불가능하니 로그가 드물게
+/// 남아 여러 턴이 뭉친 것(진짜 사용량)이거나 카운터가 튄 것(가짜)인데, 이 둘은 **그 이벤트와 직전 이벤트 사이의
+/// 시간**으로만 갈린다. 그래서 큰 델타의 개수·합과 그 간격(최대 델타 하나 + bigDelta 분포의 중앙값)을 함께 싣는다.
+///
 /// 프라이버시 규약(구조적 보증): 이 타입에는 **문자열 필드가 하나도 없다.** 필드를 추가하지 마라 — 문자열이 하나라도
 /// 생기는 순간 경로·파일명·본문이 새어 나갈 통로가 열린다. 스캐너가 읽는 필드도 payload.type /
 /// payload.info.total_token_usage.{input_tokens,output_tokens} / timestamp 뿐이다.
@@ -26,14 +30,31 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
     var filesMonth: Int = 0
     /// 대상 월 token_count 이벤트 수.
     var eventsMonth: Int = 0
-    /// 대상 월 이벤트 중 단일 이벤트 최대 델타. 비정상적으로 크면 누적 카운터가 점프했다는 뜻이다.
+    /// 대상 월 이벤트 중 단일 이벤트 최대 델타(**앱 산식 기준**). 비정상적으로 크면 누적 카운터가 점프했다는 뜻이다.
+    /// 파일에서 처음 만나는 이벤트는 델타를 만들지 않으므로(기준선만 세운다) 이 값에 이월분은 섞이지 않는다 —
+    /// 이월은 `legacyTotal − dedupTotal − dupTokens` 로 따로 재고, 이 필드는 **이월로 설명되지 않는 점프**만 본다.
     var maxDelta: Int = 0
+    /// **최대 델타 이벤트와 그 직전 유효 이벤트 사이의 초.** 최대 델타가 진짜 사용량인지 카운터 점프인지를 가르는 결정타다.
+    /// 필드 실측에서 단일 이벤트 델타가 10억(= Codex 컨텍스트 상한의 수천 배)으로 나왔는데, 한 턴으로는 불가능한 값이라
+    /// 두 갈래가 남았다 — (가) 로그가 드물어 그 사이 수천 요청이 실제로 쌓였다(진짜 사용량), (나) 카운터가 불연속으로 튀었다(가짜).
+    /// 간격이 시간 단위면 (가)가, 수십 초면 (나)가 답이다. 최대 델타가 파일의 첫 이벤트라 직전이 없으면 0.
+    var maxDeltaGapSeconds: Int = 0
+    /// 대상 월 이벤트 중 델타가 `bigDeltaThreshold` 를 **초과**한 이벤트 수(임계값 정확히 같으면 제외).
+    var bigDeltaCount: Int = 0
+    /// 그 이벤트들의 델타 합 = 총합 중 "한 턴으로 설명 불가능한 점프"가 차지하는 몫.
+    var bigDeltaTotal: Int = 0
+    /// bigDelta 이벤트들의 (직전 유효 이벤트와의) 간격 중앙값(초). 0개면 0, 짝수 개면 아래쪽 중앙값.
+    /// `maxDeltaGapSeconds` 가 한 표본이라면 이쪽은 분포다 — 점프가 특정 순간의 사고인지 상습인지 가른다.
+    var bigGapMedianSeconds: Int = 0
     /// 파일의 **첫** token_count 이벤트가 **대상 월에 속하면서** 그 누적치가 20만을 넘는 파일 수(resume 카운터 이월 의심).
     /// 첫 이벤트가 지난달이면 이 달 합계에 이월 효과가 없으므로 세지 않는다.
     var carryFiles: Int = 0
-    /// 그 파일들의 첫 이벤트 누적치 합 = **"파일마다 0 에서 시작하는 산식 탓에 대상 월에 잘못 더해진 양"의 상한 추정치**.
-    /// 상한인 이유: 첫 이벤트는 prevCumulative==0 이라 델타가 누적치 전액이 되는데, 그 전액은 직전 세션에서 이미
-    /// 계상됐을 수 있는 몫까지 포함하기 때문이다(실제 신규분은 그보다 작거나 같다).
+    /// 그 파일들의 첫 이벤트 누적치 합 = **옛 산식(파일마다 기준선 0)이 대상 월에 잘못 더했던 양** 중 문턱 위 몫.
+    ///
+    /// **문턱 아래의 이월은 이 값에 안 잡힌다. 문턱 없는 전액은 `legacyTotal − dedupTotal − dupTokens` 로 얻어라.**
+    /// 이 맥 2026-07 실측이 그 증거다 — 실제 이월은 441,368 인데 `carryTotal` 은 **0** 이었다(첫 이벤트가 20만 아래인
+    /// 파일들만 있었다). 20만 문턱은 "정상 세션의 첫 응답은 이보다 훨씬 작다"는 판별용이지 총량 계측용이 아니다.
+    /// 덧붙여 이 값은 상한 추정이기도 하다: 첫 이벤트의 누적치 전액에는 직전 세션에서 이미 계상됐을 몫까지 들어 있다.
     var carryTotal: Int = 0
     /// 대상 월 이벤트에서 (timestamp, cum) 쌍이 2개 이상 파일에 나타난 개수(0 이 아니면 파일 간 중복 계상).
     var dupEvents: Int = 0
@@ -44,6 +65,19 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
     /// 대상 월 앱 산식 총합에 파일 간 중복 제거를 적용한 값(= 앱 산식 총합 − dupTokens).
     /// 앱 산식 총합은 dedupTotal + dupTokens 로 복원된다.
     var dedupTotal: Int = 0
+    /// 이월 수정 **전** 산식(= 파일의 첫 token_count 누적치를 통째로 델타로 계상하던 방식)의 대상 월 총합.
+    /// **이 필드 하나만 의도적으로 옛 세대를 재현한다** — 나머지는 전부 현행 프로덕션 산식을 미러한다.
+    ///
+    /// 왜 남기나: 정정 전 값은 고치고 나면 두 번 다시 관측할 수 없다. 이 값이 있어야 (1) 이전 빌드가 보낸 페이로드와
+    /// 같은 자로 비교되고, (2) **이월분의 정확값을 `legacyTotal − dedupTotal − dupTokens` 로 회수**할 수 있다
+    /// (`carryTotal` 은 20만 문턱 위만 세는 하한이라 첫 이벤트가 작은 파일들을 통째로 놓친다).
+    ///
+    /// 왜 이 파일 안에서 재나: 프로덕션 `codex_input` 과 견주면 이월 효과에 "증분 캐시 경로 vs 전량 재파싱" 차이가
+    /// 섞인다. 같은 한 번의 순회에서 두 누계를 굴려야 이월 효과만 깨끗이 분리된다.
+    ///
+    /// 손대지 마라: `ScanState.ingest` 의 `legacyDelta`(기준선 미관측을 0 으로 취급)가 이 필드의 정의 전부다.
+    /// 앱 산식이 또 바뀌더라도 이 줄은 그대로 둬야 before/after 가 성립한다.
+    var legacyTotal: Int = 0
     /// **대상 월 이벤트에서** 일어난 누적 감소(리셋) 횟수. 앱 산식은 max(0,…) 로 클램프하므로 여기서 토큰이 유실된다.
     var drops: Int = 0
     /// 대상 월 기준 단일 파일 최대 기여. 총합 대비 비중이 크면 한 세션이 그 달을 좌우한다는 뜻이다.
@@ -53,19 +87,27 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
 
     init(
         filesTotal: Int = 0, filesMonth: Int = 0, eventsMonth: Int = 0, maxDelta: Int = 0,
+        maxDeltaGapSeconds: Int = 0, bigDeltaCount: Int = 0, bigDeltaTotal: Int = 0,
+        bigGapMedianSeconds: Int = 0,
         carryFiles: Int = 0, carryTotal: Int = 0, dupEvents: Int = 0, dupTokens: Int = 0,
-        finalSum: Int = 0, dedupTotal: Int = 0, drops: Int = 0, topFile: Int = 0, appBuild: Int = 0
+        finalSum: Int = 0, dedupTotal: Int = 0, legacyTotal: Int = 0, drops: Int = 0,
+        topFile: Int = 0, appBuild: Int = 0
     ) {
         self.filesTotal = filesTotal
         self.filesMonth = filesMonth
         self.eventsMonth = eventsMonth
         self.maxDelta = maxDelta
+        self.maxDeltaGapSeconds = maxDeltaGapSeconds
+        self.bigDeltaCount = bigDeltaCount
+        self.bigDeltaTotal = bigDeltaTotal
+        self.bigGapMedianSeconds = bigGapMedianSeconds
         self.carryFiles = carryFiles
         self.carryTotal = carryTotal
         self.dupEvents = dupEvents
         self.dupTokens = dupTokens
         self.finalSum = finalSum
         self.dedupTotal = dedupTotal
+        self.legacyTotal = legacyTotal
         self.drops = drops
         self.topFile = topFile
         self.appBuild = appBuild
@@ -79,12 +121,17 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
         filesMonth = try c.decodeIfPresent(Int.self, forKey: .filesMonth) ?? 0
         eventsMonth = try c.decodeIfPresent(Int.self, forKey: .eventsMonth) ?? 0
         maxDelta = try c.decodeIfPresent(Int.self, forKey: .maxDelta) ?? 0
+        maxDeltaGapSeconds = try c.decodeIfPresent(Int.self, forKey: .maxDeltaGapSeconds) ?? 0
+        bigDeltaCount = try c.decodeIfPresent(Int.self, forKey: .bigDeltaCount) ?? 0
+        bigDeltaTotal = try c.decodeIfPresent(Int.self, forKey: .bigDeltaTotal) ?? 0
+        bigGapMedianSeconds = try c.decodeIfPresent(Int.self, forKey: .bigGapMedianSeconds) ?? 0
         carryFiles = try c.decodeIfPresent(Int.self, forKey: .carryFiles) ?? 0
         carryTotal = try c.decodeIfPresent(Int.self, forKey: .carryTotal) ?? 0
         dupEvents = try c.decodeIfPresent(Int.self, forKey: .dupEvents) ?? 0
         dupTokens = try c.decodeIfPresent(Int.self, forKey: .dupTokens) ?? 0
         finalSum = try c.decodeIfPresent(Int.self, forKey: .finalSum) ?? 0
         dedupTotal = try c.decodeIfPresent(Int.self, forKey: .dedupTotal) ?? 0
+        legacyTotal = try c.decodeIfPresent(Int.self, forKey: .legacyTotal) ?? 0
         drops = try c.decodeIfPresent(Int.self, forKey: .drops) ?? 0
         topFile = try c.decodeIfPresent(Int.self, forKey: .topFile) ?? 0
         appBuild = try c.decodeIfPresent(Int.self, forKey: .appBuild) ?? 0
@@ -94,12 +141,18 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
 /// ~/.codex/sessions 를 전량 1회 순회해 진단값을 만든다. 순수 함수(상태 없음) — Task.detached 에서 돈다.
 ///
 /// 산식은 프로덕션 스캐너(TokenUsageIncrementalScanner.scanCodex)의 Codex 경로를 **그대로 재현**한다:
-/// 파일마다 prevCumulative 0 에서 시작해 token_count 이벤트마다 delta = max(0, cum − prevCumulative) 를
-/// 그 이벤트 timestamp(→KST)의 월에 귀속한다. cum = total_token_usage.(input_tokens + output_tokens).
-/// info/total/timestamp 결손 이벤트는 건너뛰되 prevCumulative 를 갱신하지 않는다(다음 유효 이벤트가 흡수).
+/// 파일에서 **처음 만나는 유효 token_count 는 델타를 만들지 않고 기준선만 세우고**(그 누적치는 직전 세션에서
+/// 이어받은 카운터지 이번에 쓴 양이 아니다), 그다음부터 delta = max(0, cum − 기준선) 을 그 이벤트
+/// timestamp(→KST)의 월에 귀속한다. cum = total_token_usage.(input_tokens + output_tokens).
+/// info/total/timestamp 결손 이벤트는 건너뛰되 기준선을 갱신하지 않는다(다음 유효 이벤트가 흡수).
+/// 그래서 `dedupTotal + dupTokens == TokenUsageScanner.scan().codexInput` 이 성립한다(같은 홈·같은 월 기준).
 ///
-/// 차이는 둘뿐이고, 둘 다 "진단은 전량을 본다"는 목적에서 나온다:
-/// 1) 증분 캐시·mtime 프리필터가 없다(모든 rollout 파일을 offset 0 부터 읽는다).
+/// **예외는 `legacyTotal` 하나뿐이다** — 그 필드만 의도적으로 옛 세대(파일마다 기준선 0)를 재현한다. 정정 전 값은
+/// 고치고 나면 다시 관측할 수 없고, 두 값의 차이가 곧 이월분의 정확값이기 때문이다.
+///
+/// 그 밖의 차이는 둘뿐이고, 둘 다 "진단은 전량을 본다"는 목적에서 나온다:
+/// 1) 증분 캐시·mtime 프리필터가 없다(모든 rollout 파일을 offset 0 부터 읽는다). 프로덕션이 이어읽기 캐시로
+///    표현하는 "아직 기준선을 못 봤다"(consumedOffset == 0)는 여기선 파일 경계의 `baseline = nil` 이 대신한다.
 /// 2) 개행 없이 끝나는 마지막 라인도 파싱한다(증분 스캐너는 다음 갱신을 위해 남겨 두지만, 여기선 다음이 없다).
 ///
 /// 비용: 전량 순회라 비싸다. 호출측이 **앱 빌드당 1회만** 부르는 것을 전제로 캐시를 두지 않는다.
@@ -129,6 +182,11 @@ enum CodexUsageDiagnosticsScanner {
         result.filesMonth = state.filesMonth
         result.eventsMonth = state.eventsMonth
         result.maxDelta = state.maxDelta
+        result.maxDeltaGapSeconds = state.maxDeltaGapSeconds
+        result.bigDeltaCount = state.bigDeltaCount
+        result.bigDeltaTotal = state.bigDeltaTotal
+        result.bigGapMedianSeconds = state.bigGapMedianSeconds()
+        result.legacyTotal = state.legacyTotal
         result.carryFiles = state.carryFiles
         result.carryTotal = state.carryTotal
         result.drops = state.drops
@@ -141,6 +199,14 @@ enum CodexUsageDiagnosticsScanner {
         result.dedupTotal = state.appTotal - state.dupTokens
         return result
     }
+
+    // MARK: 임계값
+
+    /// "한 턴으로는 설명할 수 없는 델타"의 문턱. Codex 컨텍스트 상한이 수십만 토큰이라 한 번의 요청·응답이 만들 수 있는
+    /// 누적 증가는 아무리 커도 그 수준이다 — 200만은 그 상한의 수 배로, 이보다 큰 단일 이벤트 델타는 "한 턴"으로
+    /// 존재할 수 없다. 즉 이 문턱을 넘은 이벤트는 (가) 로그가 드물어 그 사이 여러 턴이 뭉쳤거나 (나) 카운터가
+    /// 불연속으로 튄 것이고, 둘을 가르는 건 그 이벤트가 직전 이벤트와 얼마나 떨어져 있느냐다(→ bigGapMedianSeconds).
+    private static let bigDeltaThreshold = 2_000_000
 
     // MARK: 스캔 상태
 
@@ -165,18 +231,37 @@ enum CodexUsageDiagnosticsScanner {
 
         // 파일별(파일 경계에서 리셋)
         private var fileIndex = 0
-        private var prevCumulative = 0
+        /// 델타 기준선 = 직전 유효 token_count 의 누적치. **nil("아직 기준선을 못 봤다")과 0("관측된 0")은 다르다** —
+        /// 그 구분이 "파일에서 처음 만나는 유효 이벤트는 델타를 만들지 않는다"는 규칙의 전부다(프로덕션과 같은 규칙).
+        /// 프로덕션은 이 구분을 이어읽기 캐시까지 들고 가야 해서 consumedOffset 으로 표현하지만(유효 이벤트를 하나도
+        /// 못 본 파일은 오프셋을 전진시키지 않는다), 이 진단은 매번 오프셋 0 부터 전량 재파싱이라 파일 경계에서 nil 로
+        /// 되돌리는 것만으로 같은 의미가 된다 — token_count 가 하나도 없는 파일은 기준선이 서지 않고 기여도 0 이다.
+        private var baseline: Int?
+        /// 직전 유효 이벤트의 UTC epoch 초. 파일 경계에서 nil — 파일의 첫 이벤트는 잴 직전이 없으니 간격 0 이다.
+        /// prevCumulative 와 같은 이유로 **대상 월 밖 이벤트로도 전진한다**: 델타의 기준선이 그 이벤트이므로,
+        /// 그 델타가 얼마 만에 쌓였는지도 같은 기준선에서 재야 짝이 맞는다(월 렌즈는 '무엇을 세느냐'만 가른다).
+        private var prevEventEpoch: Int?
         private var firstEvent: FirstEvent?
         private var monthContrib = 0
+        /// 이월 수정 전 산식의 이 파일 기여분. 지금은 monthContrib 와 같은 값이지만 정의가 다르다 —
+        /// 이쪽은 "파일 첫 이벤트의 누적치 전액"을 **언제나** 포함한다. 앱 산식이 그 몫을 빼는 날에도 그대로 둬라.
+        private var monthContribLegacy = 0
         private var lastCumulativeInMonth = 0
         private var touched = false
 
         // 전역 누적
         private(set) var appTotal = 0
+        private(set) var legacyTotal = 0
         private(set) var finalSum = 0
         private(set) var filesMonth = 0
         private(set) var eventsMonth = 0
         private(set) var maxDelta = 0
+        private(set) var maxDeltaGapSeconds = 0
+        private(set) var bigDeltaCount = 0
+        private(set) var bigDeltaTotal = 0
+        /// bigDelta 이벤트 각각의 직전 이벤트와의 간격(초). 중앙값을 내려고 모아 둔다 — 개수가 문턱을 넘는 이벤트
+        /// 수뿐이라(정상 데이터에선 0개) 메모리는 무시할 수준이다.
+        private var bigGaps: [Int] = []
         private(set) var drops = 0
         private(set) var carryFiles = 0
         private(set) var carryTotal = 0
@@ -188,9 +273,11 @@ enum CodexUsageDiagnosticsScanner {
 
         func beginFile(index: Int) {
             fileIndex = index
-            prevCumulative = 0
+            baseline = nil
+            prevEventEpoch = nil
             firstEvent = nil
             monthContrib = 0
+            monthContribLegacy = 0
             lastCumulativeInMonth = 0
             touched = false
         }
@@ -199,6 +286,7 @@ enum CodexUsageDiagnosticsScanner {
             guard touched else { return }
             filesMonth += 1
             appTotal += monthContrib
+            legacyTotal += monthContribLegacy
             finalSum += lastCumulativeInMonth
             topFile = max(topFile, monthContrib)
             // resume 카운터 이월: 이 파일의 **첫** token_count 는 prevCumulative==0 을 만나 델타가 누적치 전액이 된다.
@@ -228,19 +316,42 @@ enum CodexUsageDiagnosticsScanner {
 
             let cum = intField(total["input_tokens"]) + intField(total["output_tokens"])
             let inMonth = (monthKey == month)
-            // prevCumulative 는 대상 월 밖 이벤트로도 계속 전진해야 한다 — 그래야 이 달 첫 델타의 기준선이 맞는다.
+            // 기준선은 대상 월 밖 이벤트로도 계속 전진해야 한다 — 그래야 이 달 첫 델타의 기준선이 맞는다.
             // 월 렌즈가 가르는 건 '무엇을 세느냐'지 '어떻게 걸어가느냐'가 아니다.
             if firstEvent == nil { firstEvent = FirstEvent(cumulative: cum, inMonth: inMonth) }
-            if inMonth, cum < prevCumulative { drops += 1 }
-            let delta = max(0, cum - prevCumulative)
-            prevCumulative = cum
+            if inMonth, let prev = baseline, cum < prev { drops += 1 }   // 기준선이 없으면 견줄 대상도 없다.
+            // 앱 산식(프로덕션 미러): 기준선을 아직 못 봤으면 델타를 만들지 않고 기준선만 세운다. 그 누적치는
+            // "카운터가 이미 거기 와 있었다"는 정보이지 이번에 쓴 양이 아니다.
+            let delta = baseline.map { max(0, cum - $0) } ?? 0
+            // 옛 산식: 미관측 기준선을 '0 을 관측했다'로 취급했다 → 파일 첫 이벤트의 누적치 전액이 델타가 됐다.
+            // 이 한 줄이 legacyTotal 과 dedupTotal 을 가르는 전부다.
+            let legacyDelta = max(0, cum - (baseline ?? 0))
+            let epoch = CodexUsageDiagnosticsScanner.utcEpochSeconds(fromTimestamp: timestamp)
+            // 이 델타가 쌓이는 데 걸린 시간 = 델타의 기준선이 된 그 이벤트와의 간격. 직전이 없으면(파일 첫 이벤트) 0,
+            // 타임스탬프가 역행하면 0 으로 클램프(로그가 뒤섞여 들어온 경우 음수 간격을 보고하지 않는다).
+            let gap: Int = {
+                guard let epoch, let previous = prevEventEpoch else { return 0 }
+                return max(0, epoch - previous)
+            }()
+            baseline = cum
+            prevEventEpoch = epoch
             guard inMonth else { return }
 
             monthContrib += delta
+            monthContribLegacy += legacyDelta
             eventsMonth += 1
             touched = true
             lastCumulativeInMonth = cum
-            maxDelta = max(maxDelta, delta)
+            // 동점이면 먼저 나온 이벤트가 이긴다(>, not >=) — 간격이 어느 이벤트의 것인지 결정적으로 정해진다.
+            if delta > maxDelta {
+                maxDelta = delta
+                maxDeltaGapSeconds = gap
+            }
+            if delta > CodexUsageDiagnosticsScanner.bigDeltaThreshold {
+                bigDeltaCount += 1
+                bigDeltaTotal += delta
+                bigGaps.append(gap)
+            }
 
             // 중복 계상 추적. NUL 구분자(타임스탬프에 NUL 이 들어갈 수 없어 충돌 불가).
             let key = "\(timestamp)\u{0}\(cum)"
@@ -255,6 +366,14 @@ enum CodexUsageDiagnosticsScanner {
             } else {
                 sightings[key] = KeySighting(lastFileIndex: fileIndex, fileCount: 1)
             }
+        }
+
+        /// bigDelta 이벤트 간격들의 중앙값. 0개면 0. 짝수 개면 **아래쪽** 중앙값(평균을 내면 표본에 없는 값이 생기고
+        /// 반올림 규칙까지 끼어들어 재현이 흐려진다 — 항상 실제 표본 하나를 고른다).
+        func bigGapMedianSeconds() -> Int {
+            guard !bigGaps.isEmpty else { return 0 }
+            let sorted = bigGaps.sorted()
+            return sorted[(sorted.count - 1) / 2]
         }
 
         func duplicateKeyCount() -> Int {
@@ -380,6 +499,43 @@ enum CodexUsageDiagnosticsScanner {
             }
         }
         return String(format: "%04d-%02d", year, month)
+    }
+
+    /// UTC ISO8601 타임스탬프의 앞 19자(YYYY-MM-DDTHH:MM:SS)를 epoch 초로. 소수 초는 버린다(초 단위면 충분하다 —
+    /// 우리가 가르려는 건 "수십 초냐 몇 시간이냐"다). 형식이 어긋나면 nil.
+    ///
+    /// 시간대를 더하지 않는 이유: 이 값은 **차이를 재는 데만** 쓰이고 모든 이벤트가 같은 UTC 기준이라 오프셋이 상쇄된다.
+    /// (월 귀속은 kstMonthKey 가 따로 KST 로 판정한다 — 이쪽에 +9를 또 더하면 그 판정과 이중으로 얽힌다.)
+    /// 달력 계산은 civil-from-days 역산(Howard Hinnant 방식)으로 윤년·세기 예외를 한 번에 처리한다.
+    private static func utcEpochSeconds(fromTimestamp s: String) -> Int? {
+        let b = Array(s.utf8)
+        guard b.count >= 19 else { return nil }
+        for i in [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18] {
+            let c = b[i]
+            guard c >= 48, c <= 57 else { return nil }
+        }
+        func num(_ start: Int, _ len: Int) -> Int {
+            var v = 0
+            for k in start..<(start + len) { v = v * 10 + Int(b[k] - 48) }
+            return v
+        }
+        let year = num(0, 4)
+        let month = num(5, 2)
+        let day = num(8, 2)
+        let hour = num(11, 2)
+        let minute = num(14, 2)
+        let second = num(17, 2)
+        guard month >= 1, month <= 12, day >= 1, day <= daysInMonth(year: year, month: month),
+              hour <= 23, minute <= 59, second <= 60   // 60 은 윤초 표기를 거부하지 않기 위해서다.
+        else { return nil }
+        // 3월을 해의 시작으로 옮기면(윤일이 해의 끝으로 간다) 윤년 보정이 나눗셈 몇 번으로 끝난다.
+        let y = month <= 2 ? year - 1 : year
+        let era = (y >= 0 ? y : y - 399) / 400
+        let yearOfEra = y - era * 400                                  // 0..399
+        let dayOfYear = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1   // 0..365
+        let dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear
+        let days = era * 146_097 + dayOfEra - 719_468                  // 719_468 = 1970-01-01 오프셋
+        return days * 86_400 + hour * 3_600 + minute * 60 + second
     }
 
     /// 그레고리력 월별 일수(윤년 규칙 포함). +9시간 올림에서 월 경계를 정확히 넘기기 위한 것.

@@ -20,9 +20,14 @@ extension WorkTimerStore {
     nonisolated static let pokeDisplayFreshnessSeconds: TimeInterval = 3600
     /// 찌르기 쿨타임(초). 서버가 강제하고 클라는 표시용 카운트다운만 미러링한다.
     static let pokeCooldownSeconds: TimeInterval = 60
-    /// 울트라 하루 한도(보낸 사람 기준·대상 무관·KST 자정 리셋). 서버 ultra_poke_user 의 ultra_poke_daily_limit 과
+    /// 울트라 하루 한도(보낸 사람 기준·KST 자정 리셋). 서버 ultra_poke_user 의 ultra_poke_daily_limit 과
     /// **같은 값이어야 한다** — 어긋나면 클라가 "1번 남음"이라 말한 뒤 서버가 거절하는 무언의 모순이 된다.
-    /// 한도를 바꿀 땐 서버 상수와 이 한 줄만 고치면 된다(안내 문구·게이트가 전부 여기서 파생된다).
+    /// 한도를 바꿀 땐 서버 상수와 이 한 줄만 고치면 된다(안내 문구가 전부 여기서 파생된다).
+    ///
+    /// **대상 무관이 아니다**: 서버는 같은 팀 대상에게는 이 한도 검사를 건너뛰고, 그렇게 쏜 울트라는
+    /// 하루 집계에서도 빠진다. 그래서 서버가 실어 주는 ultra_remaining 은 이제 **"팀 밖 대상에게 남은 횟수"** 다.
+    /// 클라가 팀 판정을 재구현하지 않는 것이 이 설계의 핵심이다 — 판정이 두 곳에 있으면 언젠가 갈리고,
+    /// 그때 화면은 서버가 허락한 발사를 막거나 막을 발사를 허락한다(sendMessage 의 등급·집중 모드와 같은 규약).
     nonisolated static let ultraPokeDailyLimit = 2
     /// 울트라 표시 신선도(초). 일반 찔림의 1시간(pokeDisplayFreshnessSeconds)과 **일부러 다르다** —
     /// 울트라는 화면 전체를 5초간 덮으므로, 맥이 잠들었다 깨어난 뒤 40분 전 울트라가 갑자기 터지면
@@ -131,6 +136,10 @@ extension WorkTimerStore {
 
     /// 오늘(KST) 울트라 몫을 다 썼는가. MilestoneTracker.dayKey 와 같은 눈금(Asia/Seoul yyyyMMdd)을 써
     /// 자정 롤오버가 리그·마일스톤과 어긋나지 않게 한다. 비교로 판정하므로 날이 바뀌면 저절로 풀린다.
+    ///
+    /// **표시 전용이다 — 발사를 막는 데 쓰지 마라.** 서버가 팀원 대상에는 하루 한도를 적용하지 않으므로
+    /// (ultraPokeDailyLimit 주석) 이 값이 참이어도 **팀원에게는 여전히 쏠 수 있다**. 이걸 발사 게이트로 쓰면
+    /// 팀 밖 3발째로 한 번 거절당한 날엔 서버가 허락하는 팀원 울트라까지 클라가 요청조차 안 내고 막는다.
     func isUltraPokeSpent(now: Date) -> Bool { ultraPokeSpentDay == MilestoneTracker.dayKey(now) }
 
     /// 오늘 남은 울트라 횟수(모르면 nil). 스탬프가 오늘이 아니면 어제 값이라 **모름으로 답한다** —
@@ -149,6 +158,7 @@ extension WorkTimerStore {
     }
 
     /// 오늘 몫 소진 미러를 세운다(@Observable 동등성 가드 — 같은 값 재대입도 관찰자를 발화시킨다).
+    /// 세우는 것은 **화면이 읽을 사실**(팀 밖 몫이 없다)이지 다음 요청을 막는 잠금이 아니다 — isUltraPokeSpent 주석 참조.
     func markUltraSpent(now: Date) {
         let key = MilestoneTracker.dayKey(now)
         if ultraPokeSpentDay != key { ultraPokeSpentDay = key }
@@ -156,7 +166,8 @@ extension WorkTimerStore {
 
     /// 서버가 실어 준 남은 횟수를 반영한다. **값이 없으면 '모름'(nil)으로 되돌린다** — 직전 숫자를 남기면
     /// 방금 한 발 썼는데도 옛 숫자를 계속 보여준다(마이그레이션 전 서버는 이 필드를 아예 안 보낸다).
-    /// 0 이면 오늘 몫 소진이므로 소진 미러도 함께 세운다 — 그래야 다음 시도가 요청 없이 막힌다.
+    /// 0 이면 팀 밖 몫이 소진됐다는 뜻이므로 소진 미러도 함께 세운다 — 화면이 "울트라 소진"이라 말할 근거다
+    /// (다음 요청을 막지는 않는다. 팀원에게는 서버가 여전히 허락한다 — isUltraPokeSpent 주석 참조).
     func applyUltraRemaining(_ value: Int?, now: Date) {
         // 음수는 서버 버그이거나 미래 규약이다. 숫자로 말할 수 없는 값이므로 0 으로 접는다.
         let normalized = value.map { max(0, $0) }
@@ -166,23 +177,29 @@ extension WorkTimerStore {
         if normalized == 0 { markUltraSpent(now: now) }
     }
 
-    /// 울트라 찌르기. 일반 sendPoke 와 게이트는 같고(근무중 선게이트) 하루 한도 로컬 미러가 하나 더 붙는다.
+    /// 울트라 찌르기. 선게이트는 일반 sendPoke 와 **정확히 같다**(로그인 + 근무중). 하루 한도는 여기서 막지 않는다.
     /// 서버 게이트 순서는 invalid → 보낸이근무 → 대상근무 → 하루한도 → 쿨타임이고, 여기 매핑도 그 어휘를 따른다.
+    ///
+    /// **하루 한도 로컬 미러(ultraPokeSpentDay)로 요청을 막지 않는 이유**: 서버가 같은 팀 대상에는 한도 검사를
+    /// 건너뛰므로(ultraPokeDailyLimit 주석) "오늘 몫 소진"은 더 이상 발사 여부의 답이 아니다. 예전처럼 선게이트로
+    /// 쓰면 팀 밖 대상에게 3발째를 쏴 한 번 거절당한 사용자가 **그날 내내 팀원에게도 못 쏜다** — 서버는 허락하는데
+    /// 클라가 요청을 안 내서. 앱 재시작이나 KST 자정에나 풀리는, 사용자가 원인을 알 수 없는 종류의 고장이다.
+    ///
+    /// 팀 판정을 클라가 대신 하는 길은 택하지 않았다(팀 목록은 이미 받고 있지만). 판정이 두 곳에 있으면 언젠가
+    /// 갈리고, 그때 화면은 서버가 허락한 발사를 막거나 막을 발사를 허락한다. 대가는 이미 소진된 상태에서
+    /// 헛요청 1회가 더 나가는 것뿐인데(사용자 26명 규모에서 무의미한 비용) 서버는 어차피 유일한 권위다.
+    ///
+    /// 미러는 그대로 산다 — 버튼 비활성·툴팁·"오늘 N번 남음" 문구가 읽는 **표시용 사실**이다.
+    /// 표시(서버가 준 남은 횟수를 그대로 반영)와 발사 허용(서버가 판정)을 갈라 두는 것이 이 함수의 요점이다.
     func sendUltraPoke(to userID: String) {
         guard session != nil else { return }
         guard startedAt != nil else {
             pokeNotice = "근무 중일 때만 콕 찌를 수 있어요"
             return
         }
-        let sentAt = clock()
         // 날이 바뀌었으면 어제의 남은 횟수부터 버린다 — 안 버리면 어제 "0번 남음"이 오늘 안내로 샌다.
-        refreshUltraQuota(now: sentAt)
-        // 이 맥이 이미 오늘 몫을 다 쓴 걸 알면 요청 자체를 안 낸다. 다른 맥에서 썼다면 미러가 비어 있으므로
-        // 서버가 ultra_used_today 로 가르쳐 주고, 그때 미러를 채워 다음 시도부터 막는다.
-        if isUltraPokeSpent(now: sentAt) {
-            pokeNotice = Self.ultraSpentNotice
-            return
-        }
+        // (요청 0건짜리 순수 로컬 판정. 발사를 막지는 않는다.)
+        refreshUltraQuota(now: clock())
         let generation = sessionGeneration
         Task { @MainActor in
             do {
@@ -204,6 +221,9 @@ extension WorkTimerStore {
                     pokeNotice = Self.ultraSentNotice(remaining: ultraRemaining(now: now))
                 case .ultraUsedToday:
                     // status 자체가 '오늘 몫 없음'의 권위다 — 서버가 남은 횟수를 안 실어 줘도(구버전) 0 으로 본다.
+                    // 서버는 팀원 대상엔 이 status 를 내지 않으므로 이 거절은 **팀 밖 대상**에 대한 사실이다.
+                    // 그래서 여기서 세우는 미러도 화면이 읽을 표시일 뿐, 다음 시도를 막는 잠금이 아니다 —
+                    // 바로 다음 발사가 팀원 대상이면 서버는 그걸 허락하고, 클라는 그 요청을 그대로 내보낸다.
                     applyUltraRemaining(response.ultraRemainingForDisplay ?? 0, now: now)
                     markUltraSpent(now: now)
                     pokeNotice = Self.ultraSpentNotice

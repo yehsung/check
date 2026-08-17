@@ -276,14 +276,15 @@ struct CheckMenuView: View {
                             cooldownRemaining: { store.pokeCooldownRemaining(for: $0, now: store.displayNow) },
                             onPoke: { store.sendPoke(to: $0) },
                             onUltra: { store.sendUltraPoke(to: $0) },
-                            // 오늘 몫이 남았는가. 하루 한도는 서버가 최종 판정하고 여기선 로컬 미러만 읽는다.
+                            // 오늘 팀 밖 몫이 남았는가 — **화면 문구용 사실**이다(힌트·툴팁). 하루 한도는 서버가
+                            // 판정하고 여기선 로컬 미러만 읽는다. 이 값이 false 여도 3초 홀드는 그대로 발사된다:
+                            // 서버가 같은 팀 대상엔 한도를 안 걸기 때문이다(WorkTimerStore.isUltraPokeSpent 주석).
                             canUltra: !store.isUltraPokeSpent(now: store.displayNow),
                             // 남은 횟수는 **울트라 응답으로만** 갱신된다(nil = 아직 모름). 시작 시점을 알기 위한
                             // 추가 GET/RPC 를 만들지 않는다 — 모를 때는 아무 숫자도 보여 주지 않는 쪽을 택했다.
                             // ultraRemainingToday 를 직접 읽지 않고 ultraRemaining(now:)를 거치는 이유:
                             // 그 함수만 KST 하루 스탬프를 대조해, 자정을 넘긴 어제의 "0번 남음"이 남지 않게 한다.
                             ultraRemainingText: WorkTimerStore.ultraRemainingText(remaining: store.ultraRemaining(now: store.displayNow)),
-                            onUltraBlocked: { store.pokeNotice = WorkTimerStore.ultraSpentNotice },
                             isFocusMode: store.focusMode,
                             onToggleFocusMode: { store.toggleFocusMode() },
                             // 3글자 메시지 — 찌르기와 같은 표·같은 폴링을 타지만 RPC·쿨타임·결과 문구는 각자의 것이다.
@@ -2046,13 +2047,14 @@ private struct PokePanel: View {
     let cooldownRemaining: (String) -> Int
     let onPoke: (String) -> Void
     // 울트라 발사(3초 꾹). 일반 찌르기와 **다른 RPC**라 콜백을 나눠 받는다.
+    // 3초를 다 누르면 canUltra 와 **무관하게** 호출된다 — 하루 한도는 서버가 판정한다(PokeChargeButton 주석).
     let onUltra: (String) -> Void
-    // 오늘 울트라 몫이 남았는가. 남지 않았으면 3초를 다 눌러도 발사 대신 안내만 뜬다(숨은 규칙 금지).
+    // 오늘 팀 밖 울트라 몫이 남았는가 — **표시 전용**(제목 행 힌트 문구·흐림, 행 툴팁)이다.
+    // 발사 게이트로 쓰지 마라: 서버는 같은 팀 대상에겐 하루 한도를 안 걸므로, "소진"이 떠 있어도
+    // 팀원에겐 실제로 나가야 한다. 사용자는 소진 표시를 보면서 팀원에게는 쏘게 된다 — 그게 의도다.
     let canUltra: Bool
     // 남은 울트라 횟수 문구("오늘 N번 남음"). nil = 아직 모름 → 충전 중에도 아무 숫자를 말하지 않는다.
     let ultraRemainingText: String?
-    // 오늘 몫이 없는데 3초를 다 눌렀을 때의 안내. 조용히 아무 일도 안 일어나면 고장으로 읽힌다.
-    let onUltraBlocked: () -> Void
     // 집중 모드(내 수신 거부) 상태와 토글. 값+클로저로만 받아 이 패널을 렌더 테스트 친화적으로 유지한다.
     var isFocusMode: Bool = false
     var onToggleFocusMode: () -> Void = {}
@@ -2252,7 +2254,6 @@ private struct PokePanel: View {
                         isComposing: activeComposerUserID == entry.userID,
                         onPoke: { onPoke(entry.userID) },
                         onUltra: { onUltra(entry.userID) },
-                        onUltraBlocked: onUltraBlocked,
                         onChargingChanged: { isChargingUltra = $0 },
                         onToggleCompose: { toggleCompose(entry.userID) }
                     )
@@ -2317,13 +2318,14 @@ private struct PokeDirectoryRowView: View {
     let remainingCooldown: Int
     // 내가 근무중이라 찌를 수 있는지. false면 버튼이 흐려지고 비활성된다.
     let canPoke: Bool
-    // 오늘 울트라 몫이 남았는지(툴팁/안내 분기용). 찌르기 자체의 활성 여부와는 무관하다.
+    // 오늘 팀 밖 울트라 몫이 남았는지 — **툴팁 문구 분기 전용**이다.
+    // 찌르기 자체의 활성 여부와도, 울트라 발사 여부와도 무관하다(발사는 서버가 판정한다).
+    // 소진 툴팁이 떠 있어도 같은 팀 대상에게는 실제로 나간다 — 서버가 팀 대상엔 한도를 안 건다.
     let canUltra: Bool
     // 이 행 아래 메시지 작성기가 펼쳐져 있는지(버튼을 켜진 상태로 그린다).
     var isComposing: Bool = false
     let onPoke: () -> Void
     let onUltra: () -> Void
-    let onUltraBlocked: () -> Void
     // 충전 시작/끝만 패널에 알린다(진행도는 버튼 안에 갇혀 있다).
     var onChargingChanged: (Bool) -> Void = { _ in }
     // 메시지 작성기 펼침/접힘 토글. 펼침 자체는 아무것도 보내지 않는다(전송은 작성기 안에서만).
@@ -2408,10 +2410,8 @@ private struct PokeDirectoryRowView: View {
             // 위 분기에서 Button 이 아니라 흐린 라벨(pokeIconLabel)로 그려지므로 **제스처 대상 자체가 없다** —
             // 그 상태의 꾹 누르기는 아무 일도 일어나지 않고 help 툴팁이 이유를 말한다(숨은 규칙을 만들지 않는다).
             PokeChargeButton(
-                canUltra: canUltra,
                 onPoke: onPoke,
                 onUltra: onUltra,
-                onUltraBlocked: onUltraBlocked,
                 onChargingChanged: onChargingChanged
             )
             // 툴팁의 홀드 시간도 상수에서 만든다(힌트 문구와 같은 이유 — 두 곳에 숫자를 흩뿌리지 않는다).
@@ -2499,10 +2499,10 @@ private struct PokeDirectoryRowView: View {
 /// 한 번 오고 업에서 onEnded 가 온다. 대신 **커서가 뷰 밖으로 나가도 이벤트가 계속 오므로 취소는
 /// 우리가 좌표로 판정해야 한다**.
 private struct PokeChargeButton: View {
-    let canUltra: Bool                 // 오늘 울트라가 남았는가(툴팁/안내 분기용)
     let onPoke: () -> Void
+    /// 3초 홀드 완료. **조건 없이** 호출된다 — 하루 한도 판정은 서버 몫이다(beginCharge 주석 참조).
+    /// 그래서 이 버튼은 canUltra 를 아예 받지 않는다: 안 가진 값으로는 게이트를 만들 수 없다.
     let onUltra: () -> Void
-    let onUltraBlocked: () -> Void
     /// 충전 시작/끝 알림. 패널 제목 행이 이 동안에만 "오늘 N번 남음"을 말한다.
     var onChargingChanged: (Bool) -> Void = { _ in }
 
@@ -2587,7 +2587,23 @@ private struct PokeChargeButton: View {
             try? await Task.sleep(for: .seconds(Self.ultraHoldSeconds))
             guard !Task.isCancelled, isPressing, !isCancelled else { return }
             didFireUltra = true
-            if canUltra { onUltra() } else { onUltraBlocked() }
+            // 3초를 다 눌렀으면 **무조건** 발사한다. 하루 한도 판정은 서버 한 곳에만 있다.
+            //
+            // 예전에는 여기서 `if canUltra` 로 갈라 소진 상태면 안내만 띄웠다. 서버가 **같은 팀 대상에는
+            // 하루 한도를 적용하지 않게** 된 순간(WorkTimerStore.ultraPokeDailyLimit 주석) 그 줄은 기능을
+            // 통째로 무력화하는 접착식 잠금이 됐다: 팀 밖 대상에게 한 번 거절당해 미러가 서면, 서버가
+            // 허락하는 팀원 울트라까지 **요청조차 나가지 않는다**(앱 재시작이나 KST 자정에나 풀린다).
+            // 화면은 3초를 다 채워 빨갛게 물들었는데 아무 일도 없는, 사용자가 원인을 알 수 없는 고장이다.
+            //
+            // 팀 판정을 여기서 흉내 내는 길도 택하지 않았다(클라가 팀 목록을 이미 알더라도). 판정이 두 곳에
+            // 있으면 언젠가 갈리고, 그때 화면은 서버가 허락한 발사를 막거나 막을 발사를 허락한다.
+            // 대가는 정말 소진된 날의 헛요청 1회뿐이고, 그 경우 서버가 ultra_used_today 로 거절해
+            // 스토어가 **예전과 같은 문구**(WorkTimerStore.ultraSpentNotice)를 안내줄에 세운다 — 사용자가
+            // 보는 결과는 왕복 한 번 뒤에 오는 같은 문장이다(새 문구를 만들지 않은 이유).
+            //
+            // canUltra 는 이 버튼에 더 이상 오지 않는다 — 표시(제목 행 힌트·행 툴팁)는 부모가 그리고,
+            // 여기 남겨 두면 다음 사람이 "버튼이 아는 값이니 게이트로 쓰자"고 이 줄을 되살린다.
+            onUltra()
             withAnimation(.easeOut(duration: 0.2)) { charge = 0 }   // 손을 뗄 때까지 '다 참'이 남지 않게
         }
     }
@@ -2973,10 +2989,11 @@ private struct PowerMenuButton: View {
             Toggle("로그인 시 자동 실행", isOn: Binding(
                 get: { launchAtLogin },
                 set: { wanted in
+                    // applyUserToggle 이 **사용자 의도까지** 남긴다. 여기서 setLaunchAtLoginEnabled 만
+                    // 부르면 끈 사실이 어디에도 안 남아, 다음 실행의 자동 등록이 그대로 되켜 버린다
+                    // (기본값이 켜짐이 된 뒤로 이 경로가 유일한 탈출구다).
                     // 쓰기 실패(권한 등)면 실상태를 되읽어 UI 가 거짓말하지 않게 한다.
-                    launchAtLogin = LoginItemRegistrar.setLaunchAtLoginEnabled(wanted)
-                        ? wanted
-                        : LoginItemRegistrar.isLaunchAtLoginEnabled()
+                    launchAtLogin = LoginItemRegistrar.applyUserToggle(wanted)
                 }
             ))
             Button("앱 종료") { NSApplication.shared.terminate(nil) }

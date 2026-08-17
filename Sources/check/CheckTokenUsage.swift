@@ -144,8 +144,14 @@ struct TokenUsageCache: Equatable, Sendable {
     /// codex 상태 스키마 버전. 로드 시 currentCodexSchemaVersion 과 다르면 codexFileStates 를 폐기해 재파싱을 유발한다.
     var codexSchemaVersion: Int = TokenUsageCache.currentCodexSchemaVersion
 
-    /// 현재 codex 상태 스키마 버전(이벤트-타임스탬프 귀속). 옛 mtime-월/dayBaseline 캐시는 이 키가 없어 버전 0 으로 취급된다.
-    static let currentCodexSchemaVersion = 2
+    /// 현재 codex 상태 스키마 버전(이벤트-타임스탬프 귀속).
+    ///
+    /// 2 → 3: "파일의 첫 관측 누적치는 델타가 아니라 기준선" 규칙 도입(근거는 CodexFileProgress 주석의 프로덕션 실측).
+    /// 버전이 오르면 로드 시 옛 codexFileStates 가 폐기되고 codex 전체 재파싱이 1회 일어나는데,
+    /// **이미 부풀어 박힌 이번 달 값이 그 재파싱으로 재계산되는 것이 이 변경의 정정 메커니즘이다.**
+    /// (버전을 그대로 두면 캐시에 남은 옛 monthContribTotal 이 그대로 살아 있어 산식만 고쳐도 숫자가 안 고쳐진다.)
+    /// 옛 mtime-월/dayBaseline 캐시는 이 키가 없어 버전 0 으로 취급된다.
+    static let currentCodexSchemaVersion = 3
 }
 
 // TokenUsageCache 커스텀 Codable(스키마 게이트 + 압축 딕셔너리 왕복). 옛 캐시(codexSchemaVersion 부재/불일치)는
@@ -200,14 +206,36 @@ struct ClaudeEntry: Equatable, Sendable {
 
 /// Codex 파일(세션)의 증분 진행 상태 + 이벤트-타임스탬프 귀속 누적. 파일 mtime 월에 세션 누적치를 통째 귀속하던 옛 근사
 /// (지난달 시작 세션을 이번 달 resume 하면 과거 누적 전체가 이번 달로 편입 → +수십억 이상치)를 버리고, token_count
-/// 이벤트마다 그 이벤트 timestamp(→KST)로 delta 를 월/일에 정확히 귀속한다. resume/fork 파일은 카운터가 0에서 새로
-/// 시작하므로(이월 없음) 파일 간 중복합산 걱정이 없다.
+/// 이벤트마다 그 이벤트 timestamp(→KST)로 delta 를 월/일에 정확히 귀속한다.
+///
+/// **파일의 첫 관측 누적치는 델타가 아니라 기준선이다.** 여기엔 원래 "resume/fork 파일은 카운터가 0에서 새로
+/// 시작하므로(이월 없음) 파일 간 중복합산 걱정이 없다"고 적혀 있었다. 그 단언에는 근거가 없었고, v0.2.30 에 넣은
+/// 진단 계측이 프로덕션에서 회수한 값으로 **거짓임이 확인됐다**(실사용자 2인, 2026-08 기준):
+///
+/// | | 앱값(codex_input) | 큰 누적치로 '시작'하는 파일 수 | 그 시작치들의 합 | 파일당 평균 |
+/// |---|---|---|---|---|
+/// | A | 96,805,065,798 | 54  | 35,924,152,806 (앱값의 37%) | 665,262,089 |
+/// | B | 74,487,275,586 | 105 | 44,134,955,126 (앱값의 59%) | 420,332,905 |
+///
+/// 둘 다 dup_events 0 / drops 0 이었다 — 파일 간 중복 계상도, 카운터 리셋도 아니다. 남는 설명은 하나뿐이다:
+/// 파일이 평균 6.6억/4.2억 토큰**에서 시작한다.** 그 파일이 첫 로그 줄을 쓰기도 전에 소비했을 수 있는 양이 아니므로
+/// 직전 세션에서 이어받은 카운터이고, 파일마다 기준선을 0 에서 시작하면 그 전액이 이번 달 델타로 통째로 들어간다.
+///
+/// 그래서 오프셋 0 부터 새로 파싱할 때(신규 파일 / 축소·mtime 역행에 의한 전체 재파싱) 그 파일에서 **처음 만나는
+/// 유효 token_count 는 델타를 만들지 않고 기준선만 세운다**(delta 0). 두 번째 이벤트부터 max(0, cum − 기준선).
+/// 이어읽기 경로는 캐시의 prevCumulative 가 이미 유효한 기준선이라 동작이 바뀌지 않는다.
+///
+/// 트레이드오프: **진짜 새 세션의 첫 턴을 놓친다.** 그 크기는 최대 컨텍스트(수십만) 수준이라 이월분 6.6억에 견주면
+/// 무시할 수 있고, 남의 세션에서 이어받은 누적을 이번 달에 통째로 얹는 쪽보다 훨씬 작은 오차다. 되돌리려는 사람은
+/// 위 실측을 먼저 반박해라 — 이 선택은 추정이 아니라 프로덕션 계측에서 나왔다.
 struct CodexFileProgress: Equatable, Sendable {
     var size: Int
     var mtimeMicros: Int
     var consumedOffset: Int
     /// 파일별 마지막 유효 token_count 의 누적치(input_tokens + output_tokens). 다음 이벤트 delta 의 기준선.
     /// info null·timestamp 결손 이벤트는 이 값을 갱신하지 않는다 — 건너뛴 토큰은 다음 유효 이벤트의 delta 에 자연 흡수(유실 없음).
+    /// 이 파일에서 아직 유효 이벤트를 하나도 못 본 상태는 (consumedOffset == 0, prevCumulative == 0) 으로 표현된다
+    /// — 이벤트 라인을 소비했다면 그 줄의 개행까지 소비돼 consumedOffset > 0 이므로, 이 조합은 "기준선 없음"과 동치다.
     var prevCumulative: Int
     /// 이 파일 상태가 마지막으로 갱신된 KST 'YYYY-MM'. monthContribTotal = 그 월에 귀속된 이벤트 delta 의 합.
     /// 표시 총합은 monthKey == 현재 월 인 파일의 monthContribTotal 만 더한다(월 롤오버 시 0 리셋 → 과거분 자연 탈락).
@@ -306,7 +334,8 @@ enum TokenUsageCacheStore {
 /// 월 귀속(핵심 개편):
 /// - Claude: 엔트리 ts14(UTC 초) 를 KST(UTC+9)로 본 달력 월에 귀속. 현재 월 = [이번달 1일 0시 KST, 다음달 1일 0시 KST).
 /// - Codex: token_count 이벤트마다 그 이벤트 timestamp(→KST)로 delta 를 월/일에 귀속(파일 mtime 월 통째 귀속 폐기 —
-///   resume 세션이 지난달 누적을 이번 달로 편입하던 +수십억 이상치를 근절). 파일별 prevCumulative 로 delta 를 잇는다.
+///   resume 세션이 지난달 누적을 이번 달로 편입하던 +수십억 이상치를 근절). 파일별 기준선(prevCumulative)으로 delta 를 잇되,
+///   **파일을 처음부터 파싱할 때의 첫 유효 이벤트는 델타가 아니라 기준선**이다(CodexFileProgress 주석의 실측 근거 참고).
 /// - 집계는 현재 KST 월만. 엔트리 보관은 현재+직전 월(월초 지연 기록·시계 오차 대비), 그 이전은 퇴거.
 ///
 /// 증분 절차(파일마다):
@@ -515,8 +544,10 @@ enum TokenUsageIncrementalScanner {
     // MARK: Codex
 
     /// ~/.codex/sessions/**/rollout-*.jsonl. 각 파일을 줄 단위로 이어읽으며 token_count 이벤트마다 delta 를 그 이벤트의
-    /// timestamp(→KST) 월/일에 귀속한다. delta = max(0, cum − prevCumulative), cum = total_token_usage.(input+output).
-    /// info null·total 결손·timestamp 파싱 실패 이벤트는 건너뛰되 prevCumulative 를 갱신하지 않는다 — 건너뛴 토큰은 다음
+    /// timestamp(→KST) 월/일에 귀속한다. delta = max(0, cum − 기준선), cum = total_token_usage.(input+output).
+    /// **오프셋 0 부터 새로 파싱할 때 그 파일의 첫 유효 이벤트는 델타를 만들지 않고 기준선만 세운다**(그 누적치는
+    /// 직전 세션에서 이어받은 카운터지 이번에 쓴 양이 아니다 — 근거는 CodexFileProgress 주석의 프로덕션 실측).
+    /// info null·total 결손·timestamp 파싱 실패 이벤트는 건너뛰되 기준선을 갱신하지 않는다 — 건너뛴 토큰은 다음
     /// 유효 이벤트의 delta 에 자연 흡수(유실 없음). 누적이 줄면 max(0,…) 로 클램프(리셋 방어). 월/일 롤오버 시 해당 contrib 0 리셋.
     private static func scanCodex(
         _ cache: inout TokenUsageCache, homeDirectory: URL, cutoff: Date,
@@ -533,9 +564,12 @@ enum TokenUsageIncrementalScanner {
             let prior = cache.codexFileStates[path]
 
             // 파일별 상태 시작값. 이어읽기면 직전 상태를 잇고, 신규/축소/역행이면 처음부터(0). 월/일 롤오버는 키가 바뀐
-            // contrib 를 0 으로 리셋하되 prevCumulative 는 유지(누적 카운터는 파일 안에서 계속 이어진다).
+            // contrib 를 0 으로 리셋하되 기준선은 유지(누적 카운터는 파일 안에서 계속 이어진다).
             var startOffset = 0
-            var prevCumulative = 0
+            // 델타 기준선 = 직전 유효 token_count 의 누적치. nil 은 "이 파일에서 아직 기준선을 본 적이 없다"로,
+            // "기준선이 0이다"와 **반드시 구분해야 한다** — 그 구분이 첫 관측을 델타로 만들지 않는 규칙의 전부다.
+            // (영속 필드를 새로 만들지 않는다: 캐시에는 관측된 기준선만 들어가고, 미관측 상태는 offset 0 이 표현한다.)
+            var baseline: Int?
             var monthContrib = 0
             var dayContrib = 0
 
@@ -558,10 +592,14 @@ enum TokenUsageIncrementalScanner {
                     }
                     continue
                 }
-                // 성장(append)이면 이어읽기 + 직전 상태 이월, 그 외(축소/역행)면 전체 재파싱(offset 0 + contrib/prevCumulative 리셋).
+                // 성장(append)이면 이어읽기 + 직전 상태 이월, 그 외(축소/역행)면 전체 재파싱(offset 0 + contrib/기준선 리셋).
                 if f.size >= p.size, f.mtimeMicros >= p.mtimeMicros {
                     startOffset = p.consumedOffset
-                    prevCumulative = p.prevCumulative
+                    // 이어읽기 경로: 캐시의 prevCumulative 가 이미 유효한 기준선이다(값이 0 이어도 '관측된 0'이다).
+                    // 그래서 이 경로의 동작은 첫-관측 규칙 도입으로 바뀌지 않는다.
+                    // 예외는 consumedOffset == 0 뿐이다 — 완결 라인을 하나도 소비하지 못했다는 뜻이고(이벤트 라인을
+                    // 읽었다면 그 줄의 개행까지 소비돼 offset > 0), 곧 기준선을 세운 적이 없다는 뜻이라 nil 로 되돌린다.
+                    baseline = p.consumedOffset > 0 ? p.prevCumulative : nil
                     monthContrib = rolledMonthContrib
                     dayContrib = rolledDayContrib
                 }
@@ -575,22 +613,32 @@ enum TokenUsageIncrementalScanner {
                       payload["type"] as? String == "token_count",
                       let info = payload["info"] as? [String: Any],
                       let total = info["total_token_usage"] as? [String: Any]
-                else { return }   // info null·total 결손: 건너뛰되 prevCumulative 갱신 안 함(다음 유효 이벤트가 흡수).
-                // 이벤트 timestamp(UTC ISO)를 KST 월키/일키로. 파싱 실패도 동일하게 건너뜀(prevCumulative 불변 → 흡수).
+                else { return }   // info null·total 결손: 건너뛰되 기준선 갱신 안 함(다음 유효 이벤트가 흡수).
+                // 이벤트 timestamp(UTC ISO)를 KST 월키/일키로. 파싱 실패도 동일하게 건너뜀(기준선 불변 → 흡수).
                 guard let ts = object["timestamp"] as? String,
                       let keys = kstMonthDayKeys(fromTimestamp: ts) else { return }
                 let cum = intField(total["input_tokens"]) + intField(total["output_tokens"])
-                let delta = max(0, cum - prevCumulative)   // 누적 감소(리셋)면 0 으로 클램프.
-                prevCumulative = cum
-                if keys.month == monthString { monthContrib += delta }
-                if keys.day == todayDate { dayContrib += delta }
+                // 첫 관측(baseline == nil)은 델타를 만들지 않고 기준선만 세운다 — 그 누적치는 "카운터가 이미 거기 와
+                // 있었다"는 정보이지 이번에 쓴 양이 아니다(실측 근거는 CodexFileProgress 주석).
+                if let prev = baseline {
+                    let delta = max(0, cum - prev)   // 누적 감소(리셋)면 0 으로 클램프.
+                    if keys.month == monthString { monthContrib += delta }
+                    if keys.day == todayDate { dayContrib += delta }
+                }
+                baseline = cum
             }) else { continue }
             stats.codexFilesRead += 1
             stats.codexBytesRead += read.bytesRead
 
+            // 기준선을 못 세운 채 끝난 파일(= 이번 읽기에서 유효 token_count 가 하나도 없었다: 헤더/히스토리만 쓰인
+            // 갓 만들어진 rollout)은 **오프셋을 전진시키지 않는다.** 전진시키면 다음 이어읽기가 "관측된 기준선 0"을
+            // 물려받아, 그때 처음 만나는 이벤트의 누적치 전액이 델타가 된다 — 이 커밋이 없애려는 결함이 그대로 되살아난다.
+            // (baseline == nil 이면 이번 읽기는 반드시 offset 0 전체 파싱이었으므로 startOffset 도 0 이다.)
+            // 비용은 그 파일이 다음에 자랐을 때 한 번 더 처음부터 읽는 것뿐이고, 크기·mtime 이 그대로면 아예 스킵된다.
+            let persistedOffset = (baseline == nil) ? startOffset : read.consumedOffset
             cache.codexFileStates[path] = CodexFileProgress(
-                size: f.size, mtimeMicros: f.mtimeMicros, consumedOffset: read.consumedOffset,
-                prevCumulative: prevCumulative,
+                size: f.size, mtimeMicros: f.mtimeMicros, consumedOffset: persistedOffset,
+                prevCumulative: baseline ?? 0,
                 monthKey: monthString, monthContribTotal: monthContrib,
                 dayKey: todayDate, dayContribTotal: dayContrib
             )

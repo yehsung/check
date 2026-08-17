@@ -1387,9 +1387,10 @@ extension WorkTimerStore {
         defaults.set(enabled, forKey: Self.todoEnabledKey)
     }
 
-    func toggleTodoEnabled() {
-        setTodoEnabled(!isTodoEnabled)
-    }
+    // toggleTodoEnabled() 는 v0.2.32 에 지웠다. 유일한 호출자이던 팝오버의 TodoToggleControl 이
+    // 설정 창으로 이사하면서, 설정 토글은 원하는 값을 아는 상태에서 setTodoEnabled(_:) 를 직접 부른다.
+    // 뒤집기 헬퍼가 남아 있으면 "지금 값을 읽고 뒤집는" 경로가 되살아나 바인딩과 경합할 수 있다.
+
     static let accessTokenKey = "check.session.accessToken"
     static let refreshTokenKey = "check.session.refreshToken"
     static let userIDKey = "check.session.userID"

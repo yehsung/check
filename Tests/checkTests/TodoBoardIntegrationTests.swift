@@ -166,7 +166,8 @@ func todoEnabledDefaultsOnAndPersists() {
     let first = make()
     defer { first.tickerTask?.cancel(); first.refreshTask?.cancel() }
     #expect(first.isTodoEnabled)         // 기본은 켬(새 기능을 발견하게)
-    first.toggleTodoEnabled()
+    // 설정 창 토글이 실제로 부르는 경로로 뒤집는다(옛 toggleTodoEnabled 는 호출부가 사라져 v0.2.32 에 삭제).
+    first.setTodoEnabled(false)
     #expect(first.isTodoEnabled == false)
 
     let relaunched = make()              // 앱을 껐다 켜도 선택이 유지된다

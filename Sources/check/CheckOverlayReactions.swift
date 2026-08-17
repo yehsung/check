@@ -349,9 +349,17 @@ final class ReactionEngine {
 
     // MARK: - A1 히트 영역(캐릭터 몸체 투영 rect 캐시)
     /// 캐릭터 노드 bbox 8코너를 뷰로 투영해 만든 몸체 화면영역(뷰 로컬, 12pt 인플레이트). attach 시 무효화하고
-    /// 첫 조회 때 지연 계산한다. 뷰 로컬 투영은 패널 위치와 무관하게 안정적이라(카메라·모델 고정) 재배치/드래그로는
-    /// 바뀌지 않는다 — 그래서 프레임당 재계산 없이 캐시 1개면 충분하다(관찰 무효화 최소화 규약).
+    /// 첫 조회 때 지연 계산한다. 뷰 로컬 투영은 **패널 위치**와는 무관하게 안정적이라(카메라·모델 고정)
+    /// 재배치/드래그로는 바뀌지 않는다 — 그래서 프레임당 재계산 없이 캐시 1개면 충분하다.
+    ///
+    /// **다만 뷰 '크기'에는 그 안정성이 성립하지 않는다.** 투영은 뷰 크기로 하기 때문이다. 울트라가 정확히
+    /// 그 크기를 바꾼다(같은 머신 실측: 140×170 ↔ 1058×1058 정사각). 큰 뷰에서 계산된 rect 가 작은 뷰에
+    /// 남으면 프리체크가 **영영** 탈락해 캐릭터 정중앙조차 몸체가 아니라고 답한다 = 클릭·드래그 전멸이고,
+    /// 다음 울트라가 캐시를 버릴 때까지 사용자가 할 수 있는 일이 없다(실사용 신고와 같은 증상).
+    /// 그래서 캐시의 열쇠는 **계산할 때의 뷰 크기**다 — 누가 무효화를 잊어도 크기가 다르면 그 캐시는 안 쓴다.
     @ObservationIgnored private var cachedBodyViewRect: NSRect?
+    /// 위 캐시를 계산한 뷰 크기(캐시의 열쇠). nil 이면 캐시도 없다.
+    @ObservationIgnored private var cachedBodyViewSize: NSSize?
 
     private static let reactionActionKey = "check.reaction"
     private static let confettiNodeName = "check.reaction.confetti"
@@ -371,7 +379,7 @@ final class ReactionEngine {
         self.facingNode = node.childNode(withName: CheckCharacter3DScene.facingWrapperName, recursively: false)
         self.sceneRoot = sceneRoot
         self.attachedView = view
-        cachedBodyViewRect = nil // A1: 새 뷰/노드 → 몸체 투영 캐시 무효화(다음 조회에 지연 계산).
+        invalidateBodyHitCache() // A1: 새 뷰/노드 → 몸체 투영 캐시 무효화(다음 조회에 지연 계산).
         let (minB, maxB) = node.boundingBox
         let extent = CGFloat(max(maxB.x - minB.x, max(maxB.y - minB.y, maxB.z - minB.z)))
         modelExtent = extent > 0 ? extent : 1
@@ -770,7 +778,10 @@ final class ReactionEngine {
 
     /// 몸체 투영 캐시를 버린다. 캐시는 "카메라·모델이 고정이라 패널 위치와 무관"하다는 전제로 사는데,
     /// 울트라는 **뷰 크기 자체**를 바꾸므로 그 전제가 깨진다 — 크기 변경 양끝에서 반드시 부른다.
-    func invalidateBodyHitCache() { cachedBodyViewRect = nil }
+    func invalidateBodyHitCache() {
+        cachedBodyViewRect = nil
+        cachedBodyViewSize = nil
+    }
 
     /// 외부(패널 숨김 등)에서 졸기 상태를 강제 종료한다. 포즈까지 identity 로 복원(잔상 방지).
     func stopSleeping() {
@@ -841,7 +852,10 @@ final class ReactionEngine {
     /// 캐릭터 노드 bbox 8코너를 뷰로 투영해 만든 몸체 영역(뷰 로컬, bob/sway 대비 12pt 인플레이트). 1회 계산 후 캐시.
     /// 투영은 카메라·모델이 고정이라 패널 위치와 무관하게 안정적이므로 재배치/드래그로 무효화할 필요가 없다.
     private func projectedBodyViewRect(in view: SCNView) -> NSRect? {
-        if let cachedBodyViewRect { return cachedBodyViewRect }
+        // 크기가 같을 때만 캐시를 믿는다. 이 한 줄이 "무효화를 부를 사람"에 대한 의존을 통째로 없앤다 —
+        // 무효화 호출이 크기 변경보다 **먼저** 일어나는 순서(격발 종료가 그렇다: invalidate → setFrame)에서는
+        // 그 사이에 낀 조회 하나가 옛 크기의 rect 를 다시 박아 넣을 수 있기 때문이다.
+        if let cachedBodyViewRect, cachedBodyViewSize == view.bounds.size { return cachedBodyViewRect }
         guard let node = reactionNode, view.bounds.width > 1, view.bounds.height > 1 else { return nil }
         let (minB, maxB) = node.boundingBox
         let corners = [
@@ -861,6 +875,7 @@ final class ReactionEngine {
         guard maxX > minX, maxY > minY else { return nil }
         let rect = NSRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY).insetBy(dx: -12, dy: -12)
         cachedBodyViewRect = rect
+        cachedBodyViewSize = view.bounds.size   // 이 rect 가 유효한 유일한 크기.
         return rect
     }
 

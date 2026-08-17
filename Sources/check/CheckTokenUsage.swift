@@ -558,9 +558,12 @@ enum TokenUsageIncrementalScanner {
             under: root, cutoff: cutoff,
             matching: { $0.lastPathComponent.hasPrefix("rollout-") && $0.pathExtension == "jsonl" }
         )
+        // 이번 순회에서 실제로 본 경로. 아래 "사라진 파일 정리"가 이 집합을 쓴다.
+        var seenPaths = Set<String>()
         for f in files {
             stats.codexFilesStatted += 1
             let path = f.url.path
+            seenPaths.insert(path)
             let prior = cache.codexFileStates[path]
 
             // 파일별 상태 시작값. 이어읽기면 직전 상태를 잇고, 신규/축소/역행이면 처음부터(0). 월/일 롤오버는 키가 바뀐
@@ -644,6 +647,35 @@ enum TokenUsageIncrementalScanner {
             )
             stats.cacheChanged = true
         }
+
+        // ── 사라진 파일 정리(과다계상의 실제 원인) ───────────────────────────────────────────────
+        //
+        // totals() 는 캐시에 남아 있는 **모든** codex 파일 상태의 monthContribTotal 을 더한다. 그런데 파일이 그 경로에서
+        // 사라져도(삭제·이동) 상태는 캐시에 남는다 — evict 는 mtime 이 직전 월 시작보다 오래된 것만 지우므로 이번 달
+        // 기여는 그 달 내내 살아남는다. 그래서 증분 값이 **전량 재파싱보다 계속 커진다.** 재현(차분 테스트):
+        // 파일 하나를 다른 경로로 옮기면 옛 키와 새 키가 함께 더해져 그 파일 몫이 **정확히 두 배**가 된다.
+        //
+        // 왜 이게 실사용에서 일어나나: Codex CLI 는 오래된 rollout 을 **압축**하고(`codex.rollout_compression.*`,
+        // pre/post_compression_bytes · scanned/removed) 세션을 **`~/.codex/archived_sessions` 로 옮긴다**
+        // (codex-cli 0.144.1 바이너리 문자열로 확인). 둘 다 `~/.codex/sessions/**/rollout-*.jsonl` 에서 그 파일을
+        // 없앤다. 세션이 많은 무거운 사용자일수록 자주 일어나므로 "무거운 사용자만 벌어진다"는 관측과 맞는다.
+        //
+        // 판정이 정확한 이유: monthKey == 현재 월 인 상태는 마지막 갱신 때 mtime 프리필터(cutoff = 이번 달 시작)를
+        // 통과한 파일이고 mtime 은 되돌지 않는다 — 그 파일이 아직 그 경로에 있다면 이번 순회에도 반드시 잡힌다.
+        // 그러므로 "이번 달 키인데 이번 순회에 없다" = 그 경로에 더는 없다. 순회가 I/O 오류로 놓쳤을 가능성만
+        // fileExists 로 한 번 더 확인한다(후보가 있을 때만 도는 stat 이라 평상시 비용 0).
+        // 다른 달 키의 상태는 이번 달 합계에 안 들어가므로 건드리지 않는다(프리필터 밖이라 순회에도 안 잡힌다 —
+        // 여기서 지우면 재개된 세션의 이어읽기 기준선을 헛되이 버린다). 그쪽은 evict 가 mtime 으로 맡는다.
+        //
+        // 지워도 손실이 없다: 그 경로에 파일이 되돌아오면 오프셋 0 부터 다시 파싱되고, 첫 이벤트가 기준선이 되어
+        // 그 파일의 이번 달 델타 합이 전량 재파싱과 **같은 값**으로 재구성된다(비용은 한 번의 재읽기뿐).
+        let beforeStates = cache.codexFileStates.count
+        cache.codexFileStates = cache.codexFileStates.filter { path, state in
+            if state.monthKey != monthString { return true }
+            if seenPaths.contains(path) { return true }
+            return FileManager.default.fileExists(atPath: path)
+        }
+        if cache.codexFileStates.count != beforeStates { stats.cacheChanged = true }
     }
 
     // MARK: 합계 / 퇴거

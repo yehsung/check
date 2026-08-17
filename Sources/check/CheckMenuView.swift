@@ -23,8 +23,6 @@ struct CheckMenuView: View {
     var previewUpdateBanner: Bool = false
     // 스냅샷 전용: 배너에 얹을 패치노트 줄을 강제로 주입한다. 앱에서는 updateCheck?.latestNotes(릴리스 노트 파싱본)만 쓴다.
     var previewUpdateNotes: [String] = []
-    // 스냅샷 전용: 팀 목록 내 행이 별명 편집 행으로 바뀐 상태를 강제로 그린다. 앱에서는 항상 false(연필 토글).
-    var previewEditingDisplayName: Bool = false
     // 스냅샷 전용: 콕찌르기 목록에서 이 사용자의 메시지 작성기가 펼쳐진 상태로 그린다. 앱은 nil(말풍선 버튼 토글).
     var previewMessageComposerUserID: String? = nil
     // 스냅샷 전용: 펼친 작성기 입력칸에 미리 들어가 있는 값(글자수 카운터 상태 재현). 앱은 ""(빈 칸에서 시작).
@@ -243,7 +241,8 @@ struct CheckMenuView: View {
                         )
                     } else if store.isTokenBoardVisible {
                         // AI 토큰 순위 페이지(앱 사용자 전체 공개). 리그와 같은 뼈대(뒤로 + 제목 + 고정 행높이 리스트/스크롤).
-                        // 제목 좌우 ‹ › 로 과거 달을 볼 수 있고(미래 불가), 헤더 끝 눈 버튼은 내 사용량 공개/비공개 토글이다.
+                        // 제목 좌우 ‹ › 로 과거 달을 볼 수 있다(미래 불가). 공개/비공개 **전환**은 설정 창이 가져갔고,
+                        // 여기 남는 것은 그 결과(내 행의 "비공개" 칩)뿐이다 — isMyUsagePublic 은 계속 넘긴다.
                         TokenBoardPanel(
                             entries: store.tokenBoard,
                             myUserID: store.session?.userID,
@@ -257,7 +256,6 @@ struct CheckMenuView: View {
                             canStepForward: TokenBoardMonthNavigator.canStepForward(from: store.tokenBoardMonth),
                             onStepMonth: { store.stepTokenBoardMonth(by: $0) },
                             isMyUsagePublic: store.tokenUsagePublic,
-                            onToggleMyUsagePublic: { store.setTokenUsagePublic(!store.tokenUsagePublic) },
                             // 뒤로도 토글과 같은 닫기 경로를 타야 보던 과거 달이 남지 않는다(다음에 열면 늘 이번 달).
                             onBack: { store.closeTokenBoard() },
                             extraChromeHeight: listExtraChromeHeight,
@@ -323,7 +321,6 @@ struct CheckMenuView: View {
                         TeamPanel(
                             store: store,
                             previewCodeRevealed: previewOwnerCodeRevealed,
-                            previewEditingDisplayName: previewEditingDisplayName,
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
@@ -601,21 +598,32 @@ private struct HeaderGoalSection: View {
                         .font(.caption2)
                         .foregroundStyle(CheckTheme.secondaryText)
                         .monospacedDigit()
-                    // 할 일 기능 on/off. **눈에 보이는 자리**여야 한다 — 처음엔 푸터 전원 버튼 메뉴에, 다음엔
-                    // 캐릭터 버튼 메뉴에 넣었는데 둘 다 Menu 의 보조 화살표라 사실상 없는 것과 같았다
-                    // ("투두 온오프 버튼 대체 어디있어?" 실사용 신고). 푸터는 4버튼이 상한이므로(FooterWidthBudget)
-                    // 그 규칙이 스스로 지정한 넘침 자리인 **내 근무 박스 캡션 행**에 세운다 — 연필/그래프와 같은
-                    // 소형(18pt) 버튼이라 캡션 줄 높이도, 창 높이 예산(700pt 상한)도 1pt 도 늘지 않는다.
-                    // 켜짐이면 accent 로 물들어(isActive) 상태가 hover 없이도 읽힌다 — 기본값이 켜짐이라
-                    // 이 색이 곧 "여기 스위치가 있다"는 신호도 겸한다.
+                    // 설정 창 진입점. 팝오버에서 설정에 닿는 **유일하게 눈에 보이는 길**이다
+                    // (⌘, 는 이미 있지만 아무 데도 적혀 있지 않다 — 앱 메뉴가 없는 LSUIElement 앱이라
+                    //  단축키를 알려 줄 자리 자체가 없다). 이전 진입점이던 전원 버튼 롱프레스는
+                    //  "설정을 보려고 누르면 앱이 꺼지는" 자리였고, 실제로 아무도 못 찾았다.
+                    //
+                    // 왜 여기인가(다른 두 후보를 재 보고 고른 자리다):
+                    //  · 푸터 — 4버튼이 상한이다(FooterWidthBudget). 다섯 번째를 세우면 동기화 문구 슬롯이
+                    //    125→90pt 로 줄어 "소속된 팀이 없어요…"(176pt)가 축소로도 안 들어가 말줄임된다.
+                    //  · 팀 카드 헤더 — 네 번째 버튼이면 팀 이름 폭이 85→50pt(8자→5자)로 잘린다
+                    //    (TeamHeaderWidthBudget — "아잉체크 개발팀"이 "아잉체…"가 된다).
+                    // 남는 곳이 이 캡션 행이고, 그건 위 두 예산이 **스스로 지정한 넘침 자리**다.
+                    // 마침 여기 있던 할 일 토글이 설정 창으로 옮겨 갔으므로 버튼 수는 3개 그대로다 —
+                    // 캡션 여유(실측 122px)와 창 높이 예산(700pt 상한)이 1pt 도 움직이지 않는다.
+                    //
                     // 자리는 그래프/연필의 **왼쪽**이다: 오른쪽 끝부터 세는 손버릇(끝=연필, 끝에서 둘째=내 기록)을
-                    // 건드리지 않아야, 목표를 고치려다 할 일 기능을 꺼 버리는 오클릭이 생기지 않는다.
+                    // 건드리지 않아야, 목표를 고치려다 설정 창을 여는 오클릭이 생기지 않는다.
+                    //
+                    // isActive 를 쓰지 않는다(기본값 false). 이 행의 accent 는 "지금 켜져 있다"는 뜻인데
+                    // 설정 창은 팝오버 **밖**에 사는 별도 창이고, 그 창을 여는 순간 앱이 활성화되며
+                    // MenuBarExtra 팝오버는 닫힌다 — 켜짐을 비출 관찰 대상도, 그걸 볼 화면도 없다.
+                    // 여기서 컨트롤러의 isOpen(비관찰 값)을 읽으면 갱신되지 않는 색만 하나 늘어난다.
                     HeaderCaptionIconButton(
-                        icon: TodoToggleControl.icon,
-                        help: TodoToggleControl.help(isOn: store.isTodoEnabled),
-                        isActive: store.isTodoEnabled
+                        icon: "gearshape.fill",
+                        help: "설정 — 자동 실행 · 할 일 · 별명 · 토큰 공개"
                     ) {
-                        TodoToggleControl.press(store)
+                        CheckSettingsWindowController.shared.show()
                     }
                     // 내 기록(지난주 회고 + 근무 리듬 히트맵). 팀 카드 헤더가 아니라 **내 근무 박스**에 둔다 —
                     // 본인 데이터만 보는 개인 화면이라 자리가 여기가 맞고, 팀 헤더에 네 번째 버튼을 세우면
@@ -677,32 +685,12 @@ private struct HeaderGoalSection: View {
     }
 }
 
-/// 할 일 기능 on/off 버튼의 아이콘·문구·동작 계약(결정적 검증 지점).
-///
-/// 버튼 자체는 SwiftUI 라 테스트에서 누를 수 없다 — 그래서 "누르면 무슨 일이 나는가"를 이 한 곳으로 빼
-/// 테스트가 같은 함수를 눌러 볼 수 있게 한다. 뷰는 이 값·함수를 **그대로만** 쓴다(여기서 갈라지면 회귀).
-///
-/// 문구는 상태 + 그 상태에서 캐릭터를 눌렀을 때 실제로 벌어지는 일 + 이 버튼을 누르면 할 일, 셋을 다 말한다.
-/// 예전 메뉴 문구("캐릭터를 눌러 할 일 열기")는 켠 상태만 서술해, 껐을 때 캐릭터가 아파하는 반응으로
-/// 돌아간다는 걸 아무도 몰랐다.
-enum TodoToggleControl {
-    static let icon = "checklist"
-
-    /// 두 문구 모두 서술어로 문장을 닫는다(같은 행의 선례: "캐릭터 표시 중 — 누르면 숨김").
-    /// "아파하기"를 쓰지 않는 이유: 그건 코드 주석/MARK 에만 살던 **내부 용어**라, 사용자는 그 리액션에
-    /// 이름이 있다는 것조차 모른다. 사용자가 실제로 보는 것(콕 찌르면 반응하는 캐릭터)으로 적는다.
-    static func help(isOn: Bool) -> String {
-        isOn
-            ? "할 일 켜짐 — 캐릭터를 누르면 할 일이 열려요 · 눌러서 끄기"
-            : "할 일 꺼짐 — 캐릭터를 누르면 콕 반응만 해요 · 눌러서 켜기"
-    }
-
-    /// 버튼을 누른 그 순간의 동작. 값은 스토어가 UserDefaults(check.todoEnabled)까지 함께 저장한다.
-    @MainActor
-    static func press(_ store: WorkTimerStore) {
-        store.toggleTodoEnabled()
-    }
-}
+// 여기 있던 `TodoToggleControl`(할 일 on/off 버튼의 아이콘·문구·동작 계약)은 v0.2.32 에 사라졌다.
+// 스위치가 설정 창(`CheckSettingsView` — "캐릭터를 눌러 할 일 열기")으로 이사하면서 팝오버 호출부가
+// 0이 됐고, 그쪽은 토글이라 press(toggle) 가 아니라 `store.setTodoEnabled(_:)` 를 직접 쓴다.
+// 그 문구가 지켜야 할 것(껐을 때 캐릭터가 어떻게 되는지를 말할 것 · 내부 용어 "아파하기"를 사용자
+// 문구로 새어 보내지 말 것)은 사라지지 않았다 — 설정 창 소스를 읽는
+// `todoSwitchWordingStillCoversBothStatesAtItsNewHome`(CheckMenuRenderTests) 이 이어받았다.
 
 /// 헤더 목표 캡션 행 전용 소형 아이콘 버튼(18pt). 캡션(caption2) 행 높이를 키우지 않으면서 hover 배경과
 /// 툴팁으로 버튼임을 드러낸다 — 표준 IconButton(27pt)을 쓰면 이 행만 세로로 부풀어 배치가 어색해진다.
@@ -710,7 +698,9 @@ enum TodoToggleControl {
 private struct HeaderCaptionIconButton: View {
     let icon: String
     let help: String
-    let isActive: Bool
+    /// accent 로 물들일지. 이 행에서 accent 는 **"지금 켜져 있다"**는 뜻이므로, 상태가 없는 단순 진입
+    /// 버튼(설정 창 열기)은 기본값(false)을 그대로 쓴다 — 늘 켜진 색은 상태 신호를 죽인다.
+    var isActive: Bool = false
     let action: () -> Void
 
     @State private var hovering = false
@@ -838,12 +828,11 @@ enum MemberRowNameWidthBudget {
 private struct TeamPanel: View {
     // store 를 통째로 받아 대부분의 값을 파생 읽기한다. 초단위(displayNow) 의존은 잎 뷰로 격리하므로
     // 본체는 displayNow 를 읽지 않는다 — 매초 재정렬/재계산이 사라진다.
-    // @Bindable 인 이유: 별명 편집 입력이 $store.displayNameDraft 로 바인딩된다(HeaderCard 선례).
-    @Bindable var store: WorkTimerStore
+    // @Bindable 이 아니라 let 인 이유: 여기서 쓰던 유일한 쓰기 바인딩($store.displayNameDraft)이
+    // 별명 편집과 함께 설정 창으로 옮겨 갔다. 읽기만 하는 지금은 @Bindable 이 붙을 자리가 없다.
+    let store: WorkTimerStore
     // 스냅샷 전용: 참여코드 인라인 행이 펼쳐진 상태로 그린다(키 버튼 클릭을 대신). 앱은 false.
     var previewCodeRevealed: Bool = false
-    // 스냅샷 전용: 내 행이 별명 편집 행으로 바뀐 상태로 그린다(연필 배지 클릭을 대신). 앱은 false.
-    var previewEditingDisplayName: Bool = false
     // 목록 위쪽에서 배너/토큰 행이 먹은 높이(pt). 그만큼 무스크롤 표시 행수를 줄여 창 상한을 지킨다.
     var extraChromeHeight: CGFloat = 0
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
@@ -855,13 +844,11 @@ private struct TeamPanel: View {
     init(
         store: WorkTimerStore,
         previewCodeRevealed: Bool = false,
-        previewEditingDisplayName: Bool = false,
         extraChromeHeight: CGFloat = 0,
         clipsOverflowInsteadOfScroll: Bool = false
     ) {
         self.store = store
         self.previewCodeRevealed = previewCodeRevealed
-        self.previewEditingDisplayName = previewEditingDisplayName
         self.extraChromeHeight = extraChromeHeight
         self.clipsOverflowInsteadOfScroll = clipsOverflowInsteadOfScroll
         _showsInviteCode = State(initialValue: previewCodeRevealed)
@@ -967,58 +954,20 @@ private struct TeamPanel: View {
             } else {
                 ForEach(sortedMembers) { member in
                     let isMe = myUserID != nil && member.id == myUserID
-                    Group {
-                        if isMe, isEditingName {
-                            DisplayNameEditorRow(
-                                avatarName: member.name,
-                                avatarURL: member.avatarURL,
-                                text: $store.displayNameDraft,
-                                // displayNow 를 읽지 않는다 — 스토어가 refreshDisplayNameLock 으로 밀어 넣은
-                                // 결과만 본다. 여기서 store.displayNow 를 읽으면 팀 카드 서브트리 전체가
-                                // 매초 무효화된다(이 파일이 세 곳에 주석까지 남기며 금지한 회귀).
-                                isLocked: store.isDisplayNameLocked,
-                                isSaving: store.isUpdatingDisplayName,
-                                notice: noticeText(),
-                                isNoticeError: store.isDisplayNameNoticeError,
-                                onSave: { saveName() },
-                                onCancel: { store.cancelEditingDisplayName() }
-                            )
-                        } else {
-                            TeamMemberLiveRow(
-                                store: store,
-                                member: member,
-                                teamGoalSeconds: store.teamGoalSeconds,
-                                isMe: isMe,
-                                onPickAvatar: isMe ? { store.updateAvatar(imageData: $0) } : nil,
-                                // 내 행에만 편집 진입을 붙인다(아바타 편집이 이미 같은 조건으로 붙는다).
-                                // 별명 편집 진입점은 앱 전체에서 **여기 하나뿐**이다 — 헤더에 하나 더 세우면
-                                // listExtraChromeHeight 예산과 700pt 상한 테스트를 다시 맞춰야 한다.
-                                onBeginEditName: isMe ? { store.beginEditingDisplayName(currentName: member.name) } : nil
-                            )
-                        }
-                    }
-                    // 두 분기가 같은 58pt 를 쓰게 하는 것이 이 배선의 전부다. 높이를 분기 안으로 옮기면
-                    // 목록 총 높이가 편집 여부에 따라 달라져 창이 700pt 상한을 넘는다.
+                    // 별명 편집 진입(연필 배지 → 인라인 편집 행)이 여기 있었다. 설정 창의 "별명" 행이
+                    // **별명의 단일 거처**가 되면서 통째로 걷어냈다 — 같은 값을 두 군데서 고칠 수 있으면
+                    // 쿨타임(주 1회)·중복 검사 같은 서버 규칙 앞에서 두 화면의 안내가 언젠가 어긋난다.
+                    // 이름 자체는 그대로 보인다(행이 없어진 게 아니라 편집 진입만 없어졌다).
+                    TeamMemberLiveRow(
+                        store: store,
+                        member: member,
+                        teamGoalSeconds: store.teamGoalSeconds,
+                        isMe: isMe,
+                        onPickAvatar: isMe ? { store.updateAvatar(imageData: $0) } : nil
+                    )
+                    // 행 높이는 계속 상수로 고정한다 — 목록 총 높이가 내용에 따라 흔들리면 창이 700pt 상한을 넘는다.
                     .frame(height: CheckTheme.memberRowHeight)
                 }
-            }
-        }
-    }
-
-    private var isEditingName: Bool { store.isEditingDisplayName || previewEditingDisplayName }
-
-    /// 안내 줄 우선순위: 스토어가 세운 notice(실패 사유 또는 쿨타임) > 기본 도움말.
-    /// 색은 store.isDisplayNameNoticeError 가 정한다 — notice != nil 로 추측하면 쿨타임 안내까지 빨갛게 뜬다.
-    private func noticeText() -> String {
-        store.displayNameNotice
-            ?? "\(WorkTimerStore.displayNameMaxLength)자까지 · 다른 사람과 겹칠 수 없어요"
-    }
-
-    /// 성공했을 때만 편집 행을 닫는다(실패 시 입력값을 유지해 바로 고쳐 재시도) — 헤더 목표 편집기와 같은 규약.
-    private func saveName() {
-        Task { @MainActor in
-            if await store.updateDisplayName(store.displayNameDraft) {
-                store.isEditingDisplayName = false
             }
         }
     }
@@ -1077,8 +1026,9 @@ private struct TeamMemberLiveRow: View {
     let teamGoalSeconds: Int
     let isMe: Bool
     var onPickAvatar: ((Data) -> Void)? = nil
-    /// 내 행 별명 편집 진입(팀 목록의 유일한 진입점). 남의 행에서는 nil 이라 연필 자리조차 만들지 않는다.
-    var onBeginEditName: (() -> Void)? = nil
+    // 별명 편집 진입(onBeginEditName) 통로가 여기 있었다. 설정 창이 별명의 단일 거처가 되면서 걷어냈다 —
+    // TeamMemberRow 의 인자는 남아 있지만(그 파일은 이 작업의 소유가 아니다) 아무도 넘기지 않으므로
+    // 연필 배지는 어느 행에도 그려지지 않는다.
 
     var body: some View {
         let now = store.displayNow
@@ -1097,8 +1047,7 @@ private struct TeamMemberLiveRow: View {
             meetsWeeklyGoal: member.hasMetWeeklyGoal(goalSeconds: teamGoalSeconds, now: now),
             goalFraction: goalFraction,
             isMe: isMe,
-            onPickAvatar: isMe ? onPickAvatar : nil,
-            onBeginEditName: isMe ? onBeginEditName : nil
+            onPickAvatar: isMe ? onPickAvatar : nil
         )
     }
 
@@ -1340,10 +1289,9 @@ private struct TokenBoardPanel: View {
     var canStepForward: Bool = false
     // 월 이동 액션(-1=과거, +1=미래). 값+클로저로만 받아 렌더 테스트가 스토어 없이도 상태를 재현할 수 있게 한다.
     var onStepMonth: (Int) -> Void = { _ in }
-    // 내 토큰 사용량 공개 여부. 헤더 눈 버튼 아이콘/툴팁과 내 행 "비공개" 미니 칩 노출을 가른다.
+    // 내 토큰 사용량 공개 여부. 내 행에 "비공개" 미니 칩을 붙일지만 가른다 —
+    // **전환은 여기서 하지 않는다**(설정 창의 "AI 토큰 사용량 공개" 스위치가 유일한 집이다).
     var isMyUsagePublic: Bool = true
-    // 공개/비공개 토글 액션. nil 이면 헤더에 눈 버튼을 그리지 않는다(렌더 테스트에서 토글 없는 상태 재현).
-    var onToggleMyUsagePublic: (() -> Void)? = nil
     var onBack: () -> Void = {}
     // 현재 KST 날짜 'YYYY-MM-DD'. 행이 서버의 todayDate 와 비교해 "오늘 +N"(오늘분) 표시 여부를 가른다.
     // 기본은 실시간 계산 — 렌더 테스트는 픽스처와 같은 오늘 키를 쓰도록 주입한다(결정성). 렌더 시점에 1회 평가된다.
@@ -1389,16 +1337,10 @@ private struct TokenBoardPanel: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 IconButton(icon: "arrowtriangle.right.fill", help: "다음 달", enabled: canStepForward) { onStepMonth(1) }
+                // 공개/비공개 눈 버튼이 있던 자리. 설정 창으로 옮겼다 — "한 번 정하고 잊는" 값이라
+                // 순위판을 볼 때마다 손 닿는 곳에 있을 이유가 없고, 같은 스위치가 두 군데 있으면 언젠가 어긋난다.
+                // Spacer 는 남긴다: 제목이 짧은 달에도 월 이동 버튼 묶음이 왼쪽에 붙어 있어야 한다.
                 Spacer(minLength: 2)
-                // 내 사용량 공개/비공개 토글 — 토글 액션이 있을 때만 노출한다. 비공개면 남들 보드에서 내 행이 숨겨진다.
-                if let onToggleMyUsagePublic {
-                    IconButton(
-                        icon: isMyUsagePublic ? "eye" : "eye.slash",
-                        help: isMyUsagePublic ? "내 사용량 공개 중 — 누르면 나만 보기" : "내 사용량 비공개 중 — 누르면 공개",
-                        tint: isMyUsagePublic ? CheckTheme.secondaryText : CheckTheme.accent,
-                        action: onToggleMyUsagePublic
-                    )
-                }
             }
             PanelDivider()
             entryList
@@ -2090,8 +2032,9 @@ private struct PokePanel: View {
     // 직접 입력 초안. 대상을 바꾸면 비운다(앞사람에게 쓰던 말이 뒷사람 칸에 남아 오발송되지 않게).
     @State private var draft: String = ""
 
-    // 스냅샷 미리보기가 켜져 있으면 그 값이 이긴다(TeamPanel 의 previewEditingDisplayName 선례 —
-    // @State 시드용 init 을 만들지 않고도 펼친 상태를 그대로 그릴 수 있다).
+    // 스냅샷 미리보기가 켜져 있으면 그 값이 이긴다. 파생 프로퍼티 한 줄이라 @State 시드용 init 이 필요 없다
+    // — 같은 문제를 init 으로 푼 쪽(TeamCard 의 previewCodeRevealed → _showsInviteCode 시드)과 대비된다.
+    // 시드는 "처음 한 번"이라 이후 토글이 미리보기를 덮지만, 이쪽은 미리보기가 늘 이겨 렌더가 결정적이다.
     private var activeComposerUserID: String? { previewComposingUserID ?? composingUserID }
 
     private var draftBinding: Binding<String> {
@@ -2950,10 +2893,10 @@ private struct FooterBar: View {
             // 새 버튼이 필요하면 푸터가 아니라 관련 카드(예: 내 근무 박스 캡션 행)로 보낸다.
             // 캐릭터 표시 on/off. **메뉴가 아니라 그냥 버튼**이다 — 여기에 Menu 를 씌워 '할 일' 스위치를
             // 숨겨 봤지만, 전원 버튼 메뉴와 똑같이 아무도 못 여는 자리였다(보조 화살표는 hover 전엔 보이지도
-            // 않는다). 할 일 스위치는 내 근무 박스 캡션 행으로 올려 보냈고(HeaderGoalSection), 이 버튼은
-            // 아이콘 하나가 현재 상태를 그대로 말하는 원래의 단순한 토글로 되돌린다.
+            // 않는다). 할 일 스위치는 설정 창(CheckSettingsView)이 가져갔고, 이 버튼은 아이콘 하나가
+            // 현재 상태를 그대로 말하는 원래의 단순한 토글로 되돌린다.
             // 덤: Menu 는 ImageRenderer 가 그리지 못해(자리에 노란 경고 상자가 박힌다) 렌더 회귀 테스트의
-            // 사각지대였다 — 버튼으로 되돌리며 푸터 전체가 다시 픽셀로 검증된다.
+            // 사각지대였다 — 푸터에 Menu 가 하나도 남지 않은 지금, 푸터 전체가 픽셀로 검증된다.
             IconButton(
                 icon: store.isOverlayEnabled ? "person.fill" : "person.fill.xmark",
                 help: store.isOverlayEnabled ? "캐릭터 표시 중 — 누르면 숨김" : "캐릭터 숨김 — 누르면 표시"
@@ -2966,52 +2909,21 @@ private struct FooterBar: View {
             IconButton(icon: "rectangle.portrait.and.arrow.right", help: "로그아웃") {
                 store.signOut()
             }
-            // 전원 버튼: 클릭은 그대로 즉시 종료(primaryAction — 기존 근육기억 보존), 꾹 누르거나
-            // 화살표를 열면 '로그인 시 자동 실행' 토글이 나온다. 푸터는 4버튼이 상한이라(FooterWidthBudget)
-            // 다섯 번째 버튼 대신 기존 자리에 메뉴를 겹친다. "껐는데 다시 켜진다"는 불만의 해소 지점 —
-            // 자동 실행을 끄는 수단이 시스템 설정 밖으로 나와야 한다.
-            PowerMenuButton(store: store)
+            // 전원 버튼: **그냥 버튼이다.** v0.2.17 이 '로그인 시 자동 실행' 토글을 숨길 자리를 찾다가 이 자리를
+            // Menu 로 바꿨는데, 딸려온 대가가 셋이었다:
+            //  · 색 — Menu 의 label 에는 AppKit 이 자기 틴트를 입혀 `.foregroundStyle(CheckTheme.danger)` 가
+            //    무시된다. 위험을 알리는 빨강이 화면에서 흰색으로 그려졌다("왜 하얀색이 됐냐" 실사용 신고).
+            //  · 오작동 — primaryAction 이 종료라, 설정을 보려고 눌러 본 클릭이 확인 없이 앱을 껐다.
+            //  · 발견 불가 — 토글은 꾹 누르거나 hover 때만 보이는 화살표를 열어야 나왔다(아무도 못 찾았다).
+            // 자동 실행 토글은 설정 창(CheckSettingsView)으로 옮겼으므로 여기 남을 이유가 없다.
+            // 시각 언어도 이 한 줄로 다시 IconButton(12pt semibold · 27pt 원형)에 수렴한다.
+            IconButton(icon: "power", help: "앱 종료", tint: CheckTheme.danger) {
+                NSApplication.shared.terminate(nil)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .panelStyle()
-    }
-}
-
-/// 푸터의 전원 메뉴. IconButton 과 같은 시각 언어(12pt 세미볼드 아이콘, 27pt 원형 배경)를 유지한다.
-private struct PowerMenuButton: View {
-    @Bindable var store: WorkTimerStore
-    @State private var hovering = false
-    @State private var launchAtLogin = true
-
-    var body: some View {
-        Menu {
-            Toggle("로그인 시 자동 실행", isOn: Binding(
-                get: { launchAtLogin },
-                set: { wanted in
-                    // applyUserToggle 이 **사용자 의도까지** 남긴다. 여기서 setLaunchAtLoginEnabled 만
-                    // 부르면 끈 사실이 어디에도 안 남아, 다음 실행의 자동 등록이 그대로 되켜 버린다
-                    // (기본값이 켜짐이 된 뒤로 이 경로가 유일한 탈출구다).
-                    // 쓰기 실패(권한 등)면 실상태를 되읽어 UI 가 거짓말하지 않게 한다.
-                    launchAtLogin = LoginItemRegistrar.applyUserToggle(wanted)
-                }
-            ))
-            Button("앱 종료") { NSApplication.shared.terminate(nil) }
-        } label: {
-            Image(systemName: "power")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(hovering ? CheckTheme.primaryText : CheckTheme.danger)
-                .frame(width: 27, height: 27)
-                .background(Circle().fill(Color.white.opacity(hovering ? 0.14 : 0.06)))
-        } primaryAction: {
-            NSApplication.shared.terminate(nil)
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .onHover { hovering = $0 }
-        .help("클릭: 앱 종료 · 길게 누르기: 자동 실행 설정")
-        .onAppear { launchAtLogin = LoginItemRegistrar.isLaunchAtLoginEnabled() }
     }
 }
 
@@ -3497,7 +3409,9 @@ struct PasswordResetEntryLink: View {
         raw.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// 눌린 그 순간의 동작(TodoToggleControl.press 선례).
+    /// 눌린 그 순간의 동작. 버튼 action 은 오프스크린 렌더에서 증명할 수 없으므로, 누르면 벌어지는 일을
+    /// 이렇게 순수 함수 하나로 빼 두는 것이 이 저장소의 관례다(예전 선례 `TodoToggleControl.press` 는
+    /// 그 컨트롤이 설정 창으로 이사하며 사라졌고, 관례만 남았다).
     func press() {
         begin(Self.emailToCarry(email))
     }

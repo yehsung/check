@@ -161,6 +161,12 @@ final class CheckOverlayController {
     // A1: 커서가 캐릭터 몸체 위인지 추적하는 전역 mouseMoved 모니터(패널 표시 중에만 설치). 몸체 위면 클릭 통과를
     // 잠시 해제(ignoresMouseEvents=false)해 우리 창이 클릭을 소비·리액션/드래그로 쓰고, 몸체 밖(여백 포함)은 통과.
     private var mouseMoveMonitor: Any?
+    // ★ 같은 목적의 **로컬** 모니터. 전역 모니터는 "남의 앱으로 배달되는 이벤트"만 본다 — 우리 앱이 활성이면
+    //   커서 이동은 우리 앱으로 배달되므로 전역 모니터가 **한 건도 못 받는다**(실측: 같은 머신에서 mouseMoved
+    //   12건을 합성했을 때 비활성 구간 global=13/local=0, 활성 구간 **global=0/local=13**).
+    //   전역 모니터가 이 기계의 유일한 입구였기 때문에, 활성 구간에서는 updateHitThrough 가 영영 안 불려
+    //   `ignoresMouseEvents` 가 true 로 굳고 **캐릭터를 클릭도 드래그도 못 하게 된다**.
+    private var localMouseMoveMonitor: Any?
     // 드래그 임시 상태(다운~업 사이에만 유효).
     private var dragAnchor: NSPoint = .zero        // 좌클릭 다운 시점의 마우스 좌표.
     private var originAtDragStart: NSPoint = .zero // 다운 시점의 패널 origin.
@@ -203,7 +209,13 @@ final class CheckOverlayController {
     var isBoardOpen: (() -> Bool)?
 
     /// 울트라 격발 중에만 유효한 원복 상태. nil 이면 격발 중이 아니다(isUltraActive 의 근거).
-    private struct UltraRestoreState { let frame: NSRect; let hadMouseMonitor: Bool }
+    ///
+    /// `startedAt` 은 **이 격발이 시작된 시각**이고 마감의 유일한 근거다(재수신마다 armUltraRestore 가
+    /// 다시 찍는다 = 5초 재시작). 마감을 별도 저장 필드로 두지 않는 이유: 두 값이 갈리는 순간
+    /// "격발 중인데 마감이 없다"는 조합이 생기고, 그 조합에서는 **아무도 원복을 강제하지 못한다** —
+    /// 이 기능의 유일한 치명 사고 모드가 정확히 그것이다. 상태와 마감을 한 몸으로 묶으면 그 조합 자체가
+    /// 존재할 수 없다(ultraDeadline 은 이 값에서 파생만 한다).
+    private struct UltraRestoreState { let frame: NSRect; let hadMouseMonitor: Bool; var startedAt: Date }
     private var ultraRestoreState: UltraRestoreState?
     /// 정상 원복 타이머(5초).
     private var ultraTask: Task<Void, Never>?
@@ -211,8 +223,14 @@ final class CheckOverlayController {
     ///   deadline 이 지나면 여기서 강제로 원복한다. 격발 중 화면이 클릭을 먹으므로, 영원히 덮인 채 남으면
     ///   사용자는 화면을 되찾을 수단이 없다(메뉴바와 ⌘⌥Esc 뿐이다).
     private var ultraWatchdogTask: Task<Void, Never>?
-    /// 격발이 반드시 걷혀야 하는 시각. 헤드리스 검증 지점이자 워치독의 판정 근거(한 곳에서만 계산).
-    private(set) var ultraDeadline: Date?
+    /// 격발이 반드시 걷혀야 하는 시각. 헤드리스 검증 지점이자 워치독의 판정 근거.
+    ///
+    /// **저장하지 않고 원복 상태에서 파생한다.** 저장 필드였을 때는 "격발 중(원복 상태 있음)인데 마감은
+    /// nil" 이나 그 반대가 원리적으로 가능했고(두 대입이 서로 다른 경로에 흩어져 있었다), 앞의 조합에서는
+    /// 시간 기반 방어가 통째로 무력해진다. 파생값이면 두 사실이 언제나 같은 한 값에서 나온다.
+    var ultraDeadline: Date? {
+        ultraRestoreState.map { $0.startedAt.addingTimeInterval(ultraDeadlineSeconds) }
+    }
     /// 격발 세대. 재수신으로 5초를 리셋할 때마다 오른다. 취소된 옛 워치독이 즉시 깨어나 **방금 시작한**
     /// 격발을 잘라먹는 것을 막는 유일한 수단이다(취소 여부만 봐서는 두 경우를 구분할 수 없다).
     private var ultraGeneration = 0
@@ -256,6 +274,8 @@ final class CheckOverlayController {
     /// 이 값만 쓴다. 이게 없으면 히트-스루 기계(updateHitThrough / restorePassThroughAfterExit)가
     /// 커서 위치에 따라 값을 뒤집어 5초 격발이 "막다 말다" 하는 최악의 상태가 된다.
     private var pinnedIgnoresMouseEvents: Bool?
+    /// 엔진의 몸체 투영 캐시를 계산한 패널 크기(자세한 이유는 `isBodyAtScreenPointFresh`).
+    private var bodyHitCacheSize: NSSize?
     /// `updateWorking` 재진입 래치. AppKit 이 우리 자신의 프레임 변경 도중에 SwiftUI 를 평가해
     /// `.onChange` → updateWorking 을 되부르는 것을 막는다(자세한 이유는 updateWorking 주석).
     private var isUpdatingWorking = false
@@ -264,8 +284,15 @@ final class CheckOverlayController {
     var isUltraActive: Bool { ultraRestoreState != nil }
     /// 헤드리스 검증 지점. '이 클래스가 A1 히트-스루 기계를 떼었는가'를 고정한다.
     var hasMouseMoveMonitor: Bool { mouseMoveMonitor != nil }
+    /// 헤드리스 검증 지점. **우리 앱이 활성일 때의 유일한 입구**(로컬 모니터)를 달았는가.
+    /// 이 값이 false 인 채로 패널이 떠 있으면 활성 구간에서 캐릭터가 클릭·드래그를 통째로 잃는다.
+    var hasLocalMouseMoveMonitor: Bool { localMouseMoveMonitor != nil }
     /// 헤드리스 검증 지점. '클릭 통과 값을 못 박았는가'(nil = 평시 자동 토글).
     var pinnedIgnoresMouseEventsValue: Bool? { pinnedIgnoresMouseEvents }
+    /// 헤드리스 검증 지점. 몸체 투영 캐시를 **어느 패널 크기에서** 허용했는가(nil = 아직 물어본 적 없음).
+    /// 엔진이 스스로 뷰 크기로 캐시를 키잉하므로 이 층은 두 번째 겹이다 — 그래서 동작으로는 관측되지 않고,
+    /// 이 값이 그 겹이 실제로 살아 있음을 고정하는 유일한 지점이다.
+    var bodyHitCacheSizeValue: NSSize? { bodyHitCacheSize }
     /// 헤드리스 검증 지점. 메시지 펌프가 도는 중인가(shouldBeVisible·nudgeSchedulerRunning 과 같은 성격).
     /// **평시 false 여야 한다** — 큐가 비었는데 true 면 상시 루프가 하나 남은 것이다.
     var isDrainingMessages: Bool { messageDrainTask != nil }
@@ -521,14 +548,32 @@ final class CheckOverlayController {
                 self?.updateHitThrough(at: NSEvent.mouseLocation)
             }
         }
+        // ★ 우리 앱이 **활성**인 동안의 유일한 입구. 전역 모니터는 그 구간에 한 건도 받지 못한다(실측 수치는
+        //   localMouseMoveMonitor 선언부 주석). 이 앱은 LSUIElement 라 평소엔 비활성이지만, 설정 창은
+        //   `NSApp.activate()` 로 **명시적으로 활성화**하고(CheckSettingsWindow) 활성 상태는 **창을 닫아도
+        //   풀리지 않는다** — 같은 머신 실측: accessory 앱이 창을 닫은 뒤에도 isActive=true 가 유지됐고,
+        //   사용자가 다른 앱을 클릭한 순간에야 전역 모니터가 다시 이벤트를 받았다. 즉 이 줄이 없으면
+        //   "설정을 한 번 열었더니 그 뒤로 캐릭터가 안 움직인다"가 되고, 근무 종료·재시작으로도 안 풀린다
+        //   (그 경로는 전역 모니터를 다시 달 뿐이고, 그 모니터가 침묵 중이다).
+        //   반환한 이벤트는 손대지 않고 그대로 흘린다 — 우리는 관찰만 한다.
+        localMouseMoveMonitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] event in
+            MainActor.assumeIsolated {
+                self?.updateHitThrough(at: NSEvent.mouseLocation)
+            }
+            return event
+        }
     }
 
-    /// 전역 mouseMoved 모니터를 끄고, 드래그 상태와 클릭 통과를 초기 상태(통과)로 되돌린다(숨김 중 유실 대비).
+    /// mouseMoved 모니터(전역·로컬)를 끄고, 드래그 상태와 클릭 통과를 초기 상태(통과)로 되돌린다(숨김 중 유실 대비).
     private func removeMouseMoveMonitor() {
         if let mouseMoveMonitor {
             NSEvent.removeMonitor(mouseMoveMonitor)
         }
         mouseMoveMonitor = nil
+        if let localMouseMoveMonitor {
+            NSEvent.removeMonitor(localMouseMoveMonitor)
+        }
+        localMouseMoveMonitor = nil
         isDragCandidate = false
         didDrag = false
         // 숨김/리셋 시 정면 복귀(드래그 중 숨겨져 mouseUp 이 유실돼도 방향이 남지 않게).
@@ -543,8 +588,63 @@ final class CheckOverlayController {
     /// (테스트 진입점이라 internal 이다 — 격발 중 이 문을 두드려도 값이 안 흔들린다는 U3 못 박기를
     ///  헤드리스로 실증하려면 밖에서 부를 수 있어야 한다.)
     func updateHitThrough(at screenPoint: NSPoint) {
-        guard shouldBeVisible, !isDragCandidate else { return }
-        setIgnoresMouseEvents(!engine.isBodyAtScreenPoint(screenPoint))
+        guard shouldBeVisible else { return }
+        // ★ 사용자가 캐릭터 근처에서 마우스를 움직이는 **바로 그 순간** 굳은 문을 스스로 연다. 아래 셋은
+        //   전부 "열려 있어야 정상인데 닫힌 채 남을 수 있는" 값이고, 닫힌 채 남으면 증상이 똑같다 —
+        //   캐릭터가 클릭도 드래그도 안 먹는다. 태스크가 전부 죽은 세계에서도 이 경로는 살아 있다.
+        recoverStuckInputGates()
+        guard !isDragCandidate else { return }
+        setIgnoresMouseEvents(!isBodyAtScreenPointFresh(screenPoint))
+    }
+
+    /// 마우스가 우리 문을 두드릴 때마다 도는 자가 복구. **여기서 고치는 것은 전부 '값이 굳은 상태'다.**
+    ///
+    /// 이 파일의 입력 경로는 사슬 하나다: 마우스 이동 → updateHitThrough → `ignoresMouseEvents=false`
+    /// → 패널이 클릭을 받음 → handleMouseDown. 사슬 앞쪽 값이 하나라도 굳으면 뒤는 전부 죽는데,
+    /// 그 굳음을 풀어 줄 사람이 지금까지 **다음 울트라뿐**이었다(실사용 신고: "울트라 맞고 나서 풀렸다").
+    /// 근무 종료·재시작은 이 값들을 건드리지 않으므로 사용자가 스스로 할 수 있는 일이 없었다.
+    ///
+    /// `now` 는 테스트 주입점이다(시각 판정을 벽시계에서 떼어 낸다).
+    func recoverStuckInputGates(now: Date = Date()) {
+        // ① 상한을 넘긴 격발. 정상 타이머·워치독이 **둘 다** 죽은 세계(취소 유실·스케줄 유실·앱 정지)에서도
+        //    사용자가 캐릭터를 만지는 순간 여기서 걷힌다. 마감 전에는 절대 걷지 않는다 — 5초 격발은
+        //    가려야 하고, 격발 중 드래그를 허용하면 화면만 한 패널이 끌려가 saveOffset 이 전체화면 기준
+        //    오프셋을 영속해 사용자가 캐릭터를 두었던 자리가 영영 날아간다.
+        if isUltraActive, let deadline = ultraDeadline, now >= deadline {
+            endUltraTakeover()
+        }
+        // ② 주인 없는 못 박기. 못 박기는 격발만 걸고 endUltraTakeover 만 푸는데, 그 짝이 어떤 이유로든
+        //    어긋나면 `setIgnoresMouseEvents` 가 인자를 통째로 무시해 히트-스루가 영구 정지한다.
+        if pinnedIgnoresMouseEvents != nil, !isUltraActive {
+            pinIgnoresMouseEvents(nil)
+        }
+        // ③ 주인 없는 드래그 후보. mouseUp 은 유실될 수 있고(다른 Space·앱 전환·창 유실 — 이 파일이
+        //    여러 곳에서 이미 그 전제를 적어 두었다), 유실되면 `isDragCandidate` 가 true 로 남아
+        //    **updateHitThrough 자신이 위에서 막힌다** = 통과값이 굳는다. 버튼이 실제로 눌려 있지 않다면
+        //    그 후보는 유령이다(진짜 드래그 중에는 pressedMouseButtons 의 0번 비트가 서 있다).
+        if isDragCandidate, NSEvent.pressedMouseButtons & 1 == 0 {
+            isDragCandidate = false
+            didDrag = false
+            engine.setDragFacing(0)
+            facingHysteresis.reset()
+        }
+    }
+
+    /// 몸체 판정을 묻되, **패널 크기가 달라졌으면 엔진의 투영 캐시를 먼저 버린다.**
+    ///
+    /// 엔진 캐시는 "카메라·모델이 고정이라 패널 위치와 무관"하다는 전제로 사는데 그 전제는 **크기**에는
+    /// 성립하지 않는다 — 투영은 뷰 크기로 하기 때문이다. 울트라가 그 크기를 화면만 하게 바꿨다 되돌리므로,
+    /// 큰 뷰에서 계산된 rect 가 작은 뷰에 남으면 프리체크가 **영영** 탈락한다(같은 머신 실측: 926 정사각에서
+    /// 캐시를 채운 뒤 140×170 으로 줄이면 캐릭터 정중앙조차 몸체가 아니라고 답한다 → 클릭·드래그 전멸,
+    /// 다음 울트라가 캐시를 버릴 때까지 복구 불가 = 신고된 증상과 같다).
+    /// 크기를 기억해 두고 달라졌을 때만 버리므로 평시 비용은 NSSize 비교 한 번이다.
+    private func isBodyAtScreenPointFresh(_ screenPoint: NSPoint) -> Bool {
+        let size = panel.frame.size
+        if bodyHitCacheSize != size {
+            engine.invalidateBodyHitCache()
+            bodyHitCacheSize = size
+        }
+        return engine.isBodyAtScreenPoint(screenPoint)
     }
 
     /// 커서가 호스팅 뷰(패널) 밖으로 나갔을 때: 통과로 되돌린다(이후엔 전역 모니터가 다시 감지). 드래그 중엔 유지.
@@ -582,7 +682,9 @@ final class CheckOverlayController {
     /// 사용자가 캐릭터를 두었던 자리가 영영 날아간다.
     private func withinBody(_ screenPoint: NSPoint) -> Bool {
         if isUltraActive { return false }
-        return engine.hasAttachedView ? engine.isBodyAtScreenPoint(screenPoint) : panel.frame.contains(screenPoint)
+        return engine.hasAttachedView
+            ? isBodyAtScreenPointFresh(screenPoint)
+            : panel.frame.contains(screenPoint)
     }
 
     /// 좌클릭 다운: 표시 중이고 몸체 위면 드래그 후보로 삼는다(리액션은 아직 발화하지 않고 업 시점에 판정).
@@ -591,6 +693,9 @@ final class CheckOverlayController {
     /// 업 시점의 saveOffset 이 **전체화면 프레임 기준 오프셋**을 영속해 사용자가 캐릭터를 두었던 자리가
     /// 영영 날아간다. 클릭은 패널이 먹되(막는 게 목적) 아무 일도 일어나지 않는 것이 맞다.
     func handleMouseDown(at location: NSPoint) {
+        // 굳은 문은 여기서도 먼저 연다 — 이 이벤트가 그 문을 통과해 들어왔더라도(패널이 클릭을 받는 상태),
+        // 상한을 넘긴 격발이 남아 있으면 아래 `!isUltraActive` 가드가 이 클릭을 통째로 버린다.
+        recoverStuckInputGates()
         guard shouldBeVisible, !isUltraActive, withinBody(location) else { return }
         isDragCandidate = true
         didDrag = false
@@ -956,7 +1061,11 @@ final class CheckOverlayController {
         let takeoverStart = Date()
 
         if !isRefresh {
-            ultraRestoreState = UltraRestoreState(frame: panel.frame, hadMouseMonitor: mouseMoveMonitor != nil)
+            ultraRestoreState = UltraRestoreState(
+                frame: panel.frame,
+                hadMouseMonitor: mouseMoveMonitor != nil,
+                startedAt: takeoverStart
+            )
             // A1 히트-스루 기계를 떼고(60Hz 토글 중단) 클릭 통과를 **true 로 못 박는다** = 가리되 막지 않는다.
             //
             // 한때 false(패널이 클릭을 먹어 화면을 실제로 막음)로 두었다가 되돌렸다. 실사용 확인 결과
@@ -1001,8 +1110,10 @@ final class CheckOverlayController {
     private func armUltraRestore(startedAt start: Date) {
         ultraGeneration &+= 1
         let generation = ultraGeneration
-        let deadline = start.addingTimeInterval(ultraDeadlineSeconds)
-        ultraDeadline = deadline
+        // 마감의 유일한 근거를 여기서 다시 찍는다(재수신이면 5초 재시작 = 마감도 그만큼 뒤로).
+        // 값 자체는 원복 상태 안에 있으므로 "격발 중인데 마감이 없다"는 조합이 생기지 않는다.
+        ultraRestoreState?.startedAt = start
+        guard let deadline = ultraDeadline else { return }
         let duration = ultraDurationSeconds
         // 워치독은 고정 상수가 아니라 **마감까지 남은 시간**만 잔다. 고정 상수로 자면 마감을 앞당겨 잡아 봐야
         // 실제 원복은 (블로킹 시간 + 상수) 뒤라 상한이 그대로 밀린다 — 마감을 '기록'만 하고 '집행'하지 않는 꼴.
@@ -1052,7 +1163,11 @@ final class CheckOverlayController {
     func endUltraTakeover(restoresVisibility: Bool = true) {
         ultraTask?.cancel(); ultraTask = nil
         ultraWatchdogTask?.cancel(); ultraWatchdogTask = nil
-        ultraDeadline = nil
+        // ★ 세대를 올려 **취소된 워치독이 즉시 깨어나는** 이 저장소의 함정을 한 번 더 막는다
+        //   (`try? await Task.sleep` + cancel 은 취소가 아니라 즉시 실행이다). 지금은 뒤따르는
+        //   `isUltraActive` 가드가 막아 주지만, 그 가드는 "원복 상태가 이미 비었다"는 순서에 기대고 있다 —
+        //   세대는 순서에 기대지 않는다.
+        ultraGeneration &+= 1
         // ★ 안전밸브: 못 박기 해제는 **guard 보다 위**다. 못 박기만 걸린 채 복원 상태가 없어지는 경로가
         //   하나라도 생기면 화면이 영영 클릭을 먹는다 — 격발의 유일한 치명 사고 모드다. 못 박기가
         //   안 걸려 있으면 아무것도 하지 않는다(평시 히트-스루 값을 여기서 건드리면 커서가 몸체 위에

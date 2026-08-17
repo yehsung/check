@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 이미 배선돼 있어야 캐릭터 등장과 밀린 찔림이 통째로 유실되지 않는다.
         overlayController = CheckOverlayController(store: store, updateCheck: updateCheck)
         wireTodoBoard()
+        wireSettingsWindow()
         // 로그인 시 자동 실행은 **전원의 기본값**이다. 매 실행마다 판단해서 등록이 사라져 있으면(brew 로
         // .app 번들이 교체되면 실제로 사라진다) 되살린다. 사용자가 끈 것은 두 갈래 모두 존중한다 —
         // 앱 토글로 끈 것은 userTurnedOffKey 로, 시스템 설정에서 끈 것은 .requiresApproval 상태로 걸러진다.
@@ -96,6 +97,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defaults: .standard,
             isTodoEnabled: { [weak self] in self?.store.isTodoEnabled ?? false }
         )
+    }
+
+    /// 설정 창을 배선한다(실행당 1회). **창의 수명은 컨트롤러가 들고, 여는 경로는 세 갈래로 모인다**:
+    /// 팝오버의 기어 버튼(`CheckSettingsWindowController.shared.show()`), ⌘,, 그리고 아래 `@objc` 액션.
+    ///
+    /// 담는 뷰는 컨트롤러의 기본값(`CheckSettingsView`)이다 — 여기서 다시 적으면 조립 지점이 둘이 된다.
+    private func wireSettingsWindow() {
+        CheckSettingsWindowController.shared.configure(store: store)
+        CheckSettingsShortcut.install { CheckSettingsWindowController.shared.show() }
+        // 실행 중인 앱에서 창이 **실제로** 떴는지 밖에서 재기 위한 문(인자가 없으면 아무 일도 안 한다).
+        // 이 저장소에서 창 검증은 CGWindowList 실측 없이는 성립하지 않는다 — 근거는 그 타입 주석 참고.
+        CheckSettingsWindowProbe.startIfRequested()
+    }
+
+    /// 설정 창을 여는 표준 AppKit 액션. `NSApp.sendAction(#selector(...), to: nil, from: nil)` 로
+    /// 반응 체인을 타고 닿을 수 있어야, 나중에 메뉴 항목이나 다른 표면이 붙을 때 배선이 하나로 남는다.
+    @objc func showSettingsWindow(_ sender: Any?) {
+        CheckSettingsWindowController.shared.show()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

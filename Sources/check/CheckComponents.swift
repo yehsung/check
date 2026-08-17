@@ -334,67 +334,13 @@ struct TeamMemberRow: View {
     }
 }
 
-// MARK: - Display name inline editor row (팀 목록 내 행)
-
-/// 내 행을 **대체**하는 별명 인라인 편집 행.
-/// 높이가 TeamMemberRow 와 같은 memberRowHeight(58)로 호출부에서 고정되므로, 목록 행수·ListRowBudget·
-/// 스크롤 상한(maxVisibleRows)·창 높이 예산(listExtraChromeHeight)이 **하나도 움직이지 않는다**.
-/// 헤더 목표 편집기처럼 아래로 펼치는 방식이었다면 새 예산 상수와 최악 조합 상한 테스트를 다시 맞춰야 했다 —
-/// 이 저장소에서 가장 비싼 제약을 건드리지 않는 쪽을 택했다.
-///
-/// 높이 수납: 입력 행 ~24 + spacing 2 + 캡션 ~13 = ~39pt ≤ 58pt.
-struct DisplayNameEditorRow: View {
-    let avatarName: String
-    var avatarURL: URL? = nil
-    @Binding var text: String
-    /// 쿨타임 등으로 지금은 바꿀 수 없음 — 입력·저장을 잠그고 안내만 보여 준다.
-    let isLocked: Bool
-    let isSaving: Bool
-    /// 1줄 안내. 평소엔 도움말, 실패하면 사유, 잠겼으면 언제 가능한지.
-    /// 세 상태가 **같은 자리**를 써서 행 높이가 흔들리지 않는다(높이가 흔들리면 창 전체가 튄다).
-    let notice: String
-    /// 실패 사유일 때 danger 색으로 칠할지(도움말·쿨타임은 secondaryText).
-    /// notice != nil 로 추측하면 "일주일에 한 번" 쿨타임 안내까지 빨갛게 떠 사용자가 실패로 읽는다.
-    let isNoticeError: Bool
-    let onSave: () -> Void
-    let onCancel: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            CheckAvatarView(name: avatarName, avatarURL: avatarURL, size: 26)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    TextField("새 별명", text: $text)
-                        .textFieldStyle(.plain)
-                        .font(.subheadline)
-                        .foregroundStyle(CheckTheme.primaryText)
-                        .tint(CheckTheme.accent)
-                        .lineLimit(1)
-                        .disabled(isLocked || isSaving)
-                        .accessibilityLabel("새 별명")
-                        // Enter 저장 — 헤더 목표 편집기와 같은 손맛.
-                        .onSubmit(onSave)
-                    Button("저장", action: onSave)
-                        .font(.caption2)
-                        // 저장 왕복 중에도 잠근다 — 연타로 두 번째 요청이 나가면 쿨타임을 태운 채 실패한다.
-                        .disabled(isLocked || isSaving)
-                    Button(action: onCancel) {
-                        Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .help("취소")
-                    .accessibilityLabel("별명 변경 취소")
-                }
-                Text(notice)
-                    .font(.caption2)
-                    .foregroundStyle(isNoticeError ? CheckTheme.danger : CheckTheme.secondaryText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-        }
-    }
-}
+// 여기 있던 `DisplayNameEditorRow`(내 행을 대체하던 별명 인라인 편집 행)는 v0.2.32 에 사라졌다.
+// 별명 편집의 유일한 거처가 설정 창(CheckSettingsView 의 DisplayNameSettingsRow)이 되면서 소스
+// 호출부가 0이 됐다. 그 뷰가 지고 있던 제약("58pt 고정 행 안에 수납해 목록 행수·스크롤 상한·창 높이
+// 예산을 1pt 도 흔들지 않는다")은 함께 사라졌다 — 설정 창은 세로로 늘어나도 되는 창이다.
+// 다만 **안내 한 줄의 색 분기**(도움말·쿨타임은 secondaryText, 실패 사유만 danger)는 그대로 살아
+// 설정 창이 이어받았다. notice != nil 로 색을 추측하면 "일주일에 한 번" 안내가 빨갛게 떠 사용자가
+// 실패로 읽는다는 그 사고가 여전히 가능해서다 — DisplayNameUITests 가 새 집에서 그걸 지킨다.
 
 // MARK: - Team weekly totals (per-team list)
 

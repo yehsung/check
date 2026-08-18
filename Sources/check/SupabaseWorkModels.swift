@@ -338,7 +338,7 @@ struct TokenUsageUpsertRequest: Encodable {
     let todayTotal: Int
     let todayDate: String
 
-    // ── Codex 집계 진단(codex_diag_*, 전부 Int · 앱 빌드당 1회만 값이 실린다) ──
+    // ── Codex 집계 진단(codex_diag_*, 전부 Int · "<빌드>:<KST 날짜>" 도장당 1회만 값이 실린다) ──
     //
     // **옵셔널인 것이 이 설계의 전부다.** 합성 Encodable 은 Optional 프로퍼티를 encodeIfPresent 로 내보내므로
     // nil 이면 JSON 본문에 **키 자체가 없고**, PostgREST 의 upsert(INSERT … ON CONFLICT DO UPDATE)는
@@ -347,7 +347,7 @@ struct TokenUsageUpsertRequest: Encodable {
     // 기능 전체가 무의미해진다. 실측으로 확인했다 — diagnostics 가 nil 인 본문에는 codex_diag_ 로 시작하는
     // 키가 하나도 나오지 않는다(아래 init 주석의 인코딩 결과 참조).
     //
-    // 중첩 객체가 아니라 18개를 **펼쳐** 담는 이유: 서버가 스칼라 컬럼 18개라 jsonb 하나로는 upsert 되지 않는다.
+    // 중첩 객체가 아니라 19개를 **펼쳐** 담는 이유: 서버가 스칼라 컬럼 19개라 jsonb 하나로는 upsert 되지 않는다.
     // 전 필드가 Int 인 것은 프라이버시의 구조적 보증이다(CodexUsageDiagnostics 주석) — 문자열을 더하지 마라.
     var codexDiagFilesTotal: Int?
     var codexDiagFilesMonth: Int?
@@ -371,17 +371,39 @@ struct TokenUsageUpsertRequest: Encodable {
     // 이월 수정 **전** 옛 산식의 총합이라, 같은 행에서 신·구 산식을 나란히 놓고 차이를 빼 볼 수 있게 한다.
     //
     // 위 13개와 완전히 같은 규약이다 — **옵셔널이 핵심**(nil = 키 생략 = 서버 값 보존), 전부 Int(문자열 금지),
-    // 새 필드는 마지막에. 이 5개도 앱 빌드당(정확히는 "<빌드>:<월>" 도장당) 1회만 값이 실린다.
+    // 새 필드는 마지막에. 이 5개도 "<빌드>:<KST 날짜>" 도장당 1회만 값이 실린다(도장이 월→일 단위가 되어 하루 1회).
     var codexDiagLegacyTotal: Int?
     var codexDiagBigDeltaCount: Int?
     var codexDiagBigDeltaTotal: Int?
     var codexDiagMaxDeltaGapS: Int?
     var codexDiagBigGapMedianS: Int?
+
+    // ── 3차: 진단을 **잰 그 순간의 Codex 총합** 스냅샷(codex_diag_input_at_scan) ──
+    //
+    // 위 18개와 `codex_input` 은 **서로 다른 시각의 값**이었다. `codex_input` 은 업로드마다(30초) 갱신되는데
+    // 진단은 도장당 1회만 계산되므로, 진단을 올린 뒤 Codex 를 더 쓴 사람은 codex_input 만 자라고 진단은 얼어 있다.
+    // 그래서 `legacy_total − codex_input` 같은 뺄셈이 진단 이후의 사용량까지 섞어 **음수**를 낸다
+    // (실사고: -4,297,774,877 — 진단 이후 43억을 더 쓴 것이 차이에 섞였다).
+    // 이 한 필드가 그 뺄셈에 쓸 **같은 시각의 분모**를 준다: 진단이 실린 그 업로드의 Codex 총합.
+    //
+    // 규약은 위 18개와 완전히 같다 — **옵셔널이 핵심**이다. nil 이면 키가 빠져 PostgREST 가 이 컬럼을 건드리지 않으므로,
+    // 진단이 안 실리는 평상시 업로드(30초마다)가 이 스냅샷을 덮지 않는다. 옵셔널이 아니면 매 업로드마다 갱신돼
+    // codex_input 과 똑같아지고 이 필드의 존재 이유가 통째로 사라진다.
+    //
+    // 값의 출처는 아래 생성자다 — 인자로 받지 않고 **같은 본문에 실리는 codexInput+codexOutput 에서 파생**시킨다.
+    // 호출측이 따로 넘기게 두면 행에 실린 Codex 합과 스냅샷이 어긋날 여지가 생기는데, 그 어긋남이 정확히
+    // 이 필드가 없애려던 결함이다. 파생이면 구조적으로 불가능하다.
+    var codexDiagInputAtScan: Int?
 }
 
 extension TokenUsageUpsertRequest {
-    /// 진단 스냅샷을 18개 스칼라로 펼쳐 담는 생성자. **diagnostics 가 nil 이면 18개 필드가 전부 nil 로 남아**
+    /// 진단 스냅샷을 19개 스칼라로 펼쳐 담는 생성자. **diagnostics 가 nil 이면 19개 필드가 전부 nil 로 남아**
     /// 인코딩 결과에서 codex_diag_* 키가 통째로 사라진다(= 서버의 기존 진단값 보존).
+    ///
+    /// 19번째(codexDiagInputAtScan)만 diagnostics 안이 아니라 **이 생성자가 받은 codexInput+codexOutput 에서 파생**된다
+    /// (= 같은 본문의 codex_input+codex_output, 즉 usage.codexTotal). 진단 스캐너는 앱의 월간 집계를 모르므로 그쪽에
+    /// 넣을 수 없고, 넣더라도 "행에 실린 값"과 "스냅샷"이 다른 경로로 오는 순간 어긋날 수 있다. 여기서 파생시키면
+    /// 두 값이 같은 한 줄에서 나와 구조적으로 일치한다. diagnostics 가 nil 이면 이 필드도 nil 이다(키 생략).
     ///
     /// nil 로 인코딩한 실물(keyEncodingStrategy = .convertToSnakeCase):
     /// {"user_id":"…","month":"2026-08","device_id":"…","claude_input":11,"claude_output":22,
@@ -433,7 +455,11 @@ extension TokenUsageUpsertRequest {
             codexDiagBigDeltaCount: diagnostics?.bigDeltaCount,
             codexDiagBigDeltaTotal: diagnostics?.bigDeltaTotal,
             codexDiagMaxDeltaGapS: diagnostics?.maxDeltaGapSeconds,
-            codexDiagBigGapMedianS: diagnostics?.bigGapMedianSeconds
+            codexDiagBigGapMedianS: diagnostics?.bigGapMedianSeconds,
+            // 진단이 실릴 때만 값이 생긴다(nil 이면 키 생략 → 서버 스냅샷 보존). 값은 이 본문의 Codex 총합 그 자체.
+            // codexTotal 을 쓰는 이유: 앱은 Codex 델타를 입출력 구분 없이 전액 codexInput 에 담고 codexOutput 은 항상 0 이라
+            // 오늘은 codexInput 과 같은 값이지만, 훗날 출력을 쪼개 담더라도 "그 업로드의 Codex 총합"이라는 뜻이 유지된다.
+            codexDiagInputAtScan: diagnostics.map { _ in codexInput + codexOutput }
         )
     }
 }

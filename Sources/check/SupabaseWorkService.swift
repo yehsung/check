@@ -584,9 +584,12 @@ actor SupabaseWorkService {
     /// 반환 없음(return=minimal) — 표시는 별도 fetchTokenBoard 로 다시 읽는다. usage.month 는 D1 이 계산한 KST 'YYYY-MM'.
     ///
     /// diagnostics 는 Codex 집계 진단(codex_diag_*)이고 **기본값 nil** 이다. 호출측(WorkTimerStoreSync)은
-    /// 앱 빌드당 1회만 값을 채워 보낸다 — nil 이면 본문에서 codex_diag_* 키가 통째로 빠지고, PostgREST 는
-    /// 본문에 없는 컬럼을 갱신하지 않으므로 서버에 이미 쌓인 진단값이 매 30초 업로드에 지워지지 않는다
-    /// (TokenUsageUpsertRequest 의 진단 필드 주석 참조). 진단값은 순위판 RPC 에 실리지 않는다 — 운영자만 DB 에서 본다.
+    /// "<빌드>:<KST 날짜>" 도장당 1회(= 하루 1회)만 값을 채워 보낸다 — nil 이면 본문에서 codex_diag_* 키가 통째로
+    /// 빠지고, PostgREST 는 본문에 없는 컬럼을 갱신하지 않으므로 서버에 이미 쌓인 진단값이 매 30초 업로드에
+    /// 지워지지 않는다 (TokenUsageUpsertRequest 의 진단 필드 주석 참조).
+    /// 그 19개 중 codex_diag_input_at_scan 은 여기서 따로 넘기지 않는다 — 요청 생성자가 아래 usage.codexInput/
+    /// codexOutput 에서 파생시킨다(= usage.codexTotal). 행에 실린 Codex 합과 스냅샷이 어긋날 수 없게 하는 장치다.
+    /// 진단값은 순위판 RPC 에 실리지 않는다 — 운영자만 DB 에서 본다.
     func upsertTokenUsage(
         accessToken: String,
         userID: String,

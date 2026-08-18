@@ -223,10 +223,12 @@ extension WorkTimerStore {
         // 이 한 줄이 아래 await 동안의 재진입도 함께 막는다 — 진단 계산을 기다리는 사이 다른 호출이 들어와도
         // 이 스탬프에 걸려 되돌아가므로 같은 주기가 두 번 올라가지 않는다.
         lastTokenUploadAt = now
-        // Codex 집계 진단(앱 빌드당 1회). **이 줄이 수집 거부 가드 뒤에 있는 것이 요건이다** — 위
+        // Codex 집계 진단(빌드+KST 날짜당 1회 = 하루 1회). **이 줄이 수집 거부 가드 뒤에 있는 것이 요건이다** — 위
         // `guard tokenUsageCollect` 에서 이미 빠져나가므로 거부자에게선 계산도 업로드도 일어나지 않는다.
-        // 이미 보고한 빌드면 nil 을 돌려주며 스캔 자체를 건너뛴다(전량 순회라 비싸다).
-        let diagnostics = await codexDiagnosticsIfUnreported(month: usage.month)
+        // 오늘 이미 보고했으면 nil 을 돌려주며 스캔 자체를 건너뛴다(전량 순회라 비싸다).
+        // now 를 넘기는 이유: 도장 산식이 KST 날짜를 쓰는데, 판정과 아래 찍기가 **같은 now** 를 봐야
+        // 자정을 걸친 업로드에서 "판정은 어제·도장은 오늘"로 갈려 하루가 통째로 재보고되는 일이 없다.
+        let diagnostics = await codexDiagnosticsIfUnreported(month: usage.month, now: now)
         // 세대는 이 await 뒤에 잡는다 — 스캔을 기다리는 사이 계정이 갈렸다면 아래 요청은 새 세션으로 나가므로,
         // 비교 대상도 그 시점의 세대여야 멀쩡한 업로드가 헛되이 버려지지 않는다.
         let generation = sessionGeneration
@@ -280,10 +282,10 @@ extension WorkTimerStore {
             // 한계 하나는 분명히 해 둔다: 이 도장이 증명하는 것은 **전송 성공**이지 **저장 확인**이 아니다.
             // 서버의 수집 거부 트리거는 행을 조용히 버리고도 204 를 돌려주므로(설정이 아직 안 내려온 창에서
             // 일어날 수 있다), 그 경우 이 달의 진단은 다시 시도되지 않는다 — 거부자에게는 그게 옳은 결과다.
-            // 도장에 쓰는 build/month 는 방금 보낸 값 그 자체다(진단이 잰 빌드 + 업로드한 행의 달).
+            // 도장에 쓰는 build/now 는 방금 판정에 쓴 값 그 자체다(진단이 잰 빌드 + 위 게이트가 본 같은 now).
             if let diagnostics {
                 defaults.set(
-                    Self.codexDiagnosticsStamp(build: diagnostics.appBuild, month: usage.month),
+                    Self.codexDiagnosticsStamp(build: diagnostics.appBuild, now: now),
                     forKey: Self.codexDiagnosticsReportedStampKey
                 )
             }
@@ -302,13 +304,22 @@ extension WorkTimerStore {
         }
     }
 
-    /// 마지막으로 Codex 진단을 **서버에 올린** 시점의 도장(UserDefaults). 값은 "<CFBundleVersion>:<KST 월>"
-    /// 문자열이다(예 "39:2026-08"). 진단 관련 키는 이것 하나뿐이다 — 빌드만 담던 키는 남기지 않았다.
+    /// 마지막으로 Codex 진단을 **서버에 올린** 시점의 도장(UserDefaults). 값은 "<CFBundleVersion>:<KST 날짜>"
+    /// 문자열이다(예 "39:2026-08-18"). 진단 관련 키는 이것 하나뿐이다 — 빌드만 담던 키는 남기지 않았다.
     ///
-    /// **왜 빌드만으로는 안 되는가**(이 도장의 요점): 진단이 답해야 하는 질문은 "**이번 달**에 왜 부풀었나"다.
-    /// 빌드 단위 도장이면 한 달에 한 번이 아니라 **설치당 한 번**이 되어, 달 초에 찍힌 사람은 그 달 내내
-    /// 거의 빈 스냅샷을 서버에 고정해 둔 채 정작 사용량만 쌓는다(실측: 이 맥의 2026-08 은 전 필드 0,
-    /// 6·7월엔 실데이터). 다음 달에 같은 현상이 이어져도 관측되지 않는다. 월을 섞으면 그 두 구멍이 닫힌다.
+    /// **왜 빌드만으로는 안 되는가**(이 도장의 출발점): 진단이 답해야 하는 질문은 "**지금** 왜 부풀었나"다.
+    /// 빌드 단위 도장이면 **설치당 한 번**이 되어, 한 번 찍힌 사람은 그 뒤로 거의 빈 스냅샷을 서버에 고정해 둔 채
+    /// 정작 사용량만 쌓는다(실측: 이 맥의 2026-08 은 전 필드 0, 6·7월엔 실데이터).
+    ///
+    /// **왜 월로도 모자라는가**(월 → 날짜로 바꾼 이유, 두 가지):
+    /// (1) 진단과 codex_input 의 **시각 어긋남**. codex_input 은 30초마다 갱신되는데 진단은 도장당 1회라,
+    ///     월 도장이면 스냅샷과 현재값이 최대 한 달까지 벌어진다(음수 정정량 사고의 원인).
+    /// (2) **재발을 못 본다**. v0.2.32 가 고친 증분 캐시 유령 항목이 다시 쌓이는지는 반복 측정으로만 보이는데,
+    ///     월 도장은 사용자당 월 1표본뿐이라 시계열이 서지 않는다. 날짜 도장이면 하루 1표본이 쌓인다.
+    /// 비용은 무시할 수준이다 — 전량 패스가 이 맥 실측 444파일 0.39초, 하루 한 번이다.
+    ///
+    /// **마이그레이션 코드는 없다.** 옛 키에 월 형식("39:2026-08")이 들어 있던 사용자는 날짜 형식과 자연히
+    /// 불일치해 다음 실행에 1회 더 보고하고 그 뒤로 하루 1회 리듬을 탄다 — 그게 원하는 동작이다.
     ///
     /// **UserDefaults 에 영속하는 이유**(reportedAppVersionStamp 는 일부러 메모리에만 둔다):
     /// 저쪽은 못 보내면 남이 나에게 메시지를 못 보내는 **기능**이라 실행마다 다시 말해 자가치유해야 하지만,
@@ -322,19 +333,26 @@ extension WorkTimerStore {
     /// 도장 문자열의 **유일한** 산식. 건너뛸지 판정하는 곳(codexDiagnosticsIfUnreported)과 찍는 곳
     /// (업로드 성공 지점)이 반드시 이 함수를 함께 쓴다 — 두 곳이 각자 문자열을 만들면 한 글자만 어긋나도
     /// 판정이 영영 불일치해 30초마다 전량 스캔을 도는(정반대의) 사고가 된다.
-    /// month 는 업로드하는 행과 같은 KST 'YYYY-MM'(D1 이 계산한 usage.month)이라 도장과 데이터의 달이 어긋나지 않는다.
-    static func codexDiagnosticsStamp(build: Int, month: String) -> String {
-        "\(build):\(month)"
+    ///
+    /// 날짜는 **TokenUsageIncrementalScanner.dayBounds(now:).date** 가 준다 — 여기서 새로 계산하지 않는다.
+    /// 이 저장소는 KST 경계 산식이 흩어지면 어긋난 이력이 있어, "오늘 +N" 창을 가르는 그 함수 하나만 쓴다
+    /// (D1 이 usage.todayDate 에 담는 값과 같은 산식이라, 도장의 날짜와 업로드한 행의 날짜가 어긋나지 않는다).
+    static func codexDiagnosticsStamp(build: Int, now: Date) -> String {
+        "\(build):\(TokenUsageIncrementalScanner.dayBounds(now: now).date)"
     }
 
-    /// 이 빌드·이 달에 아직 진단을 보고하지 않았다면 계산해 돌려준다. 이미 보고했거나 빌드를 모르면 **nil**
+    /// 이 빌드·오늘(KST) 아직 진단을 보고하지 않았다면 계산해 돌려준다. 이미 보고했거나 빌드를 모르면 **nil**
     /// (= 업로드 본문에 codex_diag_* 키가 붙지 않고, 서버의 기존 진단값이 그대로 보존된다).
     ///
     /// 호출 규약: **반드시 `guard tokenUsageCollect` 뒤에서 부를 것.** 수집을 거부한 사람에게선 업로드는 물론
     /// 계산(홈 디렉터리 순회)도 일어나면 안 된다. 이 함수 자신은 그 플래그를 보지 않는다 — 가드는 호출부에 있다.
     ///
     /// 비싼 부분(전량 순회, 실측 0.39초/444파일)은 Task.detached(.utility) 에서 돈다. 메인 액터는 await 로
-    /// 비켜 주므로 화면은 멈추지 않는다. 30초마다 이 비용을 치르지 않게 막는 것이 위의 도장이다.
+    /// 비켜 주므로 화면은 멈추지 않는다. 30초마다 이 비용을 치르지 않게 막는 것이 위의 도장이다(하루 1회로 줄인다).
+    ///
+    /// month 와 now 는 역할이 다르다: **month 는 무엇을 재는가**(스캐너가 집계할 대상 달 = 업로드하는 행의 달),
+    /// **now 는 언제 재는가**(도장의 날짜). 둘을 한 인자로 합치지 마라 — 달 경계 첫날에 어제(지난달) 도장으로
+    /// 이번 달 진단을 건너뛰거나 그 반대가 된다.
     ///
     /// 빌드를 모르면(개발 빌드 등 CFBundleVersion 미심음) 계산하지 않는다: 진단값은 **어느 산식이 만든
     /// 숫자인가**와 짝일 때만 쓸모가 있어서, 출처 없는 숫자를 서버에 남기면 코호트 분석이 오히려 오염된다
@@ -343,11 +361,11 @@ extension WorkTimerStore {
     /// 실패는 없다 — 스캐너는 던지지 않고, 홈에 ~/.codex 가 없으면 0으로 채운 스냅샷을 돌려준다
     /// (그 0 도 "이 기기는 Codex 를 안 쓴다"는 유효한 관측이다). 이 함수가 어떤 값을 돌려주든 본 기능인
     /// 토큰 업로드는 그대로 진행된다.
-    func codexDiagnosticsIfUnreported(month: String) async -> CodexUsageDiagnostics? {
+    func codexDiagnosticsIfUnreported(month: String, now: Date) async -> CodexUsageDiagnostics? {
         guard let build = appVersionProvider()?.build, build > 0 else { return nil }
-        // 이 빌드 + 이 달로 이미 한 번 올렸으면 여기서 끝난다 — 스캔에 들어가지 않는다.
+        // 이 빌드 + 오늘 날짜로 이미 한 번 올렸으면 여기서 끝난다 — 스캔에 들어가지 않는다.
         guard defaults.string(forKey: Self.codexDiagnosticsReportedStampKey)
-                != Self.codexDiagnosticsStamp(build: build, month: month) else { return nil }
+                != Self.codexDiagnosticsStamp(build: build, now: now) else { return nil }
         // 홈은 메인 액터에서 미리 읽어 값으로 넘긴다(detached 클로저가 캡처하는 것은 Sendable 한 URL 뿐).
         let home = FileManager.default.homeDirectoryForCurrentUser
         return await Task.detached(priority: .utility) {

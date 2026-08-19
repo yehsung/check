@@ -264,6 +264,9 @@ extension WorkTimerStore {
         ultraBalanceFailed = false
         applyUltraBalance(response.balance)
         if let cap = response.balanceCap, ultraBalanceCap != cap { ultraBalanceCap = cap }
+        // 무제한 깃발은 **서버가 준 값 그대로**다. nil(구버전 서버)은 isUnlimited 가 false 로 접는다 —
+        // 모를 때 무제한이라고 말하면 그건 만들어 낸 사실이다.
+        if ultraUnlimited != response.isUnlimited { ultraUnlimited = response.isUnlimited }
         let rows = MissionProgress.rows(from: response)
         if missions != rows { missions = rows }
         if !missionsLoaded { missionsLoaded = true }

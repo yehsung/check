@@ -104,6 +104,10 @@ func ownSessionStillAutoStopsOnWake() {
     store.start(now: sleepAt.addingTimeInterval(-3_600))
     // start() 는 소유권을 확정하는 지점이라 표식이 반드시 내려가 있어야 한다.
     #expect(!store.adoptedRemoteSession)
+    // v0.2.35: 잠자기 마감 시각이 min(뚜껑 닫은 시각, 마지막 의미 있는 입력)으로 정밀해졌다.
+    // 이 테스트가 고정하는 것은 **표식이 마감을 막지 않는다**이지 마감 시각 정책이 아니므로,
+    // "뚜껑을 닫기 직전까지 타이핑하고 있었다"를 명시해 원래 의도만 남긴다(헤드리스라 하트비트가 돌지 않는다).
+    store.lastMeaningfulInputAt = sleepAt
 
     store.handleSleep(at: sleepAt)
     store.handleWake(at: sleepAt.addingTimeInterval(10 * 60))
@@ -227,6 +231,9 @@ func startClearsAdoptionMarkSoOwnSessionStaysClosable() {
     #expect(!store.adoptedRemoteSession)
 
     // 표식이 남아 있었다면 아래 잠자기 마감이 통째로 막힌다.
+    // v0.2.35 의 잠자기 시각 정밀화(min(뚜껑, 마지막 입력))는 이 테스트의 관심사가 아니므로
+    // "뚜껑 직전까지 입력이 있었다"를 명시한다(헤드리스라 하트비트가 그 값을 전진시키지 못한다).
+    store.lastMeaningfulInputAt = t0.addingTimeInterval(60)
     store.handleSleep(at: t0.addingTimeInterval(60))
     store.handleWake(at: t0.addingTimeInterval(60 + 10 * 60))
     #expect(store.startedAt == nil)

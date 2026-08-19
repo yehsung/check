@@ -1848,8 +1848,23 @@ func popoverStaysWithinHeightCapForWorstBannerAndPanelCombinations() throws {
     addUndoBanner(insights)
     try measure("insights+banners", CheckMenuView(store: insights, previewUpdateBanner: true, previewUpdateNotes: sampleUpdateNotes))
 
+    // (g) 홈: 자리 비움 복원 배너(보조줄 한 줄이 붙어 인라인 배너보다 높다) + 목표 편집 인라인 행.
+    //     복원 배너는 **근무 중에도** 뜨므로 12시간 확인 배너와 같은 화면에 설 수 있는 유일한 조합이다
+    //     (실제로 그려지는 건 하나지만, 예산 계산이 틀리면 목록이 한 행 더 남아 창이 넘친다).
+    let away = teamStore()
+    addAwayRestorable(away, now: now)
+    try measure("home+awayRestore+goalEditor", CheckMenuView(store: away, previewGoalEditing: true))
+
+    // (h) 하위 패널 + 복원 배너. 배너는 홈에만 있는 것이 아니다 — 헤더 카드 아래 형제라 리그/토큰/찌르기
+    //     화면 위에도 그대로 얹힌다(그 자리에서 복원 버튼을 잃으면 안 되므로 의도한 동작이다).
+    let awayPanel = teamStore()
+    addAwayRestorable(awayPanel, now: now)
+    awayPanel.leaderboard = manyLeaderboardEntries(count: 12)
+    awayPanel.isLeaderboardVisible = true
+    try measure("league+awayRestore", CheckMenuView(store: awayPanel))
+
     // 모든 조합이 측정됐는지(렌더 실패로 조용히 건너뛰지 않았는지) 확인한다.
-    #expect(cases.count == 6)
+    #expect(cases.count == 8)
 }
 
 /// 배너는 한 번에 하나만 그린다 — 겹쳐 쌓이면 창이 상한을 넘기 때문. 회고 배너가 떠 있어도 12시간 확인
@@ -4256,4 +4271,567 @@ private func enclosingBlock(of source: String, containing index: String.Index) -
         cursor = source.index(after: cursor)
     }
     return nil
+}
+
+// MARK: - 자리 비움 복원 도달률 (v0.2.35 — 메뉴바 + 팝오버 배너)
+//
+// 이 릴리스에서 임계가 2시간 30분으로 내려가 "점심+회의 3시간"이 끊긴다. 끊긴 사람이 복원 창(6시간)
+// 안에 배너를 보지 못하면 그 시간은 **영구 소실**된다 — 그래서 아래 테스트들은 문구가 아니라
+// **도달**(메뉴바 글자가 실제로 달라지는가, 배너가 실제 픽셀로 그려지는가, 배너가 다른 배너에 밀려
+// 사라지지 않는가)을 잰다.
+
+private func awayRestorableSession(
+    startedAt: Date,
+    endedAt: Date,
+    remainingSeconds: Int = 18_000,
+    reason: AutoCloseReason = .away
+) -> AwayRestorableSession {
+    AwayRestorableSession(
+        sessionID: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        startedAt: startedAt,
+        endedAt: endedAt,
+        autoClosedAt: endedAt.addingTimeInterval(9_000),
+        reason: reason,
+        expiresAt: endedAt.addingTimeInterval(21_600),
+        remainingSeconds: remainingSeconds
+    )
+}
+
+/// 스토어에 '복원 가능한 자리 비움 마감'을 세운다. 소유 계정 잠금(awayStateOwnerUserID)까지 맞춰야
+/// restorableAwaySession 이 값을 돌려준다 — 그 잠금이 남의 마감을 새 계정 화면에 띄우지 않는 장치다.
+@MainActor
+private func addAwayRestorable(
+    _ store: WorkTimerStore,
+    now: Date,
+    workedSeconds: Int = 11_400,
+    remainingSeconds: Int = 18_000
+) {
+    store.awayStateOwnerUserID = store.session?.userID
+    store.awayRestorable = awayRestorableSession(
+        startedAt: now.addingTimeInterval(-TimeInterval(workedSeconds) - 9_000),
+        endedAt: now.addingTimeInterval(-9_000),
+        remainingSeconds: remainingSeconds
+    )
+}
+
+@Test
+func menuBarSpeaksAwayInsteadOfOffWhileTheRestoreWindowIsOpen() {
+    let plain = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
+    let away = plain.markingAwayRestorable(true)
+
+    // 평소 비근무는 한 글자도 바뀌지 않는다(38명 전원이 매일 보는 화면이다).
+    #expect(MenuBarStatusFormatter.title(for: plain) == "오프")
+    #expect(MenuBarStatusFormatter.symbolName(for: plain) == "pause.circle.fill")
+
+    // 복원 창이 열려 있으면 글자와 심볼이 **함께** 달라진다(둘 중 하나만 바뀌면 캐릭터를 켠 사람이 못 본다).
+    #expect(MenuBarStatusFormatter.title(for: away) == "자리비움")
+    #expect(MenuBarStatusFormatter.symbolName(for: away) == "moon.zzz.fill")
+
+    // 근무 중에도 복원 창은 열려 있을 수 있다 — 자동 시작이 방금 사람을 근무중으로 되돌린 그 순간이다.
+    // 그때 표식을 접으면 캐릭터를 끈 사람에게 능동 채널이 0이 되고, 6시간 뒤 그날 오전이 영구 소실된다.
+    // 시계(MM:SS)는 근무 중 가장 많이 읽히는 정보라 살려 두고, 뒤에 점 하나 + 심볼로만 말한다.
+    let working = WorkStatusSnapshot(status: .working, elapsedSeconds: 84).markingAwayRestorable(true)
+    #expect(MenuBarStatusFormatter.title(for: working) == "01:24•")
+    #expect(MenuBarStatusFormatter.symbolName(for: working) == "arrow.uturn.backward.circle.fill")
+
+    // 복원 창이 닫혀 있으면 근무 라벨은 한 글자도 달라지지 않는다(38명이 하루 종일 보는 화면이다).
+    let plainWorking = WorkStatusSnapshot(status: .working, elapsedSeconds: 84)
+    #expect(MenuBarStatusFormatter.title(for: plainWorking) == "01:24")
+    #expect(MenuBarStatusFormatter.symbolName(for: plainWorking) == "figure.run.circle.fill")
+
+    // pendingSync 와 같은 얼굴이 되면 두 고장이 구분되지 않는다 — 심볼도 제목도 겹치지 않아야 한다.
+    let pendingWorking = WorkStatusSnapshot(status: .working, elapsedSeconds: 84, pendingSync: true)
+        .markingAwayRestorable(true)
+    #expect(MenuBarStatusFormatter.symbolName(for: working) != MenuBarStatusFormatter.symbolName(for: pendingWorking))
+    #expect(MenuBarStatusFormatter.title(for: working) != MenuBarStatusFormatter.title(for: pendingWorking))
+    // 동기화 대기는 근무 중에도 이긴다(아직 서버에 없는 마감을 복원 가능한 일처럼 보여 주지 않는다).
+    #expect(MenuBarStatusFormatter.title(for: pendingWorking) == "대기")
+    #expect(MenuBarStatusFormatter.symbolName(for: pendingWorking) == "exclamationmark.icloud.fill")
+
+    // 동기화 대기가 이긴다 — 아직 서버에 안 올라간 마감을 끝난 일처럼 보여 주지 않는다.
+    let pending = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0, pendingSync: true).markingAwayRestorable(true)
+    #expect(MenuBarStatusFormatter.title(for: pending) == "대기")
+    #expect(MenuBarStatusFormatter.symbolName(for: pending) == "exclamationmark.icloud.fill")
+}
+
+/// 스토어의 파생 저장값(menuBarTitle)은 **근무 틱에서만** 갱신된다(refreshMenuBarTitle 은
+/// `startedAt != nil` 안에서 불린다). 자리 비움은 마감된 뒤 상태라 그 틱이 영영 돌지 않으므로,
+/// 저장값을 그대로 믿으면 라벨은 6시간 내내 "오프"로 남는다 — 이 기능의 유일한 수동 채널이 죽는 지점이다.
+@Test
+func menuBarLabelDoesNotWaitForTheStoredTitleToCatchUp() {
+    let away = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0).markingAwayRestorable(true)
+    // 스토어가 마지막으로 계산해 둔 값은 마감 전의 "오프"다(비근무라 다시 계산되지 않는다).
+    #expect(MenuBarStatusFormatter.displayTitle(stored: "오프", snapshot: away) == "자리비움")
+
+    // 자리 비움이 아닌 모든 경우엔 저장값을 한 글자도 건드리지 않는다(근무 중 초 단위 라벨 포함).
+    let working = WorkStatusSnapshot(status: .working, elapsedSeconds: 3_661)
+    #expect(MenuBarStatusFormatter.displayTitle(stored: "01:01", snapshot: working) == "01:01")
+    // 복원 배너가 떠 있는 채로 새 세션이 돌고 있는 상태(복원의 정상 경로다). 라벨은 **살아 있는 초**를
+    // 계속 그려야 한다 — 스냅샷의 elapsedSeconds 는 재대입되지 않아 낡았고(틱은 저장값만 갱신한다),
+    // 여기서 스냅샷으로 다시 만들면 메뉴바 시계가 옛 값에 얼어붙는다. 그래서 저장값(01:01)은 그대로
+    // 두고 표식만 얹는다 — 시계는 계속 흐르고, 복원할 것이 남았다는 사실도 함께 보인다.
+    let workingWithBanner = WorkStatusSnapshot(status: .working, elapsedSeconds: 0).markingAwayRestorable(true)
+    #expect(MenuBarStatusFormatter.displayTitle(stored: "01:01", snapshot: workingWithBanner) == "01:01•")
+    // 초가 흐르면 표식만 남고 숫자는 저장값을 따라간다(스냅샷의 0초에 얼어붙지 않는다).
+    #expect(MenuBarStatusFormatter.displayTitle(stored: "01:02", snapshot: workingWithBanner) == "01:02•")
+    // 저장값이 이미 표식을 달고 온 경우에도 두 번 붙지 않는다.
+    #expect(MenuBarStatusFormatter.displayTitle(stored: "01:02•", snapshot: workingWithBanner) == "01:02•")
+    #expect(MenuBarStatusFormatter.displayTitle(stored: "오프", snapshot: WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)) == "오프")
+    let pending = WorkStatusSnapshot(status: .working, elapsedSeconds: 10, pendingSync: true).markingAwayRestorable(true)
+    #expect(MenuBarStatusFormatter.displayTitle(stored: "대기", snapshot: pending) == "대기")
+}
+
+/// 메뉴바 라벨은 (a) 바 높이(22pt) 안에 들어가고, (b) 폭 예산을 넘지 않으며,
+/// (c) 평소 '오프' 라벨과 **픽셀이 실제로 다르다**. (c)가 없으면 문자열만 바뀌고 화면은 그대로인
+/// (마스코트가 심볼을 덮는) 상태를 이 테스트가 초록으로 통과시킨다.
+@MainActor
+@Test
+func awayMenuBarLabelChangesRealPixelsAndStaysInsideItsWidthBudget() throws {
+    // ★ title 인자에 **스토어가 실제로 들고 있는 낡은 값("오프")**을 넣는다. 프로덕션에서 자리 비움은
+    //   비근무 상태라 refreshMenuBarTitle 이 돌지 않아 저장값이 갱신되지 않는다 — 여기에 정답을 미리
+    //   넣어 두면 라벨이 저장값을 그대로 그려도 테스트가 초록이 되어, 실기기에서만 "오프"로 남는다.
+    func render(_ snapshot: WorkStatusSnapshot) throws -> NSBitmapImageRep {
+        let view = MenuBarStatusLabel(snapshot: snapshot, title: "오프")
+        .frame(height: 22)
+        .padding(.horizontal, 6)
+        .background(Color(red: 0.12, green: 0.13, blue: 0.17))
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        guard let image = renderer.nsImage,
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff)
+        else { throw RenderError.failed }
+        return bitmap
+    }
+
+    let plain = try render(WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0))
+    let away = try render(WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0).markingAwayRestorable(true))
+
+    // (a) 바 높이. 캐릭터/심볼이 잘리면 아이콘이 사라진 것처럼 보인다.
+    #expect(Double(away.pixelsHigh) / 2.0 <= 22.5)
+    // (b) 폭 예산(메뉴바는 다른 앱과 나눠 쓰는 공간이다).
+    let awayWidth = Double(away.pixelsWide) / 2.0
+    #expect(
+        awayWidth <= Double(MenuBarStatusFormatter.maxLabelWidth),
+        "자리비움 라벨이 폭 예산을 넘었습니다: \(awayWidth)pt > \(MenuBarStatusFormatter.maxLabelWidth)pt"
+    )
+    // 예산이 실측보다 터무니없이 헐거우면 아무것도 못 막는다 — 여유는 두되 상한이 살아 있게 둔다.
+    #expect(awayWidth >= Double(MenuBarStatusFormatter.maxLabelWidth) - 12)
+
+    // (c) 실제로 다르게 그려졌는가. 글자 수가 늘었으므로 폭부터 달라야 하고,
+    //     같은 폭 구간(왼쪽 아이콘 자리)에서도 그림이 달라야 한다(마스코트 → 달 심볼).
+    #expect(away.pixelsWide > plain.pixelsWide)
+    let iconBand = min(plain.pixelsWide, away.pixelsWide) / 3
+    let iconDiffers = bandDiffers(plain, away, width: iconBand)
+    #expect(iconDiffers, "자리 비움인데 메뉴바 아이콘 자리가 평소와 같은 픽셀입니다(마스코트가 심볼을 덮었습니다)")
+}
+
+/// 근무 중 복원 표식이 (a) 픽셀로 실제 달라지고, (b) 같은 폭 예산 안에 있고, (c) pendingSync 와
+/// 다른 얼굴인가. 이 표시의 목적은 "팝오버를 열어 보게 만드는 것"이라, 문자열만 바뀌고 화면은 그대로인
+/// 상태(마스코트가 심볼을 덮는 경우)를 픽셀로 못 박아야 한다 — away 라벨이 그랬듯이.
+@MainActor
+@Test
+func workingMenuBarLabelShowsTheRestoreWindowWithoutHidingTheClock() throws {
+    // ★ title 에는 **스토어의 저장값**(refreshMenuBarTitle 이 만든 순수 MM:SS)을 넣는다. 표식은 라벨이
+    //   displayTitle 로 얹는 것이 프로덕션 경로다 — 여기에 완성된 문자열을 미리 넣으면 라벨이 표식을
+    //   통째로 빠뜨려도 테스트가 초록이 된다.
+    func render(_ snapshot: WorkStatusSnapshot, stored: String) throws -> NSBitmapImageRep {
+        let view = MenuBarStatusLabel(snapshot: snapshot, title: stored)
+            .frame(height: 22)
+            .padding(.horizontal, 6)
+            .background(Color(red: 0.12, green: 0.13, blue: 0.17))
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        guard let image = renderer.nsImage,
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff)
+        else { throw RenderError.failed }
+        return bitmap
+    }
+
+    // 근무 중 가장 넓어지는 라벨(HH:MM + 표식)로 잰다 — MM:SS 로 재면 예산 초과를 놓친다.
+    let widest = WorkStatusSnapshot(status: .working, elapsedSeconds: 86_340)
+    let plain = try render(widest, stored: MenuBarStatusFormatter.title(for: widest))
+    let restorable = try render(widest.markingAwayRestorable(true), stored: MenuBarStatusFormatter.title(for: widest))
+    let pending = try render(
+        WorkStatusSnapshot(status: .working, elapsedSeconds: 86_340, pendingSync: true).markingAwayRestorable(true),
+        stored: "대기"
+    )
+
+    let restorableWidth = Double(restorable.pixelsWide) / 2.0
+
+    // (a) 바 높이 안에 들어간다.
+    #expect(Double(restorable.pixelsHigh) / 2.0 <= 22.5)
+    // (b) 폭 예산. 근무 라벨은 하루 종일 떠 있으므로 자리비움 라벨과 같은 예산을 쓴다.
+    #expect(
+        restorableWidth <= Double(MenuBarStatusFormatter.maxLabelWidth),
+        "근무 중 복원 표식 라벨이 폭 예산을 넘었습니다: \(restorableWidth)pt > \(MenuBarStatusFormatter.maxLabelWidth)pt"
+    )
+    // (c) 평소 근무 라벨과 픽셀이 다르다 — 표식(오른쪽)과 심볼(왼쪽) 양쪽에서.
+    #expect(restorable.pixelsWide > plain.pixelsWide, "근무 중 복원 표식이 라벨 폭을 전혀 넓히지 못했습니다(점이 지워졌습니다)")
+    let iconBand = min(plain.pixelsWide, restorable.pixelsWide) / 3
+    #expect(
+        bandDiffers(plain, restorable, width: iconBand),
+        "복원 창이 열렸는데 근무 중 아이콘 자리가 평소와 같은 픽셀입니다(마스코트가 심볼을 덮었습니다)"
+    )
+    // (d) pendingSync 와 같은 그림이 되면 두 고장이 구분되지 않는다.
+    #expect(
+        bandDiffers(pending, restorable, width: iconBand),
+        "복원 표식이 동기화 대기와 같은 아이콘으로 그려졌습니다(두 고장이 구분되지 않습니다)"
+    )
+    #expect(restorable.pixelsWide != pending.pixelsWide)
+}
+
+/// 배너가 **실제 잉크로** 그려지는가. ImageRenderer 는 Menu/TextField 를 샛노란 경고 상자로 그리고
+/// 그 자리는 픽셀 커버리지가 0이 되므로, "렌더는 됐다"만 보는 테스트는 8일간 결함을 못 잡았다(v0.2.32 이력).
+@MainActor
+@Test
+func awayRestoreBannerIsDrawnWithRealInkAndNoUnavailableBox() throws {
+    let now = Date()
+    let base = makeTeamStore(members: steadyMembers(count: 4), now: now, tokenUsage: seededTokenStore())
+    let withBanner = makeTeamStore(members: steadyMembers(count: 4), now: now, tokenUsage: seededTokenStore())
+    addAwayRestorable(withBanner, now: now)
+
+    let plainBitmap = try renderBitmap(CheckMenuView(store: base))
+    let bannerBitmap = try renderBitmap(CheckMenuView(store: withBanner))
+
+    #expect(bannerBitmap.pixelsHigh > plainBitmap.pixelsHigh, "복원 배너가 창을 전혀 늘리지 않았습니다")
+
+    // ★ 띠(band)로 자르지 않고 **두 렌더의 총량 차이**를 본다. 팝오버 배경이 창 높이에 걸린 그라디언트라
+    //   배너가 끼어들면 0행부터 모든 픽셀이 미세하게 달라진다 — "달라진 첫 행 = 배너 윗변"도, "화면 절반"도
+    //   못 쓴다(전자는 0을 주고, 후자는 헤더 게이지의 주황이 정족수를 채워 배너가 통째로 안 그려져도 초록이 된다.
+    //   실제로 그 상태를 뮤테이션으로 재현해 두 뮤턴트가 살아남았다). 총량 차이는 배너가 더한 잉크만 센다.
+    func orangeInk(_ bitmap: NSBitmapImageRep) -> Int {
+        pixelCount(bitmap, top: 0, bottom: bitmap.pixelsHigh - 1, left: 0, right: bitmap.pixelsWide - 1) { r, g, b in
+            r >= 150 && g >= 90 && b < g - 30
+        }
+    }
+    func brightInk(_ bitmap: NSBitmapImageRep) -> Int {
+        brightPixelCount(bitmap, top: 0, bottom: bitmap.pixelsHigh - 1, left: 0, right: bitmap.pixelsWide - 1)
+    }
+
+    // (1) ImageRenderer 가 "못 그림"으로 남긴 노란 상자가 어디에도 없어야 한다.
+    //     (Menu/TextField 를 쓰면 그 자리는 픽셀 커버리지가 0 이 되고, 노란 상자가 남거나 아무것도 안 남는다.)
+    #expect(
+        unavailablePlaceholderBounds(bannerBitmap, top: 0, bottom: bannerBitmap.pixelsHigh - 1) == nil,
+        "복원 배너가 뜬 팝오버에 ImageRenderer 경고 상자가 있습니다"
+    )
+
+    // (2) 배너 색(pending 주황)이 실제 면적으로 늘어야 한다 — 배경 틴트 + 테두리 + [이어붙이기] 캡슐.
+    let tinted = orangeInk(bannerBitmap) - orangeInk(plainBitmap)
+    #expect(tinted > 3_000, "복원 배너가 더한 주황 잉크가 \(tinted)픽셀뿐입니다(배너가 자리만 차지하고 안 그려졌습니다)")
+
+    // (3) 글자도 함께 늘어야 한다 — 제목 + 보조줄 + 버튼 글자.
+    let ink = brightInk(bannerBitmap) - brightInk(plainBitmap)
+    #expect(ink > 1_500, "복원 배너가 더한 글자 잉크가 \(ink)픽셀뿐입니다")
+}
+
+/// 배너 높이는 창 높이 예산(listExtraChromeHeight)이 쓰는 상수와 일치해야 한다. 어긋나면 목록 행수를
+/// 잘못 깎아 팝오버가 700pt 를 넘고 푸터(로그아웃/앱 종료)가 화면 밖으로 나간다.
+@MainActor
+@Test
+func awayRestoreBannerHeightMatchesItsDeclaredConstant() throws {
+    let now = Date()
+    let base = makeTeamStore(members: steadyMembers(count: 3), now: now)
+    let banner = makeTeamStore(members: steadyMembers(count: 3), now: now)
+    addAwayRestorable(banner, now: now)
+
+    let plain = try #require(renderedPixelHeight(CheckMenuView(store: base)))
+    let grown = try #require(renderedPixelHeight(CheckMenuView(store: banner)))
+    let delta = Double(grown - plain) / 2.0
+    #expect(
+        abs(delta - Double(CheckMenuView.awayRestoreBannerHeight)) <= 1.5,
+        "복원 배너 실측 높이 \(delta)pt 가 선언 상수 \(CheckMenuView.awayRestoreBannerHeight)pt 와 다릅니다"
+    )
+    // 보조줄이 실제로 붙어 있는가 — 한 줄짜리 인라인 배너보다 확실히 높아야 한다.
+    #expect(delta > Double(CheckMenuView.inlineBannerHeight))
+}
+
+/// 배너는 한 번에 하나다. 복원 배너는 **유예가 더 짧은** 배너(12시간 확인·10분 되돌리기)에는 양보하고,
+/// 놓쳐도 되는 배너(회고·새 버전)는 이긴다 — 이쪽만 놓치면 시간이 영구 소실되기 때문이다.
+@MainActor
+@Test
+func awayRestoreBannerYieldsToShorterFusesAndOutranksTheRest() throws {
+    let now = Date()
+
+    func store(_ configure: (WorkTimerStore) -> Void) -> WorkTimerStore {
+        let store = makeTeamStore(members: steadyMembers(count: 4), now: now, tokenUsage: seededTokenStore())
+        configure(store)
+        return store
+    }
+
+    let awayOnly = store { addAwayRestorable($0, now: now) }
+    let awayHeight = try #require(renderedPixelHeight(CheckMenuView(store: awayOnly)))
+
+    // (a) 회고 + 새 버전이 함께 자격을 갖춰도 복원 배너가 그려진다(높이가 복원 배너 단독과 같다).
+    let withWeaker = store {
+        addAwayRestorable($0, now: now)
+        $0.retro = sampleWeeklyRetro()
+        $0.showsRetroBanner = true
+    }
+    let weakerHeight = try #require(
+        renderedPixelHeight(CheckMenuView(store: withWeaker, previewUpdateBanner: true, previewUpdateNotes: sampleUpdateNotes))
+    )
+    #expect(weakerHeight == awayHeight, "회고/새 버전 배너가 복원 배너를 밀어냈습니다")
+
+    // (b) 10분짜리 되돌리기 배너가 함께 있으면 그쪽이 이긴다(더 빨리 사라지는 기회다).
+    let withUndo = store {
+        addAwayRestorable($0, now: now)
+        $0.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
+        $0.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
+        $0.lastAutoClosedAt = now
+        $0.refreshTimedBanner(now: now)
+    }
+    let undoHeight = try #require(renderedPixelHeight(CheckMenuView(store: withUndo)))
+    #expect(undoHeight != awayHeight, "되돌리기 배너가 복원 배너에 밀렸습니다(유예가 짧은 쪽이 이겨야 합니다)")
+
+    // (c) 12시간 확인 배너(무응답 30분이면 자동 마감)가 가장 급하다.
+    let withLongSession = store {
+        addAwayRestorable($0, now: now)
+        $0.startedAt = now.addingTimeInterval(-43_200)
+        $0.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 43_200)
+        $0.isLongSessionPromptActive = true
+    }
+    let longHeight = try #require(renderedPixelHeight(CheckMenuView(store: withLongSession)))
+    #expect(longHeight != awayHeight, "12시간 확인 배너가 복원 배너에 밀렸습니다")
+}
+
+/// 복원의 정상 경로는 "복귀 → 자동 시작이 새 세션을 염 → 그 상태에서 이어 붙이기"다.
+/// 근무 중이라고 배너를 감추면 돌아온 사람 대부분이 배너를 영영 못 본다.
+@MainActor
+@Test
+func awayRestoreBannerStaysVisibleAfterAutoStartOpensANewSession() throws {
+    let now = Date()
+    let base = makeTeamStore(members: steadyMembers(count: 3), now: now)
+    base.startedAt = now.addingTimeInterval(-120)
+    base.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 120)
+
+    let restored = makeTeamStore(members: steadyMembers(count: 3), now: now)
+    restored.startedAt = now.addingTimeInterval(-120)
+    restored.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 120)
+    addAwayRestorable(restored, now: now)
+
+    let plain = try #require(renderedPixelHeight(CheckMenuView(store: base)))
+    let grown = try #require(renderedPixelHeight(CheckMenuView(store: restored)))
+    #expect(grown > plain, "근무 중(자동 시작 직후)에는 복원 배너가 그려지지 않았습니다")
+}
+
+/// 서버가 만료(remainingSeconds == 0)라고 말하면 배너도 메뉴바 표시도 사라진다.
+/// 창 판정은 서버가 소유한다 — 클라 시계를 되돌려 창을 늘릴 수 없다.
+@MainActor
+@Test
+func expiredRestoreWindowDrawsNothing() throws {
+    let now = Date()
+    let expired = makeTeamStore(members: steadyMembers(count: 3), now: now)
+    addAwayRestorable(expired, now: now, remainingSeconds: 0)
+    let base = makeTeamStore(members: steadyMembers(count: 3), now: now)
+
+    #expect(!AwayRestoreBannerCopy.isWindowOpen(expired.restorableAwaySession))
+    let expiredHeight = try #require(renderedPixelHeight(CheckMenuView(store: expired)))
+    let baseHeight = try #require(renderedPixelHeight(CheckMenuView(store: base)))
+    #expect(expiredHeight == baseHeight, "만료된 복원 대상에 배너가 그려졌습니다")
+
+    // 계정이 바뀌면(로그아웃 → 다른 사람 로그인) 남의 마감이 새 계정 메뉴바에 뜨지 않는다.
+    let otherAccount = makeTeamStore(members: steadyMembers(count: 3), now: now)
+    addAwayRestorable(otherAccount, now: now)
+    otherAccount.awayStateOwnerUserID = "someone-else"
+    #expect(!AwayRestoreBannerCopy.isWindowOpen(otherAccount.restorableAwaySession))
+}
+
+@Test
+func awayRestoreBannerSaysHowMuchWorkIsAtStake() {
+    let now = Date()
+    let session = awayRestorableSession(
+        startedAt: now.addingTimeInterval(-20_400),
+        endedAt: now.addingTimeInterval(-9_000)
+    )
+    // 되살릴 **분량**을 말한다(3시간 10분). 잔여 창을 쓰면 폴링마다 글자가 바뀌어 같은 배너가 매번 흔들린다.
+    #expect(AwayRestoreBannerCopy.subtitle(for: session) == "3시간 10분 되살릴 수 있어요")
+
+    // 길이가 0 이하인 마감은 되살릴 분량이 없다 — "0시간 00분 되살릴 수 있어요"를 그리지 않는다.
+    let empty = awayRestorableSession(startedAt: now, endedAt: now)
+    #expect(AwayRestoreBannerCopy.subtitle(for: empty) == nil)
+
+    // 시각을 모르면 보조줄을 지어내지 않는다(0분/음수 분량 표시 금지).
+    let unknown = AwayRestorableSession(
+        sessionID: "s", startedAt: nil, endedAt: nil, autoClosedAt: nil,
+        reason: .sleep, expiresAt: nil, remainingSeconds: 100
+    )
+    #expect(AwayRestoreBannerCopy.subtitle(for: unknown) == nil)
+
+    // 왕복 중에도 버튼은 남는다(사라지면 눌린 건지 알 수 없다).
+    #expect(AwayRestoreBannerCopy.actionTitle(isRestoring: false) == "이어붙이기")
+    #expect(AwayRestoreBannerCopy.actionTitle(isRestoring: true) != AwayRestoreBannerCopy.actionTitle(isRestoring: false))
+}
+
+/// 이 배너에는 닫기(X)가 없다. X 는 "실수로 눌러 영구 소실"이라는 경로를 하나 더 만들 뿐,
+/// 되찾아 주는 것이 없다(창이 닫히면 서버가 대상을 내려 배너는 스스로 사라진다).
+@MainActor
+@Test
+func awayRestoreBannerCarriesNoDismissButton() throws {
+    let source = try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8)
+    let code = swiftCodeStrippingComments(source)
+    let marker = try #require(code.range(of: "topBanner == .awayRestore"))
+    let block = try #require(bracedBlock(of: code, after: marker.upperBound))
+    #expect(block.contains("restoreAwaySession"), "복원 배너가 복원 RPC 를 부르지 않습니다")
+    #expect(!block.contains("onDismiss"), "복원 배너에 닫기(X)가 붙었습니다 — 놓치면 시간이 영구 소실됩니다")
+}
+
+/// 팀에 자동 마감의 흔적을 남기지 않는다(PICK 의 판단): `auto_closed_reason` 은 팀 조회 select 에 없고,
+/// 남의 마지막 키 입력 시각(`last_input_at`)도 조회하지 않는다(docs/away-close.md 1절 — 규약으로만 막힌다).
+/// 이 둘은 서버 RLS 가 팀 범위라 **요청하면 보인다**. 막는 것은 select 목록 한 줄뿐이므로 여기서 못 박는다.
+@Test
+func teamQueriesNeverAskForAwayColumns() throws {
+    let source = try String(contentsOf: checkSourceURL("SupabaseWorkService.swift"), encoding: .utf8)
+    let code = swiftCodeStrippingComments(source)
+
+    var selects: [String] = []
+    var cursor = code.startIndex
+    while let hit = code.range(of: "URLQueryItem(name: \"select\", value: \"", range: cursor..<code.endIndex) {
+        guard let close = code.range(of: "\"", range: hit.upperBound..<code.endIndex) else { break }
+        selects.append(String(code[hit.upperBound..<close.lowerBound]))
+        cursor = close.upperBound
+    }
+    #expect(selects.count >= 4, "select 목록을 하나도 못 찾았습니다(파서가 낡았습니다: \(selects.count)개)")
+    for select in selects {
+        #expect(!select.contains("last_input_at"), "팀 조회가 남의 마지막 입력 시각을 요청합니다: \(select)")
+        #expect(!select.contains("auto_closed"), "팀 조회가 자동 마감 사유를 요청합니다: \(select)")
+    }
+}
+
+/// 두 비트맵의 왼쪽 `width` 픽셀 띠가 한 픽셀이라도 다른가(폭이 달라 bitmapDiffBounds 를 못 쓰는 자리용).
+private func bandDiffers(_ a: NSBitmapImageRep, _ b: NSBitmapImageRep, width: Int) -> Bool {
+    guard let pa = a.bitmapData, let pb = b.bitmapData, width > 0 else { return false }
+    let spp = min(a.samplesPerPixel, b.samplesPerPixel)
+    for y in 0..<min(a.pixelsHigh, b.pixelsHigh) {
+        for x in 0..<min(width, min(a.pixelsWide, b.pixelsWide)) {
+            let oa = y * a.bytesPerRow + x * a.samplesPerPixel
+            let ob = y * b.bytesPerRow + x * b.samplesPerPixel
+            for sample in 0..<spp where pa[oa + sample] != pb[ob + sample] { return true }
+        }
+    }
+    return false
+}
+
+/// `index` 이후 처음 나오는 `{` 의 짝을 찾아 그 안쪽만 돌려준다.
+/// (enclosingBlock 은 **감싸는** 블록을 주므로 `if` 한 갈래만 보고 싶을 때는 형제 갈래까지 딸려 온다 —
+///  실제로 이 파일에서 그 차이 때문에 옆 배너의 onDismiss 가 걸렸다.)
+private func bracedBlock(of source: String, after index: String.Index) -> String? {
+    guard let open = source.range(of: "{", range: index..<source.endIndex) else { return nil }
+    var depth = 0
+    var cursor = open.lowerBound
+    while cursor < source.endIndex {
+        if source[cursor] == "{" { depth += 1 }
+        if source[cursor] == "}" {
+            depth -= 1
+            if depth == 0 { return String(source[source.index(after: open.lowerBound)..<cursor]) }
+        }
+        cursor = source.index(after: cursor)
+    }
+    return nil
+}
+
+/// 인라인 배너의 보조줄이 실제로 높이를 만드는지 실측한다(보조줄이 조용히 안 그려지면 배너가
+/// "얼마를 잃는지" 말하지 못한 채 상수만 맞아 초록이 된다).
+@MainActor
+@Test
+func inlineBannerSubtitleActuallyAddsALine() throws {
+    let oneLine = InlineActionBanner(
+        icon: "moon.zzz.fill",
+        title: AwayRestoreBannerCopy.title,
+        actionTitle: "이어붙이기",
+        tint: CheckTheme.pending,
+        action: {}
+    )
+    let twoLines = InlineActionBanner(
+        icon: "moon.zzz.fill",
+        title: AwayRestoreBannerCopy.title,
+        subtitle: "3시간 10분 되살릴 수 있어요",
+        actionTitle: "이어붙이기",
+        tint: CheckTheme.pending,
+        action: {}
+    )
+    let short = try #require(renderedPixelHeight(oneLine.padding(12)))
+    let tall = try #require(renderedPixelHeight(twoLines.padding(12)))
+    #expect(tall > short, "보조줄이 배너 높이를 전혀 늘리지 않았습니다(그려지지 않았습니다)")
+}
+
+/// 두 렌더가 **처음으로** 갈리는 행(픽셀 y). 위쪽이 같은 화면일 때 끼어든 요소의 윗변이 된다.
+private func firstDivergingRow(_ a: NSBitmapImageRep, _ b: NSBitmapImageRep) -> Int? {
+    guard let pa = a.bitmapData, let pb = b.bitmapData, a.pixelsWide == b.pixelsWide else { return nil }
+    let spp = min(a.samplesPerPixel, b.samplesPerPixel)
+    for y in 0..<min(a.pixelsHigh, b.pixelsHigh) {
+        for x in 0..<a.pixelsWide {
+            let oa = y * a.bytesPerRow + x * a.samplesPerPixel
+            let ob = y * b.bytesPerRow + x * b.samplesPerPixel
+            for sample in 0..<spp where pa[oa + sample] != pb[ob + sample] { return y }
+        }
+    }
+    return nil
+}
+
+/// 목록이 무스크롤 상한에 닿아 있을 때, 배너가 뜨면 **행 하나가 스크롤 뒤로 밀려** 창이 자라지 않아야 한다.
+/// 이것이 `awayRestoreBannerHeight` 상수가 실제로 하는 일이다(CheckMenuView.listExtraChromeHeight →
+/// ListRowBudget). 상수가 0 이거나 실제보다 작으면 목록이 한 행 더 남아 창이 700pt 를 넘고, 그 순간
+/// 푸터(로그아웃/앱 종료)가 화면 밖으로 나간다.
+@MainActor
+@Test
+func awayRestoreBannerBuysItsHeightFromTheTeamListInsteadOfTheWindow() throws {
+    let now = Date()
+    // 팀원 8명 = 무스크롤 상한(6행)을 넘긴 상태. 여기서만 예산이 관측 가능해진다.
+    let plain = makeTeamStore(members: steadyMembers(count: 8), now: now, tokenUsage: seededTokenStore())
+    let banner = makeTeamStore(members: steadyMembers(count: 8), now: now, tokenUsage: seededTokenStore())
+    addAwayRestorable(banner, now: now)
+
+    let without = try #require(renderedPixelHeight(CheckMenuView(store: plain)))
+    let with = try #require(renderedPixelHeight(CheckMenuView(store: banner)))
+    #expect(
+        with <= without,
+        "배너가 창을 \((with - without) / 2)pt 늘렸습니다 — 목록 행수 예산에 배너 높이가 안 실렸습니다"
+    )
+    #expect(Double(with) / 2.0 <= 700.0)
+}
+
+
+/// 육안 확인용 스냅샷(메뉴바 라벨 3종 + 복원 배너가 뜬 팝오버). 판정은 위 테스트들이 하고,
+/// 이 테스트는 사람이 볼 그림만 남긴다 — 스크래치에 쓰므로 저장소는 건드리지 않는다.
+@MainActor
+@Test
+func dumpAwayRestoreSnapshots() throws {
+    let now = Date()
+    let store = makeTeamStore(members: presenceMembers(now: now), now: now, tokenUsage: seededTokenStore())
+    addAwayRestorable(store, now: now)
+    saveAwaySnapshot(try renderPNG(CheckMenuView(store: store)), "popover-away-restore")
+
+    for (label, snapshot) in [
+        ("off", WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)),
+        ("away", WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0).markingAwayRestorable(true)),
+        ("working", WorkStatusSnapshot(status: .working, elapsedSeconds: 3_661)),
+        ("working-restorable", WorkStatusSnapshot(status: .working, elapsedSeconds: 3_661).markingAwayRestorable(true))
+    ] {
+        // 저장값은 스토어가 만드는 값 그대로다(자리 비움은 낡은 "오프", 근무는 순수 MM:SS).
+        // 표식은 라벨이 얹는다 — 완성된 문자열을 넣으면 프로덕션 경로를 우회한다.
+        let stored = label == "away" ? "오프" : MenuBarStatusFormatter.title(for: snapshot.markingAwayRestorable(false))
+        let view = MenuBarStatusLabel(snapshot: snapshot, title: stored)
+            .frame(height: 22)
+            .padding(.horizontal, 6)
+            .background(Color(red: 0.12, green: 0.13, blue: 0.17))
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 4
+        if let image = renderer.nsImage,
+           let tiff = image.tiffRepresentation,
+           let bitmap = NSBitmapImageRep(data: tiff),
+           let png = bitmap.representation(using: .png, properties: [:]) {
+            saveAwaySnapshot(png, "menubar-\(label)")
+        }
+    }
+}
+
+private func saveAwaySnapshot(_ png: Data, _ name: String) {
+    let dir = URL(
+        fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/afk-ui",
+        isDirectory: true
+    )
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try? png.write(to: dir.appendingPathComponent("\(name).png"))
 }

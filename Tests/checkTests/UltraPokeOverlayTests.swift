@@ -1156,3 +1156,206 @@ func rewardStillPeeksWhenIntentSaysVisibleButTheWindowIsNot() {
 
     stopWorking(store, controller)
 }
+
+// MARK: - 자리 비움 복원 안내(v0.2.35) — 자동 시작이 새 세션을 **조용히** 열지 않는다
+//
+// 왜 이 파일인가: 헬퍼(격리 defaults · 컨트롤러 픽스처 · startWorking)가 전부 파일 private 이라
+// 공용화하려고 남의 파일을 건드리지 않는다는 이 저장소의 규약(파일 머리말)을 그대로 따른다.
+//
+// 지키는 것: 무입력 2시간 30분이면 근무가 마지막 입력 시각으로 소급 마감된다. 잘못 끊긴 사람이 그 시간을
+// 되찾는 창은 6시간이고, 놓치면 **영구 소실**이다. 그리고 이 앱에서 "돌아왔다"가 확실한 유일한 사건은
+// 자동 시작이 발화하는 그 순간이다(PICK.md) — 거기서 알리지 않으면 남는 채널은 "팝오버를 스스로 여는 것"
+// 하나뿐이다.
+
+/// 복원 창 안의 자동 마감 하나를 스토어에 심는다(서버 폴링 결과를 그대로 흉내낸 상태).
+@MainActor
+private func armRestorableAwaySession(
+    _ store: WorkTimerStore,
+    now: Date,
+    lostSeconds: TimeInterval = 3 * 3_600,
+    remainingSeconds: Int = 3 * 3_600
+) {
+    store.awayStateOwnerUserID = "me"
+    store.awayRestorable = AwayRestorableSession(
+        sessionID: "20000000-0000-0000-0000-000000000001",
+        startedAt: now.addingTimeInterval(-lostSeconds - 3 * 3_600),
+        endedAt: now.addingTimeInterval(-3 * 3_600),
+        autoClosedAt: now.addingTimeInterval(-3 * 3_600),
+        reason: .away,
+        expiresAt: now.addingTimeInterval(TimeInterval(remainingSeconds)),
+        remainingSeconds: remainingSeconds
+    )
+}
+
+/// 넛지 자격(로그인 + 팀 확정 + 비근무)을 세운다.
+@MainActor
+private func armNudgeEligibility(_ store: WorkTimerStore) {
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = "10000000-0000-0000-0000-000000000001"
+}
+
+@MainActor
+@Test
+func autoStartWithRestorableSessionAnnouncesRestoreInsteadOfOpeningSilently() {
+    // 재현: 3시간 회의를 다녀온 사람이 키보드를 만지면 넛지가 발화한다. v0.2.35 이전 배선은 여기서
+    // "일하는 것 같아서 근무 시작했어요!"만 띄우고 새 세션을 열었다 — 잃은 3시간은 한 글자도 언급되지 않는다.
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let engine = ReactionEngine(clock: { now })
+    let (store, controller) = makeUltraController(engine: engine)
+    armNudgeEligibility(store)
+    store.setOverlayEnabled(true)
+    armRestorableAwaySession(store, now: now)
+    #expect(store.restorableAwaySession != nil, "픽스처: 복원 대상이 서 있어야 한다")
+
+    controller.nudgeAutoStart()
+
+    // ① 스토어가 "물어야 한다"를 실제로 세웠는가(= offerAwayRestoreOnAutoStart 가 불렸는가).
+    #expect(store.awayRestorePromptPending, "복원 제안이 세워지지 않았다 — 스토어 호출이 배선되지 않았다")
+    // ② 말풍선이 복원 안내로 바뀌었는가.
+    #expect(engine.commuteStartBubbleOverride?.text == CheckOverlayController.awayRestoreNudgeText)
+    #expect(engine.commuteStartBubbleOverride?.seconds == CheckOverlayController.awayRestoreNudgeBubbleSeconds)
+    // ③ 그래도 근무는 시작한다(복원을 안 누른 사람의 앞으로 1시간까지 잃게 두지 않는다 —
+    //    복원 RPC 가 이 세션을 원자적으로 지우고 옛 세션을 되살린다. docs/away-close.md 5절).
+    #expect(store.startedAt != nil)
+    #expect(store.snapshot.isWorking)
+    // ④ 배너 대상은 그대로다 — 새 세션을 열었다고 복원 대상이 사라지면 팝오버에서도 되찾을 수 없다.
+    #expect(store.restorableAwaySession != nil)
+
+    // ⑤ 실제로 사람 눈에 닿는가. store 관찰 경로(SwiftUI)를 헤드리스로 모사한다.
+    controller.updateWorking(true)
+    #expect(engine.greetingText == CheckOverlayController.awayRestoreNudgeText)
+    #expect(engine.commuteStartBubbleOverride == nil, "1회 소비")
+
+    controller.updateWorking(false)
+    store.stop()
+}
+
+@MainActor
+@Test
+func autoStartWithoutRestorableSessionIsByteForByteTheOldBehaviour() {
+    // 회귀 0: 복원 대상이 없거나 창이 닫혔으면 v0.2.34 와 완전히 같은 동작이어야 한다.
+    let now = Date(timeIntervalSince1970: 1_800_100_000)
+
+    // (a) 복원 대상 자체가 없다(평범한 아침 출근).
+    do {
+        let engine = ReactionEngine(clock: { now })
+        let (store, controller) = makeUltraController(engine: engine)
+        armNudgeEligibility(store)
+        store.setOverlayEnabled(true)
+
+        controller.nudgeAutoStart()
+
+        #expect(engine.commuteStartBubbleOverride?.text == CheckOverlayController.nudgeAutoStartText)
+        #expect(engine.commuteStartBubbleOverride?.seconds == CheckOverlayController.nudgeAutoStartBubbleSeconds)
+        #expect(!store.awayRestorePromptPending)
+        #expect(store.startedAt != nil)
+        controller.updateWorking(false)
+        store.stop()
+    }
+
+    // (b) 대상은 있으나 창이 닫혔다(remainingSeconds == 0). 만료 판정은 서버 값으로만 한다 —
+    //     여기서 옛 문구로 돌아오지 않으면 되살릴 수 없는 것을 되살릴 수 있다고 말하는 셈이다.
+    do {
+        let engine = ReactionEngine(clock: { now })
+        let (store, controller) = makeUltraController(engine: engine)
+        armNudgeEligibility(store)
+        store.setOverlayEnabled(true)
+        armRestorableAwaySession(store, now: now, remainingSeconds: 0)
+
+        controller.nudgeAutoStart()
+
+        #expect(engine.commuteStartBubbleOverride?.text == CheckOverlayController.nudgeAutoStartText)
+        #expect(!store.awayRestorePromptPending)
+        #expect(store.startedAt != nil)
+        controller.updateWorking(false)
+        store.stop()
+    }
+
+    // (c) 남의 계정 마감(계정 전환 후 남은 상태). restorableAwaySession 이 스스로 침묵하므로
+    //     복원 안내가 새 계정 화면에 뜨지 않는다.
+    do {
+        let engine = ReactionEngine(clock: { now })
+        let (store, controller) = makeUltraController(engine: engine)
+        armNudgeEligibility(store)
+        store.setOverlayEnabled(true)
+        armRestorableAwaySession(store, now: now)
+        store.awayStateOwnerUserID = "someone-else"
+
+        controller.nudgeAutoStart()
+
+        #expect(engine.commuteStartBubbleOverride?.text == CheckOverlayController.nudgeAutoStartText)
+        #expect(!store.awayRestorePromptPending)
+        controller.updateWorking(false)
+        store.stop()
+    }
+}
+
+@MainActor
+@Test
+func autoStartDoesNotStrandARestoreBubbleWhenTheCharacterIsHidden() {
+    // 캐릭터를 끈 사용자에게는 말풍선 채널이 없다. 그래도 (1) 근무는 시작돼야 하고,
+    // (2) 오버라이드를 세워 두면 안 된다 — 몇 시간 뒤 캐릭터를 다시 켜는 순간 낡은 복원 안내가
+    // 이미 닫힌 창에 대해 튀어나온다.
+    let now = Date(timeIntervalSince1970: 1_800_200_000)
+    let engine = ReactionEngine(clock: { now })
+    let (store, controller) = makeUltraController(engine: engine)
+    armNudgeEligibility(store)
+    armRestorableAwaySession(store, now: now)
+    store.setOverlayEnabled(false)
+
+    controller.nudgeAutoStart()
+
+    #expect(engine.commuteStartBubbleOverride == nil)
+    #expect(store.startedAt != nil)
+    #expect(store.snapshot.isWorking)
+    // 스토어 쪽 제안 상태는 채널과 무관하게 선다 — 팝오버 배너가 이 사람에게 남은 채널이다.
+    #expect(store.awayRestorePromptPending)
+    #expect(store.restorableAwaySession != nil)
+
+    store.stop()
+}
+
+@MainActor
+@Test
+func awayRestoreNudgeTextFitsInsideTheGreetingBubble() throws {
+    // 말풍선은 caption2 · maxWidth 110 · lineLimit(2) 다(CheckGreetingBubble). 넘치면 꼬리가 "…"로 잘려
+    // "자리 비운 근무 이어붙일…" 처럼 **행동을 담은 절반이 사라진다** — 픽셀이 아니라 글자 배치로 못 박는다.
+    let base = NSFont.preferredFont(forTextStyle: .caption2)
+    var descriptor = base.fontDescriptor
+    if let rounded = descriptor.withDesign(.rounded) { descriptor = rounded }
+    descriptor = descriptor.addingAttributes([
+        .traits: [NSFontDescriptor.TraitKey.weight: NSFont.Weight.semibold.rawValue]
+    ])
+    let font = NSFont(descriptor: descriptor, size: base.pointSize) ?? base
+    // maxWidth 110 에서 좌우 padding 8 씩을 뺀 실제 글자 폭.
+    let textWidth: CGFloat = 110 - 16
+    let lineHeight = NSLayoutManager().defaultLineHeight(for: font)
+
+    func lineCount(_ text: String) -> Int {
+        let bounds = (text as NSString).boundingRect(
+            with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font]
+        )
+        return Int((bounds.height / lineHeight).rounded(.up))
+    }
+
+    // 픽스처 보정: 이미 배포된 문구가 2줄에 들어간다는 것으로 이 자(尺)가 맞는지 먼저 확인한다.
+    #expect(lineCount(CheckOverlayController.nudgeAutoStartText) <= 2, "자가 어긋났다 — 기존 문구조차 2줄을 넘는다")
+    #expect(
+        lineCount(CheckOverlayController.awayRestoreNudgeText) <= 2,
+        "복원 안내가 2줄을 넘어 잘린다: \"\(CheckOverlayController.awayRestoreNudgeText)\""
+    )
+
+    // 실제로 그려 본 폭도 예산 안이어야 한다(프레임 상한이 걸려 있는지까지 본다).
+    let renderer = ImageRenderer(
+        content: CheckGreetingBubble(text: CheckOverlayController.awayRestoreNudgeText)
+    )
+    renderer.scale = 2
+    let image = try #require(renderer.nsImage)
+    let tiff = try #require(image.tiffRepresentation)
+    let bitmap = try #require(NSBitmapImageRep(data: tiff))
+    #expect(Double(bitmap.pixelsWide) / 2.0 <= 110.5)
+    // 2줄 안에 들어간다는 주장의 픽셀 쪽 짝: 3줄이면 높이가 한 줄만큼 더 커진다.
+    #expect(Double(bitmap.pixelsHigh) / 2.0 <= Double(lineHeight) * 2 + 12)
+}

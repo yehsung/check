@@ -49,6 +49,10 @@ struct CheckMenuView: View {
         case longSession
         /// 자리 비움 자동 마감 되돌리기(유예 10분).
         case undoAutoClose
+        /// 자리 비움/잠자기로 자동 마감된 근무를 **서버 창(6시간) 안에** 이어 붙이기.
+        /// undoAutoClose 보다 뒤인 이유는 순전히 유예 길이다(저쪽은 10분, 이쪽은 6시간).
+        /// 회고·새 버전보다 앞인 이유는 이쪽만 **놓치면 시간이 영구 소실**되기 때문이다.
+        case awayRestore
         /// 지난주 회고 안내(주 1회).
         case retro
         /// 새 버전 안내(상시라 가장 덜 급하다).
@@ -64,6 +68,9 @@ struct CheckMenuView: View {
     static let updateNoteLineHeight: CGFloat = 15
     static let updateNoteBlockPadding: CGFloat = 8
     static let longSessionBannerHeight: CGFloat = 92
+    /// 자리 비움 복원 배너 높이(pt). 보조줄(되살릴 분량)이 한 줄 붙어 인라인 배너보다 높다 —
+    /// 그 줄이 "얼마를 잃는지"를 말해 주는 유일한 자리라, 높이를 아끼자고 지우면 배너가 그냥 잔소리가 된다.
+    static let awayRestoreBannerHeight: CGFloat = 56
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
     /// 헤더 주간 목표 편집 인라인 행 높이(pt). 배너는 아니지만 헤더를 그만큼 부풀리므로 같은 예산에 넣는다.
@@ -82,6 +89,10 @@ struct CheckMenuView: View {
     private var topBanner: TopBanner? {
         if isMainScreen, showsLongSessionBanner { return .longSession }
         if isMainScreen, store.timedBanner == .undoAutoClose { return .undoAutoClose }
+        // 근무 중에도 뜬다(다른 배너와 다른 점). 복귀 → 자동 시작이 새 세션을 연 **바로 그 상태**가
+        // 복원의 정상 경로이기 때문이다 — 여기서 '근무 중이면 감춘다'로 두면 돌아온 사람 대부분이
+        // 배너를 영영 못 본다(서버 RPC 가 새 세션을 지우고 옛 세션을 되살리는 것이 설계다).
+        if isMainScreen, AwayRestoreBannerCopy.isWindowOpen(store.restorableAwaySession) { return .awayRestore }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
         if showsUpdateBanner { return .update }
         return nil
@@ -91,6 +102,7 @@ struct CheckMenuView: View {
         switch topBanner {
         case .longSession: return Self.longSessionBannerHeight
         case .undoAutoClose, .retro: return Self.inlineBannerHeight
+        case .awayRestore: return Self.awayRestoreBannerHeight
         case .update:
             // 노트가 있으면 줄 수만큼 배너가 자란다(없으면 예전과 같은 높이 — 목록 행수 예산도 그대로).
             let notes = updateBannerNotes
@@ -228,6 +240,21 @@ struct CheckMenuView: View {
                             onDismiss: { store.clearAutoCloseUndo() }
                         )
                     }
+                    // 자리 비움/잠자기로 끊긴 근무를 이어 붙이는 배너. **닫기(X)를 달지 않았다** — 이 배너를
+                    // 놓치면 서버 창(6시간)이 닫히면서 그 시간이 영구 소실되는데, X 는 "실수로 눌러 영구
+                    // 소실"이라는 경로를 하나 더 만들 뿐 되찾아 주는 것이 없다. 창이 닫히거나 복원이
+                    // 끝나면 서버가 대상을 내려 주고(polling) 배너는 스스로 사라진다.
+                    if topBanner == .awayRestore, let restorable = store.restorableAwaySession {
+                        InlineActionBanner(
+                            icon: AwayRestoreBannerCopy.icon,
+                            title: AwayRestoreBannerCopy.title,
+                            subtitle: AwayRestoreBannerCopy.subtitle(for: restorable),
+                            actionTitle: AwayRestoreBannerCopy.actionTitle(isRestoring: store.isRestoringAwaySession),
+                            tint: CheckTheme.pending,
+                            // 원자 RPC 한 번. 연타 가드는 스토어가 갖고 있다(isRestoringAwaySession).
+                            action: { _ = store.restoreAwaySession() }
+                        )
+                    }
                     // 토큰 소모량 행은 내 근무 박스와 팀원 현황 사이(사용자 지정 위치). 탭하면 순위 페이지.
                     // 하위 패널이 열려 있으면 감춘다 — 그 자리는 패널이 쓰고, 창 높이 상한도 그만큼 여유가 생긴다.
                     if showsTokenUsageRow {
@@ -282,6 +309,9 @@ struct CheckMenuView: View {
                             // 울트라 **잔량**(재화). nil = 아직 모름 → 배지는 자리를 지킨 채 숫자만 비운다.
                             // 표시 전용이다 — 3초 홀드는 이 값과 무관하게 발사되고 판정은 서버가 한다.
                             ultraBalance: store.ultraBalance,
+                            // 무제한(관리자)이면 배지가 숫자 대신 ∞ 를 그린다. **서버가 말해 준 사실**이고
+                            // 클라는 role 을 보지 않는다 — 스토어가 응답의 깃발을 그대로 나른다.
+                            ultraUnlimited: store.ultraUnlimited,
                             // 배지 탭 → 울트라 화면. **콕찌르기를 '봤다'로 소비하지 않는다**(openUltraPanel 주석).
                             onOpenUltraPanel: { store.openUltraPanel(from: .poke) },
                             // 수신 연결이 죽었다는 사실은 안내줄 최우선 가지다. 판정은 순수 함수 한 곳뿐이고
@@ -311,6 +341,7 @@ struct CheckMenuView: View {
                         // 울트라 화면(잔량 + 충전 경로). 리그/토큰/찌르기/내 기록과 **같은 뼈대**다.
                         UltraPanel(
                             balance: store.ultraBalance,
+                            isUnlimited: store.ultraUnlimited,
                             missions: store.missions,
                             hasLoaded: store.missionsLoaded,
                             hasFailed: store.ultraBalanceFailed,
@@ -356,14 +387,19 @@ struct CheckMenuView: View {
 }
 
 struct MenuBarStatusLabel: View {
-    // 아이콘 판정용 스냅샷(상태/대기). 텍스트는 스토어가 계산해 둔 파생 저장값(menuBarTitle)을 그대로 쓴다.
+    // 아이콘 판정용 스냅샷(상태/대기/자리비움). 텍스트는 스토어가 계산해 둔 파생 저장값(menuBarTitle)을 쓴다.
     let snapshot: WorkStatusSnapshot
     // 상단바에 표시할 라벨 텍스트. 스토어가 == 가드와 함께 갱신하므로 여기선 그리기만 한다(매초 재계산 없음).
     let title: String
 
     var body: some View {
         HStack(spacing: 5) {
-            if let mascot = CheckMascotAssets.menuBarImage(for: snapshot) {
+            // 자리 비움일 때는 **마스코트를 쓰지 않는다.** 마스코트 표정은 neutral/negative 둘뿐이라
+            // (CheckMascotAssets.Mood) 비근무면 항상 같은 시무룩 얼굴이 나오고, 그 얼굴은 평범한 '오프'와
+            // 픽셀 하나 다르지 않다 — 캐릭터를 켠 사람의 메뉴바에서는 자리 비움이 통째로 안 보이게 된다.
+            // 이 자리에서만 심볼로 갈아 끼우면 글자(자리비움)와 그림이 함께 달라져, 마스코트 유무와 무관하게
+            // "평소와 다르다"가 반드시 눈에 걸린다(새 이미지 에셋 없이).
+            if let mascot = CheckMascotAssets.menuBarImage(for: snapshot), !snapshot.isAwayRestorable {
                 // 이미 18×18pt로 크기를 지정한 이미지라 .resizable()/.frame() 불필요.
                 // MenuBarExtra 라벨이 intrinsic size를 써도 바 높이 안에 온전히 들어간다.
                 Image(nsImage: mascot)
@@ -372,10 +408,46 @@ struct MenuBarStatusLabel: View {
                     .symbolRenderingMode(.hierarchical)
                     .imageScale(.medium)
             }
-            Text(title)
+            Text(MenuBarStatusFormatter.displayTitle(stored: title, snapshot: snapshot))
                 .font(.system(.body, design: .rounded).weight(.medium))
                 .monospacedDigit()
         }
+    }
+}
+
+// MARK: - 자리 비움 복원 배너 문구 (순수 계산 — 결정적 검증 지점)
+
+/// 자리 비움/잠자기 자동 마감을 이어 붙이는 배너의 문구와 표시 조건.
+///
+/// 뷰에서 분리한 이유는 둘이다: (1) 문구는 픽셀 없이 검증할 수 있어야 하고, (2) **표시 조건이 시계를
+/// 읽지 않아야 한다.** 만료 판정을 여기서 `Date()` 로 하면 배너 조건이 매초 갱신되는 값에 묶여
+/// 팝오버 서브트리 전체가 초당 한 번 무효화된다(잎 뷰 격리 불변식 위반). 창 판정은 서버가 하고
+/// (docs/away-close.md 5절) 클라는 서버가 준 잔여 초만 본다.
+enum AwayRestoreBannerCopy {
+    static let icon = "moon.zzz.fill"
+    /// 사유(away/sleep)를 문구로 가르지 않는다 — 사람에게는 둘 다 "자리를 비운 사이"이고,
+    /// 가르는 순간 잠자기 마감이 '내 잘못'처럼 읽힌다.
+    static let title = "자리 비운 사이 근무가 끝났어요"
+
+    /// 서버가 아직 되살릴 수 있다고 말한 대상인가. `remainingSeconds <= 0` 은 이미 만료다.
+    static func isWindowOpen(_ session: AwayRestorableSession?) -> Bool {
+        guard let session else { return false }
+        return session.remainingSeconds > 0
+    }
+
+    /// 되살릴 수 있는 **분량**. 잔여 창 시간이 아니라 잃은 근무 시간을 쓴다 — 사람을 움직이는 숫자는
+    /// "언제까지"가 아니라 "얼마"이고, 잔여 창은 폴링마다 줄어들어 같은 배너가 30초마다 다른 글자가 된다.
+    static func subtitle(for session: AwayRestorableSession) -> String? {
+        guard let started = session.startedAt, let ended = session.endedAt else { return nil }
+        let seconds = Int(ended.timeIntervalSince(started))
+        guard seconds > 0 else { return nil }
+        return "\(MenuBarStatusFormatter.hoursMinutes(seconds)) 되살릴 수 있어요"
+    }
+
+    /// 왕복 중에는 문구로 진행을 알린다(버튼을 지우지 않는다 — 사라지면 눌린 건지 알 수 없다).
+    /// 연타는 스토어의 `isRestoringAwaySession` 가드가 막으므로 여기서 비활성으로 만들 필요가 없다.
+    static func actionTitle(isRestoring: Bool) -> String {
+        isRestoring ? "이어붙이는 중" : "이어붙이기"
     }
 }
 
@@ -1628,8 +1700,17 @@ enum UltraChargeStyle {
 /// 그래서 0일 때 사실만 말하고 끝내지 않고 **획득 경로를 말한다**. 이 앱에서 새 경제를 가르치는
 /// 자리는 여기 하나뿐이다(콕찌르기를 여는 순간이 잔량을 궁금해하는 유일한 순간이다).
 enum UltraBalanceText {
-    /// 배지 안 숫자. 음수는 서버 버그이거나 미래 규약이라 0으로 접는다.
-    static func badge(balance: Int) -> String { "\(max(0, balance))" }
+    /// 무제한(관리자)일 때 배지가 그리는 **한 글자**. 숫자가 아니라 기호인 것이 설계다 —
+    /// 제목 행 폭 예산이 "배지 = 캡슐 + 번개 + 글리프 하나"를 전제로 계산돼 있고(PokeTitleRowWidthBudget),
+    /// 여기에 "무제한"(3글자, 26pt 로 재면 26pt·caption2 로도 21pt)을 넣으면 그 예산이 통째로 뒤집힌다.
+    /// 뜻은 배지 툴팁(badgeHelp)과 울트라 화면의 큰 글자("무제한")가 말로 풀어 준다.
+    static let unlimitedBadge = "∞"
+
+    /// 배지 안 글자. 음수는 서버 버그이거나 미래 규약이라 0으로 접는다.
+    /// **무제한이면 숫자를 아예 만들지 않는다** — 관리자에게 잔량 숫자는 아무 뜻도 없다(줄지 않는다).
+    static func badge(balance: Int, unlimited: Bool = false) -> String {
+        unlimited ? unlimitedBadge : "\(max(0, balance))"
+    }
 
     /// 0개일 때. **획득 경로를 말한다** — 사실만 말하고 길을 안 알려 주면 그 화면은 막다른 길이다.
     static let empty = "미션으로 충전"
@@ -1641,23 +1722,30 @@ enum UltraBalanceText {
 
     /// 제목 행 힌트. **nil(아직 모름)이면 아무 숫자도 만들지 않고** 발견성 문구를 그대로 둔다
     /// (WorkTimerStorePoke 의 "정직한 일은 버리는 것" 규약 계승 — 틀린 숫자보다 침묵이 낫다).
-    static func hint(balance: Int?) -> String {
+    /// 무제한이면 **언제나 발견성 문구다.** 관리자의 잔량은 0일 수 있는데(쓰지 않으니 늘지도 않는다),
+    /// 그 사람에게 "미션으로 충전"이라고 말하면 하지 않아도 되는 일을 시키는 거짓 안내가 된다.
+    static func hint(balance: Int?, unlimited: Bool = false) -> String {
+        if unlimited { return discover }
         guard let balance else { return discover }
         return balance <= 0 ? empty : discover
     }
 
     /// 행 툴팁의 괄호 안 문구. 잔량이 없어도 **3초 홀드는 그대로 발사된다**(판정은 서버다) —
     /// 그래서 "못 쏜다"가 아니라 "없다 + 채우는 법"을 말한다.
-    static func rowTooltip(balance: Int?) -> String {
-        (balance ?? 1) > 0
+    static func rowTooltip(balance: Int?, unlimited: Bool = false) -> String {
+        (unlimited || (balance ?? 1) > 0)
             ? "콕 찌르기 (\(UltraChargeStyle.holdSecondsText)초 꾹 누르면 울트라)"
             : "콕 찌르기 (울트라 없음 — 미션으로 충전)"
     }
 
     /// 배지 툴팁. 숫자 자체는 반드시 Text 로 그린다 — 툴팁은 픽셀을 만들지 않으므로
     /// 정보를 여기에만 두면 렌더 테스트가 통째로 눈이 먼다.
-    static func badgeHelp(balance: Int?) -> String {
-        balance.map { "울트라 \($0)개 — 눌러서 충전 방법 보기" } ?? "잔량을 아직 못 읽었어요 — 눌러서 보기"
+    /// 무제한일 때는 **기호의 뜻을 말로 푼다** — 배지가 그리는 것은 글리프 하나뿐이라,
+    /// 그 자리에 잔량이 있던 것을 기억하는 사람은 ∞ 를 "못 읽었다"로 오해할 수 있다.
+    /// "충전 방법"을 말하지 않는 것도 의도다: 충전할 것이 없는 사람에게 충전을 권하지 않는다.
+    static func badgeHelp(balance: Int?, unlimited: Bool = false) -> String {
+        if unlimited { return "울트라 무제한 — 눌러서 보기" }
+        return balance.map { "울트라 \($0)개 — 눌러서 충전 방법 보기" } ?? "잔량을 아직 못 읽었어요 — 눌러서 보기"
     }
 }
 
@@ -1689,6 +1777,21 @@ enum PokeTitleRowWidthBudget {
     /// 배지 폭: 캡슐 h-padding 6*2 + bolt 10 + 내부 간격 3 + 숫자(자릿수 × 7).
     static func badgeWidth(digits: Int) -> CGFloat { 12 + 10 + 3 + CGFloat(max(0, digits)) * 7 }
 
+    /// 무제한 배지가 그리는 기호 "∞" 의 폭(pt). **숫자 한 자리보다 넓다** — 그래서 자릿수로 재지 않고
+    /// 항을 따로 둔다(1자리인 척하면 예산이 조용히 2.3pt 씩 거짓말한다).
+    ///
+    /// **근거(실측, caption2 = 10pt bold · SF):** 숫자 6.83pt / "∞" 9.27pt.
+    /// 보수적으로 10 을 쓴다. 그래도 **두 자리(14pt)보다는 좁다** — 그리고 이 파일에는
+    /// `hintWidth(digits: 2) >= longestHintWidth` 를 못 박은 단언이 이미 있다(상한이 두 자리로
+    /// 올라가는 날을 대비해 세워 둔 것). 즉 **무제한 배지의 여유는 그 단언이 이미 증명해 둔 여유의
+    /// 부분집합이다** — 폭 예산을 늘릴 이유도, 기호를 더 좁은 것으로 바꿀 이유도 없다.
+    /// (그래서 "무제한" 3글자를 배지에 넣는 선택은 기각했다: caption2 로 재도 21pt 라
+    ///  3자리 숫자보다 넓어, 힌트가 말줄임되는 첫 번째 조합이 된다.)
+    static let unlimitedGlyphWidth: CGFloat = 10
+
+    /// 무제한 배지의 폭. 숫자 자리를 기호 하나로 바꾼 것 말고는 badgeWidth 와 같은 조립이다.
+    static var unlimitedBadgeWidth: CGFloat { 12 + 10 + 3 + unlimitedGlyphWidth }
+
     /// 그 조합에서 힌트에 남는 폭(pt).
     static func hintWidth(digits: Int = maxBadgeDigits) -> CGFloat {
         contentWidth
@@ -1703,6 +1806,20 @@ enum PokeTitleRowWidthBudget {
     static func hintKoreanGlyphs(digits: Int = maxBadgeDigits) -> Int {
         max(0, Int(hintWidth(digits: digits) / koreanCaptionGlyphWidth))
     }
+
+    /// 무제한 배지가 섰을 때 힌트에 남는 폭(pt). 관리자 화면에서만 성립하는 조합이라 따로 잰다.
+    static var hintWidthWhenUnlimited: CGFloat {
+        contentWidth
+            - iconButtonWidth * 2
+            - titleWidth
+            - spacerMinWidth
+            - unlimitedBadgeWidth
+            - spacing * 5
+    }
+
+    static var hintKoreanGlyphsWhenUnlimited: Int {
+        max(0, Int(hintWidthWhenUnlimited / koreanCaptionGlyphWidth))
+    }
 }
 
 /// 제목 행 오른쪽 울트라 잔량 배지. **탭하면 울트라 화면**(잔량 + 충전 경로)이 열린다 —
@@ -1715,11 +1832,16 @@ enum PokeTitleRowWidthBudget {
 struct UltraBalanceBadge: View {
     /// nil = 아직 모름. 숫자를 만들지 않고 번개만 흐리게 그린다(자리는 유지).
     let balance: Int?
+    /// **서버가 말해 준** 무제한(관리자). true 면 숫자 자리에 기호 하나(∞)를 그린다.
+    /// 기본값 false 라 이 값을 안 넘기는 자리(기존 호출부·테스트)는 지금과 **완전히 같다**.
+    var isUnlimited: Bool = false
     let action: () -> Void
 
     @State private var hovering = false
 
-    private var isEmpty: Bool { (balance ?? 1) <= 0 }
+    /// 무제한은 **비어 있지 않다.** 이 한 줄을 빼면 잔량 0 인 관리자의 배지가 회색으로 죽는다
+    /// (관리자는 재화를 안 쓰므로 잔량이 0 에 머무는 것이 정상이다 — 서버는 그래도 발사한다).
+    private var isEmpty: Bool { !isUnlimited && (balance ?? 1) <= 0 }
     private var tint: Color { isEmpty ? CheckTheme.secondaryText : CheckTheme.accent }
 
     var body: some View {
@@ -1727,8 +1849,9 @@ struct UltraBalanceBadge: View {
             HStack(spacing: 3) {
                 Image(systemName: "bolt.fill")
                     .font(.system(size: 9, weight: .bold))
-                if let balance {
-                    Text(UltraBalanceText.badge(balance: balance))
+                // 무제한이면 잔량을 몰라도 그린다(∞ 는 잔량에서 파생되는 글자가 아니다).
+                if isUnlimited || balance != nil {
+                    Text(UltraBalanceText.badge(balance: balance ?? 0, unlimited: isUnlimited))
                         .font(.caption2.weight(.bold))
                         .monospacedDigit()
                 }
@@ -1746,9 +1869,9 @@ struct UltraBalanceBadge: View {
         .onHover { hovering = $0 }
         // 자리는 유지하고 숫자만 비운다 — 배지가 사라졌다 나타나면 제목 행 폭이 흔들린다
         // (IconButton.enabled 주석이 이미 "자리를 유지한 채 비활성만"으로 거부한 문제와 같은 것이다).
-        .opacity(balance == nil ? 0.55 : 1)
+        .opacity(balance == nil && !isUnlimited ? 0.55 : 1)
         .fixedSize()
-        .help(UltraBalanceText.badgeHelp(balance: balance))
+        .help(UltraBalanceText.badgeHelp(balance: balance, unlimited: isUnlimited))
     }
 }
 
@@ -2134,6 +2257,10 @@ private struct PokePanel: View {
     // 잔량은 미션으로 **그날 중에 늘어난다**. 0이라고 클라가 막으면 미션을 채워 잔량이 생긴 뒤에도
     // 그 화면은 다음 sync 까지 계속 잠겨 있다(구버전 v0.2.30 이 정확히 그 결함이었다).
     let ultraBalance: Int?
+    // 내가 **잔량 제한을 받지 않는가**(관리자). 서버 ultra_wallet_sync 가 말해 준 값을 스토어가 나른다.
+    // 클라가 role 로 추측하지 않는다 — 그 판정은 서버 한 곳이다(WorkTimerStore.ultraUnlimited 주석).
+    // 기본값 false 라 관리자가 아닌 사람의 화면은 지금과 **글자 하나까지 같다**.
+    var ultraUnlimited: Bool = false
     // 잔량 배지 탭 → 울트라 화면(잔량 + 충전 경로). "0개인데 어떻게 채우죠?"의 답이 있는 유일한 자리다.
     var onOpenUltraPanel: () -> Void = {}
     // 찌르기 **수신** 연결이 끊겼는가(PokeConnectionNotice.shouldWarn 결과). 안내줄 최우선 가지가 된다.
@@ -2230,11 +2357,20 @@ private struct PokePanel: View {
                 // 재화가 된 지금 그건 "지갑을 열어야만 잔고를 볼 수 있는" 설계다.
                 // 새 줄이 아니라 제목 행의 남는 폭에 얹는다 — 줄을 하나 더하면 패널 높이가 커져
                 // 창 높이 상한(700pt) 예산을 갉아먹는다(PokeTitleRowWidthBudget 이 그 폭을 지킨다).
-                UltraBalanceBadge(balance: ultraBalance, action: onOpenUltraPanel)
+                UltraBalanceBadge(
+                    balance: ultraBalance,
+                    // 무제한이면 숫자 대신 ∞ 를 그린다 — 새 줄을 만들지 않고 **같은 자리**에서 바뀐다.
+                    isUnlimited: ultraUnlimited,
+                    action: onOpenUltraPanel
+                )
                 // 발견성 문구는 그대로 산다. 0일 때만 "미션으로 충전"으로 갈아 끼워 **획득 경로**를 말한다.
-                Text(UltraBalanceText.hint(balance: ultraBalance))
+                // 무제한인 사람에겐 그 갈아 끼움이 없다(채울 것이 없다).
+                Text(UltraBalanceText.hint(balance: ultraBalance, unlimited: ultraUnlimited))
                     .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText.opacity((ultraBalance ?? 1) > 0 ? 1.0 : 0.65))
+                    .foregroundStyle(
+                        CheckTheme.secondaryText
+                            .opacity(ultraUnlimited || (ultraBalance ?? 1) > 0 ? 1.0 : 0.65)
+                    )
                     .fixedSize()
             }
             PanelDivider()
@@ -2346,6 +2482,7 @@ private struct PokePanel: View {
                         remainingCooldown: cooldownRemaining(entry.userID),
                         canPoke: isMyselfWorking,
                         ultraBalance: ultraBalance,
+                        ultraUnlimited: ultraUnlimited,
                         isComposing: activeComposerUserID == entry.userID,
                         onPoke: { onPoke(entry.userID) },
                         onUltra: { onUltra(entry.userID) },
@@ -2417,6 +2554,8 @@ private struct PokeDirectoryRowView: View {
     // 무조건 발사되고 판정은 서버가 한다. 잔량 0 툴팁이 떠 있어도 누르면 요청은 나간다 —
     // 그 사이 미션으로 잔량이 늘었을 수 있고, 그걸 아는 것은 서버뿐이다.
     let ultraBalance: Int?
+    // 무제한(관리자)이면 잔량 0 이어도 툴팁이 "없음"을 말하지 않는다 — 서버는 그래도 발사한다.
+    var ultraUnlimited: Bool = false
     // 이 행 아래 메시지 작성기가 펼쳐져 있는지(버튼을 켜진 상태로 그린다).
     var isComposing: Bool = false
     let onPoke: () -> Void
@@ -2509,7 +2648,7 @@ private struct PokeDirectoryRowView: View {
             // 툴팁의 홀드 시간도 상수에서 만든다(힌트 문구와 같은 이유 — 두 곳에 숫자를 흩뿌리지 않는다).
             // 잔량이 없을 때의 문장은 "다 썼다"가 아니다: 그건 하루 몫 시절의 말이고, 지금은
             // 기다려도 안 찬다. **충전 경로를 말하는 문장**으로 갈아 끼웠다.
-            .help(UltraBalanceText.rowTooltip(balance: ultraBalance))
+            .help(UltraBalanceText.rowTooltip(balance: ultraBalance, unlimited: ultraUnlimited))
         }
     }
 
@@ -3076,7 +3215,22 @@ enum UltraPanelCopy {
     static let failedCaption = "최신 잔량을 못 읽었어요"
     static let emptyMissions = "충전 경로가 아직 없어요"
 
-    static func heroCaption(balance: Int?, hasFailed: Bool) -> String {
+    /// 무제한(관리자)일 때 큰 글자 자리에 들어가는 말. **여기서는 기호를 쓰지 않는다** —
+    /// 이 화면은 폭이 넉넉하고(히어로 카드 한 줄을 통째로 쓴다), 뜻을 곧이곧대로 말할 수 있는
+    /// 유일한 자리다. 배지의 ∞ 가 무엇이었는지도 여기서 답을 얻는다.
+    static let unlimitedBalance = "무제한"
+    /// 무제한일 때의 보조 문장. 획득 경로("미션을 채우면")를 말하지 않는 것이 요점이다 —
+    /// 채울 필요가 없는 사람에게 할 일을 만들어 주지 않는다.
+    static var unlimitedCaption: String {
+        "\(UltraChargeStyle.holdSecondsText)초 꾹 누르면 발사 — 잔량을 쓰지 않아요"
+    }
+
+    static func heroCaption(balance: Int?, hasFailed: Bool, unlimited: Bool = false) -> String {
+        // ★ 무제한이 실패보다 **앞이다**. failedCaption 은 "최신 **잔량**을 못 읽었어요"인데,
+        //   잔량이 뜻을 갖지 않는 사람에게 그 문장은 아무 정보도 아니고 불안만 만든다.
+        //   sync 실패 사실 자체는 사라지지 않는다 — 미션 목록의 실패 문구와 [다시 시도] 버튼이
+        //   hasFailed 로 따로 그려진다(그쪽은 관리자에게도 그대로 뜻이 있다).
+        if unlimited { return unlimitedCaption }
         // 실패가 먼저다: 잔량은 남아 있어도(스토어가 알던 값을 버리지 않는다) 최신이라는 보장이 없다.
         if hasFailed { return failedCaption }
         guard let balance else { return loadingCaption }
@@ -3085,8 +3239,9 @@ enum UltraPanelCopy {
             : "아래 미션을 채우면 하나 생겨요"
     }
 
-    static func balanceText(_ balance: Int?) -> String {
-        balance.map { String(max(0, $0)) } ?? unknownBalance
+    static func balanceText(_ balance: Int?, unlimited: Bool = false) -> String {
+        if unlimited { return unlimitedBalance }
+        return balance.map { String(max(0, $0)) } ?? unknownBalance
     }
 }
 
@@ -3094,6 +3249,8 @@ enum UltraPanelCopy {
 /// store 값을 값 + 클로저로만 받아 렌더 테스트 친화적으로 유지).
 private struct UltraPanel: View {
     let balance: Int?
+    /// 서버가 말해 준 무제한(관리자). 기본값 false — 안 넘기면 지금과 완전히 같다.
+    var isUnlimited: Bool = false
     let missions: [MissionProgress]
     /// 미션을 한 번이라도 성공적으로 받았는가(빈 목록과 로드 전을 가른다 — 토큰 보드와 같은 규약).
     let hasLoaded: Bool
@@ -3117,6 +3274,11 @@ private struct UltraPanel: View {
     private var noticeHeight: CGFloat {
         (notice?.isEmpty == false) ? Self.noticeStripHeight : 0
     }
+
+    /// 히어로 아이콘을 accent 로 그릴 조건. **무제한은 잔량이 0 이어도 켜진 상태다** —
+    /// 관리자는 재화를 안 쓰므로 잔량이 0 에 머무는 것이 정상이고, 그 화면이 회색으로 죽으면
+    /// "울트라를 못 쏜다"는 거짓말이 된다(서버는 그래도 발사한다).
+    private var isCharged: Bool { isUnlimited || (balance ?? 0) > 0 }
 
     private var visibleRows: Int {
         ListRowBudget.visibleRows(
@@ -3156,23 +3318,26 @@ private struct UltraPanel: View {
     private var heroCard: some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(CheckTheme.accent.opacity((balance ?? 0) > 0 ? 0.18 : 0.08))
+                Circle().fill(CheckTheme.accent.opacity(isCharged ? 0.18 : 0.08))
                 Image(systemName: "bolt.fill")
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle((balance ?? 0) > 0 ? CheckTheme.accent : CheckTheme.secondaryText)
+                    .foregroundStyle(isCharged ? CheckTheme.accent : CheckTheme.secondaryText)
             }
             .frame(width: 46, height: 46)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(UltraPanelCopy.balanceText(balance))
+                    Text(UltraPanelCopy.balanceText(balance, unlimited: isUnlimited))
                         .font(.system(size: 26, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(CheckTheme.primaryText)
-                    Text("개")
-                        .font(.caption)
-                        .foregroundStyle(CheckTheme.secondaryText)
+                    // 단위는 **셀 수 있을 때만** 붙인다. "무제한 개"는 말이 아니다.
+                    if !isUnlimited {
+                        Text("개")
+                            .font(.caption)
+                            .foregroundStyle(CheckTheme.secondaryText)
+                    }
                 }
-                Text(UltraPanelCopy.heroCaption(balance: balance, hasFailed: hasFailed))
+                Text(UltraPanelCopy.heroCaption(balance: balance, hasFailed: hasFailed, unlimited: isUnlimited))
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)

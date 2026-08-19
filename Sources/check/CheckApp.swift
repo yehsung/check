@@ -19,7 +19,14 @@ struct CheckApp: App {
                 // 창 키 획득/상실도 setMenuPresented 로 흘려 티커/폴링 게이팅의 이중 안전망을 만든다.
                 .background(WindowAnchorAccessor(onVisibilityChange: { appDelegate.store.setMenuPresented($0) }))
         } label: {
-            MenuBarStatusLabel(snapshot: appDelegate.store.snapshot, title: appDelegate.store.menuBarTitle)
+            // 자리 비움은 스냅샷을 재대입하지 않고(전체 무효화 회피) 라벨을 그리는 이 자리에서만 얹는다.
+            // restorableAwaySession 은 계정이 바뀌면 스스로 침묵하고, 창 판정은 서버가 준 잔여 초로만 한다.
+            MenuBarStatusLabel(
+                snapshot: appDelegate.store.snapshot.markingAwayRestorable(
+                    AwayRestoreBannerCopy.isWindowOpen(appDelegate.store.restorableAwaySession)
+                ),
+                title: appDelegate.store.menuBarTitle
+            )
         }
         .menuBarExtraStyle(.window)
     }

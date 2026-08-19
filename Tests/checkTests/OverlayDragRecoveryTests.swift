@@ -364,3 +364,103 @@ func rewardNotificationLeavesDragWorking() {
 
     rig.teardown()
 }
+
+// MARK: - v0.2.35: 자리 비움 복원 안내가 입력 사슬에 손대지 않는다
+//
+// v0.2.35 는 `nudgeAutoStart()` 에 새 분기를 하나 들인다 — 복원 가능한 자동 마감이 있으면 등장 말풍선을
+// 다른 문구로 갈아 끼운다. 이 파일의 세 사고는 전부 "창을 만지는 새 기능이 입력 사슬의 값 하나를 굳혔다"
+// 였고, v0.2.32 의 드래그 사망도 정확히 이 계층에서 났다. 그래서 새 분기가 지나간 뒤에도
+//
+//   ① 못 박기(pinnedIgnoresMouseEvents)가 서지 않고,
+//   ② 히트-스루 모니터 구성이 그대로이고,
+//   ③ 사용자가 캐릭터를 **실제로 끌 수 있는지**
+//
+// 를 값과 결과 양쪽으로 본다. 그리고 복원 분기와 평소 분기의 입력 상태가 **서로 같다**는 것까지 본다 —
+// "복원 대상이 있는 사람만 캐릭터가 안 움직인다"는 재발 형태를 이 대조가 막는다.
+
+/// 넛지 자격(로그인 + 팀)을 세운다.
+@MainActor
+private func armDragNudgeEligibility(_ store: WorkTimerStore) {
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = "10000000-0000-0000-0000-000000000001"
+}
+
+/// 복원 창 안의 자동 마감 하나를 심는다.
+@MainActor
+private func armDragRestorableSession(_ store: WorkTimerStore, now: Date) {
+    store.awayStateOwnerUserID = "me"
+    store.awayRestorable = AwayRestorableSession(
+        sessionID: "20000000-0000-0000-0000-0000000000aa",
+        startedAt: now.addingTimeInterval(-6 * 3_600),
+        endedAt: now.addingTimeInterval(-3 * 3_600),
+        autoClosedAt: now.addingTimeInterval(-3 * 3_600),
+        reason: .away,
+        expiresAt: now.addingTimeInterval(3 * 3_600),
+        remainingSeconds: 3 * 3_600
+    )
+}
+
+/// 입력 사슬의 상태 한 벌(값 비교용).
+private struct InputGateState: Equatable {
+    let pinned: Bool?
+    let ignoresMouseEvents: Bool
+    let globalMonitor: Bool
+    let localMonitor: Bool
+}
+
+@MainActor
+@Test
+func awayRestoreNudgeLeavesTheInputChainUntouched() {
+    let now = Date(timeIntervalSince1970: 1_800_300_000)
+
+    @MainActor
+    func gates(_ rig: DragRig) -> InputGateState {
+        InputGateState(
+            pinned: rig.controller.pinnedIgnoresMouseEventsValue,
+            ignoresMouseEvents: rig.controller.panel.ignoresMouseEvents,
+            globalMonitor: rig.controller.hasMouseMoveMonitor,
+            localMonitor: rig.controller.hasLocalMouseMoveMonitor
+        )
+    }
+
+    /// 넛지 발동 → SwiftUI 관찰 경로 모사까지 한 벌로 돈다. 반환값은 발동 직전/직후/표시 후의 게이트 상태.
+    @MainActor
+    func run(restorable: Bool) -> (before: InputGateState, afterNudge: InputGateState, afterShow: InputGateState, dragged: Bool, rig: DragRig) {
+        let rig = DragRig()
+        armDragNudgeEligibility(rig.store)
+        rig.store.setOverlayEnabled(true)
+        if restorable { armDragRestorableSession(rig.store, now: now) }
+
+        let before = gates(rig)
+        rig.controller.nudgeAutoStart()
+        let afterNudge = gates(rig)
+        // 자동 시작이 스토어를 근무중으로 바꿨다 — 프로덕션과 같은 순서로 컨트롤러에 흘린다.
+        rig.controller.updateWorking(true)
+        rig.layout()
+        return (before, afterNudge, gates(rig), rig.dragMovesPanel(), rig)
+    }
+
+    let plain = run(restorable: false)
+    let withRestore = run(restorable: true)
+
+    // ① 못 박기는 어느 경로에서도 서지 않는다(값 불변). v0.2.32 의 드래그 사망이 정확히 이 값이었다.
+    #expect(plain.before.pinned == nil, "픽스처: 시작 시점에 못 박기가 없어야 한다")
+    #expect(withRestore.before.pinned == nil, "픽스처: 시작 시점에 못 박기가 없어야 한다")
+    #expect(withRestore.afterNudge.pinned == nil, "복원 안내가 클릭 통과를 못 박았다")
+    #expect(withRestore.afterShow.pinned == nil, "복원 안내 뒤 표시 경로가 클릭 통과를 못 박았다")
+
+    // ② 복원 분기와 평소 분기의 입력 상태가 완전히 같다 — 새 분기는 문구만 바꾼다.
+    #expect(withRestore.afterNudge == plain.afterNudge, "복원 분기가 발동 직후 입력 상태를 갈랐다")
+    #expect(withRestore.afterShow == plain.afterShow, "복원 분기가 표시 후 입력 상태를 갈랐다")
+
+    // ③ 픽스처가 실제로 복원 경로를 탔는가(같다는 단언이 '둘 다 아무 일도 안 했다'로 통과하지 않게).
+    #expect(withRestore.rig.store.awayRestorePromptPending, "픽스처: 복원 경로를 타지 않았다")
+    #expect(!plain.rig.store.awayRestorePromptPending)
+
+    // ④ 값이 아니라 결과. 복원 안내를 받은 사람도 캐릭터를 끌 수 있어야 한다.
+    #expect(plain.dragged, "픽스처: 평소 경로에서 드래그가 살아 있어야 한다")
+    #expect(withRestore.dragged, "복원 안내 뒤 드래그가 죽었다")
+
+    plain.rig.teardown()
+    withRestore.rig.teardown()
+}

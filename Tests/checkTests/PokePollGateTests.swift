@@ -578,8 +578,13 @@ func localExpiryTickSyncsWalletWhileWorking() async {
 func threeHourMilestoneFiresWalletSyncOnceADay() async {
     let testHost = "poke-gate-wallet-milestone"
     let store = makePokeGateStore(host: testHost)
-    let now = Date()
+    // ⚠️ Date() 를 쓰면 **KST 00:00~03:00 사이에만 빨개진다**: todayDuration 은 진행 세션을 KST 자정으로
+    //    클리핑하므로 새벽에 돌리면 3시간이 채워지지 않아 마일스톤이 발화하지 않는다(실측으로 잡았다).
+    //    시각을 고정해 하루 중 언제 돌려도 같은 결과가 나오게 한다 — displayNow 까지 함께 세우는 것이 핵심이다
+    //    (todayDuration 이 보는 '지금'은 인자 now 가 아니라 displayNow 다).
+    let now = milestoneFixtureNow
     store.startedAt = now.addingTimeInterval(-3 * 3600 - 60)
+    store.displayNow = now
     store.accumulatedSeconds = 0
     store.accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: now)
 
@@ -598,8 +603,9 @@ func threeHourMilestoneFiresWalletSyncOnceADay() async {
 func milestoneDoesNotFireWalletSyncBeforeThreeHours() async {
     let testHost = "poke-gate-wallet-early"
     let store = makePokeGateStore(host: testHost)
-    let now = Date()
+    let now = milestoneFixtureNow
     store.startedAt = now.addingTimeInterval(-2 * 3600)
+    store.displayNow = now
     store.accumulatedSeconds = 0
     store.accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: now)
 
@@ -912,12 +918,90 @@ private func walletSyncRequestCount(host: String) -> Int {
 }
 
 /// 발사형(Task) 경로라 요청이 비동기로 도착한다. 폴링 없이 짧게 기다린다.
+/// 마일스톤 픽스처의 고정 '지금'(2026-08-19 15:00 KST — 낮 한복판). 하루 경계에서 멀리 떨어져 있어야
+/// 진행 세션의 자정 클리핑이 결과를 바꾸지 않는다.
+private let milestoneFixtureNow = Date(timeIntervalSince1970: 1_787_119_200)
+
 private func waitUntilCount(host: String, expected: Int, timeout: TimeInterval = 60) async {
     let deadline = Date().addingTimeInterval(timeout)
     while Date() < deadline {
         if walletSyncRequestCount(host: host) >= expected { return }
         try? await Task.sleep(for: .milliseconds(10))
     }
+}
+
+// MARK: - AF: 자리 비움 정책 폴링 게이트 (v0.2.35 — docs/away-close.md 2절)
+//
+// away_sync() 는 폴링 본문에 얹혀 있다. 근무 중에는 매 주기 불러야 하고(임계·복원 창·판정 재료가
+// 매번 바뀔 수 있다), **비근무에서는 스로틀**해야 한다 — 로그인만 해 둔 맥 38대가 하루 종일
+// 30초마다 이 RPC 를 때리면 그건 take_pokes 게이트를 만든 이유(O1)를 그대로 되풀이하는 것이다.
+
+@MainActor
+@Test
+func awaySyncIsThrottledWhileNotWorking() async {
+    let testHost = "afk-sync-idle"
+    let store = makePokeGateStore(host: testHost)
+    let start = Date(timeIntervalSince1970: 1_800_000_000)
+    #expect(store.startedAt == nil)
+
+    await store.refreshAwayStateIfNeeded(now: start)
+    #expect(awaySyncRequestCount(host: testHost) == 1)
+
+    // 스로틀 안(60초 뒤)에는 나가지 않는다.
+    await store.refreshAwayStateIfNeeded(now: start.addingTimeInterval(60))
+    #expect(awaySyncRequestCount(host: testHost) == 1)
+
+    // 스로틀을 넘기면 다시 나간다 — 영구 침묵이 아니라 지연이다(복원 배너가 비근무에서 뜬다).
+    await store.refreshAwayStateIfNeeded(
+        now: start.addingTimeInterval(WorkTimerStore.awaySyncIdleThrottleSeconds + 1)
+    )
+    #expect(awaySyncRequestCount(host: testHost) == 2)
+}
+
+@MainActor
+@Test
+func awaySyncRunsEveryPollWhileWorking() async {
+    let testHost = "afk-sync-working"
+    let store = makePokeGateStore(host: testHost)
+    let start = Date(timeIntervalSince1970: 1_800_000_000)
+    store.startedAt = start
+    store.currentSessionID = "50000000-0000-0000-0000-0000000000a1"
+
+    // 근무 중에는 스로틀이 없다. 정책이 낡으면 마감 시각이 서버와 갈리고, 복원 창 판정도 함께 늙는다.
+    await store.refreshAwayStateIfNeeded(now: start)
+    await store.refreshAwayStateIfNeeded(now: start.addingTimeInterval(30))
+    #expect(awaySyncRequestCount(host: testHost) == 2)
+}
+
+/// away_sync 가 없는 서버(마이그레이션 미적용)에서 이 호출이 폴링을 죽이지 않는다.
+/// 죽으면 그 뒤 팀 상태·리그·토큰 보드가 통째로 멈춘다 — 실패는 "모른다"로 접히기만 해야 한다.
+@MainActor
+@Test
+func awaySyncFailureLeavesPollingAliveAndStopsClosing() async {
+    let testHost = "schema-missing"
+    let store = makePokeGateStore(host: testHost)
+    store.startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+    store.awayServerSupported = true
+    store.awayPolicy = AwayPolicy(
+        closeThresholdSeconds: 9_000,
+        restoreWindowSeconds: nil,
+        dailyRestoreLimit: nil,
+        restoresLeftToday: nil,
+        serverNow: nil
+    )
+
+    await store.refreshAwayStateIfNeeded(now: Date(timeIntervalSince1970: 1_800_000_000))
+
+    // 정책이 비워진다 = 마감이 멈춘다. 그리고 새 컬럼 전송도 함께 꺼진다(그 서버에 보내면 하트비트가 400 이다).
+    #expect(store.awayPolicy == nil)
+    #expect(!store.awayServerSupported)
+    // 폴링의 나머지가 계속 돈다는 증거: 같은 스토어로 이어지는 호출이 그대로 요청을 낸다.
+    await store.localExpiryTick()
+    #expect(takePokesRequestCount(host: testHost) >= 1)
+}
+
+private func awaySyncRequestCount(host: String) -> Int {
+    URLProtocolStub.requests(forHost: host).filter { $0.url?.path == "/rest/v1/rpc/away_sync" }.count
 }
 
 // MARK: - 헬퍼

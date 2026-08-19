@@ -263,22 +263,49 @@ actor SupabaseWorkService {
         try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
     }
 
-    func stopWork(accessToken: String, teamID: String, userID: String, startedAt: Date, endedAt: Date, durationSeconds: Int, fallbackSessionID: String) async throws {
-        let patched = try await send(
-            path: "/rest/v1/work_sessions",
-            method: "PATCH",
-            queryItems: [
-                URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
-                URLQueryItem(name: "user_id", value: "eq.\(userID)"),
-                URLQueryItem(name: "ended_at", value: "is.null")
-            ],
-            body: StopSessionRequest(
-                endedAt: dateFormatter.string(from: endedAt),
-                durationSeconds: max(0, durationSeconds)
-            ),
-            accessToken: accessToken,
-            prefer: "return=representation"
-        )
+    /// autoClosedReason: 자동 마감이면 사유(away/sleep/long_session). 사용자가 누른 종료는 nil 이고,
+    /// 그때 이 함수가 만드는 요청 바이트는 v0.2.34 와 완전히 같다.
+    func stopWork(
+        accessToken: String,
+        teamID: String,
+        userID: String,
+        startedAt: Date,
+        endedAt: Date,
+        durationSeconds: Int,
+        fallbackSessionID: String,
+        autoClosedReason: AutoCloseReason? = nil
+    ) async throws {
+        let closedStamp = dateFormatter.string(from: Date())
+        func patch(includeReason: Bool) async throws -> Data {
+            try await send(
+                path: "/rest/v1/work_sessions",
+                method: "PATCH",
+                queryItems: [
+                    URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
+                    URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                    URLQueryItem(name: "ended_at", value: "is.null")
+                ],
+                body: StopSessionRequest(
+                    endedAt: dateFormatter.string(from: endedAt),
+                    durationSeconds: max(0, durationSeconds),
+                    autoClosedAt: includeReason ? closedStamp : nil,
+                    autoClosedReason: includeReason ? autoClosedReason?.rawValue : nil
+                ),
+                accessToken: accessToken,
+                prefer: "return=representation"
+            )
+        }
+        var patched = Data()
+        if autoClosedReason == nil {
+            patched = try await patch(includeReason: false)
+        } else {
+            // 사유 컬럼이 없는 서버에서 **종료 자체가 실패하면** 그 세션은 영영 열린 채 남는다(팀원 화면
+            // '근무중' 고착 + 타이머 계속). 사유는 부가 정보이므로, 못 쓰면 사유 없이 마감하는 쪽이 옳다.
+            try await withoutNewColumns(
+                { patched = try await patch(includeReason: true) },
+                retry: { patched = try await patch(includeReason: false) }
+            )
+        }
         let updatedRows = (try? decoder.decode([WorkSessionRow].self, from: patched)) ?? []
         if updatedRows.isEmpty {
             try await sendNoBody(
@@ -291,19 +318,95 @@ actor SupabaseWorkService {
                     userId: userID,
                     startedAt: dateFormatter.string(from: startedAt),
                     endedAt: dateFormatter.string(from: endedAt),
-                    durationSeconds: max(0, durationSeconds)
+                    durationSeconds: max(0, durationSeconds),
+                    autoClosedAt: autoClosedReason == nil ? nil : closedStamp,
+                    autoClosedReason: autoClosedReason?.rawValue
                 ),
                 accessToken: accessToken,
                 prefer: "resolution=ignore-duplicates,return=minimal"
             )
+            // ★ 0행 = 서버가 이 세션을 **이미 닫아 뒀다**(스캐빈저가 먼저 발화했다). 폴백 INSERT 는
+            //   on_conflict=id + ignore-duplicates 라 아무것도 하지 않으므로, 사유는 여기서만 고칠 수 있다.
+            //   잠자기 경로가 이 갈래로 오는 것이 정상이다: 뚜껑을 닫으면 10분 뒤 서버가 'abandoned' 로
+            //   먼저 마감하는데 그 사유는 **복원 대상이 아니다**. 이 정정이 빠지면 2파의 핵심 이득
+            //   ("뚜껑 닫고 나간 사람 구제")이 통째로 사라진다(docs/away-close.md 4절).
+            if let autoClosedReason {
+                try? await correctAutoClose(
+                    accessToken: accessToken,
+                    userID: userID,
+                    sessionID: fallbackSessionID,
+                    startedAt: startedAt,
+                    endedAt: endedAt,
+                    reason: autoClosedReason,
+                    closedStamp: closedStamp
+                )
+            }
         }
         try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "off_work", activeSessionID: nil)
     }
 
+    /// 서버가 먼저 닫아 둔 **내** 세션의 자동 마감 사유를 정정한다(그리고 ended_at 은 **더 이르게만** 당긴다).
+    ///
+    /// 두 요청으로 나뉘는 이유는 "늦추는 것은 위조"라는 규약을 서버 필터로 강제하기 위해서다:
+    ///  1. `ended_at=gt.<내 시각>` 필터를 건 PATCH — 서버 값이 내 값보다 **늦을 때만** 닿는다.
+    ///  2. 1이 0행이면(서버 값이 이미 더 이르다) 사유만 고친다. ended_at 은 손대지 않는다.
+    /// 실패는 삼킨다(호출부의 try?) — 정정은 부가 이득이고, 여기서 던지면 이미 성공한 마감이 큐에서 재생된다.
+    private func correctAutoClose(
+        accessToken: String,
+        userID: String,
+        sessionID: String,
+        startedAt: Date,
+        endedAt: Date,
+        reason: AutoCloseReason,
+        closedStamp: String
+    ) async throws {
+        let narrowed = try await send(
+            path: "/rest/v1/work_sessions",
+            method: "PATCH",
+            queryItems: [
+                URLQueryItem(name: "id", value: "eq.\(sessionID)"),
+                URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                URLQueryItem(name: "ended_at", value: "gt.\(dateFormatter.string(from: endedAt))")
+            ],
+            body: AutoCloseCorrectionRequest(
+                endedAt: dateFormatter.string(from: endedAt),
+                durationSeconds: max(0, Int(endedAt.timeIntervalSince(startedAt))),
+                autoClosedAt: closedStamp,
+                autoClosedReason: reason.rawValue
+            ),
+            accessToken: accessToken,
+            prefer: "return=representation"
+        )
+        let narrowedRows = (try? decoder.decode([WorkSessionRow].self, from: narrowed)) ?? []
+        guard narrowedRows.isEmpty else { return }
+        try await sendNoBody(
+            path: "/rest/v1/work_sessions",
+            method: "PATCH",
+            queryItems: [
+                URLQueryItem(name: "id", value: "eq.\(sessionID)"),
+                URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                URLQueryItem(name: "ended_at", value: "not.is.null")
+            ],
+            body: AutoCloseReasonPatchRequest(autoClosedAt: closedStamp, autoClosedReason: reason.rawValue),
+            accessToken: accessToken,
+            prefer: "return=minimal"
+        )
+    }
+
     /// 근무중 생존신호. work_statuses.last_seen_at(+updated_at)을 현재 시각으로 갱신한다.
     /// upsertStatus 를 재사용하므로 active_session_id 도 유지된다.
-    func heartbeat(accessToken: String, teamID: String, userID: String, sessionID: String) async throws {
-        try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
+    /// lastInputAt: 이 맥이 관측한 마지막 의미 있는 입력 시각(v0.2.35). 같은 요청에 얹으므로 왕복은 그대로 1회다.
+    /// **소유 맥은 반드시 sessionID 와 함께 보낸다** — away 자격 판정(away_input_observable)이 "지금 세션을
+    /// 소유한 기기 행" 을 요구하므로, 세션을 안 실으면 그 사용자는 조용히 away 마감 대상에서 영원히 빠진다.
+    func heartbeat(accessToken: String, teamID: String, userID: String, sessionID: String, lastInputAt: Date? = nil) async throws {
+        try await upsertStatus(
+            accessToken: accessToken,
+            teamID: teamID,
+            userID: userID,
+            status: "working",
+            activeSessionID: sessionID,
+            lastInputAt: lastInputAt
+        )
     }
 
     /// 이 맥이 이 세션의 소유자라는 **사실**을 기기별 행으로 남긴다(work_status_devices).
@@ -323,21 +426,58 @@ actor SupabaseWorkService {
         userID: String,
         deviceID: String,
         sessionID: String,
-        openedSession: Bool
+        openedSession: Bool,
+        lastInputAt: Date? = nil
     ) async throws {
         let stamp = dateFormatter.string(from: Date())
+        func post(includeInput: Bool) async throws {
+            try await sendNoBody(
+                path: "/rest/v1/work_status_devices",
+                method: "POST",
+                queryItems: [URLQueryItem(name: "on_conflict", value: "team_id,user_id,device_id")],
+                body: StatusDeviceUpsertRequest(
+                    teamId: teamID,
+                    userId: userID,
+                    deviceId: deviceID,
+                    sessionId: sessionID,
+                    lastSeenAt: stamp,
+                    updatedAt: stamp,
+                    lastInputAt: includeInput ? lastInputAt.map { dateFormatter.string(from: $0) } : nil,
+                    openedSession: openedSession
+                ),
+                accessToken: accessToken,
+                prefer: "resolution=merge-duplicates,return=minimal"
+            )
+        }
+        guard lastInputAt != nil else {
+            try await post(includeInput: false)
+            return
+        }
+        try await withoutNewColumns({ try await post(includeInput: true) }, retry: { try await post(includeInput: false) })
+    }
+
+    /// **비소유 맥**(다른 맥이 연 세션을 미러링 중)이 자기 기기 행에 `last_input_at` 만 쓴다.
+    /// 이 한 요청이 없으면 "아이맥에서 시작 → 노트북으로 옮겨 작업"이 결정론적으로 매일 오마감된다:
+    /// 소유 맥의 last_input_at 은 얼어붙고, 노트북은 아무것도 보고하지 않아 서버의 max 규칙이 구제하지 못한다.
+    ///
+    /// **session_id / last_seen_at / opened_session 을 담지 않는 것이 이 함수의 전부다**(StatusDeviceInputRequest
+    /// 주석 참조). 담으면 소유권 판정의 증거가 되어 살아 있는 맥의 세션을 서로 뺏는 v0.2.16 사고로 되돌아간다.
+    func reportDeviceInput(
+        accessToken: String,
+        teamID: String,
+        userID: String,
+        deviceID: String,
+        lastInputAt: Date
+    ) async throws {
         try await sendNoBody(
             path: "/rest/v1/work_status_devices",
             method: "POST",
             queryItems: [URLQueryItem(name: "on_conflict", value: "team_id,user_id,device_id")],
-            body: StatusDeviceUpsertRequest(
+            body: StatusDeviceInputRequest(
                 teamId: teamID,
                 userId: userID,
                 deviceId: deviceID,
-                sessionId: sessionID,
-                lastSeenAt: stamp,
-                updatedAt: stamp,
-                openedSession: openedSession
+                lastInputAt: dateFormatter.string(from: lastInputAt)
             ),
             accessToken: accessToken,
             prefer: "resolution=merge-duplicates,return=minimal"
@@ -357,6 +497,112 @@ actor SupabaseWorkService {
         )
         let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         return Int(text) ?? 0
+    }
+
+    // MARK: - 자리 비움 자동 마감 (v0.2.35 / docs/away-close.md)
+
+    /// `away_sync()` — **임계값의 유일한 출처**다. 사장님 확정 사항이라 클라에 리터럴을 두지 않는다:
+    /// 이 숫자는 실측 없이 정한 값이고 계측 후 SQL 한 줄로 바뀌는데, 브루 지연으로 절반이 옛 값을 쓰면 안 된다.
+    ///
+    /// 마이그레이션이 아직 안 나간 서버에서는 PGRST202(404)가 오고 공용 매핑이 `.databaseSchemaMissing`
+    /// 으로 접는다 — 그것을 `AwaySyncUnavailable` 로 다시 접어 던진다(ultra_wallet_sync 와 같은 관용구).
+    /// 스토어는 이 오류를 받으면 정책을 비워 **마감을 멈춘다**: 임계를 모르는 채 리터럴로 마감하는 것이
+    /// 이 기능에서 가장 나쁜 실패 모드다.
+    func awaySync(accessToken: String) async throws -> AwaySync {
+        let data: Data
+        do {
+            data = try await send(
+                path: "/rest/v1/rpc/away_sync",
+                method: "POST",
+                body: AwaySyncRequest(),
+                accessToken: accessToken,
+                prefer: nil
+            )
+        } catch SupabaseWorkServiceError.databaseSchemaMissing {
+            throw AwaySyncUnavailable()
+        }
+        guard let response = try? decoder.decode(AwaySyncResponse.self, from: data) else {
+            throw AwaySyncUnavailable()
+        }
+        return awaySync(from: response)
+    }
+
+    /// 응답 원문 → 도메인. **정책은 임계가 실제로 온 경우에만 만든다** — 0/음수/키 부재는 전부 "모른다"이고,
+    /// 모를 때의 안전한 기본값은 "안 끊는다"다.
+    func awaySync(from response: AwaySyncResponse) -> AwaySync {
+        let isOK = response.status == "ok"
+        var policy: AwayPolicy?
+        if let threshold = response.closeThresholdSeconds, threshold > 0 {
+            policy = AwayPolicy(
+                closeThresholdSeconds: TimeInterval(threshold),
+                restoreWindowSeconds: response.restoreWindowSeconds.map(TimeInterval.init),
+                dailyRestoreLimit: response.dailyRestoreLimit,
+                restoresLeftToday: response.restoresLeftToday,
+                serverNow: response.serverNow.flatMap(parseDate)
+            )
+        }
+        var open: AwayOpenSession?
+        if let payload = response.openSession, let id = payload.id {
+            open = AwayOpenSession(
+                sessionID: id,
+                startedAt: payload.startedAt.flatMap(parseDate),
+                lastInputAt: payload.lastInputAt.flatMap(parseDate),
+                // 키가 없으면 false. 모르는 자격을 참으로 승격시키면 혼합 함대(구버전 맥이 섞인 사용자)의
+                // 살아 있는 근무가 매일 지워진다 — 서버 백스톱의 완화는 클라보다 30분 늦어 도달하지 못한다.
+                closeEligible: payload.closeEligible ?? false
+            )
+        }
+        var restorable: AwayRestorableSession?
+        if let payload = response.restorable, let id = payload.sessionId {
+            restorable = AwayRestorableSession(
+                sessionID: id,
+                startedAt: payload.startedAt.flatMap(parseDate),
+                endedAt: payload.endedAt.flatMap(parseDate),
+                autoClosedAt: payload.autoClosedAt.flatMap(parseDate),
+                reason: payload.autoClosedReason.flatMap(AutoCloseReason.init(rawValue:)),
+                expiresAt: payload.expiresAt.flatMap(parseDate),
+                remainingSeconds: max(0, payload.remainingSeconds ?? 0)
+            )
+        }
+        return AwaySync(isOK: isOK, policy: policy, openSession: open, restorable: restorable)
+    }
+
+    /// `restore_auto_closed_session(p_session_id)` — S2 삭제 → S1 재개 → 상태행 갱신 → 하루 카운터를
+    /// **한 트랜잭션**에서 한다. 클라에서 2회 왕복으로 흉내내지 마라(중간에 죽으면 열린 세션이 0개나 2개가 된다).
+    func restoreAutoClosedSession(accessToken: String, sessionID: String) async throws -> AwayRestoreOutcome {
+        let data = try await send(
+            path: "/rest/v1/rpc/restore_auto_closed_session",
+            method: "POST",
+            body: AwayRestoreRequest(pSessionId: sessionID),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        guard let response = try? decoder.decode(AwayRestoreResponse.self, from: data) else {
+            return .failed(status: "undecodable")
+        }
+        return awayRestoreOutcome(from: response, requestedSessionID: sessionID)
+    }
+
+    /// 응답 원문 → 결과(순수 함수라 테스트가 왕복 없이 어휘 전체를 고정한다).
+    /// 모르는 status 는 **성공으로 접지 않는다** — 접으면 열리지도 않은 세션을 로컬이 근무중으로 그린다.
+    func awayRestoreOutcome(from response: AwayRestoreResponse, requestedSessionID: String) -> AwayRestoreOutcome {
+        switch response.status {
+        case "ok", "already_open":
+            // already_open 은 재시도·두 번째 맥이다. 서버가 멱등하게 성공으로 답하므로 클라도 성공으로 다룬다 —
+            // 두 번 누른 사람에게 오류를 보이지 않는 것이 이 상태값의 존재 이유다.
+            return .restored(
+                sessionID: response.sessionId ?? requestedSessionID,
+                startedAt: response.startedAt.flatMap(parseDate)
+            )
+        case "expired":
+            return .expired
+        case "limit_reached":
+            return .limitReached(usedToday: response.usedToday ?? 0, limit: response.limit ?? 0)
+        case "not_found", "not_restorable", "already_restored", "not_member":
+            return .notRestorable(status: response.status ?? "")
+        default:
+            return .failed(status: response.status ?? "unknown")
+        }
     }
 
     /// 자동 마감한 세션을 되돌린다. ended_at/duration_seconds 를 null 로 재개하고 상태를 working 으로 복구.
@@ -952,22 +1198,61 @@ actor SupabaseWorkService {
             .first?.displayNameChangedAt.flatMap(parseDate)
     }
 
-    private func upsertStatus(accessToken: String, teamID: String, userID: String, status: String, activeSessionID: String?) async throws {
-        try await sendNoBody(
-            path: "/rest/v1/work_statuses",
-            method: "POST",
-            queryItems: [URLQueryItem(name: "on_conflict", value: "team_id,user_id")],
-            body: StatusUpsertRequest(
-                teamId: teamID,
-                userId: userID,
-                status: status,
-                activeSessionId: activeSessionID,
-                lastSeenAt: dateFormatter.string(from: Date()),
-                updatedAt: dateFormatter.string(from: Date())
-            ),
-            accessToken: accessToken,
-            prefer: "resolution=merge-duplicates,return=minimal"
-        )
+    /// lastInputAt 은 **하트비트 경로만** 싣는다(같은 요청에 얹으므로 쓰기 비용 증가는 0이다).
+    /// nil 이면 Swift 합성 Encodable 이 키를 생략하고 PostgREST merge-duplicates 는 본문에 없는 컬럼을
+    /// 건드리지 않는다 — 그래서 start/stop/reopen 경로의 바이트는 이 변경 전과 **한 글자도 다르지 않다**.
+    private func upsertStatus(
+        accessToken: String,
+        teamID: String,
+        userID: String,
+        status: String,
+        activeSessionID: String?,
+        lastInputAt: Date? = nil
+    ) async throws {
+        func post(includeInput: Bool) async throws {
+            try await sendNoBody(
+                path: "/rest/v1/work_statuses",
+                method: "POST",
+                queryItems: [URLQueryItem(name: "on_conflict", value: "team_id,user_id")],
+                body: StatusUpsertRequest(
+                    teamId: teamID,
+                    userId: userID,
+                    status: status,
+                    activeSessionId: activeSessionID,
+                    lastSeenAt: dateFormatter.string(from: Date()),
+                    updatedAt: dateFormatter.string(from: Date()),
+                    lastInputAt: includeInput ? lastInputAt.map { dateFormatter.string(from: $0) } : nil
+                ),
+                accessToken: accessToken,
+                prefer: "resolution=merge-duplicates,return=minimal"
+            )
+        }
+        guard lastInputAt != nil else {
+            try await post(includeInput: false)
+            return
+        }
+        // ★ 새 컬럼이 없는 서버로 떨어지면 **하트비트 자체가 실패한다** — 그러면 10분 뒤 서버 스캐빈저가
+        //   살아 있는 세션을 방치로 마감한다(브루 배포가 db push 보다 먼저 나가는 창은 실재한다).
+        //   스토어가 away_sync 응답으로 이 컬럼의 존재를 이미 확인하고 부르지만, 그 게이트가 한 번이라도
+        //   새면 사고의 크기가 "타이머 유실"이라 여기서 한 겹 더 막는다.
+        try await withoutNewColumns({ try await post(includeInput: true) }, retry: { try await post(includeInput: false) })
+    }
+
+    /// 새 컬럼(last_input_at / auto_closed_*)을 모르는 서버에서 요청이 통째로 죽지 않게 하는 1회 재시도.
+    /// PostgREST 는 없는 컬럼을 PGRST204("... in the schema cache")로 돌려주고 공용 매핑이 그것을
+    /// `.databaseSchemaMissing` 으로 접는다. 400 도 함께 받는 이유는 사유 어휘 제약 위반(23514)처럼
+    /// **새로 더한 컬럼 때문에만** 생길 수 있는 거절을 같은 문으로 흡수하기 위해서다.
+    private func withoutNewColumns(
+        _ attempt: () async throws -> Void,
+        retry: () async throws -> Void
+    ) async throws {
+        do {
+            try await attempt()
+        } catch SupabaseWorkServiceError.databaseSchemaMissing {
+            try await retry()
+        } catch SupabaseWorkServiceError.invalidResponse(400) {
+            try await retry()
+        }
     }
 
 }

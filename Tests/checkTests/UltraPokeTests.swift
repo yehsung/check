@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import SwiftUI
 import Testing
 @testable import check
 
@@ -906,6 +908,483 @@ final class UltraSequenceURLProtocol: URLProtocol {
         }
         Self.lock.unlock()
 
+        let data = Data(json.utf8)
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// MARK: - 관리자 무제한(v0.2.35)
+//
+// 사실관계: 서버 `ultra_poke_user` 는 `profiles.role = 'admin'` 이면 잔량 검사를 건너뛰고 즉시 발사한다
+// (20260809160000 이 세우고 20260814015000 이 role 조회로 바꾼 뒤 계속). 그런데 화면은 잔량 숫자(⚡N)를
+// 그대로 그렸다 — 관리자에게 그 숫자는 아무 뜻도 없다(쓰지 않으니 줄지도 않는다).
+//
+// **이 스위트가 지키는 것은 셋이다:**
+//  (가) 그 사실을 **서버가 말해 준다**. 클라는 role 을 추측하지 않는다 — 응답의 `unlimited` 불린 하나가
+//       유일한 입력이고, 그 값이 없는 서버(마이그레이션 전)에서도 디코드가 살아야 한다.
+//  (나) 화면이 그 사실을 **말한다**. 배지는 숫자 대신 기호 하나, 울트라 화면은 "무제한".
+//  (다) **관리자가 아닌 사람에게는 지금과 완전히 같다**(회귀 0). 픽셀까지 같아야 한다.
+@MainActor
+@Suite struct UltraUnlimitedFlagTests {
+
+    // MARK: - 픽스처
+
+    /// 서버 응답 한 벌. `unlimited` 만 갈아 끼울 수 있게 조각으로 만든다 —
+    /// 나머지 키를 손으로 두 번 적으면 "구버전 응답"과 "신버전 응답"이 다른 이유가 흐려진다.
+    private static func walletJSON(unlimited: String?) -> String {
+        let flag = unlimited.map { "\"unlimited\":\($0)," } ?? ""
+        return """
+        {"status":"ok",\(flag)"balance":3,"balance_cap":5,"daily_floor":1,"day":"2026-08-20",
+         "floor_applied":false,
+         "missions":[{"key":"work3h","kst_day":"2026-08-20","target_seconds":10800,
+                      "progress_seconds":9321,"claimed":false,"granted_now":false,"capped":false}],
+         "worked_seconds_closed":8121,"worked_seconds_open":1200,
+         "streak_days":5,"streak_includes_today":true,"measured_at":1755561234}
+        """
+    }
+
+    private func makeDefaults() -> UserDefaults {
+        let suiteName = "check-ultra-unlimited-tests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
+    }
+
+    private func makeService(host: String) -> SupabaseWorkService {
+        SupabaseWorkService(
+            projectURL: URL(string: "http://\(host)")!,
+            anonKey: "anon-test-key",
+            session: UltraWalletSyncURLProtocol.session()
+        )
+    }
+
+    private func makeStore(host: String) -> WorkTimerStore {
+        let store = WorkTimerStore(
+            service: makeService(host: host),
+            environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+            defaults: makeDefaults()
+        )
+        store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+        return store
+    }
+
+    // MARK: - (가) 서버가 말해 준다 — 실제 HTTP → 실제 디코더 왕복
+
+    /// **이 마이그레이션 이전 서버**(키가 아예 없다)에서도 지갑 동기화가 살아 있는가.
+    ///
+    /// 이 테스트 하나가 `unlimited` 를 Optional 로 둔 이유 전부다. 비옵셔널로 바꾸면(= `decode` 로
+    /// 바꾸면) 이 응답에서 디코드가 **통째로 throw** 되고, 잔량·미션·스트릭이 함께 사라진다 —
+    /// 화면은 "못 읽었어요"를 띄우는데 실제 원인은 "곁가지 키 하나가 없다"이다.
+    /// 그래서 나머지 필드까지 값으로 확인한다: 통째로 죽었는지 곁가지만 없는지를 이 줄들이 가른다.
+    @Test func serverWithoutTheFlagStillDecodesAndMeansNotUnlimited() async throws {
+        let host = "ultra-unlimited-old-server-test"
+        UltraWalletSyncURLProtocol.stub(Self.walletJSON(unlimited: nil), forHost: host)
+
+        let response = try await makeService(host: host).syncUltraWallet(accessToken: "t")
+
+        // 곁가지가 없다고 본체가 죽지 않았다.
+        #expect(response.isOK)
+        #expect(response.balance == 3)
+        #expect(response.balanceCap == 5)
+        #expect(response.missions.count == 1)
+        #expect(response.streakDays == 5)
+        // 그리고 **모른다**. 모를 때의 해석은 "무제한이 아니다" 한 쪽뿐이다 —
+        // 반대로 접으면 구버전 서버에 붙은 전원의 화면이 "무제한"이라고 거짓말한다.
+        #expect(response.unlimited == nil)
+        #expect(response.isUnlimited == false)
+    }
+
+    /// 신버전 서버의 두 값이 그대로 실려 온다. false 쪽이 **음성 대조군**이다 —
+    /// 이게 없으면 `isUnlimited` 가 상수 true 로 굳어도 위 테스트만으로는 못 잡는다.
+    @Test func serverFlagRidesThroughTheRealDecoderBothWays() async throws {
+        let onHost = "ultra-unlimited-admin-server-test"
+        UltraWalletSyncURLProtocol.stub(Self.walletJSON(unlimited: "true"), forHost: onHost)
+        let admin = try await makeService(host: onHost).syncUltraWallet(accessToken: "t")
+        #expect(admin.unlimited == true)
+        #expect(admin.isUnlimited)
+        // 무제한이어도 잔량 키는 그대로 온다(서버가 빼면 클라가 깨진다 — 마이그레이션 단언이 그걸 못 박는다).
+        #expect(admin.balance == 3)
+
+        let offHost = "ultra-unlimited-member-server-test"
+        UltraWalletSyncURLProtocol.stub(Self.walletJSON(unlimited: "false"), forHost: offHost)
+        let member = try await makeService(host: offHost).syncUltraWallet(accessToken: "t")
+        #expect(member.unlimited == false)
+        #expect(member.isUnlimited == false)
+    }
+
+    /// `status: "invalid"`(비로그인)는 status 외의 키를 하나도 보내지 않는다 — 그 응답에서도
+    /// 디코드가 살아야 하고, 무제한은 **거짓**이어야 한다(모르면 무제한이 아니다).
+    @Test func invalidResponseNeitherThrowsNorClaimsUnlimited() async throws {
+        let host = "ultra-unlimited-invalid-server-test"
+        UltraWalletSyncURLProtocol.stub(#"{"status":"invalid"}"#, forHost: host)
+        let response = try await makeService(host: host).syncUltraWallet(accessToken: "t")
+        #expect(response.isOK == false)
+        #expect(response.unlimited == nil)
+        #expect(response.isUnlimited == false)
+    }
+
+    // MARK: - 스토어가 그 값을 나른다
+
+    @Test func storeCarriesTheServerFlagAndNeverInventsIt() async throws {
+        let host = "ultra-unlimited-store-test"
+        let store = makeStore(host: host)
+        #expect(store.ultraUnlimited == false, "기본값은 '아직 모른다'의 안전한 쪽이어야 한다.")
+
+        UltraWalletSyncURLProtocol.stub(Self.walletJSON(unlimited: "true"), forHost: host)
+        store.applyUltraWallet(try await makeService(host: host).syncUltraWallet(accessToken: "t"))
+        #expect(store.ultraUnlimited)
+        #expect(store.ultraBalance == 3, "무제한이라고 잔량 미러를 버리지 않는다(서버는 여전히 값을 보낸다).")
+
+        // 서버가 마음을 바꾸면(강등·구버전 서버로의 폴백) 화면도 따라 내려온다. 접착식이면 안 된다.
+        UltraWalletSyncURLProtocol.stub(Self.walletJSON(unlimited: nil), forHost: host)
+        store.applyUltraWallet(try await makeService(host: host).syncUltraWallet(accessToken: "t"))
+        #expect(store.ultraUnlimited == false)
+    }
+
+    /// 계정이 바뀌면 남의 무제한을 물려받지 않는다(잔량·상한과 같은 규약).
+    @Test func clearingTheSessionClearsUnlimitedToo() {
+        let store = makeStore(host: "ultra-unlimited-clear-test")
+        store.ultraUnlimited = true
+        store.clearPersistedSession()
+        #expect(store.ultraUnlimited == false)
+    }
+
+    // MARK: - (나) 화면이 그 사실을 말한다 — 문구(순수)
+
+    @Test func unlimitedCopySaysSoWithoutInventingADailyQuota() {
+        // 배지는 **한 글자**다. 폭 예산이 그 전제 위에 서 있다(아래 폭 테스트가 실측으로 못 박는다).
+        #expect(UltraBalanceText.badge(balance: 0, unlimited: true) == "∞")
+        #expect(UltraBalanceText.unlimitedBadge.count == 1)
+        // 잔량이 0 이어도 "0" 이라고 말하지 않는다 — 관리자는 재화를 안 써서 0 에 머무는 것이 정상이고,
+        // 그 사람에게 0 은 "못 쏜다"는 거짓말이다(서버는 그래도 발사한다).
+        #expect(UltraBalanceText.badge(balance: 0, unlimited: true) != UltraBalanceText.badge(balance: 0))
+        // 힌트는 언제나 발견성 문구다 — 채울 것이 없는 사람에게 충전을 권하지 않는다.
+        #expect(UltraBalanceText.hint(balance: 0, unlimited: true) == UltraBalanceText.discover)
+        #expect(UltraBalanceText.hint(balance: nil, unlimited: true) == UltraBalanceText.discover)
+        // 행 툴팁도 같은 규칙(잔량 0 이어도 "없음"을 말하지 않는다).
+        #expect(
+            UltraBalanceText.rowTooltip(balance: 0, unlimited: true)
+                == UltraBalanceText.rowTooltip(balance: 3)
+        )
+        // 배지 툴팁은 기호의 뜻을 **말로** 푼다. 그 자리에 숫자가 있던 것을 기억하는 사람이
+        // ∞ 를 "못 읽었다"로 오해하지 않게 하는 유일한 장치다.
+        #expect(UltraBalanceText.badgeHelp(balance: 0, unlimited: true).contains("무제한"))
+        #expect(UltraBalanceText.badgeHelp(balance: 0, unlimited: true).contains("충전") == false)
+
+        // 울트라 화면은 폭이 넉넉하다 — 여기서는 기호가 아니라 말을 쓴다.
+        #expect(UltraPanelCopy.balanceText(0, unlimited: true) == "무제한")
+        #expect(UltraPanelCopy.balanceText(nil, unlimited: true) == "무제한")
+        #expect(UltraPanelCopy.heroCaption(balance: 0, hasFailed: false, unlimited: true).contains("잔량"))
+        // 실패보다 앞이다: "최신 **잔량**을 못 읽었어요"는 잔량이 뜻을 갖지 않는 사람에게 정보가 아니다
+        // (sync 실패 사실은 미션 목록의 문구와 [다시 시도]가 hasFailed 로 따로 말한다).
+        #expect(
+            UltraPanelCopy.heroCaption(balance: 0, hasFailed: true, unlimited: true)
+                != UltraPanelCopy.failedCaption
+        )
+
+        // 하루 몫 시절의 어휘가 새 문장으로 되살아나지 않았는가(기존 계약 계승).
+        let added = [
+            UltraBalanceText.badgeHelp(balance: 0, unlimited: true),
+            UltraPanelCopy.unlimitedBalance,
+            UltraPanelCopy.unlimitedCaption,
+        ]
+        for text in added {
+            for banned in ["오늘", "남음", "소진", "하루"] {
+                #expect(text.contains(banned) == false, "\"\(text)\" 가 하루 몫 어휘 \"\(banned)\" 를 쓴다.")
+            }
+        }
+    }
+
+    // MARK: - (다) 회귀 0 — 관리자가 아닌 사람의 문구는 글자 하나까지 같다
+
+    @Test func nonAdminCopyIsCharacterForCharacterUnchanged() {
+        for balance in [nil, 0, 1, 3, 5] as [Int?] {
+            #expect(UltraBalanceText.hint(balance: balance, unlimited: false) == UltraBalanceText.hint(balance: balance))
+            #expect(
+                UltraBalanceText.rowTooltip(balance: balance, unlimited: false)
+                    == UltraBalanceText.rowTooltip(balance: balance)
+            )
+            #expect(
+                UltraBalanceText.badgeHelp(balance: balance, unlimited: false)
+                    == UltraBalanceText.badgeHelp(balance: balance)
+            )
+            #expect(UltraPanelCopy.balanceText(balance, unlimited: false) == UltraPanelCopy.balanceText(balance))
+            for failed in [false, true] {
+                #expect(
+                    UltraPanelCopy.heroCaption(balance: balance, hasFailed: failed, unlimited: false)
+                        == UltraPanelCopy.heroCaption(balance: balance, hasFailed: failed)
+                )
+            }
+        }
+        #expect(UltraBalanceText.badge(balance: 3, unlimited: false) == "3")
+        #expect(UltraBalanceText.badge(balance: -3, unlimited: false) == "0")
+    }
+
+    // MARK: - 폭 예산 — 기호를 고른 근거를 **실측으로** 못 박는다
+
+    /// "∞ 는 숫자 한 자리보다 넓지만 두 자리보다 좁다"가 이 기능의 폭 결정 전부다.
+    ///
+    /// 왜 예산을 고치지 않고 기호를 골랐는가: 이 파일에는 이미
+    /// `hintWidth(digits: 2) >= longestHintWidth` 단언이 있다(상한이 두 자리로 올라갈 날을 대비해
+    /// 세워 둔 것). ∞ 가 두 자리보다 좁다면 **무제한 배지의 여유는 그 단언이 이미 증명해 둔 여유의
+    /// 부분집합**이다 — 새 예산을 세울 필요가 없다. 반대로 "무제한" 3글자를 배지에 넣었다면
+    /// caption2 로 재도 21pt 라 세 자리 숫자보다 넓어, 힌트가 말줄임되는 첫 조합이 됐을 것이다.
+    @Test func unlimitedBadgeFitsInsideTheHeadroomTheTwoDigitAssertionAlreadyProved() {
+        #expect(PokeTitleRowWidthBudget.unlimitedBadgeWidth > PokeTitleRowWidthBudget.badgeWidth(digits: 1))
+        #expect(PokeTitleRowWidthBudget.unlimitedBadgeWidth <= PokeTitleRowWidthBudget.badgeWidth(digits: 2))
+        // 그래서 가장 긴 힌트가 말줄임 없이 들어간다.
+        #expect(PokeTitleRowWidthBudget.hintWidthWhenUnlimited >= PokeTitleRowWidthBudget.longestHintWidth)
+        #expect(PokeTitleRowWidthBudget.hintKoreanGlyphsWhenUnlimited >= UltraBalanceText.empty.count)
+        // 대조군: 예산이 배지를 실제로 센다(안 세면 위 부등식은 아무것도 안 지킨다).
+        #expect(PokeTitleRowWidthBudget.hintWidthWhenUnlimited < PokeTitleRowWidthBudget.hintWidth(digits: 1))
+    }
+
+    /// ★ 위 상수가 **현실과 맞는가**를 렌더로 잰다. 순수 계산끼리만 비교하면 상수를 아무 값으로
+    /// 바꿔도 초록이다 — 그 사각지대를 이 테스트가 닫는다(실제 폰트로 그린 픽셀 폭을 본다).
+    @Test func theInfinityGlyphMeasuresBetweenOneAndTwoDigitsForReal() throws {
+        let oneDigit = try ultraUnlimitedRenderedSize(UltraBalanceBadge(balance: 5, action: {}))
+        let twoDigits = try ultraUnlimitedRenderedSize(UltraBalanceBadge(balance: 42, action: {}))
+        let unlimited = try ultraUnlimitedRenderedSize(
+            UltraBalanceBadge(balance: 0, isUnlimited: true, action: {})
+        )
+        // 전제: 자릿수가 실제로 폭을 만든다(이게 아니면 아래 부등식은 잡음과 구별되지 않는다).
+        #expect(twoDigits.w > oneDigit.w)
+        // 본론: ∞ 는 한 자리보다 넓고 두 자리보다 좁다 = unlimitedGlyphWidth 의 근거.
+        #expect(unlimited.w > oneDigit.w, "∞ 를 1자리로 재고 있다 — 예산이 조용히 거짓말한다.")
+        #expect(unlimited.w <= twoDigits.w, "∞ 가 두 자리보다 넓다 — 폭 예산을 다시 세워야 한다.")
+        // 높이는 안 변한다(제목 행이 무제한 여부로 흔들리면 700pt 예산이 갉인다).
+        #expect(unlimited.h == oneDigit.h)
+    }
+
+    // MARK: - 픽셀 — 배지가 **실제로** 다른 것을 그린다
+
+    @Test func theBadgeActuallyDrawsSomethingElseWhenUnlimited() throws {
+        let plain = try ultraUnlimitedRenderPNG(UltraBalanceBadge(balance: 0, action: {}), width: 60)
+        let plainTwin = try ultraUnlimitedRenderPNG(UltraBalanceBadge(balance: 0, action: {}), width: 60)
+        let unlimited = try ultraUnlimitedRenderPNG(
+            UltraBalanceBadge(balance: 0, isUnlimited: true, action: {}), width: 60
+        )
+        // 대조군 먼저: 같은 입력이면 바이트까지 같다.
+        #expect(plain == plainTwin)
+        #expect(plain != unlimited, "무제한인데 배지가 잔량 0 과 같은 그림이다 — 화면이 아무 말도 안 한다.")
+        // 회귀 0: 깃발을 끄면 **바이트까지** 예전 그림이다(기본 인자 생략과 명시가 같아야 한다).
+        let explicitlyOff = try ultraUnlimitedRenderPNG(
+            UltraBalanceBadge(balance: 0, isUnlimited: false, action: {}), width: 60
+        )
+        #expect(plain == explicitlyOff)
+    }
+
+    // MARK: - 패널 두 장 — 사장님이 실제로 보는 화면이 바뀌는가
+
+    /// 콕찌르기 화면(배지가 사는 자리)과 울트라 화면(큰 글자가 사는 자리) **둘 다** 바뀌어야 한다.
+    /// 값 테스트는 문구가 옳은지만 보고, 그 문구가 화면에 닿는지는 못 본다 — UltraPanel 은 private 라
+    /// 뷰 트리로 열 수도 없다. 그래서 메뉴 전체를 그려 픽셀로 가른다.
+    @Test func bothPanelsChangeForAnAdminAndNoOneElsesPixelsMove() throws {
+        for visible in [PanelUnderTest.poke, .ultra] {
+            let plain = try ultraUnlimitedRenderPNG(CheckMenuView(store: panelStore(visible, unlimited: false)))
+            let twin = try ultraUnlimitedRenderPNG(CheckMenuView(store: panelStore(visible, unlimited: false)))
+            let unlimited = try ultraUnlimitedRenderPNG(CheckMenuView(store: panelStore(visible, unlimited: true)))
+            // 대조군: 같은 입력이면 바이트까지 같다(이게 없으면 아래 부등식은 렌더 잡음과 구별되지 않는다).
+            #expect(plain == twin, "\(visible) 픽스처가 결정적이지 않다 — 아래 부등식이 공허해진다.")
+            #expect(plain != unlimited, "\(visible) 화면이 무제한을 말하지 않는다 — 여전히 잔량 숫자를 그린다.")
+        }
+    }
+
+    /// 무제한 표시가 **새 줄을 만들지 않는다.** 배지가 제목 행에 얹혀 있다는 주장의 실증이다
+    /// (창 높이 상한 700pt 예산 — 줄이 하나 늘면 그만큼 갉아먹는다).
+    @Test func unlimitedAddsNoNewLineToEitherPanel() throws {
+        for visible in [PanelUnderTest.poke, .ultra] {
+            let plain = try #require(ultraUnlimitedRenderedHeight(CheckMenuView(store: panelStore(visible, unlimited: false))))
+            let unlimited = try #require(ultraUnlimitedRenderedHeight(CheckMenuView(store: panelStore(visible, unlimited: true))))
+            #expect(plain == unlimited, "\(visible) 높이가 무제한 여부로 흔들린다 = 줄이 생겼다.")
+            #expect(Double(unlimited) / 2.0 <= 700.0)
+        }
+    }
+
+    /// ★ 픽셀은 "화면이 달라졌다"까지만 말한다. **어느 문구가 그 자리에 닿았는지**는 못 읽는다 —
+    /// 실제로 울트라 화면의 큰 글자 분기를 통째로 지워도 위 부등식은 초록이었다(히어로 아이콘 색이
+    /// isCharged 로 함께 바뀌기 때문이다. 뮤테이션으로 확인했다). UltraPanel 은 private 라 뷰 트리로
+    /// 열 수도 없으므로, 그 사각지대는 **원문 계약**으로 닫는다.
+    ///
+    /// 주석을 걷어낸 코드만 본다 — 안 그러면 설명을 지워야만 초록이 되는 테스트가 된다.
+    @Test func theUltraPanelActuallyAsksTheCopyForTheUnlimitedWording() throws {
+        let source = Self.codeOnly(try Self.menuViewSource())
+        let panel = try Self.structBody("private struct UltraPanel: View {", in: source)
+        #expect(
+            panel.contains("UltraPanelCopy.balanceText(balance, unlimited: isUnlimited)"),
+            "울트라 화면의 큰 글자가 무제한을 안 묻는다 — 관리자에게 여전히 숫자를 그린다."
+        )
+        #expect(
+            panel.contains("unlimited: isUnlimited"),
+            "히어로 보조문장도 같은 사실을 받아야 한다(문구만 옳고 화면엔 안 닿는 상태를 막는다)."
+        )
+        // 단위는 셀 수 있을 때만 붙는다("무제한 개"는 말이 아니다).
+        #expect(panel.contains("if !isUnlimited {"), "단위 \"개\" 가 무제한일 때도 붙는다.")
+        // 대조군: 추출이 실제로 한 선언만 잘라 왔다(전체를 돌려주면 위 단언은 공허하다).
+        #expect(panel.contains("struct MissionRowView") == false, "선언 추출 범위가 너무 넓다.")
+        #expect(panel.contains("heroCard"), "선언 추출 범위가 너무 좁다 — 히어로 카드를 못 담았다.")
+    }
+
+    // MARK: - 소스 읽기 헬퍼(이 스위트 전용 — 다른 파일의 동명 헬퍼와 겹치지 않게 static 으로 둔다)
+
+    private static func menuViewSource() throws -> String {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = repoRoot.appendingPathComponent("Sources/check/CheckMenuView.swift")
+        // 못 읽으면 **던진다** — 조용히 통과하면 경로가 바뀐 날 방어망이 사라진 것을 아무도 모른다.
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw UltraUnlimitedSourceError.unreadable(url.path)
+        }
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// 줄 주석을 걷어낸 코드. 문자열 리터럴 안의 `//` 는 이 파일에 없다(있으면 이 헬퍼를 고쳐야 한다).
+    private static func codeOnly(_ source: String) -> String {
+        source
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> String in
+                guard let range = line.range(of: "//") else { return String(line) }
+                return String(line[line.startIndex..<range.lowerBound])
+            }
+            .joined(separator: "\n")
+    }
+
+    /// 선언 한 줄부터 **중괄호 깊이가 0 으로 돌아올 때까지**(= 본문 전체)를 잘라낸다.
+    private static func structBody(_ header: String, in source: String) throws -> String {
+        let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard let start = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix(header) })
+        else { throw UltraUnlimitedSourceError.declarationNotFound(header) }
+        var depth = 0
+        var collected: [String] = []
+        for line in lines[start...] {
+            collected.append(line)
+            depth += line.filter { $0 == "{" }.count
+            depth -= line.filter { $0 == "}" }.count
+            if depth == 0, collected.count > 1 { break }
+        }
+        return collected.joined(separator: "\n")
+    }
+
+    private enum PanelUnderTest { case poke, ultra }
+
+    /// 두 패널 중 하나만 열린 결정적 스토어. **무제한 말고는 아무것도 다르지 않다** —
+    /// 잔량도 목록도 안내줄도 같다. 그래야 위 부등식이 "무제한 표시"만을 잡는다.
+    private func panelStore(_ visible: PanelUnderTest, unlimited: Bool) -> WorkTimerStore {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = makeStore(host: "ultra-unlimited-panel-render-test")
+        store.startedAt = now
+        store.displayNow = now
+        store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3_600)
+        store.currentTeamID = URLProtocolStub.stubTeamID
+        store.teamName = "아잉팀"
+        store.pokeDirectory = [
+            PokeDirectoryEntry(userID: "teammate", name: "영식", avatarURL: nil, isWorking: true)
+        ]
+        store.pokeDirectoryLoaded = true
+        // ★ 잔량 0 = 관리자의 정상 상태다(재화를 안 쓰므로 늘지도 줄지도 않는다).
+        //   그래서 이 값이 무제한 표시의 가장 가혹한 조건이다: 잘못 만들면 화면이 "울트라 없음"이라고 말한다.
+        store.applyUltraBalance(0)
+        store.missionsLoaded = true
+        store.ultraUnlimited = unlimited
+        switch visible {
+        case .poke: store.isPokePanelVisible = true
+        case .ultra: store.isUltraPanelVisible = true
+        }
+        return store
+    }
+}
+
+// MARK: - 무제한 테스트 전용 렌더/스텁 헬퍼
+//
+// 이름을 전부 고유하게 짓는 이유는 이 파일 머리의 경고 그대로다: 모듈 전역에서 이름이 겹치면
+// 테스트 타깃이 통째로 컴파일되지 않는다(다른 파일에도 renderPNG 가 산다).
+
+@MainActor
+private func ultraUnlimitedRenderPNG(_ view: some View, width: CGFloat = 340) throws -> Data {
+    let renderer = ImageRenderer(content: view.frame(width: width).fixedSize())
+    renderer.scale = 2
+    guard let image = renderer.nsImage,
+          let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff),
+          let png = bitmap.representation(using: .png, properties: [:])
+    else { throw UltraUnlimitedRenderError.failed }
+    return png
+}
+
+@MainActor
+private func ultraUnlimitedRenderedHeight(_ view: some View, width: CGFloat = 340) -> Int? {
+    let renderer = ImageRenderer(content: view.frame(width: width).fixedSize())
+    renderer.scale = 2
+    guard let image = renderer.nsImage,
+          let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff)
+    else { return nil }
+    return bitmap.pixelsHigh
+}
+
+/// 자연 크기로 그린 픽셀 크기. **폭 자체가 계약인 배지 전용** — `.frame(width:)` 로 고정하면
+/// "기호가 숫자보다 넓다"가 픽셀에서 사라진다.
+@MainActor
+private func ultraUnlimitedRenderedSize(_ view: some View) throws -> (w: Int, h: Int) {
+    let renderer = ImageRenderer(content: view.fixedSize())
+    renderer.scale = 2
+    guard let image = renderer.nsImage,
+          let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff)
+    else { throw UltraUnlimitedRenderError.failed }
+    return (bitmap.pixelsWide, bitmap.pixelsHigh)
+}
+
+private enum UltraUnlimitedRenderError: Error { case failed }
+
+private enum UltraUnlimitedSourceError: Error {
+    case unreadable(String)
+    case declarationNotFound(String)
+}
+
+/// `ultra_wallet_sync` 응답만 흉내 내는 스텁. **기존 UltraSequenceURLProtocol 을 건드리지 않는 이유**는
+/// 그쪽이 찌르기 순차 시나리오 전용이라, 지갑 경로를 끼워 넣으면 이 파일의 다른 테스트가 보는 큐 규칙이
+/// 바뀌기 때문이다. 호스트별로 격리한다(요청 기록은 프로세스 전역이다).
+final class UltraWalletSyncURLProtocol: URLProtocol {
+    static let walletPath = "/rest/v1/rpc/ultra_wallet_sync"
+
+    private static let lock = NSLock()
+    private nonisolated(unsafe) static var bodiesByHost: [String: String] = [:]
+
+    static func stub(_ json: String, forHost host: String) {
+        lock.lock(); defer { lock.unlock() }
+        bodiesByHost[host] = json
+    }
+
+    static func session() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [UltraWalletSyncURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let host = request.url?.host ?? ""
+        Self.lock.lock()
+        let stubbed = Self.bodiesByHost[host]
+        Self.lock.unlock()
+        // 지갑 경로가 아니면 빈 배열(다른 경로가 이 스텁을 타고 들어와도 조용히 지나가게).
+        let json = (request.url?.path == Self.walletPath) ? (stubbed ?? "{}") : "[]"
         let data = Data(json.utf8)
         let response = HTTPURLResponse(
             url: request.url!,

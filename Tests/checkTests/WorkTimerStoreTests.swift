@@ -5216,3 +5216,753 @@ func forcedLogoutClearsAutoCloseUndoTarget() {
     store.refreshTimedBanner()
     #expect(store.timedBanner == nil)
 }
+
+// MARK: - AF: 자리 비움 자동 마감 (v0.2.35 — docs/away-close.md)
+//
+// 이 스위트가 고정하는 계약은 넷이다.
+//  1. **임계는 서버가 소유한다.** 못 받았으면 몇 시간이 지나도 마감하지 않는다(모를 때의 안전한 기본값).
+//  2. **판정 기준은 max(로컬 관측, 서버가 계산한 기기 max)** — 로컬 단독이면 "아이맥 켜둔 채 노트북에서
+//     작업"이 결정론적으로 매일 오마감된다.
+//  3. **closeEligible 을 클라가 무시하면 안 된다.** 클라는 서버 백스톱보다 30분 먼저 발화하므로,
+//     서버에만 있는 혼합 함대 면제는 도달조차 못 한다.
+//  4. **비소유 맥의 쓰기는 last_input_at 만이다.** session_id/last_seen_at 을 담는 순간 그 행이 소유권
+//     판정의 증거로 승격돼 v0.2.16 의 이중 소유 사고로 되돌아간다.
+
+private let awayUserID = "00000000-0000-0000-0000-000000000002"
+private let awaySessionID = "20000000-0000-0000-0000-0000000000aa"
+
+@MainActor
+private func makeAwayStore(host: String, now: Date) -> WorkTimerStore {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(host)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: awayUserID)
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.clock = { now }
+    store.inputSessionUsable = { true }
+    store.meaningfulIdleSeconds = { 0 }
+    return store
+}
+
+/// 근무 중 + 서버 판정 재료가 갖춰진 상태를 만든다. threshold 는 **서버가 준 값**이다(클라 상수 아님).
+@MainActor
+private func armAwayStore(
+    _ store: WorkTimerStore,
+    now: Date,
+    startedAt: Date,
+    localInput: Date?,
+    remoteInput: Date?,
+    closeEligible: Bool = true,
+    thresholdSeconds: TimeInterval? = 9_000,
+    serverSessionID: String = awaySessionID
+) {
+    store.startedAt = startedAt
+    store.currentSessionID = WorkTimerStore.canonicalSessionID(awaySessionID)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+    store.lastMeaningfulInputAt = localInput
+    store.awayServerSupported = true
+    store.awayPolicy = thresholdSeconds.map {
+        AwayPolicy(
+            closeThresholdSeconds: $0,
+            restoreWindowSeconds: 21_600,
+            dailyRestoreLimit: 2,
+            restoresLeftToday: 2,
+            serverNow: now
+        )
+    }
+    store.awayOpenSession = AwayOpenSession(
+        sessionID: serverSessionID,
+        startedAt: startedAt,
+        lastInputAt: remoteInput,
+        closeEligible: closeEligible
+    )
+}
+
+/// docs/away-close.md 2절의 응답을 **문서에 적힌 그대로** 디코드한다. 키 하나가 어긋나면 여기서 죽는다.
+@MainActor
+@Test
+func awaySyncResponseDecodesDocumentedContract() async {
+    let json = """
+    {
+      "status": "ok",
+      "serverNow": "2026-08-19T13:51:15.990741+00:00",
+      "closeThresholdSeconds": 9000,
+      "backstopSeconds": 10800,
+      "freezeSeconds": 1800,
+      "restoreWindowSeconds": 21600,
+      "dailyRestoreLimit": 2,
+      "restorableReasons": ["away", "sleep"],
+      "restoresUsedToday": 0,
+      "restoresLeftToday": 2,
+      "openSession": {
+        "id": "20000000-0000-0000-0000-0000000000aa",
+        "teamId": "10000000-0000-0000-0000-000000000001",
+        "startedAt": "2026-08-19T01:00:00+00:00",
+        "lastInputAt": "2026-08-19T02:00:00+00:00",
+        "closeEligible": true,
+        "closeDueAt": "2026-08-19T04:30:00+00:00"
+      },
+      "restorable": {
+        "sessionId": "30000000-0000-0000-0000-0000000000bb",
+        "teamId": "10000000-0000-0000-0000-000000000001",
+        "startedAt": "2026-08-19T00:00:00+00:00",
+        "endedAt": "2026-08-19T02:59:00+00:00",
+        "durationSeconds": 10740,
+        "autoClosedAt": "2026-08-19T05:29:00+00:00",
+        "autoClosedReason": "away",
+        "expiresAt": "2026-08-19T08:59:00+00:00",
+        "remainingSeconds": 10740
+      }
+    }
+    """
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let response = try! decoder.decode(AwaySyncResponse.self, from: Data(json.utf8))
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://away-decode")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let sync = await service.awaySync(from: response)
+
+    #expect(sync.isOK)
+    #expect(sync.policy?.closeThresholdSeconds == 9_000)
+    #expect(sync.policy?.restoreWindowSeconds == 21_600)
+    #expect(sync.policy?.dailyRestoreLimit == 2)
+    #expect(sync.openSession?.sessionID == "20000000-0000-0000-0000-0000000000aa")
+    #expect(sync.openSession?.closeEligible == true)
+    #expect(sync.openSession?.lastInputAt != nil)
+    #expect(sync.restorable?.sessionID == "30000000-0000-0000-0000-0000000000bb")
+    #expect(sync.restorable?.reason == .away)
+    #expect(sync.restorable?.remainingSeconds == 10_740)
+    #expect(sync.restorable?.expiresAt != nil)
+}
+
+/// 임계가 없는(혹은 0인) 응답은 **정책 없음**으로 접힌다 = 그 폴링에서 마감 금지.
+/// closeEligible 키가 없으면 false 다 — 모르는 자격을 참으로 승격시키면 혼합 함대가 매일 지워진다.
+@MainActor
+@Test
+func awaySyncTreatsMissingPolicyAndEligibilityAsUnknown() async {
+    let json = """
+    {"status":"ok","openSession":{"id":"20000000-0000-0000-0000-0000000000aa"}}
+    """
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let response = try! decoder.decode(AwaySyncResponse.self, from: Data(json.utf8))
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://away-decode-2")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let sync = await service.awaySync(from: response)
+
+    #expect(sync.policy == nil)
+    #expect(sync.openSession?.closeEligible == false)
+    #expect(sync.restorable == nil)
+}
+
+/// 임계 경계는 **배타적**이다(서버 부등호와 같다): 정확히 임계면 살아 있고, 넘겨야 마감된다.
+/// 마감 시각은 마지막 입력 시각 그대로(소급)여야 한다 — 지금 시각으로 마감하면 자리 비운 시간이 근무로 남는다.
+@MainActor
+@Test
+func awayCloseFiresOnlyPastServerThresholdAndBacktracksEndedAt() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let start = now.addingTimeInterval(-6 * 3_600)
+    let lastInput = now.addingTimeInterval(-9_000)
+
+    let onBoundary = makeAwayStore(host: "away-boundary", now: now)
+    armAwayStore(onBoundary, now: now, startedAt: start, localInput: lastInput, remoteInput: nil)
+    onBoundary.evaluateAwaySession(now: now)
+    #expect(onBoundary.startedAt == start)
+
+    let past = makeAwayStore(host: "away-past", now: now)
+    armAwayStore(past, now: now, startedAt: start, localInput: lastInput.addingTimeInterval(-1), remoteInput: nil)
+    past.evaluateAwaySession(now: now)
+    #expect(past.startedAt == nil)
+    #expect(past.syncMessage == "자리 비움으로 자동 근무종료됨")
+    let stopped = past.pendingItems.last
+    #expect(stopped?.endedAt == lastInput.addingTimeInterval(-1))
+    #expect(stopped?.autoCloseReason == .away)
+}
+
+/// **서버가 임계를 안 줬으면 마감하지 않는다**(구버전 서버·오프라인·RPC 실패). 사장님 확정 사항이다 —
+/// 클라 상수로 두면 계측 후 값을 바꿀 때 브루 지연으로 절반이 옛 값을 쓴다.
+@MainActor
+@Test
+func awayCloseNeverFiresWithoutServerPolicy() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: "away-nopolicy", now: now)
+    armAwayStore(
+        store,
+        now: now,
+        startedAt: now.addingTimeInterval(-12 * 3_600),
+        localInput: now.addingTimeInterval(-10 * 3_600),
+        remoteInput: nil,
+        thresholdSeconds: nil
+    )
+
+    store.evaluateAwaySession(now: now)
+
+    #expect(store.startedAt != nil)
+    #expect(store.pendingItems.isEmpty)
+}
+
+/// closeEligible 이 거짓이면(구버전 맥이 섞인 사용자) 통째로 면제다.
+@MainActor
+@Test
+func awayCloseSkippedWhenServerSaysNotEligible() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: "away-ineligible", now: now)
+    armAwayStore(
+        store,
+        now: now,
+        startedAt: now.addingTimeInterval(-8 * 3_600),
+        localInput: now.addingTimeInterval(-5 * 3_600),
+        remoteInput: nil,
+        closeEligible: false
+    )
+
+    store.evaluateAwaySession(now: now)
+
+    #expect(store.startedAt != nil)
+}
+
+/// **아이맥 켜둔 채 노트북에서 작업.** 로컬 관측은 3시간 전에 멈췄지만 서버가 든 기기 max 는 1분 전이다 —
+/// 로컬 단독으로 판정하면 이 사람은 매일 결정론적으로 오마감된다.
+@MainActor
+@Test
+func awayCloseUsesRemoteDeviceInputWhenLocalIsStale() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: "away-remote", now: now)
+    armAwayStore(
+        store,
+        now: now,
+        startedAt: now.addingTimeInterval(-8 * 3_600),
+        localInput: now.addingTimeInterval(-3 * 3_600),
+        remoteInput: now.addingTimeInterval(-60)
+    )
+
+    store.evaluateAwaySession(now: now)
+
+    #expect(store.startedAt != nil)
+    #expect(store.awayLastInputAt() == now.addingTimeInterval(-60))
+}
+
+/// 흡수 세션(다른 맥이 연 세션)은 내 무입력으로 마감하지 않는다. 그 사람은 지금도 일하고 있다.
+@MainActor
+@Test
+func awayCloseSkippedForAdoptedSession() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: "away-adopted", now: now)
+    armAwayStore(
+        store,
+        now: now,
+        startedAt: now.addingTimeInterval(-8 * 3_600),
+        localInput: now.addingTimeInterval(-5 * 3_600),
+        remoteInput: nil
+    )
+    store.adoptedRemoteSession = true
+
+    store.evaluateAwaySession(now: now)
+
+    #expect(store.startedAt != nil)
+}
+
+/// 서버가 든 열린 세션이 내 세션이 아니면(찢어진 읽기·다른 맥의 세션) 그 판정 재료로 마감하지 않는다.
+@MainActor
+@Test
+func awayCloseSkippedWhenServerSessionDiffers() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: "away-othersession", now: now)
+    armAwayStore(
+        store,
+        now: now,
+        startedAt: now.addingTimeInterval(-8 * 3_600),
+        localInput: now.addingTimeInterval(-5 * 3_600),
+        remoteInput: nil,
+        serverSessionID: "40000000-0000-0000-0000-0000000000cc"
+    )
+
+    store.evaluateAwaySession(now: now)
+
+    #expect(store.startedAt != nil)
+}
+
+/// 기준 시각이 세션 시작보다 이르면 마감하지 않는다(서버 백스톱의 `started_at <= last_input` 가드와 같은 조건).
+/// 없으면 0초 세션이 만들어져 그 근무가 통째로 사라진다.
+@MainActor
+@Test
+func awayCloseSkippedWhenLastInputPrecedesSessionStart() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: "away-beforestart", now: now)
+    armAwayStore(
+        store,
+        now: now,
+        startedAt: now.addingTimeInterval(-3 * 3_600),
+        localInput: now.addingTimeInterval(-5 * 3_600),
+        remoteInput: nil
+    )
+
+    store.evaluateAwaySession(now: now)
+
+    #expect(store.startedAt != nil)
+}
+
+/// away 는 long_session 보다 **먼저** 평가된다(더 이른 시각 + 복원 가능한 사유).
+/// 순서가 뒤집히면 같은 부재가 long_session 으로 기록되고 그 사유는 복원 대상이 아니다 = 시간이 영구 소실된다.
+@MainActor
+@Test
+func awayEvaluationPrecedesLongSessionInWorkTick() throws {
+    let code = strippingSwiftComments(
+        try String(contentsOf: awaySourceURL("WorkTimerStore.swift"), encoding: .utf8)
+    )
+    let away = try #require(code.range(of: "evaluateAwaySession(now: now)"))
+    let long = try #require(code.range(of: "evaluateLongSession(now: now)"))
+    #expect(away.lowerBound < long.lowerBound)
+}
+
+/// 잠자기 마감 시각 = min(뚜껑 닫은 시각, 마지막 의미 있는 입력). 맥은 **항상 무입력 뒤에 잠들기 때문에**
+/// 이 한 줄이 없으면 절전 설정 길이만큼 매번 덤이 붙는다.
+@MainActor
+@Test
+func sleepCloseUsesEarlierOfLidAndLastInput() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let start = now.addingTimeInterval(-4 * 3_600)
+    let lastInput = now.addingTimeInterval(-3 * 3_600)
+    let lidClosed = now.addingTimeInterval(-2 * 3_600)
+
+    let store = makeAwayStore(host: "sleep-accuracy", now: now)
+    store.startedAt = start
+    store.currentSessionID = WorkTimerStore.canonicalSessionID(awaySessionID)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+    store.lastMeaningfulInputAt = lastInput
+    store.handleSleep(at: lidClosed)
+
+    store.handleWake(at: now)
+
+    #expect(store.startedAt == nil)
+    let stopped = store.pendingItems.last
+    #expect(stopped?.endedAt == lastInput)
+    #expect(stopped?.autoCloseReason == .sleep)
+}
+
+/// 입력 관측이 세션 시작보다 이르면 **시작 시각으로 클램프**한다 — 안 하면 duration 이 0이 되어 그 근무가 사라진다.
+@MainActor
+@Test
+func sleepCloseClampsToSessionStart() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let start = now.addingTimeInterval(-2 * 3_600)
+    let store = makeAwayStore(host: "sleep-clamp", now: now)
+    store.startedAt = start
+    store.currentSessionID = WorkTimerStore.canonicalSessionID(awaySessionID)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+    store.lastMeaningfulInputAt = now.addingTimeInterval(-5 * 3_600)
+    store.handleSleep(at: now.addingTimeInterval(-3_600))
+
+    store.handleWake(at: now)
+
+    #expect(store.pendingItems.last?.endedAt == start)
+}
+
+/// 입력 전진은 **단조 증가**이고, 화면 잠금/비콘솔에서는 전진하지 않는다
+/// (잠그고 자러 간 사람은 잠근 시각에서 멈춘다 — 잠금 화면의 비밀번호 타이핑이 내 근무를 연장하면 안 된다).
+@MainActor
+@Test
+func meaningfulInputAdvancesMonotonicallyAndStopsWhenLocked() {
+    var now = Date(timeIntervalSince1970: 1_800_000_000)
+    var idle: TimeInterval = 10
+    var usable = true
+    let store = makeAwayStore(host: "input-advance", now: now)
+    store.meaningfulIdleSeconds = { idle }
+    store.inputSessionUsable = { usable }
+
+    #expect(store.advanceMeaningfulInput(now: now) == now.addingTimeInterval(-10))
+
+    // 뒤로 가는 관측(유휴가 더 길어짐)은 무시한다.
+    idle = 600
+    #expect(store.advanceMeaningfulInput(now: now) == now.addingTimeInterval(-10))
+
+    // 잠금 중에는 전진하지 않는다.
+    usable = false
+    idle = 0
+    now = now.addingTimeInterval(3_600)
+    #expect(store.advanceMeaningfulInput(now: now) == now.addingTimeInterval(-3_610))
+
+    // 잠금이 풀리면 다시 전진한다.
+    usable = true
+    #expect(store.advanceMeaningfulInput(now: now) == now)
+
+    // 관측 자체가 없으면(이벤트 소스가 무한대를 준다) 아무 값도 세우지 않는다 —
+    // distantPast 를 세우면 그 값이 '마지막 입력'으로 서버에 올라간다.
+    let blind = makeAwayStore(host: "input-blind", now: now)
+    blind.meaningfulIdleSeconds = { .infinity }
+    #expect(blind.advanceMeaningfulInput(now: now) == nil)
+    #expect(blind.lastMeaningfulInputAt == nil)
+}
+
+/// 근무 시작은 그 자체가 입력이다. 옛 관측이 남으면 새 세션의 판정 재료가 된다.
+@MainActor
+@Test
+func startStampsMeaningfulInput() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: "input-on-start", now: now)
+    store.lastMeaningfulInputAt = now.addingTimeInterval(-6 * 3_600)
+
+    store.start(now: now)
+
+    #expect(store.lastMeaningfulInputAt == now)
+}
+
+/// 하트비트는 **서버가 자리 비움 스키마를 갖고 있다고 확인된 뒤에만** last_input_at 을 싣는다.
+/// 브루 배포가 db push 보다 먼저 나가는 창에서 이 컬럼을 보내면 하트비트가 400 이 되고,
+/// 10분 뒤 서버가 살아 있는 세션을 방치로 마감한다.
+@MainActor
+@Test
+func heartbeatCarriesLastInputOnlyOnSupportedServer() async {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    let legacyHost = "away-heartbeat-legacy"
+    let legacy = makeAwayStore(host: legacyHost, now: now)
+    legacy.startedAt = now.addingTimeInterval(-600)
+    legacy.currentSessionID = WorkTimerStore.canonicalSessionID(awaySessionID)
+    legacy.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+    legacy.awayServerSupported = false
+    await legacy.sendHeartbeatIfWorking()
+    #expect(!URLProtocolStub.bodyText(forHost: legacyHost).contains("last_input_at"))
+
+    let newHost = "away-heartbeat-new"
+    let modern = makeAwayStore(host: newHost, now: now)
+    modern.startedAt = now.addingTimeInterval(-600)
+    modern.currentSessionID = WorkTimerStore.canonicalSessionID(awaySessionID)
+    modern.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+    modern.awayServerSupported = true
+    await modern.sendHeartbeatIfWorking()
+    let bodies = URLProtocolStub.bodies(forHost: newHost)
+    // 두 곳(work_statuses 하트비트 + work_status_devices 기기 행)에 **같은 값**이 실린다.
+    #expect(bodies.filter { $0.contains("last_input_at") }.count == 2)
+}
+
+/// 흡수 맥(다른 맥이 연 세션을 미러링)은 자기 기기 행에 **last_input_at 만** 쓴다.
+/// session_id/last_seen_at 을 함께 보내면 그 행이 소유권 판정의 증거로 승격돼
+/// "흡수 맥은 그 세션의 생존신호를 대신 보내지 않는다"는 계약이 깨진다(= 아무도 못 닫는 세션).
+@MainActor
+@Test
+func adoptedMacReportsInputWithoutSessionOrPresence() async {
+    let host = "away-adopted-input"
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: host, now: now)
+    store.startedAt = now.addingTimeInterval(-600)
+    store.currentSessionID = WorkTimerStore.canonicalSessionID(awaySessionID)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+    store.adoptedRemoteSession = true
+    store.awayServerSupported = true
+
+    await store.sendHeartbeatIfWorking()
+
+    let requests = URLProtocolStub.requests(forHost: host)
+    #expect(requests.allSatisfy { $0.url?.path != "/rest/v1/work_statuses" })
+    let bodies = URLProtocolStub.bodies(forHost: host)
+    #expect(bodies.count == 1)
+    let body = bodies.first ?? ""
+    #expect(body.contains("last_input_at"))
+    #expect(body.contains("device_id"))
+    #expect(!body.contains("session_id"))
+    #expect(!body.contains("last_seen_at"))
+    #expect(!body.contains("opened_session"))
+}
+
+/// 자동 마감 사유가 **서버 PATCH 본문까지** 실제로 도달한다. 사유가 안 남으면 복원 RPC 가
+/// not_restorable 로 거절해 그 사람은 시간을 되찾을 방법이 없다.
+@MainActor
+@Test
+func autoCloseReasonReachesServerPatchBody() async {
+    let host = "away-reason-patch"
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: host, now: now)
+    armAwayStore(
+        store,
+        now: now,
+        startedAt: now.addingTimeInterval(-8 * 3_600),
+        localInput: now.addingTimeInterval(-3 * 3_600),
+        remoteInput: nil
+    )
+
+    store.evaluateAwaySession(now: now)
+    await store.retryPendingSync()
+
+    let patched = zip(URLProtocolStub.requests(forHost: host), URLProtocolStub.bodies(forHost: host))
+        .filter { $0.0.url?.path == "/rest/v1/work_sessions" && $0.0.httpMethod == "PATCH" }
+        .map(\.1)
+    #expect(patched.contains { $0.contains("\"auto_closed_reason\":\"away\"") })
+}
+
+/// **뚜껑 닫고 나간 사람의 유일한 구제 통로.** 뚜껑을 닫으면 서버 스캐빈저가 10분 뒤 그 세션을
+/// 'abandoned' 로 먼저 마감하는데 그 사유는 복원 대상이 아니다 — 깨어난 클라가 사유를 'sleep' 으로
+/// 정정하지 않으면 2파의 핵심 이득이 통째로 사라진다(docs/away-close.md 4절).
+/// 마감 PATCH 가 0행(= 서버가 이미 닫아 뒀다)일 때만 이 정정이 나간다.
+@MainActor
+@Test
+func sleepReasonIsCorrectedWhenServerClosedTheSessionFirst() async {
+    let host = "away-sleep-correction"
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: host, now: now)
+    store.startedAt = now.addingTimeInterval(-4 * 3_600)
+    store.currentSessionID = WorkTimerStore.canonicalSessionID(awaySessionID)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+    store.lastMeaningfulInputAt = now.addingTimeInterval(-3 * 3_600)
+    store.handleSleep(at: now.addingTimeInterval(-2 * 3_600))
+    store.handleWake(at: now)
+
+    await store.retryPendingSync()
+
+    let sessionPatches = zip(URLProtocolStub.requests(forHost: host), URLProtocolStub.bodies(forHost: host))
+        .filter { $0.0.url?.path == "/rest/v1/work_sessions" && $0.0.httpMethod == "PATCH" }
+    // ① ended_at 을 **더 이르게만** 당기는 정정(서버 값이 더 늦을 때만 닿도록 gt 필터를 건다).
+    #expect(sessionPatches.contains {
+        ($0.0.url?.query ?? "").contains("ended_at=gt.") && $0.1.contains("\"auto_closed_reason\":\"sleep\"")
+    })
+    // ② 서버 값이 이미 더 이르면 사유만 고친다(ended_at 은 손대지 않는다 — 늦추는 것은 위조다).
+    #expect(sessionPatches.contains {
+        ($0.0.url?.query ?? "").contains("ended_at=not.is.null") && !$0.1.contains("ended_at\":")
+    })
+}
+
+/// 사용자가 직접 누른 종료는 사유를 남기지 않는다 — 요청 바이트가 v0.2.34 와 같아야 한다
+/// (자동 마감과 수동 종료가 팀원 화면에서 구분되면 안 된다는 규약의 코드 쪽 반쪽).
+@MainActor
+@Test
+func manualStopSendsNoAutoCloseColumns() async {
+    let host = "away-manual-stop"
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: host, now: now)
+    store.startedAt = now.addingTimeInterval(-3_600)
+    store.currentSessionID = WorkTimerStore.canonicalSessionID(awaySessionID)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+
+    store.stop(now: now)
+    await store.retryPendingSync()
+
+    #expect(!URLProtocolStub.bodyText(forHost: host).contains("auto_closed"))
+}
+
+/// 복원 응답 어휘 전체를 고정한다. 모르는 status 를 성공으로 접으면 열리지도 않은 세션을 근무중으로 그린다.
+@MainActor
+@Test
+func awayRestoreOutcomeMapsEveryDocumentedStatus() async {
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://away-restore-map")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    func outcome(_ status: String, usedToday: Int? = nil, limit: Int? = nil, sessionId: String? = nil) async -> AwayRestoreOutcome {
+        await service.awayRestoreOutcome(
+            from: AwayRestoreResponse(
+                status: status,
+                sessionId: sessionId,
+                startedAt: nil,
+                reason: nil,
+                restoredAt: nil,
+                usedToday: usedToday,
+                limit: limit,
+                deletedOpenSessions: nil,
+                endedAt: nil,
+                windowSeconds: nil,
+                ageSeconds: nil
+            ),
+            requestedSessionID: awaySessionID
+        )
+    }
+
+    #expect(await outcome("ok", sessionId: awaySessionID) == .restored(sessionID: awaySessionID, startedAt: nil))
+    // 두 번 누른 사람·두 번째 맥에게 오류를 보이지 않는다(서버가 멱등하게 성공으로 답한다).
+    #expect(await outcome("already_open") == .restored(sessionID: awaySessionID, startedAt: nil))
+    #expect(await outcome("expired") == .expired)
+    #expect(await outcome("limit_reached", usedToday: 2, limit: 2) == .limitReached(usedToday: 2, limit: 2))
+    #expect(await outcome("not_found") == .notRestorable(status: "not_found"))
+    #expect(await outcome("not_restorable") == .notRestorable(status: "not_restorable"))
+    #expect(await outcome("already_restored") == .notRestorable(status: "already_restored"))
+    #expect(await outcome("not_member") == .notRestorable(status: "not_member"))
+    #expect(await outcome("conflict") == .failed(status: "conflict"))
+    #expect(await outcome("invalid") == .failed(status: "invalid"))
+    #expect(await outcome("아무도 모르는 값") == .failed(status: "아무도 모르는 값"))
+}
+
+/// 복원 후 12시간 앵커는 **복원된 세션의 시작 시각**이다(복원 시각이 아니다).
+/// 복원 시각으로 세우면 09:00 시작 → 13:00 마감 → 15:00 복원인 사람의 총 세션이 18시간이 되고
+/// 12시간 안전장치가 복원 경로에서 통째로 무력화된다.
+@MainActor
+@Test
+func restoreAnchorsLongSessionToRestoredStart() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let restoredStart = now.addingTimeInterval(-6 * 3_600)
+    let closedEndedAt = now.addingTimeInterval(-3 * 3_600)
+    let store = makeAwayStore(host: "away-restore-anchor", now: now)
+    store.accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: now)
+    store.accumulatedSeconds = 3 * 3_600
+
+    store.applyRestoredAwaySession(
+        sessionID: awaySessionID.uppercased(),
+        startedAt: restoredStart,
+        closedEndedAt: closedEndedAt
+    )
+
+    #expect(store.startedAt == restoredStart)
+    #expect(store.longSessionAnchor == restoredStart)
+    // 세션 ID 는 반드시 정규화(소문자)된다 — 대문자로 들고 있으면 다음 폴링이 내 세션을 남의 것으로 읽는다.
+    #expect(store.currentSessionID == awaySessionID.lowercased())
+    #expect(store.ownsCurrentSessionStrongly)
+    #expect(!store.adoptedRemoteSession)
+    // 마감이 누적에 더해 둔 그 세션의 오늘 몫을 도로 뺀다(안 빼면 같은 구간을 두 번 센다).
+    #expect(store.accumulatedSeconds == 0)
+    // 버튼을 누른 것 자체가 사람이 자리에 있다는 증거다 — 안 밀면 다음 틱이 방금 살린 세션을 다시 마감한다.
+    #expect(store.lastMeaningfulInputAt == now)
+    #expect(store.awayRestorable == nil)
+    #expect(!store.awayRestorePromptPending)
+}
+
+/// 복귀(자동 시작)의 그 순간이 이 기능의 **유일한 도달 채널**이다. 복원 대상이 있으면 조용히 새 세션을
+/// 열지 말고 물어야 한다. 만료된 대상으로는 묻지 않는다(창 판정은 서버 값으로만 한다).
+@MainActor
+@Test
+func autoStartOffersRestoreOnlyWhileWindowIsOpen() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: "away-autostart-offer", now: now)
+    store.awayStateOwnerUserID = awayUserID
+    store.awayRestorable = AwayRestorableSession(
+        sessionID: awaySessionID,
+        startedAt: now.addingTimeInterval(-6 * 3_600),
+        endedAt: now.addingTimeInterval(-3 * 3_600),
+        autoClosedAt: now.addingTimeInterval(-3 * 3_600),
+        reason: .away,
+        expiresAt: now.addingTimeInterval(3 * 3_600),
+        remainingSeconds: 3 * 3_600
+    )
+
+    #expect(store.offerAwayRestoreOnAutoStart(now: now))
+    #expect(store.awayRestorePromptPending)
+
+    // 창이 닫혔으면 묻지 않는다(그 세션은 이미 되살릴 수 없다).
+    store.dismissAwayRestorePrompt()
+    #expect(!store.offerAwayRestoreOnAutoStart(now: now.addingTimeInterval(4 * 3_600)))
+    #expect(!store.awayRestorePromptPending)
+
+    // 근무 중이면 물을 일이 없다(복원은 비근무 전용 — 진행 중 세션을 옛 세션으로 덮으면 안 된다).
+    store.startedAt = now
+    #expect(!store.offerAwayRestoreOnAutoStart(now: now))
+}
+
+/// 계정이 바뀌면 배너는 **스스로 침묵한다**. 로그아웃 경로가 이 스토어의 다른 파일에 있어
+/// 그쪽이 away 상태 정리를 잊어도 남의 마감이 새 계정 화면에 뜨지 않는다.
+@MainActor
+@Test
+func restorableBannerIsSilentForAnotherAccount() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    let store = makeAwayStore(host: "away-owner-lock", now: now)
+    store.awayStateOwnerUserID = awayUserID
+    store.awayRestorable = AwayRestorableSession(
+        sessionID: awaySessionID,
+        startedAt: now.addingTimeInterval(-6 * 3_600),
+        endedAt: now.addingTimeInterval(-3 * 3_600),
+        autoClosedAt: now.addingTimeInterval(-3 * 3_600),
+        reason: .away,
+        expiresAt: now.addingTimeInterval(3 * 3_600),
+        remainingSeconds: 3 * 3_600
+    )
+    #expect(store.restorableAwaySession != nil)
+
+    store.session = SupabaseSession(accessToken: "t", refreshToken: nil, userID: "00000000-0000-0000-0000-0000000000ff")
+
+    #expect(store.restorableAwaySession == nil)
+    #expect(!store.offerAwayRestoreOnAutoStart(now: now))
+}
+
+/// away_sync 가 실패하면(구버전 서버·오프라인) **정책이 비워져 마감이 멈춘다**.
+/// 마지막으로 본 임계를 계속 쓰는 쪽이 더 나쁘다 — 서버가 값을 바꿔도 옛 값으로 계속 끊고, 되돌릴 수단이 배포뿐이다.
+@MainActor
+@Test
+func failedAwaySyncStopsClosingInsteadOfKeepingStalePolicy() async {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    // 이 호스트의 /rest/v1/* 는 전부 404 PGRST205 다(= 마이그레이션 미적용 서버).
+    let store = makeAwayStore(host: "schema-missing", now: now)
+    armAwayStore(
+        store,
+        now: now,
+        startedAt: now.addingTimeInterval(-8 * 3_600),
+        localInput: now.addingTimeInterval(-5 * 3_600),
+        remoteInput: nil
+    )
+
+    await store.refreshAwayStateIfNeeded(now: now)
+
+    #expect(store.awayPolicy == nil)
+    #expect(store.awayOpenSession == nil)
+    #expect(!store.awayServerSupported)
+    store.evaluateAwaySession(now: now)
+    #expect(store.startedAt != nil)
+}
+
+/// **팀 조회 select 에 last_input_at / auto_closed_reason 을 넣지 않는다**(docs/away-close.md 1·4절).
+/// RLS 는 팀 범위라 요청하면 보인다 — 남의 마지막 키 입력 시각을 30초 해상도로 노출하는 것도,
+/// 자동 마감과 수동 종료를 팀원이 구분하게 만드는 것도 이 앱이 하기로 한 일이 아니다. 규약으로만 막힌다.
+@MainActor
+@Test
+func teamScopedSelectsNeverRequestInputOrCloseReason() throws {
+    let code = strippingSwiftComments(
+        try String(contentsOf: awaySourceURL("SupabaseWorkService.swift"), encoding: .utf8)
+    )
+    for select in code.components(separatedBy: "URLQueryItem(name: \"select\", value: \"").dropFirst() {
+        let list = select.components(separatedBy: "\"").first ?? ""
+        #expect(!list.contains("last_input_at"))
+        #expect(!list.contains("auto_closed"))
+    }
+}
+
+private func awaySourceURL(_ name: String) -> URL {
+    URL(fileURLWithPath: #filePath)          // Tests/checkTests/WorkTimerStoreTests.swift
+        .deletingLastPathComponent()          // Tests/checkTests
+        .deletingLastPathComponent()          // Tests
+        .deletingLastPathComponent()          // (repo root)
+        .appendingPathComponent("Sources/check/\(name)")
+}
+
+/// `//` 줄 주석과 `/* */` 블록 주석을 걷어낸다(하우스 규칙 — 안 걷어내면 설명을 지워야 초록이 된다).
+/// 문자열 리터럴 안의 `//` 는 남긴다.
+private func strippingSwiftComments(_ source: String) -> String {
+    var result = ""
+    var inString = false
+    var inLineComment = false
+    var inBlockComment = false
+    var previous: Character = " "
+    let characters = Array(source)
+    var index = 0
+    while index < characters.count {
+        let c = characters[index]
+        let next: Character? = index + 1 < characters.count ? characters[index + 1] : nil
+        if inLineComment {
+            if c == "\n" { inLineComment = false; result.append(c) }
+        } else if inBlockComment {
+            if c == "*", next == "/" { inBlockComment = false; index += 1 }
+        } else if inString {
+            if c == "\"", previous != "\\" { inString = false }
+            result.append(c)
+        } else if c == "/", next == "/" {
+            inLineComment = true; index += 1
+        } else if c == "/", next == "*" {
+            inBlockComment = true; index += 1
+        } else if c == "\"" {
+            inString = true; result.append(c)
+        } else {
+            result.append(c)
+        }
+        previous = c
+        index += 1
+    }
+    return result
+}

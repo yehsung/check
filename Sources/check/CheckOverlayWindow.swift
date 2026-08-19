@@ -93,6 +93,17 @@ final class CheckOverlayController {
     static let nudgeAutoStartText = "일하는 것 같아서 근무 시작했어요!"
     static let nudgeAutoStartBubbleSeconds: Double = 8
 
+    /// 자동 시작이 발화했는데 **되살릴 수 있는 자동 마감**이 남아 있을 때의 등장 말풍선(v0.2.35).
+    ///
+    /// 위 문구를 대신한다. 둘 다 띄울 자리가 없고(말풍선은 caption2 · maxWidth 110 · 2줄이 상한이다 —
+    /// CheckGreetingBubble), 두 소식의 급함이 다르기 때문이다: "왜 저절로 시작됐지?"는 궁금함이지만
+    /// 복원 창(6시간)을 놓치면 그 사람의 오전이 **영구 소실**된다. 임계가 4시간에서 2시간 30분으로
+    /// 내려와 이 일이 더 자주 일어난다.
+    /// 문구를 늘리려면 UltraPokeOverlayTests 의 폭 예산 테스트가 먼저 막는다.
+    static let awayRestoreNudgeText = "자리 비운 근무 이어붙일 수 있어요"
+    /// 복원 안내는 자동 시작 안내보다 오래 남긴다 — 이 문구를 놓치면 남는 채널이 팝오버를 스스로 여는 것뿐이다.
+    static let awayRestoreNudgeBubbleSeconds: Double = 10
+
     /// 오늘 팀에서 1등으로 출근했을 때의 등장 말풍선(하루 1회, store 의 dayKey 장부가 보증).
     static let firstArrivalText = "오늘 1등 출근이에요!"
     static let firstArrivalBubbleSeconds: Double = 6
@@ -534,16 +545,38 @@ final class CheckOverlayController {
     /// 패널 표시 + commuteStart 리액션을 자연 처리하고, perform(.commuteStart)이 오버라이드를 소비한다.
     ///
     /// 원치 않는 시작을 되돌리는 수단은 평소와 같은 '근무 종료' 버튼 하나다 — 전용 되돌리기 UI 는 두지 않는다.
+    ///
+    /// ★ 자동 시작이 발화하는 이 순간이 이 앱에서 "사람이 돌아왔다"가 확실한 **유일한 사건**이다(PICK.md).
+    ///   자리 비움으로 소급 마감된 근무가 아직 복원 창(서버 소유, 6시간) 안에 있으면, 새 세션을 **조용히**
+    ///   열어서는 안 된다 — 그 사람은 잃은 시간이 있다는 것도, 되찾을 수 있다는 것도 모른 채 창이 닫힌다.
     func nudgeAutoStart() {
         guard isNudgeEligible else { return }
+        // 복원 제안 판정은 **start() 보다 먼저** 해야 한다 — offerAwayRestoreOnAutoStart 는 `startedAt == nil`
+        // 을 요구한다(근무 중이면 물을 일이 없다는 스토어 쪽 계약). 뒤로 옮기면 항상 false 가 되어
+        // 이 배선이 조용히 죽는다.
+        let offersRestore = store.offerAwayRestoreOnAutoStart()
         // 말풍선 오버라이드는 캐릭터가 표시될 때만 세운다 — 숨김 상태에서 세워 두면 소비되지 않은 채 남아,
         // 몇 시간 뒤 사용자가 캐릭터를 다시 켜는 순간(commuteStart) 낡은 안내가 뒤늦게 튀어나온다.
         if store.isOverlayEnabled {
             engine.setCommuteStartBubbleOverride(
-                text: Self.nudgeAutoStartText,
-                seconds: Self.nudgeAutoStartBubbleSeconds
+                text: offersRestore ? Self.awayRestoreNudgeText : Self.nudgeAutoStartText,
+                seconds: offersRestore ? Self.awayRestoreNudgeBubbleSeconds : Self.nudgeAutoStartBubbleSeconds
             )
         }
+        // ★ 복원 대상이 있어도 **근무는 시작한다.** 두 대가를 재고 고른 결론이다.
+        //
+        //  (a) 새 세션(S2)을 여는 비용 = 0. docs/away-close.md 5절: `restore_auto_closed_session` 은 한
+        //      트랜잭션에서 "복귀 후 자동 시작이 연 열린 세션(S1 보다 나중에 시작한 것)을 삭제"하고 S1 을
+        //      되살린다(`deletedOpenSessions`). S2 는 S1 이 덮는 구간이라 지워져도 잃는 시간이 없고,
+        //      `conflict` 는 **S1 보다 먼저** 시작한 세션이 있을 때만 나오므로 이 경로에서는 생기지 않는다.
+        //      팝오버 배너(CheckMenuView.topBanner)도 근무 중에 뜨도록 이미 만들어져 있다 — 복귀 → 자동
+        //      시작이 새 세션을 연 그 상태가 복원의 **정상 경로**라고 그쪽 주석이 못 박고 있다.
+        //  (b) 시작을 막는 비용 = 실재. 복원을 안 누른 사람(말풍선을 놓쳤거나, 캐릭터를 껐거나, 그냥 무시)은
+        //      근무가 아예 시작되지 않고, 넛지는 쿨다운(NudgeScheduler.cooldownSeconds = 1시간) 때문에
+        //      한 시간 동안 다시 발화하지 않는다. 잃은 3시간을 알리려다 앞으로의 1시간을 더 잃는다.
+        //
+        //  즉 (a) 는 서버가 원자적으로 정리해 주는 되돌릴 수 있는 일이고 (b) 는 되돌릴 수 없는 손실이다.
+        //  PICK 이 금지한 것은 "조용히" 여는 것이지 여는 것 자체가 아니며, 위 말풍선이 그 침묵을 깬다.
         store.start()
     }
 

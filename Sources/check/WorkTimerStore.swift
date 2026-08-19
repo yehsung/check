@@ -63,6 +63,10 @@ final class WorkTimerStore {
     // 유효기간이 없으면 배너가 로그아웃 전까지 모든 팝오버에 상주하고, 그 사이 새로 시작한 근무를
     // 옛 세션으로 덮어쓰는 사고가 난다.
     static let autoCloseUndoWindowSeconds: TimeInterval = 10 * 60
+    /// 비근무 상태에서 away_sync() 를 다시 부르기까지의 스로틀(초). 근무 중에는 매 폴링 부른다 —
+    /// 마감 판정의 두 재료(임계·closeEligible)가 그 응답에만 있기 때문이다. 비근무일 때 이 값이 필요한 이유는
+    /// 복원 창(6시간)뿐이라 2분 지연은 아무것도 바꾸지 않고, 38명 × 30초 폴링에 요청 하나를 더 얹지 않는다.
+    static let awaySyncIdleThrottleSeconds: TimeInterval = 120
     // 팝오버를 열 때 팀 메타(목표/이름/역할/참여코드)를 재조회하는 스로틀(초). 팀원이 바꾼 주간 목표가
     // 내 팝오버에 최대 이 시간 안에 반영되게 한다. 여닫이마다 멤버십을 난사하지 않도록 스로틀을 건다.
     static let teamMetaRefreshThrottleSeconds: TimeInterval = 60
@@ -514,6 +518,11 @@ final class WorkTimerStore {
     /// 서버가 말해 준 잔량 상한(nil = 모름). **클라에 리터럴 5 를 박지 않는 이유가 이 프로퍼티다** —
     /// 상한은 서버 `ultra_balance_cap()` 하나가 정하고, 클라가 한 벌 더 가지면 서버가 바꿔도 화면만 옛 숫자를 말한다.
     var ultraBalanceCap: Int?
+    /// **서버가 말해 준** 무제한 여부(관리자). 클라가 role 로 추측하지 않는다 — 판정은
+    /// profiles.role='admin' 하나이고 그것을 아는 쪽은 서버뿐이다(UltraWalletResponse.unlimited 주석).
+    /// 기본값 false = "아직 모른다"의 안전한 쪽(숫자를 그린다). 서버가 말해 준 적 없는 사용자에게
+    /// 무제한이라고 말하는 것이 그 반대보다 훨씬 나쁘다.
+    var ultraUnlimited = false
     /// 마지막 sync 가 **실패**했는가. 잔량 표시의 3분기(불러오는 중 / 못 읽었어요 / 정상)를 가른다.
     /// nil 잔량 하나로는 '아직 안 물어봤다'와 '물어봤는데 못 읽었다'를 가를 수 없다.
     var ultraBalanceFailed = false
@@ -673,6 +682,47 @@ final class WorkTimerStore {
 
     // 잠자기 정책: willSleep 시각을 기록해 didWake 에서 잠든 시간을 판정한다.
     var sleepBeganAt: Date?
+
+    // MARK: - 자리 비움 자동 마감 (v0.2.35 / docs/away-close.md)
+
+    /// 이 맥이 관측한 **마지막 의미 있는 입력** 시각(키·클릭·스크롤 — 마우스 이동 제외, v0.2.17 계약).
+    /// 새 타이머를 만들지 않는다: 근무 중 하트비트(30초)가 advanceMeaningfulInput 으로 전진시킨다.
+    /// **단조 증가만** 허용하고, 화면 잠금·비콘솔이면 전진하지 않는다 — 잠그고 자러 간 사람은 잠근 시각부터
+    /// 카운트되고, 잠금 화면에서 남이 비밀번호를 두드려도 내 근무가 연장되지 않는다. 관찰 대상 아님.
+    @ObservationIgnored var lastMeaningfulInputAt: Date?
+    /// 마지막 의미 있는 입력 후 경과 초(주입). 기본은 NudgeScheduler 의 그 함수 **그대로** — 신호원이 두 벌이
+    /// 되는 순간 "무엇이 사용 중인가"의 정의가 갈린다(넛지는 마우스 이동을 빼는데 여기선 포함, 같은 사고 재발).
+    @ObservationIgnored var meaningfulIdleSeconds: () -> TimeInterval = NudgeScheduler.meaningfulIdleSeconds
+    /// 지금 이 세션이 사람 앞에 있는가(주입). 기본은 화면 잠금 아님 + 콘솔 세션.
+    @ObservationIgnored var inputSessionUsable: () -> Bool = NudgeScheduler.consoleSessionUsable
+    /// 서버가 소유하는 자리 비움 정책. **nil 이면 away 마감을 하지 않는다** — 임계를 모르는 채 리터럴로
+    /// 마감하는 것이 이 기능에서 가장 나쁜 실패 모드다(구버전 서버·오프라인·RPC 실패 전부 여기로 떨어진다).
+    @ObservationIgnored var awayPolicy: AwayPolicy?
+    /// 서버가 본 내 열린 세션(lastInputAt/closeEligible). 판정은 이 값과 로컬 관측의 **max** 로 한다.
+    @ObservationIgnored var awayOpenSession: AwayOpenSession?
+    /// 복원 가능한 자동 마감 세션(서버가 창을 소유한다). 뷰가 배너로 그리므로 관찰 대상이다.
+    var awayRestorable: AwayRestorableSession?
+    /// 위 두 값이 **어느 계정의 것인가**. 로그아웃/계정 전환 경로가 이 파일 밖(WorkTimerStoreAuth)에 있어
+    /// 그쪽을 건드리지 않고도 남의 배너가 새 계정 화면에 남지 않게 하는 잠금이다(restorableAwaySession 참조).
+    @ObservationIgnored var awayStateOwnerUserID: String?
+    /// 복귀(자동 시작) 순간에 "이어 붙일까요?"를 물어야 하는가. UI 는 W2 가 그린다 — 스토어는 상태만 세운다.
+    var awayRestorePromptPending = false
+    /// 복원 RPC 왕복 중. 버튼 연타로 두 번 나가지 않게 하는 게이트(관찰 대상 — 버튼이 비활성을 그린다).
+    var isRestoringAwaySession = false
+    /// away_sync() 를 마지막으로 부른 시각(스로틀 판정). 관찰 대상 아님.
+    @ObservationIgnored var lastAwaySyncAt: Date = .distantPast
+    /// 이 서버가 자리 비움 스키마를 갖고 있는가(= away_sync() 가 실제로 응답했는가).
+    /// **새 컬럼을 보내는 유일한 게이트다.** 브루 배포는 앱이 db push 보다 먼저 나가는 창을 만드는데,
+    /// 그때 last_input_at 을 실으면 하트비트가 통째로 400 이 되고 10분 뒤 서버가 살아 있는 세션을 마감한다.
+    /// away_sync 는 같은 마이그레이션 묶음에 있으므로 그 응답이 곧 "새 컬럼이 있다"는 증거다. 관찰 대상 아님.
+    @ObservationIgnored var awayServerSupported = false
+
+    /// 뷰가 읽는 유일한 복원 배너 출처. 계정이 바뀌었으면 **스스로 침묵한다** — 로그아웃은 이 스토어의 다른
+    /// 파일에서 일어나고, 그 경로가 away 상태를 지우는 것을 잊어도 남의 마감이 새 계정 화면에 뜨지 않는다.
+    var restorableAwaySession: AwayRestorableSession? {
+        guard let session, awayStateOwnerUserID == session.userID else { return nil }
+        return awayRestorable
+    }
     // 12시간 확인: 카운터 기준점(근무 시작 또는 마지막 "네, 근무 중이에요" 확인 시점).
     var longSessionAnchor: Date?
     var isLongSessionPromptActive = false
@@ -880,6 +930,11 @@ final class WorkTimerStore {
         longSessionAnchor = now
         clearLongSessionPrompt()
         sleepBeganAt = nil
+        // 근무 시작은 그 자체가 입력이다(수동은 클릭, 넛지 시작은 그 앞 5분의 실제 사용이 근거다).
+        // 이 한 줄이 없으면 오전에 자리 비움으로 마감된 사람의 **옛 관측**(예: 10:30)이 그대로 남아,
+        // 16:05 에 새로 연 세션의 판정 재료가 된다 — 세션 시작 가드가 막긴 하지만 그 가드 하나에
+        // 기대는 대신 여기서 정확한 값을 세운다.
+        lastMeaningfulInputAt = now
         snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
         startTimer()
         refreshMenuBarTitle()
@@ -1040,7 +1095,15 @@ final class WorkTimerStore {
             self.sleepBeganAt = nil
             return
         }
-        autoStop(endedAt: sleepBeganAt, message: "잠자기로 자동 근무종료됨")
+        // ★ 마감 시각 = min(뚜껑 닫은 시각, 마지막 의미 있는 입력). 맥은 **항상 무입력 뒤에 잠들기 때문에**
+        //   (절전 설정만큼 기다렸다 잠든다) 지금까지는 매번 그 설정 길이만큼 덤이 붙었다.
+        //   시작 시각보다 이르게 내려가지 않게 클램프한다 — 안 하면 duration 이 0이 되어 그 근무가 통째로 사라진다.
+        //   (lastMeaningfulInputAt 은 근무 중 하트비트만 전진시키므로 이 세션의 관측이다.)
+        let sleepEndedAt = max(
+            startedAt ?? sleepBeganAt,
+            min(sleepBeganAt, lastMeaningfulInputAt ?? sleepBeganAt)
+        )
+        autoStop(endedAt: sleepEndedAt, message: "잠자기로 자동 근무종료됨", reason: .sleep)
     }
 
     // MARK: - 12시간 확인 (30분 무응답 자동 마감)
@@ -1059,7 +1122,8 @@ final class WorkTimerStore {
             }
             autoStop(
                 endedAt: anchor.addingTimeInterval(Self.longSessionThresholdSeconds),
-                message: "장시간 미확인으로 자동 근무종료됨"
+                message: "장시간 미확인으로 자동 근무종료됨",
+                reason: .longSession
             )
             return
         }
@@ -1082,9 +1146,109 @@ final class WorkTimerStore {
         promptShownAt = nil
     }
 
+    // MARK: - 자리 비움 자동 마감 (v0.2.35 / docs/away-close.md)
+
+    /// 마지막 의미 있는 입력 시각을 전진시킨다(단조 증가). 근무 중 하트비트가 30초마다 부르고,
+    /// 반환값은 그 요청에 그대로 실린다. **새 타이머를 만들지 않는 것이 이 함수의 존재 이유다.**
+    ///
+    /// 전진하지 않는 두 경우:
+    ///  · 화면 잠금/비콘솔(inputSessionUsable 거짓) — 잠그고 자러 간 사람은 잠근 시각에서 멈추고,
+    ///    잠금 화면에서 남이 비밀번호를 두드려도 그 입력이 내 근무를 연장하지 않는다.
+    ///  · 관측이 없거나(무한대) 값이 뒤로 가는 경우 — 시계 되돌림·이벤트 소스 리셋이 과거를 만들어도
+    ///    이미 관측한 입력을 무효로 만들지 않는다.
+    @discardableResult
+    func advanceMeaningfulInput(now: Date) -> Date? {
+        guard inputSessionUsable() else { return lastMeaningfulInputAt }
+        let idle = meaningfulIdleSeconds()
+        guard idle.isFinite, idle >= 0 else { return lastMeaningfulInputAt }
+        // 미래 시각을 서버에 보내지 않는다(서버도 least(last_input_at, now()) 로 한 번 더 누른다).
+        let observed = min(now.addingTimeInterval(-idle), now)
+        guard let current = lastMeaningfulInputAt else {
+            lastMeaningfulInputAt = observed
+            return observed
+        }
+        if observed > current { lastMeaningfulInputAt = observed }
+        return lastMeaningfulInputAt
+    }
+
+    /// 판정 기준 시각 = **max(로컬 관측, 서버가 계산한 내 모든 기기 행의 max)**.
+    /// 로컬 단독으로 판정하면 "아이맥 켜둔 채 노트북에서 작업"이 결정론적으로 매일 오마감된다(공격이 잡았다).
+    /// 서버 단독으로도 안 된다 — 내 맥의 방금 입력은 다음 하트비트까지 서버에 없다.
+    func awayLastInputAt() -> Date? {
+        [lastMeaningfulInputAt, awayOpenSession?.lastInputAt].compactMap { $0 }.max()
+    }
+
+    /// 근무 틱에서 호출(evaluateLongSession 과 같은 자리). 임계를 넘도록 입력이 없으면 **마지막 입력 시각으로**
+    /// 소급 마감한다. away 는 long_session 보다 **먼저** 평가한다 — 더 이른 시각이고 복원 가능한 사유다.
+    ///
+    /// 마감하지 않는 조건(하나라도 걸리면 그대로 통과한다. 모를 때의 안전한 기본값은 "안 끊는다"다):
+    ///  1. 흡수 세션(다른 맥이 연 세션) — 남의 근무를 내 무입력으로 마감하지 않는다.
+    ///  2. **서버가 임계를 안 줬다**(구버전 서버·오프라인·RPC 실패). 임계는 서버가 소유한다(사장님 확정).
+    ///  3. `closeEligible == false` — 혼합 함대(구버전 맥이 섞인 사용자)는 통째로 면제다. 클라가 서버보다
+    ///     30분 먼저 발화하므로, 이 게이트를 클라가 무시하면 서버 쪽 완화는 도달조차 못 한다.
+    ///  4. 서버가 든 열린 세션이 내 세션이 아니다(찢어진 읽기·다른 맥의 세션) — 남의 판정 근거로 마감 금지.
+    ///  5. 기준 시각이 세션 시작보다 이르다 — 서버 백스톱의 `started_at <= last_input` 가드와 같은 조건이다.
+    ///     이게 없으면 0초 세션이 만들어져 그 근무가 통째로 사라진다.
+    ///  6. 경계는 **배타적**이다(정확히 임계면 마감하지 않는다 — 서버 부등호와 같게 맞춘다).
+    func evaluateAwaySession(now: Date) {
+        guard !adoptedRemoteSession else { return }
+        guard startedAt != nil else { return }
+        guard let policy = awayPolicy else { return }
+        guard let open = awayOpenSession, open.closeEligible else { return }
+        guard let localSessionID = Self.canonicalSessionID(currentSessionID),
+              Self.canonicalSessionID(open.sessionID) == localSessionID
+        else {
+            return
+        }
+        guard let lastInput = awayLastInputAt() else { return }
+        guard let sessionStart = startedAt, sessionStart <= lastInput else { return }
+        guard now.timeIntervalSince(lastInput) > policy.closeThresholdSeconds else { return }
+        autoStop(endedAt: lastInput, message: "자리 비움으로 자동 근무종료됨", reason: .away)
+    }
+
+    /// 자동 시작(넛지)이 발화하는 **바로 그 순간** — 이 앱에서 "돌아왔다"가 확실한 유일한 사건이다.
+    /// 복원 가능한 마감이 있으면 새 세션을 조용히 열지 말고 물어야 한다(true 를 돌려준다).
+    /// 컨트롤러(CheckOverlayWindow.nudgeAutoStart)가 이 값을 보고 말풍선/배너로 잇는다 — UI 는 W2 소유다.
+    ///
+    /// 여기서 묻지 않으면 그 사람은 영영 모른다: 자동 시작은 끌 수 없는 기본 동작이고, 팝오버를 그 창 안에
+    /// 열지 않으면 6시간 뒤 창이 닫혀 그날 오전이 영구 소실된다(PICK 이 억울함의 근원으로 지목한 경로).
+    @discardableResult
+    func offerAwayRestoreOnAutoStart(now: Date? = nil) -> Bool {
+        let now = now ?? clock()
+        guard startedAt == nil else { return false }
+        guard let restorable = restorableAwaySession else { return false }
+        // 만료 판정은 서버가 준 값으로만 한다(클라 시계를 되돌려 창을 늘릴 수 없다).
+        if let expiresAt = restorable.expiresAt, now >= expiresAt { return false }
+        if restorable.remainingSeconds <= 0 { return false }
+        if !awayRestorePromptPending { awayRestorePromptPending = true }
+        return true
+    }
+
+    /// 복원 제안을 닫는다(사용자가 "아니요"를 눌렀거나 복원이 끝났다). 배너 자체(awayRestorable)는
+    /// 서버가 소유하므로 여기서 지우지 않는다 — 다음 폴링이 여전히 복원 가능하다고 하면 팝오버에 남아 있어야 한다.
+    func dismissAwayRestorePrompt() {
+        if awayRestorePromptPending { awayRestorePromptPending = false }
+    }
+
+    /// 자리 비움 상태를 통째로 비운다(계정 전환 등 이 스토어가 아는 초기화 지점).
+    func clearAwayState() {
+        lastMeaningfulInputAt = nil
+        awayServerSupported = false
+        awayPolicy = nil
+        awayOpenSession = nil
+        if awayRestorable != nil { awayRestorable = nil }
+        awayStateOwnerUserID = nil
+        if awayRestorePromptPending { awayRestorePromptPending = false }
+        lastAwaySyncAt = .distantPast
+    }
+
     /// 지정한 종료 시각으로 로컬 상태를 즉시 마감하고, 기존 직렬 sync 경로(enqueueSync)로 서버에 반영한다.
     /// syncMessage 는 사유 문구로 세팅한다(이후 refresh 가 "동기화됨"으로 정규화할 수 있음 — 즉시 피드백 목적).
-    private func autoStop(endedAt: Date, message: String) {
+    ///
+    /// reason 은 **서버 어휘 그대로**(work_sessions.auto_closed_reason)다. 기본값을 두지 않는 것은 의도다 —
+    /// 새 자동 마감 경로가 생길 때 "이 마감은 복원 대상인가"를 반드시 한 번 판단하게 강제한다.
+    /// 사유가 안 남으면 복원 RPC 가 not_restorable 로 거절해 그 사람은 시간을 되찾을 방법이 없다.
+    private func autoStop(endedAt: Date, message: String, reason: AutoCloseReason) {
         guard let sessionStart = startedAt else { return }
         // 흡수 세션(다른 맥이 연 세션)은 이 맥이 **자동으로** 마감하지 않는다. 상대는 지금도 일하고 있는데
         // 내 잠자기·12시간 판정으로 과거 시각 마감을 써 버리면 그 뒤 근무가 통째로 사라진다.
@@ -1115,7 +1279,12 @@ final class WorkTimerStore {
         refreshMenuBarTitle()
         // 자동 마감도 근무 상태 확정이라 배너 판정을 되맞춘다(자동시작 [취소] 는 여기서 사라진다).
         refreshTimedBanner()
-        syncCurrentStatus(durationSeconds: duration, sessionStartedAt: sessionStart, endedAt: endedAt)
+        syncCurrentStatus(
+            durationSeconds: duration,
+            sessionStartedAt: sessionStart,
+            endedAt: endedAt,
+            autoCloseReason: reason
+        )
         syncMessage = message
         // 자동 마감(잠자기·12시간 미확인·자리비움)도 근무 종료다. 여기 한 줄이 없으면 뚜껑을 열어
         // `.didWake` 로 막 다시 붙은 소켓이 곧바로 이어지는 자동 마감 뒤에도 그대로 떠 있다 —
@@ -1438,6 +1607,10 @@ final class WorkTimerStore {
                 // 이 한 줄이 없으면 근무 중 앱을 재시작한 맥은 (start() 를 타지 않으므로) 초인종이 영영
                 // 안 붙고, 서버가 세션을 닫아 준 맥은 비근무인 채로 소켓을 계속 들고 있는다.
                 self?.reconcileRealtimeWithWorkState()
+                // 자리 비움 정책·복원 창을 서버에서 받아 온다. **팀 상태 반영 뒤**여야 한다 —
+                // 방금 큐에서 나간 마감 PATCH 가 이미 서버에 반영된 상태로 복원 대상을 묻게 된다.
+                // 실패는 삼킨다(정책이 비워져 마감이 멈출 뿐, 팀 폴링은 그대로 산다).
+                await self?.refreshAwayStateIfNeeded()
                 await self?.refreshLeaderboardIfVisible()
                 await self?.refreshTokenBoardIfVisible()
                 await self?.refreshPokeDirectoryIfVisible()
@@ -1467,6 +1640,10 @@ final class WorkTimerStore {
         // snapshot 은 재대입하지 않는다 — 라벨/오버레이/헤더 전체 무효화를 막는다. 라이브 초는 todayDuration
         // (잎 뷰)과 menuBarTitle 파생값으로 흐르고, 여기선 정책 평가와 라벨 문자열만 갱신한다.
         if startedAt != nil {
+            // away 를 **먼저** 본다: 더 이른 시각으로 마감하고(사람이 마지막으로 있었던 시각) 복원 가능한
+            // 사유를 남기기 때문이다. 순서를 뒤집으면 12시간 미확인 마감이 먼저 발화해 같은 부재가
+            // long_session 으로 기록되고, 그 사유는 복원 대상이 아니라 그 시간이 영구 소실된다.
+            evaluateAwaySession(now: now)
             evaluateLongSession(now: now)
             evaluateTimeMilestones(now: now)
             refreshMenuBarTitle()
@@ -1787,6 +1964,8 @@ extension WorkTimerStore {
         ultraPanelOrigin = .home
         ultraBalance = nil
         ultraBalanceCap = nil
+        // 남의 무제한을 물려받으면 새 계정 화면이 잔량 대신 ∞ 를 그린다(위 블록이 막으려던 그것).
+        ultraUnlimited = false
         ultraBalanceFailed = false
         missions = []
         missionsLoaded = false
@@ -1864,6 +2043,8 @@ extension WorkTimerStore {
         clearLongSessionPrompt()
         sleepBeganAt = nil
         clearAutoCloseUndo()
+        // 자리 비움 상태도 계정에 묶인 값이다(복원 대상 세션 ID·서버 정책·입력 관측).
+        clearAwayState()
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
         tickerTask?.cancel()
         tickerTask = nil
@@ -1899,6 +2080,10 @@ struct PendingWorkItem: Equatable {
     /// 이 항목을 만든 계정의 userID. 강제 로그아웃은 큐를 남기므로(오프라인 근무 보존), 다음 로그인 때
     /// 소유자가 다른 항목만 골라 버리는 데 쓴다(앞 계정 근무가 새 계정 이름으로 기록되는 오염 금지).
     let ownerUserID: String?
+    /// 자동 마감이면 그 사유(서버 어휘). 사용자가 누른 종료는 nil 이고, 그때 서버로 나가는 요청은
+    /// v0.2.34 와 바이트가 같다. 큐에 실어 나르는 이유는 오프라인 재생 때문이다 — 재생 시점에는
+    /// 스토어의 근무 상태가 이미 다음 세션으로 넘어가 있어 사유를 되살릴 방법이 없다.
+    let autoCloseReason: AutoCloseReason?
 
     init(
         id: UUID,
@@ -1906,7 +2091,8 @@ struct PendingWorkItem: Equatable {
         sessionID: String,
         sessionStartedAt: Date?,
         endedAt: Date?,
-        ownerUserID: String? = nil
+        ownerUserID: String? = nil,
+        autoCloseReason: AutoCloseReason? = nil
     ) {
         self.id = id
         self.operation = operation
@@ -1914,5 +2100,6 @@ struct PendingWorkItem: Equatable {
         self.sessionStartedAt = sessionStartedAt
         self.endedAt = endedAt
         self.ownerUserID = ownerUserID
+        self.autoCloseReason = autoCloseReason
     }
 }

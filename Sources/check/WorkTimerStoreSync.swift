@@ -390,10 +390,20 @@ extension WorkTimerStore {
         // (scavengeAbandonedTeamSessionsIfNeeded 는 stale 판정에 자타 구분이 없어 내 행도 대상이고,
         // 서버 RPC 는 security definer 라 내 세션을 마감한다) → 다음 폴링이 (.offWork, .some) 로
         // 로컬을 정확히 내린다. 사용자가 직접 누른 종료(stop)는 이 가드와 무관하게 그대로 나간다.
-        guard !adoptedRemoteSession else { return }
-        guard startedAt != nil, session != nil, let sessionID = currentSessionID, let teamID = currentTeamID else {
+        // ★ **입력 관측은 소유 여부보다 앞이다.** 사람이 이 맥에서 타이핑하고 있다는 사실은 어느 맥이 세션을
+        //   열었든 같은 무게를 갖는다 — 이 한 줄이 없으면 "아이맥에서 시작 → 노트북으로 옮겨 작업"이
+        //   결정론적으로 매일 오마감된다(소유 맥의 last_input_at 은 얼어붙고, 노트북은 아무 말도 하지 않는다).
+        //   새 타이머는 만들지 않는다: 이 함수가 이미 30초마다 돌고 있다.
+        let observedInput = advanceMeaningfulInput(now: clock())
+        guard startedAt != nil, session != nil, let teamID = currentTeamID else { return }
+        // 흡수 세션이어도 **입력만은** 자기 기기 행에 남긴다. session_id/last_seen_at 은 절대 건드리지 않으므로
+        // (SupabaseWorkService.reportDeviceInput) 아래 가드가 지키는 계약 — "흡수 맥은 그 세션의 생존신호를
+        // 대신 보내지 않는다" — 은 한 글자도 약해지지 않는다. 그 계약이 깨지면 '아무도 못 닫는 세션'이 된다.
+        guard !adoptedRemoteSession else {
+            await reportDeviceInputIfPossible(teamID: teamID, lastInputAt: observedInput)
             return
         }
+        guard let sessionID = currentSessionID else { return }
         let generation = sessionGeneration
         do {
             try await withSessionRetry { activeSession in
@@ -401,7 +411,8 @@ extension WorkTimerStore {
                     accessToken: activeSession.accessToken,
                     teamID: teamID,
                     userID: activeSession.userID,
-                    sessionID: sessionID
+                    sessionID: sessionID,
+                    lastInputAt: awayServerSupported ? observedInput : nil
                 )
             }
         } catch {
@@ -427,13 +438,196 @@ extension WorkTimerStore {
                     userID: activeSession.userID,
                     deviceID: deviceID,
                     sessionID: sessionID,
-                    openedSession: openedSession
+                    openedSession: openedSession,
+                    lastInputAt: awayServerSupported ? observedInput : nil
                 )
             }
         } catch {
             // 주장 기록 실패는 조용히 무시한다. 못 남기면 상대 맥이 나를 '판정 불가'로 보고 백스톱(7분)으로
             // 되돌아갈 뿐이다 — v0.2.14 와 같은 수준이지 더 나빠지지 않는다.
         }
+    }
+
+    /// 비소유 맥(흡수 상태)이 **자기 기기 행에 last_input_at 만** 올린다. 실패는 조용히 무시한다 —
+    /// 이 값이 없으면 away 자격이 서지 않아 그 사용자가 면제될 뿐이고, 그건 안전한 쪽이다.
+    private func reportDeviceInputIfPossible(teamID: String, lastInputAt: Date?) async {
+        guard awayServerSupported, let lastInputAt else { return }
+        let generation = sessionGeneration
+        do {
+            try await withSessionRetry { activeSession in
+                try await service.reportDeviceInput(
+                    accessToken: activeSession.accessToken,
+                    teamID: teamID,
+                    userID: activeSession.userID,
+                    deviceID: deviceID,
+                    lastInputAt: lastInputAt
+                )
+            }
+        } catch {
+            guard generation == sessionGeneration else { return }
+        }
+    }
+
+    // MARK: - 자리 비움 정책·복원 (v0.2.35 / docs/away-close.md)
+
+    /// away_sync() 를 불러 정책·판정 재료·복원 대상을 받아 온다. 근무 중에는 매 폴링, 비근무면 스로틀.
+    ///
+    /// **실패는 전부 "모른다"로 접는다**: 정책을 비우면 evaluateAwaySession 이 그대로 통과하므로 마감이 멈춘다.
+    /// 이 방향이 유일하게 안전한 실패다 — 반대(마지막으로 본 임계를 계속 쓰기)는 서버가 임계를 올렸는데도
+    /// 옛 값으로 남의 근무를 계속 끊는 상태가 되고, 그걸 되돌릴 수단이 클라 배포뿐이다.
+    func refreshAwayStateIfNeeded(now: Date? = nil) async {
+        let now = now ?? clock()
+        guard let session else {
+            // 로그아웃/세션 없음 — 남의 계정 화면에 배너가 남지 않게 통째로 비운다.
+            clearAwayState()
+            return
+        }
+        if startedAt == nil, now.timeIntervalSince(lastAwaySyncAt) < Self.awaySyncIdleThrottleSeconds {
+            return
+        }
+        lastAwaySyncAt = now
+        let generation = sessionGeneration
+        let ownerUserID = session.userID
+        do {
+            let sync = try await withSessionRetry { activeSession in
+                try await service.awaySync(accessToken: activeSession.accessToken)
+            }
+            guard generation == sessionGeneration, self.session?.userID == ownerUserID else { return }
+            applyAwaySync(sync, ownerUserID: ownerUserID)
+        } catch is AwaySyncUnavailable {
+            // 마이그레이션이 아직 안 나간 서버. 정책을 비워 마감을 멈추고, 새 컬럼 전송도 함께 끈다
+            // (그 서버에 last_input_at 을 보내면 하트비트가 400 이 되어 세션이 방치로 마감된다).
+            guard generation == sessionGeneration else { return }
+            awayServerSupported = false
+            awayPolicy = nil
+            awayOpenSession = nil
+        } catch {
+            // 네트워크 실패·취소. 서버 미배포와 달리 스키마 판단은 건드리지 않고 판정 재료만 무효화한다.
+            guard generation == sessionGeneration else { return }
+            awayPolicy = nil
+            awayOpenSession = nil
+        }
+    }
+
+    /// away_sync 응답을 스토어 상태로 반영한다(요청/응답과 분리해 테스트가 그대로 부를 수 있게 둔다).
+    func applyAwaySync(_ sync: AwaySync, ownerUserID: String) {
+        // 응답이 왔다 = 이 서버는 자리 비움 스키마를 갖고 있다. 상태가 invalid(비로그인)여도 참이다.
+        awayServerSupported = true
+        awayStateOwnerUserID = ownerUserID
+        awayPolicy = sync.policy
+        awayOpenSession = sync.openSession
+        if awayRestorable != sync.restorable { awayRestorable = sync.restorable }
+        // 복원 대상이 사라졌으면(복원됨·만료·다른 맥이 처리) 제안도 함께 내린다.
+        if sync.restorable == nil, awayRestorePromptPending { awayRestorePromptPending = false }
+    }
+
+    /// 복원 버튼/말풍선의 액션. **원자 RPC 한 번**으로만 간다(2회 왕복 흉내 금지 — 중간에 죽으면
+    /// 열린 세션이 0개나 2개가 된다). 기존 canUndoAutoClose/performUndoAutoClose(스캐빈저 10분 되돌리기)는
+    /// 그대로 살아 있고 이 경로와 섞이지 않는다 — 그쪽 가드는 전부 실제 사고에서 나왔다.
+    @discardableResult
+    func restoreAwaySession() -> Task<Void, Never>? {
+        guard !isRestoringAwaySession, restorableAwaySession != nil else { return nil }
+        return Task { @MainActor in await performRestoreAwaySession() }
+    }
+
+    func performRestoreAwaySession() async {
+        guard !isRestoringAwaySession, let restorable = restorableAwaySession else { return }
+        guard let session else { return }
+        isRestoringAwaySession = true
+        defer { isRestoringAwaySession = false }
+        let generation = sessionGeneration
+        // 복원 왕복 전의 근무 상태 write 세대. 왕복 중 사용자가 [근무 시작]/[근무 종료]를 눌렀다면
+        // 그 조작이 최신이므로 로컬 반영을 통째로 건너뛴다(옛 세션으로 현재 세션을 덮어쓰기 금지).
+        let writeGeneration = workStateWriteGeneration
+        let outcome: AwayRestoreOutcome
+        do {
+            outcome = try await withSessionRetry { activeSession in
+                try await service.restoreAutoClosedSession(
+                    accessToken: activeSession.accessToken,
+                    sessionID: restorable.sessionID
+                )
+            }
+        } catch {
+            guard generation == sessionGeneration else { return }
+            syncMessage = authMessage(for: error, fallback: "재개 실패")
+            return
+        }
+        guard generation == sessionGeneration, self.session?.userID == session.userID else { return }
+        switch outcome {
+        case .restored(let sessionID, let serverStartedAt):
+            guard writeGeneration == workStateWriteGeneration else {
+                awayRestorePromptPending = false
+                return
+            }
+            applyRestoredAwaySession(
+                sessionID: sessionID,
+                startedAt: serverStartedAt ?? restorable.startedAt,
+                closedEndedAt: restorable.endedAt
+            )
+        case .expired:
+            awayRestorable = nil
+            awayRestorePromptPending = false
+            syncMessage = "복원 시간이 지났어요"
+        case .limitReached(let used, let limit):
+            awayRestorable = nil
+            awayRestorePromptPending = false
+            syncMessage = "오늘 복원 횟수를 다 썼어요(\(used)/\(limit))"
+        case .notRestorable:
+            // 내 것이 아니거나 이미 복원됐다 — 배너를 내린다(재시도해도 같은 답이 온다).
+            awayRestorable = nil
+            awayRestorePromptPending = false
+        case .failed:
+            // conflict/invalid/미지 status. **재시도하지 않는다**(서버가 정상 경로에서 주지 않는 답이다).
+            awayRestorePromptPending = false
+            syncMessage = "재개 실패"
+        }
+    }
+
+    /// 복원 성공을 로컬 상태에 반영한다. 서버가 이미 한 일(S2 삭제·S1 재개·상태행 갱신·카운터)은
+    /// **중복으로 하지 않는다** — 여기서 하는 것은 로컬 미러링뿐이다.
+    func applyRestoredAwaySession(sessionID: String, startedAt restoredStart: Date?, closedEndedAt: Date?) {
+        guard let restoredStart, let canonical = Self.canonicalSessionID(sessionID) else { return }
+        let now = clock()
+        // 복원도 내가 확정한 근무 상태 변경이다 — in-flight 였던 낡은 팀 응답이 이 재개를 되돌리지 못하게.
+        workStateWriteGeneration &+= 1
+        // 마감이 누적에 더해 둔 그 세션의 '오늘 몫'을 도로 뺀다. 안 빼면 이 세션이 다시 진행 세션이 되어
+        // 같은 구간을 두 번 세고, 메뉴바·큰 타이머·오버레이가 일제히 두 배로 뛴다(다음 폴링까지).
+        let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
+        if accumulatedDayStart >= dayStart, let closedEndedAt {
+            let contributed = max(0, Int(closedEndedAt.timeIntervalSince(max(restoredStart, dayStart))))
+            accumulatedSeconds = max(0, accumulatedSeconds - contributed)
+        }
+        displayNow = now
+        startedAt = restoredStart
+        currentSessionID = canonical
+        // **강한 소유**: 이 맥이 복원 RPC 를 직접 보내 성공했고, 서버는 그 트랜잭션에서 다른 열린 세션을
+        // 전부 지운 뒤 active_session_id 를 이 세션으로 세웠다(= 지금 이 세션을 돌보는 맥은 이 맥이다).
+        // performUndoAutoClose 가 강도를 물려받는 것과 근거가 다르다: 저쪽은 '남의 세션을 주워 닫았다가
+        // 되돌리는' 경로가 실재해서 승격이 위험하지만, 이 RPC 는 auth.uid() 소유 세션만 되살린다.
+        claimSessionOwnership(canonical, strength: .strong)
+        // 복원 시각이 아니라 **복원된 세션의 시작 시각**이다. 복원 시각으로 세우면 09:00 시작 → 13:00 마감
+        // → 15:00 복원인 사람의 12시간 프롬프트가 다음날 03:00 으로 밀려 총 18시간 세션이 되고,
+        // 12시간 안전장치가 복원 경로에서 통째로 무력화된다(performUndoAutoClose 의 규약 그대로).
+        longSessionAnchor = restoredStart
+        clearLongSessionPrompt()
+        sleepBeganAt = nil
+        // 버튼을 누른 것 자체가 "사람이 자리에 있다"는 증거다. 서버도 같은 트랜잭션에서 last_input_at 을
+        // now 로 민다 — 여기서 로컬을 안 밀면 다음 틱이 옛 입력 시각으로 방금 살린 세션을 다시 마감한다.
+        lastMeaningfulInputAt = now
+        awayOpenSession = nil
+        awayRestorable = nil
+        awayRestorePromptPending = false
+        // 다음 폴링이 새 열린 세션의 판정 재료를 받아 오게 스로틀을 푼다.
+        lastAwaySyncAt = .distantPast
+        snapshot = WorkStatusSnapshot(
+            status: .working,
+            elapsedSeconds: max(0, Int(now.timeIntervalSince(restoredStart)))
+        )
+        startTimer()
+        refreshMenuBarTitle()
+        // 근무가 다시 섰으므로 유예형 배너(되돌리기)의 성립 조건도 뒤집힌다.
+        refreshTimedBanner(now: now)
+        syncMessage = "근무 재개됨"
     }
 
     /// 서버상 내 세션이 열려 있고 로컬은 비근무(startedAt==nil, pendingItems 비어 있음)이며 마지막 신호와의
@@ -751,7 +945,12 @@ extension WorkTimerStore {
         }
     }
 
-    func syncCurrentStatus(durationSeconds: Int? = nil, sessionStartedAt: Date? = nil, endedAt: Date? = nil) {
+    func syncCurrentStatus(
+        durationSeconds: Int? = nil,
+        sessionStartedAt: Date? = nil,
+        endedAt: Date? = nil,
+        autoCloseReason: AutoCloseReason? = nil
+    ) {
         guard session != nil else {
             snapshot.pendingSync = true
             syncMessage = "로그인 필요"
@@ -782,7 +981,8 @@ extension WorkTimerStore {
                 sessionID: currentSessionID ?? fallbackSessionID,
                 sessionStartedAt: sessionStartedAt,
                 endedAt: endedAt,
-                ownerUserID: ownerUserID
+                ownerUserID: ownerUserID,
+                autoCloseReason: autoCloseReason
             )
         }
         // in-flight 동안 '대기' 표시를 켜지 않는다(정상 왕복마다 라벨이 깜빡이는 것 방지).
@@ -868,7 +1068,11 @@ extension WorkTimerStore {
                     startedAt: item.sessionStartedAt ?? Date(),
                     endedAt: item.endedAt ?? Date(),
                     durationSeconds: durationSeconds,
-                    fallbackSessionID: item.sessionID
+                    fallbackSessionID: item.sessionID,
+                    // 사유는 큐 항목이 나른다. 서버가 이 세션을 먼저 닫아 뒀다면(뚜껑 닫고 나간 사람 —
+                    // 스캐빈저가 10분 뒤 'abandoned' 로 마감한다) stopWork 가 그 자리에서 사유를 정정해
+                    // 복원 대상으로 되돌린다. 정정이 빠지면 오늘 가장 큰 억울함이 그대로 남는다.
+                    autoClosedReason: item.autoCloseReason
                 )
             }
         }

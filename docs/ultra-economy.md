@@ -10,6 +10,7 @@
 | `20260819010000_ultra_wallet.sql` | 잔량 컬럼 2개 · `ultra_ledger` · 미션/스트릭 RPC · 감사 | 없음 |
 | `20260819020000_poke_realtime_ring.sql` | `poke_topic` · realtime 정책 · `poke_ring` · 킬스위치 | 없음 |
 | `20260819030000_poke_economy_and_ring.sql` | `poke_user` / `send_message` / `ultra_poke_user` 재작성 1회 + `shares_team` drop | **있음** |
+| `20260820040000_ultra_unlimited_flag.sql` | `ultra_wallet_sync` 에 `unlimited` 키 1개 추가(운영자 표시 전용, 본문 3줄) | 없음 |
 
 ---
 
@@ -71,6 +72,7 @@
   "worked_seconds_open": 0,
   "streak_days": 3,
   "streak_includes_today": true,
+  "unlimited": false,
   "measured_at": 1787098516
 }
 ```
@@ -88,6 +90,7 @@
 | `worked_seconds_open` | int | **오늘** 열린 세션의 진행분(초) | 아니오 |
 | `streak_days` | int | 연속 출근 일수. **표시 전용 — 보상 없음** | 아니오 |
 | `streak_includes_today` | bool | 오늘 출근이 스트릭에 포함됐는가 | 아니오 |
+| `unlimited` | bool | **잔량 제한을 받지 않는가**(운영자 `profiles.role='admin'`). 참이면 화면은 숫자 대신 무제한을 표시한다. 판정은 `ultra_poke_user` 가 발사 게이트에서 쓰는 술어와 **문자 그대로 같다** — 두 곳이 갈리면 화면과 실제가 어긋난다. **표시 전용이다**: 적립·차감 산식에 쓰지 마라 | **예**(20260820040000 이전 서버) |
 | `measured_at` | int | 서버 측정 시각(epoch 초) | 아니오 |
 
 `status == "invalid"` 이면 **`status` 외의 키는 없다**(비로그인 또는 프로필 없음).

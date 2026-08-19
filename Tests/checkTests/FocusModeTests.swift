@@ -83,7 +83,7 @@ func toggleFocusModeAppliesOptimisticallyAndPatchesProfile() async {
 func focusModeNoticeTellsTheSenderNothingWasSpent() {
     // 몫이 안 깎였다는 사실까지 말해야 한다 — 안 그러면 사용자가 남은 울트라 횟수를 잘못 센다.
     #expect(WorkTimerStore.targetFocusedNotice.contains("집중"))
-    #expect(WorkTimerStore.targetFocusedNotice != WorkTimerStore.ultraSpentNotice)
+    #expect(WorkTimerStore.targetFocusedNotice != WorkTimerStore.ultraEmptyNotice)
 }
 
 @MainActor

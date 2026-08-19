@@ -465,7 +465,7 @@ import Testing
 
     /// 폴링 tick 이 그 만료를 돌린다 — **근무중 게이트 앞**이라 근무를 끝낸 뒤에도 돈다.
     /// 게이트 뒤에 두면 큐가 가장 오래 밀리는 구간(캐릭터가 사라진 뒤)에 정확히 안 돈다.
-    @Test func pokePollTickExpiresQueuedMessagesEvenWhenNotWorking() async {
+    @Test func localExpiryTickExpiresQueuedMessagesEvenWhenNotWorking() async {
         let store = makeStore(host: "msg-queue-expiry-tick")
         let base = Self.frozenNow
         store.enqueueReceivedMessages([
@@ -479,7 +479,7 @@ import Testing
         ])
         store.startedAt = nil   // 비근무 — take_pokes 는 안 나가지만 만료는 돌아야 한다
 
-        await store.pokePollTick()
+        await store.localExpiryTick()
 
         #expect(store.receivedMessages.map(\.id) == ["fresh"])
         #expect(store.currentMessage?.body == "고고")
@@ -719,7 +719,7 @@ import Testing
     /// 만료는 **폴링 tick 에 실제로 배선돼 있다**(refreshUltraQuota 와 같은 자리). 함수만 있고 아무도 안 부르면
     /// 어제 것이 영영 남는데, 그건 단위 테스트가 함수를 직접 불러 보는 것으로는 절대 안 잡힌다.
     /// 근무중 게이트 **앞**이어야 한다 — 자리를 비운 비근무 구간이야말로 받은 말이 낡는 구간이다.
-    @Test func pokePollTickExpiresStaleReceiptEvenWhenNotWorking() async {
+    @Test func localExpiryTickExpiresStaleReceiptEvenWhenNotWorking() async {
         let store = makeStore(host: "msg-receipt-tick")
         let base = Self.frozenNow
         store.enqueueReceivedMessages([
@@ -733,7 +733,7 @@ import Testing
         store.consumeCurrentMessage()
         store.startedAt = nil   // 비근무 — take_pokes 는 안 나가지만 만료는 돌아야 한다
 
-        await store.pokePollTick()
+        await store.localExpiryTick()
 
         #expect(store.lastShownMessage == nil)
     }
@@ -767,8 +767,8 @@ import Testing
         store.startedAt = nil   // 근무 이력 없음 — ①의 증거
         store.appVersionProvider = { AppVersionReport(build: 38, version: "0.2.29") }
 
-        await store.pokePollTick()
-        await store.pokePollTick()
+        await store.localExpiryTick()
+        await store.localExpiryTick()
 
         // ②: tick 두 번에 PATCH 는 정확히 1건.
         #expect(versionPatchBodies(host: host).count == 1)
@@ -785,7 +785,7 @@ import Testing
 
         // ③: 앱이 업데이트되면(같은 실행에서 재현) 다시 보낸다.
         store.appVersionProvider = { AppVersionReport(build: 39, version: "0.2.30") }
-        await store.pokePollTick()
+        await store.localExpiryTick()
 
         #expect(versionPatchBodies(host: host).count == 2)
         #expect(versionPatchBodies(host: host).last?.contains("\"app_build\":39") == true)
@@ -799,7 +799,7 @@ import Testing
         let store = makeStore(host: host)
         store.appVersionProvider = { nil }
 
-        await store.pokePollTick()
+        await store.localExpiryTick()
 
         #expect(versionPatchBodies(host: host).isEmpty)
     }
@@ -815,8 +815,8 @@ import Testing
         let store = makeStore(host: host)
         store.appVersionProvider = { AppVersionReport(build: 38, version: "0.2.29") }
 
-        await store.pokePollTick()
-        await store.pokePollTick()
+        await store.localExpiryTick()
+        await store.localExpiryTick()
 
         // 두 번 다 시도했다(도장이 안 찍혔다). 실패가 화면에 새지도 않는다.
         #expect(versionPatchBodies(host: host).count == 2)

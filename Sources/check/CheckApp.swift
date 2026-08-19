@@ -28,7 +28,16 @@ struct CheckApp: App {
 /// 종료(⌘Q·푸터 종료 버튼의 NSApplication.terminate 포함)를 가로채 근무중이면 퇴근 동기화를 끝낸 뒤 종료한다.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let store = WorkTimerStore()
+    /// 스토어 하나. **리얼타임 전송자를 여기서만 만든다** — 저장소 전체에서 `LiveRealtimeTransport(` 가
+    /// 나타나는 프로덕션 지점은 이 줄 하나이고, 그 사실을 소스 계약 테스트가 되묻는다.
+    ///
+    /// 킬스위치가 꺼져 있으면(출시 기본값) 전송자가 nil 이라 링은 `.idle(.disabled)` 로 태어나
+    /// 한 발짝도 움직이지 않고, 찌르기는 예전 그대로 15초 폴링으로 온다(사장님 확정 ②).
+    /// 켜는 법은 `RealtimeFeature` 주석에 있다. `LiveRealtimeTransport.init?` 는 테스트 프로세스에서
+    /// **nil 을 돌려주므로**, 이 줄이 그대로 있어도 `swift test` 는 소켓을 하나도 열지 않는다.
+    let store = WorkTimerStore(
+        realtimeTransport: RealtimeFeature.isEnabled() ? LiveRealtimeTransport() : nil
+    )
     // 업데이트 감지 스토어(1개). 팝오버 배너(CheckMenuView)와 근무중 오버레이 말풍선(컨트롤러)이 같은
     // 상태를 공유하도록 델리게이트가 단일 소유한다 — 하루 1회 체크/버전당 1회 말풍선 기록이 두 표면에 일관된다.
     let updateCheck = UpdateCheckStore()

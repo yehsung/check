@@ -545,6 +545,12 @@ enum SupabaseWorkServiceError: Error, Equatable {
     case signupDisabled
     case weakPassword
     case databaseSchemaMissing
+    /// `ultra_wallet_sync` 가 서버에 아직 없다(PGRST202). **`databaseSchemaMissing` 을 그대로 재던지지 않는 이유**는
+    /// takePokes 가 세운 관용구와 같다 — 그 오류는 "어떤 RPC 인지"를 잃어버린 값이라, 스토어가 받으면
+    /// "서버 전체가 낡았다"와 "지갑 RPC 하나만 없다"를 가를 수 없다. 여기서 접어 두면 지갑만 조용히
+    /// 못 쓰고(잔량 표시가 '못 읽었어요'로 내려앉고) 찌르기·메시지·근무는 그대로 산다.
+    /// 브루 배포라 앱이 db push 보다 먼저 나가는 창이 실제로 존재한다.
+    case ultraWalletUnavailable
     case sessionAlreadyOpen
     /// GoTrue 재발송 제한(429). 실측 본문이 두 종류다 — 이메일 발송 간격 제한은
     /// `{"error_code":"over_email_send_rate_limit","msg":"For security purposes, you can only request this after N seconds."}`,
@@ -926,6 +932,13 @@ struct PokeSendRequest: Encodable {
     let pTo: String
 }
 
+/// ultra_wallet_sync RPC 본문. { p_days_back: 소급 일수 }.
+/// **본문을 비우지 않는 이유**: PostgREST 는 본문의 키 집합으로 오버로드를 고른다. 기본값이 있어도
+/// 키를 명시해 두면 나중에 인자가 하나 더 생겨도 이 호출이 어느 함수로 갈지 흔들리지 않는다.
+struct UltraWalletSyncRequest: Encodable {
+    let pDaysBack: Int
+}
+
 /// take_pokes RPC 요청. { p_message_capable: 이 앱이 메시지를 표시할 수 있는가 }.
 ///
 /// **이 인자가 존재하는 이유가 곧 이 릴리스의 사고다.** v0.2.28 이 pokes.kind 에 'message' 를 더했는데
@@ -949,29 +962,55 @@ struct PokeSendResponse: Decodable, Equatable {
     /// **nil 은 0 이 아니라 '모른다'** 이다 — 일반 poke_user 응답과 이 키를 안 보내는 구버전 서버가 여기로 온다.
     /// 이 구분이 없으면 일반 찌르기 한 번에 화면이 "오늘 0번 남음"이라고 거짓말한다.
     var ultraRemaining: Int?
+    /// v0.2.34 의 **재화 잔량**(ultra_balance). ultraRemaining 과 값이 같게 오지만 의미가 다르다 —
+    /// 저쪽은 "오늘 남은 횟수"라는 옛 어휘이고 이쪽은 이월되는 재화의 잔량이다(docs/ultra-economy.md §3).
+    ///
+    /// **반드시 Optional 이어야 한다.** 비옵셔널로 두면 이 키를 안 보내는 서버(= db push 전 창)에서
+    /// 디코드가 통째로 throw 되고, 그러면 콕찌르기가 통째로 죽는다(PokeDirectoryRow.canReceiveMessage 주석의 그 사고).
+    /// nil 은 "0개"가 아니라 **"모른다"** 이다.
+    var ultraBalance: Int?
+    /// 초인종(Realtime broadcast) 발사 결과. `"sent"` / `"failed"` / nil(= 키 없는 구버전 서버).
+    /// **화면에 쓰지 않는다 — 진단용이다.** `"failed"` 는 찌르기가 실패했다는 뜻이 아니라
+    /// 초인종만 삼켜졌다는 뜻이다(키스위치가 내려가 있으면 정상 진행). 이걸 실패로 읽으면
+    /// v0.2.34 사용자 전원이 "찌르기 실패"를 본다 — 출시 시점의 기본값이 삼킴이기 때문이다.
+    var ring: String?
 
     enum CodingKeys: String, CodingKey {
         case status
         case retryAfterSeconds
         case resetAfterSeconds
         case ultraRemaining
+        case ultraBalance
+        case ring
     }
 
-    init(status: String, retryAfterSeconds: Int? = nil, resetAfterSeconds: Int? = nil, ultraRemaining: Int? = nil) {
+    init(
+        status: String,
+        retryAfterSeconds: Int? = nil,
+        resetAfterSeconds: Int? = nil,
+        ultraRemaining: Int? = nil,
+        ultraBalance: Int? = nil,
+        ring: String? = nil
+    ) {
         self.status = status
         self.retryAfterSeconds = retryAfterSeconds
         self.resetAfterSeconds = resetAfterSeconds
         self.ultraRemaining = ultraRemaining
+        self.ultraBalance = ultraBalance
+        self.ring = ring
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         status = try container.decode(String.self, forKey: .status)
         retryAfterSeconds = try container.decodeIfPresent(Int.self, forKey: .retryAfterSeconds)
-        // ↓ 아래 두 줄이 이 타입의 함정 전부다. 직접 생성(PokeSendResponse(status:…)) 테스트로는
+        // ↓ 아래 네 줄이 이 타입의 함정 전부다. 직접 생성(PokeSendResponse(status:…)) 테스트로는
         //   커스텀 디코더의 누락을 원리적으로 못 잡으므로 JSON 을 실제로 통과시키는 테스트로 못 박는다.
+        //   CodingKey 만 더하고 이 줄을 빼면 값은 **영원히 nil** 이다.
         resetAfterSeconds = try container.decodeIfPresent(Int.self, forKey: .resetAfterSeconds)
         ultraRemaining = try container.decodeIfPresent(Int.self, forKey: .ultraRemaining)
+        ultraBalance = try container.decodeIfPresent(Int.self, forKey: .ultraBalance)
+        ring = try container.decodeIfPresent(String.self, forKey: .ring)
     }
 
     /// 스토어가 `ultraRemainingToday` 에 **그대로 대입할** 값(음수 방어만 한다). 상한 클램프를 여기서 하지 않는 이유는
@@ -979,6 +1018,11 @@ struct PokeSendResponse: Decodable, Equatable {
     /// 한도를 바꿀 때 고쳐야 할 곳이 둘로 늘어난다.
     /// nil 이면 **대입하지 마라**(모름 유지). 화면은 모를 때 아무 말도 하지 않는 쪽이 틀린 숫자보다 낫다.
     var ultraRemainingForDisplay: Int? { ultraRemaining.map { max(0, $0) } }
+
+    /// 화면이 읽는 **잔량**. 새 키(ultraBalance)를 먼저 보고 없으면 옛 키(ultraRemaining)로 폴백한다.
+    /// 폴백이 안전한 근거: 서버가 둘을 같은 값으로 실어 준다(docs/ultra-economy.md §3 — 의미만 바뀌었고
+    /// 숫자는 그대로다). 둘 다 없으면 nil = **모름**이고, 모를 때 화면은 0 이 아니라 "—" 를 그린다.
+    var ultraBalanceForDisplay: Int? { (ultraBalance ?? ultraRemaining).map { max(0, $0) } }
 }
 
 /// 찌르기 결과의 도메인 표현(스토어/UI 공유). **미지 status 는 반드시 .invalid 로 떨어진다** —
@@ -1047,6 +1091,280 @@ struct ReceivedPoke: Equatable {
         self.kind = kind
         self.body = body
     }
+}
+
+// MARK: - 울트라 재화 지갑 / 미션 (v0.2.34 계약 타입)
+//
+// 정본은 docs/ultra-economy.md 다. 여기 타입은 그 문서의 응답 스키마를 **그대로** 옮긴 것이고,
+// 문서에 없는 키에 의존하지 않는다(ring 페이로드의 `id` 처럼 계약이 아닌 키가 실제로 있다).
+//
+// 경제 규칙의 단일 출처는 **서버**다. 하루 밑바닥(1 또는 2)도 잔량 상한(5)도 클라에 상수로 두지 않는다 —
+// 밑바닥은 서버가 profiles.app_build 로 갈라 주고(구버전 유예), 상한은 응답의 balanceCap 이 말한다.
+// 이 규칙을 클라가 한 벌 더 갖는 순간 서버가 값을 바꿔도 화면만 옛 숫자를 말한다(v0.2.33 의
+// ultraPokeDailyLimit 이 정확히 그 실패였다 — 그래서 이번에 통째로 지웠다).
+
+/// `ultra_wallet_sync(p_days_back int default 1) → jsonb` 응답.
+///
+/// **status 를 먼저 읽고 분기하는 디코더다.** `status == "invalid"`(비로그인·프로필 없음)이면
+/// 서버는 status 외의 키를 **하나도 보내지 않는다**. 그걸 모르고 balance 를 decode 하면 통째로 throw 되고,
+/// 스토어는 '서버 오류'로 오진해 "못 읽었어요"를 띄운다 — 실제 원인은 '로그인이 안 됐다'인데.
+struct UltraWalletResponse: Decodable, Equatable, Sendable {
+    /// `"ok"` | `"invalid"`. 미지 값은 invalid 와 같게 취급된다(isOK 가 == "ok" 로만 참이다).
+    let status: String
+    /// 이 호출 **직후**의 잔량(밑바닥 보정·미션 적립이 이미 반영된 값).
+    let balance: Int
+    /// 잔량 상한. **nil = 서버가 말해 주지 않았다.** UI 는 리터럴 5 를 박지 말고 이 값을 읽는다.
+    let balanceCap: Int?
+    /// 이 사용자의 하루 밑바닥(1 또는 2). 진단용 — 구버전 유예가 실제로 걸렸는지 여기서 보인다.
+    let dailyFloor: Int?
+    /// `YYYY-MM-DD` (KST). 서버가 판정한 '오늘'.
+    let day: String
+    /// 이번 호출에서 밑바닥 보정이 **실제로 잔량을 올렸는가**.
+    let floorApplied: Bool
+    /// 최신 날짜 우선. 기본 p_days_back=1 이면 오늘과 어제 두 행이 온다.
+    let missions: [MissionRow]
+    let workedSecondsClosed: Int
+    let workedSecondsOpen: Int
+    /// 연속 출근 일수. **표시 전용 — 보상 없음**(사장님 확정 3).
+    let streakDays: Int
+    let streakIncludesToday: Bool
+    /// 서버 측정 시각(epoch 초).
+    let measuredAt: Int
+
+    var isOK: Bool { status == "ok" }
+
+    /// 오늘 서버가 잰 누적 근무초(닫힌 + 열린). 미션 진행 바가 아니라 진단 줄이 읽는다.
+    var workedSecondsToday: Int { workedSecondsClosed + workedSecondsOpen }
+
+    /// `missions[]` 원소. 모르는 `key` 는 **무시**한다(서버가 미션을 늘려도 옛 앱이 안 깨지게).
+    struct MissionRow: Decodable, Equatable, Sendable {
+        let key: String
+        /// `YYYY-MM-DD`. 이 행이 평가한 날. 오늘 행과 어제 행을 가르는 유일한 근거다.
+        let kstDay: String
+        let targetSeconds: Int
+        let progressSeconds: Int
+        /// 그날 몫을 **이미 받았다**.
+        let claimed: Bool
+        /// **이번 호출에서** 받았다 → 연출(`.ultraCharged`)의 유일한 트리거.
+        let grantedNow: Bool
+        /// 달성했지만 **잔량이 가득 차서 적립하지 않았다**. 이때 `claimed` 는 **false 로 남는다**
+        /// (서버가 장부를 안 쓰기 때문 — docs/ultra-economy.md §2). 그래서 claimed 만 보면
+        /// "아직 못 받았다"로 보이고 화면은 진행 바를 100% 로 그린 채 아무 말도 안 하게 된다.
+        let capped: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case key, kstDay, targetSeconds, progressSeconds, claimed, grantedNow, capped
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            key = try c.decode(String.self, forKey: .key)
+            kstDay = try c.decode(String.self, forKey: .kstDay)
+            targetSeconds = try c.decode(Int.self, forKey: .targetSeconds)
+            progressSeconds = try c.decode(Int.self, forKey: .progressSeconds)
+            claimed = try c.decode(Bool.self, forKey: .claimed)
+            grantedNow = try c.decode(Bool.self, forKey: .grantedNow)
+            // capped 만 관대한 이유: 이 키는 상한(사장님 확정 4)과 함께 태어난 신참이라,
+            // 서버가 한 단계 뒤처진 창에서 없을 수 있다. 없으면 '가득 차지 않았다'가 안전한 쪽이다.
+            capped = try c.decodeIfPresent(Bool.self, forKey: .capped) ?? false
+        }
+
+        init(
+            key: String,
+            kstDay: String,
+            targetSeconds: Int,
+            progressSeconds: Int,
+            claimed: Bool,
+            grantedNow: Bool,
+            capped: Bool = false
+        ) {
+            self.key = key
+            self.kstDay = kstDay
+            self.targetSeconds = targetSeconds
+            self.progressSeconds = progressSeconds
+            self.claimed = claimed
+            self.grantedNow = grantedNow
+            self.capped = capped
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case status, balance, balanceCap, dailyFloor, day, floorApplied, missions
+        case workedSecondsClosed, workedSecondsOpen, streakDays, streakIncludesToday, measuredAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        status = try c.decode(String.self, forKey: .status)
+        guard status == "ok" else {
+            // ★ 여기서 바로 끝낸다. 아래 decode 를 한 줄이라도 시도하면 invalid 응답이 throw 로 변한다.
+            balance = 0
+            balanceCap = nil
+            dailyFloor = nil
+            day = ""
+            floorApplied = false
+            missions = []
+            workedSecondsClosed = 0
+            workedSecondsOpen = 0
+            streakDays = 0
+            streakIncludesToday = false
+            measuredAt = 0
+            return
+        }
+        balance = try c.decode(Int.self, forKey: .balance)
+        day = try c.decode(String.self, forKey: .day)
+        // 아래는 전부 관대하게 읽는다. 근거: 이 응답의 **본체는 잔량과 미션**이고, 진단용 곁가지
+        // (스트릭·측정초·밑바닥) 하나가 빠졌다고 잔량 표시가 통째로 "못 읽었어요"가 되면 안 된다.
+        // 반대로 balance/day 를 관대하게 읽으면 서버 결함이 화면에서 '잔량 0' 이라는 **거짓말**로 나타난다.
+        balanceCap = try c.decodeIfPresent(Int.self, forKey: .balanceCap)
+        dailyFloor = try c.decodeIfPresent(Int.self, forKey: .dailyFloor)
+        floorApplied = try c.decodeIfPresent(Bool.self, forKey: .floorApplied) ?? false
+        missions = try c.decodeIfPresent([MissionRow].self, forKey: .missions) ?? []
+        workedSecondsClosed = try c.decodeIfPresent(Int.self, forKey: .workedSecondsClosed) ?? 0
+        workedSecondsOpen = try c.decodeIfPresent(Int.self, forKey: .workedSecondsOpen) ?? 0
+        streakDays = try c.decodeIfPresent(Int.self, forKey: .streakDays) ?? 0
+        streakIncludesToday = try c.decodeIfPresent(Bool.self, forKey: .streakIncludesToday) ?? false
+        measuredAt = try c.decodeIfPresent(Int.self, forKey: .measuredAt) ?? 0
+    }
+
+    init(
+        status: String,
+        balance: Int = 0,
+        balanceCap: Int? = nil,
+        dailyFloor: Int? = nil,
+        day: String = "",
+        floorApplied: Bool = false,
+        missions: [MissionRow] = [],
+        workedSecondsClosed: Int = 0,
+        workedSecondsOpen: Int = 0,
+        streakDays: Int = 0,
+        streakIncludesToday: Bool = false,
+        measuredAt: Int = 0
+    ) {
+        self.status = status
+        self.balance = balance
+        self.balanceCap = balanceCap
+        self.dailyFloor = dailyFloor
+        self.day = day
+        self.floorApplied = floorApplied
+        self.missions = missions
+        self.workedSecondsClosed = workedSecondsClosed
+        self.workedSecondsOpen = workedSecondsOpen
+        self.streakDays = streakDays
+        self.streakIncludesToday = streakIncludesToday
+        self.measuredAt = measuredAt
+    }
+}
+
+/// 미션 목록 한 줄의 **표시용** 값. 서버 응답(UltraWalletResponse)에서 순수 변환으로 만들고,
+/// 화면은 이 타입만 읽는다 — 뷰가 서버 스키마를 직접 읽으면 키 하나 바뀔 때 고칠 곳이 뷰까지 번진다.
+struct MissionProgress: Identifiable, Equatable, Sendable {
+    /// rawValue 는 **서버의 `missions[].key` 와 문자 그대로 같다**(work3h). 서버 키가 없는 줄
+    /// (dailyFloor / arrivalStreak)은 클라가 응답의 다른 필드로 만들어 내는 표시 전용 행이다.
+    enum Kind: String, CaseIterable, Sendable {
+        case todayThreeHours = "work3h"
+        case dailyFloor
+        case arrivalStreak
+    }
+
+    /// 미션 1호 목표의 **폴백**(3시간). 서버가 그 행을 안 줬을 때만 쓴다 — 판정의 출처가 아니다.
+    /// 서버 `mission_work_seconds()` 와 같은 값이지만, 어긋나도 손해는 진행 바가 잠깐 틀리는 것뿐이고
+    /// 다음 sync 가 진짜 목표로 교정한다(적립 여부는 언제나 서버가 정한다).
+    static let defaultTargetSeconds = 3 * 3_600
+
+    var id: String { kind.rawValue }
+    let kind: Kind
+    /// 0…1. **진행 개념이 없는 줄은 nil** 이고 그때 화면은 바를 그리지 않는다.
+    let progress: Double?
+    /// 오늘 몫을 이미 받았다(또는 오늘 이미 적용됐다).
+    let claimedToday: Bool
+    /// 달성했지만 **잔량이 가득 차서 못 받았다**(사장님 확정 4). claimedToday 와 **동시에 참일 수 없다** —
+    /// 서버가 상한에서는 장부를 안 쓰기 때문이다. 화면은 이 줄에 "가득 차서 오늘은 못 받아요"를 그린다.
+    let cappedToday: Bool
+    /// 그 줄의 오른쪽 보조 문장(진행 시간·연속 일수 등). 문장은 여기서 한 번만 만든다.
+    let detail: String
+
+    /// 서버 응답 → 미션 목록. **순수 함수라 테스트가 이 한 함수로 화면 전체의 규칙을 고정한다.**
+    ///
+    /// 순서가 곧 화면 순서다: 오늘 3시간(유일한 실제 보상) → 매일 밑바닥 → 연속 출근(표시만).
+    /// **모르는 key 는 무시한다** — 서버가 미션을 늘려도 옛 앱이 빈 줄을 그리지 않는다.
+    static func rows(from response: UltraWalletResponse) -> [MissionProgress] {
+        guard response.isOK else { return [] }
+        // 오늘 행만 본다. 어제 행(p_days_back=1 이 함께 주는 소급분)은 **적립을 위해** 존재하는 것이고
+        // 화면의 '오늘 미션'이 아니다 — 섞으면 어제 이미 받은 몫 때문에 오늘 줄이 완료로 보인다.
+        let today = response.missions.first { $0.key == Kind.todayThreeHours.rawValue && $0.kstDay == response.day }
+        var rows: [MissionProgress] = []
+
+        // 목표는 **오늘 행 → 다른 날 행 → 폴백** 순으로 찾는다. 오늘 행이 없을 때(서버가 아직 그날을
+        // 평가하지 않았거나 근무가 0초인 아침) 목표를 0 으로 두면 진행률이 0/0 이 되어 바가 100% 로 튄다 —
+        // 아무것도 안 했는데 "다 했다"고 그리는 것이라 가장 나쁜 종류의 거짓말이다(실측: 첫 판이 그랬다).
+        let target = max(
+            1,
+            today?.targetSeconds
+                ?? response.missions.first { $0.key == Kind.todayThreeHours.rawValue }?.targetSeconds
+                ?? defaultTargetSeconds
+        )
+        let done = today?.progressSeconds ?? response.workedSecondsToday
+        rows.append(
+            MissionProgress(
+                kind: .todayThreeHours,
+                progress: min(1, Double(done) / Double(target)),
+                claimedToday: today?.claimed ?? false,
+                cappedToday: today?.capped ?? false,
+                detail: "\(hoursText(done)) / \(hoursText(target))"
+            )
+        )
+
+        rows.append(
+            MissionProgress(
+                kind: .dailyFloor,
+                progress: nil,
+                // '오늘 보정이 실제로 일어났다'가 이 줄의 완료 조건이다. 밑바닥은 적립이 아니라 보정이라
+                // (잔량 3인 사람은 보정이 안 걸린다) floorApplied 가 false 여도 정상이다.
+                claimedToday: response.floorApplied,
+                cappedToday: false,
+                detail: response.dailyFloor.map { "매일 \($0)개까지" } ?? "매일 자동 충전"
+            )
+        )
+
+        rows.append(
+            MissionProgress(
+                kind: .arrivalStreak,
+                progress: nil,
+                claimedToday: response.streakIncludesToday,
+                cappedToday: false,
+                detail: "\(response.streakDays)일 연속"
+            )
+        )
+        return rows
+    }
+
+    /// 초 → "3시간" / "2시간 30분" / "45분". 미션 줄의 보조 문장 전용이라 여기 둔다.
+    static func hoursText(_ seconds: Int) -> String {
+        let total = max(0, seconds) / 60
+        let hours = total / 60
+        let minutes = total % 60
+        if hours == 0 { return "\(minutes)분" }
+        if minutes == 0 { return "\(hours)시간" }
+        return "\(hours)시간 \(minutes)분"
+    }
+}
+
+/// `drainReceivedPokes()` 의 결과. **Void 였던 것을 이 타입으로 바꾼 이유는 캐치업이다** —
+/// 리얼타임 구독 직후의 따라잡기는 "실패했으면 다시"가 필요한데, 예전 함수는 오류를 안에서 삼키고
+/// Void 를 돌려줘 호출부가 성공/실패를 원리적으로 알 수 없었다(WorkTimerStorePoke.swift 의 그 catch 주석).
+///
+/// 기존 호출부 2곳(폴링 tick·근무 종료 꼬리 회수)은 결과를 **무시**한다 — @discardableResult 라 동작 변화가 0이다.
+enum DrainOutcome: Equatable, Sendable {
+    /// take_pokes 가 실제로 돌았다. `count` 는 **소비된 행 전체 수**(찔림 + 메시지)로, 초인종 페이로드의
+    /// `pending` 과 견주면 소비 경로가 새는지 보인다. 0 도 성공이다(가져올 게 없었을 뿐).
+    case ok(count: Int)
+    /// 요청이 실패했거나(네트워크·인증) 세션이 없어 아예 못 보냈다. 문자열은 **진단용**이고 화면에 쓰지 않는다.
+    /// 세션 없음도 여기로 온다 — 캐치업이 재시도해 봐야 성공할 수 없는 상태라 '성공'으로 접으면
+    /// 따라잡기 실패가 조용히 감춰진다.
+    case failed(String)
+
+    var isOK: Bool { if case .ok = self { return true }; return false }
 }
 
 // MARK: - 3글자 메시지 (계약 타입)

@@ -801,6 +801,41 @@ actor SupabaseWorkService {
         return try decoder.decode([TakenPokeRow].self, from: data)
     }
 
+    /// 울트라 재화 지갑 동기화. `ultra_wallet_sync(p_days_back int default 1)` RPC 를 로그인 토큰으로 호출한다.
+    /// 이름은 sync 지만 **읽기 전용이 아니다** — 밑바닥 보정과 미션 적립이 이 호출 안에서 일어난다.
+    /// 그래서 "패널을 열 때만" 부르면 근무만 하고 패널을 안 연 사용자의 코인이 영구 소실된다
+    /// (호출 지점 4곳의 근거는 WorkTimerStore.UltraSyncReason 주석에 있다).
+    ///
+    /// 멱등하다: 누적 근무초는 단조증가라 임계를 하루 한 번만 넘고, 적립은 부분 유니크 인덱스가 막는다.
+    /// 몇 번을 불러도 장부는 하루 한 줄이다.
+    ///
+    /// `p_days_back` 기본 1 = **오늘과 어제**. 어제 3시간을 채우고 앱을 껐다 오늘 켠 사용자의 몫을 소급한다.
+    ///
+    /// ── 하위호환: RPC 가 아직 없는 서버 ──
+    /// 브루 배포라 앱이 db push 보다 **먼저** 나가는 창이 실제로 존재한다. 그때 PostgREST 는 PGRST202
+    /// (= .databaseSchemaMissing)를 낸다. takePokes 와 같은 관용구로, 다만 재호출할 옛 모양이 없으므로
+    /// 전용 오류 `.ultraWalletUnavailable` 로 **접어서** 던진다 — 스토어가 "서버 미배포"와 "네트워크 실패"를
+    /// 가를 수 있어야 진단이 성립한다. 그대로 재던지면 두 원인이 같은 문장으로 뭉개진다.
+    ///
+    /// **fetchTokenUsageSettings 의 select 에 끼워 넣지 않는다.** 잔량 컬럼에는 select grant 가 아예 없어
+    /// (밑바닥 보정 전 값 노출 금지) 컬럼을 하나 더하는 순간 42703 으로 토큰 설정까지 못 읽게 된다 —
+    /// 이 저장소가 이미 한 번 기록한 사고다(fetchTokenUsageSettings 주석).
+    func syncUltraWallet(accessToken: String, daysBack: Int = 1) async throws -> UltraWalletResponse {
+        let data: Data
+        do {
+            data = try await send(
+                path: "/rest/v1/rpc/ultra_wallet_sync",
+                method: "POST",
+                body: UltraWalletSyncRequest(pDaysBack: daysBack),
+                accessToken: accessToken,
+                prefer: nil
+            )
+        } catch SupabaseWorkServiceError.databaseSchemaMissing {
+            throw SupabaseWorkServiceError.ultraWalletUnavailable
+        }
+        return try decoder.decode(UltraWalletResponse.self, from: data)
+    }
+
     /// 콕찌르기 대상 디렉토리(앱 사용자 전체, 본인 제외 + 근무중 여부). app_user_directory() RPC 를 로그인 토큰으로 호출한다.
     func fetchPokeDirectory(accessToken: String) async throws -> [PokeDirectoryRow] {
         let data = try await send(

@@ -324,3 +324,43 @@ func lostMouseUpDoesNotFreezeHitThroughForever() {
     #expect(rig.dragMovesPanel(), "드래그도 그대로 살아 있다")
     rig.teardown()
 }
+
+// MARK: - 원인 5(예방): 보상 통지는 입력 사슬에 손대지 않는다
+//
+// 이 파일의 세 원인은 전부 "창을 만지는 새 기능이 입력 사슬의 값 하나를 굳혔다"였다. v0.2.34 는 그 계층에
+// 새 손님을 하나 들인다 — 미션 보상 통지(.ultraCharged)는 격발처럼 **숨김 상태에서도 창을 띄운다**.
+// 격발과 다른 점은 자격이다: 격발은 클릭 통과를 못 박을 이유가 있지만(전체화면을 5초 덮는다),
+// 보상은 140×170 캐릭터가 잠깐 나타났다 사라지는 것뿐이라 입력에 대해 할 말이 없다.
+//
+// 그래서 여기서는 값이 아니라 **결과**로 본다: 보상이 지나간 뒤에도 사용자가 캐릭터를 실제로 끌 수 있는가.
+// (값 단언은 UltraPokeOverlayTests.rewardLeavesTheInputPinAloneOnEveryPath 가 세 경로 전부에 건다.)
+
+@MainActor
+@Test
+func rewardNotificationLeavesDragWorking() {
+    let rig = DragRig()
+    rig.startWorking()
+    #expect(rig.dragMovesPanel(), "픽스처: 시작 시점에 드래그가 살아 있어야 한다")
+
+    let monitors = (rig.controller.hasMouseMoveMonitor, rig.controller.hasLocalMouseMoveMonitor)
+
+    // (a) 표시 중 보상.
+    rig.controller.presentReward(.ultraCharged)
+    rig.layout()
+    #expect(rig.controller.pinnedIgnoresMouseEventsValue == nil, "보상이 클릭 통과를 못 박았다")
+    #expect(
+        (rig.controller.hasMouseMoveMonitor, rig.controller.hasLocalMouseMoveMonitor) == monitors,
+        "보상이 히트-스루 모니터를 떼거나 붙였다 — 이 파일의 원인 2가 그대로 재발한다"
+    )
+    #expect(rig.dragMovesPanel(), "표시 중 보상 뒤 드래그가 죽었다")
+
+    // (b) 숨김 peek 보상 → 다시 근무. 창을 띄우는 쪽 경로가 값을 굳히면 여기서 드러난다.
+    rig.stopWorking()
+    rig.controller.presentReward(.ultraCharged)
+    rig.layout()
+    #expect(rig.controller.pinnedIgnoresMouseEventsValue == nil, "peek 보상이 클릭 통과를 못 박았다")
+    rig.startWorking()
+    #expect(rig.dragMovesPanel(), "peek 보상 뒤 드래그가 죽었다")
+
+    rig.teardown()
+}

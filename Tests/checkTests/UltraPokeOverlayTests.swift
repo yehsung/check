@@ -914,3 +914,245 @@ func overlayUltraDeadlineIsAnchoredAtTakeoverStartNotAfterMount() throws {
     stopWorking(store, controller)
 }
 
+
+// MARK: - 미션 보상 통지(.ultraCharged) — 배달 경로 셋과 그 경계
+//
+// 이 절이 지키는 것은 하나다: **서버가 이미 올린 재화를 사용자가 모른 채 지나가지 않는다.**
+// 보상은 찔림과 다르게 재전송이 없다 — `ultra_wallet_sync` 의 grantedNow 는 그 sync 응답 한 번에만 실리고
+// (장부 유니크 인덱스가 두 번째 적립을 막는다), 그 다음 sync 부터는 claimed=true 일 뿐 grantedNow=false 다.
+// 그래서 이 통지가 어느 상태에서 죽으면 "잔량이 늘었다"는 사실은 사용자가 패널을 열 때까지 침묵한다.
+//
+// 배달 경로는 셋이고, 경계는 **컨트롤러가 아니라 엔진이** 정한다.
+//   (a) 표시 중       → engine.request 만(정상 경로가 창 수명을 소유)
+//   (b) 숨김          → peek(8초 창을 새로 무장)
+//   (c) 엔진이 거부   → **아무것도 하지 않는다**(창도 안 띄운다)
+// (c) 가 이 절의 핵심이다. 앞선 판은 창부터 띄우고 요청은 나중에 했고, 그래서 거부되면 창만 떴다 지고
+// 알맹이는 사라졌다(CheckOverlayController.showCurrentMessageBubble 주석이 그 손실을 기록해 두었다).
+
+/// 엔진 clock 을 테스트가 손으로 민다. 보상 통지의 경계 중 하나(격발 리액션은 만료됐는데 컨트롤러 격발은
+/// 아직 살아 있는 1초 창 — ultraSeconds 5 vs ultraSeconds+ultraWatchdogGrace 6)를 만들려면 시간이 움직여야 한다.
+private final class ManualClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Date
+
+    init(_ start: Date) { value = start }
+
+    var now: Date {
+        lock.lock(); defer { lock.unlock() }
+        return value
+    }
+
+    func advance(_ seconds: Double) {
+        lock.lock(); defer { lock.unlock() }
+        value = value.addingTimeInterval(seconds)
+    }
+
+    var reader: @Sendable () -> Date {
+        { [self] in now }
+    }
+}
+
+@MainActor
+@Test
+func rewardTriggerIsWiredFromStoreToOverlay() {
+    // 배선 자체를 못 박는다. 스토어는 grantedNow 를 본 그 자리에서 `onRewardTrigger?(.ultraCharged)` 를
+    // 쏘는데(WorkTimerStorePoke), 컨트롤러가 그 구멍을 안 막고 있으면 **아무 일도 일어나지 않고 아무도 모른다**.
+    // 콜백이 nil 이면 `?.` 가 조용히 삼키기 때문에 서버·스토어·엔진이 전부 초록인 채로 사용자만 침묵을 겪는다.
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 700_000) })
+    let (store, controller) = makeUltraController(engine: engine)
+
+    // 콜백을 nil 검사로 보지 않고 **실제로 쏴 본다.** 함수 타입은 nil 비교가 컴파일러 진단에 걸리고,
+    // 무엇보다 "구멍이 막혔다"보다 "그 구멍으로 연출이 나왔다"가 지키고 싶은 사실이다.
+    store.onRewardTrigger?(.ultraCharged)
+    #expect(
+        engine.greetingText == "울트라 +1!",
+        "컨트롤러가 onRewardTrigger 를 배선하지 않았다 — `?.` 가 조용히 삼켜 아무도 모른다"
+    )
+    #expect(engine.state == .playing(.ultraCharged))
+
+    controller.updateWorking(false)   // peek 태스크 취소 + 렌더 정리.
+}
+
+@MainActor
+@Test
+func rewardPeeksWhenOverlayIsHidden() {
+    // 비근무·캐릭터 표시 꺼짐 — 찔림과 **똑같이** 8초 peek 로 전달한다. 이 경로를 shouldBeVisible 게이트로
+    // 막으면(onReactionTrigger 처럼) 근무를 끝낸 뒤 도착한 보상이 통째로 사라진다. 미션 판정은 서버가
+    // 세션을 닫으며 하므로 **근무 종료 직후가 오히려 흔한 도착 시각**이다.
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 701_000) })
+    let (store, controller) = makeUltraController(engine: engine)
+    store.setOverlayEnabled(false)
+
+    #expect(controller.panel.isVisible == false)
+    controller.presentReward(.ultraCharged)
+
+    #expect(engine.greetingText == "울트라 +1!")
+    #expect(engine.renderActive, "peek 동안 렌더가 켜져야 연출이 그려진다")
+    #expect(controller.panel.isVisible, "숨김 상태에서 보상이 창을 못 띄웠다 — 사용자는 아무것도 못 본다")
+    #expect(controller.isPeekArmed, "8초 퇴장 타이머가 없으면 창이 그대로 남는다")
+    // peek 는 일시 토스트일 뿐 '캐릭터 켜기'가 아니다.
+    #expect(controller.shouldBeVisible == false)
+
+    controller.updateWorking(false)
+}
+
+@MainActor
+@Test
+func rewardDoesNotArmPeekWhileNormallyVisible() {
+    // 표시 중이면 **창 수명은 정상 경로의 것**이다. 여기서 peek 를 무장하면 8초 뒤 그 타이머가 깨어나
+    // `shouldBeVisible` 가드에 막혀 물러나기는 하지만, 그 사이 도착한 다른 peek 의 퇴장을 자기가 취소해
+    // 창을 남기는 등 두 소유자가 겹친다. 정상 경로에서는 움찔+말풍선만이 답이다.
+    let clock = ManualClock(Date(timeIntervalSince1970: 702_000))
+    let engine = ReactionEngine(clock: clock.reader)
+    let (store, controller) = makeUltraController(engine: engine)
+    store.setOverlayEnabled(true)
+    startWorking(store, controller)
+    #expect(controller.panel.isVisible, "픽스처가 표시 중을 만들지 못했다")
+    // 근무 시작은 출근 인사(.commuteStart, 우선순위 3)를 재생한다. 그게 살아 있으면 보상(3)이 3 <= 3 에
+    // 걸려 거부되고, 이 테스트는 '경로 선택'이 아니라 '엔진 우선순위'를 시험하게 된다 — 주제가 아닌 축은
+    // 재운다(이 파일의 ultraNeverExpires 와 같은 규약).
+    clock.advance(ReactionKind.commuteStart.duration + 0.1)
+    #expect(engine.state == .idle, "픽스처: 출근 인사가 끝난 뒤여야 한다")
+
+    controller.presentReward(.ultraCharged)
+
+    #expect(engine.greetingText == "울트라 +1!")
+    #expect(engine.state == .playing(.ultraCharged))
+    #expect(controller.isPeekArmed == false, "표시 중인데 peek 타이머를 세웠다 — 창 소유자가 둘이 된다")
+
+    stopWorking(store, controller)
+}
+
+@MainActor
+@Test
+func rewardOpensNoWindowWhenTheEngineRefuses() {
+    // ★ 회귀 지점. 앞선 판의 peek 는 `engine.request` 의 반환값을 보지 않고 **창부터 띄웠다**.
+    //   그래서 재생 중이라 요청이 거부되면 창만 떴다 8초 뒤 지고, 사용자는 빈 캐릭터가 잠깐 튀어나왔다
+    //   사라지는 것만 본다. 보상에서는 그 손실이 더 나쁘다 — 재화는 이미 올라갔고 재전송이 없다.
+    //
+    //   여기서 만드는 상태는 실제로 존재한다: 근무 종료 인사(.commuteEnd, 우선순위 3)가 재생 중이고
+    //   패널은 이미 숨김으로 내려간 그 구간이다. 보상(3)은 3 <= 3 에 걸리고 예외 셋 중 어디에도
+    //   해당하지 않는다(active 가 .poked 도, 보상도, commuteEnd→commuteStart 재시작도 아니다).
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 703_000) })
+    let (store, controller) = makeUltraController(engine: engine)
+    store.setOverlayEnabled(false)
+
+    #expect(engine.request(.commuteEnd), "픽스처: 근무 종료 인사가 재생 중이어야 한다")
+    #expect(controller.panel.isVisible == false)
+
+    controller.presentReward(.ultraCharged)
+
+    #expect(engine.state == .playing(.commuteEnd), "거부됐어야 할 요청이 재생을 갈아치웠다")
+    #expect(engine.greetingText != "울트라 +1!")
+    #expect(controller.panel.isVisible == false, "거부됐는데 창을 띄웠다 — 빈 캐릭터가 튀어나왔다 사라진다")
+    #expect(controller.isPeekArmed == false, "띄우지도 않은 창에 퇴장 타이머를 걸었다")
+    #expect(engine.renderActive == false)
+
+    controller.updateWorking(false)
+}
+
+@MainActor
+@Test
+func rewardIsSwallowedDuringUltraTakeoverEvenAfterItsReactionExpired() {
+    // 격발 중에는 삼킨다 — 전체화면 발광 위에 작은 말풍선을 겹치지 않는다(handleReceivedPokes 와 같은 규약).
+    //
+    // ★ 이 테스트가 시계를 미는 이유: 엔진 리액션(.ultraPoked)은 5.0초에 만료되는데 컨트롤러 격발은
+    //   워치독 여유까지 6.0초다. 그 **1초 창**에서는 엔진이 idle 이라 우선순위(4)가 더 이상 아무것도
+    //   막아 주지 않는다 — `isUltraActive` 가드가 유일한 방어다. 시계를 밀지 않으면 우선순위가 대신
+    //   막아 주어 가드를 지워도 초록인, 아무것도 안 지키는 테스트가 된다.
+    let clock = ManualClock(Date(timeIntervalSince1970: 704_000))
+    let engine = ReactionEngine(clock: clock.reader)
+    let (store, controller) = makeUltraController(
+        engine: engine,
+        ultraDurationSeconds: ultraNeverExpires,
+        ultraDeadlineSeconds: ultraNeverExpires
+    )
+    store.setOverlayEnabled(false)   // 캐릭터를 꺼 뒀어도 격발은 그대로 재생된다(사용자 결정).
+
+    controller.handleReceivedPokes([ultraPoke(at: clock.now)])
+    #expect(controller.isUltraActive)
+    let ultraText = engine.greetingText
+
+    // 격발 리액션만 만료시킨다. 컨트롤러 격발은 그대로 살아 있다(주입 상한이 아직 멀다).
+    clock.advance(ReactionKind.ultraPoked(bubbleText: "").duration + 0.1)
+    #expect(engine.state == .idle, "픽스처: 엔진 리액션이 만료돼 우선순위 방어가 사라진 창이어야 한다")
+    #expect(controller.isUltraActive, "픽스처: 컨트롤러 격발은 아직 살아 있어야 한다")
+
+    controller.presentReward(.ultraCharged)
+
+    #expect(engine.greetingText == ultraText, "격발 말풍선을 보상 통지가 갈아치웠다")
+    #expect(engine.state == .idle, "격발 중에 보상 연출이 끼어들었다")
+    #expect(controller.isPeekArmed == false, "격발 창 수명을 peek 타이머가 가로챘다")
+
+    controller.endUltraTakeover()
+    controller.updateWorking(false)
+}
+
+@MainActor
+@Test
+func rewardLeavesTheInputPinAloneOnEveryPath() {
+    // ★ 이 작업의 안전 증거. v0.2.32 의 드래그 사망 사고가 정확히 이 계층(클릭 통과 못 박기)에서 났다.
+    //   보상 통지는 창을 띄우고 리액션을 걸지만 **입력에 대해서는 아무 말도 하지 않아야 한다** —
+    //   못 박기(pinnedIgnoresMouseEvents)가 non-nil 이 되는 순간 히트-스루 기계가 통째로 멈추고
+    //   캐릭터는 클릭도 드래그도 받지 못한다. 격발만이 그 값을 만질 자격이 있다.
+    let clock = ManualClock(Date(timeIntervalSince1970: 705_000))
+    let engine = ReactionEngine(clock: clock.reader)
+    let (store, controller) = makeUltraController(
+        engine: engine,
+        ultraDurationSeconds: ultraNeverExpires,
+        ultraDeadlineSeconds: ultraNeverExpires
+    )
+
+    // (a) 숨김 peek 경로.
+    store.setOverlayEnabled(false)
+    #expect(controller.pinnedIgnoresMouseEventsValue == nil)
+    controller.presentReward(.ultraCharged)
+    #expect(controller.isPeekArmed, "픽스처: 이 경로가 실제로 peek 를 탔어야 한다")
+    #expect(controller.pinnedIgnoresMouseEventsValue == nil, "peek 보상이 클릭 통과를 못 박았다")
+
+    // (b) 정상 표시 경로.
+    store.setOverlayEnabled(true)
+    startWorking(store, controller)
+    #expect(controller.pinnedIgnoresMouseEventsValue == nil)
+    controller.presentReward(.ultraCharged)
+    #expect(controller.pinnedIgnoresMouseEventsValue == nil, "표시 중 보상이 클릭 통과를 못 박았다")
+
+    // (c) 격발 중 경로 — 못 박기는 격발의 것이라 **true 그대로**여야 한다(보상이 풀어서도 안 된다).
+    controller.handleReceivedPokes([ultraPoke(at: clock.now)])
+    #expect(controller.pinnedIgnoresMouseEventsValue == true, "픽스처: 격발이 못 박기를 세웠어야 한다")
+    controller.presentReward(.ultraCharged)
+    #expect(controller.pinnedIgnoresMouseEventsValue == true, "보상이 격발의 못 박기를 풀었다 — 5초가 막다 말다 한다")
+
+    controller.endUltraTakeover()
+    #expect(controller.pinnedIgnoresMouseEventsValue == nil, "격발이 걷히면 못 박기도 함께 풀린다")
+    stopWorking(store, controller)
+}
+
+@MainActor
+@Test
+func rewardStillPeeksWhenIntentSaysVisibleButTheWindowIsNot() {
+    // 정상 경로 판정이 `shouldBeVisible` **만** 보면 안 되는 이유. 그 값은 **의도**이고 실제 창이 아니다 —
+    // 둘이 어긋나는 구간이 실재한다(근무 시작 직후 프레임 전이, 화면 구성 변경으로 창이 내려간 뒤,
+    // 격발 원복 도중). 그 구간에서 request 만 하면 연출이 **아무도 못 보는 곳에서 소진**되고,
+    // 보상은 재전송이 없으므로 그대로 사라진다. handleReceivedPokes(:886)가 같은 이유로 두 값을 함께 본다.
+    //
+    // (이 단언이 없으면 `panel.isVisible` 조건을 지워도 스위트가 초록이었다 — 실제로 확인하고 이 테스트를 얹었다.)
+    let clock = ManualClock(Date(timeIntervalSince1970: 706_000))
+    let engine = ReactionEngine(clock: clock.reader)
+    let (store, controller) = makeUltraController(engine: engine)
+    store.setOverlayEnabled(true)
+    startWorking(store, controller)
+    clock.advance(ReactionKind.commuteStart.duration + 0.1)
+
+    // 의도는 '표시', 실제 창은 내려가 있는 구간.
+    controller.panel.orderOut(nil)
+    #expect(controller.shouldBeVisible, "픽스처: 의도는 표시여야 한다")
+    #expect(controller.panel.isVisible == false, "픽스처: 실제 창은 내려가 있어야 한다")
+
+    controller.presentReward(.ultraCharged)
+
+    #expect(controller.panel.isVisible, "창이 내려간 사이 보상이 아무도 못 보는 곳에서 소진됐다")
+    #expect(engine.greetingText == "울트라 +1!")
+
+    stopWorking(store, controller)
+}

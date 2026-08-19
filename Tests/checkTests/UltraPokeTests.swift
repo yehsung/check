@@ -76,77 +76,50 @@ import Testing
         UltraSequenceURLProtocol.ultraBodies(forHost: host)
     }
 
-    // MARK: - 한도 상수(U1)
+    // MARK: - 잔량 안내 문구(U1, 순수)
 
-    /// 하루 한도는 **명명 상수 하나**이고 안내 문구가 거기서 파생된다. 리터럴을 흩뿌리면 한도를 바꿀 때
-    /// 문구만 옛 숫자로 남아 "하루에 한 번"이라 말하면서 두 번 받아 주는 상태가 된다.
-    @Test func ultraDailyLimitIsNamedConstantAndDrivesTheNotice() {
-        #expect(WorkTimerStore.ultraPokeDailyLimit == 2)
-        #expect(WorkTimerStore.ultraSpentNotice.contains("\(WorkTimerStore.ultraPokeDailyLimit)번"))
+    /// v0.2.34: **하루 한도 상수가 사라졌다.** 잔량 0 안내는 그 상수에서 파생되지 않고,
+    /// "다 썼다"로 끝내지도 않는다 — 회복 방법(미션)까지 같은 줄에서 말해야 한다.
+    /// 0잔량 사용자가 3초를 꾹 눌러 서버 거절을 받았을 때 **실제로 읽는 문장**이 이것이다.
+    @Test func ultraEmptyNoticeSaysHowToRecoverAndNotADailyLimit() {
+        #expect(WorkTimerStore.ultraEmptyNotice == "울트라가 없어요 — 미션으로 충전하세요")
+        // 하루 한도 어휘가 되살아나면 계약 상대가 없는 문장이 된다(서버가 그 상수를 지웠다).
+        #expect(WorkTimerStore.ultraEmptyNotice.contains("하루에") == false)
+        #expect(WorkTimerStore.ultraEmptyNotice.contains("미션"))
     }
 
-    // MARK: - 남은 횟수 문구(U2, 순수)
-
-    /// 모를 때는 **아무 숫자도 말하지 않는다**. 남은 횟수는 울트라 응답으로만 알 수 있어서 '모름' 구간이
-    /// 정상적으로 존재하고, 그때 0 이나 한도를 지어내면 화면이 거짓말을 한다.
-    @Test func ultraRemainingTextStaysSilentWhenUnknown() {
-        #expect(WorkTimerStore.ultraRemainingText(remaining: nil) == nil)
-        #expect(WorkTimerStore.ultraRemainingText(remaining: 2) == "오늘 2번 남음")
-        #expect(WorkTimerStore.ultraRemainingText(remaining: 1) == "오늘 1번 남음")
-        #expect(WorkTimerStore.ultraRemainingText(remaining: 0) == "오늘 몫은 다 썼어요")
-        // 서버 이상치(음수)는 숫자로 말할 수 없다 — 침묵한다.
-        #expect(WorkTimerStore.ultraRemainingText(remaining: -1) == nil)
+    /// 모를 때는 **아무 숫자도 말하지 않는다**. 잔량 키를 안 보내는 서버(구버전)가 실제로 있고,
+    /// 그때 "0개예요"라고 말하면 그건 거짓말이다.
+    @Test func ultraSentNoticeAppendsBalanceOnlyWhenKnown() {
+        #expect(WorkTimerStore.ultraSentNotice(balance: nil) == "울트라 찌르기 발사!")
+        #expect(WorkTimerStore.ultraSentNotice(balance: 2) == "울트라 발사! 남은 울트라 2개")
+        #expect(WorkTimerStore.ultraSentNotice(balance: 1) == "울트라 발사! 남은 울트라 1개")
+        #expect(WorkTimerStore.ultraSentNotice(balance: 0) == "울트라 발사! 이제 0개예요")
     }
 
-    @Test func ultraSentNoticeAppendsRemainingOnlyWhenKnown() {
-        #expect(WorkTimerStore.ultraSentNotice(remaining: nil) == "울트라 찌르기 발사!")
-        #expect(WorkTimerStore.ultraSentNotice(remaining: 1) == "울트라 찌르기 발사! 오늘 1번 남음")
-        #expect(WorkTimerStore.ultraSentNotice(remaining: 0) == "울트라 찌르기 발사! 오늘 몫은 다 썼어요")
-    }
+    // MARK: - 잔량은 이월된다(하루 스탬프가 없다)
 
-    // MARK: - 남은 횟수 미러와 자정 리셋
-
-    /// 2 → 1 → 0 으로 줄고, 0 에서 소진 미러가 함께 선다. 그리고 **KST 자정을 넘기면 모름(nil)으로 돌아간다** —
-    /// 이 리셋이 없으면 어제의 "0번 남음"이 오늘 화면에 남아 새 날인데 못 쓴다고 안내한다.
-    @Test func ultraRemainingCountsDownAndResetsAfterKSTMidnight() {
+    /// **자정을 넘겨도 잔량은 그대로다.** v0.2.33 의 남은 횟수는 하루 귀속이라 자정에 '모름'으로 되돌렸는데,
+    /// 잔량은 이월되는 재화라 그 리셋을 그대로 두면 다음 sync 까지 배지가 조용히 빈칸이 된다.
+    /// 이 테스트가 빨개지는 유일한 방법은 잔량에 하루 스탬프를 다시 붙이는 것이다.
+    @Test func ultraBalanceCarriesOverAcrossKSTMidnight() {
         let store = makeStore(host: "ultra-store-quota-test", session: URLSession(configuration: .stubbed))
-        // KST 한낮으로 시각을 고정한다(벽시계 의존 제거 — 자정 근처에 돌려도 결과가 같다).
-        let today = Date(timeIntervalSince1970: 1_785_888_000)
-        let tomorrow = today.addingTimeInterval(24 * 3600)
 
-        store.applyUltraRemaining(2, now: today)
-        #expect(store.ultraRemaining(now: today) == 2)
-        #expect(store.isUltraPokeSpent(now: today) == false)
+        store.applyUltraBalance(2)
+        #expect(store.ultraBalance == 2)
+        store.applyUltraBalance(1)
+        #expect(store.ultraBalance == 1)
+        store.applyUltraBalance(0)
+        #expect(store.ultraBalance == 0)
 
-        store.applyUltraRemaining(1, now: today)
-        #expect(store.ultraRemaining(now: today) == 1)
-        #expect(store.isUltraPokeSpent(now: today) == false)
+        // 하루가 지나도 스토어는 아무 일도 하지 않는다 — 잔량을 버릴 자리가 코드에 없다.
+        // (v0.2.33 은 여기서 refreshUltraQuota 가 값을 nil 로 내렸다.)
+        store.applyUltraBalance(3)
+        #expect(store.ultraBalance == 3)
 
-        store.applyUltraRemaining(0, now: today)
-        #expect(store.ultraRemaining(now: today) == 0)
-        // 0 은 곧 소진이다 — 미러가 서야 다음 시도가 요청 없이 막힌다.
-        #expect(store.isUltraPokeSpent(now: today))
-
-        // 자정을 넘기면 어제 값은 답이 될 수 없다.
-        #expect(store.ultraRemaining(now: tomorrow) == nil)
-        #expect(store.isUltraPokeSpent(now: tomorrow) == false)
-        store.refreshUltraQuota(now: tomorrow)
-        #expect(store.ultraRemainingToday == nil)
-        #expect(store.ultraRemainingDay == nil)
-    }
-
-    /// nil 은 '모름'이라 **직전 숫자를 지운다**. 마이그레이션 전 서버는 남은 횟수를 안 실어 주는데,
-    /// 그때 옛 숫자를 남기면 방금 한 발 썼는데도 화면이 이전 숫자를 계속 보여준다.
-    @Test func applyUltraRemainingNilFallsBackToUnknown() {
-        let store = makeStore(host: "ultra-store-unknown-test", session: URLSession(configuration: .stubbed))
-        let now = Date(timeIntervalSince1970: 1_785_888_000)
-
-        store.applyUltraRemaining(1, now: now)
-        #expect(store.ultraRemaining(now: now) == 1)
-
-        store.applyUltraRemaining(nil, now: now)
-        #expect(store.ultraRemaining(now: now) == nil)
-        #expect(store.ultraRemainingDay == nil)
+        // 음수는 서버 버그이거나 미래 규약이다. 숫자로 말할 수 없으므로 0 으로 접는다.
+        store.applyUltraBalance(-1)
+        #expect(store.ultraBalance == 0)
     }
 
     // MARK: - 하루 한도는 게이트가 아니다(뒤집힌 계약)
@@ -164,9 +137,9 @@ import Testing
         UltraSequenceURLProtocol.enqueue([#"{"status":"ok","ultra_remaining":0}"#], forHost: host)
         let store = makeSequenceStore(host: host)
         let now = Date()
-        // 화면이 "오늘 몫은 다 썼어요"라고 말하는 바로 그 상태를 만든다.
-        store.applyUltraRemaining(0, now: now)
-        #expect(store.isUltraPokeSpent(now: now))
+        // 화면이 "울트라 없음"이라고 말하는 바로 그 상태를 만든다.
+        store.applyUltraBalance(0)
+        #expect(store.ultraBalance == 0)
 
         store.sendUltraPoke(to: "teammate")
         await waitUntil { self.ultraBodies(host: host).count == 1 }
@@ -176,8 +149,8 @@ import Testing
         #expect(ultraBodies(host: host).first?.contains("teammate") == true)
         // ② 문구는 미러가 아니라 서버 응답이 정한다.
         await waitUntil { store.pokeCooldownUntil["teammate"] != nil }
-        #expect(store.pokeNotice == "울트라 찌르기 발사! 오늘 몫은 다 썼어요")
-        #expect(store.pokeNotice != WorkTimerStore.ultraSpentNotice)
+        #expect(store.pokeNotice == "울트라 발사! 이제 0개예요")
+        #expect(store.pokeNotice != WorkTimerStore.ultraEmptyNotice)
         _ = try #require(store.pokeCooldownUntil["teammate"])
     }
 
@@ -191,13 +164,13 @@ import Testing
             forHost: host
         )
         let store = makeSequenceStore(host: host)
-        store.applyUltraRemaining(0, now: Date())
+        store.applyUltraBalance(0)
 
         store.sendUltraPoke(to: "outsider")
         await waitUntil { store.pokeNotice != nil }
 
         #expect(ultraBodies(host: host).count == 1)      // 미러가 아니라 서버가 거절했다
-        #expect(store.pokeNotice == WorkTimerStore.ultraSpentNotice)
+        #expect(store.pokeNotice == WorkTimerStore.ultraEmptyNotice)
         // 하루 한도 거절은 쿨타임을 태우지 않는다(서버가 행을 안 남긴다 — 다른 축이다).
         #expect(store.pokeCooldownUntil["outsider"] == nil)
     }
@@ -219,10 +192,10 @@ import Testing
         let store = makeSequenceStore(host: host)
 
         store.sendUltraPoke(to: "outsider")
-        await waitUntil { store.ultraPokeSpentDay != nil }
+        await waitUntil { store.ultraBalance != nil }
         #expect(ultraBodies(host: host).count == 1)
-        #expect(store.isUltraPokeSpent(now: Date()))          // 표시 미러는 섰다(그게 미러의 일이다)
-        #expect(store.pokeNotice == WorkTimerStore.ultraSpentNotice)
+        #expect(store.ultraBalance == 0)                      // 표시 잔량은 0 이 됐다(그게 표시의 일이다)
+        #expect(store.pokeNotice == WorkTimerStore.ultraEmptyNotice)
 
         store.sendUltraPoke(to: "teammate")
         let fired = await waitUntil { self.ultraBodies(host: host).count == 2 }
@@ -238,10 +211,9 @@ import Testing
         await waitUntil { store.pokeCooldownUntil["teammate"] != nil }
         let until = try #require(store.pokeCooldownUntil["teammate"])
         #expect(until.timeIntervalSince(Date()) > 0)
-        #expect(store.pokeNotice == "울트라 찌르기 발사! 오늘 몫은 다 썼어요")
-        // ③ 그동안 남은 횟수 표시는 서버 값 그대로다(팀 발사가 몫을 되돌려 주지 않는다).
-        #expect(store.ultraRemainingToday == 0)
-        #expect(WorkTimerStore.ultraRemainingText(remaining: store.ultraRemaining(now: Date())) == "오늘 몫은 다 썼어요")
+        #expect(store.pokeNotice == "울트라 발사! 이제 0개예요")
+        // ③ 그동안 잔량 표시는 서버 값 그대로다.
+        #expect(store.ultraBalance == 0)
         #expect(store.pokeCooldownUntil["outsider"] == nil)   // 거절당한 쪽은 쿨타임도 안 탔다
     }
 
@@ -253,21 +225,17 @@ import Testing
         UltraSequenceURLProtocol.enqueue([#"{"status":"ok","ultra_remaining":0}"#], forHost: zeroHost)
         let spentStore = makeSequenceStore(host: zeroHost)
         spentStore.sendUltraPoke(to: "someone")
-        await waitUntil { spentStore.ultraRemainingToday != nil }
+        await waitUntil { spentStore.ultraBalance != nil }
 
-        #expect(spentStore.ultraRemainingToday == 0)
-        #expect(spentStore.isUltraPokeSpent(now: Date()))     // 표시용 소진 미러가 선다
-        #expect(WorkTimerStore.ultraRemainingText(remaining: spentStore.ultraRemaining(now: Date())) == "오늘 몫은 다 썼어요")
+        #expect(spentStore.ultraBalance == 0)
 
         let oneHost = "ultra-store-display-one-test"
         UltraSequenceURLProtocol.enqueue([#"{"status":"ok","ultra_remaining":1}"#], forHost: oneHost)
         let leftStore = makeSequenceStore(host: oneHost)
         leftStore.sendUltraPoke(to: "someone")
-        await waitUntil { leftStore.ultraRemainingToday != nil }
+        await waitUntil { leftStore.ultraBalance != nil }
 
-        #expect(leftStore.ultraRemainingToday == 1)
-        #expect(leftStore.isUltraPokeSpent(now: Date()) == false)
-        #expect(WorkTimerStore.ultraRemainingText(remaining: leftStore.ultraRemaining(now: Date())) == "오늘 1번 남음")
+        #expect(leftStore.ultraBalance == 1)
     }
 
     // MARK: - 게이트(요청을 아예 안 내는 경로)
@@ -294,7 +262,7 @@ import Testing
         let notWorking = makeSequenceStore(host: notWorkingHost)
         notWorking.startedAt = nil
         // 소진 미러와 무관한 게이트다 — 몫이 남아 있어도 근무중이 아니면 안 나간다.
-        notWorking.applyUltraRemaining(2, now: Date())
+        notWorking.applyUltraBalance(2)
 
         notWorking.sendUltraPoke(to: "target")
         try? await Task.sleep(for: .milliseconds(80))
@@ -316,11 +284,12 @@ import Testing
         #expect(store.pokeNotice == "근무 중일 때만 콕 찌를 수 있어요")
     }
 
-    /// 소진 미러는 **날짜 키**다 — 어제 다 썼다는 기록이 오늘의 발사를 막으면 안 된다.
-    @Test func yesterdaySpentMirrorDoesNotBlockToday() async {
+    /// **잔량 0 은 발사를 막지 않는다.** 잔량은 미션으로 그날 중에 늘어나므로, 0을 보고 선게이트를 걸면
+    /// 3시간을 채워 서버 잔량이 1이 된 사용자가 앱을 재시작하기 전까지 못 쏜다(v0.2.30 구버전의 그 고장).
+    @Test func zeroBalanceDoesNotBlockTheRequest() async {
         let host = "ultra-store-yesterday-test"
         let store = makeStore(host: host, session: URLSession(configuration: .stubbed))
-        store.ultraPokeSpentDay = MilestoneTracker.dayKey(Date().addingTimeInterval(-24 * 3600))
+        store.applyUltraBalance(0)
 
         store.sendUltraPoke(to: "target")
         await waitUntil { ultraRequestCount(host: host) == 1 }
@@ -339,11 +308,10 @@ import Testing
         let sentAt = Date()
 
         store.sendUltraPoke(to: "target")
-        await waitUntil { store.ultraRemainingToday != nil }
+        await waitUntil { store.ultraBalance != nil }
 
-        #expect(store.ultraRemainingToday == 1)
-        #expect(store.isUltraPokeSpent(now: Date()) == false)   // 아직 한 번 남았다
-        #expect(store.pokeNotice == "울트라 찌르기 발사! 오늘 1번 남음")
+        #expect(store.ultraBalance == 1)
+        #expect(store.pokeNotice == "울트라 발사! 남은 울트라 1개")
         let until = try #require(store.pokeCooldownUntil["target"])
         // 발사 시각 기준 하한만 엄격히 본다(상한은 병렬 실행 지연을 흡수) — 검증 대상은 '60초를 미러링했는가'.
         #expect(until.timeIntervalSince(sentAt) >= 60)
@@ -352,11 +320,10 @@ import Testing
         // 두 번째 발사: 서버가 남은 0 을 알려 준다.
         TokenBoardURLProtocol.setResponse(#"{"status":"ok","ultra_remaining":0}"#, forHost: host)
         store.sendUltraPoke(to: "target2")
-        await waitUntil { store.ultraRemainingToday == 0 }
+        await waitUntil { store.ultraBalance == 0 }
 
-        #expect(store.ultraRemainingToday == 0)
-        #expect(store.isUltraPokeSpent(now: Date()))
-        #expect(store.pokeNotice == "울트라 찌르기 발사! 오늘 몫은 다 썼어요")
+        #expect(store.ultraBalance == 0)
+        #expect(store.pokeNotice == "울트라 발사! 이제 0개예요")
     }
 
     /// 한도 소진(다른 맥에서 이미 다 씀): 미러를 채워 다음 시도부터 요청을 막고, **쿨타임은 건드리지 않는다**
@@ -370,12 +337,11 @@ import Testing
         let store = makeStore(host: host, session: TokenBoardURLProtocol.session())
 
         store.sendUltraPoke(to: "target")
-        await waitUntil { store.ultraPokeSpentDay != nil }
+        await waitUntil { store.ultraBalance != nil }
 
-        #expect(store.isUltraPokeSpent(now: Date()))
-        #expect(store.ultraRemainingToday == 0)
+        #expect(store.ultraBalance == 0)
         #expect(store.pokeCooldownUntil["target"] == nil)
-        #expect(store.pokeNotice == WorkTimerStore.ultraSpentNotice)
+        #expect(store.pokeNotice == WorkTimerStore.ultraEmptyNotice)
     }
 
     /// 쿨타임: 몫은 그대로다(서버가 행을 안 남겼다). 무음 실패를 금지한다 — 3초를 꾹 눌러 링을 다 채운 뒤
@@ -389,8 +355,7 @@ import Testing
         store.sendUltraPoke(to: "target")
         await waitUntil { store.pokeCooldownUntil["target"] != nil }
 
-        #expect(store.ultraPokeSpentDay == nil)          // 오늘 몫 미소진
-        #expect(store.ultraRemainingToday == nil)        // 서버가 말하지 않았으니 모름 유지
+        #expect(store.ultraBalance == nil)        // 서버가 말하지 않았으니 모름 유지(재화는 안 탔다)
         #expect(store.pokeNotice == "방금 찌른 상대예요. 잠시 후 울트라를 쓸 수 있어요")
         let until = try #require(store.pokeCooldownUntil["target"])
         #expect(until.timeIntervalSince(sentAt) >= 40)
@@ -406,8 +371,7 @@ import Testing
         await waitUntil { store.pokeNotice != nil }
 
         #expect(store.pokeNotice == "자리비움 상태에는 찌를 수 없어요")
-        #expect(store.ultraPokeSpentDay == nil)
-        #expect(store.ultraRemainingToday == nil)
+        #expect(store.ultraBalance == nil)
     }
 
     /// 미지 status(마이그레이션 미적용 서버가 늘릴 수 있는 값)는 .invalid 로 접히고 몫을 태우지 않는다.
@@ -420,7 +384,7 @@ import Testing
         await waitUntil { store.pokeNotice != nil }
 
         #expect(store.pokeNotice == "지금은 찌를 수 없어요")
-        #expect(store.ultraPokeSpentDay == nil)
+        #expect(store.ultraBalance == nil)
     }
 
     // MARK: - 대조군
@@ -431,9 +395,7 @@ import Testing
         let host = "ultra-store-control-test"
         TokenBoardURLProtocol.setResponse(#"{"status":"ok"}"#, forHost: host)
         let store = makeStore(host: host, session: TokenBoardURLProtocol.session())
-        let today = MilestoneTracker.dayKey(Date())
-        store.ultraPokeSpentDay = today
-        store.applyUltraRemaining(0, now: Date())
+        store.applyUltraBalance(0)
         store.pokeNotice = "이전 안내"
 
         store.sendPoke(to: "target")
@@ -441,9 +403,8 @@ import Testing
 
         #expect(store.pokeCooldownUntil["target"] != nil)   // 일반 찌르기는 정상 발사됐다
         #expect(store.pokeNotice == nil)                    // ok → 안내 해제
-        // 일반 찌르기는 울트라 장부를 건드리지 않는다(응답에 ultra_remaining 이 없어도 0 으로 접지 않는다).
-        #expect(store.ultraPokeSpentDay == today)
-        #expect(store.ultraRemainingToday == 0)
+        // 일반 찌르기는 울트라 장부를 건드리지 않는다(응답에 잔량 키가 없어도 잔량을 흔들지 않는다).
+        #expect(store.ultraBalance == 0)
     }
 
     // MARK: - 수신 신선도(순수)
@@ -482,16 +443,19 @@ import Testing
     /// 반대로 이미 다 쓴 사람이 "1번 남음"을 보고 눌러 서버 거절만 받는다.
     @Test func clearPersistedSessionClearsUltraState() {
         let store = makeStore(host: "ultra-store-clear-test", session: URLSession(configuration: .stubbed))
-        let now = Date()
-        store.ultraPokeSpentDay = MilestoneTracker.dayKey(now)
-        store.applyUltraRemaining(0, now: now)
+        store.applyUltraBalance(0)
+        store.missions = [MissionProgress(kind: .todayThreeHours, progress: 1, claimedToday: true, cappedToday: false, detail: "x")]
+        store.missionsLoaded = true
+        store.streakDays = 5
+        store.isUltraPanelVisible = true
 
         store.clearPersistedSession()
 
-        #expect(store.ultraPokeSpentDay == nil)
-        #expect(store.ultraRemainingToday == nil)
-        #expect(store.ultraRemainingDay == nil)
-        #expect(store.isUltraPokeSpent(now: now) == false)
+        #expect(store.ultraBalance == nil)
+        #expect(store.missions.isEmpty)
+        #expect(store.missionsLoaded == false)
+        #expect(store.streakDays == 0)
+        #expect(store.isUltraPanelVisible == false)
     }
 }
 
@@ -543,8 +507,8 @@ import Testing
         ]
         store.pokeDirectoryLoaded = true
         store.isPokePanelVisible = true
-        // 서버가 0 을 알려 준 상태 = 화면이 "오늘 몫은 다 썼어요"라고 말하는 그 조건.
-        store.applyUltraRemaining(0, now: now)
+        // 서버가 0 을 알려 준 상태 = 화면이 "울트라 없음"이라고 말하는 그 조건.
+        store.applyUltraBalance(0)
         return store
     }
 
@@ -588,7 +552,7 @@ import Testing
         let store = spentPanelStore(host: host, now: now)
 
         // 전제: 화면이 소진을 말하는 상태다(이게 아니면 아래 단언들은 아무것도 증명하지 못한다).
-        #expect(store.isUltraPokeSpent(now: now))
+        #expect(store.ultraBalance == 0)
 
         var budget = 400_000
         let panel = try #require(
@@ -596,18 +560,65 @@ import Testing
             "콕찌르기 패널을 뷰 트리에서 못 찾았다 — 패널이 안 그려지거나 트리 모양이 바뀌었다"
         )
 
-        let canUltra = try #require(child("canUltra", of: panel) as? Bool)
-        #expect(canUltra == false, "소진 상태에서는 표시용 canUltra 가 false 여야 힌트·툴팁이 소진을 말한다.")
-        let remainingText = child("ultraRemainingText", of: panel) as? String
-        #expect(remainingText == "오늘 몫은 다 썼어요")
-        #expect(PokeUltraHint.text(canUltra: canUltra, isCharging: false, remainingText: remainingText) == PokeUltraHint.spent)
-        #expect(PokeUltraHint.text(canUltra: canUltra, isCharging: true, remainingText: remainingText) == "오늘 몫은 다 썼어요")
+        // v0.2.34: 패널이 받는 표시용 사실이 canUltra(Bool) → ultraBalance(Int?) 로 바뀌었다.
+        // **Optional 인 것이 계약의 일부다** — nil("아직 모름")을 0("없다")으로 접으면 앱을 켠 직후
+        // 수 초 동안 화면이 "울트라 없음"이라는 만들어 낸 사실을 말한다.
+        let balanceChild = try #require(child("ultraBalance", of: panel), "패널이 잔량을 표시용으로 받아야 한다.")
+        // ★ `as? Int?` 로는 **못 잡는다**: Any 에 담긴 Int 를 Int? 로 캐스팅하면 암묵적으로 감싸져 성공한다
+        //   (실측: 패널을 비옵셔널 Int 로 좁힌 뮤턴트가 그 단언을 통과했다). 런타임 타입을 직접 읽는다.
+        #expect(
+            String(describing: type(of: balanceChild)) == "Optional<Int>",
+            """
+            패널이 받는 잔량이 Optional 이 아니다. nil("아직 모름")을 0("없다")으로 접으면
+            앱을 켠 직후 수 초 동안 화면이 "울트라 없음"이라는 만들어 낸 사실을 말한다.
+            """
+        )
+        let balance = try #require(balanceChild as? Int?, "잔량은 Int? 다 — 비옵셔널로 좁히면 '모름'이 사라진다.")
+        #expect(balance == 0, "서버가 0 을 알려 준 상태에서는 표시용 잔량이 0 이어야 힌트·툴팁이 충전 경로를 말한다.")
+        // 그 값이 실제로 만드는 문구를 여기서 확인한다(순수 함수와 호출부를 한 줄로 잇는다).
+        #expect(UltraBalanceText.hint(balance: balance) == UltraBalanceText.empty)
+        #expect(UltraBalanceText.rowTooltip(balance: balance).contains("미션으로 충전"))
+        // 잔량 배지 탭 경로가 패널에 달려 있다 — 0개인 사람이 충전 방법에 닿는 유일한 문이다.
+        #expect(
+            panel.children.contains { $0.label == "onOpenUltraPanel" },
+            "잔량 배지 탭 콜백이 사라졌다. 0개인 사용자가 '어떻게 채우죠?'의 답에 닿을 길이 없어진다."
+        )
         // 발사 경로는 살아 있다(값을 부르지는 않는다 — 위 주석의 이유).
         #expect(panel.children.contains { $0.label == "onUltra" }, "울트라 발사 콜백은 소진 상태에서도 그대로 달려 있어야 한다.")
         // 막는 콜백은 아예 사라졌다 — 남겨 두면 다음 사람이 "있으니 쓰자"고 게이트를 되살린다.
         #expect(
             panel.children.contains { $0.label == "onUltraBlocked" } == false,
             "막는 콜백이 패널에 되살아났다. 하루 한도 판정은 서버 한 곳뿐이다(표시와 발사의 분리)."
+        )
+    }
+
+    /// **울트라 화면이 열리면 토큰 소모량 행이 사라진다** — 다른 네 하위 패널과 같은 규약이다.
+    ///
+    /// 이걸 빠뜨리면(`isSubPanelOpen` 에 새 플래그를 안 더하면) 그 행이 패널과 함께 그려져 창이
+    /// 700pt 상한을 넘고 **푸터가 화면 밖으로 잘린다** — 그 순간 사용자는 로그아웃할 방법을 잃는다.
+    /// 대조군(홈 화면에서는 그 행이 실재한다)이 함께 있어야 이 단언이 공허해지지 않는다.
+    @Test func openingTheUltraPanelHidesTheTokenUsageRowLikeEveryOtherSubPanel() throws {
+        let now = Date()
+        let home = spentPanelStore(host: "ultra-subpanel-home", now: now)
+        home.isPokePanelVisible = false          // 홈(팀 카드) 화면
+        var homeBudget = 400_000
+        #expect(
+            findViewNode(named: "CheckTokenUsageRow", in: CheckMenuView(store: home).body, budget: &homeBudget) != nil,
+            "대조군 실패: 홈 화면에 토큰 소모량 행이 없다 — 이 픽스처로는 아래 단언이 아무것도 증명하지 못한다."
+        )
+
+        let ultra = spentPanelStore(host: "ultra-subpanel-open", now: now)
+        ultra.isPokePanelVisible = false
+        ultra.isUltraPanelVisible = true
+        var panelBudget = 400_000
+        #expect(
+            findViewNode(named: "UltraPanel", in: CheckMenuView(store: ultra).body, budget: &panelBudget) != nil,
+            "울트라 화면이 아예 안 그려졌다 — content 의 분기가 빠졌다."
+        )
+        var rowBudget = 400_000
+        #expect(
+            findViewNode(named: "CheckTokenUsageRow", in: CheckMenuView(store: ultra).body, budget: &rowBudget) == nil,
+            "isSubPanelOpen 이 울트라 화면을 안 센다 — 토큰 행이 함께 그려져 창이 상한을 넘고 푸터가 잘린다."
         )
     }
 
@@ -659,27 +670,80 @@ import Testing
             button.contains("onUltraBlocked") == false,
             """
             막는 콜백이 되살아났다. 서버 거절(.ultraUsedToday)이 스토어에서 같은 문장
-            (WorkTimerStore.ultraSpentNotice)을 세우므로 사용자가 보는 결과는 왕복 한 번 뒤의 같은 문구다 —
+            (WorkTimerStore.ultraEmptyNotice)을 세우므로 사용자가 보는 결과는 왕복 한 번 뒤의 같은 문구다 —
             클라에 두 번째 판정을 만들 이유가 없다.
             """
         )
         #expect(button.contains("isUltraPokeSpent") == false, "소진 미러는 표시 계층의 값이다. 버튼이 읽으면 그게 게이트가 된다.")
         #expect(button.contains("ultraSpentNotice") == false, "소진 안내는 서버 응답을 받은 스토어가 세운다(문구가 두 곳으로 갈라지지 않게).")
         #expect(button.contains("ultraRemaining") == false, "남은 횟수도 표시용이다 — 버튼이 알면 다음 사람이 그걸로 다시 막는다.")
+        // ★ blocker(UI #4) — 개명이 이 목록을 **어휘 맹목**으로 만든다. v0.2.34 에서 사실의 이름이
+        //   canUltra/isUltraPokeSpent 에서 ultraBalance 로 바뀌었고, 잔량은 예전 이름보다 훨씬 더
+        //   "이걸로 막고 싶다"는 유혹이 크다(0이면 못 쏘는 게 당연해 보인다). 새 이름을 목록에 넣지 않으면
+        //   `if ultraBalance > 0` 을 버튼에 심어도 위 단언이 전부 초록이다.
+        #expect(button.contains("ultraBalance") == false, "잔량도 표시용이다 — 미션으로 그날 중에 늘어나므로 버튼이 그걸로 막으면 재시작 전까지 못 쏜다.")
+        #expect(button.contains("ultraEmptyNotice") == false, "잔량 0 안내는 서버 응답을 받은 스토어가 세운다(문구가 두 곳으로 갈라지지 않게).")
     }
 
-    /// **툴팁은 그대로 소진을 말한다.** 발사 게이트를 걷어낸 변경이 표시까지 걷어내면, 몫이 없는 날
-    /// 화면에는 아무 단서도 남지 않는다(3초를 눌러 서버 거절을 받기 전까지 알 방법이 없다).
-    /// 행은 여전히 canUltra 를 읽고, 소진 문장은 예전 그대로다.
-    @Test func rowTooltipStillSpeaksTheSpentSentence() throws {
+    /// **툴팁은 그대로 잔량을 말한다 — 다만 문장이 바뀌었다(삭제가 아니라 재조준이다).**
+    ///
+    /// 발사 게이트를 걷어낸 변경이 표시까지 걷어내면, 잔량이 없는 날 화면에는 아무 단서도 남지 않는다
+    /// (3초를 눌러 서버 거절을 받기 전까지 알 방법이 없다). 그래서 행은 여전히 잔량을 읽는다.
+    ///
+    /// 문장이 바뀐 이유: "울트라는 오늘 다 썼어요"는 **하루 몫 시절의 말**이다. 이제 울트라는 재화라
+    /// 기다려도 안 차고, 미션을 해야만 찬다 — "다 썼다"는 자정을 기다리게 만드는 거짓말이다.
+    @Test func rowTooltipSpeaksBalanceAndTheWayToRefill() throws {
         let source = try menuViewSource()
         let row = Self.codeOnly(try Self.declaration("private struct PokeDirectoryRowView: View {", in: source))
 
-        // 툴팁이 미러를 읽는다(표시용으로는 살아 있다). 발사 게이트를 걷어낼 때 표시까지 걷어내면,
-        // 몫이 없는 날 화면에는 3초를 눌러 서버 거절을 받기 전까지 아무 단서도 남지 않는다.
-        #expect(row.contains("canUltra ?"), "행 툴팁은 canUltra 로 갈린다 — 표시는 남기고 발사만 서버에 맡긴 것이 이번 변경이다.")
-        #expect(row.contains("울트라는 오늘 다 썼어요"), "소진 툴팁 문장은 그대로여야 한다(표시 무회귀).")
+        #expect(
+            row.contains("UltraBalanceText.rowTooltip"),
+            "행 툴팁은 잔량으로 갈린다 — 표시는 남기고 발사만 서버에 맡긴 것이 이번 변경이다."
+        )
         #expect(row.contains("onUltraBlocked") == false, "행도 막는 콜백을 더 이상 나르지 않는다.")
+
+        // 하루 몫 시절의 어휘가 **코드로** 되살아나지 않았는가. 주석은 걷어낸 뒤라 설계 설명은 무죄다.
+        // 범위를 행 하나로 좁히지 않고 파일 전체(코드)로 넓힌 이유: 옛 문구가 어디로든 슬쩍
+        // 되돌아오면 화면 전체가 다시 "기다리면 찬다"고 말하기 때문이다.
+        let code = Self.codeOnly(source)
+        for banned in ["오늘 다 썼", "울트라 소진", "번 남음", "하루에"] {
+            #expect(
+                code.contains(banned) == false,
+                """
+                v0.2.34 에서 사라진 하루 몫 어휘 "\(banned)" 가 CheckMenuView 코드에 되살아났다.
+                울트라는 재화라 자정에 차지 않는다 — 기다리라고 말하는 문장은 전부 거짓말이다.
+                """
+            )
+        }
+    }
+
+    /// 잔량 문구가 **하루 몫의 어휘를 쓰지 않는다**(순수 — 값으로 검증한다).
+    @Test func ultraBalanceTextNeverSaysDailyQuota() {
+        #expect(UltraBalanceText.hint(balance: 0) == "미션으로 충전")
+        #expect(UltraBalanceText.hint(balance: 3) == UltraBalanceText.discover)
+        // 모를 때는 아무 숫자도 만들지 않는다 — 틀린 숫자를 보여 주느니 발견성 문구를 그대로 둔다.
+        #expect(UltraBalanceText.hint(balance: nil) == UltraBalanceText.discover)
+        // nil 은 0 이 아니다. 이 등식이 깨지면 앱을 켠 직후 수 초 동안 "없다"는 거짓말이 화면에 뜬다.
+        #expect(UltraBalanceText.hint(balance: nil) != UltraBalanceText.hint(balance: 0))
+        // 툴팁도 같은 규칙이다(모르면 허용으로 읽는다 — 판정은 서버다).
+        #expect(UltraBalanceText.rowTooltip(balance: nil) == UltraBalanceText.rowTooltip(balance: 1))
+        #expect(UltraBalanceText.rowTooltip(balance: 0) != UltraBalanceText.rowTooltip(balance: 1))
+
+        let everything = [
+            UltraBalanceText.empty,
+            UltraBalanceText.discover,
+            UltraBalanceText.rowTooltip(balance: 0),
+            UltraBalanceText.rowTooltip(balance: 3),
+            UltraBalanceText.badgeHelp(balance: 0),
+            UltraBalanceText.badgeHelp(balance: nil),
+        ]
+        for text in everything {
+            for banned in ["오늘", "남음", "소진", "하루"] {
+                #expect(text.contains(banned) == false, "\"\(text)\" 가 하루 몫 어휘 \"\(banned)\" 를 쓴다.")
+            }
+        }
+        // 배지 숫자는 음수를 만들지 않는다(서버 버그가 화면에 "-1개"로 새지 않게).
+        #expect(UltraBalanceText.badge(balance: -3) == "0")
     }
 
     // MARK: - 소스 읽기 헬퍼

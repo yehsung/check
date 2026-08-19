@@ -86,6 +86,9 @@ final class WorkTimerStore {
     var refreshTask: Task<Void, Never>?
     var syncTask: Task<Void, Never>?
     let service: SupabaseWorkService
+    /// 세션 갱신의 단일 주체(SessionRefreshCoordinator 주석 참조). withSessionRetry 와 리얼타임 선제 갱신이
+    /// 반드시 이 문 하나를 지나야 refresh token 회전 경합이 생기지 않는다.
+    @ObservationIgnored let sessionRefreshCoordinator = SessionRefreshCoordinator()
     let hasAnonKey: Bool
     let defaults: UserDefaults
     /// 월간 AI 토큰 사용량 스토어. 프로덕션은 전역 공유(.shared)라 토큰 행/업로드 트랙이 같은 집계를 읽는다.
@@ -466,6 +469,29 @@ final class WorkTimerStore {
     // 단위라 여러 맥을 써도 서로 덮어쓰지 않고 서버에서 합산된다.
     @ObservationIgnored var deviceID: String = ""
 
+    // ── 울트라 패널(잔량 + 미션) ──
+    /// 울트라 패널이 떠 있는가. **리그·토큰보드·콕찌르기·개인기록과 상호 배타이고, 그 배타는 양방향이다** —
+    /// 한쪽만 걸면 다른 패널을 열어도 이 화면이 위에 남아 굳는다(closeUltraPanel 호출부를 세어 확인할 것).
+    var isUltraPanelVisible = false
+    /// 어디서 이 패널로 들어왔는가. [뒤로]가 돌아갈 곳을 정하는 유일한 근거다.
+    private(set) var ultraPanelOrigin: UltraPanelOrigin = .home
+
+    /// 초인종 링의 현재 상태. **W1 은 이 값을 읽기만 하고, 쓰는 것은 agent-realtime(W2)이다.**
+    /// 출시 기본값 `.idle(.disabled)` 이 곧 "리얼타임 없음"이고, 그 상태에서 폴링이 예전 그대로 돈다.
+    var realtimeState: RealtimeState = .idle(.disabled)
+    /// 구독 직후 따라잡기가 **실패한** 시각(성공하면 nil 로 되돌린다). 화면 경고의 근거.
+    var realtimeCatchUpFailedAt: Date?
+
+    /// 리얼타임 한 벌(전송자·링·타이머·진단)의 수명 소유자. **저장 프로퍼티를 일곱 개 흩뿌리지 않는 이유**는
+    /// 로그아웃/잠자기에서 "타이머 하나를 안 껐다"가 이 계층의 대표 누수이기 때문이다 — 한 덩어리면 셀 수 있다.
+    /// 전송자가 nil 이면 링은 `.idle(.disabled)` 로 태어나 한 발짝도 움직이지 않는다(fail-closed).
+    @ObservationIgnored let realtime: RealtimeRuntime
+
+    /// 미션 보상 연출 싱크. onReactionTrigger 와 **따로 둔 이유**: 그쪽은 `shouldBeVisible` 게이트를 지나므로
+    /// 캐릭터를 숨긴 사용자에게는 아무것도 안 뜬다. 보상은 서버가 재화를 이미 올렸고 되돌릴 수 없으므로
+    /// 그 게이트를 우회해 peek 으로라도 알려야 한다(배선은 agent-overlay/W2 몫이다).
+    @ObservationIgnored var onRewardTrigger: ((ReactionKind) -> Void)?
+
     // 콕찌르기 페이지 상태. 리그/토큰 보드와 3자 상호 배타(하나 열면 나머지 닫기).
     // pokeDirectory: 앱 사용자 전체(본인 제외), 근무중 먼저·이름순. 페이지가 열려 있는 동안 refresh 루프가 갱신.
     var pokeDirectory: [PokeDirectoryEntry] = []
@@ -476,20 +502,37 @@ final class WorkTimerStore {
     var pokeCooldownUntil: [String: Date] = [:]
     // 패널 상단 1줄 안내(찌르기 실패 사유 등). 패널 닫기/성공 시 nil.
     var pokeNotice: String?
-    // 오늘(KST) 울트라 몫을 **다 썼는지**의 로컬 미러(dayKey 문자열, 없으면 아직 여유 있음).
-    // 뷰가 버튼 활성/툴팁으로 읽으므로 관찰 대상이다. UserDefaults 에 남기지 않는 이유: 영속이 사 주는 건
-    // '실행당 헛요청 1회 절약'뿐인데(26명·무료플랜 기준 무의미), 대신 계정 전환·기기 간 불일치라는 버그 종을
-    // 통째로 들여온다. 서버가 유일한 권위이고 이 값은 같은 세션에서의 헛시도를 막는 장치일 뿐이다.
-    var ultraPokeSpentDay: String?
-    /// 오늘(KST) **남은** 울트라 횟수. nil = 아직 모름(한 번도 응답을 못 받았거나 자정을 넘겼다).
-    /// 이 값을 위해 새 GET/RPC 를 만들지 않는다 — 울트라 응답이 실어 주는 값으로만 채운다. 그래서 모르는
-    /// 구간이 정상적으로 존재하고, 그때 UI 는 **아무 숫자도 말하지 않는다**(틀린 숫자보다 침묵이 낫다).
-    /// 관찰 대상에서 뺀 이유: 이 값이 바뀌는 순간은 항상 pokeNotice 대입과 같은 지점이고, 패널이 열려 있는
-    /// 동안엔 displayNow 티커가 매초 트리를 재평가하므로 화면이 낡은 숫자에 머무를 창이 없다.
-    @ObservationIgnored var ultraRemainingToday: Int?
-    /// ultraRemainingToday 가 귀속하는 KST 하루 키(accumulatedDayStart 와 같은 스탬프 규약).
-    /// 이 스탬프가 없으면 자정을 넘긴 뒤에도 어제의 '0번 남음'이 살아남아, 새 날인데 못 쓴다고 안내한다.
-    @ObservationIgnored var ultraRemainingDay: String?
+    // ── 울트라 재화 지갑 (v0.2.34) ──
+    //
+    // v0.2.33 의 세 미러(ultraPokeSpentDay / ultraRemainingToday / ultraRemainingDay)는 **통째로 지웠다.**
+    // 그 셋은 "오늘 남은 횟수"라는 하루 귀속 개념을 표현하던 값인데, 이번 릴리스에서 울트라는
+    // **이월되는 재화**가 됐다. 하루 스탬프를 그대로 두면 자정에 잔량을 버려, 패널 상단 잔량이
+    // 다음 sync 까지 조용히 빈칸이 된다 — 재화는 자정에 사라지지 않는데.
+    /// 내 울트라 **잔량**. nil = 아직 모름(한 번도 sync 를 못 했거나 실패). **날짜 스탬프가 없는 것이 설계다.**
+    /// 화면은 nil 을 0 이 아니라 "—" 로 그린다 — 0 이라고 말하면 그건 거짓말이 될 수 있다.
+    var ultraBalance: Int?
+    /// 서버가 말해 준 잔량 상한(nil = 모름). **클라에 리터럴 5 를 박지 않는 이유가 이 프로퍼티다** —
+    /// 상한은 서버 `ultra_balance_cap()` 하나가 정하고, 클라가 한 벌 더 가지면 서버가 바꿔도 화면만 옛 숫자를 말한다.
+    var ultraBalanceCap: Int?
+    /// 마지막 sync 가 **실패**했는가. 잔량 표시의 3분기(불러오는 중 / 못 읽었어요 / 정상)를 가른다.
+    /// nil 잔량 하나로는 '아직 안 물어봤다'와 '물어봤는데 못 읽었다'를 가를 수 없다.
+    var ultraBalanceFailed = false
+    /// 미션 목록(표시용). 서버 응답에서 순수 변환(MissionProgress.rows)으로 만든다.
+    var missions: [MissionProgress] = []
+    /// 미션을 한 번이라도 성공적으로 받았는가(pokeDirectoryLoaded 와 같은 규약 — 빈 목록과 로드 전을 가른다).
+    var missionsLoaded = false
+    /// 연속 출근 일수. **표시 전용이고 보상이 없다**(사장님 확정 3). 화면에 보상 칩을 그리지 마라 —
+    /// 없는 걸 약속하는 것은 거짓말이고, 서버는 스트릭으로 어떤 적립도 하지 않는다.
+    var streakDays = 0
+    var streakIncludesToday = false
+    /// 미션을 **방금 달성해 울트라가 늘었다**는 지속 안내. 연출(.ultraCharged)은 2초면 사라지므로,
+    /// 그것만으로는 자리를 비운 사용자에게 아무 증거도 남지 않는다.
+    var missionNotice: String?
+    /// 서버가 말해 준 미션 1호 목표 초(nil = 아직 모름). **판정용이 아니라 발화 시점 계산용이다** —
+    /// 클라가 3시간을 넘겼다고 판단해도 받는지 여부는 서버가 정한다.
+    @ObservationIgnored var ultraMissionTargetSeconds: Int?
+    /// 마지막 지갑 sync 시각. `.periodic` 스로틀(5분)의 유일한 근거다.
+    @ObservationIgnored var lastUltraWalletSyncAt: Date?
     // 내 토큰 사용량 공개 여부(profiles.token_usage_public 미러). 로그인 후 서버값 1회 로드, 토글은 낙관 반영.
     var tokenUsagePublic = true
     @ObservationIgnored var tokenUsagePublicLoaded = false
@@ -504,6 +547,10 @@ final class WorkTimerStore {
     // 수신 찔림 폴링 태스크(로그인 중 15초 타이머. 실제 take_pokes 는 근무중에만 나간다 — O1/takePokesIfWorking).
     // refresh 루프와 별도인 이유는 유휴 주기(수백 초)로는 말풍선 전달이 너무 늦기 때문이다.
     var pokePollTask: Task<Void, Never>?
+    /// 진행 중인 drain. 있으면 새 요청을 만들지 않고 **트레일링 한 번**으로 접는다(requestDrain 주석).
+    @ObservationIgnored var drainInFlight: Task<Void, Never>?
+    /// drain 이 도는 동안 새 신호가 왔는가. 끝난 뒤 정확히 1회 더 돈다.
+    @ObservationIgnored var drainPendingTrailing = false
     /// 수신 찔림 싱크. 오버레이 컨트롤러가 연결해 움찔+말풍선(숨김 시 peek)으로 표시한다(관찰 대상 아님).
     @ObservationIgnored var onPokesReceived: (([ReceivedPoke]) -> Void)?
 
@@ -695,8 +742,14 @@ final class WorkTimerStore {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         defaults: UserDefaults = .standard,
         workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter,
-        tokenUsage: TokenUsageStore = .shared
+        tokenUsage: TokenUsageStore = .shared,
+        // ★ 기본값이 **nil** 이다(라이브 전송자가 아니라). 이 저장소는 기본값이 라이브라서 스텁 주입을
+        //   잊은 테스트가 실네트워크로 새어 나간 188초짜리 플레이키를 겪었다 — 그 종을 구조적으로 봉한다.
+        //   여기서는 주입을 잊으면 소켓이 **아예 안 열린다**(fail-closed). 프로덕션 조립은 CheckApp 한 곳뿐이고,
+        //   그 사실은 소스 계약 테스트가 되묻는다(`LiveRealtimeTransport(` 가 프로덕션에 정확히 1회).
+        realtimeTransport: RealtimeTransport? = nil
     ) {
+        self.realtime = RealtimeRuntime(transport: realtimeTransport)
         self.service = service
         self.defaults = defaults
         self.tokenUsage = tokenUsage
@@ -833,6 +886,16 @@ final class WorkTimerStore {
         // 근무 상태가 바뀌면 유예형 배너의 성립 조건도 뒤집힌다(되돌리기는 비근무 전용).
         refreshTimedBanner(now: now)
         syncCurrentStatus()
+        // 근무 시작 직후의 창을 닫는다: takePokesIfWorking 은 `startedAt != nil` 을 요구하는데,
+        // 그 값이 방금 섰으므로 다음 폴링 tick(최대 15초) 전까지 도착한 찔림이 붕 뜬다.
+        // 리얼타임이 켜진 뒤에도 이 1회는 남는다 — 구독 전이보다 근무 시작이 먼저인 순서가 존재한다.
+        requestDrain()
+        // ★ 초인종은 **근무 중에만** 붙는다(v0.2.34). 서버의 poke_user / ultra_poke_user / send_message 가
+        //   전부 target_not_working 게이트를 갖기 때문에 비근무 소켓은 받을 것이 원리적으로 없다.
+        //   그래서 로그인 지점(startStatusRefreshLoop)이 아니라 **여기**가 링이 출발하는 자리다 —
+        //   위 requestDrain 바로 뒤인 이유는 근무 게이트(realtimeMayConsumePokes)가 startedAt 을 보는데
+        //   그 값이 이 함수 앞부분에서 이미 섰기 때문이다.
+        startRealtimeIfPossible()
     }
 
     func stop(now: Date = Date()) {
@@ -875,6 +938,13 @@ final class WorkTimerStore {
         if !isTerminating {
             flushPokesOnWorkEnd()
         }
+        // ★ 링은 **꼬리 회수 뒤에** 내린다. 회수는 폴링 경로이고 `pollingIsPausedByRealtime` 하나를
+        //   보는데, 순서를 뒤집으면 그 판정이 "이미 안 붙어 있다"로 바뀌어 의미가 조용히 달라진다.
+        //   지금은 상수가 억제를 꺼 두어 둘 다 같은 결과지만, v0.2.35 에서 상수를 지우는 날 이 순서가
+        //   회수를 살릴지 죽일지를 결정한다 — 그때 판단할 근거를 여기 순서로 남긴다.
+        //   `.signedOut` 이 아니라 `.workEnded` 인 것이 핵심이다: 로그아웃이 아니므로 accessToken 을
+        //   지우지 않고, 다시 근무를 시작하면 그 토큰으로 곧바로 붙는다.
+        realtimeApply(.workEnded, at: now)
     }
 
     // MARK: - 첫 출근 인사 (오늘 팀에서 내가 1등)
@@ -940,12 +1010,19 @@ final class WorkTimerStore {
 
     /// willSleep. 근무중이면 덮은 시각을 기록한다(깨어날 때 잠든 시간을 재기 위함).
     func handleSleep(at date: Date = Date()) {
+        // ⚠️ 아래 가드보다 **앞이다.** 기존 handleSleep 은 비근무 중 잠자기를 통째로 no-op 으로 만드는데,
+        //    소켓은 근무 여부와 무관하게 떠 있다. 뒤로 내리면 "로그인만 하고 근무 안 하는 사람"의 소켓이
+        //    뚜껑을 닫아도 안 내려가고, 그 죽은 소켓 위에서 깨어나 캐치업이 통째로 안 돈다.
+        realtimeApply(.willSleep, at: date)
         guard startedAt != nil else { return }
         sleepBeganAt = date
     }
 
     /// didWake. 잠든 시간이 5분 이하면 근무 연속으로 인정, 초과하면 덮은 시각으로 자동 마감한다.
     func handleWake(at date: Date = Date()) {
+        // ⚠️ **맨 앞이다.** 아래로는 조기 리턴 가지가 셋(sleepBeganAt nil / 유예 이내 / 흡수 세션)이라
+        //    뒤에 붙이면 실제 경로 대부분에서 재연결이 안 돈다 = 뚜껑을 열어도 찌르기가 영영 안 온다.
+        realtimeApply(.didWake, at: date)
         guard let sleepBeganAt, startedAt != nil else {
             self.sleepBeganAt = nil
             return
@@ -1040,6 +1117,10 @@ final class WorkTimerStore {
         refreshTimedBanner()
         syncCurrentStatus(durationSeconds: duration, sessionStartedAt: sessionStart, endedAt: endedAt)
         syncMessage = message
+        // 자동 마감(잠자기·12시간 미확인·자리비움)도 근무 종료다. 여기 한 줄이 없으면 뚜껑을 열어
+        // `.didWake` 로 막 다시 붙은 소켓이 곧바로 이어지는 자동 마감 뒤에도 그대로 떠 있다 —
+        // 받을 것이 없는 연결이 하루 종일 하트비트만 태우는 정확히 그 모양이다.
+        realtimeApply(.workEnded, at: endedAt)
     }
 
     @discardableResult
@@ -1116,6 +1197,7 @@ final class WorkTimerStore {
         if isLeaderboardVisible {
             closeTokenBoard()
             closePokePanel()
+            closeUltraPanel()
             isInsightsPanelVisible = false
             loadLeaderboard()
         }
@@ -1150,6 +1232,7 @@ final class WorkTimerStore {
         isTokenBoardVisible = true
         isLeaderboardVisible = false
         closePokePanel()
+        closeUltraPanel()
         isInsightsPanelVisible = false
         // 앱을 켜 둔 채 달이 바뀐 경우(6월에 보고 닫은 뒤 7월 1일) 지난달 캐시가 그대로 그려지고
         // 재조회마저 지난달로 나가지 않도록, 여는 순간 현재 달로 맞춘다.
@@ -1184,9 +1267,49 @@ final class WorkTimerStore {
             isPokePanelVisible = true
             isLeaderboardVisible = false
             closeTokenBoard()
+            closeUltraPanel()
             isInsightsPanelVisible = false
             loadPokeDirectory()
+            // 패널을 여는 순간 지갑을 한 번 맞춘다. 잔량 배지가 제목 행에 상시 떠 있으므로
+            // 낡은 숫자를 그리면 그게 곧 거짓말이다(미션 적립도 이 호출 안에서 일어난다).
+            syncUltraWallet(reason: .panelOpen)
         }
+    }
+
+    /// 울트라 패널을 **연다**(토글이 아니다 — 진입점이 둘이라 토글은 배지 두 번 탭에서 엉킨다).
+    ///
+    /// ★ blocker UI-2: origin 이 `.poke` 여도 **closePokePanel() 을 부르지 않는다.** 그 함수는
+    ///   lastShownMessage / pokeNotice / messageNotice 를 죽이는데(그쪽 주석: "닫았다는 것이 곧 봤다의 증거다"),
+    ///   **배지를 탭한 것은 '봤다'가 아니다.** take_pokes 는 서버 원자 소비라 그렇게 지운 3글자는 복구 불가다.
+    ///   그래서 여기서는 `isPokePanelVisible = false` 한 줄만 내린다.
+    func openUltraPanel(from origin: UltraPanelOrigin) {
+        ultraPanelOrigin = origin
+        if origin == .poke {
+            isPokePanelVisible = false
+        }
+        isUltraPanelVisible = true
+        isLeaderboardVisible = false
+        closeTokenBoard()
+        isInsightsPanelVisible = false
+        syncUltraWallet(reason: .panelOpen)
+    }
+
+    /// 울트라 패널을 닫는 **유일한** 경로. 다른 패널을 여는 네 곳도 전부 여기를 지난다(상호 배타 양방향).
+    func closeUltraPanel() {
+        guard isUltraPanelVisible else {
+            // 이미 닫혀 있으면 origin 도 건드리지 않는다 — 다른 패널 토글이 부를 때 진입 맥락을 지우면
+            // 콕찌르기에서 들어와 있던 사용자의 [뒤로]가 엉뚱한 곳으로 간다.
+            return
+        }
+        isUltraPanelVisible = false
+        missionNotice = nil
+        if ultraPanelOrigin == .poke {
+            // togglePokePanel 이 아니라 직접 세운다 — 그 토글은 열려 있으면 closePokePanel 을 타서
+            // 위 blocker UI-2 의 부작용(안 본 메시지 소비)을 **두 번째로** 일으킨다.
+            isPokePanelVisible = true
+            loadPokeDirectory()
+        }
+        ultraPanelOrigin = .home
     }
 
     /// 개인 기록 버튼 액션. 내 근무 리듬/지난주 회고 페이지를 토글하고, 여는 순간 세션을 로드한다. 다른 패널과 상호 배타.
@@ -1196,6 +1319,7 @@ final class WorkTimerStore {
             isLeaderboardVisible = false
             closeTokenBoard()
             closePokePanel()
+            closeUltraPanel()
             // 배너 소비 판정은 evaluateRetroBanner 한 곳에만 둔다 — 예전엔 여기서 markRetroBannerSeen() 을
             // 무조건 불러, 아직 회고를 못 받은 상태(첫 조회 실패·오프라인)에서 패널을 열기만 해도 이번 주 키가
             // 소진돼 뒤늦게 회고가 도착해도 그 주 내내 배너가 뜨지 않았다(회귀 지점). 패널이 열려 있으므로
@@ -1247,6 +1371,15 @@ final class WorkTimerStore {
         startedAt != nil || isMenuPresented || !pendingItems.isEmpty
     }
 
+    /// 미션 1호(그날 누적 3시간) 목표의 **클라 힌트**. 서버 `mission_work_seconds()` = 10800 과 같은 값이지만
+    /// **판정의 출처가 아니다** — 이 숫자는 "이제 서버에 물어볼 만하다"를 정할 뿐이고, 받았는지는 서버가 답한다.
+    /// 서버가 목표를 바꾸면 첫 sync 응답의 target_seconds 가 ultraMissionTargetSeconds 를 채워 자가 교정되고,
+    /// 그 전에도 5분 주기 `.periodic` sync 가 어차피 잡는다(그래서 이 값이 틀려도 코인이 소실되지 않는다).
+    /// 값의 출처는 **하나**다 — 미션 줄의 진행 바 폴백과 같은 상수를 쓴다(둘로 갈리면 화면과 발화가 어긋난다).
+    static let missionWorkSecondsHint: Int = MissionProgress.defaultTargetSeconds
+    /// 발화 임계. 서버가 말해 준 값이 있으면 그걸 쓰고, 모르면 힌트를 쓴다.
+    var missionWorkSeconds: Int { ultraMissionTargetSeconds ?? Self.missionWorkSecondsHint }
+
     /// refresh 루프의 슬라이스 주기(초). fast 모드는 이 값 1회(기본 30s)를 자고, slow 유휴 모드는 이 값의
     /// 10슬라이스(기본 300s)로 나눠 자며 매 슬라이스마다 fast 전이를 재확인한다. 테스트에서 짧게 줄여 검증한다.
     /// (기본값을 상수에서 파생시킨다 — 이 주기가 곧 하트비트 주기이고, 백스톱 임계가 그 주기를 근거로
@@ -1265,6 +1398,13 @@ final class WorkTimerStore {
     func startStatusRefreshLoop() {
         // 수신 찔림 폴링은 refresh 루프와 수명을 같이한다(로그인/활성화 지점에서 함께 시작, 자체 idempotent 가드).
         startPokePolling()
+        // 초인종도 같은 자리에서 시도한다. 다만 **로그인만으로는 붙지 않는다**(v0.2.34) — 이 호출은
+        // 이미 근무 중인 맥(저장 세션으로 재실행한 경우)만 통과시키고, 그 밖에는 근무 게이트에서
+        // 조용히 되돌아온다. 근무가 시작되는 자리는 start() 이고, 서버 동기화로 근무가 복원되는 자리는
+        // 위 루프의 reconcileRealtimeWithWorkState() 다.
+        // 전송자가 없으면(킬스위치 off·테스트) 이 호출은 아무 일도 하지 않고, 폴링은 위 한 줄 그대로
+        // 돈다 — 리얼타임을 통째로 빼도 나머지가 온전히 동작해야 한다는 계약이 이것이다.
+        startRealtimeIfPossible()
         guard refreshTask == nil else { return }
         refreshTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -1293,6 +1433,11 @@ final class WorkTimerStore {
                 await self?.retryPendingSync()
                 await self?.sendHeartbeatIfWorking()
                 await self?.refreshTeamStatus()
+                // 팀 상태가 반영된 **직후**에 링을 근무 게이트에 되맞춘다. 근무 상태는 start()/stop() 말고도
+                // 여기서 뒤집힌다: 앱 재시작 복구·다른 맥이 연 세션 흡수·서버가 세션을 닫음.
+                // 이 한 줄이 없으면 근무 중 앱을 재시작한 맥은 (start() 를 타지 않으므로) 초인종이 영영
+                // 안 붙고, 서버가 세션을 닫아 준 맥은 비근무인 채로 소켓을 계속 들고 있는다.
+                self?.reconcileRealtimeWithWorkState()
                 await self?.refreshLeaderboardIfVisible()
                 await self?.refreshTokenBoardIfVisible()
                 await self?.refreshPokeDirectoryIfVisible()
@@ -1356,7 +1501,33 @@ final class WorkTimerStore {
                 onReactionTrigger?(.milestone)
             }
         }
+        // ★ 3시간 = 미션 1호의 목표다. 이 분기가 **이번 릴리스에 새로 생기는 발화 지점**이고,
+        //   이게 없으면 근무만 하고 패널을 한 번도 안 연 사용자는 그날 sync 가 0회라 코인이 영구 소실된다.
+        //   축하(onReactionTrigger)를 쏘지 않는 이유: 여기서는 아직 **받았는지 모른다**. 판정은 서버다.
+        //   상한에 걸렸을 수도, 이미 받았을 수도 있으므로 연출은 서버가 granted_now 를 준 뒤에만 나간다.
+        //   마일스톤 키를 쓰는 것은 하루 1회 스로틀 목적이다(멱등한 RPC 라 두 번 불려도 해는 없지만
+        //   무료 플랜에서 15초마다 왕복을 내지 않기 위해).
+        if today >= missionWorkSeconds,
+           milestoneTracker.fireIfNeeded(MilestoneTracker.hourThreeKey, now: now) {
+            syncUltraWallet(reason: .missionCandidate)
+        }
     }
+}
+
+/// 울트라 패널에 **어디서 들어왔는가**. [뒤로]가 돌아갈 곳을 정하는 유일한 근거다.
+/// 홈(메인 목록)에서 들어오면 홈으로, 콕찌르기 제목 행의 잔량 배지에서 들어오면 콕찌르기로 돌아간다.
+enum UltraPanelOrigin: Equatable, Sendable {
+    case home
+    case poke
+}
+
+extension MilestoneTracker {
+    /// 오늘 누적 **3시간** = 미션 1호의 목표. 기존 키(hour1/hour4/teamGoal/firstArrival)에는 이 자리가 없었다 —
+    /// 이 키가 곧 blocker(서버 #3)이 지적한 "존재하지 않는 클라 호출 지점"이다.
+    ///
+    /// **여기서 축하가 터지지 않는다.** 이 키는 하루 1회 스로틀일 뿐이고, 실제로 받았는지는 서버가 답한다.
+    /// (MilestoneTracker 본체는 agent-reactions 소유라 확장으로만 더한다 — 파일 경계를 넘지 않기 위해서다.)
+    static let hourThreeKey = "hour3"
 }
 
 extension WorkTimerStore {
@@ -1609,11 +1780,27 @@ extension WorkTimerStore {
         reportedAppVersionStamp = nil
         tokenUsagePublic = true
         tokenUsagePublicLoaded = false
-        // 계정이 바뀌면 남의 쿨타임/남의 하루 몫을 물려받지 않게 반드시 비운다. 남기면 새 계정이 자기 울트라를
-        // 못 쓰거나(소진 미러 상속), 이미 다 쓴 사람이 "1번 남음"을 보고 눌러 서버 거절만 받는다.
-        ultraPokeSpentDay = nil
-        ultraRemainingToday = nil
-        ultraRemainingDay = nil
+        // 계정이 바뀌면 남의 재화를 물려받지 않게 반드시 비운다. 이 블록이 없으면 로그아웃 후 재로그인 시
+        // **남의 잔량 화면이 그대로 떠 있고**, 거기서 [뒤로]를 누르면 ultraPanelOrigin 이 .poke 로 남아
+        // 앞 계정 맥락의 콕찌르기가 열린다(blocker UI-1 이 지적한 그 경로다).
+        isUltraPanelVisible = false
+        ultraPanelOrigin = .home
+        ultraBalance = nil
+        ultraBalanceCap = nil
+        ultraBalanceFailed = false
+        missions = []
+        missionsLoaded = false
+        missionNotice = nil
+        streakDays = 0
+        streakIncludesToday = false
+        lastUltraWalletSyncAt = nil
+        // 갱신 조정자도 계정에 묶인다. 진행 중이던 갱신 결과가 새 세션에 적용되면 남의 토큰으로 근무를 기록한다.
+        sessionRefreshCoordinator.invalidate()
+        // 리얼타임 링도 함께 내린다. realtimeApply 가 소켓을 끊고 예약 타이머를 취소하며 realtimeState 를
+        // 쓴다 — 여기서 realtimeState 를 직접 대입하면 링과 화면이 갈리고, 갈린 순간 폴링 억제가 거짓말한다.
+        realtimeApply(.signedOut)
+        realtime.cancelTimers()
+        realtimeCatchUpFailedAt = nil
         // 별명 편집/쿨타임도 계정에 묶인 상태다. 남기면 새 계정 화면에 앞 사람의 '언제부터 가능' 안내가 뜬다.
         isEditingDisplayName = false
         displayNameDraft = ""

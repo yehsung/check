@@ -79,7 +79,12 @@ extension WorkTimerStore {
         defer { teamGoalComplete = complete }
         // 첫 관측(nil)은 전이로 치지 않는다. 미완료→완료 로 바뀌는 순간에만, 1일 1회 축하한다.
         if teamGoalComplete == false, complete, milestoneTracker.fireIfNeeded(MilestoneTracker.teamGoalKey, now: now) {
-            onReactionTrigger?(.milestone)
+            // ★ `.milestone` 이 아니라 `.goalAchieved` 다. 실사용 신고("주간 목표 달성이 1시간 근무와
+            //   똑같아 보인다")의 원인이 정확히 이 한 줄이었다 — 같은 폴짝, 같은 색종이, 말풍선 없음.
+            //   **onRewardTrigger 가 아니라 기존 채널을 그대로 탄다**: 이 감지는 근무 여부와 무관한
+            //   폴링에서 도는데, 비근무·숨김 사용자가 팀원의 달성 때문에 8초 팝업을 맞으면 안 된다.
+            //   보상 채널(shouldBeVisible 우회)은 **내 재화가 실제로 늘었을 때**만 쓴다.
+            onReactionTrigger?(.goalAchieved)
         }
     }
 

@@ -1805,3 +1805,206 @@ func overlayPanelStaysInvisibleToTheUserWhileTesting() {
     ])
     #expect(controller.panel.alphaValue == 0, "peek 가 사용자 화면에 보인다")
 }
+
+// MARK: - v0.2.34: 목표 달성 / 미션 보상 연출
+//
+// 사용자 신고는 "주간 목표 달성이 1시간 근무와 똑같아 보인다"였다. 아래 테스트는 그 '똑같음'이
+// 되돌아오는 경로(연출을 milestone 으로 되돌리기, 파티클을 색종이로 되돌리기, 말풍선 떼기)를 막는다.
+
+@MainActor
+@Test
+func goalAchievedIsNotMilestoneInDisguise() {
+    // ① 우선순위·길이가 마일스톤과 다르다.
+    #expect(ReactionKind.goalAchieved.priority > ReactionKind.milestone.priority)
+    #expect(ReactionKind.ultraCharged.priority > ReactionKind.milestone.priority)
+    // 4는 전체화면 점거(ultraPoked)의 자리다 — 거기까지 올리면 안 된다.
+    #expect(ReactionKind.goalAchieved.priority < ReactionKind.ultraPoked(bubbleText: "울트라!").priority)
+    #expect(ReactionKind.ultraCharged.priority < ReactionKind.ultraPoked(bubbleText: "울트라!").priority)
+    #expect(ReactionKind.goalAchieved.duration != ReactionKind.milestone.duration)
+    #expect(ReactionKind.ultraCharged.duration != ReactionKind.milestone.duration)
+
+    // ② 모션이 다르다. 마일스톤은 폴짝 2회(0.88s)뿐이고, 목표 달성은 공중 정지 0.35s 가 들어가 2.02s 다.
+    //    "떠 있는 순간"이 있느냐가 흑백 화면에서도 갈리는 축이다.
+    let goal = ReactionActions.goalAchieved(hop: 1.0)
+    let milestone = ReactionActions.milestone(hop: 1.0)
+    #expect(goal.duration > milestone.duration + 1.0)
+    #expect(abs(goal.duration - 2.02) < 0.01)
+    // 재생 길이(duration)는 액션 길이를 담아야 한다 — 짧으면 모션 도중 idle 로 만료된다.
+    #expect(ReactionKind.goalAchieved.duration >= goal.duration)
+    let charged = ReactionActions.ultraCharged()
+    #expect(abs(charged.duration - 1.72) < 0.01)
+    #expect(ReactionKind.ultraCharged.duration >= charged.duration)
+
+    // ③ 파티클이 다르다 — 색이 아니라 **방향·회전·블렌드·방출 길이** 네 축이 반대다.
+    let confetti = ReactionActions.confettiSystem()
+    let spark = ReactionActions.goalSparkSystem()
+    #expect(confetti.acceleration.y < 0)          // 색종이는 떨어진다
+    #expect(spark.acceleration.y > 0)             // 스파크는 솟는다
+    #expect(confetti.particleAngularVelocity > 0) // 색종이는 돈다
+    #expect(spark.particleAngularVelocity == 0)   // 스파크는 곧게 솟는다
+    #expect(confetti.blendMode == .alpha)
+    #expect(spark.blendMode == .additive)
+    #expect(spark.emissionDuration > confetti.emissionDuration)
+    #expect(spark.spreadingAngle < confetti.spreadingAngle)
+    #expect(spark.birthRate > 0)
+    #expect(spark.loops == false)
+    #expect(spark.isLightingEnabled == false)
+}
+
+@MainActor
+@Test
+func rewardParticleVelocitiesAreNeverNegative() {
+    // 음수 속도(설계 원안의 particleVelocity = -1.1)는 이 저장소에 선례가 0이고, SceneKit 이 클램프하면
+    // 파티클이 하나도 안 보여도 값 검증은 초록이다. 수렴은 방출구를 오므리는 SCNAction 이 만든다.
+    #expect(ReactionActions.goalSparkSystem().particleVelocity > 0)
+    let charge = ReactionActions.ultraChargeSystem(extent: 2)
+    #expect(charge.particleVelocity > 0)
+    #expect(charge.particleVelocityVariation >= 0)
+    // 방출 껍질은 모델 크기에 비례한다(extent 0 이어도 반경이 0 이 되지 않게 하한을 둔다).
+    #expect(ReactionActions.ultraChargeSystem(extent: 0).emitterShape is SCNSphere)
+    #expect(charge.blendMode == .additive)
+    #expect(charge.loops == false)
+}
+
+@MainActor
+@Test
+func rewardReactionsSpeakTheirReasonWhileMilestoneStaysSilent() {
+    // 말풍선이 없다는 것이 "구분이 안 된다"의 절반이었다. 축하·보상은 글자로 이유를 말한다.
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 90_000) })
+    #expect(engine.request(.milestone))
+    #expect(engine.greetingText == nil, "마일스톤에 말풍선이 생기면 목표 달성과의 구분이 흐려진다")
+
+    let goalEngine = ReactionEngine(clock: { Date(timeIntervalSince1970: 91_000) })
+    #expect(goalEngine.request(.goalAchieved))
+    #expect(goalEngine.greetingText == "주간 목표 달성!")
+
+    let chargeEngine = ReactionEngine(clock: { Date(timeIntervalSince1970: 92_000) })
+    #expect(chargeEngine.request(.ultraCharged))
+    #expect(chargeEngine.greetingText == "울트라 +1!")
+}
+
+// MARK: - blocker UI-3: 보상 재생 중 도착한 찌름이 사라지면 안 된다
+
+@MainActor
+@Test
+func rewardPlaybackYieldsToIncomingPokeButNotToLowerReactions() {
+    // take_pokes 는 이미 원자적으로 소비를 끝냈고 호출부는 request 의 반환값을 읽지 않는다 —
+    // 여기서 거부되면 그 찌름의 글자는 복구 불가로 증발한다. 보상에는 배지·미션 행·notice 라는
+    // 지속 증거가 따로 있으므로 **양보하는 쪽은 보상**이다.
+    for reward in [ReactionKind.goalAchieved, ReactionKind.ultraCharged] {
+        let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 93_000) })
+        #expect(engine.request(reward))
+        #expect(engine.state == .playing(reward))
+        #expect(engine.request(.poked(bubbleText: "김철수님이 콕!")))
+        #expect(engine.state == .playing(.poked(bubbleText: "김철수님이 콕!")))
+        #expect(engine.greetingText == "김철수님이 콕!")
+    }
+
+    // 반대로 하위 순위(팀원 인사 1 · 오늘 4시간 2)는 보상을 인터럽트하지 못한다.
+    // 인사는 15초 폴링마다 흔하게 오고, 보상 말풍선은 재화가 늘었다는 즉시 증거의 전부다.
+    for reward in [ReactionKind.goalAchieved, ReactionKind.ultraCharged] {
+        let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 94_000) })
+        #expect(engine.request(reward))
+        #expect(engine.request(.greeting(name: "영희")) == false)
+        #expect(engine.request(.milestone) == false)
+        #expect(engine.state == .playing(reward))
+    }
+}
+
+@MainActor
+@Test
+func sleepingIsInterruptedByRewardReactions() {
+    // 자는 동안 목표를 달성하거나 보상을 받은 사용자에게 연출이 통째로 사라지면 안 된다
+    // (`.drowsy/.greeting` 무시 가지에 잘못 넣으면 정확히 그렇게 된다).
+    for reward in [ReactionKind.goalAchieved, ReactionKind.ultraCharged] {
+        let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 95_000) })
+        #expect(engine.request(.drowsy))
+        #expect(engine.state == .sleeping)
+        #expect(engine.request(reward))
+        #expect(engine.state == .playing(reward))
+        engine.stopSleeping()
+    }
+}
+
+// MARK: - 새 파티클 노드가 씬에 쌓이지 않는다 (removeTransientNodes 등록)
+
+@MainActor
+@Test
+func rewardParticleNodesAreRegisteredForRemoval() throws {
+    // removeTransientNodes 의 이름 배열에 새 파티클 이름을 안 넣으면 인터럽트 뒤에도 방출구 노드가
+    // 씬에 남아 다음 연출 위에 겹쳐 뜨고, 반복되면 계속 쌓인다.
+    for reward in [ReactionKind.goalAchieved, ReactionKind.ultraCharged] {
+        let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 96_000) })
+        let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
+        let root = scene.rootNode
+        let wrapper = try #require(
+            root.childNode(withName: CheckCharacter3DScene.reactionWrapperName, recursively: false)
+        )
+        engine.attach(node: wrapper, sceneRoot: root, view: SCNView())
+
+        let emitterCount = { root.childNodes.filter { !$0.particleSystems.isNilOrEmpty }.count }
+        #expect(emitterCount() == 0)
+        #expect(engine.request(reward))
+        #expect(emitterCount() == 1, "보상 연출이 파티클을 하나도 안 뿌렸다")
+
+        // 동순위 찌름이 보상을 인터럽트한다 → interruptCurrent → removeTransientNodes.
+        // 찌름은 파티클을 뿌리지 않으므로 남아 있으면 그건 지워지지 않은 잔여물이다.
+        #expect(engine.request(.poked(bubbleText: "콕!")))
+        #expect(emitterCount() == 0, "인터럽트 후에도 파티클 방출구가 씬에 남았다")
+    }
+}
+
+@MainActor
+@Test
+func ultraChargeConvergesByCollapsingItsEmitter() throws {
+    // 수렴을 음수 속도로 만들지 않는 대신, 방출 껍질을 오므리는 액션이 그 일을 한다.
+    // 이 액션이 없으면 파란 스파크가 그냥 제자리에서 흩어져 '흡수'로 읽히지 않는다.
+    let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 97_000) })
+    let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
+    let root = scene.rootNode
+    let wrapper = try #require(
+        root.childNode(withName: CheckCharacter3DScene.reactionWrapperName, recursively: false)
+    )
+    engine.attach(node: wrapper, sceneRoot: root, view: SCNView())
+
+    #expect(engine.request(.ultraCharged))
+    let emitter = try #require(root.childNodes.first { !$0.particleSystems.isNilOrEmpty })
+    let collapse = try #require(emitter.action(forKey: ReactionEngine.ultraChargeCollapseKey))
+    #expect(abs(collapse.duration - 0.70) < 0.001)
+
+    // 목표 달성 쪽은 오므리지 않는다(솟는 분수라 방출구가 제자리여야 한다) — 두 연출이 서로 베끼지 않았다.
+    let goalEngine = ReactionEngine(clock: { Date(timeIntervalSince1970: 98_000) })
+    let goalScene = try #require(CheckCharacter3DScene.makeScene(animated: false))
+    let goalRoot = goalScene.rootNode
+    let goalWrapper = try #require(
+        goalRoot.childNode(withName: CheckCharacter3DScene.reactionWrapperName, recursively: false)
+    )
+    goalEngine.attach(node: goalWrapper, sceneRoot: goalRoot, view: SCNView())
+    #expect(goalEngine.request(.goalAchieved))
+    let goalEmitter = try #require(goalRoot.childNodes.first { !$0.particleSystems.isNilOrEmpty })
+    #expect(goalEmitter.action(forKey: ReactionEngine.ultraChargeCollapseKey) == nil)
+}
+
+@MainActor
+@Test
+func attachReplaysRewardReactionsThatArrivedBeforeTheSceneExisted() throws {
+    // reactionAction(for:) 에 새 case 를 nil 로 두면 지연 생성(래치) 중 도착한 축하·보상이 모션 없이
+    // 지나간다 — attach 재생 경로가 그것을 잡는다.
+    for reward in [ReactionKind.goalAchieved, ReactionKind.ultraCharged] {
+        let engine = ReactionEngine(clock: { Date(timeIntervalSince1970: 99_000) })
+        #expect(engine.request(reward))
+        let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
+        let root = scene.rootNode
+        let wrapper = try #require(
+            root.childNode(withName: CheckCharacter3DScene.reactionWrapperName, recursively: false)
+        )
+        let view = SCNView()
+        engine.attach(node: wrapper, sceneRoot: root, view: view)
+        #expect(wrapper.action(forKey: "check.reaction") != nil, "attach 가 걸린 보상 모션을 재생하지 않았다")
+        #expect(view.preferredFramesPerSecond == ReactionEngine.activeFPS)
+    }
+}
+
+private extension Optional where Wrapped == [SCNParticleSystem] {
+    var isNilOrEmpty: Bool { self?.isEmpty ?? true }
+}

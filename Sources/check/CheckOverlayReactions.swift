@@ -28,6 +28,14 @@ enum ReactionKind: Equatable {
     case poked(bubbleText: String)
     /// 울트라 찌르기 수신 — 화면을 뒤덮은 거대 캐릭터가 5초 내내 격렬하게 떤다.
     case ultraPoked(bubbleText: String)
+    /// 팀 주간 목표 100% 돌파 전용 축하. 예전엔 오늘 1시간·4시간과 함께 `.milestone` 하나에 묶여 있었고,
+    /// 그게 곧 "주간 목표 달성이 1시간 근무와 똑같아 보인다"(실사용 신고)의 원인이다 —
+    /// 같은 폴짝, 같은 색종이, 말풍선 없음. 세 축을 전부 반대로 뒤집어 갈라낸다(ReactionActions.goalAchieved 주석).
+    case goalAchieved
+    /// 미션 달성으로 울트라를 **얻은** 순간. 축하가 아니라 **통지**다 — 서버가 재화를 이미 올렸고
+    /// 되돌릴 방법이 없으므로, 이 연출이 사실을 못 전하면 사용자는 늘어난 줄 모른 채로 남는다.
+    /// 연관값(잔량)을 두지 않는다: "울트라 +1 (3개)" 는 말풍선 한 줄 예산을 넘고, 잔량은 배지가 상시 말한다.
+    case ultraCharged
 
     /// 우선순위(높을수록 우선). 울트라 > hit/출퇴근/화들짝/찌름 > 마일스톤 > 인사 > 졸기.
     /// (wake/drowsy 는 sleeping 상태 분기에서 직접 처리되어 우선순위 비교를 거의 타지 않는다.)
@@ -38,6 +46,12 @@ enum ReactionKind: Equatable {
         case .ultraPoked:
             return 4
         case .hit, .commuteStart, .commuteEnd, .wake, .poked:
+            return 3
+        // 목표 달성·보상 통지도 3이다. 2(마일스톤)로 두면 '오늘 4시간' 축하가 재생 중일 때 도착한
+        // 보상 통지가 조용히 거부되는데, 재화는 서버가 이미 올렸고 되돌릴 수 없다.
+        // 4로 올리지 않는 이유: 4는 전체화면 점거(ultraPoked)의 자리다.
+        // 동순위 충돌은 request() 의 activeIsReward 예외로 **보상이 양보**하는 쪽으로 푼다(그쪽 주석 참조).
+        case .goalAchieved, .ultraCharged:
             return 3
         case .milestone:
             return 2
@@ -73,6 +87,14 @@ enum ReactionKind: Equatable {
             // 요구 사양 그대로 5초. ReactionActions.ultraPoked 의 총 길이와 CheckOverlayController.ultraSeconds
             // 셋이 같은 숫자여야 모션이 끝나는 순간 창도 접힌다 — 하나만 바꾸면 잔여 프레임이 남거나 잘린다.
             return 5.0
+        case .goalAchieved:
+            // ReactionActions.goalAchieved 총 2.02s(웅크림 0.16 + 도약 0.42 + **공중 정지 0.35** + 하강 0.34
+            // + 정착 0.75)에 여유 0.18. 마일스톤(1.6)과 **다른 숫자여야 한다** — 같으면 길이로도 안 갈린다.
+            return 2.2
+        case .ultraCharged:
+            // ReactionActions.ultraCharged 총 1.72s(흡수 0.70 + 번쩍 0.14 + 정착 0.88)에 여유 0.28.
+            // 말풍선은 자체 타이머(3.2s)라 모션이 끝난 뒤에도 "울트라 +1!" 이 잠깐 남는다.
+            return 2.0
         case .drowsy:
             // 지속 상태(sleeping)라 만료 판정에 쓰지 않는다. 참고용으로 진입 모션 길이를 둔다.
             return 2.0
@@ -276,6 +298,12 @@ final class ReactionEngine {
     static let pokedBubbleSeconds: Double = 6
     /// 울트라 말풍선 지속(초). 격발 길이와 같게 둬 창이 접히는 순간 말풍선도 함께 사라진다.
     static let ultraPokedBubbleSeconds: Double = 5
+    /// 주간 목표 달성 말풍선 지속(초). 모션(2.02s)보다 길게 둬 "왜 축하하는지"를 읽을 시간을 준다 —
+    /// 마일스톤에 말풍선이 없다는 것이 "구분이 안 된다"의 절반이었다.
+    static let goalBubbleSeconds: Double = 4
+    /// 보상 통지 말풍선 지속(초). 모션(1.72s)보다 길다 — 이 문장이 재화가 늘었다는 유일한 즉시 증거다
+    /// (지속 증거인 배지·미션 행·missionNotice 는 패널을 열어야 보인다).
+    static let ultraChargedBubbleSeconds: Double = 3.2
 
     /// 말풍선 텍스트(SwiftUI 관찰용). nil 이면 숨김. 각 리액션이 자기 텍스트/지속시간으로 교체한다.
     /// (팀원 인사·시작 화이팅·때리기 아얏·종료 수고·깨우기 등 모두 이 한 채널을 자체 타이머로 공유.)
@@ -364,6 +392,13 @@ final class ReactionEngine {
     private static let reactionActionKey = "check.reaction"
     private static let confettiNodeName = "check.reaction.confetti"
     private static let zzzNodeName = "check.reaction.zzz"
+    /// 주간 목표 달성 파티클 노드 이름. ⚠️ removeTransientNodes 의 배열에 **반드시** 들어 있어야 한다.
+    private static let goalSparkNodeName = "check.reaction.goalspark"
+    /// 보상 파티클 노드 이름. 위와 같은 규약.
+    private static let ultraChargeNodeName = "check.reaction.ultracharge"
+    /// 보상 파티클 방출구를 중심으로 **오므리는** 액션의 키. 이 액션이 곧 '흡수'다(ultraChargeSystem 주석 참조) —
+    /// 파티클 속도를 음수로 두는 대신 방출 반경 자체를 줄여 수렴을 만든다. 테스트가 이 키로 존재를 확인한다.
+    static let ultraChargeCollapseKey = "check.reaction.ultracharge.collapse"
 
     init(clock: @escaping () -> Date = { Date() }) {
         self.clock = clock
@@ -497,6 +532,10 @@ final class ReactionEngine {
             return ReactionActions.poked(extent: modelExtent)
         case .ultraPoked:
             return ReactionActions.ultraPoked(extent: modelExtent)
+        case .goalAchieved:
+            return ReactionActions.goalAchieved(hop: modelExtent * 0.34)
+        case .ultraCharged:
+            return ReactionActions.ultraCharged()
         case .drowsy:
             return nil
         }
@@ -564,10 +603,14 @@ final class ReactionEngine {
                 // 자는 중 클릭 → 화들짝 + "깜빡 졸았다!" 로 깨운다(hit 쿨다운과 무관하게 즉시).
                 beginWake(now: now)
                 return true
-            case .commuteStart, .commuteEnd, .milestone, .poked, .ultraPoked:
+            case .commuteStart, .commuteEnd, .milestone, .poked, .ultraPoked, .goalAchieved, .ultraCharged:
                 // 잠을 인터럽트하고 정상 재생으로 넘어간다(아래 일반 경로). .poked 는 잠을 깨운 뒤 이어서
                 // 움찔+말풍선이 보이도록 endSleep 후 통상 경로로 흘린다(runReaction 이 resetPose 로 숙인
                 // 포즈를 identity 로 스냅해 잔상 없이 움찔로 이어진다 — beginWake 의 화들짝과 구분).
+                //
+                // ⚠️ .goalAchieved/.ultraCharged 를 위의 `.drowsy, .greeting`(무시) 가지에 넣으면,
+                //    자는 사이 목표를 달성하거나 보상을 받은 사용자에게 축하·통지가 **통째로 사라진다**.
+                //    보상 쪽은 서버가 이미 재화를 올린 뒤라 그 손실에 짝이 없다 — 반드시 이쪽 가지다.
                 endSleep()
             }
         }
@@ -593,7 +636,23 @@ final class ReactionEngine {
             // 컨트롤러가 5초 타이머를 리셋한다. 이게 없으면 4 <= 4 에 걸려 두 번째 울트라가 조용히 씹힌다.
             var ultraRestart = false
             if case .ultraPoked = active, case .ultraPoked = kind { ultraRestart = true }
-            guard commuteRestart || activeIsPoked || ultraRestart else {
+            // 보상/축하(goalAchieved·ultraCharged)는 재생 2.0~2.2초 동안 **어떤 동순위 요청에도 자리를 내준다**.
+            // 이게 없으면 그 2초 사이 도착한 `.poked`(3) 가 3 <= 3 에 걸려 거부되는데, 호출부
+            // (CheckOverlayWindow 의 handleReceivedPokes)는 request 의 반환값을 읽지 않고 take_pokes 는
+            // 이미 원자적으로 소비를 끝냈다 — 그 찌름의 글자는 **복구 불가로 증발**한다.
+            // 반대로 보상에는 배지 숫자·미션 행·missionNotice 라는 지속 증거가 따로 남는다.
+            // 지속 증거가 있는 쪽이 양보하는 게 맞다. (예전엔 .milestone 이 2라 찌름이 언제나 이겼으므로
+            //  이 손실 경로는 goalAchieved/ultraCharged 가 3으로 들어오면서 새로 생기는 것이다.)
+            //
+            // 단, 양보는 **동순위(3)에만** 한다. `.poked` 처럼 무조건 양보하게 두면 팀원 인사(1)나
+            // 오늘 4시간(2)이 0.3초 만에 "울트라 +1!" 을 지워 버린다 — 인사는 15초 폴링마다 흔하게 오고,
+            // 그 말풍선은 재화가 늘었다는 **즉시 증거의 전부**다(지속 증거는 패널을 열어야 보인다).
+            // 잃으면 안 되는 상대(찌름)는 정확히 동순위 3이므로 이 폭이면 충분하다.
+            let sameRank = kind.priority == active.priority
+            var activeIsReward = false
+            if case .goalAchieved = active { activeIsReward = sameRank }
+            if case .ultraCharged = active { activeIsReward = sameRank }
+            guard commuteRestart || activeIsPoked || ultraRestart || activeIsReward else {
                 return false
             }
         }
@@ -637,7 +696,9 @@ final class ReactionEngine {
 
     private func removeTransientNodes() {
         guard let root = sceneRoot else { return }
-        for name in [Self.confettiNodeName, Self.zzzNodeName] {
+        // ⚠️ 새 파티클을 만들 때마다 이 배열에 이름을 더해야 한다. 빠뜨리면 인터럽트(interruptCurrent) 뒤에도
+        //    방출구 노드가 씬에 남아 다음 연출 위에 겹쳐 뜨고, 반복되면 노드가 계속 쌓인다.
+        for name in [Self.confettiNodeName, Self.zzzNodeName, Self.goalSparkNodeName, Self.ultraChargeNodeName] {
             root.childNodes.filter { $0.name == name }.forEach { $0.removeFromParentNode() }
         }
     }
@@ -683,6 +744,14 @@ final class ReactionEngine {
             // 말풍선만 뜬다 — peek 와 같은 계약이라 "보낸이의 몫이 무음으로 증발"하는 경로가 없다.
             runReaction(ReactionActions.ultraPoked(extent: modelExtent))
             showBubble(bubbleText, seconds: Self.ultraPokedBubbleSeconds)
+        case .goalAchieved:
+            runReaction(ReactionActions.goalAchieved(hop: modelExtent * 0.34))
+            emitGoalSparks()
+            showBubble("주간 목표 달성!", seconds: Self.goalBubbleSeconds)
+        case .ultraCharged:
+            runReaction(ReactionActions.ultraCharged())
+            emitUltraCharge()
+            showBubble("울트라 +1!", seconds: Self.ultraChargedBubbleSeconds)
         case .drowsy, .wake:
             // drowsy/wake 는 request 에서 beginSleep/beginWake 로 직접 처리되어 이 경로로 오지 않는다.
             break
@@ -926,6 +995,44 @@ final class ReactionEngine {
         emitter.runAction(.sequence([.wait(duration: 1.5), .removeFromParentNode()]))
     }
 
+    // MARK: - 목표 달성 / 보상 파티클
+
+    /// 주간 목표 달성 스파크: **발밑에서 솟는다**(색종이는 머리 위에서 떨어진다). emitConfetti 와 같은 규약 —
+    /// removeTransientNodes 선행 + 이름 부여 + 자가 제거.
+    private func emitGoalSparks() {
+        guard let root = sceneRoot else { return }
+        removeTransientNodes()
+        let emitter = SCNNode()
+        emitter.name = Self.goalSparkNodeName
+        emitter.position = SCNVector3(0, -modelExtent * 0.45, 0)
+        emitter.addParticleSystem(ReactionActions.goalSparkSystem())
+        root.addChildNode(emitter)
+        emitter.runAction(.sequence([.wait(duration: 2.4), .removeFromParentNode()]))
+    }
+
+    /// 보상 파티클: 몸을 감싼 껍질에서 태어나 **껍질이 오므라들며** 안으로 모인다.
+    ///
+    /// 수렴을 파티클 속도의 음수(-1.1)로 만들지 않는다: 이 저장소에 음수 속도 선례가 0이고,
+    /// `#expect(velocity < 0)` 는 방금 넣은 세터를 되읽을 뿐이라 SceneKit 이 그 값을 클램프해
+    /// **파티클이 하나도 안 보여도 테스트는 초록**이다(ImageRenderer 가 Menu 를 못 그린 것과 같은 사각지대).
+    /// 대신 양수 속도 + 방출구 노드를 SCNAction 으로 오므린다 — SCNAction 은 이 파일이 이미 값으로
+    /// 검증하고 있는 언어다(collapse 액션의 존재를 테스트가 키로 확인한다).
+    private func emitUltraCharge() {
+        guard let root = sceneRoot else { return }
+        removeTransientNodes()
+        let emitter = SCNNode()
+        emitter.name = Self.ultraChargeNodeName
+        emitter.position = SCNVector3(0, 0, 0)   // 몸 중심 — 수렴점이 곧 캐릭터다.
+        emitter.addParticleSystem(ReactionActions.ultraChargeSystem(extent: modelExtent))
+        root.addChildNode(emitter)
+        // 방출 반경(= 노드 스케일)을 흡수 구간과 같은 0.70s 동안 0.12 까지 조인다 → 태어나는 자리가
+        // 매 프레임 중심에 가까워져 '빨려든다'로 읽힌다. 키를 주는 이유는 테스트가 이 액션을 집어내기 위해서다.
+        let collapse = SCNAction.scale(to: 0.12, duration: 0.70)
+        collapse.timingMode = .easeIn
+        emitter.runAction(collapse, forKey: Self.ultraChargeCollapseKey)
+        emitter.runAction(.sequence([.wait(duration: 1.8), .removeFromParentNode()]))
+    }
+
     // MARK: - 💤 Z 노드(졸기)
 
     /// 💤 한 묶음(3개)을 머리 위 빈 코너에서 위로 떠오르게 방출한다. 각 묶음 컨테이너는 수명 후 자가 제거되며,
@@ -1135,6 +1242,75 @@ enum ReactionActions {
         return .sequence([oneHop, oneHop])
     }
 
+    /// 주간 목표 달성: 마일스톤과 **세 축이 전부 반대**여야 한다. 사용자 신고가 정확히
+    /// "주간 목표 달성이 1시간 근무와 똑같아 보인다"였고, 색만 바꾸면 그 신고가 그대로 재발한다.
+    ///
+    ///   | 축     | milestone                    | goalAchieved                          |
+    ///   |--------|------------------------------|---------------------------------------|
+    ///   | 모션   | 폴짝 2회(0.88s), 공중 정지 없음 | **한 번의 큰 도약 + 공중 정지 0.35s**(2.02s) |
+    ///   | 스핀   | 없음                          | **y축 720°**(commuteStart 의 360°와도 갈린다) |
+    ///   | 스케일 | 없음(위치만 움직인다)          | 웅크림→스트레치→착지 찌부(무게가 실린다)      |
+    ///   | 파티클 | 색종이가 **떨어진다**(-1.5y)   | 스파크가 **솟는다**(+0.6y) — goalSparkSystem |
+    ///   | 말풍선 | **없음**                      | "주간 목표 달성!" (글자가 이유를 말한다)      |
+    ///
+    /// 흑백 화면에서도 갈리는 축이 셋이다(떠 있는 순간 / 파티클 방향 / 글자). 색은 넷째일 뿐이다.
+    /// 총 2.02s. identity 에서 시작해 identity 로 끝난다(이 파일의 잔상 금지 규약).
+    /// 스핀(euler)·도약(position)·스케일은 **서로 다른 프로퍼티**라 한 group 안에서 충돌하지 않는다
+    /// (같은 프로퍼티에 두 스트림을 걸면 서로 덮어쓴다 — poked/ultraPoked 주석의 그 함정).
+    static func goalAchieved(hop: CGFloat) -> SCNAction {
+        let identity = SCNVector3(1, 1, 1)
+        let crouch = SCNVector3(1.16, 0.78, 1.16)   // 도약 전 웅크림(무게)
+        let launch = SCNVector3(0.88, 1.24, 0.88)   // 도약 스트레치 — 공중 정지 동안 이 자세를 유지한다
+        let landing = SCNVector3(1.14, 0.84, 1.14)  // 착지 찌부
+
+        let crouchDown = SCNAction.scaleKeyframe(from: identity, to: crouch, duration: 0.16, timing: .easeOut)
+
+        let up = SCNAction.moveBy(x: 0, y: hop, z: 0, duration: 0.42)
+        up.timingMode = .easeOut
+        let rise = SCNAction.group([
+            SCNAction.scaleKeyframe(from: crouch, to: launch, duration: 0.42, timing: .easeOut),
+            up
+        ])
+
+        // 공중 정지 0.35s — 이 연출의 핵심이다. 마일스톤에는 '떠 있는 순간'이 아예 없다.
+        // wait 대신 launch→launch 키프레임으로 스케일을 **명시로 붙들어** 다음 키프레임의 from 과 어긋나지 않게 한다
+        // (scaleKeyframe 은 customAction 으로 node.scale 을 직접 대입하므로 붙들지 않으면 이음매가 튄다).
+        let hover = SCNAction.scaleKeyframe(from: launch, to: launch, duration: 0.35, timing: .linear)
+
+        let down = SCNAction.moveBy(x: 0, y: -hop, z: 0, duration: 0.34)
+        down.timingMode = .easeIn
+        let fall = SCNAction.group([
+            down,
+            // ScaleTiming 에는 easeIn 이 없다(linear/easeOut/easeInEaseOut 셋뿐) — 하강 스케일은 easeInEaseOut 으로 잇는다.
+            SCNAction.scaleKeyframe(from: launch, to: landing, duration: 0.34, timing: .easeInEaseOut)
+        ])
+
+        let settle = SCNAction.scaleKeyframe(from: landing, to: identity, duration: 0.75, timing: .easeInEaseOut)
+
+        // moveBy 합 = +hop -hop = 0 이라 수평·수직 드리프트가 없다(작은 패널로 복귀해도 제자리다).
+        let body = SCNAction.sequence([crouchDown, rise, hover, fall, settle])   // 0.16+0.42+0.35+0.34+0.75 = 2.02
+        let spin = SCNAction.rotateBy(x: 0, y: .pi * 4, z: 0, duration: 2.02)    // 720°. commuteStart 는 360°.
+        spin.timingMode = .easeInEaseOut
+        return .group([body, spin])
+    }
+
+    /// 미션 보상: **흡수**다. 축하가 아니라 획득이라 제자리에서 일어난다 — 뛰어오르지 않는다.
+    /// 전부 **균일 스케일**이라, 이 파일의 다른 모든 연출(hit/poked/ultraPoked/goalAchieved 의 비균일
+    /// squash & stretch)과 눈으로 갈린다: 찌부러지는 게 아니라 숨을 들이쉬었다 번쩍한다.
+    /// 총 1.72s(0.70 + 0.14 + 0.28 + 0.60), identity 로 시작해 identity 로 끝난다.
+    static func ultraCharged() -> SCNAction {
+        let identity = SCNVector3(1, 1, 1)
+        let draw = SCNVector3(0.90, 0.90, 0.90)     // 들이쉼(수렴 파티클과 같은 0.70s)
+        let flash = SCNVector3(1.22, 1.22, 1.22)    // 번쩍
+        let over = SCNVector3(0.97, 0.97, 0.97)     // 되돌아오는 오버슈트
+        return .sequence([
+            .scaleKeyframe(from: identity, to: draw, duration: 0.70, timing: .easeInEaseOut),
+            .scaleKeyframe(from: draw, to: flash, duration: 0.14, timing: .easeOut),
+            .scaleKeyframe(from: flash, to: over, duration: 0.28, timing: .easeInEaseOut),
+            .scaleKeyframe(from: over, to: identity, duration: 0.60, timing: .easeInEaseOut)
+        ])
+    }
+
     /// 팀원 인사: z축 ±10° 두 번 까딱.
     static func greetingNod() -> SCNAction {
         let a = radians(10)
@@ -1209,6 +1385,71 @@ enum ReactionActions {
         system.isLightingEnabled = false
         // 버스트: 짧은 시간에 다량 방출.
         system.birthRate = 800
+        return system
+    }
+
+    /// 목표 달성 전용 파티클: **금빛 상승 스파크**. 색종이(핑크 사각 · 중력 -1.5 로 낙하 · 회전 3 · alpha)와
+    /// 방향·회전·블렌드·방출길이가 모두 반대라 색약/흑백 화면에서도 "떨어진다 vs 솟는다"로 갈린다.
+    /// 색만 바꾼 색종이는 사용자가 말한 "똑같은 색종이"의 재발이다 — 그래서 부호를 뒤집는다.
+    static func goalSparkSystem() -> SCNParticleSystem {
+        let system = SCNParticleSystem()
+        system.particleImage = nil
+        system.emissionDuration = 0.6          // 색종이 0.1(한 방 버스트) → 지속 분출(솟는 시간이 보여야 한다)
+        system.loops = false
+        system.particleLifeSpan = 1.8
+        system.particleLifeSpanVariation = 0.5
+        system.particleSize = 0.022
+        system.particleSizeVariation = 0.012
+        system.particleVelocity = 1.5          // 양수. 이 파일에 음수 속도 선례는 없다(ultraChargeSystem 주석 참조)
+        system.particleVelocityVariation = 0.5
+        system.spreadingAngle = 26             // 색종이 180(사방) → 좁은 분수
+        system.emitterShape = SCNCylinder(radius: 0.12, height: 0.01)
+        system.birthDirection = .constant
+        system.emittingDirection = SCNVector3(0, 1, 0)
+        system.acceleration = SCNVector3(0, 0.6, 0)   // ★ 색종이의 -1.5 와 부호가 반대다 — 계속 솟는다
+        system.particleColor = NSColor.systemYellow
+        system.particleColorVariation = SCNVector4(0.06, 0.5, 0.4, 0)   // 금~주황 안에서만 흔든다
+        system.particleAngle = 0
+        system.particleAngularVelocity = 0     // 색종이의 회전(3)과 대비 — 곧게 솟는다
+        system.blendMode = .additive           // 색종이 .alpha → 발광체로 읽힌다
+        system.isLightingEnabled = false
+        system.birthRate = 420
+        return system
+    }
+
+    /// 보상 파티클: 몸을 감싼 껍질에서 태어나는 파란 스파크. 색은 UltraChargeStyle.base(3초 꾹 충전 링의
+    /// 그 파랑)와 같은 값이라 "꾹 눌러 쏘는 그것"과 같은 언어로 읽힌다.
+    ///
+    /// ⚠️ **속도를 음수로 두지 않는다.** 설계 원안의 `particleVelocity = -1.1`(방출 방향의 반대 = 수렴)은
+    ///    이 저장소에 선례가 0이고, 값 검증(`#expect(velocity < 0)`)은 방금 넣은 세터를 되읽을 뿐이라
+    ///    SceneKit 이 그 값을 클램프하면 **파티클이 하나도 안 보여도 테스트가 초록**이다.
+    ///    수렴은 대신 방출구 노드를 오므리는 SCNAction 이 만든다(ReactionEngine.emitUltraCharge) —
+    ///    껍질 반경이 0.70s 동안 줄어드는 동안 태어나는 자리가 매 프레임 중심에 가까워진다.
+    ///    그래서 여기 속도는 작은 양수다: 껍질 위에서 살짝 흩어지되 lifeSpan(0.5s) 안에 사라진다.
+    static func ultraChargeSystem(extent: CGFloat) -> SCNParticleSystem {
+        let system = SCNParticleSystem()
+        system.particleImage = nil
+        system.emissionDuration = 0.70         // ultraCharged() 의 흡수 구간·collapse 액션과 같은 길이
+        system.loops = false
+        system.particleLifeSpan = 0.5          // 짧다 — 껍질이 오므라드는 '지금'만 보인다
+        system.particleLifeSpanVariation = 0.2
+        system.particleSize = 0.02
+        system.particleSizeVariation = 0.008
+        system.particleVelocity = 0.22         // ★ 양수. 위 주석의 이유로 음수를 쓰지 않는다
+        system.particleVelocityVariation = 0.1
+        system.spreadingAngle = 180
+        system.emitterShape = SCNSphere(radius: max(extent, 0.01) * 0.5)
+        system.birthDirection = .surfaceNormal
+        system.acceleration = SCNVector3(0, 0, 0)   // 중력 없음 — 색종이(떨어짐)·스파크(솟음) 어느 쪽도 아니다
+        system.particleColor = NSColor(srgbRed: CGFloat(UltraChargeStyle.base.r),
+                                       green: CGFloat(UltraChargeStyle.base.g),
+                                       blue: CGFloat(UltraChargeStyle.base.b),
+                                       alpha: 1)
+        system.particleColorVariation = SCNVector4(0.04, 0.2, 0.2, 0)
+        system.particleAngularVelocity = 0
+        system.blendMode = .additive
+        system.isLightingEnabled = false
+        system.birthRate = 300
         return system
     }
 

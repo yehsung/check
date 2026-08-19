@@ -296,6 +296,12 @@ final class CheckOverlayController {
     /// 헤드리스 검증 지점. 메시지 펌프가 도는 중인가(shouldBeVisible·nudgeSchedulerRunning 과 같은 성격).
     /// **평시 false 여야 한다** — 큐가 비었는데 true 면 상시 루프가 하나 남은 것이다.
     var isDrainingMessages: Bool { messageDrainTask != nil }
+    /// 헤드리스 검증 지점. 숨김 peek 의 **자동 퇴장 타이머가 서 있는가**(shouldBeVisible 과 같은 성격).
+    ///
+    /// 이 값이 없으면 "엔진이 거부했을 때 창을 띄우지 않는다"를 창 상태만으로 증명해야 하는데, 그 앞 요청이
+    /// 이미 창을 띄워 둔 경우(연속 peek)와 구분되지 않는다. 여기서 보는 것은 **이번 호출이 peek 를 새로
+    /// 무장했는가**다 — beginPeek 이 수용된 경로에서만 이 태스크를 다시 만든다.
+    var isPeekArmed: Bool { pokePeekTask != nil }
 
     init(
         store: WorkTimerStore,
@@ -352,6 +358,11 @@ final class CheckOverlayController {
         // 똑같이 peek 한다 — 서버가 이미 소비한 찔림이라 여기서 버리면 영영 전달되지 않는다.
         // 폴링/신선도 필터는 스토어가 끝냈으므로 여기선 받은 배치를 그대로 표시만 한다.
         store.onPokesReceived = { [weak self] pokes in self?.handleReceivedPokes(pokes) }
+
+        // 미션 보상 통지. onReactionTrigger 와 달리 shouldBeVisible 게이트를 걸지 않는다 — 수신 찔림과 같은
+        // 이유다. 서버가 이미 잔량을 올린 뒤라 여기서 버리면 사용자는 늘어난 줄 모른 채 남고, 그 재화는
+        // 되돌릴 수도 다시 통지될 수도 없다. 판단(무엇을 이 경로로 보낼지)은 스토어가 한다.
+        store.onRewardTrigger = { [weak self] kind in self?.presentReward(kind) }
 
         // 3글자 메시지는 **콜백이 아니라 큐**로 온다(스토어 receivedMessages). 도착만 여기서 감지하고
         // 표시 순서는 큐가 정한다 — 자세한 이유는 armMessageWatch 주석.
@@ -887,7 +898,39 @@ final class CheckOverlayController {
             // 정상 표시 중: 움찔+말풍선만(정상 경로가 창 수명을 소유). request 는 진행 중 찌름을 인터럽트해 갱신한다.
             engine.request(.poked(bubbleText: text))
         } else {
-            beginPokePeek(text: text)
+            beginPeek(.poked(bubbleText: text))
+        }
+    }
+
+    // MARK: - 미션 보상 통지(울트라 충전) — 서버가 이미 재화를 올린 뒤라 되돌릴 수 없다
+    //
+    // 스토어가 `ultra_wallet_sync` 응답에서 grantedNow 를 보고 부른다. 이 경로가 침묵하면 사용자는
+    // 잔량이 늘었다는 사실을 **패널을 열기 전까지** 모른다(배지·미션 행·missionNotice 는 전부 패널 안이다).
+
+    /// 보상 리액션을 지금 화면 상태에 맞는 경로로 흘린다.
+    ///
+    /// 가드 모양은 `handleReceivedPokes`(:882 / :886)와 **일부러 같다** — 같은 판단을 두 벌로 적으면
+    /// 언젠가 한쪽만 바뀐다.
+    ///  · **격발 중이면 삼킨다.** 전체화면 발광 위에 작은 움찔·다른 말풍선을 겹치지 않는다. 엔진도
+    ///    우선순위(4 > 3)로 어차피 거부하므로, 상태를 흔들기 전에 먼저 막는다.
+    ///  · **정상 표시 중이면** 움찔+말풍선만(정상 경로가 창 수명을 소유한다). `panel.isVisible` 까지 보는 이유는
+    ///    :886 과 같다 — `shouldBeVisible` 은 의도이지 실제 창이 아니고, 둘이 어긋난 순간(근무 시작 직후
+    ///    프레임 전이 중) request 만 하면 아무도 못 보는 곳에서 재생이 소진된다.
+    ///  · **그 밖(비근무·캐릭터 표시 꺼짐)이면** peek. 찔림과 **똑같이** 8초만 보여 준다.
+    ///
+    /// ★ `.goalAchieved`(팀 주간 목표)는 이 경로로 오지 않는다 — 기존 `onReactionTrigger`(:345, shouldBeVisible
+    ///   게이트) 그대로다. 그 감지는 근무 여부와 무관한 폴링에서 도는데(WorkTimerStoreSync), 비근무·숨김
+    ///   사용자가 남의 달성 때문에 8초 팝업을 맞으면 안 된다. 게이트를 우회할 근거가 있는 것은 `.ultraCharged`
+    ///   하나뿐이다(서버가 이미 재화를 올렸고 되돌릴 수 없다). 그래도 이 함수는 종류를 가리지 않는다 —
+    ///   무엇을 이 경로로 보낼지는 **스토어의 결정**이고, 여기서 두 번째 화이트리스트를 만들면 그 결정이
+    ///   두 파일에 흩어진다.
+    func presentReward(_ kind: ReactionKind) {
+        if isUltraActive { return }
+        if shouldBeVisible && panel.isVisible {
+            engine.request(kind)
+        } else {
+            // 반환값을 버리지 않는다: 거부되면 창을 띄우지 않는 것이 beginPeek 의 계약이다(:946 의 재발 금지).
+            beginPeek(kind)
         }
     }
 
@@ -957,7 +1000,10 @@ final class CheckOverlayController {
         } else {
             // 캐릭터를 꺼 둔 사용자·비근무 구간도 찔림과 **똑같이** 8초 peek 로 전달한다. 보낸 쪽은 이미
             // 하루 몫과 쿨타임을 태웠고 서버는 원자 소비를 끝냈으므로, 여기서 강등하면 그 글자는 영영 사라진다.
-            beginPokePeek(text: text)
+            //
+            // peek 이 거부되면(엔진이 재생 중) **큐를 건드리지 않고 물러난다** — 위 세 가드가 이미 대부분을
+            // 막지만, 막는 쪽과 소비하는 쪽이 다른 판정을 쓰면 언젠가 갈린다. 늦게 뜨는 것은 손실이 아니다.
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
         }
         store.consumeCurrentMessage()
         return true
@@ -1230,12 +1276,24 @@ final class CheckOverlayController {
     /// 캐릭터 표시를 꺼 둔 사용자(isOverlayEnabled=false)에게도 peek 는 그대로 재생한다(v0.2.7 계약).
     /// take_pokes RPC 가 이미 원자적으로 소비한 찔림이라 여기서 버리면 영영 사라지고, 보낸 쪽은 성공 처리되어
     /// 쿨타임만 태운 채 수신자에게는 아무 일도 일어나지 않는다 — 그래서 표시 설정과 무관하게 8초만 보여 준다.
-    private func beginPokePeek(text: String) {
+    ///
+    /// **찔림 전용이 아니다.** 미션 보상 통지(`.ultraCharged`)도 같은 기계를 탄다 — peek 창(8초)·퇴장 규칙·
+    /// 승격 처리를 두 벌로 두면 언젠가 한쪽만 어긋난다(메시지를 찔림 채널에 태운 것과 같은 판단).
+    /// 그래서 문구가 아니라 **리액션 종류**를 받는다: 말풍선은 엔진의 `perform` 이 그 종류에서 만든다.
+    ///
+    /// ★ **엔진에 먼저 묻고, 수용됐을 때만 창을 띄운다.** 앞선 판은 `request` 의 반환값을 보지 않고 창부터
+    ///   띄웠고, 그래서 재생 중이라 요청이 거부되면 **창만 떴다 지고 알맹이는 소비된 뒤**가 됐다
+    ///   (showCurrentMessageBubble 주석 :946 이 그 손실을 기록해 두었다). 거부되면 여기서 아무것도 하지 않고
+    ///   false 를 돌려주므로, 호출자가 "소비하지 않고 다음 기회를 기다린다"를 고를 수 있다.
+    ///   진행 중이던 peek 의 퇴장 타이머도 **수용된 뒤에야** 리셋한다 — 거부됐는데 취소부터 하면
+    ///   앞 peek 가 8초 뒤 스스로 물러나지 못해 창이 남는다.
+    @discardableResult
+    private func beginPeek(_ kind: ReactionKind) -> Bool {
+        guard engine.request(kind) else { return false }
         pokePeekTask?.cancel()
         engine.renderActive = true
         reposition()
         panel.orderFrontRegardless()
-        engine.request(.poked(bubbleText: text))
         pokePeekTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(Self.pokePeekSeconds))
             guard let self, !Task.isCancelled else { return }
@@ -1246,6 +1304,7 @@ final class CheckOverlayController {
             self.engine.renderActive = false
             self.panel.orderOut(nil)
         }
+        return true
     }
 
     /// 저장된 우상단 오프셋이 있으면 그 위치(클램프 보정)로, 없으면 메인 스크린 visibleFrame 우상단

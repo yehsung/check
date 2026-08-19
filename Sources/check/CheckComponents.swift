@@ -1169,20 +1169,78 @@ struct AuthLinkButton: View {
 
 // MARK: - Footer utility bar pieces
 
+/// 찌르기 **수신 채널**(초인종 리얼타임)이 죽었다는 사실을 화면에 띄울지 결정하는 **유일한 판정**.
+///
+/// 순수 함수인 것이 요점이다: 세 표면(푸터 점·메인 메뉴 찌르기 아이콘·콕찌르기 안내줄)이 이 한 함수를
+/// 부르므로, 한 곳만 고쳐 세 얼굴이 서로 다른 말을 하는 일이 원리적으로 없다("게이트는 짝으로 있다").
+///
+/// ★ **출시 기본값 `.idle(.disabled)` 에서는 절대 뜨지 않는다.** 리얼타임을 빼고 배포하는 경우
+///   (사장님 확정 2) 전 사용자가 이 상태이고, 그때 경고가 뜨면 38명 전원이 멀쩡한 폴링을 두고
+///   "찌르기가 고장났다"고 읽는다. 이 한 줄이 이 릴리스에서 가장 위험한 자리다.
+///
+/// ★ **연결 시도 중(`.connecting`)에는 뜨지 않는다.** 앱을 막 켠 사람에게 경고부터 던지지 않는다.
+///
+/// ★ **재연결 중에는 유예(45초) 안에서는 뜨지 않는다.** 맥 뚜껑을 닫았다 열면 소켓은 반드시 끊기고,
+///   그때마다 경고가 뜨면 경고는 곧 배경이 되어 진짜 고장을 가린다. 유예를 **넘긴** 재연결은
+///   실패가 확정된 것과 같다 — 3분째 재시도 중인 사람은 실제로 찌르기를 못 받고 있고,
+///   "아직 재연결 중"은 그 사실을 가리는 변명일 뿐이다. 기준은 시도 **횟수**가 아니라
+///   `Backoff.failingSince` 이후 경과 시간 하나다(백오프가 1·2·4초라 3회는 7초 만에 채워지는데,
+///   절전 해제 직후 네트워크가 아직 안 올라온 그 7초가 정확히 오탐 구간이다).
+enum PokeConnectionNotice {
+    /// 실패가 이만큼 이어지면 확정으로 본다. **RealtimeLinkConstants 의 단일 출처를 그대로 쓴다** —
+    /// 여기 45 를 리터럴로 베끼면 링이 임계를 바꾼 날 화면만 옛 시간을 본다.
+    static var graceSeconds: TimeInterval { RealtimeLinkConstants.failedAfterSeconds }
+
+    /// 콕찌르기 패널 안내줄(넓다 — 2줄까지 허용). 사용자가 갈 곳을 정확히 하나 가리킨다(푸터 새로고침).
+    static let panelText = "찌르기 연결이 끊겼어요 — 새로고침을 눌러 보세요"
+    /// 푸터 한 줄(짧게). caption2 8자 ≈ 80pt ≤ FooterWidthBudget 문구 예산.
+    static let footerText = "찌르기 연결 끊김"
+    /// 메인 메뉴 찌르기 아이콘의 툴팁. **높이 0pt 로 얹는 유일한 표면**이라 문구는 여기 하나뿐이다.
+    static let iconHelp = "콕 찌르기 (수신 연결이 끊겼어요)"
+
+    static func shouldWarn(state: RealtimeState, now: Date) -> Bool {
+        switch state {
+        case .idle, .connecting, .subscribed:
+            return false
+        case .failed:
+            return true
+        case .reconnecting(let backoff):
+            return now.timeIntervalSince(backoff.failingSince) >= graceSeconds
+        }
+    }
+}
+
 struct SyncStatusView: View {
     let message: String
+    /// 찌르기 수신 연결이 끊겼는가(PokeConnectionNotice.shouldWarn 의 결과). true 면 점이 danger 로 바뀌고,
+    /// **동기화 문구가 정상일 때만** 문구를 이 사실로 교체한다 — 로그인/동기화 실패가 더 급하고,
+    /// 그때 찌르기가 안 오는 건 원인이 아니라 결과다.
+    ///
+    /// 점은 화이트리스트와 무관하게 danger 로 바꾼다: 문구 자리를 다른 고장에 내준 상태에서도
+    /// 신호 하나는 남아야 하고, 그 하나가 없으면 이 표면은 "가장 흔한 날에만 보이는 경고"가 된다.
+    var pokeDisconnected: Bool = false
 
     private var isSynced: Bool {
         message == "동기화됨"
     }
 
+    /// 문구까지 바꾸는가. 점만 바꾸는 경우와 구별된다.
+    private var showsDisconnectText: Bool { pokeDisconnected && isSynced }
+
+    private var dotColor: Color {
+        if pokeDisconnected { return CheckTheme.danger }
+        return isSynced ? CheckTheme.working : CheckTheme.pending
+    }
+
+    private var text: String { showsDisconnectText ? PokeConnectionNotice.footerText : message }
+
     var body: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(isSynced ? CheckTheme.working : CheckTheme.pending)
+                .fill(dotColor)
                 .frame(width: 7, height: 7)
-                .shadow(color: (isSynced ? CheckTheme.working : CheckTheme.pending).opacity(0.5), radius: 3)
-            Text(message)
+                .shadow(color: dotColor.opacity(0.5), radius: 3)
+            Text(text)
                 .font(.caption2)
                 .foregroundStyle(CheckTheme.secondaryText)
                 .lineLimit(1)

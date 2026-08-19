@@ -2540,13 +2540,18 @@ func detectTeamReactionsCelebratesTeamGoalCrossingOnce() {
     #expect(events.isEmpty)
 
     // 목표 100% 돌파(41h) — 미완료→완료 전이 시 1회 축하.
+    // ★ v0.2.34: 축하의 종류가 `.milestone` → `.goalAchieved` 로 갈렸다. 실사용 신고
+    //   "주간 목표 달성이 1시간 근무와 똑같아 보인다"의 원인이 정확히 이 한 줄이었다(같은 폴짝·같은 색종이).
+    //   **여전히 onReactionTrigger 채널이다**(onRewardTrigger 가 아니다) — 이 감지는 비근무 사용자의
+    //   폴링에서도 도는데, 팀원의 달성 때문에 숨긴 캐릭터가 8초 팝업으로 튀어나오면 안 된다.
     store.teamMembers = [worked(41 * 3_600)]
     store.detectTeamReactions()
-    #expect(events.filter { $0 == .milestone }.count == 1)
+    #expect(events.filter { $0 == .goalAchieved }.count == 1)
+    #expect(events.contains(.milestone) == false, "주간 목표는 시간 마일스톤과 같은 연출을 쓰지 않는다")
 
     // 완료 유지 상태에선 재축하하지 않는다.
     store.detectTeamReactions()
-    #expect(events.filter { $0 == .milestone }.count == 1)
+    #expect(events.filter { $0 == .goalAchieved }.count == 1)
 }
 
 /// 주간 목표는 1인당 약속이므로 축하도 1인당 평균으로 판정한다(리그 표시와 같은 규약).
@@ -2585,12 +2590,12 @@ func teamGoalCelebrationUsesPerMemberAverageNotTeamTotal() {
     store.teamMembers = (1...5).map { member("m\($0)", 12 * 3_600) }
     store.detectTeamReactions()
     #expect(store.teamWeeklyAverageSeconds() == 12 * 3_600)
-    #expect(events.filter { $0 == .milestone }.isEmpty)
+    #expect(events.filter { $0 == .goalAchieved }.isEmpty)
 
     // 각자 41시간이 되어 1인당 평균이 목표를 넘어서면 그때 1회 축하한다.
     store.teamMembers = (1...5).map { member("m\($0)", 41 * 3_600) }
     store.detectTeamReactions()
-    #expect(events.filter { $0 == .milestone }.count == 1)
+    #expect(events.filter { $0 == .goalAchieved }.count == 1)
 }
 
 // MARK: - 트랙 B: 저장 라벨 / 큐 정합성 / 자정 클리핑 / 취소 안전화

@@ -188,6 +188,13 @@ final class URLProtocolStub: URLProtocol {
            request.url?.path == "/rest/v1/work_status_devices" {
             return 404
         }
+        // ultra_wallet_sync RPC 가 **아직 없는 서버**(브루 배포가 db push 보다 앞선 창) 재현 호스트.
+        // 404 + "schema cache" 문구가 PGRST202 의 실제 모양이고, 서비스가 그걸 .ultraWalletUnavailable 로
+        // 접는지 검증한다(재던지면 "네트워크 실패"와 구별이 사라진다).
+        if request.url?.host?.contains("wallet-missing") == true,
+           request.url?.path == "/rest/v1/rpc/ultra_wallet_sync" {
+            return 404
+        }
         if request.url?.host == "retry-toggle",
            request.url?.path == "/rest/v1/work_sessions",
            request.httpMethod == "PATCH" {
@@ -241,6 +248,9 @@ final class URLProtocolStub: URLProtocol {
         // loaded 래치가 영영 안 서서 폴링 tick 마다 같은 GET 이 재발사되고, 요청 건수를 세는 테스트가 흔들린다.
         if request.url?.path == "/rest/v1/profiles", request.httpMethod == "GET" {
             return Data(#"[{"token_usage_public":true}]"#.utf8)
+        }
+        if request.url?.path == "/rest/v1/rpc/ultra_wallet_sync" {
+            return ultraWalletSyncData(for: request)
         }
         if request.url?.path == "/rest/v1/rpc/lookup_team_by_code" {
             return lookupTeamByCodeData(for: request)
@@ -308,6 +318,28 @@ final class URLProtocolStub: URLProtocol {
               "refresh_token": "signed-up-refresh-token",
               "user": { "id": "00000000-0000-0000-0000-000000000002" }
             }
+            """.utf8
+        )
+    }
+
+    /// ultra_wallet_sync 픽스처. 기본은 "오늘 3시간을 방금 채워 +1 을 받았다" 이고,
+    /// host 에 "wallet-missing" 이 들어가면 RPC 부재(PGRST202)를, "wallet-claimed" 가 들어가면
+    /// **이미 받은 날**(granted_now=false)을 돌려준다 — 연출 트리거가 claimed 가 아니라 granted_now 인지
+    /// 가르는 유일한 픽스처 쌍이다.
+    private static func ultraWalletSyncData(for request: URLRequest) -> Data {
+        let host = request.url?.host ?? ""
+        if host.contains("wallet-missing") {
+            return Data(#"{"code":"PGRST202","message":"Could not find the function public.ultra_wallet_sync(p_days_back) in the schema cache"}"#.utf8)
+        }
+        let grantedNow = host.contains("wallet-claimed") ? "false" : "true"
+        return Data(
+            """
+            {"status":"ok","balance":3,"balance_cap":5,"daily_floor":1,"day":"2026-08-19",
+             "floor_applied":true,
+             "missions":[{"key":"work3h","kst_day":"2026-08-19","target_seconds":10800,
+                          "progress_seconds":14400,"claimed":true,"granted_now":\(grantedNow),"capped":false}],
+             "worked_seconds_closed":14400,"worked_seconds_open":0,
+             "streak_days":3,"streak_includes_today":true,"measured_at":1787098516}
             """.utf8
         )
     }

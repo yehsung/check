@@ -100,9 +100,14 @@ struct CheckMenuView: View {
         }
     }
 
-    /// 하위 패널(리그/토큰/찌르기/개인 기록)이 열려 있는지. 열려 있으면 팀 카드 자리를 그 패널이 대신 쓴다.
+    /// 하위 패널(리그/토큰/찌르기/개인 기록/울트라)이 열려 있는지. 열려 있으면 팀 카드 자리를 그 패널이 대신 쓴다.
+    ///
+    /// ★ 새 패널을 만들면 **여기 더하는 것을 잊지 마라.** 빠뜨리면 토큰 소모량 행이 패널과 함께 그려져
+    ///   창이 700pt 상한을 넘고 푸터(로그아웃/앱 종료)가 화면 밖으로 잘린다 — 그 순간 사용자는
+    ///   로그아웃할 방법을 잃는다. 이 목록의 원소 수는 스토어의 isXxxVisible 플래그 수와 같아야 한다.
     private var isSubPanelOpen: Bool {
-        store.isLeaderboardVisible || store.isTokenBoardVisible || store.isPokePanelVisible || store.isInsightsPanelVisible
+        store.isLeaderboardVisible || store.isTokenBoardVisible || store.isPokePanelVisible
+            || store.isInsightsPanelVisible || store.isUltraPanelVisible
     }
 
     /// 토큰 소모량 행은 홈(팀 목록) 화면의 구성요소다 — 하위 패널이 열리면 감춘다. 패널이 쓸 세로 공간을
@@ -274,15 +279,17 @@ struct CheckMenuView: View {
                             cooldownRemaining: { store.pokeCooldownRemaining(for: $0, now: store.displayNow) },
                             onPoke: { store.sendPoke(to: $0) },
                             onUltra: { store.sendUltraPoke(to: $0) },
-                            // 오늘 팀 밖 몫이 남았는가 — **화면 문구용 사실**이다(힌트·툴팁). 하루 한도는 서버가
-                            // 판정하고 여기선 로컬 미러만 읽는다. 이 값이 false 여도 3초 홀드는 그대로 발사된다:
-                            // 서버가 같은 팀 대상엔 한도를 안 걸기 때문이다(WorkTimerStore.isUltraPokeSpent 주석).
-                            canUltra: !store.isUltraPokeSpent(now: store.displayNow),
-                            // 남은 횟수는 **울트라 응답으로만** 갱신된다(nil = 아직 모름). 시작 시점을 알기 위한
-                            // 추가 GET/RPC 를 만들지 않는다 — 모를 때는 아무 숫자도 보여 주지 않는 쪽을 택했다.
-                            // ultraRemainingToday 를 직접 읽지 않고 ultraRemaining(now:)를 거치는 이유:
-                            // 그 함수만 KST 하루 스탬프를 대조해, 자정을 넘긴 어제의 "0번 남음"이 남지 않게 한다.
-                            ultraRemainingText: WorkTimerStore.ultraRemainingText(remaining: store.ultraRemaining(now: store.displayNow)),
+                            // 울트라 **잔량**(재화). nil = 아직 모름 → 배지는 자리를 지킨 채 숫자만 비운다.
+                            // 표시 전용이다 — 3초 홀드는 이 값과 무관하게 발사되고 판정은 서버가 한다.
+                            ultraBalance: store.ultraBalance,
+                            // 배지 탭 → 울트라 화면. **콕찌르기를 '봤다'로 소비하지 않는다**(openUltraPanel 주석).
+                            onOpenUltraPanel: { store.openUltraPanel(from: .poke) },
+                            // 수신 연결이 죽었다는 사실은 안내줄 최우선 가지다. 판정은 순수 함수 한 곳뿐이고
+                            // 출시 기본값 .idle(.disabled) 에서는 언제나 false 다.
+                            isPokeDisconnected: PokeConnectionNotice.shouldWarn(
+                                state: store.realtimeState,
+                                now: store.displayNow
+                            ),
                             isFocusMode: store.focusMode,
                             onToggleFocusMode: { store.toggleFocusMode() },
                             // 3글자 메시지 — 찌르기와 같은 표·같은 폴링을 타지만 RPC·쿨타임·결과 문구는 각자의 것이다.
@@ -299,6 +306,19 @@ struct CheckMenuView: View {
                             onBack: { store.togglePokePanel() },
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
+                        )
+                    } else if store.isUltraPanelVisible {
+                        // 울트라 화면(잔량 + 충전 경로). 리그/토큰/찌르기/내 기록과 **같은 뼈대**다.
+                        UltraPanel(
+                            balance: store.ultraBalance,
+                            missions: store.missions,
+                            hasLoaded: store.missionsLoaded,
+                            hasFailed: store.ultraBalanceFailed,
+                            notice: store.missionNotice,
+                            onRetry: { store.syncUltraWallet(reason: .panelOpen) },
+                            extraChromeHeight: listExtraChromeHeight,
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                            onBack: { store.closeUltraPanel() }
                         )
                     } else if store.isInsightsPanelVisible {
                         // 개인 기록 페이지(지난주 회고 + 근무 리듬 히트맵). 내 데이터만 쓰고, 계산은 전부
@@ -884,7 +904,7 @@ private struct TeamPanel: View {
                         showsInviteCode.toggle()
                     }
                 }
-                IconButton(icon: "hand.point.right.fill", help: "콕 찌르기") { store.togglePokePanel() }
+                PokeEntryIconButton(store: store)
                 IconButton(icon: "chart.bar.xaxis", help: "팀별 현황") { store.toggleLeaderboard() }
             }
             // 참여코드 인라인 행은 헤더 아래에만 나타나 상단 앵커 원칙(아래로만 성장)을 지킨다.
@@ -1597,20 +1617,138 @@ enum UltraChargeStyle {
     }
 }
 
-/// 콕찌르기 패널 제목 행의 울트라 힌트 문구(순수 로직 — 값으로 검증한다).
+/// 울트라 **잔량 문구** 규약(순수 — 값으로 검증한다). v0.2.33 의 `PokeUltraHint` 를 대체한다.
 ///
-/// 울트라는 하루 **2회**라 "남은 횟수"가 비로소 뜻을 갖는다. 다만 그 숫자는 울트라 응답으로만 채워지므로
-/// (시작 시점을 알기 위한 추가 요청을 만들지 않는다는 결정) 앱을 켜자마자는 **모른다**.
-/// 모를 때는 아무 숫자도 만들지 않는다 — 틀린 숫자를 보여 주느니 발견성 문구를 그대로 둔다.
-enum PokeUltraHint {
-    /// 홀드 시간은 리터럴로 적지 않는다 — UltraChargeStyle.holdSeconds 가 발사 시각의 유일한 권위이고,
-    /// 그 숫자를 여기 베껴 두면 상수를 바꾼 날 화면만 옛 시간을 말한다(사용자는 문구대로 눌렀는데 안 나간다).
-    static let discover = "\(UltraChargeStyle.holdSecondsText)초 꾹 = 울트라"
-    static let spent = "울트라 소진"
+/// 옛 문구("오늘 N번 남음" / "울트라 소진")를 그대로 두면 안 되는 이유는 **두 번 틀리기 때문**이다:
+///  · 잔량은 **오늘의 것이 아니다** — 재화라 이월된다. 잔량 3인 사람에게 "오늘 3번 남음"은
+///    자정에 초기화된다는 거짓말이고, 실제로는 내일도 3이다.
+///  · 잔량은 **남은 것이 아니다** — 가진 것이다. "소진"은 '기다리면 찬다'를 함의하는데,
+///    이제는 **미션을 해야만** 찬다. 기다리는 사람은 영영 못 받는다.
+///
+/// 그래서 0일 때 사실만 말하고 끝내지 않고 **획득 경로를 말한다**. 이 앱에서 새 경제를 가르치는
+/// 자리는 여기 하나뿐이다(콕찌르기를 여는 순간이 잔량을 궁금해하는 유일한 순간이다).
+enum UltraBalanceText {
+    /// 배지 안 숫자. 음수는 서버 버그이거나 미래 규약이라 0으로 접는다.
+    static func badge(balance: Int) -> String { "\(max(0, balance))" }
 
-    static func text(canUltra: Bool, isCharging: Bool, remainingText: String?) -> String {
-        if isCharging, let remainingText { return remainingText }
-        return canUltra ? discover : spent
+    /// 0개일 때. **획득 경로를 말한다** — 사실만 말하고 길을 안 알려 주면 그 화면은 막다른 길이다.
+    static let empty = "미션으로 충전"
+
+    /// 1개 이상일 때 — 발견성 문구를 그대로 살린다(3초 꾹을 아직 모르는 사람이 다수다).
+    /// 홀드 시간은 리터럴로 적지 않는다: UltraChargeStyle.holdSeconds 가 발사 시각의 유일한 권위이고,
+    /// 그 숫자를 여기 베껴 두면 상수를 바꾼 날 화면만 옛 시간을 말한다.
+    static var discover: String { "\(UltraChargeStyle.holdSecondsText)초 꾹 = 울트라" }
+
+    /// 제목 행 힌트. **nil(아직 모름)이면 아무 숫자도 만들지 않고** 발견성 문구를 그대로 둔다
+    /// (WorkTimerStorePoke 의 "정직한 일은 버리는 것" 규약 계승 — 틀린 숫자보다 침묵이 낫다).
+    static func hint(balance: Int?) -> String {
+        guard let balance else { return discover }
+        return balance <= 0 ? empty : discover
+    }
+
+    /// 행 툴팁의 괄호 안 문구. 잔량이 없어도 **3초 홀드는 그대로 발사된다**(판정은 서버다) —
+    /// 그래서 "못 쏜다"가 아니라 "없다 + 채우는 법"을 말한다.
+    static func rowTooltip(balance: Int?) -> String {
+        (balance ?? 1) > 0
+            ? "콕 찌르기 (\(UltraChargeStyle.holdSecondsText)초 꾹 누르면 울트라)"
+            : "콕 찌르기 (울트라 없음 — 미션으로 충전)"
+    }
+
+    /// 배지 툴팁. 숫자 자체는 반드시 Text 로 그린다 — 툴팁은 픽셀을 만들지 않으므로
+    /// 정보를 여기에만 두면 렌더 테스트가 통째로 눈이 먼다.
+    static func badgeHelp(balance: Int?) -> String {
+        balance.map { "울트라 \($0)개 — 눌러서 충전 방법 보기" } ?? "잔량을 아직 못 읽었어요 — 눌러서 보기"
+    }
+}
+
+/// 콕찌르기 제목 행의 폭 예산(순수 계산 — 결정적 검증 지점).
+/// 행 구성: `[뒤로 27][콕 찌르기][집중모드 27][Spacer ≥6][잔량 배지][힌트]` · spacing 8 × 5
+///
+/// TeamHeaderWidthBudget / FooterWidthBudget 과 같은 이유로 존재한다: 이 행에 무언가를 하나 더
+/// 세우는 순간 **가장 유연한 요소(힌트 문구)가 먼저 말줄임된다.** 배지를 세운 것이 그 '하나 더'다.
+/// 그리고 힌트는 `.fixedSize()` 라 넘쳐도 높이가 안 변한다 = **렌더 높이 테스트로는 안 잡힌다.**
+/// 이 순수 계산이 그 사각지대의 유일한 방어망이다.
+enum PokeTitleRowWidthBudget {
+    /// 팝오버 340 - 바깥 padding 12*2 - 패널 padding 12*2.
+    static let contentWidth: CGFloat = 340 - 12 * 2 - 12 * 2
+    static let iconButtonWidth: CGFloat = 27
+    static let spacing: CGFloat = 8
+    static let spacerMinWidth: CGFloat = 6
+    /// "콕 찌르기"(subheadline bold · 한글 4 + 공백 1) 실측 폭.
+    static let titleWidth: CGFloat = 57
+    /// caption2(10pt) 한글 1자 근사. 라틴/숫자/공백은 이보다 좁으므로 한글로 재면 보수적이다.
+    static let koreanCaptionGlyphWidth: CGFloat = 10
+    /// 실제로 쓰는 가장 긴 힌트("3초 꾹 = 울트라")의 실측 폭. 한글 3자 + 라틴/기호/공백 7이라
+    /// 글자수(10)로 재면 과대평가된다.
+    static let longestHintWidth: CGFloat = 71
+
+    /// 배지가 그릴 수 있는 **최대 자릿수**. 잔량 상한이 5(사장님 확정 4)라 1자리로 고정된다.
+    /// 서버가 상한을 두 자리로 올리면 이 값이 아니라 `hintWidth(digits: 2)` 단언이 먼저 답을 준다.
+    static let maxBadgeDigits = 1
+
+    /// 배지 폭: 캡슐 h-padding 6*2 + bolt 10 + 내부 간격 3 + 숫자(자릿수 × 7).
+    static func badgeWidth(digits: Int) -> CGFloat { 12 + 10 + 3 + CGFloat(max(0, digits)) * 7 }
+
+    /// 그 조합에서 힌트에 남는 폭(pt).
+    static func hintWidth(digits: Int = maxBadgeDigits) -> CGFloat {
+        contentWidth
+            - iconButtonWidth * 2          // 뒤로 + 집중모드
+            - titleWidth
+            - spacerMinWidth
+            - badgeWidth(digits: digits)
+            - spacing * 5
+    }
+
+    /// 그 폭에 말줄임 없이 들어가는 한글 글자수.
+    static func hintKoreanGlyphs(digits: Int = maxBadgeDigits) -> Int {
+        max(0, Int(hintWidth(digits: digits) / koreanCaptionGlyphWidth))
+    }
+}
+
+/// 제목 행 오른쪽 울트라 잔량 배지. **탭하면 울트라 화면**(잔량 + 충전 경로)이 열린다 —
+/// "0개인데 어떻게 채우죠?"라는 질문이 실제로 생기는 자리가 여기뿐이라 답도 여기에 붙인다.
+///
+/// **Menu 를 쓰지 않는다.** ImageRenderer 가 Menu 를 노란 상자로 그려 그 자리 픽셀 커버리지가 0이 되고,
+/// 그러면 "배지가 통째로 사라진 회귀"를 렌더 테스트가 영영 못 잡는다(푸터가 Menu 를 걷어낸 뒤에야
+/// 비로소 픽셀로 검증됐다는 기록이 그 대가를 이미 적어 뒀다). Button + .buttonStyle(.plain) 은
+/// IconButton/PanelRetryButton 과 같은 관용구이고 이미 픽셀로 검증된 길이다.
+struct UltraBalanceBadge: View {
+    /// nil = 아직 모름. 숫자를 만들지 않고 번개만 흐리게 그린다(자리는 유지).
+    let balance: Int?
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    private var isEmpty: Bool { (balance ?? 1) <= 0 }
+    private var tint: Color { isEmpty ? CheckTheme.secondaryText : CheckTheme.accent }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 9, weight: .bold))
+                if let balance {
+                    Text(UltraBalanceText.badge(balance: balance))
+                        .font(.caption2.weight(.bold))
+                        .monospacedDigit()
+                }
+            }
+            .foregroundStyle(tint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            // 테두리를 남기는 이유는 미학이 아니라 **검증**이다: nil 일 때 아이콘만 흐리게 그리면
+            // 패널 배경과의 픽셀 델타가 거의 0이라 배지 소실 회귀를 렌더가 못 잡는다.
+            .background(Capsule().fill(tint.opacity(hovering ? 0.28 : 0.16)))
+            .overlay(Capsule().stroke(tint.opacity(0.35), lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        // 자리는 유지하고 숫자만 비운다 — 배지가 사라졌다 나타나면 제목 행 폭이 흔들린다
+        // (IconButton.enabled 주석이 이미 "자리를 유지한 채 비활성만"으로 거부한 문제와 같은 것이다).
+        .opacity(balance == nil ? 0.55 : 1)
+        .fixedSize()
+        .help(UltraBalanceText.badgeHelp(balance: balance))
     }
 }
 
@@ -1991,12 +2129,15 @@ private struct PokePanel: View {
     // 울트라 발사(3초 꾹). 일반 찌르기와 **다른 RPC**라 콜백을 나눠 받는다.
     // 3초를 다 누르면 canUltra 와 **무관하게** 호출된다 — 하루 한도는 서버가 판정한다(PokeChargeButton 주석).
     let onUltra: (String) -> Void
-    // 오늘 팀 밖 울트라 몫이 남았는가 — **표시 전용**(제목 행 힌트 문구·흐림, 행 툴팁)이다.
-    // 발사 게이트로 쓰지 마라: 서버는 같은 팀 대상에겐 하루 한도를 안 걸므로, "소진"이 떠 있어도
-    // 팀원에겐 실제로 나가야 한다. 사용자는 소진 표시를 보면서 팀원에게는 쏘게 된다 — 그게 의도다.
-    let canUltra: Bool
-    // 남은 울트라 횟수 문구("오늘 N번 남음"). nil = 아직 모름 → 충전 중에도 아무 숫자를 말하지 않는다.
-    let ultraRemainingText: String?
+    // 내 울트라 **잔량**(재화 — 이월된다). nil = 아직 모름.
+    // **표시 전용이다. 발사 게이트로 쓰지 마라** — 판정은 서버 ultra_poke_user 한 곳이고,
+    // 잔량은 미션으로 **그날 중에 늘어난다**. 0이라고 클라가 막으면 미션을 채워 잔량이 생긴 뒤에도
+    // 그 화면은 다음 sync 까지 계속 잠겨 있다(구버전 v0.2.30 이 정확히 그 결함이었다).
+    let ultraBalance: Int?
+    // 잔량 배지 탭 → 울트라 화면(잔량 + 충전 경로). "0개인데 어떻게 채우죠?"의 답이 있는 유일한 자리다.
+    var onOpenUltraPanel: () -> Void = {}
+    // 찌르기 **수신** 연결이 끊겼는가(PokeConnectionNotice.shouldWarn 결과). 안내줄 최우선 가지가 된다.
+    var isPokeDisconnected: Bool = false
     // 집중 모드(내 수신 거부) 상태와 토글. 값+클로저로만 받아 이 패널을 렌더 테스트 친화적으로 유지한다.
     var isFocusMode: Bool = false
     var onToggleFocusMode: () -> Void = {}
@@ -2022,9 +2163,9 @@ private struct PokePanel: View {
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
 
-    // 지금 누군가를 꾹 누르는 중인지. **진행도(0~1)가 아니라 켜짐/꺼짐 한 비트만** 올라온다 —
-    // 진행도를 여기 두면 3초 동안 매 프레임 이 패널(목록 전체)이 재평가된다.
-    @State private var isChargingUltra = false
+    // v0.2.34: `@State isChargingUltra` 를 지웠다. 잔량이 배지로 **상시** 보이므로 "꾹 누르는 동안에만
+    // 숫자를 말하는" 분기가 필요 없어졌고, 그 한 비트가 3초 홀드마다 이 패널(목록 26행 포함)을
+    // 두 번 재평가하던 경로였다. 부수 정리가 아니라 이득이다.
 
     // 지금 메시지 작성기가 펼쳐진 대상(nil = 전부 접힘). **Optional 하나가 곧 "한 번에 한 행만" 규칙**이다 —
     // 행마다 Bool 플래그를 두면 26행이 동시에 펼쳐질 수 있고, 그 순간 목록 높이가 700pt 예산을 넘긴다.
@@ -2085,11 +2226,15 @@ private struct PokePanel: View {
                     action: onToggleFocusMode
                 )
                 Spacer(minLength: 6)
-                // 발견성(+ 꾹 누르는 동안엔 남은 횟수). 새 줄이 아니라 제목 행의 남는 폭에 얹는다 —
-                // 줄을 하나 더하면 패널 높이가 커져 창 높이 상한(700pt) 예산을 갉아먹는다.
-                Text(PokeUltraHint.text(canUltra: canUltra, isCharging: isChargingUltra, remainingText: ultraRemainingText))
+                // 잔량 **상시** 표시. 예전엔 3초 꾹 누르는 동안에만 보였는데(PokeUltraHint 의 isCharging 분기),
+                // 재화가 된 지금 그건 "지갑을 열어야만 잔고를 볼 수 있는" 설계다.
+                // 새 줄이 아니라 제목 행의 남는 폭에 얹는다 — 줄을 하나 더하면 패널 높이가 커져
+                // 창 높이 상한(700pt) 예산을 갉아먹는다(PokeTitleRowWidthBudget 이 그 폭을 지킨다).
+                UltraBalanceBadge(balance: ultraBalance, action: onOpenUltraPanel)
+                // 발견성 문구는 그대로 산다. 0일 때만 "미션으로 충전"으로 갈아 끼워 **획득 경로**를 말한다.
+                Text(UltraBalanceText.hint(balance: ultraBalance))
                     .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText.opacity(canUltra ? 1.0 : 0.5))
+                    .foregroundStyle(CheckTheme.secondaryText.opacity((ultraBalance ?? 1) > 0 ? 1.0 : 0.65))
                     .fixedSize()
             }
             PanelDivider()
@@ -2116,6 +2261,13 @@ private struct PokePanel: View {
     // 셋 다 아니면 nil(생략 — 상단 앵커 유지). 비근무 안내가 집중 모드보다 앞인 이유는 그것이 **지금 이 화면에서
     // 하려는 일**(찌르기)의 차단 사유이기 때문이다. 집중 모드는 내 수신 설정이라 정보에 가깝다.
     private var noticeLine: (text: String, isWarning: Bool)? {
+        // 연결이 끊겼으면 그게 **가장 먼저**다. 이 화면에서 하려는 일이 양방향 모두 막힌 상태이고,
+        // 전송 실패 문구(messageNotice/pokeNotice)는 그 결과일 뿐이라 원인을 가리면 안 된다.
+        // 받기의 차단 사유가 보내기의 차단 사유보다 앞이다 — 보낸 사람은 실패를 보지만,
+        // 못 받은 사람은 아무 일도 안 일어난 것과 구별할 방법이 없다.
+        if isPokeDisconnected {
+            return (PokeConnectionNotice.panelText, true)
+        }
         // 메시지 결과가 찌르기 결과보다 앞이다 — 메시지는 사용자가 글자를 골라 넣은 **뒤**의 답이라
         // 그 답이 안 보이면 "보내진 건가?"가 남는다. 스토어가 두 문구를 다른 칸에 담아 둔 덕에
         // 여기서 순서만 정하면 되고, 어느 쪽도 상대를 지우지 않는다.
@@ -2193,11 +2345,10 @@ private struct PokePanel: View {
                         entry: entry,
                         remainingCooldown: cooldownRemaining(entry.userID),
                         canPoke: isMyselfWorking,
-                        canUltra: canUltra,
+                        ultraBalance: ultraBalance,
                         isComposing: activeComposerUserID == entry.userID,
                         onPoke: { onPoke(entry.userID) },
                         onUltra: { onUltra(entry.userID) },
-                        onChargingChanged: { isChargingUltra = $0 },
                         onToggleCompose: { toggleCompose(entry.userID) }
                     )
                     .frame(height: Self.rowHeight)
@@ -2261,16 +2412,15 @@ private struct PokeDirectoryRowView: View {
     let remainingCooldown: Int
     // 내가 근무중이라 찌를 수 있는지. false면 버튼이 흐려지고 비활성된다.
     let canPoke: Bool
-    // 오늘 팀 밖 울트라 몫이 남았는지 — **툴팁 문구 분기 전용**이다.
-    // 찌르기 자체의 활성 여부와도, 울트라 발사 여부와도 무관하다(발사는 서버가 판정한다).
-    // 소진 툴팁이 떠 있어도 같은 팀 대상에게는 실제로 나간다 — 서버가 팀 대상엔 한도를 안 건다.
-    let canUltra: Bool
+    // 내 울트라 잔량 — **툴팁 문구 분기 전용**이다. nil = 아직 모름(허용으로 읽는다).
+    // 찌르기 자체의 활성 여부와도, 울트라 발사 여부와도 무관하다: 3초 홀드는 잔량과 **무관하게**
+    // 무조건 발사되고 판정은 서버가 한다. 잔량 0 툴팁이 떠 있어도 누르면 요청은 나간다 —
+    // 그 사이 미션으로 잔량이 늘었을 수 있고, 그걸 아는 것은 서버뿐이다.
+    let ultraBalance: Int?
     // 이 행 아래 메시지 작성기가 펼쳐져 있는지(버튼을 켜진 상태로 그린다).
     var isComposing: Bool = false
     let onPoke: () -> Void
     let onUltra: () -> Void
-    // 충전 시작/끝만 패널에 알린다(진행도는 버튼 안에 갇혀 있다).
-    var onChargingChanged: (Bool) -> Void = { _ in }
     // 메시지 작성기 펼침/접힘 토글. 펼침 자체는 아무것도 보내지 않는다(전송은 작성기 안에서만).
     var onToggleCompose: () -> Void = {}
 
@@ -2354,11 +2504,12 @@ private struct PokeDirectoryRowView: View {
             // 그 상태의 꾹 누르기는 아무 일도 일어나지 않고 help 툴팁이 이유를 말한다(숨은 규칙을 만들지 않는다).
             PokeChargeButton(
                 onPoke: onPoke,
-                onUltra: onUltra,
-                onChargingChanged: onChargingChanged
+                onUltra: onUltra
             )
             // 툴팁의 홀드 시간도 상수에서 만든다(힌트 문구와 같은 이유 — 두 곳에 숫자를 흩뿌리지 않는다).
-            .help(canUltra ? "콕 찌르기 (\(UltraChargeStyle.holdSecondsText)초 꾹 누르면 울트라)" : "콕 찌르기 (울트라는 오늘 다 썼어요)")
+            // 잔량이 없을 때의 문장은 "다 썼다"가 아니다: 그건 하루 몫 시절의 말이고, 지금은
+            // 기다려도 안 찬다. **충전 경로를 말하는 문장**으로 갈아 끼웠다.
+            .help(UltraBalanceText.rowTooltip(balance: ultraBalance))
         }
     }
 
@@ -2443,11 +2594,10 @@ private struct PokeDirectoryRowView: View {
 /// 우리가 좌표로 판정해야 한다**.
 private struct PokeChargeButton: View {
     let onPoke: () -> Void
-    /// 3초 홀드 완료. **조건 없이** 호출된다 — 하루 한도 판정은 서버 몫이다(beginCharge 주석 참조).
-    /// 그래서 이 버튼은 canUltra 를 아예 받지 않는다: 안 가진 값으로는 게이트를 만들 수 없다.
+    /// 3초 홀드 완료. **조건 없이** 호출된다 — 잔량 판정은 서버 몫이다(beginCharge 주석 참조).
+    /// 그래서 이 버튼은 잔량도 하루 한도도 **아예 받지 않는다**: 안 가진 값으로는 게이트를 만들 수 없다.
+    /// v0.2.34 에서 사실의 이름이 canUltra → ultraBalance 로 바뀌었지만 규칙은 그대로다.
     let onUltra: () -> Void
-    /// 충전 시작/끝 알림. 패널 제목 행이 이 동안에만 "오늘 N번 남음"을 말한다.
-    var onChargingChanged: (Bool) -> Void = { _ in }
 
     @State private var charge: CGFloat = 0
     @State private var isPressing = false
@@ -2484,7 +2634,6 @@ private struct PokeChargeButton: View {
             .onDisappear {
                 cancelCharge(animated: false)
                 isPressing = false
-                onChargingChanged(false)
             }
     }
 
@@ -2495,7 +2644,6 @@ private struct PokeChargeButton: View {
             withAnimation(.spring(response: 0.22, dampingFraction: 0.55)) { isPressing = true }
             didFireUltra = false
             isCancelled = false
-            onChargingChanged(true)
             beginCharge()
             return
         }
@@ -2507,7 +2655,6 @@ private struct PokeChargeButton: View {
             // 사용자가 예측할 수 없으므로 규칙을 하나로 못 박는다.
             isCancelled = true
             cancelCharge(animated: true)
-            onChargingChanged(false)
         }
     }
 
@@ -2515,7 +2662,6 @@ private struct PokeChargeButton: View {
         let cancelled = isCancelled, fired = didFireUltra
         withAnimation(.spring(response: 0.22, dampingFraction: 0.55)) { isPressing = false }
         cancelCharge(animated: true)
-        onChargingChanged(false)
         guard !cancelled, !fired else { return }
         onPoke()          // 3초 전에 뗐다 → 평소의 일반 찌르기
     }
@@ -2848,6 +2994,311 @@ private struct InsightsPanel: View {
 
 // MARK: - Footer utility bar
 
+// MARK: - 울트라 화면 (잔량 + 충전 경로)
+
+/// 미션 줄의 문구·아이콘 규약(순수 — 값으로 검증한다).
+///
+/// **이름이 "미션 목록"이 아니라 "울트라"인 이유**: v0.2.34 시점 실제 미션은 1개(오늘 3시간)뿐이다.
+/// 1행짜리 목록은 목록으로 안 읽히고 미완성으로 읽힌다. 이 화면이 답하는 질문은 "미션이 뭐가 있나"가
+/// 아니라 **"울트라가 몇 개고 어떻게 채우나"**이고, 그 답(잔량 + 충전 경로 3줄)은 지금도 한 화면을 채운다.
+enum MissionCopy {
+    static func title(_ kind: MissionProgress.Kind) -> String {
+        switch kind {
+        case .todayThreeHours: return "오늘 3시간 근무"
+        case .dailyFloor:      return "매일 첫 근무"
+        case .arrivalStreak:   return "연속 출근"
+        }
+    }
+
+    static func icon(_ kind: MissionProgress.Kind) -> String {
+        switch kind {
+        case .todayThreeHours: return "clock.badge.checkmark"   // macOS 13+ (배포 타깃 14 ✓)
+        case .dailyFloor:      return "sunrise.fill"
+        case .arrivalStreak:   return "flame.fill"
+        }
+    }
+
+    /// 보상 칩 문구. **nil = 이 줄에는 보상이 없다** → 칩을 아예 그리지 않는다.
+    ///
+    /// ★ 연속 출근이 nil 인 것이 사장님 확정 3이다: **스트릭은 표시만 하고 보상이 없다.**
+    ///   서버 ultra_wallet_sync 는 스트릭으로 장부를 단 한 줄도 쓰지 않으며(그쪽 사후 단언이
+    ///   'insert into ultra_ledger 개수 == 1' 로 못 박았다), 여기에 "5일마다 ⚡︎ +1" 같은 칩을 그리면
+    ///   **없는 걸 약속하는 거짓말**이 된다. 5일째 되는 날 아무 일도 안 일어나고, 그때 사용자가
+    ///   잃는 것은 울트라 하나가 아니라 이 화면 전체에 대한 신뢰다.
+    ///
+    /// ★ 밑바닥 보정을 "+1"로 쓰지 않는 이유: 그건 수입이 아니라 **바닥을 메워 주는 규칙**이다.
+    ///   "+1"로 적으면 열흘 잠수 후 10개를 기대하게 되는데 실제로는 1개다(도장이 하루 하나뿐이라
+    ///   보정도 한 번이다).
+    static func reward(_ kind: MissionProgress.Kind) -> String? {
+        switch kind {
+        case .todayThreeHours: return "⚡︎ +1"
+        case .dailyFloor:      return "0개면 1개로"
+        case .arrivalStreak:   return nil
+        }
+    }
+
+    static let claimedChip = "받음"
+    /// 잔량 상한(사장님 확정 4)에 걸려 **적립하지 않은** 날의 칩.
+    static let cappedChip = "가득 참"
+    /// 그 사실을 말하는 문장. 서버는 상한에서 장부를 안 쓰므로 `claimed` 가 **false 로 남는다** —
+    /// 그래서 이 줄이 없으면 화면은 진행 바를 100%로 그린 채 "아직 못 받았다"처럼 보이고,
+    /// 사용자는 자기가 뭘 잘못했는지 영영 알 수 없다.
+    static let cappedNotice = "가득 차서 오늘은 못 받아요"
+
+    /// 그 줄 아래 보조 문장. 상한에 걸린 날은 진행 시간 대신 **그 사실**을 말한다
+    /// (그날의 진행률은 이미 100%라 시간을 말해 봐야 새로 알려 주는 것이 없다).
+    static func detail(_ mission: MissionProgress) -> String {
+        mission.cappedToday ? cappedNotice : mission.detail
+    }
+
+    /// 그 줄 오른쪽에 무엇을 그리는가. **순수 값이라 뮤테이션이 여기서 죽는다.**
+    static func chip(_ mission: MissionProgress) -> MissionChip {
+        guard let reward = reward(mission.kind) else { return .none }
+        if mission.cappedToday { return .capped }
+        if mission.claimedToday { return .claimed }
+        return .reward(reward)
+    }
+}
+
+/// 미션 줄 오른쪽 칩의 종류. `.none` 은 "칩이 없다"이지 "빈 칩"이 아니다.
+enum MissionChip: Equatable {
+    case none
+    case reward(String)
+    case claimed
+    case capped
+}
+
+enum UltraPanelCopy {
+    static let title = "울트라"
+    /// 잔량을 모를 때 그리는 글자. **0 으로 접지 않는다** — 0 이라고 말하면 그건 만들어 낸 사실이다.
+    static let unknownBalance = "—"
+    static let loadingCaption = "불러오는 중…"
+    static let failedCaption = "최신 잔량을 못 읽었어요"
+    static let emptyMissions = "충전 경로가 아직 없어요"
+
+    static func heroCaption(balance: Int?, hasFailed: Bool) -> String {
+        // 실패가 먼저다: 잔량은 남아 있어도(스토어가 알던 값을 버리지 않는다) 최신이라는 보장이 없다.
+        if hasFailed { return failedCaption }
+        guard let balance else { return loadingCaption }
+        return balance > 0
+            ? "\(UltraChargeStyle.holdSecondsText)초 꾹 누르면 한 개 써요"
+            : "아래 미션을 채우면 하나 생겨요"
+    }
+
+    static func balanceText(_ balance: Int?) -> String {
+        balance.map { String(max(0, $0)) } ?? unknownBalance
+    }
+}
+
+/// 울트라 화면. 리그/토큰/찌르기/내 기록과 **같은 뼈대**다(뒤로 + 제목 + PanelDivider + 본문,
+/// store 값을 값 + 클로저로만 받아 렌더 테스트 친화적으로 유지).
+private struct UltraPanel: View {
+    let balance: Int?
+    let missions: [MissionProgress]
+    /// 미션을 한 번이라도 성공적으로 받았는가(빈 목록과 로드 전을 가른다 — 토큰 보드와 같은 규약).
+    let hasLoaded: Bool
+    var hasFailed: Bool = false
+    /// 방금 미션을 달성했다는 지속 안내(연출은 2초면 사라진다).
+    var notice: String? = nil
+    var onRetry: (() -> Void)? = nil
+    var extraChromeHeight: CGFloat = 0
+    var clipsOverflowInsteadOfScroll: Bool = false
+    let onBack: () -> Void
+
+    static let rowHeight: CGFloat = 56
+    static let rowSpacing: CGFloat = 8
+    /// 히어로 카드(72pt)를 **이미 반영한** 상한이다 — 히어로를 extraChromeHeight 에 다시 더해 넣지 마라
+    /// (이중 차감으로 visibleRows 가 최소값까지 주저앉는다).
+    static let maxVisibleRows = 4
+    static let heroHeight: CGFloat = 72
+    /// 안내줄 한 줄이 먹는 높이(바깥 VStack spacing 12 포함).
+    static let noticeStripHeight: CGFloat = 14 + 12
+
+    private var noticeHeight: CGFloat {
+        (notice?.isEmpty == false) ? Self.noticeStripHeight : 0
+    }
+
+    private var visibleRows: Int {
+        ListRowBudget.visibleRows(
+            maxVisibleRows: Self.maxVisibleRows,
+            rowHeight: Self.rowHeight,
+            rowSpacing: Self.rowSpacing,
+            extraChromeHeight: extraChromeHeight + noticeHeight
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
+                Text(UltraPanelCopy.title)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+            }
+            PanelDivider()
+            heroCard
+            if let notice, !notice.isEmpty {
+                Text(notice)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(CheckTheme.accent)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            missionList
+        }
+        .padding(12)
+        .panelStyle()
+    }
+
+    @ViewBuilder
+    private var heroCard: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(CheckTheme.accent.opacity((balance ?? 0) > 0 ? 0.18 : 0.08))
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle((balance ?? 0) > 0 ? CheckTheme.accent : CheckTheme.secondaryText)
+            }
+            .frame(width: 46, height: 46)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(UltraPanelCopy.balanceText(balance))
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(CheckTheme.primaryText)
+                    Text("개")
+                        .font(.caption)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                }
+                Text(UltraPanelCopy.heroCaption(balance: balance, hasFailed: hasFailed))
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            // 실패했을 때만 재시도를 준다(리그/토큰/내 기록과 같은 3분기 규약).
+            if hasFailed, let onRetry { PanelRetryButton(action: onRetry) }
+        }
+        .frame(height: Self.heroHeight)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CheckTheme.fieldFill))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(CheckTheme.accent.opacity(0.28), lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
+    private var missionList: some View {
+        let capHeight = Self.listContentHeight(rowCount: visibleRows)
+        let contentHeight = Self.listContentHeight(rowCount: max(1, missions.count))
+        let rows = VStack(spacing: Self.rowSpacing) {
+            if missions.isEmpty {
+                Text(hasLoaded ? UltraPanelCopy.emptyMissions
+                               : (hasFailed ? "미션을 불러오지 못했어요" : UltraPanelCopy.loadingCaption))
+                    .font(.caption)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
+            } else {
+                ForEach(missions) { MissionRowView(mission: $0) }
+            }
+        }
+        if contentHeight <= capHeight {
+            rows.frame(maxWidth: .infinity, alignment: .top)
+        } else if clipsOverflowInsteadOfScroll {
+            // 스냅샷 전용: ImageRenderer 는 ScrollView 안쪽을 못 그린다(4개 패널이 모두 같은 우회를 쓴다).
+            rows.frame(maxWidth: .infinity, alignment: .top)
+                .frame(height: capHeight, alignment: .top)
+                .clipped()
+        } else {
+            ScrollView(.vertical, showsIndicators: true) {
+                rows.frame(maxWidth: .infinity)
+            }
+            .frame(height: capHeight)
+        }
+    }
+
+    static func listContentHeight(rowCount: Int) -> CGFloat {
+        guard rowCount > 0 else { return 0 }
+        return CGFloat(rowCount) * rowHeight + CGFloat(rowCount - 1) * rowSpacing
+    }
+}
+
+private struct MissionRowView: View {
+    let mission: MissionProgress
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: MissionCopy.icon(mission.kind))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(mission.claimedToday ? CheckTheme.working : CheckTheme.accent)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(MissionCopy.title(mission.kind))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    chip
+                }
+                if let progress = mission.progress {
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(CheckTheme.trackFill)
+                            Capsule()
+                                .fill(progress >= 1 ? CheckTheme.working : CheckTheme.accent)
+                                .frame(width: max(0, proxy.size.width * min(1, max(0, progress))))
+                        }
+                    }
+                    .frame(height: 4)      // HeaderCard 진행 바와 같은 관용구 — 렌더 검증된 패턴이다
+                }
+                Text(MissionCopy.detail(mission))
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: UltraPanel.rowHeight)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CheckTheme.fieldFill))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private var chip: some View {
+        switch MissionCopy.chip(mission) {
+        case .none:
+            // 보상이 없는 줄(연속 출근)에는 칩을 그리지 않는다 — 사장님 확정 3.
+            EmptyView()
+        case .claimed:
+            HStack(spacing: 3) {
+                Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
+                Text(MissionCopy.claimedChip).font(.caption2.weight(.bold))
+            }
+            .foregroundStyle(CheckTheme.working)
+        case .capped:
+            Text(MissionCopy.cappedChip)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(CheckTheme.pending)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(CheckTheme.pending.opacity(0.16)))
+        case .reward(let text):
+            Text(text)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(CheckTheme.accent)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(CheckTheme.accent.opacity(0.16)))
+        }
+    }
+}
+
 /// 푸터 동기화 문구(SyncStatusView)에 남는 텍스트 폭 예산(순수 계산 — 결정적 검증 지점).
 ///
 /// 푸터는 `[동기화 문구][Spacer][아이콘 버튼…]` 한 줄이고 팝오버 폭은 340 고정이다. 문구만 유연 요소라
@@ -2882,12 +3333,53 @@ enum FooterWidthBudget {
     }
 }
 
+/// 메인 메뉴 헤더의 찌르기 진입 버튼. **높이 0pt 로 리얼타임 고장을 표면화하는 유일한 자리다.**
+///
+/// 왜 잎 뷰인가: 판정이 `store.displayNow` 를 읽으므로, 이 계산을 팀 카드 본체에 두면 그 카드가
+/// 매초 무효화된다(TeamWorkingCountChip 이 같은 이유로 잎 뷰다). 잎으로 가두면 매초 다시 그리는 것은
+/// 27×27 아이콘 하나뿐이다.
+///
+/// 왜 메뉴바가 아닌가: 메뉴바 타이틀은 MM:SS(근무 경과)를 담는 자리이고 이 앱에서 가장 많이 읽히는
+/// 숫자다. 고장 하나를 알리려고 정상 기능을 가릴 수 없고, 아이콘으로 대신할 수도 없다 —
+/// `exclamationmark.icloud.fill` 은 pendingSync 가 이미 쓰고 있어서 겹치면 **다른 두 고장이 같은
+/// 얼굴**이 된다(구버전에 미지 열거값을 접어 오배달을 만든 것과 같은 종류의 사고다).
+///
+/// 왜 PokePanel 안이 아닌가: 그 패널은 팝오버를 열고 이 손가락 아이콘을 눌러야 나오는 하위 화면이라,
+/// 거기에만 두면 topicDenied(REST 는 멀쩡하고 소켓만 죽은 상태)가 완전한 침묵이 된다.
+private struct PokeEntryIconButton: View {
+    @Bindable var store: WorkTimerStore
+
+    var body: some View {
+        let warns = PokeConnectionNotice.shouldWarn(state: store.realtimeState, now: store.displayNow)
+        IconButton(
+            icon: "hand.point.right.fill",
+            help: warns ? PokeConnectionNotice.iconHelp : "콕 찌르기",
+            // 착색만 바꾼다 — 아이콘을 바꾸면 사용자가 이 버튼을 찾던 모양이 사라진다.
+            tint: warns ? CheckTheme.pending : CheckTheme.secondaryText
+        ) {
+            store.togglePokePanel()
+        }
+    }
+}
+
+/// 푸터 동기화 상태. `PokeEntryIconButton` 과 같은 이유로 잎 뷰다(displayNow 를 읽는다).
+private struct FooterSyncStatus: View {
+    @Bindable var store: WorkTimerStore
+
+    var body: some View {
+        SyncStatusView(
+            message: store.syncMessage,
+            pokeDisconnected: PokeConnectionNotice.shouldWarn(state: store.realtimeState, now: store.displayNow)
+        )
+    }
+}
+
 private struct FooterBar: View {
     @Bindable var store: WorkTimerStore
 
     var body: some View {
         HStack(spacing: 8) {
-            SyncStatusView(message: store.syncMessage)
+            FooterSyncStatus(store: store)
             Spacer(minLength: 6)
             // 버튼은 4개까지다(FooterWidthBudget). 하나 더 세우면 동기화 문구가 곧바로 말줄임된다 —
             // 새 버튼이 필요하면 푸터가 아니라 관련 카드(예: 내 근무 박스 캡션 행)로 보낸다.

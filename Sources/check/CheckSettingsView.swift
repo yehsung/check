@@ -379,6 +379,9 @@ struct CheckSettingsView: View {
                     isOn: tokenUsagePublicBinding
                 )
             }
+            // 진단은 **카드가 아니라 한 줄 각주**다. 설정 창은 400pt 이고 콘텐츠가 이미 355pt 라
+            // 섹션 카드(제목+패딩)를 하나 더 얹으면 445pt 가 되어 맨 아래 — 즉 이 줄 자체가 잘린다.
+            RealtimeDiagnosticsRow(store: store)
         }
         .padding(14)
         // 창이 늘어나면 같이 늘고, 좁혀도 설명이 뭉개지지 않는 하한을 준다(창 크기는 배선 쪽 소관).
@@ -436,5 +439,26 @@ struct CheckSettingsView: View {
             get: { store.tokenUsagePublic },
             set: { store.setTokenUsagePublic($0) }
         )
+    }
+}
+
+/// 초인종(리얼타임) 한 줄 진단. **"찌르기가 안 와요" 신고에서 소켓/따라잡기/토큰 중 어디인지를 가른다.**
+///
+/// 이 줄이 없으면 `.idle(.disabled)`(전송자 nil — 킬스위치 off 또는 조립 실패)가 **완전한 침묵**이 된다:
+/// REST 는 멀쩡하고 syncMessage 는 "동기화됨"을 유지하므로 앱 어디에도 신호가 없다.
+///
+/// 표면은 Text 한 줄뿐이다 — Menu/TextField 를 쓰지 않는다(ImageRenderer 가 그 자리를 노란 상자로 그려
+/// 픽셀 커버리지가 0이 되고, 그러면 이 줄이 사라져도 렌더 테스트가 초록으로 남는다).
+private struct RealtimeDiagnosticsRow: View {
+    let store: WorkTimerStore
+
+    var body: some View {
+        Text("초인종 " + store.realtimeDiagnosticsLine)
+            .font(.system(size: 10).monospacedDigit())
+            .foregroundStyle(CheckTheme.secondaryText)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .padding(.leading, 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

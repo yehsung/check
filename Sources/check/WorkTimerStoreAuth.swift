@@ -51,6 +51,9 @@ extension WorkTimerStore {
         await refreshTeamStatus()
         guard generation == sessionGeneration else { return }
         startStatusRefreshLoop()
+        // 지갑을 한 번 맞춘다. 기본 p_days_back=1 이라 **어제 3시간을 채우고 앱을 껐던 사용자의 몫이
+        // 여기서 소급된다** — 이 호출이 없으면 그 코인은 영영 안 들어온다.
+        syncUltraWallet(reason: .signIn)
     }
 
     func signIn(email: String, password: String) async {
@@ -89,6 +92,8 @@ extension WorkTimerStore {
         // 무관하지만, 지난주 회고 배너는 사용자가 열 수 없는 '자동 안내'라 이 경로가 없으면 팝오버를
         // 닫았다 다시 열기 전까지 영영 뜨지 않는다(회귀 지점).
         if needsInsightsReload { await performLoadInsights() }
+        // 저장 세션 활성화 경로와 같은 이유로 지갑을 맞춘다(어제 몫 소급).
+        syncUltraWallet(reason: .signIn)
     }
 
     func signUp(email: String, password: String, displayName: String) async {
@@ -416,6 +421,11 @@ extension WorkTimerStore {
             return "비밀번호 조건 확인"
         case .databaseSchemaMissing:
             return "DB 스키마 필요"
+        case .ultraWalletUnavailable:
+            // 지갑 RPC 하나만 없는 상태다. 이 문장이 메뉴바에 뜨는 일은 정상 경로에선 없다
+            // (performSyncUltraWallet 이 이 오류를 삼키고 ultraBalanceFailed 만 세운다).
+            // 그래도 한국어를 돌려주는 이유는 이 매퍼의 계약이다 — 빠뜨리면 다른 경로가 영문 원문을 띄운다.
+            return "울트라 기능 준비 중"
         case .sessionAlreadyOpen:
             return "이미 다른 곳에서 근무 중이에요"
         // 아래 셋은 비밀번호 재설정(OTP) 경로가 만들어 낸 분류다. 그 경로는 자체 매퍼
@@ -452,7 +462,21 @@ extension WorkTimerStore {
 
             let refreshedSession: SupabaseSession
             do {
-                refreshedSession = try await service.refreshSession(refreshToken: refreshToken)
+                // ★ 갱신 주체는 조정자 하나다(SessionRefreshCoordinator 주석). 여기서 직접
+                //   service.refreshSession 을 부르면 리얼타임 선제 갱신과 경합해 refresh token 회전이
+                //   겹치고, 그 결과가 근무 중 강제 로그아웃이다.
+                refreshedSession = try await sessionRefreshCoordinator.refresh(
+                    generation: generation,
+                    // 인자로 붙잡지 않고 **호출 시점에** 읽는다 — 합류하지 못한 순차 호출이
+                    // 이미 회전된 옛 토큰을 재사용하는 것을 막는 유일한 방법이다.
+                    tokenProvider: { [weak self] in self?.session?.refreshToken ?? refreshToken },
+                    refresh: { [service] token in try await service.refreshSession(refreshToken: token) },
+                    apply: { [weak self] session in
+                        guard let self, generation == self.sessionGeneration else { return }
+                        self.session = session
+                        self.persistSession(session)
+                    }
+                )
             } catch {
                 guard generation == sessionGeneration else { throw originalError }
                 // 취소/일시 네트워크 오류로 갱신이 실패했으면 세션을 유지한다(throw 는 유지 — 호출부가 재시도).

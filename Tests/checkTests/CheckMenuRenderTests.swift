@@ -4046,3 +4046,214 @@ func theOutdatedTooltipQuotesTheStoreNoticeInsteadOfInventingItsOwnWording() thr
     #expect(body.contains("WorkTimerStore.messageTargetOutdatedNotice"))
     #expect(!body.contains(WorkTimerStore.messageTargetOutdatedNotice), "같은 문장을 리터럴로 다시 적어 두면 안 된다")
 }
+
+// MARK: - 울트라 화면(잔량 + 충전 경로) — v0.2.34
+
+/// 울트라 화면이 열린 스토어. 미션 목록은 **서버 응답에서 순수 변환**해 만든다(뷰가 판정하지 않는다).
+@MainActor
+private func makeUltraPanelStore(
+    balance: Int? = 3,
+    missionCount: Int = 3,
+    claimed: Bool = false,
+    capped: Bool = false,
+    hasFailed: Bool = false,
+    notice: String? = nil,
+    now: Date = Date()
+) -> WorkTimerStore {
+    let store = makeTeamStore(members: [], now: now)
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3_600)
+    store.ultraBalance = balance
+    store.ultraBalanceFailed = hasFailed
+    store.missionNotice = notice
+    let all: [MissionProgress] = [
+        // ★ 진행률과 detail 을 **고정**한다. 칩 상태에 따라 진행 바까지 함께 바뀌면 아래 비교가
+        //   "칩이 그려졌는가"가 아니라 "진행 바가 움직였는가"를 재게 되고, 칩을 통째로 지워도 초록이 된다
+        //   (실측: 첫 판이 그랬다 — 뮤턴트 '칩 미표시'가 살아남았다).
+        MissionProgress(
+            kind: .todayThreeHours,
+            progress: 1.0,
+            claimedToday: claimed,
+            cappedToday: capped,
+            detail: "3시간 / 3시간"
+        ),
+        MissionProgress(kind: .dailyFloor, progress: nil, claimedToday: true, cappedToday: false, detail: "매일 1개까지"),
+        MissionProgress(kind: .arrivalStreak, progress: nil, claimedToday: true, cappedToday: false, detail: "5일 연속")
+    ]
+    store.missions = Array(all.prefix(missionCount))
+    store.missionsLoaded = true
+    store.isUltraPanelVisible = true
+    return store
+}
+
+@MainActor
+@Test
+func ultraPanelWindowHeightWithinCap() throws {
+    // 최악 조합: 표시 상한(maxVisibleRows=4)을 넘긴 미션 + 안내줄 + 새 버전 배너.
+    // 미션이 늘어나는 것은 예정된 일이라(지금 3개) 상한을 지금 못 박아 둔다.
+    let store = makeUltraPanelStore(balance: 5, missionCount: 3, notice: "오늘 3시간 — 울트라 +1")
+    // 서버가 미션을 늘린 미래를 흉내 낸다(같은 순수 타입이라 화면은 그대로 그린다).
+    store.missions += (0..<3).map {
+        MissionProgress(kind: .todayThreeHours, progress: Double($0) / 3, claimedToday: false, cappedToday: false, detail: "미래 미션 \($0)")
+    }
+    let pixelHeight = try #require(renderedPixelHeight(CheckMenuView(store: store, previewUpdateBanner: true)))
+    #expect(Double(pixelHeight) / 2.0 <= 700.0)
+}
+
+@MainActor
+@Test
+func ultraPanelDrawsEachChipStateDifferently() throws {
+    // 칩 세 상태(보상 대기 / 받음 / 가득 참)가 **픽셀로** 갈린다. 순수 함수 테스트는 어느 칩을 골랐는지
+    // 알지만 그것이 그려졌는지는 모르고, 렌더는 그려진 것만 알지 왜 그렸는지는 모른다 — 둘 다 필요하다.
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let pending = makeUltraPanelStore(missionCount: 1, now: now)
+    let pendingTwin = makeUltraPanelStore(missionCount: 1, now: now)
+    let claimed = makeUltraPanelStore(missionCount: 1, claimed: true, now: now)
+    let capped = makeUltraPanelStore(balance: 5, missionCount: 1, capped: true, now: now)
+
+    let base = try renderPNG(CheckMenuView(store: pending))
+    // 대조군: 같은 입력이면 바이트까지 같다(없으면 아래 부등식이 렌더 잡음과 구별되지 않는다).
+    #expect(base == (try renderPNG(CheckMenuView(store: pendingTwin))))
+    #expect(base != (try renderPNG(CheckMenuView(store: claimed))))
+    // ★ 가득 참이 '받음'과 같은 그림이면 사장님 확정 4가 화면에서 사라진 것이다 —
+    //   서버가 상한에서 claimed 를 false 로 남기므로, 이 구별이 없으면 사용자는 진행 바 100% 를 보면서
+    //   "왜 안 받아지지?"만 남는다.
+    #expect((try renderPNG(CheckMenuView(store: claimed))) != (try renderPNG(CheckMenuView(store: capped))))
+    savePokeUISnapshot(base, "ultra-panel-pending")
+    savePokeUISnapshot(try renderPNG(CheckMenuView(store: capped)), "ultra-panel-capped")
+}
+
+@MainActor
+@Test
+func ultraPanelDistinguishesUnknownBalanceFromZero() throws {
+    // 잔량 nil("아직 모름")은 0("없다")과 **다르게** 그려야 한다. 0 으로 접으면 만들어 낸 사실을 말하는 것이다.
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let zero = try renderPNG(CheckMenuView(store: makeUltraPanelStore(balance: 0, now: now)))
+    let unknown = try renderPNG(CheckMenuView(store: makeUltraPanelStore(balance: nil, now: now)))
+    #expect(zero != unknown)
+    // 실패 상태는 재시도 버튼을 얻는다(리그/토큰/내 기록과 같은 3분기 규약).
+    let failed = try renderPNG(CheckMenuView(store: makeUltraPanelStore(balance: nil, hasFailed: true, now: now)))
+    #expect(failed != unknown, "실패했는데 '불러오는 중'과 같은 그림이면 사용자에게 재시도할 길이 없다.")
+    savePokeUISnapshot(failed, "ultra-panel-failed")
+}
+
+@MainActor
+@Test
+func ultraPanelSnapshot() throws {
+    let png = try renderPNG(CheckMenuView(store: makeUltraPanelStore(balance: 3, notice: "오늘 3시간 — 울트라 +1")))
+    #expect(png.count > 0)
+    savePokeUISnapshot(png, "ultra-panel-3missions")
+}
+
+@MainActor
+@Test
+func mainMenuPokeIconSurfacesRealtimeFailureAtZeroHeightCost() throws {
+    // blocker(리얼타임 #3): PokePanel 은 팝오버를 열고 손가락 아이콘을 **눌러야** 나오는 하위 화면이라,
+    // 거기에만 경고를 두면 topicDenied(REST 는 멀쩡하고 소켓만 죽은 상태)가 완전한 침묵이 된다.
+    // 메인 메뉴 아이콘에 착색으로 얹는다 — IconButton 이 tint 를 이미 받으므로 **새 픽셀 0pt** 다.
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    func homeStore(failing: Bool) -> WorkTimerStore {
+        let store = makeTeamStore(members: steadyMembers(count: 3), now: now)
+        store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3_600)
+        if failing {
+            store.realtimeState = .failed(
+                Backoff(attempt: 7, retryAt: now, failingSince: now.addingTimeInterval(-600)),
+                .topicDenied
+            )
+        }
+        return store
+    }
+    let healthy = try renderBitmap(CheckMenuView(store: homeStore(failing: false)))
+    let healthyTwin = try renderBitmap(CheckMenuView(store: homeStore(failing: false)))
+    let failing = try renderBitmap(CheckMenuView(store: homeStore(failing: true)))
+
+    let healthyPNG = try #require(healthy.representation(using: .png, properties: [:]))
+    let twinPNG = try #require(healthyTwin.representation(using: .png, properties: [:]))
+    let failingPNG = try #require(failing.representation(using: .png, properties: [:]))
+    // 대조군: 같은 입력이면 바이트까지 같다.
+    #expect(healthyPNG == twinPNG)
+    #expect(healthyPNG != failingPNG, "리얼타임 실패가 메인 메뉴에 아무 자국도 안 남겼다 — 하위 화면을 안 여는 사람은 영영 모른다.")
+    // **높이 0pt**: 착색만 바꿨으므로 창이 1px 도 자라지 않는다(700pt 예산을 안 건드린다).
+    #expect(healthy.pixelsHigh == failing.pixelsHigh)
+    // 이 화면에서 바뀌는 자리는 **둘**이다: 팀 카드 헤더의 찌르기 아이콘(착색)과 푸터의 상태 점.
+    // 그래서 "차이가 아이콘 하나 크기"라고 단언할 수는 없다 — 대신 차이가 **어디서 시작하는지**를 본다.
+    // 아이콘 착색이 사라지면 남는 차이는 푸터뿐이고, 그때 minY 는 화면 아래쪽으로 내려간다.
+    // 이 부등식이 곧 "메인 메뉴에도 표면이 있다"는 주장의 실증이다.
+    let diff = try #require(bitmapDiffBounds(healthy, failing))
+    #expect(
+        diff.minY < failing.pixelsHigh / 2,
+        "차이가 화면 아래쪽(푸터)에서만 시작한다 = 메인 메뉴 아이콘은 아무 말도 안 하고 있다."
+    )
+}
+
+
+@Test
+func theUltraBadgeLivesInTheTitleRowNotOnALineOfItsOwn() throws {
+    // 배지가 새 줄이 되면 패널이 그만큼 자라 700pt 예산을 갉아먹는다. 그런데 **높이 비교로는 못 잡는다**:
+    // `pokePanelHeightIsIndependentOfUltraBalance` 는 잔량 값들 **사이의** 차이만 보므로,
+    // 세 값 모두가 똑같이 한 줄씩 자라면 여전히 초록이다(실측으로 확인한 사각지대다).
+    // 그래서 구조를 소스로 못 박는다: 배지는 제목 행 HStack 안, 힌트 Text 와 **같은 블록**에 있어야 한다.
+    let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
+    let panel = try #require(swiftStructBody(source, name: "PokePanel"))
+    // 제목 행 = 뒤로 IconButton 을 담은 HStack. **PanelDivider() 앞까지**로 자르면 안 된다 —
+    // 배지를 HStack 밖(구분선 바로 위 새 줄)으로 내린 뮤턴트가 그 범위 안에 그대로 들어와 살아남는다
+    // (실측: 첫 판이 그랬다). 중괄호 균형으로 HStack 이 **닫히는 곳**까지만 본다.
+    let titleRowStart = try #require(panel.range(of: "IconButton(icon: \"chevron.left\""))
+    let titleRow = try #require(enclosingBlock(of: panel, containing: titleRowStart.lowerBound))
+    #expect(titleRow.contains("UltraBalanceBadge("), "잔량 배지가 제목 행 HStack 밖으로 나갔다 = 새 줄이 생겼다.")
+    #expect(titleRow.contains("UltraBalanceText.hint("), "발견성 힌트도 같은 행에 있어야 폭 예산이 뜻을 갖는다.")
+    // 대조군: 이 추출이 실제로 한 블록만 잘라 온다(전체를 통째로 돌려주면 위 단언은 공허하다).
+    #expect(!titleRow.contains("PanelDivider()"), "제목 행 추출이 구분선까지 삼켰다 — 범위가 너무 넓다.")
+    #expect(!titleRow.contains("entryList"), "제목 행 추출이 본문까지 삼켰다 — 범위가 너무 넓다.")
+    // 그리고 그 폭 예산이 실제로 존재한다(계산 없이 세우면 힌트가 조용히 말줄임된다).
+    #expect(source.contains("enum PokeTitleRowWidthBudget"))
+}
+
+@Test
+func theMissionRowAsksMissionCopyInsteadOfInventingItsOwnWording() throws {
+    // 칩·보조문장을 뷰가 직접 만들면, 순수 함수 테스트가 아무리 옳아도 화면은 다른 말을 한다.
+    // (이 저장소가 이미 같은 이유로 PokeDirectoryRowView 에 같은 계약을 걸어 뒀다.)
+    let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
+    let row = try #require(swiftStructBody(source, name: "MissionRowView"))
+    #expect(row.contains("MissionCopy.chip(mission)"), "칩 선택을 뷰가 직접 한다 — 스트릭 보상 금지가 화면에서 새어 나간다.")
+    // 그리고 그 칩을 **실제로 그린다.** 선택 함수만 갖고 body 에서 안 부르면(칩 뷰가 트리에 없으면)
+    // 위 단언은 초록인 채로 화면에서 칩이 통째로 사라진다 — 픽셀 비교로는 못 가른다(같은 행의
+    // 아이콘 색이 claimedToday 로 함께 바뀌어 두 그림이 어차피 다르기 때문이다. 실측으로 확인했다).
+    let beforeChipDeclaration = String(row[row.startIndex..<(row.range(of: "private var chip")?.lowerBound ?? row.endIndex)])
+    #expect(
+        beforeChipDeclaration.split(separator: "\n").contains { $0.trimmingCharacters(in: .whitespaces) == "chip" },
+        "MissionRowView 의 body 가 chip 을 그리지 않는다 — 보상/받음/가득참이 화면에서 사라졌다."
+    )
+    #expect(row.contains("MissionCopy.detail(mission)"), "보조문장을 뷰가 직접 만든다 — 상한(가득 참) 사실이 화면에서 사라진다.")
+    #expect(!row.contains("mission.detail"), "뷰가 원본 detail 을 직접 읽는다 = MissionCopy.detail 의 상한 분기를 우회한다.")
+    #expect(!row.contains("mission.cappedToday"), "뷰가 상한을 스스로 판정한다 — 판정은 MissionCopy 한 곳이어야 한다.")
+    // 문구 리터럴이 뷰에 다시 적히지 않았는가(한 쪽만 고쳐지는 날이 온다).
+    #expect(!row.contains(MissionCopy.cappedNotice))
+    #expect(!row.contains(MissionCopy.claimedChip))
+    #expect(!row.contains(MissionCopy.cappedChip))
+}
+
+
+/// 주어진 위치를 감싸는 **가장 안쪽 중괄호 블록**을 돌려준다(소스 구조 계약 전용).
+/// "A 가 B 와 같은 블록에 있는가"를 문자열 범위로 물으면 블록 경계를 넘어선 오답이 나온다 —
+/// 그 오답이 정확히 "새 줄로 내렸는데 초록"이라는 뮤턴트 생존을 만든다.
+private func enclosingBlock(of source: String, containing index: String.Index) -> String? {
+    var openings: [String.Index] = []
+    var cursor = source.startIndex
+    while cursor < index {
+        if source[cursor] == "{" { openings.append(cursor) }
+        if source[cursor] == "}" { _ = openings.popLast() }
+        cursor = source.index(after: cursor)
+    }
+    guard let open = openings.last else { return nil }
+    var depth = 0
+    cursor = open
+    while cursor < source.endIndex {
+        if source[cursor] == "{" { depth += 1 }
+        if source[cursor] == "}" {
+            depth -= 1
+            if depth == 0 { return String(source[source.index(after: open)..<cursor]) }
+        }
+        cursor = source.index(after: cursor)
+    }
+    return nil
+}

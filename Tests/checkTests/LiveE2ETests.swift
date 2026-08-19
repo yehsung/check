@@ -1997,9 +1997,10 @@ struct LiveE2ETests {
         // B 의 수신함을 먼저 비운다(앞 시나리오가 남긴 미소비 찔림이 kind 단언을 흔들지 않게, 멱등).
         _ = try await storeB.service.takePokes(accessToken: sessionB.accessToken)
 
-        // 클라 상수와 서버 상수가 같은 값이어야 "오늘 N번 남음" 안내가 서버 판정과 어긋나지 않는다.
-        let limit = WorkTimerStore.ultraPokeDailyLimit
-        #expect(limit == 2)
+        // v0.2.34: 클라의 하루 한도 상수는 사라졌다(재화 경제로 전환 — 잔량은 서버가 정한다).
+        // 이 프로브가 도는 계정의 app_build 가 43 미만이면 서버 밑바닥은 2 다(구버전 유예,
+        // docs/ultra-economy.md §1). 실서버 프로브라 그 값을 클라 상수에서 파생시킬 수는 없다.
+        let limit = 2
 
         // (a-1) A→B 울트라 = ok. 남은 횟수가 한도-1 이라는 사실이 **서버가 2회 한도로 돌고 있다**의 증거다.
         let first = try await storeA.service.sendUltraPoke(accessToken: sessionA.accessToken, to: sessionB.userID)

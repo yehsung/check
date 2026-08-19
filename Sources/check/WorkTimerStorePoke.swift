@@ -20,39 +20,26 @@ extension WorkTimerStore {
     nonisolated static let pokeDisplayFreshnessSeconds: TimeInterval = 3600
     /// 찌르기 쿨타임(초). 서버가 강제하고 클라는 표시용 카운트다운만 미러링한다.
     static let pokeCooldownSeconds: TimeInterval = 60
-    /// 울트라 하루 한도(보낸 사람 기준·KST 자정 리셋). 서버 ultra_poke_user 의 ultra_poke_daily_limit 과
-    /// **같은 값이어야 한다** — 어긋나면 클라가 "1번 남음"이라 말한 뒤 서버가 거절하는 무언의 모순이 된다.
-    /// 한도를 바꿀 땐 서버 상수와 이 한 줄만 고치면 된다(안내 문구가 전부 여기서 파생된다).
-    ///
-    /// **대상 무관이 아니다**: 서버는 같은 팀 대상에게는 이 한도 검사를 건너뛰고, 그렇게 쏜 울트라는
-    /// 하루 집계에서도 빠진다. 그래서 서버가 실어 주는 ultra_remaining 은 이제 **"팀 밖 대상에게 남은 횟수"** 다.
-    /// 클라가 팀 판정을 재구현하지 않는 것이 이 설계의 핵심이다 — 판정이 두 곳에 있으면 언젠가 갈리고,
-    /// 그때 화면은 서버가 허락한 발사를 막거나 막을 발사를 허락한다(sendMessage 의 등급·집중 모드와 같은 규약).
-    nonisolated static let ultraPokeDailyLimit = 2
     /// 울트라 표시 신선도(초). 일반 찔림의 1시간(pokeDisplayFreshnessSeconds)과 **일부러 다르다** —
     /// 울트라는 화면 전체를 5초간 덮으므로, 맥이 잠들었다 깨어난 뒤 40분 전 울트라가 갑자기 터지면
     /// 그건 알림이 아니라 습격이다. 정상 전달 지연 상한은 폴링 주기(15초)라 120초면 재시도·네트워크
     /// 흔들림까지 덮는다.
     nonisolated static let ultraDisplayFreshnessSeconds: TimeInterval = 120
-    /// 하루 한도 소진 안내. 문장을 한도 상수에서 만들어, 상수만 바꾸면 문구가 저절로 따라오게 한다.
-    nonisolated static let ultraSpentNotice = "울트라 찌르기는 하루에 \(WorkTimerStore.ultraPokeDailyLimit)번까지예요"
+    /// 잔량이 0일 때의 안내. **하루 한도 상수에서 파생하지 않는다** — 그 상수는 이번 릴리스에 서버에서
+    /// 사라졌고(재화 경제로 전환), 파생을 남겨 두면 계약 상대가 없는 문장만 코드에 남는다.
+    /// 0잔량 사용자가 3초를 꾹 눌러 서버 거절을 받았을 때 **실제로 읽는 문장**이 바로 이것이다 —
+    /// 그래서 "다 썼다"로 끝내지 않고 회복 방법(미션)까지 같은 줄에서 말한다.
+    nonisolated static let ultraEmptyNotice = "울트라가 없어요 — 미션으로 충전하세요"
     /// 대상이 집중 모드일 때의 안내. 몫도 쿨타임도 소모되지 않았다는 사실까지 말해 준다 —
     /// 안 그러면 사용자는 "한 번 날린 건가?" 하고 남은 횟수를 잘못 센다.
     nonisolated static let targetFocusedNotice = "지금 집중 중이에요. 나중에 찔러 주세요"
 
-    /// 남은 횟수 안내 문구. **모르면 nil** 이고, 그때 화면은 아무 숫자도 말하지 않는다 —
-    /// 남은 횟수는 울트라 응답으로만 알 수 있어서 '아직 모름' 구간이 정상적으로 존재하고,
-    /// 틀린 숫자를 보여주느니 침묵하는 편이 낫기 때문이다(그래서 이걸 알자고 새 GET 을 만들지 않는다).
-    /// 순수 함수라 UI 는 이 함수만 쓰고 자기 문장을 만들지 않는다(문구가 두 곳으로 갈라지지 않게).
-    nonisolated static func ultraRemainingText(remaining: Int?) -> String? {
-        guard let remaining, remaining >= 0 else { return nil }
-        return remaining == 0 ? "오늘 몫은 다 썼어요" : "오늘 \(remaining)번 남음"
-    }
-
-    /// 울트라 발사 직후 안내. 남은 횟수를 아는 경우에만 뒤에 덧붙인다.
-    nonisolated static func ultraSentNotice(remaining: Int?) -> String {
-        guard let tail = ultraRemainingText(remaining: remaining) else { return "울트라 찌르기 발사!" }
-        return "울트라 찌르기 발사! " + tail
+    /// 울트라 발사 직후 안내. 잔량을 아는 경우에만 뒤에 덧붙인다.
+    /// **모르면 숫자를 지어내지 않는다** — 서버가 잔량 키를 안 보내는 창(구버전 서버)이 실제로 있고,
+    /// 그때 "0개예요"라고 말하면 그건 거짓말이다. 순수 함수라 UI 는 자기 문장을 만들지 않는다.
+    nonisolated static func ultraSentNotice(balance: Int?) -> String {
+        guard let balance else { return "울트라 찌르기 발사!" }
+        return balance > 0 ? "울트라 발사! 남은 울트라 \(balance)개" : "울트라 발사! 이제 0개예요"
     }
 
     /// 콕찌르기 패널 열림/refresh 루프에서 부르는 디렉토리 로드 래퍼(Task 발사).
@@ -113,7 +100,7 @@ extension WorkTimerStore {
                 case .ultraUsedToday:
                     // poke_user 는 이 status 를 절대 내지 않는다(두 RPC 가 status 어휘만 공유한다).
                     // 컴파일 망라를 위한 도달 불가 분기 — 그래도 무음으로 삼키지는 않는다.
-                    pokeNotice = Self.ultraSpentNotice
+                    pokeNotice = Self.ultraEmptyNotice
                 case .notWorking:
                     pokeNotice = "근무 중일 때만 콕 찌를 수 있어요"
                 case .targetNotWorking:
@@ -134,72 +121,21 @@ extension WorkTimerStore {
         }
     }
 
-    /// 오늘(KST) 울트라 몫을 다 썼는가. MilestoneTracker.dayKey 와 같은 눈금(Asia/Seoul yyyyMMdd)을 써
-    /// 자정 롤오버가 리그·마일스톤과 어긋나지 않게 한다. 비교로 판정하므로 날이 바뀌면 저절로 풀린다.
+    /// 울트라 찌르기. 선게이트는 일반 sendPoke 와 **정확히 같다**(로그인 + 근무중). 잔량은 여기서 막지 않는다.
+    /// 서버 게이트 순서는 invalid → 보낸이근무 → 대상근무 → 집중모드 → 관리자 → 재화 → 쿨타임이고,
+    /// 여기 매핑도 그 어휘를 따른다(docs/ultra-economy.md §3 — 그 순서가 계약이다).
     ///
-    /// **표시 전용이다 — 발사를 막는 데 쓰지 마라.** 서버가 팀원 대상에는 하루 한도를 적용하지 않으므로
-    /// (ultraPokeDailyLimit 주석) 이 값이 참이어도 **팀원에게는 여전히 쏠 수 있다**. 이걸 발사 게이트로 쓰면
-    /// 팀 밖 3발째로 한 번 거절당한 날엔 서버가 허락하는 팀원 울트라까지 클라가 요청조차 안 내고 막는다.
-    func isUltraPokeSpent(now: Date) -> Bool { ultraPokeSpentDay == MilestoneTracker.dayKey(now) }
-
-    /// 오늘 남은 울트라 횟수(모르면 nil). 스탬프가 오늘이 아니면 어제 값이라 **모름으로 답한다** —
-    /// 이 비교가 없으면 자정을 넘긴 뒤에도 어제의 "0번 남음"이 화면에 남는다.
-    func ultraRemaining(now: Date) -> Int? {
-        guard ultraRemainingDay == MilestoneTracker.dayKey(now) else { return nil }
-        return ultraRemainingToday
-    }
-
-    /// 날이 바뀌었으면 어제의 남은 횟수를 '모름'으로 되돌린다(다음 울트라 응답이 진실을 채운다).
-    /// 남은 횟수를 알자고 새 요청을 만들지 않기로 했으므로, 로컬이 할 수 있는 정직한 일은 '버리는 것'뿐이다.
-    func refreshUltraQuota(now: Date) {
-        guard ultraRemainingDay != MilestoneTracker.dayKey(now) else { return }
-        if ultraRemainingToday != nil { ultraRemainingToday = nil }
-        if ultraRemainingDay != nil { ultraRemainingDay = nil }
-    }
-
-    /// 오늘 몫 소진 미러를 세운다(@Observable 동등성 가드 — 같은 값 재대입도 관찰자를 발화시킨다).
-    /// 세우는 것은 **화면이 읽을 사실**(팀 밖 몫이 없다)이지 다음 요청을 막는 잠금이 아니다 — isUltraPokeSpent 주석 참조.
-    func markUltraSpent(now: Date) {
-        let key = MilestoneTracker.dayKey(now)
-        if ultraPokeSpentDay != key { ultraPokeSpentDay = key }
-    }
-
-    /// 서버가 실어 준 남은 횟수를 반영한다. **값이 없으면 '모름'(nil)으로 되돌린다** — 직전 숫자를 남기면
-    /// 방금 한 발 썼는데도 옛 숫자를 계속 보여준다(마이그레이션 전 서버는 이 필드를 아예 안 보낸다).
-    /// 0 이면 팀 밖 몫이 소진됐다는 뜻이므로 소진 미러도 함께 세운다 — 화면이 "울트라 소진"이라 말할 근거다
-    /// (다음 요청을 막지는 않는다. 팀원에게는 서버가 여전히 허락한다 — isUltraPokeSpent 주석 참조).
-    func applyUltraRemaining(_ value: Int?, now: Date) {
-        // 음수는 서버 버그이거나 미래 규약이다. 숫자로 말할 수 없는 값이므로 0 으로 접는다.
-        let normalized = value.map { max(0, $0) }
-        if ultraRemainingToday != normalized { ultraRemainingToday = normalized }
-        let stamp = normalized == nil ? nil : MilestoneTracker.dayKey(now)
-        if ultraRemainingDay != stamp { ultraRemainingDay = stamp }
-        if normalized == 0 { markUltraSpent(now: now) }
-    }
-
-    /// 울트라 찌르기. 선게이트는 일반 sendPoke 와 **정확히 같다**(로그인 + 근무중). 하루 한도는 여기서 막지 않는다.
-    /// 서버 게이트 순서는 invalid → 보낸이근무 → 대상근무 → 하루한도 → 쿨타임이고, 여기 매핑도 그 어휘를 따른다.
-    ///
-    /// **하루 한도 로컬 미러(ultraPokeSpentDay)로 요청을 막지 않는 이유**: 서버가 같은 팀 대상에는 한도 검사를
-    /// 건너뛰므로(ultraPokeDailyLimit 주석) "오늘 몫 소진"은 더 이상 발사 여부의 답이 아니다. 예전처럼 선게이트로
-    /// 쓰면 팀 밖 대상에게 3발째를 쏴 한 번 거절당한 사용자가 **그날 내내 팀원에게도 못 쏜다** — 서버는 허락하는데
-    /// 클라가 요청을 안 내서. 앱 재시작이나 KST 자정에나 풀리는, 사용자가 원인을 알 수 없는 종류의 고장이다.
-    ///
-    /// 팀 판정을 클라가 대신 하는 길은 택하지 않았다(팀 목록은 이미 받고 있지만). 판정이 두 곳에 있으면 언젠가
-    /// 갈리고, 그때 화면은 서버가 허락한 발사를 막거나 막을 발사를 허락한다. 대가는 이미 소진된 상태에서
-    /// 헛요청 1회가 더 나가는 것뿐인데(사용자 26명 규모에서 무의미한 비용) 서버는 어차피 유일한 권위다.
-    ///
-    /// 미러는 그대로 산다 — 버튼 비활성·툴팁·"오늘 N번 남음" 문구가 읽는 **표시용 사실**이다.
-    /// 표시(서버가 준 남은 횟수를 그대로 반영)와 발사 허용(서버가 판정)을 갈라 두는 것이 이 함수의 요점이다.
+    /// **로컬 잔량(ultraBalance)으로 요청을 막지 않는 이유**: 잔량은 미션으로 **그날 중에 늘어난다**.
+    /// 0을 보고 선게이트를 걸면, 3시간을 채워 서버 잔량이 1이 된 사용자가 앱을 재시작하기 전까지
+    /// 못 쏜다 — 서버는 허락하는데 클라가 요청을 안 내서. v0.2.30 의 구버전이 정확히 그 상태이고
+    /// (CheckMenuView:2590 의 `if canUltra`), 그래서 서버가 구버전에는 밑바닥 2를 계속 준다.
+    /// 표시(잔량 배지·툴팁)와 발사 허용(서버 판정)을 갈라 두는 것이 이 함수의 요점이다.
     func sendUltraPoke(to userID: String) {
         guard session != nil else { return }
         guard startedAt != nil else {
             pokeNotice = "근무 중일 때만 콕 찌를 수 있어요"
             return
         }
-        // 날이 바뀌었으면 어제의 남은 횟수부터 버린다 — 안 버리면 어제 "0번 남음"이 오늘 안내로 샌다.
-        // (요청 0건짜리 순수 로컬 판정. 발사를 막지는 않는다.)
-        refreshUltraQuota(now: clock())
         let generation = sessionGeneration
         Task { @MainActor in
             do {
@@ -207,7 +143,6 @@ extension WorkTimerStore {
                     try await service.sendUltraPoke(accessToken: activeSession.accessToken, to: userID)
                 }
                 guard generation == sessionGeneration else { return }
-                let now = clock()
                 switch PokeSendOutcome(response: response) {
                 case .ok:
                     // 울트라도 pokes 행을 남기므로 서버의 같은-대상 60초 쿨타임이 함께 시작된다.
@@ -217,16 +152,16 @@ extension WorkTimerStore {
                     // 두 번째 응답이 하루 한도를 하나 더 깎은 값으로 온다 — 남은 횟수는 서버 값이 진실이므로
                     // 그대로 반영한다(로컬 추측으로 덮지 않는다).
                     pokeCooldownUntil[userID] = Date().addingTimeInterval(Self.pokeCooldownSeconds)
-                    applyUltraRemaining(response.ultraRemainingForDisplay, now: now)
-                    pokeNotice = Self.ultraSentNotice(remaining: ultraRemaining(now: now))
+                    // 서버 값이 유일한 진실이다. nil(= 키를 안 보내는 서버)이면 **덮지 않는다** —
+                    // 직전에 알던 잔량을 모름으로 되돌리면 배지가 "—"로 깜빡인다.
+                    if let balance = response.ultraBalanceForDisplay { applyUltraBalance(balance) }
+                    pokeNotice = Self.ultraSentNotice(balance: response.ultraBalanceForDisplay ?? ultraBalance)
                 case .ultraUsedToday:
-                    // status 자체가 '오늘 몫 없음'의 권위다 — 서버가 남은 횟수를 안 실어 줘도(구버전) 0 으로 본다.
-                    // 서버는 팀원 대상엔 이 status 를 내지 않으므로 이 거절은 **팀 밖 대상**에 대한 사실이다.
-                    // 그래서 여기서 세우는 미러도 화면이 읽을 표시일 뿐, 다음 시도를 막는 잠금이 아니다 —
-                    // 바로 다음 발사가 팀원 대상이면 서버는 그걸 허락하고, 클라는 그 요청을 그대로 내보낸다.
-                    applyUltraRemaining(response.ultraRemainingForDisplay ?? 0, now: now)
-                    markUltraSpent(now: now)
-                    pokeNotice = Self.ultraSpentNotice
+                    // 상태 어휘는 서버가 확정한 7개 중 하나이고 이름만 옛것이다(ultra_used_today).
+                    // 의미는 이제 "잔량 0"이다 — 팀 무제한이 폐지돼 팀원에게도 재화를 쓴다.
+                    // status 자체가 '재화 없음'의 권위다 — 서버가 잔량을 안 실어 줘도 0으로 본다.
+                    applyUltraBalance(response.ultraBalanceForDisplay ?? 0)
+                    pokeNotice = Self.ultraEmptyNotice
                 case .cooldown(let retryAfterSeconds):
                     pokeCooldownUntil[userID] = Date().addingTimeInterval(TimeInterval(retryAfterSeconds))
                     // 3초를 꾹 눌러 링을 다 채운 뒤 아무 문구도 안 뜨면, 버튼이 쿨타임으로 흐려지는 것과
@@ -241,8 +176,8 @@ extension WorkTimerStore {
                     pokeNotice = "자리비움 상태에는 찌를 수 없어요"
                     loadPokeDirectory()
                 case .targetFocused:
-                    // 집중 모드도 몫을 태우지 않는다 — 서버가 하루 한도 검사보다 **앞에서** 거절하므로
-                    // 여기서 남은 횟수를 건드리면 안 된다(멀쩡한 몫을 화면에서만 깎게 된다).
+                    // 집중 모드도 재화를 태우지 않는다 — 서버가 재화 차감보다 **앞에서** 거절하므로
+                    // 여기서 잔량을 건드리면 안 된다(멀쩡한 재화를 화면에서만 깎게 된다).
                     pokeNotice = Self.targetFocusedNotice
                 case .invalid:
                     pokeNotice = "지금은 찌를 수 없어요"
@@ -257,6 +192,106 @@ extension WorkTimerStore {
         }
     }
 
+    // MARK: - 울트라 재화 지갑 (ultra_wallet_sync)
+    //
+    // 이 절의 전제 하나만 기억하면 된다: **ultra_wallet_sync 는 읽기가 아니다.**
+    // 밑바닥 보정과 미션 적립이 그 호출 안에서 일어난다. 그래서 "안 부르면 못 받는다" 이고,
+    // 호출 지점이 넷인 것은 화면을 위해서가 아니라 **재화가 소실되지 않게** 하기 위해서다.
+
+    /// `.periodic` 스로틀 주기(초). 15초 폴링에 그냥 얹으면 사용자당 하루 수천 왕복이 된다(무료 플랜).
+    /// 5분이면 3시간 임계를 넘긴 사용자가 늦어도 5분 안에 코인을 받는다.
+    static let ultraWalletSyncThrottleSeconds: TimeInterval = 300
+
+    /// 지갑 sync 를 부르는 이유. **진단 문자열이 아니라 호출 지점의 목록이다** —
+    /// 이 enum 의 케이스가 곧 "코인이 소실되지 않는 이유" 넷이다.
+    enum UltraSyncReason: String, Equatable, Sendable {
+        /// 로그인/저장 세션 활성화 직후. 어제 몫 소급(p_days_back=1)이 여기서 걸린다.
+        case signIn
+        /// 콕찌르기 패널 또는 울트라 패널을 연 순간. 화면에 낡은 숫자를 그리지 않기 위해서다.
+        case panelOpen
+        /// 오늘 누적이 미션 임계를 넘은 순간(클라 hour3 마일스톤, 하루 1회).
+        case missionCandidate
+        /// 폴링 tick 의 5분 스로틀. **근무중일 때만.** 위 셋을 전부 놓친 사용자의 마지막 그물이다.
+        case periodic
+    }
+
+    /// Task 발사 래퍼. 호출부는 결과를 기다리지 않는다(화면은 @Observable 로 따라온다).
+    func syncUltraWallet(reason: UltraSyncReason) {
+        Task { @MainActor in await performSyncUltraWallet(reason: reason) }
+    }
+
+    /// 폴링 tick 전용 — 근무중이고 스로틀이 열렸을 때만 발사한다. **요청 0건이 기본값이다.**
+    func syncUltraWalletIfDue(now: Date) {
+        guard startedAt != nil else { return }
+        if let last = lastUltraWalletSyncAt,
+           now.timeIntervalSince(last) < Self.ultraWalletSyncThrottleSeconds {
+            return
+        }
+        syncUltraWallet(reason: .periodic)
+    }
+
+    /// 실제 왕복. 응답을 잔량·미션·스트릭에 반영하고, **이번 호출에서 받은** 미션이 있으면 연출과 안내를 남긴다.
+    func performSyncUltraWallet(reason: UltraSyncReason) async {
+        guard session != nil else { return }
+        let generation = sessionGeneration
+        // 스탬프는 **발사 시점**에 찍는다. 성공에만 찍으면 서버가 죽어 있는 동안 매 tick 이 재시도해
+        // 15초마다 왕복이 나간다(reportAppVersionIfNeeded 와 반대 규약인 이유: 저쪽은 실패해도 요청 1건이
+        // 아니라 '수신 스위치 영구 off' 라는 회복 불가 상태를 만들지만, 여기 실패의 대가는 5분 지연뿐이다).
+        lastUltraWalletSyncAt = clock()
+        do {
+            let response = try await withSessionRetry { activeSession in
+                try await service.syncUltraWallet(accessToken: activeSession.accessToken)
+            }
+            guard generation == sessionGeneration else { return }
+            applyUltraWallet(response)
+        } catch {
+            if case .cancelled = classifyAuthError(error) { return }
+            guard generation == sessionGeneration else { return }
+            // 실패는 **잔량을 지우지 않는다.** 알던 숫자를 버리면 배지가 "—"로 깜빡이는데,
+            // 재화는 이월되므로 직전 값이 지금도 거의 확실히 맞다. 대신 진단 플래그만 세운다.
+            ultraBalanceFailed = true
+        }
+    }
+
+    /// 응답 반영(순수 상태 전이 — 네트워크 없음). 테스트가 이 한 함수로 규칙을 고정한다.
+    func applyUltraWallet(_ response: UltraWalletResponse) {
+        guard response.isOK else {
+            // status == "invalid" = 비로그인/프로필 없음. **서버 오류가 아니다.**
+            // 실패 플래그를 세우면 화면이 "못 읽었어요 + 재시도" 를 띄우는데, 재시도해도 같은 답이 온다.
+            ultraBalanceFailed = false
+            return
+        }
+        ultraBalanceFailed = false
+        applyUltraBalance(response.balance)
+        if let cap = response.balanceCap, ultraBalanceCap != cap { ultraBalanceCap = cap }
+        let rows = MissionProgress.rows(from: response)
+        if missions != rows { missions = rows }
+        if !missionsLoaded { missionsLoaded = true }
+        if streakDays != response.streakDays { streakDays = response.streakDays }
+        if streakIncludesToday != response.streakIncludesToday {
+            streakIncludesToday = response.streakIncludesToday
+        }
+        if let target = response.missions.first(where: { $0.key == MissionProgress.Kind.todayThreeHours.rawValue })?.targetSeconds,
+           target > 0, ultraMissionTargetSeconds != target {
+            ultraMissionTargetSeconds = target
+        }
+
+        // ★ granted_now 가 **유일한** 연출 트리거다. claimed 는 "오늘 몫을 이미 받았다"라서
+        //   5분마다 참이고, 그걸 트리거로 쓰면 근무 내내 2초 연출이 반복된다.
+        //   어제 몫 소급도 여기 걸린다(kst_day 를 가리지 않는 것이 의도다 — 받았으면 알려야 한다).
+        guard response.missions.contains(where: { $0.grantedNow }) else { return }
+        // 연출은 2초면 사라진다. 자리를 비운 사용자에게 그것만으로는 아무 증거도 남지 않으므로
+        // **지속 증거**를 같은 지점에서 남긴다(패널을 열면 이 줄이 그를 기다린다).
+        missionNotice = "오늘 3시간 — 울트라 +1"
+        onRewardTrigger?(.ultraCharged)
+    }
+
+    /// 잔량 대입(@Observable 동등성 가드 + 음수 방어). 음수는 서버 버그이거나 미래 규약이라 0으로 접는다.
+    func applyUltraBalance(_ value: Int) {
+        let normalized = max(0, value)
+        if ultraBalance != normalized { ultraBalance = normalized }
+    }
+
     /// 표시용 쿨타임 잔여 초(0이면 찌르기 가능). displayNow 티커 기준으로 매초 줄어든다.
     func pokeCooldownRemaining(for userID: String, now: Date) -> Int {
         guard let until = pokeCooldownUntil[userID] else { return 0 }
@@ -264,7 +299,7 @@ extension WorkTimerStore {
     }
 
     /// 수신 찔림 폴링 시작(idempotent). startStatusRefreshLoop 와 같은 지점에서 켜지고 clearPersistedSession 이 끈다.
-    /// 15초마다 pokePollTick() 1회분을 돈다.
+    /// 15초마다 localExpiryTick() 1회분을 돈다.
     /// 루프는 sleep 먼저·폴링 나중이다 — 시작 즉시 네트워크 콜을 내지 않아 기존 단위테스트의 요청 목록 단언이 흔들리지 않는다
     /// (앱 상시 실행이라 첫 전달 15초 지연은 무해).
     func startPokePolling() {
@@ -274,7 +309,7 @@ extension WorkTimerStore {
                 try? await Task.sleep(for: .seconds(Self.pokePollIntervalSeconds), tolerance: .seconds(2))
                 if Task.isCancelled { return }
                 guard let self else { return }
-                await self.pokePollTick()
+                await self.localExpiryTick()
             }
         }
     }
@@ -283,12 +318,8 @@ extension WorkTimerStore {
     /// 루프에 인라인돼 있으면 실시간 15초를 기다리거나 주기 상수를 전역 var 로 여는 수밖에 없다. 후자는
     /// 병렬로 도는 다른 스위트가 서로의 값을 덮어써 무음으로 깨진다(URLProtocolStub.delayedHosts 에서 이미 겪었다).
     /// 세션이 없으면 요청 0건으로 빠지고 루프는 다음 tick 을 계속 돈다(로그인 복구를 기다리는 것).
-    func pokePollTick() async {
+    func localExpiryTick() async {
         guard session != nil else { return }
-        // 자정을 넘겼으면 어제의 울트라 남은 횟수를 여기서 버린다(요청 0건 — 순수 로컬 판정).
-        // 발사 시점에도 같은 판정을 하지만, 패널을 열어 둔 채 자정을 넘긴 사용자에게 "0번 남음"이
-        // 눌러 보기 전까지 남아 있는 것을 막으려면 상시 폴링에도 붙여야 한다.
-        refreshUltraQuota(now: clock())
         // 표시를 기다리다 5분이 지난 메시지를 큐에서 버린다(요청 0건 — 순수 로컬 판정, 위 한 줄과 같은 이유).
         // **근무중 게이트 앞이 핵심이다**: 근무를 끝내 캐릭터가 사라진 뒤가 바로 큐가 가장 오래 밀리는 구간이라,
         // 게이트 뒤에 두면 정확히 필요한 때 안 돈다.
@@ -306,7 +337,40 @@ extension WorkTimerStore {
         // '메시지 못 받는 사람'으로 굳는다 — 정작 그가 근무를 시작하는 순간에도 그렇다(목록은 그 전에 그려진다).
         // 평소 요청은 0건이다: 아래 변경 게이트가 실행당 한 번만 통과시킨다.
         await reportAppVersionIfNeeded()
-        await takePokesIfWorking()
+        // 근무중이면 5분에 1회 지갑을 맞춘다(요청 0~1건 — 아래 스로틀이 막는다).
+        // ★ 이 자리가 blocker(서버 #3)의 마지막 그물이다: 근무만 하고 패널을 한 번도 안 연 사용자는
+        //   .panelOpen 도 .signIn 도 안 타고, 3시간 마일스톤은 하루 1회뿐이라 그 순간 네트워크가 끊겨 있으면
+        //   그날 sync 가 0회가 된다 — 그러면 서버가 미션을 평가할 기회 자체가 없어 코인이 영구 소실된다.
+        //   (다음 날 p_days_back=1 이 어제 몫을 소급하지만, 이틀 연속으로 놓치면 그건 사라진다.)
+        syncUltraWalletIfDue(now: clock())
+        // ★ 리얼타임 킬스위치. **폴링 경로를 지우지 않았다** — 리얼타임이 실제로 구독 중일 때만 쉰다.
+        //   판정을 여기 한 줄에만 두는 것이 핵심이다(RealtimeState.isSubscribed 주석):
+        //   두 곳에서 갈라 판정하면 "리얼타임은 반쯤 죽었는데 폴링도 안 도는" 완전한 침묵이 만들어진다.
+        //   출시 시점 realtimeState 는 .idle(.disabled) 라 이 가드는 언제나 통과한다 = 지금과 같다.
+        if !pollingIsPausedByRealtime {
+            await takePokesIfWorking()
+        }
+    }
+
+    /// v0.2.34 는 **리얼타임을 켜되 폴링을 함께 돌린다**(사장님 확정).
+    ///
+    /// 이 상수가 true 인 동안 아래 판정은 언제나 false 다 = 억제가 없다. 왜 켜자마자 안 떼는가:
+    /// e2e 배달은 **내 맥 1대·안정된 wifi·깨어 있는 상태**에서만 증명됐다. 증명 못 한 것은 38명이
+    /// 실제로 겪는 것들이다 — 뚜껑 여닫기, VPN 전환, 절전 복귀, 카페 wifi. 좀비 소켓 감지·백오프
+    /// 재연결·캐치업은 **단위 테스트로만** 검증됐고 실환경에서 한 번도 돌지 않았다.
+    /// 폴링을 남기면 그 로직이 틀렸을 때 **30초 지연으로 열화**되고, 떼면 **찌르기가 아예 안 온다**.
+    /// 그리고 안 오는 것은 **아무도 신고하지 않는다** — 이 앱의 최악 실패 모드는 침묵이다.
+    ///
+    /// 중복 소비 걱정은 없다: 링과 폴링이 같은 찌름을 동시에 집어도 take_pokes 가 원자적으로
+    /// 소비하므로 두 번째는 빈손으로 돌아온다. 그 원자성이 초인종 설계가 성립하는 근거 그 자체다.
+    ///
+    /// **떼는 조건**: 실사용에서 리얼타임이 안정적임이 확인되면 이 상수를 지우고 억제를 되살린다(v0.2.35).
+    /// 그때 판정이 다시 `realtimeState.isSubscribed` 하나로 돌아간다.
+    static let pollingKeepsRunningAlongsideRealtime = true
+
+    /// 폴링이 리얼타임에 자리를 내줬는가. **폴링 억제 판정의 단일 출처다.**
+    var pollingIsPausedByRealtime: Bool {
+        Self.pollingKeepsRunningAlongsideRealtime ? false : realtimeState.isSubscribed
     }
 
     /// 이 맥의 앱 버전을 서버 profiles 에 남긴다(실행당 1회). 서버가 이 값으로 **남이 나에게 메시지를 보낼 수
@@ -361,8 +425,16 @@ extension WorkTimerStore {
     ///
     /// 남는 구멍: 로컬은 비근무인데 서버엔 열린 세션이 남은 구간(오프라인 종료·크래시 후 흡수 전)의 찔림은
     /// 소비되지 않는다. 그건 서버 7일 cron 이 정리한다.
+    /// ★ blocker(리얼타임 #5) — 이 가드는 **리얼타임 경로에서도 유지된다.**
+    /// work_sessions_one_open_per_user 때문에 회사 맥이 근무중이면 집 맥은 확정적으로 비근무인데,
+    /// 초인종은 두 맥 모두에 도착한다. 집 맥도 take_pokes 를 쏘면 단일 UPDATE…RETURNING 이 한쪽만
+    /// 이기게 하므로 **회사 맥에는 아무것도 안 오고**, 집 맥은 CheckOverlayWindow 의 peek 경로가
+    /// shouldBeVisible 게이트를 안 보므로 8초짜리 팝업을 띄운다.
+    ///
+    /// `adoptedRemoteSession` 도 함께 막는다: 흡수 세션의 주인은 다른 맥이다. 로컬 startedAt 이
+    /// 서 있어도 그 근무는 이 맥의 것이 아니므로, 여기서 소비하면 진짜 주인이 못 본다.
     func takePokesIfWorking() async {
-        guard startedAt != nil else { return }
+        guard startedAt != nil, !adoptedRemoteSession else { return }
         await drainReceivedPokes()
     }
 
@@ -370,14 +442,17 @@ extension WorkTimerStore {
     /// 폴링 tick 과 근무 종료 꼬리 회수가 이 한 몸을 공유한다 — 소비가 원자적이라 경로가 갈라지면
     /// 한쪽이 삼킨 찔림을 다른 쪽이 다시 볼 방법이 없다.
     /// 세대 재확인이 없으면 로그아웃/재로그인 사이에 도착한 응답이 새 계정 화면에 앞 계정의 말풍선을 띄운다.
-    func drainReceivedPokes() async {
-        guard session != nil else { return }
+    @discardableResult
+    func drainReceivedPokes() async -> DrainOutcome {
+        guard session != nil else { return .failed("세션 없음") }
         let generation = sessionGeneration
         do {
             let rows = try await withSessionRetry { activeSession in
                 try await service.takePokes(accessToken: activeSession.accessToken)
             }
-            guard generation == sessionGeneration else { return }
+            // 세대가 갈렸으면 이 응답은 앞 계정의 것이다. **소비는 이미 서버에서 일어났으므로**
+            // 성공으로 보고할 수도 없다 — 캐치업이 "따라잡았다"고 판단하면 새 계정의 미소비분을 놓친다.
+            guard generation == sessionGeneration else { return .failed("세션 세대 변경") }
             let now = Date()
             let batch = WorkTimerStore.freshReceivedPokes(rows: rows, now: now)
             if !batch.isEmpty {
@@ -387,8 +462,37 @@ extension WorkTimerStore {
             // 자기 큐로 간다 — 위 batch 에는 메시지가 애초에 들어 있지 않으므로(freshReceivedPokes 의 kind 가드)
             // 한 행이 두 경로를 동시에 타는 일은 없다.
             enqueueReceivedMessages(WorkTimerStore.freshReceivedMessages(rows: rows, now: now))
+            // count 는 **소비된 행 전체 수**(신선도 필터 이전)다. 초인종 페이로드의 pending 과 견주면
+            // 소비 경로가 새는지 보이는데, 필터 뒤 개수를 세면 '오래돼서 안 보여준 것'까지 유실로 오진한다.
+            return .ok(count: rows.count)
         } catch {
-            // 취소/일시 오류는 조용히 넘긴다(다음 tick 에 재시도).
+            // 화면은 여전히 조용하다(다음 tick 에 재시도). 바뀐 것은 **호출부가 실패를 알 수 있다**는 것뿐이고,
+            // 그게 리얼타임 캐치업이 재시도할 수 있는 유일한 근거다.
+            return .failed(String(describing: error))
+        }
+    }
+
+    /// drain 요청을 **직렬화**한다. 이미 돌고 있으면 새로 쏘지 않고 트레일링 한 번으로 접는다 —
+    /// 1초 안에 두 명이 찌르면 초인종이 두 번 울리는데, 그때 take_pokes 를 두 번 동시에 쏘면
+    /// 원자 소비가 한쪽만 이겨 나머지 응답은 빈 배열이다(그리고 두 요청 모두 무료 플랜 왕복을 쓴다).
+    ///
+    /// ★ blocker(리얼타임 #2) — **defer 를 쓰지 마라.** `defer { drainInFlight = nil }` 은 스코프 종료
+    ///   시점에 실행되므로, 트레일링을 소비하러 재진입하는 시점에도 drainInFlight 가 여전히 non-nil 이다.
+    ///   그러면 재진입이 자기 자신에게 막혀 pending 만 다시 세우고 아무도 안 돈다 = **두 번째 찌르기가
+    ///   영영 유실된다**(폴링을 지운 구성에서는 회복 경로가 0이다). 루프로 소비하고 **그 뒤에** 비운다.
+    func requestDrain() {
+        guard drainInFlight == nil else {
+            drainPendingTrailing = true
+            return
+        }
+        drainInFlight = Task { @MainActor [weak self] in
+            guard let self else { return }
+            repeat {
+                // 루프 **안에서 먼저** 내린다. 뒤에 내리면 이번 drain 이 도는 동안 도착한 신호를 지운다.
+                self.drainPendingTrailing = false
+                _ = await self.drainReceivedPokes()
+            } while self.drainPendingTrailing
+            self.drainInFlight = nil
         }
     }
 
@@ -407,6 +511,10 @@ extension WorkTimerStore {
     @discardableResult
     func flushPokesOnWorkEnd() -> Task<Void, Never>? {
         guard session != nil else { return nil }
+        // 리얼타임이 구독 중이면 꼬리 회수가 필요 없다 — 그 15초 창은 폴링 게이트가 만든 것이고,
+        // 구독 중에는 초인종이 즉시 requestDrain 을 부르므로 이미 비어 있다. 여기서 한 번 더 쏘면
+        // 근무 종료 순간에 확정적으로 빈 배열을 받는 왕복이 하나 는다.
+        guard !pollingIsPausedByRealtime else { return nil }
         return Task { @MainActor [weak self] in
             await self?.drainReceivedPokes()
         }

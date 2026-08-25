@@ -98,6 +98,19 @@ extension SupabaseWorkService {
             return .sessionAlreadyOpen
         }
 
+        // ★ 상태코드 게이트 — 본문 메시지 폴딩(.authMessage)보다 **먼저** 건다. GoTrue 는 5xx/429 에도
+        //   {"msg":...} 본문을 실어 주는데, 그걸 .authMessage 로 접으면 classifyAuthError 가 .fatal 로 봐
+        //   무료플랜 일시정지(5xx)·레이트리밋(429) 같은 일시 장애가 refresh 경로에서 **강제 로그아웃**이 됐다
+        //   (transient 분기가 .invalidResponse(5xx)/.rateLimited 만 받으므로 여기서 그 모양으로 던져야 산다).
+        //   4xx 의미는 불변이다 — 400 invalid_grant(회전 실패)·401/403 은 아래 기존 분류를 그대로 지난다.
+        if statusCode >= 500 {
+            return .invalidResponse(statusCode)
+        }
+        if statusCode == 429 {
+            // 남은 초는 본문("…after N seconds")에서 뽑고, 못 뽑으면 nil 이다(0으로 지어내면 재시도가 바로 열린다).
+            return .rateLimited(retryAfterSeconds: Self.retryAfterSeconds(in: rawBody))
+        }
+
         guard let response = try? decoder.decode(SupabaseErrorResponse.self, from: data) else {
             return statusCode == 401 ? .sessionExpired : .invalidResponse(statusCode)
         }

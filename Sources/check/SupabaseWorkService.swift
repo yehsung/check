@@ -264,7 +264,7 @@ actor SupabaseWorkService {
     }
 
     /// autoClosedReason: 자동 마감이면 사유(away/sleep/long_session). 사용자가 누른 종료는 nil 이고,
-    /// 그때 이 함수가 만드는 요청 바이트는 v0.2.34 와 완전히 같다.
+    /// 그때의 요청 **본문** 바이트는 v0.2.34 와 같다(쿼리에는 v0.2.36 부터 id 필터가 더해졌다 — 아래 주석).
     func stopWork(
         accessToken: String,
         teamID: String,
@@ -281,6 +281,10 @@ actor SupabaseWorkService {
                 path: "/rest/v1/work_sessions",
                 method: "PATCH",
                 queryItems: [
+                    // ★ 내 세션만 명중해야 한다. id 없이 ended_at=is.null 로만 걸면, 깨어난 맥의 소급
+                    //   잠자기 마감이 그 사이 **다른 맥이 연 새 세션**을 잡아 과거 시각으로 덮어 파괴한다.
+                    //   0행이 되면 아래 폴백 POST(on_conflict=id)가 내 닫힌 세션을 만드므로 마감은 잃지 않는다.
+                    URLQueryItem(name: "id", value: "eq.\(fallbackSessionID)"),
                     URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
                     URLQueryItem(name: "user_id", value: "eq.\(userID)"),
                     URLQueryItem(name: "ended_at", value: "is.null")
@@ -351,6 +355,13 @@ actor SupabaseWorkService {
     ///  1. `ended_at=gt.<내 시각>` 필터를 건 PATCH — 서버 값이 내 값보다 **늦을 때만** 닿는다.
     ///  2. 1이 0행이면(서버 값이 이미 더 이르다) 사유만 고친다. ended_at 은 손대지 않는다.
     /// 실패는 삼킨다(호출부의 try?) — 정정은 부가 이득이고, 여기서 던지면 이미 성공한 마감이 큐에서 재생된다.
+    ///
+    /// **abandoned 만 고친다**(두 PATCH 모두 `auto_closed_reason=eq.abandoned`): 이 정정의 의미는
+    /// "스캐빈저가 방치로 닫은 것을 실제 사유·시각으로 되돌린다"까지다. 필터가 없으면 — 맥 A 잠듦 →
+    /// 서버 abandoned 마감 → 맥 B 가 백스톱으로 인수해 근무 후 정당하게 마감(같은 세션 행) — 한참 뒤
+    /// 깨어난 A 의 소급 정정이 그 **정당한 나중 마감**을 A 의 잠자기 시각으로 당겨 근무를 파괴한다
+    /// (gt 필터는 시각만 보므로 이 경우를 못 거른다). handleWake 경로와 v0.2.36 의 수용 지점 정정이
+    /// 모두 이 함수를 지나므로, 여기 한 곳의 필터가 두 경로를 함께 봉쇄한다.
     private func correctAutoClose(
         accessToken: String,
         userID: String,
@@ -366,7 +377,8 @@ actor SupabaseWorkService {
             queryItems: [
                 URLQueryItem(name: "id", value: "eq.\(sessionID)"),
                 URLQueryItem(name: "user_id", value: "eq.\(userID)"),
-                URLQueryItem(name: "ended_at", value: "gt.\(dateFormatter.string(from: endedAt))")
+                URLQueryItem(name: "ended_at", value: "gt.\(dateFormatter.string(from: endedAt))"),
+                URLQueryItem(name: "auto_closed_reason", value: "eq.abandoned")
             ],
             body: AutoCloseCorrectionRequest(
                 endedAt: dateFormatter.string(from: endedAt),
@@ -385,7 +397,8 @@ actor SupabaseWorkService {
             queryItems: [
                 URLQueryItem(name: "id", value: "eq.\(sessionID)"),
                 URLQueryItem(name: "user_id", value: "eq.\(userID)"),
-                URLQueryItem(name: "ended_at", value: "not.is.null")
+                URLQueryItem(name: "ended_at", value: "not.is.null"),
+                URLQueryItem(name: "auto_closed_reason", value: "eq.abandoned")
             ],
             body: AutoCloseReasonPatchRequest(autoClosedAt: closedStamp, autoClosedReason: reason.rawValue),
             accessToken: accessToken,
@@ -607,17 +620,27 @@ actor SupabaseWorkService {
 
     /// 자동 마감한 세션을 되돌린다. ended_at/duration_seconds 를 null 로 재개하고 상태를 working 으로 복구.
     /// 유니크 인덱스(work_sessions_one_open_per_user)상 다른 열린 세션이 없을 때만 안전하다.
+    /// auto_closed_at/auto_closed_reason 도 함께 null 로 되돌린다 — 남기면 **열린** 세션이 'abandoned'
+    /// 사유를 단 채 살아나, 이후의 마감 사유 판정·복원 자격 판정이 죽은 마감의 잔재를 읽는다.
     func reopenSession(accessToken: String, teamID: String, userID: String, sessionID: String) async throws {
-        try await sendNoBody(
-            path: "/rest/v1/work_sessions",
-            method: "PATCH",
-            queryItems: [
-                URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
-                URLQueryItem(name: "id", value: "eq.\(sessionID)")
-            ],
-            body: ReopenSessionRequest(),
-            accessToken: accessToken,
-            prefer: "return=minimal"
+        func patch(resetAutoClose: Bool) async throws {
+            try await sendNoBody(
+                path: "/rest/v1/work_sessions",
+                method: "PATCH",
+                queryItems: [
+                    URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
+                    URLQueryItem(name: "id", value: "eq.\(sessionID)")
+                ],
+                body: ReopenSessionRequest(resetAutoClose: resetAutoClose),
+                accessToken: accessToken,
+                prefer: "return=minimal"
+            )
+        }
+        // 사유 컬럼이 없는 서버에서 되돌리기 자체가 죽지 않게 한 겹 막는다(stopWork 와 같은 결).
+        // 실서버는 20260809140000 부터 컬럼이 있어 정상 경로는 항상 전자다.
+        try await withoutNewColumns(
+            { try await patch(resetAutoClose: true) },
+            retry: { try await patch(resetAutoClose: false) }
         )
         try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
     }
@@ -1325,8 +1348,9 @@ extension SupabaseWorkService {
     /// 같은 영어가 그대로 뜬다. 그 파일은 이 트랙 소유가 아니므로 여기서 메시지 본문만 보고 한 번 더 좁힌다.
     /// (그래서 판정 기준이 status 가 아니라 **문구**다 — 던져진 시점에 status 는 이미 사라졌다.)
     static func passwordRecoveryError(_ error: SupabaseWorkServiceError) -> SupabaseWorkServiceError {
-        // 429 인데 본문이 비었거나 JSON 이 아니면 공용 매핑이 .invalidResponse(429) 로 준다.
-        // 이건 status 로만 알 수 있는 유일한 경우라 먼저 걷어낸다(남은 초는 알 길이 없으니 nil).
+        // v0.2.36 부터 공용 매핑의 상태코드 게이트가 429 를 직접 .rateLimited 로 접으므로 이 값으로는
+        // 더 이상 오지 않는다. 분기를 지우지 않는 이유는 방어다 — 게이트를 안 지난 채 이 재분류에 들어오는
+        // 경로가 생겨도 429 가 인증 오류로 표시되는 회귀만은 막는다(남은 초는 알 길이 없으니 nil).
         if case .invalidResponse(429) = error {
             return .rateLimited(retryAfterSeconds: nil)
         }
@@ -1358,7 +1382,9 @@ extension SupabaseWorkService {
     /// "…after 51 seconds." 에서 51 을 뽑는다. **정규식 대신 뒤에서 훑는** 이유는 문구가 GoTrue 버전마다
     /// 조금씩 달라져 왔기 때문이다("this after N seconds" / "N seconds"). "second" 바로 앞의 숫자 뭉치만
     /// 취하고, 없으면 nil 이다 — 못 뽑았다고 0 을 돌려주면 곧바로 재시도가 열려 429 를 다시 부른다.
-    private static func retryAfterSeconds(in lowercasedMessage: String) -> Int? {
+    /// 공용 매핑(serviceError 의 429 게이트)과 이 재분류가 **같은 파서를 공유한다** — 둘이 갈리면 같은 본문의
+    /// 남은 초가 경로에 따라 달라진다. 그래서 private 이 아니다.
+    static func retryAfterSeconds(in lowercasedMessage: String) -> Int? {
         guard let secondRange = lowercasedMessage.range(of: "second") else {
             return nil
         }

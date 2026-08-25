@@ -40,10 +40,16 @@ extension WorkTimerStore {
                 return
             }
             guard generation == sessionGeneration else { return }
+            // applyRemoteOwnStatus 의 강하 통보/잠자기 정정(v0.2.36 W3)이 방금 세운 문구를 같은 패스의
+            // "동기화됨" 정규화가 즉시 덮으면 통보는 존재한 적이 없는 것과 같다(침묵 그대로 재현).
+            // 이번 호출이 문구를 바꿨을 때만 이 주기의 정규화를 건너뛰고, 다음 정상 폴링이 평소처럼
+            // 정규화한다 — autoCloseAbandonedOwnSessionIfNeeded 의 조기 반환이 만드는 것과 같은
+            // 한 주기 노출이다(그쪽 문구도 다음 폴링에 "동기화됨"으로 덮인다).
+            let messageBeforeApply = syncMessage
             applyRemoteOwnStatus(writeGeneration: writeGeneration)
             stopTimerIfIdle()
             scavengeAbandonedTeamSessionsIfNeeded()
-            if syncMessage != "동기화됨" { syncMessage = "동기화됨" }
+            if syncMessage == messageBeforeApply, syncMessage != "동기화됨" { syncMessage = "동기화됨" }
         } catch {
             // 취소(.task 취소/팝오버 빨리 닫기)는 실패 문구를 남기지 않고 조용히 빠져나간다(사용자 헛경보 금지).
             if case .cancelled = classifyAuthError(error) { return }
@@ -1078,6 +1084,10 @@ extension WorkTimerStore {
         }
     }
 
+    /// 내 소유 세션이 서버에서 abandoned 로 닫혀 강하할 때의 사용자 통보 한 줄(v0.2.36 W3).
+    /// 노출 수명은 refreshTeamStatus 의 정규화 가드가 준다(세운 그 주기는 살고, 다음 정상 폴링이 덮는다).
+    static let remoteAbandonedCloseNotice = "연결이 끊겨 근무가 자동 종료됐어요"
+
     /// 서버 스냅샷의 '내 행'을 로컬 상태로 흡수한다(앱 재시작 복구/타 기기 조작 반영).
     /// writeGeneration 은 이 응답을 발사하기 직전의 workStateWriteGeneration 이다. 값이 그 사이 올랐다면
     /// (= 사용자가 방금 시작/종료를 눌렀다면) 흡수를 통째로 건너뛴다 — 낡은 응답이 방금 누른 조작을 되돌리는
@@ -1097,13 +1107,114 @@ extension WorkTimerStore {
             return
         }
 
+        // [v0.2.36 W2 — 잠자기 정정 수용 지점] 서버 스캐빈저가 abandoned(복원 불가)로 먼저 닫아 둔
+        // **이 맥 소유** 세션을 폴링이 발견한 순간. didWake 가 아니라 여기가 발화점이어야 하는 이유:
+        //  (1) 깨어난 직후엔 폴링 루프의 Task.sleep 이 즉시 재개돼 이 함수가 didWake 보다 먼저 로컬을
+        //      내리고, 그 뒤의 handleWake 는 startedAt 가드에서 조기 반환한다(경쟁의 결정적 패자),
+        //  (2) 다크웨이크는 didWake 자체가 없다,
+        //  (3) 잠자는 사이 앱이 죽으면(업그레이드·크래시) 메모리 상태가 통째로 없다.
+        // 세 경우 모두 handleSleep 이 영속해 둔 마커(PendingSleepClose)가 유일한 관측이고, 이 지점은
+        // 세 경우 전부가 반드시 지난다. 정정 stop(reason=sleep)이 드레인되면 서버 stopWork 의 0행
+        // 갈래가 correctAutoClose 로 사유를 sleep 으로 고쳐 기존 복원 인프라(배너 + 넛지 복원 제안)가
+        // 그대로 이어받는다.
+        // ★ 아래 서버 today 덮어쓰기보다 **앞**이어야 한다(이중 가산 금지). (a) 갈래의 autoStop 관문은
+        //   회계를 스스로 하는데(accumulatedSeconds += 정정 몫), 서버 today 는 이 세션의 abandoned 마감
+        //   몫을 이미 포함하므로 먼저 덮으면 같은 구간이 두 번 더해진다. "정정 전 로컬 누적 + 정정 몫"은
+        //   handleWake 정상 경로와 같은 값이고, 정정이 서버에 닿은 뒤의 폴링이 서버 값으로 수렴시킨다.
+        if ownMember.status == .offWork, let marker = pendingSleepCloseMarker() {
+            // 마감 시각 산식은 handleWake 와 동일 계약: min 은 절전 대기 시간만큼의 덤 제거,
+            // 바깥 max 는 시작 시각 클램프(0초 세션 = 근무 전체 소실 방지).
+            let sleepEndedAt = max(
+                marker.sessionStartedAt,
+                min(marker.sleepBeganAt, marker.lastInputAt ?? marker.sleepBeganAt)
+            )
+            if startedAt != nil, !adoptedRemoteSession,
+               Self.canonicalSessionID(currentSessionID) == marker.sessionID {
+                // (a) 경쟁 갈래: 로컬은 아직 근무중인데 서버는 이미 닫았다. autoStop 관문
+                //     (closeOwnedSessionLocally)이 세대 증가·회계·큐잉(reason=sleep)·소유권 해제·
+                //     teardown·라벨/배너 갱신·마커 소거까지 전부 수행하므로 여기서는 그중 무엇도
+                //     중복하지 않는다(이중 가산·이중 teardown 금지의 근거). 마커 소거를 여기서도
+                //     명시하는 이유: 이 소거가 이 갈래의 "정정은 1회"를 지키는 계약이다.
+                clearPendingSleepClose()
+                closeOwnedSessionLocally(
+                    endedAt: sleepEndedAt,
+                    message: "잠자기로 자동 근무종료됨",
+                    reason: .sleep
+                )
+                // 서버가 이미 닫은 id 다 — (.offWork,.some) 가지의 기존 계약 그대로 잔존 세션 ID 를
+                // 끊는다(닫힌 id 가 재흡수/폴백 POST 로 서버에 되돌아가는 사고 방지). autoStop **뒤**인
+                // 이유: 큐 항목이 이 값을 실어야 정정 PATCH 가 그 세션을 명중한다.
+                currentSessionID = nil
+                // 이후의 강하 로직(startedAt=nil·소유 해제·스냅샷)은 autoStop 이 방금 한 일과 겹친다
+                // (이중 teardown) — 여기서 끝낸다. 꼬리의 백스톱/반납 관측도 소유 해제로 전부 no-op 이다.
+                return
+            }
+            if startedAt == nil, isOwnedByThisMac(marker.sessionID) {
+                // (b) 재실행 갈래: 잠자는 사이 앱이 죽어 didWake 도 로컬 근무 상태도 없다. 영속 마커 +
+                //     영속 소유 ID 가 "그 세션은 잠자기로 닫혔어야 했다"의 증거 전부다. autoStop 은
+                //     부를 수 없고(startedAt 가드) 회계도 아래 서버 today 반영이 이미 옳으므로,
+                //     정정 stop 항목만 큐에 실어 기존 드레인 → 0행 → correctAutoClose 경로를 태운다.
+                clearPendingSleepClose()
+                pendingItems.append(PendingWorkItem(
+                    id: UUID(),
+                    operation: .stop(
+                        durationSeconds: max(0, Int(sleepEndedAt.timeIntervalSince(marker.sessionStartedAt)))
+                    ),
+                    sessionID: marker.sessionID,
+                    sessionStartedAt: marker.sessionStartedAt,
+                    endedAt: sleepEndedAt,
+                    ownerUserID: session.userID,
+                    autoCloseReason: .sleep
+                ))
+                // 서버가 닫은 세션의 소유 표식은 증거 수명을 다했다((.offWork,.some) 가지와 같은 규약 —
+                // 남기면 다음 실행이 죽은 ID 를 '내 세션'으로 되찾으려 든다).
+                releaseSessionOwnership()
+                enqueueSync()
+                // 강하시킬 로컬 근무가 없으므로 아래 정상 흐름(서버 today 반영 등)은 그대로 계속한다.
+            }
+        }
+
         accumulatedSeconds = ownMember.todayDurationSeconds
         accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: clock())
 
         switch (ownMember.status, startedAt) {
         case (.working, nil):
             adoptRemoteSession(ownMember)
-        case (.offWork, .some):
+        case (.offWork, .some(let closedSessionStart)):
+            // [v0.2.36 W3 — 침묵 제거] 이 맥 소유 세션이 서버에서 닫혀 내려가는데(잠자기 마커도 없다 —
+            // 깨어있는 채 네트워크 단절 → 10분 뒤 abandoned 마감이 대표) 지금까지는 통보·배너·정정이
+            // 전부 0이었다. 피해자는 아무것도 모른 채 재시작 지연을 겪는다. abandoned 는 복원 대상이
+            // 아니므로(restorableReasons=['away','sleep']) 기존 10분 되돌리기 배너가 유일한 구제다.
+            //
+            // 신호 공백 게이트(> 스캐빈저 임계 10분)를 거는 이유: 신선한 신호의 (.offWork,.some) 강하는
+            // "다른 맥에서 사용자가 방금 직접 누른 종료"가 대표라 사고가 아니고(통보하면 헛경보),
+            // 서버 away 백스톱 마감(하트비트는 살아 신호가 신선하다)은 복원 배너가 따로 알린다.
+            // seen 미상은 기존대로 침묵한다(모를 때 헛경보를 만들지 않는다).
+            if !adoptedRemoteSession,
+               let seen = ownMember.lastSeenAt ?? ownMember.updatedAt,
+               clock().timeIntervalSince(seen) > Self.abandonedSessionThresholdSeconds {
+                // 되돌리기 대상 등록은 아래 releaseSessionOwnership() 이 증거(소유 강도)를 지우기
+                // **전**이어야 한다 — autoCloseAbandonedOwnSessionIfNeeded 의 lastAutoClosedClaimStrength
+                // 규약 그대로다(강도 상속 없이는 되돌리기가 강한 소유자를 둘로 만든다).
+                lastAutoClosedSessionID = Self.canonicalSessionID(currentSessionID)
+                lastAutoClosedStartedAt = closedSessionStart
+                lastAutoClosedClaimStrength = isOwnedByThisMac(currentSessionID)
+                    ? ownedSessionClaimStrength
+                    : .weak
+                // 되돌리면 이 세션이 다시 진행 세션이 되므로, 위에서 서버 today 로 덮은 누적에서 도로
+                // 빼야 할 이 세션 몫. 서버의 마감 시각은 응답에 없어 마지막 신호(seen)로 근사한다 —
+                // 스캐빈저가 정확히 그 시각(coalesce(last_seen_at, updated_at))으로 마감하기 때문이다.
+                lastAutoClosedSeconds = max(
+                    0,
+                    Int(seen.timeIntervalSince(max(closedSessionStart, TeamWeeklyGoal.koreanDayStart(for: clock()))))
+                )
+                lastAutoClosedAt = clock()
+                // performUndoAutoClose 가 이 마감을 실제로 감당하는지는 코드로 확인했다:
+                // reopenSession 은 id 필터 PATCH 로 ended_at/duration 을 null 로 되돌리고 상태행을
+                // working 으로 세우므로, 누가 닫았든(클라 stopWork/서버 스캐빈저) 닫힌 행의 모양이 같아
+                // 동일하게 동작한다. 문구는 refreshTeamStatus 의 정규화 가드가 이 주기 동안 지켜 준다.
+                syncMessage = Self.remoteAbandonedCloseNotice
+            }
             startedAt = nil
             // 흡수 세션이든 이 맥이 연 세션이든 서버에서 이미 닫혔다 — 표식과 잔존 세션ID를 **함께** 끊는다.
             // 예전엔 currentSessionID 를 남겨, 이미 닫힌 id 가 뒤이은 경로로 서버에 되돌아갔다:

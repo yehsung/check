@@ -3,13 +3,20 @@
 이 문서는 **클라이언트가 서버와 주고받는 것의 정본**이다. 응답 필드 이름·타입·의미가 여기 적힌 것과
 다르면 그건 서버가 아니라 이 문서가 틀린 것이니 고쳐라. 설계 근거는 `PICK.md`, 결함 이력은 `attack-1..4.md`.
 
-마이그레이션 3개:
+마이그레이션 3개 + 비활성 스위치 1개:
 
 | 파일 | 무엇을 하나 | 마감이 일어나나 |
 |---|---|---|
 | `20260820010000_away_input_tracking.sql` | `last_input_at` 컬럼 2개 + 리그 라이브 클램프 + 임계 상수 + 판정 단일 출처 함수 2개 | **아니오**(오판 비용 0) |
 | `20260820020000_away_restore.sql` | `auto_closed_*`/`restored_at` + 복원 RPC + `away_sync()` + 기존 마감 경로에 사유 기록 | 아니오 |
 | `20260820030000_away_close_backstop.sql` | `close_away_work_sessions()` + pg_cron 5분 | **예**(임계+30분) |
+| `20260820050000_away_close_disabled_until_fleet_converges.sql` | 임계를 **315360000초(10년) 센티널**로 상향 = 3층(away 마감) 꺼짐 | **아니오** |
+
+★ **실서버 현황**: 임계는 지금 315360000초다 — 혼합 함대에서 구버전 흡수 맥이 서버에 행을 안 남겨
+면제 조건이 그 맥을 못 보고 살아있는 근무가 소급 삭제되는 결함 때문에 3층을 끈 상태다(재현·재개
+조건은 그 파일 헤더). 1층(리그 클램프)·2층(복원 인프라)은 그대로 살아 있고, **잠자기(sleep) 마감과
+그 복원은 3층과 무관하게 계속 동작한다.** 아래 본문의 9000초(2시간 30분) 등은 계측 후 되세울 원래
+설계값이다 — 클라는 어차피 임계를 `away_sync()` 응답으로만 받으므로 코드가 갈릴 것은 없다.
 
 ---
 
@@ -47,6 +54,8 @@
   "status": "ok",                    // "ok" | "invalid"(비로그인)
   "serverNow": "2026-08-19T13:51:15.990741+00:00",  // 시계 어긋남 감지용
   // ── 정책(서버 소유 상수. 계측 후 SQL 한 줄로 바뀐다 — 캐시해도 되지만 매 폴링 갱신이 안전) ──
+  // ⚠️ 실서버는 지금 closeThresholdSeconds=315360000(10년 센티널 = 3층 꺼짐)을 돌려준다.
+  //    아래 9000/10800 은 3층을 다시 켤 때의 설계값이다(머리말의 실서버 현황 참조).
   "closeThresholdSeconds": 9000,     // 2시간 30분. 클라 마감 임계
   "backstopSeconds": 10800,          // 3시간. 서버가 마감하는 시각(= 임계 + 유예)
   "freezeSeconds": 1800,             // 30분. 리그 라이브 클램프 유예
@@ -114,9 +123,28 @@ closeEligible == true
 | `restored_at` | 클라가 쓰지 마라. 복원 RPC 가 소유한다 |
 
 - `ended_at` 은 지금처럼 **소급 시각**(마지막 입력 / `min(sleepBeganAt, lastMeaningfulInputAt)`)이다.
-- **`sleep` 경로 주의**: 뚜껑을 닫으면 10분 뒤 서버 스캐빈저가 먼저 `abandoned` 로 마감한다.
-  깨어난 클라가 그 세션이 이미 닫혀 있는 것을 보면 `auto_closed_reason` 을 `'sleep'` 으로 **정정 PATCH** 하라
-  (그래야 복원 대상이 된다). `ended_at` 은 더 이르게만 정정하라(늦추는 것은 위조다).
+- **`sleep` 경로 — 경쟁 면역 구조(v0.2.36)**: 뚜껑을 닫으면 10분 뒤 서버 스캐빈저가 먼저
+  `abandoned`(복원 **불가** 사유)로 마감한다. 정정을 didWake 에만 걸면 반드시 진다 — 깨어나는 순간
+  폴링 루프의 `Task.sleep` 이 즉시 재개돼 하트비트→폴링을 먼저 완주하고(부활 시도 하트비트는 서버
+  트리거가 off_work 로 강등), 폴링이 `(.offWork,.some)` 을 보고 `startedAt=nil` 로 내리면 뒤늦은
+  handleWake 는 startedAt 가드에서 조기 반환한다. 그래서 구조는 두 조각이다:
+  1. **willSleep 영속 마커**: `handleSleep` 이 근무 중 관측(`PendingSleepClose` — sessionID/
+     sessionStartedAt/sleepBeganAt/lastInputAt)을 UserDefaults(`check.sleepClose.pending`)에 심는다.
+     흡수 세션엔 심지 않는다. 정상 마감 경로(수동 stop/autoStop/유예 안 wake/새 start/계정 전환)가
+     지우고, handleWake 의 startedAt 가드 조기 반환과 강제 로그아웃에서는 **일부러 살린다**.
+  2. **폴링 수용 지점 정정**: `applyRemoteOwnStatus` 가 서버의 닫힘을 발견하는 그 자리에서 마커를
+     소비해 `reason='sleep'`, `ended_at = max(started, min(sleepBeganAt, lastInputAt))` 의 정정
+     stop 을 큐에 싣는다(서버 반영은 기존 stopWork 0행 갈래의 정정 PATCH — `ended_at` 은
+     `gt.` 필터로 **더 이르게만** 당긴다. 늦추는 것은 위조다). 이 지점은
+     **깨어남 순서 경쟁**(폴링이 didWake 보다 먼저)·**다크웨이크**(didWake 자체가 없다)·
+     **잠자는 사이 앱 사망**(다음 실행의 첫 폴링이 영속 마커+영속 소유 ID 로 정정) 전부가 지난다.
+     handleWake 가 먼저 이기면 큐의 stop 항목이 수용 지점의 pendingItems 가드를 잠가 이중 정정이
+     구조적으로 불가능하다. 정정만 성사되면 복원 배너·넛지 복원 제안이 그대로 이어받는다.
+- **abandoned 강하의 통보(v0.2.36)**: 마커 없이(잠자기가 아닌데 — 깨어있는 채 네트워크 단절 등)
+  내 소유 세션이 신호 공백 10분+ 로 닫혀 강하하면 클라는 침묵하지 않는다 — 사용자 문구
+  ("연결이 끊겨 근무가 자동 종료됐어요") + 기존 10분 되돌리기 배너를 세운다(abandoned 는 복원
+  RPC 대상이 아니라 되돌리기가 유일한 구제다). 신선한 신호의 강하(다른 맥의 정상 종료)는 기존대로
+  조용히 내린다.
 - 팀 조회 select 에 `auto_closed_reason` 을 넣지 마라(수동 종료와 구분 불가해야 한다).
 
 ## 5. 복원 — `restore_auto_closed_session(p_session_id uuid)`
@@ -155,7 +183,9 @@ closeEligible == true
 
 마감 조건(전부 참일 때만):
 `ended_at is null` ∧ `status='working'` ∧ `active_session_id = 그 세션` ∧ `closeEligible` ∧
-`last_input_at`(max 규칙) `is not null` ∧ `last_input < now - 3시간` ∧ `started_at <= last_input`
+`last_input_at`(max 규칙) `is not null` ∧ `last_input < now - (임계+유예)` ∧ `started_at <= last_input`
+(임계+유예 = 설계값으로 3시간. **실서버는 임계가 10년 센티널이라 이 백스톱은 지금 후보를 잡지 못한다** —
+cron 은 재개 절차를 한 단계로 줄이기 위해 등록된 채 둔다.)
 
 마감 결과: `ended_at = greatest(started_at, least(last_input, now))`, `auto_closed_reason='away'`,
 상태행은 `off_work` + `active_session_id=null`. 멱등(`where ended_at is null` + EPQ 재확인).
@@ -175,7 +205,10 @@ li = greatest(work_statuses.last_input_at, max(work_status_devices.last_input_at
 
 ## 8. 상수를 바꾸는 법 (계측 후)
 
-세 값 모두 **실측 전 잠정값**이다. 클라 배포 없이 SQL 한 줄로 바꾼다:
+세 값 모두 **실측 전 잠정값**이다. 클라 배포 없이 SQL 한 줄로 바뀌지만, **반드시 새 마이그레이션
+파일로 바꿔라** — 이 프로젝트는 전체 재적용을 실제로 겪었고(무료플랜 일시정지 복원), ad-hoc SQL 은
+재적용 때 조용히 되돌아간다. 임계는 `20260820050000` 이 315360000(10년 센티널 = 3층 꺼짐)으로
+이미 한 번 덮었다 — 아래 9000 은 다시 켤 때의 값이다:
 
 ```sql
 create or replace function public.away_close_threshold_seconds() returns int language sql immutable as $$ select 9000 $$;
@@ -186,6 +219,8 @@ create or replace function public.away_daily_restore_limit()     returns int lan
 
 ★ 지켜야 하는 부등식(20260820010000 의 사후 단언이 배포 때 기계로 검사한다):
 **`restore_window > threshold + freeze`**. 깨지면 마감된 세션이 태어나자마자 복원 불가가 된다.
+(3층이 꺼진 지금은 임계가 10년이라 이 부등식이 일부러 깨져 있다 — away 마감 자체가 없어 무해하고,
+sleep 복원 창은 `ended_at` 기준이라 영향받지 않는다. 다시 켤 때 9000 으로 되세우면 자동으로 복원된다.)
 
 ## 9. 알려진 잔여 위험 (숨기지 않는다)
 

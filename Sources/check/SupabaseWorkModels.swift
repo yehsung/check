@@ -123,6 +123,42 @@ enum PendingWorkOperation: Equatable {
     case stop(durationSeconds: Int)
 }
 
+/// 수동 Codable(v0.2.36 — pendingItems 영속용). 합성에 맡기지 않는 이유: 합성 포맷은 케이스 구조가
+/// 그대로 디스크 포맷이 되어, 케이스를 고치는 순간 이전 실행이 남긴 큐가 통째로 디코드 실패한다.
+/// kind 문자열을 손으로 못 박아 디스크 계약을 코드 구조에서 분리한다(모르는 kind 는 throw —
+/// 호출부가 빈 큐로 접는다).
+extension PendingWorkOperation: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case durationSeconds
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(String.self, forKey: .kind) {
+        case "start":
+            self = .start
+        case "stop":
+            self = .stop(durationSeconds: try container.decode(Int.self, forKey: .durationSeconds))
+        case let kind:
+            throw DecodingError.dataCorruptedError(
+                forKey: .kind, in: container, debugDescription: "unknown operation kind: \(kind)"
+            )
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .start:
+            try container.encode("start", forKey: .kind)
+        case .stop(let durationSeconds):
+            try container.encode("stop", forKey: .kind)
+            try container.encode(durationSeconds, forKey: .durationSeconds)
+        }
+    }
+}
+
 /// 팀 코드 미리보기 결과. lookup_team_by_code(code) RPC 로 받아 온다(가입 전에도 anon 으로 호출 가능).
 /// invite_code 는 담지 않는다(코드는 입력자가 이미 알고 있으므로 되돌려줄 이유가 없다).
 struct TeamJoinPreview: Equatable {
@@ -552,7 +588,10 @@ enum SupabaseWorkServiceError: Error, Equatable {
     /// 브루 배포라 앱이 db push 보다 먼저 나가는 창이 실제로 존재한다.
     case ultraWalletUnavailable
     case sessionAlreadyOpen
-    /// GoTrue 재발송 제한(429). 실측 본문이 두 종류다 — 이메일 발송 간격 제한은
+    /// 429 레이트리밋 일반. 원래는 GoTrue 재발송 제한 전용이었지만 v0.2.36 부터 공용 매핑
+    /// (SupabaseWorkHTTP.serviceError)의 상태코드 게이트가 **모든 429** 를 이 케이스로 접는다 —
+    /// classifyAuthError 가 transient 로 분류해 일시 제한이 강제 로그아웃으로 번지지 않게 하기 위해서다.
+    /// GoTrue 재발송 제한의 실측 본문이 두 종류다 — 이메일 발송 간격 제한은
     /// `{"error_code":"over_email_send_rate_limit","msg":"For security purposes, you can only request this after N seconds."}`,
     /// IP 단위 요청 제한은 `{"error_code":"over_request_rate_limit","msg":"Request rate limit reached"}`(2026-08-13 실측, verify 40연타).
     /// 뒤쪽엔 초가 아예 없으므로 **남은 초는 옵셔널이다** — nil 을 "0초"로 취급하면 재시도 버튼이 곧바로 열려 429 를 다시 부른다.
@@ -756,17 +795,29 @@ struct AutoCloseCorrectionRequest: Encodable {
 }
 
 /// 자동 마감된 세션을 되돌릴 때 ended_at/duration_seconds 를 명시적으로 null 로 재개한다.
-/// (기본 합성 인코더는 nil Optional 을 생략하므로 encodeNil 로 서버에 null 을 확실히 보낸다.)
+/// (기본 합성 인코더는 nil Optional 을 생략하므로 encodeNil 로 서버에 null 을 확실히 보낸다 —
+///  PostgREST 는 키 부재와 null 을 구분한다: 키가 빠지면 그 컬럼은 그대로 남는다.)
 struct ReopenSessionRequest: Encodable {
     enum CodingKeys: String, CodingKey {
         case endedAt
         case durationSeconds
+        case autoClosedAt
+        case autoClosedReason
     }
+
+    /// 자동 마감 잔재(auto_closed_*)도 함께 null 로 되돌릴지. 사유 컬럼이 없는 서버로 떨어지는
+    /// withoutNewColumns 재시도만 false 를 쓴다(그때의 본문은 v0.2.35 와 같은 바이트다).
+    var resetAutoClose = true
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeNil(forKey: .endedAt)
         try container.encodeNil(forKey: .durationSeconds)
+        guard resetAutoClose else { return }
+        // 되살린 **열린** 세션에 'abandoned' 꼬리표가 남으면 이후 이 세션이 다시 닫힐 때의 사유 판정과
+        // 복원 자격 판정(is_restorable/서버 RPC)이 죽은 마감의 잔재를 읽는다 — 재개는 마감의 흔적까지 지운다.
+        try container.encodeNil(forKey: .autoClosedAt)
+        try container.encodeNil(forKey: .autoClosedReason)
     }
 }
 
@@ -1741,7 +1792,8 @@ struct DisplayNameChangedAtRow: Decodable, Equatable {
 /// 자동 마감 사유. **서버 check 제약(work_sessions_auto_closed_reason_check)과 같은 어휘다** —
 /// 다른 값을 보내면 PATCH 가 23514 로 거절돼 마감이 통째로 서버에 도달하지 못한다(= 세션이 영영 안 닫힌다).
 /// 복원 대상은 `away`/`sleep` 둘뿐이고, 그 판정은 서버가 한다(restore_auto_closed_session 의 사유 게이트).
-enum AutoCloseReason: String, Equatable, Sendable {
+// Codable 은 pendingItems 영속(v0.2.36) 때문이다 — rawValue(서버 어휘) 그대로 디스크에 남는다.
+enum AutoCloseReason: String, Equatable, Sendable, Codable {
     case away
     case sleep
     case longSession = "long_session"

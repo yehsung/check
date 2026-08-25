@@ -177,4 +177,13 @@ final class NudgeScheduler {
     func handleWake() {
         activeTickTimes = []
     }
+
+    /// 쿨다운 즉시 만료(v0.2.36 [F5] — 근무 → 비근무 실전이에서 컨트롤러 updateWorking 이 호출).
+    /// 쿨다운의 목적(무시당한 제안을 1시간 안에 반복하지 않기)은 **사용자가 무시한 경우에만** 성립한다.
+    /// 서버/자동 마감으로 근무가 끝난 경우엔 직전 발화의 쿨다운을 이월하면 재시작이 최대 1시간 밀린다.
+    /// 적립(activeTickTimes)은 건드리지 않는다 — 리셋은 발화가 아니라서, 이후에도 "최근 10분 안에
+    /// 실제 사용 5분"을 0 부터 다시 채워야 발동한다.
+    func resetCooldown() {
+        cooldownUntil = .distantPast
+    }
 }

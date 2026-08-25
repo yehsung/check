@@ -163,7 +163,9 @@ final class CheckOverlayController {
 
     // MARK: - 근무 시작 제안(넛지) — 안내만 하고 즉시 자동 시작(A3)
     /// 넛지 감지 스케줄러(비근무·로그인 상태일 때만 가동). onNudge → nudgeAutoStart.
-    private var nudgeScheduler: NudgeScheduler!
+    /// getter 가 internal 인 이유: [F5] 쿨다운 리셋 배선은 이 스케줄러의 cooldownUntil 로만 관측된다 —
+    /// 헤드리스 검증 지점(shouldBeVisible 과 같은 성격, 대입은 여전히 이 클래스만 한다).
+    private(set) var nudgeScheduler: NudgeScheduler!
     /// 캐릭터 몸체 위 클릭만 우리 창이 소비하도록 hitTest 하고, 로컬 마우스 이벤트(down/dragged/up/moved)를
     /// 컨트롤러로 넘기는 호스팅 뷰(패널 contentView).
     /// (자기 참조 클로저를 담은 루트 뷰를 얹은 뒤 대입하므로 init 순서상 IUO var 로 둔다.)
@@ -290,6 +292,10 @@ final class CheckOverlayController {
     /// `updateWorking` 재진입 래치. AppKit 이 우리 자신의 프레임 변경 도중에 SwiftUI 를 평가해
     /// `.onChange` → updateWorking 을 되부르는 것을 막는다(자세한 이유는 updateWorking 주석).
     private var isUpdatingWorking = false
+    /// 직전 updateWorking 이 관측한 **근무 여부**([F5] 쿨다운 리셋의 전이 판정 근거). shouldBeVisible 과
+    /// 별개다 — 그쪽은 표시 여부(근무 AND 오버레이 켜짐)라, 캐릭터를 꺼 둔 사용자는 근무가 끝나도
+    /// 표시 전이가 없어 표시 기준으로는 리셋이 영영 죽는다.
+    private var wasWorkingAtLastUpdate = false
     /// 헤드리스 검증 지점(shouldBeVisible·nudgeSchedulerRunning 과 같은 성격 — 실제 창 상태가 아니라
     /// 이 클래스의 결정을 고정한다).
     var isUltraActive: Bool { ultraRestoreState != nil }
@@ -323,7 +329,13 @@ final class CheckOverlayController {
         updateCheck: UpdateCheckStore? = nil,
         ultraDurationSeconds: Double = CheckOverlayController.ultraSeconds,
         ultraDeadlineSeconds: Double
-            = CheckOverlayController.ultraSeconds + CheckOverlayController.ultraWatchdogGrace
+            = CheckOverlayController.ultraSeconds + CheckOverlayController.ultraWatchdogGrace,
+        // 넛지 스케줄러의 시간·입력·세션 판정(테스트만 주입, 프로덕션 기본값은 실제 시스템 그대로).
+        // 이 주입이 없으면 컨트롤러를 관통하는 넛지 배선([F5] 쿨다운 리셋 등)을 결정적으로 검증할 수 없다 —
+        // 실제 idle/잠금은 돌리는 맥의 상태라, 잠긴 원격/CI 맥에서는 모든 tick 이 적립 없이 통과한다.
+        nudgeIdleSeconds: @escaping () -> TimeInterval = NudgeScheduler.meaningfulIdleSeconds,
+        nudgeClock: @escaping () -> Date = { Date() },
+        nudgeSessionUsable: @escaping () -> Bool = NudgeScheduler.consoleSessionUsable
     ) {
         self.notificationCenter = notificationCenter
         self.store = store
@@ -382,8 +394,11 @@ final class CheckOverlayController {
         // 넛지 스케줄러: 자격은 store 로 구성(로그인·팀·비근무·억제 아님), 발동은 자동 근무 시작(안내만)으로.
         // 공백 관측/생존 스탬프는 수동 종료 억제의 해제·영속 판정으로 잇는다(스케줄러는 store 를 모른다).
         nudgeScheduler = NudgeScheduler(
+            idleSeconds: nudgeIdleSeconds,
+            clock: nudgeClock,
             isEligible: { [weak self] in self?.isNudgeEligible ?? false },
             onNudge: { [weak self] in self?.nudgeAutoStart() },
+            isSessionUsable: nudgeSessionUsable,
             onAbsenceGap: { [weak self] in self?.store.clearAutoStartSuppression() },
             onAliveTick: { [weak self] now in self?.store.recordNudgeAlive(now) },
             workspaceNotifications: workspaceNotifications
@@ -430,6 +445,20 @@ final class CheckOverlayController {
         if isUpdatingWorking { return }
         isUpdatingWorking = true
         defer { isUpdatingWorking = false }
+        // ★ [F5] 근무 → 비근무 **실전이**에서 넛지 쿨다운을 즉시 만료한다(v0.2.36). 서버가 하트비트 10분
+        //   끊김(뚜껑·네트워크)으로 세션을 abandoned 마감하면 재시작의 유일한 자동 수단은 넛지(최소 5분)인데,
+        //   닫힌 세션이 직전 넛지로 시작된 것이면 쿨다운(1시간)이 stop/start 를 넘어 생존해 재시작이 강하 후
+        //   최대 44분까지 밀린다(주입 테스트로 재현). 쿨다운의 목적(무시당한 제안을 1시간 안에 반복하지 않기)은
+        //   **사용자가 무시한 경우에만** 성립하고, 서버/자동 마감으로 끝난 근무는 무시가 아니다.
+        //   수동 [근무 종료] 뒤에도 리셋되지만 그 경우 억제(suppressAutoStart)가 자동 시작을 막으므로 계약
+        //   훼손은 없다. 재통지(onChange of isSignedIn 등 — 전이 아님)에 리셋이 나가지 않도록 직전 관측값으로
+        //   전이만 가려 쏘고, 자리는 아래 울트라 조기 리턴들보다 **앞**이다 — 격발 중 도착한 종료 전이도,
+        //   오버레이를 꺼 둔 사용자(표시 전이가 없는)의 종료 전이도 여기서는 놓치지 않는다.
+        let wasWorking = wasWorkingAtLastUpdate
+        wasWorkingAtLastUpdate = isWorking
+        if wasWorking && !isWorking {
+            nudgeScheduler.resetCooldown()
+        }
         let visible = isWorking && store.isOverlayEnabled
         let wasVisible = shouldBeVisible
         shouldBeVisible = visible

@@ -312,7 +312,16 @@ final class WorkTimerStore {
     // 서버 미반영 근무 조작의 FIFO 큐. 단일 슬롯이 아니라 큐라, in-flight 중 들어온 반대 조작이나
     // 오프라인에서 쌓인 여러 세션이 유실되지 않고 순서대로 재생된다. 각 항목은 자체 세션 정보를 동봉해
     // currentSessionID 변화와 무관하게 정확히 재생된다.
-    var pendingItems: [PendingWorkItem] = []
+    //
+    // **didSet 으로 defaults 에 영속한다(v0.2.36).** 메모리 전용이던 시절엔 오프라인 중 앱 종료/크래시가
+    // 미반영 근무를 통째로 지웠다 — 큐가 곧 서버 쓰기이므로 그 소실은 근무 기록의 영구 소실이다.
+    // 대입·append·removeFirst·removeAll(소유자 필터) 전부가 이 관찰자를 지나므로 변이 지점마다
+    // 저장 호출을 흩뿌리지 않는다(한 곳이라 새 변이 경로도 자동으로 안전하다).
+    // 재생 안전: 크래시 시점에 따라(서버 실행 뒤, removeFirst 영속 전) 같은 항목이 이중 재생될 수 있으나
+    // start POST 는 ignore-duplicates, stop PATCH 는 세션 id 필터라 서버 멱등으로 무해하다.
+    var pendingItems: [PendingWorkItem] = [] {
+        didSet { persistPendingWorkQueue() }
+    }
     /// 큐/진행 중 근무의 소유 계정(userID). 강제 로그아웃은 큐를 비우지 않고 이 값만 남기므로, 다음 로그인에서
     /// adoptWorkStateOwner 가 같은 계정이면 이어받고 다른 계정이면 버린다. 관찰 대상이 아니다(뷰가 읽지 않음).
     @ObservationIgnored var workStateOwnerUserID: String?
@@ -825,6 +834,10 @@ final class WorkTimerStore {
         session = restoredSession
         // 이번 실행에서 쌓일 큐/진행 중 근무의 주인은 복구된 세션의 계정이다(비로그인 시작이면 첫 로그인이 정한다).
         workStateOwnerUserID = restoredSession?.userID
+        // 이전 실행이 못 보낸 근무 큐를 복원한다(오프라인 중 종료/크래시 생존 — didSet 영속의 반대편).
+        // 소유자 필터는 여기서 하지 않는다 — 항목마다 소유자가 붙어 있고, 로그인 확정 시점의
+        // adoptWorkStateOwner 가 남의 것만 골라 버린다(강제 로그아웃 보존 계약과 같은 자리).
+        pendingItems = Self.restoredPendingWorkQueue(from: defaults)
         syncMessage = hasAnonKey ? (restoredSession == nil ? "로그인 필요" : "동기화됨") : "Supabase 키 필요"
         observeSleepWake(workspaceNotifications)
         refreshMenuBarTitle()
@@ -930,6 +943,9 @@ final class WorkTimerStore {
         longSessionAnchor = now
         clearLongSessionPrompt()
         sleepBeganAt = nil
+        // 새 세션이 시작됐다 — 이전 세션의 잠자기 마감 정정 마커는 이 시점부터 낡은 관측이다.
+        // 남기면 이 세션과 무관한 옛 sleepBeganAt 이 다음 정정의 재료로 오용될 수 있어 여기서 끊는다.
+        clearPendingSleepClose()
         // 근무 시작은 그 자체가 입력이다(수동은 클릭, 넛지 시작은 그 앞 5분의 실제 사용이 근거다).
         // 이 한 줄이 없으면 오전에 자리 비움으로 마감된 사람의 **옛 관측**(예: 10:30)이 그대로 남아,
         // 16:05 에 새로 연 세션의 판정 재료가 된다 — 세션 시작 가드가 막긴 하지만 그 가드 하나에
@@ -958,7 +974,15 @@ final class WorkTimerStore {
         // stop() 의 호출자는 전부 사용자의 명시적 의사다(팝오버 토글·12시간 배너 [지금 종료]·앱 종료 시퀀스).
         // 자동 마감은 autoStop/서버 경유라 이 함수를 타지 않는다. 그러므로 여기서 자동 시작을 억제한다 —
         // "원치 않으면 근무 종료를 누르면 된다"(v0.2.12 계약)가 실제로 성립하려면 종료가 붙어 있어야 한다.
-        suppressAutoStart(now: now)
+        //
+        // 단, **종료 시퀀스의 stop() 은 예외다.** finishWorkBeforeQuit 의 startedAt != nil 가드를 지나
+        // 여기 왔다는 것 자체가 사용자가 [근무 종료]를 누르지 **않은** 채 앱이 끝나는 상황이라는 뜻이므로
+        // (⌘Q·재부팅·brew 업그레이드 — 눌렀다면 그 stop 이 먼저 startedAt 을 내렸다), 수동 종료용 억제를
+        // 심으면 안 된다 — 심으면 1시간 안에 재실행될 때 init 재무장 판정이 억제를 유지해, 계속 일하는
+        // 사용자의 자동 근무시작이 무기한 죽는다(8/20 업그레이드가 함대 전체에 심은 그 결함).
+        if !isTerminating {
+            suppressAutoStart(now: now)
+        }
         // 종료도 내 write 다 — 세대를 올려 in-flight 낡은 응답의 '근무중' 흡수를 무력화한다.
         workStateWriteGeneration &+= 1
         // 서버 복구 경로(applyRemoteOwnStatus)로 시작된 세션이라 start() 를 안 탔을 수 있으므로 여기서도 끊는다.
@@ -979,6 +1003,9 @@ final class WorkTimerStore {
         longSessionAnchor = nil
         clearLongSessionPrompt()
         sleepBeganAt = nil
+        // 이 세션은 정상 경로로 닫힌다 — 잠자기 마감 정정 마커가 남아 있으면(덮은 채 들고 이동해 와서
+        // 여기서 직접 종료한 경우) 낡은 관측이 다음 실행의 정정 재료로 오용되므로 함께 지운다.
+        clearPendingSleepClose()
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
         stopTimerIfIdle()
         refreshMenuBarTitle()
@@ -1069,8 +1096,22 @@ final class WorkTimerStore {
         //    소켓은 근무 여부와 무관하게 떠 있다. 뒤로 내리면 "로그인만 하고 근무 안 하는 사람"의 소켓이
         //    뚜껑을 닫아도 안 내려가고, 그 죽은 소켓 위에서 깨어나 캐치업이 통째로 안 돈다.
         realtimeApply(.willSleep, at: date)
-        guard startedAt != nil else { return }
+        guard let sessionStart = startedAt else { return }
         sleepBeganAt = date
+        // 이 관측을 defaults 에 영속한다(v0.2.36). 뚜껑을 10분+ 닫으면 서버 스캐빈저가 이 세션을
+        // abandoned(복원 불가)로 먼저 마감하는데, 깨어난 뒤의 handleWake 는 폴링이 로컬을 먼저 내리면
+        // startedAt 가드에서 조기 반환하고, 잠자는 사이 앱이 죽으면(업그레이드) 아예 불리지 않는다 —
+        // 메모리의 sleepBeganAt 만으로는 sleep 정정이 영영 못 나간다. 소비는 Sync 의 서버 정정 수용
+        // 지점(applyRemoteOwnStatus 쪽)과 다음 실행이 맡고, 여기는 심는 쪽이다.
+        // 흡수 세션은 심지 않는다 — 내 덮개 시각은 남의 세션의 마감 근거가 될 수 없다(autoStop 과 같은 계약).
+        if !adoptedRemoteSession, let sessionID = Self.canonicalSessionID(currentSessionID) {
+            persistPendingSleepClose(PendingSleepClose(
+                sessionID: sessionID,
+                sessionStartedAt: sessionStart,
+                sleepBeganAt: date,
+                lastInputAt: lastMeaningfulInputAt
+            ))
+        }
     }
 
     /// didWake. 잠든 시간이 5분 이하면 근무 연속으로 인정, 초과하면 덮은 시각으로 자동 마감한다.
@@ -1085,6 +1126,9 @@ final class WorkTimerStore {
         let asleep = date.timeIntervalSince(sleepBeganAt)
         guard asleep > Self.sleepGraceSeconds else {
             self.sleepBeganAt = nil
+            // 유예 안 잠자기 = 세션 계속. 스캐빈저 임계(10분)보다 짧아 서버가 먼저 마감했을 수 없으므로
+            // 정정 마커는 여기서 소용을 다했다(남기면 다음 잠자기까지 낡은 관측이 산다).
+            clearPendingSleepClose()
             return
         }
         // 흡수 세션은 이 맥의 것이 아니다 — 내 덮개를 닫은 시각으로 남의 근무를 마감하지 않고 **아무 것도 하지 않는다**.
@@ -1242,6 +1286,32 @@ final class WorkTimerStore {
         lastAwaySyncAt = .distantPast
     }
 
+    // MARK: - 잠자기 마감 정정 마커 (v0.2.36 계약 스텁 — 의미 구현·배선·테스트는 웨이브 소유자가 완성)
+
+    /// 미결 잠자기 마감 마커의 영속 키. 잠자는 사이 앱이 죽어도(업그레이드·크래시) 다음 실행이
+    /// 서버의 abandoned 마감을 sleep 으로 정정할 수 있어야 하므로 defaults 에 남긴다.
+    static let pendingSleepCloseKey = "check.sleepClose.pending"
+
+    func persistPendingSleepClose(_ marker: PendingSleepClose) {
+        guard let data = try? JSONEncoder().encode(marker) else { return }
+        defaults.set(data, forKey: Self.pendingSleepCloseKey)
+    }
+
+    func pendingSleepCloseMarker() -> PendingSleepClose? {
+        guard let data = defaults.data(forKey: Self.pendingSleepCloseKey) else { return nil }
+        return try? JSONDecoder().decode(PendingSleepClose.self, from: data)
+    }
+
+    func clearPendingSleepClose() {
+        defaults.removeObject(forKey: Self.pendingSleepCloseKey)
+    }
+
+    /// 자동 마감을 파일 밖(WorkTimerStoreSync 의 서버 정정 수용 지점)에서도 부를 수 있게 하는 내부 관문.
+    /// autoStop 자체는 파일-private 을 유지한다(호출자 가드를 한 곳에 모으는 기존 계약 보존).
+    func closeOwnedSessionLocally(endedAt: Date, message: String, reason: AutoCloseReason) {
+        autoStop(endedAt: endedAt, message: message, reason: reason)
+    }
+
     /// 지정한 종료 시각으로 로컬 상태를 즉시 마감하고, 기존 직렬 sync 경로(enqueueSync)로 서버에 반영한다.
     /// syncMessage 는 사유 문구로 세팅한다(이후 refresh 가 "동기화됨"으로 정규화할 수 있음 — 즉시 피드백 목적).
     ///
@@ -1274,6 +1344,10 @@ final class WorkTimerStore {
         longSessionAnchor = nil
         clearLongSessionPrompt()
         sleepBeganAt = nil
+        // 자동 마감(모든 사유)이 확정됐다 — 이 세션의 잠자기 마감 정정 마커도 소용을 다했다.
+        // handleWake 가 sleep 사유로 여기 온 경우가 대표다: 정정할 마감을 지금 이 자리에서 직접 내보내므로
+        // (아래 syncCurrentStatus 가 사유를 실어 나른다) 마커가 더 살아 있으면 이중 정정의 재료만 된다.
+        clearPendingSleepClose()
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
         stopTimerIfIdle()
         refreshMenuBarTitle()
@@ -1717,6 +1791,27 @@ extension WorkTimerStore {
     static let autoStartSuppressedKey = "check.nudge.autoStartSuppressed"
     /// 억제 중 스케줄러의 마지막 생존 스탬프(Date). 실행 간 공백(앱이 죽어 있던 시간)을 재는 유일한 근거.
     static let nudgeLastAliveAtKey = "check.nudge.lastAliveAt"
+    /// 미반영 근무 큐(pendingItems)의 영속 키(JSON). 오프라인 중 앱 종료/크래시가 미반영 근무를 지우지
+    /// 않게 하는 장부다 — didSet 이 쓰고 init 이 복원한다.
+    static let pendingWorkQueueKey = "check.workQueue.pending"
+
+    /// pendingItems 의 didSet 전용 영속. 빈 큐는 키 자체를 지운다 — "드레인 완료"가 디스크에도 그대로
+    /// 보이게 하고, 낡은 JSON 이 다음 실행에 유령 항목으로 되살아날 여지를 없앤다.
+    func persistPendingWorkQueue() {
+        guard !pendingItems.isEmpty else {
+            defaults.removeObject(forKey: Self.pendingWorkQueueKey)
+            return
+        }
+        guard let data = try? JSONEncoder().encode(pendingItems) else { return }
+        defaults.set(data, forKey: Self.pendingWorkQueueKey)
+    }
+
+    /// 이전 실행이 남긴 미반영 근무 큐. 깨진 데이터는 빈 큐로 접는다 — 복원 실패로 앱이 죽으면
+    /// 그 크래시가 큐보다 더 큰 것을 잃게 한다(다음 didSet 영속이 깨진 원본도 자연히 갈아 끼운다).
+    static func restoredPendingWorkQueue(from defaults: UserDefaults) -> [PendingWorkItem] {
+        guard let data = defaults.data(forKey: pendingWorkQueueKey) else { return [] }
+        return (try? JSONDecoder().decode([PendingWorkItem].self, from: data)) ?? []
+    }
 
     /// 캐릭터 오버레이 표시 여부를 지정하고 설정을 저장한다.
     func setOverlayEnabled(_ enabled: Bool) {
@@ -2003,7 +2098,8 @@ extension WorkTimerStore {
         showsRetroBanner = false
         // 미반영 근무 큐(pendingItems)와 진행 중 근무(startedAt/accumulatedSeconds)는 여기서 비우지 않는다.
         // 이 함수는 토큰 만료 강제 로그아웃(refresh token 부재/무효, 저장 세션 재활성 실패)에서도 불리는데,
-        // 큐는 UserDefaults 에 남지 않는 메모리 장부라 한 번 비우면 오프라인에서 쌓인 근무가 영구 소실된다.
+        // 여기서 비우면 didSet 영속(v0.2.36, check.workQueue.pending)까지 함께 지워져
+        // 오프라인에서 쌓인 근무가 영구 소실된다.
         // 대신 위에서 소유 계정(workStateOwnerUserID)을 남겨, 다음 로그인이 다른 계정이면 그때
         // adoptWorkStateOwner 가 큐와 진행 중 근무를 버린다(계정 오염 방지와 재로그인 재생을 양립시킨다).
         // 자리 비움 되돌리기 대상은 계정에 묶인 sessionID 라 함께 끊는다 — 남기면 재로그인한 다른 계정 화면에
@@ -2043,6 +2139,9 @@ extension WorkTimerStore {
         clearLongSessionPrompt()
         sleepBeganAt = nil
         clearAutoCloseUndo()
+        // 잠자기 마감 정정 마커도 계정에 묶인 관측이다. 남기면 앞 계정 세션의 sleep 정정이 새 계정의
+        // 폴링 수용 지점에서 소비를 시도하게 된다(세션 UUID 가 달라 실해는 없지만 관측 자체가 남의 것이다).
+        clearPendingSleepClose()
         // 자리 비움 상태도 계정에 묶인 값이다(복원 대상 세션 ID·서버 정책·입력 관측).
         clearAwayState()
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
@@ -2071,7 +2170,8 @@ private final class QuitBarrier {
 
 /// 서버 미반영 근무 조작 한 건. 조작 종류와 그 조작이 속한 세션 정보를 함께 담아, 큐가 나중에 드레인할 때
 /// currentSessionID/startedAt 의 이후 변화와 무관하게 정확히 재생되도록 한다(오프라인 복구 정합성).
-struct PendingWorkItem: Equatable {
+/// Codable 인 이유: 큐는 defaults 에 영속한다(pendingWorkQueueKey) — 오프라인 중 앱 종료/크래시 생존.
+struct PendingWorkItem: Equatable, Codable {
     let id: UUID
     let operation: PendingWorkOperation
     let sessionID: String
@@ -2102,4 +2202,14 @@ struct PendingWorkItem: Equatable {
         self.ownerUserID = ownerUserID
         self.autoCloseReason = autoCloseReason
     }
+}
+
+/// 근무 중 잠자기에 들어간 순간의 관측 스냅샷(v0.2.36). willSleep 에서 영속하고, 서버가 그 세션을
+/// abandoned 로 먼저 마감해 둔 것을 발견한 쪽(깨어남 순서 불문 — 폴링 수용 지점·다음 실행)이
+/// 이 값으로 sleep 정정을 큐에 실은 뒤 지운다. 세션이 정상 경로로 닫히면 그 자리에서 지운다.
+struct PendingSleepClose: Codable, Equatable {
+    let sessionID: String
+    let sessionStartedAt: Date
+    let sleepBeganAt: Date
+    let lastInputAt: Date?
 }

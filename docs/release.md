@@ -139,6 +139,8 @@ brew update && brew upgrade --cask aing-check
 
 앱은 공증(notarized)되어 있으므로 팀원은 격리 해제(`xattr`)나 `설치하기.command` 없이 바로 실행됩니다. 실행하면 메뉴바에 아이콘이 뜨고, 이후 가입/로그인 절차는 [`docs/team-install.md`](team-install.md) 의 2번 이후와 동일합니다.
 
+Cask 는 업그레이드/삭제 시 실행 중인 앱을 먼저 종료하고(`uninstall quit` — 앱 종료 훅이 근무중이면 퇴근 동기화 후 종료), 설치/업그레이드 완료 후에는 `postflight` 가 앱을 백그라운드로 재실행합니다 — 업그레이드가 앱을 종료만 하고 방치해 근무가 미기록되는 일을 막기 위한 짝입니다.
+
 ## 공개 릴리즈의 의미 (사용자 인지 사항)
 
 brew 배포는 앱 소스 저장소와 tap 저장소를 **public** 으로 두는 것을 전제로 합니다(private 저장소는 팀원마다 GitHub 인증 설정이 필요해 배포가 번거로워짐). 즉 **앱 바이너리(공증된 zip)와 Cask 가 인터넷에 공개**됩니다.

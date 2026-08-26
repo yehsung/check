@@ -18,6 +18,12 @@ cask "aing-check" do
 
   # 앱은 Developer ID 서명 + 공증 + 스테이플되어 있으므로 quarantine 조치 불필요.
 
+  # quit 훅과 짝: 설치/업그레이드가 끝나면 앱을 백그라운드로 재실행한다.
+  # 이게 없으면 업그레이드가 앱을 종료만 하고 방치해, 사용자가 눈치채기 전까지 근무가 기록되지 않는다.
+  postflight do
+    system_command "/usr/bin/open", args: ["-g", "#{appdir}/aing-check.app"]
+  end
+
   # 삭제/업그레이드 시 실행 중인 앱을 먼저 종료한다(앱의 종료 훅이 근무중이면 퇴근 동기화 후 종료).
   uninstall quit: "kingcheck"
 

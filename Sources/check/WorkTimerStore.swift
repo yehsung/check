@@ -95,6 +95,10 @@ final class WorkTimerStore {
     @ObservationIgnored let sessionRefreshCoordinator = SessionRefreshCoordinator()
     let hasAnonKey: Bool
     let defaults: UserDefaults
+    /// access/refresh 토큰 금고(TokenVault.swift). 비밀값은 defaults 가 아니라 **여기로만** 드나든다 —
+    /// v0.2.36 까지 토큰이 defaults 평문(kingcheck.plist)에 남아 refresh token 탈취로 영구 계정 탈취가
+    /// 가능했다(전면 감사 P0). userID/email 같은 비밀 아닌 값은 여전히 defaults 다.
+    @ObservationIgnored let tokenVault: TokenVault
     /// 월간 AI 토큰 사용량 스토어. 프로덕션은 전역 공유(.shared)라 토큰 행/업로드 트랙이 같은 집계를 읽는다.
     /// 테스트(특히 ImageRenderer 렌더)는 격리 인스턴스를 주입해, 뷰 .task 가 도는 렌더 중에도 실홈 스캔이
     /// 테스트 러너의 .standard 를 오염시키지 않게 한다(감지 대신 의존성 주입으로 격리 — 구조적 결정성).
@@ -800,6 +804,10 @@ final class WorkTimerStore {
         service: SupabaseWorkService = SupabaseWorkService(),
         environment: [String: String] = ProcessInfo.processInfo.environment,
         defaults: UserDefaults = .standard,
+        // ★ 기본값이 **nil** 이다(KeychainTokenVault() 가 아니라). 기본 인자는 호출 지점에서 평가되므로
+        //   금고를 여기서 만들면 주입을 잊은 테스트가 서명 안 된 러너로 실제 로그인 키체인을 오염시킨다.
+        //   nil 은 아래에서 defaultTokenVault 로 풀리고, 그 분기가 테스트 프로세스를 걸러 낸다.
+        tokenVault: TokenVault? = nil,
         workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter,
         tokenUsage: TokenUsageStore = .shared,
         // ★ 기본값이 **nil** 이다(라이브 전송자가 아니라). 이 저장소는 기본값이 라이브라서 스텁 주입을
@@ -811,6 +819,8 @@ final class WorkTimerStore {
         self.realtime = RealtimeRuntime(transport: realtimeTransport)
         self.service = service
         self.defaults = defaults
+        let resolvedVault = tokenVault ?? Self.defaultTokenVault(defaults: defaults)
+        self.tokenVault = resolvedVault
         self.tokenUsage = tokenUsage
         milestoneTracker = MilestoneTracker(defaults: defaults)
         hasAnonKey = SupabaseConfig.anonKey(environment: environment) != nil
@@ -830,7 +840,7 @@ final class WorkTimerStore {
         }
         // 기기 식별자는 최초 1회 생성 후 영속한다 — 맥 2대가 서로의 월 토큰 원장을 덮어쓰지 않게 하는 키(결함1).
         deviceID = Self.resolveDeviceID(defaults: defaults)
-        let restoredSession = Self.restoredSession(from: defaults)
+        let restoredSession = Self.restoredSession(from: defaults, vault: resolvedVault)
         session = restoredSession
         // 이번 실행에서 쌓일 큐/진행 중 근무의 주인은 복구된 세션의 계정이다(비로그인 시작이면 첫 로그인이 정한다).
         workStateOwnerUserID = restoredSession?.userID
@@ -1977,26 +1987,65 @@ extension WorkTimerStore {
         foreignDeviceTrackingSessionID = nil
     }
 
-    static func restoredSession(from defaults: UserDefaults) -> SupabaseSession? {
-        guard let accessToken = defaults.string(forKey: accessTokenKey),
+    /// 금고 미주입 시의 기본 금고. **분기는 여기 한 곳뿐이다.**
+    /// - 프로덕션: KeychainTokenVault — 토큰이 디스크 평문(kingcheck.plist)에서 로그인 키체인으로 옮겨진다.
+    /// - 테스트 프로세스: UserDefaultsTokenVault — 서명 안 된 테스트 러너가 실제 키체인을 오염시키지 않고,
+    ///   defaults 에 토큰을 시딩/단언하는 기존 스위트의 계약이 바이트 단위로 보존된다(TokenVault.swift 주석).
+    /// 판정은 CheckPanelVisibility.isRunningTests 재사용이다 — 그 주석이 "판정은 여기 한 곳뿐"이라 못 박았고
+    /// (dyld 의 .xctest 번들 실측, 프로덕션 상시 false), RealtimeTransport 도 같은 이유로 재사용했다.
+    static func defaultTokenVault(defaults: UserDefaults) -> TokenVault {
+        CheckPanelVisibility.isRunningTests
+            ? UserDefaultsTokenVault(defaults: defaults)
+            : KeychainTokenVault()
+    }
+
+    static func restoredSession(from defaults: UserDefaults, vault: TokenVault) -> SupabaseSession? {
+        migrateLegacyTokens(from: defaults, into: vault)
+        // 금고 우선, defaults 는 최후 폴백이다. 폴백이 실제로 잡히는 경우는 키체인 write 가 고장 난 맥
+        // (위 이행이 옮기지 못해 defaults 사본을 남긴 경우)뿐이다 — 그 맥에서 폴백이 없으면 brew 업그레이드
+        // 직후 첫 실행이 곧바로 로그아웃 화면이 된다. 정상 맥은 이행이 defaults 를 비우므로 폴백이 죽어 있다.
+        guard let accessToken = vault.read(accessTokenKey) ?? defaults.string(forKey: accessTokenKey),
               let userID = defaults.string(forKey: userIDKey)
         else {
             return nil
         }
         return SupabaseSession(
             accessToken: accessToken,
-            refreshToken: defaults.string(forKey: refreshTokenKey),
+            refreshToken: vault.read(refreshTokenKey) ?? defaults.string(forKey: refreshTokenKey),
             userID: userID
         )
     }
 
+    /// v0.2.36 이하가 defaults 평문에 남긴 토큰의 1회 자동 이행: 금고에 없고 defaults 에 있으면 금고로
+    /// 옮기고 defaults 에서 지운다. **brew 업그레이드 사용자 38명의 로그인 유지가 이 경로 하나에 달렸다** —
+    /// 없으면 업그레이드 첫 실행이 전원 로그아웃이다.
+    ///
+    /// 삭제는 **써진 것을 읽어 확인한 뒤에만** 한다. 금고 계약(write 실패 ⇒ read nil)상 읽어서 같으면
+    /// 정말 저장된 것이다. 키체인이 고장 난 맥에서 확인 없이 지우면 마지막 남은 토큰 사본을 태우는 셈이라,
+    /// 그 맥은 실패 시 defaults 사본을 남겨 다음 실행이 재시도한다(위 restoredSession 폴백의 짝).
+    /// 키별 독립 이행인 이유: refresh 없는 세션(access 만)도 합법이라(persistSession) 묶어 처리하면
+    /// 한쪽 부재가 다른 쪽 이행까지 막는다.
+    static func migrateLegacyTokens(from defaults: UserDefaults, into vault: TokenVault) {
+        for key in [accessTokenKey, refreshTokenKey] {
+            guard vault.read(key) == nil, let legacy = defaults.string(forKey: key) else { continue }
+            vault.write(legacy, key: key)
+            if vault.read(key) == legacy {
+                defaults.removeObject(forKey: key)
+            }
+        }
+    }
+
     func persistSession(_ session: SupabaseSession, email: String? = nil, displayName: String? = nil) {
-        defaults.set(session.accessToken, forKey: Self.accessTokenKey)
+        // 비밀값(access/refresh)은 금고로만, 비밀 아닌 값(userID/email/별명)은 defaults 로 — 이 함수가
+        // 그 경계선이다. 여기서 defaults.set(토큰) 을 한 줄이라도 되살리면 평문 유출(P0)이 그대로 재발한다.
+        tokenVault.write(session.accessToken, key: Self.accessTokenKey)
         defaults.set(session.userID, forKey: Self.userIDKey)
         if let refreshToken = session.refreshToken {
-            defaults.set(refreshToken, forKey: Self.refreshTokenKey)
+            tokenVault.write(refreshToken, key: Self.refreshTokenKey)
         } else {
-            defaults.removeObject(forKey: Self.refreshTokenKey)
+            // 옛 defaults 경로의 removeObject 와 같은 규약: refresh 없는 세션을 저장하면 앞 세션의
+            // refresh 가 지워져야 한다 — 남기면 다음 실행이 남의(앞 세션의) 회전 토큰으로 grant 를 친다.
+            tokenVault.delete(Self.refreshTokenKey)
         }
         if let email {
             defaults.set(email, forKey: Self.emailKey)
@@ -2022,6 +2071,10 @@ extension WorkTimerStore {
         // 재로그인 후 재시작이 자기 세션을 남의 것으로 오인해 하트비트가 끊기고, 10분 뒤 스캐빈저가 마감한다.
         // 세션 ID 는 UUID 라 다른 계정과 겹칠 수 없고, 계정이 실제로 바뀌면 adoptWorkStateOwner 가,
         // 사용자가 직접 로그아웃하면 signOut 이 그 자리에서 지운다.
+        // 금고와 defaults **둘 다** 지운다. defaults 쪽 토큰 키는 평상시엔 이행이 이미 비워 빈 삭제지만,
+        // 키체인 고장 맥이 남긴 평문 사본(migrateLegacyTokens 의 보존 분기)이 로그아웃 후에도 살아남으면
+        // 이 수정이 막으려던 유출이 '로그아웃했는데도' 계속되는 셈이라 반드시 함께 지운다.
+        [Self.accessTokenKey, Self.refreshTokenKey].forEach(tokenVault.delete)
         [Self.accessTokenKey, Self.refreshTokenKey, Self.userIDKey].forEach(defaults.removeObject)
         // 세션이 사라지면 리그 페이지 상태도 함께 초기화한다(signOut·토큰 만료 로그아웃 공통 경로).
         leaderboard = []

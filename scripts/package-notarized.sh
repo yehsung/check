@@ -30,7 +30,7 @@ NOTARIZE_ZIP="$ROOT/dist/aing-check-notarize.zip"
 rm -f "$NOTARIZE_ZIP"
 ditto -c -k --keepParent "$APP_PATH" "$NOTARIZE_ZIP"
 echo "공증 제출 중 (보통 2~10분)..." >&2
-xcrun notarytool submit "$NOTARIZE_ZIP" --keychain-profile check-notary --wait >&2
+xcrun notarytool submit "$NOTARIZE_ZIP" --keychain-profile "${NOTARY_PROFILE:-check-notary}" --wait >&2
 xcrun stapler staple "$APP_PATH" >&2
 rm -f "$NOTARIZE_ZIP"
 spctl --assess --type execute -v "$APP_PATH" >&2 || true

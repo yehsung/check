@@ -2622,6 +2622,9 @@ func refreshMenuBarTitleGuardsRedundantAssignment() {
     let now = TeamWeeklyGoal.koreanDayStart(for: Date()).addingTimeInterval(12 * 3600)
     store.startedAt = now.addingTimeInterval(-3_661) // 1시간 1분 1초
     store.displayNow = now
+    // v0.2.38 M1: 메뉴바 라벨은 팝오버 시계(displayNow)가 아니라 store.clock() 기준으로 계산한다
+    // (닫힌 팝오버에서 displayNow 는 얼어 있는데 라벨은 매초 살아야 하므로). 그래서 시계도 같은 now 로 고정한다.
+    pinClock(store, to: now)
     store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
 
     let firedOnChange = ObservationFlag()

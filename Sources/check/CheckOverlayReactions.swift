@@ -1,5 +1,7 @@
 import AppKit
 import Foundation
+import Metal
+import MetalKit
 import Observation
 import SceneKit
 
@@ -282,8 +284,12 @@ final class ReactionEngine {
 
     static let hitCooldown: TimeInterval = 0.6
 
-    /// 렌더 FPS 정책: 유휴/졸기는 느린 모션이라 8fps 로 충분하고, 리액션 재생 중에만 30fps 로 올린다.
-    static let idleFPS = 8
+    /// 렌더 FPS 정책: 유휴/졸기는 느린 모션이라 6fps 로 충분하고, 리액션 재생 중에만 30fps 로 올린다.
+    ///
+    /// v0.2.38 에 8 → **6**. 계측: 3D 상시 렌더가 유휴 CPU 의 ≈1.5%p 를 차지했고 그 대부분이 프레임 수에
+    /// 비례한다. 4 까지 내리면 부유(bob 1.8s 왕복)가 끊겨 보일 수 있어 6 에서 멈춘다 — "살아 있음"이 우선이라는
+    /// 제품 결정. 깜빡임(0.12s)은 이 값으로는 한 프레임도 안 잡히므로 blink 가 그 순간만 activeFPS 로 올린다.
+    static let idleFPS = 6
     static let activeFPS = 30
     /// 눈 깜빡임 지속(초). 사람의 깜빡임(0.1~0.15초)에 맞춘다 — 더 길면 '조는 것'으로 읽힌다.
     static let blinkSeconds: Double = 0.12
@@ -315,6 +321,26 @@ final class ReactionEngine {
     /// SCNView 렌더 루프 활성 여부(SwiftUI 관찰용). 패널 표시~근무종료 인사까지 true 로 유지해
     /// 근무종료 꾸벅 인사가 렌더되게 하고, 숨김 시 false 로 내려 렌더를 멈춘다(전력 배려).
     var renderActive = false
+    /// 렌더 **정지**(SwiftUI 관찰용, v0.2.38). `renderActive` 와 **직교**한다 — 그쪽은 표시 의도(패널 표시~근무종료
+    /// 인사)이고, 이쪽은 "지금 아무도 못 보는 순간"(화면 슬립·잠금·세션 비활성)이다. 캐릭터는 근무 중 항상 살아
+    /// 있어야 한다는 제품 결정 때문에 부재로는 멈추지 않고, **보이지 않을 때만** 멈춘다.
+    ///
+    /// 소유자는 `CheckOverlayController` 다: 정지 사유를 집합으로 관리해 **하나라도 남아 있으면 true**, 전부
+    /// 풀려야 false 로 내린다(슬립+잠금이 겹쳤을 때 먼저 풀린 쪽이 조기 재개시키지 않게). 표시 의도와 섞지 않으므로
+    /// 깨어나는 순간 이 값 하나만 내려가면 되고, SCNView 컨테이너(CheckCharacter3DView)는
+    /// `isActive && !renderSuspended` 로 렌더 활성을 계산해 isPlaying/isPaused 를 내리고 올린다.
+    /// 메인 액터에서만 읽고 쓴다.
+    ///
+    /// **정지 중 이 엔진이 지키는 것(β2 실측 후속)**: SceneKit 파티클 시스템은 node/scene `isPaused` 와 무관하게 렌더
+    /// 루프를 깨운다. 그래서 정지 중에는 졸기 진입을 거부하고(`request(.drowsy)`), 자는 중 💤 버스트는 스폰하지 않으며
+    /// (타이머는 산다), 리액션 요청은 **수용하되 모션·파티클은 걸지 않는다**(`runReaction`/emit*). 재개(true→false)
+    /// 순간에는 정지 중 만료된 리액션의 잔여 액션을 정리해 첫 프레임에 뒤늦게 튀지 않게 한다(`reconcileAfterResume`).
+    var renderSuspended = false {
+        didSet {
+            guard oldValue, !renderSuspended else { return }
+            reconcileAfterResume()
+        }
+    }
 
     @ObservationIgnored private(set) var activeKind: ReactionKind?
     @ObservationIgnored private var activeUntil: Date = .distantPast
@@ -333,22 +359,51 @@ final class ReactionEngine {
     @ObservationIgnored private weak var attachedView: SCNView?
     @ObservationIgnored private var modelExtent: CGFloat = 1
     @ObservationIgnored private var greetingClearTask: Task<Void, Never>?
-    /// 리액션 재생이 끝나면 FPS 를 유휴(8)로 되돌리는 태스크. 새 리액션이 들어오면 다시 스케줄된다.
+    /// 리액션 재생이 끝나면 FPS 를 유휴(idleFPS)로 되돌리는 태스크. 새 리액션이 들어오면 다시 스케줄된다.
     @ObservationIgnored private var fpsResetTask: Task<Void, Never>?
     /// 진행 중인 깜빡임(재진입 시 취소 — 눈이 감긴 채 남는 경로를 없앤다).
     @ObservationIgnored private var blinkTask: Task<Void, Never>?
-    /// 자는 동안 💤 를 주기적으로 방출하는 반복 태스크(3.5초 주기). 깨거나 인터럽트되면 취소된다.
+    /// 자는 동안 💤 를 주기적으로 방출하는 반복 태스크(`zzzIntervalSeconds` 주기). 깨거나 인터럽트되면 취소된다.
     @ObservationIgnored private var zzzTask: Task<Void, Never>?
+    /// 💤 버스트 주기(초).
+    static let zzzIntervalSeconds: TimeInterval = 3.5
+    /// 💤 루프의 수면. 프로덕션은 실제 `Task.sleep`, **테스트만** 갈아 끼운다(CheckOverlayController.blinkSleep 과 같은
+    /// 규약) — "정지 중엔 스폰을 건너뛰고 재개 후 다시 스폰한다"를 3.5초 실시간 없이 tick 단위로 검증하기 위해.
+    @ObservationIgnored var zzzSleep: @Sendable (Double) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
     /// 이번 잠의 자동 기상 타이머. 클릭·찔림 등으로 먼저 깨면 endSleep 이 취소한다.
     @ObservationIgnored private var napTask: Task<Void, Never>?
 
     // MARK: - 감은 눈(sleeping) 자원. attach 에서 1회 찾아 캐시하고, 졸기 진입/이탈 시 텍스처·선을 토글한다.
     /// 얼굴 재질(큰 CGImage 디퓨즈). sleeping 시 디퓨즈를 감은 눈 텍스처로 교체하고 깨면 원복한다.
     @ObservationIgnored private weak var faceMaterial: SCNMaterial?
-    /// 깨어 있을 때의 원본 디퓨즈(교체 전 값). 원복에 쓴다.
-    @ObservationIgnored private var awakeDiffuse: Any?
+    /// 깨어 있을 때의 원본 디퓨즈(교체 전 값). 원복에 쓴다(GPU 텍스처가 없는 폴백 경로).
+    @ObservationIgnored private var awakeDiffuse: CGImage?
     /// 눈을 피부로 덮은 sleeping 디퓨즈(1회 생성 캐시). nil 이면 커버 실패 → 텍스처 교체 생략(선만).
     @ObservationIgnored private var sleepDiffuse: CGImage?
+
+    // MARK: - 얼굴 GPU 텍스처(v0.2.38, M5). 깜빡임·졸기의 디퓨즈 교체를 CGImage 재변환 없이 포인터 대입으로.
+    //
+    // 계측: `diffuse.contents` 에 CGImage 를 대입할 때마다 SceneKit 이 CGImage→GPU 변환(C3DImageCacheBitmap,
+    // vPremultipliedAlphaBlend, renderResourceForImage:)을 **매번 다시** 한다 — 3~7초마다 오는 깜빡임이 켜고 끌 때
+    // 512² 텍스처를 두 번씩 새로 올렸다. 그래서 attach 시점에 뜬 눈/감은 눈을 `MTLTexture` 로 한 번만 올려 두고,
+    // 이후 교체는 그 객체를 대입만 한다(SceneKit 은 MTLTexture 를 변환 없이 그대로 샘플한다).
+    //
+    // 폴백: 뷰가 없거나(헤드리스 attach) 뷰에 Metal 디바이스가 없으면 텍스처를 만들지 않고 예전 CGImage 경로를
+    // 그대로 탄다 — 헤드리스 테스트는 `diffuse.contents` 에서 CGImage 픽셀을 읽어 검증한다.
+    // 텍스처는 **뷰의 디바이스**로 만든다(시스템 기본 디바이스가 아니라) — 다중 GPU 에서 렌더러와 다른 디바이스의
+    // 텍스처는 그릴 수 없다. 디바이스가 바뀌면(재-attach) 다시 만든다.
+    @ObservationIgnored private var awakeFaceTexture: (any MTLTexture)?
+    @ObservationIgnored private var sleepFaceTexture: (any MTLTexture)?
+    @ObservationIgnored private var faceTextureDevice: (any MTLDevice)?
+    /// 헤드리스 검증 지점(카운터 훅): 얼굴 디퓨즈에 **CGImage 를 대입한** 횟수. GPU 텍스처 경로가 살아 있으면
+    /// 깜빡임·졸기 동안 0 이어야 한다(한 번이라도 오르면 SceneKit 재변환이 되살아난 것).
+    @ObservationIgnored private(set) var faceDiffuseCGImageAssignments = 0
+    /// 헤드리스 검증 지점(카운터 훅): 얼굴 디퓨즈에 **MTLTexture 를 대입한** 횟수.
+    @ObservationIgnored private(set) var faceDiffuseTextureAssignments = 0
+    /// 뜬 눈/감은 눈 GPU 텍스처가 둘 다 준비돼 있는가(헤드리스 검증 지점).
+    var hasFaceTextures: Bool { awakeFaceTexture != nil && sleepFaceTexture != nil }
     /// 감은 눈 선 오버레이 노드(좌/우). sleeping 시 보이고 평상시 숨긴다.
     @ObservationIgnored private weak var closedEyeLeft: SCNNode?
     @ObservationIgnored private weak var closedEyeRight: SCNNode?
@@ -419,6 +474,7 @@ final class ReactionEngine {
         let extent = CGFloat(max(maxB.x - minB.x, max(maxB.y - minB.y, maxB.z - minB.z)))
         modelExtent = extent > 0 ? extent : 1
         locateSleepEyeTargets(in: sceneRoot)
+        prepareFaceTextures(device: view?.device)
 
         switch state {
         case .playing(let kind):
@@ -455,6 +511,9 @@ final class ReactionEngine {
         faceMaterial = nil
         awakeDiffuse = nil
         sleepDiffuse = nil
+        awakeFaceTexture = nil
+        sleepFaceTexture = nil
+        faceTextureDevice = nil
         var found: (material: SCNMaterial, image: CGImage, geometry: SCNGeometry?)?
         sceneRoot.enumerateHierarchy { node, stop in
             for material in node.geometry?.materials ?? [] {
@@ -477,16 +536,88 @@ final class ReactionEngine {
         sleepDiffuse = CheckCharacter3DScene.makeClosedEyesImage(faceImage: cg, geometry: geometry)
     }
 
+    /// 뜬 눈/감은 눈 GPU 텍스처를 (재)준비한다. `device` 가 nil 이면 텍스처를 버리고 CGImage 폴백으로 남는다.
+    /// 같은 디바이스로 이미 준비돼 있으면 no-op. 새로 만들었고 지금 자는 중이 아니면 뜬 눈 텍스처를 곧바로
+    /// 재질에 얹는다 — 그래야 첫 프레임부터 SceneKit 이 CGImage 를 변환할 일이 아예 없다.
+    private func prepareFaceTextures(device: (any MTLDevice)?) {
+        guard let device, let awake = awakeDiffuse, let sleep = sleepDiffuse else {
+            awakeFaceTexture = nil
+            sleepFaceTexture = nil
+            faceTextureDevice = nil
+            return
+        }
+        if hasFaceTextures, let current = faceTextureDevice, current === device { return }
+        let awakeTexture = Self.makeFaceTexture(awake, device: device)
+        let sleepTexture = Self.makeFaceTexture(sleep, device: device)
+        guard let awakeTexture, let sleepTexture else {
+            // 한 장이라도 실패하면 둘 다 버린다 — 뜬 눈은 GPU, 감은 눈은 CGImage 같은 반쪽 상태를 두지 않는다.
+            awakeFaceTexture = nil
+            sleepFaceTexture = nil
+            faceTextureDevice = nil
+            return
+        }
+        awakeFaceTexture = awakeTexture
+        sleepFaceTexture = sleepTexture
+        faceTextureDevice = device
+        if !isSleeping { setFaceDiffuse(closed: false) }
+    }
+
+    /// 얼굴 디퓨즈 CGImage 를 SceneKit 이 그대로 샘플할 수 있는 `MTLTexture` 로 올린다(밉맵 포함, GPU 전용 저장).
+    ///
+    /// **색공간**: SceneKit 은 CGImage 디퓨즈를 sRGB 로 보고 선형 공간에서 렌더한다(샘플 시 감마 해제 → 프레임버퍼
+    /// 재인코딩). MTKTextureLoader 는 macOS 에서 CGImage 를 `.SRGB` 옵션과 무관하게 `rgba8Unorm`(선형) 으로 올리므로
+    /// (실측) 그대로 쓰면 이중 인코딩으로 허옇게 뜬다 — 같은 저장소를 `rgba8Unorm_srgb` 로 다시 보는 텍스처 뷰를
+    /// 돌려준다. 알파는 로더가 CGImage 를 premultiplied 로 그려 넣으므로 SceneKit 의 CGImage 경로(vPremultipliedAlpha)
+    /// 와 같다. 밉맵을 함께 만드는 이유: SceneKit 의 기본 mipFilter 는 nearest 라 CGImage 경로도 밉맵을 쓴다 —
+    /// 없으면 축소 시 더 날카롭게(다르게) 보인다. 동일성은 V0238OverlayTests 의 렌더 픽셀 diff 가 고정한다.
+    /// 실패(로더 예외) 시 nil → 호출측이 CGImage 폴백을 유지한다.
+    nonisolated static func makeFaceTexture(_ image: CGImage, device: any MTLDevice) -> (any MTLTexture)? {
+        let loader = MTKTextureLoader(device: device)
+        let options: [MTKTextureLoader.Option: Any] = [
+            .generateMipmaps: true,
+            .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue),
+            .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue)
+        ]
+        guard let linear = try? loader.newTexture(cgImage: image, options: options) else { return nil }
+        let srgbFormat: MTLPixelFormat
+        switch linear.pixelFormat {
+        case .rgba8Unorm: srgbFormat = .rgba8Unorm_srgb
+        case .bgra8Unorm: srgbFormat = .bgra8Unorm_srgb
+        case .rgba8Unorm_srgb, .bgra8Unorm_srgb: return linear
+        default: return nil // 예상 밖 포맷(예: 16비트) — 색을 장담할 수 없으니 CGImage 폴백.
+        }
+        return linear.makeTextureView(pixelFormat: srgbFormat)
+    }
+
+    /// 얼굴 디퓨즈를 뜬 눈/감은 눈으로 바꾼다. GPU 텍스처가 있으면 그 객체를 대입하고(재변환 없음), 없으면
+    /// CGImage 폴백. 어느 쪽이든 자원이 없으면 아무것도 하지 않는다(선만 토글 — 기존 계약).
+    private func setFaceDiffuse(closed: Bool) {
+        guard let faceMaterial else { return }
+        if let awakeFaceTexture, let sleepFaceTexture {
+            faceMaterial.diffuse.contents = closed ? sleepFaceTexture : awakeFaceTexture
+            faceDiffuseTextureAssignments += 1
+            return
+        }
+        if closed {
+            guard let sleep = sleepDiffuse else { return }
+            faceMaterial.diffuse.contents = sleep
+        } else {
+            guard let awake = awakeDiffuse else { return }
+            faceMaterial.diffuse.contents = awake
+        }
+        faceDiffuseCGImageAssignments += 1
+    }
+
     /// 감은 눈 적용: 얼굴 디퓨즈를 눈 덮은 버전으로 교체하고 감은 선 노드를 보인다.
     private func applyClosedEyes() {
-        if let sleep = sleepDiffuse { faceMaterial?.diffuse.contents = sleep }
+        setFaceDiffuse(closed: true)
         closedEyeLeft?.isHidden = false
         closedEyeRight?.isHidden = false
     }
 
     /// 감은 눈 해제: 얼굴 디퓨즈를 원복하고 감은 선 노드를 숨긴다(멱등).
     private func restoreEyes() {
-        if let awake = awakeDiffuse { faceMaterial?.diffuse.contents = awake }
+        setFaceDiffuse(closed: false)
         closedEyeLeft?.isHidden = true
         closedEyeRight?.isHidden = true
     }
@@ -495,14 +626,15 @@ final class ReactionEngine {
     /// 새 에셋도 픽셀 연산도 없다 — 리깅이 없어 눈꺼풀을 못 움직이는 이 모델에서 '살아 있음'을 만드는 유일한 수단.
     ///
     /// idle 일 때만 깜빡인다: 자는 중엔 이미 같은 자산으로 눈이 감겨 있고(깜빡이면 오히려 눈을 뜬다),
-    /// 리액션 재생 중엔 그 연출이 표정을 쓰고 있다.
+    /// 리액션 재생 중엔 그 연출이 표정을 쓰고 있다. 렌더가 정지된 동안(renderSuspended — 화면 슬립·잠금)도
+    /// 물러난다: 아무도 못 보는데 FPS 를 올리고 텍스처를 바꿀 이유가 없다.
     func blink() {
-        guard renderActive, sleepDiffuse != nil, state == .idle else { return }
+        guard renderActive, !renderSuspended, sleepDiffuse != nil, state == .idle else { return }
         blinkTask?.cancel()
         blinkTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            // 유휴 8fps 에서 0.12초는 한 프레임도 안 잡혀 깜빡임이 통째로 보이지 않는다. 이 순간만 올리고
-            // 곧바로 되돌린다(scheduleFPSReset 이 재생 중이면 유지, 아니면 8fps 로 복귀).
+            // 유휴 6fps 에서 0.12초는 한 프레임도 안 잡혀 깜빡임이 통째로 보이지 않는다. 이 순간만 올리고
+            // 곧바로 되돌린다(scheduleFPSReset 이 재생 중이면 유지, 아니면 idleFPS 로 복귀).
             self.setRenderFPS(Self.activeFPS)
             self.applyClosedEyes()
             try? await Task.sleep(for: .seconds(Self.blinkSeconds))
@@ -546,7 +678,7 @@ final class ReactionEngine {
         attachedView?.preferredFramesPerSecond = fps
     }
 
-    /// `seconds` 뒤 상태가 여전히 idle/sleeping 이면 FPS 를 유휴(8)로 되돌린다. 리액션이 이어지면 새로 스케줄된다.
+    /// `seconds` 뒤 상태가 여전히 idle/sleeping 이면 FPS 를 유휴(idleFPS)로 되돌린다. 리액션이 이어지면 새로 스케줄된다.
     private func scheduleFPSReset(after seconds: TimeInterval) {
         fpsResetTask?.cancel()
         fpsResetTask = Task { @MainActor [weak self] in
@@ -663,6 +795,10 @@ final class ReactionEngine {
 
         // drowsy 는 일회성 재생이 아니라 지속 상태(sleeping)로의 진입이다.
         if case .drowsy = kind {
+            // 렌더 정지 중(화면 슬립·잠금)엔 잠들지 않는다: 졸기는 가라앉는 액션 + 💤 파티클 루프를 세우는데,
+            // 파티클은 isPaused 를 무시하고 렌더 루프를 깨워 정지가 무효가 된다. 아무도 못 보는 졸기는 의미도 없다.
+            // 컨트롤러의 canEnterDrowsy 도 같은 조건을 보지만, 진입 거부의 최종 문은 여기다.
+            guard !renderSuspended else { return false }
             beginSleep()
             return true
         }
@@ -799,7 +935,12 @@ final class ReactionEngine {
         endSleep()
         if let node = reactionNode {
             node.removeAction(forKey: Self.reactionActionKey)
-            node.runAction(ReactionActions.drowsyRise(), forKey: Self.reactionActionKey)
+            if renderSuspended {
+                // 정지 중(노드 isPaused)에 건 액션은 재개 순간 뒤늦게 재생된다 — 잠금 화면 뒤에서 깬 잠은 스냅으로 세운다.
+                resetPose()
+            } else {
+                node.runAction(ReactionActions.drowsyRise(), forKey: Self.reactionActionKey)
+            }
         }
     }
 
@@ -883,7 +1024,7 @@ final class ReactionEngine {
     /// 각도가 갈려, 드래그로 돌아본 각도와 재-attach 후 각도가 다른 기괴한 상태가 된다.
     private func applyDragFacingToNode() {
         guard let facing = facingNode else { return }
-        // 애니메이션 없이 즉시 스냅한다: 드래그 중 렌더는 유휴 8fps 라 0.15s 회전이 한두 프레임으로 쪼개져
+        // 애니메이션 없이 즉시 스냅한다: 드래그 중 렌더는 유휴 6fps 라 0.15s 회전이 한두 프레임으로 쪼개져
         // "뚝뚝 끊기는" 느낌을 준다는 실사용 피드백 — 방향 전환은 그 프레임에 한 번에 돌아보는 게 낫다.
         facing.removeAction(forKey: Self.facingActionKey)
         facing.eulerAngles = SCNVector3(0, CGFloat(dragFacing) * Self.dragFacingAngle, 0)
@@ -953,18 +1094,40 @@ final class ReactionEngine {
         zzzTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self, self.isSleeping else { return }
-                self.spawnZzzBurst()
-                try? await Task.sleep(for: .seconds(3.5))
+                // 렌더 정지 중엔 스폰만 건너뛴다(타이머는 산다): 파티클은 isPaused 를 무시하고 렌더 루프를 깨운다.
+                if !self.renderSuspended { self.spawnZzzBurst() }
+                let sleep = self.zzzSleep
+                await sleep(Self.zzzIntervalSeconds)
             }
         }
     }
 
     /// wrapper 에 리액션 시퀀스를 건다. 시퀀스는 identity 에서 시작해 identity 로 끝나므로 잔상이 남지 않는다.
     /// 상태 만료(idle 복귀)는 clock(expireIfNeeded)이 담당한다(렌더 루프 유무와 무관하게 결정적).
+    ///
+    /// 렌더 정지 중(renderSuspended)에는 **걸지 않는다** — 숨김 패널 규약과 같은 선택이다: 그쪽은 노드가 없어 모션이
+    /// 자연 no-op 이고 상태·말풍선만 남는다(peek 이 그 위에 서 있다). 여기서도 요청은 수용돼 상태(clock 만료)·말풍선·
+    /// 우선순위는 그대로 흐르고 모션만 빠진다. 대안(재개 후 재생)은 정지 중 걸린 액션이 β2 의 isPaused 해제 순간
+    /// 한꺼번에 튀는 바로 그 증상이라 택하지 않는다. 정지 전에 이미 걸린 액션은 clock 만료 여부로 재개 시 정리한다.
     private func runReaction(_ action: SCNAction) {
-        guard let node = reactionNode else { return }
+        guard let node = reactionNode, !renderSuspended else { return }
         resetPose()
         node.runAction(action, forKey: Self.reactionActionKey)
+    }
+
+    /// 재개(renderSuspended true→false) 직후 정리: 정지 중 clock 으로 만료된 리액션이 노드에 액션·파티클을 남겨 뒀으면
+    /// 걷어낸다 — 안 걷어내면 β2 가 isPaused 를 푸는 첫 프레임에 옛 모션이 뒤늦게 튄다. 아직 만료 전이면 그대로
+    /// 이어서 재생하게 두고(0.x초 잔여), 자는 중(drowsySink 가 같은 키)은 건드리지 않는다.
+    private func reconcileAfterResume() {
+        expireIfNeeded()
+        guard activeKind == nil, !isSleeping, let node = reactionNode,
+              node.action(forKey: Self.reactionActionKey) != nil || sceneRoot?.childNodes.contains(where: {
+                  $0.name == Self.confettiNodeName || $0.name == Self.goalSparkNodeName || $0.name == Self.ultraChargeNodeName
+              }) == true
+        else { return }
+        interruptCurrent()
+        fpsResetTask?.cancel()
+        setRenderFPS(Self.idleFPS)
     }
 
     // MARK: - 말풍선(공통)
@@ -984,7 +1147,7 @@ final class ReactionEngine {
     // MARK: - 색종이 버스트(마일스톤)
 
     private func emitConfetti() {
-        guard let root = sceneRoot else { return }
+        guard let root = sceneRoot, !renderSuspended else { return }
         removeTransientNodes()
         let emitter = SCNNode()
         emitter.name = Self.confettiNodeName
@@ -1000,7 +1163,7 @@ final class ReactionEngine {
     /// 주간 목표 달성 스파크: **발밑에서 솟는다**(색종이는 머리 위에서 떨어진다). emitConfetti 와 같은 규약 —
     /// removeTransientNodes 선행 + 이름 부여 + 자가 제거.
     private func emitGoalSparks() {
-        guard let root = sceneRoot else { return }
+        guard let root = sceneRoot, !renderSuspended else { return }
         removeTransientNodes()
         let emitter = SCNNode()
         emitter.name = Self.goalSparkNodeName
@@ -1018,7 +1181,7 @@ final class ReactionEngine {
     /// 대신 양수 속도 + 방출구 노드를 SCNAction 으로 오므린다 — SCNAction 은 이 파일이 이미 값으로
     /// 검증하고 있는 언어다(collapse 액션의 존재를 테스트가 키로 확인한다).
     private func emitUltraCharge() {
-        guard let root = sceneRoot else { return }
+        guard let root = sceneRoot, !renderSuspended else { return }
         removeTransientNodes()
         let emitter = SCNNode()
         emitter.name = Self.ultraChargeNodeName

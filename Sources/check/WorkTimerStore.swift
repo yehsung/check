@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Network
 import Observation
 
 /// 비밀번호 재설정(메일 OTP) 진행 단계. **화면 선택의 유일한 근거**라 별도 Bool 플래그를 두지 않는다 —
@@ -204,9 +205,12 @@ final class WorkTimerStore {
         guard isMenuPresented != presented else { return }
         isMenuPresented = presented
         if presented {
-            displayNow = Date()
+            // 닫힌 동안 얼어 있던 팝오버 시계를 여는 순간 되맞춘다(티커는 닫힌 팝오버에 이 값을 쓰지 않는다 — M1).
+            displayNow = clock()
             // 팝오버가 닫혀 있는 동안 티커가 멈춰 있었을 수 있으므로 유예형 배너 판정을 지금 시각으로 되맞춘다.
             refreshTimedBanner()
+            // 감속(60초) 중이던 티커를 1초 주기로 되돌린다 — 안 그러면 최대 60초 동안 초침이 멈춘 팝오버가 보인다.
+            restoreTickerCadenceIfSlowed()
             stopTimerIfIdle()
             if isLeaderboardVisible { loadLeaderboard() }
             if isTokenBoardVisible { loadTokenBoard() }
@@ -257,6 +261,29 @@ final class WorkTimerStore {
     @ObservationIgnored private var wakeObserverToken: NSObjectProtocol?
     @ObservationIgnored private var observedWorkspaceCenter: NotificationCenter?
 
+    // ── 깨움 결합 게이트 (v0.2.38 M7) ──
+    /// 네트워크 경로 관측자(주입점). **nil 이면 게이트가 없다** = 깨움 즉시 예전 순서. 테스트 프로세스의 기본값이 nil 이고
+    /// 프로덕션은 defaultNetworkPath 가 NWPathMonitor 관측자를 채운다 — 리얼타임 전송자의 nil 규약과 같은 모양이다
+    /// (주입을 잊은 테스트가 실제 경로 모니터를 띄우지도, 그 비동기 순서에 흔들리지도 않는다).
+    @ObservationIgnored var networkPath: NetworkPathObserving? = WorkTimerStore.defaultNetworkPath()
+    /// 결합 대기 상한(초). 넘기면 결합 여부와 무관하게 진행한다 — **영구 대기 금지**(관측자가 무엇이든 스토어가 상한을 건다).
+    @ObservationIgnored var wakeGateTimeoutSeconds: TimeInterval = 10
+    /// 상한 타이머의 잠(주입). passwordResetSleep 과 같은 규약 — 테스트가 짧게 줄인다.
+    @ObservationIgnored var wakeGateSleep: @Sendable (TimeInterval) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
+    /// 서 있는 게이트. 열리면(결합 또는 상한) 스스로 nil 이 되고 붙잡아 둔 루프를 되살린다(releaseWakeGate).
+    @ObservationIgnored var wakeGateTask: Task<Void, Never>?
+    /// 게이트가 내려 둔 루프들. 열릴 때 refresh 루프는 **본문 먼저**로, 찔림 폴링은 평소대로 다시 세운다.
+    @ObservationIgnored var refreshLoopHeldByWakeGate = false
+    @ObservationIgnored var pokePollHeldByWakeGate = false
+    /// 게이트 뒤 첫 폴링 본문의 되맞춤 자리에서 넣을 리얼타임 `.didWake` 가 남아 있는가.
+    @ObservationIgnored var wakeRejoinPending = false
+
+    /// 마지막으로 팀 상태(work_statuses 4 GET)를 **성공적으로** 받은 시각 — 팝오버 재오픈 15초 스로틀(Q10)의 근거.
+    /// v0.2.38 δ 가 이 파일을 못 고쳐 Sync 확장의 약참조 측면 표로 심었던 값을 저장 프로퍼티로 이관했다. 관찰 대상 아님.
+    @ObservationIgnored var lastTeamStatusAt: Date = .distantPast
+
     var snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
 
     /// 이 스토어의 '지금'. 프로덕션은 항상 `Date()` 라 동작이 바이트 하나 달라지지 않고, 테스트만 갈아 끼운다.
@@ -271,7 +298,18 @@ final class WorkTimerStore {
     /// 주입 범위는 이 계약이 지나는 경로(자동 마감 · 되돌리기 · 흡수 · 배너 유예 · 틱)로 한정한다.
     @ObservationIgnored var clock: () -> Date = { Date() }
 
+    /// **팝오버 시계.** CheckMenuView 의 초 단위 잎(큰 타이머·주간 게이지·팀원 행·쿨타임)이 읽는 '지금'이다.
+    /// v0.2.38(M1)부터 티커는 **팝오버가 열려 있을 때만** 이 값을 매초 대입한다 — 닫혀 있어도 뷰 트리는 상주하므로
+    /// 그 상태의 대입은 보이지 않는 화면을 매초 재평가·재레이아웃시킬 뿐이었다(계측: 유휴 main 스레드 1.06%,
+    /// 15초 샘플 NSHostingView.layout 22~115회). 닫힌 동안 얼어 있다가 setMenuPresented(true) 가 여는 순간
+    /// 즉시 되맞추므로 사용자에게는 보이지 않는다.
+    /// 그래서 이 값은 **표시 전용**이다: 메뉴바 라벨·마일스톤·자동 마감·복원/흡수 경로는 이 값이 아니라 `clock()` 을
+    /// 쓴다(todayDuration(at:)). 얼어 있는 시계로 정책을 판정하면 닫힌 팝오버가 곧 멈춘 근무 기록이 된다.
     var displayNow = Date()
+    /// **오버레이 시계.** 캐릭터 패널의 타이머 라벨이 읽을 '지금'(팝오버 시계와 분리 — 둘이 한 값이면 한쪽만 보일 때도
+    /// 두 표면이 함께 무효화된다). 티커는 **패널이 보일 때**(overlayClockIsShowing = 오버레이 켜짐 && 근무 중)만
+    /// 매초 대입한다. 라벨은 overlayTodayDuration 을 읽는다(CheckCharacter3DView 전환은 β2 완료 후).
+    var overlayNow = Date()
     var displayName: String
     var email: String
     var password = ""
@@ -759,8 +797,17 @@ final class WorkTimerStore {
     @ObservationIgnored var isUpdatingTeamGoal = false
 
 
-    var todayDuration: Int {
-        let dayStart = TeamWeeklyGoal.koreanDayStart(for: displayNow)
+    /// 오늘 누적(초) — **팝오버 시계 기준**(뷰 전용 접근자). 닫힌 팝오버에서는 그 시계가 얼어 있으므로 정책·라벨·복원
+    /// 경로는 이 값을 읽지 말고 `todayDuration(at: clock())` 을 써라(M1 — 시계 3종 분리).
+    var todayDuration: Int { todayDuration(at: displayNow) }
+
+    /// 오버레이 타이머 라벨용 오늘 누적(초) — 오버레이 시계 기준. 패널이 보일 때만 매초 바뀐다.
+    var overlayTodayDuration: Int { todayDuration(at: overlayNow) }
+
+    /// 주어진 시각 기준 오늘 누적(초). **근무 기록의 유일한 산식**이고 어떤 티커·표시 시계에도 매달리지 않는다 —
+    /// 메뉴바 라벨(refreshMenuBarTitle)·마일스톤(evaluateTimeMilestones)·복원/흡수 경로가 `clock()` 을 넣어 부른다.
+    func todayDuration(at now: Date) -> Int {
+        let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
         // 누적 기여는 그 값이 '오늘' 것일 때만 센다: 스탬프(accumulatedDayStart)가 오늘 자정 이후면 유효,
         // 아니면 0. 자정을 넘겨 어제 누적이 오늘 표시를 부풀리거나 새 날 마일스톤을 오발화시키지 않게 한다.
         let accumulatedContribution = accumulatedDayStart >= dayStart ? accumulatedSeconds : 0
@@ -768,7 +815,15 @@ final class WorkTimerStore {
         // 진행 세션 기여를 KST 자정으로 클리핑한다: 자정을 넘긴 세션이 오늘 표시를 부풀리거나 자정 직후
         // 마일스톤이 오발화하지 않게 하고, 시계 되돌림으로 음수가 되면 0으로 클램프한다.
         let effectiveStart = max(startedAt, dayStart)
-        return accumulatedContribution + max(0, Int(displayNow.timeIntervalSince(effectiveStart)))
+        return accumulatedContribution + max(0, Int(now.timeIntervalSince(effectiveStart)))
+    }
+
+    /// 상태 전이 지점(근무 시작·종료·복원·흡수·되돌리기)에서 표시 시계 둘을 그 시각으로 맞춘다. 전이는 어차피
+    /// snapshot 재대입으로 두 표면을 다시 그리므로 여기서의 대입은 "닫힌 팝오버를 매초 건드리지 않는다"(M1)와
+    /// 무관하다 — 그 규약은 **티커**의 것이다. 전이 직후 첫 그림이 낡은 시계로 그려지지 않게 하는 것이 목적이다.
+    func stampDisplayClocks(_ now: Date) {
+        displayNow = now
+        overlayNow = now
     }
 
     /// 내 이번 주 누적(초). 팀 목록에서 내 행의 라이브 주간값을 쓰고, 아직 못 받았으면 오늘 누적으로 대체한다.
@@ -932,7 +987,7 @@ final class WorkTimerStore {
         workStateWriteGeneration &+= 1
         // 새 근무를 시작하면 직전 자동 마감 되돌리기는 무효다(옛 세션으로 현 세션을 덮어쓰지 못하게 즉시 끊는다).
         clearAutoCloseUndo()
-        displayNow = now
+        stampDisplayClocks(now)
         startedAt = now
         // 세션 ID 는 **만드는 순간 정규화**한다. Swift 의 UUID().uuidString 은 대문자인데 서버의
         // work_sessions.id / work_statuses.active_session_id 는 Postgres uuid 네이티브 타입이라 소문자로
@@ -997,7 +1052,7 @@ final class WorkTimerStore {
         workStateWriteGeneration &+= 1
         // 서버 복구 경로(applyRemoteOwnStatus)로 시작된 세션이라 start() 를 안 탔을 수 있으므로 여기서도 끊는다.
         clearAutoCloseUndo()
-        displayNow = now
+        stampDisplayClocks(now)
         // 서버 전송 duration 은 세션 전체를 유지한다(서버가 타임스탬프로 클리핑). 로컬 누적 가산만 오늘 자정으로
         // 클리핑해, 자정을 넘긴 세션이 '오늘 누적'에 통째로 더해져 표시가 점프하는 것을 막는다.
         let duration = max(0, Int(now.timeIntervalSince(startedAt)))
@@ -1128,7 +1183,17 @@ final class WorkTimerStore {
     func handleWake(at date: Date = Date()) {
         // ⚠️ **맨 앞이다.** 아래로는 조기 리턴 가지가 셋(sleepBeganAt nil / 유예 이내 / 흡수 세션)이라
         //    뒤에 붙이면 실제 경로 대부분에서 재연결이 안 돈다 = 뚜껑을 열어도 찌르기가 영영 안 온다.
-        realtimeApply(.didWake, at: date)
+        // v0.2.38 M7 — 네트워크 관측자가 있으면(프로덕션) 재연결을 **결합 게이트 뒤**로 미룬다. 깨움 직후에는 모든
+        // 루프의 Task.sleep 이 동시에 만료돼 Wi-Fi 가 붙기도 전에 요청이 폭주하고 소켓이 즉시 재연결을 시도했다.
+        // 게이트가 열리면(satisfied 또는 상한 10초) 폴링 본문 1회 → 리얼타임 didWake 순서로 발사한다(beginWakeGate).
+        // 관측자가 없으면(테스트 기본값·주입 안 함) 예전 그대로 즉시 재연결한다.
+        // 아래 로컬 판정(잠자기 정정 마감)은 네트워크와 무관하므로 게이트를 기다리지 않는다 — 그 결과(정정 큐)만
+        // 게이트 뒤에서 나간다(enqueueSync 가 게이트를 기다린다). 정정은 늦춰질 뿐 잃지 않는다.
+        if networkPath != nil {
+            beginWakeGate()
+        } else {
+            realtimeApply(.didWake, at: date)
+        }
         guard let sleepBeganAt, startedAt != nil else {
             self.sleepBeganAt = nil
             return
@@ -1597,11 +1662,14 @@ final class WorkTimerStore {
         tickerTask?.cancel()
         tickerTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                // 표시값은 wall-clock 파생이라 누적 오차가 없어 tolerance 로 웨이크업을 병합해도 안전하다.
-                try? await Task.sleep(for: .seconds(1), tolerance: .milliseconds(200))
+                // 주기는 매 반복 앞에서 다시 정한다: 평소 1초, 표시 없는 근무가 1시간 넘게 이어지면 60초(분 경계 정렬).
+                // 표시값은 wall-clock(clock()) 파생이라 주기가 얼마든 누적 오차가 없다 — tolerance 로 웨이크업을 병합해도 안전하다.
+                guard let delay = self?.armNextTickDelay() else { return }
+                try? await Task.sleep(for: .seconds(delay), tolerance: .milliseconds(200))
                 // 스토어가 해제됐으면 루프를 빠져나간다 — weak self 라 tick 는 no-op 이 되지만 루프 자체는 계속
-                // 돌아 좀비가 되므로 self 소멸 시 명시적으로 탈출한다.
-                guard let self else { return }
+                // 돌아 좀비가 되므로 self 소멸 시 명시적으로 탈출한다. 취소(감속 해제의 재시작)도 여기서 끝낸다 —
+                // 옛 루프가 마지막 틱을 한 번 더 쏘면 새 루프와 겹친다.
+                guard let self, !Task.isCancelled else { return }
                 self.tick()
             }
         }
@@ -1616,6 +1684,70 @@ final class WorkTimerStore {
         }
         tickerTask?.cancel()
         tickerTask = nil
+        // 티커가 서면 감속 장부도 접는다 — 다음 근무의 '표시 없는 1시간'은 처음부터 다시 센다.
+        displayIdleSince = nil
+        currentTickDelay = 1
+    }
+
+    // MARK: - 티커 감속 (v0.2.38 M1 덤)
+
+    /// 표시 없는 근무(오버레이 시계 안 보임 + 팝오버 닫힘)가 이 시간(초) 넘게 이어지면 티커를 감속한다.
+    static let tickerSlowdownAfterSeconds: TimeInterval = 3600
+    /// 감속 주기(초). 메뉴바 라벨이 분 단위(HH:MM)인 동안만 쓰이므로 사용자가 보는 것은 바뀌지 않는다.
+    static let slowTickIntervalSeconds: TimeInterval = 60
+
+    /// 표시 없는 상태(팝오버 닫힘 && 오버레이 시계 안 보임)가 시작된 시각. 티커가 매 틱 갱신하고, 표시가 생기면 nil.
+    @ObservationIgnored var displayIdleSince: Date?
+    /// 티커가 마지막으로 정한 주기(초). 1 = 평소, 그 밖 = 감속 중(분 경계 정렬로 1…60). 관찰 대상 아님.
+    @ObservationIgnored var currentTickDelay: TimeInterval = 1
+
+    /// 오버레이 시계가 보이는가(= overlayNow 를 매초 대입할 이유가 있는가). 패널 자체의 표시 판정(CheckOverlayWindow)은
+    /// 여기서 모른다 — 스토어가 아는 두 사실(토글·근무 중)만으로 판정한다. 그 둘이 참인데 패널이 다른 이유로 숨어 있는
+    /// 창(전체화면 등)은 짧고, 그동안의 비용은 예전과 같다.
+    var overlayClockIsShowing: Bool { isOverlayEnabled && startedAt != nil }
+
+    /// 다음 틱까지 잘 시간(초). 티커 루프가 매 반복 앞에서 부른다(currentTickDelay 장부 갱신 포함).
+    func armNextTickDelay() -> TimeInterval {
+        let delay = nextTickDelay(now: clock())
+        currentTickDelay = delay
+        return delay
+    }
+
+    /// 감속 판정 + 분 경계 정렬. 순수 함수(장부는 건드리지 않는다) — 테스트가 직접 부른다.
+    ///
+    /// 감속 조건 셋(전부 참일 때만 60초):
+    ///  1. 근무 중(티커가 도는 이유가 근무일 때만 — 팀원 초침 때문에 도는 티커는 팝오버가 열려 있어 애초에 제외),
+    ///  2. 팝오버 닫힘 && 오버레이 시계 안 보임이 **1시간 넘게** 이어졌다(displayIdleSince),
+    ///  3. 메뉴바 라벨이 분 단위다 — MenuBarStatusFormatter.duration 은 1시간 미만을 MM:SS 로 그리므로 그동안은
+    ///     초침이 라벨에 보인다. 임계를 여기서 다시 선언하지 않고 포맷터 결과로 판정한다(출처 하나).
+    /// 근무 기록 정확성은 주기와 무관하다: 시각은 항상 clock() 이고 todayDuration(at:)·자동 마감 시각은 관측 시각이
+    /// 아니라 사건 시각(마지막 입력·12시간 앵커)에서 계산된다. 감속이 늦추는 것은 **판정 시점**뿐이다(≤60초).
+    func nextTickDelay(now: Date) -> TimeInterval {
+        guard startedAt != nil, !isMenuPresented, !overlayClockIsShowing,
+              let since = displayIdleSince,
+              now.timeIntervalSince(since) >= Self.tickerSlowdownAfterSeconds
+        else { return 1 }
+        let today = todayDuration(at: now)
+        guard Self.menuBarLabelIsMinuteGranular(seconds: today) else { return 1 }
+        // 분 경계에 맞춰 깨운다 — HH:MM 이 실제 분 넘김보다 늦게 바뀌지 않게(정렬 뒤로는 정확히 60초 간격).
+        return Self.slowTickIntervalSeconds - TimeInterval(today % 60)
+    }
+
+    /// 메뉴바 라벨이 이 누적값의 분 안에서 초를 보이지 않는가. 같은 분의 두 시각(정각·+30초)이 같은 문자열이면 분 단위다.
+    static func menuBarLabelIsMinuteGranular(seconds: Int) -> Bool {
+        let minuteStart = seconds - seconds % 60
+        return MenuBarStatusFormatter.duration(minuteStart) == MenuBarStatusFormatter.duration(minuteStart + 30)
+    }
+
+    /// 표시 조건이 다시 생겼다(팝오버 열림·오버레이 켜짐). 감속 중이던 티커를 즉시 1초 주기로 되돌린다.
+    /// 감속 중이 아니면 티커를 건드리지 않는다 — 재시작은 첫 틱을 1초 미루므로 헛재시작은 초침을 한 번 멈칫하게 한다.
+    func restoreTickerCadenceIfSlowed() {
+        displayIdleSince = nil
+        guard currentTickDelay != 1, tickerTask != nil else { return }
+        currentTickDelay = 1
+        tickerTask?.cancel()
+        tickerTask = nil
+        stopTimerIfIdle()
     }
 
     /// 30초 refresh 루프의 적응형 주기 판정. 근무중/팝오버 열림/미반영 큐가 있으면 빠른 주기(30s)로,
@@ -1659,11 +1791,24 @@ final class WorkTimerStore {
         // 돈다 — 리얼타임을 통째로 빼도 나머지가 온전히 동작해야 한다는 계약이 이것이다.
         startRealtimeIfPossible()
         guard refreshTask == nil else { return }
+        startRefreshLoopTask(runBodyFirst: false)
+    }
+
+    /// refresh 루프 Task 본체. `runBodyFirst` 는 깨움 결합 게이트가 열린 직후 전용이다(v0.2.38 M7) — 첫 반복의 잠을
+    /// 건너뛰고 본문부터 돈다(게이트가 미뤄 둔 그 1회 = 단일 tick). 평소 시작은 예전처럼 한 슬라이스를 자고 시작한다.
+    /// 본문은 이 안에 그대로 둔다(메서드로 뽑지 않는다) — `self?.reconcileRealtimeWithWorkState()` 배선을 소스 계약
+    /// 테스트가 이 모양 그대로 읽는다.
+    func startRefreshLoopTask(runBodyFirst: Bool) {
+        refreshTask?.cancel()
         refreshTask = Task { @MainActor [weak self] in
+            var skipSleep = runBodyFirst
             while !Task.isCancelled {
                 let slice = self?.refreshLoopSliceSeconds ?? 30
                 let tolerance = Duration.seconds(slice / 6)
-                if self?.refreshLoopIsFast ?? false {
+                if skipSleep {
+                    // 게이트가 열린 직후: 미뤄 둔 본문을 지금 돈다(잠 없이 1회).
+                    skipSleep = false
+                } else if self?.refreshLoopIsFast ?? false {
                     // 빠른 주기: 슬라이스 1회(기본 30s)를 잔다.
                     try? await Task.sleep(for: .seconds(slice), tolerance: tolerance)
                 } else {
@@ -1680,21 +1825,27 @@ final class WorkTimerStore {
                         if self?.refreshLoopIsFast ?? false { break }
                     }
                 }
+                // 잠에서 깬 반복이 취소된 루프의 것이면 본문을 쏘지 않는다 — 깨움 게이트가 루프를 내리는 순간 만료된
+                // 잠이 그대로 본문으로 이어지면 게이트가 막으려던 바로 그 폭주가 된다(M7).
+                if Task.isCancelled { return }
                 // 본문 맨 앞이어야 한다: performPendingOperation 은 teamID 가 없으면 throw 하므로,
                 // 팀 확정이 큐 드레인보다 앞서야 오프라인에서 쌓인 근무가 **같은 주기에** 재생된다.
                 await self?.confirmMembershipIfNeeded()
                 await self?.retryPendingSync()
-                await self?.sendHeartbeatIfWorking()
-                await self?.refreshTeamStatus()
+                // v0.2.38 S3: `sendHeartbeatIfWorking → refreshTeamStatus → (되맞춤) → refreshAwayStateIfNeeded` 를
+                // work_tick RPC 1건으로 합친다(docs/work-tick.md). 전송만 합치고 의미는 그대로다 — 응답 조각은 그 세
+                // 함수가 소비하던 경로로 흘러가고, RPC 를 못 쓰면(함수 없음·실행권 회수·5xx 연속) 같은 틱 안에서 그
+                // 세 함수를 같은 순서로 부른다. 되맞춤은 팀 상태와 away 사이 그 자리 그대로라 틱을 둘로 나눠 넘긴다.
+                let tick = await self?.workTickIfPossible()
                 // 팀 상태가 반영된 **직후**에 링을 근무 게이트에 되맞춘다. 근무 상태는 start()/stop() 말고도
                 // 여기서 뒤집힌다: 앱 재시작 복구·다른 맥이 연 세션 흡수·서버가 세션을 닫음.
                 // 이 한 줄이 없으면 근무 중 앱을 재시작한 맥은 (start() 를 타지 않으므로) 초인종이 영영
                 // 안 붙고, 서버가 세션을 닫아 준 맥은 비근무인 채로 소켓을 계속 들고 있는다.
                 self?.reconcileRealtimeWithWorkState()
-                // 자리 비움 정책·복원 창을 서버에서 받아 온다. **팀 상태 반영 뒤**여야 한다 —
+                // 자리 비움 정책·복원 창(away 조각 반영 또는 폴백 refreshAwayStateIfNeeded). **팀 상태 반영 뒤**여야 한다 —
                 // 방금 큐에서 나간 마감 PATCH 가 이미 서버에 반영된 상태로 복원 대상을 묻게 된다.
                 // 실패는 삼킨다(정책이 비워져 마감이 멈출 뿐, 팀 폴링은 그대로 산다).
-                await self?.refreshAwayStateIfNeeded()
+                if let tick { await self?.finishWorkTick(tick) }
                 await self?.refreshLeaderboardIfVisible()
                 await self?.refreshTokenBoardIfVisible()
                 await self?.refreshPokeDirectoryIfVisible()
@@ -1704,13 +1855,28 @@ final class WorkTimerStore {
                 if self?.isMenuPresented == true {
                     await self?.uploadTokenUsageIfNeeded()
                 }
+                // 깨움 게이트가 미뤄 둔 리얼타임 `.didWake` 는 **본문이 끝난 여기**서 넣는다(M7) — 팀 상태 반영·되맞춤 뒤라야
+                // 잠자기 정정으로 방금 닫힌 세션에 대고 조인했다가 곧바로 끊는 헛왕복이 없고, 본문의 마지막 요청 뒤라야
+                // "폴링 본문 1회 → 조인 1회"가 순서 그대로다. 게이트가 없던 반복에선 no-op.
+                self?.flushWakeRejoinIfPending()
             }
         }
     }
 
-    private func tick() {
+    /// 티커 1회분. 루프와 분리해 테스트가 벽시계 없이 직접 부른다(시각은 주입 clock 이 정한다).
+    func tick() {
         let now = clock()
-        displayNow = now
+        // ★ 시계 3종 분리(M1). 팝오버 시계는 **열려 있을 때만**, 오버레이 시계는 **패널이 보일 때만** 대입한다 —
+        //   @Observable 은 대입 자체가 관찰자를 깨우므로, 보이지 않는 표면의 시계를 건드리는 것이 곧 그 표면의
+        //   매초 재평가다(닫힌 팝오버의 CheckMenuView 트리는 상주한다). 아래 정책·라벨은 전부 `now`(clock) 로 판정한다.
+        if isMenuPresented { displayNow = now }
+        if overlayClockIsShowing { overlayNow = now }
+        // 감속 장부: 표시 없는 상태의 시작 시각(nextTickDelay 가 1시간 경과를 이 값으로 잰다).
+        if !isMenuPresented, !overlayClockIsShowing {
+            if displayIdleSince == nil { displayIdleSince = now }
+        } else if displayIdleSince != nil {
+            displayIdleSince = nil
+        }
         // 자정을 넘겼으면 어제 스탬프의 누적을 0으로 리셋하고 스탬프를 오늘로 갱신한다(하우스키핑). 표시/마일스톤은
         // todayDuration 의 자정 클리핑이 이미 막지만, 누적 원장 자체도 새 날에 맞춘다(이후 refresh 가 서버값 복원).
         let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
@@ -1730,16 +1896,18 @@ final class WorkTimerStore {
             evaluateAwaySession(now: now)
             evaluateLongSession(now: now)
             evaluateTimeMilestones(now: now)
-            refreshMenuBarTitle()
+            refreshMenuBarTitle(now: now)
         }
     }
 
     /// 메뉴바 라벨 문자열을 현재 상태에서 다시 계산해, 문자열이 실제로 바뀔 때만 대입한다.
     /// (@Observable 은 동일 값 대입도 관찰자를 발화시키므로 != 가드가 무효화 최소화의 핵심이다.)
-    func refreshMenuBarTitle() {
+    /// **팝오버 시계(displayNow)를 읽지 않는다** — 닫힌 팝오버에서 그 시계는 얼어 있고, 이 라벨은 닫혀 있어도 매초
+    /// 살아야 한다(M1). now 가 Optional 인 이유는 refreshTimedBanner 와 같다(기본 인자가 self.clock 을 못 읽는다).
+    func refreshMenuBarTitle(now: Date? = nil) {
         var derived = snapshot
         if derived.isWorking {
-            derived.elapsedSeconds = todayDuration
+            derived.elapsedSeconds = todayDuration(at: now ?? clock())
         }
         let new = MenuBarStatusFormatter.title(for: derived)
         if menuBarTitle != new {
@@ -1751,7 +1919,8 @@ final class WorkTimerStore {
     /// 4시간을 이미 넘긴 채 관측되면 1시간 키는 조용히 소비해 뒤늦게 축하가 터지지 않게 한다.
     func evaluateTimeMilestones(now: Date) {
         guard startedAt != nil else { return }
-        let today = todayDuration
+        // 인자 시각 기준이다(팝오버 시계가 아니라) — 닫힌 팝오버에서도 1h/3h/4h 가 제시각에 발화해야 한다(M1).
+        let today = todayDuration(at: now)
         if today >= 4 * 3_600 {
             if milestoneTracker.fireIfNeeded(MilestoneTracker.hourFourKey, now: now) {
                 onReactionTrigger?(.milestone)
@@ -1827,6 +1996,11 @@ extension WorkTimerStore {
     func setOverlayEnabled(_ enabled: Bool) {
         isOverlayEnabled = enabled
         defaults.set(enabled, forKey: Self.overlayEnabledKey)
+        // 켜는 순간 오버레이 시계를 지금으로 맞추고(첫 그림이 낡은 시계로 그려지지 않게), 감속 중이던 티커를 되돌린다(M1).
+        if enabled {
+            if startedAt != nil { overlayNow = clock() }
+            restoreTickerCadenceIfSlowed()
+        }
     }
 
     /// 캐릭터 오버레이 표시를 토글하고 설정을 저장한다.
@@ -2202,6 +2376,161 @@ extension WorkTimerStore {
         tickerTask = nil
         refreshTimedBanner()
         refreshMenuBarTitle()
+    }
+}
+
+// MARK: - 깨움 결합 게이트 (v0.2.38 M7)
+
+extension WorkTimerStore {
+    /// 프로덕션의 네트워크 경로 관측자. 테스트 프로세스에서는 **nil** 이다(defaultTokenVault·LiveRealtimeTransport 와
+    /// 같은 판정) — 게이트가 없으면 handleWake 는 예전 순서(즉시 재연결)로 돌고, 게이트 동작은 관측자를 주입한
+    /// V0238ClockTests 가 결정적으로 검증한다.
+    static func defaultNetworkPath() -> NetworkPathObserving? {
+        CheckPanelVisibility.isRunningTests ? nil : LiveNetworkPathObserver()
+    }
+
+    /// handleWake 가 세운다. 게이트가 서 있는 동안 **어떤 루프도 서버를 두드리지 않는다**: 만료된 Task.sleep 이 곧바로
+    /// 본문을 쏘지 못하게 refresh 루프와 찔림 폴링을 내려 두고, 결합(또는 상한)이 오면 refresh 루프를 **본문 먼저**로
+    /// 다시 세운다(단일 tick). 그 본문의 되맞춤 자리에서 리얼타임 `.didWake` 가 나간다(flushWakeRejoinIfPending).
+    /// sync 큐(enqueueSync)도 게이트를 기다리므로 잠자기 정정 PATCH 역시 결합 뒤에 나간다.
+    func beginWakeGate() {
+        // 앞선 게이트가 아직 열리지 않았다면(연속 깨움·다크웨이크) 그것을 버리고 새로 센다 — 두 게이트가 각자
+        // 루프를 재시작하면 본문이 두 번 돈다. 붙잡아 둔 루프 표식은 그대로 남아 새 게이트가 되살린다.
+        wakeGateTask?.cancel()
+        if refreshTask != nil {
+            refreshTask?.cancel()
+            refreshTask = nil
+            refreshLoopHeldByWakeGate = true
+        }
+        if pokePollTask != nil {
+            pokePollTask?.cancel()
+            pokePollTask = nil
+            pokePollHeldByWakeGate = true
+        }
+        wakeGateTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            // 결합 확인 또는 상한 초과 — 어느 쪽이든 진행한다(영구 대기 금지).
+            _ = await self.awaitWakeNetwork()
+            guard !Task.isCancelled else { return }
+            self.wakeGateTask = nil
+            self.releaseWakeGate()
+        }
+    }
+
+    /// 관측자의 결합 대기와 상한 타이머를 경주시킨다. true = 결합 확인, false = 상한 초과. 관측자가 없으면 즉시 true.
+    /// 진 쪽은 취소한다 — 관측자 구현은 취소에 응답해야 한다(LiveNetworkPathObserver 는 onCancel 에서 걸쇠를 푼다).
+    func awaitWakeNetwork() async -> Bool {
+        guard let networkPath else { return true }
+        let timeout = wakeGateTimeoutSeconds
+        let sleep = wakeGateSleep
+        return await withTaskGroup(of: Bool.self) { group in
+            group.addTask { await networkPath.waitUntilSatisfied(); return true }
+            group.addTask { await sleep(timeout); return false }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
+    }
+
+    /// 게이트가 열렸다. 내려 둔 루프를 되살리고, 미뤄 둔 재연결을 본문 뒤에 배치한다.
+    func releaseWakeGate() {
+        let resumeRefresh = refreshLoopHeldByWakeGate
+        let resumePoke = pokePollHeldByWakeGate
+        refreshLoopHeldByWakeGate = false
+        pokePollHeldByWakeGate = false
+        guard session != nil else {
+            // 게이트 도중 로그아웃 — 루프를 되살리지 않는다(다음 로그인이 새로 세운다). 링도 로그아웃 상태라 no-op.
+            wakeRejoinPending = false
+            realtimeApply(.didWake, at: clock())
+            return
+        }
+        if resumePoke { startPokePolling() }
+        if resumeRefresh {
+            // 폴링 본문 1회 → 조인 순서: 본문의 되맞춤 자리에서 flushWakeRejoinIfPending 이 `.didWake` 를 넣는다.
+            wakeRejoinPending = true
+            startRefreshLoopTask(runBodyFirst: true)
+        } else {
+            // 루프가 없던 프로세스(로그인 직후 루프 시작 전 등) — 본문이 없으니 바로 재연결한다.
+            realtimeApply(.didWake, at: clock())
+        }
+    }
+
+    /// 서 있는 게이트가 열릴 때까지 기다린다(없으면 즉시). 네트워크로 나가는 큐(enqueueSync)가 부른다.
+    func awaitWakeGate() async {
+        guard let gate = wakeGateTask else { return }
+        await gate.value
+    }
+
+    /// 게이트가 미뤄 둔 리얼타임 `.didWake` 를 넣는다(refresh 루프 본문의 되맞춤 직후에서 1회). 남은 것이 없으면 no-op.
+    func flushWakeRejoinIfPending() {
+        guard wakeRejoinPending else { return }
+        wakeRejoinPending = false
+        realtimeApply(.didWake, at: clock())
+    }
+}
+
+/// 네트워크 경로 관측자(주입점). 프로덕션은 NWPathMonitor(LiveNetworkPathObserver), 테스트는 스크립트.
+protocol NetworkPathObserving: Sendable {
+    /// 경로가 satisfied 가 될 때까지 기다린다. 이미 satisfied 면 즉시 돌아온다. **상한은 호출자(스토어)가 건다** —
+    /// 구현이 무엇이든 영구 대기가 될 수 없게. 취소되면 satisfied 와 무관하게 돌아와야 한다(상한이 이겼을 때).
+    func waitUntilSatisfied() async
+}
+
+/// 프로덕션 네트워크 경로 관측자. **호출마다 새 NWPathMonitor** 를 띄워 첫 보고를 진실로 삼는다 — 잠들기 전에 받아 둔
+/// satisfied 를 믿지 않기 위해서다(깨움 직후 오래 산 모니터의 currentPath 는 잠들기 전 값을 들고 있을 수 있고, 그 값으로
+/// 즉시 진행하면 게이트가 있으나 마나다). 첫 보고는 보통 수 ms 안에 오므로 이미 결합돼 있을 때의 비용은 사실상 0이다.
+final class LiveNetworkPathObserver: NetworkPathObserving {
+    private let queue = DispatchQueue(label: "check.network-path", qos: .utility)
+
+    func waitUntilSatisfied() async {
+        let monitor = NWPathMonitor()
+        let latch = ResumeLatch()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                latch.arm(continuation)
+                monitor.pathUpdateHandler = { path in
+                    guard path.status == .satisfied else { return }
+                    latch.fire()
+                }
+                monitor.start(queue: queue)
+            }
+            monitor.cancel()
+        } onCancel: {
+            // 상한이 이겼다(스토어의 task group 이 취소). 매달린 continuation 을 풀어 자식 Task 가 끝나게 한다 —
+            // 안 풀면 group 이 자식을 기다리느라 게이트가 영영 안 열린다(영구 대기 금지의 실체).
+            latch.fire()
+        }
+    }
+}
+
+/// continuation 을 **정확히 한 번** 재개하는 걸쇠. 재개 요청이 arm 보다 먼저 와도(이미 취소된 Task) 잃지 않는다.
+private final class ResumeLatch: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var fired = false
+
+    func arm(_ continuation: CheckedContinuation<Void, Never>) {
+        lock.lock()
+        if fired {
+            lock.unlock()
+            continuation.resume()
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+    }
+
+    func fire() {
+        lock.lock()
+        guard !fired else {
+            lock.unlock()
+            return
+        }
+        fired = true
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume()
     }
 }
 

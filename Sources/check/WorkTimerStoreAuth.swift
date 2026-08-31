@@ -38,8 +38,18 @@ extension WorkTimerStore {
         if hasActivatedStoredSession {
             // 첫 활성화가 오프라인/취소로 멤버십 확정에 실패했으면(membershipConfirmed==false) 재오픈 때 재확정한다 —
             // hasActivatedStoredSession 조기 래치로 확정 경로가 영구 소멸하던 결함을 막는다. 토큰 회전은 여전히 1회다.
-            if !membershipConfirmed { await confirmMembership() }
-            await refreshTeamStatus()
+            // 방금 확정했으면 팀 상태는 스로틀과 무관하게 받는다(그 전까진 팀이 nil 이라 스탬프가 찍힌 적이 없다).
+            if !membershipConfirmed {
+                await confirmMembership()
+                await refreshTeamStatus()
+                return
+            }
+            // v0.2.38 Q10: 마지막 팀 상태 수신이 15초 안이면 4 GET 을 건너뛴다 — 첫 프레임은 캐시(teamMembers)로
+            // 그리고 30초 폴링이 평소처럼 갱신한다. 계측상 팝오버 여닫이마다 나가던 6요청 중 4가 이 호출이었다.
+            // (memberships/my_team_invite_code 는 setMenuPresented 의 refreshTeamMetaIfStale 이 60초 스로틀로 따로 관리.)
+            guard !teamStatusIsFresh(now: clock()) else { return }
+            // v0.2.38 S3: 팀 상태 4 GET 대신 work_tick(p_heartbeat=false) 1건 — 폴백은 그 4 GET 그대로.
+            await refreshTeamStatusOnDemand()
             return
         }
         hasActivatedStoredSession = true

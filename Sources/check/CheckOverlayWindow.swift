@@ -69,6 +69,22 @@ enum CheckPanelVisibility {
     }
 }
 
+/// 블록 기반 노티 옵저버 토큰과 그 센터를 함께 담는 상자(Sendable).
+///
+/// 왜 `NSObjectProtocol?` 을 그냥 들고 있지 않은가 — 해제 경로가 `deinit` 이기 때문이다. Swift 6 에서 deinit 은
+/// **비격리**라 격리된 저장 프로퍼티를 읽지 못하고(`NSObjectProtocol` 은 Sendable 이 아니다), Sendable 상자에 넣어야
+/// deinit 이 토큰을 꺼내 `removeObserver` 를 부를 수 있다(CheckTodoBoardWindow 의 모니터 토큰 상자와 같은 이유).
+/// `removeObserver` 는 어느 스레드에서 불러도 된다(문서).
+private final class OverlayObserverToken: @unchecked Sendable {
+    let center: NotificationCenter
+    let raw: NSObjectProtocol
+    init(center: NotificationCenter, raw: NSObjectProtocol) {
+        self.center = center
+        self.raw = raw
+    }
+    func remove() { center.removeObserver(raw) }
+}
+
 /// 근무중일 때만 화면 우상단(메뉴바 바로 아래)에 떠 있는 3D 캐릭터 오버레이 패널과 그 표시/숨김·재배치를 관리한다.
 ///
 /// 패널은 앱 시작 시 1회 생성해 숨김으로 시작한다. 루트 뷰(`CheckOverlayRootView`)가 store의
@@ -112,6 +128,34 @@ final class CheckOverlayController {
     /// 너무 잦으면 '깜빡임'이 아니라 '떨림'으로 읽힌다.
     static let blinkIntervalRange: ClosedRange<Double> = 3.0...7.0
 
+    // MARK: - 렌더 정지 사유(v0.2.38) — 보이지 않는 순간에만 3D 렌더를 멈춘다
+
+    /// 3D 렌더를 멈추는 사유. **부재(자리비움)는 사유가 아니다** — 캐릭터는 근무 중 항상 살아 있어야 한다는
+    /// 제품 결정. 여기 있는 것은 전부 "화면에 그려도 아무도 못 보는" 상태뿐이다.
+    ///
+    /// 집합으로 관리하는 이유: 뚜껑을 닫으면 화면 슬립과 잠금이 **겹쳐서** 온다. 단일 Bool 이면 먼저 풀리는 쪽
+    /// (screensDidWake — 비밀번호 화면이 뜨는 순간)이 렌더를 되살려, 잠금 화면 뒤에서 다시 GPU 를 태운다.
+    /// 하나라도 남아 있으면 정지, 전부 풀려야 재개다.
+    enum RenderSuspendReason: Hashable, Sendable, CaseIterable {
+        /// 디스플레이가 꺼졌다(NSWorkspace.screensDidSleep ↔ screensDidWake).
+        case screensAsleep
+        /// 잠금 화면(loginwindow 의 배포 노티 "com.apple.screenIsLocked" ↔ "…Unlocked").
+        /// 해제 노티가 유실되면 `reconcileStaleRenderSuspension` 이 콘솔 세션 판정으로 걷어낸다(안전밸브).
+        case screenLocked
+        /// 콘솔 세션이 비활성(빠른 사용자 전환 — NSWorkspace.sessionDidResignActive ↔ sessionDidBecomeActive).
+        /// 위와 같은 안전밸브의 대상이다(콘솔 세션 판정이 온콘솔 여부도 본다).
+        case sessionInactive
+    }
+
+    /// 해제 노티 유실 안전밸브가 걷어낼 수 있는 사유. `.screensAsleep` 은 **아니다** — 디스플레이 슬립은 공개 API 짝이고,
+    /// 콘솔 세션 판정은 디스플레이 상태에 대해 아무 말도 하지 않는다.
+    static let staleReleasableReasons: Set<RenderSuspendReason> = [.screenLocked, .sessionInactive]
+
+    /// 잠금/해제 배포 노티 이름. **비공개 이름**이라 계약이 없다 — 안 오면 아무 일도 없어야 하고(기본값은 렌더 유지),
+    /// 오면 정지/재개다. 테스트가 같은 이름으로 주입 센터에 게시한다.
+    static let screenLockedNotification = Notification.Name("com.apple.screenIsLocked")
+    static let screenUnlockedNotification = Notification.Name("com.apple.screenIsUnlocked")
+
     /// 새 버전 감지 시 캐릭터가 띄우는 말풍선 문구/지속시간. 버전당 1회만(도배 금지).
     static let updateBubbleText = "새 업데이트가 있어요!"
     static let updateBubbleSeconds: Double = 6
@@ -152,7 +196,20 @@ final class CheckOverlayController {
     private(set) var nudgeSchedulerRunning = false
 
     private let notificationCenter: NotificationCenter
-    private var screenObserver: NSObjectProtocol?
+    private var screenObserver: OverlayObserverToken?
+    /// 렌더 정지 사유 옵저버(슬립/깨움·잠금/해제·세션 비활성/활성). deinit 이 전부 해제한다.
+    private var renderSuspendObservers: [OverlayObserverToken] = []
+    /// 현재 살아 있는 렌더 정지 사유(헤드리스 검증 지점). 비어 있지 않으면 `engine.renderSuspended == true` 다.
+    private(set) var renderSuspendReasons: Set<RenderSuspendReason> = []
+    /// 콘솔 세션 판정(화면 잠금 아님 + 온콘솔). 넛지와 **같은 주입**(`nudgeSessionUsable`)을 공유한다 — 진실의 출처가
+    /// 하나여야 "넛지는 잠금이 풀렸다는데 캐릭터는 아직 잠겼다"는 상태가 생기지 않는다. 안전밸브만 쓴다.
+    private let consoleSessionUsable: () -> Bool
+    /// 깜빡임 스케줄러의 수면. 프로덕션은 실제 `Task.sleep` 이고 **테스트만** 갈아 끼운다(`ultraSleep`·`messageBubbleSleep`
+    /// 과 같은 주입 규약 — 시간을 기다리는 대신 깨울 사람을 고른다). 안전밸브가 이 루프에 얹혀 있어, 이 주입이 없으면
+    /// "해제 노티 없이도 다음 tick 에 재개된다"를 3~7초 실시간으로만 검증할 수 있다.
+    var blinkSleep: @Sendable (Double) async -> Void = {
+        try? await Task.sleep(for: .seconds($0), tolerance: .seconds(1))
+    }
     private let store: WorkTimerStore
     /// 드래그로 옮긴 위치를 영속하는 저장소(테스트 격리를 위해 주입 가능).
     private let defaults: UserDefaults
@@ -326,6 +383,9 @@ final class CheckOverlayController {
         engine: ReactionEngine? = nil,
         defaults: UserDefaults = .standard,
         workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter,
+        // 잠금/해제 배포 노티의 출처(테스트만 주입 — 평범한 NotificationCenter 에 같은 이름으로 게시한다).
+        // nil 이면 잠금 사유는 영영 오르지 않는다(렌더 유지 쪽이 안전한 기본).
+        distributedNotifications: NotificationCenter? = DistributedNotificationCenter.default(),
         updateCheck: UpdateCheckStore? = nil,
         ultraDurationSeconds: Double = CheckOverlayController.ultraSeconds,
         ultraDeadlineSeconds: Double
@@ -343,6 +403,7 @@ final class CheckOverlayController {
         self.updateCheck = updateCheck
         self.ultraDurationSeconds = ultraDurationSeconds
         self.ultraDeadlineSeconds = ultraDeadlineSeconds
+        self.consoleSessionUsable = nudgeSessionUsable
         self.engine = engine ?? ReactionEngine()
         panel = Self.makePanel(size: Self.panelSize)
 
@@ -406,6 +467,7 @@ final class CheckOverlayController {
 
         reposition()
         observeScreenChanges()
+        observeRenderSuspension(workspace: workspaceNotifications, distributed: distributedNotifications)
         // 넛지 스케줄러를 실행 시 여기서 한 번 가동한다. 이 줄이 없으면 유일한 기동 지점이 updateWorking 의
         // defer 뿐이고, updateWorking 은 숨겨진 패널의 SwiftUI 루트 뷰가 `.onChange(initial: true)` 를 실제로
         // 평가해 줄 때만 불린다 — 즉 자동 근무 시작 전체가 "숨긴 패널의 body 도 평가된다"는 검증 안 된 런타임
@@ -413,6 +475,14 @@ final class CheckOverlayController {
         // 콘텐츠 뷰가 아예 생성되지 않았다) D1 킥을 만들게 했다. start() 는 loopTask 가드로 멱등이라 루트 뷰가
         // 곧바로 한 번 더 불러도 루프가 두 개 생기지 않는다.
         syncNudgeScheduler()
+    }
+
+    deinit {
+        // 옵저버의 주인은 노티 센터다 — 컨트롤러가 죽어도 등록은 센터에 남는다. 블록은 weak self 라 무해하지만
+        // 등록 자체가 영영 남고, 배포 센터(잠금 노티)는 프로세스 밖 데몬과의 구독이다. 프로덕션은 프로세스 수명이라
+        // 여기 오지 않지만 테스트는 컨트롤러를 수백 개 만든다 — 그래서 해제 경로는 마지막 문인 deinit 이다.
+        screenObserver?.remove()
+        renderSuspendObservers.forEach { $0.remove() }
     }
 
     /// 넛지 자동 시작 자격: 로그인됨·팀 있음·비근무. (표시중 조건은 소멸 — 안내만 하고 바로 시작.)
@@ -883,8 +953,9 @@ final class CheckOverlayController {
     ///  · 표시 중(근무중 + 캐릭터 켬) — 안 보이는데 자는 건 의미가 없다,
     ///  · 다른 리액션이 없다 — 연출 도중 잠들면 그 연출이 끊긴다,
     ///  · **보드가 닫혀 있다** — 할 일을 보며 생각하는 동안 눈을 감으면 "얘 죽었나"로 읽힌다.
+    ///  · **렌더가 정지돼 있지 않다**(v0.2.38) — 화면 슬립·잠금 중의 졸기는 💤 파티클로 정지를 무효화한다(엔진도 거부한다).
     var canEnterDrowsy: Bool {
-        shouldBeVisible && engine.state == .idle && !(isBoardOpen?() ?? false)
+        shouldBeVisible && engine.state == .idle && !(isBoardOpen?() ?? false) && !engine.renderSuspended
     }
 
     private func stopDrowsyScheduler() {
@@ -897,14 +968,20 @@ final class CheckOverlayController {
     /// 표시 중일 때만 3~7초마다 한 번 깜빡인다. 엔진이 idle 이 아니면(자는 중·리액션 중) 스스로 물러나므로
     /// 여기서는 표시/격발 여부만 본다. tolerance 를 크게 둬 타이머 coalescing(전력 절감)을 허용한다 —
     /// 깜빡임은 정확한 시각이 의미 없는 앰비언트 연출이다.
+    ///
+    /// 렌더 정지 안전밸브(`reconcileStaleRenderSuspension`)도 이 tick 에 얹는다: 표시 중에만 도는 유일한 짧은 주기
+    /// 루프라(졸기는 40~80분) 해제 노티가 유실돼도 최대 한 주기(≤7초) 뒤 재개된다. 사유가 없을 땐 비용 0 이다.
     private func startBlinkScheduler() {
         guard blinkTask == nil else { return }
         blinkTask = Task { @MainActor [weak self] in
             var rng = SystemRandomNumberGenerator()
             while !Task.isCancelled {
                 let interval = Double.random(in: CheckOverlayController.blinkIntervalRange, using: &rng)
-                try? await Task.sleep(for: .seconds(interval), tolerance: .seconds(1))
+                // 수면 동안 self 를 붙들지 않는다(주입 클로저만 꺼내 쓴다).
+                guard let sleep = self?.blinkSleep else { return }
+                await sleep(interval)
                 guard let self, !Task.isCancelled else { return }
+                self.reconcileStaleRenderSuspension()
                 // 전체화면 격발 중엔 깜빡이지 않는다 — 5초 연출의 표정을 건드리지 않는다.
                 guard self.shouldBeVisible, !self.isUltraActive else { continue }
                 self.engine.blink()
@@ -1450,12 +1527,87 @@ final class CheckOverlayController {
 
     /// 화면 구성 변경(해상도·배열·메뉴바 높이 등) 시 우상단 위치를 다시 잡는다.
     private func observeScreenChanges() {
-        screenObserver = notificationCenter.addObserver(
+        let token = notificationCenter.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
             queue: nil
         ) { [weak self] _ in
             Task { @MainActor in self?.reposition() }
+        }
+        screenObserver = OverlayObserverToken(center: notificationCenter, raw: token)
+    }
+
+    // MARK: - 렌더 정지(화면 슬립·잠금·세션 비활성) — 표시 의도(shouldBeVisible)와 절대 섞지 않는다
+
+    /// 렌더 정지 사유의 출처를 구독한다. 각 노티는 사유 하나를 올리거나 내릴 뿐이고, 판정(하나라도 남았는가)은
+    /// `setRenderSuspension` 한 곳이 한다. 표시 의도·패널·모니터·스케줄러는 **건드리지 않는다** — 깨어나는 순간
+    /// 되살려야 할 것이 `engine.renderSuspended` 하나뿐이어야 1프레임 안에 재개된다.
+    ///
+    /// 핸들러는 게시 스레드에서 동기 실행된다(queue: nil). NSWorkspace·배포 센터 모두 메인에서 게시하므로 평소에는
+    /// 메인 액터에 동기 진입해 그 자리에서 플래그를 내리고, 혹시 다른 스레드면 메인으로 한 번 건너뛴다.
+    private func observeRenderSuspension(workspace: NotificationCenter?, distributed: NotificationCenter?) {
+        func observe(
+            _ center: NotificationCenter,
+            _ name: Notification.Name,
+            _ reason: RenderSuspendReason,
+            suspends: Bool
+        ) {
+            let token = center.addObserver(forName: name, object: nil, queue: nil) { [weak self] _ in
+                Self.onMain { self?.setRenderSuspension(reason, suspended: suspends) }
+            }
+            renderSuspendObservers.append(OverlayObserverToken(center: center, raw: token))
+        }
+        if let workspace {
+            observe(workspace, NSWorkspace.screensDidSleepNotification, .screensAsleep, suspends: true)
+            observe(workspace, NSWorkspace.screensDidWakeNotification, .screensAsleep, suspends: false)
+            observe(workspace, NSWorkspace.sessionDidResignActiveNotification, .sessionInactive, suspends: true)
+            observe(workspace, NSWorkspace.sessionDidBecomeActiveNotification, .sessionInactive, suspends: false)
+        }
+        if let distributed {
+            observe(distributed, Self.screenLockedNotification, .screenLocked, suspends: true)
+            observe(distributed, Self.screenUnlockedNotification, .screenLocked, suspends: false)
+        }
+    }
+
+    /// 사유 하나를 올리거나 내리고, 집합이 비었는지로 `engine.renderSuspended` 를 정한다.
+    /// 같은 사유의 중복 게시(잠금 노티가 두 번 오는 경우 등)는 집합이라 자연히 멱등이다.
+    private func setRenderSuspension(_ reason: RenderSuspendReason, suspended: Bool) {
+        if suspended {
+            renderSuspendReasons.insert(reason)
+        } else {
+            renderSuspendReasons.remove(reason)
+        }
+        let shouldSuspend = !renderSuspendReasons.isEmpty
+        // 값이 같으면 대입하지 않는다 — @Observable 관찰자(SCNView 컨테이너)를 공연히 깨우지 않기 위해.
+        if engine.renderSuspended != shouldSuspend {
+            engine.renderSuspended = shouldSuspend
+        }
+    }
+
+    /// 해제 노티 유실 안전밸브(v0.2.38). 잠금/세션 사유는 **비공개·비대칭** 출처라 "잠금은 왔는데 해제가 안 온" 상태가
+    /// 생기면 근무 내내 캐릭터가 굳는다 — 사용자가 바로 체감하는 회귀다. 그래서 그 사유가 서 있는 동안만 콘솔 세션을
+    /// 직접 물어(`CGSessionCopyCurrentDictionary`: 잠금 아님 + 온콘솔) 사용 가능하면 사유를 걷어낸다.
+    ///
+    /// **한 방향뿐이다.** 반대(판정은 잠금인데 사유가 없음)는 세우지 않는다 — 비공개 노티 밖의 근거로 렌더를 멈추면
+    /// 원격 세션·CI 처럼 판정이 늘 '잠금'인 맥에서 캐릭터가 영영 안 움직인다(넛지가 같은 함정을 이미 겪었다).
+    /// `.screensAsleep` 도 건드리지 않는다(`staleReleasableReasons` 주석). 사유가 없으면 판정 호출 자체를 하지 않는다.
+    /// 깜빡임 tick 이 부르고, 테스트는 직접 부른다. 걷어낸 게 있으면 true.
+    @discardableResult
+    func reconcileStaleRenderSuspension() -> Bool {
+        let stale = renderSuspendReasons.intersection(Self.staleReleasableReasons)
+        guard !stale.isEmpty, consoleSessionUsable() else { return false }
+        for reason in stale {
+            setRenderSuspension(reason, suspended: false)
+        }
+        return true
+    }
+
+    /// 메인 스레드면 그 자리에서(동기), 아니면 메인 액터로 건너뛰어 실행한다. 노티 핸들러 전용.
+    nonisolated private static func onMain(_ body: @escaping @MainActor @Sendable () -> Void) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated { body() }
+        } else {
+            Task { @MainActor in body() }
         }
     }
 

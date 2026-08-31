@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Observation
 import SwiftUI
@@ -127,19 +128,28 @@ enum TokenNumberFormatter {
 ///
 /// 세 축:
 /// - claudeFileStates: 경로 → (size, mtime, consumedOffset). 파일이 안 변했는지(스킵)·어디까지 읽었는지(이어읽기) 판단.
-/// - claudeEntries: dedupe 키(=id\0requestId) → 엔트리. 라인 단위 usage 를 dedupe 해 월 필터로 합계를 낸다.
-///   append-only 로그라 파일이 커져도 새 바이트만 이어읽어 엔트리를 추가한다.
+/// - claudeEntries: dedupe 키(ClaudeEntryKey = "id\0requestId" 의 128비트 해시) → 엔트리. 라인 단위 usage 를 dedupe 해
+///   월 필터로 합계를 낸다. append-only 로그라 파일이 커져도 새 바이트만 이어읽어 엔트리를 추가한다.
 /// - codexFileStates: 경로 → (offset, size, mtime, prevCumulative, month/day 귀속 상태). rollout 은 token_count 이벤트마다
 ///   그 이벤트 timestamp(→KST)로 delta 를 월/일에 정확히 귀속한다(파일 mtime 월에 세션 누적치를 통째 귀속하던 옛 근사 폐기).
 ///
 /// 압축: 엔트리/상태는 이름키 대신 배열 튜플로 인코딩한다(3만 엔트리 ≈ 수 MB → 이름키면 배로 커진다).
+///
+/// 상주 크기(v0.2.38 계측 후 개편): v0.2.37 은 문자열 키 딕셔너리가 ≈16MB 상주했다 — `[String: ClaudeEntry]` 7.67MB
+/// (70,766 엔트리) + 키 문자열 저장소 74,431 개 8.0MB. 그중 73% 가 지난달 엔트리였다(보관 경계가 직전 월 1일).
+/// 그래서 (1) 키를 16바이트 인라인 해시로(문자열 힙 객체 0), (2) 보관 경계를 월 시작 − 48h 로 당겨(월 경계 straddle 만 남김)
+/// 엔트리 맵을 ≈1/5 로 줄인다. 두 변경 모두 합계 산식(현재 월 필터)은 건드리지 않는다.
+///
+/// 핫/콜드 분리(디스크): 파일 진행 상태(핫 — 파일이 자랄 때마다 바뀌는 수백 KB)와 엔트리(콜드 — 수 MB)를 별도 파일로
+/// 쓴다. 저장은 스토어의 스로틀(≥5분 / 팝오버 닫힘 / 종료)을 타고, 그때도 더러워진 쪽만 다시 쓴다. 레이아웃은
+/// TokenUsageCacheStore 참고.
 ///
 /// 하위호환: codexSchemaVersion 으로 codex 상태의 스키마 세대를 표기한다. 이벤트-귀속 재설계로 옛 codexFileStates 는
 /// 델타 이력이 없어 재활용 불가 — 로드 시 버전이 현재와 다르면 codexFileStates 만 버리고(Claude 상태는 유지) 전체 재파싱을
 /// 1회 유발한다(과거 귀속이 소급 교정된다). 아래 커스텀 Codable 이 이 게이트를 수행한다.
 struct TokenUsageCache: Equatable, Sendable {
     var claudeFileStates: [String: FileProgress] = [:]
-    var claudeEntries: [String: ClaudeEntry] = [:]
+    var claudeEntries: [ClaudeEntryKey: ClaudeEntry] = [:]
     var codexFileStates: [String: CodexFileProgress] = [:]
     /// codex 상태 스키마 버전. 로드 시 currentCodexSchemaVersion 과 다르면 codexFileStates 를 폐기해 재파싱을 유발한다.
     var codexSchemaVersion: Int = TokenUsageCache.currentCodexSchemaVersion
@@ -154,9 +164,128 @@ struct TokenUsageCache: Equatable, Sendable {
     static let currentCodexSchemaVersion = 3
 }
 
+/// Claude 엔트리의 dedupe 키. 옛 문자열 키 "message.id\0requestId" 의 **SHA-256 앞 16바이트**를 빅엔디언 UInt64 두 개로
+/// 든다 — 정의가 "그 문자열의 해시"라 (id, requestId) 로 만들든 옛 문자열로 만들든 같은 키다.
+///
+/// 왜 해시인가: 문자열 키는 엔트리마다 힙 객체 하나(≈96B)를 더 들고, 딕셔너리 슬롯도 16B 포인터+길이 대신 그 문자열을
+/// 비교한다. 16바이트 인라인 키는 힙 객체 0, 해시/비교가 정수 연산이고, JSON 으로도 32자 16진(옛 키 ≈60자+`\0`)이라
+/// 콜드 파일도 준다.
+///
+/// 충돌: 128비트라 생일 경계가 2^64 개 키다. 한 달 치 10^5 개 키에서 충돌 확률 ≈ n²/2^129 ≈ 10^-29 — 실질 0
+/// (SHA-256 절단이라 입력 편향에도 균일하다). 두 요청이 한 엔트리로 합쳐지려면 이 확률을 뚫어야 한다.
+struct ClaudeEntryKey: Hashable, Sendable {
+    let hi: UInt64
+    let lo: UInt64
+
+    /// 옛 dedupe 문자열("id\0requestId")에서. 캐시의 옛 세대 키를 그대로 해시하면 새 키가 된다(정의 그 자체).
+    init(dedupeString: String) {
+        self.init(hashing: Array(dedupeString.utf8))
+    }
+
+    /// 프로덕션 ingest 경로. NUL 구분자(둘 다 NUL 을 못 담으므로 ("ab","") 와 ("a","b") 가 다른 키다).
+    init(messageID: String, requestID: String) {
+        var bytes = Array(messageID.utf8)
+        bytes.append(0)
+        bytes.append(contentsOf: requestID.utf8)
+        self.init(hashing: bytes)
+    }
+
+    private init(hashing bytes: [UInt8]) {
+        let digest = SHA256.hash(data: bytes)
+        (hi, lo) = digest.withUnsafeBytes { raw in
+            (raw.loadUnaligned(fromByteOffset: 0, as: UInt64.self).bigEndian,
+             raw.loadUnaligned(fromByteOffset: 8, as: UInt64.self).bigEndian)
+        }
+    }
+
+    /// 32자 소문자 16진(hi 16자 + lo 16자). 캐시 JSON 의 오브젝트 키가 이 문자열이다.
+    var hex: String {
+        var out = [UInt8](repeating: 0, count: 32)
+        let digits = Array("0123456789abcdef".utf8)
+        var h = hi, l = lo
+        for i in stride(from: 15, through: 0, by: -1) {
+            out[i] = digits[Int(h & 0xF)]; h >>= 4
+            out[16 + i] = digits[Int(l & 0xF)]; l >>= 4
+        }
+        return String(decoding: out, as: UTF8.self)
+    }
+
+    /// 32자 16진에서. 자릿수가 다르거나 16진이 아닌 문자가 있으면 nil(옛 문자열 키는 항상 NUL 을 담으므로 여기서 걸러진다).
+    init?(hex: String) {
+        let b = Array(hex.utf8)
+        guard b.count == 32 else { return nil }
+        var acc: [UInt64] = [0, 0]
+        for (i, c) in b.enumerated() {
+            let v: UInt64
+            switch c {
+            case 48...57: v = UInt64(c - 48)
+            case 97...102: v = UInt64(c - 87)
+            case 65...70: v = UInt64(c - 55)
+            default: return nil
+            }
+            acc[i / 16] = (acc[i / 16] << 4) | v
+        }
+        hi = acc[0]; lo = acc[1]
+    }
+}
+
+// 단일값 16진 문자열로 왕복한다. 딕셔너리는 (Swift 의 비-String 키 딕셔너리가 평면 배열로 인코드되는 함정을 피해)
+// 아래 헬퍼로 `[String: ClaudeEntry]` 오브젝트로 명시 변환해 쓴다.
+extension ClaudeEntryKey: Codable {
+    init(from decoder: Decoder) throws {
+        let s = try decoder.singleValueContainer().decode(String.self)
+        guard let key = ClaudeEntryKey(hex: s) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "ClaudeEntryKey 16진 32자가 아님"))
+        }
+        self = key
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(hex)
+    }
+}
+
+extension Dictionary where Key == ClaudeEntryKey, Value == ClaudeEntry {
+    /// 옛 dedupe 문자열("id\0requestId")로 조회/대입. 키의 정의가 그 문자열의 해시라 프로덕션 ingest 가 넣은 엔트리에
+    /// 그대로 닿는다 — 우회가 아니라 정의를 쓰는 것이다(테스트·진단용, 스캔 경로는 (id, requestId) 이니셜라이저를 쓴다).
+    subscript(_ dedupeString: String) -> ClaudeEntry? {
+        get { self[ClaudeEntryKey(dedupeString: dedupeString)] }
+        set { self[ClaudeEntryKey(dedupeString: dedupeString)] = newValue }
+    }
+
+    /// JSON 오브젝트(16진 키)로. 콜드 파일과 모놀리식 인코딩이 공유한다.
+    var hexKeyed: [String: ClaudeEntry] {
+        var out: [String: ClaudeEntry] = [:]
+        out.reserveCapacity(count)
+        for (k, v) in self { out[k.hex] = v }
+        return out
+    }
+
+    /// JSON 오브젝트에서. strict 면 16진이 아닌 키 하나라도 있으면 nil(콜드 파일 손상 → 폐기). lenient 면 옛 문자열 키를
+    /// 해시해 받아들인다(옛 모놀리식 캐시를 디코드하는 경로 — 스토어는 그 세대를 로드하지 않지만 디코더는 전 세대를 읽는다).
+    static func fromHexKeyed(_ raw: [String: ClaudeEntry], strict: Bool) -> [ClaudeEntryKey: ClaudeEntry]? {
+        var out: [ClaudeEntryKey: ClaudeEntry] = [:]
+        out.reserveCapacity(raw.count)
+        for (s, v) in raw {
+            if let k = ClaudeEntryKey(hex: s) {
+                out[k] = v
+            } else if strict {
+                return nil
+            } else {
+                out[ClaudeEntryKey(dedupeString: s)] = v
+            }
+        }
+        return out
+    }
+}
+
 // TokenUsageCache 커스텀 Codable(스키마 게이트 + 압축 딕셔너리 왕복). 옛 캐시(codexSchemaVersion 부재/불일치)는
 // codexFileStates 를 통째로 버려(Claude 상태는 보존) 다음 스캔에서 codex 를 전체 재파싱하게 만든다. 이렇게 하면 옛 6/8필드
 // codex 튜플(숫자열)을 새 8필드(문자열 섞임) 형식으로 억지 디코드하다 던지는 실패(→ 전체 캐시 폐기, Claude 재스캔)를 피한다.
+//
+// 이 인코딩은 "캐시 전체 한 덩어리"(모놀리식)다. 스토어(TokenUsageCacheStore)는 이걸 핫 파일의 본문으로 쓰되 엔트리를
+// 비워 넣고, 엔트리는 콜드 파일에 따로 쓴다. 디코더는 옛 문자열 키 엔트리도(해시해서) 받아들이므로 어느 세대의 모놀리식
+// JSON 도 읽히지만, 스토어의 레이아웃 버전 게이트는 v0.2.37 이하 파일을 로드하지 않는다(그쪽 주석 참고).
 extension TokenUsageCache: Codable {
     enum CodingKeys: String, CodingKey {
         case claudeFileStates, claudeEntries, codexFileStates, codexSchemaVersion
@@ -165,7 +294,8 @@ extension TokenUsageCache: Codable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         claudeFileStates = try c.decodeIfPresent([String: FileProgress].self, forKey: .claudeFileStates) ?? [:]
-        claudeEntries = try c.decodeIfPresent([String: ClaudeEntry].self, forKey: .claudeEntries) ?? [:]
+        let rawEntries = try c.decodeIfPresent([String: ClaudeEntry].self, forKey: .claudeEntries) ?? [:]
+        claudeEntries = Dictionary.fromHexKeyed(rawEntries, strict: false) ?? [:]
         let version = try c.decodeIfPresent(Int.self, forKey: .codexSchemaVersion) ?? 0
         if version == Self.currentCodexSchemaVersion {
             codexFileStates = try c.decodeIfPresent([String: CodexFileProgress].self, forKey: .codexFileStates) ?? [:]
@@ -180,7 +310,7 @@ extension TokenUsageCache: Codable {
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(claudeFileStates, forKey: .claudeFileStates)
-        try c.encode(claudeEntries, forKey: .claudeEntries)
+        try c.encode(claudeEntries.hexKeyed, forKey: .claudeEntries)
         try c.encode(codexFileStates, forKey: .codexFileStates)
         try c.encode(codexSchemaVersion, forKey: .codexSchemaVersion)
     }
@@ -300,29 +430,102 @@ extension CodexFileProgress: Codable {
     }
 }
 
-/// 캐시 파일 로드/저장(Application Support/aing-check/token-usage-cache.json). 스캔과 분리해 스캐너는 로그 파일만 읽게 한다.
+/// 캐시 파일 로드/저장. 스캔과 분리해 스캐너는 로그 파일만 읽게 한다.
+///
+/// 레이아웃(v0.2.38, 핫/콜드 분리). 베이스 URL(옛 단일 파일 자리, Application Support/aing-check/token-usage-cache.json)에서
+/// 두 파일을 파생한다:
+/// - `<베이스>.state.json`(핫): `{"schemaVersion": N, "state": <TokenUsageCache 모놀리식, 엔트리 비움>}` — 파일 진행 상태.
+///   파일이 자랄 때마다 바뀌지만 수백 KB 다.
+/// - `<베이스>.entries.json`(콜드): `{"<16진 키>": [ts14, in, out, cr, cc], ...}` — 엔트리 맵. 수 MB 지만 새 usage 라인이
+///   들어올 때만 바뀐다.
+/// 저장은 더러워진 쪽만 다시 쓰되(둘 다 없으면 만들고), **콜드를 먼저** 쓴다 — 핫이 콜드보다 앞서 디스크에 남으면
+/// "이미 소비한 오프셋"인데 엔트리가 없는 상태가 되어 과소집계다(반대는 재읽기+dedupe 로 무해).
+///
+/// 로드는 두 파일이 다 있고 핫의 schemaVersion 이 현재와 같을 때만 성립한다. 그 외(없음·손상·옛 세대)는 전부 빈 캐시
+/// → 다음 스캔이 전체 스캔이다(캐시는 항상 재구성 가능한 파생물이라 예외를 던지지 않는다).
+///
+/// v0.2.37 이하의 단일 파일(베이스 자리, 문자열 키 7.6MB)은 읽지 않고 **지운다**: 새 세대는 다른 파일명을 쓰므로 어차피
+/// 로드되지 않고, 남겨 두면 디스크만 차지한다. 다운그레이드도 안전하다 — 옛 버전은 베이스 파일이 없으면 전체 스캔하고,
+/// 새 파일들은 건드리지 않는다(같은 파일을 두 세대가 다르게 해석해 과소집계하는 사고가 이 이름 분리로 막힌다).
 enum TokenUsageCacheStore {
+    /// 레이아웃 세대. 핫 파일의 값이 이와 다르면 두 파일 모두 폐기(→ 1회 전체 재스캔). 옛 단일 파일엔 이 키가 없다(= 0).
+    /// 1: v0.2.38 — 해시 키 + 핫/콜드 분리 + 48h 보관 경계.
+    static let currentSchemaVersion = 1
+
+    /// 어느 파일이 더러워졌는가(저장 대상). 스캐너 Stats 가 채우고 스토어가 누적한다.
+    struct Parts: OptionSet, Sendable, Equatable {
+        let rawValue: UInt8
+        /// 핫: claudeFileStates / codexFileStates.
+        static let state = Parts(rawValue: 1)
+        /// 콜드: claudeEntries.
+        static let entries = Parts(rawValue: 2)
+        static let all: Parts = [.state, .entries]
+    }
+
     static func defaultURL() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         return base.appendingPathComponent("aing-check/token-usage-cache.json", isDirectory: false)
     }
 
-    /// 없거나 손상됐으면 빈 캐시(첫 실행 = 전체 스캔). 예외를 던지지 않는다(캐시는 항상 재구성 가능한 파생물).
-    static func load(from url: URL) -> TokenUsageCache {
-        guard let data = try? Data(contentsOf: url),
-              let cache = try? JSONDecoder().decode(TokenUsageCache.self, from: data)
+    static func stateURL(for base: URL) -> URL {
+        base.deletingPathExtension().appendingPathExtension("state.json")
+    }
+
+    static func entriesURL(for base: URL) -> URL {
+        base.deletingPathExtension().appendingPathExtension("entries.json")
+    }
+
+    /// 핫 파일 봉투. state 는 모놀리식 TokenUsageCache 인코딩(엔트리는 비워 넣는다).
+    private struct StateFile: Codable {
+        var schemaVersion: Int
+        var state: TokenUsageCache
+    }
+
+    /// 두 파일이 다 있고 세대가 맞을 때만 캐시. 그 외엔 빈 캐시(첫 실행 = 전체 스캔). 옛 단일 파일이 있으면 지운다.
+    static func load(from base: URL) -> TokenUsageCache {
+        removeLegacyFile(at: base)
+        guard let stateData = try? Data(contentsOf: stateURL(for: base)),
+              let envelope = try? JSONDecoder().decode(StateFile.self, from: stateData),
+              envelope.schemaVersion == currentSchemaVersion,
+              let entriesData = try? Data(contentsOf: entriesURL(for: base)),
+              let rawEntries = try? JSONDecoder().decode([String: ClaudeEntry].self, from: entriesData),
+              let entries = Dictionary.fromHexKeyed(rawEntries, strict: true)
         else { return TokenUsageCache() }
+        var cache = envelope.state
+        cache.claudeEntries = entries
         return cache
     }
 
-    /// 상위 폴더를 만들고 원자적으로 쓴다. 호출측이 "새 데이터가 있을 때만" 부르므로 무변경 갱신에선 쓰기 0.
-    static func save(_ cache: TokenUsageCache, to url: URL) {
-        guard let data = try? JSONEncoder().encode(cache) else { return }
-        try? FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true
-        )
-        try? data.write(to: url, options: .atomic)
+    /// parts 에 든 파일(과 아직 디스크에 없는 파일)을 원자적으로 쓴다. 콜드 → 핫 순서이고, 콜드 쓰기가 실패하면 핫은
+    /// 건드리지 않는다(위 과소집계 불변식). 반환은 요청한 부분이 전부 써졌는가.
+    @discardableResult
+    static func save(_ cache: TokenUsageCache, parts requested: Parts, to base: URL) -> Bool {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: base.deletingLastPathComponent(), withIntermediateDirectories: true)
+        var parts = requested
+        if !fm.fileExists(atPath: entriesURL(for: base).path) { parts.insert(.entries) }
+        if !fm.fileExists(atPath: stateURL(for: base).path) { parts.insert(.state) }
+
+        if parts.contains(.entries) {
+            guard let data = try? JSONEncoder().encode(cache.claudeEntries.hexKeyed),
+                  (try? data.write(to: entriesURL(for: base), options: .atomic)) != nil
+            else { return false }
+        }
+        if parts.contains(.state) {
+            var hot = cache
+            hot.claudeEntries = [:]
+            guard let data = try? JSONEncoder().encode(StateFile(schemaVersion: currentSchemaVersion, state: hot)),
+                  (try? data.write(to: stateURL(for: base), options: .atomic)) != nil
+            else { return false }
+        }
+        return true
+    }
+
+    /// v0.2.37 이하의 단일 파일 제거(있을 때만). 실패는 무시한다 — 다음 로드에서 다시 시도된다.
+    private static func removeLegacyFile(at base: URL) {
+        guard FileManager.default.fileExists(atPath: base.path) else { return }
+        try? FileManager.default.removeItem(at: base)
     }
 }
 
@@ -336,7 +539,9 @@ enum TokenUsageCacheStore {
 /// - Codex: token_count 이벤트마다 그 이벤트 timestamp(→KST)로 delta 를 월/일에 귀속(파일 mtime 월 통째 귀속 폐기 —
 ///   resume 세션이 지난달 누적을 이번 달로 편입하던 +수십억 이상치를 근절). 파일별 기준선(prevCumulative)으로 delta 를 잇되,
 ///   **파일을 처음부터 파싱할 때의 첫 유효 이벤트는 델타가 아니라 기준선**이다(CodexFileProgress 주석의 실측 근거 참고).
-/// - 집계는 현재 KST 월만. 엔트리 보관은 현재+직전 월(월초 지연 기록·시계 오차 대비), 그 이전은 퇴거.
+/// - 집계는 현재 KST 월만. 엔트리 보관은 [월 시작 − 48h, ∞) — 월 경계를 걸치는 세션(월말 밤에 시작해 월초 새벽까지
+///   이어지는 스트리밍 스냅샷·포크 복제)의 dedupe 만 남기고 그 이전은 퇴거한다. v0.2.37 까지는 직전 월 1일부터 보관해
+///   엔트리의 73% 가 지난달 것이었다(≈11MB 상주). 같은 (id, requestId) 라인들은 초~분 간격으로 찍히므로 48h 면 넉넉하다.
 ///
 /// 증분 절차(파일마다):
 /// - 디렉터리 워크 + stat → mtime 프리필터(현재 월 시작 이전 파일 통째 스킵).
@@ -363,16 +568,20 @@ enum TokenUsageIncrementalScanner {
         return c
     }()
 
-    /// 주어진 시각이 속한 KST 달력 월의 경계(절대 시각)와 'YYYY-MM' 문자열, 직전 월 시작.
-    /// start = 이번달 1일 0시 KST, end = 다음달 1일 0시 KST, prevStart = 지난달 1일 0시 KST.
-    static func monthBounds(now: Date) -> (start: Date, end: Date, prevStart: Date, month: String) {
+    /// 엔트리/파일상태 보관 하한이 월 시작에서 얼마나 앞서는가. 월 경계 straddle 을 덮되 지난달 본체는 들지 않는 폭(48h).
+    /// KST 는 DST 가 없어 48h 는 정확히 이틀이다.
+    static let retentionSlack: TimeInterval = 48 * 3_600
+
+    /// 주어진 시각이 속한 KST 달력 월의 경계(절대 시각)와 'YYYY-MM' 문자열, 보관 하한.
+    /// start = 이번달 1일 0시 KST, end = 다음달 1일 0시 KST, retentionStart = start − 48h(그 이전 ts14/mtime 은 퇴거).
+    static func monthBounds(now: Date) -> (start: Date, end: Date, retentionStart: Date, month: String) {
         let cal = kstCalendar
         let comps = cal.dateComponents([.year, .month], from: now)
         let start = cal.date(from: comps)!
         let end = cal.date(byAdding: .month, value: 1, to: start)!
-        let prevStart = cal.date(byAdding: .month, value: -1, to: start)!
+        let retentionStart = start.addingTimeInterval(-retentionSlack)
         let month = String(format: "%04d-%02d", comps.year ?? 0, comps.month ?? 0)
-        return (start, end, prevStart, month)
+        return (start, end, retentionStart, month)
     }
 
     /// 주어진 시각의 KST 달력 월 'YYYY-MM'. 스토어가 복원 스냅샷의 월 일치 판정에 쓴다.
@@ -398,8 +607,19 @@ enum TokenUsageIncrementalScanner {
         var codexFilesStatted = 0
         var codexFilesRead = 0
         var codexBytesRead = 0
-        /// 캐시에 실제 변경(엔트리/상태 추가·갱신 또는 퇴거)이 있었는가. false 면 저장을 건너뛴다.
-        var cacheChanged = false
+        /// 콜드(엔트리 맵)에 실제 변경(추가·교체·ts 승격·퇴거)이 있었는가.
+        var entriesChanged = false
+        /// 핫(claude/codex 파일 진행 상태)에 실제 변경(갱신·롤오버·정리·퇴거)이 있었는가.
+        var statesChanged = false
+        /// 캐시 어디든 변경이 있었는가. false 면 저장할 것이 없다.
+        var cacheChanged: Bool { entriesChanged || statesChanged }
+        /// 저장 대상 파일(스토어의 dirty 누적에 그대로 합쳐진다).
+        var changedParts: TokenUsageCacheStore.Parts {
+            var p = TokenUsageCacheStore.Parts()
+            if entriesChanged { p.insert(.entries) }
+            if statesChanged { p.insert(.state) }
+            return p
+        }
     }
 
     struct Result: Sendable {
@@ -419,12 +639,12 @@ enum TokenUsageIncrementalScanner {
         var stats = Stats()
 
         // 현재 KST 월 경계. 합계 창 = [monthStart, monthEnd), 스캔 프리필터 컷오프 = monthStart,
-        // 퇴거(보관) 경계 = prevMonthStart(직전 월까지 보관).
-        let (monthStart, monthEnd, prevMonthStart, monthString) = monthBounds(now: now)
+        // 퇴거(보관) 경계 = retentionStart(월 시작 − 48h; 월 경계 straddle 만 남기고 지난달 본체는 들지 않는다).
+        let (monthStart, monthEnd, retentionStart, monthString) = monthBounds(now: now)
         let monthStartTs14 = ts14(from: monthStart)
         let monthEndTs14 = ts14(from: monthEnd)
-        let prevMonthStartTs14 = ts14(from: prevMonthStart)
-        let prevMonthStartMicros = micros(from: prevMonthStart)
+        let retentionTs14 = ts14(from: retentionStart)
+        let retentionMicros = micros(from: retentionStart)
 
         // 오늘(KST) 창. Claude 는 ts14 범위([오늘 0시, 내일 0시))로 오늘분을 가르고, Codex 는 이벤트 timestamp 의 KST 일키로
         // 가르므로 todayDate 문자열이 두 트랙 공통 열쇠다(Codex 스캔에 넘겨 이벤트 일키와 비교·파일 dayKey 를 오늘로 세팅).
@@ -432,11 +652,11 @@ enum TokenUsageIncrementalScanner {
         let todayStartTs14 = ts14(from: todayStart)
         let todayEndTs14 = ts14(from: todayEnd)
 
-        // 1) 퇴거(로드 시점): 직전 월 시작 밖 엔트리/파일상태 제거. 무언가 지워지면 캐시 변경으로 표시(저장 유도).
-        evict(&cache, evictTs14: prevMonthStartTs14, evictMicros: prevMonthStartMicros, changed: &stats.cacheChanged)
+        // 1) 퇴거(로드 시점): 보관 하한 밖 엔트리/파일상태 제거. 무언가 지워지면 캐시 변경으로 표시(저장 유도).
+        evict(&cache, evictTs14: retentionTs14, evictMicros: retentionMicros, stats: &stats)
 
         // 2) 소스별 증분 스캔(프리필터 컷오프 = 현재 월 시작). Codex 는 이벤트 월/일 귀속을 위해 현재 월키·오늘 일키를 받는다.
-        scanClaude(&cache, homeDirectory: homeDirectory, cutoff: monthStart, evictTs14: prevMonthStartTs14, stats: &stats)
+        scanClaude(&cache, homeDirectory: homeDirectory, cutoff: monthStart, evictTs14: retentionTs14, stats: &stats)
         scanCodex(&cache, homeDirectory: homeDirectory, cutoff: monthStart, monthString: monthString, todayDate: todayDate, stats: &stats)
 
         // 3) 합계 재계산(엔트리 맵 현재-월 필터 + codex 파일상태 monthKey==현재월 필터). 오늘분은 같은 순회에서 겹쳐 센다
@@ -471,34 +691,58 @@ enum TokenUsageIncrementalScanner {
             } else {
                 startOffset = 0
             }
+            var entriesTouched = false
             guard let read = readTail(at: f.url, from: startOffset, { line in
-                ingestClaudeLine(line, into: &cache, evictTs14: evictTs14)
+                ingestClaudeLine(line, into: &cache, evictTs14: evictTs14, changed: &entriesTouched)
             }) else { continue }
             stats.claudeFilesRead += 1
             stats.claudeBytesRead += read.bytesRead
             cache.claudeFileStates[path] = FileProgress(
                 size: f.size, mtimeMicros: f.mtimeMicros, consumedOffset: read.consumedOffset
             )
-            stats.cacheChanged = true
+            stats.statesChanged = true
+            if entriesTouched { stats.entriesChanged = true }
         }
     }
 
     /// 한 Claude 라인을 파싱해 dedupe 키로 엔트리 맵에 넣는다(포크 복제는 같은 키라 한 번만 계상).
-    private static func ingestClaudeLine(_ line: UnsafeRawBufferPointer, into cache: inout TokenUsageCache, evictTs14: Int) {
+    /// changed 는 엔트리 맵이 실제로 바뀌었을 때만 true 로 세운다(같은 값 재관측은 무변경).
+    private static func ingestClaudeLine(
+        _ line: UnsafeRawBufferPointer, into cache: inout TokenUsageCache, evictTs14: Int, changed: inout Bool
+    ) {
         // 프리체크: "usage"(assistant 라인에만) → "assistant". 둘 다 있어야 디코드(대다수 라인 조기 배제).
         guard contains(line, usagePattern), contains(line, assistantPattern) else { return }
-        guard let base = line.baseAddress,
-              let object = try? JSONSerialization.jsonObject(with: Data(bytes: base, count: line.count)) as? [String: Any],
-              object["type"] as? String == "assistant",
-              let timestamp = object["timestamp"] as? String,
-              let message = object["message"] as? [String: Any],
-              let usageObject = message["usage"] as? [String: Any],
-              let ts = ts14(fromTimestampPrefix: timestamp)
-        else { return }
-        // 직전 월 시작 밖(퇴거 대상)은 아예 저장하지 않는다 — 엔트리 맵을 ≤2개월 규모로 유지. 합계 창 필터는 별도(현재 월).
-        guard ts >= evictTs14 else { return }
-        // (message.id, requestId) 쌍으로 dedupe. NUL 구분자(둘 다 NUL 을 못 담으므로 충돌 불가).
-        let key = "\(message["id"] as? String ?? "")\u{0}\(object["requestId"] as? String ?? "")"
+        // 라인마다 autoreleasepool: JSONSerialization 이 만드는 브리지 임시 객체(수 KB content 문자열 포함)를 그 라인
+        // 안에서 돌려준다. 첫 스캔은 유틸리티 태스크에서 수십~수백 MB 를 연달아 파싱하므로, 풀 없이는 풀이 언제 비워지느냐가
+        // peak footprint 를 정한다(v0.2.37 실측 peak 405MB). 프리체크를 통과한 라인에만 씌워 비용을 매칭 라인으로 한정한다.
+        autoreleasepool {
+            guard let base = line.baseAddress,
+                  // 복사 없이 라인 버퍼를 그대로 파서에 넘긴다(파서는 동기·읽기 전용이라 수명이 이 호출 안에서 끝난다).
+                  let object = try? JSONSerialization.jsonObject(
+                      with: Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: base), count: line.count, deallocator: .none)
+                  ) as? [String: Any],
+                  object["type"] as? String == "assistant",
+                  let timestamp = object["timestamp"] as? String,
+                  let message = object["message"] as? [String: Any],
+                  let usageObject = message["usage"] as? [String: Any],
+                  let ts = ts14(fromTimestampPrefix: timestamp)
+            else { return }
+            // 보관 하한(월 시작 − 48h) 밖은 아예 저장하지 않는다 — 엔트리 맵을 현재 월 + straddle 규모로 유지. 합계 창 필터는 별도(현재 월).
+            guard ts >= evictTs14 else { return }
+            let key = ClaudeEntryKey(
+                messageID: message["id"] as? String ?? "", requestID: object["requestId"] as? String ?? ""
+            )
+            ingest(
+                key: key, ts: ts, usageObject: usageObject, into: &cache.claudeEntries, changed: &changed
+            )
+        }
+    }
+
+    /// 엔트리 맵 갱신 규칙(max-output wins · max-ts 유지). 파싱과 분리해 autoreleasepool 안을 짧게 유지한다.
+    private static func ingest(
+        key: ClaudeEntryKey, ts: Int, usageObject: [String: Any],
+        into entries: inout [ClaudeEntryKey: ClaudeEntry], changed: inout Bool
+    ) {
         // "키별로 output_tokens 최대치 채택"(max-output wins, 같으면 기존 유지). 한 assistant 메시지는 스트리밍 중
         // 같은 (id,requestId)로 여러 번 기록되며 이 중복 라인들은 진행 스냅샷이라 output_tokens 가 점증한다
         // (실측: [2,2,688], [7,7,7,7,343] — 마지막이 그 요청의 최종값). 따라서 "첫 값 채택"은 출력을 ~3.67배
@@ -512,33 +756,36 @@ enum TokenUsageIncrementalScanner {
         // 트레이드오프: max-output 값이 지난달 라인에서 왔더라도, 같은 키의 더 최신 라인이 이번달이면 그 값을 이번달로
         // 계상한다(드문 reverse-straddle 에서 소폭 과다). 지난달 옛 스냅샷이 이번달 키를 통째로 탈락시키는
         // 과소집계보다 안전한 쪽을 택한다. 어느 순서로 들어와도 max(output)·max(ts) 라 결과는 결정적이다.
-        if var existing = cache.claudeEntries[key] {
+        if var existing = entries[key] {
             let windowTs14 = max(existing.ts14, ts)
             if existing.output >= output {
                 // output 은 안 바뀌어도 더 최신 라인을 봤으면 월 판정 ts 만 끌어올린다(대입만, 값은 유지).
                 if windowTs14 != existing.ts14 {
                     existing.ts14 = windowTs14
-                    cache.claudeEntries[key] = existing
+                    entries[key] = existing
+                    changed = true
                 }
                 return
             }
             // max-output 교체: 값(input/cache 포함)은 이 레코드로, 월 판정 ts 는 관측 최대치로.
-            cache.claudeEntries[key] = ClaudeEntry(
+            entries[key] = ClaudeEntry(
                 ts14: windowTs14,
                 input: intField(usageObject["input_tokens"]),
                 output: output,
                 cacheRead: intField(usageObject["cache_read_input_tokens"]),
                 cacheCreation: intField(usageObject["cache_creation_input_tokens"])
             )
+            changed = true
             return
         }
-        cache.claudeEntries[key] = ClaudeEntry(
+        entries[key] = ClaudeEntry(
             ts14: ts,
             input: intField(usageObject["input_tokens"]),
             output: output,
             cacheRead: intField(usageObject["cache_read_input_tokens"]),
             cacheCreation: intField(usageObject["cache_creation_input_tokens"])
         )
+        changed = true
     }
 
     // MARK: Codex
@@ -591,7 +838,7 @@ enum TokenUsageIncrementalScanner {
                             monthKey: monthString, monthContribTotal: rolledMonthContrib,
                             dayKey: todayDate, dayContribTotal: rolledDayContrib
                         )
-                        stats.cacheChanged = true
+                        stats.statesChanged = true
                     }
                     continue
                 }
@@ -645,7 +892,7 @@ enum TokenUsageIncrementalScanner {
                 monthKey: monthString, monthContribTotal: monthContrib,
                 dayKey: todayDate, dayContribTotal: dayContrib
             )
-            stats.cacheChanged = true
+            stats.statesChanged = true
         }
 
         // ── 사라진 파일 정리(과다계상의 실제 원인) ───────────────────────────────────────────────
@@ -675,7 +922,7 @@ enum TokenUsageIncrementalScanner {
             if seenPaths.contains(path) { return true }
             return FileManager.default.fileExists(atPath: path)
         }
-        if cache.codexFileStates.count != beforeStates { stats.cacheChanged = true }
+        if cache.codexFileStates.count != beforeStates { stats.statesChanged = true }
     }
 
     // MARK: 합계 / 퇴거
@@ -713,18 +960,22 @@ enum TokenUsageIncrementalScanner {
         return usage
     }
 
-    /// 직전 월 시작 밖 엔트리/파일상태를 제거(로드·저장 시점). 무언가 지워지면 changed 를 세워 저장을 유도한다.
-    private static func evict(_ cache: inout TokenUsageCache, evictTs14: Int, evictMicros: Int, changed: inout Bool) {
+    /// 보관 하한(월 시작 − 48h) 밖 엔트리/파일상태를 제거(로드 시점). 무언가 지워지면 해당 부분의 변경 플래그를 세워
+    /// 저장을 유도한다(엔트리는 콜드, 파일상태는 핫).
+    ///
+    /// 파일상태도 같은 하한을 쓴다: mtime 이 월 시작보다 오래된 파일은 프리필터에 걸려 이번 달 순회에 들지 않으므로 그
+    /// 상태는 쓸 데가 없다. 지난달 codex 세션이 이번 달 재개되면(mtime 갱신) 오프셋 0 부터 다시 읽지만, 첫 이벤트가
+    /// 기준선이 되고 지난달 이벤트 델타는 지난달로 귀속되므로 이번 달 값은 이어읽기와 **같다**(비용은 그 파일 1회 재읽기뿐).
+    private static func evict(_ cache: inout TokenUsageCache, evictTs14: Int, evictMicros: Int, stats: inout Stats) {
         let beforeEntries = cache.claudeEntries.count
         cache.claudeEntries = cache.claudeEntries.filter { $0.value.ts14 >= evictTs14 }
+        if cache.claudeEntries.count != beforeEntries { stats.entriesChanged = true }
         let beforeClaudeFiles = cache.claudeFileStates.count
         cache.claudeFileStates = cache.claudeFileStates.filter { $0.value.mtimeMicros >= evictMicros }
         let beforeCodexFiles = cache.codexFileStates.count
         cache.codexFileStates = cache.codexFileStates.filter { $0.value.mtimeMicros >= evictMicros }
-        if cache.claudeEntries.count != beforeEntries
-            || cache.claudeFileStates.count != beforeClaudeFiles
-            || cache.codexFileStates.count != beforeCodexFiles {
-            changed = true
+        if cache.claudeFileStates.count != beforeClaudeFiles || cache.codexFileStates.count != beforeCodexFiles {
+            stats.statesChanged = true
         }
     }
 
@@ -903,8 +1154,12 @@ enum TokenUsageScanner {
 /// 공유 인스턴스(shared): init 은 스캔을 킥하지 않고 영속 스냅샷만 복원한다. 첫 스캔은 CheckMenuView 의 .task 가 부르는
 /// runRefreshLoop 로 일원화된다. 다른 트랙(팀 토큰 업로드)도 같은 인스턴스의 currentMonthUsage 를 읽으므로 뷰가 개인 소유하지 않는다.
 ///
-/// 정책(30분 스로틀 대체): 팝오버 표시 즉시 1회 갱신 + 열려 있는 동안 30초 주기. 빠른 여닫이 churn 방지로
+/// 정책(30분 스로틀 대체): 팝오버 표시 즉시 1회 갱신 + 열려 있는 동안 refreshPeriod(120초) 주기. 빠른 여닫이 churn 방지로
 /// 마지막 갱신 후 minRefreshInterval(3초) 미만이면 스킵한다.
+///
+/// 저장 정책(v0.2.38): 스캔이 캐시를 바꿔도 즉시 쓰지 않고 더러움(어느 파일이)만 누적한다. 디스크에 가는 순간은 셋뿐이다 —
+/// (a) 스캔 완료 시점에 마지막 저장 후 saveInterval(300초) 이상 지났으면, (b) 갱신 루프가 끝날 때(팝오버 닫힘) 1회,
+/// (c) 앱 종료 알림에서 1회(동기). v0.2.37 은 변경이 있는 30초 갱신마다 7.6MB 를 통째로 다시 써 21분에 64MB 를 썼다.
 @Observable
 @MainActor
 final class TokenUsageStore {
@@ -918,10 +1173,20 @@ final class TokenUsageStore {
     static let shared = TokenUsageStore()
 
     nonisolated static let snapshotKey = "check.tokenUsage.snapshot"
-    /// 갱신 루프 주기(초). 팝오버가 열려 있는 동안만 이 주기로 돈다.
-    nonisolated static let refreshPeriod: TimeInterval = 30
+    /// 갱신 루프 주기(초). 팝오버가 열려 있는 동안만 이 주기로 돈다. 30 → 120(v0.2.38): 한 주기가 ~1,600 파일 stat 순회라
+    /// 열어 둔 팝오버의 utility CPU 스파이크(3.7%)를 1/4 로. 토큰 행은 정보성 표시라 최대 2분 지연을 허용한다(사장님 결정).
+    nonisolated static let refreshPeriod: TimeInterval = 120
+    /// 갱신 주기의 허용 오차(초). 시스템이 웨이크업을 뭉칠 수 있게 넉넉히 준다(절전).
+    nonisolated static let refreshTolerance: TimeInterval = 20
     /// 최소 갱신 간격(초). 마지막 갱신 후 이 시간 미만이면 갱신을 스킵한다(여닫이 churn 방지).
     nonisolated static let minRefreshInterval: TimeInterval = 3
+    /// 캐시 저장 최소 간격(초). 스캔이 캐시를 바꿔도 마지막 저장(스토어 생성 시점이 첫 기준)에서 이만큼 지나야 디스크에 쓴다.
+    /// 그 사이 변경은 dirty 로 모였다가 다음 저장·루프 종료·앱 종료에 한 번에 나간다.
+    nonisolated static let saveInterval: TimeInterval = 300
+
+    /// 캐시 쓰기 직렬화 큐. 저장을 순서대로 처리하므로 더 오래된 스냅샷이 더 새 것을 덮어쓰지 못하고, 종료 시의 동기 저장
+    /// (`sync`)은 진행 중이던 비동기 저장이 끝난 뒤에 최신 스냅샷을 쓴다.
+    nonisolated private static let saveQueue = DispatchQueue(label: "kingcheck.tokenUsage.cacheSave", qos: .utility)
 
     /// 현재 KST 월 사용량. nil(영속 없음/월 리셋/최초)이거나 total==0 이면 행을 그리지 않는다.
     /// 스캔 완료마다 계약 타입으로 갱신되고, 다른 트랙의 업로드 로직이 이 값을 읽는다.
@@ -930,30 +1195,56 @@ final class TokenUsageStore {
     private(set) var isScanning = false
     /// 지금까지 시작한 스캔 횟수(테스트 계측 — churn 가드가 실제로 스캔을 건너뛰는지 확인).
     @ObservationIgnored private(set) var scanCount = 0
+    /// 지금까지 예약/수행한 캐시 저장 횟수(테스트 계측 — 스로틀·루프 종료·종료 훅이 실제로 몇 번 쓰는지 확인).
+    @ObservationIgnored private(set) var saveCount = 0
 
     private let defaults: UserDefaults
     private let homeDirectory: URL
     private let cacheURL: URL
     private let clock: () -> Date
+    private let notificationCenter: NotificationCenter
     // 증분 캐시(인메모리). 첫 스캔에서 디스크로부터 로드하고 이후엔 메모리에서 이어받는다(재디코드 회피).
     @ObservationIgnored private var cache: TokenUsageCache?
     // 마지막 갱신 시작 시각(churn 가드 기준).
     @ObservationIgnored private var lastRefreshAt: Date?
     // 진행 중 스캔 핸들(재진입 방지). 관찰 대상 아님.
     @ObservationIgnored private var scanTask: Task<Void, Never>?
+    // 아직 디스크에 안 나간 변경(어느 파일이). 저장이 예약되는 순간 비운다.
+    @ObservationIgnored private var dirty = TokenUsageCacheStore.Parts()
+    // 마지막 저장(예약) 시각. 스토어 생성 시점에서 출발한다 — "첫 저장도 생성 후 300초 또는 루프 종료/앱 종료".
+    @ObservationIgnored private var lastSaveAt: Date
+    // 앱 종료 알림 구독(스토어와 수명을 같이한다 — 박스의 deinit 이 해지).
+    @ObservationIgnored private var terminationObserver: NotificationSubscription?
+
+    /// 블록 옵저버 토큰을 수명에 묶는 박스. 스토어의 nonisolated deinit 에서 비-Sendable 토큰을 만질 수 없어 해지를 여기로 옮겼다.
+    private final class NotificationSubscription: @unchecked Sendable {
+        private let center: NotificationCenter
+        private let token: any NSObjectProtocol
+        init(center: NotificationCenter, token: any NSObjectProtocol) {
+            self.center = center
+            self.token = token
+        }
+        deinit { center.removeObserver(token) }
+    }
 
     /// init 은 스캔을 절대 킥하지 않는다(부트스트랩 개념 제거). 영속 스냅샷 복원만 하고, 첫 스캔은 뷰(.task) 루프가 맡는다.
     /// 이로써 ImageRenderer(.task 미실행) 렌더 테스트가 결정적이 되고, 실홈 백그라운드 스캔이 테스트 러너 defaults 를 오염시키지 않는다.
+    ///
+    /// notificationCenter: 앱 종료(NSApplication.willTerminateNotification)를 듣는 곳. 테스트는 사설 센터를 주입해 종료를
+    /// 모사한다(실 센터에 가짜 종료 알림을 흘리면 다른 구독자가 반응한다).
     init(
         defaults: UserDefaults = .standard,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         cacheURL: URL = TokenUsageCacheStore.defaultURL(),
-        clock: @escaping () -> Date = { Date() }
+        clock: @escaping () -> Date = { Date() },
+        notificationCenter: NotificationCenter = .default
     ) {
         self.defaults = defaults
         self.homeDirectory = homeDirectory
         self.cacheURL = cacheURL
         self.clock = clock
+        self.notificationCenter = notificationCenter
+        self.lastSaveAt = clock()
         // 재시작 후 즉시 표시: 영속 스냅샷을 먼저 읽는다. 단, 귀속 월(month)이 현재 KST 월과 다르면(달이 바뀜)
         // 표시하지 않고(리셋) 재스캔에 맡긴다 — 지난달 숫자가 새 달 첫 프레임에 잘못 보이지 않게.
         if let data = defaults.data(forKey: Self.snapshotKey),
@@ -961,15 +1252,28 @@ final class TokenUsageStore {
            restored.month == TokenUsageIncrementalScanner.kstMonthString(clock()) {
             currentMonthUsage = restored
         }
+        // (c) 앱 종료 훅: AppKit 은 이 알림을 메인 스레드에서 동기로 돌리고, 돌아오면 프로세스가 끝난다 — 그래서 큐 없이
+        // (queue: nil = 게시 스레드에서 동기) 받아 **동기로** 쓴다. 비동기 홉은 종료 전에 돌지 않을 수 있다.
+        let token = notificationCenter.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.persistForTermination() }
+        }
+        terminationObserver = NotificationSubscription(center: notificationCenter, token: token)
     }
 
     /// 뷰(.task)에서 부르는 갱신 루프. 표시 즉시 1회 + 이후 refreshPeriod 주기. 뷰가 사라지면 Task 취소로 끝난다.
+    ///
+    /// (b) 루프가 끝나는 지점에서 더러운 캐시를 1회 저장한다. 취소 핸들러(withTaskCancellationHandler)가 아니라 루프 뒤에
+    /// 두는 이유: 핸들러는 취소 즉시 — 스캔이 진행 중인 도중에도 — 불려 낡은 스냅샷을 쓰고, 곧이어 도착한 스캔 결과는 다음
+    /// 열림까지 디스크에 못 간다. 위 await 는 진행 중이던 스캔을 끝까지 기다리므로 여기서 쓰는 스냅샷은 그 결과를 포함한다.
+    /// (취소된 태스크도 본문은 끝까지 실행된다 — 협력적 취소.)
     func runRefreshLoop() async {
         while !Task.isCancelled {
             await refreshIfStale()
-            // tolerance 를 넉넉히 줘 정확한 타이밍을 요구하지 않는다(절전 — 시스템이 웨이크업을 뭉칠 수 있게).
-            try? await Task.sleep(for: .seconds(Self.refreshPeriod), tolerance: .seconds(5))
+            try? await Task.sleep(for: .seconds(Self.refreshPeriod), tolerance: .seconds(Self.refreshTolerance))
         }
+        persistIfDirty(force: true)
     }
 
     /// 즉시 1회 갱신(단, 신선하면 스킵). 진행 중이면 그 완료를 기다리고, 마지막 갱신 후 minRefreshInterval 미만이면 스킵한다.
@@ -985,6 +1289,13 @@ final class TokenUsageStore {
         await scanTask?.value
     }
 
+    /// 예약된 비동기 캐시 저장이 모두 디스크에 닿을 때까지 기다린다(테스트 결정성용 — 저장 큐에 장벽을 하나 넣는다).
+    nonisolated func awaitPendingSaves() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            Self.saveQueue.async { continuation.resume() }
+        }
+    }
+
     private func startScan() {
         guard scanTask == nil else { return }
         isScanning = true
@@ -996,20 +1307,48 @@ final class TokenUsageStore {
         // 인메모리 캐시가 있으면 그대로 이어받고, 없으면(첫 스캔) 백그라운드에서 디스크 로드 → 증분(=전체) 스캔.
         let inMemory = cache
         scanTask = Task { @MainActor [weak self] in
-            let (newCache, usage) = await Task.detached(priority: .utility) { () -> (TokenUsageCache, TokenUsageMonthly) in
+            let result = await Task.detached(priority: .utility) { () -> TokenUsageIncrementalScanner.Result in
                 let base = inMemory ?? TokenUsageCacheStore.load(from: url)
-                let result = TokenUsageIncrementalScanner.update(base, homeDirectory: home, now: now)
-                // 새 데이터가 있을 때만 저장(무변경 갱신에선 쓰기 0).
-                if result.stats.cacheChanged {
-                    TokenUsageCacheStore.save(result.cache, to: url)
-                }
-                return (result.cache, result.usage)
+                return TokenUsageIncrementalScanner.update(base, homeDirectory: home, now: now)
             }.value
             guard let self else { return }
-            self.cache = newCache
-            self.apply(usage)
+            self.cache = result.cache
+            // 변경은 즉시 쓰지 않고 더러움만 누적한다 — (a) 저장 간격이 찼을 때만 디스크로.
+            self.dirty.formUnion(result.stats.changedParts)
+            self.apply(result.usage)
+            self.persistIfDirty(force: false)
             self.isScanning = false
             self.scanTask = nil
+        }
+    }
+
+    /// 더러운 부분을 저장 큐에 예약한다(비동기·직렬). force 가 아니면 마지막 저장 후 saveInterval 미만이면 미룬다.
+    /// 예약과 동시에 dirty 를 비우고 시계를 갱신하므로, 그 뒤 스캔이 다시 더럽히면 다음 창에 나간다.
+    private func persistIfDirty(force: Bool) {
+        guard !dirty.isEmpty, let cache else { return }
+        let now = clock()
+        if !force, now.timeIntervalSince(lastSaveAt) < Self.saveInterval { return }
+        let parts = dirty
+        dirty = []
+        lastSaveAt = now
+        saveCount += 1
+        let url = cacheURL
+        Self.saveQueue.async {
+            TokenUsageCacheStore.save(cache, parts: parts, to: url)
+        }
+    }
+
+    /// (c) 앱 종료: 더러운 부분을 **동기로** 쓴다. 저장 큐에 sync 로 들어가므로 진행 중이던 비동기 저장이 끝난 뒤 최신
+    /// 스냅샷이 마지막에 남는다. 2~3MB JSON 인코딩+원자적 쓰기라 종료를 수십 ms 늦출 뿐이다.
+    private func persistForTermination() {
+        guard !dirty.isEmpty, let cache else { return }
+        let parts = dirty
+        dirty = []
+        lastSaveAt = clock()
+        saveCount += 1
+        let url = cacheURL
+        Self.saveQueue.sync {
+            _ = TokenUsageCacheStore.save(cache, parts: parts, to: url)
         }
     }
 

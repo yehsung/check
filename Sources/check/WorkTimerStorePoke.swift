@@ -12,9 +12,15 @@ import Foundation
 //  - profiles.token_usage_public: 본인 행 select/update(RLS). token_usage_board 는 비공개 유저를 타인에게 숨긴다(본인 행은 유지).
 @MainActor
 extension WorkTimerStore {
-    /// 수신 찔림 폴링 주기(초). 타이머 자체는 로그인 중 상시 돌지만, 실제 take_pokes 는 근무중에만 나간다
-    /// (O1 — takePokesIfWorking). 전달 지연 상한이자 서버 부하 트레이드오프.
+    /// 수신 찔림 폴링 주기(초) — 리얼타임 **미구독**(킬스위치·연결 중·재연결·끊김) 상태의 값. 타이머 자체는
+    /// 로그인 중 상시 돌지만, 실제 take_pokes 는 근무중에만 나간다(O1 — takePokesIfWorking).
+    /// 전달 지연 상한이자 서버 부하 트레이드오프.
     static let pokePollIntervalSeconds: Double = 15
+    /// 리얼타임 **구독 중**의 폴링 주기(초) — v0.2.38 Q8(사장님 결정). 구독 중엔 찌르기가 소켓으로 즉시 오고
+    /// 폴링은 "소켓이 조용히 죽은" 극소수 케이스의 안전망일 뿐이라, 그 안전망의 지연 상한을 15→60초로 늦춘다
+    /// (근무 8시간 기준 take_pokes 1,920 → 480회). 완전 제거(S4)는 2주 진단 후 별도 결정 — 그때까지
+    /// 이 상수와 아래 판정 구조를 지운다거나 합치지 마라.
+    static let pokePollIntervalSecondsWhileSubscribed: Double = 60
     /// 이 시간(초)보다 오래된 찔림은 수신해도 표시하지 않는다(서버에선 소비됨) — 새벽 찔림이 아침에 뜨는 어색함 방지.
     /// nonisolated 순수 함수 freshReceivedPokes 가 참조하므로 불변 상수를 nonisolated 로 노출한다.
     nonisolated static let pokeDisplayFreshnessSeconds: TimeInterval = 3600
@@ -22,8 +28,8 @@ extension WorkTimerStore {
     static let pokeCooldownSeconds: TimeInterval = 60
     /// 울트라 표시 신선도(초). 일반 찔림의 1시간(pokeDisplayFreshnessSeconds)과 **일부러 다르다** —
     /// 울트라는 화면 전체를 5초간 덮으므로, 맥이 잠들었다 깨어난 뒤 40분 전 울트라가 갑자기 터지면
-    /// 그건 알림이 아니라 습격이다. 정상 전달 지연 상한은 폴링 주기(15초)라 120초면 재시도·네트워크
-    /// 흔들림까지 덮는다.
+    /// 그건 알림이 아니라 습격이다. 정상 전달 지연 상한은 폴링 주기(미구독 15초·구독 중 60초 — 구독 중엔
+    /// 소켓이 먼저 울린다)라 120초면 재시도·네트워크 흔들림까지 덮는다.
     nonisolated static let ultraDisplayFreshnessSeconds: TimeInterval = 120
     /// 잔량이 0일 때의 안내. **하루 한도 상수에서 파생하지 않는다** — 그 상수는 이번 릴리스에 서버에서
     /// 사라졌고(재화 경제로 전환), 파생을 남겨 두면 계약 상대가 없는 문장만 코드에 남는다.
@@ -47,9 +53,12 @@ extension WorkTimerStore {
         Task { @MainActor in await performLoadPokeDirectory() }
     }
 
-    /// refresh 루프 전용 — 패널이 노출 중일 때만 재조회.
+    /// refresh 루프 전용 — **팝오버가 열려 있고** 패널이 노출 중일 때만 재조회.
+    /// isPokePanelVisible 은 팝오버를 닫아도 내려가지 않는다('마지막으로 본 패널'을 다음 오픈에 그대로 보여 주기
+    /// 위한 값이다). 그래서 이 플래그만 보면 닫힌 팝오버가 app_user_directory(6.4KB/37행)를 30초마다 두드린다
+    /// (v0.2.38 Q7 계측). 다시 열리는 순간의 1회 갱신은 setMenuPresented(true) 의 loadPokeDirectory() 가 맡는다.
     func refreshPokeDirectoryIfVisible() async {
-        guard isPokePanelVisible else { return }
+        guard isMenuPresented, isPokePanelVisible else { return }
         await performLoadPokeDirectory()
     }
 
@@ -309,7 +318,10 @@ extension WorkTimerStore {
         guard pokePollTask == nil else { return }
         pokePollTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(Self.pokePollIntervalSeconds), tolerance: .seconds(2))
+                // 주기는 **매 반복의 앞**에서 다시 읽는다 — 구독/해제 전이는 지금 자는 구간이 끝난 다음 tick 부터
+                // 새 주기를 탄다(Q8). 자는 도중에 깨워 재계산하지 않는다: 그러면 전이가 요동칠 때 tick 이 몰린다.
+                let interval = self?.pokePollIntervalSecondsNow ?? Self.pokePollIntervalSeconds
+                try? await Task.sleep(for: .seconds(interval), tolerance: .seconds(2))
                 if Task.isCancelled { return }
                 guard let self else { return }
                 await self.localExpiryTick()
@@ -371,9 +383,20 @@ extension WorkTimerStore {
     /// 그때 판정이 다시 `realtimeState.isSubscribed` 하나로 돌아간다.
     static let pollingKeepsRunningAlongsideRealtime = true
 
+    /// 링 구독 신호의 **단일 읽기 지점**. 폴링 억제(pollingIsPausedByRealtime)와 폴링 주기
+    /// (pokePollIntervalSecondsNow)가 둘 다 여기서 파생한다 — 같은 신호를 두 곳에서 따로 읽으면 한쪽만
+    /// 고쳐진 날 "리얼타임은 반쯤 죽었는데 폴링은 60초로 늘어져 있는" 반쪽 침묵이 된다.
+    var realtimeRingIsSubscribed: Bool { realtimeState.isSubscribed }
+
     /// 폴링이 리얼타임에 자리를 내줬는가. **폴링 억제 판정의 단일 출처다.**
     var pollingIsPausedByRealtime: Bool {
-        Self.pollingKeepsRunningAlongsideRealtime ? false : realtimeState.isSubscribed
+        Self.pollingKeepsRunningAlongsideRealtime ? false : realtimeRingIsSubscribed
+    }
+
+    /// 지금 이 순간의 take_pokes 폴링 주기(초). 구독 중 60초, 그 외(킬스위치 `.idle(.disabled)`·연결 중·
+    /// 재연결·실패·비근무) 15초 — v0.2.38 Q8. 루프가 매 반복 앞에서 읽으므로 전이는 다음 tick 부터 반영된다.
+    var pokePollIntervalSecondsNow: Double {
+        realtimeRingIsSubscribed ? Self.pokePollIntervalSecondsWhileSubscribed : Self.pokePollIntervalSeconds
     }
 
     /// 이 맥의 앱 버전을 서버 profiles 에 남긴다(실행당 1회). 서버가 이 값으로 **남이 나에게 메시지를 보낼 수

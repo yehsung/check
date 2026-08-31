@@ -175,7 +175,10 @@ func claudeAdoptsMaxOutputAmongStreamingSnapshotsInSameFile() {
 // '관측 최대 ts'로 유지하면, 이번달 라인이 하나라도 있으면 그 키(최대 output)가 현재 월 합계에 남는다. 입력 순서와 무관하게 결정적.
 @Test
 func claudeReverseStraddleCountsKeyByMaxObservedTimestamp() {
-    let prevMonth = fixedNow.addingTimeInterval(-20 * 86_400)  // 2026-06-24 → 지난달(보관 안, 합계 밖)
+    // v0.2.38 Q6: 보관 경계가 '직전 월 1일'에서 '월 시작 − 48h'로 당겨졌다(TokenUsageIncrementalScanner.retentionSlack).
+    // 그래서 지난달 라인은 6/29 00:00 KST 이후여야 ingest 가드를 통과한다 — 6/24 는 이제 아예 저장되지 않는다.
+    // 경계 자체는 V0238TokenTests.retentionKeepsLast48HoursOfPreviousMonthAndEvictsOlder / ingestGuardUsesSameRetentionBoundaryAsEviction 가 검증.
+    let prevMonth = fixedNow.addingTimeInterval(-14 * 86_400)  // 2026-06-30 12:33 KST → 지난달(48h 안이라 보관, 합계 밖)
     let inMonth = fixedNow.addingTimeInterval(-5 * 86_400)     // 2026-07-09 → 현재 월
     let big = claudeLine(id: "msg_r", requestId: "req_r", timestamp: prevMonth,
         usage: "{\"input_tokens\":7,\"output_tokens\":100}")   // 지난달·큰 output.
@@ -690,13 +693,14 @@ func shrunkFileTriggersFullReparseFallback() {
 
 @Test
 func evictsEntriesBeforePreviousMonth() {
-    // 현재 월 합계와 보관(직전 월까지)/퇴거(직전 월 이전)를 분리 검증한다:
-    // 지난달(6월) 엔트리는 보관되나 합계 제외, 전전월(5월) 엔트리는 퇴거.
+    // 현재 월 합계와 보관/퇴거를 분리 검증한다. v0.2.38 Q6 부터 보관 하한은 '직전 월 1일'이 아니라
+    // '월 시작 − 48h'(6/29 00:00 KST) 다 — 지난달이라도 그 안(6/30)이면 보관되나 합계 제외, 그 밖(5월)은 퇴거.
+    // 48h 경계값 자체는 V0238TokenTests.retentionKeepsLast48HoursOfPreviousMonthAndEvictsOlder 가 검증한다.
     var cache = TokenUsageCache()
     cache.claudeEntries["fresh\u{0}fresh"] = ClaudeEntry(
         ts14: ts14(fixedNow.addingTimeInterval(-5 * 86_400)), input: 111, output: 0, cacheRead: 0, cacheCreation: 0)   // 7월
     cache.claudeEntries["mid\u{0}mid"] = ClaudeEntry(
-        ts14: ts14(fixedNow.addingTimeInterval(-20 * 86_400)), input: 222, output: 0, cacheRead: 0, cacheCreation: 0)  // 6월
+        ts14: ts14(fixedNow.addingTimeInterval(-14 * 86_400)), input: 222, output: 0, cacheRead: 0, cacheCreation: 0)  // 6/30(48h 안)
     cache.claudeEntries["old\u{0}old"] = ClaudeEntry(
         ts14: ts14(fixedNow.addingTimeInterval(-60 * 86_400)), input: 999, output: 0, cacheRead: 0, cacheCreation: 0)  // 5월
 
@@ -704,7 +708,7 @@ func evictsEntriesBeforePreviousMonth() {
     let result = TokenUsageIncrementalScanner.update(cache, homeDirectory: home, now: fixedNow)
 
     #expect(result.cache.claudeEntries["old\u{0}old"] == nil)   // 5월(직전 월 이전) → 퇴거
-    #expect(result.cache.claudeEntries["mid\u{0}mid"] != nil)   // 6월(직전 월) → 보관
+    #expect(result.cache.claudeEntries["mid\u{0}mid"] != nil)   // 6/30(월 시작 − 48h 안) → 보관
     #expect(result.cache.claudeEntries["fresh\u{0}fresh"] != nil)
     #expect(result.usage.claudeInput == 111)                    // 합계는 현재 월(7월)의 fresh 만(mid/old 제외)
     #expect(result.stats.cacheChanged == true)                  // 퇴거가 있었으니 저장 유도

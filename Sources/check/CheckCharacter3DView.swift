@@ -1,26 +1,90 @@
 import AppKit
+import ImageIO
 import Metal
+import os
 import SceneKit
 import SwiftUI
 
 /// 아잉 3D 캐릭터 씬 구성.
 ///
-/// 리소스 번들(`CheckResources.bundle`)의 `aing.usdz`를 로드하고, 마스코트 원색(보라)이 살도록 모든 재질을
+/// 리소스 번들(`CheckResources.bundle`)의 캐릭터 모델을 로드하고, 마스코트 원색(보라)이 살도록 모든 재질을
 /// unlit(`.constant`)로 바꾼 뒤, 바운딩박스를 기준으로 캐릭터를 살짝 내려다보는 구도로 프레임에 꽉 차게
 /// 카메라를 배치한다. 여기에 느린 상하 부유(bob)와 아주 느린 살랑 회전(sway) 애니메이션을 붙인다.
 ///
 /// 기본 PBR/조명에서는 텍스처가 허옇게 떠 마스코트 색이 사라지므로 반드시 `.constant`를 쓴다
 /// (오프스크린 렌더로 확인: 조명 모델을 켜면 중앙 픽셀이 거의 흰색, `.constant`면 라벤더 보라).
+///
+/// 모델 출처는 둘이다(v0.2.38 M3). 빌드 머신에서 미리 구운 `aing.scn`(`scripts/prebake-character.swift` 산출물 —
+/// unlit·512 텍스처 베이크까지 끝난 SceneKit 네이티브 아카이브)을 우선 읽고, 없거나 못 읽으면 원본 `aing.usdz` 로
+/// 폴백한다. usdz 런타임 임포트는 USD/ModelIO 를 상주시키고(+22~38MB) USD 워커 스레드 11개 + 폴링 슬리퍼 1개를
+/// 실행 내내 남기며 2048² 텍스처를 디코드한 뒤 512 로 다시 줄이지만, .scn 은 NSKeyedUnarchiver 경로라 그 어느 것도
+/// 만들지 않는다(같은 머신 실측: 로드 65ms + 베이크 78ms → 로드 3ms + PNG 디코드 ~40ms, 스레드 +14 → +0).
 enum CheckCharacter3DScene {
     /// 카메라 시야각(도). 거리 산정과 프레이밍에 공통으로 쓴다.
     static let fieldOfView: CGFloat = 40
 
-    /// 번들에서 `aing.usdz`를 SCNScene으로 로드한다. 실패 시 nil.
+    /// 번들 모델 출처. **선언 순서가 곧 로드 우선순위**다(프리베이크 → 원본 폴백).
+    enum ModelSource: String, CaseIterable {
+        /// `scripts/prebake-character.swift` 가 만든 SceneKit 네이티브 아카이브(unlit·512 텍스처 베이크 완료).
+        case prebaked = "scn"
+        /// 원본 USDZ. 프리베이크가 없거나(구버전 SceneKit 이 새 아카이브를 거부하는 경우 포함) 못 읽을 때의 폴백.
+        case usdz = "usdz"
+    }
+
+    /// 두 출처가 공유하는 리소스 이름(`aing.scn` / `aing.usdz`).
+    static let modelResourceName = "aing"
+
+    /// 출처의 번들 URL. 번들에 없으면 nil.
+    static func modelURL(for source: ModelSource) -> URL? {
+        CheckResources.bundle.url(forResource: modelResourceName, withExtension: source.rawValue)
+    }
+
+    private static let logger = Logger(subsystem: "kingcheck", category: "character")
+
+    /// 번들 모델을 SCNScene 으로 로드한다(프리베이크 우선, usdz 폴백). 실패 시 nil.
     static func loadModelScene() -> SCNScene? {
-        guard let url = CheckResources.bundle.url(forResource: "aing", withExtension: "usdz") else {
-            return nil
+        loadModelScene(order: ModelSource.allCases)?.scene
+    }
+
+    /// 특정 출처 하나만 로드한다(계약 테스트·계측용). 실패 시 nil.
+    static func loadModelScene(from source: ModelSource) -> SCNScene? {
+        loadModelScene(order: [source])?.scene
+    }
+
+    /// 출처를 `order` 순서로 시도해 처음 성공한 씬과 그 출처를 돌려준다. `url` 은 출처→URL 해석기 — 테스트가
+    /// "프리베이크 없음/손상"을 주입해 폴백을 강제할 수 있게 분리했다.
+    ///
+    /// 로드가 throw 하거나 지오메트리가 하나도 없으면 실패로 보고 다음 출처로 넘어간다. 프리베이크는 빌드 머신의
+    /// SceneKit 이 쓴 아카이브라, 더 오래된 macOS(LSMinimumSystemVersion 14)의 SceneKit 이 거부할 가능성을 배제할
+    /// 수 없다 — 그 경우에도 캐릭터가 사라지는 대신 종전 usdz 경로로 내려간다. 출처·소요를 로그로 남겨 배포 후
+    /// `log show --predicate 'subsystem == "kingcheck" AND category == "character"'` 로 어느 경로를 탔는지 확인한다.
+    static func loadModelScene(
+        order: [ModelSource],
+        url: (ModelSource) -> URL? = { CheckCharacter3DScene.modelURL(for: $0) }
+    ) -> (scene: SCNScene, source: ModelSource)? {
+        for source in order {
+            guard let fileURL = url(source) else { continue }
+            let started = CFAbsoluteTimeGetCurrent()
+            guard let scene = try? SCNScene(url: fileURL, options: nil), hasGeometry(scene) else {
+                logger.error("character model unreadable source=\(source.rawValue, privacy: .public)")
+                continue
+            }
+            let ms = (CFAbsoluteTimeGetCurrent() - started) * 1_000
+            logger.notice(
+                "character model loaded source=\(source.rawValue, privacy: .public) ms=\(ms, format: .fixed(precision: 1), privacy: .public)"
+            )
+            return (scene, source)
         }
-        return try? SCNScene(url: url, options: nil)
+        return nil
+    }
+
+    /// 로드된 씬에 지오메트리가 하나라도 있는가(부분 로드/손상 아카이브를 폴백으로 넘기기 위한 최소 건전성).
+    private static func hasGeometry(_ scene: SCNScene) -> Bool {
+        var found = false
+        scene.rootNode.enumerateHierarchy { node, stop in
+            if node.geometry != nil { found = true; stop.pointee = true }
+        }
+        return found
     }
 
     /// 리액션 wrapper 노드 이름. idle(부유/회전)은 wrapper 안쪽 캐릭터에, 리액션은 wrapper 에 걸어
@@ -157,29 +221,42 @@ enum CheckCharacter3DScene {
         return NSImage(cgImage: cg, size: NSSize(width: width, height: height))
     }
 
-    /// 모든 재질을 unlit(`.constant`)로 전환하고, 상주 텍스처를 다운스케일한다.
+    /// 모든 재질을 unlit(`.constant`)로 전환하고, 디퓨즈를 **CGImage 로 정규화**하며 상주 텍스처를 다운스케일한다.
     ///
     /// 기본 조명에서 텍스처가 허옇게 뜨는 것을 막아 마스코트 원색을 보존한다. 아울러 원본 텍스처(2048²)를
     /// 패널 표시 크기(280×340@2x)에 맞춰 512px 로 줄여 상주 텍스처 메모리를 크게 절감한다(A8).
+    ///
+    /// **CGImage 정규화가 계약이다.** ReactionEngine 은 얼굴 재질을 "큰 CGImage 디퓨즈"로 찾아 깜빡임·졸기 감은 눈을
+    /// 만든다. usdz 는 아카이브 참조 URL 을, 프리베이크 .scn 은 임베드 PNG `Data` 를 디퓨즈로 돌려주므로, 어느 출처든
+    /// 여기서 CGImage 로 통일하지 않으면 얼굴을 못 찾아 깜빡임·감은 눈이 **조용히** 사라진다(테스트 없이는 아무도 모른다).
     static func applyUnlitMaterials(to root: SCNNode) {
         root.enumerateHierarchy { node, _ in
             node.geometry?.materials.forEach { material in
                 material.lightingModel = .constant
-                if let downscaled = downscaledTexture(material.diffuse.contents) {
-                    material.diffuse.contents = downscaled
+                if let baked = downscaledTexture(material.diffuse.contents) {
+                    material.diffuse.contents = baked
                 }
             }
         }
     }
 
-    /// 텍스처 콘텐츠를 최대 `maxDimension`px 로 리샘플한 CGImage 로 돌려준다.
-    /// NSImage/CGImage/파일 참조(URL·경로)만 처리하고, 이미 작거나 알 수 없는 타입이면 nil(교체하지 않음 — 무손실 no-op).
+    /// 디퓨즈 콘텐츠의 베이크 결과 — `maxDimension` 초과면 그 크기로 리샘플한 CGImage, 이하면 CGImage 로 **정규화만** 한 것
+    /// (usdz 의 2048² 아카이브 참조 URL → 512² CGImage, 프리베이크 .scn 의 512² PNG Data → 512² CGImage).
+    /// 이미 CGImage 이고 충분히 작으면 nil(교체 불필요 — 무손실 no-op). 디코드 불가·비정상 치수·알 수 없는 타입도 nil(교체하지 않음).
     static func downscaledTexture(_ contents: Any?, maxDimension: CGFloat = 512) -> CGImage? {
+        guard let decoded = decodedTexture(contents) else { return nil }
+        if let smaller = resampled(decoded, maxDimension: maxDimension) { return smaller }
+        return isCGImage(contents) ? nil : decoded
+    }
+
+    /// 재질 콘텐츠를 CGImage 로 디코드한다. CGImage/NSImage/파일 참조(URL·경로)/인코딩 바이트(Data — .scn 아카이브가
+    /// 임베드 이미지를 이렇게 돌려준다)만 처리하고, 알 수 없는 타입이나 비정상 치수(<8px — 예: 아카이브 통짜 오독 → 1×512)면 nil.
+    static func decodedTexture(_ contents: Any?) -> CGImage? {
         guard let contents else { return nil }
         let source: CGImage?
         // 주의: CF 불투명 타입(CGImage)으로의 `as?` 캐스트는 실제 타입과 무관하게 성공하므로
         // (NSURL 도 삼켜 쓰레기 치수를 만든다) 반드시 CFGetTypeID 로 판별한다.
-        if CFGetTypeID(contents as CFTypeRef) == CGImage.typeID {
+        if isCGImage(contents) {
             source = (contents as! CGImage)
         } else if let image = contents as? NSImage {
             source = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
@@ -187,12 +264,22 @@ enum CheckCharacter3DScene {
             source = decodeTextureURL(url)
         } else if let path = contents as? String {
             source = NSImage(contentsOfFile: path)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        } else if let data = contents as? Data {
+            source = decodeTextureData(data)
         } else {
             return nil
         }
-        guard let cg = source else { return nil }
-        // 디코드가 비정상 이미지(예: 아카이브 통짜 오독 → 1×512)를 내놓으면 교체하지 않는다(무손실 no-op).
-        guard cg.width >= 8, cg.height >= 8 else { return nil }
+        guard let cg = source, cg.width >= 8, cg.height >= 8 else { return nil }
+        return cg
+    }
+
+    private static func isCGImage(_ contents: Any?) -> Bool {
+        guard let contents else { return false }
+        return CFGetTypeID(contents as CFTypeRef) == CGImage.typeID
+    }
+
+    /// 최장변이 `maxDimension` 을 넘으면 그 크기로 리샘플한 CGImage, 아니면 nil(이미 충분히 작다).
+    private static func resampled(_ cg: CGImage, maxDimension: CGFloat) -> CGImage? {
         let maxSide = max(cg.width, cg.height)
         guard maxSide > Int(maxDimension) else { return nil }
         let scale = maxDimension / CGFloat(maxSide)
@@ -212,6 +299,12 @@ enum CheckCharacter3DScene {
         context.interpolationQuality = .high
         context.draw(cg, in: CGRect(x: 0, y: 0, width: newWidth, height: newHeight))
         return context.makeImage()
+    }
+
+    /// 인코딩된 이미지 바이트(PNG 등)를 ImageIO 로 디코드한다. 실패 시 nil.
+    private static func decodeTextureData(_ data: Data) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCache: false] as CFDictionary)
     }
 
     /// SceneKit 이 USDZ 내부 텍스처를 가리킬 때 쓰는 `...aing.usdz?offset=N&size=M` 아카이브 참조 URL 을
@@ -980,13 +1073,58 @@ struct CheckOverlayTimerLabel: View {
 
 /// 3D 캐릭터를 그리는 SCNView 래퍼.
 ///
-/// 배경은 투명하고, 전력 배려를 위해 유휴 8fps(리액션 재생 중에만 30fps)·저(低) 안티에일리어싱으로 둔다.
-/// `isActive == false`(패널 숨김)일 때는 `isPlaying=false`/`rendersContinuously=false`로 렌더 루프를 멈춘다.
+/// 배경은 투명하고, 전력 배려를 위해 유휴 fps(리액션 재생 중에만 30fps)·저(低) 안티에일리어싱으로 둔다.
+///
+/// 렌더 활성은 `isActive && !engine.renderSuspended` 다(v0.2.38 β1/β2 계약). `isActive` 는 표시 의도(패널 표시~
+/// 근무종료 인사), `renderSuspended` 는 "지금 아무도 못 보는 순간"(화면 슬립·잠금·세션 비활성)이다. 캐릭터는 근무 중
+/// 보일 때는 항상 살아 있어야 하므로 멈추는 건 이 둘 중 하나가 꺼졌을 때뿐이다.
+///
+/// 비활성이면 `applyRenderState` 가 렌더 루프를 **진짜로** 멈춘다. `isPlaying=false`/`rendersContinuously=false` 만으로는
+/// idle 무한 SCNAction(부유·살랑)이 살아 있어 SCNView 가 계속 그렸다(같은 머신 실측 7.3fps — 창을 orderOut 해도 같다).
+/// 캐릭터 루트 노드를 `isPaused` 로 세워야 ~0.4초 꼬리 뒤 0fps 가 되고, 그때 렌더 루프가 붙들던 GPU 풀(≈100MB)이
+/// 회수된다. 마지막 프레임은 화면에 그대로 남는다(슬립/잠금 정지에서 중요 — 깨어나면 그 자리에서 이어진다).
 struct CheckCharacter3DView: NSViewRepresentable {
-    /// true일 때만 렌더 루프/애니메이션을 돌린다. 패널 숨김 시 false → 정지(전력 절약).
+    /// 표시 의도. 패널 숨김 시 false → 정지(전력 절약).
     var isActive: Bool
     /// 리액션 엔진. makeNSView 에서 wrapper 노드/씬 루트를 연결한다(없으면 리액션 없이 idle 만).
     var engine: ReactionEngine?
+
+    /// 렌더 활성 판정(순수 함수, β1 계약 식). 표시 의도가 있고 정지 사유가 없을 때만 true.
+    static func renderActive(isActive: Bool, renderSuspended: Bool) -> Bool {
+        isActive && !renderSuspended
+    }
+
+    /// `engine.renderSuspended` 를 읽는 **유일한 지점**. @Observable 읽기라 값이 바뀌면 SwiftUI 가 updateNSView 를
+    /// 다시 부른다(NSViewRepresentable 의 make/update 도 관찰 추적 범위 안이다 — V0238CharacterTests 가 호스팅 뷰로 확인).
+    private var effectiveActive: Bool {
+        Self.renderActive(isActive: isActive, renderSuspended: engine?.renderSuspended ?? false)
+    }
+
+    /// 정지/재개가 세우고 푸는 캐릭터 루트 = 리액션 wrapper(그 아래 facing → idle 캐릭터). 리액션 액션은 wrapper 에,
+    /// idle 무한 액션은 안쪽 캐릭터에 걸리므로 wrapper 하나를 세우면 캐릭터의 모든 액션이 선다. 엔진이 씬 루트에 다는
+    /// 일시 파티클 노드(색종이·💤)는 **일부러 포함하지 않는다** — 파티클 시스템은 어느 노드/씬 isPaused 로도 멈추지
+    /// 않고(실측), 자가 제거 액션까지 세우면 정지 중 노드만 남는다. 짧은 수명이 다하면 스스로 사라지고 루프도 선다.
+    /// wrapper 가 없으면(임포트 실패로 캐릭터 없는 씬) 씬 루트.
+    static func characterRootNode(in scene: SCNScene?) -> SCNNode? {
+        guard let scene else { return nil }
+        return scene.rootNode.childNode(withName: CheckCharacter3DScene.reactionWrapperName, recursively: false)
+            ?? scene.rootNode
+    }
+
+    /// 렌더 루프 게이트 — isPlaying/rendersContinuously 와 캐릭터 루트 isPaused 를 **한 곳에서 짝으로** 내리고 올린다.
+    /// 재개는 isPaused 해제 → isPlaying 순(정지 중 쌓인 액션이 첫 프레임부터 이어지게), 정지는 그 역순.
+    static func applyRenderState(active: Bool, to view: SCNView) {
+        let root = characterRootNode(in: view.scene)
+        if active {
+            root?.isPaused = false
+            view.isPlaying = true
+            view.rendersContinuously = true
+        } else {
+            view.isPlaying = false
+            view.rendersContinuously = false
+            root?.isPaused = true
+        }
+    }
 
     func makeNSView(context: Context) -> SCNView {
         let view = SCNView()
@@ -995,12 +1133,11 @@ struct CheckCharacter3DView: NSViewRepresentable {
         view.backgroundColor = .clear
         view.allowsCameraControl = false
         view.autoenablesDefaultLighting = false
-        // 전력 배려: 안티에일리어싱 최소(2X). FPS 는 유휴(8) 기본값으로 시작하고, 엔진이 리액션 재생 중에만
+        // 전력 배려: 안티에일리어싱 최소(2X). FPS 는 유휴 기본값으로 시작하고, 엔진이 리액션 재생 중에만
         // 30 으로 올렸다가 되돌린다(attach 가 뷰를 받아 상태에 맞춰 조절).
         view.antialiasingMode = .multisampling2X
         view.preferredFramesPerSecond = ReactionEngine.idleFPS
-        view.isPlaying = isActive
-        view.rendersContinuously = isActive
+        Self.applyRenderState(active: effectiveActive, to: view)
         if let engine,
            let root = scene?.rootNode,
            let wrapper = root.childNode(withName: CheckCharacter3DScene.reactionWrapperName, recursively: false) {
@@ -1010,8 +1147,7 @@ struct CheckCharacter3DView: NSViewRepresentable {
     }
 
     func updateNSView(_ view: SCNView, context: Context) {
-        view.isPlaying = isActive
-        view.rendersContinuously = isActive
+        Self.applyRenderState(active: effectiveActive, to: view)
     }
 }
 
@@ -1175,15 +1311,19 @@ struct CheckOverlayRootView: View {
     }
 
     var body: some View {
-        // 오버레이가 실제로 보일 때만 todayDuration 을 읽어 관찰을 건다. 꺼짐/숨김 상태에서 근무중이어도
-        // 매초 displayNow 변화로 body 가 재평가되던 낭비를 없앤다(보일 때만 라벨이 초 단위로 흐른다).
+        // 오버레이가 실제로 보일 때만 누적을 읽어 관찰을 건다. 꺼짐/숨김 상태에서 근무중이어도
+        // 매초 시계 변화로 body 가 재평가되던 낭비를 없앤다(보일 때만 라벨이 초 단위로 흐른다).
         let showing = Self.showsTimer(
             isWorking: store.snapshot.isWorking,
             isOverlayEnabled: store.isOverlayEnabled,
             renderActive: engine?.renderActive == true
         )
+        // ★ 라벨은 **오버레이 시계**(overlayNow → overlayTodayDuration)를 따른다(v0.2.38 M1). `store.todayDuration` 은
+        //   팝오버 시계(displayNow) 파생인데, 그 시계는 팝오버가 **열려 있을 때만** 매초 갱신되므로 그대로 두면 팝오버가
+        //   닫힌 동안 캐릭터 라벨이 멈춘다. overlayNow 는 이 패널이 보일 때(오버레이 켜짐 && 근무 중)만 티커가 대입하므로
+        //   숨김 상태의 헛재평가도 없다(V0238ClockTests 가 두 시계의 분리를 고정한다).
         return CheckOverlayCharacterView(
-            elapsedSeconds: showing ? store.todayDuration : 0,
+            elapsedSeconds: showing ? store.overlayTodayDuration : 0,
             isActive: store.snapshot.isWorking,
             showsTimer: showing,
             engine: engine

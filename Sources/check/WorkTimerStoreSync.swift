@@ -28,34 +28,310 @@ extension WorkTimerStore {
             let members = try await withSessionRetry { activeSession in
                 try await service.fetchTeamStatuses(accessToken: activeSession.accessToken, teamID: teamID)
             }
-            guard generation == sessionGeneration else { return }
-            // 등호 가드로 무효화를 줄이되, 전이 감지는 가드 밖에서 매 refresh 호출한다(대입이 스킵돼도 old==new 라 동작 동일).
-            if teamMembers != members { teamMembers = members }
-            detectTeamReactions()
-            // 앱 시작 복구/폴링에서 서버상 내 세션은 열려 있으나 로컬은 비근무이고 마지막 신호 공백이 크면
-            // 그 세션을 마지막 신호 시각으로 자동 마감한다. 자동 마감이 일어나면 restore 로직은 건너뛴다.
-            if writeGeneration == workStateWriteGeneration, await autoCloseAbandonedOwnSessionIfNeeded() {
-                guard generation == sessionGeneration else { return }
-                stopTimerIfIdle()
-                return
-            }
-            guard generation == sessionGeneration else { return }
-            // applyRemoteOwnStatus 의 강하 통보/잠자기 정정(v0.2.36 W3)이 방금 세운 문구를 같은 패스의
-            // "동기화됨" 정규화가 즉시 덮으면 통보는 존재한 적이 없는 것과 같다(침묵 그대로 재현).
-            // 이번 호출이 문구를 바꿨을 때만 이 주기의 정규화를 건너뛰고, 다음 정상 폴링이 평소처럼
-            // 정규화한다 — autoCloseAbandonedOwnSessionIfNeeded 의 조기 반환이 만드는 것과 같은
-            // 한 주기 노출이다(그쪽 문구도 다음 폴링에 "동기화됨"으로 덮인다).
-            let messageBeforeApply = syncMessage
-            applyRemoteOwnStatus(writeGeneration: writeGeneration)
-            stopTimerIfIdle()
-            scavengeAbandonedTeamSessionsIfNeeded()
-            if syncMessage == messageBeforeApply, syncMessage != "동기화됨" { syncMessage = "동기화됨" }
+            await applyFetchedTeamStatuses(members, generation: generation, writeGeneration: writeGeneration)
         } catch {
             // 취소(.task 취소/팝오버 빨리 닫기)는 실패 문구를 남기지 않고 조용히 빠져나간다(사용자 헛경보 금지).
             if case .cancelled = classifyAuthError(error) { return }
             guard generation == sessionGeneration else { return }
             syncMessage = authMessage(for: error, fallback: "동기화 실패")
         }
+    }
+
+    /// 팀 상태 **수신 성공 → 반영**(refreshTeamStatus 의 후반을 그대로 떼어 낸 것 — v0.2.38 S3).
+    /// 기존 4 GET 경로와 work_tick 경로가 이 한 함수를 부른다: 세대 가드 → 신선도 스탬프 → 팀 목록 → 전이 감지 →
+    /// 방치 세션 자동 마감 → applyRemoteOwnStatus(잠자기 마커 소비 포함) → 스캐빈저 → 문구 정규화의 **순서가 계약**이다.
+    /// generation/writeGeneration 은 호출자가 **발사 전에** 캡처한 값이어야 한다(응답 반영 시점이 아니라).
+    func applyFetchedTeamStatuses(_ members: [TeamMemberStatus], generation: Int, writeGeneration: Int) async {
+        guard generation == sessionGeneration else { return }
+        // 성공 수신 시각(팝오버 재오픈 15초 스로틀의 근거 — Q10). 실패/취소는 찍지 않아 다음 오픈이 다시 받는다.
+        lastTeamStatusAt = clock()
+        // 등호 가드로 무효화를 줄이되, 전이 감지는 가드 밖에서 매 refresh 호출한다(대입이 스킵돼도 old==new 라 동작 동일).
+        if teamMembers != members { teamMembers = members }
+        detectTeamReactions()
+        // 앱 시작 복구/폴링에서 서버상 내 세션은 열려 있으나 로컬은 비근무이고 마지막 신호 공백이 크면
+        // 그 세션을 마지막 신호 시각으로 자동 마감한다. 자동 마감이 일어나면 restore 로직은 건너뛴다.
+        if writeGeneration == workStateWriteGeneration, await autoCloseAbandonedOwnSessionIfNeeded() {
+            guard generation == sessionGeneration else { return }
+            stopTimerIfIdle()
+            return
+        }
+        guard generation == sessionGeneration else { return }
+        // applyRemoteOwnStatus 의 강하 통보/잠자기 정정(v0.2.36 W3)이 방금 세운 문구를 같은 패스의
+        // "동기화됨" 정규화가 즉시 덮으면 통보는 존재한 적이 없는 것과 같다(침묵 그대로 재현).
+        // 이번 호출이 문구를 바꿨을 때만 이 주기의 정규화를 건너뛰고, 다음 정상 폴링이 평소처럼
+        // 정규화한다 — autoCloseAbandonedOwnSessionIfNeeded 의 조기 반환이 만드는 것과 같은
+        // 한 주기 노출이다(그쪽 문구도 다음 폴링에 "동기화됨"으로 덮인다).
+        let messageBeforeApply = syncMessage
+        applyRemoteOwnStatus(writeGeneration: writeGeneration)
+        stopTimerIfIdle()
+        scavengeAbandonedTeamSessionsIfNeeded()
+        if syncMessage == messageBeforeApply, syncMessage != "동기화됨" { syncMessage = "동기화됨" }
+    }
+
+    // MARK: - 근무 틱 통합 RPC work_tick (v0.2.38 S3 / docs/work-tick.md)
+
+    /// 컴파일 타임 킬스위치. false 면 아래 전부 죽고 v0.2.37 의 다중 호출 경로 그대로다(서버측 킬스위치는
+    /// `revoke execute … from authenticated` 한 줄 — 클라는 403 을 보고 이 실행 동안 폴백한다).
+    static let workTickEnabled = true
+
+    /// 폴링 본문의 `workTickIfPossible()` 이 되맞춤(reconcileRealtimeWithWorkState) 뒤에 마저 할 일을 넘기는 손잡이.
+    /// 기존 순서 `하트비트 → 팀 상태 → 되맞춤 → away` 에서 되맞춤이 팀 상태와 away 사이에 있으므로, 한 응답으로
+    /// 받은 away 조각의 **반영 시점**을 그 자리에 맞추려면 틱을 둘로 나눠야 한다(의미 불변).
+    enum WorkTickAwayHandoff: Equatable {
+        /// RPC 성공 — away 조각을 들고 있다. `finishWorkTick` 이 기존 refreshAwayStateIfNeeded 와 같은 가드로 반영한다.
+        case fromTick(away: AwaySyncResponse?, ownerUserID: String, generation: Int)
+        /// 폴백 — `finishWorkTick` 이 기존 `refreshAwayStateIfNeeded()` 를 그대로 부른다(요청도 그쪽이 낸다).
+        case fallback
+        /// 취소·세대 변화 — 아무것도 더 하지 않는다(기존 경로도 이 경우 조용히 빠져나갔다).
+        case skipped
+    }
+
+    /// 30초 폴링 본문의 `sendHeartbeatIfWorking → refreshTeamStatus` 자리(+ away 조각 수령). 가용하면 work_tick 1건,
+    /// 아니면 **그 두 함수를 같은 순서로** 부른다. 실패한 틱은 반드시 폴백으로 즉시 재수행한다(하트비트 유실 창 금지 —
+    /// 서버는 하트비트 실패 시 전체를 실패시키므로 실패 응답 = 쓰기 0건이 보장되어 재수행이 안전하다).
+    ///
+    /// 무소속(`currentTeamID == nil`)은 통합 대상이 아니다: 기존 경로가 팀 GET 을 내지 않아 합칠 것이 없고
+    /// (away_sync 만 120초 스로틀로), work_tick 으로 바꾸면 그 사용자에게 요청이 오히려 늘어난다. 기존 함수로 보낸다.
+    func workTickIfPossible() async -> WorkTickAwayHandoff {
+        guard Self.workTickEnabled, let session, let teamID = currentTeamID else {
+            await sendHeartbeatIfWorking()
+            await refreshTeamStatus()
+            return .fallback
+        }
+        guard service.workTickGate.isAvailable(now: clock()) else {
+            // 이 실행 동안 꺼졌거나(404/403/계약) 1시간 정지 중 — 기존 경로 그대로(진단 카운터만 올린다).
+            service.workTickGate.recordFallback()
+            await sendHeartbeatIfWorking()
+            await refreshTeamStatus()
+            return .fallback
+        }
+
+        let now = clock()
+        // [sendHeartbeatIfWorking 의 앞부분 그대로] 입력 관측은 소유 여부보다 앞이다 — 어느 맥이 세션을 열었든
+        // "이 맥에서 사람이 타이핑하고 있다" 는 사실은 같은 무게를 갖는다(주석은 그 함수에 있다).
+        let observedInput = advanceMeaningfulInput(now: now)
+        // 상태별 인자(docs/work-tick.md 4.4 표). 값의 출처는 기존 요청과 같다:
+        //  · 소유 맥: p_session_id = currentSessionID, opened = ownsCurrentSessionStrongly, 입력 관측 → ①+②
+        //  · 흡수 맥: p_session_id 없음 + 입력 관측 → ②′(관측 없음이면 서버가 skipped = 쓰기 0, 기존과 같다)
+        //  · 세션 ID 없는 소유 맥(강제 로그아웃 후 재로그인 복구 전): 기존 sendHeartbeatIfWorking 이 조용히 반환하던
+        //    상태라 p_heartbeat=false(조회만) — 세션 ID 는 applyRemoteOwnStatus 의 default 가지가 되살린다.
+        var heartbeat = startedAt != nil
+        var sessionID: String?
+        var deviceIDToSend: String?
+        var openedSession = false
+        var lastInputAt: Date?
+        if heartbeat {
+            if adoptedRemoteSession {
+                deviceIDToSend = deviceID
+                lastInputAt = observedInput
+            } else if let current = currentSessionID {
+                sessionID = current
+                deviceIDToSend = deviceID
+                openedSession = ownsCurrentSessionStrongly
+                lastInputAt = observedInput
+            } else {
+                heartbeat = false
+            }
+        }
+        // 팀 메타는 팝오버가 열려 있고 60초 스로틀을 지났을 때만 싣는다. 스탬프는 setMenuPresented 의
+        // refreshTeamMetaIfStale 과 **같은 값**을 보므로 이중 발사가 없다. 실패하면 스탬프를 되돌려 다음 기회가 산다.
+        let includeMeta = isMenuPresented
+            && now.timeIntervalSince(lastTeamMetaRefreshAt) >= Self.teamMetaRefreshThrottleSeconds
+        let metaStampBefore = lastTeamMetaRefreshAt
+        if includeMeta { lastTeamMetaRefreshAt = now }
+
+        // 기존 refreshTeamStatus 와 같은 세대 캡처(발사 전). 하트비트 결과는 세대와 무관하게 서버에 이미 반영된 것이라
+        // 되돌리지 않는다(기존 하트비트도 ack 로 아무것도 안 했다).
+        let generation = sessionGeneration
+        let writeGeneration = workStateWriteGeneration
+        let goalWriteGeneration = teamGoalWriteGeneration
+        let ownerUserID = session.userID
+        let outcome = await performWorkTick(
+            teamID: teamID,
+            heartbeat: heartbeat,
+            sessionID: sessionID,
+            deviceID: deviceIDToSend,
+            openedSession: openedSession,
+            lastInputAt: lastInputAt,
+            includeMeta: includeMeta
+        )
+        switch outcome {
+        case .cancelled:
+            return .skipped
+        case .failed:
+            // 이 틱을 기존 경로로 즉시 재수행한다. 메타 스탬프는 되돌린다(이번 틱엔 메타를 못 받았다).
+            if includeMeta, lastTeamMetaRefreshAt == now { lastTeamMetaRefreshAt = metaStampBefore }
+            service.workTickGate.recordFallback()
+            await sendHeartbeatIfWorking()
+            await refreshTeamStatus()
+            return .fallback
+        case .success(let response, let members):
+            await applyFetchedTeamStatuses(members, generation: generation, writeGeneration: writeGeneration)
+            guard generation == sessionGeneration else { return .skipped }
+            if let meta = response.meta {
+                applyTeamMeta(meta, goalWriteGeneration: goalWriteGeneration)
+            }
+            return .fromTick(away: response.away, ownerUserID: ownerUserID, generation: generation)
+        }
+    }
+
+    /// 폴링 본문에서 되맞춤 뒤에 부른다: RPC 로 받은 away 조각을 **기존 refreshAwayStateIfNeeded 와 같은 가드**로
+    /// 반영하거나(세션 없음 → 비움 / 비근무 120초 스로틀 안 → 무시 / 스탬프 → 세대·계정 확인 → applyAwaySync),
+    /// 폴백이면 그 함수를 그대로 부른다. 스로틀 판정의 `startedAt` 은 이 시점(팀 상태 반영 **뒤**) 값이다 — 기존과 같다.
+    /// 비근무 스로틀을 유지하는 이유: work_tick 은 조각을 매 틱 실어 오지만, "비근무에선 2분에 한 번만 판정 재료를
+    /// 갱신한다" 는 클라의 반영 의미까지 바꾸지 않기 위해서다(요청 수와 무관한 의미 축).
+    func finishWorkTick(_ handoff: WorkTickAwayHandoff) async {
+        switch handoff {
+        case .skipped:
+            return
+        case .fallback:
+            await refreshAwayStateIfNeeded()
+        case .fromTick(let away, let ownerUserID, let generation):
+            let now = clock()
+            guard let session else {
+                clearAwayState()
+                return
+            }
+            if startedAt == nil, now.timeIntervalSince(lastAwaySyncAt) < Self.awaySyncIdleThrottleSeconds {
+                return
+            }
+            lastAwaySyncAt = now
+            guard generation == sessionGeneration, session.userID == ownerUserID else { return }
+            if let away {
+                applyAwaySync(await service.awaySync(from: away), ownerUserID: ownerUserID)
+            } else {
+                // 조각이 비어 왔다 — 기존 네트워크 실패와 같은 "모른다" 로 접는다(정책을 비워 마감을 멈춘다).
+                awayPolicy = nil
+                awayOpenSession = nil
+            }
+        }
+    }
+
+    /// 팝오버 즉시 새로고침(activateStoredSession fast path, 15초 신선도 스로틀 뒤)의 팀 상태 1회.
+    /// 가용하면 `p_heartbeat=false` 의 work_tick 1건(쓰기 0 — 지금도 refreshTeamStatus 는 하트비트를 안 보낸다),
+    /// 아니면 기존 `refreshTeamStatus()`. away/meta 조각은 **반영하지 않는다** — 기존 fast path 도 팀 상태만 받았다.
+    func refreshTeamStatusOnDemand() async {
+        guard Self.workTickEnabled, session != nil, let teamID = currentTeamID else {
+            await refreshTeamStatus()
+            return
+        }
+        guard service.workTickGate.isAvailable(now: clock()) else {
+            service.workTickGate.recordFallback()
+            await refreshTeamStatus()
+            return
+        }
+        let generation = sessionGeneration
+        let writeGeneration = workStateWriteGeneration
+        let outcome = await performWorkTick(
+            teamID: teamID, heartbeat: false, sessionID: nil, deviceID: nil,
+            openedSession: false, lastInputAt: nil, includeMeta: false
+        )
+        switch outcome {
+        case .cancelled:
+            return
+        case .failed:
+            service.workTickGate.recordFallback()
+            await refreshTeamStatus()
+        case .success(_, let members):
+            await applyFetchedTeamStatuses(members, generation: generation, writeGeneration: writeGeneration)
+        }
+    }
+
+    /// work_tick 한 번의 결과. 성공이면 팀 조각을 `assembleTeamStatuses` 로 조립해 함께 돌려준다(4 GET 경로와 같은 함수).
+    enum WorkTickCallOutcome {
+        case success(WorkTickResponse, members: [TeamMemberStatus])
+        case failed
+        case cancelled
+    }
+
+    /// 요청 조립·발사·실패 분류(게이트 갱신)까지. 상태 반영은 호출자가 한다.
+    /// `p_seen_at`/`p_since`/조립 `now` 는 **벽시계**(기존 upsertStatus 의 `Date()`·fetchTeamStatuses 의 `now: Date()`
+    /// 그대로)이고, 게이트의 시각만 주입 시계(clock)다 — 1시간 정지의 만료를 테스트가 시계 전진으로 재현한다.
+    private func performWorkTick(
+        teamID: String,
+        heartbeat: Bool,
+        sessionID: String?,
+        deviceID: String?,
+        openedSession: Bool,
+        lastInputAt: Date?,
+        includeMeta: Bool
+    ) async -> WorkTickCallOutcome {
+        let wall = Date()
+        let request = await service.makeWorkTickRequest(
+            teamID: teamID,
+            heartbeat: heartbeat,
+            sessionID: sessionID,
+            deviceID: deviceID,
+            openedSession: openedSession,
+            lastInputAt: lastInputAt,
+            includeMeta: includeMeta,
+            now: wall
+        )
+        let gate = service.workTickGate
+        do {
+            let response = try await withSessionRetry { activeSession in
+                try await service.workTick(accessToken: activeSession.accessToken, request: request)
+            }
+            var serverNow: Date?
+            if let raw = response.serverNow { serverNow = await service.parseDate(raw) }
+            gate.recordSuccess(serverNow: serverNow, localNow: Date())
+            let members = await service.assembleTeamStatuses(
+                rows: response.statuses ?? [],
+                active: response.sessionsActive ?? [],
+                weekly: response.sessionsWeekly ?? [],
+                devices: response.devices ?? [],
+                now: wall
+            )
+            return .success(response, members: members)
+        } catch let failure as WorkTickFailure {
+            let now = clock()
+            switch failure {
+            case .functionMissing(let code):
+                gate.disable(reason: "404 함수 없음\(code.map { " \($0)" } ?? "")", at: now)
+            case .forbidden(let code):
+                gate.disable(reason: "403 실행권 없음\(code.map { " \($0)" } ?? "")", at: now)
+            case .contractMismatch(let version):
+                gate.disable(reason: "계약 v=\(version.map { String($0) } ?? "없음")", at: now)
+            case .undecodable:
+                gate.disable(reason: "응답 해석 실패", at: now)
+            case .serverError(let status):
+                gate.recordTransientFailure(reason: "HTTP \(status)", at: now)
+            case .rejected(let status, let code):
+                gate.recordTransientFailure(reason: "HTTP \(status)\(code.map { " \($0)" } ?? "")", at: now)
+            }
+            return .failed
+        } catch {
+            // 취소는 실패로 세지 않는다(팝오버 빨리 닫기·루프 취소). 그 밖(네트워크·토큰 갱신 실패)은 일시 실패다 —
+            // 폴백 경로가 같은 오류를 만나 기존 문구 규약대로 알린다.
+            if case .cancelled = classifyAuthError(error) { return .cancelled }
+            gate.recordTransientFailure(reason: (error as? URLError).map { "URLError \($0.code.rawValue)" } ?? "\(type(of: error))", at: clock())
+            return .failed
+        }
+    }
+
+    /// work_tick 의 `meta` 조각 반영 — refreshTeamMeta(WorkTimerStoreAuth)와 같은 규약: != 가드, 목표는
+    /// 발사 전 세대와 같을 때만(스냅백 방지), 정상 0행(무소속)은 여기서 처리하지 않는다. 참여코드는 `invite_code`
+    /// 조각이 있을 때만 반영한다(0행 = nil 확정, 조각 자체가 없으면 기존 값 유지 — loadMyInviteCode 와 같다).
+    func applyTeamMeta(_ meta: WorkTickResponse.Meta, goalWriteGeneration: Int) {
+        guard let row = meta.memberships?.first else { return }
+        let membership = service.membership(from: row)
+        if currentTeamID != membership.teamID { currentTeamID = membership.teamID }
+        if teamName != membership.teamName { teamName = membership.teamName }
+        if teamGoalWriteGeneration == goalWriteGeneration {
+            let newGoal = membership.goalHours * 3600
+            if teamGoalSeconds != newGoal { teamGoalSeconds = newGoal }
+            reconcileInsightsGoal()
+        }
+        if teamRole != membership.role { teamRole = membership.role }
+        if let codes = meta.inviteCode {
+            let code = codes.first?.inviteCode
+            if myTeamInviteCode != code { myTeamInviteCode = code }
+        }
+    }
+
+    /// 설정 창 한 줄(진단 전용 — syncMessage 에 폴백 사유를 싣지 않는다).
+    var workTickDiagnosticsLine: String {
+        service.workTickGate.diagnosticsLine(now: clock())
     }
 
     /// 팀의 이번 주 1인당 평균 근무 초(총합 ÷ 인원). 리그 표시(TeamLeaderboardEntry.averageSeconds)와 같은 규약이라
@@ -131,9 +407,12 @@ extension WorkTimerStore {
         Task { @MainActor in await performLoadLeaderboard() }
     }
 
-    /// 리그 페이지가 열려 있는 동안만 순위를 갱신한다(30초 refresh 루프에서 호출).
+    /// **팝오버가 열려 있고** 리그 페이지가 노출 중일 때만 순위를 갱신한다(30초 refresh 루프에서 호출).
+    /// isLeaderboardVisible 은 팝오버를 닫아도 내려가지 않는다('마지막으로 본 패널' 복원용). 이 플래그만 보면
+    /// 닫힌 팝오버가 리그 RPC 를 30초마다 두드린다(v0.2.38 Q7 계측). 다시 열리는 순간의 1회 갱신은
+    /// setMenuPresented(true) 의 loadLeaderboard() 가 맡는다. 목표 변경(updateTeamGoal)의 호출은 열린 팝오버 안이다.
     func refreshLeaderboardIfVisible() async {
-        guard isLeaderboardVisible else { return }
+        guard isMenuPresented, isLeaderboardVisible else { return }
         await performLoadLeaderboard()
     }
 
@@ -165,9 +444,10 @@ extension WorkTimerStore {
         Task { @MainActor in await performLoadTokenBoard() }
     }
 
-    /// 토큰 보드 페이지가 열려 있는 동안만 보드를 갱신한다(30초 refresh 루프에서 호출).
+    /// **팝오버가 열려 있고** 토큰 보드 페이지가 노출 중일 때만 보드를 갱신한다(30초 refresh 루프에서 호출).
+    /// 가드의 근거는 refreshLeaderboardIfVisible 과 같다(Q7). 재오픈 1회 갱신은 setMenuPresented 의 loadTokenBoard().
     func refreshTokenBoardIfVisible() async {
-        guard isTokenBoardVisible else { return }
+        guard isMenuPresented, isTokenBoardVisible else { return }
         await performLoadTokenBoard()
     }
 
@@ -257,16 +537,25 @@ extension WorkTimerStore {
                 //     기기 행이 처음 생긴 뒤로 갱신이 끊긴 옛 행은 화석으로 보고 무시한다.)
                 //    읽지 못하면(네트워크/권한) 덮어쓰지 않는다 — 모르면 파괴하지 않는 쪽이 안전하다.
                 //    새 표 업로드는 아래에서 그대로 진행하고, 실패한 읽기는 다음 주기에 다시 시도된다.
+                //    **그 읽기는 하루 1회다**(v0.2.38 M8). 이 GET 이 분당 1건씩 나가고 있었는데(계측), 지키려는 상대
+                //    (아직 v0.2.10 인 다른 맥)는 브루 자동 갱신 뒤 사실상 없다. 오늘(KST) 이미 읽은 값이 장부에 있으면
+                //    그 값과 비교하고, 옛 표에 실제로 쓴 뒤에는 장부를 내 값으로 올려 둔다(서버 행이 그 값이 됐으므로 —
+                //    다음 비교가 "내 값이 줄었는데도 덮어쓰기"를 허용하지 않게).
                 let mayWriteLegacy: Bool
-                do {
-                    let currentLegacyTotal = try await service.fetchLegacyTokenUsageTotal(
-                        accessToken: activeSession.accessToken,
-                        userID: activeSession.userID,
-                        month: usage.month
-                    )
-                    mayWriteLegacy = (currentLegacyTotal ?? 0) <= usage.total
-                } catch {
-                    mayWriteLegacy = false
+                if let knownTotal = legacyTokenTotalKnownToday(userID: activeSession.userID, month: usage.month, now: now) {
+                    mayWriteLegacy = knownTotal <= usage.total
+                } else {
+                    do {
+                        let currentLegacyTotal = try await service.fetchLegacyTokenUsageTotal(
+                            accessToken: activeSession.accessToken,
+                            userID: activeSession.userID,
+                            month: usage.month
+                        )
+                        recordLegacyTokenTotal(currentLegacyTotal ?? 0, userID: activeSession.userID, month: usage.month, now: now)
+                        mayWriteLegacy = (currentLegacyTotal ?? 0) <= usage.total
+                    } catch {
+                        mayWriteLegacy = false
+                    }
                 }
                 if mayWriteLegacy {
                     try await service.upsertLegacyTokenUsage(
@@ -274,6 +563,7 @@ extension WorkTimerStore {
                         userID: activeSession.userID,
                         usage: usage
                     )
+                    recordLegacyTokenTotal(usage.total, userID: activeSession.userID, month: usage.month, now: now)
                 }
                 // 2) 새 원장은 (user_id, month, device_id) 라 기기 식별자를 함께 올린다 — 맥 2대가 서로를 덮어쓰지 않고
                 //    서버 보드 RPC 가 user_id 로 묶어 합산한다(결함1).
@@ -313,6 +603,45 @@ extension WorkTimerStore {
                 if syncMessage != message { syncMessage = message }
             }
         }
+    }
+
+    // MARK: - 옛 표 현재값 하루 1회 장부 (M8)
+
+    /// 옛 표(token_usage_monthly) 현재값 GET 의 하루 1회 장부 키(UserDefaults). 값은
+    /// "<userID>|<month>|<KST 날짜>|<total>" — 계정·달·날짜 중 하나라도 다르면 없는 것으로 본다.
+    /// 날짜 산식은 codexDiagnosticsStamp 와 같은 TokenUsageIncrementalScanner.dayBounds(now:).date 다
+    /// (이 저장소는 KST 경계 산식이 흩어지면 어긋난 이력이 있어, 그 함수 하나만 쓴다).
+    static let legacyTokenTotalLedgerKey = "check.tokenUpload.legacyTotalLedger"
+
+    /// 오늘(KST) 이미 읽어 둔(또는 내가 쓴) 옛 표 총량. nil 이면 오늘 아직 안 읽었다 = GET 한 번 나간다.
+    func legacyTokenTotalKnownToday(userID: String, month: String, now: Date) -> Int? {
+        guard let raw = defaults.string(forKey: Self.legacyTokenTotalLedgerKey) else { return nil }
+        let parts = raw.split(separator: "|", omittingEmptySubsequences: false)
+        guard parts.count == 4,
+              parts[0] == userID,
+              parts[1] == month,
+              parts[2] == TokenUsageIncrementalScanner.dayBounds(now: now).date,
+              let total = Int(parts[3])
+        else { return nil }
+        return total
+    }
+
+    /// 장부에 오늘치 옛 표 총량을 적는다(GET 성공 직후와 옛 표 쓰기 직후, 두 곳에서만 부른다).
+    func recordLegacyTokenTotal(_ total: Int, userID: String, month: String, now: Date) {
+        let day = TokenUsageIncrementalScanner.dayBounds(now: now).date
+        defaults.set("\(userID)|\(month)|\(day)|\(total)", forKey: Self.legacyTokenTotalLedgerKey)
+    }
+
+    // MARK: - 팀 상태 신선도 (팝오버 재오픈 스로틀, Q10)
+
+    /// 팝오버 재오픈(activateStoredSession fast path)에서 팀 상태 4 GET 을 건너뛰는 창(초).
+    /// 30초 폴링이 도는 동안 사용자가 이 시간 안에 다시 열면 첫 프레임은 캐시(teamMembers)로 그린다.
+    static let teamStatusReopenThrottleSeconds: TimeInterval = 15
+
+    /// 팀 상태가 재오픈 스로틀 창 안에 있는가(= fast path 가 4 GET 을 건너뛰어도 되는가).
+    /// 근거 스탬프 `lastTeamStatusAt` 은 WorkTimerStore.swift 의 저장 프로퍼티다(δ 가 두었던 약참조 측면 표는 ε 가 이관).
+    func teamStatusIsFresh(now: Date) -> Bool {
+        now.timeIntervalSince(lastTeamStatusAt) < Self.teamStatusReopenThrottleSeconds
     }
 
     /// 마지막으로 Codex 진단을 **서버에 올린** 시점의 도장(UserDefaults). 값은 "<CFBundleVersion>:<KST 날짜>"
@@ -603,7 +932,7 @@ extension WorkTimerStore {
             let contributed = max(0, Int(closedEndedAt.timeIntervalSince(max(restoredStart, dayStart))))
             accumulatedSeconds = max(0, accumulatedSeconds - contributed)
         }
-        displayNow = now
+        stampDisplayClocks(now)
         startedAt = restoredStart
         currentSessionID = canonical
         // **강한 소유**: 이 맥이 복원 RPC 를 직접 보내 성공했고, 서버는 그 트랜잭션에서 다른 열린 세션을
@@ -820,10 +1149,12 @@ extension WorkTimerStore {
             // 경우는 weak 다 — 그래야 강한 소유자가 둘이 되어 규칙이 동전 던지기로 되돌아가지 않는다.
             claimSessionOwnership(sessionID, strength: lastAutoClosedClaimStrength)
             longSessionAnchor = restoredStart
-            displayNow = clock()
+            // 표시 시계는 맞춰 두되 계산은 주입 시계로 한다 — 팝오버 시계는 닫힌 동안 얼어 있다(M1).
+            let now = clock()
+            stampDisplayClocks(now)
             snapshot = WorkStatusSnapshot(
                 status: .working,
-                elapsedSeconds: max(0, Int(displayNow.timeIntervalSince(restoredStart)))
+                elapsedSeconds: max(0, Int(now.timeIntervalSince(restoredStart)))
             )
             clearAutoCloseUndo()
             startTimer()
@@ -983,7 +1314,8 @@ extension WorkTimerStore {
         } else {
             item = PendingWorkItem(
                 id: UUID(),
-                operation: .stop(durationSeconds: durationSeconds ?? todayDuration),
+                // 폴백도 인자 시각 기준이다(팝오버 시계가 아니라 — 닫힌 팝오버에서 그 시계는 얼어 있다, M1).
+                operation: .stop(durationSeconds: durationSeconds ?? todayDuration(at: endedAt ?? clock())),
                 sessionID: currentSessionID ?? fallbackSessionID,
                 sessionStartedAt: sessionStartedAt,
                 endedAt: endedAt,
@@ -1011,6 +1343,10 @@ extension WorkTimerStore {
         let previous = syncTask
         syncTask = Task { @MainActor [weak self] in
             await previous?.value
+            // 깨움 결합 게이트가 서 있으면(v0.2.38 M7) 결합(또는 상한 10초)까지 기다린다 — 뚜껑을 연 직후의 잠자기 정정
+            // PATCH 가 Wi-Fi 가 붙기 전에 나가 실패 → "대기" 라벨 → 재시도로 도는 헛왕복을 없앤다. 게이트는 이 큐를
+            // 기다리지 않으므로(루프를 내렸다 되살릴 뿐) 순환 대기는 없고, 큐 항목 자체는 영속이라 잃지 않는다.
+            await self?.awaitWakeGate()
             await self?.runPendingSync()
         }
     }
@@ -1297,8 +1633,10 @@ extension WorkTimerStore {
     /// @Observable 은 같은 값 대입도 관찰자를 발화시켜 팝오버 서브트리 전체가 매 폴링 무효화된다.
     /// (호출자인 applyRemoteOwnStatus 가 끝에서 refreshMenuBarTitle/refreshTimedBanner 를 부르므로 여기선 생략한다.)
     private func adoptRemoteSession(_ ownMember: TeamMemberStatus) {
-        let restoredStart = ownMember.currentSessionStartedAt ?? clock()
-        displayNow = clock()
+        // 표시 시계는 맞춰 두되 계산은 주입 시계로 한다 — 팝오버 시계는 닫힌 동안 얼어 있다(M1).
+        let now = clock()
+        let restoredStart = ownMember.currentSessionStartedAt ?? now
+        stampDisplayClocks(now)
         if startedAt != restoredStart { startedAt = restoredStart }
         // activeSessionID 가 비어 온 찢어진 읽기에서는 내가 들고 있던 id 를 유지한다(nil 로 덮으면 하트비트가 끊긴다).
         // 서버에서 온 값은 여기서 정규화한다 — 아래 1차 판정(isOwnedByThisMac)과 currentSessionID 대입이
@@ -1327,7 +1665,7 @@ extension WorkTimerStore {
         }
         snapshot = WorkStatusSnapshot(
             status: .working,
-            elapsedSeconds: max(0, Int(displayNow.timeIntervalSince(restoredStart)))
+            elapsedSeconds: max(0, Int(now.timeIntervalSince(restoredStart)))
         )
         startTimer()
     }

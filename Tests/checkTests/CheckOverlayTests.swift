@@ -1729,7 +1729,9 @@ func characterSceneRendersVisiblePixels() throws {
 func usdzArchiveTextureDownscalesToSaneDimensions() throws {
     // 실제 usdz 의 아카이브 참조 텍스처(...usdz?offset=&size=)가 정상 치수(≥8px, ≤512px)로
     // 다운스케일되는지 검증한다. 참조 해석이 깨지면 no-op(nil)으로 떨어져 found 가 false 가 된다.
-    let scene = try #require(CheckCharacter3DScene.loadModelScene())
+    // v0.2.38 β2: 기본 로더는 프리베이크 aing.scn(텍스처가 이미 512 로 구워진 네이티브 아카이브)을 우선 읽으므로,
+    // 이 테스트가 보는 '아카이브 참조 텍스처' 경로는 usdz 출처를 명시해야만 지나간다.
+    let scene = try #require(CheckCharacter3DScene.loadModelScene(from: .usdz))
     var found = false
     scene.rootNode.enumerateHierarchy { node, _ in
         node.geometry?.materials.forEach { material in

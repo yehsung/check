@@ -681,7 +681,9 @@ struct AuthUser: Decodable {
 
 struct ProfileRow: Decodable {
     let displayName: String
-    let email: String
+    /// v0.2.38 부터 work_statuses select 에 싣지 않는다(서버가 안 주면 nil). Optional 로 남기는 이유는
+    /// 임베드 컬럼을 되살린 서버/옛 응답이 와도 디코드가 깨지지 않게 하기 위함이다 — 표시에는 쓰지 않는다.
+    let email: String?
     let avatarUrl: String?
 }
 
@@ -1931,4 +1933,108 @@ typealias AwaySyncRequest = EmptyBody
 /// restore_auto_closed_session(p_session_id uuid) 본문.
 struct AwayRestoreRequest: Encodable {
     let pSessionId: String
+}
+
+// MARK: - 근무 틱 통합 RPC `work_tick` (v0.2.38 S3 / docs/work-tick.md)
+
+/// `POST /rest/v1/rpc/work_tick` 본문. **9개 키를 언제나 전부 싣는다**(nil 은 `null`).
+///
+/// PostgREST 는 **보낸 키 집합**으로 함수를 고른다. 합성 Encodable 은 nil Optional 의 키를 생략하는데, 그러면 상태에
+/// 따라 키 집합이 달라져(비근무 6개 / 소유 맥 9개 …) 어느 조합 하나만 서버 시그니처와 어긋나도 그 상태의 틱만
+/// PGRST202(404)로 조용히 폴백한다 — 스텁 테스트는 초록인 채로. 키 집합을 하나로 고정하면 실패 모양도 하나다
+/// (실서버 확인 1건이 전 상태를 대표한다). `null` 은 서버 기본값과 등가라 의미 차이는 없다(2.1 표).
+/// 키 이름은 서버 마이그레이션의 인자 이름과 글자 단위로 같아야 하며, 그 일치는 V0238TickTests 의 소스 계약이 못 박는다.
+struct WorkTickRequest: Encodable, Equatable, Sendable {
+    /// ③~⑥ 의 `team_id=eq.` = `currentTeamID`. 무소속이면 null(팀 조각 4개는 `[]`).
+    let pTeamId: String?
+    /// `startedAt != nil && session != nil && teamID != nil`. false 면 서버 쓰기 0건(조회만).
+    let pHeartbeat: Bool
+    /// non-null = 소유 맥 모드(상태+기기 upsert) / null = 흡수 맥 모드(입력만).
+    let pSessionId: String?
+    let pDeviceId: String?
+    /// `ownsCurrentSessionStrongly` — 매 하트비트 덮어쓴다(기존 계약).
+    let pOpenedSession: Bool
+    /// `advanceMeaningfulInput()` 관측. null 이면 컬럼을 건드리지 않는다(본문 키 생략과 등가).
+    let pLastInputAt: String?
+    /// ①② 의 `last_seen_at`/`updated_at` — 지금처럼 **클라 자기 시계** 스탬프다(의미 불변).
+    let pSeenAt: String
+    /// ⑤ 의 `ended_at=gte.` = `koreanWeekStart(now)` — 클라 값을 보내야 ⑤ 와 글자 단위로 같다.
+    let pSince: String
+    /// 팝오버 열림 && 60초 스로틀 통과 — true 면 ⑧a+⑧b 를 `meta` 에 싣는다.
+    let pIncludeMeta: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case pTeamId, pHeartbeat, pSessionId, pDeviceId, pOpenedSession, pLastInputAt, pSeenAt, pSince, pIncludeMeta
+    }
+
+    /// 인코더의 convertToSnakeCase 가 위 키를 `p_team_id …` 로 바꾼다. nil 은 **encodeNil** 로 키를 남긴다.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        func put(_ value: String?, _ key: CodingKeys) throws {
+            if let value { try container.encode(value, forKey: key) } else { try container.encodeNil(forKey: key) }
+        }
+        try put(pTeamId, .pTeamId)
+        try container.encode(pHeartbeat, forKey: .pHeartbeat)
+        try put(pSessionId, .pSessionId)
+        try put(pDeviceId, .pDeviceId)
+        try container.encode(pOpenedSession, forKey: .pOpenedSession)
+        try put(pLastInputAt, .pLastInputAt)
+        try container.encode(pSeenAt, forKey: .pSeenAt)
+        try container.encode(pSince, forKey: .pSince)
+        try container.encode(pIncludeMeta, forKey: .pIncludeMeta)
+    }
+}
+
+/// `work_tick` 응답(단일 jsonb). **각 조각은 기존 GET/RPC 가 주던 행과 같은 모양**이라 디코더를 그대로 재사용한다 —
+/// `statuses → [WorkStatusRow]`, `sessions_* → [WorkSessionRow]`, `devices → [WorkStatusDeviceRow]`,
+/// `away → AwaySyncResponse`, `meta.memberships → [MembershipRow]`, `meta.invite_code → [InviteCodeRow]`.
+/// 전 필드 Optional 인 이유는 하나다: 서버가 키를 **더하거나** 한 조각을 빼도 응답 전체가 throw 되어 하트비트가
+/// 폴백으로 두 번 나가는 일이 없어야 한다. `v` 만은 호출부가 1 이 아니면 계약 협상 실패로 폴백한다(2.4).
+struct WorkTickResponse: Decodable, Sendable {
+    let v: Int?
+    /// 트랜잭션 시각. **진단·시계 차 계측에만** 쓴다(판정에 쓰지 않는다 — 의미 불변).
+    let serverNow: String?
+    let teamId: String?
+    let heartbeat: Heartbeat?
+    let statuses: [WorkStatusRow]?
+    let sessionsActive: [WorkSessionRow]?
+    let sessionsWeekly: [WorkSessionRow]?
+    let sessionsSince: String?
+    let devices: [WorkStatusDeviceRow]?
+    let away: AwaySyncResponse?
+    let meta: Meta?
+
+    /// 하트비트 ack. **클라는 이 값으로 상태를 바꾸지 않는다**(지금도 upsert 의 204 로 아무것도 안 한다) — 진단 전용.
+    /// `mode` 의 모르는 값은 "쓰기 여부 불명" 으로 접고 아무것도 추론하지 않는다(2.4).
+    struct Heartbeat: Decodable, Sendable {
+        let mode: String?
+        let status: String?
+        let activeSessionId: String?
+        let lastSeenAt: String?
+        let device: Bool?
+    }
+
+    struct Meta: Decodable, Sendable {
+        let memberships: [MembershipRow]?
+        let inviteCode: [InviteCodeRow]?
+    }
+}
+
+/// `work_tick` 이 실패한 **이유**. 폴백 규칙(docs/work-tick.md 2.5/4.5)은 이 구분 위에 선다 —
+/// 함수 없음·실행권 회수·계약 불일치는 "이 실행 동안 끈다", 5xx·그 밖은 "연속 3회면 1시간 끈다".
+/// 401 은 여기 없다: 서비스가 `SupabaseWorkServiceError.sessionExpired` 로 던져 기존 `withSessionRetry` 의
+/// 토큰 갱신 경로를 그대로 탄다. URLError(네트워크·취소)도 그대로 전파한다(취소는 실패로 세지 않기 위해).
+enum WorkTickFailure: Error, Equatable, Sendable {
+    /// 404 / PGRST202 — 함수가 없거나(db push 전) **모르는 인자 키**를 보냈다.
+    case functionMissing(code: String?)
+    /// 403 / 42501 — anon 호출·EXECUTE 회수(서버측 킬스위치)·RLS 위반.
+    case forbidden(code: String?)
+    /// 응답 `v` 가 1 이 아니다(계약 협상 실패 — 열거값 확장엔 능력 협상).
+    case contractMismatch(version: Int?)
+    /// 2xx 인데 `WorkTickResponse` 로 읽히지 않는다.
+    case undecodable
+    /// 5xx / 무료플랜 일시정지.
+    case serverError(status: Int)
+    /// 그 밖의 비 2xx(400 22023 클라 버그, 23514 제약 위반 등). `code` 는 PostgREST 본문의 SQLSTATE/PGRST 코드.
+    case rejected(status: Int, code: String?)
 }

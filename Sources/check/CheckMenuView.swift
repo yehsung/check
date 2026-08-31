@@ -190,7 +190,7 @@ struct CheckMenuView: View {
                 await store.activateStoredSession()
             }
             .task {
-                // 토큰 사용량 갱신 루프를 팝오버 표시 동안만 돌린다(즉시 1회 + 30초 주기, 뷰 사라지면 자동 취소).
+                // 토큰 사용량 갱신 루프를 팝오버 표시 동안만 돌린다(즉시 1회 + 120초 주기 = TokenUsageStore.refreshPeriod, 뷰 사라지면 자동 취소).
                 // 첫 스캔 트리거를 여기로 일원화한다 — 토큰 스토어는 init 에서 스캔을 킥하지 않으므로(영속 스냅샷 복원만),
                 // 표시 중 이 루프가 값을 채운다. 스캔 대상은 주입된 store.tokenUsage 다 — 프로덕션은 전역 .shared,
                 // 렌더 테스트는 격리 인스턴스라, ImageRenderer 가 이 .task 를 돌려도 실홈 스캔이 테스트 .standard 를 오염시키지 않는다.
@@ -295,15 +295,23 @@ struct CheckMenuView: View {
                         )
                     } else if store.isPokePanelVisible {
                         // 콕찌르기 페이지(앱 사용자 전체 목록). 리그/토큰 보드와 같은 뼈대. store 값을 값+클로저로만 넘겨
-                        // PokePanel 을 렌더 테스트 친화적으로 유지한다(쿨타임 잔여는 displayNow 기준 클로저로 매초 갱신).
+                        // PokePanel 을 렌더 테스트 친화적으로 유지한다.
+                        //
+                        // ★ 초 단위 시계(displayNow)는 **여기서 값으로 읽지 않는다.** 아래 네 클로저(clock/cooldownRemaining/
+                        //   isPokeDisconnected/messageCooldownRemaining)가 store.menuClockNow 를 읽는데, 그 읽기는 클로저를
+                        //   **부르는 뷰**의 body 에 관찰 등록된다 — 패널은 그것들을 MenuClockLeaf 안에서만 부르므로 매초
+                        //   다시 그리는 것은 쿨타임 버튼·작성기 카운트다운·수신 시각·안내줄뿐이다.
+                        //   v0.2.37 까지는 `now: store.displayNow` 한 줄과 행마다 값으로 푼 쿨타임 클로저가 팝오버 루트를
+                        //   매초 무효화해, 찔림 패널을 마지막으로 보고 닫은 뒤 유휴 CPU 가 2.9%→4.5% 로 올랐다
+                        //   (V0238MenuTests 가 루트·패널의 displayNow 무관찰을 못 박는다).
                         PokePanel(
                             entries: store.pokeDirectory,
                             isMyselfWorking: store.snapshot.isWorking,
                             hasLoaded: store.pokeDirectoryLoaded,
                             fallbackStatus: store.syncMessage,
                             notice: store.pokeNotice,
-                            now: store.displayNow,
-                            cooldownRemaining: { store.pokeCooldownRemaining(for: $0, now: store.displayNow) },
+                            clock: { store.menuClockNow },
+                            cooldownRemaining: { store.pokeCooldownRemaining(for: $0, now: store.menuClockNow) },
                             onPoke: { store.sendPoke(to: $0) },
                             onUltra: { store.sendUltraPoke(to: $0) },
                             // 울트라 **잔량**(재화). nil = 아직 모름 → 배지는 자리를 지킨 채 숫자만 비운다.
@@ -315,16 +323,16 @@ struct CheckMenuView: View {
                             // 배지 탭 → 울트라 화면. **콕찌르기를 '봤다'로 소비하지 않는다**(openUltraPanel 주석).
                             onOpenUltraPanel: { store.openUltraPanel(from: .poke) },
                             // 수신 연결이 죽었다는 사실은 안내줄 최우선 가지다. 판정은 순수 함수 한 곳뿐이고
-                            // 출시 기본값 .idle(.disabled) 에서는 언제나 false 다.
-                            isPokeDisconnected: PokeConnectionNotice.shouldWarn(
-                                state: store.realtimeState,
-                                now: store.displayNow
-                            ),
+                            // 출시 기본값 .idle(.disabled) 에서는 언제나 false 다. 판정이 시계를 읽으므로(재연결 유예)
+                            // 값이 아니라 클로저로 넘긴다 — 안내줄 잎이 부른다.
+                            isPokeDisconnected: {
+                                PokeConnectionNotice.shouldWarn(state: store.realtimeState, now: store.menuClockNow)
+                            },
                             isFocusMode: store.focusMode,
                             onToggleFocusMode: { store.toggleFocusMode() },
                             // 3글자 메시지 — 찌르기와 같은 표·같은 폴링을 타지만 RPC·쿨타임·결과 문구는 각자의 것이다.
                             onSendMessage: { store.sendMessage(to: $0, body: $1) },
-                            messageCooldownRemaining: { store.messageCooldownRemaining(for: $0, now: store.displayNow) },
+                            messageCooldownRemaining: { store.messageCooldownRemaining(for: $0, now: store.menuClockNow) },
                             isSendingMessage: store.isSendingMessage,
                             messageNotice: store.messageNotice,
                             // 큐의 맨 앞 = 아직 사용자에게 보여 주지 않은 가장 오래된 1건.
@@ -2228,11 +2236,93 @@ struct PokeMessageReceiptStrip: View {
     }
 }
 
+// MARK: - 팝오버 시계 게이트 + 초단위 잎 (v0.2.38 α)
+
+extension WorkTimerStore {
+    /// 팝오버가 열려 있을 때만 초침을 따라가는 **잎 뷰용** 시계.
+    ///
+    /// 닫혀 있으면(isMenuPresented == false) displayNow 를 **아예 읽지 않고** 고정값을 돌려준다 — Observation 은
+    /// "읽은 것"만 관찰 등록하므로, 닫힌 팝오버의 잎은 티커가 매초 displayNow 를 써도 무효화되지 않는다.
+    /// isMenuPresented 자체는 관찰 대상이 아니라(@ObservationIgnored) 이 분기가 재평가를 만들지는 않는다:
+    ///  · 열림→닫힘: 마지막으로 열린 채 평가된 잎은 displayNow 를 등록해 뒀으므로 **다음 한 틱**에 다시 평가되고,
+    ///    그때 닫힌 가지로 옮겨 앉아 등록이 사라진다(그 뒤로는 조용하다).
+    ///  · 닫힘→열림: 등록이 없어 setMenuPresented(true) 의 displayNow 갱신으로는 깨어나지 못한다 — 그래서
+    ///    MenuClockLeaf 가 창의 키 상태(controlActiveState)에 의존해, 창이 다시 키를 얻는 순간 한 번 재평가된다.
+    ///
+    /// 고정값이 distantPast 인 이유: 닫힌 동안 시계가 "아직 시작 안 함"으로 읽히면 쿨타임은 전부 진행 중, 연결 경고는
+    /// 꺼짐, 수신 시각은 "방금"이 된다 — 아무도 보지 않는 상태의 값이지만, 재오픈 첫 프레임에 혹시 한 번 보이더라도
+    /// **찌를 수 있는 걸 못 찌르는 쪽**(안전한 쪽)으로 틀린다. distantFuture 면 반대로 쿨타임 중인 대상이 활성으로
+    /// 보여 눌렀다가 서버 거절을 받는다. 게다가 pokeCooldownUntil 은 디렉토리를 받을 때마다 만료분이 지워지므로
+    /// "진행 중"으로 읽히는 대상은 실제로 쿨타임 중인 사람뿐이다.
+    var menuClockNow: Date {
+        isMenuPresented ? displayNow : Self.menuClockFrozen
+    }
+
+    /// 닫힌 팝오버의 시계 값(위 주석). 테스트가 같은 값을 기대치로 쓴다.
+    static let menuClockFrozen = Date.distantPast
+}
+
+/// 초 단위 값을 **이 뷰 안에서만** 읽게 하는 잎.
+///
+/// `read` 를 여기 body 에서 부르므로 그 안에서 읽은 store.displayNow(=menuClockNow) 의 관찰 등록은 이 잎에만 남고,
+/// 부모(행·패널·팝오버 루트)는 매초 무효화되지 않는다. 팝오버 트리 안에서 초 단위 값이 필요한 자리는 **전부** 이 잎을
+/// 거쳐야 한다 — 부모 body 에서 `read()` 를 한 번이라도 직접 부르면 그 부모부터 위로 초당 재평가가 되살아난다
+/// (V0238MenuTests 가 루트/패널/행의 재평가 횟수를 잰다).
+///
+/// controlActiveState 를 읽는 이유는 값이 아니라 **재평가 시점**이다: 팝오버가 닫혀 있는 동안 menuClockNow 는
+/// displayNow 를 읽지 않아 이 잎의 관찰 등록이 비는데, 그 상태로는 다시 열려도 스스로 깨어날 길이 없다.
+/// 창이 키를 얻고 잃을 때 이 환경값이 바뀌므로(WindowAnchorAccessor 가 setMenuPresented 에 쓰는 것과 같은
+/// 창 사건) 재오픈 순간 이 잎이 한 번 평가되고, 그 평가가 displayNow 를 다시 등록한다.
+struct MenuClockLeaf<Value, Content: View>: View {
+    /// 초 단위 값 읽기(쿨타임 잔여 초·현재 시각·연결 경고 여부). **이 body 밖에서 부르지 마라.**
+    let read: () -> Value
+    @ViewBuilder let content: (Value) -> Content
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    var body: some View {
+        // 재오픈 트리거(위 주석). 값은 판정에 쓰지 않는다 — 헤드리스 렌더(ImageRenderer)의 기본값(.key)에 기대지 않기 위해서다.
+        let _ = controlActiveState
+        #if DEBUG
+        let _ = PokePanelRenderProbe.noteLeafBody()
+        #endif
+        content(read())
+    }
+}
+
+#if DEBUG
+/// 테스트 전용 계측(DEBUG 빌드에만 존재 — 릴리스 경로는 이 타입을 모른다).
+/// "displayNow 를 60번 밀어도 패널 body·정렬·행 본체는 0번, 잎만 60번"을 V0238MenuTests 가 여기서 읽는다.
+@MainActor
+enum PokePanelRenderProbe {
+    /// PokePanel.body 평가 횟수.
+    static var panelBodies = 0
+    /// PokePanel 이 목록을 정렬한 횟수(body 당 정확히 1회여야 한다 — panelBodies 와 같아야 한다).
+    static var sortCalls = 0
+    /// PokeDirectoryRowView.body 평가 횟수(행 본체 — 초를 몰라야 한다).
+    static var rowBodies = 0
+    /// MenuClockLeaf.body 평가 횟수(초 단위 잎 — 매초 도는 유일한 자리).
+    static var leafBodies = 0
+
+    static func reset() {
+        panelBodies = 0
+        sortCalls = 0
+        rowBodies = 0
+        leafBodies = 0
+    }
+    static func notePanelBody() { panelBodies += 1 }
+    static func noteRowBody() { rowBodies += 1 }
+    static func noteLeafBody() { leafBodies += 1 }
+}
+#endif
+
 /// 팀 카드 자리를 대체하는 콕찌르기 페이지(앱 로그인 사용자 전체). 리그/토큰 보드와 같은 뼈대다:
 /// 뒤로 버튼 + 제목 + (조건부 안내줄) + 고정 행높이 리스트(maxVisibleRows 초과 시 스크롤). 행은 아바타 + 이름 +
 /// 상태 칩(근무중/자리비움) + 우측 찌르기 버튼(손가락 아이콘: 가능=accent 원형, 쿨타임/내 비근무/대상 자리비움=흐린 비활성).
-/// 자리비움 대상은 찌를 수 없다(서버 강제, 클라 선게이트). store 값을 값+클로저로만 받아 렌더 테스트 친화적으로 유지한다 —
-/// 쿨타임 잔여는 displayNow 기준 클로저로 매초 갱신된다.
+/// 자리비움 대상은 찌를 수 없다(서버 강제, 클라 선게이트). store 값을 값+클로저로만 받아 렌더 테스트 친화적으로 유지한다.
+///
+/// **초 단위 시계는 이 패널 body 가 읽지 않는다.** 쿨타임 잔여·수신 시각·연결 경고는 읽기 클로저로 받아 MenuClockLeaf
+/// 안에서만 푼다 — 그래서 티커가 매초 다시 그리는 것은 행 속 버튼 하나·작성기·수신 줄·안내줄이고, 목록 정렬과 26행
+/// 레이아웃은 입력(entries 등)이 바뀔 때만 돈다.
 private struct PokePanel: View {
     // 근무중 먼저·이름순으로 정렬된 사용자 목록(store 에서 이미 정렬됨). 뷰에서도 같은 규약으로 다시 정렬한다.
     let entries: [PokeDirectoryEntry]
@@ -2244,9 +2334,11 @@ private struct PokePanel: View {
     let fallbackStatus: String
     // 상단 1줄 안내(찌르기 실패 사유 등). 있으면 우선 노출한다(주황 계열).
     let notice: String?
-    // 렌더 기준 시각(결정성). 카운트다운은 cooldownRemaining 클로저가 displayNow 로 계산하므로 참조용이다.
-    let now: Date
-    // 대상별 쿨타임 잔여 초(0이면 찌르기 가능). displayNow 기준으로 매초 줄어든다.
+    // 현재 시각 읽기(수신 메시지의 "방금/N분 전"). **패널 body 는 부르지 않는다** — 수신 줄 잎(MenuClockLeaf)이 부른다.
+    // v0.2.37 까지는 `now: Date` 값이었고, 그 한 줄이 팝오버 루트에 displayNow 관찰을 등록해 트리 전체를 매초 돌렸다.
+    let clock: () -> Date
+    // 대상별 쿨타임 잔여 초 읽기(0이면 찌르기 가능). 행마다 `{ cooldownRemaining(entry.userID) }` 로 **다시 감싸서** 내리고,
+    // 실제 호출은 행 속 찌르기 버튼 잎만 한다 — 여기서 값으로 풀면 이 패널 body 가 초당 재평가로 돌아간다.
     let cooldownRemaining: (String) -> Int
     let onPoke: (String) -> Void
     // 울트라 발사(3초 꾹). 일반 찌르기와 **다른 RPC**라 콜백을 나눠 받는다.
@@ -2263,8 +2355,9 @@ private struct PokePanel: View {
     var ultraUnlimited: Bool = false
     // 잔량 배지 탭 → 울트라 화면(잔량 + 충전 경로). "0개인데 어떻게 채우죠?"의 답이 있는 유일한 자리다.
     var onOpenUltraPanel: () -> Void = {}
-    // 찌르기 **수신** 연결이 끊겼는가(PokeConnectionNotice.shouldWarn 결과). 안내줄 최우선 가지가 된다.
-    var isPokeDisconnected: Bool = false
+    // 찌르기 **수신** 연결이 끊겼는가(PokeConnectionNotice.shouldWarn 결과) 읽기. 안내줄 최우선 가지가 된다.
+    // 판정이 시계를 읽으므로(재연결 유예 경과) 값이 아니라 클로저다 — 안내줄 잎(PokePanelNoticeLine)이 부른다.
+    var isPokeDisconnected: () -> Bool = { false }
     // 집중 모드(내 수신 거부) 상태와 토글. 값+클로저로만 받아 이 패널을 렌더 테스트 친화적으로 유지한다.
     var isFocusMode: Bool = false
     var onToggleFocusMode: () -> Void = {}
@@ -2337,6 +2430,13 @@ private struct PokePanel: View {
     }
 
     var body: some View {
+        #if DEBUG
+        let _ = PokePanelRenderProbe.notePanelBody()
+        #endif
+        // 정렬은 body 당 **1회**. 아래 rowCount/entryList/rows 가 이 결과를 나눠 쓴다 — 예전엔 computed 프로퍼티라
+        // 한 body 에 세 번 정렬했고, 그 body 가 매초 돌았다. 정렬 키는 근무중 여부·이름뿐이라(쿨타임은 안 들어간다)
+        // 초침이 순서를 바꿀 일도 없다 — 순서는 entries 가 바뀔 때만 바뀐다.
+        let sorted = Self.sortedForDisplay(entries)
         VStack(spacing: 12) {
             HStack(spacing: 8) {
                 IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
@@ -2375,80 +2475,57 @@ private struct PokePanel: View {
             }
             PanelDivider()
             // 최근 받은 메시지 1건. 목록 위·안내줄 위다 — 남이 나에게 한 말이 내가 하려던 일보다 먼저 눈에 든다.
+            // "방금/N분 전"은 시계를 읽는다 — 잎으로 가둬 매초 다시 그리는 것이 이 한 줄이 되게 한다.
             if let latestMessage {
-                PokeMessageReceiptStrip(message: latestMessage, now: now, waitingCount: waitingMessageCount)
+                MenuClockLeaf(read: clock) { now in
+                    PokeMessageReceiptStrip(message: latestMessage, now: now, waitingCount: waitingMessageCount)
+                }
             }
             // 안내줄: notice 우선(주황), 없고 내가 비근무면 안내(회색), 근무중+notice nil 이면 생략(상단 앵커 유지).
-            if let noticeLine {
-                Text(noticeLine.text)
-                    .font(.caption2)
-                    .foregroundStyle(noticeLine.isWarning ? CheckTheme.pending : CheckTheme.secondaryText)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            entryList
+            // 연결 끊김 판정이 시계를 읽으므로 줄 전체가 잎이다 — 어느 문구가 뜨는지, 뜨는지 자체를 잎이 정한다.
+            PokePanelNoticeLine(
+                isPokeDisconnected: isPokeDisconnected,
+                messageNotice: messageNotice,
+                notice: notice,
+                isMyselfWorking: isMyselfWorking,
+                isFocusMode: isFocusMode
+            )
+            entryList(sorted)
         }
         .padding(12)
         .panelStyle()
     }
 
-    // 안내줄 내용/톤. notice 가 있으면 그것을(주황), 없고 비근무면 근무 안내(회색), 그다음 집중 모드 상태,
-    // 셋 다 아니면 nil(생략 — 상단 앵커 유지). 비근무 안내가 집중 모드보다 앞인 이유는 그것이 **지금 이 화면에서
-    // 하려는 일**(찌르기)의 차단 사유이기 때문이다. 집중 모드는 내 수신 설정이라 정보에 가깝다.
-    private var noticeLine: (text: String, isWarning: Bool)? {
-        // 연결이 끊겼으면 그게 **가장 먼저**다. 이 화면에서 하려는 일이 양방향 모두 막힌 상태이고,
-        // 전송 실패 문구(messageNotice/pokeNotice)는 그 결과일 뿐이라 원인을 가리면 안 된다.
-        // 받기의 차단 사유가 보내기의 차단 사유보다 앞이다 — 보낸 사람은 실패를 보지만,
-        // 못 받은 사람은 아무 일도 안 일어난 것과 구별할 방법이 없다.
-        if isPokeDisconnected {
-            return (PokeConnectionNotice.panelText, true)
-        }
-        // 메시지 결과가 찌르기 결과보다 앞이다 — 메시지는 사용자가 글자를 골라 넣은 **뒤**의 답이라
-        // 그 답이 안 보이면 "보내진 건가?"가 남는다. 스토어가 두 문구를 다른 칸에 담아 둔 덕에
-        // 여기서 순서만 정하면 되고, 어느 쪽도 상대를 지우지 않는다.
-        if let messageNotice, !messageNotice.isEmpty {
-            return (messageNotice, true)
-        }
-        if let notice, !notice.isEmpty {
-            return (notice, true)
-        }
-        if !isMyselfWorking {
-            return ("근무 중일 때만 콕 찌를 수 있어요", false)
-        }
-        if isFocusMode {
-            return (PokeFocusNotice.text, false)
-        }
-        return nil
+    // 서버 정렬을 신뢰하지 않고 뷰에서도 근무중 먼저·이름순으로 다시 정렬한다. body 맨 위에서 **한 번만** 부른다.
+    private static func sortedForDisplay(_ entries: [PokeDirectoryEntry]) -> [PokeDirectoryEntry] {
+        #if DEBUG
+        PokePanelRenderProbe.sortCalls += 1
+        #endif
+        return entries.sortedForPokeDisplay()
     }
 
-    // 서버 정렬을 신뢰하지 않고 뷰에서도 근무중 먼저·이름순으로 다시 정렬한다.
-    private var sortedEntries: [PokeDirectoryEntry] {
-        entries.sortedForPokeDisplay()
-    }
-
-    private var rowCount: Int {
-        sortedEntries.isEmpty ? 1 : sortedEntries.count
+    private static func rowCount(of sorted: [PokeDirectoryEntry]) -> Int {
+        sorted.isEmpty ? 1 : sorted.count
     }
 
     // 리스트 높이 = 인원 비례. maxVisibleRows까지는 그대로 자라고(스크롤 없음), 초과하면 그 높이로 고정 후 스크롤.
     // **펼친 작성기도 이 안에서 자란다** — 리스트 총 높이 상한(capHeight)은 펼침 여부와 무관하므로,
     // 어떤 조합에서도 창 높이는 '접힌 7행'을 넘지 않는다(펼치면 보이는 행수가 줄고 나머지는 스크롤로 밀린다).
     @ViewBuilder
-    private var entryList: some View {
+    private func entryList(_ sorted: [PokeDirectoryEntry]) -> some View {
         let capHeight = Self.listContentHeight(rowCount: visibleRows)
-        let contentHeight = Self.listContentHeight(rowCount: rowCount) + composerBlockHeight
+        let contentHeight = Self.listContentHeight(rowCount: Self.rowCount(of: sorted)) + composerBlockHeight
         if contentHeight <= capHeight {
-            rows.frame(maxWidth: .infinity, alignment: .top)
+            rows(sorted).frame(maxWidth: .infinity, alignment: .top)
         } else if clipsOverflowInsteadOfScroll {
             // 스냅샷 전용: 보이는 첫 부분만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
-            rows.frame(maxWidth: .infinity, alignment: .top)
+            rows(sorted).frame(maxWidth: .infinity, alignment: .top)
                 .frame(height: capHeight, alignment: .top)
                 .clipped()
         } else {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: true) {
-                    rows.frame(maxWidth: .infinity)
+                    rows(sorted).frame(maxWidth: .infinity)
                 }
                 .frame(height: capHeight)
                 // 26명 목록에서 아래쪽 행을 펼치면 작성기가 보이는 창 밖에 생긴다 — 방금 누른 사람에게는
@@ -2467,19 +2544,22 @@ private struct PokePanel: View {
     private static func composerAnchorID(_ userID: String) -> String { "composer-\(userID)" }
 
     @ViewBuilder
-    private var rows: some View {
+    private func rows(_ sorted: [PokeDirectoryEntry]) -> some View {
         VStack(spacing: Self.rowSpacing) {
-            if sortedEntries.isEmpty {
+            if sorted.isEmpty {
                 // 로드 성공했는데 비면 '아직 아무도 없음', 로드 전/실패면 fallbackStatus(동기화 상태 문구).
                 Text(PokeDirectoryEmptyMessage.text(hasLoaded: hasLoaded, fallbackStatus: fallbackStatus))
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
             } else {
-                ForEach(sortedEntries) { entry in
+                ForEach(sorted) { entry in
                     PokeDirectoryRowView(
                         entry: entry,
-                        remainingCooldown: cooldownRemaining(entry.userID),
+                        // 쿨타임 잔여 초는 **읽기 클로저**로 내린다 — 행이 아니라 행 속 찌르기 버튼 잎(MenuClockLeaf)이 부른다.
+                        // 여기서 `cooldownRemaining(entry.userID)` 를 값으로 풀면 그 읽기가 이 패널 body 에 등록돼
+                        // 목록 전체가 초당 재평가로 돌아간다(v0.2.37 까지의 결함 지점).
+                        cooldownRemaining: { cooldownRemaining(entry.userID) },
                         canPoke: isMyselfWorking,
                         ultraBalance: ultraBalance,
                         ultraUnlimited: ultraUnlimited,
@@ -2490,27 +2570,30 @@ private struct PokePanel: View {
                     )
                     .frame(height: Self.rowHeight)
                     if activeComposerUserID == entry.userID {
-                        PokeMessageComposer(
-                            targetName: entry.name,
-                            text: draftBinding,
-                            remainingCooldown: messageCooldownRemaining(entry.userID),
-                            // 행의 **메시지 버튼과 같은 게이트**다(내 근무 + 대상 근무 + 대상이 받을 수 있는 버전).
-                            // 규칙이 갈라지면 버튼은 흐린데 입력칸은 살아 있는 화면이 생기고, 그 차이를 설명할 방법이 없다.
-                            //
-                            // ★ 펼쳐 둔 사이 폴링으로 canReceiveMessage 가 false 로 바뀌면 **접지 않고 여기서 잠근다**:
-                            // 접으면 사용자가 치던 글자가 이유 없이 사라져 앱이 고장 난 것으로 읽히고, 폴링이 사용자의
-                            // 화면을 접었다 폈다 하는 규칙이 새로 생긴다. 자리비움이 같은 순간에 하는 일도 이것뿐이라
-                            // (이미 그렇게 돈다) 여기만 한 항 늘리면 두 사유가 같은 모양으로 멈춘다 — 머리줄이 사유를
-                            // 말하고, 닫는 길은 작성기의 [x] 로 남는다(행 버튼은 그 순간 흐린 라벨이라 토글이 안 된다).
-                            canSend: isMyselfWorking && entry.isWorking && entry.canReceiveMessage,
-                            isSending: isSendingMessage,
-                            onSend: { text in
-                                onSendMessage(entry.userID, text)
-                                // 보낸 값은 비운다 — 남아 있으면 쿨타임이 풀리는 순간 같은 말이 또 나간다.
-                                draft = ""
-                            },
-                            onCancel: { closeCompose() }
-                        )
+                        // 작성기는 남은 초를 **숫자로** 말하는 자리라("N초 뒤 가능") 초마다 그려야 맞다 — 잎으로 가둔다.
+                        MenuClockLeaf(read: { messageCooldownRemaining(entry.userID) }) { remaining in
+                            PokeMessageComposer(
+                                targetName: entry.name,
+                                text: draftBinding,
+                                remainingCooldown: remaining,
+                                // 행의 **메시지 버튼과 같은 게이트**다(내 근무 + 대상 근무 + 대상이 받을 수 있는 버전).
+                                // 규칙이 갈라지면 버튼은 흐린데 입력칸은 살아 있는 화면이 생기고, 그 차이를 설명할 방법이 없다.
+                                //
+                                // ★ 펼쳐 둔 사이 폴링으로 canReceiveMessage 가 false 로 바뀌면 **접지 않고 여기서 잠근다**:
+                                // 접으면 사용자가 치던 글자가 이유 없이 사라져 앱이 고장 난 것으로 읽히고, 폴링이 사용자의
+                                // 화면을 접었다 폈다 하는 규칙이 새로 생긴다. 자리비움이 같은 순간에 하는 일도 이것뿐이라
+                                // (이미 그렇게 돈다) 여기만 한 항 늘리면 두 사유가 같은 모양으로 멈춘다 — 머리줄이 사유를
+                                // 말하고, 닫는 길은 작성기의 [x] 로 남는다(행 버튼은 그 순간 흐린 라벨이라 토글이 안 된다).
+                                canSend: isMyselfWorking && entry.isWorking && entry.canReceiveMessage,
+                                isSending: isSendingMessage,
+                                onSend: { text in
+                                    onSendMessage(entry.userID, text)
+                                    // 보낸 값은 비운다 — 남아 있으면 쿨타임이 풀리는 순간 같은 말이 또 나간다.
+                                    draft = ""
+                                },
+                                onCancel: { closeCompose() }
+                            )
+                        }
                         .id(Self.composerAnchorID(entry.userID))
                     }
                 }
@@ -2540,13 +2623,81 @@ private struct PokePanel: View {
     }
 }
 
+/// 콕찌르기 패널의 안내줄(연결 끊김 / 메시지 결과 / 찌르기 결과 / 비근무 / 집중 모드 중 하나, 없으면 아무것도 안 그린다).
+///
+/// 왜 잎인가: 연결 끊김 판정(isPokeDisconnected)이 시계를 읽는다(재연결 유예 경과 여부). 그 판정을 패널 body 에 두면
+/// 패널이 매초 무효화된다 — PokeEntryIconButton/FooterSyncStatus 가 같은 이유로 잎이다. 줄이 **뜨는지 자체**도
+/// 그 판정에 달려 있으므로 `if let` 까지 이 안에 있다(없으면 빈 뷰라 VStack 간격을 먹지 않는다).
+private struct PokePanelNoticeLine: View {
+    let isPokeDisconnected: () -> Bool
+    let messageNotice: String?
+    let notice: String?
+    let isMyselfWorking: Bool
+    let isFocusMode: Bool
+
+    var body: some View {
+        MenuClockLeaf(read: isPokeDisconnected) { disconnected in
+            if let line = Self.line(
+                disconnected: disconnected,
+                messageNotice: messageNotice,
+                notice: notice,
+                isMyselfWorking: isMyselfWorking,
+                isFocusMode: isFocusMode
+            ) {
+                Text(line.text)
+                    .font(.caption2)
+                    .foregroundStyle(line.isWarning ? CheckTheme.pending : CheckTheme.secondaryText)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    // 안내줄 내용/톤(순수). notice 가 있으면 그것을(주황), 없고 비근무면 근무 안내(회색), 그다음 집중 모드 상태,
+    // 셋 다 아니면 nil(생략 — 상단 앵커 유지). 비근무 안내가 집중 모드보다 앞인 이유는 그것이 **지금 이 화면에서
+    // 하려는 일**(찌르기)의 차단 사유이기 때문이다. 집중 모드는 내 수신 설정이라 정보에 가깝다.
+    static func line(
+        disconnected: Bool,
+        messageNotice: String?,
+        notice: String?,
+        isMyselfWorking: Bool,
+        isFocusMode: Bool
+    ) -> (text: String, isWarning: Bool)? {
+        // 연결이 끊겼으면 그게 **가장 먼저**다. 이 화면에서 하려는 일이 양방향 모두 막힌 상태이고,
+        // 전송 실패 문구(messageNotice/pokeNotice)는 그 결과일 뿐이라 원인을 가리면 안 된다.
+        // 받기의 차단 사유가 보내기의 차단 사유보다 앞이다 — 보낸 사람은 실패를 보지만,
+        // 못 받은 사람은 아무 일도 안 일어난 것과 구별할 방법이 없다.
+        if disconnected {
+            return (PokeConnectionNotice.panelText, true)
+        }
+        // 메시지 결과가 찌르기 결과보다 앞이다 — 메시지는 사용자가 글자를 골라 넣은 **뒤**의 답이라
+        // 그 답이 안 보이면 "보내진 건가?"가 남는다. 스토어가 두 문구를 다른 칸에 담아 둔 덕에
+        // 여기서 순서만 정하면 되고, 어느 쪽도 상대를 지우지 않는다.
+        if let messageNotice, !messageNotice.isEmpty {
+            return (messageNotice, true)
+        }
+        if let notice, !notice.isEmpty {
+            return (notice, true)
+        }
+        if !isMyselfWorking {
+            return ("근무 중일 때만 콕 찌를 수 있어요", false)
+        }
+        if isFocusMode {
+            return (PokeFocusNotice.text, false)
+        }
+        return nil
+    }
+}
+
 /// 콕찌르기 한 행 = 좌측 세로 해시색 바(유저 컬러 포인트) + 아바타 + 이름 + 상태 칩(근무중/자리비움) + 우측 찌르기 버튼.
 /// 상태 칩은 근무중이면 초록 점+"근무중", 아니면 회색 "자리비움". 찌르기 버튼은 손가락 아이콘: 가능(accent 원형·눌림 탄성),
 /// 쿨타임 중/내가 비근무/대상이 자리비움(흐린 비활성 아이콘, 숫자 없음). 자리비움 대상은 찌를 수 없다(서버 강제).
 private struct PokeDirectoryRowView: View {
     let entry: PokeDirectoryEntry
-    // 이 대상 쿨타임 잔여 초(0이면 쿨타임 아님). 패널이 displayNow 기준으로 계산해 넘긴다.
-    let remainingCooldown: Int
+    // 이 대상 쿨타임 잔여 초 읽기(0이면 쿨타임 아님). **행 본체는 부르지 않는다** — 찌르기 버튼 잎(MenuClockLeaf)만 부른다.
+    // 값(Int)으로 받던 시절엔 패널이 행마다 이 값을 풀어 넘겼고, 그게 패널 body 를 초당 재평가로 묶은 지점이었다.
+    let cooldownRemaining: () -> Int
     // 내가 근무중이라 찌를 수 있는지. false면 버튼이 흐려지고 비활성된다.
     let canPoke: Bool
     // 내 울트라 잔량 — **툴팁 문구 분기 전용**이다. nil = 아직 모름(허용으로 읽는다).
@@ -2567,6 +2718,9 @@ private struct PokeDirectoryRowView: View {
     private var accentColor: Color { CheckTheme.avatarColor(for: entry.name) }
 
     var body: some View {
+        #if DEBUG
+        let _ = PokePanelRenderProbe.noteRowBody()
+        #endif
         HStack(spacing: 10) {
             Capsule()
                 .fill(accentColor)
@@ -2623,8 +2777,17 @@ private struct PokeDirectoryRowView: View {
 
     // 찌르기 버튼 — 손가락 아이콘. 여러 비활성 사유가 있지만 시각은 2가지: 가능(accent 원형·눌림 탄성)과 비활성(흐린 아이콘).
     // 쿨타임 잔여 초는 숫자로 그리지 않고, 쿨타임 중/내가 비근무/대상 자리비움 모두 흐린 비활성 아이콘으로 같은 계열로 표시한다.
-    @ViewBuilder
+    //
+    // 쿨타임 잔여는 **이 잎 안에서만** 읽는다(MenuClockLeaf): 행 본체는 초를 모르고, 매초 다시 그리는 것은 이 30pt 원 하나다.
+    // 만료 순간 활성으로 바뀌는 UX 는 그대로다 — 잎이 매초 `remaining > 0` 을 다시 판정한다.
     private var pokeButton: some View {
+        MenuClockLeaf(read: cooldownRemaining) { remaining in
+            pokeButton(remainingCooldown: remaining)
+        }
+    }
+
+    @ViewBuilder
+    private func pokeButton(remainingCooldown: Int) -> some View {
         if remainingCooldown > 0 {
             // 쿨타임 중 — 숫자 없이 흐린 비활성. 같은 대상 60초 쿨타임을 서버가 강제하고 여기선 미러링만 한다.
             pokeIconLabel(active: false)

@@ -18,12 +18,24 @@ actor SupabaseWorkService {
 
     /// 폴링 전용 세션. 요청 15초/리소스 30초 타임아웃(30초 폴링·90초 신선도 규약과 정합).
     /// 앱 전역 .shared 대신 전용 구성을 써 무한 대기·백그라운드 재시도가 티커/폴링 주기와 어긋나지 않게 한다.
+    ///
+    /// **응답 캐시는 끈다**(v0.2.38 Q9). 기본 구성은 매 응답을 URLCache(sqlite)에 쓰는데, 이 세션이 나르는 것은
+    /// 30초마다 바뀌는 상태 JSON 뿐이라 캐시 적중이 원리적으로 없다 — 근무 8시간에 디스크 쓰기 ~1,000회만 남는다.
+    /// 아바타 이미지는 이 세션이 아니라 `URLSession.shared` 로 받는다(CheckAvatarView) — 그쪽은 디스크 캐시에
+    /// 의존하므로 여기 설정과 무관하게 그대로다.
     static let defaultSession: URLSession = {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 15
         configuration.timeoutIntervalForResource = 30
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: configuration)
     }()
+
+    /// `work_tick` 실행 단위 가용성(v0.2.38 S3). 스토어 파일에 저장 프로퍼티를 더하지 않으려고 서비스가 들고 있다 —
+    /// 서비스는 스토어당 하나(테스트도 스토어마다 새로 만든다)라 수명이 "이 실행 동안" 과 정확히 같다.
+    /// 잠금으로 보호되는 Sendable 클래스라 메인 액터가 await 없이 읽고 쓴다(폴백 판정이 틱마다 도는 자리다).
+    nonisolated let workTickGate = WorkTickGate()
 
     init(
         projectURL: URL = SupabaseConfig.projectURL,
@@ -92,7 +104,9 @@ actor SupabaseWorkService {
             path: "/rest/v1/work_statuses",
             method: "GET",
             queryItems: [
-                URLQueryItem(name: "select", value: "user_id,status,updated_at,last_seen_at,active_session_id,profiles(display_name,email,avatar_url)"),
+                // email 은 싣지 않는다(v0.2.38 Q9): 화면 어디에도 쓰지 않는 개인정보를 37행 × 30초로 실어 나르고 있었다.
+                // 이름 폴백은 '팀원' 하나다 — ProfileRow.email 은 Optional 로 남겨 옛 응답이 와도 디코드가 깨지지 않는다.
+                URLQueryItem(name: "select", value: "user_id,status,updated_at,last_seen_at,active_session_id,profiles(display_name,avatar_url)"),
                 URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
                 URLQueryItem(name: "order", value: "updated_at.desc")
             ],
@@ -114,6 +128,21 @@ actor SupabaseWorkService {
         // (같은 이유로 임베딩(select=…,work_status_devices(…))도 쓰지 않는다: 표가 없으면 PostgREST 가 관계를
         //  못 찾아 상태 GET 자체를 400 으로 거부한다.)
         let devices = (try? await deviceRows) ?? []
+        return assembleTeamStatuses(rows: rows, active: activeSessions, weekly: weeklySessions, devices: devices, now: now)
+    }
+
+    /// 행 → `TeamMemberStatus` 조립(fetchTeamStatuses 의 후반을 그대로 떼어 낸 것 — v0.2.38 S3).
+    /// **기존 4 GET 경로와 work_tick 경로가 이 한 함수를 부른다.** 스냅샷 조립 로직이 두 벌이 되면 두 경로의
+    /// 화면이 언젠가 갈리고, 갈린 쪽은 폴백 중인 맥에서만 보이는 결함이 된다. 인자는 work_tick 응답의 조각 이름과
+    /// 1:1 이다(statuses / sessions_active / sessions_weekly / devices) — 조각은 기존 GET 이 주던 행과 같은 모양이라
+    /// 여기서는 출처를 구분할 필요가 없다.
+    func assembleTeamStatuses(
+        rows: [WorkStatusRow],
+        active activeSessions: [WorkSessionRow],
+        weekly weeklySessions: [WorkSessionRow],
+        devices: [WorkStatusDeviceRow],
+        now: Date
+    ) -> [TeamMemberStatus] {
         let activeByUser = Dictionary(grouping: activeSessions, by: \.userId)
         let weeklyByUser = weeklyDurations(from: weeklySessions, now: now)
         let todayByUser = todayDurations(from: weeklySessions, now: now)
@@ -123,7 +152,7 @@ actor SupabaseWorkService {
             let avatarURL = (row.profiles?.avatarUrl).flatMap { URL(string: $0) }
             return TeamMemberStatus(
                 id: row.userId,
-                name: row.profiles?.displayName ?? row.profiles?.email ?? "팀원",
+                name: row.profiles?.displayName ?? "팀원",
                 status: row.status == "working" ? .working : .offWork,
                 updatedAt: row.updatedAt.flatMap(parseDate),
                 currentSessionStartedAt: activeStartedAt,
@@ -185,7 +214,9 @@ actor SupabaseWorkService {
             path: "/rest/v1/work_sessions",
             method: "GET",
             queryItems: [
-                URLQueryItem(name: "select", value: "id,user_id,started_at,ended_at,duration_seconds"),
+                // 주간 합산은 타임스탬프 구간 클리핑(clippedContribution)만 쓴다 — id·duration_seconds 는 읽지 않으므로
+                // 싣지 않는다(v0.2.38 Q9; 팀 주간 행은 인당 수십 건이라 이 두 컬럼이 응답의 1/3 이었다).
+                URLQueryItem(name: "select", value: "user_id,started_at,ended_at"),
                 URLQueryItem(name: "team_id", value: "eq.\(teamID)"),
                 URLQueryItem(name: "ended_at", value: "not.is.null"),
                 // 경계 걸친 세션(예: 일요일 23시~월요일 1시)을 놓치지 않도록 '주와 겹침' 기준으로 조회한다.
@@ -580,6 +611,95 @@ actor SupabaseWorkService {
         return AwaySync(isOK: isOK, policy: policy, openSession: open, restorable: restorable)
     }
 
+    // MARK: - 근무 틱 통합 RPC (v0.2.38 S3 / docs/work-tick.md)
+
+    static let workTickPath = "/rest/v1/rpc/work_tick"
+
+    /// work_tick 요청 조립. 스탬프 형식은 기존 요청과 **같은 포매터**(dateFormatter)다 — `p_seen_at` 은 upsertStatus 의
+    /// `last_seen_at`/`updated_at`, `p_since` 는 fetchWeeklySessions 의 `ended_at=gte.` 와 글자 단위로 같아야 한다.
+    /// `now` 하나로 세 값을 만든다(기존 경로는 함수마다 `Date()` 를 따로 읽었지만 ms 차이뿐이라 의미가 없다).
+    func makeWorkTickRequest(
+        teamID: String?,
+        heartbeat: Bool,
+        sessionID: String?,
+        deviceID: String?,
+        openedSession: Bool,
+        lastInputAt: Date?,
+        includeMeta: Bool,
+        now: Date
+    ) -> WorkTickRequest {
+        WorkTickRequest(
+            pTeamId: teamID,
+            pHeartbeat: heartbeat,
+            pSessionId: sessionID,
+            pDeviceId: deviceID,
+            pOpenedSession: openedSession,
+            pLastInputAt: lastInputAt.map { dateFormatter.string(from: $0) },
+            pSeenAt: dateFormatter.string(from: now),
+            pSince: dateFormatter.string(from: weekStart(for: now)),
+            pIncludeMeta: includeMeta
+        )
+    }
+
+    /// `work_tick(...)` — 근무 중 30초마다 따로 나가던 하트비트 2 + 팀 상태 GET 4 + away_sync(+ 팀 메타 2)를
+    /// **한 번의 POST** 로 보낸다. 전송만 합치고 의미는 바꾸지 않는다: 요청 값은 기존 요청이 싣던 값 그대로
+    /// (`WorkTickRequest` 주석), 응답 조각은 기존 디코더로 읽는다(`WorkTickResponse`).
+    ///
+    /// **공용 `send` 를 쓰지 않고 직접 보내는 이유**: 폴백 규칙이 상태코드·PostgREST 코드로 갈리는데
+    /// (404/PGRST202 → 끔, 403/42501 → 끔, 5xx → 연속 3회면 1시간), 공용 매핑은 403 을 `.authMessage(영문)` 로
+    /// 접어 상태코드를 잃는다. 헤더 구성은 `send` 와 같다(apikey / Bearer / Accept / Content-Type).
+    /// 401 만은 `.sessionExpired` 로 던져 `withSessionRetry` 의 토큰 갱신·재시도를 그대로 탄다.
+    /// 인코더의 convertToSnakeCase 가 `pTeamId → p_team_id` 를 만든다(다른 RPC 본문과 같은 규약).
+    func workTick(accessToken: String, request: WorkTickRequest) async throws -> WorkTickResponse {
+        guard let anonKey else {
+            throw SupabaseWorkServiceError.missingAnonKey
+        }
+        var urlRequest = URLRequest(url: try url(path: Self.workTickPath, queryItems: []))
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue(anonKey, forHTTPHeaderField: "apikey")
+        urlRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try encoder.encode(request)
+
+        // URLError(네트워크·취소)는 그대로 전파한다 — 스토어가 취소를 실패로 세지 않게 가르려면 원형이 필요하다.
+        let (data, response) = try await session.data(for: urlRequest)
+        guard let http = response as? HTTPURLResponse else {
+            throw WorkTickFailure.rejected(status: -1, code: nil)
+        }
+        let code = postgrestErrorCode(in: data)
+        switch http.statusCode {
+        case 200..<300:
+            break
+        case 401:
+            throw SupabaseWorkServiceError.sessionExpired
+        case 404:
+            throw WorkTickFailure.functionMissing(code: code)
+        case 403:
+            throw WorkTickFailure.forbidden(code: code)
+        case 500...:
+            throw WorkTickFailure.serverError(status: http.statusCode)
+        default:
+            // 코드가 상태보다 정확한 경우(프록시가 상태를 바꿔 준 300/406 등)도 같은 문으로 접는다.
+            if code == "PGRST202" { throw WorkTickFailure.functionMissing(code: code) }
+            if code == "42501" { throw WorkTickFailure.forbidden(code: code) }
+            throw WorkTickFailure.rejected(status: http.statusCode, code: code)
+        }
+        guard let decoded = try? decoder.decode(WorkTickResponse.self, from: data) else {
+            throw WorkTickFailure.undecodable
+        }
+        guard decoded.v == 1 else {
+            throw WorkTickFailure.contractMismatch(version: decoded.v)
+        }
+        return decoded
+    }
+
+    /// PostgREST 오류 본문의 `code`(SQLSTATE 또는 PGRSTxxx). 없거나 본문이 JSON 이 아니면 nil.
+    private func postgrestErrorCode(in data: Data) -> String? {
+        struct Envelope: Decodable { let code: String? }
+        return (try? decoder.decode(Envelope.self, from: data))?.code
+    }
+
     /// `restore_auto_closed_session(p_session_id)` — S2 삭제 → S1 재개 → 상태행 갱신 → 하루 카운터를
     /// **한 트랜잭션**에서 한다. 클라에서 2회 왕복으로 흉내내지 마라(중간에 죽으면 열린 세션이 0개나 2개가 된다).
     func restoreAutoClosedSession(accessToken: String, sessionID: String) async throws -> AwayRestoreOutcome {
@@ -813,7 +933,13 @@ actor SupabaseWorkService {
         guard let row = rows.first else {
             return nil
         }
-        return (
+        return membership(from: row)
+    }
+
+    /// 멤버십 행 → 튜플(fetchOwnMembership 의 변환을 떼어 낸 것 — v0.2.38 S3). work_tick 의 `meta.memberships.first`
+    /// 가 같은 변환을 지나야 목표 폴백(60시간)·역할 폴백(member)·팀명 폴백("팀")이 두 경로에서 한 글자도 갈리지 않는다.
+    nonisolated func membership(from row: MembershipRow) -> (teamID: String, teamName: String, goalHours: Int, role: String) {
+        (
             teamID: row.teamId,
             teamName: row.teams?.name ?? "팀",
             goalHours: row.teams?.weeklyGoalHours ?? TeamWeeklyGoal.defaultGoalHours,
@@ -1397,5 +1523,127 @@ extension SupabaseWorkService {
             }
         }
         return digits.isEmpty ? nil : Int(String(digits.reversed()))
+    }
+}
+
+// MARK: - work_tick 가용성 게이트 (v0.2.38 S3 / docs/work-tick.md 4.1·4.5)
+
+/// `work_tick` 을 **이 실행 동안** 쓸 수 있는가와, 왜 못 쓰는가. 컴파일 상수 킬스위치(`WorkTimerStore.workTickEnabled`)
+/// 뒤의 실행 단위 스위치다. 규칙은 계약 문서 4.5 그대로다:
+///  · 404/PGRST202(함수 없음·모르는 키) · 403/42501(실행권 회수) · `v != 1` · 디코드 실패 → **이 실행 동안 끈다**
+///  · 5xx·그 밖의 실패 → 연속 3회면 **1시간** 폴백 후 재시도(지속 오류 시 "실패 1 + 폴백 7" 폭주의 상한)
+/// 어느 쪽이든 그 틱은 호출부가 기존 경로로 즉시 재수행한다 — 하트비트 유실 창을 만들지 않는 것이 규칙의 전부다.
+///
+/// 폴백 사유는 `syncMessage` 가 아니라 여기(진단 문자열)에 남긴다. 사용자에게 "동기화 실패" 를 보일 상황이 아니라
+/// 이득만 사라진 상태이기 때문이다. NSLock 으로 보호하는 `@unchecked Sendable` — 액터 밖(메인 액터)에서 동기로 읽는다.
+final class WorkTickGate: @unchecked Sendable {
+    /// 연속 일시 실패 상한. 도달하면 `suspensionSeconds` 동안 폴백.
+    static let transientFailureLimit = 3
+    static let suspensionSeconds: TimeInterval = 60 * 60
+
+    private let lock = NSLock()
+    private var disabledReason: String?
+    private var disabledAt: Date?
+    private var consecutiveTransientFailures = 0
+    private var suspendedUntil: Date?
+    private var lastTransientReason: String?
+    private var successCount = 0
+    private var fallbackCount = 0
+    /// server_now − 로컬 시계(초). 양수면 서버가 앞선다. 판정에는 쓰지 않는다(계측 전용).
+    private var lastClockSkewSeconds: TimeInterval?
+
+    /// 지금 work_tick 을 시도해도 되는가. 1시간 정지는 `now` 가 지나면 스스로 풀린다(카운터도 새로 센다).
+    func isAvailable(now: Date) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if disabledReason != nil { return false }
+        if let until = suspendedUntil {
+            if now < until { return false }
+            suspendedUntil = nil
+            consecutiveTransientFailures = 0
+        }
+        return true
+    }
+
+    /// 이 실행 동안 끈다(함수 없음·실행권 회수·계약 불일치·디코드 실패).
+    func disable(reason: String, at now: Date) {
+        lock.lock(); defer { lock.unlock() }
+        guard disabledReason == nil else { return }
+        disabledReason = reason
+        disabledAt = now
+    }
+
+    /// 일시 실패 1회(5xx·네트워크·그 밖의 4xx). 연속 3회면 1시간 정지.
+    func recordTransientFailure(reason: String, at now: Date) {
+        lock.lock(); defer { lock.unlock() }
+        lastTransientReason = reason
+        consecutiveTransientFailures += 1
+        if consecutiveTransientFailures >= Self.transientFailureLimit {
+            suspendedUntil = now.addingTimeInterval(Self.suspensionSeconds)
+        }
+    }
+
+    /// 성공 1회. 연속 실패 장부를 지우고 시계 차를 계측한다.
+    func recordSuccess(serverNow: Date?, localNow: Date) {
+        lock.lock(); defer { lock.unlock() }
+        successCount += 1
+        consecutiveTransientFailures = 0
+        lastTransientReason = nil
+        if let serverNow { lastClockSkewSeconds = serverNow.timeIntervalSince(localNow) }
+    }
+
+    /// 폴백 경로로 수행한 틱 1회(진단 카운터).
+    func recordFallback() {
+        lock.lock(); defer { lock.unlock() }
+        fallbackCount += 1
+    }
+
+    /// 상태 스냅샷(테스트·진단용).
+    var snapshot: Snapshot {
+        lock.lock(); defer { lock.unlock() }
+        return Snapshot(
+            disabledReason: disabledReason,
+            disabledAt: disabledAt,
+            consecutiveTransientFailures: consecutiveTransientFailures,
+            suspendedUntil: suspendedUntil,
+            lastTransientReason: lastTransientReason,
+            successCount: successCount,
+            fallbackCount: fallbackCount,
+            lastClockSkewSeconds: lastClockSkewSeconds
+        )
+    }
+
+    struct Snapshot: Equatable, Sendable {
+        let disabledReason: String?
+        let disabledAt: Date?
+        let consecutiveTransientFailures: Int
+        let suspendedUntil: Date?
+        let lastTransientReason: String?
+        let successCount: Int
+        let fallbackCount: Int
+        let lastClockSkewSeconds: TimeInterval?
+    }
+
+    /// 설정 창용 한 줄(값 사이 구분자는 ` · ` — realtimeDiagnosticsLine 과 같은 규약).
+    func diagnosticsLine(now: Date) -> String {
+        let s = snapshot
+        var parts: [String] = []
+        if let reason = s.disabledReason {
+            parts.append("폴백 고정(\(reason))")
+            if let at = s.disabledAt { parts.append("\(WorkTimerStore.realtimeDiagnosticsTime.string(from: at)) 부터") }
+        } else if let until = s.suspendedUntil, now < until {
+            parts.append("1시간 폴백(\(s.lastTransientReason ?? "연속 실패"))")
+            parts.append("\(WorkTimerStore.realtimeDiagnosticsTime.string(from: until)) 까지")
+        } else {
+            parts.append("work_tick 사용")
+            if s.consecutiveTransientFailures > 0, let reason = s.lastTransientReason {
+                parts.append("연속 실패 \(s.consecutiveTransientFailures)회(\(reason))")
+            }
+        }
+        parts.append("성공 \(s.successCount)회")
+        parts.append("폴백 \(s.fallbackCount)회")
+        if let skew = s.lastClockSkewSeconds {
+            parts.append(String(format: "시계차 %+.1fs", skew))
+        }
+        return parts.joined(separator: " · ")
     }
 }

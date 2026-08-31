@@ -381,7 +381,12 @@ struct CheckSettingsView: View {
             }
             // 진단은 **카드가 아니라 한 줄 각주**다. 설정 창은 400pt 이고 콘텐츠가 이미 355pt 라
             // 섹션 카드(제목+패딩)를 하나 더 얹으면 445pt 가 되어 맨 아래 — 즉 이 줄 자체가 잘린다.
-            RealtimeDiagnosticsRow(store: store)
+            // 두 각주는 바깥 VStack 의 14pt 간격이 아니라 2pt 로 붙인다 — 창 400pt 예산에서 각주 한 줄이
+            // 12pt 인데 14pt 간격을 하나 더 쓰면 409pt 로 넘쳐 맨 아랫줄(이 진단)이 잘린다(RealtimeLinkTests).
+            VStack(alignment: .leading, spacing: 2) {
+                RealtimeDiagnosticsRow(store: store)
+                WorkTickDiagnosticsRow(store: store)
+            }
         }
         .padding(14)
         // 창이 늘어나면 같이 늘고, 좁혀도 설명이 뭉개지지 않는 하한을 준다(창 크기는 배선 쪽 소관).
@@ -453,7 +458,27 @@ private struct RealtimeDiagnosticsRow: View {
     let store: WorkTimerStore
 
     var body: some View {
-        Text("초인종 " + store.realtimeDiagnosticsLine)
+        DiagnosticsFootnote(text: "초인종 " + store.realtimeDiagnosticsLine)
+    }
+}
+
+/// 근무 틱(work_tick RPC) 한 줄 진단(v0.2.38 S3). **"팀 화면이 늦어요/안 바뀌어요" 신고에서 통합 RPC 를 쓰는지,
+/// 개별 REST 로 폴백해 있는지(사유·언제까지), 시계차가 얼마인지**를 가른다. syncMessage 에는 폴백 사유를 싣지 않으므로
+/// 이 줄이 유일한 표면이다. 초인종 줄과 같은 각주 스타일이며, 함께 설정 창 400pt 높이 예산 안에 든다(RealtimeLinkTests).
+private struct WorkTickDiagnosticsRow: View {
+    let store: WorkTimerStore
+
+    var body: some View {
+        DiagnosticsFootnote(text: "근무 틱 " + store.workTickDiagnosticsLine)
+    }
+}
+
+/// 두 진단 줄이 공유하는 각주 스타일(10pt 고정폭 숫자, 보조색, 한 줄, 가운데 생략).
+private struct DiagnosticsFootnote: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
             .font(.system(size: 10).monospacedDigit())
             .foregroundStyle(CheckTheme.secondaryText)
             .lineLimit(1)

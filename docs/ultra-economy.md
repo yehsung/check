@@ -11,6 +11,9 @@
 | `20260819020000_poke_realtime_ring.sql` | `poke_topic` · realtime 정책 · `poke_ring` · 킬스위치 | 없음 |
 | `20260819030000_poke_economy_and_ring.sql` | `poke_user` / `send_message` / `ultra_poke_user` 재작성 1회 + `shares_team` drop | **있음** |
 | `20260820040000_ultra_unlimited_flag.sql` | `ultra_wallet_sync` 에 `unlimited` 키 1개 추가(운영자 표시 전용, 본문 3줄) | 없음 |
+| `20260901120000_admin_ultra_ledger.sql` | 없음(표·컬럼 0개) | **있음** — `ultra_poke_user` 관리자 분기가 장부에 `delta 0` 을 적는다 |
+| `20260901130000_ultra_lap_economy.sql` | 없음(표·컬럼 0개) | **있음** — 상한 5→3 · `ultra_wallet_sync` 가 3시간 **마다** 지급하고 가득 참은 영구 소멸 |
+| `20260901140000_ultra_capped_persistent.sql` | 없음 | **있음** — `capped` 를 순간 신호에서 **상태**(잔량 ≥ 상한)로 |
 
 ---
 
@@ -20,9 +23,10 @@
 |---|---|---|
 | 하루 밑바닥 (새 버전) | **1** | `ultra_daily_floor(app_build)`, `app_build >= 43` |
 | 하루 밑바닥 (구버전) | **2** | `ultra_daily_floor(app_build)`, `app_build < 43` 또는 null |
-| 잔량 상한 | **5** | `ultra_balance_cap()` |
-| 미션 1호 목표 | 그날 누적 근무 **3시간** | `mission_work_seconds()` = 10800 |
-| 미션 보상 | +1 (미션·날짜당 1회) | `ultra_ledger` 의 `unique (user_id, kst_day, reason) where delta > 0` |
+| 잔량 상한 | **3** | `ultra_balance_cap()` (2026-09-01 에 5→3) |
+| 미션 1호 목표 | 그날 누적 근무 **3시간마다**(3·6·9…) | `mission_work_seconds()` = 10800 |
+| 미션 보상 | 랩당 +1 (**랩·날짜당 1회**) | `ultra_ledger` 의 `unique (user_id, kst_day, reason) where delta > 0` |
+| 가득 찼을 때 달성 | **영구 소멸**(2026-09-01 확정) | `delta 0` 소멸 행이 재평가를 막는다 |
 | 연속 출근 스트릭 | **표시만. 보상 없음** | `ultra_wallet_sync` 는 스트릭으로 어떤 적립도 하지 않는다 |
 | 울트라 발사 비용 | 1 | `ultra_poke_user` |
 | 같은 대상 쿨타임 | 60초 (거절은 몫을 안 태운다) | 세 RPC 공통 |
@@ -58,17 +62,19 @@
 {
   "status": "ok",
   "balance": 3,
-  "balance_cap": 5,
+  "balance_cap": 3,
   "daily_floor": 1,
-  "day": "2026-08-19",
+  "day": "2026-09-01",
   "floor_applied": true,
   "missions": [
-    { "key": "work3h", "kst_day": "2026-08-19", "target_seconds": 10800,
-      "progress_seconds": 14400, "claimed": true, "granted_now": true, "capped": false },
-    { "key": "work3h", "kst_day": "2026-08-18", "target_seconds": 10800,
-      "progress_seconds": 14400, "claimed": true, "granted_now": false, "capped": false }
+    { "key": "work3h", "kst_day": "2026-09-01", "target_seconds": 10800,
+      "progress_seconds": 3600, "claimed": false, "granted_now": true, "capped": true,
+      "laps_settled": 2, "laps_granted": 2, "worked_seconds": 25200 },
+    { "key": "work3h", "kst_day": "2026-08-31", "target_seconds": 10800,
+      "progress_seconds": 0, "claimed": false, "granted_now": false, "capped": true,
+      "laps_settled": 1, "laps_granted": 1, "worked_seconds": 10900 }
   ],
-  "worked_seconds_closed": 14400,
+  "worked_seconds_closed": 25200,
   "worked_seconds_open": 0,
   "streak_days": 3,
   "streak_includes_today": true,
@@ -81,7 +87,7 @@
 |---|---|---|---|
 | `status` | string | `"ok"` \| `"invalid"` | 아니오 |
 | `balance` | int | 이 호출 **직후**의 잔량(밑바닥 보정·미션 적립이 이미 반영됨) | 아니오 |
-| `balance_cap` | int | 상한(현재 5). UI 가 리터럴 5를 박지 말 것 | 아니오 |
+| `balance_cap` | int | 상한(현재 **3**. 2026-09-01 에 5→3). UI 가 리터럴을 박지 말 것 | 아니오 |
 | `daily_floor` | int | 이 사용자의 하루 밑바닥(1 또는 2). 진단용 | 아니오 |
 | `day` | string | `YYYY-MM-DD` (KST) | 아니오 |
 | `floor_applied` | bool | 이번 호출에서 밑바닥 보정이 **실제로 잔량을 올렸는가** | 아니오 |
@@ -103,24 +109,50 @@
 | `key` | string | 현재 `"work3h"` 하나. 미래에 늘어날 수 있으니 **모르는 key 는 무시**할 것 |
 | `kst_day` | string | `YYYY-MM-DD`. 이 행이 평가한 날 |
 | `target_seconds` | int | 목표(10800) |
-| `progress_seconds` | int | 그날 서버가 잰 누적 근무초(닫힌 + 열린) |
-| `claimed` | bool | 그날 몫을 **이미 받았다** |
-| `granted_now` | bool | **이번 호출에서** 받았다 → 연출(`.ultraCharged`)의 트리거 |
-| `capped` | bool | 달성했지만 **잔량이 가득 차서 적립하지 않았다** |
+| `progress_seconds` | int | **현재 랩의 진행**(0…`target_seconds`). 랩마다 0 으로 되감긴다 — 그날 총합은 `worked_seconds` |
+| `claimed` | bool | **언제나 false**(랩이 반복되므로 완료 상태가 없다). 옛 의미: 그날 몫을 이미 받았다 |
+| `granted_now` | bool | **이번 호출에서** 한 랩 이상 받았다 → 연출(`.ultraCharged`)의 트리거 |
+| `capped` | bool | 달성했지만 **가득 차서 소멸했다**(영구. 나중에 비워도 안 돌아온다) |
+| `laps_settled` | int | 그날 정산된 랩 수(받은 것 + 소멸한 것). **더해진 진단 키** |
+| `laps_granted` | int | 그중 실제로 받은 수. **더해진 진단 키** |
+| `worked_seconds` | int | 그날 총 근무초(= 옛 `progress_seconds`). **더해진 진단 키** |
 
-**`capped` 의 정확한 의미가 중요하다.** 상한에서 미션을 달성하면 서버는
-**장부를 쓰지 않고 잔량도 안 올린다**(장부만 쓰면 감사가 영구 드리프트를 내고, 잔량만 올리면 상한이 뚫린다).
-그래서 `claimed` 는 **false 로 남는다**. 결과적으로 그날 중에 울트라를 한 발 쓰고 다시 sync 하면
-**그때 받는다.** UI 는 이 행에 "가득 차서 오늘은 못 받아요"를 그린다.
+**★ 2026-09-01 에 랩(lap) 방식으로 바뀌었다.** 미션은 하루 1회가 아니라 **그날 누적 3시간마다** 성립한다.
+랩 N 의 장부 `reason` 은 랩 1이 `mission:work3h`, 랩 2 이상이 `mission:work3h#N` 이다.
+
+> ⚠️ **랩 1의 reason 을 바꾸지 마라.** 바꾸는 순간 어제 이미 받은 사람의 행이 "없는 것"으로 보여
+> `p_days_back=1` 이 어제 몫을 **한 번 더 지급한다**(전원에게 1회씩). 마이그레이션의 소스 단언이
+> 이 리터럴을 되묻어 배포를 멈춘다.
+
+**`capped` 는 "지금 가득 차 있다"는 상태다**(20260901140000). 처음엔 "이번 호출에서 랩이 소멸했다"는
+순간 신호였는데, 그러면 가득 찬 사람이 3시간을 채우는 그 한 번의 sync 에서만 참이고 5분 뒤엔 사라져
+**정작 계속 잃는 사람이 왜 잃는지 모른다**. 지금은 `v_capped or (v_bal >= v_cap)` 이라 가득 찬 동안
+계속 참이고, 잔량이 상한 밑으로 내려가면 사라진다. 클라 문구도 현재형 경고여야 한다
+(v0.2.39: `"가득 찼어요 — 쓰지 않으면 놓쳐요"`).
+
+**소멸 자체는 영구다.** 달성 순간 잔량이 가득 차 있으면 그 랩은 **그냥 사라진다.**
+예전에는 장부를 아예 안 써서 "한 발 쓰고 다시 sync 하면 그때 받는" 유예가 있었는데, 그 유예를 없앴다
+(사장님 확정 — 모아두는 것보다 **쓰는 것**이 이득이어야 한다). 소멸의 영구성은 **`delta 0` 장부 행**이
+보장한다: 그 행이 있으면 그 랩은 다시 평가되지 않는다. `delta 0` 인 이유는 관리자 발사 행과 같다 —
+감사 합계에 영향이 없고(0), 유니크 인덱스(`where delta > 0`)에도 안 걸린다(같은 날 여러 랩이 남아야 하므로).
+
+**`claimed` 는 이제 언제나 `false` 다.** 랩이 반복되므로 "오늘 몫 끝"이라는 상태가 존재하지 않는다.
+구버전(build 43~47)은 `claimed=false` 일 때 보상 칩(⚡︎ +1)과 진행 바를 그리는데, 그것이 정확히
+우리가 원하는 화면이다. `claimed` 와 `capped` 는 여전히 **동시에 참일 수 없다**(클라 계약).
+
+**`progress_seconds` 는 그날 총합이 아니라 `현재 랩의 진행`(0…target)이다.** 랩을 하나 정산할 때마다
+0 으로 되감긴다 — 구버전이 이 값 하나로 진행 바를 그리므로, 되감아야 "다음 하나까지"가 보인다.
+그날 총합이 필요하면 응답 최상위의 `worked_seconds_closed + worked_seconds_open` 을 쓸 것.
 
 상태 조합표:
 
 | `claimed` | `granted_now` | `capped` | 화면 |
 |---|---|---|---|
-| false | false | false | 진행 중 (`progress/target`) |
-| true | true | false | **방금 받았다** → 연출 + "오늘 3시간 — 울트라 +1" |
-| true | false | false | 오늘 몫 이미 받음 |
-| false | false | **true** | **"가득 차서 오늘은 못 받아요"** |
+| false | false | false | 진행 중 (`progress/target` — **다음 하나까지**) |
+| false | **true** | false | **방금 받았다** → 연출 + "3시간 채웠어요 — 울트라 +1" |
+| false | false | **true** | **"가득 찼어요 — 쓰지 않으면 놓쳐요"**(잔량 ≥ 상한. 그동안 성립하는 랩은 소멸한다) |
+| false | **true** | **true** | 받자마자 가득 찼다 — 연출과 경고가 함께 뜬다(정상) |
+| true | — | — | **이제 나오지 않는다** |
 
 ### 측정 규칙 (신고 대응 시 이걸 본다)
 
@@ -168,6 +200,19 @@ invalid → not_working → target_not_working → target_focused → 관리자 
 
 **관리자는 재화를 쓰지 않는다.** 응답의 숫자는 `greatest(실제잔량, 1)` 이다 —
 0을 실어 보내면 구버전이 버튼을 잠그기 때문이다(20260817130000 이 세운 예외를 승계).
+
+**단, 발사 사실은 장부에 남는다**(20260901120000). 재화를 안 썼으니 `delta` 는 **0** 이고,
+`detail` 에 `{"unlimited": true}` 가 박혀 유료 차감(-1)과 한눈에 갈린다. `delta 0` 인 것이 계약이다:
+`ultra_wallet_audit()` 은 delta 를 합산하므로 0 은 드리프트를 만들지 않고,
+`ultra_ledger_grant_once` 는 `where delta > 0` 부분 인덱스라 0 은 색인되지 않아
+**같은 날 여러 발**이 유니크 충돌 없이 남는다(관리자는 하루 한도가 없으므로 필수 조건이다).
+`balance_after` 는 응답용 `greatest(_,1)` 이 아니라 실제 잔량이고, 관리자 분기는
+`ultra_wallet_touch` 보다 앞이므로 그 값은 **밑바닥 보정 전** 값이다.
+
+> 왜 뒤늦게 넣었나 — 2026-09-01 실측에서 7일간 울트라 79발 중 **38발이 관리자 발사였고 장부에는 0줄**이었다.
+> `pokes` 는 7일 보존(`cleanup_old_pokes`)이라 그 뒤엔 흔적이 사라진다. 감사 도구에 구멍이 하나 있으면
+> 그 도구 전체를 못 믿는다. **이 파일 이전의 관리자 발사는 소급 복원하지 않는다** — 원천이 없고,
+> 없는 것을 지어내면 장부가 감사 증거이기를 그만둔다.
 
 **거절은 몫을 태우지 않는다.** `cooldown` 은 잔량 차감 **전**에 반환된다.
 
@@ -289,6 +334,18 @@ select kst_day, reason, delta, balance_after, detail
  order by created_at desc limit 20;
 ```
 
+**울트라 발사 전건**(관리자 포함, 20260901120000 이후). 누가 누구에게 몇 발 쐈는지는 이 한 줄이 원천이다 —
+`pokes` 와 달리 장부는 지워지지 않는다:
+
+```sql
+select l.created_at, p.display_name as 보낸이, l.delta,
+       coalesce(l.detail->>'unlimited', 'false') as 무제한,
+       (select display_name from public.profiles where id = (l.detail->>'to')::uuid) as 받은이
+  from public.ultra_ledger l join public.profiles p on p.id = l.user_id
+ where l.reason = 'spend:ultra'
+ order by l.created_at desc limit 50;
+```
+
 ### 신고가 들어오면 이 순서로 가른다
 
 1. **제보자 빌드부터**: `select id, app_build from public.profiles where email = '<제보자>'`.
@@ -337,5 +394,10 @@ select kst_day, reason, delta, balance_after, detail
 * **`ultra_ledger` 는 무한히 자란다**(38명 × 하루 ~3행 = 연 4만 행). 청소 크론이 없다.
   필요해지면 `cleanup_old_pokes`(20260724020000) 패턴으로 180일 이전 `spend` 행만 지운다
   (`floor`/`mission` 행은 감사 증거라 남긴다).
-* **상한에서 놓친 어제 몫은 이틀 뒤 사라진다.** `p_days_back` 기본이 1이라 오늘과 어제만 본다.
-  잔량이 가득 찬 사람에게만 해당하므로 손해는 실질적으로 0이다.
+* **가득 찬 상태에서 성립한 랩은 그 자리에서 사라진다**(2026-09-01 확정). 이것은 버그가 아니라 규칙이다 —
+  울트라를 쌓아두지 말고 쓰라는 것이 설계 의도다. 다만 **소멸 판정은 "달성한 순간"이 아니라
+  "달성 후 첫 평가 시점"의 잔량으로 내려진다** — 서버는 과거 시점의 잔량을 알 수 없기 때문이다.
+  근무 중에는 5분마다 sync 가 돌아 그 차이는 실질적으로 5분 이내다.
+* **상한을 5→3 으로 내렸을 때 이미 4~5개를 들고 있던 사람은 깎지 않았다**(실측 14명).
+  `ultra_wallet_touch` 는 잔량을 **절대 내리지 않는다** — 내리면 장부 합계와 갈려
+  `ultra_wallet_audit()` 이 영구 드리프트를 낸다. 쓰면서 3 이하로 내려가면 그때부터 상한 3 이 걸린다.

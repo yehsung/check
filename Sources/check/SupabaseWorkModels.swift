@@ -1266,9 +1266,19 @@ struct UltraWalletResponse: Decodable, Equatable, Sendable {
         /// (서버가 장부를 안 쓰기 때문 — docs/ultra-economy.md §2). 그래서 claimed 만 보면
         /// "아직 못 받았다"로 보이고 화면은 진행 바를 100% 로 그린 채 아무 말도 안 하게 된다.
         let capped: Bool
+        /// 그날 **정산된 랩 수**(받은 것 + 가득 차서 소멸한 것). 소멸이 몇 번 일어났는지는
+        /// `lapsSettled - lapsGranted` 로만 보인다 — 소멸은 영구라 나중에 어디서도 되짚을 수 없다.
+        let lapsSettled: Int
+        /// 그중 **실제로 받은** 수. 화면의 "오늘 N개"는 이 값이다.
+        let lapsGranted: Int
+        /// 그날 **총 근무초**. 랩 방식 이전에 `progressSeconds` 가 담던 값이 이 키로 옮겨 왔다.
+        let workedSeconds: Int
 
+        /// 키는 `.convertFromSnakeCase` 가 이미 카멜로 바꾼 뒤에 매칭되므로 **카멜로 적는다**
+        /// (`laps_granted` → `lapsGranted`). 스네이크로 적으면 어떤 키도 안 잡혀 전부 기본값이 된다.
         enum CodingKeys: String, CodingKey {
             case key, kstDay, targetSeconds, progressSeconds, claimed, grantedNow, capped
+            case lapsSettled, lapsGranted, workedSeconds
         }
 
         init(from decoder: Decoder) throws {
@@ -1282,6 +1292,15 @@ struct UltraWalletResponse: Decodable, Equatable, Sendable {
             // capped 만 관대한 이유: 이 키는 상한(사장님 확정 4)과 함께 태어난 신참이라,
             // 서버가 한 단계 뒤처진 창에서 없을 수 있다. 없으면 '가득 차지 않았다'가 안전한 쪽이다.
             capped = try c.decodeIfPresent(Bool.self, forKey: .capped) ?? false
+            // 랩 3형제가 관대한 이유는 capped 와 똑같다 — 2026-09-01 랩 전환과 함께 태어난 키라
+            // 서버가 한 단계 뒤처진 창에서는 통째로 없다. 개수는 0 이 안전한 쪽이다(없는 랩을 지어내면
+            // 화면이 "오늘 N개"라고 거짓말한다).
+            lapsSettled = try c.decodeIfPresent(Int.self, forKey: .lapsSettled) ?? 0
+            lapsGranted = try c.decodeIfPresent(Int.self, forKey: .lapsGranted) ?? 0
+            // ★ 폴백이 0 이 아니라 progressSeconds 인 이유: 랩 이전 서버는 progress_seconds 에
+            //   **그날 총합**을 담았다. 즉 그 서버에서 이 둘은 같은 수이고, 0 으로 접으면 총 근무초가
+            //   화면에서 사라진다(진단 줄이 "0분 일했다"고 말한다).
+            workedSeconds = try c.decodeIfPresent(Int.self, forKey: .workedSeconds) ?? progressSeconds
         }
 
         init(
@@ -1291,7 +1310,14 @@ struct UltraWalletResponse: Decodable, Equatable, Sendable {
             progressSeconds: Int,
             claimed: Bool,
             grantedNow: Bool,
-            capped: Bool = false
+            capped: Bool = false,
+            // 맨 뒤 + 기본값인 이유는 소스 호환이다 — 중간에 끼우거나 필수로 두면 인자를 순서대로
+            // 넘기던 기존 픽스처가 전부 컴파일 오류가 난다.
+            lapsSettled: Int = 0,
+            lapsGranted: Int = 0,
+            // nil = "말 안 했다". 디코더의 폴백과 **같은 규칙**으로 progressSeconds 를 쓴다 — 두 생성
+            // 경로가 다른 값을 만들면 픽스처로 재현한 화면과 실서버 화면이 갈린다.
+            workedSeconds: Int? = nil
         ) {
             self.key = key
             self.kstDay = kstDay
@@ -1300,6 +1326,9 @@ struct UltraWalletResponse: Decodable, Equatable, Sendable {
             self.claimed = claimed
             self.grantedNow = grantedNow
             self.capped = capped
+            self.lapsSettled = lapsSettled
+            self.lapsGranted = lapsGranted
+            self.workedSeconds = workedSeconds ?? progressSeconds
         }
     }
 
@@ -1402,11 +1431,36 @@ struct MissionProgress: Identifiable, Equatable, Sendable {
     let progress: Double?
     /// 오늘 몫을 이미 받았다(또는 오늘 이미 적용됐다).
     let claimedToday: Bool
-    /// 달성했지만 **잔량이 가득 차서 못 받았다**(사장님 확정 4). claimedToday 와 **동시에 참일 수 없다** —
-    /// 서버가 상한에서는 장부를 안 쓰기 때문이다. 화면은 이 줄에 "가득 차서 오늘은 못 받아요"를 그린다.
+    /// **잔량이 상한 이상이다**(서버 20260901140000). "랩을 방금 놓쳤다"가 아니라 **상태**라는 것이 요점이다 —
+    /// 순간 신호였을 때는 3시간에 한 번, 그 순간 팝오버를 열고 있어야만 보여서 정작 계속 잃는 사람이
+    /// 왜 잃는지 몰랐다. 지금은 가득 찬 동안 계속 참이고 한 발 쓰면 사라진다.
+    /// claimedToday 와 **동시에 참일 수 없다**(서버의 claimed 가 랩 방식에서 언제나 false 다).
+    /// 화면은 이 줄의 보조 문장을 경고로 덮는다(`MissionCopy.cappedNotice`).
     let cappedToday: Bool
     /// 그 줄의 오른쪽 보조 문장(진행 시간·연속 일수 등). 문장은 여기서 한 번만 만든다.
     let detail: String
+    /// 오늘 **실제로 받은 랩 수**. 랩 방식(2026-09-01)에서 "완료"가 사라진 자리를 이 수가 대신한다 —
+    /// 서버의 `claimed` 가 언제나 false 라 그것만 보면 화면은 하루 종일 "아직 못 받았다"고 말한다.
+    let lapsGrantedToday: Int
+
+    /// 멤버와이즈 init 을 **명시**하는 이유는 소스 호환이다. 필드를 그냥 더하면 암묵 멤버와이즈가
+    /// 필수 인자를 하나 늘려 기존 생성 지점이 전부 컴파일 오류가 난다. 맨 뒤 + 기본값 0
+    /// (= "오늘 받은 랩이 없다")이라야 옛 호출부가 그대로 산다.
+    init(
+        kind: Kind,
+        progress: Double?,
+        claimedToday: Bool,
+        cappedToday: Bool,
+        detail: String,
+        lapsGrantedToday: Int = 0
+    ) {
+        self.kind = kind
+        self.progress = progress
+        self.claimedToday = claimedToday
+        self.cappedToday = cappedToday
+        self.detail = detail
+        self.lapsGrantedToday = lapsGrantedToday
+    }
 
     /// 서버 응답 → 미션 목록. **순수 함수라 테스트가 이 한 함수로 화면 전체의 규칙을 고정한다.**
     ///
@@ -1428,14 +1482,28 @@ struct MissionProgress: Identifiable, Equatable, Sendable {
                 ?? response.missions.first { $0.key == Kind.todayThreeHours.rawValue }?.targetSeconds
                 ?? defaultTargetSeconds
         )
+        // ★ done 은 랩 방식(2026-09-01) 이후 **현재 랩의 진행**(0…target)이지 그날 총합이 아니다.
+        //   그날 총합이 필요하면 today?.workedSeconds 를 읽어라.
+        //   폴백 `?? response.workedSecondsToday` 는 **구서버에서만** 맞는 값이다 — 거기서는
+        //   progress_seconds 가 곧 그날 총합이었고 랩 개념 자체가 없었다. 랩 서버에서 오늘 행이
+        //   없다는 건 근무가 0초라는 뜻이라 두 값이 어차피 같아, 이 폴백은 그대로 둬도 해가 없다.
         let done = today?.progressSeconds ?? response.workedSecondsToday
+        let lapsGrantedToday = today?.lapsGranted ?? 0
+        let remaining = max(0, target - done)
         rows.append(
             MissionProgress(
                 kind: .todayThreeHours,
                 progress: min(1, Double(done) / Double(target)),
+                // claimed 를 계속 읽는 이유: 랩 서버는 언제나 false 를 보내지만 **랩 이전 서버는 여기에
+                // 진짜 완료를 담는다**. 지우면 그 서버에 붙은 화면이 받은 몫을 못 받은 것으로 그린다.
                 claimedToday: today?.claimed ?? false,
                 cappedToday: today?.capped ?? false,
-                detail: "\(hoursText(done)) / \(hoursText(target))"
+                // 랩은 반복되므로 문장의 주어는 '완료'가 아니라 **다음 하나까지 남은 시간**이다.
+                // (상한에 걸린 줄은 뷰가 cappedNotice 로 덮으므로 여기서 소멸을 말하지 않는다.)
+                detail: lapsGrantedToday >= 1
+                    ? "오늘 \(lapsGrantedToday)개 · 다음까지 \(hoursText(remaining))"
+                    : "다음 하나까지 \(hoursText(remaining))",
+                lapsGrantedToday: lapsGrantedToday
             )
         )
 
@@ -1447,7 +1515,10 @@ struct MissionProgress: Identifiable, Equatable, Sendable {
                 // (잔량 3인 사람은 보정이 안 걸린다) floorApplied 가 false 여도 정상이다.
                 claimedToday: response.floorApplied,
                 cappedToday: false,
-                detail: response.dailyFloor.map { "매일 \($0)개까지" } ?? "매일 자동 충전"
+                // ★ "매일 N개까지"에서 바꾼 이유: 바로 윗줄이 "근무 3시간마다"가 된 뒤로 같은 화면에서
+                //   **모순으로 읽힌다**("3시간마다 받는다"와 "하루 N개까지"). 밑바닥은 한도가 아니라
+                //   바닥을 받쳐 주는 보정이므로(잔량 3인 사람에겐 아무 일도 안 일어난다) 조건을 앞에 적는다.
+                detail: response.dailyFloor.map { "잔량 0이면 \($0)개로" } ?? "매일 자동 충전"
             )
         )
 

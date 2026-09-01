@@ -3304,9 +3304,13 @@ private struct InsightsPanel: View {
 /// 1행짜리 목록은 목록으로 안 읽히고 미완성으로 읽힌다. 이 화면이 답하는 질문은 "미션이 뭐가 있나"가
 /// 아니라 **"울트라가 몇 개고 어떻게 채우나"**이고, 그 답(잔량 + 충전 경로 3줄)은 지금도 한 화면을 채운다.
 enum MissionCopy {
+    /// 미션 줄의 제목. **3시간 줄이 "마다"인 이유**: 그건 하루 한 번 끝나는 퀘스트가 아니라
+    /// 그날 누적 3시간마다 다시 열리는 랩이다. "오늘 3시간"으로 적으면 한 번 채운 사람은 그날
+    /// 남은 근무에서 더 받을 게 없다고 읽고, 실제로 두 번째·세 번째로 들어오는 울트라를
+    /// 설명할 말이 화면에서 사라진다.
     static func title(_ kind: MissionProgress.Kind) -> String {
         switch kind {
-        case .todayThreeHours: return "오늘 3시간 근무"
+        case .todayThreeHours: return "근무 3시간마다"
         case .dailyFloor:      return "매일 첫 근무"
         case .arrivalStreak:   return "연속 출근"
         }
@@ -3339,13 +3343,28 @@ enum MissionCopy {
         }
     }
 
+    /// "받음" 칩. **이 칩이 남는 자리는 밑바닥 보정(`dailyFloor`) 한 줄뿐이다** — 3시간 줄이
+    /// 반복 지급으로 바뀌면서 서버가 그 줄의 `claimed` 를 **언제나 false 로 보낸다**(랩이 또
+    /// 열려 있으니 "오늘 치는 받았다"로 닫을 수가 없다). 죽은 문구처럼 보여도 지우면 안 된다.
     static let claimedChip = "받음"
     /// 잔량 상한(사장님 확정 4)에 걸려 **적립하지 않은** 날의 칩.
     static let cappedChip = "가득 참"
-    /// 그 사실을 말하는 문장. 서버는 상한에서 장부를 안 쓰므로 `claimed` 가 **false 로 남는다** —
-    /// 그래서 이 줄이 없으면 화면은 진행 바를 100%로 그린 채 "아직 못 받았다"처럼 보이고,
-    /// 사용자는 자기가 뭘 잘못했는지 영영 알 수 없다.
-    static let cappedNotice = "가득 차서 오늘은 못 받아요"
+    /// 그 사실을 말하는 문장. 이 줄이 없으면 화면은 진행 바를 100%로 그린 채 "아직 못 받았다"처럼
+    /// 보이고, 사용자는 자기가 뭘 잘못했는지 영영 알 수 없다.
+    ///
+    /// ★ `capped` 는 "랩을 놓쳤다"가 아니라 **"지금 잔량이 상한 이상이다"** 를 뜻한다
+    ///   (서버 20260901140000). 그래서 문장이 **현재형 경고**다 — 아직 아무것도 안 놓친 사람에게도
+    ///   참이 되므로 과거형("놓쳤어요")은 거짓말이 된다.
+    ///
+    /// ★ 왜 상태로 바꿨나: 예전 의미("이번 호출에서 랩이 소멸했다")는 **순간적**이라 사실상 아무도
+    ///   못 봤다. 가득 찬 사람이 3시간을 채우는 그 한 번의 sync 에서만 참이고 5분 뒤엔 사라지니,
+    ///   팝오버를 마침 그때 열고 있어야만 보였다. 정작 계속 잃는 사람이 왜 잃는지 모르는 것이
+    ///   경고의 실패다. 이제는 가득 찬 동안 계속 떠 있고, 한 발 쓰면 사라진다.
+    ///
+    /// ★ 소멸은 영구다: 서버가 상한에 걸린 랩에 `delta 0` 행을 적어 못 박으므로 **한 발 쓰고
+    ///   되받을 유예가 없다.** 그래서 "쓰지 않으면"이라는 조건절이 진짜 조건이다 — 지금 쓰면
+    ///   다음 3시간부터 다시 들어오고, 안 쓰면 그 랩은 영영 없다.
+    static let cappedNotice = "가득 찼어요 — 쓰지 않으면 놓쳐요"
 
     /// 그 줄 아래 보조 문장. 상한에 걸린 날은 진행 시간 대신 **그 사실**을 말한다
     /// (그날의 진행률은 이미 100%라 시간을 말해 봐야 새로 알려 주는 것이 없다).
@@ -3354,6 +3373,11 @@ enum MissionCopy {
     }
 
     /// 그 줄 오른쪽에 무엇을 그리는가. **순수 값이라 뮤테이션이 여기서 죽는다.**
+    ///
+    /// ★ `.capped` → `.claimed` → `.reward` 순서를 건드리지 마라. `.claimed` 가 죽은 가지처럼
+    ///   보이는 것은 3시간 줄 때문인데(반복 지급이라 서버가 `claimed` 를 언제나 false 로 보내
+    ///   그 줄에는 "받음" 칩이 더 이상 뜨지 않는다), 밑바닥 보정 줄은 여전히 `claimedToday` 로
+    ///   이 가지를 탄다. 지우면 그쪽이 보상 칩("0개면 1개로")을 이미 받은 뒤에도 계속 그린다.
     static func chip(_ mission: MissionProgress) -> MissionChip {
         guard let reward = reward(mission.kind) else { return .none }
         if mission.cappedToday { return .capped }
@@ -3399,7 +3423,7 @@ enum UltraPanelCopy {
         guard let balance else { return loadingCaption }
         return balance > 0
             ? "\(UltraChargeStyle.holdSecondsText)초 꾹 누르면 한 개 써요"
-            : "아래 미션을 채우면 하나 생겨요"
+            : "근무 3시간마다 하나씩 생겨요"
     }
 
     static func balanceText(_ balance: Int?, unlimited: Bool = false) -> String {
@@ -3562,7 +3586,10 @@ private struct MissionRowView: View {
         HStack(spacing: 10) {
             Image(systemName: MissionCopy.icon(mission.kind))
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(mission.claimedToday ? CheckTheme.working : CheckTheme.accent)
+                // 랩 수도 함께 본다: 3시간 줄은 `claimed` 가 언제나 false라, 오늘 세 개를 받고도
+                // 아이콘이 영영 안 물들면 화면이 "아직 아무것도 안 줬다"고 거짓말한다.
+                .foregroundStyle(mission.claimedToday || mission.lapsGrantedToday > 0
+                                 ? CheckTheme.working : CheckTheme.accent)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {

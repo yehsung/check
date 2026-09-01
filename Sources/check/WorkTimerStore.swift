@@ -1935,10 +1935,16 @@ final class WorkTimerStore {
         //   이게 없으면 근무만 하고 패널을 한 번도 안 연 사용자는 그날 sync 가 0회라 코인이 영구 소실된다.
         //   축하(onReactionTrigger)를 쏘지 않는 이유: 여기서는 아직 **받았는지 모른다**. 판정은 서버다.
         //   상한에 걸렸을 수도, 이미 받았을 수도 있으므로 연출은 서버가 granted_now 를 준 뒤에만 나간다.
-        //   마일스톤 키를 쓰는 것은 하루 1회 스로틀 목적이다(멱등한 RPC 라 두 번 불려도 해는 없지만
+        //   마일스톤 키를 쓰는 것은 **랩당 1회** 스로틀 목적이다(멱등한 RPC 라 두 번 불려도 해는 없지만
         //   무료 플랜에서 15초마다 왕복을 내지 않기 위해).
-        if today >= missionWorkSeconds,
-           milestoneTracker.fireIfNeeded(MilestoneTracker.hourThreeKey, now: now) {
+        //   ★ 미션이 "그날 3시간 1회"에서 "3시간마다 반복 지급(랩)"으로 바뀌었으므로 스로틀 키도
+        //     랩 번호를 탄다. 하루 1회 키로는 첫 랩만 즉시 발화하고 랩 2·3·4는 근무 중 5분 주기 sync 가
+        //     올 때까지 밀린다 — 받은 순간과 알려 주는 순간이 최대 5분 어긋난다.
+        //   missionWorkSeconds 가 0 이하이면 랩을 0으로 접는다. 이 값은 서버가 준 target 에서 오므로
+        //   0/음수가 올 여지가 있고, 그대로 나누면 0 나눗셈으로 앱이 죽는다.
+        let lap = missionWorkSeconds > 0 ? today / missionWorkSeconds : 0
+        if lap >= 1,
+           milestoneTracker.fireIfNeeded(MilestoneTracker.ultraLapKey(lap), now: now) {
             syncUltraWallet(reason: .missionCandidate)
         }
     }
@@ -1955,9 +1961,19 @@ extension MilestoneTracker {
     /// 오늘 누적 **3시간** = 미션 1호의 목표. 기존 키(hour1/hour4/teamGoal/firstArrival)에는 이 자리가 없었다 —
     /// 이 키가 곧 blocker(서버 #3)이 지적한 "존재하지 않는 클라 호출 지점"이다.
     ///
-    /// **여기서 축하가 터지지 않는다.** 이 키는 하루 1회 스로틀일 뿐이고, 실제로 받았는지는 서버가 답한다.
+    /// **여기서 축하가 터지지 않는다.** 이 키는 랩당 1회 스로틀일 뿐이고, 실제로 받았는지는 서버가 답한다.
     /// (MilestoneTracker 본체는 agent-reactions 소유라 확장으로만 더한다 — 파일 경계를 넘지 않기 위해서다.)
     static let hourThreeKey = "hour3"
+
+    /// 랩 n(누적 3시간·6시간·9시간…)의 스로틀 키.
+    ///
+    /// **랩 1은 기존 `hourThreeKey`("hour3") 를 그대로 쓴다.** 새 키로 갈아 끼우면 오늘 이미 3시간
+    /// 지점에서 발화한 사용자가 같은 랩을 한 번 더 발화한다 — 멱등한 RPC 라 결과는 무해하지만
+    /// 무료 플랜에서 불필요한 왕복이고, 무엇보다 마일스톤 장부의 연속성이 끊긴다(어제까지 "hour3" 로
+    /// 남은 기록과 오늘부터의 기록이 다른 키가 되어 같은 사건을 두 이름으로 세게 된다).
+    static func ultraLapKey(_ lap: Int) -> String {
+        lap <= 1 ? hourThreeKey : "hour3.lap\(lap)"
+    }
 }
 
 extension WorkTimerStore {

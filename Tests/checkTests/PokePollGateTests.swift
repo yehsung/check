@@ -332,6 +332,10 @@ func ultraWalletResponseDecodesInvalidWithoutThrowing() throws {
 
 /// 성공 응답의 **모든 계약 키**를 실제 JSON 으로 통과시킨다. 직접 생성자로는 커스텀 디코더의 누락을
 /// 원리적으로 못 잡는다(PokeSendResponse 주석의 그 함정이 이 타입에도 그대로 있다).
+///
+/// 랩 3형제(`laps_settled`/`laps_granted`/`worked_seconds`)는 **여기 없다** — 일부러다. 이 응답은
+/// 그 키들을 모르는 서버(랩 전환 이전)의 모양이고, 그 서버에서도 디코드가 살아야 한다는 것이
+/// 이 테스트가 지키는 것이다. 새 키 쪽은 V0239UltraLapTests 가 있음/없음 양쪽으로 덮는다.
 @Test
 func ultraWalletResponseDecodesEveryContractKey() throws {
     let decoder = JSONDecoder()
@@ -445,7 +449,7 @@ func missionRowsUseTodayOnlyAndSurfaceCapped() {
 
     #expect(rows[1].progress == nil)       // 밑바닥 줄엔 진행 개념이 없다
     #expect(rows[1].claimedToday == false) // floor_applied=false = 오늘 보정이 안 걸렸다
-    #expect(rows[1].detail == "매일 1개까지")
+    #expect(rows[1].detail == "잔량 0이면 1개로")
     #expect(rows[2].detail == "4일 연속")
 
     // ★ 진짜 갈림길: **오늘 행이 아예 없을 때**. `kstDay == day` 대조를 빼면 어제 행이 오늘 줄로 올라와
@@ -500,9 +504,12 @@ func applyUltraWalletFiresRewardOnlyOnGrantedNow() {
     #expect(store.streakDays == 2)
 
     // ② 방금 받았다: 연출 1회 + 지속 증거.
+    // 문장이 "오늘 3시간"이 아니라 "3시간 채웠어요"인 이유는 랩 반복 지급이다 — 하루에 여러 번 오는
+    // 안내라 '오늘'을 주어로 쓰면 두 번째부터는 이미 지난 일을 다시 말하는 것처럼 읽힌다.
+    // 이 응답에는 laps_granted 가 없으므로(랩 이전 서버와 같은 모양) 개수 없는 쪽으로 접힌다.
     store.applyUltraWallet(row(grantedNow: true, claimed: true))
     #expect(fired == [.ultraCharged])
-    #expect(store.missionNotice == "오늘 3시간 — 울트라 +1")
+    #expect(store.missionNotice == "3시간 채웠어요 — 울트라 +1")
 }
 
 /// invalid 응답은 **서버 오류가 아니다**(비로그인/프로필 없음). 실패 플래그를 세우면 화면이
@@ -671,7 +678,7 @@ func closeUltraPanelReturnsToOriginWithoutSideEffects() {
     store.isPokePanelVisible = true
     store.lastShownMessage = ReceivedMessage(id: "m1", fromName: "영식", body: "밥?", createdAt: Date())
     store.openUltraPanel(from: .poke)
-    store.missionNotice = "오늘 3시간 — 울트라 +1"
+    store.missionNotice = "3시간 채웠어요 — 울트라 +1"
 
     store.closeUltraPanel()
 

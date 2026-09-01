@@ -253,24 +253,42 @@ struct UltraPokeButtonTests {
         }
     }
 
-    /// 잔량 상한(사장님 확정 4)에 걸린 날: **`claimed` 는 false 로 남는다**(서버가 장부를 안 쓴다).
-    /// 그래서 `capped` 를 안 보면 화면은 진행 바를 100%로 그린 채 "아직 못 받았다"처럼 보이고,
+    /// 잔량이 상한에 찬 상태: **`claimed` 는 false 로 남는다**(서버가 장부를 안 쓴다).
+    /// 그래서 `capped` 를 안 보면 화면은 진행 바만 그린 채 아무 말도 안 하고,
     /// 사용자는 자기가 뭘 잘못했는지 영영 알 수 없다.
+    ///
+    /// ★ v0.2.39 에서 `capped` 의 **뜻이 바뀌었다**. 예전엔 "이번 호출에서 랩이 소멸했다"라 순간적이었고,
+    ///   가득 찬 사람은 3시간마다 딱 한 번 그 순간 팝오버를 열고 있어야만 문구를 볼 수 있었다.
+    ///   이제는 **"지금 잔량이 상한 이상이다"** 를 뜻해서 가득 찬 동안 계속 떠 있는다 —
+    ///   그러면 아직 아무것도 안 놓친 사람에게도 뜨므로 과거형("놓쳤어요")은 거짓말이 된다.
+    ///   그래서 문장이 현재형 경고다.
     @Test func cappedMissionSaysWhyItGaveNothing() {
-        let capped = MissionProgress(kind: .todayThreeHours, progress: 1, claimedToday: false, cappedToday: true, detail: "3시간 / 3시간")
+        let capped = MissionProgress(kind: .todayThreeHours, progress: 1, claimedToday: false, cappedToday: true, detail: "다음 하나까지 0분")
         #expect(MissionCopy.chip(capped) == .capped)
-        #expect(MissionCopy.detail(capped) == "가득 차서 오늘은 못 받아요")
+        #expect(MissionCopy.cappedNotice == "가득 찼어요 — 쓰지 않으면 놓쳐요")
+        #expect(MissionCopy.detail(capped) == MissionCopy.cappedNotice)
+        // 지난 일이 아니라 **지금 상태**를 말한다. 과거형은 아직 아무것도 안 놓친 사람에게 거짓말이다.
+        #expect(MissionCopy.cappedNotice.contains("놓쳤") == false)
         // 보상 칩(⚡︎ +1)으로 그리면 **줄 수 없는 것을 약속**하는 것이다.
         #expect(MissionCopy.chip(capped) != .reward(MissionCopy.reward(.todayThreeHours) ?? ""))
         // '받음'으로 그리면 **주지 않은 것을 줬다고 말하는** 것이다.
         #expect(MissionCopy.chip(capped) != .claimed)
 
+        // ★ 새 뜻에서는 **랩이 소멸하지 않았어도** capped 가 참일 수 있다(그날 아직 3시간을 못 채웠는데
+        //   잔량만 가득한 아침). 그때도 화면이 깨지면 안 된다: 진행 바는 그대로 그려지고
+        //   보조 문장만 경고로 덮인다.
+        let cappedEarly = MissionProgress(kind: .todayThreeHours, progress: 0.2, claimedToday: false, cappedToday: true, detail: "다음 하나까지 2시간 24분")
+        #expect(cappedEarly.progress == 0.2, "상한이 진행률을 지워 버리면 사용자는 자기 근무가 어디쯤인지 못 본다.")
+        #expect(MissionCopy.detail(cappedEarly) == MissionCopy.cappedNotice)
+        #expect(MissionCopy.chip(cappedEarly) == .capped)
+
         // 평상시 세 상태는 서로 다르다.
-        let pending = MissionProgress(kind: .todayThreeHours, progress: 0.4, claimedToday: false, cappedToday: false, detail: "1시간 12분 / 3시간")
-        let claimed = MissionProgress(kind: .todayThreeHours, progress: 1, claimedToday: true, cappedToday: false, detail: "3시간 / 3시간")
+        let pending = MissionProgress(kind: .todayThreeHours, progress: 0.4, claimedToday: false, cappedToday: false, detail: "다음 하나까지 1시간 48분")
+        // '받음' 칩이 남는 자리는 밑바닥 보정 줄이다 — 3시간 줄의 claimed 는 서버가 언제나 false 로 보낸다.
+        let claimed = MissionProgress(kind: .dailyFloor, progress: nil, claimedToday: true, cappedToday: false, detail: "잔량 0이면 1개로")
         #expect(MissionCopy.chip(pending) == .reward("⚡︎ +1"))
         #expect(MissionCopy.chip(claimed) == .claimed)
-        // 진행 시간은 상한에 안 걸린 날에만 말한다.
+        // 진행 시간은 상한에 안 걸린 줄에서만 말한다.
         #expect(MissionCopy.detail(pending) == pending.detail)
         #expect(MissionCopy.detail(claimed) == claimed.detail)
     }
@@ -295,7 +313,9 @@ struct UltraPokeButtonTests {
         let some = UltraPanelCopy.heroCaption(balance: 3, hasFailed: false)
         #expect(Set([failed, loading, empty, some]).count == 4)
         // 0개인 사람에게는 **길을 알려 준다**(사실만 말하고 끝내면 그 화면은 막다른 길이다).
-        #expect(empty.contains("미션"))
+        // v0.2.39 부터 그 길은 "미션"이라는 추상어가 아니라 **조건 그 자체**를 말한다 —
+        // 잔량이 0 인 사람이 알아야 할 것은 미션 화면이 어디 있는지가 아니라 언제 다시 생기는지다.
+        #expect(empty == "근무 3시간마다 하나씩 생겨요")
         // 홀드 시간은 상수에서 만든다 — 리터럴로 적으면 상수를 바꾼 날 화면만 옛 시간을 말한다.
         #expect(some.contains(UltraChargeStyle.holdSecondsText))
     }

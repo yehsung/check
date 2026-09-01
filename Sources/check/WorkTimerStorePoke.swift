@@ -294,7 +294,13 @@ extension WorkTimerStore {
         guard response.missions.contains(where: { $0.grantedNow }) else { return }
         // 연출은 2초면 사라진다. 자리를 비운 사용자에게 그것만으로는 아무 증거도 남지 않으므로
         // **지속 증거**를 같은 지점에서 남긴다(패널을 열면 이 줄이 그를 기다린다).
-        missionNotice = "오늘 3시간 — 울트라 +1"
+        // 랩 반복 지급이라 오늘 몫이 항상 1개는 아니다. granted_now 행들의 lapsGranted 최대값이
+        // **오늘 실제로 받은 랩 수**다(어제 소급 행이 섞여도 큰 쪽이 오늘 몫이다). 0 은 랩 이전 서버가
+        // 그 키를 안 보낸 것이므로 1로 접는다 — "오늘 0개"는 받은 사람에게 거짓말이다.
+        let lapsToday = response.missions.filter { $0.grantedNow }.map { $0.lapsGranted }.max() ?? 1
+        missionNotice = lapsToday >= 2
+            ? "3시간 채웠어요 — 울트라 +1 (오늘 \(lapsToday)개)"
+            : "3시간 채웠어요 — 울트라 +1"
         onRewardTrigger?(.ultraCharged)
     }
 

@@ -322,26 +322,55 @@ final class URLProtocolStub: URLProtocol {
         )
     }
 
-    /// ultra_wallet_sync 픽스처. 기본은 "오늘 3시간을 방금 채워 +1 을 받았다" 이고,
+    /// 랩 하나의 길이(3시간). 서버 `mission_work_seconds()` 와 같은 값이다.
+    static let walletFixtureLapSeconds = 10_800
+    /// **현재 랩**의 진행(15분). 0 으로 두면 "진행이 그날 총합이 아니라 현재 랩 기준인가"를 묻는 단언이
+    /// 0 == 0 으로 우연히 통과해 버린다 — 그래서 총합과 절대 같아질 수 없는 값을 심는다.
+    static let walletFixtureLapProgressSeconds = 900
+
+    /// ultra_wallet_sync 픽스처. 기본은 "오늘 3시간짜리 랩을 하나 정산해 +1 을 방금 받았다" 이고,
     /// host 에 "wallet-missing" 이 들어가면 RPC 부재(PGRST202)를, "wallet-claimed" 가 들어가면
-    /// **이미 받은 날**(granted_now=false)을 돌려준다 — 연출 트리거가 claimed 가 아니라 granted_now 인지
-    /// 가르는 유일한 픽스처 쌍이다.
+    /// **이번 호출에서는 안 받았다**(granted_now=false)를 돌려준다 — 연출 트리거가 claimed 가 아니라
+    /// granted_now 인지 가르는 유일한 픽스처 쌍이다.
+    /// host 에 "wallet-lapsN" 이 들어가면 오늘 랩을 N 개 정산한 상태가 된다(안 적으면 1개).
+    ///
+    /// ★ 2026-09-01 랩 전환 뒤 **새 서버가 실제로 보내는 모양**이다. 세 가지가 예전과 다르다:
+    ///   ① `claimed` 는 언제나 false — 랩이 또 열려 있으니 "오늘 치는 받았다"로 닫을 수가 없다.
+    ///   ② `progress_seconds` 는 그날 총합이 아니라 **현재 랩의 진행**이다.
+    ///   ③ 그날 총합은 새 키 `worked_seconds` 로 옮겨 갔고, 받은 랩 수는 `laps_granted` 가 말한다.
+    ///   옛 모양(claimed=true + progress_seconds=총합)을 픽스처에 남겨 두면, 스텁만 보는 테스트들이
+    ///   실서버에서 이미 사라진 화면을 계속 초록으로 지킨다.
     private static func ultraWalletSyncData(for request: URLRequest) -> Data {
         let host = request.url?.host ?? ""
         if host.contains("wallet-missing") {
             return Data(#"{"code":"PGRST202","message":"Could not find the function public.ultra_wallet_sync(p_days_back) in the schema cache"}"#.utf8)
         }
         let grantedNow = host.contains("wallet-claimed") ? "false" : "true"
+        let laps = walletFixtureLapCount(in: host)
+        // 그날 총합 = 정산한 랩들 + 지금 돌고 있는 랩의 진행. 이 항등식이 깨진 픽스처는
+        // 서버가 절대 못 보내는 상태라, 그걸로 초록이 된 코드는 실서버에서 무슨 짓을 할지 모른다.
+        let workedSeconds = laps * walletFixtureLapSeconds + walletFixtureLapProgressSeconds
         return Data(
             """
-            {"status":"ok","balance":3,"balance_cap":5,"daily_floor":1,"day":"2026-08-19",
+            {"status":"ok","balance":1,"balance_cap":3,"daily_floor":1,"day":"2026-08-19",
              "floor_applied":true,
-             "missions":[{"key":"work3h","kst_day":"2026-08-19","target_seconds":10800,
-                          "progress_seconds":14400,"claimed":true,"granted_now":\(grantedNow),"capped":false}],
-             "worked_seconds_closed":14400,"worked_seconds_open":0,
+             "missions":[{"key":"work3h","kst_day":"2026-08-19","target_seconds":\(walletFixtureLapSeconds),
+                          "progress_seconds":\(walletFixtureLapProgressSeconds),"claimed":false,
+                          "granted_now":\(grantedNow),"capped":false,
+                          "laps_settled":\(laps),"laps_granted":\(laps),"worked_seconds":\(workedSeconds)}],
+             "worked_seconds_closed":\(workedSeconds),"worked_seconds_open":0,
              "streak_days":3,"streak_includes_today":true,"measured_at":1787098516}
             """.utf8
         )
+    }
+
+    /// host 의 "wallet-lapsN" 에서 N 을 읽는다(없으면 1). 호스트 이름으로 고르는 이유는 이 스텁의
+    /// 다른 분기(wallet-missing / wallet-claimed)와 같다 — 테스트마다 고유 호스트를 쓰므로
+    /// 병렬 실행에서 서로의 픽스처를 덮어쓸 수 없다.
+    private static func walletFixtureLapCount(in host: String) -> Int {
+        guard let marker = host.range(of: "wallet-laps") else { return 1 }
+        let digits = host[marker.upperBound...].prefix { $0.isNumber }
+        return Int(digits) ?? 1
     }
 
     // 스텁 팀 픽스처가 반환하는 기본 팀 id. 스토어 테스트가 currentTeamID 를 직접 세팅할 때도 사용한다.

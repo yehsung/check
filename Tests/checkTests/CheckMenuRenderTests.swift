@@ -4073,6 +4073,9 @@ private func makeUltraPanelStore(
     capped: Bool = false,
     hasFailed: Bool = false,
     notice: String? = nil,
+    // 오늘 받은 랩 수. 3시간 줄은 서버가 `claimed` 를 언제나 false 로 보내므로, 이 수가 "오늘 뭔가 받았다"를
+    // 화면에 나타내는 유일한 입력이다(아이콘 착색이 이걸 읽는다).
+    lapsGrantedToday: Int = 0,
     now: Date = Date()
 ) -> WorkTimerStore {
     let store = makeTeamStore(members: [], now: now)
@@ -4089,9 +4092,11 @@ private func makeUltraPanelStore(
             progress: 1.0,
             claimedToday: claimed,
             cappedToday: capped,
-            detail: "3시간 / 3시간"
+            // 랩 방식(v0.2.39)의 보조 문장은 완료가 아니라 **다음 하나까지 남은 시간**을 말한다.
+            detail: "다음 하나까지 0분",
+            lapsGrantedToday: lapsGrantedToday
         ),
-        MissionProgress(kind: .dailyFloor, progress: nil, claimedToday: true, cappedToday: false, detail: "매일 1개까지"),
+        MissionProgress(kind: .dailyFloor, progress: nil, claimedToday: true, cappedToday: false, detail: "잔량 0이면 1개로"),
         MissionProgress(kind: .arrivalStreak, progress: nil, claimedToday: true, cappedToday: false, detail: "5일 연속")
     ]
     store.missions = Array(all.prefix(missionCount))
@@ -4105,7 +4110,9 @@ private func makeUltraPanelStore(
 func ultraPanelWindowHeightWithinCap() throws {
     // 최악 조합: 표시 상한(maxVisibleRows=4)을 넘긴 미션 + 안내줄 + 새 버전 배너.
     // 미션이 늘어나는 것은 예정된 일이라(지금 3개) 상한을 지금 못 박아 둔다.
-    let store = makeUltraPanelStore(balance: 5, missionCount: 3, notice: "오늘 3시간 — 울트라 +1")
+    // 안내줄은 **가장 긴 분기**를 쓴다(랩 여러 개를 받은 날). lineLimit(1) + 고정 높이라 문장이 길어져도
+    // 창이 자라면 안 되는데, 짧은 쪽으로 재면 그 계약이 재어지지 않는다.
+    let store = makeUltraPanelStore(balance: 3, missionCount: 3, notice: "3시간 채웠어요 — 울트라 +1 (오늘 3개)")
     // 서버가 미션을 늘린 미래를 흉내 낸다(같은 순수 타입이라 화면은 그대로 그린다).
     store.missions += (0..<3).map {
         MissionProgress(kind: .todayThreeHours, progress: Double($0) / 3, claimedToday: false, cappedToday: false, detail: "미래 미션 \($0)")
@@ -4123,7 +4130,7 @@ func ultraPanelDrawsEachChipStateDifferently() throws {
     let pending = makeUltraPanelStore(missionCount: 1, now: now)
     let pendingTwin = makeUltraPanelStore(missionCount: 1, now: now)
     let claimed = makeUltraPanelStore(missionCount: 1, claimed: true, now: now)
-    let capped = makeUltraPanelStore(balance: 5, missionCount: 1, capped: true, now: now)
+    let capped = makeUltraPanelStore(balance: 3, missionCount: 1, capped: true, now: now)
 
     let base = try renderPNG(CheckMenuView(store: pending))
     // 대조군: 같은 입력이면 바이트까지 같다(없으면 아래 부등식이 렌더 잡음과 구별되지 않는다).
@@ -4133,6 +4140,16 @@ func ultraPanelDrawsEachChipStateDifferently() throws {
     //   서버가 상한에서 claimed 를 false 로 남기므로, 이 구별이 없으면 사용자는 진행 바 100% 를 보면서
     //   "왜 안 받아지지?"만 남는다.
     #expect((try renderPNG(CheckMenuView(store: claimed))) != (try renderPNG(CheckMenuView(store: capped))))
+
+    // ★ v0.2.39: 3시간 줄의 `claimed` 는 서버가 **언제나 false** 로 보낸다. 그래서 "오늘 받았다"를
+    //   화면에 나타내는 것은 랩 수뿐이고, 그걸 안 읽으면 세 개를 받은 사람의 줄이 하나도 못 받은 줄과
+    //   픽셀까지 같아진다 — 화면이 "아직 아무것도 안 줬다"고 거짓말하는 것이다.
+    let withLaps = makeUltraPanelStore(missionCount: 1, lapsGrantedToday: 3, now: now)
+    #expect(
+        base != (try renderPNG(CheckMenuView(store: withLaps))),
+        "오늘 랩을 3개 받은 화면이 0개 받은 화면과 같다 — 받은 사실이 그려지지 않았다."
+    )
+
     savePokeUISnapshot(base, "ultra-panel-pending")
     savePokeUISnapshot(try renderPNG(CheckMenuView(store: capped)), "ultra-panel-capped")
 }
@@ -4154,7 +4171,7 @@ func ultraPanelDistinguishesUnknownBalanceFromZero() throws {
 @MainActor
 @Test
 func ultraPanelSnapshot() throws {
-    let png = try renderPNG(CheckMenuView(store: makeUltraPanelStore(balance: 3, notice: "오늘 3시간 — 울트라 +1")))
+    let png = try renderPNG(CheckMenuView(store: makeUltraPanelStore(balance: 3, notice: "3시간 채웠어요 — 울트라 +1")))
     #expect(png.count > 0)
     savePokeUISnapshot(png, "ultra-panel-3missions")
 }
@@ -4241,8 +4258,16 @@ func theMissionRowAsksMissionCopyInsteadOfInventingItsOwnWording() throws {
     #expect(row.contains("MissionCopy.detail(mission)"), "보조문장을 뷰가 직접 만든다 — 상한(가득 참) 사실이 화면에서 사라진다.")
     #expect(!row.contains("mission.detail"), "뷰가 원본 detail 을 직접 읽는다 = MissionCopy.detail 의 상한 분기를 우회한다.")
     #expect(!row.contains("mission.cappedToday"), "뷰가 상한을 스스로 판정한다 — 판정은 MissionCopy 한 곳이어야 한다.")
+    // ★ v0.2.39: 아이콘 착색은 `claimedToday` **하나로는 못 정한다.** 3시간 줄의 claimed 는 서버가
+    //   언제나 false 로 보내므로(랩이 또 열려 있어 그날 치를 닫을 수 없다), 랩 수를 안 읽으면
+    //   오늘 세 개를 받은 사람의 아이콘이 영영 안 물들고 화면은 "아직 아무것도 안 줬다"고 말한다.
+    //   픽셀 테스트(ultraPanelDrawsEachChipStateDifferently)가 그림을, 이 줄이 근거를 못 박는다.
+    #expect(row.contains("mission.lapsGrantedToday"), "아이콘 착색이 랩 수를 안 읽는다 — 받은 사실이 화면에서 사라진다.")
+
     // 문구 리터럴이 뷰에 다시 적히지 않았는가(한 쪽만 고쳐지는 날이 온다).
     #expect(!row.contains(MissionCopy.cappedNotice))
+    // `claimedChip`("받음")은 **밑바닥 보정 줄에만** 남은 칩이다(3시간 줄은 위 이유로 이 가지를 못 탄다).
+    // 죽은 문구처럼 보여도 뷰가 리터럴로 베껴 쓰면 안 된다는 계약은 그대로다.
     #expect(!row.contains(MissionCopy.claimedChip))
     #expect(!row.contains(MissionCopy.cappedChip))
 }

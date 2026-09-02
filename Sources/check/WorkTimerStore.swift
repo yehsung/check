@@ -393,6 +393,14 @@ final class WorkTimerStore {
     @ObservationIgnored var lastUploadedUsage: TokenUsageMonthly?
     /// 마지막 업로드 시도 시각. 60초 스로틀 기준(난사 방지). 관찰 대상 아님.
     @ObservationIgnored var lastTokenUploadAt: Date = .distantPast
+    /// 마지막 **배경** 토큰 스캔 시각(팝오버가 닫힌 근무 중에 도는 저빈도 경로, refreshTokenUsageInBackgroundIfDue).
+    /// 업로드 스로틀과 따로 두는 이유: 저쪽이 재는 것은 '서버 왕복'이고 이쪽이 재는 것은 **전량 파일 순회**다 —
+    /// 비싼 쪽이 이 스탬프고, 60/600초 주기의 유일한 근거다. 앱 재시작마다 초기화돼도 무해하다
+    /// (첫 틱에 한 번 더 도는 것뿐). 관찰 대상 아님.
+    @ObservationIgnored var lastBackgroundTokenScanAt: Date = .distantPast
+    /// 마지막으로 하트비트로 보고한 스캔 시각. 같은 스캔을 두 번 보고하지 않게 하는 변경 게이트다
+    /// (lastUploadedUsage 와 같은 규약 — 성공에만 갱신해 실패는 다음 주기가 그대로 재시도한다). 관찰 대상 아님.
+    @ObservationIgnored var lastTokenScanHeartbeatAt: Date?
 
     // 토큰 순위판이 보고 있는 월(KST 'YYYY-MM'). 기본은 이번 달이고 ‹ › 로 과거 달을 볼 수 있다(미래로는 불가).
     // 패널을 닫으면 이번 달로 되돌린다 — 다음에 열 때 늘 현재 달부터 보이게.
@@ -1850,10 +1858,15 @@ final class WorkTimerStore {
                 await self?.refreshTokenBoardIfVisible()
                 await self?.refreshPokeDirectoryIfVisible()
                 // 내 월간 토큰 사용량을 변경 게이트+60초 스로틀로 서버에 올린다(팀원 보드 최신화). 대부분 게이트에서 즉시 반환.
-                // 팝오버가 열려 있을 때만 부른다 — 토큰 스캔은 행이 처음 그려질 때(팝오버 열림) 지연 시작되므로(D1 규약),
-                // 닫힌 상태에서 TokenUsageStore.shared 를 건드려 앱 시작부터 스캔이 도는 것을 막는다.
+                // 팝오버가 **열려 있으면** 스캔의 소유자는 뷰 루프(CheckMenuView 의 runRefreshLoop)이므로 여기서는
+                // 업로드만 한다. **닫혀 있으면** 그 뷰 루프가 없어 스캔 자체가 돌지 않는다 — 메뉴바를 안 여는 사람은
+                // Claude/Codex 를 아무리 써도 서버에 0 으로 남았다(실측: 활동 중인데 이번 달 행이 없는 사람 8명).
+                // 그래서 닫힌 동안에는 이쪽이 **근무 중일 때만** 저빈도로 직접 스캔한다.
+                // 앱 시작부터 스캔이 돌지 않게 하던 원래 의도는 그 `startedAt != nil` 게이트가 승계한다.
                 if self?.isMenuPresented == true {
                     await self?.uploadTokenUsageIfNeeded()
+                } else {
+                    await self?.refreshTokenUsageInBackgroundIfDue()
                 }
                 // 깨움 게이트가 미뤄 둔 리얼타임 `.didWake` 는 **본문이 끝난 여기**서 넣는다(M7) — 팀 상태 반영·되맞춤 뒤라야
                 // 잠자기 정정으로 방금 닫힌 세션에 대고 조인했다가 곧바로 끊는 헛왕복이 없고, 본문의 마지막 요청 뒤라야
@@ -2277,6 +2290,10 @@ extension WorkTimerStore {
         tokenBoardFailed = false
         lastUploadedUsage = nil
         lastTokenUploadAt = .distantPast
+        // 하트비트 도장도 계정에 묶인 사실이다(user_id 로 들어간다). 남기면 새 계정의 첫 스캔이 앞 계정의
+        // 스캔 시각과 같아 보여 보고가 한 주기 밀린다. 배경 스캔 주기 스탬프는 **일부러 남긴다** —
+        // 그건 계정이 아니라 이 맥의 순회 비용을 재는 값이라, 로그아웃/재로그인이 전량 순회를 다시 열 이유가 없다.
+        lastTokenScanHeartbeatAt = nil
         // 콕찌르기/공개 설정 상태도 함께 비운다(리그·토큰 보드와 동일 규약).
         pokeDirectory = []
         isPokePanelVisible = false

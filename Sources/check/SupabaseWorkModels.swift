@@ -500,6 +500,29 @@ extension TokenUsageUpsertRequest {
     }
 }
 
+/// token_usage_device_monthly **스캐너 하트비트** 본문. 위 TokenUsageUpsertRequest 와 같은 표·같은 충돌키
+/// ((user_id, month, device_id))를 쓰지만 **토큰 컬럼을 하나도 담지 않는다** — 그것이 이 타입의 존재 이유다.
+///
+/// TokenUsageUpsertRequest 를 재사용하지 않는 이유: 그 타입은 토큰 컬럼(claude_*/codex_*/total/today_*)을
+/// 갖고 있어 본문에 그대로 실린다. 하트비트는 합계가 0 일 때도 나가야 하므로 그 값들은 0 으로 실리고,
+/// PostgREST 의 upsert 는 본문에 온 컬럼을 그대로 SET 하므로 **그 기기의 이번 달 누적치가 통째로 0 으로 밀린다.**
+/// 반대로 본문에 **없는** 컬럼은 갱신하지 않는다(이 저장소가 created_at 을 보존하는 데 이미 기대는 성질 —
+/// 20260726010000_token_usage_device.sql:57). 그래서 필드를 이 다섯 개로 묶어 두는 것 자체가 안전장치다.
+/// 토큰 컬럼을 여기에 더하지 마라.
+///
+/// 인코더는 keyEncodingStrategy = .convertToSnakeCase 라(SupabaseWorkService.init) 카멜로 적으면
+/// user_id·month·device_id·last_scan_at·scan_files 로 나간다 — CodingKeys 를 따로 두지 않는 이유다.
+struct TokenScanHeartbeatRequest: Encodable {
+    let userId: String
+    let month: String
+    let deviceId: String
+    /// 스캔을 마친 시각(ISO8601 문자열). 다른 timestamptz 요청과 같이 서비스의 dateFormatter 로 찍어 넣는다.
+    /// 이 값이 서버에 남아야 "총합 0" 이 미사용인지 스캐너 고장인지 갈린다 — 행 자체가 없던 시절엔 둘이 같아 보였다.
+    let lastScanAt: String
+    /// 그 스캔이 stat 한 파일 수(claude+codex). 0 이면 "스캔은 돌았는데 볼 파일이 없었다"까지 구분된다.
+    let scanFiles: Int
+}
+
 /// 옛 표 token_usage_monthly upsert 본문(= v0.2.10 이 쓰던 그 모양, device_id 없음).
 /// v0.2.11 도 이 표를 계속 갱신한다 — 이유는 SupabaseWorkService.upsertLegacyTokenUsage 주석 참조.
 struct TokenUsageLegacyUpsertRequest: Encodable {

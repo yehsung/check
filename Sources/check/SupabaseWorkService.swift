@@ -1016,6 +1016,43 @@ actor SupabaseWorkService {
         )
     }
 
+    /// 스캐너 하트비트. **토큰 값과 무관하게** "스캔이 돌았고 파일을 N개 봤다"만 남긴다.
+    /// 필요한 이유: 사용량 업로드는 합계가 0 이면 아예 나가지 않아, 서버에서 "Claude/Codex 를 안 쓴 사람"과
+    /// "스캐너가 죽은 사람"이 똑같이 '행 없음'으로 보였다(2026-09-02 에 이 구분이 안 돼 원인 판별이 길어졌다).
+    /// 이 요청은 총합과 무관하게 나가므로 last_scan_at 의 유무·신선도가 그 둘을 가른다.
+    ///
+    /// ★ 본문은 user_id·month·device_id·last_scan_at·scan_files **다섯 개뿐**이다. 토큰 컬럼을 절대 싣지 마라 —
+    /// PostgREST 의 upsert 는 본문에 온 컬럼만 SET 하고 본문에 없는 컬럼은 건드리지 않는데
+    /// (이 저장소가 created_at 을 보존하는 데 이미 기대는 성질, 20260726010000_token_usage_device.sql:57),
+    /// 하트비트는 합계 0 일 때도 나가므로 토큰 컬럼을 0 으로 실으면 **그 기기의 이번 달 누적치를 통째로 0 으로 민다.**
+    /// 요청 타입을 TokenUsageUpsertRequest 가 아닌 전용 TokenScanHeartbeatRequest 로 둔 것도 같은 이유다 —
+    /// 그 타입은 토큰 컬럼을 갖고 있어 재사용하는 순간 이 위험이 그대로 따라 들어온다.
+    /// 나머지(경로·on_conflict·Prefer)는 upsertTokenUsage 와 같은 관용구다 — 행이 없으면 insert 되고,
+    /// 있으면 이 두 컬럼만 갱신된다. 시각 포맷도 다른 timestamptz 요청과 같은 dateFormatter(ISO8601)를 쓴다.
+    func sendTokenScanHeartbeat(
+        accessToken: String,
+        userID: String,
+        month: String,
+        deviceID: String,
+        files: Int,
+        scannedAt: Date
+    ) async throws {
+        try await sendNoBody(
+            path: "/rest/v1/token_usage_device_monthly",
+            method: "POST",
+            queryItems: [URLQueryItem(name: "on_conflict", value: "user_id,month,device_id")],
+            body: TokenScanHeartbeatRequest(
+                userId: userID,
+                month: month,
+                deviceId: deviceID,
+                lastScanAt: dateFormatter.string(from: scannedAt),
+                scanFiles: files
+            ),
+            accessToken: accessToken,
+            prefer: "resolution=merge-duplicates,return=minimal"
+        )
+    }
+
     /// 옛 표 token_usage_monthly 의 내 이번 달 행 총량을 읽는다(없으면 nil). select=total 한 줄만 읽는다.
     /// 쓰임: 옛 표를 덮어쓰기 **전** 게이트. 그 행이 아직 v0.2.10 인 다른 맥의 더 큰 누적치일 수 있어,
     /// 그때 내 값으로 덮으면 그 맥의 사용량이 순위에서 사라진다(upsertLegacyTokenUsage 주석 참조).

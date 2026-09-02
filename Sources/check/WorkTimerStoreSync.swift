@@ -605,6 +605,92 @@ extension WorkTimerStore {
         }
     }
 
+    // MARK: - 팝오버 없이 도는 배경 스캔 (v0.2.39)
+
+    /// 팝오버가 닫혀 있어도 **근무 중이면** 저빈도로 스캔 → 업로드 → 하트비트.
+    ///
+    /// 왜 필요한가: 토큰 사용량이 팝오버에 **이중으로** 묶여 있었다. 스캔은 CheckMenuView 의 `.task { runRefreshLoop() }`
+    /// 에서만 킥되고(TokenUsageStore.init 은 스캔을 안 켠다), 업로드도 refresh 루프의 `isMenuPresented` 게이트 뒤였다.
+    /// 그래서 메뉴바를 안 여는 사람은 Claude/Codex 를 아무리 써도 서버에 0 으로 남았다. 월이 바뀌면 더 나빴다 —
+    /// 스냅샷 복원이 '복원값의 달 == 이번 달'에만 걸려 currentMonthUsage 가 nil 이 되고, 업로드의
+    /// `guard let usage, usage.total > 0` 이 그 nil 을 걸러 **그 달 내내 한 건도** 안 올라갔다
+    /// (실측: 활동 중인데 이번 달 행이 없는 사람 8명, 지난달 수십억 토큰을 쓴 헤비 유저 포함).
+    ///
+    /// 왜 '근무 중'인가: Claude/Codex 를 쓰는 시간대가 곧 근무 시간대이고, 쉬는 동안 1,600 파일 stat 순회를
+    /// 돌리는 것은 v0.2.38 이 걷어낸 바로 그 비용이다. 팝오버가 닫힌 채 앱 시작부터 스캔이 도는 것을 막던
+    /// 옛 `isMenuPresented` 게이트의 의도도 이 `startedAt != nil` 가드가 그대로 승계한다.
+    func refreshTokenUsageInBackgroundIfDue(now: Date = Date()) async {
+        guard session != nil else { return }
+        // 수집 거부자에게선 스캔조차 돌리지 않는다 — 업로드가 서버에서 버려지는 것과 별개로,
+        // 애초에 그 사람 맥에서 파일을 읽을 이유가 없다(uploadTokenUsageIfNeeded 와 같은 규약).
+        guard tokenUsageCollect else { return }
+        guard startedAt != nil else { return }
+        // 롤오버 판정: 지금 들고 있는 값이 이번 달 것이 아니면(달이 막 바뀌었거나 이번 실행에서 한 번도 안 스캔했다)
+        // 서버에 이 달 행이 아예 없다는 뜻이다. 그 창을 10분씩 열어 둘 이유가 없어 주기를 1분으로 줄인다.
+        let rolledOver = tokenUsage.currentMonthUsage?.month != TokenUsageIncrementalScanner.kstMonthString(now)
+        // ★ 롤오버여도 **60초 하한은 반드시 둔다.** 스캔이 끝난 뒤에도 이 판정이 참으로 남는 경로가 둘 있다:
+        //   ⓐ **KST 월 경계 창**: 스캔이 잡은 달과 이 함수가 보는 now 의 달이 갈리는 순간(자정 전후).
+        //   ⓑ **총합 0 인 달의 다음 실행**: 그 달 스냅샷이 디스크에 안 남아(영속은 총합 0 을 거른다)
+        //      재시작 직후 currentMonthUsage 가 nil 인 채로 시작한다. 첫 스캔 전까지 계속 참이다.
+        //   하한이 없으면 그동안 **매 30초 틱마다 전량 순회**가 돈다(= 이 함수가 아끼려던 비용을 정반대로 쓴다).
+        //   ⚠️ "총합 0 이면 currentMonthUsage 가 안 채워진다"는 **틀린 근거다** — TokenUsageStore.apply 는
+        //      무조건 대입하고, 0 게이트가 걸린 것은 디스크 영속뿐이다. 그 근거로 읽고 하한을 걷어내지 마라.
+        let interval: TimeInterval = rolledOver ? 60 : 600
+        guard now.timeIntervalSince(lastBackgroundTokenScanAt) >= interval else { return }
+        // 스탬프를 **먼저** 찍는다. 아래 await(전량 순회 + 서버 왕복)를 기다리는 사이 다음 틱이 들어와도 이 스탬프에
+        // 걸려 되돌아가므로 순회가 겹치지 않는다(uploadTokenUsageIfNeeded 의 lastTokenUploadAt 과 같은 관용구).
+        lastBackgroundTokenScanAt = now
+        // 롤오버면 3초 스로틀을 무시하고 반드시 한 번 돈다 — '지금 값이 없다'는 것 자체가 스캔의 이유다.
+        if rolledOver {
+            await tokenUsage.refreshNow()
+        } else {
+            await tokenUsage.refreshIfStale()
+        }
+        await uploadTokenUsageIfNeeded(now: now)
+        await sendTokenScanHeartbeatIfNeeded(now: now)
+    }
+
+    /// 스캔이 돌았다는 **사실 자체**를 서버에 남긴다. 위 업로드가 게이트에서 되돌아가도(총합 0이거나 값이 그대로여도)
+    /// 보낸다 — 그게 이 경로의 존재 이유다. 업로드가 침묵하면 서버에서는 "안 쓴 사람"과 "스캐너가 죽은 사람"이
+    /// 똑같이 '행 없음'으로 보이고, 그 둘을 가를 신호가 이것 하나뿐이다(files = 이번 스캔이 stat 한 파일 수,
+    /// scannedAt = 그 스캔이 끝난 시각. files 0 은 "돌았는데 파일이 없었다", 하트비트 부재는 "안 돌았다").
+    ///
+    /// 업로드 게이트(총합 0·60초 스로틀·변경 게이트·옛 표 축소 금지)에는 손대지 않는다 — 이 하트비트는 그 옆에
+    /// 따로 붙는 별개 경로다. 같은 스캔을 두 번 보고하지 않게 lastScanAt 변경 게이트를 두고, 도장은 **성공에만**
+    /// 찍어 실패가 다음 주기에 그대로 재시도되게 한다. 실패는 조용히 삼킨다(진단 신호일 뿐 기능이 아니라,
+    /// 문구를 세워 봐야 사용자가 할 수 있는 일이 없다).
+    func sendTokenScanHeartbeatIfNeeded(now: Date = Date()) async {
+        guard session != nil else { return }
+        // 수집 거부자의 스캔 사실도 서버에 남기지 않는다(위 배경 스캔이 이미 막지만, 이 함수만 따로 불려도
+        // 프라이버시 규약이 깨지지 않게 여기서도 건다 — 게이트는 짝으로 있어야 한다).
+        guard tokenUsageCollect else { return }
+        // 이번 실행에서 스캔이 한 번도 안 끝났으면 보고할 사실이 없다(nil = 스캐너가 아직 안 돌았다).
+        guard let scannedAt = tokenUsage.lastScanAt else { return }
+        guard scannedAt != lastTokenScanHeartbeatAt else { return }
+        let files = tokenUsage.lastScanFileCount
+        let month = TokenUsageIncrementalScanner.kstMonthString(now)
+        let generation = sessionGeneration
+        do {
+            try await withSessionRetry { activeSession in
+                try await service.sendTokenScanHeartbeat(
+                    accessToken: activeSession.accessToken,
+                    userID: activeSession.userID,
+                    month: month,
+                    // 새 원장(user_id, month, device_id)이 쓰는 **그 기기 식별자 그대로**다. 여기서 따로 만들면
+                    // 하트비트가 가리키는 기기와 사용량 행의 기기가 어긋나, 맥 2대인 사람에게서 "스캔은 도는데
+                    // 값이 없는 기기"가 유령으로 하나 더 보인다.
+                    deviceID: deviceID,
+                    files: files,
+                    scannedAt: scannedAt
+                )
+            }
+            guard generation == sessionGeneration else { return }
+            lastTokenScanHeartbeatAt = scannedAt
+        } catch {
+            // 조용히 삼킨다 — 도장을 성공에만 찍으므로 다음 주기가 같은 스캔을 그대로 다시 보고한다.
+        }
+    }
+
     // MARK: - 옛 표 현재값 하루 1회 장부 (M8)
 
     /// 옛 표(token_usage_monthly) 현재값 GET 의 하루 1회 장부 키(UserDefaults). 값은

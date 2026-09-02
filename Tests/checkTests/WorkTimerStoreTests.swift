@@ -3096,12 +3096,31 @@ private func makeStubStore(host: String, userID: String = "00000000-0000-0000-00
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: isolatedDefaults()
+        defaults: isolatedDefaults(),
+        // ★ 토큰 스토어를 반드시 주입한다(v0.2.39). 폴링 루프가 팝오버 **닫힘** 가지에서
+        //   refreshTokenUsageInBackgroundIfDue 를 부르게 되면서, 근무 중 루프를 도는 테스트가 기본값
+        //   TokenUsageStore.shared 를 그대로 쓰면 **실제 홈**(~/.claude · ~/.codex ≈ 1,600 파일)을 순회하고
+        //   그 결과가 테스트 러너의 UserDefaults.standard 에 영속된다(TokenUsageStore.shared 주석이 경고하는 그 오염).
+        //   실측: idleRefreshLoopWakesWithinOneSliceWhenWorkStarts 가 shared.scanCount 를 1 로 올렸다.
+        tokenUsage: inertTokenStore()
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: userID)
     // 세션을 직접 주입하는 테스트는 로그인 흐름(confirmMembership)을 건너뛰므로 팀도 직접 확정한다.
     store.currentTeamID = URLProtocolStub.stubTeamID
     return store
+}
+
+/// 스캔이 절대 실홈을 건드리지 않는 토큰 스토어(빈 임시 홈 · 임시 캐시 · 격리 defaults).
+@MainActor
+private func inertTokenStore() -> TokenUsageStore {
+    let tmp = FileManager.default.temporaryDirectory
+    let tag = UUID().uuidString
+    return TokenUsageStore(
+        defaults: isolatedDefaults(),
+        homeDirectory: tmp.appendingPathComponent("check-tests-token-home-\(tag)", isDirectory: true),
+        cacheURL: tmp.appendingPathComponent("check-tests-token-cache-\(tag).json", isDirectory: false),
+        notificationCenter: NotificationCenter()
+    )
 }
 
 private func isolatedDefaults() -> UserDefaults {

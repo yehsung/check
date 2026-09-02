@@ -182,6 +182,13 @@ final class URLProtocolStub: URLProtocol {
            request.url?.path == "/rest/v1/token_usage_device_monthly" {
             return 404
         }
+        // v0.2.40 스캐너 하트비트만 5xx 로 떨어뜨리는 호스트. 도장(lastTokenScanHeartbeatAt)이 **성공에만**
+        // 찍혀 실패한 스캔이 다음 주기에 그대로 재시도되는지 검증용 — 실패에도 도장을 찍으면 그 스캔의 사실은
+        // 영영 서버에 안 남고, "안 씀"과 "스캐너 죽음"을 가를 신호가 그 창에서 사라진다.
+        if request.url?.host?.hasPrefix("v0240-hb-fails") == true,
+           request.url?.path == "/rest/v1/token_usage_device_monthly" {
+            return 500
+        }
         // 기기별 소유 주장 표만 없는 서버(= 이 릴리스의 마이그레이션 미적용) 재현 호스트.
         // 팀 상태 폴링이 이 404 하나로 통째로 죽지 않는지(= 앱이 서버 배포 순서에 인질로 잡히지 않는지) 검증용.
         if request.url?.host == "status-device-table-missing",

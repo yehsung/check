@@ -1197,6 +1197,14 @@ final class TokenUsageStore {
     @ObservationIgnored private(set) var scanCount = 0
     /// 지금까지 예약/수행한 캐시 저장 횟수(테스트 계측 — 스로틀·루프 종료·종료 훅이 실제로 몇 번 쓰는지 확인).
     @ObservationIgnored private(set) var saveCount = 0
+    /// 마지막 스캔이 stat 한 로그 파일 수(claude + codex). **0 은 "스캔이 돌았는데 파일이 없다"(= AI CLI 를 안 쓴다)**이고,
+    /// 갱신되지 않은 상태(lastScanAt == nil)는 "스캔이 아예 안 돌았다"(= 스캐너가 죽어 있다)다. 이 둘은 서버에서 보면
+    /// 똑같이 "사용량 0"으로 보이는데 원인도 처방도 정반대라, 두 값을 같이 올려 갈라 본다.
+    /// 2026-09-02 에 활동 중인데 9월 행이 없는 8명의 원인을 못 가른 것이 정확히 이 구분이 없어서였다.
+    @ObservationIgnored private(set) var lastScanFileCount: Int = 0
+    /// 마지막 스캔이 **끝난** 시각(주입 clock 기준). nil 은 이 프로세스에서 스캔이 한 번도 완주하지 않았다는 뜻이며,
+    /// lastScanFileCount == 0 ("스캔은 돌았고 파일이 없었다")과 구분되는 유일한 신호다 — 위 구분의 나머지 반쪽이다.
+    @ObservationIgnored private(set) var lastScanAt: Date?
 
     private let defaults: UserDefaults
     private let homeDirectory: URL
@@ -1284,6 +1292,17 @@ final class TokenUsageStore {
         await scanTask?.value
     }
 
+    /// 신선도 스로틀을 무시하고 1회 스캔한다(진행 중이면 그 완료를 기다린다 — 동시 스캔은 여전히 금지다).
+    /// 월 롤오버로 currentMonthUsage 가 nil 이 된 직후처럼 **지금 값이 없다는 것 자체가 이유**일 때만 쓴다.
+    /// minRefreshInterval(3초)은 팝오버 여닫이 churn 을 막으라고 있는 것이지, "이번 달 값이 아직 하나도 없다"를
+    /// 막으라고 있는 게 아니다 — 그 3초에 걸려 첫 스캔을 미루면 그 달 내내 0 으로 남는다(2026-09-02 결함).
+    /// 평상시 경로는 refreshIfStale() 이다(연타는 그쪽 스로틀이 막는다).
+    func refreshNow() async {
+        if scanTask != nil { await scanTask?.value; return }
+        startScan()
+        await scanTask?.value
+    }
+
     /// 진행 중 스캔이 있으면 끝날 때까지 기다린다. 테스트 결정성용 — .utility 백그라운드 태스크를 직접 await.
     func awaitScanCompletion() async {
         await scanTask?.value
@@ -1316,6 +1335,10 @@ final class TokenUsageStore {
             // 변경은 즉시 쓰지 않고 더러움만 누적한다 — (a) 저장 간격이 찼을 때만 디스크로.
             self.dirty.formUnion(result.stats.changedParts)
             self.apply(result.usage)
+            // 관측값은 스캔이 **완주한 뒤에만** 채운다 — 시작 시점에 찍으면 중간에 죽은 스캔도 "돌았다"로 보여
+            // "안 씀(파일 0)"과 "스캐너 죽음(미갱신)"의 구분이 무너진다.
+            self.lastScanFileCount = result.stats.claudeFilesStatted + result.stats.codexFilesStatted
+            self.lastScanAt = self.clock()
             self.persistIfDirty(force: false)
             self.isScanning = false
             self.scanTask = nil

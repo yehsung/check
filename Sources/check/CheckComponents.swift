@@ -721,7 +721,7 @@ struct ContributionGridView: View {
             RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                 .fill(Self.color(value: value, denominator: denominator, levels: levels, color: color))
                 .frame(width: Self.cellSize, height: Self.cellSize)
-                .help(helpText(week: week, weekday: weekday, value: value))
+                .help(Self.tooltipText(weekStart: weekStart, week: week, weekday: weekday, valueText: valueText(value)))
         }
     }
 
@@ -731,13 +731,16 @@ struct ContributionGridView: View {
         return values[week][weekday]
     }
 
-    private func helpText(week: Int, weekday: Int, value: Int) -> String {
+    /// 칸 툴팁 "9월 3일 · 4시간 12분". 날짜는 weekStart 에서 (주 × 7 + 요일)일 뒤의 KST 날짜다 — 이 오프셋이
+    /// 하루라도 어긋나면 잔디 전체가 하루씩 밀려 보이는데 픽셀 테스트는 .help 를 못 보므로 순수 함수로 떼어 검증한다.
+    /// valueText 는 호출부가 이미 만든 값 문구("근무 없음" / "1.2M 토큰")라 그리드는 데이터 종류를 모른다.
+    nonisolated static func tooltipText(weekStart: Date, week: Int, weekday: Int, valueText: String) -> String {
         let calendar = TeamWeeklyGoal.kstCalendar
         guard let day = calendar.date(byAdding: .day, value: week * WorkRhythmHeatmap.dayCount + weekday, to: weekStart) else {
-            return valueText(value)
+            return valueText
         }
         let c = calendar.dateComponents([.month, .day], from: day)
-        return "\(c.month ?? 0)월 \(c.day ?? 0)일 · \(valueText(value))"
+        return "\(c.month ?? 0)월 \(c.day ?? 0)일 · \(valueText)"
     }
 
     /// 농도 단계(0…levels). 0 은 기록 없음, levels 는 분모 이상. ceil 이라 1초라도 있으면 1단계 — 옅은 바탕과 구분된다.

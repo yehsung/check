@@ -176,7 +176,9 @@ func heatmapAndRetroCoverExactlyTheSameWeek() {
 
 @MainActor
 @Test
-func insightsFetchWindowCoversExactlyLastWeekAndTheWeekBefore() throws {
+func insightsFetchWindowStartsAtTheGrassWindowAndNeverAfterTheRetroBaseline() throws {
+    // (예전 이름 insightsFetchWindowCoversExactlyLastWeekAndTheWeekBefore — 창이 2주이던 시절의 단언이라
+    //  12주 잔디로 창이 13주가 된 뒤엔 이름이 정반대 사실을 말했다. 회귀를 이름만 보고 판단하는 사람을 위해 바꿨다.)
     let window = try #require(WorkInsightsWeekWindow.lastWeek(now: insightsNow))
 
     #expect(window.start == kst(2026, 7, 13))
@@ -531,6 +533,35 @@ func wideningTheFetchWindowLeavesHeatmapAndRetroUnchanged() {
     // 잔디만 넓어진 창의 행을 받는다.
     #expect(wide.dailyGrid.totalSeconds == narrow.dailyGrid.totalSeconds + 18 * 3_600)
     #expect(wide.dailyGrid.seconds[0][0] == 9 * 3_600)
+}
+
+@Test
+func insightsComputationIgnoresRowOrder() {
+    // 조회를 started_at 내림차순으로 바꾼 근거: 세 계산(히트맵·회고·잔디)은 전부 행 순서에 무관한 합산이어야 한다.
+    // 어느 하나라도 "먼저 온 행"에 기대면(예: 최다 요일 동률 판정, 세션 수) 정렬 방향을 바꾸는 순간 값이 흔들린다.
+    let rows = [
+        sessionRow(kst(2026, 4, 27, 9), kst(2026, 4, 27, 18), id: "oldest"),   // 잔디 첫 열
+        sessionRow(kst(2026, 6, 2, 9), kst(2026, 6, 2, 12), id: "mid"),
+        sessionRow(kst(2026, 7, 7, 9), kst(2026, 7, 7, 13), id: "prev"),       // 그 전주(회고 비교선)
+        sessionRow(kst(2026, 7, 13, 9), kst(2026, 7, 13, 12), id: "mon"),      // 지난주 월 3h
+        sessionRow(kst(2026, 7, 15, 9), kst(2026, 7, 15, 12), id: "wed"),      // 지난주 수 3h
+        sessionRow(kst(2026, 7, 14, 23, 30), kst(2026, 7, 15, 1, 10), id: "overnight"),   // 화 30분 + 수 70분
+        sessionRow(kst(2026, 7, 21, 9), kst(2026, 7, 21, 10), id: "yesterday")
+    ]
+    let ongoing = kst(2026, 7, 22, 10)
+
+    let ascending = WorkInsightsComputation.build(rows: rows, now: insightsNow, goalSeconds: 40 * 3_600, ongoingStart: ongoing)
+    let descending = WorkInsightsComputation.build(rows: rows.reversed(), now: insightsNow, goalSeconds: 40 * 3_600, ongoingStart: ongoing)
+    let shuffled = WorkInsightsComputation.build(rows: [rows[3], rows[6], rows[0], rows[5], rows[2], rows[4], rows[1]], now: insightsNow, goalSeconds: 40 * 3_600, ongoingStart: ongoing)
+
+    #expect(ascending == descending)
+    #expect(ascending == shuffled)
+    // 최다 요일(월 3h 대 수 3h + 자정 넘김 조각 70분 = 4h10m → 수요일)도 순서와 무관하게 같은 요일이다.
+    #expect(ascending.retro?.busiestDayIndex == 2)
+    #expect(descending.retro?.busiestDayIndex == 2)
+    #expect(ascending.retro?.sessionCount == 3)
+    #expect(ascending.dailyGrid.seconds[0][0] == 9 * 3_600)
+    #expect(descending.dailyGrid.seconds[12][2] == 2 * 3_600)
 }
 
 @Test

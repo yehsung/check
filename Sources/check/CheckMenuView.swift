@@ -3024,7 +3024,8 @@ enum InsightsPanelChromeBudget {
     /// 크롬이 하나도 없을 때 창 상한(700pt)까지 남는 여유(pt) = 700 − 기본 상태 실측 창 높이 − 5pt 안전 여유.
     /// 잔디가 붙으면서 본문 자연 높이만으로 상한을 넘겨 **음수**가 됐다(700 − 757 − 5): 크롬이 없어도 본문을
     /// 62pt 깎아 스크롤로 넘기고, 그 위에 얹히는 배너/목표 편집 행은 그만큼 더 깎는다(창은 늘 695pt 에 멈춘다).
-    /// 회고 카드 + 히트맵(307pt)은 깎인 뒤에도 온전히 보이고, 잔디는 첫 몇 행이 보여 아래에 더 있음을 알린다.
+    /// 회고 카드 + 히트맵(307pt)은 깎인 뒤에도 온전히 보이고, 잔디는 첫 서너 행만 접힘선 위에 남는다 — 그래서
+    /// 깎인 바닥엔 InsightsOverflowFade 로 "아래에 더 있다"를 알린다(스크롤 인디케이터는 기본 설정에서 숨는다).
     static let chromeSlack: CGFloat = -62
     /// 지난주가 비었을 때(회고 카드는 빈 줄 한 줄, 히트맵은 빈 격자에 피크 문구 없음)의 본문 자연 높이(pt).
     /// 340pt 폭 실측 창 660pt − 본문 밖 270pt. 이 상태는 잔디에만 기록이 있는 사용자(지난주 휴가)가 매주 만나는
@@ -3042,6 +3043,26 @@ enum InsightsPanelChromeBudget {
         let overflow = extraChromeHeight - slack
         guard overflow > 0 else { return nil }
         return max(minContentHeight, naturalHeight - overflow)
+    }
+}
+
+/// 개인 기록 본문이 예산에 깎여 스크롤로 넘어갔을 때 그 바닥에 까는 "아래에 더 있다" 단서 — 패널색으로 잦아드는
+/// 그라데이션. 기본 상태에서도 본문이 62pt 깎이면서 12주 잔디가 7행 중 서너 행만 접힘선 위에 보이는데, 스크롤
+/// 인디케이터는 마우스를 올리기 전엔 숨는 것이 macOS 기본이라 이것 말고는 잔디가 잘렸음을 알 길이 없다(잘린
+/// 행이 그냥 '3행짜리 잔디'로 읽힌다). 스크롤 내용 바닥에 같은 높이의 여백을 함께 두어, 끝까지 내리면 잔디의
+/// 일요일 행이 아니라 그 여백이 그라데이션 아래 놓인다.
+struct InsightsOverflowFade: View {
+    /// 그라데이션 높이(pt). 잔디 한 행(16pt) 남짓 — 잘린 행이 '흐려지며 이어진다'로 읽히는 최소 높이.
+    static let height: CGFloat = 22
+
+    var body: some View {
+        LinearGradient(
+            colors: [CheckTheme.panel.opacity(0), CheckTheme.panel],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: Self.height)
+        .allowsHitTesting(false)
     }
 }
 
@@ -3154,19 +3175,26 @@ private struct InsightsPanel: View {
             ? InsightsPanelChromeBudget.contentNaturalHeightWithoutLastWeek
             : InsightsPanelChromeBudget.contentNaturalHeight
         if let cap = InsightsPanelChromeBudget.capHeight(extraChromeHeight: extraChromeHeight, naturalHeight: naturalHeight) {
+            // 깎인 본문의 바닥엔 "아래에 더 있다" 그라데이션을 얹고, 스크롤 내용 끝에 같은 높이의 여백을 둔다
+            // (InsightsOverflowFade 참고). 두 경로(스크롤/클립)가 같은 모양이어야 스냅샷이 실제 화면을 말한다.
             if clipsOverflowInsteadOfScroll {
                 // 스냅샷 전용: 자연 높이로 그린 뒤 위에서부터 cap 만큼만 남기고 잘라 낸다(ScrollView 는 렌더 불가).
                 content
+                    .padding(.bottom, InsightsOverflowFade.height)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, maxHeight: cap, alignment: .top)
                     .clipped()
+                    .overlay(alignment: .bottom) { InsightsOverflowFade() }
             } else {
                 // 높이를 명시로 못 박는다(리그/토큰/찌르기 목록과 같은 관례) — ScrollView 의 ideal 높이 추론에
                 // 창 크기를 맡기지 않아야 팝오버 총높이가 상한 안에 결정적으로 들어온다.
                 ScrollView(.vertical, showsIndicators: true) {
-                    content.frame(maxWidth: .infinity)
+                    content
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, InsightsOverflowFade.height)
                 }
                 .frame(height: cap)
+                .overlay(alignment: .bottom) { InsightsOverflowFade() }
             }
         } else {
             content
@@ -3294,7 +3322,8 @@ private struct InsightsPanel: View {
                 denominator: WorkDailyGrid.fullDaySeconds,
                 levels: Self.dailyGridLevels,
                 color: CheckTheme.accent,
-                valueText: { $0 > 0 ? MenuBarStatusFormatter.hoursMinutes($0) : "근무 없음" }
+                // 툴팁 값 문구는 모델 쪽 순수 함수(테스트 대상) — 여기 리터럴을 두면 픽셀 테스트가 못 보는 사각지대다.
+                valueText: WorkDailyGrid.tooltipValueText
             )
         }
     }

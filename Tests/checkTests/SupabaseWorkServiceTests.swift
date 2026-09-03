@@ -1813,7 +1813,7 @@ func fetchMySessionsRequestsOwnCompletedSessionsSinceWindow() async throws {
     #expect(rows.first { $0.id == "s1" }?.durationSeconds == 10800)
     #expect(rows.first { $0.id == "s2" }?.endedAt == "2026-07-21T03:00:00Z")
 
-    // 요청: GET /rest/v1/work_sessions + 본인 필터 + 완료 세션 + since 창 + 시작순 + 상한.
+    // 요청: GET /rest/v1/work_sessions + 본인 필터 + 완료 세션 + since 창 + 최신순 + 상한.
     let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
     #expect(url.path == "/rest/v1/work_sessions")
     #expect(TokenBoardURLProtocol.lastMethod(forHost: testHost) == "GET")
@@ -1822,9 +1822,11 @@ func fetchMySessionsRequestsOwnCompletedSessionsSinceWindow() async throws {
     #expect(items.contains(URLQueryItem(name: "user_id", value: "eq.u1")))
     #expect(items.contains(URLQueryItem(name: "ended_at", value: "not.is.null")))
     #expect(items.contains(URLQueryItem(name: "ended_at", value: "gte.2026-07-01T00:00:00Z")))
-    #expect(items.contains(URLQueryItem(name: "order", value: "started_at.asc")))
-    // 상한 5000행: 조회 창이 13주(12주 잔디)로 넓어져 2000행으론 모자란다 — 자리 비움 자동 마감이 잦은 사용자는
-    // 하루 수십 건이라, 상한에 걸리면 started_at 오름차순이라 **가장 최근 주부터** 비어 지난주 회고가 통째로 사라진다.
+    // 정렬은 **내림차순**: 조회 창이 13주(12주 잔디)로 넓어져 어떤 상한(우리 limit 이든 서버 max_rows 든)에 걸리면
+    // 오름차순에선 가장 최근 주(지난주 회고·히트맵)가 먼저 사라지고, 내림차순에선 잔디의 가장 오래된 열만 옅어진다.
+    #expect(items.contains(URLQueryItem(name: "order", value: "started_at.desc")))
+    #expect(!items.contains(URLQueryItem(name: "order", value: "started_at.asc")))
+    // 상한 5000행: 2000행 시절의 잔재를 남기지 않는다(서버가 더 낮게 자를 수는 있어도 클라가 먼저 자르진 않는다).
     #expect(items.contains(URLQueryItem(name: "limit", value: "5000")))
     #expect(!items.contains(URLQueryItem(name: "limit", value: "2000")))
     // 팀 필터는 걸지 않는다(본인 세션만 보면 되고 RLS 가 나머지를 막는다).

@@ -282,6 +282,12 @@ struct WorkDailyGrid: Equatable, Sendable {
         TeamWeeklyGoal.kstCalendar.date(byAdding: .day, value: week * WorkRhythmHeatmap.dayCount + weekday, to: weekStart)
     }
 
+    /// 잔디 칸 툴팁의 값 문구. 0 은 "근무 없음"(옅은 바탕 칸을 가리켰을 때 "0시간 00분"보다 뜻이 분명하다),
+    /// 그 외는 헤더와 같은 "4시간 12분" 표기. 그리드 뷰가 날짜를 앞에 붙여 "9월 3일 · 4시간 12분"이 된다.
+    static func tooltipValueText(_ seconds: Int) -> String {
+        seconds > 0 ? MenuBarStatusFormatter.hoursMinutes(seconds) : "근무 없음"
+    }
+
     /// 창의 시작 = now 가 속한 KST 주의 월요일 − (weeks − 1)주. 이번 주가 마지막 열이 되도록 잡는다.
     static func windowStart(now: Date, weeks: Int = defaultWeeks) -> Date? {
         let thisWeekStart = TeamWeeklyGoal.koreanWeekStart(for: now)

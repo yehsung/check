@@ -198,9 +198,10 @@ func incrementalMatchesFullParseWhenFileGrowsBetweenStatAndRead() {
     if let p = cache.codexFileStates[path] {
         cache.codexFileStates[path] = CodexFileProgress(
             size: max(0, p.size - 120), mtimeMicros: p.mtimeMicros - 5_000_000,
-            consumedOffset: p.consumedOffset, prevCumulative: p.prevCumulative,
-            monthKey: p.monthKey, monthContribTotal: p.monthContribTotal,
-            dayKey: p.dayKey, dayContribTotal: p.dayContribTotal
+            consumedOffset: p.consumedOffset,
+            prevInput: p.prevInput, prevOutput: p.prevOutput, prevCached: p.prevCached,
+            monthKey: p.monthKey, monthInput: p.monthInput, monthOutput: p.monthOutput, monthCached: p.monthCached,
+            dayContrib: p.dayContrib
         )
     }
     divAppend(divEvent(cum: 900_000, at: base.addingTimeInterval(60)) + "\n",

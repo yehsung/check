@@ -104,6 +104,10 @@ final class WorkTimerStore {
     /// 테스트(특히 ImageRenderer 렌더)는 격리 인스턴스를 주입해, 뷰 .task 가 도는 렌더 중에도 실홈 스캔이
     /// 테스트 러너의 .standard 를 오염시키지 않게 한다(감지 대신 의존성 주입으로 격리 — 구조적 결정성).
     let tokenUsage: TokenUsageStore
+    /// Codex 계정 사용량 스토어(v0.2.41). 프로덕션은 CheckApp 이 `.live()` 를 넘기고, **기본값은 무해 인스턴스**(`inert()`)다 —
+    /// 주입을 잊은 테스트가 실제 `codex app-server` 를 띄우는 일이 구조적으로 없다(realtimeTransport 의 fail-closed 와 같은 결).
+    /// 업로드 래퍼(uploadTokenUsageIfNeeded(now:))가 스캔 뒤 refreshIfDue 를 부르고, 스냅샷은 업로드 본문과 내 행 툴팁에 실린다.
+    let codexAccount: CodexAccountUsageStore
     var session: SupabaseSession?
     var sessionGeneration = 0
     /// 진행 중 세션의 ID. **불변식: 항상 정규화된(소문자) 형태다** — 대입하는 모든 경로가
@@ -391,6 +395,9 @@ final class WorkTimerStore {
     var tokenBoardFailed = false
     /// 마지막으로 서버에 올린 월간 사용량. 변경 게이트 기준(같은 값이면 재업로드 안 함). 관찰 대상 아님.
     @ObservationIgnored var lastUploadedUsage: TokenUsageMonthly?
+    /// 마지막으로 서버에 올린 계정 집계 키("월합|누적|상태"). usage 가 그대로여도 이 키가 바뀌면 올린다 —
+    /// 계정 버킷은 로컬 로그와 무관하게 자라므로(다른 기기·클라우드) 변경 게이트가 usage 만 보면 계정값이 서버에 영영 안 간다.
+    @ObservationIgnored var lastUploadedAccountKey: String?
     /// 마지막 업로드 시도 시각. 60초 스로틀 기준(난사 방지). 관찰 대상 아님.
     @ObservationIgnored var lastTokenUploadAt: Date = .distantPast
     /// 마지막 **배경** 토큰 스캔 시각(팝오버가 닫힌 근무 중에 도는 저빈도 경로, refreshTokenUsageInBackgroundIfDue).
@@ -873,6 +880,9 @@ final class WorkTimerStore {
         tokenVault: TokenVault? = nil,
         workspaceNotifications: NotificationCenter? = NSWorkspace.shared.notificationCenter,
         tokenUsage: TokenUsageStore = .shared,
+        // ★ 기본값이 **nil** 이다(라이브 프로브가 아니라). nil 은 아래에서 무해 인스턴스로 풀린다 — 주입을 잊은 테스트가
+        //   실제 `codex` 프로세스를 띄우지 않는다. 프로덕션 조립은 CheckApp 한 곳뿐이고 소스 계약 테스트가 되묻는다.
+        codexAccount: CodexAccountUsageStore? = nil,
         // ★ 기본값이 **nil** 이다(라이브 전송자가 아니라). 이 저장소는 기본값이 라이브라서 스텁 주입을
         //   잊은 테스트가 실네트워크로 새어 나간 188초짜리 플레이키를 겪었다 — 그 종을 구조적으로 봉한다.
         //   여기서는 주입을 잊으면 소켓이 **아예 안 열린다**(fail-closed). 프로덕션 조립은 CheckApp 한 곳뿐이고,
@@ -885,6 +895,7 @@ final class WorkTimerStore {
         let resolvedVault = tokenVault ?? Self.defaultTokenVault(defaults: defaults)
         self.tokenVault = resolvedVault
         self.tokenUsage = tokenUsage
+        self.codexAccount = codexAccount ?? CodexAccountUsageStore.inert()
         milestoneTracker = MilestoneTracker(defaults: defaults)
         hasAnonKey = SupabaseConfig.anonKey(environment: environment) != nil
         email = defaults.string(forKey: Self.emailKey) ?? ""
@@ -2289,6 +2300,7 @@ extension WorkTimerStore {
         tokenBoardLoading = false
         tokenBoardFailed = false
         lastUploadedUsage = nil
+        lastUploadedAccountKey = nil
         lastTokenUploadAt = .distantPast
         // 하트비트 도장도 계정에 묶인 사실이다(user_id 로 들어간다). 남기면 새 계정의 첫 스캔이 앞 계정의
         // 스캔 시각과 같아 보여 보고가 한 주기 밀린다. 배경 스캔 주기 스탬프는 **일부러 남긴다** —

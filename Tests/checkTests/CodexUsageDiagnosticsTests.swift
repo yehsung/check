@@ -436,7 +436,7 @@ func codexDiagnosticsDedupTotalPlusDupTokensMatchesProductionScanner() {
 
     #expect(production.codexInput == 113_000)               // 50,000 + 60,000 + 3,000
     #expect(d.dedupTotal == 63_000)                         // 113,000 − 50,000
-    #expect(d.dedupTotal + d.dupTokens == production.codexInput)
+    #expect(d.dedupTotal + d.dupTokens == production.codexTotal)   // v0.2.41: 입력+출력 분리 후에도 항등식은 총합 기준
     #expect(d.finalSum == 714_000)                          // 350,000 + 360,000 + 4,000
     #expect(d.legacyTotal == 718_000)                       // 옛 산식(첫 이벤트 전액 포함)
     #expect(d.legacyTotal - d.dedupTotal - d.dupTokens == 605_000)   // 300,000 + 300,000 + 5,000
@@ -466,7 +466,7 @@ func codexDiagnosticsMatchesProductionScannerWithoutDuplicates() {
     #expect(d.dupTokens == 0)
     #expect(production.codexInput == 3_300)     // A 의 델타만(3,300). B 는 첫 이벤트뿐이라 0.
     #expect(d.dedupTotal == 3_300)
-    #expect(d.dedupTotal + d.dupTokens == production.codexInput)
+    #expect(d.dedupTotal + d.dupTokens == production.codexTotal)   // v0.2.41: 입력+출력 분리 후에도 항등식은 총합 기준
     #expect(d.legacyTotal - d.dedupTotal - d.dupTokens == 2_100)   // 1,200 + 900
     diagCleanup(home)
 }

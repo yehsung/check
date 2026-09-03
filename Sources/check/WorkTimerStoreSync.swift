@@ -493,23 +493,42 @@ extension WorkTimerStore {
 
     /// 팝오버 열림/refresh 루프에서 부르는 업로드 진입점. D1 의 로컬 월간 사용량을 읽어 게이트 판정 후 upsert 한다.
     /// (토큰 스토어 의존은 이 얇은 래퍼에만 둔다 — 주입된 tokenUsage 를 읽어, 결정 로직/테스트는 usage 주입 오버로드가 담당.)
+    ///
+    /// v0.2.41: 업로드 전에 Codex 계정 프로브를 간격(30분) 하에 돌린다. 게이트는 업로드와 같다(로그인 + 수집 허용) —
+    /// 수집 거부자에게선 프로브(프로세스)도 돌지 않는다. 월 롤오버(들고 있는 값의 달 ≠ 이번 달, **nil 포함** — 달이 바뀌면
+    /// TokenUsageStore 가 지난달 스냅샷을 복원하지 않아 nil 이 곧 롤오버의 실제 모양이다)면 force 로 당겨 돈다.
+    /// 그 판정은 첫 스캔 전(앱 시작 직후·팝오버 첫 열림)에도 참이라 30초 틱마다 걸리는데, 스토어의 60초 하한
+    /// (forcedRefreshFloor)이 프로세스 난사를 막는다 — 첫 스캔이 끝나면(수 초) usage 가 채워져 판정이 꺼진다.
     func uploadTokenUsageIfNeeded(now: Date = Date()) async {
-        await uploadTokenUsageIfNeeded(usage: tokenUsage.currentMonthUsage, now: now)
+        let usage = tokenUsage.currentMonthUsage
+        if session != nil, tokenUsageCollect {
+            let rolledOver = usage?.month != TokenUsageIncrementalScanner.kstMonthString(now)
+            await codexAccount.refreshIfDue(now: now, force: rolledOver)
+        }
+        await uploadTokenUsageIfNeeded(usage: usage, account: codexAccount.snapshot, accountStatus: codexAccount.lastStatus, now: now)
     }
 
     /// 변경 게이트 + 60초 스로틀. 마지막 업로드 값과 다르고 60초 지났을 때만 upsert 한다.
-    /// nil/총합 0 은 올리지 않는다(보드는 행 없는 팀원을 0 으로 채우므로 빈 행을 만들 필요가 없다).
+    /// nil/총합 0 은 올리지 않는다(보드는 행 없는 팀원을 0 으로 채우므로 빈 행을 만들 필요가 없다) — 단 **계정 월합이 있으면**
+    /// 로컬 0 이어도 올린다(`.zst` 만 남은 채 설치한 사람의 Codex 몫은 계정 집계만이 안다; 서버 보드가 greatest 로 쓴다).
     /// 새 기기별 표에 올리고, 옛 표에는 '그 행을 깎지 않을 때만' 같은 값을 올린다(이유는 아래 주석 참조).
     /// 실패는 조용히 — lastUploadedUsage 를 성공 시에만 갱신해 다음 주기에 재시도된다.
     /// 예외로 '스키마 부재'만은 문구로 드러낸다(마이그레이션 미적용을 운영자가 알 방법이 그것뿐이다).
-    func uploadTokenUsageIfNeeded(usage: TokenUsageMonthly?, now: Date) async {
+    func uploadTokenUsageIfNeeded(
+        usage: TokenUsageMonthly?, account: CodexAccountUsage? = nil, accountStatus: CodexAccountProbeStatus? = nil, now: Date
+    ) async {
         guard session != nil else { return }
         // 수집 끔이면 아예 보내지 않는다. 서버 트리거가 어차피 조용히 버리므로 결과는 같지만,
         // 그 사람 맥이 30초마다 헛왕복을 도는 것을 없앤다(설정이 서버에서 도착하기 전 기본값은 수집이라,
         // 로그인 직후 한두 번은 나갈 수 있다 — 그건 서버가 막는다).
         guard tokenUsageCollect else { return }
-        guard let usage, usage.total > 0 else { return }
-        guard usage != lastUploadedUsage, now.timeIntervalSince(lastTokenUploadAt) >= 60 else { return }
+        guard let usage else { return }
+        let accountMonth = account?.monthTotal(usage.month) ?? 0
+        guard usage.total > 0 || accountMonth > 0 else { return }
+        // 변경 게이트는 usage 와 계정 키 **둘 다** 본다 — usage 가 그대로여도 계정값(월합·누적·상태)이 바뀌면 올린다.
+        let accountKey = Self.accountUploadKey(account: account, month: usage.month, status: accountStatus)
+        let changed = usage != lastUploadedUsage || accountKey != lastUploadedAccountKey
+        guard changed, now.timeIntervalSince(lastTokenUploadAt) >= 60 else { return }
         // 시도 시각을 먼저 스탬프해, 실패하더라도 60초 안에는 재시도하지 않는다(난사 방지).
         // 이 한 줄이 아래 await 동안의 재진입도 함께 막는다 — 진단 계산을 기다리는 사이 다른 호출이 들어와도
         // 이 스탬프에 걸려 되돌아가므로 같은 주기가 두 번 올라가지 않는다.
@@ -572,6 +591,8 @@ extension WorkTimerStore {
                     userID: activeSession.userID,
                     usage: usage,
                     deviceID: deviceID,
+                    account: account,
+                    accountStatus: accountStatus,
                     diagnostics: diagnostics
                 )
             }
@@ -593,6 +614,7 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             // 성공 시에만 마지막 업로드 값을 갱신한다 — 실패면 값이 그대로라 다음 60초 후 변경 게이트가 다시 통과한다.
             lastUploadedUsage = usage
+            lastUploadedAccountKey = accountKey
         } catch {
             guard generation == sessionGeneration else { return }
             // 스키마 부재(= 새 표 마이그레이션 미적용)만은 조용히 넘기지 않는다. 예전엔 모든 실패를 삼켜,
@@ -603,6 +625,17 @@ extension WorkTimerStore {
                 if syncMessage != message { syncMessage = message }
             }
         }
+    }
+
+    /// 계정 집계의 변경 게이트 키 = 월합|누적|상태. 이 셋 중 하나라도 바뀌면 다른 키다. 스냅샷·상태가 둘 다 없으면 nil.
+    /// 받은 시각(fetchedAt)은 **일부러 뺀다** — 넣으면 30분마다 프로브가 성공할 때마다 값이 그대로여도 업로드가 나간다
+    /// (하루 48회 헛왕복). 서버의 codex_account_at 은 값이 바뀐 업로드의 시각으로 충분하고, 프로브 생존은 status 가 말한다.
+    static func accountUploadKey(account: CodexAccountUsage?, month: String, status: CodexAccountProbeStatus?) -> String? {
+        guard account != nil || status != nil else { return nil }
+        let monthTotal = account.map { String($0.monthTotal(month)) } ?? "-"
+        let lifetime = account?.lifetimeTokens.map(String.init) ?? "-"
+        let statusRaw = status.map { String($0.rawValue) } ?? "-"
+        return "\(monthTotal)|\(lifetime)|\(statusRaw)"
     }
 
     // MARK: - 팝오버 없이 도는 배경 스캔 (v0.2.39)
@@ -794,8 +827,10 @@ extension WorkTimerStore {
                 != Self.codexDiagnosticsStamp(build: build, now: now) else { return nil }
         // 홈은 메인 액터에서 미리 읽어 값으로 넘긴다(detached 클로저가 캡처하는 것은 Sendable 한 URL 뿐).
         let home = FileManager.default.homeDirectoryForCurrentUser
+        // 프로덕션 스캐너와 같은 Codex 홈(로그인 셸 CODEX_HOME 캐시)을 본다 — 루트가 다르면 항등식이 깨진다.
+        let codexHome = CodexAccountUsageProbe.cachedCodexHome()
         return await Task.detached(priority: .utility) {
-            CodexUsageDiagnosticsScanner.compute(homeDirectory: home, month: month, appBuild: build)
+            CodexUsageDiagnosticsScanner.compute(homeDirectory: home, codexHome: codexHome, month: month, appBuild: build)
         }.value
     }
 

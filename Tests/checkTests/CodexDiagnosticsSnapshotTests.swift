@@ -111,12 +111,13 @@ private let migrationDiagColumns: Set<String> = [
     "codex_diag_input_at_scan",
 ]
 
-/// 진단을 뺀 본문의 고정 키 12개.
+/// 진단을 뺀 본문의 고정 키 13개(v0.2.41 에 codex_cache_read 가 항상 실린다 — 20260903120000 컬럼).
 private let nonDiagColumns: Set<String> = [
     "user_id", "month", "device_id",
     "claude_input", "claude_output", "claude_cache_read", "claude_cache_creation",
     "codex_input", "codex_output", "total",
     "today_total", "today_date",
+    "codex_cache_read",
 ]
 
 @MainActor
@@ -175,9 +176,10 @@ func codexDiagKeysVanishEntirelyWhenDiagnosticsIsNil() throws {
     let keys = Set(object.keys)
 
     #expect(keys.filter { $0.hasPrefix("codex_diag") }.isEmpty)
-    // 남은 것은 고정 12키뿐 — 진단이 빠졌다고 다른 값이 함께 사라지지도, 늘어나지도 않는다.
+    // 남은 것은 고정 13키뿐 — 진단이 빠졌다고 다른 값이 함께 사라지지도, 늘어나지도 않는다(계정 키도 nil 이라 0개).
     #expect(keys == nonDiagColumns)
-    #expect(keys.count == 12)
+    #expect(keys.count == 13)
+    #expect(keys.filter { $0.hasPrefix("codex_account") }.isEmpty)
     // 스냅샷 컬럼도 예외가 아니다(이것만 값 타입으로 새면 평상시 업로드가 매번 덮는다).
     #expect(object["codex_diag_input_at_scan"] == nil)
 }

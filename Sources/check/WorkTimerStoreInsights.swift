@@ -1,23 +1,27 @@
 import Foundation
 
-// 개인 기록(히트맵·주간 회고) + 토큰 순위 월 이동의 스토어 계층.
+// 개인 기록(히트맵·주간 회고·12주 잔디) + 토큰 순위 월 이동의 스토어 계층.
 // 데이터 출처는 서버 work_sessions 의 내 완료 세션뿐이고(타인 데이터 미조회), 요일/주 계산은 전부
 // CheckWorkInsights 의 순수 함수가 담당한다(스토어는 로딩·상태 반영만).
 @MainActor
 extension WorkTimerStore {
-    /// 개인 기록 조회 창의 폭(주). 지난주(히트맵·회고 본체) + 그 전주(회고의 '전주 대비 증감' 비교선) = 2주.
-    /// 히트맵이 최근 8주 합산이던 시절엔 8주치를 받아 왔지만, 이제 그보다 오래된 행은 어느 계산도 쓰지 않는다.
-    static let insightsWeeks = 2
+    /// 개인 기록 조회 창의 폭(주). 12주 잔디(이번 주 + 지난 12주 = 13주)가 가장 넓은 소비자다. 히트맵·회고는
+    /// 같은 응답에서 지난주(+그 전주 비교선) 창을 스스로 잘라 쓰므로, 창을 넓혀도 그 둘의 값은 변하지 않는다.
+    /// 히트맵이 최근 8주 합산이던 시절엔 8주치를 받아 왔고, 지난주만 보게 되며 2주로 줄였다가 잔디로 다시 넓혔다.
+    static let insightsWeeks = WorkDailyGrid.defaultWeeks
     /// 이 주의 회고 배너를 이미 보여줬는지 기록하는 UserDefaults 키의 앞자리(계정별 접미사가 붙는다).
     static let retroBannerShownWeekKey = "check.retro.shownForWeek"
     /// 이 맥의 기기 식별자 UserDefaults 키(토큰 원장 분리용).
     static let deviceIDKey = "check.deviceID"
 
-    /// 개인 기록 조회 창의 시작(KST) = **그 전주 월요일 00:00**. 히트맵·회고가 쓰는 주 창 계산기에서 그대로 얻어
-    /// 두 계산이 한 번의 조회를 나눠 쓴다(경계를 여기서 따로 세면 조회가 회고 비교선보다 짧아질 수 있다).
+    /// 개인 기록 조회 창의 시작(KST) = min(회고 비교선인 **그 전주 월요일 00:00**, 잔디의 **12주 전 월요일 00:00**).
+    /// 세 계산이 한 번의 조회를 나눠 쓴다 — 어느 한쪽 계산기에서만 얻으면 조회가 다른 소비자의 창보다 짧아져
+    /// 그쪽 값이 조용히 0 으로 굳는다(예: 잔디의 앞 10주가 통째로 회색). 그래서 둘 다 물어 더 이른 쪽을 쓴다.
     static func insightsWindowStart(now: Date = Date()) -> Date {
-        WorkInsightsWeekWindow.lastWeek(now: now)?.previousStart
-            ?? TeamWeeklyGoal.koreanWeekStart(for: now)
+        let fallback = TeamWeeklyGoal.koreanWeekStart(for: now)
+        let retroStart = WorkInsightsWeekWindow.lastWeek(now: now)?.previousStart ?? fallback
+        let gridStart = WorkDailyGrid.windowStart(now: now, weeks: insightsWeeks) ?? fallback
+        return min(retroStart, gridStart)
     }
 
     /// 이 맥의 기기 식별자를 읽고, 없으면 한 번 만들어 저장한다(결함1 — 맥별 토큰 원장 분리 키).
@@ -36,7 +40,7 @@ extension WorkTimerStore {
         Task { @MainActor in await performLoadInsights() }
     }
 
-    /// 내 최근 완료 세션을 받아 히트맵/회고를 계산해 반영한다.
+    /// 내 최근 완료 세션을 받아 히트맵/회고/12주 잔디를 계산해 반영한다.
     /// 표준 로딩 관례: session 가드 → sessionGeneration 캡처 → withSessionRetry → 응답 반영 시 generation 재확인
     /// → 등호 가드 대입 → 취소 에러 조용히. 실패해도 문구를 흔들지 않는다(다음 재오픈에서 재시도).
     func performLoadInsights() async {
@@ -74,6 +78,7 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             if heatmap != computed.heatmap { heatmap = computed.heatmap }
             if retro != computed.retro { retro = computed.retro }
+            if dailyGrid != computed.dailyGrid { dailyGrid = computed.dailyGrid }
             if !insightsLoaded { insightsLoaded = true }
             if insightsFailed { insightsFailed = false }
             // 이 결과가 어느 주 기준인지 남긴다 — 앱을 켜 둔 채 주가 바뀌면 팝오버 오픈 훅이 재계산을 건다.
@@ -104,6 +109,9 @@ extension WorkTimerStore {
         if insightsLoaded { insightsLoaded = false }
         if heatmap != .empty { heatmap = .empty }
         if retro != nil { retro = nil }
+        // 잔디도 계산 시점의 '오늘'에 고정된 값이다(마지막 열 = 그때의 이번 주). 남겨 두면 새 주의 첫 화면에
+        // 지난주가 마지막 열인 채로 그려지고, 재계산이 실패하면 그 상태가 '오늘'인 척 굳는다.
+        if dailyGrid != .empty { dailyGrid = .empty }
         // 배너도 내린다 — [보기]를 눌러도 지금 보여 줄 회고가 없다. 이번 주 키는 소비하지 않으므로
         // 재계산이 성공하면 evaluateRetroBanner 가 새 회고로 다시 판정한다.
         if showsRetroBanner { showsRetroBanner = false }

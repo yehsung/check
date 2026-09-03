@@ -1823,7 +1823,10 @@ func fetchMySessionsRequestsOwnCompletedSessionsSinceWindow() async throws {
     #expect(items.contains(URLQueryItem(name: "ended_at", value: "not.is.null")))
     #expect(items.contains(URLQueryItem(name: "ended_at", value: "gte.2026-07-01T00:00:00Z")))
     #expect(items.contains(URLQueryItem(name: "order", value: "started_at.asc")))
-    #expect(items.contains(URLQueryItem(name: "limit", value: "2000")))
+    // 상한 5000행: 조회 창이 13주(12주 잔디)로 넓어져 2000행으론 모자란다 — 자리 비움 자동 마감이 잦은 사용자는
+    // 하루 수십 건이라, 상한에 걸리면 started_at 오름차순이라 **가장 최근 주부터** 비어 지난주 회고가 통째로 사라진다.
+    #expect(items.contains(URLQueryItem(name: "limit", value: "5000")))
+    #expect(!items.contains(URLQueryItem(name: "limit", value: "2000")))
     // 팀 필터는 걸지 않는다(본인 세션만 보면 되고 RLS 가 나머지를 막는다).
     #expect(!items.contains(where: { $0.name == "team_id" }))
 }

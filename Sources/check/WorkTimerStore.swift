@@ -420,6 +420,8 @@ final class WorkTimerStore {
     @ObservationIgnored var insightsWeekKey: String?
     var heatmap: WorkRhythmHeatmap = .empty
     var retro: WeeklyRetro?
+    /// 최근 12주 일별 근무 잔디(이슈 #3). heatmap/retro 와 같은 조회·같은 파싱에서 함께 계산되고 함께 비워진다.
+    var dailyGrid: WorkDailyGrid = .empty
     // 월요일 첫 팝오버에 지난주 회고를 한 번 안내하는 배너의 노출 여부(주당 1회, UserDefaults 로 기록).
     var showsRetroBanner = false
 
@@ -2355,6 +2357,7 @@ extension WorkTimerStore {
         insightsWeekKey = nil
         heatmap = .empty
         retro = nil
+        dailyGrid = .empty
         showsRetroBanner = false
         // 미반영 근무 큐(pendingItems)와 진행 중 근무(startedAt/accumulatedSeconds)는 여기서 비우지 않는다.
         // 이 함수는 토큰 만료 강제 로그아웃(refresh token 부재/무효, 저장 세션 재활성 실패)에서도 불리는데,

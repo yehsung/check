@@ -365,6 +365,7 @@ struct CheckMenuView: View {
                         InsightsPanel(
                             heatmap: store.heatmap,
                             retro: store.retro,
+                            dailyGrid: store.dailyGrid,
                             hasLoaded: store.insightsLoaded,
                             // 실패는 '진행중'과 다른 문구 + [다시 시도] 로 갈라 준다(패널 안에서 재시도 가능).
                             hasFailed: store.insightsFailed,
@@ -3013,23 +3014,34 @@ private struct PokeChargeButton: View {
 /// 개인 기록 패널의 본문 표시 높이 예산(순수 계산 — 결정적 검증 지점).
 ///
 /// 리그/토큰/찌르기/팀 목록은 배너·목표 편집 행이 먹은 높이를 ListRowBudget 으로 **행수**에서 깎는다. 이 패널은
-/// 행 기반이 아니라(회고 카드 + 7×24 히트맵 고정 높이) 깎을 행이 없으므로, 대신 본문 표시 높이를 잘라
+/// 행 기반이 아니라(회고 카드 + 7×24 히트맵 + 13×7 잔디 고정 높이) 깎을 행이 없으므로, 대신 본문 표시 높이를 잘라
 /// 스크롤로 넘긴다. 팝오버는 위가 고정돼 아래로만 자라므로(CheckWindowAnchor) 상한(700pt)을 넘긴 만큼은
-/// 푸터(로그아웃/앱 종료)와 히트맵 하단이 화면 밖으로 잘려 손이 닿지 않는다.
+/// 푸터(로그아웃/앱 종료)와 잔디 하단이 화면 밖으로 잘려 손이 닿지 않는다.
 enum InsightsPanelChromeBudget {
-    /// 본문(회고 카드 + 구분선 + 히트맵)의 자연 높이(pt). 340pt 폭 ImageRenderer 실측값.
-    static let contentNaturalHeight: CGFloat = 307
-    /// 크롬이 하나도 없을 때 창 상한(700pt)까지 남는 여유(pt). 기본 상태 실측 577pt 기준 + 5pt 안전 여유.
-    /// 이 여유를 넘겨 먹은 만큼만 본문을 깎는다 — 배너 하나(≤92pt)만으로는 아무것도 줄이지 않는다.
-    static let chromeSlack: CGFloat = 118
+    /// 본문(회고 카드 + 구분선 + 히트맵 + 구분선 + 12주 잔디)의 자연 높이(pt). 340pt 폭 ImageRenderer 실측값:
+    /// 잔디 전 307pt(창 577pt) → 잔디(구분선 + 캡션 + 월 라벨 + 7행×16pt) 후 창 757pt, 차이 180pt 를 더한 487pt.
+    static let contentNaturalHeight: CGFloat = 487
+    /// 크롬이 하나도 없을 때 창 상한(700pt)까지 남는 여유(pt) = 700 − 기본 상태 실측 창 높이 − 5pt 안전 여유.
+    /// 잔디가 붙으면서 본문 자연 높이만으로 상한을 넘겨 **음수**가 됐다(700 − 757 − 5): 크롬이 없어도 본문을
+    /// 62pt 깎아 스크롤로 넘기고, 그 위에 얹히는 배너/목표 편집 행은 그만큼 더 깎는다(창은 늘 695pt 에 멈춘다).
+    /// 회고 카드 + 히트맵(307pt)은 깎인 뒤에도 온전히 보이고, 잔디는 첫 몇 행이 보여 아래에 더 있음을 알린다.
+    static let chromeSlack: CGFloat = -62
+    /// 지난주가 비었을 때(회고 카드는 빈 줄 한 줄, 히트맵은 빈 격자에 피크 문구 없음)의 본문 자연 높이(pt).
+    /// 340pt 폭 실측 창 660pt − 본문 밖 270pt. 이 상태는 잔디에만 기록이 있는 사용자(지난주 휴가)가 매주 만나는
+    /// 화면이라 따로 잰다 — 큰 본문 기준 예산을 그대로 쓰면 스크롤 높이(425pt)가 본문(390pt)보다 커서
+    /// 패널 바닥에 35pt 빈 띠가 늘 남는다.
+    static let contentNaturalHeightWithoutLastWeek: CGFloat = 390
     /// 아무리 깎여도 본문에 남기는 최소 높이(회고 카드 한 장은 보이도록).
     static let minContentHeight: CGFloat = 190
 
-    /// 크롬이 여유를 넘겨 먹었을 때만 본문 표시 높이를 돌려준다(nil 이면 자연 높이 그대로 — 스크롤 없음).
-    static func capHeight(extraChromeHeight: CGFloat) -> CGFloat? {
-        let overflow = extraChromeHeight - chromeSlack
+    /// 본문 표시 높이(nil 이면 자연 높이 그대로 — 스크롤 없음). 여유(chromeSlack)는 가장 큰 본문 기준으로 잰 값이라,
+    /// 본문이 그보다 짧은 만큼(naturalHeight 가 작은 만큼) 여유가 늘어난다 — 지난주가 빈 본문은 크롬이 없으면
+    /// 여유가 양수(+35)로 돌아와 깎지 않고, 기본 본문은 여유가 음수라 크롬이 없어도 깎는다.
+    static func capHeight(extraChromeHeight: CGFloat, naturalHeight: CGFloat = contentNaturalHeight) -> CGFloat? {
+        let slack = chromeSlack + (contentNaturalHeight - naturalHeight)
+        let overflow = extraChromeHeight - slack
         guard overflow > 0 else { return nil }
-        return max(minContentHeight, contentNaturalHeight - overflow)
+        return max(minContentHeight, naturalHeight - overflow)
     }
 }
 
@@ -3062,12 +3074,14 @@ enum InsightsEmptyMessage {
 }
 
 /// 팀 카드 자리를 대체하는 개인 기록 페이지. 리그/토큰/찌르기와 4자 상호 배타이며 본인 데이터만 쓴다.
-/// 위에서부터 (a) 지난주 회고 카드, (b) 요일×시간대 근무 리듬 히트맵 — **둘 다 같은 주(지난주)**를 그린다.
-/// 값만 받아 그리므로(스토어 미참조)
+/// 위에서부터 (a) 지난주 회고 카드, (b) 요일×시간대 근무 리듬 히트맵 — **둘 다 같은 주(지난주)**를 그린다 —
+/// 그리고 (c) 최근 12주 일별 근무 잔디(이번 주까지). 값만 받아 그리므로(스토어 미참조)
 /// 렌더 테스트가 픽스처만으로 모든 상태를 재현할 수 있다.
 private struct InsightsPanel: View {
     let heatmap: WorkRhythmHeatmap
     let retro: WeeklyRetro?
+    // 최근 12주 일별 잔디. heatmap/retro 와 같은 조회에서 함께 계산된다.
+    let dailyGrid: WorkDailyGrid
     // 첫 성공 로드 여부. false 면 "불러오는 중…"(syncMessage 재사용 금지).
     let hasLoaded: Bool
     // 마지막 조회가 실패로 끝났는지. true 면 로딩 문구 대신 실패 문구 + [다시 시도] 를 그린다.
@@ -3095,10 +3109,12 @@ private struct InsightsPanel: View {
                 Spacer(minLength: 6)
             }
             PanelDivider()
+            // 자리 문구의 '보여 줄 기록' 총량에 잔디 누적도 더한다 — 지난주가 비었어도(휴가) 최근 12주에 기록이
+            // 있으면 본문을 그려야 잔디가 보인다(회고 카드는 자기 빈 줄로 "지난주 근무 기록이 없어요"를 말한다).
             if let placeholder = InsightsEmptyMessage.text(
                 hasLoaded: hasLoaded,
                 hasFailed: hasFailed,
-                totalSeconds: heatmap.totalSeconds
+                totalSeconds: heatmap.totalSeconds + dailyGrid.totalSeconds
             ) {
                 HStack(spacing: 8) {
                     Text(placeholder)
@@ -3121,16 +3137,23 @@ private struct InsightsPanel: View {
         .panelStyle()
     }
 
-    /// 회고 카드 + 히트맵 본문. 배너/목표 편집 행이 창 여유를 다 먹었으면 그만큼 낮춰 스크롤로 넘긴다 —
-    /// 팝오버는 위가 고정되고 아래로만 자라므로(CheckWindowAnchor) 상한을 넘긴 만큼 푸터가 화면 밖으로 잘린다.
+    /// 회고 카드 + 히트맵 + 12주 잔디 본문. 자연 높이만으로 창 상한을 넘기므로 크롬이 없어도 예산이 정한 높이로
+    /// 낮춰 스크롤로 넘긴다(InsightsPanelChromeBudget) — 팝오버는 위가 고정되고 아래로만 자라므로(CheckWindowAnchor)
+    /// 상한을 넘긴 만큼 푸터가 화면 밖으로 잘린다. 배너/목표 편집 행이 얹히면 그만큼 더 낮춘다.
     @ViewBuilder
     private var insightsBody: some View {
         let content = VStack(spacing: 12) {
             retroCard
             PanelDivider()
             heatmapSection
+            PanelDivider()
+            dailyGridSection
         }
-        if let cap = InsightsPanelChromeBudget.capHeight(extraChromeHeight: extraChromeHeight) {
+        // 지난주가 비면(회고 nil ⇔ 히트맵 0 — 같은 세션에서 나오므로 늘 함께 간다) 본문이 97pt 짧다 — 그 높이로 예산을 잰다.
+        let naturalHeight = retro == nil
+            ? InsightsPanelChromeBudget.contentNaturalHeightWithoutLastWeek
+            : InsightsPanelChromeBudget.contentNaturalHeight
+        if let cap = InsightsPanelChromeBudget.capHeight(extraChromeHeight: extraChromeHeight, naturalHeight: naturalHeight) {
             if clipsOverflowInsteadOfScroll {
                 // 스냅샷 전용: 자연 높이로 그린 뒤 위에서부터 cap 만큼만 남기고 잘라 낸다(ScrollView 는 렌더 불가).
                 content
@@ -3247,6 +3270,37 @@ private struct InsightsPanel: View {
             }
         }
     }
+
+    // (c) 최근 12주 근무 잔디 — 주(열) × 요일(행), 이번 주까지. 캡션 오른쪽에 옅음→진함 범례.
+    @ViewBuilder
+    private var dailyGridSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "leaf.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                Text("최근 12주 근무")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                Spacer(minLength: 4)
+                ContributionLegendView(levels: Self.dailyGridLevels, color: CheckTheme.accent)
+            }
+            ContributionGridView(
+                weeks: dailyGrid.weeks,
+                values: dailyGrid.seconds,
+                weekStart: dailyGrid.weekStart,
+                isFuture: dailyGrid.isFuture(week:weekday:),
+                // 분모는 하루 8시간 고정 — 히트맵의 3600초 고정과 같은 철학(자기 최대값 기준이면 기준이 흔들린다).
+                denominator: WorkDailyGrid.fullDaySeconds,
+                levels: Self.dailyGridLevels,
+                color: CheckTheme.accent,
+                valueText: { $0 > 0 ? MenuBarStatusFormatter.hoursMinutes($0) : "근무 없음" }
+            )
+        }
+    }
+
+    /// 잔디 농도 단계 수(옅음→진함 4단계 + 빈 칸).
+    private static let dailyGridLevels = 4
 
     // "화요일 15시" — peakSlot(가장 진한 칸)의 표시 문구. 데이터가 없으면 nil(줄 자체를 생략).
     private var peakText: String? {

@@ -947,9 +947,11 @@ actor SupabaseWorkService {
         )
     }
 
-    /// 개인 기록(근무 리듬 히트맵 · 지난주 회고)의 원천 데이터. 내 완료 세션만 since 이후로 읽는다.
+    /// 개인 기록(근무 리듬 히트맵 · 지난주 회고 · 12주 잔디)의 원천 데이터. 내 완료 세션만 since 이후로 읽는다.
     /// RLS 는 같은 팀 세션 읽기를 허용하므로 본인 행은 당연히 읽히고, user_id 필터로 남의 행은 애초에 안 가져온다.
-    /// 시작 시각 오름차순 + 상한 2000행(조회 창인 2주치 개인 세션엔 넉넉하다)으로 응답 크기를 묶는다.
+    /// 시작 시각 오름차순 + 상한 5000행으로 응답 크기를 묶는다. 조회 창이 13주로 넓어지면서 2000행으론 모자란다 —
+    /// 자리 비움 자동 마감이 잦은 사용자는 하루에 세션이 수십 건씩 쌓여(13주 × 7일 × 20건 = 1,820건은 평범한 값)
+    /// 상한에 걸리면 **가장 최근 주가 아니라 가장 오래된 주부터** 채워져 정작 이번 주·지난주가 통째로 비었다.
     func fetchMySessions(accessToken: String, userID: String, since: Date) async throws -> [WorkSessionRow] {
         let data = try await send(
             path: "/rest/v1/work_sessions",
@@ -960,7 +962,7 @@ actor SupabaseWorkService {
                 URLQueryItem(name: "ended_at", value: "not.is.null"),
                 URLQueryItem(name: "ended_at", value: "gte.\(dateFormatter.string(from: since))"),
                 URLQueryItem(name: "order", value: "started_at.asc"),
-                URLQueryItem(name: "limit", value: "2000")
+                URLQueryItem(name: "limit", value: "5000")
             ],
             body: Optional<EmptyBody>.none,
             accessToken: accessToken,

@@ -646,6 +646,167 @@ struct WorkRhythmHeatmapGrid: View {
     }
 }
 
+// MARK: - Contribution grid (잔디 — 근무·토큰 공용)
+
+/// 깃허브 잔디 모양의 범용 기여 그리드: 주(열) × 요일(행). 값→농도 규칙(분모·단계 수)과 색, 툴팁 문구를
+/// 매개변수로 받아 **근무 잔디와 토큰 잔디가 같은 뷰**를 쓴다 — 데이터 종류마다 그리드를 따로 만들면 칸 크기·월 라벨·
+/// 미래 칸 규칙이 서서히 갈라진다(같은 패널에 두 잔디가 나란히 서는 순간 그 차이가 결함으로 보인다).
+/// 레이아웃: 요일 라벨 열(월·수·금만 표기, 20pt) + 13열 × 16pt 칸 + 2pt 간격 = 20 + 2 + 13×16 + 12×2 = 254pt
+/// ≤ 팝오버 콘텐츠 폭 292pt(340 − 바깥 12×2 − 패널 12×2). 위에는 그 달이 시작되는 열 위에 "N월" 라벨을 단다.
+struct ContributionGridView: View {
+    /// 열(주) 수. values 의 바깥 길이와 같아야 하며, 모자라면 0 으로 읽는다(인덱스 크래시 없음).
+    let weeks: Int
+    /// values[주][요일 0=월 … 6=일].
+    let values: [[Int]]
+    /// 가장 오래된 열의 월요일 00:00(KST) — 월 라벨과 툴팁 날짜의 원점.
+    let weekStart: Date
+    /// (주, 요일) 칸이 미래인지. 미래 칸은 투명하게 비워 "0 = 기록 없음"과 구분한다.
+    let isFuture: (Int, Int) -> Bool
+    /// 농도 분모. 이 값 이상이면 가장 진한 단계다(근무 = 8시간, 토큰은 호출부가 정한다).
+    let denominator: Int
+    /// 농도 단계 수(0 제외). 4 면 옅음 → 진함 네 단계.
+    var levels: Int = 4
+    /// 칸 색(단계에 따라 불투명도만 달라진다).
+    var color: Color = CheckTheme.accent
+    /// 툴팁의 값 문구("4시간 12분" / "1.2M 토큰"). 날짜는 그리드가 붙인다 → "9월 3일 · 4시간 12분".
+    var valueText: (Int) -> String = { "\($0)" }
+
+    static let cellSize: CGFloat = 16
+    static let cellGap: CGFloat = 2
+    static let labelWidth: CGFloat = 20
+    static let cornerRadius: CGFloat = 3
+    /// 0=월 … 6=일. 월·수·금만 글자를 넣고 나머지는 빈 자리로 둔다(16pt 행에 7글자를 다 쓰면 빽빽하다).
+    static let dayLabels = ["월", "", "수", "", "금", "", ""]
+    /// 월 라벨 행 높이(pt). 라벨이 없어도 이 높이는 유지해 그리드 상단이 흔들리지 않게 한다.
+    static let monthLabelHeight: CGFloat = 10
+
+    var body: some View {
+        let months = Self.monthLabels(weekStart: weekStart, weeks: weeks)
+        VStack(alignment: .leading, spacing: Self.cellGap) {
+            // 월 라벨 행. 그 달이 시작되는 열 위에만 "N월"을 두고, 다른 열은 폭만 차지한다.
+            HStack(spacing: Self.cellGap) {
+                Color.clear
+                    .frame(width: Self.labelWidth, height: Self.monthLabelHeight)
+                ForEach(0..<max(0, weeks), id: \.self) { week in
+                    Text(months.indices.contains(week) ? months[week].map { "\($0)월" } ?? "" : "")
+                        .font(.system(size: 8))
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .fixedSize()
+                        .frame(width: Self.cellSize, height: Self.monthLabelHeight, alignment: .leading)
+                }
+            }
+            ForEach(0..<WorkRhythmHeatmap.dayCount, id: \.self) { weekday in
+                HStack(spacing: Self.cellGap) {
+                    Text(Self.dayLabels[weekday])
+                        .font(.system(size: 9))
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .frame(width: Self.labelWidth, alignment: .trailing)
+                    ForEach(0..<max(0, weeks), id: \.self) { week in
+                        cell(week: week, weekday: weekday)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func cell(week: Int, weekday: Int) -> some View {
+        if isFuture(week, weekday) {
+            // 미래는 투명 — 옅은 바탕(0 = 기록 없음)과 구분되어야 "아직 오지 않은 날"로 읽힌다.
+            Color.clear
+                .frame(width: Self.cellSize, height: Self.cellSize)
+        } else {
+            let value = value(week: week, weekday: weekday)
+            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                .fill(Self.color(value: value, denominator: denominator, levels: levels, color: color))
+                .frame(width: Self.cellSize, height: Self.cellSize)
+                .help(Self.tooltipText(weekStart: weekStart, week: week, weekday: weekday, valueText: valueText(value)))
+        }
+    }
+
+    // 형이 어긋난 values(빈 배열 등)가 들어와도 인덱스 크래시 없이 0 으로 읽는다.
+    private func value(week: Int, weekday: Int) -> Int {
+        guard week < values.count, weekday < values[week].count else { return 0 }
+        return values[week][weekday]
+    }
+
+    /// 칸 툴팁 "9월 3일 · 4시간 12분". 날짜는 weekStart 에서 (주 × 7 + 요일)일 뒤의 KST 날짜다 — 이 오프셋이
+    /// 하루라도 어긋나면 잔디 전체가 하루씩 밀려 보이는데 픽셀 테스트는 .help 를 못 보므로 순수 함수로 떼어 검증한다.
+    /// valueText 는 호출부가 이미 만든 값 문구("근무 없음" / "1.2M 토큰")라 그리드는 데이터 종류를 모른다.
+    nonisolated static func tooltipText(weekStart: Date, week: Int, weekday: Int, valueText: String) -> String {
+        let calendar = TeamWeeklyGoal.kstCalendar
+        guard let day = calendar.date(byAdding: .day, value: week * WorkRhythmHeatmap.dayCount + weekday, to: weekStart) else {
+            return valueText
+        }
+        let c = calendar.dateComponents([.month, .day], from: day)
+        return "\(c.month ?? 0)월 \(c.day ?? 0)일 · \(valueText)"
+    }
+
+    /// 농도 단계(0…levels). 0 은 기록 없음, levels 는 분모 이상. ceil 이라 1초라도 있으면 1단계 — 옅은 바탕과 구분된다.
+    /// 순수 함수라 nonisolated(단위 테스트 대상). 정수 산술로 계산해 부동소수 경계(정확히 분모의 1/4 등)에서 흔들리지 않는다.
+    nonisolated static func level(value: Int, denominator: Int, levels: Int) -> Int {
+        guard value > 0, levels > 0 else { return 0 }
+        guard denominator > 0 else { return levels }
+        return min(levels, (value * levels + denominator - 1) / denominator)
+    }
+
+    /// 단계별 불투명도. 히트맵(0.20 + 0.80 × 농도)과 같은 사다리를 써서 두 격자의 '진함'이 같은 뜻이 되게 한다.
+    nonisolated static func opacity(level: Int, levels: Int) -> Double {
+        guard level > 0, levels > 0 else { return 0 }
+        return 0.20 + 0.80 * Double(min(level, levels)) / Double(levels)
+    }
+
+    /// 칸 색: 0단계는 옅은 fieldFill(빈 칸), 그 외엔 단계 불투명도의 color.
+    nonisolated static func color(value: Int, denominator: Int, levels: Int, color: Color) -> Color {
+        let step = level(value: value, denominator: denominator, levels: levels)
+        guard step > 0 else { return CheckTheme.fieldFill }
+        return color.opacity(opacity(level: step, levels: levels))
+    }
+
+    /// 열마다 달 라벨(1…12) 또는 nil. 어떤 달의 1일이 그 주에 들어 있으면 그 열이 그 달의 시작 열이다
+    /// (일요일이 속한 달이 그 전주 일요일의 달과 다르면 새 달이 시작됐다). 첫 열은 그 앞 주와 비교한다.
+    nonisolated static func monthLabels(weekStart: Date, weeks: Int) -> [Int?] {
+        let calendar = TeamWeeklyGoal.kstCalendar
+        guard weeks > 0 else { return [] }
+        func monthOfSunday(week: Int) -> Int? {
+            calendar.date(byAdding: .day, value: week * WorkRhythmHeatmap.dayCount + WorkRhythmHeatmap.dayCount - 1, to: weekStart)
+                .map { calendar.component(.month, from: $0) }
+        }
+        var previous = monthOfSunday(week: -1)
+        return (0..<weeks).map { week in
+            let current = monthOfSunday(week: week)
+            defer { previous = current }
+            return current != previous ? current : nil
+        }
+    }
+}
+
+/// 잔디 범례: 옅음 → 진함 단계 칸을 작게 나열한다(캡션 행 오른쪽용, 8pt 칸).
+struct ContributionLegendView: View {
+    var levels: Int = 4
+    var color: Color = CheckTheme.accent
+
+    static let cellSize: CGFloat = 8
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text("적게")
+                .font(.system(size: 8))
+                .foregroundStyle(CheckTheme.secondaryText)
+            ForEach(0...max(1, levels), id: \.self) { step in
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(step == 0 ? CheckTheme.fieldFill : color.opacity(ContributionGridView.opacity(level: step, levels: levels)))
+                    .frame(width: Self.cellSize, height: Self.cellSize)
+            }
+            Text("많이")
+                .font(.system(size: 8))
+                .foregroundStyle(CheckTheme.secondaryText)
+        }
+        .fixedSize()
+    }
+}
+
 // MARK: - Auth buttons + fields
 
 struct AuthButton: View {

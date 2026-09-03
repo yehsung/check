@@ -244,6 +244,110 @@ struct WeeklyRetro: Equatable {
     }
 }
 
+/// 최근 13주(이번 주 + 지난 12주)의 **일별** 근무 초 — 깃허브 잔디와 같은 모양(주 열 × 요일 행)의 순수 데이터.
+/// 히트맵(지난주 한 주의 시간대)과 회고(지난주 합계)가 답하지 못하는 "요즘 꾸준히 일하고 있나"를 한눈에 보이는 것이
+/// 존재 이유다(이슈 #3). 서버 조회 창을 이만큼 넓혀 같은 세션 배열에서 계산하므로, 세션을 KST 일 경계로 쪼개
+/// 귀속하는 규칙은 회고의 하루 클리핑과 정확히 같다 — 자정을 넘긴 세션이 한 날에 통째로 몰리면 잔디가 거짓말한다.
+struct WorkDailyGrid: Equatable, Sendable {
+    /// 기본 창 폭(주). 이번 주 열 하나 + 지난 12주 = 13열(팝오버 폭 안에 16pt 칸으로 들어가는 최대치).
+    static let defaultWeeks = 13
+    /// 잔디 농도의 분모(초) = 하루 8시간. 히트맵의 3600초 고정 분모와 같은 철학이다 — 자기 최대값 기준
+    /// 상대 농도로 두면 같은 8시간이 그 주 다른 날에 따라 색이 달라지고, 사람마다 기준이 흔들린다.
+    static let fullDaySeconds = 8 * 3_600
+
+    /// 가장 오래된 주의 월요일 00:00(KST). 열 인덱스 0 의 시작이자 툴팁·월 라벨 날짜 계산의 원점.
+    let weekStart: Date
+    /// 열 수(주). empty 는 0.
+    let weeks: Int
+    /// seconds[주][요일 0=월 … 6=일] = 그 날 근무한 초. 미래 칸은 항상 0 이지만 "0 = 근무 없음"과 구분하기 위해
+    /// 센티널을 쓰지 않고 isFuture(week:weekday:) 로 따로 가른다(값 배열은 어느 소비자든 그대로 합산해도 안전).
+    var seconds: [[Int]]
+    /// 오늘까지의 날 수(weekStart 부터 오늘 포함). 이 값 이상인 칸(주×7+요일)은 미래다.
+    let days: Int
+
+    static let empty = WorkDailyGrid(weekStart: .distantPast, weeks: 0, seconds: [], days: 0)
+
+    /// 전체 누적 초. 패널 자리 문구 판정(지난주가 비어도 잔디에 기록이 있으면 본문을 그린다)에 쓴다.
+    var totalSeconds: Int {
+        seconds.reduce(0) { $0 + $1.reduce(0, +) }
+    }
+
+    /// (주, 요일) 칸이 오늘보다 뒤인지. 범위 밖 인덱스도 미래로 취급해 뷰가 어떤 인덱스로 물어도 안전하다.
+    func isFuture(week: Int, weekday: Int) -> Bool {
+        week * WorkRhythmHeatmap.dayCount + weekday >= days
+    }
+
+    /// (주, 요일) 칸의 KST 날짜(그 날 00:00). 툴팁 "9월 3일" 표기용.
+    func date(week: Int, weekday: Int) -> Date? {
+        TeamWeeklyGoal.kstCalendar.date(byAdding: .day, value: week * WorkRhythmHeatmap.dayCount + weekday, to: weekStart)
+    }
+
+    /// 잔디 칸 툴팁의 값 문구. 0 은 "근무 없음"(옅은 바탕 칸을 가리켰을 때 "0시간 00분"보다 뜻이 분명하다),
+    /// 그 외는 헤더와 같은 "4시간 12분" 표기. 그리드 뷰가 날짜를 앞에 붙여 "9월 3일 · 4시간 12분"이 된다.
+    static func tooltipValueText(_ seconds: Int) -> String {
+        seconds > 0 ? MenuBarStatusFormatter.hoursMinutes(seconds) : "근무 없음"
+    }
+
+    /// 창의 시작 = now 가 속한 KST 주의 월요일 − (weeks − 1)주. 이번 주가 마지막 열이 되도록 잡는다.
+    static func windowStart(now: Date, weeks: Int = defaultWeeks) -> Date? {
+        let thisWeekStart = TeamWeeklyGoal.koreanWeekStart(for: now)
+        return TeamWeeklyGoal.kstCalendar.date(byAdding: .weekOfYear, value: -(max(1, weeks) - 1), to: thisWeekStart)
+    }
+
+    /// 파싱을 끝낸 완료 세션 + 진행 중 세션으로 잔디를 만든다.
+    /// - parsed: 완료 세션(히트맵·회고와 공유하는 파싱 결과).
+    /// - now: 기준 시각. 창은 [이번 주 월요일 − (weeks−1)주, now) 이고, now 가 속한 날이 마지막 유효 칸이다.
+    /// - ongoingStart: 진행 중인 내 세션의 시작(없으면 nil). 서버는 완료 세션만 주므로 이 값이 없으면 오늘 칸이
+    ///   퇴근 전까지 비어 있다 — 헤더가 이미 세고 있는 오늘 근무가 잔디에만 없으면 "왜 오늘은 회색이냐"가 된다.
+    ///   '지금까지'만 더한다(미래는 세지 않는다).
+    static func build(
+        parsed: [WorkInsightsSession],
+        now: Date,
+        ongoingStart: Date? = nil,
+        weeks: Int = defaultWeeks
+    ) -> WorkDailyGrid {
+        let calendar = TeamWeeklyGoal.kstCalendar
+        let weeks = max(1, weeks)
+        guard let weekStart = windowStart(now: now, weeks: weeks),
+              let todayOffset = calendar.dateComponents([.day], from: weekStart, to: TeamWeeklyGoal.koreanDayStart(for: now)).day
+        else {
+            return .empty
+        }
+        let dayCount = WorkRhythmHeatmap.dayCount
+        var seconds = Array(repeating: Array(repeating: 0, count: dayCount), count: weeks)
+
+        var sessions = parsed
+        if let ongoingStart, ongoingStart < now {
+            sessions.append(WorkInsightsSession(start: ongoingStart, end: now))
+        }
+
+        for session in sessions {
+            // 창 앞쪽(12주보다 오래된 구간)은 버리고, 끝은 now 로 자른다 — 시계가 앞선 기기가 남긴 '미래' 종료가
+            // 들어와도 오늘 뒤의 칸으로 새지 않는다(미래 칸 = 0 불변식).
+            var cursor = max(session.start, weekStart)
+            let end = min(session.end, now)
+            guard cursor < end else { continue }
+
+            // 회고(WeeklyRetro.build)와 같은 하루 경계 클리핑 — 자정을 넘긴 세션은 두 날에 실제 머문 초만큼 나뉜다.
+            while cursor < end {
+                let dayStart = TeamWeeklyGoal.koreanDayStart(for: cursor)
+                guard let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart), nextDay > cursor else { break }
+                let sliceEnd = min(nextDay, end)
+                guard sliceEnd > cursor else { break }
+                let slice = Int(sliceEnd.timeIntervalSince(cursor))
+                if slice > 0,
+                   let offset = calendar.dateComponents([.day], from: weekStart, to: dayStart).day,
+                   offset >= 0, offset < weeks * dayCount {
+                    seconds[offset / dayCount][offset % dayCount] += slice
+                }
+                cursor = sliceEnd
+            }
+        }
+
+        return WorkDailyGrid(weekStart: weekStart, weeks: weeks, seconds: seconds, days: todayOffset + 1)
+    }
+}
+
 /// 개인 기록 계산 결과 묶음(히트맵 + 회고). 두 계산이 같은 파싱 결과를 나눠 쓰도록 한곳에 묶고,
 /// 스토어가 이 함수를 **메인액터 밖에서** 한 번에 돌린 뒤 결과만 받아 반영하게 하는 것이 존재 이유다.
 /// (예전엔 응답 도착 직후 메인액터에서 두 계산을 연속 동기 호출해, 세션이 많은 계정에서 팝오버를 열 때마다
@@ -251,6 +355,8 @@ struct WeeklyRetro: Equatable {
 struct WorkInsightsComputation: Equatable {
     let heatmap: WorkRhythmHeatmap
     let retro: WeeklyRetro?
+    /// 최근 12주 일별 잔디. 같은 파싱 결과에서 한 번에 계산해 세 결과가 같은 세션 집합을 본다.
+    let dailyGrid: WorkDailyGrid
 
     /// 순수 계산이라 어느 스레드에서 불러도 결과가 같다(전역 상태·시계 접근 없음 — now 는 인자로 받는다).
     /// - ongoingStart: **지금 진행 중인 내 세션**의 시작 시각(없으면 nil). 서버 조회는 완료 세션(ended_at not null)만
@@ -262,14 +368,17 @@ struct WorkInsightsComputation: Equatable {
         goalSeconds: Int,
         ongoingStart: Date? = nil
     ) -> WorkInsightsComputation {
-        var parsed = WorkInsightsDate.parseSessions(rows)
+        let completed = WorkInsightsDate.parseSessions(rows)
+        var parsed = completed
         // 진행 중 세션은 '지금까지'만 기여한다(헤더의 라이브 주간 기여와 같은 규약 — 미래는 세지 않는다).
         if let ongoingStart, ongoingStart < now {
             parsed.append(WorkInsightsSession(start: ongoingStart, end: now))
         }
         return WorkInsightsComputation(
             heatmap: WorkRhythmHeatmap.build(parsed: parsed, now: now),
-            retro: WeeklyRetro.build(parsed: parsed, now: now, goalSeconds: goalSeconds)
+            retro: WeeklyRetro.build(parsed: parsed, now: now, goalSeconds: goalSeconds),
+            // 잔디는 진행 세션을 스스로 얹는다(완료본 + ongoingStart) — 이미 얹은 parsed 를 주면 이중 계상이다.
+            dailyGrid: WorkDailyGrid.build(parsed: completed, now: now, ongoingStart: ongoingStart)
         )
     }
 }

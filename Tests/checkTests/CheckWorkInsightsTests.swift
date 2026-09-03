@@ -176,17 +176,21 @@ func heatmapAndRetroCoverExactlyTheSameWeek() {
 
 @MainActor
 @Test
-func insightsFetchWindowCoversExactlyLastWeekAndTheWeekBefore() throws {
+func insightsFetchWindowStartsAtTheGrassWindowAndNeverAfterTheRetroBaseline() throws {
+    // (예전 이름 insightsFetchWindowCoversExactlyLastWeekAndTheWeekBefore — 창이 2주이던 시절의 단언이라
+    //  12주 잔디로 창이 13주가 된 뒤엔 이름이 정반대 사실을 말했다. 회귀를 이름만 보고 판단하는 사람을 위해 바꿨다.)
     let window = try #require(WorkInsightsWeekWindow.lastWeek(now: insightsNow))
 
     #expect(window.start == kst(2026, 7, 13))
     #expect(window.end == kst(2026, 7, 20))
     #expect(window.previousStart == kst(2026, 7, 6))
 
-    // 조회 창은 회고 비교선(그 전주 시작)에서 시작한다 — 더 짧으면 '전주 대비 증감'이 0으로 굳고,
-    // 더 길면 어느 계산도 쓰지 않는 페이로드만 커진다(히트맵이 8주 합산이던 시절의 잔재).
-    #expect(WorkTimerStore.insightsWindowStart(now: insightsNow) == window.previousStart)
-    #expect(WorkTimerStore.insightsWeeks == 2)
+    // 조회 창은 세 소비자 중 가장 넓은 12주 잔디의 시작(이번 주 월요일 − 12주 = 04-27)에서 시작한다.
+    // 회고 비교선(그 전주 시작)보다 짧아지면 '전주 대비 증감'이 0으로 굳으므로 그보다 늦어서는 안 된다.
+    #expect(WorkTimerStore.insightsWindowStart(now: insightsNow) == kst(2026, 4, 27))
+    #expect(WorkTimerStore.insightsWindowStart(now: insightsNow) <= window.previousStart)
+    #expect(WorkTimerStore.insightsWindowStart(now: insightsNow) == WorkDailyGrid.windowStart(now: insightsNow))
+    #expect(WorkTimerStore.insightsWeeks == 13)
 }
 
 // MARK: - 지난주 회고
@@ -381,6 +385,185 @@ func retroSkipsSessionsOutsideItsTwoWeekWindowWithoutChangingTotals() {
     #expect(retro?.previousWeekSeconds == 2 * 3_600)
 }
 
+// MARK: - 최근 12주 일별 잔디(WorkDailyGrid)
+
+// insightsNow(2026-07-22 수) 기준 잔디 창: 이번 주 월요일 07-20 − 12주 = **2026-04-27(월)** 00:00 부터 오늘까지 13열.
+// 열 인덱스 = (그 날 − 04-27) / 7, 행 = 요일(0=월). 지난주(07-13~19)는 11열, 이번 주는 12열이다.
+
+@Test
+func dailyGridAnchorsThirteenMondayColumnsEndingWithThisWeek() {
+    let grid = WorkDailyGrid.build(parsed: [], now: insightsNow)
+
+    #expect(grid.weekStart == kst(2026, 4, 27))
+    #expect(grid.weeks == 13)
+    #expect(grid.seconds.count == 13)
+    #expect(grid.seconds.allSatisfy { $0.count == 7 })
+    #expect(grid.totalSeconds == 0)
+    // 오늘(07-22 수)은 12열 2행이고 그 뒤는 미래다. 오늘까지의 날 수 = 86 + 1.
+    #expect(grid.days == 87)
+    #expect(!grid.isFuture(week: 12, weekday: 2))
+    #expect(grid.isFuture(week: 12, weekday: 3))
+    #expect(grid.isFuture(week: 12, weekday: 6))
+    #expect(!grid.isFuture(week: 11, weekday: 6))
+    #expect(!grid.isFuture(week: 0, weekday: 0))
+    // 범위 밖 인덱스는 미래로 본다(뷰가 어떤 인덱스로 물어도 안전).
+    #expect(grid.isFuture(week: 13, weekday: 0))
+    // 칸의 날짜: 12열 2행 = 오늘 00:00, 0열 0행 = 창의 시작.
+    #expect(grid.date(week: 12, weekday: 2) == kst(2026, 7, 22))
+    #expect(grid.date(week: 0, weekday: 0) == kst(2026, 4, 27))
+    // 창 시작 계산기는 스토어 조회 창과 같은 값을 낸다.
+    #expect(WorkDailyGrid.windowStart(now: insightsNow) == kst(2026, 4, 27))
+    #expect(WorkDailyGrid.fullDaySeconds == 8 * 3_600)
+}
+
+@Test
+func dailyGridSplitsSessionsAtKoreanMidnightIntoTheRightDayCells() {
+    // 지난주 화 23:30 → 수 01:10 (6000초). 화요일 칸 1800 / 수요일 칸 4200 으로 나뉘어야 한다 —
+    // 한 날에 통째로 몰리면 "자정 넘겨 일한 날"이 잔디에서 사라지거나 두 배가 된다.
+    let sessions = WorkInsightsDate.parseSessions([
+        sessionRow(kst(2026, 7, 14, 23, 30), kst(2026, 7, 15, 1, 10))
+    ])
+
+    let grid = WorkDailyGrid.build(parsed: sessions, now: insightsNow)
+
+    #expect(grid.seconds[11][1] == 1_800)   // 07-14(화)
+    #expect(grid.seconds[11][2] == 4_200)   // 07-15(수)
+    #expect(grid.totalSeconds == 6_000)
+    // 같은 날 세션 두 건은 한 칸에 누적된다.
+    let twice = WorkDailyGrid.build(parsed: sessions + [WorkInsightsSession(start: kst(2026, 7, 14, 9), end: kst(2026, 7, 14, 10))], now: insightsNow)
+    #expect(twice.seconds[11][1] == 1_800 + 3_600)
+}
+
+@Test
+func dailyGridDropsSessionsBeforeTheWindowAndClipsTheLeadingEdge() {
+    let sessions = WorkInsightsDate.parseSessions([
+        sessionRow(kst(2026, 4, 20, 9), kst(2026, 4, 20, 18)),      // 13주 전 — 통째로 제외
+        sessionRow(kst(2026, 4, 26, 22), kst(2026, 4, 27, 2)),      // 창 앞 경계 걸침 — 뒤쪽 2시간만
+        sessionRow(kst(2026, 4, 26, 20), kst(2026, 4, 27, 0)),      // 창 시작에 맞닿기만 함 — 제외
+        sessionRow(kst(2026, 6, 3, 9), kst(2026, 6, 3, 12))         // 창 한가운데(5열 수요일) — 3시간
+    ])
+
+    let grid = WorkDailyGrid.build(parsed: sessions, now: insightsNow)
+
+    #expect(grid.seconds[0][0] == 2 * 3_600)
+    #expect(grid.seconds[5][2] == 3 * 3_600)
+    #expect(grid.totalSeconds == 5 * 3_600)
+}
+
+@Test
+func dailyGridCountsTheRunningSessionUpToNowAndKeepsFutureCellsZero() {
+    // 서버는 완료 세션만 주므로 오늘 칸은 진행 세션(ongoingStart)으로만 채워진다 — 헤더가 이미 세고 있는
+    // 오늘 근무가 잔디에만 없으면 "왜 오늘은 회색이냐"가 된다. '지금까지'만 더하고 미래는 세지 않는다.
+    let running = WorkDailyGrid.build(parsed: [], now: insightsNow, ongoingStart: kst(2026, 7, 22, 9))
+    #expect(running.seconds[12][2] == 3 * 3_600)
+    #expect(running.totalSeconds == 3 * 3_600)
+
+    // 자정을 넘겨 진행 중이면 어제 몫과 오늘 몫으로 나뉜다.
+    let overnight = WorkDailyGrid.build(parsed: [], now: insightsNow, ongoingStart: kst(2026, 7, 21, 23))
+    #expect(overnight.seconds[12][1] == 3_600)
+    #expect(overnight.seconds[12][2] == 12 * 3_600)
+
+    // 시작이 now 이후(시계 되돌림)면 아무것도 더하지 않는다.
+    let future = WorkDailyGrid.build(parsed: [], now: insightsNow, ongoingStart: insightsNow.addingTimeInterval(60))
+    #expect(future.totalSeconds == 0)
+
+    // 시계가 앞선 기기가 남긴 '미래 종료' 완료 세션도 now 에서 잘린다 — 미래 칸은 언제나 0 이다.
+    let clockAhead = WorkDailyGrid.build(
+        parsed: [WorkInsightsSession(start: kst(2026, 7, 22, 11), end: kst(2026, 7, 23, 11))],
+        now: insightsNow
+    )
+    #expect(clockAhead.seconds[12][2] == 3_600)
+    #expect(clockAhead.seconds[12][3] == 0)
+    #expect(clockAhead.totalSeconds == 3_600)
+}
+
+@Test
+func dailyGridEmptyHasNoColumns() {
+    let empty = WorkDailyGrid.empty
+    #expect(empty.weeks == 0)
+    #expect(empty.seconds.isEmpty)
+    #expect(empty.totalSeconds == 0)
+    #expect(empty.isFuture(week: 0, weekday: 0))
+    #expect(WorkDailyGrid.build(parsed: [], now: insightsNow) != empty)
+}
+
+@Test
+func insightsComputationCarriesTheDailyGridWithoutDoubleCountingTheRunningSession() {
+    // 세 계산이 같은 파싱 결과를 본다. 진행 세션은 히트맵·회고용 배열에도, 잔디에도 **한 번씩만** 들어가야 한다 —
+    // 이미 얹은 배열을 잔디에 또 넘기면 오늘 칸이 두 배가 된다.
+    let rows = [
+        sessionRow(kst(2026, 5, 6, 9), kst(2026, 5, 6, 18)),     // 11주 전 — 잔디에만
+        sessionRow(kst(2026, 7, 14, 9), kst(2026, 7, 14, 12))    // 지난주 — 셋 모두
+    ]
+    let computed = WorkInsightsComputation.build(
+        rows: rows, now: insightsNow, goalSeconds: 40 * 3_600,
+        ongoingStart: kst(2026, 7, 22, 10)   // 오늘 2시간째
+    )
+
+    #expect(computed.dailyGrid == WorkDailyGrid.build(
+        parsed: WorkInsightsDate.parseSessions(rows), now: insightsNow, ongoingStart: kst(2026, 7, 22, 10)
+    ))
+    #expect(computed.dailyGrid.seconds[1][2] == 9 * 3_600)
+    #expect(computed.dailyGrid.seconds[11][1] == 3 * 3_600)
+    #expect(computed.dailyGrid.seconds[12][2] == 2 * 3_600)
+    #expect(computed.dailyGrid.totalSeconds == 14 * 3_600)
+    // 히트맵·회고는 창을 넓혀도 그대로다(지난주만 본다).
+    #expect(computed.heatmap.totalSeconds == 3 * 3_600)
+    #expect(computed.retro?.totalSeconds == 3 * 3_600)
+}
+
+@Test
+func wideningTheFetchWindowLeavesHeatmapAndRetroUnchanged() {
+    // 조회 창이 2주 → 13주로 넓어져 옛 행이 같은 응답에 섞여 와도, 히트맵과 회고는 예전과 한 칸도 다르면 안 된다.
+    let recent = [
+        sessionRow(kst(2026, 7, 7, 9), kst(2026, 7, 7, 13)),      // 그 전주 4h(회고 비교선)
+        sessionRow(kst(2026, 7, 15, 9), kst(2026, 7, 15, 18))     // 지난주 9h
+    ]
+    let older = [
+        sessionRow(kst(2026, 4, 27, 9), kst(2026, 4, 27, 18)),    // 12주 전 월요일
+        sessionRow(kst(2026, 6, 2, 9), kst(2026, 6, 2, 18))       // 7주 전
+    ]
+
+    let narrow = WorkInsightsComputation.build(rows: recent, now: insightsNow, goalSeconds: 40 * 3_600)
+    let wide = WorkInsightsComputation.build(rows: older + recent, now: insightsNow, goalSeconds: 40 * 3_600)
+
+    #expect(wide.heatmap == narrow.heatmap)
+    #expect(wide.retro == narrow.retro)
+    #expect(wide.retro?.previousWeekSeconds == 4 * 3_600)
+    // 잔디만 넓어진 창의 행을 받는다.
+    #expect(wide.dailyGrid.totalSeconds == narrow.dailyGrid.totalSeconds + 18 * 3_600)
+    #expect(wide.dailyGrid.seconds[0][0] == 9 * 3_600)
+}
+
+@Test
+func insightsComputationIgnoresRowOrder() {
+    // 조회를 started_at 내림차순으로 바꾼 근거: 세 계산(히트맵·회고·잔디)은 전부 행 순서에 무관한 합산이어야 한다.
+    // 어느 하나라도 "먼저 온 행"에 기대면(예: 최다 요일 동률 판정, 세션 수) 정렬 방향을 바꾸는 순간 값이 흔들린다.
+    let rows = [
+        sessionRow(kst(2026, 4, 27, 9), kst(2026, 4, 27, 18), id: "oldest"),   // 잔디 첫 열
+        sessionRow(kst(2026, 6, 2, 9), kst(2026, 6, 2, 12), id: "mid"),
+        sessionRow(kst(2026, 7, 7, 9), kst(2026, 7, 7, 13), id: "prev"),       // 그 전주(회고 비교선)
+        sessionRow(kst(2026, 7, 13, 9), kst(2026, 7, 13, 12), id: "mon"),      // 지난주 월 3h
+        sessionRow(kst(2026, 7, 15, 9), kst(2026, 7, 15, 12), id: "wed"),      // 지난주 수 3h
+        sessionRow(kst(2026, 7, 14, 23, 30), kst(2026, 7, 15, 1, 10), id: "overnight"),   // 화 30분 + 수 70분
+        sessionRow(kst(2026, 7, 21, 9), kst(2026, 7, 21, 10), id: "yesterday")
+    ]
+    let ongoing = kst(2026, 7, 22, 10)
+
+    let ascending = WorkInsightsComputation.build(rows: rows, now: insightsNow, goalSeconds: 40 * 3_600, ongoingStart: ongoing)
+    let descending = WorkInsightsComputation.build(rows: rows.reversed(), now: insightsNow, goalSeconds: 40 * 3_600, ongoingStart: ongoing)
+    let shuffled = WorkInsightsComputation.build(rows: [rows[3], rows[6], rows[0], rows[5], rows[2], rows[4], rows[1]], now: insightsNow, goalSeconds: 40 * 3_600, ongoingStart: ongoing)
+
+    #expect(ascending == descending)
+    #expect(ascending == shuffled)
+    // 최다 요일(월 3h 대 수 3h + 자정 넘김 조각 70분 = 4h10m → 수요일)도 순서와 무관하게 같은 요일이다.
+    #expect(ascending.retro?.busiestDayIndex == 2)
+    #expect(descending.retro?.busiestDayIndex == 2)
+    #expect(ascending.retro?.sessionCount == 3)
+    #expect(ascending.dailyGrid.seconds[0][0] == 9 * 3_600)
+    #expect(descending.dailyGrid.seconds[12][2] == 2 * 3_600)
+}
+
 @Test
 func insightsComputationRunsOffTheMainActor() async {
     // 회귀 지점: 이 계산이 메인액터에 묶여 있으면(@MainActor 로 되돌아가면) 응답 도착 순간 UI 가 통째로 멈춘다
@@ -417,9 +600,10 @@ func insightsLoadDoesNotCalculateInlineOnTheMainActor() throws {
 
     #expect(source.contains("Task.detached"))
     #expect(source.contains("WorkInsightsComputation.build(rows: rows"))
-    // 메인액터에서 직접 집계를 돌리던 두 호출은 남아 있으면 안 된다.
+    // 메인액터에서 직접 집계를 돌리던 두 호출은 남아 있으면 안 된다(잔디도 같은 규약).
     #expect(!source.contains("WorkRhythmHeatmap.build("))
     #expect(!source.contains("WeeklyRetro.build("))
+    #expect(!source.contains("WorkDailyGrid.build("))
 }
 
 // MARK: - 주 키 / 월 네비게이터

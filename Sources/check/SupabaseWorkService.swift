@@ -947,9 +947,14 @@ actor SupabaseWorkService {
         )
     }
 
-    /// 개인 기록(근무 리듬 히트맵 · 지난주 회고)의 원천 데이터. 내 완료 세션만 since 이후로 읽는다.
+    /// 개인 기록(근무 리듬 히트맵 · 지난주 회고 · 12주 잔디)의 원천 데이터. 내 완료 세션만 since 이후로 읽는다.
     /// RLS 는 같은 팀 세션 읽기를 허용하므로 본인 행은 당연히 읽히고, user_id 필터로 남의 행은 애초에 안 가져온다.
-    /// 시작 시각 오름차순 + 상한 2000행(조회 창인 2주치 개인 세션엔 넉넉하다)으로 응답 크기를 묶는다.
+    /// 시작 시각 **내림차순** + 상한 5000행으로 응답 크기를 묶는다. 조회 창이 13주(12주 잔디)로 넓어지면서 행수가
+    /// 2주 시절의 6.5배가 됐고, 어떤 상한이든(우리가 적은 5000 이든, PostgREST 가 서버 설정 max_rows 로 조용히
+    /// 잘라 내는 1000 이든 — 호스티드 값은 확인하지 못했고 로컬 config 는 1000) 잘리는 순간이 오면 **어느 쪽 행이
+    /// 먼저 사라지느냐**가 문제다. 오름차순이면 가장 최근 주(지난주 회고·히트맵·잔디의 마지막 열)가 먼저 비어
+    /// 기존 표시가 통째로 사라지고, 내림차순이면 잔디의 가장 오래된 열부터 비어 새 기능만 옅어진다. 세 계산은
+    /// 모두 행 순서에 무관한 합산이라(테스트 insightsComputationIgnoresRowOrder) 정렬 방향은 결과에 영향이 없다.
     func fetchMySessions(accessToken: String, userID: String, since: Date) async throws -> [WorkSessionRow] {
         let data = try await send(
             path: "/rest/v1/work_sessions",
@@ -959,8 +964,8 @@ actor SupabaseWorkService {
                 URLQueryItem(name: "user_id", value: "eq.\(userID)"),
                 URLQueryItem(name: "ended_at", value: "not.is.null"),
                 URLQueryItem(name: "ended_at", value: "gte.\(dateFormatter.string(from: since))"),
-                URLQueryItem(name: "order", value: "started_at.asc"),
-                URLQueryItem(name: "limit", value: "2000")
+                URLQueryItem(name: "order", value: "started_at.desc"),
+                URLQueryItem(name: "limit", value: "5000")
             ],
             body: Optional<EmptyBody>.none,
             accessToken: accessToken,

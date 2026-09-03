@@ -1433,6 +1433,7 @@ private func makeInsightsStore(withData: Bool = true, loaded: Bool = true) -> Wo
     store.teamGoalSeconds = 40 * 3_600
     store.heatmap = withData ? sampleWorkRhythmHeatmap() : .empty
     store.retro = withData ? sampleWeeklyRetro() : nil
+    store.dailyGrid = withData ? sampleWorkDailyGrid() : .empty
     store.insightsLoaded = loaded
     store.isInsightsPanelVisible = true
     return store
@@ -1449,7 +1450,8 @@ func checkMenuViewRendersInsightsPanelSnapshot() throws {
     #expect(store.retro?.totalSeconds == store.heatmap.totalSeconds)
     // 문구 규약(순수 판정)도 함께 고정한다 — 데이터가 있으면 자리 문구가 아니라 본문을 그린다.
     #expect(InsightsEmptyMessage.text(hasLoaded: true, totalSeconds: store.heatmap.totalSeconds) == nil)
-    let png = try renderPNG(CheckMenuView(store: store))
+    // 본문이 예산대로 잘려 ScrollView 에 들어가므로(ImageRenderer 는 ScrollView 내용을 못 그린다) 클립 모드로 그린다.
+    let png = try renderPNG(CheckMenuView(store: store, previewClipsOverflowList: true))
     #expect(png.count > 0)
     saveV0211Snapshot(png, "insights-panel")
 }
@@ -1497,7 +1499,8 @@ func checkMenuViewRendersInsightsRunningSessionThatCrossedTheWeekSnapshot() thro
     let store = makeInsightsStore(withData: false, loaded: true)
     store.heatmap = computed.heatmap
     store.retro = computed.retro
-    let png = try renderPNG(CheckMenuView(store: store))
+    store.dailyGrid = computed.dailyGrid
+    let png = try renderPNG(CheckMenuView(store: store, previewClipsOverflowList: true))
     #expect(png.count > 0)
     saveV0211Snapshot(png, "insights-running-across-week")
 }
@@ -1739,6 +1742,326 @@ func heatmapCellColorScalesWithBucketDensity() {
         + CGFloat(WorkRhythmHeatmap.hourCount) * WorkRhythmHeatmapGrid.cellSize
         + CGFloat(WorkRhythmHeatmap.hourCount - 1) * WorkRhythmHeatmapGrid.cellGap
     #expect(gridWidth <= 292)
+}
+
+// MARK: - 최근 12주 근무 잔디(ContributionGridView) — 농도 단계·폭·월 라벨·미래 칸·패널 배선
+
+/// 잔디 렌더 픽스처의 고정 기준 시각(2026-07-14 화 12:33 KST — 이 파일의 다른 고정 시각과 같은 값).
+private let dailyGridFixtureNow = Date(timeIntervalSince1970: 1_784_000_000)
+
+/// 12주 잔디 픽스처(결정적): 고정 시각 기준 13열을 만들고, 오늘까지의 평일은 0/2/4/6/8시간이 번갈아 들도록,
+/// 주말은 격주 토요일에만 1시간이 들도록 채운다 — 빈 칸·네 단계·미래 칸(이번 주 수~일)이 한 그림에 다 보인다.
+private func sampleWorkDailyGrid(now: Date = dailyGridFixtureNow) -> WorkDailyGrid {
+    var grid = WorkDailyGrid.build(parsed: [], now: now)
+    for week in 0..<grid.weeks {
+        for weekday in 0..<WorkRhythmHeatmap.dayCount where !grid.isFuture(week: week, weekday: weekday) {
+            if weekday < 5 {
+                grid.seconds[week][weekday] = ((week + weekday) % 5) * 2 * 3_600
+            } else if weekday == 5, week % 2 == 0 {
+                grid.seconds[week][weekday] = 3_600
+            }
+        }
+    }
+    return grid
+}
+
+@Test
+func contributionGridLevelCeilsAndClampsAgainstTheDenominator() {
+    // 농도 단계 규약(순수 판정): 분모는 호출부가 정하고(근무 = 8시간 고정), 단계는 ceil(값×단계/분모)를 단계 수로 클램프.
+    // 1초라도 있으면 1단계 — 옅은 바탕(0)과 구분돼야 "조금 일한 날"이 "안 온 날"로 보이지 않는다.
+    let day = WorkDailyGrid.fullDaySeconds
+    #expect(day == 28_800)
+    #expect(ContributionGridView.level(value: 0, denominator: day, levels: 4) == 0)
+    #expect(ContributionGridView.level(value: -5, denominator: day, levels: 4) == 0)
+    #expect(ContributionGridView.level(value: 1, denominator: day, levels: 4) == 1)
+    #expect(ContributionGridView.level(value: day / 4, denominator: day, levels: 4) == 1)        // 정확히 2시간 = 1단계
+    #expect(ContributionGridView.level(value: day / 4 + 1, denominator: day, levels: 4) == 2)    // 2시간 1초 = 2단계
+    #expect(ContributionGridView.level(value: day / 2, denominator: day, levels: 4) == 2)
+    #expect(ContributionGridView.level(value: day - 1, denominator: day, levels: 4) == 4)
+    #expect(ContributionGridView.level(value: day, denominator: day, levels: 4) == 4)
+    #expect(ContributionGridView.level(value: day * 3, denominator: day, levels: 4) == 4)        // 초과는 클램프
+    // 단계 수를 바꿔도 같은 규칙(토큰 잔디가 다른 단계 수를 쓸 수 있다).
+    #expect(ContributionGridView.level(value: day, denominator: day, levels: 5) == 5)
+    #expect(ContributionGridView.level(value: 1, denominator: day, levels: 5) == 1)
+    // 분모 0(방어)은 값이 있으면 최고 단계, 단계 0 은 항상 0.
+    #expect(ContributionGridView.level(value: 10, denominator: 0, levels: 4) == 4)
+    #expect(ContributionGridView.level(value: 10, denominator: day, levels: 0) == 0)
+
+    // 불투명도 사다리는 히트맵과 같은 0.20 + 0.80 × 비율 — 최고 단계는 1.0, 0단계는 0.
+    #expect(ContributionGridView.opacity(level: 0, levels: 4) == 0)
+    #expect(abs(ContributionGridView.opacity(level: 1, levels: 4) - 0.40) < 0.0001)
+    #expect(ContributionGridView.opacity(level: 4, levels: 4) == 1)
+    #expect(ContributionGridView.opacity(level: 9, levels: 4) == 1)
+
+    // 색: 0 만 fieldFill, 단계마다 다르며, 클램프는 색에서도 성립한다.
+    let accent = CheckTheme.accent
+    #expect(ContributionGridView.color(value: 0, denominator: day, levels: 4, color: accent) == CheckTheme.fieldFill)
+    #expect(ContributionGridView.color(value: 1, denominator: day, levels: 4, color: accent) != CheckTheme.fieldFill)
+    #expect(ContributionGridView.color(value: day / 4, denominator: day, levels: 4, color: accent)
+        != ContributionGridView.color(value: day / 2, denominator: day, levels: 4, color: accent))
+    #expect(ContributionGridView.color(value: day, denominator: day, levels: 4, color: accent)
+        == ContributionGridView.color(value: day * 2, denominator: day, levels: 4, color: accent))
+}
+
+@MainActor
+@Test
+func contributionGridWidthFitsPanelContentAndLabelsAlternateWeekdays() {
+    // 격자 총 폭(요일 라벨 + 13열 + 간격)이 패널 콘텐츠 폭(340 - 12*2 - 12*2 = 292pt) 안에 들어간다 — 히트맵과 같은 예산.
+    let gridWidth = ContributionGridView.labelWidth
+        + ContributionGridView.cellGap
+        + CGFloat(WorkDailyGrid.defaultWeeks) * ContributionGridView.cellSize
+        + CGFloat(WorkDailyGrid.defaultWeeks - 1) * ContributionGridView.cellGap
+    #expect(gridWidth == 254)
+    #expect(gridWidth <= 292)
+    #expect(ContributionGridView.cellSize == 16)
+    #expect(ContributionGridView.cellGap == 2)
+    // 요일 라벨은 월·수·금만(0=월 규약), 나머지 행은 빈 자리로 폭만 지킨다.
+    #expect(ContributionGridView.dayLabels == ["월", "", "수", "", "금", "", ""])
+}
+
+@Test
+func contributionGridMonthLabelsMarkTheColumnWhereEachMonthBegins() {
+    // 2026-04-27(월) 부터 13열. 5월 1일은 0열(일요일 05-03), 6월 1일은 5열(06-01 월), 7월 1일은 9열(일요일 07-05)에 있다.
+    var components = DateComponents()
+    components.year = 2026; components.month = 4; components.day = 27
+    let weekStart = TeamWeeklyGoal.kstCalendar.date(from: components)!
+
+    let labels = ContributionGridView.monthLabels(weekStart: weekStart, weeks: 13)
+
+    #expect(labels.count == 13)
+    #expect(labels[0] == 5)
+    #expect(labels[5] == 6)
+    #expect(labels[9] == 7)
+    #expect(labels.compactMap { $0 } == [5, 6, 7])
+    // 열이 없으면 라벨도 없다(empty 그리드).
+    #expect(ContributionGridView.monthLabels(weekStart: weekStart, weeks: 0).isEmpty)
+    // 첫 열의 월요일이 그 달 1일이면(2026-06-01) 첫 열에 라벨이 선다.
+    components.month = 6; components.day = 1
+    let juneStart = TeamWeeklyGoal.kstCalendar.date(from: components)!
+    #expect(ContributionGridView.monthLabels(weekStart: juneStart, weeks: 2).first == 6)
+}
+
+@MainActor
+@Test
+func contributionGridPaintsValuesAndLeavesFutureCellsTransparent() throws {
+    // 픽셀 판정: 값이 있는 칸은 옅은 바탕과 다른 색으로 칠해지고, 미래 칸은 값이 있어도 투명하다(아무것도 그리지 않는다).
+    let grid = sampleWorkDailyGrid()
+    func render(_ values: [[Int]]) throws -> NSBitmapImageRep {
+        try renderBitmap(
+            ContributionGridView(
+                weeks: grid.weeks, values: values, weekStart: grid.weekStart,
+                isFuture: grid.isFuture(week:weekday:), denominator: WorkDailyGrid.fullDaySeconds
+            )
+        )
+    }
+    let zeros = Array(repeating: Array(repeating: 0, count: 7), count: grid.weeks)
+    let blank = try render(zeros)
+    let painted = try render(grid.seconds)
+
+    // 높이 = 월 라벨 행 + 간격 + 7행×16 + 6×2 = 136pt(2배 스케일 272px) — 칸 크기가 바뀌면 여기서 걸린다.
+    let expectedHeight = ContributionGridView.monthLabelHeight + ContributionGridView.cellGap
+        + 7 * ContributionGridView.cellSize + 6 * ContributionGridView.cellGap
+    #expect(expectedHeight == 136)
+    #expect(blank.pixelsHigh == Int(expectedHeight) * 2)
+
+    // 값은 칸 영역(요일 라벨 오른쪽, 월 라벨 행 아래)의 픽셀을 바꾼다.
+    let diff = try #require(bitmapDiffBounds(blank, painted), "값이 있는 칸이 픽셀을 바꿔야 한다")
+    #expect(diff.minX >= Int(ContributionGridView.labelWidth + ContributionGridView.cellGap) * 2)
+    #expect(diff.minY >= Int(ContributionGridView.monthLabelHeight + ContributionGridView.cellGap) * 2)
+    // accent 로 칠해진 픽셀이 실제로 생겼다(fieldFill 만 바뀐 게 아니다).
+    #expect(accentPixelCount(painted, top: 0, bottom: painted.pixelsHigh - 1) > 0)
+    #expect(accentPixelCount(blank, top: 0, bottom: blank.pixelsHigh - 1) == 0)
+
+    // 미래 칸(이번 주 일요일)에 값을 넣어도 그림은 그대로다 — 투명 칸이라 색도 툴팁도 없다.
+    var leaked = zeros
+    leaked[grid.weeks - 1][6] = WorkDailyGrid.fullDaySeconds
+    #expect(grid.isFuture(week: grid.weeks - 1, weekday: 6))
+    let withFuture = try render(leaked)
+    #expect(bitmapDiffBounds(blank, withFuture) == nil)
+
+    // 같은 값을 과거 칸(첫 열 월요일)에 넣으면 그려진다(위 판정이 '아무것도 못 그림'이 아니라는 대조군).
+    var past = zeros
+    past[0][0] = WorkDailyGrid.fullDaySeconds
+    #expect(bitmapDiffBounds(blank, try render(past)) != nil)
+}
+
+@MainActor
+@Test
+func checkMenuViewRendersInsightsDailyGridSnapshot() throws {
+    // 개인 기록 패널 (c) 최근 12주 근무 잔디: 캡션 + 범례(적게→많이) + 월 라벨 + 13열×7행. 본문은 자연 높이가
+    // 창 상한을 넘겨 기본 상태에서도 잘려 스크롤로 넘어가므로(InsightsPanelChromeBudget), 스냅샷은 클립 모드로 그린다.
+    let store = makeInsightsStore()
+    store.dailyGrid = sampleWorkDailyGrid()
+    let withGrid = try renderBitmap(CheckMenuView(store: store, previewClipsOverflowList: true))
+    // 스냅샷은 같은 비트맵에서 뽑는다 — 같은 스토어를 또 그릴 이유가 없다(같은 입력은 바이트까지 같다).
+    saveV0211Snapshot(try #require(withGrid.representation(using: .png, properties: [:])), "insights-daily-grid")
+
+    // 잔디가 패널 픽셀을 실제로 바꾼다(배선 확인: 스토어 값이 뷰까지 닿는다).
+    let empty = makeInsightsStore()
+    empty.dailyGrid = .empty
+    let withoutGrid = try renderBitmap(CheckMenuView(store: empty, previewClipsOverflowList: true))
+    #expect(withGrid.pixelsHigh == withoutGrid.pixelsHigh)   // 둘 다 예산대로 잘려 같은 높이(695pt)에 선다.
+    // 서로 다른 스토어의 렌더는 상반부(회고 카드·히트맵 — 같은 픽스처)에도 ≤2/255 잡음이 깔린다(bitmapDiffBounds
+    // 주석). 바이트 일치로 비교하면 minY 가 0 으로 내려와 이 판정이 이 환경에서 결정적으로 빨갛다 — 잡음 위 문턱으로 본다.
+    let diff = try #require(bitmapDiffBounds(withGrid, withoutGrid, tolerance: 8), "잔디 값이 패널 픽셀에 드러나야 한다")
+    // 잔디는 히트맵 아래(본문의 하반부)에 있다 — 그 위(회고 카드·히트맵)는 잔디 유무로 달라지지 않는다.
+    #expect(diff.minY > withGrid.pixelsHigh / 2)
+    // 잡음이 아닌 실제 차이: 하반부에 accent 로 칠해진 칸이 잔디 쪽에만 더 있다(빈 잔디는 요일 라벨만 남는다).
+    let half = withGrid.pixelsHigh / 2
+    #expect(accentPixelCount(withGrid, top: half, bottom: withGrid.pixelsHigh - 1)
+        > accentPixelCount(withoutGrid, top: half, bottom: withoutGrid.pixelsHigh - 1))
+    // 잔디 유무와 무관하게 창은 상한 안이다(본문이 예산대로 잘린다).
+    #expect(Double(withGrid.pixelsHigh) / 2.0 <= 700.0)
+    #expect(Double(withoutGrid.pixelsHigh) / 2.0 <= 700.0)
+}
+
+@Test
+func contributionGridTooltipNamesTheDayAndTheValue() throws {
+    // 툴팁 "9월 3일 · 4시간 12분" — 픽셀 테스트는 .help 를 못 보므로 날짜 오프셋(주×7+요일)과 포맷을 순수 함수로 못 박는다.
+    // 2026-04-27(월) 원점: 12열 2행 = +86일 = 07-22(수), 0열 0행 = 04-27, 0열 6행 = 05-03(일), 5열 0행 = 06-01(월).
+    var components = DateComponents()
+    components.year = 2026; components.month = 4; components.day = 27
+    let weekStart = TeamWeeklyGoal.kstCalendar.date(from: components)!
+    let threeHours = WorkDailyGrid.tooltipValueText(3 * 3_600)
+
+    #expect(ContributionGridView.tooltipText(weekStart: weekStart, week: 12, weekday: 2, valueText: threeHours) == "7월 22일 · 3시간 00분")
+    #expect(ContributionGridView.tooltipText(weekStart: weekStart, week: 0, weekday: 0, valueText: "x") == "4월 27일 · x")
+    #expect(ContributionGridView.tooltipText(weekStart: weekStart, week: 0, weekday: 6, valueText: "x") == "5월 3일 · x")
+    #expect(ContributionGridView.tooltipText(weekStart: weekStart, week: 5, weekday: 0, valueText: "x") == "6월 1일 · x")
+    // 값 문구는 호출부 몫 — 그리드는 데이터 종류를 모른다(토큰 잔디가 "1.2M 토큰"을 넘겨도 그대로 붙는다).
+    #expect(ContributionGridView.tooltipText(weekStart: weekStart, week: 1, weekday: 1, valueText: "1.2M 토큰") == "5월 5일 · 1.2M 토큰")
+
+    // 근무 잔디의 값 문구: 0 은 "근무 없음", 그 외는 헤더와 같은 "N시간 MM분".
+    #expect(WorkDailyGrid.tooltipValueText(0) == "근무 없음")
+    #expect(WorkDailyGrid.tooltipValueText(-1) == "근무 없음")
+    #expect(WorkDailyGrid.tooltipValueText(60) == "0시간 01분")
+    #expect(WorkDailyGrid.tooltipValueText(4 * 3_600 + 12 * 60) == "4시간 12분")
+    #expect(threeHours == "3시간 00분")
+    // 모델의 칸 날짜 계산기와 같은 날을 가리킨다(두 오프셋 계산이 갈라지면 툴팁이 잔디와 하루 어긋난다).
+    let grid = WorkDailyGrid.build(parsed: [], now: dailyGridFixtureNow)
+    for (week, weekday) in [(0, 0), (3, 4), (grid.weeks - 1, 1)] {
+        let day = grid.date(week: week, weekday: weekday)!
+        let c = TeamWeeklyGoal.kstCalendar.dateComponents([.month, .day], from: day)
+        #expect(ContributionGridView.tooltipText(weekStart: grid.weekStart, week: week, weekday: weekday, valueText: "v")
+            == "\(c.month!)월 \(c.day!)일 · v")
+    }
+
+    // 배선(주석 제거 후 소스 계약): 패널이 위 순수 함수를 그대로 넘긴다 — 여기 리터럴 클로저를 두면 위 단언이
+    // 초록인 채로 실제 툴팁만 달라진다(툴팁은 픽셀에 안 나오므로 이 줄이 유일한 배선 근거다).
+    let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
+    #expect(source.contains("valueText: WorkDailyGrid.tooltipValueText"))
+    #expect(!source.contains("\"근무 없음\""))
+}
+
+@MainActor
+@Test
+func insightsOverflowFadeMarksTheClippedBottomOfTheBody() throws {
+    // 본문이 예산에 깎이면(기본 상태부터 그렇다) 바닥에 패널색 그라데이션을 얹어 "아래에 더 있다"를 알린다 —
+    // 잔디 7행 중 서너 행만 접힘선 위에 남는데 스크롤 인디케이터는 기본 설정에서 숨어 있어, 이 단서가 없으면
+    // 잘린 잔디가 '3행짜리 잔디'로 읽힌다. (1) 그라데이션 자체: 위는 투명(바탕이 비침), 아래는 패널색.
+    let fade = try renderBitmap(InsightsOverflowFade().background(Color(red: 1, green: 0, blue: 0)), width: 100)
+    #expect(fade.pixelsHigh == Int(InsightsOverflowFade.height) * 2)
+    #expect(InsightsOverflowFade.height == 22)
+    func rgb(_ bitmap: NSBitmapImageRep, x: Int, y: Int) -> (Int, Int, Int) {
+        let data = bitmap.bitmapData!
+        let offset = y * bitmap.bytesPerRow + x * bitmap.samplesPerPixel
+        return (Int(data[offset]), Int(data[offset + 1]), Int(data[offset + 2]))
+    }
+    let top = rgb(fade, x: 50, y: 0)
+    let bottom = rgb(fade, x: 50, y: fade.pixelsHigh - 1)
+    #expect(top.0 >= 240 && top.1 <= 15 && top.2 <= 15, "맨 위는 바탕(빨강)이 그대로 비쳐야 한다")
+    // 맨 아래는 CheckTheme.panel(0.17, 0.18, 0.24 → 43, 46, 61) 에 수렴한다.
+    #expect(abs(bottom.0 - 43) <= 6 && abs(bottom.1 - 46) <= 6 && abs(bottom.2 - 61) <= 6, "맨 아래는 패널색이어야 한다")
+
+    // (2) 배선(주석 제거 후 소스 계약): 깎인 두 경로(스크롤·클립) 모두 바닥에 그라데이션을 얹고, 스크롤 내용 끝에 같은
+    //     높이의 여백을 둔다(끝까지 내렸을 때 잔디 마지막 행이 아니라 여백이 그라데이션 아래 놓이도록). 깎이지 않는
+    //     경로(else)에는 없다 — 두 번만 나와야 한다.
+    let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
+    let panel = try #require(swiftStructBody(source, name: "InsightsPanel"))
+    #expect(panel.components(separatedBy: ".overlay(alignment: .bottom) { InsightsOverflowFade() }").count - 1 == 2)
+    #expect(panel.components(separatedBy: ".padding(.bottom, InsightsOverflowFade.height)").count - 1 == 2)
+    #expect(panel.contains("ScrollView(.vertical, showsIndicators: true)"))
+
+    // (3) 픽셀(클립 모드 스냅샷): 접힘선에 걸려 잘린 잔디 행은 그라데이션 아래에서 accent 로 읽히지 않는다.
+    //     그라데이션이 없으면 잘린 칸의 accent 가 접힘선(그 아래는 곧바로 패널 padding)까지 닿아 마지막 accent 행과
+    //     패널색 연속 구간 사이가 0~4px(칸 간격)다. 그라데이션이 있으면 칸이 1/3 지점부터 accent 판정을 잃어
+    //     그 사이가 그라데이션 높이의 2/3(≈29px) 이상 벌어진다. 픽스처 1열(week 1)은 월~목이 2/4/6/8시간이라
+    //     잘린 목요일 행이 가장 진한 칸이다 — 그라데이션이 빠지면 바로 그 칸이 접힘선까지 accent 로 닿는다.
+    let store = makeInsightsStore()
+    store.dailyGrid = sampleWorkDailyGrid()
+    #expect(store.dailyGrid.seconds[1][3] == WorkDailyGrid.fullDaySeconds)
+    let clipped = try renderBitmap(CheckMenuView(store: store, previewClipsOverflowList: true))
+    // 1열 칸의 가운데 x: 바깥 12 + 패널 12 + 요일 라벨 20 + 간격 2 + 한 열(16 + 2) + 반 칸 8 = 72pt.
+    let column = 72 * 2
+    let gap = try #require(gapBetweenLastAccentAndPanelRun(clipped, x: column), "잔디 칸 아래에 패널색 구간이 있어야 한다")
+    #expect(gap >= 8, "잘린 행이 그라데이션 없이 접힘선까지 accent 로 닿았다(gap \(gap)px)")
+    #expect(gap <= Int(InsightsOverflowFade.height) * 2 + 4)
+}
+
+/// x 열을 아래에서 위로 훑어, 마지막 accent 픽셀 행과 그 **아래**에서 시작하는 패널색(CheckTheme.panel ±4)
+/// 20px 연속 구간 사이의 거리(px). accent 픽셀이 없거나 그 아래 패널색 구간이 없으면 nil.
+/// InsightsOverflowFade 의 픽셀 근거 전용 — 그라데이션은 accent 칸을 패널색으로 잦아들게 하므로 이 거리가 벌어진다.
+private func gapBetweenLastAccentAndPanelRun(_ bitmap: NSBitmapImageRep, x: Int) -> Int? {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3, x < bitmap.pixelsWide else { return nil }
+    let bpr = bitmap.bytesPerRow
+    let spp = bitmap.samplesPerPixel
+    func rgb(_ y: Int) -> (Int, Int, Int) {
+        let offset = y * bpr + x * spp
+        return (Int(data[offset]), Int(data[offset + 1]), Int(data[offset + 2]))
+    }
+    func isAccent(_ y: Int) -> Bool {
+        let (r, g, b) = rgb(y)
+        return b >= 190 && b > r + 80 && g > r + 40 && g < b
+    }
+    func isPanel(_ y: Int) -> Bool {
+        let (r, g, b) = rgb(y)
+        return abs(r - 43) <= 4 && abs(g - 46) <= 4 && abs(b - 61) <= 4
+    }
+    guard let lastAccent = (0..<bitmap.pixelsHigh).reversed().first(where: isAccent) else { return nil }
+    var y = lastAccent + 1
+    while y + 20 <= bitmap.pixelsHigh {
+        if (y..<(y + 20)).allSatisfy(isPanel) { return y - lastAccent }
+        y += 1
+    }
+    return nil
+}
+
+@MainActor
+@Test
+func insightsPanelShowsTheGrassEvenWhenLastWeekWasEmpty() throws {
+    // 지난주가 비어도(휴가) 최근 12주에 기록이 있으면 자리 문구 대신 본문을 그린다 — 안 그러면 잔디가 있는데도
+    // "지난주 근무 기록이 없어요" 한 줄만 떠서 12주 기록이 통째로 안 보인다. 회고 카드는 자기 빈 줄로 지난주를 말한다.
+    let grid = sampleWorkDailyGrid()
+    #expect(grid.totalSeconds > 0)
+    #expect(InsightsEmptyMessage.text(hasLoaded: true, totalSeconds: 0 + grid.totalSeconds) == nil)
+    #expect(InsightsEmptyMessage.text(hasLoaded: true, totalSeconds: 0) == InsightsEmptyMessage.noData)
+
+    let withGrass = makeInsightsStore(withData: false, loaded: true)
+    withGrass.dailyGrid = grid
+    let placeholder = makeInsightsStore(withData: false, loaded: true)
+    let grassHeight = try #require(renderedPixelHeight(CheckMenuView(store: withGrass, previewClipsOverflowList: true)))
+    let placeholderHeight = try #require(renderedPixelHeight(CheckMenuView(store: placeholder, previewClipsOverflowList: true)))
+    #expect(grassHeight > placeholderHeight)
+    #expect(Double(grassHeight) / 2.0 <= 700.0)
+    saveV0211Snapshot(try renderPNG(CheckMenuView(store: withGrass, previewClipsOverflowList: true)), "insights-grass-only")
+
+    // 이 본문은 회고 카드가 빈 줄 하나라 97pt 짧다(실측 390pt) — 크롬이 없으면 깎지 않아 스크롤도, 바닥의 빈 띠도 없다.
+    // (큰 본문 기준 425pt 로 못 박으면 390pt 본문 아래 35pt 가 늘 비어 보인다.) 이 상태의 창은 실측 660pt.
+    let short = InsightsPanelChromeBudget.contentNaturalHeightWithoutLastWeek
+    #expect(short < InsightsPanelChromeBudget.contentNaturalHeight)
+    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: 0, naturalHeight: short) == nil)
+    let scrollHeight = try #require(renderedPixelHeight(CheckMenuView(store: withGrass)))   // 실제 앱 경로(ScrollView 없음)
+    #expect(Double(scrollHeight) / 2.0 == 660)
+    // 목표 편집 행(92)이 얹히면 늘어난 여유(+35)를 넘긴 57pt 만 깎아 창은 다시 695pt 에 선다.
+    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: CheckMenuView.goalEditorHeight, naturalHeight: short) == short - 57)
+    let withEditor = try #require(renderedPixelHeight(CheckMenuView(store: withGrass, previewGoalEditing: true)))
+    #expect(Double(withEditor) / 2.0 == 695)
+
+    // 소스 계약(주석 제거 후): 자리 문구의 총량에 잔디 누적이 더해지고, 패널이 스토어의 잔디를 받아 8시간 분모로 그린다.
+    let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
+    #expect(source.contains("totalSeconds: heatmap.totalSeconds + dailyGrid.totalSeconds"))
+    #expect(source.contains("dailyGrid: store.dailyGrid"))
+    #expect(source.contains("denominator: WorkDailyGrid.fullDaySeconds"))
 }
 
 // MARK: - 창 높이 상한(≤700pt) — 배너·토큰 행·패널이 겹치는 최악 조합
@@ -2138,14 +2461,25 @@ func insightsPanelWindowHeightWithinCapWithChrome() throws {
         return points
     }
 
-    // 예산 계산 자체를 못 박는다: 목표 편집 행(92) + 12시간 배너(92) = 184pt 는 여유(118)를 66pt 넘기므로
-    // 본문을 그만큼 깎아 스크롤로 넘긴다. 배너 하나만으로는 여유 안이라 아무것도 깎지 않는다.
+    // 예산 계산 자체를 못 박는다. 12주 잔디가 붙은 뒤로는 본문 자연 높이(487)만으로 상한을 넘겨 여유가 음수(−62)다 —
+    // 크롬이 없어도 본문을 62pt 깎아 425pt 로 스크롤에 넘기고(창 695pt), 목표 편집 행(92) + 12시간 배너(92) = 184pt 가
+    // 얹히면 그만큼 더 깎는다. 회고 카드 + 히트맵(307pt)은 기본 상태에서 깎인 뒤에도 온전히 보인다.
+    #expect(InsightsPanelChromeBudget.chromeSlack < 0)
+    #expect(InsightsPanelChromeBudget.contentNaturalHeight + InsightsPanelChromeBudget.chromeSlack >= 307)
+    #expect(
+        InsightsPanelChromeBudget.capHeight(extraChromeHeight: 0)
+            == InsightsPanelChromeBudget.contentNaturalHeight + InsightsPanelChromeBudget.chromeSlack
+    )
     let worstChrome = CheckMenuView.goalEditorHeight + CheckMenuView.longSessionBannerHeight
     #expect(
         InsightsPanelChromeBudget.capHeight(extraChromeHeight: worstChrome)
             == InsightsPanelChromeBudget.contentNaturalHeight - (worstChrome - InsightsPanelChromeBudget.chromeSlack)
     )
-    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: CheckMenuView.longSessionBannerHeight) == nil)
+    // 최악 조합에서도 바닥(minContentHeight)에 닿지 않아 창이 정확히 상한 안에 멈춘다.
+    #expect(
+        InsightsPanelChromeBudget.contentNaturalHeight - (worstChrome - InsightsPanelChromeBudget.chromeSlack)
+            > InsightsPanelChromeBudget.minContentHeight
+    )
 
     // (a) 목표 편집 행 + 12시간 확인 배너(가장 부푸는 조합).
     let longSession = makeInsightsStore()
@@ -2158,13 +2492,15 @@ func insightsPanelWindowHeightWithinCapWithChrome() throws {
     let update = makeInsightsStore()
     _ = try measure("insights+goalEditor+updateBanner", CheckMenuView(store: update, previewGoalEditing: true, previewUpdateBanner: true, previewUpdateNotes: sampleUpdateNotes))
 
-    // (c) 목표 편집 행만(여유 안이라 본문을 깎지 않는다 — 불필요한 스크롤을 만들지 않는다).
+    // (c) 목표 편집 행만 — 여유가 음수라 이것도 그만큼 더 깎는다(창은 기본 상태와 같은 높이에 멈춘다).
     let goalOnly = try measure("insights+goalEditor", CheckMenuView(store: makeInsightsStore(), previewGoalEditing: true))
-    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: CheckMenuView.goalEditorHeight) == nil)
+    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: CheckMenuView.goalEditorHeight) != nil)
 
-    // (d) 크롬이 없으면 기본 상태 그대로(스크롤 없음).
+    // (d) 크롬이 없어도 본문은 예산대로 잘려 창이 상한 바로 아래(700 − 5pt 안전 여유)에 선다.
+    //     실측이 예산 상수와 어긋나면 여기서 잡힌다(자연 높이가 바뀌었는데 상수를 안 고친 경우).
     let plain = try measure("insights", CheckMenuView(store: makeInsightsStore()))
-    #expect(goalOnly > plain)  // 목표 편집 행만큼만 자란다(본문은 그대로).
+    #expect(plain == 695)
+    #expect(goalOnly == plain)  // 목표 편집 행이 먹은 만큼 본문이 깎여 창 높이는 그대로다.
 }
 
 @MainActor
@@ -2985,9 +3321,16 @@ private func renderBitmap(_ view: some View, width: CGFloat = 340, scale: CGFloa
 }
 
 /// 두 렌더에서 서로 다른 픽셀이 이루는 사각형(픽셀 좌표, 원점 좌상단). 완전히 같으면 nil.
+///
+/// tolerance: 채널 차가 이 값 **이하**면 같은 픽셀로 본다(기본 0 = 바이트 일치). 같은 스토어를 두 번 그리면
+/// 바이트까지 같지만, **서로 다른 스토어**로 같은 팝오버를 그리면 전혀 다르지 않은 자리(바깥 여백까지)에서
+/// 채널당 ≤2/255 의 저진폭 잡음이 수천 픽셀 생긴다(ImageRenderer 의 합성 경로가 서브트리 차이에 따라 달라지는
+/// 것으로 보인다 — 실측 maxΔ 2, >4 는 0). 그 잡음이 diff 의 minY 를 0 으로 끌어내려 "차이는 하반부에만 있다" 같은
+/// 위치 판정을 결정적으로 깨뜨린 적이 있다(잔디 배선 테스트). 위치를 묻는 전체 팝오버 비교는 tolerance 8 을 쓴다.
 private func bitmapDiffBounds(
     _ a: NSBitmapImageRep,
-    _ b: NSBitmapImageRep
+    _ b: NSBitmapImageRep,
+    tolerance: Int = 0
 ) -> (minX: Int, minY: Int, maxX: Int, maxY: Int)? {
     guard a.pixelsWide == b.pixelsWide, a.pixelsHigh == b.pixelsHigh,
           let pa = a.bitmapData, let pb = b.bitmapData
@@ -3001,7 +3344,7 @@ private func bitmapDiffBounds(
             var sample = 0
             var differs = false
             while sample < spp {
-                if pa[offset + sample] != pb[offset + sample] { differs = true; break }
+                if abs(Int(pa[offset + sample]) - Int(pb[offset + sample])) > tolerance { differs = true; break }
                 sample += 1
             }
             guard differs else { continue }

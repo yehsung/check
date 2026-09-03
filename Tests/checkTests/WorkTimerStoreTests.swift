@@ -4607,6 +4607,79 @@ func insightsIncludeTheRunningSessionThatCrossedTheWeekBoundary() async {
 
 @MainActor
 @Test
+func insightsLoadFillsTheDailyGridAndWeekRolloverOrSignOutResetsIt() async throws {
+    // 12주 잔디는 히트맵/회고와 같은 조회·같은 파싱에서 함께 채워지고, 주가 바뀌거나 로그아웃하면 함께 비워진다.
+    // 이 호스트는 '지난주 월요일 10~12시' 완료 세션 하나를 준다(회고 배너 픽스처 재사용).
+    let testHost = "signin-retro-banner-test"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(testHost)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    #expect(store.dailyGrid == .empty)
+
+    await store.performLoadInsights()
+
+    // 조회 창은 잔디 시작(이번 주 월요일 − 12주)까지 넓어졌다 — 요청의 since 가 그 날짜다.
+    let request = try #require(URLProtocolStub.requests(forHost: testHost).last {
+        $0.url?.path == "/rest/v1/work_sessions" && $0.httpMethod == "GET"
+    })
+    let since = WorkTimerStore.insightsWindowStart()
+    #expect(since == WorkDailyGrid.windowStart(now: Date()))
+    let requestURL = try #require(request.url)
+    let items = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false)?.queryItems)
+    #expect(items.contains(URLQueryItem(name: "ended_at", value: "gte.\(ISO8601DateFormatter().string(from: since))")))
+    #expect(items.contains(URLQueryItem(name: "limit", value: "5000")))
+
+    // 잔디: 13열, 지난주(11열) 월요일 칸에 2시간. 히트맵/회고는 넓어진 창에서도 예전 값 그대로다.
+    #expect(store.insightsLoaded)
+    #expect(store.dailyGrid.weeks == 13)
+    #expect(store.dailyGrid.seconds[11][0] == 7_200)
+    #expect(store.dailyGrid.totalSeconds == 7_200)
+    #expect(store.dailyGrid.weekStart == WorkDailyGrid.windowStart(now: Date()))
+    #expect(store.heatmap.totalSeconds == 7_200)
+    #expect(store.retro?.totalSeconds == 7_200)
+
+    // 진행 중 세션은 오늘 칸에 '지금까지'만 얹힌다(완료 행이 오기 전 이중 계상 없음).
+    store.startedAt = Date().addingTimeInterval(-600)
+    await store.performLoadInsights()
+    #expect(store.dailyGrid.totalSeconds >= 7_200 + 600)
+    #expect(store.dailyGrid.totalSeconds <= 7_200 + 605)
+    store.startedAt = nil
+    await store.performLoadInsights()
+    #expect(store.dailyGrid.totalSeconds == 7_200)
+
+    // 주가 바뀌면(주 키 불일치) 재계산 시작 시 잔디도 버린다 — 지난주가 마지막 열인 채 '오늘'인 척 남지 않게.
+    store.insightsWeekKey = "2020-01-06"
+    store.discardInsightsIfWeekRolledOver()
+    #expect(store.dailyGrid == .empty)
+    #expect(store.heatmap == .empty)
+    #expect(!store.insightsLoaded)
+
+    // 같은 주면 버리지 않는다.
+    await store.performLoadInsights()
+    #expect(store.dailyGrid.totalSeconds == 7_200)
+    store.discardInsightsIfWeekRolledOver()
+    #expect(store.dailyGrid.totalSeconds == 7_200)
+
+    // 로그아웃은 잔디까지 비운다(다음 계정에 앞 사람의 잔디를 물려주지 않는다).
+    store.signOut()
+    #expect(store.dailyGrid == .empty)
+}
+
+@MainActor
+@Test
 func insightsLoadFailureIsDistinguishableFromLoading() async {
     // 회귀 지점: performLoadInsights 의 catch 가 아무 상태도 세우지 않아, 조회가 실패해도 패널이
     // "불러오는 중…" 그대로 멈춰 있었다(진행중과 실패가 같은 문구 + 패널 안 재시도 경로 없음).

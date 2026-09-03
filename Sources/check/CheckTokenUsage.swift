@@ -897,12 +897,31 @@ enum TokenUsageIncrementalScanner {
                 matching: { $0.lastPathComponent.hasPrefix("rollout-") && $0.pathExtension == "jsonl" }
             )
         }
-        // 이번 순회에서 실제로 본 경로. 아래 "사라진 파일 정리"가 이 집합을 쓴다.
+        scanCodexFiles(&cache, files: files, roots: roots, monthString: monthString, stats: &stats)
+    }
+
+    /// 열거된 파일 목록으로 codex 상태를 갱신한다(열거와 분리한 이유: 테스트가 "열거 뒤 옮겨진 파일" — 목록엔 있는데 읽을 수
+    /// 없는 경로 — 를 손으로 만든 목록으로 재현할 수 있게. 실제 순회에선 두 루트를 차례로 열거하는 사이에 보관(rename)이
+    /// 일어나면 정확히 그 모양이 된다).
+    static func scanCodexFiles(
+        _ cache: inout TokenUsageCache, files: [(url: URL, size: Int, mtimeMicros: Int)], roots: [URL],
+        monthString: String, stats: inout Stats
+    ) {
+        // 이번 순회에서 **실제로 확인한** 경로(무변경 스킵 또는 읽기 성공). 아래 "사라진 파일 정리"가 이 집합을 쓴다.
+        // 열거 직후가 아니라 읽기 성공 뒤에 넣는 것이 요건이다(리뷰 P2): 열거와 읽기 사이에 보관(rename)된 파일은 옛 경로 읽기가
+        // 실패해 옛 상태가 그대로 남는데, 그것을 '본 것'으로 치면 정리를 건너뛰어 새 경로 상태와 함께 **정확히 두 배**로 잡히고
+        // 배경 경로에선 그 값이 곧바로 업로드된다. 읽기 실패 경로는 정리 규칙(존재 확인 → .zst 확인)에 그대로 맡긴다.
+        //
+        // 무변경 스킵 분기는 파일을 열지 않으므로 '읽기 실패'가 없다 — 그런데 보관은 mtime 을 보존하는 rename 이라 열거가 준
+        // stat 은 옛 상태와 **같다**(= 그 분기를 탄다). 그래서 같은 이름이 두 루트 목록에 함께 있으면(rollout 이름에 UUID 가 있어
+        // 정상 상태에선 있을 수 없다) 한쪽은 열거 뒤 옮겨진 낡은 항목이다 — 그 경우에만 존재를 확인하고 없으면 seen 으로 치지
+        // 않는다(정리 규칙이 지운다). 평상시엔 이름 집계 한 번뿐이라 stat 이 늘지 않는다.
         var seenPaths = Set<String>()
+        var nameCounts: [String: Int] = [:]
+        for f in files { nameCounts[f.url.lastPathComponent, default: 0] += 1 }
         for f in files {
             stats.codexFilesStatted += 1
             let path = f.url.path
-            seenPaths.insert(path)
             let prior = cache.codexFileStates[path]
 
             // 파일별 상태 시작값. 이어읽기면 직전 상태를 잇고, 신규/축소/역행이면 처음부터(0). 월 롤오버는 키가 바뀐
@@ -924,6 +943,10 @@ enum TokenUsageIncrementalScanner {
                 // (안 그러면 지난달 누적이 이번달 표시로 샌다). 월이 그대로면 완전 무변경이라 스킵(캐시 변경 없음) —
                 // 일 롤오버는 더 이상 상태를 건드리지 않는다(일별 맵이 날짜를 키로 들고 있어 오늘 값이 저절로 0 이다).
                 if p.size == f.size, p.mtimeMicros == f.mtimeMicros {
+                    if nameCounts[f.url.lastPathComponent, default: 0] > 1, !FileManager.default.fileExists(atPath: path) {
+                        continue   // 열거 뒤 다른 루트로 옮겨진 낡은 항목 — 옛 상태는 아래 정리 규칙이 지운다.
+                    }
+                    seenPaths.insert(path)
                     if !sameMonth {
                         cache.codexFileStates[path] = CodexFileProgress(
                             size: p.size, mtimeMicros: p.mtimeMicros, consumedOffset: p.consumedOffset,
@@ -989,6 +1012,7 @@ enum TokenUsageIncrementalScanner {
                 }
                 baseline = (input, output, cached)
             }) else { continue }
+            seenPaths.insert(path)
             stats.codexFilesRead += 1
             stats.codexBytesRead += read.bytesRead
 
@@ -1033,14 +1057,44 @@ enum TokenUsageIncrementalScanner {
         // 보관(rename → archived_sessions/)으로 경로가 바뀐 파일: 옛 경로 상태는 `.jsonl` 도 `.zst` 도 없어 여기서 정리되고,
         // 새 경로는 이번 순회(두 번째 루트)에서 0 부터 파싱되며 첫 이벤트가 기준선이므로 그 파일의 이번 달 델타 합이
         // 전량 재파싱과 **같은 값**으로 재구성된다(비용은 한 번의 재읽기뿐, 이중 계상 없음 — 테스트가 증명한다).
+        //
+        // **이미 압축된 파일이 옮겨진 경우**(리뷰 P2, codex 소스로 확인): 보관은 `existing_rollout_path` 가 고른 물리 경로를
+        // 그대로 rename 하므로 `.jsonl.zst` 는 `archived_sessions/<같은 이름>.zst` 로 가고, 보관 해제는 파일명의 날짜로
+        // `sessions/YYYY/MM/DD/<같은 이름>.zst` 로 돌아온다(`rollout_file_name.rs` 가 `.zst` 를 벗겨 파싱한다). 그때 옛 경로엔
+        // `.jsonl` 도 `.zst` 도 없어 옛 규칙은 상태를 지웠고 새 경로의 `.zst` 는 읽을 수 없어 그 파일 몫이 통째로 사라졌다.
+        // 그래서 동결 사유에 **다른 루트의 동명 `.zst`** 도 넣는다(compressedTwinCandidates). 동명 `.jsonl` 이 다른 루트에
+        // 있으면 그것은 이번 순회에 새 키로 파싱됐으니 옛 상태를 지워야 한다(안 지우면 이중 계상) — `.zst` 만 동결이다.
         let beforeStates = cache.codexFileStates.count
         cache.codexFileStates = cache.codexFileStates.filter { path, state in
             if state.monthKey != monthString { return true }
             if seenPaths.contains(path) { return true }
             if FileManager.default.fileExists(atPath: path) { return true }
-            return FileManager.default.fileExists(atPath: path + ".zst")
+            return compressedTwinCandidates(for: path, roots: roots).contains { FileManager.default.fileExists(atPath: $0) }
         }
         if cache.codexFileStates.count != beforeStates { stats.statesChanged = true }
+    }
+
+    /// 사라진 rollout 경로의 압축 쌍둥이 후보(순수). ① 같은 경로 + `.zst`, ② archived 루트의 `<이름>.zst`(보관),
+    /// ③ sessions 루트의 `YYYY/MM/DD/<이름>.zst`(보관 해제 — 날짜는 파일명 `rollout-YYYY-MM-DD…` 에서, codex 의
+    /// `rollout_date_parts` 와 같은 규칙). 후보가 있을 때만 stat 하므로 평상시 비용 0. roots 는 codexRoots 의 순서(sessions, archived).
+    static func compressedTwinCandidates(for path: String, roots: [URL]) -> [String] {
+        var out = [path + ".zst"]
+        let name = (path as NSString).lastPathComponent
+        guard roots.count >= 2, name.hasPrefix("rollout-") else { return out }
+        let sessionsRoot = roots[0]
+        let archivedRoot = roots[1]
+        let archived = archivedRoot.appendingPathComponent(name + ".zst").path
+        if archived != out[0] { out.append(archived) }
+        // rollout-YYYY-MM-DD... → YYYY/MM/DD
+        let date = name.dropFirst("rollout-".count)
+        if date.count >= 10 {
+            let y = date.prefix(4), m = date.dropFirst(5).prefix(2), d = date.dropFirst(8).prefix(2)
+            if y.allSatisfy(\.isNumber), m.allSatisfy(\.isNumber), d.allSatisfy(\.isNumber) {
+                let restored = sessionsRoot.appendingPathComponent("\(y)/\(m)/\(d)/\(name).zst").path
+                if !out.contains(restored) { out.append(restored) }
+            }
+        }
+        return out
     }
 
     // MARK: 합계 / 퇴거

@@ -499,9 +499,14 @@ extension WorkTimerStore {
     /// TokenUsageStore 가 지난달 스냅샷을 복원하지 않아 nil 이 곧 롤오버의 실제 모양이다)면 force 로 당겨 돈다.
     /// 그 판정은 첫 스캔 전(앱 시작 직후·팝오버 첫 열림)에도 참이라 30초 틱마다 걸리는데, 스토어의 60초 하한
     /// (forcedRefreshFloor)이 프로세스 난사를 막는다 — 첫 스캔이 끝나면(수 초) usage 가 채워져 판정이 꺼진다.
+    ///
+    /// 프로브는 업로드보다 게이트가 하나 더 있다: **수집 설정이 서버에서 도착한 뒤**(tokenUsagePublicLoaded) 에만 돈다.
+    /// 업로드는 설정 도착 전 기본값(수집)으로 한두 번 나가도 서버 트리거가 버리지만, 프로브는 이 맥에서 외부 프로세스
+    /// (`codex app-server`)를 띄우는 일이라 서버가 막을 수 없다 — 거부자의 맥에서 로그인 직후 한 틱이라도 뜨면 프라이버시 규약
+    /// 위반이다(리뷰 P2). 설정은 폴링 첫 유효 틱에서 오므로 프로브는 그만큼(수십 초) 늦을 뿐이다.
     func uploadTokenUsageIfNeeded(now: Date = Date()) async {
         let usage = tokenUsage.currentMonthUsage
-        if session != nil, tokenUsageCollect {
+        if session != nil, tokenUsageCollect, tokenUsagePublicLoaded {
             let rolledOver = usage?.month != TokenUsageIncrementalScanner.kstMonthString(now)
             await codexAccount.refreshIfDue(now: now, force: rolledOver)
         }

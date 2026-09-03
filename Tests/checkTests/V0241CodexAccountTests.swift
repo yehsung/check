@@ -6,12 +6,15 @@ import Testing
 //
 // 이 파일이 지키는 것:
 //   (A) 스캐너 — archived_sessions 루트 집계, 보관(rename) 무손실·무중복, `.zst` 동결 보존, `.zst` 없는 삭제는 정리,
+//       압축된 채 루트를 옮긴 파일 동결(리뷰 P2), 열거 뒤 옮겨진 경로의 옛 상태 정리(리뷰 P2 — 이중 계상 방지),
 //       캐시 델타 분리(필드별 클램프), 일별 맵·todayTotal 파생 일치, 월 롤오버 시 일별 맵 비움, CODEX_HOME 재정의,
 //       진단 스캐너의 두 루트 항등식.
-//   (B) 계정 프로브 파서 — 정상/잡음/에러/null 버킷/잘림/월합·UTC prefix/보관 정리/요청 모양/폴백 후보.
-//   (C) 계정 스토어 — 1800초 간격·force·auth.json 부재(프로세스 0)·영속 왕복·실패 시 직전 스냅샷 유지·재진입.
+//   (B) 계정 프로브 파서 — 정상/잡음/에러/null 버킷/잘림/월합·UTC prefix/보관 정리/요청 모양/폴백 후보/후보 PATH(리뷰 P1)/
+//       셸 조회 파서/툴체인 확정 규칙.
+//   (C) 계정 스토어 — 1800초 간격·force·auth.json 부재(프로세스 0)·CODEX_HOME 아래 auth.json(리뷰 P2)·영속 왕복·
+//       실패 시 직전 스냅샷 유지·재진입.
 //   (D) 업로드 계약(URLProtocolStub) — 본문 키 존재/생략, 로컬 0 + 계정 > 0 업로드, 계정값만 바뀌어도 업로드,
-//       하트비트 5키 불변, 기본 스토어는 프로세스를 띄우지 않는다.
+//       하트비트 5키 불변, 기본 스토어는 프로세스를 띄우지 않는다, 수집 설정 도착 전엔 프로브 없음(리뷰 P2).
 //   (E) 보드 디코드(새 컬럼 있음/없음) · 표시 산식 경계 · 소스/SQL 계약.
 //
 // 모든 테스트는 임시 홈의 픽스처만 읽고, **실제 `codex` 를 절대 실행하지 않는다**(러너 주입·inert).
@@ -85,6 +88,14 @@ private func c41Scan(_ cache: TokenUsageCache = TokenUsageCache(), home: URL, co
 private func c41State(_ cache: TokenUsageCache, _ url: URL) -> CodexFileProgress? {
     let tail = url.pathComponents.suffix(3).joined(separator: "/")
     return cache.codexFileStates.first { $0.key.hasSuffix(tail) }?.value
+}
+
+/// 열거자와 같은 정규 경로(realpath — `/var` → `/private/var`). `resolvingSymlinksInPath()` 는 `/private` 접두어를 일부러 벗기므로
+/// 쓸 수 없다. 손으로 만든 파일 목록을 스캐너에 넘길 때 키가 갈리지 않게 한다(파일이 존재해야 한다).
+private func c41Canonical(_ url: URL) -> URL {
+    guard let raw = realpath(url.path, nil) else { return url }
+    defer { free(raw) }
+    return URL(fileURLWithPath: String(cString: raw), isDirectory: false)
 }
 
 // MARK: - (A) 스캐너
@@ -192,6 +203,151 @@ func scannerStillDropsVanishedRolloutWhenNoCompressedTwinExists() {
     #expect(r2.usage.codexTotal == 2_000)
     #expect(c41State(r2.cache, a) == nil)
     #expect(r2.stats.statesChanged == true)
+}
+
+/// 이미 압축된(`.zst`) 파일이 보관/보관 해제로 루트를 옮겨도 이번 달 기여가 보존된다(리뷰 P2 — codex 소스로 확인:
+/// 보관은 물리 경로 `.jsonl.zst` 를 그대로 archived_sessions 로 rename 하고, 보관 해제는 파일명 날짜로 sessions/YYYY/MM/DD 에 되돌린다).
+/// 옛 규칙(같은 경로의 `.zst` 만 확인)은 옛 경로에 아무것도 없어 상태를 지웠고 새 경로의 `.zst` 는 읽을 수 없어 몫이 사라졌다.
+/// 뮤테이션: compressedTwinCandidates 를 `[path + ".zst"]` 로 되돌리면 빨강.
+@Test
+func scannerFreezesCompressedRolloutMovedBetweenRoots() {
+    let home = c41TempHome("zst-move")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let name = "rollout-2026-07-05T00-00-00-mvz.jsonl"
+    let live = c41Sessions(home, "2026/07/05/\(name)")
+    c41Write([c41Event(input: 300, output: 0, at: c41July5), c41Event(input: 4_300, output: 200, at: c41July5)]
+        .joined(separator: "\n") + "\n", to: live)
+    let r1 = c41Scan(home: home)
+    #expect(r1.usage.codexTotal == 4_200)
+
+    // 압축 워커: 원본 삭제 + `.zst`. 그 다음 사용자가 보관 → `.zst` 가 archived_sessions 로 rename.
+    try? FileManager.default.removeItem(at: live)
+    let archivedZst = c41Archived(home, name + ".zst")
+    c41Write("zstd-frame-bytes", to: archivedZst)
+    let r2 = c41Scan(r1.cache, home: home)
+    #expect(r2.usage.codexTotal == 4_200, "압축된 채 보관된 파일의 기여가 사라졌다: \(r2.usage.codexTotal)")
+    #expect(c41State(r2.cache, live) != nil, "동결돼야 할 옛 경로 상태가 정리됐다")
+    #expect(r2.stats.codexFilesStatted == 0)
+
+    // 보관 해제: archived 의 `.zst` 가 sessions/2026/07/05/ 로 돌아간다(옛 경로 = 원래 경로 + .zst → 기존 규칙으로도 동결).
+    try? FileManager.default.removeItem(at: archivedZst)
+    c41Write("zstd-frame-bytes", to: URL(fileURLWithPath: live.path + ".zst"))
+    let r3 = c41Scan(r2.cache, home: home)
+    #expect(r3.usage.codexTotal == 4_200)
+
+    // 반대 방향: archived 에서 스캔한 파일이 압축된 뒤 보관 해제로 sessions/YYYY/MM/DD/<이름>.zst 가 된 경우.
+    let archivedName = "rollout-2026-07-06T09-30-00-una.jsonl"
+    let archivedLive = c41Archived(home, archivedName)
+    c41Write([c41Event(input: 10, output: 0, at: c41July5), c41Event(input: 1_010, output: 0, at: c41July5)]
+        .joined(separator: "\n") + "\n", to: archivedLive)
+    let r4 = c41Scan(r3.cache, home: home)
+    #expect(r4.usage.codexTotal == 5_200)
+    try? FileManager.default.removeItem(at: archivedLive)
+    c41Write("zstd-frame-bytes", to: c41Sessions(home, "2026/07/06/\(archivedName).zst"))
+    let r5 = c41Scan(r4.cache, home: home)
+    #expect(r5.usage.codexTotal == 5_200, "압축된 채 보관 해제된 파일의 기여가 사라졌다: \(r5.usage.codexTotal)")
+
+    // 동명 `.jsonl` 이 다른 루트에 있는 경우는 동결이 **아니다** — 새 키로 파싱되므로 옛 상태를 지워야 이중 계상이 없다
+    // (scannerKeepsMonthTotalWhenRolloutIsArchivedByRename 이 값으로 증명). 여기서는 후보 산식만 고정한다.
+    let roots = TokenUsageIncrementalScanner.codexRoots(homeDirectory: home, codexHome: nil)
+    let twins = TokenUsageIncrementalScanner.compressedTwinCandidates(for: live.path, roots: roots)
+    #expect(twins == [live.path + ".zst", c41Archived(home, name + ".zst").path])
+    let fromArchived = TokenUsageIncrementalScanner.compressedTwinCandidates(for: archivedLive.path, roots: roots)
+    #expect(fromArchived == [archivedLive.path + ".zst", c41Sessions(home, "2026/07/06/\(archivedName).zst").path])
+    // 날짜가 없는 이름은 같은 경로 후보뿐(archived 후보는 자기 자신과 같아 접힌다).
+    #expect(TokenUsageIncrementalScanner.compressedTwinCandidates(for: c41Archived(home, "rollout-x.jsonl").path, roots: roots)
+            == [c41Archived(home, "rollout-x.jsonl").path + ".zst"])
+    #expect(TokenUsageIncrementalScanner.compressedTwinCandidates(for: "/tmp/other.jsonl", roots: roots) == ["/tmp/other.jsonl.zst"])
+}
+
+/// 열거와 처리 사이에 보관(rename)된 파일(리뷰 P2): 두 루트를 차례로 열거하므로 그 사이 옮겨진 파일은 **양쪽 목록에 다 든다** —
+/// 옛 경로 항목은 낡았다. 옛 경로를 '본 것'으로 치면 옛 상태가 남아 새 경로 상태와 함께 **정확히 두 배**가 되고 배경 경로에선
+/// 그 값이 곧바로 업로드된다. 낡은 항목의 모양은 둘이다:
+///   ① 열거 stat 이 옛 상태와 같다(보관은 mtime 을 보존하는 rename 이라 이것이 실제 모양) → 무변경 스킵 분기 — 파일을 열지 않으므로
+///      '읽기 실패'가 없다. 같은 이름이 두 루트에 있을 때만 존재를 확인해 없으면 seen 으로 치지 않는다.
+///   ② 열거 stat 이 옛 상태와 다르다(옮기기 직전에 자랐다) → 읽기 실패(`continue`) — 읽기 성공 뒤에만 seen 에 넣는다.
+/// 어느 쪽이든 정리 규칙(존재 → .zst 쌍둥이)이 그 순회에서 옛 상태를 지운다. 손으로 만든 목록으로 그 창을 재현한다.
+/// 뮤테이션: ① 무변경 분기의 이름 충돌 존재 확인을 빼거나 ② seenPaths.insert 를 읽기 전으로 되돌리면 각각 빨강.
+@Test
+func scannerDropsStaleStateWhenListedPathBecameUnreadable() throws {
+    let home = c41TempHome("stale-listing")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let roots = TokenUsageIncrementalScanner.codexRoots(homeDirectory: home, codexHome: nil)
+    // 보관 디렉터리는 codex 가 만들어 두는 것 — 없으면 rename 이 실패해 픽스처가 성립하지 않으므로 먼저 만든다.
+    try FileManager.default.createDirectory(at: roots[1], withIntermediateDirectories: true)
+
+    // ① 무변경 stat 의 낡은 항목(실제 보관 모양).
+    let name = "rollout-2026-07-05T00-00-00-race.jsonl"
+    let live = c41Sessions(home, "2026/07/05/\(name)")
+    let body = [c41Event(input: 100, output: 0, at: c41July5), c41Event(input: 2_100, output: 400, at: c41July5)]
+        .joined(separator: "\n") + "\n"
+    c41Write(body, to: live)
+    let r1 = c41Scan(home: home)
+    #expect(r1.usage.codexTotal == 2_400)
+    let stale = try #require(r1.cache.codexFileStates.first?.key)   // 열거자가 준 정규 경로(/private/var/…)
+    let prior = try #require(r1.cache.codexFileStates[stale])
+    let archived = c41Archived(home, name)
+    try FileManager.default.moveItem(at: live, to: archived)
+    #expect(!FileManager.default.fileExists(atPath: stale))
+    // 열거자는 정규 경로(/private/var/…)를 주므로 손으로 만든 목록도 같은 모양으로(안 그러면 키가 갈려 픽스처 자체가 이중 계상).
+    let unchangedListing: [(url: URL, size: Int, mtimeMicros: Int)] = [
+        (URL(fileURLWithPath: stale), prior.size, prior.mtimeMicros),   // rename 직전의 stat = 옛 상태와 동일
+        (c41Canonical(archived), prior.size, prior.mtimeMicros)
+    ]
+    var cache = r1.cache
+    var stats = TokenUsageIncrementalScanner.Stats()
+    TokenUsageIncrementalScanner.scanCodexFiles(&cache, files: unchangedListing, roots: roots, monthString: "2026-07", stats: &stats)
+    #expect(cache.codexFileStates[stale] == nil, "무변경으로 보인 옛 경로 상태가 남았다(이중 계상)")
+    #expect(cache.codexFileStates.count == 1)
+    #expect(cache.codexFileStates.values.reduce(0) { $0 + $1.monthContribTotal } == 2_400, "월 합이 두 배가 됐다")
+    #expect(stats.codexFilesRead == 1)
+    #expect(stats.statesChanged == true)
+
+    // ② 자란 stat 의 낡은 항목(읽기 실패 경로): 다른 파일로 같은 창을 만든다. 옮기기 직전에 한 줄이 붙어 열거 stat 이 옛 상태보다 크다.
+    let name2 = "rollout-2026-07-06T00-00-00-grow.jsonl"
+    let live2 = c41Sessions(home, "2026/07/06/\(name2)")
+    c41Write([c41Event(input: 10, output: 0, at: c41July5), c41Event(input: 510, output: 0, at: c41July5)]
+        .joined(separator: "\n") + "\n", to: live2)
+    let r2 = c41Scan(cache, home: home)
+    #expect(r2.usage.codexTotal == 2_900)
+    let stale2 = try #require(r2.cache.codexFileStates.keys.first { $0.hasSuffix(name2) })
+    let prior2 = try #require(r2.cache.codexFileStates[stale2])
+    c41Append(c41Event(input: 810, output: 0, at: c41July5) + "\n", to: live2, modified: c41Now.addingTimeInterval(5))
+    let grownAttrs = try FileManager.default.attributesOfItem(atPath: live2.path)
+    let grownSize = try #require(grownAttrs[.size] as? Int)
+    let grownMtime = Int((try #require(grownAttrs[.modificationDate] as? Date)).timeIntervalSince1970 * 1_000_000)
+    #expect(grownSize > prior2.size)
+    let archived2 = c41Archived(home, name2)
+    try FileManager.default.moveItem(at: live2, to: archived2)
+    let grownListing: [(url: URL, size: Int, mtimeMicros: Int)] = [
+        (URL(fileURLWithPath: stale2), grownSize, grownMtime),   // 이어읽기 대상으로 보이지만 열 수 없다
+        (c41Canonical(archived2), grownSize, grownMtime)
+    ]
+    var cache2 = r2.cache
+    var stats2 = TokenUsageIncrementalScanner.Stats()
+    TokenUsageIncrementalScanner.scanCodexFiles(&cache2, files: grownListing, roots: roots, monthString: "2026-07", stats: &stats2)
+    #expect(cache2.codexFileStates[stale2] == nil, "읽기 실패한 옛 경로 상태가 남았다(이중 계상)")
+    #expect(cache2.codexFileStates.count == 2)
+    #expect(cache2.codexFileStates.values.reduce(0) { $0 + $1.monthContribTotal } == 2_400 + 800, "월 합이 두 배가 됐다")
+    #expect(stats2.codexFilesRead == 1)
+
+    // 읽기 실패가 **존재하는** 파일에서 났다면(권한 등) 상태는 지우지 않는다 — 정리 규칙의 존재 확인이 지킨다.
+    let name3 = "rollout-2026-07-07T00-00-00-perm.jsonl"
+    let live3 = c41Sessions(home, "2026/07/07/\(name3)")
+    c41Write([c41Event(input: 1, output: 0, at: c41July5), c41Event(input: 101, output: 0, at: c41July5)]
+        .joined(separator: "\n") + "\n", to: live3)
+    let r3 = c41Scan(cache2, home: home)
+    #expect(r3.usage.codexTotal == 3_300)
+    let key3 = try #require(r3.cache.codexFileStates.keys.first { $0.hasSuffix(name3) })
+    try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: live3.path)
+    defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: live3.path) }
+    var cache3 = r3.cache
+    var stats3 = TokenUsageIncrementalScanner.Stats()
+    TokenUsageIncrementalScanner.scanCodexFiles(
+        &cache3, files: [(URL(fileURLWithPath: key3), r3.cache.codexFileStates[key3]!.size + 1, prior.mtimeMicros + 1)],
+        roots: roots, monthString: "2026-07", stats: &stats3)
+    #expect(cache3.codexFileStates[key3] != nil, "존재하는 파일의 읽기 실패로 상태가 지워졌다")
+    #expect(stats3.codexFilesRead == 0)
 }
 
 /// 캐시 델타 분리(issue #2): 입력(캐시 포함)·출력·캐시가 각각 누적되고 필드별로 클램프된다. 캐시는 total 에 안 들어간다.
@@ -431,7 +587,7 @@ func probeRequestIsThreeJSONLMessagesWithUsageReadAsID2() {
 }
 
 @Test
-func probeFallbackCandidatesStartWithHomebrewThenUserPrefixes() {
+func probeFallbackCandidatesStartWithHomebrewThenUserPrefixes() throws {
     let home = c41TempHome("candidates")
     defer { try? FileManager.default.removeItem(at: home) }
     // nvm 두 버전 + Cursor 확장 번들을 심어 글롭 규칙을 본다.
@@ -448,10 +604,313 @@ func probeFallbackCandidatesStartWithHomebrewThenUserPrefixes() {
     #expect(paths.contains(home.appendingPathComponent(".local/bin/codex").path))
     let nvm = paths.filter { $0.contains("/.nvm/") }
     #expect(nvm.count == 2 && nvm[0].contains("v22.3.0"))   // 최신 node 먼저
-    #expect(paths.contains { $0.hasSuffix(".cursor/extensions/openai.chatgpt-1.2.3/bin/macos-arm64/codex") })
+    // IDE 번들 네이티브 바이너리는 node 심(npm-global 이하) **앞**이다(리뷰 P1: node 없는 맥에서 시도 상한 안에 닿게).
+    let ide = try #require(paths.firstIndex { $0.hasSuffix(".cursor/extensions/openai.chatgpt-1.2.3/bin/macos-arm64/codex") })
+    let npm = try #require(paths.firstIndex(of: home.appendingPathComponent(".npm-global/bin/codex").path))
+    #expect(ide == 2 && ide < npm, "IDE 번들이 node 심 뒤에 있다: \(paths)")
+    #expect(paths.count == 2 + 1 + 4 + 2)
     #expect(CodexAccountUsageProbe.shellLookupTimeout == 5)
     #expect(CodexAccountUsageProbe.fetchDeadline == 15)
     #expect(CodexAccountUsageProbe.killGrace == 2)
+}
+
+/// 후보 툴체인의 PATH(리뷰 P1): 실행 파일 디렉터리가 맨 앞 → 로그인 셸 PATH → node 탐색 디렉터리(bun·nvm 포함). 셸이 찾은
+/// codex 가 첫 후보, 실행 가능한 폴백만 뒤따르고 같은 경로는 한 번, CODEX_HOME 은 셸 값이 실린다.
+/// 옛 구현은 폴백 PATH 에 homebrew·/usr/local·volta 만 덧붙여 nvm 의 npm 셸 스크립트가 node 를 못 찾았다(exit 127).
+/// 뮤테이션: environment(for:) 에서 실행 파일 디렉터리를 빼거나 nodeSearchDirectories 에서 nvm/bun 을 빼면 빨강.
+@Test
+func probeCandidateToolchainsPutExecutableDirectoryFirstInPATH() throws {
+    let home = c41TempHome("toolchains")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let nvmBin = home.appendingPathComponent(".nvm/versions/node/v22.3.0/bin", isDirectory: true)
+    c41Write("#!/usr/bin/env node\n", to: nvmBin.appendingPathComponent("codex"))
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: nvmBin.appendingPathComponent("codex").path)
+    c41Write("#!/usr/bin/env node\n", to: home.appendingPathComponent(".npm-global/bin/codex"))   // 실행 비트 없음 → 제외
+    let base = ["PATH": "/usr/bin:/bin", "HOME": home.path]
+
+    // 셸이 못 찾은 경우(nvm 초기화가 .zshrc 에 있고 -lc 만 돈 모양): 폴백 nvm 후보 하나.
+    let shellNoCodex = CodexAccountUsageProbe.ShellEnvironment(path: "/opt/homebrew/bin:/usr/bin:/bin", codexHome: "", codex: "")
+    let fallbackOnly = CodexAccountUsageProbe.candidateToolchains(homeDirectory: home, shell: shellNoCodex, base: base)
+        .filter { $0.executable.path.hasPrefix(home.standardizedFileURL.path) || $0.executable.path.hasPrefix(home.path) }
+    let nvm = try #require(fallbackOnly.first)
+    #expect(nvm.executable.path.hasSuffix(".nvm/versions/node/v22.3.0/bin/codex"))
+    let path = try #require(nvm.environment["PATH"]).split(separator: ":").map(String.init)
+    #expect(path.first?.hasSuffix(".nvm/versions/node/v22.3.0/bin") == true, "실행 파일 디렉터리가 PATH 맨 앞이 아니다: \(path)")
+    #expect(path.contains("/opt/homebrew/bin") && path.contains("/usr/bin"))            // 셸 PATH 승계
+    #expect(path.contains(home.appendingPathComponent(".bun/bin").path))                 // node 탐색 디렉터리(bun)
+    #expect(path.filter { $0.hasSuffix(".nvm/versions/node/v22.3.0/bin") }.count == 1)   // 중복 없음
+    #expect(nvm.environment["CODEX_HOME"] == nil)                                        // 빈 CODEX_HOME 은 싣지 않는다
+    #expect(nvm.environment["HOME"] == home.path)                                        // 나머지 env 승계
+
+    // 셸이 찾은 codex 는 첫 후보이고, 폴백과 같은 경로면 한 번만 든다. CODEX_HOME 은 셸 값.
+    let shellFound = CodexAccountUsageProbe.ShellEnvironment(
+        path: nvmBin.path + ":/usr/bin:/bin", codexHome: home.appendingPathComponent("cx").path,
+        codex: nvmBin.appendingPathComponent("codex").path)
+    let all = CodexAccountUsageProbe.candidateToolchains(homeDirectory: home, shell: shellFound, base: base)
+    #expect(all.first?.executable.path.hasSuffix("v22.3.0/bin/codex") == true)
+    #expect(all.filter { $0.executable.path.hasSuffix("v22.3.0/bin/codex") }.count == 1)
+    #expect(all.first?.environment["CODEX_HOME"] == home.appendingPathComponent("cx").path)
+    #expect(all.first?.environment["PATH"]?.hasPrefix(nvmBin.standardizedFileURL.path) == true)
+    // 셸 PATH 가 없으면(조회 실패) GUI PATH 를 잇는다.
+    let noShell = CodexAccountUsageProbe.environment(for: nvmBin.appendingPathComponent("codex"), homeDirectory: home, shell: nil, base: base)
+    #expect(noShell["PATH"]?.contains("/usr/bin:/bin") == true)
+    #expect(CodexAccountUsageProbe.nodeSearchDirectories(homeDirectory: home).contains(nvmBin.path))
+    #expect(CodexAccountUsageProbe.maxCandidateAttempts == 4)
+}
+
+/// 셸 조회 파서: 마지막 표지 뒤의 NUL 세 토막만 읽는다(dotfile 이 stdout 에 찍은 배너는 무시). 스크립트는 `-lc`/`-ic` 공용이고
+/// 표지·PATH·CODEX_HOME·`command -v codex` 를 그 순서로 찍는다.
+@Test
+func probeShellLookupParserReadsOnlyAfterTheLastMarker() throws {
+    let marker = CodexAccountUsageProbe.shellLookupMarker
+    let noisy = "Welcome banner\n" + marker + "\0/first:/bin\0\0\0" + "\n" + marker + "\0/opt/homebrew/bin:/usr/bin\0/Users/x/cx\0/opt/homebrew/bin/codex\0"
+    let env = try #require(CodexAccountUsageProbe.parseShellLookup(Data(noisy.utf8)))
+    #expect(env.path == "/opt/homebrew/bin:/usr/bin")
+    #expect(env.codexHome == "/Users/x/cx")
+    #expect(env.codex == "/opt/homebrew/bin/codex")
+    #expect(CodexAccountUsageProbe.parseShellLookup(Data("no marker here\0a\0b\0c\0".utf8)) == nil)
+    #expect(CodexAccountUsageProbe.parseShellLookup(Data((marker + "\0/only-path").utf8)) == nil)   // 토막 부족
+    let script = CodexAccountUsageProbe.shellLookupScript
+    #expect(script.contains(marker) && script.contains("\"$PATH\"") && script.contains("${CODEX_HOME-}")
+            && script.contains("command -v codex"))
+}
+
+/// 툴체인 확정 규칙: 성공 또는 인증 오류만 확정(바이너리·메서드가 산 증거). 그 밖은 다음 후보의 이유다.
+@Test
+func probeConfirmsToolchainOnlyOnSuccessOrAuthError() {
+    #expect(CodexAccountUsageProbe.confirmsToolchain(.success(c41Usage())))
+    #expect(CodexAccountUsageProbe.confirmsToolchain(.failure(.init(status: .notLoggedIn, reason: "auth"))))
+    for status in [CodexAccountProbeStatus.failed, .timeout, .codexNotInstalled] {
+        #expect(!CodexAccountUsageProbe.confirmsToolchain(.failure(.init(status: status, reason: "x"))), "\(status)")
+    }
+}
+
+/// 실행 파일(내용은 아무거나, 실행 비트만)을 심는다 — 가짜 러너가 경로만 보고 답하므로 실제로 실행되지 않는다.
+private func c41PlantExecutable(_ url: URL) {
+    c41Write("#!/bin/sh\nexit 127\n", to: url)
+    try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+}
+
+/// 경로별 canned 결과를 돌려주고 시도 순서를 기록하는 가짜 세션 러너(프로세스 0). 등록되지 않은 경로(이 맥의 실제 후보가 섞여
+/// 들어와도)는 '응답 없이 종료'다.
+private final class C41SessionRunner: @unchecked Sendable {
+    typealias Outcome = (result: Result<CodexAccountUsage, CodexAccountUsageProbe.Failure>, kind: CodexAccountUsageProbe.SessionKind)
+    private let lock = NSLock()
+    private var _attempts: [String] = []
+    private var _outcomes: [String: Outcome] = [:]
+    var attempts: [String] { lock.withLock { _attempts } }
+    func set(_ suffix: String, _ outcome: Outcome) { lock.withLock { _outcomes[suffix] = outcome } }
+    func reset() { lock.withLock { _attempts = [] } }
+    func run(_ toolchain: CodexAccountUsageProbe.Toolchain) async -> Outcome {
+        let path = toolchain.executable.path
+        return lock.withLock {
+            _attempts.append(path)
+            if let hit = _outcomes.first(where: { path.hasSuffix($0.key) }) { return hit.value }
+            return (.failure(.init(status: .failed, reason: "응답 없이 종료")), .exited)
+        }
+    }
+}
+
+/// 셸 조회 호출을 세고 고정값을 돌려주는 가짜(프로세스 0).
+private final class C41ShellLookup: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _calls: [Bool] = []
+    var calls: [Bool] { lock.withLock { _calls } }
+    var login: CodexAccountUsageProbe.ShellEnvironment?
+    var interactive: CodexAccountUsageProbe.ShellEnvironment?
+    init(login: CodexAccountUsageProbe.ShellEnvironment?, interactive: CodexAccountUsageProbe.ShellEnvironment? = nil) {
+        self.login = login
+        self.interactive = interactive
+    }
+    func lookup(_ isInteractive: Bool) async -> CodexAccountUsageProbe.ShellEnvironment? {
+        lock.withLock { _calls.append(isInteractive); return isInteractive ? interactive : login }
+    }
+}
+
+/// 리뷰 P1 재현 — 툴체인은 **실행으로** 확정한다. 셸이 찾은 npm 셸 스크립트(`#!/usr/bin/env node`)가 node 를 못 찾아 exit 127
+/// (응답 없이 종료)로 끝나면 다음 후보(IDE 번들 네이티브 바이너리)를 띄워 그것으로 확정하고, 확정된 것이 나중에 돌지 못하게 되면
+/// (node 삭제 = 기동 실패) 캐시를 버리고 재탐색한다. 옛 구현은 존재만으로 첫 후보를 프로세스 수명 동안 캐시해 30분마다 같은
+/// 실패를 반복했고 다른 후보는 영영 시도되지 않았다.
+/// 뮤테이션: 확정 조건을 '존재'로 되돌리거나(첫 후보 캐시), exited 에서 캐시를 안 비우거나, 타임아웃에서 다음 후보로 넘어가면 빨강.
+@Test
+func probeFetchConfirmsToolchainByExecutionAndEvictsOneThatStoppedRunning() async throws {
+    let home = c41TempHome("fetch-confirm")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let npm = home.appendingPathComponent(".npm-global/bin/codex")
+    let ide = home.appendingPathComponent(".cursor/extensions/openai.chatgpt-1.2.3/bin/macos-arm64/codex")
+    c41PlantExecutable(npm)
+    c41PlantExecutable(ide)
+    let shell = C41ShellLookup(login: .init(path: "/opt/homebrew/bin:/usr/bin:/bin", codexHome: "", codex: npm.path))
+    let runner = C41SessionRunner()
+    runner.set(".npm-global/bin/codex", (.failure(.init(status: .failed, reason: "exit 127")), .exited))
+    runner.set("macos-arm64/codex", (.success(c41Usage()), .responded))
+    let cache = CodexAccountUsageProbe.LocateCache()
+    let t0 = c41FetchedAt
+    func fetch(at now: Date) async -> Result<CodexAccountUsage, CodexAccountUsageProbe.Failure> {
+        await CodexAccountUsageProbe.fetch(homeDirectory: home, appVersion: "t", now: now, cache: cache, lookup: shell.lookup, run: runner.run)
+    }
+
+    // 1) 첫 프로브: 셸이 찾은 npm 후보 실패 → IDE 후보 성공 → IDE 로 확정.
+    let first = await fetch(at: t0)
+    #expect((try? first.get())?.monthTotal("2026-09") == 60_000)
+    let mine = { runner.attempts.filter { $0.hasPrefix(home.path) || $0.hasPrefix(home.standardizedFileURL.path) } }
+    #expect(mine().map { ($0 as NSString).lastPathComponent == "codex" } == [true, true])
+    #expect(mine().first?.hasSuffix(".npm-global/bin/codex") == true, "셸이 찾은 codex 가 첫 후보여야 한다: \(runner.attempts)")
+    #expect(mine().last?.hasSuffix("macos-arm64/codex") == true, "실패한 첫 후보 뒤에 다음 후보를 띄우지 않았다(리뷰 P1): \(runner.attempts)")
+    #expect(cache.confirmedToolchain?.executable.path.hasSuffix("macos-arm64/codex") == true, "실행으로 확인된 후보가 캐시돼야 한다")
+    #expect(cache.failure == nil)
+    #expect(shell.calls == [false])   // 로그인 셸이 codex 를 찾았으니 대화형 조회는 없다
+
+    // 2) 두 번째 프로브: 확정된 IDE 후보만 돈다(npm 은 다시 띄우지 않는다). 셸 조회도 캐시.
+    runner.reset()
+    _ = await fetch(at: t0.addingTimeInterval(1_800))
+    #expect(mine().count == 1 && mine().first?.hasSuffix("macos-arm64/codex") == true, "확정된 툴체인 하나만 띄워야 한다: \(runner.attempts)")
+    #expect(shell.calls == [false])
+
+    // 3) 확정된 것이 돌지 못하게 됨(기동 실패): 캐시를 버리고 그것을 뺀 나머지를 재탐색 → npm 도 실패 → 전부 실패를 TTL 동안 캐시.
+    runner.set("macos-arm64/codex", (.failure(.init(status: .failed, reason: "launch")), .launchFailed))
+    runner.reset()
+    let t3 = t0.addingTimeInterval(3_600)
+    let third = await fetch(at: t3)
+    #expect((try? third.get()) == nil)
+    #expect(mine().first?.hasSuffix("macos-arm64/codex") == true && mine().dropFirst().first?.hasSuffix(".npm-global/bin/codex") == true,
+            "확정 툴체인 실패 뒤 재탐색이 없다: \(runner.attempts)")
+    #expect(!mine().dropFirst().contains { $0.hasSuffix("macos-arm64/codex") }, "기동 실패한 후보를 재탐색에서 다시 띄웠다")
+    #expect(cache.confirmedToolchain == nil)
+    #expect(cache.failure?.status == .failed && cache.failure?.at == t3)
+
+    // 4) TTL 안의 프로브는 프로세스를 하나도 띄우지 않고 캐시된 실패를 돌려준다. TTL 이 지나면 재탐색.
+    runner.reset()
+    let cachedFailure = await fetch(at: t3.addingTimeInterval(CodexAccountUsageProbe.locateFailureTTL - 1))
+    if case .failure(let f) = cachedFailure { #expect(f.status == .failed) } else { Issue.record("캐시된 실패여야 한다") }
+    #expect(runner.attempts.isEmpty, "탐색 실패 캐시 안에서 프로세스가 떴다: \(runner.attempts)")
+    _ = await fetch(at: t3.addingTimeInterval(CodexAccountUsageProbe.locateFailureTTL))
+    #expect(!mine().isEmpty)
+
+    // 5) 인증 오류 응답도 확정이다(바이너리·메서드가 산 증거) — 다음 후보를 띄우지 않는다.
+    let authCache = CodexAccountUsageProbe.LocateCache()
+    runner.set(".npm-global/bin/codex", (.failure(.init(status: .notLoggedIn, reason: "chatgpt authentication required")), .responded))
+    runner.reset()
+    let auth = await CodexAccountUsageProbe.fetch(homeDirectory: home, appVersion: "t", now: t0, cache: authCache, lookup: shell.lookup, run: runner.run)
+    if case .failure(let f) = auth { #expect(f.status == .notLoggedIn) } else { Issue.record("인증 오류가 그대로 돌아와야 한다") }
+    #expect(mine().count == 1)
+    #expect(authCache.confirmedToolchain?.executable.path.hasSuffix(".npm-global/bin/codex") == true)
+
+    // 6) 타임아웃은 환경 문제 — 거기서 멈추고(다음 후보 없음) 아무것도 캐시하지 않는다(다음 프로브가 재탐색).
+    let timeoutCache = CodexAccountUsageProbe.LocateCache()
+    runner.set(".npm-global/bin/codex", (.failure(.init(status: .timeout, reason: "15초")), .timeout))
+    runner.reset()
+    let timedOut = await CodexAccountUsageProbe.fetch(homeDirectory: home, appVersion: "t", now: t0, cache: timeoutCache, lookup: shell.lookup, run: runner.run)
+    if case .failure(let f) = timedOut { #expect(f.status == .timeout) } else { Issue.record("타임아웃이 그대로 돌아와야 한다") }
+    #expect(mine().count == 1, "타임아웃 뒤 다음 후보를 띄웠다: \(runner.attempts)")
+    #expect(timeoutCache.confirmedToolchain == nil && timeoutCache.failure == nil)
+
+    // 7) 후보가 하나도 없으면 프로세스 없이 `.codexNotInstalled` 를 TTL 동안 캐시한다.
+    let empty = c41TempHome("fetch-empty")
+    defer { try? FileManager.default.removeItem(at: empty) }
+    let emptyCache = CodexAccountUsageProbe.LocateCache()
+    let none = C41ShellLookup(login: .init(path: "/usr/bin:/bin", codexHome: "", codex: ""), interactive: nil)
+    runner.reset()
+    let real = CodexAccountUsageProbe.candidateToolchains(homeDirectory: empty, shell: nil).count   // 이 맥의 /opt/homebrew 등
+    let notInstalled = await CodexAccountUsageProbe.fetch(homeDirectory: empty, appVersion: "t", now: t0, cache: emptyCache, lookup: none.lookup, run: runner.run)
+    if real == 0 {
+        if case .failure(let f) = notInstalled { #expect(f.status == .codexNotInstalled) } else { Issue.record("미설치여야 한다") }
+        #expect(runner.attempts.isEmpty)
+        #expect(emptyCache.failure?.status == .codexNotInstalled)
+        #expect(none.calls == [false, true])   // codex 를 못 찾으면 대화형 셸로 한 번 더
+    }
+
+    // 8) 시도 상한: 실행 가능한 후보가 5개여도 한 프로브에 maxCandidateAttempts(4)개까지만 띄운다.
+    let many = c41TempHome("fetch-many")
+    defer { try? FileManager.default.removeItem(at: many) }
+    for rel in [".npm-global/bin/codex", ".volta/bin/codex", ".bun/bin/codex", ".local/bin/codex", ".nvm/versions/node/v20.1.0/bin/codex"] {
+        c41PlantExecutable(many.appendingPathComponent(rel))
+    }
+    let manyCache = CodexAccountUsageProbe.LocateCache()
+    let manyRunner = C41SessionRunner()   // 전부 '응답 없이 종료'
+    let candidates = CodexAccountUsageProbe.candidateToolchains(homeDirectory: many, shell: nil).count
+    #expect(candidates >= 5)
+    _ = await CodexAccountUsageProbe.fetch(homeDirectory: many, appVersion: "t", now: t0, cache: manyCache, lookup: none.lookup, run: manyRunner.run)
+    #expect(manyRunner.attempts.count == CodexAccountUsageProbe.maxCandidateAttempts, "시도 상한을 넘겼다: \(manyRunner.attempts.count)")
+    #expect(manyCache.failure?.status == .failed)
+}
+
+/// 셸 조회 규칙: `-lc` 가 codex 를 못 찾으면 `-ic`(.zshrc 의 nvm 초기화) 로 한 번 더 묻고, 찾은 쪽의 PATH·CODEX_HOME 을 쓴다.
+/// 성공은 프로세스 수명 캐시(두 번째 호출에 셸 0), 실패(둘 다 nil)는 TTL 동안 캐시. `resolveCodexHome` 은 빈 CODEX_HOME 을 nil 로.
+/// 뮤테이션: 대화형 재조회를 빼거나, 실패 캐시 TTL 비교를 뒤집으면 빨강.
+@Test
+func probeShellEnvironmentRetriesInteractivelyAndCachesOutcome() async {
+    let t0 = c41FetchedAt
+    // -lc 는 codex 없음(PATH 만), -ic 가 nvm PATH 와 codex 를 찾는다.
+    let shell = C41ShellLookup(
+        login: .init(path: "/usr/bin:/bin", codexHome: "", codex: ""),
+        interactive: .init(path: "/Users/x/.nvm/versions/node/v22/bin:/usr/bin:/bin", codexHome: "/Users/x/cx", codex: "/Users/x/.nvm/versions/node/v22/bin/codex"))
+    let cache = CodexAccountUsageProbe.LocateCache()
+    let env = await CodexAccountUsageProbe.resolveShellEnvironment(now: t0, cache: cache, lookup: shell.lookup)
+    #expect(shell.calls == [false, true])
+    #expect(env?.codex == "/Users/x/.nvm/versions/node/v22/bin/codex")
+    #expect(env?.path == "/Users/x/.nvm/versions/node/v22/bin:/usr/bin:/bin")
+    #expect(env?.codexHome == "/Users/x/cx")
+    #expect(CodexAccountUsageProbe.cachedCodexHome(cache: cache)?.path == "/Users/x/cx")
+    // 캐시: 두 번째 호출은 셸을 띄우지 않는다.
+    _ = await CodexAccountUsageProbe.resolveShellEnvironment(now: t0.addingTimeInterval(86_400), cache: cache, lookup: shell.lookup)
+    #expect(shell.calls == [false, true])
+
+    // -ic 도 못 찾으면 codex 는 비고 PATH 는 더 넓은 쪽(대화형)을 쓴다.
+    let widest = C41ShellLookup(login: .init(path: "/usr/bin:/bin", codexHome: "", codex: ""),
+                                interactive: .init(path: "/opt/homebrew/bin:/usr/bin:/bin", codexHome: "", codex: ""))
+    let c2 = CodexAccountUsageProbe.LocateCache()
+    let e2 = await CodexAccountUsageProbe.resolveShellEnvironment(now: t0, cache: c2, lookup: widest.lookup)
+    #expect(e2?.codex == "" && e2?.path == "/opt/homebrew/bin:/usr/bin:/bin")
+    #expect(await CodexAccountUsageProbe.resolveCodexHome(now: t0, cache: c2, lookup: widest.lookup) == nil)   // 빈 CODEX_HOME → nil
+
+    // 둘 다 실패(타임아웃·기동 실패 = nil): TTL 동안 캐시, 지나면 재조회.
+    let failing = C41ShellLookup(login: nil, interactive: nil)
+    let c3 = CodexAccountUsageProbe.LocateCache()
+    #expect(await CodexAccountUsageProbe.resolveShellEnvironment(now: t0, cache: c3, lookup: failing.lookup) == nil)
+    #expect(failing.calls == [false, true])
+    _ = await CodexAccountUsageProbe.resolveShellEnvironment(now: t0.addingTimeInterval(CodexAccountUsageProbe.locateFailureTTL - 1), cache: c3, lookup: failing.lookup)
+    #expect(failing.calls.count == 2, "실패 캐시 안에서 셸을 다시 띄웠다")
+    _ = await CodexAccountUsageProbe.resolveShellEnvironment(now: t0.addingTimeInterval(CodexAccountUsageProbe.locateFailureTTL), cache: c3, lookup: failing.lookup)
+    #expect(failing.calls.count == 4)
+    #expect(CodexAccountUsageProbe.cachedCodexHome(cache: c3) == nil)
+}
+
+/// 종료 경로의 잔여 드레인은 **비차단**이다(리뷰 P2): 쓰는 쪽이 아직 열려 있어도(고아 자식이 파이프를 쥔 모양) 지금 있는 만큼만
+/// 읽고 돌아온다. 차단 읽기(readToEnd)였다면 EOF 까지 영원히 기다려 스레드가 샌다 — 세마포어 2초로 그 차이를 가른다.
+/// 뮤테이션: O_NONBLOCK 설정을 빼면 두 번째 드레인(빈 파이프)이 막혀 빨강.
+@Test
+func probeDrainNonBlockingReturnsWhatIsThereWithoutWaitingForEOF() throws {
+    let pipe = Pipe()
+    let fd = pipe.fileHandleForReading.fileDescriptor
+    defer { try? pipe.fileHandleForWriting.close() }   // 뮤턴트가 막혔더라도 스레드를 풀어 준다
+    final class Box: @unchecked Sendable { let lock = NSLock(); var data: Data? }
+    func drain(timeout: TimeInterval) -> Data? {
+        let box = Box()
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            let d = CodexAccountUsageProbe.drainNonBlocking(fd)
+            box.lock.withLock { box.data = d }
+            done.signal()
+        }
+        guard done.wait(timeout: .now() + timeout) == .success else { return nil }
+        return box.lock.withLock { box.data }
+    }
+    try pipe.fileHandleForWriting.write(contentsOf: Data("partial-line-without-newline".utf8))
+    let first = try #require(drain(timeout: 2), "쓰는 쪽이 열린 채로 드레인이 돌아오지 않았다(차단 읽기)")
+    #expect(String(decoding: first, as: UTF8.self) == "partial-line-without-newline")
+    // 비어 있는 파이프(쓰는 쪽은 여전히 열림): 즉시 빈 데이터.
+    let empty = try #require(drain(timeout: 2), "빈 파이프에서 드레인이 막혔다")
+    #expect(empty.isEmpty)
+    // 여러 조각이 쌓여 있어도 지금 있는 만큼 전부 읽는다(파이프 버퍼 16KiB 아래로 두어 쓰기가 막히지 않게).
+    let chunk = Data(repeating: 0x41, count: 10_000)
+    try pipe.fileHandleForWriting.write(contentsOf: chunk)
+    try pipe.fileHandleForWriting.write(contentsOf: Data("\n".utf8))
+    let all = try #require(drain(timeout: 2))
+    #expect(all.count == chunk.count + 1)
+    // 쓰는 쪽이 닫히면(EOF) 빈 데이터로 즉시 돌아온다.
+    try pipe.fileHandleForWriting.close()
+    #expect(drain(timeout: 2)?.isEmpty == true)
 }
 
 @Test
@@ -543,6 +1002,50 @@ func accountStoreSkipsProcessWhenAuthFileIsMissing() async {
     await store.refreshIfDue(now: c41FetchedAt.addingTimeInterval(1_800))
     #expect(runner.calls == 1)
     #expect(store.lastStatus == .ok)
+}
+
+/// CODEX_HOME 사용자(리뷰 P2): auth.json 은 `$CODEX_HOME/auth.json` 에 있다. 주입된 홈 확정이 그 경로를 주면 `~/.codex` 에
+/// auth.json 이 없어도 러너가 돈다. 반대로 CODEX_HOME 아래에 없으면 `~/.codex` 에 있어도 미로그인이다(codex 도 그렇게 본다).
+/// 뮤테이션: refreshIfDue 가 codexHomeResolver 를 무시하고 `~/.codex` 만 보면 빨강.
+@MainActor
+@Test
+func accountStoreChecksAuthUnderResolvedCodexHome() async {
+    let home = c41TempHome("codex-home-auth")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let custom = home.appendingPathComponent("custom-codex", isDirectory: true)
+    c41Write("{\"tokens\":\"secret\"}", to: custom.appendingPathComponent("auth.json"))
+    let runner = C41Runner(.success(c41Usage()))
+    let resolverCalls = C41Runner(.success(c41Usage()))
+    let store = CodexAccountUsageStore(
+        defaults: c41Defaults(), homeDirectory: home,
+        codexHome: { _ = await resolverCalls.run(home, c41FetchedAt); return custom },
+        runner: runner.run)
+    await store.refreshIfDue(now: c41FetchedAt)
+    #expect(runner.calls == 1, "CODEX_HOME 아래 auth.json 을 두고도 미로그인으로 끝났다")
+    #expect(resolverCalls.calls == 1)
+    #expect(store.lastStatus == .ok)
+
+    // CODEX_HOME 은 있는데 그 아래 auth.json 이 없다 — `~/.codex/auth.json` 이 있어도 미로그인(러너 0).
+    let other = c41TempHome("codex-home-auth-2")
+    defer { try? FileManager.default.removeItem(at: other) }
+    c41LogIn(other)
+    let strict = CodexAccountUsageStore(
+        defaults: c41Defaults(), homeDirectory: other,
+        codexHome: { other.appendingPathComponent("empty-codex", isDirectory: true) },
+        runner: runner.run)
+    await strict.refreshIfDue(now: c41FetchedAt)
+    #expect(runner.calls == 1)
+    #expect(strict.lastStatus == .notLoggedIn)
+    // 홈 확정을 기다리는 동안에도 재진입은 막힌다(inFlight 가 await 앞에 선다).
+    let slow = CodexAccountUsageStore(
+        defaults: c41Defaults(), homeDirectory: home,
+        codexHome: { try? await Task.sleep(for: .milliseconds(120)); return custom },
+        runner: runner.run)
+    async let first: Void = slow.refreshIfDue(now: c41FetchedAt)
+    try? await Task.sleep(for: .milliseconds(20))
+    #expect(slow.isDue(now: c41FetchedAt.addingTimeInterval(3_600), force: true) == false)
+    await first
+    #expect(runner.calls == 2)
 }
 
 @MainActor
@@ -641,6 +1144,8 @@ private func c41Store(host: String, tokenUsage: TokenUsageStore, codexAccount: C
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.membershipConfirmed = true
     store.isMenuPresented = false
+    // 수집 설정이 서버에서 도착한 상태(프로브 게이트). 도착 전의 동작은 uploadWrapperWaitsForCollectSettingBeforeProbing 이 본다.
+    store.tokenUsagePublicLoaded = true
     return store
 }
 
@@ -799,6 +1304,32 @@ func uploadWrapperRefreshesAccountProbeBeforeUploadingAndRespectsGates() async t
     #expect(body["codex_account_month"] as? Int == 12_345)
     #expect(body["codex_account_status"] as? Int == 1)
     #expect(store.lastUploadedAccountKey != nil)
+}
+
+/// 수집 설정이 서버에서 도착하기 전(tokenUsagePublicLoaded == false)에는 프로브가 돌지 않는다(리뷰 P2) — 기본값이 '수집'이라
+/// 거부자의 맥에서 로그인 직후 한 틱에 `codex app-server` 가 뜰 수 있었다. 업로드는 서버 트리거가 버리므로 그대로 나간다.
+/// 뮤테이션: 래퍼 게이트에서 tokenUsagePublicLoaded 를 빼면 빨강.
+@MainActor
+@Test
+func uploadWrapperWaitsForCollectSettingBeforeProbing() async {
+    let host = "v0241-wrapper-loaded"
+    let home = c41TempHome("wrapper-loaded-home")
+    defer { try? FileManager.default.removeItem(at: home) }
+    c41LogIn(home)
+    let runner = C41Runner(.success(c41Usage(month: 7, fetchedAt: c41SepNow)))
+    let account = CodexAccountUsageStore(defaults: c41Defaults(), homeDirectory: home, runner: runner.run)
+    let store = c41Store(host: host, tokenUsage: c41TokenStore(home: home, now: c41SepNow, snapshot: c41LocalUsage(total: 3_000)), codexAccount: account)
+    defer { c41CancelTasks(store) }
+    store.tokenUsagePublicLoaded = false
+    await store.uploadTokenUsageIfNeeded(now: c41SepNow)
+    #expect(runner.calls == 0, "수집 설정 도착 전에 codex 프로세스가 떴다")
+    #expect(c41UploadBodies(host: host).count == 1)   // 업로드 자체는 나간다(서버가 막는다)
+    #expect(c41UploadBodies(host: host).first?["codex_account_month"] == nil)
+    // 설정이 도착하면(로드 완료) 다음 틱에 돈다.
+    store.tokenUsagePublicLoaded = true
+    await store.uploadTokenUsageIfNeeded(now: c41SepNow.addingTimeInterval(61))
+    #expect(runner.calls == 1)
+    #expect(c41UploadBodies(host: host).last?["codex_account_month"] as? Int == 7)
 }
 
 /// 래퍼의 force 는 롤오버(들고 있는 값의 달 ≠ 이번 달, nil 포함)에 걸리되 60초 하한을 지킨다 — 첫 스캔 전 30초 틱이
@@ -1010,16 +1541,22 @@ func sourceContractLiveAccountStoreIsBuiltOnlyInCheckApp() throws {
     #expect(probe.contains("FileManager.default.fileExists(atPath: authPath)"))
     #expect(!probe.contains("contentsOf: authPath") && !probe.contains("Data(contentsOf: home"))
     #expect(probe.contains("standardError = FileHandle.nullDevice"))
+    // 종료 경로의 잔여 읽기는 비차단 드레인이다(리뷰 P2). 차단 읽기(readToEnd/readDataToEndOfFile)가 프로브 소스에 돌아오면
+    // npm 런처의 고아 자식이 파이프를 쥔 채 남을 때 스레드가 영원히 샌다 — 그 호출 지점은 프로세스 없이는 못 재현하므로
+    // 드레인 함수 테스트(probeDrainNonBlocking…)와 이 계약으로 짝을 맞춘다.
+    #expect(probe.contains("s.received.append(CodexAccountUsageProbe.drainNonBlocking(reader.fileDescriptor))"))
+    #expect(!probe.contains("readToEnd(") && !probe.contains("readDataToEndOfFile("), "프로브에 차단 읽기가 돌아왔다")
+    // 셸 조회도 세마포어·waitUntilExit 없이 ProcessSession(콜백+데드라인)으로 돈다(리뷰 P2: 협력 스레드 풀 잠식).
+    #expect(!probe.contains("DispatchSemaphore") && !probe.contains("waitUntilExit("), "셸 조회가 호출 스레드를 막는다")
+    #expect(probe.contains("executable: URL(fileURLWithPath: \"/bin/zsh\")"))
 }
 
-/// 서버 마이그레이션 계약(20260903120000): 컬럼 6개 · 보드 14컬럼 · 계정은 max · greatest · 진단 판정 · anon 차단 · 프로브 롤백.
+/// 서버 마이그레이션 계약(20260903120000): 컬럼 6개 · 보드 14컬럼 · 계정은 max · greatest · 진단 판정 · 진단 상태는 min ·
+/// anon 차단 · 프로브 롤백. 파일이 없으면(supabase/ 없는 체크아웃) 다른 SQL 계약 테스트(20260726010000 등)와 같이 **빨강**이다 —
+/// 조용히 통과하면 계약이 검사되지 않은 채 초록으로 보인다(리뷰 P2).
 @Test
 func migrationContractCodexAccountUsage() throws {
     let url = c41RepoURL("supabase/migrations/20260903120000_codex_account_usage.sql")
-    guard FileManager.default.fileExists(atPath: url.path) else {
-        // supabase/ 는 gitignore 라 체크아웃에 없을 수 있다(워크트리) — 그때는 계약을 검사할 대상이 없다.
-        return
-    }
     let sql = try String(contentsOf: url, encoding: .utf8)
     for column in ["codex_cache_read bigint not null default 0", "codex_account_month bigint", "codex_account_lifetime bigint",
                    "codex_account_at timestamptz", "codex_account_last_day text", "codex_account_status smallint"] {
@@ -1034,6 +1571,10 @@ func migrationContractCodexAccountUsage() throws {
     #expect(sql.contains("grant execute on function public.token_usage_board(text) to authenticated;"))
     #expect(sql.contains("drop function if exists public.token_scan_health(text);"))
     #expect(sql.contains("'로컬 로그 없음(계정 집계로 대체)'"))
+    // 진단 상태는 기기 중 최선(min). max 면 한 기기의 실패가 계정값을 받은 기기를 가린다.
+    #expect(sql.contains("min(d.codex_account_status)::smallint"))
+    #expect(!sql.contains("max(d.codex_account_status)"))
+    #expect(sql.contains("h.codex_account_status = 1 and h.codex_account_month = 1000"))   // 프로브 ⓕ (A=1, B=5 → 1)
     #expect(sql.contains("grant  execute on function public.token_scan_health(text) to service_role;"))
     #expect(sql.contains("raise exception 'CODEX_ACCOUNT_USAGE_PROBE_ROLLBACK';"))
     #expect(sql.contains("if sqlerrm <> 'CODEX_ACCOUNT_USAGE_PROBE_ROLLBACK' then raise; end if;"))

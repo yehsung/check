@@ -260,7 +260,7 @@ struct TokenBoardRow: Decodable, Equatable {
     /// 오늘(KST) 증가량과 그 귀속 날짜 'YYYY-MM-DD'. var + 기본값이라 마이그레이션 전 옛 RPC(컬럼 누락)와 호환된다.
     var todayTotal: Int = 0
     var todayDate: String = ""
-    /// Codex 캐시 히트 합(기기 합산). 20260903120000 이전 RPC 엔 없다 → 0.
+    /// Codex 캐시 히트 합(기기 합산). 20260903160000 이전 RPC 엔 없다 → 0.
     var codexCacheRead: Int = 0
     /// Codex 계정 월합(기기 간 max — 기기마다 같은 계정값을 올린다). 없으면 nil(옛 RPC 이거나 아무 기기도 못 읽었다).
     var codexAccountMonth: Int? = nil
@@ -293,7 +293,7 @@ extension TokenBoardRow {
         // 마이그레이션 전 호환: 옛 RPC 는 이 컬럼을 안 내려주므로 없으면 0/"".
         todayTotal = try c.decodeIfPresent(Int.self, forKey: .todayTotal) ?? 0
         todayDate = try c.decodeIfPresent(String.self, forKey: .todayDate) ?? ""
-        // 20260903120000 이전 RPC 호환: 없으면 캐시 0, 계정 nil(= "모름" — 0 과 구분해야 비중 라인이 '계정 0' 을 그리지 않는다).
+        // 20260903160000 이전 RPC 호환: 없으면 캐시 0, 계정 nil(= "모름" — 0 과 구분해야 비중 라인이 '계정 0' 을 그리지 않는다).
         codexCacheRead = try c.decodeIfPresent(Int.self, forKey: .codexCacheRead) ?? 0
         codexAccountMonth = try c.decodeIfPresent(Int.self, forKey: .codexAccountMonth)
     }
@@ -396,7 +396,7 @@ struct TokenUsageUpsertRequest: Encodable {
     let todayTotal: Int
     let todayDate: String
     /// Codex 캐시 히트 합(입력의 부분집합, total 에 안 들어감). **항상 실린다**(Int) — 매 업로드가 최신 로컬 집계이므로 덮어써야
-    /// 맞다. ★ 이 키 때문에 20260903120000 마이그레이션이 **클라 배포 전에** 적용돼야 한다(컬럼이 없으면 PostgREST 가 400).
+    /// 맞다. ★ 이 키 때문에 20260903160000 마이그레이션이 **클라 배포 전에** 적용돼야 한다(컬럼이 없으면 PostgREST 가 400).
     let codexCacheRead: Int
 
     // ── Codex 계정 집계(codex_account_*, 옵셔널 — nil 이면 키 생략 → 서버 값 보존) ──

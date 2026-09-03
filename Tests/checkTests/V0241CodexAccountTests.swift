@@ -1008,7 +1008,7 @@ func probeDrainNonBlockingReturnsWhatIsThereWithoutWaitingForEOF() throws {
 
 @Test
 func probeStatusRawValuesMatchServerColumnContract() {
-    // 서버 smallint 계약(20260903120000 마이그레이션 주석): 1 ok · 2 미설치 · 3 미로그인 · 4 타임아웃 · 5 실패.
+    // 서버 smallint 계약(20260903160000 마이그레이션 주석): 1 ok · 2 미설치 · 3 미로그인 · 4 타임아웃 · 5 실패.
     #expect(CodexAccountProbeStatus.ok.rawValue == 1)
     #expect(CodexAccountProbeStatus.codexNotInstalled.rawValue == 2)
     #expect(CodexAccountProbeStatus.notLoggedIn.rawValue == 3)
@@ -1758,12 +1758,12 @@ func sourceContractLiveAccountStoreIsBuiltOnlyInCheckApp() throws {
     #expect(probe.contains("executable: URL(fileURLWithPath: \"/bin/zsh\")"))
 }
 
-/// 서버 마이그레이션 계약(20260903120000): 컬럼 6개 · 보드 14컬럼 · 계정은 max · greatest · 진단 판정 · 진단 상태는 min ·
+/// 서버 마이그레이션 계약(20260903160000): 컬럼 6개 · 보드 14컬럼 · 계정은 max · greatest · 진단 판정 · 진단 상태는 min ·
 /// anon 차단 · 프로브 롤백. 파일이 없으면(supabase/ 없는 체크아웃) 다른 SQL 계약 테스트(20260726010000 등)와 같이 **빨강**이다 —
 /// 조용히 통과하면 계약이 검사되지 않은 채 초록으로 보인다(리뷰 P2).
 @Test
 func migrationContractCodexAccountUsage() throws {
-    let url = c41RepoURL("supabase/migrations/20260903120000_codex_account_usage.sql")
+    let url = c41RepoURL("supabase/migrations/20260903160000_codex_account_usage.sql")
     let sql = try String(contentsOf: url, encoding: .utf8)
     for column in ["codex_cache_read bigint not null default 0", "codex_account_month bigint", "codex_account_lifetime bigint",
                    "codex_account_at timestamptz", "codex_account_last_day text", "codex_account_status smallint"] {

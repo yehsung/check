@@ -111,7 +111,7 @@ private let migrationDiagColumns: Set<String> = [
     "codex_diag_input_at_scan",
 ]
 
-/// 진단을 뺀 본문의 고정 키 13개(v0.2.41 에 codex_cache_read 가 항상 실린다 — 20260903120000 컬럼).
+/// 진단을 뺀 본문의 고정 키 13개(v0.2.41 에 codex_cache_read 가 항상 실린다 — 20260903160000 컬럼).
 private let nonDiagColumns: Set<String> = [
     "user_id", "month", "device_id",
     "claude_input", "claude_output", "claude_cache_read", "claude_cache_creation",

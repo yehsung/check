@@ -306,9 +306,12 @@ func codexSumsEventDeltasAcrossFilesAndAbsorbsInvalidLine() {
     let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
 
     // 530 = 파일1(530) + 파일2(0). 옛 기대값 1255 에서 725 가 빠졌는데 그게 정확히 두 파일의 첫 이벤트 누적치(520 + 205)다.
-    #expect(usage.codexInput == 530)    // 파일마다 첫 관측은 기준선 → 델타는 두 번째 이벤트부터
-    #expect(usage.codexOutput == 0)     // 이벤트-귀속 델타는 입출력을 합쳐 codexInput 에 담는다
+    // v0.2.41(issue #2): 델타를 필드별로 나눠 담는다 — 입력 1000−500, 출력 50−20, 캐시 800−400. codexTotal(입력+출력)은 불변.
+    #expect(usage.codexInput == 500)    // 파일마다 첫 관측은 기준선 → 델타는 두 번째 이벤트부터
+    #expect(usage.codexOutput == 30)
+    #expect(usage.codexCacheRead == 400)
     #expect(usage.codexTotal == 530)
+    #expect(usage.total == 530)         // 캐시는 입력의 부분집합이라 total 에 더하지 않는다
     try? FileManager.default.removeItem(at: home)
 }
 
@@ -522,8 +525,9 @@ func codexFirstEventSetsBaselineSoCarriedOverCumulativeIsNotCounted() {
     try? FileManager.default.removeItem(at: home)
 }
 
-// (b·자정 넘김) 무변경 파일에서 날이 바뀌면 재읽기 없이 dayContribTotal 을 0 리셋하고 dayKey 를 오늘로 갱신한다.
-// 월(monthKey)은 그대로라 월 집계는 유지된다. 어제 누적이 오늘로 새지 않는다.
+// (b·자정 넘김) 무변경 파일에서 날이 바뀌어도 어제 델타가 오늘로 새지 않는다. v0.2.41 부터 일별 맵(dayContrib)이 날짜를
+// 키로 들고 있어 **상태를 고쳐 쓰지 않고도**(재읽기 0·캐시 변경 0) 오늘 값이 0 이다 — 옛 (dayKey, dayContribTotal) 쌍은
+// 자정마다 리셋 저장이 필요했다. 월(monthKey)은 그대로라 월 집계는 유지된다.
 @Test
 func codexDayRolloverResetsDayContribOnUnchangedFile() {
     let home = makeTempHome()
@@ -543,16 +547,16 @@ func codexDayRolloverResetsDayContribOnUnchangedFile() {
     let r1 = TokenUsageIncrementalScanner.update(TokenUsageCache(), homeDirectory: home, now: yScanNow)
     #expect(r1.usage.todayDate == "2026-07-13")
     #expect(r1.usage.todayTotal == 5000)   // delta 5000(=7000−기준선 2000)만, 기준선 2000 은 아님
-    #expect(r1.cache.codexFileStates.values.first?.dayKey == "2026-07-13")
-    #expect(r1.cache.codexFileStates.values.first?.dayContribTotal == 5000)   // 롤오버가 실제로 지울 값이 있다
+    #expect(r1.cache.codexFileStates.values.first?.dayContrib == ["2026-07-13": 5000])   // 어제 키에 실제 값이 있다
+    #expect(r1.usage.codexDaily == ["2026-07-13": 5000])
 
-    // 자정 넘김: 파일 무변경(크기·mtime 불변). now=오늘(fixedNow) 재스캔 → 재읽기 0, dayContrib 0 리셋, dayKey=오늘.
+    // 자정 넘김: 파일 무변경(크기·mtime 불변). now=오늘(fixedNow) 재스캔 → 재읽기 0, 상태 불변, 오늘 값 0.
     let r2 = TokenUsageIncrementalScanner.update(r1.cache, homeDirectory: home, now: fixedNow)
 
     #expect(r2.stats.codexBytesRead == 0)   // 무변경 파일 — 재읽기 0
-    #expect(r2.stats.cacheChanged == true)  // 일 롤오버 리셋은 캐시 변경(저장 유도)
-    #expect(r2.cache.codexFileStates.values.first?.dayKey == "2026-07-14")
-    #expect(r2.cache.codexFileStates.values.first?.dayContribTotal == 0)
+    #expect(r2.stats.cacheChanged == false) // 일 롤오버는 더 이상 상태를 건드리지 않는다(자정마다 저장하던 비용 제거)
+    #expect(r2.cache.codexFileStates.values.first?.dayContrib == ["2026-07-13": 5000])   // 어제 값은 제자리에 남는다(일별 추이)
+    #expect(r2.usage.codexDaily["2026-07-14"] == nil)
     #expect(r2.usage.todayTotal == 0)       // 어제 delta 5000 이 오늘로 새지 않음
     #expect(r2.usage.codexInput == 5000)    // 월(7월) 집계는 유지(monthKey 그대로 7월)
     try? FileManager.default.removeItem(at: home)
@@ -577,7 +581,10 @@ func todayTotalCombinesClaudeAndCodexForToday() {
     let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
 
     #expect(usage.todayTotal == 37)   // Claude(10+20) + Codex delta(107−100=7)
-    #expect(usage.codexInput == 7)    // Codex 몫이 실제로 0 이 아니다(두 트랙 합산이 살아 있음을 못 박는다)
+    #expect(usage.codexTotal == 7)    // Codex 몫이 실제로 0 이 아니다(두 트랙 합산이 살아 있음을 못 박는다) — 입력 3 + 출력 4
+    // 일별 맵에서 파생됐음을 함께 못 박는다(오늘 키의 합 == todayTotal).
+    #expect(usage.claudeDaily["2026-07-14"] == 30)
+    #expect(usage.codexDaily["2026-07-14"] == 7)
     try? FileManager.default.removeItem(at: home)
 }
 
@@ -780,10 +787,14 @@ func codexTailAddsDeltaOfAppendedCumulativeOnReRead() {
     appendFile(l2, to: url, modified: fixedNow.addingTimeInterval(1))
     let r2 = TokenUsageIncrementalScanner.update(r1.cache, homeDirectory: home, now: fixedNow)
     #expect(r2.stats.codexBytesRead == l2.utf8.count)   // 새 바이트만
-    // 230 = 이어읽기 delta(340−110). 이어읽기 경로는 캐시의 prevCumulative(110)를 기준선으로 물려받으므로
+    // 230 = 이어읽기 delta(340−110). 이어읽기 경로는 캐시의 prev*(입력 100·출력 10·캐시 50)를 기준선으로 물려받으므로
     // 첫-관측 규칙에 영향받지 않는다 — 물려받지 못하면(nil) 340 이 다시 기준선이 되어 0 이 된다.
-    #expect(r2.usage.codexInput == 230)
+    #expect(r2.usage.codexTotal == 230)
+    #expect(r2.usage.codexInput == 200)      // 300 − 100
+    #expect(r2.usage.codexOutput == 30)      // 40 − 10
+    #expect(r2.usage.codexCacheRead == 100)  // 150 − 50
     #expect(r2.cache.codexFileStates.values.first?.prevCumulative == 340)
+    #expect(r2.cache.codexFileStates.values.first?.prevCached == 150)
     try? FileManager.default.removeItem(at: home)
 }
 
@@ -863,12 +874,12 @@ func cacheSurvivesCompactCodableRoundTripIncludingNulKeys() {
     cache.claudeEntries["msg_1\u{0}req_1"] = ClaudeEntry(ts14: 20_260_722_103_000, input: 1, output: 2, cacheRead: 3, cacheCreation: 4)
     cache.claudeFileStates["/a/b.jsonl"] = FileProgress(size: 10, mtimeMicros: 999, consumedOffset: 8)
     cache.codexFileStates["/c/rollout.jsonl"] = CodexFileProgress(
-        size: 20, mtimeMicros: 111, consumedOffset: 15, prevCumulative: 340,
-        monthKey: "2026-07", monthContribTotal: 300, dayKey: "2026-07-14", dayContribTotal: 42)
+        size: 20, mtimeMicros: 111, consumedOffset: 15, prevInput: 300, prevOutput: 40, prevCached: 120,
+        monthKey: "2026-07", monthInput: 250, monthOutput: 50, monthCached: 90, dayContrib: ["2026-07-14": 42, "2026-07-03": 258])
 
     let data = try! JSONEncoder().encode(cache)
     let decoded = try! JSONDecoder().decode(TokenUsageCache.self, from: data)
-    #expect(decoded == cache)   // NUL 구분자 키 + codex 8필드(문자열 섞임) 배열튜플이 정확히 왕복.
+    #expect(decoded == cache)   // NUL 구분자 키 + codex 11필드(문자열·맵 섞임) 배열튜플이 정확히 왕복.
 }
 
 // (f) 하위호환: 구버전 캐시(codexSchemaVersion 부재 + 옛 codex 튜플)를 로드하면 codexFileStates 만 폐기하고 Claude 상태는
@@ -907,22 +918,46 @@ func codexStatesFromSchemaVersion2CacheAreDiscardedToForceCorrectiveReparse() {
     #expect(TokenUsageCache.currentCodexSchemaVersion >= 3)   // 2 이하로 되돌리면 위 폐기가 일어나지 않는다
 }
 
-// 새 8필드(이벤트-귀속) codex 배열튜플이 정확히 왕복한다(prevCumulative·month/day 귀속 보존).
+// 새 11필드(스키마 v4: 필드별 기준선·월 기여 + 일별 맵) codex 배열튜플이 정확히 왕복한다.
 @Test
 func codexFileProgressRoundTripsEventAttributionFields() {
     var cache = TokenUsageCache()
     cache.codexFileStates["/c/rollout.jsonl"] = CodexFileProgress(
-        size: 20, mtimeMicros: 111, consumedOffset: 15, prevCumulative: 340,
-        monthKey: "2026-07", monthContribTotal: 300, dayKey: "2026-07-14", dayContribTotal: 42)
+        size: 20, mtimeMicros: 111, consumedOffset: 15, prevInput: 300, prevOutput: 40, prevCached: 120,
+        monthKey: "2026-07", monthInput: 250, monthOutput: 50, monthCached: 90, dayContrib: ["2026-07-14": 42])
     let data = try! JSONEncoder().encode(cache)
     let decoded = try! JSONDecoder().decode(TokenUsageCache.self, from: data)
     #expect(decoded == cache)
     let s = decoded.codexFileStates["/c/rollout.jsonl"]!
-    #expect(s.prevCumulative == 340)
+    #expect(s.prevCumulative == 340)      // 파생: prevInput + prevOutput
+    #expect(s.prevCached == 120)
     #expect(s.monthKey == "2026-07")
-    #expect(s.monthContribTotal == 300)
-    #expect(s.dayKey == "2026-07-14")
-    #expect(s.dayContribTotal == 42)
+    #expect(s.monthContribTotal == 300)   // 파생: monthInput + monthOutput(캐시 미포함)
+    #expect(s.monthCached == 90)
+    #expect(s.dayContrib == ["2026-07-14": 42])
+    // 튜플 형태(11원소, 마지막이 일별 맵 오브젝트) — 옛 8원소 v3 튜플과 달라 스키마 게이트가 필요한 이유.
+    let json = String(decoding: data, as: UTF8.self)
+    #expect(json.contains("[20,111,15,300,40,120,\"2026-07\",250,50,90,{\"2026-07-14\":42}]"))
+}
+
+// (스키마 v4 게이트) v0.2.40 이 쓴 v3 캐시(8원소 튜플·dayKey/dayContribTotal)는 통째로 폐기돼 codex 1회 전체 재파싱을 유발한다 —
+// 그 재파싱이 archived_sessions 를 처음 읽고 보관/압축으로 잃은 기여를 되찾는 경로다. 버전을 3 으로 되돌리면 옛 8원소 튜플을
+// 새 11원소 형식으로 억지 디코드하다 실패하거나(문자열 자리에 숫자) 옛 기여를 그대로 물려받는다.
+@Test
+func codexStatesFromSchemaVersion3CacheAreDiscardedForArchiveAwareReparse() throws {
+    let v3JSON = """
+    {"claudeFileStates":{"/a/b.jsonl":[10,999,8]},"claudeEntries":{"msg\\u0000req":[20260722103000,1,2,3,4]},\
+    "codexFileStates":{"/p/rollout.jsonl":[10,20,30,665000000,"2026-07",96805065798,"2026-07-14",42]},\
+    "codexSchemaVersion":3}
+    """
+    // 게이트가 없으면 옛 8원소 튜플을 새 형식으로 디코드하다 던진다(문자열 자리에 숫자) — 그 경우 여기서 실패로 기록된다.
+    let decoded = try #require(try? JSONDecoder().decode(TokenUsageCache.self, from: Data(v3JSON.utf8)),
+                               "v3 캐시가 디코드 실패로 통째 폐기됐다(스키마 게이트가 codex 상태만 버려야 한다)")
+    #expect(decoded.codexFileStates.isEmpty)                  // v3 상태 폐기 → 재파싱
+    #expect(decoded.claudeFileStates["/a/b.jsonl"] != nil)    // Claude 상태는 보존
+    #expect(decoded.claudeEntries["msg\u{0}req"]?.input == 1)
+    #expect(decoded.codexSchemaVersion == 4)
+    #expect(TokenUsageCache.currentCodexSchemaVersion == 4)   // 3 으로 되돌리면 위 폐기가 일어나지 않는다
 }
 
 // MARK: - 숫자 포맷 (콤마 전체 숫자)
@@ -967,14 +1002,16 @@ func monthlyTooltipUsesGroupedFullNumbers() {
     #expect(usage.codexTotal == 145_691_467)
     #expect(usage.total == 4_426_359_038)
     #expect(usage.detailTooltip ==
-        "Claude 4,280,667,571 (입력 8,458,939 · 출력 9,796,198 · 캐시읽기 4,063,320,273 · 캐시생성 199,092,161) · Codex 145,691,467")
+        "Claude 4,280,667,571 (입력 8,458,939 · 출력 9,796,198 · 캐시읽기 4,063,320,273 · 캐시생성 199,092,161) "
+        + "· Codex 145,691,467 (입력 145,068,307 · 출력 623,160 · 캐시 0)")
 }
 
 @Test
 func monthlyTooltipOmitsSourcesWithNoUsage() {
-    // Codex 만 있는 경우 툴팁에 Codex 만 나온다(빈 Claude 파트 미표시).
-    let codexOnly = TokenUsageMonthly(month: "2026-07", codexInput: 1_500_000, codexOutput: 500_000)
-    #expect(codexOnly.detailTooltip == "Codex 2,000,000")
+    // Codex 만 있는 경우 툴팁에 Codex 만 나온다(빈 Claude 파트 미표시). v0.2.41: 입력·출력·캐시 내역이 괄호로 붙는다(issue #2).
+    let codexOnly = TokenUsageMonthly(month: "2026-07", codexInput: 1_500_000, codexOutput: 500_000, codexCacheRead: 1_200_000)
+    #expect(codexOnly.detailTooltip == "Codex 2,000,000 (입력 1,500,000 · 출력 500,000 · 캐시 1,200,000)")
+    #expect(codexOnly.total == 2_000_000)   // 캐시는 total 에 안 들어간다
 }
 
 @Test
@@ -1022,7 +1059,7 @@ func monthlyTooltipAppendsTodayWhenPresent() {
     #expect(usage.detailTooltip == "Claude 100 (입력 100 · 출력 0 · 캐시읽기 0 · 캐시생성 0) · 오늘 +1,234,567")
     // 오늘분 0 이면 기존 문구 불변(하위호환).
     let noToday = TokenUsageMonthly(month: "2026-07", codexInput: 1_500_000, codexOutput: 500_000)
-    #expect(noToday.detailTooltip == "Codex 2,000,000")
+    #expect(noToday.detailTooltip == "Codex 2,000,000 (입력 1,500,000 · 출력 500,000 · 캐시 0)")
 }
 
 // MARK: - 뷰 시그니처 (onOpenBoard 유무)

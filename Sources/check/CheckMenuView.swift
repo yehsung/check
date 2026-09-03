@@ -258,7 +258,7 @@ struct CheckMenuView: View {
                     // 토큰 소모량 행은 내 근무 박스와 팀원 현황 사이(사용자 지정 위치). 탭하면 순위 페이지.
                     // 하위 패널이 열려 있으면 감춘다 — 그 자리는 패널이 쓰고, 창 높이 상한도 그만큼 여유가 생긴다.
                     if showsTokenUsageRow {
-                        CheckTokenUsageRow(store: store.tokenUsage, onOpenBoard: { store.toggleTokenBoard() })
+                        CheckTokenUsageRow(store: store.tokenUsage, account: store.codexAccount, onOpenBoard: { store.toggleTokenBoard() })
                     }
                     if store.isLeaderboardVisible {
                         LeaderboardPanel(

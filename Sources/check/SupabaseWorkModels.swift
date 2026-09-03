@@ -253,12 +253,17 @@ struct TokenBoardRow: Decodable, Equatable {
     let claudeOutput: Int
     let claudeCacheRead: Int
     let claudeCacheCreation: Int
+    /// Codex 로컬 합(기기 합산 그대로 — 옛 클라 호환). `total` 은 서버가 계정 집계와 견준 effective 값이라 이 둘의 합과 다를 수 있다.
     let codexInput: Int
     let codexOutput: Int
     let total: Int
     /// 오늘(KST) 증가량과 그 귀속 날짜 'YYYY-MM-DD'. var + 기본값이라 마이그레이션 전 옛 RPC(컬럼 누락)와 호환된다.
     var todayTotal: Int = 0
     var todayDate: String = ""
+    /// Codex 캐시 히트 합(기기 합산). 20260903120000 이전 RPC 엔 없다 → 0.
+    var codexCacheRead: Int = 0
+    /// Codex 계정 월합(기기 간 max — 기기마다 같은 계정값을 올린다). 없으면 nil(옛 RPC 이거나 아무 기기도 못 읽었다).
+    var codexAccountMonth: Int? = nil
 }
 
 // TokenBoardRow 커스텀 디코드: 서버가 아직 옛 token_usage_board RPC(today_total/today_date 컬럼 없음)여도
@@ -270,6 +275,7 @@ extension TokenBoardRow {
         case claudeInput, claudeOutput, claudeCacheRead, claudeCacheCreation
         case codexInput, codexOutput, total
         case todayTotal, todayDate
+        case codexCacheRead, codexAccountMonth
     }
 
     init(from decoder: Decoder) throws {
@@ -287,6 +293,9 @@ extension TokenBoardRow {
         // 마이그레이션 전 호환: 옛 RPC 는 이 컬럼을 안 내려주므로 없으면 0/"".
         todayTotal = try c.decodeIfPresent(Int.self, forKey: .todayTotal) ?? 0
         todayDate = try c.decodeIfPresent(String.self, forKey: .todayDate) ?? ""
+        // 20260903120000 이전 RPC 호환: 없으면 캐시 0, 계정 nil(= "모름" — 0 과 구분해야 비중 라인이 '계정 0' 을 그리지 않는다).
+        codexCacheRead = try c.decodeIfPresent(Int.self, forKey: .codexCacheRead) ?? 0
+        codexAccountMonth = try c.decodeIfPresent(Int.self, forKey: .codexAccountMonth)
     }
 }
 
@@ -306,8 +315,19 @@ struct TokenBoardEntry: Identifiable, Equatable {
     /// 오늘(KST) 증가량과 그 귀속 날짜 'YYYY-MM-DD'. 서버 행에서 온다(마이그레이션 전엔 0/"").
     var todayTotal: Int = 0
     var todayDate: String = ""
+    /// Codex 캐시 히트 합(기기 합산, 입력의 부분집합). 옛 RPC 면 0.
+    var codexCacheRead: Int = 0
+    /// Codex 계정 월합(기기 간 max). 옛 RPC 거나 미보고면 nil.
+    var codexAccountMonth: Int? = nil
 
     var id: String { userID }
+
+    /// Claude 소계(4필드).
+    var claudeTotal: Int { claudeInput + claudeOutput + claudeCacheRead + claudeCacheCreation }
+    /// Codex 로컬 소계(입력+출력, 기기 합산).
+    var codexLocalTotal: Int { codexInput + codexOutput }
+    /// 순위에 실제로 쓰인 Codex 몫 = 로컬 합과 계정 월합 중 큰 쪽(서버 `greatest(codex_local, coalesce(codex_account, 0))` 미러).
+    var codexEffective: Int { max(codexLocalTotal, codexAccountMonth ?? 0) }
 
     /// 표시할 오늘 증가량. todayDate 가 현재 KST 날짜(currentDate)와 같을 때만 todayTotal 을, 어제 이후로 스테일이면
     /// 0 을 돌려준다 — 어제 이후 안 연 사람도 "오늘 +0"으로 균일하게 표시되도록(행 높이/레이아웃 일관). 순수 함수라 테스트로 고정한다.
@@ -333,7 +353,9 @@ extension Array where Element == TokenBoardRow {
                 codexInput: row.codexInput,
                 codexOutput: row.codexOutput,
                 todayTotal: row.todayTotal,
-                todayDate: row.todayDate
+                todayDate: row.todayDate,
+                codexCacheRead: row.codexCacheRead,
+                codexAccountMonth: row.codexAccountMonth
             )
         }
     }
@@ -373,6 +395,23 @@ struct TokenUsageUpsertRequest: Encodable {
     // 오늘(KST) 증가량과 귀속 날짜 — 서버 행에 함께 저장돼 순위판 "오늘 +N" 에 쓰인다.
     let todayTotal: Int
     let todayDate: String
+    /// Codex 캐시 히트 합(입력의 부분집합, total 에 안 들어감). **항상 실린다**(Int) — 매 업로드가 최신 로컬 집계이므로 덮어써야
+    /// 맞다. ★ 이 키 때문에 20260903120000 마이그레이션이 **클라 배포 전에** 적용돼야 한다(컬럼이 없으면 PostgREST 가 400).
+    let codexCacheRead: Int
+
+    // ── Codex 계정 집계(codex_account_*, 옵셔널 — nil 이면 키 생략 → 서버 값 보존) ──
+    //
+    // 계정 프로브가 이번 실행에서 아직 안 돌았거나 스냅샷이 없으면 nil 로 두어 서버의 마지막 계정값을 지우지 않는다.
+    // 값이 있을 때는 다섯을 **함께** 싣는다(월합·누적·시각·마지막 반영일·상태) — 한쪽만 갱신되면 시각과 값이 어긋난다.
+    // 상태(status)만은 스냅샷 없이도 실을 수 있다(예: 미로그인 3) — 서버 진단이 "왜 계정값이 없나"를 가른다.
+    var codexAccountMonth: Int?
+    var codexAccountLifetime: Int?
+    /// ISO8601(서비스 dateFormatter). 계정 스냅샷을 받은 시각.
+    var codexAccountAt: String?
+    /// 계정 버킷의 마지막 UTC 날짜 'YYYY-MM-DD'(이 달 안에서). 반영 지연을 서버에서 볼 수 있게.
+    var codexAccountLastDay: String?
+    /// CodexAccountProbeStatus.rawValue.
+    var codexAccountStatus: Int?
 
     // ── Codex 집계 진단(codex_diag_*, 전부 Int · "<빌드>:<KST 날짜>" 도장당 1회만 값이 실린다) ──
     //
@@ -459,6 +498,8 @@ extension TokenUsageUpsertRequest {
         total: Int,
         todayTotal: Int,
         todayDate: String,
+        codexCacheRead: Int = 0,
+        account: TokenUsageAccountFields? = nil,
         diagnostics: CodexUsageDiagnostics?
     ) {
         self.init(
@@ -474,6 +515,12 @@ extension TokenUsageUpsertRequest {
             total: total,
             todayTotal: todayTotal,
             todayDate: todayDate,
+            codexCacheRead: codexCacheRead,
+            codexAccountMonth: account?.month,
+            codexAccountLifetime: account?.lifetime,
+            codexAccountAt: account?.fetchedAt,
+            codexAccountLastDay: account?.lastDay,
+            codexAccountStatus: account?.status,
             codexDiagFilesTotal: diagnostics?.filesTotal,
             codexDiagFilesMonth: diagnostics?.filesMonth,
             codexDiagEventsMonth: diagnostics?.eventsMonth,
@@ -498,6 +545,16 @@ extension TokenUsageUpsertRequest {
             codexDiagInputAtScan: diagnostics.map { _ in codexInput + codexOutput }
         )
     }
+}
+
+/// 업로드 본문에 실을 Codex 계정 집계 다섯 값. 서비스가 CodexAccountUsage 스냅샷+상태에서 만든다(SupabaseWorkService.upsertTokenUsage).
+/// 스냅샷 없이 상태만 있으면(미로그인·미설치) month/lifetime/fetchedAt/lastDay 는 nil 로 두고 status 만 싣는다.
+struct TokenUsageAccountFields: Equatable, Sendable {
+    var month: Int?
+    var lifetime: Int?
+    var fetchedAt: String?
+    var lastDay: String?
+    var status: Int?
 }
 
 /// token_usage_device_monthly **스캐너 하트비트** 본문. 위 TokenUsageUpsertRequest 와 같은 표·같은 충돌키

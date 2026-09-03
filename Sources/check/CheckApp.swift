@@ -42,7 +42,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 한 발짝도 움직이지 않고, 찌르기는 예전 그대로 15초 폴링으로 온다(사장님 확정 ②).
     /// 켜는 법은 `RealtimeFeature` 주석에 있다. `LiveRealtimeTransport.init?` 는 테스트 프로세스에서
     /// **nil 을 돌려주므로**, 이 줄이 그대로 있어도 `swift test` 는 소켓을 하나도 열지 않는다.
+    ///
+    /// Codex 계정 프로브도 여기서만 라이브로 만든다(`CodexAccountUsageStore.live()` 는 저장소에서 이 줄 하나). 기본값은
+    /// 무해 인스턴스라 테스트가 실제 `codex app-server` 를 띄우는 일이 없다 — 이 사실도 소스 계약 테스트가 되묻는다.
     let store = WorkTimerStore(
+        codexAccount: CodexAccountUsageStore.live(),
         realtimeTransport: RealtimeFeature.isEnabled() ? LiveRealtimeTransport() : nil
     )
     // 업데이트 감지 스토어(1개). 팝오버 배너(CheckMenuView)와 근무중 오버레이 말풍선(컨트롤러)이 같은

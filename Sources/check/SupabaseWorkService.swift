@@ -990,13 +990,26 @@ actor SupabaseWorkService {
     /// 그 19개 중 codex_diag_input_at_scan 은 여기서 따로 넘기지 않는다 — 요청 생성자가 아래 usage.codexInput/
     /// codexOutput 에서 파생시킨다(= usage.codexTotal). 행에 실린 Codex 합과 스냅샷이 어긋날 수 없게 하는 장치다.
     /// 진단값은 순위판 RPC 에 실리지 않는다 — 운영자만 DB 에서 본다.
+    ///
+    /// account/accountStatus(v0.2.41): Codex 계정 집계 스냅샷과 마지막 프로브 상태. 둘 다 nil 이면 codex_account_* 키가
+    /// 본문에서 통째로 빠져 서버의 마지막 계정값이 보존된다(진단 필드와 같은 옵셔널 규약). 스냅샷 없이 상태만 있으면
+    /// status 만 실린다. codex_cache_read 는 **항상** 실린다(로컬 집계라 매번 최신값으로 덮는 것이 맞다).
     func upsertTokenUsage(
         accessToken: String,
         userID: String,
         usage: TokenUsageMonthly,
         deviceID: String,
+        account: CodexAccountUsage? = nil,
+        accountStatus: CodexAccountProbeStatus? = nil,
         diagnostics: CodexUsageDiagnostics? = nil
     ) async throws {
+        let accountFields: TokenUsageAccountFields? = (account == nil && accountStatus == nil) ? nil : TokenUsageAccountFields(
+            month: account.map { $0.monthTotal(usage.month) },
+            lifetime: account?.lifetimeTokens,
+            fetchedAt: account.map { dateFormatter.string(from: $0.fetchedAt) },
+            lastDay: account?.latestBucketDate(in: usage.month),
+            status: accountStatus?.rawValue
+        )
         try await sendNoBody(
             path: "/rest/v1/token_usage_device_monthly",
             method: "POST",
@@ -1014,6 +1027,8 @@ actor SupabaseWorkService {
                 total: usage.total,
                 todayTotal: usage.todayTotal,
                 todayDate: usage.todayDate,
+                codexCacheRead: usage.codexCacheRead,
+                account: accountFields,
                 diagnostics: diagnostics
             ),
             accessToken: accessToken,

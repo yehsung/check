@@ -158,7 +158,7 @@ func fixtureScanTotalsAndFileProgressMatchPreChangeOracle() {
     #expect(r.cache.codexFileStates.values.first?.consumedOffset == sizes.codexSize)
     #expect(r.cache.codexFileStates.values.first?.prevCumulative == 1_700)
     #expect(r.cache.codexFileStates.values.first?.monthContribTotal == 700)
-    #expect(r.cache.codexFileStates.values.first?.dayContribTotal == 200)
+    #expect(r.cache.codexFileStates.values.first?.dayContrib == ["2026-07-14": 200, "2026-07-05": 500])   // v0.2.41: 일별 맵(과제 E 선행)
     #expect(r.stats.claudeFilesRead == 2)
     #expect(r.stats.codexFilesRead == 1)
     #expect(r.stats.cacheChanged == true)
@@ -300,8 +300,8 @@ func retentionKeepsLast48HoursOfPreviousMonthAndEvictsOlder() {
     let micros = { (d: Date) in Int((d.timeIntervalSince1970 * 1_000_000).rounded()) }
     cache.claudeFileStates["/keep.jsonl"] = FileProgress(size: 1, mtimeMicros: micros(boundary.addingTimeInterval(3_600)), consumedOffset: 1)
     cache.claudeFileStates["/drop.jsonl"] = FileProgress(size: 1, mtimeMicros: micros(boundary.addingTimeInterval(-3_600)), consumedOffset: 1)
-    cache.codexFileStates["/keep-rollout.jsonl"] = CodexFileProgress(size: 1, mtimeMicros: micros(boundary), consumedOffset: 1, prevCumulative: 1, monthKey: "2026-06", monthContribTotal: 0, dayKey: "", dayContribTotal: 0)
-    cache.codexFileStates["/drop-rollout.jsonl"] = CodexFileProgress(size: 1, mtimeMicros: micros(boundary.addingTimeInterval(-1)), consumedOffset: 1, prevCumulative: 1, monthKey: "2026-06", monthContribTotal: 0, dayKey: "", dayContribTotal: 0)
+    cache.codexFileStates["/keep-rollout.jsonl"] = CodexFileProgress(size: 1, mtimeMicros: micros(boundary), consumedOffset: 1, prevInput: 1, prevOutput: 0, prevCached: 0, monthKey: "2026-06", monthInput: 0, monthOutput: 0, monthCached: 0, dayContrib: [:])
+    cache.codexFileStates["/drop-rollout.jsonl"] = CodexFileProgress(size: 1, mtimeMicros: micros(boundary.addingTimeInterval(-1)), consumedOffset: 1, prevInput: 1, prevOutput: 0, prevCached: 0, monthKey: "2026-06", monthInput: 0, monthOutput: 0, monthCached: 0, dayContrib: [:])
 
     let home = v0238TempDir("retention")   // 로그 없음 — 퇴거/합계만
     let r = TokenUsageIncrementalScanner.update(cache, homeDirectory: home, now: v0238Now)
@@ -414,7 +414,7 @@ func partialSaveRewritesOnlyDirtyFileAndLoadMergesBoth() {
     var cache = TokenUsageCache()
     cache.claudeEntries["m1\u{0}r1"] = ClaudeEntry(ts14: 20_260_710_000_000, input: 1, output: 2, cacheRead: 3, cacheCreation: 4)
     cache.claudeFileStates["/a.jsonl"] = FileProgress(size: 10, mtimeMicros: 999, consumedOffset: 8)
-    cache.codexFileStates["/r.jsonl"] = CodexFileProgress(size: 5, mtimeMicros: 1, consumedOffset: 5, prevCumulative: 100, monthKey: "2026-07", monthContribTotal: 7, dayKey: "2026-07-14", dayContribTotal: 7)
+    cache.codexFileStates["/r.jsonl"] = CodexFileProgress(size: 5, mtimeMicros: 1, consumedOffset: 5, prevInput: 100, prevOutput: 0, prevCached: 0, monthKey: "2026-07", monthInput: 7, monthOutput: 0, monthCached: 0, dayContrib: ["2026-07-14": 7])
 
     // 처음엔 어느 부분만 요청해도 둘 다 만들어진다(없는 파일은 항상 채운다 — 핫만 있는 쌍은 로드에서 폐기되므로).
     #expect(TokenUsageCacheStore.save(cache, parts: [.state], to: base))
@@ -424,7 +424,7 @@ func partialSaveRewritesOnlyDirtyFileAndLoadMergesBoth() {
     let hotBytes1 = v0238FileBytes(stateURL)
 
     // codex 상태만 바뀐 저장(핫만): 콜드 파일 불변.
-    cache.codexFileStates["/r.jsonl"]?.monthContribTotal = 70
+    cache.codexFileStates["/r.jsonl"]?.monthInput = 70
     #expect(TokenUsageCacheStore.save(cache, parts: [.state], to: base))
     #expect(v0238FileBytes(entriesURL) == coldBytes1)
     #expect(v0238FileBytes(stateURL) != hotBytes1)

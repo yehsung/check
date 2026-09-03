@@ -138,14 +138,18 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
     }
 }
 
-/// ~/.codex/sessions 를 전량 1회 순회해 진단값을 만든다. 순수 함수(상태 없음) — Task.detached 에서 돈다.
+/// ~/.codex/sessions **와 ~/.codex/archived_sessions** 를 전량 1회 순회해 진단값을 만든다. 순수 함수(상태 없음) — Task.detached 에서 돈다.
+/// 두 루트를 보는 이유는 프로덕션 스캐너와 같다(v0.2.41): 보관된 채팅은 후자로 rename 되므로 전자만 보면 그 몫이 빠져
+/// 아래 항등식이 깨진다. 루트 목록은 TokenUsageIncrementalScanner.codexRoots 를 그대로 쓴다(한 곳에서만 정의).
 ///
 /// 산식은 프로덕션 스캐너(TokenUsageIncrementalScanner.scanCodex)의 Codex 경로를 **그대로 재현**한다:
 /// 파일에서 **처음 만나는 유효 token_count 는 델타를 만들지 않고 기준선만 세우고**(그 누적치는 직전 세션에서
-/// 이어받은 카운터지 이번에 쓴 양이 아니다), 그다음부터 delta = max(0, cum − 기준선) 을 그 이벤트
-/// timestamp(→KST)의 월에 귀속한다. cum = total_token_usage.(input_tokens + output_tokens).
+/// 이어받은 카운터지 이번에 쓴 양이 아니다), 그다음부터 delta = max(0, input − 기준선입력) + max(0, output − 기준선출력)
+/// 을 그 이벤트 timestamp(→KST)의 월에 귀속한다(v0.2.41 부터 프로덕션이 입력/출력을 따로 클램프하므로 여기도 같은 산식 —
+/// 카운터가 단조 증가하는 정상 로그에선 옛 `max(0, cum − prev)` 와 같은 값이고, 한 필드만 줄어드는 비정상 리셋에서만 갈린다).
+/// cum = total_token_usage.(input_tokens + output_tokens) 은 리셋(drops)·중복 키·legacy 산식에 그대로 쓴다.
 /// info/total/timestamp 결손 이벤트는 건너뛰되 기준선을 갱신하지 않는다(다음 유효 이벤트가 흡수).
-/// 그래서 `dedupTotal + dupTokens == TokenUsageScanner.scan().codexInput` 이 성립한다(같은 홈·같은 월 기준).
+/// 그래서 `dedupTotal + dupTokens == TokenUsageScanner.scan().codexTotal`(= codexInput + codexOutput) 이 성립한다(같은 홈·같은 월 기준).
 ///
 /// **예외는 `legacyTotal` 하나뿐이다** — 그 필드만 의도적으로 옛 세대(파일마다 기준선 0)를 재현한다. 정정 전 값은
 /// 고치고 나면 다시 관측할 수 없고, 두 값의 차이가 곧 이월분의 정확값이기 때문이다.
@@ -158,12 +162,12 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
 /// 비용: 전량 순회라 비싸다. 호출측이 **앱 빌드당 1회만** 부르는 것을 전제로 캐시를 두지 않는다.
 enum CodexUsageDiagnosticsScanner {
     /// month 는 KST 'YYYY-MM'. appBuild 는 결과에 그대로 실려 나간다(값의 출처 표시).
-    static func compute(homeDirectory: URL, month: String, appBuild: Int) -> CodexUsageDiagnostics {
+    static func compute(homeDirectory: URL, codexHome: URL? = nil, month: String, appBuild: Int) -> CodexUsageDiagnostics {
         var result = CodexUsageDiagnostics()
         result.appBuild = appBuild
 
-        let root = homeDirectory.appendingPathComponent(".codex/sessions", isDirectory: true)
-        let files = rolloutFiles(under: root)
+        let files = TokenUsageIncrementalScanner.codexRoots(homeDirectory: homeDirectory, codexHome: codexHome)
+            .flatMap { rolloutFiles(under: $0) }
         result.filesTotal = files.count
         guard !files.isEmpty else { return result }
 
@@ -231,12 +235,15 @@ enum CodexUsageDiagnosticsScanner {
 
         // 파일별(파일 경계에서 리셋)
         private var fileIndex = 0
-        /// 델타 기준선 = 직전 유효 token_count 의 누적치. **nil("아직 기준선을 못 봤다")과 0("관측된 0")은 다르다** —
+        /// 델타 기준선 = 직전 유효 token_count 의 누적치(input+output). **nil("아직 기준선을 못 봤다")과 0("관측된 0")은 다르다** —
         /// 그 구분이 "파일에서 처음 만나는 유효 이벤트는 델타를 만들지 않는다"는 규칙의 전부다(프로덕션과 같은 규칙).
         /// 프로덕션은 이 구분을 이어읽기 캐시까지 들고 가야 해서 consumedOffset 으로 표현하지만(유효 이벤트를 하나도
         /// 못 본 파일은 오프셋을 전진시키지 않는다), 이 진단은 매번 오프셋 0 부터 전량 재파싱이라 파일 경계에서 nil 로
         /// 되돌리는 것만으로 같은 의미가 된다 — token_count 가 하나도 없는 파일은 기준선이 서지 않고 기여도 0 이다.
         private var baseline: Int?
+        /// 프로덕션 미러용 필드별 기준선(입력·출력). baseline 과 같은 순간에 서고 같은 순간에 갱신된다.
+        private var baselineInput = 0
+        private var baselineOutput = 0
         /// 직전 유효 이벤트의 UTC epoch 초. 파일 경계에서 nil — 파일의 첫 이벤트는 잴 직전이 없으니 간격 0 이다.
         /// prevCumulative 와 같은 이유로 **대상 월 밖 이벤트로도 전진한다**: 델타의 기준선이 그 이벤트이므로,
         /// 그 델타가 얼마 만에 쌓였는지도 같은 기준선에서 재야 짝이 맞는다(월 렌즈는 '무엇을 세느냐'만 가른다).
@@ -274,6 +281,8 @@ enum CodexUsageDiagnosticsScanner {
         func beginFile(index: Int) {
             fileIndex = index
             baseline = nil
+            baselineInput = 0
+            baselineOutput = 0
             prevEventEpoch = nil
             firstEvent = nil
             monthContrib = 0
@@ -314,15 +323,19 @@ enum CodexUsageDiagnosticsScanner {
                   let monthKey = kstMonthKey(fromTimestamp: timestamp)
             else { return }
 
-            let cum = intField(total["input_tokens"]) + intField(total["output_tokens"])
+            let inputCum = intField(total["input_tokens"])
+            let outputCum = intField(total["output_tokens"])
+            let cum = inputCum + outputCum
             let inMonth = (monthKey == month)
             // 기준선은 대상 월 밖 이벤트로도 계속 전진해야 한다 — 그래야 이 달 첫 델타의 기준선이 맞는다.
             // 월 렌즈가 가르는 건 '무엇을 세느냐'지 '어떻게 걸어가느냐'가 아니다.
             if firstEvent == nil { firstEvent = FirstEvent(cumulative: cum, inMonth: inMonth) }
             if inMonth, let prev = baseline, cum < prev { drops += 1 }   // 기준선이 없으면 견줄 대상도 없다.
             // 앱 산식(프로덕션 미러): 기준선을 아직 못 봤으면 델타를 만들지 않고 기준선만 세운다. 그 누적치는
-            // "카운터가 이미 거기 와 있었다"는 정보이지 이번에 쓴 양이 아니다.
-            let delta = baseline.map { max(0, cum - $0) } ?? 0
+            // "카운터가 이미 거기 와 있었다"는 정보이지 이번에 쓴 양이 아니다. 필드별 클램프(입력·출력 각각)도 프로덕션과 같다.
+            let delta = baseline == nil
+                ? 0
+                : max(0, inputCum - baselineInput) + max(0, outputCum - baselineOutput)
             // 옛 산식: 미관측 기준선을 '0 을 관측했다'로 취급했다 → 파일 첫 이벤트의 누적치 전액이 델타가 됐다.
             // 이 한 줄이 legacyTotal 과 dedupTotal 을 가르는 전부다.
             let legacyDelta = max(0, cum - (baseline ?? 0))
@@ -334,6 +347,8 @@ enum CodexUsageDiagnosticsScanner {
                 return max(0, epoch - previous)
             }()
             baseline = cum
+            baselineInput = inputCum
+            baselineOutput = outputCum
             prevEventEpoch = epoch
             guard inMonth else { return }
 

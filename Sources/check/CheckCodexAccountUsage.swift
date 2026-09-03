@@ -187,9 +187,15 @@ enum CodexAccountUsageProbe {
         await shellLookup(interactive: interactive, timeout: shellLookupTimeout)
     }
 
-    /// 로그인 셸 조회(캐시). `-lc`(.zprofile) 로 먼저 묻고 codex 가 안 보이면 `-ic`(.zshrc — nvm 초기화는 대개 여기 있다) 로
-    /// 한 번 더 묻는다. 둘 다 `shellLookupTimeout` 으로 막고 stdin 은 /dev/null 이라 대화형 dotfile 도 멈추지 않는다.
-    /// 실패는 `locateFailureTTL` 동안 캐시한다.
+    /// 로그인 셸 조회(캐시). `-lc`(.zprofile) 로 먼저 묻고 **codex 가 안 보이거나 CODEX_HOME 이 비어 있으면** `-ic`(.zshrc —
+    /// nvm 초기화도, `export CODEX_HOME=…` 도 대개 여기 있다) 로 한 번 더 묻는다. 둘 다 `shellLookupTimeout` 으로 막고 stdin 은
+    /// /dev/null 이라 대화형 dotfile 도 멈추지 않는다. 실패는 `locateFailureTTL` 동안 캐시한다.
+    ///
+    /// CODEX_HOME 도 재조회 조건인 이유(리뷰 2차 P2): `.zshrc` 에만 CODEX_HOME 을 둔 사용자는 `-lc` 가 codex 를 찾아 버리면 대화형
+    /// 조회가 안 돌아 CODEX_HOME 이 영영 빈 채 캐시됐다 — 그러면 계정 스토어가 `~/.codex/auth.json` 만 봐서 '미로그인'이고
+    /// 스캐너도 `~/.codex/sessions` 만 읽는다. 비용은 프로세스 수명당 대화형 셸 1회다(성공 결과는 수명 캐시).
+    /// 병합 규칙: 세 필드 각각 **비어 있지 않은 쪽**을 쓰되 둘 다 있으면 대화형(실제 사용 환경)이 이긴다 — 로그인 셸이 찾은 codex 를
+    /// 대화형이 못 찾았다고 지우지 않는다(옛 코드는 `codex: interactive.codex` 로 덮어써 codex 를 잃었을 것이다).
     static func resolveShellEnvironment(
         now: Date = Date(), cache: LocateCache = .shared, lookup: ShellLookup? = nil
     ) async -> ShellEnvironment? {
@@ -201,13 +207,8 @@ enum CodexAccountUsageProbe {
         if let cached { return cached }
         let lookup = lookup ?? liveShellLookup
         var shell = await lookup(false)
-        if shell?.codex?.isEmpty ?? true, let interactive = await lookup(true) {
-            // 대화형 조회가 codex 를 찾았으면 그 환경이 실제 사용 환경이다. 못 찾았어도 PATH 는 더 넓은 쪽을 쓴다.
-            shell = ShellEnvironment(
-                path: (interactive.path?.isEmpty == false) ? interactive.path : shell?.path,
-                codexHome: (interactive.codexHome?.isEmpty == false) ? interactive.codexHome : shell?.codexHome,
-                codex: interactive.codex
-            )
+        if needsInteractiveLookup(shell), let interactive = await lookup(true) {
+            shell = merged(login: shell, interactive: interactive)
         }
         let resolved = shell
         cache.state.withLock { state in
@@ -215,6 +216,22 @@ enum CodexAccountUsageProbe {
             state.shellFailedAt = resolved == nil ? now : nil
         }
         return resolved
+    }
+
+    /// 대화형(`-ic`) 재조회가 필요한가(순수): 로그인 셸 결과가 없거나, codex 를 못 찾았거나, CODEX_HOME 이 비어 있을 때.
+    static func needsInteractiveLookup(_ login: ShellEnvironment?) -> Bool {
+        guard let login else { return true }
+        return (login.codex?.isEmpty ?? true) || (login.codexHome?.isEmpty ?? true)
+    }
+
+    /// 로그인 셸 결과와 대화형 결과의 병합(순수): 필드별로 비어 있지 않은 쪽, 둘 다 있으면 대화형.
+    static func merged(login: ShellEnvironment?, interactive: ShellEnvironment) -> ShellEnvironment {
+        func pick(_ a: String?, _ b: String?) -> String? { (a?.isEmpty == false) ? a : b }
+        return ShellEnvironment(
+            path: pick(interactive.path, login?.path),
+            codexHome: pick(interactive.codexHome, login?.codexHome),
+            codex: pick(interactive.codex, login?.codex)
+        )
     }
 
     // MARK: 후보 (순수)
@@ -409,7 +426,8 @@ enum CodexAccountUsageProbe {
     /// 후보 확정 규칙(리뷰 P1): 툴체인은 **실행으로** 확정한다. 확인된 툴체인은 프로세스 수명 동안 캐시하되, 그것이 돌지 못하게
     /// 되면(응답 없이 종료·기동 실패 — node 삭제 등) 캐시를 버리고 재탐색한다. 후보는 셸이 찾은 codex → 폴백 순으로
     /// `maxCandidateAttempts` 개까지 실행해 보고, 타임아웃은 환경 문제(네트워크)라 거기서 멈춘다(캐시 없음 — 다음 프로브가 재탐색).
-    /// 후보가 하나도 없으면 `.codexNotInstalled`, 전부 실패면 `.failed` 를 `locateFailureTTL` 동안 캐시한다.
+    /// 후보가 하나도 없으면 `.codexNotInstalled`, 전부 실패면 `.failed` 를 `locateFailureTTL` 동안 캐시한다(확정 툴체인을
+    /// 폐기한 직후 남은 후보가 0 인 것도 `.failed` — 설치는 돼 있으니까).
     ///
     /// `cache`·`lookup`·`run` 은 테스트 주입점이다(기본값 = 프로덕션: 공유 캐시·`/bin/zsh` 조회·실제 프로세스). 테스트는 새
     /// 캐시 + 고정 셸 환경 + 경로별 canned 결과로 이 확정 규칙만 돌린다 — 프로세스는 뜨지 않는다.
@@ -443,8 +461,12 @@ enum CodexAccountUsageProbe {
         let candidates = candidateToolchains(homeDirectory: homeDirectory, shell: shell)
             .filter { $0.executable != excluded }
         guard !candidates.isEmpty else {
-            cache.state.withLock { $0.failedAt = now; $0.failedStatus = .codexNotInstalled }
-            return .failure(Failure(status: .codexNotInstalled, reason: "codex 실행 파일 없음"))
+            // 후보 0 의 상태는 **왜 0 인지**로 가른다(리뷰 2차 P2): 방금 확정 툴체인을 폐기해서 비었으면 codex 는 설치돼 있고
+            // 돌지 못하는 것(node 삭제 등)이라 `.failed` 다 — `.codexNotInstalled` 로 올리면 서버 진단(token_scan_health)이
+            // '미설치'로 오진해 운영자가 엉뚱한 곳을 본다. 애초에 후보가 하나도 없었을 때만 `.codexNotInstalled`.
+            let status: CodexAccountProbeStatus = excluded == nil ? .codexNotInstalled : .failed
+            cache.state.withLock { $0.failedAt = now; $0.failedStatus = status }
+            return .failure(Failure(status: status, reason: excluded == nil ? "codex 실행 파일 없음" : "확정 툴체인 폐기 뒤 남은 후보 없음"))
         }
         var last: Result<CodexAccountUsage, Failure> = .failure(Failure(status: .failed, reason: "후보 없음"))
         for candidate in candidates.prefix(maxCandidateAttempts) {

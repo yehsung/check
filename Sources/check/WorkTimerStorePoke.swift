@@ -805,20 +805,27 @@ extension WorkTimerStore {
         return max(0, Int(until.timeIntervalSince(now).rounded(.up)))
     }
 
-    /// 로그인 후 내 토큰 사용량 공개 여부를 서버값으로 1회 로드한다(폴링 첫 유효 tick 에서 부른다).
+    /// 로그인 후 내 토큰 사용량 공개·수집 설정을 서버값으로 1회 로드한다(폴링 첫 유효 tick 에서 부른다).
     /// 성공 시에만 loaded 플래그를 세워, 실패하면 다음 tick 에 다시 시도할 수 있게 한다.
+    ///
+    /// 게이트는 **수집 설정 수신**(tokenUsageCollectLoaded)이다 — 공개 플래그(tokenUsagePublicLoaded)는 사용자가 GET 전에 토글하면
+    /// 먼저 서는 낙관 플래그라, 그것을 게이트로 쓰면 로그인 직후 토글 한 번에 이 GET 이 영영 안 나가 수집 설정도 못 받고
+    /// Codex 계정 프로브도 그 세션 내내 잠긴다. 그래서 GET 은 수집 설정을 받을 때까지 나가되, 공개 여부는 사용자가 이미 골랐으면
+    /// (tokenUsagePublicLoaded) 서버값으로 덮지 않는다(PATCH 가 아직 안 닿은 낡은 값일 수 있다 — 옛 규약 그대로).
     func loadTokenUsagePrivacyIfNeeded() async {
-        guard !tokenUsagePublicLoaded, session != nil else { return }
+        guard !tokenUsageCollectLoaded, session != nil else { return }
         let generation = sessionGeneration
         do {
             let settings = try await withSessionRetry { activeSession in
                 try await service.fetchTokenUsageSettings(accessToken: activeSession.accessToken, userID: activeSession.userID)
             }
             guard generation == sessionGeneration else { return }
-            if tokenUsagePublic != settings.isPublic { tokenUsagePublic = settings.isPublic }
+            if !tokenUsagePublicLoaded, tokenUsagePublic != settings.isPublic { tokenUsagePublic = settings.isPublic }
             // 수집 설정은 사용자가 앱에서 바꾸는 값이 아니라 서버가 정하는 값이라 낙관 갱신도 토글도 없다.
             // 앱 게이트는 통신 낭비를 줄이는 부수 장치일 뿐 — 실효는 서버 트리거가 낸다(구버전도 함께 막힌다).
             if tokenUsageCollect != settings.collects { tokenUsageCollect = settings.collects }
+            // 여기서 세운다 — 서버 응답을 **실제로 받은** 유일한 자리다(아래 별명 쿨타임 GET 은 try? 라 이 사실과 무관하다).
+            tokenUsageCollectLoaded = true
             // 집중 모드도 같은 GET 으로 받는다(요청 추가 0). 컬럼이 없는 서버에서는 false 로 와서 기존 동작이 유지된다.
             if focusMode != settings.focusMode { focusMode = settings.focusMode }
             // 별명 쿨타임 기준 시각. 실패해도 위 두 설정은 이미 반영됐다 — 쿨타임만 '아직 모름'으로 남고

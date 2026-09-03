@@ -759,13 +759,14 @@ func probeFetchConfirmsToolchainByExecutionAndEvictsOneThatStoppedRunning() asyn
     #expect(mine().last?.hasSuffix("macos-arm64/codex") == true, "실패한 첫 후보 뒤에 다음 후보를 띄우지 않았다(리뷰 P1): \(runner.attempts)")
     #expect(cache.confirmedToolchain?.executable.path.hasSuffix("macos-arm64/codex") == true, "실행으로 확인된 후보가 캐시돼야 한다")
     #expect(cache.failure == nil)
-    #expect(shell.calls == [false])   // 로그인 셸이 codex 를 찾았으니 대화형 조회는 없다
+    // 로그인 셸이 codex 는 찾았지만 CODEX_HOME 이 비어 있어 대화형 조회가 한 번 더 돈다(리뷰 2차 P2; nil 이라 로그인 결과 유지).
+    #expect(shell.calls == [false, true])
 
-    // 2) 두 번째 프로브: 확정된 IDE 후보만 돈다(npm 은 다시 띄우지 않는다). 셸 조회도 캐시.
+    // 2) 두 번째 프로브: 확정된 IDE 후보만 돈다(npm 은 다시 띄우지 않는다). 셸 조회도 캐시(프로세스 수명당 대화형 1회).
     runner.reset()
     _ = await fetch(at: t0.addingTimeInterval(1_800))
     #expect(mine().count == 1 && mine().first?.hasSuffix("macos-arm64/codex") == true, "확정된 툴체인 하나만 띄워야 한다: \(runner.attempts)")
-    #expect(shell.calls == [false])
+    #expect(shell.calls == [false, true])
 
     // 3) 확정된 것이 돌지 못하게 됨(기동 실패): 캐시를 버리고 그것을 뺀 나머지를 재탐색 → npm 도 실패 → 전부 실패를 TTL 동안 캐시.
     runner.set("macos-arm64/codex", (.failure(.init(status: .failed, reason: "launch")), .launchFailed))
@@ -874,6 +875,98 @@ func probeShellEnvironmentRetriesInteractivelyAndCachesOutcome() async {
     _ = await CodexAccountUsageProbe.resolveShellEnvironment(now: t0.addingTimeInterval(CodexAccountUsageProbe.locateFailureTTL), cache: c3, lookup: failing.lookup)
     #expect(failing.calls.count == 4)
     #expect(CodexAccountUsageProbe.cachedCodexHome(cache: c3) == nil)
+}
+
+/// 리뷰 2차 P2 — 대화형 재조회 조건은 "codex 를 못 찾았거나 **CODEX_HOME 이 비어 있을 때**" 다. `.zshrc` 에만
+/// `export CODEX_HOME=…` 을 둔 사용자는 `-lc` 가 codex(npm)를 찾아 버리면 옛 규칙에선 대화형 조회가 안 돌아 CODEX_HOME 이 영영
+/// 빈 채 캐시됐고, 계정 스토어는 `~/.codex/auth.json` 만 봐서 '미로그인'이었다. 병합은 필드별 '비어 있지 않은 쪽' —
+/// 대화형이 codex 를 못 돌려줘도 로그인 셸이 찾은 codex 는 남는다. 비용은 프로세스 수명당 대화형 1회(캐시).
+/// 뮤테이션: 재조회 조건을 codex 부재로 되돌리면 calls == [false] 이고 cachedCodexHome == nil 이라 빨강; 병합을
+/// `codex: interactive.codex` 로 되돌리면 codex 가 지워져 빨강.
+@MainActor
+@Test
+func probeShellLookupRetriesInteractivelyWhenCodexHomeIsEmptyAndMergesNonEmptyFields() async {
+    let home = c41TempHome("codex-home-interactive")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let custom = home.appendingPathComponent("x", isDirectory: true)
+    // auth.json 은 `$CODEX_HOME/auth.json` 에만 있다(`~/.codex/auth.json` 없음).
+    c41Write("{\"tokens\":\"secret\"}", to: custom.appendingPathComponent("auth.json"))
+    let npm = home.appendingPathComponent(".npm-global/bin/codex").path
+    let shell = C41ShellLookup(
+        login: .init(path: "/usr/bin:/bin", codexHome: "", codex: npm),
+        interactive: .init(path: "", codexHome: custom.path, codex: ""))
+    let cache = CodexAccountUsageProbe.LocateCache()
+    let t0 = c41FetchedAt
+    let env = await CodexAccountUsageProbe.resolveShellEnvironment(now: t0, cache: cache, lookup: shell.lookup)
+    #expect(shell.calls == [false, true], "codex 는 찾았지만 CODEX_HOME 이 비었으면 대화형으로 한 번 더 물어야 한다")
+    #expect(env?.codexHome == custom.path)
+    #expect(env?.codex == npm, "대화형이 codex 를 못 찾았다고 로그인 셸이 찾은 codex 를 지웠다")
+    #expect(env?.path == "/usr/bin:/bin", "대화형 PATH 가 비었으면 로그인 셸 PATH 를 유지해야 한다")
+    #expect(CodexAccountUsageProbe.cachedCodexHome(cache: cache)?.path == custom.path)
+    #expect(CodexAccountUsageProbe.needsInteractiveLookup(.init(path: "/usr/bin", codexHome: "/x", codex: "/x/codex")) == false)
+    #expect(CodexAccountUsageProbe.needsInteractiveLookup(nil))
+
+    // 그 캐시로 만든 계정 스토어: `$CODEX_HOME/auth.json` 을 찾아 러너가 정확히 1회 돈다(옛 규칙이면 미로그인 → 0).
+    let runner = C41Runner(.success(c41Usage()))
+    let store = CodexAccountUsageStore(
+        defaults: c41Defaults(), homeDirectory: home,
+        codexHome: { await CodexAccountUsageProbe.resolveCodexHome(now: t0, cache: cache, lookup: shell.lookup) },
+        runner: runner.run)
+    await store.refreshIfDue(now: t0)
+    #expect(store.runnerCallCount == 1, "CODEX_HOME 아래 auth.json 을 두고도 미로그인으로 끝났다")
+    #expect(store.lastStatus == .ok)
+    #expect(shell.calls == [false, true], "캐시된 셸 환경을 두고 셸을 다시 띄웠다(프로세스 수명당 1회여야 한다)")
+
+    // 둘 다 채워져 있으면 대화형 조회는 없다(비용 0).
+    let full = C41ShellLookup(login: .init(path: "/usr/bin:/bin", codexHome: "/Users/x/cx", codex: "/usr/local/bin/codex"), interactive: nil)
+    let c2 = CodexAccountUsageProbe.LocateCache()
+    _ = await CodexAccountUsageProbe.resolveShellEnvironment(now: t0, cache: c2, lookup: full.lookup)
+    #expect(full.calls == [false])
+    // 병합 규칙(순수): 둘 다 비어 있지 않으면 대화형(실제 사용 환경)이 이긴다.
+    let both = CodexAccountUsageProbe.merged(
+        login: .init(path: "/a", codexHome: "/h1", codex: "/a/codex"),
+        interactive: .init(path: "/b", codexHome: "/h2", codex: "/b/codex"))
+    #expect(both == .init(path: "/b", codexHome: "/h2", codex: "/b/codex"))
+}
+
+/// 리뷰 2차 P2 — 확정 툴체인이 exited/launchFailed 로 폐기된 뒤 남은 후보가 0 이면 `.codexNotInstalled` 가 아니라 `.failed` 다:
+/// 바이너리는 설치돼 있고 돌지 못하는 것(node 삭제 등)이라, '미설치'로 올리면 서버 진단이 오진한다. 캐시 상태도 `.failed`.
+/// 뮤테이션: 후보 0 분기의 status 를 `.codexNotInstalled` 고정으로 되돌리면 빨강.
+@Test
+func probeFetchReportsFailedNotNotInstalledWhenEvictedToolchainWasTheOnlyCandidate() async {
+    let home = c41TempHome("fetch-evict-only")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let ide = home.appendingPathComponent(".cursor/extensions/openai.chatgpt-2.0.0/bin/macos-arm64/codex")
+    c41PlantExecutable(ide)
+    // 로그인 셸은 codex 를 모른다(CODEX_HOME 도 비어 대화형이 한 번 더 돌지만 nil) → 후보는 IDE 번들 하나뿐.
+    let none = C41ShellLookup(login: .init(path: "/usr/bin:/bin", codexHome: "", codex: ""), interactive: nil)
+    let runner = C41SessionRunner()
+    runner.set("macos-arm64/codex", (.success(c41Usage()), .responded))
+    let cache = CodexAccountUsageProbe.LocateCache()
+    let t0 = c41FetchedAt
+    // 이 맥의 실제 폴백(/opt/homebrew 등)이 섞이면 '후보 0' 이 아니라 '전부 실패' 경로다 — 상태는 같지만 시도 수 단언은 그때만.
+    let onlyIDE = CodexAccountUsageProbe.candidateToolchains(homeDirectory: home, shell: nil).count == 1
+    let first = await CodexAccountUsageProbe.fetch(homeDirectory: home, appVersion: "t", now: t0, cache: cache, lookup: none.lookup, run: runner.run)
+    #expect((try? first.get())?.monthTotal("2026-09") == 60_000)
+    #expect(cache.confirmedToolchain?.executable.path.hasSuffix("macos-arm64/codex") == true)
+
+    // 같은 후보가 기동 실패 → 폐기 → 남은 후보 0 → `.failed`(미설치 아님).
+    runner.set("macos-arm64/codex", (.failure(.init(status: .failed, reason: "launch")), .launchFailed))
+    runner.reset()
+    let t1 = t0.addingTimeInterval(1_800)
+    let second = await CodexAccountUsageProbe.fetch(homeDirectory: home, appVersion: "t", now: t1, cache: cache, lookup: none.lookup, run: runner.run)
+    if case .failure(let f) = second { #expect(f.status == .failed, "설치된 codex 가 못 도는 것을 미설치로 올렸다: \(f)") } else { Issue.record("실패여야 한다") }
+    #expect(cache.confirmedToolchain == nil)
+    #expect(cache.failure?.status == .failed)
+    #expect(cache.failure?.at == t1)
+    if onlyIDE {
+        #expect(runner.attempts.count == 1, "폐기한 후보 말고는 띄울 것이 없어야 한다: \(runner.attempts)")
+    }
+    // TTL 안에서는 캐시된 `.failed` 를 그대로 돌려준다(프로세스 0).
+    runner.reset()
+    let cached = await CodexAccountUsageProbe.fetch(homeDirectory: home, appVersion: "t", now: t1.addingTimeInterval(60), cache: cache, lookup: none.lookup, run: runner.run)
+    if case .failure(let f) = cached { #expect(f.status == .failed) } else { Issue.record("캐시된 실패여야 한다") }
+    #expect(runner.attempts.isEmpty)
 }
 
 /// 종료 경로의 잔여 드레인은 **비차단**이다(리뷰 P2): 쓰는 쪽이 아직 열려 있어도(고아 자식이 파이프를 쥔 모양) 지금 있는 만큼만
@@ -1146,6 +1239,7 @@ private func c41Store(host: String, tokenUsage: TokenUsageStore, codexAccount: C
     store.isMenuPresented = false
     // 수집 설정이 서버에서 도착한 상태(프로브 게이트). 도착 전의 동작은 uploadWrapperWaitsForCollectSettingBeforeProbing 이 본다.
     store.tokenUsagePublicLoaded = true
+    store.tokenUsageCollectLoaded = true
     return store
 }
 
@@ -1306,9 +1400,9 @@ func uploadWrapperRefreshesAccountProbeBeforeUploadingAndRespectsGates() async t
     #expect(store.lastUploadedAccountKey != nil)
 }
 
-/// 수집 설정이 서버에서 도착하기 전(tokenUsagePublicLoaded == false)에는 프로브가 돌지 않는다(리뷰 P2) — 기본값이 '수집'이라
+/// 수집 설정이 서버에서 도착하기 전(tokenUsageCollectLoaded == false)에는 프로브가 돌지 않는다(리뷰 P2) — 기본값이 '수집'이라
 /// 거부자의 맥에서 로그인 직후 한 틱에 `codex app-server` 가 뜰 수 있었다. 업로드는 서버 트리거가 버리므로 그대로 나간다.
-/// 뮤테이션: 래퍼 게이트에서 tokenUsagePublicLoaded 를 빼면 빨강.
+/// 뮤테이션: 래퍼 게이트에서 tokenUsageCollectLoaded 를 빼면 빨강.
 @MainActor
 @Test
 func uploadWrapperWaitsForCollectSettingBeforeProbing() async {
@@ -1320,16 +1414,129 @@ func uploadWrapperWaitsForCollectSettingBeforeProbing() async {
     let account = CodexAccountUsageStore(defaults: c41Defaults(), homeDirectory: home, runner: runner.run)
     let store = c41Store(host: host, tokenUsage: c41TokenStore(home: home, now: c41SepNow, snapshot: c41LocalUsage(total: 3_000)), codexAccount: account)
     defer { c41CancelTasks(store) }
-    store.tokenUsagePublicLoaded = false
+    store.tokenUsageCollectLoaded = false
     await store.uploadTokenUsageIfNeeded(now: c41SepNow)
     #expect(runner.calls == 0, "수집 설정 도착 전에 codex 프로세스가 떴다")
     #expect(c41UploadBodies(host: host).count == 1)   // 업로드 자체는 나간다(서버가 막는다)
     #expect(c41UploadBodies(host: host).first?["codex_account_month"] == nil)
     // 설정이 도착하면(로드 완료) 다음 틱에 돈다.
-    store.tokenUsagePublicLoaded = true
+    store.tokenUsageCollectLoaded = true
     await store.uploadTokenUsageIfNeeded(now: c41SepNow.addingTimeInterval(61))
     #expect(runner.calls == 1)
     #expect(c41UploadBodies(host: host).last?["codex_account_month"] as? Int == 7)
+}
+
+/// 프로필 프라이버시 GET(`token_usage_public` select)만 가로채 **정해진 시간 동안 응답을 붙들어 두는** 프로토콜. 나머지 요청은
+/// protocolClasses 의 다음 순서인 URLProtocolStub 이 그대로 받는다. URLProtocolStub 의 `delayed-` 접두어(0.15초)로는 병렬 스위트
+/// 부하에서 '토글 → 게이트 판정' 사이에 응답이 먼저 도착해 흔들린다 — 지연을 넉넉히(0.6초) 두고, 요청이 **나간 순간**을
+/// 세어 그 뒤에 토글하므로 순서가 확정된다.
+private final class C41HeldPrivacyGET: URLProtocol {
+    nonisolated(unsafe) static var holdSeconds: TimeInterval = 0.6
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var _started: [String: Int] = [:]
+    /// 호스트별 '나간(아직 응답 전일 수 있는)' 프라이버시 GET 수.
+    static func started(host: String) -> Int { lock.withLock { _started[host, default: 0] } }
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        request.url?.path == "/rest/v1/profiles" && request.httpMethod == "GET"
+            && request.url?.query?.contains("token_usage_public") == true
+    }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let host = request.url?.host ?? ""
+        Self.lock.withLock { Self._started[host, default: 0] += 1 }
+        let box = C41HeldDelivery(
+            proto: self,
+            response: HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!)
+        DispatchQueue.global().asyncAfter(deadline: .now() + Self.holdSeconds) { box.run() }
+    }
+    override func stopLoading() {}
+}
+
+/// 붙들어 둔 응답의 전달(URLProtocolStub.StubDelivery 와 같은 꼴 — Process/URLProtocol 은 Sendable 이 아니라 상자에 넣는다).
+private final class C41HeldDelivery: @unchecked Sendable {
+    let proto: URLProtocol
+    let response: HTTPURLResponse
+    init(proto: URLProtocol, response: HTTPURLResponse) { self.proto = proto; self.response = response }
+    func run() {
+        proto.client?.urlProtocol(proto, didReceive: response, cacheStoragePolicy: .notAllowed)
+        proto.client?.urlProtocol(proto, didLoad: Data(#"[{"token_usage_public":true}]"#.utf8))
+        proto.client?.urlProtocolDidFinishLoading(proto)
+    }
+}
+
+/// c41Store 와 같되 프라이버시 GET 을 C41HeldPrivacyGET 이 붙든다. 플래그는 **로그인 직후 모양**(아무 설정도 안 옴)으로 둔다.
+@MainActor
+private func c41HeldPrivacyStore(host: String, tokenUsage: TokenUsageStore, codexAccount: CodexAccountUsageStore) -> WorkTimerStore {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [C41HeldPrivacyGET.self, URLProtocolStub.self]
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(host)")!, anonKey: "anon-test-key", session: URLSession(configuration: configuration))
+    let store = WorkTimerStore(
+        service: service, environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"], defaults: c41Defaults(),
+        workspaceNotifications: nil, tokenUsage: tokenUsage, codexAccount: codexAccount)
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: c41UserID)
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.membershipConfirmed = true
+    store.isMenuPresented = false
+    store.tokenUsagePublicLoaded = false
+    store.tokenUsageCollectLoaded = false
+    return store
+}
+
+/// 리뷰 2차 P2 — 프로브 게이트는 낙관 플래그(tokenUsagePublicLoaded)가 아니라 **수집 설정 수신**(tokenUsageCollectLoaded)이다.
+/// 프로필 GET 이 아직 응답하지 않은 채 사용자가 공개 토글을 누르면 setTokenUsagePublic 이 tokenUsagePublicLoaded 를 먼저 세운다 —
+/// 옛 게이트는 그것을 '설정 도착'으로 읽어 거부자의 맥에서 `codex app-server` 를 띄웠다. 응답이 실제로 오면 그때 게이트가
+/// 열리고, 늦게 온 서버값이 사용자의 선택을 덮지도 않는다.
+/// 뮤테이션: 게이트를 tokenUsagePublicLoaded 로 되돌리면 첫 단언(러너 0)이 빨강; 로더가 응답 전에 플래그를 세우면 빨강.
+@MainActor
+@Test
+func uploadWrapperIgnoresOptimisticPublicFlagUntilCollectSettingActuallyArrives() async {
+    let host = "v0241-collect-flag"
+    let home = c41TempHome("collect-flag-home")
+    defer { try? FileManager.default.removeItem(at: home) }
+    c41LogIn(home)
+    let runner = C41Runner(.success(c41Usage(month: 9, fetchedAt: c41SepNow)))
+    let account = CodexAccountUsageStore(defaults: c41Defaults(), homeDirectory: home, runner: runner.run)
+    let store = c41HeldPrivacyStore(host: host, tokenUsage: c41TokenStore(home: home, now: c41SepNow, snapshot: c41LocalUsage(total: 3_000)), codexAccount: account)
+    defer { c41CancelTasks(store) }
+    store.tokenUsagePublic = false   // 직전 실행에서 비공개였던 사람이
+
+    // 프로필 GET 을 띄워 두고(응답은 붙들려 있다) 그 사이에 공개 토글을 누른다. 요청이 **나간 것**을 확인한 뒤 진행한다.
+    async let load: Void = store.loadTokenUsagePrivacyIfNeeded()
+    for _ in 0..<200 where C41HeldPrivacyGET.started(host: host) == 0 { try? await Task.sleep(for: .milliseconds(5)) }
+    #expect(C41HeldPrivacyGET.started(host: host) == 1, "프로필 GET 이 나가 있어야 한다(응답 대기 중)")
+    #expect(store.tokenUsageCollectLoaded == false, "응답 전에 수신 플래그가 섰다")
+    store.setTokenUsagePublic(true)
+    #expect(store.tokenUsagePublicLoaded == true)      // 낙관 플래그는 GET 전에 선다(사용자 선택 보호 — 옛 규약)
+    #expect(store.tokenUsageCollectLoaded == false)    // 수신 플래그는 여전히 아니다
+
+    await store.uploadTokenUsageIfNeeded(now: c41SepNow)
+    #expect(runner.calls == 0, "수집 설정이 서버에서 오기 전에 공개 토글만으로 codex 프로세스가 떴다(리뷰 2차 P2)")
+    #expect(c41UploadBodies(host: host).count == 1)   // 업로드 자체는 나간다(서버 트리거가 막는다)
+
+    // 응답이 실제로 오면 그때 플래그가 서고, 다음 틱에 프로브가 돈다.
+    await load
+    #expect(store.tokenUsageCollectLoaded == true, "서버 응답을 받았는데 수신 플래그가 안 섰다")
+    #expect(C41HeldPrivacyGET.started(host: host) == 1)
+    await store.uploadTokenUsageIfNeeded(now: c41SepNow.addingTimeInterval(61))
+    #expect(runner.calls == 1)
+    #expect(c41UploadBodies(host: host).last?["codex_account_month"] as? Int == 9)
+
+    // 사용자가 GET 전에 **비공개**를 골랐으면 늦게 온 서버값(공개 true)이 그 선택을 덮지 않는다 — 대신 수집 설정은 받아
+    // 게이트가 열린다(옛 규약처럼 로더를 통째로 건너뛰면 그 세션 내내 프로브가 잠긴다).
+    let host2 = host + "-private"
+    let account2 = CodexAccountUsageStore(defaults: c41Defaults(), homeDirectory: home, runner: runner.run)
+    let store2 = c41HeldPrivacyStore(host: host2, tokenUsage: c41TokenStore(home: home, now: c41SepNow, snapshot: c41LocalUsage(total: 3_000)), codexAccount: account2)
+    defer { c41CancelTasks(store2) }
+    store2.setTokenUsagePublic(false)
+    await store2.loadTokenUsagePrivacyIfNeeded()   // 게이트는 수신 플래그라 토글 뒤에도 GET 은 나간다
+    #expect(store2.tokenUsageCollectLoaded == true)
+    #expect(store2.tokenUsagePublic == false, "늦게 온 서버값이 사용자의 비공개 선택을 덮었다")
+    await store2.loadTokenUsagePrivacyIfNeeded()   // 받은 뒤엔 다시 묻지 않는다
+    #expect(C41HeldPrivacyGET.started(host: host2) == 1)
+    await store2.uploadTokenUsageIfNeeded(now: c41SepNow)
+    #expect(runner.calls == 2)
 }
 
 /// 래퍼의 force 는 롤오버(들고 있는 값의 달 ≠ 이번 달, nil 포함)에 걸리되 60초 하한을 지킨다 — 첫 스캔 전 30초 틱이

@@ -610,7 +610,13 @@ final class WorkTimerStore {
     @ObservationIgnored var lastUltraWalletSyncAt: Date?
     // 내 토큰 사용량 공개 여부(profiles.token_usage_public 미러). 로그인 후 서버값 1회 로드, 토글은 낙관 반영.
     var tokenUsagePublic = true
+    /// 공개 여부가 **확정**됐는가 — 서버 응답이 왔거나 **사용자가 직접 골랐거나**(setTokenUsagePublic 이 GET 전에 세운다:
+    /// 폴링 첫 tick 이 그 선택을 덮지 않게). 그래서 이것은 '서버에서 받았다'의 증거가 아니다 — 그 용도는 아래 플래그다.
     @ObservationIgnored var tokenUsagePublicLoaded = false
+    /// 수집 설정(token_usage_collect)이 **서버에서 실제로 도착**했는가. loadTokenUsagePrivacyIfNeeded 가 응답을 받았을 때만
+    /// true, 로그아웃 리셋에서 false. Codex 계정 프로브(외부 프로세스)의 게이트가 이것이다(리뷰 2차 P2): tokenUsagePublicLoaded 를
+    /// 게이트로 쓰면 로그인 직후 공개 토글 한 번이 '설정 도착'으로 읽혀 거부자의 맥에서 `codex app-server` 가 뜬다.
+    @ObservationIgnored var tokenUsageCollectLoaded = false
     /// 집중 모드(콕찌르기 수신 거부, profiles.focus_mode 미러). 켜면 남이 나를 못 찌른다 — 판정은 서버가 한다.
     /// 뷰가 토글 상태를 그리므로 관찰 대상이다. 로그인 후 1회 로드(토큰 설정과 같은 GET)하고 토글은 낙관 반영.
     var focusMode = false
@@ -2324,6 +2330,8 @@ extension WorkTimerStore {
         reportedAppVersionStamp = nil
         tokenUsagePublic = true
         tokenUsagePublicLoaded = false
+        // 수집 설정 수신 플래그도 계정에 묶인다 — 남기면 다음 계정은 서버 설정을 받기 전에 프로브(외부 프로세스)가 뜬다.
+        tokenUsageCollectLoaded = false
         // 계정이 바뀌면 남의 재화를 물려받지 않게 반드시 비운다. 이 블록이 없으면 로그아웃 후 재로그인 시
         // **남의 잔량 화면이 그대로 떠 있고**, 거기서 [뒤로]를 누르면 ultraPanelOrigin 이 .poke 로 남아
         // 앞 계정 맥락의 콕찌르기가 열린다(blocker UI-1 이 지적한 그 경로다).

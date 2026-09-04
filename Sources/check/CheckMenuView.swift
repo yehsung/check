@@ -3397,7 +3397,7 @@ private struct InsightsPanel: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                 Spacer(minLength: 4)
-                ContributionLegendView(levels: Self.dailyGridLevels, color: CheckTheme.accent)
+                ContributionLegendView(levels: Self.dailyGridLevels, color: Self.workGrassColor)
             }
             ContributionGridView(
                 weeks: dailyGrid.weeks,
@@ -3407,7 +3407,7 @@ private struct InsightsPanel: View {
                 // 분모는 하루 8시간 고정 — 히트맵의 3600초 고정과 같은 철학(자기 최대값 기준이면 기준이 흔들린다).
                 denominator: WorkDailyGrid.fullDaySeconds,
                 levels: Self.dailyGridLevels,
-                color: CheckTheme.accent,
+                color: Self.workGrassColor,
                 // 툴팁 값 문구는 모델 쪽 순수 함수(테스트 대상) — 여기 리터럴을 두면 픽셀 테스트가 못 보는 사각지대다.
                 valueText: WorkDailyGrid.tooltipValueText
             )
@@ -3427,7 +3427,7 @@ private struct InsightsPanel: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                 Spacer(minLength: 4)
-                ContributionLegendView(levels: Self.dailyGridLevels, color: CheckTheme.accent)
+                ContributionLegendView(levels: Self.dailyGridLevels, color: Self.tokenGrassColor)
             }
             ContributionGridView(
                 weeks: tokenDailyGrid.weeks,
@@ -3437,7 +3437,7 @@ private struct InsightsPanel: View {
                 // 분모는 하루 5천만 토큰 고정 — 근무 잔디의 8시간과 같은 철학(근거는 TokenDailyGrid.fullDayTokens 주석).
                 denominator: TokenDailyGrid.fullDayTokens,
                 levels: Self.dailyGridLevels,
-                color: CheckTheme.accent,
+                color: Self.tokenGrassColor,
                 // 툴팁 값 문구도 모델 쪽 순수 함수 — 여기 리터럴을 두면 픽셀 테스트가 못 보는 사각지대가 된다.
                 valueText: TokenDailyGrid.tooltipValueText
             )
@@ -3447,6 +3447,19 @@ private struct InsightsPanel: View {
     /// 잔디 농도 단계 수(옅음→진함 4단계 + 빈 칸). 두 잔디가 같은 값을 쓴다 — 단계 수가 갈리면 같은 진하기가
     /// 서로 다른 뜻이 되어 나란히 놓인 두 격자를 비교할 수 없다.
     private static let dailyGridLevels = 4
+
+    // ── 잔디 두 개의 색 (2026-09-04 사장님 지시) ──────────────────────────────────────────────
+    // 둘 다 accent(파랑)이던 시절엔 "근무 잔디랑 토큰 잔디가 똑같은 파란색이라 헷갈린다"는 지적이 나왔다.
+    // 규약은 두 줄이다: **초록 = 근무, 보라 = AI 토큰.**
+    //
+    // ★ 지난주 근무 리듬 히트맵(WorkRhythmHeatmapGrid)은 **파랑 그대로 둔다** — 사장님 확정 사항이다.
+    //   "근무 데이터니까 초록으로 통일하자"는 일관성 논리로 그것까지 바꾸지 마라. 히트맵은 격자 모양 자체가
+    //   다르고(7×24 밀집 블록 vs 13×7 달력형) 캡션도 "지난주 근무 리듬"이라 애초에 혼동의 원인이 아니었다.
+    //
+    // 격자와 범례가 **같은 상수**를 봐야 한다 — 예전엔 두 자리에 색을 따로 적어, 한쪽만 고치면 범례와 칸이
+    // 어긋난 채로 테스트가 초록이었다. 소스 계약 테스트가 이 상수 참조를 못 박는다.
+    private static let workGrassColor = CheckTheme.working
+    private static let tokenGrassColor = CheckTheme.aiToken
 
     // "화요일 15시" — peakSlot(가장 진한 칸)의 표시 문구. 데이터가 없으면 nil(줄 자체를 생략).
     private var peakText: String? {

@@ -33,6 +33,11 @@ enum CheckTheme {
     static let pending = Color(red: 1.0, green: 0.72, blue: 0.33)
     static let accent = Color(red: 0.33, green: 0.67, blue: 1.0)
     static let danger = Color(red: 1.0, green: 0.45, blue: 0.46)
+    /// AI 토큰 잔디의 표시색(보라). 내 기록 패널에서 근무 잔디(초록)·근무 리듬 히트맵(파랑 accent)과
+    /// **한눈에 갈리는 세 번째 축**이 필요해 새로 둔다 — 잔디 둘이 같은 파랑이라 근무와 토큰이 헷갈린다는
+    /// 지적(2026-09-04)이 출발점이다. 팔레트의 다른 색과 채도·밝기 톤을 맞췄다.
+    /// 이미 뜻이 박힌 색은 재사용하지 않는다: pending(주황)='대기', danger(빨강)='위험', offWork(청회색)='퇴근'.
+    static let aiToken = Color(red: 0.72, green: 0.55, blue: 1.0)
 
     // Gradients for pills / gauges
     static let startGradient = LinearGradient(

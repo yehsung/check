@@ -753,7 +753,11 @@ func migrationContractTokenUsageDaily() throws {
     #expect(sql.contains("(user_id, day desc)"))
 
     // 권한: anon 은 명시 회수(Supabase 기본 권한이 새 표를 anon 에게도 연다), authenticated 는 delete 없음.
-    #expect(sql.contains("revoke all on table public.token_usage_device_daily from public, anon;"))
+    // ★ authenticated 도 회수 대상이다. Supabase 는 public 스키마의 새 표에 기본 특권으로 anon·authenticated·
+    //   service_role 에게 ALL 을 자동 부여하므로, 회수 없이 select/insert/update 만 grant 하면 **delete 가 남는다**.
+    //   2026-09-04 프로덕션 적용에서 마이그레이션의 사후 단언("authenticated 가 delete 할 수 있습니다")이
+    //   그 누락을 잡아 배포가 중단됐다 — 그때 고친 것을 여기서도 못 박는다.
+    #expect(sql.contains("revoke all on table public.token_usage_device_daily from public, anon, authenticated;"))
     #expect(sql.contains("grant select, insert, update on public.token_usage_device_daily to authenticated;"))
     #expect(!sql.contains("grant select, insert, update, delete on public.token_usage_device_daily to authenticated"))
     #expect(sql.contains("enable row level security"))

@@ -2024,11 +2024,12 @@ func checkMenuViewRendersInsightsDailyGridSnapshot() throws {
     // v0.2.41 부터 근무 잔디는 회고 카드 **바로 아래**(둘째 섹션)다. 그 위의 회고 카드는 잔디 유무로 달라지지 않으므로
     // 차이는 회고 카드 아래에서 시작한다. (잔디가 비면 그 아래 토큰 잔디·히트맵이 통째로 위로 밀려 하반부도 전부 다르다.)
     #expect(diff.minY > 400, "회고 카드(상단 200pt)가 잔디 유무로 흔들렸다")
-    // 잡음이 아닌 실제 차이: 하반부에 accent 로 칠해진 칸이 잔디 쪽에 더 많다(빈 잔디는 요일 라벨만 남고,
+    // 잡음이 아닌 실제 차이: 하반부에 **초록**으로 칠해진 칸이 잔디 쪽에 더 많다(빈 잔디는 요일 라벨만 남고,
     // 그만큼 접힘선 위로 올라온 아래 섹션들이 그 자리를 다 채우지는 못한다).
+    // v0.2.42 부터 근무 잔디는 초록이다 — 예전엔 accent(파랑)를 셌는데, 그대로 두면 0 대 0 이라 늘 빨갛다.
     let half = withGrid.pixelsHigh / 2
-    #expect(accentPixelCount(withGrid, top: half, bottom: withGrid.pixelsHigh - 1)
-        > accentPixelCount(withoutGrid, top: half, bottom: withoutGrid.pixelsHigh - 1))
+    #expect(grassPixelCount(withGrid, top: half, bottom: withGrid.pixelsHigh - 1, hue: .work)
+        > grassPixelCount(withoutGrid, top: half, bottom: withoutGrid.pixelsHigh - 1, hue: .work))
     // 잔디 유무와 무관하게 창은 상한 안이다(본문이 예산대로 잘린다).
     #expect(Double(withGrid.pixelsHigh) / 2.0 <= 700.0)
     #expect(Double(withoutGrid.pixelsHigh) / 2.0 <= 700.0)
@@ -2117,7 +2118,7 @@ func insightsOverflowFadeMarksTheClippedBottomOfTheBody() throws {
     // 1열 칸의 가운데 x: 바깥 12 + 패널 12 + 요일 라벨 20 + 간격 2 + 한 열(16 + 2) + 반 칸 8 = 72pt.
     let column = 72 * 2
     let gap = try #require(gapBetweenLastAccentAndPanelRun(clipped, x: column), "잔디 칸 아래에 패널색 구간이 있어야 한다")
-    #expect(gap >= 8, "잘린 행이 그라데이션 없이 접힘선까지 accent 로 닿았다(gap \(gap)px)")
+    #expect(gap >= 8, "잘린 행이 그라데이션 없이 접힘선까지 칸 색으로 닿았다(gap \(gap)px)")
     #expect(gap <= Int(InsightsOverflowFade.height) * 2 + 4)
 }
 
@@ -2132,15 +2133,18 @@ private func gapBetweenLastAccentAndPanelRun(_ bitmap: NSBitmapImageRep, x: Int)
         let offset = y * bpr + x * spp
         return (Int(data[offset]), Int(data[offset + 1]), Int(data[offset + 2]))
     }
-    func isAccent(_ y: Int) -> Bool {
+    // v0.2.42 부터 잔디 색이 셋으로 갈렸다(근무 초록 · 토큰 보라 · 히트맵 파랑). 이 helper 가 찾는 것은
+    // "접힘선 바로 위에서 잘린 **칸**"이지 특정 색이 아니므로 셋 다 인정한다 — accent 만 보면 잘린 것이
+    // 초록·보라일 때 훨씬 위의 파란 픽셀을 잡아 거리가 엉뚱하게 벌어진다(실제로 gap 142 로 빨개졌다).
+    func isCell(_ y: Int) -> Bool {
         let (r, g, b) = rgb(y)
-        return b >= 190 && b > r + 80 && g > r + 40 && g < b
+        return GrassHue.isPaintedCell(r: r, g: g, b: b)
     }
     func isPanel(_ y: Int) -> Bool {
         let (r, g, b) = rgb(y)
         return abs(r - 43) <= 4 && abs(g - 46) <= 4 && abs(b - 61) <= 4
     }
-    guard let lastAccent = (0..<bitmap.pixelsHigh).reversed().first(where: isAccent) else { return nil }
+    guard let lastAccent = (0..<bitmap.pixelsHigh).reversed().first(where: isCell) else { return nil }
     var y = lastAccent + 1
     while y + 20 <= bitmap.pixelsHigh {
         if (y..<(y + 20)).allSatisfy(isPanel) { return y - lastAccent }
@@ -3813,6 +3817,58 @@ private func unavailablePlaceholderRowRuns(
 /// [top, bottom] 띠에서 링크 글자색(CheckTheme.accent = 84,171,255)에 가까운 픽셀 수.
 /// 이 팝오버에서 파랑이 이만큼 진하게 나오는 것은 accent 뿐이라(패널 43,46,61 · 필드 채움은 더 어둡다)
 /// "그 자리에 링크 글자가 그려졌다"의 픽셀 근거로 쓴다.
+/// 잔디 칸 색이 차지한 픽셀 수. accentPixelCount 는 **파랑**만 세므로, 근무 잔디(초록)·토큰 잔디(보라)로
+/// 색이 갈린 v0.2.42 부터는 "잔디가 그려졌는가"를 그것으로 물을 수 없다(0 이 나온다).
+/// 판정은 색상 축 하나로 한다 — 초록은 g 가 r·b 보다 뚜렷이 크고, 보라는 r·b 가 g 보다 뚜렷이 크며 b 가 가장 크다.
+/// 농도(opacity)가 4단계라 절대값이 아니라 **채널 사이의 우열**로 봐야 옅은 칸도 잡힌다.
+private func grassPixelCount(
+    _ bitmap: NSBitmapImageRep,
+    top: Int,
+    bottom: Int,
+    hue: GrassHue
+) -> Int {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return 0 }
+    let bpr = bitmap.bytesPerRow
+    let spp = bitmap.samplesPerPixel
+    var count = 0
+    for y in max(0, top)...min(bitmap.pixelsHigh - 1, bottom) {
+        for x in 0..<bitmap.pixelsWide {
+            let offset = y * bpr + x * spp
+            let r = Int(data[offset]), g = Int(data[offset + 1]), b = Int(data[offset + 2])
+            if GrassHue.matches(hue, r: r, g: g, b: b) { count += 1 }
+        }
+    }
+    return count
+}
+
+enum GrassHue {
+    case work, token
+
+    /// 칸 색 판정. **절대값이 아니라 채널 우열**로 본다 — 농도가 4단계인 데다 접힘선의 그라데이션이 칸을
+    /// 패널색(43,46,61)으로 섞어 놓기 때문이다. 예: 40% 초록은 (61,117,101)까지 내려가는데 `g > b + 20` 으로
+    /// 잡으면 놓친다(101+20 > 117). 그래서 초록은 `g > r+25 && g > b`, 보라는 `b > g+20 && r > g` 로 본다.
+    /// 이 셋은 서로도, 파랑 accent(84,171,255) 와도, 패널색과도 겹치지 않는다(각 조합을 손으로 대입해 확인).
+    static func matches(_ hue: GrassHue, r: Int, g: Int, b: Int) -> Bool {
+        switch hue {
+        case .work:  return g > r + 25 && g > b
+        case .token: return b > g + 20 && r > g
+        }
+    }
+
+    /// 파랑 accent(히트맵·링크)까지 포함한 "**진하게** 칠해진 칸인가". 접힘선 helper 전용이다.
+    ///
+    /// 위 `matches` 와 달리 **세기 하한(주 채널 190)** 을 둔다. 그 helper 가 재는 것은 "마지막 칸과 패널색
+    /// 사이의 거리" = 그라데이션이 칸을 얼마나 잦아들게 했는가인데, 옅은 꼬리까지 칸으로 세면 그 거리가
+    /// 0 에 붙어 그라데이션이 있으나 없으나 같은 값이 된다(실제로 gap 이 7 까지 내려가 빨개졌다).
+    /// 190 은 옛 accent 판정(`b >= 190`)이 쓰던 값 그대로다 — 색만 셋으로 늘리고 세기 기준은 바꾸지 않는다.
+    static func isPaintedCell(r: Int, g: Int, b: Int) -> Bool {
+        let accent = b >= 190 && b > r + 80 && g > r + 40 && g < b
+        let strongWork = matches(.work, r: r, g: g, b: b) && g >= 190
+        let strongToken = matches(.token, r: r, g: g, b: b) && b >= 190
+        return accent || strongWork || strongToken
+    }
+}
+
 private func accentPixelCount(_ bitmap: NSBitmapImageRep, top: Int, bottom: Int) -> Int {
     guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return 0 }
     let bpr = bitmap.bytesPerRow
@@ -5691,8 +5747,12 @@ func checkMenuViewRendersInsightsTokenGridSnapshot() throws {
     // 배선: 스토어의 토큰 값이 뷰까지 닿아 픽셀을 바꾼다. 차이는 회고 카드 아래(둘째·셋째 섹션)에서 시작한다.
     let diff = try #require(bitmapDiffBounds(painted, blank, tolerance: 8), "토큰 값이 패널 픽셀에 드러나야 한다")
     #expect(diff.minY > 400, "회고 카드(상단 200pt)가 토큰 값으로 흔들렸다")
-    #expect(accentPixelCount(painted, top: 0, bottom: painted.pixelsHigh - 1)
-        > accentPixelCount(blank, top: 0, bottom: blank.pixelsHigh - 1))
+    // v0.2.42 부터 토큰 잔디는 **보라**다 — 예전엔 accent(파랑)를 셌는데 그대로 두면 두 그림 다 같은 값이라
+    // 이 단언이 늘 빨갛다(실제로 그렇게 빨개졌다). 보라 픽셀은 칠해진 쪽에만 있다.
+    #expect(grassPixelCount(painted, top: 0, bottom: painted.pixelsHigh - 1, hue: .token)
+        > grassPixelCount(blank, top: 0, bottom: blank.pixelsHigh - 1, hue: .token))
+    // 그리고 두 잔디가 **서로 다른 색**이라는 것도 같은 그림에서 확인한다 — 이 릴리스의 요지다.
+    #expect(grassPixelCount(painted, top: 0, bottom: painted.pixelsHigh - 1, hue: .work) > 0)
 
     // 값 문구 배선(툴팁은 픽셀에 안 나오므로 소스 계약으로 못 박는다 — 여기 리터럴을 두면 위 단언이 초록인 채 툴팁만 달라진다).
     let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
@@ -5806,4 +5866,72 @@ func insightsPanelChromeBudgetMatchesTheMeasuredFourBodyCombinations() throws {
         #expect(Double(height) / 2.0 == expected, "지난주=\(hasRetro) 토큰섹션=\(showsToken) 창 높이가 \(Double(height) / 2.0)pt")
         #expect(Double(height) / 2.0 <= 700.0)
     }
+}
+
+// MARK: - 잔디 색 규약 (v0.2.42)
+
+/// 넘긴 색이 칸 색에 **실제로 쓰인다**는 계약. 이 테스트가 없으면 호출부가 어떤 색을 넘기든 격자가 같은 그림이라
+/// 색 회귀를 아무도 못 잡는다(픽셀 스냅샷은 두 잔디를 각각 그리지 서로 비교하지 않는다).
+@Test
+func contributionGridPaintsWithTheColorItWasGiven() {
+    let day = WorkDailyGrid.fullDaySeconds
+    let work = ContributionGridView.color(value: day, denominator: day, levels: 4, color: CheckTheme.working)
+    let token = ContributionGridView.color(value: day, denominator: day, levels: 4, color: CheckTheme.aiToken)
+    let blue = ContributionGridView.color(value: day, denominator: day, levels: 4, color: CheckTheme.accent)
+    #expect(work != token)
+    #expect(work != blue)
+    #expect(token != blue)
+    // 0 은 색과 무관하게 빈 칸 바탕이다 — 색 축이 달라져도 "안 한 날"의 뜻은 하나여야 한다.
+    #expect(ContributionGridView.color(value: 0, denominator: day, levels: 4, color: CheckTheme.working)
+            == ContributionGridView.color(value: 0, denominator: day, levels: 4, color: CheckTheme.aiToken))
+}
+
+/// 배선(주석 제거 후 소스 계약) — 2026-09-04 사장님 지시로 정해진 색 규약을 못 박는다.
+///   ① 근무 잔디 = 초록(working), ② AI 토큰 잔디 = 보라(aiToken), ③ **근무 리듬 히트맵은 파랑(accent) 그대로.**
+/// ③ 이 특히 중요하다: "근무 데이터니까 초록으로 통일하자"는 일관성 논리로 히트맵까지 바꾸는 것을 막는 유일한 장치다
+/// (사장님이 히트맵은 파랑 유지로 확정했다). 그리고 각 잔디의 격자·범례가 **같은 상수**를 봐야 한다 —
+/// 예전엔 색을 두 자리에 따로 적어, 한쪽만 고치면 범례와 칸이 어긋난 채 초록이었다.
+@Test
+func grassColorsFollowTheAgreedPaletteAndTheHeatmapStaysBlue() throws {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    func stripped(_ path: String) throws -> String {
+        let text = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+        return text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> String in
+                guard let slash = line.range(of: "//") else { return String(line) }
+                return String(line[line.startIndex..<slash.lowerBound])
+            }
+            .joined(separator: "\n")
+    }
+    let menu = try stripped("Sources/check/CheckMenuView.swift")
+    let components = try stripped("Sources/check/CheckComponents.swift")
+    let theme = try stripped("Sources/check/CheckTheme.swift")
+
+    // ① 새 보라가 테마에 있고, ② 두 잔디가 각각 자기 상수를 쓴다.
+    #expect(theme.contains("static let aiToken = Color("))
+    #expect(menu.contains("private static let workGrassColor = CheckTheme.working"))
+    #expect(menu.contains("private static let tokenGrassColor = CheckTheme.aiToken"))
+
+    // 격자와 범례가 같은 상수를 본다: 각 상수가 정의(1) + 격자(1) + 범례(1) = 3회 등장한다.
+    #expect(menu.components(separatedBy: "workGrassColor").count - 1 == 3)
+    #expect(menu.components(separatedBy: "tokenGrassColor").count - 1 == 3)
+
+    // 두 잔디 섹션 어디에도 accent 리터럴이 남지 않았다(한쪽만 되돌리는 사고 차단).
+    let workSection = try #require(menu.range(of: "private var dailyGridSection"))
+    let tokenSection = try #require(menu.range(of: "private var tokenGridSection"))
+    let peakSection = try #require(menu.range(of: "private var peakText"))
+    let grassBlock = String(menu[workSection.lowerBound..<peakSection.lowerBound])
+    #expect(!grassBlock.contains("CheckTheme.accent"))
+    #expect(tokenSection.lowerBound > workSection.lowerBound)   // 근무 잔디가 토큰 잔디보다 위
+
+    // ③ 히트맵은 파랑 유지 — 이 단언이 빨개지면 그건 사장님 확정을 뒤집은 것이다.
+    // 히트맵 구조체 **본문만** 잘라 본다 — 파일 끝까지 잡으면 뒤따르는 다른 뷰들이 쓰는 색까지 섞여
+    // 단언이 그 뷰들의 사정으로 빨개진다(실제로 그렇게 한 번 헛발을 짚었다).
+    let heatmap = try #require(components.range(of: "struct WorkRhythmHeatmapGrid"))
+    let nextDecl = try #require(components.range(of: "\nstruct ContributionGridView"))
+    let heatmapBlock = String(components[heatmap.lowerBound..<nextDecl.lowerBound])
+    #expect(heatmapBlock.contains("CheckTheme.accent"))
+    #expect(!heatmapBlock.contains("CheckTheme.working"))
+    #expect(!heatmapBlock.contains("CheckTheme.aiToken"))
 }

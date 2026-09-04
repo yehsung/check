@@ -1424,23 +1424,30 @@ struct UltraWalletResponse: Decodable, Equatable, Sendable {
         let claimed: Bool
         /// **이번 호출에서** 받았다 → 연출(`.ultraCharged`)의 유일한 트리거.
         let grantedNow: Bool
-        /// 달성했지만 **잔량이 가득 차서 적립하지 않았다**. 이때 `claimed` 는 **false 로 남는다**
-        /// (서버가 장부를 안 쓰기 때문 — docs/ultra-economy.md §2). 그래서 claimed 만 보면
-        /// "아직 못 받았다"로 보이고 화면은 진행 바를 100% 로 그린 채 아무 말도 안 하게 된다.
+        /// **지금 잔량이 상한 이상이다**(서버 20260901140000 이후 이 뜻이다 — 순간 신호가 아니라 상태).
+        /// 아직 아무것도 못 채운 사람에게도 참이 될 수 있고, 채워 둔 하나가 있는지는 `pending` 이 말한다.
+        /// `claimed` 는 이 상태에서도 **false 로 남는다**(랩이 또 열려 있어 그날 치를 닫을 수 없다).
         let capped: Bool
-        /// 그날 **정산된 랩 수**(받은 것 + 가득 차서 소멸한 것). 소멸이 몇 번 일어났는지는
-        /// `lapsSettled - lapsGranted` 로만 보인다 — 소멸은 영구라 나중에 어디서도 되짚을 수 없다.
+        /// 그날 **정산된 랩 수**. 소멸이 폐지된 20260903190000 이후로는 `lapsGranted` 와 **같은 수**다
+        /// (정산됐는데 못 받은 랩이라는 상태가 사라졌다 — 못 받았으면 대기하거나 아직 안 채운 것이다).
+        /// 두 키를 남겨 두는 이유는 구서버 응답을 그대로 읽기 위해서다(그쪽에서는 갈릴 수 있다).
         let lapsSettled: Int
         /// 그중 **실제로 받은** 수. 화면의 "오늘 N개"는 이 값이다.
         let lapsGranted: Int
         /// 그날 **총 근무초**. 랩 방식 이전에 `progressSeconds` 가 담던 값이 이 키로 옮겨 왔다.
         let workedSeconds: Int
+        /// 3시간을 채웠지만 **잔량이 가득 차서 대기 중**이다(서버 20260903190000).
+        /// `capped`("지금 가득 참")와 다른 축이다: capped 는 아직 아무것도 안 채운 사람에게도 참이고,
+        /// pending 은 **이미 채워 둔 하나가 기다리고 있다**는 뜻이라 "하나 쓰면 바로 받는다"가 성립한다.
+        /// 대기 중에는 진행도가 target 에 고정되고 그 뒤의 근무는 다음 랩으로 쌓이지 않는다(카운터 정지).
+        /// 오늘 행에서만 참일 수 있다 — 지난 날의 대기라는 개념은 서버에 없다.
+        let pending: Bool
 
         /// 키는 `.convertFromSnakeCase` 가 이미 카멜로 바꾼 뒤에 매칭되므로 **카멜로 적는다**
         /// (`laps_granted` → `lapsGranted`). 스네이크로 적으면 어떤 키도 안 잡혀 전부 기본값이 된다.
         enum CodingKeys: String, CodingKey {
             case key, kstDay, targetSeconds, progressSeconds, claimed, grantedNow, capped
-            case lapsSettled, lapsGranted, workedSeconds
+            case lapsSettled, lapsGranted, workedSeconds, pending
         }
 
         init(from decoder: Decoder) throws {
@@ -1463,6 +1470,10 @@ struct UltraWalletResponse: Decodable, Equatable, Sendable {
             //   **그날 총합**을 담았다. 즉 그 서버에서 이 둘은 같은 수이고, 0 으로 접으면 총 근무초가
             //   화면에서 사라진다(진단 줄이 "0분 일했다"고 말한다).
             workedSeconds = try c.decodeIfPresent(Int.self, forKey: .workedSeconds) ?? progressSeconds
+            // pending 도 관대하게 읽는다 — 대기 규칙과 함께 태어난 키라 한 단계 뒤처진 서버에는 없다.
+            // **없으면 false 가 안전한 쪽이다**: 대기를 지어내면 화면이 "하나 쓰면 받아요"라고 약속하는데
+            // 그 서버는 줄 것이 없다(그쪽에서는 소멸했다). 그건 줄 수 없는 것을 약속하는 거짓말이다.
+            pending = try c.decodeIfPresent(Bool.self, forKey: .pending) ?? false
         }
 
         init(
@@ -1479,7 +1490,9 @@ struct UltraWalletResponse: Decodable, Equatable, Sendable {
             lapsGranted: Int = 0,
             // nil = "말 안 했다". 디코더의 폴백과 **같은 규칙**으로 progressSeconds 를 쓴다 — 두 생성
             // 경로가 다른 값을 만들면 픽스처로 재현한 화면과 실서버 화면이 갈린다.
-            workedSeconds: Int? = nil
+            workedSeconds: Int? = nil,
+            // 맨 뒤 + 기본값인 이유는 위 lapsSettled/lapsGranted 와 같다(소스 호환).
+            pending: Bool = false
         ) {
             self.key = key
             self.kstDay = kstDay
@@ -1491,6 +1504,7 @@ struct UltraWalletResponse: Decodable, Equatable, Sendable {
             self.lapsSettled = lapsSettled
             self.lapsGranted = lapsGranted
             self.workedSeconds = workedSeconds ?? progressSeconds
+            self.pending = pending
         }
     }
 
@@ -1597,13 +1611,19 @@ struct MissionProgress: Identifiable, Equatable, Sendable {
     /// 순간 신호였을 때는 3시간에 한 번, 그 순간 팝오버를 열고 있어야만 보여서 정작 계속 잃는 사람이
     /// 왜 잃는지 몰랐다. 지금은 가득 찬 동안 계속 참이고 한 발 쓰면 사라진다.
     /// claimedToday 와 **동시에 참일 수 없다**(서버의 claimed 가 랩 방식에서 언제나 false 다).
-    /// 화면은 이 줄의 보조 문장을 경고로 덮는다(`MissionCopy.cappedNotice`).
+    /// 화면은 이 줄의 보조 문장을 경고로 덮는다(`MissionCopy.cappedNotice`) — 단 `isPending` 이 참이면
+    /// 그쪽이 이긴다(가득 참은 상태 설명이고, 대기는 그 사람이 지금 할 수 있는 행동을 말한다).
     let cappedToday: Bool
     /// 그 줄의 오른쪽 보조 문장(진행 시간·연속 일수 등). 문장은 여기서 한 번만 만든다.
     let detail: String
     /// 오늘 **실제로 받은 랩 수**. 랩 방식(2026-09-01)에서 "완료"가 사라진 자리를 이 수가 대신한다 —
     /// 서버의 `claimed` 가 언제나 false 라 그것만 보면 화면은 하루 종일 "아직 못 받았다"고 말한다.
     let lapsGrantedToday: Int
+    /// **3시간을 이미 채워 놓고 기다리는 중**이다(서버 20260903190000). `cappedToday` 와 함께 참이지만
+    /// 말하는 것이 다르다: capped 는 "지금 가득 찼다"(아직 아무것도 안 채운 사람에게도 참),
+    /// isPending 은 "채워 둔 하나가 있고 하나 쓰면 그 자리에서 들어온다"이다. 그래서 화면은
+    /// **대기를 먼저** 말한다 — 그 사람에게 필요한 정보는 경고가 아니라 받는 방법이다.
+    let isPending: Bool
 
     /// 멤버와이즈 init 을 **명시**하는 이유는 소스 호환이다. 필드를 그냥 더하면 암묵 멤버와이즈가
     /// 필수 인자를 하나 늘려 기존 생성 지점이 전부 컴파일 오류가 난다. 맨 뒤 + 기본값 0
@@ -1614,7 +1634,8 @@ struct MissionProgress: Identifiable, Equatable, Sendable {
         claimedToday: Bool,
         cappedToday: Bool,
         detail: String,
-        lapsGrantedToday: Int = 0
+        lapsGrantedToday: Int = 0,
+        isPending: Bool = false
     ) {
         self.kind = kind
         self.progress = progress
@@ -1622,6 +1643,7 @@ struct MissionProgress: Identifiable, Equatable, Sendable {
         self.cappedToday = cappedToday
         self.detail = detail
         self.lapsGrantedToday = lapsGrantedToday
+        self.isPending = isPending
     }
 
     /// 서버 응답 → 미션 목록. **순수 함수라 테스트가 이 한 함수로 화면 전체의 규칙을 고정한다.**
@@ -1665,7 +1687,10 @@ struct MissionProgress: Identifiable, Equatable, Sendable {
                 detail: lapsGrantedToday >= 1
                     ? "오늘 \(lapsGrantedToday)개 · 다음까지 \(hoursText(remaining))"
                     : "다음 하나까지 \(hoursText(remaining))",
-                lapsGrantedToday: lapsGrantedToday
+                lapsGrantedToday: lapsGrantedToday,
+                // 대기는 **오늘 행에서만** 온다. 어제 행에서 끌어오면(kstDay 대조를 빼면) 어제 대기했던
+                // 사람의 오늘 줄이 "하나 쓰면 받아요"라고 말하는데, 그 약속은 이미 오늘 지급으로 끝났다.
+                isPending: today?.pending ?? false
             )
         )
 

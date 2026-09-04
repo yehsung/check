@@ -165,6 +165,16 @@ extension WorkTimerStore {
                     // 직전에 알던 잔량을 모름으로 되돌리면 배지가 "—"로 깜빡인다.
                     if let balance = response.ultraBalanceForDisplay { applyUltraBalance(balance) }
                     pokeNotice = Self.ultraSentNotice(balance: response.ultraBalanceForDisplay ?? ultraBalance)
+                    // ★ 잔량이 **줄어드는 유일한 순간**이다. 서버는 대기 중인 랩(v0.2.41)을 "잔량이
+                    //   상한 밑으로 내려간 다음 sync"에 지급하므로, 여기서 한 번 걷어차지 않으면
+                    //   그 사람은 최대 5분(.periodic 스로틀)을 기다린다 — 방금 쓴 대가로 받는 것이라
+                    //   지연이 그대로 "안 주네?"로 읽힌다.
+                    //   ★ 랩 스로틀 키(ultraLapKey)가 대신해 주지 못한다: 그 키는 **로컬 누적 근무초**
+                    //     (todayDuration)를 3시간으로 나눈 값이라 대기 중에도 6·9시간에서 그냥 오른다.
+                    //     즉 그쪽은 **근무 시간**이 만드는 발화고, 여기는 **잔량이 줄어드는 순간**이 만드는
+                    //     발화다. 울트라를 써도 todayDuration 은 1초도 안 움직이므로 두 발화는 겹치지
+                    //     않는다 — 지금 이 지점이 없으면 방금 쓴 사람에게 즉시 지급할 경로가 없다.
+                    syncUltraWallet(reason: .missionCandidate)
                 case .ultraUsedToday:
                     // 상태 어휘는 서버가 확정한 7개 중 하나이고 이름만 옛것이다(ultra_used_today).
                     // 의미는 이제 "잔량 0"이다 — 팀 무제한이 폐지돼 팀원에게도 재화를 쓴다.
@@ -218,7 +228,9 @@ extension WorkTimerStore {
         case signIn
         /// 콕찌르기 패널 또는 울트라 패널을 연 순간. 화면에 낡은 숫자를 그리지 않기 위해서다.
         case panelOpen
-        /// 오늘 누적이 미션 임계를 넘은 순간(클라 hour3 마일스톤, 하루 1회).
+        /// 랩 임계를 넘은 순간(클라 hour3 마일스톤, 랩마다 1회) **그리고 울트라 발사에 성공한 순간**.
+        /// 뒤쪽이 v0.2.41 에서 붙었다: 대기 중인 랩은 "잔량이 상한 밑으로 내려간 다음 sync"에 지급되는데,
+        /// 잔량이 줄어드는 순간이 발사 하나뿐이라 거기서 묻지 않으면 5분 뒤에야 들어온다.
         case missionCandidate
         /// 폴링 tick 의 5분 스로틀. **근무중일 때만.** 위 셋을 전부 놓친 사용자의 마지막 그물이다.
         case periodic

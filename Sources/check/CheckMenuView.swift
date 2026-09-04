@@ -3547,29 +3547,34 @@ enum MissionCopy {
     /// 반복 지급으로 바뀌면서 서버가 그 줄의 `claimed` 를 **언제나 false 로 보낸다**(랩이 또
     /// 열려 있으니 "오늘 치는 받았다"로 닫을 수가 없다). 죽은 문구처럼 보여도 지우면 안 된다.
     static let claimedChip = "받음"
-    /// 잔량 상한(사장님 확정 4)에 걸려 **적립하지 않은** 날의 칩.
+    /// 잔량이 상한이라 **지금은 더 못 받는** 날의 칩.
     static let cappedChip = "가득 참"
-    /// 그 사실을 말하는 문장. 이 줄이 없으면 화면은 진행 바를 100%로 그린 채 "아직 못 받았다"처럼
-    /// 보이고, 사용자는 자기가 뭘 잘못했는지 영영 알 수 없다.
+    /// 3시간을 **이미 채워 두고 기다리는 중**일 때의 칩(v0.2.41 대기 규칙).
+    static let pendingChip = "대기 중"
+    /// 상한에 닿아 있다는 사실을 말하는 문장. 이 줄이 없으면 화면은 진행 바만 그린 채
+    /// "아직 못 받았다"처럼 보이고, 사용자는 자기가 뭘 잘못했는지 영영 알 수 없다.
     ///
     /// ★ `capped` 는 "랩을 놓쳤다"가 아니라 **"지금 잔량이 상한 이상이다"** 를 뜻한다
-    ///   (서버 20260901140000). 그래서 문장이 **현재형 경고**다 — 아직 아무것도 안 놓친 사람에게도
+    ///   (서버 20260901140000). 그래서 문장이 **현재형**이다 — 아직 아무것도 안 채운 사람에게도
     ///   참이 되므로 과거형("놓쳤어요")은 거짓말이 된다.
     ///
-    /// ★ 왜 상태로 바꿨나: 예전 의미("이번 호출에서 랩이 소멸했다")는 **순간적**이라 사실상 아무도
-    ///   못 봤다. 가득 찬 사람이 3시간을 채우는 그 한 번의 sync 에서만 참이고 5분 뒤엔 사라지니,
-    ///   팝오버를 마침 그때 열고 있어야만 보였다. 정작 계속 잃는 사람이 왜 잃는지 모르는 것이
-    ///   경고의 실패다. 이제는 가득 찬 동안 계속 떠 있고, 한 발 쓰면 사라진다.
-    ///
-    /// ★ 소멸은 영구다: 서버가 상한에 걸린 랩에 `delta 0` 행을 적어 못 박으므로 **한 발 쓰고
-    ///   되받을 유예가 없다.** 그래서 "쓰지 않으면"이라는 조건절이 진짜 조건이다 — 지금 쓰면
-    ///   다음 3시간부터 다시 들어오고, 안 쓰면 그 랩은 영영 없다.
-    static let cappedNotice = "가득 찼어요 — 쓰지 않으면 놓쳐요"
+    /// ★ v0.2.41 에서 **뒷말이 바뀌었다**: 가득 찬 상태의 달성은 이제 소멸하지 않고 **대기**한다
+    ///   (서버 20260903190000, 사장님 지시). 그래서 "쓰지 않으면 놓쳐요"는 이제 거짓말이다 —
+    ///   안 써도 하나는 남아 기다린다. 다만 **대기는 하나뿐이고 그동안 카운터가 멈추므로**
+    ///   여전히 쓰는 편이 이득이고, 그 사실을 그대로 말한다.
+    static let cappedNotice = "가득 찼어요 — 3시간을 채워도 대기해요"
+    /// 대기 중인 줄의 문장. 여기서 말해야 할 것은 경고가 아니라 **받는 방법**이다 —
+    /// 이 사람은 이미 다 채웠고, 한 발만 쓰면 그 자리에서 들어온다(서버가 발사 직후 sync 로 지급한다).
+    static let pendingNotice = "3시간 채웠어요 — 하나 쓰면 받아요"
 
-    /// 그 줄 아래 보조 문장. 상한에 걸린 날은 진행 시간 대신 **그 사실**을 말한다
+    /// 그 줄 아래 보조 문장. 대기/상한인 날은 진행 시간 대신 **그 사실**을 말한다
     /// (그날의 진행률은 이미 100%라 시간을 말해 봐야 새로 알려 주는 것이 없다).
+    ///
+    /// ★ 대기가 상한보다 **먼저**다. 대기 중이면 잔량은 반드시 가득 차 있어 둘 다 참인데,
+    ///   그 사람에게 "가득 찼어요"만 말하면 **이미 받아 둔 하나가 있다는 사실이 화면에서 사라진다.**
     static func detail(_ mission: MissionProgress) -> String {
-        mission.cappedToday ? cappedNotice : mission.detail
+        if mission.isPending { return pendingNotice }
+        return mission.cappedToday ? cappedNotice : mission.detail
     }
 
     /// 그 줄 오른쪽에 무엇을 그리는가. **순수 값이라 뮤테이션이 여기서 죽는다.**
@@ -3578,8 +3583,12 @@ enum MissionCopy {
     ///   보이는 것은 3시간 줄 때문인데(반복 지급이라 서버가 `claimed` 를 언제나 false 로 보내
     ///   그 줄에는 "받음" 칩이 더 이상 뜨지 않는다), 밑바닥 보정 줄은 여전히 `claimedToday` 로
     ///   이 가지를 탄다. 지우면 그쪽이 보상 칩("0개면 1개로")을 이미 받은 뒤에도 계속 그린다.
+    ///
+    /// ★ `.pending` 은 그 셋 **앞에** 얹는다(순서를 바꾼 것이 아니라 앞에 하나를 더한 것이다).
+    ///   대기 중이면 `cappedToday` 도 참이라, 뒤에 두면 영영 안 그려진다.
     static func chip(_ mission: MissionProgress) -> MissionChip {
         guard let reward = reward(mission.kind) else { return .none }
+        if mission.isPending { return .pending }
         if mission.cappedToday { return .capped }
         if mission.claimedToday { return .claimed }
         return .reward(reward)
@@ -3592,6 +3601,9 @@ enum MissionChip: Equatable {
     case reward(String)
     case claimed
     case capped
+    /// 3시간을 채워 두고 기다리는 중. `.capped` 와 **다른 색**으로 그린다 —
+    /// 하나는 "지금은 못 받아요"이고 하나는 "이미 받아 뒀어요"라, 같은 그림이면 뜻이 뭉개진다.
+    case pending
 }
 
 enum UltraPanelCopy {
@@ -3843,6 +3855,15 @@ private struct MissionRowView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Capsule().fill(CheckTheme.pending.opacity(0.16)))
+        case .pending:
+            // 근무색(초록)으로 그린다 — 이건 경고가 아니라 **이미 벌어 둔 것**이다.
+            // 주황(가득 참)과 색까지 갈라야 한 눈에 두 상태가 구별된다.
+            Text(MissionCopy.pendingChip)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(CheckTheme.working)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(CheckTheme.working.opacity(0.16)))
         case .reward(let text):
             Text(text)
                 .font(.caption2.weight(.bold))

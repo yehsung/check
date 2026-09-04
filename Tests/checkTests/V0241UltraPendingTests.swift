@@ -16,7 +16,8 @@ import Testing
 //       채워 둔 하나가 있다는 사실이 화면에서 통째로 사라진다.
 //  (라) **발사 직후 지갑 sync** — 서버는 "잔량이 상한 밑으로 내려간 다음 sync"에 대기분을 준다.
 //       발사 성공 지점에서 걷어차지 않으면 그 사람은 최대 5분(.periodic 스로틀)을 기다린다.
-//       랩 스로틀 키는 대기 중 랩 번호가 안 올라 재발화하지 않으므로 **이 지점이 유일한 즉시 경로**다.
+//       랩 스로틀 키는 **로컬 누적 근무초**로 오르는 별개의 발화라(울트라를 써도 그 값은 안 움직인다)
+//       잔량이 줄어드는 순간을 잡아 주지 못한다 — 그래서 여기가 유일한 즉시 경로다.
 //  (마) **서버 계약** — 마이그레이션 소스가 상태 기계와 권한 미부여를 실제로 담고 있는가.
 
 // MARK: - 픽스처
@@ -284,9 +285,9 @@ private func v0241Store(host: String) -> WorkTimerStore {
 /// **발사 성공 직후 지갑 sync 를 한 번 부른다.**
 ///
 /// 서버는 대기 중인 랩을 "잔량이 상한 밑으로 내려간 **다음** sync"에 지급한다. 잔량이 줄어드는 순간은
-/// 이 발사 하나뿐이고, 랩 스로틀 키(`ultraLapKey`)는 대기 중에 랩 번호가 오르지 않아 재발화하지 않는다
-/// (받을 게 없으니 왕복할 이유가 없다 — 그건 옳다). 그래서 이 호출이 없으면 즉시 지급 경로가
-/// **원리적으로 존재하지 않고**, 방금 하나를 쓴 사람이 최대 5분을 기다린다.
+/// 이 발사 하나뿐이다. 랩 스로틀 키(`ultraLapKey`)는 대신해 주지 못한다 — 그 키는 로컬 누적 근무초
+/// (`todayDuration`)를 3시간으로 나눈 값이라 대기 중에도 6·9시간에서 오르지만, **울트라를 써도 그 값은
+/// 1초도 안 움직인다.** 그래서 이 호출이 없으면 방금 하나를 쓴 사람이 최대 5분을 기다린다.
 @MainActor
 @Test
 func firingAnUltraKicksAWalletSyncSoThePendingLapArrivesNow() async {
@@ -381,19 +382,53 @@ func migrationContractUltraPendingLap() throws {
         "퀘스트 상태 컬럼에 grant 가 걸렸다 — 진행도가 클라에서 위조 가능해진다: \(grantLines)"
     )
     #expect(sql.contains("has_column_privilege('authenticated'"), "권한 미부여 단언이 없다.")
+    // 랩 번호 헬퍼도 definer 전용이다 — 클라에 열면 남의 장부 지급 수를 헤아릴 수 있다.
+    #expect(
+        grantLines.allSatisfy { !$0.contains("ultra_work3h_laps") },
+        "랩 번호 헬퍼에 grant 가 걸렸다 — definer 전용 계약 위반: \(grantLines)"
+    )
+    #expect(sql.contains("revoke all on function public.ultra_work3h_laps(uuid, date) from anon, authenticated;"),
+            "랩 번호 헬퍼의 실행권 회수가 없다.")
 
     // ③ 랩 reason 규약은 그대로다(랩 1을 바꾸면 어제 몫이 전원에게 이중 지급된다).
     #expect(sql.contains("'mission:work3h'"))
     #expect(sql.contains("'mission:work3h#'"))
     // ④ ★ 소멸 경로가 사라졌다. 이 insert 가 돌아오면 대기해야 할 랩이 '정산됨'으로 굳는다.
     #expect(!sql.contains("'capped', true"), "delta 0 소멸 행 insert 가 돌아왔다 — 대기가 영영 안 온다.")
-    // ⑤ 대기 상태 기계의 네 판정.
-    #expect(sql.contains("v_q_pending := true;"), "대기 플래그를 세우는 자리가 없다.")
+    // ⑤ 대기 상태 기계의 판정들.
+    //    대기 플래그를 세우는 자리는 **둘**이다: 오늘 루프의 상한 분기와, 어제 따라잡기의 상한 분기.
+    //    뒤쪽이 빠지면 "앱을 켜 두었으면 대기, 꺼 두었으면 소멸"로 같은 근무가 갈린다.
+    #expect(
+        sql.components(separatedBy: "v_q_pending := true;").count - 1 == 2,
+        "대기 플래그를 세우는 자리가 2곳이 아니다 — 어느 한쪽에서 가득 찬 달성이 그냥 사라진다."
+    )
     #expect(sql.contains("v_q_base := v_today_sec;"), "대기 지급이 base 를 지금으로 안 옮긴다 — 시간이 이월된다.")
     #expect(sql.contains("v_q_base := v_q_base + v_target_sec;"), "정상 지급이 target 만큼만 전진하지 않는다.")
     #expect(sql.contains("case when v_q_pending then v_target_sec"), "대기 중 진행도 고정이 없다.")
     #expect(sql.contains("not v_was_pending"), "따라잡기가 대기 여부를 안 본다 — 같은 랩을 두 번 준다.")
     #expect(sql.contains("'pending_paid', true"), "대기 지급이 감사에서 구분되지 않는다.")
+
+    // ⑤-b ★ 장부 reason 슬롯은 **이미 쓰인 최대 랩 번호 + 1** 이다(그날 지급 개수 + 1 이 아니다).
+    //     ⑦의 일회성 삭제가 장부 가운데에 구멍을 남기므로(프로덕션 실장부: `[work3h(삭제), #2(지급)]`),
+    //     개수 + 1 은 이미 쓰인 자리를 가리켜 유니크 인덱스에 삼켜지고 대기가 그날 자정까지 안 풀린다.
+    #expect(
+        sql.components(separatedBy: "greatest(v_lap_hi, v_paid_cnt) + 1").count - 1 == 3,
+        "슬롯 계산이 세 지급 지점(대기·어제 따라잡기·오늘 루프)에 모두 있지 않다."
+    )
+    #expect(!sql.contains("v_paid_cnt + 1"), "reason 슬롯이 다시 '개수 + 1' 로 만들어진다 — 구멍에서 지급이 삼켜진다.")
+    #expect(sql.contains("create function public.ultra_work3h_laps(p_uid uuid, p_day date,"),
+            "랩 번호 헬퍼가 없다 — 같은 계산이 다시 복사됐다.")
+    // ⑤-c ★ 배포 첫 sync(상태 null)의 기준선은 **장부에서** 온다. 0 으로 잡으면 오늘 이미 받고
+    //     소비까지 끝낸 랩을 같은 근무로 다시 준다(상한에 닿을 때까지 — 슬롯이 단조라 인덱스는 못 막는다).
+    #expect(sql.contains("v_q_base := v_paid_cnt::bigint * v_target_sec;"),
+            "롤오버 기준선이 장부에서 오지 않는다 — 배포 첫 sync 가 이미 받은 랩을 다시 지급한다.")
+    #expect(!sql.contains("v_q_base := 0;"), "롤오버가 기준선을 0 으로 되돌린다 — 배포 첫 sync 이중 지급.")
+    // ⑤-d ★ 어제 따라잡기는 상태가 '정확히 어제'일 때만 도는 것이 아니다. 좁히면 배포 당일 전원
+    //     (상태 null)의 어제 몫이 통째로 사라지고, ⑦의 어제 삭제가 아무 일도 못 한다.
+    #expect(sql.contains("if v_q_day is null or v_q_day <= v_yday then"),
+            "어제 따라잡기가 '상태 = 어제' 로 좁혀졌다 — 배포 당일 어제 몫이 사라진다.")
+    #expect(sql.contains("else v_paid_cnt::bigint * v_target_sec end"),
+            "어제 기준선이 장부에서 오지 않는다 — 어제 이미 받은 사람에게 또 지급된다.")
     // ⑥ 응답 계약: pending 키를 오늘 행에서만 참으로 보낸다.
     #expect(sql.contains("'pending', (v_i = 0 and v_q_pending)"))
     // ⑦ 일회성 정정은 오늘·어제로 **한정**된다(과거는 역사로 보존).

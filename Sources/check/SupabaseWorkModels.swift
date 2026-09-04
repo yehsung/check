@@ -375,9 +375,16 @@ struct TokenBoardEntry: Identifiable, Equatable {
             )
         }
         // 계정 집계는 **로컬보다 커서 실제로 쓰였을 때만** 적는다. 작거나 같으면 순위에 쓰인 값이 로컬이라
-        // 굳이 두 숫자를 나란히 보여 혼란을 만들 이유가 없다(내 박스 툴팁과 같은 판정).
+        // 굳이 두 숫자를 나란히 보여 혼란을 만들 이유가 없다.
+        // 판정은 내 박스 툴팁과 **다르다**(같다고 적어 뒀던 주석이 틀렸다): 내 박스는 계정값이 0 보다 크면 늘 적고,
+        // 여기는 순위에 실제로 쓰였을 때(로컬보다 클 때)만 적는다. 순위판은 남의 행이라 참고용 숫자를 늘릴수록
+        // 읽는 비용만 커지기 때문이다.
+        // 계정값을 적을 때는 내 박스와 **같은 문구**로 "총합은 계정 집계 기준"을 한 줄 더 붙인다 — 이게 없으면
+        // 툴팁에 Codex 숫자가 둘(로컬 소계·계정 집계) 나란히 놓이는데 어느 쪽이 굵은 총합과 캡션에 쓰였는지
+        // 알 길이 없다(내 박스에는 있는 설명이 순위판에만 빠져 어휘가 갈렸던 자리).
         if let account = codexAccountMonth, account > codexLocalTotal {
             parts.append("Codex 계정 집계 \(TokenNumberFormatter.grouped(account))")
+            parts.append(TokenUsageMonthly.accountDrivenTotalNote)
         }
         return parts.joined(separator: " · ")
     }

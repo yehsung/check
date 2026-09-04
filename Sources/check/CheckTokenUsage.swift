@@ -53,6 +53,10 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     /// 라벨 "N월 …"에 쓰는 월 숫자. 'YYYY-MM' 의 뒤 두 자리를 정수로(선행 0 제거). 파싱 실패 시 0.
     var monthNumber: Int { Int(month.split(separator: "-").last ?? "") ?? 0 }
 
+    /// 굵은 총합이 로컬 소계와 다른 이유를 설명하는 한 마디. 내 박스 툴팁과 순위판 툴팁(TokenBoardEntry.detailTooltip)이
+    /// **같은 문구**를 써야 같은 현상을 두 어휘로 부르지 않는다 — 리터럴을 두 곳에 흩뿌리지 않고 여기 하나만 둔다.
+    static let accountDrivenTotalNote = "총합은 계정 집계 기준"
+
     /// .help 툴팁 상세 문구(계정 집계 없이). 축약 없이 콤마 전체 숫자로, 값이 있는 소스만 이어 붙인다
     /// ("Claude 4,280,667,571 (입력 8,458,939 · 출력 9,796,198 · 캐시읽기 4,063,320,273 · 캐시생성 199,092,161) · Codex 145,691,467 (입력 145,068,307 · 출력 623,160 · 캐시 0)").
     var detailTooltip: String { detailTooltip(account: nil) }
@@ -84,7 +88,7 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
                 }
                 parts.append(line)
                 if accountMonth > codexTotal {
-                    parts.append("총합은 계정 집계 기준")
+                    parts.append(Self.accountDrivenTotalNote)
                 }
             }
         }

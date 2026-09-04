@@ -126,10 +126,16 @@ func boardDetailTooltipKeepsTheMyBoxVocabularyAndFullPrecision() {
         claudeInput: 1, claudeOutput: 2, claudeCacheRead: 3, claudeCacheCreation: 4,
         codexInput: 100, codexOutput: 20, codexCacheRead: 60, codexAccountMonth: 1_000
     )
+    // 계정 집계가 쓰였으면 내 박스와 **같은 문구**로 "총합은 계정 집계 기준"이 붙는다 — 이 한 마디가 없으면
+    // 툴팁에 Codex 숫자가 둘(로컬 120 · 계정 1,000) 나란히 놓이는데 캡션·굵은 총합이 어느 쪽인지 알 수 없다.
     #expect(
         full.detailTooltip
-            == "Claude 10 (입력 1 · 출력 2 · 캐시읽기 3 · 캐시생성 4) · Codex 120 (캐시 60) · Codex 계정 집계 1,000"
+            == "Claude 10 (입력 1 · 출력 2 · 캐시읽기 3 · 캐시생성 4) · Codex 120 (캐시 60) "
+            + "· Codex 계정 집계 1,000 · 총합은 계정 집계 기준"
     )
+    // 문구는 리터럴로 두 곳에 흩뿌리지 않고 내 박스 상수를 그대로 쓴다(어휘가 갈리는 것을 막는 배선).
+    #expect(full.detailTooltip.hasSuffix(TokenUsageMonthly.accountDrivenTotalNote))
+    #expect(TokenUsageMonthly.accountDrivenTotalNote == "총합은 계정 집계 기준")
     // 계정 집계가 로컬보다 크지 않으면(= 순위에 안 쓰였으면) 그 줄은 통째로 빠진다 — 안 쓰인 숫자를 나란히
     // 보여 줄 이유가 없다. 동률(120 == 120)도 로컬이 기준이라 뺀다.
     let localWins = toolMixEntry(claudeInput: 10, codexInput: 120, codexCacheRead: 60, codexAccountMonth: 120)
@@ -137,7 +143,9 @@ func boardDetailTooltipKeepsTheMyBoxVocabularyAndFullPrecision() {
     // 값이 0 인 소스는 통째로 뺀다(기존 관용구와 동일).
     #expect(toolMixEntry(codexInput: 120, codexCacheRead: 60).detailTooltip == "Codex 120 (캐시 60)")
     #expect(toolMixEntry(claudeInput: 10).detailTooltip == "Claude 10 (입력 10 · 출력 0 · 캐시읽기 0 · 캐시생성 0)")
-    // 아무것도 안 쓴 사람은 빈 문자열 — SwiftUI .help("") 는 툴팁을 띄우지 않는다(빈 말풍선 방지).
+    // 아무것도 안 쓴 사람은 빈 문자열. `.help("")` 의 동작(빈 말풍선?)은 AppKit 버전마다 갈리고 ImageRenderer 로
+    // 확인할 수도 없어(.help 는 픽셀에 안 그려진다) 검증 불가능한 가정을 남기지 않는다 —
+    // 뷰가 이 빈 문자열을 보고 툴팁 자체를 안 건다(tokenBoardRowWiresTheToolMixCaptionAndTooltipToTheEntry 가 배선을 고정).
     #expect(toolMixEntry().detailTooltip == "")
     // 큰 값도 축약하지 않는다(캡션은 196.6억, 툴팁은 19,658,964,272 — 같은 카드에서 둘 다 보인다).
     let big = toolMixEntry(claudeInput: 19_658_964_272, codexInput: 2_543_110, codexCacheRead: 1_800_000)
@@ -149,6 +157,6 @@ func boardDetailTooltipKeepsTheMyBoxVocabularyAndFullPrecision() {
     )
     // 로컬이 0 인데 계정 집계만 있는 사람(기기가 아직 못 읽었지만 계정에는 잡힌다) — 계정 줄만 남는다.
     let accountOnly = toolMixEntry(codexAccountMonth: 300_000_000)
-    #expect(accountOnly.detailTooltip == "Codex 계정 집계 300,000,000")
+    #expect(accountOnly.detailTooltip == "Codex 계정 집계 300,000,000 · 총합은 계정 집계 기준")
     #expect(accountOnly.toolUsageLabel == "Codex 3억")
 }

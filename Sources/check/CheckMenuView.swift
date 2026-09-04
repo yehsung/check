@@ -1553,10 +1553,43 @@ struct TokenBoardRowView: View {
     // 표시할 오늘 증가량. 날짜가 오늘이 아니면 0("오늘 +0 토큰"으로 균일 표시 — 어제 이후 안 연 사람도 행 형태 동일).
     private var todayValue: Int { entry.todayDelta(currentDate: todayKey) }
 
-    // 칩이 둘 붙는 내 비공개 행에서만 숫자 열에 씌우는 상한(pt). nil 이면 제한 없음(보통 행은 예전 그대로).
-    private var crowdedNumberColumnWidth: CGFloat? { showsPrivateChip ? 88 : nil }
+    // 숫자 열에 씌우는 상한(pt). nil 이면 제한 없음(캡션도 칩도 없는 행은 예전 그대로).
+    //
+    // 캡을 씌우는 조건이 둘인 이유(실측 근거 — 292pt 행에서 scale 4 잉크로 재고 끝자리 픽셀 diff 로 검증했다):
+    // ① 칩이 둘 붙는 내 비공개 행: 앞자리를 칩이 다 먹어 10자리 총량이 말줄임됐다(옛 회귀 지점).
+    // ② 캡션(Claude·Codex 한 줄)이 붙는 행: 캡이 없으면 숫자 열이 ideal 폭(13~14자리 + " 토큰" ≈ 102pt)을
+    //    먼저 가져가 캡션 상자에 103pt 만 남는다. 그 폭에서는 0.7 축소로도 **26자부터** 말줄임됐다 —
+    //    스펙 예시 문구 "Claude 196.6억 · Codex 254만"(26자)이 "Claude 196.6억 · Codex 25…" 로,
+    //    실측 1위값 조합 "Claude 45.6억 · Codex 1,234만"(27자)이 "Claude 45.6억 · Codex 1,23…" 로 잘려
+    //    254만이 25만으로 읽혔다. 이 기능이 막겠다던 자릿수 오독이 정확히 캡션에서 재발한 것이다.
+    //
+    // 두 조건에 **같은 88pt** 를 쓴다. 88 이면 캡션 상자가 121pt 로 넓어져 현실 최대치를 한참 넘는
+    // 29자("Claude 1,234억 · Codex 1,234억")까지 온전히 들어가고, 숫자 열은 1조 단위 총합
+    // ("1,234,567,890,123 토큰")까지 0.7 균일 축소로 전 자릿수를 지킨다(둘 다 렌더로 확인).
+    // 100pt 로 두면 27자는 살지만 29자가 다시 잘린다 — 캡션이 붙는 행과 안 붙는 행의 임계를 둘로 나눌
+    // 이유가 없어 하나로 합쳤다.
+    private var crowdedNumberColumnWidth: CGFloat? { (showsPrivateChip || entry.toolUsageLabel != nil) ? 88 : nil }
 
     var body: some View {
+        tooltipped(card)
+    }
+
+    /// 툴팁은 **문구가 있을 때만** 붙인다. 한 번도 안 올린 사람(총합 0)의 detailTooltip 은 빈 문자열인데,
+    /// `.help("")` 가 빈 말풍선을 띄우는지 아무것도 안 띄우는지는 AppKit(NSView.toolTip) 버전마다 갈려
+    /// ImageRenderer 로도 확인할 수 없다(.help 는 픽셀에 안 그려진다). 검증할 수 없는 가정을 남기느니
+    /// 아예 안 거는 쪽이 싸다 — 가입만 하고 안 올린 행은 프로덕션에 실제로 있다.
+    @ViewBuilder
+    private func tooltipped(_ view: some View) -> some View {
+        if entry.detailTooltip.isEmpty {
+            view
+        } else {
+            // 캡션 줄은 축약(196.6억)이라, 정확한 값을 보고 싶으면 카드에 마우스만 올리면 된다 —
+            // 여기 문구는 grouped 로 1의 자리까지 전부 적는다(내 박스 툴팁과 같은 어휘·정밀도).
+            view.help(entry.detailTooltip)
+        }
+    }
+
+    private var card: some View {
         HStack(spacing: 10) {
             // 좌측 세로 악센트 바(3pt 캡슐): 유저 해시색. 카드 안에서 위아래 살짝 띄워 유저 구분 컬러 포인트를 준다.
             Capsule()
@@ -1599,8 +1632,9 @@ struct TokenBoardRowView: View {
                 // "누가 어떤 AI 를 얼마나 썼는지"(issue #5) — Claude/Codex 를 나눠 한 줄로. 0 인 쪽은 빠지고
                 // 둘 다 0 이면 줄 자체가 없다(toolUsageLabel == nil). 좁아지면 말줄임 대신 균일 축소로 버틴다 —
                 // 우측 총합과 같은 원칙(잘리면 "Codex 19.6억"이 "Codex 1…"이 돼 자릿수를 통째로 오독한다).
-                // 축소 하한이 0.85 가 아니라 0.7 인 이유는 실측이다: 이 캡션에 실제로 남는 폭은 100pt 안팎이라
-                // 0.85 에서는 칩이 둘 붙는 내 행의 "Claude 196.6억 · Codex 196.6억"이 말줄임됐다(292pt 렌더로 확인).
+                // 축소 하한이 0.85 가 아니라 0.7 인 이유는 실측이다: 숫자 열 캡(88pt)을 씌워 캡션 상자를
+                // 121pt 까지 넓힌 **뒤에도** 0.85 에서는 스펙 예시 26자("Claude 196.6억 · Codex 254만")부터
+                // 말줄임됐다(292pt 렌더로 확인 — 캡과 하한 둘 다 있어야 27자·29자가 산다).
                 // 우측 숫자 열이 이미 0.7 을 쓰고 있으므로 같은 하한을 쓴다.
                 if let toolUsage = entry.toolUsageLabel {
                     Text(toolUsage)
@@ -1644,8 +1678,9 @@ struct TokenBoardRowView: View {
                 }
             }
             .layoutPriority(1)
-            // 칩 두 개가 붙는 내 비공개 행은 폭 예산 자체가 모자라다 — 숫자 열 상한을 낮춰 minimumScaleFactor 가
-            // '전 자릿수 유지 + 균일 축소'로 처리하게 하고(0.78배, 말줄임 없음) 남는 폭은 이름에 돌려준다.
+            // 칩이 둘 붙는 행도, 캡션이 붙는 행도 폭 예산이 모자라다 — 숫자 열 상한(crowdedNumberColumnWidth)을
+            // 낮춰 minimumScaleFactor 가 '전 자릿수 유지 + 균일 축소'로 처리하게 하고(말줄임 없음)
+            // 남는 폭은 왼쪽 이름·캡션 열에 돌려준다.
             .frame(maxWidth: crowdedNumberColumnWidth, alignment: .trailing)
         }
         .padding(.leading, 8)
@@ -1661,9 +1696,6 @@ struct TokenBoardRowView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(isMe ? CheckTheme.accent.opacity(0.45) : CheckTheme.border, lineWidth: 1)
         )
-        // 캡션 줄은 축약(196.6억)이라, 정확한 값을 보고 싶으면 카드에 마우스만 올리면 된다 —
-        // 여기 문구는 grouped 로 1의 자리까지 전부 적는다(내 박스 툴팁과 같은 어휘·정밀도).
-        .help(entry.detailTooltip)
     }
 }
 

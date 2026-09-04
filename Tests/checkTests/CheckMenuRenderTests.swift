@@ -2414,7 +2414,10 @@ private func toolMixRowEntry(
 /// ±1 흔들린다(실측) — 그래서 "같다"를 주장하는 비교에서는 아바타를 뺀 두 구간만 본다.
 private enum TokenRowColumns {
     static let nameStart: CGFloat = 55     // 아바타 오른쪽(이름·캡션 열 시작)
-    static let numberStart: CGFloat = 196  // 우측 숫자 열 시작(= 폭 292 − 96)
+    /// 우측 숫자 열의 **정확한** 시작(pt). 캡션이나 칩이 붙은 행은 숫자 열에 88pt 상한이 걸리므로
+    /// 292 − 오른쪽 패딩 12 − 88 = 192 가 경계다(scale 4 잉크 실측: 숫자 잉크 193.75pt~, 캡션 잉크 ~180pt).
+    /// 예전 값 196 은 "숫자 열 시작"이 아니라 그 안쪽 지점이었고, 반대로 이름 열 띠가 숫자 열 앞자리를 물고 있었다.
+    static let numberStart: CGFloat = 192
     static let width: CGFloat = 292
 }
 
@@ -2457,7 +2460,9 @@ func tokenBoardRowDrawsToolMixCaptionWithoutMovingTheNumberColumn() throws {
     let localPair = try stackedRowPixels(row(accountDriven), row(localOnly), width: rowWidth)
     #expect(nameColumn(localPair.top) != nameColumn(localPair.bottom))
 
-    // 칩이 둘 붙는 가장 빡빡한 행(내 비공개 행)에서도 마찬가지다 — 캡션이 숫자 열을 밀어내지 않는다.
+    // 칩이 둘 붙는 내 비공개 행에서도 마찬가지다 — 캡션이 숫자 열을 밀어내지 않는다.
+    // (캡션 기준으로 더 빡빡한 쪽은 오히려 칩 없는 보통 행이다 — 근거는
+    //  tokenBoardToolMixCaptionShrinksInsteadOfTruncating 의 실측 주석.)
     let crowdedPair = try stackedRowPixels(row(claudeOnly, crowded: true), row(mixed, crowded: true), width: rowWidth)
     #expect(nameColumn(crowdedPair.top) != nameColumn(crowdedPair.bottom))
     #expect(numberColumn(crowdedPair.top) == numberColumn(crowdedPair.bottom))
@@ -2509,10 +2514,17 @@ func tokenBoardRowKeepsRowHeightWithAndWithoutTheToolMixCaption() throws {
 @MainActor
 @Test
 func tokenBoardToolMixCaptionShrinksInsteadOfTruncating() throws {
-    // 이 화면의 최악 결함은 숫자가 잘려 자릿수를 오독하는 것이다("Codex 19.6억" → "Codex 1…" 은 20분의 1로 읽힌다).
+    // 이 화면의 최악 결함은 숫자가 잘려 자릿수를 오독하는 것이다("Codex 254만" → "Codex 25…" 는 10분의 1로 읽힌다).
     // 캡션 줄도 같은 규칙을 따른다 — 좁으면 말줄임이 아니라 균일 축소(minimumScaleFactor)로 버틴다.
     // 검증 방법(기존 회귀 테스트와 같은 관용구): 캡션 **끝자리만** 다른 두 행을 나란히 그려, 말줄임되면 사라질
     // 자리의 변화가 그림에 남는지 본다. 잘리면 두 행의 캡션 영역이 완전히 같아진다.
+    //
+    // **어느 행이 캡션에 가장 빡빡한가(실측 — 직관과 반대다)**: 칩이 둘 붙는 내 비공개 행이 아니라
+    // **칩 없는 보통 행**이다. 숫자 열 상한(88pt)이 예전에는 showsPrivateChip 행에만 걸려 있어서, 캡이 없는
+    // 보통 행은 숫자 열이 ideal 폭을 먼저 가져가고 캡션 상자에 103pt 만 남았다(내 행은 114.5pt — scale 4 잉크 실측).
+    // 그래서 보통 행만 26자부터 잘렸고, 칩이 둘 붙는 내 행은 29자까지 멀쩡했다.
+    // 지금은 캡션이 붙는 행에도 같은 88pt 캡을 씌워 두 행의 캡션 상자가 121pt 로 같아졌다 —
+    // 그래도 **주(主) 케이스는 보통 행**으로 둔다. 캡이 다시 내 행에만 걸리는 회귀가 여기서 잡혀야 하기 때문이다.
     let rowWidth: CGFloat = 292   // 실제 패널 행 폭(팝오버 안쪽) — 340pt 보다 좁아 잘림이 먼저 드러난다.
     // 오른쪽 숫자 열(총합이 달라 어차피 다르다)과 아바타(그라디언트)를 뺀 이름·캡션 열만 본다.
     let captionFrom = TokenRowColumns.nameStart
@@ -2523,36 +2535,94 @@ func tokenBoardToolMixCaptionShrinksInsteadOfTruncating() throws {
     func row(_ entry: TokenBoardEntry, crowded: Bool) -> some View {
         TokenBoardRowView(entry: entry, isMe: crowded, showsPrivateChip: crowded, showsToday: true)
     }
-    // 가장 빡빡한 행: 긴 이름 + "나" + "비공개" 칩이 앞자리를 다 먹은 내 비공개 행에 억+억 캡션.
-    // (축소 하한이 0.85 였을 때 실제로 잘리던 조합이다 — 0.7 로 내린 근거가 이 케이스다.)
-    let codexTail = try stackedRowPixels(
-        row(entry(claude: 19_658_964_272, codex: 19_658_964_272), crowded: true),
-        row(entry(claude: 19_658_964_272, codex: 19_758_964_272), crowded: true),
-        width: rowWidth
-    )
-    #expect(   // "Codex 196.6억" vs "Codex 197.6억" — 끝자리가 살아 있다.
-        codexTail.top.slice(fromPoints: captionFrom, toPoints: captionTo)
-            != codexTail.bottom.slice(fromPoints: captionFrom, toPoints: captionTo)
-    )
-    // Claude 쪽 자리도 마찬가지(앞부분이 밀리거나 뭉개져도 안 된다).
+    /// 캡션 끝자리만 다른 두 행을 한 패스로 그려 "끝자리가 살아 있는가"를 돌려준다.
+    func captionTailSurvives(claude: Int, codex: Int, codexBumped: Int, crowded: Bool) throws -> Bool {
+        let pair = try stackedRowPixels(
+            row(entry(claude: claude, codex: codex), crowded: crowded),
+            row(entry(claude: claude, codex: codexBumped), crowded: crowded),
+            width: rowWidth
+        )
+        return pair.top.slice(fromPoints: captionFrom, toPoints: captionTo)
+            != pair.bottom.slice(fromPoints: captionFrom, toPoints: captionTo)
+    }
+
+    // (1) 주 케이스 — 칩 없는 보통 행, 27자. 프로덕션 실측 수준의 값이다(1위 45.6억 + 코덱스 1,234만).
+    //     캡이 보통 행에 안 걸리면 "Claude 45.6억 · Codex 1,23…" 이 돼 1,234만이 123만으로 읽힌다.
+    #expect(entry(claude: 4_564_338_243, codex: 12_340_000).toolUsageLabel == "Claude 45.6억 · Codex 1,234만")
+    #expect(try captionTailSurvives(claude: 4_564_338_243, codex: 12_340_000, codexBumped: 12_350_000, crowded: false))
+    // (2) 스펙이 예시로 못 박은 문구 자체(26자) — 이게 잘리면 254만이 25만으로 읽힌다(회귀 지점).
+    #expect(entry(claude: 19_658_964_272, codex: 2_540_000).toolUsageLabel == "Claude 196.6억 · Codex 254만")
+    #expect(try captionTailSurvives(claude: 19_658_964_272, codex: 2_540_000, codexBumped: 2_550_000, crowded: false))
+    // (3) 현실 최대치를 한참 넘는 29자(양쪽 다 1000억대)도 보통 행에서 살아야 한다 — 88pt 캡의 여유분 근거.
+    #expect(entry(claude: 123_400_000_000, codex: 123_400_000_000).toolUsageLabel == "Claude 1,234억 · Codex 1,234억")
+    #expect(try captionTailSurvives(
+        claude: 123_400_000_000, codex: 123_400_000_000, codexBumped: 123_500_000_000, crowded: false
+    ))
+    // (4) 칩이 둘 붙는 내 비공개 행도 같은 성질을 지킨다(28자 억+억). 축소 하한이 0.85 면 여기서 잘린다.
+    #expect(try captionTailSurvives(
+        claude: 19_658_964_272, codex: 19_658_964_272, codexBumped: 19_758_964_272, crowded: true
+    ))
+    // (5) Claude 쪽 자리도 마찬가지(앞부분이 밀리거나 뭉개져도 안 된다) — 보통 행에서 확인한다.
     let claudeTail = try stackedRowPixels(
-        row(entry(claude: 19_658_964_272, codex: 19_658_964_272), crowded: true),
-        row(entry(claude: 19_758_964_272, codex: 19_658_964_272), crowded: true),
+        row(entry(claude: 19_658_964_272, codex: 2_540_000), crowded: false),
+        row(entry(claude: 19_758_964_272, codex: 2_540_000), crowded: false),
         width: rowWidth
     )
     #expect(
         claudeTail.top.slice(fromPoints: captionFrom, toPoints: captionTo)
             != claudeTail.bottom.slice(fromPoints: captionFrom, toPoints: captionTo)
     )
-    // 칩 없는 보통 행(더 여유롭다)도 같은 성질을 지킨다.
-    let plainRow = try stackedRowPixels(
-        row(entry(claude: 2_564_338_243, codex: 2_000_000_000), crowded: false),
-        row(entry(claude: 2_564_338_243, codex: 2_100_000_000), crowded: false),
+}
+
+@MainActor
+@Test
+func tokenBoardCaptionRowCapsTheNumberColumnLikeTheCrowdedRow() throws {
+    // P1 의 뿌리: 숫자 열 상한이 showsPrivateChip 행에만 걸려 있어, 캡션이 붙은 보통 행은 숫자 열이
+    // ideal 폭을 먼저 가져가고 캡션이 잘렸다. 지금은 캡션이 있으면 칩 유무와 상관없이 같은 88pt 캡이 걸린다.
+    // 그 결과가 픽셀로 관측 가능하다: **캡션이 붙은 보통 행과 칩 둘 붙은 내 행의 숫자 열이 같은 자리에 놓인다.**
+    // (칩은 왼쪽 이름 줄에만 있으므로 숫자 열 띠에는 영향이 없다.)
+    let rowWidth = TokenRowColumns.width
+    let captioned = toolMixRowEntry(total: 19_661_507_382, claudeInput: 4_564_338_243, codexInput: 12_340_000)
+    // isMe 는 켜지 않는다 — 켜면 카드 테두리 색이 accent 로 바뀌어 숫자 열 띠(카드 오른쪽 테두리 포함)까지
+    // 달라져 비교가 성립하지 않는다. 여기서 알고 싶은 건 칩이 먹는 **폭 예산**뿐이라 칩만 켠다.
+    let pair = try stackedRowPixels(
+        TokenBoardRowView(entry: captioned, showsToday: true),
+        TokenBoardRowView(entry: captioned, showsPrivateChip: true, showsToday: true),
         width: rowWidth
     )
-    #expect(   // "Codex 20억" vs "Codex 21억"
-        plainRow.top.slice(fromPoints: captionFrom, toPoints: captionTo)
-            != plainRow.bottom.slice(fromPoints: captionFrom, toPoints: captionTo)
+    #expect(
+        pair.top.slice(fromPoints: TokenRowColumns.numberStart, toPoints: rowWidth)
+            == pair.bottom.slice(fromPoints: TokenRowColumns.numberStart, toPoints: rowWidth)
+    )
+    // 캡션이 없는 행에는 캡이 없다(예전 그대로) — 그래서 같은 총합이어도 숫자 열이 더 넓게 놓여 그림이 다르다.
+    // 이 대비가 없으면 "캡을 늘 씌운다"는 다른 구현과 구분되지 않는다.
+    let bare = TokenBoardEntry(
+        userID: "u9", name: "타팀 김서연", avatarURL: nil, total: 19_661_507_382,
+        claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0,
+        codexInput: 0, codexOutput: 0, todayTotal: 123_360_493, todayDate: TokenUsageDayKey.current()
+    )
+    #expect(bare.toolUsageLabel == nil)
+    let barePair = try stackedRowPixels(
+        TokenBoardRowView(entry: bare, showsToday: true),
+        TokenBoardRowView(entry: captioned, showsToday: true),
+        width: rowWidth
+    )
+    #expect(
+        barePair.top.slice(fromPoints: TokenRowColumns.numberStart, toPoints: rowWidth)
+            != barePair.bottom.slice(fromPoints: TokenRowColumns.numberStart, toPoints: rowWidth)
+    )
+    // 캡을 씌워도 숫자는 전 자릿수를 지킨다(균일 축소) — 1조 단위 총합의 끝자리 변화도 그림에 남아야 한다.
+    func huge(_ total: Int) -> TokenBoardEntry {
+        toolMixRowEntry(total: total, claudeInput: 4_564_338_243, codexInput: 12_340_000)
+    }
+    let hugePair = try stackedRowPixels(
+        TokenBoardRowView(entry: huge(1_234_567_890_123), showsToday: true),
+        TokenBoardRowView(entry: huge(1_234_567_890_127), showsToday: true),
+        width: rowWidth
+    )
+    #expect(
+        hugePair.top.slice(fromPoints: TokenRowColumns.numberStart, toPoints: rowWidth)
+            != hugePair.bottom.slice(fromPoints: TokenRowColumns.numberStart, toPoints: rowWidth)
     )
 }
 
@@ -2563,7 +2633,11 @@ func tokenBoardRowWiresTheToolMixCaptionAndTooltipToTheEntry() throws {
     // 그래서 주석을 걷어낸 소스로 계약을 못 박는다(주석 미제거로 하면 설명을 지워야 초록이 되는 테스트가 된다).
     let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
     // 카드에 상세 툴팁이 달려 있다 — 캡션의 축약값(196.6억)이 실제로 몇인지 볼 수 있는 유일한 자리다.
-    #expect(source.contains(".help(entry.detailTooltip)"))
+    #expect(source.contains("view.help(entry.detailTooltip)"))
+    // 단, 문구가 **빈 문자열이면 아예 걸지 않는다**. 총합 0 인 행(가입만 하고 한 번도 안 올린 사람)은
+    // 프로덕션에 실제로 있고, `.help("")` 가 빈 말풍선을 띄우는지는 AppKit 버전마다 갈려 ImageRenderer 로도
+    // 확인할 수 없다(.help 는 픽셀에 안 그려진다) — 검증 불가능한 가정 대신 분기 하나로 없앤 자리다.
+    #expect(source.contains("if entry.detailTooltip.isEmpty"))
     // 캡션 줄은 모델의 순수 함수를 그대로 쓴다. 여기서 문자열을 다시 조립하면 순수 함수 테스트가 초록인 채
     // 화면 문구만 갈라진다.
     #expect(source.contains("if let toolUsage = entry.toolUsageLabel"))

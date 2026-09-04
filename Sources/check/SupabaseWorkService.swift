@@ -1073,6 +1073,45 @@ actor SupabaseWorkService {
         )
     }
 
+    /// 일별 표(token_usage_device_daily)에 **배열 본문**으로 upsert 한다(v0.2.41 토큰 잔디). 충돌키 (user_id, day, device_id),
+    /// Prefer 는 월 표와 같은 관용구(merge-duplicates + return=minimal — 수집 거부자의 0행도 성공으로 본다).
+    /// 호출측(WorkTimerStoreSync.uploadTokenUsageDailyIfNeeded)이 **바뀐 날만** 골라 넘기므로 행 수는 보통 한두 개다.
+    /// 빈 배열이면 요청을 **아예 보내지 않는다** — PostgREST 는 빈 배열 upsert 에도 200 을 돌려주지만 30초마다 헛왕복이 될 뿐이다.
+    /// 행에 user_id/device_id 가 이미 실려 있어 따로 받지 않는다(같은 값을 두 경로로 받으면 어긋날 자리가 생긴다).
+    func upsertTokenUsageDaily(accessToken: String, rows: [TokenUsageDailyUpsertRow]) async throws {
+        guard !rows.isEmpty else { return }
+        try await sendNoBody(
+            path: "/rest/v1/token_usage_device_daily",
+            method: "POST",
+            queryItems: [URLQueryItem(name: "on_conflict", value: "user_id,day,device_id")],
+            body: rows,
+            accessToken: accessToken,
+            prefer: "resolution=merge-duplicates,return=minimal"
+        )
+    }
+
+    /// 내 일별 토큰 행(기기별)을 since(KST 'YYYY-MM-DD') 이후로 읽는다 — 토큰 잔디의 서버 몫. 자기 행 select 는 RLS 정책으로
+    /// 열려 있고 읽기 RPC 는 없다(남의 일별 기록은 어떤 경로로도 나가지 않는다). 합산은 클라(TokenDailyMerge)가 한다.
+    /// limit 1000 은 호스티드 PostgREST 의 max_rows 와 같다 — 13주 × 기기 2대 ≈ 180행이라 충분하고, 그 이상은 잘라도
+    /// day.desc 정렬이라 **오래된 쪽**이 빠진다(최근 잔디가 먼저 산다).
+    func fetchMyTokenDaily(accessToken: String, userID: String, since: String) async throws -> [TokenUsageDailyRow] {
+        let data = try await send(
+            path: "/rest/v1/token_usage_device_daily",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "select", value: "day,device_id,claude_total,codex_total,codex_account"),
+                URLQueryItem(name: "user_id", value: "eq.\(userID)"),
+                URLQueryItem(name: "day", value: "gte.\(since)"),
+                URLQueryItem(name: "order", value: "day.desc"),
+                URLQueryItem(name: "limit", value: "1000")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode([TokenUsageDailyRow].self, from: data)
+    }
+
     /// 옛 표 token_usage_monthly 의 내 이번 달 행 총량을 읽는다(없으면 nil). select=total 한 줄만 읽는다.
     /// 쓰임: 옛 표를 덮어쓰기 **전** 게이트. 그 행이 아직 v0.2.10 인 다른 맥의 더 큰 누적치일 수 있어,
     /// 그때 내 값으로 덮으면 그 맥의 사용량이 순위에서 사라진다(upsertLegacyTokenUsage 주석 참조).

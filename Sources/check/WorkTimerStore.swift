@@ -398,6 +398,10 @@ final class WorkTimerStore {
     /// 마지막으로 서버에 올린 계정 집계 키("월합|누적|상태"). usage 가 그대로여도 이 키가 바뀌면 올린다 —
     /// 계정 버킷은 로컬 로그와 무관하게 자라므로(다른 기기·클라우드) 변경 게이트가 usage 만 보면 계정값이 서버에 영영 안 간다.
     @ObservationIgnored var lastUploadedAccountKey: String?
+    /// 마지막으로 일별 표(token_usage_device_daily)에 올린 날짜별 값(v0.2.41 토큰 잔디). 월간 upsert 가 성공한 직후 이 맵과
+    /// 현재 값을 비교해 **바뀐 날만** 배열로 올린다(처음엔 전부). 성공에만 갱신 — 실패한 날은 다음 주기에 그대로 재시도된다.
+    /// 로그아웃에 비운다(다음 계정은 처음부터). 관찰 대상 아님.
+    @ObservationIgnored var lastUploadedDaily: [String: TokenUsageDailyValue] = [:]
     /// 마지막 업로드 시도 시각. 60초 스로틀 기준(난사 방지). 관찰 대상 아님.
     @ObservationIgnored var lastTokenUploadAt: Date = .distantPast
     /// 마지막 **배경** 토큰 스캔 시각(팝오버가 닫힌 근무 중에 도는 저빈도 경로, refreshTokenUsageInBackgroundIfDue).
@@ -429,6 +433,10 @@ final class WorkTimerStore {
     var retro: WeeklyRetro?
     /// 최근 12주 일별 근무 잔디(이슈 #3). heatmap/retro 와 같은 조회·같은 파싱에서 함께 계산되고 함께 비워진다.
     var dailyGrid: WorkDailyGrid = .empty
+    /// 최근 12주 일별 AI 토큰 잔디(이슈 #3 의 토큰 절반). 같은 조회 안에서 서버 일별 표 + 로컬 일별 맵 + 계정 버킷을 합쳐 계산하고
+    /// (WorkTimerStoreInsights), 주가 바뀌거나 로그아웃하면 근무 잔디와 함께 비워진다. 토큰 조회는 **독립 실패**다 — 못 받아도
+    /// 근무 잔디·회고·히트맵은 그대로 그려진다. 수집 거부(tokenUsageCollect == false)면 항상 empty(패널도 섹션을 숨긴다).
+    var tokenDailyGrid: TokenDailyGrid = .empty
     // 월요일 첫 팝오버에 지난주 회고를 한 번 안내하는 배너의 노출 여부(주당 1회, UserDefaults 로 기록).
     var showsRetroBanner = false
 
@@ -2309,6 +2317,8 @@ extension WorkTimerStore {
         tokenBoardFailed = false
         lastUploadedUsage = nil
         lastUploadedAccountKey = nil
+        // 일별 업로드 장부도 계정에 묶인다(user_id 행) — 남기면 다음 계정의 첫 업로드가 "이미 올린 날"로 읽혀 그 날들이 통째로 빠진다.
+        lastUploadedDaily = [:]
         lastTokenUploadAt = .distantPast
         // 하트비트 도장도 계정에 묶인 사실이다(user_id 로 들어간다). 남기면 새 계정의 첫 스캔이 앞 계정의
         // 스캔 시각과 같아 보여 보고가 한 주기 밀린다. 배경 스캔 주기 스탬프는 **일부러 남긴다** —
@@ -2378,6 +2388,8 @@ extension WorkTimerStore {
         heatmap = .empty
         retro = nil
         dailyGrid = .empty
+        // 토큰 잔디도 계정의 것이다(서버 일별 행 + 이 계정으로 올린 로컬 맵) — 다음 계정에 물려주지 않는다.
+        tokenDailyGrid = .empty
         showsRetroBanner = false
         // 미반영 근무 큐(pendingItems)와 진행 중 근무(startedAt/accumulatedSeconds)는 여기서 비우지 않는다.
         // 이 함수는 토큰 만료 강제 로그아웃(refresh token 부재/무효, 저장 세션 재활성 실패)에서도 불리는데,

@@ -348,6 +348,131 @@ struct WorkDailyGrid: Equatable, Sendable {
     }
 }
 
+/// 최근 13주(이번 주 + 지난 12주)의 **일별 AI 토큰** — 근무 잔디(WorkDailyGrid)와 같은 모양(주 열 × 요일 행), 값은 토큰(이슈 #3 의
+/// 토큰 절반). 원천은 셋을 날짜별로 **max** 로 합친 맵이다(TokenDailyMerge): 서버 일별 표(기기 합, 지난 달까지 기억) ·
+/// 이 맥의 로컬 일별 맵(현재 월 + 48시간, 오늘은 서버보다 최신) · Codex 계정 버킷(다른 기기·클라우드 포함, ~70일).
+/// 창·미래 칸·툴팁 날짜 규칙은 근무 잔디와 정확히 같아야 한다 — 같은 패널에 두 잔디가 나란히 서므로 하루만 어긋나도 결함으로 보인다.
+struct TokenDailyGrid: Equatable, Sendable {
+    /// 잔디 농도의 분모(토큰/일) = **5천만 고정**. 근무 잔디의 8시간·히트맵의 3600초와 같은 철학(자기 최대값 기준이면 사람마다·
+    /// 주마다 기준이 흔들린다). 근거: 2026년 8월 실측에서 헤비 유저(월 1.6B·2.7B·3.2B — 20260902090000 머리 주석)의 하루 최대치가
+    /// 이 언저리였다 — 그 이상은 가장 진한 칸으로 클램프되고, 하루 1,250만(1/4) 이하가 첫 단계다.
+    static let fullDayTokens = 50_000_000
+
+    /// 가장 오래된 주의 월요일 00:00(KST). 근무 잔디와 같은 원점(WorkDailyGrid.windowStart).
+    let weekStart: Date
+    /// 열 수(주). empty 는 0.
+    let weeks: Int
+    /// tokens[주][요일 0=월 … 6=일] = 그 날 유효 토큰. 미래 칸은 항상 0(isFuture 로 가른다 — 근무 잔디와 같은 규약).
+    var tokens: [[Int]]
+    /// 오늘까지의 날 수(weekStart 부터 오늘 포함). 이 값 이상인 칸은 미래다.
+    let days: Int
+
+    static let empty = TokenDailyGrid(weekStart: .distantPast, weeks: 0, tokens: [], days: 0)
+
+    /// 전체 누적 토큰(검증·요약용).
+    var totalTokens: Int {
+        tokens.reduce(0) { $0 + $1.reduce(0, +) }
+    }
+
+    /// (주, 요일) 칸이 오늘보다 뒤인지. 범위 밖 인덱스도 미래로 취급한다(WorkDailyGrid 와 같다).
+    func isFuture(week: Int, weekday: Int) -> Bool {
+        week * WorkRhythmHeatmap.dayCount + weekday >= days
+    }
+
+    /// 잔디 칸 툴팁의 값 문구. 0 은 "사용 없음"(옅은 바탕 칸을 가리켰을 때 "0 토큰"보다 뜻이 분명하다), 그 외는 토큰 행과 같은
+    /// 콤마 전체 숫자 + "토큰"(축약 없음 — 순위판·내 행이 전부 전체 숫자라 여기만 "1.2M" 이면 단위가 어긋나 보인다).
+    /// 그리드 뷰가 날짜를 앞에 붙여 "9월 3일 · 12,345,678 토큰"이 된다.
+    static func tooltipValueText(_ tokens: Int) -> String {
+        tokens > 0 ? "\(TokenNumberFormatter.grouped(tokens)) 토큰" : "사용 없음"
+    }
+
+    /// Date → KST 'YYYY-MM-DD'(claudeDaily/codexDaily·서버 day 컬럼과 같은 축). 서버 조회의 since 와 칸 귀속이 이 문자열을 쓴다.
+    static func dayString(_ date: Date) -> String {
+        let c = TeamWeeklyGoal.kstCalendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", c.year ?? 1970, c.month ?? 1, c.day ?? 1)
+    }
+
+    /// 'YYYY-MM-DD' → 그 날 KST 00:00. 형이 어긋나면 nil(그 키는 버린다 — 잔디 전체를 못 그리는 것보다 낫다).
+    static func date(fromDay day: String) -> Date? {
+        let parts = day.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        var c = DateComponents()
+        c.year = parts[0]
+        c.month = parts[1]
+        c.day = parts[2]
+        return TeamWeeklyGoal.kstCalendar.date(from: c)
+    }
+
+    /// 날짜별 토큰 맵으로 잔디를 만든다. 창은 근무 잔디와 같은 [이번 주 월요일 − (weeks−1)주, 오늘] 이고, 창 밖·미래 날짜는
+    /// 버린다(시계가 앞선 기기가 서버에 남긴 '내일' 행이 미래 칸을 칠하지 않게 — 미래 칸 = 0 불변식).
+    static func build(daily: [String: Int], now: Date, weeks: Int = WorkDailyGrid.defaultWeeks) -> TokenDailyGrid {
+        let calendar = TeamWeeklyGoal.kstCalendar
+        let weeks = max(1, weeks)
+        guard let weekStart = WorkDailyGrid.windowStart(now: now, weeks: weeks),
+              let todayOffset = calendar.dateComponents([.day], from: weekStart, to: TeamWeeklyGoal.koreanDayStart(for: now)).day
+        else {
+            return .empty
+        }
+        let dayCount = WorkRhythmHeatmap.dayCount
+        let days = todayOffset + 1
+        var tokens = Array(repeating: Array(repeating: 0, count: dayCount), count: weeks)
+        for (day, value) in daily where value > 0 {
+            guard let date = date(fromDay: day),
+                  let offset = calendar.dateComponents([.day], from: weekStart, to: date).day,
+                  offset >= 0, offset < weeks * dayCount, offset < days
+            else { continue }
+            tokens[offset / dayCount][offset % dayCount] += value
+        }
+        return TokenDailyGrid(weekStart: weekStart, weeks: weeks, tokens: tokens, days: days)
+    }
+}
+
+/// 토큰 잔디의 세 원천을 날짜별 **유효 토큰** 한 맵으로 합치는 순수 규칙(스토어·테스트가 같은 함수를 쓴다).
+/// 유효 토큰 = claude 합 + max(codex 로컬 합, codex 계정값) — 서버 보드 RPC(20260903160000)의 greatest 산식을 하루 단위로 옮긴 것이다.
+enum TokenDailyMerge {
+    /// 서버 일별 행(기기별)을 날짜별로 합친다. claude/codex 로컬 합은 기기 **sum**(각 맥의 자기 로그), codex_account 는 기기 간 **max**
+    /// (모든 맥이 같은 계정값을 올리므로 더하면 기기 수만큼 뻥튀기 — 월 표와 같은 성질). null 인 기기는 max 에서 빠진다.
+    static func serverTotals(_ rows: [TokenUsageDailyRow]) -> [String: Int] {
+        var claude: [String: Int] = [:]
+        var codexLocal: [String: Int] = [:]
+        var codexAccount: [String: Int] = [:]
+        for row in rows {
+            claude[row.day, default: 0] += max(0, row.claudeTotal)
+            codexLocal[row.day, default: 0] += max(0, row.codexTotal)
+            if let account = row.codexAccount {
+                codexAccount[row.day] = max(codexAccount[row.day] ?? 0, account)
+            }
+        }
+        var result: [String: Int] = [:]
+        for day in Set(claude.keys).union(codexLocal.keys).union(codexAccount.keys) {
+            result[day] = (claude[day] ?? 0) + max(codexLocal[day] ?? 0, codexAccount[day] ?? 0)
+        }
+        return result
+    }
+
+    /// 이 맥의 로컬 일별 유효 토큰: claudeDaily + max(codexDaily, 계정 버킷). 계정 버킷은 UTC 일자 키지만 같은 문자열 키로 맞춘다
+    /// (경계 9시간 차 — 월간 순위와 같은 문서화된 미결). 버킷은 ~70일이라 현재 월 밖의 Codex 날도 채워 준다(로컬 맵은 현재 월뿐).
+    static func localTotals(usage: TokenUsageMonthly?, account: CodexAccountUsage?) -> [String: Int] {
+        let claude = usage?.claudeDaily ?? [:]
+        let codex = usage?.codexDaily ?? [:]
+        let buckets = account?.buckets ?? [:]
+        var result: [String: Int] = [:]
+        for day in Set(claude.keys).union(codex.keys).union(buckets.keys) {
+            let value = max(0, claude[day] ?? 0) + max(max(0, codex[day] ?? 0), max(0, buckets[day] ?? 0))
+            if value > 0 { result[day] = value }
+        }
+        return result
+    }
+
+    /// 날짜별 max(서버, 로컬). 서버는 기기 합이라 보통 크지만, 오늘·최근은 로컬이 더 최신이고(업로드는 60초 게이트), 현재 월의
+    /// 앞쪽 48시간 꼬리는 로컬이 부분값이라 서버가 크다 — 어느 쪽이 진실에 가까운지 날마다 다르므로 큰 쪽을 쓴다(더하면 이중 계상).
+    static func merged(server: [String: Int], local: [String: Int]) -> [String: Int] {
+        var result = server
+        for (day, value) in local { result[day] = max(result[day] ?? 0, value) }
+        return result
+    }
+}
+
 /// 개인 기록 계산 결과 묶음(히트맵 + 회고). 두 계산이 같은 파싱 결과를 나눠 쓰도록 한곳에 묶고,
 /// 스토어가 이 함수를 **메인액터 밖에서** 한 번에 돌린 뒤 결과만 받아 반영하게 하는 것이 존재 이유다.
 /// (예전엔 응답 도착 직후 메인액터에서 두 계산을 연속 동기 호출해, 세션이 많은 계정에서 팝오버를 열 때마다

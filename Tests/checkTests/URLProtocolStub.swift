@@ -289,6 +289,12 @@ final class URLProtocolStub: URLProtocol {
         if request.url?.path == "/rest/v1/token_usage_monthly", request.httpMethod == "GET" {
             return legacyTokenUsageData(for: request)
         }
+        // 일별 토큰 표(v0.2.41 토큰 잔디) 조회. 미등록이면 Data() 가 돌아가 [TokenUsageDailyRow] 디코드가 throw 되고,
+        // 스토어는 그것을 '독립 실패'로 삼켜 토큰 잔디만 조용히 비운다 — 근무 기록 테스트가 초록인 채로 토큰 경로가
+        // 한 번도 성공하지 않는다. 기본은 빈 배열(행 없음), 픽스처 호스트는 아래에서 갈라 준다.
+        if request.url?.path == "/rest/v1/token_usage_device_daily", request.httpMethod == "GET" {
+            return tokenDailyData(for: request)
+        }
         if request.url?.path == "/auth/v1/token",
            request.url?.query?.contains("grant_type=refresh_token") == true
         {
@@ -809,6 +815,36 @@ final class URLProtocolStub: URLProtocol {
         ISO8601DateFormatter().string(from: date)
     }
 
+    /// 일별 토큰 표 픽스처. 호스트에 "token-daily-two-devices" 가 들어가면 기기 2대의 같은 날 행(계정값은 둘 다 1,000 —
+    /// max 로 읽어야 한다)과 하루 더를 주고, 그 외에는 빈 배열이다. 날짜는 요청의 `day=gte.<since>` 를 기준으로 상대 계산한다
+    /// (실제 시계로 도는 테스트가 언제 돌아도 창 안에 들어오게).
+    private static func tokenDailyData(for request: URLRequest) -> Data {
+        guard let host = request.url?.host, host.contains("token-daily-two-devices") else {
+            return Data("[]".utf8)
+        }
+        // since = 잔디 창 시작(월요일). 그 다음 날(화요일)과 그 다음 주 수요일을 쓴다 — 어느 주에 돌려도 과거·창 안이다.
+        let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let since = items.first { $0.name == "day" }?.value?.replacingOccurrences(of: "gte.", with: "") ?? "2026-01-05"
+        func shifted(_ days: Int) -> String {
+            let parts = since.split(separator: "-").compactMap { Int($0) }
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = TimeZone(identifier: "Asia/Seoul")!
+            var c = DateComponents(); c.year = parts[0]; c.month = parts[1]; c.day = parts[2]
+            let date = cal.date(byAdding: .day, value: days, to: cal.date(from: c)!)!
+            let out = cal.dateComponents([.year, .month, .day], from: date)
+            return String(format: "%04d-%02d-%02d", out.year!, out.month!, out.day!)
+        }
+        return Data(
+            """
+            [
+              {"day":"\(shifted(9))","device_id":"MAC-B","claude_total":0,"codex_total":300,"codex_account":null},
+              {"day":"\(shifted(1))","device_id":"MAC-A","claude_total":1000,"codex_total":200,"codex_account":1000},
+              {"day":"\(shifted(1))","device_id":"MAC-B","claude_total":500,"codex_total":100,"codex_account":1000}
+            ]
+            """.utf8
+        )
+    }
+
     private static func workSessionsData(for request: URLRequest) -> Data {
         let host = request.url?.host
         let openQuery = request.url?.query?.contains("ended_at=is.null") == true
@@ -1012,5 +1048,9 @@ final class URLProtocolStub: URLProtocol {
             || host?.contains("device-claim") == true
             || host == "status-device-table-missing"
             || host?.hasPrefix("korean-week-") == true
+            // 토큰 잔디(v0.2.41) 호스트군: 근무 세션도 있어야 "토큰 조회가 근무 쪽을 막지 않는다"를 볼 수 있다
+            // (완료 세션이 0건이면 근무 잔디가 비어 그 판정이 늘 참인 채로 의미를 잃는다).
+            || host?.hasPrefix("token-daily-") == true
+            || host?.hasPrefix("insights-token-") == true
     }
 }

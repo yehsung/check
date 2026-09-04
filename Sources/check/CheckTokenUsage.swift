@@ -53,6 +53,10 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     /// 라벨 "N월 …"에 쓰는 월 숫자. 'YYYY-MM' 의 뒤 두 자리를 정수로(선행 0 제거). 파싱 실패 시 0.
     var monthNumber: Int { Int(month.split(separator: "-").last ?? "") ?? 0 }
 
+    /// 굵은 총합이 로컬 소계와 다른 이유를 설명하는 한 마디. 내 박스 툴팁과 순위판 툴팁(TokenBoardEntry.detailTooltip)이
+    /// **같은 문구**를 써야 같은 현상을 두 어휘로 부르지 않는다 — 리터럴을 두 곳에 흩뿌리지 않고 여기 하나만 둔다.
+    static let accountDrivenTotalNote = "총합은 계정 집계 기준"
+
     /// .help 툴팁 상세 문구(계정 집계 없이). 축약 없이 콤마 전체 숫자로, 값이 있는 소스만 이어 붙인다
     /// ("Claude 4,280,667,571 (입력 8,458,939 · 출력 9,796,198 · 캐시읽기 4,063,320,273 · 캐시생성 199,092,161) · Codex 145,691,467 (입력 145,068,307 · 출력 623,160 · 캐시 0)").
     var detailTooltip: String { detailTooltip(account: nil) }
@@ -84,7 +88,7 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
                 }
                 parts.append(line)
                 if accountMonth > codexTotal {
-                    parts.append("총합은 계정 집계 기준")
+                    parts.append(Self.accountDrivenTotalNote)
                 }
             }
         }
@@ -159,6 +163,46 @@ enum TokenNumberFormatter {
             count += 1
         }
         return String(out.reversed())
+    }
+
+    /// 좁은 보조 캡션 전용 축약 표기(순위판 이름 밑 "Claude 196.6억 · Codex 254만" 한 줄).
+    ///
+    /// 왜 축약을 허용하나: 이 저장소는 "축약 B/M/K 없음"을 규칙으로 못 박았다(grouped 주석 참고). 근거는
+    /// **헤드라인 숫자의 크기를 왜곡하지 않기 위해서**였다 — 45억을 "4.5B" 로 줄이면 자릿수 감각이 통째로 사라진다.
+    /// 그 규칙은 여기서도 유효하다: 헤드라인 총합과 툴팁은 여전히 grouped 로 1의 자리까지 전부 쓴다.
+    /// 순위판 행의 이름 밑 캡션에 실제로 남는 폭은 100pt 안팎이다(292pt 행에서 좌측 악센트바+아바타 53pt 와
+    /// 우측 숫자 열이 먼저 가져간다 — ImageRenderer 실측). "Claude 19,658,964,272 · Codex 2,543,110"(39자)는
+    /// 애초에 들어가지 않는다. 그래서 **이 한 줄에서만** 축약하고,
+    /// 정확한 값은 카드 툴팁(.help, grouped)으로 한 번에 볼 수 있게 한다 — 규칙의 근거와 충돌하지 않는 자리다.
+    ///
+    /// 규약(로케일 비의존 · 수동 조립 · 정수 연산만 — Double 반올림 오차로 경계가 흔들리지 않게):
+    /// - 1억 이상: 억 단위. 1000억 미만은 소수 첫째 자리까지(196.6억), 1000억 이상은 소수 없이 천단위 콤마(1,234억).
+    ///   소수 첫째 자리가 0 이면 소수를 뗀다(200억 — "200.0억" 금지).
+    /// - 1만 이상: 만 단위 정수 반올림 + 천단위 콤마(254만, 1,234만).
+    /// - 그 미만: grouped 그대로(8,432). 0 이하는 "0".
+    static func compactKorean(_ value: Int) -> String {
+        // 토큰 수는 음수가 될 수 없다 — grouped 와 같은 방어적 클램프.
+        guard value > 0 else { return "0" }
+        let eok = 100_000_000      // 1억
+        let man = 10_000           // 1만
+        if value >= eok {
+            // 1000억 이상은 소수를 붙일 자리도 의미도 없다(1,234.5억은 폭만 먹는다) — 억 단위 정수 반올림.
+            if value >= 1_000 * eok {
+                return grouped((value + eok / 2) / eok) + "억"
+            }
+            // 소수 첫째 자리까지 반올림한다. 10배 후 정수 나눗셈이라 Double 경계 오차가 없다.
+            let tenths = (value * 10 + eok / 2) / eok
+            let whole = tenths / 10
+            let frac = tenths % 10
+            // 소수가 0 이면 떼어 "200억"으로 — 0 을 남기면 좁은 캡션에서 두 글자를 헛되이 먹는다.
+            return frac == 0 ? grouped(whole) + "억" : grouped(whole) + ".\(frac)억"
+        }
+        if value >= man {
+            let rounded = (value + man / 2) / man
+            // 반올림이 1억(=10,000만)에 닿으면 억 표기로 올린다 — 같은 크기를 "10,000만"과 "1억" 두 어휘로 쓰지 않는다.
+            return rounded >= man ? "1억" : grouped(rounded) + "만"
+        }
+        return grouped(value)
     }
 }
 

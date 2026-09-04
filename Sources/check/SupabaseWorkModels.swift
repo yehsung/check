@@ -334,6 +334,60 @@ struct TokenBoardEntry: Identifiable, Equatable {
     func todayDelta(currentDate: String) -> Int {
         todayDate == currentDate ? todayTotal : 0
     }
+
+    /// 이름 밑 캡션 한 줄: "누가 어떤 AI 를 얼마나 썼는지"(issue #5). 0 이 아닌 쪽만 ` · ` 로 잇는다 —
+    /// `"Claude 196.6억 · Codex 254만"` / 한쪽만 있으면 `"Claude 196.6억"` / 둘 다 0 이면 **nil**.
+    /// nil 일 때 뷰가 줄 자체를 그리지 않아 한 번도 안 올린 사람의 행이 한 줄로 유지된다(빈 줄로 벌어지지 않는다).
+    ///
+    /// Codex 는 `codexEffective`(로컬 합과 계정 월합 중 큰 쪽)를 쓴다 — 우측 굵은 총합(`total`)이 서버에서
+    /// `greatest(codex_local, codex_account)` 로 계산되므로, 여기서 로컬만 쓰면 캡션의 두 값 합이 총합과 안 맞는다.
+    /// 축약은 좁은 폭 때문이며(292pt 행에서 이 줄에 실제로 남는 폭은 100pt 안팎 — 실측),
+    /// 정확한 값은 `detailTooltip` 이 grouped 로 준다.
+    var toolUsageLabel: String? {
+        var parts: [String] = []
+        if claudeTotal > 0 {
+            parts.append("Claude \(TokenNumberFormatter.compactKorean(claudeTotal))")
+        }
+        if codexEffective > 0 {
+            parts.append("Codex \(TokenNumberFormatter.compactKorean(codexEffective))")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// 카드에 마우스를 올리면 뜨는 상세(.help). 내 팝오버 행 문구(TokenUsageMonthly.detailTooltip)와 **같은 어휘·같은
+    /// 정밀도**로 쓴다 — 순위판과 내 박스에서 같은 숫자를 다르게 부르면 그 자체가 결함으로 읽힌다. 축약은 캡션 줄에만
+    /// 있고 여기는 grouped 로 1의 자리까지 전부 적는다(캡션의 "196.6억"이 실제로 몇인지 확인하는 유일한 자리).
+    /// 값이 0 인 소스는 통째로 뺀다(기존 관용구와 동일). Codex 입력/출력은 나누지 않는다 — 앱이 델타를 전액
+    /// codexInput 에 담고 codexOutput 은 항상 0 이라, 나눠 봐야 "출력 0"이라는 거짓 정보만 준다.
+    var detailTooltip: String {
+        var parts: [String] = []
+        if claudeTotal > 0 {
+            parts.append(
+                "Claude \(TokenNumberFormatter.grouped(claudeTotal)) "
+                + "(입력 \(TokenNumberFormatter.grouped(claudeInput)) · 출력 \(TokenNumberFormatter.grouped(claudeOutput)) "
+                + "· 캐시읽기 \(TokenNumberFormatter.grouped(claudeCacheRead)) · 캐시생성 \(TokenNumberFormatter.grouped(claudeCacheCreation)))"
+            )
+        }
+        if codexLocalTotal > 0 {
+            parts.append(
+                "Codex \(TokenNumberFormatter.grouped(codexLocalTotal)) "
+                + "(캐시 \(TokenNumberFormatter.grouped(codexCacheRead)))"
+            )
+        }
+        // 계정 집계는 **로컬보다 커서 실제로 쓰였을 때만** 적는다. 작거나 같으면 순위에 쓰인 값이 로컬이라
+        // 굳이 두 숫자를 나란히 보여 혼란을 만들 이유가 없다.
+        // 판정은 내 박스 툴팁과 **다르다**(같다고 적어 뒀던 주석이 틀렸다): 내 박스는 계정값이 0 보다 크면 늘 적고,
+        // 여기는 순위에 실제로 쓰였을 때(로컬보다 클 때)만 적는다. 순위판은 남의 행이라 참고용 숫자를 늘릴수록
+        // 읽는 비용만 커지기 때문이다.
+        // 계정값을 적을 때는 내 박스와 **같은 문구**로 "총합은 계정 집계 기준"을 한 줄 더 붙인다 — 이게 없으면
+        // 툴팁에 Codex 숫자가 둘(로컬 소계·계정 집계) 나란히 놓이는데 어느 쪽이 굵은 총합과 캡션에 쓰였는지
+        // 알 길이 없다(내 박스에는 있는 설명이 순위판에만 빠져 어휘가 갈렸던 자리).
+        if let account = codexAccountMonth, account > codexLocalTotal {
+            parts.append("Codex 계정 집계 \(TokenNumberFormatter.grouped(account))")
+            parts.append(TokenUsageMonthly.accountDrivenTotalNote)
+        }
+        return parts.joined(separator: " · ")
+    }
 }
 
 extension Array where Element == TokenBoardRow {

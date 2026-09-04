@@ -379,6 +379,23 @@ struct TokenDailyGrid: Equatable, Sendable {
         week * WorkRhythmHeatmap.dayCount + weekday >= days
     }
 
+    /// 서버 조회가 **실패**했을 때 쓰는 겹치기: 이 잔디(로컬 몫으로 새로 지은 것)에 직전 잔디(서버 몫이 살아 있는 값)를
+    /// **칸별 max** 로 얹는다. 예전에는 직전 잔디를 통째로 물려줬는데, 그러면 조회가 실패한 사이 자란 오늘 칸의 로컬 값이
+    /// 반영되지 않아 잔디가 그 자리에 얼어붙었다(손에 있는 값을 쓰지 않았다). 반대로 로컬만 쓰면 지난 달·다른 기기 몫
+    /// (서버만 아는 값)이 통째로 사라진다 — 그래서 둘의 큰 쪽이다(TokenDailyMerge.merged 와 같은 규칙, 격자 단위 판).
+    /// 창(weekStart·weeks)이 다르면 칸의 뜻이 달라 잘못된 날에 값이 얹히므로 겹치지 않는다. 미래 칸도 건너뛴다
+    /// (직전 잔디가 더 뒤 시각에 지어졌다면 이 잔디의 미래 칸에 값이 들어와 '미래 칸 = 0' 불변식이 깨진다).
+    func overlaying(_ other: TokenDailyGrid) -> TokenDailyGrid {
+        guard weeks > 0, other.weeks == weeks, other.weekStart == weekStart else { return self }
+        var merged = self
+        for week in 0..<weeks {
+            for weekday in 0..<WorkRhythmHeatmap.dayCount where !isFuture(week: week, weekday: weekday) {
+                merged.tokens[week][weekday] = max(tokens[week][weekday], other.tokens[week][weekday])
+            }
+        }
+        return merged
+    }
+
     /// 잔디 칸 툴팁의 값 문구. 0 은 "사용 없음"(옅은 바탕 칸을 가리켰을 때 "0 토큰"보다 뜻이 분명하다), 그 외는 토큰 행과 같은
     /// 콤마 전체 숫자 + "토큰"(축약 없음 — 순위판·내 행이 전부 전체 숫자라 여기만 "1.2M" 이면 단위가 어긋나 보인다).
     /// 그리드 뷰가 날짜를 앞에 붙여 "9월 3일 · 12,345,678 토큰"이 된다.

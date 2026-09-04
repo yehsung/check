@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 @testable import check
 
@@ -300,10 +301,12 @@ func dailyUpsertPostsAnArrayWithSnakeKeysAndOmitsCodexAccountWhenAbsent() async 
     let store = tgStore(host: host)
     defer { tgCancelTasks(store) }
 
+    // 계정 버킷이 있는 날(09-01)과 없는 날(09-02)이 섞인, 실제로 가장 흔한 모양이다(Codex 를 쓰는 사람의 한 달치).
     await store.uploadTokenUsageDailyIfNeeded(
         usage: tgUsage(claudeDaily: ["2026-09-01": 100], codexDaily: ["2026-09-02": 7]),
         account: tgAccount(["2026-09-01": 900]),
-        generation: store.sessionGeneration
+        generation: store.sessionGeneration,
+        now: tgNow
     )
 
     let request = try #require(tgDailyRequests(host: host).first)
@@ -315,9 +318,21 @@ func dailyUpsertPostsAnArrayWithSnakeKeysAndOmitsCodexAccountWhenAbsent() async 
     #expect(prefer.contains("resolution=merge-duplicates"))
     #expect(prefer.contains("return=minimal"))
 
-    let body = try #require(tgDailyBodies(host: host).first)
-    #expect(body.count == 2, "본문은 배열이어야 한다(행 하나씩 보내면 왕복이 날짜 수만큼 는다)")
-    let first = try #require(body.first { $0["day"] as? String == "2026-09-01" })
+    // ★★ 리뷰 P0: PostgREST 는 배열 본문의 키 집합이 행마다 다르면 400 PGRST102 로 **본문 전체**를 거절한다.
+    //    그래서 계정 키 유무로 두 묶음으로 갈라 보낸다 — 모든 본문의 키 집합은 균일해야 한다.
+    //    (스텁이 그 규칙을 물어뜯으므로, 한 요청으로 되돌리면 위 호출이 400 을 받아 아래 판정 전에 장부가 안 선다.)
+    let bodies = tgDailyBodies(host: host)
+    #expect(bodies.count == 2, "혼합 키를 한 요청에 담았거나 행마다 쪼갰다: \(bodies.count)건")
+    for body in bodies {
+        #expect(Set(body.map { Set($0.keys) }).count == 1, "한 본문 안의 키 집합이 행마다 다르다 — 서버가 400 으로 통째 거절한다")
+    }
+    // 실패한 요청이 하나라도 있으면 장부가 서지 않는다 — 두 요청이 다 성공했다는 증거다.
+    #expect(store.lastUploadedDaily.count == 2)
+    #expect(!store.tokenDailyRetryPending)
+
+    let all = bodies.flatMap { $0 }
+    #expect(all.count == 2, "본문은 배열이어야 한다(행 하나씩 보내면 왕복이 날짜 수만큼 는다)")
+    let first = try #require(all.first { $0["day"] as? String == "2026-09-01" })
     #expect(first["user_id"] as? String == tgUserID)
     #expect(first["device_id"] as? String == "MAC-A")
     #expect(first["claude_total"] as? Int == 100)
@@ -327,9 +342,38 @@ func dailyUpsertPostsAnArrayWithSnakeKeysAndOmitsCodexAccountWhenAbsent() async 
 
     // ★ 계정 버킷이 없는 날은 **키 자체가 빠진다**. 0 을 실으면 PostgREST 가 그 컬럼을 SET 해 다른 기기가 앞서
     //   올린 계정값을 0 으로 밀어 버린다(월 표 codex_account_* 와 같은 규약).
-    let second = try #require(body.first { $0["day"] as? String == "2026-09-02" })
+    let second = try #require(all.first { $0["day"] as? String == "2026-09-02" })
     #expect(second["codex_account"] == nil, "codex_account 가 실렸다: \(second.keys.sorted())")
     #expect(second["codex_total"] as? Int == 7)
+
+    // 키가 균일하면(계정값이 전부 있거나 전부 없으면) 요청은 **한 건**이다 — 무조건 두 번 보내지 않는다.
+    let uniformHost = "v0241-daily-body-uniform"
+    let uniform = tgStore(host: uniformHost)
+    defer { tgCancelTasks(uniform) }
+    await uniform.uploadTokenUsageDailyIfNeeded(
+        usage: tgUsage(claudeDaily: ["2026-09-01": 100, "2026-09-02": 7]),
+        account: tgAccount(["2026-09-01": 900, "2026-09-02": 800]),
+        generation: uniform.sessionGeneration,
+        now: tgNow
+    )
+    #expect(tgDailyBodies(host: uniformHost).count == 1)
+    #expect(tgDailyBodies(host: uniformHost)[0].count == 2)
+}
+
+/// 스텁이 PostgREST 의 키 균일성 규칙을 **실제로 물어뜯는지**. 이 판정이 없으면 위 계약 테스트가 "요청이 두 건"만 보고
+/// 왜 혼합 본문이 금지인지는 아무도 증명하지 않는다(그 상태로 한 요청으로 되돌리면 다시 조용히 초록이 된다).
+@Test
+func stubRejectsArrayBodiesWithMismatchedKeysLikePostgrest() async throws {
+    #expect(URLProtocolStub.hasMismatchedObjectKeys(#"[{"a":1,"b":2},{"a":3}]"#))
+    #expect(!URLProtocolStub.hasMismatchedObjectKeys(#"[{"a":1,"b":2},{"a":3,"b":4}]"#))
+    #expect(!URLProtocolStub.hasMismatchedObjectKeys(#"{"a":1}"#))
+
+    var request = URLRequest(url: URL(string: "http://v0241-mixed-keys/rest/v1/token_usage_device_daily")!)
+    request.httpMethod = "POST"
+    request.httpBody = Data(#"[{"user_id":"u","day":"2026-09-01","codex_account":1},{"user_id":"u","day":"2026-09-02"}]"#.utf8)
+    let (data, response) = try await URLSession(configuration: .stubbed).data(for: request)
+    #expect((response as? HTTPURLResponse)?.statusCode == 400)
+    #expect(String(decoding: data, as: UTF8.self).contains("PGRST102"))
 }
 
 @MainActor
@@ -340,17 +384,18 @@ func dailyUpsertSendsOnlyChangedDaysAndGoesSilentWhenNothingMoved() async throws
     defer { tgCancelTasks(store) }
     let first = tgUsage(claudeDaily: ["2026-09-01": 100, "2026-09-02": 200])
 
-    await store.uploadTokenUsageDailyIfNeeded(usage: first, account: nil, generation: store.sessionGeneration)
+    await store.uploadTokenUsageDailyIfNeeded(usage: first, account: nil, generation: store.sessionGeneration, now: tgNow)
     #expect(tgDailyBodies(host: host).count == 1)
     #expect(tgDailyBodies(host: host)[0].count == 2, "처음엔 전부 보낸다")
 
     // 값이 그대로면 요청 자체가 없다(빈 배열 upsert 도 30초마다 헛왕복이 될 뿐이다).
-    await store.uploadTokenUsageDailyIfNeeded(usage: first, account: nil, generation: store.sessionGeneration)
+    await store.uploadTokenUsageDailyIfNeeded(usage: first, account: nil, generation: store.sessionGeneration, now: tgNow)
     #expect(tgDailyBodies(host: host).count == 1, "안 바뀐 날을 다시 올렸다")
 
     // 하루만 자라면 그 하루만 나간다.
     await store.uploadTokenUsageDailyIfNeeded(
-        usage: tgUsage(claudeDaily: ["2026-09-01": 100, "2026-09-02": 250]), account: nil, generation: store.sessionGeneration)
+        usage: tgUsage(claudeDaily: ["2026-09-01": 100, "2026-09-02": 250]), account: nil,
+        generation: store.sessionGeneration, now: tgNow)
     let second = try #require(tgDailyBodies(host: host).last)
     #expect(tgDailyBodies(host: host).count == 2)
     #expect(second.count == 1)
@@ -367,6 +412,7 @@ func dailyUpsertSendsOnlyChangedDaysAndGoesSilentWhenNothingMoved() async throws
     #expect(!store.lastUploadedDaily.isEmpty)
     store.signOut()
     #expect(store.lastUploadedDaily.isEmpty)
+    #expect(store.lastUploadedDailyBaselineDay == nil)
     #expect(store.tokenDailyGrid == .empty)
 }
 
@@ -381,20 +427,123 @@ func dailyUpsertIsSilentWithoutSessionOrWhenCollectionIsOptedOut() async {
     // 수집 거부: 서버 트리거가 어차피 버리지만, 그 사람 맥이 헛왕복을 도는 것 자체를 없앤다.
     // (게이트는 짝으로 있어야 한다 — 이 함수만 따로 불려도 새지 않게 여기서도 한 번 더 건다.)
     store.tokenUsageCollect = false
-    await store.uploadTokenUsageDailyIfNeeded(usage: usage, account: nil, generation: store.sessionGeneration)
+    await store.uploadTokenUsageDailyIfNeeded(usage: usage, account: nil, generation: store.sessionGeneration, now: tgNow)
     #expect(tgDailyRequests(host: host).isEmpty)
     #expect(store.lastUploadedDaily.isEmpty, "거부 상태에서 장부가 갱신되면 수집을 켠 뒤 그 날들이 영영 안 올라간다")
 
     // 비로그인.
     store.tokenUsageCollect = true
     store.session = nil
-    await store.uploadTokenUsageDailyIfNeeded(usage: usage, account: nil, generation: store.sessionGeneration)
+    await store.uploadTokenUsageDailyIfNeeded(usage: usage, account: nil, generation: store.sessionGeneration, now: tgNow)
     #expect(tgDailyRequests(host: host).isEmpty)
 
     // 올릴 날이 하나도 없어도(전부 0) 요청은 없다.
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: tgUserID)
-    await store.uploadTokenUsageDailyIfNeeded(usage: tgUsage(), account: nil, generation: store.sessionGeneration)
+    await store.uploadTokenUsageDailyIfNeeded(usage: tgUsage(), account: nil, generation: store.sessionGeneration, now: tgNow)
     #expect(tgDailyRequests(host: host).isEmpty)
+}
+
+/// withObservationTracking 의 @Sendable onChange 가 발화 여부를 기록하는 참조 상자.
+/// 관찰 알림은 MainActor 의 willSet 에서 동기 발화하므로 실제 경합은 없다.
+private final class TgFireFlag: @unchecked Sendable {
+    var fired = false
+}
+
+@MainActor
+@Test
+func tokenUsageCollectIsObservableSoTheTokenSectionFollowsTheServerSetting() {
+    // 리뷰 P1: 이 값은 **뷰 본문**이 읽는다(CheckMenuView 의 showsTokenGrid). @ObservationIgnored 로 두면
+    // 로그인 수십 초 뒤 서버 설정이 도착해 false 로 바뀌어도 body 가 다시 돌지 않아, 거부자에게 (로컬값으로 칠해진)
+    // 토큰 잔디가 계속 보이고 본문 높이 예산도 섹션이 있는 값으로 굳는다. 팝오버 루트는 v0.2.38 에서 매초 재렌더를
+    // 일부러 끊어 놨으므로 다른 관찰값이 우연히 바뀔 때까지 그 상태가 유지된다 — 픽셀 테스트로는 못 잡는 결함이다.
+    let store = tgStore(host: "v0241-collect-observation")
+    defer { tgCancelTasks(store) }
+
+    let flag = TgFireFlag()
+    withObservationTracking { _ = store.tokenUsageCollect } onChange: { flag.fired = true }
+    store.tokenUsageCollect = false
+    #expect(flag.fired, "tokenUsageCollect 가 관찰 대상이 아니다 — 수집 설정이 도착해도 패널이 다시 그려지지 않는다")
+
+    // 반대 방향(운영자가 다시 켜 줌)도 같다.
+    let back = TgFireFlag()
+    withObservationTracking { _ = store.tokenUsageCollect } onChange: { back.fired = true }
+    store.tokenUsageCollect = true
+    #expect(back.fired)
+}
+
+@MainActor
+@Test
+func dailyUploadFailureReopensTheGateSoTheDaysAreRetriedNextCycle() async throws {
+    // 리뷰 P2: 일별 업로드는 월간 변경 게이트 **안쪽**에서만 불린다. 실패 뒤 사용자가 AI 를 더 쓰지 않으면 usage 도
+    // 계정 키도 그대로라 `guard changed` 가 되돌려보내 재시도 자체가 오지 않았다 — 그 날 행은 앱 재시작 전까지
+    // 안 올라가고, 달이 바뀌면 월 접두어 필터가 그 날을 빼 서버에 영구 구멍이 남는다(지난 달 잔디는 서버가 유일한 기억이다).
+    let host = "v0241-daily-fails"
+    let store = tgStore(host: host)
+    defer { tgCancelTasks(store) }
+    let usage = tgUsage(claudeDaily: ["2026-09-01": 100])
+
+    await store.uploadTokenUsageIfNeeded(usage: usage, account: nil, accountStatus: .ok, now: tgNow)
+    #expect(tgDailyBodies(host: host).count == 1)
+    #expect(store.lastUploadedDaily.isEmpty, "실패한 업로드가 장부를 갱신했다 — 그 날들은 영영 재시도되지 않는다")
+    #expect(store.tokenDailyRetryPending, "재시도 대기가 안 섰다 — 다음 주기의 변경 게이트가 열리지 않는다")
+    // 월간은 독립적으로 완결됐다(일별 실패가 순위판 사용량을 멈추지 않는다).
+    #expect(store.lastUploadedUsage == usage)
+
+    // 값이 **하나도 안 바뀐** 다음 주기(60초 뒤)에도 다시 나간다.
+    await store.uploadTokenUsageIfNeeded(usage: usage, account: nil, accountStatus: .ok, now: tgNow.addingTimeInterval(61))
+    #expect(tgDailyBodies(host: host).count == 2, "실패한 날들이 재시도되지 않았다")
+    #expect(store.tokenDailyRetryPending)
+    // 60초 스로틀은 그대로다(재시도가 난사가 되지 않는다).
+    await store.uploadTokenUsageIfNeeded(usage: usage, account: nil, accountStatus: .ok, now: tgNow.addingTimeInterval(90))
+    #expect(tgDailyBodies(host: host).count == 2)
+
+    // 스키마 부재(마이그레이션 미적용)는 예외다 — 배포로만 풀리는 항구적 실패라 60초마다 되짚어도 고쳐지지 않는다.
+    // 대신 운영자 신호(문구)가 뜬다.
+    let missing = tgStore(host: "schema-missing")
+    defer { tgCancelTasks(missing) }
+    await missing.uploadTokenUsageDailyIfNeeded(
+        usage: usage, account: nil, generation: missing.sessionGeneration, now: tgNow)
+    #expect(!missing.tokenDailyRetryPending, "배포로만 풀리는 실패에 60초 재시도를 걸면 헛왕복이 영원히 돈다")
+    #expect(missing.syncMessage == "DB 스키마 필요")
+}
+
+@MainActor
+@Test
+func dailyLedgerRebaselinesOncePerKstDaySoServerSideDeletionsHeal() async throws {
+    // 리뷰 P2: 장부는 "204 를 받았다"만 알 뿐 "저장됐다"는 모른다 — 수집 거부 트리거는 행을 조용히 버리고도 204 를 준다.
+    // 운영자가 수집을 껐다(purge 로 행 삭제) 다시 켜도 앱은 세션 중에 설정을 다시 읽지 않아(세션당 1회 GET) 장부가
+    // "이미 올렸다"고 막았다. 하루 1회 전량 재기준이 그 유일한 복원 경로다.
+    let host = "v0241-daily-rebaseline"
+    let store = tgStore(host: host)
+    defer { tgCancelTasks(store) }
+    let usage = tgUsage(claudeDaily: ["2026-09-01": 100, "2026-09-02": 200])
+
+    await store.uploadTokenUsageDailyIfNeeded(usage: usage, account: nil, generation: store.sessionGeneration, now: tgNow)
+    #expect(tgDailyBodies(host: host).count == 1)
+    #expect(store.lastUploadedDailyBaselineDay == "2026-09-03")
+
+    // 같은 날에는 안 바뀐 값을 다시 올리지 않는다(재기준이 스로틀을 무력화하면 안 된다).
+    await store.uploadTokenUsageDailyIfNeeded(
+        usage: usage, account: nil, generation: store.sessionGeneration, now: tgNow.addingTimeInterval(3_600))
+    #expect(tgDailyBodies(host: host).count == 1)
+
+    // KST 날짜가 바뀌면 그 달치를 **통째로** 다시 올린다.
+    await store.uploadTokenUsageDailyIfNeeded(
+        usage: usage, account: nil, generation: store.sessionGeneration, now: tgNow.addingTimeInterval(24 * 3_600))
+    #expect(tgDailyBodies(host: host).count == 2)
+    #expect(try #require(tgDailyBodies(host: host).last).count == 2, "재기준 뒤에도 바뀐 날만 보냈다 — 지워진 날은 복원되지 않는다")
+    #expect(store.lastUploadedDailyBaselineDay == "2026-09-04")
+
+    // 게이트 배선: usage 가 하나도 안 바뀐 다음 날 주기에도 월간 변경 게이트가 열려 일별이 다시 나간다.
+    let cycleHost = "v0241-daily-rebaseline-cycle"
+    let cycle = tgStore(host: cycleHost)
+    defer { tgCancelTasks(cycle) }
+    await cycle.uploadTokenUsageIfNeeded(usage: usage, account: nil, accountStatus: .ok, now: tgNow)
+    #expect(tgDailyBodies(host: cycleHost).count == 1)
+    await cycle.uploadTokenUsageIfNeeded(usage: usage, account: nil, accountStatus: .ok, now: tgNow.addingTimeInterval(120))
+    #expect(tgDailyBodies(host: cycleHost).count == 1, "같은 날 안 바뀐 값이 다시 나갔다")
+    await cycle.uploadTokenUsageIfNeeded(usage: usage, account: nil, accountStatus: .ok, now: tgNow.addingTimeInterval(24 * 3_600))
+    #expect(tgDailyBodies(host: cycleHost).count == 2, "날짜가 바뀌었는데 게이트가 열리지 않았다")
 }
 
 @MainActor
@@ -485,9 +634,11 @@ func insightsLoadMergesServerAndLocalIntoTheTokenGridWithoutTouchingTheWorkGrass
 
 @MainActor
 @Test
-func insightsLoadKeepsTheWorkGrassWhenTheTokenFetchFailsAndSkipsItWhenOptedOut() async {
-    // (1) 서버 일별 조회가 실패해도(표 미배포·네트워크) 근무 쪽은 그대로 그려지고, 잔디는 로컬 몫만으로라도 선다.
-    let host = "insights-token-fetch-fails"   // 이 호스트엔 일별 픽스처가 없어 빈 배열이 온다
+func insightsLoadDrawsBothGrassesWithNoServerTokenRowsAndSkipsTheFetchWhenOptedOut() async {
+    // (1) 서버에 내 일별 행이 **하나도 없어도**(첫 배포 직후·새 계정) 근무 쪽은 그대로 그려지고, 토큰 잔디는 격자로 선다.
+    //     ※ 이 호스트는 빈 배열 200 = **성공**이다(예전 이름 …WhenTheTokenFetchFails 는 그 사실과 어긋났다).
+    //       진짜 5xx 실패 경로와 폴백 겹치기는 insightsLoadOverlaysLocalOnThePreviousGridWhenTheTokenFetchDies 가 태운다.
+    let host = "insights-token-empty-rows"
     let store = tgStore(host: host)
     defer { tgCancelTasks(store) }
 
@@ -512,6 +663,63 @@ func insightsLoadKeepsTheWorkGrassWhenTheTokenFetchFailsAndSkipsItWhenOptedOut()
     store.discardInsightsIfWeekRolledOver()
     #expect(store.tokenDailyGrid == .empty)
     #expect(store.dailyGrid == .empty)
+}
+
+@MainActor
+@Test
+func insightsLoadOverlaysLocalOnThePreviousGridWhenTheTokenFetchDies() async {
+    // 리뷰 P2: 예전 폴백은 조회가 죽으면 **직전 잔디를 통째로** 물려줘, 그 사이 자란 오늘 칸의 로컬 값을 손에 쥐고도
+    // 버렸다(잔디가 그 자리에 얼어붙는다). 반대로 로컬만 쓰면 지난 달·다른 기기 몫(서버만 아는 값)이 통째로 사라진다.
+    // 그래서 칸별 max 다. 이 판정은 GET 이 **실제로 5xx 로 죽는** 호스트로 catch 경로를 태운다 —
+    // 빈 배열 200 은 '성공(행 없음)'이라 그 분기에 닿지 않아, 예전 테스트는 이 폴백을 한 번도 실행하지 않았다.
+    let host = "insights-token-get-fails"
+    let today = TokenDailyGrid.dayString(Date())
+    var local = TokenUsageMonthly(month: TokenUsageIncrementalScanner.kstMonthString(Date()))
+    local.claudeDaily = [today: 4_242]
+    let store = tgStore(host: host, localSnapshot: local)
+    defer { tgCancelTasks(store) }
+
+    // 직전 잔디: 서버만 아는 값(다른 기기·지난 주)이 첫 칸에 들어 있다.
+    var previous = TokenDailyGrid.build(daily: [:], now: Date())
+    previous.tokens[0][0] = 9_000_000
+    store.tokenDailyGrid = previous
+
+    await store.performLoadInsights()
+
+    #expect(store.tokenDailyGrid.tokens[0][0] == 9_000_000, "서버만 아는 지난 값이 사라졌다")
+    let last = store.tokenDailyGrid.weeks - 1
+    let todayIndex = store.tokenDailyGrid.days - 1 - last * WorkRhythmHeatmap.dayCount
+    #expect(store.tokenDailyGrid.tokens[last][todayIndex] == 4_242, "조회가 실패한 사이 자란 로컬 값이 반영되지 않았다(잔디가 얼었다)")
+    // 근무 쪽은 그대로다(토큰은 독립 실패).
+    #expect(store.dailyGrid.totalSeconds > 0, "토큰 조회 실패가 근무 잔디를 막았다")
+    #expect(store.insightsLoaded)
+    #expect(!store.insightsFailed)
+}
+
+@Test
+func overlayingKeepsTheLargerCellAndRefusesGridsFromAnotherWindow() {
+    let now = tgUTC("2026-09-03T03:00:00Z")
+    var a = TokenDailyGrid.build(daily: [:], now: now)
+    var b = TokenDailyGrid.build(daily: [:], now: now)
+    a.tokens[0][0] = 10
+    a.tokens[0][1] = 500
+    b.tokens[0][0] = 700
+    b.tokens[0][2] = 3
+    let merged = a.overlaying(b)
+    #expect(merged.tokens[0][0] == 700)   // 큰 쪽
+    #expect(merged.tokens[0][1] == 500)   // 나만 아는 값
+    #expect(merged.tokens[0][2] == 3)     // 상대만 아는 값
+    // 창이 다르면(주가 넘어감) 칸의 뜻이 달라 겹치지 않는다 — 잘못된 날에 값이 얹히는 것이 최악이다.
+    let otherWindow = TokenDailyGrid.build(daily: [:], now: now.addingTimeInterval(14 * 24 * 3_600))
+    #expect(a.overlaying(otherWindow) == a)
+    #expect(a.overlaying(.empty) == a)
+    #expect(TokenDailyGrid.empty.overlaying(a) == .empty)
+    // 미래 칸은 절대 채우지 않는다(직전 잔디가 더 뒤 시각에 지어졌더라도).
+    var future = TokenDailyGrid.build(daily: [:], now: now)
+    let lastWeek = future.weeks - 1
+    future.tokens[lastWeek][WorkRhythmHeatmap.dayCount - 1] = 999
+    let guarded = a.overlaying(future)
+    #expect(guarded.tokens[lastWeek][WorkRhythmHeatmap.dayCount - 1] == 0)
 }
 
 // MARK: - (D) SQL 계약 (20260903170000_token_usage_daily.sql)
@@ -562,7 +770,19 @@ func migrationContractTokenUsageDaily() throws {
     #expect(sql.contains("create trigger skip_token_usage_daily_when_opted_out"))
     #expect(sql.contains("execute function public.skip_token_usage_when_opted_out()"))
     #expect(sql.contains("create trigger touch_token_usage_daily_updated_at"))
-    #expect("skip_token_usage_daily_when_opted_out" < "touch_token_usage_daily_updated_at")
+    // ★ 이름 순서는 **파일에 실제로 적힌 create trigger 이름들**을 뽑아 비교한다. 예전엔 리터럴 둘을 비교했는데
+    //   ('skip…' < 'touch…') 그 단언은 언제나 참이라, create trigger 쪽 이름만 바꿔도 조용히 통과하는 죽은 판정이었다.
+    let triggerNames = sql.components(separatedBy: "create trigger ").dropFirst()
+        .map { String($0.prefix { !$0.isWhitespace }) }
+        .filter { $0.hasSuffix("_token_usage_daily_updated_at") || $0.hasSuffix("_token_usage_daily_when_opted_out") }
+    #expect(triggerNames.count == 2, "일별 표 트리거가 2개가 아니다: \(triggerNames)")
+    #expect(triggerNames.sorted().first == "skip_token_usage_daily_when_opted_out",
+            "이름 순으로 도는데 터치가 먼저다 — 수집 거부자의 행에 updated_at 이 찍힌다: \(triggerNames.sorted())")
+    // 마이그레이션 자신도 리터럴이 아니라 **카탈로그(pg_trigger.tgname)** 를 읽어 되묻는다.
+    #expect(sql.contains("select array_agg(t.tgname order by t.tgname) into tgnames from pg_trigger t"))
+    #expect(sql.contains("if tgnames[1] <> 'skip_token_usage_daily_when_opted_out' then"))
+    #expect(!sql.contains("if 'skip_token_usage_daily_when_opted_out' > 'touch_token_usage_daily_updated_at' then"),
+            "리터럴끼리 비교하는 죽은 단언이 되살아났다")
     #expect(sql.contains("new.updated_at := now();"))
 
     // purge 확장: 플래그 하나로 상태가 완결돼야 한다(월 표·옛 표와 함께 일별 표도 지운다).
@@ -631,10 +851,25 @@ func sourceContractDailyUploadSitsAfterTheMonthlyUpsert() throws {
     let assign = try #require(tail.range(of: "lastUploadedDaily = current"))
     let catchStart = try #require(tail.range(of: "} catch {"))
     #expect(assign.upperBound < catchStart.lowerBound, "실패 경로에서 장부를 갱신하면 그 날들이 영영 재시도되지 않는다")
+    // 그리고 그 '다음 주기'가 실제로 오도록, 실패는 재시도 대기를 세우고(catch 안쪽) 월간 변경 게이트가 그것을 본다.
+    let pending = try #require(tail.range(of: "tokenDailyRetryPending = true"))
+    #expect(catchStart.upperBound < pending.lowerBound, "재시도 대기를 성공 경로에서 세우면 아무 뜻이 없다")
+    #expect(sync.contains("|| dailyDue"), "월간 변경 게이트가 일별 재시도/재기준을 보지 않는다 — 재시도가 영영 안 온다")
+    #expect(sync.contains("tokenDailyRetryPending || lastUploadedDailyBaselineDay != TokenDailyGrid.dayString(now)"))
+
+    // 서비스는 codex_account 키 유무로 **묶음을 갈라** 보낸다 — 혼합 키 배열은 PostgREST 가 400 PGRST102 로
+    // 통째 거절하므로(리뷰 P0), 배열을 그대로 싣는 경로가 남으면 Codex 사용자의 일별 행이 한 줄도 안 올라간다.
+    let service = tgStrippingComments(try String(contentsOf: tgRepoURL("Sources/check/SupabaseWorkService.swift"), encoding: .utf8))
+    #expect(service.contains("rows.filter { $0.codexAccount != nil }"))
+    #expect(service.contains("for group in groups where !group.isEmpty"))
+    #expect(!service.contains("body: rows,"), "배열을 통째로 POST 하는 경로가 남아 있다")
 
     let insights = tgStrippingComments(try String(contentsOf: tgRepoURL("Sources/check/WorkTimerStoreInsights.swift"), encoding: .utf8))
     #expect(insights.contains("since: TokenDailyGrid.dayString(since)"))
     #expect(insights.contains("service.fetchMyTokenDaily("))
     // 병합은 순수 함수로 — 스토어 안에 산식을 다시 쓰면 테스트가 보는 함수와 앱이 쓰는 산식이 갈라진다.
     #expect(insights.contains("TokenDailyMerge.merged(server: TokenDailyMerge.serverTotals(tokenRows), local: local)"))
+    // 조회 실패 폴백은 직전 잔디를 **통째로 물려주지 않는다** — 로컬로 새로 지은 잔디에 칸별 max 로 얹는다(리뷰 P2).
+    #expect(insights.contains("TokenDailyGrid.build(daily: local, now: now).overlaying(previousTokenGrid)"))
+    #expect(!insights.contains("tokenGrid = previousTokenGrid"), "직전 잔디를 통째로 물려주면 그 사이 자란 오늘 칸이 얼어붙는다")
 }

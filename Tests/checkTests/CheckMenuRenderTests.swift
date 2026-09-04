@@ -5301,6 +5301,12 @@ func insightsPanelHidesTheTokenGrassWhenTokenCollectionIsOptedOut() throws {
     #expect(Double(withSection) / 2.0 == 695)
     #expect(Double(withoutSection) / 2.0 == 660)
     #expect(withoutSection < withSection)
+    // 같은 스토어에서 **플래그만** 뒤집어도 다음 렌더에서 섹션이 사라진다(값 배선). 서버 설정은 로그인 수십 초 뒤에
+    // 도착하므로 이 전환이 실제 화면에서 일어난다 — SwiftUI 가 그 전환을 보려면 store.tokenUsageCollect 가
+    // 관찰 대상이어야 하고, 그 배선은 V0241TokenGrassTests 의 tokenUsageCollectIsObservable… 이 따로 못 박는다
+    // (ImageRenderer 는 매번 새 뷰를 지어 그리므로 관찰 결함을 그 자체로는 볼 수 없다).
+    collecting.tokenUsageCollect = false
+    #expect(try #require(renderedPixelHeight(CheckMenuView(store: collecting))) == withoutSection)
     saveV0211Snapshot(try renderPNG(CheckMenuView(store: optedOut, previewClipsOverflowList: true)), "insights-token-opted-out")
 
     // 근무 기록이 하나도 없어도 토큰 잔디에 값이 있으면 본문을 그린다(근무 타이머는 안 쓰고 AI 만 쓰는 사용자).

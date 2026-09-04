@@ -97,8 +97,10 @@ extension WorkTimerStore {
             let ongoingStart = startedAt
             let (computed, tokenGrid) = await Task.detached(priority: .userInitiated) {
                 let insights = WorkInsightsComputation.build(rows: rows, now: now, goalSeconds: goalSeconds, ongoingStart: ongoingStart)
-                // 토큰 잔디: 날짜별 max(서버 기기 합, 로컬). 서버 조회가 실패했으면 직전 잔디를 물려주고(같은 주 — 주가 바뀌면
-                // discardInsightsIfWeekRolledOver 가 먼저 비운다), 그것도 없으면 로컬 몫만으로라도 그린다.
+                // 토큰 잔디: 날짜별 max(서버 기기 합, 로컬). 서버 조회가 **실패**했으면 로컬 몫으로 새로 지은 잔디에 직전 잔디를
+                // 칸별 max 로 얹는다(overlaying) — 직전 잔디를 통째로 물려주면 그 사이 자란 오늘 칸의 로컬 값이 반영되지 않아
+                // 잔디가 얼어붙고, 로컬만 쓰면 지난 달·다른 기기 몫(서버만 아는 값)이 사라진다. 직전 잔디가 없거나 창이 다르면
+                // (주가 바뀌면 discardInsightsIfWeekRolledOver 가 먼저 비운다) 로컬 몫만으로 선다.
                 let tokenGrid: TokenDailyGrid
                 if !collectsTokens {
                     tokenGrid = .empty
@@ -106,10 +108,8 @@ extension WorkTimerStore {
                     let local = TokenDailyMerge.localTotals(usage: localTokenUsage, account: accountSnapshot)
                     if let tokenRows {
                         tokenGrid = TokenDailyGrid.build(daily: TokenDailyMerge.merged(server: TokenDailyMerge.serverTotals(tokenRows), local: local), now: now)
-                    } else if previousTokenGrid != .empty {
-                        tokenGrid = previousTokenGrid
                     } else {
-                        tokenGrid = TokenDailyGrid.build(daily: local, now: now)
+                        tokenGrid = TokenDailyGrid.build(daily: local, now: now).overlaying(previousTokenGrid)
                     }
                 }
                 return (insights, tokenGrid)

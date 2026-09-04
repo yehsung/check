@@ -34,12 +34,15 @@ final class URLProtocolStub: URLProtocol {
     }
 
     override func startLoading() {
-        Self.record(request: request, bodyText: Self.bodyText(from: request))
+        // 본문은 **한 번만** 읽는다 — httpBodyStream 은 소비되면 두 번째 읽기가 빈 문자열이라, 기록과 판정이
+        // 같은 값을 봐야 한다(PostgREST 규칙 재현이 본문을 본다).
+        let body = Self.bodyText(from: request)
+        Self.record(request: request, bodyText: body)
 
-        let responseData = Self.responseData(for: request)
+        let responseData = Self.responseData(for: request, body: body)
         let response = HTTPURLResponse(
             url: request.url!,
-            statusCode: Self.statusCode(for: request),
+            statusCode: Self.statusCode(for: request, body: body),
             httpVersion: nil,
             headerFields: ["Content-Type": "application/json"]
         )!
@@ -133,7 +136,33 @@ final class URLProtocolStub: URLProtocol {
         return String(data: data, encoding: .utf8) ?? ""
     }
 
-    private static func statusCode(for request: URLRequest) -> Int {
+    /// PostgREST 규칙: **배열 본문의 키 집합이 행마다 다르면** 스키마를 보기도 전에 400 PGRST102 로 통째 거절된다
+    /// ("All object keys must match" — 프로덕션 PostgREST 14.5 실측). 이 스텁이 그 규칙을 흉내내지 않던 동안,
+    /// codex_account 가 있는 날과 없는 날이 섞인 일별 upsert 본문이 계약 테스트에서 초록으로 통과했다(v0.2.41 리뷰 P0) —
+    /// 그 모양은 실제 서버에 **단 한 줄도** 저장되지 않는다. 모든 /rest/v1 POST 에 걸어 새 배열 업로드도 함께 막는다.
+    static func hasMismatchedObjectKeys(_ body: String) -> Bool {
+        guard let rows = (try? JSONSerialization.jsonObject(with: Data(body.utf8))) as? [[String: Any]], rows.count > 1
+        else { return false }
+        return Set(rows.map { Set($0.keys) }).count > 1
+    }
+
+    private static func statusCode(for request: URLRequest, body: String) -> Int {
+        if request.url?.path.hasPrefix("/rest/v1/") == true, request.httpMethod == "POST",
+           hasMismatchedObjectKeys(body) {
+            return 400
+        }
+        // 일별 토큰 upsert 만 5xx 로 떨어뜨리는 호스트(v0.2.41): 실패가 장부를 갱신하지 않고 재시도 플래그를 세우는지,
+        // 그리고 서버 조회 실패가 잔디를 얼리지 않는지 검증용. 월간 표는 정상 응답해야 '일별 실패는 독립'을 볼 수 있다.
+        if request.url?.host?.hasPrefix("v0241-daily-fails") == true,
+           request.url?.path == "/rest/v1/token_usage_device_daily" {
+            return 500
+        }
+        // 일별 토큰 **조회**만 5xx 인 호스트: performLoadInsights 의 catch(tokenRows = nil) 와 폴백 겹치기를 실제로 태운다.
+        if request.url?.host == "insights-token-get-fails",
+           request.url?.path == "/rest/v1/token_usage_device_daily",
+           request.httpMethod == "GET" {
+            return 500
+        }
         if request.url?.host == "invalid-key" {
             return 401
         }
@@ -211,7 +240,12 @@ final class URLProtocolStub: URLProtocol {
         return request.url?.path == "/rest/v1/work_sessions" ? 201 : 200
     }
 
-    private static func responseData(for request: URLRequest) -> Data {
+    private static func responseData(for request: URLRequest, body: String) -> Data {
+        // 위 statusCode 의 400 과 짝. 실제 PostgREST 응답 모양 그대로다(code/message).
+        if request.url?.path.hasPrefix("/rest/v1/") == true, request.httpMethod == "POST",
+           hasMismatchedObjectKeys(body) {
+            return Data(#"{"code":"PGRST102","message":"All object keys must match","details":null,"hint":null}"#.utf8)
+        }
         if request.url?.host == "invalid-key" {
             return Data(
                 """

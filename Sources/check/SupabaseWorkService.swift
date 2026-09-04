@@ -1078,16 +1078,30 @@ actor SupabaseWorkService {
     /// 호출측(WorkTimerStoreSync.uploadTokenUsageDailyIfNeeded)이 **바뀐 날만** 골라 넘기므로 행 수는 보통 한두 개다.
     /// 빈 배열이면 요청을 **아예 보내지 않는다** — PostgREST 는 빈 배열 upsert 에도 200 을 돌려주지만 30초마다 헛왕복이 될 뿐이다.
     /// 행에 user_id/device_id 가 이미 실려 있어 따로 받지 않는다(같은 값을 두 경로로 받으면 어긋날 자리가 생긴다).
+    ///
+    /// ★ **키 집합이 같은 행끼리만 한 요청에 담는다**(v0.2.41 리뷰 P0). PostgREST 는 배열 본문의 키 집합이 행마다 다르면
+    ///   스키마를 보기도 **전에** 400 PGRST102("All object keys must match")로 **본문 전체**를 거절한다(프로덕션 14.5 실측).
+    ///   그런데 codex_account 는 계정 버킷이 없는 날엔 키가 통째로 빠지는 것이 요건이라(TokenUsageDailyUpsertRow 주석 —
+    ///   0 을 실으면 다른 기기가 올린 계정값을 밀어 버린다), Codex 를 쓰는 사람의 한 달치에는 '있는 날'과 '없는 날'이 **반드시**
+    ///   섞인다. 그 배열을 통째로 보내면 그 사람의 일별 행이 서버에 **단 한 줄도** 올라가지 않고(400 은 조용히 삼켜진다),
+    ///   장부도 갱신되지 않아 다음 주기가 같은 혼합 본문을 다시 보내는 영구 고착이 된다.
+    ///   그래서 `?columns=` 로 키를 강제하는 대신(그러면 빠진 키가 **null 로 쓰여** 계정값이 지워진다) 두 묶음으로 갈라
+    ///   각각 보낸다 — 요청은 최대 2건이고, 빈 묶음은 건너뛴다. 첫 묶음이 실패하면 그대로 던져 장부가 갱신되지 않는다
+    ///   (upsert 는 멱등이라 다음 주기가 둘 다 다시 보내도 안전하다).
     func upsertTokenUsageDaily(accessToken: String, rows: [TokenUsageDailyUpsertRow]) async throws {
         guard !rows.isEmpty else { return }
-        try await sendNoBody(
-            path: "/rest/v1/token_usage_device_daily",
-            method: "POST",
-            queryItems: [URLQueryItem(name: "on_conflict", value: "user_id,day,device_id")],
-            body: rows,
-            accessToken: accessToken,
-            prefer: "resolution=merge-duplicates,return=minimal"
-        )
+        // 순서는 결정적으로 둔다(계정값 있는 묶음 먼저) — 계약 테스트·로그가 요청 순서를 읽을 수 있어야 한다.
+        let groups = [rows.filter { $0.codexAccount != nil }, rows.filter { $0.codexAccount == nil }]
+        for group in groups where !group.isEmpty {
+            try await sendNoBody(
+                path: "/rest/v1/token_usage_device_daily",
+                method: "POST",
+                queryItems: [URLQueryItem(name: "on_conflict", value: "user_id,day,device_id")],
+                body: group,
+                accessToken: accessToken,
+                prefer: "resolution=merge-duplicates,return=minimal"
+            )
+        }
     }
 
     /// 내 일별 토큰 행(기기별)을 since(KST 'YYYY-MM-DD') 이후로 읽는다 — 토큰 잔디의 서버 몫. 자기 행 select 는 RLS 정책으로

@@ -509,7 +509,8 @@ func lapEconomyCopyIsCharacterForCharacter() {
 
     // 상한 경고: `capped` 가 "지금 잔량이 가득이다"로 바뀌어 가득한 동안 계속 떠 있으므로,
     // 아직 아무것도 안 놓친 사람에게도 뜬다 — 과거형("놓쳤어요")은 그 사람에게 거짓말이다.
-    #expect(MissionCopy.cappedNotice == "가득 찼어요 — 쓰지 않으면 놓쳐요")
+    // v0.2.41 에서 뒷말이 한 번 더 바뀌었다: 소멸이 **대기**가 되어(20260903190000) 안 써도 하나는 남는다.
+    #expect(MissionCopy.cappedNotice == "가득 찼어요 — 3시간을 채워도 대기해요")
 
     // 잔량 0 캡션: 0개인 사람이 알아야 할 것은 미션 화면이 어디 있는지가 아니라 **언제 다시 생기는지**다.
     #expect(UltraPanelCopy.heroCaption(balance: 0, hasFailed: false) == "근무 3시간마다 하나씩 생겨요")

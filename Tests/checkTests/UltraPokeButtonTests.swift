@@ -265,7 +265,9 @@ struct UltraPokeButtonTests {
     @Test func cappedMissionSaysWhyItGaveNothing() {
         let capped = MissionProgress(kind: .todayThreeHours, progress: 1, claimedToday: false, cappedToday: true, detail: "다음 하나까지 0분")
         #expect(MissionCopy.chip(capped) == .capped)
-        #expect(MissionCopy.cappedNotice == "가득 찼어요 — 쓰지 않으면 놓쳐요")
+        // v0.2.41: 소멸이 **대기**로 바뀌어(서버 20260903190000) "놓쳐요"가 거짓이 됐다.
+        // 안 써도 하나는 남지만, 대기는 하나뿐이고 그동안 카운터가 멈추므로 쓰는 편이 여전히 이득이다.
+        #expect(MissionCopy.cappedNotice == "가득 찼어요 — 3시간을 채워도 대기해요")
         #expect(MissionCopy.detail(capped) == MissionCopy.cappedNotice)
         // 지난 일이 아니라 **지금 상태**를 말한다. 과거형은 아직 아무것도 안 놓친 사람에게 거짓말이다.
         #expect(MissionCopy.cappedNotice.contains("놓쳤") == false)

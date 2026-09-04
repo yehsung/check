@@ -4414,6 +4414,9 @@ private func makeUltraPanelStore(
     missionCount: Int = 3,
     claimed: Bool = false,
     capped: Bool = false,
+    // v0.2.41: 3시간을 채워 두고 기다리는 중(서버 pending). 대기 중이면 잔량은 반드시 가득 차 있으므로
+    // 실제 화면에서는 capped 와 **함께** 참이다 — 그래서 아래 렌더 테스트도 둘을 함께 세운다.
+    pending: Bool = false,
     hasFailed: Bool = false,
     notice: String? = nil,
     // 오늘 받은 랩 수. 3시간 줄은 서버가 `claimed` 를 언제나 false 로 보내므로, 이 수가 "오늘 뭔가 받았다"를
@@ -4437,7 +4440,8 @@ private func makeUltraPanelStore(
             cappedToday: capped,
             // 랩 방식(v0.2.39)의 보조 문장은 완료가 아니라 **다음 하나까지 남은 시간**을 말한다.
             detail: "다음 하나까지 0분",
-            lapsGrantedToday: lapsGrantedToday
+            lapsGrantedToday: lapsGrantedToday,
+            isPending: pending
         ),
         MissionProgress(kind: .dailyFloor, progress: nil, claimedToday: true, cappedToday: false, detail: "잔량 0이면 1개로"),
         MissionProgress(kind: .arrivalStreak, progress: nil, claimedToday: true, cappedToday: false, detail: "5일 연속")
@@ -4495,6 +4499,36 @@ func ultraPanelDrawsEachChipStateDifferently() throws {
 
     savePokeUISnapshot(base, "ultra-panel-pending")
     savePokeUISnapshot(try renderPNG(CheckMenuView(store: capped)), "ultra-panel-capped")
+}
+
+/// v0.2.41 — **"가득 참"과 "대기 중"이 픽셀로 갈린다.**
+///
+/// 실제 서버 상태에서 이 둘은 **함께** 온다(대기하려면 잔량이 가득 차 있어야 한다). 그래서 화면이
+/// `cappedToday` 만 읽으면 대기는 통째로 안 보이고, 이미 3시간을 채워 둔 사람이 "가득 찼어요 —
+/// 3시간을 채워도 대기해요"라는 **일반 안내**만 보게 된다. 그 사람에게 필요한 문장은 경고가 아니라
+/// "하나 쓰면 받아요"라는 **행동 지시**다. 순수 함수 테스트는 어느 칩·문장을 골랐는지만 알고,
+/// 그것이 실제로 그려졌는지는 이 테스트만 안다.
+@MainActor
+@Test
+func ultraPanelDrawsPendingApartFromMerelyBeingFull() throws {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    // 가득 참(대기 아님): 아직 아무것도 못 채웠는데 잔량만 3인 아침.
+    let full = makeUltraPanelStore(balance: 3, missionCount: 1, capped: true, now: now)
+    let fullTwin = makeUltraPanelStore(balance: 3, missionCount: 1, capped: true, now: now)
+    // 대기: 3시간을 채워 뒀고 잔량도 가득하다(서버는 이 조합만 보낸다).
+    let waiting = makeUltraPanelStore(balance: 3, missionCount: 1, capped: true, pending: true, now: now)
+
+    let fullPNG = try renderPNG(CheckMenuView(store: full))
+    // 대조군: 같은 입력이면 바이트까지 같다(없으면 아래 부등식이 렌더 잡음과 구별되지 않는다).
+    #expect(fullPNG == (try renderPNG(CheckMenuView(store: fullTwin))))
+    #expect(
+        fullPNG != (try renderPNG(CheckMenuView(store: waiting))),
+        "대기 중인 화면이 그냥 가득 찬 화면과 같다 — 채워 둔 하나가 있다는 사실이 화면에서 사라졌다."
+    )
+    // 보상 대기(평상시)와도 달라야 한다. 셋이 같은 그림이면 칩이 아예 안 그려지고 있는 것이다.
+    let plain = try renderPNG(CheckMenuView(store: makeUltraPanelStore(missionCount: 1, now: now)))
+    #expect(plain != (try renderPNG(CheckMenuView(store: waiting))))
+    savePokeUISnapshot(try renderPNG(CheckMenuView(store: waiting)), "ultra-panel-pending-lap")
 }
 
 @MainActor
@@ -4601,6 +4635,9 @@ func theMissionRowAsksMissionCopyInsteadOfInventingItsOwnWording() throws {
     #expect(row.contains("MissionCopy.detail(mission)"), "보조문장을 뷰가 직접 만든다 — 상한(가득 참) 사실이 화면에서 사라진다.")
     #expect(!row.contains("mission.detail"), "뷰가 원본 detail 을 직접 읽는다 = MissionCopy.detail 의 상한 분기를 우회한다.")
     #expect(!row.contains("mission.cappedToday"), "뷰가 상한을 스스로 판정한다 — 판정은 MissionCopy 한 곳이어야 한다.")
+    // v0.2.41: 대기도 같은 규약이다. 뷰가 isPending 을 직접 읽으면 "대기 → 가득 참 → 받음 → 보상"
+    // 우선순위가 두 곳에 생기고, 그중 한 곳만 고쳐지는 날이 온다.
+    #expect(!row.contains("mission.isPending"), "뷰가 대기를 스스로 판정한다 — 판정은 MissionCopy 한 곳이어야 한다.")
     // ★ v0.2.39: 아이콘 착색은 `claimedToday` **하나로는 못 정한다.** 3시간 줄의 claimed 는 서버가
     //   언제나 false 로 보내므로(랩이 또 열려 있어 그날 치를 닫을 수 없다), 랩 수를 안 읽으면
     //   오늘 세 개를 받은 사람의 아이콘이 영영 안 물들고 화면은 "아직 아무것도 안 줬다"고 말한다.
@@ -4613,6 +4650,13 @@ func theMissionRowAsksMissionCopyInsteadOfInventingItsOwnWording() throws {
     // 죽은 문구처럼 보여도 뷰가 리터럴로 베껴 쓰면 안 된다는 계약은 그대로다.
     #expect(!row.contains(MissionCopy.claimedChip))
     #expect(!row.contains(MissionCopy.cappedChip))
+    #expect(!row.contains(MissionCopy.pendingChip))
+    #expect(!row.contains(MissionCopy.pendingNotice))
+    // v0.2.41: 대기 칩이 **실제로 그 문구로** 그려지는가. 픽셀 비교로는 못 가른다 — 같은 줄의
+    // 보조 문장이 대기 문구로 함께 바뀌어 두 그림이 어차피 다르기 때문이다. 그래서 칩을 통째로
+    // 지우거나 "가득 참" 칩을 대신 그려도 렌더 테스트는 초록이다(실측한 함정과 같은 자리).
+    #expect(row.contains("case .pending:"), "대기 칩 가지가 없다 — 대기가 칩 없이 그려진다.")
+    #expect(row.contains("MissionCopy.pendingChip"), "대기 칩이 자기 문구를 안 쓴다.")
 }
 
 

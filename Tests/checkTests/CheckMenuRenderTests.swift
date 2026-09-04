@@ -1059,6 +1059,114 @@ private enum RenderError: Error {
     case failed
 }
 
+/// 행 하나를 픽셀로 들고 있는 값. 부분 띠 비교와 잉크 세로 범위 측정을 **같은 버퍼**에서 한다.
+private struct RowPixelBuffer {
+    let bytes: [UInt8]
+    let pixelsWide: Int
+    let pixelsHigh: Int
+    let bytesPerPixel: Int
+
+    private func rgb(_ x: Int, _ y: Int) -> (Int, Int, Int) {
+        let i = (y * pixelsWide + x) * bytesPerPixel
+        return (Int(bytes[i]), Int(bytes[i + 1]), Int(bytes[i + 2]))
+    }
+
+    // scale 2 라 1pt = 2px.
+    private func clampX(_ points: CGFloat) -> Int { min(pixelsWide, max(0, Int(points * 2))) }
+
+    /// 가로 구간(pt)만 잘라 낸 픽셀. 구간을 좁히면 "왼쪽 열을 바꿔도 오른쪽 숫자 열은 안 움직였다" 같은 국소 주장이 된다.
+    func slice(fromPoints: CGFloat, toPoints: CGFloat) -> [UInt8] {
+        let startX = clampX(fromPoints)
+        let endX = max(startX + 1, clampX(toPoints))
+        var out: [UInt8] = []
+        out.reserveCapacity((endX - startX) * pixelsHigh * bytesPerPixel)
+        for y in 0..<pixelsHigh {
+            let base = (y * pixelsWide + startX) * bytesPerPixel
+            out.append(contentsOf: bytes[base..<(base + (endX - startX) * bytesPerPixel)])
+        }
+        return out
+    }
+
+    /// 가로 구간(pt)에서 카드 배경과 다른 픽셀이 있는 세로 범위(px). 이름/캡션 열이 세로로 어디에 얼마나 놓였는지 재는 자다.
+    /// 잉크가 없으면 nil.
+    func inkRowSpan(fromPoints: CGFloat, toPoints: CGFloat) -> (first: Int, last: Int)? {
+        let startX = clampX(fromPoints)
+        let endX = max(startX + 1, clampX(toPoints))
+        // 기준색 = 이 띠의 위쪽 4px 지점(카드 채움). 내용은 세로 중앙에 놓이므로 이 높이는 늘 배경이다.
+        let background = rgb(startX, 4)
+        var first: Int? = nil
+        var last = 0
+        // 위아래 3px 은 건너뛴다 — 카드 테두리 1px 선이 폭 전체에 깔려 있어, 안 세면 모든 띠의 잉크가 온 높이가 된다.
+        for y in 3..<max(4, pixelsHigh - 3) {
+            var hasInk = false
+            for x in startX..<endX {
+                let c = rgb(x, y)
+                // 안티에일리어싱 가장자리를 잉크로 세지 않도록 채널 차 12 를 문턱으로 둔다.
+                if abs(c.0 - background.0) > 12 || abs(c.1 - background.1) > 12 || abs(c.2 - background.2) > 12 {
+                    hasInk = true
+                    break
+                }
+            }
+            if hasInk {
+                if first == nil { first = y }
+                last = y
+            }
+        }
+        guard let firstRow = first else { return nil }
+        return (firstRow, last)
+    }
+}
+
+/// 두 행을 **한 번의 렌더 패스**로 위아래에 그려 각각의 픽셀을 돌려준다.
+///
+/// 왜 한 패스인가(실측 근거): 렌더를 두 번 해서 "그림이 같다"를 주장하면 전체 스위트(1,507 테스트) 부하 아래서
+/// 드물게 어긋난다 — 격리 실행에서 완전히 같던 두 렌더가 전체 실행에서 한 번 달라졌다(118초 지연 구간).
+/// 같은 패스 안에서 비교하면 폰트·외형·메모리 압력 같은 전역 상태가 두 행에 똑같이 걸려 비교가 결정적이다.
+/// PNG 바이트 비교를 안 쓰는 이유도 같은 결: 픽셀이 같아도 인코딩 바이트는 갈릴 수 있다(실측 — `.help(…)` 문구만
+/// 다른 두 렌더의 PNG 길이가 26,308 vs 26,279 였다).
+@MainActor
+private func stackedRowPixels(
+    _ top: some View,
+    _ bottom: some View,
+    width: CGFloat,
+    rowHeight: CGFloat = 62
+) throws -> (top: RowPixelBuffer, bottom: RowPixelBuffer) {
+    // 각 행 위아래에 같은 두께의 투명 여백을 둔다 — 여백 없이 붙여 놓으면 위 카드의 테두리는 그림 가장자리에,
+    // 아래 카드의 테두리는 그림 안쪽 이음매에 걸려 1px 선의 안티에일리어싱이 서로 달라진다(실측: 그 두 줄에서만
+    // 354픽셀이 어긋났다). 여백을 주면 두 카드의 주변 조건이 같아져 카드 안쪽 비교가 결정적이 된다.
+    let pad: CGFloat = 8
+    let stacked = VStack(spacing: 0) {
+        top.frame(width: width, height: rowHeight).padding(.vertical, pad)
+        bottom.frame(width: width, height: rowHeight).padding(.vertical, pad)
+    }
+    let renderer = ImageRenderer(content: stacked.frame(width: width).fixedSize())
+    renderer.scale = 2
+    guard let image = renderer.nsImage,
+          let tiffData = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiffData),
+          let base = bitmap.bitmapData
+    else {
+        throw RenderError.failed
+    }
+    let bytesPerPixel = bitmap.bitsPerPixel / 8
+    let padPixels = Int(pad * 2)
+    let rowPixels = Int(rowHeight * 2)
+    let blockPixels = rowPixels + padPixels * 2
+    guard bitmap.pixelsHigh == blockPixels * 2 else { throw RenderError.failed }
+    // 여백을 걷어내고 **카드 영역만** 잘라 낸다 — 돌려주는 버퍼의 좌표계는 행 하나를 단독으로 그린 것과 같다.
+    func buffer(block: Int) -> RowPixelBuffer {
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(bitmap.pixelsWide * rowPixels * bytesPerPixel)
+        let firstRow = block * blockPixels + padPixels
+        for y in firstRow..<(firstRow + rowPixels) {
+            let row = base + y * bitmap.bytesPerRow
+            bytes.append(contentsOf: UnsafeBufferPointer(start: row, count: bitmap.pixelsWide * bytesPerPixel))
+        }
+        return RowPixelBuffer(bytes: bytes, pixelsWide: bitmap.pixelsWide, pixelsHigh: rowPixels, bytesPerPixel: bytesPerPixel)
+    }
+    return (buffer(block: 0), buffer(block: 1))
+}
+
 /// 평균 내림차순 N팀 리더보드 표본(스크롤 상한 검증용). 우리 팀(stubTeamID)은 포함하지 않는다.
 /// member_count 1 이라 평균 = 총합이라 순서/상한 검증에 영향 없다.
 private func manyLeaderboardEntries(count: Int) -> [TeamLeaderboardEntry] {
@@ -1101,8 +1209,8 @@ private func makeLoginStore(syncMessage: String) -> WorkTimerStore {
 
 /// 뷰를 340pt 폭 고정으로 렌더한 뒤 PNG 픽셀 높이를 돌려준다. 높이 동일성 비교 전용.
 @MainActor
-private func renderedPixelHeight(_ view: some View) -> Int? {
-    let renderer = ImageRenderer(content: view.frame(width: 340).fixedSize())
+private func renderedPixelHeight(_ view: some View, width: CGFloat = 340) -> Int? {
+    let renderer = ImageRenderer(content: view.frame(width: width).fixedSize())
     renderer.scale = 2
     guard let image = renderer.nsImage,
           let tiffData = image.tiffRepresentation,
@@ -1217,14 +1325,17 @@ private func makeTokenBoardStore(memberCount: Int = 7) -> WorkTimerStore {
     // 축약 없는 전체 숫자 표기(콤마)와 정렬 순서(등수 배지 없음)·"나" 칩을 함께 보이도록 큰 값/0 과 타팀 이름을 섞는다.
     // 이름은 팀을 넘나든다(전체 공개) — 같은 팀/타팀 구분 없이 이번 달 소모량 순위로 한데 모인다.
     // 오늘분: 대부분 오늘 키(today)로 "오늘 +N" 이 뜨고, 한 명(u4)은 스테일 날짜(어제)라 "오늘 +0"으로 균일 표시된다.
+    // 도구 구성(issue #5): Claude 전용(u1) · Codex 비중이 큰 혼합(u2) · 계정 집계가 로컬보다 큰 내 행(u-me) ·
+    // Codex 전용(u4) · 만/천 단위 혼합(u5) · 한 번도 안 올린 사람(u7·u8, 캡션 줄 없음)을 한 화면에 모은다.
+    // 각 행의 total 은 서버 규약(claude 합 + greatest(codex 로컬, codex 계정))과 일치시켜 캡션 두 값의 합이 총합과 맞물린다.
     let today = TokenUsageDayKey.current()
     let stale = "2020-01-01"  // 오늘이 아닌 날짜 — "오늘 +0 토큰"으로 균일하게 표시되는지 확인.
     let pool: [TokenBoardEntry] = [
         TokenBoardEntry(userID: "u1", name: "영식", avatarURL: nil, total: 4_564_338_243, claudeInput: 4_000_000_000, claudeOutput: 500_000_000, claudeCacheRead: 60_000_000, claudeCacheCreation: 4_338_243, codexInput: 0, codexOutput: 0, todayTotal: 123_456_789, todayDate: today),
-        TokenBoardEntry(userID: "u2", name: "타팀 김서연", avatarURL: nil, total: 2_100_000_000, claudeInput: 1_800_000_000, claudeOutput: 250_000_000, claudeCacheRead: 50_000_000, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 42_000_000, todayDate: today),
-        TokenBoardEntry(userID: "u-me", name: "yesung", avatarURL: nil, total: 1_234_567_890, claudeInput: 1_000_000_000, claudeOutput: 200_000_000, claudeCacheRead: 34_000_000, claudeCacheCreation: 567_890, codexInput: 0, codexOutput: 0, todayTotal: 7_654_321, todayDate: today),
-        TokenBoardEntry(userID: "u4", name: "타팀 박도윤", avatarURL: nil, total: 640_000_000, claudeInput: 600_000_000, claudeOutput: 40_000_000, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 5_000_000, todayDate: stale),
-        TokenBoardEntry(userID: "u5", name: "민수", avatarURL: nil, total: 89_000, claudeInput: 80_000, claudeOutput: 9_000, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 1_234, todayDate: today),
+        TokenBoardEntry(userID: "u2", name: "타팀 김서연", avatarURL: nil, total: 2_100_000_000, claudeInput: 100_000_000, claudeOutput: 30_000_000, claudeCacheRead: 13_000_000, claudeCacheCreation: 0, codexInput: 1_957_000_000, codexOutput: 0, todayTotal: 42_000_000, todayDate: today, codexCacheRead: 1_400_000_000),
+        TokenBoardEntry(userID: "u-me", name: "yesung", avatarURL: nil, total: 1_534_567_890, claudeInput: 1_000_000_000, claudeOutput: 200_000_000, claudeCacheRead: 34_000_000, claudeCacheCreation: 567_890, codexInput: 12_000_000, codexOutput: 0, todayTotal: 7_654_321, todayDate: today, codexCacheRead: 3_000_000, codexAccountMonth: 300_000_000),
+        TokenBoardEntry(userID: "u4", name: "타팀 박도윤", avatarURL: nil, total: 640_000_000, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 640_000_000, codexOutput: 0, todayTotal: 5_000_000, todayDate: stale, codexCacheRead: 470_000_000),
+        TokenBoardEntry(userID: "u5", name: "민수", avatarURL: nil, total: 89_000, claudeInput: 80_000, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 9_000, codexOutput: 0, todayTotal: 1_234, todayDate: today),
         TokenBoardEntry(userID: "u6", name: "타팀 이하은", avatarURL: nil, total: 12_345, claudeInput: 12_345, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 0, todayDate: today),
         TokenBoardEntry(userID: "u7", name: "지현", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 0, todayDate: today),
         TokenBoardEntry(userID: "u8", name: "타팀 최시우", avatarURL: nil, total: 0, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0, codexInput: 0, codexOutput: 0, todayTotal: 0, todayDate: today)
@@ -2278,6 +2389,196 @@ func tokenBoardRowKeepsFullNumbersWhenPrivateChipCrowdsTheRow() throws {
     let c = try renderPNG(row(total: 4_564_338_243, todayTotal: 123_360_497), width: rowWidth)
     #expect(a != c)
     saveV0211Snapshot(a, "token-row-private-chip")
+}
+
+// MARK: - v0.2.41: 이름 밑 "Claude N · Codex N" 캡션 (issue #5)
+
+/// 도구 구성 캡션 렌더용 엔트리. total 을 인자로 고정해 **우측 숫자 열 내용은 그대로 둔 채** 왼쪽 캡션만 바꾼다.
+private func toolMixRowEntry(
+    total: Int,
+    claudeInput: Int = 0,
+    codexInput: Int = 0,
+    codexAccountMonth: Int? = nil,
+    name: String = "타팀 김서연"
+) -> TokenBoardEntry {
+    TokenBoardEntry(
+        userID: "u1", name: name, avatarURL: nil, total: total,
+        claudeInput: claudeInput, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0,
+        codexInput: codexInput, codexOutput: 0,
+        todayTotal: 123_360_493, todayDate: TokenUsageDayKey.current(),
+        codexCacheRead: 0, codexAccountMonth: codexAccountMonth
+    )
+}
+
+/// 292pt 행의 세 세로 구간(pt). 아바타(21~51pt)는 그라디언트라 같은 그림이라도 세로 위치에 따라 채널 값이
+/// ±1 흔들린다(실측) — 그래서 "같다"를 주장하는 비교에서는 아바타를 뺀 두 구간만 본다.
+private enum TokenRowColumns {
+    static let nameStart: CGFloat = 55     // 아바타 오른쪽(이름·캡션 열 시작)
+    static let numberStart: CGFloat = 196  // 우측 숫자 열 시작(= 폭 292 − 96)
+    static let width: CGFloat = 292
+}
+
+@MainActor
+@Test
+func tokenBoardRowDrawsToolMixCaptionWithoutMovingTheNumberColumn() throws {
+    // issue #5: "각자 어떤 플로우로 토큰을 쓰고 있는지" — 이름 밑 한 줄에 Claude/Codex 를 나눠 적는다.
+    // 이 행의 폭 예산은 292pt 로 고정돼 있고 우측 숫자 열이 절대 밀리면 안 된다(자릿수 오독은 이 화면의 최악 결함).
+    // 그래서 (a) 캡션이 실제로 픽셀을 바꾸는지와 (b) 그러는 동안 숫자 열은 한 픽셀도 안 움직이는지를 함께 못 박는다.
+    let rowWidth = TokenRowColumns.width
+    let total = 4_564_338_243
+    func row(_ entry: TokenBoardEntry, crowded: Bool = false) -> some View {
+        TokenBoardRowView(entry: entry, isMe: crowded, showsPrivateChip: crowded, showsToday: true)
+    }
+    func nameColumn(_ b: RowPixelBuffer) -> [UInt8] {
+        b.slice(fromPoints: TokenRowColumns.nameStart, toPoints: TokenRowColumns.numberStart)
+    }
+    func numberColumn(_ b: RowPixelBuffer) -> [UInt8] {
+        b.slice(fromPoints: TokenRowColumns.numberStart, toPoints: rowWidth)
+    }
+    // 같은 총합을 도구 구성만 달리해 담는다(총합·오늘값이 같으니 캡션 말고는 변수가 없다).
+    let claudeOnly = toolMixRowEntry(total: total, claudeInput: total)
+    let mixed = toolMixRowEntry(total: total, claudeInput: 2_564_338_243, codexInput: 2_000_000_000)
+    // 계정 집계(20억)가 로컬(1,200만)보다 크다 → 캡션은 계정 기준이라 mixed 와 **같은 캡션**이어야 한다.
+    let accountDriven = toolMixRowEntry(total: total, claudeInput: 2_564_338_243, codexInput: 12_000_000, codexAccountMonth: 2_000_000_000)
+    // 같은 로컬값에 계정 집계만 없는 행 — 캡션이 "Codex 1,200만"이라 accountDriven 과 달라야 한다.
+    let localOnly = toolMixRowEntry(total: total, claudeInput: 2_564_338_243, codexInput: 12_000_000)
+
+    let pair = try stackedRowPixels(row(claudeOnly), row(mixed), width: rowWidth)
+    // (a) 캡션 줄이 실제로 그려진다 — 도구 구성이 다르면 이름 열의 그림이 다르다.
+    #expect(nameColumn(pair.top) != nameColumn(pair.bottom))
+    // (b) 숫자 열은 그대로다 — 오른쪽 96pt 띠의 원시 픽셀이 완전히 같아야 한다.
+    #expect(numberColumn(pair.top) == numberColumn(pair.bottom))
+
+    // 캡션의 Codex 값은 codexEffective(로컬과 계정 집계 중 큰 쪽)다 — 우측 굵은 총합이 서버에서 그렇게 계산되기 때문.
+    let effectivePair = try stackedRowPixels(row(mixed), row(accountDriven), width: rowWidth)
+    #expect(nameColumn(effectivePair.top) == nameColumn(effectivePair.bottom))
+    #expect(numberColumn(effectivePair.top) == numberColumn(effectivePair.bottom))
+    // 로컬만 쓰면(회귀) accountDriven 이 localOnly 와 같은 그림이 된다 — 둘이 달라야 effective 를 썼다는 증거다.
+    let localPair = try stackedRowPixels(row(accountDriven), row(localOnly), width: rowWidth)
+    #expect(nameColumn(localPair.top) != nameColumn(localPair.bottom))
+
+    // 칩이 둘 붙는 가장 빡빡한 행(내 비공개 행)에서도 마찬가지다 — 캡션이 숫자 열을 밀어내지 않는다.
+    let crowdedPair = try stackedRowPixels(row(claudeOnly, crowded: true), row(mixed, crowded: true), width: rowWidth)
+    #expect(nameColumn(crowdedPair.top) != nameColumn(crowdedPair.bottom))
+    #expect(numberColumn(crowdedPair.top) == numberColumn(crowdedPair.bottom))
+
+    saveV0211Snapshot(try renderPNG(row(mixed).frame(height: 62), width: rowWidth), "token-row-tool-mix")
+}
+
+@MainActor
+@Test
+func tokenBoardRowKeepsRowHeightWithAndWithoutTheToolMixCaption() throws {
+    // 캡션 한 줄이 늘어도 행 높이 62pt 예산은 그대로여야 한다(넘치면 maxVisibleRows·창 700pt 상한까지 흔들린다).
+    // 실측(고정 높이 없이 그린 자연 높이): 캡션이 있든 없든 84px = 42pt — 아바타(30pt) + 세로 패딩(12pt)이
+    // 여전히 행 높이를 지배하고, 이름+캡션 두 줄(약 23pt)은 그 안에 통째로 들어간다. 그래서 rowHeight 는 62 그대로다.
+    let rowWidth: CGFloat = 292
+    func row(_ entry: TokenBoardEntry) -> some View {
+        TokenBoardRowView(entry: entry, showsToday: true)
+    }
+    // 아무것도 안 올린 사람(캡션 nil) — 줄 자체가 없어 이름이 예전처럼 세로 중앙에 남는다.
+    func zeroUsageEntry(total: Int) -> TokenBoardEntry {
+        TokenBoardEntry(
+            userID: "u7", name: "타팀 김서연", avatarURL: nil, total: total,
+            claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0,
+            codexInput: 0, codexOutput: 0, todayTotal: 0, todayDate: TokenUsageDayKey.current()
+        )
+    }
+    let plainEntry = zeroUsageEntry(total: 0)
+    #expect(plainEntry.toolUsageLabel == nil)
+    let captionedEntry = toolMixRowEntry(total: 4_564_338_243, claudeInput: 2_564_338_243, codexInput: 2_000_000_000)
+    let plainHeight = try #require(renderedPixelHeight(row(plainEntry), width: rowWidth))
+    let captionedHeight = try #require(renderedPixelHeight(row(captionedEntry), width: rowWidth))
+    #expect(plainHeight == captionedHeight)
+    #expect(captionedHeight <= 124)   // 62pt(scale 2 → 124px) 예산 안 — rowHeight/maxVisibleRows/창 상한 갱신 불필요.
+
+    // 이름 열(61~150pt: 아바타 오른쪽부터 숫자 열 왼쪽까지)의 잉크 범위를 재서 두 가지를 못 박는다.
+    let pair = try stackedRowPixels(row(plainEntry), row(captionedEntry), width: rowWidth)
+    let plainSpan = try #require(pair.top.inkRowSpan(fromPoints: 61, toPoints: 150))
+    let captionedSpan = try #require(pair.bottom.inkRowSpan(fromPoints: 61, toPoints: 150))
+    // (1) 캡션이 붙으면 이름 열의 잉크가 실제로 한 줄만큼 두꺼워진다(줄이 그려졌다는 실측 증거 — 20px → 46px).
+    #expect(captionedSpan.last - captionedSpan.first > plainSpan.last - plainSpan.first + 12)
+    // (2) 캡션이 nil 인 행은 이름이 세로 중앙 그대로다 — 여기서 빈 줄을 자리만 잡아 두면(nil 분기 제거)
+    //     이름이 위로 밀려 예전 행과 어긋난다. 잉크 중심이 행 중심에서 3px(1.5pt) 안이어야 한다.
+    let plainCenter = Double(plainSpan.first + plainSpan.last) / 2.0
+    #expect(abs(plainCenter - Double(pair.top.pixelsHigh) / 2.0) <= 3.0)
+    // 총합이 커도(우측 숫자 열이 길어져도) 캡션 없는 행의 이름 위치는 그대로다 — 두 열은 서로를 밀지 않는다.
+    let totalPair = try stackedRowPixels(row(plainEntry), row(zeroUsageEntry(total: 4_564_338_243)), width: rowWidth)
+    #expect(totalPair.top.inkRowSpan(fromPoints: 61, toPoints: 150)! == totalPair.bottom.inkRowSpan(fromPoints: 61, toPoints: 150)!)
+}
+
+@MainActor
+@Test
+func tokenBoardToolMixCaptionShrinksInsteadOfTruncating() throws {
+    // 이 화면의 최악 결함은 숫자가 잘려 자릿수를 오독하는 것이다("Codex 19.6억" → "Codex 1…" 은 20분의 1로 읽힌다).
+    // 캡션 줄도 같은 규칙을 따른다 — 좁으면 말줄임이 아니라 균일 축소(minimumScaleFactor)로 버틴다.
+    // 검증 방법(기존 회귀 테스트와 같은 관용구): 캡션 **끝자리만** 다른 두 행을 나란히 그려, 말줄임되면 사라질
+    // 자리의 변화가 그림에 남는지 본다. 잘리면 두 행의 캡션 영역이 완전히 같아진다.
+    let rowWidth: CGFloat = 292   // 실제 패널 행 폭(팝오버 안쪽) — 340pt 보다 좁아 잘림이 먼저 드러난다.
+    // 오른쪽 숫자 열(총합이 달라 어차피 다르다)과 아바타(그라디언트)를 뺀 이름·캡션 열만 본다.
+    let captionFrom = TokenRowColumns.nameStart
+    let captionTo = TokenRowColumns.numberStart
+    func entry(claude: Int, codex: Int) -> TokenBoardEntry {
+        toolMixRowEntry(total: claude + codex, claudeInput: claude, codexInput: codex)
+    }
+    func row(_ entry: TokenBoardEntry, crowded: Bool) -> some View {
+        TokenBoardRowView(entry: entry, isMe: crowded, showsPrivateChip: crowded, showsToday: true)
+    }
+    // 가장 빡빡한 행: 긴 이름 + "나" + "비공개" 칩이 앞자리를 다 먹은 내 비공개 행에 억+억 캡션.
+    // (축소 하한이 0.85 였을 때 실제로 잘리던 조합이다 — 0.7 로 내린 근거가 이 케이스다.)
+    let codexTail = try stackedRowPixels(
+        row(entry(claude: 19_658_964_272, codex: 19_658_964_272), crowded: true),
+        row(entry(claude: 19_658_964_272, codex: 19_758_964_272), crowded: true),
+        width: rowWidth
+    )
+    #expect(   // "Codex 196.6억" vs "Codex 197.6억" — 끝자리가 살아 있다.
+        codexTail.top.slice(fromPoints: captionFrom, toPoints: captionTo)
+            != codexTail.bottom.slice(fromPoints: captionFrom, toPoints: captionTo)
+    )
+    // Claude 쪽 자리도 마찬가지(앞부분이 밀리거나 뭉개져도 안 된다).
+    let claudeTail = try stackedRowPixels(
+        row(entry(claude: 19_658_964_272, codex: 19_658_964_272), crowded: true),
+        row(entry(claude: 19_758_964_272, codex: 19_658_964_272), crowded: true),
+        width: rowWidth
+    )
+    #expect(
+        claudeTail.top.slice(fromPoints: captionFrom, toPoints: captionTo)
+            != claudeTail.bottom.slice(fromPoints: captionFrom, toPoints: captionTo)
+    )
+    // 칩 없는 보통 행(더 여유롭다)도 같은 성질을 지킨다.
+    let plainRow = try stackedRowPixels(
+        row(entry(claude: 2_564_338_243, codex: 2_000_000_000), crowded: false),
+        row(entry(claude: 2_564_338_243, codex: 2_100_000_000), crowded: false),
+        width: rowWidth
+    )
+    #expect(   // "Codex 20억" vs "Codex 21억"
+        plainRow.top.slice(fromPoints: captionFrom, toPoints: captionTo)
+            != plainRow.bottom.slice(fromPoints: captionFrom, toPoints: captionTo)
+    )
+}
+
+@MainActor
+@Test
+func tokenBoardRowWiresTheToolMixCaptionAndTooltipToTheEntry() throws {
+    // 툴팁은 픽셀에 안 나온다(ImageRenderer 는 .help 를 그리지 않는다) — 이 배선이 끊겨도 렌더 테스트는 전부 초록이다.
+    // 그래서 주석을 걷어낸 소스로 계약을 못 박는다(주석 미제거로 하면 설명을 지워야 초록이 되는 테스트가 된다).
+    let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
+    // 카드에 상세 툴팁이 달려 있다 — 캡션의 축약값(196.6억)이 실제로 몇인지 볼 수 있는 유일한 자리다.
+    #expect(source.contains(".help(entry.detailTooltip)"))
+    // 캡션 줄은 모델의 순수 함수를 그대로 쓴다. 여기서 문자열을 다시 조립하면 순수 함수 테스트가 초록인 채
+    // 화면 문구만 갈라진다.
+    #expect(source.contains("if let toolUsage = entry.toolUsageLabel"))
+    #expect(!source.contains("compactKorean"))   // 축약 조립처는 TokenBoardEntry.toolUsageLabel 하나뿐이다.
+}
+
+@MainActor
+@Test
+func tokenBoardWithToolMixStaysWithinWindowCap() throws {
+    // 캡션이 붙은 픽스처(6명)로도 창 높이 상한(≤700pt)은 그대로다 — 행 높이가 고정 62pt 라 예산이 안 움직인다.
+    let pixelHeight = try #require(renderedPixelHeight(CheckMenuView(store: makeTokenBoardStore(memberCount: 6))))
+    #expect(Double(pixelHeight) / 2.0 <= 700.0)
+    // 스크롤 상한을 넘긴 8명(내 행 포함)도 마찬가지.
+    let full = try #require(renderedPixelHeight(CheckMenuView(store: makeTokenBoardStore(memberCount: 8))))
+    #expect(Double(full) / 2.0 <= 700.0)
 }
 
 @MainActor

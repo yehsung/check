@@ -1565,32 +1565,50 @@ struct TokenBoardRowView: View {
                 .frame(maxHeight: .infinity)
                 .padding(.vertical, 3)
             CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: 30)
-            // 이름 + 칩은 한 덩어리로 6pt 간격에 묶는다 — 균일 10pt 는 칩이 둘 붙는 내 행에서 이름 몫을 먼저 갉아먹는다.
-            HStack(spacing: 6) {
-                Text(entry.name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(CheckTheme.primaryText)
-                    .lineLimit(1)
-                    // 폭이 모자라면 말줄임보다 먼저 살짝 줄여 이름을 끝까지 보여 준다(칩 두 개가 붙는 내 행 대비).
-                    .minimumScaleFactor(0.75)
-                if isMe {
-                    Text("나")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(CheckTheme.accent)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(CheckTheme.accent.opacity(0.18)))
-                        .fixedSize()
+            // 왼쪽 열 = 이름 줄 + (있으면) 도구별 캡션 줄. 캡션이 없으면(둘 다 0) VStack 이 한 줄로 줄어들어
+            // 예전과 똑같은 행이 된다 — 빈 줄을 자리만 잡아 두지 않는다.
+            VStack(alignment: .leading, spacing: 2) {
+                // 이름 + 칩은 한 덩어리로 6pt 간격에 묶는다 — 균일 10pt 는 칩이 둘 붙는 내 행에서 이름 몫을 먼저 갉아먹는다.
+                HStack(spacing: 6) {
+                    Text(entry.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .lineLimit(1)
+                        // 폭이 모자라면 말줄임보다 먼저 살짝 줄여 이름을 끝까지 보여 준다(칩 두 개가 붙는 내 행 대비).
+                        .minimumScaleFactor(0.75)
+                    if isMe {
+                        Text("나")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(CheckTheme.accent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(CheckTheme.accent.opacity(0.18)))
+                            .fixedSize()
+                    }
+                    if showsPrivateChip {
+                        // 회색 "비공개" 미니 칩 — 남들 보드엔 내 행이 안 보인다는 표시(내 행에만, 비공개일 때만).
+                        Text("비공개")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(CheckTheme.secondaryText)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.white.opacity(0.10)))
+                            .fixedSize()
+                    }
                 }
-                if showsPrivateChip {
-                    // 회색 "비공개" 미니 칩 — 남들 보드엔 내 행이 안 보인다는 표시(내 행에만, 비공개일 때만).
-                    Text("비공개")
-                        .font(.system(size: 9, weight: .bold))
+                // "누가 어떤 AI 를 얼마나 썼는지"(issue #5) — Claude/Codex 를 나눠 한 줄로. 0 인 쪽은 빠지고
+                // 둘 다 0 이면 줄 자체가 없다(toolUsageLabel == nil). 좁아지면 말줄임 대신 균일 축소로 버틴다 —
+                // 우측 총합과 같은 원칙(잘리면 "Codex 19.6억"이 "Codex 1…"이 돼 자릿수를 통째로 오독한다).
+                // 축소 하한이 0.85 가 아니라 0.7 인 이유는 실측이다: 이 캡션에 실제로 남는 폭은 100pt 안팎이라
+                // 0.85 에서는 칩이 둘 붙는 내 행의 "Claude 196.6억 · Codex 196.6억"이 말줄임됐다(292pt 렌더로 확인).
+                // 우측 숫자 열이 이미 0.7 을 쓰고 있으므로 같은 하한을 쓴다.
+                if let toolUsage = entry.toolUsageLabel {
+                    Text(toolUsage)
+                        .font(.caption2)
                         .foregroundStyle(CheckTheme.secondaryText)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.white.opacity(0.10)))
-                        .fixedSize()
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
             }
             // 남는 폭은 전부 이름 덩어리가 가진다(예전엔 Spacer 가 유연 폭을 반씩 나눠 가져, 칩이 붙은 행에서
@@ -1643,6 +1661,9 @@ struct TokenBoardRowView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(isMe ? CheckTheme.accent.opacity(0.45) : CheckTheme.border, lineWidth: 1)
         )
+        // 캡션 줄은 축약(196.6억)이라, 정확한 값을 보고 싶으면 카드에 마우스만 올리면 된다 —
+        // 여기 문구는 grouped 로 1의 자리까지 전부 적는다(내 박스 툴팁과 같은 어휘·정밀도).
+        .help(entry.detailTooltip)
     }
 }
 

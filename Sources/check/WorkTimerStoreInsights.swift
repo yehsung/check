@@ -40,7 +40,8 @@ extension WorkTimerStore {
         Task { @MainActor in await performLoadInsights() }
     }
 
-    /// 내 최근 완료 세션을 받아 히트맵/회고/12주 잔디를 계산해 반영한다.
+    /// 내 최근 완료 세션을 받아 히트맵/회고/12주 잔디를 계산해 반영한다. 같은 창의 내 일별 토큰 행도 함께 받아 토큰 잔디를 만든다
+    /// (독립 실패 — 토큰 조회가 죽어도 근무 쪽은 그대로).
     /// 표준 로딩 관례: session 가드 → sessionGeneration 캡처 → withSessionRetry → 응답 반영 시 generation 재확인
     /// → 등호 가드 대입 → 취소 에러 조용히. 실패해도 문구를 흔들지 않는다(다음 재오픈에서 재시도).
     func performLoadInsights() async {
@@ -61,7 +62,30 @@ extension WorkTimerStore {
                 )
             }
             guard generation == sessionGeneration else { return }
+            // 토큰 잔디(v0.2.41)의 서버 몫 — 같은 창의 내 일별 행. **독립 실패**다: 못 받아도(표 미배포·네트워크) 아래 근무 잔디·회고·
+            // 히트맵은 그대로 계산·표시된다. 수집 거부자는 서버에 행이 없고(purge) 섹션도 숨기므로 조회 자체를 건너뛴다.
+            var tokenRows: [TokenUsageDailyRow]?
+            let collectsTokens = tokenUsageCollect
+            if collectsTokens {
+                do {
+                    tokenRows = try await withSessionRetry { activeSession in
+                        try await service.fetchMyTokenDaily(
+                            accessToken: activeSession.accessToken,
+                            userID: activeSession.userID,
+                            since: TokenDailyGrid.dayString(since)
+                        )
+                    }
+                } catch {
+                    if case .cancelled = classifyAuthError(error) { return }
+                    tokenRows = nil
+                }
+                guard generation == sessionGeneration else { return }
+            }
             let now = Date()
+            // 토큰 잔디의 로컬 몫(이 맥의 일별 맵 + 계정 버킷)과, 서버 조회가 실패했을 때 물려줄 직전 잔디.
+            let localTokenUsage = tokenUsage.currentMonthUsage
+            let accountSnapshot = codexAccount.snapshot
+            let previousTokenGrid = tokenDailyGrid
             // 계산은 메인액터 밖에서 한다. 히트맵·회고는 세션마다 타임스탬프를 파싱하고 시간/일 경계로 쪼개는
             // 순수 CPU 작업이라, 세션이 많은 계정(자리 비움 자동 마감이 잦으면 수백~수천 건)에서는
             // 메인액터에 올려 두면 응답이 도착하는 순간 UI 가 통째로 멈춘다 — 서버 limit 상한인 2000행에서
@@ -71,14 +95,31 @@ extension WorkTimerStore {
             // 아직 끝나지 않은 근무(일요일 밤 시작)의 지난주 몫이 통째로 빠지지 않게. 이 값을 넘겨도 이중
             // 계상은 없다 — 그 세션이 끝나 완료 행이 되면 startedAt 은 이미 nil 이다.
             let ongoingStart = startedAt
-            let computed = await Task.detached(priority: .userInitiated) {
-                WorkInsightsComputation.build(rows: rows, now: now, goalSeconds: goalSeconds, ongoingStart: ongoingStart)
+            let (computed, tokenGrid) = await Task.detached(priority: .userInitiated) {
+                let insights = WorkInsightsComputation.build(rows: rows, now: now, goalSeconds: goalSeconds, ongoingStart: ongoingStart)
+                // 토큰 잔디: 날짜별 max(서버 기기 합, 로컬). 서버 조회가 **실패**했으면 로컬 몫으로 새로 지은 잔디에 직전 잔디를
+                // 칸별 max 로 얹는다(overlaying) — 직전 잔디를 통째로 물려주면 그 사이 자란 오늘 칸의 로컬 값이 반영되지 않아
+                // 잔디가 얼어붙고, 로컬만 쓰면 지난 달·다른 기기 몫(서버만 아는 값)이 사라진다. 직전 잔디가 없거나 창이 다르면
+                // (주가 바뀌면 discardInsightsIfWeekRolledOver 가 먼저 비운다) 로컬 몫만으로 선다.
+                let tokenGrid: TokenDailyGrid
+                if !collectsTokens {
+                    tokenGrid = .empty
+                } else {
+                    let local = TokenDailyMerge.localTotals(usage: localTokenUsage, account: accountSnapshot)
+                    if let tokenRows {
+                        tokenGrid = TokenDailyGrid.build(daily: TokenDailyMerge.merged(server: TokenDailyMerge.serverTotals(tokenRows), local: local), now: now)
+                    } else {
+                        tokenGrid = TokenDailyGrid.build(daily: local, now: now).overlaying(previousTokenGrid)
+                    }
+                }
+                return (insights, tokenGrid)
             }.value
             // 계산 동안 로그아웃/재로그인이 끼어들 수 있다 — 대입 직전에 세대를 한 번 더 확인한다.
             guard generation == sessionGeneration else { return }
             if heatmap != computed.heatmap { heatmap = computed.heatmap }
             if retro != computed.retro { retro = computed.retro }
             if dailyGrid != computed.dailyGrid { dailyGrid = computed.dailyGrid }
+            if tokenDailyGrid != tokenGrid { tokenDailyGrid = tokenGrid }
             if !insightsLoaded { insightsLoaded = true }
             if insightsFailed { insightsFailed = false }
             // 이 결과가 어느 주 기준인지 남긴다 — 앱을 켜 둔 채 주가 바뀌면 팝오버 오픈 훅이 재계산을 건다.
@@ -112,6 +153,9 @@ extension WorkTimerStore {
         // 잔디도 계산 시점의 '오늘'에 고정된 값이다(마지막 열 = 그때의 이번 주). 남겨 두면 새 주의 첫 화면에
         // 지난주가 마지막 열인 채로 그려지고, 재계산이 실패하면 그 상태가 '오늘'인 척 굳는다.
         if dailyGrid != .empty { dailyGrid = .empty }
+        // 토큰 잔디도 같은 이유로 버린다(마지막 열 = 계산 시점의 이번 주). 서버 조회가 실패했을 때 직전 잔디를 물려주는 규칙이
+        // 여기 걸려, 새 주에 지난주 기준 잔디를 '오늘'인 척 남기지 못한다.
+        if tokenDailyGrid != .empty { tokenDailyGrid = .empty }
         // 배너도 내린다 — [보기]를 눌러도 지금 보여 줄 회고가 없다. 이번 주 키는 소비하지 않으므로
         // 재계산이 성공하면 evaluateRetroBanner 가 새 회고로 다시 판정한다.
         if showsRetroBanner { showsRetroBanner = false }

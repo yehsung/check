@@ -398,6 +398,23 @@ final class WorkTimerStore {
     /// 마지막으로 서버에 올린 계정 집계 키("월합|누적|상태"). usage 가 그대로여도 이 키가 바뀌면 올린다 —
     /// 계정 버킷은 로컬 로그와 무관하게 자라므로(다른 기기·클라우드) 변경 게이트가 usage 만 보면 계정값이 서버에 영영 안 간다.
     @ObservationIgnored var lastUploadedAccountKey: String?
+    /// 마지막으로 일별 표(token_usage_device_daily)에 올린 날짜별 값(v0.2.41 토큰 잔디). 월간 upsert 가 성공한 직후 이 맵과
+    /// 현재 값을 비교해 **바뀐 날만** 배열로 올린다(처음엔 전부). 성공에만 갱신 — 실패한 날은 다음 주기에 그대로 재시도된다.
+    /// 로그아웃에 비운다(다음 계정은 처음부터). 관찰 대상 아님.
+    @ObservationIgnored var lastUploadedDaily: [String: TokenUsageDailyValue] = [:]
+    /// 위 장부를 마지막으로 **전량 재기준(rebaseline)** 한 KST 날짜. 하루가 바뀌면 장부를 비워 그 달치를 통째로 다시 올린다.
+    /// 이유(리뷰 P2): 장부는 "204 를 받았다"만 알 뿐 "서버에 실제로 저장됐다"는 모른다 — 수집 거부 트리거는 행을 조용히
+    /// 버리고도 204 를 준다. 운영자가 수집을 껐다(purge 로 행 삭제) 다시 켜면 앱은 그 사이 설정을 다시 읽지 않으므로
+    /// (loadTokenUsagePrivacyIfNeeded 는 세션당 1회) 장부가 "이미 올렸다"고 막아 그 날들이 앱 재시작 전까지 복원되지 않았다.
+    /// 하루 1회 전량 재업로드면 어떤 경로로 서버와 어긋났든 24시간 안에 스스로 수렴한다(현재 월 최대 31행 = 요청 2건).
+    /// 관찰 대상 아님.
+    @ObservationIgnored var lastUploadedDailyBaselineDay: String?
+    /// 직전 일별 업로드가 (스키마 부재가 아닌) 실패로 끝나 **다시 보내야 하는가**(리뷰 P2). 월간 변경 게이트는 usage/계정 키만
+    /// 보므로, 일별만 실패한 뒤 사용자가 AI 를 더 쓰지 않으면 `guard changed` 에서 되돌아가 재시도 자체가 오지 않았다
+    /// (그 날 행은 앱 재시작 전까지 안 올라가고, 달이 바뀌면 월 접두어 필터가 그 날을 빼 서버에 영구 구멍이 남는다).
+    /// 성공에 내린다. 스키마 부재(마이그레이션 미적용)에는 세우지 않는다 — 배포로만 풀리는 항구적 실패라 60초마다
+    /// 되짚어도 고쳐지지 않고, 운영자 신호는 이미 syncMessage 로 떴다. 관찰 대상 아님.
+    @ObservationIgnored var tokenDailyRetryPending = false
     /// 마지막 업로드 시도 시각. 60초 스로틀 기준(난사 방지). 관찰 대상 아님.
     @ObservationIgnored var lastTokenUploadAt: Date = .distantPast
     /// 마지막 **배경** 토큰 스캔 시각(팝오버가 닫힌 근무 중에 도는 저빈도 경로, refreshTokenUsageInBackgroundIfDue).
@@ -429,6 +446,10 @@ final class WorkTimerStore {
     var retro: WeeklyRetro?
     /// 최근 12주 일별 근무 잔디(이슈 #3). heatmap/retro 와 같은 조회·같은 파싱에서 함께 계산되고 함께 비워진다.
     var dailyGrid: WorkDailyGrid = .empty
+    /// 최근 12주 일별 AI 토큰 잔디(이슈 #3 의 토큰 절반). 같은 조회 안에서 서버 일별 표 + 로컬 일별 맵 + 계정 버킷을 합쳐 계산하고
+    /// (WorkTimerStoreInsights), 주가 바뀌거나 로그아웃하면 근무 잔디와 함께 비워진다. 토큰 조회는 **독립 실패**다 — 못 받아도
+    /// 근무 잔디·회고·히트맵은 그대로 그려진다. 수집 거부(tokenUsageCollect == false)면 항상 empty(패널도 섹션을 숨긴다).
+    var tokenDailyGrid: TokenDailyGrid = .empty
     // 월요일 첫 팝오버에 지난주 회고를 한 번 안내하는 배너의 노출 여부(주당 1회, UserDefaults 로 기록).
     var showsRetroBanner = false
 
@@ -625,8 +646,11 @@ final class WorkTimerStore {
     // 내 토큰 사용량 **수집** 여부(profiles.token_usage_collect 미러). 공개 여부와 독립이다 —
     // 공개는 '남의 순위판에 뜨는가', 수집은 '서버에 쌓이는가'. 앱에서 바꾸는 값이 아니라 서버가 정한다.
     // 실효는 서버 트리거가 내고(구버전 클라도 함께 막힌다), 이 플래그는 헛업로드를 줄이는 부수 장치다.
-    // 뷰가 읽지 않으므로 관찰 대상에서 뺀다.
-    @ObservationIgnored var tokenUsageCollect = true
+    // v0.2.41 부터 **관찰 대상**이다 — 내 기록 패널이 이 값으로 토큰 잔디 섹션의 표시/숨김과 본문 높이 예산을
+    // 가른다(CheckMenuView: showsTokenGrid). @ObservationIgnored 로 두면 로그인 수십 초 뒤 서버 설정이
+    // 도착해 false 로 바뀌어도 body 가 다시 돌지 않아, 거부자에게 (로컬값으로 칠해진) 토큰 잔디가 계속 보이고
+    // 높이 예산도 섹션이 있는 값으로 굳는다(팝오버 루트는 v0.2.38 에서 매초 재렌더를 끊어 놔 우연한 갱신도 없다).
+    var tokenUsageCollect = true
     // 수신 찔림 폴링 태스크(로그인 중 15초 타이머. 실제 take_pokes 는 근무중에만 나간다 — O1/takePokesIfWorking).
     // refresh 루프와 별도인 이유는 유휴 주기(수백 초)로는 말풍선 전달이 너무 늦기 때문이다.
     var pokePollTask: Task<Void, Never>?
@@ -2309,6 +2333,10 @@ extension WorkTimerStore {
         tokenBoardFailed = false
         lastUploadedUsage = nil
         lastUploadedAccountKey = nil
+        // 일별 업로드 장부도 계정에 묶인다(user_id 행) — 남기면 다음 계정의 첫 업로드가 "이미 올린 날"로 읽혀 그 날들이 통째로 빠진다.
+        lastUploadedDaily = [:]
+        lastUploadedDailyBaselineDay = nil
+        tokenDailyRetryPending = false
         lastTokenUploadAt = .distantPast
         // 하트비트 도장도 계정에 묶인 사실이다(user_id 로 들어간다). 남기면 새 계정의 첫 스캔이 앞 계정의
         // 스캔 시각과 같아 보여 보고가 한 주기 밀린다. 배경 스캔 주기 스탬프는 **일부러 남긴다** —
@@ -2378,6 +2406,8 @@ extension WorkTimerStore {
         heatmap = .empty
         retro = nil
         dailyGrid = .empty
+        // 토큰 잔디도 계정의 것이다(서버 일별 행 + 이 계정으로 올린 로컬 맵) — 다음 계정에 물려주지 않는다.
+        tokenDailyGrid = .empty
         showsRetroBanner = false
         // 미반영 근무 큐(pendingItems)와 진행 중 근무(startedAt/accumulatedSeconds)는 여기서 비우지 않는다.
         // 이 함수는 토큰 만료 강제 로그아웃(refresh token 부재/무효, 저장 세션 재활성 실패)에서도 불리는데,

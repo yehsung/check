@@ -34,12 +34,15 @@ final class URLProtocolStub: URLProtocol {
     }
 
     override func startLoading() {
-        Self.record(request: request, bodyText: Self.bodyText(from: request))
+        // 본문은 **한 번만** 읽는다 — httpBodyStream 은 소비되면 두 번째 읽기가 빈 문자열이라, 기록과 판정이
+        // 같은 값을 봐야 한다(PostgREST 규칙 재현이 본문을 본다).
+        let body = Self.bodyText(from: request)
+        Self.record(request: request, bodyText: body)
 
-        let responseData = Self.responseData(for: request)
+        let responseData = Self.responseData(for: request, body: body)
         let response = HTTPURLResponse(
             url: request.url!,
-            statusCode: Self.statusCode(for: request),
+            statusCode: Self.statusCode(for: request, body: body),
             httpVersion: nil,
             headerFields: ["Content-Type": "application/json"]
         )!
@@ -133,7 +136,33 @@ final class URLProtocolStub: URLProtocol {
         return String(data: data, encoding: .utf8) ?? ""
     }
 
-    private static func statusCode(for request: URLRequest) -> Int {
+    /// PostgREST 규칙: **배열 본문의 키 집합이 행마다 다르면** 스키마를 보기도 전에 400 PGRST102 로 통째 거절된다
+    /// ("All object keys must match" — 프로덕션 PostgREST 14.5 실측). 이 스텁이 그 규칙을 흉내내지 않던 동안,
+    /// codex_account 가 있는 날과 없는 날이 섞인 일별 upsert 본문이 계약 테스트에서 초록으로 통과했다(v0.2.41 리뷰 P0) —
+    /// 그 모양은 실제 서버에 **단 한 줄도** 저장되지 않는다. 모든 /rest/v1 POST 에 걸어 새 배열 업로드도 함께 막는다.
+    static func hasMismatchedObjectKeys(_ body: String) -> Bool {
+        guard let rows = (try? JSONSerialization.jsonObject(with: Data(body.utf8))) as? [[String: Any]], rows.count > 1
+        else { return false }
+        return Set(rows.map { Set($0.keys) }).count > 1
+    }
+
+    private static func statusCode(for request: URLRequest, body: String) -> Int {
+        if request.url?.path.hasPrefix("/rest/v1/") == true, request.httpMethod == "POST",
+           hasMismatchedObjectKeys(body) {
+            return 400
+        }
+        // 일별 토큰 upsert 만 5xx 로 떨어뜨리는 호스트(v0.2.41): 실패가 장부를 갱신하지 않고 재시도 플래그를 세우는지,
+        // 그리고 서버 조회 실패가 잔디를 얼리지 않는지 검증용. 월간 표는 정상 응답해야 '일별 실패는 독립'을 볼 수 있다.
+        if request.url?.host?.hasPrefix("v0241-daily-fails") == true,
+           request.url?.path == "/rest/v1/token_usage_device_daily" {
+            return 500
+        }
+        // 일별 토큰 **조회**만 5xx 인 호스트: performLoadInsights 의 catch(tokenRows = nil) 와 폴백 겹치기를 실제로 태운다.
+        if request.url?.host == "insights-token-get-fails",
+           request.url?.path == "/rest/v1/token_usage_device_daily",
+           request.httpMethod == "GET" {
+            return 500
+        }
         if request.url?.host == "invalid-key" {
             return 401
         }
@@ -211,7 +240,12 @@ final class URLProtocolStub: URLProtocol {
         return request.url?.path == "/rest/v1/work_sessions" ? 201 : 200
     }
 
-    private static func responseData(for request: URLRequest) -> Data {
+    private static func responseData(for request: URLRequest, body: String) -> Data {
+        // 위 statusCode 의 400 과 짝. 실제 PostgREST 응답 모양 그대로다(code/message).
+        if request.url?.path.hasPrefix("/rest/v1/") == true, request.httpMethod == "POST",
+           hasMismatchedObjectKeys(body) {
+            return Data(#"{"code":"PGRST102","message":"All object keys must match","details":null,"hint":null}"#.utf8)
+        }
         if request.url?.host == "invalid-key" {
             return Data(
                 """
@@ -288,6 +322,12 @@ final class URLProtocolStub: URLProtocol {
         }
         if request.url?.path == "/rest/v1/token_usage_monthly", request.httpMethod == "GET" {
             return legacyTokenUsageData(for: request)
+        }
+        // 일별 토큰 표(v0.2.41 토큰 잔디) 조회. 미등록이면 Data() 가 돌아가 [TokenUsageDailyRow] 디코드가 throw 되고,
+        // 스토어는 그것을 '독립 실패'로 삼켜 토큰 잔디만 조용히 비운다 — 근무 기록 테스트가 초록인 채로 토큰 경로가
+        // 한 번도 성공하지 않는다. 기본은 빈 배열(행 없음), 픽스처 호스트는 아래에서 갈라 준다.
+        if request.url?.path == "/rest/v1/token_usage_device_daily", request.httpMethod == "GET" {
+            return tokenDailyData(for: request)
         }
         if request.url?.path == "/auth/v1/token",
            request.url?.query?.contains("grant_type=refresh_token") == true
@@ -809,6 +849,36 @@ final class URLProtocolStub: URLProtocol {
         ISO8601DateFormatter().string(from: date)
     }
 
+    /// 일별 토큰 표 픽스처. 호스트에 "token-daily-two-devices" 가 들어가면 기기 2대의 같은 날 행(계정값은 둘 다 1,000 —
+    /// max 로 읽어야 한다)과 하루 더를 주고, 그 외에는 빈 배열이다. 날짜는 요청의 `day=gte.<since>` 를 기준으로 상대 계산한다
+    /// (실제 시계로 도는 테스트가 언제 돌아도 창 안에 들어오게).
+    private static func tokenDailyData(for request: URLRequest) -> Data {
+        guard let host = request.url?.host, host.contains("token-daily-two-devices") else {
+            return Data("[]".utf8)
+        }
+        // since = 잔디 창 시작(월요일). 그 다음 날(화요일)과 그 다음 주 수요일을 쓴다 — 어느 주에 돌려도 과거·창 안이다.
+        let items = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let since = items.first { $0.name == "day" }?.value?.replacingOccurrences(of: "gte.", with: "") ?? "2026-01-05"
+        func shifted(_ days: Int) -> String {
+            let parts = since.split(separator: "-").compactMap { Int($0) }
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = TimeZone(identifier: "Asia/Seoul")!
+            var c = DateComponents(); c.year = parts[0]; c.month = parts[1]; c.day = parts[2]
+            let date = cal.date(byAdding: .day, value: days, to: cal.date(from: c)!)!
+            let out = cal.dateComponents([.year, .month, .day], from: date)
+            return String(format: "%04d-%02d-%02d", out.year!, out.month!, out.day!)
+        }
+        return Data(
+            """
+            [
+              {"day":"\(shifted(9))","device_id":"MAC-B","claude_total":0,"codex_total":300,"codex_account":null},
+              {"day":"\(shifted(1))","device_id":"MAC-A","claude_total":1000,"codex_total":200,"codex_account":1000},
+              {"day":"\(shifted(1))","device_id":"MAC-B","claude_total":500,"codex_total":100,"codex_account":1000}
+            ]
+            """.utf8
+        )
+    }
+
     private static func workSessionsData(for request: URLRequest) -> Data {
         let host = request.url?.host
         let openQuery = request.url?.query?.contains("ended_at=is.null") == true
@@ -1012,5 +1082,9 @@ final class URLProtocolStub: URLProtocol {
             || host?.contains("device-claim") == true
             || host == "status-device-table-missing"
             || host?.hasPrefix("korean-week-") == true
+            // 토큰 잔디(v0.2.41) 호스트군: 근무 세션도 있어야 "토큰 조회가 근무 쪽을 막지 않는다"를 볼 수 있다
+            // (완료 세션이 0건이면 근무 잔디가 비어 그 판정이 늘 참인 채로 의미를 잃는다).
+            || host?.hasPrefix("token-daily-") == true
+            || host?.hasPrefix("insights-token-") == true
     }
 }

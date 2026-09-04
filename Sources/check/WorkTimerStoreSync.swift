@@ -533,8 +533,12 @@ extension WorkTimerStore {
         let accountMonth = account?.monthTotal(usage.month) ?? 0
         guard usage.total > 0 || accountMonth > 0 else { return }
         // 변경 게이트는 usage 와 계정 키 **둘 다** 본다 — usage 가 그대로여도 계정값(월합·누적·상태)이 바뀌면 올린다.
+        // 거기에 일별 재시도 대기(tokenDailyRetryPending)와 하루 1회 재기준도 게이트를 연다(리뷰 P2): 일별 업로드는 이
+        // 게이트 **안쪽**에서만 불리므로, 이 셋이 없으면 "일별만 실패 → 사용자가 AI 를 더 안 씀 → 재시도가 영영 안 옴"과
+        // "서버가 purge 로 지운 날들이 장부에 막혀 복원 안 됨"이 그대로 남는다(uploadTokenUsageDailyIfNeeded 주석).
         let accountKey = Self.accountUploadKey(account: account, month: usage.month, status: accountStatus)
-        let changed = usage != lastUploadedUsage || accountKey != lastUploadedAccountKey
+        let dailyDue = tokenDailyRetryPending || lastUploadedDailyBaselineDay != TokenDailyGrid.dayString(now)
+        let changed = usage != lastUploadedUsage || accountKey != lastUploadedAccountKey || dailyDue
         guard changed, now.timeIntervalSince(lastTokenUploadAt) >= 60 else { return }
         // 시도 시각을 먼저 스탬프해, 실패하더라도 60초 안에는 재시도하지 않는다(난사 방지).
         // 이 한 줄이 아래 await 동안의 재진입도 함께 막는다 — 진단 계산을 기다리는 사이 다른 호출이 들어와도
@@ -622,6 +626,10 @@ extension WorkTimerStore {
             // 성공 시에만 마지막 업로드 값을 갱신한다 — 실패면 값이 그대로라 다음 60초 후 변경 게이트가 다시 통과한다.
             lastUploadedUsage = usage
             lastUploadedAccountKey = accountKey
+            // 3) 일별 표(v0.2.41 토큰 잔디): 월간 upsert 가 **성공한 직후**, 같은 게이트(로그인·수집 허용·변경·60초) 아래에서
+            //    바뀐 날만 올린다. 월간 성공 뒤에 두는 이유: 일별 표 마이그레이션이 아직 없는 서버(404)에서도 월간 업로드와
+            //    그 변경 게이트(lastUploadedUsage)는 정상 완결되어 순위판 사용량이 멈추지 않는다 — 일별 실패는 독립이다.
+            await uploadTokenUsageDailyIfNeeded(usage: usage, account: account, generation: generation, now: now)
         } catch {
             guard generation == sessionGeneration else { return }
             // 스키마 부재(= 새 표 마이그레이션 미적용)만은 조용히 넘기지 않는다. 예전엔 모든 실패를 삼켜,
@@ -630,6 +638,61 @@ extension WorkTimerStore {
             if (error as? SupabaseWorkServiceError) == .databaseSchemaMissing {
                 let message = authMessage(for: error, fallback: "동기화 실패")
                 if syncMessage != message { syncMessage = message }
+            }
+        }
+    }
+
+    /// 일별 표 업로드(v0.2.41 토큰 잔디). **반드시 월간 upsert 가 성공한 직후에만** 부른다(uploadTokenUsageIfNeeded 의 3)) —
+    /// 그래야 로그인·수집 허용·변경·60초 게이트를 그대로 물려받고, 요청 순서(월간 → 일별)가 서버 쪽 '월 표가 먼저 정확해진다'
+    /// 규약과 일치한다. 수집 거부 가드는 여기서도 한 번 더 건다(게이트는 짝으로 있어야 한다 — 이 함수만 따로 불려도 새지 않게).
+    ///
+    /// 행 = 현재 월 범위의 (claudeDaily ∪ codexDaily ∪ 그 달 계정 버킷) 날짜 중 **마지막 성공 업로드와 값이 다른 날만**(처음엔 전부).
+    /// 실패는 조용히(장부를 갱신하지 않고 tokenDailyRetryPending 을 세워, 위 월간 변경 게이트가 usage 가 그대로여도 다음 주기를
+    /// 열어 준다 — 그 플래그가 없던 동안 "일별만 실패 → 사용자가 AI 를 더 안 씀"이면 재시도가 영영 오지 않았다).
+    /// 스키마 부재(마이그레이션 미적용)만은 월간 경로와 같은 문구로 드러내고, 그 경우엔 재시도 플래그를 세우지 않는다 —
+    /// 배포로만 풀리는 항구적 실패라 60초마다 되짚어도 고쳐지지 않는다(신호는 이미 떴고, 배포 뒤 첫 사용량 변화가 전량을 올린다).
+    ///
+    /// 하루(KST)가 바뀌면 장부를 비워 **그 달치를 통째로 다시** 올린다(재기준). 장부는 "204 를 받았다"만 알 뿐 "저장됐다"는
+    /// 모르기 때문이다 — 수집 거부 트리거는 행을 조용히 버리고도 204 를 준다. 운영자가 수집을 껐다(purge) 다시 켜도 앱은
+    /// 세션 중에 설정을 다시 읽지 않으므로(loadTokenUsagePrivacyIfNeeded 는 세션당 1회) 장부가 복원을 막았다.
+    func uploadTokenUsageDailyIfNeeded(
+        usage: TokenUsageMonthly, account: CodexAccountUsage?, generation: Int, now: Date
+    ) async {
+        guard session != nil, tokenUsageCollect else { return }
+        // 재기준: 날짜가 바뀌었으면 장부를 비운다. 여기서(전송 전) 날짜를 찍어 두는 것이 요건이다 — 실패해도 날짜가 남아야
+        // 위 게이트의 dailyDue 가 내려가고, 남은 재시도는 tokenDailyRetryPending 이 맡는다(둘 다 열려 있으면 무한히 열린다).
+        let today = TokenDailyGrid.dayString(now)
+        if lastUploadedDailyBaselineDay != today {
+            lastUploadedDaily = [:]
+            lastUploadedDailyBaselineDay = today
+        }
+        let current = TokenUsageDailyUpload.values(usage: usage, account: account)
+        let changed = TokenUsageDailyUpload.changedDays(current: current, lastUploaded: lastUploadedDaily)
+        guard !changed.isEmpty else {
+            // 보낼 것이 없으면 재시도 대기도 의미가 없다(달이 바뀌어 값이 통째로 사라진 경우 등) — 게이트를 닫는다.
+            tokenDailyRetryPending = false
+            return
+        }
+        do {
+            try await withSessionRetry { activeSession in
+                try await service.upsertTokenUsageDaily(
+                    accessToken: activeSession.accessToken,
+                    rows: TokenUsageDailyUpload.rows(
+                        userID: activeSession.userID, deviceID: deviceID, days: changed, values: current
+                    )
+                )
+            }
+            guard generation == sessionGeneration else { return }
+            // 성공에만 장부를 통째로 갈아 끼운다 — 안 바뀐 날은 어차피 같은 값이고, 현재 범위에서 빠진 날(달이 바뀜)은 잊는다.
+            lastUploadedDaily = current
+            tokenDailyRetryPending = false
+        } catch {
+            guard generation == sessionGeneration else { return }
+            if (error as? SupabaseWorkServiceError) == .databaseSchemaMissing {
+                let message = authMessage(for: error, fallback: "동기화 실패")
+                if syncMessage != message { syncMessage = message }
+            } else {
+                tokenDailyRetryPending = true
             }
         }
     }
@@ -1968,5 +2031,56 @@ extension WorkTimerStore {
         }
         // 동급이면 결정적·대칭인 사전식으로 정확히 한쪽만 물러나게 한다.
         return claim.deviceID < deviceID
+    }
+}
+
+// MARK: - 일별 토큰 업로드의 순수 계산 (v0.2.41 토큰 잔디)
+
+/// 일별 업로드의 변경 게이트 단위: 하루치 (claude, codex, codexAccount). 값이 하나라도 다르면 '바뀐 날'이다.
+/// codexAccount 가 nil 이면 그 날짜의 계정 버킷이 없다는 뜻이고 본문에서 키가 빠진다(TokenUsageDailyUpsertRow 주석).
+struct TokenUsageDailyValue: Equatable, Sendable {
+    var claude: Int
+    var codex: Int
+    var codexAccount: Int?
+}
+
+/// 월간 사용량 + 계정 스냅샷에서 일별 표에 올릴 값을 고르는 순수 규칙(스토어·테스트 공용).
+enum TokenUsageDailyUpload {
+    /// 현재 월 범위의 날짜별 값. 키 = usage.month 접두어인 (claudeDaily ∪ codexDaily ∪ 계정 버킷) 날짜.
+    /// - 로컬 맵에는 보관 하한(월 시작 − 48시간) 때문에 지난 달 꼬리 이틀이 남아 있을 수 있다 — 그 날들은 이미 그 달에 올렸고
+    ///   지금은 부분값이라 **보내지 않는다**(월 접두어 필터). 보내면 서버의 온전한 값을 부분값으로 덮는다.
+    /// - 계정 버킷 날짜도 키에 넣는다(스펙의 claudeDaily ∪ codexDaily 보다 넓다): `.zst` 만 남은 채 설치한 사람의 Codex 사용은
+    ///   로컬 맵에 없고 계정 버킷에만 있다 — 월간 경로가 "로컬 0 + 계정 > 0" 을 올리는 것과 같은 이유로 일별도 그 날을 남겨야
+    ///   다른 맥과 서버 잔디에 그 날이 보인다. 셋 다 0/nil 인 날은 말할 것이 없어 뺀다.
+    static func values(usage: TokenUsageMonthly, account: CodexAccountUsage?) -> [String: TokenUsageDailyValue] {
+        let prefix = usage.month + "-"
+        let buckets = account?.buckets ?? [:]
+        var result: [String: TokenUsageDailyValue] = [:]
+        for day in Set(usage.claudeDaily.keys).union(usage.codexDaily.keys).union(buckets.keys) where day.hasPrefix(prefix) {
+            let value = TokenUsageDailyValue(
+                claude: max(0, usage.claudeDaily[day] ?? 0),
+                codex: max(0, usage.codexDaily[day] ?? 0),
+                codexAccount: buckets[day].map { max(0, $0) }
+            )
+            guard value.claude > 0 || value.codex > 0 || value.codexAccount != nil else { continue }
+            result[day] = value
+        }
+        return result
+    }
+
+    /// 마지막 성공 업로드와 값이 다른 날만(날짜 오름차순 — 요청 본문이 결정적이라 테스트·로그가 읽기 쉽다). 장부가 비어 있으면 전부.
+    static func changedDays(current: [String: TokenUsageDailyValue], lastUploaded: [String: TokenUsageDailyValue]) -> [String] {
+        current.filter { day, value in lastUploaded[day] != value }.keys.sorted()
+    }
+
+    /// 요청 행(days 순서 그대로). values 에 없는 날은 건너뛴다(형이 어긋나도 크래시 없음).
+    static func rows(userID: String, deviceID: String, days: [String], values: [String: TokenUsageDailyValue]) -> [TokenUsageDailyUpsertRow] {
+        days.compactMap { day in
+            guard let value = values[day] else { return nil }
+            return TokenUsageDailyUpsertRow(
+                userId: userID, day: day, deviceId: deviceID,
+                claudeTotal: value.claude, codexTotal: value.codex, codexAccount: value.codexAccount
+            )
+        }
     }
 }

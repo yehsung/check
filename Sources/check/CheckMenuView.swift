@@ -366,6 +366,9 @@ struct CheckMenuView: View {
                             heatmap: store.heatmap,
                             retro: store.retro,
                             dailyGrid: store.dailyGrid,
+                            tokenDailyGrid: store.tokenDailyGrid,
+                            // 수집 거부면 섹션을 아예 뺀다(서버에 행이 없고 앞으로도 안 쌓인다 — 빈 잔디는 거짓말이다).
+                            showsTokenGrid: store.tokenUsageCollect,
                             hasLoaded: store.insightsLoaded,
                             // 실패는 '진행중'과 다른 문구 + [다시 시도] 로 갈라 준다(패널 안에서 재시도 가능).
                             hasFailed: store.insightsFailed,
@@ -3018,22 +3021,36 @@ private struct PokeChargeButton: View {
 /// 스크롤로 넘긴다. 팝오버는 위가 고정돼 아래로만 자라므로(CheckWindowAnchor) 상한(700pt)을 넘긴 만큼은
 /// 푸터(로그아웃/앱 종료)와 잔디 하단이 화면 밖으로 잘려 손이 닿지 않는다.
 enum InsightsPanelChromeBudget {
-    /// 본문(회고 카드 + 구분선 + 히트맵 + 구분선 + 12주 잔디)의 자연 높이(pt). 340pt 폭 ImageRenderer 실측값:
-    /// 잔디 전 307pt(창 577pt) → 잔디(구분선 + 캡션 + 월 라벨 + 7행×16pt) 후 창 757pt, 차이 180pt 를 더한 487pt.
-    static let contentNaturalHeight: CGFloat = 487
+    /// 본문(회고 카드 + 근무 잔디 + 토큰 잔디 + 지난주 히트맵)의 자연 높이(pt). 340pt 폭 ImageRenderer 실측값:
+    /// 토큰 잔디 전 487pt(창 757pt) → 토큰 잔디(구분선 + 캡션 + 월 라벨 + 7행×16pt) 후 창 938.5pt = 668.5pt.
+    /// 본문 밖 크롬은 270pt 고정이라 창 높이 − 270 이 곧 이 값이다(잔디 때와 같은 재는 법).
+    static let contentNaturalHeight: CGFloat = 668.5
     /// 크롬이 하나도 없을 때 창 상한(700pt)까지 남는 여유(pt) = 700 − 기본 상태 실측 창 높이 − 5pt 안전 여유.
-    /// 잔디가 붙으면서 본문 자연 높이만으로 상한을 넘겨 **음수**가 됐다(700 − 757 − 5): 크롬이 없어도 본문을
-    /// 62pt 깎아 스크롤로 넘기고, 그 위에 얹히는 배너/목표 편집 행은 그만큼 더 깎는다(창은 늘 695pt 에 멈춘다).
-    /// 회고 카드 + 히트맵(307pt)은 깎인 뒤에도 온전히 보이고, 잔디는 첫 서너 행만 접힘선 위에 남는다 — 그래서
-    /// 깎인 바닥엔 InsightsOverflowFade 로 "아래에 더 있다"를 알린다(스크롤 인디케이터는 기본 설정에서 숨는다).
-    static let chromeSlack: CGFloat = -62
+    /// 잔디 둘이 붙으면서 본문 자연 높이만으로 상한을 크게 넘겨 더 깊은 **음수**가 됐다(700 − 938.5 − 5): 크롬이
+    /// 없어도 본문을 243.5pt 깎아 스크롤로 넘기고, 그 위에 얹히는 배너/목표 편집 행은 그만큼 더 깎는다
+    /// (본문 표시 높이는 어느 조합에서도 425pt 로 수렴해 창이 늘 695pt 에 멈춘다 — 잔디 이전과 같은 착지점이다).
+    /// 회고 카드 + 근무 잔디(v0.2.41 의 새 순서에서 위 둘)는 깎인 뒤에도 거의 다 보이고, 토큰 잔디는 첫 행들만
+    /// 접힘선 위에 남는다 — 그래서 깎인 바닥엔 InsightsOverflowFade 로 "아래에 더 있다"를 알린다
+    /// (스크롤 인디케이터는 기본 설정에서 숨는다). 히트맵은 접힘선 아래로 내려갔다(구조체 머리 주석의 순서 근거).
+    static let chromeSlack: CGFloat = -243.5
     /// 지난주가 비었을 때(회고 카드는 빈 줄 한 줄, 히트맵은 빈 격자에 피크 문구 없음)의 본문 자연 높이(pt).
-    /// 340pt 폭 실측 창 660pt − 본문 밖 270pt. 이 상태는 잔디에만 기록이 있는 사용자(지난주 휴가)가 매주 만나는
-    /// 화면이라 따로 잰다 — 큰 본문 기준 예산을 그대로 쓰면 스크롤 높이(425pt)가 본문(390pt)보다 커서
-    /// 패널 바닥에 35pt 빈 띠가 늘 남는다.
-    static let contentNaturalHeightWithoutLastWeek: CGFloat = 390
+    /// 340pt 폭 실측 창 841.5pt − 본문 밖 270pt. 이 상태는 잔디에만 기록이 있는 사용자(지난주 휴가)가 매주 만나는
+    /// 화면이라 따로 잰다 — 큰 본문 기준 예산을 그대로 쓰면 스크롤 높이가 본문보다 커서 패널 바닥에 빈 띠가 남는다.
+    /// 큰 본문과의 차(97pt)는 토큰 잔디 유무와 무관하게 같다(실측: 668.5−571.5 = 487−390 = 97).
+    static let contentNaturalHeightWithoutLastWeek: CGFloat = 571.5
     /// 아무리 깎여도 본문에 남기는 최소 높이(회고 카드 한 장은 보이도록).
     static let minContentHeight: CGFloat = 190
+    /// 토큰 잔디 섹션 한 덩이(구분선 + 간격 + 캡션 + 격자)의 높이(pt). 340pt 폭 ImageRenderer 실측 차이값이다.
+    /// 수집 거부자는 이 섹션이 통째로 빠지므로(showsTokenGrid == false) 본문이 그만큼 짧고, 그 상태의 예산을
+    /// 큰 본문 기준으로 잡으면 패널 바닥에 이 높이만큼 빈 띠가 늘 남는다(잔디 때 겪은 결함과 같은 자리).
+    static let tokenSectionHeight: CGFloat = 181.5
+
+    /// 네 조합(지난주 유무 × 토큰 섹션 유무)의 본문 자연 높이. 상수 둘 + 델타 하나로 잰다 —
+    /// 조합마다 상수를 두면 레이아웃이 바뀔 때 네 개를 다 다시 재야 하고, 그중 하나만 낡아도 조용히 어긋난다.
+    static func naturalHeight(hasRetro: Bool, showsTokenGrid: Bool) -> CGFloat {
+        let base = hasRetro ? contentNaturalHeight : contentNaturalHeightWithoutLastWeek
+        return showsTokenGrid ? base : base - tokenSectionHeight
+    }
 
     /// 본문 표시 높이(nil 이면 자연 높이 그대로 — 스크롤 없음). 여유(chromeSlack)는 가장 큰 본문 기준으로 잰 값이라,
     /// 본문이 그보다 짧은 만큼(naturalHeight 가 작은 만큼) 여유가 늘어난다 — 지난주가 빈 본문은 크롬이 없으면
@@ -3082,27 +3099,39 @@ enum InsightsEmptyMessage {
     static let noData = noRetro
     static let loadFailed = "기록을 불러오지 못했어요"
 
-    /// 본문 대신 보여 줄 자리 문구. nil 이면 실제 내용(회고 카드 + 히트맵)을 그린다.
-    static func text(hasLoaded: Bool, hasFailed: Bool = false, totalSeconds: Int) -> String? {
+    /// 본문 대신 보여 줄 자리 문구. nil 이면 실제 내용(회고 카드 + 잔디 둘 + 히트맵)을 그린다.
+    /// hasTokenGrass: 근무 총량이 0 이어도 토큰 잔디에 그릴 값이 있으면 본문을 그린다(v0.2.41 — 근무 타이머를 안 쓰고
+    /// AI 만 쓰는 사용자에게 본문 전체를 자리 문구로 덮으면 토큰 잔디가 통째로 사라진다).
+    static func text(hasLoaded: Bool, hasFailed: Bool = false, totalSeconds: Int, hasTokenGrass: Bool = false) -> String? {
         if !hasLoaded { return hasFailed ? loadFailed : loading }
         // 한 번이라도 성공한 뒤 마지막 조회가 실패했고 보여 줄 기록이 하나도 없으면 "기록이 없다"고 단정하지 않는다 —
         // insightsLoaded 는 성공 후 false 로 되돌아가지 않으므로(로드 완료 + 실패 + 누적 0) 조합이 성립하는데,
         // 이건 대개 '가입 첫날 0건으로 로드해 둔 스냅샷 + 이후 조회 실패'다(서버엔 한 주치 기록이 있는데 못 읽은 상태).
         // 예전엔 이 조합에서 "기록이 없다"는 단정 옆에 [다시 시도]가 함께 떠 서로 모순된 화면이 됐다(회귀 지점).
-        if totalSeconds == 0 { return hasFailed ? loadFailed : noData }
+        if totalSeconds == 0, !hasTokenGrass { return hasFailed ? loadFailed : noData }
         return nil
     }
 }
 
 /// 팀 카드 자리를 대체하는 개인 기록 페이지. 리그/토큰/찌르기와 4자 상호 배타이며 본인 데이터만 쓴다.
-/// 위에서부터 (a) 지난주 회고 카드, (b) 요일×시간대 근무 리듬 히트맵 — **둘 다 같은 주(지난주)**를 그린다 —
-/// 그리고 (c) 최근 12주 일별 근무 잔디(이번 주까지). 값만 받아 그리므로(스토어 미참조)
+/// 위에서부터 (a) 지난주 회고 카드, (b) 최근 12주 일별 근무 잔디, (c) 최근 12주 일별 AI 토큰 잔디,
+/// (d) 요일×시간대 지난주 근무 리듬 히트맵. 값만 받아 그리므로(스토어 미참조)
 /// 렌더 테스트가 픽스처만으로 모든 상태를 재현할 수 있다.
+///
+/// **순서가 이 모양인 이유**(v0.2.41): 본문 자연 높이가 창 상한(700pt)을 넘겨 아래쪽이 늘 접힘선 밑으로 밀린다
+/// (InsightsPanelChromeBudget). 예전 순서(회고 → 히트맵 → 잔디)에서는 새로 만든 잔디가 통째로 접힘선 아래에 숨어
+/// 스크롤하지 않으면 존재조차 몰랐다. 그래서 **새 기능 둘(잔디·토큰 잔디)을 위로 올리고**, 이미 v0.2.40 부터 있던
+/// 히트맵을 스크롤 아래로 내렸다. 캡션이 "최근 12주 …" 둘 다음에 "지난주 …" 하나라 기간도 위에서 아래로 읽힌다.
 private struct InsightsPanel: View {
     let heatmap: WorkRhythmHeatmap
     let retro: WeeklyRetro?
     // 최근 12주 일별 잔디. heatmap/retro 와 같은 조회에서 함께 계산된다.
     let dailyGrid: WorkDailyGrid
+    // 최근 12주 일별 AI 토큰 잔디(이슈 #3 의 토큰 절반). 같은 조회에서 서버 일별 표 + 로컬 일별 맵 + 계정 버킷을 합쳐 나온다.
+    var tokenDailyGrid: TokenDailyGrid = .empty
+    // 토큰 잔디 섹션을 그릴지(= 서버 수집 허용). 수집 거부자는 서버에 일별 행이 없고 앞으로도 안 쌓이므로 빈 잔디를
+    // 보여 주면 "내가 안 썼다"는 거짓말이 된다 — 섹션 자체를 뺀다. 본문 높이 예산도 이 값으로 갈린다.
+    var showsTokenGrid: Bool = false
     // 첫 성공 로드 여부. false 면 "불러오는 중…"(syncMessage 재사용 금지).
     let hasLoaded: Bool
     // 마지막 조회가 실패로 끝났는지. true 면 로딩 문구 대신 실패 문구 + [다시 시도] 를 그린다.
@@ -3135,7 +3164,11 @@ private struct InsightsPanel: View {
             if let placeholder = InsightsEmptyMessage.text(
                 hasLoaded: hasLoaded,
                 hasFailed: hasFailed,
-                totalSeconds: heatmap.totalSeconds + dailyGrid.totalSeconds
+                totalSeconds: heatmap.totalSeconds + dailyGrid.totalSeconds,
+                // 근무 기록이 하나도 없어도 토큰 잔디에 값이 있으면 본문을 그린다 — 근무 타이머는 안 쓰고 AI 만 쓰는
+                // 사용자에게 "지난주 근무 기록이 없어요" 한 줄만 띄우면 방금 만든 토큰 잔디가 통째로 안 보인다
+                // (잔디에도 같은 이유로 dailyGrid 누적을 위 총량에 더한다).
+                hasTokenGrass: showsTokenGrid && tokenDailyGrid.totalTokens > 0
             ) {
                 HStack(spacing: 8) {
                     Text(placeholder)
@@ -3163,17 +3196,20 @@ private struct InsightsPanel: View {
     /// 상한을 넘긴 만큼 푸터가 화면 밖으로 잘린다. 배너/목표 편집 행이 얹히면 그만큼 더 낮춘다.
     @ViewBuilder
     private var insightsBody: some View {
+        // 순서는 회고 → 근무 잔디 → 토큰 잔디 → 히트맵(구조체 머리 주석의 근거 — 접힘선 위 자리를 새 기능에 준다).
         let content = VStack(spacing: 12) {
             retroCard
             PanelDivider()
-            heatmapSection
-            PanelDivider()
             dailyGridSection
+            if showsTokenGrid {
+                PanelDivider()
+                tokenGridSection
+            }
+            PanelDivider()
+            heatmapSection
         }
-        // 지난주가 비면(회고 nil ⇔ 히트맵 0 — 같은 세션에서 나오므로 늘 함께 간다) 본문이 97pt 짧다 — 그 높이로 예산을 잰다.
-        let naturalHeight = retro == nil
-            ? InsightsPanelChromeBudget.contentNaturalHeightWithoutLastWeek
-            : InsightsPanelChromeBudget.contentNaturalHeight
+        // 지난주가 비면(회고 nil ⇔ 히트맵 0 — 같은 세션에서 나오므로 늘 함께 간다) 본문이 짧고, 토큰 섹션이 빠져도 짧다.
+        let naturalHeight = InsightsPanelChromeBudget.naturalHeight(hasRetro: retro != nil, showsTokenGrid: showsTokenGrid)
         if let cap = InsightsPanelChromeBudget.capHeight(extraChromeHeight: extraChromeHeight, naturalHeight: naturalHeight) {
             // 깎인 본문의 바닥엔 "아래에 더 있다" 그라데이션을 얹고, 스크롤 내용 끝에 같은 높이의 여백을 둔다
             // (InsightsOverflowFade 참고). 두 경로(스크롤/클립)가 같은 모양이어야 스냅샷이 실제 화면을 말한다.
@@ -3270,7 +3306,7 @@ private struct InsightsPanel: View {
         )
     }
 
-    // (b) 근무 리듬 히트맵 — 지난주 요일×시간대 격자 + 가장 활발했던 시간.
+    // (d) 근무 리듬 히트맵 — 지난주 요일×시간대 격자 + 가장 활발했던 시간.
     @ViewBuilder
     private var heatmapSection: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -3278,16 +3314,13 @@ private struct InsightsPanel: View {
                 Image(systemName: "square.grid.3x3.fill")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(CheckTheme.secondaryText)
-                Text("근무 리듬")
+                // 회고 카드와 **같은 주**를 그린다는 사실이 캡션 안에 들어가야 한다(예전엔 "최근 8주" 합산이라
+                // 두 칸이 서로 다른 기간을 말하면서도 나란히 놓여 있었다). v0.2.41 부터 위에 "최근 12주 …" 캡션이
+                // 둘이나 있어, 기간을 오른쪽 꼬리표로 미뤄 두면 아래로 훑는 눈에 "12주짜리 셋째 격자"로 읽힌다.
+                Text("지난주 근무 리듬")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                 Spacer(minLength: 4)
-                // 위 회고 카드와 **같은 주**를 그린다는 사실이 드러나야 한다(예전엔 "최근 8주" 합산이라
-                // 두 칸이 서로 다른 기간을 말하면서도 나란히 놓여 있었다).
-                Text("지난주")
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .fixedSize()
             }
             WorkRhythmHeatmapGrid(heatmap: heatmap)
             if let peakText {
@@ -3299,7 +3332,7 @@ private struct InsightsPanel: View {
         }
     }
 
-    // (c) 최근 12주 근무 잔디 — 주(열) × 요일(행), 이번 주까지. 캡션 오른쪽에 옅음→진함 범례.
+    // (b) 최근 12주 근무 잔디 — 주(열) × 요일(행), 이번 주까지. 캡션 오른쪽에 옅음→진함 범례.
     @ViewBuilder
     private var dailyGridSection: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -3328,7 +3361,38 @@ private struct InsightsPanel: View {
         }
     }
 
-    /// 잔디 농도 단계 수(옅음→진함 4단계 + 빈 칸).
+    // (c) 최근 12주 AI 토큰 잔디 — 근무 잔디와 같은 뷰·같은 창·같은 칸 크기, 값만 토큰이다(이슈 #3).
+    // 근무 잔디 바로 아래에 두어 "일한 날"과 "AI 를 쓴 날"이 같은 격자 모양으로 위아래에서 맞물려 읽히게 한다.
+    @ViewBuilder
+    private var tokenGridSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                Text("최근 12주 AI 토큰")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                Spacer(minLength: 4)
+                ContributionLegendView(levels: Self.dailyGridLevels, color: CheckTheme.accent)
+            }
+            ContributionGridView(
+                weeks: tokenDailyGrid.weeks,
+                values: tokenDailyGrid.tokens,
+                weekStart: tokenDailyGrid.weekStart,
+                isFuture: tokenDailyGrid.isFuture(week:weekday:),
+                // 분모는 하루 5천만 토큰 고정 — 근무 잔디의 8시간과 같은 철학(근거는 TokenDailyGrid.fullDayTokens 주석).
+                denominator: TokenDailyGrid.fullDayTokens,
+                levels: Self.dailyGridLevels,
+                color: CheckTheme.accent,
+                // 툴팁 값 문구도 모델 쪽 순수 함수 — 여기 리터럴을 두면 픽셀 테스트가 못 보는 사각지대가 된다.
+                valueText: TokenDailyGrid.tooltipValueText
+            )
+        }
+    }
+
+    /// 잔디 농도 단계 수(옅음→진함 4단계 + 빈 칸). 두 잔디가 같은 값을 쓴다 — 단계 수가 갈리면 같은 진하기가
+    /// 서로 다른 뜻이 되어 나란히 놓인 두 격자를 비교할 수 없다.
     private static let dailyGridLevels = 4
 
     // "화요일 15시" — peakSlot(가장 진한 칸)의 표시 문구. 데이터가 없으면 nil(줄 자체를 생략).

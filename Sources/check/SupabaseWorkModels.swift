@@ -602,6 +602,34 @@ struct TokenUsageLegacyTotalRow: Decodable {
     let total: Int
 }
 
+/// token_usage_device_daily upsert 본문 **한 줄**(배열로 실린다, snake_case 인코딩). 하루(KST)·기기당 한 행이고
+/// 충돌키는 (user_id, day, device_id) 다. 서비스 upsertTokenUsageDaily 가 `[TokenUsageDailyUpsertRow]` 를 그대로 보낸다.
+///
+/// codex_account 는 **옵셔널이 핵심**이다(월 표의 codex_account_*·codex_diag_* 와 같은 규약): 합성 Encodable 은 nil 을
+/// encodeIfPresent 로 내보내 **키 자체가 빠지고**, PostgREST 의 merge-duplicates upsert 는 본문에 온 컬럼만 SET 한다.
+/// 계정 버킷(UTC 일자)이 그 날짜에 없는 기기가 0 을 실으면 다른 기기가 앞서 올린 계정값을 0 으로 밀어 버린다 — nil 이면
+/// 서버 값이 보존된다. claude_total/codex_total 은 로컬 집계라 항상 실린다(매 업로드가 최신값이므로 덮는 것이 맞다).
+struct TokenUsageDailyUpsertRow: Encodable, Equatable, Sendable {
+    let userId: String
+    /// KST 'YYYY-MM-DD'(claudeDaily/codexDaily 의 키 그대로).
+    let day: String
+    let deviceId: String
+    let claudeTotal: Int
+    let codexTotal: Int
+    var codexAccount: Int?
+}
+
+/// 일별 표 조회 응답 한 줄(select=day,device_id,claude_total,codex_total,codex_account). 기기별 행이 그대로 오고
+/// 합산은 클라(TokenDailyMerge.serverTotals)가 한다 — claude+codex 는 기기 합, codex_account 는 기기 간 max.
+struct TokenUsageDailyRow: Decodable, Equatable, Sendable {
+    let day: String
+    let deviceId: String
+    let claudeTotal: Int
+    let codexTotal: Int
+    /// null = 그 기기가 그 날짜의 계정 버킷을 보고하지 않음("0" 과 다르다).
+    let codexAccount: Int?
+}
+
 struct TeamWeeklyGoal: Equatable {
     static let defaultGoalSeconds = 60 * 60 * 60
     // 목표시간 기본값(시간 단위). teams.weekly_goal_hours 누락/null 시 폴백에 쓴다.

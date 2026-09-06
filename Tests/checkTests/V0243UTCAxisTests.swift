@@ -11,7 +11,7 @@ import Testing
 // 규칙 호출측(내 박스·잔디 병합)은 UTC 맵을 쓴다. KST 맵(`codexDaily`)과 `todayTotal` 은 그대로다.
 //
 // 표시(사용자 결정): "9시 경계 하루" — 반영된 날은 계정 버킷 그대로, 날짜 라벨은 UTC 날짜 문자열을 KST 날짜로 그대로 읽는다
-// (UTC 하루 = KST 오전 9시 ~ 다음날 오전 9시). 툴팁 한 줄(`TokenUsageMonthly.tokenDayAxisNote`)이 세 화면에서 같은 리터럴로 이를 밝힌다.
+// (UTC 하루 = KST 오전 9시 ~ 다음날 오전 9시). 안내 한 줄(`TokenUsageMonthly.tokenDayAxisNote`)은 잔디 헤더에만 짧게 둔다(v0.2.45).
 //
 // 기준 시각은 포크 스위트와 같다(2026-07-14 12:33:20 KST → 현재 월 2026-07, UTC 보존 하한 2026-06-30).
 
@@ -300,29 +300,34 @@ func grassMergePrefersTheUTCLocalValueAndFallsBackForOldClients() {
     #expect(old?.first?.codexUtcTotal == nil)
 }
 
-// MARK: - 7. 툴팁: 세 화면이 같은 리터럴로 하루의 뜻을 밝힌다
+// MARK: - 7. 하루 축 안내: 잔디 헤더에만, 짧게
 
 @Test
-func dayAxisNoteIsOneLiteralSharedByMyBoxBoardAndGrass() throws {
-    #expect(TokenUsageMonthly.tokenDayAxisNote == "Codex 하루는 오전 9시 기준(계정 집계와 같은 축) · Claude 는 자정 기준")
+func dayAxisNoteLivesOnlyOnTheGrassHeader() throws {
+    // v0.2.45: 내 박스·순위판 툴팁에서는 뺐다(사용자 지적 "유저들한테 너무 과하다"). 잔디 헤더 .help 한 곳만 짧은 문장으로 —
+    // 새벽 사용이 전날 칸에 들어가는 이유를 그 자리에서만 알린다.
+    #expect(TokenUsageMonthly.tokenDayAxisNote == "Codex 는 오전 9시 기준 하루예요")
     var usage = TokenUsageMonthly(month: "2026-09")
     usage.codexInput = 1_000
-    #expect(usage.detailTooltip.hasSuffix(" · " + TokenUsageMonthly.tokenDayAxisNote))
-    usage.codexInput = 0
-    usage.claudeInput = 5
-    #expect(!usage.detailTooltip.contains(TokenUsageMonthly.tokenDayAxisNote))   // Codex 가 없으면 말할 것이 없다
+    #expect(usage.detailTooltip == "Codex 1,000")
+    #expect(!usage.detailTooltip.contains("9시"))
     let entry = TokenBoardEntry(
         userID: "u", name: "n", avatarURL: nil, total: 120, claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0,
         codexInput: 150, codexOutput: 0, codexCacheRead: 0, codexAccountMonth: 100, codexEffectiveFromServer: 120)
-    #expect(entry.detailTooltip.hasSuffix(" · " + TokenUsageMonthly.tokenDayAxisNote))
-    // 소스 계약: 리터럴은 한 곳(TokenUsageMonthly)에만 있고, 순위판 툴팁·잔디 헤더가 그 상수를 부른다.
+    #expect(entry.detailTooltip == "Codex 120")
+    #expect(!entry.detailTooltip.contains("9시"))
+    // 소스 계약: 리터럴은 한 곳(TokenUsageMonthly)에만 있고, 잔디 헤더만 그 상수를 부른다 — 순위판 툴팁은 부르지 않는다.
+    // 진단 상수(accountDrivenTotalNote · localExceedsAccountNote)는 사라졌다.
     let usageSource = uaStrippingComments(try String(contentsOf: uaRepoURL("Sources/check/CheckTokenUsage.swift"), encoding: .utf8))
     let models = uaStrippingComments(try String(contentsOf: uaRepoURL("Sources/check/SupabaseWorkModels.swift"), encoding: .utf8))
     let menu = uaStrippingComments(try String(contentsOf: uaRepoURL("Sources/check/CheckMenuView.swift"), encoding: .utf8))
-    #expect(usageSource.components(separatedBy: "\"Codex 하루는 오전 9시 기준").count - 1 == 1)
-    #expect(!models.contains("\"Codex 하루는 오전 9시 기준") && !menu.contains("\"Codex 하루는 오전 9시 기준"))
-    #expect(models.contains("TokenUsageMonthly.tokenDayAxisNote"))
+    let rule = uaStrippingComments(try String(contentsOf: uaRepoURL("Sources/check/CodexEffectiveRule.swift"), encoding: .utf8))
+    #expect(usageSource.components(separatedBy: "\"Codex 는 오전 9시 기준").count - 1 == 1)
+    #expect(!models.contains("\"Codex 는 오전 9시 기준") && !menu.contains("\"Codex 는 오전 9시 기준"))
+    #expect(!models.contains("tokenDayAxisNote"))
     #expect(menu.contains(".help(TokenUsageMonthly.tokenDayAxisNote)"))
+    #expect(!usageSource.contains("accountDrivenTotalNote") && !models.contains("accountDrivenTotalNote"))
+    #expect(!rule.contains("localExceedsAccountNote") && !models.contains("localExceedsAccountNote"))
 }
 
 // MARK: - 8. upsert 묶음: 키 집합이 같은 행끼리만(옵셔널이 셋이 됐다) · 순서 결정적

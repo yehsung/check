@@ -1010,17 +1010,15 @@ func monthlyTooltipUsesGroupedFullNumbers() {
     #expect(usage.claudeTotal == 4_280_667_571)
     #expect(usage.codexTotal == 145_691_467)
     #expect(usage.total == 4_426_359_038)
-    #expect(usage.detailTooltip ==
-        "Claude 4,280,667,571 (입력 8,458,939 · 출력 9,796,198 · 캐시읽기 4,063,320,273 · 캐시생성 199,092,161) "
-        + "· Codex 145,691,467 (입력 145,068,307 · 출력 623,160 · 캐시 0) · " + TokenUsageMonthly.tokenDayAxisNote)
+    // v0.2.45: 툴팁은 캡션의 두 값(정확한 숫자)만 — 내역·로컬/계정·하루 축은 운영자 진단이라 UI 에서 걷어냈다.
+    #expect(usage.detailTooltip == "Claude 4,280,667,571 · Codex 145,691,467")
 }
 
 @Test
 func monthlyTooltipOmitsSourcesWithNoUsage() {
-    // Codex 만 있는 경우 툴팁에 Codex 만 나온다(빈 Claude 파트 미표시). v0.2.41: 입력·출력·캐시 내역이 괄호로 붙는다(issue #2).
+    // Codex 만 있는 경우 툴팁에 Codex 만 나온다(빈 Claude 파트 미표시). v0.2.45: 내역 괄호·하루 축 문구 없이 값 하나(캐시는 입력의 부분집합이라 합에 안 들어간다).
     let codexOnly = TokenUsageMonthly(month: "2026-07", codexInput: 1_500_000, codexOutput: 500_000, codexCacheRead: 1_200_000)
-    // v0.2.43: Codex 가 있으면 끝에 하루의 뜻(9시 경계) 한 줄이 붙는다(V0243UTCAxisTests).
-    #expect(codexOnly.detailTooltip == "Codex 2,000,000 (입력 1,500,000 · 출력 500,000 · 캐시 1,200,000) · " + TokenUsageMonthly.tokenDayAxisNote)
+    #expect(codexOnly.detailTooltip == "Codex 2,000,000")
     #expect(codexOnly.total == 2_000_000)   // 캐시는 total 에 안 들어간다
 }
 
@@ -1063,16 +1061,17 @@ func monthlyDecodesLegacySnapshotWithoutTodayFieldsAsDefaults() {
 }
 
 @Test
-func monthlyTooltipAppendsTodayWhenPresent() {
-    // 내 박스 툴팁 끝에 "오늘 +N" 한 줄이 붙는다(값이 있을 때만 — 없으면 기존 문구 그대로).
+func monthlyTooltipDoesNotRepeatTodayOrDiagnostics() {
+    // v0.2.45: "오늘 +N" 은 내 박스 행 자체가 보여 주므로(CheckMenuView "오늘 +N 토큰") 툴팁에 다시 적지 않는다 — 툴팁은 두 값뿐.
     let usage = TokenUsageMonthly(month: "2026-07", claudeInput: 100, todayTotal: 1_234_567, todayDate: "2026-07-14")
-    #expect(usage.detailTooltip == "Claude 100 (입력 100 · 출력 0 · 캐시읽기 0 · 캐시생성 0) · 오늘 +1,234,567")
-    // 오늘분 0 이면 기존 문구 불변(하위호환).
+    #expect(usage.detailTooltip == "Claude 100")
     let noToday = TokenUsageMonthly(month: "2026-07", codexInput: 1_500_000, codexOutput: 500_000)
-    #expect(noToday.detailTooltip == "Codex 2,000,000 (입력 1,500,000 · 출력 500,000 · 캐시 0) · " + TokenUsageMonthly.tokenDayAxisNote)
-    // 오늘분과 Codex 가 함께 있으면 "오늘 +N" 뒤에 하루의 뜻이 온다(맨 끝 고정).
+    #expect(noToday.detailTooltip == "Codex 2,000,000")
     let both = TokenUsageMonthly(month: "2026-07", codexInput: 5, todayTotal: 3, todayDate: "2026-07-14")
-    #expect(both.detailTooltip == "Codex 5 (입력 5 · 출력 0 · 캐시 0) · 오늘 +3 · " + TokenUsageMonthly.tokenDayAxisNote)
+    #expect(both.detailTooltip == "Codex 5")
+    for tip in [usage, noToday, both].map(\.detailTooltip) {
+        #expect(!tip.contains("오늘") && !tip.contains("기준") && !tip.contains("캐시"))
+    }
 }
 
 // MARK: - 뷰 시그니처 (onOpenBoard 유무)

@@ -39,6 +39,9 @@ private func tgUsage(
     codexDaily: [String: Int] = [:]
 ) -> TokenUsageMonthly {
     var usage = TokenUsageMonthly(month: month)
+    // v0.2.43(E-3): 이 픽스처는 **이 빌드가 스캔한** 스냅샷을 뜻한다 — windowStart 가 비어 있으면 첫 스캔 전 복원된 옛 스냅샷으로 읽혀
+    // codex_utc_total 이 생략된다(V0243ReviewFixTests). 월 1일을 창 시작으로 두면 창 규칙은 옛 월 접두어 규칙과 같아 날짜 집합은 그대로다.
+    usage.windowStart = month + "-01"
     usage.claudeDaily = claudeDaily
     usage.codexDaily = codexDaily
     // 월간 업로드 게이트(총합 > 0)를 통과시키기 위한 최소값 — 일별 경로와는 무관하다.
@@ -253,7 +256,8 @@ func uploadValuesKeepOnlyCurrentMonthDaysAndSkipEmptyOnes() {
         account: tgAccount(["2026-09-01": 900, "2026-09-05": 4, "2026-08-31": 3])
     )
     #expect(Set(values.keys) == ["2026-09-01", "2026-09-02", "2026-09-05"])
-    // 이번 달 날은 네 값이 다 실린다(codexUTC 는 UTC 맵이 비어 있어 0 — nil 이 아니다: 이 달은 UTC 맵이 덮는 범위다).
+    // 이번 달 날은 네 값이 다 실린다(codexUTC 는 UTC 맵이 비어 있어 0 — nil 이 아니다: 이 빌드가 스캔한 스냅샷(windowStart 채워짐)이고
+    // 이 달은 UTC 맵이 덮는 범위다. 옛 스냅샷이면 nil — V0243ReviewFixTests.restoredLegacySnapshotOmitsUTCTotalsInsteadOfSendingZeros).
     #expect(values["2026-09-01"] == TokenUsageDailyValue(claude: 100, codex: 0, codexUTC: 0, codexAccount: 900))
     // 계정 버킷이 없는 날은 nil 이다(0 이 아니다) — 0 을 실으면 다른 기기가 올린 계정값을 덮는다.
     #expect(values["2026-09-02"] == TokenUsageDailyValue(claude: 0, codex: 7, codexUTC: 0, codexAccount: nil))

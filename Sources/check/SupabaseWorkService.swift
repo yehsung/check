@@ -1003,11 +1003,16 @@ actor SupabaseWorkService {
         accountStatus: CodexAccountProbeStatus? = nil,
         diagnostics: CodexUsageDiagnostics? = nil
     ) async throws {
+        // v0.2.43(코드 리뷰 P1): 미로그인(3)이면 스냅샷 네 값을 **싣지 않는다**. 스토어는 로그아웃·API 키 전환 뒤에도 마지막 스냅샷을
+        // 계속 들고 있는데(CheckCodexAccountUsage 는 status 만 바꾼다), 그것을 status 3 과 함께 실으면 서버가 "스냅샷 있는 미로그인 기기"
+        // 라는 어긋난 상태를 본다(구 산식은 그 기기의 반영일 로컬을 계정 위에 얹어 최대 2배 이중 계상). 키를 빼면 서버의 마지막 계정값은
+        // 보존되고, 산식 쪽은 서버 가드(스냅샷 없는 status 3 만 계정 밖)가 막는다 — 클라 생략은 그 가드의 짝이지 대체가 아니다.
+        let snapshot: CodexAccountUsage? = (accountStatus == .notLoggedIn) ? nil : account
         let accountFields: TokenUsageAccountFields? = (account == nil && accountStatus == nil) ? nil : TokenUsageAccountFields(
-            month: account.map { $0.monthTotal(usage.month) },
-            lifetime: account?.lifetimeTokens,
-            fetchedAt: account.map { dateFormatter.string(from: $0.fetchedAt) },
-            lastDay: account?.latestBucketDate(in: usage.month),
+            month: snapshot.map { $0.monthTotal(usage.month) },
+            lifetime: snapshot?.lifetimeTokens,
+            fetchedAt: snapshot.map { dateFormatter.string(from: $0.fetchedAt) },
+            lastDay: snapshot?.latestBucketDate(in: usage.month),
             status: accountStatus?.rawValue
         )
         try await sendNoBody(

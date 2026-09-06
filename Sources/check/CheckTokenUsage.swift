@@ -52,12 +52,13 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     /// `windowStartDay` 가 월 1일로 대신한다(옛 동작과 같다). Codex 일별 맵은 여전히 현재 월뿐이다(7일 지난 rollout 은 `.zst` 라
     /// 못 읽고 계정 버킷이 70일을 채운다 — CodexFileProgress 의 월 상태 모델을 바꾸지 않는다).
     var windowStart: String = ""
-    /// **이 기기의 Claude 로그가 온전한 첫 날** 'YYYY-MM-DD'(v0.2.43) = 스캔에서 본 가장 오래된 Claude transcript 의 mtime(KST 일자) 다음 날.
-    /// Claude Code 는 transcript 를 mtime 기준 30일(기본) 지나면 지우므로, 그보다 앞선 날의 로컬 일별 값은 **부분값**일 수 있다 —
-    /// 어떤 날 D 의 엔트리를 담은 파일은 mtime ≥ D 이므로, 남아 있는 가장 오래된 파일의 날짜 이후는 전부 남아 있다(온전),
-    /// 그 앞은 지워졌을 수 있다(부분). 일별 업로드는 이 날 앞의 Claude 값을 보내지 않는다(캐시 재구성·재설치 뒤 옛 완전값을 부분값으로
-    /// 덮지 않게 — TokenUsageDailyUpload.values). 빈 문자열 = 창 시작(제한 없음; Claude 파일이 하나도 없는 맥). 잔디 표시는 이 값과
-    /// 무관하다(서버 행과 날짜별 max 라 부분값이 화면을 깎지 못한다).
+    /// **이 기기의 Claude 로그가 온전한 첫 날** 'YYYY-MM-DD'(v0.2.43) = 스캔에서 본 가장 오래된 Claude transcript 의 mtime(KST 일자) 다음 날
+    /// — 단 그 파일이 **정리 기간(29일) 보다 오래됐을 때만**. Claude Code 는 transcript 를 mtime 기준 30일(기본) 지나면 지우므로, 그보다
+    /// 앞선 날의 로컬 일별 값은 **부분값**일 수 있다 — 어떤 날 D 의 엔트리를 담은 파일은 mtime ≥ D 이므로, 남아 있는 가장 오래된
+    /// 파일의 날짜 이후는 전부 남아 있다(온전), 그 앞은 지워졌을 수 있다(부분). 가장 오래된 파일이 29일 안이면 정리가 닿은 파일이
+    /// 없으니 하한도 없다(빈 문자열) — 조건 없이 +1일을 세우면 첫 설치일의 오늘이 영구 누락된다(코드 리뷰 P1).
+    /// 일별 업로드는 이 날 앞의 Claude 값을 보내지 않는다(캐시 재구성·재설치 뒤 옛 완전값을 부분값으로 덮지 않게 —
+    /// TokenUsageDailyUpload.values). 빈 문자열 = 제한 없음. 잔디 표시는 이 값과 무관하다(서버 행과 날짜별 max 라 부분값이 화면을 깎지 못한다).
     var claudeCompleteFrom: String = ""
 
     /// 화면 우측에 굵게 뜨는 총합 = 여섯 필드의 단순 합. **codexCacheRead 는 넣지 않는다**(codexInput 의 부분집합).
@@ -1001,7 +1002,7 @@ enum TokenUsageIncrementalScanner {
             utcRetainFrom: utcRetainFromKey(monthString: monthString)
         )
         usage.windowStart = window.startKey
-        usage.claudeCompleteFrom = claudeCompleteFromKey(oldestMtimeMicros: oldestClaudeMtime)
+        usage.claudeCompleteFrom = claudeCompleteFromKey(oldestMtimeMicros: oldestClaudeMtime, now: now)
         return Result(cache: cache, usage: usage, stats: stats)
     }
 
@@ -1026,11 +1027,21 @@ enum TokenUsageIncrementalScanner {
         return (start, start.addingTimeInterval(-retentionSlack), dayBounds(now: start).date)
     }
 
-    /// 이 기기의 Claude 로그가 온전한 첫 날(TokenUsageMonthly.claudeCompleteFrom): 창 안에서 본 가장 오래된 transcript mtime 의 KST 일자
-    /// **다음 날**. 그 날 자체는 같은 날의 더 이른 파일이 이미 지워졌을 수 있어 부분값으로 본다. 파일이 하나도 없으면 빈 문자열(제한 없음).
-    static func claudeCompleteFromKey(oldestMtimeMicros: Int?) -> String {
+    /// Claude Code 의 transcript 정리 기간(기본 `cleanupPeriodDays` 30일) − 1일. 가장 오래된 파일이 이보다 **오래됐을 때만** 그 날의
+    /// 더 이른 파일이 이미 정리로 지워졌을 수 있다 — 그보다 젊으면 정리가 닿은 파일이 없으므로 로그는 온전하다.
+    static let claudeCleanupFloorSeconds: TimeInterval = 29 * 86_400
+
+    /// 이 기기의 Claude 로그가 온전한 첫 날(TokenUsageMonthly.claudeCompleteFrom). 파일이 하나도 없으면 빈 문자열(제한 없음).
+    ///
+    /// 하한은 **정리가 그 날의 더 이른 파일을 지웠을 수 있을 때만** 세운다: 가장 오래된 transcript mtime 이 now − 29일 보다 오래됐으면
+    /// 그 KST 일자의 **다음 날**(그 날 자체는 더 이른 파일이 지워졌을 수 있어 부분값), 그보다 젊으면 빈 문자열.
+    /// v0.2.43 초안은 조건 없이 언제나 +1일을 돌려, 가장 오래된 파일이 **오늘** 만들어진 경우(첫 설치일 · 30일 공백 뒤 첫 날 ·
+    /// `claude -c` 로 한 파일만 이어 쓰는 사용자)에 오늘 Claude 일별을 업로드에서 영구히 뺐다(코드 리뷰 P1 — v0.2.42 는 올렸으므로 회귀).
+    /// 정리가 닿지 않은 파일에 하한을 세울 이유가 없다.
+    static func claudeCompleteFromKey(oldestMtimeMicros: Int?, now: Date) -> String {
         guard let oldestMtimeMicros else { return "" }
         let oldest = Date(timeIntervalSince1970: TimeInterval(oldestMtimeMicros) / 1_000_000)
+        guard now.timeIntervalSince(oldest) >= claudeCleanupFloorSeconds else { return "" }
         return dayBounds(now: dayBounds(now: oldest).end).date
     }
 

@@ -1300,6 +1300,17 @@ func uploadBodyOmitsAccountKeysWhenAbsentAndCarriesCacheReadAlways() async throw
     let third = try #require(c41UploadBodies(host: host).last)
     #expect(third["codex_account_status"] as? Int == 3)
     #expect(third["codex_account_month"] == nil && third["codex_account_lifetime"] == nil)
+
+    // v0.2.43(코드 리뷰 P1, E-2): 미로그인(3)으로 바뀐 뒤에도 스토어는 마지막 스냅샷을 들고 있다 — 그 스냅샷을 status 3 과 **함께**
+    // 실으면 서버가 그 기기를 "스냅샷 있는 status 3" 으로 보고(구 산식에선 반영일 로컬을 계정 위에 얹었다) 값이 어긋난다.
+    // 미로그인이면 스냅샷 네 키를 생략한다(키 생략 → 서버의 마지막 계정값은 보존, 산식은 서버 가드가 막는다).
+    await store.uploadTokenUsageIfNeeded(usage: c41LocalUsage(total: 2_000), account: account, accountStatus: .notLoggedIn, now: c41SepNow.addingTimeInterval(183))
+    let fourth = try #require(c41UploadBodies(host: host).last)
+    #expect(c41UploadBodies(host: host).count == 4)
+    #expect(fourth["codex_account_status"] as? Int == 3)
+    #expect(fourth["codex_account_month"] == nil && fourth["codex_account_lifetime"] == nil
+            && fourth["codex_account_last_day"] == nil && fourth["codex_account_at"] == nil,
+            "미로그인인데 스냅샷 키가 실렸다: \(fourth.keys.filter { $0.hasPrefix("codex_account") }.sorted())")
 }
 
 /// 로컬 0 + 계정 > 0 이면 업로드된다(옛 게이트 `usage.total > 0` 만이면 침묵). 계정 0·로컬 0 은 여전히 침묵.

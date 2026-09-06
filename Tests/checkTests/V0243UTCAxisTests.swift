@@ -217,25 +217,27 @@ func dailyUploadSendsEachFieldOnlyWhereItsMapIsComplete() throws {
     usage.codexDaily = ["2026-07-01": 5]
     usage.codexDailyUTC = ["2026-06-30": 9, "2026-07-01": 3]
     let values = TokenUsageDailyUpload.values(usage: usage, account: uaAccount(["2026-07-01": 40, "2026-06-30": 8]))
-    // 전월 마지막 UTC 일(6/30): Codex KST 맵은 이번 달만 덮으므로 **키 생략**, UTC 값·계정 버킷은 싣고, Claude 는 창이 덮어 완전값이면 싣는다.
-    #expect(values["2026-06-30"] == TokenUsageDailyValue(claude: 2, codex: nil, codexUTC: 9, codexAccount: 8))
+    // 전월 마지막 UTC 일(6/30): Codex KST 맵은 이번 달만 덮으므로 **키 생략**, UTC 값도 재파싱 직후 부분값이라 **싣지 않는다**(E-4 — 서버는
+    // 그 날을 반영일로 보고 계정 버킷을 쓴다), 계정 버킷은 싣고, Claude 는 창이 덮어 완전값이면 싣는다.
+    #expect(values["2026-06-30"] == TokenUsageDailyValue(claude: 2, codex: nil, codexUTC: nil, codexAccount: 8))
     #expect(values["2026-07-01"] == TokenUsageDailyValue(claude: 4, codex: 5, codexUTC: 3, codexAccount: 40))
     // 창 안이지만 이번 달 밖·UTC 하한 앞(5/10): Claude 만. Codex 두 값은 모른다(nil) — 0 으로 보내면 5월 행의 Codex 가 지워진다.
     #expect(values["2026-05-10"] == TokenUsageDailyValue(claude: 6, codex: nil, codexUTC: nil, codexAccount: nil))
     // 로그 완전성 하한이 6/30 뒤면 그 날 Claude 도 빠진다(A 의 규칙 그대로).
     usage.claudeCompleteFrom = "2026-07-01"
     let guarded = TokenUsageDailyUpload.values(usage: usage, account: nil)
-    #expect(guarded["2026-06-30"] == TokenUsageDailyValue(claude: nil, codex: nil, codexUTC: 9, codexAccount: nil))
+    // 6/30 은 Claude 도 하한 앞·Codex 두 값도 모름·버킷 없음 → 행 자체가 빠진다(넷 다 없는 날).
+    #expect(guarded["2026-06-30"] == nil)
     // 셋 다 없는 날은 빠진다.
     #expect(guarded["2026-05-10"] == nil)
 
-    // 요청 본문: 6/30 행에는 codex_total 키가 없고 codex_utc_total 은 있다. 7/1 행은 셋 다.
+    // 요청 본문: 6/30 행에는 codex_total 도 codex_utc_total 도 없다(E-4). 7/1 행은 셋 다.
     let rows = TokenUsageDailyUpload.rows(userID: "u", deviceID: "MAC-A", days: ["2026-06-30", "2026-07-01", "2026-05-10"], values: values)
     let encoder = JSONEncoder()
     encoder.keyEncodingStrategy = .convertToSnakeCase
     let bodies = try rows.map { try JSONSerialization.jsonObject(with: encoder.encode($0)) as? [String: Any] ?? [:] }
-    #expect(Set(bodies[0].keys) == ["user_id", "day", "device_id", "claude_total", "codex_utc_total", "codex_account"])
-    #expect(bodies[0]["codex_utc_total"] as? Int == 9)
+    #expect(Set(bodies[0].keys) == ["user_id", "day", "device_id", "claude_total", "codex_account"])
+    #expect(bodies[0]["codex_utc_total"] == nil)
     #expect(Set(bodies[1].keys) == ["user_id", "day", "device_id", "claude_total", "codex_total", "codex_utc_total", "codex_account"])
     #expect(Set(bodies[2].keys) == ["user_id", "day", "device_id", "claude_total"])
     // 스냅샷 Codable: UTC 맵이 왕복하고, 없는 옛 스냅샷은 빈 맵.

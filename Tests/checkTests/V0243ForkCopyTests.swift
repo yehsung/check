@@ -477,9 +477,12 @@ func dailyUploadSendsWindowDaysAndFallsBackToMonthForOldSnapshots() throws {
     #expect(try JSONDecoder().decode(TokenUsageMonthly.self, from: data) == usage)
     let legacy = try JSONDecoder().decode(TokenUsageMonthly.self, from: Data("{\"month\":\"2026-07\"}".utf8))
     #expect(legacy.windowStart == "" && legacy.windowStartDay == "2026-07-01" && legacy.claudeCompleteFrom == "")
-    #expect(TokenUsageIncrementalScanner.claudeCompleteFromKey(oldestMtimeMicros: nil) == "")
-    #expect(TokenUsageIncrementalScanner.claudeCompleteFromKey(oldestMtimeMicros: micros(forkUTC("2026-06-04T14:59:59Z"))) == "2026-06-05")   // KST 06-04 23:59:59
-    #expect(TokenUsageIncrementalScanner.claudeCompleteFromKey(oldestMtimeMicros: micros(forkUTC("2026-06-04T15:00:00Z"))) == "2026-06-06")   // KST 06-05 00:00
+    // 하한 규칙(E-1): 가장 오래된 파일이 정리 기간(29일) 보다 오래됐을 때만 그 KST 일자 +1일. forkNow(07-14) 기준 06-04 는 40일 전이라 하한이 선다.
+    #expect(TokenUsageIncrementalScanner.claudeCompleteFromKey(oldestMtimeMicros: nil, now: forkNow) == "")
+    #expect(TokenUsageIncrementalScanner.claudeCompleteFromKey(oldestMtimeMicros: micros(forkUTC("2026-06-04T14:59:59Z")), now: forkNow) == "2026-06-05")   // KST 06-04 23:59:59
+    #expect(TokenUsageIncrementalScanner.claudeCompleteFromKey(oldestMtimeMicros: micros(forkUTC("2026-06-04T15:00:00Z")), now: forkNow) == "2026-06-06")   // KST 06-05 00:00
+    // 29일 안의 파일은 하한을 세우지 않는다 — 오늘 파일뿐인 첫 설치일에 오늘을 영구 누락하던 결함(리뷰 P1)의 회귀 방지(V0243ReviewFixTests 가 스캔→values 로 고정).
+    #expect(TokenUsageIncrementalScanner.claudeCompleteFromKey(oldestMtimeMicros: micros(forkNow.addingTimeInterval(-3_600)), now: forkNow) == "")
 }
 
 /// ★ PostgREST 는 배열 본문의 키 집합이 행마다 다르면 400 PGRST102 로 본문 전체를 거절한다(v0.2.41 리뷰 P0). claude_total 도 빠질 수 있게 된

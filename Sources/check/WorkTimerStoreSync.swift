@@ -2042,7 +2042,13 @@ extension WorkTimerStore {
 /// - claude: 이 기기의 Claude 로그가 온전한 날(TokenUsageMonthly.claudeCompleteFrom 이후)에만 값. 그 앞은 nil(v0.2.43).
 /// - codex(KST): 현재 KST 월 안의 날에만 값 — KST 맵(codexDaily)은 현재 월뿐이다. 창(12주) 안이라도 지난달 날은 nil(v0.2.43 UTC 축 작업에서
 ///   잡은 구멍: 창이 12주로 넓어진 뒤 지난달 날에 0 을 실으면 그 달 행의 Codex 가 지워진다).
-/// - codexUTC: UTC 보존 하한(전월 마지막 UTC 일, `utcRetainFromKey`) 이상의 날에만 값. 그 앞은 nil.
+/// - codexUTC: **이 빌드의 스캔 산출물**(windowStart 가 채워진 스냅샷)이고, UTC 보존 하한(전월 마지막 UTC 일, `utcRetainFromKey`)
+///   **다음 날 이후**의 날에만 값. 그 앞은 nil. 두 예외의 이유(코드 리뷰 P2 두 건):
+///   · 첫 스캔 전 복원된 옛 스냅샷(v0.2.42, windowStart "")은 UTC 맵이 비어 있다 — 0 을 실으면 서버 `coalesce(codex_utc_total, codex_total)`
+///     이 0 이 되어 그 사용자의 꼬리가 다음 업로드까지 0 이다. 모르는 값은 키를 뺀다.
+///   · 전월 마지막 UTC 일(하한 당일, 예: 7월의 "2026-06-30")의 UTC 합은 이번 달 첫 9시간 몫만 담긴 **부분값**이다(전월 mtime 파일은
+///     이번 달 프리필터 밖이라 파싱되지 않는다). 그 날은 서버 산식에서 반영일이라 계정 버킷이 쓰이므로 싣지 않아도 손실이 없다.
+///     (스캐너가 그 키를 **보존**하는 것은 별개의 규칙이다 — 월초 마지막 날 차분 재료이지 업로드 재료가 아니다.)
 /// - codexAccount: 그 날짜의 계정 버킷이 있을 때만.
 struct TokenUsageDailyValue: Equatable, Sendable {
     var claude: Int?
@@ -2066,8 +2072,10 @@ enum TokenUsageDailyUpload {
         let windowStart = usage.windowStartDay
         let completeFrom = usage.claudeCompleteFrom
         let monthPrefix = usage.month + "-"
-        // UTC 축 맵의 보존 하한(전월 마지막 UTC 일). 그 앞 날짜의 codex_utc_total 은 모른다(nil) — 있어도 부분값이다.
+        // UTC 축 맵의 보존 하한(전월 마지막 UTC 일). 그 날과 그 앞 날짜의 codex_utc_total 은 모른다(nil) — 하한 당일은 재파싱 직후 부분값이고
+        // (E-4), 그 앞은 맵에 없다. UTC 맵 자체는 이 빌드가 스캔한 스냅샷(windowStart 채워짐)에만 있다 — 옛 스냅샷은 통째로 모른다(E-3).
         let utcRetainFrom = TokenUsageIncrementalScanner.utcRetainFromKey(monthString: usage.month)
+        let utcMapIsFromThisBuild = !usage.windowStart.isEmpty
         let buckets = account?.buckets ?? [:]
         var result: [String: TokenUsageDailyValue] = [:]
         // 고정폭 'YYYY-MM-DD' 라 사전식 비교 == 날짜 순서. 계정 버킷·UTC 맵은 UTC 일자 키, Claude·Codex KST 맵은 KST 일자 키인데
@@ -2077,7 +2085,7 @@ enum TokenUsageDailyUpload {
             // 각 값은 그 맵이 덮는 날에만 싣는다(TokenUsageDailyValue 주석). 모르는 값은 nil → 키 생략 → 서버의 옛 완전값 보존.
             let claudeKnown = completeFrom.isEmpty || day >= completeFrom
             let codexKnown = day.hasPrefix(monthPrefix)
-            let utcKnown = day >= utcRetainFrom
+            let utcKnown = utcMapIsFromThisBuild && day > utcRetainFrom
             let value = TokenUsageDailyValue(
                 claude: claudeKnown ? max(0, usage.claudeDaily[day] ?? 0) : nil,
                 codex: codexKnown ? max(0, usage.codexDaily[day] ?? 0) : nil,

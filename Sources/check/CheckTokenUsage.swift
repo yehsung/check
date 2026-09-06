@@ -33,10 +33,33 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     var todayTotal: Int = 0
     /// todayTotal 이 귀속된 KST 날짜 'YYYY-MM-DD'. 표시 측이 현재 KST 날짜와 다르면(어제 이후 안 연 스냅샷) 오늘분을 0 으로 본다.
     var todayDate: String = ""
-    /// KST 'YYYY-MM-DD' → 그 날 Claude 4필드 합(현재 월 안의 날짜만). 일별 추이(과제 E)의 원천이며 todayTotal 의 Claude 몫이다.
+    /// KST 'YYYY-MM-DD' → 그 날 Claude 4필드 합(**12주 잔디 창 안의 날짜** — v0.2.43 부터 현재 월이 아니라 windowStart 이후 전부).
+    /// 일별 추이(잔디)의 원천이며 todayTotal 의 Claude 몫이다. 월 합계(claudeInput 등)는 여전히 현재 월만이다.
     var claudeDaily: [String: Int] = [:]
     /// KST 'YYYY-MM-DD' → 그 날 Codex 입력+출력 델타 합(현재 월 안의 날짜만). todayTotal 의 Codex 몫.
     var codexDaily: [String: Int] = [:]
+    /// **UTC** 'YYYY-MM-DD' → 그 UTC 하루(= KST 오전 9시 ~ 다음날 오전 9시)의 Codex 입력+출력 델타 합(v0.2.43, 계정 우선 산식 검토 P1).
+    /// 계정 버킷(`account/usage/read`)이 UTC 날짜 키라, 산식의 꼬리(`day > lastDay`)와 마지막 날 차분은 **이 맵**과 견줘야 한다 —
+    /// KST 맵(codexDaily)을 같은 문자열 키로 견주면 KST 0~9시 몫이 전날 UTC 버킷과 겹쳐 항상 더해진다(운영자 5월: UTC 정렬
+    /// 오차 0.1M vs KST 키 28.6M(37%); 조영서 +41% 실례). 키 범위는 현재 월이 아니라 **UTC 일 ≥ KST 월 시작 − 1일**
+    /// (`TokenUsageIncrementalScanner.utcRetainFromKey`) — 전월 마지막 UTC 일은 이번 달 첫 9시간을 담고 있어 월초에 버리면
+    /// 마지막 날 차분이 0 으로 떨어진다. 같은 이벤트가 두 맵에 **한 번씩** 들어가므로 두 맵의 합은 같다(KST 월 밖 키 제외).
+    /// 표시(사용자 결정 2026-09-06)는 "9시 경계 하루": 반영된 날은 계정 버킷 그대로, 날짜 라벨은 이 키를 KST 날짜로 그대로 읽는다.
+    var codexDailyUTC: [String: Int] = [:]
+    /// 일별 맵의 창 시작 'YYYY-MM-DD'(v0.2.43). Claude 일별 맵은 현재 월이 아니라 **12주 잔디 창**([이번 주 월요일 − 12주, 오늘])을
+    /// 담고, 그 창의 첫 날이 이 값이다. 일별 업로드(TokenUsageDailyUpload.values)가 "창 안의 날만 보낸다"는 필터의 기준으로 쓴다 —
+    /// 창 앞 이틀(straddle 보관분)은 부분값이라 서버의 온전한 값을 덮으면 안 된다. 옛 스냅샷엔 없으므로 빈 문자열이면
+    /// `windowStartDay` 가 월 1일로 대신한다(옛 동작과 같다). Codex 일별 맵은 여전히 현재 월뿐이다(7일 지난 rollout 은 `.zst` 라
+    /// 못 읽고 계정 버킷이 70일을 채운다 — CodexFileProgress 의 월 상태 모델을 바꾸지 않는다).
+    var windowStart: String = ""
+    /// **이 기기의 Claude 로그가 온전한 첫 날** 'YYYY-MM-DD'(v0.2.43) = 스캔에서 본 가장 오래된 Claude transcript 의 mtime(KST 일자) 다음 날
+    /// — 단 그 파일이 **정리 기간(29일) 보다 오래됐을 때만**. Claude Code 는 transcript 를 mtime 기준 30일(기본) 지나면 지우므로, 그보다
+    /// 앞선 날의 로컬 일별 값은 **부분값**일 수 있다 — 어떤 날 D 의 엔트리를 담은 파일은 mtime ≥ D 이므로, 남아 있는 가장 오래된
+    /// 파일의 날짜 이후는 전부 남아 있다(온전), 그 앞은 지워졌을 수 있다(부분). 가장 오래된 파일이 29일 안이면 정리가 닿은 파일이
+    /// 없으니 하한도 없다(빈 문자열) — 조건 없이 +1일을 세우면 첫 설치일의 오늘이 영구 누락된다(코드 리뷰 P1).
+    /// 일별 업로드는 이 날 앞의 Claude 값을 보내지 않는다(캐시 재구성·재설치 뒤 옛 완전값을 부분값으로 덮지 않게 —
+    /// TokenUsageDailyUpload.values). 빈 문자열 = 제한 없음. 잔디 표시는 이 값과 무관하다(서버 행과 날짜별 max 라 부분값이 화면을 깎지 못한다).
+    var claudeCompleteFrom: String = ""
 
     /// 화면 우측에 굵게 뜨는 총합 = 여섯 필드의 단순 합. **codexCacheRead 는 넣지 않는다**(codexInput 의 부분집합).
     /// 이 값이 서버 `total` 컬럼으로 올라가 기기 합산에 쓰이므로 의미(로컬 6필드 합)를 바꾸지 마라 — 계정 집계를 섞은
@@ -50,6 +73,14 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     /// Codex 소계(입력+출력) — 툴팁 표기용. 의미 불변: 캐시는 입력에 이미 들어 있다.
     var codexTotal: Int { codexInput + codexOutput }
 
+    /// 일별 맵 창의 첫 날. windowStart 가 비어 있으면(옛 스냅샷·손으로 만든 값) 월 1일 — 그러면 일별 업로드 필터가 옛 월 접두어 규칙과 같아진다.
+    var windowStartDay: String { windowStart.isEmpty ? month + "-01" : windowStart }
+
+    /// 계정 버킷과 같은 축(UTC 날짜)의 로컬 Codex 일별 맵 — 산식 호출측(내 박스 `TokenUsageDisplay`·잔디 `TokenDailyMerge`)이 쓴다.
+    /// UTC 맵이 비어 있으면 KST 맵으로 후퇴한다: 이 빌드 이전에 저장된 스냅샷(UTC 맵 없음)을 첫 스캔 전에 복원한 순간뿐이고,
+    /// 첫 스캔(캐시 v2/v5 전체 재파싱)이 끝나면 두 맵이 함께 채워진다. Codex 를 안 쓰면 둘 다 비어 있어 어느 쪽이든 같다.
+    var codexDailyOnAccountAxis: [String: Int] { codexDailyUTC.isEmpty ? codexDaily : codexDailyUTC }
+
     /// 라벨 "N월 …"에 쓰는 월 숫자. 'YYYY-MM' 의 뒤 두 자리를 정수로(선행 0 제거). 파싱 실패 시 0.
     var monthNumber: Int { Int(month.split(separator: "-").last ?? "") ?? 0 }
 
@@ -57,12 +88,20 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     /// **같은 문구**를 써야 같은 현상을 두 어휘로 부르지 않는다 — 리터럴을 두 곳에 흩뿌리지 않고 여기 하나만 둔다.
     static let accountDrivenTotalNote = "총합은 계정 집계 기준"
 
+    /// 하루의 뜻을 밝히는 한 줄(v0.2.43, 사용자 결정 "9시 경계"). Codex 는 계정 버킷과 같은 UTC 하루(= KST 오전 9시 ~ 다음날 오전 9시)를
+    /// KST 날짜 라벨로 읽고, Claude 는 KST 자정 하루다 — 같은 잔디 칸이 두 축을 담으므로 내 박스·순위판 툴팁·잔디 헤더 **세 곳**이
+    /// 이 리터럴 하나를 부른다(V0243UTCAxisTests 가 소스 계약으로 고정). 자정 분할(로컬 시간 분포로 나누기)은 하지 않는다 —
+    /// 로컬이 검증되기 전엔 로컬의 시간 분포를 근거로 쓰지 않는다.
+    static let tokenDayAxisNote = "Codex 하루는 오전 9시 기준(계정 집계와 같은 축) · Claude 는 자정 기준"
+
     /// .help 툴팁 상세 문구(계정 집계 없이). 축약 없이 콤마 전체 숫자로, 값이 있는 소스만 이어 붙인다
     /// ("Claude 4,280,667,571 (입력 8,458,939 · 출력 9,796,198 · 캐시읽기 4,063,320,273 · 캐시생성 199,092,161) · Codex 145,691,467 (입력 145,068,307 · 출력 623,160 · 캐시 0)").
     var detailTooltip: String { detailTooltip(account: nil) }
 
-    /// 계정 집계까지 붙인 툴팁. 계정 월합이 있으면 `Codex 계정 집계 N (D일까지 반영)` 을 잇고, 그 값이 로컬보다 크면
-    /// 표시 총합에 계정값이 쓰였음을 한 줄로 명시한다(행의 굵은 숫자와 로컬 소계가 왜 다른지 설명하는 자리).
+    /// 계정 집계까지 붙인 툴팁. 이 달 계정 월합이 있으면 로컬 줄에 "로컬 집계" 라벨을 붙이고 `Codex 계정 집계 N (D일까지 반영)`
+    /// 을 이은 뒤, 표시 총합이 계정 기준임을 한 줄로 명시한다(v0.2.43 계정 우선 규칙 — 행의 굵은 숫자와 로컬 소계가 왜 다른지
+    /// 설명하는 자리). 로컬이 계정보다 20% 넘게 크면 진단 한 줄(포크 복사본 의심)을 더한다. 순위판 툴팁(TokenBoardEntry.detailTooltip)과
+    /// 같은 어휘·같은 문구.
     func detailTooltip(account: CodexAccountUsage?) -> String {
         var parts: [String] = []
         if claudeTotal > 0 {
@@ -72,30 +111,33 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
                 + "· 캐시읽기 \(TokenNumberFormatter.grouped(claudeCacheRead)) · 캐시생성 \(TokenNumberFormatter.grouped(claudeCacheCreation)))"
             )
         }
+        let accountMonth = account?.monthTotal(month) ?? 0
         if codexTotal > 0 {
             parts.append(
-                "Codex \(TokenNumberFormatter.grouped(codexTotal)) "
+                "Codex \(accountMonth > 0 ? "로컬 집계 " : "")\(TokenNumberFormatter.grouped(codexTotal)) "
                 + "(입력 \(TokenNumberFormatter.grouped(codexInput)) · 출력 \(TokenNumberFormatter.grouped(codexOutput)) "
                 + "· 캐시 \(TokenNumberFormatter.grouped(codexCacheRead)))"
             )
         }
-        if let account {
-            let accountMonth = account.monthTotal(month)
-            if accountMonth > 0 {
-                var line = "Codex 계정 집계 \(TokenNumberFormatter.grouped(accountMonth))"
-                if let day = account.latestBucketDate(in: month), let dayNumber = Int(day.suffix(2)) {
-                    line += " (\(dayNumber)일까지 반영)"
-                }
-                parts.append(line)
-                if accountMonth > codexTotal {
-                    parts.append(Self.accountDrivenTotalNote)
-                }
+        if let account, accountMonth > 0 {
+            var line = "Codex 계정 집계 \(TokenNumberFormatter.grouped(accountMonth))"
+            if let day = account.latestBucketDate(in: month), let dayNumber = Int(day.suffix(2)) {
+                line += " (\(dayNumber)일까지 반영)"
+            }
+            parts.append(line)
+            parts.append(Self.accountDrivenTotalNote)
+            if CodexEffectiveRule.localExceedsAccount(local: codexTotal, account: accountMonth) {
+                parts.append(CodexEffectiveRule.localExceedsAccountNote)
             }
         }
         // 내 박스 툴팁 끝에 "오늘 +N" 한 줄을 덧붙인다(값이 있을 때만 — 없으면 기존 문구 그대로라 하위 호환).
         // 내 박스 usage 는 매번 갓 스캔한 값이라 todayDate 는 항상 오늘이므로 여기선 날짜 가드 없이 노출한다.
         if todayTotal > 0 {
             parts.append("오늘 +\(TokenNumberFormatter.grouped(todayTotal))")
+        }
+        // Codex 숫자가 하나라도 있으면 하루의 뜻을 맨 끝에 밝힌다(순위판 툴팁·잔디 헤더와 같은 리터럴). Claude 만 있으면 말할 것이 없다.
+        if codexTotal > 0 || accountMonth > 0 {
+            parts.append(Self.tokenDayAxisNote)
         }
         return parts.joined(separator: " · ")
     }
@@ -109,7 +151,8 @@ extension TokenUsageMonthly {
         case claudeInput, claudeOutput, claudeCacheRead, claudeCacheCreation
         case codexInput, codexOutput, codexCacheRead
         case todayTotal, todayDate
-        case claudeDaily, codexDaily
+        case claudeDaily, codexDaily, codexDailyUTC
+        case windowStart, claudeCompleteFrom
     }
 
     init(from decoder: Decoder) throws {
@@ -127,6 +170,11 @@ extension TokenUsageMonthly {
         todayDate = try c.decodeIfPresent(String.self, forKey: .todayDate) ?? ""
         claudeDaily = try c.decodeIfPresent([String: Int].self, forKey: .claudeDaily) ?? [:]
         codexDaily = try c.decodeIfPresent([String: Int].self, forKey: .codexDaily) ?? [:]
+        // v0.2.43: UTC 축 일별 맵. 옛 스냅샷엔 없다 → 빈 맵(codexDailyOnAccountAxis 가 KST 맵으로 후퇴).
+        codexDailyUTC = try c.decodeIfPresent([String: Int].self, forKey: .codexDailyUTC) ?? [:]
+        // v0.2.43: 창 시작. 옛 스냅샷엔 없다 → 빈 문자열(windowStartDay 가 월 1일로 해석).
+        windowStart = try c.decodeIfPresent(String.self, forKey: .windowStart) ?? ""
+        claudeCompleteFrom = try c.decodeIfPresent(String.self, forKey: .claudeCompleteFrom) ?? ""
     }
 
     func encode(to encoder: Encoder) throws {
@@ -143,6 +191,9 @@ extension TokenUsageMonthly {
         try c.encode(todayDate, forKey: .todayDate)
         try c.encode(claudeDaily, forKey: .claudeDaily)
         try c.encode(codexDaily, forKey: .codexDaily)
+        try c.encode(codexDailyUTC, forKey: .codexDailyUTC)
+        try c.encode(windowStart, forKey: .windowStart)
+        try c.encode(claudeCompleteFrom, forKey: .claudeCompleteFrom)
     }
 }
 
@@ -250,7 +301,10 @@ struct TokenUsageCache: Equatable, Sendable {
     /// 3 → 4(v0.2.41): 기준선·월 기여를 입력/출력/캐시 세 필드로 쪼개고(issue #2), 일키+일합 한 쌍을 일별 맵으로 바꿨다
     /// (과제 E 선행). 튜플 인코딩 형태가 달라졌으므로 옛 8원소 튜플은 재활용하지 않고 폐기 → codex 1회 전체 재파싱.
     /// 이 재파싱이 곧 **보관/압축 유실의 소급 정정**이기도 하다 — archived_sessions 를 처음 읽고, 옛 캐시가 버린 기여를 다시 쌓는다.
-    static let currentCodexSchemaVersion = 4
+    ///
+    /// 4 → 5(v0.2.43): 포크 복사 구간 규칙(CodexForkRule) + 12번째 원소(forkCopyDeadlineMicros). v4 상태는 포크 복사본을 새 소비로
+    /// 센 채 굳어 있고 오프셋이 복사 구간을 지나 있어 재활용할 수 없다 — 통째로 버려 전체 재파싱(= 이미 올라간 달의 소급 정정).
+    static let currentCodexSchemaVersion = 5
 }
 
 /// Claude 엔트리의 dedupe 키. 옛 문자열 키 "message.id\0requestId" 의 **SHA-256 앞 16바이트**를 빅엔디언 UInt64 두 개로
@@ -447,6 +501,14 @@ struct ClaudeEntry: Equatable, Sendable {
 /// 트레이드오프: **진짜 새 세션의 첫 턴을 놓친다.** 그 크기는 최대 컨텍스트(수십만) 수준이라 이월분 6.6억에 견주면
 /// 무시할 수 있고, 남의 세션에서 이어받은 누적을 이번 달에 통째로 얹는 쪽보다 훨씬 작은 오차다. 되돌리려는 사람은
 /// 위 실측을 먼저 반박해라 — 이 선택은 추정이 아니라 프로덕션 계측에서 나왔다.
+///
+/// **포크 복사 구간(v0.2.43)** — 위 "이월"의 진짜 정체. Codex 는 스레드를 포크할 때(서브에이전트 스폰·`thread/fork`·`review/start`)
+/// 부모 rollout 의 항목을 **자식의 새 파일에 그대로 다시 쓴다**(codex-rs `session/mod.rs` `InitialHistory::Forked` →
+/// `persist_rollout_items`; `rollout/src/policy.rs` 가 `TokenCount` 를 영속한다). token_count 이벤트가 전부 복사되고 타임스탬프만
+/// 포크 시각으로 새로 찍히며, 자식의 누적 카운터는 부모의 마지막 값에서 이어진다. 그래서 첫 이벤트만 기준선으로 막아서는
+/// 복사된 열의 나머지가 그대로 델타가 되어 **포크 한 번마다 부모 이력이 한 번 더** 그날에 더해졌다(2026-09 프로덕션: 두 사용자가
+/// 계정 집계의 4.6배·3.4배, 일별로는 포크를 많이 쓴 날만 7~8배). 규칙은 CodexForkRule 참고 — 복사 구간의 이벤트는 기준선만
+/// 갱신하고 델타를 내지 않는다. 그 구간의 끝 = 부모가 포크 시점까지 쓴 누적치 S 이고 자식 첫 이벤트의 델타 = 자식 자신의 첫 턴이다.
 struct CodexFileProgress: Equatable, Sendable {
     var size: Int
     var mtimeMicros: Int
@@ -469,6 +531,15 @@ struct CodexFileProgress: Equatable, Sendable {
     /// v0.2.40 까지의 (dayKey, dayContribTotal) 한 쌍을 대체한다 — 일 롤오버마다 상태를 고쳐 쓰던(저장 유도) 비용이 없어지고,
     /// 지난 날들의 값이 남아 일별 추이(과제 E)를 만들 수 있다. 오늘 값은 이 맵의 오늘 키다.
     var dayContrib: [String: Int]
+    /// 포크 파일의 복사 구간 마감(UTC 마이크로초) = 자기 session_meta 시각 + CodexForkRule.copyWindowMicros. 0 = 포크 아님.
+    /// 이어읽기가 이 값을 물려받아, 첫 파싱이 복사 버스트 도중에 끊겼어도 다음 읽기에서 남은 복사본을 계속 건너뛴다.
+    var forkCopyDeadlineMicros: Int = 0
+    /// **UTC** 'YYYY-MM-DD' → 그 UTC 하루 귀속 delta(입력+출력)의 합(v0.2.43). dayContrib(KST)와 같은 이벤트를 다른 축의 키로 쌓는다 —
+    /// 계정 버킷과 같은 축에서 꼬리·차분을 내기 위해서다(TokenUsageMonthly.codexDailyUTC 주석). 키 범위는 KST 월이 아니라
+    /// **UTC 일 ≥ KST 월 시작 − 1일**(`utcRetainFromKey`): 월 롤오버에 통째로 비우지 않고 그 하한 아래 키만 걷어낸다
+    /// (전월 마지막 UTC 일이 이번 달 첫 9시간을 담는다). 이 빌드 이전의 v5 캐시는 없으므로(배포된 적 없는 세대) 이 맵이 빈 v5 상태는
+    /// 테스트 픽스처뿐이다 — 그래도 빈 맵은 "관측 없음"으로 안전하게 읽힌다.
+    var dayContribUTC: [String: Int] = [:]
 
     /// 옛 산식과의 대조용 합(입력+출력) — 델타의 기준선을 한 숫자로 보고 싶은 테스트·주석이 쓴다.
     var prevCumulative: Int { prevInput + prevOutput }
@@ -506,8 +577,9 @@ extension ClaudeEntry: Codable {
     }
 }
 
-// 압축 배열-튜플 인코딩(11원소, 스키마 v4):
-//   [size, mtime, offset, prevInput, prevOutput, prevCached, monthKey, monthInput, monthOutput, monthCached, {day: delta}].
+// 압축 배열-튜플 인코딩(13원소, 스키마 v5):
+//   [size, mtime, offset, prevInput, prevOutput, prevCached, monthKey, monthInput, monthOutput, monthCached, {KST day: delta},
+//    forkCopyDeadlineMicros, {UTC day: delta}].
 // 옛 세대 튜플(v3 의 8원소·그 이전 숫자열)은 TokenUsageCache 의 스키마 게이트가 애초에 이 디코더로 오지 못하게 막으므로,
 // 여기의 decodeIfPresent 는 새 형식의 잘린 튜플에 대한 방어일 뿐이다(at-end → 기본값). monthKey 위치에 숫자를 억지 디코드하는 일은 없다.
 extension CodexFileProgress: Codable {
@@ -524,6 +596,8 @@ extension CodexFileProgress: Codable {
         monthOutput = try c.decodeIfPresent(Int.self) ?? 0
         monthCached = try c.decodeIfPresent(Int.self) ?? 0
         dayContrib = try c.decodeIfPresent([String: Int].self) ?? [:]
+        forkCopyDeadlineMicros = try c.decodeIfPresent(Int.self) ?? 0
+        dayContribUTC = try c.decodeIfPresent([String: Int].self) ?? [:]
     }
     func encode(to encoder: Encoder) throws {
         var c = encoder.unkeyedContainer()
@@ -532,6 +606,134 @@ extension CodexFileProgress: Codable {
         try c.encode(monthKey)
         try c.encode(monthInput); try c.encode(monthOutput); try c.encode(monthCached)
         try c.encode(dayContrib)
+        try c.encode(forkCopyDeadlineMicros)
+        try c.encode(dayContribUTC)
+    }
+}
+
+// MARK: - Codex 포크 복사 구간 규칙 (스캐너·진단 공용)
+
+/// Codex 포크 파일의 **복사 구간**을 가르는 규칙. 프로덕션 스캐너(TokenUsageIncrementalScanner.scanCodexFiles)와 진단
+/// (CodexUsageDiagnosticsScanner)이 같은 함수를 부른다 — 둘의 산식이 갈리면 `dedupTotal + dupTokens == codexTotal` 항등식이 깨진다.
+///
+/// 배경(2026-09-06 확정): Codex CLI 는 스레드를 포크할 때(서브에이전트 스폰 `agent/control/spawn.rs`, 앱의 `thread/fork`,
+/// `review/start`) 부모 rollout 의 항목을 자식의 새 파일에 그대로 다시 쓴다. `keep_forked_rollout_item` 이 EventMsg/SessionMeta 를
+/// 유지하고 `record_initial_history` 의 Forked 분기가 `persist_rollout_items` 로 기록하며, `rollout/src/policy.rs` 는 TokenCount 를
+/// 영속한다. 자식 파일의 모양(내 맥 0.144.1 에서 `thread/fork` 로 두 번 재현, 모델 호출 0):
+///   0번 줄 = 자식 자신의 session_meta(`forked_from_id` = 부모, 라인 timestamp = 포크 시각 T0)
+///   1번 줄 = **복사된 부모 session_meta**(id = 부모, payload 의 timestamp 는 부모의 옛 시각)
+///   2번 줄~ = 부모 이력 복사(token_count 포함, 값 그대로, 라인 timestamp 는 포크 시각)
+///   그 뒤 = 자식 자신의 이벤트(누적 카운터는 부모 마지막 값에서 이어짐 — `last_token_info_from_rollout` 시딩).
+///
+/// 판정 두 가지(둘 중 하나면 포크): (1) 오프셋 0 파싱의 첫 session_meta 에 `forked_from_id` 또는 `parent_thread_id` 가 non-null 문자열,
+/// (2) 첫 줄이 아닌 자리에서 만난 session_meta(= 복사된 부모 메타 — 구버전이 표식을 안 써도 복사본 자체가 증거다).
+///
+/// 복사 구간 = 라인 timestamp 가 **T0 + 5초** 이하인 token_count. 왜 5초인가: 복사본은 `persist_rollout_items` 한 번에 동기로 써진다 —
+/// 실측 10.7MB/3,771줄/token_count 554개가 49ms(05:52:00.861Z → .910Z), 작은 파일은 자기 메타 뒤 127ms. 자식 자신의 첫 token_count 는
+/// 모델 왕복 뒤에야 나온다. 5초는 복사 쪽에 100배 여유를 주고, 모델이 5초 안에 첫 응답을 끝낸 극소수 경우엔 그 한 턴을 놓친다
+/// (과소 쪽 소폭 — 복사 구간을 새 소비로 세던 4~8배 과다와 견줄 수 없다). 시계를 못 읽는 라인(timestamp 결손·형식 이탈)은
+/// 마감을 세우지 못해 "포크 아님"으로 흘러간다 — 과다계상은 남지만 크래시도 유실도 없다.
+///
+/// 프라이버시: 여기서 읽는 것은 `type`, `forked_from_id`/`parent_thread_id` 의 **유무**, 라인 `timestamp` 뿐이고 어떤 값도 보관하지 않는다.
+enum CodexForkRule {
+    /// 복사 버스트 허용 창(마이크로초). 위 실측 근거 참고.
+    static let copyWindowMicros = 5_000_000
+    /// 라인 프리체크용 바이트 패턴. 메시지 본문에 같은 낱말이 들어도 `isSessionMeta` 의 type 확인이 거른다.
+    static let sessionMetaPattern = Array("session_meta".utf8)
+
+    static func isSessionMeta(_ object: [String: Any]) -> Bool {
+        object["type"] as? String == "session_meta"
+    }
+
+    /// 자기 session_meta 에 포크 표식이 있는가. null 은 표식이 아니다(`skip_serializing_if = Option::is_none` 이라 보통은 키 자체가 없다).
+    static func hasForkMarker(_ object: [String: Any]) -> Bool {
+        guard let payload = object["payload"] as? [String: Any] else { return false }
+        for key in ["forked_from_id", "parent_thread_id"] {
+            if let value = payload[key] as? String, !value.isEmpty { return true }
+        }
+        return false
+    }
+
+    /// 라인 timestamp(UTC ISO8601, 예 "2026-09-06T05:35:27.749Z")를 UTC epoch 마이크로초로. 앞 19자(고정폭)로 초를 만들고 '.' 뒤
+    /// 숫자(최대 6자리)를 소수부로 읽는다. 형식이 어긋나면 nil. 달력은 civil-from-days 역산(Howard Hinnant)으로 윤년을 한 번에 처리한다.
+    static func timestampMicros(fromTimestamp s: String) -> Int? {
+        let b = Array(s.utf8)
+        guard b.count >= 19 else { return nil }
+        for i in [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18] {
+            let c = b[i]
+            guard c >= 48, c <= 57 else { return nil }
+        }
+        func num(_ start: Int, _ len: Int) -> Int {
+            var v = 0
+            for k in start..<(start + len) { v = v * 10 + Int(b[k] - 48) }
+            return v
+        }
+        let year = num(0, 4), month = num(5, 2), day = num(8, 2)
+        let hour = num(11, 2), minute = num(14, 2), second = num(17, 2)
+        guard month >= 1, month <= 12, day >= 1, day <= 31, hour <= 23, minute <= 59, second <= 60 else { return nil }
+        let y = month <= 2 ? year - 1 : year
+        let era = (y >= 0 ? y : y - 399) / 400
+        let yearOfEra = y - era * 400
+        let dayOfYear = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1
+        let dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear
+        let days = era * 146_097 + dayOfEra - 719_468
+        var micros = (days * 86_400 + hour * 3_600 + minute * 60 + second) * 1_000_000
+        // 소수부: '.' 바로 뒤의 숫자들(최대 6자리, 모자라면 0 채움).
+        if b.count > 20, b[19] == 46 {   // '.'
+            var frac = 0
+            var digits = 0
+            var i = 20
+            while i < b.count, digits < 6, b[i] >= 48, b[i] <= 57 {
+                frac = frac * 10 + Int(b[i] - 48)
+                digits += 1
+                i += 1
+            }
+            while digits < 6 { frac *= 10; digits += 1 }
+            micros += frac
+        }
+        return micros
+    }
+}
+
+/// 한 파일을 읽는 동안의 포크 판정 상태(값 타입, 파일마다 새로). 오프셋 0 파싱이면 **처음 만나는** session_meta 가 자기 메타이고
+/// 그 뒤의 session_meta 는 전부 복사된 부모 메타다. 이어읽기면 캐시의 마감을 물려받고(startedAtZero = false) 그때 만나는
+/// session_meta 는 전부 복사된 부모 메타다(자기 메타는 첫 파싱에서 이미 지나갔다).
+struct CodexForkTracker {
+    /// 이번 읽기가 파일 첫 줄부터인가(그 읽기의 첫 session_meta 만 "자기 메타"다).
+    let startedAtZero: Bool
+    /// 복사 구간 마감(UTC 마이크로초). 0 = 포크 아님(또는 아직 판정 전).
+    private(set) var deadlineMicros: Int
+    /// 이번 읽기에서 자기 메타를 이미 봤는가.
+    private var ownMetaSeen = false
+    /// 자기 메타의 라인 시각(마이크로초). 두 번째 메타로 포크가 확정될 때 마감의 기준이 된다.
+    private var ownMetaMicros: Int?
+
+    init(startedAtZero: Bool, deadlineMicros: Int) {
+        self.startedAtZero = startedAtZero
+        self.deadlineMicros = deadlineMicros
+    }
+
+    /// session_meta 라인을 반영한다. 오프셋 0 파싱의 첫 session_meta 면 자기 메타 — 표식이 있으면 마감을 세운다.
+    /// 그 밖의 session_meta 는 복사된 부모 메타 — 마감이 아직 없으면 자기 메타 시각(없으면 이 줄의 시각)으로 세운다.
+    mutating func observeSessionMeta(_ object: [String: Any]) {
+        let lineMicros = (object["timestamp"] as? String).flatMap(CodexForkRule.timestampMicros(fromTimestamp:))
+        if startedAtZero, !ownMetaSeen {
+            ownMetaSeen = true
+            ownMetaMicros = lineMicros
+            if CodexForkRule.hasForkMarker(object), let t0 = lineMicros {
+                deadlineMicros = t0 + CodexForkRule.copyWindowMicros
+            }
+            return
+        }
+        if deadlineMicros == 0, let t0 = ownMetaMicros ?? lineMicros {
+            deadlineMicros = t0 + CodexForkRule.copyWindowMicros
+        }
+    }
+
+    /// 이 token_count 이벤트가 복사 구간에 드는가. 마감이 없으면(포크 아님) 언제나 false — 비포크 파일엔 시계 파싱 비용도 없다.
+    func isCopy(eventTimestamp: String) -> Bool {
+        guard deadlineMicros > 0, let micros = CodexForkRule.timestampMicros(fromTimestamp: eventTimestamp) else { return false }
+        return micros <= deadlineMicros
     }
 }
 
@@ -555,7 +757,11 @@ extension CodexFileProgress: Codable {
 enum TokenUsageCacheStore {
     /// 레이아웃 세대. 핫 파일의 값이 이와 다르면 두 파일 모두 폐기(→ 1회 전체 재스캔). 옛 단일 파일엔 이 키가 없다(= 0).
     /// 1: v0.2.38 — 해시 키 + 핫/콜드 분리 + 48h 보관 경계.
-    static let currentSchemaVersion = 1
+    /// 2: v0.2.43 — Codex 포크 복사 구간 규칙 + Claude 12주 창. 옛 캐시는 (a) 복사 구간을 새 소비로 센 codex 상태가 오프셋과 함께
+    ///    굳어 있고 (b) Claude 엔트리가 현재 월치뿐이라, 통째로 버리고 한 번 전체 재파싱한다 — 그것이 이미 올라간 달의 값을 소급
+    ///    정정하고 지난 12주 Claude 일별을 되살리는 수단이다. `.zst` 만 남은 파일의 동결 기여는 사라지는데, 그 몫은 계정 집계
+    ///    (서버 산식이 계정 우선으로 바뀐다, v0.2.43)가 맡는다.
+    static let currentSchemaVersion = 2
 
     /// 어느 파일이 더러워졌는가(저장 대상). 스캐너 Stats 가 채우고 스토어가 누적한다.
     struct Parts: OptionSet, Sendable, Equatable {
@@ -644,12 +850,16 @@ enum TokenUsageCacheStore {
 /// - Codex: token_count 이벤트마다 그 이벤트 timestamp(→KST)로 delta 를 월/일에 귀속(파일 mtime 월 통째 귀속 폐기 —
 ///   resume 세션이 지난달 누적을 이번 달로 편입하던 +수십억 이상치를 근절). 파일별 기준선(prevCumulative)으로 delta 를 잇되,
 ///   **파일을 처음부터 파싱할 때의 첫 유효 이벤트는 델타가 아니라 기준선**이다(CodexFileProgress 주석의 실측 근거 참고).
-/// - 집계는 현재 KST 월만. 엔트리 보관은 [월 시작 − 48h, ∞) — 월 경계를 걸치는 세션(월말 밤에 시작해 월초 새벽까지
-///   이어지는 스트리밍 스냅샷·포크 복제)의 dedupe 만 남기고 그 이전은 퇴거한다. v0.2.37 까지는 직전 월 1일부터 보관해
-///   엔트리의 73% 가 지난달 것이었다(≈11MB 상주). 같은 (id, requestId) 라인들은 초~분 간격으로 찍히므로 48h 면 넉넉하다.
+/// - 월 합계는 현재 KST 월만. Claude 엔트리 보관은 [12주 잔디 창 시작 − 48h, ∞)(v0.2.43 — 그 전엔 월 시작 − 48h) — 잔디의
+///   Claude 일별이 서버 일별 표(v0.2.41)보다 앞선 기록을 보여 줄 길은 로컬 로그뿐이라 창을 잔디와 맞췄다(Claude Code 는
+///   transcript 를 기본 30일 보관하므로 그만큼이 되살아난다). 48h 는 창 경계를 걸치는 세션(스트리밍 스냅샷·포크 복제)의
+///   dedupe 만 남기는 폭이다. 비용(내 맥 실측): 최근 30일 918파일/724MB, 84일 1,892파일/1,220MB — 첫 스캔 한 번만 늘고
+///   이후는 이어읽기이며 엔트리 맵은 약 3배(entries.json 559KB → 1.5MB 수준). Codex 는 월 창 그대로다(7일 지난 rollout 은
+///   `.zst` 라 읽지 못하고 계정 버킷이 70일을 채운다).
+/// - Codex 포크 파일의 복사 구간은 델타를 내지 않는다(v0.2.43, CodexForkRule).
 ///
 /// 증분 절차(파일마다):
-/// - 디렉터리 워크 + stat → mtime 프리필터(현재 월 시작 이전 파일 통째 스킵).
+/// - 디렉터리 워크 + stat → mtime 프리필터(Claude 는 12주 창 시작, Codex 는 현재 월 시작 이전 파일 통째 스킵).
 /// - size·mtime 동일 → 무변경, 재읽기 0.
 /// - 커졌으면(append) consumedOffset 부터 tail 만 스트리밍 — 오프셋은 항상 마지막 "완결 라인"(개행) 끝으로 저장.
 /// - 줄어들었거나 mtime 역행이면 그 파일 전체 재파싱(오프셋 0). 엔트리는 dedupe 키라 재삽입 무해.
@@ -673,7 +883,7 @@ enum TokenUsageIncrementalScanner {
         return c
     }()
 
-    /// 엔트리/파일상태 보관 하한이 월 시작에서 얼마나 앞서는가. 월 경계 straddle 을 덮되 지난달 본체는 들지 않는 폭(48h).
+    /// 엔트리/파일상태 보관 하한이 창 시작(Claude: 12주 창, Codex: 월)에서 얼마나 앞서는가. 경계 straddle 을 덮되 그 앞 본체는 들지 않는 폭(48h).
     /// KST 는 DST 가 없어 48h 는 정확히 이틀이다.
     static let retentionSlack: TimeInterval = 48 * 3_600
 
@@ -712,6 +922,8 @@ enum TokenUsageIncrementalScanner {
         var codexFilesStatted = 0
         var codexFilesRead = 0
         var codexBytesRead = 0
+        /// 포크 파일의 복사 구간이라 델타를 내지 않고 건너뛴 token_count 이벤트 수(CodexForkRule). 로그·테스트 계측용.
+        var codexForkCopyEvents = 0
         /// 콜드(엔트리 맵)에 실제 변경(추가·교체·ts 승격·퇴거)이 있었는가.
         var entriesChanged = false
         /// 핫(claude/codex 파일 진행 상태)에 실제 변경(갱신·롤오버·정리·퇴거)이 있었는가.
@@ -745,36 +957,52 @@ enum TokenUsageIncrementalScanner {
         var cache = input
         var stats = Stats()
 
-        // 현재 KST 월 경계. 합계 창 = [monthStart, monthEnd), 스캔 프리필터 컷오프 = monthStart,
-        // 퇴거(보관) 경계 = retentionStart(월 시작 − 48h; 월 경계 straddle 만 남기고 지난달 본체는 들지 않는다).
+        // 현재 KST 월 경계. 합계 창 = [monthStart, monthEnd). Codex 의 스캔 프리필터 컷오프·퇴거 경계는 여전히 월 기준이다
+        // (retentionStart = 월 시작 − 48h; 월 경계 straddle 만 남기고 지난달 본체는 들지 않는다).
         let (monthStart, monthEnd, retentionStart, monthString) = monthBounds(now: now)
         let monthStartTs14 = ts14(from: monthStart)
         let monthEndTs14 = ts14(from: monthEnd)
-        let retentionTs14 = ts14(from: retentionStart)
-        let retentionMicros = micros(from: retentionStart)
+        let codexRetentionMicros = micros(from: retentionStart)
+
+        // Claude 의 창(v0.2.43): 12주 잔디 창 [이번 주 월요일 − 12주, ∞). 프리필터 컷오프 = 창 시작, 퇴거 경계 = 창 시작 − 48h.
+        // 월 합계는 그대로 현재 월 필터이고, 창은 **일별 맵**(잔디·일별 업로드)만 넓힌다 — 잔디가 서버 일별 표(v0.2.41 에 생김)
+        // 이전 기록을 보여 줄 길은 로컬 로그뿐이고, Claude Code 는 transcript 를 기본 30일 보관한다.
+        let window = windowBounds(now: now)
+        let windowStartTs14 = ts14(from: window.start)
+        let claudeRetentionTs14 = ts14(from: window.retentionStart)
+        let claudeRetentionMicros = micros(from: window.retentionStart)
 
         // 오늘(KST) 일키. 두 트랙 모두 일별 맵(KST 'YYYY-MM-DD')을 만들고 오늘분은 그 맵의 오늘 키로 파생한다 —
-        // Claude 는 엔트리 ts14 를 아래 일 버킷 경계로 가르고, Codex 는 이벤트 timestamp 의 KST 일키를 파일별 dayContrib 에 쌓는다.
+        // Claude 는 엔트리 ts14 를 아래 일 버킷 경계(창 시작부터 월 끝까지)로 가르고, Codex 는 이벤트 timestamp 의 KST 일키를
+        // 파일별 dayContrib 에 쌓는다.
         let todayDate = dayBounds(now: now).date
-        let dayBuckets = kstDayBuckets(monthStart: monthStart, monthEnd: monthEnd)
+        let dayBuckets = kstDayBuckets(start: window.start, end: monthEnd)
 
-        // 1) 퇴거(로드 시점): 보관 하한 밖 엔트리/파일상태 제거. 무언가 지워지면 캐시 변경으로 표시(저장 유도).
-        evict(&cache, evictTs14: retentionTs14, evictMicros: retentionMicros, stats: &stats)
+        // 1) 퇴거(로드 시점): 보관 하한 밖 엔트리/파일상태 제거(Claude 는 창 기준, Codex 는 월 기준). 무언가 지워지면 캐시 변경으로 표시.
+        evict(
+            &cache, claudeEvictTs14: claudeRetentionTs14, claudeEvictMicros: claudeRetentionMicros,
+            codexEvictMicros: codexRetentionMicros, stats: &stats
+        )
 
-        // 2) 소스별 증분 스캔(프리필터 컷오프 = 현재 월 시작). Codex 는 이벤트 월/일 귀속을 위해 현재 월키를 받는다.
-        scanClaude(&cache, homeDirectory: homeDirectory, cutoff: monthStart, evictTs14: retentionTs14, stats: &stats)
+        // 2) 소스별 증분 스캔. Claude 프리필터 컷오프 = 창 시작, Codex = 현재 월 시작(이벤트 월/일 귀속을 위해 현재 월키를 받는다).
+        let oldestClaudeMtime = scanClaude(
+            &cache, homeDirectory: homeDirectory, cutoff: window.start, evictTs14: claudeRetentionTs14, stats: &stats
+        )
         scanCodex(
             &cache, roots: codexRoots(homeDirectory: homeDirectory, codexHome: codexHome),
             cutoff: monthStart, monthString: monthString, stats: &stats
         )
 
         // 3) 합계 재계산(엔트리 맵 현재-월 필터 + codex 파일상태 monthKey==현재월 필터). 일별 맵은 같은 순회에서 만들고
-        //    오늘분은 두 맵의 오늘 키 합으로 파생한다.
-        let usage = totals(
+        //    (Claude 는 창 안 전부, Codex 는 현재 월) 오늘분은 두 맵의 오늘 키 합으로 파생한다.
+        var usage = totals(
             cache, month: monthString,
-            monthStartTs14: monthStartTs14, monthEndTs14: monthEndTs14,
-            dayBuckets: dayBuckets, todayDate: todayDate
+            monthStartTs14: monthStartTs14, monthEndTs14: monthEndTs14, windowStartTs14: windowStartTs14,
+            dayBuckets: dayBuckets, todayDate: todayDate,
+            utcRetainFrom: utcRetainFromKey(monthString: monthString)
         )
+        usage.windowStart = window.startKey
+        usage.claudeCompleteFrom = claudeCompleteFromKey(oldestMtimeMicros: oldestClaudeMtime, now: now)
         return Result(cache: cache, usage: usage, stats: stats)
     }
 
@@ -790,12 +1018,39 @@ enum TokenUsageIncrementalScanner {
         ]
     }
 
-    /// 현재 월의 KST 일 버킷: (그 날 0시의 UTC ts14, 'YYYY-MM-DD') 오름차순. Claude 엔트리의 ts14 를 일자로 가르는 데 쓴다 —
-    /// 엔트리마다 Calendar 를 부르지 않고(3만 건), 최대 31개 경계를 이진 탐색한다. 마지막 원소의 상한은 monthEnd 다.
-    static func kstDayBuckets(monthStart: Date, monthEnd: Date) -> [(startTs14: Int, key: String)] {
+    /// Claude 일별 맵의 창(v0.2.43). start = 12주 잔디 창의 첫 날(이번 주 월요일 − 12주, KST 0시 = `WorkDailyGrid.windowStart`),
+    /// retentionStart = start − 48h(엔트리/파일상태 퇴거 경계 — 창 경계 straddle 의 dedupe 만 남긴다), startKey = start 의 'YYYY-MM-DD'.
+    /// 잔디 창과 스캔 창이 어긋나면 잔디가 창 앞부분을 비워 보이므로 **같은 함수**(WorkDailyGrid.windowStart)를 부른다 —
+    /// 계산이 갈릴 수 없게 하는 것이 요건이고, 테스트가 그 동치를 한 번 더 못 박는다. 그 함수가 nil 이면(달력 실패) 월 시작으로 후퇴한다.
+    static func windowBounds(now: Date) -> (start: Date, retentionStart: Date, startKey: String) {
+        let start = WorkDailyGrid.windowStart(now: now) ?? monthBounds(now: now).start
+        return (start, start.addingTimeInterval(-retentionSlack), dayBounds(now: start).date)
+    }
+
+    /// Claude Code 의 transcript 정리 기간(기본 `cleanupPeriodDays` 30일) − 1일. 가장 오래된 파일이 이보다 **오래됐을 때만** 그 날의
+    /// 더 이른 파일이 이미 정리로 지워졌을 수 있다 — 그보다 젊으면 정리가 닿은 파일이 없으므로 로그는 온전하다.
+    static let claudeCleanupFloorSeconds: TimeInterval = 29 * 86_400
+
+    /// 이 기기의 Claude 로그가 온전한 첫 날(TokenUsageMonthly.claudeCompleteFrom). 파일이 하나도 없으면 빈 문자열(제한 없음).
+    ///
+    /// 하한은 **정리가 그 날의 더 이른 파일을 지웠을 수 있을 때만** 세운다: 가장 오래된 transcript mtime 이 now − 29일 보다 오래됐으면
+    /// 그 KST 일자의 **다음 날**(그 날 자체는 더 이른 파일이 지워졌을 수 있어 부분값), 그보다 젊으면 빈 문자열.
+    /// v0.2.43 초안은 조건 없이 언제나 +1일을 돌려, 가장 오래된 파일이 **오늘** 만들어진 경우(첫 설치일 · 30일 공백 뒤 첫 날 ·
+    /// `claude -c` 로 한 파일만 이어 쓰는 사용자)에 오늘 Claude 일별을 업로드에서 영구히 뺐다(코드 리뷰 P1 — v0.2.42 는 올렸으므로 회귀).
+    /// 정리가 닿지 않은 파일에 하한을 세울 이유가 없다.
+    static func claudeCompleteFromKey(oldestMtimeMicros: Int?, now: Date) -> String {
+        guard let oldestMtimeMicros else { return "" }
+        let oldest = Date(timeIntervalSince1970: TimeInterval(oldestMtimeMicros) / 1_000_000)
+        guard now.timeIntervalSince(oldest) >= claudeCleanupFloorSeconds else { return "" }
+        return dayBounds(now: dayBounds(now: oldest).end).date
+    }
+
+    /// [start, end) 의 KST 일 버킷: (그 날 0시의 UTC ts14, 'YYYY-MM-DD') 오름차순. Claude 엔트리의 ts14 를 일자로 가르는 데 쓴다 —
+    /// 엔트리마다 Calendar 를 부르지 않고(3만 건), 최대 ~100개 경계를 이진 탐색한다. 마지막 원소의 상한은 end 다.
+    static func kstDayBuckets(start: Date, end: Date) -> [(startTs14: Int, key: String)] {
         var out: [(startTs14: Int, key: String)] = []
-        var day = monthStart
-        while day < monthEnd {
+        var day = start
+        while day < end {
             out.append((ts14(from: day), dayBounds(now: day).date))
             guard let next = kstCalendar.date(byAdding: .day, value: 1, to: day) else { break }
             day = next
@@ -806,12 +1061,15 @@ enum TokenUsageIncrementalScanner {
     // MARK: Claude Code
 
     /// ~/.claude/projects/**/*.jsonl. type=="assistant" + usage 라인을 (message.id, requestId) 로 글로벌 dedupe.
+    /// 반환: 프리필터를 통과한 파일 중 가장 오래된 mtime(마이크로초) — 로그 완전성 하한(claudeCompleteFromKey)의 재료. 파일이 없으면 nil.
+    @discardableResult
     private static func scanClaude(
         _ cache: inout TokenUsageCache, homeDirectory: URL, cutoff: Date, evictTs14: Int, stats: inout Stats
-    ) {
+    ) -> Int? {
         let root = homeDirectory.appendingPathComponent(".claude/projects", isDirectory: true)
         // 워크/stat 는 클로저 밖에서(엔트리 맵을 캡처하는 tail 클로저와 배타적 접근이 겹치지 않게).
         let files = recentFiles(under: root, cutoff: cutoff, matching: { $0.pathExtension == "jsonl" })
+        let oldestMtime = files.map(\.mtimeMicros).min()
         for f in files {
             stats.claudeFilesStatted += 1
             let path = f.url.path
@@ -837,6 +1095,7 @@ enum TokenUsageIncrementalScanner {
             stats.statesChanged = true
             if entriesTouched { stats.entriesChanged = true }
         }
+        return oldestMtime
     }
 
     /// 한 Claude 라인을 파싱해 dedupe 키로 엔트리 맵에 넣는다(포크 복제는 같은 키라 한 번만 계상).
@@ -861,7 +1120,7 @@ enum TokenUsageIncrementalScanner {
                   let usageObject = message["usage"] as? [String: Any],
                   let ts = ts14(fromTimestampPrefix: timestamp)
             else { return }
-            // 보관 하한(월 시작 − 48h) 밖은 아예 저장하지 않는다 — 엔트리 맵을 현재 월 + straddle 규모로 유지. 합계 창 필터는 별도(현재 월).
+            // 보관 하한(12주 창 시작 − 48h, v0.2.43) 밖은 아예 저장하지 않는다 — 엔트리 맵을 창 + straddle 규모로 유지. 합계 창 필터는 별도(현재 월).
             guard ts >= evictTs14 else { return }
             let key = ClaudeEntryKey(
                 messageID: message["id"] as? String ?? "", requestID: object["requestId"] as? String ?? ""
@@ -931,6 +1190,7 @@ enum TokenUsageIncrementalScanner {
     /// 직전 세션에서 이어받은 카운터지 이번에 쓴 양이 아니다 — 근거는 CodexFileProgress 주석의 프로덕션 실측).
     /// info null·total 결손·timestamp 파싱 실패 이벤트는 건너뛰되 기준선을 갱신하지 않는다 — 건너뛴 토큰은 다음
     /// 유효 이벤트의 delta 에 자연 흡수(유실 없음). 누적이 줄면 max(0,…) 로 클램프(리셋 방어). 월 롤오버 시 월 기여·일별 맵 리셋.
+    /// **포크 파일의 복사 구간은 기준선만 갱신하고 델타를 내지 않는다**(v0.2.43, CodexForkRule — 자기 session_meta 시각 + 5초 안의 이벤트).
     private static func scanCodex(
         _ cache: inout TokenUsageCache, roots: [URL], cutoff: Date,
         monthString: String, stats: inout Stats
@@ -949,8 +1209,10 @@ enum TokenUsageIncrementalScanner {
     /// 일어나면 정확히 그 모양이 된다).
     static func scanCodexFiles(
         _ cache: inout TokenUsageCache, files: [(url: URL, size: Int, mtimeMicros: Int)], roots: [URL],
-        monthString: String, stats: inout Stats
+        monthString: String, utcRetainFrom: String? = nil, stats: inout Stats
     ) {
+        // UTC 일별 맵의 보존 하한(v0.2.43): 전월 마지막 UTC 일까지 남긴다. 테스트가 달리 주지 않으면 월키에서 계산한다.
+        let utcRetainFrom = utcRetainFrom ?? utcRetainFromKey(monthString: monthString)
         // 이번 순회에서 **실제로 확인한** 경로(무변경 스킵 또는 읽기 성공). 아래 "사라진 파일 정리"가 이 집합을 쓴다.
         // 열거 직후가 아니라 읽기 성공 뒤에 넣는 것이 요건이다(리뷰 P2): 열거와 읽기 사이에 보관(rename)된 파일은 옛 경로 읽기가
         // 실패해 옛 상태가 그대로 남는데, 그것을 '본 것'으로 치면 정리를 건너뛰어 새 경로 상태와 함께 **정확히 두 배**로 잡히고
@@ -979,6 +1241,12 @@ enum TokenUsageIncrementalScanner {
             var monthOutput = 0
             var monthCached = 0
             var dayContrib: [String: Int] = [:]
+            // UTC 축 일별 맵(v0.2.43). KST 맵과 달리 월 롤오버에 비우지 않고 보존 하한(utcRetainFrom) 아래 키만 걷어낸다.
+            var dayContribUTC: [String: Int] = [:]
+            // 포크 복사 구간 추적(CodexForkRule). 오프셋 0 파싱이면 파일 머리의 session_meta 에서 판정하고, 이어읽기면 캐시의 마감을
+            // 물려받는다(첫 파싱이 복사 버스트 도중에 끊겼어도 남은 복사본이 계속 걸러진다).
+            var fork = CodexForkTracker(startedAtZero: true, deadlineMicros: 0)
+            var copyEvents = 0
 
             if let p = prior {
                 let sameMonth = (p.monthKey == monthString)
@@ -996,7 +1264,9 @@ enum TokenUsageIncrementalScanner {
                             size: p.size, mtimeMicros: p.mtimeMicros, consumedOffset: p.consumedOffset,
                             prevInput: p.prevInput, prevOutput: p.prevOutput, prevCached: p.prevCached,
                             monthKey: monthString, monthInput: 0, monthOutput: 0, monthCached: 0,
-                            dayContrib: [:]
+                            dayContrib: [:], forkCopyDeadlineMicros: p.forkCopyDeadlineMicros,
+                            // UTC 맵은 통째로 비우지 않는다 — 전월 마지막 UTC 일(이번 달 첫 9시간)은 남긴다(검토 P1).
+                            dayContribUTC: p.dayContribUTC.filter { $0.key >= utcRetainFrom }
                         )
                         stats.statesChanged = true
                     }
@@ -1015,16 +1285,31 @@ enum TokenUsageIncrementalScanner {
                     // 예외는 consumedOffset == 0 뿐이다 — 완결 라인을 하나도 소비하지 못했다는 뜻이고(이벤트 라인을
                     // 읽었다면 그 줄의 개행까지 소비돼 offset > 0), 곧 기준선을 세운 적이 없다는 뜻이라 nil 로 되돌린다.
                     baseline = p.consumedOffset > 0 ? (p.prevInput, p.prevOutput, p.prevCached) : nil
+                    // 이어읽기면 복사 구간 마감도 물려받는다. 아직 완결 라인을 하나도 소비하지 못한 파일(offset 0)은 처음부터 다시
+                    // 읽으므로 첫 줄이 자기 메타다.
+                    fork = CodexForkTracker(startedAtZero: p.consumedOffset == 0, deadlineMicros: p.forkCopyDeadlineMicros)
                     if sameMonth {
                         monthInput = p.monthInput
                         monthOutput = p.monthOutput
                         monthCached = p.monthCached
                         dayContrib = p.dayContrib
                     }
+                    // UTC 맵은 월이 바뀌어도 하한 이상 키를 물려받는다(이어읽기의 새 이벤트가 그 위에 쌓인다).
+                    dayContribUTC = p.dayContribUTC.filter { $0.key >= utcRetainFrom }
                 }
             }
 
             guard let read = readTail(at: f.url, from: startOffset, { line in
+                // 포크 표식은 파일 머리의 session_meta 에 있다(자기 메타의 forked_from_id / 두 번째 메타 = 복사된 부모 메타).
+                // 프리체크 바이트 패턴만으로는 본문에 그 낱말이 든 메시지 라인도 걸리므로 type 으로 확정한다. 읽는 필드는
+                // type · forked_from_id/parent_thread_id 의 유무 · 라인 timestamp 뿐이고 어떤 값도 보관하지 않는다(프라이버시 규약).
+                if contains(line, CodexForkRule.sessionMetaPattern),
+                   let base = line.baseAddress,
+                   let object = try? JSONSerialization.jsonObject(with: Data(bytes: base, count: line.count)) as? [String: Any],
+                   CodexForkRule.isSessionMeta(object) {
+                    fork.observeSessionMeta(object)
+                    return
+                }
                 guard contains(line, tokenCountPattern) else { return }
                 guard let base = line.baseAddress,
                       let object = try? JSONSerialization.jsonObject(with: Data(bytes: base, count: line.count)) as? [String: Any],
@@ -1039,6 +1324,13 @@ enum TokenUsageIncrementalScanner {
                 let input = intField(total["input_tokens"])
                 let output = intField(total["output_tokens"])
                 let cached = intField(total["cached_input_tokens"])
+                // 포크 복사 구간: 부모 이력의 복사본이라 델타를 내지 않고 기준선만 갱신한다(구간 끝의 기준선 = 부모가 포크 시점까지
+                // 쓴 누적치 S → 자식 첫 이벤트의 델타 = 자식 자신의 첫 턴). 마감은 자기 session_meta 시각 + 5초(CodexForkRule 주석).
+                if fork.isCopy(eventTimestamp: ts) {
+                    baseline = (input, output, cached)
+                    copyEvents += 1
+                    return
+                }
                 // 첫 관측(baseline == nil)은 델타를 만들지 않고 기준선만 세운다 — 그 누적치는 "카운터가 이미 거기 와
                 // 있었다"는 정보이지 이번에 쓴 양이 아니다(실측 근거는 CodexFileProgress 주석).
                 if let prev = baseline {
@@ -1053,12 +1345,17 @@ enum TokenUsageIncrementalScanner {
                         // 일별 맵은 현재 월 키만 담는다(월 롤오버에 통째로 비우므로 다른 달 키가 섞이면 안 된다).
                         if dIn + dOut > 0 { dayContrib[keys.day, default: 0] += dIn + dOut }
                     }
+                    // UTC 축(v0.2.43): 같은 델타를 UTC 일키로 한 번 더 쌓는다 — 월 게이트 대신 보존 하한(전월 마지막 UTC 일)으로 거른다.
+                    if dIn + dOut > 0, keys.utcDay >= utcRetainFrom {
+                        dayContribUTC[keys.utcDay, default: 0] += dIn + dOut
+                    }
                 }
                 baseline = (input, output, cached)
             }) else { continue }
             seenPaths.insert(path)
             stats.codexFilesRead += 1
             stats.codexBytesRead += read.bytesRead
+            stats.codexForkCopyEvents += copyEvents
 
             // 기준선을 못 세운 채 끝난 파일(= 이번 읽기에서 유효 token_count 가 하나도 없었다: 헤더/히스토리만 쓰인
             // 갓 만들어진 rollout)은 **오프셋을 전진시키지 않는다.** 전진시키면 다음 이어읽기가 "관측된 기준선 0"을
@@ -1070,7 +1367,7 @@ enum TokenUsageIncrementalScanner {
                 size: f.size, mtimeMicros: f.mtimeMicros, consumedOffset: persistedOffset,
                 prevInput: baseline?.input ?? 0, prevOutput: baseline?.output ?? 0, prevCached: baseline?.cached ?? 0,
                 monthKey: monthString, monthInput: monthInput, monthOutput: monthOutput, monthCached: monthCached,
-                dayContrib: dayContrib
+                dayContrib: dayContrib, forkCopyDeadlineMicros: fork.deadlineMicros, dayContribUTC: dayContribUTC
             )
             stats.statesChanged = true
         }
@@ -1150,16 +1447,21 @@ enum TokenUsageIncrementalScanner {
     /// Codex 월 합계는 필드별: codexInput(캐시 포함 입력)·codexOutput·codexCacheRead(입력의 부분집합, total 에 안 들어감).
     private static func totals(
         _ cache: TokenUsageCache, month: String,
-        monthStartTs14: Int, monthEndTs14: Int,
-        dayBuckets: [(startTs14: Int, key: String)], todayDate: String
+        monthStartTs14: Int, monthEndTs14: Int, windowStartTs14: Int,
+        dayBuckets: [(startTs14: Int, key: String)], todayDate: String,
+        utcRetainFrom: String
     ) -> TokenUsageMonthly {
         var usage = TokenUsageMonthly(month: month)
-        for (_, e) in cache.claudeEntries where e.ts14 >= monthStartTs14 && e.ts14 < monthEndTs14 {
-            usage.claudeInput += e.input
-            usage.claudeOutput += e.output
-            usage.claudeCacheRead += e.cacheRead
-            usage.claudeCacheCreation += e.cacheCreation
-            // 일별: ts14 가 속한 KST 일 버킷(startTs14 <= ts14 인 마지막 버킷)에 4필드 합을 더한다(월 부분집합).
+        // Claude: 월 합계는 [monthStart, monthEnd) 만, 일별 맵은 창 [windowStart, monthEnd) 전부(v0.2.43 — 잔디가 12주를 본다).
+        // 창 시작은 항상 월 시작보다 앞이므로(84일 > 한 달) 월 안의 엔트리는 두 조건을 다 만족한다.
+        for (_, e) in cache.claudeEntries where e.ts14 >= windowStartTs14 && e.ts14 < monthEndTs14 {
+            if e.ts14 >= monthStartTs14 {
+                usage.claudeInput += e.input
+                usage.claudeOutput += e.output
+                usage.claudeCacheRead += e.cacheRead
+                usage.claudeCacheCreation += e.cacheCreation
+            }
+            // 일별: ts14 가 속한 KST 일 버킷(startTs14 <= ts14 인 마지막 버킷)에 4필드 합을 더한다.
             if let key = dayKey(for: e.ts14, in: dayBuckets) {
                 usage.claudeDaily[key, default: 0] += e.input + e.output + e.cacheRead + e.cacheCreation
             }
@@ -1171,6 +1473,13 @@ enum TokenUsageIncrementalScanner {
             usage.codexCacheRead += s.monthCached
             // 일별: 파일별 맵을 날짜 키로 합친다(어제 시작·오늘 성장 세션도 날짜별로 제자리에 들어간다).
             for (day, delta) in s.dayContrib { usage.codexDaily[day, default: 0] += delta }
+        }
+        // UTC 축 일별 맵(v0.2.43)은 **상태 키(monthKey)를 가리지 않고** 보존 하한 이상 키를 전부 합친다 — 지난달에 마지막으로 쓰인 파일
+        // (이번 달 프리필터 밖, 퇴거 전)의 전월 마지막 UTC 일 몫도 이번 달 첫 9시간과 같은 키에 들어야 그 날 값이 온전하다.
+        for (_, s) in cache.codexFileStates {
+            for (day, delta) in s.dayContribUTC where day >= utcRetainFrom {
+                usage.codexDailyUTC[day, default: 0] += delta
+            }
         }
         usage.todayTotal = (usage.claudeDaily[todayDate] ?? 0) + (usage.codexDaily[todayDate] ?? 0)
         usage.todayDate = todayDate
@@ -1189,20 +1498,22 @@ enum TokenUsageIncrementalScanner {
         return lo > 0 ? buckets[lo - 1].key : nil
     }
 
-    /// 보관 하한(월 시작 − 48h) 밖 엔트리/파일상태를 제거(로드 시점). 무언가 지워지면 해당 부분의 변경 플래그를 세워
-    /// 저장을 유도한다(엔트리는 콜드, 파일상태는 핫).
+    /// 보관 하한 밖 엔트리/파일상태를 제거(로드 시점): Claude 엔트리·파일상태는 12주 창 시작 − 48h, Codex 파일상태는 월 시작 − 48h
+    /// (v0.2.43 — Codex 는 월 창을 유지한다). 무언가 지워지면 해당 부분의 변경 플래그를 세워 저장을 유도한다(엔트리는 콜드, 파일상태는 핫).
     ///
     /// 파일상태도 같은 하한을 쓴다: mtime 이 월 시작보다 오래된 파일은 프리필터에 걸려 이번 달 순회에 들지 않으므로 그
     /// 상태는 쓸 데가 없다. 지난달 codex 세션이 이번 달 재개되면(mtime 갱신) 오프셋 0 부터 다시 읽지만, 첫 이벤트가
     /// 기준선이 되고 지난달 이벤트 델타는 지난달로 귀속되므로 이번 달 값은 이어읽기와 **같다**(비용은 그 파일 1회 재읽기뿐).
-    private static func evict(_ cache: inout TokenUsageCache, evictTs14: Int, evictMicros: Int, stats: inout Stats) {
+    private static func evict(
+        _ cache: inout TokenUsageCache, claudeEvictTs14: Int, claudeEvictMicros: Int, codexEvictMicros: Int, stats: inout Stats
+    ) {
         let beforeEntries = cache.claudeEntries.count
-        cache.claudeEntries = cache.claudeEntries.filter { $0.value.ts14 >= evictTs14 }
+        cache.claudeEntries = cache.claudeEntries.filter { $0.value.ts14 >= claudeEvictTs14 }
         if cache.claudeEntries.count != beforeEntries { stats.entriesChanged = true }
         let beforeClaudeFiles = cache.claudeFileStates.count
-        cache.claudeFileStates = cache.claudeFileStates.filter { $0.value.mtimeMicros >= evictMicros }
+        cache.claudeFileStates = cache.claudeFileStates.filter { $0.value.mtimeMicros >= claudeEvictMicros }
         let beforeCodexFiles = cache.codexFileStates.count
-        cache.codexFileStates = cache.codexFileStates.filter { $0.value.mtimeMicros >= evictMicros }
+        cache.codexFileStates = cache.codexFileStates.filter { $0.value.mtimeMicros >= codexEvictMicros }
         if cache.claudeFileStates.count != beforeClaudeFiles || cache.codexFileStates.count != beforeCodexFiles {
             stats.statesChanged = true
         }
@@ -1339,10 +1650,11 @@ enum TokenUsageIncrementalScanner {
         Int((date.timeIntervalSince1970 * 1_000_000).rounded())
     }
 
-    /// Codex 이벤트 timestamp(UTC ISO8601, 예 "2026-07-24T07:17:35.634Z")를 KST(+9)로 본 (월키 'YYYY-MM', 일키 'YYYY-MM-DD').
+    /// Codex 이벤트 timestamp(UTC ISO8601, 예 "2026-07-24T07:17:35.634Z")를 KST(+9)로 본 (월키 'YYYY-MM', 일키 'YYYY-MM-DD')
+    /// 과 **UTC 일키**(앞 10자 그대로 — 계정 버킷과 같은 축, v0.2.43).
     /// 앞 19자(YYYY-MM-DDTHH:MM:SS, UTC)만 정수 컴포넌트로 읽어 UTC Date 를 만들고 KST 캘린더로 월/일을 뽑는다 — 단순 +9h
     /// 문자열 산술의 자릿수 올림(일·월·연 경계) 버그를 피한다. 소수초·타임존 표기 변형에 견고(앞 19자 고정폭만 사용). 실패 시 nil.
-    private static func kstMonthDayKeys(fromTimestamp s: String) -> (month: String, day: String)? {
+    static func kstMonthDayKeys(fromTimestamp s: String) -> (month: String, day: String, utcDay: String)? {
         let b = Array(s.utf8)
         guard b.count >= 19 else { return nil }
         // 연(0..3) 월(5,6) 일(8,9) 시(11,12) 분(14,15) 초(17,18) — 나머지는 구분자('-' 'T' ':').
@@ -1362,7 +1674,22 @@ enum TokenUsageIncrementalScanner {
         guard let date = utcCalendar.date(from: comps) else { return nil }
         let k = kstCalendar.dateComponents([.year, .month, .day], from: date)
         let y = k.year ?? 0, mo = k.month ?? 0, d = k.day ?? 0
-        return (String(format: "%04d-%02d", y, mo), String(format: "%04d-%02d-%02d", y, mo, d))
+        // UTC 일키는 timestamp 앞 10자 그대로(위에서 자릿수를 검증했고 구분자는 '-' 고정폭).
+        return (String(format: "%04d-%02d", y, mo), String(format: "%04d-%02d-%02d", y, mo, d), String(s.prefix(10)))
+    }
+
+    /// UTC 일별 맵(dayContribUTC / codexDailyUTC)의 보존 하한 = **KST 월 시작 − 1일** 의 'YYYY-MM-DD'(v0.2.43).
+    /// 전월 마지막 UTC 일(예: 7월이면 "2026-06-30" = KST 6/30 09:00 ~ 7/1 09:00)은 이번 달 첫 9시간을 담고 있어 이 키까지 남긴다 —
+    /// 월초에 버리면 마지막 날 차분이 0 으로 떨어진다(검토 P1). 'YYYY-MM' 이 아니면 빈 문자열(모든 키가 그 이상이라 보존 규칙이 사실상 꺼진다).
+    static func utcRetainFromKey(monthString: String) -> String {
+        let parts = monthString.split(separator: "-")
+        guard parts.count == 2, let y = Int(parts[0]), let m = Int(parts[1]), (1...12).contains(m) else { return "" }
+        var comps = DateComponents()
+        comps.year = y; comps.month = m; comps.day = 1
+        guard let first = kstCalendar.date(from: comps),
+              let prev = kstCalendar.date(byAdding: .day, value: -1, to: first) else { return "" }
+        let k = kstCalendar.dateComponents([.year, .month, .day], from: prev)
+        return String(format: "%04d-%02d-%02d", k.year ?? 0, k.month ?? 0, k.day ?? 0)
     }
 }
 
@@ -1671,8 +1998,8 @@ struct CheckTokenUsageRow: View {
                 .foregroundStyle(CheckTheme.secondaryText)
                 .lineLimit(1)
             Spacer(minLength: 6)
-            // 표시 총합만 계정 집계를 섞는다(TokenUsageDisplay.effectiveTotal). usage.total(업로드값)은 그대로다.
-            Text(TokenNumberFormatter.grouped(TokenUsageDisplay.effectiveTotal(local: usage, accountMonth: accountMonth(for: usage))))
+            // 표시 총합만 계정 집계를 섞는다(TokenUsageDisplay.effectiveTotal — 계정 우선 규칙). usage.total(업로드값)은 그대로다.
+            Text(TokenNumberFormatter.grouped(TokenUsageDisplay.effectiveTotal(local: usage, account: account?.snapshot)))
                 .font(.caption.weight(.bold))
                 .foregroundStyle(CheckTheme.primaryText)
                 .monospacedDigit()

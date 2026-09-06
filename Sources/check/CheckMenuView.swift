@@ -3426,6 +3426,9 @@ private struct InsightsPanel: View {
                 Text("최근 12주 AI 토큰")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
+                    // 한 칸이 두 축을 담는다(Claude 는 KST 자정 하루, Codex 는 계정 버킷과 같은 UTC 하루 = KST 오전 9시 경계) —
+                    // 내 박스·순위판 툴팁과 같은 리터럴로 밝힌다(v0.2.43, 사용자 결정 "9시 경계").
+                    .help(TokenUsageMonthly.tokenDayAxisNote)
                 Spacer(minLength: 4)
                 ContributionLegendView(levels: Self.dailyGridLevels, color: Self.tokenGrassColor)
             }

@@ -122,26 +122,29 @@ func toolUsageLabelUsesEffectiveCodexNotTheLocalSum() {
 func boardDetailTooltipKeepsTheMyBoxVocabularyAndFullPrecision() {
     // 내 팝오버 행(TokenUsageMonthly.detailTooltip)과 같은 어휘·같은 정밀도(grouped) — 순위판과 내 박스가
     // 같은 숫자를 다르게 부르면 그 자체가 결함으로 읽힌다. 캡션의 축약이 실제로 몇인지 확인하는 유일한 자리다.
+    // v0.2.43 UTC 축: Codex 가 있는 툴팁은 끝에 하루의 뜻(9시 경계)을 밝힌다(V0243UTCAxisTests 가 리터럴·배선을 고정).
+    let axis = " · " + TokenUsageMonthly.tokenDayAxisNote
     let full = toolMixEntry(
         claudeInput: 1, claudeOutput: 2, claudeCacheRead: 3, claudeCacheCreation: 4,
         codexInput: 100, codexOutput: 20, codexCacheRead: 60, codexAccountMonth: 1_000
     )
     // 계정 집계가 쓰였으면 내 박스와 **같은 문구**로 "총합은 계정 집계 기준"이 붙는다 — 이 한 마디가 없으면
     // 툴팁에 Codex 숫자가 둘(로컬 120 · 계정 1,000) 나란히 놓이는데 캡션·굵은 총합이 어느 쪽인지 알 수 없다.
+    // v0.2.43: 계정을 아는 행은 로컬 줄에 "로컬 집계" 라벨이 붙는다(두 숫자가 대칭으로 읽히게 — issue #6 제보자 요구).
     #expect(
         full.detailTooltip
-            == "Claude 10 (입력 1 · 출력 2 · 캐시읽기 3 · 캐시생성 4) · Codex 120 (캐시 60) "
-            + "· Codex 계정 집계 1,000 · 총합은 계정 집계 기준"
+            == "Claude 10 (입력 1 · 출력 2 · 캐시읽기 3 · 캐시생성 4) · Codex 로컬 집계 120 (캐시 60) "
+            + "· Codex 계정 집계 1,000 · 총합은 계정 집계 기준" + axis
     )
     // 문구는 리터럴로 두 곳에 흩뿌리지 않고 내 박스 상수를 그대로 쓴다(어휘가 갈리는 것을 막는 배선).
-    #expect(full.detailTooltip.hasSuffix(TokenUsageMonthly.accountDrivenTotalNote))
+    #expect(full.detailTooltip.contains(" · " + TokenUsageMonthly.accountDrivenTotalNote + " · "))
     #expect(TokenUsageMonthly.accountDrivenTotalNote == "총합은 계정 집계 기준")
-    // 계정 집계가 로컬보다 크지 않으면(= 순위에 안 쓰였으면) 그 줄은 통째로 빠진다 — 안 쓰인 숫자를 나란히
-    // 보여 줄 이유가 없다. 동률(120 == 120)도 로컬이 기준이라 뺀다.
+    // v0.2.43: 계정 집계는 로컬보다 작거나 같아도 **함께** 적는다(제보자 요구: 계정·로컬 둘 다 노출). 옛 RPC(codex_effective 없음)에서
+    // 동률(120 == 120)이면 총합은 로컬 기준이라 "총합은 계정 집계 기준" 문구만 빠진다.
     let localWins = toolMixEntry(claudeInput: 10, codexInput: 120, codexCacheRead: 60, codexAccountMonth: 120)
-    #expect(localWins.detailTooltip == "Claude 10 (입력 10 · 출력 0 · 캐시읽기 0 · 캐시생성 0) · Codex 120 (캐시 60)")
+    #expect(localWins.detailTooltip == "Claude 10 (입력 10 · 출력 0 · 캐시읽기 0 · 캐시생성 0) · Codex 로컬 집계 120 (캐시 60) · Codex 계정 집계 120" + axis)
     // 값이 0 인 소스는 통째로 뺀다(기존 관용구와 동일).
-    #expect(toolMixEntry(codexInput: 120, codexCacheRead: 60).detailTooltip == "Codex 120 (캐시 60)")
+    #expect(toolMixEntry(codexInput: 120, codexCacheRead: 60).detailTooltip == "Codex 120 (캐시 60)" + axis)
     #expect(toolMixEntry(claudeInput: 10).detailTooltip == "Claude 10 (입력 10 · 출력 0 · 캐시읽기 0 · 캐시생성 0)")
     // 아무것도 안 쓴 사람은 빈 문자열. `.help("")` 의 동작(빈 말풍선?)은 AppKit 버전마다 갈리고 ImageRenderer 로
     // 확인할 수도 없어(.help 는 픽셀에 안 그려진다) 검증 불가능한 가정을 남기지 않는다 —
@@ -153,10 +156,10 @@ func boardDetailTooltipKeepsTheMyBoxVocabularyAndFullPrecision() {
     #expect(
         big.detailTooltip
             == "Claude 19,658,964,272 (입력 19,658,964,272 · 출력 0 · 캐시읽기 0 · 캐시생성 0) "
-            + "· Codex 2,543,110 (캐시 1,800,000)"
+            + "· Codex 2,543,110 (캐시 1,800,000)" + axis
     )
     // 로컬이 0 인데 계정 집계만 있는 사람(기기가 아직 못 읽었지만 계정에는 잡힌다) — 계정 줄만 남는다.
     let accountOnly = toolMixEntry(codexAccountMonth: 300_000_000)
-    #expect(accountOnly.detailTooltip == "Codex 계정 집계 300,000,000 · 총합은 계정 집계 기준")
+    #expect(accountOnly.detailTooltip == "Codex 계정 집계 300,000,000 · 총합은 계정 집계 기준" + axis)
     #expect(accountOnly.toolUsageLabel == "Codex 3억")
 }

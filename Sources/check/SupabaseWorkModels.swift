@@ -264,6 +264,9 @@ struct TokenBoardRow: Decodable, Equatable {
     var codexCacheRead: Int = 0
     /// Codex 계정 월합(기기 간 max — 기기마다 같은 계정값을 올린다). 없으면 nil(옛 RPC 이거나 아무 기기도 못 읽었다).
     var codexAccountMonth: Int? = nil
+    /// v0.2.43(20260906120000): 서버가 계정 우선 규칙(CodexEffectiveRule)으로 계산한 Codex 유효값. 옛 RPC 면 nil —
+    /// 그때는 클라가 종전 `max(로컬, 계정)` 으로 폴백한다(TokenBoardEntry.codexEffective).
+    var codexEffective: Int? = nil
 }
 
 // TokenBoardRow 커스텀 디코드: 서버가 아직 옛 token_usage_board RPC(today_total/today_date 컬럼 없음)여도
@@ -276,6 +279,7 @@ extension TokenBoardRow {
         case codexInput, codexOutput, total
         case todayTotal, todayDate
         case codexCacheRead, codexAccountMonth
+        case codexEffective
     }
 
     init(from decoder: Decoder) throws {
@@ -296,6 +300,8 @@ extension TokenBoardRow {
         // 20260903160000 이전 RPC 호환: 없으면 캐시 0, 계정 nil(= "모름" — 0 과 구분해야 비중 라인이 '계정 0' 을 그리지 않는다).
         codexCacheRead = try c.decodeIfPresent(Int.self, forKey: .codexCacheRead) ?? 0
         codexAccountMonth = try c.decodeIfPresent(Int.self, forKey: .codexAccountMonth)
+        // 20260906120000 이전 RPC 호환: 없으면 nil(= 서버 계산값 없음 → 클라 폴백).
+        codexEffective = try c.decodeIfPresent(Int.self, forKey: .codexEffective)
     }
 }
 
@@ -319,6 +325,8 @@ struct TokenBoardEntry: Identifiable, Equatable {
     var codexCacheRead: Int = 0
     /// Codex 계정 월합(기기 간 max). 옛 RPC 거나 미보고면 nil.
     var codexAccountMonth: Int? = nil
+    /// 서버가 계정 우선 규칙으로 계산한 Codex 유효값(20260906120000 의 `codex_effective`). 옛 RPC 면 nil.
+    var codexEffectiveFromServer: Int? = nil
 
     var id: String { userID }
 
@@ -326,8 +334,17 @@ struct TokenBoardEntry: Identifiable, Equatable {
     var claudeTotal: Int { claudeInput + claudeOutput + claudeCacheRead + claudeCacheCreation }
     /// Codex 로컬 소계(입력+출력, 기기 합산).
     var codexLocalTotal: Int { codexInput + codexOutput }
-    /// 순위에 실제로 쓰인 Codex 몫 = 로컬 합과 계정 월합 중 큰 쪽(서버 `greatest(codex_local, coalesce(codex_account, 0))` 미러).
-    var codexEffective: Int { max(codexLocalTotal, codexAccountMonth ?? 0) }
+    /// 순위에 실제로 쓰인 Codex 몫. 서버가 계정 우선 규칙으로 계산한 `codex_effective`(20260906120000) 가 있으면 그것,
+    /// 옛 RPC 면 종전 `greatest(codex_local, coalesce(codex_account, 0))` 미러로 폴백한다(서버·클라 버전이 어긋난 과도기에도
+    /// 캡션의 두 값 합이 굵은 총합과 맞아야 한다 — 총합은 언제나 서버가 준 `total` 이고 캡션은 그 산식을 따라간다).
+    var codexEffective: Int { codexEffectiveFromServer ?? max(codexLocalTotal, codexAccountMonth ?? 0) }
+
+    /// 총합이 계정 집계를 기준으로 계산됐는가. 새 서버(codex_effective 있음)는 계정 월합이 0 보다 크면 언제나 계정 기준이고
+    /// (이 달 버킷이 없으면 월합이 0 이라 로컬로 떨어진다), 옛 서버는 계정이 로컬보다 클 때만 계정이 이겼다.
+    var totalIsAccountDriven: Bool {
+        guard let account = codexAccountMonth, account > 0 else { return false }
+        return codexEffectiveFromServer != nil || account > codexLocalTotal
+    }
 
     /// 표시할 오늘 증가량. todayDate 가 현재 KST 날짜(currentDate)와 같을 때만 todayTotal 을, 어제 이후로 스테일이면
     /// 0 을 돌려준다 — 어제 이후 안 연 사람도 "오늘 +0"으로 균일하게 표시되도록(행 높이/레이아웃 일관). 순수 함수라 테스트로 고정한다.
@@ -339,8 +356,8 @@ struct TokenBoardEntry: Identifiable, Equatable {
     /// `"Claude 196.6억 · Codex 254만"` / 한쪽만 있으면 `"Claude 196.6억"` / 둘 다 0 이면 **nil**.
     /// nil 일 때 뷰가 줄 자체를 그리지 않아 한 번도 안 올린 사람의 행이 한 줄로 유지된다(빈 줄로 벌어지지 않는다).
     ///
-    /// Codex 는 `codexEffective`(로컬 합과 계정 월합 중 큰 쪽)를 쓴다 — 우측 굵은 총합(`total`)이 서버에서
-    /// `greatest(codex_local, codex_account)` 로 계산되므로, 여기서 로컬만 쓰면 캡션의 두 값 합이 총합과 안 맞는다.
+    /// Codex 는 `codexEffective`(서버가 계정 우선 규칙으로 계산한 값 — 옛 RPC 면 max 폴백)를 쓴다 — 우측 굵은 총합(`total`)이
+    /// 서버에서 같은 규칙으로 계산되므로, 여기서 로컬만 쓰면 캡션의 두 값 합이 총합과 안 맞는다.
     /// 축약은 좁은 폭 때문이며(292pt 행에서 이 줄에 실제로 남는 폭은 100pt 안팎 — 실측),
     /// 정확한 값은 `detailTooltip` 이 grouped 로 준다.
     var toolUsageLabel: String? {
@@ -368,23 +385,34 @@ struct TokenBoardEntry: Identifiable, Equatable {
                 + "· 캐시읽기 \(TokenNumberFormatter.grouped(claudeCacheRead)) · 캐시생성 \(TokenNumberFormatter.grouped(claudeCacheCreation)))"
             )
         }
+        // 계정 집계를 아는 행(계정 월합 non-nil, 0 포함)은 **로컬과 계정을 둘 다** 적는다(issue #6 제보자 요구: "툴팁에 계정 집계와
+        // 로컬 집계를 함께 노출"). 로컬 줄에 "로컬 집계" 라벨을 붙이는 것도 그때뿐이다 — 계정을 모르면 Codex 숫자가 하나라
+        // 라벨이 오히려 소음이다(옛 문구 그대로). 어휘·정밀도는 내 박스 툴팁(TokenUsageMonthly.detailTooltip)과 같다.
+        // 계정 월합이 0 이면(이 달 버킷이 아직 없거나 옛 RPC) 계정 줄을 적지 않는다 — "계정 집계 0" 은 사용이 0 이 아니라 반영 전이라는
+        // 뜻이라 오독을 부른다(내 박스 툴팁의 `accountMonth > 0` 게이트와 같다).
+        let accountMonth = codexAccountMonth ?? 0
+        let showsAccount = accountMonth > 0
         if codexLocalTotal > 0 {
             parts.append(
-                "Codex \(TokenNumberFormatter.grouped(codexLocalTotal)) "
+                "Codex \(showsAccount ? "로컬 집계 " : "")\(TokenNumberFormatter.grouped(codexLocalTotal)) "
                 + "(캐시 \(TokenNumberFormatter.grouped(codexCacheRead)))"
             )
         }
-        // 계정 집계는 **로컬보다 커서 실제로 쓰였을 때만** 적는다. 작거나 같으면 순위에 쓰인 값이 로컬이라
-        // 굳이 두 숫자를 나란히 보여 혼란을 만들 이유가 없다.
-        // 판정은 내 박스 툴팁과 **다르다**(같다고 적어 뒀던 주석이 틀렸다): 내 박스는 계정값이 0 보다 크면 늘 적고,
-        // 여기는 순위에 실제로 쓰였을 때(로컬보다 클 때)만 적는다. 순위판은 남의 행이라 참고용 숫자를 늘릴수록
-        // 읽는 비용만 커지기 때문이다.
-        // 계정값을 적을 때는 내 박스와 **같은 문구**로 "총합은 계정 집계 기준"을 한 줄 더 붙인다 — 이게 없으면
-        // 툴팁에 Codex 숫자가 둘(로컬 소계·계정 집계) 나란히 놓이는데 어느 쪽이 굵은 총합과 캡션에 쓰였는지
-        // 알 길이 없다(내 박스에는 있는 설명이 순위판에만 빠져 어휘가 갈렸던 자리).
-        if let account = codexAccountMonth, account > codexLocalTotal {
-            parts.append("Codex 계정 집계 \(TokenNumberFormatter.grouped(account))")
-            parts.append(TokenUsageMonthly.accountDrivenTotalNote)
+        if showsAccount {
+            parts.append("Codex 계정 집계 \(TokenNumberFormatter.grouped(accountMonth))")
+            // 총합에 계정이 쓰였으면 내 박스와 **같은 문구**로 밝힌다 — 이게 없으면 Codex 숫자가 둘 나란히 놓이는데 어느 쪽이
+            // 굵은 총합과 캡션에 쓰였는지 알 길이 없다. 로컬이 계정보다 20% 넘게 크면 진단 한 줄을 더한다(포크 복사본 —
+            // CodexEffectiveRule 머리 주석; 문턱은 서버 진단 token_scan_health 와 같은 1.2).
+            if totalIsAccountDriven {
+                parts.append(TokenUsageMonthly.accountDrivenTotalNote)
+                if CodexEffectiveRule.localExceedsAccount(local: codexLocalTotal, account: accountMonth) {
+                    parts.append(CodexEffectiveRule.localExceedsAccountNote)
+                }
+            }
+        }
+        // Codex 숫자가 하나라도 있으면 하루의 뜻을 맨 끝에 밝힌다 — 내 박스 툴팁·잔디 헤더와 같은 리터럴(v0.2.43, 9시 경계).
+        if codexLocalTotal > 0 || showsAccount {
+            parts.append(TokenUsageMonthly.tokenDayAxisNote)
         }
         return parts.joined(separator: " · ")
     }
@@ -409,7 +437,8 @@ extension Array where Element == TokenBoardRow {
                 todayTotal: row.todayTotal,
                 todayDate: row.todayDate,
                 codexCacheRead: row.codexCacheRead,
-                codexAccountMonth: row.codexAccountMonth
+                codexAccountMonth: row.codexAccountMonth,
+                codexEffectiveFromServer: row.codexEffective
             )
         }
     }
@@ -523,10 +552,18 @@ struct TokenUsageUpsertRequest: Encodable {
     // 호출측이 따로 넘기게 두면 행에 실린 Codex 합과 스냅샷이 어긋날 여지가 생기는데, 그 어긋남이 정확히
     // 이 필드가 없애려던 결함이다. 파생이면 구조적으로 불가능하다.
     var codexDiagInputAtScan: Int?
+
+    // ── 4차(v0.2.43): 포크 복사 구간 계수 2개(codex_diag_fork_files · codex_diag_fork_tokens, 20260906120000 컬럼) ──
+    //
+    // Codex 포크 파일의 복사 구간(CodexForkRule)이 몇 파일에 걸렸고, 옛 산식이라면 그 달에 얼마를 더했을지를 같은 도장 규약으로
+    // 싣는다. 이 둘이 있어야 "이 사람의 과다계상이 포크 복사본에서 온 것인가"를 서버에서 로그 없이 가른다.
+    // 규약은 위 19개와 같다 — **옵셔널이 핵심**(nil = 키 생략 = 서버 값 보존), Int 뿐(문자열 금지), 새 필드는 마지막에.
+    var codexDiagForkFiles: Int?
+    var codexDiagForkTokens: Int?
 }
 
 extension TokenUsageUpsertRequest {
-    /// 진단 스냅샷을 19개 스칼라로 펼쳐 담는 생성자. **diagnostics 가 nil 이면 19개 필드가 전부 nil 로 남아**
+    /// 진단 스냅샷을 21개 스칼라로 펼쳐 담는 생성자(19 + v0.2.43 포크 계수 2). **diagnostics 가 nil 이면 21개 필드가 전부 nil 로 남아**
     /// 인코딩 결과에서 codex_diag_* 키가 통째로 사라진다(= 서버의 기존 진단값 보존).
     ///
     /// 19번째(codexDiagInputAtScan)만 diagnostics 안이 아니라 **이 생성자가 받은 codexInput+codexOutput 에서 파생**된다
@@ -596,7 +633,9 @@ extension TokenUsageUpsertRequest {
             // 진단이 실릴 때만 값이 생긴다(nil 이면 키 생략 → 서버 스냅샷 보존). 값은 이 본문의 Codex 총합 그 자체.
             // codexTotal 을 쓰는 이유: 앱은 Codex 델타를 입출력 구분 없이 전액 codexInput 에 담고 codexOutput 은 항상 0 이라
             // 오늘은 codexInput 과 같은 값이지만, 훗날 출력을 쪼개 담더라도 "그 업로드의 Codex 총합"이라는 뜻이 유지된다.
-            codexDiagInputAtScan: diagnostics.map { _ in codexInput + codexOutput }
+            codexDiagInputAtScan: diagnostics.map { _ in codexInput + codexOutput },
+            codexDiagForkFiles: diagnostics?.forkFiles,
+            codexDiagForkTokens: diagnostics?.forkCopyTokens
         )
     }
 }
@@ -662,18 +701,24 @@ struct TokenUsageLegacyTotalRow: Decodable {
 /// codex_account 는 **옵셔널이 핵심**이다(월 표의 codex_account_*·codex_diag_* 와 같은 규약): 합성 Encodable 은 nil 을
 /// encodeIfPresent 로 내보내 **키 자체가 빠지고**, PostgREST 의 merge-duplicates upsert 는 본문에 온 컬럼만 SET 한다.
 /// 계정 버킷(UTC 일자)이 그 날짜에 없는 기기가 0 을 실으면 다른 기기가 앞서 올린 계정값을 0 으로 밀어 버린다 — nil 이면
-/// 서버 값이 보존된다. claude_total/codex_total 은 로컬 집계라 항상 실린다(매 업로드가 최신값이므로 덮는 것이 맞다).
+/// 서버 값이 보존된다. 같은 규약이 v0.2.43 부터 네 값 전부에 적용된다(TokenUsageDailyValue 주석 — 각 로컬 맵이 **덮는 날에만** 값이 있다):
+/// - claude_total: 이 기기의 Claude 로그가 온전한 날(TokenUsageMonthly.claudeCompleteFrom 이후)만. 그 앞은 키 생략.
+/// - codex_total(KST 하루): 현재 KST 월의 날만(KST 맵은 현재 월뿐). 창 안 지난달 날은 키 생략 — 0 을 실으면 그 달 행의 Codex 가 지워진다.
+/// - codex_utc_total(UTC 하루 = KST 오전 9시 ~ 다음날 9시, 계정 버킷과 같은 축): UTC 보존 하한(전월 마지막 UTC 일) 이후만. 그 앞은 키 생략.
+///   서버 산식(20260906120000)의 꼬리·마지막 날 차분은 이 값을 우선 쓴다(`coalesce(codex_utc_total, codex_total)`).
+/// 키 집합이 다른 행은 서비스가 묶음을 갈라 보낸다(upsertTokenUsageDaily).
 struct TokenUsageDailyUpsertRow: Encodable, Equatable, Sendable {
     let userId: String
-    /// KST 'YYYY-MM-DD'(claudeDaily/codexDaily 의 키 그대로).
+    /// 'YYYY-MM-DD' — claude_total/codex_total 은 이 날짜를 KST 하루로, codex_utc_total/codex_account 는 UTC 하루로 읽는다(서버 컬럼 주석).
     let day: String
     let deviceId: String
-    let claudeTotal: Int
-    let codexTotal: Int
+    var claudeTotal: Int?
+    var codexTotal: Int?
+    var codexUtcTotal: Int? = nil
     var codexAccount: Int?
 }
 
-/// 일별 표 조회 응답 한 줄(select=day,device_id,claude_total,codex_total,codex_account). 기기별 행이 그대로 오고
+/// 일별 표 조회 응답 한 줄(select=day,device_id,claude_total,codex_total,codex_utc_total,codex_account). 기기별 행이 그대로 오고
 /// 합산은 클라(TokenDailyMerge.serverTotals)가 한다 — claude+codex 는 기기 합, codex_account 는 기기 간 max.
 struct TokenUsageDailyRow: Decodable, Equatable, Sendable {
     let day: String
@@ -682,6 +727,8 @@ struct TokenUsageDailyRow: Decodable, Equatable, Sendable {
     let codexTotal: Int
     /// null = 그 기기가 그 날짜의 계정 버킷을 보고하지 않음("0" 과 다르다).
     let codexAccount: Int?
+    /// UTC 하루의 로컬 Codex 델타 합(v0.2.43). null = 구클라(≤ v0.2.42) 행 — 잔디 병합은 그때 codex_total(KST) 로 후퇴한다.
+    var codexUtcTotal: Int? = nil
 }
 
 struct TeamWeeklyGoal: Equatable {

@@ -1003,11 +1003,16 @@ actor SupabaseWorkService {
         accountStatus: CodexAccountProbeStatus? = nil,
         diagnostics: CodexUsageDiagnostics? = nil
     ) async throws {
+        // v0.2.43(코드 리뷰 P1): 미로그인(3)이면 스냅샷 네 값을 **싣지 않는다**. 스토어는 로그아웃·API 키 전환 뒤에도 마지막 스냅샷을
+        // 계속 들고 있는데(CheckCodexAccountUsage 는 status 만 바꾼다), 그것을 status 3 과 함께 실으면 서버가 "스냅샷 있는 미로그인 기기"
+        // 라는 어긋난 상태를 본다(구 산식은 그 기기의 반영일 로컬을 계정 위에 얹어 최대 2배 이중 계상). 키를 빼면 서버의 마지막 계정값은
+        // 보존되고, 산식 쪽은 서버 가드(스냅샷 없는 status 3 만 계정 밖)가 막는다 — 클라 생략은 그 가드의 짝이지 대체가 아니다.
+        let snapshot: CodexAccountUsage? = (accountStatus == .notLoggedIn) ? nil : account
         let accountFields: TokenUsageAccountFields? = (account == nil && accountStatus == nil) ? nil : TokenUsageAccountFields(
-            month: account.map { $0.monthTotal(usage.month) },
-            lifetime: account?.lifetimeTokens,
-            fetchedAt: account.map { dateFormatter.string(from: $0.fetchedAt) },
-            lastDay: account?.latestBucketDate(in: usage.month),
+            month: snapshot.map { $0.monthTotal(usage.month) },
+            lifetime: snapshot?.lifetimeTokens,
+            fetchedAt: snapshot.map { dateFormatter.string(from: $0.fetchedAt) },
+            lastDay: snapshot?.latestBucketDate(in: usage.month),
             status: accountStatus?.rawValue
         )
         try await sendNoBody(
@@ -1085,13 +1090,19 @@ actor SupabaseWorkService {
     ///   0 을 실으면 다른 기기가 올린 계정값을 밀어 버린다), Codex 를 쓰는 사람의 한 달치에는 '있는 날'과 '없는 날'이 **반드시**
     ///   섞인다. 그 배열을 통째로 보내면 그 사람의 일별 행이 서버에 **단 한 줄도** 올라가지 않고(400 은 조용히 삼켜진다),
     ///   장부도 갱신되지 않아 다음 주기가 같은 혼합 본문을 다시 보내는 영구 고착이 된다.
-    ///   그래서 `?columns=` 로 키를 강제하는 대신(그러면 빠진 키가 **null 로 쓰여** 계정값이 지워진다) 두 묶음으로 갈라
-    ///   각각 보낸다 — 요청은 최대 2건이고, 빈 묶음은 건너뛴다. 첫 묶음이 실패하면 그대로 던져 장부가 갱신되지 않는다
-    ///   (upsert 는 멱등이라 다음 주기가 둘 다 다시 보내도 안전하다).
+    ///   그래서 `?columns=` 로 키를 강제하는 대신(그러면 빠진 키가 **null 로 쓰여** 계정값이 지워진다) 키 모양별 묶음으로 갈라
+    ///   각각 보낸다. v0.2.43 부터 옵셔널이 넷이다(claude_total · codex_total · codex_utc_total · codex_account — 각 로컬 맵이 덮는
+    ///   날에만 값이 있다, TokenUsageDailyUpsertRow 주석) — 묶음은 **정확히 같은 키 집합**끼리(최대 16 모양, 실제로는 서너 개), 빈 묶음은 없다.
+    ///   첫 묶음이 실패하면 그대로 던져 장부가 갱신되지 않는다(upsert 는 멱등이라 다음 주기가 전부 다시 보내도 안전하다).
     func upsertTokenUsageDaily(accessToken: String, rows: [TokenUsageDailyUpsertRow]) async throws {
         guard !rows.isEmpty else { return }
-        // 순서는 결정적으로 둔다(계정값 있는 묶음 먼저) — 계약 테스트·로그가 요청 순서를 읽을 수 있어야 한다.
-        let groups = [rows.filter { $0.codexAccount != nil }, rows.filter { $0.codexAccount == nil }]
+        // 묶음 키 = 옵셔널 넷의 유무 비트(claude·codex·utc·account 순). 순서는 결정적으로 둔다 — 키가 많은 묶음부터(비트 내림차순),
+        // 계약 테스트·로그가 요청 순서를 읽을 수 있어야 한다.
+        func shape(_ r: TokenUsageDailyUpsertRow) -> Int {
+            (r.claudeTotal != nil ? 8 : 0) + (r.codexTotal != nil ? 4 : 0) + (r.codexUtcTotal != nil ? 2 : 0) + (r.codexAccount != nil ? 1 : 0)
+        }
+        let grouped = Dictionary(grouping: rows, by: shape)
+        let groups = grouped.keys.sorted(by: >).map { grouped[$0] ?? [] }
         for group in groups where !group.isEmpty {
             try await sendNoBody(
                 path: "/rest/v1/token_usage_device_daily",
@@ -1113,7 +1124,7 @@ actor SupabaseWorkService {
             path: "/rest/v1/token_usage_device_daily",
             method: "GET",
             queryItems: [
-                URLQueryItem(name: "select", value: "day,device_id,claude_total,codex_total,codex_account"),
+                URLQueryItem(name: "select", value: "day,device_id,claude_total,codex_total,codex_utc_total,codex_account"),
                 URLQueryItem(name: "user_id", value: "eq.\(userID)"),
                 URLQueryItem(name: "day", value: "gte.\(since)"),
                 URLQueryItem(name: "order", value: "day.desc"),

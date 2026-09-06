@@ -646,13 +646,13 @@ extension WorkTimerStore {
     /// 그래야 로그인·수집 허용·변경·60초 게이트를 그대로 물려받고, 요청 순서(월간 → 일별)가 서버 쪽 '월 표가 먼저 정확해진다'
     /// 규약과 일치한다. 수집 거부 가드는 여기서도 한 번 더 건다(게이트는 짝으로 있어야 한다 — 이 함수만 따로 불려도 새지 않게).
     ///
-    /// 행 = 현재 월 범위의 (claudeDaily ∪ codexDaily ∪ 그 달 계정 버킷) 날짜 중 **마지막 성공 업로드와 값이 다른 날만**(처음엔 전부).
+    /// 행 = 12주 잔디 창 안의 (claudeDaily ∪ codexDaily ∪ 계정 버킷) 날짜 중 **마지막 성공 업로드와 값이 다른 날만**(처음엔 전부; v0.2.43 부터 창).
     /// 실패는 조용히(장부를 갱신하지 않고 tokenDailyRetryPending 을 세워, 위 월간 변경 게이트가 usage 가 그대로여도 다음 주기를
     /// 열어 준다 — 그 플래그가 없던 동안 "일별만 실패 → 사용자가 AI 를 더 안 씀"이면 재시도가 영영 오지 않았다).
     /// 스키마 부재(마이그레이션 미적용)만은 월간 경로와 같은 문구로 드러내고, 그 경우엔 재시도 플래그를 세우지 않는다 —
     /// 배포로만 풀리는 항구적 실패라 60초마다 되짚어도 고쳐지지 않는다(신호는 이미 떴고, 배포 뒤 첫 사용량 변화가 전량을 올린다).
     ///
-    /// 하루(KST)가 바뀌면 장부를 비워 **그 달치를 통째로 다시** 올린다(재기준). 장부는 "204 를 받았다"만 알 뿐 "저장됐다"는
+    /// 하루(KST)가 바뀌면 장부를 비워 **창치를 통째로 다시** 올린다(재기준). 장부는 "204 를 받았다"만 알 뿐 "저장됐다"는
     /// 모르기 때문이다 — 수집 거부 트리거는 행을 조용히 버리고도 204 를 준다. 운영자가 수집을 껐다(purge) 다시 켜도 앱은
     /// 세션 중에 설정을 다시 읽지 않으므로(loadTokenUsagePrivacyIfNeeded 는 세션당 1회) 장부가 복원을 막았다.
     func uploadTokenUsageDailyIfNeeded(
@@ -2036,33 +2036,63 @@ extension WorkTimerStore {
 
 // MARK: - 일별 토큰 업로드의 순수 계산 (v0.2.41 토큰 잔디)
 
-/// 일별 업로드의 변경 게이트 단위: 하루치 (claude, codex, codexAccount). 값이 하나라도 다르면 '바뀐 날'이다.
-/// codexAccount 가 nil 이면 그 날짜의 계정 버킷이 없다는 뜻이고 본문에서 키가 빠진다(TokenUsageDailyUpsertRow 주석).
+/// 일별 업로드의 변경 게이트 단위: 하루치 (claude, codex(KST), codexUTC, codexAccount). 값이 하나라도 다르면 '바뀐 날'이다.
+/// **nil 은 "이 기기가 그 날의 그 값을 모른다" = 본문에서 키가 빠진다**(TokenUsageDailyUpsertRow 주석) — 0 을 실으면 서버의 완전값을
+/// 부분값/0 으로 덮는다. 각 값이 nil 인 조건은 그 값의 로컬 맵이 **덮는 날짜 범위**다:
+/// - claude: 이 기기의 Claude 로그가 온전한 날(TokenUsageMonthly.claudeCompleteFrom 이후)에만 값. 그 앞은 nil(v0.2.43).
+/// - codex(KST): 현재 KST 월 안의 날에만 값 — KST 맵(codexDaily)은 현재 월뿐이다. 창(12주) 안이라도 지난달 날은 nil(v0.2.43 UTC 축 작업에서
+///   잡은 구멍: 창이 12주로 넓어진 뒤 지난달 날에 0 을 실으면 그 달 행의 Codex 가 지워진다).
+/// - codexUTC: **이 빌드의 스캔 산출물**(windowStart 가 채워진 스냅샷)이고, UTC 보존 하한(전월 마지막 UTC 일, `utcRetainFromKey`)
+///   **다음 날 이후**의 날에만 값. 그 앞은 nil. 두 예외의 이유(코드 리뷰 P2 두 건):
+///   · 첫 스캔 전 복원된 옛 스냅샷(v0.2.42, windowStart "")은 UTC 맵이 비어 있다 — 0 을 실으면 서버 `coalesce(codex_utc_total, codex_total)`
+///     이 0 이 되어 그 사용자의 꼬리가 다음 업로드까지 0 이다. 모르는 값은 키를 뺀다.
+///   · 전월 마지막 UTC 일(하한 당일, 예: 7월의 "2026-06-30")의 UTC 합은 이번 달 첫 9시간 몫만 담긴 **부분값**이다(전월 mtime 파일은
+///     이번 달 프리필터 밖이라 파싱되지 않는다). 그 날은 서버 산식에서 반영일이라 계정 버킷이 쓰이므로 싣지 않아도 손실이 없다.
+///     (스캐너가 그 키를 **보존**하는 것은 별개의 규칙이다 — 월초 마지막 날 차분 재료이지 업로드 재료가 아니다.)
+/// - codexAccount: 그 날짜의 계정 버킷이 있을 때만.
 struct TokenUsageDailyValue: Equatable, Sendable {
-    var claude: Int
-    var codex: Int
+    var claude: Int?
+    var codex: Int?
+    var codexUTC: Int? = nil
     var codexAccount: Int?
 }
 
 /// 월간 사용량 + 계정 스냅샷에서 일별 표에 올릴 값을 고르는 순수 규칙(스토어·테스트 공용).
 enum TokenUsageDailyUpload {
-    /// 현재 월 범위의 날짜별 값. 키 = usage.month 접두어인 (claudeDaily ∪ codexDaily ∪ 계정 버킷) 날짜.
-    /// - 로컬 맵에는 보관 하한(월 시작 − 48시간) 때문에 지난 달 꼬리 이틀이 남아 있을 수 있다 — 그 날들은 이미 그 달에 올렸고
-    ///   지금은 부분값이라 **보내지 않는다**(월 접두어 필터). 보내면 서버의 온전한 값을 부분값으로 덮는다.
+    /// 창 안의 날짜별 값(v0.2.43 — 현재 월이 아니라 **12주 잔디 창** `usage.windowStartDay` 이후). 키 = (claudeDaily ∪ codexDaily ∪ 계정 버킷) 날짜.
+    /// - Claude 일별 맵은 창 시작부터의 날만 담고(버킷이 창에서 시작한다), Codex 일별 맵은 현재 월뿐이다. 계정 버킷(~70일)은 창 앞
+    ///   날짜도 들 수 있는데 그 날들은 **보내지 않는다**(창 필터) — 창 앞은 엔트리 보관 하한(창 시작 − 48시간) 탓에 부분값일 수 있고,
+    ///   서버의 온전한 값을 부분값으로 덮으면 안 된다. 옛 스냅샷(windowStart 빈 문자열)은 월 1일이 창 시작이라 옛 월 접두어 규칙과 같다.
+    /// - 첫 업로드는 최대 84일 × 1행(배열 upsert 한 번, 서버 max_rows 1000 이내)이고 그 뒤로는 changedDays 게이트가 바뀐 날만 고른다 —
+    ///   그 행들이 서버에 남아 잔디가 v0.2.41 이전 기록(예: 2026-08 가입자의 8월)을 되찾는다.
     /// - 계정 버킷 날짜도 키에 넣는다(스펙의 claudeDaily ∪ codexDaily 보다 넓다): `.zst` 만 남은 채 설치한 사람의 Codex 사용은
     ///   로컬 맵에 없고 계정 버킷에만 있다 — 월간 경로가 "로컬 0 + 계정 > 0" 을 올리는 것과 같은 이유로 일별도 그 날을 남겨야
     ///   다른 맥과 서버 잔디에 그 날이 보인다. 셋 다 0/nil 인 날은 말할 것이 없어 뺀다.
     static func values(usage: TokenUsageMonthly, account: CodexAccountUsage?) -> [String: TokenUsageDailyValue] {
-        let prefix = usage.month + "-"
+        let windowStart = usage.windowStartDay
+        let completeFrom = usage.claudeCompleteFrom
+        let monthPrefix = usage.month + "-"
+        // UTC 축 맵의 보존 하한(전월 마지막 UTC 일). 그 날과 그 앞 날짜의 codex_utc_total 은 모른다(nil) — 하한 당일은 재파싱 직후 부분값이고
+        // (E-4), 그 앞은 맵에 없다. UTC 맵 자체는 이 빌드가 스캔한 스냅샷(windowStart 채워짐)에만 있다 — 옛 스냅샷은 통째로 모른다(E-3).
+        let utcRetainFrom = TokenUsageIncrementalScanner.utcRetainFromKey(monthString: usage.month)
+        let utcMapIsFromThisBuild = !usage.windowStart.isEmpty
         let buckets = account?.buckets ?? [:]
         var result: [String: TokenUsageDailyValue] = [:]
-        for day in Set(usage.claudeDaily.keys).union(usage.codexDaily.keys).union(buckets.keys) where day.hasPrefix(prefix) {
+        // 고정폭 'YYYY-MM-DD' 라 사전식 비교 == 날짜 순서. 계정 버킷·UTC 맵은 UTC 일자 키, Claude·Codex KST 맵은 KST 일자 키인데
+        // 한 행(day)에 네 값이 함께 실린다 — 서버 컬럼이 축을 각각 명시한다(codex_total=KST 하루, codex_utc_total=UTC 하루, codex_account=UTC 버킷).
+        let keys = Set(usage.claudeDaily.keys).union(usage.codexDaily.keys).union(usage.codexDailyUTC.keys).union(buckets.keys)
+        for day in keys where day >= windowStart {
+            // 각 값은 그 맵이 덮는 날에만 싣는다(TokenUsageDailyValue 주석). 모르는 값은 nil → 키 생략 → 서버의 옛 완전값 보존.
+            let claudeKnown = completeFrom.isEmpty || day >= completeFrom
+            let codexKnown = day.hasPrefix(monthPrefix)
+            let utcKnown = utcMapIsFromThisBuild && day > utcRetainFrom
             let value = TokenUsageDailyValue(
-                claude: max(0, usage.claudeDaily[day] ?? 0),
-                codex: max(0, usage.codexDaily[day] ?? 0),
+                claude: claudeKnown ? max(0, usage.claudeDaily[day] ?? 0) : nil,
+                codex: codexKnown ? max(0, usage.codexDaily[day] ?? 0) : nil,
+                codexUTC: utcKnown ? max(0, usage.codexDailyUTC[day] ?? 0) : nil,
                 codexAccount: buckets[day].map { max(0, $0) }
             )
-            guard value.claude > 0 || value.codex > 0 || value.codexAccount != nil else { continue }
+            guard (value.claude ?? 0) > 0 || (value.codex ?? 0) > 0 || (value.codexUTC ?? 0) > 0 || value.codexAccount != nil else { continue }
             result[day] = value
         }
         return result
@@ -2079,7 +2109,7 @@ enum TokenUsageDailyUpload {
             guard let value = values[day] else { return nil }
             return TokenUsageDailyUpsertRow(
                 userId: userID, day: day, deviceId: deviceID,
-                claudeTotal: value.claude, codexTotal: value.codex, codexAccount: value.codexAccount
+                claudeTotal: value.claude, codexTotal: value.codex, codexUtcTotal: value.codexUTC, codexAccount: value.codexAccount
             )
         }
     }

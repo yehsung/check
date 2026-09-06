@@ -39,6 +39,9 @@ private func tgUsage(
     codexDaily: [String: Int] = [:]
 ) -> TokenUsageMonthly {
     var usage = TokenUsageMonthly(month: month)
+    // v0.2.43(E-3): 이 픽스처는 **이 빌드가 스캔한** 스냅샷을 뜻한다 — windowStart 가 비어 있으면 첫 스캔 전 복원된 옛 스냅샷으로 읽혀
+    // codex_utc_total 이 생략된다(V0243ReviewFixTests). 월 1일을 창 시작으로 두면 창 규칙은 옛 월 접두어 규칙과 같아 날짜 집합은 그대로다.
+    usage.windowStart = month + "-01"
     usage.claudeDaily = claudeDaily
     usage.codexDaily = codexDaily
     // 월간 업로드 게이트(총합 > 0)를 통과시키기 위한 최소값 — 일별 경로와는 무관하다.
@@ -253,11 +256,13 @@ func uploadValuesKeepOnlyCurrentMonthDaysAndSkipEmptyOnes() {
         account: tgAccount(["2026-09-01": 900, "2026-09-05": 4, "2026-08-31": 3])
     )
     #expect(Set(values.keys) == ["2026-09-01", "2026-09-02", "2026-09-05"])
-    #expect(values["2026-09-01"] == TokenUsageDailyValue(claude: 100, codex: 0, codexAccount: 900))
+    // 이번 달 날은 네 값이 다 실린다(codexUTC 는 UTC 맵이 비어 있어 0 — nil 이 아니다: 이 빌드가 스캔한 스냅샷(windowStart 채워짐)이고
+    // 이 달은 UTC 맵이 덮는 범위다. 옛 스냅샷이면 nil — V0243ReviewFixTests.restoredLegacySnapshotOmitsUTCTotalsInsteadOfSendingZeros).
+    #expect(values["2026-09-01"] == TokenUsageDailyValue(claude: 100, codex: 0, codexUTC: 0, codexAccount: 900))
     // 계정 버킷이 없는 날은 nil 이다(0 이 아니다) — 0 을 실으면 다른 기기가 올린 계정값을 덮는다.
-    #expect(values["2026-09-02"] == TokenUsageDailyValue(claude: 0, codex: 7, codexAccount: nil))
+    #expect(values["2026-09-02"] == TokenUsageDailyValue(claude: 0, codex: 7, codexUTC: 0, codexAccount: nil))
     // 계정 버킷만 있는 날도 남긴다(`.zst` 만 남은 채 설치한 사람의 Codex 사용은 로컬 맵에 없다).
-    #expect(values["2026-09-05"] == TokenUsageDailyValue(claude: 0, codex: 0, codexAccount: 4))
+    #expect(values["2026-09-05"] == TokenUsageDailyValue(claude: 0, codex: 0, codexUTC: 0, codexAccount: 4))
     // 셋 다 0/nil 인 날은 말할 것이 없어 뺀다.
     #expect(TokenUsageDailyUpload.values(usage: tgUsage(claudeDaily: ["2026-09-01": 0]), account: nil).isEmpty)
     #expect(TokenUsageDailyUpload.values(usage: tgUsage(), account: nil).isEmpty)
@@ -338,7 +343,7 @@ func dailyUpsertPostsAnArrayWithSnakeKeysAndOmitsCodexAccountWhenAbsent() async 
     #expect(first["claude_total"] as? Int == 100)
     #expect(first["codex_total"] as? Int == 0)
     #expect(first["codex_account"] as? Int == 900)
-    #expect(Set(first.keys) == ["user_id", "day", "device_id", "claude_total", "codex_total", "codex_account"])
+    #expect(Set(first.keys) == ["user_id", "day", "device_id", "claude_total", "codex_total", "codex_utc_total", "codex_account"])
 
     // ★ 계정 버킷이 없는 날은 **키 자체가 빠진다**. 0 을 실으면 PostgREST 가 그 컬럼을 SET 해 다른 기기가 앞서
     //   올린 계정값을 0 으로 밀어 버린다(월 표 codex_account_* 와 같은 규약).
@@ -589,7 +594,7 @@ func dailyFetchAsksForMyRowsSinceTheWindowStartOrderedAndCapped() async throws {
     let url = try #require(request.url)
     let items = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
     func value(_ name: String) -> String? { items.first { $0.name == name }?.value }
-    #expect(value("select") == "day,device_id,claude_total,codex_total,codex_account")
+    #expect(value("select") == "day,device_id,claude_total,codex_total,codex_utc_total,codex_account")
     #expect(value("user_id") == "eq.\(tgUserID)")
     #expect(value("day") == "gte.2026-06-08")
     // day.desc 라 상한에 걸려 잘려도 **오래된 쪽**이 빠진다(최근 잔디가 먼저 산다). 1000 은 호스티드 max_rows 와 같다.
@@ -861,10 +866,12 @@ func sourceContractDailyUploadSitsAfterTheMonthlyUpsert() throws {
     #expect(sync.contains("|| dailyDue"), "월간 변경 게이트가 일별 재시도/재기준을 보지 않는다 — 재시도가 영영 안 온다")
     #expect(sync.contains("tokenDailyRetryPending || lastUploadedDailyBaselineDay != TokenDailyGrid.dayString(now)"))
 
-    // 서비스는 codex_account 키 유무로 **묶음을 갈라** 보낸다 — 혼합 키 배열은 PostgREST 가 400 PGRST102 로
-    // 통째 거절하므로(리뷰 P0), 배열을 그대로 싣는 경로가 남으면 Codex 사용자의 일별 행이 한 줄도 안 올라간다.
+    // 서비스는 키 모양(옵셔널 넷 — claude_total · codex_total · codex_utc_total · codex_account 의 유무, v0.2.43)으로 **묶음을 갈라**
+    // 보낸다 — 혼합 키 배열은 PostgREST 가 400 PGRST102 로 통째 거절하므로(리뷰 P0), 배열을 그대로 싣는 경로가 남으면 Codex 사용자의
+    // 일별 행이 한 줄도 안 올라간다.
     let service = tgStrippingComments(try String(contentsOf: tgRepoURL("Sources/check/SupabaseWorkService.swift"), encoding: .utf8))
-    #expect(service.contains("rows.filter { $0.codexAccount != nil }"))
+    #expect(service.contains("(r.claudeTotal != nil ? 8 : 0) + (r.codexTotal != nil ? 4 : 0) + (r.codexUtcTotal != nil ? 2 : 0) + (r.codexAccount != nil ? 1 : 0)"))
+    #expect(service.contains("Dictionary(grouping: rows, by: shape)"))
     #expect(service.contains("for group in groups where !group.isEmpty"))
     #expect(!service.contains("body: rows,"), "배열을 통째로 POST 하는 경로가 남아 있다")
 

@@ -18,7 +18,7 @@ import Testing
 //   2) 도장이 하루 단위 — "<빌드>:<KST YYYY-MM-DD>". 월 도장이면 스냅샷과 현재값이 최대 한 달까지 벌어진다.
 //
 // 이 스위트의 심장은 `codexDiagSnapshotIsNotOverwrittenByPlainUploads` 다 — 진단키가 실리는 업로드와
-// 안 실리는 업로드가 [19,0,0,0,19,0] 으로 갈리지 않으면 스냅샷은 매 30초 codex_input 으로 덮여
+// 안 실리는 업로드가 [21,0,0,0,21,0] 으로 갈리지 않으면 스냅샷은 매 30초 codex_input 으로 덮여
 // 이 기능 전체가 무의미해진다(그때는 굳이 컬럼을 더할 이유가 없다).
 
 // MARK: - 픽스처 헬퍼
@@ -67,6 +67,8 @@ private func filledDiagnostics(build: Int = 41) -> CodexUsageDiagnostics {
     diagnostics.legacyTotal = 115
     diagnostics.drops = 116
     diagnostics.topFile = 117
+    diagnostics.forkFiles = 118
+    diagnostics.forkCopyTokens = 119
     diagnostics.appBuild = build
     return diagnostics
 }
@@ -86,7 +88,7 @@ private func upsertRequest(
     )
 }
 
-/// supabase/migrations/20260817140000_codex_diag_input_snapshot.sql 이 서버에 세운 진단 컬럼 19개.
+/// supabase/migrations/20260817140000_codex_diag_input_snapshot.sql 이 서버에 세운 진단 컬럼 19개 + 20260906120000 의 포크 계수 2개(v0.2.43) = 21개.
 /// 이 목록을 **마이그레이션에서 그대로 옮겨 적은 것**이 요점이다 — 앱이 보내는 키와 서버 컬럼이 1:1 이 아니면
 /// PostgREST 는 모르는 키를 400 으로 되쏘거나(오타) 값이 조용히 어디에도 안 쌓인다.
 private let migrationDiagColumns: Set<String> = [
@@ -109,6 +111,8 @@ private let migrationDiagColumns: Set<String> = [
     "codex_diag_max_delta_gap_s",
     "codex_diag_big_gap_median_s",
     "codex_diag_input_at_scan",
+    "codex_diag_fork_files",
+    "codex_diag_fork_tokens",
 ]
 
 /// 진단을 뺀 본문의 고정 키 13개(v0.2.41 에 codex_cache_read 가 항상 실린다 — 20260903160000 컬럼).
@@ -145,7 +149,7 @@ private func makeStore(host: String, build: Int?) -> WorkTimerStore {
 ///
 /// **deviceID 로 거르는 이유**: 스텁의 기록 버퍼는 프로세스 전역이고 호스트별이라, 같은 호스트를 쓰는 다른
 /// 스위트(예: device-table-missing 을 쓰는 tokenUploadSurfacesMissingDeviceTableSchema)가 병렬로 돌면
-/// 남의 본문이 내 시퀀스에 섞여 [19,0,0,0,19,0] 같은 순서 단언이 무음으로 깨진다. deviceID 는
+/// 남의 본문이 내 시퀀스에 섞여 [21,0,0,0,21,0] 같은 순서 단언이 무음으로 깨진다. deviceID 는
 /// 격리 UserDefaults 마다 새로 만들어지는 UUID 라 이 스토어의 본문만 정확히 남는다.
 private func deviceUploadBodies(host: String, deviceID: String) -> [String] {
     zip(URLProtocolStub.requests(forHost: host), URLProtocolStub.bodies(forHost: host))
@@ -157,7 +161,7 @@ private func deviceUploadBodies(host: String, deviceID: String) -> [String] {
         .map(\.1)
 }
 
-/// 본문 하나의 codex_diag_* 키 개수(0 = 진단 미동봉, 19 = 진단 동봉).
+/// 본문 하나의 codex_diag_* 키 개수(0 = 진단 미동봉, 21 = 진단 동봉 — v0.2.43 부터 포크 계수 2개가 더해져 19 → 21).
 private func diagKeyCount(in body: String) -> Int {
     let object = (try? JSONSerialization.jsonObject(with: Data(body.utf8))) as? [String: Any] ?? [:]
     return object.keys.filter { $0.hasPrefix("codex_diag") }.count
@@ -184,16 +188,16 @@ func codexDiagKeysVanishEntirelyWhenDiagnosticsIsNil() throws {
     #expect(object["codex_diag_input_at_scan"] == nil)
 }
 
-// MARK: - 2. 진단을 채우면 19키 · 스냅샷은 Codex '총합'에서 파생된다
+// MARK: - 2. 진단을 채우면 21키 · 스냅샷은 Codex '총합'에서 파생된다
 
 // 두 가지를 한 번에 못 박는다.
-//  (a) 나가는 진단 키 집합이 마이그레이션 컬럼 19개와 **정확히 같다**(빠짐도 여분도 없음).
+//  (a) 나가는 진단 키 집합이 마이그레이션 컬럼 21개와 **정확히 같다**(빠짐도 여분도 없음).
 //  (b) codex_diag_input_at_scan 이 codexInput 이 아니라 **codexInput+codexOutput** 에서 온다.
 //      오늘은 앱이 Codex 델타를 전액 codexInput 에 담고 codexOutput 은 항상 0 이라 두 산식의 값이 같다 —
 //      그래서 (5, 3) 처럼 출력이 0 이 아닌 본문을 일부러 만들어야만 차이가 보인다. 훗날 출력을 쪼개 담는 날
 //      "그 업로드의 Codex 총합"이라는 뜻이 조용히 깨지는 것을 지금 막아 두는 단언이다.
 @Test
-func codexDiagEncodesNineteenMigrationColumnsWithSnapshotFromCodexTotal() throws {
+func codexDiagEncodesTwentyOneMigrationColumnsWithSnapshotFromCodexTotal() throws {
     let encoder = productionShapedEncoder()
     let diagnostics = filledDiagnostics()
 
@@ -202,7 +206,7 @@ func codexDiagEncodesNineteenMigrationColumnsWithSnapshotFromCodexTotal() throws
     let diagKeys = Set(object.keys.filter { $0.hasPrefix("codex_diag") })
 
     #expect(diagKeys == migrationDiagColumns)
-    #expect(diagKeys.count == 19)
+    #expect(diagKeys.count == 21)
     #expect(Set(object.keys) == nonDiagColumns.union(migrationDiagColumns))
 
     // 값이 필드끼리 뒤바뀌지 않았는지 — 전부 서로 다른 값을 심어 뒀다.
@@ -211,6 +215,8 @@ func codexDiagEncodesNineteenMigrationColumnsWithSnapshotFromCodexTotal() throws
     #expect(object["codex_diag_big_gap_median_s"] as? Int == 108)
     #expect(object["codex_diag_legacy_total"] as? Int == 115)
     #expect(object["codex_diag_build"] as? Int == 41)
+    #expect(object["codex_diag_fork_files"] as? Int == 118)
+    #expect(object["codex_diag_fork_tokens"] as? Int == 119)
 
     // (b-1) 출력이 0 인 오늘의 모양: 스냅샷 = 이 본문의 codex_input 그 자체.
     #expect(object["codex_diag_input_at_scan"] as? Int == 7_000)
@@ -320,13 +326,13 @@ func codexDiagScansOncePerBuildAndKSTDay() async {
 
 // MARK: - 5. 스냅샷은 평상시 업로드에 덮이지 않는다 ★ 이 설계의 핵심
 
-// 연속 업로드 6회의 진단키수가 [19, 0, 0, 0, 19, 0] 이어야 한다.
-//   · #1 — 오늘 첫 업로드: 진단 19키 + 그 순간의 Codex 총합 스냅샷.
+// 연속 업로드 6회의 진단키수가 [21, 0, 0, 0, 21, 0] 이어야 한다.
+//   · #1 — 오늘 첫 업로드: 진단 21키 + 그 순간의 Codex 총합 스냅샷.
 //   · #2~#4 — 같은 날 평상시 업로드: codex_input 은 자라지만 **codex_diag_* 는 키 자체가 없다**.
 //     본문에 없으면 PostgREST 가 그 컬럼을 건드리지 않으므로 서버의 스냅샷은 #1 시점 값으로 얼어 있다.
 //     이것이 `codex_diag_legacy_total − codex_diag_input_at_scan` 을 같은 시각의 뺄셈으로 만든다.
 //   · #5 — 날이 바뀌어 다시 진단. 스냅샷도 그날 값으로 함께 갱신된다(두 값은 항상 같은 순간에서 온다).
-// 만약 스냅샷이 옵셔널이 아니면 이 수열은 [19,1,1,1,19,1] 이 되고 스냅샷은 매번 codex_input 과 같아진다 —
+// 만약 스냅샷이 옵셔널이 아니면 이 수열은 [21,1,1,1,21,1] 이 되고 스냅샷은 매번 codex_input 과 같아진다 —
 // 그러면 이 컬럼을 더한 이유가 통째로 사라진다.
 @MainActor
 @Test
@@ -362,7 +368,7 @@ func codexDiagSnapshotIsNotOverwrittenByPlainUploads() async {
 
     let bodies = deviceUploadBodies(host: host, deviceID: store.deviceID)
     #expect(bodies.count == 6)
-    #expect(bodies.map(diagKeyCount) == [19, 0, 0, 0, 19, 0])
+    #expect(bodies.map(diagKeyCount) == [21, 0, 0, 0, 21, 0])
 
     // 진단이 실린 두 본문에서만 스냅샷이 **그 본문의 codex_input 과 같다**(= 같은 순간의 값).
     let snapshots: [Int?] = bodies.map { body in
@@ -389,7 +395,7 @@ func codexDiagSnapshotIsNotOverwrittenByPlainUploads() async {
 
 // 도장은 서버 쓰기가 실제로 성공했을 때만 찍힌다. 만약 스캔 직후에 찍는다면, 마이그레이션 미적용(404)이나
 // 네트워크 단절로 실패한 날의 진단은 영영 사라진다 — 정작 진단이 가장 필요한 상황에서 표본이 비는 셈이다.
-// 실패 두 번이면 진단키수는 [19, 19] 이고 도장은 계속 nil 이어야 한다.
+// 실패 두 번이면 진단키수는 [21, 21] 이고 도장은 계속 nil 이어야 한다.
 @MainActor
 @Test
 func codexDiagLeavesNoStampWhenUploadFailsAndRecomputesNextTime() async {
@@ -420,7 +426,7 @@ func codexDiagLeavesNoStampWhenUploadFailsAndRecomputesNextTime() async {
     // 도장이 없으니 두 번 다 진단을 새로 계산해 실어 보냈다.
     let bodies = deviceUploadBodies(host: host, deviceID: store.deviceID)
     #expect(bodies.count == 2)
-    #expect(bodies.map(diagKeyCount) == [19, 19])
+    #expect(bodies.map(diagKeyCount) == [21, 21])
     // 실패 경로가 조용히 삼켜지지 않았다는 대조 신호(스키마 부재는 화면 문구로 드러난다).
     #expect(store.syncMessage == "DB 스키마 필요")
 }
@@ -465,6 +471,6 @@ func codexDiagSkipsScanAndUploadWhenCollectionIsOff() async {
     )
     let bodies = deviceUploadBodies(host: host, deviceID: store.deviceID)
     #expect(bodies.count == 1)
-    #expect(bodies.map(diagKeyCount) == [19])
+    #expect(bodies.map(diagKeyCount) == [21])
     #expect(store.defaults.string(forKey: WorkTimerStore.codexDiagnosticsReportedStampKey) == "41:2026-08-18")
 }

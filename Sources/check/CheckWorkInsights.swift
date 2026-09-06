@@ -349,8 +349,9 @@ struct WorkDailyGrid: Equatable, Sendable {
 }
 
 /// 최근 13주(이번 주 + 지난 12주)의 **일별 AI 토큰** — 근무 잔디(WorkDailyGrid)와 같은 모양(주 열 × 요일 행), 값은 토큰(이슈 #3 의
-/// 토큰 절반). 원천은 셋을 날짜별로 **max** 로 합친 맵이다(TokenDailyMerge): 서버 일별 표(기기 합, 지난 달까지 기억) ·
-/// 이 맥의 로컬 일별 맵(현재 월 + 48시간, 오늘은 서버보다 최신) · Codex 계정 버킷(다른 기기·클라우드 포함, ~70일).
+/// 토큰 절반). 원천은 셋을 날짜별로 합친 맵이다(TokenDailyMerge — Codex 는 계정 우선 규칙 `CodexEffectiveRule.day`, 서버 vs 로컬은
+/// 큰 쪽): 서버 일별 표(기기 합, 지난 달까지 기억) · 이 맥의 로컬 일별 맵(현재 월 + 48시간, 오늘은 서버보다 최신) ·
+/// Codex 계정 버킷(다른 기기·클라우드 포함, ~70일).
 /// 창·미래 칸·툴팁 날짜 규칙은 근무 잔디와 정확히 같아야 한다 — 같은 패널에 두 잔디가 나란히 서므로 하루만 어긋나도 결함으로 보인다.
 struct TokenDailyGrid: Equatable, Sendable {
     /// 잔디 농도의 분모(토큰/일) = **5천만 고정**. 근무 잔디의 8시간·히트맵의 3600초와 같은 철학(자기 최대값 기준이면 사람마다·
@@ -445,37 +446,48 @@ struct TokenDailyGrid: Equatable, Sendable {
 }
 
 /// 토큰 잔디의 세 원천을 날짜별 **유효 토큰** 한 맵으로 합치는 순수 규칙(스토어·테스트가 같은 함수를 쓴다).
-/// 유효 토큰 = claude 합 + max(codex 로컬 합, codex 계정값) — 서버 보드 RPC(20260903160000)의 greatest 산식을 하루 단위로 옮긴 것이다.
+/// 유효 토큰 = claude 합 + Codex 유효값(`CodexEffectiveRule.day`: 계정이 반영된 날은 계정 버킷, 마지막 버킷 날은 큰 쪽, 그 뒤는 로컬)
+/// — 서버 보드 RPC(20260906120000)의 계정 우선 산식을 하루 단위로 옮긴 것이다. v0.2.41 의 `max(로컬, 계정)` 은 포크 복사본으로
+/// 부푼 로컬을 그대로 잔디에 물들였다(CodexEffectiveRule 머리 주석).
 enum TokenDailyMerge {
     /// 서버 일별 행(기기별)을 날짜별로 합친다. claude/codex 로컬 합은 기기 **sum**(각 맥의 자기 로그), codex_account 는 기기 간 **max**
     /// (모든 맥이 같은 계정값을 올리므로 더하면 기기 수만큼 뻥튀기 — 월 표와 같은 성질). null 인 기기는 max 에서 빠진다.
+    /// 마지막 버킷 날짜 = codex_account 가 non-null 인 가장 늦은 day(잔디는 달을 가르지 않으므로 조회 범위 전체에서).
+    /// Codex 로컬은 **UTC 축 값**(codex_utc_total)을 쓰고, 구클라 행(null)은 KST 값(codex_total)으로 후퇴한다(v0.2.43 — 계정 버킷과
+    /// 같은 축이어야 꼬리·마지막 날 차분이 9시간 어긋난 채 겹치지 않는다; 서버 산식의 `coalesce(codex_utc_total, codex_total)` 와 같은 규칙).
     static func serverTotals(_ rows: [TokenUsageDailyRow]) -> [String: Int] {
         var claude: [String: Int] = [:]
         var codexLocal: [String: Int] = [:]
         var codexAccount: [String: Int] = [:]
         for row in rows {
             claude[row.day, default: 0] += max(0, row.claudeTotal)
-            codexLocal[row.day, default: 0] += max(0, row.codexTotal)
+            codexLocal[row.day, default: 0] += max(0, row.codexUtcTotal ?? row.codexTotal)
             if let account = row.codexAccount {
                 codexAccount[row.day] = max(codexAccount[row.day] ?? 0, account)
             }
         }
+        let lastDay = codexAccount.keys.max()
         var result: [String: Int] = [:]
         for day in Set(claude.keys).union(codexLocal.keys).union(codexAccount.keys) {
-            result[day] = (claude[day] ?? 0) + max(codexLocal[day] ?? 0, codexAccount[day] ?? 0)
+            result[day] = (claude[day] ?? 0)
+                + CodexEffectiveRule.day(day, local: codexLocal[day] ?? 0, accountBucket: codexAccount[day], accountLastDay: lastDay)
         }
         return result
     }
 
-    /// 이 맥의 로컬 일별 유효 토큰: claudeDaily + max(codexDaily, 계정 버킷). 계정 버킷은 UTC 일자 키지만 같은 문자열 키로 맞춘다
-    /// (경계 9시간 차 — 월간 순위와 같은 문서화된 미결). 버킷은 ~70일이라 현재 월 밖의 Codex 날도 채워 준다(로컬 맵은 현재 월뿐).
+    /// 이 맥의 로컬 일별 유효 토큰: claudeDaily + Codex 유효값(**UTC 축 맵** `codexDailyOnAccountAxis` 와 계정 버킷을 `CodexEffectiveRule.day` 로).
+    /// 계정 버킷도 UTC 일자 키라 같은 축이다(v0.2.43 — 예전엔 KST 맵을 같은 문자열 키로 견줘 9시간이 어긋났다). 버킷은 ~70일이라 현재 월
+    /// 밖의 Codex 날도 채워 준다(로컬 UTC 맵은 전월 마지막 UTC 일부터). 마지막 버킷 날짜는 스냅샷 전체의 최신 버킷(`latestBucketDate`).
+    /// Claude 칸은 KST 자정 하루, Codex 칸은 UTC 하루(KST 오전 9시 경계)를 같은 날짜 라벨로 그린다 — 툴팁 `TokenUsageMonthly.tokenDayAxisNote`.
     static func localTotals(usage: TokenUsageMonthly?, account: CodexAccountUsage?) -> [String: Int] {
         let claude = usage?.claudeDaily ?? [:]
-        let codex = usage?.codexDaily ?? [:]
+        let codex = usage?.codexDailyOnAccountAxis ?? [:]
         let buckets = account?.buckets ?? [:]
+        let lastDay = account?.latestBucketDate
         var result: [String: Int] = [:]
         for day in Set(claude.keys).union(codex.keys).union(buckets.keys) {
-            let value = max(0, claude[day] ?? 0) + max(max(0, codex[day] ?? 0), max(0, buckets[day] ?? 0))
+            let value = max(0, claude[day] ?? 0)
+                + CodexEffectiveRule.day(day, local: codex[day] ?? 0, accountBucket: buckets[day], accountLastDay: lastDay)
             if value > 0 { result[day] = value }
         }
         return result

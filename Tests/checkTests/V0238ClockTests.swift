@@ -412,10 +412,16 @@ private func sourceURL(_ name: String) -> URL {
         let clock = TestClock(t0)
         let store = makeStore(host: "v0238-clock-c", suiteName: "check-v0238-clock-c", clock: clock)
         defer { cancelTasks(store) }
-        beginWork(store, startedAt: t0.addingTimeInterval(-10)) // 1시간 미만 → MM:SS 라벨(초가 보인다)
+        beginWork(store, startedAt: t0.addingTimeInterval(-10)) // 근무 10초째 — 제목은 시:분 "00:00"(v0.2.43)
         store.displayNow = .distantPast // 팝오버 시계를 일부러 망가뜨려 둔다 — 라벨은 이것을 읽으면 안 된다
         #expect(!store.isMenuPresented)
 
+        // 60틱을 1초 간격으로 돌린다(닫힌 팝오버에서도 티커가 매 틱 라벨을 **재계산**하는 계약). 시:분 제목은
+        // 분이 넘어가는 그 한 틱(누적 59→60초)에서만 문자열이 바뀌므로 대입도 그 한 번뿐이어야 한다 —
+        // 매 틱 같은 문자열을 재대입하면 != 가드가 죽은 것이고, 0번이면 라벨이 닫힌 팝오버에서 얼어 있는 것이다.
+        // 기준선: 첫 틱의 "오프"→"00:00" 대입은 근무 전이의 몫이라 루프 전에 한 번 정리한다.
+        store.refreshMenuBarTitle(now: clock.now)
+        #expect(store.menuBarTitle == "00:00")
         var titleTicks = 0
         var snapshotTicks = 0
         var displayNowTicks = 0
@@ -429,12 +435,12 @@ private func sourceURL(_ name: String) -> URL {
             if title.fired { titleTicks += 1 }
             if snap.fired { snapshotTicks += 1 }
             if display.fired { displayNowTicks += 1 }
-            #expect(store.menuBarTitle == MenuBarStatusFormatter.duration(store.todayDuration(at: clock.now)))
+            #expect(store.menuBarTitle == MenuBarStatusFormatter.titleDuration(store.todayDuration(at: clock.now)))
         }
-        #expect(titleTicks == 60, "닫힌 팝오버에서 메뉴바 라벨이 \(titleTicks)/60 틱만 갱신됐다.")
+        #expect(titleTicks == 1, "닫힌 팝오버에서 시:분 제목이 \(titleTicks)번 대입됐다(기대 1 — 분이 넘어간 틱 한 번).")
         #expect(snapshotTicks == 0, "티커가 snapshot 을 \(snapshotTicks)번 재대입했다 — 라벨/오버레이/헤더 전체 무효화.")
         #expect(displayNowTicks == 0)
-        #expect(store.menuBarTitle == "01:10")
+        #expect(store.menuBarTitle == "00:01")
     }
 
     // MARK: (d) 마일스톤은 주입 시계 기준이다
@@ -483,35 +489,35 @@ private func sourceURL(_ name: String) -> URL {
         #expect(store.todayDuration(at: t0) == 0)
     }
 
-    // MARK: (e) 표시 없는 근무 1시간 → 60초 티커, 기록은 정확
+    // MARK: (e) 팝오버 닫힘 1분 → 60초 티커, 기록은 정확 (v0.2.43: 유예 1시간 → 1분, 라벨 조건 폐기)
 
-    @Test func tickerSlowsToAMinuteAfterAnIdleHourAndKeepsTheRecordExact() {
+    @Test func tickerSlowsToAMinuteAfterAMinuteWithoutASecondsSurfaceAndKeepsTheRecordExact() {
         let clock = TestClock(t0)
         let store = makeStore(host: "v0238-clock-e", suiteName: "check-v0238-clock-e", clock: clock)
         defer { cancelTasks(store) }
-        beginWork(store, startedAt: t0.addingTimeInterval(-3_600)) // 이미 1시간 → 라벨은 HH:MM
+        beginWork(store, startedAt: t0.addingTimeInterval(-3_600)) // 이미 1시간 — 제목은 HH:MM(지금은 언제나 그렇다)
         store.setOverlayEnabled(false)
         #expect(!store.isMenuPresented)
 
-        store.tick() // 표시 없는 상태의 시작(t0)을 장부에 적는다
+        store.tick() // 초 표시 화면이 없는 상태의 시작(t0)을 장부에 적는다
         #expect(store.nextTickDelay(now: clock.now) == 1)
-        clock.now = t0.addingTimeInterval(3_599)
+        clock.now = t0.addingTimeInterval(59)
         store.tick()
-        #expect(store.nextTickDelay(now: clock.now) == 1, "1시간이 차기 전에 감속했다.")
+        #expect(store.nextTickDelay(now: clock.now) == 1, "1분 유예가 차기 전에 감속했다.")
 
-        clock.now = t0.addingTimeInterval(3_600)
+        clock.now = t0.addingTimeInterval(60)
         store.tick()
         #expect(store.nextTickDelay(now: clock.now) == 60)
         // 분 경계 정렬: 분에서 23초 지난 시각이면 다음 분 넘김까지 37초.
-        #expect(store.nextTickDelay(now: t0.addingTimeInterval(3_600 + 23)) == 37)
+        #expect(store.nextTickDelay(now: t0.addingTimeInterval(60 + 23)) == 37)
 
         // 감속 틱 10회. 근무 시간 계산은 주기와 무관하게 정확하고, 라벨도 그 값이다.
         for minute in 1...10 {
-            clock.now = t0.addingTimeInterval(3_600 + 60 * Double(minute))
+            clock.now = t0.addingTimeInterval(60 + 60 * Double(minute))
             store.tick()
-            let expected = 7_200 + 60 * minute
+            let expected = 3_660 + 60 * minute
             #expect(store.todayDuration(at: clock.now) == expected)
-            #expect(store.menuBarTitle == MenuBarStatusFormatter.duration(expected))
+            #expect(store.menuBarTitle == MenuBarStatusFormatter.titleDuration(expected))
             #expect(store.nextTickDelay(now: clock.now) == 60)
         }
 
@@ -529,8 +535,8 @@ private func sourceURL(_ name: String) -> URL {
         #expect(store.nextTickDelay(now: clock.now) == 1)
     }
 
-    @Test func slowdownNeverEngagesWhileAnyClockShowsOrTheLabelShowsSeconds() {
-        // 오버레이 시계가 보이면 2시간이 지나도 1초.
+    @Test func slowdownEngagesWithTheOverlayShowingButNeverWhileThePopoverIsOpen() {
+        // v0.2.43: 오버레이 시계가 보여도 감속한다 — 캐릭터 라벨이 시:분이라 초를 보일 이유가 없다(종전엔 2시간이 지나도 1초).
         do {
             let clock = TestClock(t0)
             let store = makeStore(host: "v0238-clock-e2", suiteName: "check-v0238-clock-e2", clock: clock)
@@ -541,10 +547,11 @@ private func sourceURL(_ name: String) -> URL {
                 clock.now = t0.addingTimeInterval(3_600 * Double(hour))
                 store.tick()
             }
-            #expect(store.nextTickDelay(now: clock.now) == 1)
-            #expect(store.displayIdleSince == nil)
+            #expect(store.overlayClockIsShowing)
+            #expect(store.nextTickDelay(now: clock.now) == 60)
+            #expect(store.displayIdleSince == t0)
         }
-        // 팝오버가 열려 있으면 1초.
+        // 팝오버가 열려 있으면 1초(초 표시 화면 — 오늘 시계 MM:SS·쿨타임 카운트다운).
         do {
             let clock = TestClock(t0)
             let store = makeStore(host: "v0238-clock-e3", suiteName: "check-v0238-clock-e3", clock: clock)
@@ -557,8 +564,9 @@ private func sourceURL(_ name: String) -> URL {
                 store.tick()
             }
             #expect(store.nextTickDelay(now: clock.now) == 1)
+            #expect(store.displayIdleSince == nil)
         }
-        // 라벨이 초를 보이는 동안(자정 통과로 오늘 누적이 1시간 미만)은 표시가 없어도 1초 — 초침이 60초씩 건너뛰면 안 된다.
+        // 자정을 지나 오늘 누적이 1시간 미만이어도 감속한다 — 제목이 시:분이라 초 단위 구간이 없다(종전엔 MM:SS 라 1초로 복귀했다).
         do {
             let dayStart = TeamWeeklyGoal.koreanDayStart(for: t0)
             let lateNight = dayStart.addingTimeInterval(-1_800) // 어제 23:30
@@ -568,11 +576,11 @@ private func sourceURL(_ name: String) -> URL {
             beginWork(store, startedAt: lateNight)
             store.setOverlayEnabled(false)
             store.tick()
-            clock.now = dayStart.addingTimeInterval(1_800) // 00:30 — 표시 없는 1시간은 찼지만 오늘 누적은 30분
+            clock.now = dayStart.addingTimeInterval(1_800) // 00:30 — 오늘 누적은 30분(00:30)
             store.tick()
             #expect(store.todayDuration(at: clock.now) == 1_800)
-            #expect(store.nextTickDelay(now: clock.now) == 1)
-            // 01:00 을 넘겨 라벨이 분 단위가 되면 그때 감속한다.
+            #expect(store.menuBarTitle == "00:30")
+            #expect(store.nextTickDelay(now: clock.now) == 60)
             clock.now = dayStart.addingTimeInterval(3_600)
             store.tick()
             #expect(store.nextTickDelay(now: clock.now) == 60)

@@ -12,7 +12,7 @@ import Testing
 /// 스캔 기준 시각(고정). 월/타임스탬프/mtime 을 모두 이 값에서 파생해 결정적으로 만든다.
 /// 실제 KST 값: 2026-07-14 12:33:20 KST → 현재 KST 월 = "2026-07".
 /// 현재 월 경계: [KST 2026-07-01 00:00, KST 2026-08-01 00:00) = [UTC 2026-06-30 15:00, UTC 2026-07-31 15:00).
-/// 직전 월 시작(보관 하한): KST 2026-06-01 00:00 = UTC 2026-05-31 15:00.
+/// Claude 보관 하한(v0.2.43): 12주 잔디 창 시작 KST 2026-04-20 00:00(월요일) − 48h = KST 2026-04-18 00:00. Codex 파일상태는 월 시작 − 48h(KST 06-29).
 private let fixedNow = Date(timeIntervalSince1970: 1_784_000_000)
 
 /// Claude timestamp 포맷(UTC, 소수초, Z). 스캐너의 앞 19자 사전식/정수 월 비교와 맞물린다.
@@ -270,17 +270,19 @@ func claudeTreatsMissingAndNullUsageFieldsAsZero() {
 }
 
 @Test
-func mtimePrefilterSkipsFilesUntouchedSinceMonthStart() {
+func mtimePrefilterSkipsFilesUntouchedSinceWindowStart() {
     let home = makeTempHome()
     let inMonth = fixedNow.addingTimeInterval(-5 * 86_400)
-    // 라인 timestamp 는 현재 월이지만 파일 mtime 이 현재 월 시작 이전(지난달, 40일 전)이라 파일 통째로 스킵되어야 한다.
+    // v0.2.43: Claude 프리필터 컷오프는 월 시작이 아니라 12주 잔디 창 시작(KST 04-20)이다. 100일 전에 마지막으로 손댄 파일은
+    // 여전히 열지 않고, 40일 전(지난달, 창 안)에 손댄 파일은 이제 연다 — 그 파일의 이번 달 라인은 정직하게 센다.
     let line = claudeLine(id: "m", requestId: "r", timestamp: inMonth, usage: "{\"input_tokens\":777}")
+    writeFile("\(line)\n", to: claudeURL(home, project: "p", file: "stale.jsonl"),
+              modified: fixedNow.addingTimeInterval(-100 * 86_400))
+    #expect(TokenUsageScanner.scan(homeDirectory: home, now: fixedNow).total == 0)
+
     writeFile("\(line)\n", to: claudeURL(home, project: "p", file: "old.jsonl"),
               modified: fixedNow.addingTimeInterval(-40 * 86_400))
-
-    let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
-
-    #expect(usage.total == 0)
+    #expect(TokenUsageScanner.scan(homeDirectory: home, now: fixedNow).claudeInput == 777)
     try? FileManager.default.removeItem(at: home)
 }
 
@@ -699,25 +701,29 @@ func shrunkFileTriggersFullReparseFallback() {
 }
 
 @Test
-func evictsEntriesBeforePreviousMonth() {
-    // 현재 월 합계와 보관/퇴거를 분리 검증한다. v0.2.38 Q6 부터 보관 하한은 '직전 월 1일'이 아니라
-    // '월 시작 − 48h'(6/29 00:00 KST) 다 — 지난달이라도 그 안(6/30)이면 보관되나 합계 제외, 그 밖(5월)은 퇴거.
-    // 48h 경계값 자체는 V0238TokenTests.retentionKeepsLast48HoursOfPreviousMonthAndEvictsOlder 가 검증한다.
+func evictsEntriesBeforeTheTwelveWeekWindow() {
+    // 현재 월 합계와 보관/퇴거를 분리 검증한다. v0.2.43 부터 Claude 보관 하한은 '월 시작 − 48h' 가 아니라
+    // '12주 잔디 창 시작 − 48h'(KST 04-18 00:00) 다 — 5월·6월처럼 창 안이면 보관되나 합계 제외, 그 밖(4월 초)은 퇴거.
+    // 경계값 자체는 V0238TokenTests.retentionKeepsTheTwelveWeekWindowAndEvictsOlder 가 검증한다.
     var cache = TokenUsageCache()
     cache.claudeEntries["fresh\u{0}fresh"] = ClaudeEntry(
         ts14: ts14(fixedNow.addingTimeInterval(-5 * 86_400)), input: 111, output: 0, cacheRead: 0, cacheCreation: 0)   // 7월
     cache.claudeEntries["mid\u{0}mid"] = ClaudeEntry(
-        ts14: ts14(fixedNow.addingTimeInterval(-14 * 86_400)), input: 222, output: 0, cacheRead: 0, cacheCreation: 0)  // 6/30(48h 안)
+        ts14: ts14(fixedNow.addingTimeInterval(-14 * 86_400)), input: 222, output: 0, cacheRead: 0, cacheCreation: 0)  // 6/30(창 안)
+    cache.claudeEntries["may\u{0}may"] = ClaudeEntry(
+        ts14: ts14(fixedNow.addingTimeInterval(-60 * 86_400)), input: 333, output: 0, cacheRead: 0, cacheCreation: 0)  // 5/15(창 안 — v0.2.42 까지는 퇴거됐다)
     cache.claudeEntries["old\u{0}old"] = ClaudeEntry(
-        ts14: ts14(fixedNow.addingTimeInterval(-60 * 86_400)), input: 999, output: 0, cacheRead: 0, cacheCreation: 0)  // 5월
+        ts14: ts14(fixedNow.addingTimeInterval(-100 * 86_400)), input: 999, output: 0, cacheRead: 0, cacheCreation: 0) // 4/5(창 앞)
 
     let home = makeTempHome() // 로그 디렉터리 없음 — 워크는 아무 파일도 안 잡고 퇴거/합계만 수행.
     let result = TokenUsageIncrementalScanner.update(cache, homeDirectory: home, now: fixedNow)
 
-    #expect(result.cache.claudeEntries["old\u{0}old"] == nil)   // 5월(직전 월 이전) → 퇴거
-    #expect(result.cache.claudeEntries["mid\u{0}mid"] != nil)   // 6/30(월 시작 − 48h 안) → 보관
+    #expect(result.cache.claudeEntries["old\u{0}old"] == nil)   // 창 앞 → 퇴거
+    #expect(result.cache.claudeEntries["may\u{0}may"] != nil)   // 창 안(지지난달) → 보관, 일별 맵에만 산다
+    #expect(result.cache.claudeEntries["mid\u{0}mid"] != nil)   // 창 안 → 보관
     #expect(result.cache.claudeEntries["fresh\u{0}fresh"] != nil)
-    #expect(result.usage.claudeInput == 111)                    // 합계는 현재 월(7월)의 fresh 만(mid/old 제외)
+    #expect(result.usage.claudeInput == 111)                    // 합계는 현재 월(7월)의 fresh 만(mid/may/old 제외)
+    #expect(result.usage.claudeDaily["2026-05-15"] == 333)      // 창 안의 지난 날은 일별 맵(잔디)에 남는다
     #expect(result.stats.cacheChanged == true)                  // 퇴거가 있었으니 저장 유도
 }
 
@@ -935,9 +941,12 @@ func codexFileProgressRoundTripsEventAttributionFields() {
     #expect(s.monthContribTotal == 300)   // 파생: monthInput + monthOutput(캐시 미포함)
     #expect(s.monthCached == 90)
     #expect(s.dayContrib == ["2026-07-14": 42])
-    // 튜플 형태(11원소, 마지막이 일별 맵 오브젝트) — 옛 8원소 v3 튜플과 달라 스키마 게이트가 필요한 이유.
+    // 튜플 형태(13원소 — 일별 맵 오브젝트 뒤에 포크 복사 마감, 그 뒤 UTC 일별 맵, v0.2.43) — 옛 8원소 v3·11원소 v4 튜플과 달라 스키마
+    // 게이트가 필요한 이유.
     let json = String(decoding: data, as: UTF8.self)
-    #expect(json.contains("[20,111,15,300,40,120,\"2026-07\",250,50,90,{\"2026-07-14\":42}]"))
+    #expect(json.contains("[20,111,15,300,40,120,\"2026-07\",250,50,90,{\"2026-07-14\":42},0,{}]"))
+    #expect(s.forkCopyDeadlineMicros == 0)
+    #expect(s.dayContribUTC.isEmpty)
 }
 
 // (스키마 v4 게이트) v0.2.40 이 쓴 v3 캐시(8원소 튜플·dayKey/dayContribTotal)는 통째로 폐기돼 codex 1회 전체 재파싱을 유발한다 —
@@ -956,8 +965,8 @@ func codexStatesFromSchemaVersion3CacheAreDiscardedForArchiveAwareReparse() thro
     #expect(decoded.codexFileStates.isEmpty)                  // v3 상태 폐기 → 재파싱
     #expect(decoded.claudeFileStates["/a/b.jsonl"] != nil)    // Claude 상태는 보존
     #expect(decoded.claudeEntries["msg\u{0}req"]?.input == 1)
-    #expect(decoded.codexSchemaVersion == 4)
-    #expect(TokenUsageCache.currentCodexSchemaVersion == 4)   // 3 으로 되돌리면 위 폐기가 일어나지 않는다
+    #expect(decoded.codexSchemaVersion == 5)
+    #expect(TokenUsageCache.currentCodexSchemaVersion == 5)   // 3·4 로 되돌리면 위 폐기가 일어나지 않는다(v4 폐기는 V0243ForkCopyTests 가 따로 못 박는다)
 }
 
 // MARK: - 숫자 포맷 (콤마 전체 숫자)
@@ -1003,14 +1012,15 @@ func monthlyTooltipUsesGroupedFullNumbers() {
     #expect(usage.total == 4_426_359_038)
     #expect(usage.detailTooltip ==
         "Claude 4,280,667,571 (입력 8,458,939 · 출력 9,796,198 · 캐시읽기 4,063,320,273 · 캐시생성 199,092,161) "
-        + "· Codex 145,691,467 (입력 145,068,307 · 출력 623,160 · 캐시 0)")
+        + "· Codex 145,691,467 (입력 145,068,307 · 출력 623,160 · 캐시 0) · " + TokenUsageMonthly.tokenDayAxisNote)
 }
 
 @Test
 func monthlyTooltipOmitsSourcesWithNoUsage() {
     // Codex 만 있는 경우 툴팁에 Codex 만 나온다(빈 Claude 파트 미표시). v0.2.41: 입력·출력·캐시 내역이 괄호로 붙는다(issue #2).
     let codexOnly = TokenUsageMonthly(month: "2026-07", codexInput: 1_500_000, codexOutput: 500_000, codexCacheRead: 1_200_000)
-    #expect(codexOnly.detailTooltip == "Codex 2,000,000 (입력 1,500,000 · 출력 500,000 · 캐시 1,200,000)")
+    // v0.2.43: Codex 가 있으면 끝에 하루의 뜻(9시 경계) 한 줄이 붙는다(V0243UTCAxisTests).
+    #expect(codexOnly.detailTooltip == "Codex 2,000,000 (입력 1,500,000 · 출력 500,000 · 캐시 1,200,000) · " + TokenUsageMonthly.tokenDayAxisNote)
     #expect(codexOnly.total == 2_000_000)   // 캐시는 total 에 안 들어간다
 }
 
@@ -1059,7 +1069,10 @@ func monthlyTooltipAppendsTodayWhenPresent() {
     #expect(usage.detailTooltip == "Claude 100 (입력 100 · 출력 0 · 캐시읽기 0 · 캐시생성 0) · 오늘 +1,234,567")
     // 오늘분 0 이면 기존 문구 불변(하위호환).
     let noToday = TokenUsageMonthly(month: "2026-07", codexInput: 1_500_000, codexOutput: 500_000)
-    #expect(noToday.detailTooltip == "Codex 2,000,000 (입력 1,500,000 · 출력 500,000 · 캐시 0)")
+    #expect(noToday.detailTooltip == "Codex 2,000,000 (입력 1,500,000 · 출력 500,000 · 캐시 0) · " + TokenUsageMonthly.tokenDayAxisNote)
+    // 오늘분과 Codex 가 함께 있으면 "오늘 +N" 뒤에 하루의 뜻이 온다(맨 끝 고정).
+    let both = TokenUsageMonthly(month: "2026-07", codexInput: 5, todayTotal: 3, todayDate: "2026-07-14")
+    #expect(both.detailTooltip == "Codex 5 (입력 5 · 출력 0 · 캐시 0) · 오늘 +3 · " + TokenUsageMonthly.tokenDayAxisNote)
 }
 
 // MARK: - 뷰 시그니처 (onOpenBoard 유무)

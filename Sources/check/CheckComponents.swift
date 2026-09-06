@@ -668,17 +668,45 @@ struct ContributionGridView: View {
     var levels: Int = 4
     /// 칸 색(단계에 따라 불투명도만 달라진다).
     var color: Color = CheckTheme.accent
-    /// 툴팁의 값 문구("4시간 12분" / "1.2M 토큰"). 날짜는 그리드가 붙인다 → "9월 3일 · 4시간 12분".
+    /// 말풍선·접근성 문구의 값 부분("4시간 12분" / "12,345,678 토큰"). 날짜는 그리드가 붙인다.
     var valueText: (Int) -> String = { "\($0)" }
+    /// 커서가 올라가 있는 칸(v0.2.44 호버 말풍선). 격자 전체의 onContinuousHover 좌표를 `cell(at:)` 로 풀어 넣는다.
+    /// 테스트가 초기값을 주입해 말풍선을 렌더할 수 있게 init 인자로 받는다(호버 이벤트는 ImageRenderer 가 못 낸다).
+    @State private var hovered: Cell?
 
-    static let cellSize: CGFloat = 16
-    static let cellGap: CGFloat = 2
-    static let labelWidth: CGFloat = 20
-    static let cornerRadius: CGFloat = 3
+    /// (주, 요일) 칸 좌표. 튜플이 아닌 이유: `@State`·`==` 비교에 Equatable 이 필요하다.
+    struct Cell: Equatable, Sendable {
+        let week: Int
+        let weekday: Int
+    }
+
+    init(
+        weeks: Int, values: [[Int]], weekStart: Date, isFuture: @escaping (Int, Int) -> Bool, denominator: Int,
+        levels: Int = 4, color: Color = CheckTheme.accent, valueText: @escaping (Int) -> String = { "\($0)" },
+        initialHovered: Cell? = nil
+    ) {
+        self.weeks = weeks
+        self.values = values
+        self.weekStart = weekStart
+        self.isFuture = isFuture
+        self.denominator = denominator
+        self.levels = levels
+        self.color = color
+        self.valueText = valueText
+        _hovered = State(initialValue: initialHovered)
+    }
+
+    // 기하 상수는 nonisolated — 좌표→칸·말풍선 배치 순수 함수(nonisolated, 테스트 대상)가 읽는다. 리터럴 Sendable 이라 안전하다.
+    nonisolated static let cellSize: CGFloat = 16
+    nonisolated static let cellGap: CGFloat = 2
+    nonisolated static let labelWidth: CGFloat = 20
+    nonisolated static let cornerRadius: CGFloat = 3
+    /// 말풍선과 칸 사이 간격(pt).
+    nonisolated static let bubbleGap: CGFloat = 4
     /// 0=월 … 6=일. 월·수·금만 글자를 넣고 나머지는 빈 자리로 둔다(16pt 행에 7글자를 다 쓰면 빽빽하다).
     static let dayLabels = ["월", "", "수", "", "금", "", ""]
     /// 월 라벨 행 높이(pt). 라벨이 없어도 이 높이는 유지해 그리드 상단이 흔들리지 않게 한다.
-    static let monthLabelHeight: CGFloat = 10
+    nonisolated static let monthLabelHeight: CGFloat = 10
 
     var body: some View {
         let months = Self.monthLabels(weekStart: weekStart, weeks: weeks)
@@ -708,6 +736,47 @@ struct ContributionGridView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // ── 호버 말풍선(v0.2.44) ─────────────────────────────────────────────────────────────────
+        // 셀마다 `.help` 를 달았던 v0.2.41~43 은 사용자 체감이 "간헐적으로만 뜨고 가독성이 없다"였다 — 시스템 툴팁은
+        // 1초 뒤에 뜨고 미세 이동에 사라지며 작은 회색 글씨다. 그래서 **격자 전체**의 커서 좌표를 칸으로 풀어(cell(at:))
+        // 자체 말풍선을 즉시 그린다. 칸 사이 2pt 틈은 앞 칸에 귀속되므로(피치 나눗셈) 틈을 지나도 깜빡이지 않는다.
+        // 말풍선은 overlay 라 레이아웃(패널 높이 예산)에 참여하지 않고, allowsHitTesting(false) 라 자기 밑의 호버를 가로채지 않는다.
+        .onContinuousHover(coordinateSpace: .local) { phase in
+            switch phase {
+            case .active(let point):
+                let next = Self.cell(at: point, weeks: weeks).flatMap { isFuture($0.week, $0.weekday) ? nil : $0 }
+                if hovered != next { hovered = next }
+            case .ended:
+                if hovered != nil { hovered = nil }
+            }
+        }
+        // 안전망: 연속 호버의 .ended 가 유실돼도(창 전환·팝오버 닫힘) 격자를 떠나면 말풍선을 거둔다.
+        .onHover { inside in
+            if !inside, hovered != nil { hovered = nil }
+        }
+        .overlay(alignment: .topLeading) {
+            // 조건부(`if let`) 자식에 건 alignmentGuide 는 overlay 정렬에 반영되지 않았다(ImageRenderer 실측: 항상 (0,0)).
+            // 그래서 말풍선을 **항상** 자식으로 두고 hovered 가 없으면 투명·빈 문구로 접는다. 가이드는 자식 자신에게 직접 건다.
+            let target = hovered ?? Cell(week: 0, weekday: 0)
+            let value = value(week: target.week, weekday: target.weekday)
+            ContributionCellBubble(
+                title: hovered == nil ? "" : Self.dateText(weekStart: weekStart, week: target.week, weekday: target.weekday),
+                value: hovered == nil ? "" : valueText(value)
+            )
+            // 크기를 재지 않고 배치한다: alignmentGuide 가 말풍선 자신의 폭·높이(d)를 주므로 bubbleAnchor 가 그 크기로
+            // 원점을 계산하고, 그 원점이 overlay 의 topLeading 에 오도록 가이드를 음수로 돌려준다. 첫 프레임 점프가 없다.
+            .alignmentGuide(.leading) { d in
+                -Self.bubbleAnchor(week: target.week, weekday: target.weekday, weeks: weeks,
+                                   bubbleSize: CGSize(width: d.width, height: d.height)).origin.x
+            }
+            .alignmentGuide(.top) { d in
+                -Self.bubbleAnchor(week: target.week, weekday: target.weekday, weeks: weeks,
+                                   bubbleSize: CGSize(width: d.width, height: d.height)).origin.y
+            }
+            .opacity(hovered == nil ? 0 : 1)
+            .allowsHitTesting(false)
+            .zIndex(1)
+        }
     }
 
     @ViewBuilder
@@ -721,7 +790,8 @@ struct ContributionGridView: View {
             RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                 .fill(Self.color(value: value, denominator: denominator, levels: levels, color: color))
                 .frame(width: Self.cellSize, height: Self.cellSize)
-                .help(Self.tooltipText(weekStart: weekStart, week: week, weekday: weekday, valueText: valueText(value)))
+                // 시스템 툴팁(.help)은 쓰지 않는다 — 자체 말풍선과 겹치면 1초 뒤 회색 툴팁이 또 뜬다. 접근성 문구만 남긴다.
+                .accessibilityLabel(Self.tooltipText(weekStart: weekStart, week: week, weekday: weekday, valueText: valueText(value)))
         }
     }
 
@@ -731,7 +801,47 @@ struct ContributionGridView: View {
         return values[week][weekday]
     }
 
-    /// 칸 툴팁 "9월 3일 · 4시간 12분". 날짜는 weekStart 에서 (주 × 7 + 요일)일 뒤의 KST 날짜다 — 이 오프셋이
+    /// 격자 로컬 좌표 → 칸. x 에서 요일 라벨 폭+간격을, y 에서 월 라벨 높이+간격을 뺀 뒤 피치(칸+간격)로 나눈다 —
+    /// 나눗셈이 간격을 **앞 칸**에 귀속시키므로 칸 사이를 지나는 동안 말풍선이 깜빡이지 않는다. 라벨 영역·격자 밖·음수는 nil.
+    /// 격자는 maxWidth: .infinity 라 오른쪽 빈 영역의 좌표도 들어오는데, 열 인덱스가 weeks 를 넘어 nil 로 떨어진다.
+    nonisolated static func cell(at point: CGPoint, weeks: Int) -> Cell? {
+        guard weeks > 0 else { return nil }
+        let pitch = cellSize + cellGap
+        let x = point.x - (labelWidth + cellGap)
+        let y = point.y - (monthLabelHeight + cellGap)
+        guard x >= 0, y >= 0 else { return nil }
+        let week = Int(x / pitch), weekday = Int(y / pitch)
+        guard week < weeks, weekday < WorkRhythmHeatmap.dayCount else { return nil }
+        return Cell(week: week, weekday: weekday)
+    }
+
+    /// 말풍선 원점(격자 좌표, 좌상단)과 위/아래 여부. 칸 가로 중앙 정렬, 칸 위 bubbleGap 띄움. 맨 위 두 줄(월·화)은 위에 두면
+    /// 월 라벨과 섹션 제목을 덮으므로 칸 아래. 가로는 격자 전체 폭(요일 라벨 포함) 안으로 클램프하고, 말풍선이 격자보다 넓으면 0.
+    nonisolated static func bubbleAnchor(week: Int, weekday: Int, weeks: Int, bubbleSize: CGSize) -> (origin: CGPoint, above: Bool) {
+        let pitch = cellSize + cellGap
+        let totalWidth = labelWidth + cellGap + CGFloat(max(0, weeks)) * cellSize + CGFloat(max(0, weeks - 1)) * cellGap
+        let centerX = labelWidth + cellGap + CGFloat(week) * pitch + cellSize / 2
+        let cellTop = monthLabelHeight + cellGap + CGFloat(weekday) * pitch
+        let above = weekday >= 2
+        let x = max(0, min(centerX - bubbleSize.width / 2, totalWidth - bubbleSize.width))
+        let y = above ? cellTop - bubbleGap - bubbleSize.height : cellTop + cellSize + bubbleGap
+        return (CGPoint(x: x, y: y), above)
+    }
+
+    nonisolated static let weekdayNames = ["월", "화", "수", "목", "금", "토", "일"]
+
+    /// 말풍선 첫 줄 "9월 3일 (목)". 날짜 오프셋은 tooltipText 와 같은 식(주 × 7 + 요일)이다.
+    nonisolated static func dateText(weekStart: Date, week: Int, weekday: Int) -> String {
+        let calendar = TeamWeeklyGoal.kstCalendar
+        guard let day = calendar.date(byAdding: .day, value: week * WorkRhythmHeatmap.dayCount + weekday, to: weekStart) else {
+            return ""
+        }
+        let c = calendar.dateComponents([.month, .day], from: day)
+        let name = weekdayNames.indices.contains(weekday) ? weekdayNames[weekday] : ""
+        return "\(c.month ?? 0)월 \(c.day ?? 0)일 (\(name))"
+    }
+
+    /// 칸 접근성 문구 "9월 3일 · 4시간 12분"(v0.2.43 까지는 시스템 툴팁이었다). 날짜는 weekStart 에서 (주 × 7 + 요일)일 뒤의 KST 날짜다 — 이 오프셋이
     /// 하루라도 어긋나면 잔디 전체가 하루씩 밀려 보이는데 픽셀 테스트는 .help 를 못 보므로 순수 함수로 떼어 검증한다.
     /// valueText 는 호출부가 이미 만든 값 문구("근무 없음" / "1.2M 토큰")라 그리드는 데이터 종류를 모른다.
     nonisolated static func tooltipText(weekStart: Date, week: Int, weekday: Int, valueText: String) -> String {
@@ -779,6 +889,37 @@ struct ContributionGridView: View {
             defer { previous = current }
             return current != previous ? current : nil
         }
+    }
+}
+
+/// 잔디 호버 말풍선(v0.2.44): 날짜·요일 한 줄 + 값 한 줄. 패널과 같은 어두운 카드에 밝은 글씨 — 시스템 툴팁의 작은 회색
+/// 글씨가 "가독성이 없다"는 지적의 답이다. 크기는 내용에 맞춰 고정(fixedSize)되고 배치는 ContributionGridView.bubbleAnchor 가 한다.
+struct ContributionCellBubble: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(CheckTheme.primaryText)
+            Text(value)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(CheckTheme.primaryText)
+        }
+        .lineLimit(1)
+        .fixedSize()
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(CheckTheme.panelElevated)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(CheckTheme.border, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
     }
 }
 

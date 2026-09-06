@@ -14,7 +14,9 @@ import Testing
 //   (D) 내 박스(TokenUsageDisplay·TokenUsageMonthly.detailTooltip) — 같은 규칙·같은 어휘.
 //   (E) SQL 계약 — 마이그레이션 파일 문자열(주석 제거 후).
 
-private let afNow = Date(timeIntervalSince1970: 1_757_100_000)   // 2025-09-05 20:00:00 UTC — 버킷 보관 창 계산에만 쓴다.
+private let afNow = Date(timeIntervalSince1970: 1_757_100_000)   // 2025-09-05 20:00:00 UTC — 버킷 보관 창 계산에만 쓴다
+/// Codex 숫자가 있는 툴팁은 끝에 하루의 뜻(9시 경계)을 밝힌다(v0.2.43 UTC 축 — V0243UTCAxisTests 가 리터럴·배선을 고정).
+private let afAxis = " · " + TokenUsageMonthly.tokenDayAxisNote
 private func afAccount(_ buckets: [String: Int]) -> CodexAccountUsage {
     CodexAccountUsage(fetchedAt: afNow, lifetimeTokens: nil, buckets: buckets)
 }
@@ -106,23 +108,23 @@ func boardTooltipListsBothAccountAndLocalAndFlagsALocalThatExceedsTheAccount() {
     #expect(
         accountDriven.detailTooltip
             == "Claude 10 (입력 10 · 출력 0 · 캐시읽기 0 · 캐시생성 0) · Codex 로컬 집계 120 (캐시 60) "
-            + "· Codex 계정 집계 1,000 · 총합은 계정 집계 기준"
+            + "· Codex 계정 집계 1,000 · 총합은 계정 집계 기준" + afAxis
     )
     // 로컬이 계정보다 20% 넘게 크면 진단 한 줄(제보자 요구: "일정 비율 이상 크면 진단 상태로 표시").
     let overcount = afEntry(codexInput: 150, codexAccountMonth: 100, serverEffective: 120)
     #expect(
         overcount.detailTooltip
             == "Codex 로컬 집계 150 (캐시 0) · Codex 계정 집계 100 · 총합은 계정 집계 기준 · "
-            + CodexEffectiveRule.localExceedsAccountNote
+            + CodexEffectiveRule.localExceedsAccountNote + afAxis
     )
     #expect(CodexEffectiveRule.localExceedsAccountNote == "로컬 집계가 계정보다 큼(포크 복사본 의심)")
     // 딱 20% 는 정상 창(배치 지연) — 진단 줄 없음.
     let withinLag = afEntry(codexInput: 120, codexAccountMonth: 100, serverEffective: 110)
-    #expect(withinLag.detailTooltip == "Codex 로컬 집계 120 (캐시 0) · Codex 계정 집계 100 · 총합은 계정 집계 기준")
+    #expect(withinLag.detailTooltip == "Codex 로컬 집계 120 (캐시 0) · Codex 계정 집계 100 · 총합은 계정 집계 기준" + afAxis)
     // 계정을 모르면(옛 RPC·미보고) 예전 그대로 — 숫자가 하나뿐이라 "로컬 집계" 라벨을 붙일 이유가 없다.
-    #expect(afEntry(codexInput: 120, codexCacheRead: 60).detailTooltip == "Codex 120 (캐시 60)")
+    #expect(afEntry(codexInput: 120, codexCacheRead: 60).detailTooltip == "Codex 120 (캐시 60)" + afAxis)
     // 로컬 0·계정만 있는 사람은 계정 줄만.
-    #expect(afEntry(codexAccountMonth: 300, serverEffective: 300).detailTooltip == "Codex 계정 집계 300 · 총합은 계정 집계 기준")
+    #expect(afEntry(codexAccountMonth: 300, serverEffective: 300).detailTooltip == "Codex 계정 집계 300 · 총합은 계정 집계 기준" + afAxis)
     #expect(afEntry().detailTooltip == "")
 }
 
@@ -133,17 +135,17 @@ func myBoxTooltipListsBothAccountAndLocalWithTheSameVocabulary() {
     var usage = TokenUsageMonthly(month: "2026-09")
     usage.codexInput = 1_000; usage.codexOutput = 200; usage.codexCacheRead = 700
     let local = "Codex 1,200 (입력 1,000 · 출력 200 · 캐시 700)"
-    #expect(usage.detailTooltip == local)
+    #expect(usage.detailTooltip == local + afAxis)
     // 계정이 있으면 로컬 줄에 "로컬 집계" 라벨이 붙고, 계정 줄과 기준 문구가 따른다 — 계정이 로컬보다 작아도(1,200 ≥ 1,200) 같다.
     let big = afAccount(["2026-09-01": 3_000, "2026-09-07": 2_000, "2026-08-31": 999])
-    #expect(usage.detailTooltip(account: big) == "Codex 로컬 집계 1,200 (입력 1,000 · 출력 200 · 캐시 700) · Codex 계정 집계 5,000 (7일까지 반영) · 총합은 계정 집계 기준")
+    #expect(usage.detailTooltip(account: big) == "Codex 로컬 집계 1,200 (입력 1,000 · 출력 200 · 캐시 700) · Codex 계정 집계 5,000 (7일까지 반영) · 총합은 계정 집계 기준" + afAxis)
     let equal = afAccount(["2026-09-02": 1_200])
-    #expect(usage.detailTooltip(account: equal) == "Codex 로컬 집계 1,200 (입력 1,000 · 출력 200 · 캐시 700) · Codex 계정 집계 1,200 (2일까지 반영) · 총합은 계정 집계 기준")
+    #expect(usage.detailTooltip(account: equal) == "Codex 로컬 집계 1,200 (입력 1,000 · 출력 200 · 캐시 700) · Codex 계정 집계 1,200 (2일까지 반영) · 총합은 계정 집계 기준" + afAxis)
     // 로컬이 계정보다 20% 넘게 크면 진단 줄.
     let small = afAccount(["2026-09-02": 900])
-    #expect(usage.detailTooltip(account: small) == "Codex 로컬 집계 1,200 (입력 1,000 · 출력 200 · 캐시 700) · Codex 계정 집계 900 (2일까지 반영) · 총합은 계정 집계 기준 · " + CodexEffectiveRule.localExceedsAccountNote)
+    #expect(usage.detailTooltip(account: small) == "Codex 로컬 집계 1,200 (입력 1,000 · 출력 200 · 캐시 700) · Codex 계정 집계 900 (2일까지 반영) · 총합은 계정 집계 기준 · " + CodexEffectiveRule.localExceedsAccountNote + afAxis)
     // 이 달 버킷이 없으면(월합 0) 계정 줄 없음 — 지난달 버킷을 이번 달 반영일로 오인하지 않는다.
-    #expect(usage.detailTooltip(account: afAccount(["2026-08-31": 999])) == local)
+    #expect(usage.detailTooltip(account: afAccount(["2026-08-31": 999])) == local + afAxis)
 }
 
 // MARK: - (A) 순수 규칙 — 서버 프로브 ⓐ~ⓓ 와 같은 숫자
@@ -206,14 +208,14 @@ func boardRowUsesTheServerEffectiveValueAndFallsBackToMaxOnOldServers() throws {
     #expect(old.codexEffectiveFromServer == nil)
     #expect(old.codexEffective == 150)
     #expect(!old.totalIsAccountDriven)
-    #expect(old.detailTooltip == "Codex 로컬 집계 150 (캐시 0) · Codex 계정 집계 100")
+    #expect(old.detailTooltip == "Codex 로컬 집계 150 (캐시 0) · Codex 계정 집계 100" + afAxis)
     // 계정 null 은 nil(= 모름) — 서버 값이 있어도 그대로 디코드된다.
     let nullAccount = #"[{"user_id":"c","display_name":"c","avatar_url":null,"claude_input":0,"claude_output":0,"claude_cache_read":0,"claude_cache_creation":0,"codex_input":7,"codex_output":0,"total":7,"codex_cache_read":0,"codex_account_month":null,"codex_effective":7}]"#
     let unknown = try #require(try decoder.decode([TokenBoardRow].self, from: Data(nullAccount.utf8)).toTokenBoardEntries().first)
     #expect(unknown.codexAccountMonth == nil)
     #expect(unknown.codexEffective == 7)
     #expect(!unknown.totalIsAccountDriven)
-    #expect(unknown.detailTooltip == "Codex 7 (캐시 0)")
+    #expect(unknown.detailTooltip == "Codex 7 (캐시 0)" + afAxis)
 }
 
 // MARK: - (E) SQL 계약 (20260906120000_codex_account_first.sql)
@@ -261,7 +263,15 @@ func migrationContractCodexAccountFirst() throws {
     #expect(sql.contains("when t.codex_account is null then t.codex_local"))
     #expect(sql.contains("when t.account_last_day is null then t.codex_local"))
     #expect(sql.contains("(l.codex_input + l.codex_output)::bigint as codex_effective"))
-    // (iv) health: 두 컬럼을 맨 끝에, 판정 순서(과다계상 의심 < 정상) 유지.
+    // (iii-1) v0.2.43 UTC 축(검토 P1·P0·P2, spec-d §1): 일별 표에 codex_utc_total 을 더하고, 꼬리·마지막 날 차분은 UTC 값을 우선 쓴다.
+    //         옛 표(token_usage_monthly) 행 선택은 계정 기준 effective 를 옛 로컬과 견주지 않는다 — 계정이 있으면 기기 행이 이긴다(P0:
+    //         이 조건이 없으면 로컬을 부풀린 사용자는 옛 행이 반드시 이겨 순위판 값이 한 자리도 안 바뀐다). 문자열은 D1 과 글자 단위로 같아야 한다.
+    #expect(sql.contains("add column if not exists codex_utc_total bigint"))
+    #expect(sql.contains("coalesce(dd.codex_utc_total, dd.codex_total)"))
+    #expect(!boardBody.contains("sum(dd.codex_total)"), "꼬리·차분이 아직 KST 값(codex_total)만 본다 — UTC 값 우선이어야 한다")
+    #expect(sql.contains("(d.codex_account is not null or d.claude_total + d.codex_local >= coalesce(g.total, 0))"))
+    #expect(!sql.contains("coalesce(d.total, 0) >= coalesce(g.total, 0)) as prefer_device"), "옛 표 선택이 여전히 effective 를 옛 로컬과 견준다(P0)")
+    // (iv) health: 두 컬럼을 맨 끝에, 판정 순서(과다계상 의심 < 정상) 유지. v0.2.43: 스냅샷 노후·옛 행 덮어쓰기 판정도 '정상' 앞에.
     #expect(sql.contains("drop function if exists public.token_scan_health(text);"))
     #expect(sql.contains("codex_account_status smallint, codex_account_month bigint,\n  codex_diag_fork_files int, codex_diag_fork_tokens bigint\n)"))
     #expect(sql.contains("max(d.codex_diag_fork_files)::int"))
@@ -269,6 +279,9 @@ func migrationContractCodexAccountFirst() throws {
     let overcount = try #require(sql.range(of: "'Codex 로컬이 계정보다 큼(과다계상 의심)'")?.lowerBound)
     let normal = try #require(sql.range(of: "else '정상'")?.lowerBound)
     #expect(overcount < normal)
+    let stale = try #require(sql.range(of: "'계정 스냅샷 노후(48h+)'")?.lowerBound, "스냅샷 노후 판정이 없다")
+    let legacyWins = try #require(sql.range(of: "'옛 행이 보드를 덮음'")?.lowerBound, "옛 행 덮어쓰기 판정이 없다")
+    #expect(stale < normal && legacyWins < normal, "새 판정이 '정상' 뒤에 있으면 영원히 안 뜬다")
     // (v) 실행권: 보드는 anon 불가·authenticated/service_role 가능, health 는 service_role 전용.
     #expect(sql.contains("revoke execute on function public.token_usage_board(text) from public, anon;"))
     #expect(sql.contains("grant execute on function public.token_usage_board(text) to authenticated, service_role;"))

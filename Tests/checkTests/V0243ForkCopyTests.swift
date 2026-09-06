@@ -285,7 +285,8 @@ func codexFileProgressRoundTripsForkDeadlineAndToleratesElevenElementTuples() th
         monthKey: "2026-07", monthInput: 250, monthOutput: 50, monthCached: 90, dayContrib: ["2026-07-14": 42],
         forkCopyDeadlineMicros: 1_788_672_932_622_000)
     let data = try JSONEncoder().encode(cache)
-    #expect(String(decoding: data, as: UTF8.self).contains("[20,111,15,300,40,120,\"2026-07\",250,50,90,{\"2026-07-14\":42},1788672932622000]"))
+    // 13원소: 포크 마감 뒤에 UTC 일별 맵(v0.2.43 UTC 축)이 붙는다.
+    #expect(String(decoding: data, as: UTF8.self).contains("[20,111,15,300,40,120,\"2026-07\",250,50,90,{\"2026-07-14\":42},1788672932622000,{}]"))
     #expect(try JSONDecoder().decode(TokenUsageCache.self, from: data) == cache)
 
     // 같은 세대 안에서 11원소로 잘린 튜플은 마감 0(포크 아님)으로 읽힌다 — 새 형식의 잘린 튜플 방어(옛 세대는 아래 게이트가 막는다).
@@ -450,8 +451,10 @@ func dailyUploadSendsWindowDaysAndFallsBackToMonthForOldSnapshots() throws {
     let values = TokenUsageDailyUpload.values(usage: usage, account: account)
     #expect(Set(values.keys) == ["2026-04-20", "2026-06-04", "2026-07-01", "2026-07-02", "2026-05-05", "2026-07-03"])
     #expect(values["2026-04-19"] == nil)                                  // 창 앞(straddle 부분값)은 보내지 않는다
-    #expect(values["2026-05-05"] == TokenUsageDailyValue(claude: 0, codex: 0, codexAccount: 6))
-    #expect(values["2026-06-04"] == TokenUsageDailyValue(claude: 3, codex: 0, codexAccount: nil))
+    // 이번 달 밖·UTC 하한(6/30) 앞의 날: Codex 두 값은 **모른다**(nil, 키 생략) — 0 을 실으면 그 달 행의 Codex 가 지워진다(v0.2.43 UTC 축).
+    #expect(values["2026-05-05"] == TokenUsageDailyValue(claude: 0, codex: nil, codexUTC: nil, codexAccount: 6))
+    #expect(values["2026-06-04"] == TokenUsageDailyValue(claude: 3, codex: nil, codexUTC: nil, codexAccount: nil))
+    #expect(values["2026-07-02"] == TokenUsageDailyValue(claude: 0, codex: 5, codexUTC: 0, codexAccount: nil))
 
     // 옛 스냅샷(windowStart 없음)은 월 1일이 창 시작 → 옛 월 접두어 규칙과 같은 집합.
     usage.windowStart = ""
@@ -464,8 +467,8 @@ func dailyUploadSendsWindowDaysAndFallsBackToMonthForOldSnapshots() throws {
     usage.claudeCompleteFrom = "2026-06-01"
     let guarded = TokenUsageDailyUpload.values(usage: usage, account: account)
     #expect(Set(guarded.keys) == ["2026-05-05", "2026-06-04", "2026-07-01", "2026-07-02", "2026-07-03"])   // 04-20(Claude 뿐·하한 앞)은 빠진다
-    #expect(guarded["2026-05-05"] == TokenUsageDailyValue(claude: nil, codex: 0, codexAccount: 6))
-    #expect(guarded["2026-06-04"] == TokenUsageDailyValue(claude: 3, codex: 0, codexAccount: nil))
+    #expect(guarded["2026-05-05"] == TokenUsageDailyValue(claude: nil, codex: nil, codexUTC: nil, codexAccount: 6))
+    #expect(guarded["2026-06-04"] == TokenUsageDailyValue(claude: 3, codex: nil, codexUTC: nil, codexAccount: nil))
     let guardedRows = TokenUsageDailyUpload.rows(userID: "u", deviceID: "MAC-A", days: ["2026-05-05", "2026-06-04"], values: guarded)
     #expect(guardedRows.map(\.claudeTotal) == [nil, 3])
 

@@ -128,18 +128,19 @@ func boardDetailTooltipKeepsTheMyBoxVocabularyAndFullPrecision() {
     )
     // 계정 집계가 쓰였으면 내 박스와 **같은 문구**로 "총합은 계정 집계 기준"이 붙는다 — 이 한 마디가 없으면
     // 툴팁에 Codex 숫자가 둘(로컬 120 · 계정 1,000) 나란히 놓이는데 캡션·굵은 총합이 어느 쪽인지 알 수 없다.
+    // v0.2.43: 계정을 아는 행은 로컬 줄에 "로컬 집계" 라벨이 붙는다(두 숫자가 대칭으로 읽히게 — issue #6 제보자 요구).
     #expect(
         full.detailTooltip
-            == "Claude 10 (입력 1 · 출력 2 · 캐시읽기 3 · 캐시생성 4) · Codex 120 (캐시 60) "
+            == "Claude 10 (입력 1 · 출력 2 · 캐시읽기 3 · 캐시생성 4) · Codex 로컬 집계 120 (캐시 60) "
             + "· Codex 계정 집계 1,000 · 총합은 계정 집계 기준"
     )
     // 문구는 리터럴로 두 곳에 흩뿌리지 않고 내 박스 상수를 그대로 쓴다(어휘가 갈리는 것을 막는 배선).
     #expect(full.detailTooltip.hasSuffix(TokenUsageMonthly.accountDrivenTotalNote))
     #expect(TokenUsageMonthly.accountDrivenTotalNote == "총합은 계정 집계 기준")
-    // 계정 집계가 로컬보다 크지 않으면(= 순위에 안 쓰였으면) 그 줄은 통째로 빠진다 — 안 쓰인 숫자를 나란히
-    // 보여 줄 이유가 없다. 동률(120 == 120)도 로컬이 기준이라 뺀다.
+    // v0.2.43: 계정 집계는 로컬보다 작거나 같아도 **함께** 적는다(제보자 요구: 계정·로컬 둘 다 노출). 옛 RPC(codex_effective 없음)에서
+    // 동률(120 == 120)이면 총합은 로컬 기준이라 "총합은 계정 집계 기준" 문구만 빠진다.
     let localWins = toolMixEntry(claudeInput: 10, codexInput: 120, codexCacheRead: 60, codexAccountMonth: 120)
-    #expect(localWins.detailTooltip == "Claude 10 (입력 10 · 출력 0 · 캐시읽기 0 · 캐시생성 0) · Codex 120 (캐시 60)")
+    #expect(localWins.detailTooltip == "Claude 10 (입력 10 · 출력 0 · 캐시읽기 0 · 캐시생성 0) · Codex 로컬 집계 120 (캐시 60) · Codex 계정 집계 120")
     // 값이 0 인 소스는 통째로 뺀다(기존 관용구와 동일).
     #expect(toolMixEntry(codexInput: 120, codexCacheRead: 60).detailTooltip == "Codex 120 (캐시 60)")
     #expect(toolMixEntry(claudeInput: 10).detailTooltip == "Claude 10 (입력 10 · 출력 0 · 캐시읽기 0 · 캐시생성 0)")

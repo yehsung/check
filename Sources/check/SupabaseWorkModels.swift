@@ -264,6 +264,9 @@ struct TokenBoardRow: Decodable, Equatable {
     var codexCacheRead: Int = 0
     /// Codex 계정 월합(기기 간 max — 기기마다 같은 계정값을 올린다). 없으면 nil(옛 RPC 이거나 아무 기기도 못 읽었다).
     var codexAccountMonth: Int? = nil
+    /// v0.2.43(20260906120000): 서버가 계정 우선 규칙(CodexEffectiveRule)으로 계산한 Codex 유효값. 옛 RPC 면 nil —
+    /// 그때는 클라가 종전 `max(로컬, 계정)` 으로 폴백한다(TokenBoardEntry.codexEffective).
+    var codexEffective: Int? = nil
 }
 
 // TokenBoardRow 커스텀 디코드: 서버가 아직 옛 token_usage_board RPC(today_total/today_date 컬럼 없음)여도
@@ -276,6 +279,7 @@ extension TokenBoardRow {
         case codexInput, codexOutput, total
         case todayTotal, todayDate
         case codexCacheRead, codexAccountMonth
+        case codexEffective
     }
 
     init(from decoder: Decoder) throws {
@@ -296,6 +300,8 @@ extension TokenBoardRow {
         // 20260903160000 이전 RPC 호환: 없으면 캐시 0, 계정 nil(= "모름" — 0 과 구분해야 비중 라인이 '계정 0' 을 그리지 않는다).
         codexCacheRead = try c.decodeIfPresent(Int.self, forKey: .codexCacheRead) ?? 0
         codexAccountMonth = try c.decodeIfPresent(Int.self, forKey: .codexAccountMonth)
+        // 20260906120000 이전 RPC 호환: 없으면 nil(= 서버 계산값 없음 → 클라 폴백).
+        codexEffective = try c.decodeIfPresent(Int.self, forKey: .codexEffective)
     }
 }
 
@@ -319,6 +325,8 @@ struct TokenBoardEntry: Identifiable, Equatable {
     var codexCacheRead: Int = 0
     /// Codex 계정 월합(기기 간 max). 옛 RPC 거나 미보고면 nil.
     var codexAccountMonth: Int? = nil
+    /// 서버가 계정 우선 규칙으로 계산한 Codex 유효값(20260906120000 의 `codex_effective`). 옛 RPC 면 nil.
+    var codexEffectiveFromServer: Int? = nil
 
     var id: String { userID }
 
@@ -326,8 +334,17 @@ struct TokenBoardEntry: Identifiable, Equatable {
     var claudeTotal: Int { claudeInput + claudeOutput + claudeCacheRead + claudeCacheCreation }
     /// Codex 로컬 소계(입력+출력, 기기 합산).
     var codexLocalTotal: Int { codexInput + codexOutput }
-    /// 순위에 실제로 쓰인 Codex 몫 = 로컬 합과 계정 월합 중 큰 쪽(서버 `greatest(codex_local, coalesce(codex_account, 0))` 미러).
-    var codexEffective: Int { max(codexLocalTotal, codexAccountMonth ?? 0) }
+    /// 순위에 실제로 쓰인 Codex 몫. 서버가 계정 우선 규칙으로 계산한 `codex_effective`(20260906120000) 가 있으면 그것,
+    /// 옛 RPC 면 종전 `greatest(codex_local, coalesce(codex_account, 0))` 미러로 폴백한다(서버·클라 버전이 어긋난 과도기에도
+    /// 캡션의 두 값 합이 굵은 총합과 맞아야 한다 — 총합은 언제나 서버가 준 `total` 이고 캡션은 그 산식을 따라간다).
+    var codexEffective: Int { codexEffectiveFromServer ?? max(codexLocalTotal, codexAccountMonth ?? 0) }
+
+    /// 총합이 계정 집계를 기준으로 계산됐는가. 새 서버(codex_effective 있음)는 계정 월합이 0 보다 크면 언제나 계정 기준이고
+    /// (이 달 버킷이 없으면 월합이 0 이라 로컬로 떨어진다), 옛 서버는 계정이 로컬보다 클 때만 계정이 이겼다.
+    var totalIsAccountDriven: Bool {
+        guard let account = codexAccountMonth, account > 0 else { return false }
+        return codexEffectiveFromServer != nil || account > codexLocalTotal
+    }
 
     /// 표시할 오늘 증가량. todayDate 가 현재 KST 날짜(currentDate)와 같을 때만 todayTotal 을, 어제 이후로 스테일이면
     /// 0 을 돌려준다 — 어제 이후 안 연 사람도 "오늘 +0"으로 균일하게 표시되도록(행 높이/레이아웃 일관). 순수 함수라 테스트로 고정한다.
@@ -339,8 +356,8 @@ struct TokenBoardEntry: Identifiable, Equatable {
     /// `"Claude 196.6억 · Codex 254만"` / 한쪽만 있으면 `"Claude 196.6억"` / 둘 다 0 이면 **nil**.
     /// nil 일 때 뷰가 줄 자체를 그리지 않아 한 번도 안 올린 사람의 행이 한 줄로 유지된다(빈 줄로 벌어지지 않는다).
     ///
-    /// Codex 는 `codexEffective`(로컬 합과 계정 월합 중 큰 쪽)를 쓴다 — 우측 굵은 총합(`total`)이 서버에서
-    /// `greatest(codex_local, codex_account)` 로 계산되므로, 여기서 로컬만 쓰면 캡션의 두 값 합이 총합과 안 맞는다.
+    /// Codex 는 `codexEffective`(서버가 계정 우선 규칙으로 계산한 값 — 옛 RPC 면 max 폴백)를 쓴다 — 우측 굵은 총합(`total`)이
+    /// 서버에서 같은 규칙으로 계산되므로, 여기서 로컬만 쓰면 캡션의 두 값 합이 총합과 안 맞는다.
     /// 축약은 좁은 폭 때문이며(292pt 행에서 이 줄에 실제로 남는 폭은 100pt 안팎 — 실측),
     /// 정확한 값은 `detailTooltip` 이 grouped 로 준다.
     var toolUsageLabel: String? {
@@ -368,23 +385,30 @@ struct TokenBoardEntry: Identifiable, Equatable {
                 + "· 캐시읽기 \(TokenNumberFormatter.grouped(claudeCacheRead)) · 캐시생성 \(TokenNumberFormatter.grouped(claudeCacheCreation)))"
             )
         }
+        // 계정 집계를 아는 행(계정 월합 non-nil, 0 포함)은 **로컬과 계정을 둘 다** 적는다(issue #6 제보자 요구: "툴팁에 계정 집계와
+        // 로컬 집계를 함께 노출"). 로컬 줄에 "로컬 집계" 라벨을 붙이는 것도 그때뿐이다 — 계정을 모르면 Codex 숫자가 하나라
+        // 라벨이 오히려 소음이다(옛 문구 그대로). 어휘·정밀도는 내 박스 툴팁(TokenUsageMonthly.detailTooltip)과 같다.
+        // 계정 월합이 0 이면(이 달 버킷이 아직 없거나 옛 RPC) 계정 줄을 적지 않는다 — "계정 집계 0" 은 사용이 0 이 아니라 반영 전이라는
+        // 뜻이라 오독을 부른다(내 박스 툴팁의 `accountMonth > 0` 게이트와 같다).
+        let accountMonth = codexAccountMonth ?? 0
+        let showsAccount = accountMonth > 0
         if codexLocalTotal > 0 {
             parts.append(
-                "Codex \(TokenNumberFormatter.grouped(codexLocalTotal)) "
+                "Codex \(showsAccount ? "로컬 집계 " : "")\(TokenNumberFormatter.grouped(codexLocalTotal)) "
                 + "(캐시 \(TokenNumberFormatter.grouped(codexCacheRead)))"
             )
         }
-        // 계정 집계는 **로컬보다 커서 실제로 쓰였을 때만** 적는다. 작거나 같으면 순위에 쓰인 값이 로컬이라
-        // 굳이 두 숫자를 나란히 보여 혼란을 만들 이유가 없다.
-        // 판정은 내 박스 툴팁과 **다르다**(같다고 적어 뒀던 주석이 틀렸다): 내 박스는 계정값이 0 보다 크면 늘 적고,
-        // 여기는 순위에 실제로 쓰였을 때(로컬보다 클 때)만 적는다. 순위판은 남의 행이라 참고용 숫자를 늘릴수록
-        // 읽는 비용만 커지기 때문이다.
-        // 계정값을 적을 때는 내 박스와 **같은 문구**로 "총합은 계정 집계 기준"을 한 줄 더 붙인다 — 이게 없으면
-        // 툴팁에 Codex 숫자가 둘(로컬 소계·계정 집계) 나란히 놓이는데 어느 쪽이 굵은 총합과 캡션에 쓰였는지
-        // 알 길이 없다(내 박스에는 있는 설명이 순위판에만 빠져 어휘가 갈렸던 자리).
-        if let account = codexAccountMonth, account > codexLocalTotal {
-            parts.append("Codex 계정 집계 \(TokenNumberFormatter.grouped(account))")
-            parts.append(TokenUsageMonthly.accountDrivenTotalNote)
+        if showsAccount {
+            parts.append("Codex 계정 집계 \(TokenNumberFormatter.grouped(accountMonth))")
+            // 총합에 계정이 쓰였으면 내 박스와 **같은 문구**로 밝힌다 — 이게 없으면 Codex 숫자가 둘 나란히 놓이는데 어느 쪽이
+            // 굵은 총합과 캡션에 쓰였는지 알 길이 없다. 로컬이 계정보다 20% 넘게 크면 진단 한 줄을 더한다(포크 복사본 —
+            // CodexEffectiveRule 머리 주석; 문턱은 서버 진단 token_scan_health 와 같은 1.2).
+            if totalIsAccountDriven {
+                parts.append(TokenUsageMonthly.accountDrivenTotalNote)
+                if CodexEffectiveRule.localExceedsAccount(local: codexLocalTotal, account: accountMonth) {
+                    parts.append(CodexEffectiveRule.localExceedsAccountNote)
+                }
+            }
         }
         return parts.joined(separator: " · ")
     }
@@ -409,7 +433,8 @@ extension Array where Element == TokenBoardRow {
                 todayTotal: row.todayTotal,
                 todayDate: row.todayDate,
                 codexCacheRead: row.codexCacheRead,
-                codexAccountMonth: row.codexAccountMonth
+                codexAccountMonth: row.codexAccountMonth,
+                codexEffectiveFromServer: row.codexEffective
             )
         }
     }

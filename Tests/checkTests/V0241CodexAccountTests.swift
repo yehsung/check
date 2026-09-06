@@ -1630,31 +1630,35 @@ func tokenBoardRowDecodesWithAndWithoutTheNewColumns() throws {
 }
 
 @Test
-func effectiveTotalUsesLargerOfLocalCodexAndAccountMonth() {
+func effectiveTotalFollowsTheAccountFirstRule() {
+    // v0.2.43: 내 박스 총합은 `claude 합 + CodexEffectiveRule.month(...)` — 계정이 반영된 날은 계정, 미반영 꼬리만 로컬.
+    // (v0.2.41 의 max(로컬, 계정) 은 포크 복사본으로 부푼 로컬을 골랐다 — V0243AccountFirstTests 가 규칙 자체를 고정한다.)
     var local = TokenUsageMonthly(month: "2026-09")
     local.claudeInput = 1_000; local.claudeCacheRead = 9_000
     local.codexInput = 400; local.codexOutput = 100; local.codexCacheRead = 350
-    #expect(TokenUsageDisplay.effectiveTotal(local: local, accountMonth: nil) == 10_500)
-    #expect(TokenUsageDisplay.effectiveTotal(local: local, accountMonth: 0) == 10_500)
-    #expect(TokenUsageDisplay.effectiveTotal(local: local, accountMonth: 499) == 10_500)   // 로컬(500)이 크다
-    #expect(TokenUsageDisplay.effectiveTotal(local: local, accountMonth: 500) == 10_500)   // 동률
-    #expect(TokenUsageDisplay.effectiveTotal(local: local, accountMonth: 501) == 10_501)   // 계정이 크면 계정
-    #expect(TokenUsageDisplay.effectiveTotal(local: local, accountMonth: -5) == 10_500)    // 음수 방어
-    #expect(local.total == 10_500)                                                          // 업로드값 불변(캐시 미포함)
+    local.codexDaily = ["2026-09-01": 300, "2026-09-02": 150, "2026-09-03": 50]
+    #expect(TokenUsageDisplay.effectiveTotal(local: local, account: nil) == 10_500)                 // 계정 없음 → 로컬
+    let empty = CodexAccountUsage(fetchedAt: c41FetchedAt, lifetimeTokens: nil, buckets: ["2026-08-31": 999])
+    #expect(TokenUsageDisplay.effectiveTotal(local: local, account: empty) == 10_500)               // 이 달 버킷 없음 → 로컬
+    // 계정 9/1 100 · 9/2 120(마지막 버킷) → 220 + 꼬리 9/3 50 + max(0, 150 − 120) = 300. 로컬 500 이 커도 갈아타지 않는다.
+    let account = CodexAccountUsage(fetchedAt: c41FetchedAt, lifetimeTokens: nil, buckets: ["2026-09-01": 100, "2026-09-02": 120])
+    #expect(TokenUsageDisplay.codexEffective(local: local, account: account) == 300)
+    #expect(TokenUsageDisplay.effectiveTotal(local: local, account: account) == 10_300)
+    #expect(local.total == 10_500)                                                                   // 업로드값 불변(캐시 미포함)
 }
 
 @Test
-func tooltipAppendsAccountLinesOnlyWhenAccountMonthIsPositive() {
+func tooltipListsAccountAndLocalWhenTheAccountMonthIsPositive() {
     var usage = TokenUsageMonthly(month: "2026-09")
     usage.codexInput = 1_000; usage.codexOutput = 200; usage.codexCacheRead = 700
     let base = "Codex 1,200 (입력 1,000 · 출력 200 · 캐시 700)"
+    let labeled = "Codex 로컬 집계 1,200 (입력 1,000 · 출력 200 · 캐시 700)"
     #expect(usage.detailTooltip == base)
-    // 계정이 로컬보다 크면 총합에 계정값이 쓰였음을 명시.
+    // v0.2.43: 이 달 계정 월합이 있으면 로컬 줄에 "로컬 집계" 라벨, 계정 줄, "총합은 계정 집계 기준" — 계정이 로컬보다 크든 작든 같다.
     let big = CodexAccountUsage(fetchedAt: c41FetchedAt, lifetimeTokens: nil, buckets: ["2026-09-01": 3_000, "2026-09-07": 2_000, "2026-08-31": 999])
-    #expect(usage.detailTooltip(account: big) == base + " · Codex 계정 집계 5,000 (7일까지 반영) · 총합은 계정 집계 기준")
-    // 계정이 로컬 이하면 반영일만.
-    let small = CodexAccountUsage(fetchedAt: c41FetchedAt, lifetimeTokens: nil, buckets: ["2026-09-02": 1_200])
-    #expect(usage.detailTooltip(account: small) == base + " · Codex 계정 집계 1,200 (2일까지 반영)")
+    #expect(usage.detailTooltip(account: big) == labeled + " · Codex 계정 집계 5,000 (7일까지 반영) · 총합은 계정 집계 기준")
+    let equal = CodexAccountUsage(fetchedAt: c41FetchedAt, lifetimeTokens: nil, buckets: ["2026-09-02": 1_200])
+    #expect(usage.detailTooltip(account: equal) == labeled + " · Codex 계정 집계 1,200 (2일까지 반영) · 총합은 계정 집계 기준")
     // 이 달 버킷이 없으면(월합 0) 계정 줄 없음 — 지난달 버킷을 이번 달 반영일로 오인하지 않는다.
     let lastMonthOnly = CodexAccountUsage(fetchedAt: c41FetchedAt, lifetimeTokens: nil, buckets: ["2026-08-31": 999])
     #expect(usage.detailTooltip(account: lastMonthOnly) == base)
@@ -1734,7 +1738,8 @@ func sourceContractLiveAccountStoreIsBuiltOnlyInCheckApp() throws {
     #expect(store.contains("codexAccount: CodexAccountUsageStore? = nil"))
     #expect(store.contains("self.codexAccount = codexAccount ?? CodexAccountUsageStore.inert()"))
     let row = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/check/CheckTokenUsage.swift"), encoding: .utf8))
-    #expect(row.contains("TokenUsageDisplay.effectiveTotal(local: usage, accountMonth: accountMonth(for: usage))"))
+    // v0.2.43: 계정 우선 규칙은 월합만으로는 못 세고(꼬리·마지막 버킷) 스냅샷이 필요하다 — 뷰가 스냅샷 자체를 넘긴다.
+    #expect(row.contains("TokenUsageDisplay.effectiveTotal(local: usage, account: account?.snapshot)"))
     #expect(row.contains(".help(usage.detailTooltip(account: account?.snapshot))"))
     let menu = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/check/CheckMenuView.swift"), encoding: .utf8))
     #expect(menu.contains("CheckTokenUsageRow(store: store.tokenUsage, account: store.codexAccount"))

@@ -80,6 +80,11 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
     var legacyTotal: Int = 0
     /// **대상 월 이벤트에서** 일어난 누적 감소(리셋) 횟수. 앱 산식은 max(0,…) 로 클램프하므로 여기서 토큰이 유실된다.
     var drops: Int = 0
+    /// 포크 파일 수 — 대상 월 이벤트가 있는 파일 중 CodexForkRule 이 포크로 판정한 것(v0.2.43). 복사 구간 규칙이 실제로 몇 파일에 걸렸는가.
+    var forkFiles: Int = 0
+    /// 복사 구간의 이벤트가 **옛 산식(v0.2.42 까지)이라면 대상 월에 더했을** 델타 합(입력+출력). 앱 산식(dedupTotal)에는 들어 있지 않다 —
+    /// 이 값이 크면 그 사람의 과다계상이 포크 복사본에서 왔다는 뜻이고, 0 이면 포크와 무관하다. 서버 컬럼 codex_diag_fork_tokens.
+    var forkCopyTokens: Int = 0
     /// 대상 월 기준 단일 파일 최대 기여. 총합 대비 비중이 크면 한 세션이 그 달을 좌우한다는 뜻이다.
     var topFile: Int = 0
     /// 이 값을 만든 앱 CFBundleVersion. 빌드가 바뀌면 산식도 바뀔 수 있으므로 값과 함께 다닌다(월 렌즈의 예외).
@@ -91,7 +96,7 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
         bigGapMedianSeconds: Int = 0,
         carryFiles: Int = 0, carryTotal: Int = 0, dupEvents: Int = 0, dupTokens: Int = 0,
         finalSum: Int = 0, dedupTotal: Int = 0, legacyTotal: Int = 0, drops: Int = 0,
-        topFile: Int = 0, appBuild: Int = 0
+        topFile: Int = 0, appBuild: Int = 0, forkFiles: Int = 0, forkCopyTokens: Int = 0
     ) {
         self.filesTotal = filesTotal
         self.filesMonth = filesMonth
@@ -111,6 +116,8 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
         self.drops = drops
         self.topFile = topFile
         self.appBuild = appBuild
+        self.forkFiles = forkFiles
+        self.forkCopyTokens = forkCopyTokens
     }
 
     /// 누락 키를 기본값 0 으로 흡수한다(인코딩은 합성 구현). 이 스냅샷은 앱 빌드를 건너 저장·전송되므로,
@@ -135,6 +142,8 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
         drops = try c.decodeIfPresent(Int.self, forKey: .drops) ?? 0
         topFile = try c.decodeIfPresent(Int.self, forKey: .topFile) ?? 0
         appBuild = try c.decodeIfPresent(Int.self, forKey: .appBuild) ?? 0
+        forkFiles = try c.decodeIfPresent(Int.self, forKey: .forkFiles) ?? 0
+        forkCopyTokens = try c.decodeIfPresent(Int.self, forKey: .forkCopyTokens) ?? 0
     }
 }
 
@@ -158,6 +167,10 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
 /// 1) 증분 캐시·mtime 프리필터가 없다(모든 rollout 파일을 offset 0 부터 읽는다). 프로덕션이 이어읽기 캐시로
 ///    표현하는 "아직 기준선을 못 봤다"(consumedOffset == 0)는 여기선 파일 경계의 `baseline = nil` 이 대신한다.
 /// 2) 개행 없이 끝나는 마지막 라인도 파싱한다(증분 스캐너는 다음 갱신을 위해 남겨 두지만, 여기선 다음이 없다).
+///
+/// **포크 복사 구간(v0.2.43)** 도 프로덕션과 같은 규칙(CodexForkRule/CodexForkTracker — 같은 타입을 부른다)으로 가른다: 복사 구간의
+/// 이벤트는 앱 산식에 더하지 않고 기준선만 갱신하되, 옛 산식이라면 더했을 몫을 `forkCopyTokens` 에 따로 잰다. `legacyTotal` 은
+/// 포크 규칙도 없던 세대의 산식이므로 복사 구간도 그대로 더한다(그래야 "정정 전 값"이라는 뜻이 유지된다).
 ///
 /// 비용: 전량 순회라 비싸다. 호출측이 **앱 빌드당 1회만** 부르는 것을 전제로 캐시를 두지 않는다.
 enum CodexUsageDiagnosticsScanner {
@@ -201,6 +214,8 @@ enum CodexUsageDiagnosticsScanner {
         result.dupEvents = state.duplicateKeyCount()
         result.dupTokens = state.dupTokens
         result.dedupTotal = state.appTotal - state.dupTokens
+        result.forkFiles = state.forkFiles
+        result.forkCopyTokens = state.forkCopyTokens
         return result
     }
 
@@ -255,6 +270,10 @@ enum CodexUsageDiagnosticsScanner {
         private var monthContribLegacy = 0
         private var lastCumulativeInMonth = 0
         private var touched = false
+        /// 포크 판정 상태(프로덕션과 같은 타입). 전량 재파싱이라 파일마다 오프셋 0 에서 시작한다.
+        private var fork = CodexForkTracker(startedAtZero: true, deadlineMicros: 0)
+        /// 이 파일의 복사 구간이 옛 산식이라면 대상 월에 더했을 델타 합.
+        private var forkCopyMonth = 0
 
         // 전역 누적
         private(set) var appTotal = 0
@@ -274,6 +293,8 @@ enum CodexUsageDiagnosticsScanner {
         private(set) var carryTotal = 0
         private(set) var topFile = 0
         private(set) var dupTokens = 0
+        private(set) var forkFiles = 0
+        private(set) var forkCopyTokens = 0
         private var sightings: [String: KeySighting] = [:]
 
         init(month: String) { self.month = month }
@@ -289,11 +310,15 @@ enum CodexUsageDiagnosticsScanner {
             monthContribLegacy = 0
             lastCumulativeInMonth = 0
             touched = false
+            fork = CodexForkTracker(startedAtZero: true, deadlineMicros: 0)
+            forkCopyMonth = 0
         }
 
         func endFile() {
             guard touched else { return }
             filesMonth += 1
+            if fork.deadlineMicros > 0 { forkFiles += 1 }
+            forkCopyTokens += forkCopyMonth
             appTotal += monthContrib
             legacyTotal += monthContribLegacy
             finalSum += lastCumulativeInMonth
@@ -309,6 +334,14 @@ enum CodexUsageDiagnosticsScanner {
 
         /// 한 라인을 파싱해 상태에 반영한다. 프로덕션 Codex 경로와 같은 순서·같은 스킵 규약.
         func ingest(_ line: UnsafeRawBufferPointer) {
+            // 포크 판정(프로덕션 미러): 파일 머리의 session_meta 만 본다 — type 으로 확정하고 표식의 유무·라인 시각만 읽는다.
+            if contains(line, CodexForkRule.sessionMetaPattern),
+               let base = line.baseAddress,
+               let object = try? JSONSerialization.jsonObject(with: Data(bytes: base, count: line.count)) as? [String: Any],
+               CodexForkRule.isSessionMeta(object) {
+                fork.observeSessionMeta(object)
+                return
+            }
             guard contains(line, tokenCountPattern) else { return }
             guard let base = line.baseAddress,
                   let object = try? JSONSerialization.jsonObject(
@@ -323,6 +356,7 @@ enum CodexUsageDiagnosticsScanner {
                   let monthKey = kstMonthKey(fromTimestamp: timestamp)
             else { return }
 
+            let isCopy = fork.isCopy(eventTimestamp: timestamp)
             let inputCum = intField(total["input_tokens"])
             let outputCum = intField(total["output_tokens"])
             let cum = inputCum + outputCum
@@ -351,6 +385,17 @@ enum CodexUsageDiagnosticsScanner {
             baselineOutput = outputCum
             prevEventEpoch = epoch
             guard inMonth else { return }
+
+            // 포크 복사 구간(프로덕션 미러): 앱 산식에 더하지 않고, 옛 산식이라면 더했을 몫(delta)만 forkCopyMonth 에 잰다.
+            // legacy(이월 수정 전 산식)는 포크 규칙도 없던 세대라 그대로 더한다. 델타 분포·중복 추적은 앱 산식에 든 이벤트만 본다.
+            if isCopy {
+                forkCopyMonth += delta
+                monthContribLegacy += legacyDelta
+                eventsMonth += 1
+                touched = true
+                lastCumulativeInMonth = cum
+                return
+            }
 
             monthContrib += delta
             monthContribLegacy += legacyDelta

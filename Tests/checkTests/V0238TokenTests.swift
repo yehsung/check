@@ -100,7 +100,7 @@ private func v0238WriteOracleFixture(into home: URL) -> (aConsumed: Int, bSize: 
     let inMonth = v0238Now.addingTimeInterval(-5 * 86_400)              // 07-09 KST
     let today = v0238UTC("2026-07-14T02:00:00Z")                         // KST 07-14 11:00 (오늘)
     let prevWithin48h = v0238MonthStart.addingTimeInterval(-3_600)      // KST 06-30 23:00 (지난달, 보관 창 안)
-    let prevOutside48h = v0238MonthStart.addingTimeInterval(-10 * 86_400) // KST 06-21 (지난달, 보관 창 밖)
+    let prevOutside48h = v0238MonthStart.addingTimeInterval(-10 * 86_400) // KST 06-21 (지난달, 월 시작 − 48h 밖 — v0.2.43 부터는 12주 창 안이라 보관, 합계 밖)
 
     let k1 = v0238ClaudeLine(id: "msg_k1", req: "req_k1", at: inMonth,
         usage: "{\"input_tokens\":100,\"output_tokens\":50,\"cache_read_input_tokens\":10,\"cache_creation_input_tokens\":5}")
@@ -271,8 +271,8 @@ func entryKeyLookupByLegacyStringMatchesIngestAndSurvivesDiskRoundTrip() {
     #expect(r.cache.claudeEntries["msg_k1\u{0}req_k1"]?.input == 100)
     #expect(r.cache.claudeEntries["msg_k2\u{0}req_k2"]?.output == 688)
     #expect(r.cache.claudeEntries[ClaudeEntryKey(messageID: "msg_k5", requestID: "req_k5")]?.input == 7)
-    #expect(r.cache.claudeEntries["msg_k4\u{0}req_k4"] == nil)     // 보관 창 밖(Q6) — 애초에 저장 안 됨
-    #expect(r.cache.claudeEntries.count == 4)                       // k1 k2 k3 k5
+    #expect(r.cache.claudeEntries["msg_k4\u{0}req_k4"]?.input == 5000)   // 6/21 은 12주 창 안(v0.2.43) — 보관되나 합계 밖
+    #expect(r.cache.claudeEntries.count == 5)                            // k1 k2 k3 k4 k5
 
     let base = v0238CacheURL(in: dir)
     #expect(TokenUsageCacheStore.save(r.cache, parts: .all, to: base))
@@ -281,27 +281,31 @@ func entryKeyLookupByLegacyStringMatchesIngestAndSurvivesDiskRoundTrip() {
     #expect(loaded.claudeEntries["msg_k3\u{0}req_k3"]?.input == 1000)
     // 콜드 파일은 16진 키 오브젝트다(옛 NUL 문자열 키 없음).
     let cold = try! JSONSerialization.jsonObject(with: Data(contentsOf: TokenUsageCacheStore.entriesURL(for: base))) as! [String: Any]
-    #expect(cold.count == 4)
+    #expect(cold.count == 5)
     #expect(cold.keys.allSatisfy { ClaudeEntryKey(hex: $0) != nil })
 }
 
 // MARK: - Q6 보관 경계 (월 시작 − 48h)
 
-/// 지난달 마지막 48h 는 남고 그 이전은 지워진다(엔트리·파일상태 모두). v0.2.37 은 직전 월 1일부터 보관해 73% 가 지난달이었다.
-/// 뮤테이션: 경계를 prevMonthStart 로 되돌리면 −49h·−20d 가 살아남아 빨강.
+/// Claude 는 12주 잔디 창 시작 − 48h(KST 04-18 00:00) 부터 남고 그 이전은 지워진다(엔트리·파일상태). Codex 파일상태는 월 시작 − 48h
+/// (KST 06-29) 그대로다(v0.2.43 — Codex 는 월 창 유지). v0.2.38~42 는 Claude 도 월 시작 − 48h 였고, v0.2.37 은 직전 월 1일부터였다.
+/// 뮤테이션: Claude 경계를 월 시작 − 48h 로 되돌리면 창 안 엔트리(−20d)가 사라져 빨강, Codex 경계를 창으로 옮기면 drop-rollout 이 살아남아 빨강.
 @Test
-func retentionKeepsLast48HoursOfPreviousMonthAndEvictsOlder() {
-    let boundary = v0238MonthStart.addingTimeInterval(-48 * 3_600)   // KST 06-29 00:00
+func retentionKeepsTheTwelveWeekWindowAndEvictsOlder() {
+    let window = TokenUsageIncrementalScanner.windowBounds(now: v0238Now)
+    #expect(window.startKey == "2026-04-20")                               // 07-14(화) 의 주 월요일 07-13 − 12주
+    let boundary = window.retentionStart                                  // KST 04-18 00:00
+    let codexBoundary = v0238MonthStart.addingTimeInterval(-48 * 3_600)   // KST 06-29 00:00
     var cache = TokenUsageCache()
     cache.claudeEntries["in\u{0}m"] = ClaudeEntry(ts14: v0238TS14(v0238Now.addingTimeInterval(-5 * 86_400)), input: 111, output: 0, cacheRead: 0, cacheCreation: 0)
     cache.claudeEntries["edge-in\u{0}m"] = ClaudeEntry(ts14: v0238TS14(boundary), input: 222, output: 0, cacheRead: 0, cacheCreation: 0)                       // 경계 정각 → 보관
     cache.claudeEntries["edge-out\u{0}m"] = ClaudeEntry(ts14: v0238TS14(boundary.addingTimeInterval(-1)), input: 333, output: 0, cacheRead: 0, cacheCreation: 0) // 1초 전 → 퇴거
-    cache.claudeEntries["prev\u{0}m"] = ClaudeEntry(ts14: v0238TS14(v0238MonthStart.addingTimeInterval(-20 * 86_400)), input: 444, output: 0, cacheRead: 0, cacheCreation: 0) // 지난달 본체 → 퇴거
+    cache.claudeEntries["prev\u{0}m"] = ClaudeEntry(ts14: v0238TS14(v0238MonthStart.addingTimeInterval(-20 * 86_400)), input: 444, output: 0, cacheRead: 0, cacheCreation: 0) // 지난달 본체(6/11, 창 안) → 보관
     let micros = { (d: Date) in Int((d.timeIntervalSince1970 * 1_000_000).rounded()) }
     cache.claudeFileStates["/keep.jsonl"] = FileProgress(size: 1, mtimeMicros: micros(boundary.addingTimeInterval(3_600)), consumedOffset: 1)
     cache.claudeFileStates["/drop.jsonl"] = FileProgress(size: 1, mtimeMicros: micros(boundary.addingTimeInterval(-3_600)), consumedOffset: 1)
-    cache.codexFileStates["/keep-rollout.jsonl"] = CodexFileProgress(size: 1, mtimeMicros: micros(boundary), consumedOffset: 1, prevInput: 1, prevOutput: 0, prevCached: 0, monthKey: "2026-06", monthInput: 0, monthOutput: 0, monthCached: 0, dayContrib: [:])
-    cache.codexFileStates["/drop-rollout.jsonl"] = CodexFileProgress(size: 1, mtimeMicros: micros(boundary.addingTimeInterval(-1)), consumedOffset: 1, prevInput: 1, prevOutput: 0, prevCached: 0, monthKey: "2026-06", monthInput: 0, monthOutput: 0, monthCached: 0, dayContrib: [:])
+    cache.codexFileStates["/keep-rollout.jsonl"] = CodexFileProgress(size: 1, mtimeMicros: micros(codexBoundary), consumedOffset: 1, prevInput: 1, prevOutput: 0, prevCached: 0, monthKey: "2026-06", monthInput: 0, monthOutput: 0, monthCached: 0, dayContrib: [:])
+    cache.codexFileStates["/drop-rollout.jsonl"] = CodexFileProgress(size: 1, mtimeMicros: micros(codexBoundary.addingTimeInterval(-1)), consumedOffset: 1, prevInput: 1, prevOutput: 0, prevCached: 0, monthKey: "2026-06", monthInput: 0, monthOutput: 0, monthCached: 0, dayContrib: [:])
 
     let home = v0238TempDir("retention")   // 로그 없음 — 퇴거/합계만
     let r = TokenUsageIncrementalScanner.update(cache, homeDirectory: home, now: v0238Now)
@@ -309,23 +313,26 @@ func retentionKeepsLast48HoursOfPreviousMonthAndEvictsOlder() {
     #expect(r.cache.claudeEntries["in\u{0}m"] != nil)
     #expect(r.cache.claudeEntries["edge-in\u{0}m"] != nil)
     #expect(r.cache.claudeEntries["edge-out\u{0}m"] == nil)
-    #expect(r.cache.claudeEntries["prev\u{0}m"] == nil)
-    #expect(r.cache.claudeEntries.count == 2)
+    #expect(r.cache.claudeEntries["prev\u{0}m"] != nil)
+    #expect(r.cache.claudeEntries.count == 3)
     #expect(r.cache.claudeFileStates.keys.sorted() == ["/keep.jsonl"])
     #expect(r.cache.codexFileStates.keys.sorted() == ["/keep-rollout.jsonl"])
-    #expect(r.usage.claudeInput == 111)                 // 합계는 여전히 현재 월만(보관된 6/29 엔트리는 합계 밖)
+    #expect(r.usage.claudeInput == 111)                 // 합계는 여전히 현재 월만(보관된 4/18·6/11 엔트리는 합계 밖)
+    #expect(r.usage.claudeDaily["2026-06-11"] == 444)   // 창 안의 지난 날은 일별 맵(잔디)에 남는다
+    #expect(r.usage.claudeDaily["2026-04-18"] == nil)   // 창 앞 48h straddle 분은 부분값이라 일별 맵에 넣지 않는다
     #expect(r.stats.entriesChanged == true)             // 콜드 변경
     #expect(r.stats.statesChanged == true)              // 핫 변경
     #expect(r.stats.changedParts == .all)
 }
 
-/// ingest 가드도 같은 경계다: 파일이 이번 달 mtime 이라 열리더라도 −49h 라인은 저장조차 안 되고 −47h 라인은 저장된다(합계 밖).
+/// ingest 가드도 같은 경계다(v0.2.43: 12주 창 시작 − 48h): 파일이 열리더라도 창 시작 −49h 라인은 저장조차 안 되고 −47h 라인은 저장된다(합계 밖).
 @Test
 func ingestGuardUsesSameRetentionBoundaryAsEviction() {
     let home = v0238TempDir("ingestguard")
     defer { try? FileManager.default.removeItem(at: home) }
-    let inside = v0238ClaudeLine(id: "i", req: "i", at: v0238MonthStart.addingTimeInterval(-47 * 3_600), usage: "{\"input_tokens\":10}")
-    let outside = v0238ClaudeLine(id: "o", req: "o", at: v0238MonthStart.addingTimeInterval(-49 * 3_600), usage: "{\"input_tokens\":20}")
+    let windowStart = TokenUsageIncrementalScanner.windowBounds(now: v0238Now).start   // KST 04-20 00:00
+    let inside = v0238ClaudeLine(id: "i", req: "i", at: windowStart.addingTimeInterval(-47 * 3_600), usage: "{\"input_tokens\":10}")
+    let outside = v0238ClaudeLine(id: "o", req: "o", at: windowStart.addingTimeInterval(-49 * 3_600), usage: "{\"input_tokens\":20}")
     let current = v0238ClaudeLine(id: "c", req: "c", at: v0238Now, usage: "{\"input_tokens\":30}")
     v0238Write([inside, outside, current].joined(separator: "\n") + "\n", to: v0238ClaudeURL(home, "p", "s.jsonl"))
 
@@ -385,15 +392,29 @@ func monthBoundaryStraddleTotalsAreInvariantBetweenIncrementalAndFullScan() {
     #expect(inc3.usage.claudeOutput == 1_000)
     #expect(inc3.cache.claudeEntries.count == 4)
 
-    // 8월: 경계가 7/30 로 옮겨 전부 퇴거되고, 파일 mtime(7/1)은 8월 프리필터 밖이라 열리지 않는다. 전량도 0.
+    // 8월(v0.2.43): 12주 창(05-11~)이라 6/30·7/1 엔트리는 아직 보관되고 파일(mtime 7/1)도 창 안이라 열린다 — 8월 합계는 0 이고
+    // 증분·전량이 같으며, 일별 맵에는 지난 두 달의 날이 남는다(잔디가 보는 값). 재읽기·퇴거는 없다.
     let inc4 = TokenUsageIncrementalScanner.update(inc3.cache, homeDirectory: home, now: now4)
     let full4 = TokenUsageIncrementalScanner.update(TokenUsageCache(), homeDirectory: home, now: now4)
     #expect(inc4.usage.month == "2026-08")
     #expect(inc4.usage.total == 0)
     #expect(inc4.usage == full4.usage)
-    #expect(inc4.cache.claudeEntries.isEmpty)
-    #expect(inc4.cache.claudeFileStates.isEmpty)
-    #expect(inc4.stats.entriesChanged == true && inc4.stats.statesChanged == true)
+    #expect(inc4.cache.claudeEntries.count == 4)
+    #expect(inc4.cache.claudeFileStates.count == 1)
+    #expect(inc4.usage.claudeDaily["2026-07-01"] == 1_111)   // KST 7/1: b(2+700) + c(100) + d(max-output 레코드 9+300)
+    #expect(inc4.usage.claudeDaily["2026-06-30"] == 11)      // a(10+1)
+    #expect(inc4.stats.claudeBytesRead == 0 && inc4.stats.cacheChanged == false)
+
+    // 10월(KST 10-05 월요일 0시): 창이 7/13 로 옮겨(보관 하한 7/11) 6·7월 초 엔트리가 전부 퇴거되고 파일(mtime 7/1)도 창 밖이라 닫힌다. 전량도 0.
+    let now5 = kst("2026-10-04T15:00:00Z")   // KST 10-05 00:00 (10월)
+    let inc5 = TokenUsageIncrementalScanner.update(inc4.cache, homeDirectory: home, now: now5)
+    let full5 = TokenUsageIncrementalScanner.update(TokenUsageCache(), homeDirectory: home, now: now5)
+    #expect(inc5.usage.month == "2026-10")
+    #expect(inc5.usage.total == 0)
+    #expect(inc5.usage == full5.usage)
+    #expect(inc5.cache.claudeEntries.isEmpty)
+    #expect(inc5.cache.claudeFileStates.isEmpty)
+    #expect(inc5.stats.entriesChanged == true && inc5.stats.statesChanged == true)
 }
 
 // MARK: - 핫/콜드 분리 (파일 레이아웃 · 부분 저장 · 세대 게이트)
@@ -562,7 +583,7 @@ func storeRescansWhenOnDiskCacheIsFromOlderGeneration() async throws {
     // 종료 훅으로 저장을 강제하면 새 쌍이 생기고, 새 스토어는 그 쌍으로 재읽기 0 에 같은 값을 낸다.
     center.post(name: NSApplication.willTerminateNotification, object: nil)
     let reloaded = TokenUsageCacheStore.load(from: base)
-    #expect(reloaded.claudeEntries.count == 4)
+    #expect(reloaded.claudeEntries.count == 5)   // k1 k2 k3 k4 k5 — 12주 창(v0.2.43)이라 6/21 의 k4 도 남는다
     let again = TokenUsageIncrementalScanner.update(reloaded, homeDirectory: home, now: v0238Now)
     #expect(again.stats.claudeBytesRead == 0)
     #expect(again.usage.total == 1_574)

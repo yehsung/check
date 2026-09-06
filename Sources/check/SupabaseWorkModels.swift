@@ -548,10 +548,18 @@ struct TokenUsageUpsertRequest: Encodable {
     // 호출측이 따로 넘기게 두면 행에 실린 Codex 합과 스냅샷이 어긋날 여지가 생기는데, 그 어긋남이 정확히
     // 이 필드가 없애려던 결함이다. 파생이면 구조적으로 불가능하다.
     var codexDiagInputAtScan: Int?
+
+    // ── 4차(v0.2.43): 포크 복사 구간 계수 2개(codex_diag_fork_files · codex_diag_fork_tokens, 20260906120000 컬럼) ──
+    //
+    // Codex 포크 파일의 복사 구간(CodexForkRule)이 몇 파일에 걸렸고, 옛 산식이라면 그 달에 얼마를 더했을지를 같은 도장 규약으로
+    // 싣는다. 이 둘이 있어야 "이 사람의 과다계상이 포크 복사본에서 온 것인가"를 서버에서 로그 없이 가른다.
+    // 규약은 위 19개와 같다 — **옵셔널이 핵심**(nil = 키 생략 = 서버 값 보존), Int 뿐(문자열 금지), 새 필드는 마지막에.
+    var codexDiagForkFiles: Int?
+    var codexDiagForkTokens: Int?
 }
 
 extension TokenUsageUpsertRequest {
-    /// 진단 스냅샷을 19개 스칼라로 펼쳐 담는 생성자. **diagnostics 가 nil 이면 19개 필드가 전부 nil 로 남아**
+    /// 진단 스냅샷을 21개 스칼라로 펼쳐 담는 생성자(19 + v0.2.43 포크 계수 2). **diagnostics 가 nil 이면 21개 필드가 전부 nil 로 남아**
     /// 인코딩 결과에서 codex_diag_* 키가 통째로 사라진다(= 서버의 기존 진단값 보존).
     ///
     /// 19번째(codexDiagInputAtScan)만 diagnostics 안이 아니라 **이 생성자가 받은 codexInput+codexOutput 에서 파생**된다
@@ -621,7 +629,9 @@ extension TokenUsageUpsertRequest {
             // 진단이 실릴 때만 값이 생긴다(nil 이면 키 생략 → 서버 스냅샷 보존). 값은 이 본문의 Codex 총합 그 자체.
             // codexTotal 을 쓰는 이유: 앱은 Codex 델타를 입출력 구분 없이 전액 codexInput 에 담고 codexOutput 은 항상 0 이라
             // 오늘은 codexInput 과 같은 값이지만, 훗날 출력을 쪼개 담더라도 "그 업로드의 Codex 총합"이라는 뜻이 유지된다.
-            codexDiagInputAtScan: diagnostics.map { _ in codexInput + codexOutput }
+            codexDiagInputAtScan: diagnostics.map { _ in codexInput + codexOutput },
+            codexDiagForkFiles: diagnostics?.forkFiles,
+            codexDiagForkTokens: diagnostics?.forkCopyTokens
         )
     }
 }
@@ -687,13 +697,16 @@ struct TokenUsageLegacyTotalRow: Decodable {
 /// codex_account 는 **옵셔널이 핵심**이다(월 표의 codex_account_*·codex_diag_* 와 같은 규약): 합성 Encodable 은 nil 을
 /// encodeIfPresent 로 내보내 **키 자체가 빠지고**, PostgREST 의 merge-duplicates upsert 는 본문에 온 컬럼만 SET 한다.
 /// 계정 버킷(UTC 일자)이 그 날짜에 없는 기기가 0 을 실으면 다른 기기가 앞서 올린 계정값을 0 으로 밀어 버린다 — nil 이면
-/// 서버 값이 보존된다. claude_total/codex_total 은 로컬 집계라 항상 실린다(매 업로드가 최신값이므로 덮는 것이 맞다).
+/// 서버 값이 보존된다. codex_total 은 로컬 집계라 항상 실린다(매 업로드가 최신값이므로 덮는 것이 맞다).
+/// claude_total 도 같은 이유로 보통 실리지만, **이 기기의 Claude 로그가 온전하지 않은 날**(v0.2.43, TokenUsageMonthly.claudeCompleteFrom 앞 —
+/// Claude Code 가 30일 지난 transcript 를 지운 뒤 캐시를 다시 만든 경우)에는 nil 로 키를 뺀다. 그때 0 을 실으면 이 기기가 예전에
+/// 올린 완전값이 부분값으로 덮인다. 키 집합이 다른 행은 서비스가 묶음을 갈라 보낸다(upsertTokenUsageDaily).
 struct TokenUsageDailyUpsertRow: Encodable, Equatable, Sendable {
     let userId: String
     /// KST 'YYYY-MM-DD'(claudeDaily/codexDaily 의 키 그대로).
     let day: String
     let deviceId: String
-    let claudeTotal: Int
+    var claudeTotal: Int?
     let codexTotal: Int
     var codexAccount: Int?
 }

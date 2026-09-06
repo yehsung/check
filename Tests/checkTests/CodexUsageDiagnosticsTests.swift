@@ -963,14 +963,14 @@ func codexDiagnosticsEncodesWithoutAnyStringValues() throws {
         maxDeltaGapSeconds: 55, bigDeltaCount: 66, bigDeltaTotal: 77, bigGapMedianSeconds: 88,
         carryFiles: 99, carryTotal: 111, dupEvents: 222, dupTokens: 333,
         finalSum: 444, dedupTotal: 555, legacyTotal: 666, drops: 777,
-        topFile: 888, appBuild: 999
+        topFile: 888, appBuild: 999, forkFiles: 1010, forkCopyTokens: 1111
     )
     let data = try JSONEncoder().encode(sample)
     let object = try JSONSerialization.jsonObject(with: data)
     let root = try #require(object as? [String: Any])
 
-    // 필드 수가 18 이어야 한다(추가/삭제를 이 테스트가 먼저 알아챈다).
-    #expect(root.count == 18)
+    // 필드 수가 20 이어야 한다(18 + v0.2.43 포크 계수 2 — 추가/삭제를 이 테스트가 먼저 알아챈다).
+    #expect(root.count == 20)
 
     // 값 트리를 재귀로 훑어 문자열이 하나라도 있으면 실패.
     func stringValues(in value: Any) -> [String] {

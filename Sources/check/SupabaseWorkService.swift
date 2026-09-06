@@ -1085,13 +1085,17 @@ actor SupabaseWorkService {
     ///   0 을 실으면 다른 기기가 올린 계정값을 밀어 버린다), Codex 를 쓰는 사람의 한 달치에는 '있는 날'과 '없는 날'이 **반드시**
     ///   섞인다. 그 배열을 통째로 보내면 그 사람의 일별 행이 서버에 **단 한 줄도** 올라가지 않고(400 은 조용히 삼켜진다),
     ///   장부도 갱신되지 않아 다음 주기가 같은 혼합 본문을 다시 보내는 영구 고착이 된다.
-    ///   그래서 `?columns=` 로 키를 강제하는 대신(그러면 빠진 키가 **null 로 쓰여** 계정값이 지워진다) 두 묶음으로 갈라
-    ///   각각 보낸다 — 요청은 최대 2건이고, 빈 묶음은 건너뛴다. 첫 묶음이 실패하면 그대로 던져 장부가 갱신되지 않는다
-    ///   (upsert 는 멱등이라 다음 주기가 둘 다 다시 보내도 안전하다).
+    ///   그래서 `?columns=` 로 키를 강제하는 대신(그러면 빠진 키가 **null 로 쓰여** 계정값이 지워진다) 키 모양별 묶음으로 갈라
+    ///   각각 보낸다. v0.2.43 부터 claude_total 도 빠질 수 있어(로그가 온전하지 않은 날 — TokenUsageDailyUpsertRow 주석) 묶음은
+    ///   (claude 유무 × 계정 유무) 최대 4건이고, 빈 묶음은 건너뛴다. 첫 묶음이 실패하면 그대로 던져 장부가 갱신되지 않는다
+    ///   (upsert 는 멱등이라 다음 주기가 전부 다시 보내도 안전하다).
     func upsertTokenUsageDaily(accessToken: String, rows: [TokenUsageDailyUpsertRow]) async throws {
         guard !rows.isEmpty else { return }
-        // 순서는 결정적으로 둔다(계정값 있는 묶음 먼저) — 계약 테스트·로그가 요청 순서를 읽을 수 있어야 한다.
-        let groups = [rows.filter { $0.codexAccount != nil }, rows.filter { $0.codexAccount == nil }]
+        // 순서는 결정적으로 둔다(claude·계정 다 있는 묶음 → claude 만 → 계정 만 → 둘 다 없음) — 계약 테스트·로그가 요청 순서를 읽을 수 있어야 한다.
+        let shapes: [(claude: Bool, account: Bool)] = [(true, true), (true, false), (false, true), (false, false)]
+        let groups = shapes.map { shape in
+            rows.filter { ($0.claudeTotal != nil) == shape.claude && ($0.codexAccount != nil) == shape.account }
+        }
         for group in groups where !group.isEmpty {
             try await sendNoBody(
                 path: "/rest/v1/token_usage_device_daily",

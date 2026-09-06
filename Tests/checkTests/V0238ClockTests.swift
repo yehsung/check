@@ -491,7 +491,7 @@ private func sourceURL(_ name: String) -> URL {
 
     // MARK: (e) 팝오버 닫힘 1분 → 60초 티커, 기록은 정확 (v0.2.43: 유예 1시간 → 1분, 라벨 조건 폐기)
 
-    @Test func tickerSlowsToAMinuteAfterAnIdleHourAndKeepsTheRecordExact() {
+    @Test func tickerSlowsToAMinuteAfterAMinuteWithoutASecondsSurfaceAndKeepsTheRecordExact() {
         let clock = TestClock(t0)
         let store = makeStore(host: "v0238-clock-e", suiteName: "check-v0238-clock-e", clock: clock)
         defer { cancelTasks(store) }

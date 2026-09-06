@@ -1659,22 +1659,19 @@ func effectiveTotalFollowsTheAccountFirstRule() {
 }
 
 @Test
-func tooltipListsAccountAndLocalWhenTheAccountMonthIsPositive() {
+func tooltipShowsTheEffectiveCodexValueOnly() {
     var usage = TokenUsageMonthly(month: "2026-09")
     usage.codexInput = 1_000; usage.codexOutput = 200; usage.codexCacheRead = 700
-    // v0.2.43 UTC 축: Codex 가 있는 툴팁은 끝에 하루의 뜻(9시 경계)을 밝힌다(V0243UTCAxisTests 가 리터럴·배선을 고정).
-    let axis = " · " + TokenUsageMonthly.tokenDayAxisNote
-    let base = "Codex 1,200 (입력 1,000 · 출력 200 · 캐시 700)"
-    let labeled = "Codex 로컬 집계 1,200 (입력 1,000 · 출력 200 · 캐시 700)"
-    #expect(usage.detailTooltip == base + axis)
-    // v0.2.43: 이 달 계정 월합이 있으면 로컬 줄에 "로컬 집계" 라벨, 계정 줄, "총합은 계정 집계 기준" — 계정이 로컬보다 크든 작든 같다.
+    // v0.2.45: 툴팁은 `Codex <유효값>` 하나 — 입력·출력·캐시 내역, 로컬/계정 두 숫자, 반영일, 기준 문구, 하루 축은 UI 에서 걷어냈다.
+    #expect(usage.detailTooltip == "Codex 1,200")
+    // 이 달 계정 월합이 있으면 계정 우선 규칙의 유효값(TokenUsageDisplay.codexEffective) — 계정이 로컬보다 크든 작든 규칙은 하나다.
     let big = CodexAccountUsage(fetchedAt: c41FetchedAt, lifetimeTokens: nil, buckets: ["2026-09-01": 3_000, "2026-09-07": 2_000, "2026-08-31": 999])
-    #expect(usage.detailTooltip(account: big) == labeled + " · Codex 계정 집계 5,000 (7일까지 반영) · 총합은 계정 집계 기준" + axis)
+    #expect(usage.detailTooltip(account: big) == "Codex 5,000")
     let equal = CodexAccountUsage(fetchedAt: c41FetchedAt, lifetimeTokens: nil, buckets: ["2026-09-02": 1_200])
-    #expect(usage.detailTooltip(account: equal) == labeled + " · Codex 계정 집계 1,200 (2일까지 반영) · 총합은 계정 집계 기준" + axis)
-    // 이 달 버킷이 없으면(월합 0) 계정 줄 없음 — 지난달 버킷을 이번 달 반영일로 오인하지 않는다.
+    #expect(usage.detailTooltip(account: equal) == "Codex 1,200")
+    // 이 달 버킷이 없으면(월합 0) 로컬 그대로 — 지난달 버킷을 이번 달 반영일로 오인하지 않는다.
     let lastMonthOnly = CodexAccountUsage(fetchedAt: c41FetchedAt, lifetimeTokens: nil, buckets: ["2026-08-31": 999])
-    #expect(usage.detailTooltip(account: lastMonthOnly) == base + axis)
+    #expect(usage.detailTooltip(account: lastMonthOnly) == "Codex 1,200")
 }
 
 @Test

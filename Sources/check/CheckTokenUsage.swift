@@ -84,60 +84,30 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     /// 라벨 "N월 …"에 쓰는 월 숫자. 'YYYY-MM' 의 뒤 두 자리를 정수로(선행 0 제거). 파싱 실패 시 0.
     var monthNumber: Int { Int(month.split(separator: "-").last ?? "") ?? 0 }
 
-    /// 굵은 총합이 로컬 소계와 다른 이유를 설명하는 한 마디. 내 박스 툴팁과 순위판 툴팁(TokenBoardEntry.detailTooltip)이
-    /// **같은 문구**를 써야 같은 현상을 두 어휘로 부르지 않는다 — 리터럴을 두 곳에 흩뿌리지 않고 여기 하나만 둔다.
-    static let accountDrivenTotalNote = "총합은 계정 집계 기준"
+    /// 하루의 뜻을 밝히는 한 줄 — **잔디 헤더 `.help` 전용**(v0.2.45). Codex 잔디 칸은 계정 버킷과 같은 UTC 하루(= KST 오전 9시 ~
+    /// 다음날 오전 9시)를 KST 날짜 라벨로 읽으므로 새벽 사용이 전날 칸에 들어간다 — 그것만 짧게 알린다. 내 박스·순위판 툴팁에는
+    /// 붙이지 않는다(v0.2.43 에 세 곳에 붙였더니 "유저에게 너무 과하다"는 지적 — 2026-09-06). 자정 분할(로컬 시간 분포로 나누기)은
+    /// 하지 않는다 — 로컬이 검증되기 전엔 로컬의 시간 분포를 근거로 쓰지 않는다.
+    static let tokenDayAxisNote = "Codex 는 오전 9시 기준 하루예요"
 
-    /// 하루의 뜻을 밝히는 한 줄(v0.2.43, 사용자 결정 "9시 경계"). Codex 는 계정 버킷과 같은 UTC 하루(= KST 오전 9시 ~ 다음날 오전 9시)를
-    /// KST 날짜 라벨로 읽고, Claude 는 KST 자정 하루다 — 같은 잔디 칸이 두 축을 담으므로 내 박스·순위판 툴팁·잔디 헤더 **세 곳**이
-    /// 이 리터럴 하나를 부른다(V0243UTCAxisTests 가 소스 계약으로 고정). 자정 분할(로컬 시간 분포로 나누기)은 하지 않는다 —
-    /// 로컬이 검증되기 전엔 로컬의 시간 분포를 근거로 쓰지 않는다.
-    static let tokenDayAxisNote = "Codex 하루는 오전 9시 기준(계정 집계와 같은 축) · Claude 는 자정 기준"
-
-    /// .help 툴팁 상세 문구(계정 집계 없이). 축약 없이 콤마 전체 숫자로, 값이 있는 소스만 이어 붙인다
-    /// ("Claude 4,280,667,571 (입력 8,458,939 · 출력 9,796,198 · 캐시읽기 4,063,320,273 · 캐시생성 199,092,161) · Codex 145,691,467 (입력 145,068,307 · 출력 623,160 · 캐시 0)").
+    /// .help 툴팁(계정 스냅샷 없이). 형식은 `detailTooltip(account:)` 과 같다.
     var detailTooltip: String { detailTooltip(account: nil) }
 
-    /// 계정 집계까지 붙인 툴팁. 이 달 계정 월합이 있으면 로컬 줄에 "로컬 집계" 라벨을 붙이고 `Codex 계정 집계 N (D일까지 반영)`
-    /// 을 이은 뒤, 표시 총합이 계정 기준임을 한 줄로 명시한다(v0.2.43 계정 우선 규칙 — 행의 굵은 숫자와 로컬 소계가 왜 다른지
-    /// 설명하는 자리). 로컬이 계정보다 20% 넘게 크면 진단 한 줄(포크 복사본 의심)을 더한다. 순위판 툴팁(TokenBoardEntry.detailTooltip)과
-    /// 같은 어휘·같은 문구.
+    /// 내 박스 툴팁: **캡션에 보이는 두 값의 정확한 숫자만** — `Claude 4,280,667,571 · Codex 145,691,467`. 0 인 쪽은 뺀다.
+    /// Codex 는 `TokenUsageDisplay.codexEffective`(계정 우선 규칙 — 굵은 총합과 같은 값)다.
+    ///
+    /// v0.2.45 에 이렇게 줄였다(사용자 지적 "유저들한테 너무 과하게 다 표시한다"). 그 전엔 입력·출력·캐시 내역, 로컬/계정 구분,
+    /// "총합은 계정 집계 기준", 포크 복사본 의심, 하루 축 설명까지 한 줄에 실렸는데 전부 **운영자 진단**이지 사용자 정보가 아니다 —
+    /// 진단은 서버 `token_scan_health` 에 있다. "오늘 +N" 도 행 자체가 보여 주므로(CheckMenuView 의 "오늘 +N 토큰") 여기 다시 적지 않는다.
+    /// 순위판 툴팁(TokenBoardEntry.detailTooltip)과 같은 모양이어야 한다 — 같은 숫자를 두 어휘로 부르지 않기 위해.
     func detailTooltip(account: CodexAccountUsage?) -> String {
         var parts: [String] = []
         if claudeTotal > 0 {
-            parts.append(
-                "Claude \(TokenNumberFormatter.grouped(claudeTotal)) "
-                + "(입력 \(TokenNumberFormatter.grouped(claudeInput)) · 출력 \(TokenNumberFormatter.grouped(claudeOutput)) "
-                + "· 캐시읽기 \(TokenNumberFormatter.grouped(claudeCacheRead)) · 캐시생성 \(TokenNumberFormatter.grouped(claudeCacheCreation)))"
-            )
+            parts.append("Claude \(TokenNumberFormatter.grouped(claudeTotal))")
         }
-        let accountMonth = account?.monthTotal(month) ?? 0
-        if codexTotal > 0 {
-            parts.append(
-                "Codex \(accountMonth > 0 ? "로컬 집계 " : "")\(TokenNumberFormatter.grouped(codexTotal)) "
-                + "(입력 \(TokenNumberFormatter.grouped(codexInput)) · 출력 \(TokenNumberFormatter.grouped(codexOutput)) "
-                + "· 캐시 \(TokenNumberFormatter.grouped(codexCacheRead)))"
-            )
-        }
-        if let account, accountMonth > 0 {
-            var line = "Codex 계정 집계 \(TokenNumberFormatter.grouped(accountMonth))"
-            if let day = account.latestBucketDate(in: month), let dayNumber = Int(day.suffix(2)) {
-                line += " (\(dayNumber)일까지 반영)"
-            }
-            parts.append(line)
-            parts.append(Self.accountDrivenTotalNote)
-            if CodexEffectiveRule.localExceedsAccount(local: codexTotal, account: accountMonth) {
-                parts.append(CodexEffectiveRule.localExceedsAccountNote)
-            }
-        }
-        // 내 박스 툴팁 끝에 "오늘 +N" 한 줄을 덧붙인다(값이 있을 때만 — 없으면 기존 문구 그대로라 하위 호환).
-        // 내 박스 usage 는 매번 갓 스캔한 값이라 todayDate 는 항상 오늘이므로 여기선 날짜 가드 없이 노출한다.
-        if todayTotal > 0 {
-            parts.append("오늘 +\(TokenNumberFormatter.grouped(todayTotal))")
-        }
-        // Codex 숫자가 하나라도 있으면 하루의 뜻을 맨 끝에 밝힌다(순위판 툴팁·잔디 헤더와 같은 리터럴). Claude 만 있으면 말할 것이 없다.
-        if codexTotal > 0 || accountMonth > 0 {
-            parts.append(Self.tokenDayAxisNote)
+        let codex = TokenUsageDisplay.codexEffective(local: self, account: account)
+        if codex > 0 {
+            parts.append("Codex \(TokenNumberFormatter.grouped(codex))")
         }
         return parts.joined(separator: " · ")
     }

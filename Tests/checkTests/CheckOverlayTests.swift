@@ -99,17 +99,18 @@ func makeSceneAppliesUnlitMaterialsAndCamera() throws {
 // MARK: - J2: 근무 시간 표기
 
 @Test
-func overlayTimeFormatterFormatsHoursMinutesSeconds() {
-    // 1시간 미만: MM:SS (MenuBarStatusFormatter.duration 재사용).
+func overlayTimeFormatterFormatsHoursMinutes() {
+    // v0.2.43: 캐릭터 라벨은 **항상 HH:MM**(초 내림) — 메뉴바 제목과 같은 식(titleDuration). 종전엔 1시간 전 MM:SS,
+    // 뒤 HH:MM:SS 로 초가 흘러 캐릭터를 켠 사람은 티커 감속이 영영 안 걸렸다(V0243MinuteTickTests).
     #expect(CheckOverlayTimeFormatter.text(0) == "00:00")
-    #expect(CheckOverlayTimeFormatter.text(65) == "01:05")
-    #expect(CheckOverlayTimeFormatter.text(59 * 60 + 59) == "59:59")
-    #expect(CheckOverlayTimeFormatter.text(1_800) == MenuBarStatusFormatter.duration(1_800))
-
-    // 1시간 이상: HH:MM:SS (초까지 흐른다 — 메뉴바 HH:MM과 다름).
-    #expect(CheckOverlayTimeFormatter.text(3_600) == "01:00:00")
-    #expect(CheckOverlayTimeFormatter.text(3_661) == "01:01:01")
-    #expect(CheckOverlayTimeFormatter.text(12 * 3_600 + 34 * 60 + 56) == "12:34:56")
+    #expect(CheckOverlayTimeFormatter.text(65) == "00:01")
+    #expect(CheckOverlayTimeFormatter.text(59 * 60 + 59) == "00:59")
+    #expect(CheckOverlayTimeFormatter.text(1_800) == MenuBarStatusFormatter.titleDuration(1_800))
+    #expect(CheckOverlayTimeFormatter.text(3_600) == "01:00")
+    #expect(CheckOverlayTimeFormatter.text(3_661) == "01:01")
+    #expect(CheckOverlayTimeFormatter.text(12 * 3_600 + 34 * 60 + 56) == "12:34")
+    // 팝오버 안 시계(duration)는 여전히 초를 흘린다 — 두 포맷터가 다른 것이 의도다.
+    #expect(MenuBarStatusFormatter.duration(65) == "01:05")
 
     // 음수는 0으로 절단.
     #expect(CheckOverlayTimeFormatter.text(-10) == "00:00")
@@ -402,10 +403,10 @@ func dumpOverlaySnapshots() throws {
     // (SCNView는 AppKit 백킹이라 ImageRenderer가 직접 못 그리므로 렌더 이미지를 이미지로 합성한다).
     let scnImage = try #require(NSImage(data: scnPNG))
 
-    // (b) 분 단위 목업 — 05:07 (MM:SS).
+    // (b) 분 단위 목업 — 00:05 (HH:MM, v0.2.43 부터 초는 그리지 않는다).
     try writeOverlayMock(seconds: 5 * 60 + 7, background: scnImage,
                          to: base.appendingPathComponent("overlay-minutes.png"))
-    // (c) 장시간 목업 — 12:34:56 (HH:MM:SS). 캡슐 안에 잘림 없이 수납되는지 확인.
+    // (c) 장시간 목업 — 12:34 (HH:MM). 캡슐 안에 잘림 없이 수납되는지 확인.
     try writeOverlayMock(seconds: 12 * 3_600 + 34 * 60 + 56, background: scnImage,
                          to: base.appendingPathComponent("overlay-hours.png"))
 }

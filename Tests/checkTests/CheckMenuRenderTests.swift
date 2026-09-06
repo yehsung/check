@@ -5195,14 +5195,14 @@ func menuBarSpeaksAwayInsteadOfOffWhileTheRestoreWindowIsOpen() {
 
     // 근무 중에도 복원 창은 열려 있을 수 있다 — 자동 시작이 방금 사람을 근무중으로 되돌린 그 순간이다.
     // 그때 표식을 접으면 캐릭터를 끈 사람에게 능동 채널이 0이 되고, 6시간 뒤 그날 오전이 영구 소실된다.
-    // 시계(MM:SS)는 근무 중 가장 많이 읽히는 정보라 살려 두고, 뒤에 점 하나 + 심볼로만 말한다.
+    // 시계(HH:MM — v0.2.43 부터 제목은 항상 시:분)는 근무 중 가장 많이 읽히는 정보라 살려 두고, 뒤에 점 하나 + 심볼로만 말한다.
     let working = WorkStatusSnapshot(status: .working, elapsedSeconds: 84).markingAwayRestorable(true)
-    #expect(MenuBarStatusFormatter.title(for: working) == "01:24•")
+    #expect(MenuBarStatusFormatter.title(for: working) == "00:01•")
     #expect(MenuBarStatusFormatter.symbolName(for: working) == "arrow.uturn.backward.circle.fill")
 
     // 복원 창이 닫혀 있으면 근무 라벨은 한 글자도 달라지지 않는다(38명이 하루 종일 보는 화면이다).
     let plainWorking = WorkStatusSnapshot(status: .working, elapsedSeconds: 84)
-    #expect(MenuBarStatusFormatter.title(for: plainWorking) == "01:24")
+    #expect(MenuBarStatusFormatter.title(for: plainWorking) == "00:01")
     #expect(MenuBarStatusFormatter.symbolName(for: plainWorking) == "figure.run.circle.fill")
 
     // pendingSync 와 같은 얼굴이 되면 두 고장이 구분되지 않는다 — 심볼도 제목도 겹치지 않아야 한다.
@@ -5298,7 +5298,7 @@ func awayMenuBarLabelChangesRealPixelsAndStaysInsideItsWidthBudget() throws {
 @MainActor
 @Test
 func workingMenuBarLabelShowsTheRestoreWindowWithoutHidingTheClock() throws {
-    // ★ title 에는 **스토어의 저장값**(refreshMenuBarTitle 이 만든 순수 MM:SS)을 넣는다. 표식은 라벨이
+    // ★ title 에는 **스토어의 저장값**(refreshMenuBarTitle 이 만든 순수 HH:MM)을 넣는다. 표식은 라벨이
     //   displayTitle 로 얹는 것이 프로덕션 경로다 — 여기에 완성된 문자열을 미리 넣으면 라벨이 표식을
     //   통째로 빠뜨려도 테스트가 초록이 된다.
     func render(_ snapshot: WorkStatusSnapshot, stored: String) throws -> NSBitmapImageRep {
@@ -5315,7 +5315,7 @@ func workingMenuBarLabelShowsTheRestoreWindowWithoutHidingTheClock() throws {
         return bitmap
     }
 
-    // 근무 중 가장 넓어지는 라벨(HH:MM + 표식)로 잰다 — MM:SS 로 재면 예산 초과를 놓친다.
+    // 근무 중 가장 넓어지는 라벨(HH:MM "23:59" + 표식)로 잰다 — 제목은 항상 HH:MM 이라 이것이 최장이다.
     let widest = WorkStatusSnapshot(status: .working, elapsedSeconds: 86_340)
     let plain = try render(widest, stored: MenuBarStatusFormatter.title(for: widest))
     let restorable = try render(widest.markingAwayRestorable(true), stored: MenuBarStatusFormatter.title(for: widest))

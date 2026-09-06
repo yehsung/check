@@ -5,7 +5,11 @@ import Testing
 func workingShowsDotAndElapsedTime() {
     let snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 84)
 
-    #expect(MenuBarStatusFormatter.title(for: snapshot) == "01:24")
+    // v0.2.43: 제목은 항상 시:분이다(84초 → "00:01"). 종전 "01:24"(MM:SS)는 팝오버 안 duration(_:) 에만 남는다.
+    #expect(MenuBarStatusFormatter.title(for: snapshot) == "00:01")
+    #expect(MenuBarStatusFormatter.titleDuration(84) == "00:01")
+    #expect(MenuBarStatusFormatter.titleDuration(3_661) == "01:01")
+    #expect(MenuBarStatusFormatter.duration(84) == "01:24")
     #expect(MenuBarStatusFormatter.symbolName(for: snapshot) == "figure.run.circle.fill")
 }
 

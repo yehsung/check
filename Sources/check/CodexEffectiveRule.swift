@@ -28,8 +28,7 @@ enum CodexEffectiveRule {
     /// 계정 버킷은 몇 시간 늦게 배치로 반영되므로 당일·최근분만큼 로컬이 앞서는 것은 정상이고, 그 정상 창을 결함으로 읽지 않는 여유).
     static let overcountRatio = 1.2
 
-    /// 툴팁 한 줄. 내 박스와 순위판이 같은 리터럴을 쓴다(`TokenUsageMonthly.accountDrivenTotalNote` 와 같은 이유로 한 곳에만 둔다).
-    static let localExceedsAccountNote = "로컬 집계가 계정보다 큼(포크 복사본 의심)"
+    // 진단 문구("로컬 집계가 계정보다 큼(포크 복사본 의심)")는 v0.2.45 에 UI 에서 걷어냈다 — 운영자 진단은 서버 token_scan_health 가 낸다.
 
     /// 로컬 월합이 계정 월합보다 `overcountRatio` 배 넘게 큰가. 계정이 없거나 0 이면 비교 대상이 아니라 false.
     static func localExceedsAccount(local: Int, account: Int?) -> Bool {

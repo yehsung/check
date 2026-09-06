@@ -371,48 +371,20 @@ struct TokenBoardEntry: Identifiable, Equatable {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// 카드에 마우스를 올리면 뜨는 상세(.help). 내 팝오버 행 문구(TokenUsageMonthly.detailTooltip)와 **같은 어휘·같은
-    /// 정밀도**로 쓴다 — 순위판과 내 박스에서 같은 숫자를 다르게 부르면 그 자체가 결함으로 읽힌다. 축약은 캡션 줄에만
-    /// 있고 여기는 grouped 로 1의 자리까지 전부 적는다(캡션의 "196.6억"이 실제로 몇인지 확인하는 유일한 자리).
-    /// 값이 0 인 소스는 통째로 뺀다(기존 관용구와 동일). Codex 입력/출력은 나누지 않는다 — 앱이 델타를 전액
-    /// codexInput 에 담고 codexOutput 은 항상 0 이라, 나눠 봐야 "출력 0"이라는 거짓 정보만 준다.
+    /// 카드에 마우스를 올리면 뜨는 상세(.help): **캡션에 보이는 두 값의 정확한 숫자만** — `Claude 1,562,135,145 · Codex 6,930,295,293`.
+    /// 캡션은 축약(196.6억)이라 정확한 값을 확인하는 자리가 이것뿐이다. Codex 는 `codexEffective`(굵은 총합·캡션과 같은 값). 0 인 쪽은 뺀다.
+    /// 둘 다 0 이면 빈 문자열 — 뷰가 그때 `.help` 자체를 안 건다(tokenBoardRowWiresTheToolMixCaptionAndTooltipToTheEntry).
+    ///
+    /// v0.2.45 에 이렇게 줄였다(사용자 지적 "유저들한테 너무 과하게 다 표시한다"): 그 전엔 Claude 4필드 내역, Codex 로컬/캐시/계정 집계,
+    /// "총합은 계정 집계 기준", 포크 복사본 의심, 하루 축 설명이 한 줄에 실렸다 — 전부 운영자 진단이고, 진단은 서버 `token_scan_health` 가 맡는다.
+    /// 내 박스 툴팁(TokenUsageMonthly.detailTooltip)과 같은 모양.
     var detailTooltip: String {
         var parts: [String] = []
         if claudeTotal > 0 {
-            parts.append(
-                "Claude \(TokenNumberFormatter.grouped(claudeTotal)) "
-                + "(입력 \(TokenNumberFormatter.grouped(claudeInput)) · 출력 \(TokenNumberFormatter.grouped(claudeOutput)) "
-                + "· 캐시읽기 \(TokenNumberFormatter.grouped(claudeCacheRead)) · 캐시생성 \(TokenNumberFormatter.grouped(claudeCacheCreation)))"
-            )
+            parts.append("Claude \(TokenNumberFormatter.grouped(claudeTotal))")
         }
-        // 계정 집계를 아는 행(계정 월합 non-nil, 0 포함)은 **로컬과 계정을 둘 다** 적는다(issue #6 제보자 요구: "툴팁에 계정 집계와
-        // 로컬 집계를 함께 노출"). 로컬 줄에 "로컬 집계" 라벨을 붙이는 것도 그때뿐이다 — 계정을 모르면 Codex 숫자가 하나라
-        // 라벨이 오히려 소음이다(옛 문구 그대로). 어휘·정밀도는 내 박스 툴팁(TokenUsageMonthly.detailTooltip)과 같다.
-        // 계정 월합이 0 이면(이 달 버킷이 아직 없거나 옛 RPC) 계정 줄을 적지 않는다 — "계정 집계 0" 은 사용이 0 이 아니라 반영 전이라는
-        // 뜻이라 오독을 부른다(내 박스 툴팁의 `accountMonth > 0` 게이트와 같다).
-        let accountMonth = codexAccountMonth ?? 0
-        let showsAccount = accountMonth > 0
-        if codexLocalTotal > 0 {
-            parts.append(
-                "Codex \(showsAccount ? "로컬 집계 " : "")\(TokenNumberFormatter.grouped(codexLocalTotal)) "
-                + "(캐시 \(TokenNumberFormatter.grouped(codexCacheRead)))"
-            )
-        }
-        if showsAccount {
-            parts.append("Codex 계정 집계 \(TokenNumberFormatter.grouped(accountMonth))")
-            // 총합에 계정이 쓰였으면 내 박스와 **같은 문구**로 밝힌다 — 이게 없으면 Codex 숫자가 둘 나란히 놓이는데 어느 쪽이
-            // 굵은 총합과 캡션에 쓰였는지 알 길이 없다. 로컬이 계정보다 20% 넘게 크면 진단 한 줄을 더한다(포크 복사본 —
-            // CodexEffectiveRule 머리 주석; 문턱은 서버 진단 token_scan_health 와 같은 1.2).
-            if totalIsAccountDriven {
-                parts.append(TokenUsageMonthly.accountDrivenTotalNote)
-                if CodexEffectiveRule.localExceedsAccount(local: codexLocalTotal, account: accountMonth) {
-                    parts.append(CodexEffectiveRule.localExceedsAccountNote)
-                }
-            }
-        }
-        // Codex 숫자가 하나라도 있으면 하루의 뜻을 맨 끝에 밝힌다 — 내 박스 툴팁·잔디 헤더와 같은 리터럴(v0.2.43, 9시 경계).
-        if codexLocalTotal > 0 || showsAccount {
-            parts.append(TokenUsageMonthly.tokenDayAxisNote)
+        if codexEffective > 0 {
+            parts.append("Codex \(TokenNumberFormatter.grouped(codexEffective))")
         }
         return parts.joined(separator: " · ")
     }

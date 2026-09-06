@@ -61,8 +61,10 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     /// ("Claude 4,280,667,571 (입력 8,458,939 · 출력 9,796,198 · 캐시읽기 4,063,320,273 · 캐시생성 199,092,161) · Codex 145,691,467 (입력 145,068,307 · 출력 623,160 · 캐시 0)").
     var detailTooltip: String { detailTooltip(account: nil) }
 
-    /// 계정 집계까지 붙인 툴팁. 계정 월합이 있으면 `Codex 계정 집계 N (D일까지 반영)` 을 잇고, 그 값이 로컬보다 크면
-    /// 표시 총합에 계정값이 쓰였음을 한 줄로 명시한다(행의 굵은 숫자와 로컬 소계가 왜 다른지 설명하는 자리).
+    /// 계정 집계까지 붙인 툴팁. 이 달 계정 월합이 있으면 로컬 줄에 "로컬 집계" 라벨을 붙이고 `Codex 계정 집계 N (D일까지 반영)`
+    /// 을 이은 뒤, 표시 총합이 계정 기준임을 한 줄로 명시한다(v0.2.43 계정 우선 규칙 — 행의 굵은 숫자와 로컬 소계가 왜 다른지
+    /// 설명하는 자리). 로컬이 계정보다 20% 넘게 크면 진단 한 줄(포크 복사본 의심)을 더한다. 순위판 툴팁(TokenBoardEntry.detailTooltip)과
+    /// 같은 어휘·같은 문구.
     func detailTooltip(account: CodexAccountUsage?) -> String {
         var parts: [String] = []
         if claudeTotal > 0 {
@@ -72,24 +74,23 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
                 + "· 캐시읽기 \(TokenNumberFormatter.grouped(claudeCacheRead)) · 캐시생성 \(TokenNumberFormatter.grouped(claudeCacheCreation)))"
             )
         }
+        let accountMonth = account?.monthTotal(month) ?? 0
         if codexTotal > 0 {
             parts.append(
-                "Codex \(TokenNumberFormatter.grouped(codexTotal)) "
+                "Codex \(accountMonth > 0 ? "로컬 집계 " : "")\(TokenNumberFormatter.grouped(codexTotal)) "
                 + "(입력 \(TokenNumberFormatter.grouped(codexInput)) · 출력 \(TokenNumberFormatter.grouped(codexOutput)) "
                 + "· 캐시 \(TokenNumberFormatter.grouped(codexCacheRead)))"
             )
         }
-        if let account {
-            let accountMonth = account.monthTotal(month)
-            if accountMonth > 0 {
-                var line = "Codex 계정 집계 \(TokenNumberFormatter.grouped(accountMonth))"
-                if let day = account.latestBucketDate(in: month), let dayNumber = Int(day.suffix(2)) {
-                    line += " (\(dayNumber)일까지 반영)"
-                }
-                parts.append(line)
-                if accountMonth > codexTotal {
-                    parts.append(Self.accountDrivenTotalNote)
-                }
+        if let account, accountMonth > 0 {
+            var line = "Codex 계정 집계 \(TokenNumberFormatter.grouped(accountMonth))"
+            if let day = account.latestBucketDate(in: month), let dayNumber = Int(day.suffix(2)) {
+                line += " (\(dayNumber)일까지 반영)"
+            }
+            parts.append(line)
+            parts.append(Self.accountDrivenTotalNote)
+            if CodexEffectiveRule.localExceedsAccount(local: codexTotal, account: accountMonth) {
+                parts.append(CodexEffectiveRule.localExceedsAccountNote)
             }
         }
         // 내 박스 툴팁 끝에 "오늘 +N" 한 줄을 덧붙인다(값이 있을 때만 — 없으면 기존 문구 그대로라 하위 호환).
@@ -1671,8 +1672,8 @@ struct CheckTokenUsageRow: View {
                 .foregroundStyle(CheckTheme.secondaryText)
                 .lineLimit(1)
             Spacer(minLength: 6)
-            // 표시 총합만 계정 집계를 섞는다(TokenUsageDisplay.effectiveTotal). usage.total(업로드값)은 그대로다.
-            Text(TokenNumberFormatter.grouped(TokenUsageDisplay.effectiveTotal(local: usage, accountMonth: accountMonth(for: usage))))
+            // 표시 총합만 계정 집계를 섞는다(TokenUsageDisplay.effectiveTotal — 계정 우선 규칙). usage.total(업로드값)은 그대로다.
+            Text(TokenNumberFormatter.grouped(TokenUsageDisplay.effectiveTotal(local: usage, account: account?.snapshot)))
                 .font(.caption.weight(.bold))
                 .foregroundStyle(CheckTheme.primaryText)
                 .monospacedDigit()

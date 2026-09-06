@@ -9,7 +9,8 @@ import os
 /// 왜 필요한가(issue #6): 로컬 rollout 스캔은 보관(`archived_sessions` 로 rename)·압축(7일 지난 rollout 을 `.zst` 로
 /// 바꾸고 원본 삭제)에서 이번 달 기여를 잃어 계정 집계보다 46% 적게 나온 사례가 있다. 스캐너의 유실은 v0.2.41 에서
 /// 수리했지만(CheckTokenUsage.scanCodex), **이미 `.zst` 만 남은 파일은 어떤 스캐너도 못 읽는다**(macOS SDK 에 zstd 디코더가
-/// 없다). 그 구멍을 계정 집계가 메운다 — 서버 보드는 로컬 합과 계정 월합 중 큰 쪽을 쓴다(20260903160000 마이그레이션).
+/// 없다). 그 구멍을 계정 집계가 메운다 — 서버 보드는 v0.2.43 부터 **계정을 기준**으로 삼고 아직 버킷이 없는 최근 일자만 로컬로
+/// 메운다(20260906120000 마이그레이션, CodexEffectiveRule). v0.2.41 의 `max(로컬, 계정)` 은 포크 복사본으로 부푼 로컬을 골라 버렸다.
 ///
 /// 값의 성질(실측, codex-cli 0.144.1):
 /// - `buckets` 의 날짜는 **UTC 일자**다(로컬 이벤트 델타를 UTC/KST 로 각각 일별 합산해 대조 — UTC 가 3~10% 오차로 일치).
@@ -845,10 +846,22 @@ final class CodexAccountUsageStore {
 // MARK: - 표시 산식 (순수)
 
 /// 내 팝오버 행의 표시 총합. 로컬 6필드 합(`TokenUsageMonthly.total`, 업로드값)은 건드리지 않고, **표시**만
-/// `claudeTotal + max(codexTotal, 계정 월합)` 으로 한다 — 서버 보드가 `greatest(codex_local, codex_account)` 로 하는 것과 같은 규칙이라
-/// 내 행과 순위판의 내 숫자가 어긋나지 않는다.
+/// `claudeTotal + Codex 유효값` 으로 한다. Codex 유효값은 계정 우선 규칙(`CodexEffectiveRule.month`) — 서버 보드 RPC(20260906120000)와
+/// 같은 규칙이라 내 행과 순위판의 내 숫자가 어긋나지 않는다(업로드 지연만큼의 차이는 있다).
 enum TokenUsageDisplay {
-    static func effectiveTotal(local: TokenUsageMonthly, accountMonth: Int?) -> Int {
-        local.claudeTotal + max(local.codexTotal, max(0, accountMonth ?? 0))
+    static func effectiveTotal(local: TokenUsageMonthly, account: CodexAccountUsage?) -> Int {
+        local.claudeTotal + codexEffective(local: local, account: account)
+    }
+
+    /// 이 맥이 아는 것만으로 계산한 Codex 유효값: 로컬 월합·일별 맵(`codexDaily`)과 계정 스냅샷의 이 달 버킷.
+    static func codexEffective(local: TokenUsageMonthly, account: CodexAccountUsage?) -> Int {
+        let lastDay = account?.latestBucketDate(in: local.month)
+        return CodexEffectiveRule.month(
+            localMonth: local.codexTotal,
+            localDaily: local.codexDaily,
+            accountMonth: account.map { $0.monthTotal(local.month) },
+            accountLastDay: lastDay,
+            accountBucketOnLastDay: lastDay.flatMap { account?.buckets[$0] }
+        )
     }
 }

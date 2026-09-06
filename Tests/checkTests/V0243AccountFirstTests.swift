@@ -258,10 +258,12 @@ func migrationContractCodexAccountFirst() throws {
     #expect(!boardBody.contains("greatest(coalesce(d.codex_input"))
     #expect(boardBody.contains("(e.claude_total + e.codex_effective)::bigint as total"))
     #expect(sql.contains("max(d.codex_account_last_day) as account_last_day"))
-    #expect(sql.contains("dd.day > t.account_last_day"))
-    #expect(sql.contains("dd.day = t.account_last_day"))
-    #expect(sql.contains("when t.codex_account is null then t.codex_local"))
-    #expect(sql.contains("when t.account_last_day is null then t.codex_local"))
+    // D1(UTC 축 보강)이 꼬리·마지막 날 서브쿼리를 daily_by_day(별칭 x) 위로 옮기고, "계정 없음"과 "이달 버킷 없음" 분기를
+    // 한 줄로 합쳤다 — 뜻은 같다(둘 다 로컬 전액). 문자열은 마이그레이션 본문과 글자 단위로 같아야 한다.
+    #expect(sql.contains("x.day > t.account_last_day"), "미반영 꼬리(last_day 뒤 날짜)를 로컬로 더하는 서브쿼리가 없다")
+    #expect(sql.contains("x.day = t.account_last_day"), "마지막 버킷 날의 로컬·버킷 차분 서브쿼리가 없다")
+    #expect(sql.contains("when t.codex_account is null or t.account_last_day is null then t.codex_local"),
+            "계정 없음/이달 버킷 없음 → 로컬 전액 분기가 없다")
     #expect(sql.contains("(l.codex_input + l.codex_output)::bigint as codex_effective"))
     // (iii-1) v0.2.43 UTC 축(검토 P1·P0·P2, spec-d §1): 일별 표에 codex_utc_total 을 더하고, 꼬리·마지막 날 차분은 UTC 값을 우선 쓴다.
     //         옛 표(token_usage_monthly) 행 선택은 계정 기준 effective 를 옛 로컬과 견주지 않는다 — 계정이 있으면 기기 행이 이긴다(P0:

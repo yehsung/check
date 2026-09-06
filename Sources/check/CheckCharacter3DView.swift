@@ -1342,19 +1342,14 @@ struct CheckOverlayRootView: View {
     }
 }
 
-/// 오버레이 근무 시간 표기. 1시간 이상은 HH:MM:SS, 미만은 MM:SS.
+/// 오버레이(캐릭터) 근무 시간 표기 — **항상 HH:MM**(초는 내림). 메뉴바 제목과 같은 식(`titleDuration`)이다.
 ///
-/// 1시간 미만 구간은 `MenuBarStatusFormatter.duration`(MM:SS)을 그대로 재사용하고,
-/// 1시간 이상은 초까지 흐르도록 HH:MM:SS로 확장한다(메뉴바 라벨은 HH:MM이라 별도).
+/// v0.2.43 부터 시:분이다(사용자 결정, 배터리 3번). 종전엔 1시간 전 MM:SS·뒤 HH:MM:SS 로 초가 흘렀고, 그 초를 그리려면
+/// 캐릭터가 보이는 근무 내내 1초 틱이 필요했다 — 캐릭터를 켠 사람은 감속이 영영 걸리지 않았다. 이제 초를 보이는
+/// 표면은 열린 팝오버뿐이라, 팝오버가 닫히면 티커가 분 경계 60초로 내려가고 이 라벨은 그 틱에 맞춰 분이 바뀌는
+/// 순간 갱신된다(WorkTimerStore.nextTickDelay · V0243MinuteTickTests). 폭은 종전 MM:SS 와 같은 5글자다.
 enum CheckOverlayTimeFormatter {
     static func text(_ seconds: Int) -> String {
-        let safe = max(0, seconds)
-        guard safe >= 3_600 else {
-            return MenuBarStatusFormatter.duration(safe)
-        }
-        let hours = safe / 3_600
-        let minutes = (safe % 3_600) / 60
-        let secs = safe % 60
-        return String(format: "%02d:%02d:%02d", hours, minutes, secs)
+        MenuBarStatusFormatter.titleDuration(seconds)
     }
 }

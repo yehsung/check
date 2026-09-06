@@ -1280,28 +1280,44 @@ final class WorkTimerStore {
 
     /// 근무 틱에서 호출. 12시간 도달 시 확인 배너를 띄우고, 배너 노출 후 30분 무응답이면 12시간 시점으로 마감한다.
     func evaluateLongSession(now: Date) {
-        // 흡수 세션의 '12시간'은 남의 맥이 잰 시간이다. autoStop 이 이미 막지만 여기서도 선두에서 끊는 이유는
-        // **배너** 때문이다 — 마감만 막으면 확인 배너가 뜨고, 사용자가 [네, 근무 중이에요] 를 눌러 앵커를
-        // 지금으로 되돌려도 그 세션은 여전히 남의 것이라 30분마다 되풀이되는 유령 배너가 된다.
-        guard !adoptedRemoteSession else { return }
-        guard startedAt != nil, let anchor = longSessionAnchor else { return }
-
-        if isLongSessionPromptActive {
-            guard let promptShownAt, now.timeIntervalSince(promptShownAt) > Self.longSessionResponseWindowSeconds else {
-                return
-            }
+        switch longSessionPhase() {
+        case nil:
+            return
+        case .promptOpen(let shownAt):
+            guard now.timeIntervalSince(shownAt) > Self.longSessionResponseWindowSeconds else { return }
+            // 앵커는 phase 가 있으면 반드시 있다(longSessionPhase 의 가드) — 마감 시각은 앵커 + 12시간이다.
+            guard let anchor = longSessionAnchor else { return }
             autoStop(
                 endedAt: anchor.addingTimeInterval(Self.longSessionThresholdSeconds),
                 message: "장시간 미확인으로 자동 근무종료됨",
                 reason: .longSession
             )
-            return
+        case .countingDown(let anchor):
+            if now.timeIntervalSince(anchor) > Self.longSessionThresholdSeconds {
+                isLongSessionPromptActive = true
+                promptShownAt = now
+            }
         }
+    }
 
-        if now.timeIntervalSince(anchor) > Self.longSessionThresholdSeconds {
-            isLongSessionPromptActive = true
-            promptShownAt = now
+    /// 장기근무 판정의 국면. 12시간을 세는 중(`countingDown`)이거나 확인 배너가 떠 있어 30분 응답 창을 세는 중(`promptOpen`).
+    enum LongSessionPhase: Equatable {
+        case countingDown(anchor: Date)
+        case promptOpen(shownAt: Date)
+    }
+
+    /// evaluateLongSession(판정)과 longSessionDeadline(감속 틱의 깨움 시각)이 함께 읽는 **하나의 가드**.
+    /// 흡수 세션의 '12시간'은 남의 맥이 잰 시간이다. autoStop 이 이미 막지만 여기서도 선두에서 끊는 이유는 **배너**
+    /// 때문이다 — 마감만 막으면 확인 배너가 뜨고, 사용자가 [네, 근무 중이에요] 를 눌러 앵커를 지금으로 되돌려도 그 세션은
+    /// 여전히 남의 것이라 30분마다 되풀이되는 유령 배너가 된다. 배너가 떠 있는데 표시 시각이 없으면(방어) nil — 아무것도 안 한다.
+    func longSessionPhase() -> LongSessionPhase? {
+        guard !adoptedRemoteSession else { return nil }
+        guard startedAt != nil, let anchor = longSessionAnchor else { return nil }
+        if isLongSessionPromptActive {
+            guard let promptShownAt else { return nil }
+            return .promptOpen(shownAt: promptShownAt)
         }
+        return .countingDown(anchor: anchor)
     }
 
     /// 배너의 "네, 근무 중이에요" 액션. 배너를 닫고 12시간 카운터를 지금부터 다시 시작한다.
@@ -1361,19 +1377,27 @@ final class WorkTimerStore {
     ///     이게 없으면 0초 세션이 만들어져 그 근무가 통째로 사라진다.
     ///  6. 경계는 **배타적**이다(정확히 임계면 마감하지 않는다 — 서버 부등호와 같게 맞춘다).
     func evaluateAwaySession(now: Date) {
-        guard !adoptedRemoteSession else { return }
-        guard startedAt != nil else { return }
-        guard let policy = awayPolicy else { return }
-        guard let open = awayOpenSession, open.closeEligible else { return }
+        guard let schedule = awayCloseSchedule() else { return }
+        guard now.timeIntervalSince(schedule.lastInput) > schedule.threshold else { return }
+        autoStop(endedAt: schedule.lastInput, message: "자리 비움으로 자동 근무종료됨", reason: .away)
+    }
+
+    /// 부재 마감의 재료(기준 시각·임계) — 위 여섯 가드를 **전부** 통과할 때만 값이 있다. evaluateAwaySession(판정)과
+    /// awayCloseDeadline(감속 틱의 깨움 시각)이 둘 다 이것을 읽는다: 가드가 한 곳에 있어야 "깨우긴 했는데 판정이 다른
+    /// 가드에 막힌다" 또는 "판정은 되는데 깨우지 않아 최대 60초 늦는다"가 구조적으로 불가능하다.
+    func awayCloseSchedule() -> (lastInput: Date, threshold: TimeInterval)? {
+        guard !adoptedRemoteSession else { return nil }
+        guard startedAt != nil else { return nil }
+        guard let policy = awayPolicy else { return nil }
+        guard let open = awayOpenSession, open.closeEligible else { return nil }
         guard let localSessionID = Self.canonicalSessionID(currentSessionID),
               Self.canonicalSessionID(open.sessionID) == localSessionID
         else {
-            return
+            return nil
         }
-        guard let lastInput = awayLastInputAt() else { return }
-        guard let sessionStart = startedAt, sessionStart <= lastInput else { return }
-        guard now.timeIntervalSince(lastInput) > policy.closeThresholdSeconds else { return }
-        autoStop(endedAt: lastInput, message: "자리 비움으로 자동 근무종료됨", reason: .away)
+        guard let lastInput = awayLastInputAt() else { return nil }
+        guard let sessionStart = startedAt, sessionStart <= lastInput else { return nil }
+        return (lastInput, policy.closeThresholdSeconds)
     }
 
     /// 자동 시작(넛지)이 발화하는 **바로 그 순간** — 이 앱에서 "돌아왔다"가 확실한 유일한 사건이다.
@@ -1713,8 +1737,9 @@ final class WorkTimerStore {
         tickerTask?.cancel()
         tickerTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                // 주기는 매 반복 앞에서 다시 정한다: 평소 1초, 표시 없는 근무가 1시간 넘게 이어지면 60초(분 경계 정렬).
-                // 표시값은 wall-clock(clock()) 파생이라 주기가 얼마든 누적 오차가 없다 — tolerance 로 웨이크업을 병합해도 안전하다.
+                // 주기는 매 반복 앞에서 다시 정한다: 팝오버가 열려 있으면 1초, 닫힌 지 1분이 지나면 분 경계·다음 마감 중
+                // 이른 쪽(1…60초). 표시값은 wall-clock(clock()) 파생이라 주기가 얼마든 누적 오차가 없다 — tolerance 로
+                // 웨이크업을 병합해도 안전하다(마감은 ceil 로 잡아 tolerance 만큼 늦어져도 마감을 지난 뒤 깨운다).
                 guard let delay = self?.armNextTickDelay() else { return }
                 try? await Task.sleep(for: .seconds(delay), tolerance: .milliseconds(200))
                 // 스토어가 해제됐으면 루프를 빠져나간다 — weak self 라 tick 는 no-op 이 되지만 루프 자체는 계속
@@ -1735,27 +1760,38 @@ final class WorkTimerStore {
         }
         tickerTask?.cancel()
         tickerTask = nil
-        // 티커가 서면 감속 장부도 접는다 — 다음 근무의 '표시 없는 1시간'은 처음부터 다시 센다.
+        // 티커가 서면 감속 장부도 접는다 — 다음 근무의 '팝오버 닫힌 1분' 유예는 처음부터 다시 센다.
         displayIdleSince = nil
         currentTickDelay = 1
     }
 
     // MARK: - 티커 감속 (v0.2.38 M1 덤)
 
-    /// 표시 없는 근무(오버레이 시계 안 보임 + 팝오버 닫힘)가 이 시간(초) 넘게 이어지면 티커를 감속한다.
-    static let tickerSlowdownAfterSeconds: TimeInterval = 3600
-    /// 감속 주기(초). 메뉴바 라벨이 분 단위(HH:MM)인 동안만 쓰이므로 사용자가 보는 것은 바뀌지 않는다.
+    /// 초 표시 화면(열린 팝오버)이 없어진 뒤 이 시간(초)이 지나면 티커를 감속한다.
+    ///
+    /// v0.2.43: 3600 → 60. 감속은 보이는 값에 영향이 없다 — 메뉴바 제목·캐릭터 라벨이 시:분이라 초를 보이는 표면이
+    /// 팝오버뿐이고, 팝오버를 열면 `restoreTickerCadenceIfSlowed` 가 즉시 1초로 되돌린다. 그래서 긴 유예의 이유가 없고,
+    /// 1분은 팝오버를 여닫는 짧은 흔들림에 티커 태스크를 재생성하지 않기 위한 최소 디바운스다(배터리 3번).
+    static let tickerSlowdownAfterSeconds: TimeInterval = 60
+    /// 감속 주기(초). 두 상시 표면이 분 단위(HH:MM)라 사용자가 보는 것은 바뀌지 않는다 — 분 경계에 정렬해 깨운다.
     static let slowTickIntervalSeconds: TimeInterval = 60
 
-    /// 표시 없는 상태(팝오버 닫힘 && 오버레이 시계 안 보임)가 시작된 시각. 티커가 매 틱 갱신하고, 표시가 생기면 nil.
+    /// 초 표시 화면이 없어진 시각(= 팝오버가 닫힌 채로 흐른 시작점). 티커가 매 틱 갱신하고, 팝오버가 열리면 nil.
     @ObservationIgnored var displayIdleSince: Date?
     /// 티커가 마지막으로 정한 주기(초). 1 = 평소, 그 밖 = 감속 중(분 경계 정렬로 1…60). 관찰 대상 아님.
     @ObservationIgnored var currentTickDelay: TimeInterval = 1
 
-    /// 오버레이 시계가 보이는가(= overlayNow 를 매초 대입할 이유가 있는가). 패널 자체의 표시 판정(CheckOverlayWindow)은
+    /// 오버레이 시계가 보이는가(= 틱마다 overlayNow 를 대입할 이유가 있는가). 패널 자체의 표시 판정(CheckOverlayWindow)은
     /// 여기서 모른다 — 스토어가 아는 두 사실(토글·근무 중)만으로 판정한다. 그 둘이 참인데 패널이 다른 이유로 숨어 있는
     /// 창(전체화면 등)은 짧고, 그동안의 비용은 예전과 같다.
+    /// v0.2.43 부터 이 값은 **감속 판정에 들어가지 않는다** — 캐릭터 라벨이 시:분이라 초를 보일 이유가 없고, 60초 틱에서도
+    /// 매 틱 대입되므로 분이 바뀌는 순간 라벨이 바뀐다(secondsSurfaceVisible 참조).
     var overlayClockIsShowing: Bool { isOverlayEnabled && startedAt != nil }
+
+    /// **초를 보여 주는 표면이 지금 보이는가.** 시:분 시계(메뉴바 제목·캐릭터 라벨) 체제에서 초가 흐르는 곳은 열린
+    /// 팝오버 하나뿐이다 — 오늘 시계(`MenuBarStatusFormatter.duration`, MM:SS)와 콕찌르기 쿨타임 카운트다운이 거기 있다.
+    /// 감속의 유일한 게이트다(nextTickDelay). 오버레이는 들어가지 않는다(overlayClockIsShowing 주석).
+    var secondsSurfaceVisible: Bool { isMenuPresented }
 
     /// 다음 틱까지 잘 시간(초). 티커 루프가 매 반복 앞에서 부른다(currentTickDelay 장부 갱신 포함).
     func armNextTickDelay() -> TimeInterval {
@@ -1764,33 +1800,89 @@ final class WorkTimerStore {
         return delay
     }
 
-    /// 감속 판정 + 분 경계 정렬. 순수 함수(장부는 건드리지 않는다) — 테스트가 직접 부른다.
+    /// 감속 판정 + 분 경계 정렬 + 마감 정밀 깨움. 순수 함수(장부는 건드리지 않는다) — 테스트가 직접 부른다.
     ///
-    /// 감속 조건 셋(전부 참일 때만 60초):
+    /// 감속 조건 둘(전부 참일 때만 60초 이하):
     ///  1. 근무 중(티커가 도는 이유가 근무일 때만 — 팀원 초침 때문에 도는 티커는 팝오버가 열려 있어 애초에 제외),
-    ///  2. 팝오버 닫힘 && 오버레이 시계 안 보임이 **1시간 넘게** 이어졌다(displayIdleSince),
-    ///  3. 메뉴바 라벨이 분 단위다 — MenuBarStatusFormatter.duration 은 1시간 미만을 MM:SS 로 그리므로 그동안은
-    ///     초침이 라벨에 보인다. 임계를 여기서 다시 선언하지 않고 포맷터 결과로 판정한다(출처 하나).
+    ///  2. 초 표시 화면(열린 팝오버)이 없어진 지 **1분 넘게** 지났다(displayIdleSince).
+    /// 종전 조건 "오버레이 시계 안 보임 · 메뉴바 라벨이 분 단위 · 1시간 유예"는 v0.2.43 에 사라졌다 — 두 상시 표면이
+    /// 시:분이 되면서 초를 보이는 곳이 팝오버뿐이라, 캐릭터를 켠 사람도 근무 첫 1분부터 감속한다(배터리 3번).
+    ///
+    /// 감속 시 지연 = min(분 경계까지, 다음 마감까지), [1, 60] 클램프:
+    ///  · 분 경계: `60 − today % 60` — HH:MM 이 실제 분 넘김보다 늦게 바뀌지 않게(정렬 뒤로는 60초 간격).
+    ///  · 마감: 마일스톤(1h/4h/랩)·부재 마감·장기근무 확인/마감·유예형 배너 만료 중 가장 이른 것(nextTickDeadline).
+    ///    분 경계보다 앞서면 **그 시각에** 깨워 판정한다 — 감속이 늦춰도 되는 것은 판정 시점뿐이지 사건 시각이 아니다.
+    ///    마감 계산은 evaluate* 가 쓰는 같은 가드·같은 상수에서 나온다(awayCloseSchedule · longSessionPhase ·
+    ///    nextMilestoneDeadline). 이미 지난 마감(≤ now)은 1 — 다음 틱이 곧바로 판정한다.
     /// 근무 기록 정확성은 주기와 무관하다: 시각은 항상 clock() 이고 todayDuration(at:)·자동 마감 시각은 관측 시각이
-    /// 아니라 사건 시각(마지막 입력·12시간 앵커)에서 계산된다. 감속이 늦추는 것은 **판정 시점**뿐이다(≤60초).
+    /// 아니라 사건 시각(마지막 입력·12시간 앵커)에서 계산된다.
     func nextTickDelay(now: Date) -> TimeInterval {
-        guard startedAt != nil, !isMenuPresented, !overlayClockIsShowing,
+        guard startedAt != nil, !secondsSurfaceVisible,
               let since = displayIdleSince,
               now.timeIntervalSince(since) >= Self.tickerSlowdownAfterSeconds
         else { return 1 }
+        return slowTickDelay(now: now)
+    }
+
+    /// 감속 중 다음 틱까지의 지연(초) — 분 경계와 다음 마감 중 이른 쪽, [1, 60] 클램프. nextTickDelay 의 게이트를 지난 뒤에만 뜻이 있다.
+    func slowTickDelay(now: Date) -> TimeInterval {
         let today = todayDuration(at: now)
-        guard Self.menuBarLabelIsMinuteGranular(seconds: today) else { return 1 }
-        // 분 경계에 맞춰 깨운다 — HH:MM 이 실제 분 넘김보다 늦게 바뀌지 않게(정렬 뒤로는 정확히 60초 간격).
-        return Self.slowTickIntervalSeconds - TimeInterval(today % 60)
+        let minuteBoundary = Self.slowTickIntervalSeconds - TimeInterval(today % 60)
+        guard let deadline = nextTickDeadline(now: now) else { return minuteBoundary }
+        let remaining = deadline.timeIntervalSince(now)
+        // 이미 지난(또는 정각인) 마감은 다음 틱에서 곧바로 판정한다 — evaluate* 의 부등호가 `>` 라 정각에는 발화하지
+        // 않으므로 1초 뒤 틱이 그것을 발화시킨다. 아직 남았으면 올림해 마감을 **지나서** 깨운다.
+        guard remaining > 0 else { return 1 }
+        return min(minuteBoundary, max(1, ceil(remaining)))
     }
 
-    /// 메뉴바 라벨이 이 누적값의 분 안에서 초를 보이지 않는가. 같은 분의 두 시각(정각·+30초)이 같은 문자열이면 분 단위다.
-    static func menuBarLabelIsMinuteGranular(seconds: Int) -> Bool {
-        let minuteStart = seconds - seconds % 60
-        return MenuBarStatusFormatter.duration(minuteStart) == MenuBarStatusFormatter.duration(minuteStart + 30)
+    /// 감속 틱이 놓치면 안 되는 **가장 이른 마감**. 후보가 하나도 없으면 nil(분 경계만 본다).
+    func nextTickDeadline(now: Date) -> Date? {
+        [nextMilestoneDeadline(now: now), awayCloseDeadline(), longSessionDeadline(), timedBannerDeadline(now: now)]
+            .compactMap { $0 }
+            .min()
     }
 
-    /// 표시 조건이 다시 생겼다(팝오버 열림·오버레이 켜짐). 감속 중이던 티커를 즉시 1초 주기로 되돌린다.
+    /// 다음 마일스톤 시각. 후보는 evaluateTimeMilestones 가 보는 발화 지점 그대로다 — 1시간·4시간, 그리고 다음 랩 경계
+    /// `(today / missionWorkSeconds + 1) · missionWorkSeconds`(목표가 양수일 때). 오늘 누적을 넘긴 것만 남기고 가장 이른 것.
+    /// 서버 목표가 60의 배수가 아니면(예: 10,000초) 랩 경계가 분 경계 사이에 오므로 이 후보가 실제로 분 경계를 앞선다.
+    func nextMilestoneDeadline(now: Date) -> Date? {
+        guard startedAt != nil else { return nil }
+        let today = todayDuration(at: now)
+        var candidates = [Self.milestoneHourOneSeconds, Self.milestoneHourFourSeconds]
+        if missionWorkSeconds > 0 {
+            candidates.append((today / missionWorkSeconds + 1) * missionWorkSeconds)
+        }
+        guard let next = candidates.filter({ $0 > today }).min() else { return nil }
+        return now.addingTimeInterval(TimeInterval(next - today))
+    }
+    /// evaluateTimeMilestones 의 1시간/4시간 발화 임계(초). 여기 한 곳에서 두 소비자(판정·깨움)가 같은 값을 읽는다.
+    static let milestoneHourOneSeconds = 3_600
+    static let milestoneHourFourSeconds = 4 * 3_600
+
+    /// 부재 마감 시각 = 마지막 입력 + 서버 임계. evaluateAwaySession 과 **같은 가드**(awayCloseSchedule)를 통과할 때만 값이 있다.
+    func awayCloseDeadline() -> Date? {
+        guard let schedule = awayCloseSchedule() else { return nil }
+        return schedule.lastInput.addingTimeInterval(schedule.threshold)
+    }
+
+    /// 장기근무 마감 시각. 확인 배너가 떠 있으면 응답 창 만료, 아니면 앵커 + 12시간 — evaluateLongSession 과 같은 국면(longSessionPhase).
+    func longSessionDeadline() -> Date? {
+        switch longSessionPhase() {
+        case .countingDown(let anchor): return anchor.addingTimeInterval(Self.longSessionThresholdSeconds)
+        case .promptOpen(let shownAt): return shownAt.addingTimeInterval(Self.longSessionResponseWindowSeconds)
+        case nil: return nil
+        }
+    }
+
+    /// 유예형 배너의 만료 시각(refreshTimedBanner 가 보는 그 창). 지금은 되돌리기 배너 하나뿐이고, 그 배너는 비근무에서만
+    /// 살아 있어 근무 중 감속 틱이 이 값을 볼 일은 사실상 없다 — 그래도 배너 종류가 늘 때 티커가 조용히 늦어지지 않게 여기 둔다.
+    func timedBannerDeadline(now: Date) -> Date? {
+        guard canUndoAutoClose(now: now), let closedAt = lastAutoClosedAt else { return nil }
+        return closedAt.addingTimeInterval(Self.autoCloseUndoWindowSeconds)
+    }
+
+    /// 초 표시 화면이 다시 생겼다(팝오버 열림). 감속 중이던 티커를 즉시 1초 주기로 되돌린다.
     /// 감속 중이 아니면 티커를 건드리지 않는다 — 재시작은 첫 틱을 1초 미루므로 헛재시작은 초침을 한 번 멈칫하게 한다.
     func restoreTickerCadenceIfSlowed() {
         displayIdleSince = nil
@@ -1926,9 +2018,11 @@ final class WorkTimerStore {
         //   @Observable 은 대입 자체가 관찰자를 깨우므로, 보이지 않는 표면의 시계를 건드리는 것이 곧 그 표면의
         //   매초 재평가다(닫힌 팝오버의 CheckMenuView 트리는 상주한다). 아래 정책·라벨은 전부 `now`(clock) 로 판정한다.
         if isMenuPresented { displayNow = now }
+        // 오버레이 시계는 감속 틱(60초)에서도 매 틱 대입한다 — 시:분 라벨은 분 경계 틱에 맞춰 그 순간 바뀐다.
         if overlayClockIsShowing { overlayNow = now }
-        // 감속 장부: 표시 없는 상태의 시작 시각(nextTickDelay 가 1시간 경과를 이 값으로 잰다).
-        if !isMenuPresented, !overlayClockIsShowing {
+        // 감속 장부: 초 표시 화면(열린 팝오버)이 없어진 시각(nextTickDelay 가 1분 유예를 이 값으로 잰다).
+        // 오버레이는 보지 않는다 — 캐릭터 라벨이 시:분이라 초를 보일 이유가 없다(secondsSurfaceVisible).
+        if !secondsSurfaceVisible {
             if displayIdleSince == nil { displayIdleSince = now }
         } else if displayIdleSince != nil {
             displayIdleSince = nil
@@ -1976,13 +2070,14 @@ final class WorkTimerStore {
     func evaluateTimeMilestones(now: Date) {
         guard startedAt != nil else { return }
         // 인자 시각 기준이다(팝오버 시계가 아니라) — 닫힌 팝오버에서도 1h/3h/4h 가 제시각에 발화해야 한다(M1).
+        // 임계 상수는 nextMilestoneDeadline(감속 틱의 깨움 시각)과 공유한다 — 여기서 숫자를 다시 쓰면 둘이 갈린다.
         let today = todayDuration(at: now)
-        if today >= 4 * 3_600 {
+        if today >= Self.milestoneHourFourSeconds {
             if milestoneTracker.fireIfNeeded(MilestoneTracker.hourFourKey, now: now) {
                 onReactionTrigger?(.milestone)
             }
             _ = milestoneTracker.fireIfNeeded(MilestoneTracker.hourOneKey, now: now)
-        } else if today >= 3_600 {
+        } else if today >= Self.milestoneHourOneSeconds {
             if milestoneTracker.fireIfNeeded(MilestoneTracker.hourOneKey, now: now) {
                 onReactionTrigger?(.milestone)
             }
@@ -2068,10 +2163,11 @@ extension WorkTimerStore {
     func setOverlayEnabled(_ enabled: Bool) {
         isOverlayEnabled = enabled
         defaults.set(enabled, forKey: Self.overlayEnabledKey)
-        // 켜는 순간 오버레이 시계를 지금으로 맞추고(첫 그림이 낡은 시계로 그려지지 않게), 감속 중이던 티커를 되돌린다(M1).
-        if enabled {
-            if startedAt != nil { overlayNow = clock() }
-            restoreTickerCadenceIfSlowed()
+        // 켜는 순간 오버레이 시계를 지금으로 맞춘다(첫 그림이 낡은 시계로 그려지지 않게). 티커 케이던스는 건드리지 않는다 —
+        // v0.2.43 부터 캐릭터 라벨은 시:분이라 초를 보일 이유가 없고, 감속 틱도 매 틱 overlayNow 를 대입해 분 경계에서
+        // 라벨이 바뀐다(종전엔 여기서 restoreTickerCadenceIfSlowed 를 불러 1초로 되돌렸다 — 헛되이 1분간 초 틱이 돌았다).
+        if enabled, startedAt != nil {
+            overlayNow = clock()
         }
     }
 

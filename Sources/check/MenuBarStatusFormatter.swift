@@ -84,7 +84,7 @@ enum MenuBarStatusFormatter {
 
     /// 근무 중 경과 시간 뒤에 붙는 표식 한 점.
     ///
-    /// 근무 중 메뉴바에서 가장 많이 읽히는 정보는 MM:SS 다 — 제목을 "자리비움"으로 갈아치우면 시계가
+    /// 근무 중 메뉴바에서 가장 많이 읽히는 정보는 HH:MM 시계다 — 제목을 "자리비움"으로 갈아치우면 시계가
     /// 사라져, 되살릴 시간을 알리려다 매일 보는 화면을 망가뜨린다. 그렇다고 심볼만 바꾸면 **글자는
     /// 평소와 한 픽셀도 같아서** 숫자만 흘깃 보는 사람(=대부분)은 그냥 지나간다. 그래서 시계는 살리고
     /// 뒤에 점 하나를 더한다 — 표식 목적은 예쁜 상태 표시가 아니라 "팝오버를 열어 보게 만드는 것"이다.
@@ -110,7 +110,9 @@ enum MenuBarStatusFormatter {
         case .working:
             // 근무 중에도 복원 창은 열려 있을 수 있다 — 자동 시작이 방금 사람을 `.working` 으로 되돌린
             // 그 순간이 바로 그렇다. 여기서 표식을 접으면 돌아온 사람에게 능동 채널이 0이 된다.
-            return markingRestorable(duration(snapshot.elapsedSeconds), snapshot.isAwayRestorable)
+            // 제목은 **항상 시:분**(titleDuration)이다 — duration(MM:SS) 을 쓰면 첫 1시간 동안 초가 보여
+            // 티커를 1초로 묶는다(v0.2.43 배터리 3번, 사용자 결정).
+            return markingRestorable(titleDuration(snapshot.elapsedSeconds), snapshot.isAwayRestorable)
         case .offWork:
             return snapshot.isAwayRestorable ? awayTitle : "오프"
         }
@@ -145,6 +147,20 @@ enum MenuBarStatusFormatter {
         return title(for: snapshot)
     }
 
+    /// **메뉴바 제목·캐릭터 라벨 전용** 근무 시간 표기 — 항상 `HH:MM`(초는 내림). 5분 → "00:05", 1시간 23분 → "01:23".
+    ///
+    /// v0.2.43 부터 시:분이다(사용자 결정, 배터리 3번). 두 상시 표면(메뉴바·캐릭터)이 초를 보이지 않아야 팝오버가 닫힌
+    /// 동안 티커를 분 경계 60초로 늦출 수 있다 — 첫 1시간에 MM:SS 를 남겨 두면 그 시간 내내 1초 틱이 필요해 감속의
+    /// 뜻이 없다(WorkTimerStore.nextTickDelay). 팝오버 **안**의 오늘 시계·팀원 "현재 …" 는 여전히 `duration` 이다.
+    static func titleDuration(_ seconds: Int) -> String {
+        let safeSeconds = max(0, seconds)
+        let hours = safeSeconds / 3600
+        let minutes = (safeSeconds % 3600) / 60
+        return String(format: "%02d:%02d", hours, minutes)
+    }
+
+    /// 팝오버 안 근무 시간 표기 — 1시간 미만 MM:SS(초가 흐른다), 이상 HH:MM. 팝오버 오늘 시계(displayNow 로 매초)와
+    /// 팀원 목록 "현재 …" 가 쓴다. 메뉴바 제목은 이 함수가 아니라 `titleDuration` 이다(위 주석).
     static func duration(_ seconds: Int) -> String {
         let safeSeconds = max(0, seconds)
         let hours = safeSeconds / 3600

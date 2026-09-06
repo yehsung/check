@@ -252,14 +252,14 @@ func forkRuleParsesTimestampsAndMarkers() {
     #expect(!CodexForkRule.hasForkMarker(nullMarker))
     #expect(CodexForkRule.isSessionMeta(own) && !CodexForkRule.isSessionMeta(notMeta))
 
-    // 추적기: 첫 줄의 자기 메타에 표식이 있으면 마감 = 그 줄 시각 + 5s. 표식이 없으면 두 번째 메타가 자기 메타 시각으로 마감을 세운다.
+    // 추적기: 오프셋 0 파싱의 첫 session_meta 가 자기 메타 — 표식이 있으면 마감 = 그 줄 시각 + 5s. 표식이 없으면 두 번째 메타가
+    // 자기 메타 시각으로 마감을 세운다.
     var t = CodexForkTracker(startedAtZero: true, deadlineMicros: 0)
     t.observeSessionMeta(["type": "session_meta", "timestamp": "2026-09-06T05:35:27.622Z", "payload": ["id": "c", "forked_from_id": "p"]])
     #expect(t.deadlineMicros == 1_788_672_927_622_000 + 5_000_000)
     var u = CodexForkTracker(startedAtZero: true, deadlineMicros: 0)
     u.observeSessionMeta(["type": "session_meta", "timestamp": "2026-09-06T05:35:27.622Z", "payload": ["id": "c"]])
     #expect(u.deadlineMicros == 0)
-    u.linesSeen = 1
     u.observeSessionMeta(["type": "session_meta", "timestamp": "2026-09-06T05:35:27.749Z", "payload": ["id": "p"]])
     #expect(u.deadlineMicros == 1_788_672_927_622_000 + 5_000_000)   // 자기 메타 시각 기준(복사 메타 시각이 아니라)
     #expect(u.isCopy(eventTimestamp: "2026-09-06T05:35:32.622Z"))

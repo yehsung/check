@@ -334,7 +334,6 @@ enum CodexUsageDiagnosticsScanner {
 
         /// 한 라인을 파싱해 상태에 반영한다. 프로덕션 Codex 경로와 같은 순서·같은 스킵 규약.
         func ingest(_ line: UnsafeRawBufferPointer) {
-            defer { fork.linesSeen += 1 }
             // 포크 판정(프로덕션 미러): 파일 머리의 session_meta 만 본다 — type 으로 확정하고 표식의 유무·라인 시각만 읽는다.
             if contains(line, CodexForkRule.sessionMetaPattern),
                let base = line.baseAddress,

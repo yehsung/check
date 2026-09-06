@@ -658,15 +658,16 @@ enum CodexForkRule {
     }
 }
 
-/// 한 파일을 읽는 동안의 포크 판정 상태(값 타입, 파일마다 새로). 오프셋 0 파싱이면 첫 줄이 자기 메타이고, 이어읽기면 캐시의 마감을
-/// 물려받는다(startedAtZero = false — 그때 만나는 session_meta 는 전부 복사된 부모 메타다).
+/// 한 파일을 읽는 동안의 포크 판정 상태(값 타입, 파일마다 새로). 오프셋 0 파싱이면 **처음 만나는** session_meta 가 자기 메타이고
+/// 그 뒤의 session_meta 는 전부 복사된 부모 메타다. 이어읽기면 캐시의 마감을 물려받고(startedAtZero = false) 그때 만나는
+/// session_meta 는 전부 복사된 부모 메타다(자기 메타는 첫 파싱에서 이미 지나갔다).
 struct CodexForkTracker {
-    /// 이번 읽기가 파일 첫 줄부터인가(그 첫 줄만 "자기 메타"다).
+    /// 이번 읽기가 파일 첫 줄부터인가(그 읽기의 첫 session_meta 만 "자기 메타"다).
     let startedAtZero: Bool
     /// 복사 구간 마감(UTC 마이크로초). 0 = 포크 아님(또는 아직 판정 전).
     private(set) var deadlineMicros: Int
-    /// 이번 읽기에서 지금까지 넘겨받은 라인 수(종류 무관). 호출측이 라인마다 올린다.
-    var linesSeen = 0
+    /// 이번 읽기에서 자기 메타를 이미 봤는가.
+    private var ownMetaSeen = false
     /// 자기 메타의 라인 시각(마이크로초). 두 번째 메타로 포크가 확정될 때 마감의 기준이 된다.
     private var ownMetaMicros: Int?
 
@@ -675,11 +676,12 @@ struct CodexForkTracker {
         self.deadlineMicros = deadlineMicros
     }
 
-    /// session_meta 라인을 반영한다. 첫 줄(오프셋 0 파싱의 0번 라인)이면 자기 메타 — 표식이 있으면 마감을 세운다.
-    /// 그 밖의 자리면 복사된 부모 메타 — 마감이 아직 없으면 자기 메타 시각(없으면 이 줄의 시각)으로 세운다.
+    /// session_meta 라인을 반영한다. 오프셋 0 파싱의 첫 session_meta 면 자기 메타 — 표식이 있으면 마감을 세운다.
+    /// 그 밖의 session_meta 는 복사된 부모 메타 — 마감이 아직 없으면 자기 메타 시각(없으면 이 줄의 시각)으로 세운다.
     mutating func observeSessionMeta(_ object: [String: Any]) {
         let lineMicros = (object["timestamp"] as? String).flatMap(CodexForkRule.timestampMicros(fromTimestamp:))
-        if startedAtZero, linesSeen == 0 {
+        if startedAtZero, !ownMetaSeen {
+            ownMetaSeen = true
             ownMetaMicros = lineMicros
             if CodexForkRule.hasForkMarker(object), let t0 = lineMicros {
                 deadlineMicros = t0 + CodexForkRule.copyWindowMicros
@@ -1242,7 +1244,6 @@ enum TokenUsageIncrementalScanner {
             }
 
             guard let read = readTail(at: f.url, from: startOffset, { line in
-                defer { fork.linesSeen += 1 }
                 // 포크 표식은 파일 머리의 session_meta 에 있다(자기 메타의 forked_from_id / 두 번째 메타 = 복사된 부모 메타).
                 // 프리체크 바이트 패턴만으로는 본문에 그 낱말이 든 메시지 라인도 걸리므로 type 으로 확정한다. 읽는 필드는
                 // type · forked_from_id/parent_thread_id 의 유무 · 라인 timestamp 뿐이고 어떤 값도 보관하지 않는다(프라이버시 규약).

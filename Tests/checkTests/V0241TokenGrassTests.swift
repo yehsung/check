@@ -861,10 +861,10 @@ func sourceContractDailyUploadSitsAfterTheMonthlyUpsert() throws {
     #expect(sync.contains("|| dailyDue"), "월간 변경 게이트가 일별 재시도/재기준을 보지 않는다 — 재시도가 영영 안 온다")
     #expect(sync.contains("tokenDailyRetryPending || lastUploadedDailyBaselineDay != TokenDailyGrid.dayString(now)"))
 
-    // 서비스는 codex_account 키 유무로 **묶음을 갈라** 보낸다 — 혼합 키 배열은 PostgREST 가 400 PGRST102 로
-    // 통째 거절하므로(리뷰 P0), 배열을 그대로 싣는 경로가 남으면 Codex 사용자의 일별 행이 한 줄도 안 올라간다.
+    // 서비스는 키 모양(claude_total 유무 × codex_account 유무, v0.2.43)으로 **묶음을 갈라** 보낸다 — 혼합 키 배열은 PostgREST 가
+    // 400 PGRST102 로 통째 거절하므로(리뷰 P0), 배열을 그대로 싣는 경로가 남으면 Codex 사용자의 일별 행이 한 줄도 안 올라간다.
     let service = tgStrippingComments(try String(contentsOf: tgRepoURL("Sources/check/SupabaseWorkService.swift"), encoding: .utf8))
-    #expect(service.contains("rows.filter { $0.codexAccount != nil }"))
+    #expect(service.contains("($0.claudeTotal != nil) == shape.claude && ($0.codexAccount != nil) == shape.account"))
     #expect(service.contains("for group in groups where !group.isEmpty"))
     #expect(!service.contains("body: rows,"), "배열을 통째로 POST 하는 경로가 남아 있다")
 

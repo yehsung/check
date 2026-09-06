@@ -853,12 +853,13 @@ enum TokenUsageDisplay {
         local.claudeTotal + codexEffective(local: local, account: account)
     }
 
-    /// 이 맥이 아는 것만으로 계산한 Codex 유효값: 로컬 월합·일별 맵(`codexDaily`)과 계정 스냅샷의 이 달 버킷.
+    /// 이 맥이 아는 것만으로 계산한 Codex 유효값: 로컬 월합·**UTC 축** 일별 맵(`codexDailyOnAccountAxis`)과 계정 스냅샷의 이 달 버킷.
+    /// 꼬리·마지막 날 차분은 계정 버킷과 같은 UTC 축에서 견줘야 한다(v0.2.43 — KST 맵을 쓰면 KST 0~9시 몫이 전날 버킷과 겹쳐 항상 더해졌다).
     static func codexEffective(local: TokenUsageMonthly, account: CodexAccountUsage?) -> Int {
         let lastDay = account?.latestBucketDate(in: local.month)
         return CodexEffectiveRule.month(
             localMonth: local.codexTotal,
-            localDaily: local.codexDaily,
+            localDaily: local.codexDailyOnAccountAxis,
             accountMonth: account.map { $0.monthTotal(local.month) },
             accountLastDay: lastDay,
             accountBucketOnLastDay: lastDay.flatMap { account?.buckets[$0] }

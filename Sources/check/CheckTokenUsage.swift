@@ -38,6 +38,14 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     var claudeDaily: [String: Int] = [:]
     /// KST 'YYYY-MM-DD' → 그 날 Codex 입력+출력 델타 합(현재 월 안의 날짜만). todayTotal 의 Codex 몫.
     var codexDaily: [String: Int] = [:]
+    /// **UTC** 'YYYY-MM-DD' → 그 UTC 하루(= KST 오전 9시 ~ 다음날 오전 9시)의 Codex 입력+출력 델타 합(v0.2.43, 계정 우선 산식 검토 P1).
+    /// 계정 버킷(`account/usage/read`)이 UTC 날짜 키라, 산식의 꼬리(`day > lastDay`)와 마지막 날 차분은 **이 맵**과 견줘야 한다 —
+    /// KST 맵(codexDaily)을 같은 문자열 키로 견주면 KST 0~9시 몫이 전날 UTC 버킷과 겹쳐 항상 더해진다(운영자 5월: UTC 정렬
+    /// 오차 0.1M vs KST 키 28.6M(37%); 조영서 +41% 실례). 키 범위는 현재 월이 아니라 **UTC 일 ≥ KST 월 시작 − 1일**
+    /// (`TokenUsageIncrementalScanner.utcRetainFromKey`) — 전월 마지막 UTC 일은 이번 달 첫 9시간을 담고 있어 월초에 버리면
+    /// 마지막 날 차분이 0 으로 떨어진다. 같은 이벤트가 두 맵에 **한 번씩** 들어가므로 두 맵의 합은 같다(KST 월 밖 키 제외).
+    /// 표시(사용자 결정 2026-09-06)는 "9시 경계 하루": 반영된 날은 계정 버킷 그대로, 날짜 라벨은 이 키를 KST 날짜로 그대로 읽는다.
+    var codexDailyUTC: [String: Int] = [:]
     /// 일별 맵의 창 시작 'YYYY-MM-DD'(v0.2.43). Claude 일별 맵은 현재 월이 아니라 **12주 잔디 창**([이번 주 월요일 − 12주, 오늘])을
     /// 담고, 그 창의 첫 날이 이 값이다. 일별 업로드(TokenUsageDailyUpload.values)가 "창 안의 날만 보낸다"는 필터의 기준으로 쓴다 —
     /// 창 앞 이틀(straddle 보관분)은 부분값이라 서버의 온전한 값을 덮으면 안 된다. 옛 스냅샷엔 없으므로 빈 문자열이면
@@ -67,12 +75,23 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     /// 일별 맵 창의 첫 날. windowStart 가 비어 있으면(옛 스냅샷·손으로 만든 값) 월 1일 — 그러면 일별 업로드 필터가 옛 월 접두어 규칙과 같아진다.
     var windowStartDay: String { windowStart.isEmpty ? month + "-01" : windowStart }
 
+    /// 계정 버킷과 같은 축(UTC 날짜)의 로컬 Codex 일별 맵 — 산식 호출측(내 박스 `TokenUsageDisplay`·잔디 `TokenDailyMerge`)이 쓴다.
+    /// UTC 맵이 비어 있으면 KST 맵으로 후퇴한다: 이 빌드 이전에 저장된 스냅샷(UTC 맵 없음)을 첫 스캔 전에 복원한 순간뿐이고,
+    /// 첫 스캔(캐시 v2/v5 전체 재파싱)이 끝나면 두 맵이 함께 채워진다. Codex 를 안 쓰면 둘 다 비어 있어 어느 쪽이든 같다.
+    var codexDailyOnAccountAxis: [String: Int] { codexDailyUTC.isEmpty ? codexDaily : codexDailyUTC }
+
     /// 라벨 "N월 …"에 쓰는 월 숫자. 'YYYY-MM' 의 뒤 두 자리를 정수로(선행 0 제거). 파싱 실패 시 0.
     var monthNumber: Int { Int(month.split(separator: "-").last ?? "") ?? 0 }
 
     /// 굵은 총합이 로컬 소계와 다른 이유를 설명하는 한 마디. 내 박스 툴팁과 순위판 툴팁(TokenBoardEntry.detailTooltip)이
     /// **같은 문구**를 써야 같은 현상을 두 어휘로 부르지 않는다 — 리터럴을 두 곳에 흩뿌리지 않고 여기 하나만 둔다.
     static let accountDrivenTotalNote = "총합은 계정 집계 기준"
+
+    /// 하루의 뜻을 밝히는 한 줄(v0.2.43, 사용자 결정 "9시 경계"). Codex 는 계정 버킷과 같은 UTC 하루(= KST 오전 9시 ~ 다음날 오전 9시)를
+    /// KST 날짜 라벨로 읽고, Claude 는 KST 자정 하루다 — 같은 잔디 칸이 두 축을 담으므로 내 박스·순위판 툴팁·잔디 헤더 **세 곳**이
+    /// 이 리터럴 하나를 부른다(V0243UTCAxisTests 가 소스 계약으로 고정). 자정 분할(로컬 시간 분포로 나누기)은 하지 않는다 —
+    /// 로컬이 검증되기 전엔 로컬의 시간 분포를 근거로 쓰지 않는다.
+    static let tokenDayAxisNote = "Codex 하루는 오전 9시 기준(계정 집계와 같은 축) · Claude 는 자정 기준"
 
     /// .help 툴팁 상세 문구(계정 집계 없이). 축약 없이 콤마 전체 숫자로, 값이 있는 소스만 이어 붙인다
     /// ("Claude 4,280,667,571 (입력 8,458,939 · 출력 9,796,198 · 캐시읽기 4,063,320,273 · 캐시생성 199,092,161) · Codex 145,691,467 (입력 145,068,307 · 출력 623,160 · 캐시 0)").
@@ -115,6 +134,10 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
         if todayTotal > 0 {
             parts.append("오늘 +\(TokenNumberFormatter.grouped(todayTotal))")
         }
+        // Codex 숫자가 하나라도 있으면 하루의 뜻을 맨 끝에 밝힌다(순위판 툴팁·잔디 헤더와 같은 리터럴). Claude 만 있으면 말할 것이 없다.
+        if codexTotal > 0 || accountMonth > 0 {
+            parts.append(Self.tokenDayAxisNote)
+        }
         return parts.joined(separator: " · ")
     }
 }
@@ -127,7 +150,7 @@ extension TokenUsageMonthly {
         case claudeInput, claudeOutput, claudeCacheRead, claudeCacheCreation
         case codexInput, codexOutput, codexCacheRead
         case todayTotal, todayDate
-        case claudeDaily, codexDaily
+        case claudeDaily, codexDaily, codexDailyUTC
         case windowStart, claudeCompleteFrom
     }
 
@@ -146,6 +169,8 @@ extension TokenUsageMonthly {
         todayDate = try c.decodeIfPresent(String.self, forKey: .todayDate) ?? ""
         claudeDaily = try c.decodeIfPresent([String: Int].self, forKey: .claudeDaily) ?? [:]
         codexDaily = try c.decodeIfPresent([String: Int].self, forKey: .codexDaily) ?? [:]
+        // v0.2.43: UTC 축 일별 맵. 옛 스냅샷엔 없다 → 빈 맵(codexDailyOnAccountAxis 가 KST 맵으로 후퇴).
+        codexDailyUTC = try c.decodeIfPresent([String: Int].self, forKey: .codexDailyUTC) ?? [:]
         // v0.2.43: 창 시작. 옛 스냅샷엔 없다 → 빈 문자열(windowStartDay 가 월 1일로 해석).
         windowStart = try c.decodeIfPresent(String.self, forKey: .windowStart) ?? ""
         claudeCompleteFrom = try c.decodeIfPresent(String.self, forKey: .claudeCompleteFrom) ?? ""
@@ -165,6 +190,7 @@ extension TokenUsageMonthly {
         try c.encode(todayDate, forKey: .todayDate)
         try c.encode(claudeDaily, forKey: .claudeDaily)
         try c.encode(codexDaily, forKey: .codexDaily)
+        try c.encode(codexDailyUTC, forKey: .codexDailyUTC)
         try c.encode(windowStart, forKey: .windowStart)
         try c.encode(claudeCompleteFrom, forKey: .claudeCompleteFrom)
     }
@@ -507,6 +533,12 @@ struct CodexFileProgress: Equatable, Sendable {
     /// 포크 파일의 복사 구간 마감(UTC 마이크로초) = 자기 session_meta 시각 + CodexForkRule.copyWindowMicros. 0 = 포크 아님.
     /// 이어읽기가 이 값을 물려받아, 첫 파싱이 복사 버스트 도중에 끊겼어도 다음 읽기에서 남은 복사본을 계속 건너뛴다.
     var forkCopyDeadlineMicros: Int = 0
+    /// **UTC** 'YYYY-MM-DD' → 그 UTC 하루 귀속 delta(입력+출력)의 합(v0.2.43). dayContrib(KST)와 같은 이벤트를 다른 축의 키로 쌓는다 —
+    /// 계정 버킷과 같은 축에서 꼬리·차분을 내기 위해서다(TokenUsageMonthly.codexDailyUTC 주석). 키 범위는 KST 월이 아니라
+    /// **UTC 일 ≥ KST 월 시작 − 1일**(`utcRetainFromKey`): 월 롤오버에 통째로 비우지 않고 그 하한 아래 키만 걷어낸다
+    /// (전월 마지막 UTC 일이 이번 달 첫 9시간을 담는다). 이 빌드 이전의 v5 캐시는 없으므로(배포된 적 없는 세대) 이 맵이 빈 v5 상태는
+    /// 테스트 픽스처뿐이다 — 그래도 빈 맵은 "관측 없음"으로 안전하게 읽힌다.
+    var dayContribUTC: [String: Int] = [:]
 
     /// 옛 산식과의 대조용 합(입력+출력) — 델타의 기준선을 한 숫자로 보고 싶은 테스트·주석이 쓴다.
     var prevCumulative: Int { prevInput + prevOutput }
@@ -544,8 +576,9 @@ extension ClaudeEntry: Codable {
     }
 }
 
-// 압축 배열-튜플 인코딩(12원소, 스키마 v5):
-//   [size, mtime, offset, prevInput, prevOutput, prevCached, monthKey, monthInput, monthOutput, monthCached, {day: delta}, forkCopyDeadlineMicros].
+// 압축 배열-튜플 인코딩(13원소, 스키마 v5):
+//   [size, mtime, offset, prevInput, prevOutput, prevCached, monthKey, monthInput, monthOutput, monthCached, {KST day: delta},
+//    forkCopyDeadlineMicros, {UTC day: delta}].
 // 옛 세대 튜플(v3 의 8원소·그 이전 숫자열)은 TokenUsageCache 의 스키마 게이트가 애초에 이 디코더로 오지 못하게 막으므로,
 // 여기의 decodeIfPresent 는 새 형식의 잘린 튜플에 대한 방어일 뿐이다(at-end → 기본값). monthKey 위치에 숫자를 억지 디코드하는 일은 없다.
 extension CodexFileProgress: Codable {
@@ -563,6 +596,7 @@ extension CodexFileProgress: Codable {
         monthCached = try c.decodeIfPresent(Int.self) ?? 0
         dayContrib = try c.decodeIfPresent([String: Int].self) ?? [:]
         forkCopyDeadlineMicros = try c.decodeIfPresent(Int.self) ?? 0
+        dayContribUTC = try c.decodeIfPresent([String: Int].self) ?? [:]
     }
     func encode(to encoder: Encoder) throws {
         var c = encoder.unkeyedContainer()
@@ -572,6 +606,7 @@ extension CodexFileProgress: Codable {
         try c.encode(monthInput); try c.encode(monthOutput); try c.encode(monthCached)
         try c.encode(dayContrib)
         try c.encode(forkCopyDeadlineMicros)
+        try c.encode(dayContribUTC)
     }
 }
 
@@ -962,7 +997,8 @@ enum TokenUsageIncrementalScanner {
         var usage = totals(
             cache, month: monthString,
             monthStartTs14: monthStartTs14, monthEndTs14: monthEndTs14, windowStartTs14: windowStartTs14,
-            dayBuckets: dayBuckets, todayDate: todayDate
+            dayBuckets: dayBuckets, todayDate: todayDate,
+            utcRetainFrom: utcRetainFromKey(monthString: monthString)
         )
         usage.windowStart = window.startKey
         usage.claudeCompleteFrom = claudeCompleteFromKey(oldestMtimeMicros: oldestClaudeMtime)
@@ -1162,8 +1198,10 @@ enum TokenUsageIncrementalScanner {
     /// 일어나면 정확히 그 모양이 된다).
     static func scanCodexFiles(
         _ cache: inout TokenUsageCache, files: [(url: URL, size: Int, mtimeMicros: Int)], roots: [URL],
-        monthString: String, stats: inout Stats
+        monthString: String, utcRetainFrom: String? = nil, stats: inout Stats
     ) {
+        // UTC 일별 맵의 보존 하한(v0.2.43): 전월 마지막 UTC 일까지 남긴다. 테스트가 달리 주지 않으면 월키에서 계산한다.
+        let utcRetainFrom = utcRetainFrom ?? utcRetainFromKey(monthString: monthString)
         // 이번 순회에서 **실제로 확인한** 경로(무변경 스킵 또는 읽기 성공). 아래 "사라진 파일 정리"가 이 집합을 쓴다.
         // 열거 직후가 아니라 읽기 성공 뒤에 넣는 것이 요건이다(리뷰 P2): 열거와 읽기 사이에 보관(rename)된 파일은 옛 경로 읽기가
         // 실패해 옛 상태가 그대로 남는데, 그것을 '본 것'으로 치면 정리를 건너뛰어 새 경로 상태와 함께 **정확히 두 배**로 잡히고
@@ -1192,6 +1230,8 @@ enum TokenUsageIncrementalScanner {
             var monthOutput = 0
             var monthCached = 0
             var dayContrib: [String: Int] = [:]
+            // UTC 축 일별 맵(v0.2.43). KST 맵과 달리 월 롤오버에 비우지 않고 보존 하한(utcRetainFrom) 아래 키만 걷어낸다.
+            var dayContribUTC: [String: Int] = [:]
             // 포크 복사 구간 추적(CodexForkRule). 오프셋 0 파싱이면 파일 머리의 session_meta 에서 판정하고, 이어읽기면 캐시의 마감을
             // 물려받는다(첫 파싱이 복사 버스트 도중에 끊겼어도 남은 복사본이 계속 걸러진다).
             var fork = CodexForkTracker(startedAtZero: true, deadlineMicros: 0)
@@ -1213,7 +1253,9 @@ enum TokenUsageIncrementalScanner {
                             size: p.size, mtimeMicros: p.mtimeMicros, consumedOffset: p.consumedOffset,
                             prevInput: p.prevInput, prevOutput: p.prevOutput, prevCached: p.prevCached,
                             monthKey: monthString, monthInput: 0, monthOutput: 0, monthCached: 0,
-                            dayContrib: [:], forkCopyDeadlineMicros: p.forkCopyDeadlineMicros
+                            dayContrib: [:], forkCopyDeadlineMicros: p.forkCopyDeadlineMicros,
+                            // UTC 맵은 통째로 비우지 않는다 — 전월 마지막 UTC 일(이번 달 첫 9시간)은 남긴다(검토 P1).
+                            dayContribUTC: p.dayContribUTC.filter { $0.key >= utcRetainFrom }
                         )
                         stats.statesChanged = true
                     }
@@ -1241,6 +1283,8 @@ enum TokenUsageIncrementalScanner {
                         monthCached = p.monthCached
                         dayContrib = p.dayContrib
                     }
+                    // UTC 맵은 월이 바뀌어도 하한 이상 키를 물려받는다(이어읽기의 새 이벤트가 그 위에 쌓인다).
+                    dayContribUTC = p.dayContribUTC.filter { $0.key >= utcRetainFrom }
                 }
             }
 
@@ -1290,6 +1334,10 @@ enum TokenUsageIncrementalScanner {
                         // 일별 맵은 현재 월 키만 담는다(월 롤오버에 통째로 비우므로 다른 달 키가 섞이면 안 된다).
                         if dIn + dOut > 0 { dayContrib[keys.day, default: 0] += dIn + dOut }
                     }
+                    // UTC 축(v0.2.43): 같은 델타를 UTC 일키로 한 번 더 쌓는다 — 월 게이트 대신 보존 하한(전월 마지막 UTC 일)으로 거른다.
+                    if dIn + dOut > 0, keys.utcDay >= utcRetainFrom {
+                        dayContribUTC[keys.utcDay, default: 0] += dIn + dOut
+                    }
                 }
                 baseline = (input, output, cached)
             }) else { continue }
@@ -1308,7 +1356,7 @@ enum TokenUsageIncrementalScanner {
                 size: f.size, mtimeMicros: f.mtimeMicros, consumedOffset: persistedOffset,
                 prevInput: baseline?.input ?? 0, prevOutput: baseline?.output ?? 0, prevCached: baseline?.cached ?? 0,
                 monthKey: monthString, monthInput: monthInput, monthOutput: monthOutput, monthCached: monthCached,
-                dayContrib: dayContrib, forkCopyDeadlineMicros: fork.deadlineMicros
+                dayContrib: dayContrib, forkCopyDeadlineMicros: fork.deadlineMicros, dayContribUTC: dayContribUTC
             )
             stats.statesChanged = true
         }
@@ -1389,7 +1437,8 @@ enum TokenUsageIncrementalScanner {
     private static func totals(
         _ cache: TokenUsageCache, month: String,
         monthStartTs14: Int, monthEndTs14: Int, windowStartTs14: Int,
-        dayBuckets: [(startTs14: Int, key: String)], todayDate: String
+        dayBuckets: [(startTs14: Int, key: String)], todayDate: String,
+        utcRetainFrom: String
     ) -> TokenUsageMonthly {
         var usage = TokenUsageMonthly(month: month)
         // Claude: 월 합계는 [monthStart, monthEnd) 만, 일별 맵은 창 [windowStart, monthEnd) 전부(v0.2.43 — 잔디가 12주를 본다).
@@ -1413,6 +1462,13 @@ enum TokenUsageIncrementalScanner {
             usage.codexCacheRead += s.monthCached
             // 일별: 파일별 맵을 날짜 키로 합친다(어제 시작·오늘 성장 세션도 날짜별로 제자리에 들어간다).
             for (day, delta) in s.dayContrib { usage.codexDaily[day, default: 0] += delta }
+        }
+        // UTC 축 일별 맵(v0.2.43)은 **상태 키(monthKey)를 가리지 않고** 보존 하한 이상 키를 전부 합친다 — 지난달에 마지막으로 쓰인 파일
+        // (이번 달 프리필터 밖, 퇴거 전)의 전월 마지막 UTC 일 몫도 이번 달 첫 9시간과 같은 키에 들어야 그 날 값이 온전하다.
+        for (_, s) in cache.codexFileStates {
+            for (day, delta) in s.dayContribUTC where day >= utcRetainFrom {
+                usage.codexDailyUTC[day, default: 0] += delta
+            }
         }
         usage.todayTotal = (usage.claudeDaily[todayDate] ?? 0) + (usage.codexDaily[todayDate] ?? 0)
         usage.todayDate = todayDate
@@ -1583,10 +1639,11 @@ enum TokenUsageIncrementalScanner {
         Int((date.timeIntervalSince1970 * 1_000_000).rounded())
     }
 
-    /// Codex 이벤트 timestamp(UTC ISO8601, 예 "2026-07-24T07:17:35.634Z")를 KST(+9)로 본 (월키 'YYYY-MM', 일키 'YYYY-MM-DD').
+    /// Codex 이벤트 timestamp(UTC ISO8601, 예 "2026-07-24T07:17:35.634Z")를 KST(+9)로 본 (월키 'YYYY-MM', 일키 'YYYY-MM-DD')
+    /// 과 **UTC 일키**(앞 10자 그대로 — 계정 버킷과 같은 축, v0.2.43).
     /// 앞 19자(YYYY-MM-DDTHH:MM:SS, UTC)만 정수 컴포넌트로 읽어 UTC Date 를 만들고 KST 캘린더로 월/일을 뽑는다 — 단순 +9h
     /// 문자열 산술의 자릿수 올림(일·월·연 경계) 버그를 피한다. 소수초·타임존 표기 변형에 견고(앞 19자 고정폭만 사용). 실패 시 nil.
-    private static func kstMonthDayKeys(fromTimestamp s: String) -> (month: String, day: String)? {
+    static func kstMonthDayKeys(fromTimestamp s: String) -> (month: String, day: String, utcDay: String)? {
         let b = Array(s.utf8)
         guard b.count >= 19 else { return nil }
         // 연(0..3) 월(5,6) 일(8,9) 시(11,12) 분(14,15) 초(17,18) — 나머지는 구분자('-' 'T' ':').
@@ -1606,7 +1663,22 @@ enum TokenUsageIncrementalScanner {
         guard let date = utcCalendar.date(from: comps) else { return nil }
         let k = kstCalendar.dateComponents([.year, .month, .day], from: date)
         let y = k.year ?? 0, mo = k.month ?? 0, d = k.day ?? 0
-        return (String(format: "%04d-%02d", y, mo), String(format: "%04d-%02d-%02d", y, mo, d))
+        // UTC 일키는 timestamp 앞 10자 그대로(위에서 자릿수를 검증했고 구분자는 '-' 고정폭).
+        return (String(format: "%04d-%02d", y, mo), String(format: "%04d-%02d-%02d", y, mo, d), String(s.prefix(10)))
+    }
+
+    /// UTC 일별 맵(dayContribUTC / codexDailyUTC)의 보존 하한 = **KST 월 시작 − 1일** 의 'YYYY-MM-DD'(v0.2.43).
+    /// 전월 마지막 UTC 일(예: 7월이면 "2026-06-30" = KST 6/30 09:00 ~ 7/1 09:00)은 이번 달 첫 9시간을 담고 있어 이 키까지 남긴다 —
+    /// 월초에 버리면 마지막 날 차분이 0 으로 떨어진다(검토 P1). 'YYYY-MM' 이 아니면 빈 문자열(모든 키가 그 이상이라 보존 규칙이 사실상 꺼진다).
+    static func utcRetainFromKey(monthString: String) -> String {
+        let parts = monthString.split(separator: "-")
+        guard parts.count == 2, let y = Int(parts[0]), let m = Int(parts[1]), (1...12).contains(m) else { return "" }
+        var comps = DateComponents()
+        comps.year = y; comps.month = m; comps.day = 1
+        guard let first = kstCalendar.date(from: comps),
+              let prev = kstCalendar.date(byAdding: .day, value: -1, to: first) else { return "" }
+        let k = kstCalendar.dateComponents([.year, .month, .day], from: prev)
+        return String(format: "%04d-%02d-%02d", k.year ?? 0, k.month ?? 0, k.day ?? 0)
     }
 }
 

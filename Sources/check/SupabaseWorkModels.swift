@@ -410,6 +410,10 @@ struct TokenBoardEntry: Identifiable, Equatable {
                 }
             }
         }
+        // Codex 숫자가 하나라도 있으면 하루의 뜻을 맨 끝에 밝힌다 — 내 박스 툴팁·잔디 헤더와 같은 리터럴(v0.2.43, 9시 경계).
+        if codexLocalTotal > 0 || showsAccount {
+            parts.append(TokenUsageMonthly.tokenDayAxisNote)
+        }
         return parts.joined(separator: " · ")
     }
 }
@@ -697,21 +701,24 @@ struct TokenUsageLegacyTotalRow: Decodable {
 /// codex_account 는 **옵셔널이 핵심**이다(월 표의 codex_account_*·codex_diag_* 와 같은 규약): 합성 Encodable 은 nil 을
 /// encodeIfPresent 로 내보내 **키 자체가 빠지고**, PostgREST 의 merge-duplicates upsert 는 본문에 온 컬럼만 SET 한다.
 /// 계정 버킷(UTC 일자)이 그 날짜에 없는 기기가 0 을 실으면 다른 기기가 앞서 올린 계정값을 0 으로 밀어 버린다 — nil 이면
-/// 서버 값이 보존된다. codex_total 은 로컬 집계라 항상 실린다(매 업로드가 최신값이므로 덮는 것이 맞다).
-/// claude_total 도 같은 이유로 보통 실리지만, **이 기기의 Claude 로그가 온전하지 않은 날**(v0.2.43, TokenUsageMonthly.claudeCompleteFrom 앞 —
-/// Claude Code 가 30일 지난 transcript 를 지운 뒤 캐시를 다시 만든 경우)에는 nil 로 키를 뺀다. 그때 0 을 실으면 이 기기가 예전에
-/// 올린 완전값이 부분값으로 덮인다. 키 집합이 다른 행은 서비스가 묶음을 갈라 보낸다(upsertTokenUsageDaily).
+/// 서버 값이 보존된다. 같은 규약이 v0.2.43 부터 네 값 전부에 적용된다(TokenUsageDailyValue 주석 — 각 로컬 맵이 **덮는 날에만** 값이 있다):
+/// - claude_total: 이 기기의 Claude 로그가 온전한 날(TokenUsageMonthly.claudeCompleteFrom 이후)만. 그 앞은 키 생략.
+/// - codex_total(KST 하루): 현재 KST 월의 날만(KST 맵은 현재 월뿐). 창 안 지난달 날은 키 생략 — 0 을 실으면 그 달 행의 Codex 가 지워진다.
+/// - codex_utc_total(UTC 하루 = KST 오전 9시 ~ 다음날 9시, 계정 버킷과 같은 축): UTC 보존 하한(전월 마지막 UTC 일) 이후만. 그 앞은 키 생략.
+///   서버 산식(20260906120000)의 꼬리·마지막 날 차분은 이 값을 우선 쓴다(`coalesce(codex_utc_total, codex_total)`).
+/// 키 집합이 다른 행은 서비스가 묶음을 갈라 보낸다(upsertTokenUsageDaily).
 struct TokenUsageDailyUpsertRow: Encodable, Equatable, Sendable {
     let userId: String
-    /// KST 'YYYY-MM-DD'(claudeDaily/codexDaily 의 키 그대로).
+    /// 'YYYY-MM-DD' — claude_total/codex_total 은 이 날짜를 KST 하루로, codex_utc_total/codex_account 는 UTC 하루로 읽는다(서버 컬럼 주석).
     let day: String
     let deviceId: String
     var claudeTotal: Int?
-    let codexTotal: Int
+    var codexTotal: Int?
+    var codexUtcTotal: Int? = nil
     var codexAccount: Int?
 }
 
-/// 일별 표 조회 응답 한 줄(select=day,device_id,claude_total,codex_total,codex_account). 기기별 행이 그대로 오고
+/// 일별 표 조회 응답 한 줄(select=day,device_id,claude_total,codex_total,codex_utc_total,codex_account). 기기별 행이 그대로 오고
 /// 합산은 클라(TokenDailyMerge.serverTotals)가 한다 — claude+codex 는 기기 합, codex_account 는 기기 간 max.
 struct TokenUsageDailyRow: Decodable, Equatable, Sendable {
     let day: String
@@ -720,6 +727,8 @@ struct TokenUsageDailyRow: Decodable, Equatable, Sendable {
     let codexTotal: Int
     /// null = 그 기기가 그 날짜의 계정 버킷을 보고하지 않음("0" 과 다르다).
     let codexAccount: Int?
+    /// UTC 하루의 로컬 Codex 델타 합(v0.2.43). null = 구클라(≤ v0.2.42) 행 — 잔디 병합은 그때 codex_total(KST) 로 후퇴한다.
+    var codexUtcTotal: Int? = nil
 }
 
 struct TeamWeeklyGoal: Equatable {

@@ -2036,13 +2036,18 @@ extension WorkTimerStore {
 
 // MARK: - 일별 토큰 업로드의 순수 계산 (v0.2.41 토큰 잔디)
 
-/// 일별 업로드의 변경 게이트 단위: 하루치 (claude, codex, codexAccount). 값이 하나라도 다르면 '바뀐 날'이다.
-/// codexAccount 가 nil 이면 그 날짜의 계정 버킷이 없다는 뜻이고 본문에서 키가 빠진다(TokenUsageDailyUpsertRow 주석).
-/// claude 가 nil 이면(v0.2.43) 이 기기의 Claude 로그가 그 날엔 온전하지 않다는 뜻(TokenUsageMonthly.claudeCompleteFrom 앞)이고
-/// 역시 키가 빠진다 — 캐시 재구성·재설치 뒤 옛 완전값을 부분값으로 덮지 않기 위해서다.
+/// 일별 업로드의 변경 게이트 단위: 하루치 (claude, codex(KST), codexUTC, codexAccount). 값이 하나라도 다르면 '바뀐 날'이다.
+/// **nil 은 "이 기기가 그 날의 그 값을 모른다" = 본문에서 키가 빠진다**(TokenUsageDailyUpsertRow 주석) — 0 을 실으면 서버의 완전값을
+/// 부분값/0 으로 덮는다. 각 값이 nil 인 조건은 그 값의 로컬 맵이 **덮는 날짜 범위**다:
+/// - claude: 이 기기의 Claude 로그가 온전한 날(TokenUsageMonthly.claudeCompleteFrom 이후)에만 값. 그 앞은 nil(v0.2.43).
+/// - codex(KST): 현재 KST 월 안의 날에만 값 — KST 맵(codexDaily)은 현재 월뿐이다. 창(12주) 안이라도 지난달 날은 nil(v0.2.43 UTC 축 작업에서
+///   잡은 구멍: 창이 12주로 넓어진 뒤 지난달 날에 0 을 실으면 그 달 행의 Codex 가 지워진다).
+/// - codexUTC: UTC 보존 하한(전월 마지막 UTC 일, `utcRetainFromKey`) 이상의 날에만 값. 그 앞은 nil.
+/// - codexAccount: 그 날짜의 계정 버킷이 있을 때만.
 struct TokenUsageDailyValue: Equatable, Sendable {
     var claude: Int?
-    var codex: Int
+    var codex: Int?
+    var codexUTC: Int? = nil
     var codexAccount: Int?
 }
 
@@ -2060,19 +2065,26 @@ enum TokenUsageDailyUpload {
     static func values(usage: TokenUsageMonthly, account: CodexAccountUsage?) -> [String: TokenUsageDailyValue] {
         let windowStart = usage.windowStartDay
         let completeFrom = usage.claudeCompleteFrom
+        let monthPrefix = usage.month + "-"
+        // UTC 축 맵의 보존 하한(전월 마지막 UTC 일). 그 앞 날짜의 codex_utc_total 은 모른다(nil) — 있어도 부분값이다.
+        let utcRetainFrom = TokenUsageIncrementalScanner.utcRetainFromKey(monthString: usage.month)
         let buckets = account?.buckets ?? [:]
         var result: [String: TokenUsageDailyValue] = [:]
-        // 고정폭 'YYYY-MM-DD' 라 사전식 비교 == 날짜 순서. 계정 버킷은 UTC 일자 키지만 같은 문자열 축으로 비교한다(문서화된 미결).
-        for day in Set(usage.claudeDaily.keys).union(usage.codexDaily.keys).union(buckets.keys) where day >= windowStart {
-            // Claude 값은 이 기기의 로그가 온전한 날(claudeCompleteFrom 이후)에만 싣는다. 그 앞은 nil → 키 생략 → 서버의 옛 완전값이
-            // 보존된다. Codex 일별·계정 버킷은 transcript 보관과 무관하므로 그대로 싣는다.
+        // 고정폭 'YYYY-MM-DD' 라 사전식 비교 == 날짜 순서. 계정 버킷·UTC 맵은 UTC 일자 키, Claude·Codex KST 맵은 KST 일자 키인데
+        // 한 행(day)에 네 값이 함께 실린다 — 서버 컬럼이 축을 각각 명시한다(codex_total=KST 하루, codex_utc_total=UTC 하루, codex_account=UTC 버킷).
+        let keys = Set(usage.claudeDaily.keys).union(usage.codexDaily.keys).union(usage.codexDailyUTC.keys).union(buckets.keys)
+        for day in keys where day >= windowStart {
+            // 각 값은 그 맵이 덮는 날에만 싣는다(TokenUsageDailyValue 주석). 모르는 값은 nil → 키 생략 → 서버의 옛 완전값 보존.
             let claudeKnown = completeFrom.isEmpty || day >= completeFrom
+            let codexKnown = day.hasPrefix(monthPrefix)
+            let utcKnown = day >= utcRetainFrom
             let value = TokenUsageDailyValue(
                 claude: claudeKnown ? max(0, usage.claudeDaily[day] ?? 0) : nil,
-                codex: max(0, usage.codexDaily[day] ?? 0),
+                codex: codexKnown ? max(0, usage.codexDaily[day] ?? 0) : nil,
+                codexUTC: utcKnown ? max(0, usage.codexDailyUTC[day] ?? 0) : nil,
                 codexAccount: buckets[day].map { max(0, $0) }
             )
-            guard (value.claude ?? 0) > 0 || value.codex > 0 || value.codexAccount != nil else { continue }
+            guard (value.claude ?? 0) > 0 || (value.codex ?? 0) > 0 || (value.codexUTC ?? 0) > 0 || value.codexAccount != nil else { continue }
             result[day] = value
         }
         return result
@@ -2089,7 +2101,7 @@ enum TokenUsageDailyUpload {
             guard let value = values[day] else { return nil }
             return TokenUsageDailyUpsertRow(
                 userId: userID, day: day, deviceId: deviceID,
-                claudeTotal: value.claude, codexTotal: value.codex, codexAccount: value.codexAccount
+                claudeTotal: value.claude, codexTotal: value.codex, codexUtcTotal: value.codexUTC, codexAccount: value.codexAccount
             )
         }
     }

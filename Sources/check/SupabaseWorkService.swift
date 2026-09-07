@@ -1234,14 +1234,14 @@ actor SupabaseWorkService {
             prefer: nil
         )
         let rows = try decoder.decode([MiniGameBoardRow].self, from: data)
-        return rows.map { row in
+        return rows.map { boardRow in
             MiniGameBoardEntry(
-                userID: row.userId,
-                name: row.displayName ?? "사용자",
-                avatarURL: row.avatarUrl.flatMap { URL(string: $0) },
-                bestScore: row.bestScore,
-                bestAt: row.bestAt.flatMap { parseDate($0) },
-                plays: row.plays ?? 0
+                userID: boardRow.userId,
+                name: boardRow.displayName ?? "사용자",
+                avatarURL: boardRow.avatarUrl.flatMap { URL(string: $0) },
+                bestScore: boardRow.bestScore,
+                bestAt: boardRow.bestAt.flatMap { parseDate($0) },
+                plays: boardRow.plays ?? 0
             )
         }
     }

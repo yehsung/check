@@ -9,6 +9,10 @@ import SwiftUI
 //
 // 좌표계는 논리 292×200(y 는 아래로 +). 뷰는 `MiniGameCanvas.transform(in:)` 으로 실제 캔버스에 비율 유지로
 // 맞추므로 팝오버 높이 예산 때문에 캔버스가 140~200 사이에서 바뀌어도 규칙·난이도는 그대로다.
+//
+// 물리 상수는 200pt 캔버스에 맞춘 값이다(2026-09-08 실기: 중력 1500/점프 −430 이면 클릭 한 번에 61.6pt(높이의 31%)
+// 솟구쳐 첫 기둥 틈 74 를 한 번에 벗어났다 — 18판 최고 1점). 지금은 점프 높이 24.5pt(≈12%), 낙하 상한 380,
+// 틈 80→64, 속도 110→170, 첫 기둥까지 폭+80.
 
 /// 플래피 아잉 규칙. 시드만 주면 결정론적으로 같은 판이 나온다(테스트가 시드를 고정한다).
 struct FlappyGame: Equatable, Sendable {
@@ -19,15 +23,17 @@ struct FlappyGame: Equatable, Sendable {
     /// 충돌 판정 상자(정사각). 스프라이트(30)보다 작게 둬 "닿은 것 같은데 죽었다"를 줄인다.
     static let hitboxSize: CGFloat = 22
     static let spriteSize: CGFloat = 30
-    static let gravity: CGFloat = 1500
-    static let flapVelocity: CGFloat = -430
-    static let maxFallSpeed: CGFloat = 620
+    static let gravity: CGFloat = 900
+    /// 점프 높이 = 210² / (2·900) = 24.5pt.
+    static let flapVelocity: CGFloat = -210
+    static let maxFallSpeed: CGFloat = 380
     /// 캔버스 아래 바닥띠. 히트박스 아래가 여기 닿으면 충돌.
     static let floorBand: CGFloat = 8
     static let pipeWidth: CGFloat = 44
     static let pipeSpacing: CGFloat = 150
-    static let firstPipeX: CGFloat = width + 40
-    /// 항상 화면 안팎에 유지하는 기둥 수(간격 150 × 3 = 450 > 폭 292 + 40 이라 빈 구간이 안 생긴다).
+    /// 첫 기둥은 화면 밖 80pt 에서 시작 — 시작 직후 자세를 잡을 시간(≈0.7초)을 준다.
+    static let firstPipeX: CGFloat = width + 80
+    /// 항상 화면 안팎에 유지하는 기둥 수(간격 150 × 3 = 450 > 폭 292 + 80 이라 빈 구간이 안 생긴다).
     static let pipeCount = 3
     static let maxScore = MiniGameKind.flappy.maxScore
     /// 게임오버 뒤 결과 카드가 뜨기까지의 유예(그 사이 클릭은 무시 — 죽자마자 실수로 새 판을 열지 않게).
@@ -125,14 +131,14 @@ struct FlappyGame: Equatable, Sendable {
 
     // MARK: 순수 규칙
 
-    /// 틈 높이: 5점마다 2 줄고 62 에서 멈춘다.
+    /// 틈 높이: 80 에서 5점마다 2 줄고 64 에서 멈춘다(40점부터).
     static func gap(forScore score: Int) -> CGFloat {
-        max(62, 74 - CGFloat(2 * (max(0, score) / 5)))
+        max(64, 80 - CGFloat(2 * (max(0, score) / 5)))
     }
 
-    /// 스크롤 속도(pt/s): 점수당 3 빨라지고 190 에서 멈춘다.
+    /// 스크롤 속도(pt/s): 110 에서 점수당 2 빨라지고 170 에서 멈춘다(30점부터).
     static func speed(forScore score: Int) -> CGFloat {
-        min(190, 120 + CGFloat(3 * max(0, score)))
+        min(170, 110 + CGFloat(2 * max(0, score)))
     }
 
     /// 중력 적분 뒤 속도(최대 낙하 620 클램프).

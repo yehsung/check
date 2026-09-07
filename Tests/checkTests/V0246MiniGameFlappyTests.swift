@@ -5,7 +5,8 @@ import Testing
 @testable import check
 
 // v0.2.46 플래피 아잉 — 규칙(순수)·상태 전이·dt 클램프·렌더·프레임 프로브·소스 계약.
-// 규칙 상수는 spec-flappy.md 의 숫자를 그대로 고정한다(중력 1500 · 점프 −430 · 낙하 620 · 기둥 44/150 · 틈 74→62).
+// 규칙 상수는 200pt 캔버스에 맞춘 값을 고정한다(중력 900 · 점프 −210 · 낙하 380 · 기둥 44/150 · 틈 80→64 · 속도 110→170 · 첫 기둥 폭+80).
+// 2026-09-08 실기에서 중력 1500/점프 −430 은 클릭 한 번에 높이의 31% 를 솟구쳐 첫 기둥도 못 넘겼다.
 
 private let W = FlappyGame.width      // 292
 private let H = FlappyGame.height     // 200
@@ -27,32 +28,35 @@ private func isOver(_ phase: FlappyGame.Phase) -> Bool {
 // MARK: - (1) 순수 규칙
 
 @Test
-func gapShrinksTwoEveryFivePointsDownToSixtyTwo() {
-    #expect(FlappyGame.gap(forScore: 0) == 74)
-    #expect(FlappyGame.gap(forScore: 4) == 74)
-    #expect(FlappyGame.gap(forScore: 5) == 72)
-    #expect(FlappyGame.gap(forScore: 30) == 62)
-    #expect(FlappyGame.gap(forScore: 100) == 62)
+func gapShrinksTwoEveryFivePointsDownToSixtyFour() {
+    #expect(FlappyGame.gap(forScore: 0) == 80)
+    #expect(FlappyGame.gap(forScore: 4) == 80)
+    #expect(FlappyGame.gap(forScore: 5) == 78)
+    #expect(FlappyGame.gap(forScore: 30) == 68)
+    #expect(FlappyGame.gap(forScore: 40) == 64)
+    #expect(FlappyGame.gap(forScore: 100) == 64)
 }
 
 @Test
-func speedGrowsThreePerPointUpToOneNinety() {
-    #expect(FlappyGame.speed(forScore: 0) == 120)
-    #expect(FlappyGame.speed(forScore: 23) == 189)
-    #expect(FlappyGame.speed(forScore: 40) == 190)
-    #expect(FlappyGame.speed(forScore: 500) == 190)
+func speedGrowsTwoPerPointUpToOneSeventy() {
+    #expect(FlappyGame.speed(forScore: 0) == 110)
+    #expect(FlappyGame.speed(forScore: 23) == 156)
+    #expect(FlappyGame.speed(forScore: 30) == 170)
+    #expect(FlappyGame.speed(forScore: 40) == 170)
+    #expect(FlappyGame.speed(forScore: 500) == 170)
 }
 
 @Test
 func gravityIntegratesAndClampsFallSpeed() {
-    // 점프 직후 −430 에서 1초 자유낙하: −430 + 1500 = 1070 → 620 클램프.
-    #expect(FlappyGame.nextVelocity(FlappyGame.flapVelocity, dt: 1.0) == 620)
-    #expect(abs(FlappyGame.nextVelocity(0, dt: 1.0 / 30.0) - 50) < 1e-9)
+    // 점프 직후 −210 에서 1초 자유낙하: −210 + 900 = 690 → 380 클램프.
+    #expect(FlappyGame.nextVelocity(FlappyGame.flapVelocity, dt: 1.0) == 380)
+    #expect(abs(FlappyGame.nextVelocity(0, dt: 1.0 / 30.0) - 30) < 1e-9)
 
-    // 실제 판: 위쪽에서 떨어뜨리면 13 프레임(0.433초) 뒤 속도가 620 에 닿고 아직 바닥엔 안 닿는다.
+    // 실제 판: 위쪽에서 떨어뜨리면 13 프레임(0.433초, 30×13 = 390 → 380) 뒤 속도가 380 에 닿고 아직 바닥엔 안 닿는다
+    // (y = 20 + (30·78 + 380)/30 ≈ 110.7, 히트박스 아래 ≈ 121.7 < 192).
     var game = running(bird: .init(x: birdX, y: 20, vy: 0), pipes: [pipe(x: 600)])
     for _ in 0..<13 { game.step(dt: 1.0 / 30.0) }
-    #expect(game.bird.vy == 620)
+    #expect(game.bird.vy == 380)
     #expect(game.phase == .running)
     #expect(game.hitbox.maxY < H - FlappyGame.floorBand)
 }
@@ -61,10 +65,10 @@ func gravityIntegratesAndClampsFallSpeed() {
 func flapSetsUpwardVelocityAndCeilingStopsTheBirdWithoutKilling() {
     var game = running(bird: .init(x: birdX, y: 100, vy: 0), pipes: [pipe(x: 600)])
     game.flap()
-    #expect(game.bird.vy == -430)
+    #expect(game.bird.vy == -210)
 
     // 천장: 히트박스 윗변이 0 에 붙고 속도는 0, 충돌은 아니다.
-    var top = running(bird: .init(x: birdX, y: FlappyGame.hitboxSize / 2, vy: -430), pipes: [pipe(x: 600)])
+    var top = running(bird: .init(x: birdX, y: FlappyGame.hitboxSize / 2, vy: -210), pipes: [pipe(x: 600)])
     top.step(dt: 1.0 / 60.0)
     #expect(top.hitbox.minY == 0)
     #expect(top.bird.vy == 0)
@@ -76,13 +80,13 @@ func seededPipesStayInsideTheVerticalMargins() {
     var rng = MiniGameRandom(seed: 42)
     for _ in 0..<100 {
         let p = FlappyGame.makePipe(x: 0, score: 0, rng: &rng)
-        #expect(p.gap == 74)
-        #expect(p.centerY >= 74 / 2 + 24 && p.centerY <= H - 74 / 2 - 24 - FlappyGame.floorBand)
+        #expect(p.gap == 80)
+        #expect(p.centerY >= 80 / 2 + 24 && p.centerY <= H - 80 / 2 - 24 - FlappyGame.floorBand)   // 64…128
     }
     for _ in 0..<100 {
-        let p = FlappyGame.makePipe(x: 0, score: 30, rng: &rng)
-        #expect(p.gap == 62)
-        #expect(p.centerY >= 62 / 2 + 24 && p.centerY <= H - 62 / 2 - 24 - FlappyGame.floorBand)
+        let p = FlappyGame.makePipe(x: 0, score: 40, rng: &rng)
+        #expect(p.gap == 64)
+        #expect(p.centerY >= 64 / 2 + 24 && p.centerY <= H - 64 / 2 - 24 - FlappyGame.floorBand)   // 56…136
     }
     // 같은 시드는 같은 기둥.
     var a = MiniGameRandom(seed: 9), b = MiniGameRandom(seed: 9)
@@ -168,6 +172,7 @@ func collisionIsAxisAlignedBoxAgainstBothPipeHalves() {
 @Test
 func pipesRecycleBehindTheLastOneWithTheCurrentGap() {
     // 첫 기둥이 왼쪽으로 완전히 나가면(x + 44 < 0) 버리고 마지막 기둥 뒤 150 에 새 기둥을 단다. 틈은 그때 점수 기준.
+    // 속도 110 이라 44pt 는 0.4초 — 1초 안에 재활용된다.
     var game = running(bird: .init(x: birdX, y: H / 2, vy: 0),
                        pipes: [pipe(x: 0, gap: 180), pipe(x: 150, gap: 180), pipe(x: 300, gap: 180)], seed: 5)
     var recycled = false
@@ -198,12 +203,12 @@ func readyFlapStartsARoundWithThreePipesAndAJump() {
     game.flap()
     #expect(game.phase == .running)
     #expect(game.isPlaying)
-    #expect(game.bird.vy == -430)
+    #expect(game.bird.vy == -210)
     #expect(game.bird.x == birdX && game.bird.y == H / 2)
     #expect(game.pipes.count == 3)
-    #expect(game.pipes[0].x == W + 40)
-    #expect(game.pipes[1].x == W + 40 + 150)
-    #expect(game.pipes[2].x == W + 40 + 300)
+    #expect(game.pipes[0].x == W + 80)
+    #expect(game.pipes[1].x == W + 80 + 150)
+    #expect(game.pipes[2].x == W + 80 + 300)
 }
 
 @Test
@@ -223,8 +228,8 @@ func interruptWhileRunningSettlesTheScoreAsResult() {
     game.flap()
     #expect(game.phase == .running)
     #expect(game.score == 0)
-    #expect(game.bird.y == H / 2 && game.bird.vy == -430)
-    #expect(game.pipes.count == 3 && game.pipes[0].x == W + 40)
+    #expect(game.bird.y == H / 2 && game.bird.vy == -210)
+    #expect(game.pipes.count == 3 && game.pipes[0].x == W + 80)
     #expect(game.pipes.allSatisfy { !$0.passed })
     #expect(game.pipes != oldPipes || oldPipes.isEmpty)
 }
@@ -235,9 +240,9 @@ func interruptWhileRunningSettlesTheScoreAsResult() {
 func hugeDeltaTimeIsClampedToOneThirtieth() {
     var game = running(bird: .init(x: birdX, y: 100, vy: 0), pipes: [pipe(x: 600)])
     game.step(dt: 5)
-    #expect(abs(game.bird.vy - 50) < 1e-9, "1500 × 1/30 = 50 — 5초를 한 번에 밀지 않는다")
-    #expect(abs(game.bird.y - (100 + 50.0 / 30.0)) < 1e-6)
-    #expect(abs(game.pipes[0].x - (600 - 120.0 / 30.0)) < 1e-6)
+    #expect(abs(game.bird.vy - 30) < 1e-9, "900 × 1/30 = 30 — 5초를 한 번에 밀지 않는다")
+    #expect(abs(game.bird.y - (100 + 30.0 / 30.0)) < 1e-6)
+    #expect(abs(game.pipes[0].x - (600 - 110.0 / 30.0)) < 1e-6)
     #expect(game.phase == .running)
 
     // 음수 dt 는 0 으로.

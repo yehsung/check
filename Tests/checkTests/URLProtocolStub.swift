@@ -237,6 +237,11 @@ final class URLProtocolStub: URLProtocol {
             return patchWorkSessionsShouldFail ? 500 : 200
         }
 
+        // 미니게임 점수 upsert(return=minimal)는 실서버처럼 204 빈 본문이다.
+        if request.url?.path == "/rest/v1/minigame_daily_scores", request.httpMethod == "POST" {
+            return 204
+        }
+
         return request.url?.path == "/rest/v1/work_sessions" ? 201 : 200
     }
 
@@ -283,6 +288,10 @@ final class URLProtocolStub: URLProtocol {
         // 돌아가 [TakenPokeRow] 디코드가 조용히 throw 되는데, 스토어의 catch 가 그걸 삼켜 "요청은 나갔는데
         // 전달 경로만 죽은" 상태가 테스트에 전혀 드러나지 않는다(건수만 세는 테스트는 통과해 버린다).
         if request.url?.path == "/rest/v1/rpc/take_pokes" {
+            return Data("[]".utf8)
+        }
+        // 미니게임 순위 RPC 둘도 '아무도 없음'의 정상 응답이 빈 배열이다(take_pokes 와 같은 이유 — Data() 는 디코드 throw).
+        if request.url?.path == "/rest/v1/rpc/minigame_board" || request.url?.path == "/rest/v1/rpc/minigame_yesterday_winner" {
             return Data("[]".utf8)
         }
         // 내 공개 설정 조회(profiles GET)도 정상 1행을 돌려준다. 미등록이면 loadTokenUsagePrivacyIfNeeded 의

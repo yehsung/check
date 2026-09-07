@@ -3012,8 +3012,8 @@ func settingsEntryIsDrawnInTheCaptionRowAndIsNotAMenu() throws {
     let now = Date(timeIntervalSince1970: 1_784_000_000)
     let bitmap = try renderBitmap(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now)))
 
-    // (0) 팝오버 높이가 이사 전과 같다(517pt). 할 일 버튼이 나가고 기어가 그 자리를 이어받았으므로
-    //     캡션 행 버튼 수는 3개 그대로다 — 창 높이 예산(700pt 상한)이 1pt 도 움직이면 안 된다.
+    // (0) 팝오버 높이가 이사 전과 같다(517pt). 할 일 버튼이 나가고 기어가 그 자리를 이어받았고, v0.2.46 에
+    //     미니게임 버튼이 하나 더 섰지만 모두 18pt 소형이라 — 창 높이 예산(700pt 상한)이 1pt 도 움직이면 안 된다.
     #expect(bitmap.pixelsHigh == 517 * 2)
 
     // (1) 캡션 행은 상수로 박지 않고 **진행 바에서 파생해** 찾는다(헤더 글자가 바뀌어도 같은 띠를 가리킨다).
@@ -3021,27 +3021,27 @@ func settingsEntryIsDrawnInTheCaptionRowAndIsNotAMenu() throws {
     // 캡션 행 높이 = 소형 아이콘 버튼 18pt. 여기에 표준 IconButton(27pt)을 잘못 세우면 이 줄이 먼저 빨개진다.
     #expect(band.bottom - band.top + 1 == 18 * 2, "캡션 행 높이가 \(Double(band.bottom - band.top + 1) / 2)pt 다")
 
-    // (2) 그 행의 오른쪽 끝에 18pt 버튼이 **정확히 셋**이다: [설정][내 기록][목표 수정].
-    //     하나가 사라지거나 넷이 되면 여기서 잡힌다.
+    // (2) 그 행의 오른쪽 끝에 18pt 버튼이 **정확히 넷**이다: [설정][미니게임][내 기록][목표 수정](v0.2.46 부터).
+    //     하나가 사라지거나 다섯이 되면 여기서 잡힌다.
     let runs = inkColumnRuns(bitmap, top: band.top, bottom: band.bottom, left: 25 * 2, right: bitmap.pixelsWide - 25 * 2)
-    #expect(runs.count >= 4, "캡션 행에 왼쪽 문구도 함께 그려져야 한다(덩어리 \(runs.count)개)")
-    // 18pt 폭 덩어리가 정확히 셋이다 — 하나가 빠지면 여기가 먼저, 가장 알아보기 쉽게 빨개진다.
+    #expect(runs.count >= 5, "캡션 행에 왼쪽 문구도 함께 그려져야 한다(덩어리 \(runs.count)개)")
+    // 18pt 폭 덩어리가 정확히 넷이다 — 하나가 빠지면 여기가 먼저, 가장 알아보기 쉽게 빨개진다.
     let iconWidthRuns = runs.filter { abs(($0.end - $0.start + 1) - 18 * 2) <= 2 }
     #expect(
-        iconWidthRuns.count == 3,
-        "캡션 행의 18pt 아이콘 버튼이 \(iconWidthRuns.count)개다 — [설정][내 기록][목표 수정] 셋이어야 한다"
+        iconWidthRuns.count == 4,
+        "캡션 행의 18pt 아이콘 버튼이 \(iconWidthRuns.count)개다 — [설정][미니게임][내 기록][목표 수정] 넷이어야 한다"
     )
-    let buttons = Array(runs.suffix(3))
+    let buttons = Array(runs.suffix(4))
     for button in buttons {
         // 18pt 소형 버튼. ±2px 는 원 가장자리 안티에일리어싱 몫이다(표준 27pt 버튼이면 18px 이나 벌어진다).
         #expect(abs((button.end - button.start + 1) - 18 * 2) <= 2, "버튼 폭이 \(Double(button.end - button.start + 1) / 2)pt 다")
     }
-    // 셋이 4pt 간격으로 붙어 서므로 전체 폭은 3*18 + 2*4 = 62pt 다(간격이 벌어지면 여기서 걸린다).
-    #expect(abs((buttons[2].end - buttons[0].start + 1) - 62 * 2) <= 2)
+    // 넷이 4pt 간격으로 붙어 서므로 전체 폭은 4*18 + 3*4 = 84pt 다(간격이 벌어지면 여기서 걸린다).
+    #expect(abs((buttons[3].end - buttons[0].start + 1) - 84 * 2) <= 2)
     // 맨 오른쪽 버튼은 카드 콘텐츠 오른끝(316pt)에서 끝난다.
-    #expect(abs(buttons[2].end - (316 * 2 - 1)) <= 2)
+    #expect(abs(buttons[3].end - (316 * 2 - 1)) <= 2)
 
-    // (3) 셋 다 **아이콘이 칠해져 있다.** 원 배경(white 0.06 ≈ 56,58,73)만 남고 심볼이 빠지는 경우
+    // (3) 넷 다 **아이콘이 칠해져 있다.** 원 배경(white 0.06 ≈ 56,58,73)만 남고 심볼이 빠지는 경우
     //     (SF Symbol 이름 오타 등)를 여기서 가른다 — 아이콘은 secondaryText(≈191,192,197)라 밝기로 갈린다.
     for button in buttons {
         let glyph = brightPixelCount(bitmap, top: band.top, bottom: band.bottom, left: button.start, right: button.end)
@@ -3052,15 +3052,18 @@ func settingsEntryIsDrawnInTheCaptionRowAndIsNotAMenu() throws {
     //     그 버튼은 픽셀 커버리지 0 이 되고 (2)(3)의 셈도 무너진다.
     #expect(unavailablePlaceholderBounds(bitmap, top: band.top, bottom: band.bottom) == nil)
 
-    // (5) 셋 중 **맨 왼쪽이 설정**이라는 건 픽셀로 못 가른다(아이콘 모양 비교는 스냅샷 고정이 된다).
+    // (5) 넷 중 **맨 왼쪽이 설정**이라는 건 픽셀로 못 가른다(아이콘 모양 비교는 스냅샷 고정이 된다).
     //     소스 순서로 못 박는다 — 오른쪽 끝부터 세는 손버릇(끝=연필, 끝에서 둘째=내 기록)을 지키는 계약이다.
+    //     미니게임(v0.2.46)은 설정과 내 기록 **사이**다 — 끝 두 자리를 건드리지 않는다.
     //     이게 깨지면 목표를 고치려다 설정 창이 열리는 오클릭이 생긴다.
     let source = try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8)
     let section = try #require(swiftStructBody(source, name: "HeaderGoalSection"))
     let gear = try #require(section.range(of: "\"gearshape.fill\""), "캡션 행이 기어 아이콘을 그려야 한다")
+    let game = try #require(section.range(of: "\"gamecontroller.fill\""), "캡션 행이 미니게임 아이콘을 그려야 한다")
     let chart = try #require(section.range(of: "\"chart.xyaxis.line\""))
     let pencil = try #require(section.range(of: "\"pencil\""))
-    #expect(gear.lowerBound < chart.lowerBound)
+    #expect(gear.lowerBound < game.lowerBound)
+    #expect(game.lowerBound < chart.lowerBound)
     #expect(chart.lowerBound < pencil.lowerBound)
     // 기어가 실제로 설정 창을 연다(그리기만 하고 아무 데도 안 가는 버튼 방지).
     #expect(section.contains("CheckSettingsWindowController.shared.show()"))

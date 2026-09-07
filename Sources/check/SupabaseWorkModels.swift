@@ -1932,11 +1932,20 @@ struct ProfilePrivacyRow: Decodable, Equatable {
     /// 서버가 이 키를 안 보내는데, 비옵셔널이면 행 디코드가 통째로 throw 되어 토큰 공개 설정까지 못 읽는다.
     /// 컬럼이 없으면 꺼짐(false)으로 본다 = 기존 동작 유지.
     let focusMode: Bool?
+    /// 미니게임 순위 공개(20260908090000, v0.2.46). **별도 GET(fetchMiniGamePublic)의 응답**이다 — 기존 설정 GET 의 select 에
+    /// 끼워 넣지 않는다(마이그레이션 미적용 서버에서 42703 으로 요청 전체가 죽어 토큰 공개·집중 모드까지 못 읽는다 —
+    /// 별명 쿨타임 GET 이 따로 있는 것과 같은 이유). 컬럼/행이 없으면 nil = 공개(true)로 본다.
+    let minigamePublic: Bool?
 }
 
 /// profiles.token_usage_public 자기 행 갱신 요청(PATCH).
 struct ProfilePrivacyUpdateRequest: Encodable {
     let tokenUsagePublic: Bool
+}
+
+/// profiles.minigame_public 자기 행 갱신 요청(PATCH). 컬럼당 별도 구조체 규약(아래 focus_mode 와 같은 이유).
+struct ProfileMiniGamePublicUpdateRequest: Encodable {
+    let minigamePublic: Bool
 }
 
 /// profiles.focus_mode 자기 행 갱신 요청(PATCH). 토큰 공개와 **따로** 보내는 이유는 하나다 —
@@ -2314,4 +2323,101 @@ enum WorkTickFailure: Error, Equatable, Sendable {
     case serverError(status: Int)
     /// 그 밖의 비 2xx(400 22023 클라 버그, 23514 제약 위반 등). `code` 는 PostgREST 본문의 SQLSTATE/PGRST 코드.
     case rejected(status: Int, code: String?)
+}
+
+// MARK: - 미니게임 순위 (v0.2.46)
+
+/// minigame_daily_scores upsert 본문(snake_case 인코딩). **day 를 싣지 않는다** — 서버 BEFORE INSERT 트리거가 KST 오늘로
+/// 정한다(클라 시계 무시). best_score 에는 **이번 판 점수**를 싣고, 최고 유지(greatest)·판 수(plays+1)는 서버 트리거가 계산한다.
+struct MiniGameScoreUpsertRequest: Encodable {
+    let userId: String
+    let game: String
+    let bestScore: Int
+}
+
+/// minigame_board(p_game, p_day) RPC 본문. pDay 가 nil 이면 키를 생략해(encodeIfPresent) 서버가 KST 오늘을 쓴다;
+/// 'YYYY-MM-DD' 를 주면 그 날(어제 등)의 순위를 받는다.
+struct MiniGameBoardRequest: Encodable {
+    let pGame: String
+    var pDay: String? = nil
+}
+
+/// minigame_yesterday_winner(p_game) RPC 본문.
+struct MiniGameWinnerRequest: Encodable {
+    let pGame: String
+}
+
+/// minigame_board RPC 응답 행(snake_case 디코드). 행 자체 완결(이름/아바타 포함) — 토큰 보드와 같은 설계.
+/// display_name/plays/best_at 은 Optional 로 받는다 — 서버 함수가 컬럼을 하나 덜 실어도 목록 전체가 죽지 않게.
+struct MiniGameBoardRow: Decodable, Equatable {
+    let userId: String
+    let displayName: String?
+    let avatarUrl: String?
+    let bestScore: Int
+    /// timestamptz 문자열(소수초 유무 혼재) — 서비스가 parseDate 로 푼다.
+    let bestAt: String?
+    let plays: Int?
+}
+
+/// minigame_yesterday_winner RPC 응답 행. awarded = 자정 배치가 이미 상품(+10)을 지급했는가.
+struct MiniGameWinnerRow: Decodable, Equatable {
+    let day: String?
+    let userId: String
+    let displayName: String?
+    let avatarUrl: String?
+    let score: Int
+    let awarded: Bool?
+}
+
+/// 미니게임 오늘 순위 한 행(표시용). 정렬 순서가 곧 순위다(등수는 뷰가 인덱스로 센다).
+struct MiniGameBoardEntry: Identifiable, Equatable {
+    let userID: String
+    var name: String
+    var avatarURL: URL?
+    let bestScore: Int
+    /// 그 점수를 처음 낸 시각(동률 타이브레이크 — 먼저 낸 사람이 위). 모르면 nil(맨 뒤).
+    let bestAt: Date?
+    let plays: Int
+
+    var id: String { userID }
+}
+
+/// 어제 1등(상품 표시용). awarded 가 참이면 "+10 받음" 칩을 붙인다.
+struct MiniGameWinner: Equatable {
+    let day: String
+    let userID: String
+    let name: String
+    let avatarURL: URL?
+    let score: Int
+    let awarded: Bool
+}
+
+extension Array where Element == MiniGameBoardEntry {
+    /// 서버 정렬을 신뢰하지 않고 클라에서 다시 정렬한다: 점수 내림차순 → 먼저 낸 사람(best_at 오름차순, nil 은 뒤) → 이름.
+    func sortedForMiniGameBoard() -> [MiniGameBoardEntry] {
+        sorted { lhs, rhs in
+            if lhs.bestScore != rhs.bestScore { return lhs.bestScore > rhs.bestScore }
+            switch (lhs.bestAt, rhs.bestAt) {
+            case let (l?, r?) where l != r: return l < r
+            case (nil, .some): return false
+            case (.some, nil): return true
+            default: break
+            }
+            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
+    }
+}
+
+/// KST 달력 날짜 키 도우미(미니게임 순위의 '어제' 계산용). TokenUsageDayKey 와 같은 달력을 쓴다.
+enum MiniGameDayKey {
+    static func key(for date: Date) -> String {
+        TokenUsageDayKey.current(date)
+    }
+
+    /// KST 기준 어제 'YYYY-MM-DD'.
+    static func yesterday(_ now: Date = Date()) -> String {
+        let calendar = TeamWeeklyGoal.kstCalendar
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now) ?? now.addingTimeInterval(-86_400)
+        return key(for: yesterday)
+    }
 }

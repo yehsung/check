@@ -1207,6 +1207,95 @@ actor SupabaseWorkService {
         return try decoder.decode([TokenBoardRow].self, from: data)
     }
 
+    // MARK: - 미니게임 순위 (v0.2.46)
+
+    /// 이번 판 점수를 오늘(KST) 일별 원장에 올린다. minigame_daily_scores 에 (user_id, game, day) 로 upsert —
+    /// **day 는 본문에 없다**(서버 BEFORE INSERT 트리거가 KST 오늘로 정해 충돌 검사까지 그 날로 간다). 최고 유지·판 수는
+    /// 서버 트리거 몫이라 본문은 user_id·game·best_score(=이번 판 점수) 세 키뿐이다(merge-duplicates 는 본문 키만 갱신한다).
+    func upsertMiniGameScore(accessToken: String, userID: String, kind: MiniGameKind, score: Int) async throws {
+        try await sendNoBody(
+            path: "/rest/v1/minigame_daily_scores",
+            method: "POST",
+            queryItems: [URLQueryItem(name: "on_conflict", value: "user_id,game,day")],
+            body: MiniGameScoreUpsertRequest(userId: userID, game: kind.rawValue, bestScore: score),
+            accessToken: accessToken,
+            prefer: "resolution=merge-duplicates,return=minimal"
+        )
+    }
+
+    /// 오늘(day nil → 서버 KST 오늘) 또는 지정한 날의 게임별 순위. minigame_board(p_game, p_day) RPC(앱 사용자 전체 공개,
+    /// 공개 꺼진 사람은 본인에게만 보인다). 행 자체 완결(이름/아바타 포함). 정렬은 호출부가 다시 한다.
+    func fetchMiniGameBoard(accessToken: String, kind: MiniGameKind, day: String? = nil) async throws -> [MiniGameBoardEntry] {
+        let data = try await send(
+            path: "/rest/v1/rpc/minigame_board",
+            method: "POST",
+            body: MiniGameBoardRequest(pGame: kind.rawValue, pDay: day),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        let rows = try decoder.decode([MiniGameBoardRow].self, from: data)
+        return rows.map { row in
+            MiniGameBoardEntry(
+                userID: row.userId,
+                name: row.displayName ?? "사용자",
+                avatarURL: row.avatarUrl.flatMap { URL(string: $0) },
+                bestScore: row.bestScore,
+                bestAt: row.bestAt.flatMap { parseDate($0) },
+                plays: row.plays ?? 0
+            )
+        }
+    }
+
+    /// 어제(KST) 1등과 상품 지급 여부. minigame_yesterday_winner(p_game) RPC — 어제 기록이 없으면 0행 → nil.
+    func fetchMiniGameYesterdayWinner(accessToken: String, kind: MiniGameKind) async throws -> MiniGameWinner? {
+        let data = try await send(
+            path: "/rest/v1/rpc/minigame_yesterday_winner",
+            method: "POST",
+            body: MiniGameWinnerRequest(pGame: kind.rawValue),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        guard let row = try decoder.decode([MiniGameWinnerRow].self, from: data).first else { return nil }
+        return MiniGameWinner(
+            day: row.day ?? "",
+            userID: row.userId,
+            name: row.displayName ?? "사용자",
+            avatarURL: row.avatarUrl.flatMap { URL(string: $0) },
+            score: row.score,
+            awarded: row.awarded ?? false
+        )
+    }
+
+    /// 내 미니게임 순위 공개 여부(profiles.minigame_public). **별도 GET 인 이유는 별명 쿨타임 GET 과 같다** —
+    /// 기존 설정 GET 의 select 에 끼우면 컬럼이 없는 서버(마이그레이션 전 창)에서 42703 으로 그 요청 전체가 죽는다.
+    /// 컬럼/행이 없으면 nil(호출부가 공개 true 로 본다).
+    func fetchMiniGamePublic(accessToken: String, userID: String) async throws -> Bool? {
+        let data = try await send(
+            path: "/rest/v1/profiles",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "id", value: "eq.\(userID)"),
+                URLQueryItem(name: "select", value: "minigame_public")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode([ProfilePrivacyRow].self, from: data).first?.minigamePublic
+    }
+
+    /// 내 미니게임 순위 공개 여부 갱신. profiles 자기 행 PATCH(컬럼 단위 UPDATE 권한 필요 — 토큰 공개와 같은 함정).
+    func updateMiniGamePublic(accessToken: String, userID: String, isPublic: Bool) async throws {
+        try await sendNoBody(
+            path: "/rest/v1/profiles",
+            method: "PATCH",
+            queryItems: [URLQueryItem(name: "id", value: "eq.\(userID)")],
+            body: ProfileMiniGamePublicUpdateRequest(minigamePublic: isPublic),
+            accessToken: accessToken,
+            prefer: "return=minimal"
+        )
+    }
+
     // MARK: - 콕찌르기 / 토큰 사용량 공개 설정
 
     /// 대상에게 콕 찌르기. poke_user(p_to) RPC 를 로그인 토큰으로 호출한다. 근무중 게이트·60초 쿨타임은 서버가 강제한다.

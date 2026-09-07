@@ -217,13 +217,19 @@ struct MiniGameWindowLifecycleTests {
 @Test
 func windowLayoutIsAFixedTwoColumnConstantTable() {
     let layout = MiniGameWindowLayout.layout(hasYesterdayRow: true)
-    // 캔버스 344×236 — 폭은 596 − 12(단 사이) − 240(순위 열), 높이는 그 폭에 논리 비율(292:200)을 적용한 값.
-    #expect(layout.canvasSize == CGSize(width: 344, height: 236), "캔버스가 \(layout.canvasSize) 다")
+    // 캔버스 344×356 — 폭은 596 − 12(단 사이) − 240(순위 열), 높이는 칩 줄 아래 남는 세로 전부(396 − 28 − 12).
+    // 비율(292:200)로 236 을 쓰면 게임 열 아래 120pt 가 비었다. transform(in:) 이 짧은 축 기준으로 배율을
+    // 잡아 가운데 정렬하므로 그릇이 세로로 길어도 게임 난이도는 그대로다 — 위아래 바닥이 더 그려질 뿐.
+    #expect(layout.canvasSize == CGSize(width: 344, height: 356), "캔버스가 \(layout.canvasSize) 다")
     #expect(layout.rankSize == CGSize(width: 240, height: 396), "순위 열이 \(layout.rankSize) 다")
     #expect(MiniGameWindowLayout.rankWidth == 240)
-    // 논리 캔버스 비율을 ±1pt 안에서 지킨다(안 지키면 게임이 레터박스 띠 안에서만 논다).
-    let ratioHeight = layout.canvasSize.width * MiniGameCanvas.logicalHeight / MiniGameCanvas.logicalWidth
-    #expect(abs(layout.canvasSize.height - ratioHeight) <= 1, "캔버스 비율이 292:200 에서 벗어났다(\(ratioHeight))")
+    // 캔버스와 순위 열의 아랫변이 같은 줄에서 끝난다(두 단이 나란히 꽉 찬다).
+    #expect(layout.canvasSize.height + MiniGameWindowLayout.chipRowHeight + MiniGameWindowLayout.columnSpacing
+            == layout.rankSize.height, "두 단의 아랫변이 어긋난다")
+    // 논리 좌표는 비율 유지로 그려지므로, 배율은 짧은 축(폭)이 정한다 — 그 배율이 1 이상이어야 축소가 없다.
+    let scale = min(layout.canvasSize.width / MiniGameCanvas.logicalWidth,
+                    layout.canvasSize.height / MiniGameCanvas.logicalHeight)
+    #expect(scale >= 1, "논리 캔버스가 축소돼 그려진다(배율 \(scale))")
 
     // 행수는 어제 1등 줄이 있으나 없으나 상한 10 이다(고정 높이에 여유가 있어 그 22pt 를 흡수한다).
     #expect(MiniGameWindowLayout.visibleRows(hasYesterdayRow: true) == 10)

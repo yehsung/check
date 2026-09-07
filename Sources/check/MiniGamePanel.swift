@@ -59,10 +59,15 @@ enum MiniGameWindowLayout {
         CGSize(width: contentSize.width - contentPadding * 2, height: contentSize.height - contentPadding * 2)
     }
 
-    /// 캔버스(344×236). 논리 292×200 의 비율을 ±1pt 안에서 지킨다.
+    /// 캔버스(344×368 — 폭은 창에서 순위 열을 뺀 나머지, 높이는 칩 줄 아래 남는 세로 전부).
+    ///
+    /// 비율을 292:200 으로 고정하면 높이가 236 이 되어 게임 열 아래에 120pt 남는 여백이 생겼다.
+    /// 캔버스는 `MiniGameCanvas.transform(in:)` 이 **비율을 유지해 가운데 정렬**하므로(짧은 축 기준 배율),
+    /// 그릇이 세로로 길어져도 게임 규칙·난이도는 그대로다 — 위아래로 같은 색 바닥이 더 그려질 뿐이다.
+    /// 창이 고정 크기라 이 값도 상수이고, 모두가 같은 캔버스에서 겨룬다.
     static let canvasSize: CGSize = {
-        let width: CGFloat = 620 - 12 * 2 - 12 - 240
-        let height = (width * MiniGameCanvas.logicalHeight / MiniGameCanvas.logicalWidth).rounded()
+        let width: CGFloat = contentSize.width - contentPadding * 2 - columnSpacing - rankWidth
+        let height: CGFloat = innerSize.height - chipRowHeight - columnSpacing
         return CGSize(width: width, height: height)
     }()
 

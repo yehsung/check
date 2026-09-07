@@ -264,11 +264,13 @@ private struct TimingBarFrame: View {
                 context.fill(floor, with: .color(CheckTheme.fieldFill))
                 context.stroke(floor, with: .color(CheckTheme.border), lineWidth: 1)
 
-                // 트랙
-                let trackRect = rect(Self.trackLeft, Self.trackY - Self.trackHeight / 2, Self.trackWidth, Self.trackHeight)
-                let track = Path(roundedRect: trackRect, cornerRadius: Self.trackHeight / 2 * scale)
-                context.fill(track, with: .color(CheckTheme.trackFill))
-                context.stroke(track, with: .color(CheckTheme.border), lineWidth: 1)
+                // 트랙 — 시작 전(.ready)엔 그리지 않는다: 안내 카드가 가운데를 덮어 양끝만 괄호처럼 삐져나온다(통합 렌더에서 확인).
+                if case .ready = game.phase {} else {
+                    let trackRect = rect(Self.trackLeft, Self.trackY - Self.trackHeight / 2, Self.trackWidth, Self.trackHeight)
+                    let track = Path(roundedRect: trackRect, cornerRadius: Self.trackHeight / 2 * scale)
+                    context.fill(track, with: .color(CheckTheme.trackFill))
+                    context.stroke(track, with: .color(CheckTheme.border), lineWidth: 1)
+                }
 
                 // 목표 구간 · 마커 — 진행 중/결과 표시 중에만.
                 if game.isPlaying {

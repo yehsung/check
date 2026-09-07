@@ -195,6 +195,14 @@ func migrationContractMiniGameProbes() throws {
     #expect(sql.contains("raise exception '⑰ A 의 잔량·장부 드리프트가 변했다"), "장부 없이 잔량만 바꾸면 ultra_wallet_audit 드리프트")
     #expect(sql.contains("if jsonb_array_length(v_res->'days') <> 3 or (v_res->'reset'->>'performed') is distinct from 'false' then"), "p_day null → 3일 따라잡기")
     #expect(sql.contains("if v_n <> v_pd0 then"), "초기화 키 롤백 확인")
+    // 적용 당일의 초기화 키를 프로브 블록 **뒤**(센티널 롤백 밖)에서 미리 채운다 — 첫 cron 이 한낮에 옛 경제 잔량(5·4)을 깎지 않게.
+    // 프로브는 시작에서 그 키를 지우고(롤백으로 원복) ⑯ 을 돌리므로 재적용에도 통과한다.
+    let seed = try #require(sql.range(of: "insert into public.minigame_prize_days(day, reset_users)\nvalues ((now() at time zone 'Asia/Seoul')::date, 0)\non conflict (day) do nothing;"))
+    let sentinel = try #require(sql.range(of: "raise exception 'MINIGAME_PROBE_ROLLBACK';"))
+    let probeDelete = try #require(sql.range(of: "delete from public.minigame_prize_days where day = v_today;"))
+    #expect(sentinel.upperBound < seed.lowerBound, "오늘 키 insert 는 프로브 블록 뒤여야 실제로 남는다")
+    #expect(probeDelete.lowerBound < sentinel.lowerBound, "프로브가 오늘 키를 먼저 지워야 재적용에서도 ⑯ 이 초기화를 관측한다")
+    #expect(sql.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("on conflict (day) do nothing;"), "파일 맨 끝")
     #expect(sql.contains("if v_bal <> 13 then"))
     #expect(sql.contains("if v_bal > 3 or v_bal < 2 then"))
     #expect(sql.contains("perform public.minigame_award_daily_prizes(v_yday);"), "authenticated 가 상품 함수를 부르면 42501 이어야 한다")

@@ -4,11 +4,12 @@ import SwiftUI
 import Testing
 @testable import check
 
-// v0.2.46 미니게임 패널 렌더 — 창 높이 상한(700pt) 세 조합 · 순위 행 30pt 단위 성장/클립 · 내 행 강조 · 어제 1등 줄 · 스냅샷.
+// v0.2.46 미니게임 **창** 렌더 — 가로 2단(게임 | 오늘 순위) 스냅샷 · 순위 열 고정 폭 · 내 행 강조 · 어제 1등 줄 ·
+// 팝오버에서 패널이 빠졌는데 홈 높이가 그대로인지(캡션 행 버튼은 남았다).
 // 헬퍼는 CheckMenuRenderTests 의 것과 같은 규약(그 파일의 헬퍼는 private 이라 여기 복사).
 
 private let mgMe = "00000000-0000-0000-0000-000000000002"
-private let mgSnapshotDir = "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/agent-hub"
+private let mgSnapshotDir = "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/agent-win"
 
 @MainActor
 private func mgBoard(count: Int, includeMe: Bool) -> [MiniGameBoardEntry] {
@@ -38,73 +39,69 @@ private func mgPanelStore(rows: Int, includeMe: Bool = true, winner: Bool = true
     return store
 }
 
-// MARK: - 창 높이 상한
+// MARK: - 창 콘텐츠 렌더(가로 2단)
 
 @MainActor
-@Test
-func miniGamePanelPopoverStaysWithinHeightCapForChromeCombinations() throws {
-    defer { MiniGameSpaceKey.remove() }
-    var cases: [(String, Double)] = []
-    func measure(_ label: String, _ view: some View) throws {
-        let bitmap = try mgRenderBitmap(view)
-        let points = Double(bitmap.pixelsHigh) / 2.0
-        cases.append((label, points))
-        #expect(points <= 700.0, "\(label) 이 700pt 상한을 넘었습니다: \(points)pt")
-        mgSaveSnapshot(bitmap, name: label)
-    }
-
-    // (a) 크롬 0: 패널 + 10행(스크롤 초과) + 어제 1등 줄.
-    let plain = mgPanelStore(rows: 10, tokenUsage: mgSeededTokenStore())
-    try measure("panel-home", CheckMenuView(store: plain, previewClipsOverflowList: true))
-
-    // (b) 새 버전 배너(노트 4줄 = 149pt).
-    let update = mgPanelStore(rows: 10, tokenUsage: mgSeededTokenStore())
-    try measure("panel-update", CheckMenuView(store: update, previewClipsOverflowList: true, previewUpdateBanner: true, previewUpdateNotes: mgSampleUpdateNotes))
-
-    // (c) 12시간 확인 배너 + 목표 편집 행(92 + 92 = 184pt) — 헤더가 가장 부푸는 조합.
-    let longSession = mgPanelStore(rows: 10, tokenUsage: mgSeededTokenStore())
-    longSession.startedAt = Date().addingTimeInterval(-10)
-    longSession.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 10)
-    longSession.isLongSessionPromptActive = true
-    try measure("panel-longsession", CheckMenuView(store: longSession, previewClipsOverflowList: true, previewGoalEditing: true))
-
-    // 대조군: 크롬이 없을 때가 가장 낮지는 않아도(패널이 크롬에 양보한다) 세 값 모두 상한 안이어야 하고, 크롬 조합이 홈보다 낮으면 안 된다.
-    #expect(cases.count == 3)
-}
-
-// MARK: - 순위 목록 높이 규약
-
-@MainActor
-@Test
-func rankListGrowsThirtyPointsPerRowUntilFourAndThenClips() throws {
-    defer { MiniGameSpaceKey.remove() }
-    func height(rows: Int) throws -> Double {
-        let store = mgPanelStore(rows: rows, includeMe: false, winner: false)
-        let bitmap = try mgRenderBitmap(MiniGamePanel(store: store, clipsOverflowInsteadOfScroll: true), width: 316)
-        return Double(bitmap.pixelsHigh) / 2.0
-    }
-    let h0 = try height(rows: 0), h1 = try height(rows: 1), h2 = try height(rows: 2)
-    let h3 = try height(rows: 3), h4 = try height(rows: 4), h5 = try height(rows: 5), h9 = try height(rows: 9)
-    // 빈 목록은 안내 한 줄(26pt)이라 1행과 같은 높이다.
-    #expect(abs(h0 - h1) <= 0.5, "빈 목록(\(h0)) 과 1행(\(h1)) 높이가 다르다")
-    for (a, b, label) in [(h1, h2, "1→2"), (h2, h3, "2→3"), (h3, h4, "3→4")] {
-        #expect(abs((b - a) - 30) <= 0.5, "\(label) 행 성장이 30pt(26+4)가 아니라 \(b - a)pt 다")
-    }
-    // 4행이 상한 — 그 뒤는 클립(스크롤)이라 높이가 멈춘다.
-    #expect(abs(h5 - h4) <= 0.5, "5행(\(h5))이 4행(\(h4))보다 높다 — 상한이 안 먹는다")
-    #expect(abs(h9 - h4) <= 0.5)
-    // 본문 예산: 캔버스 200 + 12 + 제목줄 18 + 4 + 목록 116 + 8 + 요약 14 (+ 제목행 27 + 12 + 구분선 1 + 12 + 패딩 24) ≤ 700 안.
-    #expect(h4 <= 425 + 27 + 12 + 1 + 12 + 24 + 1, "4행 패널 자연 높이 \(h4) 가 예산을 넘는다")
+private func mgWindowBitmap(_ store: WorkTimerStore, kind: MiniGameKind = .timingBar) throws -> NSBitmapImageRep {
+    store.miniGameKind = kind
+    let view = CheckMiniGameWindowView(store: store, clipsOverflowInsteadOfScroll: true)
+        .background(CheckTheme.background)
+    let renderer = ImageRenderer(content: view)
+    renderer.scale = 2
+    guard let image = renderer.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff)
+    else { throw MGRenderError.failed }
+    return bitmap
 }
 
 @MainActor
 @Test
-func yesterdayWinnerRowAddsExactlyTwentyTwoPoints() throws {
+func miniGameWindowDrawsTwoColumnsAtEveryStandardSize() throws {
     defer { MiniGameSpaceKey.remove() }
-    let with = try mgRenderBitmap(MiniGamePanel(store: mgPanelStore(rows: 3, winner: true), clipsOverflowInsteadOfScroll: true), width: 316)
-    let without = try mgRenderBitmap(MiniGamePanel(store: mgPanelStore(rows: 3, winner: false), clipsOverflowInsteadOfScroll: true), width: 316)
-    let delta = Double(with.pixelsHigh - without.pixelsHigh) / 2.0
-    #expect(abs(delta - 22) <= 0.5, "어제 1등 줄이 18+4 = 22pt 가 아니라 \(delta)pt 를 먹는다(예산 표의 44 가 거짓이 된다)")
+    let size = MiniGameWindowLayout.contentSize
+    let cases: [(String, MiniGameKind, Int)] = [
+        ("window-timing", .timingBar, 12),   // 순위가 넘치는 판(스크롤 대신 클립)
+        ("window-flappy", .flappy, 4),
+        ("window-large", .timingBar, 0)      // 빈 순위 — 첫 실행에서 보게 될 그림
+    ]
+    for (name, kind, rows) in cases {
+        let store = rows > 0 ? mgPanelStore(rows: rows, winner: true) : mgEmptyBoardStore()
+        let bitmap = try mgWindowBitmap(store, kind: kind)
+        // 고정 크기를 그대로 채운다(넘치면 아래·오른쪽이 잘려 순위나 캔버스가 사라진다).
+        #expect(bitmap.pixelsWide == Int(size.width) * 2, "\(name) 폭 \(bitmap.pixelsWide)px (기대 \(Int(size.width) * 2)px)")
+        #expect(bitmap.pixelsHigh == Int(size.height) * 2, "\(name) 높이 \(bitmap.pixelsHigh)px (기대 \(Int(size.height) * 2)px)")
+        mgSaveSnapshot(bitmap, name: name)
+    }
+}
+
+@MainActor
+@Test
+func theRankColumnSitsBesideTheCanvasNotBelowIt() throws {
+    defer { MiniGameSpaceKey.remove() }
+    let size = MiniGameWindowLayout.contentSize
+    let layout = MiniGameWindowLayout.layout(hasYesterdayRow: true)
+    // 순위 행이 있는 판과 빈 판의 차이는 **오른쪽 열**에서만 난다(아래가 아니라 옆이라는 증거).
+    let filled = try mgWindowBitmap(mgPanelStore(rows: 6, includeMe: false, winner: true))
+    let empty = try mgWindowBitmap(mgEmptyBoardStore())
+    let diff = try #require(mgDiffBounds(filled, empty, tolerance: 8), "순위 행이 있으나 없으나 그림이 같다")
+    let columnLeft = MiniGameWindowLayout.contentPadding + layout.canvasSize.width
+    #expect(Double(diff.minX) / 2.0 >= columnLeft, "순위 차이가 캔버스 영역(x < \(columnLeft))까지 번졌다 — 2단이 아니다")
+    // 그리고 그 차이는 창 세로 절반 위쪽에서 시작한다(아래에 깔린 목록이 아니다).
+    #expect(Double(diff.minY) / 2.0 < size.height / 2, "순위 목록이 창 아래쪽에서 시작한다(minY \(Double(diff.minY) / 2.0)pt)")
+}
+
+@MainActor
+@Test
+func theYesterdayWinnerRowDrawsInTheRankColumnAndCostsOneRow() throws {
+    defer { MiniGameSpaceKey.remove() }
+    let with = MiniGameWindowLayout.layout(hasYesterdayRow: true)
+    // 고정 높이에 여유가 있어 어제 줄이 있어도 행수는 그대로다(둘 다 상한 10).
+    #expect(MiniGameWindowLayout.visibleRows(hasYesterdayRow: false) == with.visibleRows)
+
+    let shown = try mgWindowBitmap(mgPanelStore(rows: 3, includeMe: false, winner: true))
+    let hidden = try mgWindowBitmap(mgPanelStore(rows: 3, includeMe: false, winner: false))
+    let diff = try #require(mgDiffBounds(shown, hidden, tolerance: 8), "어제 1등 줄이 아무것도 안 그린다")
+    #expect(Double(diff.minX) / 2.0 >= MiniGameWindowLayout.contentPadding + with.canvasSize.width,
+            "어제 1등 줄이 순위 열 밖에 그려진다")
 }
 
 // MARK: - 내 행 강조
@@ -113,18 +110,14 @@ func yesterdayWinnerRowAddsExactlyTwentyTwoPoints() throws {
 @Test
 func myRowIsHighlightedWithAccentBorderAndChip() throws {
     defer { MiniGameSpaceKey.remove() }
-    // 같은 목록을 '내 행 있음/없음'으로 두 번 그려 차이가 목록 영역(하반부)에만 있는지 본다.
-    let mine = try mgRenderBitmap(MiniGamePanel(store: mgPanelStore(rows: 4, includeMe: true, winner: false), clipsOverflowInsteadOfScroll: true), width: 316)
-    let other = try mgRenderBitmap(MiniGamePanel(store: mgPanelStore(rows: 4, includeMe: false, winner: false), clipsOverflowInsteadOfScroll: true), width: 316)
-    #expect(mine.pixelsHigh == other.pixelsHigh, "내 행 강조가 행 높이를 바꿨다")
+    let mine = try mgWindowBitmap(mgPanelStore(rows: 4, includeMe: true, winner: false))
+    let other = try mgWindowBitmap(mgPanelStore(rows: 4, includeMe: false, winner: false))
+    #expect(mine.pixelsHigh == other.pixelsHigh, "내 행 강조가 창 높이를 바꿨다")
     let diff = try #require(mgDiffBounds(mine, other, tolerance: 8), "내 행이 남의 행과 똑같이 그려졌다(테두리·'나' 칩 없음)")
-    // 차이는 캔버스(위 ~ 27+12+1+12+200+12 ≈ 264pt) 아래 목록 띠에서만 난다.
-    #expect(diff.minY >= 250 * 2, "차이가 캔버스 위에서도 난다(minY \(diff.minY / 2)pt)")
-    // accent 계열 픽셀이 내 행 판에 더 많다(테두리 accent .45 + 칩).
-    let accentMine = mgPixelCount(mine, top: diff.minY, bottom: diff.maxY, left: 0, right: mine.pixelsWide - 1, where: mgIsAccentish)
-    let accentOther = mgPixelCount(other, top: diff.minY, bottom: diff.maxY, left: 0, right: other.pixelsWide - 1, where: mgIsAccentish)
+    let accentMine = mgPixelCount(mine, top: diff.minY, bottom: diff.maxY, left: diff.minX, right: diff.maxX, where: mgIsAccentish)
+    let accentOther = mgPixelCount(other, top: diff.minY, bottom: diff.maxY, left: diff.minX, right: diff.maxX, where: mgIsAccentish)
     #expect(accentMine > accentOther, "내 행에 accent 픽셀이 더 많지 않다(\(accentMine) vs \(accentOther))")
-    mgSaveSnapshot(mine, name: "panel-myrow")
+    mgSaveSnapshot(mine, name: "window-myrow")
 }
 
 // MARK: - 캡션 행: 미니게임 버튼이 홈 높이를 바꾸지 않는다
@@ -137,6 +130,16 @@ func homePopoverHeightIsUnchangedByTheMiniGameButton() throws {
     let bitmap = try mgRenderBitmap(CheckMenuView(store: store))
     // CheckMenuRenderTests.settingsEntryIsDrawnInTheCaptionRowAndIsNotAMenu 와 같은 517pt 계약(18pt 소형 버튼 하나 더).
     #expect(bitmap.pixelsHigh == 517 * 2, "캡션 행에 버튼을 더했더니 홈 높이가 \(Double(bitmap.pixelsHigh) / 2)pt 로 변했다")
+}
+
+@MainActor
+private func mgEmptyBoardStore() -> WorkTimerStore {
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+    let store = mgTeamStore(members: mgSteadyMembers(count: 8), now: now)
+    store.isMiniGamePanelVisible = true
+    store.miniGameBoardLoaded = true
+    store.miniGameYesterdayWinner = MiniGameWinner(day: "2026-09-07", userID: "u9", name: "어제왕", avatarURL: nil, score: 977, awarded: true)
+    return store
 }
 
 // MARK: - 헬퍼(복사본)

@@ -126,6 +126,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func wireSettingsWindow() {
         CheckSettingsWindowController.shared.configure(store: store)
         CheckSettingsShortcut.install { CheckSettingsWindowController.shared.show() }
+        // 미니게임 창도 같은 자리에서 배선한다(v0.2.46). 창 자체는 첫 `show()` 에 만들어지므로 여기서는
+        // 스토어만 물린다 — 게임을 한 번도 안 여는 실행에서는 창이 아예 생기지 않는다.
+        CheckMiniGameWindowController.shared.configure(store: store)
         // 실행 중인 앱에서 창이 **실제로** 떴는지 밖에서 재기 위한 문(인자가 없으면 아무 일도 안 한다).
         // 이 저장소에서 창 검증은 CGWindowList 실측 없이는 성립하지 않는다 — 근거는 그 타입 주석 참고.
         CheckSettingsWindowProbe.startIfRequested()

@@ -40,7 +40,9 @@ enum MiniGameWindowLayout {
     /// 순위 열 고정 폭.
     static let rankWidth: CGFloat = 240
     /// 순위 제목줄 · 어제 1등 줄(둘 다 18, 뒤에 4pt 간격).
-    static let rankHeaderHeight: CGFloat = 18
+    /// 순위 열 머리글 높이. **칩 줄과 같은 값**이어야 두 단의 본문(캔버스 / 어제 1등·순위 목록)이 같은
+    /// y 에서 시작한다 — 18 로 두었더니 오른쪽이 18pt 높이 떠 "시작 위치가 안 맞는다"는 지적을 받았다(2026-09-08).
+    static let rankHeaderHeight: CGFloat = chipRowHeight
     static let winnerRowHeight: CGFloat = 18
     static let rowGap: CGFloat = 4
     /// 목록 → 요약줄 간격 + 요약줄.
@@ -76,7 +78,7 @@ enum MiniGameWindowLayout {
 
     /// 순위 열에서 목록을 뺀 고정분.
     static func rankChrome(hasYesterdayRow: Bool) -> CGFloat {
-        rankHeaderHeight + rowGap
+        rankHeaderHeight + chipRowSpacing
             + (hasYesterdayRow ? winnerRowHeight + rowGap : 0)
             + summarySpacing + summaryHeight
     }
@@ -265,7 +267,9 @@ struct CheckMiniGameWindowView: View {
 
     @ViewBuilder
     private func rankColumn(visibleRows: Int) -> some View {
-        VStack(spacing: MiniGameWindowLayout.rowGap) {
+        // 바깥 간격은 왼쪽 단(칩 줄 → 캔버스)과 같은 값이다. 머리글 높이도 칩 줄과 같아서 두 단의
+        // 본문 윗변이 정확히 같은 줄에서 시작한다.
+        VStack(spacing: MiniGameWindowLayout.chipRowSpacing) {
             HStack(spacing: 6) {
                 Text(Self.rankTitle)
                     .font(.caption2.weight(.semibold))
@@ -281,6 +285,7 @@ struct CheckMiniGameWindowView: View {
                     .minimumScaleFactor(0.7)
             }
             .frame(height: MiniGameWindowLayout.rankHeaderHeight)
+            VStack(spacing: MiniGameWindowLayout.rowGap) {
             if let winner = store.miniGameYesterdayWinner {
                 HStack(spacing: 6) {
                     CheckAvatarView(name: winner.name, avatarURL: winner.avatarURL, size: 16)
@@ -314,6 +319,7 @@ struct CheckMiniGameWindowView: View {
                 .frame(height: MiniGameWindowLayout.summaryHeight)
                 .padding(.top, MiniGameWindowLayout.summarySpacing - MiniGameWindowLayout.rowGap)
             Spacer(minLength: 0)
+            }
         }
     }
 

@@ -53,8 +53,9 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
 
     /// 기본 콘텐츠 크기. 폭은 뷰가 스스로 밝힌 `CheckSettingsView.preferredWidth`(설명 한 줄이 두 줄로
     /// 접히지 않는 최소치)에 창 여백을 더한 값이다 — **크기를 여기서 따로 정하면 뷰가 문구를 고칠 때마다
-    /// 두 숫자가 조용히 어긋난다.** 높이는 지금 담긴 두 묶음이 잘리지 않는 값이고, 창은 리사이즈된다.
-    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 400)
+    /// 두 숫자가 조용히 어긋난다.** 높이는 지금 담긴 두 묶음이 잘리지 않는 값이고, 창은 리사이즈된다
+    /// (v0.2.46: '미니게임 순위 공개' 행이 붙어 콘텐츠가 452pt 로 늘어 400 → 470 — RealtimeLinkTests 의 높이 계약이 이 값을 읽는다).
+    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 470)
     /// 최소 크기. 폭은 뷰가 선언한 하한(`minWidth: 320`)을 그대로 따른다 — 그보다 좁히면 라벨과
     /// 스위치가 겹친다. 여기에 뷰가 모르는 숫자를 새로 적으면 그 순간 두 하한이 갈린다.
     static let minContentSize = NSSize(width: 320, height: 260)

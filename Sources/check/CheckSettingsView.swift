@@ -378,11 +378,17 @@ struct CheckSettingsView: View {
                     detail: "끄면 AI 토큰 순위판에서 내 사용량이 다른 사람에게 보이지 않아요.",
                     isOn: tokenUsagePublicBinding
                 )
+                PanelDivider()
+                CheckSettingsToggleRow(
+                    title: "미니게임 순위 공개",
+                    detail: "끄면 내 최고기록이 순위표에 안 보이고 올라가지도 않아요.",
+                    isOn: miniGamePublicBinding
+                )
             }
-            // 진단은 **카드가 아니라 한 줄 각주**다. 설정 창은 400pt 이고 콘텐츠가 이미 355pt 라
-            // 섹션 카드(제목+패딩)를 하나 더 얹으면 445pt 가 되어 맨 아래 — 즉 이 줄 자체가 잘린다.
-            // 두 각주는 바깥 VStack 의 14pt 간격이 아니라 2pt 로 붙인다 — 창 400pt 예산에서 각주 한 줄이
-            // 12pt 인데 14pt 간격을 하나 더 쓰면 409pt 로 넘쳐 맨 아랫줄(이 진단)이 잘린다(RealtimeLinkTests).
+            // 진단은 **카드가 아니라 한 줄 각주**다. 설정 창은 470pt(v0.2.46 에 미니게임 공개 행이 붙어 400 → 470)이고
+            // 콘텐츠가 이미 그 근처라 섹션 카드(제목+패딩)를 하나 더 얹으면 맨 아래 — 즉 이 줄 자체가 잘린다.
+            // 두 각주는 바깥 VStack 의 14pt 간격이 아니라 2pt 로 붙인다 — 예산에서 각주 한 줄이
+            // 12pt 인데 14pt 간격을 하나 더 쓰면 넘쳐 맨 아랫줄(이 진단)이 잘린다(RealtimeLinkTests).
             VStack(alignment: .leading, spacing: 2) {
                 RealtimeDiagnosticsRow(store: store)
                 WorkTickDiagnosticsRow(store: store)
@@ -443,6 +449,13 @@ struct CheckSettingsView: View {
         Binding(
             get: { store.tokenUsagePublic },
             set: { store.setTokenUsagePublic($0) }
+        )
+    }
+
+    private var miniGamePublicBinding: Binding<Bool> {
+        Binding(
+            get: { store.miniGamePublic },
+            set: { store.setMiniGamePublic($0) }
         )
     }
 }

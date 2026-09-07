@@ -112,14 +112,14 @@ struct CheckMenuView: View {
         }
     }
 
-    /// 하위 패널(리그/토큰/찌르기/개인 기록/울트라)이 열려 있는지. 열려 있으면 팀 카드 자리를 그 패널이 대신 쓴다.
+    /// 하위 패널(리그/토큰/찌르기/개인 기록/울트라/미니게임)이 열려 있는지. 열려 있으면 팀 카드 자리를 그 패널이 대신 쓴다.
     ///
     /// ★ 새 패널을 만들면 **여기 더하는 것을 잊지 마라.** 빠뜨리면 토큰 소모량 행이 패널과 함께 그려져
     ///   창이 700pt 상한을 넘고 푸터(로그아웃/앱 종료)가 화면 밖으로 잘린다 — 그 순간 사용자는
     ///   로그아웃할 방법을 잃는다. 이 목록의 원소 수는 스토어의 isXxxVisible 플래그 수와 같아야 한다.
     private var isSubPanelOpen: Bool {
         store.isLeaderboardVisible || store.isTokenBoardVisible || store.isPokePanelVisible
-            || store.isInsightsPanelVisible || store.isUltraPanelVisible
+            || store.isInsightsPanelVisible || store.isUltraPanelVisible || store.isMiniGamePanelVisible
     }
 
     /// 토큰 소모량 행은 홈(팀 목록) 화면의 구성요소다 — 하위 패널이 열리면 감춘다. 패널이 쓸 세로 공간을
@@ -358,6 +358,14 @@ struct CheckMenuView: View {
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList,
                             onBack: { store.closeUltraPanel() }
+                        )
+                    } else if store.isMiniGamePanelVisible {
+                        // 미니게임 화면(캔버스 + 오늘 순위). 다른 다섯 패널과 **같은 뼈대**다. 60Hz 게임 상태는 잎 뷰 @State 에
+                        // 갇혀 있고 store 는 패널 플래그·순위·최고기록만 준다(초 단위 시계는 읽지 않는다).
+                        MiniGamePanel(
+                            store: store,
+                            extraChromeHeight: listExtraChromeHeight,
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
                     } else if store.isInsightsPanelVisible {
                         // 개인 기록 페이지(지난주 회고 + 근무 리듬 히트맵). 내 데이터만 쓰고, 계산은 전부
@@ -728,6 +736,16 @@ private struct HeaderGoalSection: View {
                         help: "설정 — 자동 실행 · 할 일 · 별명 · 토큰 공개"
                     ) {
                         CheckSettingsWindowController.shared.show()
+                    }
+                    // 미니게임(타이밍 바·플래피 아잉 + 오늘 순위). 개인 화면이라 자리는 이 캡션 행이고(내 기록과 같은 근거),
+                    // [설정]과 [내 기록] **사이**다 — 오른쪽 끝부터 세는 손버릇(끝=연필, 끝에서 둘째=내 기록)을 건드리지 않는다.
+                    // 18pt 소형 버튼이라 캡션 행 높이(18)와 창 높이 예산은 그대로다.
+                    HeaderCaptionIconButton(
+                        icon: "gamecontroller.fill",
+                        help: "미니게임",
+                        isActive: store.isMiniGamePanelVisible
+                    ) {
+                        store.toggleMiniGamePanel()
                     }
                     // 내 기록(지난주 회고 + 근무 리듬 히트맵). 팀 카드 헤더가 아니라 **내 근무 박스**에 둔다 —
                     // 본인 데이터만 보는 개인 화면이라 자리가 여기가 맞고, 팀 헤더에 네 번째 버튼을 세우면

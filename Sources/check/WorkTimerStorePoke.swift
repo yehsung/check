@@ -856,6 +856,14 @@ extension WorkTimerStore {
                 if displayNameAvailableAt != availableAt { displayNameAvailableAt = availableAt }
             }
             refreshDisplayNameLock()
+            // 미니게임 순위 공개도 **따로** GET 한다(컬럼이 없는 서버에서 위 설정 GET 이 같이 죽지 않게 — 별명 쿨타임과 같은 규약).
+            // 사용자가 이미 골랐으면(miniGamePublicLoaded) 낡은 서버값으로 덮지 않는다. 실패는 nil = 공개(기본)로 둔다.
+            let miniGame = try? await withSessionRetry { activeSession in
+                try await service.fetchMiniGamePublic(accessToken: activeSession.accessToken, userID: activeSession.userID)
+            }
+            guard generation == sessionGeneration else { return }
+            if !miniGamePublicLoaded, let miniGame, miniGamePublic != miniGame { miniGamePublic = miniGame }
+            if miniGame != nil { miniGamePublicLoaded = true }
             tokenUsagePublicLoaded = true
         } catch {
             // 조용히 무시한다 — loaded 는 성공 시에만 서므로 다음 폴링 tick 에 재시도된다.

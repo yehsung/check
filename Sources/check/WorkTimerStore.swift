@@ -219,6 +219,7 @@ final class WorkTimerStore {
             if isLeaderboardVisible { loadLeaderboard() }
             if isTokenBoardVisible { loadTokenBoard() }
             if isPokePanelVisible { loadPokeDirectory() }
+            if isMiniGamePanelVisible { loadMiniGameBoard() }
             // 개인 기록: 패널이 열려 있으면 재조회하고, 닫혀 있어도 아직 한 번도 못 받았으면 조용히 받아 온다
             // — 월요일 첫 팝오버의 지난주 회고 배너는 retro 가 계산돼 있어야 뜨기 때문이다(실행당 1회 수준).
             // 주가 바뀌었으면(insightsWeekKey 불일치) 반드시 다시 계산한다 — needsInsightsReload 참고.
@@ -237,6 +238,9 @@ final class WorkTimerStore {
             // 그 자리를 새 버전 안내 같은 다음 순위 배너가 쓴다. 아직 그려지지 못한 배너(더 급한 배너에 밀린
             // 경우)는 키가 소비되지 않아 다음 오픈에서 다시 올라온다.
             if showsRetroBanner { showsRetroBanner = false }
+            // 진행 중인 미니게임을 끝낸다 — 닫힌 팝오버의 뷰 트리는 상주하므로 잎 뷰가 스스로 멈출 신호가 이것뿐이다
+            // (isMenuPresented 는 관찰 대상이 아니다). 유휴 0% 불변: 닫힌 뒤 60Hz 루프가 돌면 안 된다.
+            miniGameInterruptToken += 1
             stopTimerIfIdle()
         }
     }
@@ -429,6 +433,26 @@ final class WorkTimerStore {
     // 토큰 순위판이 보고 있는 월(KST 'YYYY-MM'). 기본은 이번 달이고 ‹ › 로 과거 달을 볼 수 있다(미래로는 불가).
     // 패널을 닫으면 이번 달로 되돌린다 — 다음에 열 때 늘 현재 달부터 보이게.
     var tokenBoardMonth: String = TokenUsageMonthKey.current()
+
+    // ── 미니게임 패널 (v0.2.46) ── 리그/토큰/찌르기/개인 기록/울트라와 **양방향** 상호 배타(다섯 토글이 closeMiniGamePanel 을 부른다).
+    var isMiniGamePanelVisible = false
+    /// 값이 바뀌면 게임 잎 뷰가 진행 중인 판을 즉시 끝낸다(MiniGameHost.interruptToken). 팝오버가 닫혀도 뷰 트리는 상주하고
+    /// isMenuPresented 는 관찰 대상이 아니라서, **이것이 게임을 멈추는 유일하게 관찰 가능한 신호**다 — setMenuPresented(false)·
+    /// closeMiniGamePanel·selectMiniGame·로그아웃이 올린다. 60Hz 게임 상태는 여기 두지 않는다(잎 뷰 @State).
+    var miniGameInterruptToken = 0
+    /// 마지막으로 고른 게임(UserDefaults 영속, 기본 타이밍 바).
+    var miniGameKind: MiniGameKind = .timingBar
+    /// 오늘(KST) 순위(RPC 행 자체 완결). 종류 전환·로그아웃에 비운다. 3플래그 규약은 tokenBoard 와 같다.
+    var miniGameBoard: [MiniGameBoardEntry] = []
+    var miniGameBoardLoaded = false
+    var miniGameBoardLoading = false
+    var miniGameBoardFailed = false
+    /// 어제 1등(상품 표시). 순위 조회와 같은 자리에서 **독립 실패**로 받는다.
+    var miniGameYesterdayWinner: MiniGameWinner?
+    /// 내 미니게임 순위 공개 여부(profiles.minigame_public 미러). 끄면 순위표에서 빠지고 업로드도 건너뛴다.
+    var miniGamePublic = true
+    /// 서버값 도착 또는 사용자가 직접 골랐음(tokenUsagePublicLoaded 와 같은 규약 — 폴링 GET 이 선택을 덮지 않게).
+    @ObservationIgnored var miniGamePublicLoaded = false
 
     // 개인 기록(내 근무 리듬 히트맵 + 지난주 회고) 페이지 상태. 다른 패널들과 상호 배타.
     // heatmap/retro 는 서버 원본 세션에서 순수 계산으로 파생한다(CheckWorkInsights).
@@ -934,6 +958,7 @@ final class WorkTimerStore {
         displayName = defaults.string(forKey: Self.displayNameKey) ?? ""
         isOverlayEnabled = defaults.object(forKey: Self.overlayEnabledKey) as? Bool ?? true
         isTodoEnabled = defaults.object(forKey: Self.todoEnabledKey) as? Bool ?? true
+        miniGameKind = MiniGameKind(rawValue: defaults.string(forKey: Self.miniGameKindKey) ?? "") ?? .timingBar
         // 수동 [근무 종료]의 자동 시작 억제를 복구한다. 단, 앱이 1시간 넘게 죽어 있었다면(밤새 꺼짐·재부팅)
         // 그 공백 자체가 '부재'이므로 여기서 푼다 — 살아 있는 동안의 공백 관측(onAbsenceGap)은 스케줄러가
         // 하지만, 앱이 꺼져 있던 시간은 마지막 생존 스탬프와의 차이로만 잴 수 있다.
@@ -1591,6 +1616,7 @@ final class WorkTimerStore {
             closeTokenBoard()
             closePokePanel()
             closeUltraPanel()
+            closeMiniGamePanel()
             isInsightsPanelVisible = false
             loadLeaderboard()
         }
@@ -1626,6 +1652,7 @@ final class WorkTimerStore {
         isLeaderboardVisible = false
         closePokePanel()
         closeUltraPanel()
+        closeMiniGamePanel()
         isInsightsPanelVisible = false
         // 앱을 켜 둔 채 달이 바뀐 경우(6월에 보고 닫은 뒤 7월 1일) 지난달 캐시가 그대로 그려지고
         // 재조회마저 지난달로 나가지 않도록, 여는 순간 현재 달로 맞춘다.
@@ -1661,6 +1688,7 @@ final class WorkTimerStore {
             isLeaderboardVisible = false
             closeTokenBoard()
             closeUltraPanel()
+            closeMiniGamePanel()
             isInsightsPanelVisible = false
             loadPokeDirectory()
             // 패널을 여는 순간 지갑을 한 번 맞춘다. 잔량 배지가 제목 행에 상시 떠 있으므로
@@ -1683,6 +1711,7 @@ final class WorkTimerStore {
         isUltraPanelVisible = true
         isLeaderboardVisible = false
         closeTokenBoard()
+        closeMiniGamePanel()
         isInsightsPanelVisible = false
         syncUltraWallet(reason: .panelOpen)
     }
@@ -1713,6 +1742,7 @@ final class WorkTimerStore {
             closeTokenBoard()
             closePokePanel()
             closeUltraPanel()
+            closeMiniGamePanel()
             // 배너 소비 판정은 evaluateRetroBanner 한 곳에만 둔다 — 예전엔 여기서 markRetroBannerSeen() 을
             // 무조건 불러, 아직 회고를 못 받은 상태(첫 조회 실패·오프라인)에서 패널을 열기만 해도 이번 주 키가
             // 소진돼 뒤늦게 회고가 도착해도 그 주 내내 배너가 뜨지 않았다(회귀 지점). 패널이 열려 있으므로
@@ -2133,6 +2163,8 @@ extension WorkTimerStore {
     static let overlayEnabledKey = "check.overlayEnabled"
     /// 할 일 기능 사용 여부. 켜면 캐릭터 클릭이 보드를 여닫고, 끄면 예전처럼 아파하기가 나온다.
     static let todoEnabledKey = "check.todoEnabled"
+    /// 마지막으로 고른 미니게임(MiniGameKind.rawValue).
+    static let miniGameKindKey = "check.minigame.kind"
     /// 수동 [근무 종료]의 자동 시작 억제 표식(Bool). 1시간 부재 재무장 판정과 함께 쓴다.
     static let autoStartSuppressedKey = "check.nudge.autoStartSuppressed"
     /// 억제 중 스케줄러의 마지막 생존 스탬프(Date). 실행 간 공백(앱이 죽어 있던 시간)을 재는 유일한 근거.
@@ -2498,6 +2530,17 @@ extension WorkTimerStore {
         isInsightsPanelVisible = false
         insightsLoaded = false
         insightsFailed = false
+        // 미니게임 패널·순위·공개 설정도 계정에 묶인다(순위 행은 남의 것, 공개 여부는 그 계정의 선택). 진행 중이던 판은 끝낸다.
+        // 로컬 최고기록은 계정별 키(miniGameBestKey 가 userID 를 포함)라 지울 필요가 없다.
+        isMiniGamePanelVisible = false
+        miniGameInterruptToken += 1
+        miniGameBoard = []
+        miniGameBoardLoaded = false
+        miniGameBoardLoading = false
+        miniGameBoardFailed = false
+        miniGameYesterdayWinner = nil
+        miniGamePublic = true
+        miniGamePublicLoaded = false
         insightsWeekKey = nil
         heatmap = .empty
         retro = nil

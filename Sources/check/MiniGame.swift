@@ -134,3 +134,48 @@ enum MiniGameFrameProbe {
     static var frames: Int { 0 }
     #endif
 }
+
+// MARK: - 공용 오버레이 카드
+
+/// 캔버스 위에 뜨는 시작 안내·결과 카드. **두 게임이 같은 모양을 쓴다** — 색과 글씨가 게임마다 달라
+/// "통일성이 없다"는 지적을 받았다(2026-09-08). 새 게임을 붙일 때도 이 뷰만 쓴다.
+///
+/// 구성은 위에서부터 제목(subheadline bold) · 설명 또는 점수 · 행동 안내(caption, accent) 세 줄이다.
+/// 바탕은 잔디 말풍선과 같은 `panelElevated` + `border`, 모서리 10.
+struct MiniGameOverlayCard: View {
+    /// 큰 제목. 시작 화면은 게임 이름, 결과 화면은 점수("총점 720" · "12점").
+    let title: String
+    /// 제목을 점수처럼 크게(26pt heavy rounded, 고정폭 숫자) 그릴지. 시작 화면은 false.
+    var titleIsScore: Bool = false
+    /// 가운데 줄. 시작 화면은 규칙 한 줄, 결과 화면은 "최고 N".
+    let subtitle: String
+    /// 가운데 줄을 강조색(초록)으로 — 신기록일 때만.
+    var subtitleIsHighlighted: Bool = false
+    /// 맨 아래 행동 안내. "클릭해서 시작" · "클릭해서 다시".
+    let action: String
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(title)
+                .font(titleIsScore ? .system(size: 26, weight: .heavy, design: .rounded) : .subheadline.bold())
+                .monospacedDigit()
+                .foregroundStyle(CheckTheme.primaryText)
+            Text(subtitle)
+                .font(subtitleIsHighlighted ? .caption.bold() : .caption2)
+                .monospacedDigit()
+                .foregroundStyle(subtitleIsHighlighted ? CheckTheme.working : CheckTheme.secondaryText)
+                .multilineTextAlignment(.center)
+            Text(action)
+                .font(.caption)
+                .foregroundStyle(CheckTheme.accent)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: 236)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(CheckTheme.panelElevated)
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+        )
+    }
+}

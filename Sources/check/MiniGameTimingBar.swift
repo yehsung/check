@@ -352,38 +352,19 @@ private struct TimingBarOverlay: View {
 
             switch game.phase {
             case .ready:
-                TimingBarCard {
-                    Text(MiniGameKind.timingBar.title)
-                        .font(.subheadline.bold())
-                        .foregroundStyle(CheckTheme.primaryText)
-                    Text(MiniGameKind.timingBar.howToPlay)
-                        .font(.caption2)
-                        .foregroundStyle(CheckTheme.secondaryText)
-                        .multilineTextAlignment(.center)
-                    Text("클릭해서 시작")
-                        .font(.caption)
-                        .foregroundStyle(CheckTheme.accent)
-                }
+                MiniGameOverlayCard(
+                    title: MiniGameKind.timingBar.title,
+                    subtitle: MiniGameKind.timingBar.howToPlay,
+                    action: "클릭해서 시작"
+                )
             case .finished(let total):
-                TimingBarCard {
-                    Text("총점 \(total)")
-                        .font(.system(size: 26, weight: .heavy, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(CheckTheme.primaryText)
-                    if total > bestScore {
-                        Text("신기록!")
-                            .font(.caption.bold())
-                            .foregroundStyle(CheckTheme.working)
-                    } else {
-                        Text("최고 \(bestScore)")
-                            .font(.caption)
-                            .monospacedDigit()
-                            .foregroundStyle(CheckTheme.secondaryText)
-                    }
-                    Text("클릭해서 다시")
-                        .font(.caption)
-                        .foregroundStyle(CheckTheme.accent)
-                }
+                MiniGameOverlayCard(
+                    title: "총점 \(total)",
+                    titleIsScore: true,
+                    subtitle: total > bestScore ? "신기록!" : "최고 \(bestScore)",
+                    subtitleIsHighlighted: total > bestScore,
+                    action: "클릭해서 다시"
+                )
             case .running, .roundResult:
                 EmptyView()
             }
@@ -418,19 +399,3 @@ private struct TimingBarRoundPop: View {
     }
 }
 
-/// 캔버스 위 오버레이 카드(시작 안내 · 결과). 말풍선과 같은 panelElevated 바탕 + border.
-private struct TimingBarCard<Content: View>: View {
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        VStack(spacing: 4) { content() }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .frame(maxWidth: 236)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(CheckTheme.panelElevated)
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
-            )
-    }
-}

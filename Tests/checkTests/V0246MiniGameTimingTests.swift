@@ -87,11 +87,12 @@ func timingBarMarkerIsATriangleWave() {
 
 @Test
 func timingBarRoundScoreTable() {
+    // 구간 안: 정중앙 100 → 가장자리 70. 구간 밖: 0 (부분 점수 없음 — 사용자 결정 2026-09-08).
     #expect(TimingBarGame.roundScore(distance: 0) == 100)
-    #expect(TimingBarGame.roundScore(distance: 0.5) == 80)
-    #expect(TimingBarGame.roundScore(distance: 1) == 60)
-    #expect(TimingBarGame.roundScore(distance: 1.5) == 15)
-    #expect(TimingBarGame.roundScore(distance: 2) == 0)
+    #expect(TimingBarGame.roundScore(distance: 0.5) == 85)
+    #expect(TimingBarGame.roundScore(distance: 1) == 70)
+    #expect(TimingBarGame.roundScore(distance: 1.0001) == 0)
+    #expect(TimingBarGame.roundScore(distance: 1.5) == 0)
     #expect(TimingBarGame.roundScore(distance: 2.5) == 0)
 }
 
@@ -166,7 +167,7 @@ func timingBarMissedTapScoresByDistance() {
     game.tap()
     guard case .roundResult(_, let score, _) = game.phase else { Issue.record("roundResult 아님"); return }
     #expect(score == TimingBarGame.roundScore(distance: d))
-    #expect(score < 60)
+    #expect(score == 0, "구간 밖은 0점")
     #expect(game.lastHit == (d <= 1))
     #expect(game.markerPosition == 0, "정지한 자리에 마커가 얼어 있다")
 }

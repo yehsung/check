@@ -99,10 +99,11 @@ struct TimingBarGame: Equatable, Sendable {
     }
 
     /// 목표 중심에서의 거리 d(= |p − c| / (w/2)) 를 점수로. 안(≤1)은 60~100, 두 배 폭 안은 0~30, 그 밖은 0.
+    /// 라운드 점수(사용자 결정 2026-09-08): 목표 구간 **안**이면 정중앙 100 → 가장자리 70 (정확도 비례), **밖이면 0**.
+    /// d = |마커 − 중심| / (폭/2). 구간 밖 부분 점수는 없다 — "들어왔느냐"가 먼저고, 그 다음이 정확도다.
     static func roundScore(distance d: Double) -> Int {
-        if d <= 1 { return 100 - Int((40 * d).rounded()) }
-        if d <= 2 { return max(0, 30 - Int((30 * (d - 1)).rounded())) }
-        return 0
+        guard d <= 1 else { return 0 }
+        return 100 - Int((30 * d).rounded())
     }
 
     // MARK: 전이
@@ -292,7 +293,7 @@ private struct TimingBarFrame: View {
                     context.fill(Path(roundedRect: markerRect, cornerRadius: 2 * scale), with: .color(markerColor))
                 }
 
-                // 라운드 점 10개: 미진행 border · 60+ working · 1~59 accent · 0 danger.
+                // 라운드 점 10개: 미진행 border · 명중(70+) working · 빗나감(0) danger.
                 let pitch = Self.trackWidth / CGFloat(TimingBarGame.roundCount)
                 for index in 0..<TimingBarGame.roundCount {
                     let x = Self.trackLeft + (CGFloat(index) + 0.5) * pitch

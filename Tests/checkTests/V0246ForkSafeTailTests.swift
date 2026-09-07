@@ -83,6 +83,12 @@ func migrationContractCodexForkSafeTail() throws {
             "오늘 Claude 서브쿼리가 조회 달로 가둬져 있지 않다(20260906120000 ⓘ 경계)")
     #expect(boardBody.contains("(e.claude_total + e.codex_effective)::bigint as total"))
 
+    // (iii-2) today_total 도 행 단위 선택(prefer_device)을 따른다. 종전 greatest(기기, 옛 표)는 구클라(≤ v0.2.42)가 옛 표에 쓴 같은 today 로
+    //         게이트를 우회했다(2026-09-07 abto: 월 합계 33.7억으로 잡힌 뒤에도 today 12,087,339,006 그대로 — 하네스 재현).
+    #expect(boardBody.contains("coalesce(case when prefer_device then d_today_total else g_today_total end, 0)::bigint as today_total"),
+            "today_total 이 prefer_device 를 따르지 않는다")
+    #expect(!boardBody.contains("greatest(coalesce(d_today_total"), "today_total 이 아직 두 출처의 큰 쪽이다 — 옛 표 today 로 게이트가 우회된다")
+
     // (iv) health 판정: '구버전 스캐너' 는 '스캐너 멈춤' 뒤·'과다계상 의심' 앞, 나머지 순서 유지.
     let stalled = try #require(sql.range(of: "'스캐너 멈춤(24시간 이상)'")?.lowerBound)
     let oldBuild = try #require(sql.range(of: "'Codex 구버전 스캐너(build '")?.lowerBound, "구버전 스캐너 판정이 없다")
@@ -106,6 +112,15 @@ func migrationContractCodexForkSafeTail() throws {
         #expect(sql.contains(expected), "프로브 기대값 누락: \(expected)")
     }
     #expect(sql.contains("codex_diag_build = 51"), "구빌드 픽스처가 없다")
+    // ⓜ 옛 표 우회: 픽스처 월과 이번 달 각각 옛 표 행(total 999 · today 999 · today_date 오늘)을 넣은 **뒤에도** 기기 쪽 today(0 / +30)를 단언한다.
+    let legacyFixture = try #require(sql.range(of: "values (v_uid, v_month, 0, 0, 0, 0, 999, 0, 999, now(), 999, v_today);")?.upperBound,
+                                     "ⓜ 픽스처 월 옛 표 행이 없다")
+    #expect(sql[legacyFixture...].contains("if v_total <> 100 or v_today_total <> 0 then"))
+    #expect(sql[legacyFixture...].contains("if v_total <> 999 or v_today_total <> 999 then"), "계정 없는 사용자의 옛 표 우선(종전 규칙) 단언이 없다")
+    let legacyCurrent = try #require(sql.range(of: "values (v_uid, v_cur_month, 0, 0, 0, 0, 999, 0, 999, now(), 999, v_today);")?.upperBound,
+                                     "ⓜ 이번 달 옛 표 행이 없다")
+    #expect(sql[legacyCurrent...].contains("<> 30 then"), "옛 표 행을 넣은 뒤 today +30 단언이 없다")
+    #expect(sql.contains("position('greatest(coalesce(d_today_total' in v_src) > 0"))
     #expect(sql.contains("'Codex 구버전 스캐너(build 51)%'"))
     #expect(sql.contains("v_exec_role text := current_user;"))
     #expect(sql.contains("if current_user <> v_exec_role then"))

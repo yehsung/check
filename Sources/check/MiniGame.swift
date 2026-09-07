@@ -50,10 +50,16 @@ enum MiniGameCanvas {
 
     /// 실제 캔버스 크기에서 논리 좌표를 그릴 배율과 원점(가운데 정렬). 순수 함수.
     static func transform(in size: CGSize) -> (scale: CGFloat, origin: CGPoint) {
-        let scale = min(size.width / logicalWidth, size.height / logicalHeight)
+        transform(in: size, logicalSize: CGSize(width: logicalWidth, height: logicalHeight))
+    }
+
+    /// 게임이 자기 논리 크기를 가질 때(플래피는 창 캔버스와 같은 비율의 세로로 긴 판을 쓴다 — 위아래가
+    /// 레터박스로 비면 기둥이 천장·바닥에 닿지 않는 것처럼 보인다). 배율은 짧은 축이 정하므로 비율은 유지된다.
+    static func transform(in size: CGSize, logicalSize: CGSize) -> (scale: CGFloat, origin: CGPoint) {
+        let scale = min(size.width / logicalSize.width, size.height / logicalSize.height)
         let origin = CGPoint(
-            x: (size.width - logicalWidth * scale) / 2,
-            y: (size.height - logicalHeight * scale) / 2
+            x: (size.width - logicalSize.width * scale) / 2,
+            y: (size.height - logicalSize.height * scale) / 2
         )
         return (scale, origin)
     }

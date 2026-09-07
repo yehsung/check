@@ -12,31 +12,38 @@ extension WorkTimerStore {
         "check.minigame.best.\(userID ?? "local").\(kind.rawValue)"
     }
 
-    // MARK: 패널 열고 닫기
+    // MARK: 창 열고 닫기
 
-    /// 미니게임 버튼 액션. 패널을 토글하고, 여는 순간 오늘 순위를 로드한다. 다른 다섯 패널과 상호 배타.
+    /// 캡션 행 게임패드 버튼의 액션. **별도 창**을 열고(v0.2.46) 오늘 순위를 받는다.
+    ///
+    /// 다른 패널을 닫지 않는다 — 창은 팝오버와 공존한다(팝오버를 닫아도, 다른 패널을 열어도 게임은 계속된다).
+    /// 이미 열려 있어도 `show()` 는 멱등이라 앞으로 가져오기만 한다(최소화해 뒀다면 되살린다).
+    func openMiniGameWindow() {
+        if !isMiniGamePanelVisible { isMiniGamePanelVisible = true }
+        // 첫 프레임부터 빈 목록 자리에 "불러오는 중…"이 뜨게 한다(토큰 보드와 같은 규약 — 본문 자리에 동기화 문구 금지).
+        if !miniGameBoardLoaded { miniGameBoardLoading = true }
+        loadMiniGameBoard()
+        CheckMiniGameWindowController.shared.show()
+    }
+
+    /// 진입 버튼을 다시 눌렀을 때(열려 있으면 닫고, 아니면 연다). 창을 쓰는 지금도 남겨 두는 이유는 같은 버튼이
+    /// 토글로 읽히기 때문이다 — 열린 창을 한 번 더 눌러 닫을 수 있어야 한다.
     func toggleMiniGamePanel() {
         if isMiniGamePanelVisible {
             closeMiniGamePanel()
             return
         }
-        isMiniGamePanelVisible = true
-        isLeaderboardVisible = false
-        closeTokenBoard()
-        closePokePanel()
-        closeUltraPanel()
-        isInsightsPanelVisible = false
-        // 첫 프레임부터 빈 목록 자리에 "불러오는 중…"이 뜨게 한다(토큰 보드와 같은 규약 — 본문 자리에 동기화 문구 금지).
-        if !miniGameBoardLoaded { miniGameBoardLoading = true }
-        loadMiniGameBoard()
+        openMiniGameWindow()
     }
 
-    /// 미니게임 패널을 닫는 **유일한** 경로. 뒤로 버튼·토글·다른 패널 열기가 모두 여기를 지나야 진행 중인 판이 끝난다
-    /// (interruptToken). 이미 닫혀 있으면 아무것도 하지 않는다 — 다른 토글이 부를 때 헛되이 토큰을 올려 잎 뷰를 깨우지 않게.
+    /// 미니게임 창을 닫는다(진행 중인 판도 끝낸다 — interruptToken). 사용자가 타이틀바 빨간 점을 눌렀을 때는
+    /// 컨트롤러의 `windowWillClose` 가 같은 두 값을 직접 맞춘다(그쪽은 `close()` 를 거치지 않는 경로다).
+    /// 이미 닫혀 있으면 아무것도 하지 않는다 — 헛되이 토큰을 올려 잎 뷰를 깨우지 않게.
     func closeMiniGamePanel() {
         guard isMiniGamePanelVisible else { return }
         isMiniGamePanelVisible = false
         miniGameInterruptToken += 1
+        CheckMiniGameWindowController.shared.close()
     }
 
     /// 게임 종류 전환. 진행 중인 판을 끝내고(토큰) 그 게임의 오늘 순위를 다시 받는다. 선택은 영속한다.
@@ -89,7 +96,8 @@ extension WorkTimerStore {
                     accessToken: activeSession.accessToken, userID: activeSession.userID, kind: kind, score: score)
             }
             guard generation == sessionGeneration else { return }
-            if isMenuPresented, isMiniGamePanelVisible, miniGameKind == kind {
+            // 창이 열려 있으면 재조회한다(팝오버는 닫혀 있어도 된다 — 게임은 별도 창이다).
+            if isMiniGamePanelVisible, miniGameKind == kind {
                 await performLoadMiniGameBoard()
             }
         } catch {

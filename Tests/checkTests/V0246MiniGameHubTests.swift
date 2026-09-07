@@ -48,63 +48,61 @@ private func mgWait(_ condition: @MainActor () -> Bool) async {
 
 @MainActor
 @Test
-func miniGamePanelIsMutuallyExclusiveWithEveryOtherPanelInBothDirections() {
-    let store = mgStore(host: "mg-exclusive")
-    // 열면 다른 다섯이 닫힌다.
+func theGameWindowCoexistsWithEveryPopoverPanel() {
+    // v0.2.46: 미니게임은 별도 창이라 팝오버 패널들과 **상호 배타가 아니다**. 예전 패널 시절의 양방향 배타를
+    // 그대로 두면 게임을 하는 동안 순위판을 열어 볼 수도, 팝오버를 쓰는 동안 게임을 켜 둘 수도 없다.
+    let store = mgStore(host: "mg-coexist")
     store.isLeaderboardVisible = true
     store.isTokenBoardVisible = true
     store.isPokePanelVisible = true
     store.isInsightsPanelVisible = true
     store.isUltraPanelVisible = true
-    store.toggleMiniGamePanel()
+    store.openMiniGameWindow()
     #expect(store.isMiniGamePanelVisible)
-    #expect(!store.isLeaderboardVisible && !store.isTokenBoardVisible && !store.isPokePanelVisible)
-    #expect(!store.isInsightsPanelVisible && !store.isUltraPanelVisible)
-    // 첫 프레임부터 "불러오는 중…"(토큰 보드와 같은 규약).
+    #expect(store.isLeaderboardVisible && store.isTokenBoardVisible && store.isPokePanelVisible)
+    #expect(store.isInsightsPanelVisible && store.isUltraPanelVisible, "창이 팝오버 패널을 닫았다")
+    // 첫 프레임부터 빈 목록 자리에 "불러오는 중…"(토큰 보드와 같은 규약).
     #expect(store.miniGameBoardLoading)
 
-    // 반대 방향: 다른 패널을 열면 미니게임이 닫힌다(양방향 — 한쪽만 걸면 이 화면이 위에 남아 굳는다).
-    store.toggleLeaderboard();      #expect(!store.isMiniGamePanelVisible, "리그가 미니게임을 안 닫는다")
-    store.toggleMiniGamePanel();    #expect(store.isMiniGamePanelVisible)
-    store.toggleTokenBoard();       #expect(!store.isMiniGamePanelVisible, "토큰 보드가 미니게임을 안 닫는다")
-    store.toggleMiniGamePanel();    #expect(store.isMiniGamePanelVisible)
-    store.togglePokePanel();        #expect(!store.isMiniGamePanelVisible, "콕찌르기가 미니게임을 안 닫는다")
-    store.toggleMiniGamePanel();    #expect(store.isMiniGamePanelVisible)
-    store.openUltraPanel(from: .home); #expect(!store.isMiniGamePanelVisible, "울트라가 미니게임을 안 닫는다")
-    store.toggleMiniGamePanel();    #expect(store.isMiniGamePanelVisible)
-    store.toggleInsightsPanel();    #expect(!store.isMiniGamePanelVisible, "내 기록이 미니게임을 안 닫는다")
-    store.toggleMiniGamePanel();    #expect(store.isMiniGamePanelVisible)
-    // 토글 두 번 = 닫힘.
-    store.toggleMiniGamePanel();    #expect(!store.isMiniGamePanelVisible)
+    // 반대 방향도 마찬가지 — 어느 패널을 열어도 창은 그대로다.
+    for open in [store.toggleLeaderboard, store.toggleTokenBoard, store.togglePokePanel, store.toggleInsightsPanel] {
+        open()
+        #expect(store.isMiniGamePanelVisible, "팝오버 패널을 열었더니 미니게임 창이 닫혔다")
+    }
+    store.openUltraPanel(from: .home)
+    #expect(store.isMiniGamePanelVisible)
+    // 진입 버튼을 다시 누르면(토글) 닫힌다.
+    store.toggleMiniGamePanel()
+    #expect(!store.isMiniGamePanelVisible)
 }
 
 // MARK: - 인터럽트 토큰
 
 @MainActor
 @Test
-func interruptTokenRisesWhenThePopoverClosesThePanelClosesOrTheKindChanges() {
+func interruptTokenRisesOnKindChangeAndWindowCloseButNotWhenThePopoverCloses() {
     let store = mgStore(host: "mg-interrupt")
-    store.toggleMiniGamePanel()
+    store.openMiniGameWindow()
     let base = store.miniGameInterruptToken
 
-    // 팝오버 닫힘 — 뷰 트리는 상주하므로 이것이 잎 뷰가 볼 수 있는 유일한 정지 신호다.
+    // 팝오버 닫힘 — 게임은 별도 창에 있으므로 **끝나지 않는다**(창의 닫힘·포커스 상실이 정지 신호다).
     store.setMenuPresented(false)
-    #expect(store.miniGameInterruptToken == base + 1, "팝오버가 닫혀도 토큰이 안 올라 게임이 60Hz 로 계속 돈다")
+    #expect(store.miniGameInterruptToken == base, "팝오버를 닫았다고 창에서 하던 판이 끝났다")
     store.setMenuPresented(true)
-    #expect(store.miniGameInterruptToken == base + 1, "열림은 판을 끝내지 않는다")
+    #expect(store.miniGameInterruptToken == base)
 
     // 종류 전환.
     store.selectMiniGame(.flappy)
-    #expect(store.miniGameInterruptToken == base + 2)
+    #expect(store.miniGameInterruptToken == base + 1)
     #expect(store.miniGameKind == .flappy)
     store.selectMiniGame(.flappy)
-    #expect(store.miniGameInterruptToken == base + 2, "같은 종류 재선택은 no-op")
+    #expect(store.miniGameInterruptToken == base + 1, "같은 종류 재선택은 no-op")
 
-    // 패널 닫힘(유일한 닫기 경로) — 닫혀 있을 때 다시 불러도 토큰이 헛되이 오르지 않는다.
+    // 창 닫기 — 닫혀 있을 때 다시 불러도 토큰이 헛되이 오르지 않는다.
     store.closeMiniGamePanel()
-    #expect(store.miniGameInterruptToken == base + 3)
+    #expect(store.miniGameInterruptToken == base + 2)
     store.closeMiniGamePanel()
-    #expect(store.miniGameInterruptToken == base + 3, "이미 닫힌 패널을 닫아도 토큰이 오르면 안 된다(다른 토글이 부르는 경로)")
+    #expect(store.miniGameInterruptToken == base + 2, "이미 닫힌 창을 닫아도 토큰이 오르면 안 된다")
 }
 
 @MainActor
@@ -267,33 +265,6 @@ func setMiniGamePublicPatchesOnlyThatColumnAndRevertsOnFailure() async throws {
     #expect(json["minigame_public"] as? Bool == false)
 }
 
-// MARK: - 높이 예산
-
-@MainActor
-@Test
-func panelBudgetTableGivesRowsThenCanvasThenHidesTheList() {
-    // (extra, canvas, rows) — 순서대로 행수(4→2) → 캔버스(200→140) → 목록 숨김(rows 0, 캔버스만).
-    let table: [(CGFloat, CGFloat, Int)] = [
-        (0, 200, 4),      // 200+12+44+116+8+14 = 394 ≤ 425
-        (53, 200, 3),     // 372: 4행 394 넘음 → 3행 364
-        (92, 199, 2),     // 333: 2행이면 334 로 1pt 넘음 → 캔버스 199
-        (149, 142, 2),    // 276: 276−134 = 142
-        (184, 200, 0),    // 241: 2행 최소 캔버스 107 < 140 → 목록 숨김, 캔버스만 200
-        (241, 184, 0)     // 184: 캔버스만 184
-    ]
-    for (extra, canvas, rows) in table {
-        let layout = MiniGamePanelBudget.layout(extraChromeHeight: extra)
-        #expect(layout.canvasHeight == canvas, "extra \(extra): 캔버스 \(layout.canvasHeight) (기대 \(canvas))")
-        #expect(layout.visibleRows == rows, "extra \(extra): 행수 \(layout.visibleRows) (기대 \(rows))")
-        // 어느 조합이든 본문이 예산 안이다(rows 0 이면 캔버스만).
-        #expect(MiniGamePanelBudget.bodyHeight(canvasHeight: layout.canvasHeight, rows: layout.visibleRows) <= 425 - extra + 0.5,
-                "extra \(extra) 조합이 예산을 넘는다")
-        #expect(layout.canvasHeight >= MiniGameCanvas.minimumHeight && layout.canvasHeight <= MiniGameCanvas.preferredHeight)
-    }
-    #expect(MiniGamePanelBudget.listHeight(rows: 4) == 116)
-    #expect(MiniGamePanelBudget.listHeight(rows: 0) == 0)
-}
-
 // MARK: - 로그아웃 리셋
 
 @MainActor
@@ -336,23 +307,26 @@ func ultraBalanceAboveTheCapIsDisplayedVerbatim() {
 func sourceContractsForTheHubWiring() throws {
     let menu = mgStrippingComments(try String(contentsOf: mgSourceURL("CheckMenuView.swift"), encoding: .utf8))
     let root = try #require(mgTypeBody(menu, name: "CheckMenuView"))
-    #expect(root.contains("|| store.isMiniGamePanelVisible"), "isSubPanelOpen 이 미니게임 패널을 안 센다 — 토큰 행이 함께 그려져 700pt 를 넘는다")
-    #expect(root.contains("MiniGamePanel("), "content 분기에 미니게임 패널이 없다")
+    // v0.2.46: 미니게임은 별도 창이다 — 팝오버 자리를 안 먹으므로 하위 패널로 세지 않고 그리지도 않는다.
+    #expect(!root.contains("|| store.isMiniGamePanelVisible"), "isSubPanelOpen 이 창을 하위 패널로 센다 — 토큰 소모량 행이 사라진다")
+    #expect(!root.contains("MiniGamePanel("), "팝오버가 아직 미니게임 패널을 그린다")
+    // 진입 버튼은 HeaderGoalSection(캡션 행)에 있다 — 루트 타입 본문이 아니라 파일 전체에서 찾는다.
+    #expect(menu.contains("store.openMiniGameWindow()"), "캡션 행 버튼이 창을 열지 않는다")
     #expect(!root.contains("store.displayNow"), "팝오버 루트가 displayNow 를 값으로 읽는다")
 
     let store = mgStrippingComments(try String(contentsOf: mgSourceURL("WorkTimerStore.swift"), encoding: .utf8))
     for name in ["toggleLeaderboard", "toggleTokenBoard", "togglePokePanel", "openUltraPanel", "toggleInsightsPanel"] {
         let body = try #require(mgFunctionBody(store, name: name), "\(name) 본문을 못 찾았다")
-        #expect(body.contains("closeMiniGamePanel()"), "\(name) 이 미니게임 패널을 안 닫는다(양방향 배타 위반)")
+        #expect(!body.contains("closeMiniGamePanel()"), "\(name) 이 미니게임 창을 닫는다 — 창은 팝오버와 공존한다")
     }
     let presented = try #require(mgFunctionBody(store, name: "setMenuPresented"))
-    #expect(presented.contains("miniGameInterruptToken += 1"), "팝오버 닫힘이 게임을 안 멈춘다")
+    #expect(!presented.contains("miniGameInterruptToken += 1"), "팝오버 닫힘이 창의 판을 끝낸다")
     #expect(presented.contains("if isMiniGamePanelVisible { loadMiniGameBoard() }"), "재오픈 시 순위 재조회가 없다")
     let loop = try #require(mgFunctionBody(store, name: "startRefreshLoopTask"))
     #expect(!loop.contains("MiniGame") && !loop.contains("miniGame"), "30초 refresh 루프에 미니게임 조회가 얹혔다(38명 × 30초)")
 
     let panel = mgStrippingComments(try String(contentsOf: mgSourceURL("MiniGamePanel.swift"), encoding: .utf8))
-    #expect(!panel.contains("displayNow") && !panel.contains("Timer.publish") && !panel.contains("Date()"), "패널이 시계를 읽는다")
+    #expect(!panel.contains("displayNow") && !panel.contains("Timer.publish") && !panel.contains("Date()"), "창 콘텐츠가 시계를 읽는다")
     #expect(panel.contains("DragGesture(minimumDistance: 0)"), "클릭은 마우스 다운(DragGesture 0)이어야 한다")
     #expect(panel.contains("NSEvent.addLocalMonitorForEvents"), "스페이스 로컬 모니터가 없다 — 근무 알약이 스페이스를 먹는다")
     #expect(!panel.contains("addGlobalMonitorForEvents"), "전역 모니터는 우리 앱이 활성일 때 눈이 먼다")

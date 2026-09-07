@@ -238,9 +238,8 @@ final class WorkTimerStore {
             // 그 자리를 새 버전 안내 같은 다음 순위 배너가 쓴다. 아직 그려지지 못한 배너(더 급한 배너에 밀린
             // 경우)는 키가 소비되지 않아 다음 오픈에서 다시 올라온다.
             if showsRetroBanner { showsRetroBanner = false }
-            // 진행 중인 미니게임을 끝낸다 — 닫힌 팝오버의 뷰 트리는 상주하므로 잎 뷰가 스스로 멈출 신호가 이것뿐이다
-            // (isMenuPresented 는 관찰 대상이 아니다). 유휴 0% 불변: 닫힌 뒤 60Hz 루프가 돌면 안 된다.
-            miniGameInterruptToken += 1
+            // 미니게임은 v0.2.46 에 별도 창으로 나갔다 — 팝오버가 닫혀도 창의 판은 계속돼야 하므로 여기서
+            // 끝내지 않는다. 창의 정지 신호는 `CheckMiniGameWindowController` 의 닫힘·포커스 상실이다.
             stopTimerIfIdle()
         }
     }
@@ -434,7 +433,8 @@ final class WorkTimerStore {
     // 패널을 닫으면 이번 달로 되돌린다 — 다음에 열 때 늘 현재 달부터 보이게.
     var tokenBoardMonth: String = TokenUsageMonthKey.current()
 
-    // ── 미니게임 패널 (v0.2.46) ── 리그/토큰/찌르기/개인 기록/울트라와 **양방향** 상호 배타(다섯 토글이 closeMiniGamePanel 을 부른다).
+    // ── 미니게임 창 (v0.2.46) ── 별도 NSWindow 라 팝오버 패널들과 **상호 배타가 아니다**(공존한다).
+    //    이 플래그는 '창이 열려 있다'는 뜻이고, 캡션 행 진입 버튼의 하이라이트와 순위 재조회 게이트로 쓴다.
     var isMiniGamePanelVisible = false
     /// 값이 바뀌면 게임 잎 뷰가 진행 중인 판을 즉시 끝낸다(MiniGameHost.interruptToken). 팝오버가 닫혀도 뷰 트리는 상주하고
     /// isMenuPresented 는 관찰 대상이 아니라서, **이것이 게임을 멈추는 유일하게 관찰 가능한 신호**다 — setMenuPresented(false)·
@@ -1616,7 +1616,6 @@ final class WorkTimerStore {
             closeTokenBoard()
             closePokePanel()
             closeUltraPanel()
-            closeMiniGamePanel()
             isInsightsPanelVisible = false
             loadLeaderboard()
         }
@@ -1652,7 +1651,6 @@ final class WorkTimerStore {
         isLeaderboardVisible = false
         closePokePanel()
         closeUltraPanel()
-        closeMiniGamePanel()
         isInsightsPanelVisible = false
         // 앱을 켜 둔 채 달이 바뀐 경우(6월에 보고 닫은 뒤 7월 1일) 지난달 캐시가 그대로 그려지고
         // 재조회마저 지난달로 나가지 않도록, 여는 순간 현재 달로 맞춘다.
@@ -1688,7 +1686,6 @@ final class WorkTimerStore {
             isLeaderboardVisible = false
             closeTokenBoard()
             closeUltraPanel()
-            closeMiniGamePanel()
             isInsightsPanelVisible = false
             loadPokeDirectory()
             // 패널을 여는 순간 지갑을 한 번 맞춘다. 잔량 배지가 제목 행에 상시 떠 있으므로
@@ -1711,7 +1708,6 @@ final class WorkTimerStore {
         isUltraPanelVisible = true
         isLeaderboardVisible = false
         closeTokenBoard()
-        closeMiniGamePanel()
         isInsightsPanelVisible = false
         syncUltraWallet(reason: .panelOpen)
     }
@@ -1742,7 +1738,6 @@ final class WorkTimerStore {
             closeTokenBoard()
             closePokePanel()
             closeUltraPanel()
-            closeMiniGamePanel()
             // 배너 소비 판정은 evaluateRetroBanner 한 곳에만 둔다 — 예전엔 여기서 markRetroBannerSeen() 을
             // 무조건 불러, 아직 회고를 못 받은 상태(첫 조회 실패·오프라인)에서 패널을 열기만 해도 이번 주 키가
             // 소진돼 뒤늦게 회고가 도착해도 그 주 내내 배너가 뜨지 않았다(회귀 지점). 패널이 열려 있으므로

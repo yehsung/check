@@ -21,8 +21,22 @@ import SwiftUI
 // 바닥 띠는 없앴다 — 바닥은 캔버스의 아랫변 자체이고, 기둥은 위아래 끝까지 그린다.
 //
 // ── 난이도 곡선 ──────────────────────────────────────────────────────────────────────────
-// "갈수록 어려워지게" (사용자, 2026-09-08). 세 값이 함께 조인다:
-//   속도 130 → 6/점 → 300 상한(29점)   ·   틈 132 → −3/점 → 96 하한(12점)   ·   간격 150 → −2/점 → 115 하한(18점)
+// "갈수록 어려워지게" (사용자, 2026-09-08). 네 값이 함께 조인다:
+//   속도 130 → 3/점 → 230 상한(34점)   ·   틈 132 → −3/점 → 96 하한(12점)   ·   간격 150 → −2/점 → 115 하한(18점)
+//   그리고 5점부터 **틈이 위아래로 움직이는 기둥**이 확률로 섞인다(아래).
+//
+// ── 갑자기 튀는 틈(surprise jump) ────────────────────────────────────────────────────────
+// 2026-09-08 실기 뒤 사용자 요청: "기둥 빈 위치가 갑자기 서프라이즈로 옮겨지게 · 차라리 속도 빨라지는 정도는 낮추고."
+// 그래서 속도 상승률을 절반(6→3/점, 상한 300→230)으로 낮추고, 그 자리에 **틈이 한 번 확 튀는 기둥**을 넣었다.
+//   · 언제부터: 점수 15 이상에서 **생성되는** 기둥부터(0~14 는 전부 고정 — 조작을 익힐 시간을 준다).
+//   · 어느 기둥이: 점수와 무관하게 **20%**. 전부가 아니라 섞이기 때문에 "갑자기"가 성립한다.
+//   · 어떻게: 기둥이 화면 오른쪽 끝에 들어온 뒤 `shiftDelay`(0.45~1.10초, 기둥마다 난수)가 지나면 틈 중심이
+//     **한 번만** 위나 아래로 `shiftJump`(58pt) 튄다. 왕복하지 않는다 — 서프라이즈는 한 방이어야 무섭다.
+//     0.12초 easeOut 보간이라 눈에는 순간이동처럼 보이지만 프레임 사이가 이어져 충돌이 어긋나지 않는다.
+//   · 클램프: 튄 뒤 중심이 여백(`centerMargin` 36) 밖이면 반대 방향으로 튀고, 양쪽 다 불가능하면 고정 기둥이 된다.
+//   · **색 신호는 없다**(사용자: "움직이는 기둥 뭔지 알려 주지 말자"). 고정 기둥과 픽셀 단위로 같게 그린다.
+//   · 틈 폭 보정도 없다 — 고정 기둥과 같은 `gap(forScore:)` 을 쓴다.
+
 
 /// 플래피 아잉 규칙. 시드만 주면 결정론적으로 같은 판이 나온다(테스트가 시드를 고정한다).
 struct FlappyGame: Equatable, Sendable {
@@ -57,17 +71,41 @@ struct FlappyGame: Equatable, Sendable {
 
     struct Pipe: Equatable, Sendable {
         var x: CGFloat
+        /// 틈 중심의 **기준선**. 고정 기둥이면 이 값이 곧 중심이고, 움직이는 기둥이면 이 값을 중심으로 왕복한다.
         var centerY: CGFloat
         var gap: CGFloat
         var passed: Bool = false
+        /// 화면에 들어온 뒤 튀기까지의 지연(초). **nil 이면 고정 기둥**이다.
+        var shiftDelay: TimeInterval?
+        /// 튀는 폭과 방향(+ 아래 · − 위). `shiftDelay` 가 nil 이면 0.
+        var shiftOffset: CGFloat = 0
+        /// 튀기 시작하는 **판 시각**(초). 기둥이 화면 오른쪽 끝에 들어올 때 `elapsed + shiftDelay` 로 한 번 채워진다.
+        /// 채워지기 전(nil)에는 기준선 그대로다 — 화면 밖에서 미리 튀어 버리면 서프라이즈가 아니라 사고다.
+        var shiftAt: TimeInterval?
 
-        /// 위 기둥 [0, centerY − gap/2] — 천장에 붙는다.
-        var topRect: CGRect {
-            CGRect(x: x, y: 0, width: FlappyGame.pipeWidth, height: max(0, centerY - gap / 2))
+        /// 이 기둥이 언젠가 튀는가(테스트·조준 판정용). 그림은 이 값을 보지 않는다 — 색 신호가 없기 때문이다.
+        var isShifting: Bool { shiftDelay != nil }
+
+        /// 그 시각의 틈 중심. **충돌·그리기가 같은 이 함수를 쓴다** — 갈라지면 "안 닿았는데 죽었다"가 된다.
+        ///
+        /// 튀기 전에는 기준선, `shiftAt` 부터 `shiftDuration`(0.12초) 동안 easeOut 으로 `shiftOffset` 만큼 옮겨 간 뒤
+        /// 그 자리에 머문다(왕복 없음). 마지막 클램프는 손으로 만든 픽스처 대비다 — 실제 생성은 아래 `makePipe` 가
+        /// 여백 안에서만 방향을 고르므로 걸리지 않는다.
+        func center(at time: TimeInterval) -> CGFloat {
+            guard let shiftAt else { return centerY }
+            let progress = min(max((time - shiftAt) / FlappyGame.shiftDuration, 0), 1)
+            let eased = 1 - pow(1 - progress, 3)          // easeOut — 시작이 가장 빠르다
+            let moved = centerY + shiftOffset * CGFloat(eased)
+            return min(max(moved, gap / 2), FlappyGame.height - gap / 2)
         }
-        /// 아래 기둥 [centerY + gap/2, height] — 바닥에 붙는다.
-        func bottomRect(height: CGFloat) -> CGRect {
-            let top = centerY + gap / 2
+
+        /// 위 기둥 [0, center − gap/2] — 천장에 붙는다.
+        func topRect(at time: TimeInterval) -> CGRect {
+            CGRect(x: x, y: 0, width: FlappyGame.pipeWidth, height: max(0, center(at: time) - gap / 2))
+        }
+        /// 아래 기둥 [center + gap/2, height] — 바닥에 붙는다.
+        func bottomRect(at time: TimeInterval, height: CGFloat) -> CGRect {
+            let top = center(at: time) + gap / 2
             return CGRect(x: x, y: top, width: FlappyGame.pipeWidth, height: max(0, height - top))
         }
     }
@@ -94,6 +132,9 @@ struct FlappyGame: Equatable, Sendable {
     private(set) var phase: Phase
     /// 게임오버 플래시 잔여 시간(0 이면 없음).
     private(set) var flashRemaining: TimeInterval
+    /// 이번 판이 시작된 뒤 흐른 시간(초). 움직이는 기둥의 틈 위치가 이 시계를 본다 —
+    /// 벽시계가 아니라 `step(dt:)` 이 흘린 시간이라 판이 결정적으로 재현된다.
+    private(set) var elapsed: TimeInterval
     private var rng: MiniGameRandom
 
     /// 프레임 루프가 돌아야 하는 상태(running · over 유예). ready/result 는 정지.
@@ -124,21 +165,23 @@ struct FlappyGame: Equatable, Sendable {
         score = 0
         phase = .ready
         flashRemaining = 0
+        elapsed = 0
     }
 
     /// 테스트 픽스처 — 임의 상태에서 시작한다(난수는 seed).
-    init(seed: UInt64, bird: Bird, pipes: [Pipe], score: Int, phase: Phase) {
+    init(seed: UInt64, bird: Bird, pipes: [Pipe], score: Int, phase: Phase, elapsed: TimeInterval = 0) {
         rng = MiniGameRandom(seed: seed)
         self.bird = bird
         self.pipes = pipes
         self.score = score
         self.phase = phase
         flashRemaining = 0
+        self.elapsed = elapsed
     }
 
     static func == (lhs: FlappyGame, rhs: FlappyGame) -> Bool {
         lhs.bird == rhs.bird && lhs.pipes == rhs.pipes && lhs.score == rhs.score
-            && lhs.phase == rhs.phase && lhs.flashRemaining == rhs.flashRemaining
+            && lhs.phase == rhs.phase && lhs.flashRemaining == rhs.flashRemaining && lhs.elapsed == rhs.elapsed
     }
 
     // MARK: 순수 규칙 — 난이도 곡선
@@ -148,15 +191,27 @@ struct FlappyGame: Equatable, Sendable {
         max(96, 132 - CGFloat(3 * max(0, score)))
     }
 
-    /// 스크롤 속도(pt/s): 130 에서 점수당 6 빨라지고 300 에서 멈춘다(29점부터).
+    /// 스크롤 속도(pt/s): 130 에서 점수당 3 빨라지고 230 에서 멈춘다(34점부터).
+    /// 상승률을 절반으로 낮춘 자리에 아래 '움직이는 틈'이 들어왔다(사용자 요청 2026-09-08).
     static func speed(forScore score: Int) -> CGFloat {
-        min(300, 130 + CGFloat(6 * max(0, score)))
+        min(230, 130 + CGFloat(3 * max(0, score)))
     }
 
     /// 기둥 사이 수평 간격: 150 에서 점수당 2 좁아지고 115 에서 멈춘다(18점부터) — 기둥이 더 자주 온다.
     static func spacing(forScore score: Int) -> CGFloat {
         max(115, 150 - CGFloat(2 * max(0, score)))
     }
+
+    /// 튀는 기둥이 나오기 시작하는 점수. 그 전에는 전부 고정이다(조작을 익힐 시간).
+    static let shiftMinScore = 15
+    /// 새 기둥이 '튀는 기둥'일 확률. 점수와 무관한 상수 — 20%.
+    static let shiftChance = 0.20
+    /// 한 번에 튀는 폭(pt). 논리 302 판에서 틈 하나 남짓 — 눈에 확 띄되 반응할 수 있는 크기다.
+    static let shiftJump: CGFloat = 58
+    /// 화면에 들어온 뒤 튀기까지의 지연 범위(초). 기둥마다 난수라 언제 튈지 외울 수 없다.
+    static let shiftDelayRange: ClosedRange<TimeInterval> = 0.45...1.10
+    /// 튀는 데 걸리는 시간(초). 순간이동처럼 보이되 프레임 사이가 이어진다.
+    static let shiftDuration: TimeInterval = 0.12
 
     // MARK: 순수 규칙 — 물리·충돌
 
@@ -165,17 +220,36 @@ struct FlappyGame: Equatable, Sendable {
         min(vy + gravity * CGFloat(dt), maxFallSpeed)
     }
 
-    /// AABB — 히트박스가 위 기둥 또는 아래 기둥과 겹치면 충돌.
-    static func collides(bird: CGRect, pipe: Pipe, height: CGFloat) -> Bool {
-        bird.intersects(pipe.topRect) || bird.intersects(pipe.bottomRect(height: height))
+    /// AABB — 히트박스가 그 시각의 위 기둥 또는 아래 기둥과 겹치면 충돌.
+    /// `time` 은 움직이는 기둥의 틈 위치를 정한다(그림과 같은 함수를 쓴다).
+    static func collides(bird: CGRect, pipe: Pipe, height: CGFloat, time: TimeInterval) -> Bool {
+        bird.intersects(pipe.topRect(at: time)) || bird.intersects(pipe.bottomRect(at: time, height: height))
     }
 
     /// 새 기둥. 틈 중심은 위·아래 여백 `centerMargin` 을 두고 뽑는다(바닥 띠가 없으므로 아래도 같은 값).
+    ///
+    /// 점수 15 이상이면 20% 로 '튀는 기둥'이 된다. 난수 소비 순서(기준선 → 판정 → 지연 → 방향)는 결정론의 일부다 —
+    /// 15점 미만에서는 `&&` 단락 평가로 판정 난수를 아예 쓰지 않아 초반 판이 종전과 같은 모양으로 남는다.
+    /// 방향은 여백 안에 들어가는 쪽으로만 고르고, 양쪽 다 안 되면 고정 기둥으로 강등한다(틈이 화면 밖으로 새지 않게).
     static func makePipe(x: CGFloat, score: Int, rng: inout MiniGameRandom) -> Pipe {
         let gap = gap(forScore: score)
         let lo = Double(gap / 2 + centerMargin)
         let hi = Double(height - gap / 2 - centerMargin)
-        return Pipe(x: x, centerY: CGFloat(rng.uniform(lo, hi)), gap: gap)
+        let center = CGFloat(rng.uniform(lo, hi))
+        guard score >= shiftMinScore, rng.unit() < shiftChance else {
+            return Pipe(x: x, centerY: center, gap: gap)
+        }
+        let delay = rng.uniform(shiftDelayRange.lowerBound, shiftDelayRange.upperBound)
+        let wantsDown = rng.unit() < 0.5
+        let canDown = Double(center + shiftJump) <= hi
+        let canUp = Double(center - shiftJump) >= lo
+        let offset: CGFloat
+        switch (wantsDown, canDown, canUp) {
+        case (true, true, _), (false, true, false): offset = shiftJump
+        case (false, _, true), (true, false, true): offset = -shiftJump
+        default: return Pipe(x: x, centerY: center, gap: gap)   // 양쪽 다 여백 밖 — 고정으로 강등
+        }
+        return Pipe(x: x, centerY: center, gap: gap, shiftDelay: delay, shiftOffset: offset)
     }
 
     // MARK: 전이
@@ -218,6 +292,9 @@ struct FlappyGame: Equatable, Sendable {
             break
         }
 
+        // 0) 판 시계. 움직이는 기둥의 틈은 이 값만 본다(벽시계 아님 — 재현 가능하다).
+        elapsed += dt
+
         // 1) 캐릭터: 중력 → 위치. 천장은 히트박스 윗변을 0 에 붙이고 속도만 죽인다(충돌 아님).
         bird.vy = Self.nextVelocity(bird.vy, dt: dt)
         bird.y += bird.vy * CGFloat(dt)
@@ -230,6 +307,10 @@ struct FlappyGame: Equatable, Sendable {
         let speed = Self.speed(forScore: score)
         for i in pipes.indices {
             pipes[i].x -= speed * CGFloat(dt)
+            // 화면 오른쪽 끝에 들어온 순간 '튈 시각'을 확정한다(화면 밖에서 미리 튀면 서프라이즈가 아니다).
+            if let delay = pipes[i].shiftDelay, pipes[i].shiftAt == nil, pipes[i].x <= Self.width {
+                pipes[i].shiftAt = elapsed + delay
+            }
             if !pipes[i].passed, bird.x > pipes[i].x + Self.pipeWidth {
                 pipes[i].passed = true
                 score += 1
@@ -253,7 +334,7 @@ struct FlappyGame: Equatable, Sendable {
         // 4) 충돌: 바닥(캔버스 아랫변) 또는 기둥.
         let box = hitbox
         if box.maxY >= Self.height
-            || pipes.contains(where: { Self.collides(bird: box, pipe: $0, height: Self.height) }) {
+            || pipes.contains(where: { Self.collides(bird: box, pipe: $0, height: Self.height, time: elapsed) }) {
             phase = .over(hold: Self.overHold)
             flashRemaining = Self.flashDuration
         }
@@ -263,6 +344,7 @@ struct FlappyGame: Equatable, Sendable {
         bird = Bird(x: Self.birdX, y: Self.height / 2, vy: 0)
         score = 0
         flashRemaining = 0
+        elapsed = 0
         let gapToNext = Self.spacing(forScore: 0)
         pipes = (0..<Self.pipeCount).map { i in
             Self.makePipe(x: Self.firstPipeX + CGFloat(i) * gapToNext, score: 0, rng: &rng)
@@ -353,8 +435,12 @@ struct FlappyGameView: View {
         }
         // 기둥: 위는 천장까지, 아래는 바닥까지. 사각으로 그려 끝이 캔버스 가장자리에 딱 붙는다
         // (모서리를 둥글리면 천장·바닥에 틈이 생겨 "떠 있는 막대"로 보인다 — 그 지적이 이 판의 이유다).
+        // 튀는 기둥도 고정 기둥과 **똑같이** 그린다 — 색으로 미리 알려 주지 않는 것이 이 규칙의 핵심이다
+        // (사용자, 2026-09-08). 구분이 필요하면 규칙(center(at:))이 아니라 눈으로 겪어야 한다.
         for pipe in game.pipes {
-            for r in [pipe.topRect, pipe.bottomRect(height: FlappyGame.height)] where r.height > 0 {
+            let halves = [pipe.topRect(at: game.elapsed),
+                          pipe.bottomRect(at: game.elapsed, height: FlappyGame.height)]
+            for r in halves where r.height > 0 {
                 let path = Path(rect(r))
                 context.fill(path, with: .color(CheckTheme.accent.opacity(0.55)))
                 context.stroke(path, with: .color(CheckTheme.accent), lineWidth: 1)

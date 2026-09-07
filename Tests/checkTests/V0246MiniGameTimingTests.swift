@@ -63,15 +63,34 @@ private func tbFinishedGame(seed: UInt64 = tbSeed) -> TimingBarGame {
 
 @Test
 func timingBarPeriodAndWidthTable() {
-    #expect(abs(TimingBarGame.period(round: 1) - 1.40) < 1e-9)
-    #expect(abs(TimingBarGame.period(round: 5) - 1.04) < 1e-9)
-    #expect(abs(TimingBarGame.period(round: 10) - 0.59) < 1e-9)
-    #expect(abs(TimingBarGame.targetWidth(round: 1) - 0.30) < 1e-9)
-    #expect(abs(TimingBarGame.targetWidth(round: 5) - 0.212) < 1e-9)
-    #expect(abs(TimingBarGame.targetWidth(round: 10) - 0.102) < 1e-9)
-    // 하한: 라운드가 더 가도 0.55 / 0.10 밑으로 안 내려간다.
-    #expect(TimingBarGame.period(round: 30) == 0.55)
-    #expect(TimingBarGame.targetWidth(round: 30) == 0.10)
+    // 2026-09-08 난이도 상향: 주기 1.40/−0.09 → 1.10/−0.075(하한 0.42), 폭 0.30/−0.022 → 0.24/−0.019(하한 0.07).
+    #expect(abs(TimingBarGame.period(round: 1) - 1.10) < 1e-9)
+    #expect(abs(TimingBarGame.period(round: 5) - 0.80) < 1e-9)
+    #expect(abs(TimingBarGame.period(round: 10) - 0.425) < 1e-9)
+    #expect(abs(TimingBarGame.targetWidth(round: 1) - 0.24) < 1e-9)
+    #expect(abs(TimingBarGame.targetWidth(round: 5) - 0.164) < 1e-9)
+    #expect(abs(TimingBarGame.targetWidth(round: 9) - 0.088) < 1e-9)
+    // 하한: r10 에서 폭이 이미 하한(0.069 → 0.07)이고, 라운드가 더 가도 0.42 / 0.07 밑으로 안 내려간다.
+    #expect(TimingBarGame.targetWidth(round: 10) == 0.07)
+    #expect(TimingBarGame.period(round: 30) == 0.42)
+    #expect(TimingBarGame.targetWidth(round: 30) == 0.07)
+}
+
+@Test
+func timingBarGetsHarderEveryRoundUntilItFlattens() {
+    // 라운드마다 더 빠르고(주기 ↓) 더 좁다(폭 ↓). 하한에 닿은 뒤로는 평평하다.
+    for round in 1..<TimingBarGame.roundCount {
+        #expect(TimingBarGame.period(round: round) > TimingBarGame.period(round: round + 1),
+                "r\(round) 주기가 r\(round + 1) 보다 짧다")
+        #expect(TimingBarGame.targetWidth(round: round) >= TimingBarGame.targetWidth(round: round + 1))
+    }
+    // 폭은 r9 → r10 에서도 실제로 좁아진다(하한에 닿기 직전 구간).
+    #expect(TimingBarGame.targetWidth(round: 9) > TimingBarGame.targetWidth(round: 10))
+    #expect(TimingBarGame.period(round: 11) == TimingBarGame.period(round: 40))
+    #expect(TimingBarGame.targetWidth(round: 11) == TimingBarGame.targetWidth(round: 40))
+    // 종전(1.40 · 0.30)보다 1라운드부터 어렵다 — 이 두 줄이 '난이도 상향'의 계약이다.
+    #expect(TimingBarGame.period(round: 1) < 1.40)
+    #expect(TimingBarGame.targetWidth(round: 1) < 0.30)
 }
 
 @Test
@@ -162,7 +181,7 @@ func timingBarTapAtTheCenterScoresAHundredThenAdvancesAfterTheHold() {
 @Test
 func timingBarMissedTapScoresByDistance() {
     var game = tbStarted()
-    // 마커가 t=0 에서 0 에 있다. 목표 중심은 ≥ 0.2 이므로 즉시 정지하면 d ≥ 0.15/0.15 = 1 을 넘는다(라운드 1 폭 0.30).
+    // 마커가 t=0 에서 0 에 있다. 목표 중심은 ≥ 0.17 이므로 즉시 정지하면 d ≥ 0.17/0.12 > 1 이다(라운드 1 폭 0.24).
     let d = abs(0 - game.target.center) / (game.target.width / 2)
     game.tap()
     guard case .roundResult(_, let score, _) = game.phase else { Issue.record("roundResult 아님"); return }
@@ -249,7 +268,7 @@ private func tbRenderBitmap(_ view: some View, width: CGFloat = 292, height: CGF
 }
 
 private func tbSavePNG(_ bitmap: NSBitmapImageRep, _ name: String) {
-    let dir = "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/agent-timing"
+    let dir = "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/agent-tune2"
     try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
     guard let png = bitmap.representation(using: .png, properties: [:]) else { return }
     try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name))
@@ -298,10 +317,31 @@ private func tbIsCard(_ r: Int, _ g: Int, _ b: Int, _ a: Int) -> Bool { a > 200 
 
 @MainActor
 @Test
+func timingBarLastRoundDrawsTheNarrowestTarget() throws {
+    // r10 은 폭 0.07(트랙의 7%) — 난이도 상향의 끝이 눈에 어떻게 보이는지 남긴다. 창 캔버스 크기로 찍는다.
+    var game = tbStarted()
+    for _ in 0..<(TimingBarGame.roundCount - 1) { tbPlayPerfectRound(&game) }
+    guard case .running(let round, _) = game.phase else {
+        Issue.record("r10 이 아니다: \(game.phase)")
+        return
+    }
+    #expect(round == 10)
+    #expect(abs(game.target.width - 0.07) < 1e-9)
+    tbAdvance(&game, by: TimingBarGame.period(round: 10) / 4)
+    let view = TimingBarGameView(host: .inert(bestScore: 900), input: MiniGameInput(), initialGame: game)
+    let bitmap = try tbRenderBitmap(view, width: 344, height: 356)
+    tbSavePNG(bitmap, "timing-round10.png")
+    #expect(tbCount(bitmap, where: tbIsAccentish) > 100, "좁아도 목표 구간은 보여야 한다")
+    #expect(tbCount(bitmap, where: tbIsWorking) > 60, "마커(working)")
+}
+
+@MainActor
+@Test
 func timingBarRunningFrameShowsTargetAndMarker() throws {
     var game = tbStarted()
-    // 마커를 트랙 중간(p = 0.5, t = T/4 = 0.35초)에 둔다 — 목표와 겹쳐도 색 픽셀은 둘 다 남는다.
-    tbAdvance(&game, by: 0.35)
+    // 마커를 트랙 중간(p = 0.5, t = T/4)에 둔다 — 목표와 겹쳐도 색 픽셀은 둘 다 남는다.
+    // 주기는 라운드 1 값을 그때그때 읽는다(난이도를 조정하면 상수가 바뀐다 — 0.35 로 박아 두면 그때 빨개진다).
+    tbAdvance(&game, by: TimingBarGame.period(round: 1) / 4)
     #expect(abs(game.markerPosition - 0.5) < 1e-9)
     let view = TimingBarGameView(host: .inert(bestScore: 640), input: MiniGameInput(), initialGame: game)
     let bitmap = try tbRenderBitmap(view)

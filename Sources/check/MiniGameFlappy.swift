@@ -3,44 +3,56 @@ import SwiftUI
 
 // MARK: - 플래피 아잉 (v0.2.46)
 //
-// 팝오버 미니게임 2종 중 하나. 규칙은 `FlappyGame`(순수 값 타입 — 뷰·스토어·시계 의존 0)에, 그림과 프레임 루프는
-// `FlappyGameView`(잎 뷰 하나)에 있다. 허브(MiniGamePanel)는 `MiniGameHost` 와 `MiniGameInput` 만 건네고
+// 미니게임 2종 중 하나. 규칙은 `FlappyGame`(순수 값 타입 — 뷰·스토어·시계 의존 0)에, 그림과 프레임 루프는
+// `FlappyGameView`(잎 뷰 하나)에 있다. 허브(미니게임 창)는 `MiniGameHost` 와 `MiniGameInput` 만 건네고
 // 게임은 그 둘 말고는 아무것도 읽지 않는다(MiniGame.swift 의 계약).
 //
-// 좌표계는 논리 292×200(y 는 아래로 +). 뷰는 `MiniGameCanvas.transform(in:)` 으로 실제 캔버스에 비율 유지로
-// 맞추므로 팝오버 높이 예산 때문에 캔버스가 140~200 사이에서 바뀌어도 규칙·난이도는 그대로다.
+// ── 논리 좌표 292×302 (y 는 아래로 +) ─────────────────────────────────────────────────────
+// 창 캔버스(344×356)와 **같은 비율**이다(292 × 356/344 = 302.19 → 302). 그래서 판이 캔버스를 꽉 채우고
+// 기둥이 천장·바닥에 닿는다. 2026-09-08 실기 전까지는 292×200 이라 344×356 안에서 위아래 60pt 씩
+// 레터박스가 생겼고, 사용자가 "천장에 구분이 없어 비어 보인다 · 바닥 표시가 어정쩡하다"고 지적했다.
+// 뷰는 `MiniGameCanvas.transform(in:logicalSize:)` 로 비율을 유지해 그린다(남는 여백 ±0.5pt).
 //
-// 물리 상수는 200pt 캔버스에 맞춘 값이다(2026-09-08 실기: 중력 1500/점프 −430 이면 클릭 한 번에 61.6pt(높이의 31%)
-// 솟구쳐 첫 기둥 틈 74 를 한 번에 벗어났다 — 18판 최고 1점). 지금은 점프 높이 24.5pt(≈12%), 낙하 상한 380,
-// 틈 80→64, 속도 110→170, 첫 기둥까지 폭+80.
+// ── 물리 상수 ────────────────────────────────────────────────────────────────────────────
+// 판이 세로로 1.51배(302/200) 길어졌으므로 세로 물리량도 같은 배로 키워 **체감 난이도를 보존**한다:
+// 중력 900→1360 · 점프 −210→−317(점프 높이 36.9pt ≈ 높이의 12.2%, 종전 24.5/200 = 12.25%) ·
+// 낙하 상한 380→574. 히트박스 22→24 · 스프라이트 30→34(세로로 길어진 판에서 캐릭터가 묻히지 않게).
+// 가로(폭 292 · 기둥 폭 44 · 첫 기둥까지 폭+80)는 그대로다.
+// 바닥 띠는 없앴다 — 바닥은 캔버스의 아랫변 자체이고, 기둥은 위아래 끝까지 그린다.
+//
+// ── 난이도 곡선 ──────────────────────────────────────────────────────────────────────────
+// "갈수록 어려워지게" (사용자, 2026-09-08). 세 값이 함께 조인다:
+//   속도 130 → 6/점 → 300 상한(29점)   ·   틈 132 → −3/점 → 96 하한(12점)   ·   간격 150 → −2/점 → 115 하한(18점)
 
 /// 플래피 아잉 규칙. 시드만 주면 결정론적으로 같은 판이 나온다(테스트가 시드를 고정한다).
 struct FlappyGame: Equatable, Sendable {
     // 논리 좌표·물리 상수. 클라·테스트가 같은 값을 본다.
     static let width: CGFloat = MiniGameCanvas.logicalWidth
-    static let height: CGFloat = MiniGameCanvas.logicalHeight
+    /// 창 캔버스(344×356)와 같은 비율의 세로 길이 — 이 게임만의 판 크기다(공용 200 이 아니다).
+    static let height: CGFloat = 302
+    /// 뷰가 `MiniGameCanvas.transform(in:logicalSize:)` 에 넘기는 판 크기.
+    static var logicalSize: CGSize { CGSize(width: width, height: height) }
     static let birdX: CGFloat = 0.28 * width
-    /// 충돌 판정 상자(정사각). 스프라이트(30)보다 작게 둬 "닿은 것 같은데 죽었다"를 줄인다.
-    static let hitboxSize: CGFloat = 22
-    static let spriteSize: CGFloat = 30
-    static let gravity: CGFloat = 900
-    /// 점프 높이 = 210² / (2·900) = 24.5pt.
-    static let flapVelocity: CGFloat = -210
-    static let maxFallSpeed: CGFloat = 380
-    /// 캔버스 아래 바닥띠. 히트박스 아래가 여기 닿으면 충돌.
-    static let floorBand: CGFloat = 8
+    /// 충돌 판정 상자(정사각). 스프라이트(34)보다 작게 둬 "닿은 것 같은데 죽었다"를 줄인다.
+    static let hitboxSize: CGFloat = 24
+    static let spriteSize: CGFloat = 34
+    static let gravity: CGFloat = 1360
+    /// 점프 높이 = 317² / (2·1360) = 36.9pt(판 높이의 12.2%).
+    static let flapVelocity: CGFloat = -317
+    static let maxFallSpeed: CGFloat = 574
     static let pipeWidth: CGFloat = 44
-    static let pipeSpacing: CGFloat = 150
-    /// 첫 기둥은 화면 밖 80pt 에서 시작 — 시작 직후 자세를 잡을 시간(≈0.7초)을 준다.
+    /// 첫 기둥은 화면 밖 80pt 에서 시작 — 시작 직후 자세를 잡을 시간(≈0.6초)을 준다.
     static let firstPipeX: CGFloat = width + 80
-    /// 항상 화면 안팎에 유지하는 기둥 수(간격 150 × 3 = 450 > 폭 292 + 80 이라 빈 구간이 안 생긴다).
+    /// 항상 화면 안팎에 유지하는 기둥 수. 간격이 최소(115)여도 세 개가 폭 292 를 덮고 하나가 오른쪽 밖에 대기한다.
     static let pipeCount = 3
     static let maxScore = MiniGameKind.flappy.maxScore
+    /// 틈 중심을 뽑을 때 위·아래로 남기는 여백(세로 1.51배에 맞춰 24 → 36).
+    static let centerMargin: CGFloat = 36
     /// 게임오버 뒤 결과 카드가 뜨기까지의 유예(그 사이 클릭은 무시 — 죽자마자 실수로 새 판을 열지 않게).
     static let overHold: TimeInterval = 0.4
     /// 게임오버 순간 빨간 플래시 길이.
     static let flashDuration: TimeInterval = 0.15
-    /// dt 상한. 앱 정지·팝오버 재표시 뒤 첫 프레임이 몇 초를 한 번에 밀지 않게.
+    /// dt 상한. 앱 정지·창 재표시 뒤 첫 프레임이 몇 초를 한 번에 밀지 않게.
     static let maxStep: TimeInterval = 1.0 / 30.0
 
     struct Pipe: Equatable, Sendable {
@@ -49,11 +61,11 @@ struct FlappyGame: Equatable, Sendable {
         var gap: CGFloat
         var passed: Bool = false
 
-        /// 위 기둥 [0, centerY − gap/2].
+        /// 위 기둥 [0, centerY − gap/2] — 천장에 붙는다.
         var topRect: CGRect {
             CGRect(x: x, y: 0, width: FlappyGame.pipeWidth, height: max(0, centerY - gap / 2))
         }
-        /// 아래 기둥 [centerY + gap/2, H].
+        /// 아래 기둥 [centerY + gap/2, height] — 바닥에 붙는다.
         func bottomRect(height: CGFloat) -> CGRect {
             let top = centerY + gap / 2
             return CGRect(x: x, y: top, width: FlappyGame.pipeWidth, height: max(0, height - top))
@@ -129,19 +141,26 @@ struct FlappyGame: Equatable, Sendable {
             && lhs.phase == rhs.phase && lhs.flashRemaining == rhs.flashRemaining
     }
 
-    // MARK: 순수 규칙
+    // MARK: 순수 규칙 — 난이도 곡선
 
-    /// 틈 높이: 80 에서 5점마다 2 줄고 64 에서 멈춘다(40점부터).
+    /// 틈 높이: 132 에서 점수당 3 줄고 96 에서 멈춘다(12점부터). 판 높이 대비 43.7% → 31.8%.
     static func gap(forScore score: Int) -> CGFloat {
-        max(64, 80 - CGFloat(2 * (max(0, score) / 5)))
+        max(96, 132 - CGFloat(3 * max(0, score)))
     }
 
-    /// 스크롤 속도(pt/s): 110 에서 점수당 2 빨라지고 170 에서 멈춘다(30점부터).
+    /// 스크롤 속도(pt/s): 130 에서 점수당 6 빨라지고 300 에서 멈춘다(29점부터).
     static func speed(forScore score: Int) -> CGFloat {
-        min(170, 110 + CGFloat(2 * max(0, score)))
+        min(300, 130 + CGFloat(6 * max(0, score)))
     }
 
-    /// 중력 적분 뒤 속도(최대 낙하 620 클램프).
+    /// 기둥 사이 수평 간격: 150 에서 점수당 2 좁아지고 115 에서 멈춘다(18점부터) — 기둥이 더 자주 온다.
+    static func spacing(forScore score: Int) -> CGFloat {
+        max(115, 150 - CGFloat(2 * max(0, score)))
+    }
+
+    // MARK: 순수 규칙 — 물리·충돌
+
+    /// 중력 적분 뒤 속도(최대 낙하 574 클램프).
     static func nextVelocity(_ vy: CGFloat, dt: TimeInterval) -> CGFloat {
         min(vy + gravity * CGFloat(dt), maxFallSpeed)
     }
@@ -151,11 +170,11 @@ struct FlappyGame: Equatable, Sendable {
         bird.intersects(pipe.topRect) || bird.intersects(pipe.bottomRect(height: height))
     }
 
-    /// 새 기둥. 틈 중심은 위·아래 여백 24(아래는 바닥띠 8 만큼 더) 를 두고 뽑는다.
+    /// 새 기둥. 틈 중심은 위·아래 여백 `centerMargin` 을 두고 뽑는다(바닥 띠가 없으므로 아래도 같은 값).
     static func makePipe(x: CGFloat, score: Int, rng: inout MiniGameRandom) -> Pipe {
         let gap = gap(forScore: score)
-        let lo = Double(gap / 2 + 24)
-        let hi = Double(height - gap / 2 - 24 - floorBand)
+        let lo = Double(gap / 2 + centerMargin)
+        let hi = Double(height - gap / 2 - centerMargin)
         return Pipe(x: x, centerY: CGFloat(rng.uniform(lo, hi)), gap: gap)
     }
 
@@ -174,7 +193,7 @@ struct FlappyGame: Equatable, Sendable {
         }
     }
 
-    /// 허브가 판을 끊을 때(팝오버 닫힘·패널/게임 전환). 진행 중이면 그 점수로 결과 확정 — 점수는 유효하다.
+    /// 허브가 판을 끊을 때(창 닫힘·포커스 상실·게임 전환). 진행 중이면 그 점수로 결과 확정 — 점수는 유효하다.
     mutating func interrupt() {
         switch phase {
         case .running, .over:
@@ -222,16 +241,18 @@ struct FlappyGame: Equatable, Sendable {
             return
         }
 
-        // 3) 화면 밖으로 완전히 나간 기둥은 버리고, 마지막 기둥 뒤 150 에 새 기둥(현재 점수의 틈).
+        // 3) 화면 밖으로 완전히 나간 기둥은 버리고, 마지막 기둥 뒤 `spacing(현재 점수)` 에 새 기둥
+        //    (틈도 현재 점수 기준 — 점수가 오를수록 좁고 자주 온다).
         while let first = pipes.first, first.x + Self.pipeWidth < 0 {
             pipes.removeFirst()
-            let lastX = pipes.last?.x ?? (Self.firstPipeX - Self.pipeSpacing)
-            pipes.append(Self.makePipe(x: lastX + Self.pipeSpacing, score: score, rng: &rng))
+            let gapToNext = Self.spacing(forScore: score)
+            let lastX = pipes.last?.x ?? (Self.firstPipeX - gapToNext)
+            pipes.append(Self.makePipe(x: lastX + gapToNext, score: score, rng: &rng))
         }
 
-        // 4) 충돌: 바닥띠 또는 기둥.
+        // 4) 충돌: 바닥(캔버스 아랫변) 또는 기둥.
         let box = hitbox
-        if box.maxY >= Self.height - Self.floorBand
+        if box.maxY >= Self.height
             || pipes.contains(where: { Self.collides(bird: box, pipe: $0, height: Self.height) }) {
             phase = .over(hold: Self.overHold)
             flashRemaining = Self.flashDuration
@@ -242,8 +263,9 @@ struct FlappyGame: Equatable, Sendable {
         bird = Bird(x: Self.birdX, y: Self.height / 2, vy: 0)
         score = 0
         flashRemaining = 0
+        let gapToNext = Self.spacing(forScore: 0)
         pipes = (0..<Self.pipeCount).map { i in
-            Self.makePipe(x: Self.firstPipeX + CGFloat(i) * Self.pipeSpacing, score: 0, rng: &rng)
+            Self.makePipe(x: Self.firstPipeX + CGFloat(i) * gapToNext, score: 0, rng: &rng)
         }
         phase = .running
     }
@@ -251,7 +273,7 @@ struct FlappyGame: Equatable, Sendable {
 
 // MARK: - 잎 뷰
 
-/// 플래피 아잉 캔버스. 부모가 준 프레임(292×h)을 채우고, 규칙은 `FlappyGame` 에 맡긴다.
+/// 플래피 아잉 캔버스. 부모가 준 프레임을 채우고, 규칙은 `FlappyGame` 에 맡긴다.
 ///
 /// 프레임 루프는 `TimelineView(.animation(paused:))` 하나뿐이다 — 진행 중(running·over 유예)일 때만 돌고, ready/result
 /// 와 허브의 interrupt 뒤엔 멈춘다(유휴 0%). 틱은 TimelineView 의 날짜가 바뀔 때(`onChange`)만 일어나므로 body 평가
@@ -324,21 +346,16 @@ struct FlappyGameView: View {
     }
 
     private func draw(_ context: inout GraphicsContext, size: CGSize) {
-        let t = MiniGameCanvas.transform(in: size)
+        let t = MiniGameCanvas.transform(in: size, logicalSize: FlappyGame.logicalSize)
         func rect(_ r: CGRect) -> CGRect {
             CGRect(x: t.origin.x + r.minX * t.scale, y: t.origin.y + r.minY * t.scale,
                    width: r.width * t.scale, height: r.height * t.scale)
         }
-        // 바닥띠.
-        let floor = CGRect(x: 0, y: FlappyGame.height - FlappyGame.floorBand,
-                           width: FlappyGame.width, height: FlappyGame.floorBand)
-        context.fill(Path(rect(floor)), with: .color(CheckTheme.trackFill))
-        // 기둥: 위·아래(아래는 바닥띠 위까지).
+        // 기둥: 위는 천장까지, 아래는 바닥까지. 사각으로 그려 끝이 캔버스 가장자리에 딱 붙는다
+        // (모서리를 둥글리면 천장·바닥에 틈이 생겨 "떠 있는 막대"로 보인다 — 그 지적이 이 판의 이유다).
         for pipe in game.pipes {
-            let top = pipe.topRect
-            let bottom = pipe.bottomRect(height: FlappyGame.height - FlappyGame.floorBand)
-            for r in [top, bottom] where r.height > 0 {
-                let path = Path(roundedRect: rect(r), cornerRadius: 4 * t.scale, style: .continuous)
+            for r in [pipe.topRect, pipe.bottomRect(height: FlappyGame.height)] where r.height > 0 {
+                let path = Path(rect(r))
                 context.fill(path, with: .color(CheckTheme.accent.opacity(0.55)))
                 context.stroke(path, with: .color(CheckTheme.accent), lineWidth: 1)
             }
@@ -348,7 +365,7 @@ struct FlappyGameView: View {
     /// 스프라이트(아잉 PNG)와 상단 점수. 위치는 논리 좌표를 실제 크기로 옮겨 놓는다.
     private var spriteAndScore: some View {
         GeometryReader { geo in
-            let t = MiniGameCanvas.transform(in: geo.size)
+            let t = MiniGameCanvas.transform(in: geo.size, logicalSize: FlappyGame.logicalSize)
             let side = FlappyGame.spriteSize * t.scale
             sprite
                 .frame(width: side, height: side)
@@ -359,7 +376,7 @@ struct FlappyGameView: View {
                     .font(.system(size: 26, weight: .heavy, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(CheckTheme.primaryText)
-                    .position(x: t.origin.x + FlappyGame.width / 2 * t.scale, y: t.origin.y + 22 * t.scale)
+                    .position(x: t.origin.x + FlappyGame.width / 2 * t.scale, y: t.origin.y + 26 * t.scale)
             }
         }
         .allowsHitTesting(false)
@@ -392,65 +409,26 @@ struct FlappyGameView: View {
         }
     }
 
+    /// 시작·결과 카드는 두 게임이 **같은** `MiniGameOverlayCard` 를 쓴다(색·글씨 통일 — 2026-09-08 지적).
     @ViewBuilder
     private var overlayCard: some View {
         switch game.phase {
         case .ready:
-            FlappyOverlayCard {
-                Text(MiniGameKind.flappy.title)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(CheckTheme.primaryText)
-                Text(MiniGameKind.flappy.howToPlay)
-                    .font(.system(size: 11))
-                    .foregroundStyle(CheckTheme.primaryText)
-                Text("클릭해서 시작")
-                    .font(.system(size: 11))
-                    .foregroundStyle(CheckTheme.secondaryText)
-            }
+            MiniGameOverlayCard(
+                title: MiniGameKind.flappy.title,
+                subtitle: MiniGameKind.flappy.howToPlay,
+                action: "클릭해서 시작"
+            )
         case .result:
-            let isRecord = game.score > host.bestScore
-            FlappyOverlayCard {
-                Text("\(game.score)점")
-                    .font(.system(size: 26, weight: .heavy, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(CheckTheme.primaryText)
-                if isRecord {
-                    Text("신기록!")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(CheckTheme.working)
-                } else {
-                    Text("최고 \(host.bestScore)")
-                        .font(.system(size: 11))
-                        .monospacedDigit()
-                        .foregroundStyle(CheckTheme.secondaryText)
-                }
-                Text("클릭해서 다시")
-                    .font(.system(size: 11))
-                    .foregroundStyle(CheckTheme.secondaryText)
-            }
+            MiniGameOverlayCard(
+                title: "\(game.score)점",
+                titleIsScore: true,
+                subtitle: game.score > host.bestScore ? "신기록!" : "최고 \(host.bestScore)",
+                subtitleIsHighlighted: game.score > host.bestScore,
+                action: "클릭해서 다시"
+            )
         case .running, .over:
             EmptyView()
         }
-    }
-}
-
-/// 캔버스 위 안내/결과 카드(잔디 말풍선과 같은 바탕 — panelElevated + border, 모서리 10).
-private struct FlappyOverlayCard<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(spacing: 4) { content }
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(CheckTheme.panelElevated)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(CheckTheme.border, lineWidth: 1)
-            )
-            .allowsHitTesting(false)
     }
 }

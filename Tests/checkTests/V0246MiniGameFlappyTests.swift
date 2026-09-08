@@ -120,9 +120,9 @@ func difficultyIsMonotonicUntilItFlattens() {
 
 @Test
 func surpriseJumpConstants() {
-    // 사용자 결정 2026-09-08: 15점부터 · 20% 고정 확률 · 58pt 한 방 · 0.45~1.10초 지연 · 0.12초 보간.
+    // 사용자 결정 2026-09-08: 15점부터 · 30% 고정 확률 · 58pt 한 방 · 0.45~1.10초 지연 · 0.12초 보간.
     #expect(FlappyGame.shiftMinScore == 15)
-    #expect(FlappyGame.shiftChance == 0.20)
+    #expect(FlappyGame.shiftChance == 0.30)
     #expect(FlappyGame.shiftJump == 58)
     #expect(FlappyGame.shiftDelayRange == 0.45...1.10)
     #expect(FlappyGame.shiftDuration == 0.12)
@@ -144,14 +144,14 @@ func pipesBornBelowFifteenPointsNeverJump() {
 }
 
 @Test
-func aboutAFifthOfPipesJumpOncePastFifteenPoints() {
+func aboutAThirdOfPipesJumpOncePastFifteenPoints() {
     func jumpCount(seed: UInt64) -> Int {
         var rng = MiniGameRandom(seed: seed)
         return (0..<200).filter { _ in FlappyGame.makePipe(x: 0, score: 20, rng: &rng).isShifting }.count
     }
     let count = jumpCount(seed: 2026)
-    // 시드 2026 에서 200개 중 정확히 40개(20.0%) — 결정론이라 값이 박힌다. 확률 상수를 건드리면 여기가 빨개진다.
-    #expect(count == 40, "200개 중 \(count)개가 튄다 — 20% 언저리여야 한다")
+    // 시드 2026 에서 200개 중 정확히 56개(28.0%) — 결정론이라 값이 박힌다. 확률 상수를 건드리면 여기가 빨개진다.
+    #expect(count == 56, "200개 중 \(count)개가 튄다 — 30% 언저리여야 한다")
     // 시드가 같으면 판도 같다(결정론).
     #expect(jumpCount(seed: 2026) == count)
     // 튀는 기둥도 틈은 고정 기둥과 같다.

@@ -204,8 +204,8 @@ struct FlappyGame: Equatable, Sendable {
 
     /// 튀는 기둥이 나오기 시작하는 점수. 그 전에는 전부 고정이다(조작을 익힐 시간).
     static let shiftMinScore = 15
-    /// 새 기둥이 '튀는 기둥'일 확률. 점수와 무관한 상수 — 20%.
-    static let shiftChance = 0.20
+    /// 새 기둥이 '튀는 기둥'일 확률. 점수와 무관한 상수 — 30%(2026-09-08 실기 뒤 20% → 30%).
+    static let shiftChance = 0.30
     /// 한 번에 튀는 폭(pt). 논리 302 판에서 틈 하나 남짓 — 눈에 확 띄되 반응할 수 있는 크기다.
     static let shiftJump: CGFloat = 58
     /// 화면에 들어온 뒤 튀기까지의 지연 범위(초). 기둥마다 난수라 언제 튈지 외울 수 없다.

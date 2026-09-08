@@ -49,7 +49,7 @@ extension WorkTimerStore {
         if teamMembers != members { teamMembers = members }
         detectTeamReactions()
         // 앱 시작 복구/폴링에서 서버상 내 세션은 열려 있으나 로컬은 비근무이고 마지막 신호 공백이 크면
-        // 그 세션을 마지막 신호 시각으로 자동 마감한다. 자동 마감이 일어나면 restore 로직은 건너뛴다.
+        // 그 세션을 마지막 신호 시각으로 자동 마감한다. 자동 마감이 일어나면 나머지 반영은 건너뛴다.
         if writeGeneration == workStateWriteGeneration, await autoCloseAbandonedOwnSessionIfNeeded() {
             guard generation == sessionGeneration else { return }
             stopTimerIfIdle()
@@ -198,7 +198,7 @@ extension WorkTimerStore {
             lastAwaySyncAt = now
             guard generation == sessionGeneration, session.userID == ownerUserID else { return }
             if let away {
-                applyAwaySync(await service.awaySync(from: away), ownerUserID: ownerUserID)
+                applyAwaySync(await service.awaySync(from: away))
             } else {
                 // 조각이 비어 왔다 — 기존 네트워크 실패와 같은 "모른다" 로 접는다(정책을 비워 마감을 멈춘다).
                 awayPolicy = nil
@@ -994,9 +994,9 @@ extension WorkTimerStore {
         }
     }
 
-    // MARK: - 자리 비움 정책·복원 (v0.2.35 / docs/away-close.md)
+    // MARK: - 자리 비움 정책 (v0.2.35 / docs/away-close.md)
 
-    /// away_sync() 를 불러 정책·판정 재료·복원 대상을 받아 온다. 근무 중에는 매 폴링, 비근무면 스로틀.
+    /// away_sync() 를 불러 정책·판정 재료를 받아 온다. 근무 중에는 매 폴링, 비근무면 스로틀.
     ///
     /// **실패는 전부 "모른다"로 접는다**: 정책을 비우면 evaluateAwaySession 이 그대로 통과하므로 마감이 멈춘다.
     /// 이 방향이 유일하게 안전한 실패다 — 반대(마지막으로 본 임계를 계속 쓰기)는 서버가 임계를 올렸는데도
@@ -1019,7 +1019,7 @@ extension WorkTimerStore {
                 try await service.awaySync(accessToken: activeSession.accessToken)
             }
             guard generation == sessionGeneration, self.session?.userID == ownerUserID else { return }
-            applyAwaySync(sync, ownerUserID: ownerUserID)
+            applyAwaySync(sync)
         } catch is AwaySyncUnavailable {
             // 마이그레이션이 아직 안 나간 서버. 정책을 비워 마감을 멈추고, 새 컬럼 전송도 함께 끈다
             // (그 서버에 last_input_at 을 보내면 하트비트가 400 이 되어 세션이 방치로 마감된다).
@@ -1036,124 +1036,14 @@ extension WorkTimerStore {
     }
 
     /// away_sync 응답을 스토어 상태로 반영한다(요청/응답과 분리해 테스트가 그대로 부를 수 있게 둔다).
-    func applyAwaySync(_ sync: AwaySync, ownerUserID: String) {
+    ///
+    /// 서버 응답의 `restorable` 조각은 **읽지 않는다**(v0.2.46 — 이어붙이기 제거). 서버는 계속 실어 보내지만
+    /// 클라는 정책·열린 세션만 가져간다.
+    func applyAwaySync(_ sync: AwaySync) {
         // 응답이 왔다 = 이 서버는 자리 비움 스키마를 갖고 있다. 상태가 invalid(비로그인)여도 참이다.
         awayServerSupported = true
-        awayStateOwnerUserID = ownerUserID
         awayPolicy = sync.policy
         awayOpenSession = sync.openSession
-        if awayRestorable != sync.restorable { awayRestorable = sync.restorable }
-        // 복원 대상이 사라졌으면(복원됨·만료·다른 맥이 처리) 제안도 함께 내린다.
-        if sync.restorable == nil, awayRestorePromptPending { awayRestorePromptPending = false }
-    }
-
-    /// 복원 버튼/말풍선의 액션. **원자 RPC 한 번**으로만 간다(2회 왕복 흉내 금지 — 중간에 죽으면
-    /// 열린 세션이 0개나 2개가 된다). 기존 canUndoAutoClose/performUndoAutoClose(스캐빈저 10분 되돌리기)는
-    /// 그대로 살아 있고 이 경로와 섞이지 않는다 — 그쪽 가드는 전부 실제 사고에서 나왔다.
-    @discardableResult
-    func restoreAwaySession() -> Task<Void, Never>? {
-        guard !isRestoringAwaySession, restorableAwaySession != nil else { return nil }
-        return Task { @MainActor in await performRestoreAwaySession() }
-    }
-
-    func performRestoreAwaySession() async {
-        guard !isRestoringAwaySession, let restorable = restorableAwaySession else { return }
-        guard let session else { return }
-        isRestoringAwaySession = true
-        defer { isRestoringAwaySession = false }
-        let generation = sessionGeneration
-        // 복원 왕복 전의 근무 상태 write 세대. 왕복 중 사용자가 [근무 시작]/[근무 종료]를 눌렀다면
-        // 그 조작이 최신이므로 로컬 반영을 통째로 건너뛴다(옛 세션으로 현재 세션을 덮어쓰기 금지).
-        let writeGeneration = workStateWriteGeneration
-        let outcome: AwayRestoreOutcome
-        do {
-            outcome = try await withSessionRetry { activeSession in
-                try await service.restoreAutoClosedSession(
-                    accessToken: activeSession.accessToken,
-                    sessionID: restorable.sessionID
-                )
-            }
-        } catch {
-            guard generation == sessionGeneration else { return }
-            syncMessage = authMessage(for: error, fallback: "재개 실패")
-            return
-        }
-        guard generation == sessionGeneration, self.session?.userID == session.userID else { return }
-        switch outcome {
-        case .restored(let sessionID, let serverStartedAt):
-            guard writeGeneration == workStateWriteGeneration else {
-                awayRestorePromptPending = false
-                return
-            }
-            applyRestoredAwaySession(
-                sessionID: sessionID,
-                startedAt: serverStartedAt ?? restorable.startedAt,
-                closedEndedAt: restorable.endedAt
-            )
-        case .expired:
-            awayRestorable = nil
-            awayRestorePromptPending = false
-            syncMessage = "복원 시간이 지났어요"
-        case .limitReached(let used, let limit):
-            awayRestorable = nil
-            awayRestorePromptPending = false
-            syncMessage = "오늘 복원 횟수를 다 썼어요(\(used)/\(limit))"
-        case .notRestorable:
-            // 내 것이 아니거나 이미 복원됐다 — 배너를 내린다(재시도해도 같은 답이 온다).
-            awayRestorable = nil
-            awayRestorePromptPending = false
-        case .failed:
-            // conflict/invalid/미지 status. **재시도하지 않는다**(서버가 정상 경로에서 주지 않는 답이다).
-            awayRestorePromptPending = false
-            syncMessage = "재개 실패"
-        }
-    }
-
-    /// 복원 성공을 로컬 상태에 반영한다. 서버가 이미 한 일(S2 삭제·S1 재개·상태행 갱신·카운터)은
-    /// **중복으로 하지 않는다** — 여기서 하는 것은 로컬 미러링뿐이다.
-    func applyRestoredAwaySession(sessionID: String, startedAt restoredStart: Date?, closedEndedAt: Date?) {
-        guard let restoredStart, let canonical = Self.canonicalSessionID(sessionID) else { return }
-        let now = clock()
-        // 복원도 내가 확정한 근무 상태 변경이다 — in-flight 였던 낡은 팀 응답이 이 재개를 되돌리지 못하게.
-        workStateWriteGeneration &+= 1
-        // 마감이 누적에 더해 둔 그 세션의 '오늘 몫'을 도로 뺀다. 안 빼면 이 세션이 다시 진행 세션이 되어
-        // 같은 구간을 두 번 세고, 메뉴바·큰 타이머·오버레이가 일제히 두 배로 뛴다(다음 폴링까지).
-        let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
-        if accumulatedDayStart >= dayStart, let closedEndedAt {
-            let contributed = max(0, Int(closedEndedAt.timeIntervalSince(max(restoredStart, dayStart))))
-            accumulatedSeconds = max(0, accumulatedSeconds - contributed)
-        }
-        stampDisplayClocks(now)
-        startedAt = restoredStart
-        currentSessionID = canonical
-        // **강한 소유**: 이 맥이 복원 RPC 를 직접 보내 성공했고, 서버는 그 트랜잭션에서 다른 열린 세션을
-        // 전부 지운 뒤 active_session_id 를 이 세션으로 세웠다(= 지금 이 세션을 돌보는 맥은 이 맥이다).
-        // performUndoAutoClose 가 강도를 물려받는 것과 근거가 다르다: 저쪽은 '남의 세션을 주워 닫았다가
-        // 되돌리는' 경로가 실재해서 승격이 위험하지만, 이 RPC 는 auth.uid() 소유 세션만 되살린다.
-        claimSessionOwnership(canonical, strength: .strong)
-        // 복원 시각이 아니라 **복원된 세션의 시작 시각**이다. 복원 시각으로 세우면 09:00 시작 → 13:00 마감
-        // → 15:00 복원인 사람의 12시간 프롬프트가 다음날 03:00 으로 밀려 총 18시간 세션이 되고,
-        // 12시간 안전장치가 복원 경로에서 통째로 무력화된다(performUndoAutoClose 의 규약 그대로).
-        longSessionAnchor = restoredStart
-        clearLongSessionPrompt()
-        sleepBeganAt = nil
-        // 버튼을 누른 것 자체가 "사람이 자리에 있다"는 증거다. 서버도 같은 트랜잭션에서 last_input_at 을
-        // now 로 민다 — 여기서 로컬을 안 밀면 다음 틱이 옛 입력 시각으로 방금 살린 세션을 다시 마감한다.
-        lastMeaningfulInputAt = now
-        awayOpenSession = nil
-        awayRestorable = nil
-        awayRestorePromptPending = false
-        // 다음 폴링이 새 열린 세션의 판정 재료를 받아 오게 스로틀을 푼다.
-        lastAwaySyncAt = .distantPast
-        snapshot = WorkStatusSnapshot(
-            status: .working,
-            elapsedSeconds: max(0, Int(now.timeIntervalSince(restoredStart)))
-        )
-        startTimer()
-        refreshMenuBarTitle()
-        // 근무가 다시 섰으므로 유예형 배너(되돌리기)의 성립 조건도 뒤집힌다.
-        refreshTimedBanner(now: now)
-        syncMessage = "근무 재개됨"
     }
 
     /// 서버상 내 세션이 열려 있고 로컬은 비근무(startedAt==nil, pendingItems 비어 있음)이며 마지막 신호와의
@@ -1216,26 +1106,29 @@ extension WorkTimerStore {
             }
             guard generation == sessionGeneration else { return true }
             // 세대 재확인(await 이후). 사용자가 왕복 중 새 근무를 시작/종료했다면 그 조작이 최신이므로
-            // 서버 마감만 유효로 두고 로컬 반영(오프 스냅백 + 되돌리기 대상 등록)은 통째로 건너뛴다.
+            // 서버 마감만 유효로 두고 로컬 반영(오프 스냅백 + 재개 대상 등록)은 통째로 건너뛴다.
             // 서버에 열린 새 세션은 그대로 살아 있고, 지금 로컬 상태가 그 세션을 정확히 가리키고 있다.
             guard writeGeneration == workStateWriteGeneration else { return true }
             lastAutoClosedSessionID = Self.canonicalSessionID(member.activeSessionID)
             lastAutoClosedStartedAt = sessionStart
+            // ★ 자동 재개 30분 창의 앵커. 이 마감의 ended_at 은 **마지막 신호(seen)** 다 — 위 stopWork 가
+            //   endedAt 으로 보낸 바로 그 값이라, 되살아나는 양(지금 − ended_at)이 서버 기록과 정확히 같다.
+            lastAutoClosedEndedAt = seen
+            // 사유. 이 경로는 신호가 끊긴 내 세션을 주워 닫는 것이므로 서버 스캐빈저와 같은 어휘다.
+            lastAutoClosedReason = .abandoned
             // 이 세션을 **누가 열었는지**를 releaseSessionOwnership() 이 증거를 지우기 전에 붙잡아 둔다.
-            // 되돌리기가 무조건 '강한 소유'를 주장하면 강한 소유자가 두 명이 될 수 있다: 맥 A 의 세션 S 가
-            // 7분 침묵으로 **맥 B** 에게 자동 마감되고 B 사용자가 [되돌리기]를 누르면, S 를 실제로 연 것은
+            // 재개가 무조건 '강한 소유'를 주장하면 강한 소유자가 두 명이 될 수 있다: 맥 A 의 세션 S 가
+            // 7분 침묵으로 **맥 B** 에게 자동 마감되고 B 에서 재개가 발화하면, S 를 실제로 연 것은
             // A 인데 B 도 strong 이 된다 → 두 strong 이 만나면 규칙이 다시 사전식 동전 던지기로 떨어진다.
             // 마감 전에 이 맥이 그 세션의 소유자였을 때만 강도를 물려받아, "강한 소유자는 최대 한 명"이라는
-            // 이 규칙의 전제를 되돌리기 경로에서도 깨지지 않게 한다.
+            // 이 규칙의 전제를 재개 경로에서도 깨지지 않게 한다.
             lastAutoClosedClaimStrength = isOwnedByThisMac(member.activeSessionID)
                 ? ownedSessionClaimStrength
                 : .weak
-            // 되돌릴 때 누적에서 도로 빼야 할 몫(위에서 누적에 넣은 값과 같은 수). 되돌리면 이 세션이 다시
+            // 재개할 때 누적에서 도로 빼야 할 몫(위에서 누적에 넣은 값과 같은 수). 재개하면 이 세션이 다시
             // 진행 세션이 되어 startedAt 기준으로 라이브 계산되므로, 빼지 않으면 그 구간을 두 번 센다.
             lastAutoClosedSeconds = closedTodaySeconds
-            // 되돌리기 배너의 유효기간 시작점. 이 스탬프가 없으면 배너를 띄우지 않는다(무기한 상주 금지).
-            // 판정(canUndoAutoClose)과 **같은 시계**로 찍어야 한다 — 한쪽만 실제 시각이면 시계를 고정한
-            // 테스트에서 배너가 유예 밖으로 보여 되돌리기가 통째로 죽는다.
+            // 마감이 **발화한** 시각(진단·문구용). 재개 판정은 이 값이 아니라 위 ended_at 을 본다.
             lastAutoClosedAt = clock()
             startedAt = nil
             currentSessionID = nil
@@ -1248,8 +1141,6 @@ extension WorkTimerStore {
             releaseSessionOwnership()
             snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
             refreshMenuBarTitle()
-            // 되돌리기 배너를 띄우는 유일한 지점. 뷰가 매초 판정하지 않도록 상태로 밀어 넣는다.
-            refreshTimedBanner()
             syncMessage = "자리 비움으로 자동 근무종료됨"
         } catch {
             guard generation == sessionGeneration else { return true }
@@ -1258,45 +1149,66 @@ extension WorkTimerStore {
         return true
     }
 
-    /// 되돌리기 배너 노출/실행 조건. 세 가지를 모두 만족해야 한다:
-    /// (1) 되돌릴 자동 마감 세션이 있고, (2) 지금 근무중이 **아니고**(근무중이면 되돌리기가 현 세션을 옛 세션으로
-    /// 갈아치운다), (3) 자동 마감 후 유예(autoCloseUndoWindowSeconds) 안이다(무기한 상주 금지).
-    /// now 가 Optional 인 이유는 refreshTimedBanner 와 같다(인스턴스 메서드 기본 인자는 self.clock 을 못 읽는다).
-    func canUndoAutoClose(now: Date? = nil) -> Bool {
+    /// **자동 재개(30분 창)의 유일한 판정자.** 다섯 가지를 모두 만족해야 한다:
+    ///  (1) 재개할 자동 마감 세션이 있다(내 소유 — 흡수 세션은 애초에 등록되지 않는다),
+    ///  (2) 지금 근무중이 **아니다**(근무중이면 재개가 현 세션을 옛 세션으로 갈아치운다),
+    ///  (3) 사유를 안다 — 모르면 되살리지 않는다(안전한 실패는 "사용자의 시간을 늘리지 않는 쪽"이다),
+    ///  (4) 사유가 `long_session` 이 **아니다** — 재개가 12시간 상한을 무력화하면 안 된다.
+    ///      (갭이 정확히 응답 창 30분이라 시간 판정만으로는 경계에 걸린다. 그래서 사유로 못 박는다.)
+    ///  (5) `ended_at` 이 지금으로부터 30분 이내다.
+    ///
+    /// ★ 앵커가 `lastAutoClosedAt`(마감이 발화한 시각)이 아니라 **`lastAutoClosedEndedAt`** 인 것이 이
+    ///   기능의 급소다. 되살아나는 시간은 정확히 `지금 − ended_at` 이므로 그 값을 묶어야 재계상 상한이
+    ///   구조적으로 30분이 된다(recentAutoCloseResumeWindowSeconds 주석에 근거 전문).
+    ///   `away`(임계 2시간 30분) 마감은 ended_at 이 마지막 입력이고 마감은 그로부터 임계만큼 뒤에
+    ///   발화하므로 이 창에 **원리적으로** 들어오지 못한다 — 별도 사유 필터가 필요 없는 이유다.
+    ///
+    /// now 가 Optional 인 이유: 인스턴스 메서드의 기본 인자는 self.clock 을 참조할 수 없다.
+    func canResumeRecentlyClosedSession(now: Date? = nil) -> Bool {
         let now = now ?? clock()
         guard lastAutoClosedSessionID != nil, lastAutoClosedStartedAt != nil else { return false }
         guard startedAt == nil else { return false }
-        guard let closedAt = lastAutoClosedAt else { return false }
-        return now.timeIntervalSince(closedAt) <= Self.autoCloseUndoWindowSeconds
+        guard let reason = lastAutoClosedReason, reason != .longSession else { return false }
+        guard let endedAt = lastAutoClosedEndedAt else { return false }
+        let gap = now.timeIntervalSince(endedAt)
+        // 음수 갭(시계 되돌림·서버 시각 어긋남)은 "모른다"로 접는다 — 미래에 끝난 세션을 되살리지 않는다.
+        return gap >= 0 && gap <= Self.recentAutoCloseResumeWindowSeconds
     }
 
-    /// 자리 비움 자동 마감을 되돌린다. canUndoAutoClose 가 참인 동안 헤더 인라인 배너의 [되돌리기]가 이걸 부른다.
-    /// 조건을 잃은 뒤(유예 만료/새 근무 시작) 눌린 경우엔 되돌리지 않고 잔여 대상을 정리만 한다.
+    /// 최근(30분 이내) 자동 마감된 내 세션을 **배너 없이** 재개한다. 부르는 자리는 "사람이 돌아왔다"가
+    /// 확실한 지점 하나뿐이다 — 넛지 자동 시작(CheckOverlayController.nudgeAutoStart). 잠에서 깨어난 뒤의
+    /// 복귀도 그 경로로 들어온다(NudgeScheduler 는 didWake 에 활성 누적을 0 으로 되돌리므로, 깨어난 뒤
+    /// 실제 사용 5분을 다시 채워야 발화한다 = 사람이 돌아왔다는 증거).
+    ///
+    /// 반환값이 **호출 순서의 계약**이다: nil 이면 재개 대상이 없다는 뜻이고, 그때만 호출자가 새 세션을
+    /// 만들어야 한다. 순서가 뒤바뀌면(먼저 start 하고 재개를 보면) 세션이 두 개가 되거나 재개가 조용히
+    /// 죽는다 — v0.2.46 에서 지운 이어붙이기의 결함이 정확히 그 순서 문제였다.
     @discardableResult
-    func undoAutoClose() -> Task<Void, Never>? {
-        guard canUndoAutoClose() else {
-            clearAutoCloseUndo()
+    func resumeRecentlyClosedSession() -> Task<Void, Never>? {
+        guard canResumeRecentlyClosedSession() else {
+            clearRecentAutoCloseResume()
             return nil
         }
-        return Task { @MainActor in await performUndoAutoClose() }
+        return Task { @MainActor in await performResumeRecentlyClosedSession() }
     }
 
-    func performUndoAutoClose() async {
-        // 되돌릴 세션 ID 도 정규화 경유다 — 이 값이 곧 currentSessionID/소유 ID 가 되고, 다음 폴링에서
+    func performResumeRecentlyClosedSession() async {
+        // 재개할 세션 ID 도 정규화 경유다 — 이 값이 곧 currentSessionID/소유 ID 가 되고, 다음 폴링에서
         // 서버가 돌려주는 소문자 값과 비교된다(대문자로 들어오면 재개하자마자 흡수로 뒤집힌다).
         guard let sessionID = Self.canonicalSessionID(lastAutoClosedSessionID),
               let restoredStart = lastAutoClosedStartedAt
         else {
             return
         }
-        // 되돌리기 성공 시 누적에서 뺄 몫. clearAutoCloseUndo 가 0으로 되돌리기 전에 미리 붙잡아 둔다.
-        let closedSeconds = lastAutoClosedSeconds
-        // 진행 중인 근무가 있으면 절대 되돌리지 않는다 — startedAt/currentSessionID 를 옛 세션으로 덮으면
-        // 방금 만든 세션이 서버에 열린 채 방치되고(팀원 화면엔 계속 근무중) 타이머가 과거로 점프한다.
-        guard startedAt == nil else {
-            clearAutoCloseUndo()
+        // ★ 30분 상한(과 사유 제외, 근무중 금지)을 **여기서 한 번 더** 건다. 게이트를 판정자에만 두면
+        //   이 함수를 직접 부르는 새 경로가 상한을 조용히 우회한다 — 그 상한이 이 기능과 이어붙이기
+        //   버그(289분 수면 재계상)를 가르는 유일한 선이므로 우회 경로를 남기지 않는다.
+        guard canResumeRecentlyClosedSession() else {
+            clearRecentAutoCloseResume()
             return
         }
+        // 재개 성공 시 누적에서 뺄 몫. clearRecentAutoCloseResume 가 0으로 되돌리기 전에 미리 붙잡아 둔다.
+        let closedSeconds = lastAutoClosedSeconds
         guard let teamID = currentTeamID else { return }
         let generation = sessionGeneration
         // 재개 RPC 왕복 전의 근무 상태 write 세대. 위 startedAt 가드는 await '이전'만 보므로, 응답을 반영할 때
@@ -1312,17 +1224,17 @@ extension WorkTimerStore {
                 )
             }
             guard generation == sessionGeneration else { return }
-            // 세대/근무 상태 재확인(await 이후). 왕복 중 사용자가 [근무 시작]을 눌렀다면 그 세션이 최신이므로
-            // 옛 세션으로 startedAt/currentSessionID 를 덮지 않고 되돌리기 대상만 정리한다(타이머 과거 점프 금지).
+            // 세대/근무 상태 재확인(await 이후). 왕복 중 사용자가 [근무 시작]/[근무 종료]를 눌렀다면 그 조작이
+            // 최신이므로 옛 세션으로 startedAt/currentSessionID 를 덮지 않고 재개 대상만 정리한다(타이머 과거 점프 금지).
             // 서버에서 다시 열린 옛 세션은 하트비트가 없어 서버 스캐빈저가 마지막 신호 시각으로 정리한다.
             guard writeGeneration == workStateWriteGeneration, startedAt == nil else {
-                clearAutoCloseUndo()
+                clearRecentAutoCloseResume()
                 return
             }
-            // 되돌리기도 내가 확정한 근무 상태 변경이라 세대를 올린다 — 이 순간 in-flight 였던 팀 상태 응답이
+            // 재개도 내가 확정한 근무 상태 변경이라 세대를 올린다 — 이 순간 in-flight 였던 팀 상태 응답이
             // 방금 재개한 근무를 다시 '종료'로 되돌리지 못하게 한다.
             workStateWriteGeneration &+= 1
-            // 되돌린 세션의 '오늘 몫'을 누적에서 뺀다. 이 세션은 지금부터 다시 진행 세션이라 todayDuration 이
+            // 재개한 세션의 '오늘 몫'을 누적에서 뺀다. 이 세션은 지금부터 다시 진행 세션이라 todayDuration 이
             // startedAt 기준으로 라이브 계산하므로, 누적에 남겨 두면 같은 구간을 두 번 세어 메뉴바 라벨·팝오버
             // 큰 타이머·캐릭터 오버레이가 일제히 두 배로 뛴다(다음 폴링 전까지 유지).
             // 날짜 스탬프(accumulatedDayStart)는 건드리지 않는다 — 자정을 넘겼다면 남은 값은 어제 몫이라
@@ -1330,13 +1242,13 @@ extension WorkTimerStore {
             accumulatedSeconds = max(0, accumulatedSeconds - closedSeconds)
             startedAt = restoredStart
             currentSessionID = sessionID
-            // 되돌리기는 사용자가 이 세션의 소유권을 **명시적으로 주장한** 것이다(내 손으로 reopen 을 보냈다).
+            // 재개는 이 맥이 그 세션의 소유권을 **다시 주장한** 것이다(이 맥이 reopen 을 보냈다).
             // 표식을 내려야 하트비트가 다시 나가고, 안 그러면 재개하자마자 신호가 끊겨 10분 뒤 스캐빈저가
             // 방금 되살린 세션을 도로 마감한다. 소유 ID 도 함께 영속해, 재개 직후 앱이 재시작돼도
             // 이 세션이 다시 '남의 것'으로 판정되지 않게 한다.
             // 강도는 **마감 직전에 이 맥이 그 세션의 소유자였는가**를 그대로 물려받는다(자세한 근거는
             // autoCloseAbandonedOwnSessionIfNeeded 의 lastAutoClosedClaimStrength 주석).
-            // 내가 연 세션을 내가 닫았다가 되돌린 경우에만 strong 이고, 남의 세션을 주워 닫았다가 되돌린
+            // 내가 연 세션을 내가 닫았다가 재개한 경우에만 strong 이고, 남의 세션을 주워 닫았다가 재개한
             // 경우는 weak 다 — 그래야 강한 소유자가 둘이 되어 규칙이 동전 던지기로 되돌아가지 않는다.
             claimSessionOwnership(sessionID, strength: lastAutoClosedClaimStrength)
             longSessionAnchor = restoredStart
@@ -1347,7 +1259,7 @@ extension WorkTimerStore {
                 status: .working,
                 elapsedSeconds: max(0, Int(now.timeIntervalSince(restoredStart)))
             )
-            clearAutoCloseUndo()
+            clearRecentAutoCloseResume()
             startTimer()
             refreshMenuBarTitle()
             syncMessage = "근무 재개됨"
@@ -1603,8 +1515,8 @@ extension WorkTimerStore {
                     durationSeconds: durationSeconds,
                     fallbackSessionID: item.sessionID,
                     // 사유는 큐 항목이 나른다. 서버가 이 세션을 먼저 닫아 뒀다면(뚜껑 닫고 나간 사람 —
-                    // 스캐빈저가 10분 뒤 'abandoned' 로 마감한다) stopWork 가 그 자리에서 사유를 정정해
-                    // 복원 대상으로 되돌린다. 정정이 빠지면 오늘 가장 큰 억울함이 그대로 남는다.
+                    // 스캐빈저가 10분 뒤 'abandoned' 로 마감한다) stopWork 가 그 자리에서 사유를 sleep 으로
+                    // 정정한다. 정정이 빠지면 서버에 사실과 다른 마감 사유가 남는다.
                     autoClosedReason: item.autoCloseReason
                 )
             }
@@ -1642,8 +1554,8 @@ extension WorkTimerStore {
         //  (3) 잠자는 사이 앱이 죽으면(업그레이드·크래시) 메모리 상태가 통째로 없다.
         // 세 경우 모두 handleSleep 이 영속해 둔 마커(PendingSleepClose)가 유일한 관측이고, 이 지점은
         // 세 경우 전부가 반드시 지난다. 정정 stop(reason=sleep)이 드레인되면 서버 stopWork 의 0행
-        // 갈래가 correctAutoClose 로 사유를 sleep 으로 고쳐 기존 복원 인프라(배너 + 넛지 복원 제안)가
-        // 그대로 이어받는다.
+        // 갈래가 correctAutoClose 로 사유를 sleep 으로 고친다 — 마감 사유가 사실과 같아야 사후 분석도
+        // 정정도 가능하다.
         // ★ 아래 서버 today 덮어쓰기보다 **앞**이어야 한다(이중 가산 금지). (a) 갈래의 autoStop 관문은
         //   회계를 스스로 하는데(accumulatedSeconds += 정정 몫), 서버 today 는 이 세션의 abandoned 마감
         //   몫을 이미 포함하므로 먼저 덮으면 같은 구간이 두 번 더해진다. "정정 전 로컬 누적 + 정정 몫"은
@@ -1710,33 +1622,36 @@ extension WorkTimerStore {
         case (.offWork, .some(let closedSessionStart)):
             // [v0.2.36 W3 — 침묵 제거] 이 맥 소유 세션이 서버에서 닫혀 내려가는데(잠자기 마커도 없다 —
             // 깨어있는 채 네트워크 단절 → 10분 뒤 abandoned 마감이 대표) 지금까지는 통보·배너·정정이
-            // 전부 0이었다. 피해자는 아무것도 모른 채 재시작 지연을 겪는다. abandoned 는 복원 대상이
-            // 아니므로(restorableReasons=['away','sleep']) 기존 10분 되돌리기 배너가 유일한 구제다.
+            // 전부 0이었다. 피해자는 아무것도 모른 채 재시작 지연을 겪는다. 10분 되돌리기 배너가 유일한 구제다.
             //
             // 신호 공백 게이트(> 스캐빈저 임계 10분)를 거는 이유: 신선한 신호의 (.offWork,.some) 강하는
-            // "다른 맥에서 사용자가 방금 직접 누른 종료"가 대표라 사고가 아니고(통보하면 헛경보),
-            // 서버 away 백스톱 마감(하트비트는 살아 신호가 신선하다)은 복원 배너가 따로 알린다.
+            // "다른 맥에서 사용자가 방금 직접 누른 종료"가 대표라 사고가 아니다(통보하면 헛경보).
             // seen 미상은 기존대로 침묵한다(모를 때 헛경보를 만들지 않는다).
             if !adoptedRemoteSession,
                let seen = ownMember.lastSeenAt ?? ownMember.updatedAt,
                clock().timeIntervalSince(seen) > Self.abandonedSessionThresholdSeconds {
-                // 되돌리기 대상 등록은 아래 releaseSessionOwnership() 이 증거(소유 강도)를 지우기
+                // 재개 대상 등록은 아래 releaseSessionOwnership() 이 증거(소유 강도)를 지우기
                 // **전**이어야 한다 — autoCloseAbandonedOwnSessionIfNeeded 의 lastAutoClosedClaimStrength
-                // 규약 그대로다(강도 상속 없이는 되돌리기가 강한 소유자를 둘로 만든다).
+                // 규약 그대로다(강도 상속 없이는 재개가 강한 소유자를 둘로 만든다).
                 lastAutoClosedSessionID = Self.canonicalSessionID(currentSessionID)
                 lastAutoClosedStartedAt = closedSessionStart
+                // ★ 자동 재개 30분 창의 앵커. 서버의 마감 시각은 응답에 없고, 스캐빈저가 정확히
+                //   마지막 신호(coalesce(last_seen_at, updated_at))로 마감하므로 그 값이 곧 ended_at 이다.
+                //   여기 위 게이트가 이미 "신호 공백 > 10분"을 요구하므로 갭은 10분 이상이고,
+                //   30분을 넘기면 재개 대상에서 자동으로 빠진다(= 오래 끊겼던 근무는 되살아나지 않는다).
+                lastAutoClosedEndedAt = seen
+                lastAutoClosedReason = .abandoned
                 lastAutoClosedClaimStrength = isOwnedByThisMac(currentSessionID)
                     ? ownedSessionClaimStrength
                     : .weak
-                // 되돌리면 이 세션이 다시 진행 세션이 되므로, 위에서 서버 today 로 덮은 누적에서 도로
-                // 빼야 할 이 세션 몫. 서버의 마감 시각은 응답에 없어 마지막 신호(seen)로 근사한다 —
-                // 스캐빈저가 정확히 그 시각(coalesce(last_seen_at, updated_at))으로 마감하기 때문이다.
+                // 재개하면 이 세션이 다시 진행 세션이 되므로, 위에서 서버 today 로 덮은 누적에서 도로
+                // 빼야 할 이 세션 몫(같은 seen 기준).
                 lastAutoClosedSeconds = max(
                     0,
                     Int(seen.timeIntervalSince(max(closedSessionStart, TeamWeeklyGoal.koreanDayStart(for: clock()))))
                 )
                 lastAutoClosedAt = clock()
-                // performUndoAutoClose 가 이 마감을 실제로 감당하는지는 코드로 확인했다:
+                // performResumeRecentlyClosedSession 이 이 마감을 실제로 감당하는지는 코드로 확인했다:
                 // reopenSession 은 id 필터 PATCH 로 ended_at/duration 을 null 로 되돌리고 상태행을
                 // working 으로 세우므로, 누가 닫았든(클라 stopWork/서버 스캐빈저) 닫힌 행의 모양이 같아
                 // 동일하게 동작한다. 문구는 refreshTeamStatus 의 정규화 가드가 이 주기 동안 지켜 준다.
@@ -1807,8 +1722,6 @@ extension WorkTimerStore {
         updateAdoptedPresenceTracking(ownMember)
         // 세 분기 모두 snapshot/accumulated 를 건드리므로 라벨 문자열을 한곳에서 재계산한다(== 가드는 내부에서).
         refreshMenuBarTitle()
-        // 원격 흡수로 근무 상태가 뒤집혔으면 유예형 배너 성립 조건도 함께 뒤집힌다(다른 기기에서 시작/종료).
-        refreshTimedBanner()
     }
 
     /// 서버가 들고 있는 내 열린 세션을 로컬 상태로 되살린다(앱 재시작 복구 / 다른 맥이 시작한 근무 미러링).
@@ -1822,7 +1735,7 @@ extension WorkTimerStore {
     ///
     /// 대입은 전부 != 가드를 건다. 이 함수는 재흡수 경로에서 30초 폴링마다 재진입할 수 있는데,
     /// @Observable 은 같은 값 대입도 관찰자를 발화시켜 팝오버 서브트리 전체가 매 폴링 무효화된다.
-    /// (호출자인 applyRemoteOwnStatus 가 끝에서 refreshMenuBarTitle/refreshTimedBanner 를 부르므로 여기선 생략한다.)
+    /// (호출자인 applyRemoteOwnStatus 가 끝에서 refreshMenuBarTitle 을 부르므로 여기선 생략한다.)
     private func adoptRemoteSession(_ ownMember: TeamMemberStatus) {
         // 표시 시계는 맞춰 두되 계산은 주입 시계로 한다 — 팝오버 시계는 닫힌 동안 얼어 있다(M1).
         let now = clock()

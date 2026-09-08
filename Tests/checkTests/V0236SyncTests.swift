@@ -220,7 +220,7 @@ private func offWorkMember(
 
         // 침묵 제거: 사용자 문구 + 10분 되돌리기 배너(abandoned 는 복원 대상이 아니라 이것이 유일한 구제).
         #expect(store.syncMessage == WorkTimerStore.remoteAbandonedCloseNotice)
-        #expect(store.canUndoAutoClose(now: now))
+        #expect(store.canResumeRecentlyClosedSession(now: now))
         #expect(store.lastAutoClosedSessionID == sessionID)
         #expect(store.lastAutoClosedStartedAt == t0)
         #expect(store.lastAutoClosedAt == now)
@@ -250,7 +250,7 @@ private func offWorkMember(
         #expect(store.startedAt == nil)
         #expect(store.syncMessage == messageBefore)
         #expect(store.lastAutoClosedSessionID == nil)
-        #expect(!store.canUndoAutoClose(now: now))
+        #expect(!store.canResumeRecentlyClosedSession(now: now))
         #expect(store.pendingItems.isEmpty)
     }
 
@@ -277,7 +277,7 @@ private func offWorkMember(
 
         #expect(store.pendingItems.isEmpty)                       // 낡은 마커로 정정하지 않는다
         #expect(store.syncMessage == WorkTimerStore.remoteAbandonedCloseNotice)
-        #expect(store.canUndoAutoClose(now: now))
+        #expect(store.canResumeRecentlyClosedSession(now: now))
         #expect(store.pendingSleepCloseMarker() == strayMarker)   // 남의/옛 관측을 지우지도 않는다
     }
 
@@ -319,7 +319,7 @@ private func offWorkMember(
         #expect(store.pendingItems.isEmpty)
         #expect(store.syncMessage == messageBefore)
         #expect(store.lastAutoClosedSessionID == nil)
-        #expect(!store.canUndoAutoClose(now: now))
+        #expect(!store.canResumeRecentlyClosedSession(now: now))
         #expect(store.pendingSleepCloseMarker() == strayMarker)
     }
 }

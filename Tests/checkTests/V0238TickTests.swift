@@ -268,7 +268,6 @@ private struct StoreSnapshot: Equatable, CustomStringConvertible {
     let teamMembers: [TeamMemberStatus]
     let awayPolicy: AwayPolicy?
     let awayOpenSession: AwayOpenSession?
-    let awayRestorable: AwayRestorableSession?
     let awayServerSupported: Bool
     let lastTeamStatusAt: Date
     let lastAwaySyncAt: Date
@@ -284,7 +283,6 @@ private struct StoreSnapshot: Equatable, CustomStringConvertible {
         teamMembers = store.teamMembers
         awayPolicy = store.awayPolicy
         awayOpenSession = store.awayOpenSession
-        awayRestorable = store.awayRestorable
         awayServerSupported = store.awayServerSupported
         lastTeamStatusAt = store.lastTeamStatusAt
         lastAwaySyncAt = store.lastAwaySyncAt

@@ -543,7 +543,7 @@ extension WorkTimerStore {
         longSessionAnchor = nil
         clearLongSessionPrompt()
         sleepBeganAt = nil
-        clearAutoCloseUndo()
+        clearRecentAutoCloseResume()
         isEditingWeeklyGoal = false
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
         tickerTask?.cancel()

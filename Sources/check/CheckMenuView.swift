@@ -47,12 +47,6 @@ struct CheckMenuView: View {
     enum TopBanner {
         /// 12시간 확인 — 무응답 30분이면 자동 마감되므로 가장 급하다.
         case longSession
-        /// 자리 비움 자동 마감 되돌리기(유예 10분).
-        case undoAutoClose
-        /// 자리 비움/잠자기로 자동 마감된 근무를 **서버 창(6시간) 안에** 이어 붙이기.
-        /// undoAutoClose 보다 뒤인 이유는 순전히 유예 길이다(저쪽은 10분, 이쪽은 6시간).
-        /// 회고·새 버전보다 앞인 이유는 이쪽만 **놓치면 시간이 영구 소실**되기 때문이다.
-        case awayRestore
         /// 지난주 회고 안내(주 1회).
         case retro
         /// 새 버전 안내(상시라 가장 덜 급하다).
@@ -68,9 +62,6 @@ struct CheckMenuView: View {
     static let updateNoteLineHeight: CGFloat = 15
     static let updateNoteBlockPadding: CGFloat = 8
     static let longSessionBannerHeight: CGFloat = 92
-    /// 자리 비움 복원 배너 높이(pt). 보조줄(되살릴 분량)이 한 줄 붙어 인라인 배너보다 높다 —
-    /// 그 줄이 "얼마를 잃는지"를 말해 주는 유일한 자리라, 높이를 아끼자고 지우면 배너가 그냥 잔소리가 된다.
-    static let awayRestoreBannerHeight: CGFloat = 56
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
     /// 헤더 주간 목표 편집 인라인 행 높이(pt). 배너는 아니지만 헤더를 그만큼 부풀리므로 같은 예산에 넣는다.
@@ -82,17 +73,12 @@ struct CheckMenuView: View {
     }
 
     /// 이번 렌더에서 실제로 그릴 배너 하나(없으면 nil). 위에서부터 급한 순서다.
-    /// 유예형 배너는 store.timedBanner **상태**만 읽는다 — 여기서 canUndoAutoClose 를 직접 부르면 인자로 줄
-    /// 시각이 매초 갱신되는 store.displayNow 뿐이라, body 최상단인 이 프로퍼티가 displayNow 를 관찰 등록해
-    /// 팝오버 전체 서브트리가 매초 무효화된다(잎 뷰 격리 불변식 위반 — 회귀 지점).
-    /// 만료 판정은 스토어의 티커/상태 전이가 refreshTimedBanner 로 밀어 넣는다.
+    /// ⚠️ 여기서 **시각에 의존하는 판정을 직접 부르지 마라.** 인자로 줄 수 있는 시각은 매초 갱신되는
+    /// store.displayNow 뿐이라, body 최상단인 이 프로퍼티가 그것을 관찰 등록해 팝오버 전체 서브트리가
+    /// 매초 무효화된다(잎 뷰 격리 불변식 위반 — 실제 회귀 지점이었다). 유예형 배너가 다시 생기면
+    /// 스토어가 판정 **결과만** 상태로 밀어 넣게 하고 여기서는 그 상태만 읽어라.
     private var topBanner: TopBanner? {
         if isMainScreen, showsLongSessionBanner { return .longSession }
-        if isMainScreen, store.timedBanner == .undoAutoClose { return .undoAutoClose }
-        // 근무 중에도 뜬다(다른 배너와 다른 점). 복귀 → 자동 시작이 새 세션을 연 **바로 그 상태**가
-        // 복원의 정상 경로이기 때문이다 — 여기서 '근무 중이면 감춘다'로 두면 돌아온 사람 대부분이
-        // 배너를 영영 못 본다(서버 RPC 가 새 세션을 지우고 옛 세션을 되살리는 것이 설계다).
-        if isMainScreen, AwayRestoreBannerCopy.isWindowOpen(store.restorableAwaySession) { return .awayRestore }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
         if showsUpdateBanner { return .update }
         return nil
@@ -101,8 +87,7 @@ struct CheckMenuView: View {
     private var topBannerHeight: CGFloat {
         switch topBanner {
         case .longSession: return Self.longSessionBannerHeight
-        case .undoAutoClose, .retro: return Self.inlineBannerHeight
-        case .awayRestore: return Self.awayRestoreBannerHeight
+        case .retro: return Self.inlineBannerHeight
         case .update:
             // 노트가 있으면 줄 수만큼 배너가 자란다(없으면 예전과 같은 높이 — 목록 행수 예산도 그대로).
             let notes = updateBannerNotes
@@ -231,33 +216,9 @@ struct CheckMenuView: View {
                         store: store,
                         previewGoalEditing: previewGoalEditing
                     )
-                    // 자리 비움 자동 마감 되돌리기 — 자동 마감 직후 유예(10분) 안이고 아직 비근무일 때만 뜬다.
-                    // 근무를 다시 시작하면 즉시 사라지고(옛 세션으로 현 세션을 덮어쓸 수 없다), X 로 직접 닫을 수도 있다.
-                    if topBanner == .undoAutoClose {
-                        InlineActionBanner(
-                            icon: "arrow.uturn.backward.circle.fill",
-                            title: "자리 비움으로 근무를 종료했어요",
-                            actionTitle: "되돌리기",
-                            tint: CheckTheme.pending,
-                            action: { _ = store.undoAutoClose() },
-                            onDismiss: { store.clearAutoCloseUndo() }
-                        )
-                    }
-                    // 자리 비움/잠자기로 끊긴 근무를 이어 붙이는 배너. **닫기(X)를 달지 않았다** — 이 배너를
-                    // 놓치면 서버 창(6시간)이 닫히면서 그 시간이 영구 소실되는데, X 는 "실수로 눌러 영구
-                    // 소실"이라는 경로를 하나 더 만들 뿐 되찾아 주는 것이 없다. 창이 닫히거나 복원이
-                    // 끝나면 서버가 대상을 내려 주고(polling) 배너는 스스로 사라진다.
-                    if topBanner == .awayRestore, let restorable = store.restorableAwaySession {
-                        InlineActionBanner(
-                            icon: AwayRestoreBannerCopy.icon,
-                            title: AwayRestoreBannerCopy.title,
-                            subtitle: AwayRestoreBannerCopy.subtitle(for: restorable),
-                            actionTitle: AwayRestoreBannerCopy.actionTitle(isRestoring: store.isRestoringAwaySession),
-                            tint: CheckTheme.pending,
-                            // 원자 RPC 한 번. 연타 가드는 스토어가 갖고 있다(isRestoringAwaySession).
-                            action: { _ = store.restoreAwaySession() }
-                        )
-                    }
+                    // v0.2.47 — 자리 비움 [되돌리기] 배너는 없앴다. 최근 30분 안에 자동 마감된 내 세션은
+                    // 사용자가 버튼을 누를 필요 없이 복귀가 감지되는 순간 스스로 재개된다
+                    // (WorkTimerStore.canResumeRecentlyClosedSession → CheckOverlayController.nudgeAutoStart).
                     // 토큰 소모량 행은 내 근무 박스와 팀원 현황 사이(사용자 지정 위치). 탭하면 순위 페이지.
                     // 하위 패널이 열려 있으면 감춘다 — 그 자리는 패널이 쓰고, 창 높이 상한도 그만큼 여유가 생긴다.
                     if showsTokenUsageRow {
@@ -409,12 +370,7 @@ struct MenuBarStatusLabel: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            // 자리 비움일 때는 **마스코트를 쓰지 않는다.** 마스코트 표정은 neutral/negative 둘뿐이라
-            // (CheckMascotAssets.Mood) 비근무면 항상 같은 시무룩 얼굴이 나오고, 그 얼굴은 평범한 '오프'와
-            // 픽셀 하나 다르지 않다 — 캐릭터를 켠 사람의 메뉴바에서는 자리 비움이 통째로 안 보이게 된다.
-            // 이 자리에서만 심볼로 갈아 끼우면 글자(자리비움)와 그림이 함께 달라져, 마스코트 유무와 무관하게
-            // "평소와 다르다"가 반드시 눈에 걸린다(새 이미지 에셋 없이).
-            if let mascot = CheckMascotAssets.menuBarImage(for: snapshot), !snapshot.isAwayRestorable {
+            if let mascot = CheckMascotAssets.menuBarImage(for: snapshot) {
                 // 이미 18×18pt로 크기를 지정한 이미지라 .resizable()/.frame() 불필요.
                 // MenuBarExtra 라벨이 intrinsic size를 써도 바 높이 안에 온전히 들어간다.
                 Image(nsImage: mascot)
@@ -423,46 +379,10 @@ struct MenuBarStatusLabel: View {
                     .symbolRenderingMode(.hierarchical)
                     .imageScale(.medium)
             }
-            Text(MenuBarStatusFormatter.displayTitle(stored: title, snapshot: snapshot))
+            Text(title)
                 .font(.system(.body, design: .rounded).weight(.medium))
                 .monospacedDigit()
         }
-    }
-}
-
-// MARK: - 자리 비움 복원 배너 문구 (순수 계산 — 결정적 검증 지점)
-
-/// 자리 비움/잠자기 자동 마감을 이어 붙이는 배너의 문구와 표시 조건.
-///
-/// 뷰에서 분리한 이유는 둘이다: (1) 문구는 픽셀 없이 검증할 수 있어야 하고, (2) **표시 조건이 시계를
-/// 읽지 않아야 한다.** 만료 판정을 여기서 `Date()` 로 하면 배너 조건이 매초 갱신되는 값에 묶여
-/// 팝오버 서브트리 전체가 초당 한 번 무효화된다(잎 뷰 격리 불변식 위반). 창 판정은 서버가 하고
-/// (docs/away-close.md 5절) 클라는 서버가 준 잔여 초만 본다.
-enum AwayRestoreBannerCopy {
-    static let icon = "moon.zzz.fill"
-    /// 사유(away/sleep)를 문구로 가르지 않는다 — 사람에게는 둘 다 "자리를 비운 사이"이고,
-    /// 가르는 순간 잠자기 마감이 '내 잘못'처럼 읽힌다.
-    static let title = "자리 비운 사이 근무가 끝났어요"
-
-    /// 서버가 아직 되살릴 수 있다고 말한 대상인가. `remainingSeconds <= 0` 은 이미 만료다.
-    static func isWindowOpen(_ session: AwayRestorableSession?) -> Bool {
-        guard let session else { return false }
-        return session.remainingSeconds > 0
-    }
-
-    /// 되살릴 수 있는 **분량**. 잔여 창 시간이 아니라 잃은 근무 시간을 쓴다 — 사람을 움직이는 숫자는
-    /// "언제까지"가 아니라 "얼마"이고, 잔여 창은 폴링마다 줄어들어 같은 배너가 30초마다 다른 글자가 된다.
-    static func subtitle(for session: AwayRestorableSession) -> String? {
-        guard let started = session.startedAt, let ended = session.endedAt else { return nil }
-        let seconds = Int(ended.timeIntervalSince(started))
-        guard seconds > 0 else { return nil }
-        return "\(MenuBarStatusFormatter.hoursMinutes(seconds)) 되살릴 수 있어요"
-    }
-
-    /// 왕복 중에는 문구로 진행을 알린다(버튼을 지우지 않는다 — 사라지면 눌린 건지 알 수 없다).
-    /// 연타는 스토어의 `isRestoringAwaySession` 가드가 막으므로 여기서 비활성으로 만들 필요가 없다.
-    static func actionTitle(isRestoring: Bool) -> String {
-        isRestoring ? "이어붙이는 중" : "이어붙이기"
     }
 }
 

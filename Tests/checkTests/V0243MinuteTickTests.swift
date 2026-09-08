@@ -57,6 +57,12 @@ private func makeStore(host: String, suiteName: String, clock: TestClock) -> Wor
         tokenUsage: inertTokenStore(suiteName: suiteName)
     )
     store.clock = { clock.now }
+    // 이 스위트의 틱은 **주입 시각만** 봐야 한다. evaluateAwaySession 이 판정 직전
+    // advanceMeaningfulInput 을 부르므로, 기본 클로저(실제 CGEventSource)를 그대로 두면 이 프로세스의
+    // 진짜 입력 유휴가 판정 재료로 새어 들어와 마감 시각 계약이 무작위로 흔들린다.
+    // 무한대 = "관측 없음" 이라 `idle.isFinite` 가드에 걸리고, 테스트가 세운 lastMeaningfulInputAt 이 그대로 쓰인다.
+    store.meaningfulIdleSeconds = { .infinity }
+    store.inputSessionUsable = { true }
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: minuteStubUserID)
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.membershipConfirmed = true
@@ -123,10 +129,6 @@ private final class FireFlag: @unchecked Sendable {
         #expect(MenuBarStatusFormatter.title(for: WorkStatusSnapshot(status: .working, elapsedSeconds: 84)) == "00:01")
         #expect(MenuBarStatusFormatter.title(for: WorkStatusSnapshot(status: .working, elapsedSeconds: 3_661)) == "01:01")
         #expect(MenuBarStatusFormatter.title(for: WorkStatusSnapshot(status: .working, elapsedSeconds: 86_340)) == "23:59")
-        #expect(
-            MenuBarStatusFormatter.title(for: WorkStatusSnapshot(status: .working, elapsedSeconds: 84).markingAwayRestorable(true))
-                == "00:01•"
-        )
         // 비근무·대기 제목은 한 글자도 안 바뀐다.
         #expect(MenuBarStatusFormatter.title(for: WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)) == "오프")
         #expect(MenuBarStatusFormatter.title(for: WorkStatusSnapshot(status: .working, elapsedSeconds: 84, pendingSync: true)) == "대기")
@@ -260,9 +262,7 @@ private final class FireFlag: @unchecked Sendable {
         // today 가 60의 배수(10,800 = 3시간)라 분 경계까지는 60 — 부재 마감 35초가 이긴다. 마지막 입력(8,965초 전)이
         // 세션 시작(10,800초 전) **뒤**여야 evaluateAwaySession 의 "시작 ≤ 마지막 입력" 가드를 통과한다.
         let now = beginSlowedWork(store, clock: clock, todayAtNow: 10_800)
-        store.awayPolicy = AwayPolicy(
-            closeThresholdSeconds: 9_000, restoreWindowSeconds: nil, dailyRestoreLimit: nil, restoresLeftToday: nil, serverNow: nil
-        )
+        store.awayPolicy = AwayPolicy(closeThresholdSeconds: 9_000, serverNow: nil)
         store.awayOpenSession = AwayOpenSession(
             sessionID: fixtureSessionID, startedAt: store.startedAt, lastInputAt: nil, closeEligible: true
         )
@@ -355,9 +355,7 @@ private final class FireFlag: @unchecked Sendable {
             let store = makeStore(host: "v0243-tick-agree-away", suiteName: "check-v0243-tick-agree-away", clock: clock)
             defer { cancelTasks(store) }
             let now = beginSlowedWork(store, clock: clock, todayAtNow: 10_800)   // 마지막 입력이 세션 시작 뒤가 되도록
-            store.awayPolicy = AwayPolicy(
-                closeThresholdSeconds: 9_000, restoreWindowSeconds: nil, dailyRestoreLimit: nil, restoresLeftToday: nil, serverNow: nil
-            )
+            store.awayPolicy = AwayPolicy(closeThresholdSeconds: 9_000, serverNow: nil)
             store.awayOpenSession = AwayOpenSession(
                 sessionID: fixtureSessionID, startedAt: store.startedAt, lastInputAt: nil, closeEligible: true
             )

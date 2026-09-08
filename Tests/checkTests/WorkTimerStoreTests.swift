@@ -1385,31 +1385,34 @@ struct SyncRaceTests {
         #expect(store.syncMessage != "자리 비움으로 자동 근무종료됨")
         // 되돌리기 배너도 뜨지 않는다 — 뜨면 옛 세션으로 현 세션을 갈아치우는 두 번째 사고가 이어진다.
         #expect(store.lastAutoClosedSessionID == nil)
-        #expect(!store.canUndoAutoClose())
+        #expect(!store.canResumeRecentlyClosedSession())
 
         await store.syncTask?.value
     }
 
     @Test
-    func undoAutoCloseDoesNotOverwriteWorkStartedDuringItsRoundTrip() async {
-        // 회귀 지점: performUndoAutoClose 의 startedAt 가드는 reopenSession RPC **이전**에만 있었다.
+    func autoCloseResumeDoesNotOverwriteWorkStartedDuringItsRoundTrip() async {
+        // 회귀 지점: performResumeRecentlyClosedSession 의 startedAt 가드는 reopenSession RPC **이전**에만 있었다.
         // 왕복 중 [근무 시작]을 누르면 응답 도착 시 startedAt/currentSessionID 가 자동 마감된 옛 세션으로
         // 교체돼 큰 타이머가 몇 시간 전으로 점프하고, 방금 만든 세션은 서버에 열린 채 방치됐다.
         let testHost = "delayed-abandoned-session-undo-race"
 
         let store = makeStubStore(host: testHost)
+        // 이 호스트군의 픽스처는 박힌 날짜(2026-01-01)를 쓴다 — 자동 재개는 ended_at 기준 30분 창이라
+        // 시계를 픽스처 근처로 고정해야 "방금 끊긴 근무"가 된다.
+        pinClock(store, to: URLProtocolStub.abandonedFixtureNow)
         defer {
             store.tickerTask?.cancel()
             store.refreshTask?.cancel()
             store.syncTask?.cancel()
         }
 
-        // 자동 마감이 끝나 되돌리기 대상이 준비된 상태를 만든다.
+        // 자동 마감이 끝나 재개 대상이 준비된 상태를 만든다.
         await store.refreshTeamStatus()
-        #expect(store.canUndoAutoClose())
+        #expect(store.canResumeRecentlyClosedSession())
         let oldStart = store.lastAutoClosedStartedAt
 
-        let undo = Task { await store.performUndoAutoClose() }
+        let undo = Task { await store.performResumeRecentlyClosedSession() }
         // 재개 PATCH(id=eq.<옛 세션>)가 날아간 순간을 잡는다 — 응답은 아직 오지 않았다.
         let sawReopenPatch = await waitForRequest(host: testHost) {
             $0.url?.path == "/rest/v1/work_sessions"
@@ -1428,9 +1431,9 @@ struct SyncRaceTests {
         #expect(store.startedAt != oldStart)
         #expect(store.currentSessionID == newSessionID)
         #expect(store.snapshot.isWorking)
-        // 되돌리기 대상은 정리돼 배너가 남지 않는다.
+        // 재개 대상은 정리된다(다음 복귀가 옛 세션을 다시 집지 않는다).
         #expect(store.lastAutoClosedSessionID == nil)
-        #expect(!store.canUndoAutoClose())
+        #expect(!store.canResumeRecentlyClosedSession())
 
         await store.syncTask?.value
     }
@@ -1683,33 +1686,36 @@ func reloginRestoresSessionIDSoHeartbeatResumes() async {
 
 @MainActor
 @Test
-func abandonedOwnSessionIsAutoClosedAndUndoable() async {
+func abandonedOwnSessionIsAutoClosedAndResumable() async {
     let testHost = "abandoned-session-test"
     let store = makeStubStore(host: testHost)
+    // 이 호스트군의 픽스처는 **박힌 날짜**(2026-01-01)를 쓴다. 자동 재개는 마감 세션의 ended_at 기준
+    // 30분 창이므로, 시계를 픽스처 근처(마지막 신호 + 9분)로 고정해야 "방금 끊긴 근무"가 된다.
+    pinClock(store, to: URLProtocolStub.abandonedFixtureNow)
     defer {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
     }
     // 로컬 비근무 + 서버엔 오래된 신호의 열린 세션 → 자동 마감 조건.
     #expect(store.startedAt == nil)
-    #expect(!store.canUndoAutoClose())
+    #expect(!store.canResumeRecentlyClosedSession())
 
     await store.refreshTeamStatus()
 
     #expect(store.startedAt == nil)
     #expect(store.syncMessage == "자리 비움으로 자동 근무종료됨")
-    #expect(store.canUndoAutoClose())
+    #expect(store.canResumeRecentlyClosedSession())
     #expect(store.lastAutoClosedSessionID == "50000000-0000-0000-0000-000000000001")
     let closedWithPatch = URLProtocolStub.requests(forHost: testHost).contains {
         $0.url?.path == "/rest/v1/work_sessions" && $0.httpMethod == "PATCH"
     }
     #expect(closedWithPatch)
 
-    await store.performUndoAutoClose()
+    await store.performResumeRecentlyClosedSession()
 
     #expect(store.startedAt != nil)
     #expect(store.currentSessionID == "50000000-0000-0000-0000-000000000001")
-    #expect(!store.canUndoAutoClose())
+    #expect(!store.canResumeRecentlyClosedSession())
     #expect(store.snapshot.isWorking)
 }
 
@@ -1756,7 +1762,7 @@ func ownerMacTakingThreeMinuteNapIsNotAutoClosedByAnotherMac() async {
     #expect(!wroteSession)
     #expect(store.syncMessage != "자리 비움으로 자동 근무종료됨")
     #expect(store.lastAutoClosedSessionID == nil)
-    #expect(!store.canUndoAutoClose())
+    #expect(!store.canResumeRecentlyClosedSession())
 
     // 대신 정상 경로가 이어진다: B 는 A 의 세션을 흡수해 **미러링**한다(하트비트는 보내지 않는다).
     #expect(store.startedAt != nil)
@@ -1795,7 +1801,7 @@ func autoCloseThresholdFollowsTheBackstopContractOnBothSides() async {
     await overStore.refreshTeamStatus()
     #expect(overStore.syncMessage == "자리 비움으로 자동 근무종료됨")
     #expect(overStore.lastAutoClosedSessionID == "51000000-0000-0000-0000-000000000001")
-    #expect(overStore.canUndoAutoClose())
+    #expect(overStore.canResumeRecentlyClosedSession())
     #expect(overStore.startedAt == nil)
 }
 
@@ -1817,67 +1823,90 @@ func liveLocalSessionIsNeverAutoClosedOnRefresh() async {
     await store.refreshTeamStatus()
 
     #expect(store.startedAt == localStart)
-    #expect(!store.canUndoAutoClose())
+    #expect(!store.canResumeRecentlyClosedSession())
 }
 
-// MARK: - 되돌리기 배너 수명(유예 만료 · 새 근무 시작 · 근무중 되돌리기 금지)
+// MARK: - 자동 재개 대상의 수명(30분 창 만료 · 새 근무 시작 · 근무중 재개 금지)
 
 @MainActor
 @Test
-func autoCloseUndoExpiresAfterGraceWindow() async throws {
-    // 회귀 지점: canUndoAutoClose 가 lastAutoClosedSessionID != nil 하나뿐이던 시절엔 배너가 로그아웃 전까지
-    // 모든 팝오버에 상주했다. 이제는 자동 마감 후 유예(10분)가 지나면 스스로 사라진다.
+func autoCloseResumeExpiresAfterItsThirtyMinuteWindow() async throws {
+    // 회귀 지점: 판정이 lastAutoClosedSessionID != nil 하나뿐이던 시절엔 대상이 로그아웃 전까지 살아 있었다.
+    // 이제는 **ended_at 으로부터 30분**이 지나면 스스로 만료한다 — 그 상한이 곧 되살아나는 시간의 상한이다.
     let testHost = "abandoned-session-test"
     let store = makeStubStore(host: testHost)
+    pinClock(store, to: URLProtocolStub.abandonedFixtureNow)
     defer {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
     }
 
     await store.refreshTeamStatus()
-    let closedAt = try #require(store.lastAutoClosedAt)
+    // 앵커는 마감이 **발화한** 시각이 아니라 그 세션의 ended_at(= 서버 스캐빈저와 같은 마지막 신호)이다.
+    let endedAt = try #require(store.lastAutoClosedEndedAt)
+    #expect(endedAt == URLProtocolStub.abandonedFixtureLastSeen)
+    #expect(store.lastAutoClosedReason == .abandoned)
 
-    #expect(store.canUndoAutoClose(now: closedAt.addingTimeInterval(WorkTimerStore.autoCloseUndoWindowSeconds - 1)))
-    #expect(!store.canUndoAutoClose(now: closedAt.addingTimeInterval(WorkTimerStore.autoCloseUndoWindowSeconds + 1)))
+    #expect(store.canResumeRecentlyClosedSession(now: endedAt.addingTimeInterval(WorkTimerStore.recentAutoCloseResumeWindowSeconds - 1)))
+    #expect(!store.canResumeRecentlyClosedSession(now: endedAt.addingTimeInterval(WorkTimerStore.recentAutoCloseResumeWindowSeconds + 1)))
 
-    // 유예를 넘겨 누르면 되돌리지 않고 잔여 대상만 정리한다(배너가 다음 렌더에서 사라진다).
-    store.lastAutoClosedAt = Date().addingTimeInterval(-(WorkTimerStore.autoCloseUndoWindowSeconds + 60))
-    #expect(store.undoAutoClose() == nil)
+    // 창을 넘긴 뒤 발화하면 재개하지 않고 잔여 대상만 정리한다(다음 복귀는 새 세션을 연다).
+    store.clock = { endedAt.addingTimeInterval(WorkTimerStore.recentAutoCloseResumeWindowSeconds + 60) }
+    #expect(store.resumeRecentlyClosedSession() == nil)
     #expect(store.lastAutoClosedSessionID == nil)
     #expect(store.lastAutoClosedStartedAt == nil)
     #expect(store.lastAutoClosedAt == nil)
+    #expect(store.lastAutoClosedEndedAt == nil)
+    #expect(store.lastAutoClosedReason == nil)
+}
+
+/// abandoned 픽스처의 고정 '지금'이 **두 계약을 실제로 가르는지** 못 박는다. 이게 없으면 상수 하나가
+/// 조용히 옮겨졌을 때 위 테스트들이 아무것도 검증하지 않는 채로 초록이 된다(스텁은 @MainActor 상수를
+/// 못 읽어 리터럴을 쓰므로, 파생 관계를 지키는 곳은 여기뿐이다).
+@MainActor
+@Test
+func abandonedFixtureNowStraddlesBothContracts() {
+    let gap = URLProtocolStub.abandonedFixtureNow.timeIntervalSince(URLProtocolStub.abandonedFixtureLastSeen)
+    // (1) 자동 마감이 성립한다: 신호 공백이 계약 임계(7분)를 넘는다.
+    #expect(gap > WorkTimerStore.adoptedReclaimStaleSeconds)
+    // (2) 그리고 그 마감은 **자동 재개 창(30분) 안**이다.
+    #expect(gap <= WorkTimerStore.recentAutoCloseResumeWindowSeconds)
+    // 픽스처의 세션 시작이 마지막 신호보다 이르다(0초 세션이 되지 않는다).
+    #expect(URLProtocolStub.abandonedFixtureSessionStart < URLProtocolStub.abandonedFixtureLastSeen)
 }
 
 @MainActor
 @Test
-func startingNewWorkClearsAutoCloseUndo() async {
-    // 회귀 지점: 배너를 무시하고 새 근무를 시작한 뒤 [되돌리기]를 누르면 진행 중 세션이 옛 세션으로 갈아치워졌다.
-    // 이제 start() 가 되돌리기 대상을 즉시 끊고, 근무중에는 조건 자체가 거짓이다.
+func startingNewWorkClearsAutoCloseResumeTarget() async {
+    // 회귀 지점: 자동 마감 대상을 남긴 채 새 근무를 시작하면 재개가 진행 중 세션을 옛 세션으로 갈아치웠다.
+    // 이제 start() 가 재개 대상을 즉시 끊고, 근무중에는 조건 자체가 거짓이다.
     let testHost = "abandoned-session-test"
     let store = makeStubStore(host: testHost)
+    pinClock(store, to: URLProtocolStub.abandonedFixtureNow)
     defer {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
     }
 
     await store.refreshTeamStatus()
-    #expect(store.canUndoAutoClose())
+    #expect(store.canResumeRecentlyClosedSession())
 
-    store.start()
+    store.start(now: URLProtocolStub.abandonedFixtureNow)
     #expect(store.lastAutoClosedSessionID == nil)
-    #expect(!store.canUndoAutoClose())
+    #expect(!store.canResumeRecentlyClosedSession())
     // 종료해도 되살아나지 않는다(옛 세션은 영구히 무효).
-    store.stop()
-    #expect(!store.canUndoAutoClose())
+    store.stop(now: URLProtocolStub.abandonedFixtureNow.addingTimeInterval(60))
+    #expect(!store.canResumeRecentlyClosedSession())
 }
 
 @MainActor
 @Test
-func undoAutoCloseRefusesWhileWorking() async {
-    // 회귀 지점: performUndoAutoClose 에 startedAt 가드가 없어 진행 중 세션의 startedAt/currentSessionID 를
+func autoCloseResumeRefusesWhileWorking() async {
+    // 회귀 지점: performResumeRecentlyClosedSession 에 startedAt 가드가 없어 진행 중 세션의 startedAt/currentSessionID 를
     // 옛 세션으로 덮었다(타이머가 과거로 점프 + 새 세션이 서버에 열린 채 방치).
     let testHost = "abandoned-session-test"
     let store = makeStubStore(host: testHost)
+    pinClock(store, to: URLProtocolStub.abandonedFixtureNow)
     defer {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
@@ -1893,18 +1922,18 @@ func undoAutoCloseRefusesWhileWorking() async {
     store.currentSessionID = "99999999-0000-0000-0000-000000000009"
     store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 120)
 
-    await store.performUndoAutoClose()
+    await store.performResumeRecentlyClosedSession()
 
     // 진행 중 세션은 그대로고, 되돌리기 대상만 정리된다.
     #expect(store.startedAt == liveStart)
     #expect(store.currentSessionID == "99999999-0000-0000-0000-000000000009")
     #expect(store.lastAutoClosedSessionID == nil)
-    #expect(!store.canUndoAutoClose())
+    #expect(!store.canResumeRecentlyClosedSession())
 }
 
 @MainActor
 @Test
-func undoAutoCloseSubtractsRestoredSessionFromTodayAccumulation() async {
+func autoCloseResumeSubtractsRestoredSessionFromTodayAccumulation() async {
     // 회귀 지점: 자동 마감 뒤 정상 폴링 1회가 accumulatedSeconds 를 서버 오늘 합계(= 방금 마감된 세션 **포함**)로
     // 채운 상태에서 [되돌리기]를 누르면, 그 세션이 다시 진행 세션이 되는데도 누적에서 빠지지 않아
     // todayDuration 이 같은 구간을 두 번 셌다(메뉴바 라벨·팝오버 큰 타이머·캐릭터 오버레이가 일제히 약 2배).
@@ -1933,9 +1962,12 @@ func undoAutoCloseSubtractsRestoredSessionFromTodayAccumulation() async {
     store.lastAutoClosedSessionID = "50000000-0000-0000-0000-000000000001"
     store.lastAutoClosedStartedAt = sessionStart
     store.lastAutoClosedAt = now
+    // 재개 창의 앵커(= 마감된 세션의 ended_at). 이 배치는 '방금 끊긴' 근무라 갭이 0 이다.
+    store.lastAutoClosedEndedAt = now
+    store.lastAutoClosedReason = .abandoned
     store.lastAutoClosedSeconds = closedSeconds
 
-    await store.performUndoAutoClose()
+    await store.performResumeRecentlyClosedSession()
 
     #expect(store.startedAt == sessionStart)
     // 재개된 세션 몫은 진행분으로만 세어야 한다 — 누적에는 남지 않는다.
@@ -1989,7 +2021,7 @@ private func assertAutoCloseAddsClosedPortionAndUndoRestoresIt(
     await store.refreshTeamStatus()
 
     #expect(store.startedAt == nil)
-    #expect(store.canUndoAutoClose())
+    #expect(store.canResumeRecentlyClosedSession())
     // 계약: 마감분의 '오늘 몫' = 마지막 신호 − max(세션 시작, KST 자정).
     let expected = max(
         0,
@@ -1999,7 +2031,7 @@ private func assertAutoCloseAddsClosedPortionAndUndoRestoresIt(
     #expect(store.lastAutoClosedSeconds == expected)
     #expect(store.todayDuration == expected)
 
-    await store.performUndoAutoClose()
+    await store.performResumeRecentlyClosedSession()
 
     // 되돌리면 그 몫은 누적에서 빠지고 진행분으로만 센다 → 오늘 누적은 그대로 이어진다(2배 금지).
     #expect(store.accumulatedSeconds == 0)
@@ -2076,12 +2108,12 @@ func autoCloseTodayPortionIsClippedToZeroWhenTheClosedRunBelongsToYesterday() as
     #expect(fixture.lastSeenAt < fixture.koreanDayStart)
 
     #expect(store.startedAt == nil)
-    #expect(store.canUndoAutoClose())
+    #expect(store.canResumeRecentlyClosedSession())
     #expect(store.accumulatedSeconds == 0)
     #expect(store.lastAutoClosedSeconds == 0)
     #expect(store.todayDuration == 0)
 
-    await store.performUndoAutoClose()
+    await store.performResumeRecentlyClosedSession()
 
     // 되돌리면 세션이 다시 흐르지만, 오늘 표시는 **자정 이후분만**이다(= 5분).
     let sinceMidnight = Int(fixture.now.timeIntervalSince(fixture.koreanDayStart))
@@ -5119,13 +5151,15 @@ func signInLoadsInsightsSoRetroBannerShowsInTheSamePopoverSession() async {
 
 @MainActor
 @Test
-func timedBannerIsPushedByStoreInsteadOfBeingJudgedEverySecond() {
-    // 회귀 지점: 팝오버 body 가 canUndoAutoClose(now: displayNow) 를 직접 불러, 배너가 없는 평소 화면에서도
-    // 매초 갱신되는 displayNow 를 관찰 등록했다(전체 트리 매초 무효화).
-    // 이제 판정 결과만 스토어가 상태로 밀어 넣고, 뷰는 그 상태만 읽는다.
+func autoCloseResumeWindowIsThirtyMinutesFromEndedAtOnBothSides() {
+    // **이 기능의 안전선 그 자체.** 자동 재개는 `지금 − ended_at ≤ 30분` 일 때만 성립한다 —
+    // 되살아나는 시간이 정확히 그 값이므로 재계상 상한이 구조적으로 30분으로 묶인다.
+    // v0.2.46 에서 지운 이어붙이기에는 이 상한이 없어 289분(4.8시간) 수면 갭을 근무로 되살렸다.
+    // 앵커가 '마감이 발화한 시각'(lastAutoClosedAt)이 아니라 **ended_at** 이라는 것도 여기서 못 박는다:
+    // 아래 두 케이스는 lastAutoClosedAt 이 **똑같이** now 인데 결과가 갈린다.
     let store = WorkTimerStore(
         service: SupabaseWorkService(
-            projectURL: URL(string: "http://timed-banner-test")!,
+            projectURL: URL(string: "http://resume-window-test")!,
             anonKey: "anon-test-key",
             session: URLSession(configuration: .stubbed)
         ),
@@ -5138,37 +5172,81 @@ func timedBannerIsPushedByStoreInsteadOfBeingJudgedEverySecond() {
         store.syncTask?.cancel()
     }
     let now = Date()
-    #expect(store.timedBanner == nil)
+    #expect(!store.canResumeRecentlyClosedSession(now: now))
 
-    // (1) 자리 비움 자동 마감 대상이 생기면 되돌리기 배너가 선다.
-    store.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
-    store.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
-    store.lastAutoClosedAt = now
-    store.refreshTimedBanner(now: now)
-    #expect(store.timedBanner == .undoAutoClose)
+    func armClose(endedAt: Date, reason: AutoCloseReason = .sleep) {
+        store.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
+        store.lastAutoClosedStartedAt = endedAt.addingTimeInterval(-7_200)
+        store.lastAutoClosedEndedAt = endedAt
+        store.lastAutoClosedReason = reason
+        store.lastAutoClosedAt = now       // 두 케이스 모두 '방금 마감했다' — 갈리는 것은 ended_at 뿐이다.
+    }
 
-    // 유예(10분)가 지나면 티커가 스스로 내린다 — 뷰가 매초 판정하지 않아도 사라진다.
-    store.refreshTimedBanner(now: now.addingTimeInterval(WorkTimerStore.autoCloseUndoWindowSeconds + 1))
-    #expect(store.timedBanner == nil)
+    // ① 29분 전에 끝난 세션 → 재개한다.
+    armClose(endedAt: now.addingTimeInterval(-29 * 60))
+    #expect(store.canResumeRecentlyClosedSession(now: now))
 
-    // (2) 근무를 시작하면 되돌리기 대상 자체가 끊기고 배너도 함께 사라진다(start 가 되맞춘다).
-    store.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
-    store.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
-    store.lastAutoClosedAt = now
-    store.refreshTimedBanner(now: now)
-    #expect(store.timedBanner == .undoAutoClose)
+    // ② **대조군** — 31분 전에 끝난 세션은 재개하지 않는다(그 사람은 새 세션을 연다).
+    armClose(endedAt: now.addingTimeInterval(-31 * 60))
+    #expect(!store.canResumeRecentlyClosedSession(now: now))
+
+    // ③ 경계 그 자체(정확히 30분)는 아직 재개 가능하다 — 상한은 포함이다.
+    armClose(endedAt: now.addingTimeInterval(-WorkTimerStore.recentAutoCloseResumeWindowSeconds))
+    #expect(store.canResumeRecentlyClosedSession(now: now))
+    armClose(endedAt: now.addingTimeInterval(-(WorkTimerStore.recentAutoCloseResumeWindowSeconds + 1)))
+    #expect(!store.canResumeRecentlyClosedSession(now: now))
+
+    // ④ 그리고 30분 창 안이라도 근무 중이면 재개하지 않는다(현 세션을 옛 세션으로 갈아치우는 사고).
+    armClose(endedAt: now.addingTimeInterval(-60))
+    #expect(store.canResumeRecentlyClosedSession(now: now))
     store.start(now: now)
-    #expect(store.timedBanner == nil)
-
-    // (3) 배너를 X 로 닫는 경로(clearAutoCloseUndo)도 상태를 즉시 내린다(되돌리기는 비근무 전용이라 먼저 종료).
+    #expect(!store.canResumeRecentlyClosedSession(now: now))
+    // 근무 시작이 대상 자체를 끊는다 — 종료해도 되살아나지 않는다.
+    #expect(store.lastAutoClosedSessionID == nil)
+    #expect(store.lastAutoClosedEndedAt == nil)
     store.stop(now: now.addingTimeInterval(1))
+    #expect(!store.canResumeRecentlyClosedSession(now: now.addingTimeInterval(1)))
+}
+
+@MainActor
+@Test
+func longSessionCloseIsNeverResumedEvenInsideTheThirtyMinuteWindow() {
+    // 12시간 마감의 갭은 응답 창(30분)과 **정확히 같은 눈금**이라 시간 판정만으로는 경계에 걸린다.
+    // 재개가 그 상한을 무력화하면 12시간 제한 자체가 없어지므로 **사유로** 못 박는다.
+    // 대조군: 같은 갭·같은 상태에서 사유만 sleep 이면 재개된다(= 시간 때문에 막힌 게 아니다).
+    let store = WorkTimerStore(
+        service: SupabaseWorkService(
+            projectURL: URL(string: "http://resume-longsession-test")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        ),
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: isolatedDefaults()
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+        store.syncTask?.cancel()
+    }
+    let now = Date()
+    let endedAt = now.addingTimeInterval(-10 * 60)     // 창 한가운데
     store.lastAutoClosedSessionID = "11111111-2222-3333-4444-555555555555"
-    store.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
-    store.lastAutoClosedAt = Date()
-    store.refreshTimedBanner()
-    #expect(store.timedBanner == .undoAutoClose)
-    store.clearAutoCloseUndo()
-    #expect(store.timedBanner == nil)
+    store.lastAutoClosedStartedAt = endedAt.addingTimeInterval(-12 * 3_600)
+    store.lastAutoClosedEndedAt = endedAt
+    store.lastAutoClosedAt = now
+
+    store.lastAutoClosedReason = .longSession
+    #expect(!store.canResumeRecentlyClosedSession(now: now))
+
+    // 사유를 모르는 경우도 재개하지 않는다 — 모를 때 사용자의 시간을 늘리는 쪽으로 움직이지 않는다.
+    store.lastAutoClosedReason = nil
+    #expect(!store.canResumeRecentlyClosedSession(now: now))
+
+    // 대조군: 같은 자리에서 sleep/abandoned 는 재개된다.
+    store.lastAutoClosedReason = .sleep
+    #expect(store.canResumeRecentlyClosedSession(now: now))
+    store.lastAutoClosedReason = .abandoned
+    #expect(store.canResumeRecentlyClosedSession(now: now))
 }
 
 // MARK: - 강제 로그아웃과 계정에 묶인 로컬 상태(큐 보존 vs 다음 계정 오염 금지)
@@ -5279,11 +5357,11 @@ func reloginWithDifferentAccountDiscardsPreviousOwnerWorkState() {
 
 @MainActor
 @Test
-func forcedLogoutClearsAutoCloseUndoTarget() {
-    // 회귀 지점: clearPersistedSession() 이 넛지 스탬프만 비우고 자리 비움 되돌리기 대상
-    // (lastAutoClosedSessionID/StartedAt/At)은 남겨, 유예 10분 안에 다른 계정으로 로그인하면 남의
-    // "자리 비움으로 근무를 종료했어요 [되돌리기]" 배너가 뜨고 누르면 새 계정 자격으로 앞 계정 세션을
-    // 재개하려다 RLS 에서 거부돼 "재개 실패"만 남았다. signOut() 은 clearAutoCloseUndo() 로 이미 막고 있었다.
+func forcedLogoutClearsAutoCloseResumeTarget() {
+    // 회귀 지점: clearPersistedSession() 이 넛지 스탬프만 비우고 자동 재개 대상
+    // (lastAutoClosedSessionID/StartedAt/EndedAt/Reason)은 남겨, 창 안에 다른 계정으로 로그인하면
+    // 새 계정 자격으로 앞 계정 세션을 재개하려다 RLS 에서 거부돼 "재개 실패"만 남았다.
+    // signOut() 은 clearRecentAutoCloseResume() 로 이미 막고 있었다.
     let store = makeStubStore(host: "forced-logout-undo")
     defer {
         store.tickerTask?.cancel()
@@ -5295,21 +5373,22 @@ func forcedLogoutClearsAutoCloseUndoTarget() {
     store.lastAutoClosedSessionID = "aaaaaaaa-0000-0000-0000-00000000000b"
     store.lastAutoClosedStartedAt = now.addingTimeInterval(-7_200)
     store.lastAutoClosedAt = now
-    store.refreshTimedBanner(now: now)
-    #expect(store.timedBanner == .undoAutoClose)
+    store.lastAutoClosedEndedAt = now.addingTimeInterval(-60)
+    store.lastAutoClosedReason = .abandoned
+    #expect(store.canResumeRecentlyClosedSession(now: now))
 
     store.clearPersistedSession()
 
     #expect(store.lastAutoClosedSessionID == nil)
     #expect(store.lastAutoClosedStartedAt == nil)
     #expect(store.lastAutoClosedAt == nil)
-    #expect(!store.canUndoAutoClose())
-    #expect(store.timedBanner == nil)
+    #expect(store.lastAutoClosedEndedAt == nil)
+    #expect(store.lastAutoClosedReason == nil)
+    #expect(!store.canResumeRecentlyClosedSession())
 
-    // 다른 계정으로 재로그인해도 배너가 되살아나지 않는다.
+    // 다른 계정으로 재로그인해도 재개 대상이 되살아나지 않는다.
     store.session = SupabaseSession(accessToken: "token-b", refreshToken: nil, userID: "00000000-0000-0000-0000-0000000000bb")
-    store.refreshTimedBanner()
-    #expect(store.timedBanner == nil)
+    #expect(!store.canResumeRecentlyClosedSession())
 }
 
 // MARK: - AF: 자리 비움 자동 마감 (v0.2.35 — docs/away-close.md)
@@ -5362,15 +5441,14 @@ private func armAwayStore(
     store.currentSessionID = WorkTimerStore.canonicalSessionID(awaySessionID)
     store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
     store.lastMeaningfulInputAt = localInput
+    // **관측 없음**(무한대). evaluateAwaySession 은 판정 직전 advanceMeaningfulInput 을 부르므로,
+    // 여기서 idle 을 0 으로 두면 모든 시나리오가 "방금 입력했다"가 되어 마감이 통째로 죽는다.
+    // 무한대는 `idle.isFinite` 가드에 걸려 위에서 세운 localInput 을 그대로 둔다 —
+    // 관측을 실제로 검사하는 테스트는 이 뒤에서 자기 값으로 덮어쓴다(입력 신선도 계약).
+    store.meaningfulIdleSeconds = { .infinity }
     store.awayServerSupported = true
     store.awayPolicy = thresholdSeconds.map {
-        AwayPolicy(
-            closeThresholdSeconds: $0,
-            restoreWindowSeconds: 21_600,
-            dailyRestoreLimit: 2,
-            restoresLeftToday: 2,
-            serverNow: now
-        )
+        AwayPolicy(closeThresholdSeconds: $0, serverNow: now)
     }
     store.awayOpenSession = AwayOpenSession(
         sessionID: serverSessionID,
@@ -5381,6 +5459,8 @@ private func armAwayStore(
 }
 
 /// docs/away-close.md 2절의 응답을 **문서에 적힌 그대로** 디코드한다. 키 하나가 어긋나면 여기서 죽는다.
+/// 픽스처에는 이어붙이기용 조각(`restorable`·복원 창/한도)이 그대로 들어 있다 — 서버는 계속 보내고
+/// 클라는 v0.2.46 부터 읽지 않는다(모르는 키는 Decodable 이 무시한다).
 @MainActor
 @Test
 func awaySyncResponseDecodesDocumentedContract() async {
@@ -5429,15 +5509,10 @@ func awaySyncResponseDecodesDocumentedContract() async {
 
     #expect(sync.isOK)
     #expect(sync.policy?.closeThresholdSeconds == 9_000)
-    #expect(sync.policy?.restoreWindowSeconds == 21_600)
-    #expect(sync.policy?.dailyRestoreLimit == 2)
+    #expect(sync.policy?.serverNow != nil)
     #expect(sync.openSession?.sessionID == "20000000-0000-0000-0000-0000000000aa")
     #expect(sync.openSession?.closeEligible == true)
     #expect(sync.openSession?.lastInputAt != nil)
-    #expect(sync.restorable?.sessionID == "30000000-0000-0000-0000-0000000000bb")
-    #expect(sync.restorable?.reason == .away)
-    #expect(sync.restorable?.remainingSeconds == 10_740)
-    #expect(sync.restorable?.expiresAt != nil)
 }
 
 /// 임계가 없는(혹은 0인) 응답은 **정책 없음**으로 접힌다 = 그 폴링에서 마감 금지.
@@ -5460,7 +5535,6 @@ func awaySyncTreatsMissingPolicyAndEligibilityAsUnknown() async {
 
     #expect(sync.policy == nil)
     #expect(sync.openSession?.closeEligible == false)
-    #expect(sync.restorable == nil)
 }
 
 /// 임계 경계는 **배타적**이다(서버 부등호와 같다): 정확히 임계면 살아 있고, 넘겨야 마감된다.
@@ -5773,8 +5847,8 @@ func adoptedMacReportsInputWithoutSessionOrPresence() async {
     #expect(!body.contains("opened_session"))
 }
 
-/// 자동 마감 사유가 **서버 PATCH 본문까지** 실제로 도달한다. 사유가 안 남으면 복원 RPC 가
-/// not_restorable 로 거절해 그 사람은 시간을 되찾을 방법이 없다.
+/// 자동 마감 사유가 **서버 PATCH 본문까지** 실제로 도달한다. 사유가 안 남으면 서버에는
+/// 원인 불명의 마감만 쌓여 사후 분석도 정정도 불가능해진다.
 @MainActor
 @Test
 func autoCloseReasonReachesServerPatchBody() async {
@@ -5799,7 +5873,7 @@ func autoCloseReasonReachesServerPatchBody() async {
 }
 
 /// **뚜껑 닫고 나간 사람의 유일한 구제 통로.** 뚜껑을 닫으면 서버 스캐빈저가 10분 뒤 그 세션을
-/// 'abandoned' 로 먼저 마감하는데 그 사유는 복원 대상이 아니다 — 깨어난 클라가 사유를 'sleep' 으로
+/// 'abandoned' 로 (= 마지막 신호 시각으로) 먼저 마감한다 — 깨어난 클라가 사유를 'sleep' 으로
 /// 정정하지 않으면 2파의 핵심 이득이 통째로 사라진다(docs/away-close.md 4절).
 /// 마감 PATCH 가 0행(= 서버가 이미 닫아 뒀다)일 때만 이 정정이 나간다.
 @MainActor
@@ -5845,137 +5919,6 @@ func manualStopSendsNoAutoCloseColumns() async {
     await store.retryPendingSync()
 
     #expect(!URLProtocolStub.bodyText(forHost: host).contains("auto_closed"))
-}
-
-/// 복원 응답 어휘 전체를 고정한다. 모르는 status 를 성공으로 접으면 열리지도 않은 세션을 근무중으로 그린다.
-@MainActor
-@Test
-func awayRestoreOutcomeMapsEveryDocumentedStatus() async {
-    let service = SupabaseWorkService(
-        projectURL: URL(string: "http://away-restore-map")!,
-        anonKey: "anon-test-key",
-        session: URLSession(configuration: .stubbed)
-    )
-    func outcome(_ status: String, usedToday: Int? = nil, limit: Int? = nil, sessionId: String? = nil) async -> AwayRestoreOutcome {
-        await service.awayRestoreOutcome(
-            from: AwayRestoreResponse(
-                status: status,
-                sessionId: sessionId,
-                startedAt: nil,
-                reason: nil,
-                restoredAt: nil,
-                usedToday: usedToday,
-                limit: limit,
-                deletedOpenSessions: nil,
-                endedAt: nil,
-                windowSeconds: nil,
-                ageSeconds: nil
-            ),
-            requestedSessionID: awaySessionID
-        )
-    }
-
-    #expect(await outcome("ok", sessionId: awaySessionID) == .restored(sessionID: awaySessionID, startedAt: nil))
-    // 두 번 누른 사람·두 번째 맥에게 오류를 보이지 않는다(서버가 멱등하게 성공으로 답한다).
-    #expect(await outcome("already_open") == .restored(sessionID: awaySessionID, startedAt: nil))
-    #expect(await outcome("expired") == .expired)
-    #expect(await outcome("limit_reached", usedToday: 2, limit: 2) == .limitReached(usedToday: 2, limit: 2))
-    #expect(await outcome("not_found") == .notRestorable(status: "not_found"))
-    #expect(await outcome("not_restorable") == .notRestorable(status: "not_restorable"))
-    #expect(await outcome("already_restored") == .notRestorable(status: "already_restored"))
-    #expect(await outcome("not_member") == .notRestorable(status: "not_member"))
-    #expect(await outcome("conflict") == .failed(status: "conflict"))
-    #expect(await outcome("invalid") == .failed(status: "invalid"))
-    #expect(await outcome("아무도 모르는 값") == .failed(status: "아무도 모르는 값"))
-}
-
-/// 복원 후 12시간 앵커는 **복원된 세션의 시작 시각**이다(복원 시각이 아니다).
-/// 복원 시각으로 세우면 09:00 시작 → 13:00 마감 → 15:00 복원인 사람의 총 세션이 18시간이 되고
-/// 12시간 안전장치가 복원 경로에서 통째로 무력화된다.
-@MainActor
-@Test
-func restoreAnchorsLongSessionToRestoredStart() {
-    let now = Date(timeIntervalSince1970: 1_800_000_000)
-    let restoredStart = now.addingTimeInterval(-6 * 3_600)
-    let closedEndedAt = now.addingTimeInterval(-3 * 3_600)
-    let store = makeAwayStore(host: "away-restore-anchor", now: now)
-    store.accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: now)
-    store.accumulatedSeconds = 3 * 3_600
-
-    store.applyRestoredAwaySession(
-        sessionID: awaySessionID.uppercased(),
-        startedAt: restoredStart,
-        closedEndedAt: closedEndedAt
-    )
-
-    #expect(store.startedAt == restoredStart)
-    #expect(store.longSessionAnchor == restoredStart)
-    // 세션 ID 는 반드시 정규화(소문자)된다 — 대문자로 들고 있으면 다음 폴링이 내 세션을 남의 것으로 읽는다.
-    #expect(store.currentSessionID == awaySessionID.lowercased())
-    #expect(store.ownsCurrentSessionStrongly)
-    #expect(!store.adoptedRemoteSession)
-    // 마감이 누적에 더해 둔 그 세션의 오늘 몫을 도로 뺀다(안 빼면 같은 구간을 두 번 센다).
-    #expect(store.accumulatedSeconds == 0)
-    // 버튼을 누른 것 자체가 사람이 자리에 있다는 증거다 — 안 밀면 다음 틱이 방금 살린 세션을 다시 마감한다.
-    #expect(store.lastMeaningfulInputAt == now)
-    #expect(store.awayRestorable == nil)
-    #expect(!store.awayRestorePromptPending)
-}
-
-/// 복귀(자동 시작)의 그 순간이 이 기능의 **유일한 도달 채널**이다. 복원 대상이 있으면 조용히 새 세션을
-/// 열지 말고 물어야 한다. 만료된 대상으로는 묻지 않는다(창 판정은 서버 값으로만 한다).
-@MainActor
-@Test
-func autoStartOffersRestoreOnlyWhileWindowIsOpen() {
-    let now = Date(timeIntervalSince1970: 1_800_000_000)
-    let store = makeAwayStore(host: "away-autostart-offer", now: now)
-    store.awayStateOwnerUserID = awayUserID
-    store.awayRestorable = AwayRestorableSession(
-        sessionID: awaySessionID,
-        startedAt: now.addingTimeInterval(-6 * 3_600),
-        endedAt: now.addingTimeInterval(-3 * 3_600),
-        autoClosedAt: now.addingTimeInterval(-3 * 3_600),
-        reason: .away,
-        expiresAt: now.addingTimeInterval(3 * 3_600),
-        remainingSeconds: 3 * 3_600
-    )
-
-    #expect(store.offerAwayRestoreOnAutoStart(now: now))
-    #expect(store.awayRestorePromptPending)
-
-    // 창이 닫혔으면 묻지 않는다(그 세션은 이미 되살릴 수 없다).
-    store.dismissAwayRestorePrompt()
-    #expect(!store.offerAwayRestoreOnAutoStart(now: now.addingTimeInterval(4 * 3_600)))
-    #expect(!store.awayRestorePromptPending)
-
-    // 근무 중이면 물을 일이 없다(복원은 비근무 전용 — 진행 중 세션을 옛 세션으로 덮으면 안 된다).
-    store.startedAt = now
-    #expect(!store.offerAwayRestoreOnAutoStart(now: now))
-}
-
-/// 계정이 바뀌면 배너는 **스스로 침묵한다**. 로그아웃 경로가 이 스토어의 다른 파일에 있어
-/// 그쪽이 away 상태 정리를 잊어도 남의 마감이 새 계정 화면에 뜨지 않는다.
-@MainActor
-@Test
-func restorableBannerIsSilentForAnotherAccount() {
-    let now = Date(timeIntervalSince1970: 1_800_000_000)
-    let store = makeAwayStore(host: "away-owner-lock", now: now)
-    store.awayStateOwnerUserID = awayUserID
-    store.awayRestorable = AwayRestorableSession(
-        sessionID: awaySessionID,
-        startedAt: now.addingTimeInterval(-6 * 3_600),
-        endedAt: now.addingTimeInterval(-3 * 3_600),
-        autoClosedAt: now.addingTimeInterval(-3 * 3_600),
-        reason: .away,
-        expiresAt: now.addingTimeInterval(3 * 3_600),
-        remainingSeconds: 3 * 3_600
-    )
-    #expect(store.restorableAwaySession != nil)
-
-    store.session = SupabaseSession(accessToken: "t", refreshToken: nil, userID: "00000000-0000-0000-0000-0000000000ff")
-
-    #expect(store.restorableAwaySession == nil)
-    #expect(!store.offerAwayRestoreOnAutoStart(now: now))
 }
 
 /// away_sync 가 실패하면(구버전 서버·오프라인) **정책이 비워져 마감이 멈춘다**.

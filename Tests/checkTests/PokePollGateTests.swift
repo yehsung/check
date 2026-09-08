@@ -989,13 +989,7 @@ func awaySyncFailureLeavesPollingAliveAndStopsClosing() async {
     let store = makePokeGateStore(host: testHost)
     store.startedAt = Date(timeIntervalSince1970: 1_800_000_000)
     store.awayServerSupported = true
-    store.awayPolicy = AwayPolicy(
-        closeThresholdSeconds: 9_000,
-        restoreWindowSeconds: nil,
-        dailyRestoreLimit: nil,
-        restoresLeftToday: nil,
-        serverNow: nil
-    )
+    store.awayPolicy = AwayPolicy(closeThresholdSeconds: 9_000, serverNow: nil)
 
     await store.refreshAwayStateIfNeeded(now: Date(timeIntervalSince1970: 1_800_000_000))
 

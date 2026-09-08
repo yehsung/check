@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import SwiftUI
 import Testing
 @testable import check
@@ -141,15 +142,26 @@ func displayNameNoticeErrorFlagChangesRenderingInTheSettingsWindow() throws {
     //
     // ⚠️ 문구는 **같게 두고 플래그만 뒤집는다.** 문구까지 바꾸면 글자 모양 차이로 그림이 달라져,
     // 색 분기가 통째로 사라져도 초록으로 통과한다(뷰가 notice != nil 로 색을 추측하던 시절의 그 버그다).
+    // ⚠️ **예열 1회는 버린다.** 이 프로세스의 첫 렌더는 폰트·심볼 이미지 캐시가 비어 있어 뒤이은
+    // 렌더와 픽셀이 다르게 나온다(격리 실행 시 재현: 아래 두 단언이 늘 같은 해시 쌍으로 갈렸다).
+    // 전체 스위트에서는 앞선 다른 렌더 테스트가 우연히 예열해 줘서 통과하기도 했는데, 그
+    // "우연히 통과"가 이 테스트를 실행 순서에 의존하게 만든다. 여기서 명시적으로 예열한다.
+    _ = try renderPNG(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: false), width: settingsWidth)
+
     let errorPNG = try renderPNG(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: true), width: settingsWidth)
     let plainPNG = try renderPNG(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: false), width: settingsWidth)
-    #expect(errorPNG != plainPNG)
+    // 비교는 **해시로** 한다(pngDigest 주석 참고 — 바이트 직접 비교는 실패할 때 스위트를 멎게 한다).
+    // 판정은 그대로다: 바이트가 같아야 해시가 같으므로 이 단언이 무는 것은 예전과 정확히 같다.
+    #expect(pngDigest(errorPNG) != pngDigest(plainPNG))
 
     // 같은 플래그로 두 번 그리면 **같은 그림**이어야 한다. 이 줄이 없으면 위 != 는 색 분기가 아니라
     // 픽스처의 잡음(스토어마다 새로 만드는 격리 defaults·토큰 홈 등)으로도 초록이 될 수 있다 —
     // 그러면 색 분기를 통째로 걷어내도 이 테스트는 계속 통과한다.
     let plainAgain = try renderPNG(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: false), width: settingsWidth)
-    #expect(plainPNG == plainAgain, "같은 상태를 두 번 그렸는데 그림이 다르다 — 픽스처가 결정적이지 않다")
+    #expect(
+        pngDigest(plainPNG) == pngDigest(plainAgain),
+        "같은 상태를 두 번 그렸는데 그림이 다르다 — 픽스처가 결정적이지 않다"
+    )
 }
 
 // MARK: - 육안 확인 덤프(env 지정 시에만)
@@ -268,6 +280,21 @@ private func makeTeamStoreLocal(members: [TeamMemberStatus], now: Date) -> WorkT
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.teamName = "아잉팀"
     return store
+}
+
+/// 렌더 PNG 를 **해시로** 비교하기 위한 요약값.
+///
+/// ⚠️ `#expect(pngA == pngB)` 로 29만 바이트짜리 `Data` 를 직접 비교하지 마라. 통과할 때는 싸지만
+/// **실패하는 순간** swift-testing 이 "뭐가 다른지"를 보여주려고 두 컬렉션의 차분을 계산하는데,
+/// 원소가 29만 개면 그 계산이 폭발해 테스트 프로세스가 코어를 물고 사실상 끝나지 않는다
+/// (실측: 전체 스위트가 수십 분 멎고 `Killing swiftpm-testing` 으로 죽는다).
+/// 즉 픽셀이 한 번 흔들리면 **빨간불이 아니라 멈춤**이 되어, 진짜 회귀가 나도 아무도 원인을 못 본다.
+///
+/// 해시로 바꿔도 **통과 조건은 한 글자도 안 바뀐다**(바이트가 같아야 해시가 같다). 달라지는 것은
+/// 실패했을 때 64글자 두 개만 찍고 즉시 빨개진다는 것뿐이다.
+/// 차이가 **어디**인지 알아야 하는 단언에는 이 저장소의 `bitmapDiffBounds` 를 써라.
+private func pngDigest(_ data: Data) -> String {
+    SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 }
 
 @MainActor

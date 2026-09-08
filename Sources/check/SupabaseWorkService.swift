@@ -363,8 +363,8 @@ actor SupabaseWorkService {
             // ★ 0행 = 서버가 이 세션을 **이미 닫아 뒀다**(스캐빈저가 먼저 발화했다). 폴백 INSERT 는
             //   on_conflict=id + ignore-duplicates 라 아무것도 하지 않으므로, 사유는 여기서만 고칠 수 있다.
             //   잠자기 경로가 이 갈래로 오는 것이 정상이다: 뚜껑을 닫으면 10분 뒤 서버가 'abandoned' 로
-            //   먼저 마감하는데 그 사유는 **복원 대상이 아니다**. 이 정정이 빠지면 2파의 핵심 이득
-            //   ("뚜껑 닫고 나간 사람 구제")이 통째로 사라진다(docs/away-close.md 4절).
+            //   먼저 마감한다. 이 정정이 빠지면 2파의 핵심 이득("뚜껑 닫고 나간 사람의 마감 시각·사유가
+            //   실제 잠든 순간과 맞는다")이 통째로 사라진다(docs/away-close.md 4절).
             if let autoClosedReason {
                 try? await correctAutoClose(
                     accessToken: accessToken,
@@ -579,9 +579,6 @@ actor SupabaseWorkService {
         if let threshold = response.closeThresholdSeconds, threshold > 0 {
             policy = AwayPolicy(
                 closeThresholdSeconds: TimeInterval(threshold),
-                restoreWindowSeconds: response.restoreWindowSeconds.map(TimeInterval.init),
-                dailyRestoreLimit: response.dailyRestoreLimit,
-                restoresLeftToday: response.restoresLeftToday,
                 serverNow: response.serverNow.flatMap(parseDate)
             )
         }
@@ -596,19 +593,7 @@ actor SupabaseWorkService {
                 closeEligible: payload.closeEligible ?? false
             )
         }
-        var restorable: AwayRestorableSession?
-        if let payload = response.restorable, let id = payload.sessionId {
-            restorable = AwayRestorableSession(
-                sessionID: id,
-                startedAt: payload.startedAt.flatMap(parseDate),
-                endedAt: payload.endedAt.flatMap(parseDate),
-                autoClosedAt: payload.autoClosedAt.flatMap(parseDate),
-                reason: payload.autoClosedReason.flatMap(AutoCloseReason.init(rawValue:)),
-                expiresAt: payload.expiresAt.flatMap(parseDate),
-                remainingSeconds: max(0, payload.remainingSeconds ?? 0)
-            )
-        }
-        return AwaySync(isOK: isOK, policy: policy, openSession: open, restorable: restorable)
+        return AwaySync(isOK: isOK, policy: policy, openSession: open)
     }
 
     // MARK: - 근무 틱 통합 RPC (v0.2.38 S3 / docs/work-tick.md)
@@ -700,48 +685,10 @@ actor SupabaseWorkService {
         return (try? decoder.decode(Envelope.self, from: data))?.code
     }
 
-    /// `restore_auto_closed_session(p_session_id)` — S2 삭제 → S1 재개 → 상태행 갱신 → 하루 카운터를
-    /// **한 트랜잭션**에서 한다. 클라에서 2회 왕복으로 흉내내지 마라(중간에 죽으면 열린 세션이 0개나 2개가 된다).
-    func restoreAutoClosedSession(accessToken: String, sessionID: String) async throws -> AwayRestoreOutcome {
-        let data = try await send(
-            path: "/rest/v1/rpc/restore_auto_closed_session",
-            method: "POST",
-            body: AwayRestoreRequest(pSessionId: sessionID),
-            accessToken: accessToken,
-            prefer: nil
-        )
-        guard let response = try? decoder.decode(AwayRestoreResponse.self, from: data) else {
-            return .failed(status: "undecodable")
-        }
-        return awayRestoreOutcome(from: response, requestedSessionID: sessionID)
-    }
-
-    /// 응답 원문 → 결과(순수 함수라 테스트가 왕복 없이 어휘 전체를 고정한다).
-    /// 모르는 status 는 **성공으로 접지 않는다** — 접으면 열리지도 않은 세션을 로컬이 근무중으로 그린다.
-    func awayRestoreOutcome(from response: AwayRestoreResponse, requestedSessionID: String) -> AwayRestoreOutcome {
-        switch response.status {
-        case "ok", "already_open":
-            // already_open 은 재시도·두 번째 맥이다. 서버가 멱등하게 성공으로 답하므로 클라도 성공으로 다룬다 —
-            // 두 번 누른 사람에게 오류를 보이지 않는 것이 이 상태값의 존재 이유다.
-            return .restored(
-                sessionID: response.sessionId ?? requestedSessionID,
-                startedAt: response.startedAt.flatMap(parseDate)
-            )
-        case "expired":
-            return .expired
-        case "limit_reached":
-            return .limitReached(usedToday: response.usedToday ?? 0, limit: response.limit ?? 0)
-        case "not_found", "not_restorable", "already_restored", "not_member":
-            return .notRestorable(status: response.status ?? "")
-        default:
-            return .failed(status: response.status ?? "unknown")
-        }
-    }
-
     /// 자동 마감한 세션을 되돌린다. ended_at/duration_seconds 를 null 로 재개하고 상태를 working 으로 복구.
     /// 유니크 인덱스(work_sessions_one_open_per_user)상 다른 열린 세션이 없을 때만 안전하다.
     /// auto_closed_at/auto_closed_reason 도 함께 null 로 되돌린다 — 남기면 **열린** 세션이 'abandoned'
-    /// 사유를 단 채 살아나, 이후의 마감 사유 판정·복원 자격 판정이 죽은 마감의 잔재를 읽는다.
+    /// 사유를 단 채 살아나, 이후의 마감 사유 판정이 죽은 마감의 잔재를 읽는다.
     func reopenSession(accessToken: String, teamID: String, userID: String, sessionID: String) async throws {
         func patch(resetAutoClose: Bool) async throws {
             try await sendNoBody(

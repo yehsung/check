@@ -13,9 +13,12 @@ import Testing
 //     그래서 안전한 케이스마다 같은 조건에서 시각만 넘긴 짝을 두고 **그쪽은 실제로 끊기는지**를 함께 본다.
 //  2. **시계는 주입하고 실네트워크로 새지 않는다.** 시각은 전부 KST 벽시계로 쓴다 — 심야 근무가 판정에
 //     영향을 주지 않는다는 계약(시간대 미사용)은 벽시계로 써야만 실제로 검사된다.
-//  3. **임계·복원 창은 서버가 준 값으로만 판정한다.** 이 파일이 9000 을 쓰는 것은 서버 응답 픽스처
+//  3. **임계는 서버가 준 값으로만 판정한다.** 이 파일이 9000 을 쓰는 것은 서버 응답 픽스처
 //     안에서뿐이고(docs/away-close.md 2절의 그 숫자), 클라 소스에 그 숫자가 없다는 것은 맨 아래
 //     소스 계약 테스트가 지킨다.
+//  4. **이어붙이기(복원)는 v0.2.46 에서 클라이언트에서 제거됐다.** 서버 응답(`restorable`)과 RPC 는
+//     그대로 살아 있으므로 픽스처는 문서 모양을 유지하고, "실려 와도 아무 일도 일어나지 않는다"를
+//     맨 아래 회귀 테스트 두 개가 지킨다.
 
 // MARK: - 픽스처
 
@@ -62,7 +65,12 @@ private func afkStore(host: String, clock: AFKClock) -> WorkTimerStore {
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.clock = { clock.now }
     store.inputSessionUsable = { true }
-    store.meaningfulIdleSeconds = { 0 }
+    // **관측 없음**(무한대)이 이 스위트의 기본값이다. 시나리오는 lastMeaningfulInputAt 을 직접 세우고
+    // (afkBeginWork), evaluateAwaySession 은 판정 직전 advanceMeaningfulInput 을 부른다 — 그 관측이
+    // idle=0 이면 모든 시나리오에서 "방금 입력했다"가 되어 마감이 통째로 죽는다. 무한대는
+    // advanceMeaningfulInput 의 `idle.isFinite` 가드에 걸려 관측을 건드리지 않는다(= 시나리오 값 보존).
+    // 관측을 실제로 쓰는 시나리오(S5 잠금, 입력 신선도)는 각자 이 클로저를 덮어쓴다.
+    store.meaningfulIdleSeconds = { .infinity }
     return store
 }
 
@@ -142,7 +150,17 @@ private func afkApplyAwaySync(_ store: WorkTimerStore, json: String) async {
         session: URLSession(configuration: .stubbed)
     )
     let sync = await service.awaySync(from: response)
-    store.applyAwaySync(sync, ownerUserID: afkUserID)
+    store.applyAwaySync(sync)
+}
+
+/// 조건이 참이 될 때까지(또는 상한까지) 기다린다. 자동 재개는 RPC 왕복 뒤에 로컬 상태를 세우므로
+/// 고정 sleep 으로는 부하 상황에서 흔들린다 — 조건 폴링이 그 축을 없앤다.
+@MainActor
+private func afkWait(untilTimeout seconds: Double, _ condition: () -> Bool) async {
+    let deadline = Date().addingTimeInterval(seconds)
+    while !condition(), Date() < deadline {
+        try? await Task.sleep(for: .milliseconds(10))
+    }
 }
 
 @MainActor
@@ -205,18 +223,16 @@ func gymNinetyMinutesAndMentoringTwoHoursSurvive() async throws {
     #expect(over.pendingItems.last?.autoCloseReason == .away)
 }
 
-// MARK: - S2. 점심 + 회의 3시간 — 끊기고, 복원하면 공백 전체가 근무로 돌아온다
+// MARK: - S2. 점심 + 회의 3시간 — 마지막 입력 시각으로 소급 마감된다
 
-/// 임계를 2시간 30분으로 낮춘 결과 **의도적으로** 끊기는 사례다(사장님 확정). 그래서 이 시나리오의
-/// 급소는 "끊긴다"가 아니라 **"복원 버튼 한 번에 공백 전체가 돌아오는가"** 다. 돌아오지 않으면
-/// 이 릴리스는 매일 3시간을 빼앗는 기능이 된다.
+/// 임계를 2시간 30분으로 낮춘 결과 **의도적으로** 끊기는 사례다(사장님 확정). 급소는 마감이
+/// **소급**이라는 점이다 — 자리를 비운 2시간 31분이 근무로 남으면 임계를 낮춘 의미가 없다.
 @MainActor
 @Test
-func lunchAndMeetingThreeHoursClosesAndRestoreReturnsTheWholeGap() async throws {
+func lunchAndMeetingThreeHoursClosesBackAtTheLastInput() async throws {
     let start = kst(2026, 8, 19, 9, 0)
     let lastInput = kst(2026, 8, 19, 12, 0)
     let closedAt = kst(2026, 8, 19, 14, 31)     // 마지막 입력 + 2시간 31분(임계 초과 첫 틱)
-    let backAt = kst(2026, 8, 19, 15, 5)        // 회의 끝나고 복귀
 
     let clock = AFKClock(closedAt)
     let store = afkStore(host: "afk-lunch-meeting", clock: clock)
@@ -231,32 +247,6 @@ func lunchAndMeetingThreeHoursClosesAndRestoreReturnsTheWholeGap() async throws 
     #expect(store.pendingItems.last?.autoCloseReason == .away)
     store.displayNow = closedAt
     #expect(store.todayDuration == 3 * 3_600)   // 09:00~12:00 만 남는다
-
-    // 복귀. 서버가 복원 대상을 들고 온다(창은 서버가 계산한다).
-    clock.now = backAt
-    await afkApplyAwaySync(
-        store,
-        json: afkAwaySyncJSON(
-            startedAt: nil,
-            lastInputAt: nil,
-            closeEligible: false,
-            restorable: (sessionID: afkSessionID, startedAt: start, endedAt: lastInput, reason: "away", now: backAt)
-        )
-    )
-    #expect(store.offerAwayRestoreOnAutoStart(now: backAt))
-    let restorable = try #require(store.restorableAwaySession)
-    #expect(restorable.reason == .away)
-
-    // 복원 성공(서버가 S1 을 재개하고 S2 를 지운 뒤 응답한 것을 로컬에 미러링).
-    store.applyRestoredAwaySession(sessionID: afkSessionID, startedAt: start, closedEndedAt: lastInput)
-
-    #expect(store.startedAt == start)
-    store.displayNow = backAt
-    // ★ 공백(12:00~15:05)까지 **전부** 근무로 돌아온다. 마감이 더해 둔 오늘 몫을 되빼지 않으면
-    //   같은 구간을 두 번 세어 9시간이 되고, 안 되빼는 대신 시작 시각을 복귀 시각으로 세우면 3시간을 잃는다.
-    #expect(store.todayDuration == Int(backAt.timeIntervalSince(start)))
-    #expect(store.awayRestorable == nil)
-    #expect(!store.awayRestorePromptPending)
 }
 
 // MARK: - S3. 새벽 2시에 30분 눈 붙였다 다시 일함 — 끊기지 않는다(시간대를 안 본다)
@@ -310,14 +300,13 @@ func napAtTwoAMSurvivesAndTimeOfDayNeverChangesTheVerdict() async throws {
     #expect(nightClosed)   // 3시간 부재는 새벽에도 낮과 **똑같이** 끊긴다(관대함도 시간대를 안 본다)
 }
 
-// MARK: - S4. 8시간 취침 — 끊기고, 복원 창은 이미 닫혀 있다
+// MARK: - S4. 8시간 취침 — 뚜껑 닫은 순간으로 소급 마감된다
 
-/// 복원 창(6시간)이 통상 수면(7~8시간)보다 **짧아야** 하는 이유가 이 시나리오다. 아침에 일어난 사람이
-/// 밤을 복원 버튼 한 번으로 근무로 만들 수 있으면 이 기능 전체가 무의미해진다.
-/// 동시에 **3시간 낮잠은 창이 살아 있어야** 한다(같은 문이라 닫으면 워크숍 다녀온 사람도 함께 죽는다).
+/// 밤 8시간이 근무로 남으면 안 된다. 마감 시각은 min(뚜껑 닫은 시각, 마지막 입력)이고, 사유는 sleep 이다
+/// (사유가 abandoned 로 남으면 마감 시각·원인이 사실과 어긋난 채 서버에 쌓인다).
 @MainActor
 @Test
-func eightHourSleepClosesAndItsRestoreWindowIsAlreadyClosed() async throws {
+func eightHourSleepClosesBackAtTheMomentTheMacWentToSleep() async throws {
     let start = kst(2026, 8, 19, 20, 0)
     let lastInput = kst(2026, 8, 19, 22, 50)
     let lidClosed = kst(2026, 8, 19, 23, 0)
@@ -335,36 +324,14 @@ func eightHourSleepClosesAndItsRestoreWindowIsAlreadyClosed() async throws {
     #expect(store.pendingItems.last?.endedAt == lastInput)
     #expect(store.pendingItems.last?.autoCloseReason == .sleep)
 
-    // 아침. 서버가 같은 세션을 복원 대상으로 실어 보내도 **창이 닫혀 있다**(잔여 0).
+    // 아침에 폴링이 한 번 더 돌아도 깎아 낸 밤은 되돌아오지 않는다.
     await afkApplyAwaySync(
         store,
-        json: afkAwaySyncJSON(
-            startedAt: nil,
-            lastInputAt: nil,
-            closeEligible: false,
-            restorable: (sessionID: afkSessionID, startedAt: start, endedAt: lastInput, reason: "sleep", now: wake)
-        )
+        json: afkAwaySyncJSON(startedAt: nil, lastInputAt: nil, closeEligible: false)
     )
-    let expired = try #require(store.restorableAwaySession)
-    #expect(expired.remainingSeconds == 0)
-    #expect(!store.offerAwayRestoreOnAutoStart(now: wake))
-    #expect(!store.awayRestorePromptPending)
-
-    // 대조군: 같은 마감이라도 3시간 뒤 복귀면 창이 살아 있다(워크숍 다녀온 사람을 살리는 그 문).
-    let napWake = kst(2026, 8, 20, 2, 0)
-    let napClock = AFKClock(napWake)
-    let nap = afkStore(host: "afk-overnight-control", clock: napClock)
-    await afkApplyAwaySync(
-        nap,
-        json: afkAwaySyncJSON(
-            startedAt: nil,
-            lastInputAt: nil,
-            closeEligible: false,
-            restorable: (sessionID: afkSessionID, startedAt: start, endedAt: lastInput, reason: "sleep", now: napWake)
-        )
-    )
-    #expect((nap.restorableAwaySession?.remainingSeconds ?? 0) > 0)
-    #expect(nap.offerAwayRestoreOnAutoStart(now: napWake))
+    #expect(!afkIsWorking(store))
+    store.displayNow = wake
+    #expect(store.todayDuration == 0)   // 마감분은 전날(8/19) 몫이라 8/20 오늘에는 한 초도 없다
 }
 
 // MARK: - S5. 잠그고 자러 감 — 잠근 시각부터 센다
@@ -413,38 +380,6 @@ func lockingTheScreenFreezesTheClockAtLockTime() async throws {
     unlocked.meaningfulIdleSeconds = { 3 * 3_600 }
     unlocked.advanceMeaningfulInput(now: now)
     #expect(unlocked.lastMeaningfulInputAt == now.addingTimeInterval(-5))
-}
-
-/// 복원 창의 만료 판정은 **서버가 준 두 값 중 하나라도 닫혔다고 하면 닫힌 것**이다.
-/// 두 값은 같은 트랜잭션에서 나오지만 클라가 한쪽만 보면, 그 한쪽이 비거나(구버전 응답·키 누락)
-/// 어긋나는 순간 이미 죽은 창이 되살아나 사용자가 [이어 붙이기]를 눌렀다가 not_restorable 을 받는다.
-@MainActor
-@Test
-func restoreOfferHonoursEitherExpirySignal() {
-    let now = kst(2026, 8, 20, 7, 0)
-    let clock = AFKClock(now)
-
-    func offer(host: String, expiresAt: Date?, remainingSeconds: Int) -> Bool {
-        let store = afkStore(host: host, clock: clock)
-        store.awayStateOwnerUserID = afkUserID
-        store.awayRestorable = AwayRestorableSession(
-            sessionID: afkSessionID,
-            startedAt: now.addingTimeInterval(-11 * 3_600),
-            endedAt: now.addingTimeInterval(-8 * 3_600),
-            autoClosedAt: now.addingTimeInterval(-8 * 3_600),
-            reason: .sleep,
-            expiresAt: expiresAt,
-            remainingSeconds: remainingSeconds
-        )
-        return store.offerAwayRestoreOnAutoStart(now: now)
-    }
-
-    // 창 시각은 지났는데 잔여 초만 남아 있는 응답 — 묻지 않는다.
-    #expect(!offer(host: "afk-expiry-a", expiresAt: now.addingTimeInterval(-3_600), remainingSeconds: 3_600))
-    // 창 시각은 미래인데 잔여가 0인 응답 — 역시 묻지 않는다.
-    #expect(!offer(host: "afk-expiry-b", expiresAt: now.addingTimeInterval(3_600), remainingSeconds: 0))
-    // 둘 다 열려 있을 때만 묻는다(대조군).
-    #expect(offer(host: "afk-expiry-c", expiresAt: now.addingTimeInterval(3_600), remainingSeconds: 3_600))
 }
 
 // MARK: - S6. 맥 2대 — 아이맥 켜둔 채 노트북에서 작업
@@ -542,59 +477,6 @@ func adoptedSessionIsNeverClosedByThisMacsIdleness() async throws {
     #expect(!afkIsWorking(owner))
 }
 
-// MARK: - S8. 복원 직후 10분 스캐빈저가 다시 닫지 않는다
-
-/// attack-4 의 결함 ⑥. 복원 트랜잭션이 last_seen_at 을 밀지 않으면 되살린 세션이 몇 초 뒤 다시 닫힌다.
-/// 클라 쪽 반쪽은 둘이다: ① 복원 직후 로컬 판정이 옛 입력 시각으로 그 세션을 다시 마감하지 않는다,
-/// ② 복원 즉시 하트비트가 다시 나가 서버의 신호 공백이 이어지지 않는다.
-@MainActor
-@Test
-func restoredSessionSurvivesTheNextTenMinutes() async throws {
-    let host = "afk-restore-survives"
-    let start = kst(2026, 8, 19, 9, 0)
-    let staleInput = kst(2026, 8, 19, 10, 0)
-    let restoredAt = kst(2026, 8, 19, 15, 0)
-    let clock = AFKClock(restoredAt)
-    let store = afkStore(host: host, clock: clock)
-    store.awayStateOwnerUserID = afkUserID
-
-    store.applyRestoredAwaySession(sessionID: afkSessionID, startedAt: start, closedEndedAt: staleInput)
-    #expect(store.startedAt == start)
-    // 버튼을 누른 것 자체가 "사람이 자리에 있다"는 증거다 — 옛 입력 시각이 남으면 다음 틱이 즉시 다시 마감한다.
-    #expect(store.lastMeaningfulInputAt == restoredAt)
-
-    // ① 10분 뒤 틱: 서버가 아직 옛 last_input(10:00)을 들고 있어도 max 규칙이 방금 누른 시각을 채택한다.
-    let tenMinutesLater = restoredAt.addingTimeInterval(600)
-    clock.now = tenMinutesLater
-    store.inputSessionUsable = { false }   // 복원 직후 사람이 잠깐 손을 뗐다 — 그래도 방금 눌렀다.
-    await afkApplyAwaySync(
-        store,
-        json: afkAwaySyncJSON(startedAt: start, lastInputAt: staleInput, closeEligible: true)
-    )
-    store.evaluateAwaySession(now: tenMinutesLater)
-    #expect(afkIsWorking(store), "복원 직후 10분 안에 다시 닫히면 사용자는 버튼이 고장 났다고 본다")
-
-    // ② 하트비트가 다시 나간다(= 서버의 신호 공백이 끊긴다 → 10분 스캐빈저 조건이 성립하지 않는다).
-    await store.sendHeartbeatIfWorking()
-    let statusPosts = zip(URLProtocolStub.requests(forHost: host), URLProtocolStub.bodies(forHost: host))
-        .filter { $0.0.url?.path == "/rest/v1/work_statuses" }
-        .map(\.1)
-    #expect(statusPosts.contains { $0.contains("last_seen_at") && $0.contains("\"status\":\"working\"") })
-}
-
-/// 서버 쪽 반쪽(복원 트랜잭션이 last_seen_at·last_input_at 을 now 로 민다)은 클라가 검사할 수 없다 —
-/// 마이그레이션은 이 저장소에 없다(supabase/ 는 .gitignore). 그래서 **계약 문서**를 고정한다:
-/// 이 문장이 문서에서 사라지면 다음 사람이 복원 RPC 를 재작성할 때 그 한 줄을 잃고,
-/// 되살린 세션이 10분 뒤 다시 닫힌다(공격이 실제로 잡아낸 결함이다).
-@Test
-func restoreContractDocumentsTheHeartbeatRefresh() throws {
-    let doc = try String(contentsOf: afkRepoFile("docs/away-close.md"), encoding: .utf8)
-    let section = try #require(doc.range(of: "restore_auto_closed_session"))
-    let tail = String(doc[section.lowerBound...])
-    #expect(tail.contains("last_seen_at=now()") || tail.contains("`last_seen_at=now()`"))
-    #expect(tail.contains("10분 스캐빈저"))
-}
-
 // MARK: - S9. 서버가 임계를 안 주면 마감하지 않는다
 
 /// 사장님 확정 사항의 코드 쪽 반쪽. 구버전 서버·오프라인·RPC 실패는 전부 "모른다"이고,
@@ -633,30 +515,357 @@ func withoutServerPolicyNothingIsEverClosed() async throws {
     #expect(!afkIsWorking(store))
 }
 
-// MARK: - S10. 복원 후 12시간 앵커는 세션 시작 시각이다
+// MARK: - S12. 자동 재개(30분 창) — 이어붙이기 자리에 들어온 것 (v0.2.47)
+//
+// 규칙(사장님 확정): 자동 마감된 **내** 세션의 `ended_at` 이 지금으로부터 **30분 이내**이고 사유가
+// `long_session` 이 아니면, 복귀가 감지되는 순간 배너 없이 그 세션을 되살린다(새 세션을 만들지 않는다).
+//
+// 이 스위트가 지키는 것은 하나다: **되살아나는 시간의 상한이 30분이다.** 되살아나는 양은 정확히
+// `지금 − ended_at` 이고, v0.2.46 에서 지운 이어붙이기에는 이 상한이 없어 289분(4.8시간)짜리 수면을
+// 근무로 되살렸다. 아래 케이스마다 대조군이 붙는다 — 상한만 검사하면 기능을 통째로 꺼도 초록이다.
 
-/// 복원 시각으로 앵커를 세우면 09:00 시작 → 14:30 마감 → 15:00 복원인 사람의 12시간 확인이
-/// 다음 날 03:00 으로 밀려 총 18시간 세션이 된다 = 12시간 안전장치가 복원 경로에서 무력화된다.
+/// 낮잠 20분은 되살아나고, **같은 경로의 4.8시간 수면은 되살아나지 않는다**(이어붙이기가 냈던 그 사고).
 @MainActor
 @Test
-func restoreAnchorsTheTwelveHourCheckToTheOriginalStart() throws {
+func shortSleepIsResumedWhileTheOldFourHourSleepBugIsNot() async throws {
+    let start = kst(2026, 8, 19, 20, 0)
+    let lastInput = kst(2026, 8, 19, 23, 0)
+    let lidClosed = kst(2026, 8, 19, 23, 0)
+
+    // ① 20분 낮잠 → 5분 뒤 복귀 감지. 갭 = 25분 ≤ 30분 → 재개 대상이다.
+    let napClock = AFKClock(lidClosed)
+    let nap = afkStore(host: "afk-resume-nap", clock: napClock)
+    afkBeginWork(nap, startedAt: start, lastInput: lastInput)
+    nap.handleSleep(at: lidClosed)
+    let napWake = kst(2026, 8, 19, 23, 20)
+    napClock.now = napWake
+    nap.handleWake(at: napWake)
+    #expect(!afkIsWorking(nap))
+    #expect(nap.lastAutoClosedReason == .sleep)
+    #expect(nap.lastAutoClosedEndedAt == lastInput)     // 앵커는 min(뚜껑, 마지막 입력)이다
+    let napReturn = kst(2026, 8, 19, 23, 25)
+    napClock.now = napReturn
+    #expect(nap.canResumeRecentlyClosedSession(now: napReturn))
+
+    // ② **대조군 — 제거된 이어붙이기가 냈던 바로 그 사고.** 같은 코드 경로로 4.8시간(289분)을 잔다.
+    //    갭이 294분이라 창 밖이다 → 되살리지 않는다. 이 단언이 상한 그 자체다.
+    let sleepClock = AFKClock(lidClosed)
+    let deep = afkStore(host: "afk-resume-deep-sleep", clock: sleepClock)
+    afkBeginWork(deep, startedAt: start, lastInput: lastInput)
+    deep.handleSleep(at: lidClosed)
+    let deepWake = lidClosed.addingTimeInterval(289 * 60)
+    sleepClock.now = deepWake
+    deep.handleWake(at: deepWake)
+    #expect(!afkIsWorking(deep))
+    #expect(deep.lastAutoClosedReason == .sleep)
+    let deepReturn = deepWake.addingTimeInterval(5 * 60)
+    sleepClock.now = deepReturn
+    #expect(
+        !deep.canResumeRecentlyClosedSession(now: deepReturn),
+        "289분 수면이 근무로 되살아난다 — 30분 상한이 사라졌다(이어붙이기 제거 사유 그 자체)"
+    )
+
+    // ③ 경계를 양쪽에서: 같은 마감을 두고 '지금'만 움직인다.
+    let inside = lastInput.addingTimeInterval(29 * 60)
+    let outside = lastInput.addingTimeInterval(31 * 60)
+    #expect(nap.canResumeRecentlyClosedSession(now: inside))
+    #expect(!nap.canResumeRecentlyClosedSession(now: outside))
+}
+
+/// **away 마감은 사유 필터 없이도 창에 못 들어온다.** ended_at = 마지막 입력이고 마감은 그로부터
+/// 임계(서버가 준 2시간 30분) 뒤에 발화하므로 갭이 언제나 30분을 넘는다. 이 산술이 계약이고,
+/// 서버 임계를 30분 밑으로 내리면 깨진다(서버 함수 코멘트에 같은 경고가 있다).
+@MainActor
+@Test
+func awayCloseCanNeverFallInsideTheResumeWindow() async throws {
     let start = kst(2026, 8, 19, 9, 0)
-    let closedEndedAt = kst(2026, 8, 19, 12, 0)
-    let restoredAt = kst(2026, 8, 19, 15, 0)
-    let clock = AFKClock(restoredAt)
-    let store = afkStore(host: "afk-anchor", clock: clock)
+    let lastInput = kst(2026, 8, 19, 12, 0)
+    let closedAt = kst(2026, 8, 19, 14, 31)     // 마지막 입력 + 2시간 31분(임계 초과 첫 틱)
 
-    store.applyRestoredAwaySession(sessionID: afkSessionID, startedAt: start, closedEndedAt: closedEndedAt)
-    #expect(store.longSessionAnchor == start)
+    let clock = AFKClock(closedAt)
+    let store = afkStore(host: "afk-resume-away", clock: clock)
+    afkBeginWork(store, startedAt: start, lastInput: lastInput)
+    await afkApplyAwaySync(store, json: afkAwaySyncJSON(startedAt: start, lastInputAt: lastInput, closeEligible: true))
 
-    // 시작 + 11시간 59분: 아직 묻지 않는다.
-    store.evaluateLongSession(now: start.addingTimeInterval(12 * 3_600 - 60))
-    #expect(!store.isLongSessionPromptActive)
+    store.evaluateAwaySession(now: closedAt)
+    #expect(!afkIsWorking(store))
+    #expect(store.lastAutoClosedReason == .away)
+    #expect(store.lastAutoClosedEndedAt == lastInput)
 
-    // 시작 + 12시간 1분(= 21:01 KST): 여기서 물어야 한다. 앵커가 복원 시각이면 이 시점엔 조용하고,
-    // 확인은 다음 날 03:00 으로 밀린다.
-    store.evaluateLongSession(now: start.addingTimeInterval(12 * 3_600 + 60))
-    #expect(store.isLongSessionPromptActive)
+    // 마감 직후에도, 그 뒤 어느 시점에도 재개 대상이 아니다.
+    #expect(!store.canResumeRecentlyClosedSession(now: closedAt))
+    #expect(!store.canResumeRecentlyClosedSession(now: closedAt.addingTimeInterval(5 * 60)))
+
+    // 산술 자체를 못 박는다: 임계(서버가 준 값) > 재개 창. 이 부등식이 위 두 단언의 **이유**다.
+    let threshold = try #require(store.awayPolicy?.closeThresholdSeconds)
+    #expect(
+        threshold > WorkTimerStore.recentAutoCloseResumeWindowSeconds,
+        "서버 임계가 재개 창 밑으로 내려왔다 — away 마감이 자동으로 되살아난다"
+    )
+
+    // **대조군**: 같은 세션·같은 시각인데 마감 사유만 sleep 이면(= 갭이 짧은 마감이면) 재개 대상이다.
+    // 이 짝이 없으면 "재개가 통째로 죽어서" 위 단언이 초록인 경우를 못 가른다.
+    let sleepClock = AFKClock(closedAt)
+    let sleeper = afkStore(host: "afk-resume-away-control", clock: sleepClock)
+    afkBeginWork(sleeper, startedAt: start, lastInput: closedAt.addingTimeInterval(-10 * 60))
+    sleeper.handleSleep(at: closedAt.addingTimeInterval(-10 * 60))
+    sleeper.handleWake(at: closedAt)
+    #expect(sleeper.lastAutoClosedReason == .sleep)
+    #expect(sleeper.canResumeRecentlyClosedSession(now: closedAt))
+}
+
+/// 흡수 세션(다른 맥이 연 세션)은 **재개 대상으로 등록조차 되지 않는다.** 남의 근무를 내 복귀로
+/// 되살리면 그 사람의 세션이 내 소유로 넘어간다. 대조군으로 같은 조건의 내 세션은 등록된다.
+@MainActor
+@Test
+func adoptedSessionIsNeverRegisteredAsAResumeTarget() async throws {
+    let start = kst(2026, 8, 19, 9, 0)
+    let lastInput = kst(2026, 8, 19, 13, 0)
+    let lidClosed = kst(2026, 8, 19, 13, 0)
+    let wake = kst(2026, 8, 19, 13, 20)
+
+    let clock = AFKClock(lidClosed)
+    let adopted = afkStore(host: "afk-resume-adopted", clock: clock)
+    afkBeginWork(adopted, startedAt: start, lastInput: lastInput)
+    adopted.adoptedRemoteSession = true
+    adopted.handleSleep(at: lidClosed)
+    clock.now = wake
+    adopted.handleWake(at: wake)
+
+    // 흡수 세션은 마감 자체를 하지 않는다(autoStop 의 첫 가드) — 그래서 재개 대상도 없다.
+    #expect(afkIsWorking(adopted))
+    #expect(adopted.lastAutoClosedSessionID == nil)
+    #expect(adopted.lastAutoClosedEndedAt == nil)
+    #expect(!adopted.canResumeRecentlyClosedSession(now: wake))
+
+    // 대조군: 표식만 내리면 같은 조건에서 마감되고 재개 대상이 선다.
+    let ownClock = AFKClock(lidClosed)
+    let own = afkStore(host: "afk-resume-adopted-control", clock: ownClock)
+    afkBeginWork(own, startedAt: start, lastInput: lastInput)
+    own.handleSleep(at: lidClosed)
+    ownClock.now = wake
+    own.handleWake(at: wake)
+    #expect(!afkIsWorking(own))
+    #expect(own.canResumeRecentlyClosedSession(now: wake))
+}
+
+/// **복귀 감지 지점의 순서 계약.** 넛지 자동 시작은 새 세션을 만들기 **전에** 재개 대상을 본다.
+/// 순서가 뒤바뀌면 세션이 두 개가 되거나 재개가 조용히 죽는다(이어붙이기 결함의 원인이 그 순서였다).
+///
+/// 비동기 왕복을 고정 sleep 으로 기다리지 않는다 — 전체 스위트가 메인 액터를 물면 그 대기가 무작위로
+/// 터진다(실측). 대신 두 조각을 각각 **결정적으로** 본다:
+///  (A) 컨트롤러 호출 **직후**(동기): 새 세션이 하나도 안 만들어졌다.
+///      `Task { @MainActor … }` 는 지금 이 액터 실행이 끝나야 돌기 시작하므로 이 관측은 결정적이다.
+///  (B) 같은 진입점이 돌려주는 Task 를 await: 그 왕복이 끝나면 **옛 세션 그대로** 살아난다.
+@MainActor
+@Test
+func nudgeAutoStartResumesTheRecentSessionInsteadOfOpeningASecondOne() async throws {
+    let now = kst(2026, 8, 19, 14, 0)
+    let closedStart = kst(2026, 8, 19, 9, 0)
+    let closedEnd = kst(2026, 8, 19, 13, 45)     // 15분 전에 끝났다 = 창 안
+    let sessionID = WorkTimerStore.canonicalSessionID(afkSessionID)!
+
+    @MainActor
+    func armResumeTarget(_ store: WorkTimerStore, endedAt: Date) {
+        store.lastAutoClosedSessionID = sessionID
+        store.lastAutoClosedStartedAt = closedStart
+        store.lastAutoClosedEndedAt = endedAt
+        store.lastAutoClosedReason = .abandoned
+        store.lastAutoClosedAt = now
+    }
+
+    // (A) 순서: 재개 대상이 있으면 넛지는 store.start() 로 가지 않는다.
+    let orderClock = AFKClock(now)
+    let ordered = afkStore(host: "afk-nudge-resume-order", clock: orderClock)
+    armResumeTarget(ordered, endedAt: closedEnd)
+    let controller = CheckOverlayController(
+        store: ordered,
+        notificationCenter: NotificationCenter(),
+        defaults: afkDefaults(),
+        workspaceNotifications: nil
+    )
+    defer {
+        ordered.tickerTask?.cancel()
+        ordered.refreshTask?.cancel()
+        ordered.syncTask?.cancel()
+    }
+    controller.nudgeAutoStart()
+    #expect(ordered.startedAt == nil, "재개 대상이 있는데 넛지가 새 세션을 먼저 만들었다 — 세션이 두 개가 된다")
+    #expect(ordered.currentSessionID == nil)
+    #expect(ordered.lastAutoClosedSessionID == sessionID, "재개 경로로 갔다면 대상은 왕복이 끝날 때까지 살아 있다")
+
+    // (B) 결과: 같은 진입점의 왕복이 끝나면 **옛 세션 그대로** 살아난다(새 ID 가 아니다).
+    let resumeClock = AFKClock(now)
+    let store = afkStore(host: "afk-nudge-resume", clock: resumeClock)
+    armResumeTarget(store, endedAt: closedEnd)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+        store.syncTask?.cancel()
+    }
+    let resume = try #require(store.resumeRecentlyClosedSession(), "재개 대상이 있는데 진입점이 nil 을 돌려줬다")
+    await resume.value
+    #expect(store.startedAt == closedStart)
+    #expect(store.currentSessionID == sessionID)
+    #expect(store.snapshot.isWorking)
+    #expect(store.lastAutoClosedSessionID == nil)     // 성공하면 대상은 정리된다
+
+    // (C) **대조군**: 창 밖(31분 전 종료)이면 같은 넛지가 그 자리에서 **새 세션**을 연다.
+    let staleClock = AFKClock(now)
+    let stale = afkStore(host: "afk-nudge-new-session", clock: staleClock)
+    armResumeTarget(stale, endedAt: now.addingTimeInterval(-31 * 60))
+    let staleController = CheckOverlayController(
+        store: stale,
+        notificationCenter: NotificationCenter(),
+        defaults: afkDefaults(),
+        workspaceNotifications: nil
+    )
+    defer {
+        stale.tickerTask?.cancel()
+        stale.refreshTask?.cancel()
+        stale.syncTask?.cancel()
+    }
+    #expect(stale.resumeRecentlyClosedSession() == nil)
+    armResumeTarget(stale, endedAt: now.addingTimeInterval(-31 * 60))
+    staleController.nudgeAutoStart()
+    #expect(stale.startedAt != nil)                       // 즉시(동기) 새 세션이 선다
+    #expect(stale.currentSessionID != sessionID)          // 옛 세션이 아니다
+    #expect(stale.lastAutoClosedSessionID == nil)         // 그리고 옛 대상은 끊긴다
+}
+
+/// **입력 신선도(20260820050000 이 "켜기 전에 함께 고칠 것"으로 못 박은 항목).**
+/// 판정 직전에 관측을 전진시키지 않으면, 하트비트 주기(30초)만큼 낡은 관측으로 임계를 넘겨
+/// **임계 직전에 돌아와 타이핑한 사람**이 끊긴다(마감은 소급이라 그 근무가 사라진다).
+@MainActor
+@Test
+func staleLocalInputIsRefreshedRightBeforeTheAwayVerdict() async throws {
+    let start = kst(2026, 8, 19, 9, 0)
+    let now = kst(2026, 8, 19, 15, 0)
+    // 마지막으로 **서버에 보고된** 입력은 임계를 1초 넘겼다 — 갱신이 없으면 이 틱에서 끊긴다.
+    let reportedInput = now.addingTimeInterval(-9_001)
+
+    // ① 사람은 5초 전에 돌아와 타이핑했다(다음 하트비트는 아직 안 나갔다) → 끊기면 안 된다.
+    let backClock = AFKClock(now)
+    let back = afkStore(host: "afk-fresh-input", clock: backClock)
+    afkBeginWork(back, startedAt: start, lastInput: reportedInput)
+    await afkApplyAwaySync(
+        back,
+        json: afkAwaySyncJSON(startedAt: start, lastInputAt: reportedInput, closeEligible: true)
+    )
+    back.meaningfulIdleSeconds = { 5 }
+    back.evaluateAwaySession(now: now)
+    #expect(afkIsWorking(back), "임계 직전에 돌아와 타이핑한 사람이 낡은 관측으로 끊겼다")
+    #expect(back.lastMeaningfulInputAt == now.addingTimeInterval(-5))
+
+    // ② **대조군** — 실제로 자리에 없으면(관측도 임계 밖) 같은 자리에서 그대로 끊긴다.
+    //    이 짝이 없으면 "관측을 무조건 지금으로 밀어" 마감을 통째로 죽여도 초록이 된다.
+    let goneClock = AFKClock(now)
+    let gone = afkStore(host: "afk-stale-input", clock: goneClock)
+    afkBeginWork(gone, startedAt: start, lastInput: reportedInput)
+    await afkApplyAwaySync(
+        gone,
+        json: afkAwaySyncJSON(startedAt: start, lastInputAt: reportedInput, closeEligible: true)
+    )
+    gone.meaningfulIdleSeconds = { 9_100 }      // 2시간 31분째 무입력 = 관측도 임계 밖
+    gone.evaluateAwaySession(now: now)
+    #expect(!afkIsWorking(gone))
+    #expect(gone.pendingItems.last?.endedAt == reportedInput)
+    #expect(gone.pendingItems.last?.autoCloseReason == .away)
+
+    // ③ 잠금 화면은 여전히 얼어 있다 — 신선도 갱신이 그 계약을 무르게 하지 않는다.
+    let lockedClock = AFKClock(now)
+    let locked = afkStore(host: "afk-fresh-input-locked", clock: lockedClock)
+    afkBeginWork(locked, startedAt: start, lastInput: reportedInput)
+    await afkApplyAwaySync(
+        locked,
+        json: afkAwaySyncJSON(startedAt: start, lastInputAt: reportedInput, closeEligible: true)
+    )
+    locked.meaningfulIdleSeconds = { 5 }
+    locked.inputSessionUsable = { false }        // 잠긴 화면에서 남이 비밀번호를 두드린 것뿐이다
+    locked.evaluateAwaySession(now: now)
+    #expect(!afkIsWorking(locked))
+    #expect(locked.lastMeaningfulInputAt == reportedInput)
+}
+
+// MARK: - S10. 이어붙이기 제거 회귀 그물 (v0.2.46)
+
+/// 서버는 `away_sync()` 에서 `restorable` 을 **계속 실어 보낸다**(RPC 도 그대로 휴면 중이다 —
+/// docs/away-close.md 5절). 클라가 그 조각을 다시 읽기 시작하면 21일치 실측이 확인한 두 결함이
+/// 그대로 돌아온다: 승인 직후 재마감 churn 21%, 그리고 수면 갭의 근무 재계상.
+///
+/// 그래서 **문서 2절 모양 그대로(restorable 포함)** 의 응답을 실제 디코드 경로
+/// (`awaySync(from:)` → `applyAwaySync`)로 통과시키고, 그 뒤 스토어에 복원 상태가 한 칸도 서지
+/// 않는지를 본다. 정책·열린 세션이 함께 반영되는지도 같이 보는 이유는 대조군이다 —
+/// 응답을 통째로 버려도 초록이 되는 테스트는 아무것도 지키지 못한다.
+@MainActor
+@Test
+func serverResumeHintLeavesNoTraceInTheStore() async throws {
+    let start = kst(2026, 8, 19, 20, 0)
+    let lastInput = kst(2026, 8, 19, 22, 50)
+    let lidClosed = kst(2026, 8, 19, 23, 0)
+    let wake = kst(2026, 8, 20, 2, 0)          // 3시간 뒤 복귀 = 서버 창(6시간)이 활짝 열려 있는 시점
+
+    let clock = AFKClock(lidClosed)
+    let store = afkStore(host: "afk-restorable-ignored", clock: clock)
+    afkBeginWork(store, startedAt: start, lastInput: lastInput)
+    store.handleSleep(at: lidClosed)
+    clock.now = wake
+    store.handleWake(at: wake)
+    #expect(!afkIsWorking(store))
+
+    await afkApplyAwaySync(
+        store,
+        json: afkAwaySyncJSON(
+            startedAt: nil,
+            lastInputAt: nil,
+            closeEligible: false,
+            restorable: (sessionID: afkSessionID, startedAt: start, endedAt: lastInput, reason: "sleep", now: wake)
+        )
+    )
+
+    // 대조군: 같은 응답의 정책 조각은 확실히 반영됐다(= 응답을 버려서 초록이 된 것이 아니다).
+    #expect(store.awayServerSupported)
+    #expect(store.awayPolicy?.closeThresholdSeconds == 9_000)
+
+    // 본론: 마감은 그대로 서 있고, 스토어 어디에도 복원 상태가 없다.
+    #expect(!afkIsWorking(store))
+    #expect(store.snapshot.status == .offWork)
+    let labels = Mirror(reflecting: store).children.compactMap(\.label).map { $0.lowercased() }
+    // 픽스처 보정: 거울이 저장 프로퍼티를 실제로 보고 있는가(0개면 아래 단언이 공짜로 초록이 된다).
+    #expect(labels.contains { $0.contains("awaypolicy") }, "거울이 스토어의 저장 프로퍼티를 못 본다 — 아래 단언이 무의미해진다")
+    let restoreProperties = labels.filter { $0.contains("restorable") || $0.contains("restoringaway") }
+    #expect(restoreProperties.isEmpty, "스토어에 복원 상태가 되살아났다: \(restoreProperties)")
+}
+// 같은 응답으로 **팝오버가** 배너를 그리지 않는지는 픽셀로 봐야 한다 —
+// CheckMenuRenderTests 의 popoverDrawsNoBannerWhenTheServerStillOffersToResume 가 그쪽 반쪽이다.
+
+/// 소스 계약(하우스 규칙 — `awayThresholdsAreNeverHardcodedInClientSource` 와 같은 방식).
+/// 클라 소스 어디에도 이어붙이기 심볼이 없어야 한다. **주석을 걷어낸 뒤** 검사한다 —
+/// 안 그러면 "왜 제거했는가"를 적은 설명 주석을 지워야만 초록이 되는 테스트가 된다.
+///
+/// ★ 아래 조각은 **첫 글자를 뗀 어간**이다(예: `…wayRestor` 는 a/A 를 뗀 형태라 대소문자 두 철자를
+///   한 번에 덮는다). 심볼을 통짜로 적어 두면 "저장소에 이 심볼이 하나도 없다"를 확인하는 검수
+///   grep 이 이 테스트 자신을 잡아 영원히 비지 않는다 — 그 grep 은 릴리스 절차의 일부다.
+@Test
+func sessionResumeSymbolsAreGoneFromClientSource() throws {
+    let sources = try afkClientSources()
+    #expect(!sources.isEmpty)
+
+    let forbiddenStems = [
+        "wayRestor",                // 배너 문구·넛지 문구·스토어 상태·모델 타입 일가
+        "estorable",                // 복원 대상 세션 타입과 그 파생 판단들
+        "estoreAwaySession",        // 복원 액션(그리고 그 async 짝)
+        "estoredAwaySession",       // 복원 성공을 로컬에 미러링하던 함수
+        "estoreAutoClosedSession",  // 서버 RPC 호출부
+        "estoringAwaySession",      // 복원 왕복 중 연타 가드
+        "wayStateOwnerUserID"       // 복원 배너의 계정 잠금
+    ]
+    for (name, code) in sources {
+        let stripped = afkStrippingSwiftComments(code)
+        for stem in forbiddenStems {
+            #expect(!stripped.contains(stem), "\(name) 에 이어붙이기 심볼이 되살아났다: …\(stem)")
+        }
+    }
 }
 
 // MARK: - S11. 소스 계약 — 임계값은 클라 소스에 없다

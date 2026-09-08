@@ -694,6 +694,18 @@ final class URLProtocolStub: URLProtocol {
     /// stale-today-session 호스트군의 신호 공백(초). 계약 임계 **밖**이어야 자동 마감이 성립한다.
     static let staleTodaySessionSignalGap: TimeInterval = 480
 
+    // MARK: - abandoned-session 호스트군의 **박힌 시각**
+    //
+    // 이 호스트군만 상대 시각이 아니라 리터럴 날짜(2026-01-01)를 쓴다. 자동 재개(30분 창)의 앵커는
+    // 마감된 세션의 ended_at(= 이 픽스처의 last_seen_at)이므로, 재개까지 검사하는 테스트는 시계를
+    // 이 근처로 고정해야 한다(안 하면 8개월 전에 끝난 세션이 되어 창 밖으로 나간다 — 그리고 그게
+    // 정답이다). 값이 세 곳에 흩어지지 않게 여기서 한 번만 정의한다.
+    static let abandonedFixtureSessionStart = Date(timeIntervalSince1970: 1_767_225_600)   // 2026-01-01T00:00:00Z
+    static let abandonedFixtureLastSeen = Date(timeIntervalSince1970: 1_767_225_660)       // 2026-01-01T00:01:00Z
+    /// 이 픽스처에서 자동 마감이 성립하고(신호 공백 9분 > 계약 임계 7분) **재개 창(30분) 안**인 '지금'.
+    /// 두 부등식이 실제로 성립하는지는 abandonedFixtureNowStraddlesBothContracts 가 못 박는다.
+    static let abandonedFixtureNow = Date(timeIntervalSince1970: 1_767_226_200)            // 2026-01-01T00:10:00Z
+
     // MARK: - 자정 클리핑 계약 호스트군(고정 시각)
 
     /// 자동 마감의 '오늘 몫'(= seen − max(sessionStart, KST 자정))을 검증하는 호스트의 픽스처.

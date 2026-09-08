@@ -955,14 +955,14 @@ struct StopSessionRequest: Encodable {
     let endedAt: String
     let durationSeconds: Int
     /// 자동 마감일 때만 채운다(사용자가 누른 종료는 nil = 키 생략 → v0.2.34 와 같은 바이트).
-    /// 이 두 값이 곧 복원 게이트의 입력이다 — 사유가 안 남으면 서버 RPC 가 not_restorable 로 거절한다.
+    /// 이 두 값이 서버에 남는 마감의 유일한 설명이다 — 안 남기면 사후 분석도 정정도 불가능해진다.
     let autoClosedAt: String?
     let autoClosedReason: String?
 }
 
 /// 자동 마감 사유만 정정하는 PATCH 본문. **잠자기 경로의 유일한 구제 통로다**: 뚜껑을 닫으면 서버
-/// 스캐빈저가 10분 뒤 그 세션을 'abandoned' 로 먼저 마감하는데, 그 사유는 복원 대상이 아니다.
-/// 깨어난 클라가 'sleep' 으로 고쳐야 "뚜껑 닫고 나간 사람"이 처음으로 구제된다(docs/away-close.md 4절).
+/// 스캐빈저가 10분 뒤 그 세션을 'abandoned' 로 (= 마지막 신호 시각으로) 먼저 마감한다.
+/// 깨어난 클라가 'sleep' 으로 고쳐야 마감 시각·사유가 실제로 잠든 순간과 맞는다(docs/away-close.md 4절).
 struct AutoCloseReasonPatchRequest: Encodable {
     let autoClosedAt: String
     let autoClosedReason: String
@@ -997,8 +997,8 @@ struct ReopenSessionRequest: Encodable {
         try container.encodeNil(forKey: .endedAt)
         try container.encodeNil(forKey: .durationSeconds)
         guard resetAutoClose else { return }
-        // 되살린 **열린** 세션에 'abandoned' 꼬리표가 남으면 이후 이 세션이 다시 닫힐 때의 사유 판정과
-        // 복원 자격 판정(is_restorable/서버 RPC)이 죽은 마감의 잔재를 읽는다 — 재개는 마감의 흔적까지 지운다.
+        // 되살린 **열린** 세션에 'abandoned' 꼬리표가 남으면 이후 이 세션이 다시 닫힐 때의 사유 판정이
+        // 죽은 마감의 잔재를 읽는다 — 재개는 마감의 흔적까지 지운다.
         try container.encodeNil(forKey: .autoClosedAt)
         try container.encodeNil(forKey: .autoClosedReason)
     }
@@ -2079,37 +2079,31 @@ struct DisplayNameChangedAtRow: Decodable, Equatable {
 
 /// 자동 마감 사유. **서버 check 제약(work_sessions_auto_closed_reason_check)과 같은 어휘다** —
 /// 다른 값을 보내면 PATCH 가 23514 로 거절돼 마감이 통째로 서버에 도달하지 못한다(= 세션이 영영 안 닫힌다).
-/// 복원 대상은 `away`/`sleep` 둘뿐이고, 그 판정은 서버가 한다(restore_auto_closed_session 의 사유 게이트).
 // Codable 은 pendingItems 영속(v0.2.36) 때문이다 — rawValue(서버 어휘) 그대로 디스크에 남는다.
 enum AutoCloseReason: String, Equatable, Sendable, Codable {
     case away
     case sleep
     case longSession = "long_session"
     case abandoned
-
-    /// 서버 복원 RPC 가 받아 주는 사유인가. 클라의 화면 판단용 거울일 뿐이고 최종 판정자는 서버다.
-    var isRestorable: Bool { self == .away || self == .sleep }
 }
 
 /// `away_sync()` 응답 원문. 타임스탬프는 **문자열로 받아** 서비스의 parseDate(소수초 유무 양쪽)로 해석한다 —
 /// 이 저장소의 다른 응답 행(WorkSessionRow/WorkStatusRow)과 같은 규약이다.
 ///
 /// 모든 필드가 옵셔널인 이유는 하나다: **모르는 값이 있으면 마감하지 않는 것이 안전한 실패**이고,
-/// non-optional 로 두면 서버가 키 하나를 빼는 순간 디코드가 통째로 throw 되어 복원 배너까지 함께 죽는다.
+/// non-optional 로 두면 서버가 키 하나를 빼는 순간 디코드가 통째로 throw 되어 정책까지 함께 죽는다.
 /// (브루 배포라 앱이 db push 보다 먼저 나가는 창이 실재한다.)
+///
+/// 서버 응답에는 이어붙이기용 조각(`restorable`·복원 창/한도)도 실려 오지만 **v0.2.46 부터 클라가 읽지
+/// 않는다**(docs/away-close.md 5절). Swift `Decodable` 은 모르는 키를 무시하므로 여기서 지운 필드는
+/// 서버가 계속 보내도 아무 일도 일어나지 않는다 — 되살릴 때 좁은 버전으로 다시 더하면 된다.
 struct AwaySyncResponse: Decodable, Equatable, Sendable {
     let status: String?
     let serverNow: String?
     let closeThresholdSeconds: Int?
     let backstopSeconds: Int?
     let freezeSeconds: Int?
-    let restoreWindowSeconds: Int?
-    let dailyRestoreLimit: Int?
-    let restorableReasons: [String]?
-    let restoresUsedToday: Int?
-    let restoresLeftToday: Int?
     let openSession: OpenSessionPayload?
-    let restorable: RestorablePayload?
 
     struct OpenSessionPayload: Decodable, Equatable, Sendable {
         let id: String?
@@ -2121,18 +2115,6 @@ struct AwaySyncResponse: Decodable, Equatable, Sendable {
         let closeEligible: Bool?
         let closeDueAt: String?
     }
-
-    struct RestorablePayload: Decodable, Equatable, Sendable {
-        let sessionId: String?
-        let teamId: String?
-        let startedAt: String?
-        let endedAt: String?
-        let durationSeconds: Int?
-        let autoClosedAt: String?
-        let autoClosedReason: String?
-        let expiresAt: String?
-        let remainingSeconds: Int?
-    }
 }
 
 /// 서버가 소유하는 자리 비움 정책. **클라에 임계 리터럴을 두지 않는다**(사장님 확정 사항) —
@@ -2141,9 +2123,6 @@ struct AwaySyncResponse: Decodable, Equatable, Sendable {
 struct AwayPolicy: Equatable, Sendable {
     /// 클라 마감 임계(초). 서버 백스톱은 여기에 유예(freeze)를 더한 시점에 발화한다.
     let closeThresholdSeconds: TimeInterval
-    let restoreWindowSeconds: TimeInterval?
-    let dailyRestoreLimit: Int?
-    let restoresLeftToday: Int?
     /// 서버가 잰 '지금'. 시계 어긋남 진단용(판정에는 쓰지 않는다 — 로컬 시계로 판정해야 오프라인에서도 일관된다).
     let serverNow: Date?
 }
@@ -2159,54 +2138,11 @@ struct AwayOpenSession: Equatable, Sendable {
     let closeEligible: Bool
 }
 
-/// 복원 가능한 자동 마감 세션(창 판정은 서버가 한다 — 클라 시계를 되돌려 창을 늘릴 수 없다).
-struct AwayRestorableSession: Equatable, Sendable {
-    let sessionID: String
-    let startedAt: Date?
-    let endedAt: Date?
-    let autoClosedAt: Date?
-    let reason: AutoCloseReason?
-    let expiresAt: Date?
-    /// 서버가 계산한 잔여 초. 0 이면 이미 만료다.
-    let remainingSeconds: Int
-}
-
 /// `away_sync()` 한 번의 결과(도메인 형). 정책이 nil 이면 이 폴링에서 away 마감은 **금지**다.
 struct AwaySync: Equatable, Sendable {
     let isOK: Bool
     let policy: AwayPolicy?
     let openSession: AwayOpenSession?
-    let restorable: AwayRestorableSession?
-}
-
-/// `restore_auto_closed_session()` 응답 원문. status 어휘는 docs/away-close.md 5절이 정본이다.
-struct AwayRestoreResponse: Decodable, Equatable, Sendable {
-    let status: String?
-    let sessionId: String?
-    let startedAt: String?
-    let reason: String?
-    let restoredAt: String?
-    let usedToday: Int?
-    let limit: Int?
-    let deletedOpenSessions: Int?
-    let endedAt: String?
-    let windowSeconds: Int?
-    let ageSeconds: Int?
-}
-
-/// 복원 결과(도메인 형). 모르는 status 는 `.failed` 로 접는다 — 성공으로 접으면 열리지도 않은 세션을
-/// 로컬이 근무중으로 그린다(팀원 화면과 갈린다).
-enum AwayRestoreOutcome: Equatable, Sendable {
-    /// 복원됨(또는 이미 열려 있음 — 재시도·두 번째 맥. 서버가 멱등하게 성공으로 답한다).
-    case restored(sessionID: String, startedAt: Date?)
-    /// 창이 닫혔다.
-    case expired
-    /// 하루 상한.
-    case limitReached(usedToday: Int, limit: Int)
-    /// 이 마감은 복원 대상이 아니다(사유/이미 복원/내 것 아님/팀 탈퇴) — 배너를 내린다.
-    case notRestorable(status: String)
-    /// 그 밖의 실패(conflict/invalid/미지 status). 재시도하지 않는다.
-    case failed(status: String)
 }
 
 /// away_sync 를 못 받은 서버/오프라인. 스토어는 이 값을 받으면 정책을 비워 **마감을 멈춘다**.
@@ -2215,11 +2151,6 @@ struct AwaySyncUnavailable: Error, Equatable {}
 
 /// away_sync() 호출 본문(인자 없음). EmptyBody 를 그대로 쓰면 되지만, 호출부에서 어떤 RPC 인지 읽히도록 별칭만 둔다.
 typealias AwaySyncRequest = EmptyBody
-
-/// restore_auto_closed_session(p_session_id uuid) 본문.
-struct AwayRestoreRequest: Encodable {
-    let pSessionId: String
-}
 
 // MARK: - 근무 틱 통합 RPC `work_tick` (v0.2.38 S3 / docs/work-tick.md)
 

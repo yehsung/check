@@ -60,13 +60,26 @@ final class WorkTimerStore {
     static let adoptedReclaimMinObservations = 3
     // 클라 스캐빈저 스로틀(초). 폴링마다 정리 RPC 를 난사하지 않도록 마지막 발사 후 이 시간은 재발사하지 않는다.
     static let scavengeThrottleSeconds: TimeInterval = 5 * 60
-    // 자리 비움 자동 마감 되돌리기 유예(초). 이 시간이 지나면 [되돌리기] 배너는 스스로 사라진다 —
-    // 유효기간이 없으면 배너가 로그아웃 전까지 모든 팝오버에 상주하고, 그 사이 새로 시작한 근무를
-    // 옛 세션으로 덮어쓰는 사고가 난다.
-    static let autoCloseUndoWindowSeconds: TimeInterval = 10 * 60
+    /// **자동 재개 상한(초) — 이 기능 전체의 안전선이다. 없애거나 늘리지 마라.**
+    ///
+    /// 자동 마감된 내 세션을 복귀 시 배너 없이 되살리는 창이다. 앵커는 마감이 **발화한** 시각이 아니라
+    /// 그 세션의 `ended_at` 이다: 되살아나는 시간이 정확히 `지금 − ended_at` 이므로, 그 값을 이 상수로
+    /// 묶으면 **재계상 상한이 구조적으로 30분**이 된다.
+    ///
+    /// 왜 이 선이 필요한가: v0.2.46 에서 지운 '이어붙이기(복원)'에는 이 상한이 없었고, 그래서 289분
+    /// (4.8시간)짜리 수면 갭을 근무로 되살렸다. 그게 그 기능의 제거 사유다. **이 상한이 이 기능과 그
+    /// 버그를 가르는 유일한 선이다.**
+    ///
+    /// 이 값이 다른 계약과 맞물리는 지점(둘 다 바꾸면 조용히 깨진다):
+    ///  · `away`(서버 임계 2시간 30분) 마감은 `ended_at = 마지막 입력`이고 마감은 그로부터 임계만큼
+    ///    **뒤에** 발화하므로 갭이 언제나 30분을 넘는다 → 사유 필터 없이도 자동으로 제외된다.
+    ///    서버 임계가 30분 밑으로 내려가면 그 계약이 깨진다(서버 쪽 코멘트에도 같은 경고가 있다).
+    ///  · `long_session`(12시간)은 갭이 정확히 응답 창(30분)이라 경계에 걸린다 —
+    ///    그래서 시간이 아니라 **사유로 명시 제외**한다(canResumeRecentlyClosedSession).
+    static let recentAutoCloseResumeWindowSeconds: TimeInterval = 30 * 60
     /// 비근무 상태에서 away_sync() 를 다시 부르기까지의 스로틀(초). 근무 중에는 매 폴링 부른다 —
-    /// 마감 판정의 두 재료(임계·closeEligible)가 그 응답에만 있기 때문이다. 비근무일 때 이 값이 필요한 이유는
-    /// 복원 창(6시간)뿐이라 2분 지연은 아무것도 바꾸지 않고, 38명 × 30초 폴링에 요청 하나를 더 얹지 않는다.
+    /// 마감 판정의 두 재료(임계·closeEligible)가 그 응답에만 있기 때문이다. 비근무일 때는 그 재료를 쓸
+    /// 일이 없어 2분 지연이 아무것도 바꾸지 않고, 38명 × 30초 폴링에 요청 하나를 더 얹지 않는다.
     static let awaySyncIdleThrottleSeconds: TimeInterval = 120
     // 팝오버를 열 때 팀 메타(목표/이름/역할/참여코드)를 재조회하는 스로틀(초). 팀원이 바꾼 주간 목표가
     // 내 팝오버에 최대 이 시간 안에 반영되게 한다. 여닫이마다 멤버십을 난사하지 않도록 스로틀을 건다.
@@ -211,8 +224,6 @@ final class WorkTimerStore {
         if presented {
             // 닫힌 동안 얼어 있던 팝오버 시계를 여는 순간 되맞춘다(티커는 닫힌 팝오버에 이 값을 쓰지 않는다 — M1).
             displayNow = clock()
-            // 팝오버가 닫혀 있는 동안 티커가 멈춰 있었을 수 있으므로 유예형 배너 판정을 지금 시각으로 되맞춘다.
-            refreshTimedBanner()
             // 감속(60초) 중이던 티커를 1초 주기로 되돌린다 — 안 그러면 최대 60초 동안 초침이 멈춘 팝오버가 보인다.
             restoreTickerCadenceIfSlowed()
             stopTimerIfIdle()
@@ -482,27 +493,10 @@ final class WorkTimerStore {
     // in-flight 였던 낡은 팀 상태 응답이 방금 누른 시작/종료를 되돌리는 스냅백을 막는다(팀 목표의 동일 패턴).
     @ObservationIgnored var workStateWriteGeneration = 0
 
-    /// 유예가 끝나면 스스로 사라지는 인라인 배너(자리 비움 되돌리기) 중 지금 그릴 것.
-    /// 판정은 canUndoAutoClose 가 하되 **결과만** 이 상태로 밀어 넣는다 — 뷰가 그 판정을 직접 부르려면
-    /// body 에서 매초 갱신되는 displayNow 를 읽어야 하고, 그러면 배너가 뜨지 않는 평소 화면까지 팝오버
-    /// 전체 서브트리가 매초 무효화돼 "초단위 의존은 잎 뷰로 격리한다"는 이 앱의 불변식이 깨진다(회귀 지점).
-    /// == 가드 대입이라 값이 실제로 바뀔 때만 뷰가 무효화된다.
-    var timedBanner: TimedBanner?
-
-    /// 유예형 인라인 배너 종류.
-    enum TimedBanner: Equatable {
-        case undoAutoClose
-    }
-
-    /// 유예형 배너 상태를 주어진 시각 기준으로 재평가한다. 티커(tick)와 상태 전이 지점(시작/종료/자동 마감/
-    /// 되돌리기/원격 흡수/팝오버 열림)에서만 부르면 되고, 그 사이에는 값이 변할 이유가 없다.
-    /// now 를 Optional 로 두는 것은 Swift 제약 때문이다 — 인스턴스 메서드의 기본 인자는 self(clock)를 참조할 수
-    /// 없다. nil 이면 주입 시계로 채운다(호출부는 그대로 `refreshTimedBanner()` 로 쓴다).
-    func refreshTimedBanner(now: Date? = nil) {
-        let now = now ?? clock()
-        let next: TimedBanner? = canUndoAutoClose(now: now) ? .undoAutoClose : nil
-        if timedBanner != next { timedBanner = next }
-    }
+    // v0.2.47 — 자리 비움 [되돌리기] 인라인 배너(유예 10분)는 제거됐다. 자동 마감의 구제는 이제
+    // 배너·버튼이 아니라 **복귀 감지 시점의 자동 재개**(canResumeRecentlyClosedSession, 30분 창)다.
+    // 유예형 배너가 다시 생기면 그때 timedBanner/refreshTimedBanner 상태 캐시를 되살려라 —
+    // 뷰가 매초 갱신되는 displayNow 로 판정을 직접 부르면 팝오버 서브트리가 매초 무효화된다(회귀 지점).
 
     /// 지금 별명을 바꿀 수 있는지. 최종 판정자는 서버다(다른 맥에서 방금 바꿨으면 서버가 cooldown 을 준다).
     /// 서버가 준 만료 시각(displayNameAvailableAt)을 우선하고, 없으면 변경 시각 + 쿨타임으로 판정한다.
@@ -822,15 +816,6 @@ final class WorkTimerStore {
     @ObservationIgnored var awayPolicy: AwayPolicy?
     /// 서버가 본 내 열린 세션(lastInputAt/closeEligible). 판정은 이 값과 로컬 관측의 **max** 로 한다.
     @ObservationIgnored var awayOpenSession: AwayOpenSession?
-    /// 복원 가능한 자동 마감 세션(서버가 창을 소유한다). 뷰가 배너로 그리므로 관찰 대상이다.
-    var awayRestorable: AwayRestorableSession?
-    /// 위 두 값이 **어느 계정의 것인가**. 로그아웃/계정 전환 경로가 이 파일 밖(WorkTimerStoreAuth)에 있어
-    /// 그쪽을 건드리지 않고도 남의 배너가 새 계정 화면에 남지 않게 하는 잠금이다(restorableAwaySession 참조).
-    @ObservationIgnored var awayStateOwnerUserID: String?
-    /// 복귀(자동 시작) 순간에 "이어 붙일까요?"를 물어야 하는가. UI 는 W2 가 그린다 — 스토어는 상태만 세운다.
-    var awayRestorePromptPending = false
-    /// 복원 RPC 왕복 중. 버튼 연타로 두 번 나가지 않게 하는 게이트(관찰 대상 — 버튼이 비활성을 그린다).
-    var isRestoringAwaySession = false
     /// away_sync() 를 마지막으로 부른 시각(스로틀 판정). 관찰 대상 아님.
     @ObservationIgnored var lastAwaySyncAt: Date = .distantPast
     /// 이 서버가 자리 비움 스키마를 갖고 있는가(= away_sync() 가 실제로 응답했는가).
@@ -839,21 +824,23 @@ final class WorkTimerStore {
     /// away_sync 는 같은 마이그레이션 묶음에 있으므로 그 응답이 곧 "새 컬럼이 있다"는 증거다. 관찰 대상 아님.
     @ObservationIgnored var awayServerSupported = false
 
-    /// 뷰가 읽는 유일한 복원 배너 출처. 계정이 바뀌었으면 **스스로 침묵한다** — 로그아웃은 이 스토어의 다른
-    /// 파일에서 일어나고, 그 경로가 away 상태를 지우는 것을 잊어도 남의 마감이 새 계정 화면에 뜨지 않는다.
-    var restorableAwaySession: AwayRestorableSession? {
-        guard let session, awayStateOwnerUserID == session.userID else { return nil }
-        return awayRestorable
-    }
     // 12시간 확인: 카운터 기준점(근무 시작 또는 마지막 "네, 근무 중이에요" 확인 시점).
     var longSessionAnchor: Date?
     var isLongSessionPromptActive = false
     var promptShownAt: Date?
-    // 자리 비움 자동 마감 되돌리기용: 마지막으로 자동 마감한 세션.
+    // 자동 재개(30분 창)용: 마지막으로 자동 마감한 내 세션.
     var lastAutoClosedSessionID: String?
     var lastAutoClosedStartedAt: Date?
-    /// 자동 마감이 일어난 시각. 되돌리기 배너의 유효기간 판정 기준이다(없으면 되돌릴 수 없다).
+    /// 자동 마감이 **발화한** 시각. 진단·문구용이고 **재개 판정에는 쓰지 않는다** — 되살아나는 양을 묶는
+    /// 것이 목적이므로 앵커는 반드시 `lastAutoClosedEndedAt` 이어야 한다(그 상수 주석 참고).
     var lastAutoClosedAt: Date?
+    /// 자동 마감된 세션의 `ended_at`. **자동 재개 30분 창의 유일한 앵커다.**
+    /// 없으면 재개하지 않는다 — 되살아날 양을 모른 채 되살리는 것이 이어붙이기가 낸 바로 그 결함이다.
+    var lastAutoClosedEndedAt: Date?
+    /// 그 마감의 사유(서버 어휘 그대로). `long_session` 은 재개하지 않는다 — 재개가 12시간 상한을
+    /// 무력화하기 때문이다. **nil(모름)도 재개하지 않는다** — 이 스토어의 다른 자동 판정과 같은 방향의
+    /// 안전한 실패다(모를 때는 사용자의 시간을 늘리는 쪽으로 움직이지 않는다).
+    @ObservationIgnored var lastAutoClosedReason: AutoCloseReason?
     /// 자동 마감이 accumulatedSeconds 에 더한 그 세션의 '오늘 몫'(초). 되돌리기가 이 값을 도로 빼서
     /// 재개된 세션 구간이 누적과 진행분에 이중 계상되는 것을 막는다.
     var lastAutoClosedSeconds: Int = 0
@@ -1039,19 +1026,18 @@ final class WorkTimerStore {
         }
     }
 
-    /// 자리 비움 자동 마감 되돌리기 대상을 지운다(되돌리기 성공/배너 닫기/새 근무 시작/로그아웃 공통 경로).
-    /// 새 근무를 시작한 뒤에도 남아 있으면 [되돌리기]가 진행 중 세션을 옛 세션으로 갈아치우므로 반드시 여기서 끊는다.
-    func clearAutoCloseUndo() {
+    /// 자동 재개 대상을 지운다(재개 성공/새 근무 시작/수동 종료/로그아웃/계정 전환 공통 경로).
+    /// 새 근무를 시작한 뒤에도 남아 있으면 재개가 진행 중 세션을 옛 세션으로 갈아치우므로 반드시 여기서 끊는다.
+    func clearRecentAutoCloseResume() {
         if lastAutoClosedSessionID != nil { lastAutoClosedSessionID = nil }
         if lastAutoClosedStartedAt != nil { lastAutoClosedStartedAt = nil }
         if lastAutoClosedAt != nil { lastAutoClosedAt = nil }
+        if lastAutoClosedEndedAt != nil { lastAutoClosedEndedAt = nil }
+        if lastAutoClosedReason != nil { lastAutoClosedReason = nil }
         if lastAutoClosedSeconds != 0 { lastAutoClosedSeconds = 0 }
-        // 되돌릴 대상이 사라졌으면 그 대상의 강도도 함께 잊는다 — 남기면 다음 자동 마감이 강도를 못 채운
+        // 재개 대상이 사라졌으면 그 대상의 강도도 함께 잊는다 — 남기면 다음 자동 마감이 강도를 못 채운
         // 경로에서 앞 세션의 strong 을 물려받아, 남이 연 세션에 대고 '내가 열었다'고 주장하게 된다.
         if lastAutoClosedClaimStrength != .weak { lastAutoClosedClaimStrength = .weak }
-        // 배너 상태는 판정값의 캐시라 판정 근거가 사라지면 즉시 따라 내려가야 한다(X 로 닫기/되돌리기 성공 경로).
-        // start/stop/autoStop 은 이 함수를 먼저 부르고 근무 상태를 마저 바꾸므로, 그쪽에서 끝에 한 번 더 되맞춘다.
-        refreshTimedBanner()
     }
 
     func start(now: Date = Date()) {
@@ -1061,8 +1047,8 @@ final class WorkTimerStore {
         clearAutoStartSuppression()
         // 근무 상태를 내가 바꿨음을 세대 토큰으로 알린다 — in-flight 였던 낡은 팀 상태 응답이 이 시작을 되돌리지 못하게.
         workStateWriteGeneration &+= 1
-        // 새 근무를 시작하면 직전 자동 마감 되돌리기는 무효다(옛 세션으로 현 세션을 덮어쓰지 못하게 즉시 끊는다).
-        clearAutoCloseUndo()
+        // 새 근무를 시작하면 직전 자동 마감의 재개 대상은 무효다(옛 세션으로 현 세션을 덮어쓰지 못하게 즉시 끊는다).
+        clearRecentAutoCloseResume()
         stampDisplayClocks(now)
         startedAt = now
         // 세션 ID 는 **만드는 순간 정규화**한다. Swift 의 UUID().uuidString 은 대문자인데 서버의
@@ -1095,8 +1081,6 @@ final class WorkTimerStore {
         snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
         startTimer()
         refreshMenuBarTitle()
-        // 근무 상태가 바뀌면 유예형 배너의 성립 조건도 뒤집힌다(되돌리기는 비근무 전용).
-        refreshTimedBanner(now: now)
         syncCurrentStatus()
         // 근무 시작 직후의 창을 닫는다: takePokesIfWorking 은 `startedAt != nil` 을 요구하는데,
         // 그 값이 방금 섰으므로 다음 폴링 tick(최대 15초) 전까지 도착한 찔림이 붕 뜬다.
@@ -1127,7 +1111,7 @@ final class WorkTimerStore {
         // 종료도 내 write 다 — 세대를 올려 in-flight 낡은 응답의 '근무중' 흡수를 무력화한다.
         workStateWriteGeneration &+= 1
         // 서버 복구 경로(applyRemoteOwnStatus)로 시작된 세션이라 start() 를 안 탔을 수 있으므로 여기서도 끊는다.
-        clearAutoCloseUndo()
+        clearRecentAutoCloseResume()
         stampDisplayClocks(now)
         // 서버 전송 duration 은 세션 전체를 유지한다(서버가 타임스탬프로 클리핑). 로컬 누적 가산만 오늘 자정으로
         // 클리핑해, 자정을 넘긴 세션이 '오늘 누적'에 통째로 더해져 표시가 점프하는 것을 막는다.
@@ -1150,8 +1134,6 @@ final class WorkTimerStore {
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
         stopTimerIfIdle()
         refreshMenuBarTitle()
-        // 근무를 마치면 되돌리기 배너의 성립 조건이 다시 열린다(비근무 전용).
-        refreshTimedBanner(now: now)
         syncCurrentStatus(durationSeconds: duration, sessionStartedAt: sessionStart, endedAt: now)
         // 수신 찔림 폴링이 '근무 중'으로 제한되므로(O1), 근무가 끝나는 이 순간 꼬리를 한 번 회수하지 않으면
         // 마지막 폴링 이후 도착한 찔림이 다음 근무 시작 때까지 전달되지 못한다(신선도 1시간을 넘기면 영구 소실).
@@ -1402,6 +1384,18 @@ final class WorkTimerStore {
     ///     이게 없으면 0초 세션이 만들어져 그 근무가 통째로 사라진다.
     ///  6. 경계는 **배타적**이다(정확히 임계면 마감하지 않는다 — 서버 부등호와 같게 맞춘다).
     func evaluateAwaySession(now: Date) {
+        // 관측을 건드리기 **전에** 값싼 가드를 먼저 통과시킨다. 이 함수는 근무 틱마다 불리는데,
+        // 부재 판정 상황이 아닌 틱(비근무·정책 없음·흡수 세션 등)에서까지 입력 관측을 전진시키면
+        // 이 함수가 "판정만 한다"는 성질을 잃는다. 낡은 관측으로 가드가 어긋나는 경우는 전부
+        // **마감하지 않는 쪽**이라(모를 때의 안전한 기본값) 이 순서가 사람을 끊지 않는다.
+        guard awayCloseSchedule() != nil else { return }
+        // ★ 판정 **직전에** 로컬 관측을 전진시킨다(20260820050000 헤더가 "켜기 전에 함께 고칠 것"으로
+        //   명시한 항목). 이 한 줄이 없으면 관측은 하트비트 주기(30초)만큼 낡은 채 판정에 들어가고,
+        //   임계 직전에 돌아와 타이핑한 사람이 그 창에서 끊긴다(마감은 소급이라 그 근무가 사라진다).
+        //   advanceMeaningfulInput 은 단조 증가 + 잠금/비콘솔 동결 + 무관측(무한대) 무시라, 여기서
+        //   불러도 "안 끊기는 쪽으로만" 움직이고 실제 부재를 덮어 주지 않는다.
+        advanceMeaningfulInput(now: now)
+        // 관측이 전진했을 수 있으니 재료를 다시 읽는다(awayLastInputAt 이 그 값을 본다).
         guard let schedule = awayCloseSchedule() else { return }
         guard now.timeIntervalSince(schedule.lastInput) > schedule.threshold else { return }
         autoStop(endedAt: schedule.lastInput, message: "자리 비움으로 자동 근무종료됨", reason: .away)
@@ -1425,39 +1419,12 @@ final class WorkTimerStore {
         return (lastInput, policy.closeThresholdSeconds)
     }
 
-    /// 자동 시작(넛지)이 발화하는 **바로 그 순간** — 이 앱에서 "돌아왔다"가 확실한 유일한 사건이다.
-    /// 복원 가능한 마감이 있으면 새 세션을 조용히 열지 말고 물어야 한다(true 를 돌려준다).
-    /// 컨트롤러(CheckOverlayWindow.nudgeAutoStart)가 이 값을 보고 말풍선/배너로 잇는다 — UI 는 W2 소유다.
-    ///
-    /// 여기서 묻지 않으면 그 사람은 영영 모른다: 자동 시작은 끌 수 없는 기본 동작이고, 팝오버를 그 창 안에
-    /// 열지 않으면 6시간 뒤 창이 닫혀 그날 오전이 영구 소실된다(PICK 이 억울함의 근원으로 지목한 경로).
-    @discardableResult
-    func offerAwayRestoreOnAutoStart(now: Date? = nil) -> Bool {
-        let now = now ?? clock()
-        guard startedAt == nil else { return false }
-        guard let restorable = restorableAwaySession else { return false }
-        // 만료 판정은 서버가 준 값으로만 한다(클라 시계를 되돌려 창을 늘릴 수 없다).
-        if let expiresAt = restorable.expiresAt, now >= expiresAt { return false }
-        if restorable.remainingSeconds <= 0 { return false }
-        if !awayRestorePromptPending { awayRestorePromptPending = true }
-        return true
-    }
-
-    /// 복원 제안을 닫는다(사용자가 "아니요"를 눌렀거나 복원이 끝났다). 배너 자체(awayRestorable)는
-    /// 서버가 소유하므로 여기서 지우지 않는다 — 다음 폴링이 여전히 복원 가능하다고 하면 팝오버에 남아 있어야 한다.
-    func dismissAwayRestorePrompt() {
-        if awayRestorePromptPending { awayRestorePromptPending = false }
-    }
-
     /// 자리 비움 상태를 통째로 비운다(계정 전환 등 이 스토어가 아는 초기화 지점).
     func clearAwayState() {
         lastMeaningfulInputAt = nil
         awayServerSupported = false
         awayPolicy = nil
         awayOpenSession = nil
-        if awayRestorable != nil { awayRestorable = nil }
-        awayStateOwnerUserID = nil
-        if awayRestorePromptPending { awayRestorePromptPending = false }
         lastAwaySyncAt = .distantPast
     }
 
@@ -1491,8 +1458,8 @@ final class WorkTimerStore {
     /// syncMessage 는 사유 문구로 세팅한다(이후 refresh 가 "동기화됨"으로 정규화할 수 있음 — 즉시 피드백 목적).
     ///
     /// reason 은 **서버 어휘 그대로**(work_sessions.auto_closed_reason)다. 기본값을 두지 않는 것은 의도다 —
-    /// 새 자동 마감 경로가 생길 때 "이 마감은 복원 대상인가"를 반드시 한 번 판단하게 강제한다.
-    /// 사유가 안 남으면 복원 RPC 가 not_restorable 로 거절해 그 사람은 시간을 되찾을 방법이 없다.
+    /// 새 자동 마감 경로가 생길 때 "이 마감을 무엇이라 부를 것인가"를 반드시 한 번 판단하게 강제한다.
+    /// 사유가 안 남으면 서버에는 원인 불명의 마감만 쌓여 사후 분석도 정정도 불가능해진다.
     private func autoStop(endedAt: Date, message: String, reason: AutoCloseReason) {
         guard let sessionStart = startedAt else { return }
         // 흡수 세션(다른 맥이 연 세션)은 이 맥이 **자동으로** 마감하지 않는다. 상대는 지금도 일하고 있는데
@@ -1505,12 +1472,34 @@ final class WorkTimerStore {
         guard !adoptedRemoteSession else { return }
         // 잠자기/장시간 미확인 자동 마감도 로컬이 확정한 근무 상태 변경이라 세대를 올린다(낡은 응답의 재개 금지).
         workStateWriteGeneration &+= 1
-        // 사유가 다른 이번 마감이 확정됐으므로 직전 자리 비움 되돌리기 대상은 무효다.
-        clearAutoCloseUndo()
+        // 직전 마감의 재개 대상은 이번 마감이 확정된 순간 무효다(대상은 언제나 최신 하나뿐).
+        clearRecentAutoCloseResume()
         // 서버 전송 duration 은 세션 전체(서버가 클리핑). 로컬 누적 가산만 종료일 자정으로 클리핑해 표시 점프를 막는다.
         let duration = max(0, Int(endedAt.timeIntervalSince(sessionStart)))
-        accumulatedSeconds += max(0, Int(endedAt.timeIntervalSince(max(sessionStart, TeamWeeklyGoal.koreanDayStart(for: endedAt)))))
+        let closedTodaySeconds = max(
+            0,
+            Int(endedAt.timeIntervalSince(max(sessionStart, TeamWeeklyGoal.koreanDayStart(for: endedAt))))
+        )
+        accumulatedSeconds += closedTodaySeconds
         accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: endedAt)
+        // ── 자동 재개 대상 등록 ────────────────────────────────────────────────────────
+        // **releaseSessionOwnership() 보다 앞이다** — 그 함수가 소유 강도의 증거를 지우기 전에 물려받아야
+        // 재개가 '강한 소유자 최대 한 명' 규칙을 깨지 않는다(autoCloseAbandonedOwnSessionIfNeeded 와 같은 규약).
+        // 위 adoptedRemoteSession 가드를 지나 여기 왔으므로 이 세션은 이 맥의 것이다.
+        //
+        // 사유를 그대로 실어 둔다: 재개 판정이 `long_session` 을 **명시적으로** 거절해야 하기 때문이다
+        // (12시간 상한을 재개가 무력화하면 안 된다). `away` 는 사유가 아니라 산술로 빠진다 —
+        // ended_at = 마지막 입력이고 마감은 그로부터 임계(2시간 30분) 뒤라 갭이 언제나 30분을 넘는다.
+        lastAutoClosedSessionID = Self.canonicalSessionID(currentSessionID)
+        lastAutoClosedStartedAt = sessionStart
+        lastAutoClosedEndedAt = endedAt
+        lastAutoClosedReason = reason
+        // 강도는 **마감 직전에 이 맥이 그 세션의 소유자였는가**를 그대로 물려받는다(Sync 의 같은 규약).
+        // 모르면 weak — 강한 소유자가 둘이 되면 반납 규칙이 사전식 동전 던지기로 되돌아간다.
+        lastAutoClosedClaimStrength = isOwnedByThisMac(currentSessionID) ? ownedSessionClaimStrength : .weak
+        // 재개할 때 누적에서 도로 뺄 몫(방금 누적에 더한 그 값). 빼지 않으면 재개된 구간을 두 번 센다.
+        lastAutoClosedSeconds = closedTodaySeconds
+        lastAutoClosedAt = clock()
         startedAt = nil
         // 이 세션은 여기서 실제로 마감된다 — 영속된 소유 ID 를 남기면 다음 실행이 이미 닫힌 세션을
         // '내 것'으로 되찾으려 들어(서버엔 없는 세션에) 하트비트를 쏘게 된다. 위 가드 덕에 흡수 세션은
@@ -1526,8 +1515,6 @@ final class WorkTimerStore {
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: accumulatedSeconds)
         stopTimerIfIdle()
         refreshMenuBarTitle()
-        // 자동 마감도 근무 상태 확정이라 배너 판정을 되맞춘다(자동시작 [취소] 는 여기서 사라진다).
-        refreshTimedBanner()
         syncCurrentStatus(
             durationSeconds: duration,
             sessionStartedAt: sessionStart,
@@ -1863,7 +1850,7 @@ final class WorkTimerStore {
 
     /// 감속 틱이 놓치면 안 되는 **가장 이른 마감**. 후보가 하나도 없으면 nil(분 경계만 본다).
     func nextTickDeadline(now: Date) -> Date? {
-        [nextMilestoneDeadline(now: now), awayCloseDeadline(), longSessionDeadline(), timedBannerDeadline(now: now)]
+        [nextMilestoneDeadline(now: now), awayCloseDeadline(), longSessionDeadline()]
             .compactMap { $0 }
             .min()
     }
@@ -1898,13 +1885,6 @@ final class WorkTimerStore {
         case .promptOpen(let shownAt): return shownAt.addingTimeInterval(Self.longSessionResponseWindowSeconds)
         case nil: return nil
         }
-    }
-
-    /// 유예형 배너의 만료 시각(refreshTimedBanner 가 보는 그 창). 지금은 되돌리기 배너 하나뿐이고, 그 배너는 비근무에서만
-    /// 살아 있어 근무 중 감속 틱이 이 값을 볼 일은 사실상 없다 — 그래도 배너 종류가 늘 때 티커가 조용히 늦어지지 않게 여기 둔다.
-    func timedBannerDeadline(now: Date) -> Date? {
-        guard canUndoAutoClose(now: now), let closedAt = lastAutoClosedAt else { return nil }
-        return closedAt.addingTimeInterval(Self.autoCloseUndoWindowSeconds)
     }
 
     /// 초 표시 화면이 다시 생겼다(팝오버 열림). 감속 중이던 티커를 즉시 1초 주기로 되돌린다.
@@ -2059,9 +2039,6 @@ final class WorkTimerStore {
             accumulatedSeconds = 0
             accumulatedDayStart = dayStart
         }
-        // 유예형 배너의 '만료'는 시간이 지나야만 일어난다 — 뷰가 매초 displayNow 를 읽는 대신 여기서 밀어 넣는다.
-        // == 가드라 유예가 끝나는 그 한 틱에서만 뷰가 무효화된다(평소엔 대입조차 없다).
-        refreshTimedBanner(now: now)
         // snapshot 은 재대입하지 않는다 — 라벨/오버레이/헤더 전체 무효화를 막는다. 라이브 초는 todayDuration
         // (잎 뷰)과 menuBarTitle 파생값으로 흐르고, 여기선 정책 평가와 라벨 문자열만 갱신한다.
         if startedAt != nil {
@@ -2549,11 +2526,9 @@ extension WorkTimerStore {
         // 오프라인에서 쌓인 근무가 영구 소실된다.
         // 대신 위에서 소유 계정(workStateOwnerUserID)을 남겨, 다음 로그인이 다른 계정이면 그때
         // adoptWorkStateOwner 가 큐와 진행 중 근무를 버린다(계정 오염 방지와 재로그인 재생을 양립시킨다).
-        // 자리 비움 되돌리기 대상은 계정에 묶인 sessionID 라 함께 끊는다 — 남기면 재로그인한 다른 계정 화면에
-        // 남의 [되돌리기] 배너가 뜨고, 눌러도 새 계정 자격으로 앞 계정 세션을 재개하려다 RLS 에서 거부된다.
-        clearAutoCloseUndo()
-        // 되돌리기 대상을 끊었으니 유예형 배너 상태도 함께 내린다(로그아웃 후 재로그인에 낡은 배너가 남지 않게).
-        refreshTimedBanner()
+        // 자동 재개 대상은 계정에 묶인 sessionID 라 함께 끊는다 — 남기면 재로그인한 다른 계정에서
+        // 앞 계정의 세션을 새 계정 자격으로 재개하려 들고 RLS 에서 거부된다.
+        clearRecentAutoCloseResume()
         tokenBoardMonth = TokenUsageMonthKey.current()
         // 팀원 인사/팀 목표 축하의 세션 상태도 비운다(다음 로그인의 첫 로드에서 인사 폭탄 금지).
         greetingDetector.reset()
@@ -2585,16 +2560,15 @@ extension WorkTimerStore {
         longSessionAnchor = nil
         clearLongSessionPrompt()
         sleepBeganAt = nil
-        clearAutoCloseUndo()
+        clearRecentAutoCloseResume()
         // 잠자기 마감 정정 마커도 계정에 묶인 관측이다. 남기면 앞 계정 세션의 sleep 정정이 새 계정의
         // 폴링 수용 지점에서 소비를 시도하게 된다(세션 UUID 가 달라 실해는 없지만 관측 자체가 남의 것이다).
         clearPendingSleepClose()
-        // 자리 비움 상태도 계정에 묶인 값이다(복원 대상 세션 ID·서버 정책·입력 관측).
+        // 자리 비움 상태도 계정에 묶인 값이다(서버 정책·열린 세션·입력 관측).
         clearAwayState()
         snapshot = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
         tickerTask?.cancel()
         tickerTask = nil
-        refreshTimedBanner()
         refreshMenuBarTitle()
     }
 }

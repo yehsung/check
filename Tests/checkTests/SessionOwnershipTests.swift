@@ -397,7 +397,7 @@ func adoptedSessionSwapResetsPresenceTracking() {
 
 @MainActor
 @Test
-func undoAutoCloseClaimsOwnedSessionID() async {
+func autoCloseResumeClaimsOwnedSessionID() async {
     // 자리 비움 되돌리기는 사용자가 직접 reopen 을 보낸 것이라 명백한 소유권 주장이다. 소유 ID 를
     // 남기지 않으면 재개 직후 앱이 재시작될 때 그 세션이 다시 '남의 것'으로 판정돼 하트비트가 끊긴다.
     let host = "undo-claims-owned-id"
@@ -413,9 +413,12 @@ func undoAutoCloseClaimsOwnedSessionID() async {
     store.lastAutoClosedSessionID = closedSessionID
     store.lastAutoClosedStartedAt = closedStart
     store.lastAutoClosedAt = Date()
+    // 자동 재개 창(30분)의 앵커 + 사유. 둘이 없으면 재개는 성립하지 않는다(모르면 되살리지 않는다).
+    store.lastAutoClosedEndedAt = Date().addingTimeInterval(-60)
+    store.lastAutoClosedReason = .abandoned
     store.lastAutoClosedSeconds = 0
 
-    await store.performUndoAutoClose()
+    await store.performResumeRecentlyClosedSession()
 
     #expect(store.startedAt == closedStart)
     #expect(!store.adoptedRemoteSession)
@@ -1286,7 +1289,7 @@ func restartDoesNotLaunderAWeakClaimIntoAStrongOne() async {
 
 @MainActor
 @Test
-func undoOfSomeoneElsesAutoClosedSessionDoesNotMintASecondStrongOwner() async {
+func resumeOfSomeoneElsesAutoClosedSessionDoesNotMintASecondStrongOwner() async {
     // **'강한 소유자는 최대 한 명'이라는 전제를 되돌리기 경로에서 지킨다.**
     // 맥 A 가 연 세션 S 가 7분 침묵으로 **이 맥(B)** 에게 자동 마감되고, B 사용자가 [되돌리기]를 눌렀다.
     // 되돌리기를 무조건 strong 으로 치면 S 의 강한 소유자가 A·B 둘이 되어, 두 strong 이 만나는 순간
@@ -1295,6 +1298,10 @@ func undoOfSomeoneElsesAutoClosedSessionDoesNotMintASecondStrongOwner() async {
     let host = "ownership-abandoned-session-release"
     let userID = "00000000-0000-0000-0000-000000000002"
     let store = makeOwnershipStubStore(host: host, userID: userID)
+    // 이 호스트군의 픽스처는 박힌 날짜(2026-01-01)를 쓴다 — 자동 재개는 ended_at 기준 30분 창이라
+    // 시계를 픽스처 근처로 고정해야 "방금 끊긴 근무"가 된다(고정하지 않으면 8개월 전 세션이다).
+    store.clock = { URLProtocolStub.abandonedFixtureNow }
+    store.displayNow = URLProtocolStub.abandonedFixtureNow
     defer {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
@@ -1307,7 +1314,7 @@ func undoOfSomeoneElsesAutoClosedSessionDoesNotMintASecondStrongOwner() async {
     await store.refreshTeamStatus()
     #expect(store.syncMessage == "자리 비움으로 자동 근무종료됨")
 
-    await store.performUndoAutoClose()
+    await store.performResumeRecentlyClosedSession()
     #expect(store.startedAt != nil)
     #expect(store.ownedWorkSessionID != nil)          // 되돌리기 자체는 그대로 동작한다(하트비트 재개)
     #expect(store.ownedSessionClaimStrength == .weak) // 그러나 '내가 열었다'고 주장하지는 않는다
@@ -1316,7 +1323,8 @@ func undoOfSomeoneElsesAutoClosedSessionDoesNotMintASecondStrongOwner() async {
     // 진짜 소유자 A 가 돌아와 신호를 전진시키면, 사전식으로 내가 이기는 배치인데도 내가 물러난다.
     let sessionID = store.currentSessionID!
     let sessionStart = store.startedAt!
-    let t0 = Date()
+    // 아래 소유권 다툼도 **같은 고정 시계** 위에서 벌어져야 한다(신호가 시계보다 미래면 판정이 뒤집힌다).
+    let t0 = URLProtocolStub.abandonedFixtureNow
     for step in 0..<2 {
         let seen = t0.addingTimeInterval(Double(step) * 30)
         store.teamMembers = [
@@ -1338,11 +1346,13 @@ func undoOfSomeoneElsesAutoClosedSessionDoesNotMintASecondStrongOwner() async {
 
 @MainActor
 @Test
-func undoOfMyOwnAutoClosedSessionKeepsStrongOwnership() async {
+func resumeOfMyOwnAutoClosedSessionKeepsStrongOwnership() async {
     // 대칭 대조군. 내가 연 세션이 (재시작 등으로) 내 앱에 자동 마감됐다가 되돌려진 경우엔 강도가
     // 그대로 strong 이어야 한다 — 이걸 잃으면 진짜 소유자가 남의 추측 앞에서도 사전식 동전 던지기로 떨어진다.
     let host = "ownership-abandoned-session-release-mine"
     let store = makeOwnershipStubStore(host: host)
+    store.clock = { URLProtocolStub.abandonedFixtureNow }
+    store.displayNow = URLProtocolStub.abandonedFixtureNow
     defer {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
@@ -1356,7 +1366,7 @@ func undoOfMyOwnAutoClosedSessionKeepsStrongOwnership() async {
     #expect(store.syncMessage == "자리 비움으로 자동 근무종료됨")
     #expect(store.ownedWorkSessionID == nil)   // 마감하면 소유 증거는 일단 내려놓는다
 
-    await store.performUndoAutoClose()
+    await store.performResumeRecentlyClosedSession()
     #expect(store.startedAt != nil)
     #expect(store.ownedSessionClaimStrength == .strong)
     #expect(store.ownsCurrentSessionStrongly)
@@ -1438,6 +1448,9 @@ func autoClosedAbandonedOwnSessionReleasesOwnedSessionID() async {
     // 존재하지 않는 세션에 하트비트를 쏘는 상태로 굳었다. 마감했으면 소유권도 함께 놓는 것이 대칭이다.
     let host = "ownership-abandoned-session-release"
     let store = makeOwnershipStubStore(host: host)
+    // 픽스처의 박힌 날짜 근처로 시계를 고정한다(자동 재개는 ended_at 기준 30분 창이다).
+    store.clock = { URLProtocolStub.abandonedFixtureNow }
+    store.displayNow = URLProtocolStub.abandonedFixtureNow
     defer {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
@@ -1455,8 +1468,8 @@ func autoClosedAbandonedOwnSessionReleasesOwnedSessionID() async {
     #expect(store.ownedWorkSessionID == nil)
     #expect(!store.adoptedRemoteSession)
 
-    // 되돌리기는 여전히 소유권 주장으로 동작해야 한다(마감 정리가 되돌리기를 망가뜨리지 않는다).
-    await store.performUndoAutoClose()
+    // 자동 재개는 여전히 소유권 주장으로 동작해야 한다(마감 정리가 재개를 망가뜨리지 않는다).
+    await store.performResumeRecentlyClosedSession()
     #expect(store.startedAt != nil)
     #expect(store.ownedWorkSessionID == abandonedSessionID)
 }

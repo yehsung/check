@@ -74,6 +74,12 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
     /// 창을 식별자로 `NSApp.windows` 에서 찾으면 다른 인스턴스(테스트가 여럿 띄운 경우)의 창을 집을 수 있다.
     var currentWindow: NSWindow? { windowStorage }
 
+    /// 창이 지금 화면에 떠 있는가(스페이스 모니터의 유일한 게이트).
+    ///
+    /// `isVisible` 은 이 저장소에서 한 번 거짓말한 적이 있어(v0.2.27) '의도(`isOpen`)'와 함께 본다 —
+    /// **둘 다 참일 때만** 스페이스를 게임이 가져간다. 창을 닫았는데 모니터가 남아 있어도 여기서 막힌다.
+    var isWindowOnScreen: Bool { isOpen && (windowStorage?.isVisible ?? false) }
+
     /// 지금 창이 실제로 자리를 저장하고 있는가(헤드리스 검증 지점).
     private(set) var frameAutosaveActive = false
 

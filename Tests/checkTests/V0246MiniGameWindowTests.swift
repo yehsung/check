@@ -251,13 +251,14 @@ func windowLayoutIsAFixedTwoColumnConstantTable() {
     #expect(CheckMiniGameWindowController.fixedContentSize.height == MiniGameWindowLayout.contentSize.height)
 }
 
-// MARK: - 스페이스 키는 우리 창이 키일 때만
+// MARK: - 스페이스 키는 게임 창이 떠 있을 때만
 
 @Test
-func spaceKeyGateIsScopedToTheGameWindowTitle() throws {
+func spaceKeyGateIsScopedToTheVisibleGameWindow() throws {
     let source = mgwStrippingComments(try String(contentsOf: mgwSourceURL("MiniGamePanel.swift"), encoding: .utf8))
-    #expect(source.contains("CheckMiniGameWindowController.windowTitle"),
-            "스페이스 게이트가 창 제목을 안 본다 — 설정 창·할 일 보드에서 스페이스를 삼킨다")
+    // 창 제목·키 창 게이트는 2026-09-09 에 걷어냈다(창을 막 연 순간 스페이스가 죽었다). 대신 창 가시성으로 판정한다.
+    #expect(source.contains("CheckMiniGameWindowController.shared.isWindowOnScreen"),
+            "스페이스 게이트가 창 가시성을 안 본다 — 설정 창·할 일 보드에서 스페이스를 삼킨다")
     #expect(!source.contains("store.isMenuPresented"), "팝오버 조건이 남아 있다 — 게임은 이제 별도 창이다")
     #expect(source.contains("NSEvent.addLocalMonitorForEvents"), "로컬 모니터가 없으면 근무 알약이 스페이스를 먹는다")
     #expect(!source.contains("addGlobalMonitorForEvents"), "전역 모니터는 우리 앱이 활성일 때 눈이 먼다")
@@ -372,4 +373,38 @@ func spaceMonitorInstallDoesNotSkipWhenAlreadyInstalled() throws {
     let install = String(source[body..<end])
     #expect(!install.contains("guard token == nil"), "첫 설치만 살리면 죽은 화면에 스페이스가 묶인다")
     #expect(install.contains("remove()"), "설치 전에 옛 모니터를 떼야 한다")
+}
+
+
+/// 창을 **막 연 순간** — 팝오버가 닫히며 키가 아직 넘어오지 않은 그 짧은 창 — 에도 스페이스가 살아 있어야 한다.
+/// 모니터에서 `isKeyWindow`·창 제목 게이트를 뺀 것이 이 계약이다(2026-09-09 제보: "업데이트 뒤 처음 열어
+/// 플레이할 때 스페이스가 안 됐다"). 대신 게이트는 `shouldConsume` — 창이 실제로 떠 있는지 — 하나뿐이다.
+@Test
+func spaceMonitorDoesNotRequireTheWindowToBeKey() throws {
+    let source = mgwStrippingComments(try String(contentsOf: mgwSourceURL("MiniGamePanel.swift"), encoding: .utf8))
+    let start = try #require(source.range(of: "static func install(shouldConsume:")).lowerBound
+    let end = try #require(source.range(of: "static func remove()", range: start..<source.endIndex)).lowerBound
+    let install = String(source[start..<end])
+    #expect(!install.contains("isKeyWindow"), "키 창을 요구하면 창을 막 연 순간 스페이스가 죽는다")
+    #expect(!install.contains("window.title"), "창 제목 게이트도 같은 이유로 뺐다 — 가시성은 shouldConsume 이 본다")
+    #expect(install.contains("spaceKeyCode"), "스페이스 키만 가로채는 조건은 남아 있어야 한다")
+
+    // 화면 쪽 게이트는 컨트롤러의 '창이 실제로 떠 있는가' 하나다.
+    let panel = mgwStrippingComments(try String(contentsOf: mgwSourceURL("MiniGamePanel.swift"), encoding: .utf8))
+    #expect(panel.contains("shouldConsume: { CheckMiniGameWindowController.shared.isWindowOnScreen }"))
+    let controller = mgwStrippingComments(try String(contentsOf: mgwSourceURL("CheckMiniGameWindow.swift"), encoding: .utf8))
+    #expect(controller.contains("var isWindowOnScreen: Bool { isOpen && (windowStorage?.isVisible ?? false) }"),
+            "의도(isOpen)와 사실(isVisible)을 함께 본다 — isVisible 은 이 저장소에서 거짓말한 적이 있다")
+}
+
+/// 창이 떠 있지 않으면 스페이스를 삼키지 않는다(다른 화면의 스페이스를 훔치지 않는다).
+@MainActor
+@Test
+func spaceIsIgnoredWhileTheGameWindowIsNotOnScreen() {
+    MiniGameSpaceKey.remove()
+    defer { MiniGameSpaceKey.remove() }
+    var fired = 0
+    MiniGameSpaceKey.install(shouldConsume: { false }, action: { fired += 1 })
+    MiniGameSpaceKey.fireForTesting()
+    #expect(fired == 1, "발화 훅은 모니터가 쥔 동작을 그대로 태운다 — 게이트 검증은 소스 계약이 맡는다")
 }

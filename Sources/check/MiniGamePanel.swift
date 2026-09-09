@@ -125,12 +125,13 @@ enum MiniGameSpaceKey {
         armed = action
         token = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             guard event.keyCode == spaceKeyCode,
-                  event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
-                  let window = event.window, window.isKeyWindow,
-                  // 게임 창에서 온 스페이스만 삼킨다. 창 객체를 들고 다니지 않고 제목으로 판정하는 이유는
-                  // 이 모니터가 뷰 수명(창 생성보다 이를 수 있다)과 무관하게 한 벌만 걸리기 때문이다.
-                  window.title == CheckMiniGameWindowController.windowTitle
+                  event.modifierFlags.intersection([.command, .control, .option]).isEmpty
             else { return event }
+            // ★ 키 창 여부로 거르지 않는다. 로컬 모니터는 **우리 앱이 활성일 때만** 이벤트를 받으므로,
+            //   여기 도달했다는 것 자체가 "우리 앱이 앞에 있다"는 뜻이다. 그 위에 `isKeyWindow` 를 더 요구했더니
+            //   게임 창을 처음 연 직후 — 메뉴바 팝오버가 닫히며 키가 넘어가는 그 짧은 순간 — 스페이스가 통째로
+            //   빠졌다("업데이트하고 처음 열어 플레이할 때 스페이스가 안 됐다", 2026-09-09 제보).
+            //   창이 실제로 떠 있는지는 아래 shouldConsume(컨트롤러의 창 가시성 + 이 화면의 생존)이 판정한다.
             // 키 반복(누르고 있기)은 삼키기만 한다 — 점프 연타가 되면 게임이 아니다.
             let isRepeat = event.isARepeat
             let consumed = MainActor.assumeIsolated { () -> Bool in
@@ -266,8 +267,9 @@ struct CheckMiniGameWindowView: View {
 
     private func installSpaceKey() {
         MiniGameSpaceKey.install(
-            // 창이 키일 때만 오는 이벤트다(모니터의 창 제목 게이트). 여기서는 "이 화면이 살아 있는가"만 본다.
-            shouldConsume: { true },
+            // 이 화면이 살아 있고 **게임 창이 실제로 화면에 떠 있을 때만** 스페이스를 삼킨다.
+            // (키 창 판정은 모니터에서 뺐다 — 창을 막 연 순간 키가 아직 안 넘어와 스페이스가 죽었다.)
+            shouldConsume: { CheckMiniGameWindowController.shared.isWindowOnScreen },
             action: { input.actionCount += 1 }
         )
     }

@@ -30,7 +30,14 @@ NOTARIZE_ZIP="$ROOT/dist/aing-check-notarize.zip"
 rm -f "$NOTARIZE_ZIP"
 ditto -c -k --keepParent "$APP_PATH" "$NOTARIZE_ZIP"
 echo "공증 제출 중 (보통 2~10분)..." >&2
-xcrun notarytool submit "$NOTARIZE_ZIP" --keychain-profile "${NOTARY_PROFILE:-check-notary}" --wait >&2
+# 키체인을 **명시한다**. 기본 키체인이 login.keychain-db 인데도 인자 없이 저장하면
+# notarytool 이 "Success" 만 찍고 실제로는 조회되지 않는 자리에 넣는다(2026-09-10 실측 —
+# store-credentials 는 성공, 같은 셸의 history 는 "No Keychain password item found").
+# `--keychain` 을 주면 저장·조회가 같은 파일을 본다. 프로파일이 사라졌을 때의 복구도 같은 인자로:
+#   xcrun notarytool store-credentials check-notary --apple-id <애플ID> --team-id <팀ID> \
+#     --password '<앱 전용 암호>' --keychain "$HOME/Library/Keychains/login.keychain-db"
+NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}"
+xcrun notarytool submit "$NOTARIZE_ZIP" --keychain-profile "${NOTARY_PROFILE:-check-notary}" --keychain "$NOTARY_KEYCHAIN" --wait >&2
 xcrun stapler staple "$APP_PATH" >&2
 rm -f "$NOTARIZE_ZIP"
 spctl --assess --type execute -v "$APP_PATH" >&2 || true

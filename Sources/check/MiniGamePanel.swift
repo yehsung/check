@@ -115,8 +115,14 @@ enum MiniGameSpaceKey {
     static var isInstalled: Bool { token != nil }
 
     /// 건다(멱등). shouldConsume 이 거짓이면 이벤트를 그대로 흘린다.
+    /// 모니터를 건다. **이미 걸려 있으면 갈아 끼운다** — 예전에는 `guard token == nil` 로 첫 설치만 살렸는데,
+    /// 창을 닫을 때 `onDisappear` 가 오지 않는 경우(AppKit 창은 orderOut 뒤에도 뷰가 살아 있다 — 할 일 보드에서
+    /// 실측한 사실이다)가 있어 **죽은 화면의 `action` 을 쥔 모니터가 남았다.** 그 상태로 창을 다시 열면 클릭은
+    /// 새 화면으로, 스페이스는 옛 화면으로 가서 "어떤 사람은 스페이스가 되고 어떤 사람은 안 되는" 증상이 된다
+    /// (2026-09-09 실사용 제보). 항상 최신 화면의 클로저를 쥐게 갈아 끼운다.
     static func install(shouldConsume: @escaping @MainActor () -> Bool, action: @escaping @MainActor () -> Void) {
-        guard token == nil else { return }
+        remove()
+        armed = action
         token = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             guard event.keyCode == spaceKeyCode,
                   event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
@@ -139,7 +145,18 @@ enum MiniGameSpaceKey {
     static func remove() {
         if let token { NSEvent.removeMonitor(token) }
         token = nil
+        armed = nil
     }
+
+    /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(키 창·제목)를 통과했을 때 실행되는 바로 그 클로저다 —
+    /// 헤드리스 검증이 합성 NSEvent 없이 "어느 화면에 묶여 있는가"를 확인하는 지점이다(합성 이벤트로는
+    /// 팝오버·창이 열리지 않는다는 것을 이 저장소가 이미 겪었다).
+    nonisolated(unsafe) private static var armed: (@MainActor () -> Void)?
+
+    #if DEBUG
+    @MainActor
+    static func fireForTesting() { armed?() }
+    #endif
 }
 
 /// 미니게임 창의 콘텐츠. store 를 통째로 받지만 초 단위 시계(displayNow)는 읽지 않는다 — 60Hz 는 게임 잎 뷰의 TimelineView 안이다.

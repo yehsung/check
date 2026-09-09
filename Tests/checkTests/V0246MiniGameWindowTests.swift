@@ -334,3 +334,42 @@ private func mgwFunctionBody(_ source: String, name: String) -> String? {
     }
     return nil
 }
+
+// MARK: - 스페이스 모니터 재설치 (2026-09-09 실사용 제보)
+
+/// 창을 닫을 때 `onDisappear` 가 오지 않는 경우가 있어(AppKit 창은 orderOut 뒤에도 뷰가 살아 있다), 예전
+/// `guard token == nil` 은 **죽은 화면의 클로저를 쥔 모니터**를 그대로 남겼다. 그러면 다시 연 창에서 클릭은
+/// 되는데 스페이스만 먹통이 된다 — 사람마다 갈리는 증상의 정체다. 설치는 언제나 갈아 끼워야 한다.
+@MainActor
+@Test
+func spaceMonitorAlwaysRebindsToTheNewestScreen() {
+    MiniGameSpaceKey.remove()
+    defer { MiniGameSpaceKey.remove() }
+
+    final class Box { var count = 0 }
+    let first = Box(), second = Box()
+
+    MiniGameSpaceKey.install(shouldConsume: { true }, action: { first.count += 1 })
+    #expect(MiniGameSpaceKey.isInstalled)
+    // 옛 화면을 정리하지 못한 채(remove 없이) 새 화면이 뜬 상황.
+    MiniGameSpaceKey.install(shouldConsume: { true }, action: { second.count += 1 })
+    #expect(MiniGameSpaceKey.isInstalled, "재설치 뒤에도 모니터는 걸려 있어야 한다")
+
+    MiniGameSpaceKey.fireForTesting()
+    #expect(second.count == 1, "스페이스가 최신 화면으로 가야 한다")
+    #expect(first.count == 0, "죽은 화면의 클로저가 살아 있으면 안 된다")
+
+    MiniGameSpaceKey.remove()
+    #expect(!MiniGameSpaceKey.isInstalled)
+}
+
+/// 소스 계약: 설치가 `guard token == nil` 로 첫 설치만 살리는 모양으로 되돌아가면 위 증상이 그대로 재발한다.
+@Test
+func spaceMonitorInstallDoesNotSkipWhenAlreadyInstalled() throws {
+    let source = mgwStrippingComments(try String(contentsOf: mgwSourceURL("MiniGamePanel.swift"), encoding: .utf8))
+    let body = try #require(source.range(of: "static func install(shouldConsume:")).lowerBound
+    let end = try #require(source.range(of: "static func remove()", range: body..<source.endIndex)).lowerBound
+    let install = String(source[body..<end])
+    #expect(!install.contains("guard token == nil"), "첫 설치만 살리면 죽은 화면에 스페이스가 묶인다")
+    #expect(install.contains("remove()"), "설치 전에 옛 모니터를 떼야 한다")
+}

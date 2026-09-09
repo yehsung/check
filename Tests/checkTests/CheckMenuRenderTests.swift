@@ -804,8 +804,9 @@ func dumpTrackFSnapshots() throws {
     try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
     let now = Date()
 
-    func write(_ view: some View, _ name: String, width: CGFloat = 340) throws {
-        let png = try renderPNG(view, width: width)
+    // 팝오버는 자기 폭을 스스로 정한다(메인 414 · 로그인/무소속 340) — 밖에서 씌우지 않는다.
+    func write(_ view: CheckMenuView, _ name: String) throws {
+        let png = try renderPNG(view)
         try png.write(to: base.appendingPathComponent(name))
     }
 
@@ -1066,6 +1067,36 @@ private func renderPNG(_ view: some View, width: CGFloat = 340) throws -> Data {
     return pngData
 }
 
+// MARK: - 팝오버 렌더는 폭을 밖에서 강제하지 않는다 (2026-09-10)
+//
+// CheckMenuView 는 **자기 폭을 스스로 정한다**: 메인 화면 414(본문 316 + 오른쪽 세로 레일 64), 로그인·무소속 340.
+// 예전처럼 `.frame(width: 340)` 을 밖에서 씌우면 414 짜리 내용이 340 안에 가운데 정렬로 넘쳐, 그림의 x=0 이
+// 콘텐츠 x=-37pt 가 된다 — 픽셀 좌표를 읽는 도우미(goalCaptionBand · inkColumnRuns · 푸터 버튼 x)가 통째로
+// 헛것을 본다(실제로 2026-09-10 에 그렇게 빨개졌다). 그래서 CheckMenuView 만 **구체 타입 오버로드**로 받아
+// 자연 크기로 그린다 — 제네릭보다 구체 오버로드가 우선이라 호출부는 한 글자도 안 바꿔도 된다.
+//
+// 본문 열은 여전히 x 12…328pt(카드 안 24…316pt)에 놓이므로, 예전에 적어 둔 본문 쪽 x 좌표 단언은 그대로 유효하다.
+// 달라지는 것은 그림의 총 폭과, 그 오른쪽에 새로 생긴 레일 영역(338…402pt)뿐이다.
+@MainActor
+private func renderNaturalBitmap(_ view: some View, scale: CGFloat = 2) throws -> NSBitmapImageRep {
+    let renderer = ImageRenderer(content: view.fixedSize())
+    renderer.scale = scale
+    guard let image = renderer.nsImage,
+          let tiffData = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiffData)
+    else {
+        throw RenderError.failed
+    }
+    return bitmap
+}
+
+@MainActor
+private func renderPNG(_ view: CheckMenuView) throws -> Data {
+    let bitmap = try renderNaturalBitmap(view)
+    guard let pngData = bitmap.representation(using: .png, properties: [:]) else { throw RenderError.failed }
+    return pngData
+}
+
 private enum RenderError: Error {
     case failed
 }
@@ -1230,6 +1261,19 @@ private func renderedPixelHeight(_ view: some View, width: CGFloat = 340) -> Int
         return nil
     }
     return bitmap.pixelsHigh
+}
+
+/// 팝오버 전용(자연 폭). 이유는 renderNaturalBitmap 위 주석에 있다.
+@MainActor
+private func renderedPixelHeight(_ view: CheckMenuView) -> Int? {
+    (try? renderNaturalBitmap(view))?.pixelsHigh
+}
+
+/// 팝오버 전용(자연 폭) — 폭까지 함께 본다. 레일이 붙는 화면만 414 로 넓어졌는지 재는 자다.
+@MainActor
+private func renderedPixelSize(_ view: CheckMenuView) -> (width: Int, height: Int)? {
+    guard let bitmap = try? renderNaturalBitmap(view) else { return nil }
+    return (bitmap.pixelsWide, bitmap.pixelsHigh)
 }
 
 private func isolatedRenderDefaults() -> UserDefaults {
@@ -2818,20 +2862,31 @@ func tokenUsageDeviceMigrationKeepsLegacyLedgerIntact() throws {
 func teamHeaderLeavesRoomForKoreanTeamName() throws {
     // 회귀 지점: v0.2.11 초안이 팀 헤더에 네 번째 아이콘 버튼('내 기록')을 세워 "아잉체크 개발팀"이
     // "아잉…"으로 잘렸다. 개인 화면 버튼은 헤더 카드(내 근무 박스)로 옮기고 장식 아이콘도 걷어냈다.
-    // 실제 헤더 구성은 버튼 3개(참여코드 / 콕찌르기 / 팀별 현황)다.
+    //
+    // 2026-09-10: 화면 이동 둘(콕찌르기 · 팀별 현황)이 오른쪽 세로 레일로 떠나 **실제 헤더 구성은
+    // 버튼 1개(참여코드 키)** 다. 이름 폭이 그만큼 돌아왔다 — 아래가 그 증거다.
+    let budget1 = TeamHeaderWidthBudget.nameWidth(iconButtonCount: 1)
     let budget3 = TeamHeaderWidthBudget.nameWidth(iconButtonCount: 3)
     let budget4 = TeamHeaderWidthBudget.nameWidth(iconButtonCount: 4)
     // 버튼 하나가 27 + 간격 8 = 35pt 를 통째로 이름에서 빼앗는다.
     #expect(abs((budget3 - budget4) - 35) < 0.001)
-    // 3버튼이면 한글 8자(“아잉체크 개발팀”)가 말줄임 없이 들어간다. 4버튼이면 절반도 못 넣는다.
-    #expect(TeamHeaderWidthBudget.fittingKoreanGlyphs(iconButtonCount: 3) >= 8)
+    #expect(abs((budget1 - budget3) - 70) < 0.001, "버튼 둘이 떠났으면 이름 폭이 70pt 늘어야 한다")
+    // 실측 근거: 292 − 88(칩) − 27(버튼 1) − 16(간격 2) − 6(Spacer) = 155pt.
+    #expect(abs(budget1 - 155) < 0.001)
+
+    // 1버튼이면 한글 15자까지 말줄임 없이 들어간다(3버튼 시절 8자). 4버튼이면 여전히 절반도 못 넣는다.
+    let glyphs1 = TeamHeaderWidthBudget.fittingKoreanGlyphs(iconButtonCount: 1)
+    let glyphs3 = TeamHeaderWidthBudget.fittingKoreanGlyphs(iconButtonCount: 3)
+    #expect(glyphs3 >= 8)
+    #expect(glyphs1 >= 15, "1버튼 헤더에 한글 \(glyphs1)자밖에 안 들어간다")
+    #expect(glyphs1 > glyphs3, "버튼이 줄었는데 이름 폭이 안 늘었다 — 예산 계산이 버튼 수를 안 보고 있다")
     #expect(TeamHeaderWidthBudget.fittingKoreanGlyphs(iconButtonCount: 4) < 8)
 
     // 육안 확인: 긴 팀 이름 + 근무중 인원이 많은(칩이 넓은) 최악 조합.
     let now = Date()
     let store = makeTeamStore(members: presenceMembers(now: now), now: now)
     store.teamName = "아잉체크 개발팀"
-    store.myTeamInviteCode = "ABCD1234"  // 키 버튼까지 뜬 3버튼 상태(팀원 누구나 보이는 기본 상태).
+    store.myTeamInviteCode = "ABCD1234"  // 키 버튼이 뜬 1버튼 상태(팀원 누구나 보이는 기본 상태).
     let png = try renderPNG(CheckMenuView(store: store))
     #expect(png.count > 0)
     saveV0211Snapshot(png, "team-header-long-name")
@@ -2987,77 +3042,81 @@ func checkMenuViewRendersTokenBoardLoadFailureSnapshot() throws {
 
 // MARK: - 설정으로 가는 길(기어) · 할 일 스위치의 집(설정 창)
 //
-// 배경: 할 일 on/off 스위치는 처음엔 푸터 전원 버튼 메뉴에, 다음엔 캐릭터 버튼 메뉴에, 그다음엔 이 캡션
+// 배경: 할 일 on/off 스위치는 처음엔 푸터 전원 버튼 메뉴에, 다음엔 캐릭터 버튼 메뉴에, 그다음엔 헤더 캡션
 // 행에 있었다. 앞의 둘은 Menu 의 보조 화살표(hover 전엔 보이지도 않는다) 뒤라 "투두 온오프 버튼 대체
 // 어디있어?"라는 실사용 신고가 그대로 남았다. 지금 스위치의 집은 설정 창(CheckSettingsView) 하나이고,
 // 팝오버에 남은 것은 그 창으로 가는 **기어 버튼** 하나다.
+//
+// 2026-09-10: 그 기어(+ 미니게임 + 내 기록)는 캡션 행을 떠나 **오른쪽 세로 레일**로 갔다. 사용자 지적이
+// 캡션 행의 대가를 그대로 짚었다("너무 작고 위치도 왜 저기 있는지 모르겠어"). 캡션 행에는 그 줄의 값을
+// 고치는 연필만 남는다. 이 테스트는 이사가 **양쪽에서 동시에** 끝났음을 본다 — 캡션 행에 하나만 남았고,
+// 레일에 여섯이 섰다.
 //
 // 판정 기준은 예전 그대로 "픽셀에 보이는가"다. ImageRenderer 는 Menu 를 못 그린다(자리에 노란 경고
 // 상자가 박힌다) — 무엇을 Menu 안에 넣든 그 순간 렌더 회귀 테스트의 사각지대가 되기 때문이다.
 
 @MainActor
 @Test
-func settingsEntryIsDrawnInTheCaptionRowAndIsNotAMenu() throws {
+func settingsEntryMovedToTheSideRailAndIsStillNotAMenu() throws {
     let now = Date(timeIntervalSince1970: 1_784_000_000)
     let bitmap = try renderBitmap(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now)))
 
-    // (0) 팝오버 높이가 이사 전과 같다(517pt). 할 일 버튼이 나가고 기어가 그 자리를 이어받았고, v0.2.46 에
-    //     미니게임 버튼이 하나 더 섰지만 모두 18pt 소형이라 — 창 높이 예산(700pt 상한)이 1pt 도 움직이면 안 된다.
+    // (0) 팝오버 높이가 이사 전과 **같다**(517pt). 버튼 셋이 캡션 행을 떠나고 팀 헤더에서 둘이 떠났지만
+    //     레일은 본문 오른쪽에 나란히 서므로 세로 예산을 1pt 도 안 먹는다 — 그게 이 배치를 고른 이유다.
+    //     (팀 헤더는 키 버튼이 없을 때도 minHeight 27 로 붙잡아 둔다 — 안 그러면 여기서 6pt 가 빠진다.)
     #expect(bitmap.pixelsHigh == 517 * 2)
+    // 창은 오른쪽으로 64 + 간격 10 만큼 넓어졌다(왼쪽으로 자란다 — WindowTopAnchor 가 오른쪽 모서리를 잡는다).
+    #expect(bitmap.pixelsWide == 414 * 2)
 
     // (1) 캡션 행은 상수로 박지 않고 **진행 바에서 파생해** 찾는다(헤더 글자가 바뀌어도 같은 띠를 가리킨다).
     let band = try #require(goalCaptionBand(bitmap), "진행 바 아래 캡션 행을 찾지 못했다 — 헤더 구조가 바뀌었다")
     // 캡션 행 높이 = 소형 아이콘 버튼 18pt. 여기에 표준 IconButton(27pt)을 잘못 세우면 이 줄이 먼저 빨개진다.
     #expect(band.bottom - band.top + 1 == 18 * 2, "캡션 행 높이가 \(Double(band.bottom - band.top + 1) / 2)pt 다")
 
-    // (2) 그 행의 오른쪽 끝에 18pt 버튼이 **정확히 넷**이다: [설정][미니게임][내 기록][목표 수정](v0.2.46 부터).
-    //     하나가 사라지거나 다섯이 되면 여기서 잡힌다.
-    let runs = inkColumnRuns(bitmap, top: band.top, bottom: band.bottom, left: 25 * 2, right: bitmap.pixelsWide - 25 * 2)
-    #expect(runs.count >= 5, "캡션 행에 왼쪽 문구도 함께 그려져야 한다(덩어리 \(runs.count)개)")
-    // 18pt 폭 덩어리가 정확히 넷이다 — 하나가 빠지면 여기가 먼저, 가장 알아보기 쉽게 빨개진다.
+    // (2) 그 행에 18pt 버튼은 **정확히 하나**(목표 수정 연필)다. 셋 중 하나라도 되돌아오면 여기서 잡힌다.
+    let runs = inkColumnRuns(bitmap, top: band.top, bottom: band.bottom, left: 25 * 2, right: 315 * 2)
+    #expect(runs.count >= 2, "캡션 행에 왼쪽 문구도 함께 그려져야 한다(덩어리 \(runs.count)개)")
     let iconWidthRuns = runs.filter { abs(($0.end - $0.start + 1) - 18 * 2) <= 2 }
     #expect(
-        iconWidthRuns.count == 4,
-        "캡션 행의 18pt 아이콘 버튼이 \(iconWidthRuns.count)개다 — [설정][미니게임][내 기록][목표 수정] 넷이어야 한다"
+        iconWidthRuns.count == 1,
+        "캡션 행의 18pt 아이콘 버튼이 \(iconWidthRuns.count)개다 — 연필 하나만 남아야 한다(나머지는 레일로 갔다)"
     )
-    let buttons = Array(runs.suffix(4))
-    for button in buttons {
-        // 18pt 소형 버튼. ±2px 는 원 가장자리 안티에일리어싱 몫이다(표준 27pt 버튼이면 18px 이나 벌어진다).
-        #expect(abs((button.end - button.start + 1) - 18 * 2) <= 2, "버튼 폭이 \(Double(button.end - button.start + 1) / 2)pt 다")
-    }
-    // 넷이 4pt 간격으로 붙어 서므로 전체 폭은 4*18 + 3*4 = 84pt 다(간격이 벌어지면 여기서 걸린다).
-    #expect(abs((buttons[3].end - buttons[0].start + 1) - 84 * 2) <= 2)
-    // 맨 오른쪽 버튼은 카드 콘텐츠 오른끝(316pt)에서 끝난다.
-    #expect(abs(buttons[3].end - (316 * 2 - 1)) <= 2)
+    let pencilButton = try #require(runs.last)
+    // 맨 오른쪽 버튼은 카드 콘텐츠 오른끝(316pt)에서 끝난다 — 본문 열 좌표는 이사 전과 같다.
+    #expect(abs(pencilButton.end - (316 * 2 - 1)) <= 2)
 
-    // (3) 넷 다 **아이콘이 칠해져 있다.** 원 배경(white 0.06 ≈ 56,58,73)만 남고 심볼이 빠지는 경우
+    // (3) 그 하나에 **아이콘이 칠해져 있다.** 원 배경(white 0.06 ≈ 56,58,73)만 남고 심볼이 빠지는 경우
     //     (SF Symbol 이름 오타 등)를 여기서 가른다 — 아이콘은 secondaryText(≈191,192,197)라 밝기로 갈린다.
-    for button in buttons {
-        let glyph = brightPixelCount(bitmap, top: band.top, bottom: band.bottom, left: button.start, right: button.end)
-        #expect(glyph >= 20, "버튼 원만 그려지고 아이콘이 빠졌다(x \(button.start)…\(button.end), 밝은 픽셀 \(glyph)개)")
-    }
+    let glyph = brightPixelCount(bitmap, top: band.top, bottom: band.bottom, left: pencilButton.start, right: pencilButton.end)
+    #expect(glyph >= 20, "버튼 원만 그려지고 아이콘이 빠졌다(밝은 픽셀 \(glyph)개)")
 
-    // (4) 캡션 행에 '못 그림' 노란 상자가 없다 = 이 행에 Menu 가 없다. 여기에 Menu 를 세우는 순간
-    //     그 버튼은 픽셀 커버리지 0 이 되고 (2)(3)의 셈도 무너진다.
+    // (4) 캡션 행에 '못 그림' 노란 상자가 없다 = 이 행에 Menu 가 없다.
     #expect(unavailablePlaceholderBounds(bitmap, top: band.top, bottom: band.bottom) == nil)
 
-    // (5) 넷 중 **맨 왼쪽이 설정**이라는 건 픽셀로 못 가른다(아이콘 모양 비교는 스냅샷 고정이 된다).
-    //     소스 순서로 못 박는다 — 오른쪽 끝부터 세는 손버릇(끝=연필, 끝에서 둘째=내 기록)을 지키는 계약이다.
-    //     미니게임(v0.2.46)은 설정과 내 기록 **사이**다 — 끝 두 자리를 건드리지 않는다.
-    //     이게 깨지면 목표를 고치려다 설정 창이 열리는 오클릭이 생긴다.
-    let source = try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8)
-    let section = try #require(swiftStructBody(source, name: "HeaderGoalSection"))
-    let gear = try #require(section.range(of: "\"gearshape.fill\""), "캡션 행이 기어 아이콘을 그려야 한다")
-    let game = try #require(section.range(of: "\"gamecontroller.fill\""), "캡션 행이 미니게임 아이콘을 그려야 한다")
-    let chart = try #require(section.range(of: "\"chart.xyaxis.line\""))
-    let pencil = try #require(section.range(of: "\"pencil\""))
-    #expect(gear.lowerBound < game.lowerBound)
-    #expect(game.lowerBound < chart.lowerBound)
-    #expect(chart.lowerBound < pencil.lowerBound)
+    // (5) 이사가 끝났다는 것은 소스로 못 박는다 — 픽셀로는 "어떤 아이콘이 어디 있는지"를 가를 수 없다
+    //     (아이콘 모양 비교는 스냅샷 고정이 된다). 주석은 걷어내고 본다: 옮긴 이유를 적은 주석에
+    //     심볼 이름이 들어가면 그 설명을 지워야만 테스트가 초록이 되는 함정이 생긴다.
+    let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
+    let caption = try #require(swiftStructBody(source, name: "HeaderGoalSection"))
+    #expect(caption.contains("\"pencil\""), "캡션 행에는 목표 수정 연필이 남아야 한다")
+    #expect(!caption.contains("\"gearshape.fill\""), "설정이 캡션 행으로 되돌아왔다")
+    #expect(!caption.contains("\"gamecontroller.fill\""), "미니게임이 캡션 행으로 되돌아왔다")
+    #expect(!caption.contains("\"chart.xyaxis.line\""), "내 기록이 캡션 행으로 되돌아왔다")
+
+    // 레일에는 여섯이 **위에서 아래 순서대로** 선다. 순서는 손버릇이 되는 값이라 소스로 고정한다.
+    let rail = try #require(swiftStructBody(source, name: "CheckMenuSideRail"))
+    let order = ["\"gamecontroller.fill\"", "PokeEntryIconButton", "\"chart.bar.xaxis\"", "\"chart.xyaxis.line\"", "\"bolt.fill\"", "\"gearshape.fill\""]
+    var cursor = rail.startIndex
+    for token in order {
+        let found = try #require(rail.range(of: token, range: cursor..<rail.endIndex), "레일에 \(token) 이 순서대로 없다")
+        cursor = found.upperBound
+    }
     // 기어가 실제로 설정 창을 연다(그리기만 하고 아무 데도 안 가는 버튼 방지).
-    #expect(section.contains("CheckSettingsWindowController.shared.show()"))
-    #expect(!section.contains("Menu {"))
-    #expect(!section.contains("Menu("))
+    #expect(rail.contains("CheckSettingsWindowController.shared.show()"))
+    #expect(!rail.contains("Menu {"))
+    #expect(!rail.contains("Menu("))
+    #expect(!caption.contains("Menu {"))
+    #expect(!caption.contains("Menu("))
 }
 
 @MainActor
@@ -3156,12 +3215,12 @@ func todoSwitchWordingStillCoversBothStatesAtItsNewHome() throws {
 @MainActor
 @Test
 func goalCaptionRowKeepsSlackWithThreeButtonsInIt() throws {
-    // 캡션 행은 [이번 주 X / Y시간][Spacer(minLength: 4)][%][설정][내 기록][목표 수정] 한 줄이다.
+    // 캡션 행은 [이번 주 X / Y시간][Spacer(minLength: 4)][%][목표 수정] 한 줄이다.
     // 행이 넘치면 Spacer 가 최소값(4pt=8px)까지 짜부라지므로, 캡션 띠에 남은 **가장 긴 빈 세로줄**이
-    // 여유의 척도가 된다. 실측: 버튼 3개 · 최악값 문구(주 168시간 목표를 꽉 채운 100%)로도 122px(=61pt).
-    // 할 일 버튼이 설정 창으로 나가고 기어가 그 자리를 이어받았으므로 버튼 수도 이 값도 그대로다.
-    // 60px(30pt) 밑으로 내려가면 다음 버튼 하나에 문구가 잘린다는 뜻이니, 그 전에 멈추라고 세워 둔 난간이다
-    // (버튼을 넷째까지 세워 보면 32px 까지 떨어진다 — 그 상태가 곧 말줄임이다).
+    // 여유의 척도가 된다. 실측 이력: 버튼 4개 시절 32px(말줄임 직전) → 3개 시절 122px →
+    // 2026-09-10 에 셋이 레일로 떠나고 연필만 남아 그보다 더 넓어졌다.
+    // 60px(30pt) 밑으로 내려가면 다음 버튼 하나에 문구가 잘린다는 뜻이니, 그 전에 멈추라고 세워 둔 난간이다.
+    // 이 줄에 버튼을 다시 세우려는 사람이 있으면 그 대가를 여기서 먼저 본다.
     let now = Date(timeIntervalSince1970: 1_784_000_000)
     let store = makeTeamStore(members: presenceMembers(now: now), now: now)
     store.teamGoalSeconds = 168 * 3_600
@@ -3181,8 +3240,12 @@ func goalCaptionRowKeepsSlackWithThreeButtonsInIt() throws {
     // "띠를 못 찾음"으로 빨개졌다. 이제는 진행 바에서 파생한다(어떤 버튼이 있든 같은 띠를 가리킨다).
     let band = try #require(goalCaptionBand(bitmap), "진행 바 아래 캡션 행을 찾지 못했다 — 헤더 구조가 바뀌었다")
 
-    let gap = longestBackgroundColumnRun(bitmap, top: band.top, bottom: band.bottom, left: 48, right: 340 * 2 - 48)
+    // 오른쪽 경계는 **본문 열 기준 상수(316pt)** 다 — pixelsWide 에서 빼면 레일 위를 읽는다.
+    let gap = longestBackgroundColumnRun(bitmap, top: band.top, bottom: band.bottom, left: 48, right: 316 * 2)
     #expect(gap > 60, "캡션 행 여유가 \(gap)px 뿐이다 — 버튼을 더 세우려면 문구부터 줄여야 한다.")
+    // 셋이 떠난 만큼 실제로 넓어졌다(버튼 3개 시절 실측 122px). 이게 없으면 "레일로 옮겼다"가 픽셀로는
+    // 아무 증거도 남기지 않는다 — 캡션 행이 되찾은 폭이 이사의 실물이다.
+    #expect(gap > 122, "캡션 행이 예전(버튼 3개, 122px)보다 넓어지지 않았다: \(gap)px")
 }
 
 @MainActor
@@ -3714,6 +3777,12 @@ private func renderBitmap(_ view: some View, width: CGFloat = 340, scale: CGFloa
     return bitmap
 }
 
+/// 팝오버 전용(자연 폭). 이유는 renderNaturalBitmap 위 주석에 있다.
+@MainActor
+private func renderBitmap(_ view: CheckMenuView, scale: CGFloat = 2) throws -> NSBitmapImageRep {
+    try renderNaturalBitmap(view, scale: scale)
+}
+
 /// 두 렌더에서 서로 다른 픽셀이 이루는 사각형(픽셀 좌표, 원점 좌상단). 완전히 같으면 nil.
 ///
 /// tolerance: 채널 차가 이 값 **이하**면 같은 픽셀로 본다(기본 0 = 바이트 일치). 같은 스토어를 두 번 그리면
@@ -4034,7 +4103,10 @@ private func goalCaptionBand(_ bitmap: NSBitmapImageRep, scale: Int = 2) -> (top
     let bpr = bitmap.bytesPerRow
     let spp = bitmap.samplesPerPixel
     // 바깥 padding 12 + 카드 padding 12 = 24pt. 모서리 라운딩을 피해 1pt 더 안쪽부터 본다.
-    let left = 25 * scale, right = bitmap.pixelsWide - 25 * scale
+    // 오른쪽 경계는 **본문 열 기준 상수(315pt)** 다 — pixelsWide 에서 빼면 안 된다. 2026-09-10 부터 메인
+    // 화면 팝오버는 414pt 이고 오른쪽 64pt 는 세로 레일인데, 레일 카드도 CheckTheme.panel 이라
+    // "카드 안"이 거짓으로 참이 되어 진행 바를 엉뚱한 높이에서 찾는다(그때 이 함수는 nil 을 돌려줬다).
+    let left = 25 * scale, right = min(bitmap.pixelsWide, 315 * scale)
     guard left < right, let panel = dominantPixel(bitmap, top: 0, bottom: bitmap.pixelsHigh - 1, left: left, right: right)
     else { return nil }
 
@@ -5621,4 +5693,287 @@ func grassColorsFollowTheAgreedPaletteAndTheHeatmapStaysBlue() throws {
     #expect(heatmapBlock.contains("CheckTheme.accent"))
     #expect(!heatmapBlock.contains("CheckTheme.working"))
     #expect(!heatmapBlock.contains("CheckTheme.aiToken"))
+}
+
+// MARK: - 오른쪽 세로 레일 (2026-09-10 — "버튼들이 많아졌으니 아예 옆쪽으로 빼서 배치")
+//
+// 레일은 **팝오버 폭만 늘리고 높이는 안 늘린다**는 계약 위에 서 있다. 그 계약이 깨지면
+// (레일이 본문보다 높아지는 순간) 700pt 상한 회귀 테스트가 전부 남의 이유로 흔들린다.
+// 여기서는 세 가지를 픽셀로 못 박는다: 여섯 칸이 다 그려졌는가 / 열린 패널이 accent 로 구별되는가 /
+// 레일이 창 높이를 정하지 않는가.
+
+/// 레일 바깥 padding(pt). 창 폭·높이 계산이 모두 이 값을 쓴다.
+private let railOuterPadding: CGFloat = 12
+
+/// 레일 버튼 i번째의 사각형(pt). 숫자는 전부 `CheckMenuSideRail`·`CheckMenuView` 에서 읽는다 —
+/// 여기에 리터럴을 다시 적으면 칸을 더하거나 높이를 바꿔도 이 가드가 따라오지 않는다(2026-09-10 지적).
+///
+/// 마지막 칸([설정])만 **바닥에 앵커**된다: 위 다섯은 화면 이동, 아래 하나는 별도 창이라 레일이 본문 높이만큼
+/// 늘어날 때 둘을 양 끝으로 벌린다(그래야 레일 아래가 통째로 비지 않는다). 그래서 창 높이를 받는다.
+private func railButtonRect(_ index: Int, windowHeightPoints: CGFloat) -> (left: CGFloat, right: CGFloat, top: CGFloat, bottom: CGFloat) {
+    let left = railOuterPadding + CheckMenuView.contentColumnWidth + 10
+    let right = left + CheckMenuSideRail.width
+    let step = CheckMenuSideRail.buttonHeight + CheckMenuSideRail.buttonSpacing
+    if index < CheckMenuSideRail.itemCount - 1 {
+        let top = railOuterPadding + CGFloat(index) * step
+        return (left: left, right: right, top: top, bottom: top + CheckMenuSideRail.buttonHeight)
+    }
+    let bottom = windowHeightPoints - railOuterPadding
+    return (left: left, right: right, top: bottom - CheckMenuSideRail.buttonHeight, bottom: bottom)
+}
+
+/// 사각형(pt) 안에서 세 채널 모두 120 이상인 픽셀 수. 아이콘·라벨 글리프를 카드 채움과 밝기로 가른다.
+private func railGlyphPixels(_ bitmap: NSBitmapImageRep, _ rect: (left: CGFloat, right: CGFloat, top: CGFloat, bottom: CGFloat), scale: Int = 2) -> Int {
+    brightPixelCount(
+        bitmap,
+        top: Int(rect.top) * scale,
+        bottom: min(bitmap.pixelsHigh - 1, Int(rect.bottom) * scale - 1),
+        left: Int(rect.left) * scale,
+        right: min(bitmap.pixelsWide - 1, Int(rect.right) * scale - 1)
+    )
+}
+
+/// 픽셀 하나의 RGB(pt 좌표).
+private func railPixel(_ bitmap: NSBitmapImageRep, xPoints: CGFloat, yPoints: CGFloat, scale: Int = 2) -> (r: Int, g: Int, b: Int)? {
+    guard let data = bitmap.bitmapData else { return nil }
+    let x = Int(xPoints * CGFloat(scale)), y = Int(yPoints * CGFloat(scale))
+    guard x >= 0, y >= 0, x < bitmap.pixelsWide, y < bitmap.pixelsHigh else { return nil }
+    let offset = y * bitmap.bytesPerRow + x * bitmap.samplesPerPixel
+    return (Int(data[offset]), Int(data[offset + 1]), Int(data[offset + 2]))
+}
+
+@MainActor
+@Test
+func sideRailDrawsAllSixButtonsWithoutClipping() throws {
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+    let store = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
+    store.myTeamInviteCode = "ABCD1234"
+    let bitmap = try renderBitmap(CheckMenuView(store: store))
+
+    // 창 폭 414 = 본문 316 + 간격 10 + 레일 64 + 바깥 padding 12*2.
+    #expect(bitmap.pixelsWide == 414 * 2)
+    let windowHeight = Double(bitmap.pixelsHigh) / 2.0
+    // 레일 맨 아래 칸([설정])이 그림 안에 온전히 들어간다 = 잘리지 않았다.
+    let last = railButtonRect(CheckMenuSideRail.itemCount - 1, windowHeightPoints: windowHeight)
+    #expect(windowHeight >= last.bottom, "레일 마지막 칸이 그림 밖으로 잘렸다")
+
+    // 여섯 칸 전부 아이콘 + 라벨이 칠해져 있다. SF Symbol 이름 오타나 라벨 누락이면 여기서 잡힌다.
+    // 임계 60은 "아이콘만"(≈40)과 "아이콘+라벨"(≥120 실측)을 가르는 자리다 — 라벨이 빠지면 빨개진다.
+    for index in 0..<CheckMenuSideRail.itemCount {
+        let glyph = railGlyphPixels(bitmap, railButtonRect(index, windowHeightPoints: windowHeight))
+        #expect(glyph >= 60, "레일 \(index)번 칸에 글리프가 \(glyph)픽셀뿐이다 — 아이콘이나 라벨이 빠졌다")
+    }
+
+    // [설정]은 **바닥에 붙어 있다** — 위 다섯 칸 바로 아래(상단 정렬)가 아니다.
+    // 본문이 레일보다 길 때 레일 아래가 통째로 비는 것이 이 앵커링의 이유다(2026-09-10 지적).
+    let stackedTop = railOuterPadding
+        + CGFloat(CheckMenuSideRail.itemCount - 1) * (CheckMenuSideRail.buttonHeight + CheckMenuSideRail.buttonSpacing)
+    #expect(last.top > stackedTop + 20,
+            "[설정] 칸이 \(last.top)pt 에 있다 — 위 다섯 칸에 붙어 있으면 레일 아래가 통째로 빈다(상단 정렬 \(stackedTop)pt)")
+
+    // 칸 사이 6pt 틈에는 글리프가 없다 = 라벨이 카드 밖으로 넘쳐 아랫칸과 겹치지 않았다(위 다섯 칸).
+    for index in 0..<(CheckMenuSideRail.itemCount - 2) {
+        let rect = railButtonRect(index, windowHeightPoints: windowHeight)
+        let gap = railGlyphPixels(bitmap, (left: rect.left, right: rect.right, top: rect.bottom + 1, bottom: rect.bottom + 5))
+        #expect(gap == 0, "레일 \(index)번과 \(index + 1)번 칸 사이 틈에 글리프가 \(gap)픽셀 있다 — 라벨이 카드를 넘쳤다")
+    }
+
+    // 레일에 '못 그림' 노란 상자가 없다 = 레일에 Menu 가 없다(있으면 픽셀 커버리지가 0이 되어 위 셈이 통째로 눈이 먼다).
+    #expect(unavailablePlaceholderBounds(bitmap, top: 12 * 2, bottom: Int(last.bottom) * 2) == nil)
+}
+
+@MainActor
+@Test
+func sideRailPaintsTheOpenPanelWithAccent() throws {
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+    func render(pokeOpen: Bool) throws -> NSBitmapImageRep {
+        let store = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
+        store.pokeDirectory = []
+        store.pokeDirectoryLoaded = true
+        store.isPokePanelVisible = pokeOpen
+        return try renderBitmap(CheckMenuView(store: store))
+    }
+    let closed = try render(pokeOpen: false)
+    let open = try render(pokeOpen: true)
+
+    // 콕찌르기는 레일 두 번째 칸. 카드 왼쪽 위(글리프가 없는 자리)에서 채움색만 읽는다.
+    let rect = railButtonRect(1, windowHeightPoints: Double(closed.pixelsHigh) / 2.0)
+    let sampleX = rect.left + 6
+    let sampleY = rect.top + 8
+    let before = try #require(railPixel(closed, xPoints: sampleX, yPoints: sampleY))
+    let after = try #require(railPixel(open, xPoints: sampleX, yPoints: sampleY))
+
+    // 닫혔을 때는 CheckTheme.panel(≈43,46,61). 열리면 accent 0.18 이 얹혀 파랑 쪽으로 확 민다.
+    #expect(after.b - before.b >= 20, "열린 패널의 레일 칸이 안 파래졌다(파랑 \(before.b)→\(after.b))")
+    #expect(after.g - before.g >= 12, "accent 채움이 아니라 다른 색이 칠해졌다(초록 \(before.g)→\(after.g))")
+    // 색만으로 정보를 주지 않는다: 테두리도 accent 로 바뀌므로 카드 경계 픽셀도 함께 움직여야 한다.
+    let borderBefore = try #require(railPixel(closed, xPoints: rect.left + 32, yPoints: rect.top + 0.5))
+    let borderAfter = try #require(railPixel(open, xPoints: rect.left + 32, yPoints: rect.top + 0.5))
+    #expect(borderAfter.b > borderBefore.b, "활성 테두리가 accent 로 안 바뀌었다")
+
+    // 대조군: 다른 칸(미니게임 = 0번)은 꿈쩍도 안 한다 — 활성 표시가 칸 하나에만 붙는다는 증거.
+    let other = railButtonRect(0, windowHeightPoints: Double(closed.pixelsHigh) / 2.0)
+    let otherBefore = try #require(railPixel(closed, xPoints: other.left + 6, yPoints: other.top + 8))
+    let otherAfter = try #require(railPixel(open, xPoints: other.left + 6, yPoints: other.top + 8))
+    #expect(otherBefore == otherAfter, "패널 하나를 열었는데 다른 칸 색까지 바뀌었다")
+}
+
+@MainActor
+@Test
+func sideRailNeverDecidesTheWindowHeight() throws {
+    // 레일 총 높이 = 6×54 + 5×6 = 354pt. 여기에 바깥 padding 12*2 를 더한 378pt 가 "레일만으로 정해지는
+    // 창 높이"다. 어떤 메인 화면이든 본문이 그보다 높아야 레일이 창 높이를 밀지 않는다 —
+    // 밀기 시작하면 팀원 수 비례 성장(windowHeightAdaptsToContentWithinCap (b))이 조용히 죽는다.
+    //
+    // ⚠️ **여유가 3pt 뿐이다**(2026-09-10 실측: 가장 짧은 메인 화면 381pt vs 레일 378pt).
+    //   레일에 칸을 하나 더하거나(=+60pt) buttonHeight 를 키우면, 혹은 본문에서 4pt 만 걷어내면
+    //   그 순간 레일이 창 높이를 결정한다. 그때 이 단언이 가장 먼저, 가장 알아보기 쉽게 빨개진다.
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+    // 리터럴이 아니라 **소스의 계약 상수**에서 읽는다 — 칸을 더하면 이 값이 저절로 커져야 경고가 산다.
+    let railOnlyHeight = CheckMenuSideRail.contentHeight + railOuterPadding * 2
+
+    // 가장 짧은 메인 화면: 팀원 0명(안내 1행짜리 목록).
+    let shortest = try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: [], now: now))))
+    #expect(Double(shortest) / 2.0 > railOnlyHeight, "가장 짧은 메인 화면(\(Double(shortest) / 2.0)pt)이 레일 높이(\(railOnlyHeight)pt)보다 낮다 — 레일이 창 높이를 결정하고 있다")
+
+    // 그래서 팀원 수 비례 성장이 살아 있다(레일이 바닥을 깔아 두면 2명과 5명이 같은 높이가 된다).
+    let two = try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: steadyMembers(count: 2), now: now))))
+    let five = try #require(renderedPixelHeight(CheckMenuView(store: makeTeamStore(members: steadyMembers(count: 5), now: now))))
+    #expect(two < five)
+
+    // 그리고 어떤 조합에서도 상한(700pt)을 안 넘는다 — 레일은 세로 예산을 1pt 도 안 먹으므로
+    // 이 값들은 레일 이전과 같아야 한다(배너 + 목표 편집 + 팀원 6명이 겹친 가장 키 큰 조합 포함).
+    let tallest = makeTeamStore(members: steadyMembers(count: 6), now: now)
+    let tallestHeight = try #require(
+        renderedPixelHeight(
+            CheckMenuView(
+                store: tallest,
+                previewGoalEditing: true,
+                previewUpdateBanner: true,
+                previewUpdateNotes: sampleUpdateNotes
+            )
+        )
+    )
+    #expect(Double(tallestHeight) / 2.0 <= 700.0, "가장 키 큰 조합이 \(Double(tallestHeight) / 2.0)pt 다")
+}
+
+@MainActor
+@Test
+func sideRailUltraBadgeSpeaksOnlyWhenItKnowsTheBalance() throws {
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+    func render(balance: Int?, unlimited: Bool) throws -> NSBitmapImageRep {
+        let store = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
+        store.ultraBalance = balance
+        store.ultraUnlimited = unlimited
+        return try renderBitmap(CheckMenuView(store: store))
+    }
+    // 배지는 울트라 칸(4번)의 오른쪽 위 모서리에 걸친다. 그 작은 사각형만 본다.
+    let rect = railButtonRect(4, windowHeightPoints: 0)
+    func badgePixels(_ bitmap: NSBitmapImageRep) -> Int {
+        railGlyphPixels(bitmap, (left: rect.right - 22, right: rect.right + 6, top: rect.top - 6, bottom: rect.top + 12))
+    }
+
+    let unknown = try render(balance: nil, unlimited: false)
+    let three = try render(balance: 3, unlimited: false)
+    let infinite = try render(balance: nil, unlimited: true)
+
+    // 모르면 아무 숫자도 만들지 않는다(틀린 숫자보다 침묵이 낫다 — UltraBalanceText.hint 와 같은 규약).
+    #expect(badgePixels(unknown) == 0, "잔량을 모르는데 배지가 그려졌다")
+    #expect(badgePixels(three) > 0, "잔량 3을 아는데 배지가 없다")
+    // 무제한은 잔량을 몰라도 ∞ 를 그린다(서버가 말해 준 사실이라 잔량에서 파생되지 않는다).
+    #expect(badgePixels(infinite) > 0, "무제한인데 배지가 없다")
+
+    // 창 높이는 셋 다 같다 — 배지는 카드 위에 얹히는 overlay 라 세로 예산을 안 먹는다.
+    #expect(unknown.pixelsHigh == three.pixelsHigh)
+    #expect(unknown.pixelsHigh == infinite.pixelsHigh)
+}
+
+@MainActor
+@Test
+func popoverGrowsSidewaysOnlyOnTheScreenThatHasTheRail() throws {
+    // 로그인·무소속 화면에는 갈 곳이 하나뿐이라 레일을 안 단다 — 폭도 예전(340) 그대로다.
+    // 넓힌 것이 "창 전체"가 아니라 "레일이 붙는 화면"이라는 사실을 여기서 못 박는다.
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+    let main = try #require(renderedPixelSize(CheckMenuView(store: makeTeamStore(members: presenceMembers(now: now), now: now))))
+    let login = try #require(renderedPixelSize(CheckMenuView(store: makeLoginStore(syncMessage: "로그인 필요"))))
+    let teamless = try #require(renderedPixelSize(CheckMenuView(store: teamlessStore(createMode: false))))
+
+    #expect(main.width == 414 * 2)
+    #expect(login.width == 340 * 2)
+    #expect(teamless.width == 340 * 2)
+    // 늘어난 폭은 정확히 레일 + 간격이다(64 + 10).
+    #expect(main.width - login.width == (64 + 10) * 2)
+}
+
+// MARK: - 레일 육안 확인 덤프(스크래치패드)
+
+@MainActor
+@Test
+func dumpSideRailSnapshots() throws {
+    guard let dir = ProcessInfo.processInfo.environment["CHECK_RAIL_SNAPSHOT_DIR"] else { return }
+    let base = URL(fileURLWithPath: dir, isDirectory: true)
+    try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+
+    func write(_ view: CheckMenuView, _ name: String) throws {
+        try renderPNG(view).write(to: base.appendingPathComponent(name))
+    }
+
+    // 1) 메인 화면 기본(팀원 4명).
+    let main = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
+    main.myTeamInviteCode = "ABCD1234"
+    main.ultraBalance = 3
+    try write(CheckMenuView(store: main), "rail-main.png")
+
+    // 2) 콕찌르기 패널이 열린 상태(레일 두 번째 칸이 accent).
+    let poke = makePokePanelStore(memberCount: 5, now: now)
+    poke.teamName = "아잉팀"
+    try write(CheckMenuView(store: poke), "rail-poke-active.png")
+
+    // 3) 가장 키 큰 조합: 새 버전 배너 + 목표 편집 펼침 + 팀원 6명.
+    //    크롬이 많아 목록이 스크롤로 넘어가므로 previewClipsOverflowList 로 그린다 —
+    //    ImageRenderer 는 ScrollView 안쪽을 못 그려서 안 켜면 목록 자리가 통째로 빈다.
+    let tallest = makeTeamStore(members: manyMembers(now: now, count: 6), now: now)
+    tallest.myTeamInviteCode = "ABCD1234"
+    try write(
+        CheckMenuView(
+            store: tallest,
+            previewClipsOverflowList: true,
+            previewGoalEditing: true,
+            previewUpdateBanner: true,
+            previewUpdateNotes: sampleUpdateNotes
+        ),
+        "rail-tallest.png"
+    )
+
+    // 4) 리얼타임 경고 상태의 콕찌르기 버튼(글리프만 pending 으로 물든다).
+    let warned = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
+    warned.myTeamInviteCode = "ABCD1234"
+    warned.realtimeState = .failed(
+        Backoff(attempt: 7, retryAt: now, failingSince: now.addingTimeInterval(-600)),
+        .topicDenied
+    )
+    try write(CheckMenuView(store: warned), "rail-poke-warn.png")
+
+    // 5) 울트라 잔량 배지 세 상태(3 / ∞ / 모름)를 한 그림에 나란히.
+    func ultraStore(balance: Int?, unlimited: Bool) -> WorkTimerStore {
+        let store = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
+        store.myTeamInviteCode = "ABCD1234"
+        store.ultraBalance = balance
+        store.ultraUnlimited = unlimited
+        return store
+    }
+    let badges = HStack(alignment: .top, spacing: 0) {
+        CheckMenuView(store: ultraStore(balance: 3, unlimited: false))
+        CheckMenuView(store: ultraStore(balance: nil, unlimited: true))
+        CheckMenuView(store: ultraStore(balance: nil, unlimited: false))
+    }
+    let renderer = ImageRenderer(content: badges.fixedSize())
+    renderer.scale = 2
+    if let image = renderer.nsImage,
+       let tiff = image.tiffRepresentation,
+       let bitmap = NSBitmapImageRep(data: tiff),
+       let png = bitmap.representation(using: .png, properties: [:]) {
+        try png.write(to: base.appendingPathComponent("rail-ultra-badge.png"))
+    }
 }

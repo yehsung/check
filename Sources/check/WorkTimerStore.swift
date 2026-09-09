@@ -445,7 +445,7 @@ final class WorkTimerStore {
     var tokenBoardMonth: String = TokenUsageMonthKey.current()
 
     // ── 미니게임 창 (v0.2.46) ── 별도 NSWindow 라 팝오버 패널들과 **상호 배타가 아니다**(공존한다).
-    //    이 플래그는 '창이 열려 있다'는 뜻이고, 캡션 행 진입 버튼의 하이라이트와 순위 재조회 게이트로 쓴다.
+    //    이 플래그는 '창이 열려 있다'는 뜻이고, 레일 진입 버튼의 하이라이트와 순위 재조회 게이트로 쓴다.
     var isMiniGamePanelVisible = false
     /// 값이 바뀌면 게임 잎 뷰가 진행 중인 판을 즉시 끝낸다(MiniGameHost.interruptToken). 팝오버가 닫혀도 뷰 트리는 상주하고
     /// isMenuPresented 는 관찰 대상이 아니라서, **이것이 게임을 멈추는 유일하게 관찰 가능한 신호**다 — setMenuPresented(false)·

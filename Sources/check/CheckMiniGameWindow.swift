@@ -16,7 +16,7 @@ import SwiftUI
 // 설정 창과 다른 점:
 //   · `.miniaturizable` 을 **넣는다.** 설정은 잠깐 들렀다 닫는 표면이라 최소화가 오히려 창을 잃는 길이지만
 //     (LSUIElement 는 Dock 타일이 없다), 게임 창은 "치워 뒀다 이따 다시" 가 자연스러운 표면이다.
-//     Dock 타일이 없어 되찾는 길은 결국 캡션 행 버튼(= `show()`)인데, 그 버튼이 최소화된 창도 되살린다.
+//     Dock 타일이 없어 되찾는 길은 결국 팝오버 레일의 미니게임 버튼(= `show()`)인데, 그 버튼이 최소화된 창도 되살린다.
 //   · **창이 키를 잃거나 닫히면 진행 중인 판을 끝낸다**(`miniGameInterruptToken`). 유휴 0% 불변이
 //     팝오버 시절엔 `setMenuPresented(false)` 로 지켜졌는데, 창은 팝오버와 무관하게 살아 있으므로
 //     정지 신호가 여기로 옮겨 왔다. 닫힘은 진입 버튼 하이라이트(`isMiniGamePanelVisible`)도 함께 내린다.
@@ -33,8 +33,9 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
     /// 전역만 두면 창 하나 재는 데도 앱 전역 상태를 오염시켜야 한다(설정 창과 같은 근거).
     static let shared = CheckMiniGameWindowController()
 
-    /// 창 제목. 스페이스 키 모니터가 "지금 키 창이 게임 창인가"를 이 문자열로 판정하므로 **계약이다**
-    /// (MiniGamePanel.swift 의 `MiniGameSpaceKey`). CGWindowList 로 밖에서 셀 때의 표식이기도 하다.
+    /// 창 제목. CGWindowList 로 밖에서 창을 셀 때의 표식이다.
+    /// (2026-09-09 이후 스페이스/ESC 모니터는 이 문자열을 보지 않는다 — 창을 막 연 순간 키 창 판정이
+    ///  아직 안 넘어와 스페이스가 죽었다. 게이트는 `isWindowOnScreen` 하나뿐이다.)
     static let windowTitle = "미니게임"
 
     /// 창 위치를 기억하는 키(UserDefaults `NSWindow Frame …`). 사용자가 자기 자리(예: 두 번째 모니터)로
@@ -45,6 +46,11 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
     /// 확대해서 하면 더 쉬워지잖아." 순위표가 걸린 게임이라 캔버스가 사람마다 다르면 겨루는 것이 실력이 아니라
     /// 창 크기가 된다(플래피는 화면이 넓을수록 반응할 여유가 늘고, 타이밍 바는 목표 구간이 픽셀로 넓어진다).
     /// 숫자는 `MiniGameWindowLayout.contentSize` 하나에서 온다 — 두 곳에 적으면 언젠가 갈린다.
+    ///
+    /// v0.2.48 에 620×420 → 700×470 으로 커졌다(사용자 지적 2026-09-10: "미니게임 창 자체도 좀 꾸며줘").
+    /// 넓힌 것은 **크롬**(여백·헤더·하단 스트립·순위 열)뿐이고 **캔버스는 344×356 그대로**다 —
+    /// 그래서 이 크기 변경은 위 '같은 조건에서 겨룬다'는 약속을 깨지 않는다. 아래 `show()` 의 되돌림 방어선이
+    /// 옛 620×420 자동저장 프레임을 새 고정값으로 끌어올린다(그 경로가 없으면 업데이트한 사람만 옛 크기로 논다).
     static let fixedContentSize = NSSize(
         width: MiniGameWindowLayout.contentSize.width,
         height: MiniGameWindowLayout.contentSize.height
@@ -97,8 +103,8 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
     func configure(
         store: WorkTimerStore,
         content: @escaping @MainActor (WorkTimerStore) -> AnyView = { store in
-            // 뷰는 주어진 크기를 채운다(창이 리사이즈되면 캔버스와 순위 행수가 함께 자란다 —
-            // `MiniGameWindowLayout`). 배경을 창 쪽에서 채우지 않으면 리사이즈 때 시스템 회색 판이 드러난다.
+            // 뷰는 주어진 크기를 채운다(레이아웃은 전부 `MiniGameWindowLayout` 의 상수다 — 창이 안 바뀐다).
+            // 배경을 창 쪽에서 채우지 않으면 화면 배율이 바뀌는 순간 시스템 회색 판이 드러난다.
             AnyView(
                 CheckMiniGameWindowView(store: store)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -142,7 +148,7 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: fixedContentSize),
             // `.resizable` 은 **없다**(크기 고정 — 위 fixedContentSize 주석). `.miniaturizable` 은 넣는다
-            // (치워 뒀다 캡션 행 버튼으로 되찾는다 — 그 버튼이 최소화된 창도 되살린다).
+            // (치워 뒀다 팝오버 레일의 미니게임 버튼으로 되찾는다 — 그 버튼이 최소화된 창도 되살린다).
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -199,7 +205,7 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
     }
 
     /// 사용자가 타이틀바의 빨간 점을 눌렀을 때. 우리가 부른 `close()` 가 아니므로 여기서 의도를 맞추고,
-    /// **진행 중인 판을 끝내며**(유휴 0%) 캡션 행 진입 버튼의 하이라이트도 내린다.
+    /// **진행 중인 판을 끝내며**(유휴 0%) 레일 진입 버튼의 하이라이트도 내린다.
     func windowWillClose(_ notification: Notification) {
         guard (notification.object as AnyObject?) === windowStorage else { return }
         stuckWindowWatchdog?.cancel()

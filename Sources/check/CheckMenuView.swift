@@ -140,7 +140,67 @@ struct CheckMenuView: View {
         return fetched.isEmpty ? previewUpdateNotes : fetched
     }
 
+    // MARK: - 창 폭 예산 (2026-09-10 지적: "버튼이 많아졌으니 아예 옆쪽으로 빼서 배치")
+
+    /// 본문 열의 폭(pt). **이 값은 예전 팝오버(340)의 콘텐츠 폭 그대로다** — 340 − 바깥 padding 12×2 = 316.
+    /// 팀 이름·동기화 문구·잔디 격자·목록 행의 폭 예산이 전부 292(= 316 − 카드 padding 12×2)를 전제로 계산돼
+    /// 있어서(TeamHeaderWidthBudget · FooterWidthBudget · PokeTitleRowWidthBudget · 히트맵/잔디 격자),
+    /// 여기를 넓히면 그 계산과 회귀 테스트가 통째로 흔들린다. **넓어지는 것은 창이지 본문이 아니다.**
+    static let contentColumnWidth: CGFloat = 316
+    /// 오른쪽 세로 레일이 붙는 메인 화면의 창 폭(pt) = 316 + 10(간격) + 64(레일) + 12×2(바깥 padding).
+    /// 창은 위·오른쪽 모서리가 고정이라(WindowTopAnchor) 폭이 늘면 **왼쪽으로** 자란다 — 위치는 안 튄다.
+    ///
+    /// ★ **호출부가 이 폭을 막지 않아야 한다.** `CheckApp` 이 `CheckMenuView(...).frame(width: 340)` 으로
+    ///   감싸면 MenuBarExtra 창은 340 에 갇히고, 414 짜리 내용이 그 안에 가운데 정렬로 넘쳐 **레일이
+    ///   창 밖으로 밀린다**(SwiftUI 는 frame 밖을 자르지 않을 뿐, 창은 자른다). 팝오버는 자기 폭을
+    ///   여기서 스스로 정하므로 호출부에는 `.frame(width:)` 가 없어야 한다.
+    static let mainWindowWidth: CGFloat = contentColumnWidth + 10 + CheckMenuSideRail.width + 24
+    /// 레일이 없는 화면(로그인 · 무소속)의 창 폭(pt). 예전 그대로 340이다 — 갈 곳이 하나뿐인 화면에
+    /// 화면 이동 레일을 세우면 누를 수 없는 버튼 6개가 서 있게 된다.
+    static let compactWindowWidth: CGFloat = 340
+
     var body: some View {
+        // 메인 화면(로그인 + 팀 확정)에만 오른쪽 세로 레일을 단다. 로그인/무소속 화면은 예전 폭(340) 그대로다.
+        Group {
+            if isMainScreen {
+                HStack(alignment: .top, spacing: 10) {
+                    bodyColumn
+                        // 본문은 예전 폭을 그대로 지킨다(contentColumnWidth 주석 참고).
+                        .frame(width: Self.contentColumnWidth)
+                    CheckMenuSideRail(store: store)
+                }
+            } else {
+                bodyColumn
+            }
+        }
+            .padding(12)
+            // 폭만 고정. 높이는 상태별 콘텐츠에 맞춰 동적으로 잡는다(MenuBarExtra 창 크기 = 콘텐츠 크기).
+            .frame(width: isMainScreen ? Self.mainWindowWidth : Self.compactWindowWidth)
+            .background(CheckTheme.background)
+            .foregroundStyle(CheckTheme.primaryText)
+            // 팝오버 표시/숨김을 스토어에 알려 티커/폴링 게이팅을 켠다(창 노티 콜백과 수렴 — 멱등이라 중복 무해).
+            .onAppear { store.setMenuPresented(true) }
+            .onDisappear { store.setMenuPresented(false) }
+            .task {
+                await store.activateStoredSession()
+            }
+            .task {
+                // 토큰 사용량 갱신 루프를 팝오버 표시 동안만 돌린다(즉시 1회 + 120초 주기 = TokenUsageStore.refreshPeriod, 뷰 사라지면 자동 취소).
+                // 첫 스캔 트리거를 여기로 일원화한다 — 토큰 스토어는 init 에서 스캔을 킥하지 않으므로(영속 스냅샷 복원만),
+                // 표시 중 이 루프가 값을 채운다. 스캔 대상은 주입된 store.tokenUsage 다 — 프로덕션은 전역 .shared,
+                // 렌더 테스트는 격리 인스턴스라, ImageRenderer 가 이 .task 를 돌려도 실홈 스캔이 테스트 .standard 를 오염시키지 않는다.
+                await store.tokenUsage.runRefreshLoop()
+            }
+            .task {
+                // 업데이트 감지의 유일한 네트워크 킥 지점(팝오버 열림 경로). 24h 스로틀이라 대부분 즉시 no-op 이고,
+                // 하루 첫 오픈에서만 GitHub 최신 릴리스를 1회 조회한다(유휴 0% 불변 — 상시 타이머 없음). nil 이면 no-op.
+                await updateCheck?.checkIfStale()
+            }
+    }
+
+    /// 배너 + 본문(왼쪽 열). 레일이 붙든 안 붙든 **같은 뷰**라, 배너·패널 배치가 화면마다 갈리지 않는다.
+    @ViewBuilder
+    private var bodyColumn: some View {
         VStack(spacing: 10) {
             // 팝오버 최상단: 새 버전 안내 배너([지금 업데이트] 원클릭 + [명령 복사] 폴백). HeaderCard 위에 얹는다.
             // 더 급한 배너가 있으면 이번 팝오버에서는 양보한다(topBanner — 배너는 한 번에 하나만).
@@ -166,29 +226,6 @@ struct CheckMenuView: View {
             }
             content
         }
-            .padding(12)
-            // 폭만 고정(340). 높이는 상태별 콘텐츠에 맞춰 동적으로 잡는다(MenuBarExtra 창 크기 = 콘텐츠 크기).
-            .frame(width: 340)
-            .background(CheckTheme.background)
-            .foregroundStyle(CheckTheme.primaryText)
-            // 팝오버 표시/숨김을 스토어에 알려 티커/폴링 게이팅을 켠다(창 노티 콜백과 수렴 — 멱등이라 중복 무해).
-            .onAppear { store.setMenuPresented(true) }
-            .onDisappear { store.setMenuPresented(false) }
-            .task {
-                await store.activateStoredSession()
-            }
-            .task {
-                // 토큰 사용량 갱신 루프를 팝오버 표시 동안만 돌린다(즉시 1회 + 120초 주기 = TokenUsageStore.refreshPeriod, 뷰 사라지면 자동 취소).
-                // 첫 스캔 트리거를 여기로 일원화한다 — 토큰 스토어는 init 에서 스캔을 킥하지 않으므로(영속 스냅샷 복원만),
-                // 표시 중 이 루프가 값을 채운다. 스캔 대상은 주입된 store.tokenUsage 다 — 프로덕션은 전역 .shared,
-                // 렌더 테스트는 격리 인스턴스라, ImageRenderer 가 이 .task 를 돌려도 실홈 스캔이 테스트 .standard 를 오염시키지 않는다.
-                await store.tokenUsage.runRefreshLoop()
-            }
-            .task {
-                // 업데이트 감지의 유일한 네트워크 킥 지점(팝오버 열림 경로). 24h 스로틀이라 대부분 즉시 no-op 이고,
-                // 하루 첫 오픈에서만 GitHub 최신 릴리스를 1회 조회한다(유휴 0% 불변 — 상시 타이머 없음). nil 이면 no-op.
-                await updateCheck?.checkIfStale()
-            }
     }
 
     @ViewBuilder
@@ -359,6 +396,189 @@ struct CheckMenuView: View {
             // 로그인/가입 카드는 콘텐츠 natural 높이로만 그린다(세로 중앙정렬용 Spacer 제거 — 창을 짧게).
             LoginPanel(store: store, initialMode: initialAuthMode, previewWarning: previewASCIIWarning)
         }
+    }
+}
+
+// MARK: - 오른쪽 세로 레일 (화면 이동 버튼 6개)
+
+/// 팝오버 오른쪽에 세로로 서는 화면 이동 레일.
+///
+/// **왜 만들었나(2026-09-10 지적).** "기능이 너무 많아져서 버튼도 많은데 배치를 다시 해봐야 될 것 같아.
+/// 특히 상단에 게임·지난기록·설정 버튼들 너무 작고 위치도 왜 저기 있는지 모르겠어." — 그 버튼들은 헤더
+/// 목표 캡션 줄(caption2 10pt)에 지름 18pt 로 얹혀 있었다. 캡션 행은 원래 **넘침 자리**였고
+/// (HeaderCaptionIconButton 주석의 "남는 곳이 이 캡션 행이고"), 넘침이 셋까지 쌓이자 "주간 목표 캡션"이라는
+/// 그 줄의 뜻이 사라졌다. 화면 이동은 화면 이동끼리 한곳에 모으고, 맥락 버튼(목표 연필 · 참여코드 키)만
+/// 자기 줄에 남긴다.
+///
+/// **왜 오른쪽인가.** 본문 폭(316)을 1pt 도 줄이지 않고 버튼을 키우는 유일한 길이다. 창은 위·오른쪽
+/// 모서리가 고정이라(WindowTopAnchor) 폭이 늘면 왼쪽으로 자란다 — 레일을 달아도 팝오버 위치가 튀지 않는다.
+///
+/// **높이 계약.** 레일 총 높이 = 6×54 + 5×6 = 354pt(바깥 padding 포함 378pt). 메인 화면 본문이 이보다
+/// 짧으면 **레일이 창 높이를 결정한다**(HStack 은 큰 쪽을 따른다). 그 순간 "팀원 수에 비례해 창이 자란다"는
+/// 오래된 성질이 작은 팀에서 조용히 죽는다.
+///
+/// ⚠️ **여유가 3pt 뿐이다.** 2026-09-10 렌더 실측: 가장 짧은 메인 화면(팀원 0명)이 381pt, 레일이 378pt.
+/// 칸을 하나 더하면 +60pt 라 곧바로 레일이 이긴다 — 항목·높이를 건드리기 전에 반드시 다시 재라
+/// (CheckMenuRenderTests.sideRailNeverDecidesTheWindowHeight 가 그 실측을 못 박는다).
+/// (테스트가 아래 상수를 읽으므로 internal 이다 — 리터럴을 다시 적으면 칸을 더해도 가드가 안 따라온다.)
+struct CheckMenuSideRail: View {
+    let store: WorkTimerStore
+
+    /// 레일 폭. 라벨("콕찌르기" 4글자 @9pt ≈ 37pt)이 좌우 여백 안에 들어가는 최소치에서 잡았다.
+    static let width: CGFloat = 64
+    static let buttonHeight: CGFloat = 54
+    static let buttonSpacing: CGFloat = 6
+    static let cornerRadius: CGFloat = 12
+    /// 항목 수. 늘리기 전에 contentHeight 가 본문 최소 높이를 넘지 않는지 렌더로 재라(위 '높이 계약').
+    /// **테스트가 이 두 값을 읽는다**(CheckMenuRenderTests.sideRailNeverDecidesTheWindowHeight) —
+    /// 리터럴을 다시 적어 두면 칸을 더해도 그 가드가 따라오지 않아 '여유 3pt' 경고가 거짓말이 된다.
+    static let itemCount = 6
+    static var contentHeight: CGFloat {
+        CGFloat(itemCount) * buttonHeight + CGFloat(itemCount - 1) * buttonSpacing
+    }
+
+    /// 울트라 배지 글자. 모르면(nil · 무제한 아님) **아무 숫자도 만들지 않는다** — 틀린 숫자보다 침묵이 낫다
+    /// (UltraBalanceText.hint 와 같은 규약). 무제한은 서버가 말해 준 사실이라 잔량 없이도 ∞ 를 그린다.
+    private var ultraBadge: String? {
+        if store.ultraUnlimited { return UltraBalanceText.unlimitedBadge }
+        guard let balance = store.ultraBalance else { return nil }
+        return UltraBalanceText.badge(balance: balance)
+    }
+
+    var body: some View {
+        VStack(spacing: Self.buttonSpacing) {
+            // 미니게임은 **별도 창**이라 토글이 아니라 열기다(v0.2.46 — 팝오버는 바깥 클릭에 닫혀 판이 날아갔다).
+            // isActive 는 그 창이 열려 있다는 뜻이고, 창을 닫으면 컨트롤러가 플래그를 내린다.
+            CheckMenuRailButton(
+                icon: "gamecontroller.fill",
+                label: "미니게임",
+                help: "미니게임 — 타이밍 바 · 플래피 아잉",
+                isActive: store.isMiniGamePanelVisible
+            ) {
+                store.openMiniGameWindow()
+            }
+            // 잎 뷰다. 이유는 그 타입의 머리 주석에 있다 — 여기서 값으로 풀면 팝오버 전체가 매초 무효화된다.
+            PokeEntryIconButton(store: store)
+            CheckMenuRailButton(
+                icon: "chart.bar.xaxis",
+                label: "팀 현황",
+                help: "팀별 현황",
+                isActive: store.isLeaderboardVisible
+            ) {
+                store.toggleLeaderboard()
+            }
+            CheckMenuRailButton(
+                icon: "chart.xyaxis.line",
+                label: "내 기록",
+                help: "내 기록 — 지난주 회고 · 근무 리듬",
+                isActive: store.isInsightsPanelVisible
+            ) {
+                store.toggleInsightsPanel()
+            }
+            // 배지는 매초 값이 아니다(지갑 동기화에만 바뀐다) — 잎으로 격리할 이유가 없다.
+            CheckMenuRailButton(
+                icon: "bolt.fill",
+                label: "울트라",
+                help: UltraBalanceText.badgeHelp(balance: store.ultraBalance, unlimited: store.ultraUnlimited),
+                isActive: store.isUltraPanelVisible,
+                badge: ultraBadge
+            ) {
+                store.openUltraPanel(from: .home)
+            }
+            // 설정만 isActive 가 없다. 설정 창은 팝오버 **밖**에 사는 별도 창이고, 그걸 여는 순간 앱이
+            // 활성화되며 팝오버는 닫힌다 — 켜짐을 비출 관찰 대상도, 그걸 볼 화면도 없다.
+            // 본문이 레일보다 길면 남는 자리가 여기로 간다. 위 다섯(게임·찌르기·현황·기록·울트라)은 위에,
+            // [설정]은 아래에 앵커된다 — 상단 정렬만 하면 본문이 길 때 레일 아래가 최대 310pt(창 높이의 46%)
+            // 통째로 비어 "여섯 칸이 떠 있는" 인상이 된다(2026-09-10 실측).
+            Spacer(minLength: 0)
+            CheckMenuRailButton(
+                icon: "gearshape.fill",
+                label: "설정",
+                help: "설정 — 자동 실행 · 할 일 · 별명 · 토큰 공개"
+            ) {
+                CheckSettingsWindowController.shared.show()
+            }
+        }
+        .frame(width: Self.width, alignment: .top)
+        // 레일은 본문 높이를 **따라간다**(늘리기만 한다 — 위 '높이 계약'의 최소 높이 354 는 VStack 이 그대로 쥔다).
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+}
+
+/// 레일 버튼 한 칸. 아이콘(17pt) 위 · 라벨(9pt) 아래의 둥근 사각형 카드다.
+///
+/// 아이콘만 있던 예전 자리(18pt 원형)와 달리 **라벨을 함께 그린다** — 사용자가 "왜 저기 있는지 모르겠다"고
+/// 한 것은 위치만이 아니라 뜻이었다. 툴팁은 hover 해야 나오므로 아이콘 하나짜리 버튼은 처음 본 사람에게
+/// 아무 말도 하지 않는다.
+private struct CheckMenuRailButton: View {
+    let icon: String
+    let label: String
+    let help: String
+    /// 이 버튼이 가리키는 패널이 지금 열려 있는가. accent 채움 + 테두리 + 글리프로 표시한다.
+    var isActive: Bool = false
+    /// 고장 착색(콕찌르기 전용). isActive 와 **겹칠 수 있다** — 그때 카드는 accent(열림), 글리프는
+    /// pending(연결 끊김)으로 서로 다른 것을 말한다. 하나로 합치면 두 사실 중 하나가 사라진다.
+    var glyphTint: Color? = nil
+    /// 우상단 잔량 배지(숫자 또는 ∞). nil 이면 배지 자체를 그리지 않는다.
+    var badge: String? = nil
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    private var glyphColor: Color {
+        if let glyphTint { return glyphTint }
+        return isActive ? CheckTheme.accent : CheckTheme.secondaryText
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 9, weight: .semibold))
+                    .lineLimit(1)
+                    // 라벨이 말줄임되면 버튼의 뜻이 통째로 사라진다 — 잘리기 전에 먼저 줄인다.
+                    .minimumScaleFactor(0.75)
+            }
+            .foregroundStyle(glyphColor)
+            .frame(maxWidth: .infinity)
+            .frame(height: CheckMenuSideRail.buttonHeight)
+            .background(
+                RoundedRectangle(cornerRadius: CheckMenuSideRail.cornerRadius, style: .continuous)
+                    .fill(isActive ? CheckTheme.accent.opacity(0.18) : CheckTheme.panel)
+            )
+            // hover 는 채움 위에 흰색을 얇게 덧칠한다(활성/비활성 어느 쪽에서도 같은 크기로 밝아지도록).
+            .background(
+                RoundedRectangle(cornerRadius: CheckMenuSideRail.cornerRadius, style: .continuous)
+                    .fill(Color.white.opacity(hovering ? 0.08 : 0))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CheckMenuSideRail.cornerRadius, style: .continuous)
+                    .stroke(isActive ? CheckTheme.accent.opacity(0.45) : CheckTheme.border, lineWidth: 1)
+            )
+            .overlay(alignment: .topTrailing) {
+                if let badge {
+                    Text(badge)
+                        .font(.system(size: 9, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(CheckTheme.accent.opacity(0.85)))
+                        // 카드 모서리에 살짝 걸치게 — 안쪽이면 아이콘과 겹치고, 더 빼면 창 밖으로 나간다.
+                        .offset(x: 3, y: -3)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: CheckMenuSideRail.cornerRadius, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+        // 라벨은 픽셀로도 보이지만, 보이스오버에는 뜻을 풀어 쓴 help 문구를 준다(아이콘+라벨 조합이라
+        // 자동 합성 라벨은 "미니게임 미니게임"처럼 겹쳐 읽힌다).
+        .accessibilityLabel(Text(help))
+        .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
     }
 }
 
@@ -625,53 +845,15 @@ private struct HeaderGoalSection: View {
                         .font(.caption2)
                         .foregroundStyle(CheckTheme.secondaryText)
                         .monospacedDigit()
-                    // 설정 창 진입점. 팝오버에서 설정에 닿는 **유일하게 눈에 보이는 길**이다
-                    // (⌘, 는 이미 있지만 아무 데도 적혀 있지 않다 — 앱 메뉴가 없는 LSUIElement 앱이라
-                    //  단축키를 알려 줄 자리 자체가 없다). 이전 진입점이던 전원 버튼 롱프레스는
-                    //  "설정을 보려고 누르면 앱이 꺼지는" 자리였고, 실제로 아무도 못 찾았다.
+                    // 2026-09-10 — 이 줄에 있던 [설정]·[미니게임]·[내 기록] 세 버튼은 오른쪽 세로 레일
+                    // (CheckMenuSideRail)로 옮겼다. 셋 다 **화면 이동**이고, 이 줄은 원래 그 셋이 갈 곳이
+                    // 없어서 쓰던 넘침 자리였다("남는 곳이 이 캡션 행이고" — 옛 주석). 사용자 지적이 정확히
+                    // 그 대가를 짚었다: "너무 작고(18pt) 위치도 왜 저기 있는지 모르겠어."
                     //
-                    // 왜 여기인가(다른 두 후보를 재 보고 고른 자리다):
-                    //  · 푸터 — 4버튼이 상한이다(FooterWidthBudget). 다섯 번째를 세우면 동기화 문구 슬롯이
-                    //    125→90pt 로 줄어 "소속된 팀이 없어요…"(176pt)가 축소로도 안 들어가 말줄임된다.
-                    //  · 팀 카드 헤더 — 네 번째 버튼이면 팀 이름 폭이 85→50pt(8자→5자)로 잘린다
-                    //    (TeamHeaderWidthBudget — "아잉체크 개발팀"이 "아잉체…"가 된다).
-                    // 남는 곳이 이 캡션 행이고, 그건 위 두 예산이 **스스로 지정한 넘침 자리**다.
-                    // 마침 여기 있던 할 일 토글이 설정 창으로 옮겨 갔으므로 버튼 수는 3개 그대로다 —
-                    // 캡션 여유(실측 122px)와 창 높이 예산(700pt 상한)이 1pt 도 움직이지 않는다.
+                    // **연필만 남긴다.** 연필은 화면 이동이 아니라 **이 줄이 보여 주는 값(주간 목표)을 고치는
+                    // 맥락 버튼**이다. 레일로 옮기면 "무엇의 목표인지" 말해 주는 문맥에서 떨어져 나온다.
+                    // 참여코드 키 버튼이 팀 카드 헤더에 남는 것과 같은 기준이다.
                     //
-                    // 자리는 그래프/연필의 **왼쪽**이다: 오른쪽 끝부터 세는 손버릇(끝=연필, 끝에서 둘째=내 기록)을
-                    // 건드리지 않아야, 목표를 고치려다 설정 창을 여는 오클릭이 생기지 않는다.
-                    //
-                    // isActive 를 쓰지 않는다(기본값 false). 이 행의 accent 는 "지금 켜져 있다"는 뜻인데
-                    // 설정 창은 팝오버 **밖**에 사는 별도 창이고, 그 창을 여는 순간 앱이 활성화되며
-                    // MenuBarExtra 팝오버는 닫힌다 — 켜짐을 비출 관찰 대상도, 그걸 볼 화면도 없다.
-                    // 여기서 컨트롤러의 isOpen(비관찰 값)을 읽으면 갱신되지 않는 색만 하나 늘어난다.
-                    HeaderCaptionIconButton(
-                        icon: "gearshape.fill",
-                        help: "설정 — 자동 실행 · 할 일 · 별명 · 토큰 공개"
-                    ) {
-                        CheckSettingsWindowController.shared.show()
-                    }
-                    // 미니게임(타이밍 바·플래피 아잉 + 오늘 순위). **별도 창을 연다**(v0.2.46 — 팝오버는 바깥을 클릭하면
-                    // 닫혀 판이 날아가고 폭 292 가 좁았다). 개인 화면이라 자리는 이 캡션 행이고(내 기록과 같은 근거),
-                    // [설정]과 [내 기록] **사이**다 — 오른쪽 끝부터 세는 손버릇(끝=연필, 끝에서 둘째=내 기록)을 건드리지 않는다.
-                    HeaderCaptionIconButton(
-                        icon: "gamecontroller.fill",
-                        help: "미니게임",
-                        isActive: store.isMiniGamePanelVisible
-                    ) {
-                        store.openMiniGameWindow()
-                    }
-                    // 내 기록(지난주 회고 + 근무 리듬 히트맵). 팀 카드 헤더가 아니라 **내 근무 박스**에 둔다 —
-                    // 본인 데이터만 보는 개인 화면이라 자리가 여기가 맞고, 팀 헤더에 네 번째 버튼을 세우면
-                    // 팀 이름이 2~3자로 잘렸다(v0.2.11 감사 지적). 캡션 행이라 연필과 같은 소형(18pt) 버튼을 쓴다.
-                    HeaderCaptionIconButton(
-                        icon: "chart.xyaxis.line",
-                        help: "내 기록",
-                        isActive: store.isInsightsPanelVisible
-                    ) {
-                        store.toggleInsightsPanel()
-                    }
                     // 주간 목표는 팀원 누구나 바꿀 수 있다 — 캡션 % 옆 작은 연필로 편집 행을 연다.
                     // 표준 IconButton(27pt)은 caption2 행 높이를 홀로 키워 캡션 줄 간격이 어색해지므로,
                     // 캡션 높이에 맞춘 소형(18pt) 버튼을 쓴다.
@@ -789,12 +971,20 @@ enum ListRowBudget {
 
 /// 팀 카드 헤더에서 팀 이름(Text)에 남는 유연 폭 예산(순수 계산 — 결정적 검증 지점).
 ///
-/// 헤더는 `[팀 이름][Spacer][N명 근무중 칩][아이콘 버튼…]` 한 줄이고 팝오버 폭은 340 고정이다. 이름만 유연
+/// 헤더는 `[팀 이름][Spacer][N명 근무중 칩][아이콘 버튼…]` 한 줄이고 본문 열 폭은 316 고정이다. 이름만 유연
 /// 요소라, 오른쪽에 버튼을 하나 더할 때마다 이름이 27+8pt 씩 먼저 잘린다(lineLimit(1)). v0.2.11 초안이
 /// 여기에 네 번째 버튼('내 기록')을 세워 "아잉체크 개발팀"이 "아잉…"으로 잘렸던 회귀를 상수로 못 박아 둔다.
+///
+/// **2026-09-10: 버튼이 3개(참여코드·콕찌르기·팀별 현황) → 1개(참여코드)로 줄었다.** 화면 이동 두 개가
+/// 오른쪽 세로 레일로 옮겨 갔기 때문이다. 값을 지우지 않고 남기는 이유는 이 예산이 **버튼 수를 인자로 받는
+/// 계산**이라서다 — 줄어든 사실은 계산 결과(아래)로 증명되고, 늘리려는 사람이 그 대가를 다시 잴 수 있다.
+///   · 버튼 3개(2026-09-09까지): 292 − 88 − 81 − 32 − 6 = 85pt → 85/(13×0.75) = 8자
+///   · 버튼 1개(지금):          292 − 88 − 27 − 16 − 6 = 155pt → 155/(13×0.75) = 15자
+/// 8자 → 15자. "아잉체크 개발팀"(8자)이 축소 없이도 넉넉히 들어간다.
 enum TeamHeaderWidthBudget {
-    /// 팝오버 340 - 바깥 padding 12*2 - 팀 카드 panelStyle padding 12*2.
-    static let contentWidth: CGFloat = 340 - 12 * 2 - 12 * 2
+    /// 본문 열 316 - 팀 카드 panelStyle padding 12*2. (316 은 예전 팝오버 340 − 바깥 padding 12×2 와
+    /// 같은 값이다 — 창은 414 로 넓어졌지만 **본문 열은 1pt 도 안 넓혔다**. CheckMenuView.contentColumnWidth 참고.)
+    static let contentWidth: CGFloat = 316 - 12 * 2
     /// "N명 근무중" 칩의 대략 폭(두 자리 인원까지 여유 있게 본다).
     static let countChipWidth: CGFloat = 88
     /// IconButton 지름과 HStack 간격.
@@ -830,8 +1020,9 @@ enum TeamHeaderWidthBudget {
 /// 그 VStack 에 남는 폭이고, 이름줄은 그 안에서 편집 배지와 다시 나눠 쓴다. 별명 최대 길이(12자)를
 /// 정한 근거가 바로 이 계산이므로, 배지를 더하거나 칩 문구를 늘리면 이 상수와 회귀 테스트를 함께 고친다.
 enum MemberRowNameWidthBudget {
-    /// 팝오버 340 - 바깥 padding 12*2 - 팀 카드 panelStyle padding 12*2 = 292.
-    static let contentWidth: CGFloat = 340 - 12 * 2 - 12 * 2
+    /// 본문 열 316 - 팀 카드 panelStyle padding 12*2 = 292. (창은 2026-09-10 에 414 로 넓어졌지만
+    /// 본문 열은 예전 팝오버(340 − 바깥 12×2)와 같은 316 그대로다 — 넓어진 것은 창이지 본문이 아니다.)
+    static let contentWidth: CGFloat = 316 - 12 * 2
     /// 아바타 지름. TeamMemberRow.textColumnInset 의 26 과 같은 값이다.
     static let avatarWidth: CGFloat = 26
     /// 같은 줄의 HStack(spacing: 10).
@@ -921,9 +1112,15 @@ private struct TeamPanel: View {
                         showsInviteCode.toggle()
                     }
                 }
-                PokeEntryIconButton(store: store)
-                IconButton(icon: "chart.bar.xaxis", help: "팀별 현황") { store.toggleLeaderboard() }
+                // 2026-09-10 — [콕찌르기]·[팀별 현황]은 오른쪽 세로 레일로 옮겼다(둘 다 화면 이동).
+                // **참여코드 키만 남는다**: 그건 이 카드가 말하는 팀의 코드를 여는 맥락 버튼이라,
+                // 레일로 보내면 "어느 팀의 코드인지" 말해 주는 문맥에서 떨어져 나온다.
+                // 버튼이 3→1로 줄어 팀 이름 폭이 늘었다 — TeamHeaderWidthBudget 주석을 함께 읽어라.
             }
+            // 남은 버튼 하나(참여코드 키)는 **조건부**라, 코드가 아직 안 실린 첫 팝오버에서는 이 줄에
+            // 27pt 요소가 하나도 없어 헤더가 6pt 주저앉는다. 그 상태로 코드가 도착하면 창 높이가 6pt 튄다.
+            // 예전엔 상시 버튼(콕찌르기·팀별 현황)이 높이를 붙잡고 있어서 없던 문제다 — 최소 높이로 대신 붙잡는다.
+            .frame(minHeight: 27)
             // 참여코드 인라인 행은 헤더 아래에만 나타나 상단 앵커 원칙(아래로만 성장)을 지킨다.
             if canRevealCode, showsInviteCode, let inviteCode = store.myTeamInviteCode {
                 InviteCodeInlineRow(code: inviteCode)
@@ -1755,8 +1952,9 @@ enum UltraBalanceText {
 /// 그리고 힌트는 `.fixedSize()` 라 넘쳐도 높이가 안 변한다 = **렌더 높이 테스트로는 안 잡힌다.**
 /// 이 순수 계산이 그 사각지대의 유일한 방어망이다.
 enum PokeTitleRowWidthBudget {
-    /// 팝오버 340 - 바깥 padding 12*2 - 패널 padding 12*2.
-    static let contentWidth: CGFloat = 340 - 12 * 2 - 12 * 2
+    /// 본문 열 316 - 패널 padding 12*2 = 292. (창이 414 로 넓어져도 본문 열은 316 그대로다 —
+    /// CheckMenuView.contentColumnWidth 주석 참고.)
+    static let contentWidth: CGFloat = 316 - 12 * 2
     static let iconButtonWidth: CGFloat = 27
     static let spacing: CGFloat = 8
     static let spacerMinWidth: CGFloat = 6
@@ -3831,8 +4029,9 @@ private struct MissionRowView: View {
 /// "자리 비움으로 자동 근무종료됨"(121pt)이 "자리 비움으로 자동…"으로 잘렸던(핵심어 '근무종료됨' 소실)
 /// 회귀를 상수로 못 박아 둔다. 4버튼이 상한이고, 그래도 넘치는 긴 문구는 minimumScaleFactor 로 줄여 담는다.
 enum FooterWidthBudget {
-    /// 팝오버 340 - 바깥 padding 12*2 - 푸터 padding 12*2.
-    static let contentWidth: CGFloat = 340 - 12 * 2 - 12 * 2
+    /// 본문 열 316 - 푸터 padding 12*2 = 292. (창이 414 로 넓어져도 본문 열은 316 그대로다 —
+    /// 푸터는 레일 아래로 내려가지 않고 본문 열 안에 남는다. CheckMenuView.contentColumnWidth 주석 참고.)
+    static let contentWidth: CGFloat = 316 - 12 * 2
     static let iconButtonWidth: CGFloat = 27
     static let spacing: CGFloat = 8
     static let spacerMinWidth: CGFloat = 6
@@ -3858,11 +4057,16 @@ enum FooterWidthBudget {
     }
 }
 
-/// 메인 메뉴 헤더의 찌르기 진입 버튼. **높이 0pt 로 리얼타임 고장을 표면화하는 유일한 자리다.**
+/// 오른쪽 세로 레일의 찌르기 진입 버튼. **높이 0pt 로 리얼타임 고장을 표면화하는 유일한 자리다.**
+/// (2026-09-10 자리 이동: 팀 카드 헤더 → 레일. 팀 헤더는 팀 맥락 줄이고 찌르기는 화면 이동이라,
+///  화면 이동을 한곳에 모으는 개편에서 이 버튼도 함께 옮겨 왔다. **역할은 그대로다** — 아래 세 문단이
+///  왜 하필 이 버튼이 그 역할을 지는지를 말한다. 옮긴 자리도 조건이 같다: 메인 화면이면 늘 그려지고,
+///  아무 것도 안 눌러도 보이며, 팝오버 높이를 1pt 도 늘리지 않는다.)
 ///
-/// 왜 잎 뷰인가: 판정이 `store.displayNow` 를 읽으므로, 이 계산을 팀 카드 본체에 두면 그 카드가
-/// 매초 무효화된다(TeamWorkingCountChip 이 같은 이유로 잎 뷰다). 잎으로 가두면 매초 다시 그리는 것은
-/// 27×27 아이콘 하나뿐이다.
+/// 왜 잎 뷰인가: 판정이 `store.displayNow` 를 읽으므로, 이 계산을 레일 본체(또는 예전의 팀 카드 본체)에
+/// 두면 그 서브트리가 매초 무효화된다(TeamWorkingCountChip 이 같은 이유로 잎 뷰다). 레일은 팝오버
+/// **루트 바로 아래**라 여기서 새면 팝오버 전체가 매초 다시 그려진다 — v0.2.38 이 실제로 겪은 회귀이고
+/// V0238MenuTests 가 그 불변식을 못 박는다. 잎으로 가두면 매초 다시 그리는 것은 이 버튼 한 칸뿐이다.
 ///
 /// 왜 메뉴바가 아닌가: 메뉴바 타이틀은 MM:SS(근무 경과)를 담는 자리이고 이 앱에서 가장 많이 읽히는
 /// 숫자다. 고장 하나를 알리려고 정상 기능을 가릴 수 없고, 아이콘으로 대신할 수도 없다 —
@@ -3876,11 +4080,14 @@ private struct PokeEntryIconButton: View {
 
     var body: some View {
         let warns = PokeConnectionNotice.shouldWarn(state: store.realtimeState, now: store.displayNow)
-        IconButton(
+        CheckMenuRailButton(
             icon: "hand.point.right.fill",
+            label: "콕찌르기",
             help: warns ? PokeConnectionNotice.iconHelp : "콕 찌르기",
+            isActive: store.isPokePanelVisible,
             // 착색만 바꾼다 — 아이콘을 바꾸면 사용자가 이 버튼을 찾던 모양이 사라진다.
-            tint: warns ? CheckTheme.pending : CheckTheme.secondaryText
+            // 열려 있으면서 끊긴 상태에서는 카드가 accent(열림), 글리프가 pending(끊김)으로 갈라 말한다.
+            glyphTint: warns ? CheckTheme.pending : nil
         ) {
             store.togglePokePanel()
         }

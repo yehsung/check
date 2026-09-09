@@ -45,7 +45,8 @@ struct MiniGameWindowLifecycleTests {
     func miniGameWindowIdentityMatchesTheContract() {
         #expect(CheckMiniGameWindowController.windowTitle == "미니게임")
         #expect(CheckMiniGameWindowController.frameAutosaveName == "check.miniGameWindow")
-        #expect(CheckMiniGameWindowController.fixedContentSize == NSSize(width: 620, height: 420))
+        // v0.2.48: 620×420 → 700×470. 넓힌 것은 크롬뿐이고 캔버스는 344×356 그대로다(아래 레이아웃 표).
+        #expect(CheckMiniGameWindowController.fixedContentSize == NSSize(width: 700, height: 470))
 
         let window = CheckMiniGameWindowController.makeWindow()
         defer { window.close() }
@@ -216,39 +217,64 @@ struct MiniGameWindowLifecycleTests {
 @MainActor
 @Test
 func windowLayoutIsAFixedTwoColumnConstantTable() {
-    let layout = MiniGameWindowLayout.layout(hasYesterdayRow: true)
-    // 캔버스 344×356 — 폭은 596 − 12(단 사이) − 240(순위 열), 높이는 칩 줄 아래 남는 세로 전부(396 − 28 − 12).
-    // 비율(292:200)로 236 을 쓰면 게임 열 아래 120pt 가 비었다. transform(in:) 이 짧은 축 기준으로 배율을
-    // 잡아 가운데 정렬하므로 그릇이 세로로 길어도 게임 난이도는 그대로다 — 위아래 바닥이 더 그려질 뿐.
-    #expect(layout.canvasSize == CGSize(width: 344, height: 356), "캔버스가 \(layout.canvasSize) 다")
-    #expect(layout.rankSize == CGSize(width: 240, height: 396), "순위 열이 \(layout.rankSize) 다")
-    #expect(MiniGameWindowLayout.rankWidth == 240)
-    // 캔버스와 순위 열의 아랫변이 같은 줄에서 끝난다(두 단이 나란히 꽉 찬다).
-    #expect(layout.canvasSize.height + MiniGameWindowLayout.chipRowHeight + MiniGameWindowLayout.columnSpacing
-            == layout.rankSize.height, "두 단의 아랫변이 어긋난다")
-    // 논리 좌표는 비율 유지로 그려지므로, 배율은 짧은 축(폭)이 정한다 — 그 배율이 1 이상이어야 축소가 없다.
-    let scale = min(layout.canvasSize.width / MiniGameCanvas.logicalWidth,
-                    layout.canvasSize.height / MiniGameCanvas.logicalHeight)
-    #expect(scale >= 1, "논리 캔버스가 축소돼 그려진다(배율 \(scale))")
+    let layout = MiniGameWindowLayout.layout(hasChampionRow: true)
+    // ★★ 이 저장소에서 가장 중요한 회귀 방지선. 캔버스는 **창 크기와 무관한 상수 344×356** 이어야 한다.
+    // v0.2.48 에 창을 620×420 → 700×470 으로 넓히면서 계산 방향을 뒤집었다(예전엔 캔버스가 창에서 계산됐다).
+    // 여기가 흔들리면 순위표에 쌓인 모든 기록의 의미가 갈린다 — 캔버스가 커지면 플래피는 반응할 여유가 늘고
+    // 타이밍 바는 목표 구간이 픽셀로 넓어져 "모두가 같은 조건" 이라는 전제가 깨진다(사용자 결정 2026-09-08).
+    #expect(MiniGameWindowLayout.canvasSize == CGSize(width: 344, height: 356), "캔버스가 \(MiniGameWindowLayout.canvasSize) 다")
+    #expect(layout.canvasSize == CGSize(width: 344, height: 356))
+    // 순위 열은 **나머지**다(창을 넓히면 여기만 자란다).
+    #expect(MiniGameWindowLayout.rankWidth == 314, "순위 열 폭이 \(MiniGameWindowLayout.rankWidth) 다")
+    #expect(layout.rankSize == CGSize(width: 314, height: 442), "순위 열이 \(layout.rankSize) 다")
 
-    // 행수는 어제 1등 줄이 있으나 없으나 상한 10 이다(고정 높이에 여유가 있어 그 22pt 를 흡수한다).
-    #expect(MiniGameWindowLayout.visibleRows(hasYesterdayRow: true) == 10)
-    #expect(MiniGameWindowLayout.visibleRows(hasYesterdayRow: false) == 10)
-    #expect(MiniGameWindowLayout.listHeight(rows: 10) == 296)
+    // 논리 좌표는 비율 유지로 그려진다 — **두 게임이 실제로 그리는 판**(292×302)으로 재야 이 단언이
+    // 무언가를 잰다(예전엔 아무 게임도 안 쓰는 200 으로 계산했다). 배율이 1 이상이어야 축소가 없다.
+    #expect(FlappyGame.logicalSize == MiniGameCanvas.logicalSize, "플래피가 공용 논리 판을 안 쓴다")
+    let scale = MiniGameCanvas.transform(in: layout.canvasSize, logicalSize: MiniGameCanvas.logicalSize).scale
+    #expect(scale >= 1, "논리 캔버스가 축소돼 그려진다(배율 \(scale))")
+    // 그리고 레터박스가 거의 0 이다(같은 비율) — 위아래로 60pt 씩 비던 292×200 시절로 돌아가지 않는다.
+    let letterbox = layout.canvasSize.height - MiniGameCanvas.logicalHeight * scale
+    #expect(letterbox < 1, "위아래 레터박스가 \(letterbox)pt 다 — 기둥이 천장·바닥에 안 닿는다")
+
+    // 두 단의 머리글 높이·그 아래 간격이 **같은 상수**여야 본문 윗변이 같은 y 에서 시작한다(2026-09-08 지적).
+    #expect(MiniGameWindowLayout.headerHeight == 32)
+    #expect(MiniGameWindowLayout.headerSpacing == 10)
+
+    // 무스크롤 행수: 어제 챔피언 카드가 있으면 9, 없으면 10. 넘치면 ScrollView.
+    #expect(MiniGameWindowLayout.visibleRows(hasChampionRow: true) == 9)
+    #expect(MiniGameWindowLayout.visibleRows(hasChampionRow: false) == 10)
+    #expect(MiniGameWindowLayout.listHeight(rows: 9) == 310)
+    #expect(MiniGameWindowLayout.listHeight(rows: 10) == 345)
     #expect(MiniGameWindowLayout.listHeight(rows: 0) == 0)
 
-    // 두 열이 창 안에 들어온다.
+    // 두 열이 창 안에 들어온다(470 넘침 없음).
     let inner = MiniGameWindowLayout.innerSize
-    #expect(inner == CGSize(width: 596, height: 396))
+    #expect(inner == CGSize(width: 672, height: 442))
     let width = layout.canvasSize.width + MiniGameWindowLayout.columnSpacing + layout.rankSize.width
     #expect(width == inner.width, "두 열 폭 합 \(width) 가 안쪽 폭 \(inner.width) 와 다르다")
-    let gameColumn = MiniGameWindowLayout.chipRowHeight + MiniGameWindowLayout.chipRowSpacing + layout.canvasSize.height
-    let rankColumn = MiniGameWindowLayout.rankChrome(hasYesterdayRow: true) + MiniGameWindowLayout.listHeight(rows: layout.visibleRows)
-    #expect(gameColumn <= inner.height, "게임 열 \(gameColumn) 이 안쪽 높이를 넘는다")
-    #expect(rankColumn <= inner.height, "순위 열 \(rankColumn) 이 안쪽 높이를 넘는다")
+    #expect(MiniGameWindowLayout.gameColumnHeight == 440)
+    #expect(MiniGameWindowLayout.gameColumnHeight <= inner.height,
+            "게임 열 \(MiniGameWindowLayout.gameColumnHeight) 이 안쪽 높이를 넘는다 — 하단 스트립이 창 밖으로 잘린다")
+    for hasChampion in [true, false] {
+        let column = MiniGameWindowLayout.rankChrome(hasChampionRow: hasChampion)
+            + MiniGameWindowLayout.listHeight(rows: MiniGameWindowLayout.visibleRows(hasChampionRow: hasChampion))
+        #expect(column <= inner.height, "순위 열(챔피언 \(hasChampion)) \(column) 이 안쪽 높이를 넘는다")
+    }
     // 창 상수와 레이아웃 상수는 한 곳에서 온다.
     #expect(CheckMiniGameWindowController.fixedContentSize.width == MiniGameWindowLayout.contentSize.width)
     #expect(CheckMiniGameWindowController.fixedContentSize.height == MiniGameWindowLayout.contentSize.height)
+}
+
+/// 소스 계약: 캔버스를 다시 창 크기에서 **계산**하는 모양으로 되돌아가면, 다음에 창을 넓히는 사람이
+/// 아무 경고 없이 게임 난이도를 바꾼다. 그래서 `canvasSize` 는 리터럴 상수여야 한다.
+@Test
+func canvasSizeIsALiteralConstantNotDerivedFromTheWindow() throws {
+    let source = mgwStrippingComments(try String(contentsOf: mgwSourceURL("MiniGamePanel.swift"), encoding: .utf8))
+    #expect(source.contains("static let canvasSize = CGSize(width: 344, height: 356)"),
+            "canvasSize 가 리터럴 상수가 아니다 — 창을 넓히는 순간 난이도가 따라 바뀐다")
+    #expect(source.contains("static var rankWidth: CGFloat { innerSize.width - columnSpacing - canvasSize.width }"),
+            "순위 열이 나머지로 잡히지 않는다")
 }
 
 // MARK: - 스페이스 키는 게임 창이 떠 있을 때만
@@ -274,7 +300,7 @@ func windowWiringIsInstalledOnceAtLaunchAndThePopoverNoLongerDrawsThePanel() thr
     let menu = mgwStrippingComments(try String(contentsOf: mgwSourceURL("CheckMenuView.swift"), encoding: .utf8))
     #expect(!menu.contains("MiniGamePanel("), "팝오버가 아직 미니게임 패널을 그린다")
     #expect(!menu.contains("|| store.isMiniGamePanelVisible"), "isSubPanelOpen 이 창을 하위 패널로 센다 — 토큰 행이 사라진다")
-    #expect(menu.contains("store.openMiniGameWindow()"), "캡션 행 버튼이 창을 열지 않는다")
+    #expect(menu.contains("store.openMiniGameWindow()"), "레일 진입 버튼이 창을 열지 않는다")
 
     let store = mgwStrippingComments(try String(contentsOf: mgwSourceURL("WorkTimerStore.swift"), encoding: .utf8))
     for name in ["toggleLeaderboard", "toggleTokenBoard", "togglePokePanel", "openUltraPanel", "toggleInsightsPanel"] {
@@ -407,4 +433,130 @@ func spaceIsIgnoredWhileTheGameWindowIsNotOnScreen() {
     MiniGameSpaceKey.install(shouldConsume: { false }, action: { fired += 1 })
     MiniGameSpaceKey.fireForTesting()
     #expect(fired == 1, "발화 훅은 모니터가 쥔 동작을 그대로 태운다 — 게이트 검증은 소스 계약이 맡는다")
+}
+
+// MARK: - 일시정지 (v0.2.48 — "게임 도중에 그냥 포기하고 다른 게임 하고 싶을 때 멈추는 게 안 되네", 2026-09-10)
+
+/// 정지 상태 기계는 순수 값이다(뷰의 @State 밖에서 잰다). 규칙은 넷:
+///   · 진행 중일 때만 정지할 수 있다 · 정지 중에도(카운트다운 포함) 판은 얼어 있다
+///   · 재개는 3 → 2 → 1 → none · 카운트다운 중 다시 누르면 정지로 되돌아간다
+@Test
+func pauseStateMachineOnlyPausesWhilePlayingAndCountsBackFromThree() {
+    typealias Pause = CheckMiniGameWindowView.PauseState
+
+    // 시작 전·결과 화면에서는 얼리지 않는다(얼리면 클릭이 안 먹는 창이 된다).
+    #expect(Pause.none.toggled(isPlaying: false) == .none, "진행 중이 아닌데 정지됐다")
+    #expect(Pause.none.toggled(isPlaying: true) == .paused)
+
+    // 정지 → 재개는 곧바로 풀리지 않는다. 3-2-1 이 있어야 정지로 얻은 리듬 이점이 사라진다.
+    #expect(Pause.countdownStart == 3)
+    #expect(Pause.paused.toggled(isPlaying: true) == .resuming(3))
+    #expect(Pause.resuming(3).steppedDown() == .resuming(2))
+    #expect(Pause.resuming(2).steppedDown() == .resuming(1))
+    #expect(Pause.resuming(1).steppedDown() == .none)
+    #expect(Pause.none.steppedDown() == .none, "정지가 아닌 상태에서 카운트다운이 돈다")
+
+    // 카운트다운 중 ESC 는 다시 정지(취소).
+    #expect(Pause.resuming(2).toggled(isPlaying: true) == .paused)
+
+    // 판이 얼어 있는가 = host.isPaused. 카운트다운 중에도 참이어야 한다 — 아니면 3-2-1 동안 기둥이 온다.
+    #expect(!Pause.none.isFrozen)
+    #expect(Pause.paused.isFrozen)
+    #expect(Pause.resuming(3).isFrozen && Pause.resuming(1).isFrozen)
+    // 카드(이어하기·그만두기)는 정지 상태에서만. 카운트다운 중에는 숫자만 크게 뜬다.
+    #expect(Pause.paused.showsCard)
+    #expect(!Pause.resuming(2).showsCard)
+    #expect(Pause.resuming(2).countdown == 2 && Pause.paused.countdown == nil)
+}
+
+/// 소스 계약: 화면이 정지 상태를 게임에 넘기고(host.isPaused), 정지 중에는 종류 칩을 **푼다**.
+/// 사용자가 원한 것이 정확히 "포기하고 다른 게임 하기"다 — 잠긴 채로 두면 요구가 반만 채워진다.
+@Test
+func pauseFreezesTheBoardAndUnlocksTheKindChips() throws {
+    let source = mgwStrippingComments(try String(contentsOf: mgwSourceURL("MiniGamePanel.swift"), encoding: .utf8))
+    #expect(source.contains("isPaused: pauseState.isFrozen"), "정지 상태가 게임에 안 넘어간다 — 판이 뒤에서 계속 돈다")
+    #expect(source.contains("isEnabled: !isPlaying || pauseState.isFrozen || kind == store.miniGameKind"),
+            "정지 중에도 종류 칩이 잠겨 있다 — '포기하고 다른 게임' 이 안 된다")
+    // 스크림은 캔버스를 통째로 가린다(정지해 놓고 다음 기둥을 외우는 것이 이득이 되면 안 된다).
+    // 두 층이다: 불투명 바닥(CheckTheme.panel) + 색조(panelElevated 0.93). 바닥을 빼면 밑그림이 7% 비쳐
+    // 시작 카드의 흰 글자가 그대로 읽힌다(2026-09-10 스냅샷 실측).
+    #expect(source.contains("CheckTheme.panelElevated.opacity(0.93)"), "정지 스크림이 없거나 불투명도가 바뀌었다")
+    let overlay = try #require(source.range(of: "private var pauseOverlay: some View {"))
+    let overlayHead = String(source[overlay.upperBound...].prefix(120))
+    #expect(overlayHead.contains("CheckTheme.panel\n"), "스크림 바닥이 반투명뿐이다 — 판이 비쳐 보인다")
+    // 카운트다운 Task 는 창이 닫히거나 판이 끝나면 반드시 취소된다.
+    #expect(source.contains("resumeTask?.cancel()"), "카운트다운 Task 취소 경로가 없다")
+    let disappear = try #require(source.range(of: ".onDisappear {"))
+    let tail = String(source[disappear.upperBound...].prefix(200))
+    #expect(tail.contains("cancelResume()"), "창이 사라져도 1초 Task 가 남는다")
+    // interrupt(창 닫힘·포커스 상실·종류 전환·그만두기) 가 오면 즉시 풀린다 + Task 취소.
+    let interrupt = try #require(source.range(of: ".onChange(of: store.miniGameInterruptToken)"))
+    let body = String(source[interrupt.upperBound...].prefix(240))
+    #expect(body.contains("cancelResume()") && body.contains("pauseState = .none"),
+            "판이 끝났는데 스크림이 남는다 — 아무것도 못 누르는 창이 된다")
+}
+
+/// [그만두기] 는 스토어의 새 문으로 간다. 하는 일은 토큰 하나지만, 창 컨트롤러가 프로퍼티를 직접 만지는
+/// 경로만 있던 자리에 **화면이 부를 이름**을 낸 것이 이 메서드의 존재 이유다.
+@MainActor
+@Test
+func abortMiniGameRoundRaisesTheInterruptTokenAndKeepsTheWindowOpen() {
+    let store = mgwStore()
+    store.isMiniGamePanelVisible = true
+    let token = store.miniGameInterruptToken
+    store.abortMiniGameRound()
+    #expect(store.miniGameInterruptToken == token + 1, "[그만두기] 가 판을 안 끝낸다")
+    #expect(store.isMiniGamePanelVisible, "그만뒀다고 창까지 닫으면 다른 게임으로 못 넘어간다")
+    store.abortMiniGameRound()
+    #expect(store.miniGameInterruptToken == token + 2, "연속 호출마다 새 신호여야 한다")
+}
+
+// MARK: - ESC 는 스페이스와 **같은 모니터**에 얹혀 있다
+
+/// 모니터를 두 벌 걸면 설치·제거 규약이 두 곳이 되어, 2026-09-09 에 고친 두 버그(죽은 화면 고착 · 키 창 게이트)가
+/// 한쪽에서만 고쳐진 채 남는다. 그래서 ESC 는 같은 install 에 얹는다.
+@MainActor
+@Test
+func escapeIsHandledByTheSameMonitorAsSpaceAndOnlySwallowedWhenUsed() {
+    MiniGameSpaceKey.remove()
+    defer { MiniGameSpaceKey.remove() }
+
+    final class Box { var space = 0; var escape = 0 }
+    let box = Box()
+    // 화면이 "안 썼다"고 답하는 경우: ESC 는 삼켜지지 않아야 한다(다른 화면의 취소 키를 훔치지 않는다).
+    MiniGameSpaceKey.install(shouldConsume: { true }, action: { box.space += 1 },
+                             onEscape: { box.escape += 1; return false })
+    #expect(MiniGameSpaceKey.fireEscapeForTesting() == false, "안 쓴 ESC 를 삼켰다")
+    #expect(box.escape == 1 && box.space == 0, "ESC 가 스페이스 동작을 태웠다")
+
+    // 화면이 "정지했다"고 답하면 삼킨다.
+    MiniGameSpaceKey.install(shouldConsume: { true }, action: { box.space += 1 },
+                             onEscape: { box.escape += 1; return true })
+    #expect(MiniGameSpaceKey.fireEscapeForTesting() == true)
+    #expect(box.escape == 2)
+    // 재설치는 여전히 최신 화면으로 갈아 끼운다(스페이스 쪽 계약을 ESC 가 깨지 않았다).
+    MiniGameSpaceKey.fireForTesting()
+    #expect(box.space == 1)
+
+    MiniGameSpaceKey.remove()
+    #expect(!MiniGameSpaceKey.isInstalled)
+    #expect(MiniGameSpaceKey.fireEscapeForTesting() == false, "떼어낸 모니터의 ESC 처리기가 살아 있다")
+}
+
+/// 소스 계약: ESC 가 같은 `install` 안에서 처리되고, 게이트(shouldConsume)는 스페이스와 **한 벌**이다.
+/// 창이 안 떠 있으면 ESC 도 그대로 흘러간다.
+@Test
+func escapeSharesTheSpaceMonitorGate() throws {
+    let source = mgwStrippingComments(try String(contentsOf: mgwSourceURL("MiniGamePanel.swift"), encoding: .utf8))
+    let start = try #require(source.range(of: "static func install(shouldConsume:")).lowerBound
+    let end = try #require(source.range(of: "static func remove()", range: start..<source.endIndex)).lowerBound
+    let install = String(source[start..<end])
+    #expect(install.contains("escapeKeyCode"), "ESC 가 이 모니터에서 안 잡힌다")
+    #expect(install.contains("guard shouldConsume() else { return false }"),
+            "ESC 가 창 가시성 게이트를 우회한다 — 창이 안 떠 있어도 ESC 를 훔친다")
+    #expect(source.contains("static let escapeKeyCode: UInt16 = 53"), "ESC keyCode 가 53 이 아니다")
+    // 모니터는 여전히 **하나**다.
+    #expect(source.components(separatedBy: "NSEvent.addLocalMonitorForEvents").count - 1 == 1,
+            "모니터가 두 벌이다 — 설치·제거 규약이 갈린다")
+    #expect(source.contains("onEscape: { togglePause() }"), "화면이 ESC 를 정지 토글에 안 물렸다")
 }

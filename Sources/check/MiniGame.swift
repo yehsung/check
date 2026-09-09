@@ -54,23 +54,21 @@ enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable {
     static let controlHint = "클릭 또는 스페이스"
 }
 
-/// 게임 논리 좌표계. 게임 규칙은 언제나 이 크기 안에서 계산하고, 뷰는 실제 캔버스 크기에 **비율 유지**로 맞춘다
-/// (팝오버 시절 캔버스 높이가 preferred 와 minimum 사이에서 바뀌던 흔적이 남아 있다 — 규칙은 영향받지 않는다).
+/// 게임 논리 좌표계. 게임 규칙은 언제나 이 크기 안에서 계산하고, 뷰는 실제 캔버스 크기에 **비율 유지**로 맞춘다.
+///
+/// 논리 판 292×302 는 창 캔버스(344×356)와 **같은 비율**이다: 292 × 356/344 = 302.19 → 302
+/// (344/356 = 0.9663 vs 292/302 = 0.9669 — 레터박스는 위아래 합쳐 0.11pt 뿐이다).
+/// 두 게임이 이 값을 같이 쓴다(FlappyGame.height · TimingBarLayout.height) — 유도식은 여기 한 벌만 둔다.
+/// 2026-09-08 이전에는 200 이라 344×356 안에서 위아래 60pt 씩 레터박스가 생겼고, 그게 "천장에 구분이 없어
+/// 비어 보인다"는 지적의 원인이었다.
 enum MiniGameCanvas {
     static let logicalWidth: CGFloat = 292
-    static let logicalHeight: CGFloat = 200
-    /// 패널이 여유 있을 때의 캔버스 높이(= logicalHeight, 배율 1).
-    static let preferredHeight: CGFloat = 200
-    /// 배너·목표 편집이 얹혀 예산이 줄 때 캔버스가 양보하는 하한.
-    static let minimumHeight: CGFloat = 140
+    static let logicalHeight: CGFloat = 302
+    /// 두 게임이 공유하는 논리 판 크기.
+    static var logicalSize: CGSize { CGSize(width: logicalWidth, height: logicalHeight) }
 
     /// 실제 캔버스 크기에서 논리 좌표를 그릴 배율과 원점(가운데 정렬). 순수 함수.
-    static func transform(in size: CGSize) -> (scale: CGFloat, origin: CGPoint) {
-        transform(in: size, logicalSize: CGSize(width: logicalWidth, height: logicalHeight))
-    }
-
-    /// 게임이 자기 논리 크기를 가질 때(플래피는 창 캔버스와 같은 비율의 세로로 긴 판을 쓴다 — 위아래가
-    /// 레터박스로 비면 기둥이 천장·바닥에 닿지 않는 것처럼 보인다). 배율은 짧은 축이 정하므로 비율은 유지된다.
+    /// 배율은 **짧은 축**이 정하므로 비율은 유지된다 — 그래서 캔버스를 흔들면 두 게임의 난이도가 함께 흔들린다.
     static func transform(in size: CGSize, logicalSize: CGSize) -> (scale: CGFloat, origin: CGPoint) {
         let scale = min(size.width / logicalSize.width, size.height / logicalSize.height)
         let origin = CGPoint(
@@ -180,9 +178,16 @@ struct MiniGameStage: Equatable, Sendable {
     let far: Color
     /// 가까운 언덕(빠른 층).
     let near: Color
-    /// 기둥·트랙 본체.
+    /// 밝은 구조색. **면적이 큰 몸통에는 쓰지 않는다** — 타이밍 바 목표 구간처럼 작고 조준해야 하는 곳의 색이다.
     let structure: Color
-    /// 기둥·트랙 테두리(밝은 쪽).
+    /// 기둥 본체(위쪽·가장 어두운 쪽). 캐릭터(마스코트 몸통 L≈0.45)와 **3:1 이상** 벌어지는 대역이다 —
+    /// 2026-09-10 실측에서 밝은 `structure` 로 기둥을 채웠더니 한낮 1.01:1 이라 겹치는 순간 캐릭터가 사라졌다.
+    /// 밝은 색은 립(`structureEdge`)과 외곽선에만 남긴다: 그래야 캐릭터가 **언제나 기둥보다 밝게** 뜬다.
+    let structureDeep: Color
+    /// 기둥 본체(아래쪽). `structureDeep` + 채널당 0.08 — 세로 그라디언트의 끝점이다.
+    /// 이쪽도 캐릭터와 3:1 이상이어야 한다(무대 5종 최솟값 3.13:1, 한낮 3.57:1).
+    let structureDeepLit: Color
+    /// 기둥·트랙 테두리(밝은 쪽). 어두워진 본체를 **윤곽으로** 세워 주는 것이 이 색의 첫 임무다.
     let structureEdge: Color
     /// 강조(별·마커·명중 링·점수 팝).
     let glow: Color
@@ -196,6 +201,8 @@ struct MiniGameStage: Equatable, Sendable {
         far: Color(red: 0.23, green: 0.17, blue: 0.32),
         near: Color(red: 0.14, green: 0.10, blue: 0.22),
         structure: Color(red: 0.49, green: 0.42, blue: 0.81),
+        structureDeep: Color(red: 0.13, green: 0.11, blue: 0.34),
+        structureDeepLit: Color(red: 0.21, green: 0.19, blue: 0.42),
         structureEdge: Color(red: 0.73, green: 0.66, blue: 1.00),
         glow: Color(red: 1.00, green: 0.77, blue: 0.54),
         starCount: 18
@@ -207,6 +214,8 @@ struct MiniGameStage: Equatable, Sendable {
         far: Color(red: 0.11, green: 0.27, blue: 0.39),
         near: Color(red: 0.08, green: 0.19, blue: 0.27),
         structure: Color(red: 0.27, green: 0.72, blue: 0.48),
+        structureDeep: Color(red: 0.11, green: 0.29, blue: 0.19),
+        structureDeepLit: Color(red: 0.19, green: 0.37, blue: 0.27),
         structureEdge: Color(red: 0.54, green: 0.94, blue: 0.75),
         glow: Color(red: 1.00, green: 0.91, blue: 0.66),
         starCount: 0
@@ -218,6 +227,8 @@ struct MiniGameStage: Equatable, Sendable {
         far: Color(red: 0.35, green: 0.18, blue: 0.27),
         near: Color(red: 0.17, green: 0.09, blue: 0.19),
         structure: Color(red: 0.88, green: 0.54, blue: 0.29),
+        structureDeep: Color(red: 0.35, green: 0.22, blue: 0.12),
+        structureDeepLit: Color(red: 0.43, green: 0.30, blue: 0.20),
         structureEdge: Color(red: 1.00, green: 0.76, blue: 0.48),
         glow: Color(red: 1.00, green: 0.82, blue: 0.48),
         starCount: 10
@@ -229,6 +240,8 @@ struct MiniGameStage: Equatable, Sendable {
         far: Color(red: 0.06, green: 0.10, blue: 0.20),
         near: Color(red: 0.03, green: 0.05, blue: 0.10),
         structure: Color(red: 0.31, green: 0.48, blue: 0.85),
+        structureDeep: Color(red: 0.12, green: 0.19, blue: 0.34),
+        structureDeepLit: Color(red: 0.20, green: 0.27, blue: 0.42),
         structureEdge: Color(red: 0.62, green: 0.75, blue: 1.00),
         glow: Color(red: 0.55, green: 0.89, blue: 1.00),
         starCount: 46
@@ -240,6 +253,8 @@ struct MiniGameStage: Equatable, Sendable {
         far: Color(red: 0.04, green: 0.17, blue: 0.20),
         near: Color(red: 0.02, green: 0.08, blue: 0.10),
         structure: Color(red: 0.21, green: 0.84, blue: 0.66),
+        structureDeep: Color(red: 0.08, green: 0.33, blue: 0.25),
+        structureDeepLit: Color(red: 0.16, green: 0.41, blue: 0.33),
         structureEdge: Color(red: 0.61, green: 1.00, blue: 0.88),
         glow: Color(red: 0.49, green: 1.00, blue: 0.83),
         starCount: 60
@@ -247,9 +262,6 @@ struct MiniGameStage: Equatable, Sendable {
 
     /// 순서대로. 인덱스 = `id`.
     static let all: [MiniGameStage] = [dawn, day, dusk, night, aurora]
-
-    /// 마지막 무대(오로라)인가 — 다음 무대 안내를 감출 때 쓴다.
-    var isLast: Bool { id == Self.all.count - 1 }
 
     /// 오로라 커튼을 그리는 무대인가(밤하늘 위 초록 띠).
     var hasAuroraBands: Bool { id == 4 }
@@ -268,11 +280,6 @@ struct MiniGameStage: Equatable, Sendable {
         return all[min(index, all.count - 1)]
     }
 
-    /// 다음 무대까지 남은 점수(마지막 무대면 nil). 상단 진행 점에 쓴다.
-    static func nextFlappyThreshold(after score: Int) -> Int? {
-        flappyThresholds.first { $0 > max(0, score) }
-    }
-
     /// 타이밍 바의 무대 — 2라운드마다 한 단계(1·2 새벽 … 9·10 오로라). 라운드 0(시작 전)은 새벽.
     static func forTimingRound(_ round: Int) -> MiniGameStage {
         let index = max(0, min(all.count - 1, (max(1, round) - 1) / 2))
@@ -288,6 +295,11 @@ struct MiniGameStage: Equatable, Sendable {
 /// 그리는 순서: 하늘 그라디언트 → (오로라) 커튼 → 별 → 지평선 광원 → 먼 능선 → 가까운 언덕.
 /// **필터(blur)를 쓰지 않는다** — 60Hz 에서 캔버스 전체를 흐리면 통합 GPU 에서 프레임이 깨진다.
 /// 부드러운 빛은 전부 radialGradient 로 만든다.
+///
+/// 이 금지는 `GraphicsContext` 의 `addFilter`·`drawLayer` 를 향한 것이지 SwiftUI `.shadow` 가 아니다.
+/// HUD 글자·카드의 `.shadow` 는 **불투명하고 클립된 층 위**라 모양이 프레임마다 변하지 않아 공짜에 가깝다
+/// (2026-09-10 실측: 허브 캔버스 래퍼 shadow 있음 0.85ms/frame vs 없음 0.86ms — 구별되지 않는다).
+/// 다음 사람이 "60Hz 서브트리에 그림자 금지"로 넓혀 읽지 않도록 여기 적어 둔다.
 enum MiniGameBackdrop {
     /// 별·능선의 자리를 정하는 고정 시드. 프레임마다 같은 자리에 있어야 한다(매번 새로 뽑으면 배경이 끓는다).
     static let seed: UInt64 = 0x5EED_B00C
@@ -359,15 +371,7 @@ enum MiniGameBackdrop {
         let horizonY = rect.minY + rect.height * 0.70
         let glowRect = CGRect(x: rect.minX - rect.width * 0.2, y: horizonY - rect.height * 0.30,
                               width: rect.width * 1.4, height: rect.height * 0.60)
-        context.fill(
-            Path(ellipseIn: glowRect),
-            with: .radialGradient(
-                Gradient(colors: [stage.glow.opacity(0.22), .clear]),
-                center: CGPoint(x: glowRect.midX, y: glowRect.midY),
-                startRadius: 0,
-                endRadius: glowRect.width / 2
-            )
-        )
+        MiniGameEffects.glow(into: &context, in: glowRect, color: stage.glow, opacity: 0.22)
 
         guard terrain else { return }
 
@@ -378,6 +382,22 @@ enum MiniGameBackdrop {
         ridge(into: &context, rect: rect, color: stage.near,
               baseline: rect.minY + rect.height * 0.88, amplitude: rect.height * 0.09,
               wavelength: 150, offset: scroll * 0.38, seed: seed &+ 23)
+    }
+
+    /// 능선 봉우리(시드별 1회 계산). `draw` 가 부르는 시드는 둘뿐이라(seed+11 · seed+23) 표가 자라지 않는다.
+    private static let peakCache: [UInt64: [CGFloat]] = {
+        var table: [UInt64: [CGFloat]] = [:]
+        for seed in [MiniGameBackdrop.seed &+ 11, MiniGameBackdrop.seed &+ 23] {
+            var rng = MiniGameRandom(seed: seed)
+            table[seed] = (0..<24).map { _ in CGFloat(rng.uniform(0.45, 1.0)) }
+        }
+        return table
+    }()
+
+    private static func cachedPeaks(seed: UInt64) -> [CGFloat] {
+        if let peaks = peakCache[seed] { return peaks }
+        var rng = MiniGameRandom(seed: seed)
+        return (0..<24).map { _ in CGFloat(rng.uniform(0.45, 1.0)) }
     }
 
     /// 능선 한 층(톱니 + 부드러운 굴곡). 파형은 시드 고정 난수로 흔들어 반복이 눈에 띄지 않게 한다.
@@ -391,9 +411,9 @@ enum MiniGameBackdrop {
         offset: CGFloat,
         seed: UInt64
     ) {
-        var rng = MiniGameRandom(seed: seed)
-        // 파형을 정할 봉우리 높이 24개(가로로 순환한다).
-        let peaks = (0..<24).map { _ in CGFloat(rng.uniform(0.45, 1.0)) }
+        // 파형을 정할 봉우리 높이 24개(가로로 순환한다). **시드가 상수라 값이 언제나 같다** —
+        // 프레임마다 다시 뽑으면 초당 120번 배열 두 개를 새로 할당하고 결과는 한 픽셀도 안 달라진다.
+        let peaks = cachedPeaks(seed: seed)
         var path = Path()
         path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
         var x = rect.minX
@@ -416,11 +436,46 @@ enum MiniGameBackdrop {
     }
 }
 
+/// 논리 좌표 → 실제 픽셀. `MiniGameCanvas.transform(in:logicalSize:)` 한 번을 들고 다니는 얇은 껍데기다.
+/// 두 게임이 같은 것을 쓴다 — 각자 만들면 같은 판을 서로 다른 식으로 투영하게 된다.
+struct MiniGameProjection {
+    let scale: CGFloat
+    let origin: CGPoint
+
+    init(container: CGSize, logicalSize: CGSize = MiniGameCanvas.logicalSize) {
+        let transform = MiniGameCanvas.transform(in: container, logicalSize: logicalSize)
+        scale = transform.scale
+        origin = transform.origin
+    }
+
+    func x(_ value: CGFloat) -> CGFloat { origin.x + value * scale }
+    func y(_ value: CGFloat) -> CGFloat { origin.y + value * scale }
+    func point(_ px: CGFloat, _ py: CGFloat) -> CGPoint { CGPoint(x: x(px), y: y(py)) }
+    func rect(_ rx: CGFloat, _ ry: CGFloat, _ rw: CGFloat, _ rh: CGFloat) -> CGRect {
+        CGRect(x: x(rx), y: y(ry), width: rw * scale, height: rh * scale)
+    }
+    func rect(_ r: CGRect) -> CGRect { rect(r.minX, r.minY, r.width, r.height) }
+}
+
 // MARK: - 이펙트(링 · 파편)
 
 /// 두 게임이 같이 쓰는 순간 이펙트. 전부 `GraphicsContext` 에 직접 그리고 상태를 갖지 않는다 —
 /// 진행도(0…1)는 부르는 쪽이 자기 시계에서 계산해 넘긴다(같은 판을 재현할 수 있어야 하기 때문이다).
 enum MiniGameEffects {
+    /// 타원 안에서 가운데가 밝고 가장자리로 사라지는 후광. **blur 대신 쓰는 유일한 수단**이다
+    /// (60Hz 에서 캔버스를 흐리면 통합 GPU 에서 프레임이 깨진다). 세 곳이 손으로 같은 레시피를 복사하고 있었다.
+    static func glow(into context: inout GraphicsContext, in rect: CGRect, color: Color, opacity: Double) {
+        context.fill(
+            Path(ellipseIn: rect),
+            with: .radialGradient(
+                Gradient(colors: [color.opacity(opacity), .clear]),
+                center: CGPoint(x: rect.midX, y: rect.midY),
+                startRadius: 0,
+                endRadius: rect.width / 2
+            )
+        )
+    }
+
     /// 중심에서 퍼지는 링. progress 0 → 반지름 0·불투명, 1 → 최대 반지름·투명.
     static func ring(
         into context: inout GraphicsContext,
@@ -440,6 +495,8 @@ enum MiniGameEffects {
     }
 
     /// 방사형 파편. 방향은 시드로 고정한다(같은 사건이면 같은 그림).
+    /// - angles: 뿌릴 각도 범위(라디안, 화면 좌표 — 0 = 앞(+x) · π/2 = 아래(+y) · π = 뒤(−x)).
+    ///   기본은 온 사방이고, 점프처럼 "어디로 밀어냈는지"가 뜻인 이펙트는 아래·뒤로 좁혀 넘긴다.
     static func sparks(
         into context: inout GraphicsContext,
         center: CGPoint,
@@ -448,14 +505,15 @@ enum MiniGameEffects {
         maxRadius: CGFloat,
         color: Color,
         seed: UInt64,
-        dotRadius: CGFloat = 2
+        dotRadius: CGFloat = 2,
+        angles: ClosedRange<Double> = 0...(.pi * 2)
     ) {
         let p = min(max(progress, 0), 1)
         guard p < 1 else { return }
         var rng = MiniGameRandom(seed: seed)
         let eased = 1 - pow(1 - p, 2)
         for _ in 0..<count {
-            let angle = rng.uniform(0, .pi * 2)
+            let angle = rng.uniform(angles.lowerBound, angles.upperBound)
             let reach = maxRadius * CGFloat(rng.uniform(0.55, 1.0)) * CGFloat(eased)
             let x = center.x + cos(angle) * Double(reach)
             let y = center.y + sin(angle) * Double(reach)
@@ -466,6 +524,30 @@ enum MiniGameEffects {
                 with: .color(color.opacity(1 - p))
             )
         }
+    }
+
+    /// 아래로 퍼지는 공기 아치(점프 임팩트). 중심에서 좌우로 벌어지며 아래로 처지고 옅어진다.
+    /// 링과 달리 **방향이 있다** — "무엇을 밟고 올라갔는지"를 말하므로 캐릭터 발밑에 둔다.
+    static func arch(
+        into context: inout GraphicsContext,
+        center: CGPoint,
+        progress: Double,
+        halfWidth: CGFloat,
+        depth: CGFloat,
+        color: Color,
+        lineWidth: CGFloat = 2
+    ) {
+        let p = min(max(progress, 0), 1)
+        guard p < 1 else { return }
+        let eased = 1 - pow(1 - p, 2)
+        let grow = CGFloat(0.35 + 0.65 * eased)
+        let hw = halfWidth * grow
+        guard hw > 0.5 else { return }
+        var path = Path()
+        path.move(to: CGPoint(x: center.x - hw, y: center.y))
+        path.addQuadCurve(to: CGPoint(x: center.x + hw, y: center.y),
+                          control: CGPoint(x: center.x, y: center.y + depth * grow * 2))
+        context.stroke(path, with: .color(color.opacity(0.85 * (1 - p))), lineWidth: lineWidth)
     }
 
     /// 캔버스 아래쪽에서 위로 번지는 빛(무대 전환·신기록 순간의 한 방). 링과 같은 진행도 규약.
@@ -517,7 +599,7 @@ struct MiniGameOverlayCard: View {
                 Image(systemName: icon)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(tint)
-                    .frame(width: 34, height: 34)
+                    .frame(width: MiniGameCardChrome.iconDiameter, height: MiniGameCardChrome.iconDiameter)
                     .background(Circle().fill(tint.opacity(0.16)))
                     .overlay(Circle().stroke(tint.opacity(0.40), lineWidth: 1))
             }
@@ -540,21 +622,68 @@ struct MiniGameOverlayCard: View {
                 .padding(.top, 2)
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .frame(maxWidth: 240)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(CheckTheme.panelElevated.opacity(0.94))
+        .padding(.vertical, MiniGameCardChrome.verticalPadding)
+        .frame(maxWidth: MiniGameCardChrome.width)
+        .modifier(MiniGameCardChrome(tint: tint))
+    }
+}
+
+/// 캔버스 위에 뜨는 카드의 **크롬 한 벌**(배경 · 테두리 · 그림자). 시작·결과 카드(`MiniGameOverlayCard`)와
+/// 정지 카드(`MiniGamePauseCard`)가 같은 창에서 번갈아 뜨는데 각자 만들면 모서리·그림자·폭이 갈린다 —
+/// 실제로 갈렸다(모서리 16 vs 14 · 그림자 14/5 vs 12/4 · 폭 250 vs 240, 2026-09-10 지적).
+struct MiniGameCardChrome: ViewModifier {
+    /// 테두리 그라디언트의 강조색. 무대 색을 넘기면 카드가 배경과 한 몸으로 읽힌다.
+    var tint: Color = CheckTheme.accent
+    /// 바닥 불투명도. 정지 카드는 **1.0(불투명)** 이어야 한다 — 스크림과 같은 색 반투명이면 카드가 녹는다.
+    var fillOpacity: Double = 0.94
+    /// 위에서 아래로 옅어지는 흰 광택(정지 카드처럼 스크림 위에 뜨는 카드만).
+    var sheen: Bool = false
+
+    /// 두 카드가 공유하는 수치. 여기 말고 다른 곳에 적지 마라.
+    static let cornerRadius: CGFloat = 14
+    static let width: CGFloat = 240
+    static let verticalPadding: CGFloat = 14
+    /// 아이콘 원판 지름(카드 맨 위 동그라미).
+    static let iconDiameter: CGFloat = 34
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+        return content.background(
+            shape
+                .fill(CheckTheme.panelElevated.opacity(fillOpacity))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(
-                            LinearGradient(colors: [tint.opacity(0.45), CheckTheme.border],
-                                           startPoint: .topLeading, endPoint: .bottomTrailing),
-                            lineWidth: 1
-                        )
+                    sheen
+                        ? AnyView(shape.fill(LinearGradient(
+                            colors: [Color.white.opacity(0.10), Color.white.opacity(0.02)],
+                            startPoint: .top, endPoint: .bottom)))
+                        : AnyView(Color.clear)
+                )
+                .overlay(
+                    shape.stroke(
+                        LinearGradient(colors: [tint.opacity(0.45), CheckTheme.border],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1
+                    )
                 )
                 .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
         )
+    }
+}
+
+/// 무대 이름 칩. **두 게임이 같은 픽셀을 쓴다** — 같은 정보를 각자 만들면 캡슐 채움(0.16 vs black 0.38)과
+/// 테두리(0.40 vs 0.55)가 갈려 같은 창에서 두 물건으로 보인다(2026-09-10 지적).
+struct MiniGameStageChip: View {
+    let stage: MiniGameStage
+
+    var body: some View {
+        Text(stage.name)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(stage.glow)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(stage.glow.opacity(0.16)))
+            .overlay(Capsule().stroke(stage.glow.opacity(0.40), lineWidth: 1))
+            .fixedSize()
     }
 }
 

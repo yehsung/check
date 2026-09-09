@@ -14,7 +14,7 @@ extension WorkTimerStore {
 
     // MARK: 창 열고 닫기
 
-    /// 캡션 행 게임패드 버튼의 액션. **별도 창**을 열고(v0.2.46) 오늘 순위를 받는다.
+    /// 팝오버 오른쪽 레일의 미니게임 버튼(v0.2.48 에 캡션 행에서 이사)의 액션. **별도 창**을 열고(v0.2.46) 오늘 순위를 받는다.
     ///
     /// 다른 패널을 닫지 않는다 — 창은 팝오버와 공존한다(팝오버를 닫아도, 다른 패널을 열어도 게임은 계속된다).
     /// 이미 열려 있어도 `show()` 는 멱등이라 앞으로 가져오기만 한다(최소화해 뒀다면 되살린다).
@@ -44,6 +44,19 @@ extension WorkTimerStore {
         isMiniGamePanelVisible = false
         miniGameInterruptToken += 1
         CheckMiniGameWindowController.shared.close()
+    }
+
+    /// 진행 중인 판을 **사용자 의사로** 접는다(정지 카드의 [그만두기] — v0.2.48).
+    ///
+    /// 하는 일은 `miniGameInterruptToken += 1` 하나뿐이다. 그런데도 새 메서드를 낸 이유: 지금까지 이 토큰을
+    /// 올리는 길은 창 컨트롤러가 스토어 프로퍼티를 **직접** 만지는 경로(`windowWillClose` · `windowDidResignKey`)
+    /// 뿐이었고, 화면에서 부를 이름이 없었다. 창 닫힘·포커스 상실과 같은 신호를 **사용자 의사**로 보내는 문이다.
+    ///
+    /// 판을 어떻게 접을지는 게임이 정한다 — 플래피는 그 순간 점수로 결과 확정, 타이밍 바는 10라운드를 못
+    /// 채웠으므로 무효(`MiniGameHost.interruptToken` 주석). 스토어는 그 차이를 모른다.
+    /// 창은 그대로 둔다(`isMiniGamePanelVisible` 을 안 내린다) — 그만둔 사람은 대개 다른 게임을 하려는 것이다.
+    func abortMiniGameRound() {
+        miniGameInterruptToken += 1
     }
 
     /// 게임 종류 전환. 진행 중인 판을 끝내고(토큰) 그 게임의 오늘 순위를 다시 받는다. 선택은 영속한다.

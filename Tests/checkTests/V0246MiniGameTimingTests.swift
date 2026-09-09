@@ -6,10 +6,15 @@ import Testing
 
 // v0.2.46 미니게임 — 타이밍 바. 규칙(순수 값 타입)·상태 기계·dt 클램프·렌더·프레임 프로브·소스 계약.
 // 시드를 고정하면 판이 결정적이라(MiniGameRandom 만 쓴다) 목표 중심을 읽어 "정중앙에서 멈추는 시각"을 역산할 수 있다.
+//
+// v0.2.48 시각 개편(2026-09-10)에서 그림이 통째로 바뀌었다(논리 292×302 · 무대 · 3중 목표 구간 · 판정 등급 ·
+// 세그먼트 바). 그래서 **렌더 단언은 새 그림 기준으로 다시 썼고**, 규칙 단언은 한 줄도 바뀌지 않았다 —
+// 이 파일의 (1)(2)(3) 절과 `timingBarDifficultyConstantsAreFrozen` 이 "디자인 작업이 난이도를 안 건드렸다"의 증거다.
 
 // MARK: - 픽스처
 
 private let tbSeed: UInt64 = 0xC0FFEE
+/// 스냅샷을 남길 곳(저장소 밖 — 스크래치).
 
 /// 시작된 판(running 1, t = 0).
 private func tbStarted(seed: UInt64 = tbSeed) -> TimingBarGame {
@@ -20,9 +25,13 @@ private func tbStarted(seed: UInt64 = tbSeed) -> TimingBarGame {
 
 /// 마커가 목표 중심에 오는 시각(첫 왕복의 오르막 구간, p = 2t/T → t = c·T/2)까지 1/30 걸음으로 전진한다.
 private func tbAdvanceToTargetCenter(_ game: inout TimingBarGame) {
+    tbAdvanceToPosition(&game, game.target.center)
+}
+
+/// 첫 왕복 오르막에서 마커를 위치 p(0…1)까지 전진시킨다(t = p·T/2).
+private func tbAdvanceToPosition(_ game: inout TimingBarGame, _ position: Double) {
     guard case .running(let round, let t0) = game.phase else { return }
-    let period = TimingBarGame.period(round: round)
-    let goal = game.target.center * period / 2
+    let goal = position * TimingBarGame.period(round: round) / 2
     var remaining = goal - t0
     while remaining > 1e-12 {
         let dt = min(remaining, TimingBarGame.maxStep)
@@ -53,9 +62,31 @@ private func tbPlayPerfectRound(_ game: inout TimingBarGame) {
     tbSkipResultHold(&game)
 }
 
+/// 목표 구간 **밖**에서 멈춘 라운드 하나(0점)를 마치고 다음 상태까지 보낸다.
+private func tbPlayMissedRound(_ game: inout TimingBarGame) {
+    tbTapOutsideTarget(&game)
+    tbSkipResultHold(&game)
+}
+
+/// 목표에서 폭만큼 떨어진 자리(d = 2)에서 정지한다. 트랙 밖으로 나가는 쪽이면 반대편을 쓴다.
+private func tbTapOutsideTarget(_ game: inout TimingBarGame) {
+    let (center, width) = game.target
+    let position = center + width <= 0.97 ? center + width : center - width
+    tbAdvanceToPosition(&game, position)
+    game.tap()
+}
+
 private func tbFinishedGame(seed: UInt64 = tbSeed) -> TimingBarGame {
     var game = tbStarted(seed: seed)
     for _ in 0..<TimingBarGame.roundCount { tbPlayPerfectRound(&game) }
+    return game
+}
+
+/// 라운드 `round` 를 진행 중인 판(앞 라운드는 전부 100점). 마커는 트랙 한가운데(p = 0.5).
+private func tbRunningRound(_ round: Int, seed: UInt64 = tbSeed) -> TimingBarGame {
+    var game = tbStarted(seed: seed)
+    for _ in 0..<(round - 1) { tbPlayPerfectRound(&game) }
+    tbAdvance(&game, by: TimingBarGame.period(round: round) / 4)
     return game
 }
 
@@ -102,6 +133,12 @@ func timingBarMarkerIsATriangleWave() {
     #expect(abs(TimingBarGame.markerPosition(t: period, period: period) - 0) < 1e-9)
     // 두 번째 왕복도 같은 모양(주기 함수).
     #expect(abs(TimingBarGame.markerPosition(t: period * 1.25, period: period) - 0.5) < 1e-9)
+    // 음수 시각도 정의된다 — 마커 잔상(t − k/60)이 이 성질에 기대고 있다(v0.2.48).
+    #expect(abs(TimingBarGame.markerPosition(t: -period / 4, period: period) - 0.5) < 1e-9)
+    for frames in [2.0, 4.0, 6.0] {
+        let ghost = TimingBarGame.markerPosition(t: 0.01 - frames / 60, period: period)
+        #expect(ghost >= 0 && ghost <= 1, "잔상 위치가 트랙(0…1) 밖으로 나가면 안 된다")
+    }
 }
 
 @Test
@@ -133,6 +170,113 @@ func timingBarTargetStaysInsideTheTrackForEveryRound() {
             tbPlayPerfectRound(&game)
         }
     }
+}
+
+/// **난이도 불변 회귀(v0.2.48 디자인 작업의 계약).** 판을 292×200 → 292×302 로 키우고 그림을 전부 새로
+/// 그렸지만, 난이도를 정하는 값은 한 톨도 안 움직였다. 이 게임의 규칙은 정규화 좌표(0…1)라 판 크기와 무관하다.
+@Test
+func timingBarDifficultyConstantsAreFrozen() {
+    let periods: [Double] = [1.10, 1.025, 0.95, 0.875, 0.80, 0.725, 0.65, 0.575, 0.50, 0.425]
+    let widths: [Double] = [0.24, 0.221, 0.202, 0.183, 0.164, 0.145, 0.126, 0.107, 0.088, 0.07]
+    for round in 1...TimingBarGame.roundCount {
+        #expect(abs(TimingBarGame.period(round: round) - periods[round - 1]) < 1e-9,
+                "r\(round) 주기가 \(periods[round - 1]) 에서 \(TimingBarGame.period(round: round)) 로 변했다")
+        #expect(abs(TimingBarGame.targetWidth(round: round) - widths[round - 1]) < 1e-9,
+                "r\(round) 목표 폭이 \(widths[round - 1]) 에서 \(TimingBarGame.targetWidth(round: round)) 로 변했다")
+    }
+    // 배점: d 0 → 100, 0.5 → 85, 1 → 70, 밖 → 0. 한 판 최대 1000점(= 서버 check 상한과 같다).
+    // d 0.35 는 90점 **경계**라 부동소수 반올림이 89로 떨어진다 — 그래서 표에는 0.34 를 둔다
+    // (안쪽 띠 폭 0.35 는 이 경계를 그린 것이다. MiniGameTimingBar.swift 의 innerTargetRatio 주석 참고).
+    for (distance, score) in [(0.0, 100), (0.1, 97), (0.34, 90), (0.5, 85), (0.9, 73), (1.0, 70), (1.01, 0)] {
+        #expect(TimingBarGame.roundScore(distance: distance) == score,
+                "d \(distance) 의 점수가 \(score) 에서 \(TimingBarGame.roundScore(distance: distance)) 로 변했다")
+    }
+    #expect(TimingBarGame.roundCount == 10)
+    #expect(TimingBarGame.roundCount * 100 == MiniGameKind.timingBar.maxScore)
+    #expect(TimingBarGame.resultHold == 0.6)
+    #expect(TimingBarGame.maxStep == 1.0 / 30.0)
+}
+
+// MARK: - (1b) 판정 등급 · 콤보 (v0.2.48)
+
+@Test
+func timingBarVerdictBoundaries() {
+    // 경계는 100 / 90 / 80 / 70. 배점상 70 미만은 0 뿐이지만 함수는 그 사이 값도 빗나감으로 접는다.
+    #expect(TimingBarGame.verdict(score: 100) == .perfect)
+    #expect(TimingBarGame.verdict(score: 99) == .great)
+    #expect(TimingBarGame.verdict(score: 90) == .great)
+    #expect(TimingBarGame.verdict(score: 89) == .good)
+    #expect(TimingBarGame.verdict(score: 80) == .good)
+    #expect(TimingBarGame.verdict(score: 79) == .close)
+    #expect(TimingBarGame.verdict(score: 70) == .close)
+    #expect(TimingBarGame.verdict(score: 69) == .miss)
+    #expect(TimingBarGame.verdict(score: 0) == .miss)
+    // 실제로 나올 수 있는 점수(0 · 70…100)가 전부 등급을 얻는다.
+    for distance in stride(from: 0.0, through: 1.2, by: 0.01) {
+        let score = TimingBarGame.roundScore(distance: distance)
+        let verdict = TimingBarGame.verdict(score: score)
+        #expect((score == 0) == (verdict == .miss), "d \(distance): 점수 \(score) 와 등급 \(verdict) 가 어긋난다")
+    }
+    // 색만으로 알리지 않는다 — 등급마다 글자가 다르다.
+    let labels = [TimingBarGame.Verdict.perfect, .great, .good, .close, .miss].map(\.label)
+    #expect(Set(labels).count == labels.count, "등급 라벨이 겹친다: \(labels)")
+    #expect(labels.allSatisfy { !$0.isEmpty })
+}
+
+@Test
+func timingBarComboCountsTrailingHits() {
+    var game = tbStarted()
+    #expect(game.combo == 0, "시작 전엔 콤보가 없다")
+    tbPlayPerfectRound(&game)
+    #expect(game.combo == 1)
+    tbPlayPerfectRound(&game)
+    tbPlayPerfectRound(&game)
+    #expect(game.combo == 3)
+    // 한 번 빗나가면 그 자리에서 끊긴다(꼬리에서 세기 때문에 앞의 3연속은 잊힌다).
+    tbPlayMissedRound(&game)
+    #expect(game.roundScores.suffix(1) == [0])
+    #expect(game.combo == 0)
+    tbPlayPerfectRound(&game)
+    #expect(game.combo == 1, "끊긴 뒤엔 1부터 다시")
+    // 무효화하면 콤보도 사라진다.
+    game.invalidate()
+    #expect(game.combo == 0)
+}
+
+/// 콤보는 **표시 전용**이다. 총점에 섞이면 서버 상한 1000점을 넘겨 업로드가 거부되고 순위 의미가 깨진다.
+@Test
+func timingBarComboNeverEntersTheTotal() {
+    var game = tbStarted()
+    for _ in 0..<TimingBarGame.roundCount {
+        tbPlayPerfectRound(&game)
+        #expect(game.total == game.roundScores.reduce(0, +), "총점이 라운드 점수 합이 아니다(콤보가 섞였다)")
+    }
+    #expect(game.combo == 10)
+    #expect(game.total == 1000, "10연속 완벽의 총점은 콤보와 무관하게 1000")
+    #expect(game.total <= MiniGameKind.timingBar.maxScore)
+
+    // 콤보가 끊긴 판도 마찬가지 — 합계는 라운드 점수의 합 그대로다.
+    var mixed = tbStarted(seed: 99)
+    for index in 0..<TimingBarGame.roundCount {
+        if index % 3 == 0 { tbPlayMissedRound(&mixed) } else { tbPlayPerfectRound(&mixed) }
+    }
+    #expect(mixed.total == mixed.roundScores.reduce(0, +))
+    #expect(mixed.roundScores == [0, 100, 100, 0, 100, 100, 0, 100, 100, 0])
+    #expect(mixed.total == 600, "0점 4번(r1·r4·r7·r10) + 100점 6번")
+}
+
+@Test
+func timingBarStageAdvancesEveryTwoRounds() {
+    // 무대는 2라운드마다 한 단계. 시작 전(0)은 새벽, 10라운드는 오로라 — 창 상단 칩이 이 이름을 그대로 쓴다.
+    let expected: [Int: String] = [0: "새벽", 1: "새벽", 2: "새벽", 3: "한낮", 4: "한낮", 5: "노을", 6: "노을",
+                                   7: "밤", 8: "밤", 9: "오로라", 10: "오로라"]
+    for (round, name) in expected.sorted(by: { $0.key < $1.key }) {
+        #expect(MiniGameStage.forTimingRound(round).name == name,
+                "라운드 \(round) 무대가 \(name) 이 아니라 \(MiniGameStage.forTimingRound(round).name)")
+    }
+    // 라운드가 10을 넘어도 마지막 무대에서 멎는다(상한 없는 인덱싱 사고 방지).
+    #expect(MiniGameStage.forTimingRound(50).name == "오로라")
+    #expect(MiniGameStage.forTimingRound(9).id != MiniGameStage.forTimingRound(1).id)
 }
 
 // MARK: - (2) 상태 기계
@@ -258,7 +402,8 @@ func timingBarStepClampsLargeDeltas() {
 private enum TimingRenderError: Error { case failed }
 
 @MainActor
-private func tbRenderBitmap(_ view: some View, width: CGFloat = 292, height: CGFloat = 200) throws -> NSBitmapImageRep {
+private func tbRenderBitmap(_ view: some View, width: CGFloat = MiniGameWindowLayout.canvasSize.width,
+                            height: CGFloat = MiniGameWindowLayout.canvasSize.height) throws -> NSBitmapImageRep {
     let renderer = ImageRenderer(content: view.frame(width: width, height: height).background(CheckTheme.panel).fixedSize())
     renderer.scale = 2
     guard let image = renderer.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) else {
@@ -267,11 +412,16 @@ private func tbRenderBitmap(_ view: some View, width: CGFloat = 292, height: CGF
     return bitmap
 }
 
+/// 실제 창 캔버스(344×356)로 한 판을 그린다 — 사람이 보는 크기가 이것뿐이라 스냅샷도 전부 이 크기다.
+@MainActor
+private func tbCanvasBitmap(_ game: TimingBarGame, bestScore: Int = 0, reduceMotion: Bool = false) throws -> NSBitmapImageRep {
+    let view = TimingBarGameView(host: .inert(bestScore: bestScore, reduceMotion: reduceMotion),
+                                 input: MiniGameInput(), initialGame: game)
+    return try tbRenderBitmap(view)
+}
+
 private func tbSavePNG(_ bitmap: NSBitmapImageRep, _ name: String) {
-    let dir = "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/agent-tune2"
-    try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-    guard let png = bitmap.representation(using: .png, properties: [:]) else { return }
-    try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name))
+    MiniGameSnapshots.save(bitmap, name: name, sub: "timing")
 }
 
 /// predicate(r,g,b,a) 를 만족하는 픽셀 수(전체).
@@ -306,60 +456,286 @@ private func tbCountIn(_ bitmap: NSBitmapImageRep, x: ClosedRange<CGFloat>, y: C
     return n
 }
 
-/// accent 파랑 계열(테두리 (84,171,255) · .35 채움 (≈52,84,121)): 파랑이 빨강보다 40 이상 앞선다.
-private func tbIsAccentish(_ r: Int, _ g: Int, _ b: Int, _ a: Int) -> Bool { a > 200 && b >= 110 && b - r >= 40 && b > g }
-/// working 초록 (89,224,161): 초록이 빨강보다 60 이상 앞서고 파랑보다 크다.
-private func tbIsWorking(_ r: Int, _ g: Int, _ b: Int, _ a: Int) -> Bool { a > 200 && g >= 180 && g - r >= 60 && g > b }
-/// danger 빨강 (255,115,117).
-private func tbIsDanger(_ r: Int, _ g: Int, _ b: Int, _ a: Int) -> Bool { a > 200 && r >= 200 && g < 150 && b < 150 }
-/// 오버레이 카드 바탕 panelElevated (54,56,74) — 캔버스 바닥(fieldFill 위 panel ≈ (34,37,49))보다 밝은 청회색.
-private func tbIsCard(_ r: Int, _ g: Int, _ b: Int, _ a: Int) -> Bool { a > 200 && abs(r - 54) <= 3 && abs(g - 56) <= 3 && abs(b - 74) <= 3 }
-
-@MainActor
-@Test
-func timingBarLastRoundDrawsTheNarrowestTarget() throws {
-    // r10 은 폭 0.07(트랙의 7%) — 난이도 상향의 끝이 눈에 어떻게 보이는지 남긴다. 창 캔버스 크기로 찍는다.
-    var game = tbStarted()
-    for _ in 0..<(TimingBarGame.roundCount - 1) { tbPlayPerfectRound(&game) }
-    guard case .running(let round, _) = game.phase else {
-        Issue.record("r10 이 아니다: \(game.phase)")
-        return
+/// 한 행에 predicate 가 `minRun` 개 이상 걸리는 첫 y(pt). 없으면 nil.
+/// **행 단위로 세는 이유**: 그라디언트 경계에서 우연히 카드 색과 같아지는 낱 픽셀이 늘 몇십 개 나온다.
+/// 카드는 폭 240pt(=480px)짜리 판이라 "이 행에 잔뜩 있다"로 봐야 진짜 카드의 윗변을 잡는다.
+private func tbTopEdge(_ bitmap: NSBitmapImageRep, minRun: Int = 120,
+                       where predicate: (Int, Int, Int, Int) -> Bool) -> CGFloat? {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 4 else { return nil }
+    let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+    for y in 0..<bitmap.pixelsHigh {
+        var run = 0
+        for x in 0..<bitmap.pixelsWide {
+            let o = y * bpr + x * spp
+            if predicate(Int(data[o]), Int(data[o + 1]), Int(data[o + 2]), Int(data[o + 3])) { run += 1 }
+        }
+        if run >= minRun { return CGFloat(y) / 2 }
     }
-    #expect(round == 10)
-    #expect(abs(game.target.width - 0.07) < 1e-9)
-    tbAdvance(&game, by: TimingBarGame.period(round: 10) / 4)
-    let view = TimingBarGameView(host: .inert(bestScore: 900), input: MiniGameInput(), initialGame: game)
-    let bitmap = try tbRenderBitmap(view, width: 344, height: 356)
-    tbSavePNG(bitmap, "timing-round10.png")
-    #expect(tbCount(bitmap, where: tbIsAccentish) > 100, "좁아도 목표 구간은 보여야 한다")
-    #expect(tbCount(bitmap, where: tbIsWorking) > 60, "마커(working)")
+    return nil
 }
+
+/// y 구간 안에서 한 행이 predicate 를 만족한 최대 개수.
+private func tbMaxRowCount(_ bitmap: NSBitmapImageRep, y: ClosedRange<CGFloat>,
+                           where predicate: (Int, Int, Int, Int) -> Bool) -> Int {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 4 else { return 0 }
+    let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+    let y0 = max(0, Int(y.lowerBound * 2)), y1 = min(bitmap.pixelsHigh - 1, Int(y.upperBound * 2))
+    guard y0 <= y1 else { return 0 }
+    var best = 0
+    for py in y0...y1 {
+        var run = 0
+        for px in 0..<bitmap.pixelsWide {
+            let o = py * bpr + px * spp
+            if predicate(Int(data[o]), Int(data[o + 1]), Int(data[o + 2]), Int(data[o + 3])) { run += 1 }
+        }
+        best = max(best, run)
+    }
+    return best
+}
+
+/// 영역 평균 밝기(0…255).
+private func tbBrightness(_ bitmap: NSBitmapImageRep, x: ClosedRange<CGFloat>, y: ClosedRange<CGFloat>) -> Double {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 4 else { return 0 }
+    let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+    let x0 = max(0, Int(x.lowerBound * 2)), x1 = min(bitmap.pixelsWide - 1, Int(x.upperBound * 2))
+    let y0 = max(0, Int(y.lowerBound * 2)), y1 = min(bitmap.pixelsHigh - 1, Int(y.upperBound * 2))
+    guard x0 <= x1, y0 <= y1 else { return 0 }
+    var sum = 0.0, n = 0.0
+    for py in y0...y1 {
+        for px in x0...x1 {
+            let o = py * bpr + px * spp
+            sum += Double(Int(data[o]) + Int(data[o + 1]) + Int(data[o + 2])) / 3
+            n += 1
+        }
+    }
+    return n > 0 ? sum / n : 0
+}
+
+// ── 색 판별기 ────────────────────────────────────────────────────────────────────────────
+// v0.2.48 부터 배경이 무대 색이라 "이 색이 있다"만으로는 약하다. 그래서 판별기는 **판정 색**(무대를 안 타는
+// 다섯 색)과 **마커**(흰 블레이드)에만 쓰고, 나머지는 위치·밝기로 확인한다.
+
+/// working 초록 (89,224,161) — 90점대(훌륭) 판정.
+private func tbIsWorking(_ r: Int, _ g: Int, _ b: Int, _ a: Int) -> Bool { a > 200 && g >= 180 && g - r >= 60 && g > b }
+/// danger 빨강 (255,115,117) — 빗나감.
+private func tbIsDanger(_ r: Int, _ g: Int, _ b: Int, _ a: Int) -> Bool { a > 200 && r >= 200 && g < 160 && b < 160 }
+/// 완벽(100점) 금색 (255,214,133).
+private func tbIsGold(_ r: Int, _ g: Int, _ b: Int, _ a: Int) -> Bool { a > 200 && r >= 225 && g >= 175 && g <= 235 && b < 175 }
+/// 마커 블레이드(흰색 primaryText 0.94) — 진행 중 마커.
+private func tbIsMarker(_ r: Int, _ g: Int, _ b: Int, _ a: Int) -> Bool { a > 200 && r >= 215 && g >= 215 && b >= 215 }
+/// 오버레이 카드 바탕 panelElevated(54,56,74) 0.94 를 무대 하늘 위에 얹은 값. 하늘은 r 과 g 가 이만큼
+/// 붙는 구간이 없어(새벽·오로라 모두 g 가 r 보다 한참 낮거나 높다) 카드만 걸린다.
+private func tbIsCard(_ r: Int, _ g: Int, _ b: Int, _ a: Int) -> Bool {
+    a > 200 && abs(r - 53) <= 7 && abs(g - 56) <= 7 && abs(b - 73) <= 8
+}
+
+// ── 논리 좌표(292×302) → 실제 pt. 창 캔버스 344×356 에서 배율 ≈1.178 ────────────────────
+private func tbScale() -> CGFloat {
+    MiniGameCanvas.transform(in: MiniGameWindowLayout.canvasSize,
+                             logicalSize: CGSize(width: MiniGameCanvas.logicalWidth, height: 302)).scale
+}
+private func tbOrigin() -> CGPoint {
+    MiniGameCanvas.transform(in: MiniGameWindowLayout.canvasSize,
+                             logicalSize: CGSize(width: MiniGameCanvas.logicalWidth, height: 302)).origin
+}
+private func tbY(_ logical: CGFloat) -> CGFloat { tbOrigin().y + logical * tbScale() }
+private func tbX(_ logical: CGFloat) -> CGFloat { tbOrigin().x + logical * tbScale() }
+
+// MARK: 스냅샷 8장 (사람이 눈으로 보는 검증)
 
 @MainActor
 @Test
-func timingBarRunningFrameShowsTargetAndMarker() throws {
+func timingBarSnapshotsCoverEveryStateOnTheRealCanvas() throws {
+    // 1) 시작 화면 — 트랙이 보이고 카드와 겹치지 않아야 한다(v0.2.48 의 핵심 요구).
+    tbSavePNG(try tbCanvasBitmap(TimingBarGame(seed: tbSeed)), "timing-ready.png")
+    // 2·3·4) 무대가 라운드로 바뀐다: r1 새벽 · r5 노을 · r9 오로라.
+    tbSavePNG(try tbCanvasBitmap(tbRunningRound(1)), "timing-r1.png")
+    tbSavePNG(try tbCanvasBitmap(tbRunningRound(5)), "timing-r5.png")
+    tbSavePNG(try tbCanvasBitmap(tbRunningRound(9)), "timing-r9.png")
+    // 5) 완벽 판정 직후 — 링 2개·파편·팝·섬광.
+    tbSavePNG(try tbCanvasBitmap(tbPerfectMoment()), "timing-perfect.png")
+    // 6) 빗나감 직후 — 붉은 플래시·danger 마커·"+0 · 빗나감".
+    tbSavePNG(try tbCanvasBitmap(tbMissMoment()), "timing-miss.png")
+    // 7) 콤보 3.
+    tbSavePNG(try tbCanvasBitmap(tbComboThree()), "timing-combo.png")
+    // 8) 결과 카드(신기록).
+    tbSavePNG(try tbCanvasBitmap(tbFinishedGame(), bestScore: 700), "timing-result.png")
+}
+
+/// 완벽(100점) 판정 0.133초 뒤 — 링이 퍼지는 중.
+private func tbPerfectMoment() -> TimingBarGame {
     var game = tbStarted()
-    // 마커를 트랙 중간(p = 0.5, t = T/4)에 둔다 — 목표와 겹쳐도 색 픽셀은 둘 다 남는다.
-    // 주기는 라운드 1 값을 그때그때 읽는다(난이도를 조정하면 상수가 바뀐다 — 0.35 로 박아 두면 그때 빨개진다).
-    tbAdvance(&game, by: TimingBarGame.period(round: 1) / 4)
-    #expect(abs(game.markerPosition - 0.5) < 1e-9)
-    let view = TimingBarGameView(host: .inert(bestScore: 640), input: MiniGameInput(), initialGame: game)
-    let bitmap = try tbRenderBitmap(view)
-    tbSavePNG(bitmap, "timing-running.png")
-    #expect(bitmap.pixelsWide == 292 * 2 && bitmap.pixelsHigh == 200 * 2)
-    #expect(tbCount(bitmap, where: tbIsAccentish) > 200, "목표 구간(accent)이 그려져야 한다")
-    #expect(tbCount(bitmap, where: tbIsWorking) > 60, "마커(working)가 그려져야 한다")
-    #expect(tbCount(bitmap, where: tbIsCard) < 50, "running 중엔 오버레이 카드가 없다")
+    tbPlayPerfectRound(&game)
+    tbPlayPerfectRound(&game)
+    tbAdvanceToTargetCenter(&game)
+    game.tap()
+    for _ in 0..<4 { game.step(dt: TimingBarGame.maxStep) }
+    return game
+}
+
+/// 빗나감 0.067초 뒤 — 붉은 플래시가 아직 살아 있고 화면이 흔들리는 중.
+private func tbMissMoment() -> TimingBarGame {
+    var game = tbStarted()
+    tbPlayPerfectRound(&game)
+    tbTapOutsideTarget(&game)
+    for _ in 0..<2 { game.step(dt: TimingBarGame.maxStep) }
+    return game
+}
+
+/// 3연속 명중 중인 판(앞에 한 번 빗나가 콤보가 정확히 3 이다).
+private func tbComboThree() -> TimingBarGame {
+    var game = tbStarted()
+    tbPlayMissedRound(&game)
+    for _ in 0..<3 { tbPlayPerfectRound(&game) }
+    tbAdvance(&game, by: TimingBarGame.period(round: 5) / 4)
+    return game
+}
+
+// MARK: 렌더 단언
+
+@MainActor
+@Test
+func timingBarReadyShowsTheTrackAndTheCardWithoutOverlap() throws {
+    // 종전에는 카드가 가운데를 덮어 트랙 양 끝만 괄호처럼 삐져나왔고, 그래서 시작 화면에 트랙을 아예 안 그렸다.
+    // v0.2.48: 판이 세로로 길어졌으니 카드를 아래에 붙이고 트랙을 보여 준다 — 트랙이 이 게임의 얼굴이다.
+    let bitmap = try tbCanvasBitmap(TimingBarGame(seed: tbSeed))
+    #expect(bitmap.pixelsWide == Int(MiniGameWindowLayout.canvasSize.width) * 2)
+    #expect(bitmap.pixelsHigh == Int(MiniGameWindowLayout.canvasSize.height) * 2)
+
+    // (a) 트랙이 있다: 캡슐 안쪽(어두운 그라디언트)이 바로 위 하늘보다 뚜렷이 어둡다.
+    let trackBand = tbBrightness(bitmap, x: tbX(60)...tbX(232), y: tbY(144)...tbY(156))
+    let skyBand = tbBrightness(bitmap, x: tbX(60)...tbX(232), y: tbY(118)...tbY(130))
+    #expect(trackBand < skyBand * 0.75, "트랙 캡슐이 안 보인다(트랙 \(trackBand) vs 하늘 \(skyBand))")
+
+    // (b) 카드는 트랙 아래에서 시작한다 — 겹치면 이 단언이 무너진다.
+    let cardTop = try #require(tbTopEdge(bitmap, where: tbIsCard), "시작 카드가 안 그려졌다")
+    #expect(cardTop > tbY(160), "카드 윗변(\(cardTop)pt)이 트랙(\(tbY(159))pt)을 덮는다")
+    #expect(tbMaxRowCount(bitmap, y: 0...tbY(160), where: tbIsCard) < 60,
+            "트랙과 그 위쪽에 카드 몸통이 걸쳐 있다")
+
+    // (c) 시작 전엔 마커도 목표 구간도 없다(트랙만 있다).
+    #expect(tbCountIn(bitmap, x: 0...MiniGameWindowLayout.canvasSize.width, y: tbY(130)...tbY(172),
+                      where: tbIsMarker) < 20, "시작 전엔 마커가 없다")
 }
 
 @MainActor
 @Test
-func timingBarReadyFrameShowsTheStartCard() throws {
-    let view = TimingBarGameView(host: .inert(), input: MiniGameInput(), initialGame: TimingBarGame(seed: tbSeed))
-    let bitmap = try tbRenderBitmap(view)
-    tbSavePNG(bitmap, "timing-ready.png")
-    #expect(tbCount(bitmap, where: tbIsCard) > 800, "시작 안내 카드(panelElevated)가 캔버스 위에 떠야 한다")
-    #expect(tbCount(bitmap, where: tbIsWorking) == 0, "시작 전엔 마커가 없다")
+func timingBarRunningFrameShowsTheTargetLayersAndTheMarker() throws {
+    let game = tbRunningRound(1)
+    #expect(abs(game.markerPosition - 0.5) < 1e-9)
+    let bitmap = try tbCanvasBitmap(game, bestScore: 640)
+    // 마커: 흰 블레이드 + 삼각 촉. 트랙 밴드 안에서만 센다(하늘의 별이 섞이지 않게).
+    let marker = tbCountIn(bitmap, x: tbX(120)...tbX(172), y: tbY(133)...tbY(167), where: tbIsMarker)
+    #expect(marker > 250, "마커 블레이드가 안 보인다(\(marker)px)")
+    // 목표 구간: 트랙 밴드가 하늘보다 밝은 구간(무대 structure 3중)이 있어야 한다.
+    let (center, width) = game.target
+    let inside = tbBrightness(bitmap, x: tbX(24 + CGFloat(center - width / 4) * 244)...tbX(24 + CGFloat(center + width / 4) * 244),
+                              y: tbY(144)...tbY(156))
+    let outside = tbBrightness(bitmap, x: tbX(28)...tbX(40), y: tbY(144)...tbY(156))
+    #expect(inside > outside * 1.4, "목표 구간이 빈 트랙과 구별되지 않는다(\(inside) vs \(outside))")
+    // 진행 중엔 카드가 없다(그라디언트 경계의 낱 픽셀은 행 단위로 세면 걸러진다).
+    #expect(tbTopEdge(bitmap, where: tbIsCard) == nil, "running 중엔 오버레이 카드가 없다")
+}
+
+@MainActor
+@Test
+func timingBarStagesDifferByRound() throws {
+    // 무대가 라운드로 갈린다 = 같은 자리(하늘)의 색이 r1 · r5 · r9 에서 서로 다르다.
+    let frames = try [1, 5, 9].map { try tbCanvasBitmap(tbRunningRound($0)) }
+    func skyColor(_ bitmap: NSBitmapImageRep) -> (Int, Int, Int) {
+        guard let data = bitmap.bitmapData else { return (0, 0, 0) }
+        let o = Int(tbY(95) * 2) * bitmap.bytesPerRow + Int(tbX(146) * 2) * bitmap.samplesPerPixel
+        return (Int(data[o]), Int(data[o + 1]), Int(data[o + 2]))
+    }
+    let colors = frames.map(skyColor)
+    for (a, b) in [(0, 1), (1, 2), (0, 2)] {
+        let delta = abs(colors[a].0 - colors[b].0) + abs(colors[a].1 - colors[b].1) + abs(colors[a].2 - colors[b].2)
+        #expect(delta > 20, "무대가 안 바뀌었다: \(colors[a]) vs \(colors[b])")
+    }
+}
+
+@MainActor
+@Test
+func timingBarPerfectHitPaintsGoldRingsAndPop() throws {
+    let bitmap = try tbCanvasBitmap(tbPerfectMoment())
+    // 완벽은 금색 — 마커·링·파편·"+100 완벽!" 팝이 전부 같은 색으로 온다.
+    #expect(tbCount(bitmap, where: tbIsGold) > 400, "완벽 판정의 금색이 거의 없다")
+    // 링은 마커에서 퍼진다 — 트랙 밴드 바깥(위쪽)에도 금색이 있어야 한다.
+    #expect(tbCountIn(bitmap, x: 0...MiniGameWindowLayout.canvasSize.width, y: tbY(96)...tbY(132), where: tbIsGold) > 40,
+            "링·팝이 마커 위로 안 퍼졌다")
+    #expect(tbCount(bitmap, where: tbIsDanger) < 40, "완벽인데 danger 색이 보인다")
+}
+
+@MainActor
+@Test
+func timingBarMissedRoundResultFlashesRedAndPaintsTheMarker() throws {
+    let game = tbMissMoment()
+    #expect(game.lastHit == false)
+    let bitmap = try tbCanvasBitmap(game)
+    #expect(tbCount(bitmap, where: tbIsDanger) > 300, "빗나간 정지는 마커·팝·세그먼트가 danger 색")
+    // 붉은 플래시: 화면 전체가 붉게 물든다 — 하늘의 빨강 성분이 같은 프레임의 평상시보다 높다.
+    var calm = game
+    for _ in 0..<8 { calm.step(dt: TimingBarGame.maxStep) }   // 0.27초 — 플래시가 끝난 뒤
+    let calmBitmap = try tbCanvasBitmap(calm)
+    func redness(_ bitmap: NSBitmapImageRep) -> Double {
+        guard let data = bitmap.bitmapData else { return 0 }
+        var sum = 0.0, n = 0.0
+        for y in stride(from: 40, to: 200, by: 4) {
+            for x in stride(from: 40, to: 600, by: 4) {
+                let o = y * bitmap.bytesPerRow + x * bitmap.samplesPerPixel
+                sum += Double(Int(data[o]) - Int(data[o + 2]))
+                n += 1
+            }
+        }
+        return n > 0 ? sum / n : 0
+    }
+    #expect(redness(bitmap) > redness(calmBitmap) + 8,
+            "붉은 플래시가 없다(\(redness(bitmap)) vs \(redness(calmBitmap)))")
+}
+
+@MainActor
+@Test
+func timingBarComboChipAppearsOnlyFromTwoInARow() throws {
+    // 콤보만 다른 두 판을 **같은 라운드(5 = 노을)** 에서 비교한다 — 무대가 다르면 하늘 색이 달라 비교가 안 된다.
+    var one = tbStarted()
+    for _ in 0..<3 { tbPlayMissedRound(&one) }     // r1~r3 빗나감
+    tbPlayPerfectRound(&one)                        // r4 명중 → 콤보 1
+    tbAdvance(&one, by: TimingBarGame.period(round: 5) / 4)
+    #expect(one.combo == 1)
+    let three = tbComboThree()
+    #expect(three.combo == 3)
+    let chipless = try tbCanvasBitmap(one)
+    let chipped = try tbCanvasBitmap(three)
+    // 콤보 칩은 헤더 아래(논리 y 56)에 뜬다. 칩의 글자·테두리는 하늘보다 훨씬 밝다.
+    let band = (x: tbX(90)...tbX(202), y: tbY(46)...tbY(66))
+    func chipPixels(_ bitmap: NSBitmapImageRep) -> Int {
+        tbCountIn(bitmap, x: band.x, y: band.y) { r, g, b, a in a > 200 && r + g + b > 450 }
+    }
+    #expect(chipPixels(chipped) > 250, "콤보 3 칩이 안 보인다(\(chipPixels(chipped))px)")
+    #expect(chipPixels(chipless) < 80, "콤보 1에서도 칩이 그려진다(\(chipPixels(chipless))px)")
+}
+
+@MainActor
+@Test
+func timingBarSegmentBarShowsOneCellPerRound() throws {
+    // 라운드 5 진행 중: 앞 4칸이 완벽(금색)으로 채워지고 나머지는 테두리만.
+    let game = tbRunningRound(5)
+    #expect(game.roundScores == [100, 100, 100, 100])
+    let bitmap = try tbCanvasBitmap(game)
+    let band = tbY(244)...tbY(256)
+    let filled = tbCountIn(bitmap, x: tbX(24)...tbX(122), y: band, where: tbIsGold)
+    let empty = tbCountIn(bitmap, x: tbX(150)...tbX(268), y: band, where: tbIsGold)
+    #expect(filled > 800, "끝낸 라운드 칸이 등급 색으로 안 찼다(\(filled)px)")
+    #expect(empty < filled / 4, "아직 안 한 칸이 채워져 있다(\(empty)px)")
+
+    // 빗나간 라운드가 섞이면 그 칸만 danger 색이다.
+    var mixed = tbStarted()
+    tbPlayMissedRound(&mixed)
+    tbPlayPerfectRound(&mixed)
+    tbAdvance(&mixed, by: 0.2)
+    let mixedBitmap = try tbCanvasBitmap(mixed)
+    #expect(tbCountIn(mixedBitmap, x: tbX(24)...tbX(46), y: band, where: tbIsDanger) > 200, "0점 칸이 빨갛지 않다")
+    #expect(tbCountIn(mixedBitmap, x: tbX(48)...tbX(70), y: band, where: tbIsGold) > 200, "100점 칸이 금색이 아니다")
 }
 
 @MainActor
@@ -367,38 +743,53 @@ func timingBarReadyFrameShowsTheStartCard() throws {
 func timingBarFinishedFrameShowsTheResultCard() throws {
     let game = tbFinishedGame()
     #expect(game.phase == .finished(total: 1000))
-    let view = TimingBarGameView(host: .inert(bestScore: 700), input: MiniGameInput(), initialGame: game)
-    let bitmap = try tbRenderBitmap(view)
-    tbSavePNG(bitmap, "timing-finished.png")
+    let bitmap = try tbCanvasBitmap(game, bestScore: 700)
     #expect(tbCount(bitmap, where: tbIsCard) > 800, "결과 카드(panelElevated)가 떠야 한다")
     // 신기록(1000 > 700)이면 '신기록!' 이 working 색으로 — 초록 글자 픽셀이 조금은 있다.
     #expect(tbCount(bitmap, where: tbIsWorking) > 0, "신기록 문구가 working 색이어야 한다")
+    // 결과 화면에서도 트랙은 남아 있고, 카드가 그 위를 덮지 않는다.
+    let cardTop = try #require(tbTopEdge(bitmap, where: tbIsCard))
+    #expect(cardTop > tbY(160), "결과 카드가 트랙을 덮는다(\(cardTop)pt)")
 }
 
 @MainActor
 @Test
-func timingBarMissedRoundResultPaintsTheMarkerRed() throws {
-    var game = tbStarted()
-    game.tap()   // t=0, p=0 → 목표 밖(중심 ≥ 0.2) → danger
-    #expect(game.lastHit == false)
-    let bitmap = try tbRenderBitmap(TimingBarGameView(host: .inert(), input: MiniGameInput(), initialGame: game))
-    #expect(tbCount(bitmap, where: tbIsDanger) > 40, "빗나간 정지는 마커가 danger 색")
+func timingBarReduceMotionDropsGhostsAndShake() throws {
+    // 동작 줄이기: 잔상·흔들림·맥동이 사라진다. 규칙(마커 위치·점수)은 그대로다.
+    let game = tbRunningRound(1)
+    let lively = try tbCanvasBitmap(game)
+    let calm = try tbCanvasBitmap(game, reduceMotion: true)
+    // 마커 왼쪽(지나온 쪽)의 잔상 3개가 사라지므로 그 띠의 흰 픽셀이 줄어든다.
+    let ghostBand = (x: tbX(130)...tbX(145), y: tbY(136)...tbY(164))
+    let withGhosts = tbCountIn(lively, x: ghostBand.x, y: ghostBand.y, where: tbIsMarker)
+    let withoutGhosts = tbCountIn(calm, x: ghostBand.x, y: ghostBand.y, where: tbIsMarker)
+    #expect(withGhosts >= withoutGhosts, "동작 줄이기가 잔상을 더 그린다")
+    // 마커 자체는 두 경우 모두 그려진다(규칙은 접근성 설정을 안 탄다).
+    let markerBand = (x: tbX(140)...tbX(152), y: tbY(133)...tbY(167))
+    #expect(tbCountIn(calm, x: markerBand.x, y: markerBand.y, where: tbIsMarker) > 150)
 }
 
 @MainActor
 @Test
 func timingBarShrunkCanvasKeepsAspectAndStillDraws() throws {
+    // 캔버스가 논리 비율보다 납작하면 좌우가 레터박스가 된다 — 그 여백엔 게임 요소가 없어야 한다.
     var game = tbStarted()
     tbAdvance(&game, by: 0.35)
     let view = TimingBarGameView(host: .inert(), input: MiniGameInput(), initialGame: game)
-    let bitmap = try tbRenderBitmap(view, height: 140)
+    let bitmap = try tbRenderBitmap(view, width: 292, height: 140)
     #expect(bitmap.pixelsHigh == 140 * 2)
-    #expect(tbCount(bitmap, where: tbIsAccentish) > 100)
-    #expect(tbCount(bitmap, where: tbIsWorking) > 30)
-    // 비율 유지: 배율 0.7 이라 트랙이 가로 292 를 다 쓰지 않는다 — 왼쪽 40pt 띠(원점 43.8 앞)엔 목표·마커 색이 없다.
-    #expect(MiniGameCanvas.transform(in: CGSize(width: 292, height: 140)).scale == 0.7)
-    let leftStrip = tbCountIn(bitmap, x: 0...40, y: 0...140) { r, g, b, a in tbIsAccentish(r, g, b, a) || tbIsWorking(r, g, b, a) }
-    #expect(leftStrip == 0, "축소된 캔버스의 왼쪽 여백에 게임 요소가 그려지면 비율 유지가 깨진 것")
+    let logical = CGSize(width: MiniGameCanvas.logicalWidth, height: 302)
+    let transform = MiniGameCanvas.transform(in: CGSize(width: 292, height: 140), logicalSize: logical)
+    #expect(abs(transform.scale - 140 / 302) < 1e-9, "짧은 축(세로)이 배율을 정한다")
+    #expect(transform.origin.x > 70, "가로가 남아 좌우로 레터박스가 생긴다")
+    // 여백에는 **배경만** 깔린다(하늘은 캔버스 전체를 덮는다 — 그래야 축소된 캔버스가 액자처럼 안 보인다).
+    // 그래서 별 몇 점은 걸릴 수 있고, 마커·목표 같은 게임 요소가 들어오면 수백 px 단위로 튄다.
+    let leftStrip = tbCountIn(bitmap, x: 0...40, y: 0...140) { r, g, b, a in
+        tbIsMarker(r, g, b, a) || tbIsGold(r, g, b, a)
+    }
+    let markerBand = tbCountIn(bitmap, x: 130...162, y: 55...85, where: tbIsMarker)
+    #expect(leftStrip < 20, "레터박스 여백에 게임 요소가 그려지면 비율 유지가 깨진 것(\(leftStrip)px)")
+    #expect(markerBand > leftStrip * 5, "마커가 있는 자리(\(markerBand)px)와 여백(\(leftStrip)px)이 구별되지 않는다")
 }
 
 // MARK: - (5) 프레임 프로브
@@ -407,13 +798,24 @@ func timingBarShrunkCanvasKeepsAspectAndStillDraws() throws {
 @Test
 func timingBarReadyViewDoesNotTickTheFrameLoop() throws {
     MiniGameFrameProbe.reset()
-    _ = try tbRenderBitmap(TimingBarGameView(host: .inert(), input: MiniGameInput(), initialGame: TimingBarGame(seed: 7)))
+    _ = try tbCanvasBitmap(TimingBarGame(seed: 7))
     #expect(MiniGameFrameProbe.frames == 0, "시작 전(paused)엔 프레임 루프가 한 번도 돌지 않아야 한다")
     // running 상태는 ImageRenderer 가 첫 프레임을 그릴 수 있어 단언하지 않는다 — 기록만 남긴다.
     MiniGameFrameProbe.reset()
-    _ = try tbRenderBitmap(TimingBarGameView(host: .inert(), input: MiniGameInput(), initialGame: tbStarted()))
+    _ = try tbCanvasBitmap(tbStarted())
     let runningFrames = MiniGameFrameProbe.frames
     #expect(runningFrames >= 0)
+}
+
+@MainActor
+@Test
+func timingBarPausedGameDoesNotTickEither() throws {
+    // 일시정지 계약(v0.2.48): 허브가 판을 얼리면 프레임이 0 이어야 한다 — 정지 중 시간이 흐르면
+    // 사용자가 안 보는 사이 라운드가 끝난다.
+    MiniGameFrameProbe.reset()
+    let view = TimingBarGameView(host: .inert(isPaused: true), input: MiniGameInput(), initialGame: tbStarted())
+    _ = try tbRenderBitmap(view)
+    #expect(MiniGameFrameProbe.frames == 0, "일시정지 중에 프레임이 돌았다(\(MiniGameFrameProbe.frames))")
 }
 
 // MARK: - (6) 소스 계약
@@ -469,4 +871,24 @@ func timingBarSourceContract() throws {
     #expect(!code.contains("GeometryReader"), "캔버스 크기는 부모가 준다")
     // 규칙 상수가 스펙 그대로 박혀 있다.
     #expect(code.contains("1.0 / 30.0") || code.contains("1 / 30"))
+
+    // v0.2.48 시각 개편이 지켜야 할 것들.
+    #expect(!code.contains("addFilter") && !code.contains("drawLayer"),
+            "60Hz 예산: blur 필터·drawLayer 금지(통합 GPU 에서 프레임이 깨진다)")
+    // 일시정지 계약을 **두 줄 다** 글자로 못 박는다(플래피 계약과 대칭).
+    // `contains("host.isPaused")` 하나로는 tick 가드만 있어도 통과해, paused 식에서 host.isPaused 를
+    // 떨어뜨려도 아무 테스트가 빨개지지 않는다 — 그러면 정지 중 60fps 로 CPU 를 태운다(2026-09-10 뮤테이션 실증).
+    #expect(code.contains("paused: !game.isPlaying || host.isPaused"),
+            "정지 중에 TimelineView 가 안 멈춘다 — 판은 얼어도 프레임 루프는 계속 돈다")
+    #expect(code.contains("guard game.isPlaying, !host.isPaused else { lastTick = nil; return }"),
+            "정지 중 tick 이 시간을 흘리지 않는다는 가드가 없다")
+    #expect(code.contains("MiniGameBackdrop.draw") && code.contains("terrain: false"),
+            "배경은 공용 배경 키트로, 정적 게임이라 능선은 끈다")
+    #expect(code.contains("MiniGameStage.forTimingRound"), "무대는 라운드가 정한다")
+    #expect(code.contains("reduceMotion"), "동작 줄이기에서 장식을 꺼야 한다")
+    // 난이도 상수가 글자 그대로 남아 있다 — 디자인 작업이 값을 못 건드렸다는 소스 수준의 증거.
+    #expect(code.contains("max(0.42, 1.10 - 0.075 * Double(round - 1))"), "주기 곡선이 바뀌었다")
+    #expect(code.contains("max(0.07, 0.24 - 0.019 * Double(round - 1))"), "목표 폭 곡선이 바뀌었다")
+    #expect(code.contains("100 - Int((30 * d).rounded())"), "배점 함수가 바뀌었다")
+    #expect(code.contains("roundScores.reduce(0, +)"), "총점은 라운드 점수의 단순 합이다(콤보 보너스 금지)")
 }

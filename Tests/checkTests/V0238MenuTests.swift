@@ -160,8 +160,13 @@ private enum V0238RenderError: Error { case failed }
 private final class LiveRenderHarness {
     private let renderer: ImageRenderer<AnyView>
 
-    init(_ content: some View) {
-        renderer = ImageRenderer(content: AnyView(content.frame(width: 340).fixedSize()))
+    /// `width` 가 nil 이면 **뷰가 정한 폭 그대로** 그린다. 팝오버 전체를 올릴 때는 반드시 nil 이다 —
+    /// CheckMenuView 는 메인 화면에서 스스로 414 를 잡는데(본문 316 + 오른쪽 세로 레일 64), 밖에서 340 을
+    /// 씌우면 내용이 넘쳐 레일이 그림 밖으로 밀린다. 그러면 레일의 잎(콕찌르기)이 그려지지 않아
+    /// "잎만 매초 돈다"는 계측이 그 잎을 세지 못한다. 패널만 단독으로 올릴 때는 예전처럼 340 을 준다.
+    init(_ content: some View, width: CGFloat? = 340) {
+        let sized = width.map { AnyView(content.frame(width: $0).fixedSize()) } ?? AnyView(content.fixedSize())
+        renderer = ImageRenderer(content: sized)
         renderer.scale = 2
     }
 
@@ -237,7 +242,8 @@ struct V0238MenuTests {
         // 팝오버 전체를 올린다 — 패널 밖 잎(헤더 타이머 등)도 함께 돌지만 계측은 패널 서브트리만 센다. 전체를 올려야
         // 대조군(entries 변경 → 루트 재평가 → 패널 재구성)이 실제 앱과 같은 경로로 돈다.
         PokePanelRenderProbe.reset()
-        let harness = LiveRenderHarness(CheckMenuView(store: store))
+        // 팝오버 전체는 자기 폭(414)으로 올린다 — 340 을 씌우면 오른쪽 세로 레일이 그림 밖으로 밀린다.
+        let harness = LiveRenderHarness(CheckMenuView(store: store), width: nil)
         try harness.render()
         // 첫 렌더: 패널 body 가 도는 만큼만 정렬한다(body 당 1회). 행 본체는 사람 수만큼, 잎은 행 속 버튼 + 안내줄.
         let firstPanelBodies = PokePanelRenderProbe.panelBodies
@@ -267,6 +273,63 @@ struct V0238MenuTests {
         #expect(PokePanelRenderProbe.panelBodies >= 1, "entries 변경에 패널이 다시 돌지 않았다 — 계측/그래프가 죽어 있다.")
         #expect(PokePanelRenderProbe.sortCalls == PokePanelRenderProbe.panelBodies, "한 body 안에서 정렬이 여러 번 돌았다.")
         #expect(PokePanelRenderProbe.rowBodies >= memberCount - 1)
+    }
+
+    // MARK: (a'') 오른쪽 세로 레일도 초침을 관찰하지 않는다 (2026-09-10 — 찌르기 버튼의 새 자리)
+    //
+    // 찌르기 진입 버튼은 팀 카드 헤더에서 레일로 옮겨 왔다. 판정(PokeConnectionNotice.shouldWarn)이
+    // displayNow 를 읽으므로, 그 계산이 레일 본체로 새면 **레일이 팝오버 루트 바로 아래**라 화면 이동
+    // 버튼 여섯 칸이 통째로 매초 다시 그려진다 — 옛 자리(팀 카드)보다 더 넓은 반경이다.
+    // 그래서 잎(PokeEntryIconButton)이 그 자리에 남아 있는지를 여기서 못 박는다.
+
+    @Test func sideRailBodyIgnoresTheClockWhileItsPokeLeafStillFollowsIt() throws {
+        let store = makePokeStore(now: Self.t0)
+        defer { cancelTasks(store) }
+        let root = CheckMenuView(store: store)
+
+        var rootBody: Any = EmptyView()
+        let rootNode = TrackedNode { rootBody = root.body }
+        rootNode.render()
+        var budget = 400_000
+        let railValue = try #require(
+            findViewValue(named: "CheckMenuSideRail", in: rootBody, budget: &budget),
+            "레일을 뷰 트리에서 못 찾았다 — 메인 화면에 레일이 안 그려지거나 타입 이름이 바뀌었다."
+        )
+        let rail = try #require(railValue as? any View)
+
+        var railBody: Any = EmptyView()
+        let railNode = TrackedNode { railBody = evaluateBody(of: rail) }
+        railNode.render()
+
+        // 티커 60틱. 레일 본체는 한 번도 다시 돌지 않는다.
+        for tick in 1...60 {
+            store.displayNow = Self.t0.addingTimeInterval(TimeInterval(tick))
+            railNode.settle()
+        }
+        #expect(
+            railNode.evaluations == 1,
+            "레일 body 가 초침에 다시 돌았다 — 찌르기 연결 판정이 잎(PokeEntryIconButton) 밖으로 샜다."
+        )
+        #expect(rootNode.evaluations == 1, "레일을 다는 것만으로 팝오버 루트가 초침을 관찰하게 됐다.")
+
+        // 대조군: 레일이 실제로 읽는 값(패널 열림 표시)이 바뀌면 반드시 다시 돈다 — 추적이 살아 있다는 증거.
+        store.isLeaderboardVisible = true
+        railNode.settle()
+        #expect(railNode.evaluations == 2, "레일 추적이 소진됐거나 등록되지 않았다 — 위 단언은 공허하다.")
+
+        // 그리고 그 잎은 초침을 **따라간다.** 안 따라가면 재연결 유예(45초)가 지나도 경고가 안 켜져,
+        // 이 버튼이 리얼타임 고장을 표면화하는 유일한 자리라는 역할이 그대로 죽는다.
+        var leafBudget = 400_000
+        let leafValue = try #require(
+            findViewValue(named: "PokeEntryIconButton", in: railBody, budget: &leafBudget),
+            "레일 안에서 찌르기 잎을 못 찾았다 — 잎이 사라졌거나 일반 버튼으로 접혔다."
+        )
+        let leaf = try #require(leafValue as? any View)
+        let leafNode = TrackedNode { _ = evaluateBody(of: leaf) }
+        leafNode.render()
+        store.displayNow = Self.t0.addingTimeInterval(61)
+        leafNode.settle()
+        #expect(leafNode.evaluations == 2, "찌르기 잎이 초침을 안 읽는다 — 유예가 지나도 경고가 안 켜진다.")
     }
 
     // MARK: (b) 쿨타임 만료 순간 버튼이 활성으로 바뀐다 (기존 UX 불변)

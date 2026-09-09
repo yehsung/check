@@ -13,7 +13,11 @@ struct CheckApp: App {
     var body: some Scene {
         MenuBarExtra {
             CheckMenuView(store: appDelegate.store, updateCheck: appDelegate.updateCheck)
-                .frame(width: 340)
+                // ★ 폭을 여기서 씌우지 않는다(v0.2.48). 팝오버는 화면에 따라 자기 폭을 스스로 정한다 —
+                // 메인(레일 있음) 414 / 로그인·무소속 340. 예전처럼 `.frame(width: 340)` 으로 감싸면
+                // MenuBarExtra 창이 340 에 갇히고 414 짜리 내용이 가운데 정렬로 넘쳐 오른쪽 레일이
+                // 창 밖으로 잘린다(테스트는 자연 폭으로 그려서 못 잡는다 — 실앱에서만 보이는 결함).
+                // 폭의 근거는 CheckMenuView.mainWindowWidth 주석에 있다.
                 // 팝오버 창의 위쪽 모서리를 고정 — 콘텐츠 높이 변화 시 위로 튀어 상단이 잘리는 것을 막는다
                 // (동적 높이는 유지, 창은 아래로만 성장/수축). 그림은 그리지 않는 배경 뷰.
                 // 창 키 획득/상실도 setMenuPresented 로 흘려 티커/폴링 게이팅의 이중 안전망을 만든다.

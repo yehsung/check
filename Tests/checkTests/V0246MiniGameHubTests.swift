@@ -310,8 +310,9 @@ func sourceContractsForTheHubWiring() throws {
     // v0.2.46: 미니게임은 별도 창이다 — 팝오버 자리를 안 먹으므로 하위 패널로 세지 않고 그리지도 않는다.
     #expect(!root.contains("|| store.isMiniGamePanelVisible"), "isSubPanelOpen 이 창을 하위 패널로 센다 — 토큰 소모량 행이 사라진다")
     #expect(!root.contains("MiniGamePanel("), "팝오버가 아직 미니게임 패널을 그린다")
-    // 진입 버튼은 HeaderGoalSection(캡션 행)에 있다 — 루트 타입 본문이 아니라 파일 전체에서 찾는다.
-    #expect(menu.contains("store.openMiniGameWindow()"), "캡션 행 버튼이 창을 열지 않는다")
+    // 진입 버튼은 v0.2.48 에 캡션 행 → 오른쪽 세로 레일(CheckMenuSideRail)로 이사했다.
+    // 그래서 루트 타입 본문이 아니라 파일 전체에서 찾는다 — 어느 잎에 있든 이 계약은 같다.
+    #expect(menu.contains("store.openMiniGameWindow()"), "레일 진입 버튼이 창을 열지 않는다")
     #expect(!root.contains("store.displayNow"), "팝오버 루트가 displayNow 를 값으로 읽는다")
 
     let store = mgStrippingComments(try String(contentsOf: mgSourceURL("WorkTimerStore.swift"), encoding: .utf8))

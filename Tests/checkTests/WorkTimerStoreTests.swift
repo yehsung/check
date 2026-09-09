@@ -4684,10 +4684,17 @@ func insightsLoadFillsTheDailyGridAndWeekRolloverOrSignOutResetsIt() async throw
     #expect(store.retro?.totalSeconds == 7_200)
 
     // 진행 중 세션은 오늘 칸에 '지금까지'만 얹힌다(완료 행이 오기 전 이중 계상 없음).
-    store.startedAt = Date().addingTimeInterval(-600)
+    //
+    // 상한을 **실제로 흐른 시간**에서 만든다. 고정 여유(+5초)로 두면 전체 스위트가 메인 액터를 잡는 동안
+    // performLoadInsights 가 그보다 늦게 끝나 무작위로 빨개진다(2026-09-10 실측: 7809 vs 상한 7805).
+    // 잡으려는 결함은 '이중 계상'(+7200 이 한 번 더)이라, 경과 시간 + 1초면 그 결함은 여전히 못 빠져나간다.
+    let runningSince = Date().addingTimeInterval(-600)
+    store.startedAt = runningSince
     await store.performLoadInsights()
+    let elapsedWhileRunning = Date().timeIntervalSince(runningSince)
     #expect(store.dailyGrid.totalSeconds >= 7_200 + 600)
-    #expect(store.dailyGrid.totalSeconds <= 7_200 + 605)
+    #expect(Double(store.dailyGrid.totalSeconds) <= 7_200 + elapsedWhileRunning + 1,
+            "진행 중 세션이 경과 시간(\(Int(elapsedWhileRunning))초)보다 많이 얹혔다 — 이중 계상 의심")
     store.startedAt = nil
     await store.performLoadInsights()
     #expect(store.dailyGrid.totalSeconds == 7_200)

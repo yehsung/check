@@ -2168,7 +2168,17 @@ struct UltraBalanceBadge: View {
 /// 집중 모드가 켜져 있을 때 콕찌르기 패널이 알려 주는 사실(순수 값 — 문구를 값으로 검증한다).
 /// 토글이 아이콘 하나뿐이라, 켜 둔 것을 잊고 "왜 아무도 안 찌르지?" 하는 경로를 이 한 줄이 막는다.
 enum PokeFocusNotice {
-    static let text = "집중 모드 — 콕찌르기를 받지 않아요"
+    /// 단계마다 **무엇이 다른지**를 말한다(v0.3.11, 2026-09-11 지적: "버튼만으론 1단과 2단의 차이를 모를 듯").
+    /// 버튼은 "1단/2단" 이름만 그리므로 차이의 설명은 이 줄이 맡는다. 남은 시간은 넣지 않는다 — 292pt 한 줄에
+    /// "(2시간 59분 남음)"까지 붙이면 실측 286.6pt 라 글꼴 차이 한 번에 두 줄로 넘어가 패널 높이가 흔들린다(툴팁이 말한다).
+    /// 1단 길이는 상수에서 파생한다 — 문구에 "3시간"을 베껴 두지 않는다.
+    static func text(for stage: FocusStage) -> String? {
+        switch stage {
+        case .off: nil
+        case .timed: "집중 모드 1단 — \(FocusModeButtonText.timedDurationText) 동안 콕찌르기를 받지 않아요"
+        case .always: "집중 모드 2단 — 해제 전까지 콕찌르기를 받지 않아요"
+        }
+    }
 }
 
 enum PokeDirectoryEmptyMessage {
@@ -2525,7 +2535,8 @@ private struct PokePanel: View {
                 messageNotice: messageNotice,
                 notice: notice,
                 isMyselfWorking: isMyselfWorking,
-                isFocusMode: isFocusMode
+                isFocusMode: isFocusMode,
+                focusStage: focusStage
             )
             entryList(sorted)
         }
@@ -2617,6 +2628,8 @@ private struct PokePanelNoticeLine: View {
     let notice: String?
     let isMyselfWorking: Bool
     let isFocusMode: Bool
+    /// 집중 모드 단계 읽기(1단·2단 설명을 가른다). **이 잎 안에서만 부른다** — 1단이면 시계를 읽는다.
+    var focusStage: () -> FocusStageFace = { .off }
 
     var body: some View {
         MenuClockLeaf(read: isPokeDisconnected) { disconnected in
@@ -2625,7 +2638,8 @@ private struct PokePanelNoticeLine: View {
                 messageNotice: messageNotice,
                 notice: notice,
                 isMyselfWorking: isMyselfWorking,
-                isFocusMode: isFocusMode
+                // 꺼져 있으면 단계 읽기를 아예 부르지 않는다(시계 읽기 0).
+                focusStage: isFocusMode ? focusStage().stage : .off
             ) {
                 Text(line.text)
                     .font(.caption2)
@@ -2645,7 +2659,7 @@ private struct PokePanelNoticeLine: View {
         messageNotice: String?,
         notice: String?,
         isMyselfWorking: Bool,
-        isFocusMode: Bool
+        focusStage: FocusStage
     ) -> (text: String, isWarning: Bool)? {
         // 연결이 끊겼으면 그게 **가장 먼저**다. 이 화면에서 하려는 일이 양방향 모두 막힌 상태이고,
         // 전송 실패 문구(messageNotice/pokeNotice)는 그 결과일 뿐이라 원인을 가리면 안 된다.
@@ -2666,8 +2680,8 @@ private struct PokePanelNoticeLine: View {
         if !isMyselfWorking {
             return ("근무 중일 때만 콕 찌를 수 있어요", false)
         }
-        if isFocusMode {
-            return (PokeFocusNotice.text, false)
+        if let focusText = PokeFocusNotice.text(for: focusStage) {
+            return (focusText, false)
         }
         return nil
     }

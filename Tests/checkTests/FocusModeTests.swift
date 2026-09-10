@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Testing
 @testable import check
 
@@ -106,6 +107,16 @@ private func makeFocusStore(host: String) -> WorkTimerStore {
     func focusModePanelNoticeYieldsToTheBlockingReason() {
         // 안내줄은 하나뿐이다. 지금 이 화면에서 하려는 일(찌르기)의 차단 사유가 우선이고,
         // 집중 모드는 내 수신 설정이라 정보에 가깝다 — 그래서 비근무 안내가 앞선다.
-        #expect(PokeFocusNotice.text.contains("받지 않아요"))
+        #expect(PokeFocusNotice.text(for: .off) == nil)
+        // v0.3.11: 단계마다 **차이**를 말한다(2026-09-11 지적 — 버튼만으론 1단과 2단의 차이를 모른다).
+        #expect(PokeFocusNotice.text(for: .timed) == "집중 모드 1단 — 3시간 동안 콕찌르기를 받지 않아요")
+        #expect(PokeFocusNotice.text(for: .always) == "집중 모드 2단 — 해제 전까지 콕찌르기를 받지 않아요")
+        // 두 문구는 292pt 본문 한 줄에 든다(두 줄로 넘어가면 패널 높이가 단계마다 흔들린다).
+        let font = NSFont.systemFont(ofSize: 10)
+        for stage in [FocusStage.timed, .always] {
+            let text = PokeFocusNotice.text(for: stage) ?? ""
+            let width = (text as NSString).size(withAttributes: [.font: font]).width
+            #expect(width <= 292 - 20, "\(stage) 안내(\(width)pt)가 본문 한 줄을 넘는다")
+        }
     }
 }

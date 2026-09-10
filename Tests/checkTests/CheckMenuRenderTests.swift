@@ -3105,7 +3105,7 @@ func settingsEntryMovedToTheSideRailAndIsStillNotAMenu() throws {
 
     // 레일에는 여섯이 **위에서 아래 순서대로** 선다. 순서는 손버릇이 되는 값이라 소스로 고정한다.
     let rail = try #require(swiftStructBody(source, name: "CheckMenuSideRail"))
-    let order = ["\"gamecontroller.fill\"", "PokeEntryIconButton", "\"chart.bar.xaxis\"", "\"chart.xyaxis.line\"", "\"bolt.fill\"", "\"gearshape.fill\""]
+    let order = ["\"gamecontroller.fill\"", "PokeEntryIconButton", "\"chart.bar.xaxis\"", "\"chart.xyaxis.line\"", "\"exclamationmark.bubble.fill\"", "\"gearshape.fill\""]
     var cursor = rail.startIndex
     for token in order {
         let found = try #require(rail.range(of: token, range: cursor..<rail.endIndex), "레일에 \(token) 이 순서대로 없다")
@@ -3113,10 +3113,68 @@ func settingsEntryMovedToTheSideRailAndIsStillNotAMenu() throws {
     }
     // 기어가 실제로 설정 창을 연다(그리기만 하고 아무 데도 안 가는 버튼 방지).
     #expect(rail.contains("CheckSettingsWindowController.shared.show()"))
+    // 제보 칸도 실제로 창을 연다.
+    #expect(rail.contains("store.openFeedbackWindow()"), "제보 칸이 아무 데도 안 간다")
+    // v0.2.49: 울트라는 레일을 **떠났다**(사용자 판단 — "따로 빼 둘 만큼 비중 있는 기능이 아니야").
+    // 남은 진입은 콕찌르기 제목 행의 잔량 배지 하나뿐이라, 레일에서 그 문이 다시 열리면 여기서 잡힌다.
+    #expect(!rail.contains("\"bolt.fill\""), "울트라 칸이 레일로 되돌아왔다")
+    #expect(!rail.contains("openUltraPanel"), "레일이 아직 울트라 화면을 연다")
     #expect(!rail.contains("Menu {"))
     #expect(!rail.contains("Menu("))
     #expect(!caption.contains("Menu {"))
     #expect(!caption.contains("Menu("))
+}
+
+@MainActor
+@Test
+func everyWindowThatOpensFromTheRailClosesThePopoverFromExactlyOnePlace() throws {
+    // 실측(표는 `WindowTopAnchor.dismissMenuPopover` 주석): 다른 창을 `NSApp.activate()` +
+    // `makeKeyAndOrderFront` 로 띄워도 팝오버는 **안 닫힌다**. 그래서 세 창 전부 명시적으로 닫는다.
+    //
+    // ★ 이 테스트가 지키는 것은 "닫는가"가 아니라 **"몇 곳에서 닫는가"** 다. 닫는 수단이 상태바 아이템
+    //   **토글**이라, 한 동작에서 두 번 누르면 팝오버가 도로 열린다(0.6초 디바운스가 실제로는 막아
+    //   주지만, 그건 안전망이지 설계가 아니다 — 의도가 두 곳에 있으면 언젠가 한쪽만 고쳐져 갈린다).
+    //
+    // 자리를 가르는 규칙은 **스토어를 거치는가** 하나다:
+    //  · 게임·제보 — 스토어의 진입점(`openMiniGameWindow()` · `openFeedbackWindow()`)을 지난다 → 거기서 닫는다.
+    //  · 설정      — 스토어를 전혀 안 거친다(`CheckSettingsWindowController.shared.show()` 가 유일한 문이고
+    //                ⌘, 도 같은 곳으로 모인다) → 레일 호출부가 닫는 유일한 자리다.
+    //
+    // 주석은 걷어내고 본다 — 위 문단들에 그 이름이 들어 있어서, 안 걷으면 이 설명을 지워야만 초록이 된다.
+    let rail = try #require(
+        swiftStructBody(
+            swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8)),
+            name: "CheckMenuSideRail"
+        )
+    )
+    let railDismissals = rail.components(separatedBy: "WindowTopAnchor.dismissMenuPopover()").count - 1
+    #expect(railDismissals == 1, "레일이 팝오버를 \(railDismissals) 곳에서 닫는다 — [설정] 한 곳이어야 한다")
+    // 그 한 곳이 **설정 칸**인지. [설정]은 레일의 마지막 칸이라, 기어 뒤에 있으면 그 칸의 것이다.
+    let gear = try #require(rail.range(of: "CheckSettingsWindowController.shared.show()"))
+    #expect(
+        rail.range(of: "WindowTopAnchor.dismissMenuPopover()", range: gear.upperBound..<rail.endIndex) != nil,
+        "레일이 팝오버를 닫긴 하는데 [설정] 칸이 아니다"
+    )
+
+    // 게임·제보는 **스토어 쪽 한 곳**이다. 레일에 또 넣으면 위 개수 단언이 먼저 잡는다.
+    func storeSource(_ name: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/check/\(name)")
+        return swiftCodeStrippingComments(try String(contentsOf: url, encoding: .utf8))
+    }
+    for file in ["WorkTimerStoreMiniGame.swift", "WorkTimerStoreFeedback.swift"] {
+        let code = try storeSource(file)
+        let count = code.components(separatedBy: "WindowTopAnchor.dismissMenuPopover()").count - 1
+        #expect(count == 1, "\(file) 이 팝오버를 \(count) 곳에서 닫는다 — 진입점 한 곳이어야 한다")
+    }
+
+    // 설정 컨트롤러 자신은 닫지 않는다. ⌘, 로 열 때는 닫을 팝오버가 없거나 사용자가 일부러 열어 둔
+    // 것이라, 거기 넣으면 두 경로의 뜻이 갈린다.
+    #expect(
+        !(try storeSource("CheckSettingsWindow.swift")).contains("dismissMenuPopover"),
+        "설정 컨트롤러가 팝오버를 닫는다 — ⌘, 경로까지 닫아 버린다"
+    )
 }
 
 @MainActor
@@ -4368,7 +4426,14 @@ private func dumpTodoSnapshot(_ view: some View, _ name: String) throws {
     }
 }
 
-// MARK: - 3글자 메시지 UI (보내기 인라인 펼침 · 입력 필터 · 받은 메시지 표시)
+// MARK: - 메시지 UI (팝오버 몫: 진입점 · 안내줄 · 받은 메시지 한 줄)
+//
+// ★ **v0.2.49 에서 이 절의 절반이 사라졌다.** 팝오버 안 인라인 작성기(PokeMessageComposer)와 그 짝
+//   (입력 필터·글자수 카운터)을 통째로 걷어냈기 때문이다 — 보내는 곳은 이제 별도 창 하나다.
+//   창 쪽 렌더 검증은 `V0249MessageWindowTests` 가 맡는다(스냅샷 접두어 `msgwin-`).
+//
+// 여기 남은 것은 팝오버가 여전히 지는 세 가지다: ① 말풍선 버튼(창으로 가는 문), ② 전송 결과 안내줄,
+// ③ 최근 받은 메시지 한 줄(그 줄도 이제 창으로 가는 문이다).
 
 /// 메시지 UI 육안 확인 PNG 를 스크래치 하위 msg-ui/ 에 저장한다(판정 근거는 아래 픽셀/값 테스트가 낸다).
 @MainActor
@@ -4388,8 +4453,9 @@ private func makeMessagePanelStore(
     memberCount: Int = 5,
     myselfWorking: Bool = true,
     now: Date = Date(),
-    // 3글자 메시지를 못 받는(구버전 앱) 대상들. 서버가 대상의 app_build 로 판정해 내려 주는 값을
-    // 그대로 흉내 낸다 — **적지 않으면 true**(모르면 허용)라는 모델 규약을 픽스처도 따른다.
+    // 서버가 대상의 app_build 로 내려 주던 '메시지 수신 가능' 깃발. **v0.2.49 부터 화면은 이 값을 쓰지 않는다**
+    // (최소 빌드 게이트가 폐기됐다). 픽스처에 남겨 둔 이유는 아래 회귀 테스트가 "그래도 아무것도 안 잠긴다"를
+    // 재기 위해서다 — 인자를 지우면 그 회귀를 실증할 방법이 사라진다.
     outdatedUserIDs: Set<String> = []
 ) -> WorkTimerStore {
     let store = makeTeamStore(members: [], now: now)
@@ -4414,166 +4480,78 @@ private func makeMessagePanelStore(
     return store
 }
 
-// MARK: 입력 필터 — 글자·숫자만 통과(이모지·기호 차단), 한글 자모는 반드시 통과
-
-@Test
-func messageInputFilterKeepsKoreanIncludingBareJamo() {
-    // 이 한 줄이 이 기능의 절반이다 — ㅇ(U+3147)·ㅋ 은 낱자모지만 실측상 otherLetter 라 통과해야 한다.
-    // 막히면 "ㅇㅋ"·"ㅠㅠ" 같은 3글자 말이 통째로 죽는다.
-    #expect(PokeMessageInputFilter.filtered("ㅇㅋ") == "ㅇㅋ")
-    #expect(PokeMessageInputFilter.filtered("ㅠㅠ") == "ㅠㅠ")
-    #expect(PokeMessageInputFilter.filtered("수고") == "수고")
-    #expect(PokeMessageInputFilter.filtered("고고1") == "고고1")
-    #expect(PokeMessageInputFilter.filtered("ok") == "ok")
-    // ★ 분해형(초성+중성+종성)은 **입력 필터를 통과해야 한다**. 파인더·한글 IME 에서 온 글자가 이 꼴이라,
-    // 여기서 지우면 "한"을 붙여넣었을 때 빈 칸이 된다. 합치는 일은 전송 직전 MessageBody.sanitized(NFC)가 한다.
-    #expect(PokeMessageInputFilter.filtered("\u{1112}\u{1161}\u{11AB}") == "\u{1112}\u{1161}\u{11AB}")
-    #expect(MessageBody.sanitized(PokeMessageInputFilter.filtered("\u{1112}\u{1161}\u{11AB}")) == "한")
-}
-
-@Test
-func messageInputFilterFollowsTheModelsAllowedSet() {
-    // 허용 집합의 권위는 MessageBody 다(뷰가 자기 표를 만들지 않는다) — 서버 정규식과 1:1인 그 표를
-    // 입력 필터가 그대로 따르는지 확인한다. 표가 넓어지면(예: `^^`) 이 테스트는 저절로 따라온다.
-    #expect(PokeMessageInputFilter.filtered("밥?") == "밥?")
-    #expect(PokeMessageInputFilter.filtered("굿!") == "굿!")
-    #expect(PokeMessageInputFilter.filtered("아~") == "아~")
-    #expect(PokeMessageInputFilter.filtered("가 나") == "가 나")   // 공백은 한글 IME 확정 키라 열려 있다
-    // 필터를 통과한 결과는 **반드시** 모델의 텍스트 전용 게이트를 통과한다(정규화 후 기준).
-    // 두 표가 갈라지면 "쳐지는데 전송만 거부" 또는 그 반대가 생기고, 이 등식이 그걸 먼저 잡는다.
-    for raw in ["밥?", "가,나", "1+1", "가-나", "굿👍", "ㅇㅋ", "★가", "가\n나"] {
-        let filtered = PokeMessageInputFilter.filtered(raw)
-        #expect(MessageBody.isTextOnly(MessageBody.sanitized(filtered)), "필터 통과분이 모델 게이트에 걸렸다: \(raw)")
-    }
-}
-
-@Test
-func messageInputFilterRemovesEmojiAndSymbols() {
-    // 서비스 계층 실측: Swift 는 👨‍👩‍👧‍👦 를 1글자로 세지만 Postgres char_length 는 7로 센다.
-    // 애초에 입력이 안 되면 그 어긋남 자체가 존재하지 않는다.
-    #expect(PokeMessageInputFilter.filtered("굿👍") == "굿")
-    #expect(PokeMessageInputFilter.filtered("👨‍👩‍👧‍👦") == "")       // ZWJ(Cf)·이모지(So) 전부 제거
-    #expect(PokeMessageInputFilter.filtered("🇰🇷") == "")            // 지역표시자(So)
-    #expect(PokeMessageInputFilter.filtered("👍🏻") == "")            // 스킨톤(Sk)
-    #expect(PokeMessageInputFilter.filtered("❤★→") == "")
-    #expect(PokeMessageInputFilter.filtered("가\n나\t다") == "가나다")   // 개행·탭(Cc)
-}
-
-@Test
-func messageInputFilterMakesSwiftAndPostgresCountsAgree() {
-    // 이 기능의 핵심 성질: **통과한 입력은 정규화 뒤 자소 수 == 코드포인트 수**다.
-    // Postgres char_length() 는 코드포인트를 세므로, 이 등식이 곧 "화면 글자수 == 서버 글자수"의 증명이다.
-    // (이모지를 열었다면 👍🏻 이 1 vs 2 로 갈려 화면만 통과시키는 상태가 생긴다.)
-    let inputs = ["ㅇㅋ", "수고", "가나다", "밥?", "아~", "ok1", "\u{1112}\u{1161}\u{11AB}", "漢字", " 굿 "]
-    for raw in inputs {
-        let normalized = MessageBody.sanitized(PokeMessageInputFilter.filtered(raw))
-        #expect(normalized.count == normalized.unicodeScalars.count, "불일치: \(raw)")
-    }
-}
-
-@Test
-func messageCounterSpeaksRemainingCharacters() {
-    #expect(PokeMessageCounter.text("") == "3자 남음")
-    #expect(PokeMessageCounter.text("수") == "2자 남음")
-    #expect(PokeMessageCounter.text("수고") == "1자 남음")
-    #expect(PokeMessageCounter.text("수고했") == "꽉 참")
-    #expect(PokeMessageCounter.text("수고했어") == "1자 초과")
-    // 길이 판정은 MessageBody 가 낸다(앞뒤 공백은 세지 않는다 — 전송값과 같은 눈금).
-    #expect(PokeMessageCounter.text(" 수고 ") == "1자 남음")
-    #expect(PokeMessageCounter.isSendable("수고했"))
-    #expect(!PokeMessageCounter.isSendable("수고했어"))
-    #expect(!PokeMessageCounter.isSendable("   "))
-}
-
-@Test
-func messageReceiptAgeReadsInPlainKorean() {
-    let now = Date()
-    #expect(PokeMessageReceiptStrip.ageText(receivedAt: now.addingTimeInterval(-5), now: now) == "방금")
-    #expect(PokeMessageReceiptStrip.ageText(receivedAt: now.addingTimeInterval(-181), now: now) == "3분 전")
-    #expect(PokeMessageReceiptStrip.ageText(receivedAt: now.addingTimeInterval(-7_200), now: now) == "2시간 전")
-}
-
-// MARK: 렌더 — 접힘/펼침/꽉 참/초과/쿨타임/결과 문구/받은 메시지
+// MARK: 진입점 — 팝오버에는 입력칸이 하나도 없다
 
 @MainActor
 @Test
-func messageComposerRendersCollapsedAndExpanded() throws {
+func pokePanelHasNoInlineComposerAnymore() throws {
+    // ImageRenderer 는 TextField/TextEditor 를 못 그려 **샛노란 상자**를 박는다. 그래서 상자 수 = 입력칸 수다.
+    // v0.2.48 까지는 말풍선 버튼을 누르면 행 아래로 입력칸이 하나 열렸다(그때 이 수가 1이었다).
+    // **지금은 어떤 상태에서도 0이어야 한다** — 팝오버에서 보내는 길이 남아 있으면 이력이 두 곳으로 갈린다.
     let now = Date()
-    // ImageRenderer 는 TextField 를 못 그려 **샛노란 상자**를 박는다. 그래서 상자 수 = 입력칸 수다.
-    //
-    // 예전엔 마지막 상자 하나를 dropLast() 로 버렸다 — 푸터 전원 버튼이 Menu 였고 그 자리에도 상자가
-    // 박혀 "맨 아래 상자는 어느 화면에나 있는 상수"였기 때문이다. 전원 버튼이 다시 IconButton 이 되면서
-    // 그 상수는 사라졌고, 이제 세는 상자는 **전부 입력칸**이다. dropLast() 를 그대로 두면 진짜 입력칸
-    // 하나를 매번 버려, 작성기가 통째로 사라져도 초록으로 통과한다.
-    //
-    // 접힘: 행마다 [말풍선][손가락] 두 버튼만 있고 입력칸은 없다.
-    let collapsed = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now)))
-    let collapsedRuns = unavailablePlaceholderRowRuns(collapsed, top: 0, bottom: collapsed.pixelsHigh - 1)
-    #expect(collapsedRuns.isEmpty)
-    saveMessageSnapshot(try #require(collapsed.representation(using: .png, properties: [:])), "msg-collapsed")
+    let panel = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now)))
+    #expect(unavailablePlaceholderRowRuns(panel, top: 0, bottom: panel.pixelsHigh - 1).isEmpty)
+    saveMessageSnapshot(try #require(panel.representation(using: .png, properties: [:])), "msg-panel")
 
-    // 펼침: 그 행 아래로 작성기가 열린다 — 입력칸은 **정확히 1개**다(한 번에 한 행 규칙의 픽셀 근거).
-    let expanded = try renderBitmap(
-        CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now), previewMessageComposerUserID: "u1")
+    // 26명(실제 팀 규모)에서도 마찬가지고, 창 높이 상한(700pt)도 그대로다.
+    let big = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 26, now: now)))
+    #expect(unavailablePlaceholderRowRuns(big, top: 0, bottom: big.pixelsHigh - 1).isEmpty)
+    #expect(Double(big.pixelsHigh) / 2.0 <= 700.0)
+}
+
+@MainActor
+@Test
+func messageButtonStaysLiveEvenWhenPokingIsBlocked() throws {
+    // ★ **v0.2.49 의 규칙 변경**: 말풍선 버튼은 이제 아무것도 보내지 않고 **창을 연다**. 그래서
+    //   찌르기 게이트(내 근무·대상 근무)와 옛 최소 빌드 게이트가 이 버튼에서 전부 사라졌다 —
+    //   자리를 비운 사람과 나눈 지난 대화를 읽는 것은 오히려 그때 가장 하고 싶은 일이다.
+    let now = Date()
+    let working = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 4, myselfWorking: true, now: now)))
+    let offWork = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 4, myselfWorking: false, now: now)))
+    let band = (top: working.pixelsHigh / 2, bottom: working.pixelsHigh - 1)
+    let live = accentPixelCount(working, top: band.top, bottom: band.bottom)
+    let dead = accentPixelCount(offWork, top: band.top, bottom: band.bottom)
+    // 비근무에서도 accent 가 **남는다**(말풍선 버튼이 살아 있다). 예전에는 두 버튼이 함께 죽어
+    // 이 값이 3분의 1 아래로 떨어졌다 — 그 시절 단언(live > dead * 3)이 지금은 거짓이어야 한다.
+    #expect(dead > 0, "비근무에서 말풍선 버튼까지 죽었다 — 창을 여는 일에 근무 여부를 물을 이유가 없다")
+    #expect(live > dead, "찌르기 버튼은 여전히 비근무에서 흐려져야 한다(대조군)")
+    saveMessageSnapshot(try #require(offWork.representation(using: .png, properties: [:])), "msg-offwork")
+
+    // 옛 최소 빌드 게이트도 화면을 **한 픽셀도** 바꾸지 않는다(그 게이트는 폐기됐다).
+    let base = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now)))
+    let outdated = try renderBitmap(
+        CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now, outdatedUserIDs: ["u4"]))
     )
-    let expandedRuns = unavailablePlaceholderRowRuns(expanded, top: 0, bottom: expanded.pixelsHigh - 1)
-    #expect(expandedRuns.count == 1)
-    // 그 입력칸은 목록 안, 푸터(맨 아래 60pt) **위**에 생겼다. 예전엔 "푸터 상자보다 위"로 봤는데
-    // 그 기준점이 사라졌으므로 푸터 자리를 직접 잰다.
-    #expect(expandedRuns.first!.end < expanded.pixelsHigh - 60 * 2)
-    saveMessageSnapshot(try #require(expanded.representation(using: .png, properties: [:])), "msg-expanded")
+    #expect(
+        bitmapDiffBounds(base, outdated) == nil,
+        "canReceiveMessage 가 아직 화면을 잠근다 — 최소 빌드 게이트는 v0.2.49 에서 폐기됐다"
+    )
 }
+
+// MARK: 안내줄 — 서버 status 아홉의 문구가 같은 칸을 나눠 쓴다
 
 @MainActor
 @Test
-func messageComposerRendersLengthStates() throws {
-    let now = Date()
-    for (draft, name) in [("", "empty"), ("수고", "partial"), ("수고했", "full"), ("수고했어", "over")] {
-        let png = try renderPNG(
-            CheckMenuView(
-                store: makeMessagePanelStore(memberCount: 5, now: now),
-                previewMessageComposerUserID: "u1",
-                previewMessageDraft: draft
-            )
-        )
-        #expect(png.count > 0)
-        saveMessageSnapshot(png, "msg-len-\(name)")
-    }
-}
-
-@MainActor
-@Test
-func messageComposerShowsCooldownWhileExpanded() throws {
-    // 방금 보낸 상대를 다시 펼치면 **왜 안 되는지**(남은 초)가 펼친 자리에서 보여야 한다.
-    let now = Date()
-    let store = makeMessagePanelStore(memberCount: 5, now: now)
-    store.messageCooldownUntil = ["u1": now.addingTimeInterval(42)]
-    store.messageNotice = WorkTimerStore.messageCooldownNotice(seconds: 42)
-    #expect(store.messageCooldownRemaining(for: "u1", now: now) == 42)
-    let png = try renderPNG(CheckMenuView(store: store, previewMessageComposerUserID: "u1"))
-    #expect(png.count > 0)
-    saveMessageSnapshot(png, "msg-cooldown")
-}
-
-@MainActor
-@Test
-func messagePanelRendersAllSixOutcomeNotices() throws {
-    // 서버 status 6종 → 안내 문구 6종. 문구의 권위는 스토어이고(여기서 리터럴을 다시 쓰지 않는다),
-    // 이 테스트는 여섯이 서로 다르고 화면에 실제로 그려진다는 것만 픽셀로 확인한다.
+func messagePanelRendersEveryOutcomeNotice() throws {
+    // 문구의 권위는 스토어다(여기서 리터럴을 다시 쓰지 않는다). 이 테스트는 서로 다른 문구가
+    // 화면에 실제로 그려진다는 것과, **쿨타임 어휘가 하나도 없다는 것**을 확인한다.
     let now = Date()
     let notices: [(String, String)] = [
         ("ok", WorkTimerStore.messageSentNotice),
         ("not_working", WorkTimerStore.messageNotWorkingNotice),
+        ("target_not_working", WorkTimerStore.messageTargetNotWorkingNotice),
         ("target_focused", WorkTimerStore.messageTargetFocusedNotice),
-        ("too_long", WorkTimerStore.messageTooLongNotice),
-        ("invalid", WorkTimerStore.messageInvalidNotice),
-        ("cooldown", WorkTimerStore.messageCooldownNotice(seconds: 47))
+        ("not_text", WorkTimerStore.messageNotTextNotice),
+        ("too_long", WorkTimerStore.messageTooLongNotice()),
+        ("blackout", WorkTimerStore.messageBlackoutNotice),
+        ("invalid", WorkTimerStore.messageInvalidNotice)
     ]
-    #expect(Set(notices.map(\.1)).count == 6)
+    // 여덟 문구가 전부 다르다(flood 는 invalid 와 **일부러 같은 문장**이라 이 목록에 없다).
+    #expect(Set(notices.map(\.1)).count == 8)
     for (name, text) in notices {
         let store = makeMessagePanelStore(memberCount: 4, now: now)
         store.messageNotice = text
-        let png = try renderPNG(CheckMenuView(store: store, previewMessageComposerUserID: "u1"))
+        let png = try renderPNG(CheckMenuView(store: store))
         #expect(png.count > 0)
         saveMessageSnapshot(png, "msg-notice-\(name)")
     }
@@ -4596,14 +4574,16 @@ func messageNoticeOutranksPokeNoticeInTheSharedLine() throws {
     saveMessageSnapshot(try #require(withBoth.representation(using: .png, properties: [:])), "msg-notice-priority")
 }
 
+// MARK: 받은 메시지 한 줄 — 200자가 행을 밀어내지 않는다
+
 @MainActor
 @Test
 func messageReceiptStripRendersInsidePopover() throws {
     let now = Date()
     let store = makeMessagePanelStore(memberCount: 5, now: now)
     store.receivedMessages = [
-        ReceivedMessage(id: "m1", fromName: "김서연", body: "밥?", createdAt: now.addingTimeInterval(-180)),
-        ReceivedMessage(id: "m2", fromName: "박도윤", body: "ㅇㅋ", createdAt: now.addingTimeInterval(-60))
+        ReceivedMessage(id: "m1", fromName: "김서연", body: "밥?", createdAt: now.addingTimeInterval(-180), fromUserID: "u11"),
+        ReceivedMessage(id: "m2", fromName: "박도윤", body: "ㅇㅋ", createdAt: now.addingTimeInterval(-60), fromUserID: "u12")
     ]
     #expect(store.currentMessage?.body == "밥?")
     #expect(store.waitingMessageCount == 1)
@@ -4612,252 +4592,72 @@ func messageReceiptStripRendersInsidePopover() throws {
     saveMessageSnapshot(png, "msg-received")
 }
 
-// MARK: 창 높이 예산 — 26명 목록에서 펼쳐도 상한(700pt)을 넘지 않는다
-
 @MainActor
 @Test
-func messageComposerNeverGrowsWindowBeyondCap() throws {
+func longReceiptBodyNeverPushesTheRowOffScreen() throws {
+    // ★ **v0.2.49 에서 고친 결함의 픽셀 근거다.** 옛 코드는 본문에 `.fixedSize()` 를 붙였다 —
+    //   그 한 줄이 "네가 원하는 폭을 전부 주겠다"는 뜻이라, 200자 본문이 팝오버 폭(292pt)을 훌쩍 넘는
+    //   이상 폭을 요구해 같은 행의 아바타·이름·"N분 전"을 통째로 밀어냈다.
+    //   3글자 시절엔 본문이 짧아 드러나지 않던 결함이고, 상한을 올린 날 즉시 터진다.
     let now = Date()
-    // 26명(실제 팀 규모) — 목록이 이미 스크롤 상한에 걸려 있다.
-    let collapsedHeight = try #require(renderedPixelHeight(CheckMenuView(store: makeMessagePanelStore(memberCount: 26, now: now))))
-    let expandedHeight = try #require(
-        renderedPixelHeight(
-            CheckMenuView(store: makeMessagePanelStore(memberCount: 26, now: now), previewMessageComposerUserID: "u1")
+    let short = makeMessagePanelStore(memberCount: 5, now: now)
+    short.receivedMessages = [
+        ReceivedMessage(id: "m1", fromName: "김서연", body: "밥?", createdAt: now.addingTimeInterval(-180), fromUserID: "u11")
+    ]
+    let long = makeMessagePanelStore(memberCount: 5, now: now)
+    long.receivedMessages = [
+        ReceivedMessage(
+            id: "m1",
+            fromName: "김서연",
+            body: String(repeating: "가나다라마바사아자차", count: 20),   // 200자
+            createdAt: now.addingTimeInterval(-180),
+            fromUserID: "u11"
         )
-    )
-    #expect(Double(collapsedHeight) / 2.0 <= 700.0)
-    #expect(Double(expandedHeight) / 2.0 <= 700.0)
-    // **펼쳐도 창이 자라지 않는다** — 펼침은 리스트 안에서 일어나고 리스트 상한은 펼침과 무관하다.
-    #expect(expandedHeight == collapsedHeight)
+    ]
+
+    let shortBitmap = try renderBitmap(CheckMenuView(store: short))
+    let longBitmap = try renderBitmap(CheckMenuView(store: long))
+    // 팝오버 폭이 본문 길이에 끌려다니지 않는다 — 이게 깨지면 창이 옆으로 늘어난다.
+    #expect(longBitmap.pixelsWide == shortBitmap.pixelsWide)
+    // 높이도 그대로다(줄이 한 줄로 말줄임된다 — 여러 줄로 자라면 목록 예산이 근거를 잃는다).
+    #expect(longBitmap.pixelsHigh == shortBitmap.pixelsHigh)
+    saveMessageSnapshot(try #require(longBitmap.representation(using: .png, properties: [:])), "msg-received-long")
 }
 
-@MainActor
-@Test
-func messageComposerStaysWithinCapAtTheNoScrollBoundary() throws {
-    // 무스크롤 상한(7행)에서 펼치면 리스트가 상한을 넘어 스크롤로 전환된다 — 창 높이는 그대로여야 한다.
-    let now = Date()
-    let base = try #require(renderedPixelHeight(CheckMenuView(store: makeMessagePanelStore(memberCount: 7, now: now))))
-    let expanded = try #require(
-        renderedPixelHeight(
-            CheckMenuView(store: makeMessagePanelStore(memberCount: 7, now: now), previewMessageComposerUserID: "u1")
-        )
-    )
-    #expect(Double(base) / 2.0 <= 700.0)
-    #expect(Double(expanded) / 2.0 <= 700.0)
-    #expect(expanded == base)
-}
+// MARK: 창 높이 예산 — 진입점만 남은 팝오버는 상한(700pt) 안에 넉넉히 든다
 
 @MainActor
 @Test
 func messagePanelStaysWithinCapWithBannerAndReceipt() throws {
-    // 최악 조합: 26명 + 최상단 배너 + 받은 메시지 줄 + 펼친 작성기.
+    // 최악 조합: 26명 + 최상단 배너 + 받은 메시지 줄(200자).
     let now = Date()
     let store = makeMessagePanelStore(memberCount: 26, now: now)
-    store.receivedMessages = [ReceivedMessage(id: "m1", fromName: "김서연", body: "밥?", createdAt: now)]
-    let height = try #require(
-        renderedPixelHeight(
-            CheckMenuView(
-                store: store,
-                previewLongSessionBanner: true,
-                previewMessageComposerUserID: "u1"
-            )
+    store.receivedMessages = [
+        ReceivedMessage(
+            id: "m1",
+            fromName: "김서연",
+            body: String(repeating: "가", count: 200),
+            createdAt: now,
+            fromUserID: "u11"
         )
-    )
+    ]
+    let height = try #require(renderedPixelHeight(CheckMenuView(store: store, previewLongSessionBanner: true)))
     #expect(Double(height) / 2.0 <= 700.0)
-}
-
-@MainActor
-@Test
-func messageComposerHeightMatchesItsDeclaredConstant() throws {
-    // 목록 높이 예산이 이 상수를 그대로 쓰므로, 실제 렌더 높이와 어긋나면 예산 계산이 근거를 잃는다.
-    let holder = MessageDraftHolder()
-    let composer = PokeMessageComposer(
-        targetName: "영식",
-        text: Binding(get: { holder.text }, set: { holder.text = $0 }),
-        onSend: { _ in },
-        onCancel: {}
-    )
-    let height = try #require(renderedPixelHeight(composer))
-    #expect(Double(height) / 2.0 == Double(PokeMessageComposer.height))
-}
-
-@Observable
-@MainActor
-final class MessageDraftHolder {
-    var text: String = ""
 }
 
 @MainActor
 @Test
 func messagePanelHeightMeasurementDump() throws {
     // 26명(실제 팀 규모) 목록의 육안 확인 PNG + 창 상한 재확인. 스크롤 대신 클립으로 그린다
-    // (ImageRenderer 는 ScrollView 내용을 못 그린다). 실측: 세 경우 모두 654pt — 상한 700pt 안.
+    // (ImageRenderer 는 ScrollView 내용을 못 그린다).
     let now = Date()
-    // 26명은 이름순 정렬이라 u1(영식)이 화면 밖으로 밀린다 — 클립 스냅샷에서 작성기를 보려면
-    // 첫 화면에 남는 대상(u23 권도경)을 펼친다. 앱에서는 ScrollViewReader 가 펼친 자리로 끌어올린다.
-    for (count, target) in [(26, nil), (26, "u23"), (7, "u1")] as [(Int, String?)] {
-        let expanded = target != nil
+    for count in [26, 7] {
         let store = makeMessagePanelStore(memberCount: count, now: now)
-        let view = CheckMenuView(
-            store: store,
-            previewClipsOverflowList: true,
-            previewMessageComposerUserID: target
-        )
+        let view = CheckMenuView(store: store, previewClipsOverflowList: true)
         let height = try #require(renderedPixelHeight(view))
         #expect(Double(height) / 2.0 <= 700.0)
-        saveMessageSnapshot(try renderPNG(view), "msg-\(count)명-\(expanded ? "펼침" : "접힘")")
+        saveMessageSnapshot(try renderPNG(view), "msg-\(count)명")
     }
-}
-
-@MainActor
-@Test
-func messageComposerWarnsWhenTheInputFilterRemovesSomething() throws {
-    // 붙여넣은 이모지가 그냥 사라지면 앱이 고장 난 것으로 읽힌다 — 사라진 이유를 머리줄이 2.5초간 말한다.
-    // (서비스 계층이 .unsupportedCharacters 를 invalid 로 접으며 이 설명을 입력 단계에 맡겼다.)
-    let holder = MessageDraftHolder()
-    holder.text = "굿"
-    let warned = PokeMessageComposer(
-        targetName: "영식",
-        text: Binding(get: { holder.text }, set: { holder.text = $0 }),
-        previewFilterWarning: true,
-        onSend: { _ in },
-        onCancel: {}
-    )
-    let png = try renderPNG(warned)
-    #expect(png.count > 0)
-    saveMessageSnapshot(png, "msg-filter-warning")
-    // 안내가 떠도 펼침 높이는 그대로다(높이가 흔들리면 목록 예산이 근거를 잃는다).
-    #expect(Double(try #require(renderedPixelHeight(warned))) / 2.0 == Double(PokeMessageComposer.height))
-    // 사유별로 다른 문구를 쓴다 — 이모지에 대고 "3글자까지"라고 하면 사용자는 줄이다가 계속 막힌다.
-    #expect(PokeMessageComposer.filterWarningText != WorkTimerStore.messageTooLongNotice)
-}
-
-@MainActor
-@Test
-func messageEntryPointCoversExactlyThePokeTargets() throws {
-    // 메시지 진입점은 찌르기와 **같은 목록·같은 게이트**를 쓴다. 내가 비근무면 두 버튼이 함께 흐려지고,
-    // 근무중이면 함께 살아난다 — 한쪽만 살아 있는 화면이 있으면 사용자가 규칙을 설명할 수 없다.
-    let now = Date()
-    let working = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 4, myselfWorking: true, now: now)))
-    let offWork = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 4, myselfWorking: false, now: now)))
-    // 목록 영역(패널 아래쪽 절반)에서 accent 픽셀이 크게 줄어든다 = 두 버튼이 함께 죽었다.
-    let band = (top: working.pixelsHigh / 2, bottom: working.pixelsHigh - 1)
-    let live = accentPixelCount(working, top: band.top, bottom: band.bottom)
-    let dead = accentPixelCount(offWork, top: band.top, bottom: band.bottom)
-    #expect(live > dead * 3)
-    saveMessageSnapshot(try #require(offWork.representation(using: .png, properties: [:])), "msg-offwork")
-}
-
-// MARK: - 구버전 상대 게이트 — 메시지만 잠그고 찌르기는 건드리지 않는다
-//
-// 실사용 신고: 구버전(≤0.2.27) 상대에게 메시지를 보내면 상대 화면에는 **그냥 콕 찔린 것**으로 뜬다.
-// 구버전 클라가 모르는 kind 를 normal 로 접고, take_pokes 는 서버 원자 소비라 그 3글자는 영영 사라진다.
-// 서버·스토어는 이미 막지만(구버전에겐 안 주고 서버에 남긴다), 화면 몫은 **보내기 전에 알게 하는 것**이다.
-
-/// 버전 게이트 육안 확인 PNG. 판정 근거는 아래 픽셀 테스트가 내고, 이 파일들은 눈으로 보기 위한 것이다.
-@MainActor
-private func saveVersionGateSnapshot(_ png: Data, _ name: String) {
-    let dir = URL(
-        fileURLWithPath: "/private/tmp/claude-501/-Users-yesung-check/8963d0f8-fdcd-471a-8c55-8502cb15766e/scratchpad/version-gate-ui",
-        isDirectory: true
-    )
-    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    try? png.write(to: dir.appendingPathComponent("\(name).png"))
-}
-
-@MainActor
-@Test
-func outdatedTargetLosesOnlyTheMessageButtonNeverThePokeButton() throws {
-    // 세 렌더는 **한 사람(u4 서준)만** 다르다: 기준 / 구버전 / 찌르기 쿨타임.
-    let now = Date()
-    let base = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now)))
-    let outdated = try renderBitmap(
-        CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now, outdatedUserIDs: ["u4"]))
-    )
-    let coolingStore = makeMessagePanelStore(memberCount: 5, now: now)
-    coolingStore.pokeCooldownUntil = ["u4": now.addingTimeInterval(45)]
-    // 메시지 쿨타임은 **다른 사람(u2)** 에게 걸어 둔다. 이 줄이 있어도 아래 diff 사각형이 u4 의 찌르기 버튼
-    // 하나로 남는다는 것이 곧 "메시지 쿨타임은 행에서 아무것도 바꾸지 않는다"의 증거다 —
-    // 그건 의도된 설계다(쿨타임 중에도 펼칠 수 있어야 작성기가 남은 초를 말해 줄 수 있다).
-    coolingStore.messageCooldownUntil = ["u2": now.addingTimeInterval(45)]
-    #expect(coolingStore.pokeCooldownRemaining(for: "u4", now: now) > 0)
-    #expect(coolingStore.messageCooldownRemaining(for: "u2", now: now) > 0)
-    let cooling = try renderBitmap(CheckMenuView(store: coolingStore))
-    saveVersionGateSnapshot(try #require(cooling.representation(using: .png, properties: [:])), "gate-cooldown")
-
-    // 찌르기 버튼의 x 자리를 **렌더로 알아낸다**(좌표 상수를 손으로 적으면 행 배치가 바뀌는 날 조용히 거짓말한다).
-    // 쿨타임은 그 행에서 찌르기 버튼 하나만 흐리게 만드므로, 그 diff 사각형이 곧 찌르기 버튼의 자리다.
-    let pokeBox = try #require(bitmapDiffBounds(base, cooling), "쿨타임이 찌르기 버튼을 흐리게 바꿔야 한다")
-    let messageBox = try #require(
-        bitmapDiffBounds(base, outdated),
-        "구버전 상대의 메시지 버튼이 꺼져야 한다 — 픽셀이 그대로면 화면에 게이트가 없는 것이다"
-    )
-    // ★ 이 한 줄이 계약 전체다: 바뀐 자리가 찌르기 버튼보다 **왼쪽에서 끝난다** =
-    // 메시지 버튼만 죽었고 찌르기 버튼은 한 픽셀도 건드리지 않았다(구버전도 찔림은 그대로 받는다).
-    #expect(messageBox.maxX < pokeBox.minX)
-    // 두 사각형이 같은 행에서 나왔다는 확인 — 다른 사람 행을 재고 있으면 위 비교는 아무 뜻이 없다.
-    #expect(messageBox.minY < pokeBox.maxY && pokeBox.minY < messageBox.maxY)
-}
-
-@MainActor
-@Test
-func threeDisabledKindsStayApartOnScreen() throws {
-    // 정상 / 구버전 / 자리비움 세 행이 한 화면에 함께 그려진다(u4 서준만 구버전, u3 지현은 자리비움).
-    // 자리비움은 **두 버튼이 함께** 죽고 구버전은 메시지만 죽으므로, 찌르기 버튼(accent 원형)이
-    // 남아 있는 행의 개수가 곧 두 상태를 가르는 픽셀 근거다.
-    let now = Date()
-    let base = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now)))
-    let mixed = try renderBitmap(
-        CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now, outdatedUserIDs: ["u4"]))
-    )
-    // accent 가 있는 행 구간의 **개수**는 그대로다 = 구버전 행에도 살아 있는 찌르기 버튼이 남았다.
-    // (찌르기까지 같이 껐다면 그 행에서 accent 가 통째로 사라져 구간이 하나 줄고, 자리비움 행과 같은 모양이 된다.)
-    let baseRuns = accentRowRuns(base, top: 0, bottom: base.pixelsHigh - 1)
-    let mixedRuns = accentRowRuns(mixed, top: 0, bottom: mixed.pixelsHigh - 1)
-    #expect(mixedRuns.count == baseRuns.count)
-    // 그래도 화면은 달라졌다(메시지 버튼이 흐려졌다) — 개수만 같고 내용은 같지 않다.
-    #expect(bitmapDiffBounds(base, mixed) != nil)
-    saveVersionGateSnapshot(try #require(mixed.representation(using: .png, properties: [:])), "gate-three-states")
-    saveVersionGateSnapshot(try #require(base.representation(using: .png, properties: [:])), "gate-baseline")
-}
-
-@MainActor
-@Test
-func expandedComposerStaysOpenAndOnlyLocksWhenTheTargetTurnsOutOfDate() throws {
-    // 폴링이 펼쳐 둔 사람의 canReceiveMessage 를 false 로 뒤집는 순간. **접지 않는다** —
-    // 접으면 치던 글자가 이유 없이 사라지고, 폴링이 사용자의 화면을 여닫는 규칙이 새로 생긴다.
-    let now = Date()
-    let open = try renderBitmap(
-        CheckMenuView(
-            store: makeMessagePanelStore(memberCount: 5, now: now),
-            previewMessageComposerUserID: "u4",
-            previewMessageDraft: "수고"
-        )
-    )
-    let locked = try renderBitmap(
-        CheckMenuView(
-            store: makeMessagePanelStore(memberCount: 5, now: now, outdatedUserIDs: ["u4"]),
-            previewMessageComposerUserID: "u4",
-            previewMessageDraft: "수고"
-        )
-    )
-    // 입력칸(ImageRenderer 의 '못 그림' 노란 상자)은 여전히 목록 안에 정확히 1개 — 작성기가 살아 있다.
-    // 예전엔 마지막 상자 하나(푸터 Menu 자리)를 dropLast() 로 버렸다. 전원 버튼이 Menu 를 벗으면서
-    // 그 상수는 사라졌고, 지금 세는 상자는 전부 입력칸이다 — 버리면 작성기가 접혀도 초록이 된다.
-    let openBoxes = unavailablePlaceholderRowRuns(open, top: 0, bottom: open.pixelsHigh - 1)
-    let lockedBoxes = unavailablePlaceholderRowRuns(locked, top: 0, bottom: locked.pixelsHigh - 1)
-    #expect(openBoxes.count == 1)
-    #expect(lockedBoxes.count == 1)
-    // 창 높이도 그대로다 — 접혔다면 펼침 덩어리만큼 줄어든다.
-    #expect(locked.pixelsHigh == open.pixelsHigh)
-    // 대신 **보내기는 잠겼다**: 머리줄이 사유를 말하고 [보내기] 캡슐의 accent 가 빠진다(행의 메시지 버튼도 함께).
-    #expect(bitmapDiffBounds(open, locked) != nil)
-    #expect(
-        accentPixelCount(locked, top: 0, bottom: locked.pixelsHigh - 1)
-            < accentPixelCount(open, top: 0, bottom: open.pixelsHigh - 1)
-    )
-    saveVersionGateSnapshot(try #require(locked.representation(using: .png, properties: [:])), "gate-composer-locked")
-    saveVersionGateSnapshot(try #require(open.representation(using: .png, properties: [:])), "gate-composer-open")
 }
 
 // MARK: - 근무 시작/종료 알약의 키보드 포커스 링
@@ -4884,10 +4684,15 @@ func focusEffectsAreDisabledOnTheWorkTogglePillAndNowhereElse() throws {
     #expect(pill.upperBound < modifier.lowerBound)
     // 입력칸이 사는 화면들은 이 수식어를 **받지 않는다**. 위 '한 번' 단언을 이름으로 못 박아,
     // 나중에 루트로 올리는 수정이 들어와도 여기서 먼저 걸리게 한다.
-    for name in ["CheckMenuView", "PokeMessageComposer"] {
+    // (옛 목록에 있던 `PokeMessageComposer` 는 v0.2.49 에서 사라졌다 — 팝오버 안 인라인 작성기를 걷어냈다.
+    //  그 자리를 잇는 메시지 창은 다른 파일이라 아래에서 따로 본다.)
+    for name in ["CheckMenuView"] {
         let body = try #require(swiftStructBody(source, name: name))
         #expect(!body.contains("focusEffectDisabled"), "\(name) 가 포커스 표시를 끄면 지금 어디에 타이핑되는지 알 수 없어진다")
     }
+    // 메시지 창도 같은 계약이다 — 200자를 쓰는 입력칸이라 커서가 안 보이면 그 창은 못 쓴다.
+    let messageViewSource = try String(contentsOf: checkSourceURL("CheckMessageView.swift"), encoding: .utf8)
+    #expect(!messageViewSource.contains("focusEffectDisabled"))
     // .focusable(false) 로 도달 자체를 막지 않았다 — 그건 키보드만 쓰는 사람에게서 근무 시작/종료를 빼앗는다.
     #expect(!header.contains(".focusable(false)"))
 }
@@ -4910,17 +4715,23 @@ func theWorkTogglePillKeepsBothFacesAndItsLayoutAfterDisablingFocusEffects() thr
     let diff = try #require(bitmapDiffBounds(offWork, working))
     // 알약은 헤더 카드 안이므로 그 차이는 화면 위쪽에서 시작한다(버튼이 사라지거나 밀려나지 않았다).
     #expect(diff.minY < working.pixelsHigh / 3)
-    saveVersionGateSnapshot(try #require(offWork.representation(using: .png, properties: [:])), "focus-pill-offwork")
-    saveVersionGateSnapshot(try #require(working.representation(using: .png, properties: [:])), "focus-pill-working")
+    saveMessageSnapshot(try #require(offWork.representation(using: .png, properties: [:])), "focus-pill-offwork")
+    saveMessageSnapshot(try #require(working.representation(using: .png, properties: [:])), "focus-pill-working")
 }
 
 @Test
-func theOutdatedTooltipQuotesTheStoreNoticeInsteadOfInventingItsOwnWording() throws {
-    // 보내기 전(툴팁)과 보낸 뒤(안내줄)가 **같은 말**을 해야 한다. 리터럴을 베껴 두면 한쪽만 고쳐지는 날이 온다.
-    let source = try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8)
+func theMessageButtonNoLongerCarriesTheRetiredVersionGate() throws {
+    // v0.2.48 까지 이 자리에는 "상대가 앱을 업데이트해야 받을 수 있어요" 툴팁이 있었다(최소 빌드 게이트).
+    // **그 게이트는 v0.2.49 에서 폐기됐다** — 모든 버전이 받는다. 툴팁이 남아 있으면 화면이 없는 규칙을
+    // 설명하게 되고, 사용자는 있지도 않은 원인을 고치려 든다.
+    // ★ **주석을 걷어내고 본다.** 안 그러면 "왜 지웠는지"를 적어 둔 설명 자체가 이 단언을 빨갛게 만들고,
+    //   다음 사람은 테스트를 통과시키려 그 설명을 지운다(이 저장소가 겪은 함정).
+    let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
     let body = try #require(swiftStructBody(source, name: "PokeDirectoryRowView"))
-    #expect(body.contains("WorkTimerStore.messageTargetOutdatedNotice"))
-    #expect(!body.contains(WorkTimerStore.messageTargetOutdatedNotice), "같은 문장을 리터럴로 다시 적어 두면 안 된다")
+    #expect(!body.contains("messageTargetOutdatedNotice"), "폐기된 최소 빌드 게이트 툴팁이 남아 있다")
+    #expect(!body.contains("canReceiveMessage"), "행이 아직 수신 가능 깃발로 무언가를 잠근다")
+    // 말풍선 버튼이 하는 일은 하나뿐이다: 창 열기.
+    #expect(body.contains("onOpenMessages"))
 }
 
 // MARK: - 울트라 화면(잔량 + 충전 경로) — v0.2.34
@@ -5859,33 +5670,72 @@ func sideRailNeverDecidesTheWindowHeight() throws {
 
 @MainActor
 @Test
-func sideRailUltraBadgeSpeaksOnlyWhenItKnowsTheBalance() throws {
+func sideRailFeedbackBadgeSpeaksOnlyWhenThereIsSomethingToHandle() throws {
+    // v0.2.49: 레일 4번 칸의 주인이 [울트라] → [제보] 로 바뀌었다. 배지의 **모양**은 그대로
+    // (CheckMenuRailButton.badge 한 벌) 이고 **뜻**만 바뀌었다 — 잔량이 아니라 미해결 제보 건수다.
+    //
+    // 규약은 잔량 배지에서 그대로 물려받는다: 말할 것이 없으면 **아무것도 안 그린다.**
+    // 잔량 쪽은 "모르면 침묵"(틀린 숫자보다 낫다)이었고, 여기서는 "0이면 침묵"이다 — 0건은 알림이
+    // 아니라 잡음이고, 관리자가 아닌 사람에게는 서버가 애초에 건수를 주지 않아 언제나 0이다.
     let now = Date(timeIntervalSince1970: 1_784_000_000)
-    func render(balance: Int?, unlimited: Bool) throws -> NSBitmapImageRep {
+    func render(openCount: Int) throws -> NSBitmapImageRep {
         let store = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
-        store.ultraBalance = balance
-        store.ultraUnlimited = unlimited
+        store.feedbackOpenCount = openCount
         return try renderBitmap(CheckMenuView(store: store))
     }
-    // 배지는 울트라 칸(4번)의 오른쪽 위 모서리에 걸친다. 그 작은 사각형만 본다.
+    // 배지는 제보 칸(4번)의 오른쪽 위 모서리에 걸친다. 그 작은 사각형만 본다.
     let rect = railButtonRect(4, windowHeightPoints: 0)
     func badgePixels(_ bitmap: NSBitmapImageRep) -> Int {
         railGlyphPixels(bitmap, (left: rect.right - 22, right: rect.right + 6, top: rect.top - 6, bottom: rect.top + 12))
     }
 
-    let unknown = try render(balance: nil, unlimited: false)
-    let three = try render(balance: 3, unlimited: false)
-    let infinite = try render(balance: nil, unlimited: true)
+    let none = try render(openCount: 0)
+    let three = try render(openCount: 3)
+    let many = try render(openCount: 120)
 
-    // 모르면 아무 숫자도 만들지 않는다(틀린 숫자보다 침묵이 낫다 — UltraBalanceText.hint 와 같은 규약).
-    #expect(badgePixels(unknown) == 0, "잔량을 모르는데 배지가 그려졌다")
-    #expect(badgePixels(three) > 0, "잔량 3을 아는데 배지가 없다")
-    // 무제한은 잔량을 몰라도 ∞ 를 그린다(서버가 말해 준 사실이라 잔량에서 파생되지 않는다).
-    #expect(badgePixels(infinite) > 0, "무제한인데 배지가 없다")
+    #expect(badgePixels(none) == 0, "처리할 제보가 0건인데 배지가 그려졌다")
+    #expect(badgePixels(three) > 0, "미해결 3건인데 배지가 없다")
+    // 세 자리는 "99+" 로 접힌다 — 접지 않으면 배지가 카드 밖으로 자라 창 오른쪽을 넘는다.
+    #expect(badgePixels(many) > 0, "미해결 120건인데 배지가 없다")
+    #expect(badgePixels(many) <= badgePixels(three) * 3, "세 자리 배지가 안 접혀 배지가 통째로 커졌다")
 
     // 창 높이는 셋 다 같다 — 배지는 카드 위에 얹히는 overlay 라 세로 예산을 안 먹는다.
-    #expect(unknown.pixelsHigh == three.pixelsHigh)
-    #expect(unknown.pixelsHigh == infinite.pixelsHigh)
+    #expect(none.pixelsHigh == three.pixelsHigh)
+    #expect(none.pixelsHigh == many.pixelsHigh)
+    // 폭도 그대로다(배지가 레일 밖으로 창을 밀지 않는다).
+    #expect(none.pixelsWide == many.pixelsWide)
+}
+
+@MainActor
+@Test
+func ultraEntryLeftTheRailButStillLivesOnThePokePage() throws {
+    // 이사가 **양쪽에서 동시에** 끝났음을 본다. 한쪽만 보면 놓친다:
+    //  · 레일만 보면 "울트라로 가는 길이 아예 사라졌다"(0개인 사람이 충전 방법에 닿지 못한다)를,
+    //  · 콕찌르기만 보면 "문이 둘"(레일에 남은 유령 칸)을 못 잡는다.
+    let now = Date(timeIntervalSince1970: 1_784_000_000)
+
+    // (1) 레일 4번 칸에는 이제 제보가 선다 — 잔량을 알려 줘도 그 칸에 배지가 안 붙는다.
+    //     (예전 [울트라] 칸이라면 잔량 3에서 배지가 떴다.)
+    let store = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
+    store.ultraBalance = 3
+    store.ultraUnlimited = false
+    store.feedbackOpenCount = 0
+    let bitmap = try renderBitmap(CheckMenuView(store: store))
+    let rect = railButtonRect(4, windowHeightPoints: 0)
+    let badge = railGlyphPixels(bitmap, (left: rect.right - 22, right: rect.right + 6, top: rect.top - 6, bottom: rect.top + 12))
+    #expect(badge == 0, "울트라 잔량이 레일 칸 배지로 다시 새어 나온다(픽셀 \(badge)개)")
+
+    // (2) 그래도 그 칸에는 글리프가 온전히 있다(아이콘 + 라벨) — 칸이 빈 채 남지 않았다.
+    let glyph = railGlyphPixels(bitmap, railButtonRect(4, windowHeightPoints: Double(bitmap.pixelsHigh) / 2.0))
+    #expect(glyph >= 60, "레일 4번 칸이 비었다(글리프 \(glyph)픽셀)")
+
+    // (3) 울트라로 가는 문은 콕찌르기 제목 행의 잔량 배지 하나로 남는다 — 소스로 못 박는다.
+    //     (주석은 걷어내고 본다: 옮긴 이유를 적은 주석에 이름이 들어가면 그 설명을 지워야만 초록이 된다.)
+    let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
+    #expect(source.contains("openUltraPanel(from: .poke)"), "콕찌르기의 울트라 진입이 사라졌다")
+    #expect(!source.contains("openUltraPanel(from: .home)"), "홈에서 울트라를 여는 진입이 아직 있다")
+    // [뒤로]는 여전히 진입한 곳으로 돌아간다(origin 복귀). 그 유일한 경로가 살아 있는지만 본다.
+    #expect(source.contains("store.closeUltraPanel()"), "울트라 화면의 [뒤로]가 사라졌다")
 }
 
 @MainActor
@@ -5906,6 +5756,9 @@ func popoverGrowsSidewaysOnlyOnTheScreenThatHasTheRail() throws {
 }
 
 // MARK: - 레일 육안 확인 덤프(스크래치패드)
+//
+// 픽셀 단언은 "무엇이 몇 픽셀인가"만 말한다 — 여섯 칸이 **읽히는 배치인가**는 사람이 봐야 한다.
+// CHECK_RAIL_SNAPSHOT_DIR 이 있을 때만 그린다(평소 테스트는 파일을 안 만든다).
 
 @MainActor
 @Test
@@ -5919,22 +5772,32 @@ func dumpSideRailSnapshots() throws {
         try renderPNG(view).write(to: base.appendingPathComponent(name))
     }
 
-    // 1) 메인 화면 기본(팀원 4명).
+    // 1) 여섯 칸 기본(게임 · 찌르기 · 현황 · 기록 · 제보 · 설정). 배지는 없다.
     let main = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
     main.myTeamInviteCode = "ABCD1234"
     main.ultraBalance = 3
-    try write(CheckMenuView(store: main), "rail-main.png")
+    try write(CheckMenuView(store: main), "rail-six.png")
 
-    // 2) 콕찌르기 패널이 열린 상태(레일 두 번째 칸이 accent).
+    // 2) 관리자 시야 — 제보 칸에 미해결 3건 배지.
+    let admin = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
+    admin.myTeamInviteCode = "ABCD1234"
+    admin.ultraBalance = 3
+    admin.feedbackOpenCount = 3
+    try write(CheckMenuView(store: admin), "rail-badge.png")
+
+    // 3) 콕찌르기 화면이 열린 상태. **상단 울트라 잔량 배지가 그대로 있는지**를 눈으로 확인하는 그림이다
+    //    (레일에서 뺀 것이 콕찌르기 쪽 진입까지 지우지 않았는가).
     let poke = makePokePanelStore(memberCount: 5, now: now)
     poke.teamName = "아잉팀"
-    try write(CheckMenuView(store: poke), "rail-poke-active.png")
+    poke.ultraBalance = 3
+    try write(CheckMenuView(store: poke), "rail-poke-panel.png")
 
-    // 3) 가장 키 큰 조합: 새 버전 배너 + 목표 편집 펼침 + 팀원 6명.
+    // 4) 가장 키 큰 조합: 새 버전 배너 + 목표 편집 펼침 + 팀원 6명.
     //    크롬이 많아 목록이 스크롤로 넘어가므로 previewClipsOverflowList 로 그린다 —
     //    ImageRenderer 는 ScrollView 안쪽을 못 그려서 안 켜면 목록 자리가 통째로 빈다.
     let tallest = makeTeamStore(members: manyMembers(now: now, count: 6), now: now)
     tallest.myTeamInviteCode = "ABCD1234"
+    tallest.feedbackOpenCount = 3
     try write(
         CheckMenuView(
             store: tallest,
@@ -5946,7 +5809,7 @@ func dumpSideRailSnapshots() throws {
         "rail-tallest.png"
     )
 
-    // 4) 리얼타임 경고 상태의 콕찌르기 버튼(글리프만 pending 으로 물든다).
+    // 5) 리얼타임 경고 상태의 콕찌르기 버튼(글리프만 pending 으로 물든다).
     let warned = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
     warned.myTeamInviteCode = "ABCD1234"
     warned.realtimeState = .failed(
@@ -5954,26 +5817,4 @@ func dumpSideRailSnapshots() throws {
         .topicDenied
     )
     try write(CheckMenuView(store: warned), "rail-poke-warn.png")
-
-    // 5) 울트라 잔량 배지 세 상태(3 / ∞ / 모름)를 한 그림에 나란히.
-    func ultraStore(balance: Int?, unlimited: Bool) -> WorkTimerStore {
-        let store = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
-        store.myTeamInviteCode = "ABCD1234"
-        store.ultraBalance = balance
-        store.ultraUnlimited = unlimited
-        return store
-    }
-    let badges = HStack(alignment: .top, spacing: 0) {
-        CheckMenuView(store: ultraStore(balance: 3, unlimited: false))
-        CheckMenuView(store: ultraStore(balance: nil, unlimited: true))
-        CheckMenuView(store: ultraStore(balance: nil, unlimited: false))
-    }
-    let renderer = ImageRenderer(content: badges.fixedSize())
-    renderer.scale = 2
-    if let image = renderer.nsImage,
-       let tiff = image.tiffRepresentation,
-       let bitmap = NSBitmapImageRep(data: tiff),
-       let png = bitmap.representation(using: .png, properties: [:]) {
-        try png.write(to: base.appendingPathComponent("rail-ultra-badge.png"))
-    }
 }

@@ -434,10 +434,10 @@ struct V0238MenuTests {
         let frozen = WorkTimerStore.menuClockFrozen
         let store = makePokeStore(now: Self.t0, cooling: ["u2": 37])
         defer { cancelTasks(store) }
-        store.messageCooldownUntil = ["u3": Self.t0.addingTimeInterval(20)]
         #expect(store.pokeCooldownRemaining(for: "u2", now: frozen) > 0)         // 쿨타임 중이던 사람은 계속 못 찌름
         #expect(store.pokeCooldownRemaining(for: "u1", now: frozen) == 0)        // 기록 없는 사람은 그대로 활성
-        #expect(store.messageCooldownRemaining(for: "u3", now: frozen) > 0)
+        // ★ 메시지 쿨타임은 v0.2.49 에서 **폐지됐다**(찌르기만 60초). 여기서 잴 값이 없다는 것이 곧 계약이고,
+        //   `messageCooldownRemaining` 이 되살아나면 이 파일이 다시 컴파일 오류로 그것을 알린다.
         #expect(PokeMessageReceiptStrip.ageText(receivedAt: Self.t0, now: frozen) == "방금")
         let backoff = Backoff(attempt: 3, retryAt: Self.t0, failingSince: Self.t0.addingTimeInterval(-3_600))
         #expect(!PokeConnectionNotice.shouldWarn(state: .reconnecting(backoff), now: frozen))
@@ -456,7 +456,10 @@ struct V0238MenuTests {
         )
         #expect(root.contains("clock: { store.menuClockNow }"), "패널의 시계는 menuClockNow 를 읽는 클로저여야 한다(닫힘 게이트 포함).")
         #expect(root.contains("cooldownRemaining: { store.pokeCooldownRemaining(for: $0, now: store.menuClockNow) }"))
-        #expect(root.contains("messageCooldownRemaining: { store.messageCooldownRemaining(for: $0, now: store.menuClockNow) }"))
+        // 메시지 쿨타임 클로저는 v0.2.49 에서 사라졌다(쿨타임 폐지). **되살아나면 실패한다** —
+        // 이 한 줄이 팝오버 트리에 초 단위 의존을 다시 들이는 경로였다.
+        #expect(!root.contains("messageCooldownRemaining"), "메시지 쿨타임 배선이 되살아났다 — 쿨타임은 폐지됐다.")
+        #expect(root.contains("onOpenMessages: { store.openMessageWindow(peer: $0) }"), "말풍선 버튼은 메시지 창을 열어야 한다.")
         #expect(root.contains("isPokeDisconnected: {"), "연결 경고 판정은 클로저로 넘겨 안내줄 잎이 불러야 한다.")
         #expect(!root.contains("isPokeDisconnected: PokeConnectionNotice.shouldWarn("))
     }
@@ -476,9 +479,9 @@ struct V0238MenuTests {
             "행에는 쿨타임 **읽기 클로저**를 내려야 한다 — 값으로 풀면 패널 body 가 초당 재평가로 돌아간다."
         )
         #expect(!panel.contains("remainingCooldown: cooldownRemaining("))
-        for line in panel.split(separator: "\n") where line.contains("messageCooldownRemaining(entry.userID)") {
-            #expect(line.contains("MenuClockLeaf(read:"), "작성기 쿨타임은 잎 안에서만 읽어야 한다: \(line.trimmingCharacters(in: .whitespaces))")
-        }
+        // 인라인 작성기와 그 쿨타임 잎은 v0.2.49 에서 통째로 사라졌다(보내는 곳은 별도 창 하나다).
+        #expect(!panel.contains("messageCooldownRemaining"), "메시지 쿨타임 읽기가 패널에 되살아났다.")
+        #expect(!panel.contains("PokeMessageComposer"), "팝오버 안 인라인 작성기가 되살아났다 — 보내는 곳은 창 하나다.")
         #expect(!panel.contains("isPokeDisconnected()"), "연결 경고 판정을 패널 body 가 직접 불렀다.")
         #expect(panel.contains("PokePanelNoticeLine("), "안내줄이 잎(PokePanelNoticeLine)이 아니다.")
         // 정렬은 body 맨 위에서 한 번 — computed 프로퍼티(sortedEntries)로 되돌리면 한 body 에 세 번 정렬한다.

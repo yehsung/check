@@ -1275,33 +1275,30 @@ actor SupabaseWorkService {
         return try decoder.decode(PokeSendResponse.self, from: data)
     }
 
-    /// 상대에게 3글자 메시지. send_message(p_to, p_body) RPC 를 로그인 토큰으로 호출한다.
-    /// 근무중 게이트·집중 모드·60초 쿨타임·3글자 상한은 **전부 서버**가 강제한다 — 아래 클라 게이트는 판정이 아니라
-    /// 헛왕복 절감 장치다(무료 플랜).
+    /// 상대에게 메시지. `send_message(p_to, p_body)` RPC 를 로그인 토큰으로 호출한다.
     ///
-    /// 응답은 poke_user 와 **문자 그대로 같은 jsonb 규약**({status, retry_after_seconds?})이라 PokeSendResponse 를
-    /// 그대로 재사용한다 — ultra_remaining/reset_after_seconds 는 이 RPC 가 안 보내므로 nil 로 남을 뿐 해가 없다.
+    /// **쿨타임이 없다**(v0.2.49 서버 계약). 근무중 게이트·집중 모드·텍스트 난간·200자 상한은 전부 서버가 강제하고,
+    /// 아래 클라 게이트는 판정이 아니라 헛왕복 절감 장치다(무료 플랜).
+    ///
+    /// 응답은 poke_user 와 **같은 jsonb 규약**({status, …})이라 PokeSendResponse 를 그대로 재사용한다 —
+    /// too_long/not_text 에 딸려 오는 `max_length` 만 이쪽이 더 읽는다.
     /// 갈리는 것은 도메인 어휘뿐이고 그건 MessageSendOutcome 이 맡는다(그 타입 주석에 이유가 있다).
     ///
-    /// **빈 본문·3글자 초과는 요청을 아예 내지 않고** 서버와 같은 status 로 즉답한다. 로컬 거절만 throw 로 만들면
+    /// **빈 본문·200자 초과는 요청을 아예 내지 않고** 서버와 같은 status 로 즉답한다. 로컬 거절만 throw 로 만들면
     /// 호출부가 같은 실패를 catch 와 switch 두 곳에서 다뤄야 하고, 그 둘은 시간이 지나면 반드시 다른 문구를 낸다.
     /// 보내는 문자열도 원문이 아니라 정규화된 값이다 — 서버도 정규화하지만, 클라가 먼저 하면 NFD 한글이
     /// 서버에서만 6글자로 세어져 거절되는 사고가 사라진다(MessageBody.sanitized 주석의 실측 참고).
+    ///
+    /// **문자 종류는 여기서 판정하지 않는다.** 이모지 거부(옛 `.unsupportedCharacters`)는 3글자 시절의
+    /// 규칙이었고, 지금 그 판정을 클라가 한 벌 더 가지면 서버의 `not_text` 집합과 갈리는 순간이 곧 버그다.
     func sendMessage(accessToken: String, to userID: String, body: String) async throws -> PokeSendResponse {
         switch MessageBody.validate(body) {
         case .empty:
             return PokeSendResponse(status: "invalid")
-        case .unsupportedCharacters:
-            // **MessageSendOutcome 에 전용 케이스를 만들지 않고 invalid 로 접는다.** 텍스트 전용은 서버가 아니라
-            // 클라가 강제하는 규칙이라(서버는 이모지를 허용하는 난간만 세운다) 서버는 이 status 를 영원히 안 낸다 —
-            // 여기에 케이스를 더하면 스토어의 응답 분기에 **서버에서 절대 오지 않는 가지**가 하나 늘 뿐이다.
-            // 사용자에게 이유를 말하는 자리는 응답 분기가 아니라 **입력 단계**다: 화면은 MessageBody.validate 를
-            // 직접 불러 .unsupportedCharacters 를 보고 "이모지는 보낼 수 없어요"를 즉시 띄우고 전송을 막는다
-            // (사장님 지시 "입력 자체가 애초에 텍스트만 되게"의 자리가 거기다). 여기까지 온 입력은 그 화면 게이트를
-            // 우회한 경로뿐이라 invalid 로 충분하다.
-            return PokeSendResponse(status: "invalid")
-        case .tooLong:
-            return PokeSendResponse(status: "too_long")
+        case .tooLong(let maxLength):
+            // 서버가 같은 상황에서 실어 주는 키를 클라 즉답도 그대로 실어 준다 — 안 그러면 같은 실패가
+            // 로컬이냐 서버냐에 따라 다른 숫자를 말한다(문구를 만드는 자리는 한 곳이어야 한다).
+            return PokeSendResponse(status: "too_long", maxLength: maxLength)
         case .ok(let normalized):
             let data = try await send(
                 path: "/rest/v1/rpc/send_message",
@@ -1311,6 +1308,59 @@ actor SupabaseWorkService {
                 prefer: nil
             )
             return try decoder.decode(PokeSendResponse.self, from: data)
+        }
+    }
+
+    /// 최근 12시간 메시지 이력. `message_history(p_hours, p_limit)` RPC 를 로그인 토큰으로 호출한다.
+    ///
+    /// **take_pokes 와 완전히 다른 성격이다**: 저쪽은 원자 소비(한 번 받으면 사라진다)이고 이쪽은 **읽기 전용**이라
+    /// 몇 번을 불러도 같은 것이 온다. 그래서 창을 열 때·[새로고침]·전송 성공·수신 폴링이 새 것을 물어왔을 때
+    /// 부담 없이 다시 부를 수 있다(그래도 **폴링을 새로 만들지는 마라** — 무료 플랜이다).
+    ///
+    /// 인자 범위는 서버가 접는다(hours 1~24 / limit 1~500). 클라도 같은 값으로 한 번 접는 이유는
+    /// "서버가 조용히 바꾼 값"과 "클라가 요청한 값"이 갈리면 화면의 안내 문구("12시간")가 거짓이 되기 때문이다.
+    ///
+    /// 반환은 **오래된 것부터**다(서버 계약). 그래도 스토어가 다시 정렬한다 — 순서가 곧 사용자가 읽는 순서라
+    /// 서버 정렬을 신뢰하지 않는 것이 이 저장소의 규약이다(sortedForPokeDisplay 와 같은 근거).
+    func fetchMessageHistory(
+        accessToken: String,
+        hours: Int = 12,
+        limit: Int = 200
+    ) async throws -> [MessageHistoryEntry] {
+        let data = try await send(
+            path: "/rest/v1/rpc/message_history",
+            method: "POST",
+            body: MessageHistoryRequest(
+                pHours: min(24, max(1, hours)),
+                pLimit: min(500, max(1, limit))
+            ),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        let rows = try decoder.decode([MessageHistoryRow].self, from: data)
+        // 클로저 인자 이름이 `row` 가 **아닌** 이유는 제보 목록과 같다(소스 계약 테스트가 그 문장을 센다).
+        return rows.compactMap { historyRow -> MessageHistoryEntry? in
+            // 본문이 비면 버린다 — 빈 말풍선은 "누가 뭘 보냈는데 내용이 없다"로 읽혀 사용자가 앱을 의심한다.
+            let body = MessageBody.sanitized(historyRow.body ?? "")
+            guard MessageBody.hasVisibleContent(body) else { return nil }
+            // 상대가 누구인지 모르면 어느 대화에도 넣을 수 없다. 화면은 '묶음'이 곧 구조라 여기서 버린다.
+            guard let peer = historyRow.peerUserId, !peer.isEmpty else { return nil }
+            // epoch 가 정본이고 ISO 문자열은 폴백이다(TakenPokeRow.createdEpoch 와 같은 근거 — 소수초 파싱 함정).
+            guard let createdAt = historyRow.createdEpoch.map({ Date(timeIntervalSince1970: TimeInterval($0)) })
+                ?? historyRow.createdAt.flatMap({ parseDate($0) })
+            else { return nil }
+            return MessageHistoryEntry(
+                id: historyRow.id,
+                peerUserID: peer,
+                // 별명이 없으면(탈퇴·익명화) 말풍선 주인을 "사용자"로 부른다 — 제보 목록과 같은 폴백.
+                peerName: historyRow.peerDisplayName.flatMap { $0.isEmpty ? nil : $0 } ?? "사용자",
+                peerAvatarURL: historyRow.peerAvatarUrl.flatMap { URL(string: $0) },
+                body: body,
+                createdAt: createdAt,
+                // **is_mine 은 서버가 판정한다.** 클라가 from_user == 내 id 로 다시 세면 세션 세대가 갈리는
+                // 창에서 남의 말이 내 말풍선으로 그려진다. 모르면 '받은 것'으로 본다(왼쪽 정렬이 안전한 쪽이다).
+                isMine: historyRow.isMine ?? false
+            )
         }
     }
 
@@ -1802,5 +1852,117 @@ final class WorkTickGate: @unchecked Sendable {
             parts.append(String(format: "시계차 %+.1fs", skew))
         }
         return parts.joined(separator: " · ")
+    }
+}
+
+// MARK: - 제보(버그·요청) (v0.2.48)
+//
+// RPC 넷 전부 **로그인 토큰**으로만 부른다. anon 으로 부를 수 있는 문을 열지 않는다 —
+// 이 저장소는 이미 anon RPC 유출을 한 번 겪었다(standing risk P0).
+//
+// **스키마 부재를 여기서 접지 않는다.** 서버가 아직 배포 전이면 PGRST202(404 "… in the schema cache")가
+// 공용 매핑을 지나 `.databaseSchemaMissing` 으로 올라가고, 그걸 '실패'와 가르는 일은 호출부(스토어)의 몫이다 —
+// 미니게임 보드가 세운 관례 그대로다. 여기서 빈 배열로 접어 버리면 스토어는 "표가 없다"와 "정말 0건이다"를
+// 영영 가를 수 없고, 화면은 마이그레이션 전에도 "제보가 없어요"라고 단정한다.
+//
+// ★ 제보 본문은 사용자가 쓴 글이다. 이 아래 어디에도 `print`/`Logger` 를 붙이지 마라.
+extension SupabaseWorkService {
+    /// 제보 한 건을 보낸다. `submit_feedback(p_kind, p_body, p_app_version, p_os_version)` → uuid.
+    ///
+    /// 반환 id 를 **옵셔널로 흘리는** 이유: 화면 어디에도 쓰지 않는 값인데, 스칼라 응답 모양이 조금만
+    /// 달라도(문자열이 아니라 객체로 감싸 오는 식) 디코드가 throw 되어 **성공한 전송이 실패로 보인다**.
+    /// 그러면 사용자는 같은 글을 두 번 보내고 24시간 상한만 축낸다.
+    func submitFeedback(
+        accessToken: String,
+        kind: FeedbackKind,
+        body: String,
+        appVersion: String,
+        osVersion: String
+    ) async throws -> String? {
+        let data = try await send(
+            path: "/rest/v1/rpc/submit_feedback",
+            method: "POST",
+            body: FeedbackSubmitRequest(
+                pKind: kind.rawValue,
+                pBody: body,
+                pAppVersion: appVersion,
+                pOsVersion: osVersion
+            ),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try? decoder.decode(String.self, from: data)
+    }
+
+    /// 제보 목록. `feedback_list(p_status, p_limit)` — **관리자면 전부, 아니면 자기 것만**이고 그 판정은 서버다.
+    /// 미해결 먼저 → 최신순으로 오지만, 정렬을 신뢰하지 않고 호출부가 다시 세운다(미니게임 보드와 같은 규약).
+    func fetchFeedbackList(
+        accessToken: String,
+        status: FeedbackStatus?,
+        limit: Int
+    ) async throws -> [FeedbackReport] {
+        let data = try await send(
+            path: "/rest/v1/rpc/feedback_list",
+            method: "POST",
+            body: FeedbackListRequest(pStatus: status?.rawValue, pLimit: limit),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        let rows = try decoder.decode([FeedbackReportRow].self, from: data)
+        // 클로저 인자 이름이 `row` 가 **아닌** 이유: 소스 계약 테스트(assemblyAndApplyFunctionsAreSingleSourced)가
+        // 이 파일 안의 문자열 `return rows.map { row in` 이 정확히 1회인지를 세어 "팀 상태 조립이 두 벌이 됐다"를
+        // 잡는다. 우리 매핑이 그 문장을 그대로 쓰면 **관계없는 테스트가 빨개지고**, 다음 사람은 그 테스트를 고치려다
+        // 진짜 계약을 지운다. 미니게임 보드도 같은 이유로 `boardRow` 를 쓴다.
+        return rows.map { reportRow in
+            FeedbackReport(
+                id: reportRow.id,
+                userID: reportRow.userId,
+                // 서버가 모르는 종류를 보내면 '요청'으로 접는다. 여기만 접는 이유: kind 는 서버 check 제약이
+                // 두 값으로 못 박은 닫힌 집합이라 확장 협상 대상이 아니고(status 와 다른 점), 배지 색 하나만
+                // 좌우한다 — 반면 status 를 접으면 처리 상태가 오배달된다(FeedbackStatus.other 주석).
+                kind: FeedbackKind(rawValue: reportRow.kind) ?? .request,
+                body: reportRow.body,
+                status: FeedbackStatus(rawValue: reportRow.status ?? FeedbackStatus.open.rawValue),
+                adminNote: reportRow.adminNote,
+                appVersion: reportRow.appVersion,
+                osVersion: reportRow.osVersion,
+                createdAt: reportRow.createdAt.flatMap { parseDate($0) },
+                updatedAt: reportRow.updatedAt.flatMap { parseDate($0) },
+                authorName: reportRow.displayName ?? "사용자",
+                authorAvatarURL: reportRow.avatarUrl.flatMap { URL(string: $0) }
+            )
+        }
+    }
+
+    /// 제보 상태를 바꾼다. `set_feedback_status(p_id, p_status, p_note)` — **관리자만**이고, 아니면 서버가
+    /// `FEEDBACK_FORBIDDEN` 예외를 던진다(공용 매핑을 지나 `.authMessage("FEEDBACK_FORBIDDEN")` 으로 온다).
+    /// 클라의 탭 감춤은 발견성일 뿐 차단이 아니다 — 차단은 언제나 이 RPC 안에서 일어난다.
+    func setFeedbackStatus(
+        accessToken: String,
+        id: String,
+        status: FeedbackStatus,
+        note: String?
+    ) async throws {
+        try await sendNoBody(
+            path: "/rest/v1/rpc/set_feedback_status",
+            method: "POST",
+            body: FeedbackStatusRequest(pId: id, pStatus: status.rawValue, pNote: note),
+            accessToken: accessToken,
+            prefer: nil
+        )
+    }
+
+    /// 미해결 제보 건수. `feedback_open_count()` — 인자 없는 RPC라 본문은 `{}` 다(take_pokes 의 옛 모양과 같은 규약:
+    /// PostgREST 는 본문의 **키 집합**으로 함수를 고르므로 빈 객체를 보내야 인자 없는 서명에 맞는다).
+    /// 관리자가 아니면 서버가 0 을 돌려준다 — 클라가 판정하지 않는다.
+    func fetchFeedbackOpenCount(accessToken: String) async throws -> Int {
+        let data = try await send(
+            path: "/rest/v1/rpc/feedback_open_count",
+            method: "POST",
+            body: EmptyBody(),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return (try? decoder.decode(Int.self, from: data)) ?? 0
     }
 }

@@ -1022,8 +1022,20 @@ func e2e_프로브는_private_채널을_구독한다() throws {
 @MainActor
 @Test
 func 설정창_콘텐츠가_창_높이_안에_들어온다() throws {
-    // 초인종 진단 줄을 더했으므로 높이 예산을 확인한다. 팝오버의 700pt 와 같은 종류의 계약이다 —
-    // 넘치면 아래 내용이 잘리는데, 잘리는 것이 바로 이 진단 줄이다(맨 아래에 있다).
+    // 설정 창의 높이 예산(팝오버의 700pt 와 같은 종류의 계약). **무엇이 잘리는가가 2026-09-10 에 바뀌었다.**
+    //
+    // 예전 이 주석은 "넘치면 잘리는 것이 바로 진단 줄이다(맨 아래에 있다)"였다. 그 진단 두 줄은
+    // 사용자 지적("이건 뭐야? 왜 넣은 거야?")으로 **제보로 옮겼다**(CheckSettingsView 주석 ·
+    // WorkTimerStoreFeedback 의 FeedbackDiagnostics). 그래서 두 가지가 달라졌다:
+    //  ① 예산에 여유가 생겼다(각주 두 줄 + 간격만큼). 넘치는 것이 임박한 화면이 아니다.
+    //  ② 이제 맨 아래는 '미니게임 순위 공개' 행이다 — 넘치면 **설정 항목 하나가 통째로 사라진다.**
+    //     각주 한 줄이 잘리는 것보다 나쁜 결과라, 여유가 생겼어도 이 계약은 그대로 둔다
+    //     (설정은 항목이 늘어나는 화면이고, v0.2.46 에 실제로 한 줄이 늘어 400 → 470 이 됐다).
+    //
+    // 아래 하한은 그 이사 때 함께 세운 것이다: 진단을 걷어내면서 **다른 것까지 걷어내지 않았는가**를 잰다.
+    // 실측(2026-09-10, 이사 직후) 콘텐츠 410pt / 창 470pt — 여유 60pt. 하한 300 은 섹션 카드 하나가
+    // 통째로 사라지는 정도를 잡는 값이고, 항목 **한 줄**이 빠지는 것까지 잡지는 않는다(그건 이 테스트가
+    // 답할 질문이 아니다 — 항목은 늘기도 줄기도 하는 것이고, 여기서 지키는 것은 창과의 관계다).
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon"],
         defaults: UserDefaults(suiteName: "settings-height-\(UUID().uuidString)")!
@@ -1032,12 +1044,38 @@ func 설정창_콘텐츠가_창_높이_안에_들어온다() throws {
         content: CheckSettingsView(store: store, launchAtLoginSeed: false)
             .frame(width: CheckSettingsView.preferredWidth)
     )
-    let size = try #require(renderer.nsImage?.size)
+    let image = try #require(renderer.nsImage)
+    let size = image.size
+    // 사람이 눈으로 볼 그림도 **이 렌더 하나에서** 남긴다(diag-settings.png). 진단 두 줄이 사라진
+    // 모습을 확인하려고 설정 창을 한 번 더 그리는 테스트를 새로 두지 않는 이유가 있다: 이 저장소에서
+    // **설정 창 렌더가 둘 이상 동시에 돌면** 옆에서 도는 팝오버 렌더 비교가 흔들린다(실측 2026-09-10 —
+    // 이 테스트와 todoSwitchLeftThePopoverAndNowMovesOnlyTheSettingsScreen 을 함께 돌리면 넷 중 셋이
+    // 빨개진다. 이 파일 것만으로도 그렇다 — 새 테스트가 만든 문제가 아니라 원래 있던 흔들림이다).
+    // 그림 하나 때문에 그 확률을 두 배로 만들지 않는다.
+    saveSettingsSnapshot(image, name: "diag-settings.png")
     #expect(size.height <= CheckSettingsWindowController.defaultContentSize.height,
             "설정 콘텐츠 \(size.height)pt 가 창 \(CheckSettingsWindowController.defaultContentSize.height)pt 를 넘었다")
+    #expect(size.height >= 300,
+            "설정 콘텐츠가 \(size.height)pt 뿐이다 — 진단 각주를 걷어내면서 설정 항목까지 사라졌는지 보라")
 }
 
 // MARK: - 헬퍼
+
+/// 설정 창 그림을 남긴다. 저장 위치는 `CHECK_SNAPSHOT_DIR`(없으면 이 실행의 임시 디렉터리) 아래 `settings/` —
+/// 세션 전용 절대 경로를 소스에 박으면 퍼블릭 저장소에 개인 머신 경로가 남고, 다른 기계에서는 `try?` 가
+/// 조용히 no-op 이 되어 "스냅샷을 남긴다"는 약속이 거짓말이 된다(제보 렌더 스위트와 같은 규약).
+@MainActor
+private func saveSettingsSnapshot(_ image: NSImage, name: String) {
+    let base = ProcessInfo.processInfo.environment["CHECK_SNAPSHOT_DIR"].map {
+        URL(fileURLWithPath: $0, isDirectory: true)
+    } ?? FileManager.default.temporaryDirectory.appendingPathComponent("check-snapshots", isDirectory: true)
+    let dir = base.appendingPathComponent("settings", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    guard let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff),
+          let png = bitmap.representation(using: .png, properties: [:]) else { return }
+    try? png.write(to: dir.appendingPathComponent(name))
+}
 
 private func fakeJWT(exp: Date) -> String {
     let payload = try! JSONSerialization.data(withJSONObject: ["exp": Int(exp.timeIntervalSince1970)])

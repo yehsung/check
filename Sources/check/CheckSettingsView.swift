@@ -385,19 +385,24 @@ struct CheckSettingsView: View {
                     isOn: miniGamePublicBinding
                 )
             }
-            // 진단은 **카드가 아니라 한 줄 각주**다. 설정 창은 470pt(v0.2.46 에 미니게임 공개 행이 붙어 400 → 470)이고
-            // 콘텐츠가 이미 그 근처라 섹션 카드(제목+패딩)를 하나 더 얹으면 맨 아래 — 즉 이 줄 자체가 잘린다.
-            // 두 각주는 바깥 VStack 의 14pt 간격이 아니라 2pt 로 붙인다 — 예산에서 각주 한 줄이
-            // 12pt 인데 14pt 간격을 하나 더 쓰면 넘쳐 맨 아랫줄(이 진단)이 잘린다(RealtimeLinkTests).
-            VStack(alignment: .leading, spacing: 2) {
-                RealtimeDiagnosticsRow(store: store)
-                WorkTickDiagnosticsRow(store: store)
-            }
+            // ★ 진단 두 줄(초인종·근무 틱)이 **여기 있었다.** 없어진 게 아니라 제보로 **옮겼다**
+            //   (2026-09-10, 사용자 지적: "이건 뭐야? 왜 넣은 거야? 빼는 게 맞지 않아?").
+            //   다시 만들지 마라 — 진단이 틀렸던 게 아니라 자리가 틀렸다.
+            //
+            //   설정은 팀원 전원이 여는 화면이고, 그들에게 `idle(disabled) · 재연결 0회` 는 읽을 수 없는
+            //   암호문이다. 정작 볼 사람은 운영자인데 신고가 올 때마다 "설정 열어서 하단 두 줄 찍어
+            //   보내주세요"를 부탁해야 했다. 지금은 제보를 보내면 그 두 줄이 본문 뒤에 자동으로 붙어
+            //   운영자 받은함에 **이미 붙어서** 도착한다(FeedbackDiagnostics — WorkTimerStoreFeedback.swift).
+            //   팀원은 "찌르기가 안 와요" 한 줄만 쓰면 되고, 화면은 깨끗해지고 진단은 오히려 잘 된다.
+            //
+            //   되돌리려는 사람이 알아야 할 사실: 이 창은 470pt 이고 콘텐츠는 이제 그보다 한참 낮으니
+            //   자리는 있다. 없는 것은 자리가 아니라 이유다.
         }
         .padding(14)
         // 창이 늘어나면 같이 늘고, 좁혀도 설명이 뭉개지지 않는 하한을 준다(창 크기는 배선 쪽 소관).
-        // maxHeight 를 열어 두는 것이 핵심이다: 창(400pt)이 콘텐츠(약 355pt)보다 높은데 프레임을
-        // 콘텐츠 높이로 두면 배경이 그만큼만 칠해지고 창 아래에 시스템 흰 띠가 남는다.
+        // maxHeight 를 열어 두는 것이 핵심이다: 창(470pt)이 콘텐츠보다 높은데 프레임을 콘텐츠 높이로
+        // 두면 배경이 그만큼만 칠해지고 창 아래에 시스템 흰 띠가 남는다. 진단 두 줄이 제보로 옮겨 간
+        // 뒤(2026-09-10) 그 여백은 더 커졌다 — 그래서 이 한 줄은 더 중요해졌다.
         // 위 정렬(topLeading)은 이 앱의 상단 앵커 규약이기도 하다 — 늘어난 만큼 아래로만 빈다.
         .frame(
             minWidth: 320, idealWidth: Self.preferredWidth, maxWidth: 520,
@@ -457,46 +462,5 @@ struct CheckSettingsView: View {
             get: { store.miniGamePublic },
             set: { store.setMiniGamePublic($0) }
         )
-    }
-}
-
-/// 초인종(리얼타임) 한 줄 진단. **"찌르기가 안 와요" 신고에서 소켓/따라잡기/토큰 중 어디인지를 가른다.**
-///
-/// 이 줄이 없으면 `.idle(.disabled)`(전송자 nil — 킬스위치 off 또는 조립 실패)가 **완전한 침묵**이 된다:
-/// REST 는 멀쩡하고 syncMessage 는 "동기화됨"을 유지하므로 앱 어디에도 신호가 없다.
-///
-/// 표면은 Text 한 줄뿐이다 — Menu/TextField 를 쓰지 않는다(ImageRenderer 가 그 자리를 노란 상자로 그려
-/// 픽셀 커버리지가 0이 되고, 그러면 이 줄이 사라져도 렌더 테스트가 초록으로 남는다).
-private struct RealtimeDiagnosticsRow: View {
-    let store: WorkTimerStore
-
-    var body: some View {
-        DiagnosticsFootnote(text: "초인종 " + store.realtimeDiagnosticsLine)
-    }
-}
-
-/// 근무 틱(work_tick RPC) 한 줄 진단(v0.2.38 S3). **"팀 화면이 늦어요/안 바뀌어요" 신고에서 통합 RPC 를 쓰는지,
-/// 개별 REST 로 폴백해 있는지(사유·언제까지), 시계차가 얼마인지**를 가른다. syncMessage 에는 폴백 사유를 싣지 않으므로
-/// 이 줄이 유일한 표면이다. 초인종 줄과 같은 각주 스타일이며, 함께 설정 창 400pt 높이 예산 안에 든다(RealtimeLinkTests).
-private struct WorkTickDiagnosticsRow: View {
-    let store: WorkTimerStore
-
-    var body: some View {
-        DiagnosticsFootnote(text: "근무 틱 " + store.workTickDiagnosticsLine)
-    }
-}
-
-/// 두 진단 줄이 공유하는 각주 스타일(10pt 고정폭 숫자, 보조색, 한 줄, 가운데 생략).
-private struct DiagnosticsFootnote: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 10).monospacedDigit())
-            .foregroundStyle(CheckTheme.secondaryText)
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .padding(.leading, 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

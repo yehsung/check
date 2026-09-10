@@ -356,6 +356,115 @@ func theVisualOverhaulDidNotTouchASingleDifficultyConstant() {
                                          logicalSize: FlappyGame.logicalSize).scale - CW / W) < 1e-12)
 }
 
+// MARK: - (1d) 잔상 이력 — 지나온 자리 (v0.2.49)
+//
+// 사용자 지적 2026-09-10: "잔상 자체는 괜찮은데 지금은 잔상이 고정되어서 캐릭터 옆에 딱 달라붙어 있는 방식으로
+// 되어 있잖아. 잔상은 캐릭터가 이동했던 위치를 남기는 방향으로 가야지."
+// v0.2.48 까지 잔상은 캐릭터에서 x −9/−18/−27 **고정 오프셋** 세 장이었다. 캐릭터의 논리 x 는 고정(birdX)이고
+// y 만 오르내리는데 잔상은 언제나 같은 y 라, 급상승·급하강 중에도 셋이 옆구리에 수평으로 나란히 붙어 다녔다.
+// 지금은 규칙이 **실제로 지나온 자리**를 들고 있고, 그 점들이 기둥과 같은 속도로 흘러간다.
+
+@Test
+func theTrailRecordsWhereTheCharacterWasAndFlowsWithTheWorld() throws {
+    var game = running(bird: .init(x: birdX, y: 150, vy: 0), pipes: [pipe(x: 600)], score: 10)
+    let dt = 1.0 / 60.0
+    let speed = FlappyGame.speed(forScore: 10)          // 160
+    #expect(game.trail.isEmpty, "시작하자마자 꼬리가 있으면 안 된다")
+
+    game.step(dt: dt)
+    #expect(game.trail.count == 1)
+    #expect(game.trail[0].x == birdX, "남긴 자리는 그 순간 캐릭터가 있던 논리 x 다")
+    #expect(game.trail[0].y == game.bird.y)
+    #expect(game.trail[0].vy == game.bird.vy, "그때의 자세를 함께 남긴다(뷰가 잔상마다 그 자세로 돌린다)")
+    #expect(game.trail[0].age == 0)
+    let pipeAtBirth = game.pipes[0].x
+
+    // 다음 프레임: 아직 간격(0.028)이 안 됐으니 새 점은 없고, 있던 점만 흘러간다.
+    game.step(dt: dt)
+    #expect(game.trail.count == 1, "60Hz 에서 매 프레임 남기면 점이 겹쳐 선이 아니라 얼룩이 된다")
+    #expect(abs(game.trail[0].x - (birdX - speed * CGFloat(dt))) < 1e-9, "speed × dt 로 안 흐른다")
+    #expect(abs(game.trail[0].age - dt) < 1e-12)
+
+    // 두 프레임(0.033초)이면 간격을 넘어 새 점이 붙는다.
+    game.step(dt: dt)
+    #expect(game.trail.count == 2)
+    // ★ 그리고 기둥과 **같은 속도**로 흐른다 — 갈라지면 꼬리가 지나온 자리가 아니라 허공에 뜬 장식이 된다.
+    #expect(abs((birdX - game.trail[0].x) - (pipeAtBirth - game.pipes[0].x)) < 1e-9,
+            "꼬리와 기둥이 다른 속도로 흐른다")
+    #expect(game.trail[0].age > game.trail[1].age, "오래된 점이 앞이다")
+}
+
+@Test
+func theTrailDropsOldPointsAndNeverGrowsPastItsCap() throws {
+    var game = running(bird: .init(x: birdX, y: 150, vy: 0), pipes: [pipe(x: 900)], score: 10)
+    // 8프레임마다 한 번 쳐서 살려 둔다(가만두면 0.6초 만에 바닥에 닿아 판이 끝난다).
+    for frame in 0..<180 {
+        if frame % 8 == 0 { game.flap() }
+        game.step(dt: 1.0 / 60.0)
+        #expect(game.trail.count <= FlappyGame.trailMax, "\(frame)프레임에서 이력이 상한을 넘었다")
+        #expect(game.trail.allSatisfy { $0.age <= FlappyGame.trailLife },
+                "\(frame)프레임에 수명이 지난 점이 남아 있다")
+    }
+    #expect(game.phase == .running, "판이 도중에 끝났다 — 정상 상태를 못 재고 있다")
+    // 정상 상태에서는 꼬리가 비어 있지도, 한 점만 있지도 않다(선으로 이어져 보여야 한다).
+    #expect(game.trail.count >= 5, "꼬리가 \(game.trail.count)점뿐이라 궤적이 아니라 점으로 보인다")
+    // 나이 순서가 유지된다(앞이 오래된 것).
+    #expect(zip(game.trail, game.trail.dropFirst()).allSatisfy { $0.age > $1.age })
+
+    // 상한 자체도 못 박는다: 이미 꽉 찬 이력에 한 점을 더 남겨도 개수가 늘지 않는다(가장 오래된 것이 빠진다).
+    let packed = (0..<FlappyGame.trailMax).map {
+        FlappyGame.TrailPoint(x: birdX - CGFloat($0), y: 150, vy: 0, age: 0.001)
+    }
+    var full = FlappyGame(seed: 1, bird: .init(x: birdX, y: 150, vy: 0), pipes: [pipe(x: 900)],
+                          score: 0, phase: .running, trail: packed)
+    full.step(dt: FlappyGame.maxStep)
+    #expect(full.trail.count == FlappyGame.trailMax)
+    #expect(full.trail.last?.age == 0, "새 점이 안 붙었다")
+}
+
+@Test
+func theTrailIsEmptiedWhenTheRoundEndsOrRestarts() {
+    // 판을 끊으면(창 닫힘·포커스 상실·전환) 그 자리에서 비운다 — 창을 다시 열었을 때 결과 화면 위로
+    // 지난 판의 궤적이 스쳐 지나가면 안 된다.
+    var interrupted = running(bird: .init(x: birdX, y: 150, vy: -200), pipes: [pipe(x: 900)])
+    for _ in 0..<10 { interrupted.step(dt: 1.0 / 60.0) }
+    #expect(!interrupted.trail.isEmpty)
+    interrupted.interrupt()
+    #expect(interrupted.trail.isEmpty)
+
+    // 그리고 **새 판**. 죽어서 결과까지 간 판은 꼬리를 들고 있다(그리지 않을 뿐이다) —
+    // 그 상태에서 다시 시작할 때 비우지 않으면 새 판 첫 프레임에 옛 궤적이 뜬다.
+    var died = running(bird: .init(x: birdX, y: 250, vy: 200), pipes: [pipe(x: 900)])
+    for _ in 0..<60 { died.step(dt: 1.0 / 60.0) }
+    #expect(died.phase == .result, "죽고 유예까지 넘어간 판이어야 한다")
+    #expect(!died.trail.isEmpty, "죽은 판의 꼬리는 남아 있다 — 새 판이 그걸 지운다는 것이 이 검사의 요지다")
+    died.flap()                                   // result → 새 판
+    #expect(died.phase == .running && died.trail.isEmpty, "새 판에 앞 판의 궤적이 남았다")
+}
+
+@Test
+func theTailSagsBelowWhenClimbingAndStretchesAboveWhenDiving() throws {
+    func tail(vy: CGFloat, y: CGFloat) -> (oldest: FlappyGame.TrailPoint, newest: FlappyGame.TrailPoint) {
+        var game = running(bird: .init(x: birdX, y: y, vy: vy), pipes: [pipe(x: 900)], score: 10)
+        for _ in 0..<10 { game.step(dt: 1.0 / 60.0) }
+        return (game.trail.first!, game.trail.last!)
+    }
+    // 언제나: 오래된 점일수록 **뒤(왼쪽)** 에 있다. 세상이 왼쪽으로 흐르기 때문이다.
+    let climb = tail(vy: FlappyGame.flapVelocity, y: 230)
+    #expect(climb.oldest.x < climb.newest.x)
+    // ★ 솟는 중 — 꼬리는 아래로 처진다(지나온 자리가 지금보다 아래다).
+    #expect(climb.oldest.y > climb.newest.y + 10, "솟는데 꼬리가 안 처진다 \(climb.oldest.y) → \(climb.newest.y)")
+
+    // ★ 떨어지는 중 — 꼬리는 위로 뻗는다. 방향이 정확히 반대다.
+    let dive = tail(vy: 300, y: 90)
+    #expect(dive.oldest.x < dive.newest.x)
+    #expect(dive.oldest.y < dive.newest.y - 10, "떨어지는데 꼬리가 안 뻗는다 \(dive.oldest.y) → \(dive.newest.y)")
+
+    // 수평 비행(점프 정점 근처)에서는 거의 수평이다 — 예전 고정 잔상은 **언제나** 이 모양이었다.
+    let level = tail(vy: -FlappyGame.gravity * CGFloat(10.0 / 120.0), y: 150)
+    #expect(abs(level.oldest.y - level.newest.y) < 2)
+}
+
 // MARK: - (2) 물리
 
 @Test
@@ -999,6 +1108,340 @@ struct V0246MiniGameFlappyRenderTests {
     }
 }
 
+// MARK: - (7b) v0.2.49 잔상 궤적 · 점프 모션 — 눈으로 판정하는 증거
+
+/// 같은 프레임에서 **꼬리만** 뺀 판. "여기에 꼬리가 그려졌다"를 색 서명 없이 재는 기준선이다
+/// (배경이 무대마다 바뀌므로 "바닥색과 다르다"로는 아무것도 증명되지 않는다).
+///
+/// ⚠️ 2026-09-10 검토에서 잡힌 공회전: 여기서 마지막 인자로 `trail: game.trail` 을 그대로 넘기고 있었다.
+/// 주석은 "꼬리만 뺀 판"이라고 적혀 있는데 실제로는 **같은 그림**이라, 이 기준선을 쓰던 단언
+/// ("동작 줄이기면 잔상이 사라진다")은 게이트가 고장 나도 절대 빨개질 수 없었다. 기본값 `[]` 를 태운다.
+private func withoutTrail(_ game: FlappyGame) -> FlappyGame {
+    FlappyGame(seed: 5, bird: game.bird, pipes: game.pipes, score: game.score, phase: game.phase,
+               elapsed: game.elapsed, scrolled: game.scrolled,
+               lastFlapAt: game.lastFlapAt, flapCount: game.flapCount,
+               lastScoreAt: game.lastScoreAt, lastScorePipeCenter: game.lastScorePipeCenter,
+               stageChangedAt: game.stageChangedAt)
+}
+
+/// 같은 프레임에서 **점프 장식만** 뺀 판(꼬리·배경·기둥은 그대로). 점프 모션의 잉크만 남기려면
+/// 나머지가 한 픽셀도 다르지 않아야 한다 — 그래서 꼬리는 여기서 빼지 않는다.
+private func withoutFlapImpact(_ game: FlappyGame) -> FlappyGame {
+    FlappyGame(seed: 5, bird: game.bird, pipes: game.pipes, score: game.score, phase: game.phase,
+               elapsed: game.elapsed, scrolled: game.scrolled,
+               lastFlapAt: nil, flapCount: game.flapCount,
+               lastScoreAt: game.lastScoreAt, lastScorePipeCenter: game.lastScorePipeCenter,
+               stageChangedAt: game.stageChangedAt, trail: game.trail)
+}
+
+/// 그 영역에서 **무대 강조색**(`stage.glow` — 노랑~크림)인 픽셀의 개수와 무게중심 y(pt).
+///
+/// 왜 색으로 고르나: "점프 장식만 뺀 판과의 차분"은 스쿼시로 흔들린 몸 윤곽까지 함께 세어서
+/// *호가 어디까지 올라갔나*를 흐린다. 호는 한 색이고 몸통은 연보라라 색으로 깨끗하게 갈린다.
+/// (파편도 같은 색이지만 **언제나 발밑**이다 — 위쪽 대역만 재면 섞이지 않는다.)
+private func glowInk(_ bitmap: NSBitmapImageRep, x: ClosedRange<CGFloat>, y: ClosedRange<CGFloat>)
+    -> (count: Int, centroidY: CGFloat) {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 4 else { return (0, 0) }
+    let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+    let x0 = max(0, Int(x.lowerBound * 2)), x1 = min(bitmap.pixelsWide - 1, Int(x.upperBound * 2))
+    let y0 = max(0, Int(y.lowerBound * 2)), y1 = min(bitmap.pixelsHigh - 1, Int(y.upperBound * 2))
+    guard x0 <= x1, y0 <= y1 else { return (0, 0) }
+    var count = 0, sum = 0.0
+    for py in y0...y1 {
+        for px in x0...x1 {
+            let o = py * bpr + px * spp
+            let r = Int(data[o]), g = Int(data[o + 1]), b = Int(data[o + 2])
+            // 호는 노란 계열(r−b 가 크게 양수)이고 몸통은 연보라(b 가 가장 크다) · 하늘·능선은 파랑 ·
+            // 별·HUD 숫자는 무채색이다. 문턱은 호가 0.6 까지 옅어져도 잡히게 잡았다(그 아래는 눈으로도 거의 안 보인다).
+            guard r >= 150, g >= 140, b <= 205, r - b >= 20 else { continue }
+            count += 1
+            sum += Double(py)
+        }
+    }
+    return (count, count == 0 ? 0 : CGFloat(sum / Double(count) / 2))
+}
+
+/// 논리 좌표 한 자리를 중심으로 한 정사각(±half pt) 안의 휘도 최소·최대·평균.
+/// 잔상이 **단색 실루엣**인지(속살이 없어 편차가 거의 0) 얼굴이 다 있는 **사본**인지(눈·입·볼터치 때문에
+/// 편차가 수십) 를 같은 자로 잰다 — 본체에 대고 재면 큰 값이 나오는 것이 이 자가 눈이 멀지 않았다는 증거다.
+@MainActor
+private func luminance(_ bitmap: NSBitmapImageRep, atLogical point: CGPoint, half: CGFloat)
+    -> (min: Double, max: Double, mean: Double, spread: Double) {
+    let t = MiniGameCanvas.transform(in: CGSize(width: CW, height: CH), logicalSize: FlappyGame.logicalSize)
+    let cx = (t.origin.x + point.x * t.scale) * 2, cy = (t.origin.y + point.y * t.scale) * 2
+    let r = half * t.scale * 2
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 4 else { return (0, 0, 0, 0) }
+    let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+    let x0 = max(0, Int(cx - r)), x1 = min(bitmap.pixelsWide - 1, Int(cx + r))
+    let y0 = max(0, Int(cy - r)), y1 = min(bitmap.pixelsHigh - 1, Int(cy + r))
+    guard x0 <= x1, y0 <= y1 else { return (0, 0, 0, 0) }
+    var values: [Double] = []
+    values.reserveCapacity((x1 - x0 + 1) * (y1 - y0 + 1))
+    for py in y0...y1 {
+        for px in x0...x1 {
+            let o = py * bpr + px * spp
+            values.append(0.2126 * Double(data[o]) + 0.7152 * Double(data[o + 1]) + 0.0722 * Double(data[o + 2]))
+        }
+    }
+    guard !values.isEmpty else { return (0, 0, 0, 0) }
+    let sorted = values.sorted()
+    // 편차는 **백분위 폭**(P90−P10)으로 잰다. 최대−최소는 오로라·밤 무대에서 상자 안에 우연히 들어온
+    // 별 한 점(1~2px)만으로 100 을 넘어 버려 "무대가 화려하다"와 "잔상에 얼굴이 있다"를 구분하지 못한다.
+    // 눈·입은 상자의 20~30% 를 차지하므로 백분위 폭에는 그대로 잡힌다.
+    let p10 = sorted[Int(Double(sorted.count - 1) * 0.10)]
+    let p90 = sorted[Int(Double(sorted.count - 1) * 0.90)]
+    return (sorted[0], sorted[sorted.count - 1], values.reduce(0, +) / Double(values.count), p90 - p10)
+}
+
+/// 실제로 몇 프레임을 굴려 만든 판. **손으로 찍은 이력은 규칙이 정말 그렇게 남기는지를 증명하지 못한다** —
+/// 스냅샷의 꼬리는 `step(dt:)` 이 남긴 그 점들이어야 한다.
+private func flown(y: CGFloat, vy: CGFloat, frames: Int, flapAfter: Int? = nil,
+                   score: Int = 8) -> FlappyGame {
+    var game = FlappyGame(seed: 5, bird: .init(x: birdX, y: y, vy: vy),
+                          pipes: [pipe(x: 205, centerY: 118, gap: 108), pipe(x: 335, centerY: 216, gap: 108)],
+                          score: score, phase: .running)
+    for frame in 0..<frames {
+        if frame == flapAfter { game.flap() }
+        game.step(dt: 1.0 / 60.0)
+    }
+    return game
+}
+
+@MainActor
+@Suite(.serialized)
+struct V0249FlappyTrailAndJumpTests {
+    private let t = MiniGameCanvas.transform(in: CGSize(width: CW, height: CH), logicalSize: FlappyGame.logicalSize)
+
+    /// 논리 사각형(캐릭터 기준 상대 좌표)을 화면 pt 범위로.
+    private func band(_ x: ClosedRange<CGFloat>, _ y: ClosedRange<CGFloat>, around cy: CGFloat)
+        -> (x: ClosedRange<CGFloat>, y: ClosedRange<CGFloat>) {
+        ((t.origin.x + (birdX + x.lowerBound) * t.scale)...(t.origin.x + (birdX + x.upperBound) * t.scale),
+         (t.origin.y + (cy + y.lowerBound) * t.scale)...(t.origin.y + (cy + y.upperBound) * t.scale))
+    }
+
+    /// **이 작업의 핵심 증거.** 꼬리가 캐릭터 옆구리가 아니라 *지나온 궤적*에 있다:
+    /// 솟는 중이면 뒤·아래, 떨어지는 중이면 뒤·위. 예전(고정 오프셋 3장)에는 두 경우 모두 뒤·수평이었다.
+    @Test
+    func theTrailFollowsTheActualPathInsteadOfHuggingTheCharacter() throws {
+        MiniGameMascot.resetCacheForTesting()
+        _ = MiniGameMascot.sideProfile()
+
+        func tailInk(_ game: FlappyGame, file: String) throws -> (below: Int, above: Int, level: Int) {
+            let drawn = try renderBitmap(view(game, best: 12))
+            savePNG(drawn, file)
+            // 꼬리만 뺀 같은 프레임 — 배경·기둥·캐릭터는 한 픽셀도 다르지 않다.
+            let bare = try renderBitmap(view(FlappyGame(seed: 5, bird: game.bird, pipes: game.pipes,
+                                                        score: game.score, phase: game.phase,
+                                                        elapsed: game.elapsed, scrolled: game.scrolled,
+                                                        lastFlapAt: game.lastFlapAt, flapCount: game.flapCount),
+                                             best: 12))
+            let cy = game.bird.y
+            let below = band((-34)...(-8), 16...46, around: cy)
+            let above = band((-34)...(-8), (-46)...(-16), around: cy)
+            let level = band((-34)...(-8), (-9)...9, around: cy)
+            return (differing(drawn, bare, x: below.x, y: below.y),
+                    differing(drawn, bare, x: above.x, y: above.y),
+                    differing(drawn, bare, x: level.x, y: level.y))
+        }
+
+        // 1) 급상승 — 점프 직후 속도로 10프레임(약 32pt 솟았다). 꼬리는 **뒤·아래**에 있어야 한다.
+        let climb = flown(y: 230, vy: FlappyGame.flapVelocity, frames: 10)
+        let climbInk = try tailInk(climb, file: "trail-climb.png")
+        print("[trail] climb below=\(climbInk.below) above=\(climbInk.above) level=\(climbInk.level)")
+        #expect(climbInk.below > 300, "솟는 중인데 뒤·아래에 꼬리가 없다(\(climbInk.below)픽셀)")
+        #expect(climbInk.above < 60, "솟는 중인데 뒤·위에 꼬리가 있다(\(climbInk.above)픽셀) — 궤적이 아니다")
+
+        // 2) 급하강 — 방향이 정확히 반대다.
+        let dive = flown(y: 90, vy: 300, frames: 10)
+        let diveInk = try tailInk(dive, file: "trail-dive.png")
+        print("[trail] dive below=\(diveInk.below) above=\(diveInk.above) level=\(diveInk.level)")
+        #expect(diveInk.above > 300, "떨어지는 중인데 뒤·위에 꼬리가 없다(\(diveInk.above)픽셀)")
+        #expect(diveInk.below < 60, "떨어지는 중인데 뒤·아래에 꼬리가 있다(\(diveInk.below)픽셀)")
+
+        // 3) 수평 비행 — 이때만 꼬리가 옆구리에 나란하다. 예전에는 세 경우가 전부 이 모양이었다.
+        let level = flown(y: 150, vy: -FlappyGame.gravity * CGFloat(10.0 / 120.0), frames: 10)
+        let levelInk = try tailInk(level, file: "trail-level.png")
+        print("[trail] level below=\(levelInk.below) above=\(levelInk.above) level=\(levelInk.level)")
+        #expect(levelInk.level > 300, "수평 비행에서 꼬리가 안 보인다")
+
+        // 4) 확대(6배) — 사용자가 보는 그 픽셀. 꼬리가 뒤로 이어지는 모양을 눈으로 판정한다.
+        let climbBitmap = try renderBitmap(view(climb, best: 12))
+        let crop = CGRect(x: t.origin.x + (birdX - 52) * t.scale, y: t.origin.y + (climb.bird.y - 40) * t.scale,
+                          width: 86 * t.scale, height: 92 * t.scale)
+        if let zoomed = cropZoom(climbBitmap, ptRect: crop, zoom: 6) { savePNG(zoomed, "trail-zoom.png") }
+
+        // 5) 동작 줄이기면 꼬리가 통째로 사라진다(규칙의 이력은 그대로 흐른다 — 그림만 끈다).
+        // (기준선은 **정말로 꼬리가 빠진 판**이다 — 예전엔 여기에 같은 꼬리를 넘기고 있어서 이 단언이
+        //  게이트가 고장 나도 초록이었다. 먼저 동작 줄이기가 아닌 판에서 두 그림이 **다른지** 확인해
+        //  기준선 자체가 살아 있음을 보이고, 그 다음에 동작 줄이기에서 같아지는지를 본다.)
+        let livelyBare = try renderBitmap(view(withoutTrail(climb), best: 12))
+        #expect(firstPixelDifference(climbBitmap, livelyBare) != nil,
+                "꼬리를 뺀 기준선이 원본과 같다 — 이 검사가 아무것도 안 본다")
+        let calm = try renderBitmap(view(climb, best: 12, reduceMotion: true))
+        let calmBare = try renderBitmap(view(withoutTrail(climb), best: 12, reduceMotion: true))
+        #expect(firstPixelDifference(calm, calmBare) == nil, "동작 줄이기인데 잔상이 남았다")
+    }
+
+    /// 점프 모션이 **위를 향한다**. v0.2.48 은 발밑에서 아래로 퍼지는 넓은 U(아치)였다
+    /// (2026-09-10 지적: "점프할 때 밑에 넓은 U 같은 거 안 어울려").
+    @Test
+    func theJumpMotionRisesAndStaysOffTheFaceAndTheBoard() throws {
+        MiniGameMascot.resetCacheForTesting()
+        _ = MiniGameMascot.sideProfile()
+        // 10프레임을 날다 3프레임 전에 쳤다 — 꼬리도 있고 점프 모션도 한창인 프레임.
+        let flap = flown(y: 190, vy: -60, frames: 10, flapAfter: 7)
+        let sinceFlap = try #require(flap.lastFlapAt).distance(to: flap.elapsed)
+        #expect(sinceFlap > 0 && sinceFlap < 0.09, "점프 모션이 한창인 프레임이 아니다(\(sinceFlap)초)")
+        let bitmap = try renderBitmap(view(flap, best: 12))
+        savePNG(bitmap, "jump-motion.png")
+        let calm = try renderBitmap(view(withoutFlapImpact(flap), best: 12))
+        let cy = flap.bird.y
+
+        // ① 캐릭터 **위쪽**이 달라진다 = 모션이 솟는 방향을 가리킨다. 아치는 여기에 한 점도 그리지 않았다.
+        let above = band((-30)...30, (-38)...(-12), around: cy)
+        let rising = differing(bitmap, calm, x: above.x, y: above.y)
+        print("[jump] above=\(rising)")
+        #expect(rising > 120, "점프 모션이 위쪽에 아무것도 안 그린다(\(rising)픽셀)")
+
+        // ①' **머리 위쪽 대역**(스프라이트 상자 윗변 = −17 보다 위)에 호 잉크가 실제로 있어야 한다.
+        //     이 한 줄이 이번 수정의 못이다: v0.2.49 첫 판은 호가 몸통 중간·스프라이트 **안쪽**(sideGap 0.42)에
+        //     있어 여기가 정확히 **0px** 이었고, 좌우 대역만 재던 ① 은 그걸 통과시켰다(2026-09-10 검토 실측).
+        //     화면에 남던 것은 "몸 옆에서 바깥으로 갈수록 내려가는 짧은 꼬리 두 개"라 방향이 반대로 읽혔다.
+        let overhead = band((-36)...36, (-42)...(-18), around: cy)
+        let overheadInk = glowInk(bitmap, x: overhead.x, y: overhead.y)
+        print("[jump] overhead ink=\(overheadInk.count)")
+        #expect(overheadInk.count > overheadInkMin,
+                "머리 위 대역에 호 잉크가 \(overheadInk.count)px 뿐이다 — '솟는다'로 읽히지 않는다")
+
+        // ①'' 그리고 호는 **올라간다**. 점프 한 번(0.24초) 동안 네 프레임을 떠서 호 잉크의 무게중심이
+        //     프레임마다 위로 가는지 본다. 정지 프레임 한 장으로는 "위에 잉크가 있다"까지만 말할 수 있고
+        //     방향은 말할 수 없다 — 예전 아치는 발밑에 **고정**이라 이 검사에서 곧장 빨개진다.
+        var centroids: [CGFloat] = []
+        for after in [9, 8, 7, 6] {
+            let frame = flown(y: 190, vy: -60, frames: 10, flapAfter: after)
+            let shot = try renderBitmap(view(frame, best: 12))
+            let arcBand = band((-36)...36, (-46)...6, around: frame.bird.y)
+            let ink = glowInk(shot, x: arcBand.x, y: arcBand.y)
+            print("[jump] frame after=\(after) arc ink=\(ink.count)")
+            #expect(ink.count > 60, "\(after) 프레임에 호 잉크가 없다(\(ink.count)px)")
+            // 캐릭터 자신이 프레임마다 다른 높이에 있으므로 **캐릭터 기준 상대 높이**로 잰다.
+            centroids.append(ink.centroidY - (t.origin.y + frame.bird.y * t.scale))
+        }
+        print("[jump] arc centroid(캐릭터 기준) \(centroids.map { Int($0) })")
+        #expect(zip(centroids, centroids.dropFirst()).allSatisfy { $0 > $1 + 0.5 },
+                "호가 프레임이 갈수록 위로 가지 않는다 \(centroids)")
+
+        // ② 그런데 **얼굴은 덮지 않는다**. 옆얼굴의 눈·입(어두운 잉크)이 점프 프레임에도 그대로 있어야 한다 —
+        //    예전 흰 플래시(0.9, 실루엣 전체)는 0.12초 동안 얼굴을 통째로 지웠다.
+        let face = band((-4)...16, (-15)...(-1), around: cy)
+        let inkNow = count(bitmap, x: face.x, y: face.y) { r, g, b, a in a >= 250 && max(r, max(g, b)) <= 110 }
+        let inkCalm = count(calm, x: face.x, y: face.y) { r, g, b, a in a >= 250 && max(r, max(g, b)) <= 110 }
+        print("[jump] face ink now=\(inkNow) calm=\(inkCalm)")
+        #expect(inkCalm > 20, "기준 프레임에 얼굴 잉크가 없다 — 이 검사가 아무것도 안 본다")
+        #expect(inkNow >= inkCalm * 6 / 10, "점프 플래시가 얼굴을 지운다(\(inkNow) vs \(inkCalm))")
+
+        // ③ 그리고 **판을 가리지 않는다**: 모션의 발자국이 캐릭터 주위를 벗어나지 않는다.
+        //    위쪽 속도선 후보를 버린 이유가 이것이다 — 선이 기둥 틈까지 올라갔다.
+        let farLeft = band((-140)...(-42), (-60)...60, around: cy)
+        let farRight = band(42...140, (-60)...60, around: cy)
+        let farUp = band((-40)...40, (-110)...(-45), around: cy)
+        #expect(differing(bitmap, calm, x: farLeft.x, y: farLeft.y) == 0, "점프 모션이 왼쪽으로 샌다")
+        #expect(differing(bitmap, calm, x: farRight.x, y: farRight.y) == 0, "점프 모션이 오른쪽으로 샌다")
+        #expect(differing(bitmap, calm, x: farUp.x, y: farUp.y) == 0, "점프 모션이 기둥 틈까지 올라간다")
+
+        // ④ 확대(6배).
+        let crop = CGRect(x: t.origin.x + (birdX - 44) * t.scale, y: t.origin.y + (cy - 44) * t.scale,
+                          width: 88 * t.scale, height: 88 * t.scale)
+        if let zoomed = cropZoom(bitmap, ptRect: crop, zoom: 6) { savePNG(zoomed, "jump-zoom.png") }
+
+        // ⑤ 동작 줄이기면 점프 장식이 통째로 빠진다.
+        let rm = try renderBitmap(view(flap, best: 12, reduceMotion: true))
+        let rmCalm = try renderBitmap(view(withoutFlapImpact(flap), best: 12, reduceMotion: true))
+        #expect(firstPixelDifference(rm, rmCalm) == nil, "동작 줄이기인데 점프 장식이 남았다")
+    }
+
+    /// 잔상은 **단색 실루엣**이다 — 얼굴이 다 있는 사본이 아니다.
+    ///
+    /// 2026-09-10 검토 실측(trail-dive.png): 잔상 네 개의 28×28px 상자 안 휘도 편차가 25/39/50/51 이었고
+    /// (민무늬 배경은 5) 6배 확대에서 **눈동자 두 점**이 그대로 보였다. 코드 주석은 "필요한 것은 실루엣뿐"
+    /// 이라고 적어 두고 코드는 스프라이트 사본을 그리고 있었다 — 지나온 자리마다 얼굴이 있으면 어느 것이
+    /// 지금의 나인지 순간적으로 헷갈린다.
+    ///
+    /// 이력 한 점만 든 판을 쓴다: 잔상끼리 겹치면 겹친 수만큼 짙어져 **한 장의 속살**을 잴 수 없다.
+    /// (규칙이 이력을 정말 그렇게 남기는지는 (1d) 가 증명한다. 여기서 재는 것은 그 한 점을 *어떻게 그리는가*다.)
+    @Test
+    func theTrailIsAFlatSilhouetteNotAFaceCopy() throws {
+        MiniGameMascot.resetCacheForTesting()
+        _ = MiniGameMascot.sideProfile()
+        let y: CGFloat = 96, ghostX = birdX - 62
+        /// 스프라이트 중심에서 **눈이 있는 자리**(옆얼굴은 오른쪽 위를 본다)와 상자 반폭.
+        /// 실측으로 잡았다(2026-09-10 휘도 그리드): 이 상자 안에서 본체는 32~251(눈동자·흰자·볼)이고
+        /// 실루엣은 91 한 값이다. 상자가 실루엣 **안쪽**에 온전히 들어가는 것이 중요하다 — 가장자리를 물면
+        /// 실루엣이든 사본이든 배경과의 경계 때문에 편차가 30 씩 나와 둘을 구분하지 못한다.
+        let faceProbe = (x: CGFloat(4), y: CGFloat(-4), half: CGFloat(3))
+
+        func frame(score: Int) throws -> NSBitmapImageRep {
+            let game = FlappyGame(seed: 5, bird: .init(x: birdX, y: y, vy: 0),
+                                  pipes: [pipe(x: 250, centerY: 150, gap: 120)],
+                                  score: score, phase: .running, elapsed: 1.0,
+                                  trail: [FlappyGame.TrailPoint(x: ghostX, y: y, vy: 0, age: 0)])
+            return try renderBitmap(view(game, best: 12))
+        }
+
+        let bitmap = try frame(score: 8)
+        // 같은 자로 세 곳을 잰다: 잔상의 **얼굴 자리** · 본체의 같은 자리 · 민무늬 하늘.
+        // 상자를 중심이 아니라 얼굴 자리(오른쪽 위 6, −8)에 대는 것이 요점이다 — 사본이면 여기에 눈·입이
+        // 들어오고 실루엣이면 아무것도 없다. 몸통 한가운데는 사본이어도 매끈해서(편차 22) 아무것도 못 잡는다.
+        let ghost = luminance(bitmap, atLogical: CGPoint(x: ghostX + faceProbe.x, y: y + faceProbe.y),
+                              half: faceProbe.half)
+        let body = luminance(bitmap, atLogical: CGPoint(x: birdX + faceProbe.x, y: y + faceProbe.y),
+                             half: faceProbe.half)
+        let sky = luminance(bitmap, atLogical: CGPoint(x: ghostX, y: y - 44), half: faceProbe.half)
+        print("[trail] ghost spread \(Int(ghost.spread)) mean \(Int(ghost.mean)) · " +
+              "body spread \(Int(body.spread)) · sky spread \(Int(sky.spread)) mean \(Int(sky.mean))")
+        // ① 이 자가 눈이 멀지 않았다: **본체**에 대면 눈·입·그라디언트 때문에 편차가 크게 나온다.
+        #expect(body.spread > 60, "본체 속살 편차가 \(body.spread) 뿐 — 자가 고장 났다")
+        // ② 잔상은 평평하다. 임계는 민무늬 하늘 편차 + 여유다(하늘 자체가 그라디언트라 0 이 될 수 없다).
+        #expect(ghost.spread <= trailFlatSpreadMax, "잔상 속살 편차 \(ghost.spread) — 실루엣이 아니라 사본이다")
+        // ③ 그래도 **보인다**: 배경과 충분히 갈린다(너무 옅으면 궤적이 사라진다).
+        #expect(abs(ghost.mean - sky.mean) >= trailVisibleMin,
+                "잔상이 배경과 \(abs(ghost.mean - sky.mean)) 밖에 안 갈린다")
+        // ④ 그리고 본체보다 **어둡다/옅다** — 지금의 나와 지나온 자리가 헷갈리면 안 된다.
+        #expect(ghost.mean < body.mean, "잔상이 본체만큼 진하다")
+
+        // ⑤ 무대 5종 전부에서 갈린다. 밝은 무대(한낮·노을)에서 때처럼 보이지도, 어두운 무대(밤)에서
+        //    사라지지도 않아야 한다 — 색을 하나로 고른 이상 다섯 곳을 다 재는 것이 유일한 확인이다.
+        var tiles: [NSBitmapImageRep] = []
+        for score in MiniGameStage.flappyThresholds {
+            let shot = try frame(score: score)
+            let g = luminance(shot, atLogical: CGPoint(x: ghostX + faceProbe.x, y: y + faceProbe.y),
+                              half: faceProbe.half)
+            let s = luminance(shot, atLogical: CGPoint(x: ghostX, y: y - 44), half: faceProbe.half)
+            let stage = MiniGameStage.forFlappyScore(score)
+            print("[trail] \(stage.name) ghost \(Int(g.mean)) vs sky \(Int(s.mean)) · 편차 \(Int(g.spread))")
+            #expect(abs(g.mean - s.mean) >= trailVisibleMin, "\(stage.name)에서 잔상이 배경에 묻힌다")
+            #expect(g.spread <= trailFlatSpreadMax, "\(stage.name)에서 잔상 속살 편차가 \(g.spread)")
+            if let zoomed = cropZoom(shot, ptRect: CGRect(x: t.origin.x + (ghostX - 24) * t.scale,
+                                                          y: t.origin.y + (y - 24) * t.scale,
+                                                          width: 48 * t.scale, height: 48 * t.scale), zoom: 4) {
+                tiles.append(zoomed)
+            }
+        }
+        if let strip = stitch(tiles) { savePNG(strip, "trail-stages.png") }
+    }
+}
+
+/// 잔상 속살의 허용 휘도 편차(P90−P10). **임계는 두 실측 사이에 놓았다**(2026-09-10, 얼굴 자리 6×6pt 상자):
+///   · 단색 실루엣: 새벽 0 · 한낮 1 · 노을 1 · 밤 0 · **오로라 13** — 오로라만 큰 이유는 잔상이 22% 불투명이라
+///     뒤의 오로라 커튼이 78% 그대로 비치기 때문이다(잔상 자신의 속살이 아니다).
+///   · 스프라이트 사본(되돌린 판): 다섯 무대 전부 **48~53**. 눈·흰자·볼터치가 그대로 살아 있다.
+/// 20 은 그 사이다. 내리면 오로라에서 헛빨강이 나고, 40 위로 올리면 사본으로 되돌려도 초록이 된다.
+private let trailFlatSpreadMax = 20.0
+/// 잔상이 배경과 갈리는 최소 휘도 차. 이보다 옅으면 궤적이 안 보인다.
+private let trailVisibleMin = 12.0
+/// 머리 위 대역의 최소 호 잉크(px, 스케일 2). 0 이 실패였고 지금은 그 몇 배가 나온다.
+private let overheadInkMin = 150
+
 // MARK: - (8) 소스 계약
 
 private func swiftCodeStrippingComments(_ source: String) -> String {
@@ -1095,6 +1538,24 @@ func flappySourceKeepsTheLeafViewContract() throws {
             "판을 끊어도 부유가 안 꺼진다 — 창을 닫은 뒤에도 애니메이션이 계속 돈다")
     // 60Hz 예산: 캔버스 전체 blur·drawLayer 금지(통합 GPU 에서 프레임이 깨진다).
     #expect(!code.contains("addFilter") && !code.contains("drawLayer"))
+
+    // ★ v0.2.49 잔상: 자리는 **규칙이 들고 있는 궤적**에서만 온다.
+    //   ① 이력은 뷰 @State 가 아니라 FlappyGame 에 있다(같은 판을 다시 그릴 수 있어야 하고, 새 판에서
+    //      앞 판의 꼬리가 지워져야 한다). ② 고정 오프셋(ghostStep)으로 캐릭터 옆에 찍지 않는다 —
+    //      그것이 "잔상이 캐릭터에 달라붙어 있다"는 지적의 원인이었다(2026-09-10).
+    #expect(code.contains("private(set) var trail: [TrailPoint]"), "이력이 규칙 값 타입에서 사라졌다")
+    #expect(!code.contains("@State private var trail"), "이력이 뷰로 넘어갔다 — 판을 재현할 수 없게 된다")
+    #expect(!code.contains("ghostStep"), "잔상이 다시 고정 오프셋으로 찍힌다")
+    #expect(code.contains("game.trail[index]"), "잔상이 궤적을 읽지 않는다")
+    #expect(code.contains("ForEach(0..<FlappyGame.trailMax"),
+            "잔상 ForEach 가 고정 상한이 아니다 — 프레임마다 배열이 새로 생긴다")
+    #expect(code.contains("trail.removeAll(keepingCapacity: true)"),
+            "이력을 비울 때 용량까지 버린다 — 프레임마다 배열을 다시 잡게 된다")
+    // ★ v0.2.49 점프 모션: 발밑에서 **아래로** 퍼지는 넓은 아치는 걷어냈다(솟는 방향과 반대였다).
+    //   공용 헬퍼(MiniGameEffects.arch)는 남아 있지만 이 게임은 쓰지 않는다.
+    #expect(!code.contains("MiniGameEffects.arch("),
+            "넓은 U 아치가 되살아났다 — 몸은 위로 솟는데 신호는 아래를 말한다(2026-09-10 지적)")
+    #expect(code.contains("wingBeat("), "점프 모션이 사라졌다")
 
     // ★ 그리기 함수 안에는 튀는 기둥 분기가 한 글자도 없다 — 색·모양으로 미리 알려 주지 않기로 한
     //   결정(2026-09-08)은 "그림이 shift* 를 읽지 않는다"로만 지켜진다.

@@ -1317,49 +1317,643 @@ func overlayPokePeekPlaysEvenWhenCharacterHidden() {
     controller.updateWorking(false) // peek 태스크 취소 + 렌더 정리.
 }
 
-// MARK: - 3글자 메시지 수신: 보낸이+본문 말풍선(찔림 채널 재사용) · 큐 순서 · 양보 규칙
+// MARK: - 메시지 수신 말풍선: 예산에 들어오면 캐릭터가 말하고, 넘치면 도착만 알린다
+
+/// 이름을 고정하고 한 글자(`glyph`)만 반복해 **인라인으로 남는 최대 자소 수**를 찾는다.
+/// 임계를 상수로 적어 두지 않고 매번 실제 판정에서 되찾는다 — 폰트가 바뀌면 이 숫자가 따라 움직이고,
+/// 아래 단언들이 "그래서 몇 자냐"를 그 자리에서 못 박는다.
+private func longestInlineBody(name: String, glyph: String, cap: Int = 200) -> Int {
+    var best = 0
+    for count in 1...cap {
+        if case .inline = OverlayMessageBubble.form(name: name, body: String(repeating: glyph, count: count)) {
+            best = count
+        } else {
+            break
+        }
+    }
+    return best
+}
 
 @Test
 func messageBubbleTextCarriesSenderAndBody() {
-    // 보낸이와 내용이 **둘 다** 있어야 한다 — 3글자만 떠 있으면 받는 쪽에서 아무 뜻도 없다.
+    // ── 짧은 갈래: 그림이 **종전 그대로**여야 한다(이 두 줄이 회귀 못이다). ──
     #expect(CheckOverlayController.messageBubbleText(name: "이유성", body: "화이팅") == "이유성님: 화이팅")
     // 이모지 3글자(확장 자소 클러스터 기준)는 그대로 실린다 — 스칼라로 세면 국기/스킨톤이 쪼개져 잘려 나간다.
     #expect(CheckOverlayController.messageBubbleText(name: "김철수", body: "👍🏻🎉🇰🇷") == "김철수님: 👍🏻🎉🇰🇷")
-    // 별명이 서버 상한(12)을 넘겨 오면 **별명**을 자른다. 안 자르면 lineLimit(2) 꼬리 잘림이 본문을 지운다
-    // — 잘리는 쪽이 알맹이가 되는 것이 이 포맷의 유일한 함정이다.
+    // 별명은 **폭 예산이 허락하는 6자**에서 자른다(서버 별명 상한 12가 아니다 — 12자 이름은 그것만으로
+    // 126.7pt 를 먹어 본문에 2~3자만 남긴다). 한글 이름은 폭 상한이 걸려도 6자 그대로다.
     #expect(
         CheckOverlayController.messageBubbleText(name: String(repeating: "가", count: 20), body: "화이팅")
-            == String(repeating: "가", count: WorkTimerStore.displayNameMaxLength) + "…님: 화이팅"
+            == String(repeating: "가", count: OverlayMessageBubble.nameLimit) + "…님: 화이팅"
     )
-    // 본문이 표시 상한을 넘겨 와도(상대 클라가 무엇을 보내든) 잘라 낸다 — 우리 폭 예산을 남이 정하지 못하게 한다.
+    // ★ 이 변경의 이유: 종전(자소 5자 임계)에는 알림으로 넘어가던 문장들이 이제 **그대로 말한다**.
+    #expect(CheckOverlayController.messageBubbleText(name: "이유성", body: "오늘 고생했어요") == "이유성님: 오늘 고생했어요")
     #expect(
-        CheckOverlayController.messageBubbleText(name: "이유성", body: "가나다라마바사")
-            == "이유성님: " + String("가나다라마바사".prefix(MessageBody.maxCharacters)) + "…"
+        CheckOverlayController.messageBubbleText(name: "이유성", body: "오늘도 화이팅입니다")
+            == "이유성님: 오늘도 화이팅입니다"
     )
-    // 본문이 비면 콜론만 남은 깨진 문구("이유성님: ") 대신 보낸이는 반드시 남긴다.
-    #expect(CheckOverlayController.messageBubbleText(name: "이유성", body: "") == "이유성님이 메시지를 보냈어요!")
+    // ── 긴 갈래: 본문을 **한 조각도** 싣지 않고 도착만 알린다(미리보기 금지). ──
+    #expect(
+        CheckOverlayController.messageBubbleText(name: "이유성", body: String(repeating: "가나다라마", count: 6))
+            == "✉️ 이유성님 메시지 도착!"
+    )
+    // 본문이 비면 콜론만 남은 깨진 문구("이유성님: ") 대신 같은 알림으로 보낸다 — 보낸이는 어떤 경우에도 남는다.
+    #expect(CheckOverlayController.messageBubbleText(name: "이유성", body: "") == "✉️ 이유성님 메시지 도착!")
+}
+
+@Test
+func messageBubbleSplitsAtMeasuredWidthNotACharacterCount() {
+    // ★ 이 테스트가 이 변경의 본체다. 갈래는 **자소 수가 아니라 합성 문구의 실제 렌더 폭**이 가른다.
+    //   그래서 임계가 문자 클래스마다 다르고, 그 값을 여기서 숫자로 못 박는다
+    //   (이름 "이유성" = 25.95pt + "님: " 14.48pt 를 뺀 나머지가 본문 몫이다).
+    let name = "이유성"
+    let measured: [(label: String, glyph: String, expected: Int)] = [
+        ("한글", "가", 10),
+        ("한글(복잡한 자모)", "뷁", 10),
+        ("한자", "漢", 10),
+        ("라틴 W(가장 넓은 라틴)", "W", 9),
+        ("라틴 a", "a", 16),
+        ("라틴 i(가장 좁은 라틴)", "i", 33),
+        ("이모지", "🎉", 9),
+        ("스킨톤 이모지", "👍🏻", 9),
+        ("국기 이모지", "🇰🇷", 9),
+        ("마침표", ".", 24),
+        ("숫자", "5", 14),
+    ]
+    for (label, glyph, expected) in measured {
+        let longest = longestInlineBody(name: name, glyph: glyph)
+        #expect(longest == expected, "\(label): 임계가 \(expected) 가 아니라 \(longest) 로 움직였다")
+        // 경계 −1 / 경계 / 경계 +1.
+        for count in [longest - 1, longest] {
+            let body = String(repeating: glyph, count: count)
+            #expect(OverlayMessageBubble.form(name: name, body: body) == .inline("\(name)님: \(body)"))
+        }
+        let over = String(repeating: glyph, count: longest + 1)
+        #expect(
+            OverlayMessageBubble.form(name: name, body: over) == .arrival("✉️ 이유성님 메시지 도착!"),
+            "\(label): 예산을 넘긴 본문이 인라인으로 남았다"
+        )
+    }
+
+    // ★ 이 변경의 이유를 숫자로: 한글은 종전 임계(자소 5)의 **두 배**가 들어간다.
+    let hangul = longestInlineBody(name: name, glyph: "가")
+    #expect(hangul >= 10, "한글이 열 자도 못 들어가면 폭 판정으로 바꾼 이유가 없다")
+    #expect(hangul > 5)
+    // 그리고 **띄어쓰기가 있는 진짜 문장**은 더 들어간다 — 위 표는 공백 없이 한 글자만 반복한 최악이다.
+    // (공백 없는 한글이 10에서 멈추는 이유는 `fitsCapsule` 주석: 시스템이 한글 덩어리를 한 낱말로 보고
+    //  통째로 다음 줄로 밀 수 있어, 낱말 하나가 한 줄 폭을 넘으면 그 자리에서 예산이 끝난다.)
+    for sentence in ["오늘 고생했어요", "오늘도 화이팅입니다", "다들 수고 많으셨습니다", "회의 5분 뒤에 시작해요"] {
+        #expect(
+            OverlayMessageBubble.form(name: name, body: sentence) == .inline("\(name)님: \(sentence)"),
+            "\(sentence.count)자 문장이 알림으로 넘어갔다: \(sentence)"
+        )
+    }
+    #expect("회의 5분 뒤에 시작해요".count == 13)
+    // 그리고 이모지가 섞이면 **자동으로** 짧아진다 — 따로 규칙을 두지 않았는데도.
+    #expect(longestInlineBody(name: name, glyph: "🎉") < hangul)
+    #expect(longestInlineBody(name: name, glyph: "W") < hangul)
+
+    // 코드포인트로 셌다면 갈래가 뒤집힌다: 국기 9개는 스칼라로 18, 자소로 9다.
+    let flags = String(repeating: "🇰🇷", count: 9)
+    #expect(flags.unicodeScalars.count == 18)
+    #expect(OverlayMessageBubble.form(name: name, body: flags) == .inline("이유성님: \(flags)"))
+}
+
+@Test
+func messageBubbleThresholdFollowsTheNameWidthToo() {
+    // 이름이 넓어지면 본문 몫이 그만큼 줄어든다 — 별도 규칙이 아니라 **합성 문구를 재기 때문에** 따라온다.
+    let tiny = longestInlineBody(name: "김", glyph: "🎉")
+    let short = longestInlineBody(name: "지훈", glyph: "🎉")
+    let normal = longestInlineBody(name: "이유성", glyph: "🎉")
+    let long = longestInlineBody(name: "가나다라마바", glyph: "🎉")
+    #expect(tiny > short)
+    #expect(short > normal)
+    #expect(normal > long)
+    #expect((tiny, short, normal, long) == (11, 10, 9, 7))
+    // 한글 본문은 이름과 무관하게 10에서 멈춘다 — 이름이 아니라 **한글 덩어리 자체**가 한 줄 폭에 걸린다
+    // (`fitsCapsule` ③). 이름을 아무리 줄여도 11번째 글자는 못 넣는다.
+    for name in ["김", "이유성", "가나다라마바", String(repeating: "가", count: 20)] {
+        #expect(longestInlineBody(name: name, glyph: "가") == 10)
+    }
+}
+
+@Test
+func messageBubbleNameKeepsItsOwnWidthBudget() {
+    // 이름 자르기도 폭이 정한다: 자소 상한(6)과 폭 상한(한글 6자 + 말줄임)을 **둘 다** 지킨다.
+    // ① 한글 이름은 종전과 한 글자도 다르지 않다 — 이 팀의 경우가 이것이다.
+    #expect(OverlayMessageBubble.clippedName("이유성") == "이유성")
+    #expect(OverlayMessageBubble.clippedName("가나다라마바") == "가나다라마바")
+    #expect(OverlayMessageBubble.clippedName("가나다라마바사") == "가나다라마바…")
+    #expect(OverlayMessageBubble.clippedName(String(repeating: "가", count: 20)) == "가가가가가가…")
+    #expect(OverlayMessageBubble.clippedName("yehsung") == "yehsun…")
+    #expect(OverlayMessageBubble.clippedName("") == "")
+    // ② 넓은 글자로만 된 이름은 몇 자를 내주고, 그만큼을 **본문이 가져간다**.
+    #expect(OverlayMessageBubble.clippedName("🎉🎉🎉🎉🎉🎉") == "🎉🎉🎉…")
+    // 자소로는 6자에서 3자로 줄었지만(폭 84.0 → 50.4pt) 그만큼이 본문 몫이 된다:
+    // 같은 자소 6자짜리 한글 이름보다 **본문이 한 자 더** 들어간다.
+    #expect(longestInlineBody(name: "🎉🎉🎉🎉🎉🎉", glyph: "🎉") == 8)
+    #expect(longestInlineBody(name: "가나다라마바", glyph: "🎉") == 7)
+    // ③ 어떤 이름을 넣어도 폭 상한을 넘지 않는다 = 도착 알림이 2줄 안에 든다는 것이 **구조로** 보장된다.
+    for glyph in ["뷁", "가", "W", "a", "i", ".", "🎉", "👍🏻", "🇰🇷"] {
+        for length in [1, 3, 6, 7, 12, 20] {
+            let name = String(repeating: glyph, count: length)
+            let clipped = OverlayMessageBubble.clippedName(name)
+            #expect(clipped.count <= OverlayMessageBubble.nameLimit + 1)   // +1 은 말줄임 한 칸.
+            #expect(
+                OverlayMessageBubble.textWidth(clipped) <= OverlayMessageBubble.nameWidthBudget,
+                "이름이 폭 상한을 넘었다: \(clipped)"
+            )
+            #expect(
+                OverlayMessageBubble.fitsCapsule(OverlayMessageBubble.arrivalText(name: name)),
+                "도착 알림이 예산을 넘으면 '메시지 도착!' 이 잘린다: \(name)"
+            )
+        }
+    }
+}
+
+@Test
+func messageBubbleSafetyNetCatchesWhatWidthCannotSee() {
+    // 폭 규칙만으로는 못 보는 두 가지.
+    // ① 그릴 게 없는 본문(공백만·제로폭만) — 폭 판정을 통과해도 캡슐엔 "이유성님: " 만 남는다.
+    #expect(OverlayMessageBubble.form(name: "이유성", body: String(repeating: " ", count: 40)) == .arrival("✉️ 이유성님 메시지 도착!"))
+    #expect(OverlayMessageBubble.form(name: "이유성", body: String(repeating: "\u{200B}", count: 40)) == .arrival("✉️ 이유성님 메시지 도착!"))
+    #expect(OverlayMessageBubble.form(name: "이유성", body: "\u{200D}\u{200B} ") == .arrival("✉️ 이유성님 메시지 도착!"))
+    // 공백이 섞여도 **그릴 게 하나라도 있으면** 그대로 말한다.
+    #expect(OverlayMessageBubble.form(name: "이유성", body: " 굿 ") == .inline("이유성님:  굿 "))
+    // ② 폭이 0에 가까운 글자로 200자를 밀어 넣는 경우 — 자소 천장이 받는다.
+    let padded = "가" + String(repeating: "\u{200B}", count: 199)
+    #expect(padded.count > OverlayMessageBubble.inlineGraphemeCeiling)
+    #expect(OverlayMessageBubble.lineCount("이유성님: \(padded)") <= 2)   // 폭만 보면 통과한다.
+    #expect(OverlayMessageBubble.form(name: "이유성", body: padded) == .arrival("✉️ 이유성님 메시지 도착!"))
+    // ★ 그리고 이 그물은 **실제 글자에는 물리지 않는다** — 언제나 폭 규칙이 먼저 발동한다.
+    for glyph in ["뷁", "가", "漢", "W", "a", "i", ".", "5", "🎉", "👍🏻", "🇰🇷"] {
+        let longest = longestInlineBody(name: "지훈", glyph: glyph)
+        #expect(
+            longest < OverlayMessageBubble.inlineGraphemeCeiling,
+            "\(glyph): 안전망(\(OverlayMessageBubble.inlineGraphemeCeiling))이 폭보다 먼저 물었다(\(longest))"
+        )
+    }
+}
+
+@Test
+func longMessageBubbleLeaksNoBodyCharacter() {
+    // 서버가 새로 허용한 200자. 본문 글자가 **한 자도** 문구에 남으면 안 된다.
+    let alphabet = Array("가나다라마바사아자차카타파하123456789ABCDEFGHIJ")
+    let body = String((0..<200).map { alphabet[$0 % alphabet.count] })
+    #expect(body.count == 200)
+    let text = CheckOverlayController.messageBubbleText(name: "이유성", body: body)
+    #expect(text == "✉️ 이유성님 메시지 도착!")
+    #expect(OverlayMessageBubble.isArrival(text))
+    for character in Set(body) {
+        #expect(!text.contains(character), "본문 글자가 알림 문구로 새어 나왔다: \(character)")
+    }
+    // 이모지로만 채운 200자도 같다(자소 단위라 스킨톤·국기가 쪼개지지 않는다).
+    let emojiBody = String(repeating: "👍🏻🎉🇰🇷", count: 67).prefix(200)
+    #expect(
+        CheckOverlayController.messageBubbleText(name: "김철수", body: String(emojiBody))
+            == "✉️ 김철수님 메시지 도착!"
+    )
+}
+
+@Test
+func messageBubbleFoldsNewlinesInsteadOfBlowingTheBudget() {
+    // 줄바꿈은 폭과 무관하게 두 줄 중 하나를 통째로 먹는다 — 접지 않으면 예산 안의 짧은 본문도 3줄이 되어
+    // 꼬리(=본문)가 잘린다. 스토어가 제어문자를 거르지만 폭 예산은 표시 쪽 몫이다.
+    #expect(CheckOverlayController.messageBubbleText(name: "이유성", body: "안\n녕") == "이유성님: 안 녕")
+    #expect(CheckOverlayController.messageBubbleText(name: "이유성", body: "안\n\n녕") == "이유성님: 안 녕")
+    #expect(overlayBubbleLineCount(CheckOverlayController.messageBubbleText(name: "이유성", body: "안\n녕")) <= 2)
+    // 줄바꿈만 있는 본문은 화면에 아무것도 못 그린다 → 빈 본문과 같은 갈래(알림).
+    #expect(CheckOverlayController.messageBubbleText(name: "이유성", body: "\n\n") == "✉️ 이유성님 메시지 도착!")
+    // 갈래 판정은 **접은 뒤** 폭으로 한다 — 화면에 그려지는 것이 접힌 문자열이기 때문이다.
+    // 접기 전에는 줄바꿈이 예산을 통째로 먹어 3줄이 되지만, 접고 나면 두 줄에 들어간다.
+    let folded = "오늘\n고생\n했어요"
+    #expect(overlayBubbleLineCount("이유성님: \(folded)") > 2)
+    #expect(OverlayMessageBubble.form(name: "이유성", body: folded) == .inline("이유성님: 오늘 고생 했어요"))
+    #expect(overlayBubbleLineCount("이유성님: 오늘 고생 했어요") <= 2)
+}
+
+@MainActor
+@Test
+func arrivalNoticeIsNeverMistakenForSpokenBody() {
+    // 렌더러는 **문구만 보고** 갈래를 되찾는다(엔진의 말풍선 통로는 문자열 하나뿐이다). 그 판정이
+    // 인라인 문구를 알림으로 오인하면 사용자가 짧은 메시지를 "도착 알림"으로 읽는다.
+    #expect(OverlayMessageBubble.isArrival("✉️ 이유성님 메시지 도착!"))
+    #expect(!OverlayMessageBubble.isArrival("이유성님: 화이팅"))
+    #expect(!OverlayMessageBubble.isArrival("이유성님이 콕 찔렀어요!"))
+    #expect(!OverlayMessageBubble.isArrival(CheckOverlayController.updateBubbleText))
+    #expect(!OverlayMessageBubble.isArrival("오늘도 화이팅!"))
+    for body in ["✉️", "도착!", "메시지", "님 메시", "✉️님", "지 도착!", "님 메시지 도착!"] {
+        let text = CheckOverlayController.messageBubbleText(name: "이유성", body: body)
+        #expect(text == "이유성님: \(body)")
+        #expect(!OverlayMessageBubble.isArrival(text), "인라인 문구가 알림으로 오인됐다: \(text)")
+    }
+    // ★ 종전의 근거("본문이 접미사 9자만큼 길 수 없다")는 폭 판정이 한글 16자를 허락하면서 죽었다.
+    //   그래서 근거를 판정 쪽으로 옮겼다 — 이름이 봉투로 시작하고 본문이 접미사와 똑같은 극단에서도
+    //   **인라인 문구가 만들어지지 않는다**(그 조합은 알림으로 간다).
+    let trap = OverlayMessageBubble.form(name: "✉️ 이유성", body: OverlayMessageBubble.arrivalSuffix)
+    #expect(trap == .arrival("✉️ ✉️ 이유성님 메시지 도착!"))
+    if case .inline(let spoken) = trap { #expect(Bool(false), "덫에 걸렸다: \(spoken)") }
+    // 그리고 어떤 (이름, 본문) 조합에서도 인라인 문구가 알림으로 읽히지 않는다.
+    for nameGlyph in ["가", "W", "🎉", "✉️"] {
+        for nameLength in [1, 3, 6, 12] {
+            let name = String(repeating: nameGlyph, count: nameLength)
+            for body in ["화이팅", OverlayMessageBubble.arrivalSuffix, "메시지 도착!", "✉️ 도착!"] {
+                if case .inline(let spoken) = OverlayMessageBubble.form(name: name, body: body) {
+                    #expect(!OverlayMessageBubble.isArrival(spoken), "인라인이 알림으로 읽힌다: \(spoken)")
+                }
+            }
+        }
+    }
 }
 
 @Test
 func messageBubbleFitsTwoLineBudget() {
-    // 실측 못 박기. 말풍선은 `lineLimit(2)` 라 3줄이 되는 순간 꼬리(=본문)가 잘린다.
-    // 현재 상한(별명 12 · 본문 MessageBody.maxCharacters=3)에서는 가장 넓은 조합도 2줄 안이지만
-    // (한글 161.1 / 이모지 177.1 / 라틴 164.7pt < 188pt 예산), 본문 상한이 4가 되면 이모지 최악이
-    // 191.1pt = 3줄로 넘어간다. 그때 이 테스트가 그 자리에서 빨개져 포맷을 함께 손보게 만든다.
-    let longName = String(repeating: "가", count: 30)
-    let worst = [
-        CheckOverlayController.messageBubbleText(name: longName, body: String(repeating: "뷁", count: 30)),
-        CheckOverlayController.messageBubbleText(name: longName, body: String(repeating: "🎉", count: 30)),
-        CheckOverlayController.messageBubbleText(name: longName, body: String(repeating: "W", count: 30)),
-        // 서버 상한을 그대로 지킨 정상 최악(별명 12 + 본문 3).
-        CheckOverlayController.messageBubbleText(
-            name: String(repeating: "가", count: WorkTimerStore.displayNameMaxLength), body: "화이팅")
-    ]
-    for text in worst {
-        #expect(overlayBubbleLineCount(text) <= 2, "말풍선이 3줄이 되면 꼬리(본문)가 잘린다: \(text)")
+    // ★ 전수 스윕: 어떤 (이름, 본문) 조합에서도 말풍선이 3줄이 되지 않는다. 3줄이면 `lineLimit(2)` 가
+    //   꼬리를 지우는데, 인라인의 꼬리는 본문이고 알림의 꼬리는 "메시지 도착!" 이다.
+    //   인라인 쪽은 판정이 같은 자로 재니 당연히 통과한다 — **이 스윕이 실제로 버는 것은 알림 쪽**이다.
+    //   알림 문구는 폭을 재지 않고 만들어지고(이름 폭 상한만 믿는다), 그 믿음이 여기서 확인된다.
+    //   (판정이 SwiftUI 가 실제로 그리는 것과 일치하는지는 아래 픽셀 테스트가 따로 본다.)
+    let glyphs = ["뷁", "가", "W", "a", "i", ".", "🎉", "👍🏻", "🇰🇷"]
+    for nameGlyph in glyphs {
+        for nameLength in [1, 3, OverlayMessageBubble.nameLimit, OverlayMessageBubble.nameLimit + 9, 20] {
+            let name = String(repeating: nameGlyph, count: nameLength)
+            for bodyGlyph in glyphs {
+                for bodyLength in [1, 5, 9, 13, 16, 17, 24, 33, 41, 100, 200] {
+                    let text = CheckOverlayController.messageBubbleText(
+                        name: name, body: String(repeating: bodyGlyph, count: bodyLength))
+                    #expect(
+                        overlayBubbleLineCount(text) <= 2,
+                        "말풍선이 3줄이 되면 꼬리가 잘린다: \(text)"
+                    )
+                }
+            }
+        }
     }
-    // 평상시 조합은 한 줄에 다 들어간다(66.4pt).
+    // 테스트가 따로 세는 줄 수와 판정이 쓰는 줄 수가 같은 답을 낸다(두 벌이 갈리면 스윕이 헛돈다).
+    for text in ["이유성님: 화이팅", "이유성님: \(String(repeating: "가", count: 16))", "✉️ 이유성님 메시지 도착!"] {
+        #expect(overlayBubbleLineCount(text) == OverlayMessageBubble.lineCount(text))
+    }
+    // 평상시 조합은 한 줄에 다 들어간다(66.4pt) — 종전 그림 그대로.
     #expect(overlayBubbleLineCount(CheckOverlayController.messageBubbleText(name: "이유성", body: "화이팅")) == 1)
+}
+
+@MainActor
+@Test
+func arrivalBubbleClickOpensMessagesOnlyWhenWired() {
+    // 알림 말풍선을 누르면 메시지 창이 열리는 흐름. **그 창은 아직 없어 지금은 언제나 nil 이고**,
+    // nil 인 동안 이 자리의 동작은 예전과 한 톨도 달라지지 않아야 한다.
+    var now = Date(timeIntervalSince1970: 130_000)
+    let engine = ReactionEngine(clock: { now })
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
+        defaults: isolatedOverlayDefaults(),
+        workspaceNotifications: nil
+    )
+    let controller = CheckOverlayController(
+        store: store, notificationCenter: NotificationCenter(), engine: engine,
+        defaults: isolatedOverlayDefaults(), workspaceNotifications: nil
+    )
+    // 근무 중으로 못 박는다 — 루트 뷰가 평가될 때 onChange(isWorking, initial: true) 가 false 를 흘리면
+    // 컨트롤러가 스스로 숨기며 ⑤의 격발을 그 자리에서 걷어낸다.
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+    controller.updateWorking(true)
+    now = now.addingTimeInterval(0.7)          // 등장 리액션을 흘려보내 idle 로.
+    #expect(engine.state == .idle)
+
+    let arrival = CheckOverlayController.messageBubbleText(
+        name: "이유성", body: String(repeating: "가", count: 200))
+    #expect(OverlayMessageBubble.isArrival(arrival))
+    engine.greetingText = arrival
+
+    let frame = controller.panel.frame
+    let onBubble = NSPoint(x: frame.minX + 20, y: frame.maxY - 20)   // 말풍선 자리(머리 위 왼쪽)
+
+    // ① 배선 전 = 지금의 프로덕션. 클릭 자리가 아예 없고, 그 자리 클릭은 **예전 그대로** 처리된다.
+    #expect(controller.onOpenMessages == nil)
+    #expect(controller.messageArrivalBubbleScreenRect() == nil)
+    controller.handleClick(at: onBubble)
+    #expect(engine.state == .playing(.hit))     // 종전 동작(헤드리스는 패널 프레임 폴백) 그대로.
+    #expect(engine.greetingText == "아얏!")      // 아파하기가 말풍선을 가져갔다 = 알림이 눌린 적 없다.
+    engine.cancelActiveReaction()
+
+    // ② 배선 후. 같은 자리 클릭이 메시지 창을 연다 — 그리고 캐릭터는 아파하지 않는다(클릭의 뜻은 하나뿐).
+    engine.greetingText = arrival
+    var opens = 0
+    controller.onOpenMessages = { opens += 1 }
+    #expect(controller.messageArrivalBubbleScreenRect() != nil)
+    controller.handleClick(at: onBubble)
+    #expect(opens == 1)
+    #expect(engine.state == .idle)
+    // 클릭이 말풍선을 지우지 않는다 — 수명은 엔진 타이머가 소유한다(알림형도 같은 수명 규약).
+    #expect(engine.greetingText == arrival)
+
+    // ③ 몸체(캐릭터) 클릭은 예전 그대로 아파하기다(①의 아파하기 쿨다운 0.6초는 넘겨서 본다).
+    now = now.addingTimeInterval(1)
+    controller.handleClick(at: NSPoint(x: frame.midX, y: frame.midY))
+    #expect(engine.state == .playing(.hit))
+    #expect(opens == 1)
+    engine.cancelActiveReaction()
+
+    // ④ 짧은 메시지(인라인)에는 클릭 자리가 없다 — 알림이 아니라 캐릭터가 한 말이기 때문이다.
+    engine.greetingText = CheckOverlayController.messageBubbleText(name: "이유성", body: "화이팅")
+    #expect(controller.messageArrivalBubbleScreenRect() == nil)
+
+    // ⑤ 울트라 격발이 오면 알림이 진다(기존 우선순위 — 전체화면이 이긴다). 격발이 말풍선 채널을
+    //    가져가므로 알림 클릭 자리도 함께 사라진다. 화면을 5초 덮은 위에 "메시지 열기" 자리가 남으면
+    //    사용자는 무엇을 누르는지 알 수 없다.
+    engine.greetingText = arrival
+    controller.handleReceivedPokes([
+        ReceivedPoke(id: "u1", fromName: "김철수", createdAt: now, kind: .ultra)
+    ])
+    #expect(controller.isUltraActive)
+    #expect(controller.messageArrivalBubbleScreenRect() == nil)
+    controller.endUltraTakeover()
+
+    controller.updateWorking(false)
+}
+
+// MARK: - 말풍선 픽셀: 긴 메시지는 본문이 한 픽셀도 새지 않는다 / 짧은 메시지는 종전 그림 그대로
+
+@MainActor
+@Test
+func longMessageBubblePixelsDoNotDependOnBody() throws {
+    // 텍스트 대조만으로는 "문구엔 없지만 화면엔 있다"를 못 잡는다. 그래서 **본문만 통째로 바꿔** 두 장을 그리고
+    // 픽셀이 완전히 같은지 본다 — 같다면 그 그림에는 본문에서 온 픽셀이 하나도 없다는 뜻이다.
+    let bodyA = String(repeating: "가나다라마바사아자차", count: 20)
+    let bodyB = String(repeating: "QWERTY🎉🔥12", count: 20)
+    #expect(bodyA.count == 200 && bodyB.count == 200)
+
+    let a = try overlayBubblePNG(text: CheckOverlayController.messageBubbleText(name: "이유성", body: bodyA))
+    let b = try overlayBubblePNG(text: CheckOverlayController.messageBubbleText(name: "이유성", body: bodyB))
+    // 빈 이미지끼리는 언제나 같다 — 비교가 뭔가를 증명하려면 먼저 잉크가 있어야 한다.
+    #expect(try overlayBubbleInkCount(a) > 500)
+    #expect(try overlayBubblePixelDiff(a, b) == 0, "본문을 통째로 바꿨는데 그림이 달라졌다 = 본문 픽셀이 새고 있다")
+
+    // 그리고 같은 사람의 **짧은** 메시지와는 다르다(알림이 인라인으로 둔갑하지 않는다).
+    let short = try overlayBubblePNG(text: CheckOverlayController.messageBubbleText(name: "이유성", body: "화이팅"))
+    #expect(try overlayBubblePixelDiff(a, short) > 500)
+}
+
+@MainActor
+@Test
+func shortMessageBubbleKeepsTheOldPicture() throws {
+    // 회귀 못: 짧은 갈래는 예전과 같은 문자열을 **예전과 같은 캡슐**(CheckGreetingBubble)로 그린다.
+    // 갈래 판정이 잘못 서면 여기서 알림 캡슐(봉투)이 나와 픽셀이 어긋난다.
+    for (name, body) in [("이유성", "화이팅"), ("김철수", "👍🏻🎉🇰🇷"), ("지훈", "ㅇㅋ")] {
+        let text = CheckOverlayController.messageBubbleText(name: name, body: body)
+        #expect(text == "\(name)님: \(body)")
+        #expect(!OverlayMessageBubble.isArrival(text))
+        let viaBranch = try overlayBubblePNG(text: text)
+        let historic = try greetingBubblePNG(text: text)   // 옛 경로: 무조건 CheckGreetingBubble
+        #expect(try overlayBubbleInkCount(historic) > 200)
+        #expect(
+            try overlayBubblePixelDiff(viaBranch, historic) == 0,
+            "짧은 갈래의 그림이 종전과 달라졌다: \(text)"
+        )
+    }
+}
+
+
+@MainActor
+@Test
+func widthJudgmentAgreesWithWhatSwiftUIActuallyDraws() throws {
+    // ★ 판정의 **바깥 증인**이다. 판정도 NSLayoutManager 로 재고 위의 스윕도 같은 자로 재므로, 둘만으로는
+    //   "같은 자로 두 번 잰 것"에 지나지 않는다. 여기서는 SwiftUI 가 실제로 그린 픽셀을 본다.
+    //   (이 테스트가 실제로 결함을 잡았다: 처음엔 `[]` 배치 하나로만 쟀는데, 화면은 한글 덩어리를 통째로
+    //    다음 줄로 밀어 10자에서 이미 잘리고 있었다. 지금의 세 겹 판정은 그 실측에서 나왔다.)
+    //
+    //   잘림 감지법: 본문의 **마지막 글자만 같은 폭의 다른 글자로** 바꿔 두 장을 그린다. 그림이 달라지면
+    //   꼬리가 그려진 것이고, 똑같으면 그 자리에 아무것도 없다 = 잘렸다. 앞 글자들의 폭이 같아 줄바꿈 위치가
+    //   흔들리지 않으므로, 차이는 오직 "마지막 글자가 보이는가"에서만 온다.
+    let classes: [(label: String, glyph: String, twin: String, exact: Bool)] = [
+        ("한글 가", "가", "나", false),    // 시스템이 이 덩어리는 잘라 붙인다(16자까지 그린다) — 판정은 10에서 멈춘다
+        ("한글 힣", "힣", "가", true),
+        ("한자", "漢", "字", true),
+        ("이모지", "🎉", "🔥", true),
+        ("국기", "🇰🇷", "🇯🇵", true),
+        ("마침표", ".", ",", false),
+        ("라틴 a", "a", "c", true),
+    ]
+    for (label, glyph, twin, exact) in classes {
+        let longest = longestInlineBody(name: "이유성", glyph: glyph)
+        // ① 인라인으로 내보낸 최장 문구는 SwiftUI 도 한 글자도 안 지운다(= 과허용 0). **이게 필수 조건이다.**
+        #expect(
+            try bubbleDrawsItsTail(name: "이유성", glyph: glyph, twin: twin, count: longest),
+            "\(label): 인라인으로 내보낸 문구를 SwiftUI 가 잘랐다 — 판정이 과하게 허락한다"
+        )
+        // ② 판정과 화면이 같은 자리에서 갈리는 클래스는 한 글자만 더해도 화면이 지운다(= 임계가 최대치다).
+        if exact {
+            #expect(
+                try !bubbleDrawsItsTail(name: "이유성", glyph: glyph, twin: twin, count: longest + 1),
+                "\(label): 한 글자 더 넣어도 안 잘린다 = 더 말할 수 있는데 안 말하고 있다"
+            )
+        }
+    }
+}
+
+/// 본문 마지막 글자를 **같은 폭의 다른 글자**로 바꿔 그렸을 때 그림이 달라지는가(= 꼬리가 그려졌는가).
+/// 갈래와 무관하게 옛 경로(`CheckGreetingBubble`)로 직접 그린다 — 알림형으로 보낸 문구도 "인라인이었다면
+/// 잘렸을까"를 물어야 하기 때문이다.
+@MainActor
+private func bubbleDrawsItsTail(name: String, glyph: String, twin: String, count: Int) throws -> Bool {
+    let head = "\(OverlayMessageBubble.clippedName(name))님: "
+    let withGlyph = head + String(repeating: glyph, count: count)
+    let withTwin = head + String(repeating: glyph, count: count - 1) + twin
+    #expect(
+        abs(OverlayMessageBubble.textWidth(withGlyph) - OverlayMessageBubble.textWidth(withTwin)) < 0.05,
+        "쌍둥이 글자의 폭이 달라 줄바꿈이 흔들린다: \(glyph) vs \(twin)"
+    )
+    return try overlayBubblePixelDiff(
+        greetingBubblePNG(text: withGlyph), greetingBubblePNG(text: withTwin)) > 0
+}
+
+@Test
+func greetingBubbleCapsuleMatchesTheMeasuredMetrics() throws {
+    // ★ 판정은 `OverlayMessageBubble.Metrics` 만 보고, 그림은 `CheckGreetingBubble` 이 그린다. 두 곳의 숫자가
+    //   갈리면 판정은 초록인 채로 화면에서만 본문이 잘린다 — 그 침묵을 막는 못이다.
+    //   (`CheckGreetingBubble` 은 이 작업의 소유 파일이 아니라 상수를 넘겨받게 고칠 수 없다. 대신 소스에서
+    //   같은 숫자를 쓰고 있는지 확인한다. 주석은 걷어낸다 — 안 그러면 설명을 지워야만 초록이 된다.)
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let raw = try String(
+        contentsOf: root.appendingPathComponent("Sources/check/CheckCharacter3DView.swift"), encoding: .utf8)
+    let source = raw.split(separator: "\n", omittingEmptySubsequences: false)
+        .map { line -> String in
+            guard let slash = line.range(of: "//") else { return String(line) }
+            return String(line[line.startIndex..<slash.lowerBound])
+        }
+        .joined(separator: "\n")
+    let start = try #require(source.range(of: "struct CheckGreetingBubble: View {"))
+    let end = try #require(source.range(of: "struct CheckUltraBubble: View {"))
+    let body = String(source[start.upperBound..<end.lowerBound])
+
+    typealias metrics = OverlayMessageBubble.Metrics
+    #expect(body.contains(".frame(maxWidth: \(Int(metrics.capsuleMaxWidth)), alignment: .leading)"))
+    #expect(body.contains(".padding(.horizontal, \(Int(metrics.horizontalPadding)))"))
+    #expect(body.contains(".padding(.vertical, \(Int(metrics.verticalPadding)))"))
+    #expect(body.contains(".lineLimit(\(metrics.lineLimit))"))
+    #expect(body.contains(".font(.system(.caption2, design: .rounded).weight(.semibold))"))
+    // 그 폰트를 AppKit 으로 되짚은 값이 판정이 쓰는 폰트다(10pt · rounded · semibold).
+    #expect(metrics.font.pointSize == NSFont.preferredFont(forTextStyle: .caption2).pointSize)
+    #expect(metrics.font.fontName.contains("Rounded"))
+    #expect(metrics.textWidth == metrics.capsuleMaxWidth - metrics.horizontalPadding * 2)
+    // 알림 캡슐은 화살표가 붙을 때 캡슐을 넓혀 **텍스트 폭을 그대로** 지킨다(같은 파일에 있어 값으로 읽는다).
+    #expect(OverlayMessageBubble.maxSize.width == metrics.capsuleMaxWidth)
+    #expect(OverlayMessageBubble.maxSize.height
+        == CGFloat(metrics.lineLimit) * metrics.lineHeight + metrics.verticalPadding * 2)
+}
+
+/// 실사용 렌더 경로와 **같은 방식**으로 말풍선 하나를 그린다 — 갈래는 문구가 정한다
+/// (CheckOverlayCharacterView 가 `OverlayMessageBubble.isArrival` 로 가르는 것과 같은 판정).
+@MainActor
+private func overlayBubblePNG(
+    text: String, onOpenMessages: (() -> Void)? = nil, scale: CGFloat = 2
+) throws -> Data {
+    let content = ZStack(alignment: .topLeading) {
+        Color.clear
+        Group {
+            if OverlayMessageBubble.isArrival(text) {
+                CheckMessageArrivalBubble(text: text, onOpenMessages: onOpenMessages)
+            } else {
+                CheckGreetingBubble(text: text)
+            }
+        }
+        .padding(.leading, 4)
+        .padding(.top, 8)
+    }
+    .frame(width: CheckOverlayController.panelSize.width, height: CheckOverlayController.panelSize.height)
+    return try renderPNG(content, scale: scale)
+}
+
+/// 옛 경로 그대로(갈래 판정 없이 CheckGreetingBubble) 그린다 — 짧은 갈래 회귀 비교의 기준선.
+@MainActor
+private func greetingBubblePNG(text: String, scale: CGFloat = 2) throws -> Data {
+    let content = ZStack(alignment: .topLeading) {
+        Color.clear
+        CheckGreetingBubble(text: text)
+            .padding(.leading, 4)
+            .padding(.top, 8)
+    }
+    .frame(width: CheckOverlayController.panelSize.width, height: CheckOverlayController.panelSize.height)
+    return try renderPNG(content, scale: scale)
+}
+
+@MainActor
+private func renderPNG<Content: View>(_ content: Content, scale: CGFloat = 3) throws -> Data {
+    let renderer = ImageRenderer(content: content)
+    renderer.scale = scale
+    let image = try #require(renderer.nsImage)
+    let tiff = try #require(image.tiffRepresentation)
+    let bitmap = try #require(NSBitmapImageRep(data: tiff))
+    return try #require(bitmap.representation(using: .png, properties: [:]))
+}
+
+/// 픽셀 래스터(RGBA 바이트). **PNG 바이트를 == 로 비교하지 않는 이유**: 같은 그림이라도 인코딩이 흔들린다 —
+/// 전체 스위트를 함께 돌릴 때 짧은 말풍선 두 장이 19508 / 19506 바이트로 갈렸다(단독 실행에선 같았다).
+/// 회귀 못은 **픽셀**로 박아야 한다.
+private func overlayBubbleRaster(_ png: Data) throws -> (width: Int, height: Int, bytes: [UInt8], stride: Int, spp: Int) {
+    let bitmap = try #require(NSBitmapImageRep(data: png))
+    let pointer = try #require(bitmap.bitmapData)
+    let count = bitmap.bytesPerRow * bitmap.pixelsHigh
+    return (
+        bitmap.pixelsWide, bitmap.pixelsHigh,
+        Array(UnsafeBufferPointer(start: pointer, count: count)),
+        bitmap.bytesPerRow, bitmap.samplesPerPixel
+    )
+}
+
+/// 투명하지 않은 픽셀 수. 두 이미지를 "같다"로 비교하기 전에 **둘 다 비어 있지 않음**을 확인하는 데 쓴다 —
+/// 빈 이미지끼리는 언제나 같아서, 그 비교는 아무것도 증명하지 못한다
+/// (ImageRenderer 가 어떤 뷰를 통째로 못 그리는 사례가 이 저장소에 이미 있었다).
+private func overlayBubbleInkCount(_ png: Data) throws -> Int {
+    let raster = try overlayBubbleRaster(png)
+    guard raster.spp == 4 else { return raster.width * raster.height }
+    var ink = 0
+    for y in 0..<raster.height {
+        for x in 0..<raster.width where raster.bytes[y * raster.stride + x * 4 + 3] > 12 {
+            ink += 1
+        }
+    }
+    return ink
+}
+
+/// 두 렌더에서 눈에 띄게 다른 픽셀 수(채널 차이가 `tolerance` 를 넘는 픽셀). 렌더러가 프레임마다 흘리는
+/// 안티에일리어싱 잔떨림은 삼키고, 글리프가 실제로 달라진 것은 수백~수천 픽셀로 잡힌다.
+private func overlayBubblePixelDiff(_ lhs: Data, _ rhs: Data, tolerance: UInt8 = 8) throws -> Int {
+    let a = try overlayBubbleRaster(lhs)
+    let b = try overlayBubbleRaster(rhs)
+    #expect(a.width == b.width && a.height == b.height)
+    guard a.width == b.width, a.height == b.height else { return .max }
+    var diff = 0
+    for y in 0..<a.height {
+        for x in 0..<a.width {
+            let base = y * a.stride + x * a.spp
+            for channel in 0..<a.spp where UInt8(abs(Int(a.bytes[base + channel]) - Int(b.bytes[base + channel]))) > tolerance {
+                diff += 1
+                break
+            }
+        }
+    }
+    return diff
+}
+
+// MARK: - 말풍선 스냅샷 덤프 (CHECK_REACTION_SNAPSHOT_DIR 지정 시에만 기록, 접두어 bubble-)
+
+@MainActor
+@Test
+func dumpMessageBubbleSnapshots() throws {
+    guard let dir = ProcessInfo.processInfo.environment["CHECK_REACTION_SNAPSHOT_DIR"] else { return }
+    let base = URL(fileURLWithPath: dir, isDirectory: true)
+    try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+    let scnPNG = try #require(CheckCharacter3DScene.renderSnapshotPNG())
+    let character = try #require(NSImage(data: scnPNG))
+
+    func dump(_ file: String, name: String, body: String, wired: Bool = false) throws {
+        try writeMessageBubbleComposite(
+            background: character,
+            text: CheckOverlayController.messageBubbleText(name: name, body: body),
+            onOpenMessages: wired ? {} : nil,
+            to: base.appendingPathComponent(file)
+        )
+    }
+
+    // 경계는 상수로 적지 않고 판정에서 되찾는다 — 스냅샷이 언제나 **지금 임계**를 보여 준다.
+    let hangul = longestInlineBody(name: "이유성", glyph: "가")
+    let emoji = longestInlineBody(name: "이유성", glyph: "🎉")
+
+    try dump("bubble2-short.png", name: "이유성", body: "화이팅")                                    // 종전 그림
+    try dump("bubble2-hangul-max.png", name: "이유성", body: String(repeating: "가", count: hangul))
+    try dump("bubble2-hangul-over.png", name: "이유성", body: String(repeating: "가", count: hangul + 1))
+    try dump("bubble2-emoji-max.png", name: "이유성", body: String(repeating: "🎉", count: emoji))
+    try dump("bubble2-emoji-over.png", name: "이유성", body: String(repeating: "🎉", count: emoji + 1))
+    try dump("bubble2-longname.png", name: "가나다라마바사아자차카타", body: "오늘 고생 많으셨어요")
+    try dump("bubble2-longname-emoji.png", name: "🎉🎉🎉🎉🎉🎉🎉🎉", body: "오늘 고생 많으셨어요")
+    try dump("bubble2-200.png", name: "이유성", body: String(repeating: "안녕하세요 ", count: 40))    // 200자 → 알림형
+    try dump("bubble2-200-wired.png", name: "이유성", body: String(repeating: "안녕하세요 ", count: 40), wired: true)
+    try dump("bubble2-real-sentence.png", name: "이유성", body: "회의 5분 뒤에 시작해요")
+}
+
+/// 캐릭터 렌더 위에 **실사용과 같은 갈래 판정**으로 말풍선을 얹어 저장한다.
+@MainActor
+private func writeMessageBubbleComposite(
+    background: NSImage, text: String, onOpenMessages: (() -> Void)?, to url: URL
+) throws {
+    let content = ZStack(alignment: .topLeading) {
+        Image(nsImage: background)
+            .resizable()
+            .scaledToFit()
+        Group {
+            if OverlayMessageBubble.isArrival(text) {
+                CheckMessageArrivalBubble(text: text, onOpenMessages: onOpenMessages)
+            } else {
+                CheckGreetingBubble(text: text)
+            }
+        }
+        .padding(.leading, 4)
+        .padding(.top, 8)
+    }
+    .frame(width: CheckOverlayController.panelSize.width, height: CheckOverlayController.panelSize.height)
+    try renderPNG(content).write(to: url)
 }
 
 @MainActor

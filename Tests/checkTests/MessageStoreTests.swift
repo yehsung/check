@@ -2,8 +2,11 @@ import Foundation
 import Testing
 @testable import check
 
-// 짧은 메시지(최대 3글자)의 **스토어 계약** — 보내기 결과 7종의 상태/문구, 60초 쿨타임 미러와 카운트다운,
-// 그리고 "메시지는 찔림 리액션을 타지 않는다"는 수신 라우팅.
+// 메시지의 **스토어 계약** — 보내기 결과 아홉 종의 상태/문구와 "메시지는 찔림 리액션을 타지 않는다"는 수신 라우팅.
+//
+// ★ **v0.2.49 에서 쿨타임 검증이 통째로 사라졌다.** 서버가 메시지 쿨타임을 폐지했기 때문이다(찌르기만 60초).
+//   이 파일에 `messageCooldown*` 이 다시 등장하면 그건 화면에 카운트다운이 돌아왔다는 뜻이다 —
+//   회귀 방어는 V0249MessageWindowTests 의 소스 계약 테스트가 맡는다(호출 0회를 센다).
 //
 // 메시지는 찔림과 같은 표(pokes)·같은 RPC(take_pokes)·같은 폴링(15초)을 탄다. 그래서 이 스위트의 절반은
 // **회귀 방어**다: 찔림/울트라가 한 톨도 안 바뀌었는지를 같은 파일에서 대조군으로 잰다. 두 경로가 한 응답에서
@@ -116,8 +119,6 @@ import Testing
 
         #expect(store.messageNotice == WorkTimerStore.messageNotWorkingNotice)
         #expect(sendRequestCount(host: host) == 0)
-        // 쿨타임을 태우지 않았다 — 안 나간 요청이 다음 시도를 막으면 사용자는 영영 못 보낸다.
-        #expect(store.messageCooldownUntil["target"] == nil)
     }
 
     /// 로그아웃 상태에서는 문구조차 남기지 않는다(sendPoke 와 같다 — 그 화면엔 볼 사람이 없다).
@@ -135,9 +136,10 @@ import Testing
 
     // MARK: - 보내기: 결과 7종
 
-    /// ① ok — 문구를 남기고 60초 쿨타임 미러를 세운다. **성공에도 말하는 것**이 찌르기와 다른 점이다:
+    /// ① ok — 문구를 남긴다. **성공에도 말하는 것**이 찌르기와 다른 점이다:
     /// 글자를 골라 넣은 뒤의 침묵은 "보내진 건가?"로 남는다.
-    @Test func sendMessageOkSpeaksAndStartsCooldownMirror() async {
+    /// **쿨타임 미러는 세우지 않는다**(v0.2.49 — 서버가 메시지 쿨타임을 폐지했다).
+    @Test func sendMessageOkSpeaksAndLocksNothing() async {
         let host = "msg-send-ok"
         let store = makeStore(host: host)
 
@@ -145,21 +147,27 @@ import Testing
 
         #expect(store.messageNotice == WorkTimerStore.messageSentNotice)
         #expect(sendRequestCount(host: host) == 1)
-        #expect(store.messageCooldownUntil["target"] == Self.frozenNow.addingTimeInterval(60))
         // 왕복이 끝나면 잠금이 풀린다 — 안 풀리면 그 세션에서 다시는 못 보낸다.
         #expect(!store.isSendingMessage)
+        // 곧바로 또 보낼 수 있다. 이것이 "쿨타임 없이"의 실제 내용이다 —
+        // 옛 구현은 여기서 60초 미러를 세워 두 번째 전송을 막았다.
+        store.messageNotice = nil
+        await send(store)
+        #expect(store.messageNotice == WorkTimerStore.messageSentNotice)
+        #expect(sendRequestCount(host: host) == 2)
     }
 
-    /// ② cooldown — 서버가 알려 준 잔여로 미러를 **덮고**, 그 숫자를 문장에 그대로 싣는다.
-    /// 로컬 60초 추측으로 덮으면 "42초 뒤"라고 말하면서 60초를 잠그는 모순이 된다.
-    @Test func sendMessageCooldownUsesServerRetrySeconds() async {
+    /// ② cooldown — **서버가 이 status 를 영원히 내지 않는다**(찌르기 전용이 됐다). 그래도 낡은 서버가
+    /// 보내는 극단에서 옛 앱이 카운트다운을 되살리면 안 되므로, 조용한 일반 안내로 접히는지 못 박는다.
+    /// 숫자가 문장에 새면 그건 이름만 다른 쿨타임이다.
+    @Test func sendMessageLegacyCooldownStatusFoldsToQuietNotice() async {
         let store = makeStore(host: "msg-send-cooldown")
 
         await send(store)
 
-        #expect(store.messageNotice == WorkTimerStore.messageCooldownNotice(seconds: 42))
-        #expect(store.messageNotice == "방금 보낸 상대예요. 42초 뒤에 다시 보낼 수 있어요")
-        #expect(store.messageCooldownUntil["target"] == Self.frozenNow.addingTimeInterval(42))
+        #expect(store.messageNotice == WorkTimerStore.messageInvalidNotice)
+        #expect(store.messageNotice?.contains("42") != true, "쿨타임 잔여 초가 화면 문구로 샜다")
+        #expect(store.messageNotice?.contains("초") != true, "카운트다운 어휘가 되살아났다")
     }
 
     /// ③ not_working — 서버가 낸 것도 클라 선게이트와 **같은 문구**다. 두 벌이면 사용자는 같은 실패를
@@ -170,7 +178,6 @@ import Testing
         await send(store)
 
         #expect(store.messageNotice == WorkTimerStore.messageNotWorkingNotice)
-        #expect(store.messageCooldownUntil["target"] == nil)
     }
 
     /// ④ target_not_working — 대상이 자리에 없다. 두루뭉술한 invalid 문구로 접히면 사용자는 사정을 모른 채
@@ -188,7 +195,6 @@ import Testing
         // invalid 로 접히던 옛 동작과의 차이를 못 박는다(두 문구가 같아지면 이 분기는 있으나 마나다).
         #expect(store.messageNotice != WorkTimerStore.messageInvalidNotice)
         #expect(sendRequestCount(host: host) == 1)
-        #expect(store.messageCooldownUntil["target"] == nil)
     }
 
     /// ⑤ target_focused — **클라는 집중 모드를 판정하지 않는다**. 요청은 실제로 나가고, 서버 판정 하나로
@@ -204,66 +210,91 @@ import Testing
 
         #expect(store.messageNotice == WorkTimerStore.messageTargetFocusedNotice)
         #expect(sendRequestCount(host: host) == 1)
-        #expect(store.messageCooldownUntil["target"] == nil)
+        // ★ **쿨타임이 폐지된 지금 이것이 유일한 수신 거부 수단이다.** `.invalid` 로 접히면
+        //   "왜 안 가는지"를 말할 수 있는 문장이 앱에서 통째로 사라진다.
+        #expect(store.messageNotice != WorkTimerStore.messageInvalidNotice)
     }
 
-    /// ⑤' target_outdated — 상대가 아직 메시지를 모르는 버전이다(v0.2.28 의 실사고 수습으로 생긴 status).
-    /// 다른 거절과 **다른 점 하나**: 사용자가 할 수 있는 일이 있다. 그래서 문구가 그 일을 가리켜야 하고
-    /// (상대의 업데이트), `.invalid` 의 "지금은 보낼 수 없어요"로 접히면 그 정보가 통째로 사라진다.
-    /// 쿨타임은 태우지 않고(서버가 행을 안 남긴다), 낡은 '메시지 가능' 배지를 고치려 디렉토리를 다시 읽는다.
-    @Test func sendMessageTargetOutdatedTellsWhoMustUpdate() async {
+    /// ⑤' target_outdated — **죽은 가지다**(v0.2.49 — 최소 빌드 게이트가 폐기됐다. 모든 버전이 받는다).
+    /// 서버는 더 이상 이 status 를 내지 않지만, 낡은 서버가 보내는 극단에서 옛 문구("상대가 앱을
+    /// 업데이트해야 받을 수 있어요")가 되살아나면 사용자는 있지도 않은 원인을 고치려 든다.
+    /// 조용한 일반 안내로 접히는 것이 계약이다.
+    @Test func sendMessageLegacyTargetOutdatedFoldsToQuietNotice() async {
         let host = "msg-send-outdated"
         let store = makeStore(host: host)
 
         await send(store)
 
-        #expect(store.messageNotice == WorkTimerStore.messageTargetOutdatedNotice)
-        #expect(store.messageNotice == "상대가 앱을 업데이트해야 받을 수 있어요")
-        // 두루뭉술한 문구로 접히지 않았다는 증거(두 문장이 같아지면 이 분기는 있으나 마나다).
-        #expect(store.messageNotice != WorkTimerStore.messageInvalidNotice)
-        #expect(store.messageNotice != WorkTimerStore.messageTargetNotWorkingNotice)
+        #expect(store.messageNotice == WorkTimerStore.messageInvalidNotice)
+        #expect(store.messageNotice?.contains("업데이트") != true, "폐기된 최소 빌드 게이트 문구가 되살아났다")
         #expect(sendRequestCount(host: host) == 1)
-        // ★ 쿨타임 미소모: 받을 수 없는 사람에게 보낸 실패가 60초를 태우면 그건 벌이다.
-        #expect(store.messageCooldownUntil["target"] == nil)
-        #expect(store.messageCooldownRemaining(for: "target", now: Self.frozenNow) == 0)
-        // 찌르기 상태는 한 톨도 안 움직인다(구버전 상대에게도 찔림은 그대로 간다).
+        // 찌르기 상태는 한 톨도 안 움직인다.
         #expect(store.pokeCooldownUntil["target"] == nil)
         #expect(store.pokeNotice == nil)
-        // 배지가 낡았다는 뜻이므로 디렉토리를 재조회한다(targetNotWorking 과 같은 규약).
-        await waitUntil {
-            URLProtocolStub.requests(forHost: host)
-                .contains { $0.url?.path == "/rest/v1/rpc/app_user_directory" }
-        }
-        #expect(
-            URLProtocolStub.requests(forHost: host)
-                .contains { $0.url?.path == "/rest/v1/rpc/app_user_directory" }
-        )
     }
 
-    /// ⑥ too_long(서버 판정) — 3글자 이하를 보냈는데도 서버가 거절하면 그 답을 그대로 옮긴다.
-    /// 서버 상한이 바뀌는 날 클라가 "3글자까지"라 우기지 않도록, 판정의 권위는 응답에 둔다.
-    @Test func sendMessageServerTooLongSpeaksLengthNotice() async {
+    /// ⑥ too_long(서버 판정) — 상한 안의 글을 보냈는데도 서버가 거절하면 그 답을 그대로 옮기고,
+    /// **서버가 알려 준 숫자(max_length)를 문장에 싣는다.** 클라 상수와 갈리는 날 사용자가 보는 숫자는
+    /// 실제로 거절한 쪽의 것이어야 한다("200자인데 왜 안 가지"를 만들지 않는다).
+    @Test func sendMessageServerTooLongSpeaksServerLimit() async {
         let host = "msg-send-too-long"
         let store = makeStore(host: host)
 
         await send(store, body: "굿")
 
-        #expect(store.messageNotice == WorkTimerStore.messageTooLongNotice)
-        #expect(store.messageNotice == "메시지는 \(MessageBody.maxCharacters)글자까지예요. 줄여서 보내 주세요")
+        // 스텁이 max_length: 140 을 실어 준다 — 클라 상수(200)가 아니라 그 숫자가 나와야 한다.
+        #expect(store.messageNotice == WorkTimerStore.messageTooLongNotice(maxLength: 140))
+        #expect(store.messageNotice == "메시지는 140자까지예요. 줄여서 보내 주세요")
+        #expect(store.messageNotice != WorkTimerStore.messageTooLongNotice())
         #expect(sendRequestCount(host: host) == 1)
     }
 
-    /// ⑥' too_long(클라 사전 게이트) — 4글자는 **네트워크를 타지 않고** 같은 문구로 즉답한다.
+    /// ⑥' too_long(클라 사전 게이트) — 201 코드포인트는 **네트워크를 타지 않고** 같은 문구로 즉답한다.
     /// 로컬 거절을 throw 로 만들면 같은 실패가 catch 와 switch 두 곳에서 다뤄지고, 그 둘은 반드시 갈린다.
     @Test func sendMessageOverLengthNeverReachesNetwork() async {
         let host = "msg-send-overlength"
         let store = makeStore(host: host)
 
-        await send(store, body: "네글자다")
+        await send(store, body: String(repeating: "가", count: MessageBody.maxLength + 1))
 
-        #expect(store.messageNotice == WorkTimerStore.messageTooLongNotice)
+        #expect(store.messageNotice == WorkTimerStore.messageTooLongNotice(maxLength: MessageBody.maxLength))
         #expect(MessageURLProtocolStub.paths(forHost: host).isEmpty)
-        #expect(store.messageCooldownUntil["target"] == nil)
+    }
+
+    /// ⑦ not_text — 서버의 텍스트 난간. **길이 문구와 합치면 안 된다**: 이유가 길이라고 읽으면
+    /// 사용자는 글자를 줄이고, 줄여도 계속 막힌다.
+    @Test func sendMessageNotTextHasItsOwnSentence() async {
+        let host = "msg-send-not-text"
+        let store = makeStore(host: host)
+
+        await send(store)
+
+        #expect(store.messageNotice == WorkTimerStore.messageNotTextNotice)
+        #expect(store.messageNotice != WorkTimerStore.messageTooLongNotice())
+        #expect(store.messageNotice != WorkTimerStore.messageInvalidNotice)
+    }
+
+    /// ⑧ blackout — 서버가 기능을 통째로 내려 둔 구간. **"다시 시도"를 말하지 않는다**:
+    /// 우리가 올릴 때까지 안 풀리는 상태라 재시도를 권하면 같은 실패를 반복하게 만든다.
+    @Test func sendMessageBlackoutDoesNotAskForRetry() async {
+        let store = makeStore(host: "msg-send-blackout")
+
+        await send(store)
+
+        #expect(store.messageNotice == WorkTimerStore.messageBlackoutNotice)
+        #expect(store.messageNotice?.contains("다시 시도") != true)
+    }
+
+    /// ⑨ flood — **속도 제한 UI 로 보이면 안 된다**(1분 60건은 사람이 못 내는 속도다).
+    /// 조용한 일반 안내로 접힌다: 남은 초를 세거나 문장에 숫자를 실으면 그건 이름만 다른 쿨타임이다.
+    @Test func sendMessageFloodIsQuietAndNeverACountdown() async {
+        let store = makeStore(host: "msg-send-flood")
+
+        await send(store)
+
+        #expect(store.messageNotice == WorkTimerStore.messageInvalidNotice)
+        #expect(store.messageNotice?.contains("초") != true, "flood 안내에 카운트다운 어휘가 들어갔다")
+        #expect(store.messageNotice?.contains("60") != true, "서버 retry_after 가 화면 문구로 샜다")
     }
 
     /// ⑦ invalid — 공백만 입력한 경우도 같은 자리로 떨어지고 요청은 0건이다.
@@ -285,19 +316,20 @@ import Testing
         await send(store)
 
         #expect(store.messageNotice == WorkTimerStore.messageInvalidNotice)
-        #expect(store.messageCooldownUntil["target"] == nil)
     }
 
-    /// 네트워크/스키마 실패는 쿨타임을 태우지 않는다 — 마이그레이션 미적용 서버에서 메시지만 조용히 못 쓰고
-    /// 찌르기는 그대로 산다는 계약이라, 여기서 잠그면 서버가 고쳐진 뒤에도 60초를 기다린다.
-    @Test func sendMessageTransportFailureKeepsCooldownIntact() async {
+    /// 네트워크/스키마 실패는 **초안을 지우지 않고** 잠금도 남기지 않는다 — 마이그레이션 미적용 서버에서
+    /// 메시지만 조용히 못 쓰고 찌르기는 그대로 산다는 계약이다.
+    @Test func sendMessageTransportFailureKeepsDraftAndUnlocks() async {
         let store = makeStore(host: "msg-send-boom")
+        store.selectedMessagePeerID = "target"
+        store.messageDraft = "다시 보내 볼 말"
 
         await send(store)
 
         #expect(store.messageNotice == "연결이 불안정해요. 잠시 후 다시 시도해 주세요")
-        #expect(store.messageCooldownUntil["target"] == nil)
         #expect(!store.isSendingMessage)
+        #expect(store.messageDraft == "다시 보내 볼 말", "실패에 초안을 지웠다 — 사용자는 그 말을 다시 못 쓴다")
     }
 
     // MARK: - 보내기: 중복 방지
@@ -322,38 +354,31 @@ import Testing
         #expect(!store.isSendingMessage)
     }
 
-    // MARK: - 쿨타임 카운트다운(얼린 시계)
+    // MARK: - 쿨타임 부재(v0.2.49)
 
-    /// 잔여 초는 displayNow 기준으로 매초 줄어들고 0에서 멈춘다(pokeCooldownRemaining 과 같은 규약).
-    /// 시계를 얼렸으므로 이 숫자들은 부하와 무관하게 항상 같다.
-    @Test func messageCooldownCountsDownAndFloorsAtZero() async {
-        let store = makeStore(host: "msg-cooldown-countdown")
-
-        await send(store)
-
-        let base = Self.frozenNow
-        #expect(store.messageCooldownRemaining(for: "target", now: base) == 60)
-        #expect(store.messageCooldownRemaining(for: "target", now: base.addingTimeInterval(30)) == 30)
-        #expect(store.messageCooldownRemaining(for: "target", now: base.addingTimeInterval(59.5)) == 1)
-        #expect(store.messageCooldownRemaining(for: "target", now: base.addingTimeInterval(60)) == 0)
-        // 지나간 쿨타임이 음수로 새면 UI 가 "-3초 뒤"라고 말한다.
-        #expect(store.messageCooldownRemaining(for: "target", now: base.addingTimeInterval(600)) == 0)
-        // 보낸 적 없는 상대는 처음부터 0이다(모름을 잠금으로 읽지 않는다).
-        #expect(store.messageCooldownRemaining(for: "someone-else", now: base) == 0)
-    }
-
-    /// 메시지 쿨타임은 **찌르기 쿨타임과 다른 칸**이다. 한 칸을 나눠 쓰면 메시지를 보낸 직후 찌르기가 잠기고,
-    /// 그건 서버 규칙(두 RPC 가 각자 쿨타임을 센다)과 어긋난 화면이다. 결과 문구 칸도 같은 이유로 갈려 있다.
-    @Test func messageStateDoesNotLeakIntoPokeState() async {
+    /// **메시지 상태는 찌르기 상태로 새지 않는다.** 한 칸을 나눠 쓰면 메시지를 보낸 직후 찌르기가 잠기고,
+    /// 그건 서버 규칙(찌르기만 60초를 센다)과 어긋난 화면이다.
+    ///
+    /// 그리고 이 테스트가 **쿨타임 폐지의 대조군**이다: 같은 틱에 찌르기는 여전히 60초를 잠근다.
+    /// 둘이 함께 풀리면 그건 메시지를 고치다 찌르기 쿨타임까지 지운 것이다.
+    @Test func messageStateDoesNotLeakIntoPokeState() async throws {
         let store = makeStore(host: "msg-cooldown-no-leak")
         store.pokeNotice = "이전 찌르기 안내"
 
         await send(store)
 
-        #expect(store.messageCooldownRemaining(for: "target", now: Self.frozenNow) == 60)
         #expect(store.pokeCooldownRemaining(for: "target", now: Self.frozenNow) == 0)
         #expect(store.pokeCooldownUntil["target"] == nil)
         #expect(store.pokeNotice == "이전 찌르기 안내")
+
+        // 대조군: 찌르기는 그대로 60초를 잠근다. (sendPoke 의 미러는 주입 시계가 아니라 실시계로 서므로
+        // 기준을 그 미러가 세운 만료 시각에서 되돌려 잡는다 — 벽시계 값을 단언에 섞지 않기 위해서다.)
+        store.sendPoke(to: "target")
+        await waitUntil { store.pokeCooldownUntil["target"] != nil }
+        let pokeUntil = try #require(store.pokeCooldownUntil["target"])
+        #expect(store.pokeCooldownRemaining(for: "target", now: pokeUntil.addingTimeInterval(-60)) == 60)
+        #expect(store.pokeCooldownRemaining(for: "target", now: pokeUntil) == 0)
+        #expect(WorkTimerStore.pokeCooldownSeconds == 60)
     }
 
     // MARK: - 수신 라우팅(순수 함수)
@@ -866,7 +891,6 @@ import Testing
         #expect(store.pokeCooldownUntil["target"] != nil)
         #expect(store.pokeNotice == nil)                       // ok → 안내 해제(찌르기는 성공에 말하지 않는다)
         #expect(store.messageNotice == nil)
-        #expect(store.messageCooldownUntil.isEmpty)
         #expect(store.receivedMessages.isEmpty)
         #expect(!store.isSendingMessage)
         // 찌르기가 메시지 RPC 를 부르지 않는다(경로가 한 몸이 되면 여기가 깨진다).
@@ -994,12 +1018,20 @@ private final class MessageURLProtocolStub: URLProtocol {
         if path == takePath { return (200, takenRowsJSON(scenario: scenario)) }
         if path == pokePath { return (200, #"{"status":"ok"}"#) }
         switch scenario {
+        // ↓ cooldown/target_outdated 는 **서버가 더 이상 내지 않는 status** 다. 그래도 스텁에 남긴 이유는
+        //   "낡은 서버가 보내도 옛 UI 가 되살아나지 않는가"를 재기 위해서다(둘 다 조용한 일반 안내로 접힌다).
         case "msg-send-cooldown":       return (200, #"{"status":"cooldown","retry_after_seconds":42}"#)
+        case "msg-send-not-text":       return (200, #"{"status":"not_text","max_length":200}"#)
+        case "msg-send-blackout":       return (200, #"{"status":"blackout"}"#)
+        // flood 는 retry_after_seconds 를 실어 보낸다 — 그 숫자가 화면 문구로 새지 않는지 재는 자다.
+        case "msg-send-flood":          return (200, #"{"status":"flood","code":"MESSAGE_FLOOD","retry_after_seconds":60}"#)
         case "msg-send-not-working":    return (200, #"{"status":"not_working"}"#)
         case "msg-send-target-away":    return (200, #"{"status":"target_not_working"}"#)
         case "msg-send-focused":        return (200, #"{"status":"target_focused"}"#)
         case "msg-send-outdated":       return (200, #"{"status":"target_outdated"}"#)
-        case "msg-send-too-long":       return (200, #"{"status":"too_long"}"#)
+        // max_length 를 **클라 상수와 다른 값**으로 준다: 화면이 서버 숫자를 쓰는지 클라 상수를 쓰는지 갈라 보려면
+        // 두 값이 달라야 한다(같으면 어느 쪽을 읽어도 통과한다).
+        case "msg-send-too-long":       return (200, #"{"status":"too_long","max_length":140}"#)
         // 미래에 서버가 늘릴 status. 옛 앱이 크래시하지 않고 invalid 로 접히는지 보는 자다.
         case "msg-send-unknown-status": return (200, #"{"status":"target_saturated"}"#)
         // 마이그레이션 미적용 서버(RPC 없음) 재현 — 스토어의 catch 로 떨어진다.

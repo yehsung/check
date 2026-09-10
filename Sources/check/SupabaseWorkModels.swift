@@ -1251,6 +1251,10 @@ struct PokeSendResponse: Decodable, Equatable {
     /// 초인종만 삼켜졌다는 뜻이다(키스위치가 내려가 있으면 정상 진행). 이걸 실패로 읽으면
     /// v0.2.34 사용자 전원이 "찌르기 실패"를 본다 — 출시 시점의 기본값이 삼킴이기 때문이다.
     var ring: String?
+    /// send_message 가 `too_long` / `not_text` 와 함께 실어 주는 서버 상한(코드포인트). nil = 안 알려 줬다.
+    /// **화면 문구는 이 값이 있으면 이 값을 쓴다** — 클라 상수(MessageBody.maxLength)와 서버가 갈리는 날,
+    /// 사용자가 보는 숫자는 실제로 거절한 쪽의 것이어야 한다(그래야 "200자인데 왜 안 가지"가 안 생긴다).
+    var maxLength: Int?
 
     enum CodingKeys: String, CodingKey {
         case status
@@ -1259,6 +1263,7 @@ struct PokeSendResponse: Decodable, Equatable {
         case ultraRemaining
         case ultraBalance
         case ring
+        case maxLength
     }
 
     init(
@@ -1267,7 +1272,8 @@ struct PokeSendResponse: Decodable, Equatable {
         resetAfterSeconds: Int? = nil,
         ultraRemaining: Int? = nil,
         ultraBalance: Int? = nil,
-        ring: String? = nil
+        ring: String? = nil,
+        maxLength: Int? = nil
     ) {
         self.status = status
         self.retryAfterSeconds = retryAfterSeconds
@@ -1275,6 +1281,7 @@ struct PokeSendResponse: Decodable, Equatable {
         self.ultraRemaining = ultraRemaining
         self.ultraBalance = ultraBalance
         self.ring = ring
+        self.maxLength = maxLength
     }
 
     init(from decoder: Decoder) throws {
@@ -1288,6 +1295,8 @@ struct PokeSendResponse: Decodable, Equatable {
         ultraRemaining = try container.decodeIfPresent(Int.self, forKey: .ultraRemaining)
         ultraBalance = try container.decodeIfPresent(Int.self, forKey: .ultraBalance)
         ring = try container.decodeIfPresent(String.self, forKey: .ring)
+        // ★ 이 줄을 빼고 CodingKey 만 더하면 값은 **영원히 nil** 이다(바로 위 네 줄과 같은 함정).
+        maxLength = try container.decodeIfPresent(Int.self, forKey: .maxLength)
     }
 
     /// 스토어가 `ultraRemainingToday` 에 **그대로 대입할** 값(음수 방어만 한다). 상한 클램프를 여기서 하지 않는 이유는
@@ -1768,7 +1777,23 @@ enum DrainOutcome: Equatable, Sendable {
     var isOK: Bool { if case .ok = self { return true }; return false }
 }
 
-// MARK: - 3글자 메시지 (계약 타입)
+// MARK: - 메시지 (계약 타입) — v0.2.49 에서 "3글자"가 사라졌다
+//
+// 사용자 요청(2026-09-10): "3글자 제한도 없애줘. 진짜 메신저 앱처럼."
+// 서버가 상한을 **200 코드포인트**로 올렸고, 쿨타임을 폐지했다(찌르기만 60초를 유지한다).
+//
+// ── 바뀐 규칙 둘 ──
+// ① 상한 3 → 200 (`MessageBody.maxLength`).
+// ② 세는 단위: 자소(`String.count`) → **유니코드 스칼라**(`unicodeScalars.count`).
+//
+// ★ ②가 ①보다 중요하다. 3글자 시절에는 이모지를 **입력 자체에서 막아** 두 계산이 갈릴 여지를 없앴다
+//   (👨‍👩‍👧‍👦 = Swift 자소 1 / Postgres char_length 7). 200자 메신저에서 이모지 금지는 말이 안 되고,
+//   이모지를 받는 순간 자소로 세면 화면은 "1/200"인데 서버만 too_long 으로 거절한다 —
+//   사용자가 원인을 알 수 없는 종류의 버그다. 그래서 카운터·사전 게이트·서버가 **같은 단위**를 센다.
+//
+// **쿨타임 타입은 여기 없다.** send_message 는 이제 `cooldown` 을 영원히 내지 않는다(찌르기 전용 규칙이 됐다).
+// `MessageSendOutcome` 에 그 케이스를 되살리지 마라 — 그 순간 화면에 카운트다운이 돌아오고,
+// 그건 사장님이 없애라고 한 바로 그것이다.
 
 /// send_message RPC 요청. { p_to: 대상 user id, p_body: 보낼 본문 }.
 /// PokeSendRequest 를 재사용하지 못하는 이유는 인자가 하나 더 있다는 것뿐이다 — **응답 규약은 그대로 공유한다**
@@ -1780,146 +1805,182 @@ struct SendMessageRequest: Encodable {
 
 /// 보내기 전 클라 판정 결과. status 어휘를 서버와 맞춘 이유는 하나다 — 같은 실패를 두 어휘로 부르면
 /// 화면 문구가 두 벌이 되고, 그중 한 벌은 반드시 낡는다.
+///
+/// **`.unsupportedCharacters`(옛 이모지 거부)는 지웠다.** 이모지를 보내는 것이 이제 정상 사용이라
+/// 클라가 문자 종류를 판정할 이유가 없다. 서버가 여전히 `not_text` 난간을 갖고 있고, 그 판정은
+/// 서버 한 곳이다 — 클라가 자기 표를 다시 만들면 두 집합이 갈리는 순간이 곧 버그다(옛 주석이 겪은 그것).
 enum MessageBodyValidation: Equatable {
     /// 실제로 보낼 문자열(정규화 완료). 원문이 아니라 **이 값**을 서버로 보내야 한다.
     case ok(String)
+    /// 비었거나, 눈에 보이는 글자가 하나도 없다(공백·제어문자·폭 0 채움문자만 있는 입력).
     case empty
-    /// 글자·숫자·허용 문장부호가 아닌 것이 섞였다(이모지·기호·개행·탭·제어문자).
-    /// **`.empty`/`.tooLong` 에 접지 않고 케이스를 나눈 이유**: 화면이 "왜 안 되는지"를 말할 수 있어야 한다.
-    /// "3글자까지예요"를 이모지 하나에 대고 띄우면 사용자는 글자 수를 줄이려 들고, 줄여도 계속 거부당한다.
-    case unsupportedCharacters
-    case tooLong(maxCharacters: Int)
+    case tooLong(maxLength: Int)
 }
 
-/// 3글자 메시지 본문의 정규화·글자수 판정. **모델에 둔 이유**: 입력 카운터(UI)·전송 게이트(스토어)·
-/// 네트워크 계층이 같은 답을 내야 하는데, 세 곳이 각자 세면 "3/3 인데 전송이 거부되는" 화면이 만들어진다.
+/// 메시지 본문의 정규화·길이 판정. **모델에 둔 이유**: 입력 카운터(창)·전송 게이트(스토어)·네트워크 계층이
+/// 같은 답을 내야 하는데, 세 곳이 각자 세면 "200/200 인데 전송이 거부되는" 화면이 만들어진다.
 /// 판정의 최종 권위는 서버이고 여기 있는 것은 헛왕복을 줄이는 사전 게이트다(무료 플랜).
 enum MessageBody {
-    /// 사용자가 세는 글자 수 기준 상한. 서버 too_long 판정과 **같은 값이어야 한다**.
-    static let maxCharacters = 3
-
-    /// 공백 + 허용 ASCII 문장부호 20자. **서버(20260814015000)가 확정한 집합과 1:1이다** — 이 목록이 서버보다
-    /// 좁으면 사용자가 서버는 받아 줄 `^^` 를 못 치고, 넓으면 클라를 통과한 글자가 서버에서 not_text 로 거부된다.
-    /// 어느 쪽이든 "화면에선 쳐지는데 안 나가는" 증상이라, 두 집합은 갈리는 순간이 곧 버그다.
-    ///
-    /// **카테고리 판정으로는 이 집합을 만들 수 없다**(실측): `~` 는 구두점이 아니라 수학기호(Sm), `^` 는
-    /// 수식기호(Sk)라 "Symbol 거부" 규칙에 걸린다. 그래서 명시 목록이어야 한다.
-    ///
-    /// 빠진 12자는 `< > & \ $ % ` { } [ ] |` — 마크업·이스케이프·템플릿 의미가 있는 것만 골라 뺐다.
-    /// 반대로 `^^`(웃음)·`-_-`·`:)`·`...` 는 3글자 짧은 말에서 실제로 쓰이는 표현이라 **일부러 살렸다**.
-    static let allowedPunctuation: Set<Unicode.Scalar> = [
-        " ", "!", "\"", "#", "'", "(", ")", "*", "+", ",", "-", ".", "/",
-        ":", ";", "=", "?", "@", "^", "_", "~"
-    ]
+    /// 상한. **단위는 유니코드 스칼라(코드포인트)** 이고 서버 `char_length` 와 같은 눈금이다.
+    /// 이름이 `maxCharacters` 가 아닌 이유가 그 단위다 — 'Character'는 Swift 에서 자소를 뜻해
+    /// 그 이름을 그대로 두면 다음 사람이 `String.count` 로 세고, 그게 정확히 이 파일이 피하려는 사고다.
+    /// 서버 응답의 `max_length` 와 같은 값이어야 한다(응답이 알려 주면 문구는 그 값을 쓴다).
+    static let maxLength = 200
 
     /// 사용자 입력 → 실제로 보낼 문자열. 두 단계뿐이다:
     /// 1) NFC 정규화. macOS 한글 입력기·파인더에서 붙여넣은 글자는 자모 분해(NFD)로 들어온다. Swift 는 이걸
     ///    2글자로 세지만 Postgres char_length 는 6으로 세서, **클라가 통과시킨 "한글"이 서버에서 거부된다**
     ///    (실측: NFD "한글" = count 2 / scalars 6, NFC 후 = count 2 / scalars 2).
-    /// 2) 앞뒤 공백·개행 trim. 붙여넣기에 딸려 온 여백으로 거부하면 불친절하다. 반면 **가운데** 개행·탭은
-    ///    지우지 않는다 — 지우면 "가\n나"가 조용히 "가나"로 바뀌어 사용자가 안 쓴 말이 나간다. 거부가 맞다.
+    /// 2) 앞뒤 공백·개행 trim.
     ///
-    /// 예전에 여기 있던 제어문자·ZWJ·방향오버라이드 필터는 **통째로 지웠다**. 텍스트 전용 게이트(isTextOnly)가
-    /// 허용 목록으로 판정하면서, 그 문자들은 "지워야 할 것"이 아니라 "애초에 통과 못 하는 것"이 됐기 때문이다.
-    /// 지우는 방식이 필요했던 이유(ZWJ 를 지우면 이모지가 쪼개진다)도 이모지를 안 받는 순간 함께 사라졌다.
+    /// ★ **가운데 개행은 지우지 않는다.** 3글자 시절엔 개행이 애초에 못 들어왔지만, 200자 창은
+    ///   Enter 가 줄바꿈이다(전송은 ⌘Enter). 여기서 가운데를 손대면 사용자가 친 줄바꿈이 조용히 사라진다.
     static func sanitized(_ raw: String) -> String {
         raw.precomposedStringWithCanonicalMapping.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// 텍스트 전용 게이트. **서버(20260814015000)의 허용 집합과 1:1인 코드포인트 범위**로 판정한다.
+    /// 서버와 **같은 눈금**의 길이(정규화 후 코드포인트 수). 화면 카운터("N/200")도 이 값을 쓴다.
     ///
-    /// **일반 카테고리(otherLetter 등)로 열면 안 된다** — 그러면 한자(中)·가나(あ)·전각(Ａ)·태국어까지
-    /// 통과해서 클라가 서버보다 넓어지고, 사용자는 화면에선 멀쩡히 쳐지는 글자가 전송에서만 거부되는
-    /// (서버 not_text) 경험을 한다. 좁아도 같은 크기의 버그다(서버는 받아 줄 `^^` 를 못 침). 그래서 범위를 못 박는다.
+    /// `String.count`(자소)로 세지 마라 — 👨‍👩‍👧‍👦 는 자소 1 / 코드포인트 7 이라, 자소로 세면
+    /// 화면은 여유가 있다고 말하는데 서버만 too_long 으로 거절한다.
+    static func length(_ raw: String) -> Int { sanitized(raw).unicodeScalars.count }
+
+    /// 눈에 보이는 글자가 하나라도 있는가.
     ///
-    /// **이 게이트가 이모지를 막는 것은 부작용이 아니라 목적이다.** 이모지를 받으면 Swift 의 자소 수와
-    /// Postgres 의 코드포인트 수가 갈리고(👨‍👩‍👧‍👦 = 1자소 / 7코드포인트), 그 간극은 "되는 이모지와 안 되는
-    /// 이모지"라는 설명 불가능한 증상으로 나타난다. 이 집합만 받으면 두 수가 **항상 일치**한다(실측).
+    /// **왜 trim 만으로 부족한가**: 폭이 0인데 '글자'로 취급되는 문자들이 있다 — 한글 채움(U+3164)은
+    /// 일반 카테고리가 `otherLetter` 라 공백 판정을 그대로 통과한다. 이 저장소는 바로 그 문자로
+    /// **별명 사칭에 실제로 뚫린 적이 있다**(20260804010000_display_name_change.sql:54-57 이 그 기록이다).
+    /// 여기서 막지 않으면 "누가 뭘 보냈는데 내용이 없는" 빈 말풍선을 200개까지 보낼 수 있다.
     ///
-    /// 자소가 아니라 **유니코드 스칼라 단위**로 검사한다: 이모지는 여러 스칼라의 조합이라 자소 단위로 보면
-    /// 그 안에 섞인 기호·ZWJ 를 못 본다.
-    static func isTextOnly(_ text: String) -> Bool {
-        text.unicodeScalars.allSatisfy { scalar in
+    /// 반대로 **넓게 막지 않는다**: 이모지·한자·기호는 전부 보이는 글자라 통과한다. 문자 종류 판정은
+    /// 서버(`not_text`) 몫이고, 클라가 그 표를 흉내 내면 두 집합이 갈리는 순간이 곧 버그다.
+    static func hasVisibleContent(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            if scalar.properties.isWhitespace { return false }
             switch scalar.value {
-            // 한글 음절 가~힣. 조합 자모(U+1100~)는 여기 없지만, sanitized 의 NFC 합성이 정상 입력을 이 범위로
-            // 옮겨 놓는다(옛한글처럼 합성되지 않는 것은 서버와 똑같이 거부된다).
-            case 0xAC00...0xD7A3: return true
-            // 한글 호환 자모 ㄱ~ㅣ. ★ 상한이 U+3163 인 것이 핵심이다 — 바로 다음 U+3164(한글 채움)는
-            //   **폭 0인데 글자 취급**이라, 열어 두면 빈 말풍선을 3개까지 보낼 수 있다. 같은 이유로 옛한글
-            //   조합 자모(U+115F 초성 채움·U+1160 중성 채움 포함)도 통째로 밖이다.
-            //   이 저장소는 바로 그 문자들로 **별명 사칭에 실제로 뚫린 적이 있다**
-            //   (20260804010000_display_name_change.sql:54-57 이 그 사고의 기록이다).
-            case 0x3131...0x3163: return true
-            // A-Z / a-z / 0-9. **아라비아-인도 숫자(٣ U+0663)는 여기 없다** — 카테고리로 열면 그것도
-            //   '숫자'라 통과하는데 서버는 거부한다.
-            case 0x41...0x5A, 0x61...0x7A, 0x30...0x39: return true
-            default: return allowedPunctuation.contains(scalar)
+            // 폭 0 채움 문자들(한글 채움 · 초성/중성 채움 · 반각 한글 채움 · 점자 빈칸).
+            case 0x115F, 0x1160, 0x3164, 0xFFA0, 0x2800: return false
+            default: break
+            }
+            switch scalar.properties.generalCategory {
+            case .control, .format, .surrogate, .unassigned,
+                 .spaceSeparator, .lineSeparator, .paragraphSeparator:
+                return false
+            default:
+                return true
             }
         }
     }
 
-    /// 사용자가 세는 글자 수(정규화 후). Character = 확장 자소 클러스터 단위라 이모지 가족·국기·스킨톤·결합 문자를
-    /// 전부 1로 센다(실측: 👨‍👩‍👧‍👦 = 1, 🇰🇷 = 1, 👍🏻 = 1). utf16/유니코드 스칼라로 세면 같은 것들이 2~11로 세어져
-    /// 사용자가 이모지 하나를 못 보낸다. 입력 카운터("N/3")도 이 값을 써야 화면과 게이트가 어긋나지 않는다.
-    static func characterCount(_ raw: String) -> Int { sanitized(raw).count }
-
-    /// **검사 순서가 문구를 정한다.** "👍👍👍👍" 는 길이도 문자도 둘 다 위반인데, 여기서 길이를 먼저 보면
-    /// 화면이 "3글자까지예요"라고 말하고 사용자는 이모지를 세 개로 줄인 뒤 또 거부당한다. 문자 검사가 먼저다.
+    /// **검사 순서가 문구를 정한다.** 빈 판정이 먼저다 — 공백만 200자 친 입력에 "200자까지예요"라고 하면
+    /// 사용자는 글자를 줄이려 들고, 줄여도 계속 거부당한다.
     static func validate(_ raw: String) -> MessageBodyValidation {
         let normalized = sanitized(raw)
-        if normalized.isEmpty { return .empty }
-        if !isTextOnly(normalized) { return .unsupportedCharacters }
-        if normalized.count > maxCharacters { return .tooLong(maxCharacters: maxCharacters) }
+        if !hasVisibleContent(normalized) { return .empty }
+        if normalized.unicodeScalars.count > maxLength { return .tooLong(maxLength: maxLength) }
         return .ok(normalized)
     }
 }
 
 /// 메시지 전송 결과의 도메인 표현(스토어/UI 공유). 미지 status 가 .invalid 로 접히는 규약은 PokeSendOutcome 과 같다.
 ///
-/// **PokeSendOutcome 에 케이스를 더하지 않고 따로 만든 이유**: 두 RPC 의 status 어휘가 양방향으로 갈린다 —
-/// send_message 에만 too_long 이 있고, poke 에만 target_not_working·ultra_used_today 가 있다. 하나로 합치면
-/// 메시지 처리부는 절대 오지 않을 두 케이스를, 찌르기 처리부는 절대 오지 않을 too_long 을 각각 떠안는다.
-/// 이미 sendPoke 경로에 도달 불가 ultraUsedToday 분기가 하나 있고(WorkTimerStorePoke), 그건 본받을 전례가 아니라
-/// 갚아야 할 빚이다. 반대로 **전선 위 응답(PokeSendResponse)은 공유한다** — jsonb 규약이 {status, retry_after_seconds?}로
-/// 문자 그대로 같아서, DTO 를 복제하면 커스텀 디코더의 함정(옵셔널 키 누락)만 두 벌로 늘어난다.
+/// **서버 status 는 정확히 아홉이다**(20260910 계약): ok · invalid · blackout · not_working · not_text ·
+/// too_long · target_not_working · target_focused · flood.
+///
+/// ★ **`cooldown` 과 `target_outdated` 는 여기 없다 — 둘 다 죽은 가지다.**
+///   · 쿨타임은 폐지됐다(찌르기에만 남았다). 케이스를 되살리면 화면에 카운트다운이 돌아오고,
+///     그건 "메시지는 쿨타임 없이"라는 요구의 정반대다.
+///   · 최소 빌드 게이트도 폐기됐다(모든 버전이 받는다).
+///   혹시 낡은 서버가 그 문자열을 보내면 `default` 가 `.invalid` 로 접는다 — 조용한 일반 안내로 끝나고,
+///   그 자리에 카운트다운은 다시 생기지 않는다.
+///
+/// **PokeSendOutcome 과 합치지 않는 이유**: 두 RPC 의 status 어휘가 양방향으로 갈린다 —
+/// send_message 에만 too_long/not_text/flood/blackout 이 있고, poke 에만 cooldown·ultra_used_today 가 있다.
+/// 하나로 합치면 각 처리부가 절대 오지 않을 케이스를 떠안는다. 반대로 **전선 위 응답(PokeSendResponse)은
+/// 공유한다** — jsonb 규약이 {status, …}로 문자 그대로 같아서, DTO 를 복제하면 커스텀 디코더의 함정만 두 벌이 된다.
 enum MessageSendOutcome: Equatable {
     case ok
-    // ↓ 아래 거절 케이스들은 **서버 게이트가 판정하는 순서대로** 늘어놓았다. 세 함수(poke_user·ultra_poke_user·
-    //   send_message)가 같은 순서를 공유하므로, 이 목록과 SQL 을 나란히 놓고 대조할 수 있게 유지해라.
-    //   invalid → not_working(보낸이) → 본문검증 → target_not_working(대상) → target_focused →
-    //   target_outdated → cooldown
-    //   (target_outdated 의 정확한 자리는 SQL 이 확정한다. 쿨타임보다 **앞**이라는 것만이 계약이다 —
-    //    받을 수 없는 사람에게 보낸 실패가 60초를 태우면 그건 벌이다.)
+    /// 우리가 모르는 실패(그리고 미지 status). 화면은 두루뭉술한 한 문장으로 끝낸다.
     case invalid
+    /// 서버가 메시지 기능을 통째로 내려 둔 구간(점검·사고 대응).
+    case blackout
     /// 보낸이가 근무중이 아니다.
     case notWorking
-    /// 3글자를 넘었다. 서버 판정과 **클라 사전 게이트(MessageBody.validate)** 가 같은 이 status 를 쓴다.
+    /// 본문이 서버의 텍스트 난간에 걸렸다. **클라는 이 판정을 하지 않는다** — 판정이 두 벌이면 갈린다.
+    case notText
+    /// 상한을 넘었다. 동반되는 `max_length` 는 응답(PokeSendResponse.maxLength)이 나른다.
     case tooLong
-    /// 대상이 자리비움이다(v0.2.20 에서 빠졌다가 복원된 게이트). **`.invalid` 로 접으면 안 되는 이유**는
-    /// 빈도다 — 자리 비운 사람은 흔해서, 두루뭉술한 "지금은 보낼 수 없어요"를 가장 자주 보게 되는 경로가 이것이다.
-    /// 화면은 이걸 받으면 디렉토리의 근무중 배지가 낡았다는 뜻으로 읽고 재조회하는 편이 좋다(sendPoke 와 같은 규약).
-    case targetNotWorking
-    /// 대상이 집중 모드다. 쿨타임도 소모되지 않는다 — 서버가 행을 안 남긴다.
+    /// 대상이 자리비움이다. **`.invalid` 로 접으면 안 되는 이유**는 빈도다 — 자리 비운 사람은 흔해서,
+    /// 두루뭉술한 "지금은 보낼 수 없어요"를 가장 자주 보게 되는 경로가 이것이다.
     case targetFocused
-    /// 대상의 앱이 메시지를 표시하지 못하는 버전이다(서버가 profiles.app_build 로 판정한다).
-    /// **`.invalid` 로 접으면 안 되는 이유**는 targetNotWorking 과 같지만 더 무겁다 — 사용자가 할 수 있는
-    /// 일이 "기다리기"가 아니라 **"상대에게 업데이트를 알리기"** 라, 두루뭉술한 문구는 그 행동을 통째로 지운다.
-    /// 쿨타임도 소모되지 않는다(서버가 행을 안 남긴다).
-    case targetOutdated
-    case cooldown(retryAfterSeconds: Int)
+    /// 대상이 집중 모드다. **쿨타임 폐지 뒤 이것이 유일한 수신 거부 수단이다** — `.invalid` 로 접지 마라.
+    case targetNotWorking
+    /// 1분 60건 초과. **속도 제한 UI 로 보이면 안 된다**(사람이 못 내는 속도라 실사용에서 안 걸린다).
+    /// 화면은 조용한 일반 안내로 접는다 — 카운트다운을 만들면 그건 다시 쿨타임이다.
+    case flood
 
     init(response: PokeSendResponse) {
         switch response.status {
         case "ok":                  self = .ok
+        case "blackout":            self = .blackout
         case "not_working":         self = .notWorking
+        case "not_text":            self = .notText
         case "too_long":            self = .tooLong
         case "target_not_working":  self = .targetNotWorking
         case "target_focused":      self = .targetFocused
-        case "target_outdated":     self = .targetOutdated
-        case "cooldown":            self = .cooldown(retryAfterSeconds: max(1, response.retryAfterSeconds ?? 60))
+        case "flood":               self = .flood
         default:                    self = .invalid
         }
     }
+}
+
+// MARK: - 메시지 이력 (message_history RPC)
+
+/// `message_history(p_hours, p_limit)` 요청. **기본값에 기대지 않고 언제나 실어 보낸다** —
+/// 서버 기본값이 바뀌는 날 화면의 "12시간이 지나면 사라져요" 한 줄이 조용히 거짓말이 된다.
+struct MessageHistoryRequest: Encodable {
+    let pHours: Int
+    let pLimit: Int
+}
+
+/// `message_history(p_hours int default 12, p_limit int default 200)` 응답 행.
+///
+/// **소비 여부와 무관하다** — take_pokes 가 이미 원자 소비한 것도 여기 그대로 있다. 그게 이 RPC 의 존재
+/// 이유다: 말풍선은 몇 초 만에 사라지고, 그 순간 자리에 없던 사람은 내용을 볼 길이 없었다.
+///
+/// 모든 필드가 Optional 인 이유는 `TakenPokeRow.kind` 와 같다 — 앱을 먼저 배포하고 db push 가 늦은 창에서
+/// 서버가 키 하나를 안 보내면, 비옵셔널은 배열 디코드를 통째로 throw 시켜 이력이 조용히 사라진다.
+struct MessageHistoryRow: Decodable, Equatable {
+    let id: String
+    let fromUser: String?
+    let toUser: String?
+    let body: String?
+    /// timestamptz 문자열(소수초 유무 혼재) — 서비스가 parseDate 로 푼다. **epoch 가 있으면 그쪽이 이긴다.**
+    let createdAt: String?
+    /// 내가 보낸 것인가. 서버가 판정한다(클라가 from_user == 내 id 로 다시 세면 세션 세대가 갈릴 때 어긋난다).
+    let isMine: Bool?
+    /// 대화 상대(내가 보낸 것이면 받는 사람, 받은 것이면 보낸 사람). 클라가 고르지 않는다.
+    let peerUserId: String?
+    let peerDisplayName: String?
+    let peerAvatarUrl: String?
+    /// 보낸 시각의 epoch 초. **이 값이 정본이다** — ISO 소수초 파싱 함정을 피하려고 서버가 함께 내려 준다.
+    let createdEpoch: Int?
+}
+
+/// 이력 한 건(표시용). 행 자체가 완결이다(상대 이름·아바타 포함) — 미니게임 보드·제보 목록과 같은 설계.
+///
+/// ★ **body 는 사람이 쓴 문장이다.** 로그·진단 문자열로 흘리지 마라.
+struct MessageHistoryEntry: Identifiable, Equatable, Sendable {
+    /// 서버 pokes 행 id(전역 유일). 중복 제거와 ForEach 의 id 를 겸한다.
+    let id: String
+    /// 대화 상대의 user id. 왼쪽 목록의 묶음 키이자 창을 열 때 고르는 대상이다.
+    let peerUserID: String
+    let peerName: String
+    let peerAvatarURL: URL?
+    let body: String
+    let createdAt: Date
+    /// true = 내가 보낸 것(오른쪽 정렬), false = 받은 것(왼쪽 정렬 + 아바타).
+    let isMine: Bool
 }
 
 /// profiles.token_usage_public 자기 행 조회 응답.
@@ -2350,5 +2411,302 @@ enum MiniGameDayKey {
         let calendar = TeamWeeklyGoal.kstCalendar
         let yesterday = calendar.date(byAdding: .day, value: -1, to: now) ?? now.addingTimeInterval(-86_400)
         return key(for: yesterday)
+    }
+}
+
+// MARK: - 제보(버그·요청) (v0.2.48)
+//
+// 사용자가 쓴 글을 나른다. **본문은 로그·에러 메시지·테스트 픽스처 어디에도 흘리지 않는다** — 여기 타입들이
+// 지나는 자리에 `print`/`Logger` 를 붙이는 순간 남의 제보가 시스템 로그에 남는다(사용자 결정 2026-09-10).
+//
+// 판정(누가 무엇을 보는가)은 언제나 서버다. 아래 타입 중 어느 것도 권한을 결정하지 않는다 —
+// `feedback_list` 는 관리자면 전부, 아니면 자기 것만 돌려주고 그 판정은 `profiles.role = 'admin'` 하나다.
+
+/// 제보 종류. **rawValue 는 서버 `feedback_reports.kind` check 제약과 같은 값이어야 한다** — 다르면 submit 이 23514 로
+/// 죽는데, 그 실패는 사용자에게 "보내지 못했어요" 로만 보여서 원인을 추적할 수 없다(V0248FeedbackTests 가 되묻는다).
+enum FeedbackKind: String, CaseIterable, Identifiable, Equatable, Sendable {
+    case bug
+    case request
+
+    var id: String { rawValue }
+
+    /// 세그먼트 캡슐에 쓰는 한국어 이름.
+    var label: String {
+        switch self {
+        case .bug: return "버그"
+        case .request: return "요청"
+        }
+    }
+
+    /// 목록 행의 종류 배지를 경고색(버그)으로 그릴지. 색 자체(`CheckTheme`)는 뷰가 고른다 —
+    /// 모델이 SwiftUI 를 알 이유가 없다.
+    var isDanger: Bool { self == .bug }
+}
+
+/// 제보 처리 상태.
+///
+/// ★ **케이스 이름과 `rawValue` 가 일부러 다르다.** 화면이 약속한 한국어 라벨(진행 · 보류)에 맞춘 이름이
+///   `inProgress` · `held` 이고, 서버가 정한 어휘는 `doing` · `wontfix` 다
+///   (`feedback_reports.status` check 제약 — 20260910120000_feedback_reports.sql:88, `set_feedback_status`
+///   도 같은 넷만 받고 아니면 `FEEDBACK_BAD_STATUS` 를 던진다). 이름이 예쁘다고 rawValue 를 `in_progress`
+///   나 `held` 로 되돌리지 마라 — 그러면 상태 변경 RPC 가 통째로 거절되고, 화면에는 "상태를 바꾸지
+///   못했어요" 한 줄만 떠서 원인을 추적할 방법이 없다(v0.2.48 통합 전에 실제로 그랬다).
+///
+/// **`other(String)` 이 있는 이유**는 이 저장소가 이미 한 번 물린 함정이다(열거값 확장엔 능력 협상):
+/// 서버가 나중에 상태 하나를 더하면, 모르는 값을 `.open` 으로 접는 클라는 '보류된 제보'를 '미해결'로
+/// 오배달한다. 관리자는 이미 처리한 건을 다시 처리하고, 그 사실을 아무도 모른다. 모르는 값은 **접지 않고
+/// 원문 그대로** 보여 준다 — 화면이 조금 낯설어지는 편이 조용한 오배달보다 언제나 낫다.
+enum FeedbackStatus: Equatable, Hashable, Sendable {
+    case open
+    case inProgress
+    case done
+    case held
+    /// 서버가 보낸, 이 버전이 모르는 상태.
+    case other(String)
+
+    /// 서버 어휘(= `feedback_reports.status` check 제약: `'open' | 'doing' | 'done' | 'wontfix'`).
+    /// 이 문자열이 서버와 갈리면 상태 변경이 통째로 거절된다(`FEEDBACK_BAD_STATUS`).
+    /// **아래 `init(rawValue:)` 와 한 쌍이다** — 한쪽만 고치면 서버가 준 값을 `.other` 로 받아
+    /// 화면에 영문 원문이 뜨고, 되돌려 보낸 값은 거절된다.
+    var rawValue: String {
+        switch self {
+        case .open: return "open"
+        case .inProgress: return "doing"
+        case .done: return "done"
+        case .held: return "wontfix"
+        case .other(let raw): return raw
+        }
+    }
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "open": self = .open
+        case "doing": self = .inProgress
+        case "done": self = .done
+        case "wontfix": self = .held
+        default: self = .other(rawValue)
+        }
+    }
+
+    /// 칩·버튼에 쓰는 한국어 이름. 모르는 값은 **원문을 그대로** 보여 준다(위 `other` 주석).
+    var label: String {
+        switch self {
+        case .open: return "미해결"
+        case .inProgress: return "진행"
+        case .done: return "완료"
+        case .held: return "보류"
+        case .other(let raw): return raw
+        }
+    }
+
+    /// 이 상태가 '아직 손 안 댄 것'인가. 미해결 배지·기본 필터의 판정이 여기 하나다.
+    var isOpen: Bool { self == .open }
+
+    /// 필터 칩과 상태 변경 버튼이 쓰는 **아는 값**들. `other` 는 여기 없다 — 우리가 만들어 보낼 수 있는
+    /// 상태가 아니기 때문이다(서버가 보내 온 것을 보여 주기만 한다).
+    static let known: [FeedbackStatus] = [.open, .inProgress, .done, .held]
+
+    /// 관리자가 행에서 직접 누를 수 있는 전이. **아는 값 넷 전부다**(= `known` 과 같은 목록).
+    ///
+    /// `open` 이 여기 없던 시절(v0.2.48 첫 판)의 결함: [완료]를 잘못 누르면 **앱 안에서 되돌릴 길이 없었다.**
+    /// 제보는 지워지지도 않으므로(서버에 delete 경로가 없다) 그 한 번의 오조작이 영구였고, 레일 배지의
+    /// 미해결 건수도 그만큼 영영 줄었다. 되돌리기를 "서버에서 고친다"로 미루는 것은 SQL 콘솔을 여는 사람
+    /// 하나에게만 있는 길이라 기능이 아니다.
+    ///
+    /// **서버가 받는다는 것을 확인하고 넣었다**: `set_feedback_status` 는 `p_status in
+    /// ('open','doing','done','wontfix')` 넷만 통과시키고 나머지는 `FEEDBACK_BAD_STATUS` 다
+    /// (20260910120000_feedback_reports.sql:329). 그러니 이 배열은 그 넷을 넘어설 수 없다 —
+    /// `other` 를 여기 넣지 마라(서버가 모르는 값이면 거절당하고 화면엔 실패 한 줄만 뜬다).
+    ///
+    /// 버튼이 넷이 되어 좁은 행에서 줄이 넘칠 위험은 뷰가 **줄바꿈**으로 받는다
+    /// (`FeedbackInboxRow.editor` 의 두 줄 배치 — 460pt 최소 폭 스냅샷이 그 배치를 못 박는다).
+    static let transitions: [FeedbackStatus] = known
+}
+
+/// `submit_feedback(p_kind, p_body, p_app_version, p_os_version)` 본문(snake_case 인코딩).
+/// 앱/OS 버전은 **자동으로 실린다** — 사용자가 적을 필요가 없고, 그 사실은 화면에 한 줄로 밝힌다(몰래 보내지 않는다).
+struct FeedbackSubmitRequest: Encodable {
+    let pKind: String
+    let pBody: String
+    let pAppVersion: String
+    let pOsVersion: String
+}
+
+/// `feedback_list(p_status, p_limit)` 본문. `pStatus` 가 nil 이면 **키가 빠져**(encodeIfPresent) 서버 기본값(전체)을 쓴다.
+struct FeedbackListRequest: Encodable {
+    var pStatus: String? = nil
+    let pLimit: Int
+}
+
+/// `set_feedback_status(p_id, p_status, p_note)` 본문. 메모가 비면 nil 로 보내 서버가 기존 메모를 지우지 않게 한다.
+struct FeedbackStatusRequest: Encodable {
+    let pId: String
+    let pStatus: String
+    var pNote: String? = nil
+}
+
+/// `feedback_list` 응답 행(snake_case 디코드).
+///
+/// `id`/`kind`/`body` 를 뺀 나머지가 전부 Optional 인 이유는 미니게임 보드 행과 같다 — 서버 함수가 컬럼을
+/// 하나 덜 실어도 목록 **전체**가 죽지 않아야 한다. 특히 제보 목록이 죽으면 관리자는 신고가 0건이라고 믿는다.
+struct FeedbackReportRow: Decodable, Equatable {
+    let id: String
+    let userId: String?
+    let kind: String
+    let body: String
+    let status: String?
+    let adminNote: String?
+    let appVersion: String?
+    let osVersion: String?
+    /// timestamptz 문자열(소수초 유무 혼재) — 서비스가 parseDate 로 푼다.
+    let createdAt: String?
+    let updatedAt: String?
+    let displayName: String?
+    let avatarUrl: String?
+}
+
+/// 제보 한 건(표시용). 행 자체가 완결이다(이름/아바타 포함) — 미니게임 보드와 같은 설계.
+struct FeedbackReport: Identifiable, Equatable, Sendable {
+    let id: String
+    /// 제보자. 서버가 익명화했거나 탈퇴한 계정이면 nil.
+    let userID: String?
+    let kind: FeedbackKind
+    /// **사용자가 쓴 글.** 로그로 흘리지 마라.
+    let body: String
+    var status: FeedbackStatus
+    var adminNote: String?
+    let appVersion: String?
+    let osVersion: String?
+    let createdAt: Date?
+    let updatedAt: Date?
+    let authorName: String
+    let authorAvatarURL: URL?
+}
+
+/// 제보 본문·메모의 길이 규칙. **순수 함수만 둔다** — 이 판정이 뷰 안에 흩어지면
+/// "보내기 버튼은 살아 있는데 서버가 거절하는" 조합이 생기고, 그 조합은 렌더 테스트로 잡히지 않는다.
+enum FeedbackComposer {
+    /// 본문 상한. 서버 `submit_feedback` 의 1~1000 제약과 **같은 값**이다(클라가 더 관대하면 사용자는
+    /// 다 쓰고 나서야 거절당한다).
+    static let maxBodyLength = 1000
+    /// 이 길이를 넘으면 카운터를 pending 색으로 — "곧 한도"라는 신호다.
+    static let warnBodyLength = 900
+    /// 관리자 메모 상한.
+    static let maxNoteLength = 500
+
+    /// 앞뒤 공백을 걷어낸 전송 본문. 화면의 글자 수 카운터는 **원문**을 세고(사람이 친 그대로 보여야 한다),
+    /// 전송 가능 판정과 실제 전송 본문은 이 값을 쓴다 — 공백만 친 글은 보낼 수 없어야 한다.
+    static func normalized(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 지금 보낼 수 있는가. 경계는 서버와 같다: 1자 이상 1000자 이하.
+    ///
+    /// 세는 단위는 Swift 의 `Character`(자소 묶음)이고 서버 `char_length` 는 코드포인트를 센다 — 한국어·영문
+    /// 산문에서는 같지만, ZWJ 이모지로만 채운 글은 클라가 통과시키고 서버가 거절할 수 있다. 그때는 평범한
+    /// 실패 안내로 떨어진다(내부 코드를 보여 주지 않는다). 그 희귀 조합 때문에 카운터를 코드포인트로 바꾸면
+    /// 모든 사람의 화면에서 숫자가 이상해진다 — 그쪽이 훨씬 나쁘다.
+    static func isSendable(_ text: String) -> Bool {
+        let count = normalized(text).count
+        return count >= 1 && count <= maxBodyLength
+    }
+
+    /// "N/1000" 카운터.
+    static func counterText(_ text: String) -> String {
+        "\(text.count)/\(maxBodyLength)"
+    }
+
+    /// 카운터를 경고색으로 그릴 때.
+    static func isCounterWarning(_ text: String) -> Bool {
+        text.count > warnBodyLength
+    }
+
+    /// 서버로 나갈 메모. 비면 nil(서버가 기존 메모를 빈 문자열로 덮지 않게).
+    static func normalizedNote(_ text: String) -> String? {
+        let trimmed = normalized(text)
+        return trimmed.isEmpty ? nil : String(trimmed.prefix(maxNoteLength))
+    }
+}
+
+/// 제보 화면의 고정 문구. 한 곳에 모아 두는 이유는 테스트가 **문구 자체**를 되묻기 때문이다 —
+/// 특히 레이트리밋 안내는 내부 코드(FEEDBACK_RATE_LIMIT)를 절대 노출하면 안 된다.
+enum FeedbackText {
+    static let windowTitle = "제보"
+    static let sendTab = "보내기"
+    static let inboxTab = "받은 제보"
+    static let placeholder = "어떤 문제가 있었는지, 무엇을 하다 생겼는지 적어 주세요"
+    static let sendAction = "보내기"
+    static let sending = "보내는 중…"
+    static let sendSuccess = "보냈어요. 고마워요!"
+    /// 24시간 10건 상한에 걸렸다. **사용자 말투로만** 말한다 — 서버 예외 이름을 그대로 보여 주면
+    /// 사용자는 자기가 뭘 잘못했는지 알 수 없고, 우리 내부 어휘가 화면에 새어 나간다.
+    static let rateLimited = "오늘은 그만 받을게요 — 내일 다시 보내 주세요"
+    static let sendFailed = "보내지 못했어요 — 잠시 뒤 다시 시도해 주세요"
+    /// 서버에 제보 표·함수가 아직 없다(브루 배포가 db push 보다 앞선 창).
+    ///
+    /// **`sendFailed` 와 갈라 둔 이유**: 그 문장은 "잠시 뒤 다시 시도해 주세요"라고 말하는데, 이 상태는
+    /// 우리가 마이그레이션을 올릴 때까지 **며칠 간다**. 그동안 사용자는 같은 글을 몇 번이고 다시 보내고
+    /// 매번 같은 문장을 본다 — 그건 안내가 아니라 거짓말이다. 여기서는 (가) 지금은 안 된다 (나) 곧 열린다
+    /// (다) **쓴 글은 그대로 있다** 셋을 말한다. (다)가 특히 중요하다: 실패 문구를 본 사람은 글이
+    /// 날아갔다고 생각하고 창을 닫는데, 초안은 실제로 살아 있다(지우는 자리는 전송 성공 하나뿐이다).
+    static let sendSchemaMissing = "이 기능은 곧 열려요 — 쓰신 글은 그대로 둘게요"
+    static let forbidden = "권한이 없어요"
+    static let statusFailed = "상태를 바꾸지 못했어요"
+    static let mineTitle = "내가 보낸 제보"
+    static let mineEmpty = "아직 보낸 제보가 없어요"
+    static let inboxEmpty = "받은 제보가 없어요"
+    /// 진짜 빈 목록의 보조 한 줄. 필터가 걸린 빈 목록과 **화면에서 갈리게** 하는 것이 이 문장의 일이다 —
+    /// 문구가 하나뿐이던 시절엔 "필터를 잘못 걸었나"와 "아직 아무도 안 보냈다"가 구분되지 않았다.
+    static let inboxEmptyHint = "누가 보내면 여기에 바로 쌓여요"
+    /// 필터가 걸려 아무것도 안 남았을 때(원래 목록에는 제보가 있다). 리그 페이지의
+    /// `LeaderboardEmptyMessage.filteredOut` 과 같은 규약 — '필터로 전부 숨겨진 것'과 '진짜 비어 있는 것'을
+    /// 절대 같은 문장으로 말하지 않는다.
+    static func inboxFilterEmpty(_ status: FeedbackStatus) -> String {
+        "\(status.label) 제보가 없어요"
+    }
+    /// 그 경우의 빠져나갈 길. 칩 이름(`filterAll`)을 **그대로** 부른다 — 화면에 없는 버튼을 말하면 안 된다.
+    static let inboxFilterEmptyHint = "위 [\(filterAll)]를 누르면 나머지가 보여요"
+    static let filterAll = "전체"
+    static let loading = "불러오는 중…"
+    static let failed = "제보를 불러오지 못했어요"
+    static let retry = "다시 시도"
+    static let notePlaceholder = "처리 메모(500자까지)"
+    /// 메모 칸 옆의 안내. 메모 전용 저장 버튼을 두지 않는 이유를 화면에서 말한다 —
+    /// 메모만 저장하는 길이 있으면 "상태는 그대로인데 메모만 달린" 제보가 생기고, 그 상태는 목록 어디에도 안 보인다.
+    static let noteSave = "메모는 상태와 함께 저장돼요"
+
+    /// "앱 0.2.48 (58) · macOS 15.6 정보가 함께 전송돼요" — 자동으로 실리는 것을 **밝히는** 한 줄.
+    /// 몰래 보내지 않는다는 약속이 이 문장이다.
+    static func autoAttachNotice(appVersion: String, build: Int?, osVersion: String) -> String {
+        var app = appVersion.isEmpty ? "앱" : "앱 \(appVersion)"
+        if let build, build > 0 { app += " (\(build))" }
+        return "\(app) · macOS \(osVersion) 정보가 함께 전송돼요"
+    }
+
+    /// 목록 행의 "방금 / N분 전 / N시간 전 / N일 전". 팀원 행·수신 메시지와 같은 눈금에 '일'만 더했다 —
+    /// 제보는 며칠 묵는 표면이라 "72시간 전"은 사람이 읽는 단위가 아니다.
+    static func ageText(_ date: Date?, now: Date) -> String {
+        guard let date else { return "" }
+        let seconds = max(0, Int(now.timeIntervalSince(date)))
+        if seconds < 60 { return "방금" }
+        if seconds < 3600 { return "\(seconds / 60)분 전" }
+        if seconds < 86_400 { return "\(seconds / 3600)시간 전" }
+        return "\(seconds / 86_400)일 전"
+    }
+}
+
+/// 이 맥의 macOS 버전 문자열("15.6.1"). 제보에 자동으로 실린다.
+/// **주입 가능한 순수 변환으로 갈라 둔 이유**는 AppVersionReport 와 같다 — `ProcessInfo` 는 프로세스가
+/// 정하는 값이라, 갈라 두지 않으면 포맷 규칙을 실증할 방법이 없다.
+enum OSVersionReport {
+    static func text(_ version: OperatingSystemVersion) -> String {
+        if version.patchVersion == 0 {
+            return "\(version.majorVersion).\(version.minorVersion)"
+        }
+        return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+    }
+
+    static func current(_ info: ProcessInfo = .processInfo) -> String {
+        text(info.operatingSystemVersion)
     }
 }

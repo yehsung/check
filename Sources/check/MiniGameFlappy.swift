@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-// MARK: - 플래피 아잉 (v0.2.46 규칙 · v0.2.48 그림)
+// MARK: - 플래피 아잉 (v0.2.46 규칙 · v0.2.48~49 그림)
 //
 // 미니게임 2종 중 하나. 규칙은 `FlappyGame`(순수 값 타입 — 뷰·스토어·시계 의존 0)에, 그림과 프레임 루프는
 // `FlappyGameView`(잎 뷰 하나)에 있다. 허브(미니게임 창)는 `MiniGameHost` 와 `MiniGameInput` 만 건네고
@@ -45,6 +45,20 @@ import SwiftUI
 // 무대 경계(0·6·13·22·34)가 튀는 기둥이 시작되는 15와 겹치지 않는 것도 같은 이유다(배경이 예고가 되면 안 된다).
 // 그림에 필요한 시계·좌표는 전부 규칙 값 타입 안의 **그림 전용 필드**로 넣었다(아래) — 벽시계를 쓰면 같은 시드가
 // 같은 그림을 내놓지 못해 스냅샷으로 검증할 수 없다.
+//
+// ── v0.2.49 잔상·점프 모션 ───────────────────────────────────────────────────────────────
+// 사용자 지적 2026-09-10(옆얼굴을 만든 뒤): ① "잔상 자체는 괜찮은데 지금은 잔상이 고정되어서 캐릭터 옆에 딱
+// 달라붙어 있는 방식으로 되어 있잖아. 잔상은 캐릭터가 이동했던 위치를 남기는 방향으로 가야지."
+// ② "점프할 때 밑에 넓은 U 같은 거 안 어울려. 다른 모션을 넣어줘."
+// → 잔상은 **규칙이 들고 있는 실제 궤적**(`trail`)이 됐다. 점들은 기둥과 같은 속도로 흘러 지나온 세상의 자리에
+//   남는다(고정 오프셋 3장은 어떤 자세에서도 옆구리에 수평으로 나란했다).
+// → 점프 모션은 발밑의 넓은 아치 대신 **어깨 밖에서 머리 위로 훑는 짧은 호 한 쌍**(`wingBeat`)이다. 고른 근거는
+//   그 함수에 적어 뒀다(후보 다섯을 실제로 그려 비교했다). 흰 플래시도 0.9 전면 → 0.45 아래쪽으로 내렸다 —
+//   그 값은 정면 대칭 PNG 시절의 것이라 덮을 얼굴이 없었는데, 지금 그 자리에는 방향의 증거인 옆얼굴이 있다.
+// → 그 첫 판은 두 군데가 덜 됐고 검토에서 실측으로 잡혔다(2026-09-10, 아래 상수 주석에 자세히):
+//   ① 호가 몸통 중간·스프라이트 안쪽에 있어 **머리 위 잉크가 0px** 이라 '흘러내리는 꼬리'로 읽혔다.
+//   ② 잔상이 실루엣이 아니라 얼굴이 다 있는 **사본**이었다(주석은 실루엣이라 적고 코드는 사본을 그렸다).
+// 여기서도 **난이도 값은 한 글자도 건드리지 않았다**.
 
 
 /// 플래피 아잉 규칙. 시드만 주면 결정론적으로 같은 판이 나온다(테스트가 시드를 고정한다).
@@ -78,6 +92,18 @@ struct FlappyGame: Equatable, Sendable {
     static let flashDuration: TimeInterval = 0.15
     /// dt 상한. 앱 정지·창 재표시 뒤 첫 프레임이 몇 초를 한 번에 밀지 않게.
     static let maxStep: TimeInterval = 1.0 / 30.0
+
+    // ── 잔상 이력의 크기(그림 전용) ──────────────────────────────────────────────────────
+    // 난이도 상수가 아니다. 여기 있는 이유는 하나뿐이다: 이력이 규칙 값 타입에 살아서 `step(dt:)` 이 읽어야 한다.
+    // 이 셋을 아무리 흔들어도 속도·틈·간격·충돌·점수는 한 글자도 바뀌지 않는다.
+    /// 잔상 한 점의 수명(초). 0.20 × 속도(130~230) = 26~46pt 뒤까지 꼬리가 남는다(스프라이트 34 의 한 칸 남짓).
+    /// 더 길면 꼬리가 기둥 틈을 가려 판이 안 보이고, 더 짧으면 궤적이 아니라 점 하나로 읽힌다.
+    static let trailLife: TimeInterval = 0.20
+    /// 자리를 남기는 간격(초). 60Hz 에서 두 프레임에 한 점 — 수명 안에 6~7점이 들어와 선으로 이어져 보인다.
+    static let trailInterval: TimeInterval = 0.028
+    /// 이력 상한. 배열은 이 크기로 **한 번만** 잡고 재사용한다(프레임마다 새로 만들면 60Hz 예산이 샌다).
+    /// 수명·간격이 6~7점을 내므로 8 은 dt 가 튀는 프레임까지 받아 주는 여유다.
+    static let trailMax = 8
 
     struct Pipe: Equatable, Sendable {
         var x: CGFloat
@@ -126,6 +152,18 @@ struct FlappyGame: Equatable, Sendable {
         var vy: CGFloat
     }
 
+    /// 잔상 한 점 — 캐릭터가 **실제로 지나온 자리**. 그림 전용이지만 규칙 값 타입에 산다(아래 `trail` 참고).
+    struct TrailPoint: Equatable, Sendable {
+        /// 남긴 순간의 논리 x. 남긴 뒤에도 **기둥과 같은 속도로** 왼쪽으로 밀린다 —
+        /// 그래야 "지나온 세상의 그 자리"에 남는다. 캐릭터 기준 고정 오프셋이면 궤적이 아니라 옆구리 장식이다.
+        var x: CGFloat
+        var y: CGFloat
+        /// 그때의 낙하 속도. 뷰가 잔상마다 **그 순간의 자세**를 준다 — 지금 자세를 쓰면 급회전에서 꼬리가 통째로 같이 돈다.
+        var vy: CGFloat
+        /// 남긴 뒤 흐른 시간(초). 불투명도·크기·폐기가 전부 이 값 하나에서 나온다.
+        var age: TimeInterval
+    }
+
     enum Phase: Equatable, Sendable {
         /// 시작 전(루프 정지). 액션 = 새 판 + 첫 점프.
         case ready
@@ -164,6 +202,14 @@ struct FlappyGame: Equatable, Sendable {
     private(set) var lastScorePipeCenter: CGFloat?
     /// 무대가 바뀐 판 시각(점수가 `MiniGameStage.flappyThresholds` 를 넘은 순간). 전환 플레어·이름 배너에 쓴다.
     private(set) var stageChangedAt: TimeInterval?
+    /// 지나온 자리들(오래된 것이 앞). 뷰가 이걸 그대로 그린다.
+    ///
+    /// **왜 뷰 @State 가 아니라 여기인가.** ① 뷰에 두면 같은 판을 다시 그릴 수 없다 — 테스트가 `initialGame`
+    /// 하나로 프레임을 재현하는 근거가 사라진다. ② 판을 끊었다 다시 시작하면 앞 판의 꼬리가 새 판 첫 프레임에
+    /// 유령으로 남는다(이력을 비울 자리가 규칙 밖이 되기 때문이다). 배경 스크롤(`scrolled`)·점프 시각
+    /// (`lastFlapAt`)을 규칙에 둔 것과 같은 이유다.
+    /// **규칙은 이 값을 한 번도 읽지 않는다** — 속도·틈·간격·충돌·점수 어느 것도 잔상을 보지 않는다.
+    private(set) var trail: [TrailPoint]
 
     private var rng: MiniGameRandom
 
@@ -205,6 +251,8 @@ struct FlappyGame: Equatable, Sendable {
         lastScoreAt = nil
         lastScorePipeCenter = nil
         stageChangedAt = nil
+        trail = []
+        trail.reserveCapacity(Self.trailMax)
     }
 
     /// 테스트 픽스처 — 임의 상태에서 시작한다(난수는 seed).
@@ -212,7 +260,7 @@ struct FlappyGame: Equatable, Sendable {
     init(seed: UInt64, bird: Bird, pipes: [Pipe], score: Int, phase: Phase, elapsed: TimeInterval = 0,
          scrolled: CGFloat = 0, lastFlapAt: TimeInterval? = nil, flapCount: Int = 0,
          lastScoreAt: TimeInterval? = nil, lastScorePipeCenter: CGFloat? = nil,
-         stageChangedAt: TimeInterval? = nil) {
+         stageChangedAt: TimeInterval? = nil, trail: [TrailPoint] = []) {
         rng = MiniGameRandom(seed: seed)
         self.bird = bird
         self.pipes = pipes
@@ -226,6 +274,8 @@ struct FlappyGame: Equatable, Sendable {
         self.lastScoreAt = lastScoreAt
         self.lastScorePipeCenter = lastScorePipeCenter
         self.stageChangedAt = stageChangedAt
+        self.trail = trail
+        self.trail.reserveCapacity(Self.trailMax)
     }
 
     static func == (lhs: FlappyGame, rhs: FlappyGame) -> Bool {
@@ -233,7 +283,7 @@ struct FlappyGame: Equatable, Sendable {
             && lhs.phase == rhs.phase && lhs.flashRemaining == rhs.flashRemaining && lhs.elapsed == rhs.elapsed
             && lhs.scrolled == rhs.scrolled && lhs.lastFlapAt == rhs.lastFlapAt && lhs.flapCount == rhs.flapCount
             && lhs.lastScoreAt == rhs.lastScoreAt && lhs.lastScorePipeCenter == rhs.lastScorePipeCenter
-            && lhs.stageChangedAt == rhs.stageChangedAt
+            && lhs.stageChangedAt == rhs.stageChangedAt && lhs.trail == rhs.trail
     }
 
     // MARK: 순수 규칙 — 난이도 곡선
@@ -324,6 +374,8 @@ struct FlappyGame: Equatable, Sendable {
 
     /// 허브가 판을 끊을 때(창 닫힘·포커스 상실·게임 전환). 진행 중이면 그 점수로 결과 확정 — 점수는 유효하다.
     mutating func interrupt() {
+        // 꼬리는 여기서 비운다. 남겨 두면 창을 다시 열었을 때 결과 화면 위로 지난 판의 궤적이 스쳐 지나간다.
+        trail.removeAll(keepingCapacity: true)
         switch phase {
         case .running, .over:
             phase = .result
@@ -362,6 +414,8 @@ struct FlappyGame: Equatable, Sendable {
         let speed = Self.speed(forScore: score)
         // 배경이 흘러간 거리 — 기둥과 **같은 속도**로 누적한다(층별 배속은 배경이 스스로 나눈다).
         scrolled += speed * CGFloat(dt)
+        // 잔상 이력도 **같은 speed** 로 흘린다. 기둥과 같은 속도라야 꼬리가 '지나온 세상의 자리'에 남는다.
+        advanceTrail(dt: dt, speed: speed)
         let stageBefore = stage.id
         for i in pipes.indices {
             pipes[i].x -= speed * CGFloat(dt)
@@ -403,6 +457,26 @@ struct FlappyGame: Equatable, Sendable {
         }
     }
 
+    /// 잔상 이력 한 프레임. **새 배열을 만들지 않는다**(60Hz 예산) — 제자리에서 밀고, 앞에서 버리고, 뒤에 붙인다.
+    ///
+    /// 순서가 중요하다: ① 전부 흘리고 나이를 먹인 뒤 ② 수명이 다한 앞쪽을 버리고 ③ 그러고 나서 지금 자리를 남긴다.
+    /// ③ 을 먼저 하면 방금 남긴 점이 같은 프레임에 한 칸 밀려 캐릭터와 어긋난 자리에서 태어난다.
+    private mutating func advanceTrail(dt: TimeInterval, speed: CGFloat) {
+        for i in trail.indices {
+            trail[i].x -= speed * CGFloat(dt)
+            trail[i].age += dt
+        }
+        // 오래된 것이 앞이므로 수명이 다한 점은 언제나 **앞쪽 연속 구간**이다 — 세어서 한 번에 버린다.
+        var expired = 0
+        while expired < trail.count, trail[expired].age > Self.trailLife { expired += 1 }
+        if expired > 0 { trail.removeFirst(expired) }
+        // 마지막 점의 나이가 곧 '마지막으로 남긴 뒤 흐른 시간'이다 — 그래서 기록 시각을 따로 들고 있지 않는다
+        // (들면 초기화할 자리가 하나 더 늘고, 언젠가 한쪽만 비워져 새 판에 옛 꼬리가 남는다).
+        guard trail.last.map({ $0.age >= Self.trailInterval }) ?? true else { return }
+        if trail.count >= Self.trailMax { trail.removeFirst() }
+        trail.append(TrailPoint(x: bird.x, y: bird.y, vy: bird.vy, age: 0))
+    }
+
     private mutating func startRound() {
         bird = Bird(x: Self.birdX, y: Self.height / 2, vy: 0)
         score = 0
@@ -414,6 +488,8 @@ struct FlappyGame: Equatable, Sendable {
         lastScoreAt = nil
         lastScorePipeCenter = nil
         stageChangedAt = nil
+        // 새 판 첫 프레임에 앞 판의 궤적이 뜨지 않게. 용량은 그대로 둔다(다시 잡지 않는다).
+        trail.removeAll(keepingCapacity: true)
         let gapToNext = Self.spacing(forScore: 0)
         pipes = (0..<Self.pipeCount).map { i in
             Self.makePipe(x: Self.firstPipeX + CGFloat(i) * gapToNext, score: 0, rng: &rng)
@@ -430,13 +506,17 @@ private enum FlappyFX {
     // ── 시간(초) ───────────────────────────────────────────────────────────────────────
     /// 점프 스쿼시&스트레치. 0.18 보다 길면 연타할 때 몸이 계속 눌린 채로 남는다.
     static let squash: TimeInterval = 0.18
-    /// 점프 순간 발밑에서 퍼지는 공기 아치.
-    static let flapArch: TimeInterval = 0.26
+    /// 점프 순간 몸 옆을 위로 훑는 날개짓 호. 파편(0.35)보다 짧아 호가 먼저 사라지고 파편이 남는다 —
+    /// 그래야 "쳤다 → 밀려났다"의 순서로 읽힌다.
+    static let flapWing: TimeInterval = 0.24
     /// 점프 파편.
     static let flapSpark: TimeInterval = 0.35
-    /// 점프 순간 스프라이트 전체가 하얗게 뜨는 시간. **정지 프레임에서 "쳤다"를 말하는 유일한 단서다** —
-    /// 스쿼시(0.86→1)와 파편만으로는 스냅샷에서 점프가 판별되지 않았다(2026-09-10 지적).
+    /// 점프 순간 스프라이트 아래쪽이 하얗게 뜨는 시간.
     static let flapFlash: TimeInterval = 0.12
+    /// 그 흰빛의 세기. 0.9 였다가 **0.45 + 아래쪽만**으로 내렸다(v0.2.49): 0.9 는 정면 대칭 PNG 시절 값이라
+    /// 덮을 얼굴이 없었는데, 지금 그 자리에는 방향의 증거인 옆얼굴이 있다. 되올리면 점프할 때마다 얼굴이 사라진다.
+    /// "쳤다"의 단서는 이제 이 한 겹이 아니라 **날개짓 호 + 파편 + 스쿼시** 셋이 나눠 진다.
+    static let flapFlashOpacity: Double = 0.45
     /// 득점 링과 "+1" 이 화면에 머무는 시간.
     static let scoreRing: TimeInterval = 0.45
     static let scorePopHold: TimeInterval = 0.60
@@ -468,18 +548,49 @@ private enum FlappyFX {
     static let scoreRingRadius: CGFloat = 16
     /// "+1"·링이 뜨는 x 오프셋(캐릭터 뒤로 이만큼). 득점 순간 방금 지난 기둥의 **뒷면**이 캐릭터에 닿아 있다.
     static let scorePopBack: CGFloat = FlappyGame.pipeWidth * 0.75
-    /// 점프 공기 아치의 반폭·깊이(스프라이트 기준 비율).
-    static let flapArchHalfWidth: CGFloat = 0.60
-    static let flapArchDepth: CGFloat = 0.34
+    /// 날개짓 호의 자리와 크기(전부 스프라이트 34 기준 비율).
+    ///
+    /// **왜 이 값인가**(v0.2.49 첫 판을 실측으로 걷어낸 자리다). 처음 값은 `sideGap` 0.42(=14.3pt,
+    /// 스프라이트 반폭 17 **안쪽**) · `rise` (0.02, 0.66) 이었다. 호는 스프라이트보다 아래 레이어라
+    /// ∩ 의 안쪽 절반이 몸에 가렸고, 몸통 중간에서 출발해 애니메이션이 끝날 무렵에야 머리 높이에 닿았다.
+    /// 실측(jump-motion.png, 2026-09-10): **스프라이트 상자 위쪽 대역의 호 잉크가 0px**. 화면에 남는 것은
+    /// "몸 옆에서 바깥으로 갈수록 내려가는 짧은 꼬리 두 개"라 '솟는다'가 아니라 '흘러내린다'로 읽혔다 —
+    /// 사용자가 발밑 U 를 거부한 것과 똑같은 실패다.
+    /// 그래서 두 가지를 함께 옮겼다: ① 어깨 밖(0.46 = 15.6pt)으로 밀어 ∩ 두 다리가 모두 몸 밖에 보이고
+    /// ② 출발을 귀 높이(0.62 = 21.1pt)로 올려 호가 **머리 위**(반높이 17)를 지나가게 했다.
+    /// 한쪽만으로는 안 된다는 것도 후보를 실제로 그려서 확인했다: 넓히기만 한 판은 ∩ 이 허리 옆에 뜨고,
+    /// 올리기만 한 판은 안쪽 절반이 여전히 몸에 가린다.
+    ///
+    /// 바꾸면 무엇이 깨지나: `sideGap` 을 0.5(=스프라이트 반폭) 아래로 되돌리면 ∩ 안쪽이 다시 가려 아래로
+    /// 처진 꼬리만 남고, `rise.from` 을 내리면 머리 위 대역 잉크가 0 으로 돌아간다 — 그 둘 다 테스트가
+    /// 픽셀로 잡는다(theJumpMotionRisesAndStaysOffTheFaceAndTheBoard). 반대로 합(0.96 = 32.6pt)을 더
+    /// 키우면 호가 캐릭터에서 떨어져 나가 기둥 틈으로 들어간다(위쪽 속도선 후보를 버린 이유가 그것이다).
+    static let flapWingSideGap: CGFloat = 0.46
+    static let flapWingHalfWidth: CGFloat = 0.25
+    static let flapWingDepth: CGFloat = 0.22
+    /// 호가 출발하는 높이(귀 높이)와 거기서 더 올라가는 거리.
+    static let flapWingRise: (from: CGFloat, travel: CGFloat) = (0.62, 0.34)
     /// 점프 파편이 퍼지는 반경 · 죽음 파편 반경.
     static let flapSparkRadius: CGFloat = 30
     static let deathSparkRadius: CGFloat = 46
     /// 점프 파편이 뿌려지는 각도 범위(0 = 앞 · π/2 = 아래 · π = 뒤). **아래·뒤로만** 밀어낸다 —
     /// 온 사방으로 뿌리면 "밟고 올라갔다"가 아니라 "터졌다"로 읽힌다.
     static let flapSparkAngles: ClosedRange<Double> = (0.28 * .pi)...(1.22 * .pi)
-    /// 잔상 간격과 불투명도(뒤로 갈수록 옅다).
-    static let ghostStep: CGFloat = 9
-    static let ghostOpacities: [Double] = [0.20, 0.12, 0.06]
+    /// 잔상: 방금 지난 자리의 불투명도(수명에 반비례해 0 까지) · 크기(방금 → 수명 끝).
+    /// 자리는 여기 없다 — 그건 규칙이 들고 있는 **실제 궤적**(`FlappyGame.trail`)이다. 예전에는 이 자리에
+    /// `ghostStep 9` 이 있어 캐릭터에서 x −9/−18/−27 로 세 장을 찍었고, 그래서 급상승·급하강 중에도 잔상이
+    /// 옆구리에 나란히 붙어 다녔다(2026-09-10 지적: "잔상은 캐릭터가 이동했던 위치를 남기는 방향으로").
+    static let trailOpacity: Double = 0.22
+    static let trailScale: (front: CGFloat, back: CGFloat) = (0.94, 0.82)
+    /// 잔상의 **단색**. 잔상은 스프라이트 사본이 아니라 이 색 한 겹을 PNG 알파로 오려 낸 실루엣이다.
+    ///
+    /// 왜: 사본으로 그렸더니 28×28 상자 안 휘도 편차가 25~51(민무늬 배경 5) 이었고 6배 확대에서 **눈동자
+    /// 두 점이 그대로** 보였다(trail-dive.png, 2026-09-10). 지나온 자리에 얼굴이 네 개 더 있으면 어느 것이
+    /// 지금의 나인지 순간적으로 헷갈린다 — 잔상에 필요한 것은 모양(실루엣)뿐이다.
+    /// 색은 마스코트 몸통의 연보라다: 무대 5종 하늘이 전부 어두운 쪽이라(휘도 0.05~0.42) 밝은 한 색이면
+    /// 다섯 곳 모두에서 뜨고, 같은 색조라 "저건 나였다"로 읽힌다. 더 어둡게 내리면 한낮·노을에서 때처럼
+    /// 보이고, 더 밝게(흰색) 올리면 본체보다 밝아져 본체와 헷갈린다.
+    static let trailTint = Color(red: 0.78, green: 0.73, blue: 0.96)
     /// 점프 스쿼시 시작값 → (1, 1).
     static let squashFrom: (x: CGFloat, y: CGFloat) = (0.86, 1.18)
     /// 바닥 그림자: 폭 = spriteSize × (base + gain × 고도) · 납작함 · 불투명도 = base + gain × 고도.
@@ -683,19 +794,15 @@ struct FlappyGameView: View {
                                  color: stage.glow, lineWidth: 1.5)
         }
 
-        // 6) 점프 임팩트 — **발밑에서 아래로 퍼지는 공기 아치 + 아래·뒤로 밀리는 파편**.
-        //    예전엔 몸통 왼쪽(= 뒤)에 날개 타원을 그렸는데, 캔버스가 스프라이트보다 아래 레이어라 잔상 3장에
-        //    가려 40%만 삐져나왔고 색이 `structureEdge`(기둥 립)라 '점프' 신호가 '닿으면 죽는 것' 신호와
-        //    겹쳤다(2026-09-10 지적). 지금은 자리도 색도 캐릭터 것이다: 앞·아래 · stage.glow.
+        // 6) 점프 임팩트 — **몸 옆을 위로 훑는 날개짓 호 한 쌍 + 아래·뒤로 밀리는 파편**.
+        //    v0.2.48 은 여기에 `MiniGameEffects.arch`(발밑에서 **아래로** 퍼지는 넓은 U)를 썼다. 그 호는
+        //    "눌렀다"를 말하는데 캐릭터는 위로 솟으니 방향이 반대였다(2026-09-10 지적: "점프할 때 밑에 넓은 U
+        //    같은 거 안 어울려"). 파편은 남긴다 — 아래·뒤로 밀려나는 점들은 "밟고 올라갔다"라 방향이 맞다.
         if motion, game.phase == .running, let at = game.lastFlapAt {
             let sinceFlap = game.elapsed - at
             let foot = t.point(game.bird.x + FlappyGame.spriteSize * 0.08,
                              displayBirdY + FlappyGame.spriteSize * 0.52)
-            MiniGameEffects.arch(into: &context, center: foot,
-                                 progress: sinceFlap / FlappyFX.flapArch,
-                                 halfWidth: FlappyGame.spriteSize * FlappyFX.flapArchHalfWidth * t.scale,
-                                 depth: FlappyGame.spriteSize * FlappyFX.flapArchDepth * t.scale,
-                                 color: stage.glow, lineWidth: 2.2)
+            wingBeat(&context, t: t, since: sinceFlap, glow: stage.glow)
             MiniGameEffects.sparks(into: &context, center: foot,
                                    progress: sinceFlap / FlappyFX.flapSpark,
                                    count: 10, maxRadius: FlappyFX.flapSparkRadius * t.scale,
@@ -714,6 +821,48 @@ struct FlappyGameView: View {
         }
     }
 
+    /// 점프 모션: 몸 **양옆**에서 위로 볼록한 짧은 호 한 쌍이 위로 훑고 사라진다(날개짓).
+    ///
+    /// **왜 이것을 골랐나**(후보 다섯을 실제로 그려 스냅샷으로 비교했다 — jump-candidates.png):
+    ///   · 아치(예전 것): 발밑에서 **아래로** 퍼지는 넓은 U. "눌렀다"라 몸이 솟는 방향과 반대다 — 지적의 대상.
+    ///   · 세로 스트레치만: 정지 프레임에 방향 신호가 없다. 읽히게 하려면 0.26초는 늘어야 하는데
+    ///     스쿼시 길이 0.18 은 **연타할 때 몸이 계속 눌린 채로 남지 않게** 정한 상한이라 건드릴 수 없다.
+    ///   · 발밑 먼지 퍼프: 바로 옆에 이미 파편 10개가 같은 자리에 뿌려진다 — 같은 점 무리를 두껍게 할 뿐이었다.
+    ///   · 위로 좁아지는 링: 늦은 프레임에서 머리 위 얇은 타원이 되어 '후광'으로 읽혔다.
+    ///   · 위쪽 속도선: 캐릭터에서 떨어져 나가 **기둥 틈** 쪽으로 올라간다 — 플레이어가 보는 곳을 가린다.
+    /// 날개짓은 **어깨 밖에서 머리 위로** 훑어 방향이 곧 모양이고, 얼굴 위를 지나지 않으며, 반경이
+    /// 스프라이트 0.7배라 기둥 틈까지 닿지 않는다.
+    ///
+    /// **레이어는 스프라이트 아래로 남긴다.** 위로 올리는 안(호를 캔버스 대신 스프라이트 위 겹으로)도 그려
+    /// 봤다: ∩ 안쪽 다리가 머리의 검은 림과 얼굴 위를 금색 선으로 가로질러
+    /// "더듬이 달린 캐릭터"가 됐다. 방향의 증거로 구워 넣은 옆얼굴을 점프할 때마다 덮는 셈이라 흰 플래시를
+    /// 0.9 → 0.45 아래쪽으로 내린 결정과 정면으로 어긋난다. 대신 호를 **어깨 밖·머리 위**로 옮겨(아래 상수)
+    /// 몸에 가릴 것이 애초에 없게 했다 — 가려지는 문제를 레이어가 아니라 자리로 푼다.
+    ///
+    /// 바꾸면 무엇이 깨지나: 호가 몸 위(±0)로 오면 방금 만든 옆얼굴을 덮고, 반경을 키우면 기둥 틈을 가려
+    /// "판이 안 보인다"가 된다. 색은 `stage.glow`(캐릭터 편) — `structureEdge`(기둥 립)를 쓰면 '점프' 신호가
+    /// '닿으면 죽는 것' 신호와 겹친다(v0.2.48 에서 실제로 그랬다).
+    private func wingBeat(_ context: inout GraphicsContext, t: MiniGameProjection,
+                          since: TimeInterval, glow: Color) {
+        let p = min(max(since / FlappyFX.flapWing, 0), 1)
+        guard p < 1 else { return }
+        let eased = CGFloat(1 - pow(1 - p, 2))
+        let sprite = FlappyGame.spriteSize
+        // 몸통 중간에서 출발해 머리 위까지 올라가며 좁아진다(솟는 방향 = 호가 가는 방향).
+        let rise = sprite * (FlappyFX.flapWingRise.from + FlappyFX.flapWingRise.travel * eased)
+        let halfW = sprite * FlappyFX.flapWingHalfWidth * (1 - 0.35 * eased) * t.scale
+        let depth = sprite * FlappyFX.flapWingDepth * (1 - 0.30 * eased) * t.scale
+        for side in [CGFloat(-1), 1] {
+            let c = t.point(game.bird.x + side * sprite * FlappyFX.flapWingSideGap,
+                            displayBirdY + sprite * 0.20 - rise)
+            var path = Path()
+            path.move(to: CGPoint(x: c.x - halfW, y: c.y + depth * 0.5))
+            path.addQuadCurve(to: CGPoint(x: c.x + halfW, y: c.y + depth * 0.5),
+                              control: CGPoint(x: c.x, y: c.y - depth * 1.4))
+            context.stroke(path, with: .color(glow.opacity(0.9 * (1 - p))), lineWidth: 2.0)
+        }
+    }
+
     /// "+1" 과 득점 링이 뜨는 논리 x. 득점 순간 방금 지나온 기둥의 **뒷면**이 캐릭터에 닿아 있으므로,
     /// 캐릭터 바로 뒤(기둥 폭의 3/4)에 두면 "저 기둥을 통과해서 받았다"가 보인다. 한 기둥 폭(44)을
     /// 통째로 물리면 표시가 왼쪽 허공에 뜨고(2026-09-10 지적), 0 이면 글씨가 얼굴을 덮는다.
@@ -726,16 +875,28 @@ struct FlappyGameView: View {
             let side = FlappyGame.spriteSize * t.scale
             let cx = t.origin.x + game.bird.x * t.scale
             let cy = t.origin.y + displayBirdY * t.scale
-            // 잔상 — 진행 중에만, 뒤로 갈수록 옅게. 속도감을 만드는 값싼 수단이다(블러는 60Hz 예산에서 못 쓴다).
-            // 잔상에는 얹는 장치도 림도 없다: 필요한 것은 실루엣뿐이고, 60Hz 에서 네 벌을 다 그릴 이유가 없다
-            // (옆모습 자체는 캐시된 그림 한 장이라 잔상에도 그대로 들어간다 — 여기서 뺄 것이 없다).
+            // 잔상 — **지나온 자리**를 그린다. 자리·자세·나이는 전부 규칙이 들고 있는 궤적(`game.trail`)에서 오고,
+            // 그 점들은 기둥과 같은 속도로 흐른다: 그래서 솟는 중이면 꼬리가 아래·뒤로 처지고, 떨어지는 중이면
+            // 위·뒤로 뻗는다. (v0.2.48 까지는 캐릭터에서 x −9/−18/−27 고정이라 어떤 자세에서도 셋이 수평으로
+            // 나란했다 — 궤적이 아니라 장식이었다.)
+            // 잔상은 **단색 실루엣 한 겹**이다(v0.2.49 수정). 얹는 장치도 림도 없고 스프라이트의 속살도 없다:
+            // 사본으로 그렸더니 지나온 자리마다 눈·입·볼터치가 그대로 살아 있어(휘도 편차 25~51) 얼굴이
+            // 다섯 개인 그림이 됐다 — 주석은 "필요한 것은 실루엣뿐"이라고 적어 두고 코드는 사본을 그렸다.
+            // ForEach 범위는 **고정 상한**이다: 이력 개수로 범위를 만들면 프레임마다 배열이 새로 생긴다(60Hz 예산).
             if !host.reduceMotion, game.phase == .running {
-                ForEach(0..<FlappyFX.ghostOpacities.count, id: \.self) { index in
-                    FlappyMascot(mood: mood, facing: false, rim: false)
-                        .frame(width: side, height: side)
-                        .rotationEffect(.degrees(spriteAngle))
-                        .opacity(FlappyFX.ghostOpacities[index])
-                        .position(x: cx - FlappyFX.ghostStep * CGFloat(index + 1) * t.scale, y: cy)
+                ForEach(0..<FlappyGame.trailMax, id: \.self) { index in
+                    if index < game.trail.count {
+                        let point = game.trail[index]
+                        let fresh = trailFreshness(point.age)     // 1(방금) → 0(수명 끝)
+                        FlappyMascot(mood: mood, facing: false, rim: false,
+                                     silhouette: FlappyFX.trailTint)
+                            .frame(width: side, height: side)
+                            .scaleEffect(FlappyFX.trailScale.back
+                                         + (FlappyFX.trailScale.front - FlappyFX.trailScale.back) * fresh)
+                            .rotationEffect(.degrees(tilt(forVY: point.vy)))
+                            .opacity(FlappyFX.trailOpacity * Double(fresh))
+                            .position(x: t.origin.x + point.x * t.scale, y: t.origin.y + point.y * t.scale)
+                    }
                 }
             }
             // 부유는 **구조 분기**로 켜고 끈다. 플래그만 내리거나 애니메이션을 nil 로 바꾸는 것으로는
@@ -847,9 +1008,19 @@ struct FlappyGameView: View {
     /// 기본 자세는 **동작이 아니라 방향 표시**라 동작 줄이기에서도 남긴다(속도 기울기와 회전만 뺀다).
     private var spriteAngle: Double {
         guard !host.reduceMotion else { return FlappyFX.baseTilt }
-        let raw = Double(game.bird.vy / FlappyGame.maxFallSpeed) * FlappyFX.tiltRange.upperBound
-        let tilt = min(FlappyFX.tiltRange.upperBound, max(FlappyFX.tiltRange.lowerBound, raw))
-        return FlappyFX.baseTilt + tilt + FlappyFX.deathSpin * (deathProgress ?? 0)
+        return tilt(forVY: game.bird.vy) + FlappyFX.deathSpin * (deathProgress ?? 0)
+    }
+
+    /// 그 속도에서의 자세(기본 −6° + 낙하 비례 −20…+25°). **잔상이 그 순간의 자세를 쓰려고** 함수로 뽑았다 —
+    /// 지금 자세를 꼬리 전체에 물리면 급회전 프레임에서 지나온 자리가 통째로 같이 돌아 궤적이 거짓말을 한다.
+    private func tilt(forVY vy: CGFloat) -> Double {
+        let raw = Double(vy / FlappyGame.maxFallSpeed) * FlappyFX.tiltRange.upperBound
+        return FlappyFX.baseTilt + min(FlappyFX.tiltRange.upperBound, max(FlappyFX.tiltRange.lowerBound, raw))
+    }
+
+    /// 잔상 한 점의 신선도(1 = 방금 · 0 = 수명 끝). 불투명도와 크기가 같이 이 값을 탄다.
+    private func trailFreshness(_ age: TimeInterval) -> CGFloat {
+        CGFloat(min(max(1 - age / FlappyGame.trailLife, 0), 1))
     }
 
     /// 점프 직후 0.18초 동안 (0.86, 1.18) → (1, 1) easeOut. 점프에 "임팩트"를 주는 가장 값싼 수단이다.
@@ -962,33 +1133,55 @@ private struct FlappyMascot: View {
     var facing: Bool = true
     /// 어두운 림을 두를지.
     var rim: Bool = true
+    /// 값이 있으면 **속살 없이 이 색 한 겹**만 스프라이트 알파로 오려 그린다(잔상 전용).
+    /// 잔상에 눈·입이 남으면 "지나온 자리"가 아니라 "얼굴이 여럿"이 된다 — 나머지 겹(림·명암·플래시)은
+    /// 실루엣에 얹을 것이 없으므로 통째로 건너뛴다(60Hz 에 최대 8장을 그리는 자리다).
+    var silhouette: Color? = nil
 
     var body: some View {
         // 옆모습 조회는 **한 번만** 한다. 이 한 값이 그림 구성을 가른다(돌아선 얼굴이냐, 정면 + 가짜 명암이냐).
         let turned = MiniGameMascot.sideProfile(mood: mood)
         let source = turned ?? CheckMascotAssets.image(for: mood)
         ZStack {
-            if rim {
+            if let silhouette {
+                // 알파만 쓰는 한 겹. `colorMultiply` 는 몸통 그라디언트·눈동자가 색만 바뀐 채 그대로 남아
+                // 실루엣이 되지 않는다(곱셈은 밝기 차이를 보존한다) — 그래서 마스크로 오려 낸다.
+                silhouette.mask(sprite(source))
+            } else {
+                if rim {
+                    sprite(source)
+                        .colorMultiply(.black)
+                        .opacity(FlappyFX.rimOpacity)
+                        .scaleEffect(FlappyFX.rimScale)
+                }
                 sprite(source)
-                    .colorMultiply(.black)
-                    .opacity(FlappyFX.rimOpacity)
-                    .scaleEffect(FlappyFX.rimScale)
-            }
-            sprite(source)
-            if facing, turned == nil {
-                // 뒤통수 그늘 + 앞쪽 반사광을 **한 장**으로. 실루엣 안쪽에만 얹는다(마스크가 PNG 알파다).
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(FlappyFX.backShade), location: 0),
-                        .init(color: .clear, location: 0.48),
-                        .init(color: .white.opacity(FlappyFX.frontLight), location: 1)
-                    ],
-                    startPoint: .leading, endPoint: .trailing
-                )
-                .mask(sprite(source))
-            }
-            if flash > 0 {
-                Color.white.opacity(0.9 * flash).mask(sprite(source))
+                if facing, turned == nil {
+                    // 뒤통수 그늘 + 앞쪽 반사광을 **한 장**으로. 실루엣 안쪽에만 얹는다(마스크가 PNG 알파다).
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black.opacity(FlappyFX.backShade), location: 0),
+                            .init(color: .clear, location: 0.48),
+                            .init(color: .white.opacity(FlappyFX.frontLight), location: 1)
+                        ],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                    .mask(sprite(source))
+                }
+                if flash > 0 {
+                    // 점프 플래시는 **몸 아래쪽에만** 얹는다(위 0.30 까지는 완전히 투명, 아래로 갈수록 진해져 0.45).
+                    // v0.2.48 은 실루엣 전체를 흰색 0.9 로 덮었는데, 그때는 정면 대칭 PNG 라 덮을 얼굴이 없었다.
+                    // v0.2.49 부터 그 자리에 **돌아선 옆얼굴**(눈·입 대비가 방향의 증거다)이 있어 0.12초 동안
+                    // 얼굴이 통째로 지워진다 — 방향을 만들려고 구운 것을 점프할 때마다 지우는 셈이다.
+                    // 아래쪽만 띄우면 "쳤다"는 여전히 보이고(밟은 쪽이 밝다) 얼굴은 남는다.
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.30),
+                            .init(color: .white.opacity(FlappyFX.flapFlashOpacity * flash), location: 1)
+                        ],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    .mask(sprite(source))
+                }
             }
         }
         .compositingGroup()

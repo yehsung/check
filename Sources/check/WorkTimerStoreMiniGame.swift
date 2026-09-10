@@ -16,14 +16,28 @@ extension WorkTimerStore {
 
     /// 팝오버 오른쪽 레일의 미니게임 버튼(v0.2.48 에 캡션 행에서 이사)의 액션. **별도 창**을 열고(v0.2.46) 오늘 순위를 받는다.
     ///
-    /// 다른 패널을 닫지 않는다 — 창은 팝오버와 공존한다(팝오버를 닫아도, 다른 패널을 열어도 게임은 계속된다).
+    /// 다른 패널을 닫지 않는다 — 창은 팝오버와 공존한다(다른 패널을 열어도 게임은 계속된다).
     /// 이미 열려 있어도 `show()` 는 멱등이라 앞으로 가져오기만 한다(최소화해 뒀다면 되살린다).
+    ///
+    /// **팝오버는 닫는다**(v0.2.49). 사용자 요구 2026-09-10: "미니게임 버튼은 눌렀을 때 미니게임 창
+    /// 열리면서 상단 탭바 화면은 닫히게 해줘." 지금까지는 게임 창을 열어도 팝오버가 그 위에 남아
+    /// 화면을 가렸다 — 창을 띄우는 `NSApp.activate()` 경로로는 팝오버가 닫히지 않는다는 것을
+    /// 실측으로 확인했다(근거 표는 `WindowTopAnchor.dismissMenuPopover` 주석).
+    ///
+    /// 순서가 **창 먼저, 팝오버 나중**인 이유가 둘이다.
+    ///  · 이 메서드는 팝오버 **안의** 버튼이 부른다. 먼저 닫으면 자기를 그린 뷰 계층을 액션 도중에 걷어낸다.
+    ///  · 닫는 수단이 상태바 아이템 클릭이라, 창이 먼저 키를 가져간 뒤 눌러야 포커스가 게임 창에 남는다.
+    ///
+    /// **판은 안 끊긴다.** `miniGameInterruptToken` 을 올리는 곳은 게임 창 자신의 닫힘·포커스 상실뿐이고
+    /// (`CheckMiniGameWindowController`), 팝오버가 닫히며 흐르는 `setMenuPresented(false)` 는 그 토큰을
+    /// 건드리지 않는다 — 그 사실은 소스 계약 테스트가 이미 못 박고 있다.
     func openMiniGameWindow() {
         if !isMiniGamePanelVisible { isMiniGamePanelVisible = true }
         // 첫 프레임부터 빈 목록 자리에 "불러오는 중…"이 뜨게 한다(토큰 보드와 같은 규약 — 본문 자리에 동기화 문구 금지).
         if !miniGameBoardLoaded { miniGameBoardLoading = true }
         loadMiniGameBoard()
         CheckMiniGameWindowController.shared.show()
+        WindowTopAnchor.dismissMenuPopover()
     }
 
     /// 진입 버튼을 다시 눌렀을 때(열려 있으면 닫고, 아니면 연다). 창을 쓰는 지금도 남겨 두는 이유는 같은 버튼이

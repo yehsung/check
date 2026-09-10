@@ -804,9 +804,34 @@ final class CheckOverlayController {
     /// 사용자가 캐릭터를 두었던 자리가 영영 날아간다.
     private func withinBody(_ screenPoint: NSPoint) -> Bool {
         if isUltraActive { return false }
+        // 도착 알림 말풍선은 **몸체 밖**(머리 위)이라 지오메트리 판정에 걸리지 않는다. 열 곳이 배선돼 있고
+        // 지금 그 말풍선이 떠 있을 때만 그 사각형을 몸체로 쳐 준다 — 그래야 패널이 클릭 통과를 풀고
+        // (updateHitThrough → ignoresMouseEvents=false) 그 클릭이 우리에게 온다.
+        // **배선 전(onOpenMessages == nil)에는 언제나 nil 이라 지금 동작은 한 톨도 달라지지 않는다.**
+        if let rect = messageArrivalBubbleScreenRect(), rect.contains(screenPoint) { return true }
         return engine.hasAttachedView
             ? isBodyAtScreenPointFresh(screenPoint)
             : panel.frame.contains(screenPoint)
+    }
+
+    /// 알림 말풍선 클릭 배선점 — 누르면 메시지 창이 열린다. **그 창이 아직 없어 지금은 언제나 nil 이고**,
+    /// nil 인 동안은 말풍선에 화살표도 안 붙고 클릭 자리도 생기지 않는다. 배선은 통합 담당이 한다.
+    /// (엔진에 두는 이유: 말풍선을 그리는 뷰와 클릭을 받는 컨트롤러가 **같은 값 하나**를 봐야
+    ///  "화살표는 있는데 눌러도 아무 일이 없다"가 생기지 않는다.)
+    var onOpenMessages: (() -> Void)? {
+        get { engine.onOpenMessages }
+        set { engine.onOpenMessages = newValue }
+    }
+
+    /// 지금 **누를 수 있는** 도착 알림 말풍선이 떠 있으면 그 화면 사각형, 아니면 nil.
+    ///
+    /// 셋을 모두 만족해야 한다: 열 곳이 배선돼 있고(nil 이면 누를 자리를 만들지 않는다),
+    /// 격발 중이 아니고(전체화면 울트라가 이기는 것이 기존 우선순위다), 지금 떠 있는 문구가 알림형이다.
+    /// 캐릭터를 꺼 둔 사용자에게는 애초에 이 경로가 오지 않는다 — `handleClick` 이 `shouldBeVisible` 을 먼저 본다.
+    func messageArrivalBubbleScreenRect() -> NSRect? {
+        guard engine.onOpenMessages != nil, !isUltraActive else { return nil }
+        guard let text = engine.greetingText, OverlayMessageBubble.isArrival(text) else { return nil }
+        return OverlayMessageBubble.screenRect(inPanelFrame: panel.frame)
     }
 
     /// 좌클릭 다운: 표시 중이고 몸체 위면 드래그 후보로 삼는다(리액션은 아직 발화하지 않고 업 시점에 판정).
@@ -892,6 +917,13 @@ final class CheckOverlayController {
     func handleClick(at location: NSPoint) {
         // 격발 중 클릭은 삼킨다(조기 해제도, 때리기도 없다 — 막는 게 목적인데 첫 클릭에 사라지면 의미가 없다).
         guard shouldBeVisible, !isUltraActive, withinBody(location) else { return }
+        // 도착 알림 말풍선 위 클릭은 **메시지 창 열기**다. 아파하기·보드보다 먼저 본다 — 이 클릭의 뜻은
+        // 하나뿐이어야 하고(말풍선을 눌렀는데 캐릭터가 "아얏!" 하면 무엇을 한 건지 알 수 없다),
+        // 말풍선은 몇 초만 떠 있으므로 그 짧은 창에서는 알림이 이긴다.
+        if let rect = messageArrivalBubbleScreenRect(), rect.contains(location) {
+            engine.onOpenMessages?()
+            return
+        }
         if engine.state == .sleeping {
             // 자는 애를 깨우는 건 그 자체로 완결된 상호작용이다. 깨우면서 보드까지 열면 두 연출이 겹치고,
             // 사용자는 "깨우려던 것"과 "열려던 것" 중 무엇을 한 건지 알 수 없다. 다음 클릭이 보드를 연다.
@@ -1058,29 +1090,10 @@ final class CheckOverlayController {
     // beginPokePeek)에 태우는 것이 전부다. 그래서 지속시간(6초)·페이드·다음 리액션과의 인터럽트 규칙·
     // peek 창(8초)·캐릭터 미-attach 폴백이 전부 찔림과 같은 기계에서 나온다 — 메시지만 따로 어긋날 여지가 없다.
 
-    /// 메시지 말풍선 문구(순수 함수 — 헤드리스로 고정한다). **보낸이와 본문이 둘 다** 들어간다:
-    /// 3글자만 떠 있으면 받는 쪽에서 아무 뜻도 없다.
-    ///
-    /// 양쪽을 여기서 자르는 이유는 **잘림의 방향** 때문이다. 말풍선은 `lineLimit(2)` 라 넘치면 SwiftUI 가
-    /// 꼬리를 지우는데, 이 문구의 꼬리는 정확히 본문이다 — 안 자르면 잘리는 쪽이 알맹이다. 별명도 본문도
-    /// **남이 정하는 문자열**이고 스토어는 길이를 일부러 재검사하지 않으므로(서버 상한이 늘면 그건 새 진실이라는
-    /// 판단 — WorkTimerStore.freshReceivedMessages), 폭 예산을 지키는 일은 표시 쪽 몫으로 남는다.
-    ///
-    /// 실측(같은 머신에서 NSLayoutManager 로 실제 줄 수를 셈. 폰트는 CheckGreetingBubble 그대로
-    /// `.caption2` rounded semibold = 10pt, 텍스트 가용 폭 94pt = 캡슐 110 − 좌우 패딩 8×2, lineLimit 2 → 예산 188pt):
-    ///  · 평상시 "이유성님: 화이팅" = 66.4pt **1줄**
-    ///  · 서버 상한 조합(별명 12자 + 본문 3자) = 144.2pt 2줄 — 기존 "이유성님 외 2명이 콕 찔렀어요!"(124.1pt 2줄)와
-    ///    같은 줄 수라 패널(140×170) 레이아웃이 지금과 달라지지 않는다.
-    ///  · 상한을 넘겨 양쪽 다 잘린 최악(별명 12+…, 이모지 3+…) = 177.1pt **2줄** ✓
-    ///  · 본문 상한이 **4로 늘면 그 최악이 191.1pt = 3줄**이 되어 꼬리(=본문)가 잘린다. 즉 상한을 올리는 변경은
-    ///    이 포맷을 함께 손봐야 한다 — 그 순간 빨개지는 테스트를 함께 뒀다(messageBubbleFitsTwoLineBudget).
+    /// 메시지 말풍선 문구(순수 함수 — 헤드리스로 고정한다). 갈래 판정은 `OverlayMessageBubble` 이 하고
+    /// 여기는 **기존 호출부가 쓰는 이름**만 남긴다(문구 규칙을 두 벌로 적으면 언젠가 한쪽만 바뀐다).
     nonisolated static func messageBubbleText(name: String, body: String) -> String {
-        let shortName = clippedForBubble(name, limit: WorkTimerStore.displayNameMaxLength)
-        let shortBody = clippedForBubble(body, limit: MessageBody.maxCharacters)
-        // 본문이 비면 콜론만 덩그러니 남는다("이유성님: "). 스토어가 빈 본문을 이미 거르지만, 그 계약에 기대어
-        // 깨진 문구를 만들 이유는 없다 — 보낸이는 어떤 경우에도 남긴다(누가 불렀는지가 이 기능의 절반이다).
-        guard !shortBody.isEmpty else { return "\(shortName)님이 메시지를 보냈어요!" }
-        return "\(shortName)님: \(shortBody)"
+        OverlayMessageBubble.form(name: name, body: body).text
     }
 
     /// 글자수 기준 자르기 + 말줄임(순수 함수). 세는 단위가 `Character`(확장 자소 클러스터)라 이모지 가족·국기·
@@ -1753,5 +1766,415 @@ struct DragFacingHysteresis {
             referenceX = x
         }
         return direction
+    }
+}
+
+// MARK: - 메시지 말풍선: 예산에 들어오면 캐릭터가 말하고, 넘치면 "도착"만 알린다
+
+/// 수신 메시지를 캐릭터 머리 위 말풍선에 어떻게 실을지 정하는 규칙 모음(전부 순수 함수 — 헤드리스로 고정한다).
+///
+/// **왜 갈래가 둘인가.** 서버 본문 상한이 3자에서 200자로 열렸다. 말풍선은 캐릭터 머리 위 110pt 캡슐이고
+/// `CheckGreetingBubble` 이 `lineLimit(2)` 라, 예산을 넘기는 순간 SwiftUI 가 **꼬리를 지운다** — 이 문구의
+/// 꼬리는 정확히 본문이다. 200자를 그 자리에 우겨넣으면 "이유성님: 안녕하…" 만 남아 **내용이 사라진다**.
+/// 그래서 예산 안에 들어오는 것만 캐릭터가 그대로 말하고, 넘치면 본문을 **한 자도 띄우지 않고** 도착만 알린다.
+/// 앞부분만 미리보기로 흘리지 않는 이유: "말한다"와 "알린다"가 한 화면에서 섞이면 사용자는 지금 보이는 것이
+/// 전부인지 일부인지 알 수 없고, 그 순간 두 규칙 다 못 믿게 된다.
+///
+/// ── 갈래를 **글자 수가 아니라 실제 폭**으로 가르는 이유 ──────────────────────
+/// 처음엔 자소 수 하나로 갈랐다(본문 5자). 그 5는 **가장 넓은 문자(이모지 14.00pt)** 로 최악을 잡은 값이라,
+/// 한글만 쓰는 팀에게는 같은 예산에 16자가 들어가는데도 5자에서 잘렸다 — "고생했어요"(5자)는 말하고
+/// "오늘 고생했어요"(7자)는 알림으로 넘어갔다. **캐릭터가 말할 수 있는 것을 굳이 안 말하게 만드는 셈이다.**
+/// 그래서 판정을 뒤집었다: 합성한 문구(`<이름>님: <본문>`)를 **그리는 것과 같은 조건으로 실제로 재서**
+/// 두 줄 안에 들어오면 말하고, 넘치면 알린다. 문자 클래스별 임계는 이제 **자동으로** 갈린다
+/// (이름 "이유성", 한 글자만 반복한 최악 기준 실측: 한글·한자 10자 · 라틴 W 9자 · 라틴 a 16자 ·
+/// 라틴 i 33자 · 이모지/스킨톤/국기 9자 · 숫자 14자 · 마침표 24자). 띄어쓰기가 있는 **진짜 문장**은 더
+/// 들어간다 — "회의 5분 뒤에 시작해요"(13자) · "Thanks for your help today"(26자)가 그대로 말풍선에 뜬다.
+///
+/// ── 재는 방법 ────────────────────────────────────────────────────────────
+/// `Metrics` 가 캡슐을 그리는 쪽이 쓰는 값을 그대로 들고 있고(폰트 `.caption2` rounded semibold =10pt,
+/// 캡슐 maxWidth 110, 좌우 패딩 8 → 텍스트 가용 폭 94pt, `lineLimit(2)`), `lineCount(_:)` 가
+/// **NSLayoutManager 로 실제 줄 수를 센다**. 판정은 문자열 + `Metrics` 만의 함수다 — 뷰 상태도, 화면 배율도,
+/// 지금 떠 있는 창도 보지 않는다. 그래서 같은 문자열이면 언제나 같은 답이고 테스트가 경계를 못 박을 수 있다.
+/// 값이 두 벌이 되지 않도록 `Metrics` 는 **여기 한 곳**이고, 그리는 쪽(`CheckGreetingBubble`)이 같은 숫자를
+/// 쓰고 있다는 사실은 소스 계약 테스트(`greetingBubbleCapsuleMatchesTheMeasuredMetrics`)가 지킨다.
+/// 60Hz 경로가 아니라 **메시지가 도착할 때 한 번** 도는 자리라 정확성이 속도보다 앞서지만, 펌프가 tick 마다
+/// 같은 메시지를 다시 물어보므로 판정 결과는 (이름, 본문) 키로 캐시한다.
+///
+/// ── 이름은 왜 여전히 6자에서 잘리나(그리고 왜 폭으로도 한 번 더 자르나) ────────
+/// `nameLimit`(자소 6)은 앞선 실측이 고른 값 그대로다 — 서버 별명 상한 12를 그대로 쓰면 12자 이름만으로
+/// 126.7pt 를 먹어 본문에 2~3자밖에 안 남고(= 200자 개방의 이득이 0), 도착 알림 문구가 3줄이 되어 스스로 잘린다.
+/// 여기에 **폭 상한을 하나 더** 걸었다: 이름은 `nameWidthBudget`(= 한글 `nameLimit` 자 + 말줄임 = 오늘의
+/// 가장 넓은 한글 이름) 보다 넓어질 수 없다. 그래서
+///   · 한글 이름은 **한 글자도 안 달라진다**(6자 그대로 — 이 팀의 경우가 이것이다),
+///   · 이모지처럼 넓은 글자로만 된 이름은 몇 자를 내주고 그만큼을 **본문이 가져간다**
+///     (🎉×6 이름 → 🎉×3+… 로 줄고, 이모지 본문이 7자에서 8자가 된다).
+/// 더 줄이지 않는 이유는 "누가 보냈나"가 이 기능의 절반이기 때문이다. 이름 폭이 묶여 있으므로 도착 알림
+/// (`✉️ ○○님 메시지 도착!`)이 2줄 안에 든다는 것도 **구조로** 보장된다 — 테스트만 아는 사실이 아니다.
+///
+/// **세는 단위는 `Character`(확장 자소 클러스터)다.** 서버는 코드포인트로 200을 세지만 여기 기준은 화면 폭이고,
+/// 사용자 눈에 이모지 가족·국기·스킨톤은 **한 칸**이다 — 코드포인트로 세면 자르는 순간 결합이 쪼개져
+/// 깨진 글리프가 뜬다. 폭은 한 칸이 아니라 1.6칸이지만, 그 차이는 이제 폭 판정이 알아서 흡수한다.
+enum OverlayMessageBubble {
+
+    // MARK: - 캡슐 치수 — 그리는 쪽과 **한 벌**이어야 한다
+
+    /// 말풍선을 그리는 코드가 쓰는 값. 판정은 여기서만 읽는다 — 두 벌로 적으면 폰트나 패딩을 고친 날
+    /// 그림과 판정이 조용히 갈리고, 그 증상은 "긴 메시지가 잘려 나온다"로만 보인다.
+    enum Metrics {
+        /// `CheckGreetingBubble` / `CheckMessageArrivalBubble` 의 `.frame(maxWidth:)`.
+        static let capsuleMaxWidth: CGFloat = 110
+        /// `.padding(.horizontal, 8)`.
+        static let horizontalPadding: CGFloat = 8
+        /// `.padding(.vertical, 5)`.
+        static let verticalPadding: CGFloat = 5
+        /// `.lineLimit(2)` — 이 줄 수를 넘기는 순간 SwiftUI 가 꼬리를 지운다.
+        static let lineLimit = 2
+
+        /// 텍스트가 실제로 쓸 수 있는 폭(= 캡슐 − 좌우 패딩). 알림 캡슐은 화살표가 붙을 때 캡슐을 8pt
+        /// **늘려** 이 값을 그대로 지킨다(`CheckMessageArrivalBubble.capsuleMaxWidth`).
+        static let textWidth: CGFloat = capsuleMaxWidth - horizontalPadding * 2
+
+        /// `.font(.system(.caption2, design: .rounded).weight(.semibold))` 의 AppKit 대역.
+        /// SwiftUI 레이아웃을 헤드리스로 재는 가장 가까운 자리다.
+        nonisolated(unsafe) static let font: NSFont = {
+            let size = NSFont.preferredFont(forTextStyle: .caption2).pointSize
+            let base = NSFont.systemFont(ofSize: size, weight: .semibold)
+            guard let descriptor = base.fontDescriptor.withDesign(.rounded) else { return base }
+            return NSFont(descriptor: descriptor, size: size) ?? base
+        }()
+
+        /// 한 줄 높이(실측이 아니라 폰트에서 파생 — 폰트를 바꾸면 캡슐 높이도 따라온다).
+        static let lineHeight: CGFloat = NSLayoutManager().defaultLineHeight(for: font)
+    }
+
+    // MARK: - 측정 (순수 함수 — 문자열과 Metrics 만 본다)
+
+    /// AppKit 텍스트 레이아웃을 두 스레드에서 동시에 돌리지 않기 위한 자물쇠. 측정은 메시지 도착마다 한 번이라
+    /// 직렬화 비용이 없고, 대신 테스트가 병렬로 스윕을 돌려도 흔들릴 자리가 사라진다.
+    private static let layoutLock = NSLock()
+
+    /// 이 문자열이 캡슐 안에서 차지하는 줄 수(순수 함수). `Metrics.textWidth` 로 감싸 실제로 줄바꿈시킨 뒤 센다 —
+    /// 폭을 더해서 나누는 산식으로는 줄바꿈이 버리는 자투리를 못 본다.
+    ///
+    /// `strategy` 는 **줄바꿈 규칙**이다. 기본값(`[]`)은 "들어가는 데까지 채우고 아무 데서나 자른다",
+    /// `.standard` 는 "낱말을 통째로 다음 줄로 민다". SwiftUI 가 실제로 어느 쪽으로 굴지는 글자에 따라 다르다
+    /// (아래 `fitsCapsule` 주석 참조) — 그래서 판정은 둘 다 물어본다.
+    nonisolated static func lineCount(
+        _ text: String, strategy: NSParagraphStyle.LineBreakStrategy = []
+    ) -> Int {
+        layoutLock.lock()
+        defer { layoutLock.unlock() }
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakStrategy = strategy
+        let storage = NSTextStorage(
+            string: text, attributes: [.font: Metrics.font, .paragraphStyle: paragraph])
+        let container = NSTextContainer(
+            size: CGSize(width: Metrics.textWidth, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        let layout = NSLayoutManager()
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+        layout.ensureLayout(for: container)
+        var lines = 0
+        var index = 0
+        while index < layout.numberOfGlyphs {
+            var range = NSRange()
+            _ = layout.lineFragmentRect(forGlyphAt: index, effectiveRange: &range)
+            index = NSMaxRange(range)
+            lines += 1
+        }
+        return lines
+    }
+
+    /// 줄바꿈 없이 한 줄로 폈을 때의 폭(순수 함수). 이름 자르기와 "그릴 게 있는가" 판정에 쓴다.
+    nonisolated static func textWidth(_ text: String) -> CGFloat {
+        layoutLock.lock()
+        defer { layoutLock.unlock() }
+        return (text as NSString).size(withAttributes: [.font: Metrics.font]).width
+    }
+
+    /// 이 문구가 캡슐 안에 **잘리지 않고** 들어가는가(순수 함수). 갈래 판정의 본 규칙이다.
+    ///
+    /// ── 왜 한 번만 재고 끝내지 않는가(실측으로 배운 것) ─────────────────────
+    /// SwiftUI `Text` 의 줄바꿈은 TextKit 을 그대로 쓰지 않는다. 같은 폭(94pt)에서 실제로 그려 보고
+    /// **꼬리가 그려졌는지 픽셀로** 확인하면, 폭이 똑같은(8.65pt) 한글끼리도 갈린다:
+    ///   · "가가가…" → 낱말 안에서 잘라 붙인다(이름 "이유성" 기준 16자까지 2줄)
+    ///   · "힣힣…" · "뷁뷁…" · "漢漢…" → **한 낱말로 보고 통째로 다음 줄로 민다**(10자에서 이미 3줄)
+    /// 시스템이 한국어 낱말 사전을 보고 가르는 것이라 우리 쪽에서 재현할 수단이 없다. 그래서 판정은
+    /// **세 가지를 모두** 통과할 때만 "들어간다"고 한다 — 어느 쪽으로 굴어도 안전한 답만 남긴다:
+    ///   ① 아무 데서나 자르는 배치로 2줄 이내(`[]`)
+    ///   ② 낱말을 통째로 미는 배치로도 2줄 이내(`.standard`)
+    ///   ③ **CJK 가 섞인 낱말**은 그 하나가 한 줄 폭 안에 들어간다 — 통째로 밀렸을 때 한 줄을 넘으면
+    ///      그 낱말 혼자 두 줄을 먹어 예산이 통째로 어긋난다(②는 한자 안에서는 잘라 버려 이걸 못 본다:
+    ///      실측 "漢×18" 을 2줄이라고 하지만 화면에서는 10자에서 이미 잘린다).
+    /// 대가는 **공백 없는 한글 11자 이상**이 알림형으로 가는 것이다(시스템이 잘라 주는 글자였다면 16자까지
+    /// 됐다). 낱말 사전을 못 보는 이상 그쪽이 맞는 방향이다 — 잘못 말하면 본문이 잘리고, 잘못 알리면
+    /// 메시지 창에서 볼 뿐이다. 그리고 띄어쓰기가 있는 실제 문장은 이 대가를 치르지 않는다
+    /// ("회의 5분 뒤에 시작해요" 13자 인라인).
+    nonisolated static func fitsCapsule(_ text: String) -> Bool {
+        guard lineCount(text) <= Metrics.lineLimit else { return false }
+        guard lineCount(text, strategy: .standard) <= Metrics.lineLimit else { return false }
+        return cjkWordsFitOneLine(text)
+    }
+
+    /// CJK(한글·한자·가나)가 섞인 낱말이 저마다 한 줄 폭 안에 드는가(순수 함수).
+    nonisolated static func cjkWordsFitOneLine(_ text: String) -> Bool {
+        for word in text.split(whereSeparator: { $0.isWhitespace }) where word.contains(where: isCJK) {
+            if textWidth(String(word)) > Metrics.textWidth { return false }
+        }
+        return true
+    }
+
+    /// 줄바꿈을 안에서 허락하지 않을 수 있는 글자인가(순수 함수). 한글(음절·자모)·한자·가나가 그렇다.
+    nonisolated static func isCJK(_ character: Character) -> Bool {
+        character.unicodeScalars.contains { scalar in
+            switch scalar.value {
+            case 0x1100...0x11FF, 0x3130...0x318F, 0xA960...0xA97F,   // 한글 자모
+                 0xAC00...0xD7A3, 0xD7B0...0xD7FF:                    // 한글 음절
+                return true
+            case 0x3040...0x30FF, 0x31F0...0x31FF:                    // 가나
+                return true
+            case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF:   // 한자
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    // MARK: - 상수
+
+    /// 말풍선이 이름에 내주는 최대 자소 수. 넘치면 `…` 로 자른다.
+    static let nameLimit = 6
+
+    /// 이름이 차지할 수 있는 최대 폭 = **한글 `nameLimit` 자 + 말줄임**. 곧 "오늘 한글 이름이 갖는 최대 폭"이라
+    /// 한글·라틴 이름은 종전 그림 그대로고, 그보다 넓은 글자(이모지)로 된 이름만 몇 자를 본문에 내준다.
+    static let nameWidthBudget: CGFloat = textWidth(String(repeating: "가", count: nameLimit) + "…")
+
+    /// **안전망**(폭 규칙이 못 보는 것을 막는다). 폭이 0에 가까운 글자(제로폭 공백·결합문자)로만 채우면
+    /// 200자도 폭 판정을 통과해 "이유성님: " 만 남은 빈 캡슐이 된다. 실제 글자로는 이 그물이 물리지 않는다 —
+    /// 폭이 허락하는 가장 긴 본문이 33자(라틴 `i`)라 언제나 폭 규칙이 먼저 발동한다(테스트가 못 박는다).
+    static let inlineGraphemeCeiling = 40
+
+    /// "이건 내용이 아니라 알림"이라는 시각 신호. 문구 **맨 앞**에 붙는다 — 렌더러(`CheckGreetingBubble`)는
+    /// 순수 Text 라 아이콘을 따로 얹을 자리가 없고, 문구 안에 있어야 어느 렌더러를 타든 신호가 살아남는다.
+    static let arrivalIcon = "✉️"
+
+    /// 도착 알림의 고정 꼬리. 저장소 말투를 따랐다("○○님 출근!" · "○○님이 콕 찔렀어요!" 계열).
+    static let arrivalSuffix = "님 메시지 도착!"
+
+    /// 말풍선에 실린 갈래. `Equatable` 이라 테스트가 "무엇을 골랐는가"를 문자열 대조 없이 본다.
+    enum Form: Equatable {
+        /// 캐릭터가 본문을 그대로 말한다(종전 그림).
+        case inline(String)
+        /// 내용은 띄우지 않고 도착만 알린다.
+        case arrival(String)
+
+        var text: String {
+            switch self {
+            case .inline(let text), .arrival(let text): return text
+            }
+        }
+    }
+
+    // MARK: - 갈래 판정
+
+    /// 갈래 판정 + 문구 생성(순수 함수, 결과 캐시).
+    nonisolated static func form(name: String, body: String) -> Form {
+        let key = "\(name)\u{0}\(body)"
+        if let hit = formCache.value(for: key) { return hit }
+        let value = measuredForm(name: name, body: body)
+        formCache.store(value, for: key)
+        return value
+    }
+
+    /// 캐시 없이 실제로 재는 판정(순수 함수). 순서가 곧 규칙이다.
+    ///
+    /// 본문이 **그릴 게 없으면**(빈 값·공백만·제로폭만) 알림형으로 보낸다 — 인라인으로 만들면 콜론만
+    /// 덩그러니 남는다("이유성님: "). 스토어가 빈 본문을 이미 거르지만 그 계약에 기대어 깨진 문구를 만들
+    /// 이유는 없고, 보낸이는 어떤 경우에도 남긴다(누가 불렀는지가 이 기능의 절반이다).
+    nonisolated static func measuredForm(name: String, body: String) -> Form {
+        let shortName = clippedName(name)
+        let flat = flattened(body)
+        let arrival = Form.arrival(arrivalText(clippedName: shortName))
+
+        // ① 화면에 그릴 게 있는가(공백·제로폭은 폭이 0이라 여기서 걸린다).
+        guard textWidth(inkOnly(flat)) > 0 else { return arrival }
+        // ② 안전망 — 위 주석 참조. 실제 글자에는 물리지 않는다.
+        guard flat.count <= inlineGraphemeCeiling else { return arrival }
+        // ③ 본 규칙 — 그리는 것과 같은 조건으로 재서 두 줄 안에 들어오는가.
+        let spoken = "\(shortName)님: \(flat)"
+        guard fitsCapsule(spoken) else { return arrival }
+        // ④ 합성 결과가 알림 판정(`isArrival`)을 통과해 버리는 극단(이름이 봉투로 시작하고 본문이 접미사와
+        //    똑같은 경우)은 인라인으로 내보내지 않는다. 내보내면 렌더러가 이걸 알림 캡슐로 그리고 클릭 자리까지
+        //    붙어 그림과 문구가 어긋난다. 알림으로 보내면 본문은 안 새고 그림도 문구와 일치한다.
+        guard !isArrival(spoken) else { return arrival }
+        return .inline(spoken)
+    }
+
+    /// 이름 자르기(순수 함수). 자소 상한(`nameLimit`)과 폭 상한(`nameWidthBudget`)을 **둘 다** 지키는
+    /// 가장 긴 앞부분을 고른다. 말줄임(`…`)도 폭을 먹으므로 후보마다 붙여서 잰다.
+    nonisolated static func clippedName(_ name: String) -> String {
+        var limit = min(name.count, nameLimit)
+        while limit > 0 {
+            let candidate = CheckOverlayController.clippedForBubble(name, limit: limit)
+            if textWidth(candidate) <= nameWidthBudget { return candidate }
+            limit -= 1
+        }
+        return name.isEmpty ? name : "…"
+    }
+
+    /// 표시용 한 줄 접기(순수 함수). 줄바꿈이 하나만 섞여도 **폭 예산 계산이 통째로 어긋난다** —
+    /// 줄바꿈은 글자 폭과 무관하게 두 줄 중 하나를 통째로 먹어, 예산 안의 짧은 본문도 3줄로 밀어낸다
+    /// (= 꼬리인 본문이 잘린다). 스토어가 제어문자를 이미 걸러 보내지만(MessageBody.sanitized),
+    /// 폭 예산을 지키는 일은 표시 쪽 몫이고 **남이 정하는 문자열**에 그 계약을 걸어 둘 이유가 없다.
+    /// 판정도 접은 뒤에 한다 — 화면에 그려지는 것이 이 문자열이기 때문이다.
+    nonisolated static func flattened(_ body: String) -> String {
+        body.split(whereSeparator: { $0.isNewline }).joined(separator: " ")
+    }
+
+    /// 공백을 걷어낸 본문(순수 함수). "그릴 게 있는가"는 공백을 빼고 봐야 한다 — 공백은 폭이 있지만
+    /// 줄 끝에서 사라지고, 200개를 넣어도 캡슐에는 아무것도 안 그려진다.
+    nonisolated static func inkOnly(_ text: String) -> String {
+        String(text.filter { !$0.isWhitespace })
+    }
+
+    /// 도착 알림 문구(순수 함수). **본문은 한 조각도 들어가지 않는다** — 길어서 못 띄우는 것인데
+    /// 앞부분만 보이면 두 규칙이 섞인다.
+    nonisolated static func arrivalText(name: String) -> String {
+        arrivalText(clippedName: clippedName(name))
+    }
+
+    /// 이미 자른 이름으로 알림 문구를 만든다(순수 함수). 문구 조립을 **한 자리**로 모아 둔 것이다 —
+    /// `measuredForm` 과 여기가 각자 조립하면 언젠가 한쪽만 바뀌고, 그러면 렌더러의 `isArrival` 이
+    /// 한쪽 문구를 못 알아본다.
+    nonisolated static func arrivalText(clippedName name: String) -> String {
+        "\(arrivalIcon) \(name)\(arrivalSuffix)"
+    }
+
+    /// 이 문구가 알림형인가(순수 함수). 렌더러가 **문구만 보고** 갈래를 되찾는 유일한 길이다 —
+    /// 엔진의 말풍선 통로(`greetingText`)는 문자열 하나뿐이고, 거기에 스타일 필드를 덧대면
+    /// 리액션 열거값(`.poked(bubbleText:)`)까지 넓혀야 해서 울트라·peek 경로가 통째로 흔들린다.
+    ///
+    /// **오탐이 없는 이유**: 예전엔 "본문이 접미사(9자)만큼 길 수 없다(임계 5)"가 근거였는데, 폭 판정은
+    /// 한글 10자에 띄어쓰기 있는 문장이면 그 이상도 허락하므로 그 논증이 죽었다. 그래서 근거를 판정 쪽으로 옮겼다 —
+    /// `measuredForm` ④ 가 이 판정을 통과하는 인라인 문구를 **애초에 만들지 않는다**.
+    nonisolated static func isArrival(_ text: String) -> Bool {
+        text.hasPrefix("\(arrivalIcon) ") && text.hasSuffix(arrivalSuffix)
+    }
+
+    // ── 판정 캐시 ────────────────────────────────────────────────────────
+    // 펌프가 tick(1초)마다 같은 메시지를 다시 물어본다(`showCurrentMessageBubble`). 같은 문자열을 그때마다
+    // 레이아웃에 돌릴 이유가 없다. 계산은 자물쇠 **밖**에서 한다 — 레이아웃은 자기 자물쇠(`layoutLock`)가
+    // 따로 지키고, 여기서 겹쳐 잠그면 두 자물쇠가 중첩된다(같은 값을 두 번 계산해 봐야 결과가 같다).
+
+    private static let formCache = FormCache()
+
+    private final class FormCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var entries: [String: Form] = [:]
+
+        func value(for key: String) -> Form? {
+            lock.lock()
+            defer { lock.unlock() }
+            return entries[key]
+        }
+
+        func store(_ value: Form, for key: String) {
+            lock.lock()
+            defer { lock.unlock() }
+            // 상한을 넘으면 통째로 비운다. LRU 를 세울 만한 자리가 아니다 — 실사용 유입은 메시지 몇 건이고,
+            // 전수 스윕을 도는 테스트만 상한에 닿는다.
+            if entries.count >= 512 { entries.removeAll(keepingCapacity: true) }
+            entries[key] = value
+        }
+    }
+
+    // ── 알림 말풍선의 클릭 자리(패널 좌표) ──────────────────────────────────
+    // 말풍선은 `CheckOverlayCharacterView` 가 ZStack(.topLeading) 에 `padding(.leading 4, .top 8)` 로 얹는다.
+
+    /// 말풍선 왼쪽 위 여백(패널 좌상단 기준).
+    static let inset = CGPoint(x: 4, y: 8)
+
+    /// 말풍선이 차지할 수 있는 최대 크기(2줄 기준 — `Metrics` 에서 파생한다). 실제 캡슐은 이보다 작을 수 있다 —
+    /// 클릭 자리를 최대 footprint 로 잡는 편이 안전하다(그 위쪽 여백은 원래 아무도 안 쓴다).
+    static let maxSize = CGSize(
+        width: Metrics.capsuleMaxWidth,
+        height: CGFloat(Metrics.lineLimit) * Metrics.lineHeight + Metrics.verticalPadding * 2
+    )
+
+    /// 패널 프레임(스크린 좌표, 좌하단 원점) 안에서 말풍선이 차지하는 사각형(순수 함수).
+    nonisolated static func screenRect(inPanelFrame frame: NSRect) -> NSRect {
+        NSRect(
+            x: frame.minX + inset.x,
+            y: frame.maxY - inset.y - maxSize.height,
+            width: maxSize.width,
+            height: maxSize.height
+        )
+    }
+}
+
+/// 도착 알림 말풍선. **평상시(짧은 메시지) 말풍선과 시각 언어가 같다**(흰 캡슐 + 얇은 테두리 + 그림자,
+/// `.caption2` rounded semibold) — 다른 창처럼 보이면 캐릭터가 말한 것과 알림이 서로 다른 기계에서 온 것처럼
+/// 읽힌다. 다른 점은 둘뿐이다: 문구 맨 앞의 봉투(`OverlayMessageBubble.arrivalIcon`)와, 열 곳이 있을 때만
+/// 붙는 작은 화살표.
+///
+/// **애니메이션을 스스로 만들지 않는다** → `reduceMotion` 갈래도 없다. 말풍선의 등장/퇴장은 얹는 쪽
+/// (`CheckOverlayCharacterView` 의 `.animation(.easeInOut(0.25), value: greetingText)`)이 소유하고,
+/// 여기서 또 붙이면 같은 전환에 두 개의 곡선이 겹친다.
+///
+/// **화면 공유·녹화 노출**은 이 뷰가 사는 패널(`makePanel` 의 `sharingType = .none`)이 이미 막는다 —
+/// 여기서 따로 할 일도, 풀어도 되는 것도 없다.
+struct CheckMessageArrivalBubble: View {
+    /// 이미 완성된 알림 문구(`OverlayMessageBubble.arrivalText`). 본문은 들어 있지 않다.
+    let text: String
+
+    /// 누르면 메시지 창을 여는 클로저. **그 창은 아직 없어서 지금은 언제나 nil 이고**, nil 이면
+    /// 화살표도 버튼 성격도 붙지 않는다(누를 수 없는 자리에 누르라는 표시를 두지 않는다). 배선은 통합 담당.
+    var onOpenMessages: (() -> Void)?
+
+    /// 열 곳이 있을 때만 캡슐을 넓힌다. 화살표(≈5pt)+간격(3pt)을 텍스트에서 빼면 가용 폭이 94 → 86pt 가 되어
+    /// 실측 예산(2줄)이 깨진다 — 그래서 폭을 8pt **늘려** 텍스트 94pt 를 그대로 지킨다.
+    /// (4 + 118 = 122pt 로 패널 140pt 안이다.)
+    private var capsuleMaxWidth: CGFloat {
+        onOpenMessages == nil ? OverlayMessageBubble.maxSize.width : OverlayMessageBubble.maxSize.width + 8
+    }
+
+    var body: some View {
+        // 화살표는 **세로 가운데**다. firstTextBaseline 로 두면 두 줄짜리 알림에서 첫 줄 오른쪽에 붙어
+        // "여기부터 접힌 내용이 있다"처럼 읽힌다 — 이건 펼침 표시가 아니라 창을 여는 표시다.
+        HStack(alignment: .center, spacing: 3) {
+            Text(text)
+                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                .foregroundStyle(.black.opacity(0.85))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            if onOpenMessages != nil {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.black.opacity(0.45))
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.92))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.black.opacity(0.10), lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+        .frame(maxWidth: capsuleMaxWidth, alignment: .leading)
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        // 실사용 클릭은 패널이 먹는다(CharacterHitTestingView 가 mouseDown 을 컨트롤러로 넘기고 super 를
+        // 부르지 않아 SwiftUI 까지 내려오지 않는다 — 컨트롤러의 handleClick 이 같은 클로저를 부른다).
+        // 그래도 여기 붙여 두는 이유는 이 뷰만 떼어 써도(미리보기·테스트) 계약이 같기 때문이다.
+        .onTapGesture { onOpenMessages?() }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(onOpenMessages == nil ? text : "\(text) 눌러서 메시지 열기")
+        .accessibilityAddTraits(onOpenMessages == nil ? [] : .isButton)
     }
 }

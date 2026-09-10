@@ -188,6 +188,11 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     ///
     /// **단, 테스트에서는 활성화하지 않는다.** 알파 0 은 창을 안 보이게 할 뿐 포커스는 못 막는다 —
     /// 스위트를 돌릴 때마다 사장님이 쓰던 앱에서 포커스가 튀는 건 창이 보이는 것만큼 나쁘다.
+    ///
+    /// ★ **이 문은 팝오버를 닫지 않는다.** 활성화만으로 팝오버가 닫힌다는 오랜 통념은 v0.2.49 실측에서
+    ///   거짓으로 판명됐다(표는 `WindowTopAnchor.dismissMenuPopover` 주석). 팝오버에서 열 때는
+    ///   **호출부**(`CheckMenuSideRail` 의 [설정] 칸)가 닫는다 — ⌘, 로 열 때는 닫을 팝오버가 없거나
+    ///   사용자가 일부러 열어 둔 것이라, 그 판단을 여기 넣으면 두 경로의 뜻이 갈린다.
     func show() {
         guard let window else { return }
         if !CheckPanelVisibility.isRunningTests {

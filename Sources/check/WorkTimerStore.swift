@@ -465,6 +465,52 @@ final class WorkTimerStore {
     /// 서버값 도착 또는 사용자가 직접 골랐음(tokenUsagePublicLoaded 와 같은 규약 — 폴링 GET 이 선택을 덮지 않게).
     @ObservationIgnored var miniGamePublicLoaded = false
 
+    // ── 제보 창 (v0.2.48) ── 미니게임과 같은 **별도 NSWindow** 라 팝오버 패널들과 상호 배타가 아니다.
+    //
+    // 로직은 전부 `WorkTimerStoreFeedback.swift` 확장에 있다. 저장 프로퍼티만 여기 있는 이유는 언어 제약이다
+    // (`@Observable` 본체 밖 extension 에는 저장 프로퍼티를 넣을 수 없다) — 설계 의도가 아니다.
+    //
+    // **폴링을 붙이지 마라.** 목록은 창을 열 때·[새로고침]·상태 변경 성공에만 받는다. 26명이 30초마다
+    // 요청 하나를 더 내는 것은 무료 플랜의 몫이 아니고, 제보는 초 단위로 바뀌는 표면도 아니다.
+
+    /// 제보 창이 열려 있는가. 레일 진입 버튼의 하이라이트와 목록 재조회 게이트로 쓴다.
+    var isFeedbackWindowVisible = false
+    /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
+    /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.
+    var feedbackList: [FeedbackReport] = []
+    /// 한 번이라도 성공적으로 받았는가(빈 목록과 로드 전을 가른다 — miniGameBoardLoaded 와 같은 3플래그 규약).
+    /// 스키마 부재(서버 배포 전)도 여기서 true 가 된다 — 그건 실패가 아니라 '아직 표가 없다'이다.
+    var feedbackLoaded = false
+    var feedbackLoading = false
+    /// 마지막 조회가 (취소도 스키마 부재도 아닌) 실패로 끝났는가. true 면 실패 문구 + [다시 시도].
+    var feedbackFailed = false
+    /// 보내기/상태 변경의 결과 안내 한 줄. **서버 예외 이름을 그대로 담지 않는다**(FeedbackText 참고).
+    var feedbackNotice: String?
+    /// 전송 왕복이 떠 있는가. 보내는 동안 버튼을 잠그지 않으면 연타가 24시간 상한을 두 배로 축낸다
+    /// (isSendingMessage 와 같은 규약).
+    var isSendingFeedback = false
+    /// 미해결 제보 건수(관리자만 0 이 아니다 — 서버 `feedback_open_count()` 가 정한다).
+    /// 레일 버튼의 배지가 읽는다. 폴링하지 않는다: 목록을 받는 자리에서 함께 갱신한다.
+    var feedbackOpenCount: Int = 0
+    /// 보내기 탭의 본문 초안. **스토어에 두는 이유**는 전송 성공에 이것을 비우는 일이 스토어의 책임이기 때문이다 —
+    /// 뷰 `@State` 에 두면 "성공했는데 글이 그대로 남아 두 번 보낸다"를 헤드리스로 잴 방법이 없다.
+    var feedbackDraft: String = ""
+    /// 보내기 탭에서 고른 종류(기본 버그).
+    var feedbackKind: FeedbackKind = .bug
+    /// 받은 제보 탭을 보고 있는가. **관리자 판정과 곱해서** 쓴다(`showsFeedbackInbox`) — 이 값만 보고 그리면
+    /// 로그아웃으로 관리자 깃발이 내려간 뒤에도 낡은 true 가 남아 탭이 잠깐 드러난다.
+    var feedbackShowsInbox = false
+    /// 받은 제보 탭의 상태 필터. nil = 전체.
+    var feedbackFilter: FeedbackStatus?
+    /// 펼쳐 놓은 제보 id(한 번에 하나). 접혀 있으면 본문은 2줄 말줄임이다.
+    var expandedFeedbackID: String?
+    /// 펼친 행의 처리 메모 초안. 한 번에 한 행만 펼치므로 한 칸이면 된다 — 행별 사전을 두면
+    /// 목록을 새로 받을 때 사라진 제보의 메모가 영영 남는다.
+    var feedbackNoteDraft: String = ""
+    /// 제보에 함께 실을 macOS 버전. 기본은 이 프로세스의 것이고 테스트가 갈아 끼운다
+    /// (appVersionProvider 와 같은 이유 — ProcessInfo 는 주입할 수 없어 포맷을 실증할 방법이 사라진다).
+    @ObservationIgnored var osVersionProvider: () -> String = { OSVersionReport.current() }
+
     // 개인 기록(내 근무 리듬 히트맵 + 지난주 회고) 페이지 상태. 다른 패널들과 상호 배타.
     // heatmap/retro 는 서버 원본 세션에서 순수 계산으로 파생한다(CheckWorkInsights).
     var isInsightsPanelVisible = false
@@ -629,7 +675,23 @@ final class WorkTimerStore {
     /// profiles.role='admin' 하나이고 그것을 아는 쪽은 서버뿐이다(UltraWalletResponse.unlimited 주석).
     /// 기본값 false = "아직 모른다"의 안전한 쪽(숫자를 그린다). 서버가 말해 준 적 없는 사용자에게
     /// 무제한이라고 말하는 것이 그 반대보다 훨씬 나쁘다.
-    var ultraUnlimited = false
+    ///
+    /// **깃발이 내려가면 제보 미해결 배지도 같이 내려간다(v0.2.48 수정).** 관리자에서 내려온 뒤
+    /// (권한 회수 · 계정 전환) 레일의 제보 배지가 **다음 목록 로드 때까지** 앞서 받은 미해결 건수를 계속
+    /// 보여 줬다 — 받은 제보 탭은 `showsFeedbackInbox`(두 값의 곱)로 즉시 닫히는데 배지만 안 닫혀서,
+    /// 이제 열 수 없는 화면의 건수가 화면에 남았다.
+    ///
+    /// 고치는 자리를 **대입 지점(applyUltraWallet)이 아니라 여기**로 잡은 이유: 대입 지점은 하나가
+    /// 아니고(지갑 sync 반영 · signOut · 테스트) 앞으로 더 늘어난다. 관찰자에 두면 "관리자가 아닌데
+    /// 배지 건수가 남아 있는" 조합이 **어느 경로로도** 만들어지지 않는다. 배지를 그리는 뷰가 관리자
+    /// 판정을 하지 않아도 되는 이유가 이것이다(`CheckMenuSideRail.feedbackBadge`).
+    /// 반대 방향(false → true)에는 아무것도 하지 않는다 — 건수는 서버가 준다.
+    var ultraUnlimited = false {
+        didSet {
+            guard !ultraUnlimited, feedbackOpenCount != 0 else { return }
+            feedbackOpenCount = 0
+        }
+    }
     /// 마지막 sync 가 **실패**했는가. 잔량 표시의 3분기(불러오는 중 / 못 읽었어요 / 정상)를 가른다.
     /// nil 잔량 하나로는 '아직 안 물어봤다'와 '물어봤는데 못 읽었다'를 가를 수 없다.
     var ultraBalanceFailed = false
@@ -704,11 +766,41 @@ final class WorkTimerStore {
     /// 메시지 전송 결과 1줄 안내. **pokeNotice 와 따로 둔다** — 두 동작이 같은 패널에 살아도 결과는 각자의 것이고,
     /// 한 칸을 나눠 쓰면 찌르기 실패 문구가 메시지 성공 위에 남는다(displayNameNotice 를 따로 둔 것과 같은 규약).
     var messageNotice: String?
-    /// 대상별 메시지 쿨타임 만료 시각(pokeCooldownUntil 과 같은 규약 — 서버가 강제하고 클라는 미러링만 한다).
-    var messageCooldownUntil: [String: Date] = [:]
-    /// 전송 왕복이 떠 있는지. **관찰 대상**이다 — 보내는 동안 버튼을 잠그지 않으면 연타가 두 번째 요청을 내고
-    /// 그 요청은 방금 자기가 만든 60초 쿨타임에 확정으로 거절당한다(isUpdatingDisplayName 과 같은 규약).
+    /// 전송 왕복이 떠 있는지. **관찰 대상**이다 — 보내는 동안 버튼을 잠그지 않으면 연타로 같은 말이 두 번 나간다.
+    ///
+    /// ★ **쿨타임 잠금이 아니다**(v0.2.49). `messageCooldownUntil` 은 통째로 지웠다 — 서버가 메시지 쿨타임을
+    ///   폐지했고(찌르기만 60초를 유지한다), 아무도 갱신하지 않는 미러가 남으면 화면에 카운트다운이 되살아난다.
     var isSendingMessage = false
+
+    // ── 메시지 창(v0.2.49) — 12시간 이력 · 대화 상대 목록 · 입력 초안 ──
+    //
+    // 로직은 전부 `WorkTimerStoreMessages.swift` 확장에 있다. 저장 프로퍼티만 여기 있는 이유는 언어 제약이다
+    // (`@Observable` 본체 밖 extension 에는 저장 프로퍼티를 넣을 수 없다) — 설계 의도가 아니다.
+    //
+    // **폴링을 붙이지 마라.** 이력은 창을 열 때·[새로고침]·전송 성공·**수신 폴링이 새 메시지를 물어왔을 때**만
+    // 받는다(마지막 것은 이미 도는 15초 폴링에 얹혀 있다 — `enqueueReceivedMessages`).
+
+    /// 메시지 창이 열려 있는가. 레일/행 진입 버튼의 하이라이트이자 "도착 시 이력 갱신" 게이트로 쓴다.
+    var isMessageWindowVisible = false
+    /// 최근 12시간 이력(오래된 것 → 최신). **사람이 쓴 문장이다. 로그로 흘리지 마라.**
+    var messageHistory: [MessageHistoryEntry] = []
+    /// 한 번이라도 성공적으로 받았는가(빈 이력과 로드 전을 가른다 — 제보 목록과 같은 3플래그 규약).
+    /// 스키마 부재(서버 배포 전)도 여기서 true 가 된다 — 그건 실패가 아니라 '아직 함수가 없다'이다.
+    var messageHistoryLoaded = false
+    var messageHistoryLoading = false
+    /// 마지막 조회가 (취소도 스키마 부재도 아닌) 실패로 끝났는가. true 면 실패 문구 + [다시 시도].
+    var messageHistoryFailed = false
+    /// 지금 보고 있는 대화 상대(nil = 아무도 안 골랐다). 왼쪽 목록의 선택이자 [보내기]의 대상이다.
+    var selectedMessagePeerID: String?
+    /// 입력 초안. **스토어에 두는 이유**는 전송 성공에 이것을 비우는 일이 스토어의 책임이기 때문이다 —
+    /// 뷰 `@State` 에 두면 "성공했는데 글이 그대로 남아 두 번 보낸다"를 헤드리스로 잴 방법이 없다(제보 초안과 같은 규약).
+    var messageDraft: String = ""
+    /// 상대별 '여기까지 읽었다' 시각. 안 읽은 점 표시의 근거다.
+    ///
+    /// **영속하지 않는다**(ultraPokeSpentDay 와 같은 판단): 12시간이면 사라지는 이력에 계정 전환·기기 간
+    /// 불일치라는 버그 종을 들여올 이유가 없다. 앱을 다시 켜면 전부 '안 읽음'으로 시작하고, 그건
+    /// 틀린 쪽으로 틀려도 안전한 방향이다(못 본 말을 못 봤다고 말한다).
+    var messageReadStamps: [String: Date] = [:]
 
     // ── 내 앱 버전 보고(profiles.app_build / app_version) ──
     /// 이 프로세스가 읽어 올 버전. 기본은 번들이고 테스트가 갈아 끼운다 — Bundle.main 은 프로세스가 정하는
@@ -2453,8 +2545,22 @@ extension WorkTimerStore {
         receivedMessages = []
         lastShownMessage = nil
         messageNotice = nil
-        messageCooldownUntil = [:]
         isSendingMessage = false
+        // ★ 메시지 창은 이 앱에서 **가장 사적인 표면**이다 — 나르는 것이 순위 숫자가 아니라 두 사람이 주고받은
+        //   문장이라, 남기면 다음 사람이 앞 사람의 대화를 그대로 읽는다. 창까지 함께 내린다(제보·미니게임 창과
+        //   **같은 규약** — 깃발만 내리면 내용이 비워진 창이 화면에 그대로 떠 있다).
+        //   `close()` 는 멱등이고 창을 파괴하지 않는다(다시 로그인해 열면 같은 자리에 선다).
+        isMessageWindowVisible = false
+        CheckMessageWindowController.shared.close()
+        messageHistory = []
+        messageHistoryLoaded = false
+        messageHistoryLoading = false
+        messageHistoryFailed = false
+        selectedMessagePeerID = nil
+        // 초안도 지운다. 제보 초안은 **일부러 남기지만**(길게 쓴 글이 사라지면 두 번 다시 제보하지 않는다)
+        // 여기는 반대다: 남기면 앞 사람이 쓰다 만 말이 새 계정의 입력칸에 남아 엉뚱한 사람에게 나갈 수 있다.
+        messageDraft = ""
+        messageReadStamps = [:]
         // 버전 보고 도장도 계정에 묶인다. 남기면 다음 계정이 자기 프로필에 버전을 못 남겨,
         // 그 사람은 근무 중인데도 아무에게서 메시지를 못 받는다(서버가 app_build 를 null 로 본다).
         reportedAppVersionStamp = nil
@@ -2504,7 +2610,16 @@ extension WorkTimerStore {
         insightsFailed = false
         // 미니게임 패널·순위·공개 설정도 계정에 묶인다(순위 행은 남의 것, 공개 여부는 그 계정의 선택). 진행 중이던 판은 끝낸다.
         // 로컬 최고기록은 계정별 키(miniGameBestKey 가 userID 를 포함)라 지울 필요가 없다.
+        //
+        // ★ **별도 창은 깃발만 내려서는 안 닫힌다**(v0.2.48 수정). `isMiniGamePanelVisible` /
+        //   `isFeedbackWindowVisible` 은 레일 버튼의 하이라이트일 뿐이고, 화면 위의 NSWindow 를 내리는
+        //   것은 컨트롤러의 `close()` 하나다. 대입만 하던 시절엔 로그아웃 뒤 **내용이 비워진 창이 그대로
+        //   떠 있었다** — 제보 창은 빈 목록·빈 초안으로, 게임 창은 순위가 사라진 채로. 레일 하이라이트만
+        //   꺼져서, 그 창을 닫는 유일한 길이 타이틀바 빨간 점이었다.
+        //   `close()` 는 멱등이고 창을 파괴하지 않는다(다시 로그인해 열면 같은 자리에 선다).
+        //   **두 창이 같은 규약이다** — 한쪽만 고치면 다음 사람이 어느 쪽이 옳은지 알 수 없다.
         isMiniGamePanelVisible = false
+        CheckMiniGameWindowController.shared.close()
         miniGameInterruptToken += 1
         miniGameBoard = []
         miniGameBoardLoaded = false
@@ -2513,6 +2628,26 @@ extension WorkTimerStore {
         miniGameYesterdayWinner = nil
         miniGamePublic = true
         miniGamePublicLoaded = false
+        // 제보도 계정에 묶인다(v0.2.48). 남기면 다음 사람이 **앞 사람이 쓴 글**을 그대로 본다 —
+        // 이 화면이 나르는 것은 순위 숫자가 아니라 사용자가 쓴 문장이라, 누수의 값이 다른 표면과 다르다.
+        // 미해결 건수는 관리자 깃발(ultraUnlimited)과 함께 0 으로 내려간다 — 로그아웃한 사람에게 남의 배지를 보여 줄 이유가 없다.
+        // 창도 함께 내린다(바로 위 미니게임 창과 **같은 규약** — 깃발만으로는 창이 화면에 남는다).
+        // 초안은 아래에서 비우므로, 안 닫으면 빈 창이 그대로 떠 있게 된다.
+        isFeedbackWindowVisible = false
+        CheckFeedbackWindowController.shared.close()
+        feedbackList = []
+        feedbackLoaded = false
+        feedbackLoading = false
+        feedbackFailed = false
+        feedbackNotice = nil
+        isSendingFeedback = false
+        feedbackOpenCount = 0
+        feedbackDraft = ""
+        feedbackKind = .bug
+        feedbackShowsInbox = false
+        feedbackFilter = nil
+        expandedFeedbackID = nil
+        feedbackNoteDraft = ""
         insightsWeekKey = nil
         heatmap = .empty
         retro = nil

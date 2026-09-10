@@ -2320,18 +2320,21 @@ func sendMessageCallsDedicatedRPCWithSnakeCaseBody() async throws {
 
 @Test
 func sendMessageClassifiesEveryServerStatus() async throws {
-    // 6종을 전부 **HTTP 응답으로** 통과시킨다. 직접 만든 PokeSendResponse 로만 검증하면 디코더 쪽 회귀
+    // **아홉 종을 전부 HTTP 응답으로** 통과시킨다. 직접 만든 PokeSendResponse 로만 검증하면 디코더 쪽 회귀
     // (스네이크케이스 키·옵셔널 누락)를 원리적으로 못 잡는다 — PokeSendResponse 는 커스텀 init(from:) 을 쓴다.
     let cases: [(String, String, MessageSendOutcome)] = [
-        ("msg-status-ok", #"{"status":"ok"}"#, .ok),
+        ("msg-status-ok", #"{"status":"ok","body":"가나다","ring":"sent"}"#, .ok),
         ("msg-status-invalid", #"{"status":"invalid"}"#, .invalid),
+        ("msg-status-blackout", #"{"status":"blackout"}"#, .blackout),
         ("msg-status-notworking", #"{"status":"not_working"}"#, .notWorking),
-        // 자리비움 게이트(2026-08-14 복원). 이게 .invalid 로 접히면 사용자는 자리 비운 사람에게 보낼 때마다
+        // 자리비움 게이트. 이게 .invalid 로 접히면 사용자는 자리 비운 사람에게 보낼 때마다
         // 두루뭉술한 "지금은 보낼 수 없어요"를 보게 된다 — 흔한 경로라 문구 손실이 크다.
         ("msg-status-target-away", #"{"status":"target_not_working"}"#, .targetNotWorking),
+        // ★ 쿨타임 폐지 뒤 **유일한 수신 거부 수단**이다(v0.2.49). 접으면 "왜 안 가는지"를 말할 문장이 사라진다.
         ("msg-status-focused", #"{"status":"target_focused"}"#, .targetFocused),
-        ("msg-status-toolong", #"{"status":"too_long"}"#, .tooLong),
-        ("msg-status-cooldown", #"{"status":"cooldown","retry_after_seconds":37}"#, .cooldown(retryAfterSeconds: 37)),
+        ("msg-status-nottext", #"{"status":"not_text","max_length":200}"#, .notText),
+        ("msg-status-toolong", #"{"status":"too_long","max_length":200}"#, .tooLong),
+        ("msg-status-flood", #"{"status":"flood","code":"MESSAGE_FLOOD","retry_after_seconds":60}"#, .flood),
         // 서버가 나중에 status 를 하나 더 늘려도 옛 앱은 크래시하지 않고 안전한 문구로 수렴해야 한다.
         ("msg-status-future", #"{"status":"뭔가새로운것"}"#, .invalid)
     ]
@@ -2343,12 +2346,30 @@ func sendMessageClassifiesEveryServerStatus() async throws {
         #expect(MessageSendOutcome(response: response) == expected, "\(testHost)")
     }
 
-    // retry_after_seconds 가 없는 cooldown(잘린 응답/옛 서버)도 0초가 아니라 최소 1초 이상으로 수렴해야 한다 —
-    // 0 이면 화면이 즉시 재시도 가능으로 보이고, 사용자는 눌러서 또 거절당한다.
-    TokenBoardURLProtocol.setResponse(#"{"status":"cooldown"}"#, forHost: "msg-status-cooldown-bare")
-    let bare = try await messageService(host: "msg-status-cooldown-bare")
-        .sendMessage(accessToken: "access-token", to: "target-user-id", body: "가나다")
-    #expect(MessageSendOutcome(response: bare) == .cooldown(retryAfterSeconds: 60))
+    // ★ **죽은 가지 둘**(v0.2.49): 서버는 send_message 에서 `cooldown` 도 `target_outdated` 도 내지 않는다.
+    //   낡은 서버가 보내도 옛 케이스가 되살아나면 안 된다 — `.invalid` 로 접혀야 화면이 조용한 일반 안내를 낸다.
+    //   케이스를 되살리는 순간 그건 곧 화면에 카운트다운(또는 "상대가 업데이트해야")이 돌아온다는 뜻이다.
+    for (testHost, json) in [
+        ("msg-status-legacy-cooldown", #"{"status":"cooldown","retry_after_seconds":37}"#),
+        ("msg-status-legacy-outdated", #"{"status":"target_outdated"}"#)
+    ] {
+        TokenBoardURLProtocol.setResponse(json, forHost: testHost)
+        let response = try await messageService(host: testHost)
+            .sendMessage(accessToken: "access-token", to: "target-user-id", body: "가나다")
+        #expect(MessageSendOutcome(response: response) == .invalid, "\(testHost)")
+    }
+
+    // max_length 는 **디코드돼야 한다**(커스텀 init(from:) 의 함정 — CodingKey 만 더하면 영원히 nil 이다).
+    // 이 값이 nil 이면 화면 문구가 클라 상수로 굳고, 서버가 상한을 바꾼 날 사용자만 옛 숫자를 본다.
+    TokenBoardURLProtocol.setResponse(#"{"status":"too_long","max_length":140}"#, forHost: "msg-status-maxlen")
+    let limited = try await messageService(host: "msg-status-maxlen")
+        .sendMessage(accessToken: "access-token", to: "t", body: "가나다")
+    #expect(limited.maxLength == 140)
+    // 안 실어 주는 응답에서는 nil = '모름'이다(0 이 아니다 — 0 이면 "0자까지"라는 문장이 나온다).
+    TokenBoardURLProtocol.setResponse(#"{"status":"ok"}"#, forHost: "msg-status-nomaxlen")
+    let plain = try await messageService(host: "msg-status-nomaxlen")
+        .sendMessage(accessToken: "access-token", to: "t", body: "가나다")
+    #expect(plain.maxLength == nil)
 }
 
 @Test
@@ -2363,18 +2384,100 @@ func sendMessageRejectsEmptyAndTooLongWithoutRoundTrip() async throws {
     #expect(MessageSendOutcome(response: blank) == .invalid)
     #expect(TokenBoardURLProtocol.lastURL(forHost: testHost) == nil)
 
-    // 4글자도 마찬가지다.
-    let long = try await service.sendMessage(accessToken: "access-token", to: "t", body: "가나다라")
+    // 201 코드포인트도 마찬가지다. **여기서 세는 단위가 코드포인트인 것이 요점**이다(서버 char_length 와 같은 눈금).
+    let long = try await service.sendMessage(
+        accessToken: "access-token", to: "t", body: String(repeating: "가", count: MessageBody.maxLength + 1))
     #expect(MessageSendOutcome(response: long) == .tooLong)
     #expect(TokenBoardURLProtocol.lastURL(forHost: testHost) == nil)
+    // 로컬 즉답도 서버와 **같은 키**를 실어 준다 — 안 그러면 같은 실패가 로컬이냐 서버냐에 따라 다른 숫자를 말한다.
+    #expect(long.maxLength == MessageBody.maxLength)
 
-    // 경계: 앞뒤 공백을 뺀 3글자는 **실제로 나가고**, 나가는 값은 원문이 아니라 정규화된 문자열이다.
-    let ok = try await service.sendMessage(accessToken: "access-token", to: "t", body: " 가나다 ")
+    // 경계: 정확히 200 코드포인트는 **실제로 나간다**.
+    let edge = try await service.sendMessage(
+        accessToken: "access-token", to: "t", body: String(repeating: "가", count: MessageBody.maxLength))
+    #expect(MessageSendOutcome(response: edge) == .ok)
+    #expect(TokenBoardURLProtocol.lastURL(forHost: testHost)?.path == "/rest/v1/rpc/send_message")
+
+    // 앞뒤 공백을 뺀 값이 나간다(원문이 아니라 정규화된 문자열). **가운데 줄바꿈은 살아남는다** —
+    // 여러 줄을 쓰는 창이라, 여기서 눕히면 사용자가 안 쓴 문장이 나간다.
+    let ok = try await service.sendMessage(accessToken: "access-token", to: "t", body: " 가나다\n라마 ")
     #expect(MessageSendOutcome(response: ok) == .ok)
-    let url = try #require(TokenBoardURLProtocol.lastURL(forHost: testHost))
-    #expect(url.path == "/rest/v1/rpc/send_message")
     let sent = try #require(TokenBoardURLProtocol.lastBody(forHost: testHost))
-    #expect(sent.contains("\"p_body\":\"가나다\""))
+    #expect(sent.contains("가나다"))
+    #expect(sent.contains("\\n라마"), "가운데 줄바꿈이 사라졌다 — 사용자가 쓴 문장이 조용히 바뀐다")
+}
+
+@Test
+func fetchMessageHistoryDecodesRowsAndFoldsArguments() async throws {
+    let testHost = "msg-history-shape"
+    TokenBoardURLProtocol.setResponse(
+        """
+        [
+          {"id": "h1", "from_user": "me", "to_user": "u2", "body": " 고고 ",
+           "created_at": "2026-09-10T04:05:06+00:00", "is_mine": true,
+           "peer_user_id": "u2", "peer_display_name": "영식", "peer_avatar_url": null,
+           "created_epoch": 1789012345},
+          {"id": "h2", "from_user": "u2", "to_user": "me", "body": "ㅇㅋ 🎉",
+           "created_at": "2026-09-10T04:06:06+00:00", "is_mine": false,
+           "peer_user_id": "u2", "peer_display_name": "영식", "peer_avatar_url": "https://x/a.png",
+           "created_epoch": 1789012405},
+          {"id": "drop-empty", "from_user": "u3", "to_user": "me", "body": "   ",
+           "created_at": null, "is_mine": false, "peer_user_id": "u3",
+           "peer_display_name": "빈말", "peer_avatar_url": null, "created_epoch": 1789012000},
+          {"id": "drop-nopeer", "from_user": "u4", "to_user": "me", "body": "안녕",
+           "created_at": null, "is_mine": false, "peer_user_id": null,
+           "peer_display_name": null, "peer_avatar_url": null, "created_epoch": 1789012000}
+        ]
+        """,
+        forHost: testHost
+    )
+
+    let entries = try await messageService(host: testHost)
+        .fetchMessageHistory(accessToken: "access-token", hours: 99, limit: 9_999)
+
+    // 인자는 **클라도 서버와 같은 값으로 접는다** — 안 접으면 화면의 "12시간" 안내가 서버가 실제로 쓴 값과 갈린다.
+    let body = try #require(TokenBoardURLProtocol.lastBody(forHost: testHost))
+    #expect(body.contains("\"p_hours\":24"))
+    #expect(body.contains("\"p_limit\":500"))
+    #expect(TokenBoardURLProtocol.lastURL(forHost: testHost)?.path == "/rest/v1/rpc/message_history")
+
+    // 빈 본문 행과 상대를 모르는 행은 버린다(빈 말풍선·어느 대화에도 못 넣는 행).
+    #expect(entries.map(\.id) == ["h1", "h2"])
+    // 본문은 정규화까지 끝나 있다(표시 쪽이 다시 다듬지 않아도 되게). **이모지는 그대로 산다.**
+    #expect(entries.first?.body == "고고")
+    #expect(entries.last?.body == "ㅇㅋ 🎉")
+    // is_mine 은 **서버 판정을 그대로** 쓴다(클라가 from_user 로 다시 세면 세션 세대가 갈릴 때 어긋난다).
+    #expect(entries.map(\.isMine) == [true, false])
+    #expect(entries.allSatisfy { $0.peerUserID == "u2" })
+    #expect(entries.last?.peerAvatarURL?.absoluteString == "https://x/a.png")
+    // epoch 가 정본이다(ISO 소수초 파싱 함정 회피 — TakenPokeRow 와 같은 근거).
+    #expect(entries.first?.createdAt == Date(timeIntervalSince1970: 1_789_012_345))
+}
+
+@Test
+func fetchMessageHistorySurvivesMissingKeysFromAnOlderServer() async throws {
+    // 앱을 먼저 배포하고 db push 가 늦은 창: 서버가 키 하나를 안 보낸다. 비옵셔널이었다면 배열 디코드가
+    // 통째로 throw 되어 **이력 전체가 조용히 사라진다**(TakenPokeRow.kind 가 겪은 그 사고).
+    let testHost = "msg-history-partial"
+    TokenBoardURLProtocol.setResponse(
+        """
+        [
+          {"id": "h1", "body": "안녕", "peer_user_id": "u2", "created_epoch": 1789012345},
+          {"id": "h2", "body": "반가워", "peer_user_id": "u2", "created_at": "2026-09-10T04:06:06+00:00"}
+        ]
+        """,
+        forHost: testHost
+    )
+
+    let entries = try await messageService(host: testHost).fetchMessageHistory(accessToken: "access-token")
+
+    #expect(entries.map(\.id) == ["h1", "h2"])
+    // 별명이 없으면 "사용자"로 부른다(제보 목록과 같은 폴백 — 말풍선 주인이 없는 화면을 만들지 않는다).
+    #expect(entries.allSatisfy { $0.peerName == "사용자" })
+    // is_mine 을 모르면 **받은 것**으로 본다(왼쪽 정렬이 안전한 쪽이다 — 남의 말을 내 말풍선에 넣지 않는다).
+    #expect(entries.allSatisfy { !$0.isMine })
+    // epoch 가 없으면 ISO 문자열로 떨어진다.
+    #expect(entries.last?.createdAt != nil)
 }
 
 @Test
@@ -2417,133 +2520,92 @@ func takePokesDecodesMessageBodyAndStaysBackwardCompatible() async throws {
 }
 
 @Test
-func messageBodyCountsCharactersTheWayUsersDo() throws {
-    // 경계 0/1/3/4.
-    #expect(MessageBody.characterCount("") == 0)
-    #expect(MessageBody.characterCount("가") == 1)
-    #expect(MessageBody.characterCount("가나다") == 3)
-    #expect(MessageBody.characterCount("가나다라") == 4)
+func messageBodyCountsCodePointsTheWayTheServerDoes() throws {
+    // ★ **단위가 코드포인트인 것이 v0.2.49 의 핵심 계약이다.** 자소(String.count)로 세면 이모지에서
+    //   화면과 서버의 눈금이 갈린다 — 화면은 "1/200"인데 서버만 too_long 으로 거절한다.
+    #expect(MessageBody.maxLength == 200)
+    #expect(MessageBody.length("") == 0)
+    #expect(MessageBody.length("가") == 1)
+    #expect(MessageBody.length("가나다") == 3)
+    // 👨‍👩‍👧‍👦 = 자소 1 / 코드포인트 7(실측). 이 차이가 곧 옛 구현의 결함이었다.
+    #expect("👨‍👩‍👧‍👦".count == 1)
+    #expect(MessageBody.length("👨‍👩‍👧‍👦") == 7)
+    // 👍(U+1F44D)는 코드포인트 **1개**다(UTF-16 으로만 2다) — 서버 char_length 도 1로 센다.
+    #expect(MessageBody.length("👍") == 1)
+    // 🇰🇷 는 지역표시자 두 개의 조합이라 2다(자소로는 1).
+    #expect("🇰🇷".count == 1)
+    #expect(MessageBody.length("🇰🇷") == 2)
+
+    // 경계 0/1/200/201 — **코드포인트로** 잰다.
     #expect(MessageBody.validate("") == .empty)
     #expect(MessageBody.validate("   ") == .empty)
     #expect(MessageBody.validate("가") == .ok("가"))
-    #expect(MessageBody.validate("가나다") == .ok("가나다"))
-    #expect(MessageBody.validate("가나다라") == .tooLong(maxCharacters: 3))
+    let full = String(repeating: "가", count: MessageBody.maxLength)
+    #expect(MessageBody.validate(full) == .ok(full))
+    #expect(MessageBody.validate(full + "가") == .tooLong(maxLength: MessageBody.maxLength))
 
-    // 자모 분해(NFD) 한글. macOS 붙여넣기로 들어오는 형태다 — Swift 는 2글자로 세지만 유니코드 스칼라는 6이라
-    // 정규화 없이 보내면 서버 char_length 가 6으로 세어 too_long 을 낸다. 보내는 값이 NFC 여야 한다.
+    // 이모지 경계: 자소로는 100자지만 코드포인트로는 200이라 **딱 맞는다**. 자소로 셌다면 100 으로 보여
+    // 사용자가 하나 더 넣었다가 서버에서만 거절당했을 자리다.
+    let flags = String(repeating: "🇰🇷", count: 100)
+    #expect(flags.count == 100)
+    #expect(MessageBody.validate(flags) == .ok(flags))
+    #expect(MessageBody.validate(flags + "🇰🇷") == .tooLong(maxLength: MessageBody.maxLength))
+
+    // 자모 분해(NFD) 한글. macOS 붙여넣기로 들어오는 형태다 — 정규화 없이 보내면 서버 char_length 가
+    // 6으로 세어 눈금이 갈린다. 보내는 값이 NFC 여야 한다.
     let decomposed = "\u{1112}\u{1161}\u{11AB}\u{1100}\u{1173}\u{11AF}"   // "한글"의 NFD
     #expect(decomposed.unicodeScalars.count == 6)
-    #expect(MessageBody.characterCount(decomposed) == 2)
     #expect(MessageBody.sanitized(decomposed) == "한글")
-    #expect(MessageBody.sanitized(decomposed).unicodeScalars.count == 2)
-
-    // 글자수 세기 자체는 여전히 자소 클러스터 단위다(입력 카운터가 이 값을 쓴다).
-    // 다만 **셀 수 있다와 보낼 수 있다는 다르다** — 이모지는 아래 텍스트 전용 게이트에서 거부된다.
-    #expect(MessageBody.characterCount("👍") == 1)
-    #expect(MessageBody.characterCount("👨‍👩‍👧‍👦") == 1)
+    #expect(MessageBody.length(decomposed) == 2)
 
     // 앞뒤 공백·개행은 자른다(붙여넣기에 딸려 온 여백으로 거부하면 불친절하다).
     #expect(MessageBody.sanitized("  가나  ") == "가나")
     #expect(MessageBody.sanitized("가나\n") == "가나")
-    // 가운데 공백은 사용자가 세는 한 글자라 남긴다.
-    #expect(MessageBody.characterCount("가 나") == 3)
+    // ★ **가운데 줄바꿈은 남긴다**(v0.2.49). Enter 가 줄바꿈인 창이라, 여기서 눕히면 사용자가 안 쓴 문장이 나간다.
+    #expect(MessageBody.sanitized("가나\n다라") == "가나\n다라")
+    #expect(MessageBody.length("가나\n다라") == 5)
 }
 
 @Test
-func messageBodyAcceptsOnlyTextAndRejectsEmoji() throws {
+func messageBodyAcceptsEverythingVisibleAndRejectsOnlyEmptyLookalikes() throws {
     // ── 통과해야 하는 것 ──
-    // ★ 한글 자모가 막히면 이 기능의 절반(ㅇㅋ·ㅎㅇ)이 죽는다.
-    // ★ `^^`·`-_-`·`:)`·`...` 는 서버가 **일부러 살려 둔** 표현이다 — 클라가 이걸 막으면 서버는 받아 주는데
-    //   사용자만 못 치는, 방향만 반대인 같은 크기의 어긋남이 된다.
-    for text in ["가나다", "ㅇㅋ", "ㅎㅇ", "abc", "123", "밥?", "ㅋㅋㅋ", "ㅠㅠ", "굿!", "OK", "음~", "ok!", "가 나", "1.5",
-                 "^^", "-_-", ":)", "...", "a@b", "#ab", "(-:"] {
-        #expect(MessageBody.validate(text) == .ok(text), "통과해야 한다: \(text)")
-    }
-    // 한글 범위 경계: 음절 가(U+AC00)~힣(U+D7A3), 호환 자모 ㄱ(U+3131)~ㅣ(U+3163).
-    for text in ["\u{AC00}", "\u{D7A3}", "\u{3131}", "\u{3163}"] {
-        #expect(MessageBody.validate(text) == .ok(text), "한글 범위 안이다: \(text.debugDescription)")
-    }
-    // 조합 자모로 들어와도 NFC 합성으로 음절 범위에 안착한다(옛한글이 아닌 정상 한글).
-    #expect(MessageBody.validate("\u{1112}\u{1161}\u{11AB}") == .ok("한"))
-
-    // ── 거부해야 하는 것 ──
-    // 이모지 전부(단일·스킨톤·국기·ZWJ 가족·VS16 하트). 이것이 텍스트 전용 게이트의 존재 이유다:
-    // 이모지를 받는 순간 Swift 자소 수와 Postgres 코드포인트 수가 갈린다(👨‍👩‍👧‍👦 = 1 vs 7).
-    for text in ["👍", "👍🏻", "🇰🇷", "👨‍👩‍👧‍👦", "❤️", "👍👍👍"] {
-        #expect(MessageBody.validate(text) == .unsupportedCharacters, "이모지는 거부해야 한다: \(text)")
-    }
-    // 가운데 개행·탭·제어문자는 **지우지 않고 거부한다** — 지우면 사용자가 안 쓴 말("가나")이 나간다.
-    for text in ["가\n나", "가\tb", "가\u{07}나"] {
-        #expect(MessageBody.validate(text) == .unsupportedCharacters, "제어문자는 거부해야 한다: \(text.debugDescription)")
-    }
-    // 기호와 허용 목록 밖 문장부호. 빠진 12자 `< > & \ $ % ` { } [ ] |` 는 마크업·이스케이프·템플릿
-    // 의미가 있어 서버가 뺀 것들이라, 클라도 똑같이 막아야 한다.
-    for text in ["♥", "＋", "가$", "①", "<b>", "a&b", "${}", "a|b", "a\\b", "[x]", "`x`"] {
-        #expect(MessageBody.validate(text) == .unsupportedCharacters, "기호는 거부해야 한다: \(text)")
-    }
-    // ★ 글자가 아닌데 글자 행세를 하는 것들. 한자·가나·전각 라틴은 카테고리로는 '글자'라, 카테고리 판정으로
-    //   열었다면 전부 통과했을 것이다 — 서버는 거부하므로 클라만 통과시키면 not_text 로 되돌아온다.
-    // `٣`(아라비아-인도 숫자)까지 포함한다 — 카테고리로는 decimalNumber 라 '숫자'로 통과했을 것이다.
-    for text in ["中", "あ", "Ａ", "ｱ", "é", "٣"] {
-        #expect(MessageBody.validate(text) == .unsupportedCharacters, "서버 집합 밖 글자다: \(text)")
+    // ★ **이모지가 통과한다**(v0.2.49). 3글자 시절엔 자소/코드포인트 눈금 차이 때문에 막았지만,
+    //   200자 메신저에서 이모지 금지는 말이 안 되고 눈금 문제는 코드포인트로 세면서 사라졌다.
+    // ★ 한자·가나·전각·악센트도 통과한다 — 문자 종류 판정은 이제 **서버(not_text)** 한 곳이다.
+    //   클라가 자기 표를 다시 만들면 두 집합이 갈리는 순간이 곧 버그다.
+    for text in ["가나다", "ㅇㅋ", "abc", "밥?", "^^", "...", "👍", "👨‍👩‍👧‍👦", "🇰🇷", "❤️",
+                 "中", "あ", "Ａ", "é", "٣", "<b>", "a&b", "${}", "a|b", "가\n나", "가\tb"] {
+        #expect(MessageBody.validate(text) == .ok(MessageBody.sanitized(text)), "통과해야 한다: \(text)")
     }
 
-    // ☠︎ ── 폭 0 채움 문자 3종: 이 저장소가 **실제로 뚫린 적 있는 구멍**이다 ──
-    // U+3164(한글 채움)·U+115F(초성 채움)·U+1160(중성 채움)은 셋 다 카테고리가 otherLetter 라
-    // "모든 Letter 허용" 방식이면 전부 통과한다. 통과하면 3글자를 이걸로 채운 **빈 말풍선**이 뜨고,
-    // 별명에서 이미 같은 수법으로 사칭 사고가 났었다(20260804010000_display_name_change.sql:54-57).
+    // ── 거부해야 하는 것: **눈에 보이는 글자가 하나도 없는 입력** ──
+    // ☠︎ 폭 0 채움 문자 3종은 이 저장소가 **실제로 뚫린 적 있는 구멍**이다(별명 사칭 —
+    //    20260804010000_display_name_change.sql:54-57). 셋 다 카테고리가 otherLetter 라
+    //    "공백이면 거부" 방식으로는 전부 통과하고, 통과하면 빈 말풍선을 200개까지 보낼 수 있다.
     for value in [0x3164, 0x115F, 0x1160] {
         let filler = String(Unicode.Scalar(UInt32(value))!)
         // 카테고리 방식이었다면 통과했을 문자임을 함께 못 박는다 — 이 단언이 깨지면 위 설명이 낡은 것이다.
         #expect(Unicode.Scalar(UInt32(value))!.properties.generalCategory == .otherLetter)
-        // 단독·3연속·정상 글자와의 혼합 모두 거부. 특히 3연속이 `.empty` 가 **아니라**
-        // `.unsupportedCharacters` 여야 한다 — trim 이 이 문자들을 지우지 않기 때문이다(실측).
-        #expect(MessageBody.validate(filler) == .unsupportedCharacters, "채움 문자 U+\(String(value, radix: 16))")
-        #expect(MessageBody.validate(String(repeating: filler, count: 3)) == .unsupportedCharacters)
-        #expect(MessageBody.validate("가\(filler)") == .unsupportedCharacters)
+        #expect(MessageBody.validate(filler) == .empty, "채움 문자 U+\(String(value, radix: 16))")
+        #expect(MessageBody.validate(String(repeating: filler, count: 5)) == .empty)
+        // 정상 글자와 섞이면 **통과한다** — 거부할 이유가 없다(보이는 내용이 있다). 판정은 서버 몫이다.
+        #expect(MessageBody.validate("가\(filler)") != .empty)
     }
-
-    // 한글 음절 범위 바로 바깥(U+D7A4)도 거부된다.
-    #expect(MessageBody.validate("\u{D7A4}") == .unsupportedCharacters)
-    // 보이지 않는 문자: 가운데에 있으면 거부. (앞뒤는 trim 대상이라 잘려 나간다 — 공백 취급이 일관된다.)
-    #expect(MessageBody.validate("가\u{200B}나") == .unsupportedCharacters)
-    #expect(MessageBody.validate("\u{202E}가나") == .unsupportedCharacters)
+    // 보이지 않는 서식 문자만 있는 입력도 빈 것으로 본다(ZWSP·방향 오버라이드·점자 빈칸).
+    for text in ["\u{200B}", "\u{202E}", "\u{2800}", "\u{FFA0}", " \u{200B}\t\n "] {
+        #expect(MessageBody.validate(text) == .empty, "보이지 않는 입력이다: \(text.debugDescription)")
+    }
 
     // ── 검사 순서 ──
-    // 길이·문자를 둘 다 어긴 입력은 **문자 쪽**으로 답해야 한다. 길이로 답하면 사용자는 이모지를 줄이다가
-    // 계속 거부당한다("3글자까지예요" → 3개로 줄임 → 또 거부).
-    #expect(MessageBody.validate("👍👍👍👍") == .unsupportedCharacters)
-    #expect(MessageBody.validate("가나다라") == .tooLong(maxCharacters: 3))
+    // 빈 판정이 길이보다 **먼저**다. 공백 200자에 "200자까지예요"라고 하면 사용자는 글자를 줄이려 들고,
+    // 줄여도 계속 거부당한다(사유가 길이가 아니기 때문이다).
+    #expect(MessageBody.validate(String(repeating: " ", count: 400)) == .empty)
 
-    // ── 서버 집합과의 1:1 전수 대조 ──
-    // 표본 몇 개가 아니라 **ASCII 인쇄 문자 전부**를 돌린다. 두 집합이 갈리는 사고는 늘 "이 한 글자"에서
-    // 나는데, 표본 테스트는 정확히 그 한 글자를 빠뜨린다. 서버 실증값: 문장부호 32자 = 허용 20 + 거부 12.
-    let excludedByServer = Set("<>&\\$%`{}[]|".unicodeScalars)
-    var allowedCount = 0
-    var rejectedCount = 0
-    for value in 0x21...0x7E {
-        let scalar = Unicode.Scalar(UInt32(value))!
-        let isAlphanumeric = (0x30...0x39).contains(value) || (0x41...0x5A).contains(value) || (0x61...0x7A).contains(value)
-        if isAlphanumeric { continue }
-        let text = String(Character(scalar))
-        if excludedByServer.contains(scalar) {
-            #expect(MessageBody.validate(text) == .unsupportedCharacters, "서버가 뺀 12자다: \(text)")
-            rejectedCount += 1
-        } else {
-            #expect(MessageBody.validate(text) == .ok(text), "서버가 허용하는 문장부호다: \(text)")
-            allowedCount += 1
-        }
-    }
-    #expect(allowedCount == 20)
-    #expect(rejectedCount == 12)
-
-    // ── 이 게이트가 사 오는 것: 자소 수 == 코드포인트 수 ──
-    // 텍스트만 통과하면 Swift 가 세는 글자와 Postgres char_length 가 세는 글자가 **항상 같다**.
-    // 서버/클라 판정이 갈릴 여지가 원리적으로 사라진다.
-    for text in ["가나다", "ㅇㅋ", "abc", "밥?", "음~", "가 나"] {
-        let normalized = MessageBody.sanitized(text)
-        #expect(normalized.count == normalized.unicodeScalars.count, "자소 수와 코드포인트 수가 갈렸다: \(text)")
-    }
+    // hasVisibleContent 는 **정규화 후 문자열**에 걸린다는 것을 직접 못 박는다(validate 가 그 순서로 부른다).
+    #expect(!MessageBody.hasVisibleContent(""))
+    #expect(!MessageBody.hasVisibleContent("\u{3164}"))
+    #expect(MessageBody.hasVisibleContent("가"))
+    #expect(MessageBody.hasVisibleContent("👍"))
 }
 
 // MARK: - 버전 게이트: take_pokes 인자 · 내 버전 보고 · 디렉토리 수신 가능 여부 (서비스 계층)
@@ -2687,23 +2749,28 @@ func pokeDirectoryCarriesMessageCapabilityAndSurvivesItsAbsence() async throws {
 }
 
 @Test
-func sendMessageClassifiesTargetOutdated() async throws {
+func sendMessageFoldsTheRetiredTargetOutdatedStatus() async throws {
+    // v0.2.28~0.2.48 에는 최소 빌드 게이트가 있었다(구버전 클라가 메시지 행을 조용히 삼켜 사고가 났었다).
+    // **v0.2.49 에서 그 게이트는 폐기됐다** — 모든 버전이 받는다. 서버는 이 status 를 더 이상 내지 않는다.
+    //
+    // 그래도 낡은 서버가 보내는 극단이 남아 있고, 그때 옛 문구("상대가 앱을 업데이트해야 받을 수 있어요")가
+    // 되살아나면 사용자는 **있지도 않은 원인**을 고치려 든다. 조용한 일반 안내로 접히는 것이 계약이다.
     let testHost = "msg-status-outdated"
     TokenBoardURLProtocol.setResponse(#"{"status":"target_outdated"}"#, forHost: testHost)
 
     let response = try await messageService(host: testHost)
         .sendMessage(accessToken: "access-token", to: "target-user-id", body: "가나다")
 
-    // .invalid 로 접히면 사용자는 "지금은 보낼 수 없어요"만 보고 **할 수 있는 일이 없다고** 배운다.
-    // 실제로는 할 일이 있다: 상대에게 업데이트를 알리는 것.
-    #expect(MessageSendOutcome(response: response) == .targetOutdated)
-    #expect(MessageSendOutcome(response: response) != .invalid)
+    #expect(MessageSendOutcome(response: response) == .invalid)
 
-    // 대조군: 기존 status 6종의 분류는 한 톨도 안 변했다(새 케이스가 남의 자리를 먹지 않았는지).
+    // 대조군: 살아 있는 status 의 분류는 한 톨도 안 변했다(폐기가 남의 자리를 먹지 않았는지).
     #expect(MessageSendOutcome(response: PokeSendResponse(status: "ok")) == .ok)
     #expect(MessageSendOutcome(response: PokeSendResponse(status: "target_not_working")) == .targetNotWorking)
     #expect(MessageSendOutcome(response: PokeSendResponse(status: "target_focused")) == .targetFocused)
     #expect(MessageSendOutcome(response: PokeSendResponse(status: "too_long")) == .tooLong)
+    #expect(MessageSendOutcome(response: PokeSendResponse(status: "not_text")) == .notText)
+    #expect(MessageSendOutcome(response: PokeSendResponse(status: "blackout")) == .blackout)
+    #expect(MessageSendOutcome(response: PokeSendResponse(status: "flood")) == .flood)
     #expect(MessageSendOutcome(response: PokeSendResponse(status: "not_working")) == .notWorking)
     #expect(MessageSendOutcome(response: PokeSendResponse(status: "뭔가또새로운것")) == .invalid)
 }

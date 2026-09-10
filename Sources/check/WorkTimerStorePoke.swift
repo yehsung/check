@@ -583,137 +583,34 @@ extension WorkTimerStore {
         }
     }
 
-    // MARK: - 짧은 메시지(최대 3글자)
+    // MARK: - 메시지 수신 (찔림과 같은 표·같은 RPC·같은 폴링)
     //
-    // 찔림과 **같은 표·같은 RPC·같은 폴링**을 탄다(pokes.kind = "message", take_pokes 로 원자 소비).
-    // 갈라지는 곳은 정확히 두 군데다: 보낼 때 어느 RPC 를 부르는가, 받은 행을 어느 표시 경로로 보내는가.
-    // 그 외의 게이트(근무중 선게이트·세대 재확인·60초 쿨타임 미러·연결 실패 문구)는 전부 찌르기와 같은 관용구다.
+    // 메시지는 찔림과 **같은 표(pokes.kind = "message")·같은 RPC(take_pokes)·같은 폴링**을 탄다.
+    // 갈라지는 곳은 정확히 한 군데다: 받은 행을 어느 표시 경로로 보내는가(freshReceivedPokes 의 kind 가드).
     //
-    // 등급(관리자 무제한 등)은 **여기 없다**. 판정이 전부 서버라 클라가 등급을 알면 두 판정이 언젠가 갈리고,
-    // 그때 화면은 서버가 허락한 일을 막거나 막을 일을 허락한다.
+    // ★ **보내기는 여기 없다**(v0.2.49). 전송·이력·창은 `WorkTimerStoreMessages.swift` 로 옮겼다 —
+    //   그날부터 메시지는 쿨타임이 없고(찌르기만 60초다) 200자를 쓰며 12시간 이력을 갖는, 찌르기와
+    //   성격이 다른 기능이 됐다. 이 파일에 남은 것은 **말풍선 큐**뿐이다.
+    //
+    // ★ **쿨타임 미러(messageCooldownUntil)와 messageCooldownRemaining 은 통째로 지웠다.**
+    //   되살리지 마라 — 서버가 send_message 에서 `cooldown` 을 영원히 내지 않으므로, 그 값을 다시 두면
+    //   아무도 갱신하지 않는 미러가 화면에 카운트다운을 그리게 된다(사장님이 없애라고 한 바로 그것).
 
-    /// 메시지 쿨타임(초). 서버가 강제하고 클라는 표시용 카운트다운만 미러링한다.
-    /// pokeCooldownSeconds 와 값이 같지만 **다른 서버 규칙**이라 따로 둔다 — 한쪽만 바뀔 때 조용히 어긋나지 않게.
-    nonisolated static let messageCooldownSeconds: TimeInterval = 60
     /// 표시 대기 큐 상한. 자리를 비운 사이 큐가 무한히 자라 화면이 몇 시간 전 대화를 순서대로 재생하는 것을 막는다.
     nonisolated static let messageQueueLimit = 20
 
-    /// **메시지 전달 창(초) = 5분.** 보낸 지 이 시간이 지나면 전하지 않는다 — 사장님 확정:
+    /// **말풍선 전달 창(초) = 5분.** 보낸 지 이 시간이 지나면 **말풍선으로는** 띄우지 않는다 — 사장님 확정:
     /// "2시간 전에 보낸 메시지가 뜨는 건 이상하다. 5분 안에 도달 못 하면 그냥 안 전하는 게 자연스럽다."
     ///
+    /// ★ **이력(message_history)의 12시간과 혼동하지 마라.** 둘은 다른 질문의 답이다:
+    ///   이 5분은 "지금 화면 위로 튀어나올 것인가"이고, 12시간은 "창을 열었을 때 읽을 수 있는가"다.
+    ///   메시지 창이 생기기 전에는 말풍선이 유일한 표시 수단이라 이 값이 곧 소멸 시각이었지만,
+    ///   이제는 아니다 — 5분이 지나 말풍선을 못 본 말도 창에는 12시간 남아 있다.
+    ///
     /// **찔림의 1시간(pokeDisplayFreshnessSeconds)과 일부러 다른 상수인 이유**: 두 알림의 값이 다르다.
-    /// 찔림은 "누가 나를 불렀다"라 한참 뒤에 알아도 의미가 남지만, 3글자 메시지는 그 순간의 말이라
-    /// ("밥?" "고고") 늦게 도착하면 내용 자체가 거짓이 된다. 울트라가 같은 이유로 120초를 따로 가진다.
-    ///
-    /// **서버와 같은 값이어야 한다** — take_pokes 가 5분 지난 메시지를 아예 안 돌려주므로, 여기가 더 길면
-    /// 클라만 혼자 낡은 말을 띄우고(그럴 일은 큐 대기 구간에서 실제로 생긴다) 더 짧으면 서버가 원자 소비한
-    /// 멀쩡한 말을 클라가 버린다. 어느 쪽이든 두 규칙이 갈리는 순간이 곧 버그다.
+    /// 찔림은 "누가 나를 불렀다"라 한참 뒤에 알아도 의미가 남지만, 메시지는 그 순간의 말이라
+    /// 늦게 화면을 덮으면 방해가 된다. 울트라가 같은 이유로 120초를 따로 가진다.
     nonisolated static let messageDisplayFreshnessSeconds: TimeInterval = 300
-
-    // 전송 결과 7종의 안내 문구. **전송 결과를 쓰는 곳은 여기 하나뿐**이므로(messageNotice) 문구도 여기 산다 —
-    // 뷰가 자기 표를 따로 들면 그중 한 벌은 반드시 낡는다(ultraSpentNotice 를 상수에서 파생시킨 것과 같은 규약).
-    nonisolated static let messageSentNotice = "메시지를 보냈어요"
-    nonisolated static let messageNotWorkingNotice = "근무 중일 때만 메시지를 보낼 수 있어요"
-    /// 대상이 자리비움일 때. 찌르기의 인라인 문구("자리비움 상태에는 찌를 수 없어요")와 **같은 문장에 동사만 바꿨다** —
-    /// 사정이 같으므로 설명도 같아야 하고(두 기능이 같은 일을 다르게 설명하면 사용자는 다른 일로 읽는다),
-    /// 동사만 다른 이유는 targetFocusedNotice 를 갈랐을 때와 똑같다: 그쪽 문장을 그대로 쓰면 메시지를 보내려던
-    /// 사람에게 "찌를 수 없어요"라고 엉뚱한 동작을 안내한다.
-    nonisolated static let messageTargetNotWorkingNotice = "자리비움 상태에는 보낼 수 없어요"
-    /// 대상이 집중 모드일 때. 찌르기의 targetFocusedNotice 와 문장이 다른 이유는 하나뿐이다 — 그쪽은 "찔러 주세요"로
-    /// 끝나는데, 여기서 재사용하면 메시지를 보내려던 사람에게 엉뚱한 동작을 안내한다.
-    nonisolated static let messageTargetFocusedNotice = "지금 집중 중이에요. 나중에 보내 주세요"
-    /// 대상의 앱이 메시지를 모르는 버전일 때. 다른 거절 문구들과 **길이·말투는 같지만 하나가 다르다** —
-    /// 여기엔 사용자가 할 일이 있다. 자리비움·집중 모드는 기다리면 풀리지만 이건 상대가 앱을 올리기 전엔
-    /// 영영 안 풀리므로, "왜 안 됐는지"만 말하고 끝내면 사용자는 같은 시도를 반복한다.
-    /// 그래서 주어가 **상대**다: 고쳐야 할 쪽이 내가 아니라는 사실 자체가 이 문장이 전할 정보다.
-    nonisolated static let messageTargetOutdatedNotice = "상대가 앱을 업데이트해야 받을 수 있어요"
-    /// 길이 초과 안내. 숫자는 **MessageBody.maxCharacters 에서 파생한다** — 서버 판정과 클라 사전 게이트가
-    /// 이미 그 상수를 쓰므로, 여기서 리터럴 3을 다시 쓰면 한도를 바꿀 때 문구만 옛 숫자로 남는다.
-    nonisolated static let messageTooLongNotice = "메시지는 \(MessageBody.maxCharacters)글자까지예요. 줄여서 보내 주세요"
-    nonisolated static let messageInvalidNotice = "지금은 메시지를 보낼 수 없어요. 잠시 후 다시 시도해 주세요"
-    /// 쿨타임 거절. 찌르기는 여기서 침묵하지만(버튼이 흐려지는 것으로 말한다) 메시지는 사용자가 글자를 골라
-    /// 입력한 **뒤**라, 아무 말도 없으면 "보내진 건가?"가 남는다 — 안 나갔다는 사실은 반드시 문장으로 말한다.
-    nonisolated static func messageCooldownNotice(seconds: Int) -> String {
-        "방금 보낸 상대예요. \(max(1, seconds))초 뒤에 다시 보낼 수 있어요"
-    }
-
-    /// 대상에게 짧은 메시지 보내기. 게이트 순서·세대 재확인·쿨타임 미러는 sendPoke 와 **같은 관용구**다.
-    /// 다른 것은 두 가지뿐이다: ① 왕복 중 잠금(isSendingMessage) — 찌르기는 한 번 누르면 끝이지만 메시지는
-    /// 입력 뒤 [보내기]라 연타가 자연스럽고, 두 번째 요청은 방금 자기가 만든 쿨타임에 확정으로 거절당한다.
-    /// ② 결과를 성공에도 말한다 — 글자를 골라 넣은 뒤의 침묵은 "보내진 건가?"로 남는다.
-    ///
-    /// **집중 모드는 여기서 거르지 않는다.** 서버가 대상의 집중 모드를 보고 target_focused 로 거절한다
-    /// (poke 와 같은 게이트). 클라가 자기 미러로 한 번 더 판정하면 두 판정이 언젠가 갈리고, 그때 화면은
-    /// 서버가 허락한 전송을 막거나 막을 전송을 허락한다 — 그건 사용자가 원인을 알 수 없는 종류의 버그다.
-    ///
-    /// 빈 본문·3글자 초과도 여기서 판정하지 않는다. service.sendMessage 가 MessageBody 로 사전 판정해
-    /// **네트워크를 타지 않고** 서버와 같은 status 를 즉답하므로, 아래 switch 하나가 로컬 거절과 서버 거절을
-    /// 같은 문구로 다룬다(같은 실패를 catch 와 switch 두 곳에서 다루면 그 둘은 반드시 갈린다).
-    func sendMessage(to userID: String, body: String) {
-        guard session != nil else { return }
-        // 클라 선게이트: 근무중이 아니면 요청을 발사하지 않고 안내만 남긴다(sendPoke 와 같은 눈금 — startedAt).
-        guard startedAt != nil else {
-            messageNotice = Self.messageNotWorkingNotice
-            return
-        }
-        // 왕복이 이미 떠 있으면 두 번째를 만들지 않는다. 문구도 건드리지 않는다 — 방금 누른 것의 결과가
-        // 곧 도착하는데 여기서 다른 말을 쓰면 그 결과가 한 프레임 만에 덮인다.
-        guard !isSendingMessage else { return }
-        isSendingMessage = true
-        let generation = sessionGeneration
-        Task { @MainActor in
-            // 세대가 바뀐 뒤(로그아웃/재로그인)의 잠금 해제는 새 세션의 잠금을 푸는 짓이 된다 —
-            // 그쪽은 clearPersistedSession 이 이미 false 로 되돌려 놓았다.
-            defer { if generation == sessionGeneration { isSendingMessage = false } }
-            do {
-                let response = try await withSessionRetry { activeSession in
-                    try await service.sendMessage(accessToken: activeSession.accessToken, to: userID, body: body)
-                }
-                guard generation == sessionGeneration else { return }
-                switch MessageSendOutcome(response: response) {
-                case .ok:
-                    // 서버가 60초 쿨타임을 시작했다. 미러를 안 맞추면 버튼이 활성인 채 남아 다음 전송이
-                    // 확정 cooldown 을 받는다(sendPoke 의 ok 분기와 같은 이유).
-                    messageCooldownUntil[userID] = clock().addingTimeInterval(Self.messageCooldownSeconds)
-                    messageNotice = Self.messageSentNotice
-                case .cooldown(let retryAfterSeconds):
-                    // 서버가 알려 준 잔여로 미러를 **덮는다**(로컬 60초 추측보다 서버 값이 진실이다).
-                    messageCooldownUntil[userID] = clock().addingTimeInterval(TimeInterval(retryAfterSeconds))
-                    messageNotice = Self.messageCooldownNotice(seconds: retryAfterSeconds)
-                case .notWorking:
-                    messageNotice = Self.messageNotWorkingNotice
-                case .targetNotWorking:
-                    // 대상 자리비움은 쿨타임을 태우지 않는다(서버가 행을 안 남긴다).
-                    // 디렉토리의 '근무중' 배지가 낡았다는 뜻이므로 즉시 재조회한다 — 안 그러면 화면은 계속
-                    // "근무중"이라 말하는데 전송만 거절돼, 사용자는 왜 안 되는지 알 방법이 없다
-                    // (sendPoke/sendUltraPoke 의 같은 분기와 같은 처리다).
-                    messageNotice = Self.messageTargetNotWorkingNotice
-                    loadPokeDirectory()
-                case .targetFocused:
-                    // 쿨타임도 소모되지 않았다 — 서버가 행을 안 남긴다. 그래서 미러를 건드리지 않는다.
-                    messageNotice = Self.messageTargetFocusedNotice
-                case .targetOutdated:
-                    // 쿨타임은 태우지 않는다(서버가 행을 안 남긴다). 그리고 targetNotWorking 과 **같은 이유로**
-                    // 디렉토리를 다시 읽는다 — 이 거절이 왔다는 건 목록에 실린 '메시지 가능' 배지가 낡았다는
-                    // 뜻이고, 고치지 않으면 화면은 계속 보낼 수 있다고 말하면서 전송만 거절된다.
-                    // (상대가 방금 앱을 올린 반대 방향도 같은 재조회로 함께 풀린다.)
-                    messageNotice = Self.messageTargetOutdatedNotice
-                    loadPokeDirectory()
-                case .tooLong:
-                    messageNotice = Self.messageTooLongNotice
-                case .invalid:
-                    messageNotice = Self.messageInvalidNotice
-                }
-            } catch {
-                if case .cancelled = classifyAuthError(error) { return }
-                guard generation == sessionGeneration else { return }
-                // 마이그레이션 미적용 서버(404/PGRST202)도 여기로 떨어진다 — 메시지만 조용히 못 쓰고
-                // 찌르기/울트라는 그대로 산다.
-                messageNotice = "연결이 불안정해요. 잠시 후 다시 시도해 주세요"
-            }
-        }
-    }
-
     /// 지금 화면에 띄울 메시지 1건(없으면 nil). 말풍선은 한 번에 하나뿐이라 **큐의 맨 앞이 곧 화면**이다.
     var currentMessage: ReceivedMessage? { receivedMessages.first }
 
@@ -789,7 +686,14 @@ extension WorkTimerStore {
             guard !body.isEmpty else { return nil }
             let createdAt = Date(timeIntervalSince1970: TimeInterval(row.createdEpoch))
             guard now.timeIntervalSince(createdAt) <= messageDisplayFreshnessSeconds else { return nil }
-            return ReceivedMessage(id: row.id, fromName: row.fromDisplayName, body: body, createdAt: createdAt)
+            return ReceivedMessage(
+                id: row.id,
+                fromName: row.fromDisplayName,
+                body: body,
+                createdAt: createdAt,
+                // 보낸이 id 를 여기서 함께 나른다 — 팝오버의 수신 줄이 "그 사람 대화"를 열 수 있는 근거다.
+                fromUserID: row.fromUser
+            )
         }
         .sorted { $0.createdAt < $1.createdAt }
     }
@@ -808,13 +712,11 @@ extension WorkTimerStore {
             queue.removeFirst(queue.count - Self.messageQueueLimit)
         }
         receivedMessages = queue
-    }
-
-    /// 표시용 메시지 쿨타임 잔여 초(0이면 보낼 수 있다). pokeCooldownRemaining 과 같은 규약으로
-    /// displayNow 티커 기준으로 매초 줄어든다.
-    func messageCooldownRemaining(for userID: String, now: Date) -> Int {
-        guard let until = messageCooldownUntil[userID] else { return 0 }
-        return max(0, Int(until.timeIntervalSince(now).rounded(.up)))
+        // ★ **여기가 "창을 열어 둔 채로 메시지가 오면 그 자리에서 나타난다"의 유일한 근거다**(v0.2.49).
+        //   새 타이머를 만들지 않고 이미 도는 수신 폴링(15초)에 얹는다 — 무료 플랜에 상시 요청을
+        //   하나 더 얹지 않는다는 규약(제보 목록·미니게임 순위와 같다).
+        //   창이 닫혀 있으면 아무 요청도 안 나간다: 이력은 창을 열 때 어차피 한 번 받는다.
+        refreshMessageHistoryOnArrival()
     }
 
     /// 로그인 후 내 토큰 사용량 공개·수집 설정을 서버값으로 1회 로드한다(폴링 첫 유효 tick 에서 부른다).
@@ -937,4 +839,19 @@ struct ReceivedMessage: Equatable, Identifiable {
     /// 정규화된 본문(앞뒤 공백 제거, 비어 있지 않음이 보장된다 — freshReceivedMessages 가 거른다).
     let body: String
     let createdAt: Date
+    /// 보낸이의 user id(v0.2.49). **팝오버의 '최근 받은 메시지' 줄을 진입점으로 만들려고 더했다** —
+    /// 별명만으로는 어느 대화를 열지 고를 수 없고(동명이인·별명 변경), id 없이 이름으로 찾으면
+    /// 그 순간 엉뚱한 사람의 대화가 열린다. 그건 메신저에서 가장 나쁜 종류의 오작동이다.
+    ///
+    /// 기본값이 nil 인 이유는 **하위호환**이다: 이 인자를 모르는 기존 호출부(테스트 픽스처 포함)가
+    /// 무수정으로 컴파일된다. nil 이면 그 줄은 대화를 고르지 않고 창만 연다.
+    let fromUserID: String?
+
+    init(id: String, fromName: String, body: String, createdAt: Date, fromUserID: String? = nil) {
+        self.id = id
+        self.fromName = fromName
+        self.body = body
+        self.createdAt = createdAt
+        self.fromUserID = fromUserID
+    }
 }

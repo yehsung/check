@@ -1277,6 +1277,15 @@ struct CheckOverlayCharacterView: View {
                                 y: max(40, geo.size.height / 2 - charBox.height / 2 + 56)
                             )
                             .id(greeting)
+                    } else if OverlayMessageBubble.isArrival(greeting) {
+                        // 긴 메시지의 **도착 알림**. 같은 자리·같은 여백·같은 수명이고 캡슐만 알림용이다
+                        // (봉투 + 열 곳이 배선됐을 때의 화살표). 갈래를 문구로 되찾는 이유는
+                        // OverlayMessageBubble.isArrival 주석에 — 엔진의 말풍선 통로는 문자열 하나뿐이다.
+                        CheckMessageArrivalBubble(text: greeting, onOpenMessages: engine.onOpenMessages)
+                            .padding(.leading, 4)
+                            .padding(.top, 8)
+                            .transition(.opacity)
+                            .id(greeting)
                     } else {
                         CheckGreetingBubble(text: greeting)
                             .padding(.leading, 4)

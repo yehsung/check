@@ -365,6 +365,10 @@ extension WorkTimerStore {
         // 자기 token_usage_public 서버값을 영영 못 읽어, 로그인 직후의 낙관 기본값 true 가 교정되지 않는다
         // — 비공개로 꺼 둔 사람의 토큰 사용량이 다음 실행마다 공개로 되살아나 보인다.
         await loadTokenUsagePrivacyIfNeeded()
+        // 집중 모드 1단 만료도 근무중 게이트 **앞**이다(요청 0건 — 켜져 있지 않으면 첫 가드에서 빠진다).
+        // 티커는 비근무 + 팝오버 닫힘이면 멈추므로, 퇴근 뒤 켜 둔 1단을 푸는 자리는 로그인 중 상시 도는 이 폴링뿐이다.
+        // 뒤로 내리면 "근무를 끝낸 뒤 3시간"이 영영 오지 않는다 — 정확히 그 사람들이 켜 놓고 까먹는 사람들이다.
+        evaluateFocusStageExpiry(now: clock())
         // 내 버전 보고도 근무중 게이트 **앞**이다(공개 설정 로드와 같은 자리·같은 이유). 뒤로 내리면 근무를
         // 한 번도 시작하지 않은 사용자의 app_build 가 서버에서 영영 null 로 남고, 그 사람은 팀원 목록에서
         // '메시지 못 받는 사람'으로 굳는다 — 정작 그가 근무를 시작하는 순간에도 그렇다(목록은 그 전에 그려진다).
@@ -729,6 +733,8 @@ extension WorkTimerStore {
     func loadTokenUsagePrivacyIfNeeded() async {
         guard !tokenUsageCollectLoaded, session != nil else { return }
         let generation = sessionGeneration
+        // GET 을 보내기 **전의** 집중 모드 선택 번호. 응답이 오기 전에 사용자가 버튼을 눌렀으면 이 응답이 더 낡았다.
+        let focusIntentAtRequest = focusIntentSerial
         do {
             let settings = try await withSessionRetry { activeSession in
                 try await service.fetchTokenUsageSettings(accessToken: activeSession.accessToken, userID: activeSession.userID)
@@ -741,7 +747,9 @@ extension WorkTimerStore {
             // 여기서 세운다 — 서버 응답을 **실제로 받은** 유일한 자리다(아래 별명 쿨타임 GET 은 try? 라 이 사실과 무관하다).
             tokenUsageCollectLoaded = true
             // 집중 모드도 같은 GET 으로 받는다(요청 추가 0). 컬럼이 없는 서버에서는 false 로 와서 기존 동작이 유지된다.
-            if focusMode != settings.focusMode { focusMode = settings.focusMode }
+            // v0.2.51: 서버값을 그대로 대입하지 않고 이 맥의 단계 기록과 합친다 — 서버 꺼짐이면 기록을 지우고,
+            // 서버 켜짐 + 앱이 꺼져 있던 동안 끝난 1단이면 **여기서 곧바로** PATCH false 를 건다(앱 재시작 만료).
+            applyServerFocusMode(settings.focusMode, intentSerialAtRequest: focusIntentAtRequest)
             // 별명 쿨타임 기준 시각. 실패해도 위 두 설정은 이미 반영됐다 — 쿨타임만 '아직 모름'으로 남고
             // 서버가 최종 판정한다. 컬럼이 없는 서버(마이그레이션 전)에서는 이 GET 이 400 이지만 여기서
             // try? 로 삼키므로 토큰 공개/수집 설정은 그대로 산다(요청을 하나로 합치면 그게 같이 죽는다).
@@ -795,37 +803,330 @@ extension WorkTimerStore {
         }
     }
 
-    /// 집중 모드 토글(낙관 반영 → PATCH, 실패 시 원복). 토큰 공개 토글과 같은 규약이다.
-    ///
-    /// 켜 두면 남이 나를 찌를 수 없다 — 판정은 **서버**가 한다(poke_user/ultra_poke_user 게이트).
-    /// 그래서 구버전 앱을 쓰는 팀원도 내 집중 모드를 존중하게 되고, 클라 미러는 화면 표시용일 뿐이다.
+    // MARK: - 집중 모드 2단 (v0.2.51)
+    //
+    // 사용자 지시(2026-09-11): "켜 놨다가 까먹고 안 끄는 사람이 여럿 있다. 1단은 3시간 뒤 자동으로 풀리고,
+    // 2단은 지금처럼 끌 때까지 계속. 버튼 한 번이면 1단, 두 번 눌러야 2단."
+    //
+    // 켜 두면 남이 나를 찌를 수 없다 — 판정은 여전히 **서버**가 한다(poke_user/ultra_poke_user 게이트). 그래서 구버전 앱을
+    // 쓰는 팀원도 내 집중 모드를 존중하고, 이 계층은 화면 표시와 '언제 끌지'만 맡는다.
+    //
+    // ★ **만료는 클라가 한다. 서버는 한 줄도 바뀌지 않았다**(같은 날 사용자 결정 — "굳이 서버에서 할 필요가 있을까?
+    //   앱이 다시 켜진 시점에 자동으로 풀어지게끔 하면 되는 거 아니야?"). 서버가 아는 것은 여전히 `profiles.focus_mode`
+    //   불리언 하나이고, 3시간이 지나면 **앱이 켜져 있을 때 앱이** PATCH false 를 보낸다.
+    //   앱이 꺼져 있는 동안 서버에 true 가 남아도 해가 없다: 앱이 꺼진 사람은 근무중이 아니라 찌르기·메시지가
+    //   이미 `target_not_working` 으로 막힌다. 집중 모드는 "앱이 켜져 있을 때 방해받지 않기"를 위한 것이다.
+    //   **"서버 만료가 더 정확하다"며 서버로 옮기지 마라** — 사용자가 명시적으로 기각한 설계다(컬럼·RPC·구버전 호환이
+    //   통째로 따라온다). 앱이 다시 켜지면 설정 로드 직후(applyServerFocusMode) 그 자리에서 풀린다.
+
+    /// 1단(시간제) 집중의 길이. **이 한 곳에서만** 정한다 — 버튼 툴팁의 "3시간"도 여기서 파생한다
+    /// (숫자를 문구에 베껴 두면 상수를 바꾼 날 화면만 옛 시간을 말한다 — UltraBalanceText 와 같은 교훈).
+    nonisolated static let focusTimedDuration: TimeInterval = 3 * 60 * 60
+
+    /// 1단 만료 PATCH false 가 실패했을 때 다시 보내기까지의 최소 간격(초).
+    /// 틱은 팝오버가 열려 있으면 **1초마다** 오므로, 이 간격이 없으면 서버가 죽은 동안(무료 플랜 일시정지 5xx)
+    /// 38명의 맥이 매초 PATCH 를 두드린다. 0 으로 줄이지 마라.
+    nonisolated static let focusExpiryRetrySeconds: TimeInterval = 60
+
+    /// 사용자 누름이 실패했을 때의 안내(옛 토글과 같은 문장).
+    nonisolated static let focusModeChangeFailedNotice = "집중 모드를 바꾸지 못했어요. 잠시 후 다시 시도해 주세요"
+
+    /// 사용자별 단계 기록 키. **userID 가 키에 들어가는 것이 요점이다** — 한 키로 두면 같은 맥에서 계정을 바꾼 다음 사람이
+    /// 앞 사람의 1단(남은 시간까지)을 물려받는다. 대소문자는 접는다(세션 복원 경로마다 UUID 표기가 다를 수 있다).
+    nonisolated static func focusStageRecordKey(userID: String) -> String {
+        "focusStageRecord.\(userID.lowercased())"
+    }
+
+    /// 이 맥에 남은 그 사용자의 단계 기록. 없거나 깨졌으면 nil — 서버가 켜져 있다면 always(2단)로 읽힌다.
+    /// `.standard` 가 아니라 주입된 `defaults` 를 쓴다(테스트가 실제 기본값을 더럽히지 않게).
+    func focusStageRecord(for userID: String) -> FocusStageRecord? {
+        guard let data = defaults.data(forKey: Self.focusStageRecordKey(userID: userID)) else { return nil }
+        return try? JSONDecoder().decode(FocusStageRecord.self, from: data)
+    }
+
+    /// 단계 기록을 쓴다(nil 이면 지운다). 실제로 바뀐 때만 관찰 카운터를 올린다 — 같은 값 재기록이 버튼을 다시 그리지 않게.
+    func writeFocusStageRecord(_ record: FocusStageRecord?, for userID: String) {
+        let key = Self.focusStageRecordKey(userID: userID)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys   // 같은 기록 = 같은 바이트(아래 비교가 뜻을 갖게)
+        let new = record.flatMap { try? encoder.encode($0) }
+        guard defaults.data(forKey: key) != new else { return }
+        if let new {
+            defaults.set(new, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+        focusStageRevision &+= 1
+    }
+
+    /// 표시용 단계(파생값). **부수효과가 없다** — 뷰 잎이 매초 부를 수 있어야 해서다.
+    /// 만료로 판정돼도 여기서는 요청을 보내지 않는다: 실제 해제(PATCH false)는 이미 도는 자리의
+    /// evaluateFocusStageExpiry 가 건다. body 에서 네트워크를 쏘면 재평가 횟수만큼 요청이 나간다.
+    /// 로그인하지 않았으면 off 다(기록은 사용자별이라 읽을 주인이 없다 — 남의 기록이 비로그인 화면에 새지 않는다).
+    func focusStage(now: Date) -> FocusStage {
+        guard focusMode, let userID = session?.userID else { return .off }
+        _ = focusStageRevision
+        return FocusStagePolicy.stage(serverOn: true, record: focusStageRecord(for: userID), now: now)
+    }
+
+    /// 버튼 잎이 부르는 읽기(단계 + 1단 남은 초). `now` 는 **1단 기록이 있을 때만 평가된다**(@autoclosure).
+    /// 꺼짐·2단에서 시계를 읽으면 그 잎이 초침(displayNow)에 관찰 등록돼, 보일 게 없는데도 매초 다시 그려진다.
+    func focusStageFace(now: @autoclosure () -> Date) -> FocusStageFace {
+        guard focusMode, let userID = session?.userID else { return .off }
+        _ = focusStageRevision
+        let record = focusStageRecord(for: userID)
+        guard let record, record.stage == .timed, let until = record.until else {
+            // 시계가 필요 없는 가지: 기록 없음·2단 → always, until 이 없는 깨진 1단 → off(정책이 시계 없이 판정한다).
+            return FocusStageFace(stage: FocusStagePolicy.stage(serverOn: true, record: record, now: now()))
+        }
+        let current = now()
+        let stage = FocusStagePolicy.stage(serverOn: true, record: record, now: current)
+        guard stage == .timed else { return FocusStageFace(stage: stage) }
+        return FocusStageFace(stage: .timed, remainingSeconds: max(0, Int(until.timeIntervalSince(current))))
+    }
+
+    /// 집중 모드 버튼 한 번. `off → 1단(3시간) → 2단(계속) → off` 순환(사용자 지시 2026-09-11).
+    /// 1단이 막 끝났지만 아직 해제 요청 전인 순간(화면은 이미 off 로 읽힌다)에 누르면 새 1단이 시작된다 —
+    /// 화면에 보이는 단계에서 한 칸 가는 것이 사용자가 기대하는 동작이다.
+    func cycleFocusStage() {
+        let now = clock()
+        switch focusStage(now: now) {
+        case .off: commitFocusStage(.timed, now: now)
+        case .timed: commitFocusStage(.always, now: now)
+        case .always: commitFocusStage(.off, now: now)
+        }
+    }
+
+    /// 켜짐/꺼짐만 아는 옛 진입점. 켜면 **2단(always)** 과 같다 — 만료를 말하지 않고 켰으면 무기한(옛 의미 그대로).
+    /// 같은 값 재설정은 아무 일도 하지 않는다(@Observable 무효화·헛왕복 방지 — FocusModeTests 가 요청 수로 못 박는다).
     func setFocusMode(_ enabled: Bool) {
         guard focusMode != enabled else { return }
-        let previous = focusMode
-        focusMode = enabled
-        guard session != nil else { return }
+        guard session != nil else {
+            // 로그인 전: 보낼 곳도, 기록을 쓸 주인도 없다. 옛 규약대로 미러만 바꾼다.
+            focusMode = enabled
+            return
+        }
+        commitFocusStage(enabled ? .always : .off, now: clock())
+    }
+
+    /// CheckMenuView 의 옛 버튼이 아직 이 이름을 부른다. **cycleFocusStage 로 위임한다** — 옛 뜻(켜짐↔꺼짐)으로 두면
+    /// 새 버튼 배선 전의 옛 버튼이 기록 없이 켜서, 1단이 존재하지 않는 불일치 상태(곧바로 2단)가 생긴다.
+    func toggleFocusMode() {
+        cycleFocusStage()
+    }
+
+    /// 사용자가 고른 단계를 반영한다: 기록 → 화면(낙관) → 서버 맞추기.
+    /// 순서가 중요하다 — 기록을 먼저 써야 focusMode 가 바뀌어 잎이 다시 그려질 때 새 단계를 읽는다.
+    private func commitFocusStage(_ target: FocusStage, now: Date) {
+        guard let userID = session?.userID else { return }
+        focusIntentSerial &+= 1
+        // 사용자가 직접 골랐다 — 만료 재시도 대기는 여기서 끝난다. 남겨 두면 방금 새로 켠 1단을
+        // 예전 만료의 재시도가 뒤늦게 false 로 꺼 버린다.
+        focusExpiryRetryAt = nil
+        let record: FocusStageRecord?
+        switch target {
+        case .off: record = nil
+        case .timed: record = FocusStageRecord(stage: .timed, until: now.addingTimeInterval(Self.focusTimedDuration))
+        case .always: record = FocusStageRecord(stage: .always, until: nil)
+        }
+        writeFocusStageRecord(record, for: userID)
+        let serverOn = target != .off
+        if focusMode != serverOn { focusMode = serverOn }
+        // 1단 → 2단은 서버값이 이미 true 라 여기서 요청이 나가지 않는다(아래 함수의 '같음' 가드).
+        // 서버가 아직 false 로 알고 있으면(1단 PATCH 가 확인되지 않았으면) 그때는 보낸다.
+        reconcileFocusModeWithServer()
+    }
+
+    /// 화면의 켜짐/꺼짐(focusMode)을 서버에 맞춘다. **한 번에 한 요청만** 날린다.
+    ///
+    /// 왜 한 줄로 세우나: 2단이 생기면서 버튼을 연달아 누르는 일이 흔해졌다(off→1단→2단→off 가 1초 안에 세 번).
+    /// 누를 때마다 PATCH 를 병렬로 쏘면 true 와 false 가 동시에 날아가고 서버에는 **나중에 커밋된 쪽**이 남는다 —
+    /// 화면은 꺼짐인데 서버는 켜짐인 채로 굳을 수 있고, 그러면 다음 실행에서 '기록 없음 = 2단'으로 되살아난다.
+    /// 날아가는 동안의 선택은 완료 뒤 이 함수가 다시 불려 **마지막 의도 하나만** 보낸다.
+    func reconcileFocusModeWithServer() {
+        guard focusPatchInFlight == nil, let userID = session?.userID else { return }
+        let desired = focusMode
+        guard focusModeServerValue != desired else {
+            // 이미 서버와 같다. 꺼짐으로 확정됐으면 남은 기록(만료된 1단)과 재시도 대기를 비운다.
+            if !desired { settleFocusOff(userID: userID) }
+            return
+        }
+        focusPatchInFlight = desired
         let generation = sessionGeneration
         Task { @MainActor in
+            var succeeded = false
+            var cancelled = false
             do {
                 try await withSessionRetry { activeSession in
                     try await service.updateFocusMode(
                         accessToken: activeSession.accessToken,
                         userID: activeSession.userID,
-                        enabled: enabled
+                        enabled: desired
                     )
                 }
+                succeeded = true
             } catch {
-                if case .cancelled = classifyAuthError(error) { return }
-                guard generation == sessionGeneration else { return }
-                focusMode = previous
-                pokeNotice = "집중 모드를 바꾸지 못했어요. 잠시 후 다시 시도해 주세요"
+                if case .cancelled = classifyAuthError(error) { cancelled = true }
             }
+            // 로그아웃·계정 교체 뒤에 도착한 결과는 새 사용자의 화면을 만지지 않는다(clearPersistedSession 이 장부를 이미 비웠다).
+            guard generation == sessionGeneration else { return }
+            focusPatchInFlight = nil
+            finishFocusPatch(sent: desired, succeeded: succeeded, cancelled: cancelled, userID: userID)
         }
     }
 
-    func toggleFocusMode() {
-        setFocusMode(!focusMode)
+    private func finishFocusPatch(sent: Bool, succeeded: Bool, cancelled: Bool, userID: String) {
+        if succeeded {
+            focusModeServerValue = sent
+        } else if focusMode == sent {
+            // 날아가는 동안 의도가 바뀌지 않았다 = 이 실패가 곧 지금 화면의 실패다.
+            if !sent, let record = focusStageRecord(for: userID), FocusStagePolicy.isExpired(record, now: clock()) {
+                // ★ 만료 경로는 **원복하지 않는다.** 사용자의 의도는 이미 꺼짐이다(3시간이 끝났다). 옛 토글의
+                //   `focusMode = previous` 를 여기서 하면 "풀렸다가 다시 켜진" 깜빡임이 되고, 끝난 1단이 기록 없는 켜짐 = 2단처럼 남는다.
+                //   화면은 off 로 둔 채 최소 60초 뒤에 다시 보낸다. 기록은 성공할 때까지 **남긴다** — 지금 지우면 앱이 꺼졌다
+                //   켜질 때 '서버 true + 기록 없음' = 2단으로 되살아난다. 사용자가 누른 일이 아니라 안내도 띄우지 않는다.
+                focusExpiryRetryAt = clock().addingTimeInterval(Self.focusExpiryRetrySeconds)
+                return
+            }
+            // 취소는 실패로 세지 않는다(옛 토글 규약 — 원복도 안내도 없다).
+            if cancelled { return }
+            // 사용자 누름의 실패: 서버가 들고 있다고 확인된 값으로 화면을 되돌린다(옛 토글의 원복 규약).
+            let restored = focusModeServerValue ?? !sent
+            if focusMode != restored { focusMode = restored }
+            if !restored { writeFocusStageRecord(nil, for: userID) }
+            pokeNotice = Self.focusModeChangeFailedNotice
+            return
+        }
+        // 날아가는 동안 사용자가 다시 골랐으면(또는 방금 확정됐으면) 마지막 선택을 이어서 맞춘다.
+        reconcileFocusModeWithServer()
     }
+
+    /// 꺼짐이 화면과 서버 양쪽에서 확정됐다 — 남은 기록(만료된 1단)과 재시도 대기를 비운다.
+    private func settleFocusOff(userID: String) {
+        focusExpiryRetryAt = nil
+        writeFocusStageRecord(nil, for: userID)
+    }
+
+    /// 1단 만료 확인. **새 타이머를 만들지 않고** 이미 도는 자리에서 부른다:
+    ///  · 티커 `tick()` — 팝오버가 열려 있으면 1초, 근무 중 닫혀 있으면 최대 60초(감속). 단 **비근무 + 팝오버 닫힘이면
+    ///    티커 자체가 멈춘다**(stopTimerIfIdle) — 퇴근 뒤 켜 둔 1단은 이 자리만으로는 영영 안 풀린다.
+    ///  · 수신 폴링 `localExpiryTick()` — 로그인 중 상시 15초(리얼타임 구독 중 60초). 위 공백을 이것이 메운다.
+    ///  · 잠자기에서 깨어날 때 `handleWake` — 켜 두고 덮개를 닫은 다음 날 아침이 가장 흔한 만료 시점이다.
+    ///  · 설정 로드 직후 `applyServerFocusMode` — 앱이 꺼져 있던 동안 끝난 1단.
+    /// 시각은 전부 `clock()` 이다. 켤 때도 같은 시계로 until 을 적었으므로 맥 시계가 틀어져 있어도 3시간은 3시간이다.
+    func evaluateFocusStageExpiry(now: Date) {
+        // 빠른 길: 켜져 있지도 재시도를 기다리지도 않으면 defaults 조차 읽지 않는다(틱마다 불린다).
+        guard focusMode || focusExpiryRetryAt != nil, let userID = session?.userID else { return }
+        guard let record = focusStageRecord(for: userID), FocusStagePolicy.isExpired(record, now: now) else { return }
+        if focusMode {
+            // 처음 감지: 화면을 곧바로 off 로 두고(사용자 의도는 이미 꺼짐) 서버에 맞춘다. 요청은 in-flight 가드로 한 건뿐이다.
+            focusIntentSerial &+= 1
+            focusMode = false
+            reconcileFocusModeWithServer()
+        } else if let retryAt = focusExpiryRetryAt, now >= retryAt, focusPatchInFlight == nil {
+            focusExpiryRetryAt = nil
+            reconcileFocusModeWithServer()
+        }
+    }
+
+    /// 설정 GET 이 가져온 서버값을 반영한다(로그인 후 1회 — loadTokenUsagePrivacyIfNeeded).
+    /// `intentSerialAtRequest` 는 GET 을 보내기 **전에** 읽은 focusIntentSerial 이다.
+    func applyServerFocusMode(_ serverOn: Bool, intentSerialAtRequest: Int) {
+        guard let userID = session?.userID else { return }
+        // 날아가는 PATCH 가 있으면 그 결과가 곧 서버값을 알려 준다 — 그보다 먼저 떠난 이 응답은 낡았다.
+        guard focusPatchInFlight == nil else { return }
+        // GET 이 나간 뒤 이 맥에서 고른 것이 **서버에 닿았다면** 이 응답이 더 낡았다 — 화면을 덮지 않는다.
+        // (옛 코드는 덮었고, 그러면 방금 켠 1단이 꺼짐으로 보이는데 서버는 켜짐으로 남는다.)
+        // 서버값을 끝내 확인하지 못했다면(그 누름이 실패했다면) 이 응답이 아는 것 중 가장 새롭다 — 반영한다.
+        if focusIntentSerial != intentSerialAtRequest, focusModeServerValue != nil { return }
+        focusModeServerValue = serverOn
+        guard serverOn else {
+            // 서버가 꺼짐이다 — 다른 맥에서 껐거나 서버가 덮었다. 이 맥의 기록은 이제 아무것도 서술하지 않는다.
+            if focusMode { focusMode = false }
+            settleFocusOff(userID: userID)
+            return
+        }
+        if let record = focusStageRecord(for: userID), FocusStagePolicy.isExpired(record, now: clock()) {
+            if focusExpiryRetryAt != nil {
+                // 이미 한 번 실패해 재시도를 기다리는 중이다 — 60초 간격은 이 경로에서도 지킨다(재시도 판정은 한 곳).
+                // 여기서 곧바로 보내면 실패 직후의 첫 설정 로드가 간격을 건너뛴 재시도가 된다.
+                evaluateFocusStageExpiry(now: clock())
+                return
+            }
+            // 앱이 꺼져 있던 동안 1단이 끝났다 — 켜진 화면을 한 번도 그리지 않고 곧바로 해제한다.
+            if focusMode { focusMode = false }
+            reconcileFocusModeWithServer()
+            return
+        }
+        // ★ 서버 켜짐 + 기록 없음 = **2단(always)**. 요청도 기록 쓰기도 없다 — 기록이 없다는 것 자체가 always 다
+        //   (기존 사용자 전환, 2026-09-11 사용자 지시. 근거와 금지 사항은 FocusStagePolicy.stage 주석).
+        if !focusMode { focusMode = true }
+    }
+}
+
+/// 집중 모드 단계(v0.2.51 — 사용자 지시 2026-09-11). 서버는 켜짐/꺼짐만 안다 — **어느 단으로 켰는지는 이 맥만 안다.**
+enum FocusStage: String, Codable, Equatable, Sendable {
+    /// 꺼짐(찌르기를 받는다).
+    case off
+    /// 1단 — 3시간 뒤 이 앱이 스스로 끈다(WorkTimerStore.focusTimedDuration).
+    case timed
+    /// 2단 — 끌 때까지 계속(v0.2.50 까지의 집중 모드와 같다).
+    case always
+}
+
+/// 이 맥에 남기는 단계 기록(사용자별 키 — WorkTimerStore.focusStageRecordKey).
+/// off 는 기록하지 않는다: 기록 삭제가 곧 off 이고, **기록이 없다는 것 = (서버가 켜져 있다면) always** 다.
+struct FocusStageRecord: Codable, Equatable, Sendable {
+    let stage: FocusStage
+    /// 1단의 해제 시각(스토어 clock 기준). 2단은 nil.
+    let until: Date?
+}
+
+/// 단계 판정(순수 함수). 스토어와 테스트가 **같은 표**를 읽는다.
+enum FocusStagePolicy {
+    static func stage(serverOn: Bool, record: FocusStageRecord?, now: @autoclosure () -> Date) -> FocusStage {
+        // 서버 꺼짐이 최우선이다 — 기록이 뭐라 하든 off(다른 맥에서 껐거나 서버가 덮었다).
+        guard serverOn else { return .off }
+        guard let record else {
+            // ★ 서버 켜짐 + 이 맥에 기록 없음 = **always(2단)**. 업데이트 전부터 켜 둔 사람이 여기로 온다.
+            //   2026-09-11 사용자 지시: "업데이트 할 때 이미 집중모드 켜 둔 사람들 2단으로 해 놔 줘."
+            //   앞 판의 "기록 없는 기존 사용자는 1단으로 전환해 3시간을 센다"는 **사용자가 명시적으로 취소했다.**
+            //   "잊은 사람을 정리한다"는 그럴듯한 이유로 여기를 .timed/.off 로 바꾸지 마라 — 켜 둔 사람이 업데이트 한 번에
+            //   말없이 풀린다. "딱 한 번만 전환"하는 표지(marker)도 만들지 마라 — 기록 없음 자체가 always 의 뜻이다.
+            //   다른 맥에서 1단으로 켠 경우도 이 맥에는 기록이 없어 always 로 보인다. 그 맥이 3시간 뒤 끄면
+            //   이 맥은 다음 설정 로드에서 서버 꺼짐을 받아 맞춰진다.
+            return .always
+        }
+        switch record.stage {
+        case .timed:
+            return isExpired(record, now: now()) ? .off : .timed
+        case .always, .off:
+            // off 기록은 쓰지 않는다 — 누가 남겼어도 어느 단인지 말해 주지 않으므로 기록 없음과 같게 읽는다.
+            return .always
+        }
+    }
+
+    /// 1단이 끝났는가. **정확히 until 에서** 끝난다(경계 포함) — "곧 해제"가 0초에서 멈춰 서 있지 않게.
+    /// until 이 없는 1단은 깨진 기록이다. 무기한으로 읽지 않고 끝난 것으로 본다(1단의 뜻이 '끝이 있다'다).
+    static func isExpired(_ record: FocusStageRecord, now: @autoclosure () -> Date) -> Bool {
+        guard record.stage == .timed else { return false }
+        guard let until = record.until else { return true }
+        return now() >= until
+    }
+}
+
+/// 집중 모드 버튼이 그리는 한 장면(값). 시계를 이미 푼 결과다 — 뷰는 이 값만 보고 그린다.
+struct FocusStageFace: Equatable, Sendable {
+    let stage: FocusStage
+    /// 1단일 때만 값이 있다(남은 초, 0 이상). 꺼짐·2단에서 nil 인 것은 시계를 읽지 않았다는 뜻이기도 하다.
+    let remainingSeconds: Int?
+
+    init(stage: FocusStage, remainingSeconds: Int? = nil) {
+        self.stage = stage
+        self.remainingSeconds = remainingSeconds
+    }
+
+    static let off = FocusStageFace(stage: .off)
 }
 
 /// 수신한 짧은 메시지 한 건. 찔림(ReceivedPoke)과 **다른 타입인 것이 요점**이다 — 같은 타입에 body 를
@@ -844,7 +1145,7 @@ struct ReceivedMessage: Equatable, Identifiable {
     /// 그 순간 엉뚱한 사람의 대화가 열린다. 그건 메신저에서 가장 나쁜 종류의 오작동이다.
     ///
     /// 기본값이 nil 인 이유는 **하위호환**이다: 이 인자를 모르는 기존 호출부(테스트 픽스처 포함)가
-    /// 무수정으로 컴파일된다. nil 이면 그 줄은 대화를 고르지 않고 창만 연다.
+    /// 무수정으로 컴파일된다. nil 이면 그 줄은 버튼이 아니라 표시 줄로만 그린다 — 상대 없이 대화에 들어가는 문을 만들지 않는다(2026-09-11).
     let fromUserID: String?
 
     init(id: String, fromName: String, body: String, createdAt: Date, fromUserID: String? = nil) {

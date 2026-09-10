@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Observation
 import SwiftUI
 import Testing
 @testable import check
@@ -298,25 +299,22 @@ func goingBackReturnsToTheListYouCameFromAndNowhereElse() {
 
 @MainActor
 @Test
-func openingWithoutAPeerLeavesTheScreenAskingForOne() {
-    // ★ v0.2.50 에서 **뒤집힌 규칙**이다. 창 시절에는 상대를 안 주면 최근 대화를 스스로 골랐다 —
-    //   왼쪽에 목록이 있어서 "아무거나 하나 열어 두는" 것이 자연스러웠기 때문이다.
-    //   지금 이 화면은 한 사람짜리고, 문은 콕찌르기 목록의 그 사람 행 하나뿐이다. 상대를 임의로 고르면
-    //   사용자가 누른 사람과 화면에 뜬 사람이 **다를 수 있다** — 그건 메시지 화면에서 가장 나쁜 종류의 버그다.
+func openingWithAnEmptyPeerIDOpensNothing() {
+    // ★ 규칙이 두 번 바뀌었다. 창 시절에는 상대를 안 주면 최근 대화를 스스로 골랐고(왼쪽 목록이 있었다),
+    //   v0.2.50 에는 "아무도 고르지 않고 '고르세요' 화면을 띄운다"였다. 2026-09-11 사용자 지적
+    //   ("애초에 대화상대를 고르지 않고 대화창에 진입할 수가 없어야되잖아") 이후로는 **상대 없이는 들어오지
+    //   못한다**: `openMessagePanel(peer:)` 이 `String` 이라 nil 은 컴파일되지 않고, 남은 구멍인 빈 문자열은
+    //   아무 상태도 건드리지 않고 돌아간다. 시그니처가 다시 넓혀지지 않는지는 V0251MessagePeerTests 가 소스로 잰다.
     let store = mwStore(host: "mw-open-default")
     store.messageHistory = [
         mwEntry(id: "a", peer: "u1", body: "옛말", minutesAgo: 300),
         mwEntry(id: "b", peer: "u2", body: "새말", minutesAgo: 5)
     ]
 
-    store.openMessagePanel(peer: nil)
+    store.openMessagePanel(peer: "")
 
-    #expect(store.isMessagePanelVisible)
+    #expect(!store.isMessagePanelVisible, "빈 id 로 대화 화면이 열렸다 — '대화 상대를 고르지 않았어요'가 뜬다")
     #expect(store.selectedMessagePeerID == nil, "아무도 안 눌렀는데 임의의 상대를 골랐다")
-    // 화면은 그 상태를 '고르기'로 말한다(빈 대화와 다른 문장이다).
-    let state = MessagePanelEmptyMessage.state(hasPeer: false, loaded: true, failed: false)
-    #expect(state.title == "대화 상대를 고르지 않았어요")
-    #expect(state.hint?.contains("콕 찌르기") == true, "어디로 가야 하는지 말하지 않는다")
 }
 
 @MainActor
@@ -879,9 +877,12 @@ func theConversationDrawsOnePersonOnlyAndStaysInsideThePopover() throws {
 @Test
 func emptyStatesAreDifferentForNoPeerAndNoMessages() throws {
     // ① 상대를 못 정했다 — 할 일은 '고르기'다(이 화면에는 사람 목록이 없으므로 어디로 갈지 말해 준다).
+    //    ⚠️ 이 상태는 **진입점으로는 도달할 수 없다**(2026-09-11 — `openMessagePanel(peer:)` 이 `String` 이다).
+    //    뷰에 남은 방어 가지가 여전히 다른 그림을 내는지만 보려고 깃발을 **직접** 세운다. 이 줄을
+    //    `openMessagePanel` 호출로 되돌리려면 옵셔널을 되살려야 하는데, 그건 사용자가 없애라고 한 바로 그 길이다.
     let noPeer = mwMenuStore(mwStore(host: "mw-render-nopeer"))
     noPeer.messageHistoryLoaded = true
-    noPeer.openMessagePanel(peer: nil)
+    noPeer.isMessagePanelVisible = true
     let noPeerBitmap = try mwBitmap(noPeer)
     MessagePanelSnapshots.save(noPeerBitmap, name: "panels-msg-nopeer.png")
     #expect(mwDiffBounds(noPeerBitmap, try mwBlankBitmap(matching: noPeerBitmap)) != nil, "빈 상태가 아무것도 안 그렸다")
@@ -1133,4 +1134,796 @@ func theOverlayBubbleOpensTheConversationOfWhoeverSentIt() throws {
     )
     // 상태 아이템이 없는 실행(헤드리스 테스트)에서는 아무 일도 안 한다.
     #expect(WindowTopAnchor.presentMenuPopover() == .noStatusItem || WindowTopAnchor.presentMenuPopover() == .debounced)
+}
+
+// MARK: - Enter 전송 (v0.2.51 — 사용자 지시 2026-09-11 ②)
+//
+// > "커멘드 엔터로 보내는게 아니라 엔터로 보내는게 보통 일반적인거 아니야? 메세지 입력하고 엔터로 보낼 수 있게 해줘."
+//
+// 판정은 `CheckEditorReturnKey.action` 한 함수다. **뷰 안에 두지 않은 이유**가 여기서 드러난다:
+// 다섯 갈래 중 둘("조합 중" · "못 보내는 상태")의 정답이 **아무 일도 안 일어나는 것**이라, 뷰 안에 있으면
+// 회귀가 나도 사람이 못 본다(줄이 조용히 생기거나, 쓰다 만 문장이 조용히 나간다).
+
+@Test
+func enterSendsAndShiftEnterBreaksTheLine() {
+    // ① 평범한 Enter — 보낼 수 있으면 보낸다. 이 한 줄이 사용자 지시 ②다.
+    #expect(CheckEditorReturnKey.action(
+        sendsOnReturn: true, hasShift: false, isComposing: false, canSend: true
+    ) == .send)
+    // ② ⇧Enter — 언제나 줄바꿈이다(200자를 여러 줄로 쓰는 길이 사라지면 안 된다).
+    #expect(CheckEditorReturnKey.action(
+        sendsOnReturn: true, hasShift: true, isComposing: false, canSend: true
+    ) == .newline)
+    // ③ 보낼 수 없는 상태 — **줄바꿈도 아니다**. 빈 칸에서 Enter 를 눌렀는데 줄만 늘어나면
+    //    사용자는 "안 보내진다"가 아니라 "칸이 이상하다"로 읽는다.
+    #expect(CheckEditorReturnKey.action(
+        sendsOnReturn: true, hasShift: false, isComposing: false, canSend: false
+    ) == .nothing)
+}
+
+@Test
+func enterWhileMarkedTextIsUpCommitsInsteadOfSending() {
+    // ★ **이 스위트에서 가장 값비싼 회귀다.** 입력기가 표시 글자(marked text)를 띄워 둔 순간의 Enter 는
+    //   조합을 끝내는 키이지 보내는 키가 아니다. 여기서 .send 가 나오면 조합 중인 글자가 빠진 문장이 나간다.
+    //   ⚠︎ macOS 2벌식 한글은 표시 글자를 안 쓴다(2026-09-11 실측 — CheckTextEditor 머리 주석). 그 입력기에서는
+    //   첫 Enter 가 완성된 문장 전체를 보내고, 이 갈래는 표시 글자를 쓰는 입력기(일본어·중국어 등)를 지킨다.
+    #expect(CheckEditorReturnKey.action(
+        sendsOnReturn: true, hasShift: false, isComposing: true, canSend: true
+    ) == .commitComposition)
+    // 보낼 수 없는 상태에서도 조합은 끝낼 수 있어야 한다(상대를 아직 안 골랐어도 글은 쓴다).
+    #expect(CheckEditorReturnKey.action(
+        sendsOnReturn: true, hasShift: false, isComposing: true, canSend: false
+    ) == .commitComposition)
+    // 조합 중 ⇧Enter 는 IME 가 확정하고 줄이 바뀐다(시스템 기본 동작 그대로).
+    #expect(CheckEditorReturnKey.action(
+        sendsOnReturn: true, hasShift: true, isComposing: true, canSend: true
+    ) == .newline)
+}
+
+@Test
+func theFeedbackEditorNeverSendsOnEnter() {
+    // 버그 설명은 여러 줄로 쓰는 글이다 — Enter 전송이 첫 문장만 보내고 나머지를 버린다.
+    for composing in [false, true] {
+        for shift in [false, true] {
+            for canSend in [false, true] {
+                #expect(CheckEditorReturnKey.action(
+                    sendsOnReturn: false, hasShift: shift, isComposing: composing, canSend: canSend
+                ) == .newline, "제보 칸에서 Enter 가 줄바꿈이 아니다(조합=\(composing) ⇧=\(shift))")
+            }
+        }
+    }
+}
+
+@Test
+func returnKeyMeansBothTheMainAndKeypadEnter() {
+    #expect(CheckEditorReturnKey.isReturn(keyCode: 36))   // ↩
+    #expect(CheckEditorReturnKey.isReturn(keyCode: 76))   // 키패드 ⌤
+    #expect(!CheckEditorReturnKey.isReturn(keyCode: 48))  // ⇥ — 탭 순회를 삼키면 접근성이 죽는다
+    #expect(!CheckEditorReturnKey.isReturn(keyCode: 49))  // 스페이스
+}
+
+@MainActor
+@Test
+func theThreeWaysToSendAllGoThroughTheSameDoor() throws {
+    // 버튼 · ⌘↩ · ↩ 이 서로 다른 문을 지나면 언젠가 판정이 갈리고, 갈린 쪽은 아무 화면에도 안 보인다.
+    let view = try mwSource("CheckMessageView.swift")
+    #expect(view.contains("keyboardShortcut(.return, modifiers: .command)"), "⌘↩ 이 사라졌다 — 손버릇을 깼다")
+    #expect(view.contains("onSend: { store.sendDraftMessage() }"), "Enter 가 전송 문을 안 지난다")
+    #expect(view.contains("canSendNow: { store.canSendMessageNow }"), "Enter 가 버튼과 다른 조건을 본다")
+    // 메시지 칸만 Enter 로 보낸다 — 이 인자 하나가 false 가 되면 앱에서 Enter 는 영영 안 보낸다(2026-09-11 검증에서
+    // 이 줄을 바꿔도 전부 초록이었다). 동작은 `theMountedMessageEditorSendsOnEnterAndBreaksTheLineOnShiftEnter` 가
+    // 올린 그대로 재고, 여기서는 그 자리를 소스로 한 번 더 못 박는다.
+    #expect(view.contains("sendsOnReturn: true"), "메시지 칸이 Enter 전송을 안 켰다")
+    // 툴팁은 상수가 아니라 `sendHelp` 계산을 거쳐 버튼에 붙는다 — 붙이는 줄이 사라지면 ⇧↩ 를 말하는 자리가 없어진다.
+    #expect(view.contains(".help(sendHelp)"), "[보내기] 버튼에 툴팁이 안 붙는다")
+    // 메시지 칸만 Enter 로 보낸다. 제보 칸에 `sendsOnReturn: true` 가 생기면 그건 사고다.
+    #expect(!(try mwSource("CheckFeedbackView.swift").contains("sendsOnReturn")),
+            "제보 칸이 Enter 전송을 켰다 — 버그 설명이 반토막 난다")
+
+    // 화면의 문구도 ↩ 를 말한다(옛 ⌘↩ 안내가 남아 있으면 사용자는 Enter 를 시도조차 안 한다).
+    #expect(MessageDraftEditor.placeholder == "메시지를 입력하세요 · ↩ 전송")
+    #expect(MessageDraftEditor.sendHelp == "보내기 (↩) · 줄바꿈은 ⇧↩")
+    #expect(!MessageDraftEditor.placeholder.contains("⌘"), "placeholder 가 아직 ⌘↩ 를 말한다")
+}
+
+@MainActor
+@Test
+func theEditorHandlesEditingShortcutsOnlyWhileFocused() throws {
+    // 앱에는 SwiftUI 가 세운 **보이지 않는 Edit 메뉴가 있다**(2026-09-11 AX 실측 — 처음 이 테스트는 "메뉴가 없다"는
+    // 틀린 전제 위에 서 있었다). 그래도 이 칸은 첫 응답자일 때 편집 단축키를 직접 받는다(CheckTextEditor.swift 머리 주석).
+    // 여기서는 처리기의 자리를 소스로 못 박고, 동작은 아래 합성 이벤트 테스트들이 잰다
+    // (⌘V·⌘C·⌘X 는 스파이로, ⌘A·⌘Z·⇧⌘Z 는 진짜 텍스트 뷰로, 포커스 가드는 다른 입력칸과 한 창에 세워서).
+    let source = try mwSource("CheckTextEditor.swift")
+    #expect(source.contains("performKeyEquivalent"), "편집 단축키를 받는 자리가 사라졌다")
+    #expect(source.contains("guard window?.firstResponder === self"), "포커스 없는 칸이 편집 단축키를 가로챈다")
+    for call in ["paste(nil)", "selectAll(nil)", "undoManager?.undo()"] {
+        #expect(source.contains(call), "표준 편집 명령이 빠졌다: \(call)")
+    }
+    #expect(source.contains("allowsUndo = true"), "되돌리기가 꺼져 있다")
+    // 다크 화면이다. 에디터가 자기 배경을 그리면 흰 상자가 뚫린다.
+    #expect(source.contains("drawsBackground = false"))
+    // 조합 중 되쓰기 금지 — 이 가드가 사라지면 마지막 글자가 씹힌다(헤드리스로 못 잡는 회귀다).
+    #expect(source.contains("guard !textView.hasMarkedText()"), "조합 중 되쓰기 가드가 사라졌다")
+}
+
+// MARK: - placeholder 와 실제 글자의 자리 (v0.2.51 — 사용자 지시 2026-09-11 ③)
+//
+// > "메세지 입력하는 텍스트 있는곳이랑 실제 텍스트 입력하는곳이랑 높이가 안맞아. 수정해줘.
+// >  이건 제보 창에서도 똑같이 발생해."
+//
+// ★ **`ImageRenderer` 로는 이걸 못 잰다.** AppKit 을 감싼 뷰를 못 그려서, 재려는 그 글자가 그림에 없다.
+//   그래서 여기서만 `NSHostingView` + `cacheDisplay(in:to:)` 로 **AppKit 이 직접 그린 픽셀**을 받는다 —
+//   진짜 `NSTextView` 가 그린 글자를 재야 이 측정이 의미가 있다.
+//
+// 재는 법: 같은 칸을 세 번 그린다.
+//   ① 빈 칸(placeholder 만 보인다)  ② 공백 한 칸(placeholder 도 글자도 없다 = 기준판)  ③ 글자 하나
+// ①−② 가 placeholder 첫 글자의 잉크, ③−② 가 실제 글자의 잉크다. 두 잉크의 **좌상단**을 비교한다.
+// placeholder 와 같은 글자를 넣는 이유는 자간·글자 모양이 달라 생기는 차이를 빼기 위해서다.
+
+private enum MWEditorInk {
+    /// 그림의 배율. **2x 로 그린다** — 1pt 를 재는 자에 눈금이 1pt 밖에 없으면 1pt 어긋남과 0pt 를
+    /// 구별할 수 없다(그리고 사용자가 실제로 보는 화면이 Retina 다).
+    static let scale: CGFloat = 2
+
+    /// AppKit 이 실제로 그린 픽셀. `ImageRenderer` 와 달리 `NSTextView` 가 그려진다.
+    @MainActor
+    static func bitmap<V: View>(_ view: V, width: CGFloat, height: CGFloat) throws -> NSBitmapImageRep {
+        let host = NSHostingView(rootView: AnyView(
+            view.frame(width: width, height: height).background(CheckTheme.background)
+        ))
+        host.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        // 창에 붙여야 NSTextView 가 레이아웃을 끝낸다(문서 뷰는 스크롤 뷰의 크기를 창에서 받는다).
+        let window = NSWindow(
+            contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false
+        )
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        // 텍스트 뷰가 자기 글자를 배치할 시간을 준다(레이아웃 매니저는 게으르다).
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        host.layoutSubtreeIfNeeded()
+        // 헤드리스 실행에는 화면이 없어서 `bitmapImageRepForCachingDisplay` 가 1x 를 돌려준다.
+        // 배율을 그림에 못 박기 위해 픽셀 수를 직접 잡고 그 안에 그린다.
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(width * scale), pixelsHigh: Int(height * scale),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else { throw MWRenderError.failed }
+        rep.size = NSSize(width: width, height: height)   // pt 크기 < 픽셀 수 = 2x
+        guard let context = NSGraphicsContext(bitmapImageRep: rep) else { throw MWRenderError.failed }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        host.displayIgnoringOpacity(host.bounds, in: context)
+        NSGraphicsContext.restoreGraphicsState()
+        return rep
+    }
+
+    /// 기준판과 달라진 픽셀의 경계. 좌상단이 곧 첫 글자의 자리다.
+    static func bounds(_ bitmap: NSBitmapImageRep, base: NSBitmapImageRep, tolerance: Double = 0.05) -> CGRect? {
+        let width = min(bitmap.pixelsWide, base.pixelsWide)
+        let height = min(bitmap.pixelsHigh, base.pixelsHigh)
+        var minX = Int.max, minY = Int.max, maxX = -1, maxY = -1
+        for y in 0..<height {
+            for x in 0..<width {
+                guard let a = bitmap.colorAt(x: x, y: y), let b = base.colorAt(x: x, y: y) else { continue }
+                let delta = abs(a.redComponent - b.redComponent)
+                    + abs(a.greenComponent - b.greenComponent)
+                    + abs(a.blueComponent - b.blueComponent)
+                if delta > tolerance {
+                    minX = min(minX, x); maxX = max(maxX, x)
+                    minY = min(minY, y); maxY = max(maxY, y)
+                }
+            }
+        }
+        guard maxX >= 0 else { return nil }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+}
+
+@MainActor
+@Test
+func thePlaceholderAndTheTypedLetterSitInTheSamePlace() throws {
+    let width = MessagePanelLayout.contentWidth
+    let height = MessagePanelLayout.editorHeight
+    // 기준판: 공백 한 칸 — placeholder 는 숨고(비어 있지 않다) 글자는 잉크를 안 남긴다.
+    let base = try MWEditorInk.bitmap(
+        MessageDraftEditor(text: .constant(" "), height: height), width: width, height: height
+    )
+    let empty = try MWEditorInk.bitmap(
+        MessageDraftEditor(text: .constant(""), height: height), width: width, height: height
+    )
+    // placeholder 의 첫 글자와 **같은 글자**를 넣는다(글자 모양 차이를 빼기 위해서다).
+    let first = String(MessageDraftEditor.placeholder.prefix(1))
+    let typed = try MWEditorInk.bitmap(
+        MessageDraftEditor(text: .constant(first), height: height), width: width, height: height
+    )
+    MessagePanelSnapshots.save(empty, name: "editor-msg-empty.png")
+    MessagePanelSnapshots.save(typed, name: "editor-msg-one-letter.png")
+
+    let scale = Double(empty.pixelsWide) / Double(width)   // 1x 인지 2x 인지 그림이 말한다
+    let placeholderInk = try #require(MWEditorInk.bounds(empty, base: base), "placeholder 가 안 그려졌다")
+    let typedInk = try #require(MWEditorInk.bounds(typed, base: base), "실제 글자가 안 그려졌다 — NSTextView 가 안 그려진다")
+
+    // 2026-09-11 실측(2x, 픽셀):
+    //   고치기 전 — placeholder (19, 15) / 글자 (22, 11) → **가로 1.5pt · 세로 2.0pt 어긋남**
+    //   고친 뒤   — placeholder (19, 15) / 글자 (20, 15) → 가로 0.5pt · 세로 0pt
+    // 세로 2pt 는 옛 `TextEditor` 의 `.padding(.vertical, 4)` 와 placeholder 7 의 차이가,
+    // 가로 1.5pt 는 `lineFragmentPadding` 5 + padding 6 = 11 과 placeholder 10 의 차이가 만든 것이다.
+    let dx = abs(placeholderInk.minX - typedInk.minX) / scale
+    let dy = abs(placeholderInk.minY - typedInk.minY) / scale
+    #expect(dx <= 1.0, "가로가 \(dx)pt 어긋났다 (placeholder \(placeholderInk.minX)px / 글자 \(typedInk.minX)px, \(scale)x)")
+    #expect(dy <= 1.0, "세로가 \(dy)pt 어긋났다 (placeholder \(placeholderInk.minY)px / 글자 \(typedInk.minY)px, \(scale)x)")
+}
+
+@MainActor
+@Test
+func theFeedbackEditorLinesUpTheSameWay() throws {
+    let width = FeedbackPanelLayout.contentWidth
+    let height = FeedbackPanelLayout.editorHeight
+    let base = try MWEditorInk.bitmap(
+        FeedbackBodyEditor(text: .constant(" "), height: height), width: width, height: height
+    )
+    let empty = try MWEditorInk.bitmap(
+        FeedbackBodyEditor(text: .constant(""), height: height), width: width, height: height
+    )
+    let first = String(FeedbackText.placeholder.prefix(1))
+    let typed = try MWEditorInk.bitmap(
+        FeedbackBodyEditor(text: .constant(first), height: height), width: width, height: height
+    )
+    MessagePanelSnapshots.save(empty, name: "editor-feedback-empty.png")
+    MessagePanelSnapshots.save(typed, name: "editor-feedback-one-letter.png")
+
+    let scale = Double(empty.pixelsWide) / Double(width)
+    let placeholderInk = try #require(MWEditorInk.bounds(empty, base: base), "제보 placeholder 가 안 그려졌다")
+    let typedInk = try #require(MWEditorInk.bounds(typed, base: base), "제보 칸의 실제 글자가 안 그려졌다")
+    // 2026-09-11 실측(2x, 픽셀):
+    //   고치기 전 — placeholder (20, 17) / 글자 (22, 11) → **가로 1.0pt · 세로 3.0pt 어긋남**
+    //     (제보 칸이 더 벌어져 있었다: placeholder 세로 8 vs `TextEditor` 4 — 사용자가 "제보 창에서도
+    //      똑같이 발생해"라고 말한 그 차이다.)
+    //   고친 뒤   — placeholder (20, 15) / 글자 (20, 15) → 가로 0pt · 세로 0pt
+    let dx = abs(placeholderInk.minX - typedInk.minX) / scale
+    let dy = abs(placeholderInk.minY - typedInk.minY) / scale
+    #expect(dx <= 1.0, "제보 칸 가로가 \(dx)pt 어긋났다")
+    #expect(dy <= 1.0, "제보 칸 세로가 \(dy)pt 어긋났다")
+}
+
+@MainActor
+@Test
+func theComposerDrawsItsFourStatesWithTheRealTextView() throws {
+    // 스펙이 요구하는 네 장: 빈 칸 · 한 글자 · 여러 줄 · 초과(빨간 테두리).
+    // **진짜 NSTextView 로 그린다** — 대체 경로가 아니라 사용자가 보는 그림이다.
+    let width = MessagePanelLayout.contentWidth
+    let height = MessagePanelLayout.editorHeight
+    let cases: [(String, String, Bool)] = [
+        ("editor-state-empty.png", "", false),
+        ("editor-state-one.png", "가", false),
+        ("editor-state-multiline.png", "첫 줄입니다\n둘째 줄입니다\n셋째 줄입니다", false),
+        ("editor-state-overflow.png", String(repeating: "가나다라마바사아자차", count: 21), true)
+    ]
+    var previous: NSBitmapImageRep?
+    for (name, text, overflowing) in cases {
+        let bitmap = try MWEditorInk.bitmap(
+            MessageDraftEditor(text: .constant(text), height: height, isOverflowing: overflowing),
+            width: width, height: height
+        )
+        MessagePanelSnapshots.save(bitmap, name: name)
+        let scale = Double(bitmap.pixelsWide) / Double(width)
+        #expect(Double(bitmap.pixelsHigh) / scale == Double(height),
+                "\(name) 이 칸 높이를 벗어났다 — 에디터가 패널을 삼킨다")
+        if let previous { #expect(MWEditorInk.bounds(bitmap, base: previous) != nil, "\(name) 이 앞 상태와 똑같이 그려졌다") }
+        previous = bitmap
+    }
+    // 세 줄은 54pt 안에 다 보인다(`CheckEditorMetrics.inset` 세로 7 의 근거).
+    #expect(height - 2 * CheckEditorMetrics.inset.height >= 13 * 3)
+}
+
+@MainActor
+@Test
+func theAdminNoteFallbackSitsWhereTheRealFieldDoes() throws {
+    // 관리자 메모 칸은 `TextField` 라 placeholder 를 **자기가** 그린다 — 그래서 실물에서는 placeholder 와
+    // 글자가 애초에 같은 자리다(사용자 지시 ③의 결함이 없는 칸이다). 여기서 재는 것은 다른 것이다:
+    // **스냅샷 대체 경로가 실물과 같은 자리에 그리는가.** 두 자리가 다르면 렌더 테스트가 "괜찮다"고
+    // 말하는 화면과 사용자가 보는 화면이 갈린다(이 저장소가 `Menu` 노란 상자에서 8일간 겪은 그 눈가리개다).
+    let width = FeedbackPanelLayout.contentWidth
+    let height: CGFloat = 30
+    let base = try MWEditorInk.bitmap(
+        FeedbackNoteField(text: .constant(" ")), width: width, height: height
+    )
+    let real = try MWEditorInk.bitmap(
+        FeedbackNoteField(text: .constant("어")), width: width, height: height
+    )
+    let plain = try MWEditorInk.bitmap(
+        FeedbackNoteField(text: .constant("어"), rendersPlainText: true), width: width, height: height
+    )
+    MessagePanelSnapshots.save(real, name: "editor-note-real.png")
+    MessagePanelSnapshots.save(plain, name: "editor-note-plain.png")
+
+    let scale = MWEditorInk.scale
+    let realInk = try #require(MWEditorInk.bounds(real, base: base), "진짜 메모 칸의 글자가 안 그려졌다")
+    let plainInk = try #require(MWEditorInk.bounds(plain, base: base), "대체 경로의 글자가 안 그려졌다")
+    let dx = abs(realInk.minX - plainInk.minX) / scale
+    let dy = abs(realInk.minY - plainInk.minY) / scale
+    #expect(dx <= 1.0, "메모 칸 가로가 \(dx)pt 어긋났다 (실물 \(realInk.minX)px / 대체 \(plainInk.minX)px)")
+    #expect(dy <= 1.0, "메모 칸 세로가 \(dy)pt 어긋났다 (실물 \(realInk.minY)px / 대체 \(plainInk.minY)px)")
+}
+
+// MARK: - 진짜 텍스트 뷰의 키 처리 (합성 NSEvent)
+//
+// 순수 판정만 재면 "판정은 맞는데 뷰가 그 판정을 안 따른다"를 못 잡는다. 그래서 진짜 `CheckEditorTextView` 에
+// 합성 키 이벤트를 넣고 **글자와 전송 횟수**를 본다.
+// ⚠︎ 실제 입력기는 이 프로세스에서 돌지 않는다 — 표시 글자는 `setMarkedText` 로 직접 심는다. 실제 입력기로
+//   친 결과(2벌식 한글은 표시 글자를 안 쓴다)는 CheckTextEditor 머리 주석에 적힌 하네스 실측이다.
+// ⚠︎ 진짜 ⌘V·⌘C·⌘X 는 부르지 않는다 — `NSPasteboard.general` 을 건드리면 테스트가 사용자 클립보드를 덮어쓴다.
+//   그 셋은 명령을 가로채 기록만 하는 스파이(`MWEditingSpyTextView`, 파일 끝)로 "어느 명령에 닿는가"만 잰다.
+
+@MainActor
+private final class MWSendCounter {
+    var count = 0
+}
+
+@MainActor
+private func mwEditorTextView(
+    _ text: String, sendsOnReturn: Bool, canSend: Bool
+) -> (CheckEditorTextView, NSWindow, MWSendCounter) {
+    let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 292, height: 54), styleMask: [.borderless], backing: .buffered, defer: false
+    )
+    let textView = CheckEditorTextView(frame: NSRect(x: 0, y: 0, width: 292, height: 54))
+    window.contentView = textView
+    window.makeFirstResponder(textView)
+    textView.string = text
+    textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+    textView.sendsOnReturn = sendsOnReturn
+    textView.canSendNow = { canSend }
+    let counter = MWSendCounter()
+    textView.onSend = { counter.count += 1 }
+    return (textView, window, counter)
+}
+
+@MainActor
+private func mwKeyEvent(
+    _ window: NSWindow, keyCode: UInt16, characters: String, ignoring: String, flags: NSEvent.ModifierFlags = []
+) -> NSEvent {
+    NSEvent.keyEvent(
+        with: .keyDown, location: .zero, modifierFlags: flags,
+        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+        context: nil, characters: characters, charactersIgnoringModifiers: ignoring,
+        isARepeat: false, keyCode: keyCode
+    )!
+}
+
+@MainActor
+@Test
+func theRealTextViewSendsOnEnterAndBreaksTheLineOnShiftEnter() {
+    let (sendView, sendWindow, sent) = mwEditorTextView("안녕하세요", sendsOnReturn: true, canSend: true)
+    sendView.keyDown(with: mwKeyEvent(sendWindow, keyCode: 36, characters: "\r", ignoring: "\r"))
+    #expect(sent.count == 1, "Enter 가 전송을 안 불렀다")
+    // 보내는 Enter 는 줄을 넣지 않는다(넣으면 스토어가 칸을 비우기 전 한 박자 동안 빈 줄이 카운터를 흔든다).
+    #expect(sendView.string == "안녕하세요", "Enter 가 전송과 함께 줄바꿈까지 넣었다: \(sendView.string.debugDescription)")
+
+    // 대조군: 같은 칸, 같은 글, ⇧ 만 다르다 — 그림이 달라야 이 두 단언이 의미가 있다.
+    let (lineView, lineWindow, lineSent) = mwEditorTextView("안녕하세요", sendsOnReturn: true, canSend: true)
+    lineView.keyDown(with: mwKeyEvent(lineWindow, keyCode: 36, characters: "\r", ignoring: "\r", flags: [.shift]))
+    #expect(lineSent.count == 0, "⇧Enter 가 전송했다")
+    #expect(lineView.string == "안녕하세요\n", "⇧Enter 가 줄을 안 바꿨다: \(lineView.string.debugDescription)")
+}
+
+@MainActor
+@Test
+func theRealTextViewDoesNothingOnEnterWhenItCannotSend() {
+    let (view, window, sent) = mwEditorTextView("", sendsOnReturn: true, canSend: false)
+    view.keyDown(with: mwKeyEvent(window, keyCode: 36, characters: "\r", ignoring: "\r"))
+    #expect(sent.count == 0)
+    #expect(view.string.isEmpty, "못 보내는 상태에서 Enter 가 줄을 넣었다: \(view.string.debugDescription)")
+}
+
+@MainActor
+@Test
+func theRealFeedbackTextViewBreaksTheLineOnEnter() {
+    let (view, window, sent) = mwEditorTextView("재현 순서", sendsOnReturn: false, canSend: true)
+    view.keyDown(with: mwKeyEvent(window, keyCode: 36, characters: "\r", ignoring: "\r"))
+    #expect(sent.count == 0, "제보 칸이 Enter 로 전송했다 — 버그 설명이 반토막 난다")
+    #expect(view.string == "재현 순서\n", "제보 칸 Enter 가 줄을 안 바꿨다: \(view.string.debugDescription)")
+}
+
+@MainActor
+@Test
+func theRealTextViewNeverSendsOrAddsALineWhileMarkedTextIsUp() {
+    let (view, window, sent) = mwEditorTextView("안녕하세", sendsOnReturn: true, canSend: true)
+    view.setMarkedText(
+        "요", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0)
+    )
+    // 심기에 실패하면 아래 두 단언은 아무것도 안 잰다(그리고 영원히 초록이다).
+    #expect(view.hasMarkedText(), "표시 글자를 못 심었다 — 이 테스트가 재는 것이 없다")
+    view.keyDown(with: mwKeyEvent(window, keyCode: 36, characters: "\r", ignoring: "\r"))
+    #expect(sent.count == 0, "표시 글자가 떠 있는데 Enter 가 전송했다 — 조합 중인 글자가 빠진 문장이 나간다")
+    #expect(!view.string.contains("\n"), "조합 확정 Enter 가 줄을 넣었다: \(view.string.debugDescription)")
+}
+
+@Test
+func editingShortcutsSurviveTheKoreanKeyboard() {
+    // 2026-09-11 실측(2벌식 한글, ⌘V): characters "v" · charactersIgnoringModifiers "ㅍ".
+    #expect(CheckEditorTextView.editingKey(characters: "v", ignoringModifiers: "ㅍ") == "v")
+    // 반대 조합(⌘, 모니터가 겪은 쪽)도 영문 쪽을 고른다.
+    #expect(CheckEditorTextView.editingKey(characters: "ㅍ", ignoringModifiers: "v") == "v")
+    #expect(CheckEditorTextView.editingKey(characters: "Z", ignoringModifiers: "Z") == "z")
+    // 영문이 하나도 없으면 아무 명령도 아니다 — 엉뚱한 편집 명령으로 접지 않는다.
+    #expect(CheckEditorTextView.editingKey(characters: "ㅍ", ignoringModifiers: "ㅍ") == "")
+    #expect(CheckEditorTextView.editingKey(characters: nil, ignoringModifiers: nil) == "")
+}
+
+@MainActor
+@Test
+func commandAOnTheKoreanKeyboardSelectsEverything() {
+    let body = "전체 선택"
+    let (view, window, _) = mwEditorTextView(body, sendsOnReturn: true, canSend: true)
+    let event = mwKeyEvent(window, keyCode: 0, characters: "a", ignoring: "ㅁ", flags: [.command])
+    #expect(view.performKeyEquivalent(with: event), "한글 자판의 ⌘A 를 안 받았다")
+    #expect(view.selectedRange() == NSRange(location: 0, length: (body as NSString).length), "⌘A 가 전체를 안 골랐다")
+    // 대조군: ⌘ 없는 'a' 는 편집 명령이 아니다(가로채면 입력이 죽는다).
+    let plain = mwKeyEvent(window, keyCode: 0, characters: "a", ignoring: "a")
+    #expect(!view.performKeyEquivalent(with: plain), "수식키 없는 글자를 편집 명령으로 가로챘다")
+}
+
+// MARK: - 올린 그대로의 배선 · 되돌리기 · 넘침 테두리 · 포커스 (2026-09-11 검증 지적 보완)
+//
+// 위 키 테스트는 `CheckEditorTextView` 를 직접 만들어 속성을 손으로 넣는다 — 그래서 `MessageDraftEditor` →
+// `CheckTextEditor` → 텍스트 뷰로 이어지는 **배선**을 한 번도 안 지난다. 검증에서 `sendsOnReturn: true` 를 false 로,
+// `textView.onSend = onSend` 를 `{}` 로 바꿔도 전부 초록이었다(앱에서는 Enter 가 영영 안 보내는 상태다).
+// 여기서는 **SwiftUI 에 올린 그대로** 두고 안의 진짜 텍스트 뷰를 꺼내 잰다.
+
+/// 스토어처럼 **관찰되는** 초안. 바깥에서 값을 바꾸면 SwiftUI 가 `updateNSView` 로 텍스트 뷰에 내려보낸다 —
+/// 전송 성공 · 대화 상대 전환 · 제보 전송 성공에서 스토어가 초안을 비우는 바로 그 경로다.
+@MainActor
+@Observable
+private final class MWDraftModel {
+    var text: String
+    init(_ text: String = "") { self.text = text }
+}
+
+private struct MWMountedMessageEditor: View {
+    @Bindable var model: MWDraftModel
+    let canSend: Bool
+    let counter: MWSendCounter
+
+    var body: some View {
+        MessageDraftEditor(
+            text: $model.text,
+            height: MessagePanelLayout.editorHeight,
+            canSendNow: { canSend },
+            onSend: { counter.count += 1 }
+        )
+    }
+}
+
+private struct MWMountedFeedbackEditor: View {
+    @Bindable var model: MWDraftModel
+
+    var body: some View {
+        FeedbackBodyEditor(text: $model.text, height: FeedbackPanelLayout.editorHeight)
+    }
+}
+
+@MainActor
+private func mwFirstSubview<T: NSView>(of root: NSView, _ type: T.Type) -> T? {
+    if let match = root as? T { return match }
+    for child in root.subviews {
+        if let match = mwFirstSubview(of: child, type) { return match }
+    }
+    return nil
+}
+
+/// 런루프를 돌린다. 되돌리기 관리자는 **이벤트 한 바퀴** 단위로 묶음을 닫고, SwiftUI 는 관찰 변화를 다음 바퀴에
+/// 내려보낸다 — 실제 앱에서 사람 손이 만드는 그 간격을 흉내 낸다(안 돌리면 한 묶음 안에서 되돌리기를 부르게 된다).
+@MainActor
+private func mwSpin(_ seconds: Double = 0.05) {
+    RunLoop.current.run(until: Date().addingTimeInterval(seconds))
+}
+
+@MainActor
+private func mwSpin(until condition: () -> Bool) {
+    var remaining = 100
+    while !condition(), remaining > 0 {
+        mwSpin(0.01)
+        remaining -= 1
+    }
+}
+
+/// SwiftUI 에 올린 입력칸 안의 **진짜** 텍스트 뷰를 꺼내 첫 응답자로 세운다(창이 입력칸을 붙들고 있다).
+@MainActor
+private func mwMount<V: View>(_ view: V, width: CGFloat, height: CGFloat) throws -> (NSWindow, CheckEditorTextView) {
+    let host = NSHostingView(rootView: view.frame(width: width, height: height))
+    host.frame = NSRect(x: 0, y: 0, width: width, height: height)
+    let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+    window.contentView = host
+    host.layoutSubtreeIfNeeded()
+    mwSpin()
+    let textView = try #require(mwFirstSubview(of: host, CheckEditorTextView.self), "올린 입력칸 안에 진짜 텍스트 뷰가 없다")
+    window.makeFirstResponder(textView)
+    return (window, textView)
+}
+
+/// 사람이 치듯 한 글자씩 넣는다(입력기가 부르는 것과 같은 `insertText(_:replacementRange:)` — 되돌리기에 기록된다).
+@MainActor
+private func mwType(_ text: String, into textView: NSTextView) {
+    for character in text {
+        textView.insertText(String(character), replacementRange: NSRange(location: NSNotFound, length: 0))
+        mwSpin(0.01)
+    }
+    mwSpin()
+}
+
+@MainActor
+@Test
+func theMountedMessageEditorSendsOnEnterAndBreaksTheLineOnShiftEnter() throws {
+    let model = MWDraftModel("안녕하세요")
+    let counter = MWSendCounter()
+    let (window, textView) = try mwMount(
+        MWMountedMessageEditor(model: model, canSend: true, counter: counter),
+        width: MessagePanelLayout.contentWidth, height: MessagePanelLayout.editorHeight
+    )
+    #expect(textView.string == "안녕하세요", "초안이 텍스트 뷰에 안 내려왔다")
+    textView.setSelectedRange(NSRange(location: ("안녕하세요" as NSString).length, length: 0))
+
+    textView.keyDown(with: mwKeyEvent(window, keyCode: 36, characters: "\r", ignoring: "\r"))
+    #expect(counter.count == 1,
+            "올린 그대로의 메시지 칸에서 Enter 가 전송을 안 불렀다 — MessageDraftEditor → CheckTextEditor → 텍스트 뷰 배선이 끊겼다")
+    #expect(textView.string == "안녕하세요", "보내는 Enter 가 줄까지 넣었다: \(textView.string.debugDescription)")
+
+    // 대조군: ⇧Enter 는 줄을 바꾸고, 그 줄이 **초안(바인딩)까지** 흘러야 한다(카운터·보내기 판정이 그 값을 본다).
+    textView.keyDown(with: mwKeyEvent(window, keyCode: 36, characters: "\r", ignoring: "\r", flags: [.shift]))
+    #expect(counter.count == 1, "⇧Enter 가 전송했다")
+    #expect(textView.string == "안녕하세요\n", "⇧Enter 가 줄을 안 바꿨다: \(textView.string.debugDescription)")
+    #expect(model.text == "안녕하세요\n", "줄바꿈이 초안으로 안 흘렀다: \(model.text.debugDescription)")
+}
+
+@MainActor
+@Test
+func theMountedMessageEditorIgnoresEnterWhenTheStoreCannotSend() throws {
+    let model = MWDraftModel("")
+    let counter = MWSendCounter()
+    let (window, textView) = try mwMount(
+        MWMountedMessageEditor(model: model, canSend: false, counter: counter),
+        width: MessagePanelLayout.contentWidth, height: MessagePanelLayout.editorHeight
+    )
+    textView.keyDown(with: mwKeyEvent(window, keyCode: 36, characters: "\r", ignoring: "\r"))
+    #expect(counter.count == 0, "보낼 수 없다는데 Enter 가 전송을 불렀다 — canSendNow 를 안 본다")
+    #expect(textView.string.isEmpty && model.text.isEmpty, "못 보내는 상태의 Enter 가 줄을 넣었다: \(textView.string.debugDescription)")
+}
+
+@MainActor
+@Test
+func theMountedFeedbackEditorBreaksTheLineOnEnter() throws {
+    let model = MWDraftModel("재현 순서")
+    let (window, textView) = try mwMount(
+        MWMountedFeedbackEditor(model: model),
+        width: FeedbackPanelLayout.contentWidth, height: FeedbackPanelLayout.editorHeight
+    )
+    textView.setSelectedRange(NSRange(location: ("재현 순서" as NSString).length, length: 0))
+    textView.keyDown(with: mwKeyEvent(window, keyCode: 36, characters: "\r", ignoring: "\r"))
+    #expect(textView.string == "재현 순서\n", "올린 그대로의 제보 칸에서 Enter 가 줄을 안 바꿨다: \(textView.string.debugDescription)")
+    #expect(model.text == "재현 순서\n", "제보 칸 줄바꿈이 초안으로 안 흘렀다: \(model.text.debugDescription)")
+    #expect(!textView.sendsOnReturn, "제보 칸이 Enter 전송을 켰다 — 버그 설명이 반토막 난다")
+}
+
+@MainActor
+@Test
+func undoStillWorksAfterTheStoreClearsTheDraft() throws {
+    // 2026-09-11 검증 재현(NSPopover 번들 앱 · 실제 키 이벤트): hello → Enter → 스토어가 초안을 비움 → ⌘Z 가 안에서
+    // 멈추고(WillUndo 만 오고 DidUndo 없음) 되돌리기 묶음이 level 1 로 굳어, 그 창에서는 ⌘Z 가 **다시는** 안 됐다.
+    let model = MWDraftModel("")
+    let (window, textView) = try mwMount(
+        MWMountedMessageEditor(model: model, canSend: true, counter: MWSendCounter()),
+        width: MessagePanelLayout.contentWidth, height: MessagePanelLayout.editorHeight
+    )
+    let undoManager = try #require(textView.undoManager, "텍스트 뷰에 되돌리기 관리자가 없다")
+    mwType("hello", into: textView)
+    #expect(model.text == "hello", "타이핑이 초안으로 안 흘렀다: \(model.text.debugDescription)")
+    // 전제: 타이핑이 기록돼야 아래가 뭔가를 잰다(기록이 애초에 없으면 이 테스트는 영원히 초록이다).
+    try #require(undoManager.canUndo, "타이핑이 되돌리기에 안 쌓인다 — 이 테스트가 재는 것이 없다")
+
+    // 스토어가 초안을 비운다(전송 성공 · 대화 상대 전환 · 제보 전송 성공).
+    model.text = ""
+    mwSpin(until: { textView.string.isEmpty })
+    try #require(textView.string.isEmpty, "스토어가 비운 초안이 텍스트 뷰에 안 내려왔다 — updateNSView 배선이 끊겼다")
+
+    // ★ 옛 타이핑 기록이 남아 있으면 다음 ⌘Z 는 없는 범위를 되돌리다 NSRangeException 으로 **테스트 프로세스째**
+    //   죽는다(검증 헤드리스 재현). 그래서 누르기 전에 먼저 묻고, 남아 있으면 누르지 않고 실패로 끝낸다.
+    guard !undoManager.canUndo else {
+        Issue.record("바깥이 초안을 비운 뒤에도 옛 타이핑 기록이 남았다 — 다음 ⌘Z 가 예외로 멈추고 그 창의 되돌리기가 굳는다")
+        return
+    }
+    let commandZ = mwKeyEvent(window, keyCode: 6, characters: "z", ignoring: "z", flags: [.command])
+    #expect(textView.performKeyEquivalent(with: commandZ), "⌘Z 를 안 받았다")
+    mwSpin()
+    #expect(textView.string.isEmpty)
+    #expect(undoManager.groupingLevel == 0, "⌘Z 뒤 되돌리기 묶음이 열린 채 굳었다 — 이 창의 ⌘Z 가 다시는 안 된다")
+
+    // "기록을 지웠다"가 "되돌리기를 껐다"가 되면 안 된다 — 비운 뒤 새로 친 글자는 여전히 되돌려진다.
+    mwType("abc", into: textView)
+    #expect(textView.string == "abc")
+    #expect(textView.performKeyEquivalent(with: commandZ), "⌘Z 를 안 받았다")
+    mwSpin()
+    #expect(textView.string.isEmpty, "비운 뒤 새로 친 글자를 ⌘Z 가 못 되돌렸다: \(textView.string.debugDescription)")
+    #expect(model.text.isEmpty, "되돌린 결과가 초안으로 안 흘렀다: \(model.text.debugDescription)")
+    let commandShiftZ = mwKeyEvent(window, keyCode: 6, characters: "Z", ignoring: "Z", flags: [.command, .shift])
+    #expect(textView.performKeyEquivalent(with: commandShiftZ), "⇧⌘Z 를 안 받았다")
+    mwSpin()
+    #expect(textView.string == "abc", "⇧⌘Z 가 다시 하기를 안 했다: \(textView.string.debugDescription)")
+}
+
+/// 편집 명령을 **부르는 대신 기록만** 하는 텍스트 뷰. 진짜 ⌘V·⌘C·⌘X 는 사용자 클립보드를 읽고 덮어쓴다.
+@MainActor
+private final class MWEditingSpyTextView: CheckEditorTextView {
+    var calls: [String] = []
+    override func paste(_ sender: Any?) { calls.append("paste") }
+    override func copy(_ sender: Any?) { calls.append("copy") }
+    override func cut(_ sender: Any?) { calls.append("cut") }
+    override func selectAll(_ sender: Any?) { calls.append("selectAll") }
+}
+
+@MainActor
+@Test
+func editingShortcutsReachTheirCommandsWithoutTouchingTheClipboard() {
+    let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 292, height: 54), styleMask: [.borderless], backing: .buffered, defer: false
+    )
+    let spy = MWEditingSpyTextView(frame: NSRect(x: 0, y: 0, width: 292, height: 54))
+    window.contentView = spy
+    window.makeFirstResponder(spy)
+    spy.string = "편집 대상"
+    // (키 코드, 영문, 2벌식 한글 자판의 charactersIgnoringModifiers, 닿아야 할 명령)
+    let shortcuts: [(UInt16, String, String, String)] = [
+        (9, "v", "ㅍ", "paste"), (8, "c", "ㅊ", "copy"), (7, "x", "ㅌ", "cut"), (0, "a", "ㅁ", "selectAll")
+    ]
+    for (keyCode, latin, hangul, command) in shortcuts {
+        let upper = latin.uppercased()
+        spy.calls = []
+        #expect(spy.performKeyEquivalent(
+            with: mwKeyEvent(window, keyCode: keyCode, characters: latin, ignoring: hangul, flags: [.command])
+        ), "한글 자판의 ⌘\(upper) 를 안 받았다")
+        #expect(spy.calls == [command], "⌘\(upper) 가 \(command) 대신 \(spy.calls) 에 닿았다")
+        // ⇧ 가 붙으면 이 넷에 들지 않는다 — 흘려보내야 한다(가로채면 ⇧⌘V 같은 다른 명령이 죽는다).
+        spy.calls = []
+        #expect(!spy.performKeyEquivalent(
+            with: mwKeyEvent(window, keyCode: keyCode, characters: upper, ignoring: upper, flags: [.command, .shift])
+        ), "⇧⌘\(upper) 를 가로챘다")
+        #expect(spy.calls.isEmpty, "⇧⌘\(upper) 가 \(spy.calls) 에 닿았다")
+    }
+}
+
+@MainActor
+@Test
+func editingShortcutsStayWithWhicheverFieldHasFocus() throws {
+    // 2026-09-11 검증 지적: `performKeyEquivalent` 는 창의 뷰 계층 **전체**를 돈다. 첫 응답자 가드가 없으면
+    // 같은 창의 다른 입력칸(목표 편집 등)에 포커스가 있어도 이 칸이 ⌘A·⌘V·⌘X 를 가로챈다.
+    let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 292, height: 120), styleMask: [.titled], backing: .buffered, defer: false
+    )
+    let container = NSView(frame: NSRect(x: 0, y: 0, width: 292, height: 120))
+    let field = NSTextField(frame: NSRect(x: 0, y: 90, width: 292, height: 24))
+    field.stringValue = "목표 편집"
+    let spy = MWEditingSpyTextView(frame: NSRect(x: 0, y: 0, width: 292, height: 54))
+    spy.string = "메시지 초안"
+    container.addSubview(field)
+    container.addSubview(spy)
+    window.contentView = container
+    window.makeFirstResponder(field)
+    try #require(window.firstResponder !== spy, "다른 칸에 포커스를 못 줬다 — 이 테스트가 재는 것이 없다")
+
+    for (keyCode, latin) in [(UInt16(0), "a"), (9, "v"), (7, "x")] {
+        #expect(!spy.performKeyEquivalent(
+            with: mwKeyEvent(window, keyCode: keyCode, characters: latin, ignoring: latin, flags: [.command])
+        ), "포커스가 없는 칸이 ⌘\(latin.uppercased()) 를 가로챘다 — 다른 입력칸의 편집 단축키가 이 칸으로 샌다")
+    }
+    #expect(spy.calls.isEmpty, "포커스가 없는 칸이 \(spy.calls) 를 불렀다")
+
+    // 대조군: 같은 칸이 포커스를 받으면 받는다(가드가 "언제나 거절"로 굳은 게 아니다).
+    window.makeFirstResponder(spy)
+    #expect(spy.performKeyEquivalent(
+        with: mwKeyEvent(window, keyCode: 0, characters: "a", ignoring: "a", flags: [.command])
+    ), "포커스를 받은 칸이 ⌘A 를 안 받았다")
+    #expect(spy.calls == ["selectAll"])
+}
+
+@MainActor
+@Test
+func theSendButtonTooltipTeachesEnterWhenItCanSend() {
+    // 상수(`MessageDraftEditor.sendHelp`)만 재면, 버튼에 실제로 붙는 계산이 옛 "보내기 (⌘↩)" 를 돌려줘도 초록이다
+    // (2026-09-11 검증에서 그 뮤테이션이 살아남았다). 그래서 [보내기] 버튼이 `.help` 로 받는 **그 계산**을 되묻는다.
+    let store = mwStore(host: "mw-send-help-tooltip")
+    store.selectedMessagePeerID = "u1"
+    store.messageDraft = "안녕"
+    let help = MessageComposerView(store: store).sendHelp
+    #expect(help == MessageDraftEditor.sendHelp, "보낼 수 있는 상태의 [보내기] 툴팁이 ↩ · ⇧↩ 안내가 아니다: \(help)")
+    // 대조군: 같은 계산이 상태를 실제로 본다 — 못 보내는 사유가 있으면 그 사유를 말한다.
+    store.messageDraft = ""
+    #expect(MessageComposerView(store: store).sendHelp == "보낼 말을 입력해 주세요")
+}
+
+/// 같은 칸을 실물(진짜 텍스트 뷰)과 스냅샷 대체 경로로 그려, **글자 좌상단의 차이(pt)** 를 잰다.
+@MainActor
+private func mwFallbackOffset(
+    width: CGFloat, height: CGFloat, name: String, _ make: (String, Bool) -> AnyView
+) throws -> (dx: Double, dy: Double, real: CGRect, plain: CGRect) {
+    let base = try MWEditorInk.bitmap(make(" ", false), width: width, height: height)
+    let real = try MWEditorInk.bitmap(make("가", false), width: width, height: height)
+    let plain = try MWEditorInk.bitmap(make("가", true), width: width, height: height)
+    MessagePanelSnapshots.save(real, name: "editor-\(name)-real.png")
+    MessagePanelSnapshots.save(plain, name: "editor-\(name)-plain.png")
+    let scale = Double(real.pixelsWide) / Double(width)
+    let realInk = try #require(MWEditorInk.bounds(real, base: base), "\(name) 실물 글자가 안 그려졌다")
+    let plainInk = try #require(MWEditorInk.bounds(plain, base: base), "\(name) 대체 경로 글자가 안 그려졌다")
+    return (abs(realInk.minX - plainInk.minX) / scale, abs(realInk.minY - plainInk.minY) / scale, realInk, plainInk)
+}
+
+@MainActor
+@Test
+func theEditorFallbacksDrawTheLetterWhereTheRealTextViewDoes() throws {
+    // 대체 경로(`rendersPlainText`)는 렌더 스냅샷이 쓰는 그림이다. 자리가 실물과 다르면 스냅샷이 "괜찮다"고 말하는 화면과
+    // 사용자가 보는 화면이 갈린다(메모 칸 테스트와 같은 이유). 2026-09-11 검증에서 두 칸의 대체 경로 padding 을
+    // (10,7) → (5,3) 으로 바꿔도 초록이었다.
+    let message = try mwFallbackOffset(
+        width: MessagePanelLayout.contentWidth, height: MessagePanelLayout.editorHeight, name: "msg-fallback"
+    ) { text, plain in
+        AnyView(MessageDraftEditor(text: .constant(text), height: MessagePanelLayout.editorHeight, rendersPlainText: plain))
+    }
+    #expect(message.dx <= 1.0 && message.dy <= 1.0,
+            "메시지 칸 대체 경로가 실물과 (\(message.dx), \(message.dy))pt 어긋났다 (실물 \(message.real.origin) / 대체 \(message.plain.origin) px)")
+
+    let feedback = try mwFallbackOffset(
+        width: FeedbackPanelLayout.contentWidth, height: FeedbackPanelLayout.editorHeight, name: "feedback-fallback"
+    ) { text, plain in
+        AnyView(FeedbackBodyEditor(text: .constant(text), height: FeedbackPanelLayout.editorHeight, rendersPlainText: plain))
+    }
+    #expect(feedback.dx <= 1.0 && feedback.dy <= 1.0,
+            "제보 칸 대체 경로가 실물과 (\(feedback.dx), \(feedback.dy))pt 어긋났다 (실물 \(feedback.real.origin) / 대체 \(feedback.plain.origin) px)")
+}
+
+/// 기준판과 달라진 픽셀 수 — 주어진 픽셀 줄 안에서만 센다.
+private func mwChangedPixels(
+    _ bitmap: NSBitmapImageRep, base: NSBitmapImageRep, rows: Range<Int>, tolerance: Double = 0.05
+) -> Int {
+    var count = 0
+    for y in rows {
+        for x in 0..<min(bitmap.pixelsWide, base.pixelsWide) {
+            guard let a = bitmap.colorAt(x: x, y: y), let b = base.colorAt(x: x, y: y) else { continue }
+            let delta = abs(a.redComponent - b.redComponent)
+                + abs(a.greenComponent - b.greenComponent)
+                + abs(a.blueComponent - b.blueComponent)
+            if delta > tolerance { count += 1 }
+        }
+    }
+    return count
+}
+
+@MainActor
+@Test
+func overflowingTextStaysInsideTheBorder() throws {
+    // 2026-09-11 검증 지적: 스크롤 뷰가 둥근 사각형을 꽉 채워, 넘친 글의 걸친 줄이 **아래 테두리 선 위로** 그려졌다
+    // (2x · 맨 아래 두 픽셀 줄의 글자 픽셀 227/206 — 옛 `TextEditor` 는 0/0). 넘침은 빨간 테두리로 알리는 상태라,
+    // 그 테두리가 글자에 먹히면 경고가 경고로 안 읽힌다. 제보 칸도 같은 입력칸을 쓰므로 함께 잰다.
+    let long = String(repeating: "가나다라마바사아자차", count: 21)
+    let cases: [(String, CGFloat, CGFloat, (String) -> AnyView)] = [
+        ("msg", MessagePanelLayout.contentWidth, MessagePanelLayout.editorHeight, {
+            AnyView(MessageDraftEditor(text: .constant($0), height: MessagePanelLayout.editorHeight, isOverflowing: true))
+        }),
+        ("feedback", FeedbackPanelLayout.contentWidth, FeedbackPanelLayout.editorHeight, {
+            AnyView(FeedbackBodyEditor(text: .constant($0), height: FeedbackPanelLayout.editorHeight))
+        })
+    ]
+    for (name, width, height, make) in cases {
+        let base = try MWEditorInk.bitmap(make(" "), width: width, height: height)
+        let full = try MWEditorInk.bitmap(make(long), width: width, height: height)
+        MessagePanelSnapshots.save(full, name: "editor-overflow-\(name).png")
+        let scale = Double(full.pixelsWide) / Double(width)
+        let ink = try #require(MWEditorInk.bounds(full, base: base), "\(name) 넘친 글이 안 그려졌다")
+        // 전제: 글이 칸 아래쪽까지 차 있어야(넘쳐야) 테두리를 덮을 기회가 있다. 안 차면 아래 단언은 아무것도 안 잰다.
+        #expect(Double(ink.maxY) >= Double(height - CheckEditorMetrics.inset.height) * scale,
+                "\(name) 글이 칸 아래까지 안 찼다(잉크 maxY \(ink.maxY)px) — 이 테스트가 재는 것이 없다")
+        // 맨 아래 1pt(테두리 선이 앉는 줄)는 글이 있든 없든 **똑같이** 그려져야 한다.
+        let borderRows = (full.pixelsHigh - Int(scale))..<full.pixelsHigh
+        let painted = mwChangedPixels(full, base: base, rows: borderRows)
+        #expect(painted == 0, "\(name) 넘친 글이 아래 테두리 줄(맨 아래 1pt)에 \(painted)px 그려졌다 — 스크롤 뷰가 테두리 안쪽으로 안 물러났다")
+    }
 }

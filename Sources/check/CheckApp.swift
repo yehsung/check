@@ -73,9 +73,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 배선을 잊어도 조용히 예전 동작(캐릭터가 아파하기)으로만 남아 결함이 눈에 안 띈다.
         //
         // ★ **갈 곳이 창에서 팝오버 안으로 바뀌었다.** 그래서 두 가지가 따라온다:
-        //   ① **상대를 함께 넘긴다.** 대화 화면이 한 사람짜리라 상대 없이 열면 빈 화면이 뜬다. 말풍선이
-        //      나르는 그 한 건이 곧 상대다 — 표시 직후 큐에서 `lastShownMessage` 로 옮겨져 있으므로
-        //      그쪽을 먼저 보고, 아직 안 옮겨졌으면 큐의 맨 앞을 본다(같은 한 건의 두 자리다).
+        //   ① **상대를 함께 넘긴다.** 대화 화면은 상대 없이 열 수 없다(`openMessagePanel(peer:)` 의 인자가 `String`).
+        //      말풍선이 나르는 그 한 건이 곧 상대이고, 고르는 규칙은 `store.arrivalBubbleSenderID` 한 곳에 있다.
+        //      **보낸이를 모르면 대화 패널 대신 콕찌르기 목록을 연다**(2026-09-11 지적: "애초에 대화상대를
+        //      고르지 않고 대화창에 진입할 수가 없어야되잖아"). 옛 배선은 `??` 끝의 nil 을 그대로 넘겨
+        //      "대화 상대를 고르지 않았어요" 화면을 열었다 — nil 을 대화 패널로 흘리는 모양으로 되돌리지 마라.
         //   ② **팝오버를 연다.** 프로그램으로 여는 수단은 닫을 때 쓰는 상태바 버튼 클릭과 **같은 문**이고
         //      (`WindowTopAnchor.presentMenuPopover` — 판정도 그 문 하나를 방향만 바꿔 쓴다), 그 문이
         //      실패해도 손해가 없다: 패널 상태는 위 줄에서 이미 세워져 있어, 사용자가 다음에 아이콘을
@@ -84,8 +86,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //      돌아가게 된다(그 목록을 지나온 것이 아니다). 홈(팀 목록)으로 나간다.
         overlayController?.onOpenMessages = { [weak store] in
             guard let store else { return }
-            let peer = store.lastShownMessage?.fromUserID ?? store.currentMessage?.fromUserID
-            store.openMessagePanel(peer: peer, from: .overlay)
+            if let peer = store.arrivalBubbleSenderID {
+                store.openMessagePanel(peer: peer, from: .overlay)
+            } else {
+                store.openPokeListToPickAPeer()
+            }
             WindowTopAnchor.presentMenuPopover()
         }
         // 로그인 시 자동 실행은 **전원의 기본값**이다. 매 실행마다 판단해서 등록이 사라져 있으면(brew 로

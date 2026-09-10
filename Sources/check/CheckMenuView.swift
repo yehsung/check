@@ -368,7 +368,10 @@ struct CheckMenuView: View {
                                 PokeConnectionNotice.shouldWarn(state: store.realtimeState, now: store.menuClockNow)
                             },
                             isFocusMode: store.focusMode,
-                            onToggleFocusMode: { store.toggleFocusMode() },
+                            // 집중 모드 2단(v0.3.0) — 누를 때마다 끔 → 3시간 → 계속 → 끔. 1단 남은 시간은 초침을 읽으므로
+                            // 값이 아니라 클로저로 넘기고 버튼 속 MenuClockLeaf 만 부른다(패널 body 가 초당 재평가로 돌지 않게).
+                            onToggleFocusMode: { store.cycleFocusStage() },
+                            focusStage: { store.focusStageFace(now: store.menuClockNow) },
                             // 메시지 — 찌르기와 같은 표·같은 폴링으로 **받지만**, 보내는 곳은 1:1 대화 패널 하나다.
                             // 여기 있던 `onSendMessage`/`messageCooldownRemaining` 은 통째로 사라졌다:
                             // 쿨타임이 폐지돼 셀 것이 없고, 인라인 작성기는 이력을 두 곳으로 갈랐다.
@@ -2034,7 +2037,7 @@ enum UltraBalanceText {
 }
 
 /// 콕찌르기 제목 행의 폭 예산(순수 계산 — 결정적 검증 지점).
-/// 행 구성: `[뒤로 27][콕 찌르기][집중모드 27][Spacer ≥6][잔량 배지][힌트]` · spacing 8 × 5
+/// 행 구성: `[뒤로 27][콕 찌르기][집중모드 50][Spacer ≥6][잔량 배지][힌트]` · spacing 8 × 5
 ///
 /// TeamHeaderWidthBudget / FooterWidthBudget 과 같은 이유로 존재한다: 이 행에 무언가를 하나 더
 /// 세우는 순간 **가장 유연한 요소(힌트 문구)가 먼저 말줄임된다.** 배지를 세운 것이 그 '하나 더'다.
@@ -2080,7 +2083,7 @@ enum PokeTitleRowWidthBudget {
     /// 그 조합에서 힌트에 남는 폭(pt).
     static func hintWidth(digits: Int = maxBadgeDigits) -> CGFloat {
         contentWidth
-            - iconButtonWidth * 2          // 뒤로 + 집중모드
+            - iconButtonWidth - CheckFocusModeButton.width   // 뒤로 + 집중모드(2단 버튼, v0.3.0)
             - titleWidth
             - spacerMinWidth
             - badgeWidth(digits: digits)
@@ -2095,7 +2098,7 @@ enum PokeTitleRowWidthBudget {
     /// 무제한 배지가 섰을 때 힌트에 남는 폭(pt). 관리자 화면에서만 성립하는 조합이라 따로 잰다.
     static var hintWidthWhenUnlimited: CGFloat {
         contentWidth
-            - iconButtonWidth * 2
+            - iconButtonWidth - CheckFocusModeButton.width
             - titleWidth
             - spacerMinWidth
             - unlimitedBadgeWidth
@@ -2203,9 +2206,11 @@ struct PokeMessageReceiptStrip: View {
     let now: Date
     /// 이 건 뒤에 대기 중인 건수(스토어 waitingMessageCount). 0이면 아무것도 그리지 않는다.
     var waitingCount: Int = 0
-    /// 눌렀을 때 열 대화(보낸이 userID — nil 이면 창만 연다). **기본값이 nil 인 이유는 렌더 테스트다** —
+    /// 눌렀을 때 열 대화(보낸이 userID). **기본값이 nil 인 이유는 렌더 테스트다** —
     /// 이 줄을 값만으로 그리던 기존 호출부가 무수정으로 컴파일된다.
-    var onOpen: ((String?) -> Void)? = nil
+    /// 인자는 `String` 이다(2026-09-11 지적 — 상대 없이 대화 화면에 들어가는 길을 타입으로 없앴다).
+    /// 보낸이 id 를 모르는 건(옛 행)은 버튼이 아니라 **표시 줄**로만 그린다 — 눌러서 갈 대화가 없다.
+    var onOpen: ((String) -> Void)? = nil
 
     static let height: CGFloat = 34
 
@@ -2218,8 +2223,8 @@ struct PokeMessageReceiptStrip: View {
     }
 
     var body: some View {
-        if let onOpen {
-            Button(action: { onOpen(message.fromUserID) }) { strip }
+        if let onOpen, let peer = message.fromUserID, !peer.isEmpty {
+            Button(action: { onOpen(peer) }) { strip }
                 .buttonStyle(.plain)
                 .help("메시지 창에서 전문 보기")
                 .accessibilityLabel("\(message.fromName)님이 보낸 메시지 — 눌러서 대화 열기")
@@ -2400,12 +2405,16 @@ private struct PokePanel: View {
     // 집중 모드(내 수신 거부) 상태와 토글. 값+클로저로만 받아 이 패널을 렌더 테스트 친화적으로 유지한다.
     var isFocusMode: Bool = false
     var onToggleFocusMode: () -> Void = {}
-    // 메시지 창 열기(대상 userID — nil 이면 대화를 고르지 않고 창만 연다).
+    // 집중 모드 단계 읽기(1단 남은 시간 포함). **이 패널 body 에서 부르지 마라** — CheckFocusModeButton 의 잎만 부른다.
+    var focusStage: () -> FocusStageFace = { .off }
+    // 그 사람과의 대화 열기(대상 userID). **옵셔널이 아니다**(2026-09-11 지적) — 상대 없이 대화 화면에
+    // 들어가는 길이 없어야 한다. `(String?) -> Void` 로 되돌리지 마라: 행은 언제나 id 를 들고 있어 넓혀도
+    // 아무 호출부가 안 깨지고, 그 사이 nil 로 들어올 문이 조용히 다시 열린다.
     //
     // ★ **여기서 보내지 않는다**(v0.2.49). 옛 `onSendMessage`/`messageCooldownRemaining` 은 통째로 지웠다:
     //   보내는 곳이 둘이면 이력도 둘로 갈리고, 메시지에는 이제 쿨타임 자체가 없다(찌르기만 60초다).
     //   `messageCooldownRemaining` 을 이 파일에 되살리면 그건 곧 화면에 카운트다운이 돌아온다는 뜻이다.
-    var onOpenMessages: (String?) -> Void = { _ in }
+    var onOpenMessages: (String) -> Void = { _ in }
     // 안 읽은 것이 있는 상대들(스토어 파생값). 말풍선 버튼 위에 점 하나로 붙는다.
     //
     // **왜 지금 생겼나**(v0.2.50): 안 읽음을 말하던 자리는 메시지 창의 왼쪽 대화 목록이었는데 그 목록이
@@ -2470,14 +2479,9 @@ private struct PokePanel: View {
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
-                // 집중 모드 토글(수신 거부). 보내는 화면에 두는 이유는 사람들이 '찌르기'를 떠올리는 자리가
+                // 집중 모드 2단 버튼(v0.3.0). 보내는 화면에 두는 이유는 사람들이 '찌르기'를 떠올리는 자리가
                 // 여기뿐이라서다 — 설정을 따로 파면 켠 사실을 잊고, 끄는 길도 못 찾는다.
-                IconButton(
-                    icon: isFocusMode ? "moon.fill" : "moon",
-                    help: isFocusMode ? "집중 모드 켜짐 — 누르면 찌르기를 다시 받아요" : "집중 모드 — 누르면 찌르기를 안 받아요",
-                    tint: isFocusMode ? CheckTheme.accent : CheckTheme.secondaryText,
-                    action: onToggleFocusMode
-                )
+                CheckFocusModeButton(read: focusStage, action: onToggleFocusMode)
                 Spacer(minLength: 6)
                 // 잔량 **상시** 표시. 예전엔 3초 꾹 누르는 동안에만 보였는데(PokeUltraHint 의 isCharging 분기),
                 // 재화가 된 지금 그건 "지갑을 열어야만 잔고를 볼 수 있는" 설계다.

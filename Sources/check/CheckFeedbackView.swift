@@ -651,7 +651,11 @@ struct FeedbackListBox<Content: View>: View {
 /// (이 저장소에서 `Menu` 는 노란 상자로 그려졌고, 그 자리는 픽셀 커버리지가 0이라 색 결함이 8일간 안 잡혔다).
 /// 스냅샷이 빈 상자만 남기면 잘림·겹침을 눈으로 확인한다는 렌더 테스트의 목적이 통째로 사라진다.
 /// 그래서 **렌더 테스트만** 같은 자리·같은 치수의 순수 SwiftUI 대체 경로를 쓴다.
-/// **앱은 언제나 진짜 `TextEditor` 다** — 기본값이 false 이고 프로덕션에서 true 를 주는 자리는 없다.
+/// **앱은 언제나 진짜 `CheckTextEditor` 다** — 기본값이 false 이고 프로덕션에서 true 를 주는 자리는 없다.
+///
+/// ★ **여기서 Enter 는 줄바꿈이다**(v0.2.51). 메시지 칸은 Enter 로 보내지만(사용자 지시 2026-09-11 ②)
+///   이 칸은 아니다 — 버그 설명은 "무엇을 하다 생겼는지"를 여러 줄로 쓰는 글이라, Enter 전송은 첫 문장만
+///   보내고 나머지를 버린다. `sendsOnReturn` 을 true 로 바꾸지 마라.
 struct FeedbackBodyEditor: View {
     @Binding var text: String
     var height: CGFloat
@@ -665,13 +669,15 @@ struct FeedbackBodyEditor: View {
                     RoundedRectangle(cornerRadius: FeedbackPanelLayout.corner, style: .continuous)
                         .stroke(CheckTheme.border, lineWidth: 1)
                 )
-            // placeholder — 비었을 때만. TextEditor 에는 placeholder 가 없다.
+            // placeholder — 비었을 때만. 텍스트 뷰에는 placeholder 가 없다.
+            // ★ padding 은 **실제 글자와 같은 상수**다(`CheckEditorMetrics.inset`). 숫자를 여기 따로 적으면
+            //   사용자 지시 ③("높이가 안맞아")이 이 칸에서 그대로 되살아난다.
             if text.isEmpty {
                 Text(FeedbackText.placeholder)
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, CheckEditorMetrics.inset.width)
+                    .padding(.vertical, CheckEditorMetrics.inset.height)
                     .allowsHitTesting(false)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -681,16 +687,11 @@ struct FeedbackBodyEditor: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, CheckEditorMetrics.inset.width)
+                    .padding(.vertical, CheckEditorMetrics.inset.height)
             } else {
-                TextEditor(text: $text)
-                    .font(.caption)
-                    .foregroundStyle(CheckTheme.primaryText)
-                    // 에디터가 자기 배경(흰 판)을 그리면 다크 화면에 흰 상자가 뚫린다.
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
+                CheckTextEditor(text: $text)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(height: height, alignment: .topLeading)

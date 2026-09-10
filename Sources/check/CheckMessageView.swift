@@ -18,7 +18,12 @@ import SwiftUI
 //   · 말풍선은 **시간순**(오래된 것 위 → 최신 아래). 받은 것은 왼쪽, 보낸 것은 오른쪽(`is_mine`).
 //   · 날짜가 바뀌는 자리에 **구분선**. 그 판정은 뷰가 아니라 `MessageThreadBuilder.timeline` 이 한다.
 //   · 처음 열면 **맨 아래(최신)**.
-//   · Enter 는 **줄바꿈**, 전송은 **⌘Enter**.
+//   · **Enter 로 보낸다**(v0.2.51 — 사용자 지시 2026-09-11 ②). 줄바꿈은 ⇧Enter, ⌘Enter 도 계속 통한다.
+//     판정은 `CheckEditorReturnKey` 하나가 한다. ⚠︎ **macOS 2벌식 한글에서는 조합 중이던 마지막 글자까지 첫 Enter 에
+//     곧바로 나간다**(2026-09-11 실입력 실측: 그 입력기는 표시 글자를 안 띄워 "조합 중"을 알 길이 없다. "안녕하세요"
+//     + Enter 는 "안녕하세요" 전체를 보냈고, 글자가 빠지거나 칸에 남는 일은 없었다). "조합 중 Enter 는 확정만"은
+//     표시 글자를 띄우는 입력기(일본어·중국어 등)에서만 일한다 — 실측은 CheckTextEditor.swift 머리 주석.
+//     **"Enter 는 줄바꿈"으로 되돌리지 마라**: 그건 사용자가 직접 고쳐 달라고 한 것이다.
 //   · `MessageThreadBuilder` 의 묶기·타임라인·날짜 구분선 계산은 **그대로 재사용한다** — 목록 UI 가
 //     사라졌을 뿐, peer 별로 묶는 일은 "그 사람 것만 골라 그린다"에 여전히 필요하다.
 //
@@ -453,10 +458,14 @@ private struct MessageBubbleRow: View {
 
 /// 여러 줄 입력 + 글자 수(N/200, **코드포인트**) + [보내기], 그리고 **사라지는 규칙 한 줄**.
 ///
-/// **Enter 는 줄바꿈이고 전송은 ⌘Enter 다**(200자를 쓰는 칸이라 Enter 전송은 문장을 반토막 낸다).
-/// 그래서 [보내기] 버튼이 `⌘↩` 단축키를 직접 들고 있다 — 단축키와 버튼이 같은 문(`sendDraftMessage`)을
-/// 지나야 두 경로가 갈리지 않는다. 그 단축키를 **알리는 자리는 placeholder 와 툴팁**이다: 292pt 폭에서
-/// 안내 줄을 하나 더 세우면 그만큼 대화가 줄어든다.
+/// **Enter 가 전송이다**(v0.2.51 — 사용자 지시 2026-09-11 ②: "메세지 입력하고 엔터로 보낼 수 있게 해줘").
+/// 줄바꿈은 ⇧Enter 이고, 옛 손버릇인 ⌘Enter 도 그대로 통한다 — [보내기] 버튼이 들고 있는
+/// `keyboardShortcut(.return, modifiers: .command)` 이 그것이다. 세 경로(버튼·⌘↩·↩)가 전부
+/// **같은 문**(`store.sendDraftMessage()`)을 지나야 판정이 갈리지 않는다.
+///
+/// Enter 판정 자체는 이 파일이 하지 않는다 — `CheckEditorReturnKey.action` 한 함수다(조합 중 · 못 보내는
+/// 상태의 "아무 일도 안 일어남"까지 거기서 결정적으로 잰다). 그 단축키를 **알리는 자리는 placeholder 와
+/// 툴팁**이다: 292pt 폭에서 안내 줄을 하나 더 세우면 그만큼 대화가 줄어든다.
 struct MessageComposerView: View {
     @Bindable var store: WorkTimerStore
     var rendersPlainText: Bool = false
@@ -481,7 +490,11 @@ struct MessageComposerView: View {
                 text: $store.messageDraft,
                 height: MessagePanelLayout.editorHeight,
                 isOverflowing: isOverflowing,
-                rendersPlainText: rendersPlainText
+                rendersPlainText: rendersPlainText,
+                // ★ 판정도 문도 **버튼과 같은 것**을 넘긴다. 여기서 조건을 다시 세면 Enter 와 버튼이
+                //   서로 다른 날 갈린다(그리고 갈린 쪽은 아무 화면에도 안 보인다).
+                canSendNow: { store.canSendMessageNow },
+                onSend: { store.sendDraftMessage() }
             )
             HStack(spacing: 8) {
                 // **사라지는 규칙을 모르면 사용자는 그것을 버그로 읽는다**(그 오해는 제보로 온다).
@@ -517,13 +530,16 @@ struct MessageComposerView: View {
         }
     }
 
-    /// 왜 못 보내는지. **쿨타임 문구는 여기 없다**(v0.2.49 — 메시지에 쿨타임이 없다).
-    /// 남은 사유는 셋뿐이고, 셋 다 사용자가 지금 고칠 수 있는 것이다.
-    private var sendHelp: String {
+    /// 왜 못 보내는지 — 보낼 수 있으면 **보내는 법**(↩ · 줄바꿈은 ⇧↩)을 말한다. **쿨타임 문구는 여기 없다**
+    /// (v0.2.49 — 메시지에 쿨타임이 없다). 남은 사유는 셋뿐이고, 셋 다 사용자가 지금 고칠 수 있는 것이다.
+    ///
+    /// `private` 이 아닌 이유(2026-09-11 검증 지적): 테스트가 [보내기] 버튼에 **실제로 붙는 이 값**을 되묻는다.
+    /// 상수(`MessageDraftEditor.sendHelp`)만 재면 이 계산이 옛 "⌘↩" 문구를 돌려줘도 초록이었다.
+    var sendHelp: String {
         if store.isSendingMessage { return "보내는 중이에요" }
         if store.selectedMessagePeerID == nil { return "콕 찌르기에서 대화 상대를 골라 주세요" }
         switch MessageBody.validate(store.messageDraft) {
-        case .ok: return "보내기 (⌘↩)"
+        case .ok: return MessageDraftEditor.sendHelp
         case .empty: return "보낼 말을 입력해 주세요"
         case .tooLong(let maxLength): return WorkTimerStore.messageTooLongNotice(maxLength: maxLength)
         }
@@ -535,16 +551,26 @@ struct MessageComposerView: View {
 /// **`rendersPlainText` 가 있는 이유**: `ImageRenderer` 는 AppKit 을 감싼 뷰를 못 그린다
 /// (이 저장소에서 `Menu` 는 노란 상자로 그려졌고, 제보 창의 `TextEditor`/`TextField(axis:)` 도 같았다).
 /// 스냅샷이 빈 상자만 남기면 잘림·겹침을 눈으로 확인한다는 렌더 테스트의 목적이 통째로 사라진다.
-/// **앱은 언제나 진짜 `TextEditor` 다** — 기본값이 false 이고 프로덕션에서 true 를 주는 자리는 없다.
+/// **앱은 언제나 진짜 `CheckTextEditor` 다** — 기본값이 false 이고 프로덕션에서 true 를 주는 자리는 없다.
+///
+/// ★ 대체 경로의 padding 은 실물과 **같은 상수**(`CheckEditorMetrics.inset`)여야 한다. 숫자를 따로 적으면
+///   스냅샷이 "맞다"고 말하는 자리와 사용자가 보는 자리가 갈리고, 그게 사용자 지시 ③이 생긴 경위다.
 struct MessageDraftEditor: View {
     @Binding var text: String
     var height: CGFloat
     var isOverflowing: Bool = false
     var rendersPlainText: Bool = false
+    /// 지금 Enter 로 보낼 수 있는가(`store.canSendMessageNow`). 못 보내면 Enter 는 아무 일도 안 한다.
+    var canSendNow: () -> Bool = { false }
+    /// Enter 가 지나는 문. 버튼·⌘↩ 과 **같은 문**이어야 한다.
+    var onSend: () -> Void = {}
 
-    /// placeholder 가 ⌘↩ 를 말한다. 292pt 폭에서는 안내 줄 하나가 대화 한 줄을 먹으므로,
+    /// placeholder 가 ↩ 를 말한다. 292pt 폭에서는 안내 줄 하나가 대화 한 줄을 먹으므로,
     /// **비어 있을 때만 쓰는 자리**에 단축키 안내를 얹는 것이 가장 싸다(툴팁이 그 답을 한 번 더 말한다).
-    static let placeholder = "메시지를 입력하세요 · ⌘↩ 전송"
+    static let placeholder = "메시지를 입력하세요 · ↩ 전송"
+
+    /// 보내기 버튼 툴팁. placeholder 는 비어 있을 때만 보이므로, **줄바꿈 방법을 말하는 자리는 여기뿐이다**.
+    static let sendHelp = "보내기 (↩) · 줄바꿈은 ⇧↩"
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -555,15 +581,15 @@ struct MessageDraftEditor: View {
                         // 초과는 테두리까지 빨갛게 — 카운터 숫자만으로는 못 보고 지나친다.
                         .stroke(isOverflowing ? CheckTheme.danger : CheckTheme.border, lineWidth: 1)
                 )
-            // placeholder — 비었을 때만. TextEditor 에는 placeholder 가 없다.
+            // placeholder — 비었을 때만. 텍스트 뷰에는 placeholder 가 없다.
             if text.isEmpty {
                 Text(Self.placeholder)
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
+                    .padding(.horizontal, CheckEditorMetrics.inset.width)
+                    .padding(.vertical, CheckEditorMetrics.inset.height)
                     .allowsHitTesting(false)
             }
             if rendersPlainText {
@@ -572,19 +598,19 @@ struct MessageDraftEditor: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
+                    .padding(.horizontal, CheckEditorMetrics.inset.width)
+                    .padding(.vertical, CheckEditorMetrics.inset.height)
             } else {
                 // ⚠︎ 입력 시점 필터를 붙이지 마라. 3글자 시절엔 이모지를 지우는 필터가 있었지만
                 //   (자소/코드포인트 눈금 차이 때문에), 지금은 이모지가 정상 입력이고 길이는 코드포인트로 센다.
                 //   그리고 조합 중인 한글을 코드가 되쓰면 마지막 글자가 씹힌다 — 그 회귀는 헤드리스로 못 잡는다.
-                TextEditor(text: $text)
-                    .font(.caption)
-                    .foregroundStyle(CheckTheme.primaryText)
-                    // 에디터가 자기 배경(흰 판)을 그리면 다크 화면에 흰 상자가 뚫린다.
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
+                CheckTextEditor(
+                    text: $text,
+                    sendsOnReturn: true,
+                    canSendNow: canSendNow,
+                    onSend: onSend
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(height: height, alignment: .topLeading)

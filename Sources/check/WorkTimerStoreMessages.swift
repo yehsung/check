@@ -145,8 +145,14 @@ extension WorkTimerStore {
     /// **이 기능의 공개 진입점.** 콕찌르기 목록의 말풍선 버튼과 캐릭터의 도착 말풍선이 부르는 단 하나의 문이다.
     ///
     /// - Parameters:
-    ///   - peer: 열자마자 볼 상대. **거의 언제나 값이 있다** — 이 화면은 한 사람과의 대화 하나뿐이라,
-    ///     상대가 없으면 그릴 것이 없다(그때는 "콕 찌르기에서 말풍선을 누르세요" 한 줄이 뜬다).
+    ///   - peer: 이 화면의 상대. **옵셔널이 아니다**(2026-09-11 지적 — "애초에 대화상대를 고르지 않고
+    ///     대화창에 진입할 수가 없어야되잖아"). 이 화면의 계약은 **상대는 들어올 때 정해지고 나갈 때까지
+    ///     바뀌지 않는다** 하나이고, 그 "들어올 때"가 이 인자다. `String?` 이던 v0.2.50 까지는 nil 로 들어와
+    ///     "대화 상대를 고르지 않았어요" 화면이 뜰 수 있었다.
+    ///     **`String?` 으로 되돌리지 마라** — `String` 은 `String?` 로 암묵 승격되므로 넓혀도 호출부가 전부
+    ///     그대로 컴파일돼 아무도 눈치채지 못한다(그래서 V0251MessagePeerTests 가 이 시그니처를 소스로 못 박는다).
+    ///     빈 문자열은 **조용히 무시한다**. `assertionFailure` 로 막으면 디버그에선 멈추고 릴리스에선 지나가
+    ///     두 빌드가 다르게 동작한다 — 상대 없는 요청은 크래시로 갚을 일이 아니라 그냥 안 여는 일이다.
     ///   - origin: [뒤로]가 돌아갈 곳. 기본은 콕찌르기 목록이다.
     ///
     /// ★ **팝오버를 닫지 않는다**(v0.2.50 에서 바뀐 지점). 창이던 시절에는 `WindowTopAnchor.dismissMenuPopover()`
@@ -156,7 +162,10 @@ extension WorkTimerStore {
     ///
     /// 다른 하위 패널과 **상호 배타**다(리그·토큰 보드·콕찌르기·내 기록·울트라·제보). 순서가 뜻이다:
     /// `closeUltraPanel()` 은 origin 이 .poke 면 콕찌르기 목록을 되살리므로, 목록을 내리는 줄이 그 뒤에 온다.
-    func openMessagePanel(peer: String?, from origin: MessagePanelOrigin = .poke) {
+    func openMessagePanel(peer: String, from origin: MessagePanelOrigin = .poke) {
+        // 빈 id 는 **아무 상태도 세우기 전에** 돌려보낸다. 이 가드를 아래로 내리지 마라 — origin 이나 패널 깃발을
+        // 먼저 세우고 나가면 그 상태가 곧 "상대 없는 대화 화면"이다.
+        guard !peer.isEmpty else { return }
         messagePanelOrigin = origin
         isMessagePanelVisible = true
         isLeaderboardVisible = false
@@ -168,14 +177,39 @@ extension WorkTimerStore {
         //   그 함수는 `lastShownMessage` 를 죽이는데, 말풍선 버튼을 누른 것은 '그 알림을 봤다'가 아니다.
         //   take_pokes 는 서버 원자 소비라 그렇게 지운 글자는 복구할 길이 없다.
         isPokePanelVisible = false
-        if let peer, !peer.isEmpty {
-            selectMessagePeer(peer)
-        }
+        // 상대를 정하는 자리는 **앱 전체에서 이 한 줄뿐이다.** 이후 어떤 응답·수신 폴링·전송 성공도 이 값을
+        // 바꾸지 않는다(performLoadMessageHistory 의 "다시 넣지 마라" 주석, V0251MessagePeerTests 의 소스 계약).
+        selectMessagePeer(peer)
         // 첫 프레임부터 빈 자리에 "불러오는 중…"이 뜨게 한다(제보 목록과 같은 규약).
         // **세션이 있을 때만** 세운다 — 로그인 전이면 아래 로드가 세션 가드에서 조용히 되돌아가는데,
         // 그때 이 깃발을 세워 두면 아무도 내려 주지 않아 화면이 영영 "불러오는 중…"에 갇힌다.
         if session != nil, !messageHistoryLoaded { messageHistoryLoading = true }
         loadMessageHistory()
+    }
+
+    /// 캐릭터 머리 위 도착 말풍선이 나르는 **보낸이 id**(모르면 nil). CheckApp 의 말풍선 배선이 읽는다.
+    ///
+    /// 표시 직후 그 한 건은 큐에서 `lastShownMessage` 로 옮겨지므로 그쪽을 먼저 보고, 아직 안 옮겨졌으면
+    /// 큐의 맨 앞(`currentMessage`)을 본다 — v0.2.50 배선이 쓰던 순서 그대로다(이번에 바꾼 것은 nil 의 행방뿐이다).
+    /// **nil 이 나오는 길이 실제로 있다**: 보낸이 id 를 안 싣던 옛 행(`ReceivedMessage.fromUserID` 는 하위호환으로
+    /// 옵셔널이다), 그리고 말풍선이 떠 있는 사이 `lastShownMessage` 가 소비·만료되고 큐도 빈 경우.
+    /// 빈 문자열도 nil 로 접는다 — 그대로 넘기면 `openMessagePanel` 이 조용히 무시해 말풍선이 "눌러도 아무 일 없음"이 된다.
+    var arrivalBubbleSenderID: String? {
+        guard let peer = lastShownMessage?.fromUserID ?? currentMessage?.fromUserID, !peer.isEmpty else {
+            return nil
+        }
+        return peer
+    }
+
+    /// 보낸이를 모르는 도착 말풍선을 눌렀을 때의 갈음 — 대화 패널 대신 **콕찌르기 목록**을 연다(2026-09-11 지적).
+    ///
+    /// 대화 패널은 상대 없이 열 수 없으므로 사용자가 목록에서 그 사람 행의 말풍선을 눌러 들어가게 한다.
+    /// **토글이 아니다** — 이미 목록이 떠 있는데 `togglePokePanel()` 을 그대로 부르면 목록이 닫히고,
+    /// 그 길의 `closePokePanel()` 이 방금 뜬 `lastShownMessage` 를 소비한다(take_pokes 는 서버 원자 소비라
+    /// 그 글자는 복구할 길이 없다). 이 가드를 지우면 말풍선 두 번 탭이 목록을 닫고 메시지를 버린다.
+    func openPokeListToPickAPeer() {
+        guard !isPokePanelVisible else { return }
+        togglePokePanel()
     }
 
     /// 대화 패널을 닫는 **유일한** 경로(멱등). [뒤로]와 다른 패널을 여는 다섯 자리가 전부 여기를 지난다.
@@ -267,13 +301,39 @@ extension WorkTimerStore {
             if messageHistory != sorted { messageHistory = sorted }
             if !messageHistoryLoaded { messageHistoryLoaded = true }
             if messageHistoryFailed { messageHistoryFailed = false }
-            // 고른 대화가 12시간 밖으로 나가 사라졌으면 선택을 놓는다 — 안 놓으면 오른쪽이 영영 빈 판이고
-            // 사용자는 그것을 '대화가 지워졌다'가 아니라 '앱이 멈췄다'로 읽는다.
-            if let selected = selectedMessagePeerID, !sorted.contains(where: { $0.peerUserID == selected }) {
-                selectedMessagePeerID = nil
-            } else if selectedMessagePeerID == nil {
-                selectMessagePeer(MessageThreadBuilder.threads(from: sorted).first?.peerUserID)
-            }
+            // ★★ **이 응답으로 대화 상대를 바꾸지 마라. 아래 코드를 다시 넣지 마라.** (2026-09-11 지적)
+            //
+            //   v0.2.50 까지 여기 이런 두 갈래가 있었다:
+            //       if let selected = selectedMessagePeerID, !sorted.contains(where: { $0.peerUserID == selected }) {
+            //           selectedMessagePeerID = nil                                    // ← ①
+            //       } else if selectedMessagePeerID == nil {
+            //           selectMessagePeer(MessageThreadBuilder.threads(from: sorted).first?.peerUserID)  // ← ②
+            //       }
+            //
+            //   ① 이 줄이 사용자가 본 버그다: "특정 사람의 프로필에 있는 대화 버튼을 눌러서 진입하는건데
+            //     대화 상대를 고르지 않았다고 떠. 애초에 대화상대를 고르지 않고 대화창에 진입할 수가
+            //     없어야되잖아." — **한 번도 대화한 적 없는 사람**은 이력에 행이 한 줄도 없으므로 조건이
+            //     언제나 참이고, 진입 직후 첫 왕복이 끝나는 순간 선택이 지워져 화면이
+            //     "대화 상대를 고르지 않았어요"로 갈아엎힌다. 즉 **처음 말 거는 모든 사람**에게서 재현된다.
+            //     원래 의도였던 '12시간 경과로 대화가 사라짐'조차 이 처리는 옳지 않다: 보던 대화가 만료되면
+            //     화면을 통째로 바꿀 것이 아니라 그 자리에서 "아직 주고받은 메시지가 없어요"로 비어야 한다
+            //     (뷰의 `MessagePanelEmptyMessage` 가 hasPeer=true 로 이미 그 문장을 갖고 있다 — 고칠 것이 없다).
+            //
+            //   ② 자동 선택도 함께 걷었다. v0.2.50 에 왼쪽 대화 목록이 사라지면서 이 화면은 **한 사람짜리**가
+            //     됐는데, 이 줄이 살아 있으면 **응답이 도착하는 순간** 가장 최근 대화가 대신 열린다 — 누른 사람과
+            //     화면에 뜬 사람이 다를 수 있다는 뜻이고, 그건 메시지 화면에서 가장 나쁜 종류의 버그다.
+            //     2026-09-11 사용자 재확인: "대화 상대를 매번 새롭게 선택하는게 아니라. 만약에 다른사람한테
+            //     보내고 싶으면 나와서 그 다른사람 옆에 있는 대화창을 눌러서 진입하면 되는거야."
+            //     v0.2.51 부터 진입점 `openMessagePanel(peer:)` 의 인자가 `String` 이라 "선택이 nil 인 채로 이
+            //     응답에 도착하는" 정상 경로는 없다. 그래서 ② 는 **죽은 가지라 무해해 보여 되돌아오기 쉬운 자리**다 —
+            //     살아나는 순간, 그 nil 이 어디서 오든 응답이 상대를 고른다.
+            //
+            //   그래서 **선택을 사용자 조작 없이 바꾸는 자리는 이 앱에 하나도 없다.** 남은 것은 두 곳뿐이다:
+            //   사용자가 고르는 `selectMessagePeer(_:)` 와, 계정이 갈릴 때 비우는 `clearPersistedSession()`.
+            //   서버 응답(빈 이력·만료·실패·늦게 온 앞 계정 응답)과 수신 폴링 갱신, 전송 성공은 전부
+            //   **선택을 읽기만 한다**. 되돌리려는 사람은 V0251MessagePeerTests 를 먼저 읽어라 — 런타임 테스트가
+            //   응답의 각 얼굴을 재고, 소스 계약 테스트가 이 함수 본문에 선택 대입도 `selectMessagePeer(` 호출도
+            //   없음을 본다(대입 개수만 세면 ② 처럼 문을 **부르는** 재유입은 초록으로 지나간다 — 실측).
         } catch {
             if case .cancelled = classifyAuthError(error) { return }
             guard generation == sessionGeneration else { return }

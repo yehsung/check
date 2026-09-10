@@ -726,7 +726,22 @@ final class WorkTimerStore {
     @ObservationIgnored var tokenUsageCollectLoaded = false
     /// 집중 모드(콕찌르기 수신 거부, profiles.focus_mode 미러). 켜면 남이 나를 못 찌른다 — 판정은 서버가 한다.
     /// 뷰가 토글 상태를 그리므로 관찰 대상이다. 로그인 후 1회 로드(토큰 설정과 같은 GET)하고 토글은 낙관 반영.
+    /// v0.2.51 부터 이 값은 **켜짐/꺼짐만** 말한다. 몇 단(1단 3시간·2단 계속)인지는 이 맥의 기록과 합친 파생값
+    /// `focusStage(now:)` 가 말한다 — 서버는 여전히 불리언 하나만 안다(WorkTimerStorePoke 의 '집중 모드 2단' 절).
     var focusMode = false
+    /// 집중 모드 단계 기록(defaults, 사용자별 키)이 바뀐 횟수. **관찰 대상인 이유**: 1단 → 2단 전환은 서버값(focusMode)이
+    /// true 그대로라, 이 카운터가 없으면 버튼 잎이 다시 그려지지 않는다(기록 자체는 defaults 라 Observation 이 못 본다).
+    /// 사용자 누름·만료·서버 꺼짐에서만 오른다 — 초침에는 오르지 않는다.
+    var focusStageRevision = 0
+    /// 서버가 지금 들고 있다고 **확인된** focus_mode(nil = 모름). 설정 GET 과 PATCH 성공만 쓴다 — 실패는 쓰지 않는다
+    /// (실패한 요청은 대개 반영되지 않았다). 1단 → 2단에서 요청을 아끼는 근거이자, 사용자 누름이 실패했을 때 화면이 돌아갈 값이다.
+    @ObservationIgnored var focusModeServerValue: Bool?
+    /// 날아가는 중인 집중 모드 PATCH 의 값(nil = 없음). **한 번에 하나만** 보낸다(reconcileFocusModeWithServer 주석).
+    @ObservationIgnored var focusPatchInFlight: Bool?
+    /// 1단 만료 PATCH false 가 실패했을 때 다시 보낼 수 있는 가장 이른 시각(clock 기준). nil = 재시도 대기 없음.
+    @ObservationIgnored var focusExpiryRetryAt: Date?
+    /// 이 맥에서 단계가 바뀐 횟수(누름·만료). 설정 GET 이 나간 **뒤에** 바뀌었으면 그 응답(더 낡은 서버값)으로 화면을 덮지 않는 근거다.
+    @ObservationIgnored var focusIntentSerial = 0
     // 내 토큰 사용량 **수집** 여부(profiles.token_usage_collect 미러). 공개 여부와 독립이다 —
     // 공개는 '남의 순위판에 뜨는가', 수집은 '서버에 쌓이는가'. 앱에서 바꾸는 값이 아니라 서버가 정한다.
     // 실효는 서버 트리거가 내고(구버전 클라도 함께 막힌다), 이 플래그는 헛업로드를 줄이는 부수 장치다.
@@ -1359,6 +1374,11 @@ final class WorkTimerStore {
         } else {
             realtimeApply(.didWake, at: date)
         }
+        // 집중 모드 1단 만료(v0.2.51). 아래 조기 리턴 가지들 **앞**이어야 한다 — 켜 두고 퇴근한 뒤 덮개를 닫은 맥
+        // (가장 흔한 만료 시점: 다음 날 아침)은 비근무라 첫 가드에서 곧바로 빠진다. 시각은 인자 date 가 아니라 clock() 이다
+        // (켤 때 until 을 적은 시계와 같은 시계로 비교해야 한다). 네트워크가 아직 안 붙었으면 PATCH 가 실패하고 60초 뒤
+        // 재시도한다 — 화면은 그동안에도 꺼짐이다(evaluateFocusStageExpiry 주석).
+        evaluateFocusStageExpiry(now: clock())
         guard let sleepBeganAt, startedAt != nil else {
             self.sleepBeganAt = nil
             return
@@ -2151,6 +2171,10 @@ final class WorkTimerStore {
         } else if displayIdleSince != nil {
             displayIdleSince = nil
         }
+        // 집중 모드 1단 만료 확인(v0.2.51). 꺼져 있으면 첫 가드에서 곧바로 빠진다(defaults 도 안 읽는다 — 매 틱 불린다).
+        // 이 틱은 비근무 + 팝오버 닫힘이면 멈추므로 이것만으로는 부족하다 — 수신 폴링(localExpiryTick)이 그 공백을 메운다.
+        // 팝오버가 열려 있으면 1초 틱이라, 버튼의 "곧 해제"가 끝나는 그 초에 해제 요청이 나간다.
+        evaluateFocusStageExpiry(now: now)
         // 자정을 넘겼으면 어제 스탬프의 누적을 0으로 리셋하고 스탬프를 오늘로 갱신한다(하우스키핑). 표시/마일스톤은
         // todayDuration 의 자정 클리핑이 이미 막지만, 누적 원장 자체도 새 날에 맞춘다(이후 refresh 가 서버값 복원).
         let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
@@ -2606,6 +2630,13 @@ extension WorkTimerStore {
         tokenUsagePublicLoaded = false
         // 수집 설정 수신 플래그도 계정에 묶인다 — 남기면 다음 계정은 서버 설정을 받기 전에 프로브(외부 프로세스)가 뜬다.
         tokenUsageCollectLoaded = false
+        // 집중 모드 미러와 서버 맞추기 장부도 계정에 묶인다(v0.2.51). 남기면 다음 계정 화면에 앞 사람의 켜짐이 설정 GET 전까지
+        // 뜨고, 날아가던 PATCH 표식이 남아 새 계정의 첫 누름이 영영 서버에 안 간다(한 번에 한 요청 가드).
+        // ★ 단계 **기록(defaults)은 지우지 않는다** — 사용자별 키라 남의 화면에 새지 않고, 같은 사람이 다시 로그인하면 1단이 이어진다.
+        focusMode = false
+        focusModeServerValue = nil
+        focusPatchInFlight = nil
+        focusExpiryRetryAt = nil
         // 계정이 바뀌면 남의 재화를 물려받지 않게 반드시 비운다. 이 블록이 없으면 로그아웃 후 재로그인 시
         // **남의 잔량 화면이 그대로 떠 있고**, 거기서 [뒤로]를 누르면 ultraPanelOrigin 이 .poke 로 남아
         // 앞 계정 맥락의 콕찌르기가 열린다(blocker UI-1 이 지적한 그 경로다).

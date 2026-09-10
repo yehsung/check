@@ -282,7 +282,11 @@ struct TimingBarGameView: View {
     var body: some View {
         // 일시정지 계약(v0.2.48): 정지 중엔 프레임이 아예 돌지 않는다. 정지 화면(스크림·카운트다운)은 허브가 그린다 —
         // 게임 쪽에도 그리면 두 벌이 되어 언젠가 갈린다.
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !game.isPlaying || host.isPaused)) { context in
+        // 프레임 상한은 **화면 주사율에서 온다**(v0.2.50). 여기 숫자를 적지 마라 — 1/60 을 박아 두면
+        // 75Hz·144Hz 처럼 60 으로 나눠떨어지지 않는 화면에서 네 프레임에 한 장이 두 배로 늘어진다
+        // (근거·표는 `MiniGameFrameRate`). 값이 바뀌면 이 뷰가 다시 만들어지며 스케줄도 다시 잡힌다.
+        TimelineView(.animation(minimumInterval: MiniGameFrameRate.minimumInterval(forRefreshRate: host.refreshHz),
+                                paused: !game.isPlaying || host.isPaused)) { context in
             TimingBarFrame(game: game, bestScore: host.bestScore, reduceMotion: host.reduceMotion)
                 // 상태 변경은 본문 평가 중이 아니라 프레임 시각이 **바뀐 뒤**(onChange)에 한다.
                 .onChange(of: context.date) { _, now in tick(now) }
@@ -569,11 +573,14 @@ private struct TimingBarFrame: View {
         // 진행 중엔 흰 블레이드(무대 5종 어디서도 목표 띠 색과 안 겹친다), 판정 뒤엔 등급 색.
         let color = verdict?.tint ?? CheckTheme.primaryText
 
-        // 잔상: 삼각파가 해석식이라 과거 위치를 그냥 계산할 수 있다(t − k/60). 지난 프레임을 보관할 필요가 없다.
+        // 잔상: 삼각파가 해석식이라 과거 위치를 그냥 계산할 수 있다(t − 나이). 지난 프레임을 보관할 필요가 없다.
+        // 나이는 **시간**이다(33·67·100ms) — 프레임 수로 세면 꼬리 길이가 화면 주사율마다 달라진다
+        // (75Hz 의 2프레임은 27ms, 60Hz 는 33ms). v0.2.50 에 프레임 간격이 화면을 따라가면서 갈린 자리라
+        // 여기서 시간으로 못 박는다: 어느 화면에서도 꼬리가 같은 길이로 보인다(픽셀은 60Hz 때와 같다).
         if !reduceMotion, case .running(let round, let t) = game.phase {
             let period = TimingBarGame.period(round: round)
-            for (frames, opacity) in [(2, 0.28), (4, 0.16), (6, 0.08)] {
-                let past = TimingBarGame.markerPosition(t: t - Double(frames) / 60.0, period: period)
+            for (age, opacity) in [(2.0 / 60.0, 0.28), (4.0 / 60.0, 0.16), (6.0 / 60.0, 0.08)] {
+                let past = TimingBarGame.markerPosition(t: t - age, period: period)
                 // 촉 없이, 블레이드보다 짧게 — 잔상이 본체와 같은 모양이면 마커가 여러 개로 보인다.
                 let ghost = bladeRect(at: past, projection: projection).insetBy(dx: 0, dy: 4 * projection.scale)
                 context.fill(Path(roundedRect: ghost, cornerRadius: 1.5 * projection.scale),

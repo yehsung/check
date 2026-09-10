@@ -882,6 +882,18 @@ func timingBarSourceContract() throws {
             "정지 중에 TimelineView 가 안 멈춘다 — 판은 얼어도 프레임 루프는 계속 돈다")
     #expect(code.contains("guard game.isPlaying, !host.isPaused else { lastTick = nil; return }"),
             "정지 중 tick 이 시간을 흘리지 않는다는 가드가 없다")
+
+    // v0.2.50: 프레임 상한은 **화면 주사율에서** 온다. 리터럴을 다시 박으면 60 으로 나눠떨어지지 않는 화면
+    // (75Hz·144Hz·90Hz …)에서 네 프레임에 한 장이 두 배로 늘어진다 — 사용자가 "살짝 버벅인다"로 신고한 그것이다.
+    #expect(code.contains("MiniGameFrameRate.minimumInterval(forRefreshRate: host.refreshHz)"),
+            "프레임 간격을 주사율에서 안 가져온다")
+    for hardCoded in ["minimumInterval: 1.0 / 60.0", "minimumInterval: 1.0/60.0", "minimumInterval: 1/60",
+                      "minimumInterval: nil"] {
+        #expect(!code.contains(hardCoded), "\(hardCoded) — 프레임 상한을 여기 박지 마라(MiniGameFrameRate 가 정한다)")
+    }
+    // 마커 잔상은 프레임 수가 아니라 **시간**으로 뒤를 돌아본다(주사율마다 꼬리 길이가 달라지지 않게).
+    #expect(code.contains("for (age, opacity) in"), "잔상 나이가 시간 단위가 아니다")
+
     #expect(code.contains("MiniGameBackdrop.draw") && code.contains("terrain: false"),
             "배경은 공용 배경 키트로, 정적 게임이라 능선은 끈다")
     #expect(code.contains("MiniGameStage.forTimingRound"), "무대는 라운드가 정한다")
@@ -891,4 +903,115 @@ func timingBarSourceContract() throws {
     #expect(code.contains("max(0.07, 0.24 - 0.019 * Double(round - 1))"), "목표 폭 곡선이 바뀌었다")
     #expect(code.contains("100 - Int((30 * d).rounded())"), "배점 함수가 바뀌었다")
     #expect(code.contains("roundScores.reduce(0, +)"), "총점은 라운드 점수의 단순 합이다(콤보 보너스 금지)")
+}
+
+// MARK: - (7) 프레임 간격이 달라도 같은 판인가 (v0.2.50)
+//
+// 프레임 상한이 화면 주사율을 따라가면서 같은 판이 60·75·120fps 로 각각 밀린다. 타이밍 바는 **정확도**가
+// 곧 점수라 여기가 갈리면 순위표가 화면의 것이 된다. 규칙은 dt 의 합만 보므로 원리적으로는 같아야 하는데,
+// 그 '원리'가 코드에 남아 있는지는 여기서만 확인된다.
+
+/// 1/15초를 한 '틱'으로 — 60fps 는 4프레임, 75fps 는 5프레임, 120fps 는 8프레임이라 **세 간격 모두**
+/// 틱 경계가 정확히 같은 시각이다(정지 버튼을 누르는 시각이 간격에 따라 갈리지 않는다).
+private let tbFpsTickHz = 15
+
+/// 같은 시드로 시작해 tapEveryTick 마다 정지를 누른다. 10라운드를 마칠 때까지.
+private func tbFpsPlay(fps: Int, tapEveryTick: Int, seed: UInt64 = tbSeed) -> (total: Int, scores: [Int], ticks: Int) {
+    var game = TimingBarGame(seed: seed)
+    game.tap()                                     // 시작(ready → running 1)
+    let dt = 1.0 / Double(fps)
+    let framesPerTick = fps / tbFpsTickHz
+    var tick = 0
+    while tick < 600 {
+        tick += 1
+        for _ in 0..<framesPerTick { game.step(dt: dt) }
+        if case .finished = game.phase { break }
+        if tick % tapEveryTick == 0 { game.tap() }
+    }
+    return (game.total, game.roundScores, tick)
+}
+
+/// 사람처럼 논다: 마커가 목표 중심을 지나는 **그 프레임**에 멈춘다(절대 시각이 아니라 화면을 보고 누른다).
+private func tbFpsPlayByEye(fps: Int, seed: UInt64 = tbSeed) -> (total: Int, scores: [Int], seconds: Double) {
+    var game = TimingBarGame(seed: seed)
+    game.tap()
+    let dt = 1.0 / Double(fps)
+    var frames = 0
+    var previous: Double?
+    while frames < fps * 40 {
+        frames += 1
+        game.step(dt: dt)
+        if case .finished = game.phase { break }
+        guard case .running(let round, let t) = game.phase else { previous = nil; continue }
+        let p = TimingBarGame.markerPosition(t: t, period: TimingBarGame.period(round: round))
+        let c = game.target.center
+        // 중심을 막 지난 프레임(부호가 뒤집힌 그 순간)에 누른다.
+        if let previous, (previous - c) * (p - c) <= 0 { game.tap() }
+        previous = p
+    }
+    return (game.total, game.roundScores, Double(frames) * dt)
+}
+
+@Test
+func timingBarMarkerRunsAtTheSameSpeedAtEveryFrameRate() {
+    // ① **판이 같은 속도로 흐른다.** 정확히 2.000초를 각 간격으로 민 뒤(60→120프레임 · 75→150 · 120→240)
+    //    마커가 같은 자리에 있어야 한다. 규칙이 프레임 수로 시간을 세면 여기가 25% 어긋난다.
+    var positions: [Int: Double] = [:]
+    for fps in [55, 60, 75, 90, 120] {
+        var game = TimingBarGame(seed: tbSeed)
+        game.tap()
+        for _ in 0..<(fps * 2) { game.step(dt: 1.0 / Double(fps)) }
+        guard case .running(let round, let t) = game.phase else {
+            Issue.record("fps=\(fps): 2초 뒤에 라운드가 안 돌고 있다")
+            continue
+        }
+        #expect(round == 1, "fps=\(fps): 2초 만에 라운드가 넘어갔다")
+        positions[fps] = TimingBarGame.markerPosition(t: t, period: TimingBarGame.period(round: round))
+    }
+    let reference = positions[60] ?? -1
+    for (fps, p) in positions.sorted(by: { $0.key < $1.key }) {
+        #expect(abs(p - reference) < 1e-9, "fps=\(fps): 2초 뒤 마커가 \(p) 로 60fps(\(reference))와 다르다")
+    }
+
+    // ② 라운드 넘어가는 시각(정지 → 결과 0.6초 → 다음 라운드)도 간격을 타지 않는다 — **한 프레임 안**이다.
+    //    딱 같을 수는 없다: 0.6 을 dt 로 깎는 카운트다운이 프레임 경계에서 끝나기 때문이다(부동소수 끝자리에
+    //    따라 마지막 한 프레임이 붙거나 떨어진다). 사람은 절대 시각이 아니라 **화면을 보고** 누르므로
+    //    이 한 프레임은 난이도가 아니다 — 마커와 사람이 같이 밀린다.
+    for fps in [55, 60, 75, 90, 120] {
+        var game = TimingBarGame(seed: tbSeed)
+        game.tap()
+        let dt = 1.0 / Double(fps)
+        for _ in 0..<fps { game.step(dt: dt) }       // 1초 진행 후
+        game.tap()                                   // 정지 → 결과 표시
+        var frames = 0
+        while frames < fps * 3 {
+            frames += 1
+            game.step(dt: dt)
+            if case .running(let round, _) = game.phase, round == 2 { break }
+        }
+        let seconds = Double(frames) * dt
+        #expect(abs(seconds - TimingBarGame.resultHold) <= dt + 1e-9,
+                "fps=\(fps): 다음 라운드가 \(seconds)초 만에 왔다(결과 표시는 \(TimingBarGame.resultHold)초)")
+    }
+}
+
+@Test
+func timingBarStaysPlayableAtEveryFrameRate() {
+    // 사람처럼(화면을 보고 중심을 지나는 프레임에 정지) 한 판을 끝까지 논다. 어느 주사율에서도 10라운드가
+    // 돌고 점수가 무너지지 않아야 한다.
+    //
+    // ★ 정확히 같은 점수는 **나오지 않고, 나올 수도 없다**: 멈출 수 있는 자리의 해상도가 곧 프레임 간격이다
+    //   (마커 위치는 프레임에서 누적한 t 의 함수다). 60fps 는 초당 60번, 75fps 는 75번 멈춰 볼 수 있다 —
+    //   이 로봇처럼 0ms 반응이면 그 차이가 총점에 그대로 나온다(실측 55→810 · 60→921 · 75→911 · 120→942).
+    //   사람의 타이밍 흔들림(수십 ms)이 프레임 간격 차이(60↔75 는 3.3ms)보다 훨씬 크므로 실사용에서는 묻힌다.
+    //   이것은 이번 변경이 만든 성질이 아니다 — 바꾸기 전에도 75Hz 화면의 프레임은 대부분 13.33ms 였다.
+    var totals: [Int: Int] = [:]
+    for fps in [55, 60, 75, 90, 120] {
+        let result = tbFpsPlayByEye(fps: fps)
+        totals[fps] = result.total
+        #expect(result.scores.count == TimingBarGame.roundCount, "fps=\(fps): 10라운드를 못 채웠다")
+        #expect(result.total >= 700, "fps=\(fps): 총점 \(result.total) — 이 주사율에서 판이 무너졌다")
+        #expect(result.seconds < 12, "fps=\(fps): 한 판이 \(result.seconds)초 걸렸다 — 판이 느려졌다")
+    }
+    print("[tb-fps] 주사율별 로봇 총점: " + totals.sorted { $0.key < $1.key }.map { "\($0.key)fps=\($0.value)" }.joined(separator: " "))
 }

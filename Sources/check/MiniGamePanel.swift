@@ -402,6 +402,9 @@ struct CheckMiniGameWindowView: View {
             reduceMotion: reduceMotion,
             interruptToken: store.miniGameInterruptToken,
             isPaused: pauseState.isFrozen,
+            // 프레임 상한의 재료(v0.2.50). 창 컨트롤러가 창이 선 화면에서 읽어 두고, 화면을 옮기면 갱신한다.
+            // `@Observable` 이라 **여기서 읽는 것만으로** 값이 바뀔 때 이 뷰가 다시 그려진다.
+            refreshHz: MiniGameFrameRateMonitor.shared.refreshHz,
             onFinished: { score in store.recordMiniGameScore(kind: kind, score: score) },
             onPlayingChanged: { playing in
                 isPlaying = playing

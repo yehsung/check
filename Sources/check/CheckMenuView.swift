@@ -23,6 +23,10 @@ struct CheckMenuView: View {
     var previewUpdateBanner: Bool = false
     // 스냅샷 전용: 배너에 얹을 패치노트 줄을 강제로 주입한다. 앱에서는 updateCheck?.latestNotes(릴리스 노트 파싱본)만 쓴다.
     var previewUpdateNotes: [String] = []
+    // 스냅샷 전용: 하위 패널의 TextEditor/TextField 를 순수 SwiftUI 로 바꿔 그린다.
+    // ImageRenderer 는 AppKit 을 감싼 뷰를 **노란 상자**로 그리므로, 그대로 두면 대화·제보 스냅샷에서
+    // 입력칸 자리가 통째로 눈먼 자리가 된다(이 저장소가 그런 자리에서 색 결함을 8일간 놓쳤다). 앱은 항상 false.
+    var previewPlainTextEditors: Bool = false
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
@@ -93,18 +97,34 @@ struct CheckMenuView: View {
         }
     }
 
-    /// 하위 패널(리그/토큰/찌르기/개인 기록/울트라)이 열려 있는지. 열려 있으면 팀 카드 자리를 그 패널이 대신 쓴다.
+    /// 하위 패널(리그/토큰/찌르기/개인 기록/울트라/**1:1 대화**/**제보**)이 열려 있는지.
+    /// 열려 있으면 팀 카드 자리를 그 패널이 대신 쓴다.
     ///
     /// 미니게임은 **여기 없다** — v0.2.46 에 별도 창(`CheckMiniGameWindowController`)으로 나갔다. 팝오버 자리를
     /// 안 먹으므로 토큰 소모량 행도 그대로 있어야 한다(여기 더하면 게임 창을 열어 둔 동안 그 행이 사라진다).
+    /// 설정도 같은 이유로 없다. **남은 별도 창은 그 둘뿐이다** — 제보와 메시지는 v0.2.50 에 여기로 내려왔다.
     ///
     /// ★ 새 패널을 만들면 **여기 더하는 것을 잊지 마라.** 빠뜨리면 토큰 소모량 행이 패널과 함께 그려져
     ///   창이 700pt 상한을 넘고 푸터(로그아웃/앱 종료)가 화면 밖으로 잘린다 — 그 순간 사용자는
-    ///   로그아웃할 방법을 잃는다. 이 목록의 원소 수는 스토어의 isXxxVisible 플래그 수와 같아야 한다.
+    ///   로그아웃할 방법을 잃는다. 이 목록의 원소 수는 스토어의 isXxxVisible 플래그 수와 같아야 한다
+    ///   (`CheckMenuRenderTests.everyPanelFlagIsCountedInTheTokenRowGate` 가 그 두 수를 세어 못 박는다).
     private var isSubPanelOpen: Bool {
         store.isLeaderboardVisible || store.isTokenBoardVisible || store.isPokePanelVisible
             || store.isInsightsPanelVisible || store.isUltraPanelVisible
+            || store.isMessagePanelVisible || store.isFeedbackPanelVisible
     }
+
+    /// 위 목록이 세는 **패널 깃발의 이름들**(테스트가 읽는 유일한 권위).
+    ///
+    /// 왜 배열까지 두는가: 깃발을 더하면서 `isSubPanelOpen` 에 얹는 것을 잊는 것이 이 화면의 대표 회귀인데,
+    /// 소스 문자열을 세는 테스트만으로는 "스토어에 깃발이 몇 개인가"를 알 수 없다. 이 배열이 그 두 세계를
+    /// 잇는다 — 테스트는 (가) 이 배열의 이름이 전부 `isSubPanelOpen` 본문에 나오는지와
+    /// (나) 스토어에 그 이름의 깃발이 실제로 있는지를 함께 본다.
+    static let subPanelFlagNames = [
+        "isLeaderboardVisible", "isTokenBoardVisible", "isPokePanelVisible",
+        "isInsightsPanelVisible", "isUltraPanelVisible",
+        "isMessagePanelVisible", "isFeedbackPanelVisible"
+    ]
 
     /// 토큰 소모량 행은 홈(팀 목록) 화면의 구성요소다 — 하위 패널이 열리면 감춘다. 패널이 쓸 세로 공간을
     /// 되찾아 창 높이 상한을 지키고, 패널 안에서 이 행이 할 일도 없다(패널마다 뒤로 버튼이 있다).
@@ -257,7 +277,29 @@ struct CheckMenuView: View {
                     if showsTokenUsageRow {
                         CheckTokenUsageRow(store: store.tokenUsage, account: store.codexAccount, onOpenBoard: { store.toggleTokenBoard() })
                     }
-                    if store.isLeaderboardVisible {
+                    if store.isMessagePanelVisible {
+                        // 1:1 대화 패널(v0.2.50). **디스패치 맨 앞이다** — 가장 좁은 화면이라(한 사람짜리)
+                        // 다른 패널과 겹칠 조합이 생기면 언제나 이쪽이 이겨야 사용자가 방금 연 대화가 안 사라진다.
+                        // store 를 통째로 내려보내는 이유는 TeamPanel 과 같다: 초안 바인딩이 필요하고,
+                        // 이 패널은 displayNow 를 읽지 않으므로 매초 무효화 경로가 생기지 않는다.
+                        CheckMessageView(
+                            store: store,
+                            rendersPlainTextEditor: previewPlainTextEditors,
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                            extraChromeHeight: listExtraChromeHeight,
+                            onBack: { store.closeMessagePanel() }
+                        )
+                    } else if store.isFeedbackPanelVisible {
+                        // 제보 패널(v0.2.50 — 별도 창에서 내려왔다). 탭 둘(보내기/받은 제보)은 그대로이고
+                        // **[새로고침]은 없다**(사용자 지시 3). 목록을 받는 자리는 스토어 진입점 주석에 있다.
+                        CheckFeedbackView(
+                            store: store,
+                            rendersPlainTextEditor: previewPlainTextEditors,
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                            extraChromeHeight: listExtraChromeHeight,
+                            onBack: { store.closeFeedbackPanel() }
+                        )
+                    } else if store.isLeaderboardVisible {
                         LeaderboardPanel(
                             // 원본 leaderboard 는 스토어에 보존하고, 표시 시점에 0시간 타팀만 숨긴다(내 팀은 0이어도 유지).
                             entries: store.leaderboard.filteredForDisplay(myTeamID: store.currentTeamID),
@@ -327,10 +369,15 @@ struct CheckMenuView: View {
                             },
                             isFocusMode: store.focusMode,
                             onToggleFocusMode: { store.toggleFocusMode() },
-                            // 메시지 — 찌르기와 같은 표·같은 폴링으로 **받지만**, 보내는 곳은 별도 창 하나다(v0.2.49).
+                            // 메시지 — 찌르기와 같은 표·같은 폴링으로 **받지만**, 보내는 곳은 1:1 대화 패널 하나다.
                             // 여기 있던 `onSendMessage`/`messageCooldownRemaining` 은 통째로 사라졌다:
-                            // 쿨타임이 폐지돼 셀 것이 없고, 200자를 팝오버 폭에서 쓰는 것은 애초에 무리였다.
-                            onOpenMessages: { store.openMessageWindow(peer: $0) },
+                            // 쿨타임이 폐지돼 셀 것이 없고, 인라인 작성기는 이력을 두 곳으로 갈랐다.
+                            // v0.2.50 부터 그 문이 **창이 아니라 이 팝오버 안의 화면**이다(사용자 지시 1).
+                            onOpenMessages: { store.openMessagePanel(peer: $0) },
+                            // 안 읽은 것이 있는 상대들. 말풍선 버튼에 점 하나로 붙는다 — 왼쪽 대화 목록이
+                            // 사라지면서(v0.2.50) 안 읽음을 말할 자리가 여기밖에 안 남았다.
+                            // 시계를 읽지 않는 값이라(도장 비교는 스토어가 끝낸다) 잎으로 가둘 이유가 없다.
+                            unreadMessagePeerIDs: store.unreadMessagePeerIDs,
                             messageNotice: store.messageNotice,
                             // 큐의 맨 앞 = 아직 사용자에게 보여 주지 않은 가장 오래된 1건.
                             // ⚠︎ 말풍선(오버레이 담당)이 consumeCurrentMessage 로 큐를 밀면 이 자리도 함께 비워진다.
@@ -492,30 +539,31 @@ struct CheckMenuSideRail: View {
             // ultraPanelOrigin 의 초기값이자 closeUltraPanel 이 되돌려 놓는 값이라 살아 있는 값이고,
             // 열거값을 줄이면 구버전 계약이 흔들리므로 지우지 않는다(그 파일은 이 트랙의 소유도 아니다).
             //
-            // **isActive 가 없다.** 설정 칸과 같은 이유다(바로 아래 주석) — 제보는 팝오버 밖에 사는
-            // 별도 창이라 켜짐을 비출 관찰 대상도, 그걸 볼 화면도 없다.
-            //
             // 배지는 매초 값이 아니다(제보가 오갈 때만 바뀐다) — 잎으로 격리할 이유가 없다.
             CheckMenuRailButton(
                 icon: "exclamationmark.bubble.fill",
                 label: "제보",
                 help: "제보 — 버그와 요청사항 보내기",
+                isActive: store.isFeedbackPanelVisible,
                 badge: feedbackBadge
             ) {
-                // 팝오버를 닫는 일은 **`openFeedbackWindow()` 안에 있다**(미니게임과 같은 모양).
-                // 여기서 한 번 더 부르지 마라 — 누르는 수단이 상태바 아이템 토글이라 한 동작에서 두 번
-                // 누르면 팝오버가 도로 열린다. 0.6초 디바운스가 막아 주긴 하지만, 의도가 두 곳에 있으면
-                // 언젠가 한쪽만 고쳐져 갈린다. 창을 여는 문이 하나이므로 닫는 자리도 그 문 하나다.
-                store.openFeedbackWindow()
+                // ★ **여기서 팝오버를 닫지 마라**(v0.2.50). 제보는 별도 창이 아니라 이 팝오버 **안의**
+                //   화면이 됐다 — 닫으면 방금 연 화면이 그 자리에서 사라진다. 스토어의 진입점에서도
+                //   `dismissMenuPopover()` 를 걷어냈다(그쪽 주석 참고). 미니게임·설정은 여전히 창이라
+                //   그 두 칸의 닫기는 그대로다.
+                //
+                // **isActive 가 생겼다.** 창이던 시절에는 비출 관찰 대상도, 그걸 볼 화면도 없었지만
+                // 이제는 팝오버 안에서 켜짐이 보이므로 다른 패널 칸들과 같은 규약을 따른다.
+                store.toggleFeedbackPanel()
             }
-            // [설정]과 [제보]에만 isActive 가 없다. 둘 다 팝오버 **밖**에 사는 별도 창이라, 켜짐을
-            // 비출 관찰 대상도 그걸 볼 화면도 없기 때문이다.
+            // [설정]에만 isActive 가 없다. 팝오버 **밖**에 사는 별도 창이라 켜짐을 비출 관찰 대상도
+            // 그걸 볼 화면도 없기 때문이다(v0.2.49 까지는 [제보]도 그랬다 — 그쪽은 패널이 되며 생겼다).
             //
             // ⚠️ 여기 적혀 있던 "그걸 여는 순간 앱이 활성화되며 팝오버는 닫힌다"는 **사실이 아니었다**.
             // v0.2.49 에 재현 앱으로 재 보니 `NSApp.activate()` + `makeKeyAndOrderFront` 로는 팝오버가
             // 그대로 떠 있다(측정표는 `WindowTopAnchor.dismissMenuPopover` 주석). 그래서 팝오버를 닫는
-            // 일은 **명시적으로** 한다 — 스토어의 `openFeedbackWindow()` · `openMiniGameWindow()`,
-            // 그리고 스토어를 안 거치는 [설정]은 바로 아래 호출부가 직접 한다.
+            // 일은 **명시적으로** 한다 — 창을 여는 스토어의 `openMiniGameWindow()`, 그리고 스토어를
+            // 안 거치는 [설정]은 바로 아래 호출부가 직접 한다(제보는 이제 창이 아니라 닫을 일이 없다).
             // 본문이 레일보다 길면 남는 자리가 여기로 간다. 위 다섯(게임·찌르기·현황·기록·제보)은 위에,
             // [설정]은 아래에 앵커된다 — 상단 정렬만 하면 본문이 길 때 레일 아래가 최대 310pt(창 높이의 46%)
             // 통째로 비어 "여섯 칸이 떠 있는" 인상이 된다(2026-09-10 실측).
@@ -526,8 +574,8 @@ struct CheckMenuSideRail: View {
                 help: "설정 — 자동 실행 · 할 일 · 별명 · 토큰 공개"
             ) {
                 CheckSettingsWindowController.shared.show()
-                // **왜 스토어가 아니라 여기인가.** 게임·제보 창은 스토어의 진입점(`openMiniGameWindow()` ·
-                // `openFeedbackWindow()`)을 지나므로 닫는 자리를 거기 한 곳으로 모았다. 설정 창은
+                // **왜 스토어가 아니라 여기인가.** 게임 창은 스토어의 진입점(`openMiniGameWindow()`)을
+                // 지나므로 닫는 자리를 거기 한 곳으로 모았다. 설정 창은
                 // 스토어를 전혀 거치지 않는다(`CheckSettingsWindowController.shared.show()` 가 유일한 문이고
                 // ⌘, 도 같은 곳으로 모인다) — 그래서 이 버튼이 닫을 수 있는 유일한 자리다.
                 // 컨트롤러의 `show()` 안에 넣지 않는 이유: 그 문은 ⌘, 로도 열리는데, 그때 팝오버는
@@ -1515,7 +1563,7 @@ enum TokenBoardEmptyMessage {
 
 /// 패널 본문 자리 문구 옆에 붙는 [다시 시도] 버튼(토큰 순위판·개인 기록 공용). 실패했을 때만 그린다 —
 /// 없던 시절엔 팝오버를 닫았다 다시 여는 것 말고는 재시도 경로가 없었다.
-private struct PanelRetryButton: View {
+struct PanelRetryButton: View {
     let action: () -> Void
 
     var body: some View {
@@ -2358,6 +2406,12 @@ private struct PokePanel: View {
     //   보내는 곳이 둘이면 이력도 둘로 갈리고, 메시지에는 이제 쿨타임 자체가 없다(찌르기만 60초다).
     //   `messageCooldownRemaining` 을 이 파일에 되살리면 그건 곧 화면에 카운트다운이 돌아온다는 뜻이다.
     var onOpenMessages: (String?) -> Void = { _ in }
+    // 안 읽은 것이 있는 상대들(스토어 파생값). 말풍선 버튼 위에 점 하나로 붙는다.
+    //
+    // **왜 지금 생겼나**(v0.2.50): 안 읽음을 말하던 자리는 메시지 창의 왼쪽 대화 목록이었는데 그 목록이
+    // 사라졌다(사용자 지시 1). 남은 자리가 이 버튼뿐이라, 안 넣으면 "안 읽음"이라는 개념이 앱에서 통째로
+    // 사라진다 — 스토어의 `unreadMessagePeerIDs`/`messageReadStamps` 도 그 순간 아무도 안 읽는 값이 된다.
+    var unreadMessagePeerIDs: Set<String> = []
     // 메시지 전송 결과 1줄 안내. 찌르기 notice 와 **다른 칸**이라 따로 받는다(스토어가 상태를 나눠 둔 이유와 같다).
     // 창에서 보낸 결과지만 이 줄도 함께 읽는다 — 같은 계정의 같은 사실이라 두 화면이 다른 말을 하면 안 된다.
     var messageNotice: String? = nil
@@ -2533,7 +2587,8 @@ private struct PokePanel: View {
                         ultraUnlimited: ultraUnlimited,
                         onPoke: { onPoke(entry.userID) },
                         onUltra: { onUltra(entry.userID) },
-                        onOpenMessages: { onOpenMessages(entry.userID) }
+                        onOpenMessages: { onOpenMessages(entry.userID) },
+                        hasUnreadMessages: unreadMessagePeerIDs.contains(entry.userID)
                     )
                     .frame(height: Self.rowHeight)
                 }
@@ -2633,9 +2688,11 @@ private struct PokeDirectoryRowView: View {
     var ultraUnlimited: Bool = false
     let onPoke: () -> Void
     let onUltra: () -> Void
-    /// 말풍선 버튼 — **메시지 창을 연다**(v0.2.49). 여기서 아무것도 보내지 않는다.
-    /// 옛 `isComposing`/`onToggleCompose`(행 아래 인라인 작성기 펼침)는 함께 사라졌다.
+    /// 말풍선 버튼 — **그 사람과의 1:1 대화 화면으로 넘어간다**(v0.2.50 — 창이 아니라 이 팝오버 안이다).
+    /// 여기서 아무것도 보내지 않는다. 옛 `isComposing`/`onToggleCompose`(행 아래 인라인 작성기 펼침)도 없다.
     var onOpenMessages: () -> Void = {}
+    /// 이 사람에게서 온 것 중 아직 안 읽은 것이 있는가. 말풍선 위 점 하나로 그린다.
+    var hasUnreadMessages: Bool = false
 
     // 좌측 세로 바 색 — 아바타 이니셜과 동일한 이름 해시색(유저별 컬러 포인트).
     private var accentColor: Color { CheckTheme.avatarColor(for: entry.name) }
@@ -2751,10 +2808,26 @@ private struct PokeDirectoryRowView: View {
     private var messageButton: some View {
         Button(action: onOpenMessages) {
             messageIconLabel(active: true)
+                // 안 읽음 점. **원 바깥 모서리에 걸친다** — 아이콘 위에 얹으면 말풍선 글리프와 겹쳐
+                // 둘 다 안 읽힌다. 색은 danger 가 아니라 accent 다: 안 읽은 메시지는 사고가 아니다.
+                .overlay(alignment: .topTrailing) {
+                    if hasUnreadMessages {
+                        Circle()
+                            .fill(CheckTheme.accent)
+                            .frame(width: 7, height: 7)
+                            .overlay(Circle().stroke(CheckTheme.panel, lineWidth: 1.5))
+                            .offset(x: 1, y: -1)
+                    }
+                }
         }
         .buttonStyle(PokePressButtonStyle())
-        .help("\(entry.name)님과의 메시지 열기")
-        .accessibilityLabel("\(entry.name)님과의 메시지 열기")
+        .help(messageHelp)
+        .accessibilityLabel(messageHelp)
+    }
+
+    /// 툴팁 = 접근성 라벨. 두 벌로 적으면 한쪽만 낡는다.
+    private var messageHelp: String {
+        hasUnreadMessages ? "\(entry.name)님과의 대화 — 안 읽은 메시지가 있어요" : "\(entry.name)님과의 대화 열기"
     }
 
     // 말풍선 라벨. 활성은 accent 글자 + 옅은 accent 원형(찌르기의 꽉 찬 accent 보다 한 급 낮은 무게),

@@ -473,8 +473,12 @@ final class WorkTimerStore {
     // **폴링을 붙이지 마라.** 목록은 창을 열 때·[새로고침]·상태 변경 성공에만 받는다. 26명이 30초마다
     // 요청 하나를 더 내는 것은 무료 플랜의 몫이 아니고, 제보는 초 단위로 바뀌는 표면도 아니다.
 
-    /// 제보 창이 열려 있는가. 레일 진입 버튼의 하이라이트와 목록 재조회 게이트로 쓴다.
-    var isFeedbackWindowVisible = false
+    /// 제보 패널이 팝오버 안에 떠 있는가(v0.2.50 — 별도 창에서 하위 패널로 내려왔다).
+    /// 레일 진입 버튼의 하이라이트이자 다른 패널과의 상호 배타 깃발이다.
+    ///
+    /// ★ 이 깃발은 `CheckMenuView.isSubPanelOpen` 에 **반드시 들어가 있어야 한다.** 빠뜨리면 토큰 소모량
+    ///   행이 패널과 함께 그려져 창이 700pt 상한을 넘고 푸터(로그아웃/앱 종료)가 잘린다.
+    var isFeedbackPanelVisible = false
     /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
     /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.
     var feedbackList: [FeedbackReport] = []
@@ -780,8 +784,19 @@ final class WorkTimerStore {
     // **폴링을 붙이지 마라.** 이력은 창을 열 때·[새로고침]·전송 성공·**수신 폴링이 새 메시지를 물어왔을 때**만
     // 받는다(마지막 것은 이미 도는 15초 폴링에 얹혀 있다 — `enqueueReceivedMessages`).
 
-    /// 메시지 창이 열려 있는가. 레일/행 진입 버튼의 하이라이트이자 "도착 시 이력 갱신" 게이트로 쓴다.
-    var isMessageWindowVisible = false
+    /// 1:1 대화 패널이 팝오버 안에 떠 있는가(v0.2.50 — 별도 창에서 하위 패널로 내려왔다).
+    /// 다른 패널과의 상호 배타 깃발이자 "도착 시 이력 갱신" 게이트다.
+    ///
+    /// ★ 이 깃발도 `CheckMenuView.isSubPanelOpen` 에 들어가 있어야 한다(위 isFeedbackPanelVisible 과 같은 이유).
+    var isMessagePanelVisible = false
+    /// 어디서 이 대화로 들어왔는가. [뒤로]가 돌아갈 곳을 정하는 유일한 근거다(울트라 패널과 같은 규약).
+    ///
+    /// **`private(set)` 이 아닌 이유는 설계가 아니라 파일 경계다** — 이 값을 쓰는 두 곳
+    /// (`openMessagePanel` · `closeMessagePanel`)이 `WorkTimerStoreMessages.swift` 확장에 있고,
+    /// Swift 는 다른 파일의 확장에서 private setter 에 못 닿는다(ultraPanelOrigin 은 본체에 붙어 있어
+    /// 그 제약을 안 만났을 뿐이다). **그 둘 말고 어디서도 대입하지 마라** — 진입 맥락을 바깥에서 바꾸면
+    /// [뒤로]가 사용자가 지나온 적 없는 화면으로 간다.
+    var messagePanelOrigin: MessagePanelOrigin = .poke
     /// 최근 12시간 이력(오래된 것 → 최신). **사람이 쓴 문장이다. 로그로 흘리지 마라.**
     var messageHistory: [MessageHistoryEntry] = []
     /// 한 번이라도 성공적으로 받았는가(빈 이력과 로드 전을 가른다 — 제보 목록과 같은 3플래그 규약).
@@ -1692,6 +1707,10 @@ final class WorkTimerStore {
     func toggleLeaderboard() {
         isLeaderboardVisible.toggle()
         if isLeaderboardVisible {
+            // v0.2.50 — 하위 패널이 둘 늘었다(1:1 대화 · 제보). **콕찌르기를 내리는 줄보다 앞**이어야 한다:
+            // closeMessagePanel() 은 origin 이 .poke 면 그 목록을 되살리므로, 뒤에 두면 되살아난 목록이 남는다.
+            closeMessagePanel()
+            closeFeedbackPanel()
             closeTokenBoard()
             closePokePanel()
             closeUltraPanel()
@@ -1728,6 +1747,8 @@ final class WorkTimerStore {
         }
         isTokenBoardVisible = true
         isLeaderboardVisible = false
+        closeMessagePanel()
+        closeFeedbackPanel()
         closePokePanel()
         closeUltraPanel()
         isInsightsPanelVisible = false
@@ -1761,6 +1782,8 @@ final class WorkTimerStore {
         if isPokePanelVisible {
             closePokePanel()
         } else {
+            closeMessagePanel()
+            closeFeedbackPanel()
             isPokePanelVisible = true
             isLeaderboardVisible = false
             closeTokenBoard()
@@ -1781,6 +1804,8 @@ final class WorkTimerStore {
     ///   그래서 여기서는 `isPokePanelVisible = false` 한 줄만 내린다.
     func openUltraPanel(from origin: UltraPanelOrigin) {
         ultraPanelOrigin = origin
+        closeMessagePanel()
+        closeFeedbackPanel()
         if origin == .poke {
             isPokePanelVisible = false
         }
@@ -1813,6 +1838,8 @@ final class WorkTimerStore {
     func toggleInsightsPanel() {
         isInsightsPanelVisible.toggle()
         if isInsightsPanelVisible {
+            closeMessagePanel()
+            closeFeedbackPanel()
             isLeaderboardVisible = false
             closeTokenBoard()
             closePokePanel()
@@ -2202,6 +2229,16 @@ enum UltraPanelOrigin: Equatable, Sendable {
     case poke
 }
 
+/// 1:1 대화 패널에 들어온 경로. [뒤로]가 돌아갈 곳을 정한다(UltraPanelOrigin 과 같은 모양·같은 이유).
+///
+/// `.poke` 가 기본값인 이유는 **실제로 그 문 하나뿐이기 때문**이다 — 콕찌르기 목록의 말풍선 버튼.
+/// `.overlay` 는 캐릭터 머리 위 도착 말풍선을 누른 경우다: 그때 사용자는 콕찌르기 목록을 보고 있지
+/// 않았으므로 [뒤로]가 그 목록을 열면 가 본 적 없는 화면으로 '돌아가게' 된다 — 홈(팀 목록)으로 나간다.
+enum MessagePanelOrigin: Equatable, Sendable {
+    case poke
+    case overlay
+}
+
 extension MilestoneTracker {
     /// 오늘 누적 **3시간** = 미션 1호의 목표. 기존 키(hour1/hour4/teamGoal/firstArrival)에는 이 자리가 없었다 —
     /// 이 키가 곧 blocker(서버 #3)이 지적한 "존재하지 않는 클라 호출 지점"이다.
@@ -2546,12 +2583,13 @@ extension WorkTimerStore {
         lastShownMessage = nil
         messageNotice = nil
         isSendingMessage = false
-        // ★ 메시지 창은 이 앱에서 **가장 사적인 표면**이다 — 나르는 것이 순위 숫자가 아니라 두 사람이 주고받은
-        //   문장이라, 남기면 다음 사람이 앞 사람의 대화를 그대로 읽는다. 창까지 함께 내린다(제보·미니게임 창과
-        //   **같은 규약** — 깃발만 내리면 내용이 비워진 창이 화면에 그대로 떠 있다).
-        //   `close()` 는 멱등이고 창을 파괴하지 않는다(다시 로그인해 열면 같은 자리에 선다).
-        isMessageWindowVisible = false
-        CheckMessageWindowController.shared.close()
+        // ★ 1:1 대화는 이 앱에서 **가장 사적인 표면**이다 — 나르는 것이 순위 숫자가 아니라 두 사람이 주고받은
+        //   문장이라, 남기면 다음 사람이 앞 사람의 대화를 그대로 읽는다.
+        //   v0.2.50 부터 별도 창이 아니라 **팝오버 하위 패널**이라 컨트롤러를 부를 일이 없다 — 깃발 하나면
+        //   화면에서 사라진다(창 시절엔 깃발만 내리면 내용이 비워진 창이 그대로 떠 있었다).
+        //   진입 맥락도 함께 되돌린다: 남겨 두면 다음 계정의 [뒤로]가 앞 사람 맥락의 화면으로 간다.
+        isMessagePanelVisible = false
+        messagePanelOrigin = .poke
         messageHistory = []
         messageHistoryLoaded = false
         messageHistoryLoading = false
@@ -2611,13 +2649,15 @@ extension WorkTimerStore {
         // 미니게임 패널·순위·공개 설정도 계정에 묶인다(순위 행은 남의 것, 공개 여부는 그 계정의 선택). 진행 중이던 판은 끝낸다.
         // 로컬 최고기록은 계정별 키(miniGameBestKey 가 userID 를 포함)라 지울 필요가 없다.
         //
-        // ★ **별도 창은 깃발만 내려서는 안 닫힌다**(v0.2.48 수정). `isMiniGamePanelVisible` /
-        //   `isFeedbackWindowVisible` 은 레일 버튼의 하이라이트일 뿐이고, 화면 위의 NSWindow 를 내리는
-        //   것은 컨트롤러의 `close()` 하나다. 대입만 하던 시절엔 로그아웃 뒤 **내용이 비워진 창이 그대로
-        //   떠 있었다** — 제보 창은 빈 목록·빈 초안으로, 게임 창은 순위가 사라진 채로. 레일 하이라이트만
-        //   꺼져서, 그 창을 닫는 유일한 길이 타이틀바 빨간 점이었다.
+        // ★ **별도 창은 깃발만 내려서는 안 닫힌다**(v0.2.48 수정). `isMiniGamePanelVisible` 은 레일 버튼의
+        //   하이라이트일 뿐이고, 화면 위의 NSWindow 를 내리는 것은 컨트롤러의 `close()` 하나다.
+        //   대입만 하던 시절엔 로그아웃 뒤 **내용이 비워진 창이 그대로 떠 있었다** — 순위가 사라진 채로.
+        //   레일 하이라이트만 꺼져서, 그 창을 닫는 유일한 길이 타이틀바 빨간 점이었다.
         //   `close()` 는 멱등이고 창을 파괴하지 않는다(다시 로그인해 열면 같은 자리에 선다).
-        //   **두 창이 같은 규약이다** — 한쪽만 고치면 다음 사람이 어느 쪽이 옳은지 알 수 없다.
+        //
+        //   **제보 창도 같은 규약이었지만 v0.2.50 에 그 창이 사라졌다**(팝오버 하위 패널이 됐다).
+        //   패널은 깃발이 곧 화면이라 부를 컨트롤러가 없다 — 이 함정의 절반이 구조적으로 없어진 것이고,
+        //   남은 절반(미니게임·설정)에는 그대로 유효하다.
         isMiniGamePanelVisible = false
         CheckMiniGameWindowController.shared.close()
         miniGameInterruptToken += 1
@@ -2631,10 +2671,9 @@ extension WorkTimerStore {
         // 제보도 계정에 묶인다(v0.2.48). 남기면 다음 사람이 **앞 사람이 쓴 글**을 그대로 본다 —
         // 이 화면이 나르는 것은 순위 숫자가 아니라 사용자가 쓴 문장이라, 누수의 값이 다른 표면과 다르다.
         // 미해결 건수는 관리자 깃발(ultraUnlimited)과 함께 0 으로 내려간다 — 로그아웃한 사람에게 남의 배지를 보여 줄 이유가 없다.
-        // 창도 함께 내린다(바로 위 미니게임 창과 **같은 규약** — 깃발만으로는 창이 화면에 남는다).
-        // 초안은 아래에서 비우므로, 안 닫으면 빈 창이 그대로 떠 있게 된다.
-        isFeedbackWindowVisible = false
-        CheckFeedbackWindowController.shared.close()
+        // v0.2.50 부터 별도 창이 아니라 **팝오버 하위 패널**이라 컨트롤러를 부를 일이 없다 — 깃발 하나면
+        // 화면에서 사라진다(창 시절엔 여기서 `close()` 를 함께 불러야 빈 창이 안 남았다).
+        isFeedbackPanelVisible = false
         feedbackList = []
         feedbackLoaded = false
         feedbackLoading = false

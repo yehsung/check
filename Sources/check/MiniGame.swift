@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // MARK: - 미니게임 공용 계약 (v0.2.48)
@@ -79,6 +80,151 @@ enum MiniGameCanvas {
     }
 }
 
+// MARK: - 프레임 상한 (v0.2.50)
+
+/// 게임 루프가 요구할 **프레임 간격**을 화면 주사율에서 뽑는다. 두 게임이 이 한 벌만 쓴다.
+///
+/// ── 왜 생겼나 (2026-09-10 실측) ─────────────────────────────────────────────
+/// 사용자 신고: "살짝 버벅이는 느낌이 생겼다. 계속인 것 같다." 60초 × 7조건(조건당 6,948프레임)을 재 보니
+/// 잔상 장수·배경·`reduceMotion` 은 드롭률이 **소수점까지 같았고**(25.0~25.1%), 오직 `1.0 / 60.0` 상한을
+/// 뗀 조건만 25.1% → 0.0% 로 떨어졌다. 원인은 이랬다:
+///   · 사용자 화면은 75Hz(vsync 13.33ms)인데 루프는 60Hz(16.67ms)를 요구했다.
+///   · TimelineView 는 "이상 시각(n × 요구간격)을 다음 vsync 로 올림"으로 프레임을 준다. 75 와 60 이
+///     나눠떨어지지 않으니 **네 프레임에 한 번**(초당 15회) 이상 시각이 vsync 하나를 건너뛰고, 그 한 장이
+///     26.67ms 로 늘어진다. 무작위 히칭이 아니라 규칙적인 저더라 "확 끊긴다"가 아니라 "살짝 버벅인다"로 읽힌다.
+///   · 이 파일의 검증 프로브로 같은 화면에서 재현했다: 1/60 요구 → p50 13.37ms · >16.67ms 25.2%,
+///     주사율에 맞춘 간격 → p50 13.33ms · >16.67ms 0.6%.
+///
+/// ── 왜 상한을 아예 풀지 않았나 ──────────────────────────────────────────────
+/// `minimumInterval: nil` 은 240Hz 기기에서 초당 240번 판을 밀고 캔버스를 다시 그린다 — 메뉴바 상주 앱이
+/// 배터리를 태울 자리가 아니다. 대신 **화면 주사율의 약수**를 고른다: 약수면 한 프레임이 정확히 k개의 vsync 를
+/// 차지해 저더가 원리적으로 없고, 고르는 값은 우리가 쥔다.
+///
+/// ── 어느 약수인가: 60 에서 가장 가깝되, **아래로는 마지못해서만** ──────────────
+/// 지금까지 60 으로 돌았고 물리·이펙트 값이 그 위에서 조율됐다. 60 에서 멀어지면 CPU 만 더 쓰는 것이 아니라
+/// 익숙한 감각에서도 멀어진다. 다만 **위로 멀어지는 것과 아래로 멀어지는 것은 값이 다르다** — 위는 CPU 만
+/// 더 쓰고 화면은 더 매끄러워지지만, 아래는 그 자체로 '끊긴다'가 된다. 그래서 규칙이 대칭이 아니다:
+///   ① 주사율이 60 이하면 **그 값 그대로**(화면이 더 줄 수가 없다). 30Hz → 30, 48Hz → 48.
+///   ② 60 초과면 60 이상인 약수 중 **가장 작은 것**(= 위쪽에서 60 에 가장 가까운 값). 75 → 75, 90 → 90,
+///      120 → 60, 144 → 72, 240 → 60. 90 에는 45 라는 더 가까운 약수가 있지만 고르지 않는다 — ①과 같은 이유다.
+///   ③ 그런 약수가 상한(120) 안에 없으면 **아래쪽에서 가장 가까운 약수**로 내려간다. 165 → 55(3 vsync).
+///   ④ 그것마저 바닥(40) 아래면 포기하고 60 을 요구한다 — 저더는 남지만 슬라이드쇼보다는 낫다. 175 → 60.
+///
+/// ── 주사율별 목표 fps (전수 확인, k = 프레임당 vsync 수) ──────────────────────
+///   화면이 줄 수 있는 그대로:  24→24 · 25→25 · 30→30 · 48→48 · 50→50 · 59→59 · 60→60   (k=1)
+///   60 위 · 상한 안:          72→72 · 75→75 · 85→85 · 90→90 · 100→100 · 119→119        (k=1)
+///   60 위 · 나눠서:           120→60(k=2) · 144→72(k=2) · 160→80(k=2) · 170→85(k=2) ·
+///                            180→60(k=3) · 200→100(k=2) · 240→60(k=4) · 360→60(k=6) · 480→60(k=8)
+///   상한이 실제로 거는 곳:     **165→55**(k=3) — 165 의 약수는 1·3·5·11·15·33·55·165 뿐이라 60 이상은
+///                            자기 자신(165)밖에 없고 그것은 상한 밖이다. 165Hz 는 흔한 게이밍 주사율이라
+///                            이 가지는 장식이 아니다. 55fps 는 3 vsync 씩 **완전히 고르다**.
+///   바닥이 거는 곳(저더 감수): 121 · 125 · 127 · 143 · 155 · 169 · 175 · 187 · 209 → 전부 60.
+///                            (소수이거나 소수의 제곱이라 60~120 에 약수가 없고, 아래쪽 최선이 11~35 다.)
+///   화면이 없거나 값이 이상:   0 · 음수 · 1 · 7 → 60(폴백).
+enum MiniGameFrameRate {
+    /// 지금까지 돌던 값이자 폴백. 물리·이펙트가 이 위에서 조율됐다.
+    static let baselineFPS = 60
+    /// 목표 상한. 60 이상인 약수가 **자기 자신밖에 없는** 주사율에서 초당 165·175번을 돌지 않게 하는 뚜껑이다
+    /// (240Hz 처럼 60 이 약수인 화면은 뚜껑과 무관하게 규칙 ②가 이미 60 을 고른다).
+    /// 이 뚜껑이 실제로 결과를 바꾸는 곳은 두 갈래다: **165 → 55**(3 vsync 씩 고르다)와,
+    /// 121·125·127·143·155·169·175·187·209 처럼 아래쪽 최선마저 바닥 밑이라 60 폴백으로 가는 주사율들.
+    static let maxFPS = 120
+    /// 목표 바닥. 여기 아래로 내려가면 저더를 없앤 대가로 '끊긴다'를 새로 만드는 셈이라, 그 자리에서는
+    /// 차라리 예전대로 60 을 요구한다(위 규칙 ④).
+    static let minFPS = 40
+    /// 이 아래는 화면의 주사율이 아니라 잘못 읽은 값으로 본다(영화가 24다 — 그보다 낮게 광고하는 화면은 없다).
+    /// 헤드리스·화면 없음·0 이 여기로 떨어진다.
+    static let minPlausibleHz = 24
+
+    /// 요구 간격에서 뺄 여유. **vsync 한 틱의 1%** 다(프레임 주기의 1% 가 아니다).
+    ///
+    /// 왜 빼는가: TimelineView 는 이상 시각을 다음 vsync 로 **올림**한다. 정확히 k/hz 를 요구했는데 화면의
+    /// 실제 주기가 보고된 정수보다 머리카락만큼 짧으면(75 로 보고하는 75.02Hz 같은 경우) 이상 시각이 조금씩
+    /// 앞서 밀리다가 어느 순간 vsync 하나를 건너뛴다 — 지금 고치는 그 저더가 드물게 돌아온다.
+    /// 대가: 화면이 정확히 정수 주사율이면 반대로 100프레임에 한 번쯤 vsync 한 틱 **이른** 프레임이 생긴다.
+    /// 이른 프레임이 늦은 프레임보다 눈에 덜 띄므로(늦은 쪽이 곧 두 배로 늘어진 그 장이다) 이쪽을 고른다.
+    /// 물리는 실 dt 를 쓰므로 어느 쪽이든 판의 속도는 변하지 않는다.
+    static let vsyncHeadroom = 0.01
+
+    /// 이 주사율에서 쓸 목표 fps. 위 머리 주석의 규칙 ①~④ 그대로다.
+    static func targetFPS(forRefreshRate hz: Int) -> Int {
+        // ④의 첫 갈래: 화면이 없거나 값이 터무니없다.
+        guard hz >= minPlausibleHz else { return baselineFPS }
+        // ①: 화면이 60 이하면 그 값이 곧 최선이다(자기 자신은 언제나 자기 약수다).
+        guard hz > baselineFPS else { return hz }
+        // 약수는 상한까지만 본다. hz > 60 이므로 후보는 최대 120개다 — 프레임마다 부르는 함수가 아니다
+        // (창을 열 때와 화면을 옮길 때만 부른다).
+        var above: Int?
+        var below = 0
+        for divisor in 1...min(hz, maxFPS) where hz % divisor == 0 {
+            if divisor >= baselineFPS {
+                // 오름차순이라 처음 만난 것이 60 이상 중 가장 작다.
+                if above == nil { above = divisor }
+            } else {
+                below = divisor
+            }
+        }
+        // ②
+        if let above { return above }
+        // ③ / ④
+        return below >= minFPS ? below : baselineFPS
+    }
+
+    /// `TimelineView(.animation(minimumInterval:))` 에 그대로 넘길 값.
+    ///
+    /// 목표 fps 의 주기에서 `vsyncHeadroom` 만큼 빼는데, **빼는 단위가 vsync 한 틱**이라 k 가 몇이든 여유가
+    /// 같다(k=4 에서 주기의 1% 를 빼면 vsync 4%가 되어 여유가 k 에 끌려다닌다). 폴백(저더를 감수하는 60)은
+    /// 나눠떨어지지 않으니 뺄 vsync 도 없다 — 정확히 1/60 을 요구한다.
+    static func minimumInterval(forRefreshRate hz: Int) -> Double {
+        let fps = targetFPS(forRefreshRate: hz)
+        guard hz >= minPlausibleHz, hz % fps == 0 else { return 1.0 / Double(fps) }
+        let vsyncsPerFrame = Double(hz / fps)
+        return (vsyncsPerFrame - vsyncHeadroom) / Double(hz)
+    }
+
+    /// 이 창이 선 화면의 주사율. 창이 아직 화면에 없으면 주 화면, 그것도 없으면(헤드리스·테스트) 폴백.
+    /// `NSScreen.maximumFramesPerSecond` 는 macOS 12+ 다(이 앱은 14+).
+    @MainActor
+    static func refreshRate(of window: NSWindow?) -> Int {
+        guard let screen = window?.screen ?? NSScreen.main else { return baselineFPS }
+        return screen.maximumFramesPerSecond
+    }
+}
+
+/// 미니게임 창이 지금 선 화면의 주사율을 들고 있는 **단 하나의 지점**.
+///
+/// 왜 전역인가: 이 값을 만드는 곳(창 컨트롤러 — 창이 어느 화면에 섰는지는 AppKit 만 안다)과 쓰는 곳
+/// (게임 잎 뷰 — SwiftUI 안쪽)이 스토어를 거치지 않고 만난다. 스토어에 넣으면 근무 타이머 상태를 보는
+/// 모든 표면이 화면을 옮길 때마다 무효화된다. `@Observable` 이라 잎 뷰는 값을 읽기만 하면 다시 그려진다.
+@Observable
+@MainActor
+final class MiniGameFrameRateMonitor {
+    /// 앱이 쓰는 단 하나의 인스턴스. 테스트는 `init` 으로 따로 만든다(전역을 오염시키지 않는다).
+    static let shared = MiniGameFrameRateMonitor()
+
+    /// 지금 화면의 주사율(Hz). 시작값은 폴백 — 창이 서기 전에는 아무도 모른다.
+    private(set) var refreshHz: Int = MiniGameFrameRate.baselineFPS
+
+    init(refreshHz: Int = MiniGameFrameRate.baselineFPS) {
+        self.refreshHz = refreshHz
+    }
+
+    /// 창이 선 화면에서 주사율을 다시 읽는다(창 생성 · 표시 · **화면 이동** · 화면 구성 변경).
+    /// 값이 같으면 대입하지 않는다 — `@Observable` 은 같은 값 대입도 관찰자를 깨워 게임 뷰를 통째로 다시 만든다.
+    @discardableResult
+    func update(for window: NSWindow?) -> Int {
+        let hz = MiniGameFrameRate.refreshRate(of: window)
+        if hz != refreshHz { refreshHz = hz }
+        return hz
+    }
+
+    #if DEBUG
+    /// **테스트 전용.** 값을 아무거나 밀어 넣는다 — "갱신이 실제로 일어났는가"를 값으로 구별하려면
+    /// 먼저 틀린 값을 세워 둬야 한다(이 기계에 화면이 하나뿐이라 실제로 옮겨 볼 수가 없다).
+    func setForTesting(_ hz: Int) { refreshHz = hz }
+    #endif
+}
+
 /// 허브(MiniGamePanel)가 게임 잎 뷰에 건네는 것 전부. 게임 뷰는 이것 말고 스토어를 읽지 않는다.
 struct MiniGameHost {
     /// 이 게임의 로컬 최고기록(결과 화면 "최고 N" 과 신기록 판정에 쓴다).
@@ -95,6 +241,12 @@ struct MiniGameHost {
     /// 정지 중 화면을 가리는 것(스크림·카드·3초 카운트다운)은 **허브**가 캔버스 위에 그린다 — 판을 들여다보며
     /// 다음 기둥을 외우는 것이 순위표 앞에서 이득이 되지 않아야 하기 때문이다.
     var isPaused: Bool = false
+    /// 이 창이 선 **화면의 주사율**(Hz, v0.2.50). 게임 뷰는 이 값을 `MiniGameFrameRate.minimumInterval(forRefreshRate:)`
+    /// 에 넣어 프레임 루프의 상한으로 쓴다 — 여기 말고 다른 곳에서 프레임 간격을 정하지 마라(리터럴 1.0/60.0 은
+    /// 소스 계약 테스트가 막는다). 값이 바뀌면(= 창을 다른 모니터로 옮기면) 잎 뷰가 새 값으로 다시 만들어지고
+    /// TimelineView 가 스케줄을 다시 잡는다 — 실측으로 확인했다(`.id()` 없이도 갱신된다).
+    /// 판의 속도는 이 값과 **무관하다**: 물리는 실 dt 를 쓰고 `maxStep` 클램프가 그대로다.
+    var refreshHz: Int = MiniGameFrameRate.baselineFPS
     /// 유효하게 끝난 판의 점수(0 이상, maxScore 이하). 허브가 최고기록 갱신·업로드·순위 새로고침을 맡는다.
     var onFinished: (Int) -> Void
     /// 진행 중 여부 변화(시작 → true, 종료/무효 → false). 허브가 스페이스 키 모니터·상태 표시·[일시정지] 버튼 노출에 쓴다.
@@ -102,9 +254,11 @@ struct MiniGameHost {
 
     /// 렌더 테스트·프리뷰용 무해한 호스트.
     static func inert(bestScore: Int = 0, reduceMotion: Bool = false, interruptToken: Int = 0,
-                      isPaused: Bool = false) -> MiniGameHost {
+                      isPaused: Bool = false,
+                      refreshHz: Int = MiniGameFrameRate.baselineFPS) -> MiniGameHost {
         MiniGameHost(bestScore: bestScore, reduceMotion: reduceMotion, interruptToken: interruptToken,
-                     isPaused: isPaused, onFinished: { _ in }, onPlayingChanged: { _ in })
+                     isPaused: isPaused, refreshHz: refreshHz,
+                     onFinished: { _ in }, onPlayingChanged: { _ in })
     }
 }
 

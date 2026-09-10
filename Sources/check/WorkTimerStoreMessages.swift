@@ -21,8 +21,8 @@ import Foundation
 // ③ **`flood` 를 속도 제한 UI 로 그리지 마라.** 1분 60건은 사람이 못 내는 속도라 실사용에서 안 걸린다.
 //    걸리면 조용한 일반 안내로 접는다 — 거기에 카운트다운을 만들면 그건 다시 쿨타임이다.
 //
-// ④ **폴링을 새로 만들지 않는다.** 이력은 창 열기 · [새로고침] · 전송 성공 · **수신 폴링이 새 메시지를
-//    물어왔을 때**만 받는다. 마지막 것이 "창을 열어 둔 채로 오면 그 자리에서 나타난다"의 근거이고,
+// ④ **폴링을 새로 만들지 않는다.** 이력은 패널 열기 · 전송 성공 · **수신 폴링이 새 메시지를
+//    물어왔을 때**만 받는다. 마지막 것이 "화면을 열어 둔 채로 오면 그 자리에서 나타난다"의 근거이고,
 //    이미 도는 15초 폴링에 얹혀 있다(`WorkTimerStorePoke.enqueueReceivedMessages`).
 //
 // ⑤ **이 화면이 나르는 것은 사람이 쓴 문장이다.** 이 파일 어디에도 `print`/`Logger` 를 붙이지 마라.
@@ -103,6 +103,29 @@ extension WorkTimerStore {
         return unread
     }
 
+    /// 화면 머리에 쓸 상대 이름. **세 곳을 차례로 본다** — 한 번도 대화한 적 없는 사람을 콕찌르기 목록에서
+    /// 처음 누른 경우가 그 셋이 다 필요한 이유다(그때는 이력에 그 사람 행이 한 줄도 없다).
+    ///   ① 이력(이 사람과 주고받은 것이 있으면 그 이름이 가장 최신이다 — 별명을 바꿔도 따라간다)
+    ///   ② 콕찌르기 목록(말풍선 버튼을 누른 그 행. 이 화면의 유일한 진입문이라 거의 언제나 있다)
+    ///   ③ 수신 큐/마지막 표시분(캐릭터 말풍선을 눌러 들어온 경우 — 그때는 목록을 안 지나왔을 수 있다)
+    /// 새 저장 프로퍼티를 만들지 않는 것이 요점이다: 이름을 따로 들면 그 값과 서버 이름이 언젠가 갈린다.
+    var selectedMessagePeerName: String? {
+        guard let id = selectedMessagePeerID else { return nil }
+        if let thread = messageThreads.first(where: { $0.peerUserID == id }) { return thread.peerName }
+        if let entry = pokeDirectory.first(where: { $0.userID == id }) { return entry.name }
+        if let last = lastShownMessage, last.fromUserID == id { return last.fromName }
+        return receivedMessages.first { $0.fromUserID == id }?.fromName
+    }
+
+    /// 같은 세 곳에서 오는 아바타(없으면 nil — 그때는 이니셜 원이 그려진다).
+    var selectedMessagePeerAvatarURL: URL? {
+        guard let id = selectedMessagePeerID else { return nil }
+        if let thread = messageThreads.first(where: { $0.peerUserID == id }), let url = thread.peerAvatarURL {
+            return url
+        }
+        return pokeDirectory.first { $0.userID == id }?.avatarURL
+    }
+
     /// 지금 입력칸에 있는 글의 길이(코드포인트 — 서버와 같은 눈금).
     var messageDraftLength: Int { MessageBody.length(messageDraft) }
 
@@ -117,51 +140,68 @@ extension WorkTimerStore {
         return false
     }
 
-    // MARK: 창 열고 닫기
+    // MARK: 패널 열고 닫기
 
-    /// **이 기능의 공개 진입점.** 콕찌르기 패널의 말풍선 버튼·팝오버의 수신 줄·캐릭터의 도착 말풍선이
-    /// 부르는 단 하나의 문이다(제보 창의 `openFeedbackWindow()` 와 같은 모양).
+    /// **이 기능의 공개 진입점.** 콕찌르기 목록의 말풍선 버튼과 캐릭터의 도착 말풍선이 부르는 단 하나의 문이다.
     ///
-    /// - Parameter peer: 열자마자 고를 대화 상대. nil 이면 마지막 선택을 지키거나, 없으면 최근 대화를 고른다.
+    /// - Parameters:
+    ///   - peer: 열자마자 볼 상대. **거의 언제나 값이 있다** — 이 화면은 한 사람과의 대화 하나뿐이라,
+    ///     상대가 없으면 그릴 것이 없다(그때는 "콕 찌르기에서 말풍선을 누르세요" 한 줄이 뜬다).
+    ///   - origin: [뒤로]가 돌아갈 곳. 기본은 콕찌르기 목록이다.
     ///
-    /// **보내는 곳은 이 창 하나다**(v0.2.49). 옛 인라인 작성기(팝오버 안 3글자 칸)를 걷어낸 이유가 그것이다 —
-    /// 보내는 곳이 둘이면 이력도 둘로 갈리고, 200자를 292pt 폭에서 쓰는 것은 애초에 무리다.
+    /// ★ **팝오버를 닫지 않는다**(v0.2.50 에서 바뀐 지점). 창이던 시절에는 `WindowTopAnchor.dismissMenuPopover()`
+    ///   가 여기 있었다 — 팝오버 위에 창을 띄우는 동작이었으니까. 지금은 팝오버 **안에서 화면이 바뀌는 것**이라,
+    ///   닫으면 사용자가 방금 연 화면이 그 자리에서 사라진다. 미니게임·설정은 여전히 별도 창이므로 그쪽 호출은
+    ///   그대로 남아 있다(이 파일에서 지운 것이 그쪽까지 지운 것으로 읽히면 안 된다).
     ///
-    /// 순서가 **창 먼저, 팝오버 나중**인 이유는 제보·게임 창과 같다: 이 메서드는 팝오버 안의 버튼이 부르므로
-    /// 먼저 닫으면 자기를 그린 뷰 계층을 액션 도중에 걷어내고, 창이 먼저 키를 가져간 뒤 닫아야 포커스가 남는다.
-    func openMessageWindow(peer: String? = nil) {
-        if !isMessageWindowVisible { isMessageWindowVisible = true }
+    /// 다른 하위 패널과 **상호 배타**다(리그·토큰 보드·콕찌르기·내 기록·울트라·제보). 순서가 뜻이다:
+    /// `closeUltraPanel()` 은 origin 이 .poke 면 콕찌르기 목록을 되살리므로, 목록을 내리는 줄이 그 뒤에 온다.
+    func openMessagePanel(peer: String?, from origin: MessagePanelOrigin = .poke) {
+        messagePanelOrigin = origin
+        isMessagePanelVisible = true
+        isLeaderboardVisible = false
+        closeTokenBoard()
+        closeUltraPanel()
+        closeFeedbackPanel()
+        isInsightsPanelVisible = false
+        // ★ `closePokePanel()` 이 아니라 깃발 한 줄이다(울트라 배지 탭이 세운 규약 — blocker UI-2).
+        //   그 함수는 `lastShownMessage` 를 죽이는데, 말풍선 버튼을 누른 것은 '그 알림을 봤다'가 아니다.
+        //   take_pokes 는 서버 원자 소비라 그렇게 지운 글자는 복구할 길이 없다.
+        isPokePanelVisible = false
         if let peer, !peer.isEmpty {
             selectMessagePeer(peer)
-        } else if selectedMessagePeerID == nil {
-            // 아무도 안 골랐으면 최근 대화를 연다 — 빈 오른쪽 판으로 시작하면 사용자가 할 일이 한 번 더 는다.
-            selectMessagePeer(messageThreads.first?.peerUserID)
         }
         // 첫 프레임부터 빈 자리에 "불러오는 중…"이 뜨게 한다(제보 목록과 같은 규약).
         // **세션이 있을 때만** 세운다 — 로그인 전이면 아래 로드가 세션 가드에서 조용히 되돌아가는데,
-        // 그때 이 깃발을 세워 두면 아무도 내려 주지 않아 창이 영영 "불러오는 중…"에 갇힌다.
+        // 그때 이 깃발을 세워 두면 아무도 내려 주지 않아 화면이 영영 "불러오는 중…"에 갇힌다.
         if session != nil, !messageHistoryLoaded { messageHistoryLoading = true }
         loadMessageHistory()
-        CheckMessageWindowController.shared.show()
-        WindowTopAnchor.dismissMenuPopover()
     }
 
-    /// 진입 버튼을 다시 눌렀을 때(열려 있으면 닫고, 아니면 연다). 같은 버튼이 토글로 읽히기 때문에 남긴다.
-    func toggleMessageWindow() {
-        if isMessageWindowVisible {
-            closeMessageWindow()
+    /// 대화 패널을 닫는 **유일한** 경로(멱등). [뒤로]와 다른 패널을 여는 다섯 자리가 전부 여기를 지난다.
+    ///
+    /// 들어온 곳으로 되돌린다 — 콕찌르기에서 들어왔으면 그 목록으로(다른 사람과 얘기하려면 거기서 다시 고른다),
+    /// 캐릭터 말풍선에서 들어왔으면 홈(팀 목록)으로. 후자를 콕찌르기로 보내면 가 본 적 없는 화면으로
+    /// '돌아가게' 된다(울트라 패널의 `ultraPanelOrigin` 이 세운 규약 그대로다).
+    ///
+    /// **초안은 지우지 않는다** — 쓰다 만 말이 화면을 잘못 바꿨다고 사라지면 사용자는 그 말을 다시 못 쓴다.
+    /// 초안이 사라지는 자리는 전송 성공과 **상대 바꾸기** 둘뿐이다(`selectMessagePeer`).
+    func closeMessagePanel() {
+        guard isMessagePanelVisible else {
+            // 이미 닫혀 있으면 origin 도 건드리지 않는다 — 다른 패널 토글이 부를 때 진입 맥락을 지우면
+            // 다음에 열린 대화의 [뒤로]가 엉뚱한 곳으로 간다(closeUltraPanel 과 같은 가드).
             return
         }
-        openMessageWindow()
-    }
-
-    /// 메시지 창을 닫는다(멱등). **초안은 지우지 않는다** — 쓰다 만 말이 창을 잘못 닫았다고 사라지면
-    /// 사용자는 그 말을 다시 못 쓴다. 초안이 사라지는 자리는 전송 성공 하나뿐이다(제보 창과 같은 규약).
-    /// 사용자가 타이틀바 빨간 점을 눌렀을 때는 컨트롤러의 `windowWillClose` 가 같은 값을 직접 맞춘다.
-    func closeMessageWindow() {
-        guard isMessageWindowVisible else { return }
-        isMessageWindowVisible = false
-        CheckMessageWindowController.shared.close()
+        isMessagePanelVisible = false
+        // 전송 결과 문구는 이 화면의 것이다. 남기면 콕찌르기 목록 안내줄에 "메시지를 보냈어요"가 떠 있다.
+        if messageNotice != nil { messageNotice = nil }
+        if messagePanelOrigin == .poke {
+            // `togglePokePanel()` 이 아니라 직접 세운다 — 그 토글은 열려 있으면 closePokePanel() 을 타서
+            // 아직 안 본 메시지를 소비한다(closeUltraPanel 이 같은 이유로 같은 모양을 쓴다).
+            isPokePanelVisible = true
+            loadPokeDirectory()
+        }
+        messagePanelOrigin = .poke
     }
 
     /// 대화 상대를 고른다(왼쪽 목록의 행 · 진입점의 인자 · 전송 성공 뒤 자리 유지).
@@ -184,7 +224,8 @@ extension WorkTimerStore {
 
     // MARK: 이력
 
-    /// 이력을 로드한다(Task 발사). **창 열기 · [새로고침] · 전송 성공 · 수신 도착에서만 부른다.**
+    /// 이력을 로드한다(Task 발사). **패널 열기 · 전송 성공 · 수신 도착에서만 부른다.**
+    /// [새로고침] 버튼은 없다 — 최신을 보는 길은 "[뒤로] 뒤 다시 말풍선"과 수신 도착 자동 갱신 둘이다.
     func loadMessageHistory() {
         Task { @MainActor in await performLoadMessageHistory() }
     }
@@ -194,7 +235,11 @@ extension WorkTimerStore {
     /// **창이 닫혀 있으면 아무 요청도 내지 않는다.** 볼 사람이 없는 갱신에 무료 플랜의 왕복을 쓰지 않는다 —
     /// 이력은 창을 열 때 어차피 한 번 받는다. 이 게이트가 "폴링을 새로 만들지 않는다"는 규약의 실제 내용이다.
     func refreshMessageHistoryOnArrival() {
-        guard isMessageWindowVisible, session != nil else { return }
+        // 팝오버가 닫혀 있으면 아무 요청도 내지 않는다 — 볼 사람이 없는 갱신에 무료 플랜의 왕복을 쓰지 않는다.
+        // **`isMenuPresented` 를 함께 보는 것이 v0.2.50 의 차이다**: 패널 깃발은 팝오버를 닫아도 내려가지
+        // 않으므로(마지막으로 본 화면을 다음 오픈에 그대로 보여 주는 규약) 깃발만 보면 닫힌 팝오버에도
+        // 15초마다 이력 조회가 붙는다. 이 게이트가 "폴링을 새로 만들지 않는다"의 실제 내용이다.
+        guard isMenuPresented, isMessagePanelVisible, session != nil else { return }
         loadMessageHistory()
     }
 
@@ -449,20 +494,9 @@ enum MessageThreadBuilder {
         return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
     }
 
-    /// 왼쪽 목록의 "마지막 시각" — 오늘 것은 시각(HH:mm), 그전 것은 날짜 라벨.
-    /// 목록은 폭이 180pt 라 둘을 다 적을 자리가 없다. 12시간 창에서 갈리는 것은 자정뿐이다.
-    static func listStampText(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
-        calendar.isDate(date, inSameDayAs: now)
-            ? clockText(date, calendar: calendar)
-            : dayLabel(date, now: now, calendar: calendar)
-    }
-
-    /// 왼쪽 목록의 한 줄 미리보기. 줄바꿈을 공백으로 눕히고 앞뒤를 다듬는다 —
-    /// **여러 줄 입력을 받는 창이라** 그대로 두면 미리보기가 첫 줄만 남고 나머지 폭이 빈다.
-    static func previewText(_ body: String) -> String {
-        body
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "\t", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    // ★ `listStampText` 와 `previewText` 는 v0.2.50 에 **왼쪽 대화 목록과 함께 사라졌다.**
+    //   둘 다 그 목록의 한 행(마지막 시각 · 한 줄 미리보기)만을 위한 계산이었고, 화면이 한 사람짜리가
+    //   되면서 부르는 곳이 한 곳도 남지 않았다. 테스트만 남겨 두면 **아무도 안 쓰는 함수를 지키는 테스트**가
+    //   되므로 그쪽도 함께 걷었다(이 저장소는 죽은 가지를 남기지 않는다).
+    //   되살려야 할 날이 오면 `dayLabel`/`clockText` 위에 다시 세우면 된다 — 그 둘은 살아 있다.
 }

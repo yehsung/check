@@ -4,7 +4,14 @@ import SwiftUI
 import Testing
 @testable import check
 
-// v0.2.48 제보(버그·요청) — 순수 경계 · 서버 어휘 · 스토어 왕복 · 창 계약 · 렌더 스냅샷.
+// 제보(버그·요청) — 순수 경계 · 서버 어휘 · 스토어 왕복 · 패널 계약 · 렌더 스냅샷.
+//
+// **v0.2.50 에 표면이 바뀌었다**(파일 이름은 이력이라 그대로 둔다). 사용자 지시 2026-09-10:
+//   "제보 창도 쓸데없이 너무 넓어. 제보창도 팝오버 창 안에서만 뜨게 하면서. 배치도 좀 효율적으로 해줘."
+//   "제보창에서 새로고침 버튼 없어도 될 듯."
+// 별도 창(520×560)이 사라지고 팝오버 하위 패널(폭 292pt)이 됐다. 그래서 창 스타일마스크·지연 생성·
+// 로그아웃 시 창 닫기를 재던 세 테스트는 **패널 계약**으로 갈아 끼웠고, 렌더 스냅샷은 패널 하나가 아니라
+// **팝오버 통째로** 그린다 — 이 작업의 최악 결함이 창 높이 회귀(700pt 상한, 푸터 잘림)이기 때문이다.
 //
 // ★ 이 파일의 픽스처 본문은 전부 **합성 문자열**이다("샘플 본문 1" 같은). 실제 제보를 픽스처로 옮겨 오지 마라 —
 //   테스트 파일은 퍼블릭 저장소에 남고, 사용자가 쓴 글은 남에게 보여 주려고 쓴 것이 아니다.
@@ -468,13 +475,13 @@ func listSortsOpenFirstThenNewest() {
 
 @MainActor
 @Test
-func withoutASessionTheWindowOpensButNothingIsSentAndNothingHangsOnLoading() async {
+func withoutASessionThePanelOpensButNothingIsSentAndNothingHangsOnLoading() async {
     let host = "fb-no-session"
     let store = fbStore(host: host, signedIn: false)
     store.feedbackDraft = "샘플 본문"
 
-    store.openFeedbackWindow()
-    #expect(store.isFeedbackWindowVisible, "창 열림 의도는 세워야 한다(로그인 안내를 그 안에서 본다)")
+    store.openFeedbackPanel()
+    #expect(store.isFeedbackPanelVisible, "패널 열림 의도는 세워야 한다(로그인 안내를 그 안에서 본다)")
     // ★ "불러오는 중…"에 영영 갇히지 않는다 — 세션이 없으면 조회를 시작조차 하지 않으므로 그 깃발을 세우면
     //   아무도 내려 주지 않는다(빈 자리 문구가 loading 으로 굳는다).
     #expect(!store.feedbackLoading, "세션이 없는데 로딩 깃발이 섰다 — 화면이 '불러오는 중…'에 갇힌다")
@@ -505,7 +512,7 @@ func aServerWithoutTheFeedbackSchemaFoldsQuietlyInsteadOfShowingAFailure() async
         path: "/rest/v1/rpc/feedback_list"
     )
 
-    store.openFeedbackWindow()
+    store.openFeedbackPanel()
     await fbWait { store.feedbackLoaded }
 
     #expect(store.feedbackLoaded, "스키마 부재를 '로드 전'으로 남겨 두면 화면이 영영 '불러오는 중…'이다")
@@ -823,20 +830,20 @@ func openCountIsAskedOnlyForAdminsAndNeverOnATimer() async {
     let store = fbStore(host: userHost, admin: false)
     FeedbackURLProtocol.set(.init(status: 200, body: "7"), host: userHost, path: "/rest/v1/rpc/feedback_open_count")
 
-    store.openFeedbackWindow()
+    store.openFeedbackPanel()
     await fbWait { store.feedbackLoaded }
     #expect(FeedbackURLProtocol.count(host: userHost, path: "/rest/v1/rpc/feedback_open_count") == 0, "관리자가 아닌데 미해결 건수를 물었다")
     #expect(store.feedbackOpenCount == 0)
-    // 창을 여는 동안 목록 조회는 **정확히 한 번**이다 — 폴링이 붙으면 여기가 먼저 빨개진다.
-    #expect(FeedbackURLProtocol.count(host: userHost, path: "/rest/v1/rpc/feedback_list") == 1, "창 열기 한 번에 목록 조회가 여러 번 나갔다")
+    // 패널을 여는 동안 목록 조회는 **정확히 한 번**이다 — 폴링이 붙으면 여기가 먼저 빨개진다.
+    #expect(FeedbackURLProtocol.count(host: userHost, path: "/rest/v1/rpc/feedback_list") == 1, "패널 열기 한 번에 목록 조회가 여러 번 나갔다")
 
     let adminHost = "fb-open-count-admin"
     let admin = fbStore(host: adminHost, admin: true)
     FeedbackURLProtocol.set(.init(status: 200, body: "7"), host: adminHost, path: "/rest/v1/rpc/feedback_open_count")
-    admin.openFeedbackWindow()
+    admin.openFeedbackPanel()
     await fbWait { admin.feedbackOpenCount == 7 }
     #expect(admin.feedbackOpenCount == 7)
-    #expect(FeedbackURLProtocol.count(host: adminHost, path: "/rest/v1/rpc/feedback_list") == 1, "창 열기 한 번에 목록 조회가 여러 번 나갔다")
+    #expect(FeedbackURLProtocol.count(host: adminHost, path: "/rest/v1/rpc/feedback_list") == 1, "패널 열기 한 번에 목록 조회가 여러 번 나갔다")
     #expect(FeedbackURLProtocol.count(host: adminHost, path: "/rest/v1/rpc/feedback_open_count") == 1, "건수 조회가 여러 번 나갔다")
 }
 
@@ -854,7 +861,7 @@ func signingOutLeavesNoOneElsesWordsBehind() {
     store.feedbackShowsInbox = true
     store.expandedFeedbackID = "a"
     store.feedbackNoteDraft = "메모"
-    store.isFeedbackWindowVisible = true
+    store.isFeedbackPanelVisible = true
 
     store.signOut()
 
@@ -863,7 +870,7 @@ func signingOutLeavesNoOneElsesWordsBehind() {
     #expect(store.feedbackDraft.isEmpty, "로그아웃 뒤에도 앞 사람이 쓰던 초안이 남아 있다")
     #expect(store.feedbackNoteDraft.isEmpty && store.expandedFeedbackID == nil)
     #expect(store.feedbackOpenCount == 0 && !store.feedbackShowsInbox && !store.showsFeedbackInbox)
-    #expect(store.feedbackNotice == nil && !store.feedbackLoaded && !store.isFeedbackWindowVisible)
+    #expect(store.feedbackNotice == nil && !store.feedbackLoaded && !store.isFeedbackPanelVisible)
 }
 
 @MainActor
@@ -879,101 +886,113 @@ func myFeedbackIsEmptyWithoutASessionInsteadOfClaimingAnonymousRows() {
     #expect(signedIn.myFeedback.map(\.id) == ["mine"])
 }
 
-// MARK: - 창 계약
+// MARK: - 패널 계약 (v0.2.50 — 창이 사라졌다)
+
+// 사용자 지시(2026-09-10): "제보창도 팝오버 창 안에서만 뜨게 하면서."
+// 그래서 여기 있던 세 테스트(창 스타일마스크·지연 생성·로그아웃 시 창 닫기)는 **잴 대상이 사라졌다.**
+// 지우기만 하면 그 자리에 아무 계약도 안 남으므로, 창이 지키던 성질 중 **패널에도 유효한 것들**을
+// 여기서 다시 못 박는다: 상호 배타 · 진입점이 목록을 받는다 · 팝오버를 닫지 않는다 · 초안이 산다.
 
 @MainActor
 @Test
-func theFeedbackWindowIsResizableDarkAndInvisibleWhileTesting() {
-    let window = CheckFeedbackWindowController.makeWindow()
-    defer { window.close() }
-    #expect(window.title == FeedbackText.windowTitle)
-    // 긴 글을 쓰는 창이라 **리사이즈된다**(미니게임과 정확히 반대 — 그쪽은 공정성 때문에 고정이다).
-    #expect(window.styleMask.contains(.resizable), "제보 창이 리사이즈되지 않는다")
-    // LSUIElement 앱은 Dock 타일이 없어 최소화한 창을 되찾을 길이 없다(설정 창과 같은 근거).
-    #expect(!window.styleMask.contains(.miniaturizable), "최소화하면 되찾을 길이 없다")
-    #expect(window.styleMask.contains(.titled) && window.styleMask.contains(.closable))
-    #expect(window.contentMinSize == CheckFeedbackWindowController.minContentSize)
-    #expect(CheckFeedbackWindowController.defaultContentSize == NSSize(width: 520, height: 560))
-    #expect(CheckFeedbackWindowController.minContentSize == NSSize(width: 460, height: 420))
-    #expect(window.appearance?.name == .darkAqua, "시스템 외관을 따르면 밝은 테마에서 흰 배경에 흰 글자가 난다")
-    #expect(!window.isReleasedWhenClosed && !window.hidesOnDeactivate)
-    // ★ 테스트가 사장님 화면에 창을 띄우지 않는다(알파 0). 판정은 CheckPanelVisibility 한 곳뿐이다.
-    #expect(CheckPanelVisibility.isRunningTests)
-    #expect(window.alphaValue == CheckPanelVisibility.panelAlpha)
-    #expect(window.collectionBehavior.contains(.moveToActiveSpace))
+func openingTheFeedbackPanelClosesEveryOtherPanelAndNeverTouchesThePopover() throws {
+    let store = fbStore(host: "fb-panel-exclusive", admin: true)
+    store.isLeaderboardVisible = true
+    store.isTokenBoardVisible = true
+    store.isPokePanelVisible = true
+    store.isInsightsPanelVisible = true
+    store.isMessagePanelVisible = true
+
+    store.openFeedbackPanel()
+
+    #expect(store.isFeedbackPanelVisible)
+    #expect(!store.isLeaderboardVisible && !store.isTokenBoardVisible)
+    #expect(!store.isPokePanelVisible && !store.isInsightsPanelVisible)
+    #expect(!store.isUltraPanelVisible && !store.isMessagePanelVisible, "다른 패널이 제보 뒤에 살아 남았다")
+
+    // ★ **팝오버를 닫지 않는다.** 창이던 시절에는 진입점이 `dismissMenuPopover()` 를 불렀는데(팝오버 위에
+    //   창을 띄우는 동작이었으니까), 지금 그러면 방금 연 화면이 그 자리에서 사라진다.
+    //   주석은 걷어내고 본다 — 위 문단과 소스 주석에 그 이름이 들어 있어서, 안 걷으면 설명을 지워야만 초록이 된다.
+    let code = fbStrippingComments(try String(contentsOf: fbSourceURL("WorkTimerStoreFeedback.swift"), encoding: .utf8))
+    #expect(!code.contains("dismissMenuPopover"), "제보 진입점이 아직 팝오버를 닫는다 — 패널은 팝오버 안에 산다")
+    // 대조군: 미니게임은 **여전히 별도 창**이라 그쪽은 닫아야 한다(함께 지웠다면 그건 요구를 넘어선 파괴다).
+    let game = fbStrippingComments(try String(contentsOf: fbSourceURL("WorkTimerStoreMiniGame.swift"), encoding: .utf8))
+    #expect(game.contains("WindowTopAnchor.dismissMenuPopover()"), "미니게임 창이 팝오버를 안 닫는다")
 }
 
 @MainActor
 @Test
-func theWindowIsBornOnFirstShowAndSurvivesBeingClosed() {
-    // 지연 생성: 제보를 한 번도 안 여는 실행이 대부분이라 앱 시작 시 창을 만들지 않는다.
-    let controller = CheckFeedbackWindowController(stuckWindowCheckSeconds: 3600)
-    #expect(!controller.hasWindow)
-    // 배선 전이면 열어도 창이 없다 — 스토어 없이 만든 창은 담을 게 없다.
-    controller.show()
-    #expect(!controller.hasWindow, "배선 전인데 빈 창을 만들었다")
+func theRefreshButtonIsGoneAndOpeningThePanelIsWhatFetchesTheList() async throws {
+    // 사용자 지시 3: "제보창에서 새로고침 버튼 없어도 될 듯."
+    // 버튼이 사라져도 **최신을 볼 길은 남아야 한다** — 그 길이 곧 진입점이다.
+    let view = fbStrippingComments(try String(contentsOf: fbSourceURL("CheckFeedbackView.swift"), encoding: .utf8))
+    #expect(!view.contains("arrow.clockwise\", help: \"새로고침\""), "[새로고침] 버튼이 남아 있다")
+    #expect(!view.contains("IconButton(icon: \"arrow.clockwise\""), "[새로고침] 아이콘 버튼이 남아 있다")
+    // [다시 시도]는 **다르다**(실패했을 때만 뜨는 복구 버튼이고, 이 저장소의 모든 패널이 갖는 규약이다).
+    #expect(view.contains("FeedbackRetryButton"), "실패 복구 버튼까지 함께 지웠다")
 
-    let store = fbStore(host: "fb-window")
-    controller.configure(store: store, content: { _ in AnyView(Color.clear) })
-    controller.show()
-    #expect(controller.hasWindow && controller.isOpen)
-    let first = controller.currentWindow
-
-    controller.show()
-    #expect(controller.currentWindow === first, "멱등이어야 할 show() 가 창을 하나 더 만들었다")
-
-    controller.close()
-    #expect(!controller.isOpen)
-    // **닫아도 파괴하지 않는다** — 다시 열면 같은 자리에 같은 크기로 선다.
-    #expect(controller.hasWindow && controller.currentWindow === first, "닫았더니 창을 버렸다")
-    controller.currentWindow?.close()
+    // 그리고 패널을 열 때마다 목록을 받는다 — 두 번 열면 두 번 받는다(그것이 새로고침을 대신하는 경로다).
+    let host = "fb-open-refetches"
+    let store = fbStore(host: host)
+    store.openFeedbackPanel()
+    await fbWait { store.feedbackLoaded }
+    store.closeFeedbackPanel()
+    store.openFeedbackPanel()
+    await fbWait { FeedbackURLProtocol.count(host: host, path: "/rest/v1/rpc/feedback_list") == 2 }
+    #expect(
+        FeedbackURLProtocol.count(host: host, path: "/rest/v1/rpc/feedback_list") == 2,
+        "다시 열었는데 목록을 안 받았다 — [새로고침]을 없앤 대가를 아무도 안 물려받았다"
+    )
 }
 
 @MainActor
 @Test
-func signingOutTakesTheWindowsOffTheScreenNotJustTheRailHighlight() {
-    // ★ v0.2.48 결함: 로그아웃은 `isFeedbackWindowVisible = false` 만 대입했다. 그 값은 레일 버튼의
-    //   하이라이트일 뿐이라 **창은 화면에 그대로 남았다** — 내용은 이미 비워진 뒤라 빈 창이었고,
-    //   닫는 길은 타이틀바 빨간 점뿐이었다. 미니게임 창도 똑같았다(같은 규약으로 함께 고친다).
-    //
-    // 공유 인스턴스를 쓰는 이유: signOut 이 부르는 것이 바로 그 인스턴스다. 창은 테스트에서 알파 0 이라
-    // 사장님 화면에 뜨지 않는다(CheckPanelVisibility).
+func signingOutClearsThePanelFlagAndOnlyTheMiniGameWindowStillNeedsClosing() {
+    // ★ v0.2.48 의 결함은 "깃발만 내리고 창은 화면에 남았다"였다. v0.2.50 에 제보 창이 사라지면서
+    //   그 결함의 절반이 **구조적으로** 없어졌다 — 패널은 깃발이 곧 화면이기 때문이다.
+    //   남은 절반(미니게임 창)은 그대로라, 그쪽만 계속 잰다.
     let store = fbStore(host: "fb-signout-closes-windows", admin: true)
-    let feedback = CheckFeedbackWindowController.shared
     let game = CheckMiniGameWindowController.shared
-    feedback.configure(store: store, content: { _ in AnyView(Color.clear) })
     game.configure(store: store, content: { _ in AnyView(Color.clear) })
-    feedback.show()
     game.show()
-    store.isFeedbackWindowVisible = true
+    store.isFeedbackPanelVisible = true
     store.isMiniGamePanelVisible = true
-    #expect(feedback.isOpen && game.isOpen, "창을 못 열었다 — 이 테스트가 아무것도 재현하지 못한다")
+    #expect(game.isOpen, "창을 못 열었다 — 이 테스트가 아무것도 재현하지 못한다")
 
     store.signOut()
 
-    #expect(!store.isFeedbackWindowVisible && !store.isMiniGamePanelVisible, "레일 하이라이트가 안 내려갔다")
-    #expect(!feedback.isOpen, "로그아웃했는데 제보 창이 화면에 남았다 — 내용만 비워진 빈 창이다")
+    #expect(!store.isFeedbackPanelVisible, "제보 패널 깃발이 안 내려갔다 — 다음 계정 화면에 앞 사람 제보가 뜬다")
+    #expect(!store.isMiniGamePanelVisible, "레일 하이라이트가 안 내려갔다")
     #expect(!game.isOpen, "로그아웃했는데 미니게임 창이 화면에 남았다")
     // **창 자체는 파괴하지 않는다**(닫아도 살아 있다는 계약 — 다시 로그인해 열면 같은 자리에 선다).
-    #expect(feedback.hasWindow && game.hasWindow, "닫으면서 창을 버렸다 — 다음에 열면 자리가 초기화된다")
+    #expect(game.hasWindow, "닫으면서 창을 버렸다 — 다음에 열면 자리가 초기화된다")
 
-    feedback.currentWindow?.close()
     game.currentWindow?.close()
 }
 
 @MainActor
 @Test
-func closingTheWindowKeepsTheDraftAlive() {
-    // 창을 잘못 닫았다고 쓰던 글이 사라지면 그 사용자는 두 번 다시 제보하지 않는다.
-    let store = fbStore(host: "fb-draft-survives")
+func closingThePanelKeepsTheDraftAliveButFoldsTheExpandedRow() {
+    // 화면을 잘못 바꿨다고 쓰던 글이 사라지면 그 사용자는 두 번 다시 제보하지 않는다.
+    let store = fbStore(host: "fb-draft-survives", admin: true)
     store.feedbackDraft = "샘플 본문 D"
-    store.isFeedbackWindowVisible = true
-    store.closeFeedbackWindow()
-    #expect(!store.isFeedbackWindowVisible)
-    #expect(store.feedbackDraft == "샘플 본문 D", "창을 닫았다고 쓰던 글을 지웠다")
+    store.isFeedbackPanelVisible = true
+    store.expandedFeedbackID = "row-0"
+    store.feedbackNoteDraft = "메모"
+
+    store.closeFeedbackPanel()
+
+    #expect(!store.isFeedbackPanelVisible)
+    #expect(store.feedbackDraft == "샘플 본문 D", "화면을 닫았다고 쓰던 글을 지웠다")
+    // 반면 펼친 행과 메모는 접는다 — 다시 열었을 때 어느 제보의 메모인지 화면만으로는 알 수 없다.
+    #expect(store.expandedFeedbackID == nil && store.feedbackNoteDraft.isEmpty)
 }
 
-// MARK: - 렌더 스냅샷
+// MARK: - 렌더 스냅샷 (panels-)
+//
+// v0.2.50 부터 제보는 **팝오버 하위 패널**이다. 그래서 스냅샷도 패널 하나가 아니라 **팝오버 통째로** 그린다 —
+// 이 작업에서 가장 값비싼 결함이 "창 높이 회귀"이기 때문이다: 패널만 따로 그리면 배너·헤더 카드·푸터가
+// 함께 서는 실제 높이를 영영 못 잰다(그리고 푸터가 잘리는 순간 사용자는 로그아웃할 방법을 잃는다).
 
 /// 스냅샷 저장 위치. 기본은 이 실행의 임시 디렉터리이고 `CHECK_SNAPSHOT_DIR` 로 덮어쓴다.
 /// 세션 전용 절대 경로를 소스에 박아 두면 퍼블릭 저장소에 개인 머신 경로가 남고, 다른 기계에서는
@@ -983,7 +1002,7 @@ enum FeedbackSnapshots {
         let base = ProcessInfo.processInfo.environment["CHECK_SNAPSHOT_DIR"].map {
             URL(fileURLWithPath: $0, isDirectory: true)
         } ?? FileManager.default.temporaryDirectory.appendingPathComponent("check-snapshots", isDirectory: true)
-        let dir = base.appendingPathComponent("feedback", isDirectory: true)
+        let dir = base.appendingPathComponent("panels", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         guard let png = bitmap.representation(using: .png, properties: [:]) else { return }
         try? png.write(to: dir.appendingPathComponent(name))
@@ -992,25 +1011,49 @@ enum FeedbackSnapshots {
 
 private enum FBRenderError: Error { case failed }
 
-/// - Parameter size: 그릴 창 크기. 기본은 창의 기본 크기이고, **최소 크기(460×420)** 를 주면
-///   "이보다 좁히면 상태 칩이 이름 위로 겹친다"는 창 최소 폭의 근거를 눈으로 확인할 수 있다.
+/// 얼린 기준 시각. 값 자체에 뜻은 없고 **변하지 않는다는 사실**만 쓴다(스냅샷이 실행 시각에 흔들리면
+/// 사람이 눈으로 비교할 수 없다).
+private let fbRenderNow = Date(timeIntervalSince1970: 1_789_000_000)
+
+/// 제보 패널이 열린 **메인 화면** 스토어. 팀이 확정된 로그인 상태여야 팝오버가 헤더 카드·레일·푸터를 그린다 —
+/// 안 그러면 "합류할 팀을 찾아요" 화면이 나와 이 스냅샷이 아무것도 증명하지 못한다.
 @MainActor
-private func fbBitmap(
-    _ store: WorkTimerStore,
-    now: Date,
-    size: NSSize = CheckFeedbackWindowController.defaultContentSize
-) throws -> NSBitmapImageRep {
-    // ★ `clipsOverflowInsteadOfScroll: true` — ImageRenderer 는 ScrollView 안쪽을 못 그린다.
-    //   이 인자가 없으면 아래 스냅샷은 헤더만 남은 빈 화면이고, 사람이 아무것도 확인할 수 없다.
-    //   `rendersPlainTextEditor: true` 도 같은 이유다(TextEditor 는 AppKit 을 감싼 뷰다).
-    let view = CheckFeedbackView(
+private func fbMenuStore(_ store: WorkTimerStore) -> WorkTimerStore {
+    store.isMenuPresented = true
+    store.displayNow = fbRenderNow
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.teamName = "아잉팀"
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3_600)
+    store.startedAt = fbRenderNow.addingTimeInterval(-3_600)
+    store.isFeedbackPanelVisible = true
+    return store
+}
+
+/// 팝오버가 얹을 수 있는 **가장 큰 크롬**의 재료. 새 버전 배너는 패치노트 줄 수만큼 자라고 그 수는
+/// `UpdateCheckStore.maxNotes`(4)로 묶여 있으므로, 노트 4줄짜리 배너(81 + 8 + 4×15 = 149pt)가 배너의 상한이다.
+/// 거기에 주간 목표 편집 인라인 행(92pt)을 겹치면 **241pt** — 이것이 하위 패널이 감당해야 할 최악의 크롬이다.
+/// (토큰 소모량 행은 하위 패널이 열리면 감춰지므로 여기 없다. 12시간 확인 배너는 92pt 라 새 버전 배너보다 낮다.)
+private let fbWorstNotes = [
+    "내 기록 패널에 근무 리듬·지난주 회고 추가",
+    "AI 토큰 순위를 지난달까지 넘겨봐요",
+    "맥을 여러 대 써도 토큰이 합산돼요",
+    "자리 비움으로 자동 종료된 근무를 되돌릴 수 있어요 — 폭을 넘는 아주 긴 문구"
+]
+
+/// ★ `previewClipsOverflowList: true` · `previewPlainTextEditors: true` — `ImageRenderer` 는 ScrollView
+///   안쪽과 `TextEditor`/`TextField` 를 못 그린다. 이 인자들이 없으면 아래 스냅샷은 목록 자리가 비고
+///   입력칸 자리가 **노란 상자**인 그림이고, 사람이 확인할 수 있는 것이 사라진다.
+///   **앱은 언제나 진짜 위젯을 쓴다**(두 기본값이 false 다).
+@MainActor
+private func fbPanelBitmap(_ store: WorkTimerStore, worstChrome: Bool = false) throws -> NSBitmapImageRep {
+    let view = CheckMenuView(
         store: store,
-        rendersPlainTextEditor: true,
-        clipsOverflowInsteadOfScroll: true,
-        now: now
+        previewClipsOverflowList: true,
+        previewGoalEditing: worstChrome,
+        previewUpdateBanner: worstChrome,
+        previewUpdateNotes: worstChrome ? fbWorstNotes : [],
+        previewPlainTextEditors: true
     )
-        .frame(width: size.width, height: size.height, alignment: .top)
-        .background(CheckTheme.background)
     let renderer = ImageRenderer(content: view)
     renderer.scale = 2
     guard let image = renderer.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff)
@@ -1021,20 +1064,18 @@ private func fbBitmap(
 /// 내용 없이 배경만 그린 같은 크기의 비트맵. 배경이 **그라디언트**라 "한 픽셀을 배경색으로 삼는" 잉크 탐지는
 /// 통째로 거짓말한다(첫 판에서 실제로 minX=0 이 나왔다) — 그래서 기준을 그림 하나로 둔다.
 @MainActor
-private func fbBlankBitmap(size: NSSize = CheckFeedbackWindowController.defaultContentSize) throws -> NSBitmapImageRep {
+private func fbBlankBitmap(matching bitmap: NSBitmapImageRep) throws -> NSBitmapImageRep {
     let view = Color.clear
-        .frame(width: size.width, height: size.height)
+        .frame(width: CGFloat(bitmap.pixelsWide) / 2, height: CGFloat(bitmap.pixelsHigh) / 2)
         .background(CheckTheme.background)
     let renderer = ImageRenderer(content: view)
     renderer.scale = 2
-    guard let image = renderer.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff)
+    guard let image = renderer.nsImage, let tiff = image.tiffRepresentation, let blank = NSBitmapImageRep(data: tiff)
     else { throw FBRenderError.failed }
-    return bitmap
+    return blank
 }
 
 /// 두 비트맵이 눈에 띄게 다른 영역의 경계(픽셀). 없으면 nil.
-/// `skippingTopPixels` 는 헤더 띠를 제외한다 — 헤더 아래 구분선은 **창 폭을 가로지르는 것이 설계**라
-/// 그것까지 세면 "내용이 왼쪽 여백 안에서 시작하는가"를 영영 잴 수 없다(첫 판에서 minX 가 늘 0이었다).
 private func fbDiffBounds(
     _ lhs: NSBitmapImageRep,
     _ rhs: NSBitmapImageRep,
@@ -1063,7 +1104,7 @@ private func fbDiffBounds(
 @MainActor
 private func fbInboxStore(host: String, rows: Int) -> WorkTimerStore {
     let store = fbStore(host: host, admin: true)
-    let base = Date(timeIntervalSince1970: 1_789_000_000)
+    let base = fbRenderNow
     let statuses: [FeedbackStatus] = [.open, .open, .inProgress, .done, .held]
     var built: [FeedbackReport] = []
     for index in 0..<rows {
@@ -1073,7 +1114,7 @@ private func fbInboxStore(host: String, rows: Int) -> WorkTimerStore {
         // 첫 판에서는 본문이 딱 두 줄에 맞아 펼쳐도 그림이 그대로였다.
         let body: String = "샘플 본문 \(index) — " + String(repeating: "가나다라마바사아자차 ", count: 22)
         let note: String? = index == 1 ? "샘플 메모" : nil
-        let version: String = "0.2.4\(index % 9) (5\(index % 9))"
+        let version: String = "0.2.5\(index % 9) (5\(index % 9))"
         let created: Date = base.addingTimeInterval(-Double(index) * 4000)
         let author: String = index == 0 ? "나야" : "동료\(index)"
         built.append(
@@ -1100,110 +1141,113 @@ private func fbInboxStore(host: String, rows: Int) -> WorkTimerStore {
     return store
 }
 
+/// 팝오버 높이 상한(pt). 창은 위 모서리가 메뉴바 아래에 고정되고 아래로만 자라므로, 이걸 넘으면
+/// 푸터(로그아웃/앱 종료)가 화면 밖으로 잘린다 — 그 순간 사용자는 로그아웃할 방법을 잃는다.
+private let fbPopoverHeightCap: Double = 700
+
 @MainActor
 @Test
-func bothTabsDrawWithoutClippingOrOverlap() throws {
-    let now = Date(timeIntervalSince1970: 1_789_000_000)
-    let size = CheckFeedbackWindowController.defaultContentSize
-    let expectedWidth = Int(size.width) * 2
-    let expectedHeight = Int(size.height) * 2
-
+func bothTabsDrawInsideThePopoverWithoutClippingOrOverlap() throws {
     // ① 보내기 탭(일반 사용자) — 글을 쓰고 있는 중, 내가 보낸 제보 두 줄.
-    let send = fbStore(host: "fb-render-send")
+    let send = fbMenuStore(fbStore(host: "fb-render-send"))
     send.feedbackDraft = "샘플 본문 — " + String(repeating: "가나다라마바사아자차 ", count: 4)
     send.feedbackList = [
-        fbReport(id: "m1", kind: .bug, status: .open, createdAt: now.addingTimeInterval(-3600)),
-        fbReport(id: "m2", kind: .request, status: .done, createdAt: now.addingTimeInterval(-200_000))
+        fbReport(id: "m1", kind: .bug, status: .open, createdAt: fbRenderNow.addingTimeInterval(-3600)),
+        fbReport(id: "m2", kind: .request, status: .done, createdAt: fbRenderNow.addingTimeInterval(-200_000))
     ]
     send.feedbackLoaded = true
-    let blank = try fbBlankBitmap()
-    let sendBitmap = try fbBitmap(send, now: now)
-    #expect(sendBitmap.pixelsWide == expectedWidth && sendBitmap.pixelsHigh == expectedHeight)
-    FeedbackSnapshots.save(sendBitmap, name: "feedback-send.png")
-    // 그린 것이 창 안에 있다(좌우로 넘치지 않는다). 기준은 '배경만 그린 같은 크기의 그림'이고,
-    // 헤더 띠(탭 줄 + 창 폭을 가로지르는 구분선)는 뺀 본문만 잰다.
-    let sendInk = try #require(fbDiffBounds(sendBitmap, blank, skippingTopPixels: 210), "보내기 탭 본문이 통째로 비었다")
-    #expect(sendInk.maxX <= CGFloat(expectedWidth) - 2, "보내기 탭 내용이 오른쪽으로 넘쳤다")
+    let sendBitmap = try fbPanelBitmap(send)
+    FeedbackSnapshots.save(sendBitmap, name: "panels-feedback-send.png")
+    // 팝오버 폭은 본문 316 + 간격 10 + 레일 64 + 바깥 padding 24 = 414pt 고정이다.
+    #expect(sendBitmap.pixelsWide == 414 * 2, "팝오버 폭이 414pt 가 아니다 — 제보 패널이 본문 열을 밀어냈다")
+    #expect(Double(sendBitmap.pixelsHigh) / 2.0 <= fbPopoverHeightCap,
+            "보내기 탭이 700pt 상한을 넘었다: \(Double(sendBitmap.pixelsHigh) / 2.0)pt")
+    let sendBlank = try fbBlankBitmap(matching: sendBitmap)
+    let sendInk = try #require(fbDiffBounds(sendBitmap, sendBlank), "보내기 탭이 통째로 비었다")
+    #expect(sendInk.maxX <= CGFloat(sendBitmap.pixelsWide) - 2, "보내기 탭 내용이 오른쪽으로 넘쳤다")
     #expect(sendInk.minX >= 4, "보내기 탭 내용이 왼쪽 밖에서 시작한다")
-    // 화면 아래쪽까지 내용이 있다("내가 보낸 제보"가 잘려 나가지 않았다는 증거).
-    #expect(sendInk.maxY > CGFloat(expectedHeight) / 2, "보내기 탭 아래 절반이 비었다 — 내가 보낸 제보가 안 그려졌다")
+    // **푸터가 살아 있다**: 잉크가 그림 맨 아래까지 닿는다(로그아웃/앱 종료 버튼 줄).
+    #expect(sendInk.maxY > CGFloat(sendBitmap.pixelsHigh) - 60, "팝오버 아래쪽이 비었다 — 푸터가 안 그려졌다")
 
     // ② 받은 제보 탭(관리자) — 상태가 섞인 목록.
-    let inbox = fbInboxStore(host: "fb-render-inbox", rows: 5)
-    let inboxBitmap = try fbBitmap(inbox, now: now)
-    #expect(inboxBitmap.pixelsWide == expectedWidth && inboxBitmap.pixelsHigh == expectedHeight)
-    FeedbackSnapshots.save(inboxBitmap, name: "feedback-inbox.png")
-    let inboxInk = try #require(fbDiffBounds(inboxBitmap, blank, skippingTopPixels: 210), "받은 제보 탭 본문이 통째로 비었다")
-    #expect(inboxInk.maxX <= CGFloat(expectedWidth) - 2, "받은 제보 행이 오른쪽으로 넘쳤다")
+    let inbox = fbMenuStore(fbInboxStore(host: "fb-render-inbox", rows: 5))
+    let inboxBitmap = try fbPanelBitmap(inbox)
+    FeedbackSnapshots.save(inboxBitmap, name: "panels-feedback-inbox.png")
+    #expect(inboxBitmap.pixelsWide == 414 * 2)
+    #expect(Double(inboxBitmap.pixelsHigh) / 2.0 <= fbPopoverHeightCap,
+            "받은 제보 탭이 700pt 상한을 넘었다: \(Double(inboxBitmap.pixelsHigh) / 2.0)pt")
+    let inboxBlank = try fbBlankBitmap(matching: inboxBitmap)
+    let inboxInk = try #require(fbDiffBounds(inboxBitmap, inboxBlank), "받은 제보 탭이 통째로 비었다")
+    #expect(inboxInk.maxX <= CGFloat(inboxBitmap.pixelsWide) - 2, "받은 제보 행이 오른쪽으로 넘쳤다")
     #expect(inboxInk.minX >= 4, "받은 제보 행이 왼쪽 밖에서 시작한다")
+    #expect(inboxInk.maxY > CGFloat(inboxBitmap.pixelsHigh) - 60, "받은 제보 탭에서 푸터가 안 그려졌다")
 
-    // ③ 펼친 행 — 전체 본문 + 메모 + 상태 버튼.
-    let expanded = fbInboxStore(host: "fb-render-expanded", rows: 4)
+    // ③ 펼친 행 — 전체 본문 + 진단 판 + 메모 + 상태 버튼 넷.
+    let expanded = fbMenuStore(fbInboxStore(host: "fb-render-expanded", rows: 4))
     expanded.expandedFeedbackID = "row-0"
     expanded.feedbackNoteDraft = "샘플 메모"
-    let expandedBitmap = try fbBitmap(expanded, now: now)
-    FeedbackSnapshots.save(expandedBitmap, name: "feedback-inbox-expanded.png")
+    let expandedBitmap = try fbPanelBitmap(expanded)
+    FeedbackSnapshots.save(expandedBitmap, name: "panels-feedback-expanded.png")
+    #expect(Double(expandedBitmap.pixelsHigh) / 2.0 <= fbPopoverHeightCap,
+            "펼친 행이 700pt 상한을 넘었다: \(Double(expandedBitmap.pixelsHigh) / 2.0)pt")
     // 펼치면 그림이 **달라진다**(접힘과 같으면 펼침이 아무 일도 안 한 것이다).
-    let collapsed = fbInboxStore(host: "fb-render-collapsed", rows: 4)
-    let collapsedBitmap = try fbBitmap(collapsed, now: now)
-    let expandDiff = try #require(
-        fbDiffBounds(expandedBitmap, collapsedBitmap),
+    let collapsed = fbMenuStore(fbInboxStore(host: "fb-render-collapsed", rows: 4))
+    let collapsedBitmap = try fbPanelBitmap(collapsed)
+    #expect(
+        fbDiffBounds(expandedBitmap, collapsedBitmap) != nil,
         "행을 펼쳤는데 그림이 그대로다 — 펼침이 아무 일도 안 했다"
     )
-    // 그 차이는 헤더(탭 줄)가 아니라 목록 안에서 난다.
-    #expect(expandDiff.minY > 40, "펼침이 헤더까지 흔들었다(minY \(expandDiff.minY)px)")
 
     // ④ 빈 목록(관리자) — 첫 실행에서 보게 될 그림.
-    let empty = fbStore(host: "fb-render-empty", admin: true)
+    let empty = fbMenuStore(fbStore(host: "fb-render-empty", admin: true))
     empty.feedbackShowsInbox = true
     empty.feedbackLoaded = true
-    let emptyBitmap = try fbBitmap(empty, now: now)
-    FeedbackSnapshots.save(emptyBitmap, name: "feedback-empty.png")
-    let emptyInk = try #require(fbDiffBounds(emptyBitmap, blank, skippingTopPixels: 210), "빈 목록 화면이 통째로 비었다 — 안내 한 줄도 없다")
-    // ★ 빈 안내가 **목록 영역을 차지한다**(v0.2.48 수정). 첫 판은 좌측 상단 한 줄이었고 그 아래
-    //   창의 83%가 무지였다 — 그 여백은 '빈 상태'가 아니라 '덜 그려진 화면'으로 읽힌다.
-    #expect(emptyInk.maxY > CGFloat(expectedHeight) * 0.7, "빈 목록 안내가 목록 영역을 채우지 않는다(아래가 통째로 비었다)")
-    #expect(emptyInk.maxX <= CGFloat(expectedWidth) - 2 && emptyInk.minX >= 4, "빈 안내 카드가 창 밖으로 넘쳤다")
-    // 문구는 카드 **가운데**에 선다(좌측 상단 한 줄이 아니다). 잉크 중심이 창 가로 중앙 근처여야 한다.
-    let center = emptyInk.midX
+    let emptyBitmap = try fbPanelBitmap(empty)
+    FeedbackSnapshots.save(emptyBitmap, name: "panels-feedback-empty.png")
+    #expect(Double(emptyBitmap.pixelsHigh) / 2.0 <= fbPopoverHeightCap)
+    let emptyBlank = try fbBlankBitmap(matching: emptyBitmap)
+    let emptyInk = try #require(fbDiffBounds(emptyBitmap, emptyBlank), "빈 목록 화면이 통째로 비었다 — 안내 한 줄도 없다")
+    #expect(emptyInk.maxX <= CGFloat(emptyBitmap.pixelsWide) - 2 && emptyInk.minX >= 4, "빈 안내 카드가 화면 밖으로 넘쳤다")
+    // ★ 창 시절의 "빈 카드가 영역을 채운다"는 **패널에서 뒤집힌다**(v0.2.50): 팝오버는 콘텐츠 높이가 곧
+    //   창 높이라, 빈 카드를 늘리면 아무것도 없는 화면이 상한을 갉아먹는다. 그래서 빈 화면은 목록이 있는
+    //   화면보다 **짧아야** 한다 — 그것이 "자연 높이로 그린다"의 눈에 보이는 증거다.
     #expect(
-        abs(center - CGFloat(expectedWidth) / 2) < CGFloat(expectedWidth) * 0.08,
-        "빈 목록 문구가 가운데가 아니다(잉크 중심 \(Int(center))px / 창 폭 \(expectedWidth)px)"
+        emptyBitmap.pixelsHigh < inboxBitmap.pixelsHigh,
+        "빈 목록 화면이 목록 있는 화면만큼 길다 — 빈 카드가 아직 자리를 늘리고 있다"
     )
 
     // ⑤ 필터가 걸린 빈 목록 — ④와 **그림이 달라야** 한다(문구가 갈리지 않으면 관리자는 필터를 의심하지 못한다).
-    let filteredEmpty = fbInboxStore(host: "fb-render-empty-filtered", rows: 3)
+    let filteredEmpty = fbMenuStore(fbInboxStore(host: "fb-render-empty-filtered", rows: 3))
     filteredEmpty.selectFeedbackFilter(.held)   // rows=3 이면 보류가 하나도 없다
     #expect(filteredEmpty.visibleFeedback.isEmpty, "필터가 걸린 빈 목록을 재현하지 못했다")
-    let filteredBitmap = try fbBitmap(filteredEmpty, now: now)
-    FeedbackSnapshots.save(filteredBitmap, name: "feedback-empty-filtered.png")
+    let filteredBitmap = try fbPanelBitmap(filteredEmpty)
+    FeedbackSnapshots.save(filteredBitmap, name: "panels-feedback-empty-filtered.png")
     #expect(
-        fbDiffBounds(filteredBitmap, emptyBitmap, skippingTopPixels: 210) != nil,
+        fbDiffBounds(filteredBitmap, emptyBitmap) != nil,
         "필터가 걸린 빈 목록이 진짜 빈 목록과 똑같이 그려졌다 — 화면에서 둘을 가를 수 없다"
     )
 
     // ⑥ 못 불러온 목록 — 같은 자리에 실패 문구와 [다시 시도]가 선다(빈 목록이라고 단정하지 않는다).
-    let failed = fbStore(host: "fb-render-empty-failed", admin: true)
+    let failed = fbMenuStore(fbStore(host: "fb-render-empty-failed", admin: true))
     failed.feedbackShowsInbox = true
     failed.feedbackFailed = true
-    let failedBitmap = try fbBitmap(failed, now: now)
-    FeedbackSnapshots.save(failedBitmap, name: "feedback-empty-failed.png")
+    let failedBitmap = try fbPanelBitmap(failed)
+    FeedbackSnapshots.save(failedBitmap, name: "panels-feedback-empty-failed.png")
     #expect(
-        fbDiffBounds(failedBitmap, emptyBitmap, skippingTopPixels: 210) != nil,
+        fbDiffBounds(failedBitmap, emptyBitmap) != nil,
         "못 불러온 화면이 '받은 제보가 없어요'와 똑같이 그려졌다"
     )
 }
 
 @MainActor
 @Test
-func atTheMinimumWidthALongNameNeverRunsUnderTheStatusChip() throws {
-    // 창 최소 폭(460)의 근거가 주석에 "이보다 좁히면 상태 칩이 본문 위로 겹친다"로 적혀 있는데,
-    // 그 폭에서 **긴 이름**으로 그려 본 그림이 없었다. 이름 칸은 `lineLimit(1)` + `Spacer(minLength: 4)` 라
-    // 압축 순서가 SwiftUI 기본값에 맡겨져 있다 — 이름이 말줄임되지 않고 칩을 밀어내면 칩이 창 밖으로 나간다.
-    let now = Date(timeIntervalSince1970: 1_789_000_000)
-    let size = CheckFeedbackWindowController.minContentSize
-    let expectedWidth = Int(size.width) * 2
-    let store = fbInboxStore(host: "fb-render-long-name", rows: 3)
+func atTwoNinetyTwoALongNameNeverRunsUnderTheStatusChip() throws {
+    // 창(460pt 최소 폭) 시절의 걱정이 **292pt 에서 훨씬 급해졌다**. 이름 칸은 `lineLimit(1)` +
+    // `Spacer(minLength: 4)` 라 압축 순서가 SwiftUI 기본값에 맡겨져 있는데, 이름이 말줄임되지 않고
+    // 옆 요소를 밀어내면 그것이 화면 밖으로 나간다.
+    //
+    // v0.2.50 의 배치 변경(상태 칩을 이름 줄에서 **메타 줄로** 내렸다)이 지키는 것이 정확히 이 성질이다.
+    let store = fbMenuStore(fbInboxStore(host: "fb-render-long-name", rows: 3))
     // 20자 이상(한글 24자). 실제로 이렇게 긴 별명이 가능하다 — 화면은 그걸 감당해야 한다.
     let longName = "아주아주긴이름을가진동료사람입니다요"
     #expect(longName.count >= 17)
@@ -1213,31 +1257,63 @@ func atTheMinimumWidthALongNameNeverRunsUnderTheStatusChip() throws {
             status: report.status, adminNote: report.adminNote,
             appVersion: report.appVersion, osVersion: report.osVersion,
             createdAt: report.createdAt, updatedAt: report.updatedAt,
-            // 첫 행은 **말줄임이 반드시 일어나는** 길이로 준다(51자). 20자짜리는 460pt 에서 아직 남는 폭이
-            // 있어 압축 순서가 드러나지 않는다 — 이름이 줄지 않고 칩을 밀어내면 칩이 창 밖으로 나간다.
+            // 첫 행은 **말줄임이 반드시 일어나는** 길이로 준다(51자).
             authorName: index == 0 ? String(repeating: longName, count: 3) : longName,
             authorAvatarURL: nil
         )
     }
-    // 첫 행은 펼쳐 둔다 — 상태 버튼이 **넷**으로 늘었으니 460pt 에서 그 줄도 함께 확인해야 한다.
+    // 첫 행은 펼쳐 둔다 — 상태 버튼이 **넷**이라 292pt 에서 그 줄도 함께 확인해야 한다.
     store.expandedFeedbackID = store.feedbackList[0].id
     store.feedbackNoteDraft = "샘플 메모"
 
-    let bitmap = try fbBitmap(store, now: now, size: size)
-    FeedbackSnapshots.save(bitmap, name: "feedback-inbox-long-name-min-width.png")
-    #expect(bitmap.pixelsWide == expectedWidth && bitmap.pixelsHigh == Int(size.height) * 2)
+    let bitmap = try fbPanelBitmap(store)
+    FeedbackSnapshots.save(bitmap, name: "panels-feedback-long-name.png")
+    #expect(bitmap.pixelsWide == 414 * 2, "긴 이름이 팝오버 폭을 밀어냈다")
+    #expect(Double(bitmap.pixelsHigh) / 2.0 <= fbPopoverHeightCap)
 
-    let blank = try fbBlankBitmap(size: size)
-    let ink = try #require(fbDiffBounds(bitmap, blank, skippingTopPixels: 210), "최소 폭 화면이 통째로 비었다")
-    #expect(ink.maxX <= CGFloat(expectedWidth) - 2, "최소 폭에서 내용이 오른쪽으로 넘쳤다(상태 칩이 잘린다)")
-    #expect(ink.minX >= 4, "최소 폭에서 내용이 왼쪽 밖에서 시작한다")
+    let blank = try fbBlankBitmap(matching: bitmap)
+    let ink = try #require(fbDiffBounds(bitmap, blank), "화면이 통째로 비었다")
+    #expect(ink.maxX <= CGFloat(bitmap.pixelsWide) - 2, "292pt 에서 내용이 오른쪽으로 넘쳤다(상태 칩이 잘린다)")
+    #expect(ink.minX >= 4, "292pt 에서 내용이 왼쪽 밖에서 시작한다")
 
     // 이름이 길다고 그림이 짧은 이름 판과 **같아지면** 안 된다(같으면 이름이 아예 안 그려진 것이다).
-    let shortName = fbInboxStore(host: "fb-render-short-name", rows: 3)
+    let shortName = fbMenuStore(fbInboxStore(host: "fb-render-short-name", rows: 3))
     shortName.expandedFeedbackID = "row-0"
     shortName.feedbackNoteDraft = "샘플 메모"
-    let shortBitmap = try fbBitmap(shortName, now: now, size: size)
-    #expect(fbDiffBounds(bitmap, shortBitmap, skippingTopPixels: 210) != nil, "긴 이름이 화면에 아무 흔적도 남기지 않았다")
+    let shortBitmap = try fbPanelBitmap(shortName)
+    #expect(fbDiffBounds(bitmap, shortBitmap) != nil, "긴 이름이 화면에 아무 흔적도 남기지 않았다")
+}
+
+@MainActor
+@Test
+func theFeedbackPanelStaysUnderTheCapWithTheTallestChromeOnTop() throws {
+    // ★ **이 작업 최악의 결함이 창 높이 회귀다.** 배너 + 목표 편집 행이 겹친 가장 키 큰 조합까지 그려
+    //   700pt 를 안 넘고 푸터가 살아 있는지 본다(넘으면 로그아웃 버튼이 화면 밖으로 나간다).
+    //
+    // **첫 판은 여기서 728pt 로 빨개졌다**(에디터 5줄 + 목록만 깎는 예산). 그 실측이 `FeedbackPanelLayout`
+    // 의 두 부등식과 "보내기 탭은 본문 전체가 예산을 진다"는 구조를 만들었다.
+    for (label, store) in [
+        ("send", fbMenuStore(fbStore(host: "fb-tallest-send"))),
+        ("inbox", fbMenuStore(fbInboxStore(host: "fb-tallest-inbox", rows: 12)))
+    ] {
+        store.feedbackDraft = String(repeating: "가나다라마바사아자차 ", count: 8)
+        store.feedbackNotice = FeedbackText.rateLimited
+        if label == "inbox" {
+            store.expandedFeedbackID = "row-0"
+            store.feedbackNoteDraft = "샘플 메모"
+        } else {
+            store.feedbackList = (0..<6).map { fbReport(id: "m\($0)", createdAt: fbRenderNow) }
+            store.feedbackLoaded = true
+        }
+        // 새 버전 배너 + 패치노트 4줄(149pt) + 주간 목표 편집 인라인 행(92pt) = **241pt**(위 상수 주석).
+        let bitmap = try fbPanelBitmap(store, worstChrome: true)
+        FeedbackSnapshots.save(bitmap, name: "panels-feedback-tallest-\(label).png")
+        let height = Double(bitmap.pixelsHigh) / 2.0
+        #expect(height <= fbPopoverHeightCap, "\(label) 최악 조합이 700pt 를 넘었다: \(height)pt")
+        let blank = try fbBlankBitmap(matching: bitmap)
+        let ink = try #require(fbDiffBounds(bitmap, blank))
+        #expect(ink.maxY > CGFloat(bitmap.pixelsHigh) - 60, "\(label) 최악 조합에서 푸터가 안 그려졌다")
+    }
 }
 
 @MainActor
@@ -1248,25 +1324,26 @@ func aNonAdminNeverGetsAnInboxTabNotEvenAHiddenOne() throws {
     #expect(CheckFeedbackView.visibleTabs(isAdmin: false) == [.send])
     #expect(CheckFeedbackView.visibleTabs(isAdmin: true) == [.send, .inbox])
 
-    let now = Date(timeIntervalSince1970: 1_789_000_000)
     // 낡은 탭 선택이 남아 있어도 관리자가 아니면 받은 제보 화면이 그려지지 않는다.
-    let user = fbStore(host: "fb-render-nonadmin", admin: false)
+    let user = fbMenuStore(fbStore(host: "fb-render-nonadmin", admin: false))
     user.feedbackShowsInbox = true
     user.feedbackList = [fbReport(id: "x", owner: fbOtherID, body: "남의 샘플 본문")]
     user.feedbackLoaded = true
     #expect(!user.showsFeedbackInbox)
-    let userBitmap = try fbBitmap(user, now: now)
-    FeedbackSnapshots.save(userBitmap, name: "feedback-send-nonadmin.png")
+    let userBitmap = try fbPanelBitmap(user)
+    FeedbackSnapshots.save(userBitmap, name: "panels-feedback-send-nonadmin.png")
 
     // 관리자 화면과 **그림이 달라야** 한다(같으면 비관리자에게 받은 제보가 그려지고 있다는 뜻이다).
-    let admin = fbInboxStore(host: "fb-render-admin-cmp", rows: 3)
-    let adminBitmap = try fbBitmap(admin, now: now)
-    var differs = false
-    for y in stride(from: 0, to: min(userBitmap.pixelsHigh, adminBitmap.pixelsHigh), by: 8) {
-        for x in stride(from: 0, to: min(userBitmap.pixelsWide, adminBitmap.pixelsWide), by: 8) {
-            if userBitmap.colorAt(x: x, y: y) != adminBitmap.colorAt(x: x, y: y) { differs = true; break }
+    let admin = fbMenuStore(fbInboxStore(host: "fb-render-admin-cmp", rows: 3))
+    let adminBitmap = try fbPanelBitmap(admin)
+    var differs = adminBitmap.pixelsHigh != userBitmap.pixelsHigh
+    if !differs {
+        for y in stride(from: 0, to: min(userBitmap.pixelsHigh, adminBitmap.pixelsHigh), by: 8) {
+            for x in stride(from: 0, to: min(userBitmap.pixelsWide, adminBitmap.pixelsWide), by: 8) {
+                if userBitmap.colorAt(x: x, y: y) != adminBitmap.colorAt(x: x, y: y) { differs = true; break }
+            }
+            if differs { break }
         }
-        if differs { break }
     }
     #expect(differs, "비관리자 화면이 관리자 화면과 똑같이 그려졌다")
 }
@@ -1505,28 +1582,27 @@ func theMachineLinesReadAsMachineLinesAndNeverEatThePreview() throws {
     }
 
     // ① 펼친 행 — 진단이 **본문과 다른 판**에 선다. 진단 없는 판과 그림이 달라야 한다(같으면 안 그린 것이다).
-    let expanded = try fbBitmap(inbox(host: "fb-diag-expanded", attached: true, expanded: true), now: now)
-    FeedbackSnapshots.save(expanded, name: "diag-inbox-expanded.png")
-    let expandedPlain = try fbBitmap(inbox(host: "fb-diag-expanded-plain", attached: false, expanded: true), now: now)
-    #expect(fbDiffBounds(expanded, expandedPlain, skippingTopPixels: 210) != nil,
+    let expanded = try fbPanelBitmap(fbMenuStore(inbox(host: "fb-diag-expanded", attached: true, expanded: true)))
+    FeedbackSnapshots.save(expanded, name: "panels-feedback-diagnostics.png")
+    let expandedPlain = try fbPanelBitmap(fbMenuStore(inbox(host: "fb-diag-expanded-plain", attached: false, expanded: true)))
+    #expect(fbDiffBounds(expanded, expandedPlain) != nil,
             "진단이 붙었는데 펼친 행 그림이 그대로다 — 운영자에게 아무것도 안 보인다")
 
     // ② 접힌 행 — 기계가 붙인 줄이 2줄 미리보기를 **먹지 않는다.** 진단 유무로 그림이 같아야 한다.
     //    (여기서 픽셀이 달라졌다면 목록에서 제보 내용 대신 `idle(disabled)` 를 읽고 있다는 뜻이다.)
-    let collapsed = try fbBitmap(inbox(host: "fb-diag-collapsed", attached: true, expanded: false), now: now)
-    let collapsedPlain = try fbBitmap(inbox(host: "fb-diag-collapsed-plain", attached: false, expanded: false), now: now)
-    FeedbackSnapshots.save(collapsed, name: "diag-inbox-collapsed.png")
+    let collapsed = try fbPanelBitmap(fbMenuStore(inbox(host: "fb-diag-collapsed", attached: true, expanded: false)))
+    let collapsedPlain = try fbPanelBitmap(fbMenuStore(inbox(host: "fb-diag-collapsed-plain", attached: false, expanded: false)))
     #expect(fbDiffBounds(collapsed, collapsedPlain) == nil,
             "접힌 목록에 기계가 붙인 줄이 새어 나왔다 — 미리보기 두 줄은 사람이 쓴 글의 자리다")
 
     // ③ 보내기 탭 — 무엇이 함께 가는지 밝히는 한 줄에 연결 상태가 들어 있다.
-    let send = fbStore(host: "fb-diag-send")
+    let send = fbMenuStore(fbStore(host: "fb-diag-send"))
     send.feedbackDraft = "찌르기가 안 와요"
     #expect(send.feedbackAutoAttachNotice.contains(FeedbackText.diagnosticsTerm))
-    let sendBitmap = try fbBitmap(send, now: now)
-    FeedbackSnapshots.save(sendBitmap, name: "diag-feedback-send.png")
-    let blank = try fbBlankBitmap()
-    #expect(fbDiffBounds(sendBitmap, blank, skippingTopPixels: 210) != nil, "보내기 탭이 통째로 비었다")
+    let sendBitmap = try fbPanelBitmap(send)
+    let blank = try fbBlankBitmap(matching: sendBitmap)
+    #expect(fbDiffBounds(sendBitmap, blank) != nil, "보내기 탭이 통째로 비었다")
+    _ = now
 }
 
 // MARK: - 소스 계약 헬퍼

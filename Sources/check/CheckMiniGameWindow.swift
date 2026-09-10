@@ -92,9 +92,29 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
     /// 이 인스턴스의 고착 확인 지연(초). 프로덕션은 언제나 `Self.stuckWindowCheckSeconds`. **테스트만** 짧게 주입한다.
     let stuckWindowCheckSeconds: Double
 
-    init(stuckWindowCheckSeconds: Double = CheckMiniGameWindowController.stuckWindowCheckSeconds) {
+    /// 창이 선 화면의 주사율을 들고 있는 곳(v0.2.50). 프로덕션은 언제나 전역 하나 —
+    /// **테스트만** 자기 것을 주입한다(전역을 오염시키지 않고 "갱신이 일어났는가"를 값으로 재기 위해서다).
+    let frameRateMonitor: MiniGameFrameRateMonitor
+
+    init(stuckWindowCheckSeconds: Double = CheckMiniGameWindowController.stuckWindowCheckSeconds,
+         frameRateMonitor: MiniGameFrameRateMonitor = .shared) {
         self.stuckWindowCheckSeconds = stuckWindowCheckSeconds
+        self.frameRateMonitor = frameRateMonitor
         super.init()
+        // 화면 **구성**이 바뀌는 갈래(창은 그 자리에 있는데 주사율만 바뀐다: 디스플레이 설정에서 75 → 60,
+        // 모니터를 뽑았다 꽂기, 가변 주사율 전환). 창이 화면 사이를 옮기는 갈래는 아래 windowDidChangeScreen 이다 —
+        // 둘 중 하나만 달면 나머지 절반에서 게임이 옛 간격으로 계속 돈다.
+        // (selector 등록은 macOS 10.11+ 에서 zeroing-weak 이라 따로 뗄 필요가 없다.)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(screenParametersDidChange(_:)),
+            name: NSApplication.didChangeScreenParametersNotification, object: nil)
+    }
+
+    /// 화면 구성이 바뀌었다 — 지금 창이 선 화면에서 주사율을 다시 읽는다. 창이 없으면 읽을 것도 없다
+    /// (다음 `show()` 가 읽는다).
+    @objc private func screenParametersDidChange(_ notification: Notification) {
+        guard windowStorage != nil else { return }
+        frameRateMonitor.update(for: windowStorage)
     }
 
     // MARK: - 배선
@@ -193,6 +213,10 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
         if window.frame.size != fixedFrame { window.setContentSize(Self.fixedContentSize) }
         window.makeKeyAndOrderFront(nil)
         isOpen = true
+        // 이제서야 창이 화면에 섰다 — 프레임 상한의 재료를 여기서 읽는다(v0.2.50). 창을 만드는 시점에는
+        // `window.screen` 이 아직 nil 이라 주 화면으로 읽히고, 사용자가 두 번째 모니터에 놓아 둔 창이면
+        // 그 값이 틀린다. 근거·표는 `MiniGameFrameRate`.
+        frameRateMonitor.update(for: window)
         armStuckWindowWatchdog()
     }
 
@@ -219,6 +243,14 @@ final class CheckMiniGameWindowController: NSObject, NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) {
         guard (notification.object as AnyObject?) === windowStorage else { return }
         endRound(closing: false)
+    }
+
+    /// **창이 다른 화면으로 옮겨졌다**(v0.2.50). 주사율이 통째로 달라지는 순간이다 — 75Hz 노트북 화면에서
+    /// 60Hz 외장 모니터로 끌어다 놓으면 프레임 상한도 같이 가야 한다(안 가면 그 화면에서 저더가 생긴다).
+    /// 값은 `MiniGameFrameRateMonitor` 한 곳에만 있고, 게임 뷰는 그것을 읽어 스케줄을 다시 잡는다.
+    func windowDidChangeScreen(_ notification: Notification) {
+        guard (notification.object as AnyObject?) === windowStorage else { return }
+        frameRateMonitor.update(for: windowStorage)
     }
 
     /// 크기 고정의 마지막 문. `.resizable` 이 없어도 AppKit 은 프로그램적 리사이즈(화면 배율 변경 등)를

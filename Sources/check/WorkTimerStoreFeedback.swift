@@ -99,29 +99,31 @@ extension WorkTimerStore {
         ].compactMap { $0 }
     }
 
-    // MARK: 창 열고 닫기
+    // MARK: 패널 열고 닫기
 
-    /// **이 기능의 공개 진입점.** 팝오버 레일의 제보 버튼이 부르는 단 하나의 문이다(미니게임의
-    /// `openMiniGameWindow()` 와 같은 모양). 창을 열고 목록을 받는다.
+    /// **이 기능의 공개 진입점.** 팝오버 레일의 제보 버튼이 부르는 단 하나의 문이다. 패널을 열고 목록을 받는다.
     ///
-    /// 다른 **패널**은 닫지 않는다 — 별도 창이라 팝오버 안의 패널들과 상호 배타가 아니다.
-    /// 이미 열려 있어도 `show()` 는 멱등이라 앞으로 가져오기만 한다.
+    /// ★ **팝오버를 닫지 않는다**(v0.2.50 에서 바뀐 지점). 창이던 시절에는 여기 `dismissMenuPopover()` 가
+    ///   있었다 — 팝오버 위에 창을 띄우는 동작이었으니까. 지금은 팝오버 **안에서 화면이 바뀌는 것**이라,
+    ///   닫으면 방금 연 화면이 그 자리에서 사라진다. 미니게임·설정은 여전히 별도 창이므로 그쪽 호출은 그대로다.
     ///
-    /// **팝오버는 닫는다**(미니게임 창과 같은 처리 — 근거 표는 `WindowTopAnchor.dismissMenuPopover` 주석).
-    /// 제보 창은 긴 글을 쓰는 표면이라 특히 그렇다: 팝오버가 위에 남아 있으면 글을 쓰는 내내 화면이
-    /// 가려지고, 무엇보다 팝오버는 **바깥을 클릭하면 닫히는** 창이라 쓰다 만 글을 잃을 위험을 계속
-    /// 옆에 두게 된다(초안은 스토어에 있어 살아남지만, 사용자는 그걸 모른다).
+    /// 다른 하위 패널과 **상호 배타**다. 순서가 뜻이다: `closeUltraPanel()`/`closeMessagePanel()` 은 origin 이
+    /// .poke 면 콕찌르기 목록을 되살리므로, 그 목록을 내리는 `closePokePanel()` 이 뒤에 온다.
     ///
-    /// ★ **닫는 곳은 여기 한 곳뿐이다.** 레일의 [제보] 버튼에서 한 번 더 부르지 마라 — 닫는 수단이
-    ///   상태바 아이템 **토글**이라 한 동작에서 두 번 누르면 팝오버가 도로 열린다.
-    ///   `dismissMenuPopover` 의 0.6초 디바운스가 실제로는 막아 주지만, 의도가 두 곳에 있으면
-    ///   언젠가 한쪽만 고쳐져 갈린다.
-    ///
-    /// 순서가 **창 먼저, 팝오버 나중**인 이유도 게임 창과 같다: 이 메서드는 팝오버 안의 버튼이 부르므로
-    /// 먼저 닫으면 자기를 그린 뷰 계층을 액션 도중에 걷어내고, 창이 먼저 키를 가져간 뒤 눌러야
-    /// 포커스가 제보 창에 남는다.
-    func openFeedbackWindow() {
-        if !isFeedbackWindowVisible { isFeedbackWindowVisible = true }
+    /// **목록을 받는 자리가 곧 이 문이다.** [새로고침] 버튼은 v0.2.50 에 없앴다(사용자 지시:
+    /// "제보창에서 새로고침 버튼 없어도 될 듯"). 최신을 보는 길은 그래서 셋이다 —
+    ///   ① [뒤로]로 나갔다가 레일의 [제보]를 다시 누르면 이 문을 다시 지나 목록을 새로 받는다.
+    ///   ② 제보를 보내면 성공 직후 `loadFeedback()` 이 목록을 다시 받는다.
+    ///   ③ (관리자) 상태를 바꾸면 성공 직후 같은 자리에서 다시 받는다.
+    /// 즉 버튼이 하던 일은 **화면을 여는 동작 자체**가 물려받았다. 폴링은 여전히 없다(머리 주석).
+    func openFeedbackPanel() {
+        isFeedbackPanelVisible = true
+        isLeaderboardVisible = false
+        closeTokenBoard()
+        closeUltraPanel()
+        closeMessagePanel()
+        closePokePanel()
+        isInsightsPanelVisible = false
         // 관리자 깃발이 아직 안 왔으면(로그인 직후 지갑 sync 전) 보내기 탭에서 시작한다.
         // 깃발이 도착하면 탭이 나타나고, 사용자가 고르면 그때 넘어간다 — 화면이 저절로 튀지 않는다.
         if !ultraUnlimited, feedbackShowsInbox { feedbackShowsInbox = false }
@@ -129,30 +131,33 @@ extension WorkTimerStore {
         // 본문 자리에 동기화 문구를 쓰지 않는다).
         //
         // **세션이 있을 때만** 세운다. 로그인 전이면 아래 `loadFeedback()` 이 세션 가드에서 조용히 되돌아가는데,
-        // 그 경우 이 깃발을 세워 두면 아무도 내려 주지 않아 창이 영영 "불러오는 중…"에 갇힌다
-        // (미니게임 창은 로그인 후에만 닿을 수 있어 그 조합이 없었다 — 여기서는 만들지 않는다).
+        // 그 경우 이 깃발을 세워 두면 아무도 내려 주지 않아 화면이 영영 "불러오는 중…"에 갇힌다.
         if session != nil, !feedbackLoaded { feedbackLoading = true }
         loadFeedback()
-        CheckFeedbackWindowController.shared.show()
-        WindowTopAnchor.dismissMenuPopover()
     }
 
-    /// 진입 버튼을 다시 눌렀을 때(열려 있으면 닫고, 아니면 연다). 같은 버튼이 토글로 읽히기 때문에 남긴다.
-    func toggleFeedbackWindow() {
-        if isFeedbackWindowVisible {
-            closeFeedbackWindow()
+    /// 레일 버튼을 다시 눌렀을 때(열려 있으면 닫고, 아니면 연다). 레일 칸은 토글로 읽히기 때문에 남긴다.
+    func toggleFeedbackPanel() {
+        if isFeedbackPanelVisible {
+            closeFeedbackPanel()
             return
         }
-        openFeedbackWindow()
+        openFeedbackPanel()
     }
 
-    /// 제보 창을 닫는다(멱등). **초안은 지우지 않는다** — 길게 쓴 글이 창을 잘못 닫았다고 사라지면
-    /// 그 사용자는 두 번 다시 제보하지 않는다. 초안이 사라지는 자리는 전송 성공 하나뿐이다.
-    /// 사용자가 타이틀바 빨간 점을 눌렀을 때는 컨트롤러의 `windowWillClose` 가 같은 값을 직접 맞춘다.
-    func closeFeedbackWindow() {
-        guard isFeedbackWindowVisible else { return }
-        isFeedbackWindowVisible = false
-        CheckFeedbackWindowController.shared.close()
+    /// 제보 패널을 닫는 **유일한** 경로(멱등). [뒤로]와 다른 패널을 여는 다섯 자리가 전부 여기를 지난다.
+    ///
+    /// **초안은 지우지 않는다** — 길게 쓴 글이 화면을 잘못 바꿨다고 사라지면 그 사용자는 두 번 다시
+    /// 제보하지 않는다. 초안이 사라지는 자리는 전송 성공 하나뿐이다.
+    ///
+    /// 돌아갈 곳은 언제나 **홈(팀 목록)** 이다 — 들어오는 문이 레일 한 곳뿐이라 origin 을 물을 이유가 없다.
+    func closeFeedbackPanel() {
+        guard isFeedbackPanelVisible else { return }
+        isFeedbackPanelVisible = false
+        // 펼쳐 둔 행과 메모 초안은 접는다 — 다시 열었을 때 앞서 보던 제보가 펼쳐진 채로 서 있으면
+        // 그 메모가 어느 제보의 것인지 화면만으로는 알 수 없다(탭 전환이 같은 이유로 같은 일을 한다).
+        expandedFeedbackID = nil
+        feedbackNoteDraft = ""
     }
 
     // MARK: 화면 상태
@@ -200,7 +205,8 @@ extension WorkTimerStore {
 
     // MARK: 목록
 
-    /// 목록을 로드한다(Task 발사). 창 열기 · [새로고침] · 상태 변경 성공에서만 부른다.
+    /// 목록을 로드한다(Task 발사). **패널 열기 · 전송 성공 · 상태 변경 성공에서만 부른다.**
+    /// [새로고침] 버튼은 없다(위 `openFeedbackPanel` 주석의 세 경로가 그 자리를 물려받았다).
     func loadFeedback() {
         Task { @MainActor in await performLoadFeedback() }
     }

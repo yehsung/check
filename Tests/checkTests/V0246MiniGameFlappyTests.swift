@@ -1083,7 +1083,7 @@ struct V0246MiniGameFlappyRenderTests {
         #expect(differing(after, plain, x: 14...110, y: 12...50) == 0, "배너가 0.9초 뒤에도 남아 있다")
     }
 
-    /// 점프 직후 한 장 — 스쿼시·날개·파편이 함께 있는 구간.
+    /// 점프 직후 한 장 — 스쿼시·흰 파편·흰 플래시가 함께 있는 구간(v0.2.50 부터 호는 없다).
     @Test
     func flapFrameShowsTheJumpImpact() throws {
         func frame(flappedAt: TimeInterval?, reduceMotion: Bool = false) throws -> NSBitmapImageRep {
@@ -1096,7 +1096,7 @@ struct V0246MiniGameFlappyRenderTests {
         let flapped = try frame(flappedAt: 3.95)
         savePNG(flapped, "flappy-flap.png")
         let calm = try frame(flappedAt: nil)
-        // 캐릭터 주위(날개·파편·스쿼시)가 눈에 띄게 달라진다 — "점프하는 듯한 임팩트"(2026-09-10).
+        // 캐릭터 주위(스쿼시·파편·플래시)가 눈에 띄게 달라진다 — "점프하는 듯한 임팩트"(2026-09-10).
         let cx = t.origin.x + birdX * t.scale, cy = t.origin.y + 150 * t.scale
         let reach = 40 * t.scale
         #expect(differing(flapped, calm, x: (cx - reach)...(cx + reach), y: (cy - reach)...(cy + reach)) > 200,
@@ -1134,11 +1134,12 @@ private func withoutFlapImpact(_ game: FlappyGame) -> FlappyGame {
                stageChangedAt: game.stageChangedAt, trail: game.trail)
 }
 
-/// 그 영역에서 **무대 강조색**(`stage.glow` — 노랑~크림)인 픽셀의 개수와 무게중심 y(pt).
+/// 그 영역에서 **따뜻한 무대 강조색**(새벽 주황 · 한낮 크림 · 노을 금색)인 픽셀의 개수와 무게중심 y(pt).
 ///
-/// 왜 색으로 고르나: "점프 장식만 뺀 판과의 차분"은 스쿼시로 흔들린 몸 윤곽까지 함께 세어서
-/// *호가 어디까지 올라갔나*를 흐린다. 호는 한 색이고 몸통은 연보라라 색으로 깨끗하게 갈린다.
-/// (파편도 같은 색이지만 **언제나 발밑**이다 — 위쪽 대역만 재면 섞이지 않는다.)
+/// v0.2.49 에는 이것으로 "호가 머리 위 어디까지 올라갔나"를 쟀다. v0.2.50 에서 호를 걷어낸 뒤로는
+/// 반대로 쓴다 — **여기 잉크가 0 이어야 한다**: 머리 위에서는 호가 되살아나지 않았다는 뜻이고,
+/// 발밑에서는 파편이 `stage.glow`(사용자가 "갈색"이라 부른 그 색)로 되돌아가지 않았다는 뜻이다.
+/// 문턱은 그 색이 0.6 까지 옅어져도 잡히게 잡았다(그 아래는 눈으로도 거의 안 보인다).
 private func glowInk(_ bitmap: NSBitmapImageRep, x: ClosedRange<CGFloat>, y: ClosedRange<CGFloat>)
     -> (count: Int, centroidY: CGFloat) {
     guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 4 else { return (0, 0) }
@@ -1151,14 +1152,62 @@ private func glowInk(_ bitmap: NSBitmapImageRep, x: ClosedRange<CGFloat>, y: Clo
         for px in x0...x1 {
             let o = py * bpr + px * spp
             let r = Int(data[o]), g = Int(data[o + 1]), b = Int(data[o + 2])
-            // 호는 노란 계열(r−b 가 크게 양수)이고 몸통은 연보라(b 가 가장 크다) · 하늘·능선은 파랑 ·
-            // 별·HUD 숫자는 무채색이다. 문턱은 호가 0.6 까지 옅어져도 잡히게 잡았다(그 아래는 눈으로도 거의 안 보인다).
+            // 따뜻한 강조색은 r−b 가 크게 양수이고, 몸통은 연보라(b 가 가장 크다) · 하늘·능선은 파랑 ·
+            // 별·HUD 숫자·**흰 파편**은 무채색(b 도 높다)이라 전부 빠진다.
             guard r >= 150, g >= 140, b <= 205, r - b >= 20 else { continue }
             count += 1
             sum += Double(py)
         }
     }
     return (count, count == 0 ? 0 : CGFloat(sum / Double(count) / 2))
+}
+
+/// 그 영역의 **흰 파편**을 잰다. 파편만 남기는 방법은 하나뿐이다: "점프 장식만 뺀 같은 프레임과 다른 픽셀"
+/// ∩ "그 자리가 더 밝아진 픽셀". 색 서명으로는 안 된다 — 반투명 흰색을 무대마다 다른 배경 위에 얹으면
+/// 결과 색이 배경을 따라가고(노을 하늘 위 = 살구빛), 밤·오로라의 **별** 수십 개가 그대로 딸려 들어온다.
+///
+/// - count: 파편 픽셀 수.
+/// - ink / behind: 그 픽셀들의 평균 휘도(파편 프레임 / 같은 자리의 배경). 둘의 비가 ratio 다.
+/// - neutralBright: 그중 **무채색이면서 밝은** 픽셀 수 —
+///   (최소 채널 ≥ 185 · 채널 폭 ≤ 40) 점 한가운데의 색이다. 무대 강조색 다섯(주황 255,196,138 ·
+///   크림 255,232,168 · 금색 255,209,122 ·
+///   하늘색 140,227,255 · 민트 125,255,212)은 채널 폭이 85~130 이라 이 자를 통과할 수 없다.
+///   **이 한 줄이 "파편은 흰색"이라는 사용자 지시를 회귀에서 지킨다.**
+/// - peak: 파편 픽셀 중 가장 밝은 휘도(점 한가운데). 몸통(연보라 L≈200)보다 위여야 겹쳐도 갈린다.
+/// - maxY: 가장 아래 파편의 y(pt). 프레임이 갈수록 내려가는지로 '퍼진다'를 잰다.
+private func sparkInk(_ jump: NSBitmapImageRep, _ calm: NSBitmapImageRep,
+                      x: ClosedRange<CGFloat>, y: ClosedRange<CGFloat>, tolerance: Int = 2)
+    -> (count: Int, ink: Double, behind: Double, ratio: Double, neutralBright: Int, peak: Double, maxY: CGFloat) {
+    guard let a = jump.bitmapData, let b = calm.bitmapData,
+          jump.bytesPerRow == calm.bytesPerRow, jump.samplesPerPixel == calm.samplesPerPixel,
+          jump.samplesPerPixel >= 4 else { return (0, 0, 0, 0, 0, 0, 0) }
+    let spp = jump.samplesPerPixel, bpr = jump.bytesPerRow
+    let x0 = max(0, Int(x.lowerBound * 2)), x1 = min(jump.pixelsWide - 1, Int(x.upperBound * 2))
+    let y0 = max(0, Int(y.lowerBound * 2)), y1 = min(jump.pixelsHigh - 1, Int(y.upperBound * 2))
+    guard x0 <= x1, y0 <= y1 else { return (0, 0, 0, 0, 0, 0, 0) }
+    func luma(_ p: UnsafePointer<UInt8>, _ o: Int) -> Double {
+        0.2126 * Double(p[o]) + 0.7152 * Double(p[o + 1]) + 0.0722 * Double(p[o + 2])
+    }
+    var count = 0, neutral = 0, inkSum = 0.0, bgSum = 0.0, peak = 0.0
+    var maxY = CGFloat(0)
+    for py in y0...y1 {
+        for px in x0...x1 {
+            let o = py * bpr + px * spp
+            guard (0..<spp).contains(where: { abs(Int(a[o + $0]) - Int(b[o + $0])) > tolerance }) else { continue }
+            let here = luma(a, o), there = luma(b, o)
+            guard here > there else { continue }   // 흰 파편은 **밝히기만** 한다.
+            count += 1
+            inkSum += here
+            peak = max(peak, here)
+            bgSum += there
+            maxY = max(maxY, CGFloat(py) / 2)
+            let r = Int(a[o]), g = Int(a[o + 1]), bl = Int(a[o + 2])
+            if min(r, min(g, bl)) >= 185, max(r, max(g, bl)) - min(r, min(g, bl)) <= 40 { neutral += 1 }
+        }
+    }
+    guard count > 0 else { return (0, 0, 0, 0, 0, 0, 0) }
+    let ink = inkSum / Double(count), behind = bgSum / Double(count)
+    return (count, ink, behind, (ink + 5) / (behind + 5), neutral, peak, maxY)
 }
 
 /// 논리 좌표 한 자리를 중심으로 한 정사각(±half pt) 안의 휘도 최소·최대·평균.
@@ -1282,82 +1331,192 @@ struct V0249FlappyTrailAndJumpTests {
         #expect(firstPixelDifference(calm, calmBare) == nil, "동작 줄이기인데 잔상이 남았다")
     }
 
-    /// 점프 모션이 **위를 향한다**. v0.2.48 은 발밑에서 아래로 퍼지는 넓은 U(아치)였다
-    /// (2026-09-10 지적: "점프할 때 밑에 넓은 U 같은 거 안 어울려").
+    /// **이 작업의 못**(v0.2.50). 점프에는 **호가 없다**. 남은 셋 — 스쿼시&스트레치 · 발밑 흰 파편 ·
+    /// 몸 아래쪽 흰 플래시 — 만으로 "쳤다"가 읽히는지를 픽셀로 잰다.
+    ///
+    /// 왜 호를 지키던 단언을 지웠나: 점프에 붙인 호는 **두 번 거부됐다**. v0.2.48 은 발밑에서 아래로 퍼지는
+    /// 넓은 U(`MiniGameEffects.arch`), v0.2.49 는 어깨 밖에서 머리 위로 훑는 ∩ 한 쌍(`wingBeat`).
+    /// v0.2.49 는 "머리 위 대역 호 잉크 150px 초과"와 "네 프레임 동안 호 무게중심이 상승"을 못 박아 뒀는데,
+    /// 그 둘은 이제 **틀린 것을 지키는 단언**이다(2026-09-10: "양옆으로 U자 거꾸로 2개 들어가는 거 별로야").
+    /// 그 자리를 ①(호가 한 픽셀도 없다) ②(그래도 점프 프레임은 평상 프레임과 다르다) ③(파편이 흰색이다)가 잇는다.
     @Test
-    func theJumpMotionRisesAndStaysOffTheFaceAndTheBoard() throws {
+    func theJumpKeepsItsPunchWithNoArcAndTheSparksAreWhite() throws {
         MiniGameMascot.resetCacheForTesting()
         _ = MiniGameMascot.sideProfile()
-        // 10프레임을 날다 3프레임 전에 쳤다 — 꼬리도 있고 점프 모션도 한창인 프레임.
+        // 10프레임을 날다 3프레임 전에 쳤다 — 꼬리도 있고 점프 장식도 한창인 프레임.
         let flap = flown(y: 190, vy: -60, frames: 10, flapAfter: 7)
         let sinceFlap = try #require(flap.lastFlapAt).distance(to: flap.elapsed)
-        #expect(sinceFlap > 0 && sinceFlap < 0.09, "점프 모션이 한창인 프레임이 아니다(\(sinceFlap)초)")
+        #expect(sinceFlap > 0 && sinceFlap < 0.09, "점프 장식이 한창인 프레임이 아니다(\(sinceFlap)초)")
         let bitmap = try renderBitmap(view(flap, best: 12))
-        savePNG(bitmap, "jump-motion.png")
+        savePNG(bitmap, "flapfx-jump.png")
+        // 같은 자리·같은 배경·같은 꼬리에서 **점프 장식만** 뺀 판. 아래 차분은 전부 이것과의 차분이다.
         let calm = try renderBitmap(view(withoutFlapImpact(flap), best: 12))
+        savePNG(calm, "flapfx-level.png")
         let cy = flap.bird.y
 
-        // ① 캐릭터 **위쪽**이 달라진다 = 모션이 솟는 방향을 가리킨다. 아치는 여기에 한 점도 그리지 않았다.
-        let above = band((-30)...30, (-38)...(-12), around: cy)
-        let rising = differing(bitmap, calm, x: above.x, y: above.y)
-        print("[jump] above=\(rising)")
-        #expect(rising > 120, "점프 모션이 위쪽에 아무것도 안 그린다(\(rising)픽셀)")
+        // ①-a 스프라이트 상자 **위**로는 아무것도 그려지지 않는다(스쿼시로 늘어난 몸의 정수리가 −18.2 다).
+        let overhead = band((-40)...40, (-46)...(-24), around: cy)
+        let overheadInk = differing(bitmap, calm, x: overhead.x, y: overhead.y)
+        #expect(overheadInk == 0, "머리 위에 점프 장식이 \(overheadInk)픽셀 남았다")
 
-        // ①' **머리 위쪽 대역**(스프라이트 상자 윗변 = −17 보다 위)에 호 잉크가 실제로 있어야 한다.
-        //     이 한 줄이 이번 수정의 못이다: v0.2.49 첫 판은 호가 몸통 중간·스프라이트 **안쪽**(sideGap 0.42)에
-        //     있어 여기가 정확히 **0px** 이었고, 좌우 대역만 재던 ① 은 그걸 통과시켰다(2026-09-10 검토 실측).
-        //     화면에 남던 것은 "몸 옆에서 바깥으로 갈수록 내려가는 짧은 꼬리 두 개"라 방향이 반대로 읽혔다.
-        let overhead = band((-36)...36, (-42)...(-18), around: cy)
-        let overheadInk = glowInk(bitmap, x: overhead.x, y: overhead.y)
-        print("[jump] overhead ink=\(overheadInk.count)")
-        #expect(overheadInk.count > overheadInkMin,
-                "머리 위 대역에 호 잉크가 \(overheadInk.count)px 뿐이다 — '솟는다'로 읽히지 않는다")
+        // ①-b **∩ 한 쌍이 실제로 살던 대역**(어깨 밖~머리 옆, −30…−10)에 무대색 잉크가 한 점도 없다.
+        //    여기서 차분(differing)은 못 쓴다 — 같은 자리를 스쿼시가 실루엣으로 흔들어서(살아 있을 때 473px)
+        //    호를 되살려도 948px 이라 "둘 중 무엇이 그렸나"를 말하지 못한다. 실제로 ①-a 만 두고 호를
+        //    되살려 봤더니 **초록으로 통과했다**(2026-09-10 뮤테이션). 호는 stage.glow 한 색이고 몸통은
+        //    연보라라 **색으로만** 깨끗하게 갈린다: 실측 0 → 호를 되살리면 347.
+        let arcBand = band((-40)...40, (-30)...(-10), around: cy)
+        let arcInk = glowInk(bitmap, x: arcBand.x, y: arcBand.y)
+        print("[flapfx] arc glow=\(arcInk.count) overhead diff=\(overheadInk)")
+        #expect(arcInk.count == 0,
+                "어깨~머리 옆에 무대색 호가 \(arcInk.count)px 있다 — ∩ 한 쌍이 되살아났다(2026-09-10 지적)")
 
-        // ①'' 그리고 호는 **올라간다**. 점프 한 번(0.24초) 동안 네 프레임을 떠서 호 잉크의 무게중심이
-        //     프레임마다 위로 가는지 본다. 정지 프레임 한 장으로는 "위에 잉크가 있다"까지만 말할 수 있고
-        //     방향은 말할 수 없다 — 예전 아치는 발밑에 **고정**이라 이 검사에서 곧장 빨개진다.
-        var centroids: [CGFloat] = []
-        for after in [9, 8, 7, 6] {
-            let frame = flown(y: 190, vy: -60, frames: 10, flapAfter: after)
-            let shot = try renderBitmap(view(frame, best: 12))
-            let arcBand = band((-36)...36, (-46)...6, around: frame.bird.y)
-            let ink = glowInk(shot, x: arcBand.x, y: arcBand.y)
-            print("[jump] frame after=\(after) arc ink=\(ink.count)")
-            #expect(ink.count > 60, "\(after) 프레임에 호 잉크가 없다(\(ink.count)px)")
-            // 캐릭터 자신이 프레임마다 다른 높이에 있으므로 **캐릭터 기준 상대 높이**로 잰다.
-            centroids.append(ink.centroidY - (t.origin.y + frame.bird.y * t.scale))
-        }
-        print("[jump] arc centroid(캐릭터 기준) \(centroids.map { Int($0) })")
-        #expect(zip(centroids, centroids.dropFirst()).allSatisfy { $0 > $1 + 0.5 },
-                "호가 프레임이 갈수록 위로 가지 않는다 \(centroids)")
+        // ①-c 그 0 이 **진짜 없음**이지 눈먼 자가 아니라는 증거: 똑같은 대역·똑같은 함수로, 무대색으로 그린
+        //     선(득점 링)이 있는 프레임을 재면 316px 이 잡힌다. 이 줄이 없으면 glowInk 이 고장 나도 ①-b 가
+        //     영원히 초록이다.
+        let ringed = try renderBitmap(view(FlappyGame(seed: 5, bird: flap.bird, pipes: flap.pipes,
+                                                     score: flap.score, phase: flap.phase,
+                                                     elapsed: flap.elapsed, scrolled: flap.scrolled,
+                                                     lastScoreAt: flap.elapsed - 0.05,
+                                                     lastScorePipeCenter: cy), best: 12))
+        #expect(glowInk(ringed, x: arcBand.x, y: arcBand.y).count > arcProbeMin,
+                "같은 대역에서 무대색 선을 못 본다 — ①-b 가 아무것도 안 본다")
 
-        // ② 그런데 **얼굴은 덮지 않는다**. 옆얼굴의 눈·입(어두운 잉크)이 점프 프레임에도 그대로 있어야 한다 —
+        // ② **그래도 점프 프레임은 평상 프레임과 다르다.** 두 가지가 남아야 한다:
+        //    (a) 실루엣 — 스쿼시가 몸을 가로로 눌러 세로로 늘인다. **정수리 대역**에서만 잰다:
+        //        흰 플래시는 스프라이트 아래쪽으로 내려 둔 그라디언트라 여기 기여가 0 이고, 그래서 이 숫자는
+        //        오직 스쿼시의 것이다(둘을 함께 세면 스쿼시를 죽여도 플래시가 대신 채워 통과한다 — 실측).
+        let crown = band((-24)...24, (-25)...(-14), around: cy)
+        let squashInk = differing(bitmap, calm, x: crown.x, y: crown.y)
+        #expect(squashInk > squashInkMin, "점프해도 실루엣이 그대로다(\(squashInk)픽셀) — 스쿼시가 죽었다")
+        //    (a') 그리고 몸 **아래쪽이 하얗게 뜬다** = 흰 플래시. 이것도 차분으로는 못 잰다 —
+        //         스쿼시가 몸을 가로로 5% 눌러 안쪽 픽셀이 통째로 움직이는 탓에, 플래시를 0 으로 죽여도
+        //         몸 전체 차분은 3815 → 2735 밖에 안 내려간다(실측). 그래서 **밝아졌는가**를 직접 잰다.
+        let lit = luminance(bitmap, atLogical: CGPoint(x: birdX - 2, y: cy + 10), half: 3)
+        let unlit = luminance(calm, atLogical: CGPoint(x: birdX - 2, y: cy + 10), half: 3)
+        let whole = band((-22)...22, (-20)...20, around: cy)
+        print("[flapfx] squash(정수리)=\(squashInk) 몸 전체=\(differing(bitmap, calm, x: whole.x, y: whole.y)) " +
+              "아래쪽 밝기 \(Int(unlit.mean))→\(Int(lit.mean))")
+        #expect(lit.mean - unlit.mean > flashRiseMin,
+                "몸 아래쪽이 안 밝아진다(\(Int(unlit.mean))→\(Int(lit.mean))) — 흰 플래시가 죽었다")
+        //    (b) 파편 — 스프라이트 상자 **아래**에만 있다(플래시·실루엣과 섞이지 않는 대역).
+        let footBand = band((-34)...22, 24...52, around: cy)
+        let sparks = sparkInk(bitmap, calm, x: footBand.x, y: footBand.y)
+        print("[flapfx] spark count=\(sparks.count) ink=\(Int(sparks.ink)) behind=\(Int(sparks.behind)) " +
+              "neutralBright=\(sparks.neutralBright)")
+        #expect(sparks.count > sparkInkMin, "발밑에 파편이 \(sparks.count)픽셀뿐이다")
+
+        // ③ **파편이 흰색이다** — 사용자 지시를 회귀에서 지키는 지점이다(2026-09-10: "밑에 거품처럼 뜨는 거
+        //    색깔을 흰색으로. 지금 갈색 안 어울려"). 무대 강조색(새벽 주황·한낮 크림·노을 금색·밤 하늘색·
+        //    오로라 민트)은 전부 채널 폭이 85 이상이라 이 자를 통과할 수 없다.
+        #expect(sparks.neutralBright > neutralSparkMin,
+                "파편에 흰 점(무채색·밝음)이 \(sparks.neutralBright)px 뿐이다 — 무대색으로 되돌아갔다")
+        let warm = glowInk(bitmap, x: footBand.x, y: footBand.y)
+        #expect(warm.count == 0, "발밑 파편이 따뜻한 색(\(warm.count)px)이다 — 갈색으로 읽힌다")
+
+        // ④ 그런데 **얼굴은 덮지 않는다**. 옆얼굴의 눈·입(어두운 잉크)이 점프 프레임에도 그대로 있어야 한다 —
         //    예전 흰 플래시(0.9, 실루엣 전체)는 0.12초 동안 얼굴을 통째로 지웠다.
         let face = band((-4)...16, (-15)...(-1), around: cy)
         let inkNow = count(bitmap, x: face.x, y: face.y) { r, g, b, a in a >= 250 && max(r, max(g, b)) <= 110 }
         let inkCalm = count(calm, x: face.x, y: face.y) { r, g, b, a in a >= 250 && max(r, max(g, b)) <= 110 }
-        print("[jump] face ink now=\(inkNow) calm=\(inkCalm)")
+        print("[flapfx] face ink now=\(inkNow) calm=\(inkCalm)")
         #expect(inkCalm > 20, "기준 프레임에 얼굴 잉크가 없다 — 이 검사가 아무것도 안 본다")
         #expect(inkNow >= inkCalm * 6 / 10, "점프 플래시가 얼굴을 지운다(\(inkNow) vs \(inkCalm))")
 
-        // ③ 그리고 **판을 가리지 않는다**: 모션의 발자국이 캐릭터 주위를 벗어나지 않는다.
-        //    위쪽 속도선 후보를 버린 이유가 이것이다 — 선이 기둥 틈까지 올라갔다.
+        // ⑤ 그리고 **판을 가리지 않는다**: 장식의 발자국이 캐릭터 주위를 벗어나지 않는다.
         let farLeft = band((-140)...(-42), (-60)...60, around: cy)
         let farRight = band(42...140, (-60)...60, around: cy)
         let farUp = band((-40)...40, (-110)...(-45), around: cy)
-        #expect(differing(bitmap, calm, x: farLeft.x, y: farLeft.y) == 0, "점프 모션이 왼쪽으로 샌다")
-        #expect(differing(bitmap, calm, x: farRight.x, y: farRight.y) == 0, "점프 모션이 오른쪽으로 샌다")
-        #expect(differing(bitmap, calm, x: farUp.x, y: farUp.y) == 0, "점프 모션이 기둥 틈까지 올라간다")
+        #expect(differing(bitmap, calm, x: farLeft.x, y: farLeft.y) == 0, "점프 장식이 왼쪽으로 샌다")
+        #expect(differing(bitmap, calm, x: farRight.x, y: farRight.y) == 0, "점프 장식이 오른쪽으로 샌다")
+        #expect(differing(bitmap, calm, x: farUp.x, y: farUp.y) == 0, "점프 장식이 기둥 틈까지 올라간다")
 
-        // ④ 확대(6배).
+        // ⑥ 확대(6배) — 사용자가 실제로 보는 픽셀. 호가 없는지·파편이 흰지를 눈으로 판정한다.
         let crop = CGRect(x: t.origin.x + (birdX - 44) * t.scale, y: t.origin.y + (cy - 44) * t.scale,
                           width: 88 * t.scale, height: 88 * t.scale)
-        if let zoomed = cropZoom(bitmap, ptRect: crop, zoom: 6) { savePNG(zoomed, "jump-zoom.png") }
+        if let zoomed = cropZoom(bitmap, ptRect: crop, zoom: 6) { savePNG(zoomed, "flapfx-jump-zoom.png") }
 
-        // ⑤ 동작 줄이기면 점프 장식이 통째로 빠진다.
+        // ⑦ 동작 줄이기면 점프 장식이 통째로 빠진다.
         let rm = try renderBitmap(view(flap, best: 12, reduceMotion: true))
         let rmCalm = try renderBitmap(view(withoutFlapImpact(flap), best: 12, reduceMotion: true))
         #expect(firstPixelDifference(rm, rmCalm) == nil, "동작 줄이기인데 점프 장식이 남았다")
+    }
+
+    /// 점프 직후 **네 프레임**을 이어 붙인다. 정지 한 장으로는 "발밑에 점이 있다"까지만 말할 수 있고
+    /// 임팩트는 움직임에서 나온다 — 파편이 프레임마다 퍼지고 옅어지는 것을 숫자와 그림 둘 다로 남긴다.
+    @Test
+    func theSparksSpreadFrameByFrameSoTheJumpReadsAsMotion() throws {
+        MiniGameMascot.resetCacheForTesting()
+        _ = MiniGameMascot.sideProfile()
+        var tiles: [NSBitmapImageRep] = []
+        var reach: [CGFloat] = [], counts: [Int] = []
+        // after 9 → 1프레임 뒤, 6 → 4프레임 뒤. 점프 파편은 0.35초(21프레임)를 산다.
+        for after in [9, 8, 7, 6] {
+            let frame = flown(y: 190, vy: -60, frames: 10, flapAfter: after)
+            let shot = try renderBitmap(view(frame, best: 12))
+            let bare = try renderBitmap(view(withoutFlapImpact(frame), best: 12))
+            let cy = frame.bird.y
+            let foot = band((-40)...26, 22...58, around: cy)
+            let ink = sparkInk(shot, bare, x: foot.x, y: foot.y)
+            counts.append(ink.count)
+            // 캐릭터 기준 상대 깊이(pt) — 프레임마다 캐릭터가 다른 높이에 있으므로 상대로 잰다.
+            reach.append(ink.maxY - (t.origin.y + cy * t.scale))
+            let crop = CGRect(x: t.origin.x + (birdX - 40) * t.scale, y: t.origin.y + (cy - 34) * t.scale,
+                              width: 76 * t.scale, height: 96 * t.scale)
+            if let zoomed = cropZoom(shot, ptRect: crop, zoom: 3) { tiles.append(zoomed) }
+        }
+        print("[flapfx] seq counts=\(counts) reach=\(reach.map { Int($0) })")
+        if let strip = stitch(tiles) { savePNG(strip, "flapfx-jump-seq.png") }
+        // 첫 프레임(친 지 1/60초)은 열 점이 아직 발밑 한자리에 겹쳐 있어 이 대역 밖이다 — 그래서 문턱이 낮다.
+        // 이 줄이 재는 것은 "네 프레임 전부에 파편이 있다"이고, 임팩트를 판정하는 것은 아래 reach 다.
+        #expect(counts.allSatisfy { $0 > 15 }, "네 프레임 중 파편이 빈 프레임이 있다 \(counts)")
+        // 파편은 **퍼진다** — 가장 아래 점이 프레임마다 더 내려간다(0.5pt 이상씩).
+        #expect(zip(reach, reach.dropFirst()).allSatisfy { $0 < $1 - 0.5 },
+                "파편이 퍼지지 않는다(움직임이 안 읽힌다) \(reach)")
+    }
+
+    /// **흰 파편이 무대 5종 전부에서 배경과 갈린다.** 색을 무대색에서 흰색으로 바꾼 것이 밝은 무대
+    /// (한낮 하늘·오로라 커튼)에서 묻히지 않는지, 캐릭터 몸통(연보라)과도 갈리는지를 실측한다.
+    @Test
+    func theWhiteSparksReadOnEveryStage() throws {
+        MiniGameMascot.resetCacheForTesting()
+        _ = MiniGameMascot.sideProfile()
+        var tiles: [NSBitmapImageRep] = []
+        for (index, stage) in MiniGameStage.all.enumerated() {
+            let score = MiniGameStage.flappyThresholds[index] + 1
+            func frame(flappedAt: TimeInterval?) throws -> NSBitmapImageRep {
+                let game = FlappyGame(seed: 5, bird: .init(x: birdX, y: 150, vy: -280),
+                                      pipes: [pipe(x: 215, centerY: 118, gap: 108)],
+                                      score: score, phase: .running, elapsed: 4.0, scrolled: 470,
+                                      lastFlapAt: flappedAt, flapCount: 7)
+                return try renderBitmap(view(game, best: 40))
+            }
+            // 친 지 0.04초 — 열 점이 아직 짙을 때다(파편 색을 재려면 점 한가운데가 가장 불투명한 프레임이어야 한다).
+            let jump = try frame(flappedAt: 3.96)
+            let calm = try frame(flappedAt: nil)
+            let foot = band((-34)...26, 20...54, around: 150)
+            let ink = sparkInk(jump, calm, x: foot.x, y: foot.y)
+            // 캐릭터 몸통(연보라)의 실제 휘도. 파편은 스프라이트 **아래 레이어**라 몸에 가려 겹치지 않지만,
+            // 만에 하나 겹쳐도 파편 쪽이 더 밝아야 갈린다 — 그 여유를 여기서 잰다.
+            let body = luminance(jump, atLogical: CGPoint(x: birdX, y: 158), half: 4)
+            print("[flapfx] \(stage.name): count=\(ink.count) ink=\(Int(ink.ink)) behind=\(Int(ink.behind)) " +
+                  "ratio=\(String(format: "%.2f", ink.ratio)) neutralBright=\(ink.neutralBright) " +
+                  "peak=\(Int(ink.peak)) 몸통=\(Int(body.mean))")
+            #expect(ink.count > sparkInkMin, "\(stage.name)에서 파편이 \(ink.count)픽셀뿐이다")
+            #expect(ink.ratio > sparkContrastMin,
+                    "\(stage.name)에서 파편이 배경에 묻힌다(대비 \(ink.ratio))")
+            #expect(ink.neutralBright > neutralSparkMin,
+                    "\(stage.name) 파편이 흰색이 아니다(무채색 밝은 점 \(ink.neutralBright)px)")
+            // 그리고 파편의 **가장 밝은 점**이 몸통보다 확실히 밝다(실측 250~252 대 186). 파편은 스프라이트
+            // 아래 레이어라 지금은 몸에 겹칠 일이 없지만, 레이어를 뒤집거나 세기를 내리면 여기부터 무너진다.
+            // (색을 무대색으로 되돌리는 회귀는 이 줄이 아니라 바로 위 neutralBright 가 잡는다 — 무대 glow 도
+            //  휘도는 204~210 이라 몸통보다는 밝다. 갈리는 것은 밝기가 아니라 **채널 폭**이다.)
+            #expect(ink.peak > body.mean + 12,
+                    "\(stage.name) 파편(\(Int(ink.peak)))이 몸통(\(Int(body.mean)))보다 밝지 않다")
+            let crop = CGRect(x: t.origin.x + (birdX - 40) * t.scale, y: t.origin.y + (150 - 34) * t.scale,
+                              width: 76 * t.scale, height: 96 * t.scale)
+            if let zoomed = cropZoom(jump, ptRect: crop, zoom: 3) { tiles.append(zoomed) }
+        }
+        if let strip = stitch(tiles) { savePNG(strip, "flapfx-stages.png") }
     }
 
     /// 잔상은 **단색 실루엣**이다 — 얼굴이 다 있는 사본이 아니다.
@@ -1439,8 +1598,27 @@ struct V0249FlappyTrailAndJumpTests {
 private let trailFlatSpreadMax = 20.0
 /// 잔상이 배경과 갈리는 최소 휘도 차. 이보다 옅으면 궤적이 안 보인다.
 private let trailVisibleMin = 12.0
-/// 머리 위 대역의 최소 호 잉크(px, 스케일 2). 0 이 실패였고 지금은 그 몇 배가 나온다.
-private let overheadInkMin = 150
+/// **정수리 대역**에서 점프 프레임이 평상 프레임과 달라야 하는 최소 픽셀 수(스케일 2). 여기는 스쿼시만의
+/// 것이다 — 흰 플래시는 스프라이트 아래쪽 그라디언트라 정수리에 한 점도 닿지 않는다.
+/// 실측: 살아 있으면 247 · `squashFrom` 을 (1,1) 로 죽이면 **0**. 몸 전체로 재면 같은 뮤테이션에서
+/// 3815 → 2361 밖에 안 떨어져 문턱을 어디에 둬도 아슬아슬하다(플래시가 대신 채운다) — 그래서 대역을 갈랐다.
+private let squashInkMin = 120
+/// 스프라이트 아래쪽(중심에서 +10pt)이 점프 순간 **밝아져야 하는** 최소 휘도(0…255).
+/// 실측: 살아 있으면 160 → 179(+19) · `flapFlashOpacity` 를 0 으로 내리면 +4(스쿼시가 몸을 움직인 몫만 남는다).
+/// 10 은 그 사이다. v0.2.49 가 플래시를 0.9 전면 → 0.45 아래쪽으로 내린 결정을 **아래쪽에서** 지키는 자리다
+/// (얼굴을 덮지 않는다는 반대쪽 상한은 ④ 가 지킨다).
+private let flashRiseMin = 10.0
+/// 발밑 파편의 최소 픽셀 수(스케일 2). 실측 170(한낮 한 프레임) · 무대 5종 235~240.
+private let sparkInkMin = 120
+/// 그중 **무채색이면서 밝은** 픽셀(점 한가운데)의 최소 수. 실측 108(한낮 한 프레임) · 무대 5종 148~162.
+/// 무대 강조색으로 되돌리면 채널 폭이 85~130 이라 **0** 이 된다 — 이 한 줄이 "파편은 흰색"을 지킨다.
+private let neutralSparkMin = 60
+/// 파편과 그 뒤 배경의 최소 휘도비. 무대 5종 실측 1.92(한낮 — 하늘이 가장 밝다) ~ 3.20(밤).
+/// 1.6 은 그 아래 한 단계다: 세기를 0.82 에서 더 내리면 한낮부터 걸린다.
+private let sparkContrastMin = 1.6
+/// "호가 살던 대역에 무대색이 0" 을 재는 자의 **살아 있음 문턱**. 같은 대역·같은 함수로 무대색 선(득점 링)을
+/// 재면 실측 316px 이 나온다. 100 은 그 1/3 이다 — 이 줄이 빨개지면 0 이 '없음'이 아니라 '눈멂'이라는 뜻이다.
+private let arcProbeMin = 100
 
 // MARK: - (8) 소스 계약
 
@@ -1520,6 +1698,16 @@ func flappySourceKeepsTheLeafViewContract() throws {
     // 일시정지 계약(두 줄): paused 에 host.isPaused 가 들어가고, tick 이 정지 중 시간을 흘리지 않는다.
     #expect(code.contains("paused: !game.isPlaying || host.isPaused"))
     #expect(code.contains("guard game.isPlaying, !host.isPaused else { lastTick = nil; return }"))
+
+    // v0.2.50: 프레임 상한은 **화면 주사율에서** 온다. 리터럴을 다시 박으면 60 으로 나눠떨어지지 않는 화면
+    // (75Hz·144Hz·90Hz …)에서 네 프레임에 한 장이 두 배로 늘어진다 — 사용자가 "살짝 버벅인다"로 신고한 그것이다.
+    #expect(code.contains("MiniGameFrameRate.minimumInterval(forRefreshRate: host.refreshHz)"),
+            "프레임 간격을 주사율에서 안 가져온다")
+    for hardCoded in ["minimumInterval: 1.0 / 60.0", "minimumInterval: 1.0/60.0", "minimumInterval: 1/60",
+                      "minimumInterval: nil"] {
+        #expect(!code.contains(hardCoded), "\(hardCoded) — 프레임 상한을 여기 박지 마라(MiniGameFrameRate 가 정한다)")
+    }
+
     // 정지 화면은 허브가 그린다 — 게임 쪽에 두 벌째를 만들지 않는다.
     #expect(!code.contains("일시정지됨") && !code.contains("PausedOverlay"))
 
@@ -1551,11 +1739,30 @@ func flappySourceKeepsTheLeafViewContract() throws {
             "잔상 ForEach 가 고정 상한이 아니다 — 프레임마다 배열이 새로 생긴다")
     #expect(code.contains("trail.removeAll(keepingCapacity: true)"),
             "이력을 비울 때 용량까지 버린다 — 프레임마다 배열을 다시 잡게 된다")
-    // ★ v0.2.49 점프 모션: 발밑에서 **아래로** 퍼지는 넓은 아치는 걷어냈다(솟는 방향과 반대였다).
-    //   공용 헬퍼(MiniGameEffects.arch)는 남아 있지만 이 게임은 쓰지 않는다.
+    // ★ v0.2.50 점프 이펙트: **호는 전부 걷어냈다.** 두 번 거부당한 자리다 —
+    //   v0.2.48 `MiniGameEffects.arch`(발밑에서 아래로 퍼지는 넓은 U) · v0.2.49 `wingBeat`(어깨 밖에서
+    //   머리 위로 훑는 ∩ 한 쌍). 공용 헬퍼(MiniGameEffects.arch)는 키트에 남아 있지만 이 게임은 쓰지 않고,
+    //   날개짓 호는 상수까지 통째로 지웠다(죽은 상수를 남기면 다음 사람이 "원래 있던 것"으로 되살린다).
     #expect(!code.contains("MiniGameEffects.arch("),
             "넓은 U 아치가 되살아났다 — 몸은 위로 솟는데 신호는 아래를 말한다(2026-09-10 지적)")
-    #expect(code.contains("wingBeat("), "점프 모션이 사라졌다")
+    #expect(!code.contains("wingBeat"),
+            "∩ 한 쌍이 되살아났다 — 34pt 실물에서 머리 위 \"^ ^\" 로 읽힌다(2026-09-10 지적)")
+    #expect(!code.contains("flapWing"), "날개짓 호 상수가 남아 있다 — 죽은 상수는 되살아난다")
+    // 남은 점프 단서 셋은 전부 이 파일 안에 글자로 있다: 스쿼시 · 발밑 파편 · 몸 아래쪽 흰 플래시.
+    #expect(code.contains("FlappyFX.squashFrom"), "스쿼시가 사라졌다 — 점프에 남은 신호가 둘로 준다")
+    #expect(code.contains("FlappyFX.flapSparkAngles"), "발밑 파편이 사라졌다")
+    #expect(code.contains("FlappyFX.flapFlashOpacity"), "흰 플래시가 사라졌다")
+    // 파편 색은 무대와 무관한 **흰색**이다(2026-09-10: "밑에 거품처럼 뜨는 거 색깔을 흰색으로").
+    #expect(code.contains("static let flapSparkColor = Color.white"),
+            "점프 파편이 흰색이 아니다 — 무대 glow 로 되돌리면 새벽·노을에서 갈색으로 읽힌다")
+    #expect(code.contains("color: FlappyFX.flapSparkColor"), "점프 파편이 그 색을 쓰지 않는다")
+    // 파편은 **스프라이트 아래 레이어**다. 흰 파편과 흰 플래시가 서로 뭉치지 않는 이유가 세기가 아니라
+    // 이 순서다 — 몸 안쪽으로 들어간 점은 아예 가려지고, 화면에 남는 흰 것은 "몸 아래쪽 옅은 빛"과
+    // "몸 밖 발밑의 점"으로 갈린다. 뒤집으면 점이 얼굴 위로 올라와 v0.2.49 가 푼 문제가 되돌아온다.
+    let canvasZ = try #require(code.range(of: "Canvas(rendersAsynchronously"))
+    let spriteZ = try #require(code.range(of: "spriteAndScore\n"))
+    #expect(canvasZ.lowerBound < spriteZ.lowerBound,
+            "파편 캔버스가 스프라이트 위로 올라갔다 — 점이 얼굴을 덮는다")
 
     // ★ 그리기 함수 안에는 튀는 기둥 분기가 한 글자도 없다 — 색·모양으로 미리 알려 주지 않기로 한
     //   결정(2026-09-08)은 "그림이 shift* 를 읽지 않는다"로만 지켜진다.
@@ -1809,4 +2016,103 @@ struct V0249FlappyFacingTests {
             savePNG(zoomed, "facing-over-zoom.png")
         }
     }
+}
+
+// MARK: - 프레임 간격이 달라도 같은 판인가 (v0.2.50)
+//
+// 프레임 상한이 화면 주사율을 따라가면서 **같은 판이 60fps 와 75fps 로 각각 밀린다.** 순위표가 걸린
+// 게임이라 그 둘이 다른 난이도면 안 된다. 물리는 실 dt 를 쓰고 `maxStep`(1/30) 클램프도 그대로라
+// 원리적으로는 같아야 하는데, 그 '원리'가 코드에 남아 있는지는 여기서만 확인된다 —
+// 누가 dt 대신 프레임당 상수를 박으면 75fps 판은 그 즉시 25% 빨라진다.
+
+/// 1/15초를 한 '틱'으로 삼는다 — 60fps 는 4프레임, 75fps 는 5프레임, 120fps 는 8프레임이라
+/// **세 간격 모두에서 틱 경계가 정확히 같은 시각**이다(점프 시각과 비교 시각이 갈리지 않는다).
+private let fpsTickHz = 15
+
+private struct FpsSample {
+    let tick: Int
+    let y: Double
+    let vy: Double
+    let score: Int
+    let scrolled: Double
+    let elapsed: Double
+    let playing: Bool
+    let running: Bool
+}
+
+/// 같은 시드·같은 점프 일정을 주어진 프레임 간격으로 민다. 점프는 틱 경계에서만 일어난다.
+private func fpsTrace(fps: Int, ticks: Int, flapEveryTick: Int, seed: UInt64 = 0xF1A99) -> [FpsSample] {
+    var game = FlappyGame(seed: seed)
+    game.flap()                                   // 시작(ready → running)
+    let dt = 1.0 / Double(fps)
+    let framesPerTick = fps / fpsTickHz
+    var out: [FpsSample] = []
+    for tick in 1...ticks {
+        for _ in 0..<framesPerTick { game.step(dt: dt) }
+        if tick % flapEveryTick == 0 { game.flap() }
+        var running = false
+        if case .running = game.phase { running = true }
+        out.append(FpsSample(tick: tick, y: Double(game.bird.y), vy: Double(game.bird.vy),
+                             score: game.score, scrolled: Double(game.scrolled),
+                             elapsed: game.elapsed, playing: game.isPlaying, running: running))
+    }
+    return out
+}
+
+/// 7틱(0.4667초)마다 점프하면 판이 **제자리에서 오르내린다** — 점프 한 번의 상승과 그다음 낙하가 정확히
+/// 상쇄되는 주기다(T = −2·flapVelocity/gravity = 2×317/1360 = 0.466s). 그래서 이 리듬이면 새가 오래 살고
+/// 기둥도 몇 개 지나간다: 프레임 간격을 비교할 창이 열린다.
+private let fpsHoverTicks = 7
+
+@Test
+func flappyRunsTheSameBoardAtEveryFrameRate() {
+    let at60 = fpsTrace(fps: 60, ticks: 200, flapEveryTick: fpsHoverTicks)
+    let at75 = fpsTrace(fps: 75, ticks: 200, flapEveryTick: fpsHoverTicks)
+    let at120 = fpsTrace(fps: 120, ticks: 200, flapEveryTick: fpsHoverTicks)
+    let run60 = at60.prefix { $0.running }.count
+    let run75 = at75.prefix { $0.running }.count
+    let run120 = at120.prefix { $0.running }.count
+
+    // ① **이 변경이 실제로 쥔 두 값**(60 = 지금까지 · 75 = 이 기계)은 같은 판을 살고 같은 틱에 죽는다.
+    #expect(run60 == run75, "60fps 와 75fps 가 다른 틱에 죽었다(\(run60) vs \(run75)) — 판이 프레임에 끌려간다")
+    #expect(run60 > 60, "비교할 창이 너무 짧다(\(run60)틱) — 픽스처가 무너졌다")
+
+    let window = min(run60, min(run75, run120))
+    #expect(at60[window - 1].score >= 2, "기둥을 하나도 안 지났다 — 비교가 시시하다")
+
+    var worstY75 = 0.0, worstY120 = 0.0, worstScroll = 0.0, worstElapsed = 0.0
+    for i in 0..<window {
+        let a = at60[i], b = at75[i], c = at120[i]
+        // ② 판 시계와 스크롤은 dt 의 단순 합이라 **간격과 무관하게 같다**.
+        //    누가 dt 대신 프레임당 상수를 박으면 75fps 판이 25% 빨라져 여기가 통째로 갈린다.
+        worstElapsed = max(worstElapsed, max(abs(a.elapsed - b.elapsed), abs(a.elapsed - c.elapsed)))
+        worstScroll = max(worstScroll, max(abs(a.scrolled - b.scrolled), abs(a.scrolled - c.scrolled)))
+        worstY75 = max(worstY75, abs(a.y - b.y))
+        worstY120 = max(worstY120, abs(a.y - c.y))
+        // ③ 같은 틱에 같은 점수 — 기둥을 지나는 시각까지 같다.
+        #expect(a.score == b.score, "틱 \(a.tick): 60/75 점수가 갈렸다(\(a.score) vs \(b.score))")
+        #expect(a.score == c.score, "틱 \(a.tick): 60/120 점수가 갈렸다(\(a.score) vs \(c.score))")
+    }
+    let seconds = at60[window - 1].elapsed
+    #expect(worstElapsed < 1e-9, "판 시계가 프레임 간격을 탄다(\(worstElapsed)s)")
+    // 스크롤은 점수가 오르는 프레임에서 속도 단계가 한 프레임 어긋날 수 있어 딱 0 은 아니다(실측 0.03pt).
+    // 프레임이 판을 밀고 있었다면 이 값은 수백 pt 가 된다.
+    #expect(worstScroll < 0.2, "스크롤이 프레임 간격을 탄다(\(worstScroll)pt)")
+
+    // ④ 새의 높이만 걸음 크기에 끌린다. **그 끌림이 정확히 '알고 있는 한 항'인지**를 재는 것이 이 단언이다:
+    //    중력 적분이 semi-implicit Euler(vy 를 먼저 밀고 그 vy 로 y 를 민다)라 한 걸음에 g·h/2 만큼 더
+    //    내려가고, 그 차이가 시간에 비례해 쌓인다 → 초당 gravity × (h₁ − h₂) / 2.
+    //    이 항 말고 다른 프레임 의존이 생기면(dt 대신 상수, 프레임 수로 세는 타이머 …) 비율이 무너진다.
+    //    **이 항은 이번 변경이 만든 것이 아니라 원래 있던 적분 방식이다** — 상수는 한 글자도 안 건드렸다.
+    for (label, worst, fps) in [("75", worstY75, 75.0), ("120", worstY120, 120.0)] {
+        let predicted = Double(FlappyGame.gravity) * (1.0 / 60.0 - 1.0 / fps) / 2 * seconds
+        let ratio = worst / predicted
+        print("[fps-invariance] 60↔\(label): 높이차 \(String(format: "%.2f", worst))pt "
+              + "(예측 \(String(format: "%.2f", predicted))pt · 비 \(String(format: "%.3f", ratio)))")
+        #expect(abs(ratio - 1) < 0.15,
+                "60↔\(label)fps 높이차가 오일러 적분 항으로 설명되지 않는다(비 \(ratio)) — 새 프레임 의존이 생겼다")
+    }
+    print("[fps-invariance] window=\(window)틱(\(String(format: "%.2f", seconds))s) "
+          + "score=\(at60[window - 1].score) 생존틱 60/75/120=\(run60)/\(run75)/\(run120) "
+          + "worstElapsed=\(worstElapsed) worstScroll=\(String(format: "%.4f", worstScroll))")
 }

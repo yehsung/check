@@ -2361,12 +2361,119 @@ func popoverStaysWithinHeightCapForWorstBannerAndPanelCombinations() throws {
     bannerPanel.isLeaderboardVisible = true
     try measure("league+inlineBanner", CheckMenuView(store: bannerPanel))
 
+    // (h) 1:1 대화 패널(200자 + 안내줄 + 초안) + 가장 큰 크롬(새 버전 배너 + 노트 4줄 + 목표 편집).
+    //     **배너의 상한은 12시간 확인 배너(92)가 아니라 노트 4줄짜리 새 버전 배너(149)다** — v0.2.50
+    //     실측에서 이 조합만 상한을 넘겼다(제보 보내기 탭이 743pt). 그래서 여기서는 그 조합으로 잰다.
+    let conversation = teamStore()
+    working(conversation)
+    var conversationHistory: [MessageHistoryEntry] = []
+    for index in 0..<8 {
+        let repeats: Int = index == 0 ? 20 : 2
+        let body: String = String(repeating: "가나다라마바사아자차", count: repeats)
+        let created: Date = now.addingTimeInterval(-Double(index) * 600.0)
+        conversationHistory.append(
+            MessageHistoryEntry(
+                id: "msg-\(index)",
+                peerUserID: "peer",
+                peerName: "영식",
+                peerAvatarURL: nil,
+                body: body,
+                createdAt: created,
+                isMine: index % 2 == 1
+            )
+        )
+    }
+    conversation.messageHistory = conversationHistory
+    conversation.messageHistoryLoaded = true
+    conversation.openMessagePanel(peer: "peer")
+    conversation.messageDraft = String(repeating: "답장 초안 ", count: 12)
+    conversation.messageNotice = WorkTimerStore.messageInvalidNotice
+    try measure(
+        "message+worstChrome",
+        CheckMenuView(
+            store: conversation,
+            previewClipsOverflowList: true,
+            previewGoalEditing: true,
+            previewUpdateBanner: true,
+            previewUpdateNotes: sampleUpdateNotes,
+            previewPlainTextEditors: true
+        )
+    )
+
+    // (i) 제보 패널(보내기 탭 — 고정 크롬이 가장 큰 화면) + 같은 최악 크롬.
+    let feedback = teamStore()
+    working(feedback)
+    feedback.isFeedbackPanelVisible = true
+    feedback.feedbackDraft = String(repeating: "가나다라마바사아자차 ", count: 8)
+    feedback.feedbackNotice = FeedbackText.rateLimited
+    feedback.feedbackLoaded = true
+    try measure(
+        "feedback+worstChrome",
+        CheckMenuView(
+            store: feedback,
+            previewClipsOverflowList: true,
+            previewGoalEditing: true,
+            previewUpdateBanner: true,
+            previewUpdateNotes: sampleUpdateNotes,
+            previewPlainTextEditors: true
+        )
+    )
+
     // 모든 조합이 측정됐는지(렌더 실패로 조용히 건너뛰지 않았는지) 확인한다.
-    #expect(cases.count == 7)
+    #expect(cases.count == 9)
 }
 
 /// 배너는 한 번에 하나만 그린다 — 겹쳐 쌓이면 창이 상한을 넘기 때문. 회고 배너가 떠 있어도 12시간 확인
 /// 배너가 있으면 그쪽이 이기고, 창 높이는 배너 하나만큼만 자란다.
+// MARK: - ★ 하위 패널 깃발은 하나도 빠지면 안 된다 (v0.2.50)
+//
+// `CheckMenuView.isSubPanelOpen` 의 주석이 경고하는 그 회귀다: 새 패널을 만들고 여기 더하는 것을 잊으면
+// 토큰 소모량 행이 패널과 **함께** 그려져 창이 700pt 상한을 넘고 푸터(로그아웃/앱 종료)가 잘린다 —
+// 그 순간 사용자는 로그아웃할 방법을 잃는다.
+//
+// 그런데 소스 문자열만 세는 테스트로는 "스토어에 깃발이 몇 개인가"를 알 수 없고, 스토어만 세는 테스트로는
+// "그 깃발이 게이트에 들어갔는가"를 알 수 없다. 그래서 **두 세계를 잇는다.**
+
+@MainActor
+@Test
+func everyPanelFlagIsCountedInTheTokenRowGate() throws {
+    let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
+    // ① 게이트 본문을 잘라 낸다(주석은 이미 걷었다 — 안 걷으면 설명에 든 깃발 이름이 단언을 통과시킨다).
+    let head = try #require(source.range(of: "private var isSubPanelOpen: Bool {"))
+    let close = try #require(source.range(of: "}", range: head.upperBound..<source.endIndex))
+    let gate = String(source[head.upperBound..<close.lowerBound])
+
+    // ② 목록의 이름이 전부 게이트 안에 있다.
+    let declared = CheckMenuView.subPanelFlagNames
+    for name in declared {
+        #expect(gate.contains("store.\(name)"), "isSubPanelOpen 이 \(name) 을 안 센다")
+    }
+    // ③ 게이트가 목록 **밖의** 것을 더 세지도 않는다(원소 수 == 목록 수).
+    let reads = gate.components(separatedBy: "store.").count - 1
+    #expect(reads == declared.count, "게이트가 \(reads) 개를 읽는데 목록은 \(declared.count) 개다")
+
+    // ④ 스토어에 그 이름의 깃발이 실제로 있고, **그 밖의 패널 깃발이 없다.**
+    let storeURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Sources/check/WorkTimerStore.swift")
+    let storeSource = swiftCodeStrippingComments(try String(contentsOf: storeURL, encoding: .utf8))
+    var found: Set<String> = []
+    for line in storeSource.split(separator: "\n") {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("var is"), trimmed.contains("Visible"), trimmed.contains("= false") else { continue }
+        let name = trimmed.dropFirst("var ".count).prefix { $0 != " " }
+        found.insert(String(name))
+    }
+    // **별도 창의 깃발은 패널이 아니다.** 팝오버 자리를 한 톨도 안 먹으므로 토큰 소모량 행이 함께 서야 한다
+    // (여기 더하면 게임 창을 열어 둔 동안 그 행이 사라진다). v0.2.50 기준 남은 별도 창은 미니게임 하나다.
+    let windowFlags: Set<String> = ["isMiniGamePanelVisible"]
+    #expect(
+        found.subtracting(windowFlags) == Set(declared),
+        "스토어의 패널 깃발과 isSubPanelOpen 목록이 갈렸다: 스토어 \(found.subtracting(windowFlags).sorted()) / 목록 \(declared.sorted())"
+    )
+    #expect(found.count == declared.count + windowFlags.count)
+}
+
 @MainActor
 @Test
 func onlyOneBannerIsDrawnAtATime() throws {
@@ -3113,8 +3220,10 @@ func settingsEntryMovedToTheSideRailAndIsStillNotAMenu() throws {
     }
     // 기어가 실제로 설정 창을 연다(그리기만 하고 아무 데도 안 가는 버튼 방지).
     #expect(rail.contains("CheckSettingsWindowController.shared.show()"))
-    // 제보 칸도 실제로 창을 연다.
-    #expect(rail.contains("store.openFeedbackWindow()"), "제보 칸이 아무 데도 안 간다")
+    // 제보 칸도 실제로 화면을 바꾼다. **v0.2.50 부터 창이 아니라 팝오버 하위 패널**이다
+    // (사용자 지시: "제보창도 팝오버 창 안에서만 뜨게") — 그래서 여는 문 이름이 바뀌었다.
+    #expect(rail.contains("store.toggleFeedbackPanel()"), "제보 칸이 아무 데도 안 간다")
+    #expect(!rail.contains("openFeedbackWindow"), "제보 칸이 아직 없어진 창을 연다")
     // v0.2.49: 울트라는 레일을 **떠났다**(사용자 판단 — "따로 빼 둘 만큼 비중 있는 기능이 아니야").
     // 남은 진입은 콕찌르기 제목 행의 잔량 배지 하나뿐이라, 레일에서 그 문이 다시 열리면 여기서 잡힌다.
     #expect(!rail.contains("\"bolt.fill\""), "울트라 칸이 레일로 되돌아왔다")
@@ -3135,10 +3244,12 @@ func everyWindowThatOpensFromTheRailClosesThePopoverFromExactlyOnePlace() throws
     //   **토글**이라, 한 동작에서 두 번 누르면 팝오버가 도로 열린다(0.6초 디바운스가 실제로는 막아
     //   주지만, 그건 안전망이지 설계가 아니다 — 의도가 두 곳에 있으면 언젠가 한쪽만 고쳐져 갈린다).
     //
-    // 자리를 가르는 규칙은 **스토어를 거치는가** 하나다:
-    //  · 게임·제보 — 스토어의 진입점(`openMiniGameWindow()` · `openFeedbackWindow()`)을 지난다 → 거기서 닫는다.
-    //  · 설정      — 스토어를 전혀 안 거친다(`CheckSettingsWindowController.shared.show()` 가 유일한 문이고
-    //                ⌘, 도 같은 곳으로 모인다) → 레일 호출부가 닫는 유일한 자리다.
+    // ★ **v0.2.50 에서 목록이 줄었다.** 제보와 메시지가 창을 버리고 팝오버 하위 패널이 됐으므로,
+    //   그 둘은 이제 팝오버를 **닫으면 안 된다**(닫으면 방금 연 화면이 그 자리에서 사라진다).
+    //   남은 창은 미니게임·설정 둘뿐이고, 자리를 가르는 규칙은 **스토어를 거치는가** 하나다:
+    //  · 게임 — 스토어의 진입점(`openMiniGameWindow()`)을 지난다 → 거기서 닫는다.
+    //  · 설정 — 스토어를 전혀 안 거친다(`CheckSettingsWindowController.shared.show()` 가 유일한 문이고
+    //           ⌘, 도 같은 곳으로 모인다) → 레일 호출부가 닫는 유일한 자리다.
     //
     // 주석은 걷어내고 본다 — 위 문단들에 그 이름이 들어 있어서, 안 걷으면 이 설명을 지워야만 초록이 된다.
     let rail = try #require(
@@ -3156,17 +3267,25 @@ func everyWindowThatOpensFromTheRailClosesThePopoverFromExactlyOnePlace() throws
         "레일이 팝오버를 닫긴 하는데 [설정] 칸이 아니다"
     )
 
-    // 게임·제보는 **스토어 쪽 한 곳**이다. 레일에 또 넣으면 위 개수 단언이 먼저 잡는다.
+    // 게임은 **스토어 쪽 한 곳**이다. 레일에 또 넣으면 위 개수 단언이 먼저 잡는다.
     func storeSource(_ name: String) throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/check/\(name)")
         return swiftCodeStrippingComments(try String(contentsOf: url, encoding: .utf8))
     }
-    for file in ["WorkTimerStoreMiniGame.swift", "WorkTimerStoreFeedback.swift"] {
+    let game = try storeSource("WorkTimerStoreMiniGame.swift")
+    let gameCount = game.components(separatedBy: "WindowTopAnchor.dismissMenuPopover()").count - 1
+    #expect(gameCount == 1, "미니게임이 팝오버를 \(gameCount) 곳에서 닫는다 — 진입점 한 곳이어야 한다")
+
+    // 반대로 **패널이 된 둘은 한 곳도 닫으면 안 된다.** 닫으면 사용자가 방금 연 화면이 사라진다
+    // (v0.2.50 — 사용자 지시: "제보창도 팝오버 창 안에서만 뜨게", "그 창 안에서 1대1 메시지 화면으로만").
+    for file in ["WorkTimerStoreFeedback.swift", "WorkTimerStoreMessages.swift"] {
         let code = try storeSource(file)
-        let count = code.components(separatedBy: "WindowTopAnchor.dismissMenuPopover()").count - 1
-        #expect(count == 1, "\(file) 이 팝오버를 \(count) 곳에서 닫는다 — 진입점 한 곳이어야 한다")
+        #expect(
+            !code.contains("dismissMenuPopover"),
+            "\(file) 이 아직 팝오버를 닫는다 — 그 화면은 팝오버 안에 산다"
+        )
     }
 
     // 설정 컨트롤러 자신은 닫지 않는다. ⌘, 로 열 때는 닫을 팝오버가 없거나 사용자가 일부러 열어 둔

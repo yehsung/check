@@ -68,12 +68,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayController = CheckOverlayController(store: store, updateCheck: updateCheck)
         wireTodoBoard()
         wireSettingsWindow()
-        // 캐릭터 머리 위 '메시지 도착' 말풍선 → 메시지 창(v0.2.49). **이 한 줄이 없으면 말풍선은 눌러도
-        // 아무 일이 없다** — 오버레이는 배선 전(nil)이면 클릭 자리를 아예 만들지 않는 계약이라,
+        // 캐릭터 머리 위 '메시지 도착' 말풍선 → 그 사람과의 1:1 대화(v0.2.50). **이 한 줄이 없으면 말풍선은
+        // 눌러도 아무 일이 없다** — 오버레이는 배선 전(nil)이면 클릭 자리를 아예 만들지 않는 계약이라,
         // 배선을 잊어도 조용히 예전 동작(캐릭터가 아파하기)으로만 남아 결함이 눈에 안 띈다.
-        // 대화를 고르지 않고(peer: nil) 창만 여는 이유: 말풍선이 나르는 것은 큐의 맨 앞 한 건이고,
-        // 창은 최근 대화를 스스로 고른다 — 같은 답을 두 곳에서 만들지 않는다.
-        overlayController?.onOpenMessages = { [weak store] in store?.openMessageWindow() }
+        //
+        // ★ **갈 곳이 창에서 팝오버 안으로 바뀌었다.** 그래서 두 가지가 따라온다:
+        //   ① **상대를 함께 넘긴다.** 대화 화면이 한 사람짜리라 상대 없이 열면 빈 화면이 뜬다. 말풍선이
+        //      나르는 그 한 건이 곧 상대다 — 표시 직후 큐에서 `lastShownMessage` 로 옮겨져 있으므로
+        //      그쪽을 먼저 보고, 아직 안 옮겨졌으면 큐의 맨 앞을 본다(같은 한 건의 두 자리다).
+        //   ② **팝오버를 연다.** 프로그램으로 여는 수단은 닫을 때 쓰는 상태바 버튼 클릭과 **같은 문**이고
+        //      (`WindowTopAnchor.presentMenuPopover` — 판정도 그 문 하나를 방향만 바꿔 쓴다), 그 문이
+        //      실패해도 손해가 없다: 패널 상태는 위 줄에서 이미 세워져 있어, 사용자가 다음에 아이콘을
+        //      누르면 그 대화가 그 자리에 서 있다.
+        //   ③ 진입 맥락은 `.overlay` 다 — [뒤로]를 콕찌르기 목록으로 보내면 **가 본 적 없는 화면으로**
+        //      돌아가게 된다(그 목록을 지나온 것이 아니다). 홈(팀 목록)으로 나간다.
+        overlayController?.onOpenMessages = { [weak store] in
+            guard let store else { return }
+            let peer = store.lastShownMessage?.fromUserID ?? store.currentMessage?.fromUserID
+            store.openMessagePanel(peer: peer, from: .overlay)
+            WindowTopAnchor.presentMenuPopover()
+        }
         // 로그인 시 자동 실행은 **전원의 기본값**이다. 매 실행마다 판단해서 등록이 사라져 있으면(brew 로
         // .app 번들이 교체되면 실제로 사라진다) 되살린다. 사용자가 끈 것은 두 갈래 모두 존중한다 —
         // 앱 토글로 끈 것은 userTurnedOffKey 로, 시스템 설정에서 끈 것은 .requiresApproval 상태로 걸러진다.
@@ -136,15 +150,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 미니게임 창도 같은 자리에서 배선한다(v0.2.46). 창 자체는 첫 `show()` 에 만들어지므로 여기서는
         // 스토어만 물린다 — 게임을 한 번도 안 여는 실행에서는 창이 아예 생기지 않는다.
         CheckMiniGameWindowController.shared.configure(store: store)
-        // 제보 창도 같은 자리에서 배선한다(v0.2.48). 창 자체는 첫 `show()` 에 만들어지므로 여기서는
-        // 스토어만 물린다 — 제보를 한 번도 안 여는 실행에서는 창이 아예 생기지 않는다.
-        // 여는 경로는 스토어의 `openFeedbackWindow()` 하나뿐이다(팝오버 레일의 제보 버튼이 그것만 부른다).
-        CheckFeedbackWindowController.shared.configure(store: store)
-        // 메시지 창도 같은 자리에서 배선한다(v0.2.49). 창 자체는 첫 `show()` 에 만들어지므로 여기서는
-        // 스토어만 물린다 — 메시지를 한 번도 안 여는 실행에서는 창이 아예 생기지 않는다.
-        // 여는 경로는 스토어의 `openMessageWindow(peer:)` 하나뿐이다(콕찌르기 패널의 말풍선 버튼 ·
-        // 팝오버의 수신 줄 · 캐릭터의 도착 말풍선이 전부 그것만 부른다).
-        CheckMessageWindowController.shared.configure(store: store)
+        // ★ **제보·메시지 창은 v0.2.50 에 사라졌다.** 둘 다 팝오버 하위 패널로 내려왔고(사용자 지시:
+        //   "제보창도 팝오버 창 안에서만 뜨게", "그 창 안에서 그 사람과의 1대1 메시지 화면으로만"),
+        //   패널은 배선할 창 수명이 없다 — 그리는 것은 `CheckMenuView` 이고 상태는 스토어 깃발 하나다.
+        //   여기에 `configure(store:)` 를 다시 더하지 마라. 남은 별도 창은 설정·미니게임 둘뿐이다.
         // 실행 중인 앱에서 창이 **실제로** 떴는지 밖에서 재기 위한 문(인자가 없으면 아무 일도 안 한다).
         // 이 저장소에서 창 검증은 CGWindowList 실측 없이는 성립하지 않는다 — 근거는 그 타입 주석 참고.
         CheckSettingsWindowProbe.startIfRequested()

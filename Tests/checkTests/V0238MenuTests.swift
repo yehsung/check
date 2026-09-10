@@ -459,7 +459,12 @@ struct V0238MenuTests {
         // 메시지 쿨타임 클로저는 v0.2.49 에서 사라졌다(쿨타임 폐지). **되살아나면 실패한다** —
         // 이 한 줄이 팝오버 트리에 초 단위 의존을 다시 들이는 경로였다.
         #expect(!root.contains("messageCooldownRemaining"), "메시지 쿨타임 배선이 되살아났다 — 쿨타임은 폐지됐다.")
-        #expect(root.contains("onOpenMessages: { store.openMessageWindow(peer: $0) }"), "말풍선 버튼은 메시지 창을 열어야 한다.")
+        // v0.2.50: 말풍선 버튼이 여는 것은 창이 아니라 **팝오버 안의 1:1 대화 패널**이다
+        // (사용자 지시: "그 창 안에서 그 사람과의 1대1 메시지 화면으로만 넘어가고").
+        #expect(root.contains("onOpenMessages: { store.openMessagePanel(peer: $0) }"), "말풍선 버튼은 1:1 대화 패널을 열어야 한다.")
+        #expect(!root.contains("openMessageWindow"), "말풍선 버튼이 아직 없어진 창을 연다.")
+        // 안 읽음은 **값**으로 넘긴다(시계를 안 읽는 파생값이라 잎으로 가둘 이유가 없다).
+        #expect(root.contains("unreadMessagePeerIDs: store.unreadMessagePeerIDs"), "안 읽음 표시가 행까지 안 내려간다.")
         #expect(root.contains("isPokeDisconnected: {"), "연결 경고 판정은 클로저로 넘겨 안내줄 잎이 불러야 한다.")
         #expect(!root.contains("isPokeDisconnected: PokeConnectionNotice.shouldWarn("))
     }

@@ -4,11 +4,18 @@ import SwiftUI
 import Testing
 @testable import check
 
-// v0.2.49 메시지 창 — 순수 경계(길이·묶음·구분선·정렬) · 스토어 왕복 · 쿨타임 부재의 소스 계약 · 렌더 스냅샷.
+// 메시지 — 순수 경계(길이·묶음·구분선·정렬) · 스토어 왕복 · 쿨타임 부재의 소스 계약 · 렌더 스냅샷.
 //
 // 사용자 요청(2026-09-10): "메시지 보낼 때 그 순간에 못 보면 내용을 못 보잖아. …
 //   시간과 함께 주고받은 순서대로. 12시간 지나면 순차적으로 사라지게. 메시지랑 찌르기는 아예 분리야.
 //   찌르기만 60초 쿨타임 있고 메시지는 쿨타임 없이 갈 거야. 진짜 메신저 앱처럼. 3글자 제한도 없애줘."
+//
+// **v0.2.50 에 표면이 바뀌었다**(파일 이름은 이력이라 그대로 둔다 — 옮기면 이 스위트의 과거가 끊긴다):
+//   "각 사람의 메시지 버튼을 누르면 해당 창 안에서 그 사람과의 1대1 메시지 화면으로만 넘어가고 …
+//    지금처럼 별도 창에서 나랑 대화하던 사람들이 왼쪽에 다 뜨는 방식이 아니라."
+// 확인 질문의 답이 **"팝오버 안에서 전환"**(창이 하나도 안 뜨는 쪽)이라, 별도 창과 왼쪽 대화 목록이
+// 함께 사라졌다. 그래서 이 파일의 창 계약 테스트는 **패널 계약**으로 갈아 끼웠고(맨 아래),
+// 렌더 스냅샷은 패널 하나가 아니라 **팝오버 통째로** 그린다(창 높이 상한 700pt 가 이 작업의 최악 결함이다).
 //
 // ★ 이 파일의 픽스처 본문은 전부 **합성 문자열**이다. 실제 대화를 픽스처로 옮겨 오지 마라 —
 //   테스트 파일은 퍼블릭 저장소에 남고, 두 사람이 주고받은 문장은 남에게 보여 주려고 쓴 것이 아니다.
@@ -227,8 +234,8 @@ func dateSeparatorsAreInsertedWhereTheDayChanges() {
 
 @MainActor
 @Test
-func clockAndListStampsAreFixedTo24HourForm() {
-    // 지역 설정이 "오후 2:05"를 만들면 말풍선·목록 폭이 사람마다 달라진다 — 이 창은 그 폭을 예산으로 쓴다.
+func clockStampsAreFixedTo24HourForm() {
+    // 지역 설정이 "오후 2:05"를 만들면 말풍선 폭이 사람마다 달라진다 — 이 화면은 그 폭을 예산으로 쓴다.
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(identifier: "Asia/Seoul")!
     let afternoon = Date(timeIntervalSince1970: 1_789_000_000)   // KST 어느 오후
@@ -236,26 +243,17 @@ func clockAndListStampsAreFixedTo24HourForm() {
     #expect(text.count == 5 && text.contains(":"))
     #expect(!text.contains("오후") && !text.contains("PM"))
 
-    // 목록 도장: 오늘 것은 시각, 그전 것은 날짜 라벨(180pt 폭에 둘을 다 적을 자리가 없다).
-    #expect(MessageThreadBuilder.listStampText(afternoon, now: afternoon, calendar: calendar) == text)
-    let yesterday = calendar.date(byAdding: .day, value: -1, to: afternoon)!
-    #expect(MessageThreadBuilder.listStampText(yesterday, now: afternoon, calendar: calendar) == "어제")
+    // ★ 여기 있던 `listStampText`/`previewText` 단언은 v0.2.50 에 **그 함수들과 함께 걷었다.**
+    //   둘 다 왼쪽 대화 목록의 한 행만을 위한 계산이었고, 그 목록이 사라지면서 부르는 곳이 없어졌다
+    //   (사용자 지시 1). 아무도 안 쓰는 함수를 지키는 테스트는 다음 사람에게 "이건 살아 있는 규칙"이라고
+    //   거짓말한다. `clockText`(위)와 `dayLabel`(아래)은 말풍선·날짜 구분선이 계속 쓰므로 그대로 남는다.
 }
+
+// MARK: - 스토어: 패널 열고 닫기 · 선택 · 읽음
 
 @MainActor
 @Test
-func listPreviewFlattensNewlinesSoTheRowNeverGrows() {
-    // 여러 줄 입력을 받는 창이라, 눕히지 않으면 미리보기가 첫 줄만 남고 나머지 폭이 빈다.
-    #expect(MessageThreadBuilder.previewText("첫 줄\n둘째 줄") == "첫 줄 둘째 줄")
-    #expect(MessageThreadBuilder.previewText("  앞뒤 공백  ") == "앞뒤 공백")
-    #expect(MessageThreadBuilder.previewText("탭\t끼움") == "탭 끼움")
-}
-
-// MARK: - 스토어: 창 열고 닫기 · 선택 · 읽음
-
-@MainActor
-@Test
-func openingTheWindowSelectsTheRequestedPeerAndMarksItRead() async {
+func openingThePanelSelectsTheRequestedPeerAndMarksItRead() async {
     let store = mwStore(host: "mw-open-peer")
     store.messageHistory = [
         mwEntry(id: "a", peer: "u1", name: "영식", body: "안녕", minutesAgo: 30),
@@ -263,29 +261,62 @@ func openingTheWindowSelectsTheRequestedPeerAndMarksItRead() async {
     ]
     // 열기 전에는 둘 다 안 읽음이다(도장이 없다).
     #expect(store.unreadMessagePeerIDs == ["u1", "u2"])
+    store.isPokePanelVisible = true
 
-    store.openMessageWindow(peer: "u1")
+    store.openMessagePanel(peer: "u1")
 
-    #expect(store.isMessageWindowVisible)
+    #expect(store.isMessagePanelVisible)
     #expect(store.selectedMessagePeerID == "u1")
-    // 고른 대화만 읽음이 된다 — 창을 열었다고 남의 대화까지 읽은 것으로 치면 점이 아무 뜻도 없어진다.
+    // 고른 대화만 읽음이 된다 — 화면을 열었다고 남의 대화까지 읽은 것으로 치면 점이 아무 뜻도 없어진다.
     #expect(store.unreadMessagePeerIDs == ["u2"])
     #expect(store.selectedMessageThread?.messages.map(\.id) == ["a"])
+    // ★ 콕찌르기 목록은 **내려간다**(같은 자리를 쓰는 하위 패널이라 상호 배타다).
+    #expect(!store.isPokePanelVisible, "대화 뒤에 콕찌르기 목록이 살아 남았다")
+    // 그리고 [뒤로]가 돌아갈 곳으로 그 목록을 기억한다.
+    #expect(store.messagePanelOrigin == .poke)
 }
 
 @MainActor
 @Test
-func openingWithoutAPeerFallsBackToTheMostRecentThread() {
-    // 빈 오른쪽 판으로 시작하면 사용자가 할 일이 한 번 더 는다.
+func goingBackReturnsToTheListYouCameFromAndNowhereElse() {
+    // 울트라 패널의 `ultraPanelOrigin` 과 **같은 규약**이다: 들어온 문이 [뒤로]를 정한다.
+    let fromPoke = mwStore(host: "mw-back-poke")
+    fromPoke.openMessagePanel(peer: "u1")
+    fromPoke.closeMessagePanel()
+    #expect(!fromPoke.isMessagePanelVisible)
+    #expect(fromPoke.isPokePanelVisible, "콕찌르기에서 들어왔는데 [뒤로]가 그 목록으로 안 갔다")
+
+    // 캐릭터 말풍선에서 들어온 경우는 홈이다 — 콕찌르기로 보내면 **가 본 적 없는 화면**으로 '돌아가게' 된다.
+    let fromOverlay = mwStore(host: "mw-back-overlay")
+    fromOverlay.openMessagePanel(peer: "u1", from: .overlay)
+    fromOverlay.closeMessagePanel()
+    #expect(!fromOverlay.isMessagePanelVisible)
+    #expect(!fromOverlay.isPokePanelVisible, "말풍선에서 들어왔는데 [뒤로]가 콕찌르기를 열었다")
+    // 맥락은 기본값으로 되돌아간다(다음에 열린 대화가 앞 맥락을 물려받으면 안 된다).
+    #expect(fromOverlay.messagePanelOrigin == .poke)
+}
+
+@MainActor
+@Test
+func openingWithoutAPeerLeavesTheScreenAskingForOne() {
+    // ★ v0.2.50 에서 **뒤집힌 규칙**이다. 창 시절에는 상대를 안 주면 최근 대화를 스스로 골랐다 —
+    //   왼쪽에 목록이 있어서 "아무거나 하나 열어 두는" 것이 자연스러웠기 때문이다.
+    //   지금 이 화면은 한 사람짜리고, 문은 콕찌르기 목록의 그 사람 행 하나뿐이다. 상대를 임의로 고르면
+    //   사용자가 누른 사람과 화면에 뜬 사람이 **다를 수 있다** — 그건 메시지 화면에서 가장 나쁜 종류의 버그다.
     let store = mwStore(host: "mw-open-default")
     store.messageHistory = [
         mwEntry(id: "a", peer: "u1", body: "옛말", minutesAgo: 300),
         mwEntry(id: "b", peer: "u2", body: "새말", minutesAgo: 5)
     ]
 
-    store.openMessageWindow()
+    store.openMessagePanel(peer: nil)
 
-    #expect(store.selectedMessagePeerID == "u2")
+    #expect(store.isMessagePanelVisible)
+    #expect(store.selectedMessagePeerID == nil, "아무도 안 눌렀는데 임의의 상대를 골랐다")
+    // 화면은 그 상태를 '고르기'로 말한다(빈 대화와 다른 문장이다).
+    let state = MessagePanelEmptyMessage.state(hasPeer: false, loaded: true, failed: false)
+    #expect(state.title == "대화 상대를 고르지 않았어요")
+    #expect(state.hint?.contains("콕 찌르기") == true, "어디로 가야 하는지 말하지 않는다")
 }
 
 @MainActor
@@ -310,15 +341,15 @@ func switchingPeerClearsTheDraftSoWordsNeverGoToTheWrongPerson() {
 
 @MainActor
 @Test
-func closingTheWindowKeepsTheDraft() {
-    // 창을 잘못 닫았다고 쓰던 말이 사라지면 사용자는 그 말을 다시 못 쓴다(제보 창과 같은 규약).
+func closingThePanelKeepsTheDraft() {
+    // 화면을 잘못 바꿨다고 쓰던 말이 사라지면 사용자는 그 말을 다시 못 쓴다(제보 화면과 같은 규약).
     let store = mwStore(host: "mw-close-draft")
-    store.isMessageWindowVisible = true
+    store.isMessagePanelVisible = true
     store.messageDraft = "쓰다 만 말"
 
-    store.closeMessageWindow()
+    store.closeMessagePanel()
 
-    #expect(!store.isMessageWindowVisible)
+    #expect(!store.isMessagePanelVisible)
     #expect(store.messageDraft == "쓰다 만 말")
 }
 
@@ -404,22 +435,36 @@ func realFailureIsMarkedSoTheWindowCanOfferRetry() async {
 
 @MainActor
 @Test
-func arrivingMessagesRefreshHistoryOnlyWhileTheWindowIsOpen() async {
-    // ★ **"창을 열어 둔 채로 오면 그 자리에서 나타난다"의 근거다.** 새 타이머를 만들지 않고 이미 도는
-    //   수신 폴링(15초)에 얹었다 — 그리고 창이 닫혀 있으면 왕복을 내지 않는다(무료 플랜).
+func arrivingMessagesRefreshHistoryOnlyWhileThePanelIsOnScreen() async {
+    // ★ **"화면을 열어 둔 채로 오면 그 자리에서 나타난다"의 근거다.** 새 타이머를 만들지 않고 이미 도는
+    //   수신 폴링(15초)에 얹었다 — 그리고 볼 사람이 없으면 왕복을 내지 않는다(무료 플랜).
+    //
+    // v0.2.50 의 게이트는 **둘**이다: 패널 깃발 + 팝오버가 떠 있는가. 깃발은 팝오버를 닫아도 안 내려가므로
+    // (마지막으로 본 화면을 다음 오픈에 그대로 보여 주는 규약) 깃발만 보면 닫힌 팝오버에도 조회가 붙는다.
     let host = "mw-arrival-refresh"
     let store = mwStore(host: host)
     FeedbackURLProtocol.set(.init(body: "[]"), host: host, path: mwHistoryPath)
 
-    // 창이 닫혀 있는 동안 도착 → 요청 0건.
+    // 화면이 닫혀 있는 동안 도착 → 요청 0건.
     store.enqueueReceivedMessages([
         ReceivedMessage(id: "m1", fromName: "영식", body: "안녕", createdAt: mwNow, fromUserID: "u1")
     ])
     try? await Task.sleep(for: .milliseconds(40))
     #expect(FeedbackURLProtocol.count(host: host, path: mwHistoryPath) == 0)
 
-    // 창을 연다(여기서 1회) → 그 뒤 도착분마다 1회씩 는다.
-    store.isMessageWindowVisible = true
+    // 깃발만 서고 팝오버는 닫힌 상태 → 여전히 0건이다(이 줄이 없으면 닫힌 팝오버가 15초마다 조회한다).
+    store.isMessagePanelVisible = true
+    store.enqueueReceivedMessages([
+        ReceivedMessage(id: "m9", fromName: "민수", body: "안녕", createdAt: mwNow, fromUserID: "u9")
+    ])
+    try? await Task.sleep(for: .milliseconds(40))
+    #expect(
+        FeedbackURLProtocol.count(host: host, path: mwHistoryPath) == 0,
+        "팝오버가 닫혀 있는데 이력 조회가 나갔다 — 아무도 안 보는 갱신에 무료 플랜의 왕복을 쓴다"
+    )
+
+    // 팝오버를 연다(여기서 1회) → 그 뒤 도착분마다 1회씩 는다.
+    store.isMenuPresented = true
     store.loadMessageHistory()
     await mwWait { FeedbackURLProtocol.count(host: host, path: mwHistoryPath) == 1 }
 
@@ -545,7 +590,8 @@ func noticesNeverLeakInternalVocabularyToTheScreen() {
 func signOutClearsEveryTraceOfTheConversation() {
     // 이 화면이 나르는 것은 순위 숫자가 아니라 **두 사람이 주고받은 문장**이다 — 남기면 다음 사람이 그대로 읽는다.
     let store = mwStore(host: "mw-signout")
-    store.isMessageWindowVisible = true
+    store.isMessagePanelVisible = true
+    store.messagePanelOrigin = .overlay
     store.messageHistory = [mwEntry(id: "a", peer: "u1", body: "사적인 말", minutesAgo: 10)]
     store.messageHistoryLoaded = true
     store.messageHistoryLoading = true
@@ -558,7 +604,8 @@ func signOutClearsEveryTraceOfTheConversation() {
 
     store.clearPersistedSession()
 
-    #expect(!store.isMessageWindowVisible)
+    #expect(!store.isMessagePanelVisible)
+    #expect(store.messagePanelOrigin == .poke, "진입 맥락이 남으면 다음 계정의 [뒤로]가 앞 사람 화면으로 간다")
     #expect(store.messageHistory.isEmpty)
     #expect(!store.messageHistoryLoaded)
     #expect(!store.messageHistoryLoading)
@@ -668,16 +715,20 @@ func theInlineComposerIsGoneSoThereIsExactlyOnePlaceToSend() throws {
     #expect(try mwSource("CheckMessageView.swift").contains("store.sendDraftMessage()"))
 }
 
-// MARK: - 렌더 스냅샷 (msgwin-)
+// MARK: - 렌더 스냅샷 (panels-)
+//
+// v0.2.50 부터 대화는 **팝오버 하위 패널**이다. 그래서 스냅샷도 패널 하나가 아니라 **팝오버 통째로** 그린다 —
+// 이 작업에서 가장 값비싼 결함이 "창 높이 회귀"이기 때문이다: 패널만 따로 그리면 배너·헤더 카드·푸터가
+// 함께 서는 실제 높이를 영영 못 잰다(그리고 푸터가 잘리는 순간 사용자는 로그아웃할 방법을 잃는다).
 
 /// 스냅샷 저장 위치. 기본은 이 실행의 임시 디렉터리이고 `CHECK_SNAPSHOT_DIR` 로 덮어쓴다 —
 /// 세션 전용 절대 경로를 소스에 박아 두면 퍼블릭 저장소에 개인 머신 경로가 남는다(제보 스위트와 같은 규약).
-enum MessageWindowSnapshots {
+enum MessagePanelSnapshots {
     static func save(_ bitmap: NSBitmapImageRep, name: String) {
         let base = ProcessInfo.processInfo.environment["CHECK_SNAPSHOT_DIR"].map {
             URL(fileURLWithPath: $0, isDirectory: true)
         } ?? FileManager.default.temporaryDirectory.appendingPathComponent("check-snapshots", isDirectory: true)
-        let dir = base.appendingPathComponent("msgwin", isDirectory: true)
+        let dir = base.appendingPathComponent("panels", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         guard let png = bitmap.representation(using: .png, properties: [:]) else { return }
         try? png.write(to: dir.appendingPathComponent(name))
@@ -686,22 +737,44 @@ enum MessageWindowSnapshots {
 
 private enum MWRenderError: Error { case failed }
 
-/// ★ `clipsOverflowInsteadOfScroll: true` · `rendersPlainTextEditor: true` — `ImageRenderer` 는 ScrollView
-///   안쪽과 `TextEditor` 를 못 그린다. 이 인자들이 없으면 아래 스냅샷은 헤더만 남은 빈 화면이고,
-///   사람이 아무것도 확인할 수 없다(제보 창이 겪은 함정 그대로다). **앱은 언제나 진짜 위젯을 쓴다.**
+/// 팝오버 높이 상한(pt). 넘으면 푸터(로그아웃/앱 종료)가 화면 밖으로 잘린다.
+private let mwPopoverHeightCap: Double = 700
+
+/// 대화 패널이 열린 **메인 화면** 스토어. 팀이 확정된 로그인 상태여야 팝오버가 헤더 카드·레일·푸터를 그린다.
 @MainActor
-private func mwBitmap(
-    _ store: WorkTimerStore,
-    size: NSSize = CheckMessageWindowController.defaultContentSize
-) throws -> NSBitmapImageRep {
-    let view = CheckMessageView(
+private func mwMenuStore(_ store: WorkTimerStore) -> WorkTimerStore {
+    store.isMenuPresented = true
+    store.displayNow = mwNow
+    store.currentTeamID = URLProtocolStub.stubTeamID
+    store.teamName = "아잉팀"
+    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3_600)
+    return store
+}
+
+/// 팝오버가 얹을 수 있는 **가장 큰 크롬**의 재료. 새 버전 배너는 패치노트 줄 수만큼 자라고 그 수는
+/// `UpdateCheckStore.maxNotes`(4)로 묶여 있으므로, 노트 4줄짜리 배너(81 + 8 + 4×15 = 149pt)가 배너의 상한이다.
+/// 거기에 주간 목표 편집 인라인 행(92pt)을 겹치면 **241pt** — 이것이 하위 패널이 감당해야 할 최악의 크롬이다.
+/// (토큰 소모량 행은 하위 패널이 열리면 감춰지므로 여기 없다. 12시간 확인 배너는 92pt 라 새 버전 배너보다 낮다.)
+private let mwWorstNotes = [
+    "내 기록 패널에 근무 리듬·지난주 회고 추가",
+    "AI 토큰 순위를 지난달까지 넘겨봐요",
+    "맥을 여러 대 써도 토큰이 합산돼요",
+    "자리 비움으로 자동 종료된 근무를 되돌릴 수 있어요 — 폭을 넘는 아주 긴 문구"
+]
+
+/// ★ `previewClipsOverflowList: true` · `previewPlainTextEditors: true` — `ImageRenderer` 는 ScrollView
+///   안쪽과 `TextEditor` 를 못 그린다. 이 인자들이 없으면 아래 스냅샷은 대화 자리가 비고 입력칸 자리가
+///   **노란 상자**인 그림이라, 사람이 확인할 수 있는 것이 사라진다. **앱은 언제나 진짜 위젯을 쓴다.**
+@MainActor
+private func mwBitmap(_ store: WorkTimerStore, worstChrome: Bool = false) throws -> NSBitmapImageRep {
+    let view = CheckMenuView(
         store: store,
-        rendersPlainTextEditor: true,
-        clipsOverflowInsteadOfScroll: true,
-        now: mwNow
+        previewClipsOverflowList: true,
+        previewGoalEditing: worstChrome,
+        previewUpdateBanner: worstChrome,
+        previewUpdateNotes: worstChrome ? mwWorstNotes : [],
+        previewPlainTextEditors: true
     )
-        .frame(width: size.width, height: size.height, alignment: .top)
-        .background(CheckTheme.background)
     let renderer = ImageRenderer(content: view)
     renderer.scale = 2
     guard let image = renderer.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff)
@@ -712,13 +785,15 @@ private func mwBitmap(
 /// 내용 없이 배경만 그린 같은 크기의 비트맵. 배경이 **그라디언트**라 "한 픽셀을 배경색으로 삼는" 잉크 탐지는
 /// 통째로 거짓말한다 — 그래서 기준을 그림 하나로 둔다(제보 스위트와 같은 근거).
 @MainActor
-private func mwBlankBitmap(size: NSSize = CheckMessageWindowController.defaultContentSize) throws -> NSBitmapImageRep {
-    let view = Color.clear.frame(width: size.width, height: size.height).background(CheckTheme.background)
+private func mwBlankBitmap(matching bitmap: NSBitmapImageRep) throws -> NSBitmapImageRep {
+    let view = Color.clear
+        .frame(width: CGFloat(bitmap.pixelsWide) / 2, height: CGFloat(bitmap.pixelsHigh) / 2)
+        .background(CheckTheme.background)
     let renderer = ImageRenderer(content: view)
     renderer.scale = 2
-    guard let image = renderer.nsImage, let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff)
+    guard let image = renderer.nsImage, let tiff = image.tiffRepresentation, let blank = NSBitmapImageRep(data: tiff)
     else { throw MWRenderError.failed }
-    return bitmap
+    return blank
 }
 
 /// 두 비트맵이 눈에 띄게 다른 영역의 경계(픽셀). 없으면 nil.
@@ -747,10 +822,11 @@ private func mwDiffBounds(
     return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
 }
 
-/// 대화가 채워진 스토어(합성 문자열만 쓴다).
+/// 대화가 채워진 스토어(합성 문자열만 쓴다). **한 사람과의 대화 하나**만 화면에 뜬다 —
+/// 다른 사람들의 이력도 함께 넣어 두는 이유는 "그 사람 것만 골라 그린다"를 재기 위해서다.
 @MainActor
-private func mwThreadStore(host: String, extra: [MessageHistoryEntry] = []) -> WorkTimerStore {
-    let store = mwStore(host: host)
+private func mwThreadStore(host: String, extra: [MessageHistoryEntry] = [], peer: String = "u1") -> WorkTimerStore {
+    let store = mwMenuStore(mwStore(host: host))
     var entries = [
         mwEntry(id: "a1", peer: "u1", name: "영식", body: "자료 확인했어요", minutesAgo: 240),
         mwEntry(id: "a2", peer: "u1", name: "영식", body: "네 곧 올릴게요", minutesAgo: 236, isMine: true),
@@ -762,70 +838,86 @@ private func mwThreadStore(host: String, extra: [MessageHistoryEntry] = []) -> W
     entries.append(contentsOf: extra)
     store.messageHistory = entries.sortedForMessageHistory()
     store.messageHistoryLoaded = true
-    store.selectMessagePeer("u1")
+    store.pokeDirectory = [
+        PokeDirectoryEntry(userID: "u1", name: "영식", avatarURL: nil, isWorking: true),
+        PokeDirectoryEntry(userID: "u2", name: "김서연", avatarURL: nil, isWorking: true),
+        PokeDirectoryEntry(userID: "u3", name: "박도윤", avatarURL: nil, isWorking: false)
+    ]
+    store.pokeDirectoryLoaded = true
+    store.openMessagePanel(peer: peer)
     return store
 }
 
 @MainActor
 @Test
-func conversationRendersWithoutClippingOrOverlap() throws {
-    let size = CheckMessageWindowController.defaultContentSize
-    let expectedWidth = Int(size.width) * 2
-    let expectedHeight = Int(size.height) * 2
-    let blank = try mwBlankBitmap()
-
+func theConversationDrawsOnePersonOnlyAndStaysInsideThePopover() throws {
     let store = mwThreadStore(host: "mw-render-thread")
     store.messageDraft = "곧 올릴게요"
     let bitmap = try mwBitmap(store)
-    #expect(bitmap.pixelsWide == expectedWidth && bitmap.pixelsHigh == expectedHeight)
-    MessageWindowSnapshots.save(bitmap, name: "msgwin-thread.png")
+    MessagePanelSnapshots.save(bitmap, name: "panels-msg-thread.png")
 
-    // 그린 것이 창 안에 있다(좌우로 넘치지 않는다). 헤더 띠는 뺀 본문만 잰다.
-    let ink = try #require(mwDiffBounds(bitmap, blank, skippingTopPixels: 90), "대화 화면이 통째로 비었다")
-    #expect(ink.maxX <= CGFloat(expectedWidth) - 2, "내용이 오른쪽으로 넘쳤다")
-    // ※ 왼쪽은 재지 않는다: 대화 목록 판이 **일부러 창 왼쪽 끝까지** 칠해져 있어(2단 구분) 잉크가 x=0 에서 시작한다.
-    //   제보 창에서 `minX >= 4` 를 잰 것과 다른 이유가 그것이다 — 거기는 한 단짜리 화면이었다.
-    // 아래쪽까지 내용이 있다(입력줄이 잘려 나가지 않았다).
-    #expect(ink.maxY > CGFloat(expectedHeight) * 0.8, "아래쪽이 비었다 — 입력줄이 안 그려졌다")
+    // 팝오버 폭은 본문 316 + 간격 10 + 레일 64 + 바깥 padding 24 = 414pt 고정이다.
+    #expect(bitmap.pixelsWide == 414 * 2, "대화 패널이 팝오버 폭을 밀어냈다")
+    #expect(Double(bitmap.pixelsHigh) / 2.0 <= mwPopoverHeightCap,
+            "대화 화면이 700pt 상한을 넘었다: \(Double(bitmap.pixelsHigh) / 2.0)pt")
 
-    // 최소 크기(460×420)에서도 같은 성질이 유지된다 — 좁히면 말풍선이 겹치거나 넘치는지 눈으로 본다.
-    let minSize = CheckMessageWindowController.minContentSize
-    let small = try mwBitmap(store, size: minSize)
-    MessageWindowSnapshots.save(small, name: "msgwin-thread-min.png")
-    let smallInk = try #require(
-        mwDiffBounds(small, try mwBlankBitmap(size: minSize), skippingTopPixels: 90),
-        "최소 크기에서 대화가 통째로 비었다"
-    )
-    #expect(smallInk.maxX <= CGFloat(Int(minSize.width) * 2) - 2, "최소 크기에서 내용이 오른쪽으로 넘쳤다")
+    let blank = try mwBlankBitmap(matching: bitmap)
+    let ink = try #require(mwDiffBounds(bitmap, blank), "대화 화면이 통째로 비었다")
+    #expect(ink.maxX <= CGFloat(bitmap.pixelsWide) - 2, "내용이 오른쪽으로 넘쳤다")
+    #expect(ink.minX >= 4, "내용이 왼쪽 밖에서 시작한다")
+    // **푸터가 살아 있다**: 잉크가 그림 맨 아래까지 닿는다(로그아웃/앱 종료 버튼 줄).
+    #expect(ink.maxY > CGFloat(bitmap.pixelsHigh) - 60, "팝오버 아래쪽이 비었다 — 푸터가 안 그려졌다")
+
+    // ★ **왼쪽 대화 목록이 없다**(사용자 지시 1). 다른 사람을 골라 그리면 그림이 달라야 한다 —
+    //   같으면 두 대화가 같은 화면이라는 뜻이고, 그건 곧 목록형 화면이 살아 있다는 신호다.
+    let other = mwThreadStore(host: "mw-render-thread-other", peer: "u2")
+    let otherBitmap = try mwBitmap(other)
+    #expect(mwDiffBounds(bitmap, otherBitmap) != nil, "상대를 바꿨는데 화면이 그대로다 — 한 사람짜리 화면이 아니다")
 }
 
 @MainActor
 @Test
-func emptyStatesAreDifferentForNoThreadsAndNoSelection() throws {
-    let blank = try mwBlankBitmap()
+func emptyStatesAreDifferentForNoPeerAndNoMessages() throws {
+    // ① 상대를 못 정했다 — 할 일은 '고르기'다(이 화면에는 사람 목록이 없으므로 어디로 갈지 말해 준다).
+    let noPeer = mwMenuStore(mwStore(host: "mw-render-nopeer"))
+    noPeer.messageHistoryLoaded = true
+    noPeer.openMessagePanel(peer: nil)
+    let noPeerBitmap = try mwBitmap(noPeer)
+    MessagePanelSnapshots.save(noPeerBitmap, name: "panels-msg-nopeer.png")
+    #expect(mwDiffBounds(noPeerBitmap, try mwBlankBitmap(matching: noPeerBitmap)) != nil, "빈 상태가 아무것도 안 그렸다")
 
-    // ① 대화가 하나도 없다 — 할 일은 '시작하기'다(이 창에는 사람 목록이 없다).
-    let empty = mwStore(host: "mw-render-empty")
-    empty.messageHistoryLoaded = true
-    let emptyBitmap = try mwBitmap(empty)
-    MessageWindowSnapshots.save(emptyBitmap, name: "msgwin-empty.png")
-    #expect(mwDiffBounds(emptyBitmap, blank, skippingTopPixels: 90) != nil, "빈 상태가 아무것도 안 그렸다")
-
-    // ② 대화는 있는데 아무도 안 골랐다 — 할 일은 '고르기'다. **두 화면은 달라야 한다.**
-    let unselected = mwThreadStore(host: "mw-render-unselected")
-    unselected.selectMessagePeer(nil)
-    let unselectedBitmap = try mwBitmap(unselected)
-    MessageWindowSnapshots.save(unselectedBitmap, name: "msgwin-empty-unselected.png")
+    // ② 상대는 정했는데 주고받은 것이 없다 — 할 일은 '시작하기'다. **두 화면은 달라야 한다.**
+    let noMessages = mwMenuStore(mwStore(host: "mw-render-empty"))
+    noMessages.messageHistoryLoaded = true
+    noMessages.pokeDirectory = [PokeDirectoryEntry(userID: "u1", name: "영식", avatarURL: nil, isWorking: true)]
+    noMessages.pokeDirectoryLoaded = true
+    noMessages.openMessagePanel(peer: "u1")
+    let emptyBitmap = try mwBitmap(noMessages)
+    MessagePanelSnapshots.save(emptyBitmap, name: "panels-msg-empty.png")
+    #expect(Double(emptyBitmap.pixelsHigh) / 2.0 <= mwPopoverHeightCap)
     #expect(
-        mwDiffBounds(emptyBitmap, unselectedBitmap) != nil,
+        mwDiffBounds(noPeerBitmap, emptyBitmap) != nil,
         "두 빈 상태가 같은 그림이다 — 사용자가 할 일이 다른데 같은 말을 하고 있다"
     )
+    // 상대를 아는 화면은 **이름을 그린다**(콕찌르기 목록에서 온 이름이다 — 이력이 비어도 안다).
+    #expect(noMessages.selectedMessagePeerName == "영식", "한 번도 대화한 적 없는 사람의 이름을 못 찾았다")
+
+    // ③ 못 불러왔다 — 위 둘과 또 다른 문장 + [다시 시도].
+    let failed = mwMenuStore(mwStore(host: "mw-render-failed"))
+    failed.messageHistoryFailed = true
+    failed.pokeDirectory = [PokeDirectoryEntry(userID: "u1", name: "영식", avatarURL: nil, isWorking: true)]
+    failed.openMessagePanel(peer: "u1")
+    failed.messageHistoryLoaded = false
+    failed.messageHistoryFailed = true
+    let failedBitmap = try mwBitmap(failed)
+    MessagePanelSnapshots.save(failedBitmap, name: "panels-msg-failed.png")
+    #expect(mwDiffBounds(failedBitmap, emptyBitmap) != nil, "못 불러온 화면이 '아직 없어요'와 똑같이 그려졌다")
 }
 
 @MainActor
 @Test
-func longBodiesWrapInsideTheBubbleInsteadOfOverflowing() throws {
-    // 200자 한 덩어리. `fixedSize(horizontal:)` 을 말풍선에 붙였다면 여기서 창 밖으로 넘친다.
+func twoHundredCharacterBodiesWrapInsideTheBubbleInsteadOfOverflowing() throws {
+    // 200자 한 덩어리. `fixedSize(horizontal:)` 을 말풍선에 붙였다면 여기서 화면 밖으로 넘친다.
     let long = mwEntry(
         id: "long",
         peer: "u1",
@@ -834,68 +926,80 @@ func longBodiesWrapInsideTheBubbleInsteadOfOverflowing() throws {
         minutesAgo: 5
     )
     let store = mwThreadStore(host: "mw-render-long", extra: [long])
-    store.selectMessagePeer("u1")
     store.messageDraft = String(repeating: "답장 초안 ", count: 12)
 
     let bitmap = try mwBitmap(store)
-    MessageWindowSnapshots.save(bitmap, name: "msgwin-long.png")
-    let ink = try #require(mwDiffBounds(bitmap, try mwBlankBitmap(), skippingTopPixels: 90))
-    #expect(ink.maxX <= CGFloat(Int(CheckMessageWindowController.defaultContentSize.width) * 2) - 2,
-            "긴 본문이 창 밖으로 넘쳤다 — 말풍선이 폭 상한을 안 지킨다")
-}
+    MessagePanelSnapshots.save(bitmap, name: "panels-msg-long.png")
+    #expect(bitmap.pixelsWide == 414 * 2, "긴 본문이 팝오버 폭을 밀어냈다")
+    #expect(Double(bitmap.pixelsHigh) / 2.0 <= mwPopoverHeightCap,
+            "200자 대화가 700pt 상한을 넘었다: \(Double(bitmap.pixelsHigh) / 2.0)pt")
+    let ink = try #require(mwDiffBounds(bitmap, try mwBlankBitmap(matching: bitmap)))
+    #expect(ink.maxX <= CGFloat(bitmap.pixelsWide) - 2, "긴 본문이 화면 밖으로 넘쳤다 — 말풍선이 폭 상한을 안 지킨다")
+    #expect(ink.maxY > CGFloat(bitmap.pixelsHigh) - 60, "200자 대화에서 푸터가 안 그려졌다")
 
-@MainActor
-@Test
-func emojiBodiesRenderInBothDirections() throws {
-    // 3글자 시절에는 입력 자체가 이모지를 지웠다. 이제는 정상 입력이라 **양쪽 말풍선 모두** 그려져야 한다.
-    let store = mwThreadStore(host: "mw-render-emoji", extra: [
+    // 이모지도 양쪽 말풍선 모두 그려진다(3글자 시절에는 입력 자체가 이모지를 지웠다).
+    let emoji = mwThreadStore(host: "mw-render-emoji", extra: [
         mwEntry(id: "e1", peer: "u1", name: "영식", body: "축하해요 🎉🎉", minutesAgo: 20),
         mwEntry(id: "e2", peer: "u1", name: "영식", body: "고마워요 👨‍👩‍👧‍👦 🇰🇷 👍🏻", minutesAgo: 18, isMine: true)
     ])
-    store.selectMessagePeer("u1")
-    store.messageDraft = "🎉 감사합니다"
-
-    let bitmap = try mwBitmap(store)
-    MessageWindowSnapshots.save(bitmap, name: "msgwin-emoji.png")
-    #expect(mwDiffBounds(bitmap, try mwBlankBitmap(), skippingTopPixels: 90) != nil)
+    emoji.messageDraft = "🎉 감사합니다"
+    let emojiBitmap = try mwBitmap(emoji)
+    MessagePanelSnapshots.save(emojiBitmap, name: "panels-msg-emoji.png")
+    #expect(mwDiffBounds(emojiBitmap, try mwBlankBitmap(matching: emojiBitmap)) != nil)
     // 카운터는 **코드포인트**를 센다("🎉 감사합니다" = 1 + 1 + 5 = 7).
-    #expect(store.messageDraftLength == 7)
+    #expect(emoji.messageDraftLength == 7)
 }
 
 @MainActor
 @Test
-func longPeerNamesNeverPushTheListRowOffScreen() throws {
+func aLongPeerNameNeverPushesTheHeaderOffScreen() throws {
     let store = mwThreadStore(host: "mw-render-longname", extra: [
         mwEntry(id: "n1", peer: "u9", name: String(repeating: "김수한무", count: 6),
-                body: String(repeating: "긴 미리보기 ", count: 20), minutesAgo: 1)
-    ])
+                body: "안녕하세요", minutesAgo: 1)
+    ], peer: "u9")
     let bitmap = try mwBitmap(store)
-    MessageWindowSnapshots.save(bitmap, name: "msgwin-long-name.png")
-    let ink = try #require(mwDiffBounds(bitmap, try mwBlankBitmap(), skippingTopPixels: 90))
-    #expect(ink.maxX <= CGFloat(Int(CheckMessageWindowController.defaultContentSize.width) * 2) - 2,
-            "긴 이름·미리보기가 목록 폭을 밀어냈다")
+    MessagePanelSnapshots.save(bitmap, name: "panels-msg-long-name.png")
+    #expect(bitmap.pixelsWide == 414 * 2, "긴 이름이 팝오버 폭을 밀어냈다")
+    let ink = try #require(mwDiffBounds(bitmap, try mwBlankBitmap(matching: bitmap)))
+    #expect(ink.maxX <= CGFloat(bitmap.pixelsWide) - 2, "긴 이름이 머리 줄을 밀어냈다")
 }
 
 @MainActor
 @Test
-func thePokePanelEntryPointHasNoInlineComposerLeft() throws {
-    // 스냅샷 `msgwin-poke-entry.png` — **콕찌르기 패널에서 인라인 작성기가 사라진 모습**이다.
-    // 말풍선 버튼은 이제 창을 여는 문일 뿐이라, 행 아래로 펼쳐지는 입력칸이 한 개도 없어야 한다.
-    let store = mwStore(host: "mw-render-poke-entry")
-    // 팝오버가 콕찌르기 패널을 그리려면 **팀이 확정된 로그인 상태**여야 한다 —
-    // 안 그러면 "합류할 팀을 찾아요" 화면이 나와 이 스냅샷이 아무것도 증명하지 못한다(첫 판의 실측).
-    store.isMenuPresented = true
-    store.displayNow = mwNow
-    store.currentTeamID = URLProtocolStub.stubTeamID
-    store.teamName = "아잉팀"
-    store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 3_600)
+func theMessagePanelStaysUnderTheCapWithTheTallestChromeOnTop() throws {
+    // ★ **이 작업 최악의 결함이 창 높이 회귀다.** 새 버전 배너 + 패치노트 4줄(149pt) + 주간 목표 편집
+    //   인라인 행(92pt) = 241pt 가 함께 선 가장 키 큰 조합까지 그려 700pt 를 안 넘고 **푸터가 살아 있는지** 본다.
+    let store = mwThreadStore(host: "mw-render-tallest", extra: [
+        mwEntry(id: "long", peer: "u1", name: "영식",
+                body: String(repeating: "가나다라마바사아자차", count: 20), minutesAgo: 5)
+    ])
+    store.messageDraft = String(repeating: "답장 초안 ", count: 12)
+    store.messageNotice = WorkTimerStore.messageInvalidNotice
+
+    let bitmap = try mwBitmap(store, worstChrome: true)
+    MessagePanelSnapshots.save(bitmap, name: "panels-tallest.png")
+    let height = Double(bitmap.pixelsHigh) / 2.0
+    #expect(height <= mwPopoverHeightCap, "가장 키 큰 대화 조합이 700pt 를 넘었다: \(height)pt")
+    let ink = try #require(mwDiffBounds(bitmap, try mwBlankBitmap(matching: bitmap)))
+    #expect(ink.maxY > CGFloat(bitmap.pixelsHigh) - 60, "가장 키 큰 조합에서 푸터가 안 그려졌다")
+    #expect(ink.maxX <= CGFloat(bitmap.pixelsWide) - 2)
+}
+
+@MainActor
+@Test
+func thePokeListIsTheOnlyDoorAndItShowsWhatIsUnread() throws {
+    // 스냅샷 `panels-poke-entry.png` — **진입 지점**이다. 말풍선 버튼을 누르면 그 사람과의 대화로 넘어간다.
+    let store = mwMenuStore(mwStore(host: "mw-render-poke-entry"))
     store.pokeDirectory = [
-        PokeDirectoryEntry(userID: "u1", name: "영식", avatarURL: nil, isWorking: true, canReceiveMessage: true),
-        PokeDirectoryEntry(userID: "u2", name: "김서연", avatarURL: nil, isWorking: true, canReceiveMessage: false),
-        PokeDirectoryEntry(userID: "u3", name: "박도윤", avatarURL: nil, isWorking: false, canReceiveMessage: true)
+        PokeDirectoryEntry(userID: "u1", name: "영식", avatarURL: nil, isWorking: true),
+        PokeDirectoryEntry(userID: "u2", name: "김서연", avatarURL: nil, isWorking: true),
+        PokeDirectoryEntry(userID: "u3", name: "박도윤", avatarURL: nil, isWorking: false)
     ]
     store.pokeDirectoryLoaded = true
     store.isPokePanelVisible = true
+    // u2 에게서 온 것은 안 읽음이다(도장이 없다) → 말풍선 버튼에 점이 붙는다.
+    store.messageHistory = [mwEntry(id: "b1", peer: "u2", name: "김서연", body: "점심?", minutesAgo: 5)]
+    store.messageHistoryLoaded = true
     store.receivedMessages = [
         ReceivedMessage(
             id: "m1",
@@ -906,55 +1010,127 @@ func thePokePanelEntryPointHasNoInlineComposerLeft() throws {
         )
     ]
 
-    let view = CheckMenuView(store: store, previewClipsOverflowList: true)
-    let renderer = ImageRenderer(content: view)
-    renderer.scale = 2
-    let image = try #require(renderer.nsImage)
-    let bitmap = try #require(image.tiffRepresentation.flatMap { NSBitmapImageRep(data: $0) })
-    MessageWindowSnapshots.save(bitmap, name: "msgwin-poke-entry.png")
+    let bitmap = try mwBitmap(store)
+    MessagePanelSnapshots.save(bitmap, name: "panels-poke-entry.png")
+    #expect(Double(bitmap.pixelsHigh) / 2.0 <= mwPopoverHeightCap)
 
-    // 팝오버 폭은 본문 길이에 끌려다니지 않는다 — 짧은 본문으로 그린 같은 화면과 폭이 **같아야** 한다
-    // (옛 수신 줄의 `.fixedSize()` 가 정확히 이 성질을 깼다: 200자가 이상 폭을 요구해 행을 밀어냈다).
+    // 안 읽음 점이 **화면을 바꾼다**(안 그러면 그 개념이 앱 어디에도 안 보인다).
+    let read = mwMenuStore(mwStore(host: "mw-render-poke-entry-read"))
+    read.pokeDirectory = store.pokeDirectory
+    read.pokeDirectoryLoaded = true
+    read.isPokePanelVisible = true
+    read.messageHistory = store.messageHistory
+    read.messageHistoryLoaded = true
+    read.messageReadStamps = ["u2": mwNow]
+    read.receivedMessages = store.receivedMessages
+    #expect(read.unreadMessagePeerIDs.isEmpty && store.unreadMessagePeerIDs == ["u2"])
+    let readBitmap = try mwBitmap(read)
+    #expect(mwDiffBounds(bitmap, readBitmap) != nil, "안 읽은 것이 있는데 말풍선 버튼이 똑같이 그려졌다")
+
+    // 팝오버 폭은 본문 길이에 끌려다니지 않는다 — 옛 수신 줄의 `.fixedSize()` 가 정확히 이 성질을 깼다.
     store.receivedMessages = [
         ReceivedMessage(id: "m1", fromName: "김서연", body: "밥?", createdAt: mwNow.addingTimeInterval(-120), fromUserID: "u2")
     ]
-    let shortRenderer = ImageRenderer(content: CheckMenuView(store: store, previewClipsOverflowList: true))
-    shortRenderer.scale = 2
-    let shortImage = try #require(shortRenderer.nsImage)
-    let shortBitmap = try #require(shortImage.tiffRepresentation.flatMap { NSBitmapImageRep(data: $0) })
+    let shortBitmap = try mwBitmap(store)
     #expect(bitmap.pixelsWide == shortBitmap.pixelsWide, "긴 본문이 팝오버 폭을 밀어냈다")
     #expect(bitmap.pixelsHigh == shortBitmap.pixelsHigh, "긴 본문이 수신 줄을 여러 줄로 키웠다")
-    // 창 높이 상한(700pt)도 그대로다.
-    #expect(Double(bitmap.pixelsHigh) / 2.0 <= 700.0)
 }
 
-// MARK: - 창 계약
+// MARK: - 패널 계약 (v0.2.50 — 창이 사라졌다)
 
 @MainActor
 @Test
-func theWindowFollowsTheFeedbackWindowContract() {
-    // 제보 창과 **같은 규약**이어야 한다 — 한쪽만 다르면 다음 사람이 어느 쪽이 옳은지 알 수 없다.
-    let window = CheckMessageWindowController.makeWindow()
+func theMessageWindowIsGoneAndNothingStillWiresIt() throws {
+    // 사용자 지시 1의 확인 질문 답: **"팝오버 안에서 전환"**(창이 하나도 안 뜨는 쪽).
+    // 창 계약을 재던 테스트는 잴 대상이 사라졌다 — 대신 "정말 사라졌는가"를 소스로 못 박는다.
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    for name in ["CheckMessageWindow.swift", "CheckFeedbackWindow.swift"] {
+        let url = root.appendingPathComponent("Sources/check/\(name)")
+        #expect(!FileManager.default.fileExists(atPath: url.path), "\(name) 이 아직 있다")
+    }
+    // 배선도 함께 사라졌다(남아 있으면 컴파일은 되는데 아무도 안 여는 창 컨트롤러가 앱에 산다).
+    let app = mwStripComments(try String(contentsOf: root.appendingPathComponent("Sources/check/CheckApp.swift"), encoding: .utf8))
+    #expect(!app.contains("CheckMessageWindowController"), "CheckApp 이 아직 메시지 창을 배선한다")
+    #expect(!app.contains("CheckFeedbackWindowController"), "CheckApp 이 아직 제보 창을 배선한다")
+    // 대조군: **설정·미니게임은 여전히 창이다**(함께 지웠다면 그건 요구를 넘어선 파괴다).
+    #expect(app.contains("CheckSettingsWindowController"))
+    #expect(app.contains("CheckMiniGameWindowController"))
+}
 
-    #expect(window.title == CheckMessageWindowController.windowTitle)
-    #expect(window.styleMask.contains(.titled))
-    #expect(window.styleMask.contains(.closable))
-    #expect(window.styleMask.contains(.resizable), "긴 대화를 보는 창이라 키울 수 있어야 한다")
-    // ★ Dock 타일이 없는 앱이라 최소화한 창을 되찾을 길이 없다(설정·제보 창과 같은 근거).
-    #expect(!window.styleMask.contains(.miniaturizable))
-    #expect(!window.isReleasedWhenClosed, "닫힘에 딸린 해제가 끼면 다음 show() 가 해제된 창을 만진다")
-    #expect(!window.hidesOnDeactivate, "옆에 켜 두는 것이 메신저의 정상 사용 형태다")
-    #expect(window.appearance?.name == .darkAqua, "앱 전체가 다크다 — 시스템 외관을 따르면 흰 배경에 흰 글자가 난다")
-    #expect(window.contentMinSize == CheckMessageWindowController.minContentSize)
-    #expect(window.alphaValue == CheckPanelVisibility.panelAlpha)
-    #expect(CheckMessageWindowController.defaultContentSize == NSSize(width: 560, height: 600))
-    #expect(CheckMessageWindowController.frameAutosaveName == "check.messageWindow")
+@MainActor
+@Test
+func openingTheConversationClosesEveryOtherPanelAndNeverTouchesThePopover() throws {
+    let store = mwStore(host: "mw-panel-exclusive")
+    store.isLeaderboardVisible = true
+    store.isTokenBoardVisible = true
+    store.isInsightsPanelVisible = true
+    store.isFeedbackPanelVisible = true
 
-    // 배선 전에는 창을 만들지 않는다(스토어 없이 만든 창은 담을 게 없다).
-    let controller = CheckMessageWindowController(stuckWindowCheckSeconds: 0.01)
-    controller.show()
-    #expect(!controller.hasWindow)
-    #expect(!controller.isOpen)
-    // 진단 문자열에 **본문이 없다** — 로그로 흘러가는 값이다.
-    #expect(controller.diagnosticState.contains("window=none"))
+    store.openMessagePanel(peer: "u1")
+
+    #expect(store.isMessagePanelVisible)
+    #expect(!store.isLeaderboardVisible && !store.isTokenBoardVisible)
+    #expect(!store.isInsightsPanelVisible && !store.isFeedbackPanelVisible)
+    #expect(!store.isPokePanelVisible && !store.isUltraPanelVisible, "다른 패널이 대화 뒤에 살아 남았다")
+
+    // ★ **팝오버를 닫지 않는다.** 창이던 시절에는 진입점이 `dismissMenuPopover()` 를 불렀는데,
+    //   지금 그러면 방금 연 대화가 그 자리에서 사라진다. 주석은 걷어내고 본다.
+    let code = try mwSource("WorkTimerStoreMessages.swift")
+    #expect(!code.contains("dismissMenuPopover"), "대화 진입점이 아직 팝오버를 닫는다 — 패널은 팝오버 안에 산다")
+}
+
+@MainActor
+@Test
+func theOverlayBubbleOpensTheConversationOfWhoeverSentIt() throws {
+    // 캐릭터 머리 위 도착 말풍선 클릭 배선. 창이 사라졌으니 갈 곳은 팝오버 **안**이다.
+    //
+    // ⚠️ **헤드리스에서 잴 수 있는 것은 여기까지다.** "정말 팝오버가 떴는가"는 창 서버를 흉내 낼 수
+    //    없어서 이 프로세스로 못 잰다(닫는 문 `dismissMenuPopover` 도 v0.2.49 부터 같은 한계 안에 있고,
+    //    그쪽 실측 표는 별도 재현 앱에서 CGWindowList 로 밖에서 센 것이다). 그래서 두 가지만 잰다:
+    //    ① 배선이 상대를 실어 나른다 ② 여는 판정이 닫는 판정과 **같은 함수** 하나다.
+    let app = mwStripComments(try String(
+        contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/check/CheckApp.swift"),
+        encoding: .utf8
+    ))
+    #expect(app.contains("onOpenMessages"), "말풍선 클릭 배선이 사라졌다 — 눌러도 아무 일이 없다")
+    #expect(app.contains("openMessagePanel(peer:"), "말풍선이 상대를 안 실어 보낸다 — 빈 화면이 열린다")
+    #expect(app.contains("from: .overlay"), "말풍선 진입이 콕찌르기에서 온 것으로 기록된다 — [뒤로]가 엉뚱한 곳으로 간다")
+    #expect(app.contains("WindowTopAnchor.presentMenuPopover()"), "패널만 세우고 팝오버를 안 연다")
+
+    // 여는 판정과 닫는 판정이 **한 함수**다(누르는 수단이 토글 하나라 두 벌로 나뉘면 언젠가 갈린다).
+    let now = Date(timeIntervalSince1970: 1_789_000_000)
+    #expect(
+        WindowTopAnchor.menuPopoverToggleDecision(
+            intent: .present, presented: false, hasStatusItem: true, lastClickAt: nil, now: now
+        ) == .click
+    )
+    // 이미 떠 있으면 누르지 않는다 — 누르면 오히려 닫힌다.
+    #expect(
+        WindowTopAnchor.menuPopoverToggleDecision(
+            intent: .present, presented: true, hasStatusItem: true, lastClickAt: nil, now: now
+        ) == .alreadySettled
+    )
+    // 닫는 쪽은 정확히 반대다(같은 함수, 방향만 다르다).
+    #expect(
+        WindowTopAnchor.menuPopoverToggleDecision(
+            intent: .dismiss, presented: true, hasStatusItem: true, lastClickAt: nil, now: now
+        ) == .click
+    )
+    #expect(
+        WindowTopAnchor.menuPopoverToggleDecision(
+            intent: .dismiss, presented: false, hasStatusItem: true, lastClickAt: nil, now: now
+        ) == .alreadySettled
+    )
+    // 디바운스는 **여닫기 공용**이다 — 방금 닫아 놓고 곧바로 열면 사용자가 보는 결과는 제자리다.
+    #expect(
+        WindowTopAnchor.menuPopoverToggleDecision(
+            intent: .present, presented: false, hasStatusItem: true,
+            lastClickAt: now.addingTimeInterval(-0.1), now: now
+        ) == .debounced
+    )
+    // 상태 아이템이 없는 실행(헤드리스 테스트)에서는 아무 일도 안 한다.
+    #expect(WindowTopAnchor.presentMenuPopover() == .noStatusItem || WindowTopAnchor.presentMenuPopover() == .debounced)
 }

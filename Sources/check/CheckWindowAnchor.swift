@@ -45,8 +45,11 @@ final class WindowTopAnchor {
     /// 마지막으로 상태바 아이템을 누른 시각(중복 방어). 두 번 누르면 **토글이라 팝오버가 도로 열린다** —
     /// 한 동작에서 두 경로가 각자 닫으려 드는 조합(예: 창을 여는 스토어 메서드와 그 버튼의 호출부가
     /// 둘 다 닫으려는 경우)에서 사용자가 보는 결과가 "안 닫힘"이 되지 않게 막는다.
-    private static var lastDismissAt: Date?
-    /// 그 방어선의 길이. 사람이 두 번 누를 수 있는 간격보다는 짧고, 한 동작 안의 두 호출보다는 길다.
+    ///
+    /// **여는 쪽과 닫는 쪽이 이 한 값을 나눠 쓴다**(v0.2.50). 누르는 수단이 같은 버튼 하나라, 방어선을
+    /// 방향마다 따로 두면 "닫자마자 열기"가 서로를 못 보고 두 번 눌러 결과가 제자리로 돌아온다.
+    private static var lastToggleClickAt: Date?
+    /// 그 방어선의 길이(여닫기 공용). 사람이 두 번 누를 수 있는 간격보다는 짧고, 한 동작 안의 두 호출보다는 길다.
     /// (테스트가 이 값을 읽는다 — 리터럴을 다시 적으면 길이를 바꿔도 가드가 안 따라온다.)
     static let dismissDebounce: TimeInterval = 0.6
 
@@ -222,6 +225,45 @@ struct WindowAnchorAccessor: NSViewRepresentable {
 
 // MARK: - 팝오버 닫기 (실측 근거는 아래 주석)
 
+/// 상태바 버튼을 눌러 **어느 쪽으로 가려는가**. 누르는 수단이 토글 하나뿐이라 방향은 판정의 입력이다.
+enum MenuPopoverIntent: Equatable, Sendable {
+    case dismiss
+    case present
+}
+
+/// 그 판정의 결과(여닫기 공용).
+enum MenuPopoverToggleDecision: Equatable, Sendable {
+    /// 눌러야 한다.
+    case click
+    /// **이미 원하는 상태다.** 여기서 누르면 오히려 반대로 뒤집힌다.
+    case alreadySettled
+    /// 상태바 버튼을 못 찾았다(상태 아이템이 없는 실행 — 테스트 프로세스 등).
+    case noStatusItem
+    /// 방금 눌렀다. 연달아 누르면 토글이라 도로 돌아오므로 두 번째는 삼킨다.
+    case debounced
+}
+
+/// `presentMenuPopover()` 가 **무엇을 했는지**(닫는 쪽 `MenuPopoverDismissal` 과 같은 모양·같은 이유).
+enum MenuPopoverPresentation: Equatable {
+    /// 상태바 아이템을 눌러 실제로 열었다.
+    case presented
+    /// 팝오버가 이미 떠 있어 **아무것도 하지 않았다.** 이 자리에서 누르면 오히려 닫힌다.
+    case alreadyPresented
+    /// 상태바 버튼을 못 찾았다(상태 아이템이 없는 실행 — 테스트 프로세스 등).
+    case noStatusItem
+    /// 방금 눌렀다. 연달아 누르면 토글이라 도로 닫히므로 두 번째는 삼킨다.
+    case debounced
+
+    init(_ decision: MenuPopoverToggleDecision) {
+        switch decision {
+        case .click: self = .presented
+        case .alreadySettled: self = .alreadyPresented
+        case .noStatusItem: self = .noStatusItem
+        case .debounced: self = .debounced
+        }
+    }
+}
+
 /// `dismissMenuPopover()` 가 **무엇을 했는지**. 헤드리스에서는 창 서버를 흉내 낼 수 없으므로
 /// 값으로 확인할 수 있는 것이 판단뿐이다 — 그래서 Bool 이 아니라 이유를 돌려준다.
 enum MenuPopoverDismissal: Equatable {
@@ -271,32 +313,85 @@ extension WindowTopAnchor {
         let decision = dismissDecision(
             presented: isMenuPopoverPresented(),
             hasStatusItem: button != nil,
-            lastDismissAt: lastDismissAt,
+            lastDismissAt: lastToggleClickAt,
             now: now
         )
         guard decision == .dismissed else { return decision }
-        lastDismissAt = now
+        lastToggleClickAt = now
         button?.performClick(nil)
         return decision
     }
 
-    /// 무엇을 할지 정하는 **순수** 판단(헤드리스 검증 지점). 창 서버를 흉내 낼 수 없으므로 실제 클릭은
-    /// 잴 수 없지만, 누를지 말지를 가르는 표는 전부 여기 있다 — 위 `dismissMenuPopover` 는 이 결정을
-    /// 그대로 따르는 얇은 배선일 뿐이다.
+    /// 팝오버를 **여는** 문(v0.2.50). 캐릭터 머리 위 '메시지 도착' 말풍선을 누른 경우가 유일한 호출부다 —
+    /// 메시지가 별도 창에서 팝오버 하위 패널로 내려오면서, 그 클릭이 갈 곳이 팝오버 **안**이 됐다.
     ///
-    /// 순서가 곧 뜻이다. `presented` 가 맨 앞인 이유는 **누르는 것이 토글**이기 때문이다 — 안 떠 있는데
-    /// 누르면 닫는 게 아니라 연다. 디바운스가 상태 아이템 확인보다 앞인 이유는, 방금 눌러 놓고 아직
-    /// 창 서버 목록이 안 따라잡은 순간에도 두 번째 클릭을 막아야 하기 때문이다.
+    /// **닫는 문과 같은 버튼·같은 판단이다.** 누르는 수단이 `NSStatusBarButton.performClick` 하나뿐이고
+    /// 그것은 토글이라, 여는 일과 닫는 일의 차이는 "지금 떠 있는가"를 어느 쪽으로 읽느냐 하나다 —
+    /// 그래서 판정을 두 벌로 만들지 않고 `menuPopoverToggleDecision(intent:)` 하나에 방향만 넘긴다.
+    ///
+    /// ⚠️ **여기서 확인할 수 있는 것은 판단까지다.** 헤드리스에서는 창 서버를 흉내 낼 수 없어 "정말 떴는가"는
+    ///    이 프로세스로 잴 수 없다(닫는 문도 v0.2.49 부터 같은 한계 안에 있다 — 위 실측 표는 별도 재현 앱에서
+    ///    `CGWindowListCopyWindowInfo` 로 밖에서 센 것이다). 그래서 실패해도 **조용히 아무 일도 없는 쪽**으로
+    ///    틀리게 짰다: 패널 상태는 이 호출과 무관하게 이미 세워져 있으므로, 팝오버가 안 떠도 사용자가 다음에
+    ///    아이콘을 누르면 그 대화가 그 자리에 있다.
+    @discardableResult
+    static func presentMenuPopover(now: Date = Date()) -> MenuPopoverPresentation {
+        let button = statusItemButton()
+        let decision = menuPopoverToggleDecision(
+            intent: .present,
+            presented: isMenuPopoverPresented(),
+            hasStatusItem: button != nil,
+            lastClickAt: lastToggleClickAt,
+            now: now
+        )
+        guard decision == .click else { return MenuPopoverPresentation(decision) }
+        lastToggleClickAt = now
+        button?.performClick(nil)
+        return .presented
+    }
+
+    /// 무엇을 할지 정하는 **순수** 판단(헤드리스 검증 지점). 창 서버를 흉내 낼 수 없으므로 실제 클릭은
+    /// 잴 수 없지만, 누를지 말지를 가르는 표는 전부 여기 있다 — `dismissMenuPopover`/`presentMenuPopover` 는
+    /// 이 결정을 그대로 따르는 얇은 배선일 뿐이다.
+    ///
+    /// 순서가 곧 뜻이다. `presented` 판정이 맨 앞인 이유는 **누르는 것이 토글**이기 때문이다 — 원하는 상태에
+    /// 이미 있으면 누르는 것이 그 상태를 되돌린다(안 떠 있는데 '닫으려' 누르면 열리고, 떠 있는데 '열려'
+    /// 누르면 닫힌다). 디바운스가 상태 아이템 확인보다 앞인 이유는, 방금 눌러 놓고 아직 창 서버 목록이
+    /// 안 따라잡은 순간에도 두 번째 클릭을 막아야 하기 때문이다.
+    static func menuPopoverToggleDecision(
+        intent: MenuPopoverIntent,
+        presented: Bool,
+        hasStatusItem: Bool,
+        lastClickAt: Date?,
+        now: Date
+    ) -> MenuPopoverToggleDecision {
+        let needsClick = (intent == .dismiss) ? presented : !presented
+        guard needsClick else { return .alreadySettled }
+        if let lastClickAt, now.timeIntervalSince(lastClickAt) < dismissDebounce { return .debounced }
+        guard hasStatusItem else { return .noStatusItem }
+        return .click
+    }
+
+    /// 닫는 쪽의 이름표. **판단은 위 하나뿐이고 여기서는 이름만 갈아입힌다** — 두 벌로 나뉘면 언젠가
+    /// 한쪽만 고쳐진다(이 저장소가 게이트를 짝으로 관리하는 이유와 같다).
     static func dismissDecision(
         presented: Bool,
         hasStatusItem: Bool,
         lastDismissAt: Date?,
         now: Date
     ) -> MenuPopoverDismissal {
-        guard presented else { return .notPresented }
-        if let lastDismissAt, now.timeIntervalSince(lastDismissAt) < dismissDebounce { return .debounced }
-        guard hasStatusItem else { return .noStatusItem }
-        return .dismissed
+        switch menuPopoverToggleDecision(
+            intent: .dismiss,
+            presented: presented,
+            hasStatusItem: hasStatusItem,
+            lastClickAt: lastDismissAt,
+            now: now
+        ) {
+        case .click: return .dismissed
+        case .alreadySettled: return .notPresented
+        case .noStatusItem: return .noStatusItem
+        case .debounced: return .debounced
+        }
     }
 
     /// 팝오버가 지금 **실제로** 화면에 서 있는가.
@@ -340,6 +435,6 @@ extension WindowTopAnchor {
     /// 중복 방어 래치를 비운다. **테스트 전용** — 한 프로세스에서 여러 판정을 이어 재려면
     /// 앞 테스트가 눌러 둔 시각이 다음 테스트를 `.debounced` 로 만들기 때문이다.
     static func resetDismissDebounceForTesting() {
-        lastDismissAt = nil
+        lastToggleClickAt = nil
     }
 }

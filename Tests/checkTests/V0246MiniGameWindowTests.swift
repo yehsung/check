@@ -560,3 +560,162 @@ func escapeSharesTheSpaceMonitorGate() throws {
             "모니터가 두 벌이다 — 설치·제거 규약이 갈린다")
     #expect(source.contains("onEscape: { togglePause() }"), "화면이 ESC 를 정지 토글에 안 물렸다")
 }
+
+// MARK: - 프레임 상한 = 화면 주사율의 약수 (v0.2.50)
+//
+// 사용자 신고 "살짝 버벅인다"의 원인은 `TimelineView(minimumInterval: 1/60)` 이었다 — 이 기계는 75Hz 라
+// 60 과 나눠떨어지지 않아 네 프레임에 한 장이 두 배(26.67ms)로 늘어졌다(실측 25.1%). 고친 방식은 상한을
+// 푸는 것이 아니라 **화면 주사율의 약수로 맞추는 것**이다(사용자 지시 2026-09-10). 여기서 그 표를 못 박는다.
+// 규칙과 근거는 `MiniGameFrameRate` 머리 주석에 있다 — 표를 고치려면 그 주석부터 고쳐야 한다.
+
+@Test
+func miniGameFrameRatePicksTheDivisorNearest60() {
+    // 사용자 지시에 함께 온 기대값(그대로다).
+    #expect(MiniGameFrameRate.targetFPS(forRefreshRate: 60) == 60)
+    #expect(MiniGameFrameRate.targetFPS(forRefreshRate: 75) == 75)
+    #expect(MiniGameFrameRate.targetFPS(forRefreshRate: 120) == 60)
+    #expect(MiniGameFrameRate.targetFPS(forRefreshRate: 144) == 72)
+    #expect(MiniGameFrameRate.targetFPS(forRefreshRate: 240) == 60)
+    #expect(MiniGameFrameRate.targetFPS(forRefreshRate: 90) == 90)
+    #expect(MiniGameFrameRate.targetFPS(forRefreshRate: 30) == 30)
+
+    // 60 이하는 화면이 주는 그대로(더 줄 수가 없다).
+    for hz in [24, 25, 30, 48, 50, 59, 60] {
+        #expect(MiniGameFrameRate.targetFPS(forRefreshRate: hz) == hz, "\(hz)Hz 는 그 값 그대로여야 한다")
+    }
+    // 60 초과 · 상한 안 — 자기 자신이 60 이상 최소 약수다.
+    for hz in [72, 75, 85, 90, 100, 119] {
+        #expect(MiniGameFrameRate.targetFPS(forRefreshRate: hz) == hz, "\(hz)Hz")
+    }
+    // 60 초과 — 나눠서 60 쪽으로 내려온다.
+    for (hz, fps) in [(120, 60), (144, 72), (160, 80), (170, 85), (180, 60), (200, 100),
+                      (240, 60), (300, 60), (360, 60), (480, 60)] {
+        #expect(MiniGameFrameRate.targetFPS(forRefreshRate: hz) == fps, "\(hz)Hz → \(fps) 여야 한다")
+    }
+    // 상한(120)이 **실제로 거는** 유일한 흔한 주사율. 165 의 약수는 1·3·5·11·15·33·55·165 뿐이라
+    // 60 이상은 자기 자신뿐이고 그것은 상한 밖이다 → 아래쪽에서 가장 가까운 55(3 vsync).
+    #expect(MiniGameFrameRate.targetFPS(forRefreshRate: 165) == 55)
+    // 바닥(40)이 거는 곳 — 60~120 에 약수가 없고 아래쪽 최선이 너무 낮다. 저더를 감수하고 60 으로 간다.
+    for hz in [121, 125, 127, 143, 155, 169, 175, 187, 209] {
+        #expect(MiniGameFrameRate.targetFPS(forRefreshRate: hz) == 60, "\(hz)Hz 는 60 폴백이어야 한다")
+    }
+}
+
+@MainActor
+@Test
+func miniGameFrameRateFallsBackWhenThereIsNoScreen() {
+    // 헤드리스·화면 없음·잘못 읽은 값. 여기서 0 으로 나누거나 1fps 로 떨어지면 게임이 멈춘 것처럼 보인다.
+    for hz in [0, -1, -60, 1, 7, 23] {
+        #expect(MiniGameFrameRate.targetFPS(forRefreshRate: hz) == 60, "\(hz) → 60 폴백이어야 한다")
+        #expect(MiniGameFrameRate.minimumInterval(forRefreshRate: hz) == 1.0 / 60.0, "\(hz) → 정확히 1/60")
+    }
+    // 이 테스트가 도는 곳에 화면이 없을 수도 있다 — 그 경로가 죽지 않는지(값이 언제나 쓸 만한지).
+    let live = MiniGameFrameRate.refreshRate(of: nil)
+    #expect(MiniGameFrameRate.targetFPS(forRefreshRate: live) >= 24)
+    #expect(MiniGameFrameRate.targetFPS(forRefreshRate: live) <= MiniGameFrameRate.maxFPS)
+}
+
+@Test
+func miniGameFrameRateIntervalLandsOnExactlyOneVsyncBoundary() {
+    // 이 단언이 이 변경의 심장이다: 요구 간격은 **k번째 vsync 를 고르고 k−1 번째는 못 고르는** 구간 안에
+    // 있어야 한다. 위로 넘치면 프레임 하나가 통째로 늦어지고(= 고치려던 저더), 아래로 (k−1)V 이하면
+    // 한 틱 이른 프레임이 상시로 생긴다.
+    for hz in 24...600 {
+        let fps = MiniGameFrameRate.targetFPS(forRefreshRate: hz)
+        let interval = MiniGameFrameRate.minimumInterval(forRefreshRate: hz)
+        if hz <= MiniGameFrameRate.baselineFPS {
+            // 규칙 ①: 화면이 60 이하면 그 값 그대로다(바닥은 여기 적용되지 않는다 — 24Hz 화면에서
+            // 40fps 를 요구하면 vsync 를 못 맞춰 도로 저더가 된다).
+            #expect(fps == hz, "\(hz)Hz 는 그 값 그대로여야 한다(목표 \(fps))")
+        } else {
+            #expect(fps >= MiniGameFrameRate.minFPS, "\(hz)Hz 목표 \(fps) — 바닥 아래다")
+        }
+        #expect(fps <= MiniGameFrameRate.maxFPS, "\(hz)Hz 목표 \(fps) — 상한 위다")
+        #expect(interval > 0)
+        guard hz % fps == 0 else {
+            // 나눠떨어지지 않는 폴백(저더 감수) — 뺄 vsync 가 없으니 정확히 1/60 이다.
+            #expect(fps == 60)
+            #expect(interval == 1.0 / 60.0, "\(hz)Hz 폴백 간격이 1/60 이 아니다")
+            continue
+        }
+        let vsync = 1.0 / Double(hz)
+        let k = Double(hz / fps)
+        #expect(interval <= k * vsync, "\(hz)Hz: 간격이 \(k)vsync 를 넘겼다 — 프레임이 늦는다")
+        #expect(interval > (k - 1) * vsync, "\(hz)Hz: 간격이 \(k - 1)vsync 이하다 — 프레임이 이르다")
+        // 여유는 vsync 한 틱 기준이라 k 에 끌려다니지 않는다.
+        #expect(abs(interval - (k - MiniGameFrameRate.vsyncHeadroom) * vsync) < 1e-12, "\(hz)Hz 여유가 k 에 끌려다닌다")
+    }
+    // 실제 화면 값 두 개(하나는 이 기계).
+    #expect(abs(MiniGameFrameRate.minimumInterval(forRefreshRate: 75) - 0.99 / 75.0) < 1e-12)
+    #expect(abs(MiniGameFrameRate.minimumInterval(forRefreshRate: 60) - 0.99 / 60.0) < 1e-12)
+}
+
+@MainActor
+@Suite(.serialized)
+struct V0250MiniGameFrameRateWiringTests {
+    /// 창을 열면 **그 창이 선 화면**에서 주사율을 읽는다. 창 생성 시점에는 `window.screen` 이 nil 이라
+    /// 그때 읽으면 두 번째 모니터에 놓아 둔 창이 주 화면의 값으로 논다.
+    @Test
+    func showReadsTheRefreshRateOfTheScreenTheWindowStandsOn() {
+        let store = mgwStore()
+        // 말도 안 되는 값으로 시작한다 — 갱신이 실제로 일어났는지 값으로 구별하기 위해서다.
+        let monitor = MiniGameFrameRateMonitor(refreshHz: 1)
+        let controller = CheckMiniGameWindowController(frameRateMonitor: monitor)
+        controller.configure(store: store)
+        #expect(MiniGameFrameRate.targetFPS(forRefreshRate: monitor.refreshHz) == 60, "1Hz 는 폴백이어야 한다")
+        controller.show()
+        defer { controller.close() }
+        let expected = MiniGameFrameRate.refreshRate(of: controller.currentWindow)
+        #expect(monitor.refreshHz == expected, "창을 열었는데 주사율을 안 읽었다(\(monitor.refreshHz) vs \(expected))")
+        #expect(monitor.refreshHz >= 24, "쓸 수 없는 주사율을 들고 있다")
+    }
+
+    /// **창을 다른 모니터로 옮겼을 때** 갱신되는가. AppKit 은 `NSWindow.didChangeScreenNotification` 을 던지고
+    /// 창은 그것을 델리게이트의 `windowDidChangeScreen(_:)` 로 넘긴다 — 여기서는 그 알림을 직접 던져
+    /// **우리 델리게이트가 실제로 그 경로에 걸려 있는지**까지 확인한다(메서드를 직접 부르면 배선이 빠져도 초록이다).
+    @Test
+    func movingTheWindowToAnotherScreenRefreshesTheRate() throws {
+        let store = mgwStore()
+        let monitor = MiniGameFrameRateMonitor(refreshHz: 1)
+        let controller = CheckMiniGameWindowController(frameRateMonitor: monitor)
+        controller.configure(store: store)
+        controller.show()
+        defer { controller.close() }
+        let window = try #require(controller.currentWindow)
+        let expected = MiniGameFrameRate.refreshRate(of: window)
+
+        // 화면을 옮긴 척: 값을 되돌려 놓고 AppKit 이 던지는 그 알림을 그대로 던진다.
+        monitor.setForTesting(1)
+        #expect(monitor.refreshHz == 1)
+        NotificationCenter.default.post(name: NSWindow.didChangeScreenNotification, object: window)
+        #expect(monitor.refreshHz == expected,
+                "창이 화면을 옮겼는데 주사율이 그대로다 — 게임이 옛 간격으로 계속 돈다")
+
+        // 화면 **구성**이 바뀌는 갈래(창은 그 자리, 주사율만 바뀜)도 같은 자리로 온다.
+        monitor.setForTesting(1)
+        NotificationCenter.default.post(name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        #expect(monitor.refreshHz == expected, "화면 구성이 바뀌었는데 주사율을 다시 안 읽었다")
+
+        // 다른 창의 알림은 우리 값을 건드리지 않는다(창이 여럿인 앱이다).
+        monitor.setForTesting(1)
+        let stranger = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 10, height: 10),
+                                styleMask: [.titled], backing: .buffered, defer: false)
+        // 닫으면 해제되는 기본값을 끈다 — ARC 가 쥔 참조가 남은 채 해제돼 프로세스가 죽는다(SIGSEGV 실측).
+        stranger.isReleasedWhenClosed = false
+        NotificationCenter.default.post(name: NSWindow.didChangeScreenNotification, object: stranger)
+        #expect(monitor.refreshHz == 1, "남의 창 알림에 반응했다")
+        stranger.orderOut(nil)
+    }
+
+    /// 허브가 그 값을 **게임까지** 나른다. 스토어를 거치지 않는 유일한 값이라 배선이 빠져도 화면은 돌아간다 —
+    /// 그래서 소스 계약으로 못 박는다(끊기면 60 폴백으로 조용히 되돌아간다).
+    @Test
+    func hubHandsTheRefreshRateToTheGame() throws {
+        let source = mgwStrippingComments(try String(contentsOf: mgwSourceURL("MiniGamePanel.swift"), encoding: .utf8))
+        #expect(source.contains("refreshHz: MiniGameFrameRateMonitor.shared.refreshHz"),
+                "허브가 주사율을 게임에 안 넘긴다 — 두 게임이 영영 60 폴백으로 돈다")
+        let controller = mgwStrippingComments(try String(contentsOf: mgwSourceURL("CheckMiniGameWindow.swift"), encoding: .utf8))
+        #expect(controller.contains("func windowDidChangeScreen("), "화면 이동 델리게이트가 없다")
+        #expect(controller.contains("NSApplication.didChangeScreenParametersNotification"), "화면 구성 변경을 안 본다")
+    }
+}

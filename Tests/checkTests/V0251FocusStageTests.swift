@@ -562,9 +562,18 @@ private func quiesce(_ store: WorkTimerStore) async {
         #expect(FocusModeButtonText.help(.off) == "누르면 3시간 집중")
         #expect(FocusModeButtonText.help(.timed) == "한 번 더 누르면 끌 때까지 계속")
         #expect(FocusModeButtonText.help(.always) == "누르면 집중 모드 해제")
+
+        // v0.3.01: 버튼 글자는 단계 이름, 남은 시간은 툴팁이 말한다.
+        #expect(FocusModeButtonText.label(.off) == "집중")
+        #expect(FocusModeButtonText.label(FocusStageFace(stage: .timed, remainingSeconds: 7_920)) == "1단")
+        #expect(FocusModeButtonText.label(FocusStageFace(stage: .always)) == "2단")
+        #expect(FocusModeButtonText.tooltip(FocusStageFace(stage: .timed, remainingSeconds: 2 * 3_600 + 12 * 60))
+                == "1단 · 2시간 12분 남음 — 한 번 더 누르면 끌 때까지 계속")
+        #expect(FocusModeButtonText.tooltip(.off) == "집중 모드 꺼짐 — 누르면 3시간 집중")
+        #expect(FocusModeButtonText.tooltip(FocusStageFace(stage: .always)) == "2단 · 끌 때까지 계속 — 누르면 집중 모드 해제")
     }
 
-    /// 색만으로 알리지 않는다: 어느 두 단계 사이에도 눈금·달·글자 중 **최소 두 갈래**가 달라야 한다.
+    /// 색만으로 알리지 않는다: 어느 두 단계 사이에도 바탕 농도·달·글자 중 **최소 두 갈래**가 달라야 한다.
     @Test func everyPairOfStagesDiffersInAtLeastTwoNonColorChannels() {
         let faces = [
             FocusStageFace.off,
@@ -577,15 +586,15 @@ private func quiesce(_ store: WorkTimerStore) async {
                 let styleA = FocusModeButtonStyle(stage: a.stage)
                 let styleB = FocusModeButtonStyle(stage: b.stage)
                 var channels = 0
-                if styleA.filledPips != styleB.filledPips { channels += 1 }
+                if styleA.fillLevel != styleB.fillLevel { channels += 1 }
                 if styleA.icon != styleB.icon { channels += 1 }
                 if FocusModeButtonText.label(a) != FocusModeButtonText.label(b) { channels += 1 }
                 #expect(channels >= 2, "\(a.stage) ↔ \(b.stage) 가 색 말고 \(channels)갈래만 다르다")
             }
         }
-        #expect(FocusModeButtonStyle(stage: .off).filledPips == 0)
-        #expect(FocusModeButtonStyle(stage: .timed).filledPips == 1)
-        #expect(FocusModeButtonStyle(stage: .always).filledPips == 2)
+        #expect(FocusModeButtonStyle(stage: .off).fillLevel == 0)
+        #expect(FocusModeButtonStyle(stage: .timed).fillLevel == 1)
+        #expect(FocusModeButtonStyle(stage: .always).fillLevel == 2)
     }
 
     /// 옛 달 아이콘 자리에 그대로 들어간다: 높이는 IconButton 과 같고, 넓어진 폭을 반영해도 제목 행 힌트가 말줄임되지 않는다.
@@ -646,11 +655,11 @@ private func quiesce(_ store: WorkTimerStore) async {
             #expect(Int(hint / glyph) >= UltraBalanceText.empty.count,
                     "\(name): 힌트 자리에 한글 \(Int(hint / glyph))자 — '\(UltraBalanceText.empty)'가 말줄임된다")
         }
-        // 가장 긴 글자가 9pt 로 캡슐 안에 든다(실측 — 좌우 2pt 여백).
-        let font = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
-        let labels = ["2시간 59분", "2시간 12분", "곧 해제", "계속", "집중", "59분"]
+        // 한 줄 캡슐(v0.3.01): 달(9pt ≈ 10) + 간격 3 + 가장 넓은 글자(caption2 bold) + 좌우 여백 4×2 가 폭 안에 든다.
+        let font = NSFont.systemFont(ofSize: 10, weight: .bold)
+        let labels = ["집중", "1단", "2단"]
         let widest = labels.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
-        #expect(widest + 4 <= CheckFocusModeButton.width, "남은 시간 글자(\(widest)pt)가 버튼 폭을 넘는다")
+        #expect(10 + 3 + widest + 8 <= CheckFocusModeButton.width, "버튼 글자(\(widest)pt)가 캡슐 폭을 넘는다")
     }
 
     @Test func reduceMotionTurnsTheStageTransitionOff() {

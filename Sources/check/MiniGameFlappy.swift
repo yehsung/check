@@ -448,7 +448,8 @@ private enum FlappyFX {
 
     // ── 각도(°) ────────────────────────────────────────────────────────────────────────
     /// 진행 방향(오른쪽)으로 기운 기본 자세. **이것만으로는 방향이 안 보인다** — 원형에 가까운 실루엣에서
-    /// −6° 는 눈으로 판별되지 않았다(2026-09-10 실측). 방향의 본체는 `FlappyMascot` 의 세 겹이다.
+    /// −6° 는 눈으로 판별되지 않았다(2026-09-10 실측). 방향의 본체는 `MiniGameMascot` 이 구워 주는
+    /// **돌아선 얼굴**이고, 이 기울기는 거기 얹는 자세일 뿐이다.
     static let baseTilt: Double = -6
     /// 낙하 속도에 비례한 기울기 범위.
     static let tiltRange: ClosedRange<Double> = -20...25
@@ -500,13 +501,11 @@ private enum FlappyFX {
     static let rimScale: CGFloat = 1.11
     static let rimOpacity: Double = 0.62
     /// 뒤통수 그늘(왼쪽 끝)과 앞쪽 반사광(오른쪽 끝)의 진하기. 한 장의 그라디언트로 함께 만든다 —
-    /// 정면 대칭 얼굴을 3/4 측면처럼 읽히게 하는 것이 이 한 겹의 일이다.
+    /// 정면 대칭 얼굴을 3/4 측면처럼 **읽히게 속이는** 것이 이 한 겹의 일이다.
+    /// v0.2.49 부터는 **정면 PNG 로 내려갔을 때만** 쓴다(게임오버 시무룩 · Metal 없는 환경). 3D 옆모습
+    /// 위에 덧대면 텍스처에 이미 구워진 명암과 이중으로 걸려 정작 봐야 할 눈·입 대비가 씻긴다.
     static let backShade: Double = 0.52
     static let frontLight: Double = 0.42
-    /// 뒤로 흐르는 목도리 색. **무대 색이 아니다** — 기둥(structureEdge)·득점(glow)과 같은 색을 쓰면
-    /// 캐릭터가 "닿으면 죽는 것"과 같은 신호를 입게 된다.
-    static let scarf = Color(red: 0.96, green: 0.42, blue: 0.55)
-    static let scarfShade = Color(red: 0.74, green: 0.22, blue: 0.38)
 }
 
 // MARK: - 잎 뷰
@@ -728,7 +727,8 @@ struct FlappyGameView: View {
             let cx = t.origin.x + game.bird.x * t.scale
             let cy = t.origin.y + displayBirdY * t.scale
             // 잔상 — 진행 중에만, 뒤로 갈수록 옅게. 속도감을 만드는 값싼 수단이다(블러는 60Hz 예산에서 못 쓴다).
-            // 잔상에는 방향 장치도 림도 없다: 필요한 것은 실루엣뿐이고, 60Hz 에서 네 벌을 다 그릴 이유가 없다.
+            // 잔상에는 얹는 장치도 림도 없다: 필요한 것은 실루엣뿐이고, 60Hz 에서 네 벌을 다 그릴 이유가 없다
+            // (옆모습 자체는 캐시된 그림 한 장이라 잔상에도 그대로 들어간다 — 여기서 뺄 것이 없다).
             if !host.reduceMotion, game.phase == .running {
                 ForEach(0..<FlappyFX.ghostOpacities.count, id: \.self) { index in
                     FlappyMascot(mood: mood, facing: false, rim: false)
@@ -932,37 +932,50 @@ struct FlappyGameView: View {
 
 // MARK: - 방향을 가진 마스코트
 
-/// 진행 방향(오른쪽)을 말하는 캐릭터 한 장.
+/// 진행 방향(오른쪽)을 **얼굴로** 말하는 캐릭터 한 장.
 ///
-/// **왜 필요한가.** 아잉 PNG 는 눈·입·볼터치가 몸통 중심에 대해 완전히 대칭인 **정면 얼굴**이라 얼굴을 돌릴
-/// 수 없다. v0.2.48 초안은 −6° 기울기 하나로 방향을 만들려 했는데, 원형에 가까운 실루엣에서 −6° 는 다섯 무대
-/// 스냅샷 어디에서도 눈으로 판별되지 않았다(2026-09-10 지적: "달려가는 쪽으로 좀 바라보고"가 구현되지 않았다).
-/// PNG 를 못 고치므로 **얹어서** 만든다. 넷을 함께 쓴다:
-///   ① 어두운 림 — 실루엣을 하늘·기둥·언덕에서 떼어 놓는다. 기둥 본체를 어둡게 내린 것과 짝이다.
-///   ② 뒤통수 그늘 — 왼쪽(뒤) 절반에 검은 그라디언트. 빛이 앞에서 온다 = 앞이 오른쪽이다.
-///   ③ 앞쪽 반사광 — 오른쪽 가장자리의 흰 띠. ②와 함께 정면 얼굴을 3/4 측면처럼 읽히게 한다.
-///   ④ 뒤로 흐르는 목도리 — 몸통 뒤로 뻗는 두 갈래. 좌우를 뒤집으면 곧바로 어긋나는, 가장 강한 신호다.
-/// **판정 기준**: 스냅샷을 좌우 반전했을 때 다르게 보여야 통과다.
+/// **왜 이렇게 됐는가.** 아잉 PNG 는 눈·입·볼터치가 몸통 중심에 대해 완전히 대칭인 **정면 얼굴**이라
+/// 좌우 반전도 회전도 방향을 만들지 못한다. v0.2.48 은 그래서 얹는 장치 넷(어두운 림 · 뒤통수 그늘 ·
+/// 앞쪽 반사광 · 뒤로 흐르는 목도리)으로 방향'감'을 지어냈다. 사용자 판정은 그걸로 부족했다
+/// (2026-09-10: "캐릭터가 오른쪽을 바라보고 있게끔. 드래그로 이동시키면 오른쪽 바라보는 거 되어 있잖아").
+/// v0.2.49 는 **얼굴을 진짜로 돌린다** — 오버레이가 쓰는 그 3D 모델을 오버레이가 쓰는 그 각도(±40°)로
+/// 돌려 구운 스프라이트(`MiniGameMascot.sideProfile()`)를 PNG 자리에 끼운다.
+///
+/// **그래서 v0.2.48 의 장치 중 무엇이 남았나** (실제로 겹쳐 보고 정한 것이다 — facing-* 스냅샷):
+///   · 어두운 림 — **남긴다.** 방향과 무관하게 하늘·기둥·언덕에서 실루엣을 떼어 놓는 일을 한다
+///     (기둥 본체를 어둡게 내린 것과 짝이다). 옆모습에서도 그 일은 그대로 필요하다.
+///   · 목도리(매듭 + 뒤로 흐르는 두 갈래) — **뺐다.** 좌표가 정면 PNG 알파(y 0.715…0.82)에 맞춰 잰
+///     값이라 돌아선 몸통에서는 띠가 몸을 가로지르는 **붉은 칼자국**으로 읽혔고, 죽은 뒤 회전 낙하
+///     프레임에서는 몸에서 뻗어 나온 붉은 날개가 됐다. 무엇보다 목도리의 존재 이유가 "얼굴이 못 도니까
+///     옷으로라도 방향을 말한다"였는데 그 전제가 사라졌다. 기준으로 삼은 오버레이 캐릭터도 맨몸이다.
+///   · 뒤통수 그늘 + 앞쪽 반사광 — **정면 PNG 로 내려갔을 때만 남긴다.** 3D 렌더는 텍스처에 이미 자기
+///     명암이 구워져 있어 그 위에 오른쪽 흰 띠를 덧대면 정작 봐야 할 눈·입 대비가 씻긴다. 반대로 정면
+///     PNG(게임오버 시무룩 · Metal 없는 환경)에서는 그 두 겹이 여전히 v0.2.48 의 일을 한다.
+///
+/// **판정 기준**은 그대로다: 스냅샷을 좌우 반전했을 때 다르게 보여야 한다.
 private struct FlappyMascot: View {
     let mood: CheckMascotAssets.Mood
     /// 점프 순간의 흰 플래시(1 → 0). 정지 프레임에서 "쳤다"를 말한다.
     var flash: Double = 0
-    /// 방향 장치(그늘 · 반사광 · 목도리)를 그릴지. 잔상은 실루엣만 필요해 false 다.
+    /// 정면 폴백에 얹는 가짜 방향 장치(뒤통수 그늘 · 앞쪽 반사광)를 그릴지. 잔상은 실루엣만 필요해 false 다.
+    /// **3D 옆모습에는 영향이 없다** — 그쪽은 얼굴이 실제로 돌아가 있어 얹을 것이 없다.
     var facing: Bool = true
     /// 어두운 림을 두를지.
     var rim: Bool = true
 
     var body: some View {
+        // 옆모습 조회는 **한 번만** 한다. 이 한 값이 그림 구성을 가른다(돌아선 얼굴이냐, 정면 + 가짜 명암이냐).
+        let turned = MiniGameMascot.sideProfile(mood: mood)
+        let source = turned ?? CheckMascotAssets.image(for: mood)
         ZStack {
             if rim {
-                image
+                sprite(source)
                     .colorMultiply(.black)
                     .opacity(FlappyFX.rimOpacity)
                     .scaleEffect(FlappyFX.rimScale)
             }
-            if facing { FlappyScarfTails().fill(scarfShading) }
-            image
-            if facing {
+            sprite(source)
+            if facing, turned == nil {
                 // 뒤통수 그늘 + 앞쪽 반사광을 **한 장**으로. 실루엣 안쪽에만 얹는다(마스크가 PNG 알파다).
                 LinearGradient(
                     stops: [
@@ -972,26 +985,20 @@ private struct FlappyMascot: View {
                     ],
                     startPoint: .leading, endPoint: .trailing
                 )
-                .mask(image)
-                // 목도리 매듭은 몸통 **위**다(뒤로만 그리면 뒤에 붙은 깃발로 보인다). 실루엣으로 자른다.
-                FlappyScarfKnot().fill(scarfShading).mask(image)
+                .mask(sprite(source))
             }
             if flash > 0 {
-                Color.white.opacity(0.9 * flash).mask(image)
+                Color.white.opacity(0.9 * flash).mask(sprite(source))
             }
         }
         .compositingGroup()
     }
 
-    private var scarfShading: LinearGradient {
-        LinearGradient(colors: [FlappyFX.scarfShade, FlappyFX.scarf],
-                       startPoint: .leading, endPoint: .trailing)
-    }
-
+    /// 스프라이트 한 겹. 3D 옆모습이든 PNG 든 **같은 192px 정사각**이라 축소 규약이 하나로 유지된다.
+    /// PNG 는 공유 캐시 원본이다 — size 를 바꾸거나 lockFocus 로 그리면 메뉴바·헤더까지 오염된다. SwiftUI 축소만.
     @ViewBuilder
-    private var image: some View {
-        // 공유 캐시 원본이다 — size 를 바꾸거나 lockFocus 로 그리면 메뉴바·헤더까지 오염된다. SwiftUI 축소만.
-        if let nsImage = CheckMascotAssets.image(for: mood) {
+    private func sprite(_ nsImage: NSImage?) -> some View {
+        if let nsImage {
             Image(nsImage: nsImage)
                 .resizable()
                 .interpolation(.high)
@@ -999,47 +1006,5 @@ private struct FlappyMascot: View {
         } else {
             Circle().fill(CheckTheme.working)
         }
-    }
-}
-
-/// 좌표는 모두 스프라이트 사각형(0…1) 기준이다. 아잉 실루엣은 y 0.72…0.82 에서 몸통만 남으므로
-/// (귀는 0.65…0.72 · 아래 꼬리는 0.85 에서 끝난다 — PNG 알파 실측) 매듭을 그 띠에 얹는다.
-private enum FlappyScarfShape {
-    static func point(_ rect: CGRect, _ x: CGFloat, _ y: CGFloat) -> CGPoint {
-        CGPoint(x: rect.minX + x * rect.width, y: rect.minY + y * rect.height)
-    }
-}
-
-/// 몸통을 두른 매듭 띠. 실루엣 마스크로 잘리므로 좌우로 넉넉히 넘겨 그린다.
-private struct FlappyScarfKnot: Shape {
-    func path(in rect: CGRect) -> Path {
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { FlappyScarfShape.point(rect, x, y) }
-        var path = Path()
-        path.move(to: p(-0.05, 0.715))
-        path.addQuadCurve(to: p(1.05, 0.715), control: p(0.50, 0.790))
-        path.addLine(to: p(1.05, 0.820))
-        path.addQuadCurve(to: p(-0.05, 0.820), control: p(0.50, 0.895))
-        path.closeSubpath()
-        return path
-    }
-}
-
-/// 몸통 뒤로 흐르는 두 갈래. 시작점은 몸통 **안쪽**(매듭에서 나온다), 끝은 사각형 **밖**(x < 0)에서
-/// 한 점으로 모인다 — 끝을 직선으로 자르면 리본이 아니라 붙여 놓은 깃발로 보인다(2026-09-10 1차 시안).
-private struct FlappyScarfTails: Shape {
-    func path(in rect: CGRect) -> Path {
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { FlappyScarfShape.point(rect, x, y) }
-        var path = Path()
-        // 위 갈래 — 길고, 뒤로 가며 올라간다.
-        path.move(to: p(0.38, 0.70))
-        path.addQuadCurve(to: p(-0.16, 0.56), control: p(0.06, 0.60))
-        path.addQuadCurve(to: p(0.40, 0.81), control: p(0.10, 0.76))
-        path.closeSubpath()
-        // 아래 갈래 — 짧고 아래로 처진다(둘이 갈려야 '흐른다'로 읽힌다).
-        path.move(to: p(0.36, 0.79))
-        path.addQuadCurve(to: p(-0.03, 0.97), control: p(0.08, 0.85))
-        path.addQuadCurve(to: p(0.40, 0.85), control: p(0.18, 0.92))
-        path.closeSubpath()
-        return path
     }
 }

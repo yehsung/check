@@ -1046,6 +1046,15 @@ func flappySourceKeepsTheLeafViewContract() throws {
     #expect(code.contains("TimelineView(.animation("))
     #expect(code.contains("paused:"))
     #expect(code.contains("CheckMascotAssets.image(for:"))
+    // v0.2.49: 옆모습은 **구운 그림 한 장**으로만 들어온다. 씬·렌더러가 이 파일에 있으면 60Hz 루프 안에서
+    // 3D 를 돌릴 길이 열린다 — 굽기는 MiniGameMascot 한 곳에만 둔다.
+    #expect(code.contains("MiniGameMascot.sideProfile("))
+    for forbidden3D in ["SCNRenderer", "SCNScene", "SCNNode", "MTLCreateSystemDefaultDevice"] {
+        #expect(!code.contains(forbidden3D), "\(forbidden3D) 은 이 파일에 있으면 안 된다 — 굽기는 한 곳이다")
+    }
+    // 목도리는 뺐다(v0.2.49). 얼굴이 실제로 돌아가면서 존재 이유가 사라졌고, 돌아선 몸통 위에서는
+    // 정면 PNG 기준으로 잰 좌표가 몸을 가로지르는 붉은 칼자국으로 읽혔다.
+    #expect(!code.contains("Scarf"), "목도리가 되살아났다 — 옆모습과 겹쳐 보고 뺀 것이다")
     #expect(code.contains("MiniGameRandom"))
     #expect(code.contains("MiniGameFrameProbe.note()"))
     // 판이 자기 논리 크기(292×302)를 쓴다 — 공용 200 을 쓰면 위아래가 빈다.
@@ -1096,4 +1105,247 @@ func flappySourceKeepsTheLeafViewContract() throws {
         #expect(!drawing.contains(forbidden), "그리기가 \(forbidden) 를 읽으면 튀는 기둥이 눈에 띈다")
     }
     #expect(drawing.contains("MiniGameBackdrop.draw("), "배경을 그리는 자리가 draw 안이 맞는지")
+}
+
+// MARK: - (9) v0.2.49 옆모습 — 오버레이의 3D 모델을 구워 스프라이트로 쓴다
+//
+// 사용자 판정 기준(2026-09-10): "플래피에서도 캐릭터가 오른쪽을 바라보게. 드래그하면 돌아보는 그 캐릭터처럼."
+// v0.2.48 의 그늘·목도리는 방향'감'까지였다 — 얼굴이 실제로 돌아가야 한다. 그래서 오버레이가 쓰는 그 모델을
+// 오버레이가 쓰는 그 각도로 돌려 한 번 굽는다. 아래 검사는 그 굽기가 (1) 실제로 나오는지 (2) PNG 와 같은
+// 크기로 앉는지 (3) 얼굴이 정말 오른쪽으로 쏠렸는지를 픽셀로 못 박는다.
+
+/// pt 사각형을 잘라 정수배 확대(보간 없음 — 사용자가 실제로 보는 픽셀을 그대로 키운다).
+private func cropZoom(_ bitmap: NSBitmapImageRep, ptRect: CGRect, zoom: CGFloat) -> NSBitmapImageRep? {
+    guard let cg = bitmap.cgImage else { return nil }
+    let px = CGRect(x: (ptRect.minX * 2).rounded(), y: (ptRect.minY * 2).rounded(),
+                    width: (ptRect.width * 2).rounded(), height: (ptRect.height * 2).rounded())
+        .intersection(CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
+    guard px.width >= 1, px.height >= 1, let cropped = cg.cropping(to: px) else { return nil }
+    let w = Int(px.width * zoom), h = Int(px.height * zoom)
+    guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    ctx.interpolationQuality = .none
+    ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: w, height: h))
+    guard let out = ctx.makeImage() else { return nil }
+    return NSBitmapImageRep(cgImage: out)
+}
+
+/// 여러 비트맵을 가로로 이어 붙인다(무대 비교용 한 장).
+private func stitch(_ tiles: [NSBitmapImageRep]) -> NSBitmapImageRep? {
+    let images = tiles.compactMap { $0.cgImage }
+    guard !images.isEmpty else { return nil }
+    let w = images.reduce(0) { $0 + $1.width }, h = images.map(\.height).max() ?? 0
+    guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    ctx.interpolationQuality = .none
+    var x = 0
+    for image in images {
+        ctx.draw(image, in: CGRect(x: x, y: h - image.height, width: image.width, height: image.height))
+        x += image.width
+    }
+    guard let out = ctx.makeImage() else { return nil }
+    return NSBitmapImageRep(cgImage: out)
+}
+
+private let FlappyFX_readyPerchProbe: CGFloat = 74
+
+/// 캐릭터를 넉넉히 감싸는 pt 사각형(캔버스 좌표). 확대 스냅샷의 잘라내기 자리다.
+@MainActor
+private func mascotBox(_ game: FlappyGame, pad: CGFloat = 13) -> CGRect {
+    let t = MiniGameCanvas.transform(in: CGSize(width: CW, height: CH), logicalSize: FlappyGame.logicalSize)
+    let side = (FlappyGame.spriteSize + pad * 2) * t.scale
+    let y: CGFloat = {
+        switch game.phase {
+        case .ready: return FlappyFX_readyPerchProbe
+        case .over(let hold): return game.bird.y + 46 * pow(min(1, max(0, 1 - hold / FlappyGame.overHold)), 2)
+        default: return game.bird.y
+        }
+    }()
+    return CGRect(x: t.origin.x + FlappyGame.birdX * t.scale - side / 2,
+                  y: t.origin.y + y * t.scale - side / 2, width: side, height: side)
+}
+
+/// 알파가 있는 픽셀 안에서 **어두운 잉크**(눈·입)의 가로 무게중심을, 실루엣 폭에 대한 0…1 로.
+/// 정면 대칭 PNG 는 0.5 근처, 오른쪽을 본 옆모습은 0.5 보다 크다 — 이 한 숫자가 "얼굴이 돌아갔다"의 증거다.
+private func inkCentroidX(_ image: NSImage) -> (centroid: Double, samples: Int)? {
+    guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+          let box = MiniGameMascot.alphaBox(cg) else { return nil }
+    let w = cg.width, h = cg.height
+    guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                              space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+          let base = ctx.data else { return nil }
+    ctx.clear(CGRect(x: 0, y: 0, width: w, height: h))
+    ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+    let bytes = base.assumingMemoryBound(to: UInt8.self)
+    let x0 = box.minX * CGFloat(w), boxW = box.width * CGFloat(w)
+    var sum = 0.0, n = 0
+    for row in 0..<h {
+        let offset = row * ctx.bytesPerRow
+        for x in 0..<w {
+            let o = offset + x * 4
+            guard bytes[o + 3] > 200 else { continue }
+            // 프리멀티플라이드라 알파가 1 인 곳만 보므로 채널이 곧 색이다. 눈·입은 확연히 어둡다.
+            let luma = 0.299 * Double(bytes[o]) + 0.587 * Double(bytes[o + 1]) + 0.114 * Double(bytes[o + 2])
+            guard luma < 90 else { continue }
+            sum += (Double(x) - Double(x0)) / Double(boxW)
+            n += 1
+        }
+    }
+    guard n > 20 else { return nil }
+    return (sum / Double(n), n)
+}
+
+@MainActor
+@Suite(.serialized)
+struct V0249FlappyFacingTests {
+    private let t = MiniGameCanvas.transform(in: CGSize(width: CW, height: CH), logicalSize: FlappyGame.logicalSize)
+
+    /// 굽기가 실제로 나오고, PNG 와 **같은 자리·같은 크기**로 앉는다.
+    @Test
+    func theSideProfileIsBakedAndFillsTheFrameLikeThePNG() throws {
+        MiniGameMascot.resetCacheForTesting()
+        let baked = MiniGameMascot.sideProfile()
+        guard let baked else {
+            // 헤드리스에 Metal 이 없는 환경 — 게임은 PNG 로 돈다. 그 사실만 남기고 통과시킨다.
+            print("[facing] no metal device — PNG 폴백 경로")
+            return
+        }
+        let cg = try #require(baked.cgImage(forProposedRect: nil, context: nil, hints: nil))
+        let box = try #require(MiniGameMascot.alphaBox(cg))
+        print("[facing] baked \(cg.width)x\(cg.height) fill w=\(box.width) h=\(box.height) " +
+              "center=(\(box.midX), \(box.midY)) ms=\(MiniGameMascot.lastBakeMilliseconds ?? -1) " +
+              "source=\(MiniGameMascot.lastBakeSource?.rawValue ?? "-")")
+        #expect(cg.width == Int(MiniGameMascot.spritePixels))
+        #expect(abs(max(box.width, box.height) - MiniGameMascot.targetFill) < 0.03,
+                "구운 캐릭터 크기가 PNG(0.85)와 어긋난다 — 히트박스 체감이 바뀐다")
+        #expect(abs(box.midX - 0.5) < 0.03 && abs(box.midY - 0.5) < 0.03, "프레임 중앙에 안 앉았다")
+        // 두 번째 호출은 캐시다 — 프레임마다 다시 굽지 않는다.
+        let again = MiniGameMascot.sideProfile()
+        #expect(again === baked, "옆모습이 캐시되지 않았다 — 60Hz 예산이 무너진다")
+        // 굽기 값(참고용 계측). 첫 굽기는 Metal·SceneKit 첫 접촉이 섞여 크고, 그 뒤는 10ms 대다.
+        var times: [Double] = []
+        for _ in 0..<3 {
+            MiniGameMascot.resetCacheForTesting()
+            _ = MiniGameMascot.sideProfile()
+            times.append(((MiniGameMascot.lastBakeMilliseconds ?? -1) * 10).rounded() / 10)
+        }
+        print("[facing] BAKE_TIMES \(times)")
+    }
+
+    /// **방향의 증거.** 어두운 잉크(눈·입)의 무게중심이 정면 PNG 는 가운데, 구운 옆모습은 오른쪽으로 쏠린다.
+    @Test
+    func theFaceActuallyLeansRight() throws {
+        MiniGameMascot.resetCacheForTesting()
+        let png = try #require(CheckMascotAssets.image(for: .neutral))
+        let frontal = try #require(inkCentroidX(png))
+        print("[facing] PNG ink centroid=\(frontal.centroid) n=\(frontal.samples)")
+        #expect(abs(frontal.centroid - 0.5) < 0.06, "정면 PNG 는 좌우 대칭이어야 한다(기준선)")
+        guard let baked = MiniGameMascot.sideProfile(), let side = inkCentroidX(baked) else { return }
+        print("[facing] 3D ink centroid=\(side.centroid) n=\(side.samples)")
+        #expect(side.centroid > frontal.centroid + 0.04,
+                "구운 옆모습의 얼굴이 오른쪽으로 안 쏠렸다 — 정면과 구별되지 않는다")
+    }
+
+    /// 프리베이크 `.scn` 이 없는 머신이 타는 **usdz 폴백**도 같은 그림을 낸다. 그 경로는 USD/ModelIO 를
+    /// 상주시키고 2048² 텍스처를 디코드하므로 느리다 — 얼마나 느린지를 숫자로 남긴다(캐시라 한 번뿐이다).
+    @Test
+    func theUSDZFallbackAlsoBakesARightFacingProfile() throws {
+        let prebaked = MiniGameMascot.bakeForTesting(order: [.prebaked])
+        let started = Date()
+        guard let usdz = MiniGameMascot.bakeForTesting(order: [.usdz]) else {
+            print("[facing] usdz 폴백을 구울 수 없다(Metal 없음 또는 리소스 없음)")
+            return
+        }
+        let ms = Date().timeIntervalSince(started) * 1_000
+        let side = try #require(inkCentroidX(usdz))
+        print("[facing] usdz source=\(MiniGameMascot.lastBakeSource?.rawValue ?? "-") " +
+              "ink centroid=\(side.centroid) n=\(side.samples) ms=\((ms * 10).rounded() / 10)")
+        #expect(MiniGameMascot.lastBakeSource == .usdz, "usdz 폴백을 안 탔다 — 이 검사가 아무것도 안 본다")
+        #expect(side.centroid > 0.55, "usdz 폴백에서 얼굴이 오른쪽으로 안 쏠렸다")
+        if let prebaked, let base = inkCentroidX(prebaked) {
+            #expect(abs(side.centroid - base.centroid) < 0.08,
+                    "두 출처가 다른 그림을 낸다 — 머신마다 캐릭터가 달라 보인다")
+        }
+        if let cg = usdz.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            savePNG(NSBitmapImageRep(cgImage: cg), "facing-usdz.png")
+        }
+    }
+
+    /// **폴백이 실제로 게임을 살린다.** 굽기가 nil 인 경우(Metal 없는 헤드리스 · 모델 없음)와 같은 경로를
+    /// 게임오버 표정이 그대로 탄다 — `.negative` 는 3D 로 못 내므로 언제나 PNG 다. 그 프레임에서도
+    /// 캐릭터가 그려지는지를 "새를 판 밖으로 뺀 같은 프레임"과 비교해 못 박는다.
+    @Test
+    func aBakeThatReturnsNilStillDrawsTheCharacter() throws {
+        #expect(MiniGameMascot.sideProfile(mood: .negative) == nil,
+                "게임오버 표정을 3D 로 지어내고 있다 — 없는 표정이다")
+        let over = FlappyGame(seed: 5, bird: .init(x: birdX, y: 150, vy: 300),
+                              pipes: [pipe(x: 70, centerY: 118, gap: 108)],
+                              score: 8, phase: .over(hold: 0.18), elapsed: 4.0, scrolled: 470)
+        let drawn = try renderBitmap(view(over, best: 12))
+        let gone = FlappyGame(seed: 5, bird: .init(x: birdX, y: -600, vy: 300),
+                              pipes: over.pipes, score: 8, phase: .over(hold: 0.18), elapsed: 4.0, scrolled: 470)
+        let empty = try renderBitmap(view(gone, best: 12))
+        let box = mascotBox(over, pad: 0)
+        #expect(differing(drawn, empty, x: box.minX...box.maxX, y: box.minY...box.maxY) > 300,
+                "PNG 폴백에서 캐릭터가 안 그려진다 — Metal 없는 환경에서 게임이 빈다")
+    }
+
+    /// 다섯 무대 · 진행 · 점프 · 죽은 뒤 스냅샷. 눈으로 판정하는 증거를 남긴다.
+    @Test
+    func facingSnapshots() throws {
+        MiniGameMascot.resetCacheForTesting()
+        _ = MiniGameMascot.sideProfile()
+
+        // 1) 진행 중 한 장 — 한낮 무대(8점).
+        let run = FlappyGame(seed: 5, bird: .init(x: birdX, y: 150, vy: -60),
+                             pipes: [pipe(x: 205, centerY: 118, gap: 108), pipe(x: 335, centerY: 196, gap: 108)],
+                             score: 8, phase: .running, elapsed: 4.0, scrolled: 470,
+                             lastFlapAt: 3.4, flapCount: 7)
+        #expect(run.stage == .day)
+        let runBitmap = try renderBitmap(view(run, best: 12))
+        savePNG(runBitmap, "facing-run.png")
+
+        // 2) 캐릭터만 8배 — 판정의 핵심 증거. 보간 없이 키운다(사용자가 보는 그 픽셀).
+        let zoom = try #require(cropZoom(runBitmap, ptRect: mascotBox(run), zoom: 8))
+        savePNG(zoom, "facing-zoom.png")
+
+        // 3) 무대 5종 — 캐릭터 자리만 잘라 4배로 이어 붙인다.
+        var tiles: [NSBitmapImageRep] = []
+        for score in [3, 8, 16, 26, 40] {
+            let gap = FlappyGame.gap(forScore: score), spacing = FlappyGame.spacing(forScore: score)
+            let game = FlappyGame(seed: 9, bird: .init(x: birdX, y: 138, vy: -140),
+                                  pipes: [pipe(x: 104, centerY: 140, gap: gap),
+                                          pipe(x: 104 + spacing, centerY: 200, gap: gap)],
+                                  score: score, phase: .running, elapsed: 6, scrolled: 620,
+                                  lastFlapAt: 5.2, flapCount: 12)
+            let bitmap = try renderBitmap(view(game, best: 30))
+            if let tile = cropZoom(bitmap, ptRect: mascotBox(game), zoom: 4) { tiles.append(tile) }
+        }
+        if let strip = stitch(tiles) { savePNG(strip, "facing-stages.png") }
+
+        // 4) 점프 프레임 — 스쿼시·플래시·파편과 겹친 얼굴.
+        let flap = FlappyGame(seed: 5, bird: .init(x: birdX, y: 150, vy: -280),
+                              pipes: [pipe(x: 205, centerY: 118, gap: 108), pipe(x: 335, centerY: 196, gap: 108)],
+                              score: 8, phase: .running, elapsed: 4.0, scrolled: 470,
+                              lastFlapAt: 3.95, flapCount: 7)
+        let flapBitmap = try renderBitmap(view(flap, best: 12))
+        savePNG(flapBitmap, "facing-flap.png")
+        if let zoomed = cropZoom(flapBitmap, ptRect: mascotBox(flap, pad: 22), zoom: 6) {
+            savePNG(zoomed, "facing-flap-zoom.png")
+        }
+
+        // 5) 죽은 뒤(회전 낙하 중) — 유예 0.4 중 절반쯤.
+        let over = FlappyGame(seed: 5, bird: .init(x: birdX, y: 150, vy: 300),
+                              pipes: [pipe(x: 70, centerY: 118, gap: 108), pipe(x: 200, centerY: 196, gap: 108)],
+                              score: 8, phase: .over(hold: 0.18), elapsed: 4.0, scrolled: 470,
+                              lastFlapAt: 3.2, flapCount: 7)
+        let overBitmap = try renderBitmap(view(over, best: 12))
+        savePNG(overBitmap, "facing-over.png")
+        if let zoomed = cropZoom(overBitmap, ptRect: mascotBox(over, pad: 22), zoom: 6) {
+            savePNG(zoomed, "facing-over-zoom.png")
+        }
+    }
 }

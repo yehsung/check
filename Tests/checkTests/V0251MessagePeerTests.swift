@@ -141,6 +141,26 @@ private func mpDefaults() -> UserDefaults {
     return defaults
 }
 
+/// 격리 토큰 스토어. 홈·캐시·defaults·알림센터를 전부 임시로 준다(V0240TokenScanTests 의 v0240TokenStore 와 같은 패턴).
+///
+/// 왜 이 파일에 필요한가 — 아래 `mpStore` 는 `session` 과 `startedAt` 을 채우는데, 그 둘이
+/// `refreshTokenUsageInBackgroundIfDue` 의 게이트 전부다. 주입하지 않으면 기본값 `TokenUsageStore.shared`
+/// (= **실제 홈**)가 쓰이고, 폴링 루프가 도는 순간 사용자의 `~/.claude`·`~/.codex`·`~/.gemini` 를 훑는다.
+/// v0.3.12 부터는 그 순회가 sqlite 로 대화 db 를 열어 **사용자 폴더에 `-shm` 까지 남겼다**(실측 2026-09-11).
+/// 스토어 쪽에도 안전망을 걸었지만(`TokenUsageStore.realHomeScanIsBlocked`) 그건 그물이고, 배선은 여기서 바로잡는다.
+@MainActor
+private func mpTokenStore() -> TokenUsageStore {
+    let tmp = FileManager.default.temporaryDirectory
+    let tag = UUID().uuidString
+    return TokenUsageStore(
+        defaults: mpDefaults(),
+        homeDirectory: tmp.appendingPathComponent("v0251-token-home-\(tag)", isDirectory: true),
+        cacheURL: tmp.appendingPathComponent("v0251-token-cache-\(tag).json", isDirectory: false),
+        clock: { mpNow },
+        notificationCenter: NotificationCenter()
+    )
+}
+
 /// 스텁 네트워크에 물린 근무중·로그인 스토어. 시계는 **얼려서** 꽂는다 —
 /// 읽음 도장이 벽시계에 흔들리면 부하 큰 병렬 실행에서 무음으로 뒤집힌다(이 저장소의 실측 회귀).
 @MainActor
@@ -154,7 +174,9 @@ private func mpStore(host: String) -> WorkTimerStore {
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: mpDefaults()
+        defaults: mpDefaults(),
+        // ★ 토큰 스토어를 **반드시** 주입한다(위 mpTokenStore 주석) — 기본값은 실제 홈을 훑는다.
+        tokenUsage: mpTokenStore()
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: mpUserID)
     store.clock = { mpNow }

@@ -18,15 +18,28 @@ import SwiftUI
 //     SwiftUI `TextEditor` · 이 뷰 셋 다 "안녕하세요" 를 치는 내내 `markedRange` 길이가 0 이었고, 음절은 저장소에
 //     곧바로 들어가 제자리에서 바뀌었다(안ㄴ → 안녀 → 안녕 …). 그래서 이 입력기에서는 **첫 Enter 가 "안녕하세요"
 //     전체를 보낸다** — 사용자 지시 원안의 "조합 중 Enter 는 확정만" 은 이 입력기에서 **지켜지지 않는다.**
-//     대신 걱정하던 사고(마지막 글자가 빠진 채 나감 · 비운 칸에 "요" 가 홀로 남음 · 전송 직후 친 글자가 앞 음절과
-//     붙음)는 한 번도 안 났다. `.commitComposition` 갈래는 표시 글자를 **쓰는** 입력기(일본어·중국어 등)를 위한
-//     것이다. 이 기기에는 그런 입력기가 없어 실입력으로는 못 쟀고, 헤드리스 테스트가 표시 글자를 직접 심어 잰다.
+//     ⚠︎⚠︎ **그 실측은 틀렸다 — 위 단락은 꺼진 입력기를 잰 것이다**(2026-09-11 재측정, v0.3.11 결함 조사).
+//     그날 하네스가 잰 것은 **앱이 비활성인 팝오버**였다. 그 상태에서는 입력 문맥(`NSTextInputContext.current`)이
+//     아예 안 켜져서 입력기를 **건너뛴 날것의 자모**가 하나씩 박힌다(bubble-215806.log 15.47~15.79s:
+//     `appActive=false currentCtx=false` 에서 "ㅇ" → "ㅇㅏ" → "ㅇㅏㄴ", `marked` 끝까지 false).
+//     **앱이 활성인 채 같은 키를 넣으면 같은 입력기가 표시 글자를 쓴다**(bubble-220030.log 46.3~46.6s:
+//     `marked=true` 로 "ㅇ" → "아" → "안"). 즉 2벌식 한글은 표시 글자를 **쓴다** — 위 단락의 "안 쓴다"는
+//     입력기가 돌지 않았던 상태의 기록이고, 그 상태가 운영자 증상 ①(자음·모음 분리)의 정체다.
+//     그래도 이 파일은 **두 전제를 모두 지킨다**(표시 글자가 뜨는 경우와 안 뜨는 경우 둘 다 같은 결과) —
+//     입력기는 사용자가 고를 수 있고, 표시 글자를 안 쓰는 입력기도 있다.
+//     · 앱이 비활성일 때 문맥이 안 켜지는 문제는 **여는 쪽**에서 막는다(`WindowTopAnchor.presentMenuPopover`
+//       의 `activateForKeyboardInput` — 클릭 핸들러 안에서 부르면 14~35ms 안에 활성이 된다는 실측 표가 거기 있다),
+//       그리고 이 뷰가 마지막 방어선을 둔다(`activateAppForTypedInputIfNeeded` — **그 묶음은 못 구한다**는
+//       한계까지 그 주석에 적어 두었다).
+//     · 표시 글자 구간에는 `textDidChange` 가 **오지 않는다**(run5-markedtext.log 4.43~5.47s: 뷰 "ㅇ" / 바인딩 "").
+//       그래서 placeholder 는 스토어가 아니라 **뷰에 그려진 것**으로 판정하고(`onRenderedEmptyChange`),
+//       전송은 **확정을 먼저**(`commitComposition`) 한다.
 //     ★ 판단 자료(2026-09-11, 같은 실입력 하네스에 기록용 평범한 NSTextView 를 세워 입력기가 부르는 것을 받아 적었다):
 //     이 입력기는 조합 중 Return 을 받으면 **마지막 음절을 같은 글자로 다시 넣어 조합을 끝내고**
 //     (`insertText("요", replacementRange: {4, 1})`) 곧바로 `insertNewline:` 을 부른다. 조합이 없을 때의 Return 은
 //     `insertNewline:` 하나뿐이다. 그러니 "조합 중 Enter" 를 가려낼 신호 자체는 있다. 다만 그 신호로 첫 Enter 를
 //     "확정만"으로 바꾸면, 한글 문장은 거의 늘 마지막 음절이 조합 중인 채 끝나므로 **모든 메시지가 Enter 두 번**이 된다.
-//     지금 코드는 그 신호를 쓰지 않는다(이 입력기에서 첫 Enter = 전송).
+//     그래서 지금 코드는 그 갈래를 `.commitThenSend` 로 쓴다: **확정하고, 그 확정된 문자열을 보낸다**(Enter 한 번).
 //   · 자리 맞추기 — `TextEditor` 안의 NSTextView 는 `lineFragmentPadding` 5pt 를 스스로 얹는다.
 //     그래서 placeholder 에 아무리 padding 을 맞춰도 실제 글자는 늘 가로 5pt 만큼 밀려 있었고,
 //     세로는 `textContainerInset` 을 못 만져 추측으로 맞출 수밖에 없었다. 여기서는 전부 **직접 정한다**
@@ -70,6 +83,47 @@ enum CheckEditorMetrics {
     }
 }
 
+/// 안내 문구(placeholder)를 그리는가 — **순수 판정**(두 입력칸이 같이 쓴다).
+///
+/// **왜 규칙을 밖으로 뺐나**: 이 판정이 틀리면 사용자는 안내 문구와 자기 글자가 **겹친 화면**을 본다
+/// (기모찌 제보 v0.3.11: "칸 안에 있는 '…입력하세요' 안내랑 글자랑 겹침, 초반에"). 겹침은 뷰 안에 숨어
+/// 있으면 아무 테스트도 못 보는 종류의 결함이라(스냅샷은 조합 상태를 못 만든다) 값으로 잴 자리가 필요하다.
+///
+/// **규칙은 하나다: 텍스트 뷰가 말해 준 것이 있으면 그 말만 믿는다.**
+///   · 조합 중 — 뷰에는 "안"이 떠 있는데 스토어는 `""` 다(표시 글자 구간에 `textDidChange` 가 안 온다).
+///     스토어로 판정하면 안내 문구가 그 "안" 위에 겹친다. 뷰의 말은 "안 비었다"이므로 숨는다.
+///   · 전송 직후 — 스토어는 `""` 인데 뷰에는 아직 글자가 남아 있을 수 있다(조합 가드). 이때도 겹친다.
+///     같은 이유로 뷰의 말이 이긴다.
+///   · 아직 못 들었을 때(nil) — 첫 그림과 **스냅샷 대체 경로**가 그렇다. 그 경로는 텍스트 뷰가 아예 없고
+///     그려지는 것이 `Text(스토어 값)` 이므로, 스토어 값이 곧 "그려진 것"이다. 규칙이 갈리지 않는다.
+enum CheckEditorPlaceholder {
+    static func isVisible(storeText: String, editorRenderedEmpty: Bool?) -> Bool {
+        if let editorRenderedEmpty { return editorRenderedEmpty }
+        return storeText.isEmpty
+    }
+}
+
+/// 글을 보내는 **단 하나의 문**(메시지 · 제보가 같이 쓴다).
+///
+/// **왜 문이 하나여야 하나**(2026-09-11 검토 지적 ②): 조합 확정을 갈래마다 손으로 넣으면 한 갈래가 빠지고,
+/// 빠진 갈래는 **마지막 한 글자를 잃는다**(기모찌 제보 v0.3.11 "뒤에 한 글자가 사라져요"). 실제로 그랬다 —
+/// 메시지 세 갈래는 확정을 지났는데 제보 [보내기]는 확정 없이 스토어를 읽어, 같은 결함이 한 화면에만 고쳐진
+/// 채 남았다. 그래서 확정은 **이 함수 안에 한 번만** 적혀 있고, 두 화면은 각자의 스토어 호출만 넘긴다.
+///
+/// 순서가 뜻이다: 확정이 먼저다. 확정은 동기라 그 자리에서 `textDidChange` 가 와 바인딩(= 스토어의 초안)이
+/// 갱신되고, 그다음 줄의 전송이 **사용자가 화면에서 보던 문장 전체**를 읽는다. 두 줄을 바꾸지 마라.
+///
+/// 확정할 것이 없으면(대부분의 전송) 아무 일도 안 한다 — 돌려주는 Bool 이 "확정했나"다.
+@MainActor
+enum CheckEditorSend {
+    @discardableResult
+    static func commitThenSend(_ send: () -> Void) -> Bool {
+        let committed = CheckEditorTextView.commitActiveComposition()
+        send()
+        return committed
+    }
+}
+
 /// Enter 키가 할 일 (순수 판정 — 헤드리스에서 결정적으로 잴 수 있는 지점).
 ///
 /// **왜 뷰 밖으로 뺐나**: 갈래가 다섯이고 그중 둘(조합 중 · 못 보내는 상태)은 "아무 일도 안 일어나는 것"이
@@ -80,8 +134,14 @@ enum CheckEditorReturnKey {
         case send
         /// 줄바꿈. 시스템 기본 동작(`super.keyDown`)에 그대로 넘긴다.
         case newline
-        /// 조합만 확정한다. IME 에 키를 넘기되 **뒤따라오는 줄바꿈은 삼킨다** — 아래 주석 참고.
-        case commitComposition
+        /// 조합을 **먼저 확정하고, 그 확정된 문자열을 보낸다.**
+        ///
+        /// 규약(사용자 결정 2026-09-11 — 카톡과 같은 동작): **첫 Enter 가 조합 중 마지막 글자까지 보낸다.**
+        /// 옛 갈래는 `.commitComposition`(확정만 하고 안 보냄)이었다. 그걸 되돌리면 한글 문장은 거의 늘
+        /// 마지막 음절이 조합 중인 채 끝나므로 **모든 메시지가 Enter 두 번**이 된다 — 사용자가 고쳐 달라고
+        /// 한 것이 그것이다. 이름을 바꾼 이유: "확정만"과 "확정하고 보낸다"는 사용자가 보는 결과가 정반대라,
+        /// 같은 이름을 남기면 다음 사람이 뜻이 바뀐 것을 모르고 옛 주석을 믿는다.
+        case commitThenSend
         /// 아무 일도 안 한다(줄바꿈도 아니다).
         case nothing
     }
@@ -91,16 +151,28 @@ enum CheckEditorReturnKey {
     ///     쓰는 글이라 Enter 전송이 문장을 반토막 낸다(사용자 지시 ②는 "메세지 입력"에 대한 말이었다).
     ///   - hasShift: ⇧ 가 눌렸는가. ⇧↩ 는 언제나 줄바꿈이다.
     ///   - isComposing: 입력기가 표시 글자(marked text)를 띄워 둔 상태인가(`NSTextView.hasMarkedText()`).
-    ///     macOS 2벌식 한글은 표시 글자를 안 쓰므로 그 입력기에서는 늘 false 다(파일 머리 주석의 실측).
+    ///     ★ **2벌식 한글에서도 실제로 true 가 된다.** 앱이 활성이라 입력 문맥이 켜져 있으면 이 입력기는
+    ///     표시 글자를 쓴다(2026-09-11 실측 bubble-220030.log 46.3~46.6s: `marked=true` 로 "ㅇ"→"아"→"안").
+    ///     이 줄에는 한동안 "macOS 2벌식 한글은 표시 글자를 안 쓰므로 늘 false" 라고 적혀 있었는데, 그 실측은
+    ///     **입력기가 아예 안 돌던 상태**(앱 비활성 → 문맥 꺼짐)를 잰 것이라 취소됐다(파일 머리 주석).
+    ///     그 한 줄만 읽고 아래 `.commitThenSend` 갈래를 **죽은 코드로 오해하지 마라** — 그 오해가
+    ///     v0.3.11 제보("뒤에 한 글자가 사라져요")를 만든 잘못된 전제 그 자체다.
+    ///     (표시 글자를 정말 안 쓰는 입력기도 있다. 그래서 이 판정은 두 경우 모두에서 같은 결과를 낸다.)
     ///   - canSend: 지금 보낼 수 있는가(`store.canSendMessageNow`).
     static func action(sendsOnReturn: Bool, hasShift: Bool, isComposing: Bool, canSend: Bool) -> Action {
         // 제보 칸: 조합이든 아니든 시스템이 하던 그대로.
         guard sendsOnReturn else { return .newline }
         // ⇧↩ 는 줄바꿈이다. 조합 중이어도 마찬가지 — IME 가 먼저 확정하고 줄이 바뀐다.
         if hasShift { return .newline }
-        // ★ 표시 글자가 떠 있으면 이 Enter 는 **조합 확정용**이다. 여기서 보내면 조합 중인 글자가 빠진 문장이
-        //   나가고, 확정된 글자는 방금 비운 칸에 홀로 남는다(옛 메신저들이 겪은 사고). 이 줄을 지우지 마라.
-        if isComposing { return .commitComposition }
+        // ★ 표시 글자가 떠 있으면 **확정을 먼저 하고 그 값을 보낸다.** 확정 없이 보내면 조합 중인 글자가 빠진
+        //   문장이 나가고(증상 ③ — run5 40.27s: 뷰 "안녕하세요" / 스토어 "안녕하세" → SEND read="안녕하세"),
+        //   확정된 글자는 방금 비운 칸에 홀로 남는다(run8-note.log 24.54s).
+        //
+        //   ⚠︎ **`canSend` 를 여기서 보지 않는다.** 그 값은 스토어(= 확정된 글자만 든 곳)에서 왔으므로
+        //   조합 중에는 한 박자 낡았다 — 한 음절만 써 놓은 상태는 스토어에서 **빈 칸**으로 보여 `canSend` 가
+        //   false 다. 여기서 그 값을 믿고 `.nothing` 을 돌려주면 첫 낱말이 영영 안 나간다. 확정한 **뒤에**
+        //   부르는 쪽이 다시 묻는다(`CheckEditorTextView.keyDown` 의 `.commitThenSend` 갈래).
+        if isComposing { return .commitThenSend }
         // 못 보내는 상태(빈 칸 · 상대 없음 · 전송 중)에서는 **줄바꿈도 아니다**. 빈 칸에서 Enter 를 눌렀는데
         // 줄만 늘어나면 사용자는 "안 보내진다"가 아니라 "칸이 이상하다"로 읽는다.
         return canSend ? .send : .nothing
@@ -122,18 +194,56 @@ class CheckEditorTextView: NSTextView {
     /// 지금 보낼 수 있는가. **값이 아니라 클로저다** — 뷰가 다시 그려질 때마다 갱신되므로,
     /// 스냅샷된 Bool 을 들고 있으면 "방금 지웠는데 아직 보낼 수 있다고 믿는" 창이 생긴다.
     var canSendNow: () -> Bool = { false }
-    /// 보내는 문. `store.sendDraftMessage()` 하나로 간다.
+    /// 보내는 문. `store.sendDraftMessage()` 하나로 간다. **조합 확정을 이미 지난 뒤에** 불린다.
     var onSend: () -> Void = {}
+
+    /// 이 칸이 화면에 서면 **커서를 가져올 것인가**(사용자 지시 2026-09-11: "콕찌르기에서 말풍선을 눌러
+    /// 1:1 대화로 들어가면 마우스 클릭 없이 바로 타자가 되게").
+    ///
+    /// 기본값 false 다 — **새 칸이 말없이 포커스를 훔치면 안 된다.** 지금 true 를 주는 자리는 대화 패널의
+    /// 입력칸 하나뿐이고(`MessageComposerView`), 그 패널은 사용자가 말풍선을 눌렀을 때만 존재한다.
+    /// 제보 칸에는 주지 마라(요청 밖이고, 제보 화면은 목록을 먼저 읽는 화면이다).
+    var focusesWhenShown = false
+
+    /// **뷰에 그려진 글자가 비었는가**를 바깥(placeholder)에 알리는 통로. 조합 중 표시 글자도 "그려진 것"이다.
+    ///
+    /// **왜 바인딩(스토어)으로는 안 되나**(2026-09-11 실측 run5-markedtext.log 4.43~5.47s): 표시 글자 구간에는
+    /// `textDidChange` 가 **한 번도 안 온다.** 그래서 뷰에 "안"이 떠 있는데 스토어는 `""` 이고, placeholder 를
+    /// `text.isEmpty` 로 숨기면 안내 문구와 글자가 **겹친다**(제보 증상 ②). 반대 방향도 있다: 조합 중 전송이
+    /// 스토어를 비우면 `apply()` 의 조합 가드 때문에 뷰에는 옛 문장이 남아, 빈 스토어 + 남은 글자 = 또 겹침
+    /// (run8-note.log 23.94s). 두 방향 모두 "뷰에 그려진 것"으로 판정하면 사라진다.
+    var onRenderedEmptyChange: ((Bool) -> Void)?
+
+    /// 마지막으로 알린 값. 같은 값을 다시 알리지 않는다(SwiftUI 상태를 매 타자마다 흔들지 않기 위해서다).
+    private var lastReportedRenderedEmpty: Bool?
 
     /// 조합 확정 직후 따라오는 줄바꿈 하나를 삼킬 것인가.
     ///
     /// **왜 필요한가**: 표시 글자를 쓰는 입력기는 조합 중 Return 을 받으면 조합을 확정한 뒤 그 키를
     /// **처리하지 않은 것으로 돌려줄 수 있다**. 그러면 `interpretKeyEvents` 가 이어서 `insertNewline(_:)` 을
     /// 부르고, 사용자는 글자를 확정했을 뿐인데 줄이 하나 생긴다. 그 한 줄을 여기서 삼킨다.
-    /// (입력기가 Return 을 먹어 버리면 `insertNewline` 은 애초에 안 불리므로 이 깃발은 아무 일도 안 한다.)
+    ///
+    /// ★ **창을 한 턴만 연다**(2026-09-11). 옛 구현은 `super.keyDown` 이 도는 **동기 구간만** 열어 놓았는데,
+    ///   입력기가 확정을 비동기로 끝내면 그 뒤에 오는 `insertNewline` 이 창이 닫힌 다음에 도착해 줄바꿈이
+    ///   그대로 새어 들어갔다(run10-enter.log 7.29s: 뷰가 "하이요\n" 이 됐다). 반대로 영구히 열어 두면
+    ///   사용자가 일부러 누른 ⇧↩ 의 줄바꿈까지 먹는다 — 그래서 **한 턴**이다.
     private var swallowsNextNewline = false
 
+    /// 지금 포커스를 쥔 입력칸(약참조). **전송 문이 "확정할 대상"을 찾는 유일한 통로다.**
+    ///
+    /// 왜 필요한가: [보내기] 버튼과 ⌘↩ 은 **키 이벤트가 이 뷰로 오지 않는다**(버튼의 동작 클로저와 SwiftUI
+    /// 단축키다). 그래서 그 두 갈래는 자기 손으로 조합을 확정할 수 없고, 확정 없이 보내면 스토어에 아직
+    /// 없는 마지막 음절이 빠진 문장이 나간다(증상 ③ — run8-note.log 23.94s: `SEND read="안녕하세"`).
+    /// 약참조인 이유는 창과 같다 — 수명은 SwiftUI/AppKit 이 쥔다.
+    private(set) static weak var focusedEditor: CheckEditorTextView?
+
     override func keyDown(with event: NSEvent) {
+        // ★ 키가 여기까지 왔다 = **사용자가 이 칸에 타이핑하고 있다**(로컬 키 이벤트는 우리 앱 창에만 온다).
+        //   그런데 앱이 비활성이면 입력 문맥이 안 켜져 한글이 자모로 쪼개져 박힌다
+        //   (증상 ① — 실측은 `activateAppForTypedInputIfNeeded` 주석). 그 상태를 여기서 되살린다.
+        //   여는 쪽(`presentMenuPopover`)이 이미 막지만, 이 줄은 **굳지 않게 하는 마지막 방어선**이다:
+        //   최악의 경우 앞 글자 몇 개만 날것으로 들어가고 그다음부터 정상 조합된다.
+        activateAppForTypedInputIfNeeded()
         guard CheckEditorReturnKey.isReturn(keyCode: event.keyCode) else {
             super.keyDown(with: event)
             return
@@ -153,12 +263,19 @@ class CheckEditorTextView: NSTextView {
         ) {
         case .newline:
             super.keyDown(with: event)
-        case .commitComposition:
-            // IME 가 조합을 확정하는 동안만 문을 닫는다. `super.keyDown` 은 동기라(입력기 처리 →
-            // 필요하면 곧바로 `insertNewline`) 이 한 줄 뒤에 여는 것으로 충분하다.
-            swallowsNextNewline = true
-            super.keyDown(with: event)
-            swallowsNextNewline = false
+        case .commitThenSend:
+            // ★ **확정을 우리가 한다** — 입력기에 Return 을 넘기지 않는다.
+            //   넘기면 입력기가 확정을 **비동기로** 끝낼 수 있어, 바로 뒤에서 부르는 전송이 확정 전 값을 읽고
+            //   (증상 ③) 확정 뒤에 오는 줄바꿈이 동기 창을 지나 새어 들어간다(run10-enter.log 7.29s).
+            //   확정을 우리가 하면 그 순간 바인딩까지 올라오므로(`commitComposition`), 아래 한 줄이 읽는 값이
+            //   **사용자가 화면에서 보던 문장 전체**가 된다.
+            commitComposition()
+            // 그래도 입력기가 줄바꿈을 뒤늦게 부를 수 있다 — 한 턴만 삼킨다(그 깃발의 주석 참고).
+            swallowNewlineForOneTurn()
+            // ★ 확정한 **뒤에** 다시 묻는다. 확정 전의 `canSend` 는 낡았다 — 조합 중인 한 음절만 써 놓은
+            //   상태는 스토어에서 빈 칸으로 보여 false 다(그 값을 믿으면 첫 낱말이 영영 안 나간다).
+            //   반대로 넘친 글(200자 초과)·상대 없음·전송 중은 확정 뒤에도 false 이므로 그대로 막힌다.
+            if canSendNow() { onSend() }
         case .send:
             onSend()
         case .nothing:
@@ -167,8 +284,203 @@ class CheckEditorTextView: NSTextView {
     }
 
     override func insertNewline(_ sender: Any?) {
-        guard !swallowsNextNewline else { return }
+        // 하나만 삼킨다. 깃발을 여기서 내리지 않으면 같은 턴에 두 번째 줄바꿈까지 먹는다.
+        if swallowsNextNewline {
+            swallowsNextNewline = false
+            return
+        }
         super.insertNewline(sender)
+    }
+
+    /// 줄바꿈 삼키기 창을 **한 런루프 턴** 동안 연다. 왜 한 턴인지는 `swallowsNextNewline` 주석에 있다.
+    private func swallowNewlineForOneTurn() {
+        swallowsNextNewline = true
+        Self.onNextRunLoopTurn { [weak self] in
+            MainActor.assumeIsolated { self?.swallowsNextNewline = false }
+        }
+    }
+
+    /// 다음 런루프 턴에 한 번 실행한다.
+    ///
+    /// ★ **`DispatchQueue.main.async` 를 쓰지 마라**(2026-09-11 실측). 이 저장소의 테스트는 NSApplication 없이
+    ///   `RunLoop.current.run(until:)` 로 시간을 돌리는데, 그 런루프는 **메인 디스패치 큐를 흘리지 않는다**
+    ///   (진단: `DispatchQueue.main.async { ran = true }` 뒤 0.1초를 돌려도 `ran == false`). 그래서 디스패치로
+    ///   미룬 일은 앱에서는 돌고 테스트에서는 안 돌아 — **검증이 못 보는 코드**가 된다. 런루프 예약은 둘 다 돈다.
+    ///
+    /// `.common` 모드인 이유: 팝오버·메뉴가 떠 있는 동안 앱의 런루프는 이벤트 추적 모드로 돈다. 기본 모드만
+    /// 넣으면 그 순간의 예약이 팝오버가 닫힐 때까지 잠든다 — 포커스를 잡는 일이 바로 그 순간에 일어난다.
+    static func onNextRunLoopTurn(_ work: @escaping @Sendable () -> Void) {
+        RunLoop.main.perform(inModes: [.common]) { work() }
+    }
+
+    // MARK: - 조합(표시 글자) 확정 — 전송 세 갈래가 모두 먼저 지나는 문
+
+    /// 지금 포커스를 쥔 입력칸의 조합을 확정한다. **[보내기] 버튼과 ⌘↩ 이 부르는 문**(그 둘은 키 이벤트가
+    /// 이 뷰로 오지 않아 자기 손으로 확정할 수 없다 — `focusedEditor` 주석).
+    ///
+    /// 돌려주는 값은 "확정할 것이 있었나"다. 없었으면 false — 그 경우가 대부분이고 아무 일도 안 한다.
+    @discardableResult
+    static func commitActiveComposition() -> Bool {
+        guard let editor = focusedEditor else { return false }
+        return editor.commitComposition()
+    }
+
+    /// 조합(표시 글자)을 **화면에 보이는 그대로** 확정한다. 확정된 글자는 그 자리에서 바인딩까지 올라간다.
+    ///
+    /// **왜 이 문이 있어야 하나**(2026-09-11 실측): 표시 글자 구간에는 `textDidChange` 가 오지 않아 스토어가
+    /// 한 음절 뒤처진다(run5-markedtext.log: 뷰 "ㅇ" / draft ""). 그 상태로 보내면
+    ///   · 마지막 음절이 빠진 문장이 나가고(run5 40.27s · run8 23.94s: `SEND read="안녕하세"`),
+    ///   · 확정된 글자는 방금 비운 칸에 옛 문장 전체와 함께 되살아난다(run8 24.54s: `draft="안녕하세요"`).
+    ///
+    /// **순서가 뜻이다.**
+    ///   ① `discardMarkedText()` — 입력기에게 조합 세션을 끝내라고 알린다. 이 줄이 없으면 입력기는 방금
+    ///      확정한 음절을 **자기 버퍼에 계속 들고 있어**, 다음에 친 글자가 그 음절에 다시 붙거나 같은 음절이
+    ///      한 번 더 들어간다(옛 메신저들이 겪은 "요 가 두 번 나오는" 사고).
+    ///   ② 그래도 표시가 남아 있으면 클라이언트 쪽에서 거둔다(`unmarkText()` — run6-unmark.log 5.03s 에서
+    ///      문자열을 그대로 두고 확정되는 것을 확인했다).
+    ///   ③ `didChangeText()` — 확정으로 늘어난 글자를 바인딩으로 올린다. ①②가 알림을 보장하지 않으므로
+    ///      여기서 한 번 더 못 박는다(델리게이트가 같은 값이면 스스로 접는다).
+    @discardableResult
+    func commitComposition() -> Bool {
+        guard hasMarkedText() else { return false }
+        inputContext?.discardMarkedText()
+        if hasMarkedText() { unmarkText() }
+        didChangeText()
+        return true
+    }
+
+    // MARK: - 입력 문맥(IME)을 켜 두기 — 증상 ①
+
+    /// 이 칸에 키가 들어왔는데 **앱이 비활성**이면 앱을 활성화한다 — 증상 ①이 **굳지 않게** 하는 마지막 방어선.
+    ///
+    /// ⚠︎ **이 줄은 "고치는" 줄이 아니다. 바닥일 뿐이다**(2026-09-11 실측으로 한계를 확인했다).
+    ///   키가 들어온 뒤의 활성화는 **그 묶음을 구하지 못한다**: 비활성으로 시작한 묶음에서 첫 타가
+    ///   활성화를 불러 31ms 뒤 앱이 활성이 됐는데도, 이어진 2·3타까지 조합되지 않고 날것으로 들어갔다
+    ///   (bubble-215806.log 15.47~15.79s: `currentCtx=true` 인데 "ㅇㅏ" → "ㅇㅏㄴ"). 입력기 쪽 세션이
+    ///   그 묶음 동안은 돌아오지 않는다. 그래서 **진짜 수리는 팝오버가 서는 순간에 활성화를 끝내는 것**이고
+    ///   (`WindowTopAnchor.activateForKeyboardInput` — 클릭 핸들러 안에서 **14~35ms** 안에 완료된다.
+    ///   유휴 상태 7회 재측정이고, 7/7 첫 타자부터 정상 조합이었다. 처음 이 자리에 적혔던 `6ms` 는 한 번의
+    ///   관측이었다 — 그 숫자로 여유를 계산하지 마라. **부하에서는 좁아진다**: 활성화 완료는 메인 런루프가
+    ///   돌려주는 비동기 통지라 앱이 바쁘면 늦게 온다),
+    ///   이 줄은 그 경로를 지나지 않고 비활성 상태에 빠진 경우가 **영구히 굳지 않게** 하는 것뿐이다.
+    ///   ⚠︎ 뒤집어 말하면 **저 여유가 사실상 유일한 방어선**이다 — 아래 실측대로 이 `keyDown` 방어선은
+    ///   한 번 꺼진 채 시작한 묶음을 **못 구한다.** 여유가 좁아지는 만큼 첫 묶음이 자모로 박힐 위험이 남는다.
+    ///
+    /// **왜**(2026-09-11 실측): 입력 문맥(`NSTextInputContext.current`)은 **앱이 활성일 때만** 켜진다.
+    /// 메뉴바 팝오버 창은 `nonactivatingPanel`(측정 styleMask 0x8080)이라 **앱이 비활성인 채 키를 받는다** —
+    /// 그 상태에서 한글을 치면 입력기를 건너뛴 날것의 자모가 하나씩 박힌다(bubble-215806.log 15.47~15.79s
+    /// `appActive=false currentCtx=false` 에서 "ㅇ" → "ㅇㅏ" → "ㅇㅏㄴ"; 같은 하네스에서 활성인 채 친 묶음은
+    /// `marked=true` 로 "ㅇ" → "아" → "안" 이었다 — bubble-220030.log 46.3~46.6s).
+    /// 문맥은 스스로 켜지지 않는다 — `inputContext.activate()` 를 직접 불러도 안 켜졌다(run7-ctx.log 11.50s).
+    /// 그래서 한 번 빠지면 팝오버를 닫고 상태바 아이콘을 진짜로 눌러 다시 열 때까지 **굳는다** — 운영자 증상 ①의
+    /// "아예 팝오버 창을 닫았다가 다시 돌아오면 정상 동작"이 그것이다.
+    ///
+    /// **키를 버리거나 미루지 않는 이유**(검토 지적 ③의 두 번째 선택지): 위 실측대로 활성화 뒤에도 그 묶음은
+    /// 조합되지 않으므로, 버리든 미루든 "자모가 안 박힌다"를 **보장하지 못한다**(미뤄서 다시 흘려도 그 묶음의
+    /// 입력기는 꺼진 채다). 보장되는 것은 하나뿐이다 — 그 자리에서 키를 버리면 사용자가 친 글자가 **사라진다.**
+    /// 그래서 확실한 손해와 불확실한 이득을 맞바꾸지 않고, 활성화를 **여는 순간으로** 옮기는 쪽으로 고쳤다.
+    ///
+    /// **가드는 "앱이 비활성인가" 하나다.** 창이 key 인지 묻지 않는다 — 2026-09-11 실측에서 그 고착 상태는
+    /// `keyWin=none`(어느 창도 key 가 아니다)이었는데도 키는 이 칸으로 들어왔다. `isKeyWindow` 를 요구했더니
+    /// 방어선이 정확히 필요한 그 순간에 침묵했다(같은 로그 12.9s: 자모가 그대로 박혔다).
+    /// **포커스를 훔칠 위험은 없다**: 로컬 키 이벤트는 우리 앱의 창에만 온다 — 여기 도달했다는 것은
+    /// 사용자가 **우리 칸에** 타이핑하고 있다는 뜻이고, 그러면 앱이 활성이어야 맞다.
+    /// (그래서 `becomeFirstResponder` 에서는 부르지 않는다 — 그 자리는 "키가 왔다"는 증거가 없어서
+    ///  코드가 포커스를 옮기기만 해도 다른 앱의 앞자리를 빼앗게 된다.)
+    ///
+    /// `NSApp` 을 `if let` 으로 받는 이유는 `WindowTopAnchor.statusItemButton()` 주석과 같다 — 헤드리스
+    /// 테스트 프로세스에서는 nil 이고, `NSApplication.shared` 로 받으면 그 접근이 앱 객체를 **만든다.**
+    func activateAppForTypedInputIfNeeded() {
+        guard let app: NSApplication = NSApp, !app.isActive else { return }
+        app.activate()
+    }
+
+    // MARK: - 포커스 (사용자 지시 2026-09-11 ④)
+
+    /// 커서를 가져갈 것인가 — **순수 판정**(헤드리스 검증 지점).
+    ///
+    /// 세 조건이 모두 참일 때만 잡는다: ① 이 칸이 잡으라고 지정된 칸이다, ② 창에 올라와 있다(= 화면에
+    /// 서 있는 패널의 일부다), ③ 아직 내가 첫 응답자가 아니다. ③이 없으면 SwiftUI 재평가마다 첫 응답자를
+    /// 다시 세워 조합이 끊긴다(초당 시계·15초 폴링이 이 트리를 지난다).
+    nonisolated static func claimsFocus(focusesWhenShown: Bool, hasWindow: Bool, alreadyFirstResponder: Bool) -> Bool {
+        focusesWhenShown && hasWindow && !alreadyFirstResponder
+    }
+
+    /// 창에 붙거나 떼어질 때 불린다. **붙는 순간이 "대화 패널이 화면에 섰다"는 뜻**이고, [뒤로]로 나갔다
+    /// 다시 들어오면 뷰가 새로 만들어지므로(`CheckMenuView` 의 `if store.isMessagePanelVisible`) 여기가 다시 온다.
+    ///
+    /// **다음 런루프 턴에 잡는다**: 이 시점에는 SwiftUI 가 아직 계층을 붙이는 중이고 창의 첫 응답자도 그 뒤에
+    /// 한 번 더 정리된다 — 지금 잡으면 그 정리에 밀려 사라진다.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard focusesWhenShown, window != nil else { return }
+        Self.onNextRunLoopTurn { [weak self] in
+            MainActor.assumeIsolated { self?.claimFocusIfNeeded() }
+        }
+    }
+
+    /// 위 순수 판정을 실제로 실행한다.
+    func claimFocusIfNeeded() {
+        guard let window else { return }
+        guard Self.claimsFocus(
+            focusesWhenShown: focusesWhenShown,
+            hasWindow: true,
+            alreadyFirstResponder: window.firstResponder === self
+        ) else { return }
+        window.makeFirstResponder(self)
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let accepted = super.becomeFirstResponder()
+        guard accepted else { return false }
+        // 전송 문이 조합을 확정할 대상. **여기 말고 다른 데서 대입하지 마라** — 두 곳이 되면 방금 닫힌 칸을
+        // 가리킨 채 남는 창이 생기고, 그러면 전송이 엉뚱한 칸의 조합을 확정한다.
+        Self.focusedEditor = self
+        // ★ **여기서 앱을 활성화하지 않는다.** 이 자리에는 "사용자가 우리에게 타이핑하고 있다"는 증거가 없다 —
+        //   코드가 포커스를 옮기기만 해도(대화 패널 진입) 다른 앱의 앞자리를 빼앗게 된다.
+        //   문맥을 되살리는 일은 키가 실제로 들어오는 자리에서만 한다(`keyDown`).
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        // 내가 쥐고 있었을 때만 자리를 비운다(새 칸이 먼저 잡고 옛 칸의 resign 이 뒤늦게 오는 순서가 있다 —
+        // `WindowTopAnchor.detach` 가 같은 이유로 같은 모양을 쓴다).
+        if resigned, Self.focusedEditor === self { Self.focusedEditor = nil }
+        return resigned
+    }
+
+    // MARK: - "그려진 것이 비었나" 알리기 — 증상 ②
+
+    /// 뷰에 그려진 글자가 비었는가. **조합 중 표시 글자도 그려진 것이다** — 표시 글자는 `string` 에 이미
+    /// 들어 있으므로(`markedRange` 는 그 안의 구간이다) 이 한 줄이 곧 "화면에 아무것도 없나"다.
+    var renderedTextIsEmpty: Bool { string.isEmpty }
+
+    /// 값이 **바뀌었을 때만** 알린다. 매 타자마다 같은 false 를 알리면 SwiftUI 상태가 그만큼 흔들린다.
+    func reportRenderedEmptinessIfChanged() {
+        let value = renderedTextIsEmpty
+        guard lastReportedRenderedEmpty != value else { return }
+        lastReportedRenderedEmpty = value
+        onRenderedEmptyChange?(value)
+    }
+
+    /// 입력기가 표시 글자를 세우거나 갈아 끼울 때. **이 자리가 없으면 조합 중 안내 문구가 글자와 겹친다**
+    /// (`textDidChange` 는 이 구간에 오지 않는다 — run5-markedtext.log).
+    override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+        reportRenderedEmptinessIfChanged()
+    }
+
+    /// 조합이 확정 없이 끝나는 경로(입력기 취소 · 우리 `commitComposition` 의 ②).
+    override func unmarkText() {
+        super.unmarkText()
+        reportRenderedEmptinessIfChanged()
+    }
+
+    /// 글이 실제로 바뀌는 모든 경로(타이핑 확정 · 붙여넣기 · 지우기 · 되돌리기)가 여기를 지난다.
+    override func didChangeText() {
+        super.didChangeText()
+        reportRenderedEmptinessIfChanged()
     }
 
     /// ⌃↩ 등이 부르는 "줄 나눔"은 U+2028(LINE SEPARATOR)을 넣는다. 그 글자는 서버로 가서
@@ -259,6 +571,10 @@ class CheckEditorTextView: NSTextView {
         font = CheckTextEditor.font
         textColor = NSColor(CheckTheme.primaryText)
         typingAttributes = CheckTextEditor.typingAttributes
+        // `string =` 은 `didChangeText()` 를 부르지 않는다 — 그래서 여기서 직접 알린다. 안 알리면
+        // 스토어가 칸을 비운 뒤에도 placeholder 가 안 돌아오고(뷰는 비었는데 마지막 보고가 "안 비었다"),
+        // 반대로 바깥이 글을 넣어 준 칸에는 안내 문구가 글자 위에 남는다.
+        reportRenderedEmptinessIfChanged()
     }
 }
 
@@ -275,11 +591,23 @@ struct CheckTextEditor: View {
     /// Enter 로 보내는 칸인가. 기본은 false — **새로 쓰는 칸의 기본값은 "Enter 는 줄바꿈"이어야 한다**
     /// (여러 줄 글을 쓰는 칸이 압도적으로 많고, 잘못 보낸 글은 되돌릴 수 없다).
     var sendsOnReturn: Bool = false
+    /// 이 칸이 화면에 서면 커서를 가져올 것인가. 기본은 false — `CheckEditorTextView.focusesWhenShown` 주석.
+    var focusesWhenShown: Bool = false
     var canSendNow: () -> Bool = { false }
     var onSend: () -> Void = {}
+    /// 뷰에 그려진 글자(조합 중 표시 글자 포함)가 비었는지 알려 준다. placeholder 를 숨기는 판정의 재료다 —
+    /// `CheckEditorTextView.onRenderedEmptyChange` 주석에 "왜 스토어 값으로는 안 되는가"가 있다.
+    var onRenderedEmptyChange: ((Bool) -> Void)?
 
     var body: some View {
-        CheckEditorScrollView(text: $text, sendsOnReturn: sendsOnReturn, canSendNow: canSendNow, onSend: onSend)
+        CheckEditorScrollView(
+            text: $text,
+            sendsOnReturn: sendsOnReturn,
+            focusesWhenShown: focusesWhenShown,
+            canSendNow: canSendNow,
+            onSend: onSend,
+            onRenderedEmptyChange: onRenderedEmptyChange
+        )
             // ★ 스크롤 뷰를 테두리 안쪽으로 물린다. 이 줄을 지우면 넘친 글이 빨간 테두리를 덮고,
             //   `textContainerInset` 이 이 폭을 뺀 값이라 글자 자리도 2pt 어긋난다(`CheckEditorMetrics.frameInset`).
             .padding(CheckEditorMetrics.frameInset)
@@ -300,8 +628,10 @@ struct CheckTextEditor: View {
 private struct CheckEditorScrollView: NSViewRepresentable {
     @Binding var text: String
     var sendsOnReturn: Bool
+    var focusesWhenShown: Bool
     var canSendNow: () -> Bool
     var onSend: () -> Void
+    var onRenderedEmptyChange: ((Bool) -> Void)?
 
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSScrollView()
@@ -366,13 +696,34 @@ private struct CheckEditorScrollView: NSViewRepresentable {
     private func apply(to textView: CheckEditorTextView, coordinator: Coordinator) {
         coordinator.text = $text
         textView.sendsOnReturn = sendsOnReturn
+        textView.focusesWhenShown = focusesWhenShown
         textView.canSendNow = canSendNow
         textView.onSend = onSend
+        textView.onRenderedEmptyChange = onRenderedEmptyChange
+        // 첫 보고는 **다음 턴**에 넘긴다. 이 함수는 `updateNSView` 안에서도 불리므로 여기서 바로 알리면
+        // SwiftUI 가 뷰를 그리는 중에 부모의 상태를 바꾸게 된다(경고 + 재평가 되돌이).
+        // 조합·타이핑 경로의 보고는 이벤트 처리 중에 오므로 그쪽은 바로 알려도 된다.
+        Self.reportSoon(textView)
         // ★ **조합 중에는 절대 되쓰지 마라.** 코드가 `string` 을 다시 넣으면 IME 의 조합 상태가 끊겨
         //   마지막 글자가 씹힌다 — 그 회귀는 헤드리스로 못 잡는다(사람이 한글을 쳐야만 보인다).
+        //
+        // ⚠︎ **"바깥이 비웠을 때만 예외로 되쓴다"를 넣지 마라 — 2026-09-11 에 넣어 봤고 해로웠다.**
+        //   조합 중에는 스토어가 한 음절 뒤처지므로(표시 글자 구간에 `textDidChange` 가 안 온다)
+        //   `text.isEmpty` 는 "바깥이 비웠다"와 "아직 안 올라왔다"를 **구별하지 못한다.** 실측 결과:
+        //   첫 음절을 치는 순간 그 예외가 발화해 조합이 즉시 확정됐다(V0311 테스트가 그 값을 잡았다) —
+        //   사용자에게는 증상 ①(자모가 하나씩 들어감)과 같은 화면이다.
+        //   run8-note.log 24.54s 의 "비운 칸에 옛 문장이 되돌아온다"는 **전송이 조합을 먼저 확정하는 것**으로
+        //   막는다(`MessageComposerView.send()`), 여기서 되쓰는 것으로 막지 않는다.
         guard !textView.hasMarkedText(), textView.string != text else { return }
         // 되쓰기는 반드시 이 문으로 — 되돌리기 기록을 먼저 지운다(그 함수 주석: 안 지우면 ⌘Z 가 창째로 굳는다).
         textView.replaceTextFromOutside(text)
+    }
+
+    /// 첫 "그려진 것" 보고를 다음 턴으로 미룬다(왜 디스패치가 아닌지는 `onNextRunLoopTurn` 주석).
+    private static func reportSoon(_ textView: CheckEditorTextView) {
+        CheckEditorTextView.onNextRunLoopTurn {
+            MainActor.assumeIsolated { textView.reportRenderedEmptinessIfChanged() }
+        }
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -383,8 +734,16 @@ private struct CheckEditorScrollView: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
-            // 조합 중인 글자도 그대로 흘린다 — 카운터("N/200")가 지금 화면에 보이는 글자를 세야 한다.
-            // 여기서 거르면 조합이 끝나기 전까지 숫자가 멈춰 보인다.
+            // 뷰에 있는 것을 그대로 흘린다(거르지 않는다).
+            //
+            // ⚠︎ **다만 이 알림은 조합 중에 오지 않는다**(2026-09-11 실측 run5-markedtext.log 4.43~5.47s:
+            //   표시 글자 구간에 `NSText.didChange` 가 한 줄도 없다). 그래서 스토어는 **확정된 글자만** 든다.
+            //   그 사실에서 두 가지가 따라온다 — 잊으면 증상 ②③이 되살아난다:
+            //     · placeholder 는 스토어가 아니라 **뷰에 그려진 것**으로 판정한다(`onRenderedEmptyChange`).
+            //     · 전송은 **확정을 먼저** 한다(`commitComposition`) — 그래야 이 알림이 와서 값이 올라온다.
+            //   글자 수 카운터("N/200")도 같은 이유로 조합 중인 한 음절만큼 뒤처진다. 그건 고치지 않는다:
+            //   스토어에 조합 중 글자를 밀어 넣으면 `canSendMessageNow` 가 확정 전에 참이 되어, 버튼 경로가
+            //   **확정되지 않은 글**을 보낼 수 있게 된다(증상 ③을 반대 방향으로 되살리는 짓이다).
             let value = textView.string
             guard text.wrappedValue != value else { return }
             text.wrappedValue = value

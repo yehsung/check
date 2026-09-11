@@ -339,6 +339,20 @@ struct TokenBoardEntry: Identifiable, Equatable {
     /// 캡션의 두 값 합이 굵은 총합과 맞아야 한다 — 총합은 언제나 서버가 준 `total` 이고 캡션은 그 산식을 따라간다).
     var codexEffective: Int { codexEffectiveFromServer ?? max(codexLocalTotal, codexAccountMonth ?? 0) }
 
+    /// 이 행의 **안티그래비티 몫**(v0.3.12) = `total − claudeTotal − codexEffective` 의 잔차.
+    ///
+    /// 왜 잔차인가: 순위판 RPC 는 출력 컬럼이 **15개 그대로**다(20260911120000 — 내역 컬럼을 더하는 것은 클라 배포와
+    /// 짝을 맞춰야 하는 별개의 결정이라 그 파일에서 하지 않았다). 그런데 총합에는 이미 들어가 있다:
+    ///   `total = claude_total + codex_effective + antigravity_total`  (device_final)
+    /// 세 항 중 둘이 행에 실려 오므로 셋째는 **정확히** 뺄셈으로 나온다. 추정이 아니라 같은 식의 이항이다.
+    ///
+    /// 다른 경로에서도 0 이 나오는 것이 이 식의 안전장치다:
+    ///  · 옛 표가 이긴 행(legacy_totals): `antigravity_total` 자리에 `0::bigint` 이 박혀 있고 total = 클로드+Codex 라 잔차 0.
+    ///  · v0.3.12 이전 서버: total 이 애초에 두 종류의 합이라 잔차 0.
+    ///  · 그보다 더 옛 RPC(codex_effective 없음): 클라 폴백이 서버가 쓴 것과 같은 `greatest(로컬, 계정)` 이라 역시 0.
+    /// 음수는 0 으로 접는다 — 서버가 산식을 바꿔 셋이 안 맞게 되는 날에도 화면에 음수가 뜨지 않게.
+    var antigravityEffective: Int { max(0, total - claudeTotal - codexEffective) }
+
     /// 총합이 계정 집계를 기준으로 계산됐는가. 새 서버(codex_effective 있음)는 계정 월합이 0 보다 크면 언제나 계정 기준이고
     /// (이 달 버킷이 없으면 월합이 0 이라 로컬로 떨어진다), 옛 서버는 계정이 로컬보다 클 때만 계정이 이겼다.
     var totalIsAccountDriven: Bool {
@@ -358,8 +372,21 @@ struct TokenBoardEntry: Identifiable, Equatable {
     ///
     /// Codex 는 `codexEffective`(서버가 계정 우선 규칙으로 계산한 값 — 옛 RPC 면 max 폴백)를 쓴다 — 우측 굵은 총합(`total`)이
     /// 서버에서 같은 규칙으로 계산되므로, 여기서 로컬만 쓰면 캡션의 두 값 합이 총합과 안 맞는다.
-    /// 축약은 좁은 폭 때문이며(292pt 행에서 이 줄에 실제로 남는 폭은 100pt 안팎 — 실측),
+    /// 축약은 좁은 폭 때문이며(292pt 행에서 이 줄에 실제로 남는 폭은 121pt — TokenToolMixWidthBudget),
     /// 정확한 값은 `detailTooltip` 이 grouped 로 준다.
+    ///
+    /// ★ **안티그래비티는 이 줄에 넣지 않는다**(v0.3.12). 두 가지가 같은 답을 가리킨다:
+    ///   ① 폭: NSFont 실측으로 세 종류의 최악 조합은 210.4pt("Claude 1,234억 · Codex 1,234억 · AG 1,234억")·
+    ///      248.6pt(이름을 온전히 적으면)인데 이 줄에 있는 폭은 121pt 이고 균일 축소 하한은 0.7 이다(= 172.9pt 까지).
+    ///      숫자 열 상한을 최저(76pt — 16자리 총합이 0.7 에서 겨우 사는 값)로 낮춰 캡션을 133pt 까지 넓혀도
+    ///      이름 세 개가 들어갈 자리(66.7pt)에 "Claude "+"Codex " 두 개(70.0pt)만으로 이미 넘친다.
+    ///      들어가게 하려면 셋 다 두 글자 약어로 줄여야 하는데, 그것은 안티그래비티를 안 쓰는 절대다수의 캡션까지
+    ///      읽기 어렵게 만든다. `TokenToolMixWidthBudget` 이 이 실측을 상수로 들고 테스트가 되묻는다.
+    ///   ② 계약: 순위판 RPC 출력은 15컬럼 그대로라 안티그래비티 **내역 컬럼이 없다**(20260911120000 — 내역 노출은
+    ///      클라 배포와 짝을 맞출 별개의 결정). 잔차(`antigravityEffective`)로 되살릴 수는 있지만, 그 값을 쓰는 자리는
+    ///      폭 제한이 없는 `detailTooltip` 하나로 둔다.
+    ///   그래서 **캡션 합 == 굵은 총합** 불변식은 안티그래비티가 0 일 때만 성립한다. 안티그래비티가 있는 행에서
+    ///   그 차이를 설명하는 자리가 툴팁이고, 툴팁의 세 값 합은 언제나 총합과 같다(그쪽 주석·V0312 테스트).
     var toolUsageLabel: String? {
         var parts: [String] = []
         if claudeTotal > 0 {
@@ -371,8 +398,12 @@ struct TokenBoardEntry: Identifiable, Equatable {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// 카드에 마우스를 올리면 뜨는 상세(.help): **캡션에 보이는 두 값의 정확한 숫자만** — `Claude 1,562,135,145 · Codex 6,930,295,293`.
+    /// 카드에 마우스를 올리면 뜨는 상세(.help): **굵은 총합을 이루는 값들의 정확한 숫자만** —
+    /// `Claude 1,562,135,145 · Codex 6,930,295,293 · 안티그래비티 42,676`.
     /// 캡션은 축약(196.6억)이라 정확한 값을 확인하는 자리가 이것뿐이다. Codex 는 `codexEffective`(굵은 총합·캡션과 같은 값). 0 인 쪽은 뺀다.
+    ///
+    /// v0.3.12: 세 번째 종류가 여기에만 있다(캡션은 폭이 없다 — toolUsageLabel 주석). 툴팁은 `.help` 라 폭 제한이 없어
+    /// 세 값을 온전한 이름·전체 자릿수로 적을 수 있고, **세 값의 합 == 굵은 총합**이라는 검산 가능한 불변식이 여기서 성립한다.
     /// 둘 다 0 이면 빈 문자열 — 뷰가 그때 `.help` 자체를 안 건다(tokenBoardRowWiresTheToolMixCaptionAndTooltipToTheEntry).
     ///
     /// v0.2.45 에 이렇게 줄였다(사용자 지적 "유저들한테 너무 과하게 다 표시한다"): 그 전엔 Claude 4필드 내역, Codex 로컬/캐시/계정 집계,
@@ -385,6 +416,10 @@ struct TokenBoardEntry: Identifiable, Equatable {
         }
         if codexEffective > 0 {
             parts.append("Codex \(TokenNumberFormatter.grouped(codexEffective))")
+        }
+        // 0 인 종류는 줄을 만들지 않는다 — 안 쓰는 사람의 툴팁은 이 줄이 붙기 전과 글자 하나 다르지 않다.
+        if antigravityEffective > 0 {
+            parts.append("안티그래비티 \(TokenNumberFormatter.grouped(antigravityEffective))")
         }
         return parts.joined(separator: " · ")
     }
@@ -532,6 +567,19 @@ struct TokenUsageUpsertRequest: Encodable {
     // 규약은 위 19개와 같다 — **옵셔널이 핵심**(nil = 키 생략 = 서버 값 보존), Int 뿐(문자열 금지), 새 필드는 마지막에.
     var codexDiagForkFiles: Int?
     var codexDiagForkTokens: Int?
+
+    // ── 안티그래비티 네 컬럼(antigravity_*, v0.3.12 · 20260911120000) ──────────────────────
+    //
+    // **옵셔널이고, 넷이 함께 실리거나 함께 빠진다**(codex_account_* 다섯과 같은 규약). 두 가지를 동시에 산다:
+    //  ① 안 쓰는 사람(현재 절대다수)의 본문에는 키가 **하나도** 없다 → 서버에 컬럼이 아직 없어도(배포 순서가 어긋나도)
+    //     그 사람의 월간 업로드는 종전과 바이트 단위로 같아 400 이 날 일이 없다. 즉 이 기능이 남의 사용량을 멈추지 못한다.
+    //  ② 쓰는 사람의 값이 0 으로 떨어지는 상황(대화 디렉터리를 지웠다·읽기 실패)에서도 서버의 마지막 값이 보존된다 —
+    //     PostgREST 의 merge-duplicates 는 본문에 온 컬럼만 SET 하므로, 키를 빼면 그 달 누적이 0 으로 밀리지 않는다.
+    // ★ `total` 에는 절대 더하지 마라(TokenUsageMonthly.total 주석 · 서버 컬럼 주석). 순위판 총합은 서버가 이 넷에서 직접 더한다.
+    var antigravityInput: Int?
+    var antigravityOutput: Int?
+    var antigravityThinking: Int?
+    var antigravityCacheRead: Int?
 }
 
 extension TokenUsageUpsertRequest {
@@ -563,6 +611,7 @@ extension TokenUsageUpsertRequest {
         todayDate: String,
         codexCacheRead: Int = 0,
         account: TokenUsageAccountFields? = nil,
+        antigravity: TokenUsageAntigravityFields? = nil,
         diagnostics: CodexUsageDiagnostics?
     ) {
         self.init(
@@ -607,8 +656,33 @@ extension TokenUsageUpsertRequest {
             // 오늘은 codexInput 과 같은 값이지만, 훗날 출력을 쪼개 담더라도 "그 업로드의 Codex 총합"이라는 뜻이 유지된다.
             codexDiagInputAtScan: diagnostics.map { _ in codexInput + codexOutput },
             codexDiagForkFiles: diagnostics?.forkFiles,
-            codexDiagForkTokens: diagnostics?.forkCopyTokens
+            codexDiagForkTokens: diagnostics?.forkCopyTokens,
+            // 넷이 함께 — antigravity 가 nil 이면 네 키가 통째로 빠진다(위 필드 주석의 ①②).
+            antigravityInput: antigravity?.input,
+            antigravityOutput: antigravity?.output,
+            antigravityThinking: antigravity?.thinking,
+            antigravityCacheRead: antigravity?.cacheRead
         )
+    }
+}
+
+/// 업로드 본문에 실을 안티그래비티 네 값(v0.3.12). 서비스가 TokenUsageMonthly 에서 만든다
+/// (`SupabaseWorkService.upsertTokenUsage` — 합이 0 이면 **nil**, 그러면 본문에서 네 키가 통째로 빠진다).
+/// 넷을 한 타입으로 묶어 두는 것 자체가 안전장치다: 따로 넘기면 "셋만 실린 본문"이 만들어질 수 있고,
+/// 그러면 서버의 네 컬럼 합이 이 기기의 실제 합과 달라진다.
+struct TokenUsageAntigravityFields: Equatable, Sendable {
+    var input: Int
+    var output: Int
+    var thinking: Int
+    var cacheRead: Int
+
+    /// 월 집계에서. 합이 0 이면 nil — "안 쓰는 사람의 본문엔 키가 없다" 규약을 **한 자리에서** 정한다.
+    init?(usage: TokenUsageMonthly) {
+        guard usage.antigravityTotal > 0 else { return nil }
+        input = usage.antigravityInput
+        output = usage.antigravityOutput
+        thinking = usage.antigravityThinking
+        cacheRead = usage.antigravityCacheRead
     }
 }
 
@@ -688,6 +762,9 @@ struct TokenUsageDailyUpsertRow: Encodable, Equatable, Sendable {
     var codexTotal: Int?
     var codexUtcTotal: Int? = nil
     var codexAccount: Int?
+    /// 그 날(KST) 안티그래비티 합(v0.3.12). 다른 넷과 같은 옵셔널 규약 — 모르는 날은 키를 빼 서버 값을 보존한다.
+    /// 서버는 이 컬럼을 **읽지 않는다**(순위판은 월 표의 네 컬럼만 본다) — 잔디를 위한 저장 전용이다.
+    var antigravityTotal: Int? = nil
 }
 
 /// 일별 표 조회 응답 한 줄(select=day,device_id,claude_total,codex_total,codex_utc_total,codex_account). 기기별 행이 그대로 오고

@@ -204,22 +204,60 @@ struct WindowAnchorAccessor: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSView {
-        NSView(frame: .zero)
+        let view = AnchorHostView(frame: .zero)
+        view.onMoveToWindow = { [coordinator = context.coordinator] window in coordinator.attach(to: window) }
+        return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         let coordinator = context.coordinator
         coordinator.onVisibilityChange = onVisibilityChange
-        // 첫 update 시 뷰가 아직 창 계층에 붙기 전일 수 있으니 다음 턴에 창을 잡는다. attach는 멱등이라
-        // 콘텐츠 변화로 update가 반복돼도 같은 창이면 즉시 반환한다(재캡처는 창 노티가 담당).
-        Task { @MainActor in
-            guard let window = nsView.window else { return }
-            coordinator.attach(to: window)
-        }
+        (nsView as? AnchorHostView)?.onMoveToWindow = { window in coordinator.attach(to: window) }
+        // 이미 창에 붙어 있으면 지금 잡는다. attach 는 멱등이라 콘텐츠 변화로 update 가 반복돼도 같은 창이면
+        // 즉시 반환한다(재캡처는 창 노티가 담당).
+        if let window = nsView.window { coordinator.attach(to: window) }
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: WindowTopAnchor) {
         coordinator.detach()
+    }
+}
+
+/// 창 계층에 **붙는 순간**을 알리는 빈 뷰(그림은 안 그린다).
+///
+/// ★ **왜 `updateNSView` 안의 `Task` 로는 모자랐나 — 관측과 추론을 갈라 적는다.**
+///
+///   **관측된 것(2026-09-11 프로브).** 옛 구현은 첫 `updateNSView` 에서 다음 턴(`Task`)에 `nsView.window`
+///   를 보고 창을 잡았다. 한 프로브 실행에서 그 줄이 창을 **못 잡았다**: `probeAnchor updateNSView window=-1`
+///   (창 없음) 뒤 `nextTurn window=-1 current=false presented=false`(bubble-220030.log). 그 실행에서는
+///   `WindowTopAnchor.current` 가 끝까지 nil 이었다.
+///
+///   **관측되지 않은 것 — 이 자리의 처음 주석이 과장했다.** 옛 코드로도 **앵커가 붙는 실행이 있다**:
+///   검토가 같은 옛 코드를 별도 번들 프로브로 재빌드해 붙는 것을 확인했다. 그러니 이것은 "결정적 실패"가
+///   아니라 **`Task` hop 타이밍 레이스**다 — hop 이 팝오버 창이 서기 전에 돌면 놓치고, 뒤에 돌면 잡는다.
+///   처음 주석이 거기서 파생시킨 단언들("`isMenuPopoverPresented()` 가 **언제나** false",
+///   "말풍선 클릭이 **늘** 대화를 닫는다", "`dismissMenuPopover` 가 아무것도 못 닫는다")도 같은 과장이다 —
+///   전부 **레이스에서 진 실행에만** 해당한다.
+///
+///   **추론(관측에서 따라오는 것, 실행마다 확인하지는 않았다).** 레이스에서 지면 그 실행 동안 `current` 가
+///   nil 이고, 거기 매달린 것이 조용히 죽는다: `isMenuPopoverPresented()` 가 false 로 답하므로
+///   `presentMenuPopover()` 는 **떠 있는 팝오버에도 버튼을 눌러 그것을 닫고**(말풍선을 눌렀는데 대화가
+///   닫히는 모양 — 검토가 지목한 `.alreadyPresented` 구멍), `dismissMenuPopover()` 는 반대로 아무것도
+///   안 닫으며, 위쪽 모서리 고정(`restoreIfNeeded`)도 키 획득/상실 통지(`onVisibilityChange`)도 안 돈다.
+///   사용자에게는 "가끔 그런다"로 보인다 — 그 간헐성이 이 결함을 오래 못 잡은 이유다.
+///
+///   **그래서 이 뷰는 유지할 값어치가 있다.** `viewDidMoveToWindow` 는 SwiftUI 재평가나 런루프 순서에
+///   기대지 않는다 — 창에 붙는 그 순간 AppKit 이 부르므로 **레이스가 성립할 자리 자체가 없어진다**
+///   (이길 확률을 올리는 것이 아니라 조건을 없앤다). (같은 이유로 `CheckEditorTextView` 도 포커스를
+///   이 자리에서 잡는다.)
+final class AnchorHostView: NSView {
+    /// 창에 붙었을 때 한 번. 창에서 떼어질 때는 부르지 않는다(그 자리는 `detach` 가 맡는다).
+    var onMoveToWindow: ((NSWindow) -> Void)?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let window else { return }
+        MainActor.assumeIsolated { onMoveToWindow?(window) }
     }
 }
 
@@ -336,6 +374,11 @@ extension WindowTopAnchor {
     ///    아이콘을 누르면 그 대화가 그 자리에 있다.
     @discardableResult
     static func presentMenuPopover(now: Date = Date()) -> MenuPopoverPresentation {
+        // ★ **판단보다 먼저 앱을 활성화한다.** 아래 함수 주석에 실측이 있다. 판단 뒤로 미루면
+        //   `.alreadySettled`(말풍선을 눌렀는데 팝오버가 이미 떠 있는 경우)에서 활성화가 건너뛰어져,
+        //   그 사용자는 **떠 있는 팝오버에 한글을 못 치는 상태**로 남는다 — 증상 ①이 가장 자주 나는 모양이고,
+        //   그 갈래에서는 버튼을 누르는 것이 답이 될 수 없다(누르면 그 팝오버가 닫힌다).
+        activateForKeyboardInput()
         let button = statusItemButton()
         let decision = menuPopoverToggleDecision(
             intent: .present,
@@ -348,6 +391,75 @@ extension WindowTopAnchor {
         lastToggleClickAt = now
         button?.performClick(nil)
         return .presented
+    }
+
+    /// 팝오버를 **프로그램으로** 열 때 앱을 활성 상태로 만든다. 증상 ①(한글 자음·모음 분리)의 원인 자리다.
+    ///
+    /// **왜 활성화가 필요한가**(2026-09-11 실측):
+    ///   · 이 문의 유일한 호출부는 캐릭터 머리 위 '메시지 도착' 말풍선 클릭이고(`CheckApp.swift`),
+    ///     그 말풍선 창은 `nonactivatingPanel`(`CheckOverlayWindow.makePanel`)이라 **클릭이 앱을 활성화하지
+    ///     않는다** — 말풍선을 CGEvent 로 진짜 클릭해 재 봤다: `BUBBLE mouseDown appActive=false panelKey=false`
+    ///     (bubble-215806.log 12.77s). 그 패널은 borderless 라 `canBecomeKey=false` 이기도 해서, 클릭해도
+    ///     key 창조차 생기지 않는다.
+    ///   · 팝오버 창 자체는 `nonactivatingPanel`(측정 styleMask 0x8080)이라 **앱 활성 없이 키를 받는다.**
+    ///     입력 문맥(`NSTextInputContext.current`)은 앱이 활성일 때만 켜지므로, 키는 들어오는데 입력기는
+    ///     돌지 않는다 → 한글이 **날것의 자모**로 박힌다. 같은 하네스에서 재현했다(bubble-215806.log
+    ///     15.47~15.79s: 비활성으로 시작한 한 묶음이 "ㅇ" → "ㅇㅏ" → "ㅇㅏㄴ"). 반대로 활성인 채 친 묶음은
+    ///     `marked=true` 로 "ㅇ" → "아" → "안" 이 됐다(bubble-220030.log 46.3~46.6s) — 즉 2벌식 한글은
+    ///     표시 글자를 **쓴다.** 예전에 "안 쓴다"로 잰 것은 이 꺼진 상태를 잰 것이었다.
+    ///   · 더 나쁜 것: 한 번 꺼진 채 시작한 묶음은 **그 묶음 내내 날것으로 남았다**(첫 타에 앱이 활성으로
+    ///     바뀐 뒤의 2·3타도 조합되지 않았다 — 같은 로그 15.5~15.8s). 그래서 "첫 타자에서 되살리기"로는
+    ///     못 고치고, **팝오버가 서는 이 순간에** 끝내야 한다.
+    ///
+    /// **무엇이 실제로 먹는가 — 후보를 하나씩 재 봤다**(Finder 를 프런트로 만든 뒤 말풍선을 CGEvent 로 클릭,
+    /// 클릭 핸들러 안에서 후보를 부르고 0.1·0.4·1.0초 뒤 상태를 찍었다. bubble-220030.log):
+    ///
+    /// | 후보                                        | 클릭 핸들러 안에서 | 결과                                   |
+    /// |---------------------------------------------|--------------------|----------------------------------------|
+    /// | `NSApp.activate()`                          | **먹는다**         | 호출 직후엔 `isActive=false` 인데 **14~35ms 뒤** `DidBecomeActive` + 팝오버 창이 key 로 돌아왔다(유휴 상태 7회 재측정, 7/7 첫 타자부터 정상 조합). |
+    /// | `NSApp.activate(ignoringOtherApps: true)`   | 먹는다(같음)       | 위와 구별되는 이점이 없다 — 그래서 안 쓴다(더 센 API 를 쓸 이유가 없다). |
+    /// | 상태바 버튼 `performClick` **만**            | **못 믿는다**      | 그 상태에서 눌렀더니 활성화도, 팝오버도 없었다(33.75s: `appActive=false`, 1초 뒤도 false). AppKit 이 팝오버를 "열려 있다"로 알고 있으면 그 클릭은 **닫는** 클릭이다. |
+    /// | activate + `performClick`(지금 코드)         | 먹는다             | 44.008s 클릭 → 44.022s 활성 + 팝오버 key. 닫혀 있던 경우엔 클릭이 열고, 가려져 있던 경우엔 활성화가 되살린다. |
+    ///
+    /// ⏱ **그 여유가 얼마인가 — 숫자를 과장하지 마라.** 위 표의 "14~35ms"는 **유휴 상태 7회**를 다시 잰
+    ///    범위다(처음 이 자리에는 한 번 관측한 `6ms` 가 표로 못 박혀 있었다 — 그 숫자로 여유를 계산하지 마라).
+    ///    결론은 7/7 그대로다: 팝오버가 선 뒤 **첫 타자부터 한글이 정상 조합된다.** 다만 이 여유는
+    ///    **부하에서는 좁아진다**(활성화 완료는 메인 런루프가 돌려주는 비동기 통지다 — 앱이 바쁘면 늦게 온다).
+    ///    그래도 이 한 줄에 거는 이유: **`keyDown` 쪽 방어선은 한 번 꺼진 채 시작한 묶음을 못 구한다**
+    ///    (`CheckEditorTextView.activateAppForTypedInputIfNeeded` 의 실측 — 첫 타에 활성화가 끝나도 그 묶음의
+    ///    2·3타는 날것으로 들어갔다). 그러니 **이 여유가 사실상 유일한 방어선**이고, 좁아지면 좁아지는 만큼
+    ///    첫 묶음이 자모로 박힐 위험이 남는다.
+    ///
+    /// 읽는 법이 둘이다.
+    ///  1. **`activate()` 는 "안 먹는" 것이 아니라 "사용자 이벤트 안에서만" 먹는다.** 타이머에서 부르면
+    ///     3초 뒤에도 `appActive=false` 였다(activate-213108.log, 3회 모두). macOS 는 앱이 **스스로** 앞자리를
+    ///     뺏는 것만 막는다 — 사용자가 우리 창을 누른 그 처리 중에는 허락한다. 그래서 이 문은 반드시
+    ///     클릭 핸들러 사슬 안에서만 불려야 하고(지금 유일한 호출부가 그렇다), **비동기로 완료된다**
+    ///     (돌아온 직후 `isActive` 를 읽어 판단하는 코드를 쓰지 마라 — 아직 false 다).
+    ///  2. **`performClick` 은 활성화 수단이 아니다.** 팝오버가 닫혀 있을 때만 열면서 활성화를 데려온다.
+    ///     앱이 비활성이 되면 팝오버 창은 화면에서 사라지는데(측정: `vis=false`) AppKit 은 여전히 열린 것으로
+    ///     알고 있을 수 있어, 그 상태의 클릭은 **닫기**로 소모된다. 활성화는 activate 가, 열기는 클릭이 한다.
+    ///
+    /// **고친 뒤 세 상태를 다시 다 재 봤다**(말풍선을 CGEvent 로 클릭. bubble2-222718.log):
+    ///   · A 팝오버 떠 있음 + 앱 활성   → `alreadyPresented`(버튼을 안 누른다 = 그 대화가 닫히지 않는다),
+    ///     그대로 한글 조합 정상(`marked=true` "ㅇ"→"아"→"안", 12.4~12.7s).
+    ///   · B 팝오버 떠 있음 + 앱 **비활성** → 클릭 전 상태가 `currentCtx=false`(= 자모가 박히는 그 상태)였는데,
+    ///     `alreadyPresented` 로 버튼은 안 누르고 **활성화만** 18ms 뒤 완료(mouseUp 17.798 → DidBecomeActive
+    ///     17.816) → 문맥이 켜지고 조합 정상. **검토가 지목한 그 구멍이 닫혔다.**
+    ///   · C 팝오버 닫힘 + 앱 비활성 → `presented`(클릭이 연다) + 33ms 뒤 활성(27.441 → 27.474), 조합 정상.
+    ///
+    /// **왜 창을 따로 key 로 만들지 않나**: 활성화 한 줄이 이미 창을 key 로 되돌린다(위 표의 활성화 줄).
+    /// 우리가 `makeKey()` 를 더 부르면 아직 서지 않은 창을 붙들어 SwiftUI 의 표시 상태와 어긋난다 —
+    /// `dismissMenuPopover` 주석의 실측 표가 `orderOut`/`close` 에서 이미 겪은 종류의 어긋남이다.
+    ///
+    /// **왜 이미 활성이면 아무것도 안 하나**: `activate()` 는 부를 때마다 다른 앱에서 포커스를 빼앗는다.
+    /// 사용자가 우리 팝오버를 이미 쓰고 있는 정상 경로에서 그 짓을 반복할 이유가 없다.
+    ///
+    /// `NSApp` 을 `if let` 으로 받는 이유는 `statusItemButton()` 주석과 같다 — 헤드리스 테스트 프로세스에서는
+    /// nil 이고, `NSApplication.shared` 로 받으면 그 접근이 앱 객체를 **만들어** 테스트를 GUI 앱으로 승격시킨다.
+    private static func activateForKeyboardInput() {
+        guard let app: NSApplication = NSApp, !app.isActive else { return }
+        app.activate()
     }
 
     /// 무엇을 할지 정하는 **순수** 판단(헤드리스 검증 지점). 창 서버를 흉내 낼 수 없으므로 실제 클릭은

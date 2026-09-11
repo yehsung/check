@@ -1749,7 +1749,10 @@ func sourceContractLiveAccountStoreIsBuiltOnlyInCheckApp() throws {
     #expect(store.contains("self.codexAccount = codexAccount ?? CodexAccountUsageStore.inert()"))
     let row = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/check/CheckTokenUsage.swift"), encoding: .utf8))
     // v0.2.43: 계정 우선 규칙은 월합만으로는 못 세고(꼬리·마지막 버킷) 스냅샷이 필요하다 — 뷰가 스냅샷 자체를 넘긴다.
-    #expect(row.contains("TokenUsageDisplay.effectiveTotal(local: usage, account: account?.snapshot)"))
+    // v0.3.12: 그 호출이 `usage.displayTotal(account:)` 로 한 겹 감싸졌다(세 번째 종류를 더하는 자리). 감싼 쪽도
+    // 스냅샷 자체를 그대로 받아 넘기므로 이 계약의 뜻은 그대로다 — 아래 두 줄이 그 사실을 함께 되묻는다.
+    #expect(row.contains("usage.displayTotal(account: account?.snapshot)"))
+    #expect(row.contains("TokenUsageDisplay.effectiveTotal(local: self, account: account) + antigravityTotal"))
     #expect(row.contains(".help(usage.detailTooltip(account: account?.snapshot))"))
     let menu = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/check/CheckMenuView.swift"), encoding: .utf8))
     #expect(menu.contains("CheckTokenUsageRow(store: store.tokenUsage, account: store.codexAccount"))

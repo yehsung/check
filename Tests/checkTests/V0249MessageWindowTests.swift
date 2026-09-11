@@ -1162,18 +1162,21 @@ func enterSendsAndShiftEnterBreaksTheLine() {
 }
 
 @Test
-func enterWhileMarkedTextIsUpCommitsInsteadOfSending() {
-    // ★ **이 스위트에서 가장 값비싼 회귀다.** 입력기가 표시 글자(marked text)를 띄워 둔 순간의 Enter 는
-    //   조합을 끝내는 키이지 보내는 키가 아니다. 여기서 .send 가 나오면 조합 중인 글자가 빠진 문장이 나간다.
-    //   ⚠︎ macOS 2벌식 한글은 표시 글자를 안 쓴다(2026-09-11 실측 — CheckTextEditor 머리 주석). 그 입력기에서는
-    //   첫 Enter 가 완성된 문장 전체를 보내고, 이 갈래는 표시 글자를 쓰는 입력기(일본어·중국어 등)를 지킨다.
+func enterWhileMarkedTextIsUpCommitsFirstAndThenSends() {
+    // ★ **이 스위트에서 가장 값비싼 회귀다.** 규약(사용자 결정 2026-09-11 — 카톡과 같은 동작):
+    //   **첫 Enter 가 조합 중 마지막 글자까지 보낸다.** 그래서 표시 글자가 떠 있는 Enter 의 답은
+    //   "확정만"(옛 `.commitComposition`)도 아니고 "그냥 보내기"(`.send`)도 아니다 —
+    //   `.send` 면 조합 중인 글자가 빠진 문장이 나가고(제보 v0.3.11 "뒤에 한 글자가 사라져요"),
+    //   "확정만"이면 한글 문장은 거의 늘 마지막 음절이 조합 중이라 **모든 메시지가 Enter 두 번**이 된다.
     #expect(CheckEditorReturnKey.action(
         sendsOnReturn: true, hasShift: false, isComposing: true, canSend: true
-    ) == .commitComposition)
-    // 보낼 수 없는 상태에서도 조합은 끝낼 수 있어야 한다(상대를 아직 안 골랐어도 글은 쓴다).
+    ) == .commitThenSend)
+    // ★ **`canSend` 가 false 여도 같은 답이다.** 그 값은 스토어(확정된 글자만 든 곳)에서 왔으므로 조합 중에는
+    //   낡았다 — 한 음절만 써 놓은 상태는 스토어에서 빈 칸으로 보여 false 다. 여기서 `.nothing` 을 돌려주면
+    //   "안녕" 한 낱말을 쓰고 Enter 를 누른 사용자의 첫 메시지가 영영 안 나간다. 확정한 **뒤에** 다시 묻는다.
     #expect(CheckEditorReturnKey.action(
         sendsOnReturn: true, hasShift: false, isComposing: true, canSend: false
-    ) == .commitComposition)
+    ) == .commitThenSend)
     // 조합 중 ⇧Enter 는 IME 가 확정하고 줄이 바뀐다(시스템 기본 동작 그대로).
     #expect(CheckEditorReturnKey.action(
         sendsOnReturn: true, hasShift: true, isComposing: true, canSend: true
@@ -1208,7 +1211,15 @@ func theThreeWaysToSendAllGoThroughTheSameDoor() throws {
     // 버튼 · ⌘↩ · ↩ 이 서로 다른 문을 지나면 언젠가 판정이 갈리고, 갈린 쪽은 아무 화면에도 안 보인다.
     let view = try mwSource("CheckMessageView.swift")
     #expect(view.contains("keyboardShortcut(.return, modifiers: .command)"), "⌘↩ 이 사라졌다 — 손버릇을 깼다")
-    #expect(view.contains("onSend: { store.sendDraftMessage() }"), "Enter 가 전송 문을 안 지난다")
+    // ★ 세 갈래가 **문 하나**를 지난다: `send()` 가 조합을 확정한 뒤 스토어의 전송을 부른다.
+    //   갈래마다 `store.sendDraftMessage()` 를 직접 부르면 그 갈래에서 **확정이 빠지고**, 빠진 갈래는
+    //   마지막 한 글자를 잃는다(제보 v0.3.11). 그래서 직접 호출이 `send()` 안에 **딱 한 번**만 있어야 한다.
+    #expect(view.contains("onSend: send"), "Enter 가 전송 문(send())을 안 지난다")
+    #expect(view.contains("Button(action: send)"), "[보내기] 버튼이 전송 문(send())을 안 지난다")
+    #expect(view.contains("CheckEditorSend.commitThenSend { store.sendDraftMessage() }"),
+            "전송 문이 확정-먼저 문(CheckEditorSend)을 안 지난다 — 조합 중인 마지막 음절이 빠진 문장이 나간다")
+    #expect(view.components(separatedBy: "store.sendDraftMessage()").count - 1 == 1,
+            "`store.sendDraftMessage()` 직접 호출이 둘 이상이다 — 확정을 건너뛰는 갈래가 생겼다")
     #expect(view.contains("canSendNow: { store.canSendMessageNow }"), "Enter 가 버튼과 다른 조건을 본다")
     // 메시지 칸만 Enter 로 보낸다 — 이 인자 하나가 false 가 되면 앱에서 Enter 는 영영 안 보낸다(2026-09-11 검증에서
     // 이 줄을 바꿔도 전부 초록이었다). 동작은 `theMountedMessageEditorSendsOnEnterAndBreaksTheLineOnShiftEnter` 가
@@ -1451,14 +1462,33 @@ func theAdminNoteFallbackSitsWhereTheRealFieldDoes() throws {
 //
 // 순수 판정만 재면 "판정은 맞는데 뷰가 그 판정을 안 따른다"를 못 잡는다. 그래서 진짜 `CheckEditorTextView` 에
 // 합성 키 이벤트를 넣고 **글자와 전송 횟수**를 본다.
-// ⚠︎ 실제 입력기는 이 프로세스에서 돌지 않는다 — 표시 글자는 `setMarkedText` 로 직접 심는다. 실제 입력기로
-//   친 결과(2벌식 한글은 표시 글자를 안 쓴다)는 CheckTextEditor 머리 주석에 적힌 하네스 실측이다.
+// ⚠︎ 실제 입력기는 이 프로세스에서 돌지 않는다 — 표시 글자는 `setMarkedText` 로 직접 심는다. **그 심기는
+//   실제 입력기가 하는 일과 같다**: 2026-09-11 프로브 실측에서 2벌식 한글은 입력 문맥이 켜져 있는 동안
+//   `marked=true` 로 "ㅇ" → "아" → "안" 을 만들어 갔다(bubble-220030.log 46.3~46.6s).
+//   예전 주석의 "2벌식 한글은 표시 글자를 안 쓴다"는 **앱이 비활성이라 입력기가 아예 안 돌던 상태**를 잰 것이다.
 // ⚠︎ 진짜 ⌘V·⌘C·⌘X 는 부르지 않는다 — `NSPasteboard.general` 을 건드리면 테스트가 사용자 클립보드를 덮어쓴다.
 //   그 셋은 명령을 가로채 기록만 하는 스파이(`MWEditingSpyTextView`, 파일 끝)로 "어느 명령에 닿는가"만 잰다.
 
+/// 전송 횟수 **와 보낸 값**을 함께 받아 적는다.
+///
+/// ★ **횟수만 세면 v0.3.11 제보를 못 잡는다**(2026-09-11 검토 지적 ④). 그 제보는 "보낸다/안 보낸다"가 아니라
+///   **"보낸 값에서 마지막 글자가 빠진다"**(기모찌: "자꾸 뭐 쓸 때 뒤에 한 글자가 사라져요")였다. 그래서
+///   이 클래스는 제품의 배선을 그대로 흉내 낸다: 스토어 초안(`draft`)은 **`textDidChange` 로만** 올라오고
+///   (표시 글자 구간에는 그 알림이 오지 않는다 — `CheckTextEditor` 의 Coordinator 주석), 전송 문은 그
+///   초안을 읽는다. 확정이 빠지거나 전송이 확정보다 **먼저** 읽으면 `reads` 에 한 글자 모자란 값이 남는다.
 @MainActor
-private final class MWSendCounter {
-    var count = 0
+private final class MWSendCounter: NSObject, NSTextViewDelegate {
+    /// 전송 문이 **읽은 값**(= 서버로 나갈 문자열). 증상 ③의 정체가 이 값이다.
+    var reads: [String] = []
+    /// 스토어의 초안. 제품과 같은 경로로만 갱신된다(`textDidChange`).
+    var draft = ""
+    /// 옛 이름을 남긴다 — 전송 **횟수**만 보면 되는 단언들이 이 파일에 여럿 있다.
+    var count: Int { reads.count }
+
+    func textDidChange(_ notification: Notification) {
+        guard let textView = notification.object as? NSTextView else { return }
+        draft = textView.string
+    }
 }
 
 @MainActor
@@ -1471,12 +1501,18 @@ private func mwEditorTextView(
     let textView = CheckEditorTextView(frame: NSRect(x: 0, y: 0, width: 292, height: 54))
     window.contentView = textView
     window.makeFirstResponder(textView)
+    let counter = MWSendCounter()
+    // 델리게이트를 먼저 물린다 — 이 배선이 없으면 `onSend` 가 읽을 초안이 없어 **값을 못 재고 횟수만 남는다.**
+    textView.delegate = counter
     textView.string = text
+    // `string =` 은 `textDidChange` 를 부르지 않는다(제품에서도 그렇다 — `replaceTextFromOutside` 주석).
+    // 그래서 출발 초안은 여기서 직접 맞춘다.
+    counter.draft = text
     textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
     textView.sendsOnReturn = sendsOnReturn
     textView.canSendNow = { canSend }
-    let counter = MWSendCounter()
-    textView.onSend = { counter.count += 1 }
+    // 제품의 전송 문과 같은 순서: **그 순간 스토어에 있는 값**을 읽는다(확정이 먼저 흘려 준 값이어야 한다).
+    textView.onSend = { counter.reads.append(counter.draft) }
     return (textView, window, counter)
 }
 
@@ -1528,16 +1564,48 @@ func theRealFeedbackTextViewBreaksTheLineOnEnter() {
 
 @MainActor
 @Test
-func theRealTextViewNeverSendsOrAddsALineWhileMarkedTextIsUp() {
+func theRealTextViewCommitsTheCompositionAndSendsItOnTheFirstEnter() {
+    // ★ **규약이 2026-09-11 에 뒤집혔다**(사용자 결정 — 카톡과 같은 동작). 옛 이름은
+    //   `theRealTextViewNeverSendsOrAddsALineWhileMarkedTextIsUp` 이고 "조합 중 Enter 는 전송 금지"를
+    //   단언했는데, 그 규약대로면 한글 문장은 거의 늘 마지막 음절이 조합 중인 채 끝나므로
+    //   **모든 메시지가 Enter 두 번**이 된다 — 사용자가 고쳐 달라고 한 것이 그것이다.
+    //   지금 규약: **확정을 먼저 하고, 그 확정된 문자열을 보낸다**(`.commitThenSend`).
+    //   ⚠︎ "조합 중이면 전송 금지"로 되돌리지 마라. 그 회귀는 사용자에게 Enter 두 번으로 보인다.
+    //
+    //   (같은 날 실측으로 옛 전제 하나도 깨졌다: 2벌식 한글은 **표시 글자를 쓴다.** 예전에 "안 쓴다"로 잰 것은
+    //    앱이 비활성이라 입력 문맥이 꺼진 상태였기 때문이다 — CheckTextEditor.swift 머리 주석의 실측 표.)
     let (view, window, sent) = mwEditorTextView("안녕하세", sendsOnReturn: true, canSend: true)
     view.setMarkedText(
         "요", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0)
     )
-    // 심기에 실패하면 아래 두 단언은 아무것도 안 잰다(그리고 영원히 초록이다).
+    // 심기에 실패하면 아래 단언들은 아무것도 안 잰다(그리고 영원히 초록이다).
     #expect(view.hasMarkedText(), "표시 글자를 못 심었다 — 이 테스트가 재는 것이 없다")
     view.keyDown(with: mwKeyEvent(window, keyCode: 36, characters: "\r", ignoring: "\r"))
-    #expect(sent.count == 0, "표시 글자가 떠 있는데 Enter 가 전송했다 — 조합 중인 글자가 빠진 문장이 나간다")
-    #expect(!view.string.contains("\n"), "조합 확정 Enter 가 줄을 넣었다: \(view.string.debugDescription)")
+    #expect(sent.count == 1, "조합 중 첫 Enter 가 전송을 안 불렀다 — 사용자에게는 Enter 두 번이 된다")
+    #expect(!view.hasMarkedText(), "전송했는데 표시 글자가 남았다 — 다음 글자가 그 음절에 다시 붙는다")
+    // ★ **여기가 제보 v0.3.11 을 재는 자리다.** 화면 글자(`view.string`)가 아니라 **전송 문이 읽은 값**을 본다 —
+    //   확정이 빠지거나 전송이 확정보다 먼저 읽으면 화면은 "안녕하세요" 인 채로 **나가는 값만** "안녕하세"가
+    //   된다(기모찌: "뒤에 한 글자가 사라져요"). 횟수와 화면만 재던 옛 단언들은 그 갈림을 통과시켰다.
+    #expect(sent.reads == ["안녕하세요"],
+            "보낸 값에서 마지막 글자가 빠졌다(= 제보 v0.3.11 그대로다): \(sent.reads)")
+    #expect(view.string == "안녕하세요", "확정이 화면의 글자를 바꿨다: \(view.string.debugDescription)")
+    #expect(!view.string.contains("\n"), "보내는 Enter 가 줄을 넣었다: \(view.string.debugDescription)")
+
+    // 대조군: 못 보내는 상태(빈 칸·200자 초과·상대 없음)에서는 **확정만** 하고 전송은 안 한다.
+    // 확정은 그래도 해야 한다 — 조합을 그대로 두면 그 음절이 스토어에 영영 안 올라간다.
+    let (blocked, blockedWindow, notSent) = mwEditorTextView("안녕하세", sendsOnReturn: true, canSend: false)
+    blocked.setMarkedText(
+        "요", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0)
+    )
+    #expect(blocked.hasMarkedText(), "대조군에 표시 글자를 못 심었다")
+    blocked.keyDown(with: mwKeyEvent(blockedWindow, keyCode: 36, characters: "\r", ignoring: "\r"))
+    #expect(notSent.reads.isEmpty, "못 보내는 상태에서 전송했다: \(notSent.reads)")
+    #expect(!blocked.hasMarkedText(), "못 보내는 상태에서 조합을 확정하지 않았다")
+    // 확정은 했으므로 **초안에는 올라와 있어야 한다** — 안 올라오면 다음에 보낼 때 그 음절이 또 빠진다.
+    #expect(notSent.draft == "안녕하세요",
+            "확정한 글자가 스토어까지 안 올라왔다: \(notSent.draft.debugDescription)")
+    #expect(blocked.string == "안녕하세요", "대조군의 글자가 바뀄다: \(blocked.string.debugDescription)")
+    #expect(!blocked.string.contains("\n"), "못 보내는 상태의 Enter 가 줄을 넣었다: \(blocked.string.debugDescription)")
 }
 
 @Test
@@ -1591,7 +1659,9 @@ private struct MWMountedMessageEditor: View {
             text: $model.text,
             height: MessagePanelLayout.editorHeight,
             canSendNow: { canSend },
-            onSend: { counter.count += 1 }
+            // 횟수가 아니라 **그 순간 초안에 있던 값**을 적는다(= 서버로 나갈 문자열). 여기서는 바인딩이
+            // 곧 스토어라, 확정이 먼저 흐르지 않으면 한 글자 모자란 값이 그대로 남는다.
+            onSend: { counter.reads.append(model.text) }
         )
     }
 }

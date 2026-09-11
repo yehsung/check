@@ -1756,6 +1756,52 @@ private struct TokenBoardPanel: View {
     }
 }
 
+/// 토큰 보드 한 행의 **도구 캡션 폭 예산**(순수 계산 — v0.3.12).
+///
+/// TeamHeaderWidthBudget / FooterWidthBudget / PokeTitleRowWidthBudget 과 같은 이유로 존재한다: 이 줄은
+/// `lineLimit(1) + minimumScaleFactor` 라 넘쳐도 **높이가 변하지 않는다** = 렌더 높이 테스트로는 안 잡히고,
+/// 넘친 순간의 증상은 말줄임이다("Codex 254만" → "Codex 25…" = 자릿수 통째 오독, v0.2.41 의 회귀 지점).
+/// 세 번째 도구(안티그래비티)가 생긴 지금, 이 계산이 "그 줄에 무엇을 더 넣을 수 있는가"의 유일한 답이다.
+///
+/// ## 폭의 유래 (행 조립에서 그대로 따온다 — TokenBoardRowView.card)
+/// 본문 열 292 − 카드 leading 8 − trailing 12 = 272 → HStack spacing 10×3 = 30 · 악센트 바 3 · 아바타 30
+/// → 이름/캡션 열 + 숫자 열이 나눠 갖는 폭 = **209**. 숫자 열에 상한(`crowdedNumberColumnWidth`)을 씌우면
+/// 나머지가 캡션 몫이다: 상한 88 → 캡션 **121pt**(코드 주석의 그 값과 같은 수가 여기서 나온다).
+///
+/// ## 실측 (NSFont.systemFont(ofSize: 10) = .caption2, 2026-09-11 이 맥)
+/// 문자열 폭은 글자수로 재면 안 된다 — 한글 10pt · 라틴 소문자 ~5.5pt · 숫자 6.83pt 로 배 이상 차이가 난다.
+/// 아래 상수는 전부 `(s as NSString).size(withAttributes:)` 로 잰 값이고, 테스트가 같은 방법으로 다시 재서 되묻는다.
+enum TokenToolMixWidthBudget {
+    /// 이름/캡션 열과 숫자 열이 나눠 갖는 폭(pt).
+    static let sharedColumnWidth: CGFloat = 292 - 8 - 12 - 10 * 3 - 3 - 30
+    /// 캡션·칩이 붙는 행의 숫자 열 상한(TokenBoardRowView.crowdedNumberColumnWidth 와 같은 값이어야 한다).
+    static let numberColumnCap: CGFloat = 88
+    /// 그때 캡션에 남는 폭(pt).
+    static var captionWidth: CGFloat { sharedColumnWidth - numberColumnCap }
+    /// 캡션의 균일 축소 하한(TokenBoardRowView 의 minimumScaleFactor 와 같은 값이어야 한다).
+    /// 이보다 더 줄여야 하는 문구는 **말줄임된다** — 그 순간이 자릿수 오독이다.
+    static let captionMinScale: CGFloat = 0.7
+    /// 말줄임 없이 담을 수 있는 문구의 자연 폭 상한(pt) = 캡션 폭 ÷ 축소 하한.
+    static var fittingNaturalWidth: CGFloat { captionWidth / captionMinScale }
+
+    /// 두 종류의 현실 최대 조합 "Claude 1,234억 · Codex 1,234억"(29자) 실측 폭. 지금 들어간다.
+    static let twoKindWorstWidth: CGFloat = 149.25
+    /// 세 종류를 짧은 약어로 적어도 이만큼이다 — "Claude 1,234억 · Codex 1,234억 · AG 1,234억".
+    static let threeKindShortWidth: CGFloat = 210.36
+    /// 이름을 온전히 적으면 — "Claude 1,234억 · Codex 1,234억 · Antigravity 1,234억".
+    static let threeKindFullWidth: CGFloat = 248.41
+    /// 16자리 총합 "1,234,567,890,123 토큰" 의 실측 폭. 숫자 열 상한을 여기서 더 낮출 수 없는 이유 —
+    /// 이 값 × 0.7 = 75.96pt 라 상한 76 이 물리적 바닥이고, 그래도 캡션은 133pt 까지밖에 못 넓힌다.
+    static let widestTotalWidth: CGFloat = 108.52
+
+    /// 숫자 열 상한을 바닥(76)까지 낮췄을 때의 캡션 폭 — 세 종류가 그래도 안 들어간다는 것을 보이는 자리.
+    static let numberColumnFloor: CGFloat = 76
+    static var widestPossibleCaptionWidth: CGFloat { sharedColumnWidth - numberColumnFloor }
+
+    /// 이 자연 폭의 문구가 말줄임 없이 들어가는가.
+    static func fits(naturalWidth: CGFloat) -> Bool { naturalWidth <= fittingNaturalWidth }
+}
+
 /// 토큰 보드 한 행 = 유저 프로필 카드: 좌측 세로 악센트 바(유저 해시색) + 이니셜/원격 아바타 + 이름(+내 행 "나" 칩)
 /// + 우측 이번 달 총합("숫자 토큰"). 등수 배지 없이 담백하게 — 정렬 순서가 곧 순위다. 카드는 fieldFill 채움 + 1px 테두리
 /// (내 카드는 테두리를 accent 은은하게)로 유저 간 분리를 준다. 악센트 바 색은 CheckTheme.avatarColor 로 아바타 이니셜과
@@ -1793,7 +1839,12 @@ struct TokenBoardRowView: View {
     // ("1,234,567,890,123 토큰")까지 0.7 균일 축소로 전 자릿수를 지킨다(둘 다 렌더로 확인).
     // 100pt 로 두면 27자는 살지만 29자가 다시 잘린다 — 캡션이 붙는 행과 안 붙는 행의 임계를 둘로 나눌
     // 이유가 없어 하나로 합쳤다.
-    private var crowdedNumberColumnWidth: CGFloat? { (showsPrivateChip || entry.toolUsageLabel != nil) ? 88 : nil }
+    //
+    // v0.3.12: 이 88 과 아래 캡션의 0.7 이 `TokenToolMixWidthBudget` 의 두 상수와 **같은 값이어야 한다**(테스트가 되묻는다).
+    // 그 예산이 "세 번째 도구는 이 줄에 못 들어간다"의 근거이고, 그 결론이 TokenBoardEntry.toolUsageLabel 주석이다.
+    private var crowdedNumberColumnWidth: CGFloat? {
+        (showsPrivateChip || entry.toolUsageLabel != nil) ? TokenToolMixWidthBudget.numberColumnCap : nil
+    }
 
     var body: some View {
         tooltipped(card)
@@ -1867,7 +1918,7 @@ struct TokenBoardRowView: View {
                         .foregroundStyle(CheckTheme.secondaryText)
                         .monospacedDigit()
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(TokenToolMixWidthBudget.captionMinScale)
                 }
             }
             // 남는 폭은 전부 이름 덩어리가 가진다(예전엔 Spacer 가 유연 폭을 반씩 나눠 가져, 칩이 붙은 행에서

@@ -531,7 +531,10 @@ extension WorkTimerStore {
         guard tokenUsageCollect else { return }
         guard let usage else { return }
         let accountMonth = account?.monthTotal(usage.month) ?? 0
-        guard usage.total > 0 || accountMonth > 0 else { return }
+        // v0.3.12: 안티그래비티만 쓰는 사람도 올린다. `usage.total` 에는 안티그래비티가 들어가지 않으므로(업로드값의 뜻을
+        // 지키려고 뺐다 — TokenUsageMonthly.total 주석) 이 가드를 그대로 두면 그 사람의 사용량이 **한 번도** 서버에 닿지
+        // 않는다. 게이트는 짝으로 있어야 한다: 본문이 antigravity_* 를 실을 수 있게 됐으면 그 문이 여기서도 열려야 한다.
+        guard usage.total > 0 || accountMonth > 0 || usage.antigravityTotal > 0 else { return }
         // 변경 게이트는 usage 와 계정 키 **둘 다** 본다 — usage 가 그대로여도 계정값(월합·누적·상태)이 바뀌면 올린다.
         // 거기에 일별 재시도 대기(tokenDailyRetryPending)와 하루 1회 재기준도 게이트를 연다(리뷰 P2): 일별 업로드는 이
         // 게이트 **안쪽**에서만 불리므로, 이 셋이 없으면 "일별만 실패 → 사용자가 AI 를 더 안 씀 → 재시도가 영영 안 옴"과
@@ -1968,6 +1971,9 @@ struct TokenUsageDailyValue: Equatable, Sendable {
     var codex: Int?
     var codexUTC: Int? = nil
     var codexAccount: Int?
+    /// 그 날(KST)의 안티그래비티 합(v0.3.12). **그 날 로컬 맵에 값이 있을 때만** 채운다 — 현재 월 밖이라 모르는 날도,
+    /// 안티그래비티를 아예 안 쓰는 사람의 날도 nil 이다(values 주석의 ①②: 컬럼 없는 서버에서 전원 400 · 서버 값 0 으로 밀림).
+    var antigravity: Int? = nil
 }
 
 /// 월간 사용량 + 계정 스냅샷에서 일별 표에 올릴 값을 고르는 순수 규칙(스토어·테스트 공용).
@@ -1992,20 +1998,30 @@ enum TokenUsageDailyUpload {
         let buckets = account?.buckets ?? [:]
         var result: [String: TokenUsageDailyValue] = [:]
         // 고정폭 'YYYY-MM-DD' 라 사전식 비교 == 날짜 순서. 계정 버킷·UTC 맵은 UTC 일자 키, Claude·Codex KST 맵은 KST 일자 키인데
-        // 한 행(day)에 네 값이 함께 실린다 — 서버 컬럼이 축을 각각 명시한다(codex_total=KST 하루, codex_utc_total=UTC 하루, codex_account=UTC 버킷).
-        let keys = Set(usage.claudeDaily.keys).union(usage.codexDaily.keys).union(usage.codexDailyUTC.keys).union(buckets.keys)
+        // 한 행(day)에 다섯 값이 함께 실린다(v0.3.12 에 antigravity_total 합류) — 서버 컬럼이 축을 각각 명시한다
+        // (codex_total=KST 하루, codex_utc_total=UTC 하루, codex_account=UTC 버킷, antigravity_total=KST 하루).
+        let keys = Set(usage.claudeDaily.keys).union(usage.codexDaily.keys).union(usage.codexDailyUTC.keys)
+            .union(usage.antigravityDaily.keys).union(buckets.keys)
         for day in keys where day >= windowStart {
             // 각 값은 그 맵이 덮는 날에만 싣는다(TokenUsageDailyValue 주석). 모르는 값은 nil → 키 생략 → 서버의 옛 완전값 보존.
             let claudeKnown = completeFrom.isEmpty || day >= completeFrom
             let codexKnown = day.hasPrefix(monthPrefix)
             let utcKnown = utcMapIsFromThisBuild && day > utcRetainFrom
+            // 안티그래비티는 **그 날 맵에 값이 있을 때만** 싣는다. 현재 월이라는 것만으로 0 을 실으면
+            //  ① 안티그래비티를 안 쓰는 절대다수의 행에까지 `antigravity_total` 키가 붙어, 서버에 컬럼이 아직 없는 창에서
+            //     **모든 사용자의 일별 업로드**가 400 으로 죽는다(월간 경로가 네 키를 함께 빼는 것과 같은 이유).
+            //  ② 그 사람의 그 날 값이 서버에 이미 있었다면 0 으로 밀린다(맵은 현재 월만 담고, 재파싱 중엔 비어 있을 수 있다).
+            // 맵은 양수만 쌓으므로 "키가 있다 == 그 날 쓴 값이 있다"이다 — 키의 유무가 곧 앎의 유무다.
+            let antigravityKnown = day.hasPrefix(monthPrefix) && usage.antigravityDaily[day] != nil
             let value = TokenUsageDailyValue(
                 claude: claudeKnown ? max(0, usage.claudeDaily[day] ?? 0) : nil,
                 codex: codexKnown ? max(0, usage.codexDaily[day] ?? 0) : nil,
                 codexUTC: utcKnown ? max(0, usage.codexDailyUTC[day] ?? 0) : nil,
-                codexAccount: buckets[day].map { max(0, $0) }
+                codexAccount: buckets[day].map { max(0, $0) },
+                antigravity: antigravityKnown ? max(0, usage.antigravityDaily[day] ?? 0) : nil
             )
-            guard (value.claude ?? 0) > 0 || (value.codex ?? 0) > 0 || (value.codexUTC ?? 0) > 0 || value.codexAccount != nil else { continue }
+            guard (value.claude ?? 0) > 0 || (value.codex ?? 0) > 0 || (value.codexUTC ?? 0) > 0
+                    || value.codexAccount != nil || (value.antigravity ?? 0) > 0 else { continue }
             result[day] = value
         }
         return result
@@ -2022,7 +2038,8 @@ enum TokenUsageDailyUpload {
             guard let value = values[day] else { return nil }
             return TokenUsageDailyUpsertRow(
                 userId: userID, day: day, deviceId: deviceID,
-                claudeTotal: value.claude, codexTotal: value.codex, codexUtcTotal: value.codexUTC, codexAccount: value.codexAccount
+                claudeTotal: value.claude, codexTotal: value.codex, codexUtcTotal: value.codexUTC,
+                codexAccount: value.codexAccount, antigravityTotal: value.antigravity
             )
         }
     }

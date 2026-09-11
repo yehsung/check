@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import Observation
+import OSLog
 import SwiftUI
 
 // MARK: - 집계 모델 (월 단위)
@@ -26,6 +27,22 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     /// 툴팁·서버 컬럼(codex_cache_read)에 "얼마나 캐시로 처리됐나"를 보여 주기 위한 값(issue #2).
     var codexCacheRead: Int = 0
 
+    // ── 안티그래비티(Antigravity CLI, `agy`) — v0.3.12 ─────────────────────────────────────
+    //
+    // 네 값을 쪼개 드는 이유: 서버 컬럼이 넷이고(antigravity_input/output/thinking/cache_read, 20260911120000),
+    // 합은 언제든 더해 만들 수 있지만 쪼갠 값은 되살릴 수 없다. 출처는 대화 하나당 sqlite 파일 하나
+    // (`~/.gemini/antigravity-cli/conversations/*.db`)의 gen_metadata 블롭이고, 파싱은 CheckAntigravityUsage.swift 가 한다.
+    //
+    // ★ 캐시읽기가 합에 **들어간다**(antigravityTotal) — Codex 의 codexCacheRead 와 정반대 규약이라 헷갈리기 쉽다.
+    //   Codex 의 input_tokens 는 캐시 히트를 **포함**하므로 따로 더하면 이중 계상이지만, agy 의 두 값은 서로 겹치지
+    //   않는다(2026-09-11 실측: input 5282 · cache_read 8128 — 캐시가 입력보다 커서 부분집합일 수 없다).
+    //   agy 자신의 total_tokens 는 5283(= 입력+출력)이라 캐시를 빼지만, 우리 합은 **넣는다** — 서버 순위판 산식이
+    //   claude_total 과 같은 규약으로 네 컬럼을 다 더하기 때문이다(20260911120000). 둘이 갈리면 캡션 합 ≠ 총합이 된다.
+    var antigravityInput: Int = 0
+    var antigravityOutput: Int = 0
+    var antigravityThinking: Int = 0
+    var antigravityCacheRead: Int = 0
+
     /// 오늘(KST 자정 이후) 늘어난 토큰량 = "오늘 +N" 표시의 원천. 각 앱이 자기 로컬 로그에서 계산해 서버 행에 함께 올린다.
     /// v0.2.41 부터 두 일별 맵(claudeDaily/codexDaily)의 **오늘 키 값의 합으로 파생**된다 — 값은 예전과 같다:
     /// Claude 는 엔트리 ts14 의 KST 날짜 == 오늘인 것의 (입력+출력+캐시읽기+캐시생성) 합, Codex 는 token_count 이벤트마다
@@ -46,6 +63,14 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     /// 마지막 날 차분이 0 으로 떨어진다. 같은 이벤트가 두 맵에 **한 번씩** 들어가므로 두 맵의 합은 같다(KST 월 밖 키 제외).
     /// 표시(사용자 결정 2026-09-06)는 "9시 경계 하루": 반영된 날은 계정 버킷 그대로, 날짜 라벨은 이 키를 KST 날짜로 그대로 읽는다.
     var codexDailyUTC: [String: Int] = [:]
+    /// KST 'YYYY-MM-DD' → 그 날 안티그래비티 기여(현재 월 안의 날짜만, v0.3.12). 일별 표의 `antigravity_total` 로 올라간다.
+    ///
+    /// ★ **월 합계(antigravityTotal)와 같은 정의다**: 네 값 전부(입력+출력+생각+**캐시읽기**).
+    ///   그래서 같은 달 안이면 `antigravityDaily.values.reduce(0,+) == antigravityTotal` 이 **항등식**이고,
+    ///   잔디(일별)와 순위판(월)이 같은 숫자를 말한다. v0.3.12 초안은 파서의 `dayContrib` 가 세 값만 쌓아
+    ///   38% 작았다(실측 26,422 vs 42,676) — 잔디를 붙이는 날 그 차이가 그대로 화면에 나왔을 것이다.
+    ///   한쪽만 되돌리지 마라: V0312 테스트가 이 항등식을 스캐너 쪽과 스토어 쪽 양쪽에서 못 박는다.
+    var antigravityDaily: [String: Int] = [:]
     /// 일별 맵의 창 시작 'YYYY-MM-DD'(v0.2.43). Claude 일별 맵은 현재 월이 아니라 **12주 잔디 창**([이번 주 월요일 − 12주, 오늘])을
     /// 담고, 그 창의 첫 날이 이 값이다. 일별 업로드(TokenUsageDailyUpload.values)가 "창 안의 날만 보낸다"는 필터의 기준으로 쓴다 —
     /// 창 앞 이틀(straddle 보관분)은 부분값이라 서버의 온전한 값을 덮으면 안 된다. 옛 스냅샷엔 없으므로 빈 문자열이면
@@ -61,9 +86,13 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     /// TokenUsageDailyUpload.values). 빈 문자열 = 제한 없음. 잔디 표시는 이 값과 무관하다(서버 행과 날짜별 max 라 부분값이 화면을 깎지 못한다).
     var claudeCompleteFrom: String = ""
 
-    /// 화면 우측에 굵게 뜨는 총합 = 여섯 필드의 단순 합. **codexCacheRead 는 넣지 않는다**(codexInput 의 부분집합).
-    /// 이 값이 서버 `total` 컬럼으로 올라가 기기 합산에 쓰이므로 의미(로컬 6필드 합)를 바꾸지 마라 — 계정 집계를 섞은
-    /// 표시 총합은 TokenUsageDisplay.effectiveTotal 이 따로 만든다.
+    /// **업로드값** `total` = 클로드 4필드 + Codex 2필드의 단순 합. **codexCacheRead 는 넣지 않는다**(codexInput 의 부분집합).
+    ///
+    /// ★ 안티그래비티도 **넣지 마라**(v0.3.12, 서버 컬럼 주석 20260911120000). 이 값은 옛 표(token_usage_monthly.total)와
+    ///   '같은 단위끼리' 견주는 자리이고(legacy_live·prefer_device) `token_scan_health` 의 '집계 0' 판정 근거다 —
+    ///   안티그래비티를 섞으면 그 비교가 조용히 어긋난다(옛 표엔 그 컬럼이 영원히 없다). 순위판 총합은 서버가
+    ///   antigravity_* 네 컬럼에서 직접 더한다.
+    /// 화면에 굵게 뜨는 표시 총합은 `displayTotal(account:)` 이 따로 만든다(세 종류).
     var total: Int {
         claudeInput + claudeOutput + claudeCacheRead + claudeCacheCreation + codexInput + codexOutput
     }
@@ -72,6 +101,12 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     var claudeTotal: Int { claudeInput + claudeOutput + claudeCacheRead + claudeCacheCreation }
     /// Codex 소계(입력+출력) — 툴팁 표기용. 의미 불변: 캐시는 입력에 이미 들어 있다.
     var codexTotal: Int { codexInput + codexOutput }
+    /// 안티그래비티 소계 = **네 값 전부**(입력+출력+생각+캐시읽기). 서버 순위판이 antigravity_* 네 컬럼을 그대로 더하는
+    /// 것과 **같은 정의**다(20260911120000) — 여기서 캐시읽기를 빼면 화면의 굵은 총합이 순위판의 내 숫자와 어긋난다.
+    /// 파서 쪽(`AntigravityGenRow.total`·`AntigravityUsageTotals.total`·`AntigravityFileProgress.monthTotal`)도
+    /// **같은 네 값 합**이다(v0.3.12 에 통일). 정의가 한 벌이라 `antigravityDaily` 의 합이 이 값과 같다 —
+    /// 한쪽만 고치면 V0312 테스트가 빨개진다. (agy 자신의 stdout `total_tokens` 만 캐시읽기를 뺀 다른 수다.)
+    var antigravityTotal: Int { antigravityInput + antigravityOutput + antigravityThinking + antigravityCacheRead }
 
     /// 일별 맵 창의 첫 날. windowStart 가 비어 있으면(옛 스냅샷·손으로 만든 값) 월 1일 — 그러면 일별 업로드 필터가 옛 월 접두어 규칙과 같아진다.
     var windowStartDay: String { windowStart.isEmpty ? month + "-01" : windowStart }
@@ -93,7 +128,8 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
     /// .help 툴팁(계정 스냅샷 없이). 형식은 `detailTooltip(account:)` 과 같다.
     var detailTooltip: String { detailTooltip(account: nil) }
 
-    /// 내 박스 툴팁: **캡션에 보이는 두 값의 정확한 숫자만** — `Claude 4,280,667,571 · Codex 145,691,467`. 0 인 쪽은 뺀다.
+    /// 내 박스 툴팁: **굵은 총합을 이루는 값들의 정확한 숫자만** — `Claude 4,280,667,571 · Codex 145,691,467 · 안티그래비티 42,676`.
+    /// 0 인 쪽은 뺀다.
     /// Codex 는 `TokenUsageDisplay.codexEffective`(계정 우선 규칙 — 굵은 총합과 같은 값)다.
     ///
     /// v0.2.45 에 이렇게 줄였다(사용자 지적 "유저들한테 너무 과하게 다 표시한다"). 그 전엔 입력·출력·캐시 내역, 로컬/계정 구분,
@@ -109,7 +145,26 @@ struct TokenUsageMonthly: Codable, Equatable, Sendable {
         if codex > 0 {
             parts.append("Codex \(TokenNumberFormatter.grouped(codex))")
         }
+        // v0.3.12 세 번째 종류. **0 이면 줄을 만들지 않는다** — 안티그래비티를 안 쓰는 사람(현재 절대다수)의
+        // 툴팁은 이 줄이 붙기 전과 글자 하나 다르지 않다. 이름은 한글로 적는다: 캡션(좁은 폭)은 "AG" 로 줄이지만
+        // 툴팁은 폭 제한이 없고, 줄인 표기의 뜻을 풀어 주는 자리가 여기뿐이다.
+        if antigravityTotal > 0 {
+            parts.append("안티그래비티 \(TokenNumberFormatter.grouped(antigravityTotal))")
+        }
         return parts.joined(separator: " · ")
+    }
+
+    /// 화면에 **굵게 뜨는 표시 총합**(세 종류 = 클로드 + Codex 유효값 + 안티그래비티).
+    ///
+    /// 서버 순위판 RPC(20260911120000)의 `total = claude_total + codex_effective + antigravity_total` 과 **같은 답**을
+    /// 내야 한다 — 내 박스의 굵은 숫자와 순위판의 내 행이 어긋나면 어느 쪽이 맞는지 사용자가 가릴 방법이 없다.
+    /// CodexEffectiveRule 의 Swift↔SQL 쌍둥이 규약과 같은 이유이고, 테스트(V0312)가 그 동치를 픽스처로 못 박는다.
+    ///
+    /// 왜 `TokenUsageDisplay.effectiveTotal` 자체를 고치지 않았나: 그 타입은 이 단계의 소유 파일이 아니다
+    /// (CheckCodexAccountUsage.swift). 그래서 **감싸는 자리**를 여기 두고, 표시 호출측은 전부 이 함수를 부른다.
+    /// 그쪽을 언젠가 손대게 되면 이 함수를 지우고 그리로 합쳐라 — 두 벌로 남으면 한쪽만 고치는 날이 온다.
+    func displayTotal(account: CodexAccountUsage?) -> Int {
+        TokenUsageDisplay.effectiveTotal(local: self, account: account) + antigravityTotal
     }
 }
 
@@ -120,8 +175,10 @@ extension TokenUsageMonthly {
         case month
         case claudeInput, claudeOutput, claudeCacheRead, claudeCacheCreation
         case codexInput, codexOutput, codexCacheRead
+        // v0.3.12. 옛 스냅샷엔 없다 → 아래 init 이 0/빈 맵으로 본다(하위호환 규약: 새 키는 언제나 decodeIfPresent).
+        case antigravityInput, antigravityOutput, antigravityThinking, antigravityCacheRead
         case todayTotal, todayDate
-        case claudeDaily, codexDaily, codexDailyUTC
+        case claudeDaily, codexDaily, codexDailyUTC, antigravityDaily
         case windowStart, claudeCompleteFrom
     }
 
@@ -136,12 +193,18 @@ extension TokenUsageMonthly {
         codexOutput = try c.decodeIfPresent(Int.self, forKey: .codexOutput) ?? 0
         // 하위호환 핵심: 옛 스냅샷엔 없는 필드 — 없으면 0/""/빈 맵으로 본다(오늘분 미상 → 표시 0, 일별 미상 → 빈 추이).
         codexCacheRead = try c.decodeIfPresent(Int.self, forKey: .codexCacheRead) ?? 0
+        // v0.3.12: 안티그래비티 네 값. 옛 스냅샷엔 없다 → 0. 첫 스캔이 끝나면 제자리에 채워진다(캐시가 비어 있어 전량 파싱).
+        antigravityInput = try c.decodeIfPresent(Int.self, forKey: .antigravityInput) ?? 0
+        antigravityOutput = try c.decodeIfPresent(Int.self, forKey: .antigravityOutput) ?? 0
+        antigravityThinking = try c.decodeIfPresent(Int.self, forKey: .antigravityThinking) ?? 0
+        antigravityCacheRead = try c.decodeIfPresent(Int.self, forKey: .antigravityCacheRead) ?? 0
         todayTotal = try c.decodeIfPresent(Int.self, forKey: .todayTotal) ?? 0
         todayDate = try c.decodeIfPresent(String.self, forKey: .todayDate) ?? ""
         claudeDaily = try c.decodeIfPresent([String: Int].self, forKey: .claudeDaily) ?? [:]
         codexDaily = try c.decodeIfPresent([String: Int].self, forKey: .codexDaily) ?? [:]
         // v0.2.43: UTC 축 일별 맵. 옛 스냅샷엔 없다 → 빈 맵(codexDailyOnAccountAxis 가 KST 맵으로 후퇴).
         codexDailyUTC = try c.decodeIfPresent([String: Int].self, forKey: .codexDailyUTC) ?? [:]
+        antigravityDaily = try c.decodeIfPresent([String: Int].self, forKey: .antigravityDaily) ?? [:]
         // v0.2.43: 창 시작. 옛 스냅샷엔 없다 → 빈 문자열(windowStartDay 가 월 1일로 해석).
         windowStart = try c.decodeIfPresent(String.self, forKey: .windowStart) ?? ""
         claudeCompleteFrom = try c.decodeIfPresent(String.self, forKey: .claudeCompleteFrom) ?? ""
@@ -157,11 +220,16 @@ extension TokenUsageMonthly {
         try c.encode(codexInput, forKey: .codexInput)
         try c.encode(codexOutput, forKey: .codexOutput)
         try c.encode(codexCacheRead, forKey: .codexCacheRead)
+        try c.encode(antigravityInput, forKey: .antigravityInput)
+        try c.encode(antigravityOutput, forKey: .antigravityOutput)
+        try c.encode(antigravityThinking, forKey: .antigravityThinking)
+        try c.encode(antigravityCacheRead, forKey: .antigravityCacheRead)
         try c.encode(todayTotal, forKey: .todayTotal)
         try c.encode(todayDate, forKey: .todayDate)
         try c.encode(claudeDaily, forKey: .claudeDaily)
         try c.encode(codexDaily, forKey: .codexDaily)
         try c.encode(codexDailyUTC, forKey: .codexDailyUTC)
+        try c.encode(antigravityDaily, forKey: .antigravityDaily)
         try c.encode(windowStart, forKey: .windowStart)
         try c.encode(claudeCompleteFrom, forKey: .claudeCompleteFrom)
     }
@@ -259,6 +327,14 @@ struct TokenUsageCache: Equatable, Sendable {
     var codexFileStates: [String: CodexFileProgress] = [:]
     /// codex 상태 스키마 버전. 로드 시 currentCodexSchemaVersion 과 다르면 codexFileStates 를 폐기해 재파싱을 유발한다.
     var codexSchemaVersion: Int = TokenUsageCache.currentCodexSchemaVersion
+    /// 안티그래비티 대화 db 경로 → 증분 진행 상태(v0.3.12). 모양·규약은 CheckAntigravityUsage.swift 의 AntigravityFileProgress 참고.
+    ///
+    /// **스키마 버전을 새로 두지 않았고, 레이아웃 버전(TokenUsageCacheStore.currentSchemaVersion)도 올리지 않았다.**
+    /// 그럴 필요가 없기 때문이다: 옛 캐시 파일엔 이 키가 아예 없어 decodeIfPresent 가 빈 맵으로 떨어뜨리고,
+    /// 빈 맵이면 안티그래비티만 1회 전량 파싱된다(대화 db 수십 개 · 수백 KB — Claude/Codex 와 비교가 안 되게 싸다).
+    /// 반대로 레이아웃 버전을 올렸다면 **그 순간 Claude 엔트리 + Codex 상태까지 통째로 버려져 전체 재파싱 1회**가
+    /// 유발된다(내 맥 실측 기준 1,892파일/1.2GB). 새 소스 하나를 더하려고 치를 값이 아니다.
+    var antigravityFileStates: [String: AntigravityFileProgress] = [:]
 
     /// 현재 codex 상태 스키마 버전(이벤트-타임스탬프 귀속).
     ///
@@ -402,6 +478,7 @@ extension Dictionary where Key == ClaudeEntryKey, Value == ClaudeEntry {
 extension TokenUsageCache: Codable {
     enum CodingKeys: String, CodingKey {
         case claudeFileStates, claudeEntries, codexFileStates, codexSchemaVersion
+        case antigravityFileStates
     }
 
     init(from decoder: Decoder) throws {
@@ -418,6 +495,8 @@ extension TokenUsageCache: Codable {
         }
         // 인메모리 버전은 항상 현재로. 다음 저장 시 새 형식·현재 버전으로 기록된다(1회 재파싱 후 정착).
         codexSchemaVersion = Self.currentCodexSchemaVersion
+        // v0.3.12: 옛 캐시엔 이 키가 없다 → 빈 맵 = 안티그래비티만 1회 전량 파싱(위 프로퍼티 주석).
+        antigravityFileStates = try c.decodeIfPresent([String: AntigravityFileProgress].self, forKey: .antigravityFileStates) ?? [:]
     }
 
     func encode(to encoder: Encoder) throws {
@@ -426,6 +505,7 @@ extension TokenUsageCache: Codable {
         try c.encode(claudeEntries.hexKeyed, forKey: .claudeEntries)
         try c.encode(codexFileStates, forKey: .codexFileStates)
         try c.encode(codexSchemaVersion, forKey: .codexSchemaVersion)
+        try c.encode(antigravityFileStates, forKey: .antigravityFileStates)
     }
 }
 
@@ -894,6 +974,26 @@ enum TokenUsageIncrementalScanner {
         var codexBytesRead = 0
         /// 포크 파일의 복사 구간이라 델타를 내지 않고 건너뛴 token_count 이벤트 수(CodexForkRule). 로그·테스트 계측용.
         var codexForkCopyEvents = 0
+        /// 안티그래비티(v0.3.12): stat 한 대화 db 수 · 실제로 연 수 · 새로 읽은 행 수 · 파싱이 거부한 행 수.
+        /// AntigravityUsageScanner.Stats 를 그대로 옮겨 담는다(그쪽이 원본 — 여기서 다시 세지 않는다).
+        var antigravityFilesStatted = 0
+        var antigravityFilesRead = 0
+        var antigravityRowsIngested = 0
+        var antigravityRowsRejected = 0
+        /// 열지 못한 대화 db 수. **0 이 아니면 그 파일의 토큰이 통째로 빠진 것**이다 — 흔한 원인은 `agy` 가 쓰는 중이라
+        /// 200ms 잠금 대기에 걸린 경우이고, 다음 스캔에 저절로 잡힌다(크기·mtime 이 여전히 달라 다시 열린다).
+        /// (v0.3.12 까지 1위였던 "사이드카 없는 WAL" 은 이제 2단 immutable 로 구제된다 — AntigravityConversationReader 주석.)
+        var antigravityOpenFailures = 0
+        /// 열긴 열었는데 gen_metadata 가 없던 db 수(= 다른 스키마의 파일). 재시도로 안 풀린다.
+        /// openFailures 와 갈라 세는 이유: 초판은 사이드카 없는 WAL 의 CANTOPEN 을 이 칸에 접어 넣어
+        /// "집계 0 인데 열기 실패 0" 이라는 침묵을 만들었다.
+        var antigravityQueryFailures = 0
+        /// 2단(`?immutable=1`)으로 구해 낸 db 수. `agy` 가 정상 종료한 기기에서는 이 값이 곧 filesRead 다.
+        var antigravityImmutableReads = 0
+        /// ★ **눈먼 스캔**: 못 읽은 파일이 있는데(열기+질의 > 0) 안티그래비티 집계가 0 이다.
+        /// = 이 기기의 안티그래비티 사용량이 통째로 안 잡혔다는 뜻이고, 이 플래그가 그 사실이 남는 자리다.
+        /// (실패 수만 세면 "실패는 있었지만 다른 파일로 값이 나왔다"와 구분되지 않는다.)
+        var antigravityBlind = false
         /// 콜드(엔트리 맵)에 실제 변경(추가·교체·ts 승격·퇴거)이 있었는가.
         var entriesChanged = false
         /// 핫(claude/codex 파일 진행 상태)에 실제 변경(갱신·롤오버·정리·퇴거)이 있었는가.
@@ -962,6 +1062,26 @@ enum TokenUsageIncrementalScanner {
             &cache, roots: codexRoots(homeDirectory: homeDirectory, codexHome: codexHome),
             cutoff: monthStart, monthString: monthString, stats: &stats
         )
+        // 2-b) 안티그래비티(v0.3.12). 스캐너 전체가 CheckAntigravityUsage.swift 에 있고 여기서는 **상태를 건네고 합계를 받을 뿐**이다.
+        //   월/일 경계는 그쪽도 이 파일의 monthBounds/dayBounds 를 부른다 — 두 소스가 각자 KST 캘린더를 만들면
+        //   언젠가 월 경계가 하루 어긋나 잔디와 월 합계가 갈린다. 실패(디렉터리 없음 = agy 미설치)는 빈 합계이고 비용도 0 이다.
+        let antigravity = AntigravityUsageScanner.update(
+            states: &cache.antigravityFileStates,
+            conversationsDirectory: AntigravityUsageScanner.conversationsDirectory(homeDirectory: homeDirectory),
+            now: now
+        )
+        stats.antigravityFilesStatted = antigravity.stats.filesStatted
+        stats.antigravityFilesRead = antigravity.stats.filesRead
+        stats.antigravityRowsIngested = antigravity.stats.rowsIngested
+        stats.antigravityRowsRejected = antigravity.stats.rowsRejected
+        stats.antigravityOpenFailures = antigravity.stats.openFailures
+        stats.antigravityQueryFailures = antigravity.stats.queryFailures
+        stats.antigravityImmutableReads = antigravity.stats.immutableReads
+        // '못 읽은 파일이 있는데 집계가 0' = 이 기기의 안티그래비티가 통째로 빠졌다. 실패 수만으로는 이 구분이 안 된다
+        // (파일 열 개 중 하나가 잠겨도 openFailures 는 1 이지만 집계는 멀쩡하다). 스토어가 이 플래그를 로그로 흘린다.
+        stats.antigravityBlind = antigravity.stats.readFailures > 0 && antigravity.totals.isEmpty
+        // 상태가 바뀌었으면 **핫 파일**이 더러워진 것이다(엔트리 맵과 무관) — 저장 대상 표시를 Claude/Codex 와 공유한다.
+        if antigravity.stats.statesChanged { stats.statesChanged = true }
 
         // 3) 합계 재계산(엔트리 맵 현재-월 필터 + codex 파일상태 monthKey==현재월 필터). 일별 맵은 같은 순회에서 만들고
         //    (Claude 는 창 안 전부, Codex 는 현재 월) 오늘분은 두 맵의 오늘 키 합으로 파생한다.
@@ -973,6 +1093,15 @@ enum TokenUsageIncrementalScanner {
         )
         usage.windowStart = window.startKey
         usage.claudeCompleteFrom = claudeCompleteFromKey(oldestMtimeMicros: oldestClaudeMtime, now: now)
+        // 안티그래비티는 `totals(...)` 안이 아니라 여기서 얹는다: 그 함수는 캐시의 Claude 엔트리·Codex 상태만 보고
+        // 순수하게 합을 내는 자리이고, 안티그래비티 합은 위 스캐너가 자기 상태에서 이미 만들어 돌려줬다(두 번 세지 않는다).
+        // ★ `usage.total` 과 `usage.todayTotal` 은 **건드리지 않는다** — 둘 다 서버가 '옛 표와 같은 단위'로 읽는 값이다
+        //   (total 주석 · 오늘치는 서버에서 fork_safe/tail_factor 축소를 타므로 섞으면 근거 없이 깎인다).
+        usage.antigravityInput = antigravity.totals.input
+        usage.antigravityOutput = antigravity.totals.output
+        usage.antigravityThinking = antigravity.totals.thinking
+        usage.antigravityCacheRead = antigravity.totals.cacheRead
+        usage.antigravityDaily = antigravity.totals.daily
         return Result(cache: cache, usage: usage, stats: stats)
     }
 
@@ -1723,7 +1852,7 @@ final class TokenUsageStore {
     @ObservationIgnored private(set) var scanCount = 0
     /// 지금까지 예약/수행한 캐시 저장 횟수(테스트 계측 — 스로틀·루프 종료·종료 훅이 실제로 몇 번 쓰는지 확인).
     @ObservationIgnored private(set) var saveCount = 0
-    /// 마지막 스캔이 stat 한 로그 파일 수(claude + codex). **0 은 "스캔이 돌았는데 파일이 없다"(= AI CLI 를 안 쓴다)**이고,
+    /// 마지막 스캔이 stat 한 로그 파일 수(claude + codex + 안티그래비티). **0 은 "스캔이 돌았는데 파일이 없다"(= AI CLI 를 안 쓴다)**이고,
     /// 갱신되지 않은 상태(lastScanAt == nil)는 "스캔이 아예 안 돌았다"(= 스캐너가 죽어 있다)다. 이 둘은 서버에서 보면
     /// 똑같이 "사용량 0"으로 보이는데 원인도 처방도 정반대라, 두 값을 같이 올려 갈라 본다.
     /// 2026-09-02 에 활동 중인데 9월 행이 없는 8명의 원인을 못 가른 것이 정확히 이 구분이 없어서였다.
@@ -1731,6 +1860,59 @@ final class TokenUsageStore {
     /// 마지막 스캔이 **끝난** 시각(주입 clock 기준). nil 은 이 프로세스에서 스캔이 한 번도 완주하지 않았다는 뜻이며,
     /// lastScanFileCount == 0 ("스캔은 돌았고 파일이 없었다")과 구분되는 유일한 신호다 — 위 구분의 나머지 반쪽이다.
     @ObservationIgnored private(set) var lastScanAt: Date?
+    /// 마지막 스캔에서 **안티그래비티가 눈이 멀었는가** — 못 읽은 대화 db 가 있는데 집계가 0 이다(v0.3.12).
+    /// `agy` 를 쓰는데 값이 0 인 사람의 원인이 "안 썼다"가 아니라 "우리가 못 읽었다"임을 가르는 유일한 신호다.
+    /// 서버 컬럼은 아직 없어서(하트비트 본문은 다섯 키 고정) 여기 남기고 os_log 로 흘린다 — 사용자에게는 보여 주지
+    /// 않는다(캡션 값의 정확한 숫자만 사용자 몫이다).
+    @ObservationIgnored private(set) var lastScanAntigravityBlind = false
+    /// 마지막 스캔에서 2단(immutable)으로 구해 낸 대화 db 수. 0 이 아니면 이 기기의 `agy` 는 정상 종료하고 있고,
+    /// 2단이 없던 빌드에서는 그만큼이 통째로 집계에서 빠져 있었다는 뜻이다.
+    @ObservationIgnored private(set) var lastScanAntigravityImmutableReads = 0
+    /// 지금까지 **막힌** 실홈 스캔 횟수(v0.3.12 — realHomeScanIsBlocked). 0 이 아니면 이 프로세스에서 스캔 요청이
+    /// 왔지만 사용자의 실제 홈을 한 바이트도 읽지 않았다는 뜻이고, 그만큼의 `scanCount` 는 빈 집계로 끝났다.
+    /// **프로덕션에서는 영원히 0 이다**(게이트가 테스트 번들 로드 여부라 앱에서는 언제나 거짓).
+    @ObservationIgnored private(set) var blockedRealHomeScanCount = 0
+
+    /// 막힌 스캔이 실홈 **대신** 보는 홈. `/dev/null` 아래라 존재할 수 없는 경로이고(문자 디바이스 밑에는 디렉터리가
+    /// 생기지 않는다), 세 소스의 디렉터리 순회가 전부 빈손으로 돌아온다. 특수 분기 없이 **같은 스캐너**가 돌아
+    /// 결과가 구조적으로 '파일이 하나도 없는 홈'과 같아진다 — 그래서 막힌 스캔도 형태가 온전한 빈 집계를 낸다.
+    nonisolated static let blockedScanHome = URL(
+        fileURLWithPath: "/dev/null/check-tests-blocked-token-scan", isDirectory: true
+    )
+
+    /// **테스트 프로세스가 사용자의 실제 홈을 스캔하려는가.** 참이면 startScan 이 실홈 대신 blockedScanHome 을 본다.
+    ///
+    /// 왜 스캔 경로 자체를 막는가 — 토큰 스토어를 **주입하지 않고** `WorkTimerStore` 를 만드는 테스트가 약 170곳 있고,
+    /// 그 기본값은 `TokenUsageStore.shared`(= 실제 홈)다. 거기에 `session` 과 `startedAt` 만 채우면
+    /// `refreshTokenUsageInBackgroundIfDue` 의 게이트가 전부 열려 스캔이 정말로 돈다. v0.3.12 가 그 스캔에
+    /// `~/.gemini/antigravity-cli/conversations/*.db` 를 더한 순간부터는 sqlite 로 **사용자 폴더를 열어** 거기에
+    /// `-shm` 을 남기기까지 했다(실측 2026-09-11: V0251MessagePeer 필터만 돌려도 두 `-shm` 의 mtime 이 갱신됐다).
+    /// 한 테스트에 격리 스토어를 꽂아 고치면 다음 사람이 같은 모양을 또 만든다 — 그래서 여기서 막는다.
+    ///
+    /// 판정은 논리곱 둘이다:
+    ///   (1) 이 프로세스가 테스트다 — `CheckPanelVisibility.isRunningTests`(dyld 이미지의 `.xctest` 번들).
+    ///       **판정을 새로 만들지 마라**: 그 파일 주석이 `XCTestConfigurationFilePath` 와
+    ///       `NSClassFromString("XCTestCase")` 가 이 저장소에서 왜 안 통했는지 실측으로 적어 두었다.
+    ///   (2) 스캔 대상이 **바로** 사용자의 홈이다. 임시 홈을 주입한 테스트는 그대로 돈다(스캐너 정확성을 재는
+    ///       테스트 수십 개가 그 경로다). 홈 **아래**를 주입한 경우는 막지 않는다 — 그런 테스트는 없고,
+    ///       넓히면 임시 홈이 홈 아래로 잡히는 기기에서 조용히 전부 빈 집계가 된다.
+    ///
+    /// (1) 이 프로덕션에서 언제나 거짓이므로 **앱 동작은 한 톨도 바뀌지 않는다**(V0312 의 소스 계약 + 런타임 테스트가
+    /// 이 게이트의 첫 줄이 그 판정임을 못 박는다).
+    nonisolated static func realHomeScanIsBlocked(homeDirectory: URL) -> Bool {
+        guard CheckPanelVisibility.isRunningTests else { return false }
+        return Self.canonicalPath(homeDirectory) == Self.canonicalPath(FileManager.default.homeDirectoryForCurrentUser)
+    }
+
+    /// 경로 비교용 정규화(심볼릭 링크 해제 + `..`/중복 슬래시 정리 + 끝 슬래시 제거).
+    /// `/var` ↔ `/private/var` 처럼 같은 디렉터리가 다른 문자열로 오는 경우를 같게 본다.
+    nonisolated private static func canonicalPath(_ url: URL) -> String {
+        let path = url.resolvingSymlinksInPath().standardizedFileURL.path
+        return path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
+    }
+
+    /// 스캔 진단 로그. 사용자 문구가 아니라 Console/`log stream` 에서 원인을 가르는 자리다.
+    nonisolated private static let scanLogger = Logger(subsystem: "kingcheck", category: "tokenScan")
 
     private let defaults: UserDefaults
     private let homeDirectory: URL
@@ -1852,11 +2034,24 @@ final class TokenUsageStore {
         scanCount += 1
         let now = clock()
         lastRefreshAt = now
-        let home = homeDirectory
-        let codexHome = codexHomeResolver()
+        // ★ 테스트 프로세스가 사용자의 실제 홈을 읽는 것을 막는 **단 하나의 지점**(realHomeScanIsBlocked 주석).
+        //   막혔으면 실홈 대신 존재하지 않는 샌드박스 홈을 스캔하고, 디스크 캐시도 이어받지 않는다 —
+        //   캐시에는 예전 오염분(실홈에서 읽은 값)이 들어 있을 수 있어 그걸 이어받으면 '빈 결과'가 아니게 된다.
+        //   결과는 조용한 빈 집계다: 더러워진 것이 없어 저장도 나가지 않고(saveCount 그대로), 총합 0 이라 영속도 없다.
+        //   프로덕션에서는 blocked 가 언제나 false 라 아래 세 줄은 예전 값 그대로다.
+        let blocked = Self.realHomeScanIsBlocked(homeDirectory: homeDirectory)
+        if blocked {
+            blockedRealHomeScanCount += 1
+            // 흔적을 남긴다(2026-09-11 검토 지적). 프로덕션에서는 이 줄이 **영원히 안 찍혀야** 한다 —
+            // 찍혔다면 앱 프로세스가 테스트로 오판된 것이고(예: XCTestConfigurationFilePath 를 물려받은 셸에서 실행),
+            // 그 순간 토큰 집계가 조용히 0 이 된다. 그때 Console 에서 이 한 줄이 유일한 단서다. 숫자만 남긴다.
+            Self.scanLogger.error("token scan blocked: real home scan refused in test process (count=\(self.blockedRealHomeScanCount, privacy: .public))")
+        }
+        let home = blocked ? Self.blockedScanHome : homeDirectory
+        let codexHome = blocked ? Self.blockedScanHome : codexHomeResolver()
         let url = cacheURL
         // 인메모리 캐시가 있으면 그대로 이어받고, 없으면(첫 스캔) 백그라운드에서 디스크 로드 → 증분(=전체) 스캔.
-        let inMemory = cache
+        let inMemory = blocked ? TokenUsageCache() : cache
         scanTask = Task { @MainActor [weak self] in
             let result = await Task.detached(priority: .utility) { () -> TokenUsageIncrementalScanner.Result in
                 let base = inMemory ?? TokenUsageCacheStore.load(from: url)
@@ -1869,7 +2064,20 @@ final class TokenUsageStore {
             self.apply(result.usage)
             // 관측값은 스캔이 **완주한 뒤에만** 채운다 — 시작 시점에 찍으면 중간에 죽은 스캔도 "돌았다"로 보여
             // "안 씀(파일 0)"과 "스캐너 죽음(미갱신)"의 구분이 무너진다.
+            // 세 소스의 stat 파일 수 합(v0.3.12 에 안티그래비티 합류). 0 은 여전히 "스캔은 돌았고 볼 파일이 없었다"이고,
+            // 안티그래비티만 쓰는 사람도 이제 0 이 아니다 — 그 구분이 이 값의 존재 이유다.
             self.lastScanFileCount = result.stats.claudeFilesStatted + result.stats.codexFilesStatted
+                + result.stats.antigravityFilesStatted
+            self.lastScanAntigravityBlind = result.stats.antigravityBlind
+            self.lastScanAntigravityImmutableReads = result.stats.antigravityImmutableReads
+            if result.stats.antigravityBlind {
+                // 숫자만 남긴다(경로·모델·본문 없음 — 이 스캐너의 프라이버시 규약).
+                Self.scanLogger.error(
+                    """
+                    antigravity blind scan: statted=\(result.stats.antigravityFilesStatted, privacy: .public)                     openFailures=\(result.stats.antigravityOpenFailures, privacy: .public)                     queryFailures=\(result.stats.antigravityQueryFailures, privacy: .public)                     → 이 기기의 안티그래비티 집계가 통째로 0 이다
+                    """
+                )
+            }
             self.lastScanAt = self.clock()
             self.persistIfDirty(force: false)
             self.isScanning = false
@@ -1938,10 +2146,13 @@ struct CheckTokenUsageRow: View {
 
     @ViewBuilder
     private var content: some View {
+        // v0.3.12: 안티그래비티만 쓰는 사람도 그린다 — `usage.total` 에는 안티그래비티가 **들어가지 않으므로**(업로드값의
+        // 뜻을 지키려고 뺐다) 그 조건만 보면 굵은 총합이 0 이 아닌데도 행이 통째로 사라진다. 게이트는 짝으로 있어야 한다.
         // 로컬 총합이 0 이어도 계정 집계가 있으면 행을 그린다(`.zst` 만 남은 채 앱을 처음 설치한 사람의 Codex 사용량은
         // 로컬에서 읽을 수 없고 계정 집계만이 그 몫을 안다 — 게이트는 짝으로 있어야 한다: 표시 총합 산식이 계정값을 쓰는데
         // 이 가드가 로컬 0 을 막으면 그 사람에겐 아무것도 안 보인다).
-        if let usage = store.currentMonthUsage, usage.total > 0 || (accountMonth(for: usage) ?? 0) > 0 {
+        if let usage = store.currentMonthUsage,
+           usage.total > 0 || (accountMonth(for: usage) ?? 0) > 0 || usage.antigravityTotal > 0 {
             // 행은 표시만 한다 — 갱신 루프는 CheckMenuView 의 .task 가 일원화해 돌린다(행이 EmptyView 라 자체 .task 가
             // 애초에 안 돌던 순환 문제를 없앤다). ImageRenderer 가 .task 를 실행하지 않아 렌더 테스트도 결정적이다.
             slimRow(usage)
@@ -1968,8 +2179,8 @@ struct CheckTokenUsageRow: View {
                 .foregroundStyle(CheckTheme.secondaryText)
                 .lineLimit(1)
             Spacer(minLength: 6)
-            // 표시 총합만 계정 집계를 섞는다(TokenUsageDisplay.effectiveTotal — 계정 우선 규칙). usage.total(업로드값)은 그대로다.
-            Text(TokenNumberFormatter.grouped(TokenUsageDisplay.effectiveTotal(local: usage, account: account?.snapshot)))
+            // 표시 총합만 계정 집계를 섞는다(displayTotal — 계정 우선 규칙 + 안티그래비티). usage.total(업로드값)은 그대로다.
+            Text(TokenNumberFormatter.grouped(usage.displayTotal(account: account?.snapshot)))
                 .font(.caption.weight(.bold))
                 .foregroundStyle(CheckTheme.primaryText)
                 .monospacedDigit()

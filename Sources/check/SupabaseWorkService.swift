@@ -941,6 +941,10 @@ actor SupabaseWorkService {
     /// account/accountStatus(v0.2.41): Codex 계정 집계 스냅샷과 마지막 프로브 상태. 둘 다 nil 이면 codex_account_* 키가
     /// 본문에서 통째로 빠져 서버의 마지막 계정값이 보존된다(진단 필드와 같은 옵셔널 규약). 스냅샷 없이 상태만 있으면
     /// status 만 실린다. codex_cache_read 는 **항상** 실린다(로컬 집계라 매번 최신값으로 덮는 것이 맞다).
+    ///
+    /// antigravity_*(v0.3.12): 이 기기의 그 달 안티그래비티 네 값. 합이 0 이면 네 키가 통째로 빠진다
+    /// (TokenUsageAntigravityFields.init?(usage:)). `total` 에는 더하지 않는다 — 그 컬럼은 옛 표와 같은 단위끼리
+    /// 견주는 자리이고, 순위판 총합은 서버가 네 컬럼에서 직접 더한다(20260911120000).
     func upsertTokenUsage(
         accessToken: String,
         userID: String,
@@ -981,6 +985,9 @@ actor SupabaseWorkService {
                 todayDate: usage.todayDate,
                 codexCacheRead: usage.codexCacheRead,
                 account: accountFields,
+                // v0.3.12: 합이 0 이면 nil → 본문에서 antigravity_* 네 키가 통째로 빠진다(안 쓰는 사람의 본문은 종전과 동일).
+                // 요청은 **늘리지 않는다** — 같은 upsert 한 번에 얹는다(컬럼이 없는 서버면 400 이고, 호출측이 조용히 삼켜 다음 기회에 재시도한다).
+                antigravity: TokenUsageAntigravityFields(usage: usage),
                 diagnostics: diagnostics
             ),
             accessToken: accessToken,
@@ -1039,14 +1046,19 @@ actor SupabaseWorkService {
     ///   장부도 갱신되지 않아 다음 주기가 같은 혼합 본문을 다시 보내는 영구 고착이 된다.
     ///   그래서 `?columns=` 로 키를 강제하는 대신(그러면 빠진 키가 **null 로 쓰여** 계정값이 지워진다) 키 모양별 묶음으로 갈라
     ///   각각 보낸다. v0.2.43 부터 옵셔널이 넷이다(claude_total · codex_total · codex_utc_total · codex_account — 각 로컬 맵이 덮는
-    ///   날에만 값이 있다, TokenUsageDailyUpsertRow 주석) — 묶음은 **정확히 같은 키 집합**끼리(최대 16 모양, 실제로는 서너 개), 빈 묶음은 없다.
+    ///   날에만 값이 있다, TokenUsageDailyUpsertRow 주석) — 묶음은 **정확히 같은 키 집합**끼리, 빈 묶음은 없다.
+    ///   v0.3.12 부터 다섯이다(+ antigravity_total) — 최대 32 모양, 실제로는 서너 개.
     ///   첫 묶음이 실패하면 그대로 던져 장부가 갱신되지 않는다(upsert 는 멱등이라 다음 주기가 전부 다시 보내도 안전하다).
     func upsertTokenUsageDaily(accessToken: String, rows: [TokenUsageDailyUpsertRow]) async throws {
         guard !rows.isEmpty else { return }
-        // 묶음 키 = 옵셔널 넷의 유무 비트(claude·codex·utc·account 순). 순서는 결정적으로 둔다 — 키가 많은 묶음부터(비트 내림차순),
-        // 계약 테스트·로그가 요청 순서를 읽을 수 있어야 한다.
+        // 묶음 키 = 옵셔널 **다섯**의 유무 비트(claude·codex·utc·account·antigravity 순, v0.3.12). 순서는 결정적으로 둔다 —
+        // 키가 많은 묶음부터(비트 내림차순), 계약 테스트·로그가 요청 순서를 읽을 수 있어야 한다.
+        // ★ 새 옵셔널을 더할 때마다 **반드시 여기에 비트를 더해라.** 빠뜨리면 키 집합이 다른 행이 한 요청에 섞여
+        //   PostgREST 가 본문 **전체**를 400 PGRST102 로 거절하고(스키마를 보기도 전에), 그 사람의 일별 행이 한 줄도
+        //   안 올라간 채 장부가 갱신되지 않아 같은 본문을 영원히 다시 보낸다(v0.2.41 리뷰 P0 의 재현).
         func shape(_ r: TokenUsageDailyUpsertRow) -> Int {
-            (r.claudeTotal != nil ? 8 : 0) + (r.codexTotal != nil ? 4 : 0) + (r.codexUtcTotal != nil ? 2 : 0) + (r.codexAccount != nil ? 1 : 0)
+            (r.claudeTotal != nil ? 16 : 0) + (r.codexTotal != nil ? 8 : 0) + (r.codexUtcTotal != nil ? 4 : 0)
+                + (r.codexAccount != nil ? 2 : 0) + (r.antigravityTotal != nil ? 1 : 0)
         }
         let grouped = Dictionary(grouping: rows, by: shape)
         let groups = grouped.keys.sorted(by: >).map { grouped[$0] ?? [] }

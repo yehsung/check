@@ -307,11 +307,28 @@ struct FeedbackSendView: View {
                 .fixedSize()
             FeedbackPrimaryButton(
                 label: store.isSendingFeedback ? FeedbackText.sending : FeedbackText.sendAction,
-                enabled: store.canSendFeedback
-            ) {
-                store.sendFeedback()
-            }
+                enabled: store.canSendFeedback,
+                action: sendTapped
+            )
         }
+    }
+
+    /// [보내기] 버튼의 동작.
+    ///
+    /// ★ **메시지 칸과 같은 문을 지난다**(`CheckEditorSend.commitThenSend`). 여기서 스토어 전송을 바로
+    ///   부르면 조합 중인 마지막 음절이 스토어에 아직 없어 그 글자가 빠진 제보가 나간다 —
+    ///   2026-09-11 검토 지적 ②가 정확히 그것이었다(메시지 세 갈래만 확정을 지나고 이 버튼은 안 지났다).
+    ///
+    /// **왜 인라인 클로저가 아니라 이름 있는 값인가**(`private` 이 아닌 이유도 같다): SwiftUI `Button` 은
+    /// 이 저장소의 헤드리스 테스트에서 **누를 수 없다** — 합성 NSEvent 도 `accessibilityPerformPress()` 도
+    /// 안 먹는 것이 실측돼 있다(`CheckMenuView.swift` 의 같은 자리 주석). 그래서 버튼의 동작을 한 값으로
+    /// 빼고, 테스트가 **올린 화면 그대로** 이 값을 태워 서버로 나가는 본문을 잰다
+    /// (`V0311KoreanCompositionTests.theFeedbackSendButtonActionShipsTheComposingSyllable`).
+    /// 이 자리를 다시 인라인 클로저로 되돌리면 그 테스트가 재는 길이 화면이 지나는 길과 갈린다 —
+    /// 소스 문자열 계약만으로는 그 갈림이 안 보인다(계약은 문이 **있는지**만 알지 **불리는지**는 모른다).
+    @MainActor
+    func sendTapped() {
+        CheckEditorSend.commitThenSend { store.sendFeedback() }
     }
 
     private var mineSection: some View {
@@ -661,6 +678,11 @@ struct FeedbackBodyEditor: View {
     var height: CGFloat
     var rendersPlainText: Bool = false
 
+    /// 텍스트 뷰가 마지막으로 알린 "그려진 것이 비었나". **nil = 아직 못 들었다**(첫 그림 · 스냅샷 경로).
+    /// 메시지 칸과 **같은 규칙**(`CheckEditorPlaceholder.isVisible`)을 쓴다 — 이 칸에도 같은 증상이 있었다
+    /// (조합 중에는 스토어가 비어 있어 안내 문구가 사용자가 친 글자 위에 겹친다).
+    @State private var editorRenderedEmpty: Bool?
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: FeedbackPanelLayout.corner, style: .continuous)
@@ -669,10 +691,11 @@ struct FeedbackBodyEditor: View {
                     RoundedRectangle(cornerRadius: FeedbackPanelLayout.corner, style: .continuous)
                         .stroke(CheckTheme.border, lineWidth: 1)
                 )
-            // placeholder — 비었을 때만. 텍스트 뷰에는 placeholder 가 없다.
+            // placeholder — **뷰에 그려진 것이 없을 때만**. 텍스트 뷰에는 placeholder 가 없다.
             // ★ padding 은 **실제 글자와 같은 상수**다(`CheckEditorMetrics.inset`). 숫자를 여기 따로 적으면
             //   사용자 지시 ③("높이가 안맞아")이 이 칸에서 그대로 되살아난다.
-            if text.isEmpty {
+            // ★ `text.isEmpty`(스토어 값)로 되돌리지 마라 — 조합 중 겹침이 그대로 돌아온다.
+            if CheckEditorPlaceholder.isVisible(storeText: text, editorRenderedEmpty: editorRenderedEmpty) {
                 Text(FeedbackText.placeholder)
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
@@ -690,7 +713,8 @@ struct FeedbackBodyEditor: View {
                     .padding(.horizontal, CheckEditorMetrics.inset.width)
                     .padding(.vertical, CheckEditorMetrics.inset.height)
             } else {
-                CheckTextEditor(text: $text)
+                // 포커스는 **잡지 않는다**(요청 밖 — 제보 화면은 목록을 먼저 읽는 화면이다).
+                CheckTextEditor(text: $text, onRenderedEmptyChange: { editorRenderedEmpty = $0 })
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }

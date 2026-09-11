@@ -19,10 +19,11 @@ import SwiftUI
 //   · 날짜가 바뀌는 자리에 **구분선**. 그 판정은 뷰가 아니라 `MessageThreadBuilder.timeline` 이 한다.
 //   · 처음 열면 **맨 아래(최신)**.
 //   · **Enter 로 보낸다**(v0.2.51 — 사용자 지시 2026-09-11 ②). 줄바꿈은 ⇧Enter, ⌘Enter 도 계속 통한다.
-//     판정은 `CheckEditorReturnKey` 하나가 한다. ⚠︎ **macOS 2벌식 한글에서는 조합 중이던 마지막 글자까지 첫 Enter 에
-//     곧바로 나간다**(2026-09-11 실입력 실측: 그 입력기는 표시 글자를 안 띄워 "조합 중"을 알 길이 없다. "안녕하세요"
-//     + Enter 는 "안녕하세요" 전체를 보냈고, 글자가 빠지거나 칸에 남는 일은 없었다). "조합 중 Enter 는 확정만"은
-//     표시 글자를 띄우는 입력기(일본어·중국어 등)에서만 일한다 — 실측은 CheckTextEditor.swift 머리 주석.
+//     판정은 `CheckEditorReturnKey` 하나가 한다. **첫 Enter 가 조합 중이던 마지막 글자까지 보낸다**(사용자 결정
+//     2026-09-11 — 카톡과 같은 동작). 표시 글자가 떠 있으면 `.commitThenSend` 로 **확정을 먼저 하고** 그 확정된
+//     문자열을 보낸다: 확정 없이 보내면 마지막 한 글자가 빠진다(기모찌 제보 v0.3.11 "뒤에 한 글자가 사라져요" —
+//     실측은 CheckTextEditor.swift 머리 주석). 세 갈래(버튼·⌘↩·↩)가 전부 `MessageComposerView.send()` 하나를
+//     지나야 그 확정이 어느 갈래에서도 빠지지 않는다.
 //     **"Enter 는 줄바꿈"으로 되돌리지 마라**: 그건 사용자가 직접 고쳐 달라고 한 것이다.
 //   · `MessageThreadBuilder` 의 묶기·타임라인·날짜 구분선 계산은 **그대로 재사용한다** — 목록 UI 가
 //     사라졌을 뿐, peer 별로 묶는 일은 "그 사람 것만 골라 그린다"에 여전히 필요하다.
@@ -491,10 +492,15 @@ struct MessageComposerView: View {
                 height: MessagePanelLayout.editorHeight,
                 isOverflowing: isOverflowing,
                 rendersPlainText: rendersPlainText,
+                // ★ **대화 패널에 들어오면 커서가 여기 있다**(사용자 지시 2026-09-11 ④: 콕찌르기에서
+                //   말풍선을 눌러 들어가면 마우스 클릭 없이 바로 타자가 되게). 이 칸은 대화 패널이 화면에
+                //   설 때만 존재하므로(`CheckMenuView` 의 `if store.isMessagePanelVisible`) 다른 화면의
+                //   포커스를 훔칠 경로가 없고, [뒤로]로 나갔다 들어오면 뷰가 새로 만들어져 다시 잡는다.
+                focusesWhenShown: true,
                 // ★ 판정도 문도 **버튼과 같은 것**을 넘긴다. 여기서 조건을 다시 세면 Enter 와 버튼이
                 //   서로 다른 날 갈린다(그리고 갈린 쪽은 아무 화면에도 안 보인다).
                 canSendNow: { store.canSendMessageNow },
-                onSend: { store.sendDraftMessage() }
+                onSend: send
             )
             HStack(spacing: 8) {
                 // **사라지는 규칙을 모르면 사용자는 그것을 버그로 읽는다**(그 오해는 제보로 온다).
@@ -511,7 +517,7 @@ struct MessageComposerView: View {
                     .font(.caption2.weight(.semibold).monospacedDigit())
                     .foregroundStyle(isOverflowing ? CheckTheme.danger : CheckTheme.secondaryText)
                     .fixedSize()
-                Button(action: { store.sendDraftMessage() }) {
+                Button(action: send) {
                     Text(store.isSendingMessage ? "보내는 중…" : "보내기")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.white)
@@ -528,6 +534,21 @@ struct MessageComposerView: View {
                 .help(sendHelp)
             }
         }
+    }
+
+    /// 전송 문 — **세 갈래(버튼 · ⌘↩ · ↩)가 전부 이 하나를 지난다.**
+    ///
+    /// ★ **조합 확정은 `CheckEditorSend.commitThenSend` 안에 있다.** 여기서 직접 확정하지 마라 —
+    ///   제보 화면도 **같은 문**을 쓰고(2026-09-11 검토 지적 ②: 확정이 메시지에만 있어서 제보 칸에서는
+    ///   마지막 글자가 계속 사라졌다), 확정이 두 곳에 적히면 다음에 또 한쪽만 고쳐진다.
+    ///   버튼과 ⌘↩ 은 키 이벤트가 텍스트 뷰로 가지 않아 스스로 확정할 수 없으므로, 그 문이 확정 대상을
+    ///   `CheckEditorTextView.focusedEditor` 로 찾는다(그 주석에 왜 그 통로뿐인지 있다).
+    ///
+    /// 확정 뒤에도 `sendDraftMessage()` 의 `canSendMessageNow` 가 한 번 더 거른다(빈 칸·200자 초과·상대
+    /// 없음·전송 중) — 여기서 조건을 다시 세지 않는 이유는 위 `canSendNow` 주석과 같다.
+    @MainActor
+    private func send() {
+        CheckEditorSend.commitThenSend { store.sendDraftMessage() }
     }
 
     /// 왜 못 보내는지 — 보낼 수 있으면 **보내는 법**(↩ · 줄바꿈은 ⇧↩)을 말한다. **쿨타임 문구는 여기 없다**
@@ -560,10 +581,17 @@ struct MessageDraftEditor: View {
     var height: CGFloat
     var isOverflowing: Bool = false
     var rendersPlainText: Bool = false
+    /// 이 칸이 화면에 서면 커서를 가져올 것인가(대화 패널만 true). 기본은 false — 새 칸이 말없이 포커스를
+    /// 훔치면 안 된다(`CheckEditorTextView.focusesWhenShown`).
+    var focusesWhenShown: Bool = false
     /// 지금 Enter 로 보낼 수 있는가(`store.canSendMessageNow`). 못 보내면 Enter 는 아무 일도 안 한다.
     var canSendNow: () -> Bool = { false }
     /// Enter 가 지나는 문. 버튼·⌘↩ 과 **같은 문**이어야 한다.
     var onSend: () -> Void = {}
+
+    /// 텍스트 뷰가 마지막으로 알린 "그려진 것이 비었나". **nil = 아직 못 들었다**(첫 그림 · 스냅샷 경로).
+    /// 판정은 `CheckEditorPlaceholder.isVisible` 하나가 한다 — 규칙을 이 파일에 다시 적지 마라.
+    @State private var editorRenderedEmpty: Bool?
 
     /// placeholder 가 ↩ 를 말한다. 292pt 폭에서는 안내 줄 하나가 대화 한 줄을 먹으므로,
     /// **비어 있을 때만 쓰는 자리**에 단축키 안내를 얹는 것이 가장 싸다(툴팁이 그 답을 한 번 더 말한다).
@@ -581,8 +609,10 @@ struct MessageDraftEditor: View {
                         // 초과는 테두리까지 빨갛게 — 카운터 숫자만으로는 못 보고 지나친다.
                         .stroke(isOverflowing ? CheckTheme.danger : CheckTheme.border, lineWidth: 1)
                 )
-            // placeholder — 비었을 때만. 텍스트 뷰에는 placeholder 가 없다.
-            if text.isEmpty {
+            // placeholder — **뷰에 그려진 것이 없을 때만**. 텍스트 뷰에는 placeholder 가 없다.
+            // `text.isEmpty`(스토어 값)로 되돌리지 마라: 조합 중에는 스토어가 비어 있어서 안내 문구가
+            // 사용자가 방금 친 글자 위에 겹친다(제보 증상 ② — `CheckEditorPlaceholder` 주석의 실측).
+            if CheckEditorPlaceholder.isVisible(storeText: text, editorRenderedEmpty: editorRenderedEmpty) {
                 Text(Self.placeholder)
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
@@ -607,8 +637,11 @@ struct MessageDraftEditor: View {
                 CheckTextEditor(
                     text: $text,
                     sendsOnReturn: true,
+                    focusesWhenShown: focusesWhenShown,
                     canSendNow: canSendNow,
-                    onSend: onSend
+                    onSend: onSend,
+                    // 조합 중 표시 글자까지 세어 알려 준다 — 위 placeholder 판정의 유일한 재료다.
+                    onRenderedEmptyChange: { editorRenderedEmpty = $0 }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

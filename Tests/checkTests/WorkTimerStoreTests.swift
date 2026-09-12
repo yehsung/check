@@ -114,6 +114,8 @@ func signUpAutoJoinsWithTeamCodeAfterAccount() async {
     store.signupTeamCode = "AINGTEAM"
     // 미리보기가 확인된 상태(가입 버튼 활성 조건).
     store.joinPreview = TeamJoinPreview(teamID: "10000000-0000-0000-0000-000000000001", name: "아잉팀", weeklyGoalHours: 40, memberCount: 3)
+    // 소속 센터도 가입 버튼 활성 조건이다(v0.3.13) — 미선택이면 signUp() 이 Task 를 만들지 않는다.
+    store.signupCenter = CenterLabel.seoul
 
     await store.signUp()?.value
 
@@ -160,6 +162,8 @@ func signUpCreateModeSetsCreatedTeamCode() async {
     store.isCreateTeamMode = true
     store.createTeamName = "새로운 팀"
     store.createTeamGoalHours = 50
+    // 소속 센터도 가입 버튼 활성 조건이다(v0.3.13).
+    store.signupCenter = CenterLabel.seoul
 
     await store.signUp()?.value
 

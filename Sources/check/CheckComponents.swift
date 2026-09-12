@@ -350,6 +350,8 @@ struct TeamMemberRow: View {
 /// 높이는 LeaderboardPanel 이 고정으로 준다.
 struct LeaderboardRow: View {
     let entry: TeamLeaderboardEntry
+    /// 팀의 소속 센터. 아바타 모서리에 겹쳐 그린다.
+    var center: String? = nil
     var isMyTeam: Bool = false
 
     // 1인당 평균 대비 목표 진행률 게이지(entry.goal 이 평균 기준으로 계산됨).
@@ -369,7 +371,7 @@ struct LeaderboardRow: View {
     var body: some View {
         HStack(spacing: 11) {
             // 팀명 해시색 이니셜 아바타(팀원 행 아바타와 같은 톤). 순위 배지 대신 담백한 표식.
-            CheckAvatarView(name: entry.name, size: 30)
+            CheckAvatarView(name: entry.name, size: 30, center: center)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(entry.name)
@@ -979,6 +981,73 @@ struct AuthButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+    }
+}
+
+/// 소속 센터 선택 2칸(v0.3.13). **가입 화면과 설정 창이 같은 칸을 쓴다** — 두 벌로 만들면 한쪽에만
+/// 세 번째 센터가 붙거나 한쪽만 라벨이 어긋나는 날이 온다. 라벨의 출처도 CenterLabel 하나다.
+///
+/// ## 왜 '미선택'이 그려질 수 있어야 하는가
+/// `selection` 이 nil 이면 **어느 칸도 채워지지 않는다.** 가입 화면의 기본값이 그것이고(안 고르면 가입
+/// 버튼이 막힌다), 설정 창에서는 서버값이 아직 안 왔을 때가 그것이다. 둘 중 하나라도 '서울'을 미리
+/// 칠해 두면 부산 연수생이 아무것도 안 하고 서울로 잡힌다 — 이 컨트롤이 존재하는 이유의 반대다.
+///
+/// ## 순위와 무관하다
+/// 고른 값은 **표시**에만 쓰인다. 순위판·리그·콕찌르기·미니게임은 센터와 무관하게 전원 통합이다.
+struct CenterChoiceCells: View {
+    /// 지금 골라진 **서버값**(`"seoul"`/`"busan"`). nil 이면 미선택 — 어느 칸도 채우지 않는다.
+    var selection: String?
+    /// false 면 누를 수 없고 흐리게 그린다(설정 창에서 서버값을 아직 못 받은 동안).
+    var isEnabled: Bool = true
+    /// true 면 두 칸이 가로를 꽉 채운다(가입 폼). false 면 글자 폭 + 여백만 차지한다(설정 창 우측 컨트롤).
+    var fillsWidth: Bool = true
+    var height: CGFloat = 34
+    /// 누른 칸의 **서버값**을 돌려준다. 화면 글자를 되돌리지 않는 이유: 받는 쪽(스토어·서버)이 쓰는 어휘가 서버값이다.
+    let onChoose: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(CenterLabel.allServerValues, id: \.self) { value in
+                cell(value)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func cell(_ value: String) -> some View {
+        let isSelected = selection == value
+        Button {
+            onChoose(value)
+        } label: {
+            Text(CenterLabel.display(value) ?? value)
+                .font(.caption.weight(.bold))
+                // 고른 칸만 흰 글자 — 배경이 그라디언트라 대비가 유지된다.
+                .foregroundStyle(isSelected ? .white : CheckTheme.primaryText)
+                .lineLimit(1)
+                .frame(maxWidth: fillsWidth ? .infinity : nil)
+                .padding(.horizontal, fillsWidth ? 0 : 14)
+                .frame(height: height)
+                .background {
+                    if isSelected {
+                        // 저장 버튼·스위치와 **같은** 그라디언트 = 이 앱에서 색이 곧 '정해졌다'의 신호다.
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(CheckTheme.gaugeGradient)
+                    } else {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(CheckTheme.fieldFill)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .stroke(CheckTheme.border, lineWidth: 1)
+                            )
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.5)
+        .accessibilityLabel(CenterLabel.display(value) ?? value)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 

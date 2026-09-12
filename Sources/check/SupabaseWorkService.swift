@@ -67,8 +67,15 @@ actor SupabaseWorkService {
 
     /// 계정만 만든다. 팀 합류/생성은 가입 성공 후 스토어가 join_team/create_team 을 명시적으로 호출한다
     /// (트리거는 더 이상 팀을 만들지 않으므로 team_id 메타데이터를 보내지 않는다).
-    func signUp(email: String, password: String, displayName: String) async throws -> SupabaseSession? {
-        let body = SignUpRequest(email: email, password: password, data: ["display_name": displayName])
+    ///
+    /// `center`(소속 센터 서버값)는 **display_name 과 같은 자리**에 얹는다 — 가입 트리거
+    /// (`handle_check_auth_user`)가 `raw_user_meta_data ->> 'center'` 를 읽어 profiles 에 넣으므로
+    /// 왕복이 하나도 늘지 않는다. nil 이면 **키를 아예 싣지 않는다**: 그래야 이 변경 전과 바이트가
+    /// 같고(가입 경로는 회귀가 가장 비싼 자리다), 트리거는 없는 키를 null 로 접는다.
+    func signUp(email: String, password: String, displayName: String, center: String? = nil) async throws -> SupabaseSession? {
+        var metadata = ["display_name": displayName]
+        if let center { metadata["center"] = center }
+        let body = SignUpRequest(email: email, password: password, data: metadata)
         let data = try await send(
             path: "/auth/v1/signup",
             method: "POST",
@@ -853,7 +860,9 @@ actor SupabaseWorkService {
                 totalSeconds: $0.totalSeconds,
                 workingCount: $0.workingCount,
                 // member_count 를 안 내려주는 구버전 RPC 는 nil → 0(평균 0명 가드).
-                memberCount: $0.memberCount ?? 0
+                memberCount: $0.memberCount ?? 0,
+                // 서버값 → 화면 글자(모르는 값·섞인 팀·구버전 RPC 는 nil = 배지 없음). 리그의 유일한 변환 지점.
+                center: CenterLabel.display($0.center)
             )
         }
     }
@@ -1200,7 +1209,9 @@ actor SupabaseWorkService {
                 avatarURL: boardRow.avatarUrl.flatMap { URL(string: $0) },
                 bestScore: boardRow.bestScore,
                 bestAt: boardRow.bestAt.flatMap { parseDate($0) },
-                plays: boardRow.plays ?? 0
+                plays: boardRow.plays ?? 0,
+                // 서버값 → 화면 글자(모르는 값은 nil = 배지 없음). 이 보드의 유일한 변환 지점.
+                center: CenterLabel.display(boardRow.center)
             )
         }
     }
@@ -1221,7 +1232,8 @@ actor SupabaseWorkService {
             name: row.displayName ?? "사용자",
             avatarURL: row.avatarUrl.flatMap { URL(string: $0) },
             score: row.score,
-            awarded: row.awarded ?? false
+            awarded: row.awarded ?? false,
+            center: CenterLabel.display(row.center)
         )
     }
 
@@ -1250,6 +1262,44 @@ actor SupabaseWorkService {
             method: "PATCH",
             queryItems: [URLQueryItem(name: "id", value: "eq.\(userID)")],
             body: ProfileMiniGamePublicUpdateRequest(minigamePublic: isPublic),
+            accessToken: accessToken,
+            prefer: "return=minimal"
+        )
+    }
+
+    // MARK: - 소속 센터 (v0.3.13)
+
+    /// 내 소속 센터(profiles.center) 서버값. **반드시 별도 GET 이다** — 별명 쿨타임·미니게임 공개와 같은 규약이고,
+    /// 여기서 어기면 피해가 더 크다: 기존 설정 GET(fetchTokenUsageSettings)의 select 에 center 를 끼우면
+    /// 마이그레이션이 아직 안 간 서버에서 42703 → 그 요청이 통째로 400 이 되어 **토큰 공개·수집·집중 모드까지**
+    /// 같이 못 읽는다(1543~1552 가 그 사고를 기록한다). 컬럼/행이 없으면 nil.
+    ///
+    /// 반환은 **서버값 그대로**(`"seoul"`)다 — 화면 글자로 접는 것은 CenterLabel 한 곳이고, 스토어는 PATCH 로
+    /// 되돌려 보낼 값을 들고 있어야 한다.
+    func fetchMyCenter(accessToken: String, userID: String) async throws -> String? {
+        let data = try await send(
+            path: "/rest/v1/profiles",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "id", value: "eq.\(userID)"),
+                URLQueryItem(name: "select", value: "center")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode([ProfileCenterRow].self, from: data).first?.center
+    }
+
+    /// 내 소속 센터 변경. profiles 자기 행 PATCH(컬럼 단위 UPDATE 권한 필요 — 토큰 공개·집중 모드와 같은 함정).
+    /// **한 컬럼만 싣는다**: 다른 컬럼과 묶으면 둘 중 하나만 권한이 있는 서버에서 요청 전체가 403 이 된다.
+    /// 보내는 값은 반드시 CenterLabel 의 서버값이다 — 다른 문자열은 check 제약(23514)에 걸려 통째로 거절된다.
+    func updateMyCenter(accessToken: String, userID: String, center: String) async throws {
+        try await sendNoBody(
+            path: "/rest/v1/profiles",
+            method: "PATCH",
+            queryItems: [URLQueryItem(name: "id", value: "eq.\(userID)")],
+            body: ProfileCenterUpdateRequest(center: center),
             accessToken: accessToken,
             prefer: "return=minimal"
         )

@@ -774,9 +774,86 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             if !miniGamePublicLoaded, let miniGame, miniGamePublic != miniGame { miniGamePublic = miniGame }
             if miniGame != nil { miniGamePublicLoaded = true }
+            // 소속 센터도 **따로** GET 한다(v0.3.13). 위 두 GET 과 같은 이유다.
+            await loadMyCenterIfNeeded()
+            guard generation == sessionGeneration else { return }
             tokenUsagePublicLoaded = true
         } catch {
             // 조용히 무시한다 — loaded 는 성공 시에만 서므로 다음 폴링 tick 에 재시도된다.
+        }
+    }
+
+    /// 내 소속 센터(profiles.center)를 **아직 모를 때만** 서버에서 받아 온다.
+    ///
+    /// **별도 GET 인 이유**: 기존 설정 GET(fetchTokenUsageSettings)의 select 에 center 를 끼우면 마이그레이션이
+    /// 아직 안 간 서버에서 42703 → 그 요청이 통째로 400 이 되어 **토큰 공개·수집·집중 모드까지** 같이 못 읽는다
+    /// (SupabaseWorkService 1543~1552 가 그 사고를 기록한다). 별명 쿨타임·미니게임 공개와 같은 규약이다.
+    ///
+    /// **부르는 곳이 둘인 이유**: 로그인 후 설정 로드에서 한 번 부르고(그래야 설정 창을 열었을 때 이미 값이 있다),
+    /// 설정 창의 센터 행이 뜰 때 또 부른다. 첫 번째가 네트워크 blip 으로 실패하면 그 함수는 다시 안 돈다
+    /// (tokenUsageCollectLoaded 가 서 있으면 통째로 건너뛴다) — 그러면 그 세션 내내 설정 창이 '불러오는 중'에
+    /// 멈춰 **자기 센터를 못 고친다.** 두 번째 호출이 그 유일한 복구 경로다. 이미 받았거나 사용자가 직접
+    /// 골랐으면(myCenterLoaded) 즉시 반환하므로 창을 여닫아도 왕복은 늘지 않는다.
+    ///
+    /// ★ 실패와 '미지정'을 **가르는 것이 이 함수의 전부다.** 실패면 플래그를 안 세워 다음 기회에 다시 묻고,
+    ///   성공이면 값이 nil 이어도(= 아직 안 고른 사람) 플래그를 세워 '미지정'을 정직하게 그린다.
+    ///   `try?` 를 쓰지 않는 이유가 이것이다 — `String??` 을 풀면 두 nil 이 같은 자리에서 뭉개진다.
+    func loadMyCenterIfNeeded() async {
+        guard !myCenterLoaded, session != nil else { return }
+        let generation = sessionGeneration
+        do {
+            let serverCenter = try await withSessionRetry { activeSession in
+                try await service.fetchMyCenter(
+                    accessToken: activeSession.accessToken, userID: activeSession.userID)
+            }
+            guard generation == sessionGeneration else { return }
+            // 응답을 기다리는 사이 사용자가 직접 골랐으면 그 선택이 이긴다(PATCH 가 아직 안 닿은 낡은 값일 수 있다 —
+            // 토큰 공개 토글과 같은 규약). 그때 myCenterLoaded 는 이미 서 있다.
+            guard !myCenterLoaded else { return }
+            if myCenter != serverCenter { myCenter = serverCenter }
+            myCenterLoaded = true
+        } catch {
+            // 조용히 무시한다 — 플래그가 안 서므로 설정 창을 다시 열 때 재시도된다.
+        }
+    }
+
+    /// 내 소속 센터 변경(낙관 반영 → PATCH, 실패 시 원복). setTokenUsagePublic 과 같은 규약이다.
+    ///
+    /// 자가 수정을 허용하는 근거: 센터는 순위를 가르지 않으므로 위조 이득이 0이고, 반대로 못 바꾸게 하면
+    /// 가입 때 잘못 고른 사람이 영원히 틀린 라벨을 달고 있게 된다(팀 탈퇴 기능이 없어 복구 경로가 운영자 SQL 뿐이다).
+    ///
+    /// 모르는 값은 **보내지 않는다.** 서버 check 제약이 23514 로 거절하면 화면만 바뀌고 서버는 안 바뀐 채
+    /// 원복도 못 본 사람이 생긴다 — 그런 요청은 애초에 나갈 이유가 없다.
+    func setMyCenter(_ serverValue: String) {
+        guard CenterLabel.isKnown(serverValue), myCenter != serverValue else { return }
+        let previous = myCenter
+        let previousLoaded = myCenterLoaded
+        myCenter = serverValue
+        // 사용자가 명시적으로 정한 값이므로 로드 완료로 간주한다(폴링 GET 이 이 선택을 덮지 않게).
+        myCenterLoaded = true
+        guard session != nil else { return }
+        let generation = sessionGeneration
+        Task { @MainActor in
+            do {
+                try await withSessionRetry { activeSession in
+                    try await service.updateMyCenter(
+                        accessToken: activeSession.accessToken,
+                        userID: activeSession.userID,
+                        center: serverValue
+                    )
+                }
+            } catch {
+                if case .cancelled = classifyAuthError(error) { return }
+                guard generation == sessionGeneration else { return }
+                // 실패하면 화면이 거짓말하지 않게 되돌린다(서버는 안 바뀌었으므로 미러도 안 바뀐 것이 진실이다).
+                // 플래그까지 되돌리는 것은 벨트+멜빵이다: 화면에서는 '아직 모름'일 때 칸이 **비활성**이라
+                // 여기 previousLoaded 가 false 인 채로 들어올 길이 없지만, 다른 호출부가 생기는 날
+                // 로드 완료가 거짓으로 남아 그 세션 내내 서버에 다시 안 묻는 상태가 되지 않게 한다.
+                if myCenter == serverValue {
+                    myCenter = previous
+                    myCenterLoaded = previousLoaded
+                }
+            }
         }
     }
 

@@ -106,14 +106,26 @@ extension WorkTimerStore {
         syncUltraWallet(reason: .signIn)
     }
 
-    func signUp(email: String, password: String, displayName: String) async {
+    func signUp(email: String, password: String, displayName: String, center: String? = nil) async {
         syncMessage = "계정 생성 중"
         let generation = sessionGeneration
         do {
-            if let createdSession = try await service.signUp(email: email, password: password, displayName: displayName) {
+            if let createdSession = try await service.signUp(
+                email: email, password: password, displayName: displayName, center: center
+            ) {
                 guard generation == sessionGeneration else { return }
                 session = createdSession
                 persistSession(createdSession, email: email, displayName: displayName)
+                // 방금 가입 메타데이터로 실어 보낸 값이다(서버 트리거가 그대로 profiles 에 넣는다).
+                // 여기서 미러를 세워 두지 않으면 가입 직후 설정 창이 '불러오는 중'으로 떠 있다가
+                // 다음 폴링에서야 값이 나타난다 — 방금 자기가 고른 것을 못 보는 화면이 된다.
+                //
+                // ★ 모르는 값은 세우지 않는다: signupCenter 는 화면이 채우지만, 그 값이 CenterLabel 의
+                //   어휘가 아니면 서버 트리거가 null 로 접으므로 미러도 '아직 모름'으로 둬야 진실과 같다.
+                if let center, CenterLabel.isKnown(center) {
+                    myCenter = center
+                    myCenterLoaded = true
+                }
                 // 새 계정이므로 앞 계정이 남긴 큐/진행 중 근무는 여기서 버려진다(오염 금지).
                 adoptWorkStateOwner(createdSession.userID)
                 self.password = ""
@@ -533,6 +545,9 @@ extension WorkTimerStore {
         createTeamGoalHours = 60
         createdTeamCode = nil
         myTeamInviteCode = nil
+        // 가입 화면 센터 선택도 계정에 묶인 입력이다. 남기면 다음 사람이 가입 폼을 열었을 때 앞 사람이
+        // 고른 칸이 이미 눌려 있어, 아무것도 안 고르고도 가입 버튼이 살아 있다(미선택 게이트가 무력화된다).
+        signupCenter = nil
         currentSessionID = nil
         // 흡수 표식과 영속된 소유 세션 ID 도 함께 내린다. 로그아웃은 startedAt 을 실제로 지우므로(강제 로그아웃의
         // clearPersistedSession 과 달리 여기선 진행 중 근무를 남기지 않는다) 표식이 서술할 세션 자체가 사라진다.

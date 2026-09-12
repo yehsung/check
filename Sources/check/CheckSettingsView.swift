@@ -328,6 +328,84 @@ private struct DisplayNameSettingsRow: View {
     }
 }
 
+// MARK: - 소속 센터 행 (v0.3.13)
+
+/// 설정 창 '내 정보' 의 소속 센터 행이 그릴 세 가지 상태. **순수 값이라 테스트가 직접 되묻는다.**
+///
+/// ★ 이 타입의 존재 이유는 `loading` 과 `unset` 을 **가르는 것 하나다.** 둘 다 `myCenter == nil` 이지만
+///   뜻이 정반대다: 전자는 "서버가 아직 말 안 했다", 후자는 "서버가 없다고 말했다". 플래그 없이 nil 을
+///   '미지정'으로 읽으면 로그인 직후 창이 미지정으로 한 번 그려졌다가 GET 이 도착하며 값으로 바뀐다 —
+///   사용자 눈에는 깜빡임이고, 그 찰나에 칸을 누르면 있지도 않던 변경이 PATCH 로 나간다.
+enum CenterSettingsRowState: Equatable {
+    /// 서버값을 아직 못 받았다. 어느 칸도 채우지 않고 누를 수도 없다.
+    case loading
+    /// 서버가 '미지정'이라고 말해 줬다(가입 때 안 고른 계정). 고르면 그 자리에서 PATCH 가 나간다.
+    case unset
+    /// 화면 글자("서울"/"부산"). 모르는 서버값은 여기 도달하지 못한다 — CenterLabel 이 걸러 unset 으로 접는다.
+    case chosen(String)
+
+    static func of(loaded: Bool, center: String?) -> CenterSettingsRowState {
+        guard loaded else { return .loading }
+        guard let display = CenterLabel.display(center) else { return .unset }
+        return .chosen(display)
+    }
+
+    /// 칸 아래 한 줄. 상태마다 **다른 문장**이어야 한다 — 셋이 같은 글자면 이 행은 아무것도 말하지 않는다.
+    var caption: String {
+        switch self {
+        case .loading:          return "불러오는 중…"
+        case .unset:            return "아직 안 골랐어요. 고르면 이름 옆에 배지로 보여요."
+        case .chosen(let name): return "지금 \(name)센터로 보여요."
+        }
+    }
+
+    /// 칸에 채워 그릴 **서버값**(없으면 어느 칸도 안 채운다).
+    func selection(center: String?) -> String? {
+        if case .chosen = self { return center }
+        return nil
+    }
+
+    var isEnabled: Bool { self != .loading }
+}
+
+/// 소속 센터 행. 토글이 아니라 2칸 선택이다(값이 둘뿐이고 켜짐/꺼짐이 아니다).
+///
+/// 여기서 바꿀 수 있어야 하는 이유: 가입 때 잘못 고른 사람의 **유일한 복구 경로**다. 팀 탈퇴 기능이
+/// 없어 계정을 다시 만들 수도 없고, 그러면 운영자 SQL 말고는 고칠 길이 없다.
+private struct CenterSettingsRow: View {
+    let store: WorkTimerStore
+
+    private var state: CenterSettingsRowState {
+        CenterSettingsRowState.of(loaded: store.myCenterLoaded, center: store.myCenter)
+    }
+
+    var body: some View {
+        // 제목/설명 열 + 우측 2칸. 토글 행과 같은 좌우 구조라 '내 정보' 카드 안에서 층이 맞는다.
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("소속 센터")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                Text(state.caption)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            CenterChoiceCells(
+                selection: state.selection(center: store.myCenter),
+                isEnabled: state.isEnabled,
+                fillsWidth: false,
+                height: 26
+            ) { store.setMyCenter($0) }
+        }
+        // 창을 열 때 아직 모르면 여기서 묻는다. 로그인 직후 설정 로드가 blip 으로 실패했을 때
+        // **그 세션에서 자기 센터를 고칠 수 있는 유일한 길**이다(스토어 쪽 주석에 근거).
+        // 이미 알고 있으면 스토어가 즉시 반환하므로 여닫아도 왕복은 늘지 않는다.
+        .task { await store.loadMyCenterIfNeeded() }
+    }
+}
+
 // MARK: - Settings window body
 
 /// 설정 창 본문. **"한 번 정하고 잊는" 것만** 담는다.
@@ -384,6 +462,8 @@ struct CheckSettingsView: View {
                     detail: "끄면 내 최고기록이 순위표에 안 보이고 올라가지도 않아요.",
                     isOn: miniGamePublicBinding
                 )
+                PanelDivider()
+                CenterSettingsRow(store: store)
             }
             // ★ 진단 두 줄(초인종·근무 틱)이 **여기 있었다.** 없어진 게 아니라 제보로 **옮겼다**
             //   (2026-09-10, 사용자 지적: "이건 뭐야? 왜 넣은 거야? 빼는 게 맞지 않아?").

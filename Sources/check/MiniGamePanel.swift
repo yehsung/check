@@ -719,7 +719,13 @@ struct CheckMiniGameWindowView: View {
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
             } else {
                 ForEach(Array(store.miniGameBoard.enumerated()), id: \.element.id) { index, entry in
-                    MiniGameRankRow(rank: index + 1, entry: entry, isMe: myUserID != nil && entry.userID == myUserID)
+                    // 내 행에도 단다(토큰 순위판·리그와 같은 규약).
+                    MiniGameRankRow(
+                        rank: index + 1,
+                        entry: entry,
+                        center: entry.center,
+                        isMe: myUserID != nil && entry.userID == myUserID
+                    )
                         .frame(height: MiniGameWindowLayout.rowHeight)
                 }
             }
@@ -895,7 +901,14 @@ private struct MiniGameChampionCard: View {
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(MiniGameMedal.gold)
                 .frame(width: MiniGameRankRow.badgeSize, height: MiniGameRankRow.badgeSize)
-            CheckAvatarView(name: winner.name, avatarURL: winner.avatarURL, size: MiniGameRankRow.avatarSize)
+            // 어제 1등도 이 화면의 아바타다 — 바로 아래 순위 행들이 전부 배지를 다는데 여기만 비면
+            // 같은 목록의 첫 줄만 센터를 숨긴 꼴이 된다. overlay 라 열 규격(위 주석)은 1pt 도 안 움직인다.
+            CheckAvatarView(
+                name: winner.name,
+                avatarURL: winner.avatarURL,
+                size: MiniGameRankRow.avatarSize,
+                center: winner.center
+            )
             VStack(alignment: .leading, spacing: 0) {
                 Text("어제 1등")
                     .font(.system(size: 9, weight: .bold))
@@ -949,6 +962,8 @@ struct MiniGameRankRow: View {
 
     let rank: Int
     let entry: MiniGameBoardEntry
+    /// 소속 센터. 아바타 모서리에 겹쳐 그린다.
+    var center: String? = nil
     var isMe: Bool = false
 
     private var medal: Color? { MiniGameMedal.color(rank: rank) }
@@ -956,7 +971,7 @@ struct MiniGameRankRow: View {
     var body: some View {
         HStack(spacing: Self.columnSpacing) {
             badge
-            CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: Self.avatarSize)
+            CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: Self.avatarSize, center: center)
             Text(entry.name)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(CheckTheme.primaryText)

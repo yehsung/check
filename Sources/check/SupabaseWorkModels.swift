@@ -186,6 +186,9 @@ struct TeamLeaderboardEntry: Identifiable, Equatable {
     let totalSeconds: Int
     let workingCount: Int
     let memberCount: Int
+    /// 팀 소속 센터의 **화면 글자**("서울"/"부산"). 섞인 팀·모르는 값·구버전 RPC 는 nil = 배지 없음.
+    /// **순위에는 아무 영향이 없다**(사장님 확정 2 — 센터는 순위를 가르지 않는다). 정렬·필터에 쓰지 마라.
+    var center: String? = nil
 
     /// 팀원 1인당 평균 근무시간(초). 인원 0(가드)이면 0. 정렬·게이지·%의 단일 기준이다.
     var averageSeconds: Int {
@@ -267,6 +270,8 @@ struct TokenBoardRow: Decodable, Equatable {
     /// v0.2.43(20260906120000): 서버가 계정 우선 규칙(CodexEffectiveRule)으로 계산한 Codex 유효값. 옛 RPC 면 nil —
     /// 그때는 클라가 종전 `max(로컬, 계정)` 으로 폴백한다(TokenBoardEntry.codexEffective).
     var codexEffective: Int? = nil
+    /// 소속 센터 **서버값**(`"seoul"`/`"busan"`, v0.3.13). 없으면 nil — 옛 RPC 호환의 근거는 아래 디코드 주석과 같다.
+    var center: String? = nil
 }
 
 // TokenBoardRow 커스텀 디코드: 서버가 아직 옛 token_usage_board RPC(today_total/today_date 컬럼 없음)여도
@@ -280,6 +285,7 @@ extension TokenBoardRow {
         case todayTotal, todayDate
         case codexCacheRead, codexAccountMonth
         case codexEffective
+        case center
     }
 
     init(from decoder: Decoder) throws {
@@ -302,6 +308,8 @@ extension TokenBoardRow {
         codexAccountMonth = try c.decodeIfPresent(Int.self, forKey: .codexAccountMonth)
         // 20260906120000 이전 RPC 호환: 없으면 nil(= 서버 계산값 없음 → 클라 폴백).
         codexEffective = try c.decodeIfPresent(Int.self, forKey: .codexEffective)
+        // v0.3.13 이전 RPC 호환: center 키가 아예 없어도 디코드가 성공해야 한다(없으면 nil = 배지 없음).
+        center = try c.decodeIfPresent(String.self, forKey: .center)
     }
 }
 
@@ -327,6 +335,9 @@ struct TokenBoardEntry: Identifiable, Equatable {
     var codexAccountMonth: Int? = nil
     /// 서버가 계정 우선 규칙으로 계산한 Codex 유효값(20260906120000 의 `codex_effective`). 옛 RPC 면 nil.
     var codexEffectiveFromServer: Int? = nil
+    /// 소속 센터의 **화면 글자**("서울"/"부산"). nil 이면 배지 없음 — 변환은 경계(toTokenBoardEntries)에서
+    /// CenterLabel.display 한 번뿐이다(PokeDirectoryEntry.center 와 같은 규약).
+    var center: String? = nil
 
     var id: String { userID }
 
@@ -445,7 +456,9 @@ extension Array where Element == TokenBoardRow {
                 todayDate: row.todayDate,
                 codexCacheRead: row.codexCacheRead,
                 codexAccountMonth: row.codexAccountMonth,
-                codexEffectiveFromServer: row.codexEffective
+                codexEffectiveFromServer: row.codexEffective,
+                // 서버값 → 화면 글자(모르는 값은 nil = 배지 없음). 이 보드의 유일한 변환 지점이다.
+                center: CenterLabel.display(row.center)
             )
         }
     }
@@ -1005,6 +1018,10 @@ struct TeamLeaderboardRow: Decodable {
     let totalSeconds: Int
     let workingCount: Int
     let memberCount: Int?
+    /// 팀의 소속 센터 **서버값**(v0.3.13). 서버가 **만장일치일 때만** 값을 싣고 섞인 팀은 null 을 준다 —
+    /// 그 판정은 여기서 하지 않는다(클라가 팀원 명부를 들고 있지 않으므로 할 수도 없다).
+    /// memberCount 와 같은 이유로 Optional 이다: 이 컬럼이 없는 구버전 RPC 로도 리그가 살아야 한다.
+    let center: String?
 }
 
 /// memberships?select=team_id,role,teams(name,weekly_goal_hours) 응답 행. teams 는 임베드 조인.
@@ -1190,12 +1207,17 @@ struct PokeDirectoryRow: Decodable, Equatable {
     /// 디코드가 통째로 throw 되어 콕찌르기 목록이 전원 사라진다(찔림까지 같이 죽는다).
     /// nil 은 "못 받는다"가 아니라 **"모른다"** 이고, 모를 때의 해석은 toPokeDirectoryEntries 에 있다.
     let canReceiveMessage: Bool?
+    /// 소속 센터 **서버값**(`"seoul"`/`"busan"`, v0.3.13). canReceiveMessage 와 **같은 이유로 Optional 이다** —
+    /// 이 컬럼을 안 내려주는 서버(마이그레이션 전 창)에서 비옵셔널이면 디렉토리 디코드가 통째로 throw 되어
+    /// 콕찌르기 목록이 전원 사라진다. 화면 글자로의 변환은 CenterLabel 한 곳에서만 한다.
+    let center: String?
 
     /// 키는 `.convertFromSnakeCase` 가 이미 카멜로 바꾼 뒤에 매칭되므로 **카멜로 적는다**
     /// (`message_capable` → `messageCapable`). 스네이크로 적으면 어떤 키도 안 잡혀 전부 nil 이 된다.
     enum CodingKeys: String, CodingKey {
         case userId, displayName, avatarUrl, isWorking
         case messageCapable, canReceiveMessage
+        case center
     }
 
     init(from decoder: Decoder) throws {
@@ -1206,16 +1228,25 @@ struct PokeDirectoryRow: Decodable, Equatable {
         isWorking = try container.decode(Bool.self, forKey: .isWorking)
         canReceiveMessage = try container.decodeIfPresent(Bool.self, forKey: .messageCapable)
             ?? container.decodeIfPresent(Bool.self, forKey: .canReceiveMessage)
+        center = try container.decodeIfPresent(String.self, forKey: .center)
     }
 
     /// 테스트/변환 픽스처용 직접 생성자. 커스텀 init(from:) 을 만든 순간 멤버와이즈 init 이 사라지므로
     /// 명시한다(기본값은 '모름' — 서버가 말해 주지 않은 상태와 같은 뜻이다).
-    init(userId: String, displayName: String, avatarUrl: String?, isWorking: Bool, canReceiveMessage: Bool? = nil) {
+    init(
+        userId: String,
+        displayName: String,
+        avatarUrl: String?,
+        isWorking: Bool,
+        canReceiveMessage: Bool? = nil,
+        center: String? = nil
+    ) {
         self.userId = userId
         self.displayName = displayName
         self.avatarUrl = avatarUrl
         self.isWorking = isWorking
         self.canReceiveMessage = canReceiveMessage
+        self.center = center
     }
 }
 
@@ -1233,6 +1264,12 @@ struct PokeDirectoryEntry: Identifiable, Equatable {
     /// 반대로 true 로 두면 최악이 "보낸 뒤 target_outdated 안내"이고, 그건 이 기능이 원래 감당하는 실패다.
     /// 최종 판정은 언제나 서버다(messageTargetOutdatedNotice 가 그 답을 옮긴다).
     var canReceiveMessage: Bool = true
+    /// 소속 센터의 **화면 글자**("서울"/"부산"). nil 이면 배지를 그리지 않는다(v0.3.13).
+    ///
+    /// ★ 여기 담기는 것은 서버값(`seoul`)이 아니라 **이미 변환된 글자**다. 경계(toPokeDirectoryEntries)에서
+    ///   CenterLabel.display 를 한 번 통과시키므로, 모르는 값은 이 필드에 **도달할 수 없다** — 네 화면이
+    ///   각자 변환하면 그중 한 곳이 모르는 값을 서울로 접는 날이 오기 때문에 관문을 하나로 둔다.
+    var center: String? = nil
 
     var id: String { userID }
 }
@@ -1247,7 +1284,9 @@ extension [PokeDirectoryRow] {
                 avatarURL: row.avatarUrl.flatMap(URL.init(string:)),
                 isWorking: row.isWorking,
                 // '모름(nil)'은 허용으로 읽는다 — 근거는 위 프로퍼티 주석에 있다.
-                canReceiveMessage: row.canReceiveMessage ?? true
+                canReceiveMessage: row.canReceiveMessage ?? true,
+                // 서버값 → 화면 글자. **모르는 값이 화면에 닿는 유일한 관문이 여기다**(모르면 nil = 배지 없음).
+                center: CenterLabel.display(row.center)
             )
         }
     }
@@ -2086,6 +2125,18 @@ struct ProfileMiniGamePublicUpdateRequest: Encodable {
     let minigamePublic: Bool
 }
 
+/// profiles.center 자기 행 갱신 요청(PATCH, v0.3.13). 컬럼당 별도 구조체 규약 그대로다.
+/// 값은 CenterLabel 의 서버값(`"seoul"`/`"busan"`)만 — 다른 문자열은 check 제약에 걸려 23514 로 거절된다.
+struct ProfileCenterUpdateRequest: Encodable {
+    let center: String
+}
+
+/// center 전용 1컬럼 응답(v0.3.13). 컬럼이 없는 서버에서는 이 GET 자체가 400 이 되고 호출부가 삼키므로,
+/// 옵셔널 폴백이 아니라 **요청 단위 격리**로 하위호환을 얻는다(DisplayNameChangedAtRow 와 같은 규약).
+struct ProfileCenterRow: Decodable, Equatable {
+    let center: String?
+}
+
 /// profiles.focus_mode 자기 행 갱신 요청(PATCH). 토큰 공개와 **따로** 보내는 이유는 하나다 —
 /// 한 요청에 두 컬럼을 실으면 둘 중 하나만 컬럼 권한이 있는 서버에서 요청 전체가 403 이 된다.
 struct ProfileFocusModeUpdateRequest: Encodable {
@@ -2426,6 +2477,9 @@ struct MiniGameBoardRow: Decodable, Equatable {
     /// timestamptz 문자열(소수초 유무 혼재) — 서비스가 parseDate 로 푼다.
     let bestAt: String?
     let plays: Int?
+    /// 소속 센터 **서버값**(v0.3.13). displayName/plays 와 같은 이유로 Optional — 서버 함수가 컬럼을 하나
+    /// 덜 실어도(구버전 롤백 포함) 순위 목록 전체가 죽지 않게.
+    let center: String?
 }
 
 /// minigame_yesterday_winner RPC 응답 행. awarded = 자정 배치가 이미 상품(+10)을 지급했는가.
@@ -2436,6 +2490,8 @@ struct MiniGameWinnerRow: Decodable, Equatable {
     let avatarUrl: String?
     let score: Int
     let awarded: Bool?
+    /// 소속 센터 **서버값**(v0.3.13). Optional 근거는 위 행과 같다.
+    let center: String?
 }
 
 /// 미니게임 오늘 순위 한 행(표시용). 정렬 순서가 곧 순위다(등수는 뷰가 인덱스로 센다).
@@ -2447,6 +2503,8 @@ struct MiniGameBoardEntry: Identifiable, Equatable {
     /// 그 점수를 처음 낸 시각(동률 타이브레이크 — 먼저 낸 사람이 위). 모르면 nil(맨 뒤).
     let bestAt: Date?
     let plays: Int
+    /// 소속 센터의 **화면 글자**("서울"/"부산"). nil 이면 배지 없음 — 변환은 서비스 경계 한 번뿐이다.
+    var center: String? = nil
 
     var id: String { userID }
 }
@@ -2459,6 +2517,8 @@ struct MiniGameWinner: Equatable {
     let avatarURL: URL?
     let score: Int
     let awarded: Bool
+    /// 소속 센터의 **화면 글자**. 어제 1등 카드도 같은 화면(미니게임 순위)의 아바타라 같은 배지를 단다.
+    var center: String? = nil
 }
 
 extension Array where Element == MiniGameBoardEntry {

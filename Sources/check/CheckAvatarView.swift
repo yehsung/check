@@ -11,13 +11,53 @@ struct CheckAvatarView: View {
     let name: String
     var avatarURL: URL? = nil
     var size: CGFloat = 26
+    /// 소속 센터("서울"/"부산"). nil 이면 배지를 안 그린다 — 기존 호출부는 기본값으로 무영향이다.
+    var center: String? = nil
 
     var body: some View {
+        avatar
+            // overlay 라서 **레이아웃 폭을 1pt 도 안 쓴다.** 이름 몫(콕찌르기 81.05pt)이 그대로인 이유가 이것이다.
+            .overlay(alignment: .bottomTrailing) {
+                if let center { CenterCornerBadge(label: center, avatarSize: size) }
+            }
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
         if let avatarURL {
             RemoteAvatarView(name: name, url: avatarURL, size: size)
         } else {
             InitialAvatar(name: name, size: size)
         }
+    }
+}
+
+/// 아바타 모서리에 얹는 소속 센터 배지. 두 글자를 그대로 적는다.
+/// 캡슐 폭이 아바타 지름을 넘지 않게 잡아 이웃(이름 텍스트)과 겹치지 않는다 —
+/// overlay 는 폭을 안 쓰지만 **그림은 이웃 위에 그려지므로** 넘치면 이름 첫 글자를 덮는다.
+struct CenterCornerBadge: View {
+    let label: String
+    let avatarSize: CGFloat
+
+    /// 글자 크기는 아바타에 비례시킨다(26pt 아바타 → 7pt). 화면마다 아바타가 22~30pt 로 달라서
+    /// 고정값을 쓰면 미니게임(22pt)에서만 배지가 아바타를 잡아먹는다.
+    private var fontSize: CGFloat { max(6, (avatarSize * 0.24).rounded()) }
+
+    var body: some View {
+        Text(label)
+            // .rounded 는 작은 한글에서 획을 굵게 유지해 1× 에서 덜 뭉갠다.
+            .font(.system(size: fontSize, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 3)
+            .padding(.vertical, 1)
+            // 어두운 알약 + 흰 글자. 아바타 해시색이 무엇이든 대비가 유지된다(아바타 색은 사람마다 다르다).
+            .background(Capsule().fill(Color.black.opacity(0.78)))
+            .overlay(Capsule().stroke(Color.white.opacity(0.55), lineWidth: 0.5))
+            // x 를 더 주면 캡슐이 아바타 오른쪽으로 나가지만, 아바타와 이름 사이 간격이 10pt 라
+            // 이름 글자를 덮지는 않는다(콕찌르기 행 기준 넘침 4pt).
+            .offset(x: 4, y: 2)
     }
 }
 

@@ -3319,6 +3319,12 @@ func todoSwitchLeftThePopoverAndNowMovesOnlyTheSettingsScreen() throws {
     func settings(_ todo: Bool) throws -> NSBitmapImageRep {
         let store = makeTeamStore(members: [], now: now)
         store.setTodoEnabled(todo)
+        // 소속 센터 행도 **시드한다**(v0.3.13). 안 주면 그 행이 서버 GET 의 도착 시점에 따라
+        // '불러오는 중…' → '미지정' 으로 바뀌어, 두 렌더 사이에 **스위치와 무관한 줄**이 달라진다
+        // (실측: 아래 flip 이 스위치 한 칸이 아니라 661px 세로 띠가 된다).
+        // launchAtLoginSeed 와 정확히 같은 종류의 조치다 — 이 테스트가 답할 질문은 할 일 스위치 하나다.
+        store.myCenterLoaded = true
+        store.myCenter = CenterLabel.seoul
         // launchAtLoginSeed 를 반드시 준다 — 안 주면 렌더가 실제 로그인 항목(SMAppService)을 읽어
         // 테스트가 이 맥의 시스템 상태에 의존하게 된다.
         return try renderBitmap(

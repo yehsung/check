@@ -696,7 +696,7 @@ import Testing
     /// 기다려도 안 차고, 미션을 해야만 찬다 — "다 썼다"는 자정을 기다리게 만드는 거짓말이다.
     @Test func rowTooltipSpeaksBalanceAndTheWayToRefill() throws {
         let source = try menuViewSource()
-        let row = Self.codeOnly(try Self.declaration("private struct PokeDirectoryRowView: View {", in: source))
+        let row = Self.codeOnly(try Self.declaration("struct PokeDirectoryRowView: View {", in: source))
 
         #expect(
             row.contains("UltraBalanceText.rowTooltip"),

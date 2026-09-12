@@ -357,6 +357,12 @@ final class WorkTimerStore {
     var createTeamGoalHours = 60
     var createdTeamCode: String?
     var myTeamInviteCode: String?
+    /// 가입 화면에서 고른 소속 센터의 **서버값**(`"seoul"`/`"busan"`). **nil = 미선택이 기본이다.**
+    ///
+    /// 기본값을 서울로 두지 않는 이유가 이 필드의 존재 이유 전부다: 그러면 부산센터 연수생이 아무것도
+    /// 안 하고 서울로 잡히고, 본인은 자기가 뭘 고르지 않았다는 사실조차 모른다(40명 전원이 서울인
+    /// 지금은 그 실수가 한동안 안 보인다). 미선택이면 가입 버튼이 막힌다 — canSubmitSignUp.
+    var signupCenter: String?
     // 코드 미리보기 재입력 경합 방지용 세대 카운터(세션과 무관 — 비로그인에서도 쓰므로). 마지막 요청만 반영한다.
     var previewGeneration = 0
     // 헤더 주간 목표 편집 인라인 행이 펼쳐져 있는지. 뷰 로컬 @State 였으나, 이 행이 헤더를 90pt 넘게 부풀려
@@ -464,6 +470,20 @@ final class WorkTimerStore {
     var miniGamePublic = true
     /// 서버값 도착 또는 사용자가 직접 골랐음(tokenUsagePublicLoaded 와 같은 규약 — 폴링 GET 이 선택을 덮지 않게).
     @ObservationIgnored var miniGamePublicLoaded = false
+
+    // ── 소속 센터 (v0.3.13) ──
+    /// 내 소속 센터의 **서버값**(profiles.center 미러, nil = 미지정이거나 아직 모름).
+    /// 서버값 그대로 들고 있는 이유: 설정 화면이 이 값을 그대로 PATCH 로 되돌려 보낸다(화면 글자는
+    /// 그릴 때만 CenterLabel.display 로 만든다 — 변환이 두 벌이 되는 순간 한쪽이 틀린다).
+    var myCenter: String?
+    /// 내 센터를 **서버에서 실제로 받았거나 사용자가 직접 골랐는가.**
+    ///
+    /// ★ 이 플래그 없이 `myCenter == nil` 을 '미지정'으로 읽으면 로그인 직후 설정 창이 **미지정으로
+    ///   한 번 그려졌다가** GET 이 도착하며 '서울'로 바뀐다 — 사용자 눈에는 깜빡임이고, 그 찰나에
+    ///   버튼을 누르면 있지도 않던 변경이 PATCH 로 나간다. tokenUsagePublicLoaded 가 기록한 사고와 같다.
+    ///   **관찰 대상이다**(@ObservationIgnored 가 아니다): 설정 창이 '불러오는 중'에서 값으로 바뀌는
+    ///   순간을 다시 그려야 하는데, 그때 myCenter 는 nil → nil 로 안 바뀔 수도 있다(미지정 계정).
+    var myCenterLoaded = false
 
     // ── 제보 창 (v0.2.48) ── 미니게임과 같은 **별도 NSWindow** 라 팝오버 패널들과 상호 배타가 아니다.
     //
@@ -1019,6 +1039,13 @@ final class WorkTimerStore {
 
     var canSync: Bool {
         hasAnonKey
+    }
+
+    /// 가입 버튼을 누를 수 있는가. 키(canSync)에 더해 **소속 센터를 골랐는가**를 본다(v0.3.13).
+    /// 로그인 버튼은 이 판정을 쓰지 않는다 — 센터는 계정을 만들 때 정해지는 값이고, 이미 있는 계정으로
+    /// 들어오는 길을 막을 이유가 없다(기존 40명은 서버 백필로 이미 서울이다).
+    var canSubmitSignUp: Bool {
+        canSync && signupCenter != nil
     }
 
     var isSignedIn: Bool {
@@ -1690,8 +1717,16 @@ final class WorkTimerStore {
             }
         }
 
+        // 센터 미선택은 여기서도 막는다. 버튼은 비활성이지만 **Enter 제출 경로가 따로 있고**,
+        // 그 길로 새면 서버가 center 없이 계정을 만들어 영영 미지정인 사람이 생긴다.
+        guard let center = signupCenter else {
+            syncMessage = "소속 센터를 골라 주세요"
+            return nil
+        }
+
         let task = Task {
-            await signUp(email: trimmedEmail, password: password, displayName: trimmedDisplayName)
+            await signUp(
+                email: trimmedEmail, password: password, displayName: trimmedDisplayName, center: center)
         }
         return task
     }
@@ -2628,6 +2663,10 @@ extension WorkTimerStore {
         reportedAppVersionStamp = nil
         tokenUsagePublic = true
         tokenUsagePublicLoaded = false
+        // 소속 센터 미러도 계정에 묶인다(v0.3.13). 남기면 새 계정의 설정 창에 **앞 사람의 센터**가
+        // 이미 골라진 채로 뜨고, 로딩 플래그까지 남으면 그 값이 '서버가 확인해 준 값'으로 읽힌다.
+        myCenter = nil
+        myCenterLoaded = false
         // 수집 설정 수신 플래그도 계정에 묶인다 — 남기면 다음 계정은 서버 설정을 받기 전에 프로브(외부 프로세스)가 뜬다.
         tokenUsageCollectLoaded = false
         // 집중 모드 미러와 서버 맞추기 장부도 계정에 묶인다(v0.2.51). 남기면 다음 계정 화면에 앞 사람의 켜짐이 설정 GET 전까지

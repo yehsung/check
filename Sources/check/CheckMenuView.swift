@@ -1519,7 +1519,8 @@ private struct LeaderboardPanel: View {
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
             } else {
                 ForEach(sortedEntries, id: \.id) { entry in
-                    LeaderboardRow(entry: entry, isMyTeam: entry.id == myTeamID)
+                    // 우리 팀 행에도 단다 — 폭 비용이 0(overlay)이라 뺄 이유가 없고, 자기 팀의 센터를 확인할 자리다.
+                    LeaderboardRow(entry: entry, center: entry.center, isMyTeam: entry.id == myTeamID)
                         .frame(height: Self.rowHeight)
                 }
             }
@@ -1739,6 +1740,8 @@ private struct TokenBoardPanel: View {
                     // 내 행이면서 비공개일 때만 "비공개" 미니 칩을 붙인다 — 남들 보드엔 내 행이 안 보인다는 표시.
                     TokenBoardRowView(
                         entry: entry,
+                        // 내 행에도 단다(센터는 순위를 가르지 않으므로 '나'만 빼는 규칙을 만들 이유가 없다).
+                        center: entry.center,
                         isMe: isMe,
                         showsPrivateChip: isMe && !isMyUsagePublic,
                         showsToday: isCurrentMonth,
@@ -1809,6 +1812,8 @@ enum TokenToolMixWidthBudget {
 /// (렌더 테스트가 "오늘 +N" 줄 노출을 직접 검증할 수 있도록 internal 로 둔다 — 앱에서는 TokenBoardPanel 만 쓴다.)
 struct TokenBoardRowView: View {
     let entry: TokenBoardEntry
+    /// 소속 센터("서울"/"부산"). 아바타 모서리에 겹쳐 그린다 — 폭 예산은 건드리지 않는다.
+    var center: String? = nil
     var isMe: Bool = false
     // 내 행이 비공개일 때만 "나" 칩 옆에 회색 "비공개" 미니 칩을 붙인다 — 남들 보드엔 내 행이 안 보인다는 표시.
     var showsPrivateChip: Bool = false
@@ -1873,7 +1878,7 @@ struct TokenBoardRowView: View {
                 .frame(width: 3)
                 .frame(maxHeight: .infinity)
                 .padding(.vertical, 3)
-            CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: 30)
+            CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: 30, center: center)
             // 왼쪽 열 = 이름 줄 + (있으면) 도구별 캡션 줄. 캡션이 없으면(둘 다 0) VStack 이 한 줄로 줄어들어
             // 예전과 똑같은 행이 된다 — 빈 줄을 자리만 잡아 두지 않는다.
             VStack(alignment: .leading, spacing: 2) {
@@ -2651,6 +2656,7 @@ private struct PokePanel: View {
                         canPoke: isMyselfWorking,
                         ultraBalance: ultraBalance,
                         ultraUnlimited: ultraUnlimited,
+                        center: entry.center,
                         onPoke: { onPoke(entry.userID) },
                         onUltra: { onUltra(entry.userID) },
                         onOpenMessages: { onOpenMessages(entry.userID) },
@@ -2741,7 +2747,9 @@ private struct PokePanelNoticeLine: View {
 /// 콕찌르기 한 행 = 좌측 세로 해시색 바(유저 컬러 포인트) + 아바타 + 이름 + 상태 칩(근무중/자리비움) + 우측 찌르기 버튼.
 /// 상태 칩은 근무중이면 초록 점+"근무중", 아니면 회색 "자리비움". 찌르기 버튼은 손가락 아이콘: 가능(accent 원형·눌림 탄성),
 /// 쿨타임 중/내가 비근무/대상이 자리비움(흐린 비활성 아이콘, 숫자 없음). 자리비움 대상은 찌를 수 없다(서버 강제).
-private struct PokeDirectoryRowView: View {
+// (렌더 테스트가 이 행 하나만 떼어 그릴 수 있도록 internal 로 둔다 — TokenBoardRowView 와 같은 근거.
+//  앱에서 이 행을 세우는 곳은 여전히 PokePanel 하나다.)
+struct PokeDirectoryRowView: View {
     let entry: PokeDirectoryEntry
     // 이 대상 쿨타임 잔여 초 읽기(0이면 쿨타임 아님). **행 본체는 부르지 않는다** — 찌르기 버튼 잎(MenuClockLeaf)만 부른다.
     // 값(Int)으로 받던 시절엔 패널이 행마다 이 값을 풀어 넘겼고, 그게 패널 body 를 초당 재평가로 묶은 지점이었다.
@@ -2755,6 +2763,8 @@ private struct PokeDirectoryRowView: View {
     let ultraBalance: Int?
     // 무제한(관리자)이면 잔량 0 이어도 툴팁이 "없음"을 말하지 않는다 — 서버는 그래도 발사한다.
     var ultraUnlimited: Bool = false
+    /// 소속 센터("서울"/"부산"). 아바타 모서리에 겹쳐 그린다 — 이 행의 이름 몫 81.05pt 는 그대로다.
+    var center: String? = nil
     let onPoke: () -> Void
     let onUltra: () -> Void
     /// 말풍선 버튼 — **그 사람과의 1:1 대화 화면으로 넘어간다**(v0.2.50 — 창이 아니라 이 팝오버 안이다).
@@ -2776,7 +2786,7 @@ private struct PokeDirectoryRowView: View {
                 .frame(width: 3)
                 .frame(maxHeight: .infinity)
                 .padding(.vertical, 3)
-            CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: 26)
+            CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: 26, center: center)
             Text(entry.name)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(CheckTheme.primaryText)
@@ -4127,7 +4137,9 @@ private struct LoginPanel: View {
                 PanelDivider()
                 credentialFields
                 primaryButton
-                    .disabled(!store.canSync)
+                    // 가입 모드에서는 **소속 센터를 고르기 전까지** 막는다(store.canSubmitSignUp).
+                    // 로그인 모드는 종전 그대로 키 유무(canSync)만 본다.
+                    .disabled(!canSubmitPrimary)
                 // 상태 배너 슬롯은 항상 확보하고 메시지 유무는 opacity로만 토글한다 — 오류 배너 등장 시 창 튐 제거.
                 AuthStatusLine(message: store.syncMessage)
                     .opacity(store.syncMessage == "로그인 필요" ? 0 : 1)
@@ -4164,6 +4176,7 @@ private struct LoginPanel: View {
                     submitLabel: .next,
                     onSubmit: { advance(from: .displayName) }
                 )
+                centerChoice
             }
             CredentialField(
                 title: "이메일",
@@ -4214,6 +4227,26 @@ private struct LoginPanel: View {
         }
     }
 
+    /// 소속 센터 2칸(가입 모드 전용). **기본은 미선택이다** — 고르기 전에는 가입 버튼이 비활성이다.
+    /// 여기에 기본값을 주면 부산센터 연수생이 아무것도 안 하고 서울로 잡히고, 본인은 자기가 고르지
+    /// 않았다는 사실조차 모른 채 남의 센터 배지를 달게 된다(SPEC '가입 화면' 절).
+    @ViewBuilder
+    private var centerChoice: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 9) {
+                Image(systemName: "building.2.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .frame(width: 16)
+                Text("소속 센터")
+                    .font(.subheadline)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                Spacer(minLength: 8)
+            }
+            CenterChoiceCells(selection: store.signupCenter) { store.signupCenter = $0 }
+        }
+    }
+
     // 필드에서 Enter를 눌렀을 때: 다음 필드가 있으면 포커스를 옮기고, 없으면(마지막 필드) 제출한다.
     private func advance(from field: AuthFocusField) {
         if let next = field.nextField(mode: mode) {
@@ -4223,9 +4256,19 @@ private struct LoginPanel: View {
         }
     }
 
-    // Enter(제출) 시 로그인/가입 버튼과 동일하게 동작한다. canSync 가드로 키 없음 상태에선 무시한다.
+    /// 지금 화면의 주 버튼을 누를 수 있는가. 판정 자체는 **스토어에 있다**(canSubmitSignUp) —
+    /// Enter 제출·버튼·스토어 진입 가드가 서로 다른 규칙을 갖게 되는 순간 한 경로로 샌다.
+    private var canSubmitPrimary: Bool {
+        switch mode {
+        case .signIn: return store.canSync
+        case .signUp: return store.canSubmitSignUp
+        }
+    }
+
+    // Enter(제출) 시 로그인/가입 버튼과 동일하게 동작한다. 같은 판정을 쓴다 — 버튼이 막힌 상태에서
+    // Enter 로만 빠져나가는 구멍을 만들지 않는다(스토어 signUp() 에 한 겹 더 있다).
     private func submitPrimary() {
-        guard store.canSync else { return }
+        guard canSubmitPrimary else { return }
         switch mode {
         case .signIn:
             store.signIn()

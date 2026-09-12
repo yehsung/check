@@ -431,11 +431,7 @@ struct FeedbackInboxView: View {
                                 isReplySending: store.feedbackReplySending,
                                 onToggle: { store.toggleFeedbackExpansion(report.id) },
                                 onStatus: { store.applyFeedbackStatusFromEditor(id: report.id, status: $0) },
-                                // 보내기 탭의 [보내기]와 달리 `CheckEditorSend.commitThenSend` 를 **안 지난다**:
-                                // 그 문은 `CheckEditorTextView`(본문 칸)의 조합만 확정할 줄 알고, 답장 칸은
-                                // 평범한 `TextField` 라 여기서 부르면 아무것도 확정하지 않으면서 **다른 탭의**
-                                // 본문 칸을 건드릴 여지만 남는다. 지나는 척하는 문이 안 지나는 문보다 나쁘다.
-                                onReply: { store.sendFeedbackReply(id: report.id) }
+                                onReply: { replyTapped(report) }
                             )
                         }
                     }
@@ -444,6 +440,26 @@ struct FeedbackInboxView: View {
             notice
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// [답장 보내기] 버튼의 동작.
+    ///
+    /// ★ **보내기 탭의 `sendTapped` 와 같은 모양이지만 문이 다르다.** 그쪽 칸은 `CheckEditorTextView`
+    ///   (NSTextView)라 `CheckEditorSend` 가 맡고, 이 칸은 `TextField`(→ `NSTextField`)라 그 문이
+    ///   **한 번도 상대해 본 적 없는 계열**이다. v0.3.14 첫 판은 그래서 확정 없이 스토어를 바로 불렀고,
+    ///   v0.3.11 의 "뒤에 한 글자가 사라져요"가 이 자리에 그대로 재현됐다(2026-09-12 실측: 화면은
+    ///   "확인했어요"인데 서버로 나간 본문은 `{"p_note":"확인했어","p_id":"r1"}`). 근거는 `FeedbackReplySend`.
+    ///
+    /// **왜 인라인 클로저가 아니라 이름 있는 값인가**: `sendTapped` 와 같은 이유다 — SwiftUI `Button` 은
+    /// 헤드리스에서 못 누르므로, 테스트가 **올린 화면 그대로** 이 값을 태워 서버로 나가는 본문을 잰다
+    /// (`V0314FeedbackReplyIMETests`). 인라인으로 되돌리면 테스트가 재는 길과 화면이 지나는 길이 갈린다.
+    ///
+    /// 인자가 id 가 아니라 **행이 그린 제보 그대로**인 이유: 답장은 언제나 "이 행"의 것이고, 그 사실이
+    /// 소스에 `store.sendFeedbackReply(id: report.id)` 한 줄로 남아야 한다
+    /// (`V0314FeedbackReplyTests.theReplyButtonSitsOnItsOwnLineAndTheOldExcuseIsGone` 이 그 줄을 읽는다).
+    @MainActor
+    func replyTapped(_ report: FeedbackReport) {
+        FeedbackReplySend.commitThenSend { store.sendFeedbackReply(id: report.id) }
     }
 
     /// 목록의 **추정** 총 높이(스크롤을 걸지 말지 정하는 데만 쓴다 — 위 `inboxRowHeight` 주석).
@@ -814,11 +830,119 @@ struct FeedbackNoteField: View {
                     .font(.caption)
                     .lineLimit(1...3)
                     .foregroundStyle(CheckTheme.primaryText)
+                    // 이 칸이 선 창을 전송 문에 알려 준다 — **진짜 `TextField` 일 때만**.
+                    // 스냅샷 갈래에 끼우면 `ImageRenderer` 가 대체 경로를 쓰는 이유(위 주석)를 스스로 깬다.
+                    .background(FeedbackReplyWindowAnchor().frame(width: 0, height: 0))
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(CheckTheme.trackFill))
+    }
+}
+
+// MARK: - 답장 칸의 조합 확정 (v0.3.14)
+
+/// 답장을 **조합 중이던 마지막 음절까지** 실어 보내는 문. `CheckEditorSend.commitThenSend` 와 같은 일을
+/// 하지만 **다른 뷰 계열**을 상대한다.
+///
+/// **왜 문이 하나 더 필요한가**(2026-09-12 실측). v0.3.11 의 "뒤에 한 글자가 사라져요"(기모찌 제보)는
+/// `CheckEditorTextView`(NSTextView)에서 고쳤고, 그 문은 `CheckEditorTextView.focusedEditor` 로만 대상을
+/// 찾는다. 답장 칸은 `TextField`(→ `NSTextField`)라 그 정적 참조에 **한 번도 등록되지 않는다** — 그래서
+/// 같은 결함이 새 자리에 그대로 났다. 헤드리스로 화면을 올려 잰 값이 그것이다:
+///   · 조합 중 화면/필드는 `"확인했어요"`, 그런데 바인딩(`store.feedbackNoteDraft`)은 `"확인했어"`,
+///   · 그 상태에서 [답장 보내기]의 동작을 태우니 서버로 나간 본문이 `{"p_note":"확인했어","p_id":"r1"}`.
+/// 마지막 음절이 **제보자에게 안 간 채** 답장이 저장됐다.
+///
+/// **`NSTextField` 에서 `hasMarkedText()` 를 묻지 마라 — 그 메서드가 없다.** 글자를 실제로 받는 것은
+/// 필드가 아니라 **창이 빌려주는 필드 에디터**(`NSTextView`, SwiftUI 에서는 `_SystemTextFieldFieldEditor`)다.
+/// 조합도 거기 있고, 실측에서 그 뷰의 `hasMarkedText()` 는 조합 중 `true` · `markedRange` 는 `{4,1}` 이었다.
+/// 즉 2벌식 한글은 이 칸에서도 표시 글자를 **쓴다**(`CheckTextEditor.swift` 머리 주석의 재측정과 같은 결론).
+///
+/// **고른 방법과 버린 방법**(다섯 다 같은 화면에서 재 봤다 — 값은 조합 "요"를 세운 `"확인했어"` 기준):
+///   · `unmarkText()` — **된다**(바인딩이 `"확인했어요"` 로). 채택.
+///   · `didChangeText()` 만 — **안 된다.** 표시 글자가 남아 있는 동안에는 알림이 와도 바인딩이 `"확인했어"`.
+///   · `window.endEditing(for: nil)` — **안 된다.** 불러도 필드 에디터가 첫 응답자로 남고 바인딩은 `"확인했어"`.
+///   · `window.makeFirstResponder(nil)` — 된다. 하지만 **커서를 뺏는다**(보낸 뒤 이어 쓰려면 다시 눌러야 한다).
+///   · `NSTextInputContext.current?.discardMarkedText()` — **쓰지 않는다.** 이름 그대로 버리는 쪽이고,
+///     헤드리스에서는 그 정적 접근자가 애초에 `nil` 이었다(앱이 활성이 아니면 안 켜진다).
+///
+/// **관측과 추론을 갈라 적는다.** 아래 세 줄 중 헤드리스에서 **값을 바꾼 줄은 `unmarkText()` 하나**다
+/// (`inputContext?.discardMarkedText()` 뒤에도 `hasMarkedText()` 는 여전히 true 였다 — 붙어 있는 실제
+/// 입력기가 없으니 당연하다). 그래도 첫 줄과 셋째 줄을 **지우지 마라**: 그 둘은 실제 입력기가 붙어 있을
+/// 때를 위한 것이고, 근거는 `CheckEditorTextView.commitComposition` 의 같은 순서에 이미 값으로 적혀 있다
+/// (①이 없으면 입력기가 방금 확정한 음절을 자기 버퍼에 계속 들고 있어 다음 글자가 거기 다시 붙는다,
+/// ③은 ①②가 알림을 안 낼 수 있는 경로의 마지막 못).
+/// 여기서 부르는 것은 정적 `NSTextInputContext.current` 가 아니라 **이 에디터의** 입력 문맥이고,
+/// 어느 쪽이든 글자는 저장소에 이미 들어 있어 남는다(그 사실은 테스트가 값으로 지킨다 —
+/// `theCommitKeepsEveryCharacterItFound`).
+@MainActor
+enum FeedbackReplySend {
+    /// 답장 칸이 서 있는 창(약참조 — 수명은 SwiftUI/AppKit 이 쥔다).
+    ///
+    /// **왜 창인가**: 필드 에디터는 창이 빌려주는 **한 벌**이고, 지금 누가 쓰고 있는지는 창의 첫 응답자가
+    /// 말해 준다. SwiftUI 가 만든 `NSTextField` 는 우리가 서브클래싱할 수 없어 `focusedEditor` 같은
+    /// 자기 등록을 못 시킨다 — 그래서 칸 옆에 0pt 표식을 세워 **창만** 받아 온다.
+    ///
+    /// 행을 접어 칸이 사라져도 이 참조는 굳이 지우지 않는다. 지울 자리(dismantle)는 SwiftUI 가 뷰를
+    /// 다시 만드는 경로에서도 불려서 방금 선 표식을 지울 수 있고, 남아 있어도 아래 두 관문
+    /// (**필드 에디터인가 · 조합 중인가**)이 전부 걸러 낸다.
+    private(set) static weak var host: NSWindow?
+
+    static func register(_ window: NSWindow?) {
+        guard let window else { return }
+        host = window
+    }
+
+    /// 지금 글자를 받고 있는 **필드 에디터**. 답장 칸이 아니면 nil 이다.
+    ///
+    /// `isFieldEditor` 관문이 두 문을 갈라 놓는다: 본문 칸(`CheckEditorTextView`)은 필드 에디터가 아니라
+    /// 여기서 절대 잡히지 않는다. 두 문이 같은 뷰를 두고 다투면 확정이 두 번 일어난다.
+    static func activeFieldEditor() -> NSTextView? {
+        guard let editor = host?.firstResponder as? NSTextView, editor.isFieldEditor else { return nil }
+        return editor
+    }
+
+    /// 조합(표시 글자)을 화면에 보이는 그대로 확정한다. 돌려주는 값은 "확정할 것이 있었나"다.
+    ///
+    /// 확정은 **동기**다(실측: 런루프를 한 턴도 돌리지 않고 읽은 바인딩이 이미 `"확인했어요"` 였다).
+    /// 그래서 아래 `commitThenSend` 의 두 줄 사이에 기다릴 것이 없다.
+    @discardableResult
+    static func commitActiveComposition() -> Bool {
+        guard let editor = activeFieldEditor(), editor.hasMarkedText() else { return false }
+        editor.inputContext?.discardMarkedText()
+        if editor.hasMarkedText() { editor.unmarkText() }
+        editor.didChangeText()
+        return true
+    }
+
+    /// 확정하고, 그다음에 보낸다. **순서가 뜻이다**(`CheckEditorSend` 와 같은 규약) — 확정이 바인딩을
+    /// 그 자리에서 올려 주므로 다음 줄의 전송이 **사용자가 화면에서 보던 문장 전체**를 읽는다.
+    /// 두 줄을 바꾸지 마라.
+    @discardableResult
+    static func commitThenSend(_ send: () -> Void) -> Bool {
+        let committed = commitActiveComposition()
+        send()
+        return committed
+    }
+}
+
+/// 답장 칸이 선 창을 위 문에 알려 주는, 그림을 그리지 않는 0pt 뷰.
+/// `TodoBoardWindowVisibility`/`WindowAnchorAccessor` 와 같은 관용구다 — 창에 붙는 순간을 AppKit 이
+/// 알려 주므로(`viewDidMoveToWindow`) SwiftUI 재평가 순서에 기대는 레이스가 성립하지 않는다.
+struct FeedbackReplyWindowAnchor: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { AnchorView(frame: .zero) }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // 이미 창에 붙어 있으면 지금 잡는다(뷰가 재사용되며 `viewDidMoveToWindow` 가 안 오는 경로).
+        FeedbackReplySend.register(nsView.window)
+    }
+
+    final class AnchorView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            FeedbackReplySend.register(window)
+        }
     }
 }
 

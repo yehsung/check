@@ -239,6 +239,10 @@ final class WorkTimerStore {
             } else {
                 evaluateRetroBanner()
             }
+            // 내 제보에 답장이 왔는지 **여는 순간 한 번** 묻는다(v0.3.14). 회고 배너와 같은 자리·같은 빈도다.
+            // 폴링에 걸지 않는 이유는 `refreshFeedbackOpenCount` 주석 그대로 — 무료 플랜에 40명이 상시로
+            // 물으면 그 자체가 요금제를 넘는다. 서버 RPC 가 아직 없으면 조용히 아무 일도 일어나지 않는다.
+            refreshFeedbackReplyBadge()
             // 팀원이 바꾼 주간 목표/이름/역할/참여코드를 팝오버 열 때 60초 스로틀로 재조회해 반영한다.
             refreshTeamMetaIfStale()
             // 팝오버 열림 시점에 내 월간 토큰을 게이트/스로틀 하에 1회 올린다(대부분 즉시 반환 — Task 남발 아님).
@@ -539,6 +543,18 @@ final class WorkTimerStore {
     /// 보이고 연타가 같은 답장을 두 번 보낸다(그리고 두 번째는 서버 트리거가 시각을 안 찍어
     /// 화면상 아무 일도 안 일어난 것처럼 보인다).
     var feedbackReplySending = false
+    /// 내 제보에 **답장이 왔다**는 상단 배너의 노출 여부(v0.3.14). 회고 배너(`showsRetroBanner`)와 같은 자리·같은 규약이다.
+    ///
+    /// ★ **판정 결과만 여기 들어온다.** 뷰(`CheckMenuView.topBanner`)는 이 깃발만 읽는다 — 거기서 시각 비교를
+    /// 직접 하면 넘길 수 있는 시각이 매초 갱신되는 `displayNow` 뿐이라, body 최상단이 그것을 관찰 등록해
+    /// 팝오버 전체 서브트리가 매초 무효화된다(그 프로퍼티 주석이 못 박은 실제 회귀 지점).
+    var showsFeedbackReplyBanner = false
+    /// 서버가 말한 **내 제보에 달린 가장 최근 답장 시각**(`feedback_reply_latest()`). 답장이 없으면 nil.
+    ///
+    /// 관찰 대상이 **아니다** — 이 값을 그리는 화면이 없다. 화면이 보는 것은 위 깃발 하나뿐이고 그 사이에
+    /// 판정(`evaluateFeedbackReplyBanner`)이 있다. 관찰에 걸면 배너를 세울 값이 아닐 때도(이미 본 답장)
+    /// 팝오버를 열 때마다 조회 응답이 서브트리를 한 번씩 다시 그린다.
+    @ObservationIgnored var feedbackReplyLatestAt: Date?
     /// 제보에 함께 실을 macOS 버전. 기본은 이 프로세스의 것이고 테스트가 갈아 끼운다
     /// (appVersionProvider 와 같은 이유 — ProcessInfo 는 주입할 수 없어 포맷을 실증할 방법이 사라진다).
     @ObservationIgnored var osVersionProvider: () -> String = { OSVersionReport.current() }
@@ -1926,6 +1942,103 @@ final class WorkTimerStore {
         toggleInsightsPanel()
     }
 
+    // MARK: - 제보 답장 알림 배너 (v0.3.14)
+    //
+    // 사용자 요구(원문): "본인이 보낸 제보에 답장이 오면, 예시로 지난주 근무기록 알림으로 보여주는것처럼.
+    // 위에 알림으로 알려줄 수 있으면 좋을듯" — 그래서 회고 배너를 **그대로 베낀다**. 사용자가 지목한
+    // 기준이 그것이고, 이미 아는 화면과 같은 모양이어야 무엇을 눌러야 할지 배울 필요가 없다.
+
+    /// 이 계정이 '어디까지 본 답장인지' 적어 두는 UserDefaults 키의 앞자리(계정별 접미사가 붙는다).
+    static let feedbackReplySeenAtKey = "check.feedback.replySeenAt"
+
+    /// 위 키에 오가는 시각 표기(ISO8601, 소수초 포함).
+    ///
+    /// 소수초를 **버리지 않는 이유**: 서버 `admin_note_at` 은 이 표의 규약대로 `clock_timestamp()` 라
+    /// 소수초가 붙는다. 초 단위로 깎아 적으면 같은 초 안에 도착한 다음 답장이 '이미 본 시각'과 같은 값이 돼
+    /// `latest <= seen` 에 걸리고, 그 답장은 영영 안 뜬다.
+    static let feedbackReplyStamp: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    /// 이 계정의 '답장 봤음' 키. 회고의 `retroBannerShownWeekKeyForCurrentUser` 와 같은 모양이고 근거도 같다 —
+    /// 전역 키 하나면 같은 맥에서 A 가 답장을 확인한 뒤 B 로 로그인했을 때 B 의 답장 알림이 통째로 묻힌다
+    /// (로그아웃은 이 기록을 지우지 않는다. 지우면 반대로 A 가 본 답장을 또 본다).
+    /// 세션이 없으면 앞자리를 그대로 쓴다 — 그 상태에선 물어볼 답장 자체가 없다.
+    var feedbackReplySeenKeyForCurrentUser: String {
+        guard let userID = session?.userID, !userID.isEmpty else { return Self.feedbackReplySeenAtKey }
+        return "\(Self.feedbackReplySeenAtKey).\(userID)"
+    }
+
+    /// 내 제보에 달린 마지막 답장 시각을 한 번 묻고 배너를 판정한다(Task 발사).
+    /// 부르는 자리는 **팝오버를 여는 순간 하나뿐**이다(`setMenuPresented`) — 위 훅 주석의 규약 그대로다.
+    func refreshFeedbackReplyBadge() {
+        guard session != nil else { return }
+        let generation = sessionGeneration
+        Task { @MainActor in await performRefreshFeedbackReplyBadge(generation: generation) }
+    }
+
+    /// 조회 본체. 실패는 **조용히** 넘긴다 — 배너 하나 때문에 화면에 실패 문구를 띄우지 않는다.
+    ///
+    /// 특히 서버 RPC 배포 전(PGRST202 → `.databaseSchemaMissing`)이 그렇다. 브루 배포가 db push 보다
+    /// 앞선 창에서는 이 함수가 **없는 것이 정상**이고, 그동안은 배너가 그냥 안 뜨면 된다
+    /// (제보 목록 조회가 세운 관례 — 서버를 기다리는 며칠 동안 모두가 빨간 화면을 보게 하지 않는다).
+    func performRefreshFeedbackReplyBadge(generation: Int) async {
+        guard session != nil else { return }
+        do {
+            let latest = try await withSessionRetry { activeSession in
+                try await service.fetchFeedbackReplyLatest(accessToken: activeSession.accessToken)
+            }
+            guard generation == sessionGeneration else { return }
+            feedbackReplyLatestAt = latest
+        } catch {
+            // 취소·스키마 부재·5xx 전부 조용히. 서 있던 배너는 **내리지 않는다** — 못 물어봤다는 사실이
+            // "답장이 없다"는 답은 아니다. 다음에 창을 열면 다시 묻는다.
+            return
+        }
+        evaluateFeedbackReplyBanner()
+    }
+
+    /// 배너를 세울지 판정한다. 서버가 준 마지막 답장 시각이 이 계정이 '봤다'고 적어 둔 시각보다
+    /// **새로울 때만** 세운다(같거나 오래됐으면 이미 본 답장이다).
+    func evaluateFeedbackReplyBanner() {
+        // 제보 패널을 이미 보고 있으면 배너를 세우지 않는다 — 답장 판이 그 화면 안에 이미 그려져 있어
+        // 중복이고, 배너가 겹치면 팝오버 높이만 밀어 올린다(회고가 개인 기록 패널에서 하는 것과 같다).
+        // 대신 **본 것으로 친다**: 답장을 읽고 있는 사람에게 창을 닫았다 열 때마다 "답장이 왔어요"를
+        // 다시 띄우는 쪽이 훨씬 이상하다.
+        guard !isFeedbackPanelVisible else {
+            markFeedbackReplyBannerSeen()
+            return
+        }
+        guard let latest = feedbackReplyLatestAt else {
+            if showsFeedbackReplyBanner { showsFeedbackReplyBanner = false }
+            return
+        }
+        if let seenText = defaults.string(forKey: feedbackReplySeenKeyForCurrentUser),
+           let seen = Self.feedbackReplyStamp.date(from: seenText),
+           latest <= seen {
+            // 이미 본 답장이다. 떠 있던 배너까지 걷어내는 이유: 이 판정은 방금 끝난 조회의 결과라,
+            // '새 답장 없음'인데 화면에 선 안내는 그 순간 거짓이 된다.
+            if showsFeedbackReplyBanner { showsFeedbackReplyBanner = false }
+            return
+        }
+        if !showsFeedbackReplyBanner { showsFeedbackReplyBanner = true }
+    }
+
+    /// 답장 배너를 '봤음'으로 적고 내린다(배너 X · 제보 패널 진입의 공통 경로).
+    ///
+    /// 적는 값은 **서버가 준 마지막 답장 시각**이지 `Date()` 가 아니다. 지금 시각을 적으면 이 맥의 시계가
+    /// 서버보다 앞선 만큼 "미래까지 봤다"고 선언하는 셈이라 그 사이에 도착한 답장이 영영 안 뜨고,
+    /// 반대로 뒤처져 있으면 같은 답장이 계속 뜬다. 아는 시각이 없으면 적을 것도 없다 — 배너만 내리고
+    /// 다음 조회가 판정을 다시 한다.
+    func markFeedbackReplyBannerSeen() {
+        if let latest = feedbackReplyLatestAt {
+            defaults.set(Self.feedbackReplyStamp.string(from: latest), forKey: feedbackReplySeenKeyForCurrentUser)
+        }
+        if showsFeedbackReplyBanner { showsFeedbackReplyBanner = false }
+    }
+
     func startTimer() {
         guard tickerTask == nil else { return }
         tickerTask?.cancel()
@@ -2772,6 +2885,11 @@ extension WorkTimerStore {
         // 토큰 잔디도 계정의 것이다(서버 일별 행 + 이 계정으로 올린 로컬 맵) — 다음 계정에 물려주지 않는다.
         tokenDailyGrid = .empty
         showsRetroBanner = false
+        // 답장 알림도 계정의 것이다 — 남기면 다음 사람 화면에 앞 사람의 "답장이 왔어요"가 선다.
+        // '어디까지 봤는지' 기록은 계정별 키(feedbackReplySeenKeyForCurrentUser)라 지우지 않는다
+        // (회고와 같은 근거 — 지우면 원래 계정으로 돌아왔을 때 본 답장이 다시 뜬다).
+        showsFeedbackReplyBanner = false
+        feedbackReplyLatestAt = nil
         // 미반영 근무 큐(pendingItems)와 진행 중 근무(startedAt/accumulatedSeconds)는 여기서 비우지 않는다.
         // 이 함수는 토큰 만료 강제 로그아웃(refresh token 부재/무효, 저장 세션 재활성 실패)에서도 불리는데,
         // 여기서 비우면 didSet 영속(v0.2.36, check.workQueue.pending)까지 함께 지워져

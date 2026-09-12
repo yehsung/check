@@ -49,6 +49,9 @@ struct CheckMenuView: View {
         case longSession
         /// 지난주 회고 안내(주 1회).
         case retro
+        /// 내 제보에 답장이 왔다는 안내(v0.3.14). 회고보다 덜 급한 이유는 회고가 '이번 주에 딱 하루'
+        /// 뜨는 안내라 밀리면 그 주를 통째로 잃는 반면, 이 배너는 본인이 확인할 때까지 남기 때문이다.
+        case feedbackReply
         /// 새 버전 안내(상시라 가장 덜 급하다).
         case update
     }
@@ -80,6 +83,9 @@ struct CheckMenuView: View {
     private var topBanner: TopBanner? {
         if isMainScreen, showsLongSessionBanner { return .longSession }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
+        // 답장은 새 버전 안내보다 급하다(내가 쓴 글에 온 답이라 사람이 기다리고 있다).
+        // 판정은 스토어가 끝내 둔 것을 읽기만 한다 — 위 경고 그대로, 여기서 시각을 비교하지 않는다.
+        if store.isSignedIn, store.showsFeedbackReplyBanner { return .feedbackReply }
         if showsUpdateBanner { return .update }
         return nil
     }
@@ -88,6 +94,8 @@ struct CheckMenuView: View {
         switch topBanner {
         case .longSession: return Self.longSessionBannerHeight
         case .retro: return Self.inlineBannerHeight
+        // 회고와 같은 InlineActionBanner 한 줄이라 높이도 같다(배너는 동시에 하나뿐이므로 더하지 않는다).
+        case .feedbackReply: return Self.inlineBannerHeight
         case .update:
             // 노트가 있으면 줄 수만큼 배너가 자란다(없으면 예전과 같은 높이 — 목록 행수 예산도 그대로).
             let notes = updateBannerNotes
@@ -240,6 +248,24 @@ struct CheckMenuView: View {
                 // 새 버전 안내 배너를 그 주 내내 가리던 문제가 사라진다.
                 .onAppear { store.markRetroBannerDisplayed() }
             }
+            // 그 아래: 내 제보에 답장이 왔다는 안내(v0.3.14). 회고 배너를 그대로 베낀 모양이다 —
+            // 사용자가 "지난주 근무기록 알림으로 보여주는것처럼"이라고 지목한 기준이 이것이다.
+            //
+            // 회고와 달리 **그려졌다는 이유로 소비하지 않는다**(markRetroBannerDisplayed 같은 onAppear 가 없다).
+            // 회고는 '이번 주 한 번 하는 안내'라 표시로 몫을 쓰지만, 답장은 본인이 읽어야 끝나는 일이다 —
+            // 스쳐 지나간 팝오버 한 번으로 없던 일이 되면 이 기능의 목적 자체가 사라진다.
+            if topBanner == .feedbackReply {
+                InlineActionBanner(
+                    icon: "bubble.left.and.bubble.right.fill",
+                    title: "제보에 답장이 왔어요",
+                    actionTitle: "보기",
+                    tint: CheckTheme.accent,
+                    // 토글이 아니라 '열기'다 — 이미 제보 화면을 보고 있는데 [보기]가 패널을 닫아 버리면
+                    // 배너가 약속한 동작과 정반대가 된다(회고 [보기]가 openInsightsPanel 을 쓰는 것과 같은 근거).
+                    action: { store.openFeedbackPanel() },
+                    onDismiss: { store.markFeedbackReplyBannerSeen() }
+                )
+            }
             content
         }
     }
@@ -299,6 +325,12 @@ struct CheckMenuView: View {
                             extraChromeHeight: listExtraChromeHeight,
                             onBack: { store.closeFeedbackPanel() }
                         )
+                        // 답장 판이 이 화면 안에 있으므로, 여기까지 온 사람은 답장을 본 것으로 친다(v0.3.14).
+                        // 레일 [제보]로 들어오든 배너 [보기]로 들어오든 문은 이 자리 하나라 여기 걸어 둔다
+                        // (`openFeedbackPanel`/`toggleFeedbackPanel` 은 이 트랙의 소유가 아니다).
+                        // 조회가 아직 안 끝나 아는 답장 시각이 없으면 기록하지 않는다 — 그 경우는 조회가
+                        // 돌아올 때 `evaluateFeedbackReplyBanner` 의 '패널이 떠 있음' 갈래가 받아 준다.
+                        .onAppear { store.markFeedbackReplyBannerSeen() }
                     } else if store.isLeaderboardVisible {
                         LeaderboardPanel(
                             // 원본 leaderboard 는 스토어에 보존하고, 표시 시점에 0시간 타팀만 숨긴다(내 팀은 0이어도 유지).

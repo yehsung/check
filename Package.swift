@@ -14,7 +14,9 @@ let package = Package(
         .executableTarget(
             name: "check",
             resources: [
-                .process("Resources")
+                .process("Resources"),
+                // 캐릭터는 `.copy` 다: `.process` 는 하위 폴더를 평탄화해서 동명 파일(캐릭터마다 atlas.png)이면 빌드가 죽는다.
+                .copy("Characters")
             ]
         ),
         .testTarget(

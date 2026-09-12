@@ -1,0 +1,79 @@
+{
+  "id": "fox",
+  "displayName": "여우",
+  "kind": "sprite",
+  "atlas": {
+    "file": "atlas.png",
+    "width": 908,
+    "height": 174,
+    "states": {
+      "frontIdle": {
+        "frames": [
+          {
+            "x": 0,
+            "y": 0,
+            "w": 227,
+            "h": 174
+          }
+        ],
+        "durationsMs": [
+          1000
+        ],
+        "loop": true
+      },
+      "sideIdle": {
+        "frames": [
+          {
+            "x": 454,
+            "y": 0,
+            "w": 227,
+            "h": 174
+          }
+        ],
+        "durationsMs": [
+          1000
+        ],
+        "loop": true
+      },
+      "sideWalk": {
+        "frames": [
+          {
+            "x": 227,
+            "y": 0,
+            "w": 227,
+            "h": 174
+          },
+          {
+            "x": 454,
+            "y": 0,
+            "w": 227,
+            "h": 174
+          },
+          {
+            "x": 681,
+            "y": 0,
+            "w": 227,
+            "h": 174
+          },
+          {
+            "x": 454,
+            "y": 0,
+            "w": 227,
+            "h": 174
+          }
+        ],
+        "durationsMs": [
+          140,
+          140,
+          140,
+          140
+        ],
+        "loop": true
+      }
+    }
+  },
+  "portrait": {
+    "neutral": "portrait-neutral.png",
+    "negative": "portrait-negative.png"
+  }
+}

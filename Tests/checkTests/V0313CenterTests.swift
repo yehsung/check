@@ -862,3 +862,28 @@ private func v0313MiniGameRow(center: String?) -> some View {
         isMe: true
     )
 }
+
+// MARK: - ⑦ 교차 센터 합류: 코드가 맞는데 0행이면 "코드 확인"이 아니다
+//
+// 서버가 `join_team` 에 센터 게이트를 넣었다(20260912185423_join_team_center_gate.sql).
+// 다른 센터 팀이면 0행을 낸다 — 코드 불일치와 **같은 모양**이다. 그래서 클라가 문구를 갈라야 한다:
+// 미리보기가 이미 팀을 찾아 둔 뒤의 0행은 코드 문제가 아니다.
+
+@MainActor
+@Test
+func 코드가_맞는데_합류가_0행이면_다른_센터라고_말한다() throws {
+    let source = try String(
+        contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/check/WorkTimerStoreAuth.swift"),
+        encoding: .utf8
+    )
+    // 미리보기 실패(진짜 코드 오류)는 그대로 "코드를 확인해 주세요" 여야 한다.
+    #expect(source.contains("joinPreviewMessage = \"코드를 확인해 주세요\""),
+            "미리보기 실패 문구까지 바꾸면 진짜 오타를 친 사람이 엉뚱한 안내를 받는다")
+    // 합류 0행 두 자리는 센터 문구를 쓴다.
+    #expect(source.components(separatedBy: "teamlessJoinBlockedMessage").count - 1 >= 3,
+            "합류 0행 두 자리(가입 직후·무소속 화면)와 선언, 셋 다 있어야 한다")
+    #expect(source.contains("if joined == nil { joinPreviewMessage = teamlessJoinBlockedMessage }"),
+            "가입 직후 합류 실패가 다시 조용해졌다 — 부산 연수생이 왜 무소속인지 모르게 된다")
+}

@@ -152,14 +152,22 @@ extension WorkTimerStore {
     }
 
     /// 코드 모드 가입 성공 후. signupTeamCode 로 join_team 을 실행하고 confirmMembership 으로 팀을 확정한다.
+    /// 코드는 맞았는데 합류가 0행일 때의 문구. **두 자리(가입 직후 · 무소속 화면)가 같은 문장을 쓴다** —
+    /// 두 벌로 적으면 한쪽만 낡는다. 서버 근거는 `join_team` 의 센터 게이트다.
+    var teamlessJoinBlockedMessage: String { "다른 센터 팀이에요 — 같은 센터 코드인지 확인해 주세요" }
+
     private func joinTeamAfterSignup() async {
         let generation = sessionGeneration
         let code = signupTeamCode
         do {
-            _ = try await withSessionRetry { activeSession in
+            let joined = try await withSessionRetry { activeSession in
                 try await service.joinTeam(accessToken: activeSession.accessToken, code: code)
             }
             guard generation == sessionGeneration else { return }
+            // 코드가 맞는데도 0행이면 센터 게이트다(위 performJoinTeamWithCode 의 같은 판정).
+            // 예전엔 **아무 말 없이** 무소속으로 떨어져서, 부산 연수생이 서울 코드로 가입하면
+            // 왜 팀이 없는지 알 길이 없었다.
+            if joined == nil { joinPreviewMessage = teamlessJoinBlockedMessage }
         } catch {
             // 합류 실패는 조용히 넘기고 confirmMembership 이 무소속으로 확정하게 둔다(문구는 이후 refresh 가 정리).
             guard generation == sessionGeneration else { return }
@@ -378,7 +386,11 @@ extension WorkTimerStore {
             }
             guard generation == sessionGeneration else { return }
             guard joined != nil else {
-                joinPreviewMessage = "코드를 확인해 주세요"
+                // ★ **여기까지 왔으면 코드는 맞았다** — 바로 위 미리보기(`lookup_team_by_code`)가 팀을 찾아
+                //   `joinPreview` 를 세웠기 때문이다. 그런데도 서버가 0행을 냈다면 남은 이유는 하나다:
+                //   **다른 센터 팀**이다(`join_team` 의 센터 게이트, 20260912185423_join_team_center_gate.sql).
+                //   "코드를 확인해 주세요"라고 말하면 사용자는 멀쩡한 코드를 몇 번이고 다시 친다.
+                joinPreviewMessage = teamlessJoinBlockedMessage
                 return
             }
             signupTeamCode = ""

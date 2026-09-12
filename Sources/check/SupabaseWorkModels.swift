@@ -2680,6 +2680,16 @@ struct FeedbackStatusRequest: Encodable {
     var pNote: String? = nil
 }
 
+/// `reply_feedback(p_id, p_note)` 본문.
+///
+/// **`pNote` 가 Optional 이 아닌 것이 이 타입의 요점이다**(위 `FeedbackStatusRequest` 와 갈리는 지점).
+/// 상태 RPC 에서 빈 메모는 "메모 삭제"지만, 보내기는 **빈 답장을 보내지 않는다** — 서버도 그렇게 갈라 놨고
+/// (`FEEDBACK_EMPTY_REPLY`), 타입이 nil 을 못 담으면 그 계약이 컴파일 단계에서 지켜진다.
+struct FeedbackReplyRequest: Encodable {
+    let pId: String
+    let pNote: String
+}
+
 /// `feedback_list` 응답 행(snake_case 디코드).
 ///
 /// `id`/`kind`/`body` 를 뺀 나머지가 전부 Optional 인 이유는 미니게임 보드 행과 같다 — 서버 함수가 컬럼을
@@ -2691,6 +2701,11 @@ struct FeedbackReportRow: Decodable, Equatable {
     let body: String
     let status: String?
     let adminNote: String?
+    /// 답장 본문이 **마지막으로 바뀐 순간**(timestamptz 문자열). 서버 트리거가 찍는다 — 클라는 실을 수 없고
+    /// 상태만 바꾼 호출로는 안 움직인다(그게 "답장 왔어요" 배너가 오발화하지 않는 근거다).
+    /// 이 컬럼을 아직 안 내려주는 서버(마이그레이션 전)에서는 nil 이고, 그때 화면은 시각을 말하지 않는다 —
+    /// **모르면 침묵한다**(다른 Optional 들과 같은 이유: 컬럼 하나가 비어도 목록 전체가 죽지 않아야 한다).
+    let adminNoteAt: String?
     let appVersion: String?
     let osVersion: String?
     /// timestamptz 문자열(소수초 유무 혼재) — 서비스가 parseDate 로 푼다.
@@ -2709,13 +2724,32 @@ struct FeedbackReport: Identifiable, Equatable, Sendable {
     /// **사용자가 쓴 글.** 로그로 흘리지 마라.
     let body: String
     var status: FeedbackStatus
+    /// 운영자가 쓴 **답장**(제보자에게도 보인다 — 서버 컬럼 주석이 그렇게 못 박아 뒀다).
+    /// v0.3.14 부터 이 값이 바뀌는 자리는 `reply_feedback` 왕복이 **성공한 뒤** 하나뿐이다 —
+    /// 상태 칩은 더 이상 메모를 싣지 않는다(낙관 반영이 이 화면의 목적을 배반하기 때문이다).
     var adminNote: String?
+    /// 그 답장이 마지막으로 바뀐 순간. **nil = 아직 답장이 없거나, 서버가 아직 이 컬럼을 모른다.**
+    ///
+    /// 기본값을 주는 이유는 언어가 아니라 **호출부**다: 기존 생성자 호출부(서비스·테스트 픽스처)가 여럿이라
+    /// 값을 요구하면 이 한 줄이 관계없는 파일 여럿을 건드리게 만든다.
+    var adminNoteAt: Date? = nil
     let appVersion: String?
     let osVersion: String?
     let createdAt: Date?
     let updatedAt: Date?
     let authorName: String
     let authorAvatarURL: URL?
+}
+
+extension FeedbackReport {
+    /// 화면에 그릴 **답장**(없으면 nil). `adminNote` 를 직접 읽지 않고 여기를 지나는 이유:
+    /// 공백만 남은 메모는 답장이 아니다. 서버는 btrim 뒤 빈 문자열을 저장하지 않지만 v0.3.14 이전에
+    /// 저장된 행에는 남아 있을 수 있고, 그때 빈 판이 행에 서면 제보자는 **답장이 온 줄 안다.**
+    var reply: String? {
+        guard let adminNote else { return nil }
+        let trimmed = adminNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 }
 
 /// 제보 본문·메모의 길이 규칙. **순수 함수만 둔다** — 이 판정이 뷰 안에 흩어지면
@@ -2757,9 +2791,27 @@ enum FeedbackComposer {
     }
 
     /// 서버로 나갈 메모. 비면 nil(서버가 기존 메모를 빈 문자열로 덮지 않게).
+    ///
+    /// **답장 보내기도 같은 값을 쓴다**(v0.3.14). 서버 `reply_feedback` 이 `btrim(p_note)` 을 저장하므로,
+    /// 여기서 자른 값과 서버에 남는 값이 **글자까지 같아야** 아래 `isSendableReply` 의 "같으면 못 보낸다"가
+    /// 왕복 뒤에도 성립한다(안 그러면 보내고 나서도 버튼이 계속 살아 있다).
     static func normalizedNote(_ text: String) -> String? {
         let trimmed = normalized(text)
         return trimmed.isEmpty ? nil : String(trimmed.prefix(maxNoteLength))
+    }
+
+    /// 지금 [보내기]를 누를 수 있는가(답장). **순수 판정이라 여기 둔다** — 뷰와 스토어가 각자 세면
+    /// "버튼은 살아 있는데 서버가 거절하는" 조합이 생긴다(이 타입이 존재하는 이유 그대로다).
+    ///
+    /// 세 갈래 중 둘이 여기 있다:
+    ///  · 비었으면 못 보낸다 — 서버가 `FEEDBACK_EMPTY_REPLY` 로 거절한다. 상태 RPC 와 갈리는 지점이다
+    ///    (거기선 빈 문자열이 '메모 삭제'지만, **보내기는 빈 답장을 보내지 않는다**).
+    ///  · 저장된 답장과 같으면 못 보낸다 — 서버 트리거가 `is distinct from` 으로 시각을 안 찍으므로
+    ///    왕복을 내도 화면에 아무 변화가 없다. 관리자는 눌렀는데 아무 일도 안 일어난 이유를 알 수 없다.
+    /// (셋째 갈래인 "보내는 중"은 스토어가 안다 — 순수하지 않다.)
+    static func isSendableReply(draft: String, savedNote: String?) -> Bool {
+        guard let normalized = normalizedNote(draft) else { return false }
+        return normalized != savedNote
     }
 }
 
@@ -2805,10 +2857,52 @@ enum FeedbackText {
     static let loading = "불러오는 중…"
     static let failed = "제보를 불러오지 못했어요"
     static let retry = "다시 시도"
-    static let notePlaceholder = "처리 메모(500자까지)"
-    /// 메모 칸 옆의 안내. 메모 전용 저장 버튼을 두지 않는 이유를 화면에서 말한다 —
-    /// 메모만 저장하는 길이 있으면 "상태는 그대로인데 메모만 달린" 제보가 생기고, 그 상태는 목록 어디에도 안 보인다.
-    static let noteSave = "메모는 상태와 함께 저장돼요"
+    /// 메모칸 안내. **'메모'가 아니라 '답장'이라고 부른다**(v0.3.14) — 이 칸에 쓴 글은 제보자 화면에
+    /// 그대로 나가므로, 이름이 '메모'면 관리자는 자기만 보는 기록이라고 믿고 쓴다.
+    /// 누가 보는지는 칸 아래 `noteSave` 가 말한다(292pt 에서 placeholder 는 짧아야 안 잘린다).
+    static let notePlaceholder = "답장(500자까지)"
+    /// 메모 칸 아래의 안내.
+    ///
+    /// **v0.3.14 에 문장이 뒤집혔다.** 예전 문구는 "메모는 상태와 함께 저장돼요"였고, 그건 메모 전용 저장
+    /// 버튼이 **없다**는 사실의 설명이었다(없는 이유: 메모만 달린 제보는 화면 어디에도 안 보였으니까).
+    /// 이제 답장이 행에 그려지고 [보내기]가 생겼으므로 그 문장은 **거짓**이다 — 상태 칩은 상태만 바꾸고
+    /// 답장은 [보내기]로만 나간다. 둘이 따로 저장된다는 사실이 이 줄이 지금 말해야 하는 전부다.
+    static let noteSave = "상태와 답장은 따로 저장돼요 — 답장은 제보한 사람에게 보여요"
+
+    // MARK: 답장 (v0.3.14)
+    //
+    // 사용자 요구: "제보에 답변 쓸때도 단순히 입력이 아니라. 보내는 버튼 까지 있어서 제보에 답장을 하고
+    // 보내기까지 해야 전달이 되게끔 하자. 지금은 입력하고. 이제 뭐 제대로 입력이 된건지 확인하기가 어려워."
+    //
+    // 그래서 이 아래 문구들이 하는 일은 하나다 — **갔는지 안 갔는지를 화면에서 말하는 것**.
+
+    /// 답장 [보내기] 버튼. 보내기 탭의 `sendAction` 과 **일부러 글자가 다르다** — 같은 팝오버 안에서
+    /// 두 버튼이 같은 이름이면 관리자는 자기가 제보를 보내는지 답장을 보내는지 헷갈린다.
+    static let replyAction = "답장 보내기"
+    static let replySending = "보내는 중…"
+    /// 행에 그려지는 답장 판의 이름표. 제보자에게는 **이게 유일한 수신 경로**라 '메모'가 아니라 '답장'이다.
+    static let replyBlockTitle = "답장"
+    /// 보냈다는 확인 한 줄. 답장 판과 시각("방금")이 이미 증거지만, 사람은 자기가 누른 버튼이
+    /// 무슨 일을 했는지 **문장으로** 한 번 듣고 싶어 한다(사용자 요구의 뒷문장이 정확히 그것이다).
+    static let replySent = "답장을 보냈어요"
+    static let replyFailed = "답장을 보내지 못했어요"
+    /// 서버에 `reply_feedback` 이 아직 없다(브루 배포가 db push 보다 앞선 창).
+    /// `sendSchemaMissing` 과 같은 규약으로 (가) 지금은 안 된다 (나) 곧 열린다 (다) **쓴 글은 그대로 있다**
+    /// 셋을 말한다 — 이 경로도 초안을 지우는 자리가 없어서 (다)가 사실이다.
+    static let replySchemaMissing = "답장 보내기는 곧 열려요 — 쓰신 글은 그대로 둘게요"
+    /// 빈 답장(서버 `FEEDBACK_EMPTY_REPLY`). 버튼이 이미 잠겨 있어 평소엔 닿지 않지만, 잠금이 언젠가
+    /// 새면 사용자는 영문 상수가 아니라 이 문장을 봐야 한다.
+    static let replyEmpty = "답장을 적어야 보낼 수 있어요"
+    /// 500자 초과(서버 `FEEDBACK_NOTE_TOO_LONG`). 클라가 먼저 잘라 보내므로 역시 평소엔 안 닿는다.
+    static let replyTooLong = "답장이 너무 길어요 — 500자까지 보낼 수 있어요"
+    /// 서버가 그 제보를 못 찾았다(`FEEDBACK_NOT_FOUND`). 다른 관리자가 지웠거나 목록이 낡았다는 뜻이다.
+    static let replyNotFound = "그 제보를 찾지 못했어요 — 목록을 다시 열어 주세요"
+
+    /// 이 안내 한 줄이 **좋은 소식**인가. 색은 여기 하나에서 갈린다 — 두 화면(보내기 탭·받은 제보 탭)이
+    /// 각자 문자열을 비교하면 언젠가 한쪽만 고쳐져, 성공 문장이 경고색으로 뜨는 화면이 생긴다.
+    static func isSuccessNotice(_ notice: String) -> Bool {
+        notice == sendSuccess || notice == replySent
+    }
 
     /// "앱 0.2.48 (58) · macOS 15.6 정보가 함께 전송돼요" — 자동으로 실리는 것을 **밝히는** 한 줄.
     /// 몰래 보내지 않는다는 약속이 이 문장이다.

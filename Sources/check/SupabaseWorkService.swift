@@ -1909,7 +1909,7 @@ final class WorkTickGate: @unchecked Sendable {
 
 // MARK: - 제보(버그·요청) (v0.2.48)
 //
-// RPC 넷 전부 **로그인 토큰**으로만 부른다. anon 으로 부를 수 있는 문을 열지 않는다 —
+// RPC 여섯(v0.3.14 에 답장 둘이 늘었다) 전부 **로그인 토큰**으로만 부른다. anon 으로 부를 수 있는 문을 열지 않는다 —
 // 이 저장소는 이미 anon RPC 유출을 한 번 겪었다(standing risk P0).
 //
 // **스키마 부재를 여기서 접지 않는다.** 서버가 아직 배포 전이면 PGRST202(404 "… in the schema cache")가
@@ -1976,6 +1976,10 @@ extension SupabaseWorkService {
                 body: reportRow.body,
                 status: FeedbackStatus(rawValue: reportRow.status ?? FeedbackStatus.open.rawValue),
                 adminNote: reportRow.adminNote,
+                // 이 컬럼을 아직 안 내려주는 서버(마이그레이션 전)에서는 nil 이다 — 화면은 답장 본문만
+                // 그리고 시각은 말하지 않는다(모르면 침묵한다). 여기서 Date() 로 지어내면 8일 전 답장이
+                // '방금'으로 뜬다.
+                adminNoteAt: reportRow.adminNoteAt.flatMap { parseDate($0) },
                 appVersion: reportRow.appVersion,
                 osVersion: reportRow.osVersion,
                 createdAt: reportRow.createdAt.flatMap { parseDate($0) },
@@ -2002,6 +2006,47 @@ extension SupabaseWorkService {
             accessToken: accessToken,
             prefer: nil
         )
+    }
+
+    /// 제보에 **답장을 보낸다**. `reply_feedback(p_id, p_note)` → 서버가 찍은 `admin_note_at`.
+    /// 관리자가 아니면 `FEEDBACK_FORBIDDEN`, 빈 답장이면 `FEEDBACK_EMPTY_REPLY`,
+    /// 500자 초과면 `FEEDBACK_NOTE_TOO_LONG`, 없는 제보면 `FEEDBACK_NOT_FOUND` 다 —
+    /// 넷 다 공용 매핑을 지나 `.authMessage(원문)` 으로 올라가고, 사람 말로 옮기는 일은 `FeedbackFailure` 가 한다.
+    ///
+    /// ★ **상태는 안 건드린다.** v0.3.14 부터 답장과 상태는 별개의 왕복이다.
+    ///
+    /// **파싱에 실패해도 throw 하지 않는 이유**(submitFeedback 이 반환 id 를 흘리는 것과 같은 근거):
+    /// 여기까지 왔다는 것은 서버가 **이미 답장을 저장했다**는 뜻이다. 스칼라 모양이 조금 달라졌다고
+    /// (소수초 자릿수·오프셋 표기) 성공한 전송을 실패로 뒤집으면 관리자는 같은 답장을 다시 보내고,
+    /// 그때 서버 트리거는 `is distinct from` 때문에 시각을 안 찍어 화면은 영영 "안 갔다"고 말한다.
+    /// 그래서 시각 하나만 이 맥의 시계로 근사한다 — 다음 `feedback_list` 가 서버 값으로 덮는다.
+    func replyFeedback(accessToken: String, id: String, note: String) async throws -> Date {
+        let data = try await send(
+            path: "/rest/v1/rpc/reply_feedback",
+            method: "POST",
+            body: FeedbackReplyRequest(pId: id, pNote: note),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return (try? decoder.decode(String.self, from: data)).flatMap { parseDate($0) } ?? Date()
+    }
+
+    /// **내 제보에 달린 답장 중 가장 최근 시각**. `feedback_reply_latest()` — 인자 없는 RPC 라 본문은 `{}` 다
+    /// (`feedback_open_count` 와 같은 규약: PostgREST 는 본문의 키 집합으로 함수를 고른다).
+    ///
+    /// 관리자라고 전체를 세지 않는다 — 이건 "내 제보에 답장 왔나"이지 운영 배지가 아니다. 그 판정도 서버다.
+    /// 답장이 하나도 없으면 서버가 `null` 을 준다 → nil(없는 것을 지어내지 않는다).
+    func fetchFeedbackReplyLatest(accessToken: String) async throws -> Date? {
+        let data = try await send(
+            path: "/rest/v1/rpc/feedback_reply_latest",
+            method: "POST",
+            body: EmptyBody(),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        // `null` 이면 디코드가 throw 하고 그게 곧 "없다"는 답이다 — 그 자리에 Date() 를 지어내면
+        // 답장을 한 번도 못 받은 사람에게 배너가 뜬다.
+        return (try? decoder.decode(String.self, from: data)).flatMap { parseDate($0) }
     }
 
     /// 미해결 제보 건수. `feedback_open_count()` — 인자 없는 RPC라 본문은 `{}` 다(take_pokes 의 옛 모양과 같은 규약:

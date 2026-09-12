@@ -531,6 +531,14 @@ final class WorkTimerStore {
     /// 펼친 행의 처리 메모 초안. 한 번에 한 행만 펼치므로 한 칸이면 된다 — 행별 사전을 두면
     /// 목록을 새로 받을 때 사라진 제보의 메모가 영영 남는다.
     var feedbackNoteDraft: String = ""
+    /// 답장 왕복이 떠 있는가(v0.3.14). 로직은 `WorkTimerStoreFeedback.sendFeedbackReply` 에 있고
+    /// 저장 프로퍼티만 여기 있는 이유는 이 블록 머리 주석의 언어 제약 그대로다.
+    ///
+    /// **관찰 대상이어야 한다**: 이 깃발이 하는 일은 왕복 동안 [답장 보내기]를 잠그고 "보내는 중…"을
+    /// 보이는 것인데, 그 사이에 다른 관찰 가능한 값이 하나도 안 바뀐다 — 관찰 밖에 두면 버튼이 멀쩡해
+    /// 보이고 연타가 같은 답장을 두 번 보낸다(그리고 두 번째는 서버 트리거가 시각을 안 찍어
+    /// 화면상 아무 일도 안 일어난 것처럼 보인다).
+    var feedbackReplySending = false
     /// 제보에 함께 실을 macOS 버전. 기본은 이 프로세스의 것이고 테스트가 갈아 끼운다
     /// (appVersionProvider 와 같은 이유 — ProcessInfo 는 주입할 수 없어 포맷을 실증할 방법이 사라진다).
     @ObservationIgnored var osVersionProvider: () -> String = { OSVersionReport.current() }

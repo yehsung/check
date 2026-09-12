@@ -701,10 +701,14 @@ func aSuccessfulStatusChangeSendsTheServerVocabularyAndRefetchesOnce() async {
 
     let sent = FeedbackURLProtocol.sentBodies(host: host, path: "/rest/v1/rpc/set_feedback_status").first ?? ""
     let payload = ((try? JSONSerialization.jsonObject(with: Data(sent.utf8))) as? [String: Any]) ?? [:]
-    #expect(Set(payload.keys) == ["p_id", "p_status", "p_note"], "본문 키가 서버 시그니처와 다르다 — \(payload.keys.sorted())")
+    // ★ **v0.3.14 에 바뀐 계약**: 상태 칩은 메모를 **같이 보내지 않는다**(키가 아예 빠진다). 예전에는
+    //   여기서 `p_note == "처리했음"` 을 셌는데, 그러면 상태만 바꾸려던 클릭이 아직 다 쓰지도 않은 답장을
+    //   제보자에게 보내고 서버 트리거가 `admin_note_at` 을 찍어 "답장 왔어요" 배너까지 오발화한다.
+    //   답장은 [답장 보내기]로만 나간다(V0314FeedbackReplyTests 가 그 짝을 못 박는다).
+    #expect(Set(payload.keys) == ["p_id", "p_status"], "본문 키가 서버 시그니처와 다르다 — \(payload.keys.sorted())")
     #expect(payload["p_id"] as? String == "r1")
     #expect(payload["p_status"] as? String == "doing", "서버 어휘가 아니라 화면 라벨/케이스 이름을 보냈다")
-    #expect(payload["p_note"] as? String == "처리했음", "메모 앞뒤 공백을 안 걷었다")
+    #expect(payload["p_note"] == nil, "상태 칩이 아직 메모를 같이 보낸다 — 답장이 본인도 모르게 나간다")
     // 성공했을 때만 재조회한다(정렬·미해결 건수를 서버 사실에 맞춘다).
     #expect(FeedbackURLProtocol.count(host: host, path: "/rest/v1/rpc/feedback_list") == 1)
 }

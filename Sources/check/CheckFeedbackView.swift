@@ -68,9 +68,25 @@ enum FeedbackPanelLayout {
     /// 조금 일찍 붙을 뿐이다(잘림은 결함이고 이른 스크롤은 아니다).
     static let mineRowHeight: CGFloat = 62
     static let inboxRowHeight: CGFloat = 96
-    /// 펼친 행이 더 먹는 높이(전체 본문 + 진단 판 + 메모 + 상태 칩 + 안내 한 줄).
-    static let inboxExpandedExtra: CGFloat = 190
+    /// 펼친 행이 더 먹는 높이(전체 본문 + 진단 판 + 답장 칸 + [답장 보내기] 줄 + 상태 칩 + 안내 두 줄).
+    /// **v0.3.14 에 190 → 236**: 보내기 버튼 줄(24 + 간격 6)과 안내가 한 줄 늘어난 몫(15 + 6)이다.
+    static let inboxExpandedExtra: CGFloat = 236
     static let rowSpacing: CGFloat = 8
+
+    /// 행에 그려진 **답장 판**이 먹는 높이의 추정치(pt). 답장이 없으면 0 이다.
+    ///
+    /// **길이로 줄 수를 세는 이유**: 이 판은 말줄임을 안 한다(제보자에게는 이게 유일한 수신 경로라
+    /// 뒷부분을 잘라 버리면 답장을 반만 받는다). 그래서 500자짜리 답장은 정말로 행을 한 뼘 늘리고,
+    /// 그 사실이 스크롤 판정에 들어가지 않으면 목록이 프레임을 넘어 잘린다.
+    ///
+    /// 292pt 폭에서 caption 한 줄은 한글 22자 남짓 들어가는데 **20자**로 나눈다 — 조금 큰 쪽으로 잡는
+    /// 이 파일의 규약 그대로다(과소평가는 잘림이고 과대평가는 이른 스크롤이다).
+    static func replyBlockHeight(_ reply: String?) -> CGFloat {
+        guard let reply, !reply.isEmpty else { return 0 }
+        let lines = max(1, Int(ceil(Double(reply.count) / 20.0)))
+        // 이름표 13 + 간격 3 + 본문 줄수 × 15 + 세로 padding 6×2, 그리고 위 블록과의 간격 6.
+        return 13 + 3 + CGFloat(lines) * 15 + 12 + 6
+    }
 
     /// 머리(뒤로 + 제목 + 탭)와 본문 사이의 세로 간격(pt).
     static let blockSpacing: CGFloat = 8
@@ -115,12 +131,15 @@ enum FeedbackPanelLayout {
     /// 보내기 탭 본문의 **추정** 자연 높이(스크롤을 걸지 말지 정하는 데만 쓴다).
     /// 조금 큰 쪽으로 잡는다 — 과소평가하면 본문이 프레임을 넘어 잘리고, 과대평가하면 스크롤이 조금
     /// 일찍 붙을 뿐이다(잘림은 결함이고 이른 스크롤은 아니다).
-    static func sendBodyContentHeight(rowCount: Int, hasNotice: Bool) -> CGFloat {
+    /// - Parameter rows: "내가 보낸 제보" 행들. **개수가 아니라 행 자체를 받는 이유**는 v0.3.14 다 —
+    ///   답장이 달린 행은 답장 판만큼 높고, 그 몫을 안 세면 답장 하나가 목록을 프레임 밖으로 밀어낸다.
+    static func sendBodyContentHeight(rows: [FeedbackReport], hasNotice: Bool) -> CGFloat {
         // 종류 22 + 에디터 + 안내/카운터 26 + 구분선 1 + 소제목 15, 그 사이 간격 다섯 번.
         var total: CGFloat = 22 + editorHeight + 26 + 1 + 15 + sectionSpacing * 5
         if hasNotice { total += 15 + sectionSpacing }
-        if rowCount > 0 {
-            total += CGFloat(rowCount) * mineRowHeight + CGFloat(rowCount - 1) * rowSpacing + 6
+        if !rows.isEmpty {
+            total += CGFloat(rows.count) * mineRowHeight + CGFloat(rows.count - 1) * rowSpacing + 6
+            total += rows.reduce(0) { $0 + replyBlockHeight($1.reply) }
         } else {
             total += 20 + 6   // 빈 목록 한 줄
         }
@@ -232,7 +251,7 @@ struct FeedbackSendView: View {
         //   굴린 휠이 어느 쪽을 움직이는지 사용자가 알 수 없다.
         FeedbackListBox(
             contentHeight: FeedbackPanelLayout.sendBodyContentHeight(
-                rowCount: store.myFeedback.count,
+                rows: store.myFeedback,
                 hasNotice: store.feedbackNotice != nil
             ),
             capHeight: FeedbackPanelLayout.budget(
@@ -256,8 +275,9 @@ struct FeedbackSendView: View {
                     Text(notice)
                         .font(.caption2)
                         // 성공만 초록. 나머지(레이트리밋·실패·권한)는 경고색이다 — 셋을 색으로 더 가르면
-                        // 사용자가 외워야 할 색이 늘어날 뿐이다.
-                        .foregroundStyle(notice == FeedbackText.sendSuccess ? CheckTheme.working : CheckTheme.pending)
+                        // 사용자가 외워야 할 색이 늘어날 뿐이다. 판정은 `FeedbackText.isSuccessNotice` 하나다
+                        // (아래 받은 제보 탭의 같은 줄과 **같은 값**을 봐야 한 쪽만 고쳐지는 일이 없다).
+                        .foregroundStyle(FeedbackText.isSuccessNotice(notice) ? CheckTheme.working : CheckTheme.pending)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 PanelDivider()
@@ -407,8 +427,15 @@ struct FeedbackInboxView: View {
                                 isExpanded: store.expandedFeedbackID == report.id,
                                 note: $store.feedbackNoteDraft,
                                 rendersPlainNoteField: rendersPlainNoteField,
+                                canSendReply: store.canSendFeedbackReply,
+                                isReplySending: store.feedbackReplySending,
                                 onToggle: { store.toggleFeedbackExpansion(report.id) },
-                                onStatus: { store.applyFeedbackStatusFromEditor(id: report.id, status: $0) }
+                                onStatus: { store.applyFeedbackStatusFromEditor(id: report.id, status: $0) },
+                                // 보내기 탭의 [보내기]와 달리 `CheckEditorSend.commitThenSend` 를 **안 지난다**:
+                                // 그 문은 `CheckEditorTextView`(본문 칸)의 조합만 확정할 줄 알고, 답장 칸은
+                                // 평범한 `TextField` 라 여기서 부르면 아무것도 확정하지 않으면서 **다른 탭의**
+                                // 본문 칸을 건드릴 여지만 남는다. 지나는 척하는 문이 안 지나는 문보다 나쁘다.
+                                onReply: { store.sendFeedbackReply(id: report.id) }
                             )
                         }
                     }
@@ -424,19 +451,24 @@ struct FeedbackInboxView: View {
         guard !rows.isEmpty else { return 0 }
         var total = CGFloat(rows.count) * FeedbackPanelLayout.inboxRowHeight
             + CGFloat(rows.count - 1) * FeedbackPanelLayout.rowSpacing
+        // 답장 판은 **접힌 행에도** 그려지므로(답장은 편집 상태가 아니라 제보의 성질이다) 전부 센다.
+        total += rows.reduce(0) { $0 + FeedbackPanelLayout.replyBlockHeight($1.reply) }
         if let expandedID, rows.contains(where: { $0.id == expandedID }) {
             total += FeedbackPanelLayout.inboxExpandedExtra
         }
         return total
     }
 
-    /// 목록 아래 안내 한 줄(상태 변경 실패 등). 빈 화면과 목록 화면이 **같은 조각**을 쓴다.
+    /// 목록 아래 안내 한 줄(답장 성공·상태 변경 실패 등). 빈 화면과 목록 화면이 **같은 조각**을 쓴다.
+    ///
+    /// **v0.3.14 에 색이 갈렸다**: 이 줄에 좋은 소식("답장을 보냈어요")이 들어오기 시작했는데, 경고색으로
+    /// 그리면 관리자는 답장을 보낼 때마다 뭔가 잘못된 줄 안다. 판정은 보내기 탭과 **같은 값**을 쓴다.
     @ViewBuilder
     private var notice: some View {
         if let notice = store.feedbackNotice {
             Text(notice)
                 .font(.caption2)
-                .foregroundStyle(CheckTheme.pending)
+                .foregroundStyle(FeedbackText.isSuccessNotice(notice) ? CheckTheme.working : CheckTheme.pending)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -489,6 +521,14 @@ struct FeedbackMineRow: View {
                 Text(FeedbackText.ageText(report.createdAt, now: now))
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
+                // ★ **제보자에게 이것이 유일한 수신 경로다**(v0.3.14). v0.3.13 까지 `adminNote` 는 이 파일에
+                //   한 번도 나오지 않았고, 그래서 여태 쓴 답장은 아무도 못 봤다. 펼침이 없는 행이라
+                //   말줄임도 없다 — 여기서 자르면 제보자는 답장을 반만 받는다.
+                //   조건을 **호출부에 두는 이유**: 뷰 안에서 접으면 답장 없는 행에도 VStack 간격 3pt 가
+                //   남아, 답장 하나 없는 화면이 조용히 길어진다.
+                if let reply = report.reply {
+                    FeedbackReplyBlock(note: reply, at: report.adminNoteAt, now: now)
+                }
             }
             Spacer(minLength: 4)
             FeedbackStatusChip(status: report.status)
@@ -517,8 +557,17 @@ struct FeedbackInboxRow: View {
     @Binding var note: String
     /// 스냅샷 전용(아래 `FeedbackNoteField` 주석). **앱은 언제나 false** 다.
     var rendersPlainNoteField: Bool = false
+    /// 지금 [답장 보내기]를 누를 수 있는가. **판정은 스토어 하나**이고 행이 다시 세지 않는다 —
+    /// 두 곳에서 세면 "버튼은 살아 있는데 스토어가 조용히 되돌아가는" 조합이 생긴다.
+    var canSendReply: Bool = false
+    /// 답장 왕복이 떠 있는가(라벨이 "보내는 중…"으로 바뀐다).
+    var isReplySending: Bool = false
     let onToggle: () -> Void
     let onStatus: (FeedbackStatus) -> Void
+    /// [답장 보내기] 동작. 다른 둘과 같이 **기본값이 없다** — 빈 클로저 기본값을 두면 배선을 빠뜨린
+    /// 호출부가 컴파일을 통과하고, 그 화면의 버튼은 눌러도 아무 일도 안 한다(그리고 그건 이 기능이
+    /// 고치려던 결함 그 자체다).
+    let onReply: () -> Void
 
     /// 사람이 쓴 글과 앱이 붙인 진단을 가른 두 조각. **한 번만 가른다** — 본문과 진단이 서로 다른 판정에서
     /// 나오면 언젠가 한쪽만 고쳐져 진단이 본문에도 남는다(같은 글자가 두 번 보인다).
@@ -573,6 +622,13 @@ struct FeedbackInboxRow: View {
             }
             .buttonStyle(.plain)
 
+            // 보낸 답장은 **접힌 행에도** 그린다(진단·macOS 버전과 갈리는 지점이다). 그 둘은 파고들 때만
+            // 필요한 참고값이지만, 답장은 "이 제보는 처리됐고 상대도 그 사실을 봤다"는 목록 차원의 사실이다 —
+            // 펼쳐야만 보이면 관리자는 자기가 답장한 제보에 또 답장한다.
+            if let reply = report.reply {
+                FeedbackReplyBlock(note: reply, at: report.adminNoteAt, now: now)
+            }
+
             // 앱이 붙인 진단은 **펼쳤을 때만**, 그리고 사용자가 쓴 문장과 **다른 판에** 그린다
             // (2026-09-10 — 설정 창에 있던 두 줄이 여기로 왔다). macOS 버전 줄이 펼침에서만 나오는 것과 같은 규약이다.
             if isExpanded, let diagnostics = parts.diagnostics {
@@ -592,17 +648,32 @@ struct FeedbackInboxRow: View {
         )
     }
 
-    /// 펼친 행의 처리 도구. 메모는 상태 버튼과 **함께** 저장된다 — 따로 저장하는 버튼을 두면
-    /// 메모만 쓰고 상태를 안 바꾼 경우가 생기고, 그 상태는 이 화면 어디에도 표시되지 않는다.
+    /// 펼친 행의 처리 도구.
     ///
-    /// **버튼 줄과 안내 문구가 두 줄로 나뉘어 있는 이유**(v0.2.48 수정, 292pt 에서 더욱): 전이가 넷이라
-    /// (`FeedbackStatus.transitions` — [완료]를 잘못 눌러도 [미해결]로 되돌릴 수 있어야 한다) 한 줄에
-    /// 칩 넷 + 안내 문구를 같이 두면 안내가 말줄임으로 잘리는데, 그 문장은 "메모 저장 버튼이 왜 없는가"의
-    /// 답이라 잘리면 안 된다. 줄을 나누면 칩은 자기 크기를 유지하고(`fixedSize`) 문구는 온전히 남는다.
+    /// **v0.3.14 에 [답장 보내기]가 생겼다.** v0.3.13 까지 메모는 상태 칩을 눌러야만 저장됐고, 그 근거는
+    /// *"따로 저장하는 버튼을 두면 메모만 쓰고 상태를 안 바꾼 경우가 생기고, 그 상태는 이 화면 어디에도
+    /// 표시되지 않는다"* 였다. 그 근거는 **답장 판이 행에 그려지는 순간 사라진다** — 이제 답장만 보낸
+    /// 제보도 화면에 그렇게 보인다. 그래서 둘을 같이 고쳤다(하나만 고치면 안 됐다).
+    ///
+    /// **[답장 보내기]가 상태 칩과 다른 줄에 서는 이유**: 292pt 에 칩이 이미 넷이다(`FeedbackStatus.transitions`
+    /// — [완료]를 잘못 눌러도 [미해결]로 되돌릴 수 있어야 한다). v0.2.48 에 바로 이 자리에서 안내 문구가
+    /// 말줄임으로 잘렸고, 그래서 줄을 나눴다. 버튼을 그 줄에 도로 밀어 넣으면 같은 사고가 재현된다.
+    ///
+    /// 세 줄의 순서가 곧 동선이다: **쓴다(칸) → 보낸다(버튼) → 분류한다(칩)**, 그리고 마지막 줄이
+    /// "둘은 따로 저장된다"를 말한다.
     private var editor: some View {
         VStack(alignment: .leading, spacing: 6) {
             PanelDivider()
             FeedbackNoteField(text: $note, rendersPlainText: rendersPlainNoteField)
+            // 메모칸 **바로 아래 줄**. 버튼 하나뿐이라 292pt 에서 잘릴 것이 없다.
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+                FeedbackPrimaryButton(
+                    label: isReplySending ? FeedbackText.replySending : FeedbackText.replyAction,
+                    enabled: canSendReply,
+                    action: onReply
+                )
+            }
             HStack(spacing: 5) {
                 ForEach(FeedbackStatus.transitions, id: \.self) { status in
                     FeedbackSegmentChip(
@@ -747,6 +818,57 @@ struct FeedbackNoteField: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(CheckTheme.trackFill))
+    }
+}
+
+/// 운영자가 보낸 **답장**이 앉는 판. **관리자와 제보자가 같은 조각을 본다** — 갈라 두면 언젠가 한쪽만
+/// 고쳐지고, 그 한쪽이 제보자 화면이면 아무도 눈치채지 못한다(v0.3.13 까지가 정확히 그 상태였다:
+/// 서버는 답장을 내려주는데 화면이 한 번도 그리지 않았다).
+///
+/// **`FeedbackDiagnosticsBlock` 과 같은 결(안쪽 트랙 색 판)인 이유**: 둘 다 "이 줄은 본문과 읽는 결이
+/// 다르다"를 말한다. 다만 글자색은 다르다 — 진단은 보조색이지만 답장은 **사람이 사람에게 쓴 글**이라
+/// 본문색으로 읽힌다. 제보자에게 이 판은 참고값이 아니라 받은 편지다.
+///
+/// 시각은 **있을 때만** 말한다(`adminNoteAt` 이 nil = 서버가 아직 그 컬럼을 모른다). 모르는 시각을
+/// `Date()` 로 지어내면 여덟 달 전 답장이 "방금"으로 뜬다 — 모르면 침묵한다.
+///
+/// ★ `ImageRenderer` 눈가리개 없음: 여기 있는 것은 `Text` 둘뿐이라 AppKit 을 감싼 뷰가 아니다
+///   (`FeedbackNoteField` 가 `rendersPlainText` 를 갖는 이유가 그 반대 경우다). 이 판에 입력 위젯을
+///   들이지 마라 — 들이는 순간 스냅샷에서 이 자리가 노란 상자가 되고, 그 아래 버튼 줄이 겹쳤는지
+///   잘렸는지 아무도 못 본다.
+struct FeedbackReplyBlock: View {
+    /// 이미 공백을 걷어낸 답장(`FeedbackReport.reply`). 빈 문자열은 여기까지 오지 않는다.
+    let note: String
+    let at: Date?
+    let now: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Text(FeedbackText.replyBlockTitle)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(CheckTheme.accent)
+                Spacer(minLength: 4)
+                if let at {
+                    Text(FeedbackText.ageText(at, now: now))
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .fixedSize()
+                }
+            }
+            // 말줄임이 **없다**: 제보자에게 이 판이 유일한 수신 경로라 뒤를 자르면 답장을 반만 받는다.
+            // 길어진 행 몫은 `FeedbackPanelLayout.replyBlockHeight` 가 스크롤 판정에 넣는다.
+            Text(note)
+                .font(.caption)
+                .foregroundStyle(CheckTheme.primaryText)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(CheckTheme.trackFill))
     }
 }

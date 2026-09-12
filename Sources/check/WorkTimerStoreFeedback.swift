@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-// MARK: - 제보(버그·요청) (v0.2.48) — 창 열고 닫기 · 보내기 · 목록 · 상태 변경
+// MARK: - 제보(버그·요청) (v0.2.48, 답장 v0.3.14) — 창 열고 닫기 · 보내기 · 목록 · 상태 변경 · 답장
 //
 // 사용자 요청(2026-09-10): "사람들이 버그 제보 가능하게 해주고, 제보 받은 내용은 관리자인 내가 앱 내에서
 // 볼 수 있게끔 하자. 버그 또는 요청사항 보낼 수 있게 하자."
@@ -54,6 +54,19 @@ extension WorkTimerStore {
     /// 지금 [보내기]를 누를 수 있는가. 서버 경계(1~1000자)와 **같은 판정**이고, 전송 중에는 잠긴다.
     var canSendFeedback: Bool {
         !isSendingFeedback && FeedbackComposer.isSendable(feedbackDraft)
+    }
+
+    /// 지금 [답장 보내기]를 누를 수 있는가(v0.3.14).
+    ///
+    /// **펼친 행이 기준이다.** 메모 초안은 한 칸뿐이고 그 칸은 언제나 펼친 행의 것이므로
+    /// (`toggleFeedbackExpansion` 이 그 행의 답장을 실어 준다), 펼친 행이 없으면 이 초안은 아무에게도
+    /// 속하지 않는다 — 그때 보내기를 열어 두면 방금 접은 행에 엉뚱한 답장이 붙는다.
+    ///
+    /// 나머지 두 갈래는 `FeedbackComposer.isSendableReply` 가 판정한다(비었나 · 저장된 답장과 같나).
+    var canSendFeedbackReply: Bool {
+        guard !feedbackReplySending, let id = expandedFeedbackID else { return false }
+        let saved = feedbackList.first { $0.id == id }?.adminNote
+        return FeedbackComposer.isSendableReply(draft: feedbackNoteDraft, savedNote: saved)
     }
 
     /// "앱 0.2.48 (58) · macOS 15.6 · 연결 상태 정보가 함께 전송돼요" — 자동으로 실리는 것을 밝히는 한 줄.
@@ -378,9 +391,72 @@ extension WorkTimerStore {
         }
     }
 
-    /// 펼친 행에서 [진행]/[완료]/[보류] 를 눌렀을 때. 지금 메모 초안을 함께 보낸다.
+    /// 펼친 행에서 [미해결]/[진행]/[완료]/[보류] 를 눌렀을 때.
+    ///
+    /// ★ **메모를 같이 보내지 않는다(v0.3.14 계약 변경).** 예전에는 상태 칩이 메모 초안을 함께 실어 날랐고,
+    ///   그게 메모가 저장되는 **유일한** 길이었다. 이제 답장은 [답장 보내기]로만 나간다 — 그 둘을 한 번에
+    ///   묶으면 (가) 상태만 바꾸려던 클릭이 아직 다 쓰지도 않은 답장을 제보자에게 보내고
+    ///   (나) 서버 트리거가 `admin_note_at` 을 찍어 "답장 왔어요" 배너가 오발화한다.
+    ///   `nil` 을 보내야 서버가 기존 답장을 건드리지 않는다(빈 문자열은 '메모 삭제'다).
     func applyFeedbackStatusFromEditor(id: String, status: FeedbackStatus) {
-        changeFeedbackStatus(id: id, to: status, note: FeedbackComposer.normalizedNote(feedbackNoteDraft))
+        changeFeedbackStatus(id: id, to: status, note: nil)
+    }
+
+    // MARK: 답장 보내기(관리자) — v0.3.14
+
+    /// [답장 보내기] 버튼의 액션. 판정은 `canSendFeedbackReply` 하나이고 여기서 다시 세지 않는다
+    /// (`sendFeedback` 과 같은 규약).
+    func sendFeedbackReply(id: String) {
+        guard session != nil, canSendFeedbackReply, expandedFeedbackID == id else { return }
+        guard let note = FeedbackComposer.normalizedNote(feedbackNoteDraft) else { return }
+        Task { @MainActor in await performSendFeedbackReply(id: id, note: note) }
+    }
+
+    /// `reply_feedback` 왕복.
+    ///
+    /// ★★ **낙관 반영이 없다. 이 화면에서만 그렇고, 그것이 이 기능의 존재 이유다.**
+    ///    상태 칩은 낙관 반영을 한다(`changeFeedbackStatus`) — 거기서는 "빨리 보이는 것"이 이득이다.
+    ///    여기서는 정반대다: 사용자가 요구한 것이 *"이제 뭐 제대로 입력이 된건지 확인하기가 어려워"* 였고,
+    ///    답장이 **가기 전에** 목록에 그려지면 그 화면은 왕복이 실패한 뒤에도 "갔다"고 말한다.
+    ///    그러면 이 버튼은 예전의 조용한 메모 칸과 똑같아진다. 그래서 목록을 건드리는 자리는
+    ///    **성공 갈래 하나뿐**이고, 실패하면 목록은 **한 글자도 안 바뀐다**.
+    ///
+    /// 진행은 `feedbackReplySending` 으로 보인다(잠금 + "보내는 중…") — 낙관 반영의 이득이던
+    /// "눌렀다는 사실이 즉시 보인다"는 그쪽이 대신 한다.
+    ///
+    /// **초안은 그대로 둔다.** 보낸 글이 칸에 남아 있어야 방금 보낸 것과 행에 그려진 답장이 같은지
+    /// 눈으로 맞춰 볼 수 있다(그리고 같으면 버튼이 저절로 잠긴다 — `isSendableReply`).
+    ///
+    /// **목록을 다시 받지 않는다.** 답장은 상태도 정렬도 안 건드리고, 서버가 준 시각을 그 자리에서 받았다 —
+    /// 무료 플랜에 왕복을 하나 더 얹을 이유가 없다(이 파일 머리 주석 ②).
+    func performSendFeedbackReply(id: String, note: String) async {
+        guard session != nil, !feedbackReplySending else { return }
+        let generation = sessionGeneration
+        feedbackReplySending = true
+        defer { if generation == sessionGeneration { feedbackReplySending = false } }
+        do {
+            let repliedAt = try await withSessionRetry { activeSession in
+                try await service.replyFeedback(accessToken: activeSession.accessToken, id: id, note: note)
+            }
+            guard generation == sessionGeneration else { return }
+            // 왕복이 끝난 **뒤에** 목록을 건드린다. 그 사이에 행이 사라졌으면(다른 관리자가 지웠거나
+            // 목록을 새로 받았으면) 아무것도 안 한다 — 없는 행을 되살리지 않는다.
+            guard let index = feedbackList.firstIndex(where: { $0.id == id }) else { return }
+            feedbackList[index].adminNote = note
+            feedbackList[index].adminNoteAt = repliedAt
+            feedbackNotice = FeedbackText.replySent
+        } catch {
+            if case .cancelled = classifyAuthError(error) { return }
+            guard generation == sessionGeneration else { return }
+            // 스키마 부재를 **따로 말하는 이유**: 이 경로는 상태 변경과 달리 목록이 멀쩡한 채로 실패한다
+            // (`feedback_list` 는 이미 배포돼 있고 `reply_feedback` 만 아직 없는 창). 누를 행도 쓴 글도
+            // 눈앞에 있으므로 "쓰신 글은 그대로 둘게요"가 가리키는 대상이 분명하다.
+            feedbackNotice = FeedbackFailure.notice(
+                for: error,
+                fallback: FeedbackText.replyFailed,
+                schemaMissing: FeedbackText.replySchemaMissing
+            )
+        }
     }
 }
 
@@ -428,6 +504,12 @@ enum FeedbackFailure {
             let upper = message.uppercased()
             if upper.contains("FEEDBACK_RATE_LIMIT") { return FeedbackText.rateLimited }
             if upper.contains("FEEDBACK_FORBIDDEN") { return FeedbackText.forbidden }
+            // 답장 경로의 셋(v0.3.14). 셋 다 클라 게이트가 먼저 막으므로 평소에는 닿지 않는다 —
+            // 그래도 적어 두는 이유는 **게이트가 새는 날**이다. 여기가 비어 있으면 그날 화면에
+            // `FEEDBACK_EMPTY_REPLY` 라는 영문 상수가 뜬다(이 타입이 존재하는 이유가 정확히 그것이다).
+            if upper.contains("FEEDBACK_EMPTY_REPLY") { return FeedbackText.replyEmpty }
+            if upper.contains("FEEDBACK_NOTE_TOO_LONG") { return FeedbackText.replyTooLong }
+            if upper.contains("FEEDBACK_NOT_FOUND") { return FeedbackText.replyNotFound }
             // ★ 원문을 돌려주지 마라. 여기로 오는 것은 우리가 아직 모르는 서버 예외이고,
             //   그 이름은 사용자에게 아무 의미가 없다(그리고 대개 영어다).
             return fallback

@@ -82,6 +82,14 @@ CHECK_E2E=1 CHECK_E2E_SR_KEY_FILE=<apikeys.json> swift test --filter LiveE2E   #
 #   curl -s -X POST "$URL/rest/v1/rpc/ultra_poke_user" -H "apikey: $ANON" \
 #        -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"p_to":"<상대uid>"}'
 #
+# 1-2b) 이번 마이그레이션이 함수를 **drop + create** 했다면, 인자 default 가 살아 있는지 되묻는다.
+#       drop 은 인자의 default 를 같이 버리고, PostgREST 는 **보낸 키의 집합으로 함수를 고른다** —
+#       그 키를 생략하는 앱 요청이 PGRST202(404) 로 죽는다. 앱은 안 바뀌었는데 화면만 빈다.
+#       (2026-09-12 v0.3.13 실사고. 자세한 내용과 대조법은 아래 "스키마 적용" → "함수를 drop+create 할 때".)
+#   select p.proname, pg_get_function_arguments(p.oid)   -- identity_arguments 는 default 를 안 보여 준다
+#     from pg_proc p where p.pronamespace='public'::regnamespace
+#      and p.proname in ('<이번에 바꾼 함수들>') order by 1;
+#
 # 1-3) **RPC 실행권 유출 점검** (grant 변경 마이그레이션을 push 했거나, 새 RPC 를 추가했으면 반드시).
 #      Supabase 는 새 함수의 EXECUTE 를 anon/PUBLIC 에 자동 부여한다 — 앱 RPC 가 auth.uid() 가드 없이
 #      로그인 없이 데이터를 반환하면 공개 cask 의 anon 키만으로 전량 유출된다(2026-08-09 token_usage_board 실사고).
@@ -178,6 +186,53 @@ supabase db push
 Dashboard 의 SQL Editor 에서 직접 실행하려면 `supabase/migrations/` 아래 SQL 파일들을
 파일명(타임스탬프) 순서대로 실행합니다.
 
+#### 함수를 `drop` + `create` 로 바꿀 때 — **인자 default 까지** 원본과 대조한다
+
+> **반환 컬럼만 맞추고 넘어가지 마세요.** `drop function` + `create function` 은 인자의
+> **기본값(`default`)** 을 같이 버립니다. default 만 빠진 함수는 SQL 로 부르면 멀쩡히 돌기 때문에
+> 눈으로도 테스트로도 멀쩡해 보이지만, PostgREST 는 **본문에 실려 온 키의 집합으로 함수를 고릅니다** —
+> 그 키를 생략하고 부르던 앱 요청이 `PGRST202`(404) 로 죽습니다. 서버만의 변경이라 **앱 버전과 무관**해
+> 구버전 사용자까지 같이 죽고, 앱은 한 줄도 안 바뀌었는데 화면만 빕니다.
+>
+> **2026-09-12 v0.3.13 실사고** — `20260912143000_profile_center.sql` 이 `center` 컬럼을 얹으려고
+> `minigame_board` 를 drop+create 하면서 원본의 `p_day date default null`
+> (`supabase/migrations/20260908090000_minigame_scores.sql:152`) 에서 **default 만 떨어뜨렸습니다.**
+> 앱은 '오늘' 순위를 볼 때 `p_day` 키를 아예 **보내지 않습니다**(`encodeIfPresent` —
+> `Sources/check/SupabaseWorkModels.swift` 의 `MiniGameBoardRequest`). 서버에 `minigame_board(p_game)` 에
+> 맞는 함수가 없어지자 미니게임 창이 최고기록·오늘 순위까지 **통째로 빈 화면**이 됐습니다(운영자 신고).
+> 그 마이그레이션에 붙어 있던 프로브 26개는 **전부 초록이었습니다 — 프로브가 `p_day` 를 넣어서 불렀기
+> 때문입니다.** 핫픽스: `supabase/migrations/20260912151142_minigame_board_default_restore.sql`.
+
+> **대조하는 법**: `pg_get_function_identity_arguments` 를 쓰지 마세요 — 이름 그대로 오버로드를 가리는
+> **신원**용이라 default 를 **안 보여 줍니다**. `pg_get_function_arguments` 를 써야 default 가 문자열에
+> 같이 나옵니다. 바꾸기 **전에** 찍어 두고 바꾼 **뒤에** 같은지 되물으세요(사람 눈보다 정확합니다).
+>
+> ```sql
+> -- 교체 전 / 교체 후 둘 다 돌려 출력을 그대로 비교한다 (관리자 SQL)
+> select p.proname, pg_get_function_arguments(p.oid) as args
+>   from pg_proc p
+>  where p.pronamespace = 'public'::regnamespace
+>    and p.proname in ('minigame_board','minigame_yesterday_winner')   -- 이번에 바꾼 함수들
+>  order by 1;
+> -- 기대: minigame_board | p_game text, p_day date DEFAULT NULL::date
+> ```
+>
+> 마이그레이션 안에서 **기계로** 막는 것이 제일 낫습니다. 위 핫픽스 파일 끝의 `do $$ ... raise exception`
+> 처럼, 문자열이 기대값과 다르면 배포가 멈추도록 사후 단언을 답니다.
+
+> **프로브도 같이 고치세요.** 인자를 전부 채워 부르는 프로브는 default 가 사라진 것을 **원리적으로 못
+> 봅니다.** default 가 있는 인자는 **빼고** 한 번 더 부르는 줄을 반드시 넣으세요 — 이번 사고에서 26개를
+> 전부 통과시킨 것이 바로 이 구멍이었습니다.
+
+> **함수 주석(`comment on function`)도 같이 날아갑니다.** `create or replace` 는 주석을 남기지만
+> `drop` + `create` 는 지웁니다. 함수를 갈아 끼울 때는 원본 마이그레이션의 `comment on function` 도
+> 같이 옮겨 붙이세요. 지금 무엇이 비었는지는 이렇게 봅니다.
+>
+> ```sql
+> select p.proname, obj_description(p.oid,'pg_proc') is not null as has_comment
+>   from pg_proc p where p.pronamespace = 'public'::regnamespace order by 1;
+> ```
+
 #### 별명·울트라 스키마에서 **지우면 안 되는 것** (v0.2.16)
 
 > **`grant execute on function public.display_name_key(text) to authenticated;` 를 지우지 마세요.**
@@ -207,6 +262,74 @@ Dashboard 의 SQL Editor 에서 직접 실행하려면 `supabase/migrations/` �
 > **롤백 시 주의**: `drop function ultra_poke_user` 한 줄이면 울트라만 죽습니다. 다만 위 두 `grant execute`
 > 와 `grant update on public.profiles to service_role` 은 **남겨 두세요** — 지우면 아바타 PATCH 와
 > 운영자 수동 조치가 함께 죽습니다.
+
+#### v0.3.13 소속 센터 표시 — **롤백 순서** (★ RPC 가 먼저, 컬럼은 나중)
+
+되돌릴 일이 생기면 **순서가 전부입니다.** 아래 순서로만 하세요.
+
+1. center 를 싣는 **다섯 RPC** 를 center 항이 없는 **직전 정의**로 되돌린다.
+2. 가입 트리거 `handle_check_auth_user()` 를 직전 정의로 되돌린다.
+3. **그 다음에야** `profiles.center` 컬럼을 뗀다. (급하지 않습니다 — 아래 참고)
+
+> **반대로 하면 화면 넷이 동시에 죽습니다.** 다섯 함수는 본문이 전부 **문자열**이라
+> (`pg_proc.prosqlbody` 가 null — 실서버에서 확인함) PostgreSQL 이 `profiles.center` 에 대한 의존성을
+> 기록해 두지 않습니다. 그래서 `alter table public.profiles drop column center` 는 **막히지 않고 그냥
+> 성공하고**, 그 순간부터 콕 찌르기 목록·AI 토큰 순위판·팀 리그·미니게임 순위가 호출될 때마다
+> `42703`(column p.center does not exist) 로 한꺼번에 죽습니다. 서버만의 변경이라 **앱 버전과 무관**해
+> 구버전 사용자까지 같이 죽습니다. 트리거(2)를 남겨 둔 채 컬럼을 떼면 더 나쁩니다 — 트리거가 실패하면
+> 롤백이 `auth.users` INSERT 까지 되돌려 **가입 자체가 실패합니다.**
+
+> **1·2 만 해도 사용자 화면은 정상입니다.** 네 모델의 `center` 가 전부 Optional 이라
+> (`Sources/check/SupabaseWorkModels.swift` 의 `TeamLeaderboardEntry`·`PokeDirectoryEntry` 등) center 항이
+> 없는 구버전 RPC 가 내려와도 디코딩이 죽지 않고 **배지만 사라집니다.** 그러니 3 은 서두르지 마세요 —
+> 오히려 **컬럼은 남기고 RPC 만 되돌린 상태가 가장 안전한 정지 지점**입니다. 40명의 값이 그대로 남아
+> 다시 켤 때 컷오프 백필을 또 하지 않아도 됩니다.
+
+직전 정의는 아래 파일에 있습니다. **손으로 다시 쓰지 말고 그대로 베껴** 새 마이그레이션 한 파일로 묶으세요.
+
+| 함수 | 직전 정의가 있는 파일 |
+| --- | --- |
+| `app_user_directory()` | `20260903131000_revert_team_poke.sql` |
+| `token_usage_board(text)` | `20260912001500_shared_codex_bucket_reconcile.sql` |
+| `minigame_board(text, date)` | `20260908090000_minigame_scores.sql` — ★ `p_day date default null`, **default 를 빠뜨리지 말 것** |
+| `minigame_yesterday_winner(text)` | `20260908180000_minigame_prize_quorum.sql` (090000 이 아닙니다 — 정족수판이 나중입니다) |
+| `team_weekly_leaderboard()` | `20260826010000_work_session_integrity.sql` |
+| `handle_check_auth_user()` | `20260804010000_display_name_unique.sql` |
+
+> `token_usage_board` 는 **절대 손으로 다시 쓰지 마세요.** 본문에 계정 우선·fork_safe 게이트·prefer_device·
+> 옛 표 병합이 들어 있어, 다시 쓰면 지난 두 주의 사고 수정이 통째로 사라집니다.
+>
+> 되돌릴 때도 위 **"함수를 drop+create 할 때"** 규약이 그대로 적용됩니다 — `minigame_board` 의
+> `p_day` default 와, 두 미니게임 함수의 `comment on function` 을 같이 옮겨 붙이세요.
+
+1·2 가 끝났는지 확인(**0 이어야** 정상):
+
+```sql
+select count(*) from pg_proc
+ where pronamespace = 'public'::regnamespace
+   and proname in ('app_user_directory','token_usage_board','minigame_board',
+                   'minigame_yesterday_winner','team_weekly_leaderboard','handle_check_auth_user')
+   and prosrc like '%center%';
+```
+
+3 단계는 위 count 가 0 인 것을 **눈으로 확인한 뒤에만** 합니다.
+
+```sql
+-- ★ 되돌릴 수 없습니다. 40명의 센터 값이 사라집니다.
+alter table public.profiles drop constraint if exists profiles_center_valid;
+alter table public.profiles drop column if exists center;
+```
+
+`revoke select (center) ...` 는 따로 하지 않아도 됩니다 — 컬럼이 사라지면 컬럼 단위 권한도 같이 사라집니다.
+(`update (center)` 는 사장님 지시로 이미 회수돼 있습니다 — `20260912161754_center_revoke_user_update.sql`.
+컬럼을 남기는 정지 지점을 고르더라도 **이 회수를 되돌리지 마세요.** 센터는 가입 때 한 번 고르는 값이고,
+잘못 고른 사람은 운영자가 SQL 로 고칩니다.)
+
+마지막으로 PostgREST 에 스키마를 다시 읽힙니다.
+
+```sql
+notify pgrst, 'reload schema';
+```
 
 ### 무료 플랜 일시정지 → Restore
 

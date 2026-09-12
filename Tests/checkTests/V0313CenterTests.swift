@@ -258,9 +258,9 @@ func 가입은_소속_센터를_고르기_전까지_막힌다() {
 
 @MainActor
 @Test
-func Enter_제출_경로도_센터_없이는_가입을_시작하지_않는다() {
+func Enter_제출_경로도_센터_없이는_가입을_시작하지_않는다() throws {
     // 버튼은 비활성이어도 **Enter 제출 경로가 따로 있다.** 그 길로 새면 서버가 center 없이 계정을 만들어
-    // 영영 미지정인 사람이 생긴다(설정에서 고칠 수는 있지만, 본인은 자기가 미지정인 줄 모른다).
+    // 영영 미지정인 사람이 생긴다 — 그리고 설정 창에는 고칠 길이 없다(변경 UI 는 걷어냈다).
     let store = v0313Store()
     store.displayName = "조현준"
     store.email = "member@example.com"
@@ -275,6 +275,32 @@ func Enter_제출_경로도_센터_없이는_가입을_시작하지_않는다() 
     let task = store.signUp()
     #expect(task != nil, "센터를 고른 뒤엔 가입이 시작돼야 한다")
     task?.cancel()
+
+    // ★ 위 문장이 **화면에 도달해야** 의미가 있다. 예전 뷰는 `submitPrimary()` 첫 줄에서
+    //   `guard canSubmitPrimary else { return }` 로 먼저 끊었다 — 그래서 센터를 안 고른 사람이
+    //   비밀번호 칸에서 Enter 를 치면 버튼은 회색, 상태줄은 빈 채로 **아무 일도 안 일어났다**.
+    //   막는 일은 스토어 가드가 그대로 하고(위 두 줄이 그 증거다), 뷰는 이유를 말할 기회를 준다.
+    let menu = v0313Normalized(try v0313Source("CheckMenuView.swift"))
+    #expect(menu.contains("private func submitPrimary() { guard store.canSync else { return }"),
+            "Enter 경로가 스토어 가드에 닿기 전에 끊기면 이유를 말할 자리가 없다")
+    #expect(!menu.contains("submitPrimary() { guard canSubmitPrimary"))
+    // 버튼 비활성 판정은 그대로 남아 있어야 한다(막는 것과 말해 주는 것은 다른 일이다).
+    #expect(menu.contains(".disabled(!canSubmitPrimary)"))
+}
+
+@MainActor
+@Test
+func 가입폼의_센터_칸은_비밀번호_다음_팀블록_바로_위다() throws {
+    // 순서는 별명 → 이메일 → 비밀번호 → **센터** → 팀코드(docs/team-install.md 의 가입 안내와 같다).
+    // 센터를 별명 바로 뒤에 두면 Enter 키보드 체인(별명→이메일→비밀번호) **한가운데**에 키보드로 못 닿는
+    // 칸이 끼어든다 — 타이핑을 다 마친 사람이 위로 되돌아가야 자기가 안 고른 걸 발견한다.
+    let menu = v0313Normalized(try v0313Source("CheckMenuView.swift"))
+    // 각 앵커의 **첫 등장**이 모두 가입 폼(credentialFields) 안이다.
+    let password = try #require(menu.range(of: "fieldIdentifier: .password"))
+    let center = try #require(menu.range(of: "centerChoice"))
+    let teamCode = try #require(menu.range(of: "TeamCodeField("))
+    #expect(password.lowerBound < center.lowerBound, "센터 칸이 비밀번호보다 위에 있다")
+    #expect(center.lowerBound < teamCode.lowerBound, "센터 칸이 팀 코드보다 아래로 내려갔다")
 }
 
 @MainActor
@@ -323,12 +349,10 @@ func 로딩_플래그가_없으면_미지정으로_읽지_않는다() {
     // 모르는 서버값은 '미지정'으로 접는다 — 억지로 서울을 칠하지 않는다.
     #expect(CenterSettingsRowState.of(loaded: true, center: "daejeon") == .unset)
 
-    // 로딩 중에는 어느 칸도 채우지 않고 누를 수도 없다(그 찰나의 누름은 유령 PATCH 가 된다).
-    #expect(CenterSettingsRowState.loading.selection(center: "seoul") == nil)
-    #expect(!CenterSettingsRowState.loading.isEnabled)
-    #expect(CenterSettingsRowState.unset.selection(center: nil) == nil)
-    #expect(CenterSettingsRowState.unset.isEnabled)
-    #expect(CenterSettingsRowState.chosen("서울").selection(center: "seoul") == "seoul")
+    // 우측 값 한 마디도 세 상태가 서로 달라야 한다. 로딩 중에 '미지정'을 적으면 그게 곧 깜빡임이다.
+    #expect(CenterSettingsRowState.loading.value != CenterSettingsRowState.unset.value)
+    #expect(CenterSettingsRowState.unset.value == "미지정")
+    #expect(CenterSettingsRowState.chosen("서울").value == "서울")
 
     // 세 상태의 문장이 서로 달라야 이 행이 무언가를 말한다.
     let captions = Set([
@@ -356,16 +380,34 @@ func 설정_행은_로딩_플래그를_실제로_읽는다() throws {
 
 @MainActor
 @Test
-func 모르는_값은_서버로_나가지_않고_미러도_안_바뀐다() {
-    // check 제약(23514)에 걸릴 값을 보내면 화면만 바뀌고 서버는 안 바뀐다 — 그런 요청은 나갈 이유가 없다.
+func 설정에서_센터를_바꾸는_길이_클라에_하나도_없다() throws {
+    // ★ 사장님 지시(2026-09-12): "설정에서 센터를 바꿀 수 있게 하지마." 강제 수단은 서버 권한이다 —
+    //   `revoke update (center) on public.profiles from authenticated` 가 적용돼 있다.
+    //   그래서 클라에 변경 UI 를 남겨 두는 것이 '있어도 그만'이 아니라 **최악**이다: 낙관 반영이 화면만
+    //   바꾸고, 거절이 조용히 원복하고, 사용자는 자기가 바꿨다고 믿은 채 아무 안내도 못 받는다.
+    //   1차 구현이 정확히 그 상태였다(피커 + setMyCenter + PATCH). 다시 들어오면 여기서 빨개진다.
+    let settingsView = v0313StrippingComments(try v0313Source("CheckSettingsView.swift"))
+    #expect(!settingsView.contains("CenterChoiceCells"), "설정 창에 센터 선택 칸이 다시 붙었다")
+    #expect(!settingsView.contains("setMyCenter"))
+
+    // 스토어·서비스·모델 어디에도 쓰는 길이 없어야 한다. 한 벌만 남겨 둬도 다음 사람이 UI 를 붙인다.
+    for file in try v0313SourceFiles() {
+        let code = v0313StrippingComments(try String(contentsOf: file, encoding: .utf8))
+        let name = file.lastPathComponent
+        #expect(!code.contains("func setMyCenter"), "\(name) 에 센터 세터가 되살아났다")
+        #expect(!code.contains("func updateMyCenter"), "\(name) 에 센터 PATCH 가 되살아났다")
+        #expect(!code.contains("ProfileCenterUpdateRequest"), "\(name) 에 센터 갱신 요청 모델이 되살아났다")
+    }
+
+    // 읽는 길은 그대로 남아 있어야 한다(설정 창은 '보여만 준다' — 아예 사라지면 그것도 회귀다).
+    let service = v0313StrippingComments(try v0313Source("SupabaseWorkService.swift"))
+    #expect(service.contains("func fetchMyCenter"))
+    #expect(v0313StrippingComments(try v0313Source("SupabaseWorkModels.swift")).contains("struct ProfileCenterRow"))
+
+    // 미러는 서버 GET 이 채우고, 사용자가 직접 쓰는 경로는 없다.
     let store = v0313Store()
-    store.myCenter = "seoul"
-    store.myCenterLoaded = true
-    store.setMyCenter("daejeon")
-    #expect(store.myCenter == "seoul", "모르는 값이 미러를 덮었다")
-    store.setMyCenter("busan")
-    #expect(store.myCenter == "busan")
-    #expect(store.myCenterLoaded, "사용자가 직접 고른 값은 로드 완료로 간주한다(폴링이 덮지 않게)")
+    #expect(store.myCenter == nil)
+    #expect(!store.myCenterLoaded)
 }
 
 @MainActor
@@ -547,19 +589,21 @@ func 센터는_순위를_가르지_않는다() {
 
 @MainActor
 @Test
-func 가입_화면과_설정_창의_센터_칸이_실제로_그려진다() throws {
+func 가입_화면의_센터_칸이_실제로_그려진다() throws {
     // 픽셀로 확인하는 것은 둘이다: (1) 칸이 **그려진다**, (2) 고른 칸이 **눈에 띄게 달라진다**.
     // (2)가 없으면 두 칸이 똑같이 보이는 채로 초록이고, 사용자는 자기가 뭘 골랐는지 알 수 없다.
+    //
+    // 쓰는 곳은 이제 **가입 화면 하나뿐**이다 — 설정 창의 센터 변경 UI 는 사장님 지시로 걷어냈고
+    // (2026-09-12), 그 자리는 읽기 전용 한 줄이다(설정에서_센터를_바꾸는_길이_클라에_하나도_없다).
     let store = v0313Store()
     store.displayName = "조현준"
     store.email = "member@example.com"
     store.isCreateTeamMode = true
     store.createTeamName = "새벽 러너스"
 
-    func cells(_ selection: String?, enabled: Bool = true) throws -> NSBitmapImageRep {
+    func cells(_ selection: String?) throws -> NSBitmapImageRep {
         try v0313Bitmap(
-            CenterChoiceCells(selection: selection, isEnabled: enabled, fillsWidth: true) { _ in }
-                .frame(width: 240),
+            CenterChoiceCells(selection: selection) { _ in }.frame(width: 240),
             scale: 2)
     }
     let none = try cells(nil)
@@ -571,14 +615,12 @@ func 가입_화면과_설정_창의_센터_칸이_실제로_그려진다() throw
     // 두 칸이 **서로 다른 쪽**을 채운다(같은 칸을 칠하면 어느 쪽을 골랐는지 알 수 없다).
     #expect(v0313ChangedPixelRatio(seoul, busan) > 0.05)
 
-    // 못 누르는 상태(서버값 대기)는 **눌리는 상태와 달라 보여야** 한다 — 같아 보이면 사용자는 눌러 보고
-    // 아무 일도 안 일어나는 것을 겪는다.
-    #expect(v0313ChangedPixelRatio(none, try cells(nil, enabled: false)) > 0.01)
+    // ★ '흐리게 + 못 누름' 상태의 그림은 **더 이상 재지 않는다.** 그 상태는 설정 창이 서버값을 기다리는
+    //   동안을 위한 것이었고, 그 화면과 함께 컴포넌트에서도 걷어냈다. 가입 폼에는 기다릴 서버값이 없다.
 
     // ★ 설정 창을 여기서 그리지 **않는다.** 이 저장소에는 "설정 창 렌더가 둘 이상 동시에 돌면 옆에서 도는
     //   팝오버 렌더 비교가 흔들린다"는 실측 기록이 있다(RealtimeLinkTests 의 높이 계약 주석).
     //   그래서 이 파일의 설정 창 렌더는 **높이 계약 테스트 하나뿐**이고, 그 그림을 사람이 볼 자리로도 쓴다.
-    //   여기서 보는 것은 칸 자체이고, 그 칸이 설정 창에 붙어 있다는 사실은 소스 계약이 따로 지킨다.
     v0313Save(seoul, name: "v0313-cells-seoul.png")
     v0313Save(try v0313Bitmap(
         CheckMenuView(store: store, initialAuthMode: .signUp), scale: 2), name: "v0313-signup.png")

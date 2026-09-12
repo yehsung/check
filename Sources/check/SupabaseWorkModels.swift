@@ -2125,11 +2125,9 @@ struct ProfileMiniGamePublicUpdateRequest: Encodable {
     let minigamePublic: Bool
 }
 
-/// profiles.center 자기 행 갱신 요청(PATCH, v0.3.13). 컬럼당 별도 구조체 규약 그대로다.
-/// 값은 CenterLabel 의 서버값(`"seoul"`/`"busan"`)만 — 다른 문자열은 check 제약에 걸려 23514 로 거절된다.
-struct ProfileCenterUpdateRequest: Encodable {
-    let center: String
-}
+// ★ profiles.center 의 **갱신 요청 모델은 일부러 없다**(사장님 지시 2026-09-12). 서버가 그 컬럼에
+//   `grant update` 를 주지 않으므로 본인이 바꾸는 길 자체가 없다 — 요청 모델만 남겨 두면 다음 사람이
+//   "이미 있으니 쓰면 되겠네" 하고 조용히 실패하는 PATCH 를 붙인다. 읽기 행(아래)만 남긴다.
 
 /// center 전용 1컬럼 응답(v0.3.13). 컬럼이 없는 서버에서는 이 GET 자체가 400 이 되고 호출부가 삼키므로,
 /// 옵셔널 폴백이 아니라 **요청 단위 격리**로 하위호환을 얻는다(DisplayNameChangedAtRow 와 같은 규약).

@@ -1291,19 +1291,9 @@ actor SupabaseWorkService {
         return try decoder.decode([ProfileCenterRow].self, from: data).first?.center
     }
 
-    /// 내 소속 센터 변경. profiles 자기 행 PATCH(컬럼 단위 UPDATE 권한 필요 — 토큰 공개·집중 모드와 같은 함정).
-    /// **한 컬럼만 싣는다**: 다른 컬럼과 묶으면 둘 중 하나만 권한이 있는 서버에서 요청 전체가 403 이 된다.
-    /// 보내는 값은 반드시 CenterLabel 의 서버값이다 — 다른 문자열은 check 제약(23514)에 걸려 통째로 거절된다.
-    func updateMyCenter(accessToken: String, userID: String, center: String) async throws {
-        try await sendNoBody(
-            path: "/rest/v1/profiles",
-            method: "PATCH",
-            queryItems: [URLQueryItem(name: "id", value: "eq.\(userID)")],
-            body: ProfileCenterUpdateRequest(center: center),
-            accessToken: accessToken,
-            prefer: "return=minimal"
-        )
-    }
+    // ★ center 를 **쓰는** 길(PATCH)은 일부러 없다(사장님 지시 2026-09-12). 서버가 `profiles.center` 에
+    //   `grant update` 를 주지 않으므로 이 토큰으로 보내는 PATCH 는 어차피 거절된다 — 함수만 남겨 두면
+    //   호출부가 '조용히 실패하는 변경'을 만든다. 센터 정정은 운영자 SQL 이 유일한 경로다.
 
     // MARK: - 콕찌르기 / 토큰 사용량 공개 설정
 

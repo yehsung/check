@@ -32,6 +32,10 @@ import Testing
         "입력칸이 재사용되지 않았다 — 새로 만들면 한글 조합이 죽는다(v0.3.13 회귀)"
     )
     #expect(reused === scroll)
+
+    // ★ 꺼내 갔으면 대기열은 비어야 한다 — 두 곳이 같은 칸을 동시에 쥐면 서로의 글자를 본다.
+    #expect(CheckTextEditor.reusableScrollForTesting() == nil,
+            "같은 칸이 두 번 나갔다 — 병렬 마운트에서 글자가 섞인다")
 }
 
 @MainActor
@@ -59,8 +63,10 @@ import Testing
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Sources/check/CheckTextEditor.swift")
     let source = try String(contentsOf: url, encoding: .utf8)
-    #expect(source.contains("reusableScrollIfAvailable()"),
+    #expect(source.contains("takePooledScroll()"),
             "makeNSView 의 재사용 분기가 사라졌다 — 한글 자모 분리가 되살아난다")
-    #expect(source.contains("CheckTextEditor.reusableScroll = scroll"),
-            "새로 만든 칸을 재사용 자리에 넣지 않으면 다음 마운트가 또 새로 만든다")
+    #expect(source.contains("static func dismantleNSView"),
+            "반납 문이 없으면 대기열이 영영 비어 매번 새 칸이 만들어진다")
+    #expect(source.contains("CheckTextEditor.pooledScroll = nil"),
+            "꺼내 갈 때 대기열을 안 비우면 두 곳이 같은 칸을 쥔다(병렬 렌더 테스트가 서로의 글자를 본다)")
 }

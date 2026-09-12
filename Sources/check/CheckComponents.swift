@@ -984,26 +984,28 @@ struct AuthButton: View {
     }
 }
 
-/// 소속 센터 선택 2칸(v0.3.13). **가입 화면과 설정 창이 같은 칸을 쓴다** — 두 벌로 만들면 한쪽에만
-/// 세 번째 센터가 붙거나 한쪽만 라벨이 어긋나는 날이 온다. 라벨의 출처도 CenterLabel 하나다.
+/// 소속 센터 선택 2칸(v0.3.13). **쓰는 곳은 가입 화면 하나뿐이다.**
+///
+/// ★ 한때 설정 창도 이 칸을 썼다. 걷어냈다 — 사장님 지시(2026-09-12)로 센터는 가입 때 한 번 고르고
+///   그 뒤로는 본인이 못 바꾸며, 서버도 `profiles.center` 에 `grant update` 를 주지 않는다.
+///   설정 창에 이 칸을 다시 붙이면 누를 때마다 화면만 바뀌었다가 조용히 원복된다. 붙이지 마라.
+///   여기서 고른 값은 `store.signupCenter` → 가입 요청의 `raw_user_meta_data.center` 로 한 번만 간다.
 ///
 /// ## 왜 '미선택'이 그려질 수 있어야 하는가
-/// `selection` 이 nil 이면 **어느 칸도 채워지지 않는다.** 가입 화면의 기본값이 그것이고(안 고르면 가입
-/// 버튼이 막힌다), 설정 창에서는 서버값이 아직 안 왔을 때가 그것이다. 둘 중 하나라도 '서울'을 미리
-/// 칠해 두면 부산 연수생이 아무것도 안 하고 서울로 잡힌다 — 이 컨트롤이 존재하는 이유의 반대다.
+/// `selection` 이 nil 이면 **어느 칸도 채워지지 않는다.** 그게 가입 화면의 기본값이다(안 고르면 가입
+/// 버튼이 막히고 Enter 도 이유를 말하며 막는다). '서울'을 미리 칠해 두면 부산 연수생이 아무것도 안 하고
+/// 서울로 잡힌다 — 이 컨트롤이 존재하는 이유의 정반대다.
 ///
 /// ## 순위와 무관하다
 /// 고른 값은 **표시**에만 쓰인다. 순위판·리그·콕찌르기·미니게임은 센터와 무관하게 전원 통합이다.
 struct CenterChoiceCells: View {
     /// 지금 골라진 **서버값**(`"seoul"`/`"busan"`). nil 이면 미선택 — 어느 칸도 채우지 않는다.
     var selection: String?
-    /// false 면 누를 수 없고 흐리게 그린다(설정 창에서 서버값을 아직 못 받은 동안).
-    var isEnabled: Bool = true
-    /// true 면 두 칸이 가로를 꽉 채운다(가입 폼). false 면 글자 폭 + 여백만 차지한다(설정 창 우측 컨트롤).
-    var fillsWidth: Bool = true
-    var height: CGFloat = 34
     /// 누른 칸의 **서버값**을 돌려준다. 화면 글자를 되돌리지 않는 이유: 받는 쪽(스토어·서버)이 쓰는 어휘가 서버값이다.
     let onChoose: (String) -> Void
+
+    /// 가입 폼의 다른 칸(CredentialField)과 같은 키. 두 칸은 가로를 반씩 꽉 채운다.
+    private static let cellHeight: CGFloat = 34
 
     var body: some View {
         HStack(spacing: 8) {
@@ -1024,9 +1026,8 @@ struct CenterChoiceCells: View {
                 // 고른 칸만 흰 글자 — 배경이 그라디언트라 대비가 유지된다.
                 .foregroundStyle(isSelected ? .white : CheckTheme.primaryText)
                 .lineLimit(1)
-                .frame(maxWidth: fillsWidth ? .infinity : nil)
-                .padding(.horizontal, fillsWidth ? 0 : 14)
-                .frame(height: height)
+                .frame(maxWidth: .infinity)
+                .frame(height: Self.cellHeight)
                 .background {
                     if isSelected {
                         // 저장 버튼·스위치와 **같은** 그라디언트 = 이 앱에서 색이 곧 '정해졌다'의 신호다.
@@ -1044,8 +1045,9 @@ struct CenterChoiceCells: View {
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.5)
+        // ★ 여기 있던 '흐리게 + 못 누름'(`.disabled` / `.opacity`)은 **일부러 없앴다.** 그건 설정 창이
+        //   서버값을 기다리는 동안을 위한 것이었는데, 설정 창의 센터 변경 UI 는 사장님 지시로 걷어냈다
+        //   (2026-09-12). 가입 폼에는 기다릴 서버값이 없다 — 여기서는 두 칸이 항상 눌린다.
         .accessibilityLabel(CenterLabel.display(value) ?? value)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }

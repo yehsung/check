@@ -328,18 +328,24 @@ private struct DisplayNameSettingsRow: View {
     }
 }
 
-// MARK: - 소속 센터 행 (v0.3.13)
+// MARK: - 소속 센터 행 (v0.3.13) — 읽기 전용
 
 /// 설정 창 '내 정보' 의 소속 센터 행이 그릴 세 가지 상태. **순수 값이라 테스트가 직접 되묻는다.**
 ///
 /// ★ 이 타입의 존재 이유는 `loading` 과 `unset` 을 **가르는 것 하나다.** 둘 다 `myCenter == nil` 이지만
 ///   뜻이 정반대다: 전자는 "서버가 아직 말 안 했다", 후자는 "서버가 없다고 말했다". 플래그 없이 nil 을
 ///   '미지정'으로 읽으면 로그인 직후 창이 미지정으로 한 번 그려졌다가 GET 이 도착하며 값으로 바뀐다 —
-///   사용자 눈에는 깜빡임이고, 그 찰나에 칸을 누르면 있지도 않던 변경이 PATCH 로 나간다.
+///   사용자 눈에는 깜빡임이다.
+///
+/// ★ **여기엔 바꾸는 길이 없다**(사장님 지시 2026-09-12). 센터는 가입 때 한 번 고르고 그 뒤로는 본인이
+///   못 바꾼다. 강제 수단은 서버 쪽이다 — `profiles.center` 에 `grant update` 를 주지 않았으므로 이 계정의
+///   PATCH 는 거절된다. 그래서 피커를 여기 남겨 두는 것이 '있어도 그만'이 아니라 **최악**이다: 낙관 반영이
+///   화면만 바꿨다가 실패 원복이 조용히 되돌리고, 사용자는 자기가 바꿨다고 믿은 채 아무 안내도 못 받는다.
+///   잘못 고른 사람은 운영자가 SQL 로 고친다. 되살리려면 SPEC 의 'DB' 절부터 다시 읽어라 — 서버 권한이 먼저다.
 enum CenterSettingsRowState: Equatable {
-    /// 서버값을 아직 못 받았다. 어느 칸도 채우지 않고 누를 수도 없다.
+    /// 서버값을 아직 못 받았다.
     case loading
-    /// 서버가 '미지정'이라고 말해 줬다(가입 때 안 고른 계정). 고르면 그 자리에서 PATCH 가 나간다.
+    /// 서버가 '미지정'이라고 말해 줬다(가입 때 안 고른 계정).
     case unset
     /// 화면 글자("서울"/"부산"). 모르는 서버값은 여기 도달하지 못한다 — CenterLabel 이 걸러 unset 으로 접는다.
     case chosen(String)
@@ -350,28 +356,28 @@ enum CenterSettingsRowState: Equatable {
         return .chosen(display)
     }
 
-    /// 칸 아래 한 줄. 상태마다 **다른 문장**이어야 한다 — 셋이 같은 글자면 이 행은 아무것도 말하지 않는다.
-    var caption: String {
+    /// 행 우측에 그릴 **값 한 마디**. 이 행이 전하는 사실의 본체다.
+    var value: String {
         switch self {
-        case .loading:          return "불러오는 중…"
-        case .unset:            return "아직 안 골랐어요. 고르면 이름 옆에 배지로 보여요."
-        case .chosen(let name): return "지금 \(name)센터로 보여요."
+        case .loading:          return "…"
+        case .unset:            return "미지정"
+        case .chosen(let name): return name
         }
     }
 
-    /// 칸에 채워 그릴 **서버값**(없으면 어느 칸도 안 채운다).
-    func selection(center: String?) -> String? {
-        if case .chosen = self { return center }
-        return nil
+    /// 값 아래 한 줄. 상태마다 **다른 문장**이어야 한다 — 셋이 같은 글자면 이 행은 아무것도 말하지 않는다.
+    /// 배지 자리를 '이름 옆'이라고 적지 마라: 확정된 자리는 **아바타 모서리**다(SPEC 확정 1 · CheckAvatarView).
+    var caption: String {
+        switch self {
+        case .loading: return "불러오는 중…"
+        case .unset:   return "가입할 때 안 골랐어요. 운영자에게 말해 주세요."
+        case .chosen:  return "아바타 모서리에 배지로 보여요. 바꾸려면 운영자에게."
+        }
     }
-
-    var isEnabled: Bool { self != .loading }
 }
 
-/// 소속 센터 행. 토글이 아니라 2칸 선택이다(값이 둘뿐이고 켜짐/꺼짐이 아니다).
-///
-/// 여기서 바꿀 수 있어야 하는 이유: 가입 때 잘못 고른 사람의 **유일한 복구 경로**다. 팀 탈퇴 기능이
-/// 없어 계정을 다시 만들 수도 없고, 그러면 운영자 SQL 말고는 고칠 길이 없다.
+/// 소속 센터 행. **읽기 전용이다** — 피커도 버튼도 PATCH 도 없다(위 열거형 주석에 근거).
+/// 토글 행과 같은 좌우 구조(제목·설명 열 + 우측 값)라 '내 정보' 카드 안에서 층이 맞는다.
 private struct CenterSettingsRow: View {
     let store: WorkTimerStore
 
@@ -380,8 +386,7 @@ private struct CenterSettingsRow: View {
     }
 
     var body: some View {
-        // 제목/설명 열 + 우측 2칸. 토글 행과 같은 좌우 구조라 '내 정보' 카드 안에서 층이 맞는다.
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("소속 센터")
                     .font(.subheadline.weight(.semibold))
@@ -389,18 +394,20 @@ private struct CenterSettingsRow: View {
                 Text(state.caption)
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
+                    // 창을 좁혀도 말줄임 대신 줄바꿈한다(토글 행과 같은 규약).
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            CenterChoiceCells(
-                selection: state.selection(center: store.myCenter),
-                isEnabled: state.isEnabled,
-                fillsWidth: false,
-                height: 26
-            ) { store.setMyCenter($0) }
+            // 값은 절대 줄이지 않는다 — 좁힐 때 접혀야 하는 것은 설명이고 이 두 글자가 아니다.
+            Text(state.value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(CheckTheme.primaryText)
+                .lineLimit(1)
+                .fixedSize()
+                .accessibilityLabel("소속 센터 \(state.value)")
         }
-        // 창을 열 때 아직 모르면 여기서 묻는다. 로그인 직후 설정 로드가 blip 으로 실패했을 때
-        // **그 세션에서 자기 센터를 고칠 수 있는 유일한 길**이다(스토어 쪽 주석에 근거).
+        // 창을 열 때 아직 모르면 여기서 묻는다. 로그인 직후 설정 로드가 blip 으로 실패하면 그 함수는
+        // 래치에 걸려 다시 안 돌아 이 행이 그 세션 내내 '불러오는 중'에 멈춘다 — 여기가 그 복구 경로다.
         // 이미 알고 있으면 스토어가 즉시 반환하므로 여닫아도 왕복은 늘지 않는다.
         .task { await store.loadMyCenterIfNeeded() }
     }
@@ -484,8 +491,15 @@ struct CheckSettingsView: View {
         // 두면 배경이 그만큼만 칠해지고 창 아래에 시스템 흰 띠가 남는다. 진단 두 줄이 제보로 옮겨 간
         // 뒤(2026-09-10) 그 여백은 더 커졌다 — 그래서 이 한 줄은 더 중요해졌다.
         // 위 정렬(topLeading)은 이 앱의 상단 앵커 규약이기도 하다 — 늘어난 만큼 아래로만 빈다.
+        // ★ 폭 하한이 곧 **높이 계약**이다(v0.3.13 에 배운 것). 예전 하한은 320 이었는데, 그 폭에서는
+        //   설명 줄 여러 개가 두 줄로 접혀 콘텐츠가 폭에 따라 들쭉날쭉했다 —
+        //   실측(2026-09-12, 세 상태 × 별명 안내 세 종류 전부 같은 값):
+        //     320 → 517pt · 360 → 504 · 370 → 491 · 375 → 478 · **380 이상 → 465(고정)**.
+        //   창 높이 계약은 470 하나인데 콘텐츠가 517 까지 자라면 맨 아래 '소속 센터' 행이 통째로 잘린다.
+        //   그래서 하한을 preferredWidth 로 올렸다: 이 폭 위에서는 **어떤 폭에서도 465pt** 라, 높이가
+        //   사용자의 드래그에 따라 달라지지 않는다. 하한을 다시 낮추려면 470 부터 다시 재라.
         .frame(
-            minWidth: 320, idealWidth: Self.preferredWidth, maxWidth: 520,
+            minWidth: Self.preferredWidth, idealWidth: Self.preferredWidth, maxWidth: 520,
             maxHeight: .infinity, alignment: .topLeading
         )
         .background(CheckTheme.background)

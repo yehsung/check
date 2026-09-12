@@ -792,8 +792,9 @@ extension WorkTimerStore {
     /// **부르는 곳이 둘인 이유**: 로그인 후 설정 로드에서 한 번 부르고(그래야 설정 창을 열었을 때 이미 값이 있다),
     /// 설정 창의 센터 행이 뜰 때 또 부른다. 첫 번째가 네트워크 blip 으로 실패하면 그 함수는 다시 안 돈다
     /// (tokenUsageCollectLoaded 가 서 있으면 통째로 건너뛴다) — 그러면 그 세션 내내 설정 창이 '불러오는 중'에
-    /// 멈춰 **자기 센터를 못 고친다.** 두 번째 호출이 그 유일한 복구 경로다. 이미 받았거나 사용자가 직접
-    /// 골랐으면(myCenterLoaded) 즉시 반환하므로 창을 여닫아도 왕복은 늘지 않는다.
+    /// 멈춰 **자기 센터를 끝내 못 본다**(그 자리엔 고칠 길이 없으니 남는 건 못 보는 것뿐이다).
+    /// 두 번째 호출이 그 유일한 복구 경로다. 이미 받았으면(myCenterLoaded) 즉시 반환하므로 창을 여닫아도
+    /// 왕복은 늘지 않는다.
     ///
     /// ★ 실패와 '미지정'을 **가르는 것이 이 함수의 전부다.** 실패면 플래그를 안 세워 다음 기회에 다시 묻고,
     ///   성공이면 값이 nil 이어도(= 아직 안 고른 사람) 플래그를 세워 '미지정'을 정직하게 그린다.
@@ -807,8 +808,8 @@ extension WorkTimerStore {
                     accessToken: activeSession.accessToken, userID: activeSession.userID)
             }
             guard generation == sessionGeneration else { return }
-            // 응답을 기다리는 사이 사용자가 직접 골랐으면 그 선택이 이긴다(PATCH 가 아직 안 닿은 낡은 값일 수 있다 —
-            // 토큰 공개 토글과 같은 규약). 그때 myCenterLoaded 는 이미 서 있다.
+            // 기다리는 사이 다른 호출(설정 로드 ↔ 설정 창 행)이 먼저 값을 채웠으면 그걸로 끝난다 —
+            // 두 응답이 같은 값이라도 두 번 대입하면 관찰 갱신이 한 번 더 돌아 화면이 괜히 다시 그려진다.
             guard !myCenterLoaded else { return }
             if myCenter != serverCenter { myCenter = serverCenter }
             myCenterLoaded = true
@@ -817,45 +818,12 @@ extension WorkTimerStore {
         }
     }
 
-    /// 내 소속 센터 변경(낙관 반영 → PATCH, 실패 시 원복). setTokenUsagePublic 과 같은 규약이다.
-    ///
-    /// 자가 수정을 허용하는 근거: 센터는 순위를 가르지 않으므로 위조 이득이 0이고, 반대로 못 바꾸게 하면
-    /// 가입 때 잘못 고른 사람이 영원히 틀린 라벨을 달고 있게 된다(팀 탈퇴 기능이 없어 복구 경로가 운영자 SQL 뿐이다).
-    ///
-    /// 모르는 값은 **보내지 않는다.** 서버 check 제약이 23514 로 거절하면 화면만 바뀌고 서버는 안 바뀐 채
-    /// 원복도 못 본 사람이 생긴다 — 그런 요청은 애초에 나갈 이유가 없다.
-    func setMyCenter(_ serverValue: String) {
-        guard CenterLabel.isKnown(serverValue), myCenter != serverValue else { return }
-        let previous = myCenter
-        let previousLoaded = myCenterLoaded
-        myCenter = serverValue
-        // 사용자가 명시적으로 정한 값이므로 로드 완료로 간주한다(폴링 GET 이 이 선택을 덮지 않게).
-        myCenterLoaded = true
-        guard session != nil else { return }
-        let generation = sessionGeneration
-        Task { @MainActor in
-            do {
-                try await withSessionRetry { activeSession in
-                    try await service.updateMyCenter(
-                        accessToken: activeSession.accessToken,
-                        userID: activeSession.userID,
-                        center: serverValue
-                    )
-                }
-            } catch {
-                if case .cancelled = classifyAuthError(error) { return }
-                guard generation == sessionGeneration else { return }
-                // 실패하면 화면이 거짓말하지 않게 되돌린다(서버는 안 바뀌었으므로 미러도 안 바뀐 것이 진실이다).
-                // 플래그까지 되돌리는 것은 벨트+멜빵이다: 화면에서는 '아직 모름'일 때 칸이 **비활성**이라
-                // 여기 previousLoaded 가 false 인 채로 들어올 길이 없지만, 다른 호출부가 생기는 날
-                // 로드 완료가 거짓으로 남아 그 세션 내내 서버에 다시 안 묻는 상태가 되지 않게 한다.
-                if myCenter == serverValue {
-                    myCenter = previous
-                    myCenterLoaded = previousLoaded
-                }
-            }
-        }
-    }
+    // ★ `setMyCenter(_:)` 는 **일부러 없다**(사장님 지시 2026-09-12, v0.3.13 2차). 센터는 가입 때
+    //   한 번 고르고 그 뒤로는 본인이 못 바꾼다 — 강제 수단은 서버 권한이다(`profiles.center` 에
+    //   `grant update` 를 주지 않았다). 낙관 반영 + PATCH 세터를 여기 다시 두면 화면이 먼저 바뀌었다가
+    //   거절이 조용히 원복해서, 사용자는 자기가 바꿨다고 믿은 채 아무 안내도 못 받는다(가장 나쁜 실패).
+    //   잘못 고른 사람은 운영자가 SQL 로 고친다. 다시 만들려면 서버 grant 부터 되돌리고 실패 안내를 먼저 설계하라.
+    //   미러(`myCenter`)를 쓰는 쪽은 읽기 GET 하나뿐이다 — 위 `loadMyCenterIfNeeded()`.
 
     /// 내 토큰 사용량 공개 여부 토글(낙관 반영 → PATCH, 실패 시 원복).
     func setTokenUsagePublic(_ isPublic: Bool) {

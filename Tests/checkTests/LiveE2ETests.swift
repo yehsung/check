@@ -77,6 +77,24 @@ private enum E2ENames {
     static let tooLong = "일이삼사오육칠팔구십일이삼"
 }
 
+/// E2E 계정이 **가입 화면에서 고르는** 소속 센터(v0.3.13).
+///
+/// 값을 여기 직접 적지 않고 `CenterLabel` 에서 가져오는 이유: 서버 제약(`profiles_center_valid`)의
+/// 어휘가 바뀌는 날 이 스위트만 조용히 뒤처지면, 라이브 E2E 가 **가입 자체를 못 하면서도** 그 사실을
+/// 클라 상수 오타로 위장한다.
+private enum E2ECenter {
+    /// owner 계정. 지금 실사용자 40명이 전원 서울센터라 기본값도 같은 값을 쓴다.
+    static let owner = CenterLabel.seoul
+    /// 합류자 계정 — **일부러 owner 와 다른 값**이다.
+    ///
+    /// 둘을 같게 두면 `team_weekly_leaderboard` 의 '만장일치일 때만 팀 센터' 규칙이 참인지 거짓인지
+    /// 이 스위트로는 **영원히 알 수 없다**(기준선이 같은 입력이면 그 비교는 영원히 초록이다).
+    /// s01 은 owner 혼자인 팀 = 만장일치 → "서울", s02 는 서울+부산 섞인 팀 → nil 을 각각 실증한다.
+    static let joiner = CenterLabel.busan
+    /// 그 밖의 조연 계정(nickname/dupName). owner 와 같은 값이면 충분하다.
+    static let other = CenterLabel.seoul
+}
+
 private enum E2ETeam {
     // 실팀과 절대 겹치지 않는 접두사. 생성/정리는 이 접두사로만 스코프한다.
     static let namePrefix = "E2E-리그-테스트"
@@ -665,6 +683,17 @@ private struct E2EAdmin: Sendable {
         ]).first?["avatar_url"] as? String
     }
 
+    /// 소속 센터 **서버값**(`"seoul"`/`"busan"`, 미지정이면 nil). v0.3.13 가입 트리거
+    /// (`handle_check_auth_user` 가 `raw_user_meta_data ->> 'center'` 를 읽는 길)가 실제로 살아 있는지는
+    /// 이 창구로만 확인된다 — 클라는 자기 행의 center 를 **읽기만** 하고(UPDATE grant 없음), 화면은
+    /// 서버값을 "서울"/"부산" 으로 접어 버려 원본 문자열이 남지 않는다.
+    func profileCenter(userID: String) async throws -> String? {
+        try await rows("profiles", [
+            URLQueryItem(name: "id", value: "eq.\(userID)"),
+            URLQueryItem(name: "select", value: "center")
+        ]).first?["center"] as? String
+    }
+
     /// 토큰 공개 여부(행이 없으면 nil).
     func profileTokenUsagePublic(userID: String) async throws -> Bool? {
         try await rows("profiles", [
@@ -847,21 +876,44 @@ private func anonRest(
     return (code, String(decoding: data, as: UTF8.self))
 }
 
+/// 스토어의 가입 제출을 실제로 **띄운다**. `signUp()` 이 nil 이면 그것은 서버 거절이 아니라
+/// **클라 사전 게이트가 막은 것**이고, 그때 `await store.signUp()?.value` 는 아무 일도 안 한 채
+/// 조용히 다음 줄로 간다.
+///
+/// ★ 이 함수가 존재하는 이유(v0.3.13 실사고): 가입에 소속 센터 게이트가 생기자
+///   (`WorkTimerStore.swift:1722` — `guard let center = signupCenter`) 아래 두 헬퍼와
+///   `ensureOwnerAndTeam` 이 **전부 no-op** 이 됐다. 9개 시나리오 + owner 부트스트랩이 통째로
+///   아무것도 안 하는데 스위트는 초록이었다 — `?.value` 의 물음표가 실패를 삼켰기 때문이다.
+///   앞으로 가입 앞에 게이트가 하나 더 붙으면 **여기서 빨개진다.**
+@MainActor
+private func launchSignUp(_ store: WorkTimerStore, what: String) async throws {
+    guard let task = store.signUp() else {
+        throw E2EError(
+            "가입이 시작조차 못 했다 — 클라 사전 게이트가 막았다(\(what)). syncMessage=\"\(store.syncMessage)\". "
+                + "가입 폼에 새 필수 입력이 생겼다면 이 스위트의 헬퍼도 그 값을 채워야 한다."
+        )
+    }
+    await task.value
+}
+
 /// 만들기 모드로 가입하며 E2E 전용 팀을 새로 만든다(계정 + owner 멤버십 + 참여코드).
+/// `center` 는 가입 화면의 2칸 선택과 같은 자리다 — 안 고르면 가입이 시작조차 안 된다(위 launchSignUp).
 @MainActor
 private func signUpCreatingE2ETeam(
     store: WorkTimerStore,
     email: String,
     displayName: String,
-    teamName: String
-) async {
+    teamName: String,
+    center: String = E2ECenter.owner
+) async throws {
     store.email = email
     store.displayName = displayName
     store.password = Emails.password
     store.isCreateTeamMode = true
     store.createTeamName = teamName
     store.createTeamGoalHours = E2ETeam.goalHours
-    await store.signUp()?.value
+    store.signupCenter = center
+    try await launchSignUp(store, what: "팀 생성 가입 \(email)")
 }
 
 /// 코드 모드로 가입하며 기존 팀에 합류한다(미리보기 확정 후 가입 → 자동 join_team).
@@ -870,15 +922,19 @@ private func signUpJoiningByCode(
     store: WorkTimerStore,
     email: String,
     displayName: String,
-    code: String
-) async {
+    code: String,
+    center: String = E2ECenter.joiner
+) async throws {
     store.email = email
     store.displayName = displayName
     store.password = Emails.password
     store.isCreateTeamMode = false
     store.signupTeamCode = code
+    store.signupCenter = center
     await store.performPreviewTeamCode()
-    await store.signUp()?.value
+    // 미리보기가 확정되지 않으면 signUp() 은 "팀 코드를 확인해 주세요" 로 nil 을 돌려준다 —
+    // 그것도 launchSignUp 이 잡는다(예전엔 이 경우도 조용히 통과했다).
+    try await launchSignUp(store, what: "코드 합류 가입 \(email)")
 }
 
 /// owner 계정과 E2E 팀이 반드시 존재하도록 보장하고 (userID, 팀코드) 를 돌려준다(순서 흔들림 대비 자가치유).
@@ -911,7 +967,7 @@ private func ensureOwnerAndTeam(anonKey: String, admin: E2EAdmin) async throws -
         }
     }
 
-    await signUpCreatingE2ETeam(
+    try await signUpCreatingE2ETeam(
         store: store,
         email: Emails.owner,
         displayName: "E2E오너",
@@ -958,7 +1014,7 @@ struct LiveE2ETests {
             store.refreshTask?.cancel()
         }
 
-        await signUpCreatingE2ETeam(
+        try await signUpCreatingE2ETeam(
             store: store,
             email: Emails.owner,
             displayName: "E2E오너",
@@ -991,6 +1047,23 @@ struct LiveE2ETests {
         #expect((statusRows.first?["status"] as? String) == "off_work")
         #expect(try await ctx.admin.teamExists(inviteCode: code))
         obs("owner 행: memberships=1(owner), work_statuses=1(off_work), 팀코드 존재=true")
+
+        // v0.3.13 — 가입 화면에서 고른 센터가 **가입 트리거를 지나 profiles 에 실제로 앉았는가.**
+        // 앱은 자기 center 를 읽기만 하므로(UPDATE grant 없음) 이 길이 끊기면 되돌릴 방법이 없다:
+        // 그날 가입한 사람은 영영 미지정이고, 본인은 자기가 미지정인 줄도 모른다.
+        // 트리거는 INSERT 가 **두 벌**(본문 + exception 핸들러)이라 한쪽만 고치면 여기서 nil 이 나온다.
+        let storedCenter = try await ctx.admin.profileCenter(userID: userID)
+        #expect(storedCenter == E2ECenter.owner, "가입 메타데이터의 center 가 profiles 에 안 앉았다: \(storedCenter ?? "nil")")
+        obs("owner center: \(storedCenter ?? "nil")(기대 \(E2ECenter.owner))")
+
+        // 만장일치 라벨 — 지금 이 팀은 owner 혼자다(s00 이 E2E 팀을 전부 지웠고 s02 는 아직 안 돌았다).
+        // 아래 s02 가 **다른 센터**의 합류자를 넣어 같은 조회가 nil 로 뒤집히는 것까지 본다.
+        // 두 시나리오의 입력이 달라야 '만장일치 규칙'이 실제로 판정되고 있음을 알 수 있다.
+        let session = try #require(store.session)
+        let boards = try await store.service.fetchTeamLeaderboard(accessToken: session.accessToken)
+        let mine = boards.first { $0.id == store.currentTeamID }
+        #expect(mine?.center == "서울", "혼자인 팀은 만장일치라 서울이어야 한다: \(mine?.center ?? "nil")")
+        obs("리그 팀 센터(owner 1인): \(mine?.center ?? "nil")")
     }
 
     // 2. 두 번째 계정이 s01 코드로 join_team → 같은 팀 member 로 합류.
@@ -1007,7 +1080,7 @@ struct LiveE2ETests {
             store.refreshTask?.cancel()
         }
 
-        await signUpJoiningByCode(
+        try await signUpJoiningByCode(
             store: store,
             email: Emails.joiner,
             displayName: "E2E합류자",
@@ -1033,6 +1106,21 @@ struct LiveE2ETests {
         let memberCount = try await ctx.admin.teamMemberCount(teamID: teamID)
         #expect(memberCount == 2)
         obs("합류 후 팀 인원=\(memberCount)(owner \(owner.userID.prefix(6))… + joiner \(joinerID.prefix(6))…)")
+
+        // v0.3.13 — 합류 경로의 가입도 center 를 싣는다(만들기 경로와 **다른 코드 길**이 아니라
+        // 같은 signUp 을 지나지만, 헬퍼가 둘이라 한쪽만 고치는 사고가 실제로 가능하다).
+        let joinerCenter = try await ctx.admin.profileCenter(userID: joinerID)
+        #expect(joinerCenter == E2ECenter.joiner, "합류 가입의 center 가 안 앉았다: \(joinerCenter ?? "nil")")
+
+        // 만장일치 규칙의 **다른 기준선**: s01 에서 "서울"이던 같은 팀이, 부산 합류자가 들어오자
+        // nil 로 뒤집혀야 한다. 서버가 `count(distinct)` 만 쓰거나 `min()` 을 무조건 라벨로 쓰면
+        // 여기서 "서울" 이 남는다 — 부산 연수생 한 명이 서울 팀으로 표시되는 바로 그 결함이다.
+        let session = try #require(store.session)
+        let boards = try await store.service.fetchTeamLeaderboard(accessToken: session.accessToken)
+        let mine = boards.first { $0.id == teamID }
+        #expect(mine != nil, "리그에 E2E 팀이 없다")
+        #expect(mine?.center == nil, "서울+부산이 섞인 팀에 라벨이 붙었다: \(mine?.center ?? "nil")")
+        obs("리그 팀 센터(서울+부산 2인): \(mine?.center ?? "nil")(기대 nil)")
     }
 
     // 3. 틀린 비번 → 로그인 실패 + "로그인 정보 오류".
@@ -1087,7 +1175,7 @@ struct LiveE2ETests {
         }
 
         // 이미 존재하는 owner 이메일로 팀 만들기 재시도 → 계정 생성 단계에서 막혀야 한다.
-        await signUpCreatingE2ETeam(
+        try await signUpCreatingE2ETeam(
             store: store,
             email: Emails.owner,
             displayName: "중복시도",
@@ -1263,7 +1351,7 @@ struct LiveE2ETests {
             store.refreshTask?.cancel()
         }
 
-        await signUpJoiningByCode(
+        try await signUpJoiningByCode(
             store: store,
             email: Emails.nickname,
             displayName: edge,
@@ -1428,7 +1516,7 @@ struct LiveE2ETests {
             await store.signIn()?.value
         }
         if !store.isSignedIn || store.currentTeamID == nil {
-            await signUpJoiningByCode(
+            try await signUpJoiningByCode(
                 store: store,
                 email: Emails.joiner,
                 displayName: "E2E합류자",
@@ -1494,7 +1582,7 @@ struct LiveE2ETests {
             await storeB.signIn()?.value
         }
         if !storeB.isSignedIn || storeB.currentTeamID != teamID {
-            await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: "E2E합류자", code: owner.code)
+            try await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: "E2E합류자", code: owner.code)
         }
         let sessionB = try #require(storeB.session)
         #expect(storeB.currentTeamID == teamID)
@@ -1508,7 +1596,7 @@ struct LiveE2ETests {
             await storeC.signIn()?.value
         }
         if !storeC.isSignedIn || storeC.currentTeamID == nil {
-            await signUpCreatingE2ETeam(store: storeC, email: Emails.nickname, displayName: "E2E타팀", teamName: E2ETeam.uniqueName())
+            try await signUpCreatingE2ETeam(store: storeC, email: Emails.nickname, displayName: "E2E타팀", teamName: E2ETeam.uniqueName())
         }
         let sessionC = try #require(storeC.session)
 
@@ -1586,7 +1674,7 @@ struct LiveE2ETests {
             await storeB.signIn()?.value
         }
         if !storeB.isSignedIn || storeB.currentTeamID != teamID {
-            await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: "E2E합류자", code: owner.code)
+            try await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: "E2E합류자", code: owner.code)
         }
         let sessionB = try #require(storeB.session)
         #expect(storeB.currentTeamID == teamID)
@@ -1686,7 +1774,7 @@ struct LiveE2ETests {
             await storeB.signIn()?.value
         }
         if !storeB.isSignedIn || storeB.currentTeamID != teamID {
-            await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: "E2E합류자", code: owner.code)
+            try await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: "E2E합류자", code: owner.code)
         }
         let sessionB = try #require(storeB.session)
 
@@ -1957,7 +2045,7 @@ struct LiveE2ETests {
             await storeB.signIn()?.value
         }
         if !storeB.isSignedIn || storeB.currentTeamID != teamID {
-            await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: E2ENames.joinerBase, code: owner.code)
+            try await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: E2ENames.joinerBase, code: owner.code)
         }
         let sessionB = try #require(storeB.session)
         #expect(storeB.currentTeamID == teamID)
@@ -1972,7 +2060,7 @@ struct LiveE2ETests {
             await storeC.signIn()?.value
         }
         if !storeC.isSignedIn || storeC.currentTeamID == nil {
-            await signUpCreatingE2ETeam(store: storeC, email: Emails.nickname, displayName: "E2E타팀", teamName: E2ETeam.uniqueName())
+            try await signUpCreatingE2ETeam(store: storeC, email: Emails.nickname, displayName: "E2E타팀", teamName: E2ETeam.uniqueName())
         }
 
         // 진입 정리 — **이 두 줄이 없으면 스위트가 두 번째 실행부터 영구히 빨개진다.**
@@ -2180,7 +2268,7 @@ struct LiveE2ETests {
             await storeB.signIn()?.value
         }
         if !storeB.isSignedIn || storeB.currentTeamID != teamID {
-            await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: E2ENames.joinerBase, code: owner.code)
+            try await signUpJoiningByCode(store: storeB, email: Emails.joiner, displayName: E2ENames.joinerBase, code: owner.code)
         }
         let sessionB = try #require(storeB.session)
 
@@ -2287,7 +2375,11 @@ struct LiveE2ETests {
         // (memberships 0행)은 무소속이어야 성립한다. 보내는 본문은 스토어 경로와 완전히 같다.
         let service = SupabaseWorkService(projectURL: SupabaseConfig.projectURL, anonKey: ctx.anonKey, session: .shared)
         let created = try await service.signUp(
-            email: Emails.dupName, password: Emails.password, displayName: E2ENames.duplicate
+            email: Emails.dupName, password: Emails.password, displayName: E2ENames.duplicate,
+            // center 도 함께 싣는다 — 스토어 경로와 **본문이 같아야** "보내는 본문은 스토어 경로와
+            // 완전히 같다"는 위 주석이 참이다. 그리고 이 계정은 표시명이 접미어로 바뀌는 유일한
+            // 가입이라, 트리거가 이름을 손볼 때 center 를 흘리는지도 여기서만 드러난다.
+            center: E2ECenter.other
         )
         let newSession = try #require(created)   // 중복이어도 **성공**이다(실패로 바뀌지 않는 것이 핵심).
         let newUserID = newSession.userID
@@ -2297,6 +2389,8 @@ struct LiveE2ETests {
         }
         #expect(profileReady)
         #expect(try await ctx.admin.profileDisplayName(userID: newUserID) == "\(E2ENames.duplicate)-2")
+        // 이름을 접미어로 고쳐 앉히는 길에서도 center 는 그대로 실려야 한다.
+        #expect(try await ctx.admin.profileCenter(userID: newUserID) == E2ECenter.other)
         obs("동명 가입: 성공, 표시명='\(try await ctx.admin.profileDisplayName(userID: newUserID) ?? "nil")'")
 
         // S1 이 가입 트리거를 20260701000000 본문으로 되돌리면 여기서 memberships 가 1행(레거시 팀)이 된다.
@@ -2408,4 +2502,56 @@ struct LiveE2ETests {
             print("E2E| - \(line)")
         }
     }
+}
+
+// MARK: - 게이트 감시망 (CHECK_E2E 와 무관하게 **항상** 돈다)
+
+/// 위 `launchSignUp` 이 실제로 이빨을 갖고 있는지 — 네트워크 없이 스텁 세션으로 확인한다.
+///
+/// **이 테스트가 라이브 게이트 밖에 있는 이유**: P0-1 의 사고는 라이브 스위트가 안 돌던 동안 일어났다.
+/// 게이트가 켜져야만 도는 검사는 그 사고를 잡을 수 없다. 여기서 잡아야 평소 `swift test` 가 잡는다.
+/// 실서버는 한 번도 건드리지 않는다(스텁 호스트 · 임시 UserDefaults).
+@MainActor
+@Test
+func 라이브E2E_가입헬퍼는_클라게이트에_막히면_던진다() async throws {
+    let host = "v0313-e2e-gate-\(UUID().uuidString)"
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(host)")!,
+        anonKey: "anon-test-key",
+        session: URLSession(configuration: .stubbed)
+    )
+    let defaults = UserDefaults(suiteName: host)!
+    let store = WorkTimerStore(
+        service: service,
+        environment: [SupabaseConfig.anonKeyEnvironmentName: "anon-test-key"],
+        defaults: defaults
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+        // 호스트마다 UUID 라 안 지우면 실행할 때마다 plist 가 하나씩 쌓인다.
+        defaults.removePersistentDomain(forName: host)
+    }
+    store.email = "gate@example.com"
+    store.password = Emails.password
+    store.displayName = "E2E게이트"
+    store.isCreateTeamMode = true
+    store.createTeamName = E2ETeam.uniqueName()
+
+    // (1) 센터 미선택 = v0.3.13 이 새로 세운 게이트. 예전 헬퍼(`await store.signUp()?.value`)는
+    //     여기서 **조용히 통과**했고, 그래서 9개 시나리오와 owner 부트스트랩이 no-op 인 채 초록이었다.
+    store.signupCenter = nil
+    await #expect(throws: E2EError.self) {
+        try await launchSignUp(store, what: "게이트 감시망")
+    }
+
+    // (2) 센터를 고르면 가입이 실제로 시작되고, 그 본문에 center 가 실린다
+    //     (= 헬퍼가 무조건 던지는 물건이 아니다 — 기준선이 달라야 (1)의 초록이 의미를 갖는다).
+    store.signupCenter = CenterLabel.seoul
+    try await launchSignUp(store, what: "게이트 감시망")
+    let bodies = URLProtocolStub.bodies(forHost: host)
+    #expect(
+        bodies.contains { $0.contains("\"center\":\"seoul\"") },
+        "가입 본문에 center 가 없다: \(bodies)"
+    )
 }

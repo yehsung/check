@@ -4176,7 +4176,6 @@ private struct LoginPanel: View {
                     submitLabel: .next,
                     onSubmit: { advance(from: .displayName) }
                 )
-                centerChoice
             }
             CredentialField(
                 title: "이메일",
@@ -4207,6 +4206,12 @@ private struct LoginPanel: View {
                 PasswordResetEntryLink(email: store.email) { store.beginPasswordReset(email: $0) }
             }
             if mode == .signUp {
+                // 자리는 **비밀번호 다음 · 팀 블록 바로 위**다(별명→이메일→비밀번호→센터→팀코드).
+                // 별명 바로 뒤에 두면 Enter 로 별명→이메일→비밀번호를 훑는 키보드 체인 한가운데에
+                // 키보드로 못 닿는 칸이 끼어든다(AuthFocusField 체인엔 센터가 없다) — 사용자는 타이핑을
+                // 마친 뒤에야 위로 되돌아가야 한다. 여기면 마지막 필드에서 자연스럽게 눈이 내려온다.
+                // docs/team-install.md 의 가입 순서도 이 순서로 적혀 있다.
+                centerChoice
                 if store.isCreateTeamMode {
                     // 팀 이름은 한글 허용(ASCII 강제 없음). 주간 목표는 스테퍼(1~168시간).
                     CredentialField(
@@ -4256,8 +4261,10 @@ private struct LoginPanel: View {
         }
     }
 
-    /// 지금 화면의 주 버튼을 누를 수 있는가. 판정 자체는 **스토어에 있다**(canSubmitSignUp) —
-    /// Enter 제출·버튼·스토어 진입 가드가 서로 다른 규칙을 갖게 되는 순간 한 경로로 샌다.
+    /// 지금 화면의 주 버튼을 **켜 둘** 수 있는가(활성/비활성 전용). 판정 자체는 **스토어에 있다**
+    /// (canSubmitSignUp) — 버튼과 스토어 진입 가드가 서로 다른 규칙을 갖게 되는 순간 한 경로로 샌다.
+    /// Enter 제출은 이 값을 보지 않는다(submitPrimary 주석 참고): 막는 일은 어차피 스토어 가드가 하고,
+    /// 여기서 먼저 끊으면 **이유를 말할 기회**가 사라진다.
     private var canSubmitPrimary: Bool {
         switch mode {
         case .signIn: return store.canSync
@@ -4265,10 +4272,19 @@ private struct LoginPanel: View {
         }
     }
 
-    // Enter(제출) 시 로그인/가입 버튼과 동일하게 동작한다. 같은 판정을 쓴다 — 버튼이 막힌 상태에서
-    // Enter 로만 빠져나가는 구멍을 만들지 않는다(스토어 signUp() 에 한 겹 더 있다).
+    // Enter(제출) 시 로그인/가입 버튼과 동일하게 동작한다. 가입이 실제로 시작되는 조건은 그대로다 —
+    // 막는 것은 **스토어의 가드**이고(signUp() 은 미달이면 Task 를 안 만들고 nil 을 돌려준다), 여기서
+    // 미리 return 하지 않는다.
+    //
+    // ★ 예전엔 여기 `guard canSubmitPrimary else { return }` 가 있었다. 그러면 센터를 안 고른 사람이
+    //   비밀번호 칸에서 Enter 를 칠 때 **아무 일도 안 일어난다** — 버튼은 회색이고 상태줄은 비어 있어서,
+    //   왜 못 넘어가는지 알 방법이 화면에 하나도 없다(v0.3.13 검토 지적). 스토어 가드를 통과시키면
+    //   같은 자리에 "소속 센터를 골라 주세요"가 뜬다(AuthStatusLine — 이 앱의 오류 표시 자리 그대로다).
+    //   `canSubmitPrimary` 는 계속 **버튼 비활성**에 쓴다. 두 경로가 다른 건 '말해 주는가'뿐이다.
     private func submitPrimary() {
-        guard canSubmitPrimary else { return }
+        // 키가 없으면 두 모드 모두 서버에 닿을 수 없고, 그건 사용자가 고칠 수 있는 문제가 아니다
+        // (빌드에 anon key 가 안 들어간 상태 — 상태줄엔 이미 "로그인 필요"가 떠 있다).
+        guard store.canSync else { return }
         switch mode {
         case .signIn:
             store.signIn()

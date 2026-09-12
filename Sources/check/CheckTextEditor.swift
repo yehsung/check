@@ -587,6 +587,19 @@ class CheckEditorTextView: NSTextView {
 /// 테두리에서 물러나는 폭(`CheckEditorMetrics.frameInset`)은 **여기서 한 번만** 준다 — 부모마다 따로 주게 두면
 /// 한 칸이 잊는 순간 그 칸의 글자만 2pt 어긋나고, 그게 사용자 지시 ③이 생긴 경위 그대로다.
 struct CheckTextEditor: View {
+    /// 재사용하는 입력칸 한 벌. **위 `makeNSView` 주석이 이 프로퍼티의 존재 이유다** — 새로 만든 칸은
+    /// 한글 입력기 세션을 못 받아 자모가 하나씩 박힌다. `nonisolated(unsafe)` 인 이유: SwiftUI 의
+    /// `makeNSView`/`updateNSView` 는 메인에서만 불리므로 실제 경합이 없다(테스트도 메인에서 돈다).
+    nonisolated(unsafe) fileprivate static var reusableScroll: NSScrollView?
+
+    /// 테스트 전용. 앱이 쓰는 재사용 규칙(`CheckEditorScrollView.reusableScrollIfAvailable`)을 그대로 되묻는다.
+    @MainActor
+    static func reusableScrollForTesting() -> NSScrollView? { CheckEditorScrollView.reusableScrollIfAvailable()?.scroll }
+
+    /// 테스트 전용. 재사용 칸을 세우거나 비운다(테스트끼리 상태를 물려주면 순서에 따라 결과가 갈린다).
+    @MainActor
+    static func setReusableScrollForTesting(_ scroll: NSScrollView?) { reusableScroll = scroll }
+
     @Binding var text: String
     /// Enter 로 보내는 칸인가. 기본은 false — **새로 쓰는 칸의 기본값은 "Enter 는 줄바꿈"이어야 한다**
     /// (여러 줄 글을 쓰는 칸이 압도적으로 많고, 잘못 보낸 글은 되돌릴 수 없다).
@@ -633,7 +646,49 @@ private struct CheckEditorScrollView: NSViewRepresentable {
     var onSend: () -> Void
     var onRenderedEmptyChange: ((Bool) -> Void)?
 
+    /// 재사용할 수 있는 입력칸이 있으면 돌려준다. **판정 규칙은 여기 한 곳에만 있다** —
+    /// 테스트가 `Context` 없이 이 규칙을 되묻는다(SwiftUI 의 Context 는 테스트에서 만들 수 없다).
+    /// 붙어 있는(superview != nil) 칸은 재사용하지 않는다 — 한 뷰는 두 곳에 못 붙는다.
+    @MainActor
+    static func reusableScrollIfAvailable() -> (scroll: NSScrollView, text: CheckEditorTextView)? {
+        guard let cached = CheckTextEditor.reusableScroll, cached.superview == nil,
+              let text = cached.documentView as? CheckEditorTextView else { return nil }
+        return (cached, text)
+    }
+
     func makeNSView(context: Context) -> NSScrollView {
+        // ★ **입력칸을 다시 만들지 않고 같은 것을 계속 쓴다**(2026-09-12, v0.3.13).
+        //   **이 재사용을 걷어내지 마라.** 한글 자모가 하나씩 박히던 결함(제보 ①, v0.3.0~v0.3.12)의 뿌리다.
+        //
+        //   무슨 일이 있었나: 대화 상대를 바꾸면 패널이 내려갔다 다시 서면서 SwiftUI 가 이 칸을 **새로 만든다.**
+        //   그런데 **새로 만들어진 NSTextView 는 한글 입력기 세션을 받지 못한다.** 첫 응답자도 제대로 되고
+        //   입력 문맥도 제 것인데(실측 `fr=true`, `inputContext === NSTextInputContext.current`) 조합만
+        //   시작을 안 한다. 그 상태의 서명은 `insertText` 의 교체 범위다:
+        //     · 정상 — `insertText("두", replacementRange: {0,1})` = 앞 글자를 **교체**한다(2벌식 조합).
+        //     · 고장 — `insertText("ㅜ", replacementRange: {대상없음,0})` = 그냥 **붙인다** → 자모가 하나씩 쌓인다.
+        //
+        //   ⚠︎ `hasMarkedText()` 로는 이 고장을 **못 잰다.** 이 입력기는 정상일 때도 표시 글자를 쓰지 않아
+        //   89키 전부 false 였다(2026-09-12 실측). 그 오독이 v0.3.12 의 오진("앱이 비활성이라 입력기가
+        //   안 켜진다")으로 이어졌고, 그 수정은 증상을 못 고쳤다.
+        //
+        //   되살리려는 시도는 전부 **실측으로 기각**됐다(같은 날, 운영자 맥에서 재현하며):
+        //     ① 팝오버가 설 때 앱 활성화 — `NSApp.isActive == true` 인데도 깨졌다.
+        //     ② 첫 응답자가 되는 순간 문맥 재바인딩(`updateWindows()` + `inputContext.activate()`) — 깨졌다.
+        //     ③ 옛 칸이 `deinit` 된 **뒤** 다시 재바인딩 — 그래도 깨졌다.
+        //     ④ 바깥이 글을 되쓰는 경로(`replaceTextFromOutside`) 의심 — 그 구간에 **한 번도 안 불렸다.**
+        //   즉 문맥·활성·되쓰기 어느 쪽도 아니고, 남은 사실은 "새 뷰는 조합을 못 받는다" 하나였다.
+        //   그래서 세션을 되살리려 싸우는 대신 **뷰를 갈지 않는다.** 12회 연속 상대 교체에서 고장 0건.
+        //
+        //   왜 한 벌로 충분한가: 이 칸을 쓰는 두 패널(대화·제보)은 `CheckMenuView` 의 `if / else if` 로
+        //   **서로 배타**라 동시에 서지 않는다. 그래도 혹시 둘이 겹치면(한 뷰는 두 곳에 못 붙는다)
+        //   `superview != nil` 로 걸러 그때만 새로 만든다.
+        if let cached = Self.reusableScrollIfAvailable() {
+            // 대리자·바인딩은 이번 마운트의 것으로 갈아 끼운다(칸의 내용물은 `updateNSView` 가 맞춘다).
+            cached.text.delegate = context.coordinator
+            context.coordinator.textView = cached.text
+            apply(to: cached.text, coordinator: context.coordinator)
+            return cached.scroll
+        }
         let scroll = NSScrollView()
         scroll.drawsBackground = false
         scroll.borderType = .noBorder
@@ -682,6 +737,7 @@ private struct CheckEditorScrollView: NSViewRepresentable {
 
         scroll.documentView = textView
         context.coordinator.textView = textView
+        CheckTextEditor.reusableScroll = scroll
         apply(to: textView, coordinator: context.coordinator)
         return scroll
     }

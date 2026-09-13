@@ -15,8 +15,8 @@ import Testing
 /// 전역 주입점을 갈아 끼우지 않고 `@TaskLocal` 덮어쓰기와 명시 id 오버로드만 쓰는 이유:
 /// swift-testing 은 테스트를 병렬로 돌린다. 전역을 잠깐 여우로 바꾸면 같은 순간
 /// `theFaceActuallyLeansRight`(아잉 잉크 무게중심) 같은 기존 테스트가 간헐적으로 빨개진다.
-@Suite("V0315Portrait")
-struct V0315PortraitTests {
+@Suite("V0316Portrait")
+struct V0316PortraitTests {
     static let aing = CharacterCatalog.builtInAingID
     static let sprites = ["shiba", "panda"]
     static let moods: [CheckMascotAssets.Mood] = [.neutral, .negative]
@@ -214,9 +214,9 @@ struct V0315PortraitTests {
     /// 건드린다**. 전체 스위트와 같이 돌면 아잉 픽셀을 재는 기존 테스트(`theFaceActuallyLeansRight` 등)를
     /// 오염시키므로, **환경변수 + 단독 실행**일 때에만 돈다.
     ///
-    ///     CHECK_V0315_STANDARD_DEFAULTS_PROBE=1 swift test --filter "영속_선택이_메뉴바까지"
+    ///     CHECK_V0316_STANDARD_DEFAULTS_PROBE=1 swift test --filter "영속_선택이_메뉴바까지"
     @Test func 영속_선택이_메뉴바까지_실제로_닿는다() throws {
-        guard ProcessInfo.processInfo.environment["CHECK_V0315_STANDARD_DEFAULTS_PROBE"] == "1" else { return }
+        guard ProcessInfo.processInfo.environment["CHECK_V0316_STANDARD_DEFAULTS_PROBE"] == "1" else { return }
         let defaults = UserDefaults.standard
         let key = CheckMascotAssets.selectionDefaultsKey
         let saved = defaults.string(forKey: key)
@@ -265,7 +265,7 @@ struct V0315PortraitTests {
     // MARK: - 7. 눈으로 볼 비교 시트
 
     /// 아잉·여우·로봇의 `menuBarImage` 를 **36×36(18pt@2x)** 으로 실제로 구워 흰/검은 배경에 얹는다.
-    /// `CHECK_V0315_PORTRAIT_SHEET_PATH` 가 있을 때만 파일로 쓴다(평소에는 픽셀 검사만).
+    /// `CHECK_V0316_PORTRAIT_SHEET_PATH` 가 있을 때만 파일로 쓴다(평소에는 픽셀 검사만).
     @Test func 메뉴바_초상을_18pt2x로_구워_배경_두_장에_얹는다() throws {
         let cell = 36
         var sheets: [(String, CheckMascotAssets.Mood, NSBitmapImageRep)] = []
@@ -283,7 +283,7 @@ struct V0315PortraitTests {
             }
         }
 
-        guard let path = ProcessInfo.processInfo.environment["CHECK_V0315_PORTRAIT_SHEET_PATH"] else { return }
+        guard let path = ProcessInfo.processInfo.environment["CHECK_V0316_PORTRAIT_SHEET_PATH"] else { return }
         let data = try Self.contactSheet(sheets, cell: cell)
         try data.write(to: URL(fileURLWithPath: path))
         print("[portrait] SHEET \(path)")
@@ -293,7 +293,7 @@ struct V0315PortraitTests {
 
     /// 이 프로세스의 `UserDefaults.standard` 를 건드리지 않는 빈 도메인.
     static func emptyDefaults() throws -> UserDefaults {
-        let name = "v0315.portrait.\(UUID().uuidString)"
+        let name = "v0316.portrait.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: name))
         defaults.removePersistentDomain(forName: name)
         return defaults

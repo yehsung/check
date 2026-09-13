@@ -21,7 +21,7 @@ import Testing
 // MARK: - 헬퍼
 
 /// 재질 디퓨즈가 CGImage 면 그것. CF 불투명 타입은 `as?` 가 늘 성공하므로 CFGetTypeID 로 판별한다.
-private func v0315DiffuseImage(_ material: SCNMaterial) -> CGImage? {
+private func v0316DiffuseImage(_ material: SCNMaterial) -> CGImage? {
     guard let contents = material.diffuse.contents,
           CFGetTypeID(contents as CFTypeRef) == CGImage.typeID else { return nil }
     return (contents as! CGImage)
@@ -29,7 +29,7 @@ private func v0315DiffuseImage(_ material: SCNMaterial) -> CGImage? {
 
 /// 번들에 실린 스프라이트 캐릭터 하나(매니페스트 + 아틀라스 이미지).
 @MainActor
-private func v0315Sprite(_ id: String = "shiba") throws -> (manifest: CharacterManifest, atlas: CGImage) {
+private func v0316Sprite(_ id: String = "shiba") throws -> (manifest: CharacterManifest, atlas: CGImage) {
     let catalog = CharacterCatalog.load(bundle: CheckResources.bundle)
     let manifest = try #require(catalog.manifest(id: id), "번들에서 \(id) 를 못 찾았다")
     let url = try #require(catalog.atlasURL(for: id))
@@ -39,7 +39,7 @@ private func v0315Sprite(_ id: String = "shiba") throws -> (manifest: CharacterM
 
 /// 씬 루트 → wrapper → facing → 그 아래 캐릭터 자식. 구조가 깨지면 여기서 먼저 터진다.
 @MainActor
-private func v0315Chain(_ scene: SCNScene) throws -> (wrapper: SCNNode, facing: SCNNode, character: SCNNode) {
+private func v0316Chain(_ scene: SCNScene) throws -> (wrapper: SCNNode, facing: SCNNode, character: SCNNode) {
     let wrapper = try #require(
         scene.rootNode.childNode(withName: CheckCharacter3DScene.reactionWrapperName, recursively: false),
         "reactionWrapper 가 없다"
@@ -53,8 +53,8 @@ private func v0315Chain(_ scene: SCNScene) throws -> (wrapper: SCNNode, facing: 
 }
 
 /// `ReactionEngine.attach` 가 뽑는 `modelExtent` 와 **같은 식**. 엔진의 그 프로퍼티는 private 이라
-/// 값을 직접 못 읽는다 — 식을 복제하지 않고 엔진에서 되읽는 길은 `v0315EngineModelExtent` 에 있다.
-private func v0315Extent(_ node: SCNNode) -> CGFloat {
+/// 값을 직접 못 읽는다 — 식을 복제하지 않고 엔진에서 되읽는 길은 `v0316EngineModelExtent` 에 있다.
+private func v0316Extent(_ node: SCNNode) -> CGFloat {
     let (minB, maxB) = node.boundingBox
     return CGFloat(max(maxB.x - minB.x, max(maxB.y - minB.y, maxB.z - minB.z)))
 }
@@ -66,9 +66,9 @@ private func v0315Extent(_ node: SCNNode) -> CGFloat {
 /// 놓이므로, `request(.milestone)` 뒤 그 y 를 0.5 로 나누면 엔진 안의 값이 그대로 나온다.
 /// (💤 는 `Task` 안에서 스폰돼 같은 턴에 안 보인다 — 실측으로 갈아탔다.)
 @MainActor
-private func v0315EngineModelExtent(scene: SCNScene) throws -> CGFloat {
+private func v0316EngineModelExtent(scene: SCNScene) throws -> CGFloat {
     let engine = ReactionEngine()
-    let chain = try v0315Chain(scene)
+    let chain = try v0316Chain(scene)
     engine.attach(node: chain.wrapper, sceneRoot: scene.rootNode, view: nil)
     #expect(engine.request(.milestone), "마일스톤이 거절됐다 — 이 프로브가 아무것도 못 잰다")
     let confetti = try #require(
@@ -80,7 +80,7 @@ private func v0315EngineModelExtent(scene: SCNScene) throws -> CGFloat {
 
 /// 씬의 카메라 노드와, 그 카메라에서 캐릭터 중심까지의 거리.
 @MainActor
-private func v0315Camera(_ scene: SCNScene) throws -> (node: SCNNode, distanceToOrigin: CGFloat) {
+private func v0316Camera(_ scene: SCNScene) throws -> (node: SCNNode, distanceToOrigin: CGFloat) {
     let camera = try #require(scene.rootNode.childNodes.first { $0.camera != nil }, "카메라가 없다")
     let p = camera.position
     let d = sqrt(CGFloat(p.x * p.x + p.y * p.y + p.z * p.z))
@@ -88,7 +88,7 @@ private func v0315Camera(_ scene: SCNScene) throws -> (node: SCNNode, distanceTo
 }
 
 /// PNG 데이터의 알파 커버리지(%) 와 불투명 픽셀의 경계 상자(정규화, 좌하단 원점).
-private func v0315AlphaStats(_ png: Data) -> (coverage: Double, box: CGRect?, size: CGSize)? {
+private func v0316AlphaStats(_ png: Data) -> (coverage: Double, box: CGRect?, size: CGSize)? {
     guard let rep = NSBitmapImageRep(data: png), let cg = rep.cgImage else { return nil }
     let w = cg.width, h = cg.height
     guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
@@ -108,7 +108,7 @@ private func v0315AlphaStats(_ png: Data) -> (coverage: Double, box: CGRect?, si
 }
 
 /// 어두운 잉크(눈·입)의 가로 무게중심. 0.5 보다 크면 오른쪽으로 쏠렸다 = 오른쪽을 본다.
-private func v0315InkCentroidX(_ image: NSImage) -> Double? {
+private func v0316InkCentroidX(_ image: NSImage) -> Double? {
     guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
     let w = cg.width, h = cg.height
     guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
@@ -137,55 +137,55 @@ private func v0315InkCentroidX(_ image: NSImage) -> Double? {
 
 @MainActor
 @Test("makeScene() 무인자는 종전과 같은 아잉 씬이다")
-func v0315DefaultSceneIsStillAing() throws {
+func v0316DefaultSceneIsStillAing() throws {
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
-    let chain = try v0315Chain(scene)
+    let chain = try v0316Chain(scene)
     // 3D 전용 장치가 전부 제자리에 있다.
     #expect(scene.rootNode.childNode(withName: CheckCharacter3DScene.closedEyeLeftName, recursively: true) != nil)
     #expect(scene.rootNode.childNode(withName: CheckCharacter3DScene.closedEyeRightName, recursively: true) != nil)
     // 스프라이트 평면이 아니다.
     #expect(chain.character.name != SpriteCharacterNode.nodeName)
-    _ = try v0315Camera(scene)
+    _ = try v0316Camera(scene)
 }
 
 @MainActor
 @Test("캐릭터 인자로 아잉을 넘겨도 무인자와 같은 씬이다")
-func v0315ExplicitAingMatchesDefault() throws {
+func v0316ExplicitAingMatchesDefault() throws {
     let implicit = try #require(CheckCharacter3DScene.makeScene(animated: false))
     let explicit = try #require(
         CheckCharacter3DScene.makeScene(animated: false, character: CharacterCatalog.builtInAing)
     )
-    #expect(v0315Extent(try v0315Chain(implicit).wrapper) == v0315Extent(try v0315Chain(explicit).wrapper))
-    #expect(try v0315Camera(implicit).node.position.z == (try v0315Camera(explicit).node.position.z))
+    #expect(v0316Extent(try v0316Chain(implicit).wrapper) == v0316Extent(try v0316Chain(explicit).wrapper))
+    #expect(try v0316Camera(implicit).node.position.z == (try v0316Camera(explicit).node.position.z))
 }
 
 // MARK: - ② 스프라이트 씬
 
 @MainActor
 @Test("스프라이트 씬은 같은 골격을 세우되 3D 감은눈 노드를 안 만든다")
-func v0315SpriteSceneSkipsClosedEyes() throws {
-    let fox = try v0315Sprite()
+func v0316SpriteSceneSkipsClosedEyes() throws {
+    let fox = try v0316Sprite()
     let scene = try #require(
         CheckCharacter3DScene.makeScene(animated: false, character: fox.manifest, atlas: fox.atlas)
     )
-    let chain = try v0315Chain(scene)
+    let chain = try v0316Chain(scene)
     #expect(chain.character.name == SpriteCharacterNode.nodeName, "스프라이트 평면이 아니다")
     // ★ 3D 전용 파이프라인을 안 탄다(DECISIONS: 깜빡임·졸기는 프레임으로).
     #expect(scene.rootNode.childNode(withName: CheckCharacter3DScene.closedEyeLeftName, recursively: true) == nil)
     #expect(scene.rootNode.childNode(withName: CheckCharacter3DScene.closedEyeRightName, recursively: true) == nil)
     // 배경은 비어 있어야 패널 뒤가 비친다.
     #expect(scene.background.contents == nil)
-    _ = try v0315Camera(scene)
+    _ = try v0316Camera(scene)
 }
 
 @MainActor
 @Test("아틀라스를 512 로 리샘플하지 않는다 — 매니페스트 픽셀 그대로다")
-func v0315SpriteAtlasIsNotDownscaled() throws {
-    let fox = try v0315Sprite()
+func v0316SpriteAtlasIsNotDownscaled() throws {
+    let fox = try v0316Sprite()
     let scene = try #require(
         CheckCharacter3DScene.makeScene(animated: false, character: fox.manifest, atlas: fox.atlas)
     )
-    let chain = try v0315Chain(scene)
+    let chain = try v0316Chain(scene)
     let contents = try #require(chain.character.geometry?.firstMaterial?.diffuse.contents)
     #expect(CFGetTypeID(contents as CFTypeRef) == CGImage.typeID, "디퓨즈가 CGImage 가 아니다")
     let cg = contents as! CGImage
@@ -197,10 +197,10 @@ func v0315SpriteAtlasIsNotDownscaled() throws {
 
 @MainActor
 @Test("아틀라스가 없으면 아잉으로 접는다 — 빈 오버레이를 남기지 않는다")
-func v0315SpriteWithoutAtlasFallsBackToAing() throws {
-    let fox = try v0315Sprite()
+func v0316SpriteWithoutAtlasFallsBackToAing() throws {
+    let fox = try v0316Sprite()
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false, character: fox.manifest, atlas: nil))
-    let chain = try v0315Chain(scene)
+    let chain = try v0316Chain(scene)
     #expect(chain.character.name != SpriteCharacterNode.nodeName, "아틀라스 없이 스프라이트를 세웠다")
     #expect(scene.rootNode.childNode(withName: CheckCharacter3DScene.closedEyeLeftName, recursively: true) != nil,
             "아잉 폴백인데 감은눈 노드가 없다")
@@ -210,36 +210,36 @@ func v0315SpriteWithoutAtlasFallsBackToAing() throws {
 
 @MainActor
 @Test("스프라이트의 modelExtent 가 아잉과 같은 1.9210 근처다 — 리액션 진폭이 여기서 나온다")
-func v0315ModelExtentMatchesAing() throws {
-    let fox = try v0315Sprite()
+func v0316ModelExtentMatchesAing() throws {
+    let fox = try v0316Sprite()
     let aingScene = try #require(CheckCharacter3DScene.makeScene(animated: false))
     let foxScene = try #require(
         CheckCharacter3DScene.makeScene(animated: false, character: fox.manifest, atlas: fox.atlas)
     )
-    let aingExtent = try v0315EngineModelExtent(scene: aingScene)
-    let foxExtent = try v0315EngineModelExtent(scene: foxScene)
-    let aingCam = try v0315Camera(aingScene), foxCam = try v0315Camera(foxScene)
+    let aingExtent = try v0316EngineModelExtent(scene: aingScene)
+    let foxExtent = try v0316EngineModelExtent(scene: foxScene)
+    let aingCam = try v0316Camera(aingScene), foxCam = try v0316Camera(foxScene)
     let aingBox = aingScene.rootNode.boundingBox, foxBox = foxScene.rootNode.boundingBox
 
-    print(String(format: "[v0315] modelExtent  아잉 %.4f · 여우 %.4f (targetExtent %.4f)",
+    print(String(format: "[v0316] modelExtent  아잉 %.4f · 여우 %.4f (targetExtent %.4f)",
                  aingExtent, foxExtent, SpriteCharacterNode.targetExtent))
-    print(String(format: "[v0315] 씬루트 bbox  아잉 dx %.4f dy %.4f dz %.4f · 여우 dx %.4f dy %.4f dz %.4f",
+    print(String(format: "[v0316] 씬루트 bbox  아잉 dx %.4f dy %.4f dz %.4f · 여우 dx %.4f dy %.4f dz %.4f",
                  aingBox.max.x - aingBox.min.x, aingBox.max.y - aingBox.min.y, aingBox.max.z - aingBox.min.z,
                  foxBox.max.x - foxBox.min.x, foxBox.max.y - foxBox.min.y, foxBox.max.z - foxBox.min.z))
-    print(String(format: "[v0315] 카메라 위치   아잉 (%.4f, %.4f, %.4f) · 여우 (%.4f, %.4f, %.4f)",
+    print(String(format: "[v0316] 카메라 위치   아잉 (%.4f, %.4f, %.4f) · 여우 (%.4f, %.4f, %.4f)",
                  aingCam.node.position.x, aingCam.node.position.y, aingCam.node.position.z,
                  foxCam.node.position.x, foxCam.node.position.y, foxCam.node.position.z))
     // ★ 카메라가 **원점**에서 얼마나 떨어졌는지는 비교 대상이 아니다. `addFramingCamera` 는
     //   `z = maxB.z + distance` 로 **bbox 앞면에서 일정 거리**에 카메라를 세운다. 아잉은 두께(dz 1.46)가
     //   있어 앞면이 앞으로 나와 있고 평면은 dz=0 이라, 원점 기준으로는 15% 가 갈리지만 **캐릭터 앞면까지의
     //   거리는 같다**. 화면에 그려지는 크기가 그 거리로 정해지므로, 재야 할 값은 이쪽이다
-    //   (렌더 실루엣 비 0.99 가 그 증거다 — v0315SpriteSceneActuallyRenders).
+    //   (렌더 실루엣 비 0.99 가 그 증거다 — v0316SpriteSceneActuallyRenders).
     let aingFront = CGFloat(aingCam.node.position.z - aingBox.max.z)
     let foxFront = CGFloat(foxCam.node.position.z - foxBox.max.z)
-    print(String(format: "[v0315] 원점까지 거리  아잉 %.4f · 여우 %.4f (%.1f%%)",
+    print(String(format: "[v0316] 원점까지 거리  아잉 %.4f · 여우 %.4f (%.1f%%)",
                  aingCam.distanceToOrigin, foxCam.distanceToOrigin,
                  (foxCam.distanceToOrigin / aingCam.distanceToOrigin - 1) * 100))
-    print(String(format: "[v0315] bbox 앞면까지  아잉 %.4f · 여우 %.4f (%.2f%%)",
+    print(String(format: "[v0316] bbox 앞면까지  아잉 %.4f · 여우 %.4f (%.2f%%)",
                  aingFront, foxFront, (foxFront / aingFront - 1) * 100))
 
     // ★ 리액션 진폭(hop·tilt·파티클 위치)이 전부 이 값의 배수다. 1% 를 넘게 갈리면 스프라이트만
@@ -260,14 +260,14 @@ func v0315ModelExtentMatchesAing() throws {
 
 @MainActor
 @Test("스프라이트 씬에 attach·졸기·깨기를 태워도 크래시하지 않고 아틀라스가 바뀌지 않는다")
-func v0315AttachIsSafeOnSprites() throws {
-    let fox = try v0315Sprite()
+func v0316AttachIsSafeOnSprites() throws {
+    let fox = try v0316Sprite()
     let scene = try #require(
         CheckCharacter3DScene.makeScene(animated: false, character: fox.manifest, atlas: fox.atlas)
     )
-    let chain = try v0315Chain(scene)
+    let chain = try v0316Chain(scene)
     let material = try #require(chain.character.geometry?.firstMaterial)
-    let before = try #require(v0315DiffuseImage(material), "디퓨즈가 CGImage 가 아니다")
+    let before = try #require(v0316DiffuseImage(material), "디퓨즈가 CGImage 가 아니다")
 
     let engine = ReactionEngine()
     let started = CFAbsoluteTimeGetCurrent()
@@ -285,10 +285,10 @@ func v0315AttachIsSafeOnSprites() throws {
     // ⚠️ 이 테스트가 무는 것은 **"터지지 않는다"뿐**이다. 아틀라스가 그대로인지는 여기서 묻지 마라 —
     //    앞선 리액션이 상태를 물고 있으면 `.drowsy` 가 **거절**돼 감은눈 경로에 아예 안 들어가고,
     //    그러면 "안 바뀌었다"가 초록으로 나온다(아무것도 안 본 초록). 그 검사는 졸기를 단독으로 태우는
-    //    `v0315DrowsyAloneDoesNotTouchTheAtlas` 에 있다.
-    let after = v0315DiffuseImage(material)
+    //    `v0316DrowsyAloneDoesNotTouchTheAtlas` 에 있다.
+    let after = v0316DiffuseImage(material)
     let msText = String(format: "%.1f", attachMs)
-    print("[v0315] sprite attach \(msText)ms · 리액션 11종 통과 · 디퓨즈 여전히 CGImage \(after != nil)")
+    print("[v0316] sprite attach \(msText)ms · 리액션 11종 통과 · 디퓨즈 여전히 CGImage \(after != nil)")
     #expect(after != nil, "리액션을 태우고 나니 디퓨즈가 CGImage 가 아니다")
     #expect(chain.character.parent === chain.facing, "리액션이 캐릭터를 씬에서 떼어냈다")
     _ = before
@@ -307,14 +307,14 @@ func v0315AttachIsSafeOnSprites() throws {
 /// 캐릭터에서 다시 뚫린다. 졸기는 스프라이트에서 기울기(drowsySink)만 남는다(DECISIONS: 전용 프레임 없음).
 @MainActor
 @Test("☠︎ 졸기가 스프라이트 아틀라스를 갈아 끼우지 않는다(2-B 가 닫았다)")
-func v0315DrowsyAloneDoesNotTouchTheAtlas() throws {
-    let fox = try v0315Sprite()
+func v0316DrowsyAloneDoesNotTouchTheAtlas() throws {
+    let fox = try v0316Sprite()
     let scene = try #require(
         CheckCharacter3DScene.makeScene(animated: false, character: fox.manifest, atlas: fox.atlas)
     )
-    let chain = try v0315Chain(scene)
+    let chain = try v0316Chain(scene)
     let material = try #require(chain.character.geometry?.firstMaterial)
-    let before = try #require(v0315DiffuseImage(material))
+    let before = try #require(v0316DiffuseImage(material))
 
     let engine = ReactionEngine()
     engine.attach(node: chain.wrapper, sceneRoot: scene.rootNode, view: nil)
@@ -322,9 +322,9 @@ func v0315DrowsyAloneDoesNotTouchTheAtlas() throws {
     //   이 검사가 아무것도 안 보게 된다(초록인 채로 통과하는 그 자리 — 실제로 한 번 당했다).
     #expect(engine.request(.drowsy), "졸기가 거절됐다 — 이 검사가 아무것도 못 본다")
     #expect(engine.state == .sleeping)
-    let after = try #require(v0315DiffuseImage(material))
+    let after = try #require(v0316DiffuseImage(material))
     let assignments = engine.faceDiffuseCGImageAssignments + engine.faceDiffuseTextureAssignments
-    print("[v0315] ☠︎ 졸기 단독 — 얼굴 디퓨즈 대입 \(assignments)회 · 아틀라스 동일 \(after === before)")
+    print("[v0316] ☠︎ 졸기 단독 — 얼굴 디퓨즈 대입 \(assignments)회 · 아틀라스 동일 \(after === before)")
     #expect(after === before,
             "졸기가 스프라이트 아틀라스를 감은눈 버전으로 갈아 끼웠다 — 몸에 피부색 얼룩이 생긴다")
     #expect(assignments == 0)
@@ -338,15 +338,15 @@ func v0315DrowsyAloneDoesNotTouchTheAtlas() throws {
 /// 이 파일은 `CheckOverlayReactions.swift` 를 소유하지 않으므로 여기서 고치지 않는다.
 @MainActor
 @Test("스프라이트 attach 비용을 숫자로 남긴다 — 아틀라스가 얼굴로 오인되는 값을 잰다")
-func v0315SpriteAttachCostProbe() throws {
-    let fox = try v0315Sprite()
+func v0316SpriteAttachCostProbe() throws {
+    let fox = try v0316Sprite()
     let foxScene = try #require(
         CheckCharacter3DScene.makeScene(animated: false, character: fox.manifest, atlas: fox.atlas)
     )
     let aingScene = try #require(CheckCharacter3DScene.makeScene(animated: false))
 
     func attachMs(_ scene: SCNScene, engine: ReactionEngine) throws -> Double {
-        let chain = try v0315Chain(scene)
+        let chain = try v0316Chain(scene)
         let t = CFAbsoluteTimeGetCurrent()
         engine.attach(node: chain.wrapper, sceneRoot: scene.rootNode, view: nil)
         return (CFAbsoluteTimeGetCurrent() - t) * 1_000
@@ -362,13 +362,13 @@ func v0315SpriteAttachCostProbe() throws {
     let foxSecond = try attachMs(foxScene, engine: foxEngine)
 
     // 오인의 직접 증거 — 아틀라스를 "얼굴"로 넣었을 때의 감은눈 텍스처 생성 비용.
-    let planeGeometry = try v0315Chain(foxScene).character.geometry
+    let planeGeometry = try v0316Chain(foxScene).character.geometry
     let bakeStart = CFAbsoluteTimeGetCurrent()
     let baked = CheckCharacter3DScene.makeClosedEyesImage(faceImage: fox.atlas, geometry: planeGeometry)
     let bakeMs = (CFAbsoluteTimeGetCurrent() - bakeStart) * 1_000
 
-    print(String(format: "[v0315] attach ms — 아잉 %.1f · 여우 %.1f · 여우 재-attach %.1f", aingFirst, foxFirst, foxSecond))
-    print(String(format: "[v0315] 아틀라스를 얼굴로 오인했을 때의 감은눈 굽기 %.1fms · 결과 %@",
+    print(String(format: "[v0316] attach ms — 아잉 %.1f · 여우 %.1f · 여우 재-attach %.1f", aingFirst, foxFirst, foxSecond))
+    print(String(format: "[v0316] 아틀라스를 얼굴로 오인했을 때의 감은눈 굽기 %.1fms · 결과 %@",
                  bakeMs, baked == nil ? "nil" : "이미지"))
     // 재-attach 가드는 반드시 먹어야 한다(울트라가 5초 안에 attach 를 두 번 부른다).
     #expect(foxSecond < max(foxFirst, 1) , "같은 씬 재-attach 가 캐시를 못 쓴다")
@@ -378,17 +378,17 @@ func v0315SpriteAttachCostProbe() throws {
 
 @MainActor
 @Test("아잉 → 여우 → 아잉 왕복에도 wrapper/facing 노드가 그대로다")
-func v0315SwapRoundTripKeepsTheChain() throws {
-    let fox = try v0315Sprite()
+func v0316SwapRoundTripKeepsTheChain() throws {
+    let fox = try v0316Sprite()
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
-    let start = try v0315Chain(scene)
+    let start = try v0316Chain(scene)
     // ★ **객체 아이덴티티**를 잡아 둔다. 이름만 비교하면 "새로 만든 같은 이름 노드"도 통과한다
     //   (그건 곧 뷰 재생성과 같은 비용이다).
     let wrapperID = ObjectIdentifier(start.wrapper), facingID = ObjectIdentifier(start.facing)
     let cameraCount = scene.rootNode.childNodes.filter { $0.camera != nil }.count
 
     #expect(CheckCharacter3DScene.swapCharacter(in: scene, to: fox.manifest, atlas: fox.atlas, animated: false))
-    let mid = try v0315Chain(scene)
+    let mid = try v0316Chain(scene)
     #expect(ObjectIdentifier(mid.wrapper) == wrapperID, "wrapper 가 새로 만들어졌다")
     #expect(ObjectIdentifier(mid.facing) == facingID, "facing 이 새로 만들어졌다")
     #expect(mid.character.name == SpriteCharacterNode.nodeName)
@@ -399,7 +399,7 @@ func v0315SwapRoundTripKeepsTheChain() throws {
     #expect(CheckCharacter3DScene.swapCharacter(
         in: scene, to: CharacterCatalog.builtInAing, atlas: nil, animated: false
     ))
-    let back = try v0315Chain(scene)
+    let back = try v0316Chain(scene)
     #expect(ObjectIdentifier(back.wrapper) == wrapperID)
     #expect(ObjectIdentifier(back.facing) == facingID)
     #expect(back.character.name != SpriteCharacterNode.nodeName, "아잉으로 안 돌아왔다")
@@ -413,31 +413,31 @@ func v0315SwapRoundTripKeepsTheChain() throws {
 
 @MainActor
 @Test("왕복 뒤에도 modelExtent 가 원래 값으로 돌아온다")
-func v0315SwapRoundTripRestoresExtent() throws {
-    let fox = try v0315Sprite()
+func v0316SwapRoundTripRestoresExtent() throws {
+    let fox = try v0316Sprite()
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
-    let chain = try v0315Chain(scene)
-    let before = v0315Extent(chain.wrapper)
+    let chain = try v0316Chain(scene)
+    let before = v0316Extent(chain.wrapper)
     #expect(CheckCharacter3DScene.swapCharacter(in: scene, to: fox.manifest, atlas: fox.atlas, animated: false))
-    let during = v0315Extent(chain.wrapper)
+    let during = v0316Extent(chain.wrapper)
     #expect(CheckCharacter3DScene.swapCharacter(
         in: scene, to: CharacterCatalog.builtInAing, atlas: nil, animated: false
     ))
-    let after = v0315Extent(chain.wrapper)
-    print(String(format: "[v0315] wrapper extent 아잉 %.4f → 여우 %.4f → 아잉 %.4f", before, during, after))
+    let after = v0316Extent(chain.wrapper)
+    print(String(format: "[v0316] wrapper extent 아잉 %.4f → 여우 %.4f → 아잉 %.4f", before, during, after))
     #expect(abs(after - before) < 0.0001, "왕복이 크기를 바꿨다")
 }
 
 @MainActor
 @Test("교체에 실패하면 씬을 건드리지 않는다 — 빈 facing 을 남기지 않는다")
-func v0315FailedSwapLeavesTheSceneIntact() throws {
-    let fox = try v0315Sprite()
+func v0316FailedSwapLeavesTheSceneIntact() throws {
+    let fox = try v0316Sprite()
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
-    let chain = try v0315Chain(scene)
+    let chain = try v0316Chain(scene)
     let characterID = ObjectIdentifier(chain.character)
     // 스프라이트인데 아틀라스가 없다 = 만들 수 없다.
     #expect(CheckCharacter3DScene.swapCharacter(in: scene, to: fox.manifest, atlas: nil) == false)
-    let after = try v0315Chain(scene)
+    let after = try v0316Chain(scene)
     #expect(ObjectIdentifier(after.character) == characterID, "실패한 교체가 캐릭터를 지웠다")
 
     // wrapper/facing 이 없는 씬(makeScene 이 만든 것이 아닌 씬)에서도 false 다.
@@ -447,10 +447,10 @@ func v0315FailedSwapLeavesTheSceneIntact() throws {
 
 @MainActor
 @Test("교체 뒤 다시 attach 해도 안전하다 — 울트라 격발이 이 경로다")
-func v0315ReattachAfterSwap() throws {
-    let fox = try v0315Sprite()
+func v0316ReattachAfterSwap() throws {
+    let fox = try v0316Sprite()
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
-    let chain = try v0315Chain(scene)
+    let chain = try v0316Chain(scene)
     let engine = ReactionEngine()
     engine.attach(node: chain.wrapper, sceneRoot: scene.rootNode, view: nil)
     engine.setDragFacing(-1)
@@ -478,8 +478,8 @@ func v0315ReattachAfterSwap() throws {
 
 @MainActor
 @Test("같은 (상태, 미러) 재호출은 프레임을 0 으로 되돌리지 않는다")
-func v0315RuntimeSetStateIsIdempotent() throws {
-    let fox = try v0315Sprite()
+func v0316RuntimeSetStateIsIdempotent() throws {
+    let fox = try v0316Sprite()
     let runtime = try #require(SpriteRuntime(manifest: fox.manifest, atlas: fox.atlas))
     runtime.setState(CharacterManifest.StateKey.sideWalk, mirrored: false, now: 0)
     #expect(runtime.stateKey == CharacterManifest.StateKey.sideWalk)
@@ -498,8 +498,8 @@ func v0315RuntimeSetStateIsIdempotent() throws {
 
 @MainActor
 @Test("tick 은 프레임이 바뀐 틱에만 true 다")
-func v0315RuntimeTickReportsChangeOnly() throws {
-    let fox = try v0315Sprite()
+func v0316RuntimeTickReportsChangeOnly() throws {
+    let fox = try v0316Sprite()
     let runtime = try #require(SpriteRuntime(manifest: fox.manifest, atlas: fox.atlas))
     runtime.setState(CharacterManifest.StateKey.sideWalk, mirrored: false, now: 0)
     #expect(runtime.tick(now: 0.05) == false, "같은 프레임인데 true 를 냈다 — 매 틱 재질을 건드리게 된다")
@@ -509,7 +509,7 @@ func v0315RuntimeTickReportsChangeOnly() throws {
 
 @MainActor
 @Test("없는 상태는 frontIdle 로 접힌다 — 폴백은 런타임 한 곳에서만")
-func v0315RuntimeFoldsMissingStates() throws {
+func v0316RuntimeFoldsMissingStates() throws {
     let spec = CharacterManifest.Atlas(
         file: "atlas.png", width: 64, height: 32,
         states: [CharacterManifest.StateKey.frontIdle: .init(
@@ -521,7 +521,7 @@ func v0315RuntimeFoldsMissingStates() throws {
         portrait: .init(neutral: "n.png", negative: "g.png")
     )
     // 32×32 이상이면 마스크가 구워진다 — 알파 없는 단색으로 만든다.
-    let atlas = try #require(v0315SolidImage(width: 64, height: 32))
+    let atlas = try #require(v0316SolidImage(width: 64, height: 32))
     let runtime = try #require(SpriteRuntime(manifest: manifest, atlas: atlas))
     #expect(runtime.hasState(CharacterManifest.StateKey.sideIdle) == false)
     runtime.setState(CharacterManifest.StateKey.sideWalk, mirrored: false, now: 0)
@@ -531,8 +531,8 @@ func v0315RuntimeFoldsMissingStates() throws {
 
 @MainActor
 @Test("isOpaque 는 atlasUV 를 거쳐 현재 프레임의 알파를 본다")
-func v0315RuntimeAlphaGoesThroughAtlasUV() throws {
-    let fox = try v0315Sprite()
+func v0316RuntimeAlphaGoesThroughAtlasUV() throws {
+    let fox = try v0316Sprite()
     let runtime = try #require(SpriteRuntime(manifest: fox.manifest, atlas: fox.atlas))
     // 평면 한복판(몸통)은 불투명, 좌상단 모서리는 투명이어야 한다.
     #expect(runtime.isOpaque(planeUV: CGPoint(x: 0.5, y: 0.5)))
@@ -549,23 +549,23 @@ func v0315RuntimeAlphaGoesThroughAtlasUV() throws {
             if runtime.isOpaque(planeUV: uv) != runtime.mask.isOpaque(u: uv.x, v: uv.y) { differing += 1 }
         }
     }
-    print("[v0315] atlasUV 경유 vs 직접 조회 불일치 \(differing)/\(total)")
+    print("[v0316] atlasUV 경유 vs 직접 조회 불일치 \(differing)/\(total)")
     #expect(differing > total / 10,
             "두 경로가 거의 같다 — 이 테스트가 atlasUV 를 실제로 못 보고 있다")
 }
 
 @MainActor
 @Test("매니페스트와 아틀라스 픽셀이 다르면 런타임을 안 만든다")
-func v0315RuntimeRejectsMismatchedAtlas() throws {
-    let fox = try v0315Sprite()
-    let wrong = try #require(v0315SolidImage(width: 64, height: 32))
+func v0316RuntimeRejectsMismatchedAtlas() throws {
+    let fox = try v0316Sprite()
+    let wrong = try #require(v0316SolidImage(width: 64, height: 32))
     #expect(SpriteRuntime(manifest: fox.manifest, atlas: wrong) == nil)
     #expect(SpriteRuntime(manifest: CharacterCatalog.builtInAing, atlas: fox.atlas) == nil,
             "3D 캐릭터로 스프라이트 런타임을 만들었다")
 }
 
 /// 알파가 전부 1인 단색 이미지(마스크 굽기가 성공하는 최소 픽스처).
-private func v0315SolidImage(width: Int, height: Int) -> CGImage? {
+private func v0316SolidImage(width: Int, height: Int) -> CGImage? {
     guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
                               bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                               bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
@@ -578,9 +578,9 @@ private func v0315SolidImage(width: Int, height: Int) -> CGImage? {
 
 @MainActor
 @Test("스프라이트 캐릭터의 옆모습은 아틀라스 프레임에서 온다 — 3D 굽기를 안 탄다")
-func v0315SideProfileUsesTheAtlas() throws {
+func v0316SideProfileUsesTheAtlas() throws {
     MiniGameMascot.resetCacheForTesting()
-    let fox = try v0315Sprite()
+    let fox = try v0316Sprite()
     let image = try #require(MiniGameMascot.sideProfile(character: fox.manifest),
                              "여우 옆모습을 못 만들었다")
     // 3D 굽기를 탔다면 lastBakeSource 가 채워진다.
@@ -592,8 +592,8 @@ func v0315SideProfileUsesTheAtlas() throws {
     let cg = try #require(image.cgImage(forProposedRect: nil, context: nil, hints: nil))
     let box = try #require(MiniGameMascot.alphaBox(cg))
     let fill = max(box.width, box.height)
-    let centroid = v0315InkCentroidX(image)
-    print(String(format: "[v0315] fox sideProfile fill %.3f (목표 %.2f) · 중심 (%.3f, %.3f) · ink centroid %@",
+    let centroid = v0316InkCentroidX(image)
+    print(String(format: "[v0316] fox sideProfile fill %.3f (목표 %.2f) · 중심 (%.3f, %.3f) · ink centroid %@",
                  fill, MiniGameMascot.targetFill, box.midX, box.midY,
                  centroid.map { String(format: "%.3f", $0) } ?? "-"))
     #expect(abs(fill - MiniGameMascot.targetFill) < 0.02, "실루엣 채움이 \(fill) 다")
@@ -602,19 +602,19 @@ func v0315SideProfileUsesTheAtlas() throws {
 
 @MainActor
 @Test("게임오버(.negative)는 스프라이트에서도 nil 이다 — 기존 계약")
-func v0315SideProfileNegativeStaysNil() throws {
+func v0316SideProfileNegativeStaysNil() throws {
     MiniGameMascot.resetCacheForTesting()
-    let fox = try v0315Sprite()
+    let fox = try v0316Sprite()
     #expect(MiniGameMascot.sideProfile(mood: .negative, character: fox.manifest) == nil)
     #expect(MiniGameMascot.sideProfile(mood: .negative) == nil)
 }
 
 @MainActor
 @Test("캐시가 캐릭터별로 갈린다 — 캐릭터를 바꿔도 옛 그림이 안 나온다")
-func v0315SideProfileCacheIsPerCharacter() throws {
+func v0316SideProfileCacheIsPerCharacter() throws {
     MiniGameMascot.resetCacheForTesting()
-    let fox = try v0315Sprite("shiba")
-    let bot = try v0315Sprite("panda")
+    let fox = try v0316Sprite("shiba")
+    let bot = try v0316Sprite("panda")
     let foxImage = try #require(MiniGameMascot.sideProfile(character: fox.manifest))
     let botImage = try #require(MiniGameMascot.sideProfile(character: bot.manifest))
     let foxAgain = try #require(MiniGameMascot.sideProfile(character: fox.manifest))
@@ -626,44 +626,44 @@ func v0315SideProfileCacheIsPerCharacter() throws {
 
 @MainActor
 @Test("여우 스프라이트 씬이 실제로 그려진다 — 알파 커버리지·투명 배경·크기")
-func v0315SpriteSceneActuallyRenders() throws {
-    let fox = try v0315Sprite()
+func v0316SpriteSceneActuallyRenders() throws {
+    let fox = try v0316Sprite()
     let size = CGSize(width: 280, height: 340)
     guard let aingPNG = CheckCharacter3DScene.renderSnapshotPNG(size: size) else {
-        print("[v0315] Metal 없음 — 렌더 검증을 건너뛴다")
+        print("[v0316] Metal 없음 — 렌더 검증을 건너뛴다")
         return
     }
     let foxPNG = try #require(
         CheckCharacter3DScene.renderSnapshotPNG(size: size, character: fox.manifest, atlas: fox.atlas)
     )
-    let botFixture = try v0315Sprite("panda")
+    let botFixture = try v0316Sprite("panda")
     let botPNG = CheckCharacter3DScene.renderSnapshotPNG(size: size, character: botFixture.manifest,
                                                          atlas: botFixture.atlas)
 
-    let aing = try #require(v0315AlphaStats(aingPNG))
-    let foxStats = try #require(v0315AlphaStats(foxPNG))
-    print(String(format: "[v0315] 렌더 %.0fx%.0f — 아잉 알파 %.2f%% box(%.3f,%.3f,%.3f,%.3f)",
+    let aing = try #require(v0316AlphaStats(aingPNG))
+    let foxStats = try #require(v0316AlphaStats(foxPNG))
+    print(String(format: "[v0316] 렌더 %.0fx%.0f — 아잉 알파 %.2f%% box(%.3f,%.3f,%.3f,%.3f)",
                  aing.size.width, aing.size.height, aing.coverage,
                  aing.box?.minX ?? -1, aing.box?.minY ?? -1, aing.box?.width ?? -1, aing.box?.height ?? -1))
-    print(String(format: "[v0315] 렌더 %.0fx%.0f — 여우 알파 %.2f%% box(%.3f,%.3f,%.3f,%.3f)",
+    print(String(format: "[v0316] 렌더 %.0fx%.0f — 여우 알파 %.2f%% box(%.3f,%.3f,%.3f,%.3f)",
                  foxStats.size.width, foxStats.size.height, foxStats.coverage,
                  foxStats.box?.minX ?? -1, foxStats.box?.minY ?? -1,
                  foxStats.box?.width ?? -1, foxStats.box?.height ?? -1))
-    if let bot = botPNG.flatMap(v0315AlphaStats) {
-        print(String(format: "[v0315] 렌더 %.0fx%.0f — 로봇 알파 %.2f%%", bot.size.width, bot.size.height, bot.coverage))
+    if let bot = botPNG.flatMap(v0316AlphaStats) {
+        print(String(format: "[v0316] 렌더 %.0fx%.0f — 로봇 알파 %.2f%%", bot.size.width, bot.size.height, bot.coverage))
     }
 
     // 저장 — 사람이 직접 열어 본다.
-    if let rep = NSBitmapImageRep(data: foxPNG) { MiniGameSnapshots.save(rep, name: "scene-fox.png", sub: "v0315") }
-    if let rep = NSBitmapImageRep(data: aingPNG) { MiniGameSnapshots.save(rep, name: "scene-aing.png", sub: "v0315") }
+    if let rep = NSBitmapImageRep(data: foxPNG) { MiniGameSnapshots.save(rep, name: "scene-fox.png", sub: "v0316") }
+    if let rep = NSBitmapImageRep(data: aingPNG) { MiniGameSnapshots.save(rep, name: "scene-aing.png", sub: "v0316") }
     if let png = botPNG, let rep = NSBitmapImageRep(data: png) {
-        MiniGameSnapshots.save(rep, name: "scene-bot.png", sub: "v0315")
+        MiniGameSnapshots.save(rep, name: "scene-bot.png", sub: "v0316")
     }
     if let image = MiniGameMascot.sideProfile(character: fox.manifest),
        let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-        MiniGameSnapshots.save(NSBitmapImageRep(cgImage: cg), name: "sideprofile-fox.png", sub: "v0315")
+        MiniGameSnapshots.save(NSBitmapImageRep(cgImage: cg), name: "sideprofile-fox.png", sub: "v0316")
     }
-    print("[v0315] 스냅샷 경로: \(MiniGameSnapshots.directory("v0315").path)")
+    print("[v0316] 스냅샷 경로: \(MiniGameSnapshots.directory("v0316").path)")
 
     // (a) 캐릭터가 보인다.
     #expect(foxStats.coverage > 5, "여우가 거의 안 그려졌다(\(foxStats.coverage)%)")
@@ -672,7 +672,7 @@ func v0315SpriteSceneActuallyRenders() throws {
     // (c) 아잉과 크기가 비슷하다. 프레임 안 실루엣 상자의 긴 변으로 잰다.
     let aingBox = try #require(aing.box), foxBox = try #require(foxStats.box)
     let aingSide = max(aingBox.width, aingBox.height), foxSide = max(foxBox.width, foxBox.height)
-    print(String(format: "[v0315] 실루엣 긴 변 — 아잉 %.3f · 여우 %.3f (비 %.3f)",
+    print(String(format: "[v0316] 실루엣 긴 변 — 아잉 %.3f · 여우 %.3f (비 %.3f)",
                  aingSide, foxSide, foxSide / aingSide))
     #expect(abs(foxSide / aingSide - 1) < 0.35,
             "여우 실루엣이 아잉의 \(foxSide / aingSide) 배다 — 같은 자리에서 크기가 튄다")

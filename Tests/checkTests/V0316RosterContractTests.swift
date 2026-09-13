@@ -13,7 +13,7 @@ import Testing
 /// 착용하려 하면 `set_character` 가 `unknown_character` 를 돌려주고, 앱 번들에만 있는 캐릭터는
 /// 고를 수는 있어도 **저장되지 않는다**. 반대로 서버에만 있으면 클라가 아잉으로 접는다(안 죽는다).
 @Suite("v0.3.15 캐릭터 명단 계약")
-struct V0315RosterContractTests {
+struct V0316RosterContractTests {
 
     /// 번들에 있어야 하는 스프라이트 캐릭터. 아잉은 내장 3D 라 여기 없다.
     static let bundledSprites = ["shiba", "panda", "rabbit", "slime", "dragon"]

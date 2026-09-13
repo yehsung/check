@@ -25,36 +25,36 @@ import Testing
 // MARK: - 픽스처
 
 /// 파이프라인이 실제로 구운 스프라이트 캐릭터들. 새 캐릭터를 더하면 여기에 더한다.
-private let v0315SpriteCharacterIDs = ["panda", "shiba"]
+private let v0316SpriteCharacterIDs = ["panda", "shiba"]
 
 /// 갈래 1 `CharacterManifest` 가 요구하는 키 집합 — **정확히 이것뿐**이어야 한다.
 /// (없으면 디코드가 throw 하고, 오타가 섞이면 조용히 nil 로 접힌다. 양쪽 다 잡으려고 집합을 같다고 본다.)
 // pixelArt 는 화풍 확정(2026-09-13)과 함께 들어왔다. **Optional 이지만 팩 스크립트가 언제나 적는다** —
-// 없으면 재질 필터가 .linear 로 떨어져 격자가 뭉개진다(V0315RosterContractTests 가 값도 본다).
-private let v0315RootKeys: Set<String> = ["id", "displayName", "kind", "atlas", "portrait", "pixelArt"]
-private let v0315AtlasKeys: Set<String> = ["file", "width", "height", "states"]
-private let v0315StateKeys: Set<String> = ["frames", "durationsMs", "loop"]
-private let v0315RectKeys: Set<String> = ["x", "y", "w", "h"]
-private let v0315PortraitKeys: Set<String> = ["neutral", "negative"]
-private let v0315RequiredStates: Set<String> = ["frontIdle", "sideIdle", "sideWalk"]
+// 없으면 재질 필터가 .linear 로 떨어져 격자가 뭉개진다(V0316RosterContractTests 가 값도 본다).
+private let v0316RootKeys: Set<String> = ["id", "displayName", "kind", "atlas", "portrait", "pixelArt"]
+private let v0316AtlasKeys: Set<String> = ["file", "width", "height", "states"]
+private let v0316StateKeys: Set<String> = ["frames", "durationsMs", "loop"]
+private let v0316RectKeys: Set<String> = ["x", "y", "w", "h"]
+private let v0316PortraitKeys: Set<String> = ["neutral", "negative"]
+private let v0316RequiredStates: Set<String> = ["frontIdle", "sideIdle", "sideWalk"]
 
 /// 픽셀이 '내용'인지 가르는 알파 — 갈래 1 `SpriteAlphaMask` 의 기본 임계와 같은 값이다.
-private let v0315OpaqueThreshold: UInt8 = 32
+private let v0316OpaqueThreshold: UInt8 = 32
 
 // MARK: - 헬퍼
 
-private struct V0315Rect: Hashable {
+private struct V0316Rect: Hashable {
     let x: Int, y: Int, w: Int, h: Int
 }
 
 /// `.copy` 로 들어간 캐릭터 파일을 **앱이 쓰는 그 해석기**로 찾는다.
-private func v0315URL(_ id: String, _ name: String, _ ext: String) -> URL? {
+private func v0316URL(_ id: String, _ name: String, _ ext: String) -> URL? {
     CheckResources.bundle.url(forResource: name, withExtension: ext, subdirectory: "Characters/\(id)")
 }
 
-private func v0315Manifest(_ id: String) throws -> [String: Any] {
+private func v0316Manifest(_ id: String) throws -> [String: Any] {
     let url = try #require(
-        v0315URL(id, "manifest", "json"),
+        v0316URL(id, "manifest", "json"),
         "번들에서 Characters/\(id)/manifest.json 을 찾을 수 있어야 한다 (.copy 가 폴더 구조를 보존했는가)"
     )
     let data = try Data(contentsOf: url)
@@ -62,22 +62,22 @@ private func v0315Manifest(_ id: String) throws -> [String: Any] {
     return try #require(object as? [String: Any], "매니페스트 최상위는 객체여야 한다")
 }
 
-private func v0315Rects(_ state: [String: Any]) throws -> [V0315Rect] {
+private func v0316Rects(_ state: [String: Any]) throws -> [V0316Rect] {
     let frames = try #require(state["frames"] as? [[String: Any]], "frames 는 rect 배열이어야 한다")
     return try frames.map { raw in
-        #expect(Set(raw.keys) == v0315RectKeys, "rect 키는 x·y·w·h 뿐이어야 한다: \(Set(raw.keys))")
-        let values = try v0315RectKeys.map { key -> (String, Int) in
+        #expect(Set(raw.keys) == v0316RectKeys, "rect 키는 x·y·w·h 뿐이어야 한다: \(Set(raw.keys))")
+        let values = try v0316RectKeys.map { key -> (String, Int) in
             let number = try #require(raw[key] as? NSNumber, "rect.\(key) 는 수여야 한다")
             return (key, try #require(Int(exactly: number), "rect.\(key) 는 정수여야 한다"))
         }
         let map = Dictionary(uniqueKeysWithValues: values)
-        return V0315Rect(x: map["x"]!, y: map["y"]!, w: map["w"]!, h: map["h"]!)
+        return V0316Rect(x: map["x"]!, y: map["y"]!, w: map["w"]!, h: map["h"]!)
     }
 }
 
 /// 아틀라스를 **포맷을 강제한 컨텍스트**에 다시 그려 픽셀을 읽는다.
 /// (`CGImage.dataProvider` 바이트를 그대로 믿으면 비트맵 포맷 가정이 깨진다 — RGBA 로 다시 그리는 게 안전하다.)
-private func v0315AtlasAlpha(_ url: URL) throws -> (alpha: [UInt8], width: Int, height: Int) {
+private func v0316AtlasAlpha(_ url: URL) throws -> (alpha: [UInt8], width: Int, height: Int) {
     let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil), "아틀라스 PNG 를 열 수 있어야 한다")
     let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil), "아틀라스를 CGImage 로 디코드할 수 있어야 한다")
     let width = image.width
@@ -104,7 +104,7 @@ private func v0315AtlasAlpha(_ url: URL) throws -> (alpha: [UInt8], width: Int, 
     return (alpha, width, height)
 }
 
-private func v0315PixelSize(_ url: URL) throws -> (width: Int, height: Int) {
+private func v0316PixelSize(_ url: URL) throws -> (width: Int, height: Int) {
     let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil), "PNG 를 열 수 있어야 한다: \(url.lastPathComponent)")
     let properties = try #require(
         CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
@@ -117,15 +117,15 @@ private func v0315PixelSize(_ url: URL) throws -> (width: Int, height: Int) {
 
 // MARK: - 테스트
 
-@Suite struct V0315CharacterBundleTests {
+@Suite struct V0316CharacterBundleTests {
 
     /// `.copy` 가 폴더 구조를 보존했는가 — 평탄화됐으면 subdirectory 조회가 전부 nil 이 된다.
     @Test func 캐릭터_폴더가_번들에_구조째_들어간다() throws {
-        for id in v0315SpriteCharacterIDs {
-            #expect(v0315URL(id, "manifest", "json") != nil, "\(id)/manifest.json")
-            #expect(v0315URL(id, "atlas", "png") != nil, "\(id)/atlas.png")
-            #expect(v0315URL(id, "portrait-neutral", "png") != nil, "\(id)/portrait-neutral.png")
-            #expect(v0315URL(id, "portrait-negative", "png") != nil, "\(id)/portrait-negative.png")
+        for id in v0316SpriteCharacterIDs {
+            #expect(v0316URL(id, "manifest", "json") != nil, "\(id)/manifest.json")
+            #expect(v0316URL(id, "atlas", "png") != nil, "\(id)/atlas.png")
+            #expect(v0316URL(id, "portrait-neutral", "png") != nil, "\(id)/portrait-neutral.png")
+            #expect(v0316URL(id, "portrait-negative", "png") != nil, "\(id)/portrait-negative.png")
         }
     }
 
@@ -143,30 +143,30 @@ private func v0315PixelSize(_ url: URL) throws -> (width: Int, height: Int) {
 
     /// 갈래 1 `CharacterManifest` 의 키·타입 계약. 키 하나만 어긋나도 캐릭터가 통째로 안 뜬다.
     @Test func 매니페스트가_갈래1_스키마_그대로다() throws {
-        for id in v0315SpriteCharacterIDs {
-            let manifest = try v0315Manifest(id)
-            #expect(Set(manifest.keys) == v0315RootKeys, "[\(id)] 최상위 키: \(Set(manifest.keys))")
+        for id in v0316SpriteCharacterIDs {
+            let manifest = try v0316Manifest(id)
+            #expect(Set(manifest.keys) == v0316RootKeys, "[\(id)] 최상위 키: \(Set(manifest.keys))")
             #expect(manifest["id"] as? String == id, "[\(id)] id 는 폴더 이름과 같아야 한다")
             let displayName = try #require(manifest["displayName"] as? String)
             #expect(!displayName.isEmpty, "[\(id)] displayName 이 비면 안 된다")
             #expect(manifest["kind"] as? String == "sprite", "[\(id)] kind 는 Kind.sprite 의 rawValue 여야 한다")
 
             let portrait = try #require(manifest["portrait"] as? [String: Any], "[\(id)] sprite 는 portrait 가 필수다")
-            #expect(Set(portrait.keys) == v0315PortraitKeys)
+            #expect(Set(portrait.keys) == v0316PortraitKeys)
             #expect(portrait["neutral"] as? String == "portrait-neutral.png")
             #expect(portrait["negative"] as? String == "portrait-negative.png")
 
             let atlas = try #require(manifest["atlas"] as? [String: Any], "[\(id)] sprite 는 atlas 가 필수다")
-            #expect(Set(atlas.keys) == v0315AtlasKeys, "[\(id)] atlas 키: \(Set(atlas.keys))")
+            #expect(Set(atlas.keys) == v0316AtlasKeys, "[\(id)] atlas 키: \(Set(atlas.keys))")
             #expect(atlas["file"] as? String == "atlas.png")
 
             let states = try #require(atlas["states"] as? [String: Any])
-            #expect(Set(states.keys) == v0315RequiredStates, "[\(id)] 상태 키: \(Set(states.keys))")
+            #expect(Set(states.keys) == v0316RequiredStates, "[\(id)] 상태 키: \(Set(states.keys))")
             for (name, rawState) in states {
                 let state = try #require(rawState as? [String: Any], "[\(id)] \(name)")
-                #expect(Set(state.keys) == v0315StateKeys, "[\(id)] \(name) 키: \(Set(state.keys))")
+                #expect(Set(state.keys) == v0316StateKeys, "[\(id)] \(name) 키: \(Set(state.keys))")
 
-                let rects = try v0315Rects(state)
+                let rects = try v0316Rects(state)
                 #expect(!rects.isEmpty, "[\(id)] \(name) 의 frames 가 비면 안 된다")
 
                 let durations = try #require(state["durationsMs"] as? [NSNumber], "[\(id)] \(name).durationsMs")
@@ -185,20 +185,20 @@ private func v0315PixelSize(_ url: URL) throws -> (width: Int, height: Int) {
 
     /// 아틀라스 PNG 가 실제로 열리고, 매니페스트가 말하는 크기와 같고, 모든 rect 가 그 안에 있다.
     @Test func 아틀라스가_열리고_모든_rect_가_그_안에_있다() throws {
-        for id in v0315SpriteCharacterIDs {
-            let manifest = try v0315Manifest(id)
+        for id in v0316SpriteCharacterIDs {
+            let manifest = try v0316Manifest(id)
             let atlas = try #require(manifest["atlas"] as? [String: Any])
             let declaredWidth = try #require(atlas["width"] as? Int)
             let declaredHeight = try #require(atlas["height"] as? Int)
 
-            let url = try #require(v0315URL(id, "atlas", "png"))
-            let size = try v0315PixelSize(url)
+            let url = try #require(v0316URL(id, "atlas", "png"))
+            let size = try v0316PixelSize(url)
             #expect(size.width == declaredWidth && size.height == declaredHeight,
                     "[\(id)] 아틀라스 실제 크기 \(size) 가 매니페스트 \(declaredWidth)x\(declaredHeight) 와 달라선 안 된다")
 
             let states = try #require(atlas["states"] as? [String: Any])
             for (name, rawState) in states {
-                for rect in try v0315Rects(try #require(rawState as? [String: Any])) {
+                for rect in try v0316Rects(try #require(rawState as? [String: Any])) {
                     #expect(rect.w > 0 && rect.h > 0, "[\(id)] \(name) rect 가 비었다: \(rect)")
                     #expect(rect.x >= 0 && rect.y >= 0
                             && rect.x + rect.w <= declaredWidth && rect.y + rect.h <= declaredHeight,
@@ -211,13 +211,13 @@ private func v0315PixelSize(_ url: URL) throws -> (width: Int, height: Int) {
     /// ★ 모든 셀이 같은 크기여야 한다. 런타임 평면은 `frontIdle` 첫 프레임으로만 정해지고 그 뒤로는 UV 만 바뀐다 —
     ///   상태마다 rect 종횡비가 다르면 옆모습이 정면 평면에 늘어붙는다(에셋만으로 막을 수 있는 결함이라 여기서 막는다).
     @Test func 모든_셀이_같은_크기다() throws {
-        for id in v0315SpriteCharacterIDs {
-            let manifest = try v0315Manifest(id)
+        for id in v0316SpriteCharacterIDs {
+            let manifest = try v0316Manifest(id)
             let atlas = try #require(manifest["atlas"] as? [String: Any])
             let states = try #require(atlas["states"] as? [String: Any])
             var sizes: Set<String> = []
             for (_, rawState) in states {
-                for rect in try v0315Rects(try #require(rawState as? [String: Any])) {
+                for rect in try v0316Rects(try #require(rawState as? [String: Any])) {
                     sizes.insert("\(rect.w)x\(rect.h)")
                 }
             }
@@ -228,17 +228,17 @@ private func v0315PixelSize(_ url: URL) throws -> (width: Int, height: Int) {
     /// 여우는 **0,1,2,1** 이다(낮은 passing f3 이 18.7% 주저앉아 버렸다 — 같은 rect 를 다시 가리켜 되돌아온다).
     /// 로봇은 4프레임 전부 서로 다르다.
     @Test func 모든_캐릭터가_0_1_2_1_로_돈다() throws {
-        let fox = try #require(try v0315Manifest("shiba")["atlas"] as? [String: Any])
-        let foxWalk = try v0315Rects(try #require((fox["states"] as? [String: Any])?["sideWalk"] as? [String: Any]))
+        let fox = try #require(try v0316Manifest("shiba")["atlas"] as? [String: Any])
+        let foxWalk = try v0316Rects(try #require((fox["states"] as? [String: Any])?["sideWalk"] as? [String: Any]))
         #expect(foxWalk.count == 4, "여우 sideWalk 는 4프레임 재생이다")
         #expect(foxWalk[1] == foxWalk[3], "여우는 2번째 프레임으로 되돌아온다(0,1,2,1)")
         #expect(Set(foxWalk).count == 3, "여우가 굽는 실제 프레임은 3장이다(f3 는 아틀라스에 없다)")
 
         // 5종 전부 0,1,2,1 이다 — 접지 B(2번)가 **접지 A 의 다리 띠 미러**라 모델 프레임이 하나 줄었다.
         // (이미지 모델은 픽셀아트에서 다리를 교대시키지 못했다 — pack-character.py 의 mirror_leg_band 주석)
-        for id in v0315SpriteCharacterIDs {
-            let atlas = try #require(try v0315Manifest(id)["atlas"] as? [String: Any])
-            let walk = try v0315Rects(try #require((atlas["states"] as? [String: Any])?["sideWalk"] as? [String: Any]))
+        for id in v0316SpriteCharacterIDs {
+            let atlas = try #require(try v0316Manifest(id)["atlas"] as? [String: Any])
+            let walk = try v0316Rects(try #require((atlas["states"] as? [String: Any])?["sideWalk"] as? [String: Any]))
             #expect(walk.count == 4, "[\(id)] sideWalk 는 4프레임 재생이다")
             #expect(walk[1] == walk[3], "[\(id)] 2번째 프레임으로 되돌아온다(0,1,2,1)")
             #expect(Set(walk).count == 3, "[\(id)] 굽는 실제 프레임은 3장이다")
@@ -247,11 +247,11 @@ private func v0315PixelSize(_ url: URL) throws -> (width: Int, height: Int) {
 
     /// 옆모습 idle 은 **걷기 프레임 중 접지가 아닌 passing 프레임**을 재사용한다(추가 에셋 0).
     @Test func 옆모습_idle_은_걷기_프레임을_재사용한다() throws {
-        for id in v0315SpriteCharacterIDs {
-            let atlas = try #require(try v0315Manifest(id)["atlas"] as? [String: Any])
+        for id in v0316SpriteCharacterIDs {
+            let atlas = try #require(try v0316Manifest(id)["atlas"] as? [String: Any])
             let states = try #require(atlas["states"] as? [String: Any])
-            let idle = try v0315Rects(try #require(states["sideIdle"] as? [String: Any]))
-            let walk = try v0315Rects(try #require(states["sideWalk"] as? [String: Any]))
+            let idle = try v0316Rects(try #require(states["sideIdle"] as? [String: Any]))
+            let walk = try v0316Rects(try #require(states["sideWalk"] as? [String: Any]))
             #expect(idle.count == 1, "[\(id)] 옆모습 idle 은 한 장이다")
             #expect(walk.contains(idle[0]), "[\(id)] 옆모습 idle rect 가 걷기 프레임 중 하나여야 한다: \(idle[0])")
         }
@@ -259,10 +259,10 @@ private func v0315PixelSize(_ url: URL) throws -> (width: Int, height: Int) {
 
     /// 메뉴바(18pt)·팝오버(46pt) 가 쓰는 표정 PNG 는 pair-lock 된 192² 그대로다.
     @Test func 표정_PNG_는_192_정사각이다() throws {
-        for id in v0315SpriteCharacterIDs {
+        for id in v0316SpriteCharacterIDs {
             for name in ["portrait-neutral", "portrait-negative"] {
-                let url = try #require(v0315URL(id, name, "png"), "[\(id)] \(name).png")
-                let size = try v0315PixelSize(url)
+                let url = try #require(v0316URL(id, name, "png"), "[\(id)] \(name).png")
+                let size = try v0316PixelSize(url)
                 #expect(size.width == 192 && size.height == 192, "[\(id)] \(name) 크기 \(size)")
             }
         }
@@ -271,18 +271,18 @@ private func v0315PixelSize(_ url: URL) throws -> (width: Int, height: Int) {
     /// 셀이 비어 있지 않고, 셀 사이 여백(gutter)이 정말로 투명한가.
     /// (diffuse 가 clamp + linear 라 셀 경계에서 이웃 셀이 번진다 — 번져 들어오는 쪽이 투명이어야 안전하다.)
     @Test func 셀에_내용이_있고_경계_여백이_투명하다() throws {
-        for id in v0315SpriteCharacterIDs {
-            let atlas = try #require(try v0315Manifest(id)["atlas"] as? [String: Any])
+        for id in v0316SpriteCharacterIDs {
+            let atlas = try #require(try v0316Manifest(id)["atlas"] as? [String: Any])
             let states = try #require(atlas["states"] as? [String: Any])
-            let url = try #require(v0315URL(id, "atlas", "png"))
-            let (alpha, width, _) = try v0315AtlasAlpha(url)
+            let url = try #require(v0316URL(id, "atlas", "png"))
+            let (alpha, width, _) = try v0316AtlasAlpha(url)
 
-            var seen: Set<V0315Rect> = []
+            var seen: Set<V0316Rect> = []
             for (name, rawState) in states {
-                for rect in try v0315Rects(try #require(rawState as? [String: Any])) where seen.insert(rect).inserted {
+                for rect in try v0316Rects(try #require(rawState as? [String: Any])) where seen.insert(rect).inserted {
                     var opaque = 0
                     for row in 0..<rect.h {
-                        for column in 0..<rect.w where alpha[(rect.y + row) * width + rect.x + column] > v0315OpaqueThreshold {
+                        for column in 0..<rect.w where alpha[(rect.y + row) * width + rect.x + column] > v0316OpaqueThreshold {
                             opaque += 1
                         }
                     }

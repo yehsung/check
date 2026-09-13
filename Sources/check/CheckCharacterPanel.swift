@@ -10,7 +10,7 @@ import SwiftUI
 //   잠금·가격이 얹힌다(DECISIONS.md 의 "재화·상점" 항목: 사장님 테스트 → 바로 상점).
 //   그래서 지금은 **전원이 모든 캐릭터를 고를 수 있다**(의도한 중간 상태, 사용자 확인).
 //   설정 창의 칩 줄(`CheckCharacterSettingsRow`)은 `ultraUnlimited` 게이트를 단 채 **그대로 남아 있다** —
-//   관리자용 빠른 경로이고, 그쪽 게이트를 건드리면 V0315CharacterPickerTests 가 빨개진다.
+//   관리자용 빠른 경로이고, 그쪽 게이트를 건드리면 V0316CharacterPickerTests 가 빨개진다.
 
 /// 캐릭터 선택 패널 본문. 팀 카드 자리를 대신 쓰고, [뒤로]로 홈(팀 목록)에 돌아간다.
 ///
@@ -201,7 +201,7 @@ struct CheckCharacterPanel: View {
 ///    60,279바이트 대 294,702바이트 — 이웃 보간이 평평한 블록을 만들어 PNG 가 훨씬 작다).
 ///    그래서 여기서는 **반드시 CGImage 로 내려서** 그린다. `Image(nsImage:)` 로 되돌리면 `pixelArt`
 ///    분기는 남아 있는 채 아무 일도 안 하고, 픽셀아트는 조용히 뭉개진 채로 배포된다.
-///    (`V0315CharacterPanelTests.픽셀아트_초상은_이웃_보간으로_그려진다` 가 그 되돌림을 픽셀로 잡는다.)
+///    (`V0316CharacterPanelTests.픽셀아트_초상은_이웃_보간으로_그려진다` 가 그 되돌림을 픽셀로 잡는다.)
 struct CharacterPortrait: View {
     let characterID: String
     /// 픽셀아트면 이웃 보간. 매니페스트의 `pixelArt` 가 유일한 출처다.
@@ -250,7 +250,7 @@ enum CharacterPanelGridBudget {
     /// 패널 안에서 격자가 **아닌** 부분의 높이(pt) = 패널 여백 12×2 + 제목 행 + 구분선 + 설명 줄 + 간격들.
     /// ImageRenderer 실측(콘텐츠 폭 292pt): 격자 자연 96/200/304pt 인 패널이 각각 197/301/405pt →
     /// 차가 어느 행 수에서도 **정확히 101pt** 다. 패널 머리에 줄을 하나 더하면 이 값이 커지고 아래 예산이
-    /// 거짓이 되므로, `V0315CharacterPanelTests` 가 이 숫자를 실측과 맞대 못 박는다.
+    /// 거짓이 되므로, `V0316CharacterPanelTests` 가 이 숫자를 실측과 맞대 못 박는다.
     static let chromeOutsideGrid: CGFloat = 101
     /// 캐릭터 패널이 떠 있을 때 팝오버에서 **패널이 아닌** 부분의 높이(pt) = 헤더 카드 + 푸터 + 바깥 여백
     /// (배너·목표 편집 행은 뺀 값 — 그것들은 `extraChromeHeight` 로 따로 들어온다).

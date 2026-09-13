@@ -112,7 +112,7 @@ enum SpriteCharacterNode {
     /// 평면 UV(hitTest 의 `textureCoordinates(withMappingChannel: 0)`) → 아틀라스 전체 UV.
     ///
     /// `contentsTransform` 과 **같은 식이어야 한다**. hitTest 는 재질 변환이 적용되기 **전**의 지오메트리 UV 를 준다
-    /// (실측: scratchpad/v0315-core/hituvprobe — 0.5 스케일 변환을 걸어도 uv 가 0.172/0.828 로 그대로였다). 그래서
+    /// (실측: scratchpad/v0316-core/hituvprobe — 0.5 스케일 변환을 걸어도 uv 가 0.172/0.828 로 그대로였다). 그래서
     /// 알파 마스크(`SpriteAlphaMask.isOpaque`)로 넘기기 전에 여기서 현재 프레임·미러를 다시 먹인다. 두 식이 갈리면
     /// 클릭 판정이 **다른 프레임의 알파**를 본다(걷는 동안만 클릭이 빗나가는, 재현하기 지독한 결함).
     nonisolated static func atlasUV(

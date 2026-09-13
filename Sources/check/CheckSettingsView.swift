@@ -606,7 +606,7 @@ struct CheckSettingsView: View {
     /// ⚠️ **창 높이 계약(`CheckSettingsWindowController.defaultContentSize.height` = 470)보다 크다.**
     ///    그 창에서 관리자가 설정을 열면 맨 아래 캐릭터 행이 통째로 잘린다(창은 리사이즈되므로 끌어
     ///    내리면 보이긴 한다). 창 쪽 숫자는 이 갈래의 소유가 아니라 여기 값으로만 남긴다 —
-    ///    잇는 쪽은 관리자일 때 이 값 이상으로 열어라. `V0315CharacterPickerTests` 가 이 숫자를 되묻는다.
+    ///    잇는 쪽은 관리자일 때 이 값 이상으로 열어라. `V0316CharacterPickerTests` 가 이 숫자를 되묻는다.
     static let adminContentHeight: CGFloat = 554
 
     var body: some View {

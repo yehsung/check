@@ -9,7 +9,7 @@ import Testing
 /// 갈래별로 나눠 지으면 아무도 소유하지 않는 자리라, 실제로 마지막까지 비어 있었다.
 @MainActor
 @Suite("v0.3.15 실행 중 캐릭터 교체")
-struct V0315LiveSwapTests {
+struct V0316LiveSwapTests {
 
     /// 진짜 SCNView + 진짜 씬 + attach 된 엔진. 교체는 노드 조작이라 화면이 필요 없다.
     private func mount(character: CharacterManifest) -> (CheckCharacter3DView, SCNView, ReactionEngine,
@@ -37,7 +37,7 @@ struct V0315LiveSwapTests {
     }
 
     private func defaults(_ id: String) -> (UserDefaults, String) {
-        let suite = "v0315-liveswap-\(UUID().uuidString)"
+        let suite = "v0316-liveswap-\(UUID().uuidString)"
         let store = UserDefaults(suiteName: suite)!
         store.set(id, forKey: CharacterSelection.defaultsKey)
         return (store, suite)

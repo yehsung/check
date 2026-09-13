@@ -19,7 +19,7 @@ import Testing
 //  ⑥ 다른 패널과 상호 배타 — 양방향.
 //
 // ⚠️ `UserDefaults.standard` 에 한 글자도 쓰지 않는다. 같은 순간 병렬로 아잉 픽셀을 재는 스위트가 있어서,
-//    표준 도메인에 선택값을 남기면 그쪽이 간헐적으로 빨개진다(V0315CharacterPickerTests 와 같은 규약).
+//    표준 도메인에 선택값을 남기면 그쪽이 간헐적으로 빨개진다(V0316CharacterPickerTests 와 같은 규약).
 
 // MARK: - ① 패널이 열려도 창은 700pt 상한 안이다
 
@@ -93,7 +93,7 @@ func 카드가_노란_상자가_아니라_초상화와_이름으로_그려진다
     #expect(cpAccentPixelCount(bitmap) > 150,
             "선택됨 표시가 안 보인다(강조색 픽셀 \(cpAccentPixelCount(bitmap))개)")
 
-    cpSave(bitmap, name: "v0315-character-panel.png")
+    cpSave(bitmap, name: "v0316-character-panel.png")
 }
 
 // MARK: - ④ 고르면 저장되고 되그릴 쪽에 알린다
@@ -186,7 +186,7 @@ func 캐릭터_패널은_누구나_연다() throws {
             "캐릭터 패널이 관리자 게이트 뒤로 들어갔다")
 
     // 설정 창의 칩 줄은 **관리자 게이트를 그대로 달고 있어야 한다**(관리자용 빠른 경로 — 건드리면
-    // V0315CharacterPickerTests 가 빨개진다).
+    // V0316CharacterPickerTests 가 빨개진다).
     let settings = cpStripped(try cpSource("CheckSettingsView.swift"))
     #expect(settings.contains("if store.ultraUnlimited { PanelDivider() CheckCharacterSettingsRow("),
             "설정의 칩 줄에서 관리자 게이트가 사라졌다 — 이번 작업은 그 줄을 건드리지 않는다")
@@ -288,7 +288,7 @@ func 캐릭터가_늘어도_창이_상한_안에_선다() throws {
             "패널이 \(height)pt — 예산 \(CharacterPanelGridBudget.maxGridHeight) + 크롬 \(CharacterPanelGridBudget.chromeOutsideGrid) 과 갈렸다")
 
     cpSave(try #require(cpBitmap(panel, width: CheckMenuView.contentColumnWidth)),
-           name: "v0315-character-panel-many.png")
+           name: "v0316-character-panel-many.png")
 }
 
 // MARK: - ⑨ 예산 상수가 실측과 맞다 (팝오버 전체)
@@ -330,10 +330,10 @@ func 캐릭터_패널_높이_예산이_실측과_맞다() throws {
 
     // 팝오버 통째 스냅샷 둘(육안 확인용): 패널만, 그리고 배너·목표 편집 행까지 얹은 최악 조합.
     cpSavePopover(CheckMenuView(store: store, characterDefaults: suite.defaults),
-                  name: "v0315-popover-character.png")
+                  name: "v0316-popover-character.png")
     cpSavePopover(CheckMenuView(store: chromed, previewClipsOverflowList: true,
                                 previewGoalEditing: true, characterDefaults: suite.defaults),
-                  name: "v0315-popover-character-worst.png")
+                  name: "v0316-popover-character-worst.png")
 }
 
 // MARK: - ⑩ 홈 화면(진입점) 스냅샷
@@ -343,7 +343,7 @@ func 캐릭터_패널_높이_예산이_실측과_맞다() throws {
 func 헤더_마스코트_진입점_스냅샷() throws {
     // 패널이 아니라 **들어가는 문**을 눈으로 본다 — 46×46 마스코트에 붓 표식이 붙었고, 헤더는 그대로다.
     let store = cpTeamStore(members: 6, tokenUsage: cpSeededTokenStore())
-    cpSavePopover(CheckMenuView(store: store), name: "v0315-popover-home-entry.png")
+    cpSavePopover(CheckMenuView(store: store), name: "v0316-popover-home-entry.png")
     let height = try #require(cpPopoverHeight(CheckMenuView(store: store)))
     #expect(height <= 700.0, "홈 화면이 \(height)pt 다")
 }
@@ -356,7 +356,7 @@ private struct CPSuite {
 }
 
 private func cpSuite() -> CPSuite {
-    let name = "v0315-panel-\(UUID().uuidString)"
+    let name = "v0316-panel-\(UUID().uuidString)"
     return CPSuite(name: name, defaults: UserDefaults(suiteName: name)!)
 }
 
@@ -366,7 +366,7 @@ private func cpDrop(_ suite: CPSuite) {
 }
 
 private func cpIsolatedDefaults() -> UserDefaults {
-    let name = "v0315-panel-render-\(UUID().uuidString)"
+    let name = "v0316-panel-render-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: name)!
     defaults.removePersistentDomain(forName: name)
     return defaults
@@ -558,7 +558,7 @@ private func cpSavePopover(_ view: CheckMenuView, name: String) {
 private func cpSave(_ bitmap: NSBitmapImageRep, name: String) {
     let dir = ProcessInfo.processInfo.environment["CHECK_SNAPSHOT_DIR"].map {
         URL(fileURLWithPath: $0, isDirectory: true)
-    } ?? FileManager.default.temporaryDirectory.appendingPathComponent("check-v0315", isDirectory: true)
+    } ?? FileManager.default.temporaryDirectory.appendingPathComponent("check-v0316", isDirectory: true)
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     guard let png = bitmap.representation(using: .png, properties: [:]) else { return }
     try? png.write(to: dir.appendingPathComponent(name))

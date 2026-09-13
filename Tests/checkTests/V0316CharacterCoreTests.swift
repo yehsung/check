@@ -19,12 +19,12 @@ import Testing
 //  ④ 아잉은 매니페스트 파일이 없어도 카탈로그에 있다. 번들에 캐릭터 폴더가 하나도 없는 빌드에서도 앱이 산다.
 //  ⑤ 프레임 재생기의 경계는 반열린 구간 [시작, 끝) — 경계에서 한 칸 밀리면 루프가 첫/끝 프레임을 두 번 낸다.
 //
-// 규약의 근거는 scratchpad/planeprobe(평면 hitTest·UV 실측)와 scratchpad/v0315-core/xformprobe(텍스처 변환
+// 규약의 근거는 scratchpad/planeprobe(평면 hitTest·UV 실측)와 scratchpad/v0316-core/xformprobe(텍스처 변환
 // 렌더 실측)다. 이 파일의 마지막 테스트가 그 렌더 실측을 스위트 안으로 끌고 들어온다.
 
 // MARK: - 픽스처
 
-private let v0315DefaultAtlasJSON = """
+private let v0316DefaultAtlasJSON = """
 {
   "file": "atlas.png",
   "width": 128,
@@ -39,17 +39,17 @@ private let v0315DefaultAtlasJSON = """
 }
 """
 
-private let v0315DefaultPortraitJSON = """
+private let v0316DefaultPortraitJSON = """
 { "neutral": "portrait-neutral.png", "negative": "portrait-negative.png" }
 """
 
 /// 매니페스트 JSON 한 장. 조각을 갈아 끼워 "이 한 곳만 틀린" 입력을 만든다.
-private func v0315JSON(
+private func v0316JSON(
     id: String = "fox",
     displayName: String = "여우",
     kind: String = "sprite",
-    atlas: String? = v0315DefaultAtlasJSON,
-    portrait: String? = v0315DefaultPortraitJSON
+    atlas: String? = v0316DefaultAtlasJSON,
+    portrait: String? = v0316DefaultPortraitJSON
 ) -> Data {
     var fields = [
         "\"id\": \"\(id)\"",
@@ -61,12 +61,12 @@ private func v0315JSON(
     return Data("{ \(fields.joined(separator: ",\n")) }".utf8)
 }
 
-private func v0315Decode(_ data: Data) throws -> CharacterManifest {
+private func v0316Decode(_ data: Data) throws -> CharacterManifest {
     try JSONDecoder().decode(CharacterManifest.self, from: data)
 }
 
 /// 1상태 아틀라스 JSON(프레임 rect 를 직접 지정해 "아틀라스 밖" 같은 경우를 만든다).
-private func v0315AtlasJSON(
+private func v0316AtlasJSON(
     width: Int = 128,
     height: Int = 64,
     file: String = "atlas.png",
@@ -77,7 +77,7 @@ private func v0315AtlasJSON(
     """
 }
 
-private func v0315SpriteManifest(
+private func v0316SpriteManifest(
     id: String = "fox",
     atlasWidth: Int = 128,
     atlasHeight: Int = 64,
@@ -98,7 +98,7 @@ private func v0315SpriteManifest(
 
 /// RGBA8(premultipliedLast) 아틀라스. **데이터 행 0 = 이미지 위쪽** — CGImage 의 규약 그대로다.
 /// `alpha`/`color` 는 (x, y) 를 받는다(y 는 위에서부터).
-private func v0315Atlas(
+private func v0316Atlas(
     width: Int,
     height: Int,
     color: (Int, Int) -> (UInt8, UInt8, UInt8) = { _, _ in (200, 40, 160) },
@@ -130,7 +130,7 @@ private func v0315Atlas(
 
 /// 16비트/채널 아틀라스 — `CGDataProvider` 빠른 길이 **거절**하고 RGBA8 재드로 폴백으로 가는 포맷.
 /// 이 길에서도 위/아래 방향이 보존되는지 확인하기 위한 픽스처다.
-private func v0315Atlas16(width: Int, height: Int, alpha: (Int, Int) -> UInt16) -> CGImage {
+private func v0316Atlas16(width: Int, height: Int, alpha: (Int, Int) -> UInt16) -> CGImage {
     var words = [UInt16](repeating: 0, count: width * height * 4)
     for y in 0..<height {
         for x in 0..<width {
@@ -154,7 +154,7 @@ private func v0315Atlas16(width: Int, height: Int, alpha: (Int, Int) -> UInt16) 
 
 /// 임시 캐릭터 폴더를 만든다. `files` 는 파일명 → 내용.
 @discardableResult
-private func v0315WriteCharacter(root: URL, folder: String, manifest: Data?) -> URL {
+private func v0316WriteCharacter(root: URL, folder: String, manifest: Data?) -> URL {
     let dir = root.appendingPathComponent(folder, isDirectory: true)
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     if let manifest {
@@ -163,19 +163,19 @@ private func v0315WriteCharacter(root: URL, folder: String, manifest: Data?) -> 
     return dir
 }
 
-private func v0315TempRoot() -> URL {
+private func v0316TempRoot() -> URL {
     let root = FileManager.default.temporaryDirectory
-        .appendingPathComponent("v0315-characters-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("v0316-characters-\(UUID().uuidString)", isDirectory: true)
     try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     return root
 }
 
-@Suite struct V0315CharacterCoreTests {
+@Suite struct V0316CharacterCoreTests {
 
     // MARK: - ③ 매니페스트: 디코드 시점 검증
 
     @Test func 매니페스트_정상_스프라이트를_값_그대로_디코드한다() throws {
-        let manifest = try v0315Decode(v0315JSON())
+        let manifest = try v0316Decode(v0316JSON())
         #expect(manifest.id == "fox")
         #expect(manifest.displayName == "여우")
         #expect(manifest.kind == .sprite)
@@ -202,7 +202,7 @@ private func v0315TempRoot() -> URL {
             "durationsMs": [100,100,100,100], "loop": true },
           "frontIdle": { "frames": [{"x":0,"y":0,"w":32,"h":64}], "durationsMs": [0], "loop": false } }
         """
-        let manifest = try v0315Decode(v0315JSON(atlas: v0315AtlasJSON(states: states)))
+        let manifest = try v0316Decode(v0316JSON(atlas: v0316AtlasJSON(states: states)))
         let walk = try #require(manifest.atlas?.states[CharacterManifest.StateKey.sideWalk])
         #expect(walk.frames.count == 4)
         #expect(walk.frames[1] == walk.frames[3])
@@ -216,7 +216,7 @@ private func v0315TempRoot() -> URL {
         #expect(throws: CharacterManifestError.frameDurationMismatch(
             id: "fox", state: "frontIdle", frames: 2, durations: 1
         )) {
-            try v0315Decode(v0315JSON(atlas: v0315AtlasJSON(states: states)))
+            try v0316Decode(v0316JSON(atlas: v0316AtlasJSON(states: states)))
         }
     }
 
@@ -232,7 +232,7 @@ private func v0315TempRoot() -> URL {
             let states = "{ \"frontIdle\": { \"frames\": [\(rect)], \"durationsMs\": [0], \"loop\": false } }"
             #expect(throws: CharacterManifestError.rectOutsideAtlas(id: "fox", state: "frontIdle", index: 0),
                     "\(label) 가 통과했다") {
-                try v0315Decode(v0315JSON(atlas: v0315AtlasJSON(states: states)))
+                try v0316Decode(v0316JSON(atlas: v0316AtlasJSON(states: states)))
             }
         }
     }
@@ -241,14 +241,14 @@ private func v0315TempRoot() -> URL {
         let states = "{ \"frontIdle\": { \"frames\": [], \"durationsMs\": [], \"loop\": false } }"
         // frontIdle 이 비면 "필수 상태 없음"으로 먼저 걸린다(평면 크기를 못 정한다).
         #expect(throws: CharacterManifestError.missingRequiredState(id: "fox", state: "frontIdle")) {
-            try v0315Decode(v0315JSON(atlas: v0315AtlasJSON(states: states)))
+            try v0316Decode(v0316JSON(atlas: v0316AtlasJSON(states: states)))
         }
         let withFront = """
         { "frontIdle": { "frames": [{"x":0,"y":0,"w":64,"h":64}], "durationsMs": [0], "loop": false },
           "sideWalk": { "frames": [], "durationsMs": [], "loop": true } }
         """
         #expect(throws: CharacterManifestError.emptyFrames(id: "fox", state: "sideWalk")) {
-            try v0315Decode(v0315JSON(atlas: v0315AtlasJSON(states: withFront)))
+            try v0316Decode(v0316JSON(atlas: v0316AtlasJSON(states: withFront)))
         }
     }
 
@@ -257,48 +257,48 @@ private func v0315TempRoot() -> URL {
         { "sideWalk": { "frames": [{"x":0,"y":0,"w":64,"h":64}], "durationsMs": [100], "loop": true } }
         """
         #expect(throws: CharacterManifestError.missingRequiredState(id: "fox", state: "frontIdle")) {
-            try v0315Decode(v0315JSON(atlas: v0315AtlasJSON(states: states)))
+            try v0316Decode(v0316JSON(atlas: v0316AtlasJSON(states: states)))
         }
     }
 
     @Test func 매니페스트_갈래와_에셋_조합이_어긋나면_throw() {
         // sprite 인데 아틀라스/초상이 없다 → 세울 수 없다.
         #expect(throws: CharacterManifestError.missingAtlas("fox")) {
-            try v0315Decode(v0315JSON(atlas: nil))
+            try v0316Decode(v0316JSON(atlas: nil))
         }
         #expect(throws: CharacterManifestError.missingPortrait("fox")) {
-            try v0315Decode(v0315JSON(portrait: nil))
+            try v0316Decode(v0316JSON(portrait: nil))
         }
         // scene3D 인데 아틀라스가 붙어 있다 → 아무도 안 읽는 데이터 = 거짓말이라 거절한다.
         #expect(throws: CharacterManifestError.unexpectedAtlas("aing")) {
-            try v0315Decode(v0315JSON(id: "aing", kind: "scene3D", portrait: nil))
+            try v0316Decode(v0316JSON(id: "aing", kind: "scene3D", portrait: nil))
         }
         #expect(throws: CharacterManifestError.unexpectedPortrait("aing")) {
-            try v0315Decode(v0315JSON(id: "aing", kind: "scene3D", atlas: nil))
+            try v0316Decode(v0316JSON(id: "aing", kind: "scene3D", atlas: nil))
         }
         // scene3D + 둘 다 없음 = 정상.
         #expect(throws: Never.self) {
-            try v0315Decode(v0315JSON(id: "aing", displayName: "아잉", kind: "scene3D", atlas: nil, portrait: nil))
+            try v0316Decode(v0316JSON(id: "aing", displayName: "아잉", kind: "scene3D", atlas: nil, portrait: nil))
         }
     }
 
     @Test func 매니페스트_id_형식을_좁게_검사한다() {
         for bad in ["", "Fox", "fox_1", "fox/../etc", "여우", "fox 1", String(repeating: "a", count: 33)] {
             #expect(throws: CharacterManifestError.invalidID(bad), "'\(bad)' 가 통과했다") {
-                try v0315Decode(v0315JSON(id: bad))
+                try v0316Decode(v0316JSON(id: bad))
             }
         }
         for good in ["fox", "bot-2", "a", String(repeating: "a", count: 32)] {
-            #expect(throws: Never.self, "'\(good)' 가 막혔다") { try v0315Decode(v0315JSON(id: good)) }
+            #expect(throws: Never.self, "'\(good)' 가 막혔다") { try v0316Decode(v0316JSON(id: good)) }
         }
     }
 
     @Test func 매니페스트_에셋_파일명은_폴더_밖을_못_가리킨다() {
-        let escaped = v0315AtlasJSON(file: "../../aing.scn", states: """
+        let escaped = v0316AtlasJSON(file: "../../aing.scn", states: """
         { "frontIdle": { "frames": [{"x":0,"y":0,"w":64,"h":64}], "durationsMs": [0], "loop": false } }
         """)
         #expect(throws: CharacterManifestError.invalidAssetFileName(id: "fox", file: "../../aing.scn")) {
-            try v0315Decode(v0315JSON(atlas: escaped))
+            try v0316Decode(v0316JSON(atlas: escaped))
         }
     }
 
@@ -310,10 +310,10 @@ private func v0315TempRoot() -> URL {
                         "durationsMs": [0,0], "loop": true } }
         """
         #expect(throws: CharacterManifestError.zeroTotalDuration(id: "fox", state: "sideWalk")) {
-            try v0315Decode(v0315JSON(atlas: v0315AtlasJSON(states: states)))
+            try v0316Decode(v0316JSON(atlas: v0316AtlasJSON(states: states)))
         }
         #expect(throws: CharacterManifestError.negativeDuration(id: "fox", state: "frontIdle", index: 0)) {
-            try v0315Decode(v0315JSON(atlas: v0315AtlasJSON(states: """
+            try v0316Decode(v0316JSON(atlas: v0316AtlasJSON(states: """
             { "frontIdle": { "frames": [{"x":0,"y":0,"w":64,"h":64}], "durationsMs": [-1], "loop": false } }
             """)))
         }
@@ -322,14 +322,14 @@ private func v0315TempRoot() -> URL {
     @Test func 매니페스트_모르는_kind_는_throw_하고_모르는_상태키는_허용한다() throws {
         // 모르는 kind: 구버전 앱이 죽는 대신 그 캐릭터 하나만 목록에서 빠진다(카탈로그가 건너뛴다).
         #expect(throws: (any Error).self) {
-            try v0315Decode(v0315JSON(kind: "hologram"))
+            try v0316Decode(v0316JSON(kind: "hologram"))
         }
         // 모르는 상태 키: 나중에 상태가 늘어도 구버전이 그 캐릭터를 통째로 버리면 안 된다.
         let states = """
         { "frontIdle": { "frames": [{"x":0,"y":0,"w":64,"h":64}], "durationsMs": [0], "loop": false },
           "backIdle": { "frames": [{"x":64,"y":0,"w":64,"h":64}], "durationsMs": [0], "loop": false } }
         """
-        let manifest = try v0315Decode(v0315JSON(atlas: v0315AtlasJSON(states: states)))
+        let manifest = try v0316Decode(v0316JSON(atlas: v0316AtlasJSON(states: states)))
         #expect(manifest.atlas?.states["backIdle"] != nil)
     }
 
@@ -348,16 +348,16 @@ private func v0315TempRoot() -> URL {
     }
 
     @Test func 카탈로그_깨진_캐릭터만_건너뛰고_나머지는_산다() throws {
-        let root = v0315TempRoot()
+        let root = v0316TempRoot()
         defer { try? FileManager.default.removeItem(at: root) }
 
-        v0315WriteCharacter(root: root, folder: "fox", manifest: v0315JSON(id: "fox"))
-        v0315WriteCharacter(root: root, folder: "bot", manifest: Data("{ not json".utf8))
-        v0315WriteCharacter(root: root, folder: "cat", manifest: v0315JSON(id: "cat", atlas: v0315AtlasJSON(states: """
+        v0316WriteCharacter(root: root, folder: "fox", manifest: v0316JSON(id: "fox"))
+        v0316WriteCharacter(root: root, folder: "bot", manifest: Data("{ not json".utf8))
+        v0316WriteCharacter(root: root, folder: "cat", manifest: v0316JSON(id: "cat", atlas: v0316AtlasJSON(states: """
         { "frontIdle": { "frames": [{"x":0,"y":0,"w":999,"h":64}], "durationsMs": [0], "loop": false } }
         """)))                                                            // 아틀라스 밖 rect → 디코드 throw
-        v0315WriteCharacter(root: root, folder: "dog", manifest: v0315JSON(id: "wolf"))  // 폴더명 ≠ id
-        v0315WriteCharacter(root: root, folder: "empty", manifest: nil)                  // manifest.json 없음
+        v0316WriteCharacter(root: root, folder: "dog", manifest: v0316JSON(id: "wolf"))  // 폴더명 ≠ id
+        v0316WriteCharacter(root: root, folder: "empty", manifest: nil)                  // manifest.json 없음
         try Data("noise".utf8).write(to: root.appendingPathComponent("README.txt"))      // 폴더가 아닌 파일
 
         let catalog = CharacterCatalog.load(charactersDirectory: root)
@@ -368,9 +368,9 @@ private func v0315TempRoot() -> URL {
     }
 
     @Test func 카탈로그_번들이_아잉_매니페스트를_실어도_내장_3D_가_이긴다() {
-        let root = v0315TempRoot()
+        let root = v0316TempRoot()
         defer { try? FileManager.default.removeItem(at: root) }
-        v0315WriteCharacter(root: root, folder: "aing", manifest: v0315JSON(id: "aing", displayName: "가짜아잉"))
+        v0316WriteCharacter(root: root, folder: "aing", manifest: v0316JSON(id: "aing", displayName: "가짜아잉"))
 
         let catalog = CharacterCatalog.load(charactersDirectory: root)
         // 폴백 대상이 스프라이트가 되면 "모르는 값 → 아잉" 안전망 자체가 스프라이트 파이프라인에 의존하게 된다.
@@ -381,15 +381,15 @@ private func v0315TempRoot() -> URL {
 
     @Test func 카탈로그_순서는_아잉_먼저_나머지는_정렬이다() {
         let catalog = CharacterCatalog(manifests: [
-            v0315SpriteManifest(id: "zebra"), v0315SpriteManifest(id: "bot"), v0315SpriteManifest(id: "fox")
+            v0316SpriteManifest(id: "zebra"), v0316SpriteManifest(id: "bot"), v0316SpriteManifest(id: "fox")
         ])
         #expect(catalog.allIDs == ["aing", "bot", "fox", "zebra"])
     }
 
     @Test func 카탈로그_에셋_URL_은_캐릭터_폴더_안을_가리킨다() throws {
-        let root = v0315TempRoot()
+        let root = v0316TempRoot()
         defer { try? FileManager.default.removeItem(at: root) }
-        let dir = v0315WriteCharacter(root: root, folder: "fox", manifest: v0315JSON(id: "fox"))
+        let dir = v0316WriteCharacter(root: root, folder: "fox", manifest: v0316JSON(id: "fox"))
 
         let catalog = CharacterCatalog.load(charactersDirectory: root)
         #expect(catalog.atlasURL(for: "fox") == dir.appendingPathComponent("atlas.png"))
@@ -402,10 +402,10 @@ private func v0315TempRoot() -> URL {
 
     @MainActor
     @Test func 선택_기본은_아잉이고_모르는_저장값은_아잉으로_접힌다() {
-        let suiteName = "check-v0315-\(UUID().uuidString)"
+        let suiteName = "check-v0316-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let catalog = CharacterCatalog(manifests: [v0315SpriteManifest(id: "fox")])
+        let catalog = CharacterCatalog(manifests: [v0316SpriteManifest(id: "fox")])
         let selection = CharacterSelection(defaults: defaults, catalog: catalog)
 
         #expect(selection.selectedID == "aing")
@@ -419,10 +419,10 @@ private func v0315TempRoot() -> URL {
 
     @MainActor
     @Test func 선택_카탈로그에_있는_것만_저장한다() {
-        let suiteName = "check-v0315-\(UUID().uuidString)"
+        let suiteName = "check-v0316-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let catalog = CharacterCatalog(manifests: [v0315SpriteManifest(id: "fox")])
+        let catalog = CharacterCatalog(manifests: [v0316SpriteManifest(id: "fox")])
         let selection = CharacterSelection(defaults: defaults, catalog: catalog)
 
         #expect(selection.select("fox"))
@@ -506,7 +506,7 @@ private func v0315TempRoot() -> URL {
     /// ★ 이 갈래의 핵심 회귀 방지. **위 절반만 불투명한** 비대칭 픽스처가 아니면 두 UV 규약이 영원히 구별되지 않는다.
     @Test func 마스크_UV_v_를_뒤집지_않는다() throws {
         let height = 64
-        let atlas = v0315Atlas(width: 64, height: height) { _, y in y < height / 2 ? 255 : 0 }
+        let atlas = v0316Atlas(width: 64, height: height) { _, y in y < height / 2 ? 255 : 0 }
 
         // (정답지) 이 픽스처의 "데이터 행 0" 이 정말 이미지 위쪽인지 독립 경로로 확인한다.
         // NSBitmapImageRep 의 colorAt(y:) 은 y=0 이 이미지 위쪽이다(planeprobe 가 쓴 그 좌표계).
@@ -530,7 +530,7 @@ private func v0315TempRoot() -> URL {
     @Test func 마스크_몸통은_불투명_여백은_투명이다() throws {
         // 가운데 원만 불투명한 캐릭터. 평면은 네모라 hitTest 는 모서리도 맞힌다 — 그 차이를 마스크가 만든다.
         let size = 64
-        let atlas = v0315Atlas(width: size, height: size) { x, y in
+        let atlas = v0316Atlas(width: size, height: size) { x, y in
             let dx = Double(x) - 31.5, dy = Double(y) - 31.5
             return (dx * dx + dy * dy) < 18 * 18 ? 255 : 0
         }
@@ -542,7 +542,7 @@ private func v0315TempRoot() -> URL {
     }
 
     @Test func 마스크_임계값_아래_알파는_투명으로_본다() throws {
-        let atlas = v0315Atlas(width: 8, height: 8) { x, _ in x < 4 ? 20 : 200 }
+        let atlas = v0316Atlas(width: 8, height: 8) { x, _ in x < 4 ? 20 : 200 }
         let low = try #require(SpriteAlphaMask(atlas: atlas, states: [:], threshold: 32))
         #expect(low.isOpaque(u: 0.1, v: 0.5) == false, "알파 20 은 임계값 32 아래라 투명")
         #expect(low.isOpaque(u: 0.9, v: 0.5))
@@ -551,7 +551,7 @@ private func v0315TempRoot() -> URL {
     }
 
     @Test func 마스크_매니페스트와_실제_아틀라스가_어긋나면_nil() throws {
-        let atlas = v0315Atlas(width: 64, height: 64) { _, _ in 255 }
+        let atlas = v0316Atlas(width: 64, height: 64) { _, _ in 255 }
         // 팩 스크립트를 다시 돌리다 한쪽만 커밋한 상황: 매니페스트는 128 폭을 말하는데 PNG 는 64 다.
         let states = [CharacterManifest.StateKey.frontIdle: CharacterManifest.State(
             frames: [CharacterManifest.Rect(x: 64, y: 0, w: 64, h: 64)], durationsMs: [0], loop: false
@@ -568,7 +568,7 @@ private func v0315TempRoot() -> URL {
         // 16비트/채널은 CGDataProvider 빠른 길이 거절하고 RGBA8 재드로 폴백으로 간다.
         // 그 길에서도 행 0 = 위쪽이 유지돼야 한다(안 그러면 특정 PNG 에서만 클릭이 상하로 뒤집힌다).
         let height = 64
-        let atlas16 = v0315Atlas16(width: 64, height: height) { _, y in y < height / 2 ? 0xFFFF : 0 }
+        let atlas16 = v0316Atlas16(width: 64, height: height) { _, y in y < height / 2 ? 0xFFFF : 0 }
         let mask = try #require(SpriteAlphaMask(atlas: atlas16, states: [:]))
         #expect(mask.isOpaque(u: 0.5, v: 0.05))
         #expect(mask.isOpaque(u: 0.5, v: 0.95) == false)
@@ -590,9 +590,9 @@ private func v0315TempRoot() -> URL {
 
     @MainActor
     @Test func 노드_최장변이_아잉_bbox_와_같다() throws {
-        let atlas = v0315Atlas(width: 128, height: 64) { _, _ in 255 }
+        let atlas = v0316Atlas(width: 128, height: 64) { _, _ in 255 }
         // 정사각 프레임.
-        let square = try #require(SpriteCharacterNode.make(manifest: v0315SpriteManifest(), atlas: atlas))
+        let square = try #require(SpriteCharacterNode.make(manifest: v0316SpriteManifest(), atlas: atlas))
         #expect(square.name == "check.spriteCharacter")
         let (minB, maxB) = square.boundingBox
         let extent = max(CGFloat(maxB.x - minB.x), CGFloat(maxB.y - minB.y))
@@ -602,12 +602,12 @@ private func v0315TempRoot() -> URL {
 
         // 세로로 긴 프레임: 최장변이 targetExtent, 나머지는 종횡비.
         let tall = try #require(SpriteCharacterNode.make(
-            manifest: v0315SpriteManifest(atlasWidth: 64, atlasHeight: 128, states: [
+            manifest: v0316SpriteManifest(atlasWidth: 64, atlasHeight: 128, states: [
                 CharacterManifest.StateKey.frontIdle: CharacterManifest.State(
                     frames: [CharacterManifest.Rect(x: 0, y: 0, w: 32, h: 128)], durationsMs: [0], loop: false
                 )
             ]),
-            atlas: v0315Atlas(width: 64, height: 128) { _, _ in 255 }
+            atlas: v0316Atlas(width: 64, height: 128) { _, _ in 255 }
         ))
         let plane = try #require(tall.geometry as? SCNPlane)
         #expect(abs(plane.height - SpriteCharacterNode.targetExtent) < 1e-3)
@@ -617,8 +617,8 @@ private func v0315TempRoot() -> URL {
     @MainActor
     @Test func 노드_프레임을_바꿔도_평면_크기가_그대로다() throws {
         // ★ 픽스처 실측에서 4족 passing 프레임이 18.7% 주저앉은 그 결함. 크기는 frontIdle 첫 프레임으로 한 번만 정한다.
-        let atlas = v0315Atlas(width: 128, height: 128) { _, _ in 255 }
-        let node = try #require(SpriteCharacterNode.make(manifest: v0315SpriteManifest(atlasHeight: 128), atlas: atlas))
+        let atlas = v0316Atlas(width: 128, height: 128) { _, _ in 255 }
+        let node = try #require(SpriteCharacterNode.make(manifest: v0316SpriteManifest(atlasHeight: 128), atlas: atlas))
         let plane = try #require(node.geometry as? SCNPlane)
         let before = (plane.width, plane.height)
         let beforeBox = node.boundingBox
@@ -642,8 +642,8 @@ private func v0315TempRoot() -> URL {
 
     @MainActor
     @Test func 노드_재질은_unlit_양면_알파_clamp_다() throws {
-        let atlas = v0315Atlas(width: 128, height: 64) { _, _ in 255 }
-        let node = try #require(SpriteCharacterNode.make(manifest: v0315SpriteManifest(), atlas: atlas))
+        let atlas = v0316Atlas(width: 128, height: 64) { _, _ in 255 }
+        let node = try #require(SpriteCharacterNode.make(manifest: v0316SpriteManifest(), atlas: atlas))
         let material = try #require(node.geometry?.firstMaterial)
         #expect(material.lightingModel == .constant, "앱이 광원을 안 쓴다 — PBR 이면 캐릭터가 허옇게 뜬다")
         #expect(material.isDoubleSided, "y 스핀(commuteStart)에서 뒷면이 보인다")
@@ -656,11 +656,11 @@ private func v0315TempRoot() -> URL {
 
     @MainActor
     @Test func 노드_스프라이트가_아니거나_에셋이_어긋나면_nil() throws {
-        let atlas = v0315Atlas(width: 128, height: 64) { _, _ in 255 }
+        let atlas = v0316Atlas(width: 128, height: 64) { _, _ in 255 }
         #expect(SpriteCharacterNode.make(manifest: CharacterCatalog.builtInAing, atlas: atlas) == nil,
                 "3D 아잉은 이 경로로 만들지 않는다")
         // 매니페스트는 256 폭을 말하는데 PNG 는 128 — 모든 프레임이 어긋난 채 조용히 돌 바에는 아잉으로 접는다.
-        #expect(SpriteCharacterNode.make(manifest: v0315SpriteManifest(atlasWidth: 256), atlas: atlas) == nil)
+        #expect(SpriteCharacterNode.make(manifest: v0316SpriteManifest(atlasWidth: 256), atlas: atlas) == nil)
     }
 
     // MARK: - 텍스처 변환: contentsTransform 과 히트테스트 식이 갈리지 않는다
@@ -719,12 +719,12 @@ private func v0315TempRoot() -> URL {
 
     /// 규약을 **픽셀로** 확정한다: 4색 아틀라스에서 한 셀을 지정해 실제로 렌더하고 화면 색을 읽는다.
     /// 계산으로 증명할 수 없는 유일한 부분(SceneKit 이 텍스처를 어느 방향으로 붙이는가)이 여기서 갈린다 —
-    /// scratchpad/v0315-core/xformprobe 로 먼저 잰 것과 같은 실험이다.
+    /// scratchpad/v0316-core/xformprobe 로 먼저 잰 것과 같은 실험이다.
     @MainActor
     @Test func 변환_실제_렌더가_지정한_셀을_그린다() throws {
         guard MTLCreateSystemDefaultDevice() != nil else { return }   // GPU 없는 환경이면 건너뛴다.
         // 좌상 빨강 / 우상 초록 / 좌하 파랑 / 우하 노랑.
-        let atlas = v0315Atlas(width: 128, height: 128, color: { x, y in
+        let atlas = v0316Atlas(width: 128, height: 128, color: { x, y in
             switch (y < 64, x < 64) {
             case (true, true): return (255, 0, 0)
             case (true, false): return (0, 255, 0)
@@ -734,7 +734,7 @@ private func v0315TempRoot() -> URL {
         }, alpha: { _, _ in 255 })
 
         func rendered(frame: CharacterManifest.Rect, mirrored: Bool) throws -> [String] {
-            let manifest = v0315SpriteManifest(atlasWidth: 128, atlasHeight: 128, states: [
+            let manifest = v0316SpriteManifest(atlasWidth: 128, atlasHeight: 128, states: [
                 CharacterManifest.StateKey.frontIdle: CharacterManifest.State(
                     frames: [frame], durationsMs: [0], loop: false
                 )

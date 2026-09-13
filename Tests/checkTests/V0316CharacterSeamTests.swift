@@ -14,7 +14,7 @@ import Testing
 /// · 팩 스크립트의 출력 경로·파일명이 바뀐다
 /// · 카탈로그의 `charactersSubdirectory` 가 바뀐다
 @Suite("v0.3.15 캐릭터 이음매")
-struct V0315CharacterSeamTests {
+struct V0316CharacterSeamTests {
 
     @MainActor
     @Test("번들의 캐릭터 폴더가 카탈로그에 그대로 잡힌다")
@@ -111,7 +111,7 @@ struct V0315CharacterSeamTests {
     @MainActor
     @Test("선택은 번들 캐릭터를 받아들이고 모르는 값은 아잉으로 접는다")
     func selectionAcceptsBundledAndFoldsUnknown() throws {
-        let suite = "v0315-seam-\(UUID().uuidString)"
+        let suite = "v0316-seam-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let selection = CharacterSelection(defaults: defaults, catalog: .load(bundle: CheckResources.bundle))

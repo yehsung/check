@@ -36,7 +36,7 @@ enum CheckResources {
 ///    `CheckMascotAssets.selection = …` 를 불러 주어야만 동작하는 설계였다면, 그 한 줄을 빠뜨린 빌드는
 ///    **테스트가 전부 초록인 채로** 메뉴바만 옛 아잉으로 남는다 — 눈으로만 잡히는 결함이다.
 ///    (`CharacterSelection` 은 `@MainActor` 인데 초상화는 아무 스레드에서나 조회되므로 인스턴스를
-///    들고 있지 않다. 대신 두 접기 규칙이 갈라지지 않게 `V0315PortraitTests` 가 둘을 맞대어 본다.)
+///    들고 있지 않다. 대신 두 접기 규칙이 갈라지지 않게 `V0316PortraitTests` 가 둘을 맞대어 본다.)
 /// 2. **범위 덮어쓰기**: `$characterIDOverride.withValue(_:)`. 전역 var 를 갈아 끼우는 대신 `@TaskLocal`
 ///    인 이유는 **병렬 테스트 오염**이다. swift-testing 은 테스트를 동시에 돌리므로, 전역 주입점을
 ///    잠깐 여우로 바꾸면 같은 순간 아잉 픽셀을 재는 기존 계약 테스트(`V0246MiniGameFlappyTests` 의
@@ -96,7 +96,7 @@ enum CheckMascotAssets {
     /// 영속 선택의 UserDefaults 키. **`CharacterSelection.defaultsKey` 와 같은 값이어야 한다.**
     /// 저쪽은 `@MainActor` 인데 초상화 조회는 아무 스레드에서나 불리므로 참조가 막혀 한 번 더 적는다
     /// (Swift 6: main actor-isolated static property 를 nonisolated 에서 못 읽는다).
-    /// 두 값이 갈리면 `V0315PortraitTests` 의 계약 테스트가 빨개진다.
+    /// 두 값이 갈리면 `V0316PortraitTests` 의 계약 테스트가 빨개진다.
     static let selectionDefaultsKey = "check.character.selected"
 
     /// 영속 선택을 읽어 접는다. **`CharacterSelection.selectedID` 와 같은 규칙이어야 한다** —

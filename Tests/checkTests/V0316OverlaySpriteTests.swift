@@ -126,7 +126,7 @@ private func pixelDifference(_ lhs: Data, _ rhs: Data) -> Double? {
 
 /// 걷기 렌더 산출물 폴더(저장소 **밖**). 사람이 눈으로 보려고 여는 자리다.
 private let walkRenderDirectory = FileManager.default.temporaryDirectory
-    .appendingPathComponent("check-v0315b-walk", isDirectory: true)
+    .appendingPathComponent("check-v0316b-walk", isDirectory: true)
 
 /// 패널을 화면 한복판에 세운다. **드래그 검증은 클램프에 닿으면 안 된다** — 기본 위치는 화면 오른쪽 끝이라
 /// 어느 쪽으로든 60pt 를 끌면 한쪽이 클램프에 걸려 패널이 안 움직이고, 그러면 "이동 중" 신호가 서지 않아
@@ -142,7 +142,7 @@ private func centerPanel(_ controller: CheckOverlayController) {
 /// 격리된 UserDefaults 위에 세운 오버레이 컨트롤러(전역 도메인·노티 오염 금지 — 기존 스위트와 같은 규약).
 @MainActor
 private func isolatedOverlayController() -> CheckOverlayController {
-    let suiteName = "check-v0315b-\(UUID().uuidString)"
+    let suiteName = "check-v0316b-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     let store = WorkTimerStore(
@@ -165,7 +165,7 @@ private func isolatedOverlayController() -> CheckOverlayController {
 
 @MainActor
 @Test("스프라이트 졸기는 아틀라스를 건드리지 않는다 — 감은눈 파이프라인 자체를 안 태운다")
-func v0315bDrowsyLeavesTheAtlasAlone() throws {
+func v0316bDrowsyLeavesTheAtlasAlone() throws {
     let parts = try spriteEngine()
     let material = try #require(parts.character.geometry?.firstMaterial)
     let before = try #require(diffuseImage(material))
@@ -176,7 +176,7 @@ func v0315bDrowsyLeavesTheAtlasAlone() throws {
 
     let after = try #require(diffuseImage(material))
     let assignments = parts.engine.faceDiffuseCGImageAssignments + parts.engine.faceDiffuseTextureAssignments
-    print("[v0315b] 졸기 단독 — 디퓨즈 대입 \(assignments)회 · 아틀라스 동일 \(after === before)")
+    print("[v0316b] 졸기 단독 — 디퓨즈 대입 \(assignments)회 · 아틀라스 동일 \(after === before)")
     #expect(after === before, "졸기가 아틀라스를 감은눈 버전으로 갈아 끼웠다 — 몸에 피부색 얼룩이 생긴다")
     #expect(assignments == 0, "스프라이트인데 얼굴 디퓨즈를 대입했다")
 
@@ -190,7 +190,7 @@ func v0315bDrowsyLeavesTheAtlasAlone() throws {
 
 @MainActor
 @Test("Metal 뷰로 attach 해도 스프라이트는 얼굴 GPU 텍스처를 만들지 않는다")
-func v0315bSpriteMakesNoFaceTextures() throws {
+func v0316bSpriteMakesNoFaceTextures() throws {
     let fixture = try spriteFixture()
     let scene = try #require(
         CheckCharacter3DScene.makeScene(animated: false, character: fixture.manifest, atlas: fixture.atlas))
@@ -209,7 +209,7 @@ func v0315bSpriteMakesNoFaceTextures() throws {
 
 @MainActor
 @Test("아잉(3D)의 감은눈 경로는 그대로다 — 스프라이트 분기가 3D 를 같이 끄지 않았다")
-func v0315bAingSleepPathSurvives() throws {
+func v0316bAingSleepPathSurvives() throws {
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
     let parts = try chain(scene)
     let engine = ReactionEngine()
@@ -226,7 +226,7 @@ func v0315bAingSleepPathSurvives() throws {
 
 @MainActor
 @Test("방향은 y 회전이 아니라 프레임이다 — 0 정면 · +1 옆모습 · -1 같은 프레임 미러")
-func v0315bFacingSwitchesFramesNotRotation() throws {
+func v0316bFacingSwitchesFramesNotRotation() throws {
     let parts = try spriteEngine()
     let manifest = try #require(CharacterCatalog.load(bundle: CheckResources.bundle).manifest(id: "shiba"))
     let spec = try #require(manifest.atlas)
@@ -265,12 +265,12 @@ func v0315bFacingSwitchesFramesNotRotation() throws {
 
     // 즉시 스냅 계약(보간 없음): facing 에 액션이 남아 있으면 안 된다.
     #expect(facing.action(forKey: "check.facing") == nil)
-    print("[v0315b] 방향 프레임 — 정면 \(front.x) · 옆 \(side.x) · 미러 scaleX \(mirrored.scaleX)")
+    print("[v0316b] 방향 프레임 — 정면 \(front.x) · 옆 \(side.x) · 미러 scaleX \(mirrored.scaleX)")
 }
 
 @MainActor
 @Test("아잉(3D)의 방향은 여전히 y 회전이다 — 프레임 분기가 3D 를 가로채지 않았다")
-func v0315bAingFacingStillRotates() throws {
+func v0316bAingFacingStillRotates() throws {
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
     let parts = try chain(scene)
     let engine = ReactionEngine()
@@ -287,7 +287,7 @@ func v0315bAingFacingStillRotates() throws {
 
 @MainActor
 @Test("드래그로 이동 중이면 옆모습 걷기, 멈추면 옆모습 idle, 놓으면 정면")
-func v0315bWalkStateFollowsMovement() throws {
+func v0316bWalkStateFollowsMovement() throws {
     let parts = try spriteEngine()
 
     parts.engine.setDragFacing(1, moving: true)
@@ -323,7 +323,7 @@ func v0315bWalkStateFollowsMovement() throws {
 
 @MainActor
 @Test("걷기 프레임은 시간이 지나면 돌고, 바뀌었을 때만 노드를 갱신한다")
-func v0315bWalkAdvancesFrames() throws {
+func v0316bWalkAdvancesFrames() throws {
     let parts = try spriteEngine()
     parts.engine.setDragFacing(1, moving: true)
 
@@ -338,7 +338,7 @@ func v0315bWalkAdvancesFrames() throws {
         seen.append(try #require(parts.engine.spriteFrameState).frame)
         cells.append(try cellSignature(parts.character).offsetX)
     }
-    print("[v0315b] 걷기 프레임 진행 \(seen) · 셀 오프셋 \(cells.map { String(format: "%.3f", $0) })")
+    print("[v0316b] 걷기 프레임 진행 \(seen) · 셀 오프셋 \(cells.map { String(format: "%.3f", $0) })")
     #expect(seen == [0, 1, 2, 3, 0], "걷기가 0,1,2,3 을 돌고 처음으로 안 돌아왔다")
     // 여우 재생순서는 0,1,2,1 이라 셀 1 과 3 은 **같은 rect** 다. 0/1/2 는 서로 달라야 한다.
     #expect(cells[0] != cells[1] && cells[1] != cells[2] && cells[0] != cells[2],
@@ -348,7 +348,7 @@ func v0315bWalkAdvancesFrames() throws {
 
 @MainActor
 @Test("걷기 프레임이 없는 캐릭터는 옆모습 idle 로 접는다 — frontIdle 로 떨어지지 않는다")
-func v0315bWalkFoldsToSideIdleWhenMissing() throws {
+func v0316bWalkFoldsToSideIdleWhenMissing() throws {
     let fixture = try spriteFixture()
     let spec = try #require(fixture.manifest.atlas)
     // 걷기만 뺀 매니페스트(같은 아틀라스). 런타임의 자동 폴백은 frontIdle 이라, 여기서 sideIdle 로
@@ -377,7 +377,7 @@ func v0315bWalkFoldsToSideIdleWhenMissing() throws {
 
 @MainActor
 @Test("걷기를 오프스크린으로 구워 눈으로 확인한다 — 다리가 실제로 바뀐다")
-func v0315bWalkRendersDistinctLegs() throws {
+func v0316bWalkRendersDistinctLegs() throws {
     let fixture = try spriteFixture()
     let scene = try #require(
         CheckCharacter3DScene.makeScene(animated: false, character: fixture.manifest, atlas: fixture.atlas))
@@ -402,14 +402,14 @@ func v0315bWalkRendersDistinctLegs() throws {
         try? png.write(to: url)
         paths.append(url.path)
     }
-    print("[v0315b] 걷기 렌더 \(paths.joined(separator: " "))")
+    print("[v0316b] 걷기 렌더 \(paths.joined(separator: " "))")
 
     // ★ 정답지는 프레임 번호가 아니라 **그림**이다. 번호만 도는 채 같은 셀을 그리면 "걷는 것으로 보이지 않는다".
     let d01 = try #require(pixelDifference(frames[0], frames[1]))
     let d12 = try #require(pixelDifference(frames[1], frames[2]))
     let d02 = try #require(pixelDifference(frames[0], frames[2]))
     let d13 = try #require(pixelDifference(frames[1], frames[3]))
-    print(String(format: "[v0315b] 걷기 픽셀 차이 %% — 0↔1 %.2f · 1↔2 %.2f · 0↔2 %.2f · 1↔3 %.2f",
+    print(String(format: "[v0316b] 걷기 픽셀 차이 %% — 0↔1 %.2f · 1↔2 %.2f · 0↔2 %.2f · 1↔3 %.2f",
                  d01, d12, d02, d13))
     #expect(d01 > 0.5 && d12 > 0.5 && d02 > 0.5, "걷기 프레임이 그림으로 구별되지 않는다 — 다리가 안 바뀐다")
     #expect(d13 < 0.01, "여우 재생순서(0,1,2,1)라면 1 과 3 은 같은 그림이어야 한다")
@@ -419,7 +419,7 @@ func v0315bWalkRendersDistinctLegs() throws {
 
 @MainActor
 @Test("클릭은 그려진 픽셀에서만 먹는다 — 격자 점을 렌더 그림과 대조한다")
-func v0315bAlphaHitTestMatchesWhatIsDrawn() throws {
+func v0316bAlphaHitTestMatchesWhatIsDrawn() throws {
     #expect(CheckPanelVisibility.isRunningTests, "테스트 판정이 거짓이면 아래 창이 사용자 화면에 뜬다")
     let fixture = try spriteFixture()
     let scene = try #require(
@@ -477,10 +477,10 @@ func v0315bAlphaHitTestMatchesWhatIsDrawn() throws {
         }
     }
     let rate = Double(agree) / Double(total) * 100
-    print(String(format: "[v0315b] 알파 히트테스트 격자 %d점 — 일치 %d (%.1f%%) · 몸 판정 %d점 · 불일치 %d",
+    print(String(format: "[v0316b] 알파 히트테스트 격자 %d점 — 일치 %d (%.1f%%) · 몸 판정 %d점 · 불일치 %d",
                  total, agree, rate, opaqueHits, disagree.count))
     for (point, hit, drawn) in disagree.prefix(6) {
-        print(String(format: "[v0315b]   불일치 (%.1f, %.1f) hit=%@ drawnAlpha=%d",
+        print(String(format: "[v0316b]   불일치 (%.1f, %.1f) hit=%@ drawnAlpha=%d",
                      point.x, point.y, hit ? "true" : "false", Int(drawn)))
     }
     #expect(rate >= 97, "클릭 판정이 화면에 그려진 것과 갈린다(일치 \(String(format: "%.1f", rate))%)")
@@ -501,7 +501,7 @@ func v0315bAlphaHitTestMatchesWhatIsDrawn() throws {
 
 @MainActor
 @Test("울트라가 발신자 캐릭터로 갈아입고 원복한다 — 뷰가 아니라 노드를 바꾼다")
-func v0315bUltraSwapsCharacterAndRestoresTheSameNode() throws {
+func v0316bUltraSwapsCharacterAndRestoresTheSameNode() throws {
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
     let parts = try chain(scene)
     let engine = ReactionEngine()
@@ -534,7 +534,7 @@ func v0315bUltraSwapsCharacterAndRestoresTheSameNode() throws {
 
 @MainActor
 @Test("모르는 캐릭터 ID·nil 은 교체하지 않는다 — throw 하지 않고 내 캐릭터 그대로")
-func v0315bUnknownCharacterIDKeepsMine() throws {
+func v0316bUnknownCharacterIDKeepsMine() throws {
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
     let parts = try chain(scene)
     let engine = ReactionEngine()
@@ -551,7 +551,7 @@ func v0315bUnknownCharacterIDKeepsMine() throws {
 
 @MainActor
 @Test("격발 왕복 뒤에도 방향·걷기 계약이 살아 있다 — 재-attach 가 방향을 다시 먹인다")
-func v0315bFacingSurvivesTheSwap() throws {
+func v0316bFacingSurvivesTheSwap() throws {
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
     let parts = try chain(scene)
     let engine = ReactionEngine()
@@ -575,7 +575,7 @@ func v0315bFacingSurvivesTheSwap() throws {
 
 @MainActor
 @Test("드래그가 걷기를 켜고 놓으면 끈다 — 보드 연동 순서는 그대로")
-func v0315bDragWiringDrivesWalking() throws {
+func v0316bDragWiringDrivesWalking() throws {
     let controller = isolatedOverlayController()
     let fixture = try spriteFixture()
     let scene = try #require(
@@ -617,7 +617,7 @@ func v0315bDragWiringDrivesWalking() throws {
 
 @MainActor
 @Test("보드가 열려 있으면 놓는 순간에도 걷기만 꺼진다 — 방향의 주인은 보드다")
-func v0315bReleaseWithBoardOpenStopsWalkingOnly() throws {
+func v0316bReleaseWithBoardOpenStopsWalkingOnly() throws {
     let controller = isolatedOverlayController()
     let fixture = try spriteFixture()
     let scene = try #require(
@@ -659,7 +659,7 @@ func v0315bReleaseWithBoardOpenStopsWalkingOnly() throws {
 
 @MainActor
 @Test("울트라 원복은 캐릭터가 안 돌아와도 프레임·못박기를 반드시 푼다")
-func v0315bUltraRestoreNeverLosesTheScreen() throws {
+func v0316bUltraRestoreNeverLosesTheScreen() throws {
     let controller = isolatedOverlayController()
     let before = controller.panel.frame
     // 캐릭터가 붙어 있지 않은 상태(씬 미마운트)로 격발한다 = 갈아입기가 **실패하는** 세계.
@@ -678,7 +678,7 @@ func v0315bUltraRestoreNeverLosesTheScreen() throws {
 
 @MainActor
 @Test("아잉 → 아잉 교체에도 감은눈이 **화면의** 캐릭터에 걸린다 — 캐시 열쇠는 씬이 아니라 노드다")
-func v0315bSleepEyeCacheFollowsTheVisibleCharacter() throws {
+func v0316bSleepEyeCacheFollowsTheVisibleCharacter() throws {
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
     let parts = try chain(scene)
     let engine = ReactionEngine()
@@ -704,7 +704,7 @@ func v0315bSleepEyeCacheFollowsTheVisibleCharacter() throws {
 
 @MainActor
 @Test("격발이 발신자 캐릭터를 실제로 세우고, 원복이 화면과 캐릭터를 함께 되돌린다")
-func v0315bUltraTakeoverSwapsAndRestoresThroughTheController() throws {
+func v0316bUltraTakeoverSwapsAndRestoresThroughTheController() throws {
     let controller = isolatedOverlayController()
     let before = controller.panel.frame
     // ★ 씬을 주입하지 않는다. 격발이 패널을 띄우는 순간 SwiftUI 가 SCNView 를 **실제로 마운트**하고
@@ -736,7 +736,7 @@ func v0315bUltraTakeoverSwapsAndRestoresThroughTheController() throws {
 
 @MainActor
 @Test("나와 같은 캐릭터·모르는 ID 는 갈아입지 않는다 — 일반 찌르기도 건드리지 않는다")
-func v0315bSameCharacterUltraSkipsTheSwap() throws {
+func v0316bSameCharacterUltraSkipsTheSwap() throws {
     let controller = isolatedOverlayController()
     // 뷰를 먼저 세워 둔다(격발이 마운트하기 전에 '내 캐릭터'를 잡아 두려면 한 번 띄워야 한다).
     controller.handleReceivedPokes([

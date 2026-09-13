@@ -9,7 +9,7 @@ import Testing
 /// throw 되고, **그 사이 도착한 찔림이 전부 조용히 사라진다**(서버는 이미 원자 소비했다).
 /// `pokes.kind` 확장 때 실제로 그렇게 메시지를 잃었다.
 @Suite("v0.3.15 울트라 캐릭터 — 모델")
-struct V0315UltraCharacterModelTests {
+struct V0316UltraCharacterModelTests {
 
     private func decode(_ json: String) throws -> [TakenPokeRow] {
         let decoder = JSONDecoder()

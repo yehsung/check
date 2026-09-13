@@ -70,12 +70,19 @@ except ModuleNotFoundError as exc:  # 어느 인터프리터로 돌렸는지까�
 # 종이 다섯뿐이므로 규칙 하나를 억지로 찾는 대신 **그 종만 조정한다**. 여기 없는 캐릭터는 기본값.
 #   head_side : 머리 상자 한 변(몸통 높이 대비). 키우면 더 넓게(몸까지), 줄이면 얼굴만.
 #   head_top  : 얼굴 중심을 찾을 위쪽 띠 비율. 귀·뿔이 큰 종은 줄여야 중심이 위로 안 끌린다.
+# ⚠️ **다리 띠 미러(--contact-b-from)는 픽셀아트 전용이다.** 글로시 3D 화풍에서는 쓰지 마라 —
+#    그라디언트가 연속이라 가로 절단선이 그대로 보인다(2026-09-13 실측, bandsweep 5단계: band 0.16
+#    이상은 전부 몸통에 이음매가 생기고, 0.12 는 이음매는 없지만 발만 뒤집혀 다리 교대가 안 된다).
+#    픽셀아트에서 통했던 이유는 블록 경계가 이미 계단이라 절단선이 묻혔기 때문이다.
+#    글로시는 **접지 B 를 새로 생성한다** — 접지 A 를 ref 로 붙여 "편집"시키지 말고 베이스(정면)만
+#    주고 대각 반대쪽을 처음부터 그리게 하면 된다. 픽셀아트 라운드가 실패한 건 낱말이 아니라 그
+#    "편집" 경로 때문이었다(코덱스는 첨부 그림을 보존하는 쪽으로 강하게 치우친다).
+#    실측 다리띠 IoU(낮을수록 다리가 바뀐 것): 시바 0.702 · 다람쥐 0.754 · 여우 0.507
+#    — 픽셀아트 라운드의 편집 방식은 0.86~0.95 였다(= 거의 안 움직임).
 WALK_TUNING = {
     # leg_band: 아래에서부터 몇 %를 "다리"로 보고 미러할지. 꼬리가 낮으면 좁혀라.
-    "shiba":  {"leg_band": 0.34},
-    "panda":  {"leg_band": 0.34},
-    "rabbit": {"leg_band": 0.34},
-    "dragon": {"leg_band": 0.30},   # 꼬리가 낮게 깔린다
+    # 지금 번들에는 이 표를 쓰는 캐릭터가 없다(5종 전부 글로시 = 접지 B 를 생성한다). 픽셀아트
+    # 캐릭터를 다시 넣을 때를 위해 기구는 남겨 둔다.
 }
 
 PORTRAIT_TUNING = {
@@ -84,6 +91,25 @@ PORTRAIT_TUNING = {
 # ───────────────────────────────────────────────────────────────────────────────────────────
 
 PORTRAIT_SIZE = 192   # 메뉴바(18pt)·팝오버(46pt)가 함께 쓰는 초상 한 변
+# 아틀라스 셀 **높이 상한**. 입력 원본이 커도 여기서 잘린다.
+#
+# **왜 상한이 필요한가**: 픽셀아트 입력은 원래 작아서(셀 236px) 상한이 없어도 됐다. 글로시 3D 입력은
+# 한 변이 1200~1400px 라 그대로 구우면 셀 1200px × 4장 = 아틀라스 5000px 급이 된다 — 번들에 못 넣는다.
+#
+# **왜 하필 이 숫자인가**(2026-09-13 실측):
+#   · 평상시 데스크톱 패널은 `CheckOverlayWindow.panelSize` = 140×170pt → 1배 170px · 2배 340px.
+#   · 최대 확대 지점은 **울트라 찌르기 5초 격발**이다. `ultraPanelFrame(in:) = screenFrame` 이라
+#     화면 전체로 커진다. 개발 맥 주 모니터는 1920×1080 @1배 → 세로 1080px.
+#     (2배 레티나 1440p 사용자라면 ~2880px 까지 갈 수 있다.)
+#   · 즉 평상시는 512 로 **충분히 남고**(패널 170px 기준 3.4배 과표본), 격발 5초 동안만 2.1배
+#     업스케일이 된다. 글로시는 원래 부드러운 그라디언트라 업스케일이 픽셀아트만큼 티나지 않는다.
+#   · 번들 무게 실측(글로시 5종 아틀라스 PNG 합계):
+#         상한 384 → 2.9MB (셀 426×388)   상한 512 → 5.0MB (셀 567×516)   상한 768 → 9.3MB (셀 805×732)
+#     앱 전체가 32MB, 리소스 번들이 9.3MB 다. 512 는 +5.0MB 로 값을 치를 만하고 768 은 격발 5초를
+#     위해 4.3MB 를 더 내는 셈이라 접었다. 384 는 격발에서 2.8배 확대라 조금 무르다.
+#   · 메뉴바·팝오버 초상은 이 아틀라스가 아니라 `portrait-*.png`(192², 5종 합계 0.57MB)를 쓰므로
+#     여기 계산과 무관하다.
+DEFAULT_MAX_CELL_HEIGHT = 512
 DEFAULT_ALPHA_THRESHOLD = 1
 # 셀 사방에 두는 투명 여백(px). diffuse 가 clamp + linear 라 셀 경계에서 이웃 셀이 번질 수 있는데,
 # 번져 들어오는 쪽이 투명이면 결과도 투명이다.
@@ -359,6 +385,10 @@ def pack(args: argparse.Namespace) -> None:
     # 그룹 간에도 **키(높이)를 맞춘다** — 정면/옆모습에서 캐릭터가 커졌다 작아지면 안 된다.
     # 확대는 하지 않는다(작은 쪽에 맞춘다): 업스케일은 흐려질 뿐 정보가 늘지 않는다.
     target_height = min(front.height, side.height)
+    # 그 위에 **상한을 한 겹 더** 씌운다(--max-height). 축소만 하므로 위 규칙과 충돌하지 않는다.
+    # 왜 필요한가 · 숫자 근거는 DEFAULT_MAX_CELL_HEIGHT 주석에.
+    if args.max_height > 0:
+        target_height = min(target_height, args.max_height)
     front_cells = front.scaled(target_height)
     side_cells = side.scaled(target_height)
 
@@ -417,11 +447,14 @@ def pack(args: argparse.Namespace) -> None:
     # 쌍은 같은 상자를 쓴다. --head-side 0 을 주면 자르지 않고 입력을 그대로 쓴다(아잉처럼 이미 두상인 캐릭터).
     if args.head_side > 0:
         tuning = PORTRAIT_TUNING.get(args.id, {})
-        side = tuning.get("head_side", args.head_side)
-        top = tuning.get("head_top", args.head_top)
+        # ⚠️ 이름을 `side` 로 두지 마라 — 위의 옆모습 Group `side` 를 덮어써 맨 아래 요약 print 가
+        #    `AttributeError: 'float' object has no attribute 'width'` 로 죽는다(산출물은 이미 다 쓴
+        #    뒤라 파일은 멀쩡한데 종료코드만 1 이다 = 스크립트로 감싸면 조용히 실패로 보인다).
+        head_side = tuning.get("head_side", args.head_side)
+        head_top = tuning.get("head_top", args.head_top)
         if tuning:
-            print("[{}]   캐릭터별 조정 적용: head_side={} head_top={}".format(args.id, side, top))
-        box = pair_locked_head_box([neutral, negative], args.alpha_threshold, top, side)
+            print("[{}]   캐릭터별 조정 적용: head_side={} head_top={}".format(args.id, head_side, head_top))
+        box = pair_locked_head_box([neutral, negative], args.alpha_threshold, head_top, head_side)
         portrait_neutral = resize_rgba(crop_padded(neutral, box), (PORTRAIT_SIZE, PORTRAIT_SIZE), nearest=args.pixel_art)
         portrait_negative = resize_rgba(crop_padded(negative, box), (PORTRAIT_SIZE, PORTRAIT_SIZE), nearest=args.pixel_art)
         print("[{}]   머리상자 {} (공유) → 초상 {}²".format(args.id, box, PORTRAIT_SIZE))
@@ -463,6 +496,8 @@ def main(argv: List[str]) -> int:
                         help="미러 결과가 앉을 프레임 번호(기본: 쓰이는 프레임 중 마지막)")
     parser.add_argument("--leg-band", type=float, default=0.34,
                         help="다리로 볼 아래쪽 비율(WALK_TUNING 에 종별 값이 있으면 그쪽이 이긴다)")
+    parser.add_argument("--max-height", type=int, default=DEFAULT_MAX_CELL_HEIGHT,
+                        help="아틀라스 셀 내용 높이 상한 px (0 = 무제한). 근거는 DEFAULT_MAX_CELL_HEIGHT 주석")
     parser.add_argument("--pixel-art", action="store_true",
                         help="픽셀아트 캐릭터: 리샘플을 NEAREST 로 하고 manifest 에 pixelArt=true 를 적는다")
     parser.add_argument("--head-side", type=float, default=0.62,

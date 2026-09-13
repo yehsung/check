@@ -62,7 +62,7 @@ struct V0316PanelCaptureProbe {
         try? FileManager.default.createDirectory(atPath: out, withIntermediateDirectories: true)
 
         var shots: [String: NSBitmapImageRep] = [:]
-        for id in ["aing", "shiba", "panda"] {
+        for id in ["aing", "shiba", "squirrel"] {
             let catalog = CheckCharacter3DScene.catalog
             let manifest = try #require(catalog.manifest(id: id), "\(id) 가 카탈로그에 없다")
             let engine = ReactionEngine()
@@ -112,7 +112,7 @@ struct V0316PanelCaptureProbe {
             (0..<rep.pixelsHigh).map { rep.colorAt(x: rep.pixelsWide / 2, y: $0)?.alphaComponent ?? 0 }
         }
         let aing = try #require(shots["aing"].map(centerColumn))
-        for id in ["shiba", "panda"] {
+        for id in ["shiba", "squirrel"] {
             let other = try #require(shots[id].map(centerColumn))
             let diff = zip(aing, other).map { abs($0 - $1) }.reduce(0, +) / Double(aing.count)
             print("[v0316-capture] \(id) vs aing 중앙열 알파 평균차 \(String(format: "%.4f", diff))")

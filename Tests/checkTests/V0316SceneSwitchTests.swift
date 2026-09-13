@@ -614,7 +614,7 @@ func v0316SideProfileNegativeStaysNil() throws {
 func v0316SideProfileCacheIsPerCharacter() throws {
     MiniGameMascot.resetCacheForTesting()
     let fox = try v0316Sprite("shiba")
-    let bot = try v0316Sprite("panda")
+    let bot = try v0316Sprite("squirrel")
     let foxImage = try #require(MiniGameMascot.sideProfile(character: fox.manifest))
     let botImage = try #require(MiniGameMascot.sideProfile(character: bot.manifest))
     let foxAgain = try #require(MiniGameMascot.sideProfile(character: fox.manifest))
@@ -636,7 +636,7 @@ func v0316SpriteSceneActuallyRenders() throws {
     let foxPNG = try #require(
         CheckCharacter3DScene.renderSnapshotPNG(size: size, character: fox.manifest, atlas: fox.atlas)
     )
-    let botFixture = try v0316Sprite("panda")
+    let botFixture = try v0316Sprite("squirrel")
     let botPNG = CheckCharacter3DScene.renderSnapshotPNG(size: size, character: botFixture.manifest,
                                                          atlas: botFixture.atlas)
 

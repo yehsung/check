@@ -25,7 +25,7 @@ import Testing
 // MARK: - 픽스처
 
 /// 파이프라인이 실제로 구운 스프라이트 캐릭터들. 새 캐릭터를 더하면 여기에 더한다.
-private let v0316SpriteCharacterIDs = ["panda", "shiba"]
+private let v0316SpriteCharacterIDs = ["squirrel", "shiba"]
 
 /// 갈래 1 `CharacterManifest` 가 요구하는 키 집합 — **정확히 이것뿐**이어야 한다.
 /// (없으면 디코드가 throw 하고, 오타가 섞이면 조용히 nil 로 접힌다. 양쪽 다 잡으려고 집합을 같다고 본다.)

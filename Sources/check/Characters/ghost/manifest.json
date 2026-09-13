@@ -1,19 +1,19 @@
 {
-  "id": "slime",
-  "displayName": "슬라임",
+  "id": "ghost",
+  "displayName": "유령",
   "kind": "sprite",
   "atlas": {
     "file": "atlas.png",
-    "width": 704,
-    "height": 132,
+    "width": 2032,
+    "height": 516,
     "states": {
       "frontIdle": {
         "frames": [
           {
             "x": 0,
             "y": 0,
-            "w": 176,
-            "h": 132
+            "w": 508,
+            "h": 516
           }
         ],
         "durationsMs": [
@@ -24,10 +24,10 @@
       "sideIdle": {
         "frames": [
           {
-            "x": 176,
+            "x": 1016,
             "y": 0,
-            "w": 176,
-            "h": 132
+            "w": 508,
+            "h": 516
           }
         ],
         "durationsMs": [
@@ -38,28 +38,28 @@
       "sideWalk": {
         "frames": [
           {
-            "x": 176,
+            "x": 508,
             "y": 0,
-            "w": 176,
-            "h": 132
+            "w": 508,
+            "h": 516
           },
           {
-            "x": 352,
+            "x": 1016,
             "y": 0,
-            "w": 176,
-            "h": 132
+            "w": 508,
+            "h": 516
           },
           {
-            "x": 528,
+            "x": 1524,
             "y": 0,
-            "w": 176,
-            "h": 132
+            "w": 508,
+            "h": 516
           },
           {
-            "x": 352,
+            "x": 1016,
             "y": 0,
-            "w": 176,
-            "h": 132
+            "w": 508,
+            "h": 516
           }
         ],
         "durationsMs": [
@@ -76,5 +76,5 @@
     "neutral": "portrait-neutral.png",
     "negative": "portrait-negative.png"
   },
-  "pixelArt": true
+  "pixelArt": false
 }

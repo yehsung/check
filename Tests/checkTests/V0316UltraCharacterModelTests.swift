@@ -46,9 +46,9 @@ struct V0316UltraCharacterModelTests {
         // 디코드 단계에서는 절대 throw 하면 안 된다(그러면 배치 전체가 소멸한다).
         let rows = try decode("""
         [{"id":"p1","from_user":"u1","from_display_name":"동료","from_avatar_url":null,
-          "created_epoch":1757000000,"kind":"ultra","body":null,"from_character":"dragon-2027"}]
+          "created_epoch":1757000000,"kind":"ultra","body":null,"from_character":"unknown-2027"}]
         """)
-        #expect(rows[0].fromCharacter == "dragon-2027")
+        #expect(rows[0].fromCharacter == "unknown-2027")
     }
 
     @MainActor

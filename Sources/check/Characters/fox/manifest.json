@@ -1,19 +1,19 @@
 {
-  "id": "dragon",
-  "displayName": "드래곤",
+  "id": "fox",
+  "displayName": "여우",
   "kind": "sprite",
   "atlas": {
     "file": "atlas.png",
-    "width": 1008,
-    "height": 236,
+    "width": 2408,
+    "height": 516,
     "states": {
       "frontIdle": {
         "frames": [
           {
             "x": 0,
             "y": 0,
-            "w": 252,
-            "h": 236
+            "w": 602,
+            "h": 516
           }
         ],
         "durationsMs": [
@@ -24,10 +24,10 @@
       "sideIdle": {
         "frames": [
           {
-            "x": 504,
+            "x": 1204,
             "y": 0,
-            "w": 252,
-            "h": 236
+            "w": 602,
+            "h": 516
           }
         ],
         "durationsMs": [
@@ -38,28 +38,28 @@
       "sideWalk": {
         "frames": [
           {
-            "x": 252,
+            "x": 602,
             "y": 0,
-            "w": 252,
-            "h": 236
+            "w": 602,
+            "h": 516
           },
           {
-            "x": 504,
+            "x": 1204,
             "y": 0,
-            "w": 252,
-            "h": 236
+            "w": 602,
+            "h": 516
           },
           {
-            "x": 756,
+            "x": 1806,
             "y": 0,
-            "w": 252,
-            "h": 236
+            "w": 602,
+            "h": 516
           },
           {
-            "x": 504,
+            "x": 1204,
             "y": 0,
-            "w": 252,
-            "h": 236
+            "w": 602,
+            "h": 516
           }
         ],
         "durationsMs": [
@@ -76,5 +76,5 @@
     "neutral": "portrait-neutral.png",
     "negative": "portrait-negative.png"
   },
-  "pixelArt": true
+  "pixelArt": false
 }

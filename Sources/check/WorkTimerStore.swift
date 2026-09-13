@@ -474,6 +474,16 @@ final class WorkTimerStore {
     var miniGamePublic = true
     /// 서버값 도착 또는 사용자가 직접 골랐음(tokenUsagePublicLoaded 와 같은 규약 — 폴링 GET 이 선택을 덮지 않게).
     @ObservationIgnored var miniGamePublicLoaded = false
+    /// 지금 판의 서버 발급 토큰(v0.3.17 위조 차단). **판이 시작될 때** 받아 두고 제출에 쓴다.
+    /// 한 토큰에 한 점수라 제출하면 비운다 — 다음 판은 새 토큰을 받는다.
+    /// 관찰 대상이 아니다: 화면이 이 값을 그리지 않는다(그렸다면 60Hz 판 중에 뷰가 다시 그려진다).
+    @ObservationIgnored var miniGameRoundToken: String?
+    /// 그 토큰이 **어느 게임의 것인가.** 게임을 바꾸면 남은 토큰은 못 쓴다(서버가 게임까지 대조한다) —
+    /// 종류를 안 들고 있으면 타이밍바 토큰으로 플래피 점수를 내려다 조용히 거절당한다.
+    @ObservationIgnored var miniGameRoundTokenKind: MiniGameKind?
+    /// 점수를 못 올렸을 때 사용자에게 보이는 한 줄. **조용히 버리지 않는다** — 삼키면
+    /// "잘 놀았는데 순위표에 없다"가 되고 그건 재현도 신고도 안 된다(이 저장소의 규약).
+    var miniGameSubmitNotice: String?
 
     // ── 소속 센터 (v0.3.13) ──
     /// 내 소속 센터의 **서버값**(profiles.center 미러, nil = 미지정이거나 아직 모름).
@@ -3029,6 +3039,11 @@ extension WorkTimerStore {
         miniGameYesterdayWinner = nil
         miniGamePublic = true
         miniGamePublicLoaded = false
+        // 토큰은 **계정에 묶인다**(서버가 소유자를 대조한다). 남기면 다음 사람이 앞 사람 토큰으로
+        // 제출을 시도해 조용히 거절당한다 — 화면엔 "점수를 못 올렸어요"만 남아 원인을 못 찾는다.
+        miniGameRoundToken = nil
+        miniGameRoundTokenKind = nil
+        miniGameSubmitNotice = nil
         // 제보도 계정에 묶인다(v0.2.48). 남기면 다음 사람이 **앞 사람이 쓴 글**을 그대로 본다 —
         // 이 화면이 나르는 것은 순위 숫자가 아니라 사용자가 쓴 문장이라, 누수의 값이 다른 표면과 다르다.
         // 미해결 건수는 관리자 깃발(ultraUnlimited)과 함께 0 으로 내려간다 — 로그아웃한 사람에게 남의 배지를 보여 줄 이유가 없다.

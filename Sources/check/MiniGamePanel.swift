@@ -381,9 +381,14 @@ struct CheckMiniGameWindowView: View {
                 .monospacedDigit()
                 .lineLimit(1)
             Spacer(minLength: 4)
-            Text(MiniGameKind.controlHint)
+            // ★ 점수를 못 올렸다는 안내는 **새 줄을 만들지 않고** 조작 안내 자리를 빌린다(v0.3.17).
+            //   이 스트립은 32pt 고정이고 창 레이아웃이 순수 상수로 못 박혀 있다 — 줄을 더하면
+            //   `MiniGameLayout` 전부를 다시 재야 한다. 셋 중 조작 안내가 제일 덜 급하고,
+            //   안내가 뜨는 순간은 이미 판이 끝난 뒤라 조작법을 볼 이유도 없다.
+            //   조용히 삼키지 않는 이유: 삼키면 "잘 놀았는데 순위표에 없다"가 되고 재현도 신고도 안 된다.
+            Text(store.miniGameSubmitNotice ?? MiniGameKind.controlHint)
                 .font(.caption2)
-                .foregroundStyle(CheckTheme.secondaryText)
+                .foregroundStyle(store.miniGameSubmitNotice == nil ? CheckTheme.secondaryText : CheckTheme.danger)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
@@ -408,6 +413,11 @@ struct CheckMiniGameWindowView: View {
             onFinished: { score in store.recordMiniGameScore(kind: kind, score: score) },
             onPlayingChanged: { playing in
                 isPlaying = playing
+                // ★ 판이 **시작되는** 이 순간이 서버 토큰을 받는 자리다(v0.3.17 위조 차단).
+                //   두 게임이 전부 이 한 호스트를 지나므로 배선 지점이 하나다 — 게임마다 따로 붙이면
+                //   한쪽을 빠뜨렸을 때 그 게임 점수만 통째로 안 올라간다(겉으론 안 보인다).
+                //   `beginMiniGameRound` 는 Task 로 띄우고 기다리지 않는다(60Hz 판을 막지 않는다).
+                if playing { store.beginMiniGameRound(kind: kind) }
                 // 판이 스스로 끝났으면(게임오버·10라운드 완주) 정지 상태도 같이 푼다 — 안 그러면 결과 화면 위에
                 // 스크림이 남아 아무것도 못 누르는 창이 된다.
                 if !playing {

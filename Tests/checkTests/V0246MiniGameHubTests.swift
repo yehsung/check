@@ -139,10 +139,20 @@ func recordScoreRejectsOutOfRangeAndRaisesLocalBestOnlyUpward() async {
     store.recordMiniGameScore(kind: .flappy, score: 1000)
     #expect(store.miniGameBest(.flappy) == 999, "플래피 상한은 999")
 
-    // 유효한 판 세 개만 올라간다(범위 밖 둘은 요청 0건).
-    await mgWait { URLProtocolStub.requests(forHost: "mg-record").filter { $0.url?.path == "/rest/v1/minigame_daily_scores" }.count >= 3 }
-    let uploads = URLProtocolStub.requests(forHost: "mg-record").filter { $0.url?.path == "/rest/v1/minigame_daily_scores" }
-    #expect(uploads.count == 3, "유효한 판마다 한 번 올린다(최고 유지·판 수는 서버 트리거 몫) — \(uploads.count)건")
+    // v0.3.17: 제출은 **토큰 RPC** 로 나간다(표 직접 쓰기는 회수됐다). 위 호출들은 토큰을 받아 둔 적이
+    // 없으므로 요청이 **한 건도** 나가면 안 된다 — 그게 위조 차단의 본체다.
+    try? await Task.sleep(for: .milliseconds(150))
+    let stray = URLProtocolStub.requests(forHost: "mg-record")
+        .filter { ($0.url?.path ?? "").contains("minigame_submit_score") || ($0.url?.path ?? "").contains("minigame_daily_scores") }
+    #expect(stray.isEmpty, Comment(rawValue: "토큰 없이 점수가 나갔다 — \(stray.count)건"))
+
+    // 토큰을 받아 둔 판은 나간다(위 단언이 "아무것도 안 나간다"로 공허해지지 않게 하는 대조군).
+    store.miniGameRoundToken = "tok-record"
+    store.miniGameRoundTokenKind = .flappy
+    store.recordMiniGameScore(kind: .flappy, score: 500)
+    await mgWait { !URLProtocolStub.requests(forHost: "mg-record").filter { ($0.url?.path ?? "").contains("minigame_submit_score") }.isEmpty }
+    let sent = URLProtocolStub.requests(forHost: "mg-record").filter { ($0.url?.path ?? "").contains("minigame_submit_score") }
+    #expect(sent.count == 1, Comment(rawValue: "토큰이 있는 판이 안 나갔다 — \(sent.count)건"))
 }
 
 @MainActor
@@ -154,28 +164,33 @@ func recordScoreSkipsUploadWhenRankingIsPrivate() async {
     store.recordMiniGameScore(kind: .timingBar, score: 500)
     #expect(store.miniGameBest(.timingBar) == 500, "비공개여도 로컬 최고는 남는다")
     try? await Task.sleep(for: .milliseconds(150))
-    let uploads = URLProtocolStub.requests(forHost: "mg-private").filter { $0.url?.path == "/rest/v1/minigame_daily_scores" }
+    let uploads = URLProtocolStub.requests(forHost: "mg-private")
+        .filter { ($0.url?.path ?? "").contains("minigame_") }
     #expect(uploads.isEmpty, "공개를 끈 사람의 점수가 올라갔다 — 설정 문구('올라가지도 않아요')가 거짓이 된다")
 }
 
 @MainActor
 @Test
-func uploadBodyCarriesExactlyUserGameAndBestScoreAndTargetsTheDailyTable() async throws {
+func uploadBodyCarriesTheRoundTokenAndTargetsTheSubmitRPC() async throws {
+    // v0.3.17: 예전에는 `/rest/v1/minigame_daily_scores` 에 user_id·game·best_score 를 직접 upsert 했다.
+    // 그 본문은 `curl` 한 줄로 그대로 흉내 낼 수 있었다 — 그래서 표 쓰기를 회수하고 토큰 RPC 로 옮겼다.
     let store = mgStore(host: "mg-upload-shape")
+    store.miniGameRoundToken = "tok-shape"
+    store.miniGameRoundTokenKind = .flappy
     store.recordMiniGameScore(kind: .flappy, score: 42)
-    await mgWait { !URLProtocolStub.requests(forHost: "mg-upload-shape").filter { $0.url?.path == "/rest/v1/minigame_daily_scores" }.isEmpty }
+    await mgWait { !URLProtocolStub.requests(forHost: "mg-upload-shape").filter { ($0.url?.path ?? "").contains("minigame_submit_score") }.isEmpty }
     let requests = URLProtocolStub.requests(forHost: "mg-upload-shape")
     let bodies = URLProtocolStub.bodies(forHost: "mg-upload-shape")
-    let index = try #require(requests.firstIndex { $0.url?.path == "/rest/v1/minigame_daily_scores" })
-    let request = requests[index]
-    #expect(request.httpMethod == "POST")
-    #expect(request.url?.query?.contains("on_conflict=user_id,game,day") == true, "충돌 키는 (user_id, game, day) — \(request.url?.query ?? "")")
-    #expect(request.value(forHTTPHeaderField: "Prefer") == "resolution=merge-duplicates,return=minimal")
+    let index = try #require(requests.firstIndex { ($0.url?.path ?? "").contains("minigame_submit_score") })
+    #expect(requests[index].httpMethod == "POST")
     let json = try #require(try JSONSerialization.jsonObject(with: Data(bodies[index].utf8)) as? [String: Any])
-    #expect(Set(json.keys) == ["user_id", "game", "best_score"], "본문 키가 정확히 셋이어야 한다(day 없음 — 서버가 정한다) — \(json.keys.sorted())")
-    #expect(json["user_id"] as? String == mgUserID)
-    #expect(json["game"] as? String == "flappy")
-    #expect(json["best_score"] as? Int == 42)
+    #expect(Set(json.keys) == ["p_game", "p_score", "p_token"],
+            Comment(rawValue: "본문 키가 바뀌었다 — \(json.keys.sorted())"))
+    #expect(json["p_game"] as? String == "flappy")
+    #expect(json["p_score"] as? Int == 42)
+    #expect(json["p_token"] as? String == "tok-shape")
+    // 옛 본문이 남아 있으면 서버는 무시하지만, 다음 사람이 그 키를 믿는다.
+    #expect(json["user_id"] == nil && json["best_score"] == nil, "옛 직접 upsert 본문이 남아 있다")
 }
 
 // MARK: - 오늘 순위

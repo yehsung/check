@@ -1177,18 +1177,40 @@ actor SupabaseWorkService {
 
     // MARK: - 미니게임 순위 (v0.2.46)
 
-    /// 이번 판 점수를 오늘(KST) 일별 원장에 올린다. minigame_daily_scores 에 (user_id, game, day) 로 upsert —
-    /// **day 는 본문에 없다**(서버 BEFORE INSERT 트리거가 KST 오늘로 정해 충돌 검사까지 그 날로 간다). 최고 유지·판 수는
-    /// 서버 트리거 몫이라 본문은 user_id·game·best_score(=이번 판 점수) 세 키뿐이다(merge-duplicates 는 본문 키만 갱신한다).
-    func upsertMiniGameScore(accessToken: String, userID: String, kind: MiniGameKind, score: Int) async throws {
-        try await sendNoBody(
-            path: "/rest/v1/minigame_daily_scores",
+    /// 판을 **시작한다**. 서버가 토큰과 시작 시각을 기록하고 토큰을 돌려준다.
+    ///
+    /// **왜 시작할 때 서버를 부르는가**(2026-09-14, 위조 차단): 예전에는 클라가 `minigame_daily_scores` 에
+    /// **직접 upsert** 했다. 그래서 앱 없이 `curl` 한 줄로 아무 점수나 올릴 수 있었고, 상금이 루비가 된
+    /// 뒤로는 그 구멍이 곧 재화 발행기였다(두 게임 1등 = 하루 40루비).
+    ///
+    /// 막는 방식은 **점수 값을 판단하지 않는다** — 그건 언젠가 정직한 사람을 막는다. 대신 "이 판이 실제로
+    /// 앱에서 시작됐는가"만 본다. 앱으로 노는 사람은 언제나 토큰이 있고 `curl` 하는 사람은 없다.
+    /// 서버는 제출 때 `경과 시간 ≥ 그 점수의 구조적 최소 시간`인지도 본다(게임 상수에서 나오는 물리량이라
+    /// 정직한 플레이는 정의상 그걸 못 깬다).
+    func startMiniGameRound(accessToken: String, kind: MiniGameKind) async throws -> MiniGameStartRoundResponse {
+        let data = try await send(
+            path: "/rest/v1/rpc/minigame_start_round",
             method: "POST",
-            queryItems: [URLQueryItem(name: "on_conflict", value: "user_id,game,day")],
-            body: MiniGameScoreUpsertRequest(userId: userID, game: kind.rawValue, bestScore: score),
+            body: MiniGameStartRoundRequest(pGame: kind.rawValue),
             accessToken: accessToken,
-            prefer: "resolution=merge-duplicates,return=minimal"
+            prefer: nil
         )
+        return try decoder.decode(MiniGameStartRoundResponse.self, from: data)
+    }
+
+    /// 끝난 판의 점수를 **토큰과 함께** 올린다. 한 토큰에 한 점수다(재사용하면 `token_used`).
+    /// 최고 유지·판 수 계산은 여전히 서버 몫이고, 클라는 서버가 확정한 값을 그대로 받아 쓴다.
+    func submitMiniGameScore(
+        accessToken: String, kind: MiniGameKind, score: Int, token: String
+    ) async throws -> MiniGameSubmitScoreResponse {
+        let data = try await send(
+            path: "/rest/v1/rpc/minigame_submit_score",
+            method: "POST",
+            body: MiniGameSubmitScoreRequest(pGame: kind.rawValue, pScore: score, pToken: token),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode(MiniGameSubmitScoreResponse.self, from: data)
     }
 
     /// 오늘(day nil → 서버 KST 오늘) 또는 지정한 날의 게임별 순위. minigame_board(p_game, p_day) RPC(앱 사용자 전체 공개,

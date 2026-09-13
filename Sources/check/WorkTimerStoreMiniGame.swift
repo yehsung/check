@@ -79,6 +79,11 @@ extension WorkTimerStore {
         miniGameKind = kind
         defaults.set(kind.rawValue, forKey: Self.miniGameKindKey)
         miniGameInterruptToken += 1
+        // 지난 게임의 토큰은 여기서 버린다. 서버가 게임까지 대조하므로 남겨 둬도 사고는 안 나지만,
+        // 남은 값이 "쓸 수 있는 토큰"처럼 보이면 다음 사람이 그렇게 읽는다.
+        miniGameRoundToken = nil
+        miniGameRoundTokenKind = nil
+        miniGameSubmitNotice = nil
         // 이전 게임의 행이 잠깐 남아 '이 게임 순위인 척' 보이지 않도록 비우고 로드 전 상태로 되돌린다.
         miniGameBoard = []
         miniGameBoardLoaded = false
@@ -101,35 +106,94 @@ extension WorkTimerStore {
         defaults.set(score, forKey: Self.miniGameBestKey(userID: session?.userID, kind: kind))
     }
 
+    /// 판이 **시작됐다**(게임 잎 뷰의 onPlayingChanged(true)). 서버에서 이 판의 토큰을 받아 둔다.
+    ///
+    /// ★ **반드시 시작 시점이어야 한다.** 서버는 토큰 발급 시각부터 제출까지의 경과가 그 점수를 낼 수
+    ///   있는 **구조적 최소 시간**보다 긴지 본다(타이밍바는 10라운드 주기 합의 절반, 플래피는
+    ///   기둥간격/속도의 누적 합 — 게임 상수에서 나오는 물리량이라 정직한 플레이는 정의상 못 깬다).
+    ///   끝날 때 받으면 경과가 0 이라 무조건 거절된다.
+    ///
+    /// ★ **게임을 막지 않는다.** Task 로 띄우고 응답을 기다리지 않는다 — 네트워크 때문에 60Hz 판이
+    ///   버벅이면 안 된다. 토큰이 늦거나 못 오면 그 판은 못 올리고, 그 사실을 사용자에게 말한다.
+    func beginMiniGameRound(kind: MiniGameKind) {
+        // 공개를 끈 사람은 순위표에 올라가지 않으므로 토큰도 받을 이유가 없다(설정 문구가 약속한 것).
+        guard miniGamePublic, session != nil else { return }
+        // 새 판이 시작됐다 — 지난 판의 토큰은 여기서 버린다(한 토큰에 한 점수).
+        miniGameRoundToken = nil
+        miniGameRoundTokenKind = nil
+        miniGameSubmitNotice = nil
+        Task { @MainActor in await performBeginMiniGameRound(kind: kind) }
+    }
+
+    /// 위의 본체. 실패는 **조용히** — 토큰이 없는 것은 제출 시점에 한 줄로 알린다(두 번 말하지 않는다).
+    func performBeginMiniGameRound(kind: MiniGameKind) async {
+        guard session != nil else { return }
+        let generation = sessionGeneration
+        do {
+            let response = try await withSessionRetry { activeSession in
+                try await service.startMiniGameRound(accessToken: activeSession.accessToken, kind: kind)
+            }
+            guard generation == sessionGeneration else { return }
+            // 판이 이미 끝났거나 다른 게임으로 바뀌었으면 늦게 온 토큰은 버린다.
+            guard let token = response.token, response.status == "ok" else { return }
+            miniGameRoundToken = token
+            miniGameRoundTokenKind = kind
+        } catch {
+            // 취소·오프라인·스키마 부재(서버 배포 전 창) 전부 여기로 온다. 토큰이 없는 채로 두고,
+            // 판이 끝나면 아래 recordMiniGameScore 가 한 줄로 알린다.
+        }
+    }
+
     /// 유효하게 끝난 판의 점수(게임 잎 뷰의 onFinished). 범위 밖(음수·상한 초과)은 버린다 — 서버 check 제약과 같은 값이라
-    /// 보내 봐야 400 이다. 로컬 최고를 올리고, 공개가 켜져 있으면 **판마다** 올린다(최고 유지·판 수는 서버 트리거 몫).
+    /// 보내 봐야 400 이다. 로컬 최고를 올리고, 공개가 켜져 있으면 **판마다** 올린다(최고 유지·판 수는 서버 몫).
     func recordMiniGameScore(kind: MiniGameKind, score: Int) {
         guard score >= 0, score <= kind.maxScore else { return }
         raiseMiniGameBest(kind, to: score)
         // 공개를 끈 사람은 순위표에 없고, 그래서 올릴 이유도 없다(끄면 "올라가지도 않아요" — 설정 문구가 약속한 것).
         guard miniGamePublic, session != nil else { return }
-        Task { @MainActor in await performSubmitMiniGameScore(kind: kind, score: score) }
+        // 토큰이 없으면 **보내지 않는다**(서버가 어차피 no_token 으로 거절한다). 조용히 버리지 않고 말한다.
+        guard let token = miniGameRoundToken, miniGameRoundTokenKind == kind else {
+            miniGameSubmitNotice = "점수를 못 올렸어요 — 연결을 확인하고 다시 해 주세요"
+            return
+        }
+        // 한 토큰에 한 점수다. 여기서 비워 두면 같은 토큰이 두 번 나가지 않는다.
+        miniGameRoundToken = nil
+        miniGameRoundTokenKind = nil
+        Task { @MainActor in await performSubmitMiniGameScore(kind: kind, score: score, token: token) }
     }
 
     /// 점수 업로드(performLoadTokenBoard 관용구: 세션 가드 → 세대 캡처 → withSessionRetry → 세대 가드). 성공하면 패널이
-    /// 보이는 동안 오늘 순위를 다시 받아 방금 판이 바로 반영되게 한다. 실패는 조용히 — 스키마 부재(마이그레이션 전 창)도
-    /// 실패 표시 없이 삼킨다(순위 조회의 실패 플래그는 조회의 것이지 제출의 것이 아니다).
-    func performSubmitMiniGameScore(kind: MiniGameKind, score: Int) async {
+    /// 보이는 동안 오늘 순위를 다시 받아 방금 판이 바로 반영되게 한다.
+    ///
+    /// **거절은 화면에 말한다.** 예전에는 실패를 통째로 삼켰는데, 그때는 실패가 "서버가 아직 없다" 정도였다.
+    /// 지금은 토큰 방식이라 거절이 곧 "이 판은 순위표에 안 올라간다"이고, 그걸 안 알리면
+    /// "잘 놀았는데 순위표에 없다"가 된다 — 재현도 신고도 안 되는 종류다.
+    func performSubmitMiniGameScore(kind: MiniGameKind, score: Int, token: String) async {
         guard session != nil else { return }
         let generation = sessionGeneration
         do {
-            try await withSessionRetry { activeSession in
-                try await service.upsertMiniGameScore(
-                    accessToken: activeSession.accessToken, userID: activeSession.userID, kind: kind, score: score)
+            let response = try await withSessionRetry { activeSession in
+                try await service.submitMiniGameScore(
+                    accessToken: activeSession.accessToken, kind: kind, score: score, token: token)
             }
             guard generation == sessionGeneration else { return }
-            // 창이 열려 있으면 재조회한다(팝오버는 닫혀 있어도 된다 — 게임은 별도 창이다).
-            if isMiniGamePanelVisible, miniGameKind == kind {
-                await performLoadMiniGameBoard()
+            if response.status == "ok" {
+                // 서버가 확정한 최고를 로컬에도 올린다(다른 맥에서 세운 기록이 섞여 있을 수 있다).
+                if let best = response.bestScore { raiseMiniGameBest(kind, to: best) }
+                miniGameSubmitNotice = nil
+                // 창이 열려 있으면 재조회한다(팝오버는 닫혀 있어도 된다 — 게임은 별도 창이다).
+                if isMiniGamePanelVisible, miniGameKind == kind {
+                    await performLoadMiniGameBoard()
+                }
+            } else {
+                // ⚠️ `need_seconds`/`elapsed_seconds` 는 **화면에 쓰지 않는다** — "얼마나 더 기다리면
+                //    통과하는지"를 알려 주는 순간 그건 위조 보조 도구다(진단은 응답에만 남는다).
+                miniGameSubmitNotice = "점수를 못 올렸어요"
             }
         } catch {
             if case .cancelled = classifyAuthError(error) { return }
-            // 그 외(스키마 부재·5xx·오프라인)는 조용히 — 로컬 최고는 이미 올랐고, 다음 판이 다시 올린다.
+            guard generation == sessionGeneration else { return }
+            miniGameSubmitNotice = "점수를 못 올렸어요 — 연결을 확인하고 다시 해 주세요"
         }
     }
 

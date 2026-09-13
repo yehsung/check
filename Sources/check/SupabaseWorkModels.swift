@@ -2561,12 +2561,54 @@ enum WorkTickFailure: Error, Equatable, Sendable {
 
 // MARK: - 미니게임 순위 (v0.2.46)
 
-/// minigame_daily_scores upsert 본문(snake_case 인코딩). **day 를 싣지 않는다** — 서버 BEFORE INSERT 트리거가 KST 오늘로
-/// 정한다(클라 시계 무시). best_score 에는 **이번 판 점수**를 싣고, 최고 유지(greatest)·판 수(plays+1)는 서버 트리거가 계산한다.
-struct MiniGameScoreUpsertRequest: Encodable {
-    let userId: String
-    let game: String
-    let bestScore: Int
+/// `minigame_start_round(p_game)` 본문. **판이 시작되는 순간** 부른다 — 나중에 부르면 서버가 잰 경과 시간이
+/// 0 에 가까워 제출이 무조건 거절된다(그게 위조 방어의 본체다).
+struct MiniGameStartRoundRequest: Encodable {
+    let pGame: String
+}
+
+/// `minigame_start_round` 응답.
+///
+/// ⚠️ **전부 Optional 이다.** 비옵셔널로 두면 이 키를 안 보내는 서버(배포 창·구버전)에서 디코드가 통째로
+/// throw 되고, 그러면 판 시작이 실패로 보여 게임이 죽는다(`PokeSendResponse.ultraBalance` 주석의 그 사고).
+struct MiniGameStartRoundResponse: Decodable, Equatable {
+    let status: String
+    /// 이 판의 토큰. `status == "ok"` 일 때만 온다. **한 토큰에 한 점수**다.
+    var token: String?
+    /// 토큰 만료 시각(ISO8601). 진단용 — 클라는 만료를 스스로 판정하지 않는다(서버가 유일한 권위다).
+    var expiresAt: String?
+    /// 서버 현재 시각(ISO8601). 진단용.
+    var serverNow: String?
+}
+
+/// `minigame_submit_score(p_game, p_score, p_token)` 본문.
+/// **표에 직접 쓰지 않는다** — `authenticated` 는 `minigame_daily_scores` 에 insert/update 권한이 없다.
+struct MiniGameSubmitScoreRequest: Encodable {
+    let pGame: String
+    let pScore: Int
+    let pToken: String
+}
+
+/// `minigame_submit_score` 응답.
+///
+/// ⚠️ 위와 같은 이유로 **전부 Optional** 이다.
+///
+/// ★ `needSeconds`·`elapsedSeconds` 는 **진단·로그 전용**이다. 이 숫자로 재시도 타이밍을 계산하지 마라 —
+///   "얼마나 더 기다리면 통과하는지"를 클라가 알려 주는 순간 그건 위조 보조 도구가 된다.
+struct MiniGameSubmitScoreResponse: Decodable, Equatable {
+    /// ok · no_token · token_used · token_expired · too_fast · invalid · unauthorized · no_profile
+    let status: String
+    /// 서버가 확정한 오늘 최고. **신기록 표시는 이 값을 쓴다** — 클라가 다시 계산하면 갈린다.
+    var bestScore: Int?
+    var plays: Int?
+    /// 이번 판이 최고를 갈아치웠는가. 서버 판정이다.
+    var improved: Bool?
+    /// too_fast 진단(초). 화면에 쓰지 않는다.
+    var needSeconds: Double?
+    /// too_fast 진단(초). 화면에 쓰지 않는다.
+    var elapsedSeconds: Double?
+    /// invalid 일 때 서버가 알려 주는 상한.
+    var max: Int?
 }
 
 /// minigame_board(p_game, p_day) RPC 본문. pDay 가 nil 이면 키를 생략해(encodeIfPresent) 서버가 KST 오늘을 쓴다;

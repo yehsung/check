@@ -35,19 +35,58 @@ func boardRequestOmitsTheDayKeyWhenNilAndSendsItWhenGiven() async throws {
     #expect(paths == ["/rest/v1/rpc/minigame_board", "/rest/v1/rpc/minigame_board"])
 }
 
+/// v0.3.17: 점수 제출이 **표 직접 쓰기에서 토큰 RPC 로** 바뀌었다.
+/// 예전에는 `/rest/v1/minigame_daily_scores` 로 upsert 해서 `curl` 한 줄이면 아무 점수나 올라갔다.
 @Test
-func upsertRequestShapeMatchesThePostgrestContract() async throws {
-    let service = mgService(host: "mg-svc-upsert")
-    try await service.upsertMiniGameScore(accessToken: "t", userID: "u-1", kind: .timingBar, score: 880)
-    let request = try #require(URLProtocolStub.requests(forHost: "mg-svc-upsert").first)
-    #expect(request.url?.path == "/rest/v1/minigame_daily_scores")
-    #expect(request.httpMethod == "POST")
-    #expect(request.url?.query == "on_conflict=user_id,game,day")
-    #expect(request.value(forHTTPHeaderField: "Prefer") == "resolution=merge-duplicates,return=minimal")
-    let body = try #require(try JSONSerialization.jsonObject(with: Data(URLProtocolStub.bodies(forHost: "mg-svc-upsert")[0].utf8)) as? [String: Any])
-    #expect(Set(body.keys) == ["user_id", "game", "best_score"])
-    #expect(body["best_score"] as? Int == 880)
-    #expect(body["game"] as? String == "timing_bar")
+func startRoundAndSubmitUseTheTokenRPCsNotTheTable() async throws {
+    let service = mgService(host: "mg-svc-token")
+    _ = try? await service.startMiniGameRound(accessToken: "t", kind: .timingBar)
+    _ = try? await service.submitMiniGameScore(accessToken: "t", kind: .flappy, score: 29, token: "tok-1")
+    let paths = URLProtocolStub.requests(forHost: "mg-svc-token").map { $0.url?.path ?? "" }
+    #expect(paths == ["/rest/v1/rpc/minigame_start_round", "/rest/v1/rpc/minigame_submit_score"],
+            Comment(rawValue: "표 직접 쓰기로 돌아갔다 — \(paths)"))
+
+    let bodies = URLProtocolStub.bodies(forHost: "mg-svc-token")
+    let start = try #require(try JSONSerialization.jsonObject(with: Data(bodies[0].utf8)) as? [String: Any])
+    #expect(Set(start.keys) == ["p_game"])
+    #expect(start["p_game"] as? String == "timing_bar")
+
+    // ★ 제출 본문에 **토큰이 실린다**. 이게 빠지면 서버가 no_token 으로 거절하고 점수가 통째로 안 올라간다.
+    let submit = try #require(try JSONSerialization.jsonObject(with: Data(bodies[1].utf8)) as? [String: Any])
+    #expect(Set(submit.keys) == ["p_game", "p_score", "p_token"],
+            Comment(rawValue: "제출 본문 키가 바뀌었다 — \(submit.keys.sorted())"))
+    #expect(submit["p_token"] as? String == "tok-1")
+    #expect(submit["p_score"] as? Int == 29)
+    #expect(submit["game"] == nil, "user_id/game 을 직접 싣던 옛 본문이 남아 있다")
+}
+
+/// 서버 어휘 전부 + **키가 없는 응답**이 throw 하지 않는지. 비옵셔널로 두면 배포 창의 구버전 서버에서
+/// 디코드가 통째로 throw 되고 게임이 죽는다.
+@Test
+func submitResponseDecodesEveryStatusAndSurvivesMissingKeys() throws {
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let cases: [(String, String)] = [
+        (#"{"status":"ok","best_score":900,"plays":3,"improved":true}"#, "ok"),
+        (#"{"status":"no_token"}"#, "no_token"),
+        (#"{"status":"token_used"}"#, "token_used"),
+        (#"{"status":"token_expired"}"#, "token_expired"),
+        (#"{"status":"too_fast","need_seconds":14.5,"elapsed_seconds":1.2}"#, "too_fast"),
+        (#"{"status":"invalid","max":1000}"#, "invalid"),
+        (#"{"status":"unauthorized"}"#, "unauthorized"),
+        (#"{"status":"no_profile"}"#, "no_profile"),
+    ]
+    for (json, status) in cases {
+        let decoded = try decoder.decode(MiniGameSubmitScoreResponse.self, from: Data(json.utf8))
+        #expect(decoded.status == status, Comment(rawValue: json))
+    }
+    let ok = try decoder.decode(MiniGameSubmitScoreResponse.self,
+                                from: Data(#"{"status":"ok","best_score":900,"improved":true}"#.utf8))
+    #expect(ok.bestScore == 900 && ok.improved == true && ok.plays == nil)
+
+    // 시작 응답도 같은 규약.
+    let start = try decoder.decode(MiniGameStartRoundResponse.self, from: Data(#"{"status":"ok"}"#.utf8))
+    #expect(start.status == "ok" && start.token == nil, "키가 없어도 throw 하면 판 시작이 실패로 보인다")
 }
 
 @Test

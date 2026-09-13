@@ -1473,6 +1473,15 @@ struct TakenPokeRow: Decodable, Equatable {
     /// 통째로 throw 되어 그 사이 도착한 **모든** 찔림이(일반 찌르기까지) 조용히 소멸한다.
     /// nil 은 "빈 본문"이 아니라 "본문이 없거나 모른다"이다 — 일반/울트라 찌르기는 애초에 본문이 없어 늘 nil 로 온다.
     var body: String?
+    /// 보낸 사람의 **착용 캐릭터 ID**(v0.3.15). **kind·body 와 정확히 같은 이유로 Optional 이고 var 다** —
+    /// 이 컬럼을 더하는 마이그레이션이 늦게 적용된 서버는 키를 안 보내는데, 비옵셔널이면 [TakenPokeRow]
+    /// 디코드가 통째로 throw 되어 그 사이 도착한 **모든** 찔림이 조용히 소멸한다.
+    ///
+    /// 서버는 **종류를 가리지 않고** 이 값을 싣는다(normal·ultra·message 전부). "울트라만 보낸 사람
+    /// 캐릭터로 덮친다"는 서버 규칙이 아니라 **표시하는 쪽의 규칙**이다.
+    /// nil 이거나 우리가 모르는 ID 면 기본 캐릭터(아잉)로 접는다 — 서버는 새 ID 를 접지 않고 그대로 싣기 때문에
+    /// 허용 목록이 늘면 구버전 앱이 모르는 값을 받는다. **절대 throw 하지 마라.**
+    var fromCharacter: String?
 }
 
 /// 오버레이로 전달되는 수신 찔림 한 건.
@@ -1484,14 +1493,20 @@ struct ReceivedPoke: Equatable {
     /// 메시지 본문(kind == .message 일 때만 값이 있다). 서버가 이미 정규화·검증한 문자열이지만
     /// 표시 쪽은 이 값을 신뢰 대상이 아니라 **표시 대상**으로만 다뤄야 한다(길이 가정 금지 — 서버 상한이 바뀌면 늘어난다).
     let body: String?
+    /// 보낸 사람의 착용 캐릭터 ID(v0.3.15). nil 이면 기본 캐릭터(아잉)다.
+    /// 울트라 격발이 이 값으로 **찔린 사람 화면의 캐릭터를 5초간 갈아 끼운다** — 산 캐릭터가 남에게
+    /// 보이는 유일한 자리다. 모르는 ID 는 표시하는 쪽에서 아잉으로 접는다.
+    let fromCharacterID: String?
 
-    /// kind·body 기본값은 하위호환용이다 — 이 인자들을 모르는 기존 호출부가 그대로 컴파일된다.
-    init(id: String, fromName: String, createdAt: Date, kind: PokeKind = .normal, body: String? = nil) {
+    /// kind·body·fromCharacterID 기본값은 하위호환용이다 — 이 인자들을 모르는 기존 호출부가 그대로 컴파일된다.
+    init(id: String, fromName: String, createdAt: Date, kind: PokeKind = .normal, body: String? = nil,
+         fromCharacterID: String? = nil) {
         self.id = id
         self.fromName = fromName
         self.createdAt = createdAt
         self.kind = kind
         self.body = body
+        self.fromCharacterID = fromCharacterID
     }
 }
 

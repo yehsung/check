@@ -583,7 +583,8 @@ extension WorkTimerStore {
             // 늦게 도착한 울트라는 전체화면 격발을 포기하고 평범한 움찔로 **강등**한다(버리지 않는다) —
             // 보낸 사람이 하루 몇 번뿐인 몫을 이미 태웠으므로 최소한 누가 찔렀는지는 전해야 한다.
             if kind == .ultra, age > ultraDisplayFreshnessSeconds { kind = .normal }
-            return ReceivedPoke(id: row.id, fromName: row.fromDisplayName, createdAt: createdAt, kind: kind)
+            return ReceivedPoke(id: row.id, fromName: row.fromDisplayName, createdAt: createdAt, kind: kind,
+                                fromCharacterID: row.fromCharacter)
         }
     }
 

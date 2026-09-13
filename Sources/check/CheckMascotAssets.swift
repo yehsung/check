@@ -112,6 +112,15 @@ enum CheckMascotAssets {
         return stored
     }
 
+    /// 지금 착용한 캐릭터가 픽셀아트인가. 카탈로그의 매니페스트가 **유일한 출처**다.
+    ///
+    /// 이 값을 쓰는 쪽은 **확대·완만한 축소**뿐이다(헤더 46pt·선택 카드 52pt). 메뉴바(18pt)는
+    /// 192px 원본의 5.3배 축소라 이웃 보간이 픽셀을 너무 많이 버려 오히려 나빠진다 —
+    /// 렌더 비교로 확인했다(scratchpad/pack5/interp-compare.png). 거기는 묻지 말고 부드럽게 둬라.
+    static func currentCharacterIsPixelArt() -> Bool {
+        catalog.manifest(id: currentCharacterID())?.pixelArt == true
+    }
+
     /// 착용 캐릭터의 초상 PNG URL. 아잉(과 초상이 없는 3D 캐릭터)은 종전 번들 루트 경로.
     static func portraitURL(for mood: Mood, characterID: String) -> URL? {
         guard characterID != CharacterCatalog.builtInAingID else { return url(for: mood) }

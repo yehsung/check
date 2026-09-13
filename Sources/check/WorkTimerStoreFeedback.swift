@@ -136,6 +136,7 @@ extension WorkTimerStore {
         closeUltraPanel()
         closeMessagePanel()
         closePokePanel()
+        closeCharacterPanel()
         isInsightsPanelVisible = false
         // 관리자 깃발이 아직 안 왔으면(로그인 직후 지갑 sync 전) 보내기 탭에서 시작한다.
         // 깃발이 도착하면 탭이 나타나고, 사용자가 고르면 그때 넘어간다 — 화면이 저절로 튀지 않는다.

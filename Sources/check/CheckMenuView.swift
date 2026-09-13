@@ -27,6 +27,11 @@ struct CheckMenuView: View {
     // ImageRenderer 는 AppKit 을 감싼 뷰를 **노란 상자**로 그리므로, 그대로 두면 대화·제보 스냅샷에서
     // 입력칸 자리가 통째로 눈먼 자리가 된다(이 저장소가 그런 자리에서 색 결함을 8일간 놓쳤다). 앱은 항상 false.
     var previewPlainTextEditors: Bool = false
+    /// 캐릭터 선택이 사는 UserDefaults 도메인. **설정 창과 같은 주입 규약**이다
+    /// (`CheckSettingsView.characterDefaults` · `CheckCharacter3DScene.selectedCharacter(defaults:)`) —
+    /// 앱은 전부 `.standard` 하나를 보고, 테스트는 자기 스위트를 넣어 표준 도메인을 건드리지 않는다
+    /// (같은 순간 병렬로 아잉 픽셀을 재는 스위트가 있다).
+    var characterDefaults: UserDefaults = .standard
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
@@ -105,7 +110,7 @@ struct CheckMenuView: View {
         }
     }
 
-    /// 하위 패널(리그/토큰/찌르기/개인 기록/울트라/**1:1 대화**/**제보**)이 열려 있는지.
+    /// 하위 패널(리그/토큰/찌르기/개인 기록/울트라/**1:1 대화**/**제보**/**캐릭터**)이 열려 있는지.
     /// 열려 있으면 팀 카드 자리를 그 패널이 대신 쓴다.
     ///
     /// 미니게임은 **여기 없다** — v0.2.46 에 별도 창(`CheckMiniGameWindowController`)으로 나갔다. 팝오버 자리를
@@ -120,6 +125,7 @@ struct CheckMenuView: View {
         store.isLeaderboardVisible || store.isTokenBoardVisible || store.isPokePanelVisible
             || store.isInsightsPanelVisible || store.isUltraPanelVisible
             || store.isMessagePanelVisible || store.isFeedbackPanelVisible
+            || store.isCharacterPanelVisible
     }
 
     /// 위 목록이 세는 **패널 깃발의 이름들**(테스트가 읽는 유일한 권위).
@@ -131,7 +137,10 @@ struct CheckMenuView: View {
     static let subPanelFlagNames = [
         "isLeaderboardVisible", "isTokenBoardVisible", "isPokePanelVisible",
         "isInsightsPanelVisible", "isUltraPanelVisible",
-        "isMessagePanelVisible", "isFeedbackPanelVisible"
+        "isMessagePanelVisible", "isFeedbackPanelVisible",
+        // 캐릭터 선택(v0.3.15). 진입점은 레일이 아니라 헤더 마스코트지만, **팝오버 자리를 먹는 것은 같다** —
+        // 들어오는 문이 어디냐가 아니라 팀 카드 자리를 대신 쓰느냐가 이 목록의 기준이다.
+        "isCharacterPanelVisible"
     ]
 
     /// 토큰 소모량 행은 홈(팀 목록) 화면의 구성요소다 — 하위 패널이 열리면 감춘다. 패널이 쓸 세로 공간을
@@ -454,6 +463,23 @@ struct CheckMenuView: View {
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList,
                             onBack: { store.toggleInsightsPanel() }
+                        )
+                    } else if store.isCharacterPanelVisible {
+                        // 캐릭터 선택(v0.3.15). 들어오는 문은 헤더 카드의 마스코트 하나뿐이라 [뒤로]가
+                        // 돌아갈 곳은 언제나 홈(팀 목록)이다 — origin 을 물을 이유가 없다(제보와 같은 규약).
+                        //
+                        // **값만 받는다.** 카탈로그는 번들 한 번 훑고 캐시된 값이고 선택은 UserDefaults 라
+                        // 스토어를 통째로 내려보낼 이유가 없다 — 이 패널은 displayNow 를 읽지 않으므로
+                        // 매초 무효화 경로도 생기지 않는다.
+                        CheckCharacterPanel(
+                            catalog: CheckCharacter3DScene.catalog,
+                            selection: CharacterSelection(
+                                defaults: characterDefaults,
+                                catalog: CheckCharacter3DScene.catalog
+                            ),
+                            extraChromeHeight: listExtraChromeHeight,
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                            onBack: { store.closeCharacterPanel() }
                         )
                     } else {
                         // store 를 통째로 내려보내 초단위(displayNow) 의존을 잎 뷰로 격리한다 — TeamPanel 본체는
@@ -872,8 +898,7 @@ private struct HeaderCard: View {
     var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
-                CheckMascotView(snapshot: store.snapshot)
-                    .frame(width: 46, height: 46)
+                CharacterEntryButton(store: store)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(store.snapshot.localizedStatus)
                         .font(.subheadline.weight(.semibold))

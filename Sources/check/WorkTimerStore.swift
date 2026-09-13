@@ -503,6 +503,23 @@ final class WorkTimerStore {
     /// ★ 이 깃발은 `CheckMenuView.isSubPanelOpen` 에 **반드시 들어가 있어야 한다.** 빠뜨리면 토큰 소모량
     ///   행이 패널과 함께 그려져 창이 700pt 상한을 넘고 푸터(로그아웃/앱 종료)가 잘린다.
     var isFeedbackPanelVisible = false
+
+    // MARK: - 캐릭터 선택 패널 (v0.3.15)
+    //
+    // 팝오버 **안의** 하위 패널이다(별도 창도 설정 안도 아니다 — 2026-09-13 사용자 확정). 진입점은 레일이
+    // 아니라 **헤더 카드의 46×46 마스코트**다: 레일 여섯 칸은 이미 꽉 차 있어 일곱 번째를 더하면 레일이
+    // 창 높이를 결정해 버리고, "내 캐릭터를 고른다"는 마스코트를 누르는 편이 더 자연스럽다.
+    //
+    // ★ **관리자 게이트가 없다**(설정의 칩 줄과 다른 점이 이것뿐이다). 곧 상점이 붙어 일반 사용자도
+    //   캐릭터를 갖게 되고, 그때 카드에 잠금·가격이 얹힌다. 지금은 전원이 모든 캐릭터를 고를 수 있는
+    //   **의도한 중간 상태**다(사용자 확인). 설정의 칩 줄은 관리자용 빠른 경로로 그대로 남겼다.
+
+    /// 캐릭터 선택 패널이 팝오버 안에 떠 있는가.
+    ///
+    /// ★ 이 깃발은 `CheckMenuView.isSubPanelOpen` 에 **반드시 들어가 있어야 한다.** 빠뜨리면 토큰 소모량
+    ///   행이 패널과 함께 그려져 창이 700pt 상한을 넘고 푸터(로그아웃/앱 종료)가 잘린다.
+    var isCharacterPanelVisible = false
+
     /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
     /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.
     var feedbackList: [FeedbackReport] = []
@@ -1790,6 +1807,7 @@ final class WorkTimerStore {
             // closeMessagePanel() 은 origin 이 .poke 면 그 목록을 되살리므로, 뒤에 두면 되살아난 목록이 남는다.
             closeMessagePanel()
             closeFeedbackPanel()
+            closeCharacterPanel()
             closeTokenBoard()
             closePokePanel()
             closeUltraPanel()
@@ -1828,6 +1846,7 @@ final class WorkTimerStore {
         isLeaderboardVisible = false
         closeMessagePanel()
         closeFeedbackPanel()
+        closeCharacterPanel()
         closePokePanel()
         closeUltraPanel()
         isInsightsPanelVisible = false
@@ -1863,6 +1882,7 @@ final class WorkTimerStore {
         } else {
             closeMessagePanel()
             closeFeedbackPanel()
+            closeCharacterPanel()
             isPokePanelVisible = true
             isLeaderboardVisible = false
             closeTokenBoard()
@@ -1885,6 +1905,7 @@ final class WorkTimerStore {
         ultraPanelOrigin = origin
         closeMessagePanel()
         closeFeedbackPanel()
+        closeCharacterPanel()
         if origin == .poke {
             isPokePanelVisible = false
         }
@@ -1919,6 +1940,7 @@ final class WorkTimerStore {
         if isInsightsPanelVisible {
             closeMessagePanel()
             closeFeedbackPanel()
+            closeCharacterPanel()
             isLeaderboardVisible = false
             closeTokenBoard()
             closePokePanel()
@@ -1930,6 +1952,36 @@ final class WorkTimerStore {
             evaluateRetroBanner()
             loadInsights()
         }
+    }
+
+    /// 캐릭터 선택 패널을 닫는 **유일한** 경로(멱등). [뒤로]와 다른 패널을 여는 자리들이 전부 여기를 지난다.
+    ///
+    /// 닫으면서 지울 상태가 없다 — 이 패널이 나르는 값은 UserDefaults 에 사는 선택 하나뿐이라
+    /// (`CharacterSelection`), 화면을 닫는 것과 고른 것이 서로에게 아무 영향도 주지 않는다.
+    func closeCharacterPanel() {
+        guard isCharacterPanelVisible else { return }
+        isCharacterPanelVisible = false
+    }
+
+    /// 헤더 마스코트 버튼 액션. 캐릭터 선택 패널을 토글하고, 여는 순간 다른 패널을 전부 내린다.
+    ///
+    /// **로드가 없다.** 카탈로그는 번들을 한 번 훑어 캐시된 값이고(`CheckCharacter3DScene.catalog`),
+    /// 선택은 로컬 UserDefaults 다 — 이 패널이 여는 순간 네트워크로 나가는 요청은 하나도 없다.
+    func toggleCharacterPanel() {
+        if isCharacterPanelVisible {
+            closeCharacterPanel()
+            return
+        }
+        // 상호 배타. **closeMessagePanel() 이 맨 앞**이어야 한다 — 그 함수는 origin 이 .poke 면 콕찌르기
+        // 목록을 되살리므로, 뒤에 두면 되살아난 목록이 이 패널과 함께 남는다(toggleLeaderboard 의 그 주석).
+        closeMessagePanel()
+        closeFeedbackPanel()
+        isCharacterPanelVisible = true
+        isLeaderboardVisible = false
+        closeTokenBoard()
+        closePokePanel()
+        closeUltraPanel()
+        isInsightsPanelVisible = false
     }
 
     /// 회고 배너 [보기] 전용 진입점. 토글이 아니라 **열기**다 — 이미 개인 기록 패널을 보고 있는데 배너를 누르면
@@ -2837,6 +2889,10 @@ extension WorkTimerStore {
         isInsightsPanelVisible = false
         insightsLoaded = false
         insightsFailed = false
+        // 캐릭터 패널도 함께 내린다. 선택값 자체는 **지우지 않는다** — 그건 계정이 아니라 이 맥의 취향이고
+        // (UserDefaults 에 산다), 다시 로그인한 사람에게 자기가 고른 캐릭터가 아잉으로 되돌아가 있으면
+        // 그건 로그아웃이 한 일 중 아무도 요청하지 않은 것이다.
+        isCharacterPanelVisible = false
         // 미니게임 패널·순위·공개 설정도 계정에 묶인다(순위 행은 남의 것, 공개 여부는 그 계정의 선택). 진행 중이던 판은 끝낸다.
         // 로컬 최고기록은 계정별 키(miniGameBestKey 가 userID 를 포함)라 지울 필요가 없다.
         //

@@ -150,6 +150,9 @@ struct CodexUsageDiagnostics: Codable, Equatable, Sendable {
 /// ~/.codex/sessions **와 ~/.codex/archived_sessions** 를 전량 1회 순회해 진단값을 만든다. 순수 함수(상태 없음) — Task.detached 에서 돈다.
 /// 두 루트를 보는 이유는 프로덕션 스캐너와 같다(v0.2.41): 보관된 채팅은 후자로 rename 되므로 전자만 보면 그 몫이 빠져
 /// 아래 항등식이 깨진다. 루트 목록은 TokenUsageIncrementalScanner.codexRoots 를 그대로 쓴다(한 곳에서만 정의).
+/// v0.3.15: 그 루트에는 Orca home(codexHomes)도 들고, 파일 목록은 프로덕션과 **같은** dedupeCodexAliases 를 거친다 —
+/// Orca 가 하드링크/복사로 여러 home 에 걸어 둔 같은 세션을 여기서만 여러 번 읽으면 항등식이 깨진다
+/// (별칭이 전부 프로덕션의 mtime 프리필터 안에 있을 때 성립 — 하드링크는 mtime 을 공유한다).
 ///
 /// 산식은 프로덕션 스캐너(TokenUsageIncrementalScanner.scanCodex)의 Codex 경로를 **그대로 재현**한다:
 /// 파일에서 **처음 만나는 유효 token_count 는 델타를 만들지 않고 기준선만 세우고**(그 누적치는 직전 세션에서
@@ -179,8 +182,9 @@ enum CodexUsageDiagnosticsScanner {
         var result = CodexUsageDiagnostics()
         result.appBuild = appBuild
 
-        let files = TokenUsageIncrementalScanner.codexRoots(homeDirectory: homeDirectory, codexHome: codexHome)
-            .flatMap { rolloutFiles(under: $0) }
+        let roots = TokenUsageIncrementalScanner.codexRoots(homeDirectory: homeDirectory, codexHome: codexHome)
+        let files = TokenUsageIncrementalScanner.dedupeCodexAliases(roots.flatMap { rolloutFiles(under: $0) }, roots: roots)
+            .kept.map(\.url)
         result.filesTotal = files.count
         guard !files.isEmpty else { return result }
 
@@ -448,18 +452,20 @@ enum CodexUsageDiagnosticsScanner {
     /// root 아래를 재귀 순회해 이름이 "rollout-" 으로 시작하고 확장자가 jsonl 인 정규 파일을 경로 사전순으로 돌려준다.
     /// mtime 프리필터가 없다 — 진단은 전량을 봐야 "이 달 이벤트가 있는 파일" 자체가 옳게 골라졌는지 검증할 수 있다.
     /// 정렬은 결정성을 위해서다(중복 키의 '첫 출현' 귀속이 순회 순서에 의존한다).
-    private static func rolloutFiles(under root: URL) -> [URL] {
-        let keys: Set<URLResourceKey> = [.isRegularFileKey]
+    /// 크기·mtime 을 함께 돌려주는 이유(v0.3.15): 별칭 제거의 정본 선택이 크기를 본다(프로덕션 recentFiles 와 같은 모양).
+    private static func rolloutFiles(under root: URL) -> [(url: URL, size: Int, mtimeMicros: Int)] {
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
         guard let enumerator = FileManager.default.enumerator(
             at: root, includingPropertiesForKeys: Array(keys), options: [], errorHandler: nil
         ) else { return [] }
-        var out: [URL] = []
+        var out: [(url: URL, size: Int, mtimeMicros: Int)] = []
         for case let url as URL in enumerator {
             guard url.lastPathComponent.hasPrefix("rollout-"), url.pathExtension == "jsonl" else { continue }
             guard let values = try? url.resourceValues(forKeys: keys), values.isRegularFile == true else { continue }
-            out.append(url)
+            let mtime = values.contentModificationDate.map { Int(($0.timeIntervalSince1970 * 1_000_000).rounded()) } ?? 0
+            out.append((url, values.fileSize ?? 0, mtime))
         }
-        return out.sorted { $0.path < $1.path }
+        return out.sorted { $0.url.path < $1.url.path }
     }
 
     /// 파일 전체를 1MB 청크로 읽어 개행 단위 라인을 body 로 흘려보낸다(메모리 상수). 열기 실패면 조용히 지나간다.

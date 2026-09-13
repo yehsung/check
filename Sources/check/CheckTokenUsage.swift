@@ -974,6 +974,8 @@ enum TokenUsageIncrementalScanner {
         var codexBytesRead = 0
         /// 포크 파일의 복사 구간이라 델타를 내지 않고 건너뛴 token_count 이벤트 수(CodexForkRule). 로그·테스트 계측용.
         var codexForkCopyEvents = 0
+        /// 다른 home 의 정본에 밀려 읽지 않은 별칭 rollout 수(v0.3.15, dedupeCodexAliases — Orca 하드링크/복사본). 업로드 안 함, 계측용.
+        var codexAliasFilesSkipped = 0
         /// 안티그래비티(v0.3.12): stat 한 대화 db 수 · 실제로 연 수 · 새로 읽은 행 수 · 파싱이 거부한 행 수.
         /// AntigravityUsageScanner.Stats 를 그대로 옮겨 담는다(그쪽이 원본 — 여기서 다시 세지 않는다).
         var antigravityFilesStatted = 0
@@ -1109,12 +1111,131 @@ enum TokenUsageIncrementalScanner {
     /// 디렉터리). Codex CLI 는 채팅을 보관하면 파일을 `std::fs::rename` 으로 후자로 **옮기고**(mtime 보존), v0.2.40 까지의 스캐너는
     /// 전자만 봐서 옮겨진 파일의 이번 달 기여를 "사라진 파일"로 지웠다(issue #6 의 46% 과소집계). 파일 수 0 인 루트는
     /// 열거자가 아무것도 내지 않아 비용 0 이다.
+    ///
+    /// v0.3.15: home 이 여럿일 수 있다(codexHomes — Orca). 반환은 home 마다 `[sessions, archived_sessions]` 쌍을 home 순서로
+    /// 평탄화한 것이고, Orca 폴더가 없으면 종전과 **정확히 같은** 두 원소다. 쌍 모양을 compressedTwinCandidates·
+    /// dedupeCodexAliases 가 전제한다(인덱스 / 2 = home 순위).
     static func codexRoots(homeDirectory: URL, codexHome: URL?) -> [URL] {
-        let base = codexHome ?? homeDirectory.appendingPathComponent(".codex", isDirectory: true)
-        return [
-            base.appendingPathComponent("sessions", isDirectory: true),
-            base.appendingPathComponent("archived_sessions", isDirectory: true)
-        ]
+        codexHomes(homeDirectory: homeDirectory, codexHome: codexHome).flatMap { base in
+            [
+                base.appendingPathComponent("sessions", isDirectory: true),
+                base.appendingPathComponent("archived_sessions", isDirectory: true)
+            ]
+        }
+    }
+
+    /// Orca(stablyai/orca) 의 macOS userData 폴더. 반드시 `homeDirectory` 에서 파생한다 — 테스트는 임시 홈으로 돈다.
+    static func orcaUserDataDirectory(homeDirectory: URL) -> URL {
+        homeDirectory.appendingPathComponent("Library/Application Support/orca", isDirectory: true)
+    }
+
+    /// 스캔할 Codex home 목록(v0.3.15). **순서가 곧 순위**다(dedupeCodexAliases 의 정본 선택 2순위).
+    ///   0: `codexHome ?? ~/.codex` — 로그인 셸 CODEX_HOME 또는 기본 home(없어도 넣는다 — 열거 비용 0, 종전 동작).
+    ///   1: Orca 공유 런타임 미러 `orca/codex-runtime-home/home`(있을 때만).
+    ///   2…: Orca 계정별 home `orca/codex-accounts/<id>/home`(이름순, 있을 때만).
+    /// 왜(2026-09-13 실측): Orca 에 Codex 계정을 연동하면 Codex 가 그 계정 home 을 CODEX_HOME 으로 받아 **거기에만** rollout 을
+    /// 쓴다 — 계정 사용량은 올라오는데 로컬 Codex 가 0 으로 잡힌 사용자의 원인이었다(`~/.codex/sessions` 는 9월 0개).
+    /// 레인 셋은 Orca 자체 사용량 스캐너(`codex-session-file-discovery.ts`)가 읽는 것과 같다.
+    /// `<id>` 나 `home` 이 심볼릭 링크면 제외한다 — Orca 도 리다이렉트된 루트를 거부한다(무관한 거대 트리를 훑지 않게).
+    /// 정규 경로가 같은 home 은 한 번만 넣는다 — CODEX_HOME 이 Orca 계정 home 을 가리키면 같은 트리를 두 번 연다.
+    static func codexHomes(homeDirectory: URL, codexHome: URL?) -> [URL] {
+        var candidates = [codexHome ?? homeDirectory.appendingPathComponent(".codex", isDirectory: true)]
+        let orca = orcaUserDataDirectory(homeDirectory: homeDirectory)
+        let runtimeHome = orca.appendingPathComponent("codex-runtime-home/home", isDirectory: true)
+        if isRealDirectory(runtimeHome) { candidates.append(runtimeHome) }
+        let accountsRoot = orca.appendingPathComponent("codex-accounts", isDirectory: true)
+        let ids = (try? FileManager.default.contentsOfDirectory(atPath: accountsRoot.path)) ?? []
+        for id in ids.sorted() {
+            let idDirectory = accountsRoot.appendingPathComponent(id, isDirectory: true)
+            let home = idDirectory.appendingPathComponent("home", isDirectory: true)
+            guard isRealDirectory(idDirectory), isRealDirectory(home) else { continue }
+            candidates.append(home)
+        }
+        var seen = Set<String>()
+        return candidates.filter { seen.insert(canonicalPathAllowingMissingTail($0.path)).inserted }
+    }
+
+    /// 심볼릭 링크가 **아닌** 디렉터리인가. attributesOfItem 은 링크를 따라가지 않는다(링크 자체면 .typeSymbolicLink).
+    private static func isRealDirectory(_ url: URL) -> Bool {
+        let type = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.type] as? FileAttributeType
+        return type == .typeDirectory
+    }
+
+    /// 존재하는 가장 긴 조상까지 realpath 로 정규화하고 남은 꼬리를 붙인다. 열거자가 준 경로(`/private/var/…`)와 홈에서 만든
+    /// 루트(`/var/…`)를 같은 모양으로 맞추려는 것이고, 이미 지워진 파일 경로(정리 규칙의 후보)에도 쓸 수 있다.
+    static func canonicalPathAllowingMissingTail(_ path: String) -> String {
+        var head = path
+        var tail: [String] = []
+        while !head.isEmpty {
+            if let raw = realpath(head, nil) {
+                let resolved = String(cString: raw)
+                free(raw)
+                guard !tail.isEmpty else { return resolved }
+                let joined = tail.reversed().joined(separator: "/")
+                return resolved.hasSuffix("/") ? resolved + joined : resolved + "/" + joined
+            }
+            if head == "/" { break }
+            tail.append((head as NSString).lastPathComponent)
+            head = (head as NSString).deletingLastPathComponent
+        }
+        return path
+    }
+
+    /// path 가 속한 home 의 순위(= 가장 긴 접두 루트의 인덱스 / 2). canonicalRoots 는 codexRoots 를 정규화한 것. 없으면 nil.
+    static func codexHomeIndex(for path: String, canonicalRoots: [String]) -> Int? {
+        let p = canonicalPathAllowingMissingTail(path)
+        var best: (index: Int, length: Int)?
+        for (i, root) in canonicalRoots.enumerated() where p.hasPrefix(root + "/") {
+            if best == nil || root.count > best!.length { best = (i, root.count) }
+        }
+        return best.map { $0.index / 2 }
+    }
+
+    /// home 간 별칭 제거(v0.3.15). Orca 는 같은 rollout 을 여러 home 에 **하드링크**로 걸고(session bridge: ~/.codex → 런타임 미러,
+    /// backfill: 미러 → ~/.codex) 교차 볼륨이면 **복사**한다. 경로 기준인 이 스캐너가 그대로 읽으면 그 세션이 home 수만큼 더해진다.
+    ///
+    /// 규칙: **파일명**으로 묶는다 — 이름(`rollout-<시각>-<세션 UUID>.jsonl`)에 세션 UUID 가 있어 서로 다른 세션이 같은 이름일 수
+    /// 없고, 포크는 새 UUID 를 받으며, Orca 는 이름을 보존한다. 그룹 원소가 **서로 다른 home** 에서 왔을 때만 정본 home 하나를
+    /// 고르고, 나머지 home 의 원소를 별칭으로 뺀다. 같은 home 안의 동명(sessions↔archived 보관 rename 경합)은 건드리지 않는다 —
+    /// 그건 scanCodexFiles 의 nameCounts/seenPaths 규칙 몫이다(정본 home 의 원소는 전부 남긴다).
+    /// 정본: (1) 크기 최대 — 복사본 중 이어 쓰인 쪽이 실사용을 담는다(하드링크는 크기가 늘 같다) (2) home 순위(codexHomes 순서)
+    /// (3) 경로 사전순.
+    /// 한계: 복사본 양쪽이 갈라져 **둘 다** 자라면 작은 쪽의 꼬리는 버려진다(드문 옛 bridge 경우 — 두 배로 세는 것보다 낫다).
+    ///
+    /// aliasPaths 는 정리 규칙이 **지워야 할** 상태 키다: 정본이 바뀌면 옛 정본 파일은 여전히 존재하므로 fileExists 로 살아남아
+    /// 새 정본 상태와 함께 두 배가 된다. 이름이 겹치는 그룹이 없으면 경로 정규화(realpath)를 한 번도 하지 않는다.
+    static func dedupeCodexAliases(
+        _ files: [(url: URL, size: Int, mtimeMicros: Int)], roots: [URL]
+    ) -> (kept: [(url: URL, size: Int, mtimeMicros: Int)], aliasPaths: Set<String>) {
+        var groups: [String: [Int]] = [:]
+        for (i, f) in files.enumerated() { groups[f.url.lastPathComponent, default: []].append(i) }
+        var canonicalRoots: [String]?
+        var dropped = Set<Int>()
+        var aliasPaths = Set<String>()
+        for members in groups.values where members.count > 1 {
+            let canon = canonicalRoots ?? roots.map { canonicalPathAllowingMissingTail($0.path) }
+            canonicalRoots = canon
+            let homeOf = members.map { codexHomeIndex(for: files[$0].url.path, canonicalRoots: canon) ?? Int.max }
+            guard Set(homeOf).count > 1 else { continue }
+            var best = 0
+            for k in 1..<members.count {
+                let a = files[members[k]], b = files[members[best]]
+                if a.size != b.size {
+                    if a.size > b.size { best = k }
+                } else if homeOf[k] != homeOf[best] {
+                    if homeOf[k] < homeOf[best] { best = k }
+                } else if a.url.path < b.url.path {
+                    best = k
+                }
+            }
+            for k in members.indices where homeOf[k] != homeOf[best] {
+                dropped.insert(members[k])
+                aliasPaths.insert(files[members[k]].url.path)
+            }
+        }
+        guard !dropped.isEmpty else { return (files, []) }
+        let kept = files.enumerated().filter { !dropped.contains($0.offset) }.map(\.element)
+        return (kept, aliasPaths)
     }
 
     /// Claude 일별 맵의 창(v0.2.43). start = 12주 잔디 창의 첫 날(이번 주 월요일 − 12주, KST 0시 = `WorkDailyGrid.windowStart`),
@@ -1159,16 +1280,26 @@ enum TokenUsageIncrementalScanner {
 
     // MARK: Claude Code
 
-    /// ~/.claude/projects/**/*.jsonl. type=="assistant" + usage 라인을 (message.id, requestId) 로 글로벌 dedupe.
-    /// 반환: 프리필터를 통과한 파일 중 가장 오래된 mtime(마이크로초) — 로그 완전성 하한(claudeCompleteFromKey)의 재료. 파일이 없으면 nil.
+    /// ~/.claude/projects/**/*.jsonl + ~/.claude/transcripts/**/*.jsonl. type=="assistant" + usage 라인을 (message.id, requestId) 로 글로벌 dedupe.
+    /// 반환: projects 루트에서 프리필터를 통과한 파일 중 가장 오래된 mtime(마이크로초) — 로그 완전성 하한(claudeCompleteFromKey)의 재료. 없으면 nil.
+    ///
+    /// transcripts(v0.3.15): Orca 자체 Claude 사용량 스캐너(`transcript-file-discovery.ts`)가 projects 와 함께 같은 파서로 읽는
+    /// 루트다. 엔트리 dedupe 가 전역 키라 두 루트에 같은 메시지가 있어도 한 번만 계상된다. (Orca 는 macOS 에서 관리 계정도
+    /// CLAUDE_CONFIG_DIR 를 바꾸지 않아 대화 기록 자체는 projects 에 남는다.)
+    /// **완전성 하한은 projects 파일로만 잰다** — 그 하한의 근거가 Claude Code 의 transcript 정리 주기(cleanupPeriodDays)인데
+    /// transcripts 는 그 주기를 따른다는 보장이 없다. 오래 남은 transcripts 파일이 섞이면 하한이 늦춰져 일별 업로드에서
+    /// 멀쩡한 날들이 빠진다.
     @discardableResult
     private static func scanClaude(
         _ cache: inout TokenUsageCache, homeDirectory: URL, cutoff: Date, evictTs14: Int, stats: inout Stats
     ) -> Int? {
-        let root = homeDirectory.appendingPathComponent(".claude/projects", isDirectory: true)
+        let projectsRoot = homeDirectory.appendingPathComponent(".claude/projects", isDirectory: true)
+        let transcriptsRoot = homeDirectory.appendingPathComponent(".claude/transcripts", isDirectory: true)
+        let isJSONL: (URL) -> Bool = { $0.pathExtension == "jsonl" }
         // 워크/stat 는 클로저 밖에서(엔트리 맵을 캡처하는 tail 클로저와 배타적 접근이 겹치지 않게).
-        let files = recentFiles(under: root, cutoff: cutoff, matching: { $0.pathExtension == "jsonl" })
-        let oldestMtime = files.map(\.mtimeMicros).min()
+        let projectFiles = recentFiles(under: projectsRoot, cutoff: cutoff, matching: isJSONL)
+        let files = projectFiles + recentFiles(under: transcriptsRoot, cutoff: cutoff, matching: isJSONL)
+        let oldestMtime = projectFiles.map(\.mtimeMicros).min()
         for f in files {
             stats.claudeFilesStatted += 1
             let path = f.url.path
@@ -1294,13 +1425,19 @@ enum TokenUsageIncrementalScanner {
         _ cache: inout TokenUsageCache, roots: [URL], cutoff: Date,
         monthString: String, stats: inout Stats
     ) {
-        let files = roots.flatMap { root in
+        let listed = roots.flatMap { root in
             recentFiles(
                 under: root, cutoff: cutoff,
                 matching: { $0.lastPathComponent.hasPrefix("rollout-") && $0.pathExtension == "jsonl" }
             )
         }
-        scanCodexFiles(&cache, files: files, roots: roots, monthString: monthString, stats: &stats)
+        // v0.3.15: home 이 여럿(Orca)이면 같은 세션이 home 마다 하드링크/복사로 놓인다 — 별칭을 빼고 넘긴다(dedupeCodexAliases).
+        let deduped = dedupeCodexAliases(listed, roots: roots)
+        stats.codexAliasFilesSkipped += listed.count - deduped.kept.count
+        scanCodexFiles(
+            &cache, files: deduped.kept, roots: roots, monthString: monthString,
+            aliasPaths: deduped.aliasPaths, stats: &stats
+        )
     }
 
     /// 열거된 파일 목록으로 codex 상태를 갱신한다(열거와 분리한 이유: 테스트가 "열거 뒤 옮겨진 파일" — 목록엔 있는데 읽을 수
@@ -1308,7 +1445,7 @@ enum TokenUsageIncrementalScanner {
     /// 일어나면 정확히 그 모양이 된다).
     static func scanCodexFiles(
         _ cache: inout TokenUsageCache, files: [(url: URL, size: Int, mtimeMicros: Int)], roots: [URL],
-        monthString: String, utcRetainFrom: String? = nil, stats: inout Stats
+        monthString: String, utcRetainFrom: String? = nil, aliasPaths: Set<String> = [], stats: inout Stats
     ) {
         // UTC 일별 맵의 보존 하한(v0.2.43): 전월 마지막 UTC 일까지 남긴다. 테스트가 달리 주지 않으면 월키에서 계산한다.
         let utcRetainFrom = utcRetainFrom ?? utcRetainFromKey(monthString: monthString)
@@ -1507,6 +1644,9 @@ enum TokenUsageIncrementalScanner {
         let beforeStates = cache.codexFileStates.count
         cache.codexFileStates = cache.codexFileStates.filter { path, state in
             if state.monthKey != monthString { return true }
+            // v0.3.15: 다른 home 의 정본에 밀린 별칭 경로는 파일이 있어도 지운다 — 정본이 바뀐 뒤(복사본이 더 자람) 옛 정본 상태가
+            // fileExists 로 살아남으면 새 정본 상태와 함께 두 배가 된다(dedupeCodexAliases 주석).
+            if aliasPaths.contains(path) { return false }
             if seenPaths.contains(path) { return true }
             if FileManager.default.fileExists(atPath: path) { return true }
             return compressedTwinCandidates(for: path, roots: roots).contains { FileManager.default.fileExists(atPath: $0) }
@@ -1516,13 +1656,21 @@ enum TokenUsageIncrementalScanner {
 
     /// 사라진 rollout 경로의 압축 쌍둥이 후보(순수). ① 같은 경로 + `.zst`, ② archived 루트의 `<이름>.zst`(보관),
     /// ③ sessions 루트의 `YYYY/MM/DD/<이름>.zst`(보관 해제 — 날짜는 파일명 `rollout-YYYY-MM-DD…` 에서, codex 의
-    /// `rollout_date_parts` 와 같은 규칙). 후보가 있을 때만 stat 하므로 평상시 비용 0. roots 는 codexRoots 의 순서(sessions, archived).
+    /// `rollout_date_parts` 와 같은 규칙). 후보가 있을 때만 stat 하므로 평상시 비용 0. roots 는 codexRoots 의 모양(home 마다 sessions, archived).
+    /// v0.3.15: home 이 여럿이면 ②③ 은 **그 경로가 속한 home 의 쌍 안에서만** 만든다 — Codex 의 보관/보관 해제는 한 home 안의
+    /// rename 이다. 어느 쌍에도 안 속하면 첫 쌍(종전 동작).
     static func compressedTwinCandidates(for path: String, roots: [URL]) -> [String] {
         var out = [path + ".zst"]
         let name = (path as NSString).lastPathComponent
         guard roots.count >= 2, name.hasPrefix("rollout-") else { return out }
-        let sessionsRoot = roots[0]
-        let archivedRoot = roots[1]
+        var pair = 0
+        if roots.count > 2 {
+            let canon = roots.map { canonicalPathAllowingMissingTail($0.path) }
+            pair = codexHomeIndex(for: path, canonicalRoots: canon) ?? 0
+            if pair * 2 + 1 >= roots.count { pair = 0 }
+        }
+        let sessionsRoot = roots[pair * 2]
+        let archivedRoot = roots[pair * 2 + 1]
         let archived = archivedRoot.appendingPathComponent(name + ".zst").path
         if archived != out[0] { out.append(archived) }
         // rollout-YYYY-MM-DD... → YYYY/MM/DD

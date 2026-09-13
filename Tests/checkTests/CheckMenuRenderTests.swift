@@ -5002,7 +5002,7 @@ func ultraPanelDistinguishesUnknownBalanceFromZero() throws {
 @MainActor
 @Test
 func ultraPanelSnapshot() throws {
-    let png = try renderPNG(CheckMenuView(store: makeUltraPanelStore(balance: 3, notice: "3시간 채웠어요 — 울트라 +1")))
+    let png = try renderPNG(CheckMenuView(store: makeUltraPanelStore(balance: 3, notice: "3시간 채웠어요 — 루비 +3")))
     #expect(png.count > 0)
     savePokeUISnapshot(png, "ultra-panel-3missions")
 }

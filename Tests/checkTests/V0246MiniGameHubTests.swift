@@ -306,14 +306,16 @@ func signOutResetsPanelBoardAndPublicFlagButKeepsPerAccountBest() {
     #expect(store.miniGameBest(.timingBar) == 0)
 }
 
-// MARK: - 울트라 잔량은 상한을 넘겨도 그대로 보인다(상품 +10)
+// MARK: - 울트라 잔량은 두 자리여도 그대로 보인다
+// 예전 근거는 "미니게임 상품 +10 이 상한 3 을 넘긴다" 였다. 2026-09-13 에 **상한 자체가 폐지**되고
+// 상품도 루비로 바뀌었지만, 이 단언은 오히려 더 중요해졌다 — 이제 잔량이 제한 없이 쌓인다.
 
 @Test
 func ultraBalanceAboveTheCapIsDisplayedVerbatim() {
     #expect(UltraBalanceText.badge(balance: 13) == "13")
     #expect(UltraPanelCopy.balanceText(13) == "13")
     let response = PokeSendResponse(status: "ok", ultraBalance: 13)
-    #expect(response.ultraBalanceForDisplay == 13, "min(balance, cap) 같은 클램프가 상품 잔량을 숨긴다")
+    #expect(response.ultraBalanceForDisplay == 13, "min(balance, cap) 같은 클램프가 쌓인 잔량을 숨긴다")
 }
 
 // MARK: - 소스 계약

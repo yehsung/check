@@ -254,10 +254,15 @@ Dashboard 의 SQL Editor 에서 직접 실행하려면 `supabase/migrations/` �
 > `revoke all ... from public` 하나로는 못 닫습니다 — Supabase 의 기본권한이 EXECUTE 를 PUBLIC 이 아니라
 > 두 역할에 **직접** 붙이기 때문에 역할을 지목해 회수해야 합니다.
 
-> **울트라 하루 한도를 바꾸려면 두 곳입니다** — 서버 `supabase/migrations/20260804030000_ultra_poke.sql` 의
-> `ultra_poke_daily_limit constant int := 2` 와 클라 `Sources/check/WorkTimerStorePoke.swift:22` 의
-> `WorkTimerStore.ultraPokeDailyLimit`. 둘이 갈리면 "오늘 N번 남음" 안내가 서버 판정과 어긋납니다
-> (회귀 방어는 `s09k_ultraPokeRoundTrip` 의 `#expect(limit == 2)` + `ultraRemaining == limit - 1`).
+> ~~**울트라 하루 한도를 바꾸려면 두 곳입니다**~~ — **이 메모는 폐기됐습니다(v0.2.34).**
+> 하루 한도(`ultra_poke_daily_limit`)는 **재화 경제로 대체**됐습니다. 발사 가능 여부는 이제 날짜별
+> 횟수가 아니라 **잔량**이 정하고, 클라 상수 `ultraPokeDailyLimit` 은 삭제됐습니다.
+> `ultra_used_today` 라는 상태 어휘만 옛 이름 그대로 남았는데, 지금 그 뜻은 "오늘 몫 소진"이 아니라
+> **"잔량 0"** 입니다(어휘를 넓히지 않으려고 이름을 유지했습니다 — `20260901120000_admin_ultra_ledger.sql`).
+>
+> **지금 울트라 수급을 바꾸려면**: 자정 밑바닥은 `ultra_daily_floor(app_build)`, 구매 가격은
+> `ultra_ruby_price()`(루비 3), 한 번에 사는 상한은 `ultra_buy_max()`(20). **보유 상한은 2026-09-13 에
+> 폐지**됐습니다(`ultra_balance_cap()` 이 int4 최대값). 자세한 계약은 [재화 경제 문서](ultra-economy.md).
 
 > **롤백 시 주의**: `drop function ultra_poke_user` 한 줄이면 울트라만 죽습니다. 다만 위 두 `grant execute`
 > 와 `grant update on public.profiles to service_role` 은 **남겨 두세요** — 지우면 아바타 PATCH 와

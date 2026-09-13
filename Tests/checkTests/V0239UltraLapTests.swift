@@ -451,21 +451,21 @@ func missionNoticeCountsTodaysLapsOnlyWhenThereIsMoreThanOne() {
     }
 
     store.applyUltraWallet(grant(lapsGranted: 1))
-    #expect(store.missionNotice == "3시간 채웠어요 — 울트라 +1")
+    #expect(store.missionNotice == "3시간 채웠어요 — 루비 +3")
 
     // ★ 경계는 **2다.** 1과 3만 재면 `>= 2` 를 `>= 3` 으로 바꾼 뮤턴트가 살아남는다 —
     //   1은 어느 쪽이든 개수 없는 문구, 3은 어느 쪽이든 개수 있는 문구라 두 판본의 출력이 같다.
     //   실제로 뮤테이션에서 그 자리가 비어 있는 것이 드러나 이 줄을 더했다.
     store.applyUltraWallet(grant(lapsGranted: 2))
-    #expect(store.missionNotice == "3시간 채웠어요 — 울트라 +1 (오늘 2개)")
+    #expect(store.missionNotice == "3시간 채웠어요 — 루비 +6 (오늘 2번)")
 
     store.applyUltraWallet(grant(lapsGranted: 3))
-    #expect(store.missionNotice == "3시간 채웠어요 — 울트라 +1 (오늘 3개)")
+    #expect(store.missionNotice == "3시간 채웠어요 — 루비 +9 (오늘 3번)")
 
     // 랩 이전 서버는 laps_granted 를 안 보낸다(= 0). "오늘 0개"는 방금 받은 사람에게 거짓말이므로
     // 개수 없는 쪽으로 접는다.
     store.applyUltraWallet(grant(lapsGranted: 0))
-    #expect(store.missionNotice == "3시간 채웠어요 — 울트라 +1")
+    #expect(store.missionNotice == "3시간 채웠어요 — 루비 +3")
 }
 
 // MARK: - 픽스처 왕복 — 스텁이 실서버 모양을 그대로 흘린다
@@ -494,7 +494,7 @@ func theSharedFixtureFeedsTheStoreTheNewServerShape() async throws {
     #expect(row.claimedToday == false, "랩 서버의 claimed 는 언제나 false 다.")
     #expect(row.detail == "오늘 3개 · 다음까지 2시간 45분")
     // 방금 받았으므로(granted_now=true) 지속 증거가 개수와 함께 남는다.
-    #expect(store.missionNotice == "3시간 채웠어요 — 울트라 +1 (오늘 3개)")
+    #expect(store.missionNotice == "3시간 채웠어요 — 루비 +9 (오늘 3번)")
 }
 
 // MARK: - 문구 계약 — 글자 그대로
@@ -510,10 +510,10 @@ func lapEconomyCopyIsCharacterForCharacter() {
     // 상한 경고: `capped` 가 "지금 잔량이 가득이다"로 바뀌어 가득한 동안 계속 떠 있으므로,
     // 아직 아무것도 안 놓친 사람에게도 뜬다 — 과거형("놓쳤어요")은 그 사람에게 거짓말이다.
     // v0.2.41 에서 뒷말이 한 번 더 바뀌었다: 소멸이 **대기**가 되어(20260903190000) 안 써도 하나는 남는다.
-    #expect(MissionCopy.cappedNotice == "가득 찼어요 — 3시간을 채워도 대기해요")
+    #expect(MissionCopy.cappedNotice == "3시간을 채우면 루비를 받아요")
 
     // 잔량 0 캡션: 0개인 사람이 알아야 할 것은 미션 화면이 어디 있는지가 아니라 **언제 다시 생기는지**다.
-    #expect(UltraPanelCopy.heroCaption(balance: 0, hasFailed: false) == "근무 3시간마다 하나씩 생겨요")
+    #expect(UltraPanelCopy.heroCaption(balance: 0, hasFailed: false) == "상점에서 루비로 사요")
     // 잔량이 있는 사람에게는 여전히 쓰는 법을 말한다(0 분기만 바뀌었다는 대조군).
     #expect(UltraPanelCopy.heroCaption(balance: 1, hasFailed: false).contains(UltraChargeStyle.holdSecondsText))
     #expect(UltraPanelCopy.heroCaption(balance: 1, hasFailed: false) != UltraPanelCopy.heroCaption(balance: 0, hasFailed: false))

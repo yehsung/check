@@ -84,10 +84,12 @@ import Testing
     /// "다 썼다"로 끝내지도 않는다 — 회복 방법(미션)까지 같은 줄에서 말해야 한다.
     /// 0잔량 사용자가 3초를 꾹 눌러 서버 거절을 받았을 때 **실제로 읽는 문장**이 이것이다.
     @Test func ultraEmptyNoticeSaysHowToRecoverAndNotADailyLimit() {
-        #expect(WorkTimerStore.ultraEmptyNotice == "울트라가 없어요 — 미션으로 충전하세요")
+        #expect(WorkTimerStore.ultraEmptyNotice == "울트라가 없어요 — 상점에서 루비로 살 수 있어요")
         // 하루 한도 어휘가 되살아나면 계약 상대가 없는 문장이 된다(서버가 그 상수를 지웠다).
         #expect(WorkTimerStore.ultraEmptyNotice.contains("하루에") == false)
-        #expect(WorkTimerStore.ultraEmptyNotice.contains("미션"))
+        // 이 단언의 뜻은 "사실만 말하지 말고 **길**을 알려 주는가"다. 2026-09-13 부터 그 길이
+        // 미션이 아니라 상점이라 낱말만 바꾼다(단언을 지우면 막다른 안내가 돌아온다).
+        #expect(WorkTimerStore.ultraEmptyNotice.contains("상점"))
     }
 
     /// 모를 때는 **아무 숫자도 말하지 않는다**. 잔량 키를 안 보내는 서버(구버전)가 실제로 있고,
@@ -579,7 +581,7 @@ import Testing
         #expect(balance == 0, "서버가 0 을 알려 준 상태에서는 표시용 잔량이 0 이어야 힌트·툴팁이 충전 경로를 말한다.")
         // 그 값이 실제로 만드는 문구를 여기서 확인한다(순수 함수와 호출부를 한 줄로 잇는다).
         #expect(UltraBalanceText.hint(balance: balance) == UltraBalanceText.empty)
-        #expect(UltraBalanceText.rowTooltip(balance: balance).contains("미션으로 충전"))
+        #expect(UltraBalanceText.rowTooltip(balance: balance).contains("상점"))
         // 잔량 배지 탭 경로가 패널에 달려 있다 — 0개인 사람이 충전 방법에 닿는 유일한 문이다.
         #expect(
             panel.children.contains { $0.label == "onOpenUltraPanel" },
@@ -721,7 +723,7 @@ import Testing
 
     /// 잔량 문구가 **하루 몫의 어휘를 쓰지 않는다**(순수 — 값으로 검증한다).
     @Test func ultraBalanceTextNeverSaysDailyQuota() {
-        #expect(UltraBalanceText.hint(balance: 0) == "미션으로 충전")
+        #expect(UltraBalanceText.hint(balance: 0) == "상점에서 사기")
         #expect(UltraBalanceText.hint(balance: 3) == UltraBalanceText.discover)
         // 모를 때는 아무 숫자도 만들지 않는다 — 틀린 숫자를 보여 주느니 발견성 문구를 그대로 둔다.
         #expect(UltraBalanceText.hint(balance: nil) == UltraBalanceText.discover)

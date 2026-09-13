@@ -509,7 +509,7 @@ func applyUltraWalletFiresRewardOnlyOnGrantedNow() {
     // 이 응답에는 laps_granted 가 없으므로(랩 이전 서버와 같은 모양) 개수 없는 쪽으로 접힌다.
     store.applyUltraWallet(row(grantedNow: true, claimed: true))
     #expect(fired == [.ultraCharged])
-    #expect(store.missionNotice == "3시간 채웠어요 — 울트라 +1")
+    #expect(store.missionNotice == "3시간 채웠어요 — 루비 +3")
 }
 
 /// invalid 응답은 **서버 오류가 아니다**(비로그인/프로필 없음). 실패 플래그를 세우면 화면이
@@ -678,7 +678,7 @@ func closeUltraPanelReturnsToOriginWithoutSideEffects() {
     store.isPokePanelVisible = true
     store.lastShownMessage = ReceivedMessage(id: "m1", fromName: "영식", body: "밥?", createdAt: Date())
     store.openUltraPanel(from: .poke)
-    store.missionNotice = "3시간 채웠어요 — 울트라 +1"
+    store.missionNotice = "3시간 채웠어요 — 루비 +3"
 
     store.closeUltraPanel()
 
@@ -874,7 +874,7 @@ func pokeStoreSourceCarriesNoDailyLimitVocabulary() throws {
     }
     // 살아 있어야 하는 쪽도 함께 못 박는다(삭제로 초록을 만들 수 없게).
     #expect(code.contains("ultraEmptyNotice"))
-    #expect(code.contains("미션으로 충전하세요"))
+    #expect(code.contains("상점에서 루비로 살 수 있어요"))
 }
 
 private func pokeStoreSource() throws -> String {

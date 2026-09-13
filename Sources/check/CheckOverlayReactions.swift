@@ -36,7 +36,8 @@ enum ReactionKind: Equatable {
     case goalAchieved
     /// 미션 달성으로 울트라를 **얻은** 순간. 축하가 아니라 **통지**다 — 서버가 재화를 이미 올렸고
     /// 되돌릴 방법이 없으므로, 이 연출이 사실을 못 전하면 사용자는 늘어난 줄 모른 채로 남는다.
-    /// 연관값(잔량)을 두지 않는다: "울트라 +1 (3개)" 는 말풍선 한 줄 예산을 넘고, 잔량은 배지가 상시 말한다.
+    /// 연관값(잔량)을 두지 않는다: "루비 +3 (12개)" 는 말풍선 한 줄 예산을 넘고, 잔량은 상점이 말한다.
+    /// 2026-09-13 부터 이 보상은 **울트라가 아니라 루비**다(리액션 이름만 옛 이름으로 남았다).
     case ultraCharged
 
     /// 우선순위(높을수록 우선). 울트라 > hit/출퇴근/화들짝/찌름 > 마일스톤 > 인사 > 졸기.
@@ -95,7 +96,7 @@ enum ReactionKind: Equatable {
             return 2.2
         case .ultraCharged:
             // ReactionActions.ultraCharged 총 1.72s(흡수 0.70 + 번쩍 0.14 + 정착 0.88)에 여유 0.28.
-            // 말풍선은 자체 타이머(3.2s)라 모션이 끝난 뒤에도 "울트라 +1!" 이 잠깐 남는다.
+            // 말풍선은 자체 타이머(3.2s)라 모션이 끝난 뒤에도 "루비 +3!" 이 잠깐 남는다.
             return 2.0
         case .drowsy:
             // 지속 상태(sleeping)라 만료 판정에 쓰지 않는다. 참고용으로 진입 모션 길이를 둔다.
@@ -310,6 +311,11 @@ final class ReactionEngine {
     /// 보상 통지 말풍선 지속(초). 모션(1.72s)보다 길다 — 이 문장이 재화가 늘었다는 유일한 즉시 증거다
     /// (지속 증거인 배지·미션 행·missionNotice 는 패널을 열어야 보인다).
     static let ultraChargedBubbleSeconds: Double = 3.2
+    /// 3시간 랩 보상 말풍선. 숫자는 서버 `ruby_mission_grant()` 와 **짝인 상수**다(둘 다 3).
+    /// 서버 상수를 바꾸면 여기도 같이 바꿔야 말풍선이 거짓말을 하지 않는다 —
+    /// 이 저장소가 `MiniGamePanel.rubyPrizes`·`prizeQuorum` 에 쓰는 것과 같은 규약이다.
+    /// (지속 안내 `missionNotice` 는 서버가 준 값을 그대로 쓴다 — 그쪽이 권위다.)
+    static let missionRewardBubble = "루비 +3!"
 
     /// 말풍선 텍스트(SwiftUI 관찰용). nil 이면 숨김. 각 리액션이 자기 텍스트/지속시간으로 교체한다.
     /// (팀원 인사·시작 화이팅·때리기 아얏·종료 수고·깨우기 등 모두 이 한 채널을 자체 타이머로 공유.)
@@ -974,7 +980,7 @@ final class ReactionEngine {
             //  이 손실 경로는 goalAchieved/ultraCharged 가 3으로 들어오면서 새로 생기는 것이다.)
             //
             // 단, 양보는 **동순위(3)에만** 한다. `.poked` 처럼 무조건 양보하게 두면 팀원 인사(1)나
-            // 오늘 4시간(2)이 0.3초 만에 "울트라 +1!" 을 지워 버린다 — 인사는 15초 폴링마다 흔하게 오고,
+            // 오늘 4시간(2)이 0.3초 만에 "루비 +3!" 을 지워 버린다 — 인사는 15초 폴링마다 흔하게 오고,
             // 그 말풍선은 재화가 늘었다는 **즉시 증거의 전부**다(지속 증거는 패널을 열어야 보인다).
             // 잃으면 안 되는 상대(찌름)는 정확히 동순위 3이므로 이 폭이면 충분하다.
             let sameRank = kind.priority == active.priority
@@ -1084,7 +1090,7 @@ final class ReactionEngine {
         case .ultraCharged:
             runReaction(ReactionActions.ultraCharged())
             emitUltraCharge()
-            showBubble("울트라 +1!", seconds: Self.ultraChargedBubbleSeconds)
+            showBubble(Self.missionRewardBubble, seconds: Self.ultraChargedBubbleSeconds)
         case .drowsy, .wake:
             // drowsy/wake 는 request 에서 beginSleep/beginWake 로 직접 처리되어 이 경로로 오지 않는다.
             break

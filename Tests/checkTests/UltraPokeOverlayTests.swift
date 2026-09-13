@@ -965,7 +965,7 @@ func rewardTriggerIsWiredFromStoreToOverlay() {
     // 무엇보다 "구멍이 막혔다"보다 "그 구멍으로 연출이 나왔다"가 지키고 싶은 사실이다.
     store.onRewardTrigger?(.ultraCharged)
     #expect(
-        engine.greetingText == "울트라 +1!",
+        engine.greetingText == "루비 +3!",
         "컨트롤러가 onRewardTrigger 를 배선하지 않았다 — `?.` 가 조용히 삼켜 아무도 모른다"
     )
     #expect(engine.state == .playing(.ultraCharged))
@@ -986,7 +986,7 @@ func rewardPeeksWhenOverlayIsHidden() {
     #expect(controller.panel.isVisible == false)
     controller.presentReward(.ultraCharged)
 
-    #expect(engine.greetingText == "울트라 +1!")
+    #expect(engine.greetingText == "루비 +3!")
     #expect(engine.renderActive, "peek 동안 렌더가 켜져야 연출이 그려진다")
     #expect(controller.panel.isVisible, "숨김 상태에서 보상이 창을 못 띄웠다 — 사용자는 아무것도 못 본다")
     #expect(controller.isPeekArmed, "8초 퇴장 타이머가 없으면 창이 그대로 남는다")
@@ -1016,7 +1016,7 @@ func rewardDoesNotArmPeekWhileNormallyVisible() {
 
     controller.presentReward(.ultraCharged)
 
-    #expect(engine.greetingText == "울트라 +1!")
+    #expect(engine.greetingText == "루비 +3!")
     #expect(engine.state == .playing(.ultraCharged))
     #expect(controller.isPeekArmed == false, "표시 중인데 peek 타이머를 세웠다 — 창 소유자가 둘이 된다")
 
@@ -1043,7 +1043,7 @@ func rewardOpensNoWindowWhenTheEngineRefuses() {
     controller.presentReward(.ultraCharged)
 
     #expect(engine.state == .playing(.commuteEnd), "거부됐어야 할 요청이 재생을 갈아치웠다")
-    #expect(engine.greetingText != "울트라 +1!")
+    #expect(engine.greetingText != "루비 +3!")
     #expect(controller.panel.isVisible == false, "거부됐는데 창을 띄웠다 — 빈 캐릭터가 튀어나왔다 사라진다")
     #expect(controller.isPeekArmed == false, "띄우지도 않은 창에 퇴장 타이머를 걸었다")
     #expect(engine.renderActive == false)
@@ -1152,7 +1152,7 @@ func rewardStillPeeksWhenIntentSaysVisibleButTheWindowIsNot() {
     controller.presentReward(.ultraCharged)
 
     #expect(controller.panel.isVisible, "창이 내려간 사이 보상이 아무도 못 보는 곳에서 소진됐다")
-    #expect(engine.greetingText == "울트라 +1!")
+    #expect(engine.greetingText == "루비 +3!")
 
     stopWorking(store, controller)
 }

@@ -35,7 +35,9 @@ extension WorkTimerStore {
     /// 사라졌고(재화 경제로 전환), 파생을 남겨 두면 계약 상대가 없는 문장만 코드에 남는다.
     /// 0잔량 사용자가 3초를 꾹 눌러 서버 거절을 받았을 때 **실제로 읽는 문장**이 바로 이것이다 —
     /// 그래서 "다 썼다"로 끝내지 않고 회복 방법(미션)까지 같은 줄에서 말한다.
-    nonisolated static let ultraEmptyNotice = "울트라가 없어요 — 미션으로 충전하세요"
+    /// ⚠️ 2026-09-13 부터 **미션은 울트라를 주지 않는다**(루비를 준다). 옛 문구 "미션으로 충전하세요"는
+    ///    거짓이 됐다 — 지금 얻는 길은 자정 밑바닥 1개와 상점 구매(루비 3개)뿐이다.
+    nonisolated static let ultraEmptyNotice = "울트라가 없어요 — 상점에서 루비로 살 수 있어요"
     /// 대상이 집중 모드일 때의 안내. 몫도 쿨타임도 소모되지 않았다는 사실까지 말해 준다 —
     /// 안 그러면 사용자는 "한 번 날린 건가?" 하고 남은 횟수를 잘못 센다.
     nonisolated static let targetFocusedNotice = "지금 집중 중이에요. 나중에 찔러 주세요"
@@ -310,9 +312,13 @@ extension WorkTimerStore {
         // **오늘 실제로 받은 랩 수**다(어제 소급 행이 섞여도 큰 쪽이 오늘 몫이다). 0 은 랩 이전 서버가
         // 그 키를 안 보낸 것이므로 1로 접는다 — "오늘 0개"는 받은 사람에게 거짓말이다.
         let lapsToday = response.missions.filter { $0.grantedNow }.map { $0.lapsGranted }.max() ?? 1
+        // 보상은 2026-09-13 부터 **루비**다(울트라가 아니다). 금액은 **서버가 준 값**을 쓴다 —
+        // 클라가 3을 베껴 두면 서버 상수를 바꾸는 날 이 줄만 거짓말을 한다. 옛 서버는 그 키를
+        // 안 보내므로 그때만 상수로 접는다.
+        let perLap = response.rubyMissionGrant ?? 3
         missionNotice = lapsToday >= 2
-            ? "3시간 채웠어요 — 울트라 +1 (오늘 \(lapsToday)개)"
-            : "3시간 채웠어요 — 울트라 +1"
+            ? "3시간 채웠어요 — 루비 +\(perLap * lapsToday) (오늘 \(lapsToday)번)"
+            : "3시간 채웠어요 — 루비 +\(perLap)"
         onRewardTrigger?(.ultraCharged)
     }
 

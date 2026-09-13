@@ -1632,7 +1632,15 @@ struct UltraWalletResponse: Decodable, Equatable, Sendable {
     /// 이 호출 **직후**의 잔량(밑바닥 보정·미션 적립이 이미 반영된 값).
     let balance: Int
     /// 잔량 상한. **nil = 서버가 말해 주지 않았다.** UI 는 리터럴 5 를 박지 말고 이 값을 읽는다.
+    ///
+    /// ⚠️ **2026-09-13 에 상한이 폐지됐다** — 서버가 int4 최대값을 보낸다(키를 지우면 이 타입이
+    ///    `decodeIfPresent` 라 **낡은 값이 그대로 남으므로** 지우지 않고 큰 값으로 덮는다).
     let balanceCap: Int?
+    /// 3시간 랩 한 번의 **루비** 보상(2026-09-13 부터 울트라 대신 루비를 준다). nil = 옛 서버.
+    /// 화면 문구가 이 값을 쓴다 — 숫자를 베껴 두면 서버 상수를 바꾸는 날 안내가 거짓말이 된다.
+    var rubyMissionGrant: Int?
+    /// 이 호출 직후의 루비 잔량. nil = 옛 서버.
+    var rubyBalance: Int?
     /// 이 사용자가 **잔량 제한을 받지 않는가**(관리자). 서버 `ultra_wallet_sync` 의 `unlimited` 키다.
     ///
     /// **반드시 Optional 이다.** 이 키를 모르는 서버(20260820040000 이전)가 실재하고, 비옵셔널로 받으면

@@ -2180,7 +2180,9 @@ enum UltraBalanceText {
     }
 
     /// 0개일 때. **획득 경로를 말한다** — 사실만 말하고 길을 안 알려 주면 그 화면은 막다른 길이다.
-    static let empty = "미션으로 충전"
+    /// ⚠️ 2026-09-13 부터 미션은 울트라가 아니라 루비를 준다. 경로는 이제 상점이다.
+    /// (배지 폭 예산이 빠듯하므로 옛 문구보다 길게 쓰지 마라 — badgeWidth 주석 참고.)
+    static let empty = "상점에서 사기"
 
     /// 1개 이상일 때 — 발견성 문구를 그대로 살린다(3초 꾹을 아직 모르는 사람이 다수다).
     /// 홀드 시간은 리터럴로 적지 않는다: UltraChargeStyle.holdSeconds 가 발사 시각의 유일한 권위이고,
@@ -2190,7 +2192,7 @@ enum UltraBalanceText {
     /// 제목 행 힌트. **nil(아직 모름)이면 아무 숫자도 만들지 않고** 발견성 문구를 그대로 둔다
     /// (WorkTimerStorePoke 의 "정직한 일은 버리는 것" 규약 계승 — 틀린 숫자보다 침묵이 낫다).
     /// 무제한이면 **언제나 발견성 문구다.** 관리자의 잔량은 0일 수 있는데(쓰지 않으니 늘지도 않는다),
-    /// 그 사람에게 "미션으로 충전"이라고 말하면 하지 않아도 되는 일을 시키는 거짓 안내가 된다.
+    /// 그 사람에게 "상점에서 사기"라고 말하면 하지 않아도 되는 일을 시키는 거짓 안내가 된다.
     ///
     /// ★ 배지가 `99+` 로 접히는 조합에서는 **짧은 발견성 문구**로 바꾼다. 그 배지는 두 자리보다
     ///   5pt 남짓 넓어 긴 힌트(71pt)가 들어갈 자리를 먹는다 — 힌트는 이 행에서 **가장 먼저 양보하도록
@@ -2211,7 +2213,7 @@ enum UltraBalanceText {
     static func rowTooltip(balance: Int?, unlimited: Bool = false) -> String {
         (unlimited || (balance ?? 1) > 0)
             ? "콕 찌르기 (\(UltraChargeStyle.holdSecondsText)초 꾹 누르면 울트라)"
-            : "콕 찌르기 (울트라 없음 — 미션으로 충전)"
+            : "콕 찌르기 (울트라 없음 — 상점에서 루비로)"
     }
 
     /// 배지 툴팁. 숫자 자체는 반드시 Text 로 그린다 — 툴팁은 픽셀을 만들지 않으므로
@@ -2713,7 +2715,7 @@ private struct PokePanel: View {
                     isUnlimited: ultraUnlimited,
                     action: onOpenUltraPanel
                 )
-                // 발견성 문구는 그대로 산다. 0일 때만 "미션으로 충전"으로 갈아 끼워 **획득 경로**를 말한다.
+                // 발견성 문구는 그대로 산다. 0일 때만 "상점에서 사기"로 갈아 끼워 **획득 경로**를 말한다.
                 // 무제한인 사람에겐 그 갈아 끼움이 없다(채울 것이 없다).
                 Text(UltraBalanceText.hint(balance: ultraBalance, unlimited: ultraUnlimited))
                     .font(.caption2)
@@ -3705,7 +3707,7 @@ enum MissionCopy {
     ///   보정도 한 번이다).
     static func reward(_ kind: MissionProgress.Kind) -> String? {
         switch kind {
-        case .todayThreeHours: return "⚡︎ +1"
+        case .todayThreeHours: return "💎 +3"   // 서버 ruby_mission_grant() 와 짝인 상수
         case .dailyFloor:      return "0개면 1개로"
         case .arrivalStreak:   return nil
         }
@@ -3730,10 +3732,15 @@ enum MissionCopy {
     ///   (서버 20260903190000, 사장님 지시). 그래서 "쓰지 않으면 놓쳐요"는 이제 거짓말이다 —
     ///   안 써도 하나는 남아 기다린다. 다만 **대기는 하나뿐이고 그동안 카운터가 멈추므로**
     ///   여전히 쓰는 편이 이득이고, 그 사실을 그대로 말한다.
-    static let cappedNotice = "가득 찼어요 — 3시간을 채워도 대기해요"
+    /// ⚠️ **2026-09-13 에 울트라 보유 상한이 폐지돼 이 상태는 더 이상 생기지 않는다**(서버가 `capped` 를
+    ///    항상 거짓으로 보낸다). 문구는 구버전 서버에 붙은 경우를 위해 남기되, "가득 찼다"는 이제 거짓이라
+    ///    지금 규칙으로 고쳐 둔다 — 사문화된 가지라도 뜨는 순간 거짓말이면 안 된다.
+    static let cappedNotice = "3시간을 채우면 루비를 받아요"
     /// 대기 중인 줄의 문장. 여기서 말해야 할 것은 경고가 아니라 **받는 방법**이다 —
     /// 이 사람은 이미 다 채웠고, 한 발만 쓰면 그 자리에서 들어온다(서버가 발사 직후 sync 로 지급한다).
-    static let pendingNotice = "3시간 채웠어요 — 하나 쓰면 받아요"
+    /// ⚠️ 같은 이유로 사문화됐다. 옛 규칙에서는 "울트라를 하나 써야 받는다"였지만 지금은 상한이 없어
+    ///    다음 동기화에서 그냥 들어온다. 깃발이 남아 있는 사용자에게 옛 문구가 뜨면 거짓 약속이 된다.
+    static let pendingNotice = "3시간 채웠어요 — 곧 들어와요"
 
     /// 그 줄 아래 보조 문장. 대기/상한인 날은 진행 시간 대신 **그 사실**을 말한다
     /// (그날의 진행률은 이미 100%라 시간을 말해 봐야 새로 알려 주는 것이 없다).
@@ -3801,9 +3808,12 @@ enum UltraPanelCopy {
         // 실패가 먼저다: 잔량은 남아 있어도(스토어가 알던 값을 버리지 않는다) 최신이라는 보장이 없다.
         if hasFailed { return failedCaption }
         guard let balance else { return loadingCaption }
+        // ⚠️ 잔량 0 일 때의 안내는 **얻는 법**을 말해야 한다. 2026-09-13 부터 근무 3시간은
+        //    울트라가 아니라 **루비**를 주므로 "근무 3시간마다 하나씩 생겨요"는 거짓이 됐다.
+        //    지금 얻는 길은 둘이다 — 자정 밑바닥 1개, 그리고 상점에서 루비로 구매.
         return balance > 0
             ? "\(UltraChargeStyle.holdSecondsText)초 꾹 누르면 한 개 써요"
-            : "근무 3시간마다 하나씩 생겨요"
+            : "상점에서 루비로 사요"
     }
 
     static func balanceText(_ balance: Int?, unlimited: Bool = false) -> String {

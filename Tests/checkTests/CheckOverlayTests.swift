@@ -2477,7 +2477,7 @@ func rewardReactionsSpeakTheirReasonWhileMilestoneStaysSilent() {
 
     let chargeEngine = ReactionEngine(clock: { Date(timeIntervalSince1970: 92_000) })
     #expect(chargeEngine.request(.ultraCharged))
-    #expect(chargeEngine.greetingText == "울트라 +1!")
+    #expect(chargeEngine.greetingText == "루비 +3!")
 }
 
 // MARK: - blocker UI-3: 보상 재생 중 도착한 찌름이 사라지면 안 된다

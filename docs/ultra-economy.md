@@ -1,7 +1,12 @@
-# 울트라 재화 경제 · 미션 · 초인종 — 서버 계약 (v0.2.34 / build 43)
+# 재화 경제(울트라·루비) · 미션 · 상점 · 초인종 — 서버 계약 (v0.3.18 / build 70)
 
 이 문서는 **클라이언트가 의존해도 되는 응답 스키마**를 정의한다. 여기 적힌 것만 계약이다 —
 적히지 않은 키는 언제든 사라질 수 있고, 적힌 키는 예고 없이 사라지지 않는다.
+
+> ⚠️ **2026-09-13 에 경제가 크게 바뀌었다.** 재화가 둘이 됐고(울트라 + **루비**), 울트라의
+> **보유 상한이 폐지**됐으며, 3시간 미션과 미니게임 상금이 **루비로** 간다. 울트라는 이제
+> "매일 자정 밑바닥 1개 + 루비로 구매" 로만 얻는다. 아래 표의 값이 그 결과다 — 이 문서에서
+> `capped`·`prize:expire`·"가득 참" 을 보면 **사문화된 개념**이라는 표시가 함께 있는지 확인하라.
 
 관련 마이그레이션 (적용 순서가 곧 이 순서다):
 
@@ -10,6 +15,12 @@
 | `20260819010000_ultra_wallet.sql` | 잔량 컬럼 2개 · `ultra_ledger` · 미션/스트릭 RPC · 감사 | 없음 |
 | `20260819020000_poke_realtime_ring.sql` | `poke_topic` · realtime 정책 · `poke_ring` · 킬스위치 | 없음 |
 | `20260819030000_poke_economy_and_ring.sql` | `poke_user` / `send_message` / `ultra_poke_user` 재작성 1회 + `shares_team` drop | **있음** |
+| `20260913093000_profile_character.sql` | `profiles.character` · `set_character` | **있음**(`take_pokes` 에 `from_character`) |
+| `20260913160500_character_roster_v2.sql` | 없음 | **있음**(허용 캐릭터 명단 교체) |
+| `20260913170000_ruby_currency.sql` | `profiles.ruby_balance` · `ruby_ledger` · 루비 상수 · `work3h_laps` | **있음** — 3시간 미션이 루비로 · 미니게임 상금이 루비 1·2·3등으로 · **울트라 상한 폐지** · 자정 클램프 삭제 |
+| `20260913170100_shop.sql` | `character_prices` · `character_ownership` · `buy_character` · `buy_ultra` · `shop_state` | **있음**(`set_character` 에 소유 게이트) |
+| `20260913180000_ruby_welcome_grant.sql` | `ruby_welcome_grant` · 평생1회 인덱스 · 백필 | **있음**(가입 트리거가 30루비 지급) |
+| `20260914010000_minigame_round_token.sql` | `minigame_rounds` · `minigame_start_round` · `minigame_submit_score` | **있음**(점수 표 직접 쓰기 회수) |
 | `20260820040000_ultra_unlimited_flag.sql` | `ultra_wallet_sync` 에 `unlimited` 키 1개 추가(운영자 표시 전용, 본문 3줄) | 없음 |
 | `20260901120000_admin_ultra_ledger.sql` | 없음(표·컬럼 0개) | **있음** — `ultra_poke_user` 관리자 분기가 장부에 `delta 0` 을 적는다 |
 | `20260901130000_ultra_lap_economy.sql` | 없음(표·컬럼 0개) | **있음** — 상한 5→3 · `ultra_wallet_sync` 가 3시간 **마다** 지급하고 가득 참은 영구 소멸 |
@@ -24,10 +35,13 @@
 |---|---|---|
 | 하루 밑바닥 (새 버전) | **1** | `ultra_daily_floor(app_build)`, `app_build >= 43` |
 | 하루 밑바닥 (구버전) | **2** | `ultra_daily_floor(app_build)`, `app_build < 43` 또는 null |
-| 잔량 상한 | **3** | `ultra_balance_cap()` (2026-09-01 에 5→3) |
+| 잔량 상한 | **없음**(2026-09-13 폐지) | `ultra_balance_cap()` 이 int4 최대값(2147483647)을 돌려준다 |
 | 미션 1호 목표 | 그날 누적 근무 **3시간마다**(3·6·9…) | `mission_work_seconds()` = 10800 |
-| 미션 보상 | 랩당 +1 (**랩·날짜당 1회**) | `ultra_ledger` 의 `unique (user_id, kst_day, reason) where delta > 0` |
-| 가득 찼을 때 달성 | **대기**(2026-09-04 확정. 최대 1개 · 카운터 정지 · 지급 시점부터 재시작) | `profiles.ultra_quest_pending` |
+| 미션 보상 | 랩당 **루비 +3**(울트라 아님. 2026-09-13 교체) | `ruby_mission_grant()` = 3 · `ruby_ledger` 의 `unique (user_id, kst_day, reason) where delta > 0` |
+| 가득 찼을 때 달성 | **사문화** — 상한이 없어 "가득 참"이 성립하지 않는다 | `profiles.ultra_quest_pending` 은 내려가기만 한다 |
+| 울트라 구매 | 루비 **3개 = 울트라 1개**, 한 번에 최대 20개 | `ultra_ruby_price()` = 3 · `ultra_buy_max()` = 20 |
+| 미니게임 상금 | 게임별 **1·2·3등에게 루비 20·10·5** (1등 울트라 10개에서 교체) | `ruby_prize_amounts()` = `{20,10,5}` · 정족수 `minigame_prize_quorum()` = 5 |
+| 가입 지급 | 루비 **30**(제일 싼 캐릭터 가격과 같아야 한다 — 마이그레이션이 단언한다) | `ruby_welcome_grant()` = 30 |
 | 연속 출근 스트릭 | **표시만. 보상 없음** | `ultra_wallet_sync` 는 스트릭으로 어떤 적립도 하지 않는다 |
 | 울트라 발사 비용 | 1 | `ultra_poke_user` |
 | 같은 대상 쿨타임 | 60초 (거절은 몫을 안 태운다) | 세 RPC 공통 |
@@ -63,7 +77,7 @@
 {
   "status": "ok",
   "balance": 3,
-  "balance_cap": 3,
+  "balance_cap": 2147483647,
   "daily_floor": 1,
   "day": "2026-09-01",
   "floor_applied": true,
@@ -88,7 +102,7 @@
 |---|---|---|---|
 | `status` | string | `"ok"` \| `"invalid"` | 아니오 |
 | `balance` | int | 이 호출 **직후**의 잔량(밑바닥 보정·미션 적립이 이미 반영됨) | 아니오 |
-| `balance_cap` | int | 상한(현재 **3**. 2026-09-01 에 5→3). UI 가 리터럴을 박지 말 것 | 아니오 |
+| `balance_cap` | int | **사문화**(2026-09-13 상한 폐지). 키를 지우지 않고 int4 최대값을 보낸다 — 클라가 이 키를 옵셔널로 읽어(`decodeIfPresent`) **null 이면 낡은 3이 그대로 남기** 때문이다. UI 가 리터럴을 박지 말 것 | 아니오 |
 | `daily_floor` | int | 이 사용자의 하루 밑바닥(1 또는 2). 진단용 | 아니오 |
 | `day` | string | `YYYY-MM-DD` (KST) | 아니오 |
 | `floor_applied` | bool | 이번 호출에서 밑바닥 보정이 **실제로 잔량을 올렸는가** | 아니오 |
@@ -113,7 +127,7 @@
 | `progress_seconds` | int | **현재 랩의 진행**(0…`target_seconds`). 랩마다 0 으로 되감긴다 — 그날 총합은 `worked_seconds` |
 | `claimed` | bool | **언제나 false**(랩이 반복되므로 완료 상태가 없다). 옛 의미: 그날 몫을 이미 받았다 |
 | `granted_now` | bool | **이번 호출에서** 한 랩 이상 받았다 → 연출(`.ultraCharged`)의 트리거 |
-| `capped` | bool | **지금 잔량이 상한 이상이다**(상태. 아직 아무것도 못 채운 사람에게도 참) |
+| `capped` | bool | **사문화**(상한이 없어 항상 거짓이다). 키는 구버전 클라를 위해 남는다 |
 | `pending` | bool | **3시간을 채워 두고 기다리는 중**(오늘 행에서만 참). 하나 쓰면 다음 sync 가 지급한다 |
 | `laps_settled` | int | 그날 **지급된** 랩 수(= `laps_granted`). 소멸 폐지 후 두 값은 언제나 같고, 구서버 응답에서만 갈린다 |
 | `laps_granted` | int | 그날 실제로 받은 랩 수. **더해진 진단 키** |
@@ -142,8 +156,8 @@
 
 1. 3시간을 채웠는데 잔량이 상한이면 퀘스트가 **얼어붙는다**. 진행도는 100%(`progress_seconds == target`)로
    멈추고 **그 뒤의 근무 시간은 다음 랩으로 쌓이지 않는다.**
-2. 울트라를 하나 써서 잔량이 상한 밑으로 내려가면 **다음 sync 가 그 한 개를 지급**하고, 진행도는
-   **지급 시점부터 0** 이다(대기 중 흘려보낸 시간은 이월되지 않는다 — 그것이 상한의 존재 이유다).
+2. **이 대기 규칙은 2026-09-13 에 사문화됐다** — 상한이 없어 1번의 "얼어붙는다"가 일어나지 않는다.
+   서술은 옛 동작의 기록으로 남긴다. 지금은 3시간을 채우면 그 자리에서 **루비 3개**가 지급된다.
    장부 행의 `detail.pending_paid = true` 가 이 경로를 감사에서 구분한다.
 3. 대기는 **동시에 1개**를 넘지 않는다(그래서 상태가 boolean 이다).
 
@@ -285,6 +299,73 @@ invalid → not_working → target_not_working → target_focused → 관리자 
 (+ `not_text`/`too_long`, 둘 다 `max_length` 동반)는 **불변**이다.
 
 ---
+
+## 4-A. 루비 지갑 (2026-09-13)
+
+`profiles.ruby_balance`(int, `>= 0`) + `public.ruby_ledger`. 울트라 지갑을 **그대로 본뜬다** —
+컬럼 8개(`id · user_id · kst_day · reason · delta · balance_after · detail · created_at`)가 같다.
+
+| 것 | 값 | 비고 |
+|---|---|---|
+| 컬럼 권한 | `grant select (ruby_balance) to anon, authenticated` | **update 는 안 준다.** 쓰기는 definer RPC 뿐 |
+| 장부 접근 | `revoke all on table public.ruby_ledger from public, anon, authenticated` + RLS on/정책 0개 | 울트라 장부 선례 그대로 |
+| reason 어휘 | `mission:% · prize:% · spend:% · shop:% · grant:%` | 확장은 **언제나 현재 값들의 상위집합**이어야 한다 |
+| 지급 멱등 | `unique (user_id, kst_day, reason) where delta > 0` | 하루 여러 번 주는 랩은 reason 에 **순번**을 붙인다(`mission:work3h#2`) |
+| 가입 지급 멱등 | `unique (user_id) where reason = 'grant:welcome'` | ★ 날짜가 **빠진** 인덱스라야 평생 1회다. 위 인덱스로는 날짜가 바뀌면 또 준다 |
+| 감사 | `ruby_balance == sum(ruby_ledger.delta)` | **드리프트 0 이 유일한 감사 수단이다.** 잔량만 올리고 장부를 안 적으면 안 된다 |
+
+**랩 카운터는 두 장부를 함께 센다** — `public.work3h_laps(uuid, date)`. 지급처가 울트라에서 루비로
+옮겨 간 **전환 당일**에, 오늘 이미 울트라로 랩을 받은 사람의 루비 장부가 비어 있어 기준선이 0 이 되고
+**같은 근무로 또 지급**되는 사고를 막는다.
+
+## 4-B. 상점 (2026-09-13)
+
+| 것 | 내용 |
+|---|---|
+| `character_prices(character_id, price)` | fox 30 · squirrel 30 · shiba 50 · ghost 50 · jellyfish 70. **아잉은 없다**(무료 = `free_character_id()`) |
+| `character_ownership(user_id, character_id, acquired_at, acquired_via)` | PK `(user_id, character_id)` 가 **구매 멱등을 보장하는 유일한 장치**다 — `ruby_ledger_grant_once` 는 `delta > 0` 조건이라 구매(음수)를 못 막는다 |
+| `buy_character(p_id text)` | `ok`(+`character`·`price`·`ruby_balance`) · `already_owned` · `unknown_character` · `insufficient`(+`need`·`have`) · `unauthorized` · `no_profile` |
+| `buy_ultra(p_count int default 1)` | `ok`(+`count`·`unit`·`spent`·`ultra_balance`·`ruby_balance`) · `insufficient`(+`need`·`have`·`ruby_balance`·`unit`·`count`) · `invalid`(+`count`·`max`) · `unauthorized` · `no_profile` |
+| `shop_state()` | `{ status, ruby_balance, ultra_balance, ultra_price, ultra_buy_max, characters: [{id, price, owned}] }`. 가격 오름차순, 같으면 id |
+| `set_character(p_id text)` | 기존 어휘 + **`not_owned`**. 아잉과 null 은 언제나 통과 |
+
+**★ `buy_ultra` 의 슬롯 번호 — 이 파일에서 제일 조용히 깨지는 자리.**
+울트라를 **올리는** 기입이라 `ultra_ledger_grant_once`(`where delta > 0`)에 걸린다. reason 을 고정
+문자열로 쓰면 **하루에 딱 한 번만** 사지고 두 번째 구매가 조용히 실패한다. 그래서 `shop:ultra` →
+`shop:ultra#2` → `#3` 로 순번을 붙이고, 유도기(`shop_ultra_slots()`)는 **개수+1 이 아니라 최대 슬롯+1**
+이다(장부 가운데 구멍 때문).
+
+**★ 상수 헬퍼의 `public` 실행권을 회수하지 마라.**
+`free_character_id()` · `ultra_ruby_price()` · `ultra_buy_max()` 는 PUBLIC EXECUTE 를 남겨 둔다.
+`security definer` 는 **자기 소유자** 권한으로 도는데, 앞선 마이그레이션이 만든 함수(`set_character`)는
+소유자가 다를 수 있어 새 헬퍼를 못 부른다 → 소유 게이트 한 줄에서 42501. 실제로 그렇게 배포가 죽었다.
+
+## 4-C. 미니게임 판 토큰 (2026-09-14)
+
+점수 위조를 막는다. **값을 판단하지 않고 출처와 물리량만 본다.**
+
+| 것 | 내용 |
+|---|---|
+| `minigame_rounds` | `anon`·`authenticated` 권한 **0**(회수 → RLS on → 정책 없음). 뚫리면 `started_at` 을 과거로 적어 시간 하한을 통째로 우회한다 |
+| 열린 토큰 | `unique (user_id, game) where used_at is null` — 쌓지 않고 **갈아 끼운다**. `curl` 루프로도 행이 1개를 안 넘는다 |
+| `minigame_start_round(p_game)` | `{ status:"ok", token, expires_at, server_now }` · `invalid` · `unauthorized` |
+| `minigame_submit_score(p_game, p_score, p_token)` | `ok`(+`best_score`·`plays`·`improved`) · `no_token` · `token_used` · `token_expired` · `too_fast`(+`need_seconds`·`elapsed_seconds`) · `invalid`(+`max`) · `unauthorized` · `no_profile` |
+| 점수 표 | `authenticated` 의 insert/update **회수**, select 는 유지(순위표가 읽는다) |
+
+**구조적 시간 하한** — 게임 상수에서 나오는 물리량이라 정직한 플레이는 정의상 못 깬다.
+타이밍바는 10라운드 반주기 합 **3.8125초**(점수 무관), 플래피는 `spacing(s)/speed(s)` 의 **누적 합**
+(근사 아님 — 29점 22.046초, 100점 57.626초). 여유 **0.95배**(부동소수·왕복 지연 몫).
+
+**★ 갈아 끼울 때 `started_at` 을 `now()` 로 다시 찍는 것이 급소다.** 옛 값을 남기면 "토큰만 미리
+받아 두고 나중에 즉시 제출"로 시간 하한이 통째로 우회된다.
+
+**못 막는 것(정직하게)** — 점수는 사용자 기기가 만든다. 토큰을 받아 **실제로 기다렸다가** 거짓 점수를
+내는 것은 여전히 가능하다. 위조의 이득이 "정직하게 노는 것과 같은 시간"까지 줄어드는 지점이 서버가
+할 수 있는 전부다.
+
+`no_token` 은 **없는 토큰·남의 토큰·게임 불일치를 하나로 묶는다** — 구분해 주면 공격자에게
+"어디까지 맞았는지" 알려 주는 신탁이 된다. `need_seconds`·`elapsed_seconds` 는 **진단 전용**이고
+화면·로그에 쓰지 않는다(얼마나 더 기다리면 통과하는지는 위조 보조 도구다).
 
 ## 5. 초인종 (Realtime Broadcast)
 
@@ -440,16 +521,27 @@ select l.created_at, p.display_name as 보낸이, l.delta,
 
 ## 8. 알려진 한계 (정직하게 적어 둔다)
 
-* **미션 3시간은 위조 가능하다.** `work_sessions.started_at/ended_at` 을 클라가 보내는 기존 P0 가
-  그대로다. 노출 수준은 기존과 동일하고(클라 판정보다는 엄격하다), 위조해도 얻는 것은 하루 +1 이다.
-  `ultra_ledger.detail.seconds` 에 판정 근거가 남으므로 이상 패턴은 사후에 잡을 수 있다.
-* **겹치는 세션은 이중 계산된다.** 리그 RPC(20260712010000)와 같은 성질이다 — 새 산식을 만들지 않고
-  이미 검증된 산식을 재사용한 결과다.
+* **미션 3시간의 근거(근무 기록)는 대부분 막혔다 — 이 문서의 옛 서술은 낡았다.**
+  `20260826010000_work_session_integrity.sql` 이 트리거 두 겹으로 닫았다: `started_at` 은 UPDATE 로
+  못 바꾸고(`guard_work_session_update` 가 OLD 로 고정), 미래 시각은 현재로 클램프, `duration_seconds` 는
+  **언제나 서버가 시각 차로 재계산**(클라 값 무시), 30일 초과 백데이트 INSERT 는 거부다.
+  남는 것은 그 파일이 스스로 적어 둔 둘뿐이다 — ⑥ "지난주 8시간짜리 그럴듯한 세션 하나" 삽입,
+  ⑦ 닫힌 옛 세션을 재개했다 지금 닫아 구간을 늘리기. 둘 다 **정당한 오프라인 큐 재생과 모양이 같아
+  쓰기로는 못 가른다**(구버전 함대를 안 죽이려고 의도적으로 남긴 것). 관측으로 잡는 축이다.
+  ⚠️ 2026-09-13 부터 이 미션의 보상이 **루비**이므로, 위조의 값어치가 "하루 +1 울트라"에서
+  "랩당 루비 3"으로 바뀌었다.
+* **겹치는 세션의 이중 계산은 닫혔다**(20260826010000). 순위 합산이 세션별 합이 아니라
+  **사용자별 구간 합집합**이라 겹치는 위조 세션 N개가 1개 몫으로 접힌다.
 * **`ultra_ledger` 는 무한히 자란다**(38명 × 하루 ~3행 = 연 4만 행). 청소 크론이 없다.
   필요해지면 `cleanup_old_pokes`(20260724020000) 패턴으로 180일 이전 `spend` 행만 지운다
   (`floor`/`mission` 행은 감사 증거라 남긴다).
-* **대기는 날짜를 넘어 유지되지만 개수는 언제나 1개다**(2026-09-04 확정). 어제 대기한 채 자정을 넘겨도
-  약속은 살아 있고, 그동안 카운터는 멈춰 있다 — 이틀을 가득 찬 채로 일해도 받을 수 있는 것은 하나다.
+* **대기(`ultra_quest_pending`)는 사문화됐다**(2026-09-13). 상한이 없어져 "가득 참"이 성립하지 않으므로
+  깃발이 **내려가기만 하고 세워지지 않는다** — 지금 깃발이 서 있는 사용자는 다음 sync 에서 정산되고 끝난다.
+* **점수 위조는 줄었지 사라지지 않았다**(4-C). 토큰을 받아 실제로 기다렸다가 거짓 점수를 내는 것은
+  여전히 가능하다. 완전 차단은 게임 로직을 서버로 옮겨야 하고, 그건 다른 크기의 작업이다.
+* **`ruby_ledger` 도 무한히 자란다**(울트라 장부와 같은 성질). 청소 크론이 없다.
+* **`minigame_rounds` 의 사용필 행은 판 수만큼 쌓인다.** 미사용은 1행으로 묶였지만 사용필은 안 묶인다.
+  `minigame_purge_rounds()`(service_role 전용)가 있으나 **주기 실행이 걸려 있지 않다.**
   이것은 버그가 아니라 규칙이다(상한 3을 둔 이유가 사라지지 않게 하는 것이 설계 의도다).
   또한 **대기·지급 판정은 "달성한 순간"이 아니라 "달성 후 첫 평가 시점"의 잔량으로 내려진다** —
   서버는 과거 시점의 잔량을 알 수 없기 때문이다. 근무 중에는 5분마다, 그리고 **울트라를 쏜 직후**

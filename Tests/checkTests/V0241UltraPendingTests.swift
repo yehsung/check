@@ -166,9 +166,9 @@ func pendingReachesTheDisplayRowAndOnlyFromTodaysRow() {
 @Test
 func pendingCopyIsCharacterForCharacterAndOutranksTheFullWarning() {
     #expect(MissionCopy.pendingChip == "대기 중")
-    #expect(MissionCopy.pendingNotice == "3시간 채웠어요 — 하나 쓰면 받아요")
+    #expect(MissionCopy.pendingNotice == "3시간 채웠어요 — 곧 들어와요")
     // 소멸이 대기로 바뀌었으므로 "놓쳐요"는 이제 거짓말이다 — 안 써도 하나는 남아 기다린다.
-    #expect(MissionCopy.cappedNotice == "가득 찼어요 — 3시간을 채워도 대기해요")
+    #expect(MissionCopy.cappedNotice == "3시간을 채우면 루비를 받아요")
     #expect(MissionCopy.cappedNotice.contains("놓") == false, "소멸 어휘가 되살아나면 없는 손실을 말하게 된다.")
 
     // ★ 실제 서버 상태: 대기 중이면 capped 도 참이다. 그 조합에서 **대기가 이긴다.**
@@ -188,7 +188,7 @@ func pendingCopyIsCharacterForCharacterAndOutranksTheFullWarning() {
     // 대조군 ②: 평상시 줄은 보상 칩과 진행 문장을 그대로 유지한다(회귀 방지).
     let plain = MissionProgress(kind: .todayThreeHours, progress: 0.4, claimedToday: false,
                                 cappedToday: false, detail: "다음 하나까지 1시간 48분")
-    #expect(MissionCopy.chip(plain) == .reward("⚡︎ +1"))
+    #expect(MissionCopy.chip(plain) == .reward("💎 +3"))
     #expect(MissionCopy.detail(plain) == plain.detail)
 
     // 대조군 ③: `.claimed` 가지는 밑바닥 보정 줄에서 여전히 살아 있다(대기를 앞에 얹었을 뿐
@@ -321,7 +321,7 @@ func firingAnUltraKicksAWalletSyncSoThePendingLapArrivesNow() async {
         try? await Task.sleep(for: .milliseconds(5))
     }
     #expect(store.ultraBalance == 3, "대기분 지급이 화면 잔량에 반영되지 않았다.")
-    #expect(store.missionNotice == "3시간 채웠어요 — 울트라 +1")
+    #expect(store.missionNotice == "3시간 채웠어요 — 루비 +3")
 }
 
 // MARK: - (마) 서버 계약 — 마이그레이션 소스

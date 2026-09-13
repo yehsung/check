@@ -268,7 +268,7 @@ struct UltraPokeButtonTests {
         #expect(MissionCopy.chip(capped) == .capped)
         // v0.2.41: 소멸이 **대기**로 바뀌어(서버 20260903190000) "놓쳐요"가 거짓이 됐다.
         // 안 써도 하나는 남지만, 대기는 하나뿐이고 그동안 카운터가 멈추므로 쓰는 편이 여전히 이득이다.
-        #expect(MissionCopy.cappedNotice == "가득 찼어요 — 3시간을 채워도 대기해요")
+        #expect(MissionCopy.cappedNotice == "3시간을 채우면 루비를 받아요")
         #expect(MissionCopy.detail(capped) == MissionCopy.cappedNotice)
         // 지난 일이 아니라 **지금 상태**를 말한다. 과거형은 아직 아무것도 안 놓친 사람에게 거짓말이다.
         #expect(MissionCopy.cappedNotice.contains("놓쳤") == false)
@@ -289,7 +289,7 @@ struct UltraPokeButtonTests {
         let pending = MissionProgress(kind: .todayThreeHours, progress: 0.4, claimedToday: false, cappedToday: false, detail: "다음 하나까지 1시간 48분")
         // '받음' 칩이 남는 자리는 밑바닥 보정 줄이다 — 3시간 줄의 claimed 는 서버가 언제나 false 로 보낸다.
         let claimed = MissionProgress(kind: .dailyFloor, progress: nil, claimedToday: true, cappedToday: false, detail: "잔량 0이면 1개로")
-        #expect(MissionCopy.chip(pending) == .reward("⚡︎ +1"))
+        #expect(MissionCopy.chip(pending) == .reward("💎 +3"))
         #expect(MissionCopy.chip(claimed) == .claimed)
         // 진행 시간은 상한에 안 걸린 줄에서만 말한다.
         #expect(MissionCopy.detail(pending) == pending.detail)
@@ -318,7 +318,7 @@ struct UltraPokeButtonTests {
         // 0개인 사람에게는 **길을 알려 준다**(사실만 말하고 끝내면 그 화면은 막다른 길이다).
         // v0.2.39 부터 그 길은 "미션"이라는 추상어가 아니라 **조건 그 자체**를 말한다 —
         // 잔량이 0 인 사람이 알아야 할 것은 미션 화면이 어디 있는지가 아니라 언제 다시 생기는지다.
-        #expect(empty == "근무 3시간마다 하나씩 생겨요")
+        #expect(empty == "상점에서 루비로 사요")
         // 홀드 시간은 상수에서 만든다 — 리터럴로 적으면 상수를 바꾼 날 화면만 옛 시간을 말한다.
         #expect(some.contains(UltraChargeStyle.holdSecondsText))
     }

@@ -96,7 +96,35 @@ enum CheckCharacter3DScene {
     static let facingWrapperName = "check.facingWrapper"
 
     /// 오버레이용으로 완성된 씬(재질 unlit·투명 배경·카메라·애니메이션 포함). 로드 실패 시 nil.
-    static func makeScene(animated: Bool = true) -> SCNScene? {
+    ///
+    /// **기본값은 내장 아잉이라 기존 호출부는 한 글자도 바뀌지 않는다.** `character` 가 스프라이트면 `aing.scn`
+    /// 을 아예 읽지 않고 아틀라스 평면 한 장으로 같은 골격(`wrapper → facing → 캐릭터`)을 세운다 — 리액션 11종·
+    /// 카메라 프레이밍·정지/재개가 캐릭터 종류와 무관하게 **같은 코드**를 지나게.
+    ///
+    /// 스프라이트에서 하지 않는 것 둘:
+    /// · `addClosedEyeNodes` — 3D 감은눈 파이프라인은 아잉 전용이다(DECISIONS: 깜빡임·졸기는 프레임으로).
+    /// · `applyUnlitMaterials` — 그 함수는 512px 초과 디퓨즈를 **리샘플한다**. 아틀라스(예: 908×174)가
+    ///   512×98 로 줄어들면 매니페스트가 말한 픽셀 크기와 갈려 `SpriteAlphaMask` 와 재질이 다른 그림을 본다.
+    ///   평면 재질은 `SpriteCharacterNode` 가 이미 `.constant` 로 만들어 오므로 태울 이유도 없다.
+    ///
+    /// 스프라이트를 세우지 못하면(아틀라스 없음·크기 불일치) **아잉으로 접는다** — 빈 오버레이를 남기지 않는다.
+    @MainActor
+    static func makeScene(
+        animated: Bool = true,
+        character: CharacterManifest = CharacterCatalog.builtInAing,
+        atlas: CGImage? = nil
+    ) -> SCNScene? {
+        if character.kind == .sprite {
+            if let scene = makeSpriteScene(animated: animated, character: character, atlas: atlas) {
+                return scene
+            }
+            logger.error("sprite scene build failed id=\(character.id, privacy: .public) — 아잉으로 접는다")
+        }
+        return makeAingScene(animated: animated)
+    }
+
+    /// 내장 아잉(3D) 씬. **v0.3.15 이전의 `makeScene` 본문 그대로다** — 여기에 스프라이트 조건을 섞지 마라.
+    private static func makeAingScene(animated: Bool) -> SCNScene? {
         guard let scene = loadModelScene() else { return nil }
         // 씬 배경을 비워 패널 뒤(바탕화면/다른 앱)가 그대로 비치게 한다.
         scene.background.contents = nil
@@ -123,6 +151,138 @@ enum CheckCharacter3DScene {
             addIdleAnimations(to: character)
         }
         return scene
+    }
+
+    /// 스프라이트 캐릭터 씬. 세우지 못하면 nil(호출부가 아잉으로 접는다).
+    @MainActor
+    private static func makeSpriteScene(
+        animated: Bool, character: CharacterManifest, atlas: CGImage?
+    ) -> SCNScene? {
+        guard let atlas, let node = SpriteCharacterNode.make(manifest: character, atlas: atlas) else {
+            return nil
+        }
+        let scene = SCNScene()
+        scene.background.contents = nil
+
+        let wrapper = SCNNode()
+        wrapper.name = reactionWrapperName
+        let facing = SCNNode()
+        facing.name = facingWrapperName
+        facing.addChildNode(node)
+        wrapper.addChildNode(facing)
+        scene.rootNode.addChildNode(wrapper)
+
+        // 카메라는 **캐릭터를 붙인 뒤·감은눈/애니메이션 전에** — 아잉과 같은 순서다(bbox 에 보조 노드가 섞이지 않게).
+        addFramingCamera(to: scene)
+        if animated {
+            addIdleAnimations(to: node)
+        }
+        return scene
+    }
+
+    /// 씬 안 캐릭터를 **뷰 재생성 없이** 갈아 끼운다. 성공하면 true.
+    ///
+    /// **왜 뷰가 아니라 노드인가.** `CheckOverlayCharacterView.characterBoxSize` 주석이 그 이유를 적어 뒀다 —
+    /// SCNView 아이덴티티가 바뀌면 `makeNSView` 가 모델을 다시 읽고 `engine.attach` 가 감은눈 텍스처(연결성분
+    /// 라벨링)를 **메인 스레드에서** 다시 만든다. 울트라 격발은 5초 안에 교체·원복 두 번이라 그 비용이 두 번 온다.
+    ///
+    /// 바꾸는 것은 `root → check.reactionWrapper → check.facingWrapper` **그 아래 자식뿐**이다. wrapper·facing
+    /// 노드 자체와 카메라는 그대로 살아 있어야 한다(리액션 SCNAction 이 wrapper 에, 방향이 facing 에 걸려 있다).
+    ///
+    /// 새 노드를 **먼저 만들고** 나서 옛 자식을 지운다 — 중간에 실패해도 빈 facing(= 캐릭터 없는 오버레이)이
+    /// 남지 않게. `facing.eulerAngles` 는 건드리지 않는다: 방향의 주인은 `ReactionEngine.applyDragFacingToNode`
+    /// 이고, 호출부가 교체 직후 `engine.attach` 를 다시 불러 보관 중인 방향을 재적용한다.
+    @MainActor
+    @discardableResult
+    static func swapCharacter(
+        in scene: SCNScene,
+        to manifest: CharacterManifest,
+        atlas: CGImage?,
+        animated: Bool = true
+    ) -> Bool {
+        guard let wrapper = scene.rootNode.childNode(withName: reactionWrapperName, recursively: false),
+              let facing = wrapper.childNode(withName: facingWrapperName, recursively: false) else {
+            logger.error("swapCharacter: wrapper/facing 을 못 찾았다 — 이 씬은 makeScene 이 만든 것이 아니다")
+            return false
+        }
+        guard let replacement = makeCharacterNode(manifest: manifest, atlas: atlas) else {
+            logger.error("swapCharacter failed id=\(manifest.id, privacy: .public) — 씬을 그대로 둔다")
+            return false
+        }
+        for child in facing.childNodes {
+            child.removeFromParentNode()
+        }
+        facing.addChildNode(replacement)
+        if animated {
+            addIdleAnimations(to: replacement)
+        }
+        return true
+    }
+
+    // MARK: - 착용 캐릭터 해석(카탈로그·아틀라스 캐시)
+
+    /// 번들 카탈로그. 디렉터리 스캔 + 매니페스트 디코드라 **한 번만** 한다.
+    @MainActor private static var cachedCatalog: CharacterCatalog?
+
+    /// 아틀라스 CGImage 캐시(캐릭터 id → 이미지). 울트라 격발은 5초 안에 교체·원복 두 번이라
+    /// 그때마다 PNG 를 다시 디코드하면 그 비용이 두 번 온다. 캐릭터 수가 한 자릿수라 전부 들고 있어도 된다.
+    @MainActor private static var cachedAtlases: [String: CGImage] = [:]
+
+    /// 이 빌드가 세울 수 있는 캐릭터 전부(캐시됨).
+    @MainActor
+    static var catalog: CharacterCatalog {
+        if let cachedCatalog { return cachedCatalog }
+        let loaded = CharacterCatalog.load()
+        cachedCatalog = loaded
+        return loaded
+    }
+
+    /// 지금 착용한 캐릭터. 저장값이 없거나 모르는 id 면 아잉(`CharacterSelection` 이 접는다).
+    ///
+    /// **`defaults` 를 인자로 두는 이유**: 기본값 `.standard` 하나로 앱 전체(오버레이·메뉴바·미니게임)가 같은
+    /// 선택을 보게 하되, 테스트는 자기 스위트를 넣어 시계를 지배한다. 설정 화면(2-D)도 반드시 같은 도메인을 써라 —
+    /// 여기와 다른 suite 를 쓰면 "골랐는데 미니게임 캐릭터만 안 바뀐다"가 된다.
+    @MainActor
+    static func selectedCharacter(defaults: UserDefaults = .standard) -> CharacterManifest {
+        CharacterSelection(defaults: defaults, catalog: catalog).selectedManifest
+    }
+
+    /// 캐릭터의 아틀라스 이미지(스프라이트만). 3D·미등록 캐릭터는 nil.
+    @MainActor
+    static func atlasImage(for manifest: CharacterManifest) -> CGImage? {
+        guard manifest.kind == .sprite else { return nil }
+        if let cached = cachedAtlases[manifest.id] { return cached }
+        guard let url = catalog.atlasURL(for: manifest.id),
+              let image = SpriteRuntime.decodeImage(at: url) else { return nil }
+        cachedAtlases[manifest.id] = image
+        return image
+    }
+
+    /// 테스트 전용: 카탈로그·아틀라스 캐시를 비운다.
+    @MainActor
+    static func resetCharacterCachesForTesting() {
+        cachedCatalog = nil
+        cachedAtlases.removeAll()
+    }
+
+    /// 교체용 캐릭터 노드 하나(wrapper/facing 없이). 실패하면 nil.
+    @MainActor
+    private static func makeCharacterNode(manifest: CharacterManifest, atlas: CGImage?) -> SCNNode? {
+        switch manifest.kind {
+        case .sprite:
+            guard let atlas else { return nil }
+            return SpriteCharacterNode.make(manifest: manifest, atlas: atlas)
+        case .scene3D:
+            // 아잉은 모델을 다시 읽는다(씬 하나에 캐릭터는 한 마리라 예비를 들고 있을 자리가 없다).
+            // unlit 정규화 → 감은눈 노드까지 `makeScene` 과 **같은 순서**로 세운다. 순서가 갈리면
+            // 감은눈 선이 unlit 정규화를 못 받아 조명에 허옇게 뜬다.
+            guard let scene = loadModelScene() else { return nil }
+            applyUnlitMaterials(to: scene.rootNode)
+            guard let character = scene.rootNode.childNodes.first else { return nil }
+            character.removeFromParentNode()
+            addClosedEyeNodes(to: character)
+            return character
+        }
     }
 
     // MARK: - 감은 눈 오버레이 노드(sleeping 시 얼굴 눈 자리에 얹는 얇은 감은 선)
@@ -375,11 +535,20 @@ enum CheckCharacter3DScene {
     }
 
     /// 오프스크린 PNG 렌더(시각 검증용). SCNRenderer로 씬을 그려 PNG Data를 돌려준다.
-    static func renderSnapshotPNG(size: CGSize = CGSize(width: 280, height: 340)) -> Data? {
-        guard let scene = makeScene(animated: false),
-              let device = MTLCreateSystemDefaultDevice() else {
-            return nil
-        }
+    /// 기본값은 아잉 — 캐릭터를 주면 그 캐릭터로 그린다(스프라이트 시각 검증이 이 문으로 들어온다).
+    @MainActor
+    static func renderSnapshotPNG(
+        size: CGSize = CGSize(width: 280, height: 340),
+        character: CharacterManifest = CharacterCatalog.builtInAing,
+        atlas: CGImage? = nil
+    ) -> Data? {
+        guard let scene = makeScene(animated: false, character: character, atlas: atlas) else { return nil }
+        return renderSnapshotPNG(scene: scene, size: size)
+    }
+
+    /// 이미 만들어 둔 씬을 그대로 그린다(교체 왕복처럼 씬을 손댄 뒤의 그림을 봐야 할 때).
+    static func renderSnapshotPNG(scene: SCNScene, size: CGSize = CGSize(width: 280, height: 340)) -> Data? {
+        guard let device = MTLCreateSystemDefaultDevice() else { return nil }
         let renderer = SCNRenderer(device: device, options: nil)
         renderer.scene = scene
         renderer.autoenablesDefaultLighting = false

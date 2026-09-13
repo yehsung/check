@@ -54,6 +54,9 @@ enum MiniGameMascot {
     private struct Key: Hashable {
         let pixels: CGFloat
         let mood: CheckMascotAssets.Mood
+        /// ★ **캐릭터 id 가 키에 있어야 한다.** 없으면 캐릭터를 바꿔도 먼저 구운 그림이 계속 나온다
+        /// (메뉴바 초상 캐시가 정확히 그 결함을 갖고 있었다 — SPEC-WAVE2 2-C).
+        let characterID: String
     }
 
     /// 값이 `nil` 인 항목 = "구워 봤고 실패했다". 다시 시도하지 않는다.
@@ -68,14 +71,74 @@ enum MiniGameMascot {
     /// `.negative`(게임오버 시무룩)는 **일부러 nil 이다.** 3D 에셋에는 표정이 하나뿐이라, 옆모습 시무룩을
     /// 만들려면 없는 표정을 지어내야 한다. 죽은 뒤에는 기존 정면 시무룩 PNG 로 돌아가는 편이 낫다 —
     /// 그 순간은 어차피 90° 회전 낙하 + 붉은 플래시라 자세가 바뀌는 것이 튀지 않는다(facing-over 스냅샷).
+    /// **스프라이트 캐릭터도 같은 계약이다** — 아틀라스에 시무룩 옆모습 프레임이 없고, 초상 PNG 는 정면이다.
+    ///
+    /// **스프라이트는 굽지 않는다.** 이미 옆모습 프레임이 아틀라스에 있으므로 3D 경로(모델 로드 → unlit →
+    /// 프로브 3회 → SCNRenderer)를 통째로 건너뛰고 그 셀을 잘라 쓴다. Metal 도 필요 없다.
+    ///
+    /// `character` 를 안 주면 **지금 착용한 캐릭터**를 쓴다(기본 = 아잉이라 기존 호출부는 종전 그림 그대로).
     static func sideProfile(pixels: CGFloat = spritePixels,
-                            mood: CheckMascotAssets.Mood = .neutral) -> NSImage? {
+                            mood: CheckMascotAssets.Mood = .neutral,
+                            character: CharacterManifest? = nil) -> NSImage? {
         guard mood == .neutral else { return nil }
-        let key = Key(pixels: pixels, mood: mood)
+        let manifest = character ?? CheckCharacter3DScene.selectedCharacter()
+        let key = Key(pixels: pixels, mood: mood, characterID: manifest.id)
         if let cached = cache[key] { return cached }
-        let baked = bake(pixels: pixels, order: CheckCharacter3DScene.ModelSource.allCases)
-        cache[key] = baked
-        return baked
+        let made: NSImage?
+        switch manifest.kind {
+        case .scene3D:
+            made = bake(pixels: pixels, order: CheckCharacter3DScene.ModelSource.allCases)
+        case .sprite:
+            made = spriteSideProfile(manifest: manifest, pixels: pixels)
+        }
+        cache[key] = made
+        return made
+    }
+
+    // MARK: - 스프라이트 옆모습(아틀라스 셀 그대로)
+
+    /// 아틀라스의 `sideIdle` 첫 프레임을 잘라 **정면 PNG 와 같은 192² 캔버스**에 앉힌다.
+    ///
+    /// 왜 잘라 낸 셀을 그대로 돌려주지 않는가: 셀은 227×174 같은 직사각이고 실루엣이 셀 안에서 차지하는
+    /// 비율도 캐릭터마다 다르다. 게임은 스프라이트를 34pt 로 그리면서 히트박스는 24pt 로 잡으므로,
+    /// **그림 안 실루엣 비율이 곧 "그리는 몸과 죽는 몸"의 어긋남**이다(`targetFill` 주석). 3D 굽기가
+    /// 프로브 3회로 수렴시키는 그 값을, 스프라이트는 알파 경계 한 번으로 정확히 맞출 수 있다.
+    ///
+    /// 상태 폴백(`sideIdle` 없으면 `frontIdle`)은 `SpriteRuntime` 이 한다 — 여기서 다시 접지 않는다.
+    private static func spriteSideProfile(manifest: CharacterManifest, pixels: CGFloat) -> NSImage? {
+        guard let atlas = CheckCharacter3DScene.atlasImage(for: manifest),
+              let runtime = SpriteRuntime(manifest: manifest, atlas: atlas) else { return nil }
+        runtime.setState(CharacterManifest.StateKey.sideIdle, mirrored: false, now: 0)
+        let frame = runtime.currentFrame
+        // `CGImage.cropping(to:)` 의 rect 는 **좌상단 원점 픽셀**이다 — 매니페스트 Rect 와 같은 규약이라
+        // 부호를 뒤집지 않는다(1차 웨이브가 못 박은 그 규약).
+        guard let cell = atlas.cropping(to: CGRect(x: frame.x, y: frame.y, width: frame.w, height: frame.h)),
+              let box = alphaBox(cell) else { return nil }
+
+        let side = max(32, pixels.rounded())
+        let cellW = CGFloat(cell.width), cellH = CGFloat(cell.height)
+        let silhouetteW = box.width * cellW, silhouetteH = box.height * cellH
+        guard silhouetteW > 0, silhouetteH > 0 else { return nil }
+        let scale = targetFill * side / max(silhouetteW, silhouetteH)
+        // `alphaBox` 는 **좌하단 원점** 정규화 좌표다(월드 +Y 와 같은 방향) — CGContext 와도 같은 방향이라
+        // 여기서 한 번 더 뒤집지 않는다.
+        let centerX = (box.midX) * cellW, centerY = (box.midY) * cellH
+        guard let context = CGContext(
+            data: nil, width: Int(side), height: Int(side), bitsPerComponent: 8,
+            bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.clear(CGRect(x: 0, y: 0, width: side, height: side))
+        context.interpolationQuality = .high
+        context.draw(cell, in: CGRect(
+            x: side / 2 - centerX * scale,
+            y: side / 2 - centerY * scale,
+            width: cellW * scale,
+            height: cellH * scale
+        ))
+        guard let image = context.makeImage() else { return nil }
+        // PNG 폴백과 같은 규약: 픽셀 수 = 포인트 수(축소는 SwiftUI 가 한 번만 한다).
+        return NSImage(cgImage: image, size: NSSize(width: side, height: side))
     }
 
     /// 테스트 전용: 캐시를 비운다(굽기 비용·폴백 경로를 반복 측정하려면 필요하다).

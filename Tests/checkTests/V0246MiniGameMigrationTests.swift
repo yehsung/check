@@ -3,7 +3,7 @@ import Testing
 @testable import check
 
 // v0.2.46 — 서버 마이그레이션 계약(20260908090000_minigame_scores.sql): 미니게임 일별 최고기록 원장 · 오늘 순위 RPC ·
-// 순위 공개 토글 · 자정 상품(전날 게임별 1등에게 울트라 찌르기 +10, pg_cron 매시 멱등).
+// 순위 공개 토글 · 자정 상품(전날 게임별 1·2·3등에게 루비 20·10·5, pg_cron 매시 멱등).
 //
 // 클라(hub 포크)가 이 이름들을 그대로 쓴다: 표 `minigame_daily_scores`(본문 user_id·game·best_score, on_conflict=user_id,game,day),
 // RPC `minigame_board(p_game, p_day)` 6컬럼, `minigame_yesterday_winner(p_game)` 6컬럼, `profiles.minigame_public`.

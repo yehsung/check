@@ -279,15 +279,23 @@ struct CheckMiniGameWindowView: View {
 
     static let title = "미니게임"
     static let rankTitle = "오늘 순위"
-    static let prizeCaption = "자정에 1등은 울트라 찌르기 +10"
+    static let prizeCaption =
+        "자정에 1·2·3등에게 루비 \(rubyPrizes[0])·\(rubyPrizes[1])·\(rubyPrizes[2])"
     static let emptyBoard = "아직 기록이 없어요 — 첫 기록의 주인공이 되세요"
     static let loadingCaption = "불러오는 중…"
     static let failedCaption = "순위를 불러오지 못했어요"
-    static let awardedChip = "+10 받음"
+    /// 어제 챔피언 카드에 붙는 칩. 이 카드는 **1등만** 띄우므로(서버 `minigame_yesterday_winner`
+    /// 가 rank=1 로 거른다) 1등 몫을 그대로 쓴다.
+    static let awardedChip = "루비 +\(rubyPrizes[0]) 받음"
     static let pauseTitle = "일시정지"
     static let resumeAction = "이어하기"
     static let quitAction = "그만두기"
     static let noRankToday = "오늘 기록 없음"
+
+    /// 자정 상품(루비). 서버 `public.ruby_prize_amounts()` 와 **짝인 상수**다(둘 다 {20,10,5}).
+    /// 2026-09-13 에 상품이 **울트라 +10(1등만) → 루비 20·10·5(1·2·3등)** 로 바뀌었다.
+    /// 서버 배열을 고치면 여기도 같이 고쳐야 하단 안내가 거짓말이 되지 않는다.
+    static let rubyPrizes = [20, 10, 5]
 
     /// 자정 상품 정족수. 서버 `public.minigame_prize_quorum()` 과 **짝인 상수**다(둘 다 5).
     /// 서버는 지급을 막고 화면은 그 조건을 미리 알린다 — 서버 함수를 바꾸면 여기도 같이 바꿔야
@@ -897,7 +905,7 @@ private struct MiniGamePauseAction: View {
     }
 }
 
-/// 어제 챔피언 카드(48pt). 왕관 · 아바타 · 이름 · 점수 · "+10 받음". 금색 채움 + 금색 테두리로 순위 행과 층을 가른다.
+/// 어제 챔피언 카드(48pt). 왕관 · 아바타 · 이름 · 점수 · "루비 +20 받음". 금색 채움 + 금색 테두리로 순위 행과 층을 가른다.
 private struct MiniGameChampionCard: View {
     let winner: MiniGameWinner
     let awardedChip: String
@@ -930,7 +938,7 @@ private struct MiniGameChampionCard: View {
                     .minimumScaleFactor(0.75)
             }
             Spacer(minLength: 4)
-            // "+10 받음" 칩은 점수 **앞**이다 — 뒤에 두면 칩 폭만큼 점수가 밀려 오른쪽 끝이 목록과 갈린다.
+            // 받음 칩은 점수 **앞**이다 — 뒤에 두면 칩 폭만큼 점수가 밀려 오른쪽 끝이 목록과 갈린다.
             if winner.awarded {
                 Text(awardedChip)
                     .font(.system(size: 9, weight: .bold))

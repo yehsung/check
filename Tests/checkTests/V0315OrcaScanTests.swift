@@ -315,6 +315,35 @@ func compressedTwinCandidatesStayInsideTheOwningOrcaHome() {
     #expect(r2.usage.codexTotal == 4_200, "Orca home 에서 압축·보관된 파일의 기여가 사라졌다: \(r2.usage.codexTotal)")
 }
 
+/// 두 home 에 하드링크된 세션을 **정본 쪽 home 의 Codex 만 압축**하면(원본 삭제 + `.zst`) 옛 정본 상태는 동결 규칙에 걸리고,
+/// 다른 home 의 `.jsonl` 은 짝을 잃어 새로 파싱된다. 동결을 남기면 두 배 — 같은 이름을 다른 경로로 읽었으면 동결하지 않는다.
+/// 뮤테이션: 정리 규칙의 seenNames 예외를 빼면 빨강(4,600).
+@Test
+func compressedCanonicalIsNotFrozenWhileItsAliasIsStillLive() throws {
+    let home = o315TempHome("zst-alias")
+    defer { try? FileManager.default.removeItem(at: home) }
+    let name = "rollout-2026-07-05T00-00-00-za.jsonl"
+    let original = home.appendingPathComponent(".codex/sessions/2026/07/05/\(name)")
+    o315Write(o315Body([(100, 0), (2_100, 300)]), to: original)
+    let alias = o315AccountHome(home, "acct").appendingPathComponent("sessions/2026/07/05/\(name)")
+    try FileManager.default.createDirectory(at: alias.deletingLastPathComponent(), withIntermediateDirectories: true)
+    #expect(link(original.path, alias.path) == 0, "하드링크 픽스처 실패")
+
+    let r1 = o315Scan(home: home)
+    #expect(r1.usage.codexTotal == 2_300)
+    #expect(r1.cache.codexFileStates.keys.first?.contains("/.codex/sessions/") == true)
+
+    // `~/.codex` 쪽 압축 워커: 원본 링크 삭제 + `.zst`. Orca 쪽 링크는 같은 바이트로 남는다.
+    try FileManager.default.removeItem(at: original)
+    o315Write("zstd-frame-bytes", to: URL(fileURLWithPath: original.path + ".zst"))
+
+    let r2 = o315Scan(r1.cache, home: home)
+    #expect(r2.usage.codexTotal == 2_300, "압축된 정본이 동결된 채 별칭이 새로 파싱돼 두 배가 됐다: \(r2.usage.codexTotal)")
+    #expect(r2.cache.codexFileStates.count == 1)
+    #expect(r2.cache.codexFileStates.keys.first?.contains("/orca/codex-accounts/") == true)
+    #expect(o315Scan(home: home).usage.codexTotal == r2.usage.codexTotal)
+}
+
 // MARK: - Claude transcripts
 
 /// `~/.claude/transcripts` 의 assistant usage 도 집계되고, projects 와 같은 (message.id, requestId) 는 한 번만 센다.

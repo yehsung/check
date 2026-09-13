@@ -115,6 +115,8 @@ private func frMountComposing(
     window.contentView = hosting
     hosting.layoutSubtreeIfNeeded()
     frSpin()
+    // 투명하게 띄운다 — key 가 되는 데는 지장이 없고, 스위트가 도는 동안 실제 데스크톱에 제보 화면이 뜨지 않게(v0.2.26 규약).
+    window.alphaValue = 0
     window.makeKeyAndOrderFront(nil)
 
     let field = try #require(

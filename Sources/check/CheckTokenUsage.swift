@@ -1642,6 +1642,8 @@ enum TokenUsageIncrementalScanner {
         // 그래서 동결 사유에 **다른 루트의 동명 `.zst`** 도 넣는다(compressedTwinCandidates). 동명 `.jsonl` 이 다른 루트에
         // 있으면 그것은 이번 순회에 새 키로 파싱됐으니 옛 상태를 지워야 한다(안 지우면 이중 계상) — `.zst` 만 동결이다.
         let beforeStates = cache.codexFileStates.count
+        // v0.3.15: 이번 순회에 실제로 읽은 파일의 이름(= 세션 UUID). 아래 동결 예외가 쓴다.
+        let seenNames = Set(seenPaths.map { ($0 as NSString).lastPathComponent })
         cache.codexFileStates = cache.codexFileStates.filter { path, state in
             if state.monthKey != monthString { return true }
             // v0.3.15: 다른 home 의 정본에 밀린 별칭 경로는 파일이 있어도 지운다 — 정본이 바뀐 뒤(복사본이 더 자람) 옛 정본 상태가
@@ -1649,6 +1651,10 @@ enum TokenUsageIncrementalScanner {
             if aliasPaths.contains(path) { return false }
             if seenPaths.contains(path) { return true }
             if FileManager.default.fileExists(atPath: path) { return true }
+            // v0.3.15: 같은 이름을 이번 순회에 **다른 경로로 읽었으면** `.zst` 가 있어도 동결하지 않는다. Orca 가 하드링크로 두 home 에
+            // 건 세션을 한쪽 Codex 만 압축하면(원본 삭제 + `.zst`) 그쪽 옛 상태는 동결되고, 다른 home 의 살아 있는 `.jsonl` 은 별칭
+            // 짝이 사라져 새 키로 전량 파싱된다 — 동결을 남기면 그 세션이 **정확히 두 배**다. 살아 있는 쪽이 같은 바이트를 담으므로 지워도 유실이 없다.
+            if seenNames.contains((path as NSString).lastPathComponent) { return false }
             return compressedTwinCandidates(for: path, roots: roots).contains { FileManager.default.fileExists(atPath: $0) }
         }
         if cache.codexFileStates.count != beforeStates { stats.statesChanged = true }

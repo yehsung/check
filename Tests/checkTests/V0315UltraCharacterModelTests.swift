@@ -32,11 +32,11 @@ struct V0315UltraCharacterModelTests {
     func rowsCarryTheCharacterWhenPresent() throws {
         let rows = try decode("""
         [{"id":"p1","from_user":"u1","from_display_name":"동료","from_avatar_url":null,
-          "created_epoch":1757000000,"kind":"ultra","body":null,"from_character":"fox"},
+          "created_epoch":1757000000,"kind":"ultra","body":null,"from_character":"shiba"},
          {"id":"p2","from_user":"u2","from_display_name":"옆자리","from_avatar_url":null,
           "created_epoch":1757000000,"kind":"normal","body":null,"from_character":null}]
         """)
-        #expect(rows[0].fromCharacter == "fox")
+        #expect(rows[0].fromCharacter == "shiba")
         #expect(rows[1].fromCharacter == nil)
     }
 
@@ -59,14 +59,14 @@ struct V0315UltraCharacterModelTests {
         var ultra = TakenPokeRow(id: "p1", fromUser: "u1", fromDisplayName: "동료",
                                  fromAvatarUrl: nil, createdEpoch: epoch)
         ultra.kind = "ultra"
-        ultra.fromCharacter = "fox"
+        ultra.fromCharacter = "shiba"
         var plain = TakenPokeRow(id: "p2", fromUser: "u2", fromDisplayName: "옆자리",
                                  fromAvatarUrl: nil, createdEpoch: epoch)
         plain.kind = "normal"
 
         let received = WorkTimerStore.freshReceivedPokes(rows: [ultra, plain], now: now)
         #expect(received.count == 2)
-        #expect(received.first { $0.id == "p1" }?.fromCharacterID == "fox")
+        #expect(received.first { $0.id == "p1" }?.fromCharacterID == "shiba")
         // 캐릭터를 안 고른 사람은 nil — 표시하는 쪽이 아잉으로 접는다.
         #expect(received.first { $0.id == "p2" }?.fromCharacterID == nil)
     }

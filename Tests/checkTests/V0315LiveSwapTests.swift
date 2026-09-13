@@ -46,11 +46,11 @@ struct V0315LiveSwapTests {
     @Test("선택이 바뀌면 실행 중인 씬이 그 자리에서 갈아 끼워진다")
     func revisionChangeSwapsTheLiveScene() throws {
         let catalog = CheckCharacter3DScene.catalog
-        try #require(catalog.manifest(id: "fox") != nil, "번들에 여우가 없다 — 에셋 갈래가 빠졌다")
+        try #require(catalog.manifest(id: "shiba") != nil, "번들에 여우가 없다 — 에셋 갈래가 빠졌다")
         var (view, scnView, _, coordinator) = try #require(mount(character: CharacterCatalog.builtInAing))
         #expect(isSprite(scnView) == false, "아잉으로 떠야 한다")
 
-        let (store, suite) = defaults("fox")
+        let (store, suite) = defaults("shiba")
         defer { store.removePersistentDomain(forName: suite) }
         view.characterDefaults = store
         view.characterRevision = 1           // 설정에서 골랐다 = 세대가 올랐다
@@ -63,7 +63,7 @@ struct V0315LiveSwapTests {
     @Test("세대가 그대로면 아무것도 하지 않는다")
     func sameRevisionIsANoOp() throws {
         var (view, scnView, _, coordinator) = try #require(mount(character: CharacterCatalog.builtInAing))
-        let (store, suite) = defaults("fox")
+        let (store, suite) = defaults("shiba")
         defer { store.removePersistentDomain(forName: suite) }
         view.characterDefaults = store
         view.characterRevision = 0           // 안 바뀌었다
@@ -74,7 +74,7 @@ struct V0315LiveSwapTests {
     @Test("★ 격발 중에는 갈지 않고, 끝난 뒤에 반영한다")
     func ultraDefersTheSwap() throws {
         var (view, scnView, engine, coordinator) = try #require(mount(character: CharacterCatalog.builtInAing))
-        let (store, suite) = defaults("fox")
+        let (store, suite) = defaults("shiba")
         defer { store.removePersistentDomain(forName: suite) }
         view.characterDefaults = store
         view.characterRevision = 1

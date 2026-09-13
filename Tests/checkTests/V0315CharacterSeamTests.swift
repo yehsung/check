@@ -24,7 +24,7 @@ struct V0315CharacterSeamTests {
         #expect(catalog.allIDs.first == CharacterCatalog.builtInAingID)
         #expect(catalog.manifest(id: "aing")?.kind == .scene3D)
         // 번들에 구운 스프라이트 둘.
-        for id in ["fox", "bot"] {
+        for id in ["shiba", "panda"] {
             let manifest = try #require(catalog.manifest(id: id), "번들에서 \(id) 를 못 찾았다 — .copy 산출물이 카탈로그에 안 잡힌다")
             #expect(manifest.kind == .sprite)
             #expect(try #require(catalog.atlasURL(for: id)).isFileURL)
@@ -37,7 +37,7 @@ struct V0315CharacterSeamTests {
     @Test("아틀라스가 실제로 열리고 매니페스트 rect 가 그 안에 있다")
     func atlasBytesMatchTheManifest() throws {
         let catalog = CharacterCatalog.load(bundle: CheckResources.bundle)
-        for id in ["fox", "bot"] {
+        for id in ["shiba", "panda"] {
             let manifest = try #require(catalog.manifest(id: id))
             let atlas = try #require(manifest.atlas)
             let url = try #require(catalog.atlasURL(for: id))
@@ -116,10 +116,10 @@ struct V0315CharacterSeamTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let selection = CharacterSelection(defaults: defaults, catalog: .load(bundle: CheckResources.bundle))
         #expect(selection.selectedID == CharacterCatalog.builtInAingID)
-        #expect(selection.select("fox"))
-        #expect(selection.selectedID == "fox")
+        #expect(selection.select("shiba"))
+        #expect(selection.selectedID == "shiba")
         // 번들에 없는 id 는 저장조차 되지 않는다.
         #expect(selection.select("ghost-that-does-not-exist") == false)
-        #expect(selection.selectedID == "fox")
+        #expect(selection.selectedID == "shiba")
     }
 }

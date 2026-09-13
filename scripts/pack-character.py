@@ -62,6 +62,27 @@ except ModuleNotFoundError as exc:  # 어느 인터프리터로 돌렸는지까�
 
 
 # 알파가 이 값보다 크면 '내용'. 1 = 완전 투명만 여백으로 본다(보수적 — 소프트 엣지를 자르지 않는다).
+# ── 캐릭터별 초상 크롭 조정 ─────────────────────────────────────────────────────────────────
+# **왜 캐릭터마다 다른가**(2026-09-13 실측): 같은 규칙으로 잘라도 실루엣 비율이 다르면 18pt 에서
+# 읽히는 정도가 갈린다. 픽셀아트 5종 측정 — 36px 점유율 시바 66.6 · 판다 69.2 · 드래곤 60.9 ·
+# 슬라임 59.3 인데 **토끼만 49.2**(귀가 세로를 다 먹는다). 대비도 30.4 로 꼴찌(아잉 43.0 보다 낮다).
+#
+# 종이 다섯뿐이므로 규칙 하나를 억지로 찾는 대신 **그 종만 조정한다**. 여기 없는 캐릭터는 기본값.
+#   head_side : 머리 상자 한 변(몸통 높이 대비). 키우면 더 넓게(몸까지), 줄이면 얼굴만.
+#   head_top  : 얼굴 중심을 찾을 위쪽 띠 비율. 귀·뿔이 큰 종은 줄여야 중심이 위로 안 끌린다.
+WALK_TUNING = {
+    # leg_band: 아래에서부터 몇 %를 "다리"로 보고 미러할지. 꼬리가 낮으면 좁혀라.
+    "shiba":  {"leg_band": 0.34},
+    "panda":  {"leg_band": 0.34},
+    "rabbit": {"leg_band": 0.34},
+    "dragon": {"leg_band": 0.30},   # 꼬리가 낮게 깔린다
+}
+
+PORTRAIT_TUNING = {
+    # "rabbit": {"head_side": 0.52, "head_top": 0.60},   # 리롤 후 재측정해서 필요하면 켠다
+}
+# ───────────────────────────────────────────────────────────────────────────────────────────
+
 PORTRAIT_SIZE = 192   # 메뉴바(18pt)·팝오버(46pt)가 함께 쓰는 초상 한 변
 DEFAULT_ALPHA_THRESHOLD = 1
 # 셀 사방에 두는 투명 여백(px). diffuse 가 clamp + linear 라 셀 경계에서 이웃 셀이 번질 수 있는데,
@@ -153,6 +174,33 @@ class Group:
         """그룹 전체에 **같은** 스케일을 먹인다."""
         width = max(1, int(round(self.width * target_height / self.height)))
         return [resize_rgba(c, (width, target_height), nearest=self.nearest) for c in self.crops]
+
+
+# ── 접지 B 를 다리 띠 미러로 만든다 ─────────────────────────────────────────────────────────
+# **왜 이렇게 하는가**(2026-09-13 실측): 옆모습 걷기의 두 접지는 **다리만 좌우가 바뀐 같은 그림**이다.
+# 그런데 이미지 모델은 그 반전을 못 한다 — 픽셀아트 5종에 깊이 언어·위치 언어·4족·2족 전부 시도했고
+# **한 종도** 다리를 교대시키지 못했다(다리띠 IoU 0.86~0.95 = 거의 안 움직임). 원인은 낱말이 아니라
+# 편집 경로 자체다: 코덱스는 첨부한 승인 그림을 **보존하는 쪽으로 강하게 치우친다.**
+#
+# 그래서 생성 대신 픽셀로 뒤집는다. 결정적이고, 콜을 안 쓰고, 원본에서 한 톨도 안 벗어난다.
+# 덤: 근/원 다리의 **명암 차이까지 같이 뒤집힌다**(시바는 앞다리가 크림·뒷다리가 어두운데, 그게 곧
+# near/far 음영이다) — 모델에게 시키려던 바로 그 일이 공짜로 된다.
+# 실측 다리띠 IoU (낮을수록 많이 바뀐 것): 시바 0.921→0.765 · 판다 0.945→0.801 ·
+#                                          토끼 0.860→0.756 · 드래곤 0.895→0.631
+#
+# ⚠️ 띠 높이는 **종마다 다르다**(WALK_TUNING). 꼬리가 낮게 달린 종은 좁혀야 꼬리가 같이 뒤집히지 않는다.
+def mirror_leg_band(image: "np.ndarray", band_frac: float, threshold: int) -> "np.ndarray":
+    x0, y0, x1, y1 = alpha_bbox(image, threshold)
+    cut = y1 - int((y1 - y0) * band_frac)
+    band = image[cut:y1].copy()
+    alpha = band[:, :, 3].astype("float64")
+    columns = np.arange(band.shape[1], dtype="float64")[None, :]
+    # 축은 **다리 띠의 알파 무게중심**이다. 이미지 중앙으로 뒤집으면 다리가 몸 밖으로 나간다.
+    center = float((columns * alpha).sum() / max(alpha.sum(), 1.0))
+    shift = int(round(2 * center - (band.shape[1] - 1)))
+    out = image.copy()
+    out[cut:y1] = np.roll(band[:, ::-1], shift, axis=1)
+    return out
 
 
 def head_box(image: "np.ndarray", threshold: int, top_frac: float, side_frac: float) -> Rect:
@@ -291,6 +339,19 @@ def pack(args: argparse.Namespace) -> None:
     negative = load_rgba(negative_path)
     walk_frames = [load_rgba(walk_paths[i]) for i in used]
 
+    # 접지 B 를 **다리 띠 미러**로 만든다(mirror_leg_band 주석에 근거). `--contact-b-from N` 이 원본
+    # 프레임 N(보통 접지 A = 0)을 지목하고, `--contact-b-slot M` 이 그 결과가 앉을 프레임 번호다.
+    # 모델이 만든 M 번 프레임은 **버린다** — 다리를 안 바꾸므로 총총거림이 된다.
+    if args.contact_b_from is not None:
+        band = WALK_TUNING.get(args.id, {}).get("leg_band", args.leg_band)
+        slot = args.contact_b_slot if args.contact_b_slot is not None else max(used)
+        if args.contact_b_from not in used or slot not in used:
+            raise SystemExit("error: --contact-b-from/slot 이 실제로 쓰이는 프레임이 아니다")
+        source = walk_frames[used.index(args.contact_b_from)]
+        walk_frames[used.index(slot)] = mirror_leg_band(source, band, args.alpha_threshold)
+        print("[{}]   접지B = 프레임 {} 의 다리 띠 미러(band={}) → 프레임 {}".format(
+            args.id, args.contact_b_from, band, slot))
+
     # 정면 표정 쌍은 이미 pair-lock 된 입력이지만, 아틀라스 셀로 앉힐 때도 **쌍의 공유 변환**이어야 한다.
     front = Group("front", [neutral, negative], args.alpha_threshold, nearest=args.pixel_art)
     side = Group("side", walk_frames, args.alpha_threshold, nearest=args.pixel_art)
@@ -355,7 +416,12 @@ def pack(args: argparse.Namespace) -> None:
     # 메뉴바·팝오버 PNG 는 **얼굴만** 잘라 낸다(head_box 주석 참고 — 전신은 18pt 에서 덩어리가 된다).
     # 쌍은 같은 상자를 쓴다. --head-side 0 을 주면 자르지 않고 입력을 그대로 쓴다(아잉처럼 이미 두상인 캐릭터).
     if args.head_side > 0:
-        box = pair_locked_head_box([neutral, negative], args.alpha_threshold, args.head_top, args.head_side)
+        tuning = PORTRAIT_TUNING.get(args.id, {})
+        side = tuning.get("head_side", args.head_side)
+        top = tuning.get("head_top", args.head_top)
+        if tuning:
+            print("[{}]   캐릭터별 조정 적용: head_side={} head_top={}".format(args.id, side, top))
+        box = pair_locked_head_box([neutral, negative], args.alpha_threshold, top, side)
         portrait_neutral = resize_rgba(crop_padded(neutral, box), (PORTRAIT_SIZE, PORTRAIT_SIZE), nearest=args.pixel_art)
         portrait_negative = resize_rgba(crop_padded(negative, box), (PORTRAIT_SIZE, PORTRAIT_SIZE), nearest=args.pixel_art)
         print("[{}]   머리상자 {} (공유) → 초상 {}²".format(args.id, box, PORTRAIT_SIZE))
@@ -391,6 +457,12 @@ def main(argv: List[str]) -> int:
     parser.add_argument("--side-idle", type=int, help="옆모습 idle 로 쓸 원본 프레임 인덱스(기본: 재생 순서의 2번째)")
     parser.add_argument("--walk-ms", type=int, default=140, help="걷기 프레임당 ms (기본 140)")
     parser.add_argument("--idle-ms", type=int, default=1000, help="idle 단일 프레임 ms (기본 1000)")
+    parser.add_argument("--contact-b-from", type=int,
+                        help="접지 B 를 이 원본 프레임의 다리 띠 미러로 만든다(보통 0 = 접지 A)")
+    parser.add_argument("--contact-b-slot", type=int,
+                        help="미러 결과가 앉을 프레임 번호(기본: 쓰이는 프레임 중 마지막)")
+    parser.add_argument("--leg-band", type=float, default=0.34,
+                        help="다리로 볼 아래쪽 비율(WALK_TUNING 에 종별 값이 있으면 그쪽이 이긴다)")
     parser.add_argument("--pixel-art", action="store_true",
                         help="픽셀아트 캐릭터: 리샘플을 NEAREST 로 하고 manifest 에 pixelArt=true 를 적는다")
     parser.add_argument("--head-side", type=float, default=0.62,

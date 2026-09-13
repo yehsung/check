@@ -1,0 +1,80 @@
+{
+  "id": "slime",
+  "displayName": "슬라임",
+  "kind": "sprite",
+  "atlas": {
+    "file": "atlas.png",
+    "width": 704,
+    "height": 132,
+    "states": {
+      "frontIdle": {
+        "frames": [
+          {
+            "x": 0,
+            "y": 0,
+            "w": 176,
+            "h": 132
+          }
+        ],
+        "durationsMs": [
+          1000
+        ],
+        "loop": true
+      },
+      "sideIdle": {
+        "frames": [
+          {
+            "x": 176,
+            "y": 0,
+            "w": 176,
+            "h": 132
+          }
+        ],
+        "durationsMs": [
+          1000
+        ],
+        "loop": true
+      },
+      "sideWalk": {
+        "frames": [
+          {
+            "x": 176,
+            "y": 0,
+            "w": 176,
+            "h": 132
+          },
+          {
+            "x": 352,
+            "y": 0,
+            "w": 176,
+            "h": 132
+          },
+          {
+            "x": 528,
+            "y": 0,
+            "w": 176,
+            "h": 132
+          },
+          {
+            "x": 352,
+            "y": 0,
+            "w": 176,
+            "h": 132
+          }
+        ],
+        "durationsMs": [
+          140,
+          140,
+          140,
+          140
+        ],
+        "loop": true
+      }
+    }
+  },
+  "portrait": {
+    "neutral": "portrait-neutral.png",
+    "negative": "portrait-negative.png"
+  },
+  "pixelArt": true
+}

@@ -20,7 +20,7 @@ import Testing
 
 /// 번들에 실린 스프라이트 캐릭터 하나(매니페스트 + 아틀라스 이미지).
 @MainActor
-private func spriteFixture(_ id: String = "fox") throws -> (manifest: CharacterManifest, atlas: CGImage) {
+private func spriteFixture(_ id: String = "shiba") throws -> (manifest: CharacterManifest, atlas: CGImage) {
     let catalog = CharacterCatalog.load(bundle: CheckResources.bundle)
     let manifest = try #require(catalog.manifest(id: id), "번들에서 \(id) 를 못 찾았다")
     let url = try #require(catalog.atlasURL(for: id))
@@ -41,7 +41,7 @@ private func chain(_ scene: SCNScene) throws -> (wrapper: SCNNode, facing: SCNNo
 
 /// 스프라이트 씬 하나 + 그 씬에 붙은 엔진(헤드리스, 뷰 없음).
 @MainActor
-private func spriteEngine(_ id: String = "fox") throws
+private func spriteEngine(_ id: String = "shiba") throws
     -> (engine: ReactionEngine, scene: SCNScene, character: SCNNode, atlas: CGImage) {
     let fixture = try spriteFixture(id)
     let scene = try #require(
@@ -228,7 +228,7 @@ func v0315bAingSleepPathSurvives() throws {
 @Test("방향은 y 회전이 아니라 프레임이다 — 0 정면 · +1 옆모습 · -1 같은 프레임 미러")
 func v0315bFacingSwitchesFramesNotRotation() throws {
     let parts = try spriteEngine()
-    let manifest = try #require(CharacterCatalog.load(bundle: CheckResources.bundle).manifest(id: "fox"))
+    let manifest = try #require(CharacterCatalog.load(bundle: CheckResources.bundle).manifest(id: "shiba"))
     let spec = try #require(manifest.atlas)
     let front = try #require(spec.states[CharacterManifest.StateKey.frontIdle]?.frames.first)
     let side = try #require(spec.states[CharacterManifest.StateKey.sideIdle]?.frames.first)
@@ -508,10 +508,10 @@ func v0315bUltraSwapsCharacterAndRestoresTheSameNode() throws {
     engine.attach(node: parts.wrapper, sceneRoot: scene.rootNode, view: nil)
     #expect(engine.currentCharacterID == CharacterCatalog.builtInAingID)
 
-    let fox = try #require(CheckCharacter3DScene.catalog.manifest(id: "fox"))
+    let fox = try #require(CheckCharacter3DScene.catalog.manifest(id: "shiba"))
     let stashed = try #require(engine.swapCharacter(to: fox, in: scene), "교체가 실패했다")
     #expect(stashed === parts.character, "떼어낸 것이 내 캐릭터가 아니다")
-    #expect(engine.currentCharacterID == "fox")
+    #expect(engine.currentCharacterID == "shiba")
     #expect(engine.isSpriteCharacter)
     // ★ wrapper/facing 은 **같은 객체**로 살아남아야 한다(뷰 재생성과 같은 비용을 내지 않았다는 증거).
     let afterSwap = try chain(scene)
@@ -543,7 +543,7 @@ func v0315bUnknownCharacterIDKeepsMine() throws {
     #expect(CheckCharacter3DScene.catalog.manifest(id: "nope-not-a-character") == nil)
     // 씬을 못 잡는 경우(뷰 미마운트)도 조용히 실패한다.
     let headless = ReactionEngine()
-    let fox = try #require(CheckCharacter3DScene.catalog.manifest(id: "fox"))
+    let fox = try #require(CheckCharacter3DScene.catalog.manifest(id: "shiba"))
     #expect(headless.swapCharacter(to: fox) == nil, "attach 도 안 된 엔진이 교체에 성공했다")
     #expect(try chain(scene).character === parts.character)
     #expect(engine.currentCharacterID == CharacterCatalog.builtInAingID)
@@ -559,7 +559,7 @@ func v0315bFacingSurvivesTheSwap() throws {
     engine.setDragFacing(-1)   // 3D 로 왼쪽을 보고 있다(facing y 회전).
     #expect(abs(CGFloat(parts.facing.eulerAngles.y) + ReactionEngine.dragFacingAngle) < 1e-5)
 
-    let fox = try #require(CheckCharacter3DScene.catalog.manifest(id: "fox"))
+    let fox = try #require(CheckCharacter3DScene.catalog.manifest(id: "shiba"))
     let stashed = try #require(engine.swapCharacter(to: fox, in: scene))
     // 보관 중이던 -1 이 **프레임으로** 다시 적용돼야 한다(재-attach 가 applyDragFacingToNode 를 부른다).
     #expect(engine.spriteFrameState?.state == CharacterManifest.StateKey.sideIdle)
@@ -664,7 +664,7 @@ func v0315bUltraRestoreNeverLosesTheScreen() throws {
     let before = controller.panel.frame
     // 캐릭터가 붙어 있지 않은 상태(씬 미마운트)로 격발한다 = 갈아입기가 **실패하는** 세계.
     controller.handleReceivedPokes([
-        ReceivedPoke(id: "u1", fromName: "누군가", createdAt: Date(), kind: .ultra, fromCharacterID: "fox")
+        ReceivedPoke(id: "u1", fromName: "누군가", createdAt: Date(), kind: .ultra, fromCharacterID: "shiba")
     ])
     #expect(controller.isUltraActive, "격발이 안 섰다 — 이 검사가 아무것도 못 본다")
     #expect(controller.panel.frame != before, "격발이 화면을 안 덮었다")
@@ -711,12 +711,12 @@ func v0315bUltraTakeoverSwapsAndRestoresThroughTheController() throws {
     //   그 makeNSView 가 engine.attach 를 부른다 — 갈아입기는 그 뒤에 일어나야 붙잡을 씬이 있다.
     //   이 테스트가 확인하는 것의 절반이 바로 그 순서다.
     controller.handleReceivedPokes([
-        ReceivedPoke(id: "u1", fromName: "이유성", createdAt: Date(), kind: .ultra, fromCharacterID: "fox")
+        ReceivedPoke(id: "u1", fromName: "이유성", createdAt: Date(), kind: .ultra, fromCharacterID: "shiba")
     ])
     #expect(controller.isUltraActive, "격발이 안 섰다")
     let scene = try #require(controller.engine.attachedScene, "격발이 뷰를 못 세웠다 — 이 검사가 아무것도 못 본다")
     let during = try chain(scene)
-    #expect(controller.engine.currentCharacterID == "fox", "찌른 사람 캐릭터로 안 갈아입었다")
+    #expect(controller.engine.currentCharacterID == "shiba", "찌른 사람 캐릭터로 안 갈아입었다")
     #expect(controller.engine.isSpriteCharacter)
 
     controller.endUltraTakeover()
@@ -767,7 +767,7 @@ func v0315bSameCharacterUltraSkipsTheSwap() throws {
 
     // **일반 찌르기는 건드리지 않는다** — 캐릭터 ID 가 실려 와도 내 캐릭터가 폴짝 뛰는 그대로다.
     controller.handleReceivedPokes([
-        ReceivedPoke(id: "n1", fromName: "이유성", createdAt: Date(), kind: .normal, fromCharacterID: "fox")
+        ReceivedPoke(id: "n1", fromName: "이유성", createdAt: Date(), kind: .normal, fromCharacterID: "shiba")
     ])
     #expect(controller.isUltraActive == false)
     #expect(try chain(scene).character === parts.character, "일반 찌르기가 캐릭터를 갈아 끼웠다")

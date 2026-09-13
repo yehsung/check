@@ -25,11 +25,13 @@ import Testing
 // MARK: - 픽스처
 
 /// 파이프라인이 실제로 구운 스프라이트 캐릭터들. 새 캐릭터를 더하면 여기에 더한다.
-private let v0315SpriteCharacterIDs = ["bot", "fox"]
+private let v0315SpriteCharacterIDs = ["panda", "shiba"]
 
 /// 갈래 1 `CharacterManifest` 가 요구하는 키 집합 — **정확히 이것뿐**이어야 한다.
 /// (없으면 디코드가 throw 하고, 오타가 섞이면 조용히 nil 로 접힌다. 양쪽 다 잡으려고 집합을 같다고 본다.)
-private let v0315RootKeys: Set<String> = ["id", "displayName", "kind", "atlas", "portrait"]
+// pixelArt 는 화풍 확정(2026-09-13)과 함께 들어왔다. **Optional 이지만 팩 스크립트가 언제나 적는다** —
+// 없으면 재질 필터가 .linear 로 떨어져 격자가 뭉개진다(V0315RosterContractTests 가 값도 본다).
+private let v0315RootKeys: Set<String> = ["id", "displayName", "kind", "atlas", "portrait", "pixelArt"]
 private let v0315AtlasKeys: Set<String> = ["file", "width", "height", "states"]
 private let v0315StateKeys: Set<String> = ["frames", "durationsMs", "loop"]
 private let v0315RectKeys: Set<String> = ["x", "y", "w", "h"]
@@ -225,16 +227,22 @@ private func v0315PixelSize(_ url: URL) throws -> (width: Int, height: Int) {
 
     /// 여우는 **0,1,2,1** 이다(낮은 passing f3 이 18.7% 주저앉아 버렸다 — 같은 rect 를 다시 가리켜 되돌아온다).
     /// 로봇은 4프레임 전부 서로 다르다.
-    @Test func 여우는_0_1_2_1_로_돌고_로봇은_네_프레임을_다_쓴다() throws {
-        let fox = try #require(try v0315Manifest("fox")["atlas"] as? [String: Any])
+    @Test func 모든_캐릭터가_0_1_2_1_로_돈다() throws {
+        let fox = try #require(try v0315Manifest("shiba")["atlas"] as? [String: Any])
         let foxWalk = try v0315Rects(try #require((fox["states"] as? [String: Any])?["sideWalk"] as? [String: Any]))
         #expect(foxWalk.count == 4, "여우 sideWalk 는 4프레임 재생이다")
         #expect(foxWalk[1] == foxWalk[3], "여우는 2번째 프레임으로 되돌아온다(0,1,2,1)")
         #expect(Set(foxWalk).count == 3, "여우가 굽는 실제 프레임은 3장이다(f3 는 아틀라스에 없다)")
 
-        let bot = try #require(try v0315Manifest("bot")["atlas"] as? [String: Any])
-        let botWalk = try v0315Rects(try #require((bot["states"] as? [String: Any])?["sideWalk"] as? [String: Any]))
-        #expect(botWalk.count == 4 && Set(botWalk).count == 4, "로봇은 0,1,2,3 — 4장 다 다르다")
+        // 5종 전부 0,1,2,1 이다 — 접지 B(2번)가 **접지 A 의 다리 띠 미러**라 모델 프레임이 하나 줄었다.
+        // (이미지 모델은 픽셀아트에서 다리를 교대시키지 못했다 — pack-character.py 의 mirror_leg_band 주석)
+        for id in v0315SpriteCharacterIDs {
+            let atlas = try #require(try v0315Manifest(id)["atlas"] as? [String: Any])
+            let walk = try v0315Rects(try #require((atlas["states"] as? [String: Any])?["sideWalk"] as? [String: Any]))
+            #expect(walk.count == 4, "[\(id)] sideWalk 는 4프레임 재생이다")
+            #expect(walk[1] == walk[3], "[\(id)] 2번째 프레임으로 되돌아온다(0,1,2,1)")
+            #expect(Set(walk).count == 3, "[\(id)] 굽는 실제 프레임은 3장이다")
+        }
     }
 
     /// 옆모습 idle 은 **걷기 프레임 중 접지가 아닌 passing 프레임**을 재사용한다(추가 에셋 0).

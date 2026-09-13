@@ -18,7 +18,7 @@ import Testing
 @Suite("V0315Portrait")
 struct V0315PortraitTests {
     static let aing = CharacterCatalog.builtInAingID
-    static let sprites = ["fox", "bot"]
+    static let sprites = ["shiba", "panda"]
     static let moods: [CheckMascotAssets.Mood] = [.neutral, .negative]
 
     // MARK: - 1. 아잉은 지금 그대로
@@ -99,8 +99,8 @@ struct V0315PortraitTests {
     @Test func 캐시가_캐릭터를_섞지_않는다() throws {
         for mood in Self.moods {
             let aingFirst = try #require(CheckMascotAssets.image(for: mood, characterID: Self.aing))
-            let fox = try #require(CheckMascotAssets.image(for: mood, characterID: "fox"))
-            let bot = try #require(CheckMascotAssets.image(for: mood, characterID: "bot"))
+            let fox = try #require(CheckMascotAssets.image(for: mood, characterID: "shiba"))
+            let bot = try #require(CheckMascotAssets.image(for: mood, characterID: "panda"))
             let aingAgain = try #require(CheckMascotAssets.image(for: mood, characterID: Self.aing))
 
             #expect(aingFirst === aingAgain, "아잉이 캐시에서 밀려났다")
@@ -110,8 +110,8 @@ struct V0315PortraitTests {
 
             // 메뉴바 캐시도 같은 함정을 판다(별도 저장소라 따로 못 박는다).
             let barAing = try #require(CheckMascotAssets.menuBarImage(for: mood, characterID: Self.aing))
-            let barFox = try #require(CheckMascotAssets.menuBarImage(for: mood, characterID: "fox"))
-            let barBot = try #require(CheckMascotAssets.menuBarImage(for: mood, characterID: "bot"))
+            let barFox = try #require(CheckMascotAssets.menuBarImage(for: mood, characterID: "shiba"))
+            let barBot = try #require(CheckMascotAssets.menuBarImage(for: mood, characterID: "panda"))
             #expect(barAing !== barFox && barFox !== barBot && barAing !== barBot)
             #expect(barAing === CheckMascotAssets.menuBarImage(for: mood, characterID: Self.aing))
         }
@@ -196,7 +196,7 @@ struct V0315PortraitTests {
                 "UserDefaults 키가 갈렸다")
 
         let catalog = CheckMascotAssets.catalog
-        for stored in [nil, Self.aing, "fox", "bot", "no-such-character", "", "FOX"] as [String?] {
+        for stored in [nil, Self.aing, "shiba", "panda", "no-such-character", "", "FOX"] as [String?] {
             let defaults = try Self.emptyDefaults()
             if let stored { defaults.set(stored, forKey: CharacterSelection.defaultsKey) }
             let viaSelection = CharacterSelection(defaults: defaults, catalog: catalog).selectedID

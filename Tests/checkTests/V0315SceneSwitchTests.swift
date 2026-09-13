@@ -29,7 +29,7 @@ private func v0315DiffuseImage(_ material: SCNMaterial) -> CGImage? {
 
 /// 번들에 실린 스프라이트 캐릭터 하나(매니페스트 + 아틀라스 이미지).
 @MainActor
-private func v0315Sprite(_ id: String = "fox") throws -> (manifest: CharacterManifest, atlas: CGImage) {
+private func v0315Sprite(_ id: String = "shiba") throws -> (manifest: CharacterManifest, atlas: CGImage) {
     let catalog = CharacterCatalog.load(bundle: CheckResources.bundle)
     let manifest = try #require(catalog.manifest(id: id), "번들에서 \(id) 를 못 찾았다")
     let url = try #require(catalog.atlasURL(for: id))
@@ -613,8 +613,8 @@ func v0315SideProfileNegativeStaysNil() throws {
 @Test("캐시가 캐릭터별로 갈린다 — 캐릭터를 바꿔도 옛 그림이 안 나온다")
 func v0315SideProfileCacheIsPerCharacter() throws {
     MiniGameMascot.resetCacheForTesting()
-    let fox = try v0315Sprite("fox")
-    let bot = try v0315Sprite("bot")
+    let fox = try v0315Sprite("shiba")
+    let bot = try v0315Sprite("panda")
     let foxImage = try #require(MiniGameMascot.sideProfile(character: fox.manifest))
     let botImage = try #require(MiniGameMascot.sideProfile(character: bot.manifest))
     let foxAgain = try #require(MiniGameMascot.sideProfile(character: fox.manifest))
@@ -636,7 +636,7 @@ func v0315SpriteSceneActuallyRenders() throws {
     let foxPNG = try #require(
         CheckCharacter3DScene.renderSnapshotPNG(size: size, character: fox.manifest, atlas: fox.atlas)
     )
-    let botFixture = try v0315Sprite("bot")
+    let botFixture = try v0315Sprite("panda")
     let botPNG = CheckCharacter3DScene.renderSnapshotPNG(size: size, character: botFixture.manifest,
                                                          atlas: botFixture.atlas)
 

@@ -1,19 +1,19 @@
 {
-  "id": "fox",
-  "displayName": "여우",
+  "id": "shiba",
+  "displayName": "시바견",
   "kind": "sprite",
   "atlas": {
     "file": "atlas.png",
-    "width": 908,
-    "height": 174,
+    "width": 960,
+    "height": 236,
     "states": {
       "frontIdle": {
         "frames": [
           {
             "x": 0,
             "y": 0,
-            "w": 227,
-            "h": 174
+            "w": 240,
+            "h": 236
           }
         ],
         "durationsMs": [
@@ -24,10 +24,10 @@
       "sideIdle": {
         "frames": [
           {
-            "x": 454,
+            "x": 480,
             "y": 0,
-            "w": 227,
-            "h": 174
+            "w": 240,
+            "h": 236
           }
         ],
         "durationsMs": [
@@ -38,28 +38,28 @@
       "sideWalk": {
         "frames": [
           {
-            "x": 227,
+            "x": 240,
             "y": 0,
-            "w": 227,
-            "h": 174
+            "w": 240,
+            "h": 236
           },
           {
-            "x": 454,
+            "x": 480,
             "y": 0,
-            "w": 227,
-            "h": 174
+            "w": 240,
+            "h": 236
           },
           {
-            "x": 681,
+            "x": 720,
             "y": 0,
-            "w": 227,
-            "h": 174
+            "w": 240,
+            "h": 236
           },
           {
-            "x": 454,
+            "x": 480,
             "y": 0,
-            "w": 227,
-            "h": 174
+            "w": 240,
+            "h": 236
           }
         ],
         "durationsMs": [
@@ -75,5 +75,6 @@
   "portrait": {
     "neutral": "portrait-neutral.png",
     "negative": "portrait-negative.png"
-  }
+  },
+  "pixelArt": true
 }

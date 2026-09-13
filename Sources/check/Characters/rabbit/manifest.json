@@ -1,0 +1,80 @@
+{
+  "id": "rabbit",
+  "displayName": "토끼",
+  "kind": "sprite",
+  "atlas": {
+    "file": "atlas.png",
+    "width": 560,
+    "height": 236,
+    "states": {
+      "frontIdle": {
+        "frames": [
+          {
+            "x": 0,
+            "y": 0,
+            "w": 140,
+            "h": 236
+          }
+        ],
+        "durationsMs": [
+          1000
+        ],
+        "loop": true
+      },
+      "sideIdle": {
+        "frames": [
+          {
+            "x": 280,
+            "y": 0,
+            "w": 140,
+            "h": 236
+          }
+        ],
+        "durationsMs": [
+          1000
+        ],
+        "loop": true
+      },
+      "sideWalk": {
+        "frames": [
+          {
+            "x": 140,
+            "y": 0,
+            "w": 140,
+            "h": 236
+          },
+          {
+            "x": 280,
+            "y": 0,
+            "w": 140,
+            "h": 236
+          },
+          {
+            "x": 420,
+            "y": 0,
+            "w": 140,
+            "h": 236
+          },
+          {
+            "x": 280,
+            "y": 0,
+            "w": 140,
+            "h": 236
+          }
+        ],
+        "durationsMs": [
+          140,
+          140,
+          140,
+          140
+        ],
+        "loop": true
+      }
+    }
+  },
+  "portrait": {
+    "neutral": "portrait-neutral.png",
+    "negative": "portrait-negative.png"
+  },
+  "pixelArt": true
+}

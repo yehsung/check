@@ -1,0 +1,80 @@
+{
+  "id": "panda",
+  "displayName": "판다",
+  "kind": "sprite",
+  "atlas": {
+    "file": "atlas.png",
+    "width": 736,
+    "height": 236,
+    "states": {
+      "frontIdle": {
+        "frames": [
+          {
+            "x": 0,
+            "y": 0,
+            "w": 184,
+            "h": 236
+          }
+        ],
+        "durationsMs": [
+          1000
+        ],
+        "loop": true
+      },
+      "sideIdle": {
+        "frames": [
+          {
+            "x": 368,
+            "y": 0,
+            "w": 184,
+            "h": 236
+          }
+        ],
+        "durationsMs": [
+          1000
+        ],
+        "loop": true
+      },
+      "sideWalk": {
+        "frames": [
+          {
+            "x": 184,
+            "y": 0,
+            "w": 184,
+            "h": 236
+          },
+          {
+            "x": 368,
+            "y": 0,
+            "w": 184,
+            "h": 236
+          },
+          {
+            "x": 552,
+            "y": 0,
+            "w": 184,
+            "h": 236
+          },
+          {
+            "x": 368,
+            "y": 0,
+            "w": 184,
+            "h": 236
+          }
+        ],
+        "durationsMs": [
+          140,
+          140,
+          140,
+          140
+        ],
+        "loop": true
+      }
+    }
+  },
+  "portrait": {
+    "neutral": "portrait-neutral.png",
+    "negative": "portrait-negative.png"
+  },
+  "pixelArt": true
+}

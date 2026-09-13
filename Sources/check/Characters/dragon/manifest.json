@@ -1,19 +1,19 @@
 {
-  "id": "bot",
-  "displayName": "로봇",
+  "id": "dragon",
+  "displayName": "드래곤",
   "kind": "sprite",
   "atlas": {
     "file": "atlas.png",
-    "width": 640,
-    "height": 192,
+    "width": 1008,
+    "height": 236,
     "states": {
       "frontIdle": {
         "frames": [
           {
             "x": 0,
             "y": 0,
-            "w": 128,
-            "h": 192
+            "w": 252,
+            "h": 236
           }
         ],
         "durationsMs": [
@@ -24,10 +24,10 @@
       "sideIdle": {
         "frames": [
           {
-            "x": 256,
+            "x": 504,
             "y": 0,
-            "w": 128,
-            "h": 192
+            "w": 252,
+            "h": 236
           }
         ],
         "durationsMs": [
@@ -38,28 +38,28 @@
       "sideWalk": {
         "frames": [
           {
-            "x": 128,
+            "x": 252,
             "y": 0,
-            "w": 128,
-            "h": 192
+            "w": 252,
+            "h": 236
           },
           {
-            "x": 256,
+            "x": 504,
             "y": 0,
-            "w": 128,
-            "h": 192
+            "w": 252,
+            "h": 236
           },
           {
-            "x": 384,
+            "x": 756,
             "y": 0,
-            "w": 128,
-            "h": 192
+            "w": 252,
+            "h": 236
           },
           {
-            "x": 512,
+            "x": 504,
             "y": 0,
-            "w": 128,
-            "h": 192
+            "w": 252,
+            "h": 236
           }
         ],
         "durationsMs": [
@@ -75,5 +75,6 @@
   "portrait": {
     "neutral": "portrait-neutral.png",
     "negative": "portrait-negative.png"
-  }
+  },
+  "pixelArt": true
 }

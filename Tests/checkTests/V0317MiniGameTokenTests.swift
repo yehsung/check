@@ -58,9 +58,11 @@ func noTokenMeansNoSubmitButTheUserIsTold() async {
     store.recordMiniGameScore(kind: .timingBar, score: 880)
     await tkSettle()
 
-    let requests = URLProtocolStub.requests(forHost: host)
-    #expect(requests.isEmpty,
-            Comment(rawValue: "토큰이 없는데 요청이 나갔다 — \(requests.map { $0.url?.path ?? "" })"))
+    // ⚠️ **제출이** 안 나갔는지를 본다. 토큰 없는 판 뒤에는 다음 판을 위한 선발급(start_round)이
+    //    한 번 나가는 것이 정상이라, "요청이 0건"으로 재면 그 정상 동작에 걸린다.
+    let submits = URLProtocolStub.requests(forHost: host).filter { ($0.url?.path ?? "").contains("submit_score") }
+    #expect(submits.isEmpty,
+            Comment(rawValue: "토큰이 없는데 제출이 나갔다 — \(submits.count)건"))
     #expect(store.miniGameSubmitNotice != nil,
             "점수를 못 올렸는데 아무 말도 안 한다 — 삼키면 \"잘 놀았는데 순위표에 없다\"가 된다")
     // 로컬 최고는 그래도 오른다(순위표와 별개로 내 기록이다).
@@ -81,7 +83,7 @@ func submitCarriesTheRoundToken() async {
     await tkSettle()
 
     let paths = URLProtocolStub.requests(forHost: host).map { $0.url?.path ?? "" }
-    #expect(paths == ["/rest/v1/rpc/minigame_submit_score"], Comment(rawValue: "\(paths)"))
+    #expect(paths.first == "/rest/v1/rpc/minigame_submit_score", Comment(rawValue: "\(paths)"))
     let body = URLProtocolStub.bodies(forHost: host).first ?? ""
     #expect(body.contains("tok-abc"), Comment(rawValue: "본문에 토큰이 없다 — \(body)"))
 
@@ -102,7 +104,8 @@ func aTokenFromAnotherGameIsNotUsed() async {
     store.recordMiniGameScore(kind: .flappy, score: 29)
     await tkSettle()
 
-    #expect(URLProtocolStub.requests(forHost: host).isEmpty, "타이밍바 토큰으로 플래피 점수를 냈다")
+    let wrongSubmits = URLProtocolStub.requests(forHost: host).filter { ($0.url?.path ?? "").contains("submit_score") }
+    #expect(wrongSubmits.isEmpty, "타이밍바 토큰으로 플래피 점수를 냈다")
     #expect(store.miniGameSubmitNotice != nil)
 }
 
@@ -192,4 +195,223 @@ private func tkStripped(_ source: String) -> String {
         index = source.index(after: index)
     }
     return out.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+}
+
+// MARK: - ⑤ 늦게 온 토큰이 지금 판의 토큰을 덮지 않는다 (실사용 신고 2026-09-14)
+
+/// **신고**: "플레이 도중에 '점수를 못 올렸어요' 한 번 떴어. 그다음 판은 또 정상적으로 되었고."
+///
+/// 서버는 `(user_id, game)` 당 **미사용 토큰을 한 행만** 두고 `minigame_start_round` 가 그 행의 id 를
+/// **갈아 끼운다**(`do update set id = gen_random_uuid()`). 그래서 요청이 겹치면 **마지막에 발급된
+/// 토큰 하나만 살아 있다.** 클라가 늦게 도착한 옛 응답으로 덮어쓰면 죽은 토큰을 들고 제출해
+/// `no_token` 이 되고, 다음 판은 경합이 없어 정상이다 — 신고의 모양과 정확히 같다.
+///
+/// 이 프로토콜은 **요청별로 지연을 달리** 준다(스텁의 호스트 단위 지연으로는 순서를 못 뒤집는다):
+/// 1번째 응답을 느리게, 2번째를 빠르게 보내 응답 A 가 B 보다 늦게 도착하는 순서를 만든다.
+final class RoundRaceURLProtocol: URLProtocol {
+    private static let lock = NSLock()
+    // ⚠️ **호스트별로** 센다. 전역 카운터로 두면 병렬로 도는 다른 테스트가 같은 프로토콜 클래스를
+    //    공유해 시퀀스를 서로 밀어 버린다(실제로 그렇게 빨개졌다).
+    private nonisolated(unsafe) static var seqByHost: [String: Int] = [:]
+    private nonisolated(unsafe) static var pathsByHost: [String: [String]] = [:]
+    private nonisolated(unsafe) static var bodiesByHost: [String: [String]] = [:]
+
+    static func reset(host: String) {
+        lock.lock(); seqByHost[host] = 0; pathsByHost[host] = []; bodiesByHost[host] = []; lock.unlock()
+    }
+
+    static func paths(host: String) -> [String] { lock.lock(); defer { lock.unlock() }; return pathsByHost[host] ?? [] }
+    static func bodies(host: String) -> [String] { lock.lock(); defer { lock.unlock() }; return bodiesByHost[host] ?? [] }
+
+    static func session() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RoundRaceURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let path = request.url?.path ?? ""
+        var body = ""
+        if let data = request.httpBody { body = String(data: data, encoding: .utf8) ?? "" }
+        else if let stream = request.httpBodyStream {
+            stream.open(); defer { stream.close() }
+            var data = Data()
+            let size = 1024
+            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
+            defer { buffer.deallocate() }
+            while stream.hasBytesAvailable {
+                let n = stream.read(buffer, maxLength: size)
+                if n <= 0 { break }
+                data.append(buffer, count: n)
+            }
+            body = String(data: data, encoding: .utf8) ?? ""
+        }
+        let host = request.url?.host ?? ""
+        Self.lock.lock()
+        Self.pathsByHost[host, default: []].append(path)
+        Self.bodiesByHost[host, default: []].append(body)
+        Self.lock.unlock()
+        if path.contains("minigame_submit_score") {
+            // 제출은 정상 수락으로 답한다 — 이 테스트가 보는 것은 "무엇을 들고 나갔나"이지 서버 판정이 아니다.
+            finish(json: #"{"status":"ok","best_score":3,"plays":1,"improved":true}"#, after: 0)
+            return
+        }
+        guard path.contains("minigame_start_round") else {
+            finish(json: "[]", after: 0)
+            return
+        }
+        Self.lock.lock(); let n = (Self.seqByHost[host] ?? 0) + 1; Self.seqByHost[host] = n; Self.lock.unlock()
+        // 1번째(판 A) = 느림 · 2번째(판 B) = 빠름 → 응답이 뒤집혀 도착한다.
+        let token = n == 1 ? "tok-A" : "tok-B"
+        let delay: TimeInterval = n == 1 ? 0.30 : 0.02
+        finish(json: #"{"status":"ok","token":"\#(token)"}"#, after: delay)
+    }
+
+    private func finish(json: String, after delay: TimeInterval) {
+        let url = request.url!
+        DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil,
+                                           headerFields: ["Content-Type": "application/json"])!
+            self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            self.client?.urlProtocol(self, didLoad: Data(json.utf8))
+            self.client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+
+    override func stopLoading() {}
+}
+
+@MainActor
+@Test("늦게 도착한 옛 판의 토큰이 지금 판의 토큰을 덮지 않는다")
+func aLateTokenFromAFinishedRoundNeverOverwritesTheCurrentOne() async {
+    RoundRaceURLProtocol.reset(host: "v0317-round-race")
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://v0317-round-race")!,
+        anonKey: "anon-test-key",
+        session: RoundRaceURLProtocol.session()
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: tkDefaults()
+    )
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: tkUserID)
+
+    // 판 A 시작 → 느린 요청이 날아간다.
+    store.beginMiniGameRound(kind: .flappy)
+    // ⚠️ 고정 시간을 기다리면 부하에서 **도착 순서가 뒤집힌다**(스텁은 도착 순서로 지연을 정한다).
+    //    프로토콜이 요청 A 를 실제로 받은 것을 확인하고 나서 B 를 낸다 — 그래야 "A 가 느리다"가 성립한다.
+    for _ in 0..<300 where RoundRaceURLProtocol.paths(host: "v0317-round-race")
+        .filter({ $0.contains("minigame_start_round") }).isEmpty {
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    // 판 A 가 끝나고(플래피 즉사) 판 B 시작 → 빠른 요청. 서버에서는 이 순간 토큰 A 가 죽는다.
+    store.beginMiniGameRound(kind: .flappy)
+
+    // 두 응답이 모두 도착할 때까지(느린 쪽 0.30s). 부하를 감안해 넉넉히 기다린다.
+    for _ in 0..<300 where RoundRaceURLProtocol.paths(host: "v0317-round-race")
+        .filter({ $0.contains("minigame_start_round") }).count < 2 {
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    try? await Task.sleep(for: .milliseconds(600))
+
+    #expect(store.miniGameRoundToken == "tok-B",
+            Comment(rawValue: "늦게 온 죽은 토큰이 지금 판의 것을 덮었다 — 들고 있는 값 \(store.miniGameRoundToken ?? "nil")"))
+}
+
+
+// MARK: - ⑥ 짧은 판도 점수가 올라간다 (선발급)
+
+/// 토큰을 **판 시작에** 받으면 플래피 즉사(1초 미만)는 왕복이 못 끝나 점수를 통째로 버린다.
+/// 그래서 창을 열 때·게임을 바꿀 때·제출이 끝난 뒤에 **미리** 받아 둔다.
+///
+/// ★ 일찍 받는 것은 안전한 방향이다: 서버의 시간 하한은 `started_at` 기준이라 토큰이 오래될수록
+///   경과가 길어져 **더 관대해진다**. 늦게 받을 때만 정직한 플레이가 막힌다.
+@MainActor
+@Test("선발급 토큰이 있으면 판 시작이 다시 요청하지 않고, 즉사 판도 올라간다")
+func aPrefetchedTokenSurvivesAnInstantRound() async {
+    RoundRaceURLProtocol.reset(host: "v0317-prefetch")
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://v0317-prefetch")!,
+        anonKey: "anon-test-key",
+        session: RoundRaceURLProtocol.session()
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: tkDefaults()
+    )
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: tkUserID)
+
+    // 창을 열 때처럼 미리 받는다(이 프로토콜의 첫 응답은 0.30s 로 느리다 — 판 시작에 받았다면 즉사 판을 놓친다).
+    store.prefetchMiniGameRoundToken(kind: .flappy)
+    for _ in 0..<100 where store.miniGameRoundToken == nil { try? await Task.sleep(for: .milliseconds(10)) }
+    #expect(store.miniGameRoundToken == "tok-A", "선발급이 안 됐다")
+
+    let beforeStarts = RoundRaceURLProtocol.paths(host: "v0317-prefetch").filter { $0.contains("minigame_start_round") }.count
+
+    // 판 시작 — 이미 쓸 수 있는 토큰이 있으므로 **다시 요청하지 않는다**.
+    store.beginMiniGameRound(kind: .flappy)
+    try? await Task.sleep(for: .milliseconds(30))
+    let afterStarts = RoundRaceURLProtocol.paths(host: "v0317-prefetch").filter { $0.contains("minigame_start_round") }.count
+    #expect(afterStarts == beforeStarts,
+            "판 시작이 토큰을 다시 받았다 — started_at 이 now() 로 되돌아가 벌어 둔 여유가 사라진다")
+
+    // 즉사: 시작하자마자 끝난다.
+    store.recordMiniGameScore(kind: .flappy, score: 3)
+    for _ in 0..<100 where !RoundRaceURLProtocol.paths(host: "v0317-prefetch").contains(where: { $0.contains("minigame_submit_score") }) {
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    let submits = RoundRaceURLProtocol.bodies(host: "v0317-prefetch").filter { $0.contains("p_token") }
+    #expect(submits.count == 1, Comment(rawValue: "즉사 판이 안 올라갔다 — 제출 \(submits.count)건"))
+    #expect(submits.first?.contains("tok-A") == true, "선발급 토큰이 안 실렸다")
+    #expect(store.miniGameSubmitNotice == nil, "올라갔는데 실패 문구가 떴다")
+}
+
+/// 선발급이 **실제로 그 세 지점에서** 일어나는지. 행동 테스트는 한 경로만 보므로 소스로 못 박는다.
+@Test("창 열기·게임 전환·제출 뒤에 토큰을 미리 받는다")
+func prefetchHappensAtTheThreeQuietMoments() throws {
+    let code = tkStripped(try #require(tkAllSources()["WorkTimerStoreMiniGame.swift"]))
+    let count = code.components(separatedBy: "prefetchMiniGameRoundToken(kind:").count - 1
+    // 정의 1 + 호출 5(창 열기 · 게임 전환 · 제출 성공/거절 뒤 · 토큰 없음 · 네트워크 실패)
+    #expect(count >= 5, Comment(rawValue: "선발급 지점이 \(count)곳뿐이다 — 짧은 판이 다시 점수를 버린다"))
+    let opensWindow = code.contains("prefetchMiniGameRoundToken(kind: miniGameKind) CheckMiniGameWindowController.shared.show()")
+    #expect(opensWindow, "창을 열 때 미리 받지 않는다")
+}
+
+
+/// 위 경합의 **가드 자체**를 결정적으로 잰다(네트워크 순서에 안 기댄다).
+/// 늦게 온 응답은 자기 세대가 밀렸으면 채택되지 않아야 한다.
+@MainActor
+@Test("세대가 밀린 응답은 토큰을 대입하지 않는다")
+func aStaleGenerationResponseIsDropped() async {
+    // ⚠️ **유효한 토큰을 돌려주는 스텁**이어야 한다. 기본 스텁은 이 RPC 에 `[]` 를 주어 디코드가
+    //    throw 되고, 그러면 가드를 지워도 덮어쓰지 않아 이 테스트가 통째로 공허해진다(실제로 그랬다).
+    let host = "v0317-stale-gen"
+    RoundRaceURLProtocol.reset(host: host)
+    let service = SupabaseWorkService(
+        projectURL: URL(string: "http://\(host)")!,
+        anonKey: "anon-test-key",
+        session: RoundRaceURLProtocol.session()
+    )
+    let store = WorkTimerStore(
+        service: service,
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: tkDefaults()
+    )
+    store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: tkUserID)
+    store.miniGameRoundToken = "tok-current"
+    store.miniGameRoundTokenKind = .flappy
+    store.miniGameRoundTokenAt = Date()
+    let current = store.miniGameRoundGeneration
+
+    // 이미 지나간 세대(현재보다 작은 값)로 도착한 응답을 흉내 낸다.
+    await store.performBeginMiniGameRound(kind: .flappy, roundGeneration: current - 1)
+
+    #expect(store.miniGameRoundToken == "tok-current",
+            "세대가 밀린 응답이 지금 토큰을 덮었다 — 서버에서 이미 죽은 값을 들고 제출하게 된다")
 }

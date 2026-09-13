@@ -481,6 +481,16 @@ final class WorkTimerStore {
     /// 그 토큰이 **어느 게임의 것인가.** 게임을 바꾸면 남은 토큰은 못 쓴다(서버가 게임까지 대조한다) —
     /// 종류를 안 들고 있으면 타이밍바 토큰으로 플래피 점수를 내려다 조용히 거절당한다.
     @ObservationIgnored var miniGameRoundTokenKind: MiniGameKind?
+    /// 그 토큰을 **언제 받았나**(서버 `started_at` 의 로컬 거울). TTL(30분)에 가까워지면 새로 받는다.
+    @ObservationIgnored var miniGameRoundTokenAt: Date?
+    /// **판 세대.** 토큰 요청을 낼 때마다 오르고, 응답은 자기 세대가 아직 최신일 때만 채택된다.
+    ///
+    /// ★ 이게 없으면 늦게 온 응답이 지금 판의 토큰을 덮는다(실사용 신고 2026-09-14: "플레이 도중에
+    ///   '점수를 못 올렸어요' 한 번 떴어. 그다음 판은 또 정상"). 서버는 `(user_id, game)` 당 미사용
+    ///   토큰을 **한 행만** 두고 `minigame_start_round` 가 그 행의 id 를 갈아 끼우므로, 요청이 겹치면
+    ///   **마지막에 발급된 토큰 하나만 살아 있다** — 옛 응답으로 덮으면 죽은 토큰을 들고 제출한다.
+    ///   `sessionGeneration` 과 같은 관용구다(저쪽은 계정 전환, 이쪽은 판 전환).
+    @ObservationIgnored var miniGameRoundGeneration = 0
     /// 점수를 못 올렸을 때 사용자에게 보이는 한 줄. **조용히 버리지 않는다** — 삼키면
     /// "잘 놀았는데 순위표에 없다"가 되고 그건 재현도 신고도 안 된다(이 저장소의 규약).
     var miniGameSubmitNotice: String?
@@ -3043,6 +3053,8 @@ extension WorkTimerStore {
         // 제출을 시도해 조용히 거절당한다 — 화면엔 "점수를 못 올렸어요"만 남아 원인을 못 찾는다.
         miniGameRoundToken = nil
         miniGameRoundTokenKind = nil
+        miniGameRoundTokenAt = nil
+        miniGameRoundGeneration += 1
         miniGameSubmitNotice = nil
         // 제보도 계정에 묶인다(v0.2.48). 남기면 다음 사람이 **앞 사람이 쓴 글**을 그대로 본다 —
         // 이 화면이 나르는 것은 순위 숫자가 아니라 사용자가 쓴 문장이라, 누수의 값이 다른 표면과 다르다.

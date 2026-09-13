@@ -62,6 +62,7 @@ except ModuleNotFoundError as exc:  # 어느 인터프리터로 돌렸는지까�
 
 
 # 알파가 이 값보다 크면 '내용'. 1 = 완전 투명만 여백으로 본다(보수적 — 소프트 엣지를 자르지 않는다).
+PORTRAIT_SIZE = 192   # 메뉴바(18pt)·팝오버(46pt)가 함께 쓰는 초상 한 변
 DEFAULT_ALPHA_THRESHOLD = 1
 # 셀 사방에 두는 투명 여백(px). diffuse 가 clamp + linear 라 셀 경계에서 이웃 셀이 번질 수 있는데,
 # 번져 들어오는 쪽이 투명이면 결과도 투명이다.
@@ -148,6 +149,61 @@ class Group:
         """그룹 전체에 **같은** 스케일을 먹인다."""
         width = max(1, int(round(self.width * target_height / self.height)))
         return [resize_rgba(c, (width, target_height)) for c in self.crops]
+
+
+def head_box(image: "np.ndarray", threshold: int, top_frac: float, side_frac: float) -> Rect:
+    """얼굴만 잘라낼 정사각 상자를 추정한다.
+
+    **왜 필요한가**(2026-09-13 실측): 전신 스프라이트를 그대로 메뉴바 18pt(36px)에 넣으면 얼굴이 몇
+    픽셀로 줄어 "주황색 덩어리 / 흰 덩어리"가 된다 — 근무/비근무 표정 구분이 통째로 사라진다. 아잉은
+    캐릭터 자체가 두상이라 이 문제가 없었고, 그래서 전신 캐릭터를 처음 넣은 지금에야 드러났다.
+
+    추정: 몸통 위쪽 `top_frac` 띠 안의 **어두운 픽셀**(눈·코) 무게중심을 얼굴 중심 x 로 본다.
+    어두운 픽셀이 없으면 그 띠의 알파 무게중심으로 폴백한다. 세로는 몸통 맨 위에서 시작한다.
+    """
+    x0, y0, x1, y1 = alpha_bbox(image, threshold)
+    height = y1 - y0
+    band_bottom = y0 + max(1, int(height * top_frac))
+    band = image[y0:band_bottom, x0:x1].astype("float32")
+    band_alpha = band[..., 3]
+    luma = 0.299 * band[..., 0] + 0.587 * band[..., 1] + 0.114 * band[..., 2]
+    dark = (band_alpha > 64) & (luma < 90)
+    if int(dark.sum()) >= 20:
+        center_x = x0 + float(np.nonzero(dark)[1].mean())
+    else:
+        columns = np.arange(band.shape[1], dtype="float32")[None, :]
+        weight = max(float(band_alpha.sum()), 1.0)
+        center_x = x0 + float((columns * band_alpha).sum() / weight)
+    side = max(8, int(height * side_frac))
+    left = int(round(center_x - side / 2.0))
+    return (left, y0, left + side, y0 + side)
+
+
+def pair_locked_head_box(images: Sequence["np.ndarray"], threshold: int,
+                         top_frac: float, side_frac: float) -> Rect:
+    """표정 쌍이 **같은 상자**를 쓰게 union 을 잡고 정사각으로 맞춘다.
+
+    따로 잡으면 상자가 달라져(실측: 여우 neutral y=13 side=102 vs negative y=37 side=88)
+    표정이 바뀔 때 메뉴바 아이콘이 튄다. 이 저장소가 리센터링에서 이미 겪은 함정과 같다.
+    """
+    boxes = [head_box(image, threshold, top_frac, side_frac) for image in images]
+    left = min(b[0] for b in boxes); top = min(b[1] for b in boxes)
+    right = max(b[2] for b in boxes); bottom = max(b[3] for b in boxes)
+    side = max(right - left, bottom - top)
+    cx = (left + right) // 2
+    cy = (top + bottom) // 2
+    return (cx - side // 2, cy - side // 2, cx - side // 2 + side, cy - side // 2 + side)
+
+
+def crop_padded(image: "np.ndarray", box: Rect) -> "np.ndarray":
+    """상자가 이미지 밖으로 나가도 투명으로 메워 잘라낸다(머리가 위쪽 가장자리에 붙어 있을 때)."""
+    x0, y0, x1, y1 = box
+    out = np.zeros((y1 - y0, x1 - x0, 4), dtype=image.dtype)
+    sx0, sy0 = max(0, x0), max(0, y0)
+    sx1, sy1 = min(image.shape[1], x1), min(image.shape[0], y1)
+    if sx1 > sx0 and sy1 > sy0:
+        out[sy0 - y0:sy1 - y0, sx0 - x0:sx1 - x0] = image[sy0:sy1, sx0:sx1]
+    return out
 
 
 def place(content: "np.ndarray", cell_w: int, cell_h: int) -> "np.ndarray":
@@ -290,9 +346,17 @@ def pack(args: argparse.Namespace) -> None:
 
     os.makedirs(args.out, exist_ok=True)
     save_png(atlas, os.path.join(args.out, "atlas.png"))
-    # 메뉴바·팝오버 PNG 는 입력을 그대로 쓴다 — 이미 pair-lock 된 쌍이고, 18pt/46pt 로 검증된 프레이밍이다.
-    save_png(neutral, os.path.join(args.out, "portrait-neutral.png"))
-    save_png(negative, os.path.join(args.out, "portrait-negative.png"))
+    # 메뉴바·팝오버 PNG 는 **얼굴만** 잘라 낸다(head_box 주석 참고 — 전신은 18pt 에서 덩어리가 된다).
+    # 쌍은 같은 상자를 쓴다. --head-side 0 을 주면 자르지 않고 입력을 그대로 쓴다(아잉처럼 이미 두상인 캐릭터).
+    if args.head_side > 0:
+        box = pair_locked_head_box([neutral, negative], args.alpha_threshold, args.head_top, args.head_side)
+        portrait_neutral = resize_rgba(crop_padded(neutral, box), (PORTRAIT_SIZE, PORTRAIT_SIZE))
+        portrait_negative = resize_rgba(crop_padded(negative, box), (PORTRAIT_SIZE, PORTRAIT_SIZE))
+        print("[{}]   머리상자 {} (공유) → 초상 {}²".format(args.id, box, PORTRAIT_SIZE))
+    else:
+        portrait_neutral, portrait_negative = neutral, negative
+    save_png(portrait_neutral, os.path.join(args.out, "portrait-neutral.png"))
+    save_png(portrait_negative, os.path.join(args.out, "portrait-negative.png"))
     with open(os.path.join(args.out, "manifest.json"), "w", encoding="utf-8") as handle:
         json.dump(manifest, handle, ensure_ascii=False, indent=2)
         handle.write("\n")
@@ -321,6 +385,10 @@ def main(argv: List[str]) -> int:
     parser.add_argument("--side-idle", type=int, help="옆모습 idle 로 쓸 원본 프레임 인덱스(기본: 재생 순서의 2번째)")
     parser.add_argument("--walk-ms", type=int, default=140, help="걷기 프레임당 ms (기본 140)")
     parser.add_argument("--idle-ms", type=int, default=1000, help="idle 단일 프레임 ms (기본 1000)")
+    parser.add_argument("--head-side", type=float, default=0.62,
+                        help="초상 머리 상자 한 변(몸통 높이 대비). 0 이면 자르지 않고 입력 그대로 (기본 0.62)")
+    parser.add_argument("--head-top", type=float, default=0.45,
+                        help="얼굴 중심을 찾을 위쪽 띠 비율 (기본 0.45)")
     parser.add_argument("--alpha-threshold", type=int, default=DEFAULT_ALPHA_THRESHOLD,
                         help="이 값보다 큰 알파를 내용으로 본다 (기본 {})".format(DEFAULT_ALPHA_THRESHOLD))
     parser.add_argument("--out", required=True, help="산출 디렉터리(예: Sources/check/Characters/fox)")

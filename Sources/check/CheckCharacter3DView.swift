@@ -1459,6 +1459,10 @@ struct CheckOverlayCharacterView: View {
     /// 타이머 라벨 표시 여부. 루트 뷰가 showsTimer 로 판정해 넘긴다.
     var showsTimer: Bool = true
     var engine: ReactionEngine?
+    /// 착용 캐릭터를 읽을 저장소. 프로덕션은 `.standard` 그대로이고, **검증이 전역을 건드리지 않고
+    /// 캐릭터를 골라 볼 수 있게** 뚫어 둔 구멍이다(안 뚫어 두면 프로브가 사용자 도메인에 써야 한다 —
+    /// 실제로 그렇게 만든 프로브가 아잉만 그려 놓고 초록이었다).
+    var characterDefaults: UserDefaults = .standard
 
     /// 3D 뷰 지연 생성 래치. 한 번이라도 표시된 뒤에는 계속 마운트해 둔다(파괴-재생성은 Metal 전역 메모리를
     /// 거의 회수하지 못하므로). 첫 표시 전까지는 SCNView+USDZ+Metal 로드를 미뤄 유휴 RSS 를 절감한다.
@@ -1479,6 +1483,7 @@ struct CheckOverlayCharacterView: View {
                     CheckCharacter3DView(
                         isActive: renderActive,
                         engine: engine,
+                        characterDefaults: characterDefaults,
                         characterRevision: CharacterSelectionBroadcast.shared.revision
                     )
                         .frame(width: charBox.width, height: charBox.height)

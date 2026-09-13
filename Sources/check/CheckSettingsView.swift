@@ -483,13 +483,15 @@ enum CheckCharacterPicker {
 ///   칩(캡슐) 버튼 줄은 순수 도형+Text 라 그대로 찍힌다. 모양은 별명 행의 [저장] 버튼과 같은 문법이다
 ///   (고른 것 = gaugeGradient, 나머지 = trackFill + border).
 ///
-/// ★ 저장 전용이다. 지금은 **로컬 선택만** 바꾼다 — 실제 착용은 나중에 서버 definer RPC 로 간다
-///   (`ultraUnlimited` 는 표시 깃발이지 권한이 아니다: 무엇이 보이는지는 정해도 무엇이 바뀌는지는 서버가 정한다).
+/// ★ 로컬 저장이 이기면 `onChosen` 으로 **서버에도 민다**(definer RPC `set_character`).
+///   `ultraUnlimited` 는 표시 깃발이지 권한이 아니다 — 무엇이 보이는지는 정해도 무엇이 바뀌는지는 서버가 정한다.
 struct CheckCharacterSettingsRow: View {
     let catalog: CharacterCatalog
     let selection: CharacterSelection
     /// 되그릴 쪽에 알리는 통로. 테스트가 자기 인스턴스를 넣어 전역을 안 건드린다.
     var broadcast: CharacterSelectionBroadcast = .shared
+    /// 저장이 이긴 뒤 한 번. 서버에 밀어 넣는 자리다(`CheckCharacterPanel.onChosen` 과 같은 규약).
+    var onChosen: (String) -> Void = { _ in }
 
     /// 눌린 칩을 즉시 옮기기 위한 로컬 거울. 진짜 값은 `selection` 에 있다 —
     /// 저장이 **거절되면 여기도 안 움직인다**(화면만 바뀌었다가 조용히 되돌아가는 거짓말을 만들지 않는다).
@@ -498,11 +500,13 @@ struct CheckCharacterSettingsRow: View {
     init(
         catalog: CharacterCatalog,
         selection: CharacterSelection,
-        broadcast: CharacterSelectionBroadcast = .shared
+        broadcast: CharacterSelectionBroadcast = .shared,
+        onChosen: @escaping (String) -> Void = { _ in }
     ) {
         self.catalog = catalog
         self.selection = selection
         self.broadcast = broadcast
+        self.onChosen = onChosen
         _selectedID = State(initialValue: selection.selectedID)
     }
 
@@ -536,6 +540,7 @@ struct CheckCharacterSettingsRow: View {
             // 저장이 이긴 경우에만 칩을 옮긴다.
             if CheckCharacterPicker.choose(id, selection: selection, broadcast: broadcast) {
                 selectedID = id
+                onChosen(id)
             }
         } label: {
             Text(catalog.manifest(id: id)?.displayName ?? id)
@@ -652,7 +657,8 @@ struct CheckSettingsView: View {
                         selection: CharacterSelection(
                             defaults: characterDefaults,
                             catalog: CheckCharacter3DScene.catalog
-                        )
+                        ),
+                        onChosen: { _ in store.pushSelectedCharacter(announcesFailure: true) }
                     )
                 }
             }

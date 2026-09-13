@@ -140,8 +140,10 @@ func 선택기_버튼이_저장_함수를_실제로_부른다() throws {
     #expect(source.contains("CheckCharacterPicker.choose(id, selection: selection, broadcast: broadcast)"),
             "칩 버튼이 저장 경로를 안 부른다 — 눌러도 아무 일도 안 일어난다")
     // 저장이 거절되면 칩도 안 움직여야 한다(화면만 바뀌었다가 조용히 되돌아가는 거짓말 금지).
-    #expect(source.contains("if CheckCharacterPicker.choose(id, selection: selection, broadcast: broadcast) { selectedID = id }"),
+    #expect(source.contains("if CheckCharacterPicker.choose(id, selection: selection, broadcast: broadcast) { selectedID = id onChosen(id) }"),
             "저장 성공 여부와 무관하게 칩이 움직이면 화면이 거짓말을 한다")
+    // ★ `onChosen(id)` 이 **같은 가지 안**에 있어야 한다 — 저장이 거절됐는데 서버에 밀면
+    //   로컬과 서버가 갈린다(내 화면은 옛 캐릭터, 남에게는 새 캐릭터).
     // 관리자 게이트도 소스로 한 번 더 못 박는다(렌더 비교가 흔들려도 이 줄은 정확하다).
     #expect(source.contains("if store.ultraUnlimited { PanelDivider() CheckCharacterSettingsRow("),
             "선택기가 ultraUnlimited 게이트 밖으로 나왔다")

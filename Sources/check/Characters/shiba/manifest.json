@@ -1,6 +1,6 @@
 {
   "id": "shiba",
-  "displayName": "시바견",
+  "displayName": "강아지",
   "kind": "sprite",
   "atlas": {
     "file": "atlas.png",

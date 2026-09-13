@@ -31,6 +31,10 @@ struct CheckCharacterPanel: View {
     /// 스냅샷 전용: 넘치는 격자를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
     let onBack: () -> Void
+    /// 저장이 **이긴 뒤** 한 번 불린다. 서버(`profiles.character`)에 밀어 넣는 자리다 —
+    /// 로컬 저장만으로는 내 화면만 바뀌고 남에게는 영원히 아잉으로 보인다(울트라 찌르기가 서버 컬럼을 읽는다).
+    /// 기본값이 no-op 이라 스냅샷·테스트 호출부는 아무것도 안 바꿔도 된다.
+    var onChosen: (String) -> Void = { _ in }
 
     /// 눌린 카드를 즉시 옮기기 위한 로컬 거울. 진짜 값은 `selection` 에 있다 —
     /// 저장이 **거절되면 여기도 안 움직인다**(화면만 바뀌었다가 조용히 되돌아가는 거짓말을 만들지 않는다).
@@ -42,7 +46,8 @@ struct CheckCharacterPanel: View {
         broadcast: CharacterSelectionBroadcast = .shared,
         extraChromeHeight: CGFloat = 0,
         clipsOverflowInsteadOfScroll: Bool = false,
-        onBack: @escaping () -> Void
+        onBack: @escaping () -> Void,
+        onChosen: @escaping (String) -> Void = { _ in }
     ) {
         self.catalog = catalog
         self.selection = selection
@@ -50,6 +55,7 @@ struct CheckCharacterPanel: View {
         self.extraChromeHeight = extraChromeHeight
         self.clipsOverflowInsteadOfScroll = clipsOverflowInsteadOfScroll
         self.onBack = onBack
+        self.onChosen = onChosen
         _selectedID = State(initialValue: selection.selectedID)
     }
 
@@ -140,6 +146,7 @@ struct CheckCharacterPanel: View {
             // 저장이 이긴 경우에만 카드를 옮긴다.
             if CheckCharacterPicker.choose(id, selection: selection, broadcast: broadcast) {
                 selectedID = id
+                onChosen(id)
             }
         } label: {
             VStack(spacing: 5) {
@@ -150,7 +157,11 @@ struct CheckCharacterPanel: View {
                     // (SpriteCharacterNode 의 `manifest.pixelArt == true ? .nearest : .linear`).
                     isPixelArt: manifest?.pixelArt == true
                 )
-                .frame(width: 52, height: 52)
+                // 전신은 세로로 길다(실측 h/w 1.02~1.37) — 상자도 세로를 넉넉히 준다. 상자가 세로로 먼저
+                // 걸리므로 여섯 캐릭터가 **모두 같은 키**로 그려진다(`CharacterCardArt` 주석의 그 불변식).
+                // ★ 카드 높이(96pt)는 **건드리지 않았다** — 80+5+이름 한 줄이 그 안에 든다.
+                //   카드를 키우면 격자 자연 높이가 커져 팝오버 700pt 예산 계산을 같이 고쳐야 한다.
+                .frame(width: 80, height: 72)
                 Text(manifest?.displayName ?? id)
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(isOn ? CheckTheme.primaryText : CheckTheme.secondaryText)
@@ -190,10 +201,108 @@ struct CheckCharacterPanel: View {
     }
 }
 
+// MARK: - 카드에 놓는 전신 그림
+
+/// 선택 카드용 **전신** 그림을 만든다. 캐릭터당 한 번 굽고 캐시한다.
+///
+/// **왜 초상 PNG 가 아닌가**(사용자 요구 2026-09-13: "얼굴쪽 확대하는게 아니라 몸 전체가 다 나오게").
+/// `portrait-*.png` 는 **메뉴바 18pt 용 얼굴 크롭**이다 — 전신을 18pt 로 줄이면 표정이 통째로 덩어리가
+/// 되어서 얼굴만 남긴 것이다(`scripts/pack-character.py` 의 `head_box` 주석에 그 사연이 있다).
+/// 고르는 화면은 요구가 정반대다: 어떤 캐릭터인지 보려는 화면이라 몸이 다 보여야 한다.
+///
+/// **새 에셋을 굽지 않는다.** 전신 정면 그림은 이미 아틀라스 안에 있다 — `frontIdle` 첫 프레임 셀이 그것이다.
+///
+/// ★★ **셀을 통째로 쓰면 안 된다.** 셀 폭은 정면·옆모습을 통틀어 **가장 넓은 프레임**에 맞춰 잡히므로
+///    캐릭터마다 남는 좌우 여백이 다르다(실측 셀 대비 실루엣 가로: 유령 0.99 · 여우 0.74 · 시바 0.71).
+///    그대로 `scaledToFit` 하면 시바가 유령의 **72% 키**로 그려진다 — 같은 격자에서 캐릭터마다 크기가
+///    다른 그림이 된다. 그래서 **알파 상자로 조여** 각자 제 몸만 남긴다.
+///    조이고 나면 세로는 모두 같다: 팩 스크립트가 정면·옆모습 그룹을 **공통 높이**로 앉히기 때문이다
+///    (실측 5종 전부 512px). 그래서 카드 안에서 여섯의 키가 정확히 맞는다.
+///
+/// 아잉(3D·아틀라스 없음)도 같은 이유로 **초상 PNG 를 조여서** 쓴다. 아잉은 캐릭터 자체가 두상이라
+/// 그 초상이 곧 전신이지만, 192² 캔버스에서 실루엣이 164×154(세로 80%)뿐이라 안 조이면 혼자 작게 보인다.
+@MainActor
+enum CharacterCardArt {
+    /// id → 조인 전신 그림. 알파 상자는 픽셀을 전부 훑으므로(셀 하나가 30만 픽셀) 캐릭터당 한 번만 한다 —
+    /// 카드는 hover·선택·창 갱신마다 다시 그려진다.
+    private static var cache: [String: CGImage] = [:]
+
+    /// 카드에 그릴 그림. 스프라이트면 아틀라스 `frontIdle` 셀, 아니면(아잉·에셋 결손) 초상 PNG.
+    static func image(characterID: String) -> CGImage? {
+        if let hit = cache[characterID] { return hit }
+        guard let raw = rawImage(characterID: characterID) else { return nil }
+        let tight = tightened(raw)
+        cache[characterID] = tight
+        return tight
+    }
+
+    /// 아틀라스의 `frontIdle` 첫 프레임 셀. 3D 캐릭터·아틀라스 결손이면 nil(호출부가 초상 PNG 로 접는다).
+    static func frontIdleCell(characterID: String) -> CGImage? {
+        guard let manifest = CheckCharacter3DScene.catalog.manifest(id: characterID),
+              let frame = manifest.atlas?.states[CharacterManifest.StateKey.frontIdle]?.frames.first,
+              let atlas = CheckCharacter3DScene.atlasImage(for: manifest) else { return nil }
+        // `CGImage.cropping(to:)` 의 rect 는 **좌상단 원점 픽셀**이고 매니페스트 `Rect` 도 같은 규약이라
+        // 부호를 뒤집지 않는다(`MiniGameMascot.spriteSideProfile` 이 못 박은 그 규약).
+        return atlas.cropping(to: CGRect(x: frame.x, y: frame.y, width: frame.w, height: frame.h))
+    }
+
+    private static func rawImage(characterID: String) -> CGImage? {
+        if let cell = frontIdleCell(characterID: characterID) { return cell }
+        return CheckMascotAssets.image(for: .neutral, characterID: characterID)?
+            .cgImage(forProposedRect: nil, context: nil, hints: nil)
+    }
+
+    /// 알파가 있는 데까지 조인 그림. 상자를 못 구하면(전부 투명 등) 원본 그대로 — 카드가 사라지는 것보다 낫다.
+    static func tightened(_ image: CGImage) -> CGImage {
+        guard let box = alphaBounds(image), let cropped = image.cropping(to: box) else { return image }
+        return cropped
+    }
+
+    /// 알파가 임계보다 큰 픽셀의 bounding box. **픽셀·좌상단 원점** — `CGImage.cropping(to:)` 과 같은 규약이라
+    /// 그대로 넘길 수 있다(비트맵 컨텍스트의 버퍼 0행이 곧 그림의 맨 윗줄이다).
+    /// 전부 투명하면 nil.
+    static func alphaBounds(_ image: CGImage, threshold: UInt8 = 8) -> CGRect? {
+        let width = image.width, height = image.height
+        guard width > 0, height > 0 else { return nil }
+        // alphaOnly 컨텍스트는 색공간이 nil 이어야 하는데 Swift API 는 비-옵셔널을 요구한다 —
+        // 그래서 RGBA 로 그리고 4번째 바이트만 본다(캐릭터당 한 번이라 이 낭비는 값이 싸다).
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let ok: Bool = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard ok else { return nil }
+
+        var minX = width, minY = height, maxX = -1, maxY = -1
+        for y in 0..<height {
+            let row = y * width * 4
+            for x in 0..<width where pixels[row + x * 4 + 3] > threshold {
+                if x < minX { minX = x }
+                if x > maxX { maxX = x }
+                if y < minY { minY = y }
+                if y > maxY { maxY = y }
+            }
+        }
+        guard maxX >= minX, maxY >= minY else { return nil }
+        return CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
+    }
+
+    /// 테스트 전용: 캐시를 비운다(에셋을 갈아 끼운 뒤 다시 재려면 필요하다).
+    static func resetCacheForTesting() {
+        cache.removeAll()
+    }
+}
+
 // MARK: - 초상화 한 장
 
-/// 카드에 놓는 캐릭터 초상. **neutral 표정 고정**이다 — 고르는 화면에서 근무 상태에 따라 얼굴이 바뀌면
+/// 카드에 놓는 캐릭터 그림. **표정은 고정**이다 — 고르는 화면에서 근무 상태에 따라 얼굴이 바뀌면
 /// "이 캐릭터가 원래 이렇게 생겼나"를 묻게 된다(헤더 마스코트는 반대로 상태를 비추는 것이 일이다).
+/// 그림은 `CharacterCardArt` 가 고른다(스프라이트는 아틀라스 전신, 아잉은 초상 PNG — 둘 다 알파 상자로 조인다).
 ///
 /// ★★ **`Image(nsImage:)` 는 `.interpolation(...)` 을 통째로 무시한다**(2026-09-13 실측).
 ///    같은 초상을 `.none` 과 `.high` 로 구운 PNG 가 **바이트까지 같았다** — 52·200·400pt 어느 크기에서도.
@@ -207,11 +316,11 @@ struct CharacterPortrait: View {
     /// 픽셀아트면 이웃 보간. 매니페스트의 `pixelArt` 가 유일한 출처다.
     var isPixelArt: Bool = false
 
-    /// 초상의 CGImage. NSImage 가 비트맵 rep 하나짜리라(초상 PNG 한 장) 이 변환은 그 rep 의 CGImage 를
-    /// 돌려주는 값싼 조회다 — NSImage 자체는 `CheckMascotAssets` 가 이미 캐시하고 있다.
+    /// 카드 그림의 CGImage. 자르기·알파 상자는 `CharacterCardArt` 가 캐릭터당 한 번만 하고 캐시하므로
+    /// 여기서는 값싼 조회다.
+    @MainActor
     private var cgImage: CGImage? {
-        CheckMascotAssets.image(for: .neutral, characterID: characterID)?
-            .cgImage(forProposedRect: nil, context: nil, hints: nil)
+        CharacterCardArt.image(characterID: characterID)
     }
 
     var body: some View {
@@ -300,15 +409,39 @@ enum CharacterPanelGridBudget {
 ///   그대로 있으며, 누를 수 있다는 표식은 `.overlay`(크기에 영향 없음)로만 그린다. `.onHover` 도 마찬가지다.
 struct CharacterEntryButton: View {
     @Bindable var store: WorkTimerStore
+    /// 캐릭터가 바뀌었다는 신호. **테스트는 자기 인스턴스를 넣어라** — 전역을 흔들면 같은 순간 아잉 픽셀을
+    /// 재는 병렬 스위트가 간헐적으로 빨개진다(`CheckCharacterPanel` 의 `broadcast` 와 같은 규약).
+    var broadcast: CharacterSelectionBroadcast = .shared
 
     @State private var hovering = false
 
     var body: some View {
+        // ★★ **이 한 줄이 없으면 캐릭터를 바꿔도 헤더 마스코트가 그대로 남는다**(사용자 신고 2026-09-13:
+        //    "근무중 옆에 캐릭터가 바로바로 안바뀌어" — 카드는 시바견인데 헤더는 해파리였다).
+        //
+        //    왜: `CheckMascotAssets` 는 `UserDefaults` 를 **직접** 읽으므로 SwiftUI 에 무효화 신호가 없다.
+        //    그럼 이 body 는 무엇에 반응하는가 — `store.snapshot` 뿐인데, 헤더는 **매초 무효화되지 않도록
+        //    일부러** 짜여 있다(`HeaderCard` 의 "큰 타이머는 잎 뷰로 격리한다" 주석). 그래서 실제로는
+        //    출퇴근 전이에서나 한 번 도는 body 다. 캐릭터 선택은 스냅샷을 건드리지 않으니 신호가 아예 없다.
+        //
+        //    `CharacterSelectionBroadcast` 는 `@Observable` 이라 여기서 `revision` 을 **읽는 것만으로**
+        //    의존이 걸리고, 저장에 성공한 `announce()` 가 이 body 를 다시 돌린다.
+        //    메뉴바 라벨이 이미 쓰는 장치다(`CheckMenuView` 의 `characterRevision`).
+        let revision = broadcast.revision
         Button {
             store.toggleCharacterPanel()
         } label: {
-            CheckMascotView(snapshot: store.snapshot)
+            CheckMascotView(
+                snapshot: store.snapshot,
+                // 기본 인자에 기대지 않고 **여기서 다시 읽는다.** 기본값은 이니셜라이저가 불릴 때 평가되므로
+                // body 가 안 돌면 옛 값이 그대로 남는다 — 위 `revision` 과 반드시 짝이어야 한다.
+                isPixelArt: CheckMascotAssets.currentCharacterIsPixelArt()
+            )
                 .frame(width: 46, height: 46)
+                // 캐릭터가 바뀌면 **다른 뷰**로 본다. 둘 다 필요하다: `revision` 을 읽어야 body 가 다시 돌고,
+                // `.id` 가 있어야 SwiftUI 가 옛 그림을 재사용하지 않는다. 무효화 반경은 이 마스코트까지다
+                // (버튼 전체에 걸면 hover 상태가 캐릭터를 바꿀 때마다 날아간다).
+                .id(revision)
                 // hover 하면 은은하게 밝아진다 — "여긴 누를 수 있다"의 절반.
                 .overlay {
                     Circle()

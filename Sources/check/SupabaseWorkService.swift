@@ -1327,6 +1327,28 @@ actor SupabaseWorkService {
         return try decoder.decode(PokeSendResponse.self, from: data)
     }
 
+    /// 착용 캐릭터를 서버에 저장한다. `set_character(p_id)` RPC 를 로그인 토큰으로 호출한다.
+    ///
+    /// **왜 서버에도 써야 하는가**: 캐릭터가 남에게 보이는 유일한 순간이 **울트라 찌르기**다 —
+    /// `take_pokes` 가 보낸이의 `from_character` 를 실어 주고, 받는 쪽 화면을 그 캐릭터가 덮는다.
+    /// 로컬(`CharacterSelection`)에만 저장하면 내 화면만 바뀌고 **남에게는 영원히 아잉**으로 보인다.
+    ///
+    /// **쓰기 경로가 이것뿐이다.** `authenticated` 에게 `profiles.character` 의 update 권한이 없어서
+    /// PATCH 우회가 구조적으로 불가능하다(컬럼 단위 grant). 허용 목록도 서버 CHECK 하나가 유일한
+    /// 출처이므로 클라가 목록을 다시 적지 않는다 — 모르는 id 는 `unknown_character` 로 돌아온다.
+    ///
+    /// `id` 가 nil 이면 **기본(아잉)으로 되돌린다**.
+    func setCharacter(accessToken: String, id: String?) async throws -> SetCharacterResponse {
+        let data = try await send(
+            path: "/rest/v1/rpc/set_character",
+            method: "POST",
+            body: SetCharacterRequest(pId: id),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode(SetCharacterResponse.self, from: data)
+    }
+
     /// 상대에게 메시지. `send_message(p_to, p_body)` RPC 를 로그인 토큰으로 호출한다.
     ///
     /// **쿨타임이 없다**(v0.2.49 서버 계약). 근무중 게이트·집중 모드·텍스트 난간·200자 상한은 전부 서버가 강제하고,

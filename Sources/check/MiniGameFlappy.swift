@@ -815,8 +815,15 @@ private struct FlappyMascot: View {
 
     var body: some View {
         // 옆모습 조회는 **한 번만** 한다(캐시된 NSImage 조회지만, 그림을 가르는 값이라 한 곳에서 읽는다).
+        //
+        // ★★ **두 줄이 짝이다 — 둘 다 아잉이어야 한다**(사용자 지시 2026-09-13: 미니게임은 아잉 고정).
+        //    윗줄만 고치면 **게임오버에서만** 착용 캐릭터가 튀어나온다: `.negative` 는 `sideProfile` 이
+        //    설계상 언제나 nil 을 주므로(3D 에 시무룩 표정이 없다) 죽는 순간 **반드시** 아랫줄로 떨어진다.
+        //    즉 "노는 동안은 아잉인데 죽으면 여우가 되는" 상태가 되고, 그건 초록 테스트 사이로 빠져나간다.
+        //    `CheckMascotAssets.image(for:)`(인자 1개)는 `UserDefaults` 의 착용 캐릭터를 읽는다 —
+        //    여기서는 절대 쓰지 마라. 반드시 `characterID:` 를 명시한다.
         let source = (facing ? MiniGameMascot.sideProfile(mood: mood) : nil)
-            ?? CheckMascotAssets.image(for: mood)
+            ?? CheckMascotAssets.image(for: mood, characterID: CharacterCatalog.builtInAingID)
         // 공유 캐시 원본이다 — size 를 바꾸거나 lockFocus 로 그리면 메뉴바·헤더까지 오염된다. SwiftUI 축소만.
         // 3D 옆모습이든 PNG 든 **같은 192px 정사각**이라 축소 규약이 하나로 유지된다.
         if let source {

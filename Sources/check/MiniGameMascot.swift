@@ -76,12 +76,22 @@ enum MiniGameMascot {
     /// **스프라이트는 굽지 않는다.** 이미 옆모습 프레임이 아틀라스에 있으므로 3D 경로(모델 로드 → unlit →
     /// 프로브 3회 → SCNRenderer)를 통째로 건너뛰고 그 셀을 잘라 쓴다. Metal 도 필요 없다.
     ///
-    /// `character` 를 안 주면 **지금 착용한 캐릭터**를 쓴다(기본 = 아잉이라 기존 호출부는 종전 그림 그대로).
+    /// ★ **`character` 를 안 주면 아잉이다 — 착용 캐릭터가 아니다**(사용자 지시 2026-09-13:
+    ///   "미니게임에서는 어떤 캐릭터든 아잉 고정으로 해줘. 다른 캐릭터로 하니까 조금 이상한듯").
+    ///   미니게임은 옆모습 한 장을 34pt 로 그리면서 히트박스는 24pt 로 잡는 게임이라, 실루엣이
+    ///   캐릭터마다 달라지면 "그리는 몸과 죽는 몸"의 어긋남이 캐릭터마다 달라진다(`targetFill` 주석).
+    ///   기본값을 착용 캐릭터로 되돌리지 마라 — 그 순간 게임 캐릭터가 다시 갈린다.
+    ///
+    ///   `character` 를 **명시로 주는 경로는 남겨 뒀다**: 아래 `spriteSideProfile`(아틀라스 셀 잘라 쓰기)이
+    ///   그것 하나로만 도달 가능하고, 지금은 테스트(`V0316SceneSwitchTests`)만 그 길을 쓴다.
+    ///   나중에 게임에 다른 캐릭터를 허용하기로 하면 이 인자에 넘기면 된다.
     static func sideProfile(pixels: CGFloat = spritePixels,
                             mood: CheckMascotAssets.Mood = .neutral,
                             character: CharacterManifest? = nil) -> NSImage? {
         guard mood == .neutral else { return nil }
-        let manifest = character ?? CheckCharacter3DScene.selectedCharacter()
+        // `CharacterCatalog.builtInAing` 이 출처다 — 카탈로그 조회를 안 거치므로 번들이 비어 있어도
+        // 실패하지 않고, 번들에 `aing` 매니페스트가 들어와도 그것이 이 값을 덮어쓰지 못한다(카탈로그 규약).
+        let manifest = character ?? CharacterCatalog.builtInAing
         let key = Key(pixels: pixels, mood: mood, characterID: manifest.id)
         if let cached = cache[key] { return cached }
         let made: NSImage?

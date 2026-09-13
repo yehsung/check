@@ -117,8 +117,10 @@ func 패널에서_고르면_저장된다() throws {
     // 카드 버튼이 **그 함수를 실제로 부르는지**는 소스로 못 박는다. ③·④ 가 전부 초록인데 버튼이
     // 저장 경로를 안 부르는 조합(먹통 선택기)이 만들어진다. 주석은 걷어내고 센다(하우스 규칙).
     let source = cpStripped(try cpSource("CheckCharacterPanel.swift"))
-    #expect(source.contains("if CheckCharacterPicker.choose(id, selection: selection, broadcast: broadcast) { selectedID = id }"),
+    #expect(source.contains("if CheckCharacterPicker.choose(id, selection: selection, broadcast: broadcast) { selectedID = id onChosen(id) }"),
             "카드가 저장 경로를 안 부르거나, 저장 성공 여부와 무관하게 움직인다")
+    // ★ `onChosen(id)` 이 **같은 가지 안**에 있어야 한다 — 저장이 거절됐는데 서버에 밀면
+    //   로컬과 서버가 갈린다(내 화면은 옛 캐릭터, 남에게는 새 캐릭터).
     // 목록 순서의 주인은 카탈로그다. 뷰에서 다시 정렬하면 "아잉 먼저"가 두 곳에 적힌다.
     #expect(source.contains("let ids = catalog.allIDs"), "패널이 catalog.allIDs 를 그대로 쓰지 않는다")
     #expect(!source.contains("catalog.allIDs.sorted()"), "뷰에서 목록을 다시 정렬하지 마라")
@@ -260,7 +262,8 @@ func 격자_예산은_행이_늘면_스크롤로_넘긴다() {
 @MainActor
 @Test
 func 캐릭터가_늘어도_창이_상한_안에_선다() throws {
-    // 상점이 붙으면 캐릭터가 5종 더 온다(DECISIONS: 시바견·판다·토끼·슬라임·아기드래곤 → 총 8종 = 3행).
+    // 상점이 붙으면 캐릭터가 더 온다(지금 6종 = 2행. 12종이면 4행). 카드는 96pt 고정이라 행이 늘면
+    // 격자 자연 높이가 그만큼 커진다.
     // 그때 창이 상한을 넘지 않는지 **지금** 재 둔다 — 에셋이 들어오는 날 이 검사는 이미 초록이어야 한다.
     let suite = cpSuite()
     defer { cpDrop(suite) }
@@ -604,4 +607,159 @@ private func cpStripped(_ source: String) -> String {
         index = source.index(after: index)
     }
     return out.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+}
+
+// MARK: - ⑪ 카드가 **전신**이다 (얼굴 크롭이 아니다)
+//
+// 사용자 요구(2026-09-13): "얼굴쪽 확대하는게 아니라 몸 전체가 다 나오게 해줘."
+// 이 요구는 **조용히 되돌아갈 수 있다** — `CharacterCardArt` 가 아틀라스를 못 열면 초상 PNG(얼굴 크롭)로
+// 접히게 되어 있고, 그 폴백은 그림이 나오므로 눈으로 스쳐보면 멀쩡해 보인다. 그래서 숫자로 못 박는다.
+
+@MainActor
+@Test
+func 카드_그림은_얼굴_크롭이_아니라_아틀라스_정면_셀이다() throws {
+    let catalog = CheckCharacter3DScene.catalog
+    let sprites = catalog.allIDs.filter { catalog.manifest(id: $0)?.kind == .sprite }
+    #expect(sprites.count >= 2, "스프라이트가 없으면 이 검사는 아무것도 안 본다")
+
+    for id in sprites {
+        let card = try #require(CharacterCardArt.image(characterID: id), "\(id) 카드 그림이 없다")
+
+        // (가) **양성 확인** — 아틀라스 frontIdle 셀을 조인 것과 같은 크기여야 한다.
+        let cell = try #require(CharacterCardArt.frontIdleCell(characterID: id), "\(id) 아틀라스 셀을 못 열었다")
+        let tightCell = CharacterCardArt.tightened(cell)
+        #expect(card.width == tightCell.width && card.height == tightCell.height,
+                "\(id) 카드가 \(card.width)×\(card.height) 인데 아틀라스 셀은 \(tightCell.width)×\(tightCell.height) 다")
+
+        // (나) **음성 확인** — 초상 PNG(얼굴 크롭)로 접히지 않았다. 폴백이 조용히 이기면 여기서 걸린다.
+        let portrait = try #require(
+            CheckMascotAssets.image(for: .neutral, characterID: id)?
+                .cgImage(forProposedRect: nil, context: nil, hints: nil),
+            "\(id) 초상 PNG 가 없다")
+        let tightPortrait = CharacterCardArt.tightened(portrait)
+        #expect(card.height != tightPortrait.height || card.width != tightPortrait.width,
+                "\(id) 카드가 얼굴 크롭 초상(\(tightPortrait.width)×\(tightPortrait.height))과 같다 — 폴백으로 접혔다")
+    }
+}
+
+@MainActor
+@Test
+func 카드_그림은_알파_상자로_조여져_네_변에_닿는다() throws {
+    // 조이기가 안 되면(또는 y 축을 뒤집어 엉뚱한 곳을 자르면) 캐릭터마다 카드 안 여백이 달라져
+    // **키가 제각각**으로 보인다 — 셀 대비 실루엣 가로가 0.71~0.99 로 벌어져 있기 때문이다.
+    // "조인 그림은 네 변에 알파가 닿는다"가 그 조이기의 사후 조건이다(축을 뒤집었으면 여기서 깨진다).
+    let catalog = CheckCharacter3DScene.catalog
+    for id in catalog.allIDs {
+        guard let card = CharacterCardArt.image(characterID: id) else { continue }
+        let box = try #require(CharacterCardArt.alphaBounds(card), "\(id) 카드가 통째로 투명하다")
+        #expect(box.minX == 0 && box.minY == 0,
+                "\(id) 조인 그림 왼쪽·위에 빈 띠가 남았다: \(box)")
+        #expect(Int(box.maxX) == card.width && Int(box.maxY) == card.height,
+                "\(id) 조인 그림 오른쪽·아래에 빈 띠가 남았다: \(box) / \(card.width)×\(card.height)")
+    }
+}
+
+@MainActor
+@Test
+func 전신_카드는_여섯이_같은_키로_그려진다() throws {
+    // 팩 스크립트가 정면·옆모습 그룹을 **공통 높이**로 앉히므로 스프라이트의 정면 실루엣 높이는 모두 같다.
+    // 그 불변식이 곧 "격자에서 키가 맞는다"이고, 한 종만 다르게 구우면 그 카드만 작아진다.
+    let catalog = CheckCharacter3DScene.catalog
+    let heights = catalog.allIDs
+        .filter { catalog.manifest(id: $0)?.kind == .sprite }
+        .compactMap { CharacterCardArt.image(characterID: $0)?.height }
+    #expect(heights.count >= 2)
+    let lo = try #require(heights.min()), hi = try #require(heights.max())
+    #expect(Double(hi - lo) / Double(hi) <= 0.05,
+            "전신 실루엣 높이가 \(lo)~\(hi) 로 벌어졌다 — 한 종이 다른 높이로 구워졌다(pack-character.py 확인)")
+}
+
+// MARK: - ⑫ 헤더 마스코트가 **캐릭터를 바꾸면 바로** 바뀐다
+//
+// 사용자 신고(2026-09-13): "근무중 옆에 캐릭터가 바로바로 안바뀌어."
+// 원인은 무효화 신호가 없다는 것이다 — 헤더는 매초 안 도는 body 이고(`HeaderCard` 주석),
+// `CheckMascotAssets` 는 UserDefaults 를 직접 읽어 SwiftUI 에 아무 신호도 주지 않는다.
+
+@MainActor
+@Test
+func 헤더_마스코트가_선택_세대를_읽고_그것으로_다시_그린다() throws {
+    // 픽셀로는 "SwiftUI 가 무효화를 받았는가"를 물을 수 없다(렌더러는 언제나 새로 그린다).
+    // 그래서 **소스 계약**으로 못 박는다 — 주석은 걷어내고 본다(설명을 지워야 초록이 되면 안 된다).
+    let source = cpStripped(try cpSource("CheckCharacterPanel.swift"))
+    let body = try #require(source.range(of: "struct CharacterEntryButton"))
+        .upperBound
+    let tail = String(source[body...])
+
+    #expect(tail.contains("broadcast.revision"),
+            "CharacterEntryButton 이 선택 세대를 안 읽는다 — @Observable 의존이 안 걸려 body 가 다시 돌지 않는다")
+    #expect(tail.contains(".id(revision)"),
+            "읽기만 하고 .id 를 안 걸었다 — SwiftUI 가 옛 마스코트를 그대로 재사용할 수 있다")
+    #expect(tail.contains("isPixelArt: CheckMascotAssets.currentCharacterIsPixelArt()"),
+            "isPixelArt 를 기본 인자에 맡겼다 — 기본값은 init 시점 평가라 캐릭터가 바뀌어도 옛 값이 남는다")
+}
+
+@MainActor
+@Test
+func 헤더_마스코트는_캐릭터마다_다른_픽셀을_낸다() throws {
+    // ⚠️ **기준선이 실제로 달라야 한다.** 이 저장소는 "같은 입력을 비교해 영원히 초록인 테스트"로 데인 적이
+    //    있다. 그래서 먼저 두 캐릭터의 초상 **파일이 다른지**부터 단언하고, 그 다음에 픽셀을 비교한다.
+    let catalog = CheckCharacter3DScene.catalog
+    let sprites = catalog.allIDs.filter { catalog.manifest(id: $0)?.kind == .sprite }
+    let other = try #require(sprites.first, "스프라이트가 없으면 비교할 기준선이 없다")
+    let aing = CharacterCatalog.builtInAingID
+
+    let aingURL = CheckMascotAssets.portraitURL(for: .neutral, characterID: aing)
+    let otherURL = CheckMascotAssets.portraitURL(for: .neutral, characterID: other)
+    #expect(aingURL != otherURL, "두 캐릭터가 같은 초상 파일을 가리킨다 — 이 비교는 무의미하다")
+
+    let snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 60)
+    // TaskLocal 이라 이 Task 안에서만 보인다 — 같은 순간 아잉 픽셀을 재는 병렬 스위트를 오염시키지 않는다.
+    let a = try CheckMascotAssets.$characterIDOverride.withValue(aing) {
+        try #require(cpBitmap(CheckMascotView(snapshot: snapshot).frame(width: 46, height: 46), width: 46))
+    }
+    let b = try CheckMascotAssets.$characterIDOverride.withValue(other) {
+        try #require(cpBitmap(CheckMascotView(snapshot: snapshot).frame(width: 46, height: 46), width: 46))
+    }
+    #expect(a.representation(using: .png, properties: [:]) != b.representation(using: .png, properties: [:]),
+            "아잉과 \(other) 가 같은 픽셀을 낸다 — 헤더가 선택을 안 따라간다")
+    // 빈 그림 두 장이 '다르다'로 통과하는 일을 막는다.
+    #expect(cpColorfulPixelCount(a) > 200, "아잉 헤더가 비어 있다")
+    #expect(cpColorfulPixelCount(b) > 200, "\(other) 헤더가 비어 있다")
+}
+
+@MainActor
+@Test
+func 카드_뷰가_실제로_전신을_그린다() throws {
+    // ⑪ 의 세 검사는 `CharacterCardArt` 가 옳은 그림을 **만드는지**만 본다 — 뷰가 그걸 **쓰는지**는
+    // 아직 아무도 안 본다. 초상 PNG 로 되돌려도 그림은 나오므로 눈으로는 스쳐 지나간다.
+    // 그래서 그려진 잉크의 **가로세로 비**를 본다: 전신은 세로로 길고(시바 1.27) 얼굴 크롭은 정사각(1.0)이다.
+    let catalog = CheckCharacter3DScene.catalog
+    let id = try #require(catalog.allIDs.first { catalog.manifest(id: $0)?.kind == .sprite })
+    let art = try #require(CharacterCardArt.image(characterID: id))
+    let expected = Double(art.height) / Double(art.width)
+    #expect(expected >= 1.05,
+            "\(id) 전신이 정사각에 가깝다(\(expected)) — 이 검사가 얼굴 크롭과 못 가른다, 기준선을 바꿔라")
+
+    let bitmap = try #require(cpBitmap(
+        CharacterPortrait(characterID: id).frame(width: 80, height: 72), width: 80))
+    let ink = try #require(cpInkBounds(bitmap), "카드에 그려진 것이 없다")
+    let drawn = ink.height / ink.width
+    #expect(abs(drawn - expected) / expected <= 0.08,
+            "카드에 그려진 잉크 비가 \(drawn) 인데 전신은 \(expected) 다 — 얼굴 크롭 초상으로 되돌아갔다")
+}
+
+/// 알파가 있는 픽셀의 bounding box(포인트 아님, 픽셀). 배경이 투명한 뷰 렌더에만 쓴다.
+private func cpInkBounds(_ bitmap: NSBitmapImageRep) -> CGRect? {
+    var minX = bitmap.pixelsWide, minY = bitmap.pixelsHigh, maxX = -1, maxY = -1
+    for y in 0..<bitmap.pixelsHigh {
+        for x in 0..<bitmap.pixelsWide {
+            guard let color = bitmap.colorAt(x: x, y: y), color.alphaComponent > 0.1 else { continue }
+            if x < minX { minX = x }
+            if x > maxX { maxX = x }
+            if y < minY { minY = y }
+            if y > maxY { maxY = y }
+        }
+    }
+    guard maxX >= minX, maxY >= minY else { return nil }
+    return CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
 }

@@ -1325,6 +1325,35 @@ struct PokeSendRequest: Encodable {
     let pTo: String
 }
 
+/// set_character RPC 본문. { p_id: 캐릭터 ID 또는 null }.
+///
+/// ★ **nil 일 때 키를 빼면 안 된다.** Swift 가 만들어 주는 인코더는 Optional 을 `encodeIfPresent` 로
+///   내보내서 키를 **생략**하는데, `set_character(p_id text)` 에는 기본값이 없으므로 키가 없는 본문은
+///   PostgREST 에서 함수 해석 실패(`PGRST202`)가 된다. 그래서 `encode(to:)` 를 직접 써서 **null 을 싣는다**.
+///   서버는 null/빈 문자열/공백을 전부 "기본(아잉)으로 되돌리기"로 읽는다(함수 주석 참고).
+struct SetCharacterRequest: Encodable {
+    let pId: String?
+
+    enum CodingKeys: String, CodingKey { case pId }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(pId, forKey: .pId)   // encodeIfPresent 가 아니다 — 위 주석.
+    }
+}
+
+/// set_character RPC 응답:
+/// { status: "ok"|"unknown_character"|"unauthorized"|"no_profile", character?: "fox"|null, id?: "…" }
+///
+/// `character` 가 **없는 것**과 **null 인 것**을 구분하지 않는다 — 둘 다 "아잉"이다. 서버는 ok 일 때만
+/// 이 키를 싣고, 기본으로 되돌렸으면 그 값이 null 이다.
+struct SetCharacterResponse: Decodable, Equatable {
+    let status: String
+    var character: String?
+    /// unknown_character 일 때 서버가 되돌려 주는 거절된 id. 진단용이다.
+    var id: String?
+}
+
 /// ultra_wallet_sync RPC 본문. { p_days_back: 소급 일수 }.
 /// **본문을 비우지 않는 이유**: PostgREST 는 본문의 키 집합으로 오버로드를 고른다. 기본값이 있어도
 /// 키를 명시해 두면 나중에 인자가 하나 더 생겨도 이 호출이 어느 함수로 갈지 흔들리지 않는다.

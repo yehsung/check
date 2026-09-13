@@ -64,6 +64,7 @@ extension WorkTimerStore {
         // 지갑을 한 번 맞춘다. 기본 p_days_back=1 이라 **어제 3시간을 채우고 앱을 껐던 사용자의 몫이
         // 여기서 소급된다** — 이 호출이 없으면 그 코인은 영영 안 들어온다.
         syncUltraWallet(reason: .signIn)
+        pushSelectedCharacter(announcesFailure: false)
     }
 
     func signIn(email: String, password: String) async {
@@ -104,6 +105,7 @@ extension WorkTimerStore {
         if needsInsightsReload { await performLoadInsights() }
         // 저장 세션 활성화 경로와 같은 이유로 지갑을 맞춘다(어제 몫 소급).
         syncUltraWallet(reason: .signIn)
+        pushSelectedCharacter(announcesFailure: false)
     }
 
     func signUp(email: String, password: String, displayName: String, center: String? = nil) async {
@@ -264,6 +266,46 @@ extension WorkTimerStore {
         }
         guard generation == sessionGeneration else { return }
         myTeamInviteCode = code
+    }
+
+    /// 지금 착용한 캐릭터를 서버(`profiles.character`)에 밀어 넣는다. **베스트 에포트**다.
+    ///
+    /// **왜 필요한가**: 선택은 `CharacterSelection` 이 `UserDefaults` 에만 저장한다. 그것만으로는
+    /// 내 화면만 바뀌고 **남에게는 영원히 아잉**으로 보인다 — 캐릭터가 남에게 보이는 유일한 순간인
+    /// 울트라 찌르기가 `take_pokes` 의 `from_character`(= 서버 컬럼)를 읽기 때문이다.
+    ///
+    /// **왜 로그인 때도 부르는가**: 오프라인에서 캐릭터를 바꾸면 그 쓰기가 사라진다. 재시도 큐를 따로
+    /// 두는 대신 **세션이 생기는 두 경로**(저장 세션 활성화 · 로그인 마무리)에서 한 번씩 밀어 넣는다.
+    /// 멱등이라 여러 번 불려도 안전하고, 그 두 곳이 이미 지갑 동기화가 지나는 자리라 새 훅이 아니다.
+    ///
+    /// `announcesFailure` 가 거짓이면 조용히 넘긴다(로그인 경로 — 사용자가 한 행동이 아니라서
+    /// 실패 문구를 띄우면 원인 없는 경고가 된다). 사용자가 직접 고른 순간에는 참으로 부른다.
+    func pushSelectedCharacter(announcesFailure: Bool) {
+        let id = CheckCharacter3DScene.selectedCharacter().id
+        Task { [weak self] in
+            await self?.pushCharacter(id, announcesFailure: announcesFailure)
+        }
+    }
+
+    /// 위의 실제 본체. 로컬 선택은 **되돌리지 않는다** — 서버가 거절해도 내 화면의 캐릭터는 그대로 둔다
+    /// (모르는 id 는 어차피 클라 카탈로그가 아잉으로 접으므로 화면이 깨지지 않는다).
+    func pushCharacter(_ id: String?, announcesFailure: Bool) async {
+        let generation = sessionGeneration
+        do {
+            let response = try await withSessionRetry { activeSession in
+                try await service.setCharacter(accessToken: activeSession.accessToken, id: id)
+            }
+            guard generation == sessionGeneration else { return }
+            if response.status != "ok", announcesFailure {
+                // unknown_character = 서버 CHECK 에 없는 id. 앱 번들과 서버 명단이 갈린 것이라
+                // 사용자가 할 수 있는 일이 없다 — 그래도 조용히 성공한 척하지는 않는다.
+                syncMessage = "캐릭터 저장 실패"
+            }
+        } catch {
+            guard generation == sessionGeneration else { return }
+            if case .cancelled = classifyAuthError(error) { return }
+            if announcesFailure { syncMessage = "캐릭터 저장 실패" }
+        }
     }
 
     /// 팀 주간 목표시간을 바꾼다(팀원 누구나). 범위(1~168) 밖이거나 이미 변경 중이면 즉시 false 로 무시한다.

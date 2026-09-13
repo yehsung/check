@@ -479,7 +479,10 @@ struct CheckMenuView: View {
                             ),
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList,
-                            onBack: { store.closeCharacterPanel() }
+                            onBack: { store.closeCharacterPanel() },
+                            // 로컬 저장이 이기면 서버에도 민다. 이 한 줄이 없으면 고른 캐릭터가
+                            // **남에게는 영원히 아잉**이다(울트라 찌르기가 서버 컬럼을 읽는다).
+                            onChosen: { _ in store.pushSelectedCharacter(announcesFailure: true) }
                         )
                     } else {
                         // store 를 통째로 내려보내 초단위(displayNow) 의존을 잎 뷰로 격리한다 — TeamPanel 본체는

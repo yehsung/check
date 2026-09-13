@@ -545,7 +545,7 @@ final class ReactionEngine {
             setRenderFPS(Self.activeFPS)
         case .sleeping:
             resetPose()
-            node.runAction(ReactionActions.drowsySink(tilt: modelExtent * 0.18), forKey: Self.reactionActionKey)
+            node.runAction(drowsySinkAction(), forKey: Self.reactionActionKey)
             applyClosedEyes()
             setRenderFPS(Self.idleFPS)
         case .idle:
@@ -818,31 +818,56 @@ final class ReactionEngine {
     }
 
     /// kind 별 이동/변형 SCNAction 을 만든다(말풍선·색종이 제외 — 순수 동작만). attach 재생·perform 이 공유한다.
-    private func reactionAction(for kind: ReactionKind) -> SCNAction? {
+    ///
+    /// **스프라이트(SCNPlane)는 x·y 회전이 깨진다** — 이유와 대체안은 `ReactionActions` 의
+    /// "2D 평면(스프라이트)용 대체 동작" 절 주석에 있다. 여기가 그 갈림길 **한 곳**이다(졸기만 예외 —
+    /// 그건 재생 경로가 아니라 상태 진입이라 `drowsySinkAction()` 이 같은 판정을 한다).
+    /// 판정을 `isSpriteCharacter`(= spriteRuntime != nil)로 두었으므로 앞으로 더할 캐릭터에도 자동으로 맞는다.
+    ///
+    /// 헤드리스 테스트가 직접 부를 수 있게 internal 이다(`wakeQuietly` 와 같은 이유) — 갈림길이 맞는지는
+    /// 실제로 액션을 재생시켜 euler 를 재는 수밖에 없고, 그러려면 이 함수가 돌려주는 것을 봐야 한다.
+    func reactionAction(for kind: ReactionKind) -> SCNAction? {
+        let flat = isSpriteCharacter
         switch kind {
         case .hit:
-            return ReactionActions.hit()
+            return ReactionActions.hit()                              // z 흔들기 + 스케일뿐 — 평면도 그대로 읽힌다
         case .commuteStart:
-            return ReactionActions.commuteStart(hop: modelExtent * 0.32)
+            let hop = modelExtent * 0.32
+            return flat ? ReactionActions.flatCommuteStart(hop: hop) : ReactionActions.commuteStart(hop: hop)
         case .commuteEnd:
-            return ReactionActions.commuteEnd()
+            return flat ? ReactionActions.flatCommuteEnd() : ReactionActions.commuteEnd()
         case .milestone:
-            return ReactionActions.milestone(hop: modelExtent * 0.28)
+            return ReactionActions.milestone(hop: modelExtent * 0.28) // 위치만 움직인다
         case .greeting:
-            return ReactionActions.greetingNod()
+            return ReactionActions.greetingNod()                      // 이미 z축 까딱이다
         case .wake:
-            return ReactionActions.wake(tilt: modelExtent * 0.18)
+            return ReactionActions.wake(tilt: modelExtent * 0.18)     // 세 축 절대 0 복원 + 이동뿐
         case .poked:
-            return ReactionActions.poked(extent: modelExtent)
+            return flat ? ReactionActions.flatPoked(extent: modelExtent)
+                        : ReactionActions.poked(extent: modelExtent)
         case .ultraPoked:
+            // ⚠️ 여기만 일부러 안 갈랐다. x ±12° 를 쓰지만 cos(12°)=0.978 이라 세로 단축이 **2.2%** 이고,
+            //    같은 연출이 스케일을 ±14% 로 흔들고 있어 묻힌다. 12.5Hz 진동이라 눈에 잡히지도 않는다.
+            //    (카드 뒤집기가 되는 y축 회전은 애초에 쓰지 않는다.)
             return ReactionActions.ultraPoked(extent: modelExtent)
         case .goalAchieved:
-            return ReactionActions.goalAchieved(hop: modelExtent * 0.34)
+            let hop = modelExtent * 0.34
+            return flat ? ReactionActions.flatGoalAchieved(hop: hop) : ReactionActions.goalAchieved(hop: hop)
         case .ultraCharged:
-            return ReactionActions.ultraCharged()
+            return ReactionActions.ultraCharged()                     // 균일 스케일뿐
         case .drowsy:
             return nil
         }
+    }
+
+    /// 졸기 가라앉기 동작. `reactionAction(for:)` 이 `.drowsy` 에 nil 을 주므로(상태 진입이지 재생이 아니다)
+    /// 평면 갈림길이 여기 한 번 더 필요하다. 두 호출부(attach 의 .sleeping 복원 · beginSleep)가 공유한다.
+    /// `reactionAction(for:)` 과 같은 이유로 internal 이다 — 이 갈림길을 팩토리만 보고 검사하면
+    /// **여기를 통째로 지워도 초록**이다(실측: 뮤테이션 M2 가 살아남았다).
+    func drowsySinkAction() -> SCNAction {
+        let tilt = modelExtent * 0.18
+        return isSpriteCharacter ? ReactionActions.flatDrowsySink(tilt: tilt)
+                                 : ReactionActions.drowsySink(tilt: tilt)
     }
 
     /// 렌더 FPS 를 설정한다(뷰가 아직 attach 되지 않았으면 no-op — attach 시점에 상태에 맞춰 다시 잡힌다).
@@ -1080,7 +1105,7 @@ final class ReactionEngine {
         setRenderFPS(Self.idleFPS)
         if let node = reactionNode {
             resetPose()
-            node.runAction(ReactionActions.drowsySink(tilt: modelExtent * 0.18), forKey: Self.reactionActionKey)
+            node.runAction(drowsySinkAction(), forKey: Self.reactionActionKey)
         }
         // 스프라이트는 **기울기(drowsySink)만** 걸고 텍스처는 건드리지 않는다(DECISIONS: 졸기는 프레임인데
         // 전용 졸기 프레임이 아직 없다). 아래 호출은 얼굴 재질이 없으므로 저절로 no-op 이다 — attach 가
@@ -1565,6 +1590,18 @@ enum ReactionActions {
     /// 거쳐 잔떨림으로 잦아든다. hit(제자리 아파하기)와 달리 실제로 뛰어오르며 난리치는 큰 모션이다.
     /// 총 ≈2.35s, scale·euler·position 모두 identity 로 끝난다(이동 합계 0 — 수직 점프만, 수평 드리프트 없음).
     static func poked(extent: CGFloat) -> SCNAction {
+        pokedAction(extent: extent, yaw: 1)
+    }
+
+    /// 평면(스프라이트)용 콕찔림. `poked` 와 **스케일·이동·타이밍이 한 톨도 다르지 않고**
+    /// y축 반 바퀴 스핀만 죽인다(yaw 0). 두 벌을 따로 적으면 한쪽만 고쳐져 길이가 갈라진다 —
+    /// `ReactionKind.poked.duration` 이 이 길이에 맞춰져 있어서 갈라지면 모션이 잘린다.
+    static func flatPoked(extent: CGFloat) -> SCNAction {
+        pokedAction(extent: extent, yaw: 0)
+    }
+
+    /// `yaw` 는 y축 스핀 배율이다(1 = 3D 원본, 0 = 평면용).
+    private static func pokedAction(extent: CGFloat, yaw: CGFloat) -> SCNAction {
         let identity = SCNVector3(1, 1, 1)
         // 점프 높이: 검증된 commuteStart(0.32)보다 살짝 큰 0.38(창 클리핑 여유 안).
         let hop = extent * 0.38
@@ -1595,11 +1632,11 @@ enum ReactionActions {
         let z = radians(26)
         let rotSeq = SCNAction.sequence([
             .rotateTo(x: 0, y: 0, z: 0, duration: 0.32),                              // 화들짝·도약 중 정자세
-            .rotateTo(x: 0, y: radians(60), z: z, duration: 0.16),                    // 공중 난리 시작
-            .rotateTo(x: 0, y: radians(120), z: -z * 0.92, duration: 0.16),
-            .rotateTo(x: 0, y: radians(180), z: z * 0.85, duration: 0.18),            // 스핀 정점(반 바퀴)
-            .rotateTo(x: 0, y: radians(120), z: -z * 0.77, duration: 0.17),
-            .rotateTo(x: 0, y: radians(60), z: z * 0.62, duration: 0.17),
+            .rotateTo(x: 0, y: radians(60) * yaw, z: z, duration: 0.16),                    // 공중 난리 시작
+            .rotateTo(x: 0, y: radians(120) * yaw, z: -z * 0.92, duration: 0.16),
+            .rotateTo(x: 0, y: radians(180) * yaw, z: z * 0.85, duration: 0.18),            // 스핀 정점(반 바퀴)
+            .rotateTo(x: 0, y: radians(120) * yaw, z: -z * 0.77, duration: 0.17),
+            .rotateTo(x: 0, y: radians(60) * yaw, z: z * 0.62, duration: 0.17),
             .rotateTo(x: 0, y: 0, z: -z * 0.46, duration: 0.20),                      // 착지·스핀 복귀
             .rotateTo(x: 0, y: 0, z: z * 0.35, duration: 0.13),                       // 재점프 흔들림
             .rotateTo(x: 0, y: 0, z: -z * 0.23, duration: 0.13),
@@ -1720,6 +1757,43 @@ enum ReactionActions {
     /// 스핀(euler)·도약(position)·스케일은 **서로 다른 프로퍼티**라 한 group 안에서 충돌하지 않는다
     /// (같은 프로퍼티에 두 스트림을 걸면 서로 덮어쓴다 — poked/ultraPoked 주석의 그 함정).
     static func goalAchieved(hop: CGFloat) -> SCNAction {
+        .group([goalAchievedBody(hop: hop), goalAchievedSpin()])
+    }
+
+    /// 평면(스프라이트)용 주간 목표 달성. **몸(웅크림→도약→공중 정지→착지→정착)은 원본 그대로**이고
+    /// y 720° 스핀만 z축 환희의 스윙으로 바꾼다. z 로 720° 를 그대로 옮기면 평면에서도 돌기는 하지만
+    /// 캐릭터가 **두 번 거꾸로 뒤집혀** 네발짐승이 공중제비를 도는 꼴이 된다.
+    ///
+    /// 마일스톤과 갈리는 축은 그대로 살아 있다 — 위 표에서 "흑백 화면에서도 갈리는 축 셋"으로 꼽은 것은
+    /// **떠 있는 순간 · 파티클 방향 · 글자**이고 셋 다 몸·파티클·말풍선 쪽이라 여기 손대지 않았다.
+    /// 회전도 여전히 갈린다(마일스톤은 회전이 아예 없다).
+    static func flatGoalAchieved(hop: CGFloat) -> SCNAction {
+        .group([goalAchievedBody(hop: hop), flatGoalAchievedSwing()])
+    }
+
+    /// y축 720° 스핀(3D 전용). commuteStart 는 360° 다.
+    private static func goalAchievedSpin() -> SCNAction {
+        let spin = SCNAction.rotateBy(x: 0, y: .pi * 4, z: 0, duration: 2.02)
+        spin.timingMode = .easeInEaseOut
+        return spin
+    }
+
+    /// z축 환희의 스윙(평면 전용). 몸의 다섯 박자(0.16/0.42/0.35/0.34/0.75)에 각도를 얹어 합이 2.02 다.
+    /// 절대각(rotateTo)이라 어느 위상에서 인터럽트돼도 resetPose 가 0 으로 스냅하면 잔상이 없다.
+    private static func flatGoalAchievedSwing() -> SCNAction {
+        let a = radians(22)
+        let swing = SCNAction.sequence([
+            .rotateTo(x: 0, y: 0, z: -a * 0.45, duration: 0.16),   // 웅크리며 반대로 감는다
+            .rotateTo(x: 0, y: 0, z: a, duration: 0.42),           // 도약
+            .rotateTo(x: 0, y: 0, z: -a, duration: 0.35),          // 공중 정지 중 반대로
+            .rotateTo(x: 0, y: 0, z: a * 0.64, duration: 0.34),    // 하강
+            .rotateTo(x: 0, y: 0, z: 0, duration: 0.75)            // 정착
+        ])
+        swing.timingMode = .easeInEaseOut
+        return swing
+    }
+
+    private static func goalAchievedBody(hop: CGFloat) -> SCNAction {
         let identity = SCNVector3(1, 1, 1)
         let crouch = SCNVector3(1.16, 0.78, 1.16)   // 도약 전 웅크림(무게)
         let launch = SCNVector3(0.88, 1.24, 0.88)   // 도약 스트레치 — 공중 정지 동안 이 자세를 유지한다
@@ -1750,10 +1824,7 @@ enum ReactionActions {
         let settle = SCNAction.scaleKeyframe(from: landing, to: identity, duration: 0.75, timing: .easeInEaseOut)
 
         // moveBy 합 = +hop -hop = 0 이라 수평·수직 드리프트가 없다(작은 패널로 복귀해도 제자리다).
-        let body = SCNAction.sequence([crouchDown, rise, hover, fall, settle])   // 0.16+0.42+0.35+0.34+0.75 = 2.02
-        let spin = SCNAction.rotateBy(x: 0, y: .pi * 4, z: 0, duration: 2.02)    // 720°. commuteStart 는 360°.
-        spin.timingMode = .easeInEaseOut
-        return .group([body, spin])
+        return SCNAction.sequence([crouchDown, rise, hover, fall, settle])   // 0.16+0.42+0.35+0.34+0.75 = 2.02
     }
 
     /// 미션 보상: **흡수**다. 축하가 아니라 획득이라 제자리에서 일어난다 — 뛰어오르지 않는다.
@@ -1819,6 +1890,91 @@ enum ReactionActions {
         let bounceUp = SCNAction.moveBy(x: 0, y: tilt * 0.12, z: 0, duration: 0.08)
         let bounceDown = SCNAction.moveBy(x: 0, y: -tilt * 0.12, z: 0, duration: 0.08)
         return .sequence([snap, bounceUp, bounceDown])
+    }
+
+    // MARK: - 2D 평면(스프라이트)용 대체 동작
+    //
+    // **왜 따로 있는가**(2026-09-13, 사용자 신고: "2d 니까 근무시작할때 한바퀴 도는거랑 끝날때 숙이는거가
+    // 이상해. 아잉 말고 다른 캐릭터일때는 입체적인 움직임 없게"). 스프라이트 캐릭터는 `SCNPlane` 이고
+    // 평면에는 **두께가 없다**:
+    //   · **y축 회전** → 평면이 옆으로 서며 한순간 사라졌다가 뒷면이 나온다(재질이 양면이라 좌우 반전된
+    //     같은 그림이다). "한 바퀴 도는" 것이 아니라 **카드 뒤집기**로 보인다.
+    //   · **x축 회전** → 평면이 눕는 방향이라 세로로 단축된다. "꾸벅 인사"가 아니라 **납작해지는** 걸로 보인다.
+    // 반대로 **z축 회전(화면 안 기울기) · 스케일 · 이동**은 평면에서도 3D 와 똑같이 읽힌다.
+    //
+    // 그래서 이 절의 함수들은 **x·y 회전을 한 톨도 쓰지 않는다.** 그 불변식은 `V0316Reaction2DTests` 가
+    // 소스와 실제 재생 양쪽에서 지킨다 — flat 변형을 더할 때도 지켜라.
+    //
+    // 길이·리듬은 3D 원본과 **같게** 둔다. `ReactionKind.duration` 이 원본 길이에 맞춰져 있어서, 짧아지면
+    // 모션이 끝난 뒤 빈 시간이 남고 길어지면 재생 도중 idle 로 만료된다.
+
+    /// 근무 시작(평면): 폴짝은 그대로 두고 원본의 **y 360° 스핀을 z축 신난 흔들기 + 스트레치**로 옮긴다.
+    /// 스핀을 z 360° 로 옮기면 평면에서도 돌기는 하지만 캐릭터가 **거꾸로 뒤집혀** 네발짐승이 공중제비를
+    /// 도는 꼴이 된다 — 출근 인사에는 과하다.
+    /// 이동(position)·회전(euler)·스케일은 **서로 다른 프로퍼티**라 한 group 안에서 충돌하지 않는다.
+    /// 총 0.60s(원본과 같다), 셋 다 identity 로 시작해 identity 로 끝난다.
+    static func flatCommuteStart(hop: CGFloat) -> SCNAction {
+        let jumpUp = SCNAction.moveBy(x: 0, y: hop, z: 0, duration: 0.3)
+        jumpUp.timingMode = .easeOut
+        let jumpDown = SCNAction.moveBy(x: 0, y: -hop, z: 0, duration: 0.3)
+        jumpDown.timingMode = .easeIn
+        let hopSeq = SCNAction.sequence([jumpUp, jumpDown])
+
+        let a = radians(16)
+        let wiggle = SCNAction.sequence([
+            .rotateTo(x: 0, y: 0, z: a, duration: 0.15),
+            .rotateTo(x: 0, y: 0, z: -a, duration: 0.18),
+            .rotateTo(x: 0, y: 0, z: a * 0.55, duration: 0.15),
+            .rotateTo(x: 0, y: 0, z: 0, duration: 0.12)
+        ])
+
+        let identity = SCNVector3(1, 1, 1)
+        let stretch = SCNVector3(0.92, 1.12, 0.92)   // 도약하며 위로 늘어남
+        let squash = SCNVector3(1.10, 0.90, 1.10)    // 착지 찌부
+        let scaleSeq = SCNAction.sequence([
+            .scaleKeyframe(from: identity, to: stretch, duration: 0.30, timing: .easeOut),
+            .scaleKeyframe(from: stretch, to: squash, duration: 0.18, timing: .easeInEaseOut),
+            .scaleKeyframe(from: squash, to: identity, duration: 0.12, timing: .easeInEaseOut)
+        ])
+        return .group([hopSeq, wiggle, scaleSeq])
+    }
+
+    /// 근무 종료(평면): 원본의 x 20° 꾸벅을 **z 12° 기울기 + 세로 눌림**으로 옮긴다.
+    /// 평면에서 "숙임"을 만드는 것은 앞으로 눕히기가 아니라 **옆으로 기울며 낮아지는** 것이다.
+    /// 총 0.40s(원본과 같다).
+    static func flatCommuteEnd() -> SCNAction {
+        let z = radians(12)
+        let bow = SCNAction.rotateTo(x: 0, y: 0, z: z, duration: 0.18)
+        bow.timingMode = .easeOut
+        let hold = SCNAction.wait(duration: 0.06)
+        let up = SCNAction.rotateTo(x: 0, y: 0, z: 0, duration: 0.16)
+        up.timingMode = .easeInEaseOut
+        let rotSeq = SCNAction.sequence([bow, hold, up])
+
+        let identity = SCNVector3(1, 1, 1)
+        let bowed = SCNVector3(1.06, 0.88, 1.06)
+        let scaleSeq = SCNAction.sequence([
+            .scaleKeyframe(from: identity, to: bowed, duration: 0.18, timing: .easeOut),
+            // wait 가 아니라 **명시 키프레임으로 붙든다** — scaleKeyframe 은 node.scale 을 직접 대입하므로
+            // 붙들지 않으면 다음 키프레임의 from 과 어긋나 이음매가 튄다(goalAchieved 의 hover 와 같은 이유).
+            .scaleKeyframe(from: bowed, to: bowed, duration: 0.06, timing: .linear),
+            .scaleKeyframe(from: bowed, to: identity, duration: 0.16, timing: .easeInEaseOut)
+        ])
+        return .group([rotSeq, scaleSeq])
+    }
+
+    /// 졸기 진입(평면): 원본의 x +14° 앞으로 숙임을 **z +12° 옆으로 기울기**로 옮긴다. 가라앉는 이동은 같다.
+    ///
+    /// ★ 여기가 제일 위험한 자리다 — 이 포즈는 재생이 끝난 뒤 **자는 내내 유지**된다. x축으로 눕히면
+    ///   스프라이트가 자는 동안 계속 납작하게 찌그러져 있다(한 번 스쳐 지나가는 다른 연출과 다르다).
+    /// 복원은 `drowsyRise`/`wake` 가 세 축 모두 절대 0 으로 되돌리므로 그대로 짝이 맞는다.
+    static func flatDrowsySink(tilt: CGFloat) -> SCNAction {
+        let sink = SCNAction.group([
+            SCNAction.rotateTo(x: 0, y: 0, z: radians(12), duration: 2.0),
+            SCNAction.moveBy(x: 0, y: -tilt * 0.33, z: 0, duration: 2.0)
+        ])
+        sink.timingMode = .easeInEaseOut
+        return sink
     }
 
     /// 색종이 파티클(코드 생성). 작은 사각 다색, 짧은 버스트.

@@ -2167,3 +2167,142 @@ func flappyRunsTheSameBoardAtEveryFrameRate() {
           + "score=\(at60[window - 1].score) 생존틱 60/75/120=\(run60)/\(run75)/\(run120) "
           + "worstElapsed=\(worstElapsed) worstScroll=\(String(format: "%.4f", worstScroll))")
 }
+
+// MARK: - 미니게임은 아잉 고정 (사용자 지시 2026-09-13)
+
+/// **미니게임 캐릭터는 착용 캐릭터를 따라가지 않는다.**
+///
+/// 사용자: "미니게임에서는 어떤 캐릭터든 아잉 고정으로 해줘. 다른 캐릭터로 하니까 조금 이상한듯"(2026-09-13).
+///
+/// 캐릭터를 읽는 자리가 **둘**이고 둘 다 막아야 한다(`FlappyMascot.body` 주석 참고):
+///   ① `MiniGameMascot.sideProfile()` — 노는 동안의 옆모습.
+///   ② `CheckMascotAssets.image(...)` 폴백 — **게임오버에서 언제나 여기로 떨어진다**(`.negative` 는
+///      설계상 `sideProfile` 이 nil 을 준다). ①만 고치면 "죽을 때만 다른 캐릭터"가 된다.
+/// 그래서 ①은 단위로, ②는 **실제 판을 렌더해서** 각각 못 박는다.
+@Suite(.serialized)
+@MainActor
+struct V0316MiniGameAingFixedTests {
+
+    /// 번들에 실린 스프라이트 캐릭터 하나(명단이 바뀌어도 따라간다 — 이름을 박지 않는다).
+    private func bundledSprite() -> CharacterManifest? {
+        let catalog = CheckMascotAssets.catalog
+        return catalog.allIDs.lazy
+            .compactMap { catalog.manifest(id: $0) }
+            .first { $0.kind == .sprite }
+    }
+
+    /// ① 기본 옆모습이 아잉이다. 캐시 키가 캐릭터 id 라, 기본 호출과 아잉 명시 호출이 **같은 항목**을
+    ///    돌려주면 기본값이 아잉이라는 뜻이다(그림을 다시 굽지 않으므로 렌더 흔들림도 타지 않는다).
+    @Test("옆모습 기본값은 착용 캐릭터가 아니라 아잉이다")
+    func sideProfileDefaultsToAing() throws {
+        let sprite = try #require(bundledSprite(),
+                                  "번들에 스프라이트가 없다 — 이 검사가 아무것도 안 본다")
+        MiniGameMascot.resetCacheForTesting()
+        let byDefault = try #require(MiniGameMascot.sideProfile(), "기본 옆모습을 못 만들었다")
+        let aing = try #require(MiniGameMascot.sideProfile(character: CharacterCatalog.builtInAing))
+        #expect(byDefault === aing, "기본 호출이 아잉 캐시 항목을 안 쓴다 = 기본값이 아잉이 아니다")
+        #expect(MiniGameMascot.lastBakeSource != nil,
+                "3D 굽기를 안 탔다 — 기본값이 스프라이트 경로로 갔다는 뜻이다")
+
+        // 대조군: 그 스프라이트는 **실제로 다른 그림**이다. 이게 없으면 위 단언이 공허해진다.
+        let worn = try #require(MiniGameMascot.sideProfile(character: sprite))
+        #expect(worn.tiffRepresentation != aing.tiffRepresentation,
+                "대조군 실패: \(sprite.id) 옆모습이 아잉과 같은 그림이다 — 이 검사가 아무것도 안 본다")
+    }
+
+    /// ②(+①) 실제 판을 두 번 렌더한다 — 착용 캐릭터만 바꿔서. 캐릭터 자리 픽셀이 **한 톨도** 달라지면 안 된다.
+    /// `.running`(노는 중 = 옆모습 경로)과 `.over`(게임오버 = 폴백 경로)를 **둘 다** 본다.
+    @Test("판을 렌더해도 착용 캐릭터가 게임 캐릭터를 바꾸지 못한다", arguments: [false, true])
+    func boardIgnoresWornCharacter(gameOver: Bool) throws {
+        let sprite = try #require(bundledSprite(),
+                                  "번들에 스프라이트가 없다 — 이 검사가 아무것도 안 본다")
+        let mood: CheckMascotAssets.Mood = gameOver ? .negative : .neutral
+
+        // 대조군 먼저: 이 표정에서 두 캐릭터의 초상이 실제로 다르다.
+        let aingFace = try #require(CheckMascotAssets.image(for: mood,
+                                                           characterID: CharacterCatalog.builtInAingID))
+        let spriteFace = try #require(CheckMascotAssets.image(for: mood, characterID: sprite.id))
+        #expect(aingFace.tiffRepresentation != spriteFace.tiffRepresentation,
+                "대조군 실패: \(sprite.id) 의 \(mood) 초상이 아잉과 같다 — 이 검사가 아무것도 안 본다")
+
+        let game = FlappyGame(seed: 1, bird: .init(x: birdX, y: 151, vy: 0),
+                              pipes: [pipe(x: 260), pipe(x: 410)], score: 3,
+                              phase: gameOver ? .over(hold: 1.0) : .running)
+        #expect(game.isGameOver == gameOver, "표정 분기를 가르는 상태가 기대와 다르다")
+
+        MiniGameMascot.resetCacheForTesting()
+        let wornRender = try CheckMascotAssets.$characterIDOverride.withValue(sprite.id) {
+            try renderBitmap(view(game))
+        }
+        MiniGameMascot.resetCacheForTesting()
+        let aingRender = try CheckMascotAssets.$characterIDOverride.withValue(CharacterCatalog.builtInAingID) {
+            try renderBitmap(view(game))
+        }
+
+        // 캐릭터가 그려지는 자리만 본다 — 배경은 무대·패럴랙스가 있어 비교 대상이 아니다.
+        // 스프라이트(34pt)가 히트박스(24pt)보다 크므로 상자를 넉넉히 넓힌다.
+        let t = MiniGameCanvas.transform(in: CGSize(width: CW, height: CH), logicalSize: FlappyGame.logicalSize)
+        let box = game.hitbox.insetBy(dx: -14, dy: -14)
+        let bx = t.origin.x + box.minX * t.scale, by = t.origin.y + box.minY * t.scale
+        let xs = bx...(bx + box.width * t.scale), ys = by...(by + box.height * t.scale)
+        let diff = differing(wornRender, aingRender, x: xs, y: ys)
+        if diff > 0 {
+            savePNG(wornRender, "aingfix-worn-\(gameOver ? "over" : "running").png")
+            savePNG(aingRender, "aingfix-aing-\(gameOver ? "over" : "running").png")
+        }
+        let where_ = gameOver ? "게임오버 = 폴백 경로가 새고 있다" : "옆모습 경로가 새고 있다"
+        #expect(diff == 0, Comment(rawValue:
+                "착용 캐릭터(\(sprite.id))를 따라 게임 캐릭터가 바뀐다 — 다른 픽셀 \(diff)개 (\(where_))"))
+
+        // 그리고 그 자리에 캐릭터가 실제로 그려져 있어야 한다 — 둘 다 빈 배경이면 위 0 은 공허하다.
+        let noBird = FlappyGame(seed: 1, bird: .init(x: birdX, y: -400, vy: 0),
+                                pipes: game.pipes, score: 3,
+                                phase: gameOver ? .over(hold: 1.0) : .running)
+        let without = try renderBitmap(view(noBird))
+        #expect(differing(aingRender, without, x: xs, y: ys) > 300,
+                "그 자리에 캐릭터가 아예 없다 — 위의 '차이 0' 이 빈 배경끼리의 비교다")
+    }
+
+    /// ★ **소스 계약 — 위 두 검사만으로는 ①이 안 잡힌다.**
+    ///
+    /// 뮤테이션으로 확인했다(2026-09-13): `sideProfile` 의 기본값을 `selectedCharacter()` 로 되돌려도
+    /// 위 두 검사가 **전부 초록**이었다. 테스트 프로세스(`xctest`)의 UserDefaults 도메인에는
+    /// `check.character.selected` 가 없어서 `selectedCharacter()` 도 아잉을 돌려주기 때문이다.
+    /// 그걸 행동으로 잡으려면 `UserDefaults.standard` 를 더럽혀야 하는데, 이 저장소는 그 길에서
+    /// 이미 데였다(`CheckMascotAssets.characterIDOverride` 주석 — 전역을 갈아 끼우면 병렬 스위트가
+    /// 간헐적으로 빨개진다). 그래서 **호출 자체를 금지**한다.
+    ///
+    /// 주석을 걷어낸 뒤 검사한다(하우스 규칙) — 안 그러면 "왜 아잉인지" 적어 둔 설명이 검사 대상
+    /// 어휘를 그대로 품고 있어, 설명을 지워야만 초록이 되는 테스트가 된다.
+    @Test("미니게임 소스는 착용 캐릭터를 읽지 않는다")
+    func minigameSourceNeverReadsTheWornCharacter() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        func code(_ path: String) throws -> String {
+            swiftCodeStrippingComments(
+                try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8))
+        }
+
+        let mascot = try code("Sources/check/MiniGameMascot.swift")
+        #expect(!mascot.contains("selectedCharacter("),
+                "MiniGameMascot 이 착용 캐릭터를 읽는다 — 미니게임은 아잉 고정이다(2026-09-13 사용자 지시)")
+        #expect(mascot.contains("character ?? CharacterCatalog.builtInAing"),
+                "옆모습 기본값이 아잉이 아니다")
+
+        let flappy = try code("Sources/check/MiniGameFlappy.swift")
+        #expect(!flappy.contains("selectedCharacter("),
+                "MiniGameFlappy 가 착용 캐릭터를 읽는다")
+        // `CheckMascotAssets.image(...)` / `menuBarImage(...)` 는 **인자 1개짜리가 착용 캐릭터**다.
+        // 이 파일에서는 반드시 `characterID:` 를 함께 넘겨야 한다.
+        for call in ["CheckMascotAssets.image(", "CheckMascotAssets.menuBarImage("] {
+            var rest = flappy[...]
+            while let hit = rest.range(of: call) {
+                let tail = rest[hit.upperBound...]
+                let args = tail.prefix(while: { $0 != ")" })
+                #expect(args.contains("characterID:"), Comment(rawValue:
+                    "\(call)…) 가 characterID 없이 불린다 — 착용 캐릭터를 읽는 경로다: \(call)\(args))"))
+                rest = tail
+            }
+        }
+    }
+}

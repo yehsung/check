@@ -378,6 +378,7 @@ extension WorkTimerStore {
         if let ruby = state.rubyBalance { rubyBalance = ruby }
         if let ultra = state.ultraBalance { ultraBalance = ultra }
         if let price = state.ultraPrice { ultraPrice = price }
+        if let buyMax = state.ultraBuyMax { ultraBuyMax = buyMax }
         guard let rows = state.characters else { return }
         shopCharacters = rows
         // 아잉은 무료라 서버 목록에 없어도 언제나 보유다.
@@ -394,9 +395,14 @@ extension WorkTimerStore {
     func tapShopCharacter(_ id: String) {
         guard purchasingID == nil else { return }
         if ownedCharacterIDs.contains(id) { return }
+        // 잔량을 모르면 **사지 않는다**(0 으로 단정하지도, 있다고 가정하지도 않는다). 다시 읽어 본다.
+        guard let have = rubyBalance else {
+            loadShopState()
+            return
+        }
         let price = shopPrice(of: id)
-        if let price, rubyBalance < price {
-            shopNotice = Self.shortfallNotice(need: price, have: rubyBalance)
+        if let price, have < price {
+            shopNotice = Self.shortfallNotice(need: price, have: have)
             return
         }
         buyCharacter(id)
@@ -445,9 +451,13 @@ extension WorkTimerStore {
             loadShopState()
             return
         }
-        let need = price * max(1, count)
-        if rubyBalance < need {
-            shopNotice = Self.shortfallNotice(need: need, have: rubyBalance)
+        guard let have = rubyBalance else {
+            loadShopState()
+            return
+        }
+        let need = price * Swift.max(1, count)
+        if have < need {
+            shopNotice = Self.shortfallNotice(need: need, have: have)
             return
         }
         buyUltra(count: count)
@@ -473,8 +483,11 @@ extension WorkTimerStore {
                 case "ok":
                     self.shopNotice = "울트라 \(count)개를 샀어요!"
                 case "insufficient":
-                    let need = self.ultraPrice.map { $0 * count }
-                    self.shopNotice = Self.shortfallNotice(need: need, have: self.rubyBalance)
+                    // ★ 서버가 need/have 를 실어 준다 — **캐릭터 구매와 같은 필드다.** 클라가 다시
+                    //   계산하면 값을 바꾸는 날 두 곳이 갈린다. 서버가 안 줬을 때만 가격×개수로 접는다.
+                    self.shopNotice = Self.shortfallNotice(
+                        need: response.need ?? self.ultraPrice.map { $0 * count },
+                        have: response.have ?? self.rubyBalance)
                 default:
                     self.shopNotice = "구매 실패"
                 }

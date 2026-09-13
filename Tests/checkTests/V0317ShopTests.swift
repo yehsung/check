@@ -294,6 +294,35 @@ struct V0317ShopTests {
         #expect(unknown.purchasingID == nil, "가격을 모르는데 샀다")
     }
 
+    @MainActor
+    @Test("잔량을 모를 때 0 이라고 말하지 않는다")
+    func unknownBalanceIsNotZero() {
+        let store = Self.plainStore()
+        #expect(store.rubyBalance == nil, "초기값이 0 이면 실제로 3 을 가진 사람에게 '0' 이라고 말한다")
+        #expect(ShopText.balance(nil) == "—")
+        #expect(ShopText.balance(0) == "0")
+        #expect(ShopText.balance(42) == "42")
+        // 모르면 **사지 않는다**(0 으로 단정하지도, 있다고 가정하지도 않는다).
+        store.applyShopState(ShopStateResponse(rubyBalance: nil, ultraBalance: nil, ultraPrice: 3,
+                                               ultraBuyMax: 20, characters: nil))
+        store.tapBuyUltra()
+        #expect(store.purchasingID == nil, "잔량을 모르는데 샀다")
+        #expect(store.ultraBuyMax == 20, "ultra_buy_max 를 안 읽었다 — 수량 선택을 붙이는 날 상한을 모른다")
+    }
+
+    @Test("울트라 부족 응답의 need·have 를 읽는다 — 캐릭터와 같은 문법")
+    func buyUltraReadsNeedAndHave() throws {
+        let decoded = try Self.decoder().decode(BuyUltraResponse.self, from: Data(#"""
+        {"status":"insufficient","need":6,"have":1,"ruby_balance":1,"unit":3,"count":2}
+        """#.utf8))
+        #expect(decoded.need == 6 && decoded.have == 1)
+        #expect(decoded.unit == 3 && decoded.count == 2)
+        #expect(WorkTimerStore.shortfallNotice(need: decoded.need, have: decoded.have) == "루비 5개 더 필요해요")
+        let invalid = try Self.decoder().decode(BuyUltraResponse.self,
+                                                from: Data(#"{"status":"invalid","count":99,"max":20}"#.utf8))
+        #expect(invalid.max == 20)
+    }
+
     // MARK: - ⑥ 렌더 — 노란 상자 없음 · 세 상태 · 창 높이 계약
 
     @MainActor
@@ -377,18 +406,43 @@ struct V0317ShopTests {
         }
     }
 
+    /// 레일이 창 높이를 결정하지 않는지 **픽셀로** 잰다(계약 테스트의 초록만으로는 여유가 몇 pt 인지 모른다).
+    @MainActor
+    @Test("레일 여유를 픽셀로 잰다")
+    func railSlackMeasuredInPixels() throws {
+        let railOnly = CheckMenuSideRail.contentHeight + 12 * 2
+        let shortest = try #require(Self.popoverHeight(
+            CheckMenuView(store: Self.teamStore(members: 0))))
+        print("[v0317] 레일 \(CheckMenuSideRail.itemCount)칸 × \(CheckMenuSideRail.buttonHeight)pt "
+              + "→ 레일만 \(railOnly)pt · 최단 메인 화면 \(shortest)pt · 여유 \(shortest - railOnly)pt")
+        #expect(shortest > railOnly,
+                Comment(rawValue: "최단 화면 \(shortest)pt 가 레일 \(railOnly)pt 보다 낮다 — 레일이 창 높이를 결정한다"))
+        // 눈으로도 확인할 수 있게 굽는다(1인팀 = 레일이 제일 이기기 쉬운 화면).
+        if let bitmap = Self.bitmap(CheckMenuView(store: Self.teamStore(members: 1)),
+                                    width: CheckMenuView.mainWindowWidth) {
+            Self.save(bitmap, name: "v0317-rail-7items-1member.png")
+        }
+    }
+
     // MARK: - ⑦ 배선 계약 (여기가 끊기면 화면은 멀쩡한데 문이 없다)
 
     @Test("헤더 루비 칩이 상점을 열고, 레일 칸 수는 그대로다")
     func headerChipOpensTheShopAndTheRailIsUntouched() throws {
         let menu = Self.stripped(try Self.source("CheckMenuView.swift"))
-        #expect(menu.contains("RubyEntryButton(store: store)"),
-                "헤더에 루비 칩이 없다 — 상점으로 가는 문이 하나도 없다")
+        #expect(menu.contains("store.toggleShopPanel()"),
+                "레일에 상점 칸이 없다 — 상점으로 가는 문이 하나도 없다")
+        #expect(menu.contains("icon: \"bag.fill\""), "상점 칸 아이콘이 없다")
+        // ★ 헤더에는 **없어야** 한다(사용자가 뒤집었다 — 루비 칩은 진입점이 아니다).
+        #expect(!menu.contains("RubyEntryButton"), "헤더 루비 칩이 아직 남아 있다")
         #expect(menu.contains("store.isShopPanelVisible"), "상점 깃발이 isSubPanelOpen 에 없다")
         #expect(menu.contains("CheckShopPanel("), "상점 패널이 라우팅에 없다")
         // ★ 레일은 **1pt 도 건드리지 않는다**(378pt vs 최단 화면 381pt — 한 칸이면 레일이 창 높이를 결정한다).
-        #expect(CheckMenuSideRail.itemCount == 6,
-                Comment(rawValue: "레일이 \(CheckMenuSideRail.itemCount)칸이 됐다 — 창 높이 계약이 깨진다"))
+        // 칸은 일곱이 됐고, 그 대신 칸 높이를 54 → 45pt 로 내려 레일 총 높이는 **줄었다**.
+        #expect(CheckMenuSideRail.itemCount == 7)
+        #expect(CheckMenuSideRail.buttonHeight == 45)
+        #expect(CheckMenuSideRail.contentHeight + 24 < 378,
+                Comment(rawValue: "레일이 \(CheckMenuSideRail.contentHeight + 24)pt — 예전 378pt 보다 크면 "
+                        + "1인팀 창이 자란다"))
     }
 
     @Test("소유 게이트가 예방·치료 양쪽에 다 있다")
@@ -408,11 +462,15 @@ struct V0317ShopTests {
         CheckCharacter3DScene.catalog.allIDs.filter { $0 != CharacterCatalog.builtInAingID }
     }
 
+    /// **실제 서버 가격**(2026-09-13 프로덕션). 그림이 거짓말하지 않게 픽스처도 같은 값을 쓴다.
+    static let realPrices: [String: Int] = ["fox": 30, "squirrel": 30, "shiba": 50,
+                                            "ghost": 50, "jellyfish": 70]
+
     @MainActor
     static func rows(ownedIDs: Set<String>, limit: Int? = nil) -> [ShopCharacterRow] {
         let ids = limit.map { Array(sprites.prefix($0)) } ?? sprites
-        return ids.enumerated().map { index, id in
-            ShopCharacterRow(id: id, price: 30 + index * 10, owned: ownedIDs.contains(id))
+        return ids.map { id in
+            ShopCharacterRow(id: id, price: realPrices[id] ?? 30, owned: ownedIDs.contains(id))
         }
     }
 

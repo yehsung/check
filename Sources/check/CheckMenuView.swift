@@ -534,12 +534,14 @@ struct CheckMenuView: View {
 /// **왜 오른쪽인가.** 본문 폭(316)을 1pt 도 줄이지 않고 버튼을 키우는 유일한 길이다. 창은 위·오른쪽
 /// 모서리가 고정이라(WindowTopAnchor) 폭이 늘면 왼쪽으로 자란다 — 레일을 달아도 팝오버 위치가 튀지 않는다.
 ///
-/// **높이 계약.** 레일 총 높이 = 6×54 + 5×6 = 354pt(바깥 padding 포함 378pt). 메인 화면 본문이 이보다
+/// **높이 계약.** 레일 총 높이 = 7×45 + 6×6 = 351pt(바깥 padding 포함 375pt). 메인 화면 본문이 이보다
 /// 짧으면 **레일이 창 높이를 결정한다**(HStack 은 큰 쪽을 따른다). 그 순간 "팀원 수에 비례해 창이 자란다"는
 /// 오래된 성질이 작은 팀에서 조용히 죽는다.
 ///
-/// ⚠️ **여유가 3pt 뿐이다.** 2026-09-10 렌더 실측: 가장 짧은 메인 화면(팀원 0명)이 381pt, 레일이 378pt.
-/// 칸을 하나 더하면 +60pt 라 곧바로 레일이 이긴다 — 항목·높이를 건드리기 전에 반드시 다시 재라
+/// ⚠️ **여유가 9pt 다**(v0.3.17 렌더 실측: 가장 짧은 메인 화면 384pt vs 레일 375pt).
+/// 그 전(6칸 × 54pt)은 378pt 라 여유가 6pt 였다 — [상점] 칸을 더하면서 `buttonHeight` 를 54 → 45 로
+/// 내렸고, 그 결과 칸이 늘었는데 여유는 오히려 커졌다.
+/// 칸을 더하면 +51pt(45+6)다. 항목·높이를 건드리기 전에 반드시 다시 재라
 /// (CheckMenuRenderTests.sideRailNeverDecidesTheWindowHeight 가 그 실측을 못 박는다).
 /// (테스트가 아래 상수를 읽으므로 internal 이다 — 리터럴을 다시 적으면 칸을 더해도 가드가 안 따라온다.)
 struct CheckMenuSideRail: View {
@@ -547,13 +549,19 @@ struct CheckMenuSideRail: View {
 
     /// 레일 폭. 라벨("콕찌르기" 4글자 @9pt ≈ 37pt)이 좌우 여백 안에 들어가는 최소치에서 잡았다.
     static let width: CGFloat = 64
-    static let buttonHeight: CGFloat = 54
+    /// 칸 하나의 높이(pt).
+    ///
+    /// ★ **54 → 45 (v0.3.17, [상점] 칸 추가).** 칸을 일곱으로 늘리면서 54 를 유지하면 레일만으로
+    ///   438pt 가 되어 **레일이 창 높이를 결정한다**(아래 '높이 계약'). 45 로 내리면 375pt 라 오히려
+    ///   지금보다 여유가 늘어난다. 칸 내용은 아이콘 17pt + 간격 3 + 라벨 9pt ≈ **31pt** 뿐이라
+    ///   45pt 안에 넉넉히 든다(실측).
+    static let buttonHeight: CGFloat = 45
     static let buttonSpacing: CGFloat = 6
     static let cornerRadius: CGFloat = 12
     /// 항목 수. 늘리기 전에 contentHeight 가 본문 최소 높이를 넘지 않는지 렌더로 재라(위 '높이 계약').
     /// **테스트가 이 두 값을 읽는다**(CheckMenuRenderTests.sideRailNeverDecidesTheWindowHeight) —
     /// 리터럴을 다시 적어 두면 칸을 더해도 그 가드가 따라오지 않아 '여유 3pt' 경고가 거짓말이 된다.
-    static let itemCount = 6
+    static let itemCount = 7
     static var contentHeight: CGFloat {
         CGFloat(itemCount) * buttonHeight + CGFloat(itemCount - 1) * buttonSpacing
     }
@@ -593,6 +601,17 @@ struct CheckMenuSideRail: View {
             }
             // 잎 뷰다. 이유는 그 타입의 머리 주석에 있다 — 여기서 값으로 풀면 팝오버 전체가 매초 무효화된다.
             PokeEntryIconButton(store: store)
+            // 상점(v0.3.17). 자리가 여기인 이유: 파는 것이 **캐릭터와 울트라**라 바로 위 [콕찌르기]와
+            // 한 묶음으로 읽힌다(울트라를 쓰는 곳이 거기다). 진입점을 헤더 루비 칩에서 이리로 옮겼다 —
+            // 사용자 지시 2026-09-13: "상점 버튼 위치는 오른쪽 버튼 목록으로 바꾸자."
+            CheckMenuRailButton(
+                icon: "bag.fill",
+                label: "상점",
+                help: "상점 — 캐릭터와 울트라 사기",
+                isActive: store.isShopPanelVisible
+            ) {
+                store.toggleShopPanel()
+            }
             CheckMenuRailButton(
                 icon: "chart.bar.xaxis",
                 label: "팀 현황",
@@ -927,10 +946,6 @@ private struct HeaderCard: View {
                     TodayTimerText(store: store)
                 }
                 Spacer(minLength: 8)
-                // 상점 진입(v0.3.17). **헤더 높이를 1pt 도 안 늘린다** — 칩의 자연 높이(≈19pt)가 같은
-                // 줄의 마스코트(46pt)보다 낮아 HStack 높이를 바꾸지 않는다. 레일에 칸을 더하지 않는
-                // 이유는 CheckShopPanel 머리말에 적어 뒀다(레일 378pt vs 최단 화면 381pt).
-                RubyEntryButton(store: store)
                 WorkTogglePill(
                     isWorking: store.snapshot.isWorking,
                     enabled: store.canSync,

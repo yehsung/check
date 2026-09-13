@@ -58,19 +58,23 @@ struct RubyIcon: View {
 /// 루비 잔량 캡슐(아이콘 + 숫자). 헤더 진입 버튼과 상점 제목 행이 **같은 모양**을 쓴다 —
 /// 누르고 들어온 곳과 도착한 곳이 같은 표식을 달고 있어야 "여기가 그 화면"임이 읽힌다.
 struct RubyBalanceChip: View {
-    let balance: Int
+    /// **nil = 아직 모름.** 숫자를 만들지 않고 "—" 를 그린다 — 0 은 "모른다"가 아니라 "없다"로 읽힌다.
+    let balance: Int?
     var highlighted: Bool = false
+    /// 큰 칩(상점 제목 줄의 잔량). 사용자 지적 2026-09-13: "루비 아이콘이랑 숫자가 지금은 너무 작아."
+    /// 작은 칩은 **가격표**에 그대로 쓴다 — 잔량과 가격이 같은 크기면 무엇이 내 것인지 안 읽힌다.
+    var large: Bool = false
 
     var body: some View {
-        HStack(spacing: 3) {
-            RubyIcon(size: 13)
+        HStack(spacing: large ? 5 : 3) {
+            RubyIcon(size: large ? 20 : 13)
             Text(ShopText.balance(balance))
-                .font(.caption2.weight(.bold))
+                .font(large ? .system(size: 17, weight: .bold) : .caption2.weight(.bold))
                 .monospacedDigit()
                 .foregroundStyle(CheckTheme.primaryText)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.horizontal, large ? 11 : 6)
+        .padding(.vertical, large ? 5 : 2)
         // 테두리를 남기는 이유는 미학이 아니라 **검증**이다(UltraBalanceBadge 와 같은 이유):
         // 배경과의 픽셀 델타가 거의 0 이면 칩 소실 회귀를 렌더가 못 잡는다.
         .background(Capsule().fill(CheckTheme.accent.opacity(highlighted ? 0.28 : 0.16)))
@@ -84,12 +88,16 @@ enum ShopText {
     static let balanceMaxNumber = 9_999
     static let balanceOverflow = "9999+"
 
-    static func balance(_ value: Int) -> String {
+    /// 잔량 글자. **nil 은 "—"** 다(0 이 아니다 — 실제로 3 을 가진 사용자에게 "0" 이라고 말한 신고가 있었다).
+    static func balance(_ value: Int?) -> String {
+        guard let value else { return "—" }
         let v = max(0, value)
         return v > balanceMaxNumber ? balanceOverflow : "\(v)"
     }
 
-    static func entryHelp(_ value: Int) -> String { "루비 \(max(0, value))개 — 눌러서 상점" }
+    static func entryHelp(_ value: Int?) -> String {
+        value.map { "루비 \(max(0, $0))개" } ?? "루비 잔량을 아직 못 읽었어요"
+    }
 
     /// 캐릭터 카드 아래 줄. 보유한 것은 가격 대신 사실을 말한다.
     static func cardPrice(owned: Bool, price: Int?) -> String {
@@ -127,13 +135,15 @@ enum ShopPanelGridBudget {
     /// + 안내 줄 + 간격들.
     ///
     /// **실측값이다**(ImageRenderer · 콘텐츠 폭 292pt): 카드 3장(1행)과 6장(2행)으로 각각 재어
-    /// 패널 높이 − 격자 자연 높이 = **둘 다 141.0pt**. 행 수와 무관하게 같다는 것이 이 상수가 참이라는
+    /// 패널 높이 − 격자 자연 높이 = **둘 다 174.0pt**. 행 수와 무관하게 같다는 것이 이 상수가 참이라는
     /// 근거다(캐릭터 패널의 101pt 를 같은 방법으로 잰 것과 같은 절차).
     /// 손으로 추정하지 마라 — 틀리면 창이 700pt 상한을 넘어 푸터(로그아웃/앱 종료)가 잘린다.
     /// `V0317ShopTests.shopChromeHeightMatchesMeasurement` 가 이 숫자를 실측과 맞대 못 박는다.
     ///
-    /// 캐릭터 패널(101pt)보다 40pt 높은 것이 곧 **울트라 구매 줄 + 안내 줄**의 값이다.
-    static let chromeOutsideGrid: CGFloat = 141
+    /// 캐릭터 패널(101pt)보다 73pt 높은 것이 곧 **큰 잔량 칩 + 안내 줄 + 소모품 구획(소제목 + 카드)
+    /// + 캐릭터 소제목**의 값이다. 처음에는 바깥 간격 12pt 로 210pt 였는데, 그 값이면 최악 조합
+    /// (배너 + 목표 편집)에서 창이 **728pt** 가 되어 상한을 넘었다 — 간격을 7pt 로 좁혀 174 로 내렸다.
+    static let chromeOutsideGrid: CGFloat = 174
     /// 팝오버에서 패널이 아닌 부분(헤더 카드 + 푸터 + 바깥 여백). 캐릭터 패널과 **같은 값**이다 —
     /// 패널 바깥은 어느 패널이 떠 있든 같은 구성이기 때문이다.
     static let popoverChromeOutsidePanel = CharacterPanelGridBudget.popoverChromeOutsidePanel
@@ -170,7 +180,9 @@ struct CheckShopPanel: View {
     let onBack: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
+        // 간격 7pt — 캐릭터 패널(12)보다 좁다. 이 패널은 줄이 둘 더 붙는데(소모품 카드 · 구획 소제목 둘),
+        // 12 로 두면 크롬만 210pt 가 되어 최악 조합(배너 + 목표 편집)에서 창이 700pt 를 넘는다(실측 728pt).
+        VStack(spacing: 7) {
             HStack(spacing: 8) {
                 IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
                 Text("상점")
@@ -178,10 +190,11 @@ struct CheckShopPanel: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
                 Spacer(minLength: 6)
-                RubyBalanceChip(balance: store.rubyBalance, highlighted: true)
+                // 진입점이 아니게 됐으므로(레일의 [상점] 칸이 문이다) 잔량은 **여기서** 확인한다.
+                // 그래서 크게 그린다 — 이 화면에서 제일 먼저 읽어야 할 숫자다.
+                RubyBalanceChip(balance: store.rubyBalance, highlighted: true, large: true)
             }
             PanelDivider()
-            ultraRow
             // ★ **안내 줄은 비어 있어도 자리를 지킨다.** 상태에 따라 행이 생겼다 사라지면
             //   `chromeOutsideGrid` 가 상태마다 달라져 위 예산이 거짓이 된다(그 순간 창이 상한을 넘는
             //   조합이 생긴다). 배지가 "자리는 유지하고 숫자만 비운다"로 푼 것과 같은 처방이다.
@@ -190,13 +203,50 @@ struct CheckShopPanel: View {
                 .foregroundStyle(store.shopNotice == nil ? Color.clear : CheckTheme.secondaryText)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            grid
+            // ── 구획 ①: 소모품 ────────────────────────────────────────────────────────────
+            // 사용자 지적 2026-09-13: "상점에서 울트라 찌르기도 너무 구분이 안되어 있어서 알아보기가
+            // 힘들어." 예전에는 캐릭터 카드들과 **같은 평면에 한 줄**로 얹혀 있어 다른 종류의 상품이라는
+            // 것이 안 읽혔다. 소제목 + 자기 배경을 가진 카드로 감싸 갈라 놓는다.
+            VStack(alignment: .leading, spacing: 4) {
+                sectionHeader("소모품")
+                ultraCard
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                sectionHeader("캐릭터")
+                grid
+            }
         }
         .padding(12)
         .panelStyle()
     }
 
-    // MARK: 울트라 구매 줄
+    /// 구획 소제목. 높이가 상태와 무관하게 고정이어야 예산이 참이다(둘 다 언제나 그려진다).
+    @ViewBuilder
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(CheckTheme.secondaryText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: 소모품 — 울트라 구매 카드
+
+    /// 캐릭터 격자와 **다른 물건**임을 배경으로 말한다. 격자 카드는 `trackFill` 평면인데 이쪽은
+    /// accent 틴트 + accent 테두리라, 색을 못 보는 화면에서도 소제목("소모품")이 한 번 더 말한다.
+    @ViewBuilder
+    private var ultraCard: some View {
+        ultraRow
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(CheckTheme.accent.opacity(0.10))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(CheckTheme.accent.opacity(0.35), lineWidth: 1)
+                    }
+            }
+    }
 
     @ViewBuilder
     private var ultraRow: some View {
@@ -204,7 +254,7 @@ struct CheckShopPanel: View {
         let busy = store.purchasingID == WorkTimerStore.ultraPurchaseID
         // 가격을 모르면 **살 수 없다**(값을 지어내지 않는다). 잔량 부족도 같은 이유로 서버가 최종 판정이고,
         // 여기 비활성화는 헛왕복을 줄이는 장치다.
-        let affordable = price.map { store.rubyBalance >= $0 } ?? false
+        let affordable = (store.rubyBalance).flatMap { have in price.map { have >= $0 } } ?? false
         HStack(spacing: 8) {
             Image(systemName: "bolt.fill")
                 .font(.system(size: 11, weight: .bold))
@@ -280,7 +330,7 @@ struct CheckShopPanel: View {
     private func card(_ entry: ShopCharacterRow) -> some View {
         let owned = entry.owned == true || store.ownedCharacterIDs.contains(entry.id)
         let busy = store.purchasingID == entry.id
-        let affordable = entry.price.map { store.rubyBalance >= $0 } ?? false
+        let affordable = (store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false
         let name = catalog.manifest(id: entry.id)?.displayName ?? entry.id
         Button {
             store.tapShopCharacter(entry.id)
@@ -360,33 +410,12 @@ struct BuyButton: View {
     }
 }
 
-// MARK: - 진입점 — 헤더 카드의 루비 잔량 칩
-
-/// 헤더 카드 첫 줄 오른쪽, 근무 토글 알약 **왼쪽**에 서는 진입 버튼.
-///
-/// ★ **헤더가 1pt 도 높아지면 안 된다**(팝오버 700pt 계약 — 렌더 테스트 여럿이 지킨다).
-///   그래서 이 버튼이 더하는 것은 전부 **높이에 영향이 없는 것들**이다: 칩의 자연 높이(≈19pt)가
-///   같은 줄의 마스코트(46pt)보다 낮아 `HStack` 의 높이를 바꾸지 않고, 표식·hover 는 배경/테두리로만 그린다.
-///
-/// ★ 무효화는 캐릭터 마스코트 버튼과 **같은 장치**다 — `store.rubyBalance` 를 직접 읽으므로
-///   `@Observable` 이 이 잎 뷰만 다시 그린다(헤더 카드 본체는 안 흔든다).
-struct RubyEntryButton: View {
-    @Bindable var store: WorkTimerStore
-
-    @State private var hovering = false
-
-    var body: some View {
-        Button {
-            store.toggleShopPanel()
-        } label: {
-            RubyBalanceChip(balance: store.rubyBalance, highlighted: hovering)
-        }
-        .buttonStyle(.plain)
-        .focusEffectDisabled()
-        .onHover { hovering = $0 }
-        .help(ShopText.entryHelp(store.rubyBalance))
-        .accessibilityLabel("상점 열기")
-        .accessibilityValue("루비 \(max(0, store.rubyBalance))개")
-        .accessibilityAddTraits(.isButton)
-    }
-}
+// MARK: - 진입점
+//
+// **진입점은 오른쪽 레일의 [상점] 칸이다**(`CheckMenuSideRail`). v0.3.17 초안에서는 헤더 카드의 루비
+// 잔량 칩이 문이었는데, 사용자가 실제 화면을 보고 뒤집었다: "루비표시랑 위치가 별로야. (…) 그냥 루비가
+// 아니라 상점 버튼으로 따로 만들고, 상점에서 루비 개수 확인 할 수 있게하자. (…) 상점 버튼 위치는
+// 오른쪽 버튼 목록으로 바꾸자." 그래서 헤더에는 아무것도 없고, 잔량은 상점 제목 줄에서 크게 보인다.
+//
+// 칸을 일곱으로 늘리면서 `CheckMenuSideRail.buttonHeight` 를 54 → 45pt 로 내렸다 — 그 이유와 실측은
+// 그쪽 '높이 계약' 주석에 있다.

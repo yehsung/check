@@ -5646,6 +5646,13 @@ private let railOuterPadding: CGFloat = 12
 ///
 /// 마지막 칸([설정])만 **바닥에 앵커**된다: 위 다섯은 화면 이동, 아래 하나는 별도 창이라 레일이 본문 높이만큼
 /// 늘어날 때 둘을 양 끝으로 벌린다(그래야 레일 아래가 통째로 비지 않는다). 그래서 창 높이를 받는다.
+/// 레일에서 [제보] 칸의 자리(0부터).
+///
+/// ★ **4 → 5 (v0.3.17).** [상점] 칸이 2번([콕찌르기] 바로 아래)으로 들어오면서 한 칸씩 밀렸다.
+///   픽셀 프로브는 이 자리를 기하로 계산하므로, 리터럴을 여러 곳에 적어 두면 칸을 끼울 때마다
+///   조용히 엉뚱한 칸을 찍는다(실제로 이 테스트가 그렇게 빨개졌다).
+private let railFeedbackIndex = 5
+
 private func railButtonRect(_ index: Int, windowHeightPoints: CGFloat) -> (left: CGFloat, right: CGFloat, top: CGFloat, bottom: CGFloat) {
     let left = railOuterPadding + CheckMenuView.contentColumnWidth + 10
     let right = left + CheckMenuSideRail.width
@@ -5757,13 +5764,15 @@ func sideRailPaintsTheOpenPanelWithAccent() throws {
 @MainActor
 @Test
 func sideRailNeverDecidesTheWindowHeight() throws {
-    // 레일 총 높이 = 6×54 + 5×6 = 354pt. 여기에 바깥 padding 12*2 를 더한 378pt 가 "레일만으로 정해지는
+    // 레일 총 높이 = 7×45 + 6×6 = 351pt. 여기에 바깥 padding 12*2 를 더한 375pt 가 "레일만으로 정해지는
     // 창 높이"다. 어떤 메인 화면이든 본문이 그보다 높아야 레일이 창 높이를 밀지 않는다 —
     // 밀기 시작하면 팀원 수 비례 성장(windowHeightAdaptsToContentWithinCap (b))이 조용히 죽는다.
     //
-    // ⚠️ **여유가 3pt 뿐이다**(2026-09-10 실측: 가장 짧은 메인 화면 381pt vs 레일 378pt).
-    //   레일에 칸을 하나 더하거나(=+60pt) buttonHeight 를 키우면, 혹은 본문에서 4pt 만 걷어내면
-    //   그 순간 레일이 창 높이를 결정한다. 그때 이 단언이 가장 먼저, 가장 알아보기 쉽게 빨개진다.
+    // ⚠️ **여유가 6pt 다**(v0.3.17 실측: 가장 짧은 메인 화면 381pt vs 레일 375pt).
+    //   v0.3.16 까지는 6칸 × 54pt = 378pt 라 여유가 3pt 였다. [상점] 칸을 더하면서 buttonHeight 를
+    //   54 → 45 로 내렸고, 그래서 **칸이 늘었는데 여유는 오히려 커졌다.**
+    //   칸을 하나 더 더하면 +51pt(45+6)라 그 순간 레일이 창 높이를 결정한다.
+    //   그때 이 단언이 가장 먼저, 가장 알아보기 쉽게 빨개진다.
     let now = Date(timeIntervalSince1970: 1_784_000_000)
     // 리터럴이 아니라 **소스의 계약 상수**에서 읽는다 — 칸을 더하면 이 값이 저절로 커져야 경고가 산다.
     let railOnlyHeight = CheckMenuSideRail.contentHeight + railOuterPadding * 2
@@ -5808,8 +5817,8 @@ func sideRailFeedbackBadgeSpeaksOnlyWhenThereIsSomethingToHandle() throws {
         store.feedbackOpenCount = openCount
         return try renderBitmap(CheckMenuView(store: store))
     }
-    // 배지는 제보 칸(4번)의 오른쪽 위 모서리에 걸친다. 그 작은 사각형만 본다.
-    let rect = railButtonRect(4, windowHeightPoints: 0)
+    // 배지는 제보 칸의 오른쪽 위 모서리에 걸친다. 그 작은 사각형만 본다.
+    let rect = railButtonRect(railFeedbackIndex, windowHeightPoints: 0)
     func badgePixels(_ bitmap: NSBitmapImageRep) -> Int {
         railGlyphPixels(bitmap, (left: rect.right - 22, right: rect.right + 6, top: rect.top - 6, bottom: rect.top + 12))
     }
@@ -5839,20 +5848,20 @@ func ultraEntryLeftTheRailButStillLivesOnThePokePage() throws {
     //  · 콕찌르기만 보면 "문이 둘"(레일에 남은 유령 칸)을 못 잡는다.
     let now = Date(timeIntervalSince1970: 1_784_000_000)
 
-    // (1) 레일 4번 칸에는 이제 제보가 선다 — 잔량을 알려 줘도 그 칸에 배지가 안 붙는다.
+    // (1) 그 자리에는 이제 제보가 선다 — 잔량을 알려 줘도 그 칸에 배지가 안 붙는다.
     //     (예전 [울트라] 칸이라면 잔량 3에서 배지가 떴다.)
     let store = makeTeamStore(members: manyMembers(now: now, count: 4), now: now)
     store.ultraBalance = 3
     store.ultraUnlimited = false
     store.feedbackOpenCount = 0
     let bitmap = try renderBitmap(CheckMenuView(store: store))
-    let rect = railButtonRect(4, windowHeightPoints: 0)
+    let rect = railButtonRect(railFeedbackIndex, windowHeightPoints: 0)
     let badge = railGlyphPixels(bitmap, (left: rect.right - 22, right: rect.right + 6, top: rect.top - 6, bottom: rect.top + 12))
     #expect(badge == 0, "울트라 잔량이 레일 칸 배지로 다시 새어 나온다(픽셀 \(badge)개)")
 
     // (2) 그래도 그 칸에는 글리프가 온전히 있다(아이콘 + 라벨) — 칸이 빈 채 남지 않았다.
-    let glyph = railGlyphPixels(bitmap, railButtonRect(4, windowHeightPoints: Double(bitmap.pixelsHigh) / 2.0))
-    #expect(glyph >= 60, "레일 4번 칸이 비었다(글리프 \(glyph)픽셀)")
+    let glyph = railGlyphPixels(bitmap, railButtonRect(railFeedbackIndex, windowHeightPoints: Double(bitmap.pixelsHigh) / 2.0))
+    #expect(glyph >= 60, "레일 제보 칸이 비었다(글리프 \(glyph)픽셀)")
 
     // (3) 울트라로 가는 문은 콕찌르기 제목 행의 잔량 배지 하나로 남는다 — 소스로 못 박는다.
     //     (주석은 걷어내고 본다: 옮긴 이유를 적은 주석에 이름이 들어가면 그 설명을 지워야만 초록이 된다.)

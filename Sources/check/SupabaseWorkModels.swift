@@ -1368,6 +1368,10 @@ struct ShopStateResponse: Decodable, Equatable {
     var ultraBalance: Int?
     /// 울트라 1개의 루비 값. 서버가 유일한 출처다 — 클라가 3 을 다시 적으면 가격을 바꾸는 날 두 곳이 갈린다.
     var ultraPrice: Int?
+    /// 한 번에 살 수 있는 울트라 최대 개수(서버 상수, 지금 20).
+    /// **지금 화면은 1개 고정이라 이 값을 판정에 쓰지 않는다** — 그래도 디코드는 해 둔다: 수량 선택을
+    /// 붙이는 날 이 키를 안 읽으면 상한을 모른 채 요청했다가 `invalid` 를 받는 경로가 생긴다.
+    var ultraBuyMax: Int?
     var characters: [ShopCharacterRow]?
 }
 
@@ -1411,6 +1415,15 @@ struct BuyUltraResponse: Decodable, Equatable {
     let status: String
     var ultraBalance: Int?
     var rubyBalance: Int?
+    /// insufficient 일 때 서버가 실어 주는 필요량·보유량. **캐릭터 구매와 같은 필드다** —
+    /// 여기에 없으면 "울트라만 얼마가 모자란지 못 말하는" 비대칭이 생긴다(서버는 보내 주고 있었다).
+    var need: Int?
+    var have: Int?
+    /// 1개당 값과 이번에 산 개수(ok·insufficient 양쪽에 온다). 진단·문구용.
+    var unit: Int?
+    var count: Int?
+    /// invalid 일 때의 상한(서버 `ultra_buy_max`).
+    var max: Int?
 }
 
 /// ultra_wallet_sync RPC 본문. { p_days_back: 소급 일수 }.

@@ -71,6 +71,44 @@ struct V0315CharacterSeamTests {
     }
 
     @MainActor
+    @Test("픽셀아트 캐릭터는 재질 필터가 .nearest 다")
+    func pixelArtUsesNearestFiltering() throws {
+        // 앱 재질 필터와 팩 스크립트 리샘플은 **짝이다** — 둘 중 하나만 픽셀아트를 알면 소용없다.
+        // 여기서는 앱 쪽 절반을 잰다(굽는 쪽은 `--pixel-art` 가 manifest 에 적는다).
+        let atlas = CharacterManifest.Atlas(
+            file: "atlas.png", width: 64, height: 32,
+            states: [CharacterManifest.StateKey.frontIdle: .init(
+                frames: [.init(x: 0, y: 0, w: 32, h: 32)], durationsMs: [100], loop: true)]
+        )
+        let pixel = CharacterManifest(id: "px", displayName: "픽셀", kind: .sprite, atlas: atlas,
+                                      portrait: .init(neutral: "n.png", negative: "g.png"), pixelArt: true)
+        let smooth = CharacterManifest(id: "sm", displayName: "부드", kind: .sprite, atlas: atlas,
+                                       portrait: .init(neutral: "n.png", negative: "g.png"), pixelArt: nil)
+        let image = try #require(solidAtlas(width: 64, height: 32))
+
+        let pixelNode = try #require(SpriteCharacterNode.make(manifest: pixel, atlas: image))
+        let pixelMat = try #require(pixelNode.geometry?.firstMaterial)
+        #expect(pixelMat.diffuse.magnificationFilter == .nearest,
+                "픽셀아트인데 확대 필터가 .linear 다 — SceneKit 이 격자를 뭉갠다")
+        #expect(pixelMat.diffuse.minificationFilter == .nearest)
+
+        let smoothNode = try #require(SpriteCharacterNode.make(manifest: smooth, atlas: image))
+        let smoothMat = try #require(smoothNode.geometry?.firstMaterial)
+        #expect(smoothMat.diffuse.magnificationFilter == .linear, "픽셀아트가 아닌데 .nearest 로 굳었다")
+    }
+
+    /// 테스트용 단색 아틀라스(알파 1).
+    private func solidAtlas(width: Int, height: Int) -> CGImage? {
+        let space = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                  bytesPerRow: 0, space: space,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.setFillColor(red: 1, green: 0, blue: 0, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return ctx.makeImage()
+    }
+
+    @MainActor
     @Test("선택은 번들 캐릭터를 받아들이고 모르는 값은 아잉으로 접는다")
     func selectionAcceptsBundledAndFoldsUnknown() throws {
         let suite = "v0315-seam-\(UUID().uuidString)"

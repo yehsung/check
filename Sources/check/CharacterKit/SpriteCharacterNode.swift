@@ -47,8 +47,11 @@ enum SpriteCharacterNode {
         material.transparencyMode = .aOne
         material.diffuse.wrapS = .clamp          // 셀 경계 밖을 물지 않게(이웃 프레임이 새어 들어오는 것을 막는다).
         material.diffuse.wrapT = .clamp
-        material.diffuse.magnificationFilter = .linear   // 픽셀아트 캐릭터가 생기면 .nearest 가 필요하다(이번 범위 밖).
-        material.diffuse.minificationFilter = .linear
+        // 픽셀아트는 **반드시** .nearest 다. .linear 로 두면 SceneKit 이 격자를 뭉개 픽셀아트의 유일한
+        // 특징을 지운다(오버레이는 스프라이트를 확대해 그린다 — 192px 원본이 280×340 패널에 선다).
+        let filter: SCNFilterMode = (manifest.pixelArt == true) ? .nearest : .linear
+        material.diffuse.magnificationFilter = filter
+        material.diffuse.minificationFilter = filter
         plane.materials = [material]
 
         let node = SCNNode(geometry: plane)

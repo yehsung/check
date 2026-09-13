@@ -103,7 +103,7 @@ def crop(image: "np.ndarray", box: Rect) -> "np.ndarray":
     return image[y0:y1, x0:x1]
 
 
-def resize_rgba(image: "np.ndarray", size: Tuple[int, int]) -> "np.ndarray":
+def resize_rgba(image: "np.ndarray", size: Tuple[int, int], nearest: bool = False) -> "np.ndarray":
     """알파를 곱해 두고 줄인다(premultiplied).
 
     투명 픽셀의 RGB 가 0(검정)이라 그냥 리샘플하면 가장자리가 검게 번진다 — 실제로 입력이 그렇다.
@@ -118,7 +118,10 @@ def resize_rgba(image: "np.ndarray", size: Tuple[int, int]) -> "np.ndarray":
     packed = np.clip(np.rint(premultiplied), 0, 255).astype(np.uint8)
 
     with Image.fromarray(packed, "RGBA") as im:
-        resized = np.array(im.resize((width, height), Image.LANCZOS)).astype(np.float64)
+        # 픽셀아트는 **NEAREST** 여야 한다 — LANCZOS 는 격자를 뭉개 픽셀아트의 유일한 특징을 지운다.
+        # 앱 쪽 재질 필터(.nearest)와 **짝이다**: 둘 중 하나만 해도 소용없다.
+        resample = Image.NEAREST if nearest else Image.LANCZOS
+        resized = np.array(im.resize((width, height), resample)).astype(np.float64)
 
     out_alpha = resized[:, :, 3:4] / 255.0
     rgb = np.where(out_alpha > 0, resized[:, :, :3] / np.maximum(out_alpha, 1e-6), 0.0)
@@ -137,8 +140,9 @@ def save_png(image: "np.ndarray", path: str) -> None:
 class Group:
     """하나의 공유 변환으로 앉히는 프레임 묶음."""
 
-    def __init__(self, name: str, frames: List["np.ndarray"], threshold: int):
+    def __init__(self, name: str, frames: List["np.ndarray"], threshold: int, nearest: bool = False):
         self.name = name
+        self.nearest = nearest
         self.box = union_bbox(frames, threshold)
         # 크롭까지가 '공유'다 — 여기서 프레임별로 다르게 굴면 재생 중에 튄다.
         self.crops = [crop(f, self.box) for f in frames]
@@ -148,7 +152,7 @@ class Group:
     def scaled(self, target_height: int) -> List["np.ndarray"]:
         """그룹 전체에 **같은** 스케일을 먹인다."""
         width = max(1, int(round(self.width * target_height / self.height)))
-        return [resize_rgba(c, (width, target_height)) for c in self.crops]
+        return [resize_rgba(c, (width, target_height), nearest=self.nearest) for c in self.crops]
 
 
 def head_box(image: "np.ndarray", threshold: int, top_frac: float, side_frac: float) -> Rect:
@@ -288,8 +292,8 @@ def pack(args: argparse.Namespace) -> None:
     walk_frames = [load_rgba(walk_paths[i]) for i in used]
 
     # 정면 표정 쌍은 이미 pair-lock 된 입력이지만, 아틀라스 셀로 앉힐 때도 **쌍의 공유 변환**이어야 한다.
-    front = Group("front", [neutral, negative], args.alpha_threshold)
-    side = Group("side", walk_frames, args.alpha_threshold)
+    front = Group("front", [neutral, negative], args.alpha_threshold, nearest=args.pixel_art)
+    side = Group("side", walk_frames, args.alpha_threshold, nearest=args.pixel_art)
 
     # 그룹 간에도 **키(높이)를 맞춘다** — 정면/옆모습에서 캐릭터가 커졌다 작아지면 안 된다.
     # 확대는 하지 않는다(작은 쪽에 맞춘다): 업스케일은 흐려질 뿐 정보가 늘지 않는다.
@@ -342,6 +346,8 @@ def pack(args: argparse.Namespace) -> None:
             "neutral": "portrait-neutral.png",
             "negative": "portrait-negative.png",
         },
+        # 앱이 이 값을 보고 재질 필터를 .nearest 로 바꾼다(SpriteCharacterNode). 짝이 맞아야 한다.
+        "pixelArt": bool(args.pixel_art),
     }
 
     os.makedirs(args.out, exist_ok=True)
@@ -350,8 +356,8 @@ def pack(args: argparse.Namespace) -> None:
     # 쌍은 같은 상자를 쓴다. --head-side 0 을 주면 자르지 않고 입력을 그대로 쓴다(아잉처럼 이미 두상인 캐릭터).
     if args.head_side > 0:
         box = pair_locked_head_box([neutral, negative], args.alpha_threshold, args.head_top, args.head_side)
-        portrait_neutral = resize_rgba(crop_padded(neutral, box), (PORTRAIT_SIZE, PORTRAIT_SIZE))
-        portrait_negative = resize_rgba(crop_padded(negative, box), (PORTRAIT_SIZE, PORTRAIT_SIZE))
+        portrait_neutral = resize_rgba(crop_padded(neutral, box), (PORTRAIT_SIZE, PORTRAIT_SIZE), nearest=args.pixel_art)
+        portrait_negative = resize_rgba(crop_padded(negative, box), (PORTRAIT_SIZE, PORTRAIT_SIZE), nearest=args.pixel_art)
         print("[{}]   머리상자 {} (공유) → 초상 {}²".format(args.id, box, PORTRAIT_SIZE))
     else:
         portrait_neutral, portrait_negative = neutral, negative
@@ -385,6 +391,8 @@ def main(argv: List[str]) -> int:
     parser.add_argument("--side-idle", type=int, help="옆모습 idle 로 쓸 원본 프레임 인덱스(기본: 재생 순서의 2번째)")
     parser.add_argument("--walk-ms", type=int, default=140, help="걷기 프레임당 ms (기본 140)")
     parser.add_argument("--idle-ms", type=int, default=1000, help="idle 단일 프레임 ms (기본 1000)")
+    parser.add_argument("--pixel-art", action="store_true",
+                        help="픽셀아트 캐릭터: 리샘플을 NEAREST 로 하고 manifest 에 pixelArt=true 를 적는다")
     parser.add_argument("--head-side", type=float, default=0.62,
                         help="초상 머리 상자 한 변(몸통 높이 대비). 0 이면 자르지 않고 입력 그대로 (기본 0.62)")
     parser.add_argument("--head-top", type=float, default=0.45,

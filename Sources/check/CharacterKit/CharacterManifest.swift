@@ -23,6 +23,17 @@ struct CharacterManifest: Codable, Equatable, Sendable {
     let atlas: Atlas?
     /// 메뉴바(18pt)·팝오버(46pt)용 정지 초상 2장(스프라이트 전용). scene3D 면 반드시 nil.
     let portrait: Portrait?
+    /// 픽셀아트인가. **없으면 false**(옛 매니페스트 호환).
+
+    ///
+
+    /// 켜면 재질 필터가 `.nearest` 가 된다 — `.linear` 로 두면 SceneKit 이 픽셀 격자를 뭉개
+
+    /// 픽셀아트의 유일한 특징을 지운다. 에셋을 굽는 쪽(`scripts/pack-character.py --pixel-art`)도
+
+    /// 같은 값을 보고 리샘플을 NEAREST 로 바꾼다 — **둘 중 하나만 해도 소용없다.**
+
+    let pixelArt: Bool?
 
     enum Kind: String, Codable, Sendable {
         /// 아잉처럼 SceneKit 씬 파일을 그대로 쓰는 캐릭터.
@@ -93,16 +104,18 @@ struct CharacterManifest: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, displayName, kind, atlas, portrait
+        case id, displayName, kind, atlas, portrait, pixelArt
     }
 
     /// 검증 없는 메모리 생성자(내장 아잉·테스트 픽스처용). 파일에서 오는 값은 반드시 `init(from:)` 을 지나야 한다.
-    init(id: String, displayName: String, kind: Kind, atlas: Atlas? = nil, portrait: Portrait? = nil) {
+    init(id: String, displayName: String, kind: Kind, atlas: Atlas? = nil, portrait: Portrait? = nil,
+         pixelArt: Bool? = nil) {
         self.id = id
         self.displayName = displayName
         self.kind = kind
         self.atlas = atlas
         self.portrait = portrait
+        self.pixelArt = pixelArt
     }
 
     /// **검증은 여기서 한 번에 한다.** 디코드 성공이 곧 "이 캐릭터는 화면에 세울 수 있다"는 뜻이어야
@@ -114,6 +127,7 @@ struct CharacterManifest: Codable, Equatable, Sendable {
         self.kind = try container.decode(Kind.self, forKey: .kind)
         self.atlas = try container.decodeIfPresent(Atlas.self, forKey: .atlas)
         self.portrait = try container.decodeIfPresent(Portrait.self, forKey: .portrait)
+        self.pixelArt = try container.decodeIfPresent(Bool.self, forKey: .pixelArt)
         try validate()
     }
 

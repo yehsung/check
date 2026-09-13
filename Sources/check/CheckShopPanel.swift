@@ -12,6 +12,13 @@ import SwiftUI
 // 메인 화면이 381pt 라 여유가 3pt 뿐이고, 한 칸(+60pt)이면 곧바로 **레일이 창 높이를 결정한다**
 // (`CheckMenuSideRail` 주석 · `CheckMenuRenderTests.sideRailNeverDecidesTheWindowHeight`).
 
+/// 상점에서 고른 것. **고른 것이지 산 것이 아니다** — 실제 구매는 `WorkTimerStore.confirmShopPurchase()`
+/// 하나뿐이고, 이 값은 하단 구매 바가 무엇을 말할지 정한다.
+enum ShopSelection: Equatable, Hashable {
+    case character(String)
+    case ultra
+}
+
 /// 루비 아이콘 비트맵. 번들에서 한 번만 읽어 캐시한다.
 ///
 /// ★★ **`Image(nsImage:)` 는 `.interpolation(...)` 을 통째로 무시한다**(2026-09-13 실측 — 같은 그림을
@@ -116,6 +123,30 @@ enum ShopText {
     static func ultraHeld(_ balance: Int?) -> String {
         balance.map { "보유 \(max(0, $0))개" } ?? "보유 —"
     }
+
+    // ── 하단 구매 바 문구(순수 — 값으로 검증한다) ────────────────────────────────────────────
+
+    /// 바의 첫 줄. 아무것도 안 골랐으면 **무엇을 해야 하는지** 말한다(빈칸으로 두면 고장으로 보인다).
+    @MainActor
+    static func barTitle(selection: ShopSelection?, catalog: CharacterCatalog) -> String {
+        switch selection {
+        case .character(let id): return catalog.manifest(id: id)?.displayName ?? id
+        case .ultra: return "울트라 찌르기 1개"
+        case nil: return WorkTimerStore.pickSomethingNotice
+        }
+    }
+
+    /// 바의 둘째 줄. **언제나 문자열을 돌려준다**(빈 문자열이어도) — 높이를 상태에 안 맡긴다.
+    ///
+    /// 우선순위: 방금 일어난 일(`notice`) > 모자란 양 > 침묵.
+    /// 안내가 모자람보다 앞서는 이유: "샀어요!" 직후에도 잔량이 다음 상품에 모자랄 수 있는데,
+    /// 그때 "루비 N개 더 필요해요"만 보이면 **방금 산 것이 실패한 것처럼 읽힌다.**
+    static func barDetail(notice: String?, selection: ShopSelection?,
+                          price: Int?, balance: Int?) -> String {
+        if let notice { return notice }
+        guard selection != nil, let price, let balance, balance < price else { return " " }
+        return WorkTimerStore.shortfallNotice(need: price, have: balance)
+    }
 }
 
 // MARK: - 상점 격자 높이 예산 (순수 계산 — 결정적 검증 지점)
@@ -135,18 +166,24 @@ enum ShopPanelGridBudget {
     /// + 안내 줄 + 간격들.
     ///
     /// **실측값이다**(ImageRenderer · 콘텐츠 폭 292pt): 카드 3장(1행)과 6장(2행)으로 각각 재어
-    /// 패널 높이 − 격자 자연 높이 = **둘 다 174.0pt**. 행 수와 무관하게 같다는 것이 이 상수가 참이라는
+    /// 패널 높이 − 격자 자연 높이 = **둘 다 199.0pt**. 행 수와 무관하게 같다는 것이 이 상수가 참이라는
     /// 근거다(캐릭터 패널의 101pt 를 같은 방법으로 잰 것과 같은 절차).
     /// 손으로 추정하지 마라 — 틀리면 창이 700pt 상한을 넘어 푸터(로그아웃/앱 종료)가 잘린다.
     /// `V0317ShopTests.shopChromeHeightMatchesMeasurement` 가 이 숫자를 실측과 맞대 못 박는다.
     ///
-    /// 캐릭터 패널(101pt)보다 73pt 높은 것이 곧 **큰 잔량 칩 + 안내 줄 + 소모품 구획(소제목 + 카드)
-    /// + 캐릭터 소제목**의 값이다. 처음에는 바깥 간격 12pt 로 210pt 였는데, 그 값이면 최악 조합
-    /// (배너 + 목표 편집)에서 창이 **728pt** 가 되어 상한을 넘었다 — 간격을 7pt 로 좁혀 174 로 내렸다.
-    static let chromeOutsideGrid: CGFloat = 174
-    /// 팝오버에서 패널이 아닌 부분(헤더 카드 + 푸터 + 바깥 여백). 캐릭터 패널과 **같은 값**이다 —
-    /// 패널 바깥은 어느 패널이 떠 있든 같은 구성이기 때문이다.
-    static let popoverChromeOutsidePanel = CharacterPanelGridBudget.popoverChromeOutsidePanel
+    /// 캐릭터 패널(101pt)보다 98pt 높은 것이 곧 **큰 잔량 칩 + 소모품 구획(소제목 + 카드)
+    /// + 캐릭터 소제목 + 하단 구매 바(38pt)** 의 값이다.
+    /// 이력: 바깥 간격 12pt·안내 줄 별도일 때 210pt → 간격 7pt 로 174pt → 2단 구매의 하단 바를 더해 199pt.
+    /// (안내 줄을 따로 두지 않고 **구매 바 둘째 줄로 합쳐** 25pt 만 늘었다 — 따로 뒀으면 39pt 였다.)
+    static let chromeOutsideGrid: CGFloat = 199
+    /// 팝오버에서 패널이 아닌 부분(헤더 카드 + 푸터 + 바깥 여백).
+    ///
+    /// ★ **캐릭터 패널의 194pt 를 그대로 쓰면 안 된다**(처음에 그렇게 했다가 최악 조합이 717pt 로
+    ///   상한을 넘었다). 같은 방법으로 상점 기준으로 다시 재면 **216pt** 다 — 팝오버 717pt 에서
+    ///   패널(199 + 격자 210)과 목표 편집 행(92)을 뺀 값이다. 두 패널이 갈리는 이유까지는 못 밝혔고,
+    ///   그래서 **추정하지 않고 잰 값을 쓴다**(`V0317ShopTests.popoverStaysUnderTheCapInTheWorstCase`
+    ///   가 최악 조합을 렌더로 확인한다).
+    static let popoverChromeOutsidePanel: CGFloat = 216
     static let safetySlack = CharacterPanelGridBudget.safetySlack
 
     static let maxGridHeight: CGFloat = 700 - popoverChromeOutsidePanel - chromeOutsideGrid - safetySlack
@@ -195,14 +232,6 @@ struct CheckShopPanel: View {
                 RubyBalanceChip(balance: store.rubyBalance, highlighted: true, large: true)
             }
             PanelDivider()
-            // ★ **안내 줄은 비어 있어도 자리를 지킨다.** 상태에 따라 행이 생겼다 사라지면
-            //   `chromeOutsideGrid` 가 상태마다 달라져 위 예산이 거짓이 된다(그 순간 창이 상한을 넘는
-            //   조합이 생긴다). 배지가 "자리는 유지하고 숫자만 비운다"로 푼 것과 같은 처방이다.
-            Text(store.shopNotice ?? " ")
-                .font(.caption2)
-                .foregroundStyle(store.shopNotice == nil ? Color.clear : CheckTheme.secondaryText)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
             // ── 구획 ①: 소모품 ────────────────────────────────────────────────────────────
             // 사용자 지적 2026-09-13: "상점에서 울트라 찌르기도 너무 구분이 안되어 있어서 알아보기가
             // 힘들어." 예전에는 캐릭터 카드들과 **같은 평면에 한 줄**로 얹혀 있어 다른 종류의 상품이라는
@@ -215,10 +244,63 @@ struct CheckShopPanel: View {
                 sectionHeader("캐릭터")
                 grid
             }
+            purchaseBar
         }
         .padding(12)
         .panelStyle()
     }
+
+    // MARK: 하단 구매 바 — **실제 구매로 가는 유일한 문**
+
+    /// ★ **높이가 상태와 무관하게 고정이다.** 고른 것이 있든 없든, 안내가 있든 없든 같은 자리를
+    ///   차지한다 — 상태마다 높이가 달라지면 `chromeOutsideGrid` 예산이 거짓이 되고, 그 순간 창이
+    ///   700pt 상한을 넘는 조합이 생긴다(안내 줄을 "비어도 자리 유지"로 둔 것과 같은 이유).
+    ///
+    /// 예전의 별도 안내 줄을 **여기로 합쳤다**. 둘 다 "지금 무슨 일이 일어나는가"를 말하는 자리라
+    /// 합치면 높이가 한 번만 든다.
+    @ViewBuilder
+    private var purchaseBar: some View {
+        let selection = store.shopSelection
+        let price = store.shopSelectionPrice
+        let busy = store.purchasingID != nil
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(ShopText.barTitle(selection: selection, catalog: catalog))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(selection == nil ? CheckTheme.secondaryText : CheckTheme.primaryText)
+                    .lineLimit(1)
+                // 둘째 줄은 **언제나 그려진다**(빈 문자열이어도) — 높이를 상태에 안 맡긴다.
+                Text(ShopText.barDetail(notice: store.shopNotice, selection: selection,
+                                        price: price, balance: store.rubyBalance))
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            if let price {
+                RubyBalanceChip(balance: price)
+            }
+            BuyButton(title: busy ? "…" : "구매하기",
+                      enabled: store.canConfirmShopPurchase) {
+                store.confirmShopPurchase()
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: Self.purchaseBarHeight)
+        .padding(.horizontal, 10)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(CheckTheme.trackFill)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(selection == nil ? CheckTheme.border : CheckTheme.accent,
+                                      lineWidth: selection == nil ? 1 : 2)
+                }
+        }
+    }
+
+    /// 구매 바의 고정 높이(pt). 상수로 못 박는다 — 내용에 따라 흔들리면 예산 계산이 거짓이 된다.
+    static let purchaseBarHeight: CGFloat = 38
 
     /// 구획 소제목. 높이가 상태와 무관하게 고정이어야 예산이 참이다(둘 다 언제나 그려진다).
     @ViewBuilder
@@ -235,17 +317,42 @@ struct CheckShopPanel: View {
     /// accent 틴트 + accent 테두리라, 색을 못 보는 화면에서도 소제목("소모품")이 한 번 더 말한다.
     @ViewBuilder
     private var ultraCard: some View {
-        ultraRow
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(CheckTheme.accent.opacity(0.10))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(CheckTheme.accent.opacity(0.35), lineWidth: 1)
-                    }
-            }
+        // ★ [사기] 버튼이 여기 있었는데 **없앴다.** 상품 종류마다 구매 방법이 다르면 그게 곧 실수의
+        //   자리다 — 울트라도 캐릭터와 똑같이 "누르면 고르기 → 하단 바에서 구매하기"를 지난다.
+        let picked = store.shopSelection == .ultra
+        Button {
+            store.selectShopItem(.ultra)
+        } label: {
+            ultraRow
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(CheckTheme.accent.opacity(picked ? 0.22 : 0.10))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(CheckTheme.accent.opacity(picked ? 1.0 : 0.35),
+                                              lineWidth: picked ? 2 : 1)
+                        }
+                }
+                .overlay(alignment: .topTrailing) {
+                    if picked { pickedBadge.padding(4) }
+                }
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .disabled(store.purchasingID != nil)
+        .accessibilityLabel("울트라 찌르기 고르기")
+        .accessibilityAddTraits(picked ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// 고른 것에 얹는 배지. 캐릭터 선택 패널의 체크 배지와 **같은 문법**이다(오버레이라 크기에 영향 0).
+    private var pickedBadge: some View {
+        Image(systemName: "checkmark")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(Color.white)
+            .frame(width: 18, height: 18)
+            .background(Circle().fill(CheckTheme.accent))
     }
 
     @ViewBuilder
@@ -272,12 +379,6 @@ struct CheckShopPanel: View {
             Spacer(minLength: 6)
             if let price {
                 RubyBalanceChip(balance: price)
-            }
-            // 모자라도 **누를 수 있다** — 그래야 "얼마가 모자란지"를 말할 자리가 생긴다
-            // (tapBuyUltra 가 서버로 안 나가고 안내만 남긴다). 가격을 모르면 그때만 막는다.
-            BuyButton(title: busy ? "…" : "사기",
-                      enabled: !busy && store.purchasingID == nil && price != nil) {
-                store.tapBuyUltra()
             }
         }
         .frame(maxWidth: .infinity)
@@ -332,8 +433,9 @@ struct CheckShopPanel: View {
         let busy = store.purchasingID == entry.id
         let affordable = (store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false
         let name = catalog.manifest(id: entry.id)?.displayName ?? entry.id
+        let picked = store.shopSelection == .character(entry.id)
         Button {
-            store.tapShopCharacter(entry.id)
+            store.selectShopItem(.character(entry.id))
         } label: {
             VStack(spacing: 4) {
                 // 카드 그림은 캐릭터 선택 패널과 **같은 것**을 쓴다(아틀라스 frontIdle 셀을 알파로 조인 전신).
@@ -362,18 +464,23 @@ struct CheckShopPanel: View {
                     .fill(CheckTheme.trackFill)
                     .overlay {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(owned ? CheckTheme.accent.opacity(0.5) : CheckTheme.border,
-                                          lineWidth: 1)
+                            .strokeBorder(picked ? CheckTheme.accent
+                                                 : (owned ? CheckTheme.accent.opacity(0.5) : CheckTheme.border),
+                                          lineWidth: picked ? 2 : 1)
                     }
             }
-            // 살 수 없는 카드는 흐리게. **누르는 것 자체는 막는다**(아래 disabled) — 비활성 카드를
-            // 누를 수 있게 두면 서버 왕복이 늘 뿐 결과가 같다.
+            // 살 수 없는 카드는 흐리게. 그래도 **누를 수는 있다** — 골라 보면 하단 바가 얼마가
+            // 모자란지 말해 준다(서버로는 안 나간다).
             .opacity(owned || affordable ? 1 : 0.5)
+            .overlay(alignment: .topTrailing) {
+                if picked { pickedBadge.padding(4) }
+            }
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()
-        // 보유·구매중만 막는다. **잔량 부족은 막지 않는다** — 누르면 얼마가 모자란지 말해 준다.
-        .disabled(owned || busy || store.purchasingID != nil)
+        // 구매 중에만 막는다. 보유한 것도 누를 수 있다 — 누르면 "이미 갖고 있어요"라고 말한다
+        // (침묵하면 눌러도 아무 일이 없어 고장으로 보인다).
+        .disabled(store.purchasingID != nil)
         .help(owned ? "\(name) — 보유 중" : "\(name) 사기")
         .accessibilityLabel(owned ? "\(name) 보유 중" : "\(name) 사기")
     }

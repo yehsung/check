@@ -387,25 +387,67 @@ extension WorkTimerStore {
         ownedCharacterIDs = owned
     }
 
-    /// 상점 카드를 눌렀을 때의 **유일한** 진입점. 살 수 있으면 사고, 모자라면 **얼마가 모자란지 말한다.**
+    /// 상점 카드를 눌렀을 때. **고르기만 한다 — 여기서는 아무것도 사지 않는다.**
     ///
-    /// **왜 비활성화가 아니라 여기인가**: 못 사는 카드를 통째로 비활성화하면 눌러도 아무 일이 없어
-    /// "왜 안 되는지"를 말할 자리가 사라진다. 서버로 나가지 않으므로 헛왕복도 없다(판정은 여전히
-    /// 서버가 최종이고, 이 줄은 안내다).
-    func tapShopCharacter(_ id: String) {
+    /// ★ 예전에는 이 함수가 곧바로 `buyCharacter` 를 불렀고, 그래서 사용자가 **실수로 전부 사 버렸다**
+    ///   (2026-09-14 신고). 구매로 가는 문은 이제 `confirmShopPurchase()` 하나뿐이다.
+    ///
+    /// 이미 가진 캐릭터는 **고르지 않는다** — 대신 그 사실을 말한다(침묵하면 눌러도 아무 일이 없어
+    /// 고장으로 보인다).
+    func selectShopItem(_ selection: ShopSelection) {
         guard purchasingID == nil else { return }
-        if ownedCharacterIDs.contains(id) { return }
-        // 잔량을 모르면 **사지 않는다**(0 으로 단정하지도, 있다고 가정하지도 않는다). 다시 읽어 본다.
+        if case .character(let id) = selection, ownedCharacterIDs.contains(id) {
+            shopSelection = nil
+            shopNotice = Self.alreadyOwnedNotice
+            return
+        }
+        // 같은 것을 다시 누르면 선택을 푼다(실수로 고른 것을 되돌리는 길).
+        shopSelection = (shopSelection == selection) ? nil : selection
+        shopNotice = nil
+    }
+
+    /// 이미 가진 것을 눌렀을 때의 문구(순수 — 값으로 검증한다).
+    nonisolated static let alreadyOwnedNotice = "이미 갖고 있어요"
+    /// 아무것도 안 골랐을 때 하단 바가 말하는 것.
+    nonisolated static let pickSomethingNotice = "살 것을 골라 주세요"
+
+    /// 지금 고른 것의 값(루비). 모르면 nil — 숫자를 지어내지 않는다.
+    var shopSelectionPrice: Int? {
+        switch shopSelection {
+        case .character(let id): return shopPrice(of: id)
+        case .ultra: return ultraPrice
+        case nil: return nil
+        }
+    }
+
+    /// 지금 고른 것을 살 수 있는가. 잔량이나 값을 **모르면 false** 다(모르면서 사지 않는다).
+    var canConfirmShopPurchase: Bool {
+        guard purchasingID == nil, shopSelection != nil else { return false }
+        guard let have = rubyBalance, let price = shopSelectionPrice else { return false }
+        return have >= price
+    }
+
+    /// ★ **실제 구매는 여기 하나뿐이다.** 하단 [구매하기] 버튼만 이 함수를 부른다 —
+    ///   카드 탭에서 이 경로로 새는 길이 생기면 사용자가 또 실수로 산다.
+    func confirmShopPurchase() {
+        guard let selection = shopSelection, purchasingID == nil else { return }
         guard let have = rubyBalance else {
             loadShopState()
             return
         }
-        let price = shopPrice(of: id)
-        if let price, have < price {
+        guard let price = shopSelectionPrice else {
+            // 값을 모르면 사지 않는다. 다시 읽어 본다.
+            loadShopState()
+            return
+        }
+        guard have >= price else {
             shopNotice = Self.shortfallNotice(need: price, have: have)
             return
         }
-        buyCharacter(id)
+        switch selection {
+        case .character(let id): buyCharacter(id)
+        case .ultra: buyUltra(count: 1)
+        }
     }
 
     /// 캐릭터를 산다. 성공하면 **서버가 준 값으로** 잔량·보유를 갱신한다(클라가 스스로 빼지 않는다).
@@ -428,7 +470,9 @@ extension WorkTimerStore {
                     // already_owned 도 성공으로 접는다 — 다른 기기에서 이미 샀다는 뜻이라
                     // 사용자가 할 일이 없고, 목록을 다시 읽으면 화면이 사실과 맞는다.
                     self.ownedCharacterIDs.insert(id)
-                    self.shopNotice = response.status == "ok" ? "샀어요!" : "이미 갖고 있어요"
+                    // 선택을 푼다 — 안 풀면 방금 산 것이 계속 골라진 채 남아 하단 바가 거짓말을 한다.
+                    self.shopSelection = nil
+                    self.shopNotice = response.status == "ok" ? "샀어요!" : Self.alreadyOwnedNotice
                     self.loadShopState()
                 case "insufficient":
                     self.shopNotice = Self.shortfallNotice(need: response.need, have: response.have)
@@ -441,26 +485,6 @@ extension WorkTimerStore {
                 self.shopNotice = "구매 실패"
             }
         }
-    }
-
-    /// 울트라 [사기] 를 눌렀을 때의 진입점. 캐릭터 카드와 **같은 규약**이다 — 모자라면 말한다.
-    func tapBuyUltra(count: Int = 1) {
-        guard purchasingID == nil else { return }
-        guard let price = ultraPrice else {
-            // 가격을 모르면 사지 않는다(값을 지어내지 않는다). 다시 읽어 본다.
-            loadShopState()
-            return
-        }
-        guard let have = rubyBalance else {
-            loadShopState()
-            return
-        }
-        let need = price * Swift.max(1, count)
-        if have < need {
-            shopNotice = Self.shortfallNotice(need: need, have: have)
-            return
-        }
-        buyUltra(count: count)
     }
 
     /// 울트라를 산다(루비 → 울트라).
@@ -481,6 +505,7 @@ extension WorkTimerStore {
                 if let ultra = response.ultraBalance { self.ultraBalance = ultra }
                 switch response.status {
                 case "ok":
+                    self.shopSelection = nil
                     self.shopNotice = "울트라 \(count)개를 샀어요!"
                 case "insufficient":
                     // ★ 서버가 need/have 를 실어 준다 — **캐릭터 구매와 같은 필드다.** 클라가 다시

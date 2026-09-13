@@ -562,6 +562,14 @@ final class WorkTimerStore {
     var shopFailed = false
     /// 상점 화면에 띄우는 한 줄(구매 결과·실패). nil 이면 안 띄운다.
     var shopNotice: String?
+    /// 상점에서 **고른 것**(아직 산 것이 아니다). nil = 아무것도 안 골랐다.
+    ///
+    /// ★ **2단 구매의 전부가 이 한 칸이다**(사용자 신고 2026-09-14: "누르면 바로 구입되는데 이건
+    ///   실수로 구매하는걸 방지하지 못해. (…) 하단부에 금액과 구매하기 버튼이 떠서 눌러야 구매 되게끔").
+    ///   카드를 누르면 여기에 담기기만 하고, **실제 구매는 `confirmShopPurchase()` 하나뿐**이다.
+    ///   상품 종류마다 구매 방법이 다르면 그게 곧 실수의 자리라, 울트라도 같은 길을 지난다.
+    var shopSelection: ShopSelection?
+
     /// 지금 사고 있는 것의 id(`WorkTimerStore.ultraPurchaseID` 면 울트라). nil 이면 구매 중이 아니다.
     /// 하나만 두는 이유: 동시에 둘을 사면 잔량 응답 둘이 뒤섞여 어느 쪽이 최신인지 알 수 없다.
     var purchasingID: String?

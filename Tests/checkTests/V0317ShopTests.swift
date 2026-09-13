@@ -257,41 +257,96 @@ struct V0317ShopTests {
         #expect(store.ultraPrice == 3)
     }
 
-    @MainActor
-    @Test("못 사는 카드를 눌러도 서버로 안 나가고 얼마가 모자란지 말한다")
-    func tappingAnUnaffordableCardExplainsInstead() {
-        let store = Self.plainStore()
-        store.applyShopState(ShopStateResponse(rubyBalance: 12, ultraBalance: 1, ultraPrice: 3,
-                                               characters: [ShopCharacterRow(id: "ghost", price: 50, owned: false)]))
-        store.shopLoaded = true
-        store.tapShopCharacter("ghost")
-        // 구매가 시작되지 않았다 = 서버로 안 나갔다.
-        #expect(store.purchasingID == nil, "못 사는 카드가 서버 왕복을 만들었다")
-        #expect(store.shopNotice == "루비 38개 더 필요해요", Comment(rawValue: store.shopNotice ?? "(없음)"))
+    // MARK: - ⑤-b 2단 구매 (이번 변경의 핵심 — 회귀하면 사용자가 또 실수로 산다)
 
-        // ★ 기준선이 실제로 다르다: 살 수 있으면 안내가 아니라 **구매로 간다**.
-        store.shopNotice = nil
-        store.rubyBalance = 100
-        store.tapShopCharacter("ghost")
-        #expect(store.shopNotice == nil, "살 수 있는데 모자라다고 말했다")
+    /// ★ **카드를 누르는 것만으로는 절대 사지 않는다.** 사용자 신고 2026-09-14: "누르면 바로
+    ///   구입되는데 이건 실수로 구매하는걸 방지하지 못해" — 실제로 실수로 전부 사 버렸다.
+    @MainActor
+    @Test("카드를 눌러도 구매가 시작되지 않는다 — 고르기일 뿐이다")
+    func tappingACardNeverBuys() {
+        let store = Self.shopStore(ruby: 1_000)
+        store.selectShopItem(.character("ghost"))
+        #expect(store.shopSelection == .character("ghost"), "고르지도 않았다")
+        #expect(store.purchasingID == nil, "카드를 눌렀는데 구매가 시작됐다 — 실수 구매가 그대로 재발한다")
+
+        // 울트라도 **같은 경로**다(상품마다 구매 방법이 다르면 그게 곧 실수의 자리다).
+        store.selectShopItem(.ultra)
+        #expect(store.shopSelection == .ultra)
+        #expect(store.purchasingID == nil, "울트라를 눌렀는데 구매가 시작됐다")
+
+        // 같은 것을 다시 누르면 선택이 풀린다(되돌리는 길).
+        store.selectShopItem(.ultra)
+        #expect(store.shopSelection == nil)
+    }
+
+    /// 구매로 가는 문이 **하단 버튼 하나뿐**인지 소스로 못 박는다. 행동 테스트만으로는
+    /// "다른 뷰에서 buyCharacter 를 직접 부르는" 조합을 못 잡는다.
+    @Test("구매 호출은 confirmShopPurchase 하나에서만 나간다")
+    func onlyTheConfirmButtonBuys() throws {
+        let panel = Self.stripped(try Self.source("CheckShopPanel.swift"))
+        #expect(panel.contains("store.confirmShopPurchase()"), "하단 구매 버튼이 없다")
+        #expect(!panel.contains("store.buyCharacter("),
+                "패널이 buyCharacter 를 직접 부른다 — 2단 구매가 우회된다")
+        #expect(!panel.contains("store.buyUltra("),
+                "패널이 buyUltra 를 직접 부른다 — 2단 구매가 우회된다")
+        let auth = Self.stripped(try Self.source("WorkTimerStoreAuth.swift"))
+        // 스토어 안에서도 buyCharacter/buyUltra 를 부르는 곳은 confirmShopPurchase 뿐이어야 한다.
+        #expect(auth.contains("case .character(let id): buyCharacter(id)")
+                && auth.contains("case .ultra: buyUltra(count: 1)"),
+                "confirmShopPurchase 가 실제 구매로 안 이어진다")
     }
 
     @MainActor
-    @Test("울트라도 같은 규약 — 모자라면 말하고 가격을 모르면 안 산다")
-    func tappingUltraFollowsTheSameRule() {
-        let store = Self.plainStore()
-        store.rubyBalance = 1
-        store.ultraPrice = 3
-        store.tapBuyUltra()
-        #expect(store.purchasingID == nil)
-        #expect(store.shopNotice == "루비 2개 더 필요해요", Comment(rawValue: store.shopNotice ?? "(없음)"))
+    @Test("잔량이 모자라면 구매하기가 비활성이고 얼마가 모자란지 말한다")
+    func shortfallDisablesTheConfirmButton() {
+        let store = Self.shopStore(ruby: 12)
+        store.selectShopItem(.character("ghost"))   // 50루비
+        #expect(store.shopSelectionPrice == 50)
+        #expect(store.canConfirmShopPurchase == false, "못 사는데 구매하기가 켜져 있다")
+        #expect(ShopText.barDetail(notice: nil, selection: store.shopSelection,
+                                   price: store.shopSelectionPrice,
+                                   balance: store.rubyBalance) == "루비 38개 더 필요해요")
+        // 눌러도 서버로 안 나간다.
+        store.confirmShopPurchase()
+        #expect(store.purchasingID == nil, "못 사는데 서버 왕복이 생겼다")
 
-        // 가격을 모르면 **사지 않는다**(값을 지어내지 않는다).
-        let unknown = Self.plainStore()
-        unknown.rubyBalance = 999
-        unknown.ultraPrice = nil
-        unknown.tapBuyUltra()
-        #expect(unknown.purchasingID == nil, "가격을 모르는데 샀다")
+        // ★ 기준선이 실제로 다르다: 살 수 있으면 켜진다.
+        store.rubyBalance = 100
+        #expect(store.canConfirmShopPurchase, "살 수 있는데 구매하기가 꺼져 있다")
+    }
+
+    @MainActor
+    @Test("이미 가진 캐릭터는 골라지지 않고 그 사실을 말한다")
+    func ownedCharactersCannotBeSelected() {
+        let store = Self.shopStore(ruby: 1_000, ownedIDs: ["ghost"])
+        store.selectShopItem(.character("ghost"))
+        #expect(store.shopSelection == nil, "이미 가진 것이 골라졌다")
+        #expect(store.shopNotice == WorkTimerStore.alreadyOwnedNotice)
+        #expect(store.canConfirmShopPurchase == false)
+    }
+
+    @MainActor
+    @Test("잔량이나 값을 모르면 구매하기가 안 켜진다")
+    func unknownValuesNeverEnableTheButton() {
+        let unknownBalance = Self.shopStore(ruby: nil)
+        unknownBalance.selectShopItem(.character("ghost"))
+        #expect(unknownBalance.canConfirmShopPurchase == false, "잔량을 모르는데 살 수 있다고 한다")
+
+        let unknownPrice = Self.shopStore(ruby: 1_000)
+        unknownPrice.ultraPrice = nil
+        unknownPrice.selectShopItem(.ultra)
+        #expect(unknownPrice.canConfirmShopPurchase == false, "값을 모르는데 살 수 있다고 한다")
+        unknownPrice.confirmShopPurchase()
+        #expect(unknownPrice.purchasingID == nil, "값을 모르는데 샀다")
+    }
+
+    @Test("하단 바는 어떤 상태에서도 문구를 돌려준다 — 높이를 상태에 안 맡긴다")
+    func theBarAlwaysHasText() {
+        // 둘째 줄은 빈 문자열이라도 **반드시** 있어야 한다(없으면 그 줄이 사라져 바 높이가 흔들린다).
+        #expect(ShopText.barDetail(notice: nil, selection: nil, price: nil, balance: nil) == " ")
+        #expect(ShopText.barDetail(notice: "샀어요!", selection: nil, price: nil, balance: nil) == "샀어요!")
+        // 안내가 모자람보다 앞선다 — "샀어요!" 직후 잔량이 모자라도 방금 산 것이 실패로 읽히면 안 된다.
+        #expect(ShopText.barDetail(notice: "샀어요!", selection: .ultra, price: 3, balance: 0) == "샀어요!")
     }
 
     @MainActor
@@ -305,7 +360,8 @@ struct V0317ShopTests {
         // 모르면 **사지 않는다**(0 으로 단정하지도, 있다고 가정하지도 않는다).
         store.applyShopState(ShopStateResponse(rubyBalance: nil, ultraBalance: nil, ultraPrice: 3,
                                                ultraBuyMax: 20, characters: nil))
-        store.tapBuyUltra()
+        store.selectShopItem(.ultra)
+        store.confirmShopPurchase()
         #expect(store.purchasingID == nil, "잔량을 모르는데 샀다")
         #expect(store.ultraBuyMax == 20, "ultra_buy_max 를 안 읽었다 — 수량 선택을 붙이는 날 상한을 모른다")
     }
@@ -328,20 +384,21 @@ struct V0317ShopTests {
     @MainActor
     @Test("상점 패널이 실제로 그려진다 — 노란 상자 0, 세 상태")
     func shopPanelRendersInThreeStates() throws {
-        // (가) 살 수 있음 (나) 잔량 부족 (다) 보유
-        let states: [(String, Int, [ShopCharacterRow])] = [
-            ("afford", 100, Self.rows(ownedIDs: [])),
-            ("poor", 5, Self.rows(ownedIDs: [])),
-            ("owned", 100, Self.rows(ownedIDs: Set(Self.sprites))),
+        // 2단 구매의 다섯 상태 + 보유.
+        let states: [(String, Int, Set<String>, ShopSelection?)] = [
+            ("idle", 100, [], nil),                                   // ① 아무것도 안 고름
+            ("picked", 100, [], .character("ghost")),                 // ② 캐릭터를 고름(가격 + 구매하기)
+            ("poor", 5, [], .character("jellyfish")),                 // ③ 잔량 부족
+            ("owned", 100, Set(Self.sprites), .character("ghost")),   // ④ 이미 보유한 것을 누름
+            ("ultra", 100, [], .ultra),                               // ⑤ 울트라를 고름
         ]
-        for (name, ruby, rows) in states {
+        for (name, ruby, ownedIDs, selection) in states {
             let store = Self.plainStore()
-            store.rubyBalance = ruby
-            store.ultraBalance = 7
-            store.ultraPrice = 3
+            let rows = Self.rows(ownedIDs: ownedIDs)
             store.applyShopState(ShopStateResponse(rubyBalance: ruby, ultraBalance: 7,
-                                                   ultraPrice: 3, characters: rows))
+                                                   ultraPrice: 3, ultraBuyMax: 20, characters: rows))
             store.shopLoaded = true
+            if let selection { store.selectShopItem(selection) }
             let panel = CheckShopPanel(store: store, onBack: {})
             let bitmap = try #require(Self.bitmap(panel, width: CheckMenuView.contentColumnWidth),
                                       "렌더 실패")
@@ -399,6 +456,11 @@ struct V0317ShopTests {
                                  previewGoalEditing: true,
                                  characterDefaults: Self.isolatedDefaults())
         let height = try #require(Self.popoverHeight(view))
+        let rows = ShopPanelGridBudget.rowCount(cardCount: Self.sprites.count)
+        let natural = ShopPanelGridBudget.naturalHeight(rowCount: rows)
+        let cap = ShopPanelGridBudget.capHeight(extraChromeHeight: 92)   // 목표 편집 행
+        print("[v0317] 최악 조합 팝오버 \(height)pt · 격자 자연 \(natural)pt vs 캡 \(cap)pt "
+              + "→ 스크롤로 밀리는 양 \(Swift.max(0, natural - cap))pt")
         #expect(height <= 700,
                 Comment(rawValue: "팝오버가 \(height)pt — 700pt 상한을 넘어 푸터가 잘린다"))
         if let bitmap = Self.bitmap(view, width: CheckMenuView.mainWindowWidth) {
@@ -479,6 +541,17 @@ struct V0317ShopTests {
         let defaults = UserDefaults(suiteName: name)!
         defaults.removePersistentDomain(forName: name)
         return defaults
+    }
+
+    /// 상점 상태가 채워진 스토어(실제 서버 가격).
+    @MainActor
+    static func shopStore(ruby: Int?, ownedIDs: Set<String> = []) -> WorkTimerStore {
+        let store = plainStore()
+        store.applyShopState(ShopStateResponse(rubyBalance: ruby, ultraBalance: 7, ultraPrice: 3,
+                                               ultraBuyMax: 20, characters: rows(ownedIDs: ownedIDs)))
+        store.rubyBalance = ruby
+        store.shopLoaded = true
+        return store
     }
 
     @MainActor

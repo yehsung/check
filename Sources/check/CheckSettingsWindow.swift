@@ -205,12 +205,34 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     ///   사용자가 일부러 열어 둔 것이라, 그 판단을 여기 넣으면 두 경로의 뜻이 갈린다.
     func show() {
         guard let window else { return }
+        growForAdminContentIfNeeded(window)
         if !CheckPanelVisibility.isRunningTests {
             NSApp.activate()
         }
         window.makeKeyAndOrderFront(nil)
         isOpen = true
         armStuckWindowWatchdog()
+    }
+
+    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **554pt** 가 된다(`CheckSettingsView.adminContentHeight`).
+    /// 기본 창은 470pt 라 그대로 열면 맨 아래 행이 잘린다.
+    ///
+    /// **왜 창을 만들 때가 아니라 열 때인가**: `ultraUnlimited` 는 서버가 정하고 세션 동기화로 **늦게 도착한다**.
+    /// 창 생성 시점에 읽으면 첫 실행에서는 아직 false 라 470 으로 굳는다.
+    ///
+    /// **왜 키우기만 하는가**: 사용자가 직접 줄여 둔 창을 우리가 매번 되돌리면 그 조작이 무의미해진다.
+    /// 저장된 자리(`setFrameAutosaveName`)보다 우리가 세게 굴면 안 된다 — 모자랄 때만 채운다.
+    private func growForAdminContentIfNeeded(_ window: NSWindow) {
+        guard wiring?.store.ultraUnlimited == true else { return }
+        let needed = CheckSettingsView.adminContentHeight
+        guard window.contentLayoutRect.height < needed else { return }
+        var size = window.frame.size
+        size.height += needed - window.contentLayoutRect.height
+        var frame = window.frame
+        // 타이틀바가 위에 있으므로 **위쪽을 고정하고 아래로** 늘린다 — 그래야 창이 화면 위로 튀지 않는다.
+        frame.origin.y -= size.height - frame.size.height
+        frame.size = size
+        window.setFrame(frame, display: false)
     }
 
     /// 설정 창을 내린다(멱등). 창과 그 안의 상태는 남는다 — 다시 열면 같은 자리에 같은 크기로 선다.

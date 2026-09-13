@@ -1258,6 +1258,19 @@ struct CheckCharacter3DView: NSViewRepresentable {
     /// 리액션 엔진. makeNSView 에서 wrapper 노드/씬 루트를 연결한다(없으면 리액션 없이 idle 만).
     var engine: ReactionEngine?
 
+    /// 초기 마운트가 **어느 캐릭터를 세울지** 정할 때 읽는 도메인. 이 뷰에서 `UserDefaults` 를 만지는
+    /// 지점은 아래 `makeNSView` 의 한 줄뿐이고, 그 한 줄이 읽는 값이 여기다.
+    ///
+    /// **왜 값으로 받는가.** `makeNSView` 안에 `.standard` 를 직접 적으면, 이 뷰를 지나는 아잉 계약
+    /// 테스트들(`V0238CharacterTests`·`CheckSleepEyesTests` 등)이 전부 **보이지 않는 전역 하나**를
+    /// 공유하게 된다 — 표준 도메인에 선택값이 남아 있는 머신에서만, 그것도 간헐적으로 빨개지는 종류다
+    /// (실행 순서와 병렬 스위트에 따라 달라진다). 값으로 받으면 테스트가 자기 suite 를 넣어
+    /// "저장된 선택을 정말 읽는가"를 오염 없이 물을 수 있다.
+    ///
+    /// 기본값이 `.standard` 라 **기존 호출부는 한 글자도 바뀌지 않고**, 앱 전체(오버레이·메뉴바·미니게임)가
+    /// 같은 도메인의 같은 선택을 본다(`CheckCharacter3DScene.selectedCharacter(defaults:)` 주석의 요구).
+    var characterDefaults: UserDefaults = .standard
+
     /// 렌더 활성 판정(순수 함수, β1 계약 식). 표시 의도가 있고 정지 사유가 없을 때만 true.
     static func renderActive(isActive: Bool, renderSuspended: Bool) -> Bool {
         isActive && !renderSuspended
@@ -1297,7 +1310,14 @@ struct CheckCharacter3DView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> SCNView {
         let view = SCNView()
-        let scene = CheckCharacter3DScene.makeScene()
+        // ★ 착용 캐릭터로 태어난다. 이 두 줄이 없으면 교체는 되는데 **앱을 다시 켜면 아잉으로 돌아온다**
+        //   (씬은 언제나 아잉으로 만들어지고, 아무도 다시 갈아 끼워 주지 않는다).
+        //   스프라이트를 못 세우면 `makeScene` 이 스스로 아잉으로 접으므로 여기에 폴백을 또 적지 않는다.
+        let character = CheckCharacter3DScene.selectedCharacter(defaults: characterDefaults)
+        let scene = CheckCharacter3DScene.makeScene(
+            character: character,
+            atlas: CheckCharacter3DScene.atlasImage(for: character)
+        )
         view.scene = scene
         view.backgroundColor = .clear
         view.allowsCameraControl = false

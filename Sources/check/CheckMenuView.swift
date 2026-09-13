@@ -712,12 +712,23 @@ struct MenuBarStatusLabel: View {
     // 상단바에 표시할 라벨 텍스트. 스토어가 == 가드와 함께 갱신하므로 여기선 그리기만 한다(매초 재계산 없음).
     let title: String
 
+    /// 캐릭터 선택 방송. **읽기만 한다** — 이 한 줄이 관찰을 등록해, 설정에서 캐릭터를 바꾸면
+    /// 이 라벨이 다시 그려진다.
+    ///
+    /// ★ 이게 없으면 아이콘이 **근무 중일 때만 우연히** 따라온다 — `title` 이 매초 바뀌어 body 가
+    ///   재평가되기 때문이다. 근무를 안 하면("오프") title 이 고정이라 **영영 안 바뀐다.**
+    ///   캐시는 이미 캐릭터 id 로 갈라져 있어 옛 그림이 끼지는 않지만, 다시 그리는 사람이 없으면
+    ///   화면은 그대로다.
+    private var characterRevision: Int { CharacterSelectionBroadcast.shared.revision }
+
     var body: some View {
         HStack(spacing: 5) {
             if let mascot = CheckMascotAssets.menuBarImage(for: snapshot) {
                 // 이미 18×18pt로 크기를 지정한 이미지라 .resizable()/.frame() 불필요.
                 // MenuBarExtra 라벨이 intrinsic size를 써도 바 높이 안에 온전히 들어간다.
-                Image(nsImage: mascot)
+                // `.id` 가 두 가지를 함께 한다 — body 에서 revision 을 **읽어** 관찰을 등록하고,
+                // 값이 바뀌면 이미지 뷰를 새로 만들어 옛 NSImage 가 남지 않게 한다.
+                Image(nsImage: mascot).id(characterRevision)
             } else {
                 Image(systemName: MenuBarStatusFormatter.symbolName(for: snapshot))
                     .symbolRenderingMode(.hierarchical)

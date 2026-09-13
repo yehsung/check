@@ -1,3 +1,4 @@
+import Observation
 import SwiftUI
 
 // MARK: - Switch (커스텀 토글)
@@ -413,6 +414,153 @@ private struct CenterSettingsRow: View {
     }
 }
 
+// MARK: - 착용 캐릭터 (v0.3.15) — 관리자 전용
+
+/// 착용 캐릭터가 **바뀌었다**는 사실 하나만 들고 있는 관찰 대상.
+///
+/// 선택값의 주인은 여전히 `CharacterSelection`(UserDefaults)이다. 이 타입이 그 위에 얹는 것은 **화면 갱신**
+/// 하나뿐이다. 이유가 있다: 메뉴바 아이콘(`CheckMenuView` 의 `MenuBarStatusLabel`)은 그림을 정적 함수
+/// (`CheckMascotAssets.menuBarImage(for:)`)에서 얻는다. 저장값이 바뀌어도 SwiftUI 입장에서는 **아무 일도
+/// 일어나지 않았다** — 의존성으로 등록된 값이 하나도 안 바뀌었으니 body 를 다시 부를 이유가 없다.
+/// 캐시는 캐릭터 id 로 갈라 놨으니 옛 이미지가 끼지는 않지만(2-C), body 가 다시 안 불리면 화면은 그대로다.
+///
+/// 그래서 선택기는 저장에 성공한 직후 여기에 한 번 알리고, **그림을 그리는 body 가 `revision` 을 읽으면**
+/// 그 body 만 다시 평가된다. 읽지 않는 body 는 아무 영향도 받지 않는다(관찰은 읽은 쪽에만 걸린다) —
+/// 그래서 이 타입을 더해도 지금 화면들의 재평가 횟수는 1도 늘지 않는다.
+///
+/// ⚠️ **아직 아무도 읽지 않는다.** 메뉴바 아이콘을 되그리려면 `MenuBarStatusLabel.body` 가
+/// `CharacterSelectionBroadcast.shared.revision` 을 한 번 읽어야 하는데 그 파일은 이 갈래의 소유가 아니다
+/// (배선 한 줄은 오케스트레이터 몫). 여기까지가 이 갈래가 할 수 있는 전부다.
+@MainActor
+@Observable
+final class CharacterSelectionBroadcast {
+    /// 앱이 쓰는 하나. **테스트는 자기 인스턴스를 만들어라** — 전역을 흔들면 같은 순간 아잉 픽셀을 재는
+    /// 병렬 스위트가 간헐적으로 빨개진다(`CheckMascotAssets.characterIDOverride` 가 TaskLocal 인 것과 같은 이유).
+    static let shared = CharacterSelectionBroadcast()
+
+    /// 마지막으로 **저장에 성공한** 캐릭터 id. 저장이 거절되면(모르는 id) 바뀌지 않는다.
+    private(set) var selectedID: String
+
+    /// 바뀐 횟수. 되그릴 쪽은 id 가 아니라 **이 값**을 읽어라 — 같은 캐릭터를 다시 고르거나 에셋만 갈린
+    /// 경우에도 화면은 다시 그려야 하는데, id 비교로는 그 두 경우가 "안 바뀜"으로 접힌다.
+    private(set) var revision = 0
+
+    init(selectedID: String = CharacterCatalog.builtInAingID) {
+        self.selectedID = selectedID
+    }
+
+    /// 저장이 끝난 뒤에만 부른다.
+    func announce(_ id: String) {
+        selectedID = id
+        revision += 1
+    }
+}
+
+/// 캐릭터 고르기의 **행동 한 줄**. 뷰 버튼 안에 인라인으로 쓰지 않고 값으로 떼어 둔 이유는,
+/// 이걸 부르지 않는 회귀(= 눌러도 아무것도 저장되지 않는 먹통 선택기)를 테스트가 **직접** 물을 수 있게 하기
+/// 위해서다. 뷰 클로저 안에 묻으면 픽셀로만 보이고, 픽셀은 "눌린 뒤"를 못 본다.
+@MainActor
+enum CheckCharacterPicker {
+    /// 고른 캐릭터를 저장하고 화면에 알린다. 카탈로그에 없는 id 면 **아무것도 하지 않고** false
+    /// (`CharacterSelection.select` 의 규약을 그대로 따른다 — 옛 저장값을 모르는 값으로 덮지 않는다).
+    @discardableResult
+    static func choose(
+        _ id: String,
+        selection: CharacterSelection,
+        broadcast: CharacterSelectionBroadcast = .shared
+    ) -> Bool {
+        guard selection.select(id) else { return false }
+        broadcast.announce(id)
+        return true
+    }
+}
+
+/// 착용 캐릭터 선택 행. **관리자에게만 보인다** — 호출부(`CheckSettingsView`)가 `store.ultraUnlimited` 로 가린다.
+///
+/// ★ 왜 `Picker`/`Menu` 가 아니라 버튼 줄인가. 이 저장소의 렌더 검증은 `ImageRenderer` 로 잘림·겹침을
+///   픽셀로 보는데, `Menu`·`TextField` 는 그 렌더러에서 **노란 상자**로 그려진다(실측 — 그 자리는 픽셀
+///   커버리지가 0이라 색 결함이 8일간 안 잡혔다). 피커로 만들면 이 행은 스냅샷에서 보이지 않는 것과 같다.
+///   칩(캡슐) 버튼 줄은 순수 도형+Text 라 그대로 찍힌다. 모양은 별명 행의 [저장] 버튼과 같은 문법이다
+///   (고른 것 = gaugeGradient, 나머지 = trackFill + border).
+///
+/// ★ 저장 전용이다. 지금은 **로컬 선택만** 바꾼다 — 실제 착용은 나중에 서버 definer RPC 로 간다
+///   (`ultraUnlimited` 는 표시 깃발이지 권한이 아니다: 무엇이 보이는지는 정해도 무엇이 바뀌는지는 서버가 정한다).
+struct CheckCharacterSettingsRow: View {
+    let catalog: CharacterCatalog
+    let selection: CharacterSelection
+    /// 되그릴 쪽에 알리는 통로. 테스트가 자기 인스턴스를 넣어 전역을 안 건드린다.
+    var broadcast: CharacterSelectionBroadcast = .shared
+
+    /// 눌린 칩을 즉시 옮기기 위한 로컬 거울. 진짜 값은 `selection` 에 있다 —
+    /// 저장이 **거절되면 여기도 안 움직인다**(화면만 바뀌었다가 조용히 되돌아가는 거짓말을 만들지 않는다).
+    @State private var selectedID: String
+
+    init(
+        catalog: CharacterCatalog,
+        selection: CharacterSelection,
+        broadcast: CharacterSelectionBroadcast = .shared
+    ) {
+        self.catalog = catalog
+        self.selection = selection
+        self.broadcast = broadcast
+        _selectedID = State(initialValue: selection.selectedID)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("캐릭터")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                Text("오버레이와 메뉴바에 나오는 내 캐릭터예요.")
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    // 좁혀도 말줄임 대신 줄바꿈(이 창의 설명 줄 규약).
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            // 목록 순서의 주인은 카탈로그다(`allIDs` 가 **아잉 먼저**, 나머지는 id 정렬).
+            // 여기서 다시 정렬하면 폴백 대상이 첫 칸이라는 사실이 두 곳에 적히고, 갈리는 날 조용히 어긋난다.
+            HStack(spacing: 6) {
+                ForEach(catalog.allIDs, id: \.self) { id in
+                    chip(id)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func chip(_ id: String) -> some View {
+        let isOn = id == selectedID
+        Button {
+            // 저장이 이긴 경우에만 칩을 옮긴다.
+            if CheckCharacterPicker.choose(id, selection: selection, broadcast: broadcast) {
+                selectedID = id
+            }
+        } label: {
+            Text(catalog.manifest(id: id)?.displayName ?? id)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isOn ? Color.white : CheckTheme.primaryText)
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .frame(height: 26)
+                .background {
+                    if isOn {
+                        Capsule().fill(CheckTheme.gaugeGradient)
+                    } else {
+                        Capsule().fill(CheckTheme.trackFill)
+                            .overlay(Capsule().strokeBorder(CheckTheme.border, lineWidth: 1))
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        // 창이 열릴 때 첫 포커스 링이 캡슐 위에 사각으로 겹치는 것을 막는다(이 창의 기존 규약).
+        .focusEffectDisabled()
+        .accessibilityLabel(catalog.manifest(id: id)?.displayName ?? id)
+        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
 // MARK: - Settings window body
 
 /// 설정 창 본문. **"한 번 정하고 잊는" 것만** 담는다.
@@ -429,16 +577,37 @@ struct CheckSettingsView: View {
     /// 의존하지 않게 하는 유일한 방법이다(onAppear 는 렌더러에서 도는 보장이 없다).
     private let launchAtLoginSeed: Bool?
 
+    /// 캐릭터 선택을 읽고 쓰는 도메인. 기본값 `.standard` 라 앱 전체(오버레이·메뉴바·미니게임)가 같은
+    /// 선택을 보고, 테스트는 자기 suite 를 넣어 **표준 도메인을 오염시키지 않는다** — 병렬로 도는 다른
+    /// 스위트가 아잉 픽셀을 재고 있어서, 여기서 표준에 쓰면 그쪽이 간헐적으로 빨개진다.
+    private let characterDefaults: UserDefaults
+
     @State private var launchAtLogin: Bool
 
-    init(store: WorkTimerStore, launchAtLoginSeed: Bool? = nil) {
+    init(
+        store: WorkTimerStore,
+        launchAtLoginSeed: Bool? = nil,
+        characterDefaults: UserDefaults = .standard
+    ) {
         self.store = store
         self.launchAtLoginSeed = launchAtLoginSeed
+        self.characterDefaults = characterDefaults
         _launchAtLogin = State(initialValue: launchAtLoginSeed ?? false)
     }
 
     /// 창을 붙일 쪽(창 배선 담당)이 참고할 기본 폭. 설명 한 줄이 두 줄로 접히지 않는 최소치 근처다.
     static let preferredWidth: CGFloat = 380
+
+    /// **관리자 화면**(캐릭터 선택기가 붙은 상태)의 실측 콘텐츠 높이(pt, preferredWidth 에서).
+    ///
+    /// 일반 사용자 화면은 465pt 그대로다 — 선택기는 `store.ultraUnlimited` 뒤에 있어 한 픽셀도 안 쓴다.
+    /// 관리자에게만 캐릭터 행(칩 한 줄 + 설명 한 줄 + 구분선)이 붙어 **89pt** 가 더 붙는다.
+    ///
+    /// ⚠️ **창 높이 계약(`CheckSettingsWindowController.defaultContentSize.height` = 470)보다 크다.**
+    ///    그 창에서 관리자가 설정을 열면 맨 아래 캐릭터 행이 통째로 잘린다(창은 리사이즈되므로 끌어
+    ///    내리면 보이긴 한다). 창 쪽 숫자는 이 갈래의 소유가 아니라 여기 값으로만 남긴다 —
+    ///    잇는 쪽은 관리자일 때 이 값 이상으로 열어라. `V0315CharacterPickerTests` 가 이 숫자를 되묻는다.
+    static let adminContentHeight: CGFloat = 554
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -471,6 +640,21 @@ struct CheckSettingsView: View {
                 )
                 PanelDivider()
                 CenterSettingsRow(store: store)
+                // ★ 관리자에게만 연다(SPEC 2-D). 캐릭터를 파는 **상점이 아직 없다** — 일반 사용자에게
+                //   열면 "가진 적 없는 것을 고를 수 있는" 화면이 되고, 그 순간 이 창이 재화 설계보다
+                //   앞서 나간다. `ultraUnlimited` 는 서버(`profiles.role = 'admin'`)가 말해 준 사실의
+                //   **표시용 사본**이라 판정에는 못 쓰지만, '무엇이 보이는가'를 정하는 데는 이것이 맞다
+                //   (무엇이 바뀌는가는 나중에 서버 definer RPC 가 정한다 — 지금은 로컬 선택뿐이다).
+                if store.ultraUnlimited {
+                    PanelDivider()
+                    CheckCharacterSettingsRow(
+                        catalog: CheckCharacter3DScene.catalog,
+                        selection: CharacterSelection(
+                            defaults: characterDefaults,
+                            catalog: CheckCharacter3DScene.catalog
+                        )
+                    )
+                }
             }
             // ★ 진단 두 줄(초인종·근무 틱)이 **여기 있었다.** 없어진 게 아니라 제보로 **옮겼다**
             //   (2026-09-10, 사용자 지적: "이건 뭐야? 왜 넣은 거야? 빼는 게 맞지 않아?").

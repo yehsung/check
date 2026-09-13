@@ -281,7 +281,8 @@ extension WorkTimerStore {
     /// `announcesFailure` 가 거짓이면 조용히 넘긴다(로그인 경로 — 사용자가 한 행동이 아니라서
     /// 실패 문구를 띄우면 원인 없는 경고가 된다). 사용자가 직접 고른 순간에는 참으로 부른다.
     func pushSelectedCharacter(announcesFailure: Bool) {
-        let id = CheckCharacter3DScene.selectedCharacter().id
+        let id = CharacterSelection(defaults: characterDefaults,
+                                    catalog: CheckCharacter3DScene.catalog).selectedID
         Task { [weak self] in
             await self?.pushCharacter(id, announcesFailure: announcesFailure)
         }
@@ -296,16 +297,199 @@ extension WorkTimerStore {
                 try await service.setCharacter(accessToken: activeSession.accessToken, id: id)
             }
             guard generation == sessionGeneration else { return }
-            if response.status != "ok", announcesFailure {
+            switch response.status {
+            case "ok":
+                break
+            case "not_owned":
+                // ★ **되돌리기는 `announcesFailure` 와 무관하다.** 이건 '실패 안내'가 아니라 **상태 정합**이다:
+                //   로컬엔 유령이 있는데 서버는 아잉이면, 내 화면엔 유령이 서고 **남에게는 아잉**이 보인다
+                //   (오버레이·메뉴바는 로컬 값으로 그리고 울트라 찌르기는 서버 컬럼을 읽는다).
+                //   두 쪽이 갈린 채로 두지 않는다.
+                //
+                //   실제로 이 경로로 들어오는 사람: (가) 상점이 붙기 전 빌드에서 이미 캐릭터를 골라 둔
+                //   사람(로컬 선택은 있는데 소유권 행이 없다) (나) 기기 두 대 중 한쪽에서만 산 사람.
+                revertCharacterToDefault()
+            default:
                 // unknown_character = 서버 CHECK 에 없는 id. 앱 번들과 서버 명단이 갈린 것이라
                 // 사용자가 할 수 있는 일이 없다 — 그래도 조용히 성공한 척하지는 않는다.
-                syncMessage = "캐릭터 저장 실패"
+                if announcesFailure { syncMessage = "캐릭터 저장 실패" }
             }
         } catch {
             guard generation == sessionGeneration else { return }
             if case .cancelled = classifyAuthError(error) { return }
             if announcesFailure { syncMessage = "캐릭터 저장 실패" }
         }
+    }
+
+    /// 로컬 선택을 **아잉으로 되돌린다**(서버가 `not_owned` 로 거절했을 때의 치료).
+    ///
+    /// 되돌린 사실을 **반드시 한 줄로 말한다** — 아무 말 없이 캐릭터가 바뀌면 버그로 보인다.
+    /// 되돌리기는 `CheckCharacterPicker` 를 지나므로 방송(broadcast)이 울고, 메뉴바 아이콘·헤더
+    /// 마스코트·오버레이가 **그 자리에서** 아잉으로 다시 그려진다(직접 UserDefaults 를 쓰면 안 울린다).
+    func revertCharacterToDefault() {
+        let catalog = CheckCharacter3DScene.catalog
+        let selection = CharacterSelection(defaults: characterDefaults, catalog: catalog)
+        guard selection.selectedID != CharacterCatalog.builtInAingID else { return }
+        CheckCharacterPicker.choose(CharacterCatalog.builtInAingID,
+                                    selection: selection, broadcast: .shared)
+        syncMessage = Self.notOwnedRevertNotice
+    }
+
+    /// 되돌렸을 때의 문구(순수 — 값으로 검증한다). 상점으로 가는 길을 함께 말한다.
+    nonisolated static let notOwnedRevertNotice = "안 산 캐릭터라 기본으로 돌아갔어요 — 상점에서 살 수 있어요"
+
+    // MARK: - 상점 / 루비 (v0.3.17)
+
+    /// 상점에서 "울트라"를 가리키는 id. 캐릭터 id 와 같은 칸(`purchasingID`)을 쓰므로 **캐릭터가
+    /// 절대 가질 수 없는 이름**이어야 한다(서버 CHECK 의 허용 목록은 전부 소문자 낱말이다).
+    static let ultraPurchaseID = "#ultra"
+
+    /// 상점 상태(잔량·가격·보유)를 한 번 읽는다. 진입(`toggleShopPanel`)과 구매 직후가 호출부다.
+    ///
+    /// **로컬 캐시를 믿지 않는 이유**: 가격도 보유도 다른 기기에서 바뀐다(다른 맥에서 사고 왔을 수 있다).
+    /// 캐시만 믿으면 "산 게 안 산 걸로 보이는" 화면이 된다.
+    func loadShopState() {
+        guard !shopLoading else { return }
+        shopLoading = true
+        let generation = sessionGeneration
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.shopLoading = false }
+            do {
+                let state = try await withSessionRetry { activeSession in
+                    try await self.service.fetchShopState(accessToken: activeSession.accessToken)
+                }
+                guard generation == self.sessionGeneration else { return }
+                self.applyShopState(state)
+                self.shopLoaded = true
+                self.shopFailed = false
+            } catch {
+                guard generation == self.sessionGeneration else { return }
+                // 취소(패널 빠른 닫기)는 실패가 아니다 — 문구를 남기면 헛경보가 된다.
+                if case .cancelled = self.classifyAuthError(error) { return }
+                self.shopFailed = true
+            }
+        }
+    }
+
+    /// 서버가 말한 상점 상태를 화면 상태로 옮긴다. **nil 은 건너뛴다** — "모른다"를 0 으로 적으면
+    /// 잔량이 있는 사람에게 "0개"라고 말하는 화면이 된다(응답 모델이 전 필드 Optional 인 이유와 같다).
+    func applyShopState(_ state: ShopStateResponse) {
+        if let ruby = state.rubyBalance { rubyBalance = ruby }
+        if let ultra = state.ultraBalance { ultraBalance = ultra }
+        if let price = state.ultraPrice { ultraPrice = price }
+        guard let rows = state.characters else { return }
+        shopCharacters = rows
+        // 아잉은 무료라 서버 목록에 없어도 언제나 보유다.
+        var owned: Set<String> = [CharacterCatalog.builtInAingID]
+        for row in rows where row.owned == true { owned.insert(row.id) }
+        ownedCharacterIDs = owned
+    }
+
+    /// 상점 카드를 눌렀을 때의 **유일한** 진입점. 살 수 있으면 사고, 모자라면 **얼마가 모자란지 말한다.**
+    ///
+    /// **왜 비활성화가 아니라 여기인가**: 못 사는 카드를 통째로 비활성화하면 눌러도 아무 일이 없어
+    /// "왜 안 되는지"를 말할 자리가 사라진다. 서버로 나가지 않으므로 헛왕복도 없다(판정은 여전히
+    /// 서버가 최종이고, 이 줄은 안내다).
+    func tapShopCharacter(_ id: String) {
+        guard purchasingID == nil else { return }
+        if ownedCharacterIDs.contains(id) { return }
+        let price = shopPrice(of: id)
+        if let price, rubyBalance < price {
+            shopNotice = Self.shortfallNotice(need: price, have: rubyBalance)
+            return
+        }
+        buyCharacter(id)
+    }
+
+    /// 캐릭터를 산다. 성공하면 **서버가 준 값으로** 잔량·보유를 갱신한다(클라가 스스로 빼지 않는다).
+    func buyCharacter(_ id: String) {
+        guard purchasingID == nil else { return }
+        purchasingID = id
+        shopNotice = nil
+        let generation = sessionGeneration
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.purchasingID = nil }
+            do {
+                let response = try await withSessionRetry { activeSession in
+                    try await self.service.buyCharacter(accessToken: activeSession.accessToken, id: id)
+                }
+                guard generation == self.sessionGeneration else { return }
+                if let ruby = response.rubyBalance { self.rubyBalance = ruby }
+                switch response.status {
+                case "ok", "already_owned":
+                    // already_owned 도 성공으로 접는다 — 다른 기기에서 이미 샀다는 뜻이라
+                    // 사용자가 할 일이 없고, 목록을 다시 읽으면 화면이 사실과 맞는다.
+                    self.ownedCharacterIDs.insert(id)
+                    self.shopNotice = response.status == "ok" ? "샀어요!" : "이미 갖고 있어요"
+                    self.loadShopState()
+                case "insufficient":
+                    self.shopNotice = Self.shortfallNotice(need: response.need, have: response.have)
+                default:
+                    self.shopNotice = "구매 실패"
+                }
+            } catch {
+                guard generation == self.sessionGeneration else { return }
+                if case .cancelled = self.classifyAuthError(error) { return }
+                self.shopNotice = "구매 실패"
+            }
+        }
+    }
+
+    /// 울트라 [사기] 를 눌렀을 때의 진입점. 캐릭터 카드와 **같은 규약**이다 — 모자라면 말한다.
+    func tapBuyUltra(count: Int = 1) {
+        guard purchasingID == nil else { return }
+        guard let price = ultraPrice else {
+            // 가격을 모르면 사지 않는다(값을 지어내지 않는다). 다시 읽어 본다.
+            loadShopState()
+            return
+        }
+        let need = price * max(1, count)
+        if rubyBalance < need {
+            shopNotice = Self.shortfallNotice(need: need, have: rubyBalance)
+            return
+        }
+        buyUltra(count: count)
+    }
+
+    /// 울트라를 산다(루비 → 울트라).
+    func buyUltra(count: Int = 1) {
+        guard purchasingID == nil else { return }
+        purchasingID = Self.ultraPurchaseID
+        shopNotice = nil
+        let generation = sessionGeneration
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.purchasingID = nil }
+            do {
+                let response = try await withSessionRetry { activeSession in
+                    try await self.service.buyUltra(accessToken: activeSession.accessToken, count: count)
+                }
+                guard generation == self.sessionGeneration else { return }
+                if let ruby = response.rubyBalance { self.rubyBalance = ruby }
+                if let ultra = response.ultraBalance { self.ultraBalance = ultra }
+                switch response.status {
+                case "ok":
+                    self.shopNotice = "울트라 \(count)개를 샀어요!"
+                case "insufficient":
+                    let need = self.ultraPrice.map { $0 * count }
+                    self.shopNotice = Self.shortfallNotice(need: need, have: self.rubyBalance)
+                default:
+                    self.shopNotice = "구매 실패"
+                }
+            } catch {
+                guard generation == self.sessionGeneration else { return }
+                if case .cancelled = self.classifyAuthError(error) { return }
+                self.shopNotice = "구매 실패"
+            }
+        }
+    }
+
+    /// 모자란 만큼을 말하는 문구(순수 — 값으로 검증한다). 서버가 숫자를 안 줬으면 **수를 지어내지 않는다.**
+    nonisolated static func shortfallNotice(need: Int?, have: Int?) -> String {
+        guard let need, let have, need > have else { return "루비가 모자라요" }
+        return "루비 \(need - have)개 더 필요해요"
     }
 
     /// 팀 주간 목표시간을 바꾼다(팀원 누구나). 범위(1~168) 밖이거나 이미 변경 중이면 즉시 false 로 무시한다.

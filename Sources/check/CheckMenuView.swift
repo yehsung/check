@@ -125,7 +125,7 @@ struct CheckMenuView: View {
         store.isLeaderboardVisible || store.isTokenBoardVisible || store.isPokePanelVisible
             || store.isInsightsPanelVisible || store.isUltraPanelVisible
             || store.isMessagePanelVisible || store.isFeedbackPanelVisible
-            || store.isCharacterPanelVisible
+            || store.isCharacterPanelVisible || store.isShopPanelVisible
     }
 
     /// 위 목록이 세는 **패널 깃발의 이름들**(테스트가 읽는 유일한 권위).
@@ -140,7 +140,9 @@ struct CheckMenuView: View {
         "isMessagePanelVisible", "isFeedbackPanelVisible",
         // 캐릭터 선택(v0.3.15). 진입점은 레일이 아니라 헤더 마스코트지만, **팝오버 자리를 먹는 것은 같다** —
         // 들어오는 문이 어디냐가 아니라 팀 카드 자리를 대신 쓰느냐가 이 목록의 기준이다.
-        "isCharacterPanelVisible"
+        "isCharacterPanelVisible",
+        // 상점(v0.3.17). 진입점은 헤더의 루비 잔량 칩이지만, 팝오버 자리를 먹는 것은 같다.
+        "isShopPanelVisible"
     ]
 
     /// 토큰 소모량 행은 홈(팀 목록) 화면의 구성요소다 — 하위 패널이 열리면 감춘다. 패널이 쓸 세로 공간을
@@ -464,6 +466,15 @@ struct CheckMenuView: View {
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList,
                             onBack: { store.toggleInsightsPanel() }
                         )
+                    } else if store.isShopPanelVisible {
+                        // 상점(v0.3.17). 들어오는 문은 헤더의 루비 잔량 칩 하나뿐이라 [뒤로]가 돌아갈
+                        // 곳은 언제나 홈이다(캐릭터 패널과 같은 규약 — origin 을 물을 이유가 없다).
+                        CheckShopPanel(
+                            store: store,
+                            extraChromeHeight: listExtraChromeHeight,
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                            onBack: { store.closeShopPanel() }
+                        )
                     } else if store.isCharacterPanelVisible {
                         // 캐릭터 선택(v0.3.15). 들어오는 문은 헤더 카드의 마스코트 하나뿐이라 [뒤로]가
                         // 돌아갈 곳은 언제나 홈(팀 목록)이다 — origin 을 물을 이유가 없다(제보와 같은 규약).
@@ -482,7 +493,12 @@ struct CheckMenuView: View {
                             onBack: { store.closeCharacterPanel() },
                             // 로컬 저장이 이기면 서버에도 민다. 이 한 줄이 없으면 고른 캐릭터가
                             // **남에게는 영원히 아잉**이다(울트라 찌르기가 서버 컬럼을 읽는다).
-                            onChosen: { _ in store.pushSelectedCharacter(announcesFailure: true) }
+                            onChosen: { _ in store.pushSelectedCharacter(announcesFailure: true) },
+                            // 소유 게이트(예방). 치료 쪽 짝은 서버의 not_owned 를 받아 로컬을 되돌리는
+                            // `WorkTimerStore.pushCharacter` 다 — **둘 다 있어야** 한다.
+                            isUnlocked: { store.isCharacterUnlocked($0) },
+                            onLocked: { _ in store.toggleShopPanel() },
+                            priceOf: { store.shopPrice(of: $0) }
                         )
                     } else {
                         // store 를 통째로 내려보내 초단위(displayNow) 의존을 잎 뷰로 격리한다 — TeamPanel 본체는
@@ -911,6 +927,10 @@ private struct HeaderCard: View {
                     TodayTimerText(store: store)
                 }
                 Spacer(minLength: 8)
+                // 상점 진입(v0.3.17). **헤더 높이를 1pt 도 안 늘린다** — 칩의 자연 높이(≈19pt)가 같은
+                // 줄의 마스코트(46pt)보다 낮아 HStack 높이를 바꾸지 않는다. 레일에 칸을 더하지 않는
+                // 이유는 CheckShopPanel 머리말에 적어 뒀다(레일 378pt vs 최단 화면 381pt).
+                RubyEntryButton(store: store)
                 WorkTogglePill(
                     isWorking: store.snapshot.isWorking,
                     enabled: store.canSync,
@@ -2120,10 +2140,28 @@ enum UltraBalanceText {
     /// 뜻은 배지 툴팁(badgeHelp)과 울트라 화면의 큰 글자("무제한")가 말로 풀어 준다.
     static let unlimitedBadge = "∞"
 
+    /// 배지가 숫자로 그리는 **최대값**. 이보다 크면 `overflowBadge` 로 접는다.
+    ///
+    /// ★ **왜 접는가**(2026-09-13, 울트라 보유 상한 폐지): 예전에는 매일 자정에 잔량이 3 으로 깎여
+    ///   사실상 한 자리였고 제목 행 폭 예산도 그 전제로 짜여 있었다. 이제 루비로 얼마든지 살 수 있어
+    ///   세 자리도 가능한데, 실측 예산상 **배지가 쓸 수 있는 자리는 두 자리까지다**
+    ///   (`PokeTitleRowWidthBudget`: 1자리 힌트 80pt · 2자리 73pt · 3자리 66pt < 가장 긴 힌트 71pt).
+    static let badgeMaxNumber = 99
+    /// 그 위를 그리는 글자. 정확한 수는 배지 툴팁(`badgeHelp`)이 그대로 말한다 — 접는 것은 그림뿐이다.
+    static let overflowBadge = "99+"
+
     /// 배지 안 글자. 음수는 서버 버그이거나 미래 규약이라 0으로 접는다.
     /// **무제한이면 숫자를 아예 만들지 않는다** — 관리자에게 잔량 숫자는 아무 뜻도 없다(줄지 않는다).
     static func badge(balance: Int, unlimited: Bool = false) -> String {
-        unlimited ? unlimitedBadge : "\(max(0, balance))"
+        if unlimited { return unlimitedBadge }
+        let value = max(0, balance)
+        return value > badgeMaxNumber ? overflowBadge : "\(value)"
+    }
+
+    /// 배지가 `overflowBadge` 로 접히는가(폭 예산이 갈리는 지점 — 순수 판정).
+    static func badgeOverflows(balance: Int?, unlimited: Bool = false) -> Bool {
+        guard !unlimited, let balance else { return false }
+        return max(0, balance) > badgeMaxNumber
     }
 
     /// 0개일 때. **획득 경로를 말한다** — 사실만 말하고 길을 안 알려 주면 그 화면은 막다른 길이다.
@@ -2138,11 +2176,20 @@ enum UltraBalanceText {
     /// (WorkTimerStorePoke 의 "정직한 일은 버리는 것" 규약 계승 — 틀린 숫자보다 침묵이 낫다).
     /// 무제한이면 **언제나 발견성 문구다.** 관리자의 잔량은 0일 수 있는데(쓰지 않으니 늘지도 않는다),
     /// 그 사람에게 "미션으로 충전"이라고 말하면 하지 않아도 되는 일을 시키는 거짓 안내가 된다.
+    ///
+    /// ★ 배지가 `99+` 로 접히는 조합에서는 **짧은 발견성 문구**로 바꾼다. 그 배지는 두 자리보다
+    ///   5pt 남짓 넓어 긴 힌트(71pt)가 들어갈 자리를 먹는다 — 힌트는 이 행에서 **가장 먼저 양보하도록
+    ///   설계된 요소**이고(PokeTitleRowWidthBudget 주석), 말줄임된 "3초 꾹 = 울트…" 보다 온전한
+    ///   "3초 꾹" 이 낫다. 잔량 0 이면 충전 안내가 먼저이므로 이 규칙보다 앞선다.
     static func hint(balance: Int?, unlimited: Bool = false) -> String {
         if unlimited { return discover }
         guard let balance else { return discover }
-        return balance <= 0 ? empty : discover
+        if balance <= 0 { return empty }
+        return badgeOverflows(balance: balance) ? discoverShort : discover
     }
+
+    /// 배지가 접힌 조합에서만 쓰는 짧은 발견성 문구. 홀드 시간은 여기서도 리터럴로 적지 않는다.
+    static var discoverShort: String { "\(UltraChargeStyle.holdSecondsText)초 꾹" }
 
     /// 행 툴팁의 괄호 안 문구. 잔량이 없어도 **3초 홀드는 그대로 발사된다**(판정은 서버다) —
     /// 그래서 "못 쏜다"가 아니라 "없다 + 채우는 법"을 말한다.
@@ -2185,9 +2232,20 @@ enum PokeTitleRowWidthBudget {
     /// 글자수(10)로 재면 과대평가된다.
     static let longestHintWidth: CGFloat = 71
 
-    /// 배지가 그릴 수 있는 **최대 자릿수**. 잔량 상한이 5(사장님 확정 4)라 1자리로 고정된다.
-    /// 서버가 상한을 두 자리로 올리면 이 값이 아니라 `hintWidth(digits: 2)` 단언이 먼저 답을 준다.
-    static let maxBadgeDigits = 1
+    /// 배지가 숫자로 그릴 수 있는 **최대 자릿수**.
+    ///
+    /// ★ **1 → 2 (2026-09-13, 울트라 보유 상한 폐지).** 예전에는 매일 자정에 잔량이 3 으로 깎여
+    ///   한 자리로 고정이었다. 이제 루비로 얼마든지 살 수 있다. 계산상 여기가 천장이다:
+    ///     1자리 힌트 80pt · **2자리 73pt** · 3자리 66pt — 가장 긴 힌트가 71pt 다.
+    ///   그래서 `UltraBalanceText.badge` 가 99 를 넘으면 `99+` 로 접고, 그 조합에서는 힌트가
+    ///   짧은 문구로 양보한다(아래 `hintWidthWhenOverflowing`).
+    static let maxBadgeDigits = 2
+
+    /// `99+` 배지가 숫자 자리에 그리는 글자의 폭(pt). caption2 bold 실측 근사 — 숫자 6.83×2 + "+" 6.2
+    /// ≈ 20. 보수적으로 21 을 쓴다(∞ 항을 따로 둔 것과 같은 이유: 자릿수로 재면 예산이 거짓말한다).
+    static let overflowGlyphWidth: CGFloat = 21
+    /// 접힘 배지의 폭. 숫자 자리를 `99+` 로 바꾼 것 말고는 badgeWidth 와 같은 조립이다.
+    static var overflowBadgeWidth: CGFloat { 12 + 10 + 3 + overflowGlyphWidth }
 
     /// 배지 폭: 캡슐 h-padding 6*2 + bolt 10 + 내부 간격 3 + 숫자(자릿수 × 7).
     static func badgeWidth(digits: Int) -> CGFloat { 12 + 10 + 3 + CGFloat(max(0, digits)) * 7 }
@@ -2220,6 +2278,16 @@ enum PokeTitleRowWidthBudget {
     /// 그 폭에 말줄임 없이 들어가는 한글 글자수.
     static func hintKoreanGlyphs(digits: Int = maxBadgeDigits) -> Int {
         max(0, Int(hintWidth(digits: digits) / koreanCaptionGlyphWidth))
+    }
+
+    /// 접힘(`99+`) 배지가 섰을 때 힌트에 남는 폭(pt). 이 조합에서만 힌트가 짧은 문구로 양보한다.
+    static var hintWidthWhenOverflowing: CGFloat {
+        contentWidth
+            - iconButtonWidth - CheckFocusModeButton.width
+            - titleWidth
+            - spacerMinWidth
+            - overflowBadgeWidth
+            - spacing * 5
     }
 
     /// 무제한 배지가 섰을 때 힌트에 남는 폭(pt). 관리자 화면에서만 성립하는 조합이라 따로 잰다.

@@ -520,6 +520,64 @@ final class WorkTimerStore {
     ///   행이 패널과 함께 그려져 창이 700pt 상한을 넘고 푸터(로그아웃/앱 종료)가 잘린다.
     var isCharacterPanelVisible = false
 
+    // MARK: - 상점 / 루비 (v0.3.17)
+    //
+    // 진입점은 **헤더 카드의 루비 잔량 칩**이다(2026-09-13 사용자 확정: "상점 진입 걍 재화 버튼 눌러서
+    // 진입으로 하자"). 레일에 일곱 번째 칸을 더하지 않는 이유는 캐릭터 패널과 같다 — 레일이 378pt 인데
+    // 제일 짧은 메인 화면이 381pt 라 한 칸(+60pt)이면 곧바로 레일이 창 높이를 결정한다.
+
+    /// 상점 패널이 팝오버 안에 떠 있는가.
+    ///
+    /// ★ 이 깃발도 `CheckMenuView.isSubPanelOpen` 에 **반드시** 들어가야 한다(캐릭터 패널과 같은 이유).
+    var isShopPanelVisible = false
+
+    /// 착용 캐릭터 선택(`check.character.selected`)이 사는 곳. **기본값이 `.standard` 라 앱 동작은
+    /// 지금과 완전히 같다** — 뷰(`CheckMenuView.characterDefaults`)도 같은 기본값을 쓴다.
+    ///
+    /// **왜 주입 지점이 필요한가**(2026-09-13 실측): 스토어가 `UserDefaults.standard` 를 직접 집으면
+    /// 그 경로를 타는 테스트가 **전역을 빌려야** 하고, 그 순간 병렬로 도는 다른 스위트(오버레이 격발
+    /// 테스트가 착용 캐릭터를 읽는다)가 간헐적으로 빨개진다. 실제로 그렇게 만들었다가 잡았다.
+    var characterDefaults: UserDefaults = .standard
+
+    /// 루비 잔량. **서버가 유일한 출처다** — 구매 성공 응답이 실어 준 값으로만 갱신하고, 클라가 스스로
+    /// 빼지 않는다. 두 곳에서 빼면 실패한 구매가 화면에서만 차감되는 조합이 생긴다.
+    var rubyBalance = 0
+    /// 울트라 1개의 루비 값. 서버가 말해 주기 전에는 nil — 화면은 **모르는 값을 숫자로 단정하지 않는다**
+    /// (0 으로 두면 "공짜"라고 말하는 화면이 된다).
+    var ultraPrice: Int?
+    /// 상점 목록(가격·보유). 순서의 주인은 서버다(가격 오름차순).
+    var shopCharacters: [ShopCharacterRow] = []
+    /// 한 번이라도 성공적으로 받았는가. **빈 목록과 '아직 안 받음'을 가른다** — 이 구분이 없으면
+    /// 로드 전에 모든 캐릭터가 잠긴 것처럼 보인다(3플래그 규약: loaded/loading/failed).
+    var shopLoaded = false
+    var shopLoading = false
+    var shopFailed = false
+    /// 상점 화면에 띄우는 한 줄(구매 결과·실패). nil 이면 안 띄운다.
+    var shopNotice: String?
+    /// 지금 사고 있는 것의 id(`WorkTimerStore.ultraPurchaseID` 면 울트라). nil 이면 구매 중이 아니다.
+    /// 하나만 두는 이유: 동시에 둘을 사면 잔량 응답 둘이 뒤섞여 어느 쪽이 최신인지 알 수 없다.
+    var purchasingID: String?
+
+    /// 내가 가진 캐릭터 id 집합(아잉은 언제나 포함). 소유 게이트가 읽는 **유일한** 값이다.
+    ///
+    /// ★ `shopLoaded` 가 false 인 동안에는 **아무것도 잠그지 않는다**(`isCharacterUnlocked` 참고).
+    ///   로드 전에는 이 집합이 비어 있어서, 그대로 게이트를 걸면 **이미 산 캐릭터까지 잠긴 채** 첫 화면이
+    ///   그려진다. 서버가 말해 주기 전의 침묵을 "안 샀다"로 읽으면 안 된다.
+    var ownedCharacterIDs: Set<String> = [CharacterCatalog.builtInAingID]
+
+    /// 이 캐릭터를 고를 수 있는가. **로드 전에는 언제나 true** — 위 주석 참고.
+    /// 아잉은 무료라 서버 응답과 무관하게 언제나 true 다.
+    func isCharacterUnlocked(_ id: String) -> Bool {
+        if id == CharacterCatalog.builtInAingID { return true }
+        guard shopLoaded else { return true }
+        return ownedCharacterIDs.contains(id)
+    }
+
+    /// 상점 목록에서 이 캐릭터의 가격(모르면 nil).
+    func shopPrice(of id: String) -> Int? {
+        shopCharacters.first { $0.id == id }?.price
+    }
+
     /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
     /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.
     var feedbackList: [FeedbackReport] = []
@@ -1808,6 +1866,7 @@ final class WorkTimerStore {
             closeMessagePanel()
             closeFeedbackPanel()
             closeCharacterPanel()
+            closeShopPanel()
             closeTokenBoard()
             closePokePanel()
             closeUltraPanel()
@@ -1847,6 +1906,7 @@ final class WorkTimerStore {
         closeMessagePanel()
         closeFeedbackPanel()
         closeCharacterPanel()
+        closeShopPanel()
         closePokePanel()
         closeUltraPanel()
         isInsightsPanelVisible = false
@@ -1883,6 +1943,7 @@ final class WorkTimerStore {
             closeMessagePanel()
             closeFeedbackPanel()
             closeCharacterPanel()
+            closeShopPanel()
             isPokePanelVisible = true
             isLeaderboardVisible = false
             closeTokenBoard()
@@ -1906,6 +1967,7 @@ final class WorkTimerStore {
         closeMessagePanel()
         closeFeedbackPanel()
         closeCharacterPanel()
+        closeShopPanel()
         if origin == .poke {
             isPokePanelVisible = false
         }
@@ -1941,6 +2003,7 @@ final class WorkTimerStore {
             closeMessagePanel()
             closeFeedbackPanel()
             closeCharacterPanel()
+            closeShopPanel()
             isLeaderboardVisible = false
             closeTokenBoard()
             closePokePanel()
@@ -1963,25 +2026,60 @@ final class WorkTimerStore {
         isCharacterPanelVisible = false
     }
 
+    /// 상점 패널을 닫는 **유일한** 경로(멱등). 안내 문구는 닫으면서 지운다 — 다음에 열었을 때
+    /// 지난번 구매 결과가 남아 있으면 방금 무슨 일이 일어난 것처럼 읽힌다.
+    func closeShopPanel() {
+        guard isShopPanelVisible else { return }
+        isShopPanelVisible = false
+        shopNotice = nil
+    }
+
+    /// 헤더 루비 칩 액션. 상점을 토글하고, 여는 순간 다른 패널을 전부 내린다(캐릭터 패널과 같은 규약).
+    ///
+    /// **여는 순간 서버를 한 번 읽는다** — 가격·보유·잔량은 다른 기기에서도 바뀌므로 캐시만 믿으면
+    /// "산 게 안 산 걸로 보이는" 화면이 된다. 캐릭터 패널이 네트워크를 안 타는 것과 갈리는 지점이다.
+    func toggleShopPanel() {
+        if isShopPanelVisible {
+            closeShopPanel()
+            return
+        }
+        // 상호 배타. **closeMessagePanel() 이 맨 앞**이어야 한다(toggleCharacterPanel 의 그 이유와 같다).
+        closeMessagePanel()
+        closeFeedbackPanel()
+        closeCharacterPanel()
+        isShopPanelVisible = true
+        isLeaderboardVisible = false
+        closeTokenBoard()
+        closePokePanel()
+        closeUltraPanel()
+        isInsightsPanelVisible = false
+        loadShopState()
+    }
+
     /// 헤더 마스코트 버튼 액션. 캐릭터 선택 패널을 토글하고, 여는 순간 다른 패널을 전부 내린다.
     ///
-    /// **로드가 없다.** 카탈로그는 번들을 한 번 훑어 캐시된 값이고(`CheckCharacter3DScene.catalog`),
-    /// 선택은 로컬 UserDefaults 다 — 이 패널이 여는 순간 네트워크로 나가는 요청은 하나도 없다.
+    /// **v0.3.17 에서 로드가 생겼다.** 예전에는 "이 패널이 여는 순간 네트워크로 나가는 요청은 하나도
+    /// 없다"가 맞았다 — 카탈로그는 번들 캐시이고 선택은 로컬 UserDefaults 뿐이었으니까. 이제 카드에
+    /// **소유 여부**가 얹히는데 그것을 아는 쪽은 서버뿐이라, 안 읽으면 `shopLoaded == false` 가 되어
+    /// 게이트가 통째로 열린 채(= 전부 고를 수 있는 채) 그려진다. 잠금은 **서버가 말해 준 뒤에만** 건다.
     func toggleCharacterPanel() {
         if isCharacterPanelVisible {
             closeCharacterPanel()
+            closeShopPanel()
             return
         }
         // 상호 배타. **closeMessagePanel() 이 맨 앞**이어야 한다 — 그 함수는 origin 이 .poke 면 콕찌르기
         // 목록을 되살리므로, 뒤에 두면 되살아난 목록이 이 패널과 함께 남는다(toggleLeaderboard 의 그 주석).
         closeMessagePanel()
         closeFeedbackPanel()
+        closeShopPanel()
         isCharacterPanelVisible = true
         isLeaderboardVisible = false
         closeTokenBoard()
         closePokePanel()
         closeUltraPanel()
         isInsightsPanelVisible = false
+        loadShopState()
     }
 
     /// 회고 배너 [보기] 전용 진입점. 토글이 아니라 **열기**다 — 이미 개인 기록 패널을 보고 있는데 배너를 누르면

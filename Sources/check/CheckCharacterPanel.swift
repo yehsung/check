@@ -31,6 +31,18 @@ struct CheckCharacterPanel: View {
     /// 스냅샷 전용: 넘치는 격자를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
     let onBack: () -> Void
+    /// 이 캐릭터를 고를 수 있는가. **기본값이 언제나 true** 라, 소유 개념을 모르는 호출부·테스트는
+    /// 지금과 완전히 같이 돈다(상점이 붙기 전의 화면을 그대로 재현할 수 있어야 한다).
+    ///
+    /// ⚠️ **클라 게이트는 짝으로 있다.** 여기서만 막고 서버가 안 막으면 우회되고, 서버만 막고 여기가
+    ///   안 비추면 "눌렀는데 아무 일도 안 일어남"이 된다. 서버 쪽 짝은 `set_character` 의 `not_owned`
+    ///   이고, 그것을 받아 **로컬을 아잉으로 되돌리는** 자리가 `WorkTimerStore.pushCharacter` 다.
+    var isUnlocked: (String) -> Bool = { _ in true }
+    /// 잠긴 카드를 눌렀을 때(보통 상점으로 보낸다). 기본 no-op.
+    var onLocked: (String) -> Void = { _ in }
+    /// 잠긴 카드에 얹을 가격(모르면 nil — 숫자를 지어내지 않는다).
+    var priceOf: (String) -> Int? = { _ in nil }
+
     /// 저장이 **이긴 뒤** 한 번 불린다. 서버(`profiles.character`)에 밀어 넣는 자리다 —
     /// 로컬 저장만으로는 내 화면만 바뀌고 남에게는 영원히 아잉으로 보인다(울트라 찌르기가 서버 컬럼을 읽는다).
     /// 기본값이 no-op 이라 스냅샷·테스트 호출부는 아무것도 안 바꿔도 된다.
@@ -47,7 +59,10 @@ struct CheckCharacterPanel: View {
         extraChromeHeight: CGFloat = 0,
         clipsOverflowInsteadOfScroll: Bool = false,
         onBack: @escaping () -> Void,
-        onChosen: @escaping (String) -> Void = { _ in }
+        onChosen: @escaping (String) -> Void = { _ in },
+        isUnlocked: @escaping (String) -> Bool = { _ in true },
+        onLocked: @escaping (String) -> Void = { _ in },
+        priceOf: @escaping (String) -> Int? = { _ in nil }
     ) {
         self.catalog = catalog
         self.selection = selection
@@ -56,6 +71,9 @@ struct CheckCharacterPanel: View {
         self.clipsOverflowInsteadOfScroll = clipsOverflowInsteadOfScroll
         self.onBack = onBack
         self.onChosen = onChosen
+        self.isUnlocked = isUnlocked
+        self.onLocked = onLocked
+        self.priceOf = priceOf
         _selectedID = State(initialValue: selection.selectedID)
     }
 
@@ -144,6 +162,12 @@ struct CheckCharacterPanel: View {
         let isOn = id == selectedID
         Button {
             // 저장이 이긴 경우에만 카드를 옮긴다.
+            // 안 산 캐릭터는 **고르지 않고 상점으로 보낸다.** 저장 자체를 안 타므로 로컬과 서버가
+            // 갈릴 여지도 없다(서버가 거절한 뒤 되돌리는 경로보다 이쪽이 조용하다).
+            guard isUnlocked(id) else {
+                onLocked(id)
+                return
+            }
             if CheckCharacterPicker.choose(id, selection: selection, broadcast: broadcast) {
                 selectedID = id
                 onChosen(id)
@@ -168,6 +192,9 @@ struct CheckCharacterPanel: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
+            // 잠긴 카드는 **흐리게**. 카드 높이(96pt)는 안 바꾼다 — 바꾸면 격자 자연 높이가 상태에 따라
+            // 달라져 창 높이 예산이 거짓이 된다. 그래서 자물쇠도 `.overlay` 로만 얹는다.
+            .opacity(isUnlocked(id) ? 1 : 0.45)
             .frame(maxWidth: .infinity)
             .frame(height: Self.cardHeight)
             .background {
@@ -182,8 +209,27 @@ struct CheckCharacterPanel: View {
             }
             // 선택됨 표시. 테두리·바탕만으로는 어두운 팔레트에서 한눈에 안 읽혀 **배지를 함께** 단다
             // (오버레이라 카드 크기에 1pt 도 영향을 주지 않는다).
+            // 잠긴 카드의 가격표(왼쪽 위). 가격을 모르면 자물쇠만 — 숫자를 지어내지 않는다.
+            .overlay(alignment: .topLeading) {
+                if !isUnlocked(id) {
+                    HStack(spacing: 2) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 8, weight: .bold))
+                        if let price = priceOf(id) {
+                            Text("\(max(0, price))")
+                                .font(.system(size: 9, weight: .bold))
+                                .monospacedDigit()
+                        }
+                    }
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, 5)
+                    .frame(height: 16)
+                    .background(Capsule().fill(CheckTheme.secondaryText.opacity(0.85)))
+                    .padding(4)
+                }
+            }
             .overlay(alignment: .topTrailing) {
-                if isOn {
+                if isOn && isUnlocked(id) {
                     Image(systemName: "checkmark")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(Color.white)
@@ -196,8 +242,9 @@ struct CheckCharacterPanel: View {
         .buttonStyle(.plain)
         // 팝오버가 열릴 때 첫 포커스 링이 카드 위에 사각으로 겹치는 것을 막는다(이 앱의 기존 규약).
         .focusEffectDisabled()
-        .accessibilityLabel(manifest?.displayName ?? id)
-        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+        .accessibilityLabel(isUnlocked(id) ? (manifest?.displayName ?? id)
+                                           : "\(manifest?.displayName ?? id) 잠김 — 상점에서 사기")
+        .accessibilityAddTraits(isOn && isUnlocked(id) ? [.isButton, .isSelected] : .isButton)
     }
 }
 

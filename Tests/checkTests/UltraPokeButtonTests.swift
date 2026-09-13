@@ -93,12 +93,13 @@ struct UltraPokeButtonTests {
     /// 렌더 높이 테스트는 전부 초록이다. 이 순수 계산이 그 사각지대의 유일한 방어망이다
     /// (FooterWidthBudget / TeamHeaderWidthBudget 이 같은 이유로 존재한다).
     @Test func pokeTitleRowLeavesRoomForBothBadgeAndHint() {
-        // 잔량 상한이 5(사장님 확정 4)라 배지는 **언제나 1자리**다.
-        #expect(PokeTitleRowWidthBudget.maxBadgeDigits == 1)
+        // ★ **1 → 2 (2026-09-13, 울트라 보유 상한 폐지).** 예전에는 매일 자정에 잔량이 상한으로 깎여
+        //   배지가 언제나 한 자리였다. 이제 루비로 얼마든지 살 수 있어 두 자리가 실제로 뜬다.
+        //   두 자리가 **천장**이라는 사실은 아래 두 줄이 증명한다(그래서 99 를 넘으면 `99+` 로 접는다 —
+        //   `UltraBalanceText.badge`). 이 예언은 원래 이 테스트가 "그때를 대비해" 세워 둔 것이었다.
+        #expect(PokeTitleRowWidthBudget.maxBadgeDigits == 2)
         // 실제로 쓰는 가장 긴 힌트가 말줄임 없이 들어간다.
         #expect(PokeTitleRowWidthBudget.hintWidth() >= PokeTitleRowWidthBudget.longestHintWidth)
-        // 상한이 두 자리로 올라가도(서버가 balance_cap 을 10 으로 바꾸는 날) 아직 여유가 있다 —
-        // 그때 화면이 먼저 깨지지 않는다는 것을 지금 못 박아 둔다.
         #expect(PokeTitleRowWidthBudget.hintWidth(digits: 2) >= PokeTitleRowWidthBudget.longestHintWidth)
         // 0개일 때의 문구(전부 한글 6자)는 보수적인 한글 눈금으로도 들어간다.
         #expect(PokeTitleRowWidthBudget.hintKoreanGlyphs() >= UltraBalanceText.empty.count)

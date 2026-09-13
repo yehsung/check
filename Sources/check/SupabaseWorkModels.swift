@@ -1354,6 +1354,65 @@ struct SetCharacterResponse: Decodable, Equatable {
     var id: String?
 }
 
+// MARK: - 상점 / 루비 (v0.3.17)
+
+/// shop_state RPC 응답: { ruby_balance, ultra_balance, ultra_price, characters: [{id, price, owned}] }.
+///
+/// ★ **status 가 없다.** 이건 판정이 아니라 **조회**라서 돌려줄 실패 어휘가 없다(실패는 HTTP 로 온다).
+/// ★★ **필드가 전부 Optional 이다.** 비옵셔널로 두면 이 키를 안 보내는 서버(= db push 전 창, 또는
+///    필드를 늘리기 전 구버전)에서 디코드가 **통째로 throw** 되고 상점 화면이 죽는다. 이 저장소가
+///    실제로 겪은 사고다(`PokeSendResponse.ultraBalance` 주석). nil 은 "0" 이 아니라 **"모른다"** 이고,
+///    화면은 모르는 값을 숫자로 단정해 말하지 않는다.
+struct ShopStateResponse: Decodable, Equatable {
+    var rubyBalance: Int?
+    var ultraBalance: Int?
+    /// 울트라 1개의 루비 값. 서버가 유일한 출처다 — 클라가 3 을 다시 적으면 가격을 바꾸는 날 두 곳이 갈린다.
+    var ultraPrice: Int?
+    var characters: [ShopCharacterRow]?
+}
+
+/// 상점 목록의 한 줄. 가격·보유는 **서버가 말한다**(클라에 가격표를 두지 않는다).
+struct ShopCharacterRow: Decodable, Equatable, Identifiable {
+    let id: String
+    var price: Int?
+    var owned: Bool?
+}
+
+/// buy_character RPC 본문. { p_id: 캐릭터 ID }. 여기는 nil 이 없다 — "아무것도 안 사기"는 호출을 안 하는 것이다.
+struct BuyCharacterRequest: Encodable {
+    let pId: String
+}
+
+/// buy_character RPC 응답:
+/// { status: "ok"|"already_owned"|"unknown_character"|"insufficient"|"unauthorized"|"no_profile",
+///   character?, price?, ruby_balance?, need?, have? }
+///
+/// `rubyBalance` 는 **구매 뒤 잔량**이다. 클라가 스스로 빼지 않는다 — 서버가 진실이고, 두 곳에서 빼면
+/// 실패한 구매가 화면에서만 차감되는 조합이 생긴다.
+struct BuyCharacterResponse: Decodable, Equatable {
+    let status: String
+    var character: String?
+    var price: Int?
+    var rubyBalance: Int?
+    /// insufficient 일 때: 필요한 양과 지금 가진 양. 화면이 "몇 개 더 필요한지"를 말할 근거다.
+    var need: Int?
+    var have: Int?
+}
+
+/// buy_ultra RPC 본문. { p_count: 몇 개 }.
+/// **본문을 비우지 않는 이유**: PostgREST 는 본문의 키 집합으로 오버로드를 고른다(UltraWalletSyncRequest 와 같은 이유).
+struct BuyUltraRequest: Encodable {
+    let pCount: Int
+}
+
+/// buy_ultra RPC 응답: { status: "ok"|"insufficient"|"invalid"|"unauthorized"|"no_profile",
+///                       ultra_balance?, ruby_balance? }
+struct BuyUltraResponse: Decodable, Equatable {
+    let status: String
+    var ultraBalance: Int?
+    var rubyBalance: Int?
+}
+
 /// ultra_wallet_sync RPC 본문. { p_days_back: 소급 일수 }.
 /// **본문을 비우지 않는 이유**: PostgREST 는 본문의 키 집합으로 오버로드를 고른다. 기본값이 있어도
 /// 키를 명시해 두면 나중에 인자가 하나 더 생겨도 이 호출이 어느 함수로 갈지 흔들리지 않는다.

@@ -1349,6 +1349,50 @@ actor SupabaseWorkService {
         return try decoder.decode(SetCharacterResponse.self, from: data)
     }
 
+    // MARK: - 상점 / 루비 (v0.3.17)
+
+    /// 상점 상태(루비·울트라 잔량 + 캐릭터 가격·보유)를 한 번에 받아 온다. `shop_state()` RPC.
+    ///
+    /// **왜 한 방인가**: 가격표와 보유 목록과 잔량은 **같은 순간의 것**이어야 한다. 셋을 따로 부르면
+    /// 그 사이에 구매가 끼어들어 "가진 돈은 새 값, 보유 목록은 옛 값"인 화면이 만들어진다.
+    func fetchShopState(accessToken: String) async throws -> ShopStateResponse {
+        let data = try await send(
+            path: "/rest/v1/rpc/shop_state",
+            method: "POST",
+            body: EmptyBody(),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode(ShopStateResponse.self, from: data)
+    }
+
+    /// 캐릭터를 산다. `buy_character(p_id)` RPC.
+    ///
+    /// **잔량 확인·차감·장부·소유 기입이 서버 한 트랜잭션 안에서 끝난다.** 클라는 가격도 잔량도
+    /// 판정하지 않는다 — 아래 화면의 비활성화는 헛왕복을 줄이는 장치이지 게이트가 아니다.
+    func buyCharacter(accessToken: String, id: String) async throws -> BuyCharacterResponse {
+        let data = try await send(
+            path: "/rest/v1/rpc/buy_character",
+            method: "POST",
+            body: BuyCharacterRequest(pId: id),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode(BuyCharacterResponse.self, from: data)
+    }
+
+    /// 울트라 찌르기를 산다(루비 → 울트라). `buy_ultra(p_count)` RPC.
+    func buyUltra(accessToken: String, count: Int) async throws -> BuyUltraResponse {
+        let data = try await send(
+            path: "/rest/v1/rpc/buy_ultra",
+            method: "POST",
+            body: BuyUltraRequest(pCount: count),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode(BuyUltraResponse.self, from: data)
+    }
+
     /// 상대에게 메시지. `send_message(p_to, p_body)` RPC 를 로그인 토큰으로 호출한다.
     ///
     /// **쿨타임이 없다**(v0.2.49 서버 계약). 근무중 게이트·집중 모드·텍스트 난간·200자 상한은 전부 서버가 강제하고,

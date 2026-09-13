@@ -173,6 +173,7 @@ extension WorkTimerStore {
         closeUltraPanel()
         closeFeedbackPanel()
         closeCharacterPanel()
+        closeShopPanel()
         isInsightsPanelVisible = false
         // ★ `closePokePanel()` 이 아니라 깃발 한 줄이다(울트라 배지 탭이 세운 규약 — blocker UI-2).
         //   그 함수는 `lastShownMessage` 를 죽이는데, 말풍선 버튼을 누른 것은 '그 알림을 봤다'가 아니다.

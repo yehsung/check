@@ -232,6 +232,10 @@ def mirror_leg_band(image: "np.ndarray", band_frac: float, threshold: int) -> "n
 def head_box(image: "np.ndarray", threshold: int, top_frac: float, side_frac: float) -> Rect:
     """얼굴만 잘라낼 정사각 상자를 추정한다.
 
+    ⚠️ **지금 번들 5종은 이 경로를 안 쓴다**(`--head-side 0` = 전신 초상). 사용자가 2026-09-13 오후에
+       "메뉴바·헤더도 전신이 다 들어가게"로 뒤집었다. 아래 근거는 여전히 사실이므로 기구는 남긴다 —
+       표정 구분이 중요한 캐릭터가 생기면 `--head-side` 를 다시 주면 된다.
+
     **왜 필요한가**(2026-09-13 실측): 전신 스프라이트를 그대로 메뉴바 18pt(36px)에 넣으면 얼굴이 몇
     픽셀로 줄어 "주황색 덩어리 / 흰 덩어리"가 된다 — 근무/비근무 표정 구분이 통째로 사라진다. 아잉은
     캐릭터 자체가 두상이라 이 문제가 없었고, 그래서 전신 캐릭터를 처음 넣은 지금에야 드러났다.
@@ -281,6 +285,24 @@ def crop_padded(image: "np.ndarray", box: Rect) -> "np.ndarray":
     sx1, sy1 = min(image.shape[1], x1), min(image.shape[0], y1)
     if sx1 > sx0 and sy1 > sy0:
         out[sy0 - y0:sy1 - y0, sx0 - x0:sx1 - x0] = image[sy0:sy1, sx0:sx1]
+    return out
+
+
+def fit_square(image: "np.ndarray", size: int, nearest: bool = False) -> "np.ndarray":
+    """비율을 유지한 채 `size`² 투명 캔버스 한가운데에 앉힌다(잘라내지 않는다).
+
+    초상은 메뉴바(18pt)와 팝오버 헤더(46pt)가 **같은 PNG 한 장**을 쓰고 둘 다 `scaledToFit` 이므로,
+    여백까지 포함해 정사각으로 구워 두면 두 곳의 크기 계산이 서로 어긋날 일이 없다.
+    """
+    height, width = image.shape[:2]
+    scale = min(size / max(width, 1), size / max(height, 1))
+    new_w = max(1, int(round(width * scale)))
+    new_h = max(1, int(round(height * scale)))
+    resized = resize_rgba(image, (new_w, new_h), nearest=nearest)
+    out = np.zeros((size, size, 4), dtype=np.uint8)
+    x = (size - new_w) // 2
+    y = (size - new_h) // 2
+    out[y:y + new_h, x:x + new_w] = resized
     return out
 
 
@@ -459,7 +481,15 @@ def pack(args: argparse.Namespace) -> None:
         portrait_negative = resize_rgba(crop_padded(negative, box), (PORTRAIT_SIZE, PORTRAIT_SIZE), nearest=args.pixel_art)
         print("[{}]   머리상자 {} (공유) → 초상 {}²".format(args.id, box, PORTRAIT_SIZE))
     else:
-        portrait_neutral, portrait_negative = neutral, negative
+        # **전신 초상**(--head-side 0). 사용자 지시(2026-09-13 오후): 메뉴바와 팝오버 헤더 둘 다
+        # 얼굴 크롭 말고 전신이 다 들어가게. 그래서 얼굴 상자를 안 잡고 **쌍의 union bbox** 로
+        # 한 번만 잘라(표정이 바뀌어도 아이콘이 안 튄다) 정사각에 비율 그대로 앉힌다.
+        # ⚠️ 대가: 18pt(36px) 에서 얼굴이 작아져 근무/비근무 표정 구분이 약해진다. 그 구분이
+        #    머리 크롭을 만든 이유였는데(head_box 주석), 사용자가 전신을 보고 그쪽을 택했다.
+        pair_box = union_bbox([neutral, negative], args.alpha_threshold)
+        portrait_neutral = fit_square(crop(neutral, pair_box), PORTRAIT_SIZE, nearest=args.pixel_art)
+        portrait_negative = fit_square(crop(negative, pair_box), PORTRAIT_SIZE, nearest=args.pixel_art)
+        print("[{}]   전신 초상 — 쌍 union {} → {}²".format(args.id, pair_box, PORTRAIT_SIZE))
     save_png(portrait_neutral, os.path.join(args.out, "portrait-neutral.png"))
     save_png(portrait_negative, os.path.join(args.out, "portrait-negative.png"))
     with open(os.path.join(args.out, "manifest.json"), "w", encoding="utf-8") as handle:

@@ -532,8 +532,54 @@ func v0316bUltraSwapsCharacterAndRestoresTheSameNode() throws {
             "격발 왕복 뒤 아잉이 눈을 못 감는다 — 감은눈 캐시가 떼어낸 노드를 가리키고 있다")
 }
 
+/// ★ **울트라는 보낸 사람 캐릭터다. nil·모르는 id 는 "안 바꿈"이 아니라 "아잉"이다.**
+///
+/// 실사용 신고(2026-09-13): *"캐릭터 출시 안 한 버전 쓰는 사람이 날 울트라로 찔렀는데 아잉 말고
+/// 내가 적용 중인 캐릭터로 뜨면서 찔려."* 원인은 호출부의 `if let characterID { ... }` 였다 —
+/// 보낸 사람이 캐릭터를 안 골랐으면(= 구버전 사용자 **전부**) 교체가 통째로 생략되어 **내 캐릭터가
+/// 나를 덮쳤다.** 서버 컬럼이 null 인 것은 정상이므로 폴백은 아잉이어야 한다.
 @MainActor
-@Test("모르는 캐릭터 ID·nil 은 교체하지 않는다 — throw 하지 않고 내 캐릭터 그대로")
+@Test("발신자 캐릭터가 nil·모르는 값이면 아잉으로 접는다 — 내 캐릭터가 아니다")
+func v0316bUltraFallsBackToAingNotMine() throws {
+    let catalog = CheckCharacter3DScene.catalog
+    // nil = 보낸 사람이 아직 안 골랐다(캐릭터 이전 버전 사용자가 전부 여기 해당한다).
+    #expect(CheckOverlayController.ultraCharacter(for: nil, catalog: catalog).id
+            == CharacterCatalog.builtInAingID,
+            "nil 을 내 캐릭터 유지로 읽으면 남이 찔렀는데 내 캐릭터가 나를 덮친다")
+    // 모르는 값 = 내가 구버전이고 상대가 새 캐릭터를 산 경우. 규칙은 CharacterSelection 과 같다.
+    #expect(catalog.manifest(id: "nope-not-a-character") == nil)
+    #expect(CheckOverlayController.ultraCharacter(for: "nope-not-a-character", catalog: catalog).id
+            == CharacterCatalog.builtInAingID)
+    #expect(CheckOverlayController.ultraCharacter(for: "", catalog: catalog).id
+            == CharacterCatalog.builtInAingID)
+    // ★ 기준선이 실제로 다르다: 아는 id 는 접히면 안 된다(위 셋이 "언제나 아잉"으로 초록이 되는 것을 막는다).
+    #expect(CheckOverlayController.ultraCharacter(for: "ghost", catalog: catalog).id == "ghost")
+}
+
+/// 판정이 **한 곳**이어야 한다 — 호출부가 nil 을 걸러 내면 위 순수 함수가 초록인 채로 화면은 틀린다.
+/// 이게 정확히 실사용 신고의 모양이었다(`if let characterID { applyUltraCharacter(characterID) }`).
+@Test("격발 호출부가 nil 을 걸러내지 않는다")
+func v0316bTakeoverDoesNotFilterNilCharacter() throws {
+    let source = try String(
+        contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/check/CheckOverlayWindow.swift"),
+        encoding: .utf8)
+    let code = source
+        .split(separator: "\n")
+        .map { line -> String in
+            guard let range = line.range(of: "//") else { return String(line) }
+            return String(line[line.startIndex..<range.lowerBound])
+        }
+        .joined(separator: " ")
+    #expect(code.contains("applyUltraCharacter(characterID)"),
+            "격발이 applyUltraCharacter 를 그대로 안 부른다")
+    #expect(!code.contains("if let characterID"),
+            "nil 을 호출부에서 걸러내고 있다 — 구버전 사용자가 찌르면 내 캐릭터가 나를 덮친다")
+}
+
+@MainActor
+@Test("교체 자체는 씬이 없거나 노드를 못 잡으면 조용히 실패한다 — throw 하지 않는다")
 func v0316bUnknownCharacterIDKeepsMine() throws {
     let scene = try #require(CheckCharacter3DScene.makeScene(animated: false))
     let parts = try chain(scene)

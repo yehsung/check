@@ -1293,7 +1293,11 @@ final class CheckOverlayController {
             //   격발은 그대로 간다 — 이 기능의 실패는 언제나 "안 바뀜"이지 "안 나옴"이 아니다).
             //   리액션 요청보다는 **앞**이어야 한다: 재-attach 가 재생 중인 리액션을 처음부터 되재생하므로,
             //   아래 ultraPoked 를 먼저 걸면 그 5초짜리가 교체 직후 다시 시작된다.
-            if let characterID { applyUltraCharacter(characterID) }
+            //
+            // ★ **nil 이어도 반드시 부른다.** `if let` 으로 감싸면 보낸 사람이 캐릭터를 안 고른 경우
+            //   (= 캐릭터 이전 버전을 쓰는 사람 전부) 교체가 통째로 생략되어 **내 캐릭터가 나를 덮친다.**
+            //   nil 은 "안 바꿈"이 아니라 "아잉"이다 — 판정은 applyUltraCharacter 안에 한 곳만 둔다.
+            applyUltraCharacter(characterID)
         }
         engine.request(.ultraPoked(bubbleText: text))
         armUltraRestore(startedAt: takeoverStart)
@@ -1304,9 +1308,26 @@ final class CheckOverlayController {
     ///
     /// 갈아입지 않는 갈래가 셋이고 **전부 조용하다**(throw 없음): 모르는 ID · 이미 그 캐릭터 · 씬을 못 잡음.
     /// 셋 다 "내 캐릭터로 격발"이라는 멀쩡한 결과로 떨어진다.
-    private func applyUltraCharacter(_ id: String) {
+    /// 격발 5초 동안 **보낸 사람의** 캐릭터로 갈아입힌다.
+    ///
+    /// ★ `id` 가 nil 이거나 이 빌드가 모르는 값이면 **아잉**이다 — 내 캐릭터가 아니다.
+    ///   · nil = 보낸 사람이 아직 안 골랐다. **캐릭터 이전 버전을 쓰는 사람이 전부 여기 해당한다.**
+    ///   · 모르는 값 = 내가 구버전이고 상대가 새 캐릭터를 산 경우. 접는 규칙은 `CharacterSelection`
+    ///     ("모르는 id 는 아잉으로 접는다")과 같아야 한다 — 두 곳이 갈리면 한쪽만 이상하게 보인다.
+    ///   두 경우에 내 캐릭터를 그대로 두면 **남이 나를 찔렀는데 내 캐릭터가 나를 덮치는** 화면이 된다
+    ///   (실사용 신고 2026-09-13: "캐릭터 출시 안 한 버전 쓰는 사람이 찔렀는데 내 캐릭터로 떴다").
+    /// 격발에 세울 캐릭터를 고른다(**순수 함수** — 씬 없이 테스트한다).
+    /// nil·모르는 id 는 전부 **아잉**이다. 판정이 여기 한 곳뿐이어야 호출부가 `if let` 으로 감싸
+    /// 통째로 건너뛰는 사고가 안 난다(아래 applyUltraCharacter 주석의 그 신고).
+    @MainActor
+    static func ultraCharacter(for id: String?, catalog: CharacterCatalog) -> CharacterManifest {
+        id.flatMap { catalog.manifest(id: $0) } ?? CharacterCatalog.builtInAing
+    }
+
+    private func applyUltraCharacter(_ id: String?) {
         guard ultraStashedCharacter == nil else { return }   // 재수신은 첫 교체를 유지한다
-        guard let manifest = CheckCharacter3DScene.catalog.manifest(id: id) else { return }
+        let manifest = Self.ultraCharacter(for: id, catalog: CheckCharacter3DScene.catalog)
+        // 이미 그 캐릭터면 교체할 것이 없다(내가 아잉이고 보낸 사람도 아잉인 흔한 경우).
         guard manifest.id != engine.currentCharacterID else { return }
         ultraStashedCharacter = engine.swapCharacter(to: manifest)
     }

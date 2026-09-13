@@ -1,6 +1,7 @@
 import AppKit
 import MachO
 import Observation
+import SceneKit
 import SwiftUI
 
 /// 우리가 만드는 패널을 **테스트 실행 중에만** 사용자 눈에서 지우는 단 하나의 전환 지점.
@@ -276,6 +277,10 @@ final class CheckOverlayController {
     /// 존재할 수 없다(ultraDeadline 은 이 값에서 파생만 한다).
     private struct UltraRestoreState { let frame: NSRect; let hadMouseMonitor: Bool; var startedAt: Date }
     private var ultraRestoreState: UltraRestoreState?
+    /// 격발 동안 비켜 둔 **내 캐릭터 노드**(강한 참조). 원복은 이 노드를 그대로 도로 붙이는 것이다 —
+    /// 아잉을 다시 만들면 USDZ 재로드 + 감은눈 굽기가 메인 스레드에서 또 돌고, 격발은 5초 안에 교체·원복
+    /// 두 번이다. nil 이면 이번 격발은 갈아입지 않았다(모르는 ID·이미 그 캐릭터·씬 미마운트).
+    private var ultraStashedCharacter: SCNNode?
     /// 정상 원복 타이머(5초).
     private var ultraTask: Task<Void, Never>?
     /// ★ 안전밸브: 정상 원복과 **독립된** 워치독 태스크. ultraTask 가 어떤 이유로 죽어도(취소·스케줄 유실)
@@ -864,7 +869,11 @@ final class CheckOverlayController {
         guard didDrag else { return }
         let proposed = NSPoint(x: originAtDragStart.x + delta.x, y: originAtDragStart.y + delta.y)
         let visible = currentVisibleFrame(near: location)
+        // 걷기 판정의 근거는 **패널이 실제로 옮겨졌는가**다(마우스가 움직였는가가 아니다). 화면 가장자리에
+        // 닿아 클램프되면 커서는 계속 가는데 캐릭터는 제자리다 — 그때 다리만 움직이면 미끄러지는 것으로 보인다.
+        let originBefore = panel.frame.origin
         panel.setFrameOrigin(Self.clampedOrigin(proposed, panelSize: Self.panelSize, in: visible))
+        let moved = panel.frame.origin != originBefore
         // 보드가 열려 있으면 캐릭터를 따라온다. 이 한 줄이 없으면 캐릭터만 움직이고 보드는 옛 자리에 남는다
         // (실사용 신고). 60Hz 경로라 Task 를 만들지 않고 프레임만 넘긴다 — 받는 쪽도 setFrame 1회로 끝낸다.
         // 화면 찾기(NSScreen 순회)는 바로 위에서 이미 한 번 했으므로 그 값을 그대로 넘겨 재탐색을 없앤다.
@@ -879,8 +888,13 @@ final class CheckOverlayController {
         // 드래그 확정 후, 수평 이동 방향(히스테리시스)을 캐릭터가 바라보게 한다.
         // ★ 위 통지보다 **뒤**여야 한다 — 드래그 중에는 '가는 방향'을 보는 것이 기존 계약이고(보드는 어차피
         //   따라붙어 있다), 통지가 계산한 '보드 쪽'은 여기서 덮인다. 놓는 순간 handleMouseUp 의 마지막
-        //   통지가 방향을 다시 보드 쪽으로 돌려놓는다.
-        engine.setDragFacing(facingHysteresis.update(x: location.x))
+        //   통지가 방향을 다시 보드 쪽으로 돌려놓는다. **순서는 그대로 두었다**(위 통지 → 여기).
+        //
+        // `moving:` 이 스프라이트 걷기를 켠다(사용자: "걷기 필요해"). 이동 중이면 옆모습 걷기, 방향만 잡고
+        // 멈추면 옆모습 idle — 멈춤은 엔진의 틱 루프가 스탬프로 판정한다(드래그 이벤트는 멈추면 안 온다).
+        // 보드가 열려 있을 때도 그대로다: 방향은 위 통지가 계산한 '보드 쪽'을 이 줄이 덮는다는 기존 계약이
+        // 걷기에도 똑같이 적용된다(끌고 가는 동안에는 가는 방향으로 걷는다).
+        engine.setDragFacing(facingHysteresis.update(x: location.x), moving: moved)
     }
 
     /// 좌클릭 업: 드래그 후보를 종료한다. 이동이 없었으면(클릭) 기존 handleClick 판정, 이동이 있었으면
@@ -888,6 +902,10 @@ final class CheckOverlayController {
     func handleMouseUp(at location: NSPoint) {
         guard isDragCandidate else { return }
         isDragCandidate = false
+        // ★ 걷기는 **여기서 무조건** 멈춘다. 아래 정면 복귀에는 보드 계약(열려 있으면 방향은 보드 쪽이 정한다)이
+        //   걸려 있지만, **걷기에는 그 계약이 없다** — 손을 뗀 캐릭터가 계속 걷는 것은 어느 경우에도 틀렸다.
+        //   방향은 건드리지 않으므로 아래 순서(보드 통지 → 정면 복귀 판정)는 그대로다.
+        engine.setWalking(false)
         if didDrag {
             saveOffset()
             // 놓은 자리로 보드를 최종 정렬한다. **위치는 마지막 dragged 통지와 같은 값이라 중복이지만,
@@ -1037,7 +1055,12 @@ final class CheckOverlayController {
         // 같은 폴링에 울트라가 2건 와도 격발은 1회다 — 첫 울트라가 배치 전체를 대표한다.
         // 캐릭터 표시를 꺼 뒀어도 전체화면 격발은 그대로 재생한다(사용자 결정: 강등하지 않는다).
         if let ultra = pokes.first(where: { $0.kind == .ultra }) {
-            beginUltraTakeover(text: Self.ultraBubbleText(name: ultra.fromName, otherCount: pokes.count - 1))
+            // ⑥ 찌른 사람의 **착용 캐릭터**가 화면을 덮친다(사용자 확정: "나 로 가자"). 이름과 같은 자리에서
+            //    같은 찔림의 캐릭터 ID 를 읽는다 — 둘이 다른 찔림에서 오면 "A 님의 울트라"인데 B 가 나온다.
+            beginUltraTakeover(
+                text: Self.ultraBubbleText(name: ultra.fromName, otherCount: pokes.count - 1),
+                characterID: ultra.fromCharacterID
+            )
             return
         }
         // 격발 중 도착한 일반 찔림은 여기서 삼킨다. 전체화면 발광 위에 작은 움찔·다른 말풍선을 겹치면
@@ -1212,7 +1235,9 @@ final class CheckOverlayController {
     /// 울트라 수신: 패널을 화면 전체로 넓히고 5초간 발광시킨 뒤 **정확히 원래대로** 되돌린다.
     /// 캐릭터 표시를 꺼 둔 사용자에게도 재생한다 — take_pokes 가 이미 원자 소비했고 보낸이는 하루치 몫을
     /// 태웠으므로 여기서 버리면 영영 사라진다(강등하지 않는다는 사용자 결정).
-    private func beginUltraTakeover(text: String) {
+    /// `characterID` 는 **찌른 사람의 착용 캐릭터**다(없거나 모르는 ID 면 내 캐릭터 그대로 격발한다).
+    /// 기본값 nil 이라 이 뜻을 모르는 기존 호출부는 한 글자도 안 바뀐다.
+    private func beginUltraTakeover(text: String, characterID: String? = nil) {
         // 보드는 격발 시작과 함께 화면에서 비킨다(전체화면 연출 위에 겹칠 수 없다). 입력 중이던 글은
         // 보드 컨트롤러가 들고 있으므로 사라지지 않는다 — 그래서 여기서 닫아도 안전하다.
         onUltraBegan?()
@@ -1263,9 +1288,27 @@ final class CheckOverlayController {
             //   확정되고 다시 그리는 것만 다음 런루프로 밀리므로(한 프레임), 5초짜리 연출에는 무해하다.
             panel.setFrame(Self.ultraPanelFrame(in: ultraScreenFrame()), display: false)
             panel.orderFrontRegardless()
+            // ★ 갈아입기는 **뷰가 선 뒤**다. 위 setFrame/orderFront 가 지연 마운트(hasEverShown 래치)를
+            //   깨우고, 그전에는 붙잡을 씬 자체가 없어 교체가 조용히 실패한다(그 경우에도 내 캐릭터로
+            //   격발은 그대로 간다 — 이 기능의 실패는 언제나 "안 바뀜"이지 "안 나옴"이 아니다).
+            //   리액션 요청보다는 **앞**이어야 한다: 재-attach 가 재생 중인 리액션을 처음부터 되재생하므로,
+            //   아래 ultraPoked 를 먼저 걸면 그 5초짜리가 교체 직후 다시 시작된다.
+            if let characterID { applyUltraCharacter(characterID) }
         }
         engine.request(.ultraPoked(bubbleText: text))
         armUltraRestore(startedAt: takeoverStart)
+    }
+
+    /// 격발 동안 발신자 캐릭터로 갈아입는다. **떼어낸 내 캐릭터 노드를 그대로 들고 있다가** 원복 때 도로 붙인다
+    /// (다시 만들면 아잉은 USDZ 재로드 + 감은눈 굽기가 메인 스레드에서 또 돈다 — 5초 안에 두 번이다).
+    ///
+    /// 갈아입지 않는 갈래가 셋이고 **전부 조용하다**(throw 없음): 모르는 ID · 이미 그 캐릭터 · 씬을 못 잡음.
+    /// 셋 다 "내 캐릭터로 격발"이라는 멀쩡한 결과로 떨어진다.
+    private func applyUltraCharacter(_ id: String) {
+        guard ultraStashedCharacter == nil else { return }   // 재수신은 첫 교체를 유지한다
+        guard let manifest = CheckCharacter3DScene.catalog.manifest(id: id) else { return }
+        guard manifest.id != engine.currentCharacterID else { return }
+        ultraStashedCharacter = engine.swapCharacter(to: manifest)
     }
 
     /// 정상 원복 타이머 + **독립 워치독**을 함께 건다(재수신이면 둘 다 리셋 = 5초 재시작).
@@ -1352,6 +1395,18 @@ final class CheckOverlayController {
         if pinnedIgnoresMouseEvents != nil {
             pinIgnoresMouseEvents(nil)
             setIgnoresMouseEvents(true)
+        }
+        // ★ 캐릭터 원복도 **guard 보다 위**다. 아래 `guard let restore` 에는 조기 반환 경로가 있고(복원
+        //   상태가 이미 비었는데 재진입), 그 뒤에 두면 내 화면에 남의 캐릭터가 영영 남는다. 이 블록이 하는 일은
+        //   노드 조작뿐이라 throw 하지도 블로킹하지도 않는다 — 실패해도 위 못박기 해제와 아래 프레임 복구에
+        //   아무 영향이 없다(원복 실패가 곧 사용자가 화면을 잃는 사고라는 이 함수의 전제를 지킨다).
+        if let stashed = ultraStashedCharacter {
+            ultraStashedCharacter = nil
+            // 재-attach 전에 격발 리액션을 끊는다. 안 끊으면 attach 의 `.playing` 분기가 5초짜리 ultraPoked 를
+            // **처음부터 다시** 재생한다(아래 원복 사슬이 같은 이유로 cancelActiveReaction 을 먼저 부른다).
+            // 이 호출은 멱등이라 아래에서 한 번 더 불려도 아무 일도 하지 않는다.
+            engine.cancelActiveReaction()
+            engine.restoreCharacterNode(stashed)
         }
         guard let restore = ultraRestoreState else { return }
         ultraRestoreState = nil

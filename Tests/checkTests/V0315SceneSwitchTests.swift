@@ -294,21 +294,19 @@ func v0315AttachIsSafeOnSprites() throws {
     _ = before
 }
 
-/// ☠︎ **실측으로 확인된 미해결 결함(2-B 몫).**
+/// ☠︎ **닫힌 결함(2-B, v0.3.15).** 표식을 걷어낸 자리다 — 아래 두 줄이 이제 그냥 초록이어야 한다.
 ///
-/// `ReactionEngine.locateSleepEyeTargets` 는 얼굴 재질을 **"큰 CGImage 디퓨즈(width ≥ 256)"** 로 찾는다.
-/// 스프라이트 아틀라스(여우 908×174 · 로봇 640×192)가 그 조건을 **그대로 만족**하므로 얼굴로 오인되고,
-/// 졸기 진입에서 `applyClosedEyes` 가 아틀라스를 **감은눈 버전으로 갈아 끼운다**(실측: 대입 1회, 객체가 바뀐다).
-/// 화면에서는 걷는 여우 몸통에 "눈으로 분류된" 자리가 피부색으로 메워진 얼룩으로 나타난다.
-/// 덤으로 `makeClosedEyesImage` 가 아틀라스 전체를 **메인 스레드에서** 훑는다(같은 머신 실측 ~2.8초, 디버그 빌드).
+/// 있었던 일: `ReactionEngine.locateSleepEyeTargets` 는 얼굴 재질을 **"큰 CGImage 디퓨즈(width ≥ 256)"** 로
+/// 찾는데, 스프라이트 아틀라스(여우 908×174 · 로봇 640×192)가 그 조건을 **그대로 만족**해 얼굴로 오인됐다.
+/// 졸기 진입의 `applyClosedEyes` 가 아틀라스를 감은눈 버전으로 갈아 끼웠고(실측: 대입 1회, 객체가 바뀐다),
+/// 화면에서는 걷는 여우 몸통에 "눈으로 분류된" 자리가 피부색 얼룩으로 번졌다. 덤으로 `makeClosedEyesImage` 가
+/// 아틀라스 전체를 **메인 스레드에서** 훑었다(같은 머신 실측 ~2.65초, 디버그 빌드).
 ///
-/// 고치는 자리는 `CheckOverlayReactions.swift` 의 `attach`(또는 `locateSleepEyeTargets`) 이고 그 파일은
-/// **2-B 소유**라 이 갈래에서 건드리지 않는다. 한 줄이면 된다 — 스프라이트면 감은눈 탐색을 태우지 않는다.
-///
-/// `withKnownIssue` 로 감싼 이유: 지금 빨개지면 인수인계가 막히고, 그냥 지우면 아무도 못 본다.
-/// **2-B 가 고치는 순간 이 테스트는 "예상 밖 통과"로 빨개져** 누군가 이 표식을 걷어내게 만든다.
+/// 고친 방법: `attach` 가 **캐릭터 종류로** 분기해 스프라이트에는 감은눈 파이프라인을 아예 태우지 않는다.
+/// 크기 임계값을 조이는 길은 택하지 않았다 — 아틀라스 크기는 캐릭터마다 다르므로 어떤 임계값도 다음
+/// 캐릭터에서 다시 뚫린다. 졸기는 스프라이트에서 기울기(drowsySink)만 남는다(DECISIONS: 전용 프레임 없음).
 @MainActor
-@Test("☠︎ 졸기가 스프라이트 아틀라스를 갈아 끼운다(2-B 가 고칠 자리)")
+@Test("☠︎ 졸기가 스프라이트 아틀라스를 갈아 끼우지 않는다(2-B 가 닫았다)")
 func v0315DrowsyAloneDoesNotTouchTheAtlas() throws {
     let fox = try v0315Sprite()
     let scene = try #require(
@@ -327,11 +325,9 @@ func v0315DrowsyAloneDoesNotTouchTheAtlas() throws {
     let after = try #require(v0315DiffuseImage(material))
     let assignments = engine.faceDiffuseCGImageAssignments + engine.faceDiffuseTextureAssignments
     print("[v0315] ☠︎ 졸기 단독 — 얼굴 디퓨즈 대입 \(assignments)회 · 아틀라스 동일 \(after === before)")
-    withKnownIssue("스프라이트가 3D 감은눈 파이프라인에 물린다 — attach 에 kind 분기가 필요하다(2-B)") {
-        #expect(after === before,
-                "졸기가 스프라이트 아틀라스를 감은눈 버전으로 갈아 끼웠다 — 몸에 피부색 얼룩이 생긴다")
-        #expect(assignments == 0)
-    }
+    #expect(after === before,
+            "졸기가 스프라이트 아틀라스를 감은눈 버전으로 갈아 끼웠다 — 몸에 피부색 얼룩이 생긴다")
+    #expect(assignments == 0)
 }
 
 /// ⚠️ **교차 갈래 계측** — `ReactionEngine.locateSleepEyeTargets` 는 얼굴 재질을 "큰 CGImage 디퓨즈

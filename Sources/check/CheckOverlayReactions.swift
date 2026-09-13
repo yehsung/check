@@ -363,6 +363,40 @@ final class ReactionEngine {
     /// 현재 바라보는 방향(-1 왼쪽 / 0 정면 / +1 오른쪽). 같은 방향 재요청은 무시(== 가드).
     @ObservationIgnored private var dragFacing = 0
     @ObservationIgnored private weak var sceneRoot: SCNNode?
+
+    // MARK: - 스프라이트 캐릭터(2D 평면) 상태
+    //
+    // 아잉(3D)과 스프라이트가 **같은 엔진**을 지난다. 갈래는 딱 셋이고 전부 여기 모아 둔다:
+    //   ① 감은눈 — 3D 파이프라인을 태우지 않는다(attach). ② 방향 — y 회전이 아니라 프레임(applyDragFacingToNode).
+    //   ③ 클릭 — 지오메트리 히트 뒤에 알파를 한 번 더 본다(isBodyAtScreenPoint).
+    // 셋의 공통 열쇠가 `spriteRuntime` 이다. nil 이면 이 엔진은 3D 캐릭터를 몰고 있는 것이고, 종전 코드가
+    // 한 톨도 안 바뀐 채 그대로 돈다.
+
+    /// 지금 붙어 있는 스프라이트 캐릭터의 살아 있는 상태(상태·프레임·미러·알파 마스크). 3D(아잉)면 nil.
+    /// `attach` 가 씬에서 스스로 판정해 세운다 — 누가 씬을 만들었든(뷰의 makeNSView·swapCharacter·테스트)
+    /// 같은 결론에 이르게. 호출부가 매니페스트를 이미 아는 경로(`swapCharacter`)는 미리 세워 두고,
+    /// attach 는 그것이 지금 노드와 맞으면 **그대로 둔다**(프레임 진행 상태를 잃지 않게).
+    @ObservationIgnored private(set) var spriteRuntime: SpriteRuntime?
+    /// 스프라이트 평면 노드(프레임 교체가 걸리는 자리). 씬 소유라 weak.
+    @ObservationIgnored private weak var spriteNode: SCNNode?
+    /// 드래그로 **이동 중**인가(= 옆모습 걷기). 방향만 잡고 멈추면 false → 옆모습 idle.
+    /// 3D 캐릭터에서는 아무도 읽지 않는다(회전에는 걷기가 없다).
+    @ObservationIgnored private(set) var isWalking = false
+    /// 마지막으로 "이동 중" 통지를 받은 시각(연속 시계). 드래그 이벤트는 마우스가 멈추면 **오지 않으므로**,
+    /// 걷기를 끄는 사람이 따로 필요하다 — 아래 틱 루프가 이 스탬프로 판정한다.
+    @ObservationIgnored private var lastDragMoveAt: TimeInterval = 0
+    /// 걷기 프레임을 돌리는 루프. 걷는 동안에만 산다.
+    @ObservationIgnored private var spriteTickTask: Task<Void, Never>?
+    /// 걷기 틱 주기(초). 프레임 노출이 140ms 라 그 절반보다 촘촘하면 프레임 경계를 놓치지 않는다.
+    static let spriteTickInterval: TimeInterval = 0.05
+    /// 이동 통지가 이만큼 끊기면 "멈췄다"로 보고 옆모습 idle 로 접는다(초).
+    /// 60Hz 드래그에서 한두 이벤트가 비는 것으로는 끊기지 않을 만큼 넉넉하다.
+    static let walkStopTimeout: TimeInterval = 0.18
+    /// 걷기 틱의 수면. 프로덕션은 실제 `Task.sleep`, **테스트만** 갈아 끼운다(`zzzSleep` 과 같은 규약).
+    /// 결정적 검증은 `advanceSpriteFrame(now:)` 를 직접 불러서 한다 — 이 루프는 "멈춤 감지"의 주인일 뿐이다.
+    @ObservationIgnored var spriteTickSleep: @Sendable (Double) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
     /// 렌더 FPS 를 조절하기 위한 SCNView 참조(attach 에서 makeNSView 가 전달). 뷰 수명은 SwiftUI 소유라 weak.
     @ObservationIgnored private weak var attachedView: SCNView?
     @ObservationIgnored private var modelExtent: CGFloat = 1
@@ -418,6 +452,8 @@ final class ReactionEngine {
     /// 감은 눈 재질/디퓨즈를 마지막으로 캡처한 씬 루트. 같은 씬 재-attach 면 캐시를 재사용하고, 씬이 교체되면
     /// 죽은 재질 참조를 버리고 새로 캡처한다(재-attach 감은눈 캐시 고착 방지).
     @ObservationIgnored private weak var eyeCacheSceneRoot: SCNNode?
+    /// 감은눈 캐시를 캡처한 **캐릭터 노드**. sceneRoot 와 짝으로 열쇠가 된다 — 이유는 `locateSleepEyeTargets` 주석.
+    @ObservationIgnored private weak var eyeCacheCharacterNode: SCNNode?
 
     /// A3: 넛지 자동 근무 시작 시 다음 commuteStart 말풍선을 1회 덮어쓰는 오버라이드. perform(.commuteStart)이
     /// 소비하며 nil 로 비워, 뒤이은 수동 시작은 평소 "오늘도 화이팅!"으로 돌아간다. 관찰 대상 아님(설정→소비만).
@@ -481,8 +517,25 @@ final class ReactionEngine {
         let (minB, maxB) = node.boundingBox
         let extent = CGFloat(max(maxB.x - minB.x, max(maxB.y - minB.y, maxB.z - minB.z)))
         modelExtent = extent > 0 ? extent : 1
-        locateSleepEyeTargets(in: sceneRoot)
-        prepareFaceTextures(device: view?.device)
+        bindSpriteRuntime(under: node)
+
+        // ☠︎ **스프라이트에는 3D 감은눈 파이프라인을 태우지 않는다.**
+        //
+        // `locateSleepEyeTargets` 는 얼굴 재질을 "큰 CGImage 디퓨즈(width ≥ 256)"로 찾는데, 스프라이트
+        // 아틀라스가 그 조건을 **그대로 만족한다**(여우 908×174 · 로봇 640×192). 그래서 아틀라스가 얼굴로
+        // 오인되고, 졸기 진입의 `applyClosedEyes` 가 아틀라스를 "감은눈 버전"으로 갈아 끼웠다 — 화면에서는
+        // **걷는 몸통에 피부색 얼룩**이 번진다. 덤으로 `makeClosedEyesImage`(연결성분 라벨링 + 인페인트)가
+        // 아틀라스 전체를 **메인 스레드에서** 훑는다(2-A 실측 ~2.65초, 디버그 빌드).
+        // 판정은 크기가 아니라 **캐릭터 종류**로 해야 한다. 그게 이 분기 전부다.
+        //
+        // 캐시를 **비우지 않는** 것도 의도다. 울트라 격발은 5초 안에 교체·원복 두 번이고, 원복은 떼어 뒀던
+        // 바로 그 아잉 노드를 도로 붙인다(restoreCharacterNode) — 재질도 이미지도 같은 객체다. 여기서 캐시를
+        // 버리면 그 순간 감은눈 굽기가 메인 스레드에서 한 번 더 돈다. 그 사이 졸기가 떨어진 재질을 만져도
+        // 화면에 보이는 것은 없고, 돌아올 때 attach 의 상태 분기가 눈 상태를 다시 맞춘다.
+        if spriteRuntime == nil {
+            locateSleepEyeTargets(in: sceneRoot, character: facingNode?.childNodes.first)
+            prepareFaceTextures(device: view?.device)
+        }
 
         switch state {
         case .playing(let kind):
@@ -509,13 +562,22 @@ final class ReactionEngine {
 
     /// 얼굴 재질·감은 눈 선 노드를 찾고, 감은 눈 텍스처(눈을 피부로 덮은 버전)를 1회 생성해 캐시한다.
     /// 얼굴 재질은 '큰 CGImage 디퓨즈'로 식별한다(💤 Z·선 평면 같은 작은 보조 재질과 구분).
-    private func locateSleepEyeTargets(in sceneRoot: SCNNode) {
+    ///
+    /// **스프라이트에서는 아예 부르지 않는다** — 아틀라스가 그 '큰 디퓨즈' 조건을 만족해 얼굴로 오인된다
+    /// (호출부 `attach` 의 ☠︎ 주석). 여기서 크기 조건을 더 조이는 것으로는 못 막는다: 아틀라스 크기는
+    /// 캐릭터 에셋마다 달라지므로 어떤 임계값도 다음 캐릭터에서 다시 뚫린다.
+    private func locateSleepEyeTargets(in sceneRoot: SCNNode, character: SCNNode?) {
         closedEyeLeft = sceneRoot.childNode(withName: CheckCharacter3DScene.closedEyeLeftName, recursively: true)
         closedEyeRight = sceneRoot.childNode(withName: CheckCharacter3DScene.closedEyeRightName, recursively: true)
         // 같은 씬으로의 재-attach 면 값비싼 재질 탐색·텍스처 생성을 건너뛰고 캐시를 재사용한다. 씬이 교체됐으면
         // (다른 sceneRoot) 이전 얼굴 재질·디퓨즈는 죽은 참조이므로 캐시를 버리고 새 얼굴에서 다시 캡처한다.
-        if faceMaterial != nil, eyeCacheSceneRoot === sceneRoot { return }
+        //
+        // ★ 열쇠가 **둘**인 이유: 울트라 격발은 씬을 그대로 둔 채 그 아래 캐릭터만 갈아 끼운다
+        //   (`swapCharacter`). sceneRoot 만 보면 "같은 씬이니 캐시 재사용"으로 빠져나가 **떼어낸 옛 캐릭터의
+        //   재질**에 감은눈을 칠하게 되고, 화면의 캐릭터는 영영 눈을 못 감는다.
+        if faceMaterial != nil, eyeCacheSceneRoot === sceneRoot, eyeCacheCharacterNode === character { return }
         eyeCacheSceneRoot = sceneRoot
+        eyeCacheCharacterNode = character
         faceMaterial = nil
         awakeDiffuse = nil
         sleepDiffuse = nil
@@ -542,6 +604,104 @@ final class ReactionEngine {
         awakeDiffuse = cg
         // 메시 기반 눈 커버(색 분류가 놓치는 눈두덩/안구 하이라이트까지 덮어 유령 눈두덩 제거). 1회 생성·캐시.
         sleepDiffuse = CheckCharacter3DScene.makeClosedEyesImage(faceImage: cg, geometry: geometry)
+    }
+
+    // MARK: - 스프라이트 판정 · 캐릭터 교체
+
+    /// 지금 서 있는 캐릭터의 id. 스프라이트면 런타임의 매니페스트, 아니면 내장 아잉.
+    /// 울트라 격발이 "이미 그 캐릭터면 갈아입지 않는다"를 묻는 자리다.
+    var currentCharacterID: String {
+        spriteRuntime?.manifest.id ?? CharacterCatalog.builtInAingID
+    }
+
+    /// 헤드리스 검증 지점: 지금 몰고 있는 것이 스프라이트인가.
+    var isSpriteCharacter: Bool { spriteRuntime != nil }
+
+    /// 지금 붙어 있는 뷰의 씬(= 캐릭터 교체가 일어나는 자리). 뷰가 아직 마운트되지 않았으면 nil.
+    var attachedScene: SCNScene? { attachedView?.scene }
+
+    /// wrapper 아래에서 스프라이트 평면을 찾아 런타임을 잇는다. 없으면(3D 아잉) 둘 다 nil 로 내린다.
+    ///
+    /// **씬에서 스스로 판정하는 이유**: 씬을 세우는 사람이 셋이다(뷰의 `makeNSView` · `swapCharacter` ·
+    /// 테스트). 그중 하나라도 "엔진에 알려 주기"를 빠뜨리면 스프라이트가 3D 취급을 받아 감은눈 파이프라인에
+    /// 도로 물리고(☠︎) 클릭이 투명한 여백에서도 먹는다. 알려 주는 쪽에 기대지 않으면 그 갈래가 없다.
+    private func bindSpriteRuntime(under node: SCNNode) {
+        guard let plane = node.childNode(withName: SpriteCharacterNode.nodeName, recursively: true),
+              let atlas = Self.diffuseImage(of: plane) else {
+            spriteRuntime = nil
+            spriteNode = nil
+            stopSpriteTickLoop()
+            isWalking = false
+            return
+        }
+        spriteNode = plane
+        // 이미 같은 아틀라스의 런타임을 들고 있으면 **그대로 둔다** — 재-attach 때마다 새로 만들면
+        // 걷던 프레임·미러가 0 으로 되감겨, 울트라가 attach 를 두 번 부르는 사이 캐릭터가 정면으로 튄다.
+        if let current = spriteRuntime, current.atlas === atlas { return }
+        spriteRuntime = Self.makeRuntime(forAtlas: atlas)
+        if spriteRuntime == nil {
+            // 평면은 섰는데 매니페스트를 못 찾았다(카탈로그 밖 아틀라스). 프레임 전환·알파 판정을 할 수 없으니
+            // 3D 경로로 접는다 — 클릭이 여백에서도 먹지만, 캐릭터가 사라지거나 터지지는 않는다.
+            spriteNode = nil
+        }
+    }
+
+    /// 아틀라스 이미지로 카탈로그에서 매니페스트를 되찾아 런타임을 만든다.
+    /// 1순위는 **객체 아이덴티티**(뷰가 `CheckCharacter3DScene.atlasImage` 캐시를 쓰면 그대로 맞는다),
+    /// 2순위는 픽셀 크기(테스트가 PNG 를 따로 디코드해 세운 씬).
+    private static func makeRuntime(forAtlas atlas: CGImage) -> SpriteRuntime? {
+        let catalog = CheckCharacter3DScene.catalog
+        let sprites = catalog.allIDs.compactMap { catalog.manifest(id: $0) }.filter { $0.kind == .sprite }
+        if let exact = sprites.first(where: { CheckCharacter3DScene.atlasImage(for: $0) === atlas }) {
+            return SpriteRuntime(manifest: exact, atlas: atlas)
+        }
+        let sized = sprites.first { $0.atlas?.width == atlas.width && $0.atlas?.height == atlas.height }
+        return sized.flatMap { SpriteRuntime(manifest: $0, atlas: atlas) }
+    }
+
+    /// 재질 디퓨즈가 CGImage 면 그것. CF 불투명 타입은 `as?` 가 늘 성공하므로 CFGetTypeID 로 판별한다.
+    private static func diffuseImage(of node: SCNNode) -> CGImage? {
+        guard let contents = node.geometry?.firstMaterial?.diffuse.contents,
+              CFGetTypeID(contents as CFTypeRef) == CGImage.typeID else { return nil }
+        return (contents as! CGImage)
+    }
+
+    /// 씬 안 캐릭터를 **뷰 재생성 없이** 갈아 끼우고 재-attach 까지 한다.
+    /// 떼어낸 옛 캐릭터 노드를 돌려준다(실패하면 nil) — 호출부가 들고 있다가 `restoreCharacterNode` 로 되돌린다.
+    ///
+    /// 재-attach 가 필요한 이유는 `swapCharacter` 의 문서가 적어 뒀다: `modelExtent`(리액션 진폭)를 새 bbox 에서
+    /// 다시 뽑고, 보관 중인 방향을 새 노드에 다시 먹인다. 그 경로가 여기서 처음으로 실제로 쓰인다.
+    ///
+    /// `scene` 은 헤드리스 검증용 주입점이다(뷰가 없으면 씬을 잡을 길이 없다). 프로덕션은 nil 로 둔다.
+    @MainActor
+    @discardableResult
+    func swapCharacter(to manifest: CharacterManifest, in scene: SCNScene? = nil) -> SCNNode? {
+        guard let target = scene ?? attachedView?.scene,
+              let wrapper = reactionNode, let root = sceneRoot else { return nil }
+        let previous = facingNode?.childNodes.first
+        let atlas = CheckCharacter3DScene.atlasImage(for: manifest)
+        guard CheckCharacter3DScene.swapCharacter(in: target, to: manifest, atlas: atlas) else { return nil }
+        // 매니페스트를 **이미 아는** 경로다. 런타임을 여기서 세워 두면 아래 attach 의 카탈로그 역추적이
+        // 불필요해지고(같은 아틀라스면 그대로 유지된다), 아틀라스가 카탈로그 밖인 경우에도 정확하다.
+        spriteRuntime = atlas.flatMap { SpriteRuntime(manifest: manifest, atlas: $0) }
+        attach(node: wrapper, sceneRoot: root, view: attachedView)
+        return previous
+    }
+
+    /// 떼어 뒀던 캐릭터 노드를 **그대로** 도로 붙이고 재-attach 한다. 다시 만들지 않는다 —
+    /// 아잉을 재생성하면 USDZ 재로드 + 감은눈 굽기가 메인 스레드에서 또 돌고, 격발 원복은 5초 안에 일어난다.
+    @MainActor
+    @discardableResult
+    func restoreCharacterNode(_ node: SCNNode) -> Bool {
+        guard let wrapper = reactionNode, let root = sceneRoot, let facing = facingNode else { return false }
+        for child in facing.childNodes {
+            child.removeFromParentNode()
+        }
+        facing.addChildNode(node)
+        // attach 가 씬에서 다시 판정하게 비워 둔다(되돌아온 것이 3D 인지 스프라이트인지 여기서 단정하지 않는다).
+        spriteRuntime = nil
+        attach(node: wrapper, sceneRoot: root, view: attachedView)
+        return true
     }
 
     /// 뜬 눈/감은 눈 GPU 텍스처를 (재)준비한다. `device` 가 nil 이면 텍스처를 버리고 CGImage 폴백으로 남는다.
@@ -636,7 +796,11 @@ final class ReactionEngine {
     /// idle 일 때만 깜빡인다: 자는 중엔 이미 같은 자산으로 눈이 감겨 있고(깜빡이면 오히려 눈을 뜬다),
     /// 리액션 재생 중엔 그 연출이 표정을 쓰고 있다. 렌더가 정지된 동안(renderSuspended — 화면 슬립·잠금)도
     /// 물러난다: 아무도 못 보는데 FPS 를 올리고 텍스처를 바꿀 이유가 없다.
+    /// 스프라이트는 이 경로를 타지 않는다: 깜빡임도 프레임이어야 하는데 전용 프레임이 없다(DECISIONS —
+    /// "깜빡임·졸기는 프레임"). 막지 않으면 격발로 갈아입은 5초 동안 **떼어 둔 아잉의 재질**을 깜빡이며
+    /// FPS 만 올린다(화면에는 아무 일도 안 일어난다).
     func blink() {
+        guard spriteRuntime == nil else { return }
         guard renderActive, !renderSuspended, sleepDiffuse != nil, state == .idle else { return }
         blinkTask?.cancel()
         blinkTask = Task { @MainActor [weak self] in
@@ -918,6 +1082,9 @@ final class ReactionEngine {
             resetPose()
             node.runAction(ReactionActions.drowsySink(tilt: modelExtent * 0.18), forKey: Self.reactionActionKey)
         }
+        // 스프라이트는 **기울기(drowsySink)만** 걸고 텍스처는 건드리지 않는다(DECISIONS: 졸기는 프레임인데
+        // 전용 졸기 프레임이 아직 없다). 아래 호출은 얼굴 재질이 없으므로 저절로 no-op 이다 — attach 가
+        // 스프라이트에 감은눈 파이프라인을 태우지 않기 때문이고(☠︎ 주석), 그게 이 한 줄의 유일한 방어선이다.
         applyClosedEyes()
         startZzzLoop()
         scheduleSelfWake()
@@ -1018,11 +1185,35 @@ final class ReactionEngine {
     /// 드래그 수평 방향을 바라보게 한다: -1(왼쪽)/0(정면)/+1(오른쪽). ±1 → facing 노드 y축 ~±40° 로 0.15s
     /// easeOut 회전, 0 → 0.2s 로 정면 복귀. 같은 방향 재호출은 no-op(== 가드). facing 노드는 리액션/idle 과
     /// 분리돼 있어 회전이 서로 간섭하지 않는다. 렌더가 돌 때만 보이므로 FPS 는 여기서 건드리지 않는다.
-    func setDragFacing(_ direction: Int) {
+    ///
+    /// `moving` 은 **드래그로 실제 이동 중인가**다(스프라이트 걷기). 기본값 false 라 기존 호출부는 한 글자도
+    /// 안 바뀌고, 방향만 잡는 경로(보드 바라보기·정면 복귀)는 자동으로 "서 있음"이 된다.
+    /// 3D 캐릭터에서는 이 인자가 아무 일도 하지 않는다 — 회전에는 걷기가 없다.
+    func setDragFacing(_ direction: Int, moving: Bool = false) {
         let dir = direction == 0 ? 0 : (direction > 0 ? 1 : -1)
-        guard dir != dragFacing else { return }
+        // 정면을 보면서 걷지는 않는다(옆모습 걷기만 있다). 여기서 접지 않으면 moving 이 남아, 다음 ±1 이
+        // 방향만 바뀐 채 "이동 중"으로 들어와 서 있는 캐릭터가 걷는다.
+        let walking = dir != 0 && moving
+        // ★ 이동 스탬프는 **가드보다 위**다. 같은 방향으로 계속 끌면 아래 가드가 조기 반환하는데, 그때 스탬프가
+        //   갱신되지 않으면 걷기 감시 루프가 walkStopTimeout 뒤에 "멈췄다"고 판정해 **드래그 도중에**
+        //   옆모습 idle 로 주저앉는다(= 끌고 있는데 다리가 멈춘다).
+        if walking { lastDragMoveAt = clock().timeIntervalSinceReferenceDate }
+        guard dir != dragFacing || walking != isWalking else { return }
         dragFacing = dir
+        isWalking = walking
         applyDragFacingToNode()
+        syncSpriteTickLoop()
+    }
+
+    /// 걷기만 끈다(방향은 건드리지 않는다). 손을 뗀 순간처럼 **방향의 주인이 따로 있는** 자리에서 쓴다 —
+    /// 정면 복귀는 보드 계약이 정하지만(handleMouseUp 주석), "놓았는데 계속 걷는다"는 어느 경우에도 틀렸다.
+    func setWalking(_ walking: Bool) {
+        let next = walking && dragFacing != 0
+        guard next != isWalking else { return }
+        isWalking = next
+        if next { lastDragMoveAt = clock().timeIntervalSinceReferenceDate }
+        applyDragFacingToNode()
+        syncSpriteTickLoop()
     }
 
     /// 보관 중인 `dragFacing` 을 facing 노드에 실제로 반영한다. 노드가 아직 없으면 no-op —
@@ -1031,11 +1222,99 @@ final class ReactionEngine {
     /// **각도 식은 여기 한 곳에만 둔다.** setDragFacing 과 attach 재적용이 각자 계산하면 언젠가 부호나
     /// 각도가 갈려, 드래그로 돌아본 각도와 재-attach 후 각도가 다른 기괴한 상태가 된다.
     private func applyDragFacingToNode() {
+        if spriteRuntime != nil {
+            applySpriteFacing()
+            return
+        }
         guard let facing = facingNode else { return }
         // 애니메이션 없이 즉시 스냅한다: 드래그 중 렌더는 유휴 6fps 라 0.15s 회전이 한두 프레임으로 쪼개져
         // "뚝뚝 끊기는" 느낌을 준다는 실사용 피드백 — 방향 전환은 그 프레임에 한 번에 돌아보는 게 낫다.
         facing.removeAction(forKey: Self.facingActionKey)
         facing.eulerAngles = SCNVector3(0, CGFloat(dragFacing) * Self.dragFacingAngle, 0)
+    }
+
+    /// 스프라이트의 방향·걷기를 **프레임**으로 준다(사용자 확정: "90도로 가자").
+    ///   `0` = 정면 idle · `+1` = 옆모습 · `-1` = 같은 프레임 **수평 미러**(추가 에셋 0).
+    /// 이동 중이면 옆모습 걷기, 방향만 잡고 멈추면 옆모습 idle.
+    ///
+    /// **y 회전을 쓰지 않는 이유**: 평면을 y축으로 40° 돌리면 옆을 보는 게 아니라 **카드가 기울어 보인다**
+    /// (1차 웨이브 실측 — 90° 에서는 아예 선 하나가 된다). 그래서 facing 노드는 정면에 못 박고 텍스처만 바꾼다.
+    /// 못 박기가 필요한 이유: 3D 로 서 있다가 교체된 스프라이트는 facing 에 옛 각도를 물려받는다.
+    ///
+    /// 즉시 스냅이다(보간 없음) — `setDragFacing` 의 -1/0/+1 계약 그대로. 유휴 6fps 에서 보간은 한두
+    /// 프레임으로 쪼개져 "뚝뚝 끊기는" 느낌만 준다는 실사용 피드백이 그 계약의 근거다.
+    private func applySpriteFacing() {
+        guard let runtime = spriteRuntime, let node = spriteNode else { return }
+        if let facing = facingNode {
+            facing.removeAction(forKey: Self.facingActionKey)
+            facing.eulerAngles = SCNVector3(0, 0, 0)
+        }
+        let key: String
+        if dragFacing == 0 {
+            key = CharacterManifest.StateKey.frontIdle
+        } else if isWalking, runtime.hasState(CharacterManifest.StateKey.sideWalk) {
+            key = CharacterManifest.StateKey.sideWalk
+        } else {
+            // 걷기가 없는 캐릭터는 **옆모습 idle 로 접는다**. 런타임의 자동 폴백은 frontIdle 이라
+            // 여기서 묻지 않으면 "옆을 보라고 했는데 정면"이 된다(hasState 가 존재하는 이유).
+            key = CharacterManifest.StateKey.sideIdle
+        }
+        runtime.setState(key, mirrored: dragFacing < 0, now: clock().timeIntervalSinceReferenceDate)
+        runtime.applyToNode(node)
+    }
+
+    /// 걷기 프레임을 한 칸 진행시킨다. **바뀌었을 때만** 노드를 만진다(매 틱 재질을 건드리면 유휴 6fps
+    /// 에서도 쓸데없는 GPU 작업이 깔린다). 테스트가 시계를 직접 밀어 결정적으로 검증하는 지점이다.
+    @discardableResult
+    func advanceSpriteFrame(now: TimeInterval) -> Bool {
+        guard let runtime = spriteRuntime, let node = spriteNode, runtime.tick(now: now) else { return false }
+        runtime.applyToNode(node)
+        return true
+    }
+
+    /// 헤드리스 검증 지점: 지금 그리고 있는 스프라이트 상태·프레임·미러.
+    var spriteFrameState: (state: String, frame: Int, mirrored: Bool)? {
+        guard let runtime = spriteRuntime else { return nil }
+        return (runtime.stateKey, runtime.frameIndex, runtime.mirrored)
+    }
+
+    /// 걷는 동안에만 틱 루프를 돌린다(idle 은 프레임이 하나뿐이라 돌 이유가 없다).
+    private func syncSpriteTickLoop() {
+        if isWalking, spriteRuntime != nil {
+            startSpriteTickLoop()
+        } else {
+            stopSpriteTickLoop()
+        }
+    }
+
+    private func startSpriteTickLoop() {
+        guard spriteTickTask == nil else { return }
+        // 유휴 6fps 에서 프레임이 140ms 마다 바뀌면 렌더가 그 사이를 못 잡아 걷기가 통째로 안 보인다
+        // (`blink` 가 0.12초 동안 FPS 를 올리는 것과 같은 이유). 드래그는 사용자가 붙들고 있는 짧은 순간이다.
+        setRenderFPS(Self.activeFPS)
+        let sleep = spriteTickSleep
+        let interval = Self.spriteTickInterval
+        spriteTickTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                await sleep(interval)
+                guard let self, !Task.isCancelled, self.isWalking else { return }
+                let now = self.clock().timeIntervalSinceReferenceDate
+                // 드래그 이벤트는 마우스가 멈추면 **오지 않는다**. 그래서 "멈췄다"를 말해 줄 사람이 여기밖에 없다.
+                if now - self.lastDragMoveAt > Self.walkStopTimeout {
+                    self.setWalking(false)   // 이 안에서 이 루프가 취소된다
+                    return
+                }
+                self.advanceSpriteFrame(now: now)
+            }
+        }
+    }
+
+    private func stopSpriteTickLoop() {
+        guard spriteTickTask != nil else { return }
+        spriteTickTask?.cancel()
+        spriteTickTask = nil
+        // 재생 중이면 유지하고, 아니면 유휴로 되돌린다(리액션의 FPS 예약과 같은 판정을 재사용한다).
+        scheduleFPSReset(after: 0)
     }
 
     /// 헤드리스 검증 지점: 현재 바라보는 방향.
@@ -1052,6 +1331,10 @@ final class ReactionEngine {
     /// (1) 캐시된 투영 bbox(뷰 로컬, 12pt 인플레이트) 프리체크 — 화면 어디를 움직여도 값싼 rect 검사로 걸러
     ///     대부분의 이동에서 hitTest 를 피한다. (2) 통과한 점만 SCNView.hitTest 로 지오메트리 정밀 확정.
     /// 뷰가 없거나(지연 마운트) 창이 없으면 항상 false(완전 통과).
+    ///
+    /// **스프라이트는 3단이다.** 평면 한 장이라 지오메트리 히트는 **투명한 여백에서도 난다** — 3D 아잉은
+    /// 메시가 곧 몸이라 없던 문제다. 그래서 히트 지점의 UV 를 알파 마스크로 한 번 더 확인한다.
+    /// 프리체크 rect·캐시는 두 갈래가 공유한다(평면 bbox 도 똑같이 투영된다).
     func isBodyAtScreenPoint(_ screenPoint: NSPoint) -> Bool {
         guard let view = attachedView, let window = view.window else { return false }
         let windowPoint = window.convertPoint(fromScreen: screenPoint)
@@ -1064,6 +1347,14 @@ final class ReactionEngine {
             .boundingBoxOnly: false,             // 지오메트리 정밀.
             .ignoreHiddenNodes: true
         ])
+        if let runtime = spriteRuntime, let plane = spriteNode {
+            guard let hit = hits.first(where: { $0.node === plane }) else { return false }
+            // ★ `atlasUV` 를 반드시 거친다 — `runtime.isOpaque(planeUV:)` 가 그 변환을 감싸고 있다.
+            //   hitTest 가 주는 UV 는 `contentsTransform` 이 걸리기 **전**의 지오메트리 UV 라(1차 웨이브 실측),
+            //   마스크에 그대로 먹이면 **아틀라스 전체 기준**으로 조회해 엉뚱한 프레임의 알파를 본다
+            //   (2-A 뮤테이션 실측: 800점 중 327점 불일치 — 걷는 동안에만 클릭이 빗나가는 결함).
+            return runtime.isOpaque(planeUV: hit.textureCoordinates(withMappingChannel: 0))
+        }
         return hits.isEmpty == false
     }
 

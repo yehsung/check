@@ -1270,6 +1270,9 @@ struct CheckCharacter3DView: NSViewRepresentable {
     /// 기본값이 `.standard` 라 **기존 호출부는 한 글자도 바뀌지 않고**, 앱 전체(오버레이·메뉴바·미니게임)가
     /// 같은 도메인의 같은 선택을 본다(`CheckCharacter3DScene.selectedCharacter(defaults:)` 주석의 요구).
     var characterDefaults: UserDefaults = .standard
+    /// 캐릭터 선택 세대(`CharacterSelectionBroadcast.revision`). **부모가 body 에서 읽어 넘긴다** —
+    /// 그래야 그 읽기가 관찰로 등록돼 선택이 바뀔 때 이 뷰가 갱신된다. 기본값 0 은 테스트·미리보기용.
+    var characterRevision: Int = 0
 
     /// 렌더 활성 판정(순수 함수, β1 계약 식). 표시 의도가 있고 정지 사유가 없을 때만 true.
     static func renderActive(isActive: Bool, renderSuspended: Bool) -> Bool {
@@ -1308,7 +1311,17 @@ struct CheckCharacter3DView: NSViewRepresentable {
         }
     }
 
+    /// 마지막으로 반영한 캐릭터 선택 세대. `updateNSView` 가 이 값과 비교해 **바뀐 순간에만** 갈아 끼운다.
+    /// 뷰가 아니라 Coordinator 에 두는 이유: `NSViewRepresentable` 은 값 타입이라 `updateNSView` 안에서
+    /// 자기 프로퍼티를 적어도 다음 호출에 남지 않는다.
+    @MainActor final class Coordinator {
+        var appliedCharacterRevision = 0
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeNSView(context: Context) -> SCNView {
+        context.coordinator.appliedCharacterRevision = characterRevision
         let view = SCNView()
         // ★ 착용 캐릭터로 태어난다. 이 두 줄이 없으면 교체는 되는데 **앱을 다시 켜면 아잉으로 돌아온다**
         //   (씬은 언제나 아잉으로 만들어지고, 아무도 다시 갈아 끼워 주지 않는다).
@@ -1337,6 +1350,27 @@ struct CheckCharacter3DView: NSViewRepresentable {
 
     func updateNSView(_ view: SCNView, context: Context) {
         Self.applyRenderState(active: effectiveActive, to: view)
+        applyCharacterChangeIfNeeded(view, coordinator: context.coordinator)
+    }
+
+    /// 설정에서 캐릭터를 바꾸면 **실행 중인 오버레이를 그 자리에서** 갈아 끼운다.
+    /// 이 배선이 없으면 선택은 저장되는데 화면은 앱을 다시 켤 때까지 옛 캐릭터로 남는다.
+    ///
+    /// **뷰를 다시 만들지 않는다** — 씬 안 노드만 바꾼다(`engine.swapCharacter` 가 교체·런타임 갱신·재-attach 를
+    /// 한 번에 한다). 뷰를 새로 만들면 모델 재로드와 감은눈 굽기가 메인 스레드에서 다시 돈다
+    /// (`CheckOverlayCharacterView.characterBoxSize` 주석의 그 이유).
+    ///
+    /// ★ **격발 중에는 건너뛴다.** 그때 화면에 선 것은 내 캐릭터가 아니라 **찌른 사람의 캐릭터**이고,
+    ///   원복은 떼어 뒀던 노드를 도로 붙이는 방식이라 여기서 갈아 끼우면 그 원복이 내 새 선택을 덮는다.
+    ///   세대를 **올리지 않고** 넘어가므로, 격발이 끝나 다음 `updateNSView` 가 오면 그때 반영된다.
+    /// `internal` 인 이유: `NSViewRepresentable.Context` 는 테스트가 만들 수 없다. 판정을 이 함수로
+    /// 떼어 두면 교체 규칙(세대 비교 · 격발 중 보류)을 값으로 직접 잴 수 있다.
+    func applyCharacterChangeIfNeeded(_ view: SCNView, coordinator: Coordinator) {
+        guard characterRevision != coordinator.appliedCharacterRevision else { return }
+        guard let engine, engine.isUltraActive == false else { return }
+        let character = CheckCharacter3DScene.selectedCharacter(defaults: characterDefaults)
+        _ = engine.swapCharacter(to: character, in: view.scene)
+        coordinator.appliedCharacterRevision = characterRevision
     }
 }
 
@@ -1440,7 +1474,13 @@ struct CheckOverlayCharacterView: View {
             let charBox = Self.characterBoxSize(viewSize: geo.size, isUltra: ultra)
             ZStack(alignment: .topLeading) {
                 if renderActive || hasEverShown {
-                    CheckCharacter3DView(isActive: renderActive, engine: engine)
+                    // revision 을 **여기 body 에서** 읽어 관찰을 등록한다 — 설정에서 캐릭터를 바꾸면
+                    // 이 뷰가 갱신되고 updateNSView 가 씬 안 노드를 갈아 끼운다.
+                    CheckCharacter3DView(
+                        isActive: renderActive,
+                        engine: engine,
+                        characterRevision: CharacterSelectionBroadcast.shared.revision
+                    )
                         .frame(width: charBox.width, height: charBox.height)
                         // 평시엔 안쪽 frame 과 같은 값이라 무영향, 격발 중엔 정사각을 화면 정중앙에 앉힌다.
                         .frame(width: geo.size.width, height: geo.size.height)

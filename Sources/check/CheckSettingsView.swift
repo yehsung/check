@@ -612,14 +612,14 @@ struct CheckSettingsView: View {
 
     /// **관리자 화면**(캐릭터 선택기가 붙은 상태)의 실측 콘텐츠 높이(pt, preferredWidth 에서).
     ///
-    /// 일반 사용자 화면은 465pt 그대로다 — 선택기는 `store.ultraUnlimited` 뒤에 있어 한 픽셀도 안 쓴다.
+    /// 일반 사용자 화면은 533pt 다(v0.3.22 '자동 근무 시작' 행 포함) — 선택기는 `store.ultraUnlimited` 뒤에 있어 한 픽셀도 안 쓴다.
     /// 관리자에게만 캐릭터 행(칩 한 줄 + 설명 한 줄 + 구분선)이 붙어 **89pt** 가 더 붙는다.
     ///
-    /// ⚠️ **창 높이 계약(`CheckSettingsWindowController.defaultContentSize.height` = 470)보다 크다.**
+    /// ⚠️ **창 높이 계약(`CheckSettingsWindowController.defaultContentSize.height` = 538)보다 크다.**
     ///    그 창에서 관리자가 설정을 열면 맨 아래 캐릭터 행이 통째로 잘린다(창은 리사이즈되므로 끌어
     ///    내리면 보이긴 한다). 창 쪽 숫자는 이 갈래의 소유가 아니라 여기 값으로만 남긴다 —
     ///    잇는 쪽은 관리자일 때 이 값 이상으로 열어라. `V0316CharacterPickerTests` 가 이 숫자를 되묻는다.
-    static let adminContentHeight: CGFloat = 554
+    static let adminContentHeight: CGFloat = 622
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -628,6 +628,13 @@ struct CheckSettingsView: View {
                     title: "로그인 시 자동 실행",
                     detail: "맥에 로그인하면 메뉴바에 자동으로 올라와요.",
                     isOn: launchAtLoginBinding
+                )
+                PanelDivider()
+                // 자동 **종료** 스위치는 일부러 없다(사장님 결정 2026-09-15) — WorkTimerStore.autoWorkStartEnabled 주석.
+                CheckSettingsToggleRow(
+                    title: "자동 근무 시작",
+                    detail: "컴퓨터를 5분쯤 쓰면 알아서 근무를 시작해요. 끄면 직접 눌러야 해요.",
+                    isOn: autoWorkStartBinding
                 )
                 PanelDivider()
                 CheckSettingsToggleRow(
@@ -679,12 +686,12 @@ struct CheckSettingsView: View {
             //   운영자 받은함에 **이미 붙어서** 도착한다(FeedbackDiagnostics — WorkTimerStoreFeedback.swift).
             //   팀원은 "찌르기가 안 와요" 한 줄만 쓰면 되고, 화면은 깨끗해지고 진단은 오히려 잘 된다.
             //
-            //   되돌리려는 사람이 알아야 할 사실: 이 창은 470pt 이고 콘텐츠는 이제 그보다 한참 낮으니
-            //   자리는 있다. 없는 것은 자리가 아니라 이유다.
+            //   되돌리려는 사람이 알아야 할 사실: 이 창은 538pt 이고 콘텐츠는 533pt 다(v0.3.22) — 이제는 자리도
+            //   없으니 창 높이부터 다시 재야 한다. 그보다 먼저 없는 것은 이유다.
         }
         .padding(14)
         // 창이 늘어나면 같이 늘고, 좁혀도 설명이 뭉개지지 않는 하한을 준다(창 크기는 배선 쪽 소관).
-        // maxHeight 를 열어 두는 것이 핵심이다: 창(470pt)이 콘텐츠보다 높은데 프레임을 콘텐츠 높이로
+        // maxHeight 를 열어 두는 것이 핵심이다: 창(538pt)이 콘텐츠보다 높은데 프레임을 콘텐츠 높이로
         // 두면 배경이 그만큼만 칠해지고 창 아래에 시스템 흰 띠가 남는다. 진단 두 줄이 제보로 옮겨 간
         // 뒤(2026-09-10) 그 여백은 더 커졌다 — 그래서 이 한 줄은 더 중요해졌다.
         // 위 정렬(topLeading)은 이 앱의 상단 앵커 규약이기도 하다 — 늘어난 만큼 아래로만 빈다.
@@ -694,7 +701,9 @@ struct CheckSettingsView: View {
         //     320 → 517pt · 360 → 504 · 370 → 491 · 375 → 478 · **380 이상 → 465(고정)**.
         //   창 높이 계약은 470 하나인데 콘텐츠가 517 까지 자라면 맨 아래 '소속 센터' 행이 통째로 잘린다.
         //   그래서 하한을 preferredWidth 로 올렸다: 이 폭 위에서는 **어떤 폭에서도 465pt** 라, 높이가
-        //   사용자의 드래그에 따라 달라지지 않는다. 하한을 다시 낮추려면 470 부터 다시 재라.
+        //   사용자의 드래그에 따라 달라지지 않는다. 하한을 다시 낮추려면 창 높이부터 다시 재라.
+        //   v0.3.22: '자동 근무 시작' 행이 붙어 폭 380 에서 **533pt**, 창은 538 이다. 이 행의 설명은 넓은 폭에서
+        //   한 줄로 펴질 수 있어 폭이 커지면 콘텐츠가 같거나 작아진다 — 계약은 여전히 폭 하한에서 잰 값이다.
         .frame(
             minWidth: Self.preferredWidth, idealWidth: Self.preferredWidth, maxWidth: 520,
             maxHeight: .infinity, alignment: .topLeading
@@ -731,6 +740,13 @@ struct CheckSettingsView: View {
         Binding(
             get: { launchAtLogin },
             set: { wanted in launchAtLogin = LoginItemRegistrar.applyUserToggle(wanted) }
+        )
+    }
+
+    private var autoWorkStartBinding: Binding<Bool> {
+        Binding(
+            get: { store.autoWorkStartEnabled },
+            set: { store.setAutoWorkStartEnabled($0) }
         )
     }
 

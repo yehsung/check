@@ -449,7 +449,7 @@ final class CheckOverlayController {
         // 표시 순서는 큐가 정한다 — 자세한 이유는 armMessageWatch 주석.
         armMessageWatch()
 
-        // 넛지 스케줄러: 자격은 store 로 구성(로그인·팀·비근무·억제 아님), 발동은 자동 근무 시작(안내만)으로.
+        // 넛지 스케줄러: 자격은 store 로 구성(로그인·팀·비근무·억제 아님·설정 켜짐), 발동은 자동 근무 시작(안내만)으로.
         // 공백 관측/생존 스탬프는 수동 종료 억제의 해제·영속 판정으로 잇는다(스케줄러는 store 를 모른다).
         nudgeScheduler = NudgeScheduler(
             idleSeconds: nudgeIdleSeconds,
@@ -482,10 +482,11 @@ final class CheckOverlayController {
         renderSuspendObservers.forEach { $0.remove() }
     }
 
-    /// 넛지 자동 시작 자격: 로그인됨·팀 있음·비근무. (표시중 조건은 소멸 — 안내만 하고 바로 시작.)
+    /// 넛지 자동 시작 자격: 로그인됨·팀 있음·비근무·억제 아님·설정 켜짐. (표시중 조건은 소멸 — 안내만 하고 바로 시작.)
     ///
-    /// 자동 시작은 끌 수 있는 설정이 아니라 앱의 기본 동작이다 — 되돌리려면 평소처럼 '근무 종료'를 누르면 된다.
-    /// 캐릭터 표시(`isOverlayEnabled`)도 자격에서 **뺀다**. 예전엔 AND 로 걸려 있어 캐릭터를 숨긴 사용자에게는
+    /// 자동 시작은 기본으로 켜진 동작이고, v0.3.22 부터 설정의 '자동 근무 시작'으로 끌 수 있다(이 맥의 설정).
+    /// 켜 둔 채 원치 않게 한 번 시작된 근무는 예전처럼 '근무 종료'로 되돌린다 — 그 종료가 억제를 세운다.
+    /// 캐릭터 표시(`isOverlayEnabled`)는 자격에서 **뺀다**. 예전엔 AND 로 걸려 있어 캐릭터를 숨긴 사용자에게는
     /// 자동 시작이 영영 일어나지 않았다. 캐릭터가 숨겨져 있으면 등장 말풍선 대신 메뉴바 아이콘이 근무중으로
     /// 바뀌어 알린다 — 알림 채널은 사라지지 않는다.
     private var isNudgeEligible: Bool {
@@ -494,6 +495,9 @@ final class CheckOverlayController {
             && store.snapshot.isWorking == false
             // 수동 [근무 종료] 억제 중엔 자동 시작하지 않는다(1시간+ 부재 후 재무장 — store 가 관리).
             && !store.autoStartSuppressed
+            // 설정에서 끈 사람. 이 한 조건이 넛지 자동 시작과 30분 자동 재개를 함께 끈다 —
+            // 재개(resumeRecentlyClosedSession)도 nudgeAutoStart 안에서만 불리고, 그 첫 줄이 이 자격을 다시 본다.
+            && store.autoWorkStartEnabled
     }
 
     /// 근무 상태 변화에 따라 패널을 표시/숨김한다. 표시 직전 항상 우상단으로 재배치한다.

@@ -65,7 +65,11 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     /// **맨 아래 설정 항목 하나가 통째로** 였다(각주 한 줄이 아니다 — 그 각주는 2026-09-10 에 제보로 옮겼다).
     /// 한때 그 대응으로 470 → 520 을 넣었지만, 그러면 기본 폭에서 아래가 55pt 비고 계약 숫자만 흐려진다.
     /// 폭 하한을 preferredWidth 로 올리면 **어떤 폭에서도 465** 라 470 이 다시 진짜 계약이 된다.
-    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 470)
+    ///
+    /// v0.3.22: '자동 근무 시작' 행(설명 두 줄)이 붙어 콘텐츠가 **533pt** 가 됐다(실측 2026-09-15, 폭 380 — 행 하나 +68).
+    /// 창을 538 로 올린다 — v0.3.13 과 같은 5pt 여유다. 폭이 넓어지면 줄바꿈이 줄어 콘텐츠는 같거나 작아지므로
+    /// 폭 하한(preferredWidth)에서 잰 값이 곧 계약이다. 높이 테스트 셋(RealtimeLinkTests · V0313 · V0316)이 이 값을 읽는다.
+    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 538)
     /// 최소 크기. 폭은 뷰가 선언한 하한(`minWidth: Self.preferredWidth`)을 그대로 따른다 — 여기에 뷰가
     /// 모르는 숫자를 새로 적으면 그 순간 두 하한이 갈리고, 갈리는 쪽이 위 높이 계약을 깬다(바로 위 실측표).
     static let minContentSize = NSSize(width: CheckSettingsView.preferredWidth, height: 260)
@@ -214,11 +218,11 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         armStuckWindowWatchdog()
     }
 
-    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **554pt** 가 된다(`CheckSettingsView.adminContentHeight`).
-    /// 기본 창은 470pt 라 그대로 열면 맨 아래 행이 잘린다.
+    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **622pt** 가 된다(`CheckSettingsView.adminContentHeight`, v0.3.22).
+    /// 기본 창은 538pt 라 그대로 열면 맨 아래 행이 잘린다.
     ///
     /// **왜 창을 만들 때가 아니라 열 때인가**: `ultraUnlimited` 는 서버가 정하고 세션 동기화로 **늦게 도착한다**.
-    /// 창 생성 시점에 읽으면 첫 실행에서는 아직 false 라 470 으로 굳는다.
+    /// 창 생성 시점에 읽으면 첫 실행에서는 아직 false 라 538 로 굳는다.
     ///
     /// **왜 키우기만 하는가**: 사용자가 직접 줄여 둔 창을 우리가 매번 되돌리면 그 조작이 무의미해진다.
     /// 저장된 자리(`setFrameAutosaveName`)보다 우리가 세게 굴면 안 된다 — 모자랄 때만 채운다.

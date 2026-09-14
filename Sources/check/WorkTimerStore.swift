@@ -197,6 +197,11 @@ final class WorkTimerStore {
     /// 할 일 기능이 켜져 있는가(기본 켬). 캐릭터 클릭의 뜻을 가르는 유일한 값이다 —
     /// 켜면 보드 여닫기, 끄면 아파하기. 한 클릭에 두 뜻을 담지 않기 위한 설정이다.
     var isTodoEnabled: Bool = true
+    /// 자동 근무 시작(넛지)이 켜져 있는가(기본 켬, 이 맥의 설정). 끄면 컴퓨터를 써도 근무가 저절로 시작되지 않고,
+    /// 최근 자동 마감 세션의 30분 자동 재개도 함께 멈춘다 — 둘 다 넛지 발동 한 곳에서만 일어나기 때문이다.
+    /// 자동 **종료**에는 짝 스위치를 두지 않는다(사장님 결정 2026-09-15): 끄는 순간 켜 둔 채 퇴근한 맥이
+    /// 근무·순위·보상을 부풀리고, 끈 사람만 이득이라 결국 모두가 끄게 된다.
+    var autoWorkStartEnabled: Bool = true
 
     /// 팝오버(MenuBarExtra 창) 표시 여부. 표시 감지(onAppear/창 노티)가 setMenuPresented 로 알린다.
     /// 관찰 대상이 아니다 — 티커/폴링 게이팅 판정에만 쓴다.
@@ -1229,6 +1234,7 @@ final class WorkTimerStore {
         displayName = defaults.string(forKey: Self.displayNameKey) ?? ""
         isOverlayEnabled = defaults.object(forKey: Self.overlayEnabledKey) as? Bool ?? true
         isTodoEnabled = defaults.object(forKey: Self.todoEnabledKey) as? Bool ?? true
+        autoWorkStartEnabled = defaults.object(forKey: Self.autoWorkStartEnabledKey) as? Bool ?? true
         miniGameKind = MiniGameKind(rawValue: defaults.string(forKey: Self.miniGameKindKey) ?? "") ?? .timingBar
         // 수동 [근무 종료]의 자동 시작 억제를 복구한다. 단, 앱이 1시간 넘게 죽어 있었다면(밤새 꺼짐·재부팅)
         // 그 공백 자체가 '부재'이므로 여기서 푼다 — 살아 있는 동안의 공백 관측(onAbsenceGap)은 스케줄러가
@@ -2630,6 +2636,8 @@ extension WorkTimerStore {
     static let overlayEnabledKey = "check.overlayEnabled"
     /// 할 일 기능 사용 여부. 켜면 캐릭터 클릭이 보드를 여닫고, 끄면 예전처럼 아파하기가 나온다.
     static let todoEnabledKey = "check.todoEnabled"
+    /// 자동 근무 시작(넛지) 사용 여부. 기기별 설정이라 서버로 보내지 않고 로그아웃에도 지우지 않는다.
+    static let autoWorkStartEnabledKey = "check.work.autoStartEnabled"
     /// 마지막으로 고른 미니게임(MiniGameKind.rawValue).
     static let miniGameKindKey = "check.minigame.kind"
     /// 수동 [근무 종료]의 자동 시작 억제 표식(Bool). 1시간 부재 재무장 판정과 함께 쓴다.
@@ -2679,6 +2687,13 @@ extension WorkTimerStore {
     func setTodoEnabled(_ enabled: Bool) {
         if isTodoEnabled != enabled { isTodoEnabled = enabled }
         defaults.set(enabled, forKey: Self.todoEnabledKey)
+    }
+
+    /// 설정 창의 '자동 근무 시작' 스위치. 판정은 넛지 자격(CheckOverlayController.isNudgeEligible)이 매 tick 다시 읽으므로
+    /// 스케줄러를 따로 흔들지 않는다 — 끄면 다음 tick 에 활성 누적이 0 으로 비고, 켜면 0 분부터 다시 센다.
+    func setAutoWorkStartEnabled(_ enabled: Bool) {
+        if autoWorkStartEnabled != enabled { autoWorkStartEnabled = enabled }
+        defaults.set(enabled, forKey: Self.autoWorkStartEnabledKey)
     }
 
     // toggleTodoEnabled() 는 v0.2.32 에 지웠다. 유일한 호출자이던 팝오버의 TodoToggleControl 이

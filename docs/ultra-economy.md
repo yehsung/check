@@ -21,6 +21,7 @@
 | `20260913170100_shop.sql` | `character_prices` · `character_ownership` · `buy_character` · `buy_ultra` · `shop_state` | **있음**(`set_character` 에 소유 게이트) |
 | `20260913180000_ruby_welcome_grant.sql` | `ruby_welcome_grant` · 평생1회 인덱스 · 백필 | **있음**(가입 트리거가 30루비 지급) |
 | `20260914010000_minigame_round_token.sql` | `minigame_rounds` · `minigame_start_round` · `minigame_submit_score` | **있음**(점수 표 직접 쓰기 회수) |
+| `20260914140000_minigame_reopen_legacy_score_writes.sql` | 없음(grant 1줄 + 단언) | **있음** — 0.3.16 이하가 쓰는 점수 표 직접 쓰기를 **다시 연다** |
 | `20260820040000_ultra_unlimited_flag.sql` | `ultra_wallet_sync` 에 `unlimited` 키 1개 추가(운영자 표시 전용, 본문 3줄) | 없음 |
 | `20260901120000_admin_ultra_ledger.sql` | 없음(표·컬럼 0개) | **있음** — `ultra_poke_user` 관리자 분기가 장부에 `delta 0` 을 적는다 |
 | `20260901130000_ultra_lap_economy.sql` | 없음(표·컬럼 0개) | **있음** — 상한 5→3 · `ultra_wallet_sync` 가 3시간 **마다** 지급하고 가득 참은 영구 소멸 |
@@ -350,7 +351,7 @@ invalid → not_working → target_not_working → target_focused → 관리자 
 | 열린 토큰 | `unique (user_id, game) where used_at is null` — 쌓지 않고 **갈아 끼운다**. `curl` 루프로도 행이 1개를 안 넘는다 |
 | `minigame_start_round(p_game)` | `{ status:"ok", token, expires_at, server_now }` · `invalid` · `unauthorized` |
 | `minigame_submit_score(p_game, p_score, p_token)` | `ok`(+`best_score`·`plays`·`improved`) · `no_token` · `token_used` · `token_expired` · `too_fast`(+`need_seconds`·`elapsed_seconds`) · `invalid`(+`max`) · `unauthorized` · `no_profile` |
-| 점수 표 | `authenticated` 의 insert/update **회수**, select 는 유지(순위표가 읽는다) |
+| 점수 표 | `authenticated` 의 insert/update 를 20260914010000 이 회수했다가 **20260914140000 이 다시 열었다**(아래 "구버전 재개"). select 는 유지(순위표가 읽는다) |
 
 **구조적 시간 하한** — 게임 상수에서 나오는 물리량이라 정직한 플레이는 정의상 못 깬다.
 타이밍바는 10라운드 반주기 합 **3.8125초**(점수 무관), 플래피는 `spacing(s)/speed(s)` 의 **누적 합**
@@ -362,6 +363,13 @@ invalid → not_working → target_not_working → target_focused → 관리자 
 **못 막는 것(정직하게)** — 점수는 사용자 기기가 만든다. 토큰을 받아 **실제로 기다렸다가** 거짓 점수를
 내는 것은 여전히 가능하다. 위조의 이득이 "정직하게 노는 것과 같은 시간"까지 줄어드는 지점이 서버가
 할 수 있는 전부다.
+
+**구버전 재개 (2026-09-14, `20260914140000`)** — 0.3.16 이하는 판 토큰을 모르고 점수 표에 **직접 upsert** 한다.
+회수 직후 최근 7일 미니게임 플레이어 21명 중 **17명(build < 69)의 점수가 조용히 0건**이 됐고(구버전은 실패를
+삼킨다), 사용자 결정으로 insert/update 를 다시 열었다. 본인 행 정책·`guard_minigame_score` 트리거는 그대로다.
+**그래서 지금은 토큰을 안 거치는 직접 쓰기가 누구에게나 열려 있다** — 판 토큰의 시간 하한은 새 앱의 경로에만
+걸리고, REST 위조를 막지는 못한다. 구버전만 골라 열 수는 없다(`profiles.app_build` 는 클라가 보고하는 값이다).
+다시 닫을 때는 `app_build < 69` 인 최근 플레이어 수를 먼저 세고, revoke 하는 **새** 마이그레이션을 쓴다.
 
 `no_token` 은 **없는 토큰·남의 토큰·게임 불일치를 하나로 묶는다** — 구분해 주면 공격자에게
 "어디까지 맞았는지" 알려 주는 신탁이 된다. `need_seconds`·`elapsed_seconds` 는 **진단 전용**이고

@@ -4520,11 +4520,16 @@ private struct LoginPanel: View {
         case .signIn:
             store.signIn()
         case .signUp:
-            store.signUp()
+            FeedbackReplySend.commitThenSend(slot: .authForm) { store.signUp() }
         }
     }
 
     // 하나의 prominent 전체폭 버튼만 노출한다. 모드/서브모드에 따라 로그인/가입/팀 만들기로 바뀐다.
+    //
+    // ★ 가입 갈래는 **조합을 먼저 확정**하고 부른다(`FeedbackReplySend.commitThenSend` — 제보 답장 칸과 같은 문).
+    //   팀 이름은 폼의 마지막 칸이라 이름을 치자마자 버튼을 누르는데, 그 순간 조합 중인 마지막 음절은 아직
+    //   `store.createTeamName` 에 없다(사용자 신고 2026-09-14: "팀명 입력할때 마지막 글자 입력 반영 안되는 버그").
+    //   로그인 갈래는 이메일·비밀번호가 ASCII 강제라 조합이 생기지 않는다.
     @ViewBuilder
     private var primaryButton: some View {
         switch mode {
@@ -4535,11 +4540,11 @@ private struct LoginPanel: View {
         case .signUp:
             if store.isCreateTeamMode {
                 AuthButton(title: "팀 만들고 시작하기", icon: "flag.fill", prominent: true) {
-                    store.signUp()
+                    FeedbackReplySend.commitThenSend(slot: .authForm) { store.signUp() }
                 }
             } else {
                 AuthButton(title: "가입", icon: "person.badge.plus", prominent: true) {
-                    store.signUp()
+                    FeedbackReplySend.commitThenSend(slot: .authForm) { store.signUp() }
                 }
             }
         }
@@ -5121,7 +5126,8 @@ private struct TeamlessPanel: View {
             WeeklyGoalStepper(hours: $store.createTeamGoalHours)
             AuthButton(title: "팀 만들고 시작하기", icon: "flag.fill", prominent: true) {
                 // 팀 생성은 가입 화면과 동일한 진입점(signUp)을 쓴다 — create 모드면 create_team 을 실행한다.
-                store.signUp()
+                // 팀 이름을 치자마자 누르는 버튼이라 **조합을 먼저 확정**한다(가입 화면 primaryButton 주석과 같은 이유).
+                FeedbackReplySend.commitThenSend(slot: .authForm) { store.signUp() }
             }
             .disabled(!store.canSync)
         }

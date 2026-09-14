@@ -887,19 +887,47 @@ enum FeedbackReplySend {
     /// 행을 접어 칸이 사라져도 이 참조는 굳이 지우지 않는다. 지울 자리(dismantle)는 SwiftUI 가 뷰를
     /// 다시 만드는 경로에서도 불려서 방금 선 표식을 지울 수 있고, 남아 있어도 아래 두 관문
     /// (**필드 에디터인가 · 조합 중인가**)이 전부 걸러 낸다.
-    private(set) static weak var host: NSWindow?
+    static var host: NSWindow? { window(for: .feedbackReply) }
 
-    static func register(_ window: NSWindow?) {
-        guard let window else { return }
-        host = window
+    /// 이 문을 지나는 칸의 **자리**. 칸마다 자기 창을 따로 적어 둔다.
+    ///
+    /// **왜 자리가 필요해졌나**(사용자 신고 2026-09-14: "닉네임 변경할때나 팀명 입력할때 마지막 글자 입력 반영
+    /// 안되는 버그"). 이 문은 이제 답장 칸만의 것이 아니다 — 설정 창의 별명 칸과 팝오버의 가입·무소속 화면
+    /// (별명·팀 이름 칸)도 같은 결함을 같은 방법으로 막는다. 그런데 칸이 **서로 다른 창**에 선다(설정 창 · 팝오버).
+    /// 창 하나만 적어 두면 마지막에 표식을 붙인 창이 앞의 것을 덮어, 설정 창에서 조합 중인 별명을 팝오버 창의
+    /// 첫 응답자에서 찾게 되고 확정은 조용히 no-op 이 된다. 자리를 나누면 각 동작이 **자기 칸이 선 창**만 본다.
+    enum Slot: Hashable {
+        /// 받은 제보 탭의 답장 칸(v0.3.14 — 이 문이 처음 생긴 자리).
+        case feedbackReply
+        /// 설정 창의 별명 칸(`DisplayNameSettingsRow`).
+        case settingsDisplayName
+        /// 팝오버의 가입·무소속·재설정 화면 칸(`CredentialField` — 별명·팀 이름이 한글이다).
+        case authForm
     }
 
-    /// 지금 글자를 받고 있는 **필드 에디터**. 답장 칸이 아니면 nil 이다.
+    private final class WeakWindow {
+        weak var window: NSWindow?
+        init(_ window: NSWindow) { self.window = window }
+    }
+
+    private static var windows: [Slot: WeakWindow] = [:]
+
+    static func register(_ window: NSWindow?, slot: Slot = .feedbackReply) {
+        guard let window else { return }
+        windows[slot] = WeakWindow(window)
+    }
+
+    /// 그 자리의 칸이 서 있는 창(약참조). 칸이 한 번도 안 섰으면 nil.
+    static func window(for slot: Slot) -> NSWindow? {
+        windows[slot]?.window
+    }
+
+    /// 지금 글자를 받고 있는 **필드 에디터**. 그 자리의 칸이 아니면 nil 이다.
     ///
     /// `isFieldEditor` 관문이 두 문을 갈라 놓는다: 본문 칸(`CheckEditorTextView`)은 필드 에디터가 아니라
     /// 여기서 절대 잡히지 않는다. 두 문이 같은 뷰를 두고 다투면 확정이 두 번 일어난다.
-    static func activeFieldEditor() -> NSTextView? {
-        guard let editor = host?.firstResponder as? NSTextView, editor.isFieldEditor else { return nil }
+    static func activeFieldEditor(slot: Slot = .feedbackReply) -> NSTextView? {
+        guard let editor = window(for: slot)?.firstResponder as? NSTextView, editor.isFieldEditor else { return nil }
         return editor
     }
 
@@ -908,8 +936,8 @@ enum FeedbackReplySend {
     /// 확정은 **동기**다(실측: 런루프를 한 턴도 돌리지 않고 읽은 바인딩이 이미 `"확인했어요"` 였다).
     /// 그래서 아래 `commitThenSend` 의 두 줄 사이에 기다릴 것이 없다.
     @discardableResult
-    static func commitActiveComposition() -> Bool {
-        guard let editor = activeFieldEditor(), editor.hasMarkedText() else { return false }
+    static func commitActiveComposition(slot: Slot = .feedbackReply) -> Bool {
+        guard let editor = activeFieldEditor(slot: slot), editor.hasMarkedText() else { return false }
         editor.inputContext?.discardMarkedText()
         if editor.hasMarkedText() { editor.unmarkText() }
         editor.didChangeText()
@@ -920,28 +948,38 @@ enum FeedbackReplySend {
     /// 그 자리에서 올려 주므로 다음 줄의 전송이 **사용자가 화면에서 보던 문장 전체**를 읽는다.
     /// 두 줄을 바꾸지 마라.
     @discardableResult
-    static func commitThenSend(_ send: () -> Void) -> Bool {
-        let committed = commitActiveComposition()
+    static func commitThenSend(slot: Slot = .feedbackReply, _ send: () -> Void) -> Bool {
+        let committed = commitActiveComposition(slot: slot)
         send()
         return committed
     }
 }
 
-/// 답장 칸이 선 창을 위 문에 알려 주는, 그림을 그리지 않는 0pt 뷰.
+/// 칸이 선 창을 위 문에 알려 주는, 그림을 그리지 않는 0pt 뷰.
 /// `TodoBoardWindowVisibility`/`WindowAnchorAccessor` 와 같은 관용구다 — 창에 붙는 순간을 AppKit 이
 /// 알려 주므로(`viewDidMoveToWindow`) SwiftUI 재평가 순서에 기대는 레이스가 성립하지 않는다.
 struct FeedbackReplyWindowAnchor: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { AnchorView(frame: .zero) }
+    /// 이 표식이 알리는 칸의 자리. 기본값은 답장 칸이다(이 표식이 처음 생긴 자리).
+    var slot: FeedbackReplySend.Slot = .feedbackReply
+
+    func makeNSView(context: Context) -> NSView {
+        let view = AnchorView(frame: .zero)
+        view.slot = slot
+        return view
+    }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? AnchorView)?.slot = slot
         // 이미 창에 붙어 있으면 지금 잡는다(뷰가 재사용되며 `viewDidMoveToWindow` 가 안 오는 경로).
-        FeedbackReplySend.register(nsView.window)
+        FeedbackReplySend.register(nsView.window, slot: slot)
     }
 
     final class AnchorView: NSView {
+        var slot: FeedbackReplySend.Slot = .feedbackReply
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            FeedbackReplySend.register(window)
+            FeedbackReplySend.register(window, slot: slot)
         }
     }
 }

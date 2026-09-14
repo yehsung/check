@@ -224,6 +224,8 @@ private struct DisplayNameSettingsRow: View {
                             .stroke(CheckTheme.border, lineWidth: 1)
                     )
                     // 여기엔 focusEffectDisabled 를 걸지 않는다 — 입력칸은 커서가 어디 있는지 보여야 쓴다.
+                    // 이 칸이 선 창을 조합 확정 문에 알려 준다(`save()` 첫 줄이 이 창의 조합을 확정한다).
+                    .background(FeedbackReplyWindowAnchor(slot: .settingsDisplayName).frame(width: 0, height: 0))
                     .onSubmit(save)
                     .accessibilityLabel("별명")
                 saveButton
@@ -318,6 +320,11 @@ private struct DisplayNameSettingsRow: View {
     }
 
     private func save() {
+        // ★ **조합을 먼저 확정한다**(`FeedbackReplySend` — 제보 답장 칸과 같은 문). 별명은 한글이라 마지막 음절이
+        //   조합 중인 채로 [저장]·Enter 가 오면 그 음절이 `draft` 에 아직 없다(사용자 신고 2026-09-14: "닉네임
+        //   변경할때 … 마지막 글자 입력 반영 안되는 버그"). 확정은 동기라 바로 아래 `canSave`·`draft` 가 화면에
+        //   보이던 이름 전체를 읽는다. 두 줄의 순서를 바꾸지 마라.
+        FeedbackReplySend.commitActiveComposition(slot: .settingsDisplayName)
         guard canSave else { return }
         Task { @MainActor in
             // 최종 판정자는 서버다. 성공하면 서버가 실제로 저장한 값으로 입력칸을 되맞춘다

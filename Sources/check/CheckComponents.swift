@@ -1209,7 +1209,9 @@ struct CredentialField: View {
             .tint(CheckTheme.accent)
             .accessibilityLabel(title)
             .submitLabel(submitLabel)
-            .onSubmit { onSubmit?() }
+            // Enter 도 **조합을 먼저 확정**하고 넘긴다(`FeedbackReplySend` — 제보 답장 칸과 같은 문). 별명 칸에서
+            // Enter 로 다음 칸으로 넘어가거나 제출할 때 조합 중이던 마지막 음절이 바인딩에 없는 채로 읽히지 않게.
+            .onSubmit { FeedbackReplySend.commitThenSend(slot: .authForm) { onSubmit?() } }
         if let focus, let fieldIdentifier {
             base.focused(focus, equals: fieldIdentifier)
         } else {
@@ -1223,7 +1225,11 @@ struct CredentialField: View {
         if isSecure {
             SecureField("", text: $text)
         } else {
+            // 이 칸이 선 창을 조합 확정 문에 알려 준다. 별명·팀 이름은 한글이라, 조합 중인 마지막 음절이
+            // 바인딩에 올라오기 전에 [가입]·[팀 만들고 시작하기]가 눌리면 그 음절이 빠진다(v0.3.14 답장 칸과
+            // 같은 결함 — 측정과 근거는 `FeedbackReplySend`). 비밀번호(SecureField)는 조합이 없어 안 붙인다.
             TextField("", text: $text)
+                .background(FeedbackReplyWindowAnchor(slot: .authForm).frame(width: 0, height: 0))
         }
     }
 }

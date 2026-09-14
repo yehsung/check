@@ -2315,6 +2315,26 @@ struct ProfileAppVersionUpdateRequest: Encodable {
     let appVersion: String
 }
 
+/// `app_latest_release()` RPC 응답(v0.3.20). 릴리스 스크립트가 brew 탭 반영을 원격에서 확인한 **뒤에만** 서버에 적는
+/// 최신 릴리스 한 줄이다 — 실행 중인 앱은 GitHub 하루 1회 폴링을 기다리지 않고 이걸로 새 버전을 안다.
+///
+/// **전부 옵셔널인 이유**: 표가 빈 서버의 `{"v":1,"version":null,"build":null,"notes":[],"published_at":null}` 도 정상 응답이고,
+/// 필드가 늘거나 빠져도 디코드에서 죽으면 안 된다(모르는 키는 합성 디코더가 무시한다). 판정(v·build·version 검사)은
+/// 디코드가 아니라 `UpdateCheckStore.applyServerRelease` 한 곳에서 한다 — 여기서 거르면 '모르는 모양'과 '업데이트 없음'이
+/// 같은 throw 로 뭉개진다. build 가 비교축인 이유는 AppVersionReport 와 같다(문자열 버전은 순서를 거짓말한다).
+struct AppLatestRelease: Decodable, Equatable, Sendable {
+    /// 응답 계약 버전. 1 만 읽는다(누락은 1 로 본다).
+    let v: Int?
+    /// "0.3.20"(v 접두 없음 — 서버가 `^[0-9]+(\.[0-9]+){1,3}$` 로 검증한다).
+    let version: String?
+    /// CFBundleVersion 정수. 서버에서 단조 증가한다(낮은 빌드 게시는 거절).
+    let build: Int?
+    /// 패치노트 항목(최대 8개, 각 1~200자). 표시 정규화·4줄 상한은 클라가 GitHub 본문과 같은 함수로 한다.
+    let notes: [String]?
+    /// 게시 시각(timestamptz 원문). 표시·판정에 쓰지 않는다 — 진단용으로만 받는다.
+    let publishedAt: String?
+}
+
 // MARK: - 별명(표시명) 변경 (계약 타입)
 
 /// set_display_name RPC 요청. { p_name: 사용자가 입력한 원문 } — 정규화의 최종 권한은 서버다.

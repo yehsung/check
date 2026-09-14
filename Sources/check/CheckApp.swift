@@ -24,9 +24,13 @@ struct CheckApp: App {
                 .background(WindowAnchorAccessor(onVisibilityChange: { appDelegate.store.setMenuPresented($0) }))
         } label: {
             // 아이콘 판정만 스냅샷을 읽고, 글자는 스토어의 파생 저장값(menuBarTitle)을 그대로 그린다.
+            // 업데이트 점: 근무를 안 하면 캐릭터 말풍선이 뜰 자리가 없고, 팝오버를 안 열면 배너도 못 본다 — 그런 사람에게
+            // 새 버전을 알릴 곳은 늘 떠 있는 이 아이콘뿐이다. 업데이트 스토어가 @Observable 이라 여기서 읽는 것만으로
+            // 새 릴리스가 잡힌 순간 라벨이 다시 그려진다.
             MenuBarStatusLabel(
                 snapshot: appDelegate.store.snapshot,
-                title: appDelegate.store.menuBarTitle
+                title: appDelegate.store.menuBarTitle,
+                updateAvailable: appDelegate.updateCheck.isUpdateAvailable
             )
         }
         .menuBarExtraStyle(.window)
@@ -51,7 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         realtimeTransport: RealtimeFeature.isEnabled() ? LiveRealtimeTransport() : nil
     )
     // 업데이트 감지 스토어(1개). 팝오버 배너(CheckMenuView)와 근무중 오버레이 말풍선(컨트롤러)이 같은
-    // 상태를 공유하도록 델리게이트가 단일 소유한다 — 하루 1회 체크/버전당 1회 말풍선 기록이 두 표면에 일관된다.
+    // 상태를 공유하도록 델리게이트가 단일 소유한다 — 서버 감시·GitHub 하루 1회 폴백·버전당 1회 말풍선 기록이 모든 표면에 일관된다.
+    // 서버 감시는 여기서 켜지 않는다(applicationDidFinishLaunching 에서 조회기와 말풍선 콜백을 물린 뒤에 켠다).
     let updateCheck = UpdateCheckStore()
     // 근무중 3D 캐릭터 오버레이. 패널은 여기서 1회 생성하고 숨김으로 시작하며, 루트 뷰가
     // store.snapshot.isWorking을 관찰해 표시/숨김을 전환한다(store는 읽기 전용으로만 참조).
@@ -93,6 +98,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             WindowTopAnchor.presentMenuPopover()
         }
+        // 새 버전 알림(v0.3.20). 서버(`app_latest_release`)를 실행 5초 뒤·5분마다·깨어날 때 본다 — **이 배선이 없으면**
+        // 감지는 예전처럼 팝오버를 열 때 하루 1회 GitHub 을 치는 것뿐이라, 아이콘을 안 누르는 사용자는 릴리스를 하루 늦게
+        // 알거나 끝내 모른다. 조회기가 nil 인 채로 두면 서버 메서드는 전부 no-op 이라 컴파일도 테스트도 조용히 초록이다.
+        //   ① **조회기는 스토어의 서비스를 그대로 쓴다.** 서비스를 하나 더 만들면 anon 키 읽기·URLSession 구성이 두 벌이 된다.
+        //      anon Bearer 라 로그인 전·로그아웃 상태에서도 동작한다.
+        //   ② **새 버전을 안 그 순간 캐릭터 말풍선을 시도한다.** 없으면 말풍선은 40~80분 졸기 tick 에만 편승해 뜬다.
+        //      캐릭터가 안 보이는 때(근무 전)는 컨트롤러가 false 로 돌려보내고, 근무를 시작하면 졸기 tick 이 버전당 1회를 챙긴다.
+        //   ③ **컨트롤러를 만든 뒤에** 켠다 — 첫 조회가 새 버전을 들고 와도 받아 줄 말풍선 자리가 있어야 한다.
+        let releaseService = store.service
+        updateCheck.serverFetcher = { try await releaseService.fetchLatestRelease() }
+        updateCheck.onNewVersionAvailable = { [weak self] _ in _ = self?.overlayController?.showUpdateBubbleIfNeeded() }
+        updateCheck.startServerWatch()
         // 로그인 시 자동 실행은 **전원의 기본값**이다. 매 실행마다 판단해서 등록이 사라져 있으면(brew 로
         // .app 번들이 교체되면 실제로 사라진다) 되살린다. 사용자가 끈 것은 두 갈래 모두 존중한다 —
         // 앱 토글로 끈 것은 userTurnedOffKey 로, 시스템 설정에서 끈 것은 .requiresApproval 상태로 걸러진다.

@@ -1644,6 +1644,21 @@ actor SupabaseWorkService {
         )
     }
 
+    /// 서버가 아는 최신 릴리스(v0.3.20). `app_latest_release()` RPC 를 **anon Bearer**(accessToken 없이)로 호출한다 —
+    /// 로그인 전·로그아웃 상태에서도 업데이트는 알아야 하므로 로그인 토큰에 묶지 않는다(lookupTeamByCode 와 같은 문).
+    /// 반환은 jsonb 단일 객체(배열 아님)라 그대로 디코드한다. 함수가 없는 옛 서버(404)·일시 장애(5xx)는 다른 호출과 같이
+    /// throw 하고, 호출부(UpdateCheckStore.checkServerNow)가 조용히 삼킨다 — GitHub 경로가 폴백으로 남아 있다.
+    func fetchLatestRelease() async throws -> AppLatestRelease {
+        let data = try await send(
+            path: "/rest/v1/rpc/app_latest_release",
+            method: "POST",
+            body: EmptyBody(),
+            accessToken: nil,
+            prefer: nil
+        )
+        return try decoder.decode(AppLatestRelease.self, from: data)
+    }
+
     /// 내 토큰 사용량 공개 여부 갱신. profiles 자기 행을 PATCH 한다(RLS 로 본인 행만 허용). 반환 없음(return=minimal).
     func updateTokenUsagePublic(accessToken: String, userID: String, isPublic: Bool) async throws {
         try await sendNoBody(

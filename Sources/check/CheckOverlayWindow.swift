@@ -966,8 +966,9 @@ final class CheckOverlayController {
                 // 졸기 진입은 정밀할 필요가 없으므로 tolerance 를 둬 타이머 coalescing(전력 절감)을 허용한다.
                 try? await Task.sleep(for: .seconds(interval), tolerance: .seconds(10))
                 guard let self, !Task.isCancelled else { return }
-                // 업데이트 감지 편승: 팝오버가 하루 1회 킥해 채워 둔 공유 상태를 읽어, 표시 중 새 버전이면
-                // 버전당 1회 말풍선을 띄운다(네트워크는 새로 치지 않음 — 상시 루프/유휴 타이머 신설 금지).
+                // 업데이트 감지 편승: 서버 감시(UpdateCheckStore)가 채워 둔 공유 상태를 읽어, 표시 중 새 버전이면
+                // 버전당 1회 말풍선을 띄운다(여기서는 네트워크를 치지 않는다). 새 버전을 안 **그 순간**의 말풍선은
+                // onNewVersionAvailable 이 따로 시도한다 — 이 tick 은 그때 캐릭터가 안 보였던 경우를 줍는 그물이다.
                 // 이번 tick 에 업데이트 말풍선을 띄웠으면 졸기는 건너뛴다(말풍선 채널 충돌 방지).
                 if self.showUpdateBubbleIfNeeded() { continue }
                 // 판정은 아래 프로퍼티 하나로 모은다 — 40~80분마다 한 번 도는 루프 안에 조건을 묻어 두면

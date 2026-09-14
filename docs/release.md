@@ -17,6 +17,7 @@ aing-check 를 팀원에게 배포하는 경로는 두 가지입니다.
 | `yehsung/homebrew-check` | Homebrew **tap** 저장소. `Casks/aing-check.rb` 하나가 들어 있고, 릴리즈마다 version/sha256 이 갱신됨 |
 | `packaging/homebrew/aing-check.rb` | Cask **템플릿**(`__VERSION__`, `__SHA256__` 자리표시자). 릴리즈 스크립트가 이 템플릿을 치환해 tap 저장소로 복사 |
 | `scripts/release-brew.sh` | 위 전 과정을 한 번에 처리하는 릴리즈 자동화 스크립트 |
+| Supabase `app_release` · `app_latest_release()` · `app_publish_release()` | **서버 릴리스 알림.** 스크립트가 tap 반영을 원격에서 확인한 뒤 맨 마지막에 게시하고, 실행 중인 앱(build 72 이상)이 5분마다 읽어 새 버전을 곧바로 안다 — 아래 [서버 릴리스 알림](#서버-릴리스-알림) |
 
 `brew tap yehsung/check` 은 GitHub 저장소 `yehsung/homebrew-check` 로 해석됩니다(tap 이름 규칙: `homebrew-` 접두사 생략). Cask 파일명이 `aing-check.rb` 이므로 설치 명령은 `brew install --cask aing-check`(또는 tap 까지 한 번에 `brew install yehsung/check/aing-check`)입니다.
 
@@ -53,8 +54,9 @@ aing-check 를 팀원에게 배포하는 경로는 두 가지입니다.
 
 ```sh
 # 0) CHANGELOG.md 에 이번 버전 항목을 먼저 쓴다 (없으면 릴리즈가 실패한다)
-#    "## 0.2.0" 섹션에 사용자 문장으로 한 줄씩. 이 섹션이 그대로 GitHub 릴리즈 노트가 되고
-#    앱의 "새 버전이 나왔어요" 배너에 앞의 4줄까지 표시된다.
+#    "## 0.2.0" 섹션에 사용자 문장으로 "- " 한 줄씩. 이 섹션이 그대로 GitHub 릴리즈 노트가 되고
+#    앱의 "새 버전이 나왔어요" 배너에 앞의 4줄까지 표시된다. 항목 줄은 서버 릴리스 알림에도 그대로 게시되므로
+#    8줄 이하 · 한 줄 200자 이하여야 한다(어긋나면 태그를 만들기 전에 멈춘다).
 
 # 1) 코드 수정 후 테스트 (반드시 통과 확인)
 export CHECK_SUPABASE_ANON_KEY="<Supabase anon key>"   # 또는 .env.local
@@ -108,27 +110,128 @@ CHECK_E2E=1 CHECK_E2E_SR_KEY_FILE=<apikeys.json> swift test --filter LiveE2E   #
 # 2) Developer ID 서명 + 공증 + 스테이플된 배포 zip 생성 → dist/aing-check.zip
 ./scripts/package-notarized.sh
 
-# 3) 태그·릴리즈·Cask 반영을 한 번에 (먼저 dry-run 으로 확인 권장)
+# 3) 태그·릴리즈·Cask 반영·서버 릴리스 알림을 한 번에 (먼저 dry-run 으로 확인 권장)
 ./scripts/release-brew.sh 0.2.0 --dry-run
 ./scripts/release-brew.sh 0.2.0
+#    맨 끝 서버 게시만 실패했다면 brew 쪽(태그·릴리즈·tap)은 이미 끝난 것이다 — 원인을 고치고 게시만 다시:
+#    ./scripts/release-brew.sh 0.2.0 --server-only
 
-# 4) 팀원은 최신 버전으로 업그레이드
+# 4) 팀원은 최신 버전으로 업그레이드 (켜져 있는 앱은 5분 안에 스스로 알린다 — 아래 "서버 릴리스 알림")
 brew update && brew upgrade --cask aing-check
 ```
 
 `release-brew.sh` 가 순서대로 하는 일:
 
-1. **사전점검** — gh 로그인, **`CHANGELOG.md` 의 `## <버전>` 패치노트**, `GH_OWNER`(또는 `.env.local` 의 `CHECK_GH_OWNER`), `dist/aing-check.zip` 존재 및 공증 스테이플(`stapler validate`) 확인. 하나라도 어긋나면 안내 메시지와 함께 실패합니다(zip 이 없으면 `package-notarized.sh` 를 먼저 돌리라고 안내). 패치노트 점검은 태그·푸시 같은 부수효과보다 **앞에** 있으므로, 노트를 안 썼으면 아무것도 건드리지 않고 즉시 멈춥니다.
-2. **git 태그 + 릴리즈** — `v0.2.0` 태그 생성/푸시 후 `gh release create` 로 릴리즈 생성 + `aing-check.zip` 업로드. 릴리즈 노트 본문은 CHANGELOG 의 해당 섹션 + 설치 안내 한 줄입니다. 이미 있는 태그/릴리즈는 건너뛰거나 자산만 덮어써서 **다시 실행해도 안전(멱등)** 합니다.
-3. **Cask 갱신** — zip 의 sha256 을 계산해 `packaging/homebrew/aing-check.rb` 의 version/sha256 을 치환한 뒤 tap 저장소의 `Casks/aing-check.rb` 로 복사·커밋·푸시. 변경이 없으면 커밋을 건너뜁니다.
-4. **안내 출력** — 팀원 최초 설치 명령과 업그레이드 명령을 출력합니다.
+1. **사전점검(부수효과 전부보다 앞)** — 하나라도 어긋나면 안내 메시지와 함께 아무것도 건드리지 않고 멈춥니다.
+   - gh 로그인, `GH_OWNER`(또는 `.env.local` 의 `CHECK_GH_OWNER`).
+   - **`CHANGELOG.md` 의 `## <버전>` 패치노트** — 노트를 안 썼으면 즉시 멈춥니다. 항목 줄(`- `·`* `)이 서버 알림 규칙(8줄 이하 · 한 줄 200자 이하)을 지키는지도 여기서 봅니다.
+   - `dist/aing-check.zip` 존재, 공증 스테이플(`stapler validate`), zip 안 앱의 **버전**(`CFBundleShortVersionString` == 릴리스 버전)과 **build**(`CFBundleVersion`, 1..1000000 정수). zip 이 없으면 `package-notarized.sh` 를 먼저 돌리라고 안내합니다.
+   - **tap 저장소** — 있는지, upstream 이 걸려 있는지, 원격보다 뒤처지지 않았는지(fetch 로 확인). 예전엔 이 확인이 GitHub 릴리즈가 공개된 **뒤에** 있어, tap 이 없으면 릴리즈만 나간 채 멈췄습니다.
+   - **서버의 현재 릴리스 알림** — `app_latest_release()` 를 읽기 전용으로 조회해, 서버 build 가 이번 build 보다 크면(또는 같은 build 에 다른 버전이면) 역행으로 멈춥니다. 버전이 서버 형식(숫자.숫자.숫자, 접미사 없음)이 아니어도 멈춥니다.
+2. **git 태그 + 릴리즈** — `v0.2.0` 태그 생성/푸시 후 `gh release create` 로 릴리즈 생성 + `aing-check.zip` 업로드. 릴리즈 노트 본문은 CHANGELOG 의 해당 섹션 + 설치 안내 한 줄입니다. 이미 있는 태그는 건너뛰고, 이미 있는 릴리즈는 자산만 덮어씁니다.
+3. **Cask 커밋** — zip 의 sha256 을 계산해 `packaging/homebrew/aing-check.rb` 의 version/sha256 을 치환한 뒤 tap 저장소의 `Casks/aing-check.rb` 로 복사·커밋. 변경이 없으면 커밋을 건너뜁니다.
+4. **tap 푸시 + 원격 게이트** — tap 로컬이 원격보다 앞서 있으면 푸시합니다(푸시할 HEAD 의 Cask 가 이번 version/sha256 일 때만 — 엉뚱한 커밋은 올리지 않습니다). 그다음 `git fetch` 로 **원격**의 `Casks/aing-check.rb` 를 되읽어 version·sha256 이 이번 zip 과 같은지 확인합니다. 다르면 서버에 게시하지 않고 멈춥니다.
+5. **서버 릴리스 알림 게시** — `app_publish_release` 로 버전·build·노트를 올리고, `app_latest_release()` 를 되읽어 build 가 맞는지 확인한 뒤 결과(`published`/`refreshed`/`unchanged`)를 출력합니다.
+6. **안내 출력** — 팀원 최초 설치 명령과 업그레이드 명령을 출력합니다.
+
+**다시 실행해도 되나** — 같은 버전·같은 zip 으로 다시 돌리는 것은 안전하게 짜여 있습니다. 태그·릴리즈는 건너뛰거나 자산만 덮어쓰고, Cask 에 변경이 없으면 커밋을 건너뛰되 **지난 실행이 커밋만 하고 푸시에 실패했으면 4 에서 그 커밋을 푸시**하고, 서버 게시는 같은 build 면 `unchanged`(노트만 바뀌었으면 `refreshed`)로 끝납니다. 다만 "완전히 멱등"은 아닙니다.
+
+- 중간에 멈추면 **앞 단계는 이미 공개된 상태**입니다(예: GitHub 릴리즈는 나갔는데 tap 은 옛것). 원인을 고치고 같은 명령을 다시 돌려 나머지를 채우세요. 그 사이 build 71 이하 앱의 GitHub 확인은 새 릴리즈를 brew 보다 먼저 볼 수 있습니다.
+- 그 사이 **zip 을 다시 만들면** sha256 이 바뀌어 릴리즈 자산이 교체되고 새 Cask 커밋이 생깁니다 — 이미 받은 사람과 해시가 달라지니 되도록 같은 zip 으로 재실행하세요.
+- 예전 스크립트는 **커밋은 됐는데 푸시가 실패한 상태를 재실행해도 푸시하지 않고 성공을 찍었습니다**(스테이징할 변경이 없으면 커밋·푸시를 둘 다 건너뜀). 지금은 4 가 앞섬을 보고 푸시한 뒤 원격을 되읽어 확인합니다.
 
 ### dry-run
 
-`--dry-run` 을 붙이면 태그/릴리즈/푸시를 실제로 실행하지 않고 각 단계에서 **무엇을 할지**만 출력합니다(생성될 Cask 내용 미리보기 포함). 사전점검이 어긋나도 종료하지 않고 경고만 남기므로, 흐름 전체를 미리 확인할 때 유용합니다.
+`--dry-run` 을 붙이면 태그/릴리즈/푸시/서버 게시를 실제로 실행하지 않고 각 단계에서 **무엇을 할지**만 출력합니다(생성될 Cask 내용과 서버에 보낼 SQL 미리보기 포함). 사전점검이 어긋나도 종료하지 않고 경고만 남기므로, 흐름 전체를 미리 확인할 때 유용합니다.
+
+- **supabase 는 부르지 않습니다.** 서버 사전점검(현재 build 조회)은 건너뛴다고 출력만 합니다. 실제 실행 전에 서버 상태를 보려면 아래 [지금 무엇이 게시돼 있나](#지금-무엇이-게시돼-있나-읽기-전용)를 직접 조회하세요.
+- **tap 원격 fetch·읽기는 실제로 합니다**(읽기 전용). 전체 흐름의 dry-run 은 Cask 를 커밋하지 않으니 원격이 옛 버전인 게 정상이라 게이트 불일치를 **경고**로 넘기고, `--server-only --dry-run` 에서는 **실패**로 멈춥니다(그 모드에선 원격이 이미 새 버전이어야 하므로). 로컬이 원격보다 앞서 있으면 `[dry-run] git -C … push` 로 푸시할 것을 알리고, 푸시하면 원격이 가질 로컬 HEAD 기준으로 판정합니다.
 
 ```sh
 GH_OWNER=yehsung ./scripts/release-brew.sh 0.2.0 --dry-run
+GH_OWNER=yehsung ./scripts/release-brew.sh 0.2.0 --server-only --dry-run
+```
+
+## 서버 릴리스 알림
+
+예전에는 앱이 **팝오버를 열 때만, 하루 한 번** GitHub `releases/latest` 를 물어 새 버전을 알았습니다 — 팀원은 하루 늦게 알거나, 팝오버를 안 열면 아예 모르고 지나갔습니다. 이제는 릴리스 스크립트가 맨 마지막에 **서버에 새 버전을 게시**하고, 켜져 있는 앱이 그 값을 주기적으로 읽습니다.
+
+| 서버 객체 | 역할 |
+| --- | --- |
+| `public.app_release` | 최신 릴리스 한 행만 담는 표. 클라이언트는 표에 직접 접근할 수 없습니다 |
+| `public.app_latest_release()` | anon · authenticated 실행 가능(로그인 안 해도 알림을 받음). `{"v":1,"version":"0.3.20","build":72,"notes":["…"],"published_at":"…"}` — 아직 게시 전이면 version·build·published_at 이 null, notes 는 `[]` |
+| `public.app_publish_release(p_version, p_build, p_notes, p_force)` | **service_role(과 소유자)만** 실행. build 기준으로 앞으로만 갑니다 |
+
+`app_publish_release` 의 결과(`status`)와 거절:
+
+- `published` — 더 높은 build 를 올렸습니다(`published_at` = 지금).
+- `refreshed` — 같은 build · 같은 버전인데 노트만 달라 노트를 갈았습니다(`published_at` 유지).
+- `unchanged` — 완전히 같습니다.
+- `app_release_regression` 예외 — 더 낮은 build 이거나, 같은 build 에 다른 버전. `p_force = true` 로만 넘길 수 있습니다.
+- `app_release_invalid` 예외 — 버전 형식(`^[0-9]+(\.[0-9]+){1,3}$`), build 1..1000000, 노트 8줄 이하 · 줄마다 1..200자 위반.
+
+게시되는 노트는 CHANGELOG `## <버전>` 섹션의 항목 줄(`- `·`* ` 로 시작)에서 불릿을 뗀 것입니다. GitHub 릴리즈 본문 끝의 설치 안내 줄은 들어가지 않습니다.
+
+> **처음 켤 때**: 릴리스 알림 마이그레이션이 서버에 먼저 적용돼 있어야 합니다(위 파이프라인 1-1). 없으면 스크립트가 사전점검에서 `서버의 현재 릴리스를 읽지 못했습니다` 로 멈춥니다 — 태그를 만들기 전이라 아무것도 나가지 않습니다.
+
+### 순서 보장 — brew 가 먼저, 서버 알림이 마지막
+
+앱은 알림을 받는 즉시 "업데이트"를 띄우고, [지금 업데이트]는 `brew upgrade` 를 부릅니다. tap 이 아직 옛 Cask 인데 알림이 먼저 나가면 사용자가 눌러도 아무것도 받지 못합니다. 그래서:
+
+1. 게시에 필요한 확인(노트 규칙 · zip build · 서버의 현재 build · tap 상태)은 **태그를 만들기 전에** 끝냅니다.
+2. tap 커밋을 푸시한 뒤 **원격을 fetch 로 되읽어** `Casks/aing-check.rb` 의 version·sha256 이 이번 zip 과 같을 때만 다음으로 갑니다. 로컬 커밋만 보고 넘어가지 않습니다.
+3. 서버 게시는 **맨 마지막**이고, 게시 응답이 아니라 앱이 실제로 읽는 `app_latest_release()` 를 되읽어 build 를 확인합니다.
+
+원격 게이트에서 멈추면 서버에는 아무것도 게시되지 않습니다. 서버 게시가 실패해도 brew 쪽은 이미 끝난 상태이므로 **게시만 다시** 하면 됩니다(`--server-only`).
+
+### 앱이 알게 되는 속도
+
+- **서버 알림을 읽는 앱(build 72 이상)** — 켜진 뒤 약 5초에 한 번, 이후 **5분마다**, 잠에서 깰 때, 팝오버를 열 때(60초에 한 번까지) 조회합니다. 게시 뒤 **켜져 있는 앱은 길어야 5분 남짓**이면 알고, 곧바로 캐릭터 말풍선("새 업데이트가 있어요!")을 띄우려 하며, 업데이트가 있는 동안 메뉴바 아이콘에 작은 점이 뜹니다. 꺼져 있던 앱은 켜질 때 압니다.
+- 비교는 **build(`CFBundleVersion` 정수)** 로 합니다. 버전 문자열 축은 `"0.3.01"=="0.3.1"` 같은 함정이 있었습니다.
+- GitHub 하루 1회 확인은 예비 경로로 남아 있습니다.
+- **build 71 이하(이미 설치된 앱)는 이 코드를 가질 수 없어** 예전처럼 팝오버를 열 때 하루 1회 GitHub 확인만 합니다. 이들이 한 번 업그레이드하고 나면 그다음 릴리스부터 빨라집니다.
+
+### `--server-only` — 게시만 다시 · 현재 릴리스 심기
+
+```sh
+GH_OWNER=yehsung ./scripts/release-brew.sh 0.2.0 --server-only --dry-run   # 먼저 확인
+GH_OWNER=yehsung ./scripts/release-brew.sh 0.2.0 --server-only
+```
+
+사전점검(zip 버전 · build · 서버 현재 build 포함)을 전부 돌리고, 태그 · GitHub 릴리즈 · Cask 커밋은 **건너뛰고**, tap 원격 게이트(로컬 커밋이 원격보다 앞서 있으면 그 푸시 포함)를 통과한 뒤에만 게시합니다. 쓰는 때:
+
+- 전체 실행이 **서버 게시에서 실패**했을 때(마이그레이션 미적용, CLI 계정 문제 등) — 원인을 고치고 이것만 다시.
+- 알림 기능을 처음 켤 때 **이미 brew 로 나간 현재 릴리스를 서버에 심을** 때. 선택 사항입니다 — 서버 알림을 읽는 첫 앱은 그다음 build 부터라, 심지 않아도 다음 릴리스가 첫 게시가 됩니다.
+
+`dist/aing-check.zip` 은 **실제로 배포된 그 zip** 이어야 합니다. 원격 게이트가 tap 의 sha256 과 대조하므로, 그 뒤에 zip 을 다시 만들었다면 통과하지 못합니다.
+
+### 역행 방지
+
+서버 build 는 뒤로 가지 않습니다. 스크립트는 사전점검에서 `app_latest_release()` 를 읽어, 서버 build 가 이번 zip 의 build 보다 크거나 같은 build 에 다른 버전이 게시돼 있으면 **태그를 만들기 전에** 멈추고 강제 게시 SQL 을 안내합니다. 서버 함수도 같은 규칙으로 한 번 더 거절합니다(`app_release_regression`). 대개 낡은 zip 이거나 버전 착오이니, 강제하기 전에 그것부터 확인하세요.
+
+### 되돌리기 (운영자 수동)
+
+스크립트는 **강제 게시를 하지 않습니다.** 잘못 나간 릴리스를 내리고 알림도 이전 릴리스로 돌려야 할 때만, 운영자가 Supabase SQL Editor(또는 SQL 을 파일로 저장해 `supabase db query --linked --agent=no -f <파일>`)에서 마지막 인자 `true` 로 직접 게시합니다.
+
+```sql
+-- 예: 0.3.20(build 72)을 내리고 0.3.19(build 71)로 되돌림. 노트는 CHANGELOG 의 그 버전 섹션 항목 줄.
+select public.app_publish_release('0.3.19', 71,
+  array['3시간 근무 보상 안내를 루비로 고쳤어요','울트라가 없으면 상점으로 안내해요']::text[],
+  true);
+select public.app_latest_release();   -- 되읽어 확인
+```
+
+- **brew 를 먼저 되돌리세요.** tap 원격의 Cask 를 이전 버전으로 되돌려 푸시한 뒤 서버를 되돌립니다. 반대면 알림이 가리키는 버전과 brew 가 주는 버전이 어긋납니다.
+- build 71 이하 앱은 GitHub `releases/latest` 만 보므로, 잘못된 릴리즈를 지우거나 pre-release 로 돌려 **GitHub 도 이전 버전을 가리키게** 하세요.
+- 서버를 되돌려도 **이미 올린 앱은 내려가지 않습니다** — 자기 build 가 더 높으니 알림이 안 뜰 뿐입니다.
+- 고쳐서 다시 낼 때는 **새 build 번호**로 릴리스하세요. 같은 build 에 다른 버전은 역행으로 거절됩니다.
+- 노트에 작은따옴표가 있으면 두 번 씁니다(`'사장님''s'`). 역행으로 멈춘 스크립트가 출력하는 강제 게시 SQL 은 이미 이스케이프돼 있습니다.
+- `app_publish_release` 는 service_role 과 소유자만 실행할 수 있습니다. `permission denied for function` 이 나오면 SQL Editor(소유자 권한)에서 실행하세요.
+
+### 지금 무엇이 게시돼 있나 (읽기 전용)
+
+```sh
+supabase db query --linked --agent=no -o json "select public.app_latest_release() as r"
 ```
 
 ## 팀원 설치 / 업그레이드
@@ -363,5 +466,12 @@ update public.teams set weekly_goal_hours = 40 where name = '팀이름';
 - **`stapler validate` 실패 / 스테이플 없음** — `dist/aing-check.zip` 이 공증 전(예: `package-local.sh` 산출물)일 때 발생합니다. `./scripts/package-notarized.sh` 로 다시 만드세요.
 - **`CHANGELOG.md 에 '## <버전>' 섹션이 없거나 비어 있습니다`** — 이번 버전의 변경 내용을 아직 안 적은 것입니다. `CHANGELOG.md` 맨 위에 `## <버전>` 을 만들고 사용자 문장으로 한 줄씩(2~4줄) 적은 뒤 다시 실행하세요. 앱 배너에 그대로 뜨는 문구이므로 내부 구조·파일명 대신 "무엇이 좋아졌는지"를 씁니다.
 - **`gh auth status` 실패** — `gh auth login` 을 다시 실행합니다.
-- **tap 저장소를 찾을 수 없음** — `../homebrew-check` 에 클론했는지, 아니면 `GH_TAP_DIR` 로 경로를 지정했는지 확인합니다. 저장소가 없으면 스크립트가 `gh repo create ...` 안내를 출력합니다.
+- **tap 저장소를 찾을 수 없음** — `../homebrew-check` 에 클론했는지, 아니면 `GH_TAP_DIR` 로 경로를 지정했는지 확인합니다. 저장소가 없으면 스크립트가 `gh repo create ...` 안내를 출력합니다. 이 확인은 사전점검이라 태그·릴리즈가 나가기 전에 멈춥니다.
+- **`서버 게시(app_publish_release)가 실패했습니다`** — brew 쪽(태그·릴리즈·tap)은 이미 끝났습니다. 함께 출력된 원인(바로 아래 항목)을 고친 뒤 **게시만 다시** 하세요: `./scripts/release-brew.sh <버전> --server-only` (먼저 `--dry-run` 을 붙여 확인). 게시가 됐는지 모르겠으면 [지금 무엇이 게시돼 있나](#지금-무엇이-게시돼-있나-읽기-전용)로 봅니다 — 같은 build 로 다시 게시하면 `unchanged` 로 끝나니 재실행은 안전합니다.
+- **`서버의 현재 릴리스를 읽지 못했습니다` / `supabase db query` 실패** — 대개 셋 중 하나입니다. (1) 릴리스 알림 마이그레이션이 아직 서버에 없음(`function public.app_latest_release() does not exist`) → 위 "스키마 적용" 대로 먼저 적용. (2) supabase CLI 가 다른 계정으로 로그인됨(403) → `supabase projects list` 에 `xfnhfjvubetkdnfkfljg` 가 보이는지 확인하고, 안 보이면 `supabase login` 으로 소유 계정에 다시 로그인. (3) 이 체크아웃이 link 되지 않음 → `supabase link --project-ref xfnhfjvubetkdnfkfljg` (`supabase/` 는 git 에서 제외라 새로 클론한 곳·워크트리에는 link 정보가 없습니다).
+- **`… 역행이라 아무것도 건드리지 않고 멈춥니다` / `app_release_regression`** — 대개 `dist/aing-check.zip` 이 낡았거나 버전을 잘못 골랐습니다. zip 을 다시 만들고 버전을 확인하세요. 정말 되돌리는 것이면 [되돌리기](#되돌리기-운영자-수동)대로 운영자가 직접 강제 게시합니다.
+- **`tap 원격(origin/main)의 Casks/aing-check.rb 가 이번 릴리스가 아닙니다`** — 전체 실행이면 tap 푸시가 원격에 닿지 않은 것입니다. `git -C ../homebrew-check status`, `git -C ../homebrew-check log --oneline -1 origin/main` 으로 확인하고 같은 명령을 다시 돌리면 앞선 커밋을 푸시합니다. `--server-only` 라면 대개 `dist/aing-check.zip` 이 배포된 zip 과 다릅니다(그 뒤 다시 패키징함) — 배포된 zip 으로 되돌리거나 새 버전으로 릴리스하세요.
+- **`tap 저장소가 원격보다 N커밋 뒤처져 있습니다`** — 다른 곳에서 tap 이 갱신됐습니다. `git -C ../homebrew-check pull --ff-only` 후 다시 실행합니다.
+- **`HEAD 의 Cask 가 이번 릴리스가 아닙니다 — 푸시하지 않습니다`** — tap 로컬에 이번 릴리스와 무관한 커밋이 푸시되지 않은 채 남아 있습니다. `git -C ../homebrew-check log --oneline @{u}..HEAD` 로 무엇인지 보고, 필요 없는 커밋이 확실할 때만 `git -C ../homebrew-check reset --hard @{u}` 로 정리한 뒤 다시 실행합니다.
+- **`항목이 서버 알림 규칙(8줄 이하 · 한 줄 200자 이하)에 어긋납니다`** — CHANGELOG 섹션의 `- ` 항목을 8줄 이하로 줄이거나 긴 줄을 나눕니다(배너에는 어차피 앞의 몇 줄만 보입니다).
 - **팀원이 옛 버전을 받음** — `brew update` 로 tap 을 먼저 갱신한 뒤 `brew upgrade --cask aing-check` 를 실행하도록 안내합니다.

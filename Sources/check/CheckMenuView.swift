@@ -227,8 +227,9 @@ struct CheckMenuView: View {
                 await store.tokenUsage.runRefreshLoop()
             }
             .task {
-                // 업데이트 감지의 유일한 네트워크 킥 지점(팝오버 열림 경로). 24h 스로틀이라 대부분 즉시 no-op 이고,
-                // 하루 첫 오픈에서만 GitHub 최신 릴리스를 1회 조회한다(유휴 0% 불변 — 상시 타이머 없음). nil 이면 no-op.
+                // 업데이트 감지의 팝오버 경로(v0.3.20 부터 네 갈래 중 하나). 서버 최신 릴리스를 60초 스로틀로 먼저 보고,
+                // GitHub 은 폴백으로 하루 1회만 친다. 나머지 셋(실행 5초 뒤 · 5분마다 · 깨어날 때)은 UpdateCheckStore 의
+                // startServerWatch 가 맡는다. nil 이면 no-op.
                 await updateCheck?.checkIfStale()
             }
     }
@@ -775,6 +776,20 @@ struct MenuBarStatusLabel: View {
     let snapshot: WorkStatusSnapshot
     // 상단바에 표시할 라벨 텍스트. 스토어가 == 가드와 함께 갱신하므로 여기선 그리기만 한다(매초 재계산 없음).
     let title: String
+    /// 새 버전이 나와 있는가(`UpdateCheckStore.isUpdateAvailable`). 참이면 아이콘 우상단에 작은 빨간 점을 얹는다.
+    ///
+    /// 기본값이 false 라 인자 없는 호출부·기존 테스트는 손대지 않아도 컴파일되고, false 는 **예전 그림과 한 픽셀도
+    /// 다르지 않다** — 캐시가 준 NSImage 인스턴스와 SF Symbol 경로를 그대로 탄다(V0320MenuBarUpdateDotTests 가
+    /// 점이 생기기 전 라벨의 사본과 바이트로 맞대어 잰다).
+    ///
+    /// ★ **점을 SwiftUI `.overlay` 로 그리지 마라 — 실제 메뉴바에서 사라진다.** `MenuBarExtra` 는 이 라벨을 뷰로
+    ///   띄우지 않고 `NSStatusBarButton` 의 `image` 한 장 + `title` 한 줄로 **납작하게 옮긴다.** 최소 재현 앱으로 잰
+    ///   사실: overlay 로 얹은 빨간 원은 버튼 이미지에 0픽셀(원본 192px 비트맵이 그대로 넘어갔다)이었고, NSImage 에
+    ///   구운 점은 그대로 남았다. 심볼에 얹은 overlay 는 템플릿 이미지로 바뀌며 색까지 지워졌다. 그런데 ImageRenderer 는
+    ///   overlay 를 멀쩡히 그리므로 **렌더 테스트만 초록**이 된다. 그래서 점은 이미지에 굽는다(`updateBadged`).
+    ///   보이스오버 문구도 같은 이유로 `.accessibilityLabel` 이 아니라 NSImage 의 `accessibilityDescription` 에 싣는다 —
+    ///   같은 재현 앱에서 버튼의 accessibilityLabel 은 nil 이었고, 버튼까지 건너온 것은 이미지 객체 자체뿐이었다.
+    var updateAvailable: Bool = false
 
     /// 캐릭터 선택 방송. **읽기만 한다** — 이 한 줄이 관찰을 등록해, 설정에서 캐릭터를 바꾸면
     /// 이 라벨이 다시 그려진다.
@@ -792,7 +807,12 @@ struct MenuBarStatusLabel: View {
                 // MenuBarExtra 라벨이 intrinsic size를 써도 바 높이 안에 온전히 들어간다.
                 // `.id` 가 두 가지를 함께 한다 — body 에서 revision 을 **읽어** 관찰을 등록하고,
                 // 값이 바뀌면 이미지 뷰를 새로 만들어 옛 NSImage 가 남지 않게 한다.
-                Image(nsImage: mascot).id(characterRevision)
+                // 점은 **새 이미지**에 굽는다 — `mascot` 은 캐시의 공유 인스턴스라 여기서 건드리면 점이 꺼진 뒤에도 남는다.
+                Image(nsImage: updateAvailable ? Self.updateBadged(mascot) : mascot).id(characterRevision)
+            } else if updateAvailable,
+                      let badged = Self.updateBadgedSymbol(named: MenuBarStatusFormatter.symbolName(for: snapshot)) {
+                // 아잉 PNG 마저 없는 폴백에도 점을 얹는다. 점이 꺼져 있으면 아래 예전 심볼 경로를 한 글자도 안 바꾸고 탄다.
+                Image(nsImage: badged)
             } else {
                 Image(systemName: MenuBarStatusFormatter.symbolName(for: snapshot))
                     .symbolRenderingMode(.hierarchical)
@@ -802,6 +822,53 @@ struct MenuBarStatusLabel: View {
                 .font(.system(.body, design: .rounded).weight(.medium))
                 .monospacedDigit()
         }
+    }
+
+    // MARK: 업데이트 점
+
+    /// 점 지름(pt). 18pt 아이콘의 1/3 — 더 크면 캐릭터 얼굴을 덮고, 더 작으면 메뉴바에서 먼지로 보인다.
+    nonisolated static let updateDotDiameter: CGFloat = 6
+    /// 점을 두르는 흰 테 두께(pt). 색이 많은 캐릭터 그림 위에서 점의 윤곽을 떼어 내고, 어두운 바에서 점을 한 번 더 띄운다.
+    nonisolated static let updateDotRingWidth: CGFloat = 1
+    /// 점이 켜진 아이콘의 보이스오버 문구(버튼까지 건너가는 유일한 통로가 이미지의 설명이다 — `updateAvailable` 주석).
+    nonisolated static let updateDotAccessibilityDescription = "업데이트 있음"
+
+    /// `icon` 우상단 모서리 **안쪽**에 점을 구운 새 NSImage.
+    ///
+    /// - 크기는 원본과 같다. 상태바 버튼 폭은 이미지 크기 + 제목으로 정해져서, 1pt 만 달라도 점이 켜지고 꺼질 때
+    ///   시계 글자가 옆으로 떨린다. 점을 바깥으로 삐져나가게 두지 않는 이유도 같다(버튼이 잘라 먹거나 폭이 는다).
+    /// - 원본을 고치지 않는다. `menuBarImage` 는 캐시의 **공유 인스턴스**를 돌려주므로, 거기에 그리거나 설명을 쓰면
+    ///   업데이트를 마친 뒤(false)에도 점·문구가 남는다.
+    /// - drawingHandler 라 그릴 때마다 다시 불린다 — 재현 앱에서 바의 appearance(VibrantLight·VibrantDark)마다
+    ///   핸들러가 따로 불렸다. 폴백 심볼이 바 색을 따라가는 것도 이 성질 덕이다.
+    nonisolated static func updateBadged(_ icon: NSImage) -> NSImage {
+        let badged = NSImage(size: icon.size, flipped: false) { rect in
+            icon.draw(in: rect)
+            let outer = Self.updateDotDiameter + Self.updateDotRingWidth * 2
+            // flipped: false 라 위쪽이 maxY 다.
+            let ring = NSRect(x: rect.maxX - outer, y: rect.maxY - outer, width: outer, height: outer)
+            NSColor.white.setFill()
+            NSBezierPath(ovalIn: ring).fill()
+            // 빨강: 시스템 설정이 '업데이트 있음'에 다는 배지 색이다. 주황은 이 앱에서 동기화 대기 경고색이라 겹치지 않게 피한다.
+            NSColor.systemRed.setFill()
+            NSBezierPath(ovalIn: ring.insetBy(dx: Self.updateDotRingWidth, dy: Self.updateDotRingWidth)).fill()
+            return true
+        }
+        badged.accessibilityDescription = Self.updateDotAccessibilityDescription
+        return badged
+    }
+
+    /// 폴백 SF Symbol 에 점을 구운 이미지(아잉 PNG 마저 없는 번들에서만 쓰인다).
+    ///
+    /// 템플릿 심볼은 메뉴바가 단색으로 다시 칠해 점의 빨강까지 지우므로(재현 앱: 버튼 이미지 template=true, 빨강 0픽셀)
+    /// 템플릿을 버리고 `labelColor` 로 직접 칠한다. drawingHandler 가 바의 appearance 로 다시 불리므로 밝은 바에선 검게,
+    /// 어두운 바에선 희게 나와 템플릿 심볼과 같은 인상을 지킨다.
+    nonisolated static func updateBadgedSymbol(named name: String) -> NSImage? {
+        let configuration = NSImage.SymbolConfiguration(textStyle: .body, scale: .medium)
+            .applying(NSImage.SymbolConfiguration(hierarchicalColor: .labelColor))
+        guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration) else { return nil }
+        return updateBadged(symbol)
     }
 }
 

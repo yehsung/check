@@ -687,6 +687,12 @@ final class ReactionEngine {
         let previous = facingNode?.childNodes.first
         let atlas = CheckCharacter3DScene.atlasImage(for: manifest)
         guard CheckCharacter3DScene.swapCharacter(in: target, to: manifest, atlas: atlas) else { return nil }
+        // 새 캐릭터를 **지금** GPU 에 올린다(텍스처·셰이더). 안 하면 그 일이 첫 렌더 때 렌더 스레드에서 일어나고,
+        // 그동안 화면에는 직전 그림이 남는다 — 울트라가 전체화면으로 키운 직후면 그게 **늘어난 옛 캐릭터**다
+        // (v0.3.21 신고: "아잉이가 0.5초 떴다가 바뀐 캐릭터로"). 뷰가 없으면(헤드리스·미마운트) 건너뛴다.
+        if let view = attachedView, let installed = facingNode?.childNodes.first {
+            _ = view.prepare(installed, shouldAbortBlock: nil)
+        }
         // 매니페스트를 **이미 아는** 경로다. 런타임을 여기서 세워 두면 아래 attach 의 카탈로그 역추적이
         // 불필요해지고(같은 아틀라스면 그대로 유지된다), 아틀라스가 카탈로그 밖인 경우에도 정확하다.
         spriteRuntime = atlas.flatMap { SpriteRuntime(manifest: manifest, atlas: $0) }

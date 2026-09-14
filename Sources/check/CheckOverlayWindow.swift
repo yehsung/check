@@ -334,6 +334,9 @@ final class CheckOverlayController {
     var messageBubbleSleep: @Sendable (Double) async -> Void = {
         try? await Task.sleep(for: .seconds($0))
     }
+    /// 검증 지점: 격발이 패널을 화면 크기로 키우기 **직전**에 부른다(v0.3.21). 테스트는 이 순간 어떤 캐릭터가 서 있는지
+    /// 잰다 — "울트라는 갈아입은 뒤에 동작한다"는 주장을 순서 그대로 확인하는 유일한 자리다. 프로덕션은 nil.
+    var onUltraWillCoverScreen: (() -> Void)?
     /// 클릭 통과 값 못 박기. non-nil 인 동안 `setIgnoresMouseEvents` 는 어떤 호출자가 무엇을 요구하든
     /// 이 값만 쓴다. 이게 없으면 히트-스루 기계(updateHitThrough / restorePassThroughAfterExit)가
     /// 커서 위치에 따라 값을 뒤집어 5초 격발이 "막다 말다" 하는 최악의 상태가 된다.
@@ -1287,17 +1290,22 @@ final class CheckOverlayController {
             //   즉 방금 세운 격발이 자기 자신의 그리기 때문에 즉시 철거되고(프레임·못박기·엔진 전부 원복),
             //   보낸 사람은 하루 몫을 태운 채 아무 일도 일어나지 않는다. 프레임 값은 이 줄에서 이미
             //   확정되고 다시 그리는 것만 다음 런루프로 밀리므로(한 프레임), 5초짜리 연출에는 무해하다.
-            panel.setFrame(Self.ultraPanelFrame(in: ultraScreenFrame()), display: false)
-            panel.orderFrontRegardless()
-            // ★ 갈아입기는 **뷰가 선 뒤**다. 위 setFrame/orderFront 가 지연 마운트(hasEverShown 래치)를
-            //   깨우고, 그전에는 붙잡을 씬 자체가 없어 교체가 조용히 실패한다(그 경우에도 내 캐릭터로
-            //   격발은 그대로 간다 — 이 기능의 실패는 언제나 "안 바뀜"이지 "안 나옴"이 아니다).
-            //   리액션 요청보다는 **앞**이어야 한다: 재-attach 가 재생 중인 리액션을 처음부터 되재생하므로,
-            //   아래 ultraPoked 를 먼저 걸면 그 5초짜리가 교체 직후 다시 시작된다.
+            // ★ **갈아입기가 덮기보다 먼저다**(v0.3.21). 예전엔 아래 setFrame 으로 화면을 먼저 덮고 그 뒤에 갈아입었다 —
+            //   setFrame 이 그 자리에서 SCNView 를 전체화면으로 키우므로, 교체가 끝날 때까지 **내 캐릭터가 전체화면으로**
+            //   보였다(신고: "기존 아잉이가 0.5초 정도 떴다가 바꾼 캐릭터로 변경되어서 울트라찌르기 동작했어").
+            //   캐릭터가 이미 서 있는 사용자(근무 중 흔한 경우)는 여기서 교체와 GPU 준비까지 끝낸 뒤 덮는다.
             //
             // ★ **nil 이어도 반드시 부른다.** `if let` 으로 감싸면 보낸 사람이 캐릭터를 안 고른 경우
             //   (= 캐릭터 이전 버전을 쓰는 사람 전부) 교체가 통째로 생략되어 **내 캐릭터가 나를 덮친다.**
             //   nil 은 "안 바꿈"이 아니라 "아잉"이다 — 판정은 applyUltraCharacter 안에 한 곳만 둔다.
+            applyUltraCharacter(characterID)
+            onUltraWillCoverScreen?()
+            panel.setFrame(Self.ultraPanelFrame(in: ultraScreenFrame()), display: false)
+            panel.orderFrontRegardless()
+            // ★ 그리고 **덮은 뒤에 한 번 더** 부른다. 캐릭터를 꺼 둔 사용자는 씬이 위 setFrame 안에서 처음 서므로
+            //   (지연 마운트 — hasEverShown 래치) 첫 호출은 붙잡을 씬이 없어 조용히 실패했다. 이미 갈아입었으면 no-op 이다.
+            //   리액션 요청보다는 **앞**이어야 한다: 재-attach 가 재생 중인 리액션을 처음부터 되재생하므로,
+            //   아래 ultraPoked 를 먼저 걸면 그 5초짜리가 교체 직후 다시 시작된다.
             applyUltraCharacter(characterID)
         }
         engine.request(.ultraPoked(bubbleText: text))
@@ -1326,11 +1334,18 @@ final class CheckOverlayController {
     }
 
     private func applyUltraCharacter(_ id: String?) {
-        guard ultraStashedCharacter == nil else { return }   // 재수신은 첫 교체를 유지한다
         let manifest = Self.ultraCharacter(for: id, catalog: CheckCharacter3DScene.catalog)
-        // 이미 그 캐릭터면 교체할 것이 없다(내가 아잉이고 보낸 사람도 아잉인 흔한 경우).
+        // **지금 붙어 있는 씬**에 이미 그 캐릭터가 서 있으면 할 일이 없다. 두 경우가 여기로 온다: 내가 이미 그 캐릭터인
+        // 흔한 경우(아잉 ↔ 아잉), 그리고 덮기 전에 이미 갈아입었고 씬이 그대로인 경우(덮은 뒤의 두 번째 호출).
         guard manifest.id != engine.currentCharacterID else { return }
-        ultraStashedCharacter = engine.swapCharacter(to: manifest)
+        // 씬이 없으면(뷰 미마운트) 조용히 실패한다 — 덮은 뒤의 두 번째 호출이 방금 선 씬에서 다시 시도한다.
+        guard let previous = engine.swapCharacter(to: manifest) else { return }
+        // ★ 이미 떼어 둔 노드가 있는데 또 갈아입었다면 **씬이 그 사이 새로 섰다**(덮는 순간 뷰가 마운트돼 내 캐릭터로
+        //   태어났다). 원복이 붙일 대상은 **지금 씬에서 방금 뗀 노드**다 — 옛 씬의 노드는 붙일 자리가 없다.
+        //   예전의 `guard ultraStashedCharacter == nil` 은 여기서 교체를 막아, 새 씬에 내 캐릭터가 5초 내내 남았다
+        //   (V0321 재수신 테스트가 잡았다). 재수신(5초 재시작)은 이 함수를 아예 부르지 않으므로
+        //   "재수신은 첫 교체를 유지한다"는 그대로다.
+        ultraStashedCharacter = previous
     }
 
     /// 정상 원복 타이머 + **독립 워치독**을 함께 건다(재수신이면 둘 다 리셋 = 5초 재시작).

@@ -336,6 +336,232 @@ private struct DisplayNameSettingsRow: View {
     }
 }
 
+// MARK: - 근무 시작·종료 단축키 기록 행 (v0.3.23)
+
+/// 기록 행 아래 **상태 한 줄**. 순수 값이라 테스트가 상태마다 문구를 글자 그대로 되묻는다.
+/// 할 말이 없는 상태(등록됨·꺼짐)에는 줄 자체가 없다 — 창 높이 계약은 줄이 있는 가장 높은 상태로 잰다
+/// (`CheckSettingsWindowController.defaultContentSize` 주석).
+enum WorkShortcutRecorderNotice: Equatable {
+    case recording
+    /// 기록 중 거절: ⌃⌥⌘ 중 두 개 이상이 아니다.
+    case rejected
+    /// 기록 중 거절: 모양은 되지만 켜진 macOS 단축키와 겹친다.
+    case rejectedSystem
+    /// 저장된 조합이 켜진 macOS 단축키와 겹쳐 걸지 않았다(`WorkShortcutStatus.conflict`). 다른 **앱**과의 겹침은
+    /// 감지할 수 없어서 이 문구가 그것을 약속하지 않는다.
+    case conflict
+    case failed
+
+    enum Tone: Equatable {
+        /// 안내(회색).
+        case hint
+        /// 다시 해 보라(주황) — 실패가 아니라 고른 조합을 못 받는 것이라 빨강으로 겁주지 않는다.
+        case retry
+        /// 등록이 안 됐다(빨강). 누르면 근무가 안 바뀐다는 뜻이라 눈에 띄어야 한다.
+        case danger
+    }
+
+    static func of(
+        isRecording: Bool,
+        lastRejection: WorkShortcutRecorder.Rejection?,
+        isEnabled: Bool,
+        status: WorkShortcutStatus
+    ) -> WorkShortcutRecorderNotice? {
+        if isRecording {
+            switch lastRejection {
+            case nil: return .recording
+            case .shape: return .rejected
+            case .system: return .rejectedSystem
+            }
+        }
+        // 스위치를 끈 사람에게 옛 겹침을 계속 빨갛게 보이면 "꺼도 뭔가 고장"으로 읽힌다.
+        guard isEnabled else { return nil }
+        switch status {
+        case .conflict: return .conflict
+        case .failed: return .failed
+        case .active, .off, .paused: return nil
+        }
+    }
+
+    var text: String {
+        switch self {
+        case .recording: return "⌃ ⌥ ⌘ 중 두 개 이상과 함께 눌러요 · esc 취소"
+        case .rejected: return "⌃ ⌥ ⌘ 중 두 개 이상을 함께 눌러 주세요"
+        case .rejectedSystem: return "macOS 단축키와 겹쳐요. 다른 조합을 눌러 주세요"
+        case .conflict: return "macOS 단축키와 겹쳐요. 다른 키로 바꿔 주세요."
+        case .failed: return "단축키를 등록하지 못했어요."
+        }
+    }
+
+    var tone: Tone {
+        switch self {
+        case .recording: return .hint
+        case .rejected, .rejectedSystem: return .retry
+        case .conflict, .failed: return .danger
+        }
+    }
+}
+
+/// 키캡 그림. 값만 받는 순수 뷰로 떼어 둔 이유는 스위치(`CheckSwitchTrack`)와 같다 — 눌림 상태는 ButtonStyle 안에서만
+/// 알 수 있어서, 그림을 그 안에 묻으면 '눌린 키캡'을 렌더로 그려 볼 방법이 사라진다.
+struct WorkShortcutKeycapFace: View {
+    let isRecording: Bool
+    var isPressed: Bool = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+        shape
+            .fill(
+                LinearGradient(
+                    colors: [Color.white.opacity(isPressed ? 0.07 : 0.13), Color.white.opacity(0.05)],
+                    startPoint: .top, endPoint: .bottom
+                )
+            )
+            // 기록 중 테두리·후광은 켜짐 스위치의 도착점 색(accent)과 같은 문법 — "지금 이 칸이 듣고 있다".
+            .overlay(shape.strokeBorder(isRecording ? CheckTheme.accent : CheckTheme.border, lineWidth: isRecording ? 1.5 : 1))
+            // 키캡의 아랫면. 눌리면 사라져 손끝에 '들어갔다'가 붙는다.
+            .shadow(color: .black.opacity(isPressed ? 0 : 0.40), radius: 0, x: 0, y: 1.5)
+            .shadow(color: CheckTheme.accent.opacity(isRecording ? 0.34 : 0), radius: 6)
+    }
+}
+
+private struct WorkShortcutKeycapButtonStyle: ButtonStyle {
+    let isRecording: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background { WorkShortcutKeycapFace(isRecording: isRecording, isPressed: configuration.isPressed) }
+            .contentShape(Rectangle())
+    }
+}
+
+/// 단축키 기록 행: `[키캡: 지금 조합] [기본값으로]` + 상태 한 줄. 설정 창의 '근무 시작·종료 단축키' 스위치 바로 아래에 붙는다.
+///
+/// ★ **TextField·Picker·Menu 를 쓰지 않는다.** 이 저장소의 렌더 검증(ImageRenderer)은 그 셋을 노란 상자(255,204,0)로
+///   그려, 그 자리는 픽셀 커버리지가 0이 된다 — 키캡이 잘리거나 겹쳐도 스냅샷이 영영 못 본다. 버튼 + 도형 + Text 만 쓴다.
+///   입력도 TextField 로 받지 않는다: 조합 키는 글자가 아니고, 한글 입력 상태에서는 TextField 가 조합 중 글자를 삼킨다.
+///   받는 쪽은 로컬 키 모니터다(`WorkShortcutRecordingSession`).
+///
+/// ★ 기록을 끝내는 문이 **전부** 있어야 한다. 기록 중에는 전역 등록이 내려가 있어서 하나라도 빠지면 전역 단축키가
+///   앱을 다시 켤 때까지 멈춘다: 수락·esc(세션) · 키캡 다시 누름(여기) · 15초 시간 초과 · 앱 비활성(세션) ·
+///   스위치 끄기·사라짐(여기) · 설정 창 닫기(`CheckSettingsWindowController.close()`·`windowWillClose`).
+struct WorkShortcutRecorderRow: View {
+    let store: WorkTimerStore
+    let session: WorkShortcutRecordingSession
+
+    init(store: WorkTimerStore, session: WorkShortcutRecordingSession = .shared) {
+        self.store = store
+        self.session = session
+    }
+
+    private var isRecording: Bool { store.isRecordingWorkShortcut }
+    private var isEnabled: Bool { store.workShortcutEnabled }
+
+    private var notice: WorkShortcutRecorderNotice? {
+        WorkShortcutRecorderNotice.of(
+            isRecording: isRecording,
+            lastRejection: session.lastRejection,
+            isEnabled: isEnabled,
+            status: store.workShortcutStatus
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                keycap
+                if store.workShortcut != .default {
+                    resetButton
+                }
+                Spacer(minLength: 0)
+            }
+            if let notice {
+                Text(notice.text)
+                    .font(.caption2)
+                    .foregroundStyle(color(for: notice.tone))
+                    // 좁혀도 말줄임 대신 줄바꿈(이 창의 설명 줄 규약).
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        // 기록이 뷰 밖의 문(창 닫기·시간 초과)으로 끝났으면 모니터도 걷는다(세션의 end 는 멱등).
+        .onChange(of: store.isRecordingWorkShortcut) { _, recording in
+            if !recording { session.end() }
+        }
+        // 기록 중에 스위치를 끄면 키캡이 비활성이 되어 '다시 눌러 끝내기'가 막힌다 — 그 순간 여기서 끝낸다.
+        .onChange(of: store.workShortcutEnabled) { _, enabled in
+            if !enabled { session.end() }
+        }
+        .onDisappear { session.end() }
+        // 행이 처음 나타날 때 전역 등록을 다시 판정한다. 겹침(.conflict)은 등록 결과가 아니라 그 순간의 시스템 목록으로만 알 수
+        // 있어서, 시스템 설정에서 겹치는 단축키를 끄고 온 사람에게는 누가 다시 물어야 풀린다. 창을 닫았다 다시 열 때는 이 뷰가
+        // 창에 붙은 채라 onAppear 가 다시 오지 않으므로 그 문은 `CheckSettingsWindowController.show()` 가 맡는다(두 곳에서 부르는 이유).
+        .onAppear { store.requestWorkShortcutReapply() }
+    }
+
+    private var keycap: some View {
+        Button {
+            if isRecording {
+                session.end()
+            } else {
+                session.begin(store: store)
+            }
+        } label: {
+            Text(isRecording ? "새 조합을 누르세요" : store.workShortcut.displayString)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isRecording ? CheckTheme.accent : CheckTheme.primaryText)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 12)
+                .frame(minWidth: 92)
+                .frame(height: 28)
+        }
+        .buttonStyle(WorkShortcutKeycapButtonStyle(isRecording: isRecording))
+        // 창이 열릴 때 첫 포커스 링이 키캡 위에 사각으로 겹치는 것을 막는다(이 창의 기존 규약 — 스위치 주석).
+        .focusEffectDisabled()
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
+        // 기호(⌃⌥⌘)는 VoiceOver 가 제대로 못 읽는다 — 낭독용 문장을 준다.
+        .accessibilityLabel(isRecording ? "새 조합을 누르세요" : store.workShortcut.spokenDescription)
+        .accessibilityHint(isRecording ? "esc 로 취소해요" : "눌러서 새 조합을 기록해요")
+    }
+
+    private var resetButton: some View {
+        Button {
+            // 기록 중에 누르면 기록부터 끝낸다 — 안 그러면 기본값이 저장된 뒤에도 전역 등록이 내려가 있다.
+            session.end()
+            store.resetWorkShortcut()
+        } label: {
+            Text("기본값으로")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(CheckTheme.primaryText)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 12)
+                .frame(height: 26)
+                .background {
+                    // 캐릭터 칩의 '안 고른' 모양과 같은 문법(trackFill + border).
+                    Capsule().fill(CheckTheme.trackFill)
+                        .overlay(Capsule().strokeBorder(CheckTheme.border, lineWidth: 1))
+                }
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
+        .help("\(WorkShortcut.default.displayString) 로 되돌려요")
+        .accessibilityLabel("기본값으로 되돌리기")
+        .accessibilityValue(WorkShortcut.default.spokenDescription)
+    }
+
+    private func color(for tone: WorkShortcutRecorderNotice.Tone) -> Color {
+        switch tone {
+        case .hint: return CheckTheme.secondaryText
+        case .retry: return CheckTheme.pending
+        case .danger: return CheckTheme.danger
+        }
+    }
+}
+
 // MARK: - 소속 센터 행 (v0.3.13) — 읽기 전용
 
 /// 설정 창 '내 정보' 의 소속 센터 행이 그릴 세 가지 상태. **순수 값이라 테스트가 직접 되묻는다.**
@@ -610,16 +836,18 @@ struct CheckSettingsView: View {
     /// 창을 붙일 쪽(창 배선 담당)이 참고할 기본 폭. 설명 한 줄이 두 줄로 접히지 않는 최소치 근처다.
     static let preferredWidth: CGFloat = 380
 
-    /// **관리자 화면**(캐릭터 선택기가 붙은 상태)의 실측 콘텐츠 높이(pt, preferredWidth 에서).
+    /// **관리자 화면**(캐릭터 선택기가 붙은 상태)의 실측 콘텐츠 높이(pt, preferredWidth 에서) — **가장 높은 상태**로 잰다.
     ///
-    /// 일반 사용자 화면은 533pt 다(v0.3.22 '자동 근무 시작' 행 포함) — 선택기는 `store.ultraUnlimited` 뒤에 있어 한 픽셀도 안 쓴다.
-    /// 관리자에게만 캐릭터 행(칩 한 줄 + 설명 한 줄 + 구분선)이 붙어 **89pt** 가 더 붙는다.
+    /// 일반 사용자 화면은 단축키 등록이 정상일 때 624pt, 단축키 안내 한 줄(macOS 단축키 겹침 · 등록 실패 · 기록 중 · 기록 거절)이 보이면 643pt 다
+    /// (v0.3.23 '근무 시작·종료 단축키' 묶음 포함) — 선택기는 `store.ultraUnlimited` 뒤에 있어 한 픽셀도 안 쓴다.
+    /// 관리자에게만 캐릭터 행(칩 한 줄 + 설명 한 줄 + 구분선)이 붙어 **89pt** 가 더 붙는다: 713 / 732(실측 2026-09-15).
     ///
-    /// ⚠️ **창 높이 계약(`CheckSettingsWindowController.defaultContentSize.height` = 538)보다 크다.**
-    ///    그 창에서 관리자가 설정을 열면 맨 아래 캐릭터 행이 통째로 잘린다(창은 리사이즈되므로 끌어
-    ///    내리면 보이긴 한다). 창 쪽 숫자는 이 갈래의 소유가 아니라 여기 값으로만 남긴다 —
-    ///    잇는 쪽은 관리자일 때 이 값 이상으로 열어라. `V0316CharacterPickerTests` 가 이 숫자를 되묻는다.
-    static let adminContentHeight: CGFloat = 622
+    /// 왜 713 이 아니라 732 인가: 설정 창은 관리자에게 열 때 창을 **이 값까지** 키운다(`growForAdminContentIfNeeded`).
+    /// 안내 한 줄이 없는 쪽으로 잡으면 겹침·실패 안내가 뜨는 순간 맨 아래 캐릭터 칩 줄이 19pt 잘린다.
+    ///
+    /// ⚠️ **창 높이 계약(`CheckSettingsWindowController.defaultContentSize.height` = 648)보다 크다.** 그래서 창 쪽이
+    ///    관리자일 때만 열면서 이 값까지 키운다. `V0316CharacterPickerTests` 가 가장 높은 상태를 그려 이 숫자를 되묻는다.
+    static let adminContentHeight: CGFloat = 732
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -636,6 +864,17 @@ struct CheckSettingsView: View {
                     detail: "컴퓨터를 5분쯤 쓰면 알아서 근무를 시작해요. 끄면 직접 눌러야 해요.",
                     isOn: autoWorkStartBinding
                 )
+                PanelDivider()
+                // 근무 시작·종료 전역 단축키(v0.3.23). 스위치와 기록 행을 한 묶음(간격 8)으로 둔다 — 카드의 행 간격(12)으로
+                // 떨어뜨리면 키캡이 무엇의 키인지 안 읽힌다.
+                VStack(alignment: .leading, spacing: 8) {
+                    CheckSettingsToggleRow(
+                        title: "근무 시작·종료 단축키",
+                        detail: "메뉴바를 열지 않아도 이 키로 근무를 시작하거나 끝내요.",
+                        isOn: workShortcutEnabledBinding
+                    )
+                    WorkShortcutRecorderRow(store: store)
+                }
                 PanelDivider()
                 CheckSettingsToggleRow(
                     title: "캐릭터를 눌러 할 일 열기",
@@ -686,12 +925,12 @@ struct CheckSettingsView: View {
             //   운영자 받은함에 **이미 붙어서** 도착한다(FeedbackDiagnostics — WorkTimerStoreFeedback.swift).
             //   팀원은 "찌르기가 안 와요" 한 줄만 쓰면 되고, 화면은 깨끗해지고 진단은 오히려 잘 된다.
             //
-            //   되돌리려는 사람이 알아야 할 사실: 이 창은 538pt 이고 콘텐츠는 533pt 다(v0.3.22) — 이제는 자리도
+            //   되돌리려는 사람이 알아야 할 사실: 이 창은 648pt 이고 콘텐츠는 가장 높은 상태에서 643pt 다(v0.3.23) — 이제는 자리도
             //   없으니 창 높이부터 다시 재야 한다. 그보다 먼저 없는 것은 이유다.
         }
         .padding(14)
         // 창이 늘어나면 같이 늘고, 좁혀도 설명이 뭉개지지 않는 하한을 준다(창 크기는 배선 쪽 소관).
-        // maxHeight 를 열어 두는 것이 핵심이다: 창(538pt)이 콘텐츠보다 높은데 프레임을 콘텐츠 높이로
+        // maxHeight 를 열어 두는 것이 핵심이다: 창(648pt)이 콘텐츠보다 높은데 프레임을 콘텐츠 높이로
         // 두면 배경이 그만큼만 칠해지고 창 아래에 시스템 흰 띠가 남는다. 진단 두 줄이 제보로 옮겨 간
         // 뒤(2026-09-10) 그 여백은 더 커졌다 — 그래서 이 한 줄은 더 중요해졌다.
         // 위 정렬(topLeading)은 이 앱의 상단 앵커 규약이기도 하다 — 늘어난 만큼 아래로만 빈다.
@@ -702,8 +941,9 @@ struct CheckSettingsView: View {
         //   창 높이 계약은 470 하나인데 콘텐츠가 517 까지 자라면 맨 아래 '소속 센터' 행이 통째로 잘린다.
         //   그래서 하한을 preferredWidth 로 올렸다: 이 폭 위에서는 **어떤 폭에서도 465pt** 라, 높이가
         //   사용자의 드래그에 따라 달라지지 않는다. 하한을 다시 낮추려면 창 높이부터 다시 재라.
-        //   v0.3.22: '자동 근무 시작' 행이 붙어 폭 380 에서 **533pt**, 창은 538 이다. 이 행의 설명은 넓은 폭에서
+        //   v0.3.22: '자동 근무 시작' 행이 붙어 폭 380 에서 **533pt**, 창은 538 이었다. 이 행의 설명은 넓은 폭에서
         //   한 줄로 펴질 수 있어 폭이 커지면 콘텐츠가 같거나 작아진다 — 계약은 여전히 폭 하한에서 잰 값이다.
+        //   v0.3.23: '근무 시작·종료 단축키' 묶음이 붙어 폭 380 에서 624pt, 안내 한 줄이 보이면 **643pt**, 창은 648 이다.
         .frame(
             minWidth: Self.preferredWidth, idealWidth: Self.preferredWidth, maxWidth: 520,
             maxHeight: .infinity, alignment: .topLeading
@@ -747,6 +987,15 @@ struct CheckSettingsView: View {
         Binding(
             get: { store.autoWorkStartEnabled },
             set: { store.setAutoWorkStartEnabled($0) }
+        )
+    }
+
+    /// 끄는 순간의 기록 종료는 기록 행이 스스로 한다(`WorkShortcutRecorderRow` 의 onChange) — 여기서 세션을 또 만지면
+    /// 기록을 끝내는 집이 둘이 된다.
+    private var workShortcutEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { store.workShortcutEnabled },
+            set: { store.setWorkShortcutEnabled($0) }
         )
     }
 

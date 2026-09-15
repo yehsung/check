@@ -14,7 +14,7 @@ import Testing
 //  ③ 누르면 **저장된다**. 저장 호출이 빠져도 로컬 칩은 옮겨 갈 수 있어 눈으로는 멀쩡하다.
 //  ④ 앱을 다시 켜면 착용 캐릭터로 돌아온다(= `makeNSView` 가 선택을 읽는다). 교체만 되고 마운트가
 //     아잉 고정이면 "골랐는데 재시작하면 아잉"이 되고, 그건 아무 테스트도 안 빨개진다.
-//  ⑤ 설정 창 높이 계약(v0.3.22 부터 538pt)이 비관리자 화면에서 **1pt 도 안 움직인다**.
+//  ⑤ 설정 창 높이 계약(v0.3.23 부터 648pt)이 비관리자 화면에서 **1pt 도 안 움직인다**.
 //
 // ⚠️ 이 파일은 `UserDefaults.standard` 에 **한 글자도 쓰지 않는다.** 같은 순간 병렬로 도는 스위트가
 //    아잉 픽셀을 재고 있어서, 표준 도메인에 선택값을 남기면 그쪽이 간헐적으로 빨개진다. 전부 임시 suite 를
@@ -39,12 +39,15 @@ func 캐릭터_선택기는_관리자에게만_보인다() throws {
     // 화면 높이가 **예전 그대로**라는 사실을 숫자로 남겨 둬야 회귀가 어느 쪽인지 읽힌다.
     #expect(plainHeight <= CheckSettingsWindowController.defaultContentSize.height,
             "일반 사용자 설정 콘텐츠 \(plainHeight)pt 가 창 \(CheckSettingsWindowController.defaultContentSize.height)pt 를 넘었다")
-    // 하한 500 = v0.3.22 실측 533pt 에서 '자동 근무 시작'(68pt)이나 '소속 센터'(55pt) 행 하나가 빠지면 걸리는 값.
-    #expect(plainHeight >= 500, "일반 사용자 화면이 \(plainHeight)pt 뿐이다 — 기존 행이 사라졌는지 보라")
+    // 이 두 렌더는 **가장 높은 상태**다(v0316Store 가 단축키 안내 한 줄 — 충돌 — 을 켠다). 그래서 위 단언이 곧
+    // "안내 한 줄이 떠도 창 안에 든다"는 창 계약(648)이다.
+    // 하한 600 = v0.3.23 실측 643pt 에서 '소속 센터'(55pt → 588) · '자동 근무 시작'(68pt → 575) ·
+    // '근무 시작·종료 단축키' 묶음(91pt + 안내 19pt → 533) 중 한 행이라도 통째로 빠지면 걸리는 값.
+    #expect(plainHeight >= 600, "일반 사용자 화면이 \(plainHeight)pt 뿐이다 — 기존 행이 사라졌는지 보라")
 
-    // ★ 관리자 화면의 높이를 **숫자로 고정한다.** 이 값이 창 계약(538)보다 크다는 사실 자체가 인수인계다 —
-    //   잇는 쪽(CheckSettingsWindow.swift 는 이 갈래 소유가 아니다)이 관리자일 때 창을 이만큼 열어야 한다.
-    //   여기 고정해 두면 선택기가 조용히 더 자라는 회귀도 함께 잡힌다.
+    // ★ 관리자 화면의 높이를 **숫자로 고정한다.** 이 값이 창 계약(648)보다 크다는 사실 자체가 인수인계다 —
+    //   설정 창은 관리자일 때 열면서 창을 이만큼 키운다(`growForAdminContentIfNeeded`). 가장 높은 상태로 재야
+    //   안내 한 줄이 떠도 맨 아래 캐릭터 칩 줄이 안 잘린다. 여기 고정해 두면 선택기가 조용히 더 자라는 회귀도 함께 잡힌다.
     #expect(adminHeight == CheckSettingsView.adminContentHeight,
             "관리자 화면이 \(adminHeight)pt 다 — 선언값 \(CheckSettingsView.adminContentHeight)pt 와 갈렸다")
     #expect(CheckSettingsView.adminContentHeight > CheckSettingsWindowController.defaultContentSize.height,
@@ -234,6 +237,9 @@ private func v0316Store(admin: Bool) -> WorkTimerStore {
     store.myCenterLoaded = true
     store.myCenter = CenterLabel.seoul
     store.ultraUnlimited = admin
+    // 단축키 안내 한 줄(충돌)을 **켠 채로** 그린다(v0.3.23). 설정 화면에서 가장 높은 상태라, 이 렌더가 곧 창 계약의
+    // 최악값이다 — 등록 정상 상태로 재면 안내가 뜨는 순간 맨 아래 행이 잘리는 창을 초록으로 통과시킨다.
+    store.workShortcutStatus = .conflict
     return store
 }
 

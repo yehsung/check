@@ -65,6 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 울트라 프레임 복귀·드래그 위치 영속·클릭통과 기계가 전부 얽힌다.
     // 셋을 낱개가 아니라 한 묶음으로 드는 이유는 TodoBoardWiring.Board 주석 참고(스토어 중복 생성 방지).
     private var todoBoard: TodoBoardWiring.Board?
+    // 근무 시작·종료 전역 단축키(v0.3.23). 조정자가 등록기를 붙들고, 등록기는 Carbon 처리기에 자기 주소를 소유권 없이
+    // 넘긴다 — 그래서 이 참조가 **앱 수명 동안** 살아 있어야 한다(CarbonWorkShortcutRegistrar 주석).
+    private var workShortcut: WorkShortcutCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 오버레이 컨트롤러를 **먼저** 만든다. 바로 아래 실행 킥이 서버에 열려 있던 세션을 흡수해 곧장 근무중으로
@@ -73,6 +76,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayController = CheckOverlayController(store: store, updateCheck: updateCheck)
         wireTodoBoard()
         wireSettingsWindow()
+        // 전역 단축키도 **오버레이 컨트롤러를 만든 뒤에** 잇는다 — 단축키로 시작한 근무도 알약으로 시작한 근무와 똑같이
+        // 캐릭터가 나와야 하는데, 그 표시 전환이 위에서 배선된다.
+        // ★ 진짜 Carbon 등록기는 **여기서만** 만든다. 테스트 프로세스가 실제 전역 키를 잡으면 스위트를 도는 동안
+        //   개발자 맥의 ⌃⌥⌘Space 를 훔친다(테스트는 가짜 등록기만 쓴다 — V0323WorkShortcutTests 가 센다).
+        // `apply()` 가 저장된 설정(켜짐·조합)대로 첫 등록을 한다. 빠지면 설정 스위치를 한 번 건드리기 전까지 키가 죽어 있다.
+        workShortcut = WorkShortcutCoordinator(store: store, registrar: CarbonWorkShortcutRegistrar())
+        workShortcut?.apply()
         // 캐릭터 머리 위 '메시지 도착' 말풍선 → 그 사람과의 1:1 대화(v0.2.50). **이 한 줄이 없으면 말풍선은
         // 눌러도 아무 일이 없다** — 오버레이는 배선 전(nil)이면 클릭 자리를 아예 만들지 않는 계약이라,
         // 배선을 잊어도 조용히 예전 동작(캐릭터가 아파하기)으로만 남아 결함이 눈에 안 띈다.

@@ -202,6 +202,20 @@ final class WorkTimerStore {
     /// 자동 **종료**에는 짝 스위치를 두지 않는다(사장님 결정 2026-09-15): 끄는 순간 켜 둔 채 퇴근한 맥이
     /// 근무·순위·보상을 부풀리고, 끈 사람만 이득이라 결국 모두가 끄게 된다.
     var autoWorkStartEnabled: Bool = true
+    /// 근무 시작·종료 전역 단축키를 쓰는가(기본 켬, v0.3.23). 자동 근무 시작과 같은 **이 맥의 설정**이라 서버로 보내지 않고
+    /// 로그아웃에도 지우지 않는다 — 계정이 아니라 이 키보드와 이 맥에 깔린 다른 앱들(조합 충돌)에 대한 답이다.
+    var workShortcutEnabled: Bool = true
+    /// 전역 단축키 조합(기본 ⌃⌥⌘Space). 저장값이 깨졌거나 허용 안 되는 조합이면 복원 때 기본값으로 접는다.
+    var workShortcut: WorkShortcut = .default
+    /// 전역 등록의 실제 결과. **조정자(WorkShortcutCoordinator)만 쓴다** — 설정 화면은 읽기만 한다.
+    /// 화면이 쓰면 "등록됐다"는 표시가 실제 등록과 갈린다.
+    var workShortcutStatus: WorkShortcutStatus = .off
+    /// 설정 창에서 새 조합을 기록하는 중인가. 이 동안 조정자는 전역 등록을 내린다(.paused).
+    /// **저장하지 않는다** — 기록 중인 채로 저장되면 다음 실행이 전역 단축키가 멈춘 상태로 시작한다.
+    var isRecordingWorkShortcut: Bool = false
+    /// 위 넷 중 설정값(켜짐·조합·기록 중)이 바뀌었거나 다시 판정해 달라는(`requestWorkShortcutReapply`) 신호를
+    /// 조정자에게 알리는 문. 관찰 대상 아님.
+    @ObservationIgnored var onWorkShortcutSettingsChanged: (@MainActor () -> Void)?
 
     /// 팝오버(MenuBarExtra 창) 표시 여부. 표시 감지(onAppear/창 노티)가 setMenuPresented 로 알린다.
     /// 관찰 대상이 아니다 — 티커/폴링 게이팅 판정에만 쓴다.
@@ -1235,6 +1249,8 @@ final class WorkTimerStore {
         isOverlayEnabled = defaults.object(forKey: Self.overlayEnabledKey) as? Bool ?? true
         isTodoEnabled = defaults.object(forKey: Self.todoEnabledKey) as? Bool ?? true
         autoWorkStartEnabled = defaults.object(forKey: Self.autoWorkStartEnabledKey) as? Bool ?? true
+        workShortcutEnabled = defaults.object(forKey: Self.workShortcutEnabledKey) as? Bool ?? true
+        workShortcut = Self.restoredWorkShortcut(from: defaults)
         miniGameKind = MiniGameKind(rawValue: defaults.string(forKey: Self.miniGameKindKey) ?? "") ?? .timingBar
         // 수동 [근무 종료]의 자동 시작 억제를 복구한다. 단, 앱이 1시간 넘게 죽어 있었다면(밤새 꺼짐·재부팅)
         // 그 공백 자체가 '부재'이므로 여기서 푼다 — 살아 있는 동안의 공백 관측(onAbsenceGap)은 스케줄러가
@@ -2638,6 +2654,10 @@ extension WorkTimerStore {
     static let todoEnabledKey = "check.todoEnabled"
     /// 자동 근무 시작(넛지) 사용 여부. 기기별 설정이라 서버로 보내지 않고 로그아웃에도 지우지 않는다.
     static let autoWorkStartEnabledKey = "check.work.autoStartEnabled"
+    /// 근무 시작·종료 전역 단축키 사용 여부(Bool). 기기별 설정 — 서버로 보내지 않고 로그아웃에도 지우지 않는다.
+    static let workShortcutEnabledKey = "check.workShortcut.enabled"
+    /// 전역 단축키 조합(WorkShortcut 의 JSON Data). 기록 중 여부는 저장하지 않는다(isRecordingWorkShortcut 주석).
+    static let workShortcutKey = "check.workShortcut.combo"
     /// 마지막으로 고른 미니게임(MiniGameKind.rawValue).
     static let miniGameKindKey = "check.minigame.kind"
     /// 수동 [근무 종료]의 자동 시작 억제 표식(Bool). 1시간 부재 재무장 판정과 함께 쓴다.
@@ -2694,6 +2714,72 @@ extension WorkTimerStore {
     func setAutoWorkStartEnabled(_ enabled: Bool) {
         if autoWorkStartEnabled != enabled { autoWorkStartEnabled = enabled }
         defaults.set(enabled, forKey: Self.autoWorkStartEnabledKey)
+    }
+
+    // MARK: 근무 시작·종료 전역 단축키 (v0.3.23)
+    //
+    // 네 세터 모두 **값이 실제로 바뀔 때만** 저장하고 조정자에게 알린다. 같은 값으로 알리면 조정자가 핫키를 풀었다 다시
+    // 걸고(그 사이 누른 키는 샌다), 설정 화면이 헛되이 다시 그려진다.
+
+    /// 전역 단축키의 누름이 근무를 토글해도 되는가. 팝오버 근무 알약에 **실제로 손이 닿는** 조건과 같다:
+    /// 알약(`WorkTogglePill(enabled: store.canSync, …)`)은 HeaderCard 안에만 있고, HeaderCard 는 `CheckMenuView.content` 가
+    /// 로그인(`isSignedIn`)이면서 무소속이 아닐(`!isTeamless`) 때만 그린다.
+    /// canSync(hasAnonKey) 하나만 보면 출시 빌드에서 늘 참이라, 로그아웃 상태의 누름이 서버에 아무것도 안 가는 로컬 근무를
+    /// 시작하고(재로그인 때 버려진다) 무소속의 누름이 영속 큐에 start 항목을 남긴다.
+    /// ★ 두 게이트는 짝이다 — 알약 쪽 분기를 바꾸면 여기도 바꿔라(V0323WorkShortcutTests 가 둘을 함께 되묻는다).
+    var canToggleWorkByShortcut: Bool {
+        canSync && isSignedIn && !isTeamless
+    }
+
+    /// 설정값은 그대로 두고 전역 등록만 다시 판정하게 한다. 설정 창을 열 때(`CheckSettingsWindowController.show()`)와
+    /// 단축키 행이 처음 나타날 때(onAppear) 부른다 — macOS 단축키와의 겹침(.conflict)은 그 순간의 시스템 목록으로만 알 수
+    /// 있어서, 사용자가 시스템 설정에서 겹치는 단축키를 끄고 돌아왔을 때 누군가 다시 물어야 풀린다.
+    func requestWorkShortcutReapply() {
+        onWorkShortcutSettingsChanged?()
+    }
+
+    /// 설정 창의 '근무 시작·종료 단축키' 스위치.
+    func setWorkShortcutEnabled(_ enabled: Bool) {
+        guard workShortcutEnabled != enabled else { return }
+        workShortcutEnabled = enabled
+        defaults.set(enabled, forKey: Self.workShortcutEnabledKey)
+        onWorkShortcutSettingsChanged?()
+    }
+
+    /// 새 조합을 저장한다. 허용 안 되는 조합(`WorkShortcut.isAllowed` 거짓)이면 **아무것도 바꾸지 않고** false —
+    /// 기록기가 이미 거르지만, 이 문이 최종 관문이어야 ⌘C 같은 조합이 어떤 경로로도 전역에 걸리지 않는다.
+    @discardableResult
+    func setWorkShortcut(_ shortcut: WorkShortcut) -> Bool {
+        guard shortcut.isAllowed else { return false }
+        guard workShortcut != shortcut else { return true }
+        workShortcut = shortcut
+        if let data = try? JSONEncoder().encode(shortcut) {
+            defaults.set(data, forKey: Self.workShortcutKey)
+        }
+        onWorkShortcutSettingsChanged?()
+        return true
+    }
+
+    /// [기본값으로] — ⌃⌥⌘Space 로 되돌린다.
+    func resetWorkShortcut() {
+        setWorkShortcut(.default)
+    }
+
+    /// 기록 시작/끝. 저장하지 않는다(프로퍼티 주석). 조정자가 이 신호로 전역 등록을 내리고(.paused) 되살린다.
+    func setRecordingWorkShortcut(_ recording: Bool) {
+        guard isRecordingWorkShortcut != recording else { return }
+        isRecordingWorkShortcut = recording
+        onWorkShortcutSettingsChanged?()
+    }
+
+    /// 저장된 조합. 깨진 Data·허용 안 되는 조합이면 기본값으로 접는다 — 옛 빌드나 손으로 고친 plist 가 ⌘C 같은 조합을
+    /// 남겼을 때 그대로 걸면 이 맥의 모든 앱에서 복사가 죽고, 사용자는 원인을 이 앱에서 찾지 못한다.
+    static func restoredWorkShortcut(from defaults: UserDefaults) -> WorkShortcut {
+        guard let data = defaults.data(forKey: workShortcutKey),
+              let decoded = try? JSONDecoder().decode(WorkShortcut.self, from: data),
+              decoded.isAllowed
+        else { return .default }
+        return decoded
     }
 
     // toggleTodoEnabled() 는 v0.2.32 에 지웠다. 유일한 호출자이던 팝오버의 TodoToggleControl 이

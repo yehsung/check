@@ -3311,8 +3311,12 @@ func todoSwitchLeftThePopoverAndNowMovesOnlyTheSettingsScreen() throws {
         store.setTodoEnabled(todo)
         return try renderBitmap(CheckMenuView(store: store))
     }
+    // tolerance 8(아래 설정 비교도 같다): 두 비교 모두 **서로 다른 스토어**로 그린 렌더끼리라, 스위치와 무관한 자리에도
+    // 채널당 ≤2/255 의 합성 잡음이 생길 수 있다(bitmapDiffBounds 주석의 실측). tolerance 0 이던 때 v0.3.23 단축키 스위트가
+    // 섞인 무거운 병렬 실행에서 이 테스트가 5/5 빨강이었다(단독 · 그 스위트를 뺀 조합은 초록 — 검증 라운드 실측 2026-09-15).
+    // 스위치 한 칸이 바뀐 자리는 채널차가 8 을 크게 넘으므로 아래 `#require` 가 여전히 그 변화를 잡는다.
     #expect(
-        bitmapDiffBounds(try popover(true), try popover(false)) == nil,
+        bitmapDiffBounds(try popover(true), try popover(false), tolerance: 8) == nil,
         "팝오버에 할 일 스위치의 흔적이 남아 있다 — 집은 설정 창 하나여야 한다"
     )
 
@@ -3333,7 +3337,7 @@ func todoSwitchLeftThePopoverAndNowMovesOnlyTheSettingsScreen() throws {
         )
     }
     let flip = try #require(
-        bitmapDiffBounds(try settings(true), try settings(false)),
+        bitmapDiffBounds(try settings(true), try settings(false), tolerance: 8),
         "설정 화면에서도 그림이 안 바뀌면 이 스위치는 어디에도 없다(먹통 스위치)"
     )
     // 바뀐 자리는 스위치 하나 크기다(실측 138x102px). 화면 전체가 흔들리면 레이아웃이 밀린 것이다.

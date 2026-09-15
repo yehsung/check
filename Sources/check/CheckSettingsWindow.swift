@@ -67,9 +67,15 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     /// 폭 하한을 preferredWidth 로 올리면 **어떤 폭에서도 465** 라 470 이 다시 진짜 계약이 된다.
     ///
     /// v0.3.22: '자동 근무 시작' 행(설명 두 줄)이 붙어 콘텐츠가 **533pt** 가 됐다(실측 2026-09-15, 폭 380 — 행 하나 +68).
-    /// 창을 538 로 올린다 — v0.3.13 과 같은 5pt 여유다. 폭이 넓어지면 줄바꿈이 줄어 콘텐츠는 같거나 작아지므로
+    /// 창을 538 로 올렸다 — v0.3.13 과 같은 5pt 여유다. 폭이 넓어지면 줄바꿈이 줄어 콘텐츠는 같거나 작아지므로
     /// 폭 하한(preferredWidth)에서 잰 값이 곧 계약이다. 높이 테스트 셋(RealtimeLinkTests · V0313 · V0316)이 이 값을 읽는다.
-    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 538)
+    ///
+    /// v0.3.23: '근무 시작·종료 단축키' 스위치 + 키캡 기록 행이 붙어 **624pt**(+91) 가 됐다. 이 묶음은 상태에 따라 아래에
+    /// 안내 한 줄(macOS 단축키 겹침 · 등록 실패 · 기록 중 · 기록 거절 — 전부 한 줄)이 더 붙어 **643pt**(+19) 까지 자란다(실측 2026-09-15, 폭 380 — 안내가 있는 상태 전부 같은 값,
+    /// 폭 400 이상에서는 630). 창 계약은 **그 가장 높은 상태**로 잡는다: 643 + 5 = **648**. 등록이 정상이면 아래가 24pt 비지만,
+    /// 정상 상태(624)로 잡으면 겹침·실패 안내가 뜨는 바로 그 순간 맨 아래 '소속 센터' 행의 설명 줄이 잘린다 — 사용자가 설정을
+    /// 고치러 들어온 순간에 화면이 깨지는 셈이다. V0316 이 가장 높은 상태를 이 값과 비교한다.
+    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 648)
     /// 최소 크기. 폭은 뷰가 선언한 하한(`minWidth: Self.preferredWidth`)을 그대로 따른다 — 여기에 뷰가
     /// 모르는 숫자를 새로 적으면 그 순간 두 하한이 갈리고, 갈리는 쪽이 위 높이 계약을 깬다(바로 위 실측표).
     static let minContentSize = NSSize(width: CheckSettingsView.preferredWidth, height: 260)
@@ -105,8 +111,16 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     /// 주입 지점이 없으면 감시자를 통째로 지워도 스위트가 초록이다).
     let stuckWindowCheckSeconds: Double
 
-    init(stuckWindowCheckSeconds: Double = CheckSettingsWindowController.stuckWindowCheckSeconds) {
+    /// 설정 화면의 단축키 기록(v0.3.23). 창이 닫히면 **여기서** 기록을 끝낸다 — 기본값은 설정 화면이 쓰는 것과 같은
+    /// `.shared` 이고, 테스트는 자기 인스턴스를 넣어 전역 모니터 상태를 흔들지 않는다.
+    let workShortcutRecording: WorkShortcutRecordingSession
+
+    init(
+        stuckWindowCheckSeconds: Double = CheckSettingsWindowController.stuckWindowCheckSeconds,
+        workShortcutRecording: WorkShortcutRecordingSession = .shared
+    ) {
         self.stuckWindowCheckSeconds = stuckWindowCheckSeconds
+        self.workShortcutRecording = workShortcutRecording
         super.init()
     }
 
@@ -210,6 +224,11 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     func show() {
         guard let window else { return }
         growForAdminContentIfNeeded(window)
+        // 열 때마다 전역 단축키를 다시 판정한다(v0.3.23). macOS 단축키와 겹쳐 .conflict 인 사람이 시스템 설정에서 그 단축키를
+        // 끄고 돌아와 설정을 다시 열면 여기서 풀린다. 단축키 행의 onAppear 만으로는 안 된다 — 이 창은 닫아도(orderOut) 뷰가
+        // 창에 붙은 채라 다시 열 때 onAppear 가 오지 않는다(실측 2026-09-15, 알파 0 테스트 창: show → close → show →
+        // performClose → show 에서 onAppear 1회 · onDisappear 0회).
+        wiring?.store.requestWorkShortcutReapply()
         if !CheckPanelVisibility.isRunningTests {
             NSApp.activate()
         }
@@ -218,11 +237,11 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         armStuckWindowWatchdog()
     }
 
-    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **622pt** 가 된다(`CheckSettingsView.adminContentHeight`, v0.3.22).
-    /// 기본 창은 538pt 라 그대로 열면 맨 아래 행이 잘린다.
+    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **732pt** 까지 자란다(`CheckSettingsView.adminContentHeight`,
+    /// v0.3.23 — 단축키 안내 한 줄이 보이는 가장 높은 상태). 기본 창은 648pt 라 그대로 열면 맨 아래 행이 잘린다.
     ///
     /// **왜 창을 만들 때가 아니라 열 때인가**: `ultraUnlimited` 는 서버가 정하고 세션 동기화로 **늦게 도착한다**.
-    /// 창 생성 시점에 읽으면 첫 실행에서는 아직 false 라 538 로 굳는다.
+    /// 창 생성 시점에 읽으면 첫 실행에서는 아직 false 라 기본 높이(648)로 굳는다.
     ///
     /// **왜 키우기만 하는가**: 사용자가 직접 줄여 둔 창을 우리가 매번 되돌리면 그 조작이 무의미해진다.
     /// 저장된 자리(`setFrameAutosaveName`)보다 우리가 세게 굴면 안 된다 — 모자랄 때만 채운다.
@@ -242,6 +261,7 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     /// 설정 창을 내린다(멱등). 창과 그 안의 상태는 남는다 — 다시 열면 같은 자리에 같은 크기로 선다.
     /// **앱은 계속 돈다**(메뉴바 전용 앱이다 — 이 창은 앱의 마지막 창일 뿐 앱의 수명이 아니다).
     func close() {
+        endWorkShortcutRecording()
         stuckWindowWatchdog?.cancel()
         stuckWindowWatchdog = nil
         windowStorage?.orderOut(nil)
@@ -252,9 +272,19 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     /// 안 맞추면 `isOpen` 이 true 로 남아 다음 `show()` 가 "이미 열려 있다"고 착각한다.
     func windowWillClose(_ notification: Notification) {
         guard (notification.object as AnyObject?) === windowStorage else { return }
+        endWorkShortcutRecording()
         stuckWindowWatchdog?.cancel()
         stuckWindowWatchdog = nil
         isOpen = false
+    }
+
+    /// 창이 내려가면 단축키 기록을 끝낸다(v0.3.23). **이 문이 없으면 전역 단축키가 앱을 다시 켤 때까지 멈출 수 있다** —
+    /// 기록 중에는 전역 등록이 내려가 있는데, 이 창은 닫아도 뷰가 살아 있어(orderOut) `onDisappear` 가 안 오는 경로가 있다.
+    /// 모니터 제거(세션)와 깃발 내리기(스토어)를 둘 다 한다: 세션이 다른 스토어로 시작됐거나 한 번도 안 시작됐어도
+    /// 이 창의 스토어는 반드시 기록 중이 아니게 된다.
+    private func endWorkShortcutRecording() {
+        workShortcutRecording.end()
+        wiring?.store.setRecordingWorkShortcut(false)
     }
 
     // MARK: - 창이 화면에 못 올라갔을 때의 복구

@@ -3125,3 +3125,260 @@ enum OSVersionReport {
         text(info.operatingSystemVersion)
     }
 }
+
+// MARK: - 1:1 오목 (v0.3.27)
+//
+// 서버 설계서 §2.4 의 RPC 중 **클라가 부르는 8개**의 본문·응답이다(gomoku_settle_expired 는 service_role 전용,
+// gomoku_ring 은 서버 내부라 앱이 부르지 않는다).
+//
+// 응답 규약 두 가지:
+//  ① **status 만 필수이고 나머지는 전부 Optional 이다.** 비옵셔널로 두면 키를 늘리기 전 서버·db push 전 창에서
+//     디코드가 통째로 throw 해 대결 창이 죽는다(ShopStateResponse 주석과 같은 사고). nil 은 "모른다"다.
+//  ② **모르는 status 는 `.unknown` 으로 접는다.** 서버가 어휘를 넓히는 날 디코드 실패로 떨어지면 실패 이유가
+//     통째로 사라지고, 접으면 화면은 일반 실패 문구를 말한다(문구 표는 GomokuNoticeText 한 곳).
+// 시각은 전부 epoch **밀리초**다. `Double` 로 읽는다 — bigint 정수로 오든 소수로 오든 한 번에 받는다
+// (정수 타입으로 두면 서버가 소수를 싣는 날 응답 전체가 throw 한다). 기기 시계 보정은 스토어 몫이다.
+
+/// 오목 RPC 프로토콜 버전. 서버 `gomoku_protocol()` 과 같은 값이다 — 이보다 작으면 서버가 `unsupported_client`
+/// 로 막는다(계정은 새 버전인데 두 번째 맥이 옛 앱인 경우를 막는 겹).
+nonisolated enum GomokuWire {
+    static let protocolVersion = 1
+}
+
+/// 오목 RPC 의 status 어휘. **모르는 값은 `.unknown`** 이다(위 ②).
+nonisolated enum GomokuRPCStatus: String, Equatable, Hashable, Sendable, Decodable {
+    case ok
+    case unauthorized
+    case unsupportedClient = "unsupported_client"
+    case invalid
+    case blackout
+    case notWorking = "not_working"
+    case targetNotWorking = "target_not_working"
+    case targetFocused = "target_focused"
+    case targetOutdated = "target_outdated"
+    case busy
+    case targetBusy = "target_busy"
+    case alreadyPending = "already_pending"
+    case insufficient
+    case notFound = "not_found"
+    case notPending = "not_pending"
+    case expired
+    case notActive = "not_active"
+    case timeout
+    case notYourTurn = "not_your_turn"
+    case stale
+    case forbidden
+    case unknown
+
+    init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = GomokuRPCStatus(rawValue: raw) ?? .unknown
+    }
+}
+
+/// gomoku_lobby / gomoku_inbox 본문. { p_protocol }.
+/// **빈 객체가 아니다** — PostgREST 는 본문의 키 집합으로 함수를 고르므로 서버 시그니처의 인자를 그대로 싣는다.
+struct GomokuLobbyRequest: Encodable {
+    var pProtocol = GomokuWire.protocolVersion
+}
+
+struct GomokuInboxRequest: Encodable {
+    var pProtocol = GomokuWire.protocolVersion
+}
+
+/// gomoku_challenge 본문. { p_protocol, p_opponent, p_stake }.
+struct GomokuChallengeRequest: Encodable {
+    var pProtocol = GomokuWire.protocolVersion
+    let pOpponent: String
+    let pStake: Int
+}
+
+/// gomoku_cancel / gomoku_resign 본문. { p_protocol, p_match_id }.
+struct GomokuMatchRequest: Encodable {
+    var pProtocol = GomokuWire.protocolVersion
+    let pMatchId: String
+}
+
+/// gomoku_respond 본문. { p_protocol, p_match_id, p_accept }.
+struct GomokuRespondRequest: Encodable {
+    var pProtocol = GomokuWire.protocolVersion
+    let pMatchId: String
+    let pAccept: Bool
+}
+
+/// gomoku_move 본문. { p_protocol, p_match_id, p_expected_seq, p_x, p_y }.
+/// `p_expected_seq` 는 **내가 본 마지막 기록 수(move_count)** 다 — 다르면 서버가 stale 로 돌려보낸다.
+struct GomokuMoveRequest: Encodable {
+    var pProtocol = GomokuWire.protocolVersion
+    let pMatchId: String
+    let pExpectedSeq: Int
+    let pX: Int
+    let pY: Int
+}
+
+/// gomoku_state 본문. { p_protocol, p_match_id, p_since_seq }. since 는 서버 default(0)가 있지만 **언제나 싣는다**.
+struct GomokuStateRequest: Encodable {
+    var pProtocol = GomokuWire.protocolVersion
+    let pMatchId: String
+    let pSinceSeq: Int
+}
+
+/// 사람 한 명(로비 목록·신청자·대국 상대). 로비에만 is_working·capable·in_match 가 실린다.
+/// `capable` 이 nil 이면 **불가**로 읽는다(스토어) — 모르는 상대에게 신청했다가 target_outdated 를 받는 것보다 낫다.
+struct GomokuUserRow: Decodable, Equatable, Sendable {
+    var userId: String?
+    var displayName: String?
+    var avatarUrl: String?
+    var character: String?
+    var isWorking: Bool?
+    var capable: Bool?
+    var inMatch: Bool?
+}
+
+struct GomokuLobbyMe: Decodable, Equatable, Sendable {
+    var rubyBalance: Int?
+    var wins: Int?
+    var losses: Int?
+    var draws: Int?
+    var activeMatchId: String?
+    var outgoingMatchId: String?
+}
+
+/// gomoku_lobby 응답: { status, server_now_ms, stakes, turn_seconds, invite_ttl_seconds, me{…}, users[…] }.
+struct GomokuLobbyResponse: Decodable, Equatable, Sendable {
+    let status: GomokuRPCStatus
+    var serverNowMs: Double?
+    var stakes: [Int]?
+    var turnSeconds: Int?
+    var inviteTtlSeconds: Int?
+    var me: GomokuLobbyMe?
+    var users: [GomokuUserRow]?
+}
+
+/// 대국 한 판의 서버 행(gomoku_state 의 match). `board` 는 설계서에 없는 키지만 서버가 실어 주면 권위로 쓴다.
+struct GomokuMatchRow: Decodable, Equatable, Sendable {
+    var id: String?
+    var status: String?
+    var stake: Int?
+    var black: String?
+    var white: String?
+    var challenger: String?
+    var opponent: String?
+    var moveCount: Int?
+    var turn: String?
+    var deadlineMs: Double?
+    var result: String?
+    var endReason: String?
+    var winner: String?
+    var inviteExpiresMs: Double?
+    var board: String?
+}
+
+/// 수 기록 한 줄. 패스는 x·y 가 null 이다(kind 'pass' 가 함께 오면 그것도 본다).
+struct GomokuMoveRow: Decodable, Equatable, Sendable {
+    var seq: Int?
+    var color: String?
+    var kind: String?
+    var x: Int?
+    var y: Int?
+}
+
+/// 대국 상태 묶음. gomoku_state 는 이것을 **최상위**에 싣고, 쓰기 RPC(respond·move·resign·timeout·stale·forbidden)는
+/// `state` 키 안에 싣는다.
+struct GomokuStatePayload: Decodable, Equatable, Sendable {
+    var match: GomokuMatchRow?
+    var moves: [GomokuMoveRow]?
+    var myColor: String?
+    var opponent: GomokuUserRow?
+    var rubyBalance: Int?
+    var serverNowMs: Double?
+}
+
+/// gomoku_state 응답: { status, match{…}, moves[…], my_color, opponent{…}, ruby_balance, server_now_ms }.
+struct GomokuStateResponse: Decodable, Equatable, Sendable {
+    let status: GomokuRPCStatus
+    var state: GomokuStatePayload
+
+    private enum CodingKeys: String, CodingKey { case status }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        status = try container.decode(GomokuRPCStatus.self, forKey: .status)
+        state = try GomokuStatePayload(from: decoder)
+    }
+}
+
+/// 쓰기 RPC(challenge·cancel·respond·move·resign) 공용 응답.
+/// `state` 는 `state` 키 안에 오는 것이 설계서 모양이고, 최상위에 `match` 가 오면 그것도 상태로 읽는다 —
+/// 어느 모양이든 "수는 뒀는데 화면이 안 바뀐다"는 경로가 생기지 않게.
+struct GomokuActionResponse: Decodable, Equatable, Sendable {
+    let status: GomokuRPCStatus
+    var state: GomokuStatePayload?
+    /// move ok: 방금 백이 둔 뒤 흑이 둘 곳이 없어 자동 패스했다.
+    var blackPassed: Bool?
+    /// forbidden: 금수 사유('double-three'·'budget' 또는 판정 어휘 전체).
+    var reason: String?
+    /// respond insufficient: 'me' | 'challenger'.
+    var side: String?
+    var need: Int?
+    var have: Int?
+    var rubyBalance: Int?
+    var serverNowMs: Double?
+    /// challenge ok.
+    var matchId: String?
+    var inviteExpiresMs: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case status, state, blackPassed, reason, side, need, have, rubyBalance, serverNowMs, matchId, inviteExpiresMs, match
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        status = try container.decode(GomokuRPCStatus.self, forKey: .status)
+        if let nested = try container.decodeIfPresent(GomokuStatePayload.self, forKey: .state) {
+            state = nested
+        } else if container.contains(.match) {
+            state = try GomokuStatePayload(from: decoder)
+        } else {
+            state = nil
+        }
+        blackPassed = try container.decodeIfPresent(Bool.self, forKey: .blackPassed)
+        reason = try container.decodeIfPresent(String.self, forKey: .reason)
+        side = try container.decodeIfPresent(String.self, forKey: .side)
+        need = try container.decodeIfPresent(Int.self, forKey: .need)
+        have = try container.decodeIfPresent(Int.self, forKey: .have)
+        rubyBalance = try container.decodeIfPresent(Int.self, forKey: .rubyBalance)
+        serverNowMs = try container.decodeIfPresent(Double.self, forKey: .serverNowMs)
+        matchId = try container.decodeIfPresent(String.self, forKey: .matchId)
+        inviteExpiresMs = try container.decodeIfPresent(Double.self, forKey: .inviteExpiresMs)
+    }
+}
+
+/// 받은/보낸 신청 한 줄. 받은 신청엔 challenger, 보낸 신청엔 opponent 가 실린다.
+struct GomokuInviteRow: Decodable, Equatable, Sendable {
+    var matchId: String?
+    var challenger: GomokuUserRow?
+    var opponent: GomokuUserRow?
+    var stake: Int?
+    var inviteExpiresMs: Double?
+}
+
+struct GomokuLastFinishedRow: Decodable, Equatable, Sendable {
+    var matchId: String?
+    var result: String?
+    var endReason: String?
+    var winner: String?
+    var stake: Int?
+    var finishedMs: Double?
+}
+
+/// gomoku_inbox 응답: { status, incoming[…], outgoing{…}|null, active_match_id, last_finished{…}, ruby_balance, server_now_ms }.
+struct GomokuInboxResponse: Decodable, Equatable, Sendable {
+    let status: GomokuRPCStatus
+    var incoming: [GomokuInviteRow]?
+    var outgoing: GomokuInviteRow?
+    var activeMatchId: String?
+    var lastFinished: GomokuLastFinishedRow?
+    var rubyBalance: Int?
+    var serverNowMs: Double?
+}

@@ -2166,3 +2166,74 @@ extension SupabaseWorkService {
         return (try? decoder.decode(Int.self, from: data)) ?? 0
     }
 }
+
+// MARK: - 1:1 오목 (v0.3.27)
+
+/// 오목 RPC 8개. 경로는 `/rest/v1/rpc/gomoku_*`, 본문은 pSnake 구조체(인코더가 p_snake 로 바꾼다), 전부 `p_protocol` 을 싣는다.
+///
+/// **판정은 전부 서버 몫이다.** 근무 여부·집중 모드·잔액·차례·시간 초과·금수는 서버가 한 트랜잭션 안에서 본다.
+/// 앱의 금수 표시(GomokuRules)는 헛왕복을 줄이는 장치이지 게이트가 아니다 — 서버 gomoku_judge 가 같은 코퍼스로 막는다.
+extension SupabaseWorkService {
+    func gomokuLobby(accessToken: String) async throws -> GomokuLobbyResponse {
+        try await gomokuRPC("gomoku_lobby", body: GomokuLobbyRequest(), accessToken: accessToken)
+    }
+
+    func gomokuChallenge(accessToken: String, opponentID: String, stake: Int) async throws -> GomokuActionResponse {
+        try await gomokuRPC(
+            "gomoku_challenge",
+            body: GomokuChallengeRequest(pOpponent: opponentID, pStake: stake),
+            accessToken: accessToken
+        )
+    }
+
+    func gomokuCancel(accessToken: String, matchID: String) async throws -> GomokuActionResponse {
+        try await gomokuRPC("gomoku_cancel", body: GomokuMatchRequest(pMatchId: matchID), accessToken: accessToken)
+    }
+
+    func gomokuRespond(accessToken: String, matchID: String, accept: Bool) async throws -> GomokuActionResponse {
+        try await gomokuRPC(
+            "gomoku_respond",
+            body: GomokuRespondRequest(pMatchId: matchID, pAccept: accept),
+            accessToken: accessToken
+        )
+    }
+
+    func gomokuMove(
+        accessToken: String, matchID: String, expectedSeq: Int, x: Int, y: Int
+    ) async throws -> GomokuActionResponse {
+        try await gomokuRPC(
+            "gomoku_move",
+            body: GomokuMoveRequest(pMatchId: matchID, pExpectedSeq: expectedSeq, pX: x, pY: y),
+            accessToken: accessToken
+        )
+    }
+
+    func gomokuResign(accessToken: String, matchID: String) async throws -> GomokuActionResponse {
+        try await gomokuRPC("gomoku_resign", body: GomokuMatchRequest(pMatchId: matchID), accessToken: accessToken)
+    }
+
+    func gomokuState(accessToken: String, matchID: String, sinceSeq: Int) async throws -> GomokuStateResponse {
+        try await gomokuRPC(
+            "gomoku_state",
+            body: GomokuStateRequest(pMatchId: matchID, pSinceSeq: sinceSeq),
+            accessToken: accessToken
+        )
+    }
+
+    func gomokuInbox(accessToken: String) async throws -> GomokuInboxResponse {
+        try await gomokuRPC("gomoku_inbox", body: GomokuInboxRequest(), accessToken: accessToken)
+    }
+
+    private func gomokuRPC<Body: Encodable, Response: Decodable>(
+        _ name: String, body: Body, accessToken: String
+    ) async throws -> Response {
+        let data = try await send(
+            path: "/rest/v1/rpc/\(name)",
+            method: "POST",
+            body: body,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode(Response.self, from: data)
+    }
+}

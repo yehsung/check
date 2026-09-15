@@ -215,6 +215,22 @@ struct V0325TooltipTests {
         #expect(clicked.visibleID == nil && clicked.pendingID == nil, "클릭으로 거둔 행 말풍선이 버튼을 지나자 되살아났다")
     }
 
+    /// 되올림은 남은 호버 중 **가장 최근에 들어온** 항목이다 — 세 겹(카드 ⊃ 행 ⊃ 버튼)에서 버튼을 떠나면 행이지 카드가 아니다.
+    /// 호버 목록을 들어온 순서로 두는 이유이고, 순서를 뒤집는 뮤턴트(N5)가 두 겹 테스트로는 살아남았다.
+    @Test func leavingTheInnermostOfThreeBringsBackTheMiddleNotTheOutermost() {
+        let card = Self.a, row = Self.b, button = Self.c
+        var intent = CheckTooltipIntent()
+        intent.hoverBegan(card, now: 10)
+        intent.hoverBegan(row, now: 10.1)
+        intent.hoverBegan(button, now: 10.2)
+        intent.fire(button, now: 10.6)
+        #expect(intent.visibleID == button)
+        intent.hoverEnded(button, now: 11)
+        #expect(intent.visibleID == row, "버튼을 떠나 행 위에 멈췄는데 바깥 카드 말풍선이 떴다")
+        intent.hoverEnded(row, now: 11.2)
+        #expect(intent.visibleID == card, "행을 떠나 카드 위에 멈췄는데 카드 말풍선이 안 돌아왔다")
+    }
+
     /// 겹친 항목은 커서 바로 아래(가장 안쪽) 문구를 보인다 — onHover 통지 순서가 거꾸로 와서 상태 기계가 바깥을 올린 경우에도.
     @Test func overlayPrefersTheInnermostContainedEntry() {
         let row = CGRect(x: 12, y: 100, width: 292, height: 40)

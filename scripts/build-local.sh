@@ -37,6 +37,28 @@ RES_DIR="$APP_DIR/Contents/Resources"
 rm -rf "$APP_DIR"
 mkdir -p "$BIN_DIR" "$RES_DIR"
 cp "$BUILD_PRODUCTS/check" "$BIN_DIR/check"
+
+# ★ 링크 SDK 스탬프를 **빌드한 SDK 로 고쳐 적는다.** Xcode 27 의 기본 빌드 시스템은 27.0 SDK 로 컴파일하면서 바이너리의
+# LC_BUILD_VERSION 에 sdk 를 배포 최소 버전(14.0)으로 적는다(빈 패키지로도 재현, SDKROOT 로도 안 고쳐진다). AppKit·SwiftUI 는
+# 그 숫자로 "옛 SDK 로 만든 앱"이라 판정해 호환 동작으로 돌아가고, 거기서는 MenuBarExtra 창이 콘텐츠가 줄어도 따라 줄지
+# 않는다 — 0.3.23 에서 팝오버 위쪽이 비어 보이고 내용이 아래로 내려앉았다(2026-09-15 여러 사용자 신고. 최소 재현 앱의
+# 스탬프만 14.0/26.5/27.0 으로 바꿔 14.0 에서만 재현되고 고친 사본은 정상임을 확인).
+# `--build-system native` 는 답이 아니다 — `--arch` 를 둘 주면 native 를 줘도 기본 빌드 시스템으로 넘어가 똑같이 14.0 이다.
+# 공증·버전·심볼 검사는 이 숫자를 안 보므로 고친 뒤 여기서 다시 잰다. vtool 이 무효화한 서명은 아래 codesign 이 새로 한다.
+SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+MIN_OS="$(vtool -show-build "$BIN_DIR/check" | awk '$1 == "minos" { print $2 }' | sort -u)"
+if [[ -z "$MIN_OS" || "$MIN_OS" == *$'\n'* ]]; then
+  echo "error: $BIN_DIR/check 의 minos 를 하나로 읽지 못했다: [$MIN_OS]" >&2
+  exit 1
+fi
+vtool -set-build-version macos "$MIN_OS" "$SDK_VERSION" -replace -output "$BIN_DIR/check.stamped" "$BIN_DIR/check" >&2
+mv "$BIN_DIR/check.stamped" "$BIN_DIR/check"
+SDK_STAMPS="$(vtool -show-build "$BIN_DIR/check" | awk '$1 == "sdk" { print $2 }' | sort -u | tr '\n' ' ')"
+MIN_STAMPS="$(vtool -show-build "$BIN_DIR/check" | awk '$1 == "minos" { print $2 }' | sort -u | tr '\n' ' ')"
+if [[ "$SDK_STAMPS" != "$SDK_VERSION " || "$MIN_STAMPS" != "$MIN_OS " ]]; then
+  echo "error: $BIN_DIR/check 스탬프가 sdk [${SDK_STAMPS% }] minos [${MIN_STAMPS% }] 이다 — 기대값 sdk $SDK_VERSION minos $MIN_OS" >&2
+  exit 1
+fi
 lipo -info "$BIN_DIR/check" >&2
 
 # SwiftPM 리소스 번들(캐릭터 이미지)을 앱 번들 Resources로 복사한다.
@@ -78,9 +100,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.3.23</string>
+  <string>0.3.24</string>
   <key>CFBundleVersion</key>
-  <string>75</string>
+  <string>76</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>

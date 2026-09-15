@@ -76,6 +76,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayController = CheckOverlayController(store: store, updateCheck: updateCheck)
         wireTodoBoard()
         wireSettingsWindow()
+        // 1:1 오목(v0.3.27) — 창 여는 문 · 받은 신청 말풍선 · 로그아웃 닫기. **오버레이 컨트롤러를 만든 뒤에** 잇는다
+        // (신청 말풍선 큐가 그 컨트롤러에 산다 — 먼저 이으면 첫 신청이 받을 곳 없이 사라진다).
+        wireGomoku()
         // 전역 단축키도 **오버레이 컨트롤러를 만든 뒤에** 잇는다 — 단축키로 시작한 근무도 알약으로 시작한 근무와 똑같이
         // 캐릭터가 나와야 하는데, 그 표시 전환이 위에서 배선된다.
         // ★ 진짜 Carbon 등록기는 **여기서만** 만든다. 테스트 프로세스가 실제 전역 키를 잡으면 스위트를 도는 동안
@@ -182,13 +185,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 미니게임 창도 같은 자리에서 배선한다(v0.2.46). 창 자체는 첫 `show()` 에 만들어지므로 여기서는
         // 스토어만 물린다 — 게임을 한 번도 안 여는 실행에서는 창이 아예 생기지 않는다.
         CheckMiniGameWindowController.shared.configure(store: store)
+        // 1:1 오목 창(v0.3.27)도 같은 자리에서 배선한다. 창은 첫 `show()` 에 만들어진다.
+        // 미니게임 창과 달리 **키를 잃거나 닫혀도 대국을 끝내지 않는다**(시간은 서버가 잰다 — CheckGomokuWindow.swift 머리 주석).
+        // 오목 스토어는 상대만 들고 있어서 내 이름·캐릭터는 `me` 문으로 이 스토어에서 읽어 넘긴다.
+        CheckGomokuWindowController.shared.configure(store: store.gomoku, me: { [weak self] in
+            guard let self else { return GomokuPlayerFace.fallback }
+            return GomokuPlayerFace.me(from: self.store)
+        })
         // ★ **제보·메시지 창은 v0.2.50 에 사라졌다.** 둘 다 팝오버 하위 패널로 내려왔고(사용자 지시:
         //   "제보창도 팝오버 창 안에서만 뜨게", "그 창 안에서 그 사람과의 1대1 메시지 화면으로만"),
         //   패널은 배선할 창 수명이 없다 — 그리는 것은 `CheckMenuView` 이고 상태는 스토어 깃발 하나다.
-        //   여기에 `configure(store:)` 를 다시 더하지 마라. 남은 별도 창은 설정·미니게임 둘뿐이다.
+        //   여기에 `configure(store:)` 를 다시 더하지 마라. 남은 별도 창은 설정·미니게임·1:1 오목 셋이다.
         // 실행 중인 앱에서 창이 **실제로** 떴는지 밖에서 재기 위한 문(인자가 없으면 아무 일도 안 한다).
         // 이 저장소에서 창 검증은 CGWindowList 실측 없이는 성립하지 않는다 — 근거는 그 타입 주석 참고.
         CheckSettingsWindowProbe.startIfRequested()
+    }
+
+    /// 1:1 오목(v0.3.27)의 문들을 잇는다(실행당 1회). **넷 다 빠져도 컴파일·테스트는 조용히 초록이다** —
+    /// 스토어 쪽 문이 전부 옵셔널이라 `?.` 가 삼킨다. 그래서 소스 계약 테스트(V0327GomokuWindowTests)가 줄마다 되묻는다.
+    ///   ① `presentWindow` — 스토어의 `openWindow(focusMatchID:)` 가 창을 띄우는 유일한 문. 없으면 미니게임 입구 ·
+    ///      배너 [수락] · 말풍선 클릭이 전부 상태만 불러오고 창은 안 뜬다.
+    ///   ② `onInviteArrived` — 처음 본 받은 신청을 캐릭터 말풍선 **큐**에 넣는다(못 띄우면 큐가 기다린다).
+    ///   ③ 말풍선 클릭 → 그 대국 id 로 창 열기. 팝오버를 거치지 않은 길이라 팝오버 닫기를 부르지 않는다.
+    ///   ④ 로그아웃·계정 전환 → 창 닫기 + 말풍선 큐 비우기. 깃발만 비우면 내용이 빈 창이 화면에 남는다.
+    private func wireGomoku() {
+        let gomoku = store.gomoku
+        gomoku.presentWindow = { CheckGomokuWindowController.shared.show() }
+        gomoku.onInviteArrived = { [weak self] invite in
+            self?.overlayController?.enqueueGomokuInvite(invite)
+        }
+        overlayController?.onOpenGomoku = { [weak self] matchID in
+            self?.store.gomoku.openWindow(focusMatchID: matchID)
+        }
+        GomokuAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
+            CheckGomokuWindowController.shared.close()
+            self?.overlayController?.clearGomokuInvites()
+        }.start()
     }
 
     /// 설정 창을 여는 표준 AppKit 액션. `NSApp.sendAction(#selector(...), to: nil, from: nil)` 로

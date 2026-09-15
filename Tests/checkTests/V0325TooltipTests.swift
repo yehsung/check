@@ -700,9 +700,15 @@ struct V0325TooltipTests {
             let n = Self.count(".checkTooltipLayer()", in: code)
             return n > 0 ? "\(name):\(n)" : nil
         }.sorted()
+        // v0.3.27: 1:1 오목 창(GomokuPanel) 루트가 다섯 번째 자리로 붙었다(테스트 이름은 식별자라 그대로 둔다).
         #expect(layerSites == [
-            "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1", "MiniGamePanel.swift:1",
+            "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1", "GomokuPanel.swift:1",
+            "MiniGamePanel.swift:1",
         ], "레이어 자리: \(layerSites)")
+        // 오목 창: 창 고정 프레임·배경·전경색 뒤(판·목록 클리핑 바깥).
+        let gomoku = try #require(Self.between(sources["GomokuPanel.swift"] ?? "",
+                                               "struct GomokuPanel: View {", "private var content: some View {"))
+        #expect(gomoku.contains("height: GomokuWindowLayout.contentSize.height, alignment: .topLeading) .background(CheckTheme.background) .foregroundStyle(CheckTheme.primaryText) .checkTooltipLayer()"))
 
         // 팝오버: 창 전체를 덮는 가장 바깥 시각 체인(배경·전경색) 바로 뒤.
         let menu = try #require(Self.between(sources["CheckMenuView.swift"] ?? "",

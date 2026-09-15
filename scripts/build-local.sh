@@ -12,9 +12,23 @@ if [[ -z "${CHECK_SUPABASE_ANON_KEY:-}" && -f "$ROOT/.env.local" ]]; then
 fi
 
 # 유니버설(arm64+x86_64) 빌드 — 인텔 맥 팀원도 실행 가능해야 한다.
-# --arch 를 두 개 주면 산출물이 .build/apple/Products/Release/ 로 들어간다(단일 arch 경로와 다름).
 swift build -c release --arch arm64 --arch x86_64 >&2
-BUILD_PRODUCTS="$ROOT/.build/apple/Products/Release"
+# 산출물 경로는 **SwiftPM 이 말해 준 값**을 쓴다. 예전엔 .build/apple/Products/Release 를 적어 두었는데, Xcode 27 의
+# 빌드 시스템은 같은 명령의 산출물을 .build/out/Products/Release 에 둔다 — 적어 둔 경로에는 옛 빌드가 그대로 남아 있어
+# 0.3.23 패키지에 0.3.22 바이너리와 리소스가 **조용히** 들어갔다(Info.plist 버전은 이 스크립트가 쓰니 0.3.23 으로 보였다,
+# 2026-09-15 nm 으로 발견). 경로를 묻고, 아래에서 산출물이 소스보다 새것인지까지 확인한다.
+BUILD_PRODUCTS="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
+if [[ ! -f "$BUILD_PRODUCTS/check" ]]; then
+  echo "error: 빌드 산출물이 없다: $BUILD_PRODUCTS/check" >&2
+  exit 1
+fi
+# 캐시 빌드(소스 변경 없음)는 바이너리를 다시 쓰지 않으므로 '빌드 시작보다 새것'으로는 못 잰다. 대신 **어떤 소스보다도
+# 새것**이어야 한다 — 소스 하나라도 산출물보다 새로우면 그 산출물은 이번 소스로 만든 것이 아니다.
+STALE_SOURCE="$(find "$ROOT/Sources" "$ROOT/Package.swift" -type f -newer "$BUILD_PRODUCTS/check" | head -n 1)"
+if [[ -n "$STALE_SOURCE" ]]; then
+  echo "error: $BUILD_PRODUCTS/check 가 소스보다 오래됐다(예: $STALE_SOURCE) — 옛 산출물을 복사하려 한다" >&2
+  exit 1
+fi
 
 APP_DIR="$ROOT/dist/aing-check.app"
 BIN_DIR="$APP_DIR/Contents/MacOS"
@@ -32,7 +46,9 @@ RESOURCE_BUNDLE="$BUILD_PRODUCTS/check_check.bundle"
 if [[ -d "$RESOURCE_BUNDLE" ]]; then
   cp -R "$RESOURCE_BUNDLE" "$RES_DIR/"
 else
-  echo "warning: resource bundle not found at $RESOURCE_BUNDLE" >&2
+  # 경고로 넘기면 캐릭터 이미지 없는 앱이 공증까지 통과해 나간다 — 멈춘다.
+  echo "error: resource bundle not found at $RESOURCE_BUNDLE" >&2
+  exit 1
 fi
 
 if [[ -n "${CHECK_SUPABASE_ANON_KEY:-}" ]]; then

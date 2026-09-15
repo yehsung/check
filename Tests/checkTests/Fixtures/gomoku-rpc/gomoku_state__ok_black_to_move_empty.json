@@ -1,0 +1,63 @@
+{
+  "match": {
+    "id": "e6c642ab-ba42-4351-92e9-796f9b909739",
+    "turn": "black",
+    "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "board": ".................................................................................................................................................................................................................................",
+    "stake": 3,
+    "white": "3e240c02-8972-478e-a674-014f498a641b",
+    "result": null,
+    "status": "active",
+    "winner": null,
+    "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+    "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "end_reason": null,
+    "move_count": 0,
+    "deadline_ms": 1789500102522,
+    "finished_ms": null,
+    "turn_started_ms": 1789500072522,
+    "invite_expires_ms": 1789500132506
+  },
+  "moves": [],
+  "state": {
+    "match": {
+      "id": "e6c642ab-ba42-4351-92e9-796f9b909739",
+      "turn": "black",
+      "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "board": ".................................................................................................................................................................................................................................",
+      "stake": 3,
+      "white": "3e240c02-8972-478e-a674-014f498a641b",
+      "result": null,
+      "status": "active",
+      "winner": null,
+      "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+      "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "end_reason": null,
+      "move_count": 0,
+      "deadline_ms": 1789500102522,
+      "finished_ms": null,
+      "turn_started_ms": 1789500072522,
+      "invite_expires_ms": 1789500132506
+    },
+    "moves": [],
+    "my_color": "black",
+    "opponent": {
+      "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+      "character": "jellyfish",
+      "avatar_url": "https://example.invalid/avatar-b.png",
+      "display_name": "코덱스토큰도둑예은"
+    },
+    "ruby_balance": 97,
+    "server_now_ms": 1789500072537
+  },
+  "status": "ok",
+  "my_color": "black",
+  "opponent": {
+    "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+    "character": "jellyfish",
+    "avatar_url": "https://example.invalid/avatar-b.png",
+    "display_name": "코덱스토큰도둑예은"
+  },
+  "ruby_balance": 97,
+  "server_now_ms": 1789500072537
+}

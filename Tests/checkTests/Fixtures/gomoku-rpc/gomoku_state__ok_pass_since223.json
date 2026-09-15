@@ -1,0 +1,93 @@
+{
+  "match": {
+    "id": "6e795c26-d006-4487-88aa-ee0f6f915ddb",
+    "turn": "white",
+    "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "board": "bbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbb.bbbwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+    "stake": 5,
+    "white": "3e240c02-8972-478e-a674-014f498a641b",
+    "result": null,
+    "status": "active",
+    "winner": null,
+    "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+    "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "end_reason": null,
+    "move_count": 225,
+    "deadline_ms": 1789500102668,
+    "finished_ms": null,
+    "turn_started_ms": 1789500072668,
+    "invite_expires_ms": 1789500132595
+  },
+  "moves": [
+    {
+      "x": 2,
+      "y": 0,
+      "seq": 224,
+      "kind": "stone",
+      "color": "white"
+    },
+    {
+      "x": null,
+      "y": null,
+      "seq": 225,
+      "kind": "pass",
+      "color": "black"
+    }
+  ],
+  "state": {
+    "match": {
+      "id": "6e795c26-d006-4487-88aa-ee0f6f915ddb",
+      "turn": "white",
+      "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "board": "bbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbb.bbbwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+      "stake": 5,
+      "white": "3e240c02-8972-478e-a674-014f498a641b",
+      "result": null,
+      "status": "active",
+      "winner": null,
+      "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+      "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "end_reason": null,
+      "move_count": 225,
+      "deadline_ms": 1789500102668,
+      "finished_ms": null,
+      "turn_started_ms": 1789500072668,
+      "invite_expires_ms": 1789500132595
+    },
+    "moves": [
+      {
+        "x": 2,
+        "y": 0,
+        "seq": 224,
+        "kind": "stone",
+        "color": "white"
+      },
+      {
+        "x": null,
+        "y": null,
+        "seq": 225,
+        "kind": "pass",
+        "color": "black"
+      }
+    ],
+    "my_color": "black",
+    "opponent": {
+      "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+      "character": "jellyfish",
+      "avatar_url": "https://example.invalid/avatar-b.png",
+      "display_name": "코덱스토큰도둑예은"
+    },
+    "ruby_balance": 95,
+    "server_now_ms": 1789500072704
+  },
+  "status": "ok",
+  "my_color": "black",
+  "opponent": {
+    "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+    "character": "jellyfish",
+    "avatar_url": "https://example.invalid/avatar-b.png",
+    "display_name": "코덱스토큰도둑예은"
+  },
+  "ruby_balance": 95,
+  "server_now_ms": 1789500072704
+}

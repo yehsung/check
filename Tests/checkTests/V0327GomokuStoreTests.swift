@@ -226,9 +226,8 @@ private func makeGomokuStore(
         anonKey: "anon-test-key",
         session: GomokuStubProtocol.session()
     )
-    let suite = "v0327-gomoku-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
+    // 테스트가 끝나면 지운다(@Test(.gomokuDefaultsCleanup)) — 안 지우면 실행마다 plist 가 쌓인다.
+    let defaults = GomokuTestDefaults.make("v0327-gomoku")
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
@@ -283,7 +282,7 @@ private let allStatuses: [GomokuRPCStatus] = [
 
 // MARK: - 1. 문구 표 · 디코드 · 본문 모양
 
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 오목_안내_문구표는_상태마다_사용자_어휘다() {
     #expect(GomokuNoticeText.challenge(.targetOutdated) == "상대가 앱을 업데이트해야 해요")
     #expect(GomokuNoticeText.challenge(.targetFocused) == "상대가 집중 모드라 신청할 수 없어요")
@@ -323,7 +322,7 @@ func 오목_안내_문구표는_상태마다_사용자_어휘다() {
     }
 }
 
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 모르는_status_는_unknown_으로_접고_status_만_필수다() throws {
     let decoder = snakeDecoder()
     let action = try decoder.decode(GomokuActionResponse.self, from: Data(#"{"status":"brand_new_thing"}"#.utf8))
@@ -351,7 +350,7 @@ func 모르는_status_는_unknown_으로_접고_status_만_필수다() throws {
     #expect(fractional.serverNowMs == 1_789_000_000_000.5)
 }
 
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 오목_RPC_여덟은_p_protocol_1_과_p_snake_키를_싣는다() async throws {
     let host = "v0327-g-shape-\(UUID().uuidString.prefix(8))".lowercased()
     GomokuStubProtocol.register(host: host) { _, _, _ in GomokuStubProtocol.Reply(body: #"{"status":"ok"}"#) }
@@ -393,7 +392,7 @@ func 오목_RPC_여덟은_p_protocol_1_과_p_snake_키를_싣는다() async thro
 // MARK: - 2. 신청 · 수락
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 신청_거절은_안내로_옮기고_성공은_서버시계로_보정한_만료를_든다() async {
     let (_, gomoku, host) = makeGomokuStore("challenge") { rpc, _, index in
         switch rpc {
@@ -432,13 +431,14 @@ func 신청_거절은_안내로_옮기고_성공은_서버시계로_보정한_�
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 수락하면_루비를_서버값으로_반영하고_판을_연다() async {
     let (store, gomoku, _) = makeGomokuStore("accept") { rpc, body, _ in
         guard rpc == "gomoku_respond" else { return nil }
         let serverNow = nowMs()
+        // 서버 잔액(11)은 일부러 '로컬 20 − 판돈 3 = 17' 과 다르다 — 같으면 로컬에서 빼는 구현도 초록이다(뮤턴트 S7).
         return reply([
-            "status": "ok", "ruby_balance": 17,
+            "status": "ok", "ruby_balance": 11,
             "state": statePayload(myColor: "white", turn: "black", deadlineMs: serverNow + 30_000,
                                   serverNowMs: serverNow, stake: 3)
         ])
@@ -452,8 +452,8 @@ func 수락하면_루비를_서버값으로_반영하고_판을_연다() async {
 
     await gomoku.respond(inviteID: matchID, accept: true)
 
-    #expect(gomoku.rubyBalance == 17)
-    #expect(store.rubyBalance == 17, "호스트의 루비 칩에도 서버값이 들어가야 한다")
+    #expect(gomoku.rubyBalance == 11, "낙관적 차감(20 − 3)이 아니라 서버값이어야 한다")
+    #expect(store.rubyBalance == 11, "호스트의 루비 칩에도 서버값이 들어가야 한다")
     #expect(gomoku.phase == .playing)
     #expect(gomoku.match?.myColor == .white)
     #expect(gomoku.match?.turn == .black)
@@ -465,7 +465,7 @@ func 수락하면_루비를_서버값으로_반영하고_판을_연다() async {
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 신청자_잔액_부족_수락은_판을_열지_않고_루비도_안_뺀다() async {
     let (store, gomoku, _) = makeGomokuStore("accept-short") { rpc, _, _ in
         rpc == "gomoku_respond"
@@ -489,7 +489,7 @@ func 신청자_잔액_부족_수락은_판을_열지_않고_루비도_안_뺀다
 // MARK: - 3. 착수
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func stale_이면_since_seq_로_다시_읽어_새_수를_얹는다() async {
     let (_, gomoku, host) = makeGomokuStore("stale") { rpc, body, _ in
         switch rpc {
@@ -524,7 +524,7 @@ func stale_이면_since_seq_로_다시_읽어_새_수를_얹는다() async {
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 기록에_구멍이_나면_처음부터_한_번_더_받는다() async {
     let (_, gomoku, host) = makeGomokuStore("gap") { rpc, body, _ in
         guard rpc == "gomoku_state" else { return nil }
@@ -547,7 +547,7 @@ func 기록에_구멍이_나면_처음부터_한_번_더_받는다() async {
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 시간_초과_응답은_결과로_옮기고_판돈만큼_잃었다고_말한다() async {
     let (store, gomoku, _) = makeGomokuStore("timeout") { rpc, _, _ in
         guard rpc == "gomoku_move" else { return nil }
@@ -578,7 +578,7 @@ func 시간_초과_응답은_결과로_옮기고_판돈만큼_잃었다고_말�
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 흑_금수는_보내기_전에_막고_서버_금수는_사유로_말한다() async {
     let (_, gomoku, host) = makeGomokuStore("forbidden") { rpc, _, _ in
         rpc == "gomoku_move" ? reply(["status": "forbidden", "reason": "overline"]) : nil
@@ -608,7 +608,7 @@ func 흑_금수는_보내기_전에_막고_서버_금수는_사유로_말한다(
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 흑_자동_패스는_차례를_백에게_남기고_마지막_돌은_백의_수다() async {
     let (_, gomoku, _) = makeGomokuStore("pass") { rpc, _, _ in
         guard rpc == "gomoku_move" else { return nil }
@@ -641,7 +641,7 @@ func 흑_자동_패스는_차례를_백에게_남기고_마지막_돌은_백의_
 // MARK: - 4. 시계 보정
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 남은_시간은_서버_시계와의_차이를_지운_기기_시각으로_잰다() {
     let gomoku = GomokuStore()
     let local = Date(timeIntervalSince1970: 1_800_000_000)
@@ -659,7 +659,7 @@ func 남은_시간은_서버_시계와의_차이를_지운_기기_시각으로_�
 // MARK: - 5. 세대 가드 · 리셋
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 로그아웃_뒤에_도착한_앞_계정의_판은_버린다() async {
     let (store, gomoku, host) = makeGomokuStore("gen-logout") { rpc, _, _ in
         rpc == "gomoku_state" ? reply(statePayload(turn: "white"), delay: 0.4) : nil
@@ -674,7 +674,7 @@ func 로그아웃_뒤에_도착한_앞_계정의_판은_버린다() async {
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 리셋_뒤에_도착한_응답도_버린다() async {
     let (_, gomoku, host) = makeGomokuStore("gen-reset") { rpc, _, _ in
         switch rpc {
@@ -697,7 +697,7 @@ func 리셋_뒤에_도착한_응답도_버린다() async {
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 로그아웃은_창을_닫고_오목_상태를_전부_비운다() async throws {
     let (store, gomoku, _) = makeGomokuStore("logout-reset")
     seedTwoMoveMatch(gomoku)
@@ -753,7 +753,7 @@ func 로그아웃은_창을_닫고_오목_상태를_전부_비운다() async thr
 // MARK: - 6. 폴링 게이트
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 폴링은_창이_보일_때만_돌고_차례_구독_여부로_주기가_갈린다() async {
     let (store, gomoku, host) = makeGomokuStore("poll-gate") { rpc, _, _ in
         switch rpc {
@@ -851,7 +851,7 @@ func 폴링은_창이_보일_때만_돌고_차례_구독_여부로_주기가_갈
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실제_폴링_루프는_창이_보이는_동안만_살아_있다() async {
     let (_, gomoku, host) = makeGomokuStore("poll-loop") { rpc, _, _ in
         rpc == "gomoku_state"
@@ -872,6 +872,9 @@ func 실제_폴링_루프는_창이_보이는_동안만_살아_있다() async {
     gomoku.windowDidHide()
     #expect(gomoku.pollTask == nil)
     #expect(gomoku.match != nil, "창을 내려도 대국은 계속된다")
+    // 창을 내린 순간 이미 나가던 조회 한 건은 끝까지 간다(스텁이 요청을 세는 시점은 전송 시점이라, 부하 중에는
+    // 150ms 안에 안 셀 수 있다 — 2026-09-16 전체 스위트 부하에서 이 자리가 빨갰다). 그 조회가 끝난 뒤를 기준으로 잰다.
+    await gomokuWait(20) { gomoku.stateInFlightID == nil }
     try? await Task.sleep(for: .milliseconds(150))
     let settled = GomokuStubProtocol.count(host: host, rpc: "gomoku_state")
     try? await Task.sleep(for: .milliseconds(1_800))       // 미구독 주기(1.5초)를 넘겨 기다린다
@@ -881,7 +884,7 @@ func 실제_폴링_루프는_창이_보이는_동안만_살아_있다() async {
 // MARK: - 7. 받은 신청 · 계기
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 새_받은_신청은_처음_본_id_에_한_번만_알린다() async {
     let (_, gomoku, _) = makeGomokuStore("arrival") { rpc, _, index in
         guard rpc == "gomoku_inbox" else { return nil }
@@ -920,7 +923,7 @@ func 새_받은_신청은_처음_본_id_에_한_번만_알린다() async {
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 인박스가_진행_중_대국을_말하면_판을_열고_보낸_신청을_걷는다() async {
     let (_, gomoku, host) = makeGomokuStore("inbox-active") { rpc, _, _ in
         switch rpc {
@@ -945,7 +948,7 @@ func 인박스가_진행_중_대국을_말하면_판을_열고_보낸_신청을_
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 팝오버_열림_인박스는_60초_스로틀이다() async throws {
     let (_, gomoku, host) = makeGomokuStore("menu-throttle") { rpc, _, _ in
         rpc == "gomoku_inbox" ? reply(["status": "ok", "incoming": []]) : nil

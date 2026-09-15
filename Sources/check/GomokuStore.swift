@@ -63,6 +63,23 @@ nonisolated struct GomokuMatchState: Identifiable, Equatable, Sendable {
 
 nonisolated enum GomokuPhase: Equatable, Sendable { case lobby, playing, result }
 
+/// 창이 안 보이는 사람에게 "지금 둘 차례"를 알리는 한 건(캐릭터 말풍선으로 간다 — CheckApp 배선).
+/// 같은 (판 id, move_count) 에는 한 번만 만든다.
+nonisolated struct GomokuAttention: Equatable, Sendable {
+    enum Kind: Equatable, Sendable {
+        /// 판이 막 시작됐고 내가 먼저 둔다(흑).
+        case matchStarted
+        /// 상대가 뒀고 이제 내 차례다.
+        case myTurn
+    }
+
+    let kind: Kind
+    let matchID: String
+    let opponentName: String
+    /// 이 알림을 만든 순간의 기록 수. 말풍선을 띄우기 직전 판이 이미 넘어갔는지 대조한다.
+    let moveCount: Int
+}
+
 // MARK: - 문구 표 (사용자 어휘 — 이 표 밖에서 문구를 만들지 마라)
 
 /// 오목 안내 한 줄의 **유일한 출처**. status → 문구 변환이 여러 곳에 흩어지면 같은 거절이 화면마다 다른 말을 한다.
@@ -74,6 +91,10 @@ nonisolated enum GomokuNoticeText {
     static let signInAgain = "다시 로그인해 주세요"
     static let notYourTurn = "상대 차례예요"
     static let inviteTimedOut = "상대가 응답하지 않았어요"
+    /// 보낸 신청이 만료 전에 사라졌다(거절·취소·상대가 다른 대국을 시작함 — 사용자에게는 모두 같은 뜻이다).
+    static let inviteDeclined = "상대가 신청을 받지 않았어요"
+    /// 착수·기권을 눌렀는데 그 전에 시간이 넘어 판이 이미 끝났다.
+    static let timedOut = "시간이 지나 대국이 끝났어요"
     static let finishedInvite = "이미 끝난 신청이에요"
     static let finishedMatch = "이미 끝난 대국이에요"
     static let cannotPlace = "둘 수 없는 자리예요"
@@ -142,7 +163,7 @@ nonisolated enum GomokuNoticeText {
         case .ok, .stale: return nil
         case .forbidden:
             return GomokuForbiddenReason(serverReason: reason).map(forbidden) ?? cannotPlace
-        case .timeout: return "시간이 지나 대국이 끝났어요"
+        case .timeout: return timedOut
         case .notYourTurn: return notYourTurn
         case .notActive, .notFound: return finishedMatch
         case .invalid: return cannotPlace
@@ -151,9 +172,11 @@ nonisolated enum GomokuNoticeText {
     }
 
     /// 기권(gomoku_resign) 결과. 성공은 결과 화면이 말한다(nil).
+    /// 서버는 기권보다 시간 초과를 먼저 정산해 `timeout` + 끝난 판을 돌려준다 — 착수와 같은 말을 한다.
     static func resign(_ status: GomokuRPCStatus) -> String? {
         switch status {
         case .ok: return nil
+        case .timeout: return timedOut
         case .notActive, .notFound: return finishedMatch
         default: return common(status)
         }
@@ -188,6 +211,13 @@ final class GomokuStore {
     nonisolated static let turnGraceSeconds: TimeInterval = 2
     /// 창 열기(openWindow)와 창 표시(windowDidShow)가 같은 조회를 두 번 쏘지 않게 하는 간격(초).
     nonisolated static let reloadDedupeSeconds: TimeInterval = 1
+    /// 서버 시계 오프셋을 다시 재는 문턱(초). 응답마다 왕복 지연이 몇 ms 씩 달라지는데, 그때마다 오프셋을 갈면
+    /// 같은 신청의 만료·같은 차례의 마감이 응답마다 다른 값이 되어 팝오버·창 루트가 헛되이 다시 그려진다.
+    nonisolated static let serverClockToleranceSeconds: TimeInterval = 0.25
+    /// 같은 신청(id·판돈·상대가 같음)을 다시 읽었을 때 만료 시각이 이만큼 안쪽으로만 다르면 기존 값을 쓴다(초).
+    nonisolated static let inviteExpiryToleranceSeconds: TimeInterval = 1
+    /// 같은 차례(기록 수·차례가 같음)를 다시 읽었을 때 마감이 이만큼 안쪽으로만 다르면 기존 값을 쓴다(초).
+    nonisolated static let deadlineToleranceSeconds: TimeInterval = 0.5
 
     nonisolated static let logger = Logger(subsystem: "kingcheck", category: "gomoku")
 
@@ -222,6 +252,10 @@ final class GomokuStore {
     var rubyBalance: Int?
     /// 한 수 제한(초). 서버 로비 응답이 말해 주면 그 값, 아니면 설계값 30.
     var turnSeconds = 30
+    /// 마지막 상대 목록 조회가 실패했다. 빈 목록을 "상대가 없다"로 보여 주지 않기 위한 값이다.
+    var lobbyLoadFailed = false
+    /// 이번 로그인에서 상대 목록을 한 번이라도 받았다.
+    var hasLoadedLobby = false
 
     /// 팝오버 배너·말풍선이 쓰는 대표 신청(만료 안 된 받은 신청 중 가장 오래된 것).
     /// **시계를 읽지 않는다** — 만료된 신청은 스토어가 만료 시각에 `incoming` 에서 걷어낸다(pruneExpiredInvites).
@@ -241,6 +275,10 @@ final class GomokuStore {
     @ObservationIgnored var onInviteArrived: (@MainActor (GomokuInvite) -> Void)?
     /// 창 닫기(컨트롤러 close). reset() 이 부른다 — 로그아웃한 뒤 앞 계정의 판이 떠 있으면 안 된다.
     @ObservationIgnored var dismissWindow: (@MainActor () -> Void)?
+    /// 판이 막 시작됐다 — 앱이 앞에 없으면 사용자의 주의를 끈다(CheckApp 이 NSApp.requestUserAttention 으로 잇는다).
+    @ObservationIgnored var requestAttention: (@MainActor () -> Void)?
+    /// 창이 안 보이는 동안 차례가 나에게 왔다(같은 판 id·기록 수에 한 번). CheckApp 이 캐릭터 말풍선으로 잇는다.
+    @ObservationIgnored var onAttention: (@MainActor (GomokuAttention) -> Void)?
 
     // MARK: 내부 장부 (관찰 대상 아님)
 
@@ -250,7 +288,22 @@ final class GomokuStore {
     @ObservationIgnored var pollStepSeconds: TimeInterval = 0.5
     /// 서버 시계 − 기기 시계(초). server_now_ms 가 올 때마다 갱신한다.
     @ObservationIgnored private(set) var serverClockOffset: TimeInterval = 0
+    /// 오프셋을 한 번이라도 쟀는가(처음 잰 값은 문턱과 무관하게 받는다).
+    @ObservationIgnored private var hasServerClockOffset = false
     @ObservationIgnored private(set) var resetGeneration = 0
+    /// 창이 다른 창에 완전히 가려졌거나 다른 Space·잠금 화면에 있다(창 컨트롤러의 가림 통지).
+    /// **폴링만** 이 값을 본다 — 시계 잎 뷰·말풍선 판정은 `isWindowVisible` 그대로다(가림 통지가 틀려도 보이는 창의 시계는 돈다).
+    @ObservationIgnored private(set) var isWindowOccluded = false
+    /// 지금 조회 중인 판 id 와, 그 사이 다른 판으로 들어온 조회 요청(마지막 것 하나).
+    @ObservationIgnored private(set) var stateInFlightID: String?
+    @ObservationIgnored private var pendingStateID: String?
+    /// 마지막으로 "내 차례가 왔다"를 본 (판 id#기록 수). 같은 차례에 말풍선이 두 번 뜨지 않게 한다.
+    @ObservationIgnored private var attentionKey: String?
+    /// 결과 화면을 한 번이라도 세운 끝난 판(받은함 last_finished 로 같은 결과를 다시 세우지 않는다).
+    @ObservationIgnored private(set) var shownResultIDs: Set<String> = []
+    /// 보낸 신청을 이 기기에서 새로 세울 때마다 오른다. 그보다 **먼저** 나간 받은함 응답이 방금 보낸 신청을 지우지 않게 한다.
+    @ObservationIgnored private var outgoingRevision = 0
+    @ObservationIgnored private var inboxRequestOutgoingRevision = 0
     /// 서버가 말한 내 진행 중 대국 id(로비·인박스·상태 응답).
     @ObservationIgnored private(set) var activeMatchID: String?
     /// onInviteArrived 를 이미 부른 받은 신청 id.
@@ -305,6 +358,8 @@ final class GomokuStore {
     /// 창이 실제로 보이기 시작했다(컨트롤러가 부른다). 폴링 시작·로비/인박스 재조회.
     func windowDidShow() {
         if !isWindowVisible { isWindowVisible = true }
+        // 막 앞으로 올라온 창이다. 숨기기 전의 가림 기록이 남아 폴링을 영영 막지 않게 지운다(가려지면 통지가 다시 온다).
+        isWindowOccluded = false
         startPolling()
         guard host?.session != nil else { return }
         let now = clock()
@@ -319,7 +374,20 @@ final class GomokuStore {
     /// 창이 가려졌다·닫혔다. 폴링만 멈춘다 — **대국은 계속된다**(시간은 서버에서 흐른다).
     func windowDidHide() {
         if isWindowVisible { isWindowVisible = false }
+        isWindowOccluded = false
         stopPolling()
+    }
+
+    /// 창의 가림 상태가 바뀌었다(다른 창 뒤·다른 Space·잠금 화면). **폴링만** 멈추고 되살린다.
+    /// `isWindowVisible` 은 건드리지 않는다 — 가림 통지가 틀려도 보이는 창의 시계가 멈추면 안 된다.
+    /// 실시간 신호(handleSignal)는 이 값과 무관하게 계속 받는다.
+    func windowOcclusionDidChange(visible: Bool) {
+        isWindowOccluded = !visible
+        if visible {
+            startPolling()
+        } else {
+            stopPolling()
+        }
     }
 
     // MARK: - 조회
@@ -336,6 +404,8 @@ final class GomokuStore {
             applyLobby(response)
         case .failure:
             Self.logger.notice("lobby request failed")
+            // 빈 목록을 "대결할 사람이 없다"로 믿게 하지 않는다 — 화면이 연결 안내와 [다시 불러오기]를 그린다.
+            if !lobbyLoadFailed { lobbyLoadFailed = true }
         }
     }
 
@@ -346,6 +416,8 @@ final class GomokuStore {
             return
         }
         noteServerNow(response.serverNowMs)
+        if lobbyLoadFailed { lobbyLoadFailed = false }
+        if !hasLoadedLobby { hasLoadedLobby = true }
         if let seconds = response.turnSeconds, seconds > 0, turnSeconds != seconds { turnSeconds = seconds }
         if let ttl = response.inviteTtlSeconds, ttl > 0 { inviteTTLSeconds = TimeInterval(ttl) }
         if let me = response.me {
@@ -376,6 +448,7 @@ final class GomokuStore {
         repeat {
             inboxAgain = false
             lastInboxRequestAt = clock()
+            inboxRequestOutgoingRevision = outgoingRevision
             let result = await perform({ try await $0.gomokuInbox(accessToken: $1) })
             guard generation == resetGeneration else { return }
             switch result {
@@ -400,21 +473,36 @@ final class GomokuStore {
         noteServerNow(response.serverNowMs)
         applyRuby(response.rubyBalance)
         let now = clock()
+        let previousIncoming = incoming
         let received = (response.incoming ?? [])
             .compactMap { row in invite(from: row, peerRow: row.challenger, fallbackPeer: nil) }
             .filter { $0.expiresAt > now }
+            .map { fresh in Self.steadyInvite(fresh, previous: previousIncoming.first { $0.id == fresh.id }) }
         if incoming != received { incoming = received }
-        let sent = response.outgoing
+        let previousOutgoing = outgoing
+        let active = response.activeMatchId?.lowercased()
+        // 이 응답은 방금 이 기기가 세운 보낸 신청보다 먼저 나갔다 — 그 신청이 없다고 해도 사실이 아니다.
+        let predatesOutgoing = inboxRequestOutgoingRevision < outgoingRevision
+        var sent = response.outgoing
             .flatMap { row in
                 invite(from: row, peerRow: row.opponent,
                        fallbackPeer: outgoing?.id == row.matchId?.lowercased() ? outgoing?.peer : nil)
             }
             .flatMap { $0.expiresAt > now ? $0 : nil }
+            .map { fresh in Self.steadyInvite(fresh, previous: previousOutgoing) }
+        if sent == nil, predatesOutgoing { sent = previousOutgoing }
         if outgoing != sent { outgoing = sent }
+        // 진행 중 대국이 있으면 거절 안내를 하지 않는다 — 내가 다른 신청을 수락해 서버가 보낸 신청을 거둔 것이지 상대가 거절한 게 아니다
+        // (수락 전에 나간 받은함이 옛 보낸 신청을 되살렸다가 다음 받은함에서 사라지는 경로 포함).
+        let inMatch = active != nil || match.map { !$0.isFinished } == true
+        if let gone = previousOutgoing, sent?.id != gone.id, gone.id != active, !predatesOutgoing, !inMatch {
+            // 보낸 신청이 받은함에서 사라졌고 판으로 이어지지도 않았다 = 거절·취소(상대가 다른 대국을 시작해 서버가
+            // 거둔 경우 포함). 만료 시각이 지났으면 만료 안내와 같은 말을 한다(두 안내가 겹치지 않게).
+            setNotice(gone.expiresAt > now ? GomokuNoticeText.inviteDeclined : GomokuNoticeText.inviteTimedOut)
+        }
         announceNewInvites()
         scheduleInviteExpiry()
 
-        let active = response.activeMatchId?.lowercased()
         activeMatchID = active
         if let active {
             if match?.id != active || match?.isFinished == true {
@@ -423,7 +511,21 @@ final class GomokuStore {
         } else if let current = match, !current.isFinished {
             // 로컬은 진행 중인데 서버엔 진행 중 대국이 없다 = 그 사이 끝났다. 결과를 받아 온다.
             await refreshMatch(id: current.id)
+        } else if match == nil, phase == .lobby,
+                  let finished = response.lastFinished?.matchId?.lowercased(), !finished.isEmpty,
+                  !dismissedMatchIDs.contains(finished), !shownResultIDs.contains(finished) {
+            // 앱을 다시 켜는 사이 끝난 판(최근 10분)의 결과를 한 번 세운다. 창이 안 보이면 다음에 열 때 보인다.
+            shownResultIDs.insert(finished)
+            await refreshMatch(id: finished)
         }
+    }
+
+    /// 같은 신청을 다시 읽었을 때 만료가 문턱 안쪽으로만 다르면 기존 값을 그대로 쓴다(관찰자를 깨우지 않게).
+    nonisolated static func steadyInvite(_ fresh: GomokuInvite, previous: GomokuInvite?) -> GomokuInvite {
+        guard let previous, previous.id == fresh.id, previous.stake == fresh.stake, previous.peer == fresh.peer,
+              abs(previous.expiresAt.timeIntervalSince(fresh.expiresAt)) < inviteExpiryToleranceSeconds
+        else { return fresh }
+        return previous
     }
 
     /// 지금 대국(없으면 서버가 말한 진행 중 대국)을 다시 읽는다.
@@ -433,38 +535,55 @@ final class GomokuStore {
 
     /// 한 판의 상태를 읽는다. 같은 판을 들고 있으면 `since_seq` 로 **새 수만** 받고, 기록이 이어지지 않으면
     /// 처음부터 한 번 더 받는다. 도는 중에 또 불리면 뒤따르는 한 번으로 합친다(loadInbox 와 같은 이유).
+    ///
+    /// 도는 중에 **다른 판** id 가 들어오면 합치지 않고 기억했다가 지금 판이 끝난 뒤 그 판을 한 번 읽는다 —
+    /// 합치면 뒤따르는 반복이 앞 판만 다시 읽어, 막 수락된 판이 다음 계기까지 화면에 안 온다.
     func refreshMatch(id rawID: String?) async {
-        guard let id = rawID?.lowercased(), !id.isEmpty, host?.session != nil else { return }
+        guard let requested = rawID?.lowercased(), !requested.isEmpty, host?.session != nil else { return }
         if stateInFlight {
-            stateAgain = true
+            if requested == stateInFlightID {
+                stateAgain = true
+            } else {
+                pendingStateID = requested
+            }
             return
         }
         stateInFlight = true
         let generation = resetGeneration
-        var forceFull = false
-        repeat {
-            stateAgain = false
-            let since = (!forceFull && match?.id == id) ? (match?.moveCount ?? 0) : 0
-            lastStateRequestAt = clock()
-            let result = await perform({ try await $0.gomokuState(accessToken: $1, matchID: id, sinceSeq: since) })
-            guard generation == resetGeneration else { return }
-            forceFull = false
-            guard case .success(let response)? = result else { continue }
-            switch response.status {
-            case .ok:
-                if applyState(response.state, requestedSince: since) == .needsFull, since > 0 {
-                    forceFull = true
-                    stateAgain = true
+        var nextID: String? = requested
+        while let id = nextID {
+            nextID = nil
+            stateInFlightID = id
+            var forceFull = false
+            repeat {
+                stateAgain = false
+                let since = (!forceFull && match?.id == id) ? (match?.moveCount ?? 0) : 0
+                lastStateRequestAt = clock()
+                let result = await perform({ try await $0.gomokuState(accessToken: $1, matchID: id, sinceSeq: since) })
+                guard generation == resetGeneration else { return }
+                forceFull = false
+                guard case .success(let response)? = result else { continue }
+                switch response.status {
+                case .ok:
+                    if applyState(response.state, requestedSince: since) == .needsFull, since > 0 {
+                        forceFull = true
+                        stateAgain = true
+                    }
+                case .notFound:
+                    if match?.id == id { clearMatch() }
+                    if activeMatchID == id { activeMatchID = nil }
+                case .unsupportedClient:
+                    setNotice(GomokuNoticeText.updateMine)
+                default:
+                    Self.logger.notice("state refused status=\(response.status.rawValue, privacy: .public)")
                 }
-            case .notFound:
-                if match?.id == id { clearMatch() }
-                if activeMatchID == id { activeMatchID = nil }
-            case .unsupportedClient:
-                setNotice(GomokuNoticeText.updateMine)
-            default:
-                Self.logger.notice("state refused status=\(response.status.rawValue, privacy: .public)")
+            } while stateAgain
+            if let pending = pendingStateID {
+                pendingStateID = nil
+                nextID = pending
             }
-        } while stateAgain
+        }
+        stateInFlightID = nil
         stateInFlight = false
     }
 
@@ -502,6 +621,12 @@ final class GomokuStore {
         guard let myColor else { return .ignored }
 
         let base = match?.id == id ? match : nil
+        // 같은 판을 진행 중으로 들고 있는데 기록 수가 **줄어든** 응답은 착수보다 먼저 읽힌 옛 스냅숏이 늦게 온 것이다
+        // (조회 → 착수 → 착수 응답 → 조회 응답 순서). 그대로 옮기면 방금 둔 돌이 사라지고 차례·마감이 한 수 전으로 돌아간다.
+        // 판을 끝낸 응답은 예외다 — 끝남은 되돌릴 수 없는 사실이라 순서와 무관하게 받는다.
+        if let base, !base.isFinished, !isFinished, let serverCount = row.moveCount, serverCount < base.moveCount {
+            return .ignored
+        }
         let tolerateGaps = requestedSince == 0
         let records: [(seq: Int, color: GomokuColor, point: GomokuPoint?)] = (payload.moves ?? [])
             .compactMap { move in
@@ -555,7 +680,12 @@ final class GomokuStore {
         }
 
         let turn = isFinished ? nil : GomokuColor(rawValue: row.turn ?? "")
-        let deadline = isFinished ? nil : deviceDate(serverMs: row.deadlineMs)
+        var deadline = isFinished ? nil : deviceDate(serverMs: row.deadlineMs)
+        if let base, let kept = base.deadline, let fresh = deadline, base.moveCount == appliedCount, base.turn == turn,
+           abs(fresh.timeIntervalSince(kept)) < Self.deadlineToleranceSeconds {
+            // 같은 차례를 다시 읽었다 — 보정 오차만큼 다른 마감으로 갈면 창 루트가 조회마다 다시 그려진다.
+            deadline = kept
+        }
         let outcome: GomokuOutcome?
         switch row.result {
         case "draw": outcome = .draw
@@ -585,6 +715,8 @@ final class GomokuStore {
             blackPassed: blackPassed
         )
         let justFinished = isFinished && base?.isFinished == false
+        let previous = match
+        let windowWasVisible = isWindowVisible
         if match != next { match = next }
         let nextPhase: GomokuPhase = isFinished ? .result : .playing
         if phase != nextPhase { phase = nextPhase }
@@ -593,9 +725,14 @@ final class GomokuStore {
             // 내 신청이 수락됐거나 내가 수락한 판이다 — 대기 카드를 걷는다.
             if outgoing?.id == id { outgoing = nil }
             if incoming.contains(where: { $0.id == id }) { incoming.removeAll { $0.id == id } }
+        } else {
+            shownResultIDs.insert(id)
         }
         lastOpponent = opponent
         lastStake = stake
+        if !isFinished {
+            noteMatchProgress(previous: previous, next: next, windowWasVisible: windowWasVisible)
+        }
         if justFinished {
             // 전적은 로비 응답에만 있다. 판이 끝난 순간 한 번 다시 읽어 결과 화면 뒤 로비가 옛 전적을 보이지 않게 한다.
             Task { [weak self] in await self?.refreshLobby() }
@@ -639,6 +776,7 @@ final class GomokuStore {
                                   isWorking: true, isCapable: true, inMatch: false)
                 let expiresAt = deviceDate(serverMs: response.inviteExpiresMs)
                     ?? clock().addingTimeInterval(inviteTTLSeconds)
+                outgoingRevision &+= 1
                 outgoing = GomokuInvite(id: id, peer: peer, stake: stake, expiresAt: expiresAt)
                 scheduleInviteExpiry()
             case .alreadyPending, .busy:
@@ -706,12 +844,18 @@ final class GomokuStore {
             case .ok:
                 removeIncoming(id)
                 guard accept else { break }
+                // 수락하는 순간 서버가 두 참가자의 **다른 대기 신청을 전부 취소한다**(보낸 것·받은 것). 로컬 카드를 그대로 두면
+                // 다음 받은함에서 '상대가 신청을 받지 않았어요'가 뜨고, 남은 보낸 신청 카드는 60초 뒤 '응답하지 않았어요'를 띄운다.
+                if outgoing != nil { outgoing = nil }
+                if !incoming.isEmpty { incoming = [] }
                 if let state = response.state {
                     applyState(state)
                 } else {
                     await refreshMatch(id: id)
                 }
-                if !isWindowVisible { presentWindow?() }
+                // 판이 열리면 applyState 가 창을 띄운다(판 시작은 경로와 무관하게 한 곳에서 알린다).
+                // 판을 못 받아 온 경우에만 여기서 창을 띄워 받은 신청이 어떻게 됐는지 보게 한다.
+                if match?.id != id, !isWindowVisible { presentWindow?() }
             case .notFound, .notPending, .expired:
                 removeIncoming(id)
             default:
@@ -900,7 +1044,7 @@ final class GomokuStore {
     // MARK: - 폴링 (창이 보일 때만)
 
     func startPolling() {
-        guard pollTask == nil, isWindowVisible else { return }
+        guard pollTask == nil, isWindowVisible, !isWindowOccluded else { return }
         pollToken &+= 1
         let token = pollToken
         pollTask = Task { @MainActor [weak self] in
@@ -908,7 +1052,7 @@ final class GomokuStore {
                 let step = self?.pollStepSeconds ?? 0.5
                 try? await Task.sleep(for: .seconds(step))
                 guard let self else { return }
-                guard !Task.isCancelled, token == self.pollToken, self.isWindowVisible else {
+                guard !Task.isCancelled, token == self.pollToken, self.isWindowVisible, !self.isWindowOccluded else {
                     if token == self.pollToken { self.pollTask = nil }
                     return
                 }
@@ -928,7 +1072,7 @@ final class GomokuStore {
     ///  · 내 대기 신청이 있으면 5초마다 인박스(수락·거절·만료를 본다).
     ///  · 로비를 보고 있으면 30초마다 목록.
     func pollTick(at now: Date) async {
-        guard isWindowVisible, host?.session != nil else { return }
+        guard isWindowVisible, !isWindowOccluded, host?.session != nil else { return }
         if let current = match, !current.isFinished {
             let waiting = current.turn != current.myColor
             let overdue = current.deadline.map { now.timeIntervalSince($0) > Self.turnGraceSeconds } ?? false
@@ -987,7 +1131,17 @@ final class GomokuStore {
         if isRulesVisible { isRulesVisible = false }
         if rubyBalance != nil { rubyBalance = nil }
         if turnSeconds != 30 { turnSeconds = 30 }
+        if lobbyLoadFailed { lobbyLoadFailed = false }
+        if hasLoadedLobby { hasLoadedLobby = false }
         serverClockOffset = 0
+        hasServerClockOffset = false
+        isWindowOccluded = false
+        stateInFlightID = nil
+        pendingStateID = nil
+        attentionKey = nil
+        shownResultIDs = []
+        outgoingRevision = 0
+        inboxRequestOutgoingRevision = 0
         activeMatchID = nil
         seenInviteIDs = []
         dismissedMatchIDs = []
@@ -1044,10 +1198,35 @@ final class GomokuStore {
         if incoming.contains(where: { $0.id == id }) { incoming.removeAll { $0.id == id } }
     }
 
-    /// server_now_ms 로 기기 시계 어긋남을 잰다.
+    /// 판 진행을 사람에게 알린다(applyState 가 진행 중 판을 옮긴 직후).
+    ///  · 판이 없거나 끝난 판에서 **진행 중 판으로 처음 넘어가면** 창을 띄우고 주의를 끈다 — 신청자는 상대가 수락한
+    ///    순간을 모르면 흑 30초를 흘려 판돈을 잃는다. 내가 수락해 연 판도 같은 문을 지난다(경로마다 따로 두지 않는다).
+    ///  · 창이 안 보이는 동안 차례가 나에게 오면 말풍선 문(onAttention)을 연다. 같은 (판 id, 기록 수)에는 한 번뿐이다.
+    private func noteMatchProgress(previous: GomokuMatchState?, next: GomokuMatchState, windowWasVisible: Bool) {
+        let started = previous == nil || previous?.isFinished == true || previous?.id != next.id
+        if started {
+            presentWindow?()
+            requestAttention?()
+        }
+        guard next.turn == next.myColor else { return }
+        let arrived = started || previous?.turn != next.myColor || previous?.moveCount != next.moveCount
+        let key = "\(next.id)#\(next.moveCount)"
+        guard arrived, attentionKey != key else { return }
+        attentionKey = key
+        guard !windowWasVisible else { return }
+        onAttention?(GomokuAttention(
+            kind: started ? .matchStarted : .myTurn, matchID: next.id,
+            opponentName: next.opponent.displayName, moveCount: next.moveCount))
+    }
+
+    /// server_now_ms 로 기기 시계 어긋남을 잰다. 처음 잰 값은 그대로 받고, 그 뒤로는 문턱(250ms) 넘게 벗어날 때만 간다 —
+    /// 왕복 지연 몇 ms 마다 오프셋을 갈면 같은 신청·같은 마감이 응답마다 다른 값이 된다.
     func noteServerNow(_ milliseconds: Double?) {
         guard let milliseconds, milliseconds > 0 else { return }
-        serverClockOffset = milliseconds / 1000 - clock().timeIntervalSince1970
+        let measured = milliseconds / 1000 - clock().timeIntervalSince1970
+        guard !hasServerClockOffset || abs(measured - serverClockOffset) >= Self.serverClockToleranceSeconds else { return }
+        serverClockOffset = measured
+        hasServerClockOffset = true
     }
 
     /// 서버 epoch 밀리초 → 기기 시계의 같은 순간.

@@ -216,6 +216,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         gomoku.onInviteArrived = { [weak self] invite in
             self?.overlayController?.enqueueGomokuInvite(invite)
         }
+        // 판이 막 시작됐다(신청자는 상대가 수락한 순간을 모른다). 스토어가 창을 띄운 직후 부르고, 앱이 앞에 없으면 주의를 끈다.
+        gomoku.requestAttention = {
+            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
+        }
+        // 창이 안 보이는 동안 내 차례가 왔다 → 캐릭터 말풍선("○○님이 뒀어요 · 내 차례예요"). 누르면 위 onOpenGomoku 로 창이 열린다.
+        gomoku.onAttention = { [weak self] attention in
+            self?.overlayController?.enqueueGomokuAttention(attention)
+        }
         overlayController?.onOpenGomoku = { [weak self] matchID in
             self?.store.gomoku.openWindow(focusMatchID: matchID)
         }

@@ -92,6 +92,8 @@ final class CheckGomokuWindowController: NSObject, NSWindowDelegate {
     /// 스토어에 마지막으로 알린 표시 상태(헤드리스 검증 지점 — true = windowDidShow, false = windowDidHide).
     /// 스토어의 반응(폴링 시작 등)은 core 가 정한다 — 이 값은 **알렸는가** 만 잰다.
     private(set) var lastVisibilityNotice: Bool?
+    /// 스토어에 마지막으로 알린 가림 상태(헤드리스 검증 지점 — true = 보임, false = 가려짐).
+    private(set) var lastOcclusionNotice: Bool?
 
     /// 이 인스턴스의 고착 확인 지연(초). 프로덕션은 언제나 `Self.stuckWindowCheckSeconds`.
     let stuckWindowCheckSeconds: Double
@@ -221,6 +223,22 @@ final class CheckGomokuWindowController: NSObject, NSWindowDelegate {
     func windowDidDeminiaturize(_ notification: Notification) {
         guard (notification.object as AnyObject?) === windowStorage else { return }
         if isOpen { notifyVisibility(true) }
+    }
+
+    /// 가림 상태가 바뀌었다 — 다른 창에 완전히 가려짐 · 다른 Space · 화면 잠금. 스토어에 **폴링만** 멈추라고 알린다
+    /// (`isWindowVisible` 과 시계 잎 뷰는 그대로다 — 가림 통지가 틀려도 보이는 창의 시계가 멈추면 안 된다).
+    /// 대국 중 가려진 동안에도 실시간 신호로는 판을 다시 읽으므로 수를 놓치지 않는다.
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow, window === windowStorage else { return }
+        applyOcclusion(visible: window.occlusionState.contains(.visible))
+    }
+
+    /// 가림 판정을 스토어로 옮긴다(헤드리스 검증 문 — 알파 0 테스트 창의 occlusionState 는 화면 사정에 따라 달라서 값을 주입한다).
+    /// 닫힌 창의 통지는 무시한다(닫기는 이미 '안 보임'을 알렸다).
+    func applyOcclusion(visible: Bool) {
+        guard isOpen else { return }
+        lastOcclusionNotice = visible
+        wiring?.store.windowOcclusionDidChange(visible: visible)
     }
 
     /// 창이 앞으로 왔다. 의도를 맞춘다(다른 경로로 창이 올라온 경우에도 `isOpen` 이 사실과 갈리지 않게).

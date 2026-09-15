@@ -2182,19 +2182,24 @@ extension SupabaseWorkService {
         try await gomokuRPC(
             "gomoku_challenge",
             body: GomokuChallengeRequest(pOpponent: opponentID, pStake: stake),
-            accessToken: accessToken
+            accessToken: accessToken,
+            retriesDeadlockOnce: true
         )
     }
 
     func gomokuCancel(accessToken: String, matchID: String) async throws -> GomokuActionResponse {
-        try await gomokuRPC("gomoku_cancel", body: GomokuMatchRequest(pMatchId: matchID), accessToken: accessToken)
+        try await gomokuRPC(
+            "gomoku_cancel", body: GomokuMatchRequest(pMatchId: matchID), accessToken: accessToken,
+            retriesDeadlockOnce: true
+        )
     }
 
     func gomokuRespond(accessToken: String, matchID: String, accept: Bool) async throws -> GomokuActionResponse {
         try await gomokuRPC(
             "gomoku_respond",
             body: GomokuRespondRequest(pMatchId: matchID, pAccept: accept),
-            accessToken: accessToken
+            accessToken: accessToken,
+            retriesDeadlockOnce: true
         )
     }
 
@@ -2204,12 +2209,16 @@ extension SupabaseWorkService {
         try await gomokuRPC(
             "gomoku_move",
             body: GomokuMoveRequest(pMatchId: matchID, pExpectedSeq: expectedSeq, pX: x, pY: y),
-            accessToken: accessToken
+            accessToken: accessToken,
+            retriesDeadlockOnce: true
         )
     }
 
     func gomokuResign(accessToken: String, matchID: String) async throws -> GomokuActionResponse {
-        try await gomokuRPC("gomoku_resign", body: GomokuMatchRequest(pMatchId: matchID), accessToken: accessToken)
+        try await gomokuRPC(
+            "gomoku_resign", body: GomokuMatchRequest(pMatchId: matchID), accessToken: accessToken,
+            retriesDeadlockOnce: true
+        )
     }
 
     func gomokuState(accessToken: String, matchID: String, sinceSeq: Int) async throws -> GomokuStateResponse {
@@ -2224,16 +2233,44 @@ extension SupabaseWorkService {
         try await gomokuRPC("gomoku_inbox", body: GomokuInboxRequest(), accessToken: accessToken)
     }
 
+    /// Postgres 교착(SQLSTATE 40P01). PostgREST 는 500 + 본문 `code` 로 싣는다 — 공용 `send` 의 매핑은 5xx 를
+    /// 코드 없이 접으므로, 오목 호출은 본문 코드를 직접 본다(헤더 구성은 `send` 와 같다).
+    static let gomokuDeadlockCode = "40P01"
+
+    /// `retriesDeadlockOnce` — 오목 **쓰기** RPC(challenge·cancel·respond·move·resign)만 켠다. 교착 응답이면 한 번 더 보낸다.
+    ///
+    /// 왜 한 번 더 보내도 안전한가: 교착으로 죽은 쪽 트랜잭션은 Postgres 가 **통째로 되돌린다**(수·차감·원장·신호 전부 0).
+    /// 그래서 재시도는 첫 시도와 같은 요청이고, 그사이 판이 바뀌었으면 서버 가드가 멱등하게 거절한다 —
+    /// 착수는 `p_expected_seq` 가 어긋나 stale, 수락·거절·취소는 pending 상태가 아니라 not_pending,
+    /// 기권은 진행 중이 아니라 not_active, 신청은 대기 신청 유니크 인덱스로 already_pending 이다.
+    /// 교착은 상금 cron 의 등수 순 지갑 잠금과 오목의 uuid 순 잠금이 엇갈릴 때 생긴다(서버 검증 보고 set #2).
+    /// 읽기(lobby·inbox·state)는 켜지 않는다 — 실패하면 다음 계기(신호·폴링)가 다시 읽는다.
     private func gomokuRPC<Body: Encodable, Response: Decodable>(
-        _ name: String, body: Body, accessToken: String
+        _ name: String, body: Body, accessToken: String, retriesDeadlockOnce: Bool = false
     ) async throws -> Response {
-        let data = try await send(
-            path: "/rest/v1/rpc/\(name)",
-            method: "POST",
-            body: body,
-            accessToken: accessToken,
-            prefer: nil
-        )
-        return try decoder.decode(Response.self, from: data)
+        guard let anonKey else {
+            throw SupabaseWorkServiceError.missingAnonKey
+        }
+        var request = URLRequest(url: try url(path: "/rest/v1/rpc/\(name)", queryItems: []))
+        request.httpMethod = "POST"
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+
+        var attempt = 0
+        while true {
+            attempt += 1
+            let (data, response) = try await session.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            if 200..<300 ~= statusCode {
+                return try decoder.decode(Response.self, from: data)
+            }
+            if retriesDeadlockOnce, attempt == 1, postgrestErrorCode(in: data) == Self.gomokuDeadlockCode {
+                continue
+            }
+            throw serviceError(statusCode: statusCode, data: data)
+        }
     }
 }

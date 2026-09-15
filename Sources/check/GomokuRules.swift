@@ -156,8 +156,12 @@ nonisolated enum GomokuRules {
     }
 
     /// 흑 차례 X 표시용: 빈칸 중 흑에게 금수(예산 초과 포함)인 칸.
-    static func forbiddenPoints(board: GomokuBoard) -> [GomokuPoint: GomokuForbiddenReason] {
-        var engine = RenjuEngine(cells: board.cells, budget: nodeBudget)
+    /// `budget` 은 앱에서는 언제나 `nodeBudget` 이다. 인자로 둔 이유는 검증이다 — 실제 국면은 예산의 1/300 도 안 써서,
+    /// 예산 초과 칸이 X 로 남는지는 작은 예산을 넣어야만 잴 수 있다.
+    static func forbiddenPoints(
+        board: GomokuBoard, budget: Int = GomokuRules.nodeBudget
+    ) -> [GomokuPoint: GomokuForbiddenReason] {
+        var engine = RenjuEngine(cells: board.cells, budget: budget)
         var result: [GomokuPoint: GomokuForbiddenReason] = [:]
         for y in 0..<GomokuBoard.size {
             for x in 0..<GomokuBoard.size where engine.cells[y * GomokuBoard.size + x] == 0 {

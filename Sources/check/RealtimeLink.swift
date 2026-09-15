@@ -453,6 +453,9 @@ struct RealtimeLink: Equatable, Sendable {
             // 하트비트 창을 놓쳤을 때 멀쩡한 연결을 끊는다). 오목 신호도 같은 증거다.
             state = .subscribed(since: since, lastHeardAt: now)
             // 이름으로 가르는 것은 오목 하나뿐이다. 나머지는 이름을 보지 않던 예전 그대로 drain 이다.
+            // 구버전(build ≤ 78) 앱은 이름을 보지 않고 모든 broadcast 를 drain 으로 보낸다. 그래서 같은 계정의 구버전
+            // 두 번째 맥은 'gomoku' 신호(신청·취소·수락·착수·정산)마다 take_pokes 를 한 번씩 더 부른다. 소비할 행이 없어
+            // 화면은 바뀌지 않고 요청만 는다(수당 10초 판 기준 시간당 약 180건) — 채널을 바꾸면 구독 정책이 새로 필요해 수용했다.
             if event == RealtimeLinkConstants.gomokuBroadcastEvent { return [.gomokuSignal] }
             return [.drain]
 

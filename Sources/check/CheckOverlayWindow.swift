@@ -250,6 +250,12 @@ final class CheckOverlayController {
     private(set) var shownGomokuInvite: (text: String, matchID: String)?
     /// 신청 말풍선을 눌렀을 때 열 곳(인자 = 대국 id). nil 이면 클릭 자리를 만들지 않는다(배선은 CheckApp).
     var onOpenGomoku: ((String) -> Void)?
+    /// 창이 안 보이는 사람에게 "내 차례"를 알리는 말풍선(v0.3.27). **한 건만** 기다린다 — 차례 알림은 가장 최근 것만
+    /// 뜻이 있다(두 수 전의 "내 차례예요"는 거짓이다). 양보 규칙은 신청 말풍선과 같다.
+    private(set) var pendingGomokuAttention: GomokuAttention?
+    private var gomokuAttentionTask: Task<Void, Never>?
+    /// 지금 떠 있는 차례 말풍선(문구 · 대국 id). 누르면 그 대국의 창을 연다(신청 말풍선과 같은 클릭 자리).
+    private(set) var shownGomokuAttention: (text: String, matchID: String)?
 
     // MARK: - 할 일 보드 훅
     //
@@ -956,7 +962,7 @@ final class CheckOverlayController {
         // 하나뿐이어야 하고(말풍선을 눌렀는데 캐릭터가 "아얏!" 하면 무엇을 한 건지 알 수 없다),
         // 말풍선은 몇 초만 떠 있으므로 그 짧은 창에서는 알림이 이긴다.
         // 오목 대결 신청 말풍선(v0.3.27)도 같은 규약이다 — 누르면 **그 대국**의 대결 창. 아파하기·보드보다 먼저 본다.
-        if let rect = gomokuInviteBubbleScreenRect(), rect.contains(location), let matchID = shownGomokuInvite?.matchID {
+        if let rect = gomokuInviteBubbleScreenRect(), rect.contains(location), let matchID = gomokuBubbleMatchID() {
             onOpenGomoku?(matchID)
             return
         }
@@ -1266,13 +1272,17 @@ final class CheckOverlayController {
     func clearGomokuInvites() {
         gomokuInviteQueue.removeAll()
         shownGomokuInvite = nil
+        pendingGomokuAttention = nil
+        shownGomokuAttention = nil
     }
 
     /// 큐 맨 앞 신청 1건을 말풍선으로 띄우고 큐에서 뺀다(띄웠으면 true). **못 띄우면 큐를 건드리지 않는다.**
-    /// 이미 만료된 신청만은 여기서 버린다 — 서버에서도 끝난 건이라 눌러 봐야 열 판이 없다.
+    /// 이미 끝난 신청은 여기서 버린다 — 만료됐거나, 기다리는 사이 팝오버 배너로 수락·거절했거나 신청자가 취소해
+    /// 스토어의 받은 신청에서 사라진 건이다. 대국을 두는 중에 옛 신청 말풍선이 뒤늦게 뜨면 안 된다.
     @discardableResult
     func showNextGomokuInviteBubble(now: Date = Date()) -> Bool {
-        gomokuInviteQueue.removeAll { $0.expiresAt <= now }
+        let alive = Set(store.gomoku.incoming.map(\.id))
+        gomokuInviteQueue.removeAll { $0.expiresAt <= now || !alive.contains($0.id) }
         guard let invite = gomokuInviteQueue.first else { return false }
         guard !isUltraActive, engine.greetingText == nil else { return false }
         if case .playing = engine.state { return false }
@@ -1306,12 +1316,85 @@ final class CheckOverlayController {
     /// 헤드리스 검증 지점: 신청 펌프가 돌고 있는가.
     var isDrainingGomokuInvites: Bool { gomokuDrainTask != nil }
 
-    /// 지금 **누를 수 있는** 신청 말풍선의 화면 사각형(아니면 nil). 열 곳이 배선돼 있고, 격발 중이 아니고,
-    /// 떠 있는 문구가 우리가 띄운 그 신청 문구일 때만이다. 자리는 메시지 말풍선과 같은 footprint 다.
+    /// 지금 **누를 수 있는** 오목 말풍선(신청·차례)의 화면 사각형(아니면 nil). 열 곳이 배선돼 있고, 격발 중이 아니고,
+    /// 떠 있는 문구가 우리가 띄운 그 문구일 때만이다. 자리는 메시지 말풍선과 같은 footprint 다.
     func gomokuInviteBubbleScreenRect() -> NSRect? {
-        guard onOpenGomoku != nil, !isUltraActive, let shown = shownGomokuInvite,
-              engine.greetingText == shown.text else { return nil }
+        guard gomokuBubbleMatchID() != nil else { return nil }
         return OverlayMessageBubble.screenRect(inPanelFrame: panel.frame)
+    }
+
+    /// 지금 떠 있는 오목 말풍선이 열 대국 id. 문구와 id 를 **함께** 본다 — 말풍선이 다른 문구로 바뀐 뒤 옛 id 로 열지 않게.
+    func gomokuBubbleMatchID() -> String? {
+        guard onOpenGomoku != nil, !isUltraActive, let text = engine.greetingText else { return nil }
+        if let shown = shownGomokuAttention, shown.text == text { return shown.matchID }
+        if let shown = shownGomokuInvite, shown.text == text { return shown.matchID }
+        return nil
+    }
+
+    // MARK: 차례 말풍선
+
+    /// 차례 말풍선 문구(순수 함수). 이름이 캡슐에 안 들어가면 이름 없이 접는다.
+    nonisolated static func gomokuAttentionBubbleText(_ attention: GomokuAttention) -> String {
+        switch attention.kind {
+        case .matchStarted:
+            return "대국이 시작됐어요 · 내 차례예요"
+        case .myTurn:
+            let name = OverlayMessageBubble.clippedName(attention.opponentName)
+            if !name.isEmpty {
+                let full = "\(name)님이 뒀어요 · 내 차례예요"
+                if OverlayMessageBubble.fitsCapsule(full) { return full }
+            }
+            return "상대가 뒀어요 · 내 차례예요"
+        }
+    }
+
+    /// 차례 알림을 넣고 펌프를 돌린다(기다리던 옛 알림은 새 것으로 바뀐다). `GomokuStore.onAttention` 이 부른다.
+    func enqueueGomokuAttention(_ attention: GomokuAttention) {
+        pendingGomokuAttention = attention
+        drainGomokuAttentionIfNeeded()
+    }
+
+    /// 기다리는 차례 알림을 말풍선으로 띄운다(띄웠으면 true). 판이 이미 넘어갔거나(내 차례가 아님 · 기록 수가 다름 ·
+    /// 끝남) 사용자가 창을 열었으면 버린다. 양보 규칙은 신청 말풍선과 같고, 못 띄우면 소비하지 않는다.
+    @discardableResult
+    func showPendingGomokuAttentionBubble() -> Bool {
+        guard let attention = pendingGomokuAttention else { return false }
+        guard Self.gomokuAttentionIsCurrent(attention, in: store.gomoku) else {
+            pendingGomokuAttention = nil
+            return false
+        }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = Self.gomokuAttentionBubbleText(attention)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownGomokuAttention = (text, attention.matchID)
+        pendingGomokuAttention = nil
+        return true
+    }
+
+    /// 차례 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다).
+    static func gomokuAttentionIsCurrent(_ attention: GomokuAttention, in gomoku: GomokuStore) -> Bool {
+        guard !gomoku.isWindowVisible, let match = gomoku.match else { return false }
+        return match.id == attention.matchID && !match.isFinished && match.turn == match.myColor
+            && match.moveCount == attention.moveCount
+    }
+
+    /// 차례 알림 펌프를 (없으면) 가동한다. 멱등이고, 기다리는 알림이 없으면 스스로 끝난다.
+    func drainGomokuAttentionIfNeeded() {
+        guard gomokuAttentionTask == nil, pendingGomokuAttention != nil else { return }
+        let tick = messageBubbleSleep
+        gomokuAttentionTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, self.pendingGomokuAttention != nil else { break }
+                self.showPendingGomokuAttentionBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.gomokuAttentionTask = nil
+        }
     }
 
     // MARK: - 울트라 찌르기 수신(전체화면 격발 5초)

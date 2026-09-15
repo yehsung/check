@@ -156,6 +156,40 @@ func gomokuLobbyRendersWithoutYellowBoxes() throws {
             "상대가 많을 때 목록 카드가 본문 아래 여백까지 자란다 — 창 밖으로 잘린다")
 }
 
+/// 상대 목록 조회가 실패하면 빈 목록을 "대결할 사람이 없어요"로 말하지 않는다 — 연결 안내와 [다시 불러오기].
+@MainActor
+@Test
+func lobbyLoadFailureShowsConnectionHelpInsteadOfAnEmptyList() throws {
+    func store(users: [GomokuUser], failed: Bool, loaded: Bool) -> GomokuStore {
+        let store = gpLobbyStore(outgoing: false)
+        store.users = users
+        store.incoming = []
+        store.notice = nil
+        store.lobbyLoadFailed = failed
+        store.hasLoadedLobby = loaded
+        return store
+    }
+    let failedEmpty = try gpBitmap(gpPanel(store(users: [], failed: true, loaded: false)))
+    let failedList = try gpBitmap(gpPanel(store(users: gpUsers(), failed: true, loaded: true)))
+    let emptyLoaded = try gpBitmap(gpPanel(store(users: [], failed: false, loaded: true)))
+    let loading = try gpBitmap(gpPanel(store(users: [], failed: false, loaded: false)))
+    let okList = try gpBitmap(gpPanel(store(users: gpUsers(), failed: false, loaded: true)))
+    gpSave(failedEmpty, name: "lobby-load-failed")
+    gpSave(failedList, name: "lobby-load-failed-with-list")
+    gpSave(emptyLoaded, name: "lobby-empty")
+    gpSave(loading, name: "lobby-loading")
+    for (name, bitmap) in [("failedEmpty", failedEmpty), ("failedList", failedList), ("emptyLoaded", emptyLoaded), ("loading", loading)] {
+        #expect(gpYellowPixels(bitmap) == 0, "\(name) 에 노란 상자가 있다")
+    }
+    // 목록 카드 안(왼쪽 540pt 열)에서 실패 화면이 '상대 없음'·'불러오는 중'과 다르게 그려진다.
+    let list = CGRect(x: GomokuWindowLayout.contentPadding,
+                      y: GomokuWindowLayout.contentPadding + GomokuWindowLayout.headerHeight + GomokuWindowLayout.headerSpacing,
+                      width: GomokuWindowLayout.lobbyListWidth, height: GomokuWindowLayout.bodyHeight)
+    #expect(gpMaxChannelDifference(failedEmpty, emptyLoaded, rect: list) > 60, "조회 실패가 '대결할 사람이 없어요'와 똑같이 보인다")
+    #expect(gpMaxChannelDifference(loading, emptyLoaded, rect: list) > 60, "불러오는 중이 '대결할 사람이 없어요'와 똑같이 보인다")
+    #expect(gpMaxChannelDifference(failedList, okList, rect: list) > 60, "목록이 있을 때 조회 실패 안내가 안 보인다")
+}
+
 /// 사각형(pt) 안에서 두 비트맵의 채널 최대 차(0 이면 한 바이트도 다르지 않다).
 private func gpMaxChannelDifference(_ lhs: NSBitmapImageRep, _ rhs: NSBitmapImageRep, rect: CGRect) -> Int {
     guard let a = lhs.bitmapData, let b = rhs.bitmapData,
@@ -313,8 +347,9 @@ func ruleExamplesMatchTheJudgeAndFitTheCrop() throws {
     #expect(GomokuRules.judge(board: withH8, point: pivot, color: .black) == .forbidden(.overline))
 }
 
+@MainActor
 @Test
-func gomokuTextIsPlainUserLanguage() {
+func gomokuTextIsPlainUserLanguage() throws {
     #expect(GomokuText.forbiddenStatus(.doubleThree) == "3-3 금수라 둘 수 없어요")
     #expect(GomokuText.forbiddenStatus(.doubleFour) == "4-4 금수라 둘 수 없어요")
     #expect(GomokuText.forbiddenStatus(.overline) == "장목 금수라 둘 수 없어요")
@@ -326,7 +361,19 @@ func gomokuTextIsPlainUserLanguage() {
     #expect(GomokuText.rubyDelta(10) == "+10")
     #expect(GomokuText.rubyDelta(-5) == "−5")
     #expect(GomokuText.rubyDelta(0) == "±0")
-    #expect(GomokuText.stakeLine(10) == "10 · 이기면 20")
+    // 판돈 줄은 순수익 기준 — 결과 카드의 루비 변화(+10)와 같은 숫자를 말한다.
+    #expect(GomokuText.stakeLine(10) == "10 · 이기면 +10")
+    #expect(GomokuText.rubyDelta(10) == "+10")
+    #expect(GomokuRuleExample.ruleLines[6].contains("판돈만큼 더"), "규칙 보기의 판돈 설명이 결과 카드와 다른 숫자를 말한다")
+    #expect(!GomokuRuleExample.ruleLines[6].contains("두 배") && !GomokuText.stakeCaption.contains("두 배"))
+    // 보이스오버 문구.
+    let match = try #require(gpPlayingStore(turn: .black).match)
+    #expect(GomokuText.boardAccessibility(match, forbiddenCount: 1)
+            == "오목판, 흑 5개, 백 5개, 마지막 수 D12, 내 차례예요, 금수 자리 1곳")
+    var waiting = match
+    waiting.turn = .white
+    #expect(GomokuText.boardAccessibility(waiting, forbiddenCount: 0) == "오목판, 흑 5개, 백 5개, 마지막 수 D12, 상대 차례예요")
+    #expect(GomokuText.clockAccessibility(18.2) == "남은 시간 19초")
     #expect(GomokuText.record(nil) == "전적 —")
     #expect(GomokuText.record(GomokuRecord(wins: 3, losses: 2, draws: 1)) == "3승 2패 1무")
     #expect(GomokuText.status(for: gpUser("a", 1, inMatch: true)) == "대국 중")
@@ -338,7 +385,14 @@ func gomokuTextIsPlainUserLanguage() {
         GomokuText.subtitle, GomokuText.lobbyCaption, GomokuText.emptyUsers, GomokuText.stakeCaption,
         GomokuText.noIncoming, GomokuText.myTurn, GomokuText.opponentTurn, GomokuText.blackPassed,
         GomokuText.resignConfirm, GomokuText.inviteBannerSubtitle, GomokuText.inviteTitle(name: "민수"),
-        CheckOverlayController.gomokuInviteBubbleText(name: "민수", stake: 5)
+        CheckOverlayController.gomokuInviteBubbleText(name: "민수", stake: 5),
+        GomokuText.loadingUsers, GomokuText.usersLoadFailed, GomokuText.reloadUsers, GomokuText.stakeLine(5),
+        GomokuText.clockAccessibility(7), GomokuText.boardAccessibility(match, forbiddenCount: 2),
+        CheckOverlayController.gomokuAttentionBubbleText(
+            GomokuAttention(kind: .myTurn, matchID: "m", opponentName: "민수", moveCount: 2)),
+        CheckOverlayController.gomokuAttentionBubbleText(
+            GomokuAttention(kind: .matchStarted, matchID: "m", opponentName: "민수", moveCount: 0)),
+        GomokuNoticeText.inviteDeclined, GomokuNoticeText.timedOut
     ]
     for reason in [GomokuForbiddenReason.doubleThree, .doubleFour, .overline, .budget] {
         shown += [GomokuText.forbiddenStatus(reason), GomokuText.forbiddenTooltip(reason)]
@@ -375,6 +429,15 @@ func gomokuPanelKeepsClocksInLeavesAndUsesNoYellowBoxControls() throws {
     #expect(panel.components(separatedBy: "remainingSeconds(").count - 1 == 1, "남은 시간을 잎 뷰 밖에서도 읽는다")
     let clock = try #require(gpRegion(panel, from: "struct GomokuTurnClock: View {", to: "// MARK:"))
     #expect(clock.contains("remainingSeconds(now: context.date)"))
+
+    // 보이스오버: 판은 한 요소로(돌 수·마지막 수·차례), 차례 링은 남은 초, 상태줄(금수 이유)은 한 문장으로 읽힌다.
+    let board = try #require(gpRegion(panel, from: "private struct GomokuPlayBoard: View {", to: "private struct GomokuMatchSide: View {"))
+    #expect(board.contains(".accessibilityLabel(GomokuText.boardAccessibility(match, forbiddenCount: forbidden.count))"),
+            "판에 보이스오버 라벨이 없다")
+    let ring = try #require(gpRegion(panel, from: "struct GomokuTurnClock: View {", to: "private struct GomokuResultCard: View {"))
+    #expect(ring.contains(".accessibilityLabel(GomokuText.clockAccessibility(remaining))"), "차례 링에 남은 시간 라벨이 없다")
+    let side = try #require(gpRegion(panel, from: "private struct GomokuMatchSide: View {", to: "private struct GomokuPlayerCard: View {"))
+    #expect(side.contains(".accessibilityElement(children: .combine)"), "상태줄(금수 이유)이 한 문장으로 읽히지 않는다")
 
     // 팝오버 배너는 시계를 전혀 읽지 않는다(팝오버 트리 — V0238 무효화 계약).
     let banner = try #require(gpRegion(panel, from: "struct GomokuInviteBanner: View {", to: "private struct GomokuActionButton: View {"))

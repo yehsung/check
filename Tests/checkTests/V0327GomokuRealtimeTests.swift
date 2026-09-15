@@ -36,11 +36,10 @@ private func makeRealtimeGomokuStore(
         session: GomokuStubProtocol.session()
     )
     let transport = FakeRealtimeTransport()
-    let suite = "v0327-rt-\(UUID().uuidString)"
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: UserDefaults(suiteName: suite)!,
+        defaults: GomokuTestDefaults.make("v0327-rt"),
         workspaceNotifications: nil,
         realtimeTransport: transport
     )
@@ -63,7 +62,7 @@ private func inboxReply(delay: TimeInterval = 0) -> GomokuStubProtocol.Reply {
 
 // MARK: - 순수 링
 
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 오목_브로드캐스트만_gomokuSignal_이고_나머지는_전부_drain_이다() {
     #expect(RealtimeLinkConstants.gomokuBroadcastEvent == "gomoku")
 
@@ -84,7 +83,7 @@ func 오목_브로드캐스트만_gomokuSignal_이고_나머지는_전부_drain_
     #expect(disabled.apply(.transport(.broadcast(event: "gomoku")), now: t0, jitter: { $0 }) == [])
 }
 
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 프레임_해석은_오목_이벤트_이름을_그대로_넘긴다() {
     let text = jsonText([
         "topic": "realtime:poke:me",
@@ -97,7 +96,7 @@ func 프레임_해석은_오목_이벤트_이름을_그대로_넘긴다() {
 // MARK: - 스토어 배선 (Fake 전송자 — 소켓 0개)
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 조인_따라잡기는_인박스를_한_번_보고_오목_신호는_take_pokes_를_부르지_않는다() async {
     let (store, transport, host) = makeRealtimeGomokuStore("wiring") { rpc, _, _ in
         rpc == "gomoku_inbox" ? inboxReply() : nil
@@ -128,7 +127,7 @@ func 조인_따라잡기는_인박스를_한_번_보고_오목_신호는_take_po
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 대국_중_신호는_인박스가_아니라_그_판의_새_수를_읽는다() async {
     let (store, transport, host) = makeRealtimeGomokuStore("in-match") { rpc, _, _ in
         guard rpc == "gomoku_state" else { return rpc == "gomoku_inbox" ? inboxReply() : nil }
@@ -167,7 +166,7 @@ func 대국_중_신호는_인박스가_아니라_그_판의_새_수를_읽는다
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 조회_중에_몰려온_신호는_뒤따르는_한_번으로_합친다() async {
     let (store, _, host) = makeRealtimeGomokuStore("coalesce") { rpc, _, _ in
         rpc == "gomoku_inbox" ? inboxReply(delay: 0.3) : nil
@@ -201,7 +200,7 @@ private func makeKillSwitchGomokuStore(
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: UserDefaults(suiteName: "v0327-ks-\(UUID().uuidString)")!,
+        defaults: GomokuTestDefaults.make("v0327-ks"),
         workspaceNotifications: nil
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: me)
@@ -209,7 +208,7 @@ private func makeKillSwitchGomokuStore(
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 전송자가_없는_맥은_깨어나면_근무_중인_주인일_때만_오목을_다시_본다() async {
     let (store, host) = makeKillSwitchGomokuStore("wake") { rpc, _, _ in
         rpc == "gomoku_inbox" ? inboxReply() : nil
@@ -237,7 +236,7 @@ func 전송자가_없는_맥은_깨어나면_근무_중인_주인일_때만_오�
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 전송자가_있는_맥은_깨어남이_아니라_재조인_따라잡기가_오목을_본다() async {
     // 깨움 결합 게이트 계약(V0238ClockTests): 조인 뒤에 본문 밖 요청이 더 나가면 안 된다.
     // 그래서 `.didWake` 는 직접 조회하지 않고, 재조인이 성공한 `.catchUp` 이 한 번 본다.
@@ -264,7 +263,7 @@ func 전송자가_있는_맥은_깨어남이_아니라_재조인_따라잡기가
     #expect(inbox() == 2, "재조인 따라잡기가 오목을 보지 않았다")
 }
 
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 오목_라우팅_배선은_소스에_그대로_있다() throws {
     let realtime = gomokuCollapsed(V0317ShopTests.stripped(try V0317ShopTests.source("WorkTimerStoreRealtime.swift")))
     #expect(realtime.contains("case .gomokuSignal: gomoku.handleSignal()"))

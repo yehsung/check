@@ -149,9 +149,13 @@ private func expectMatchEqualsServer(
         // 서버 시계와 기기 시계가 몇 시간·며칠 어긋나도(픽스처는 과거에 떴다) 기기 시각으로는 '지금 + (마감 − 서버 지금)'이다.
         let expected = clock.addingTimeInterval((deadlineMs - serverNowMs) / 1000)
         let actual = match?.deadline ?? .distantPast
-        #expect(abs(actual.timeIntervalSince(expected)) < 0.002, "마감 보정: \(actual) vs \(expected)", sourceLocation: sourceLocation)
+        // 오프셋은 문턱(250ms) 넘게 어긋날 때만 다시 잰다(2차 검증 set #1 수리 — 같은 신청·같은 마감이 응답마다 바뀌지 않게).
+        // 픽스처는 이 고정 시계와 무관한 시각에 떴고 한 흐름 안의 server_now 가 수십 ms 씩 다르므로, 보정 오차는 문턱 안이면 맞다.
+        let tolerance = GomokuStore.serverClockToleranceSeconds + 0.002
+        #expect(abs(actual.timeIntervalSince(expected)) < tolerance,
+                "마감 보정: \(actual.timeIntervalSince(expected))초 어긋남", sourceLocation: sourceLocation)
         let remaining = gomoku.remainingSeconds(now: clock) ?? -1
-        #expect(remaining > 29 && remaining <= 30, "남은 시간 \(remaining)초", sourceLocation: sourceLocation)
+        #expect(remaining > 29 && remaining <= 30 + tolerance, "남은 시간 \(remaining)초", sourceLocation: sourceLocation)
     } else {
         #expect(match?.deadline == nil, sourceLocation: sourceLocation)
         #expect(gomoku.remainingSeconds(now: clock) == nil, sourceLocation: sourceLocation)
@@ -205,9 +209,7 @@ private func makeContractStore(
     }
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!, anonKey: "anon-test-key", session: GomokuStubProtocol.session())
-    let suite = "v0327-contract-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
+    let defaults = GomokuTestDefaults.make("v0327-contract")
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
@@ -250,7 +252,7 @@ private func peer(_ id: String) -> GomokuUser {
 
 // MARK: - 1. 디코드: 모든 픽스처가 앱의 실제 응답 모델로 읽힌다
 
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_오목_응답_전부가_앱_응답_모델로_디코드되고_status_를_안다() throws {
     let names = try FileManager.default.contentsOfDirectory(atPath: contractDirectory.path)
         .filter { $0.hasSuffix(".json") && !$0.hasPrefix("_") }
@@ -297,7 +299,7 @@ func 실서버_오목_응답_전부가_앱_응답_모델로_디코드되고_stat
     }
 }
 
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 서버_board_인덱스는_앱_GomokuBoard_와_같은_y15x_이고_판정도_같다() throws {
     // 실제 기록(9수)으로 쌓은 앱 판 == 서버 board 문자열
     let finished = try fixtureJSON("gomoku_state__finished_loser_since0")
@@ -339,7 +341,7 @@ func 서버_board_인덱스는_앱_GomokuBoard_와_같은_y15x_이고_판정도_
 // MARK: - 2. M1 전체 흐름: 수락 → 9수 → 흑 5목, 두 사람 시점
 
 @MainActor
-@Test(arguments: ["black", "white"])
+@Test(.gomokuDefaultsCleanup, arguments: ["black", "white"])
 func 실서버_M1_흐름을_두_사람_시점으로_재생하면_화면이_서버와_같다(perspective: String) async throws {
     let manifest = try contractManifest()
     let fullFlow = try #require(manifest["flow_m1"] as? [[String: Any]])
@@ -440,7 +442,7 @@ func 실서버_M1_흐름을_두_사람_시점으로_재생하면_화면이_서�
 // MARK: - 3. 신청 (gomoku_challenge 12종)
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_신청_응답을_스토어가_사용자_문구와_보낸_신청으로_옮긴다() async throws {
     let rivalB = try contractUser("B")
     // (픽스처, 안내, 뒤따라 다시 읽는 rpc)
@@ -495,7 +497,7 @@ func 실서버_신청_응답을_스토어가_사용자_문구와_보낸_신청�
 // MARK: - 4. 취소 · 응답
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_취소_응답은_보낸_신청을_걷고_끝난_신청은_다시_읽는다() async throws {
     for (name, notice, inbox) in [("gomoku_cancel__ok", "신청을 취소했어요", 0), ("gomoku_cancel__not_pending", "이미 끝난 신청이에요", 1)] {
         let (_, gomoku, host) = makeContractStore("cancel", me: try callerOf(name), queues: ["gomoku_cancel": [try fixtureText(name)]])
@@ -509,7 +511,7 @@ func 실서버_취소_응답은_보낸_신청을_걷고_끝난_신청은_다시_
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_수락_거절_응답은_사유별_문구와_신청_카드를_맞춘다() async throws {
     // (픽스처, accept, 안내, 카드가 남는가, 루비)
     let cases: [(String, Bool, String, Bool, Int)] = [
@@ -534,7 +536,7 @@ func 실서버_수락_거절_응답은_사유별_문구와_신청_카드를_맞�
 // MARK: - 5. 착수 — 거절 · 판이 바뀐 경우
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_stale_은_since_0_응답으로_판을_맞추고_since_2_로_다시_읽는다() async throws {
     let facts = try ServerFacts(fixture: "gomoku_move__stale")
     let (_, gomoku, host) = makeContractStore("stale", me: facts.myID, queues: [
@@ -553,7 +555,7 @@ func 실서버_stale_은_since_0_응답으로_판을_맞추고_since_2_로_다�
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_not_your_turn_은_상대_차례라고_말하고_판을_맞춘다() async throws {
     let facts = try ServerFacts(fixture: "gomoku_move__not_your_turn")
     let white = try contractManifest()["flow_m1"] as? [[String: Any]]
@@ -574,7 +576,7 @@ func 실서버_not_your_turn_은_상대_차례라고_말하고_판을_맞춘다(
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_invalid_occupied_는_둘_수_없다고_말하고_서버_판으로_덮는다() async throws {
     let facts = try ServerFacts(fixture: "gomoku_move__invalid_occupied")
     let (_, gomoku, host) = makeContractStore("invalid", me: facts.myID, queues: [
@@ -597,7 +599,7 @@ func 실서버_invalid_occupied_는_둘_수_없다고_말하고_서버_판으로
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_흑_금수_응답은_사유_문구를_말하고_판은_서버_board_다() async throws {
     let facts = try ServerFacts(fixture: "gomoku_move__forbidden_double_three")
     let (_, gomoku, host) = makeContractStore("forbidden", me: facts.myID, queues: [
@@ -629,7 +631,7 @@ func 실서버_흑_금수_응답은_사유_문구를_말하고_판은_서버_boa
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_끝난_판에_둔_not_active_는_결과로_옮기고_since_9_로_다시_읽는다() async throws {
     let facts = try ServerFacts(fixture: "gomoku_move__not_active")
     let (_, gomoku, host) = makeContractStore("not-active", me: facts.myID, queues: [
@@ -655,7 +657,7 @@ func 실서버_끝난_판에_둔_not_active_는_결과로_옮기고_since_9_로_
 // MARK: - 6. 시간 초과 · 기권
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_착수_timeout_은_진_결과와_루비와_시간_초과_문구다() async throws {
     let facts = try ServerFacts(fixture: "gomoku_move__timeout")
     let (store, gomoku, host) = makeContractStore("timeout", me: facts.myID, queues: [
@@ -673,7 +675,7 @@ func 실서버_착수_timeout_은_진_결과와_루비와_시간_초과_문구�
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_기권_ok_는_진_결과와_판돈만큼의_루비다() async throws {
     let facts = try ServerFacts(fixture: "gomoku_resign__ok")
     let (_, gomoku, host) = makeContractStore("resign", me: facts.myID, queues: [
@@ -689,7 +691,7 @@ func 실서버_기권_ok_는_진_결과와_판돈만큼의_루비다() async thr
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_시간이_넘은_뒤_기권은_timeout_이고_결과는_시간_초과로_옮긴다() async throws {
     let facts = try ServerFacts(fixture: "gomoku_resign__timeout")
     let (_, gomoku, _) = makeContractStore("resign-timeout", me: facts.myID, queues: [
@@ -702,17 +704,15 @@ func 실서버_시간이_넘은_뒤_기권은_timeout_이고_결과는_시간_�
     #expect(gomoku.rubyBalance == 97)
     // 서버는 '이미 시간이 넘은 판의 기권'을 status timeout + 끝난 상태로 돌려준다(흐름 테스트 T3). 결과 화면이 시간 초과를
     // 말하는 동안 안내줄이 "잠시 후 다시 시도해 주세요"(일반 실패)를 말하면 사용자는 기권이 안 된 줄 안다.
-    // 계약 불일치(보고됨): GomokuNoticeText.resign 이 .timeout 을 모른다 → common → tryAgain. 앱을 고치면 이 known issue 가
-    // '기록되지 않음'으로 빨개진다 — 그때 withKnownIssue 를 걷어 낸다.
-    withKnownIssue("resign 의 서버 status timeout 을 앱 문구표가 일반 실패로 접는다") {
-        #expect(gomoku.notice != GomokuNoticeText.tryAgain, "기권 timeout 에 일반 실패 문구: \(gomoku.notice ?? "nil")")
-    }
+    // 앱 문구표가 착수와 같은 말("시간이 지나 대국이 끝났어요")을 한다(2차 검증 set #4 수리).
+    #expect(gomoku.notice != GomokuNoticeText.tryAgain, "기권 timeout 에 일반 실패 문구: \(gomoku.notice ?? "nil")")
+    #expect(gomoku.notice == GomokuNoticeText.timedOut)
 }
 
 // MARK: - 7. 흑 자동 패스 · 판 가득 무승부
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_백_착수_뒤_흑_패스와_마지막_칸_무승부를_백_시점으로_옮긴다() async throws {
     let passed = try ServerFacts(fixture: "gomoku_move__ok_black_passed")
     let draw = try ServerFacts(fixture: "gomoku_move__board_full_draw")
@@ -738,7 +738,7 @@ func 실서버_백_착수_뒤_흑_패스와_마지막_칸_무승부를_백_시�
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_흑_시점의_패스는_since_223_과_since_0_둘_다_blackPassed_다() async throws {
     let facts = try ServerFacts(fixture: "gomoku_state__ok_pass_since223")
     let (_, gomoku, host) = makeContractStore("pass-black", me: facts.myID, queues: [
@@ -764,7 +764,7 @@ func 실서버_흑_시점의_패스는_since_223_과_since_0_둘_다_blackPassed
 // MARK: - 8. 상태 조회 since 중간값 · not_found
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_state_since_0_과_since_2_와_not_found() async throws {
     let full = try ServerFacts(fixture: "gomoku_state__ok_since0")
     let (_, gomoku, host) = makeContractStore("since0", me: full.myID, queues: [
@@ -795,7 +795,7 @@ func 실서버_state_since_0_과_since_2_와_not_found() async throws {
 // MARK: - 9. 로비 · 받은함
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_로비는_가능_불가_대국중_근무안함을_칩과_정렬로_옮긴다() async throws {
     let lobby = try fixtureJSON("gomoku_lobby__ok")
     let me = try #require(lobby["me"] as? [String: Any])
@@ -833,7 +833,7 @@ func 실서버_로비는_가능_불가_대국중_근무안함을_칩과_정렬�
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 실서버_받은함은_받은_신청_둘과_보낸_신청과_만료를_서버시계로_옮긴다() async throws {
     let inbox = try fixtureJSON("gomoku_inbox__ok")
     let serverNow = try #require(number(inbox["server_now_ms"]))
@@ -867,7 +867,13 @@ func 실서버_받은함은_받은_신청_둘과_보낸_신청과_만료를_서�
     #expect(gomoku.bannerInvite?.id == incomingRows.first?["match_id"] as? String, "먼저 온(먼저 만료되는) 신청이 배너")
     #expect(arrivals.ids == incomingRows.compactMap { $0["match_id"] as? String })
     #expect(gomoku.rubyBalance == 100 && store.rubyBalance == 100)
+    // 최근 끝난 판(last_finished)은 로컬 판이 없고 아직 보여 준 적 없는 id 라 결과 화면을 세우려고 **한 번** 읽는다
+    // (2차 검증 set #4 결정). 이 테스트의 스텁은 gomoku_state 를 스크립트하지 않아 실패로 끝나고, 화면은 로비 그대로다.
+    let lastFinished = try #require(inbox["last_finished"] as? [String: Any], "픽스처: 최근 끝난 판(무승부)이 실려 있다")
+    let finishedID = try #require(lastFinished["match_id"] as? String)
     #expect(gomoku.match == nil && gomoku.phase == .lobby)
-    #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_state") == 0)
-    #expect(inbox["last_finished"] is [String: Any], "픽스처: 최근 끝난 판(무승부)이 실려 있다")
+    let states = GomokuStubProtocol.calls(host: host, rpc: "gomoku_state")
+    #expect(states.count == 1, "최근 끝난 판의 결과를 읽지 않았다(또는 두 번 읽었다)")
+    #expect((states.first?.json["p_match_id"] as? String)?.lowercased() == finishedID.lowercased())
+    #expect(states.first?.json["p_since_seq"] as? Int == 0)
 }

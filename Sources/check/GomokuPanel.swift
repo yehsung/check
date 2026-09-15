@@ -62,9 +62,15 @@ enum GomokuText {
     static let lobbyTitle = "상대 고르기"
     static let lobbyCaption = "둘 다 근무 중일 때 신청하고 받을 수 있어요"
     static let emptyUsers = "지금 대결할 수 있는 사람이 없어요"
+    /// 상대 목록을 아직 한 번도 받지 못했다(첫 조회가 도는 중).
+    static let loadingUsers = "상대 목록을 불러오고 있어요"
+    /// 상대 목록 조회가 실패했다 — 빈 목록을 "상대가 없다"로 보이지 않는다.
+    static let usersLoadFailed = GomokuNoticeText.checkConnection
+    static let reloadUsers = "다시 불러오기"
     static let challenge = "도전"
     static let stakeTitle = "판돈"
-    static let stakeCaption = "수락하는 순간 두 사람 모두 걸고, 이긴 사람이 두 배를 가져가요"
+    /// 판돈 문구는 **순수익** 기준이다(수락 때 건 판돈을 빼고 이기면 판돈만큼 더 받는다) — 결과 카드의 +판돈과 같은 눈금.
+    static let stakeCaption = "수락하는 순간 두 사람 모두 걸고, 이기면 판돈만큼 더 받아요"
     static let incomingTitle = "받은 신청"
     static let outgoingTitle = "보낸 신청"
     static let noIncoming = "받은 신청이 없어요"
@@ -116,7 +122,36 @@ enum GomokuText {
         reason == .budget ? "판정할 수 없는 자리예요" : "\(reasonLabel(reason))라 둘 수 없어요"
     }
 
-    static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 \(stake * 2)" }
+    /// 대국 화면 판돈 줄. 이기면 **판돈만큼 더**(순수익) — 결과 카드의 루비 변화(+판돈)와 같은 숫자를 말한다.
+    static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(stake)" }
+
+    /// 보이스오버: 판 전체를 한 요소로 읽는다(돌 수 · 마지막 수 · 누구 차례 · 금수 자리 수).
+    static func boardAccessibility(_ match: GomokuMatchState, forbiddenCount: Int) -> String {
+        var black = 0
+        var white = 0
+        for y in 0..<GomokuBoard.size {
+            for x in 0..<GomokuBoard.size {
+                guard let point = GomokuPoint(x: x, y: y) else { continue }
+                switch match.board[point] {
+                case .black?: black += 1
+                case .white?: white += 1
+                case nil: break
+                }
+            }
+        }
+        var parts = ["오목판", "흑 \(black)개", "백 \(white)개"]
+        parts.append(match.lastMove.map { "마지막 수 \($0.notation)" } ?? "아직 둔 돌이 없어요")
+        if match.isFinished {
+            parts.append("대국이 끝났어요")
+        } else {
+            parts.append(match.turn == match.myColor ? myTurn : opponentTurn)
+        }
+        if forbiddenCount > 0 { parts.append("금수 자리 \(forbiddenCount)곳") }
+        return parts.joined(separator: ", ")
+    }
+
+    /// 보이스오버: 차례 링.
+    static func clockAccessibility(_ seconds: Double) -> String { "남은 시간 \(remaining(seconds))" }
 
     static func stoneName(_ color: GomokuColor) -> String { color == .black ? "흑 · 먼저 둬요" : "백" }
 
@@ -562,11 +597,19 @@ private struct GomokuOpponentList: View {
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)
             }
+            if store.lobbyLoadFailed, !store.users.isEmpty {
+                // 전에 받은 목록은 그대로 두고, 지금 목록이 낡았을 수 있다는 것만 알린다.
+                failureStrip
+            }
             if store.users.isEmpty {
-                Text(GomokuText.emptyUsers)
-                    .font(.callout)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if store.lobbyLoadFailed {
+                    failurePanel
+                } else {
+                    Text(store.hasLoadedLobby ? GomokuText.emptyUsers : GomokuText.loadingUsers)
+                        .font(.callout)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else if clipsOverflowInsteadOfScroll {
                 // minHeight 0 이 핵심이다 — 없으면 이 틀이 행들의 자연 높이를 그대로 보고해 카드가 608pt 본문을 뚫고
                 // 창 아래로 자란다(2026-09-16 스냅샷 실측: 사람 10명에서 카드 아래 테두리가 창 밖으로 나갔다).
@@ -590,6 +633,44 @@ private struct GomokuOpponentList: View {
                     .frame(height: Self.rowHeight)
             }
         }
+    }
+
+    /// 목록을 한 번도 못 받았다 — 빈 목록 문구 대신 연결 안내와 [다시 불러오기].
+    private var failurePanel: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(CheckTheme.pending)
+            Text(GomokuText.usersLoadFailed)
+                .font(.callout)
+                .foregroundStyle(CheckTheme.secondaryText)
+            reloadButton(height: 32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// 전에 받은 목록이 있는데 방금 조회가 실패했다.
+    private var failureStrip: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "wifi.exclamationmark")
+                .foregroundStyle(CheckTheme.pending)
+            Text(GomokuText.usersLoadFailed)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            reloadButton(height: 26)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CheckTheme.pending.opacity(0.12)))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.pending.opacity(0.35), lineWidth: 1))
+    }
+
+    private func reloadButton(height: CGFloat) -> some View {
+        GomokuActionButton(title: GomokuText.reloadUsers, icon: "arrow.clockwise", style: .outline, height: height) {
+            Task { await store.refreshLobby() }
+        }
+        .checkTooltip("상대 목록을 다시 불러와요")
     }
 }
 
@@ -880,6 +961,9 @@ private struct GomokuPlayBoard: View {
                     Task { await store.place(point) }
                 }
             )
+            // 보이스오버: 판 전체를 한 요소로 읽는다(교차점별 요소·착수 동작은 아직 없다 — 둘 곳은 마우스로 고른다).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(GomokuText.boardAccessibility(match, forbiddenCount: forbidden.count))
     }
 }
 
@@ -934,6 +1018,8 @@ private struct GomokuMatchSide: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // 보이스오버: 상태줄(내 차례 · 금수 이유 · 안내)은 한 문장으로 읽힌다 — 금수 X 의 이유는 여기서 들린다.
+            .accessibilityElement(children: .combine)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(statusLine.tint.opacity(0.10)))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(statusLine.tint.opacity(0.35), lineWidth: 1))
 
@@ -1054,6 +1140,8 @@ struct GomokuTurnClock: View {
                     .foregroundStyle(tint)
             }
             .padding(3)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(GomokuText.clockAccessibility(remaining))
         }
     }
 }
@@ -1212,7 +1300,7 @@ struct GomokuRuleExample: Identifiable, Equatable {
         "5목이 되는 수는 금수 모양이 함께 생겨도 흑의 승리예요. 4-3은 금수가 아니에요.",
         "한 수에 30초. 시간이 지나면 차례인 사람이 져요.",
         "흑이 둘 곳이 없으면 차례가 백으로 넘어가고, 판이 가득 차면 무승부예요.",
-        "수락하는 순간 두 사람 모두 판돈을 걸고, 이긴 사람이 두 배를 받아요. 무승부면 돌려받아요."
+        "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고, 무승부면 건 판돈을 돌려받아요."
     ]
 }
 

@@ -55,8 +55,9 @@ private func gwInvite(id: String, expiresIn seconds: TimeInterval) -> GomokuInvi
     GomokuInvite(id: id, peer: gwOpponent, stake: 5, expiresAt: Date().addingTimeInterval(seconds))
 }
 
+/// 말풍선 큐 검증용 오버레이. 스토어를 함께 돌려준다 — 신청 말풍선은 **스토어의 받은 신청에 아직 있는 것만** 띄운다.
 @MainActor
-private func gwOverlay() -> (ReactionEngine, CheckOverlayController) {
+private func gwOverlay() -> (ReactionEngine, CheckOverlayController, WorkTimerStore) {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
         defaults: gwDefaults(),
@@ -70,7 +71,7 @@ private func gwOverlay() -> (ReactionEngine, CheckOverlayController) {
         defaults: gwDefaults(),
         workspaceNotifications: nil
     )
-    return (engine, controller)
+    return (engine, controller, store)
 }
 
 // MARK: - 창 수명
@@ -276,12 +277,13 @@ struct GomokuWindowLifecycleTests {
 
     @Test
     func anInviteBubbleWaitsBehindAnotherBubbleAndIsNotConsumed() {
-        let (engine, controller) = gwOverlay()
+        let (engine, controller, store) = gwOverlay()
         defer {
             controller.clearGomokuInvites()
             controller.updateWorking(false)
         }
         engine.showBubble("다른 안내", seconds: 60)
+        store.gomoku.incoming = [gwInvite(id: "invite-1", expiresIn: 50)]
         controller.enqueueGomokuInvite(gwInvite(id: "invite-1", expiresIn: 50))
 
         #expect(controller.showNextGomokuInviteBubble() == false)
@@ -291,12 +293,13 @@ struct GomokuWindowLifecycleTests {
 
     @Test
     func anInviteBubbleShowsOnceAndRemembersWhichMatchToOpen() {
-        let (engine, controller) = gwOverlay()
+        let (engine, controller, store) = gwOverlay()
         defer {
             controller.clearGomokuInvites()
             controller.updateWorking(false)
         }
         let invite = gwInvite(id: "invite-2", expiresIn: 50)
+        store.gomoku.incoming = [invite]
         controller.enqueueGomokuInvite(invite)
         controller.enqueueGomokuInvite(invite)
         #expect(controller.gomokuInviteQueue.count == 1, "같은 신청이 두 번 들어갔다")
@@ -316,16 +319,156 @@ struct GomokuWindowLifecycleTests {
 
     @Test
     func expiredInvitesAreDroppedInsteadOfShown() {
-        let (engine, controller) = gwOverlay()
+        let (engine, controller, store) = gwOverlay()
         defer {
             controller.clearGomokuInvites()
             controller.updateWorking(false)
         }
-        controller.enqueueGomokuInvite(gwInvite(id: "old", expiresIn: -1))
+        let old = gwInvite(id: "old", expiresIn: -1)
+        store.gomoku.incoming = [old]
+        controller.enqueueGomokuInvite(old)
         #expect(controller.showNextGomokuInviteBubble() == false)
         #expect(controller.gomokuInviteQueue.isEmpty, "만료된 신청이 큐에 남아 다음 말풍선 자리를 막는다")
         #expect(engine.greetingText == nil)
     }
+
+    /// 기다리는 사이 팝오버 배너로 수락·거절했거나 신청자가 취소한 신청은 뒤늦게 말풍선으로 뜨지 않는다.
+    @Test
+    func anInviteHandledWhileWaitingIsDroppedInsteadOfShown() {
+        let (engine, controller, store) = gwOverlay()
+        defer {
+            controller.clearGomokuInvites()
+            controller.updateWorking(false)
+        }
+        let handled = gwInvite(id: "handled", expiresIn: 50)
+        let alive = gwInvite(id: "alive", expiresIn: 50)
+        store.gomoku.incoming = [handled, alive]
+        controller.enqueueGomokuInvite(handled)
+        controller.enqueueGomokuInvite(alive)
+        store.gomoku.incoming = [alive]           // 'handled' 는 그사이 처리됐다
+
+        #expect(controller.showNextGomokuInviteBubble())
+        #expect(controller.shownGomokuInvite?.matchID == "alive", "이미 처리된 신청을 말풍선으로 띄웠다")
+        #expect(controller.gomokuInviteQueue.isEmpty)
+        #expect(engine.greetingText == CheckOverlayController.gomokuInviteBubbleText(name: "민수", stake: 5))
+    }
+
+    // MARK: - 받는 쪽: 차례 말풍선(창이 안 보일 때)
+
+    @Test
+    func aTurnBubbleWaitsBehindAnotherBubbleAndIsNotConsumed() {
+        let (engine, controller, store) = gwOverlay()
+        defer {
+            controller.clearGomokuInvites()
+            controller.updateWorking(false)
+        }
+        store.gomoku.phase = .playing
+        store.gomoku.match = gwActiveMatch()
+        engine.showBubble("다른 안내", seconds: 60)
+        let attention = GomokuAttention(kind: .myTurn, matchID: "match-1", opponentName: "민수", moveCount: 2)
+        controller.enqueueGomokuAttention(attention)
+
+        #expect(controller.showPendingGomokuAttentionBubble() == false)
+        #expect(controller.pendingGomokuAttention == attention, "못 띄운 차례 알림을 버렸다")
+        #expect(engine.greetingText == "다른 안내", "차례 말풍선이 떠 있던 안내를 덮었다")
+    }
+
+    @Test
+    func aTurnBubbleShowsOnlyWhileItIsStillMyTurnAndOpensThatMatch() {
+        let (engine, controller, store) = gwOverlay()
+        defer {
+            controller.clearGomokuInvites()
+            controller.updateWorking(false)
+        }
+        store.gomoku.phase = .playing
+        store.gomoku.match = gwActiveMatch()          // match-1 · 내가 흑 · 흑 차례 · 기록 2
+        let attention = GomokuAttention(kind: .myTurn, matchID: "match-1", opponentName: "민수", moveCount: 2)
+        controller.enqueueGomokuAttention(attention)
+
+        #expect(controller.showPendingGomokuAttentionBubble())
+        let text = CheckOverlayController.gomokuAttentionBubbleText(attention)
+        #expect(text == "민수님이 뒀어요 · 내 차례예요")
+        #expect(engine.greetingText == text)
+        #expect(controller.pendingGomokuAttention == nil)
+        #expect(controller.gomokuBubbleMatchID() == nil, "열 곳이 배선되기 전인데 클릭 자리가 생겼다")
+        controller.onOpenGomoku = { _ in }
+        #expect(controller.gomokuBubbleMatchID() == "match-1", "차례 말풍선을 눌러도 그 대국이 안 열린다")
+        #expect(controller.gomokuInviteBubbleScreenRect() != nil)
+
+        // 판이 이미 넘어간 알림(기록 수가 다름)은 띄우지 않고 버린다.
+        engine.greetingText = nil
+        controller.enqueueGomokuAttention(GomokuAttention(kind: .myTurn, matchID: "match-1", opponentName: "민수", moveCount: 1))
+        #expect(controller.showPendingGomokuAttentionBubble() == false)
+        #expect(controller.pendingGomokuAttention == nil)
+        // 사용자가 창을 열었으면 버린다.
+        store.gomoku.isWindowVisible = true
+        controller.enqueueGomokuAttention(attention)
+        #expect(controller.showPendingGomokuAttentionBubble() == false)
+        #expect(controller.pendingGomokuAttention == nil)
+        #expect(engine.greetingText == nil)
+        // 계정 전환은 기다리는 알림도 비운다.
+        store.gomoku.isWindowVisible = false
+        controller.enqueueGomokuAttention(attention)
+        controller.clearGomokuInvites()
+        #expect(controller.pendingGomokuAttention == nil && controller.shownGomokuAttention == nil)
+    }
+
+    // MARK: - 가림(다른 창 뒤 · 다른 Space · 잠금)
+
+    @Test
+    func occlusionPausesOnlyPollingAndIsIgnoredOnceClosed() throws {
+        #expect(CheckGomokuWindowController().responds(to: #selector(NSWindowDelegate.windowDidChangeOcclusionState(_:))),
+                "가림 통지를 받지 않는다 — 가려진 창에서 폴링이 계속 돈다")
+        let store = GomokuStore()
+        let controller = gwController(store)
+        defer { controller.discardWindowForTesting() }
+        controller.show()
+        _ = try #require(controller.currentWindow)
+        #expect(store.pollTask != nil)
+
+        controller.applyOcclusion(visible: false)
+        #expect(controller.lastOcclusionNotice == false)
+        #expect(store.isWindowOccluded)
+        #expect(store.pollTask == nil, "가려졌는데 폴링이 돈다")
+        #expect(store.isWindowVisible, "가림을 '안 보임'으로 옮겼다 — 보이는 창의 시계가 멈출 수 있다")
+        #expect(controller.lastVisibilityNotice == true)
+
+        controller.applyOcclusion(visible: true)
+        #expect(!store.isWindowOccluded)
+        #expect(store.pollTask != nil, "다시 보이는데 폴링이 안 돈다")
+
+        // 남의 창 통지는 무시한다.
+        let stranger = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+                                styleMask: [.titled], backing: .buffered, defer: true)
+        stranger.isReleasedWhenClosed = false
+        defer { stranger.orderOut(nil) }
+        controller.windowDidChangeOcclusionState(Notification(name: NSWindow.didChangeOcclusionStateNotification, object: stranger))
+        #expect(controller.lastOcclusionNotice == true)
+
+        // 닫힌 창의 가림 통지는 옮기지 않는다(닫기가 이미 '안 보임'을 알렸다).
+        controller.close()
+        controller.applyOcclusion(visible: false)
+        #expect(controller.lastOcclusionNotice == true, "닫힌 창의 가림 통지를 스토어로 옮겼다")
+        #expect(!store.isWindowOccluded)
+    }
+}
+
+/// 차례 말풍선 문구는 두 줄 캡슐에 들어가고, 메시지 도착 말풍선으로 오인되지 않는다(오인되면 클릭이 대화 패널로 간다).
+@Test
+func turnBubbleTextAlwaysFitsTheCapsule() {
+    for name in ["민수", "아주아주긴이름의사람", "Christopher Robin", "😀😀😀😀😀😀😀", ""] {
+        let text = CheckOverlayController.gomokuAttentionBubbleText(
+            GomokuAttention(kind: .myTurn, matchID: "m", opponentName: name, moveCount: 3))
+        #expect(OverlayMessageBubble.fitsCapsule(text), "'\(text)' 가 두 줄 캡슐을 넘친다")
+        #expect(text.hasSuffix("내 차례예요"), "'\(text)' 에서 차례가 빠졌다")
+        #expect(!OverlayMessageBubble.isArrival(text), "'\(text)' 가 메시지 도착 말풍선으로 읽힌다")
+    }
+    #expect(CheckOverlayController.gomokuAttentionBubbleText(
+        GomokuAttention(kind: .myTurn, matchID: "m", opponentName: "", moveCount: 3)) == "상대가 뒀어요 · 내 차례예요")
+    let started = CheckOverlayController.gomokuAttentionBubbleText(
+        GomokuAttention(kind: .matchStarted, matchID: "m", opponentName: "민수", moveCount: 0))
+    #expect(started == "대국이 시작됐어요 · 내 차례예요")
+    #expect(OverlayMessageBubble.fitsCapsule(started) && !OverlayMessageBubble.isArrival(started))
 }
 
 /// 말풍선 문구는 언제나 두 줄 캡슐 안에 들어가고, 메시지 도착 말풍선으로 오인되지 않는다(오인되면 클릭이 대화 패널로 간다).
@@ -413,6 +556,13 @@ func appWiresTheGomokuWindowAndItsDoorsAtLaunch() throws {
     #expect(app.contains("GomokuAccountWatcher(") && app.contains("CheckGomokuWindowController.shared.close()")
             && app.contains("clearGomokuInvites()"),
             "로그아웃·계정 전환에 창이 안 닫힌다")
+    let gomokuWiring = try #require(gwFunctionBody(app, name: "wireGomoku"))
+    #expect(gomokuWiring.contains("gomoku.onAttention = {") && gomokuWiring.contains("enqueueGomokuAttention(attention)"),
+            "창이 안 보일 때 내 차례가 와도 캐릭터 말풍선이 안 뜬다")
+    #expect(gomokuWiring.contains("gomoku.requestAttention = {")
+            && gomokuWiring.contains("NSApp.requestUserAttention(.criticalRequest)")
+            && gomokuWiring.contains("!NSApp.isActive"),
+            "판이 시작돼도 앱이 뒤에 있으면 주의를 끌지 않는다")
     // 말풍선 큐는 오버레이 컨트롤러에 산다 — 그걸 만든 **뒤에** 이어야 첫 신청이 받을 곳이 있다.
     let overlay = try #require(app.range(of: "overlayController = CheckOverlayController("))
     let wire = try #require(app.range(of: "wireGomoku()"))
@@ -428,6 +578,13 @@ func theGomokuWindowNeverEndsTheMatchOnItsOwn() throws {
     #expect(source.contains("frameAutosaveActive = created.setFrameAutosaveName(Self.frameAutosaveName)"),
             "자동저장 반환값을 버린다 — 이름이 겹쳐도 아무도 모른다")
     #expect(source.contains("old.setFrameAutosaveName(\"\")"), "재생성 때 자동저장 이름을 안 놓는다")
+    // 가림은 폴링만 멈춘다 — '안 보임'(windowDidHide)으로 옮기면 보이는 창의 시계 잎 뷰까지 멈출 수 있다.
+    let occlusion = try #require(gwFunctionBody(source, name: "windowDidChangeOcclusionState"))
+    let apply = try #require(gwFunctionBody(source, name: "applyOcclusion"))
+    #expect(occlusion.contains("occlusionState.contains(.visible)") && occlusion.contains("applyOcclusion("))
+    #expect(apply.contains("windowOcclusionDidChange(visible: visible)"))
+    #expect(!occlusion.contains("windowDidHide") && !apply.contains("windowDidHide") && !apply.contains("notifyVisibility"),
+            "가림 통지가 '안 보임'으로 번졌다")
 }
 
 /// 저장소 안 모든 창의 자동저장 이름이 서로 다르다(겹치면 `setFrameAutosaveName` 이 false 를 돌려주고 자리 저장이 조용히 죽는다).

@@ -211,6 +211,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func wireGomoku() {
         let gomoku = store.gomoku
         gomoku.presentWindow = { CheckGomokuWindowController.shared.show() }
+        // 로그아웃·계정 전환의 reset() 이 부르는 닫기 문. 아래 계정 감시자와 겹쳐도 close() 는 멱등이다 — 둘 중 하나만 살아도 창이 남지 않게.
+        gomoku.dismissWindow = { CheckGomokuWindowController.shared.close() }
         gomoku.onInviteArrived = { [weak self] invite in
             self?.overlayController?.enqueueGomokuInvite(invite)
         }

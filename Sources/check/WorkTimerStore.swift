@@ -264,6 +264,8 @@ final class WorkTimerStore {
             refreshFeedbackReplyBadge()
             // 팀원이 바꾼 주간 목표/이름/역할/참여코드를 팝오버 열 때 60초 스로틀로 재조회해 반영한다.
             refreshTeamMetaIfStale()
+            // 오목 받은 신청을 60초 스로틀로 한 번 본다(v0.3.27) — 창이 안 보일 때의 확인 시점 중 하나다.
+            gomoku.menuDidOpen()
             // 팝오버 열림 시점에 내 월간 토큰을 게이트/스로틀 하에 1회 올린다(대부분 즉시 반환 — Task 남발 아님).
             Task { @MainActor [weak self] in await self?.uploadTokenUsageIfNeeded() }
         } else {
@@ -822,6 +824,10 @@ final class WorkTimerStore {
     /// 전송자가 nil 이면 링은 `.idle(.disabled)` 로 태어나 한 발짝도 움직이지 않는다(fail-closed).
     @ObservationIgnored let realtime: RealtimeRuntime
 
+    /// 1:1 오목 대결 스토어(v0.3.27). 상태·동기화·폴링·RPC 는 전부 그쪽에 있고, 이 스토어는 **소유**와
+    /// 계기(팝오버 열림·근무 시작·로그아웃·계정 전환)만 넘긴다. 오목 스토어는 이 스토어를 약참조로 빌린다.
+    let gomoku: GomokuStore
+
     /// 미션 보상 연출 싱크. onReactionTrigger 와 **따로 둔 이유**: 그쪽은 `shouldBeVisible` 게이트를 지나므로
     /// 캐릭터를 숨긴 사용자에게는 아무것도 안 뜬다. 보상은 서버가 재화를 이미 올렸고 되돌릴 수 없으므로
     /// 그 게이트를 우회해 peek 으로라도 알려야 한다(배선은 agent-overlay/W2 몫이다).
@@ -1236,6 +1242,9 @@ final class WorkTimerStore {
         realtimeTransport: RealtimeTransport? = nil
     ) {
         self.realtime = RealtimeRuntime(transport: realtimeTransport)
+        // 오목 스토어는 먼저 host 없이 만들고, 이 초기화가 끝나는 자리에서 자신을 넘긴다(attach) —
+        // 저장 프로퍼티를 다 채우기 전에는 self 를 넘길 수 없다.
+        self.gomoku = GomokuStore()
         self.service = service
         self.defaults = defaults
         let resolvedVault = tokenVault ?? Self.defaultTokenVault(defaults: defaults)
@@ -1275,6 +1284,7 @@ final class WorkTimerStore {
         syncMessage = hasAnonKey ? (restoredSession == nil ? "로그인 필요" : "동기화됨") : "Supabase 키 필요"
         observeSleepWake(workspaceNotifications)
         refreshMenuBarTitle()
+        gomoku.attach(host: self)
     }
 
     /// 잠자기/깨어남 노티를 구독한다. 클로저는 [weak self]로 스토어 수명을 넘겨 자동 무력화되므로
@@ -1398,6 +1408,8 @@ final class WorkTimerStore {
         //   위 requestDrain 바로 뒤인 이유는 근무 게이트(realtimeMayConsumePokes)가 startedAt 을 보는데
         //   그 값이 이 함수 앞부분에서 이미 섰기 때문이다.
         startRealtimeIfPossible()
+        // 오목 신청은 근무 중인 사람에게만 온다(서버 target_not_working) — 근무가 시작된 이 순간 한 번 본다(v0.3.27).
+        gomoku.workDidStart()
     }
 
     func stop(now: Date = Date()) {
@@ -3107,6 +3119,9 @@ extension WorkTimerStore {
         realtimeApply(.signedOut)
         realtime.cancelTimers()
         realtimeCatchUpFailedAt = nil
+        // 1:1 오목도 계정에 묶인 상태다(v0.3.27). 창을 닫고 판·신청·루비 미러·폴링을 전부 내린다 —
+        // 남기면 다음 사람이 앞 사람의 대국 창과 받은 신청 배너를 그대로 본다.
+        gomoku.reset()
         // 별명 편집/쿨타임도 계정에 묶인 상태다. 남기면 새 계정 화면에 앞 사람의 '언제부터 가능' 안내가 뜬다.
         isEditingDisplayName = false
         displayNameDraft = ""
@@ -3217,6 +3232,8 @@ extension WorkTimerStore {
         workStateOwnerUserID = userID
         guard let previousOwner, previousOwner != userID else { return }
         // 계정이 바뀌었다 — 진행 중 근무와 그에 딸린 로컬 상태를 모두 끊는다.
+        // 오목 상태도 앞 계정의 것이다(v0.3.27). 로그아웃 경로가 이미 비웠더라도 한 번 더 — 멱등이다.
+        gomoku.reset()
         startedAt = nil
         accumulatedSeconds = 0
         accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: Date())

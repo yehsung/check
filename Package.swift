@@ -21,7 +21,9 @@ let package = Package(
         ),
         .testTarget(
             name: "checkTests",
-            dependencies: ["check"]
+            dependencies: ["check"],
+            // 렌주 판정 코퍼스(JSON)는 테스트가 #filePath 로 직접 읽는다 — 리소스로 묶지 않는다.
+            exclude: ["Fixtures"]
         )
     ]
 )

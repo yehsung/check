@@ -92,6 +92,12 @@ enum RealtimeLinkConstants {
 
     /// 서버 `public.poke_topic(uuid)` 와 문자 그대로 같은 채널명을 만든다.
     static func pokeChannel(userID: String) -> String { "poke:\(userID)" }
+
+    /// 1:1 오목 신호의 브로드캐스트 이벤트 이름(v0.3.27). 서버 `gomoku_ring` 의 `realtime.send(…, 'gomoku', …)`
+    /// 와 **문자 그대로 같다**. 같은 채널(poke:<uid>)에 실려 오고, 이 이름만 take_pokes 가 아닌 오목 재조회로 간다.
+    /// 그 밖의 이름('ring' 포함, 빈 이름 포함)은 전부 예전처럼 drain 이다 — 모르는 이름을 버리면 서버가
+    /// 이벤트 이름을 바꾸는 날 찌르기가 조용히 끊긴다.
+    static let gomokuBroadcastEvent = "gomoku"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -163,6 +169,9 @@ enum RealtimeEffect: Equatable, Sendable {
     case catchUp
     /// 브로드캐스트를 받았다 → take_pokes 1회(직렬화는 requestDrain 이 한다).
     case drain
+    /// 오목 신호('gomoku')를 받았다 → 오목 상태 재조회 1회(직렬화는 GomokuStore.handleSignal 이 한다).
+    /// **take_pokes 가 아니다** — 수마다 원자 소비 RPC 를 한 번씩 더 쏘면 무료 플랜 요청만 태운다.
+    case gomokuSignal
     case pushAccessToken(String)
     case scheduleTokenRefresh(at: Date)
     /// 강제 갱신(만료 토큰 조인 거절 직후). force=true 는 "예정보다 앞당겨서라도 지금".
@@ -438,11 +447,13 @@ struct RealtimeLink: Equatable, Sendable {
                 return dropToReconnecting(failedAttempt: attempt, now: now, jitter: jitter)
             }
 
-        case .broadcast:
+        case .broadcast(let event):
             guard case .subscribed(let since, _) = state else { return [] }
             // 어떤 트래픽이든 소켓이 살아 있다는 증거다(하트비트 응답만 증거로 삼으면 바쁜 소켓이
-            // 하트비트 창을 놓쳤을 때 멀쩡한 연결을 끊는다).
+            // 하트비트 창을 놓쳤을 때 멀쩡한 연결을 끊는다). 오목 신호도 같은 증거다.
             state = .subscribed(since: since, lastHeardAt: now)
+            // 이름으로 가르는 것은 오목 하나뿐이다. 나머지는 이름을 보지 않던 예전 그대로 drain 이다.
+            if event == RealtimeLinkConstants.gomokuBroadcastEvent { return [.gomokuSignal] }
             return [.drain]
 
         case .heartbeatAck:

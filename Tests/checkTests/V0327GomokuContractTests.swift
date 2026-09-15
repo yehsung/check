@@ -224,8 +224,10 @@ private func makeContractStore(
 
 @MainActor
 private func contractWait(_ timeout: TimeInterval = 30, _ condition: @MainActor () -> Bool) async {
-    let deadline = Date().addingTimeInterval(timeout)
-    while Date() < deadline {
+    // 상한은 벽시계가 아니라 **재개 횟수**다(5ms 한 번 = 한 차례). 전체 스위트에서는 렌더 테스트가 메인 액터를 수십 초씩 쥐어
+    // 벽시계 상한이 스토어의 Task 가 차례를 받기도 전에 끝났다(0.3.27 전체 실행: 690초 지점에서 20초 대기 실패, 격리 3/3 초록).
+    // V0325TooltipTests.waitUntil 과 같은 해법 — 재개마다 메인 액터 차례를 거치므로 스토어의 Task 도 같은 줄에서 순서를 받는다.
+    for _ in 0..<Int(timeout * 200) {
         if condition() { return }
         try? await Task.sleep(for: .milliseconds(5))
     }

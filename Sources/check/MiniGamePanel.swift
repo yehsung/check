@@ -366,6 +366,15 @@ struct CheckMiniGameWindowView: View {
                 MiniGameChromeButton(title: Self.pauseTitle, icon: "pause.fill", tint: CheckTheme.pending) {
                     togglePause()
                 }
+            } else {
+                // 1:1 오목 입구(v0.3.27). 오목은 이 창과 **별도의 넓은 창**이다(사용자 결정) — 여기는 문만 둔다.
+                // [일시정지] 와 **같은 자리를 번갈아 쓴다**: 헤더는 344pt 인데 칩 둘 + 일시정지 + 입구를 한 줄에 세우면
+                // 넘친다. 판이 도는 중에는 어차피 누를 수 없는 문이다(누르는 순간 이 창이 키를 잃어 판이 끝난다) —
+                // 정지 중에는 다시 보인다("포기하고 다른 게임" 과 같은 결).
+                // 팝오버를 닫지 않는다 — 이 창에서 오는 길이면 팝오버는 이미 닫혀 있다(토글이라 부르면 오히려 열린다).
+                MiniGameGomokuEntryButton {
+                    store.gomoku.openWindow(focusMatchID: nil)
+                }
             }
         }
     }
@@ -841,6 +850,35 @@ private struct MiniGameChromeButton: View {
         }
         .buttonStyle(.plain)
         .checkTooltip(title)
+    }
+}
+
+/// 헤더의 [1:1 오목] 입구(v0.3.27). 종류 칩과 같은 26pt 캡슐이지만 **초록**이다 — 칩(파랑 = 이 창의 게임 고르기)과
+/// 같은 색이면 "세 번째 게임"으로 읽히는데, 이 버튼은 다른 창을 여는 문이다. 렌더 테스트가 단독으로 폭을 잰다(internal).
+struct MiniGameGomokuEntryButton: View {
+    static let title = "1:1 오목"
+    static let icon = "circle.grid.3x3.fill"
+    static let help = "렌주룰 1:1 오목 대결 창을 열어요"
+
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Label(Self.title, systemImage: Self.icon)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(CheckTheme.working)
+                .padding(.horizontal, 10)
+                .frame(height: 26)
+                .background(Capsule().fill(CheckTheme.working.opacity(hovering ? 0.24 : 0.14)))
+                .overlay(Capsule().stroke(CheckTheme.working.opacity(0.45), lineWidth: 1))
+                .contentShape(Capsule())
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .checkTooltip(Self.help)
     }
 }
 

@@ -2340,7 +2340,8 @@ struct CheckTokenUsageRow: View {
                 .monospacedDigit()
             // 콜백이 있을 때만 팀 순위 버튼을 붙인다(없으면 기존처럼 값까지만).
             if let onOpenBoard {
-                IconButton(icon: "person.2", help: "팀 토큰 순위", action: onOpenBoard)
+                // 순위판은 팀이 아니라 앱 사용자 전체의 개인별 순위다(boardEntryRow 의 "AI 토큰 순위"와 같은 이름).
+                IconButton(icon: "person.2", help: "AI 토큰 순위", action: onOpenBoard)
             }
         }
         .padding(.horizontal, 12)

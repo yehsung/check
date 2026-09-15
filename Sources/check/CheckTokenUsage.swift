@@ -2358,7 +2358,7 @@ struct CheckTokenUsageRow: View {
         )
         // 스캔 중엔 살짝 흐리게(절제된 진행 표시). 값은 이전 집계를 유지하다 완료 시 교체된다.
         .opacity(store.isScanning ? 0.55 : 1)
-        .help(usage.detailTooltip(account: account?.snapshot))
+        .checkTooltip(usage.detailTooltip(account: account?.snapshot))
     }
 
     /// 이 달의 계정 월합(스냅샷이 있을 때). 스냅샷의 월과 usage.month 는 각각 UTC/KST 월이지만 순위 용도에선 허용(문서화된 미결).
@@ -2385,6 +2385,6 @@ struct CheckTokenUsageRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .panelStyle()
-        .help("앱 사용자 전체의 AI 토큰 순위를 봅니다")
+        .checkTooltip("앱 사용자 전체의 AI 토큰 순위를 봅니다")
     }
 }

@@ -2796,15 +2796,17 @@ func tokenBoardCaptionRowCapsTheNumberColumnLikeTheCrowdedRow() throws {
 @MainActor
 @Test
 func tokenBoardRowWiresTheToolMixCaptionAndTooltipToTheEntry() throws {
-    // 툴팁은 픽셀에 안 나온다(ImageRenderer 는 .help 를 그리지 않는다) — 이 배선이 끊겨도 렌더 테스트는 전부 초록이다.
+    // 툴팁은 호버해야 뜬다 — ImageRenderer 는 호버를 못 내므로 이 배선이 끊겨도 렌더 테스트는 전부 초록이다
+    // (v0.3.25 에 시스템 툴팁이 자체 말풍선으로 바뀐 뒤에도 같다).
     // 그래서 주석을 걷어낸 소스로 계약을 못 박는다(주석 미제거로 하면 설명을 지워야 초록이 되는 테스트가 된다).
     let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
     // 카드에 상세 툴팁이 달려 있다 — 캡션의 축약값(196.6억)이 실제로 몇인지 볼 수 있는 유일한 자리다.
-    #expect(source.contains("view.help(entry.detailTooltip)"))
-    // 단, 문구가 **빈 문자열이면 아예 걸지 않는다**. 총합 0 인 행(가입만 하고 한 번도 안 올린 사람)은
-    // 프로덕션에 실제로 있고, `.help("")` 가 빈 말풍선을 띄우는지는 AppKit 버전마다 갈려 ImageRenderer 로도
-    // 확인할 수 없다(.help 는 픽셀에 안 그려진다) — 검증 불가능한 가정 대신 분기 하나로 없앤 자리다.
-    #expect(source.contains("if entry.detailTooltip.isEmpty"))
+    #expect(source.contains("view.checkTooltip(entry.detailTooltip)"))
+    // 단, 문구가 **빈 문자열이면 아예 걸지 않는다**. 총합 0 인 행(가입만 하고 한 번도 안 올린 사람)은 프로덕션에 실제로 있다.
+    // v0.3.25 부터 그 분기는 이 행이 아니라 `checkTooltip` 모디파이어 안에 있다(공백뿐인 문구엔 말풍선·접근성 힌트·호버 추적 모두 없음).
+    // 그 분기가 사라지면 이 행이 빈 말풍선을 띄우므로, 행에서 옮겨 간 그 자리를 되묻는다.
+    let tooltip = swiftCodeStrippingComments(try String(contentsOf: checkSourceURL("CheckTooltip.swift"), encoding: .utf8))
+    #expect(tooltip.contains("if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {"))
     // 캡션 줄은 모델의 순수 함수를 그대로 쓴다. 여기서 문자열을 다시 조립하면 순수 함수 테스트가 초록인 채
     // 화면 문구만 갈라진다.
     #expect(source.contains("if let toolUsage = entry.toolUsageLabel"))

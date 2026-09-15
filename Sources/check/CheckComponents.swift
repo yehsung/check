@@ -329,7 +329,7 @@ struct TeamMemberRow: View {
             .contentShape(Rectangle())
             .onHover { isNameBadgeHovering = $0 }
             .onTapGesture { onBeginEditName?() }
-            .help("별명 변경")
+            .checkTooltip("별명 변경")
             .accessibilityLabel("별명 변경")
     }
 }
@@ -555,7 +555,7 @@ struct InlineActionBanner: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("닫기")
+                .checkTooltip("닫기")
             }
         }
         .padding(.horizontal, 11)
@@ -1656,7 +1656,7 @@ struct IconButton: View {
         .onHover { hovering = enabled && $0 }
         .opacity(enabled ? 1 : 0.32)
         .disabled(!enabled)
-        .help(help)
+        .checkTooltip(help)
     }
 }
 

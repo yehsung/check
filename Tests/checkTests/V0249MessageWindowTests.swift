@@ -1226,7 +1226,7 @@ func theThreeWaysToSendAllGoThroughTheSameDoor() throws {
     // 올린 그대로 재고, 여기서는 그 자리를 소스로 한 번 더 못 박는다.
     #expect(view.contains("sendsOnReturn: true"), "메시지 칸이 Enter 전송을 안 켰다")
     // 툴팁은 상수가 아니라 `sendHelp` 계산을 거쳐 버튼에 붙는다 — 붙이는 줄이 사라지면 ⇧↩ 를 말하는 자리가 없어진다.
-    #expect(view.contains(".help(sendHelp)"), "[보내기] 버튼에 툴팁이 안 붙는다")
+    #expect(view.contains(".checkTooltip(sendHelp)"), "[보내기] 버튼에 툴팁이 안 붙는다")
     // 메시지 칸만 Enter 로 보낸다. 제보 칸에 `sendsOnReturn: true` 가 생기면 그건 사고다.
     #expect(!(try mwSource("CheckFeedbackView.swift").contains("sendsOnReturn")),
             "제보 칸이 Enter 전송을 켰다 — 버그 설명이 반토막 난다")

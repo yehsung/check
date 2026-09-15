@@ -193,7 +193,7 @@ struct EditableAvatarView: View {
             .contentShape(Circle())
             .onHover { hovering = $0 }
             .onTapGesture { presentPicker() }
-            .help("아바타 변경")
+            .checkTooltip("아바타 변경")
     }
 
     // 공개 이미지 타입(png/jpeg/heic)만 허용하는 열기 패널. 취소·비이미지·로드 실패는 조용히 무시.

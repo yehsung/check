@@ -481,7 +481,7 @@ struct CheckShopPanel: View {
         // 구매 중에만 막는다. 보유한 것도 누를 수 있다 — 누르면 "이미 갖고 있어요"라고 말한다
         // (침묵하면 눌러도 아무 일이 없어 고장으로 보인다).
         .disabled(store.purchasingID != nil)
-        .help(owned ? "\(name) — 보유 중" : "\(name) 사기")
+        .checkTooltip(owned ? "\(name) — 보유 중" : "\(name) 사기")
         .accessibilityLabel(owned ? "\(name) 보유 중" : "\(name) 사기")
     }
 }

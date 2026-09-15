@@ -213,6 +213,9 @@ struct CheckMenuView: View {
             .frame(width: isMainScreen ? Self.mainWindowWidth : Self.compactWindowWidth)
             .background(CheckTheme.background)
             .foregroundStyle(CheckTheme.primaryText)
+            // 툴팁 말풍선 레이어(v0.3.25) — 팝오버 루트. 창 전체를 덮는 가장 바깥 시각 체인 뒤라, 목록 ScrollView·카드 clipShape
+            // 안의 버튼도 말풍선이 잘리지 않고 창 가장자리(오른쪽 레일·하단 푸터) 안으로 배치된다(CheckTooltip.swift).
+            .checkTooltipLayer()
             // 팝오버 표시/숨김을 스토어에 알려 티커/폴링 게이팅을 켠다(창 노티 콜백과 수렴 — 멱등이라 중복 무해).
             .onAppear { store.setMenuPresented(true) }
             .onDisappear { store.setMenuPresented(false) }
@@ -763,7 +766,7 @@ private struct CheckMenuRailButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(help)
+        .checkTooltip(help)
         // 라벨은 픽셀로도 보이지만, 보이스오버에는 뜻을 풀어 쓴 help 문구를 준다(아이콘+라벨 조합이라
         // 자동 합성 라벨은 "미니게임 미니게임"처럼 겹쳐 읽힌다).
         .accessibilityLabel(Text(help))
@@ -1202,7 +1205,7 @@ private struct HeaderCaptionIconButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(help)
+        .checkTooltip(help)
     }
 }
 
@@ -2028,19 +2031,14 @@ struct TokenBoardRowView: View {
         tooltipped(card)
     }
 
-    /// 툴팁은 **문구가 있을 때만** 붙인다. 한 번도 안 올린 사람(총합 0)의 detailTooltip 은 빈 문자열인데,
-    /// `.help("")` 가 빈 말풍선을 띄우는지 아무것도 안 띄우는지는 AppKit(NSView.toolTip) 버전마다 갈려
-    /// ImageRenderer 로도 확인할 수 없다(.help 는 픽셀에 안 그려진다). 검증할 수 없는 가정을 남기느니
-    /// 아예 안 거는 쪽이 싸다 — 가입만 하고 안 올린 행은 프로덕션에 실제로 있다.
-    @ViewBuilder
+    /// 툴팁은 **문구가 있을 때만** 뜬다. 한 번도 안 올린 사람(총합 0)의 detailTooltip 은 빈 문자열이고, 그런 행은
+    /// 프로덕션에 실제로 있다. 예전엔 여기서 분기해 시스템 툴팁을 아예 안 걸었다(빈 문구의 시스템 툴팁 동작은 AppKit
+    /// 버전마다 갈려 확인할 수 없었다). v0.3.25 부터 `checkTooltip` 이 공백뿐인 문구에는 말풍선·접근성 힌트·호버 추적을
+    /// 하나도 붙이지 않으므로(CheckTooltip.swift), 그 분기가 모디파이어 안으로 들어갔다 — 여기서 다시 나누지 않는다.
     private func tooltipped(_ view: some View) -> some View {
-        if entry.detailTooltip.isEmpty {
-            view
-        } else {
-            // 캡션 줄은 축약(196.6억)이라, 정확한 값을 보고 싶으면 카드에 마우스만 올리면 된다 —
-            // 여기 문구는 grouped 로 1의 자리까지 전부 적는다(내 박스 툴팁과 같은 어휘·정밀도).
-            view.help(entry.detailTooltip)
-        }
+        // 캡션 줄은 축약(196.6억)이라, 정확한 값을 보고 싶으면 카드에 마우스만 올리면 된다 —
+        // 여기 문구는 grouped 로 1의 자리까지 전부 적는다(내 박스 툴팁과 같은 어휘·정밀도).
+        view.checkTooltip(entry.detailTooltip)
     }
 
     private var card: some View {
@@ -2438,7 +2436,7 @@ struct UltraBalanceBadge: View {
         // (IconButton.enabled 주석이 이미 "자리를 유지한 채 비활성만"으로 거부한 문제와 같은 것이다).
         .opacity(balance == nil && !isUnlimited ? 0.55 : 1)
         .fixedSize()
-        .help(UltraBalanceText.badgeHelp(balance: balance, unlimited: isUnlimited))
+        .checkTooltip(UltraBalanceText.badgeHelp(balance: balance, unlimited: isUnlimited))
     }
 }
 
@@ -2515,7 +2513,7 @@ struct PokeMessageReceiptStrip: View {
         if let onOpen, let peer = message.fromUserID, !peer.isEmpty {
             Button(action: { onOpen(peer) }) { strip }
                 .buttonStyle(.plain)
-                .help("메시지 창에서 전문 보기")
+                .checkTooltip("메시지 창에서 전문 보기")
                 .accessibilityLabel("\(message.fromName)님이 보낸 메시지 — 눌러서 대화 열기")
                 .accessibilityAddTraits(.isButton)
         } else {
@@ -3073,15 +3071,15 @@ struct PokeDirectoryRowView: View {
         if remainingCooldown > 0 {
             // 쿨타임 중 — 숫자 없이 흐린 비활성. 같은 대상 60초 쿨타임을 서버가 강제하고 여기선 미러링만 한다.
             pokeIconLabel(active: false)
-                .help("잠시 후 다시 찌를 수 있어요")
+                .checkTooltip("잠시 후 다시 찌를 수 있어요")
         } else if !canPoke {
             // 내가 비근무 — 찌를 수 없다(서버 강제). 쿨타임과 같은 흐린 비활성 아이콘으로 표시.
             pokeIconLabel(active: false)
-                .help("내가 근무 중일 때만 콕 찌를 수 있어요")
+                .checkTooltip("내가 근무 중일 때만 콕 찌를 수 있어요")
         } else if !entry.isWorking {
             // 대상이 자리비움 — 찌를 수 없다(서버 강제). 쿨타임/내 비근무와 같은 흐린 비활성 아이콘으로 표시.
             pokeIconLabel(active: false)
-                .help("자리비움 상태에는 찌를 수 없어요")
+                .checkTooltip("자리비움 상태에는 찌를 수 없어요")
         } else {
             // 가능 — 짧게 누르면 일반, 3초 꾹 누르면 울트라. 쿨타임 중·내가 비근무·대상 자리비움일 때는
             // 위 분기에서 Button 이 아니라 흐린 라벨(pokeIconLabel)로 그려지므로 **제스처 대상 자체가 없다** —
@@ -3093,7 +3091,7 @@ struct PokeDirectoryRowView: View {
             // 툴팁의 홀드 시간도 상수에서 만든다(힌트 문구와 같은 이유 — 두 곳에 숫자를 흩뿌리지 않는다).
             // 잔량이 없을 때의 문장은 "다 썼다"가 아니다: 그건 하루 몫 시절의 말이고, 지금은
             // 기다려도 안 찬다. **충전 경로를 말하는 문장**으로 갈아 끼웠다.
-            .help(UltraBalanceText.rowTooltip(balance: ultraBalance, unlimited: ultraUnlimited))
+            .checkTooltip(UltraBalanceText.rowTooltip(balance: ultraBalance, unlimited: ultraUnlimited))
         }
     }
 
@@ -3123,7 +3121,7 @@ struct PokeDirectoryRowView: View {
                 }
         }
         .buttonStyle(PokePressButtonStyle())
-        .help(messageHelp)
+        .checkTooltip(messageHelp)
         .accessibilityLabel(messageHelp)
     }
 
@@ -3649,7 +3647,7 @@ private struct InsightsPanel: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     // 한 칸이 두 축을 담는다(Claude 는 KST 자정 하루, Codex 는 계정 버킷과 같은 UTC 하루 = KST 오전 9시 경계) —
                     // 이 안내는 **잔디 헤더에만** 짧게 둔다(v0.2.45 — 내 박스·순위판 툴팁에서는 뺐다, 사용자 지적 "너무 과하다").
-                    .help(TokenUsageMonthly.tokenDayAxisNote)
+                    .checkTooltip(TokenUsageMonthly.tokenDayAxisNote)
                 Spacer(minLength: 4)
                 ContributionLegendView(levels: Self.dailyGridLevels, color: Self.tokenGrassColor)
             }

@@ -1753,7 +1753,7 @@ func sourceContractLiveAccountStoreIsBuiltOnlyInCheckApp() throws {
     // 스냅샷 자체를 그대로 받아 넘기므로 이 계약의 뜻은 그대로다 — 아래 두 줄이 그 사실을 함께 되묻는다.
     #expect(row.contains("usage.displayTotal(account: account?.snapshot)"))
     #expect(row.contains("TokenUsageDisplay.effectiveTotal(local: self, account: account) + antigravityTotal"))
-    #expect(row.contains(".help(usage.detailTooltip(account: account?.snapshot))"))
+    #expect(row.contains(".checkTooltip(usage.detailTooltip(account: account?.snapshot))"))
     let menu = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/check/CheckMenuView.swift"), encoding: .utf8))
     #expect(menu.contains("CheckTokenUsageRow(store: store.tokenUsage, account: store.codexAccount"))
     // 하트비트 본문은 여전히 다섯 필드다(구조체에 let 이 5개).

@@ -325,7 +325,7 @@ func dayAxisNoteLivesOnlyOnTheGrassHeader() throws {
     #expect(usageSource.components(separatedBy: "\"Codex 는 오전 9시 기준").count - 1 == 1)
     #expect(!models.contains("\"Codex 는 오전 9시 기준") && !menu.contains("\"Codex 는 오전 9시 기준"))
     #expect(!models.contains("tokenDayAxisNote"))
-    #expect(menu.contains(".help(TokenUsageMonthly.tokenDayAxisNote)"))
+    #expect(menu.contains(".checkTooltip(TokenUsageMonthly.tokenDayAxisNote)"))
     #expect(!usageSource.contains("accountDrivenTotalNote") && !models.contains("accountDrivenTotalNote"))
     #expect(!rule.contains("localExceedsAccountNote") && !models.contains("localExceedsAccountNote"))
 }

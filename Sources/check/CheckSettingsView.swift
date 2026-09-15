@@ -278,7 +278,7 @@ private struct DisplayNameSettingsRow: View {
         .focusEffectDisabled()
         .disabled(!canSave)
         .opacity(canSave ? 1 : 0.55)
-        .help(store.isDisplayNameLocked ? "일주일에 한 번만 바꿀 수 있어요" : "별명 저장")
+        .checkTooltip(store.isDisplayNameLocked ? "일주일에 한 번만 바꿀 수 있어요" : "별명 저장")
     }
 
     private var normalizedDraft: String {
@@ -548,7 +548,7 @@ struct WorkShortcutRecorderRow: View {
         .focusEffectDisabled()
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.45)
-        .help("\(WorkShortcut.default.displayString) 로 되돌려요")
+        .checkTooltip("\(WorkShortcut.default.displayString) 로 되돌려요")
         .accessibilityLabel("기본값으로 되돌리기")
         .accessibilityValue(WorkShortcut.default.spokenDescription)
     }
@@ -949,6 +949,8 @@ struct CheckSettingsView: View {
             maxHeight: .infinity, alignment: .topLeading
         )
         .background(CheckTheme.background)
+        // 툴팁 말풍선 레이어(v0.3.25) — 설정 창 루트. 창을 채우는 프레임·배경 뒤라 말풍선 자리가 창 전체다.
+        .checkTooltipLayer()
         .onAppear {
             // 시드가 있으면 시스템에 묻지 않는다(렌더/테스트 경로).
             if launchAtLoginSeed == nil {

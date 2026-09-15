@@ -513,7 +513,7 @@ struct CharacterEntryButton: View {
         // (바로 옆 근무 알약이 같은 이유로 같은 수식어를 달고 있다 — 이 한 줄은 이 버튼 하나만 덮는다).
         .focusEffectDisabled()
         .onHover { hovering = $0 }
-        .help("캐릭터 고르기")
+        .checkTooltip("캐릭터 고르기")
         .accessibilityLabel("캐릭터 고르기")
         .accessibilityAddTraits(.isButton)
     }

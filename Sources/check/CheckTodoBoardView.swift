@@ -912,7 +912,7 @@ struct TodoBoardOpacityButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(TodoBoardStrings.opacityToggle)
+        .checkTooltip(TodoBoardStrings.opacityToggle)
         .accessibilityLabel(TodoBoardStrings.opacityToggle)
         .accessibilityAddTraits(isExpanded ? .isSelected : [])
     }
@@ -941,7 +941,7 @@ struct TodoBoardCloseButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(TodoBoardStrings.close)
+        .checkTooltip(TodoBoardStrings.close)
         .accessibilityLabel(TodoBoardStrings.close)
     }
 }
@@ -1108,7 +1108,7 @@ struct TodoBoardRowView: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .help(item.isDone ? TodoBoardStrings.markUndone : TodoBoardStrings.markDone)
+        .checkTooltip(item.isDone ? TodoBoardStrings.markUndone : TodoBoardStrings.markDone)
         .accessibilityLabel(item.isDone ? TodoBoardStrings.markUndone : TodoBoardStrings.markDone)
     }
 
@@ -1172,7 +1172,7 @@ struct TodoBoardRowView: View {
         .opacity(isDeleteVisible ? 1 : 0)
         // 보이지 않아도 접근성 트리에는 남긴다 — hover 로만 뜨는 버튼을 AX 에서까지 감추면
         // 포인터를 못 쓰는 사용자에게는 삭제 경로가 아예 없어진다.
-        .help(TodoBoardStrings.deleteItem)
+        .checkTooltip(TodoBoardStrings.deleteItem)
         .accessibilityLabel(TodoBoardStrings.deleteItem)
     }
 

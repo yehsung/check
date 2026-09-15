@@ -531,7 +531,7 @@ struct MessageComposerView: View {
                 .buttonStyle(.plain)
                 .disabled(!store.canSendMessageNow)
                 .keyboardShortcut(.return, modifiers: .command)
-                .help(sendHelp)
+                .checkTooltip(sendHelp)
             }
         }
     }

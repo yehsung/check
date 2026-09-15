@@ -294,6 +294,8 @@ private struct TodoBoardRootView: View {
             appearance: appearance.appearance,
             onOpacityChange: onOpacityChange
         )
+        // 툴팁 말풍선 레이어(v0.3.25) — 보드 패널 루트. 보드 본체의 모서리 clipShape 바깥이라 말풍선이 잘리지 않는다.
+        .checkTooltipLayer()
     }
 }
 

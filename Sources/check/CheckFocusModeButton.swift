@@ -90,7 +90,7 @@ struct CheckFocusModeFace: View {
         .onHover { hovering = $0 }
         .fixedSize()
         // 툴팁 = 지금 상태(1단이면 남은 시간) — 다음 누름.
-        .help(FocusModeButtonText.tooltip(face))
+        .checkTooltip(FocusModeButtonText.tooltip(face))
         .accessibilityLabel("집중 모드")
         .accessibilityValue(FocusModeButtonText.accessibilityValue(face))
     }

@@ -314,6 +314,8 @@ struct CheckMiniGameWindowView: View {
         }
         .padding(MiniGameWindowLayout.contentPadding)
         .frame(width: MiniGameWindowLayout.contentSize.width, height: MiniGameWindowLayout.contentSize.height, alignment: .topLeading)
+        // 툴팁 말풍선 레이어(v0.3.25) — 미니게임 창 루트. 캔버스·순위 열의 클리핑 바깥이다.
+        .checkTooltipLayer()
         .onAppear { installSpaceKey() }
         .onDisappear {
             MiniGameSpaceKey.remove()
@@ -815,7 +817,7 @@ private struct MiniGameKindChip: View {
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.45)
         .onHover { hovering = $0 }
-        .help(title)
+        .checkTooltip(title)
     }
 }
 
@@ -838,7 +840,7 @@ private struct MiniGameChromeButton: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help(title)
+        .checkTooltip(title)
     }
 }
 
@@ -901,7 +903,7 @@ private struct MiniGamePauseAction: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help(title)
+        .checkTooltip(title)
     }
 }
 

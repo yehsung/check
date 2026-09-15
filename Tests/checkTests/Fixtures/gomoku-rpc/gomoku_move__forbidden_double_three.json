@@ -1,0 +1,65 @@
+{
+  "match": {
+    "id": "f6a0ea2a-7f2d-405b-8d69-ee15817934d6",
+    "turn": "black",
+    "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "board": "w.............................w.............................w.............................w.......................bb...........b..............b..................................................................................",
+    "stake": 3,
+    "white": "3e240c02-8972-478e-a674-014f498a641b",
+    "result": null,
+    "status": "active",
+    "winner": null,
+    "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+    "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "end_reason": null,
+    "move_count": 8,
+    "deadline_ms": 1789497537865,
+    "finished_ms": null,
+    "turn_started_ms": 1789497507865,
+    "invite_expires_ms": 1789497567694
+  },
+  "moves": [],
+  "state": {
+    "match": {
+      "id": "f6a0ea2a-7f2d-405b-8d69-ee15817934d6",
+      "turn": "black",
+      "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "board": "w.............................w.............................w.............................w.......................bb...........b..............b..................................................................................",
+      "stake": 3,
+      "white": "3e240c02-8972-478e-a674-014f498a641b",
+      "result": null,
+      "status": "active",
+      "winner": null,
+      "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+      "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "end_reason": null,
+      "move_count": 8,
+      "deadline_ms": 1789497537865,
+      "finished_ms": null,
+      "turn_started_ms": 1789497507865,
+      "invite_expires_ms": 1789497567694
+    },
+    "moves": [],
+    "my_color": "black",
+    "opponent": {
+      "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+      "character": "jellyfish",
+      "avatar_url": "https://example.invalid/avatar-b.png",
+      "display_name": "코덱스토큰도둑예은"
+    },
+    "ruby_balance": 97,
+    "server_now_ms": 1789497507902
+  },
+  "reason": "double-three",
+  "status": "forbidden",
+  "verdict": "forbidden-double-three",
+  "my_color": "black",
+  "opponent": {
+    "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+    "character": "jellyfish",
+    "avatar_url": "https://example.invalid/avatar-b.png",
+    "display_name": "코덱스토큰도둑예은"
+  },
+  "ruby_balance": 97,
+  "server_now_ms": 1789497507902
+}

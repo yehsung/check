@@ -1,0 +1,79 @@
+{
+  "match": {
+    "id": "c19a9b09-c85c-4ede-af03-4b8886270227",
+    "turn": "black",
+    "black": "3e240c02-8972-478e-a674-014f498a641b",
+    "board": "bb.............ww................................................................................................................................................................................................................",
+    "stake": 5,
+    "white": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "result": null,
+    "status": "active",
+    "winner": null,
+    "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+    "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "end_reason": null,
+    "move_count": 4,
+    "deadline_ms": 1789497537263,
+    "finished_ms": null,
+    "turn_started_ms": 1789497507263,
+    "invite_expires_ms": 1789497566805
+  },
+  "moves": [
+    {
+      "x": 1,
+      "y": 1,
+      "seq": 4,
+      "kind": "stone",
+      "color": "white"
+    }
+  ],
+  "state": {
+    "match": {
+      "id": "c19a9b09-c85c-4ede-af03-4b8886270227",
+      "turn": "black",
+      "black": "3e240c02-8972-478e-a674-014f498a641b",
+      "board": "bb.............ww................................................................................................................................................................................................................",
+      "stake": 5,
+      "white": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "result": null,
+      "status": "active",
+      "winner": null,
+      "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+      "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "end_reason": null,
+      "move_count": 4,
+      "deadline_ms": 1789497537263,
+      "finished_ms": null,
+      "turn_started_ms": 1789497507263,
+      "invite_expires_ms": 1789497566805
+    },
+    "moves": [
+      {
+        "x": 1,
+        "y": 1,
+        "seq": 4,
+        "kind": "stone",
+        "color": "white"
+      }
+    ],
+    "my_color": "black",
+    "opponent": {
+      "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "character": "aing",
+      "avatar_url": null,
+      "display_name": "abto.app"
+    },
+    "ruby_balance": 95,
+    "server_now_ms": 1789497507282
+  },
+  "status": "ok",
+  "my_color": "black",
+  "opponent": {
+    "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "character": "aing",
+    "avatar_url": null,
+    "display_name": "abto.app"
+  },
+  "ruby_balance": 95,
+  "server_now_ms": 1789497507282
+}

@@ -1,0 +1,63 @@
+{
+  "match": {
+    "id": "bd80de54-4bbd-494c-ad7d-8387f231fc20",
+    "turn": "white",
+    "black": "3e240c02-8972-478e-a674-014f498a641b",
+    "board": "bb.wbbwwbbwwbbwwwbbwwbbwwbbwwbbbb.bbbwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+    "stake": 5,
+    "white": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "result": null,
+    "status": "active",
+    "winner": null,
+    "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+    "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "end_reason": null,
+    "move_count": 223,
+    "deadline_ms": 1789497538235,
+    "finished_ms": null,
+    "turn_started_ms": 1789497508235,
+    "invite_expires_ms": 1789497568199
+  },
+  "moves": [],
+  "state": {
+    "match": {
+      "id": "bd80de54-4bbd-494c-ad7d-8387f231fc20",
+      "turn": "white",
+      "black": "3e240c02-8972-478e-a674-014f498a641b",
+      "board": "bb.wbbwwbbwwbbwwwbbwwbbwwbbwwbbbb.bbbwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+      "stake": 5,
+      "white": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "result": null,
+      "status": "active",
+      "winner": null,
+      "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+      "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "end_reason": null,
+      "move_count": 223,
+      "deadline_ms": 1789497538235,
+      "finished_ms": null,
+      "turn_started_ms": 1789497508235,
+      "invite_expires_ms": 1789497568199
+    },
+    "moves": [],
+    "my_color": "black",
+    "opponent": {
+      "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "character": "aing",
+      "avatar_url": null,
+      "display_name": "abto.app"
+    },
+    "ruby_balance": 95,
+    "server_now_ms": 1789497508269
+  },
+  "status": "ok",
+  "my_color": "black",
+  "opponent": {
+    "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "character": "aing",
+    "avatar_url": null,
+    "display_name": "abto.app"
+  },
+  "ruby_balance": 95,
+  "server_now_ms": 1789497508269
+}

@@ -1,0 +1,80 @@
+{
+  "match": {
+    "id": "bd80de54-4bbd-494c-ad7d-8387f231fc20",
+    "turn": null,
+    "black": "3e240c02-8972-478e-a674-014f498a641b",
+    "board": "bbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbbwbbbwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+    "stake": 5,
+    "white": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "result": "draw",
+    "status": "finished",
+    "winner": null,
+    "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+    "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "end_reason": "board_full",
+    "move_count": 226,
+    "deadline_ms": null,
+    "finished_ms": 1789497508344,
+    "turn_started_ms": 1789497508288,
+    "invite_expires_ms": 1789497568199
+  },
+  "moves": [
+    {
+      "x": 3,
+      "y": 2,
+      "seq": 226,
+      "kind": "stone",
+      "color": "white"
+    }
+  ],
+  "state": {
+    "match": {
+      "id": "bd80de54-4bbd-494c-ad7d-8387f231fc20",
+      "turn": null,
+      "black": "3e240c02-8972-478e-a674-014f498a641b",
+      "board": "bbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbbwbbbwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbwwwbbwwbbwwbbwwbbbwwbbwwbbwwbbw",
+      "stake": 5,
+      "white": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "result": "draw",
+      "status": "finished",
+      "winner": null,
+      "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+      "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "end_reason": "board_full",
+      "move_count": 226,
+      "deadline_ms": null,
+      "finished_ms": 1789497508344,
+      "turn_started_ms": 1789497508288,
+      "invite_expires_ms": 1789497568199
+    },
+    "moves": [
+      {
+        "x": 3,
+        "y": 2,
+        "seq": 226,
+        "kind": "stone",
+        "color": "white"
+      }
+    ],
+    "my_color": "white",
+    "opponent": {
+      "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+      "character": "jellyfish",
+      "avatar_url": "https://example.invalid/avatar-b.png",
+      "display_name": "코덱스토큰도둑예은"
+    },
+    "ruby_balance": 100,
+    "server_now_ms": 1789497508346
+  },
+  "status": "ok",
+  "my_color": "white",
+  "opponent": {
+    "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+    "character": "jellyfish",
+    "avatar_url": "https://example.invalid/avatar-b.png",
+    "display_name": "코덱스토큰도둑예은"
+  },
+  "black_passed": false,
+  "ruby_balance": 100,
+  "server_now_ms": 1789497508346
+}

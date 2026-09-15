@@ -1,0 +1,68 @@
+{
+  "me": {
+    "wins": 0,
+    "draws": 0,
+    "losses": 1,
+    "ruby_balance": 95,
+    "active_match_id": null,
+    "outgoing_match_id": null
+  },
+  "users": [
+    {
+      "capable": true,
+      "user_id": "f46dc1d0-4dff-416e-81f0-91d4fb413def",
+      "in_match": true,
+      "character": null,
+      "avatar_url": null,
+      "is_working": true,
+      "display_name": "거부목록사용자"
+    },
+    {
+      "capable": true,
+      "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+      "in_match": false,
+      "character": "jellyfish",
+      "avatar_url": "https://example.invalid/avatar-b.png",
+      "is_working": true,
+      "display_name": "코덱스토큰도둑예은"
+    },
+    {
+      "capable": true,
+      "user_id": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "in_match": true,
+      "character": "fox",
+      "avatar_url": null,
+      "is_working": true,
+      "display_name": "코덱스토큰도둑지유"
+    },
+    {
+      "capable": false,
+      "user_id": "6a6a6a6a-0000-4000-8000-00000000000f",
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "is_working": true,
+      "display_name": "여섯째"
+    },
+    {
+      "capable": true,
+      "user_id": "785b5732-75fe-4a71-931a-2e3f06e63505",
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "is_working": false,
+      "display_name": "씨앗다섯"
+    }
+  ],
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "status": "ok",
+  "ruby_balance": 95,
+  "turn_seconds": 30,
+  "server_now_ms": 1789497507575,
+  "invite_ttl_seconds": 60,
+  "turn_grace_seconds": 2
+}

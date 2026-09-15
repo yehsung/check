@@ -1,0 +1,274 @@
+#!/usr/bin/env python3
+"""오목 RPC 응답 픽스처 생성기 — 로컬 하네스(127.0.0.1:55481) 전용.
+
+단계마다 psql 세션 하나: migrator → set role postgres → begin → (준비 SQL) → harness.login(호출자) → RPC → commit|rollback.
+출력은 jsonb 그대로(키 순서 보존) fixtures/<rpc>__<status>.json 에 쓴다. 호출자·인자는 fixtures/_manifest.json.
+"""
+import json
+import os
+import subprocess
+import sys
+from collections import OrderedDict
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = os.path.join(HERE, "fixtures")
+PSQL = "/opt/homebrew/opt/postgresql@15/bin/psql"
+PORT = "55481"
+
+A = "267a3495-643c-40cc-b1a7-14967166eae1"  # abto.app
+B = "3e240c02-8972-478e-a674-014f498a641b"  # 코덱스토큰도둑예은
+C = "544e3837-f01c-4560-b82f-4d44c269f044"  # 코덱스토큰도둑지유
+D = "f46dc1d0-4dff-416e-81f0-91d4fb413def"  # 거부목록사용자
+E = "785b5732-75fe-4a71-931a-2e3f06e63505"  # 씨앗다섯 — 근무 안 함(가능 build)
+F = "6a6a6a6a-0000-4000-8000-00000000000f"  # 여섯째 — 근무 중·구버전(build 76)
+TEAM = "fa11fa11-0000-4000-8000-000000000001"
+
+env = {k: v for k, v in os.environ.items() if not k.startswith("PG")}
+env.update(PGHOST="127.0.0.1", PGPORT=PORT, PGDATABASE="postgres", PGCONNECT_TIMEOUT="5",
+           PGSSLMODE="disable", PGCLIENTENCODING="UTF8", LC_ALL="C", LANG="C")
+
+manifest = OrderedDict()
+flow = []
+
+
+def psql(sql, user="migrator"):
+    p = subprocess.run([PSQL, "-X", "-q", "-At", "-v", "ON_ERROR_STOP=1", "-U", user, "-d", "postgres"],
+                       input=sql, capture_output=True, text=True, env=env)
+    if p.returncode != 0:
+        sys.stderr.write(sql + "\n--- stderr ---\n" + p.stderr)
+        raise SystemExit(f"psql failed rc={p.returncode}")
+    return p.stdout
+
+
+def call(caller, rpc_sql, setup="", end="rollback", name=None, note=""):
+    """caller 로 rpc_sql(jsonb 식)을 부르고 파싱한 dict 를 돌려준다. name 이 있으면 파일로 뜬다."""
+    sql = "set role postgres;\nbegin;\n" + setup + "\n"
+    sql += f"select harness.login('{caller}') \\g /dev/null\n"
+    sql += f"select '@@' || ({rpc_sql})::text;\n{end};\n"
+    out = psql(sql)
+    lines = [l for l in out.splitlines() if l.startswith("@@")]
+    assert len(lines) == 1, out
+    text = lines[0][2:]
+    obj = json.loads(text, object_pairs_hook=OrderedDict)
+    if name:
+        with open(os.path.join(OUT, name + ".json"), "w", encoding="utf-8") as fh:
+            json.dump(obj, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+        manifest[name] = OrderedDict(caller=caller, rpc=rpc_sql, setup=setup.strip() or None, end=end, note=note or None)
+        print(f"{name:52s} status={obj.get('status')}")
+    return obj
+
+
+def admin(sql):
+    psql("set role postgres;\nbegin;\n" + sql + "\ncommit;\n")
+
+
+def set_ruby_sql(uid, target):
+    return f"select contract_t.set_ruby('{uid}', {target});"
+
+
+def pair(challenger, opponent, stake):
+    r = call(challenger, f"public.gomoku_challenge(1, '{opponent}', {stake})", end="commit")
+    assert r["status"] == "ok", r
+    m = r["match_id"]
+    r = call(opponent, f"public.gomoku_respond(1, '{m}', true)", end="commit")
+    assert r["status"] == "ok", r
+    return m, r["match"]["black"], r["match"]["white"]
+
+
+def move(caller, m, seq, x, y, name=None, end="commit", setup=""):
+    return call(caller, f"public.gomoku_move(1, '{m}', {seq}, {x}, {y})", end=end, name=name, setup=setup)
+
+
+def main():
+    os.makedirs(OUT, exist_ok=True)
+    for f in os.listdir(OUT):
+        if f.endswith(".json"):
+            os.remove(os.path.join(OUT, f))
+
+    # ── 준비: 도우미 · 픽스처 사용자 ──────────────────────────────────────────────────────────
+    admin("""
+create schema if not exists contract_t;
+grant usage on schema contract_t to public;
+create or replace function contract_t.set_ruby(p_uid uuid, p_target int) returns void language plpgsql as $f$
+declare v_old int;
+begin
+  select ruby_balance into v_old from public.profiles where id = p_uid for update;
+  if v_old <> p_target then
+    update public.profiles set ruby_balance = p_target where id = p_uid;
+    insert into public.ruby_ledger(user_id, kst_day, reason, delta, balance_after)
+    values (p_uid, (now() at time zone 'Asia/Seoul')::date,
+            case when p_target > v_old then 'grant:contract-test:' else 'spend:contract-test:' end || gen_random_uuid(),
+            p_target - v_old, p_target);
+  end if;
+end $f$;
+""")
+    admin(f"""
+insert into public.memberships(team_id, user_id) select '{TEAM}', '{F}'
+ where not exists (select 1 from public.memberships where user_id = '{F}');
+delete from public.gomoku_matches;
+update public.work_sessions set ended_at = now() where ended_at is null;
+insert into public.work_sessions(team_id, user_id, started_at)
+select m.team_id, u, now() - interval '1 hour'
+  from unnest(array['{A}','{B}','{C}','{D}','{F}']::uuid[]) u
+  join lateral (select team_id from public.memberships where user_id = u limit 1) m on true;
+update public.profiles set app_build = 79, focus_mode = false where id in ('{A}','{B}','{C}','{D}','{E}');
+update public.profiles set app_build = 76, focus_mode = false where id = '{F}';
+update public.profiles set character = 'aing' where id = '{A}';
+update public.profiles set character = 'jellyfish', avatar_url = 'https://example.invalid/avatar-b.png' where id = '{B}';
+update public.profiles set character = 'fox' where id = '{C}';
+""")
+    for u in (A, B, C, D, E, F):
+        admin(set_ruby_sql(u, 100))
+
+    # C 와 D 는 대국 중(로비 in_match)
+    pair(C, D, 3)
+
+    # ── 신청 게이트 (A 가 부른다, 부작용은 rollback) ───────────────────────────────────────────
+    call(A, f"public.gomoku_challenge(1, '{A}', 3)", name="gomoku_challenge__invalid", note="자기 자신")
+    call(A, f"public.gomoku_challenge(0, '{B}', 3)", name="gomoku_challenge__unsupported_client", note="p_protocol 0")
+    call(A, f"public.gomoku_challenge(1, '{B}', 3)", name="gomoku_challenge__blackout",
+         setup="create or replace function public.poke_blackout_active(p_at timestamptz default now()) "
+               "returns boolean language sql stable as $x$ select true $x$;",
+         note="poke_blackout_active 를 트랜잭션 안에서 true 로(rollback 으로 원복)")
+    call(A, f"public.gomoku_challenge(1, '{B}', 3)", name="gomoku_challenge__not_working",
+         setup=f"update public.work_sessions set ended_at = now() where user_id = '{A}' and ended_at is null;")
+    call(A, f"public.gomoku_challenge(1, '{E}', 3)", name="gomoku_challenge__target_not_working")
+    call(A, f"public.gomoku_challenge(1, '{B}', 3)", name="gomoku_challenge__target_focused",
+         setup=f"update public.profiles set focus_mode = true where id = '{B}';")
+    call(A, f"public.gomoku_challenge(1, '{F}', 3)", name="gomoku_challenge__target_outdated", note="F build 76")
+    call(C, f"public.gomoku_challenge(1, '{B}', 3)", name="gomoku_challenge__busy", note="C 는 D 와 대국 중")
+    call(A, f"public.gomoku_challenge(1, '{C}', 3)", name="gomoku_challenge__target_busy")
+    call(A, f"public.gomoku_challenge(1, '{B}', 10)", name="gomoku_challenge__insufficient",
+         setup=set_ruby_sql(A, 4), note="A 잔액 4, 판돈 10")
+    r = call(A, f"public.gomoku_challenge(1, '{B}', 5)", name="gomoku_challenge__ok", end="commit")
+    m1 = r["match_id"]
+    call(A, f"public.gomoku_challenge(1, '{B}', 3)", name="gomoku_challenge__already_pending")
+
+    # ── 취소 ──────────────────────────────────────────────────────────────────────────────
+    r = call(B, f"public.gomoku_challenge(1, '{A}', 3)", end="commit")
+    mb = r["match_id"]
+    call(B, f"public.gomoku_cancel(1, '{mb}')", name="gomoku_cancel__ok", end="commit")
+    call(B, f"public.gomoku_cancel(1, '{mb}')", name="gomoku_cancel__not_pending")
+
+    # ── 응답 (M1: A→B 판돈 5) ───────────────────────────────────────────────────────────────
+    r = call(F, f"public.gomoku_challenge(1, '{B}', 3)", end="commit")
+    mf = r["match_id"]
+    call(B, f"public.gomoku_respond(1, '{mf}', false)", name="gomoku_respond__decline_ok", end="commit")
+    call(B, f"public.gomoku_respond(1, '{m1}', true)", name="gomoku_respond__expired",
+         setup=f"update public.gomoku_matches set invite_expires_at = clock_timestamp() - interval '1 second' where id = '{m1}';")
+    call(B, f"public.gomoku_respond(1, '{m1}', true)", name="gomoku_respond__insufficient_me", setup=set_ruby_sql(B, 2))
+    call(B, f"public.gomoku_respond(1, '{m1}', true)", name="gomoku_respond__insufficient_challenger",
+         setup=set_ruby_sql(A, 2))
+    call(B, f"public.gomoku_respond(1, '{m1}', true)", name="gomoku_respond__target_not_working",
+         setup=f"update public.work_sessions set ended_at = now() where user_id = '{A}' and ended_at is null;")
+    r = call(B, f"public.gomoku_respond(1, '{m1}', true)", name="gomoku_respond__accept_ok", end="commit")
+    blk, wht = r["match"]["black"], r["match"]["white"]
+    role = {blk: "black", wht: "white"}
+    call(A, "public.gomoku_lobby(1)", name="gomoku_lobby__ok_in_match")
+
+    # ── M1 흐름: 두 사람의 스토어가 실제로 낼 요청 순서 그대로 뜬다 ──────────────────────────────
+    # 수락자(B)는 respond 응답으로 판을 연다. 신청자(A)는 신호 → 인박스(active_match_id) → state since 0.
+    flow.append(OrderedDict(perspective=role[B], kind="respond", file="gomoku_respond__accept_ok"))
+    call(A, "public.gomoku_inbox(1)", name="gomoku_inbox__ok_active")
+    flow.append(OrderedDict(perspective=role[A], kind="inbox", file="gomoku_inbox__ok_active"))
+    call(A, f"public.gomoku_state(1, '{m1}', 0)", name="flow_m1_challenger_state_since0")
+    flow.append(OrderedDict(perspective=role[A], kind="state", since=0, file="flow_m1_challenger_state_since0"))
+    points = [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1), (3, 0), (3, 1), (4, 0)]
+    for k, (x, y) in enumerate(points):
+        actor = blk if k % 2 == 0 else wht
+        other = wht if actor == blk else blk
+        if k == 2:
+            # 두 번째 맥 시나리오: 흑의 한 기기는 count 0 에 머물러 있다가 둔다 → stale(since 0) → state since 2
+            move(blk, m1, 0, 5, 5, name="gomoku_move__stale", end="rollback")
+            call(blk, f"public.gomoku_state(1, '{m1}', 2)", name="gomoku_state__ok_black_since2_count2")
+            # 백의 한 기기는 count 1(자기 차례)로 알고 있다가 둔다 → not_your_turn(since 1) → state since 2
+            move(wht, m1, 1, 5, 5, name="gomoku_move__not_your_turn", end="rollback")
+            call(wht, f"public.gomoku_state(1, '{m1}', 2)", name="gomoku_state__ok_white_since2_count2")
+        if k == 4:
+            call(blk, f"public.gomoku_state(1, '{m1}', 0)", name="gomoku_state__ok_since0")
+            call(wht, f"public.gomoku_state(1, '{m1}', 2)", name="gomoku_state__ok_since2")
+            move(blk, m1, 4, 0, 0, name="gomoku_move__invalid_occupied", end="rollback")
+            call(blk, f"public.gomoku_state(1, '{m1}', 4)", name="gomoku_state__ok_black_since4_count4")
+        name = "gomoku_move__win_black_five" if k == 8 else f"flow_m1_k{k}_{role[actor]}_move"
+        if k == 0:
+            name = "gomoku_move__ok_black_first"
+        if k == 1:
+            name = "gomoku_move__ok_white"
+        r = move(actor, m1, k, x, y, name=name)
+        assert r["status"] == "ok", r
+        flow.append(OrderedDict(perspective=role[actor], kind="place", expected=k, x=x, y=y, file=name))
+        sname = f"flow_m1_k{k}_{role[other]}_state_since{k}"
+        call(other, f"public.gomoku_state(1, '{m1}', {k})", name=sname)
+        flow.append(OrderedDict(perspective=role[other], kind="state", since=k, file=sname))
+    call(blk, "public.gomoku_lobby(1)", name="gomoku_lobby__ok_after_win_black")
+    call(wht, "public.gomoku_lobby(1)", name="gomoku_lobby__ok_after_win_white")
+    call(wht, f"public.gomoku_state(1, '{m1}', 0)", name="gomoku_state__finished_loser_since0")
+    # 백의 한 기기가 판이 끝난 줄 모르고(count 8) 둔다 → not_active(since 8) → state since 9
+    move(wht, m1, 8, 5, 5, name="gomoku_move__not_active", end="rollback")
+    call(wht, f"public.gomoku_state(1, '{m1}', 9)", name="gomoku_state__finished_since9")
+    call(C, f"public.gomoku_state(1, '{m1}', 0)", name="gomoku_state__not_found", note="비참가자")
+
+    # ── 금수 · 기권 (M2 판돈 3) ─────────────────────────────────────────────────────────────
+    admin(set_ruby_sql(A, 100)); admin(set_ruby_sql(B, 100))
+    m2, blk, wht = pair(A, B, 3)
+    seq = 0
+    for (who, x, y) in [(blk, 7, 8), (wht, 0, 0), (blk, 7, 9), (wht, 0, 2), (blk, 9, 7), (wht, 0, 4), (blk, 10, 7), (wht, 0, 6)]:
+        r = move(who, m2, seq, x, y)
+        assert r["status"] == "ok", r
+        seq += 1
+    call(blk, f"public.gomoku_state(1, '{m2}', 0)", name="gomoku_state__ok_before_forbidden_black")
+    move(blk, m2, 8, 7, 7, name="gomoku_move__forbidden_double_three", end="rollback")
+    call(blk, f"public.gomoku_resign(1, '{m2}')", name="gomoku_resign__ok", end="commit", note="흑 기권")
+
+    # ── 시간 초과 (M3 판돈 10) ──────────────────────────────────────────────────────────────
+    admin(set_ruby_sql(A, 100)); admin(set_ruby_sql(B, 100))
+    m3, blk, wht = pair(A, B, 10)
+    move(blk, m3, 0, 7, 7)
+    call(wht, f"public.gomoku_state(1, '{m3}', 0)", name="gomoku_state__ok_white_to_move")
+    move(wht, m3, 1, 8, 8, name="gomoku_move__timeout",
+         setup=f"update public.gomoku_matches set turn_started_at = clock_timestamp() - interval '40 seconds' where id = '{m3}';")
+
+    # 기권하려는데 이미 시간이 넘은 판(M4 판돈 3, 흑 차례에서 흑이 기권)
+    admin(set_ruby_sql(A, 100)); admin(set_ruby_sql(B, 100))
+    m4, blk, wht = pair(A, B, 3)
+    call(blk, f"public.gomoku_state(1, '{m4}', 0)", name="gomoku_state__ok_black_to_move_empty")
+    call(blk, f"public.gomoku_resign(1, '{m4}')", name="gomoku_resign__timeout", end="commit",
+         setup=f"update public.gomoku_matches set turn_started_at = clock_timestamp() - interval '35 seconds' where id = '{m4}';")
+
+    # ── 흑 자동 패스 · 판 가득 무승부 (M5 판돈 5) ───────────────────────────────────────────
+    admin(set_ruby_sql(A, 100)); admin(set_ruby_sql(B, 100))
+    m5, blk, wht = pair(A, B, 5)
+    admin(f"""
+update public.gomoku_matches
+   set board = (select string_agg(case when g.i in (2 * 15 + 3, 2) then '.'
+                                       when g.i / 15 = 2 and g.i % 15 in (0, 1, 2, 4, 5, 6) then 'b'
+                                       when ((g.i % 15) + 2 * (g.i / 15)) % 4 < 2 then 'b' else 'w' end, '' order by g.i)
+                  from generate_series(0, 224) g(i)),
+       move_count = 223, turn = 'white', turn_started_at = clock_timestamp()
+ where id = '{m5}';
+""")
+    call(wht, f"public.gomoku_state(1, '{m5}', 0)", name="gomoku_state__ok_before_pass_white")
+    call(blk, f"public.gomoku_state(1, '{m5}', 0)", name="gomoku_state__ok_before_pass_black")
+    move(wht, m5, 223, 2, 0, name="gomoku_move__ok_black_passed")
+    call(blk, f"public.gomoku_state(1, '{m5}', 0)", name="gomoku_state__ok_pass_since0")
+    call(blk, f"public.gomoku_state(1, '{m5}', 223)", name="gomoku_state__ok_pass_since223")
+    move(wht, m5, 225, 3, 2, name="gomoku_move__board_full_draw")
+
+    # ── 받은함: B 에게 받은 신청 둘(A·F) + 보낸 신청(B→A) + 최근 끝난 판(M5 무승부) ─────────────
+    admin(set_ruby_sql(B, 100))
+    call(A, f"public.gomoku_challenge(1, '{B}', 3)", end="commit")
+    call(F, f"public.gomoku_challenge(1, '{B}', 10)", end="commit")
+    call(B, f"public.gomoku_challenge(1, '{A}', 5)", end="commit")
+    call(B, "public.gomoku_inbox(1)", name="gomoku_inbox__ok")
+    call(A, "public.gomoku_lobby(1)", name="gomoku_lobby__ok")
+
+    ids = OrderedDict(A=A, B=B, C=C, D=D, E=E, F=F, m1=m1, m2=m2, m3=m3, m4=m4, m5=m5)
+    with open(os.path.join(OUT, "_manifest.json"), "w", encoding="utf-8") as fh:
+        json.dump(OrderedDict(users=ids, flow_m1=flow, fixtures=manifest), fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+    print("wrote", len(manifest), "fixtures")
+
+
+if __name__ == "__main__":
+    main()

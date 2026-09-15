@@ -380,6 +380,50 @@ func 신청을_보내기_전에_나간_받은함이_늦게_와도_방금_보낸_
     #expect(gomoku.notice == "신청을 보냈어요", "보낸 신청을 거절로 안내했다: \(gomoku.notice ?? "nil")")
 }
 
+/// 재검증이 찾은 회귀(zv_P1·zv_P2): 보낸 신청이 있는 채로 **다른** 받은 신청을 수락하면 서버가 내 보낸 신청을 수락 트랜잭션에서
+/// 취소한다(SV2). 로컬 카드가 남으면 다음 받은함에서 '상대가 신청을 받지 않았어요'가, 60초 뒤엔 '응답하지 않았어요'가 대국 중에 뜬다.
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 다른_신청을_수락하면_내_보낸_신청을_조용히_거두고_대국_중에_거절_만료_안내를_띄우지_않는다() async {
+    let (_, gomoku, _) = sfMakeStore("accept-other") { rpc, _, _ in
+        switch rpc {
+        case "gomoku_respond":
+            var body = sfState(id: sfMatchB, moveCount: 0, turn: "black")
+            body["state"] = sfState(id: sfMatchB, moveCount: 0, turn: "black")
+            return .init(body: sfJSON(body))
+        case "gomoku_state":
+            return .init(body: sfJSON(sfState(id: sfMatchB, moveCount: 0, turn: "black")))
+        case "gomoku_inbox":
+            return .init(body: sfJSON(["status": "ok", "incoming": [], "outgoing": NSNull(),
+                                       "active_match_id": sfMatchB, "server_now_ms": sfNowMs()]))
+        default:
+            return nil
+        }
+    }
+    _ = sfWire(gomoku)
+    let mine = GomokuInvite(id: sfMatchA, peer: sfPeer, stake: 5, expiresAt: Date().addingTimeInterval(50))
+    let received = GomokuInvite(id: sfMatchB, peer: sfPeer, stake: 5, expiresAt: Date().addingTimeInterval(50))
+    let another = GomokuInvite(id: "cccccccc-2222-3333-4444-555555555555", peer: sfPeer, stake: 3,
+                               expiresAt: Date().addingTimeInterval(50))
+    gomoku.outgoing = mine
+    gomoku.incoming = [received, another]
+
+    await gomoku.respond(inviteID: sfMatchB, accept: true)
+    #expect(gomoku.match?.id == sfMatchB && gomoku.phase == .playing)
+    #expect(gomoku.outgoing == nil, "서버가 이미 취소한 보낸 신청 카드가 남았다")
+    #expect(gomoku.incoming.isEmpty, "서버가 이미 취소한 다른 받은 신청이 남았다")
+    #expect(gomoku.notice == nil)
+
+    // 수락 전에 나간 받은함이 옛 보낸 신청을 되살렸다가, 다음 받은함에서 사라져도 거절 안내는 없다(대국 중).
+    gomoku.outgoing = mine
+    await gomoku.applyInbox(sfDecode(GomokuInboxResponse.self, [
+        "status": "ok", "incoming": [], "outgoing": NSNull(), "active_match_id": sfMatchB, "server_now_ms": sfNowMs()
+    ]))
+    #expect(gomoku.notice != GomokuNoticeText.inviteDeclined, "내가 다른 판을 시작해 거둔 신청을 상대 거절로 안내했다")
+    gomoku.pruneExpiredInvites(now: Date().addingTimeInterval(61))
+    #expect(gomoku.notice != GomokuNoticeText.inviteTimedOut, "대국 중에 옛 보낸 신청의 만료 안내가 떴다")
+}
+
 // MARK: - F1 · F2 (계약 검토 set #4)
 
 @Test

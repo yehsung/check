@@ -492,7 +492,10 @@ final class GomokuStore {
             .map { fresh in Self.steadyInvite(fresh, previous: previousOutgoing) }
         if sent == nil, predatesOutgoing { sent = previousOutgoing }
         if outgoing != sent { outgoing = sent }
-        if let gone = previousOutgoing, sent?.id != gone.id, gone.id != active, !predatesOutgoing {
+        // 진행 중 대국이 있으면 거절 안내를 하지 않는다 — 내가 다른 신청을 수락해 서버가 보낸 신청을 거둔 것이지 상대가 거절한 게 아니다
+        // (수락 전에 나간 받은함이 옛 보낸 신청을 되살렸다가 다음 받은함에서 사라지는 경로 포함).
+        let inMatch = active != nil || match.map { !$0.isFinished } == true
+        if let gone = previousOutgoing, sent?.id != gone.id, gone.id != active, !predatesOutgoing, !inMatch {
             // 보낸 신청이 받은함에서 사라졌고 판으로 이어지지도 않았다 = 거절·취소(상대가 다른 대국을 시작해 서버가
             // 거둔 경우 포함). 만료 시각이 지났으면 만료 안내와 같은 말을 한다(두 안내가 겹치지 않게).
             setNotice(gone.expiresAt > now ? GomokuNoticeText.inviteDeclined : GomokuNoticeText.inviteTimedOut)
@@ -841,6 +844,10 @@ final class GomokuStore {
             case .ok:
                 removeIncoming(id)
                 guard accept else { break }
+                // 수락하는 순간 서버가 두 참가자의 **다른 대기 신청을 전부 취소한다**(보낸 것·받은 것). 로컬 카드를 그대로 두면
+                // 다음 받은함에서 '상대가 신청을 받지 않았어요'가 뜨고, 남은 보낸 신청 카드는 60초 뒤 '응답하지 않았어요'를 띄운다.
+                if outgoing != nil { outgoing = nil }
+                if !incoming.isEmpty { incoming = [] }
                 if let state = response.state {
                     applyState(state)
                 } else {

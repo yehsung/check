@@ -6,25 +6,25 @@
     "D": "f46dc1d0-4dff-416e-81f0-91d4fb413def",
     "E": "785b5732-75fe-4a71-931a-2e3f06e63505",
     "F": "6a6a6a6a-0000-4000-8000-00000000000f",
-    "m1": "c19a9b09-c85c-4ede-af03-4b8886270227",
-    "m2": "f6a0ea2a-7f2d-405b-8d69-ee15817934d6",
-    "m3": "1e57f5b6-8bb3-4817-a825-9f55a85700de",
-    "m4": "6845ab28-b137-43a6-aa25-8a8605e65789",
-    "m5": "bd80de54-4bbd-494c-ad7d-8387f231fc20"
+    "m1": "7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc",
+    "m2": "82216cde-011c-47b5-9707-42a98a3fb455",
+    "m3": "18202c2f-0505-4b0d-b50f-85c5288ed049",
+    "m4": "e6c642ab-ba42-4351-92e9-796f9b909739",
+    "m5": "6e795c26-d006-4487-88aa-ee0f6f915ddb"
   },
   "flow_m1": [
     {
-      "perspective": "black",
+      "perspective": "white",
       "kind": "respond",
       "file": "gomoku_respond__accept_ok"
     },
     {
-      "perspective": "white",
+      "perspective": "black",
       "kind": "inbox",
       "file": "gomoku_inbox__ok_active"
     },
     {
-      "perspective": "white",
+      "perspective": "black",
       "kind": "state",
       "since": 0,
       "file": "flow_m1_challenger_state_since0"
@@ -243,56 +243,56 @@
     },
     "gomoku_cancel__ok": {
       "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_cancel(1, '07d5907a-cf77-4535-b702-f4afd6ba055e')",
+      "rpc": "public.gomoku_cancel(1, 'b7140e55-90c6-4a42-991b-12a276fa6390')",
       "setup": null,
       "end": "commit",
       "note": null
     },
     "gomoku_cancel__not_pending": {
       "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_cancel(1, '07d5907a-cf77-4535-b702-f4afd6ba055e')",
+      "rpc": "public.gomoku_cancel(1, 'b7140e55-90c6-4a42-991b-12a276fa6390')",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_respond__decline_ok": {
       "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_respond(1, '04da01dd-d7b3-4cbe-bd0c-01b24429faea', false)",
+      "rpc": "public.gomoku_respond(1, '236df6be-2da2-4370-827d-e3a610b185c2', false)",
       "setup": null,
       "end": "commit",
       "note": null
     },
     "gomoku_respond__expired": {
       "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_respond(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', true)",
-      "setup": "update public.gomoku_matches set invite_expires_at = clock_timestamp() - interval '1 second' where id = 'c19a9b09-c85c-4ede-af03-4b8886270227';",
+      "rpc": "public.gomoku_respond(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', true)",
+      "setup": "update public.gomoku_matches set invite_expires_at = clock_timestamp() - interval '1 second' where id = '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc';",
       "end": "rollback",
       "note": null
     },
     "gomoku_respond__insufficient_me": {
       "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_respond(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', true)",
+      "rpc": "public.gomoku_respond(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', true)",
       "setup": "select contract_t.set_ruby('3e240c02-8972-478e-a674-014f498a641b', 2);",
       "end": "rollback",
       "note": null
     },
     "gomoku_respond__insufficient_challenger": {
       "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_respond(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', true)",
+      "rpc": "public.gomoku_respond(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', true)",
       "setup": "select contract_t.set_ruby('267a3495-643c-40cc-b1a7-14967166eae1', 2);",
       "end": "rollback",
       "note": null
     },
     "gomoku_respond__target_not_working": {
       "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_respond(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', true)",
+      "rpc": "public.gomoku_respond(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', true)",
       "setup": "update public.work_sessions set ended_at = now() where user_id = '267a3495-643c-40cc-b1a7-14967166eae1' and ended_at is null;",
       "end": "rollback",
       "note": null
     },
     "gomoku_respond__accept_ok": {
       "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_respond(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', true)",
+      "rpc": "public.gomoku_respond(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', true)",
       "setup": null,
       "end": "commit",
       "note": null
@@ -313,322 +313,322 @@
     },
     "flow_m1_challenger_state_since0": {
       "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 0)",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 0)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_move__ok_black_first": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 0, 0, 0)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 0, 0, 0)",
       "setup": null,
       "end": "commit",
       "note": null
     },
     "flow_m1_k0_white_state_since0": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 0)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 0)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_move__ok_white": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 1, 0, 1)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 1, 0, 1)",
       "setup": null,
       "end": "commit",
       "note": null
     },
     "flow_m1_k1_black_state_since1": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 1)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 1)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_move__stale": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 0, 5, 5)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 0, 5, 5)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_state__ok_black_since2_count2": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 2)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 2)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_move__not_your_turn": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 1, 5, 5)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 1, 5, 5)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_state__ok_white_since2_count2": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 2)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 2)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "flow_m1_k2_black_move": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 2, 1, 0)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 2, 1, 0)",
       "setup": null,
       "end": "commit",
       "note": null
     },
     "flow_m1_k2_white_state_since2": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 2)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 2)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "flow_m1_k3_white_move": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 3, 1, 1)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 3, 1, 1)",
       "setup": null,
       "end": "commit",
       "note": null
     },
     "flow_m1_k3_black_state_since3": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 3)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 3)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_state__ok_since0": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 0)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 0)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_state__ok_since2": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 2)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 2)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_move__invalid_occupied": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 4, 0, 0)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 4, 0, 0)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_state__ok_black_since4_count4": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 4)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 4)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "flow_m1_k4_black_move": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 4, 2, 0)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 4, 2, 0)",
       "setup": null,
       "end": "commit",
       "note": null
     },
     "flow_m1_k4_white_state_since4": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 4)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 4)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "flow_m1_k5_white_move": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 5, 2, 1)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 5, 2, 1)",
       "setup": null,
       "end": "commit",
       "note": null
     },
     "flow_m1_k5_black_state_since5": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 5)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 5)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "flow_m1_k6_black_move": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 6, 3, 0)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 6, 3, 0)",
       "setup": null,
       "end": "commit",
       "note": null
     },
     "flow_m1_k6_white_state_since6": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 6)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 6)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "flow_m1_k7_white_move": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 7, 3, 1)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 7, 3, 1)",
       "setup": null,
       "end": "commit",
       "note": null
     },
     "flow_m1_k7_black_state_since7": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 7)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 7)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_move__win_black_five": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 8, 4, 0)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 8, 4, 0)",
       "setup": null,
       "end": "commit",
       "note": null
     },
     "flow_m1_k8_white_state_since8": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 8)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 8)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_lobby__ok_after_win_black": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
       "rpc": "public.gomoku_lobby(1)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_lobby__ok_after_win_white": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
       "rpc": "public.gomoku_lobby(1)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_state__finished_loser_since0": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 0)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 0)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_move__not_active": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_move(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 8, 5, 5)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_move(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 8, 5, 5)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_state__finished_since9": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 9)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 9)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_state__not_found": {
       "caller": "544e3837-f01c-4560-b82f-4d44c269f044",
-      "rpc": "public.gomoku_state(1, 'c19a9b09-c85c-4ede-af03-4b8886270227', 0)",
+      "rpc": "public.gomoku_state(1, '7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc', 0)",
       "setup": null,
       "end": "rollback",
       "note": "비참가자"
     },
     "gomoku_state__ok_before_forbidden_black": {
       "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_state(1, 'f6a0ea2a-7f2d-405b-8d69-ee15817934d6', 0)",
+      "rpc": "public.gomoku_state(1, '82216cde-011c-47b5-9707-42a98a3fb455', 0)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_move__forbidden_double_three": {
       "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_move(1, 'f6a0ea2a-7f2d-405b-8d69-ee15817934d6', 8, 7, 7)",
+      "rpc": "public.gomoku_move(1, '82216cde-011c-47b5-9707-42a98a3fb455', 8, 7, 7)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_resign__ok": {
       "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_resign(1, 'f6a0ea2a-7f2d-405b-8d69-ee15817934d6')",
+      "rpc": "public.gomoku_resign(1, '82216cde-011c-47b5-9707-42a98a3fb455')",
       "setup": null,
       "end": "commit",
       "note": "흑 기권"
     },
     "gomoku_state__ok_white_to_move": {
       "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_state(1, '1e57f5b6-8bb3-4817-a825-9f55a85700de', 0)",
+      "rpc": "public.gomoku_state(1, '18202c2f-0505-4b0d-b50f-85c5288ed049', 0)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_move__timeout": {
       "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_move(1, '1e57f5b6-8bb3-4817-a825-9f55a85700de', 1, 8, 8)",
-      "setup": "update public.gomoku_matches set turn_started_at = clock_timestamp() - interval '40 seconds' where id = '1e57f5b6-8bb3-4817-a825-9f55a85700de';",
+      "rpc": "public.gomoku_move(1, '18202c2f-0505-4b0d-b50f-85c5288ed049', 1, 8, 8)",
+      "setup": "update public.gomoku_matches set turn_started_at = clock_timestamp() - interval '40 seconds' where id = '18202c2f-0505-4b0d-b50f-85c5288ed049';",
       "end": "commit",
       "note": null
     },
     "gomoku_state__ok_black_to_move_empty": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_state(1, '6845ab28-b137-43a6-aa25-8a8605e65789', 0)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_state(1, 'e6c642ab-ba42-4351-92e9-796f9b909739', 0)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_resign__timeout": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_resign(1, '6845ab28-b137-43a6-aa25-8a8605e65789')",
-      "setup": "update public.gomoku_matches set turn_started_at = clock_timestamp() - interval '35 seconds' where id = '6845ab28-b137-43a6-aa25-8a8605e65789';",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_resign(1, 'e6c642ab-ba42-4351-92e9-796f9b909739')",
+      "setup": "update public.gomoku_matches set turn_started_at = clock_timestamp() - interval '35 seconds' where id = 'e6c642ab-ba42-4351-92e9-796f9b909739';",
       "end": "commit",
       "note": null
     },
     "gomoku_state__ok_before_pass_white": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_state(1, 'bd80de54-4bbd-494c-ad7d-8387f231fc20', 0)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_state(1, '6e795c26-d006-4487-88aa-ee0f6f915ddb', 0)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_state__ok_before_pass_black": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_state(1, 'bd80de54-4bbd-494c-ad7d-8387f231fc20', 0)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_state(1, '6e795c26-d006-4487-88aa-ee0f6f915ddb', 0)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_move__ok_black_passed": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_move(1, 'bd80de54-4bbd-494c-ad7d-8387f231fc20', 223, 2, 0)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_move(1, '6e795c26-d006-4487-88aa-ee0f6f915ddb', 223, 2, 0)",
       "setup": null,
       "end": "commit",
       "note": null
     },
     "gomoku_state__ok_pass_since0": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_state(1, 'bd80de54-4bbd-494c-ad7d-8387f231fc20', 0)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_state(1, '6e795c26-d006-4487-88aa-ee0f6f915ddb', 0)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_state__ok_pass_since223": {
-      "caller": "3e240c02-8972-478e-a674-014f498a641b",
-      "rpc": "public.gomoku_state(1, 'bd80de54-4bbd-494c-ad7d-8387f231fc20', 223)",
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "rpc": "public.gomoku_state(1, '6e795c26-d006-4487-88aa-ee0f6f915ddb', 223)",
       "setup": null,
       "end": "rollback",
       "note": null
     },
     "gomoku_move__board_full_draw": {
-      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "rpc": "public.gomoku_move(1, 'bd80de54-4bbd-494c-ad7d-8387f231fc20', 225, 3, 2)",
+      "caller": "3e240c02-8972-478e-a674-014f498a641b",
+      "rpc": "public.gomoku_move(1, '6e795c26-d006-4487-88aa-ee0f6f915ddb', 225, 3, 2)",
       "setup": null,
       "end": "commit",
       "note": null

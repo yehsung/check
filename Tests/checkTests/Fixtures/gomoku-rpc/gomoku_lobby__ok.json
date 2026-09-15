@@ -5,7 +5,7 @@
     "losses": 2,
     "ruby_balance": 100,
     "active_match_id": null,
-    "outgoing_match_id": "f54ee3a2-9384-4833-8546-068d93ac9acf"
+    "outgoing_match_id": "4d847e6d-3af0-46cd-ae20-4077070d2d28"
   },
   "users": [
     {
@@ -62,7 +62,7 @@
   "status": "ok",
   "ruby_balance": 100,
   "turn_seconds": 30,
-  "server_now_ms": 1789497508449,
+  "server_now_ms": 1789500072812,
   "invite_ttl_seconds": 60,
   "turn_grace_seconds": 2
 }

@@ -543,8 +543,18 @@ func 실서버_stale_은_since_0_응답으로_판을_맞추고_since_2_로_다�
         "gomoku_move": [try fixtureText("gomoku_move__stale")],
         "gomoku_state": [try fixtureText("gomoku_state__ok_black_since2_count2")]
     ])
-    try seed(gomoku, "gomoku_respond__accept_ok")     // 이 기기는 수락 직후(count 0) 화면에 머물러 있다
-    #expect(gomoku.match?.myColor == .black && gomoku.match?.moveCount == 0)
+    // 이 기기는 같은 판의 count 0 화면에 머물러 있다. 서버가 수락 때 흑백을 **무작위로** 정하므로 픽스처를 새로 뜨면
+    // 수락 응답의 호출자가 흑일 수도 백일 수도 있다 — 색을 못 박지 말고 stale 응답의 호출자와 같은 시점의 count 0 응답을 고른다.
+    let flow = try #require(try contractManifest()["flow_m1"] as? [[String: Any]])
+    let seedFile = try #require(flow.first { entry in
+        guard entry["perspective"] as? String == facts.myColor,
+              ["respond", "state"].contains(entry["kind"] as? String ?? ""),
+              let file = entry["file"] as? String,
+              let seedFacts = try? ServerFacts(fixture: file) else { return false }
+        return seedFacts.matchID == facts.matchID && seedFacts.moveCount == 0
+    }?["file"] as? String, "stale 호출자(\(facts.myColor))의 count 0 응답이 흐름에 없다")
+    try seed(gomoku, seedFile)
+    #expect(gomoku.match?.myColor.rawValue == facts.myColor && gomoku.match?.moveCount == 0)
     await gomoku.place(GomokuPoint(x: 5, y: 5)!)
     #expect(lastBody(host, "gomoku_move")["p_expected_seq"] as? Int == 0)
     #expect(lastBody(host, "gomoku_state")["p_since_seq"] as? Int == 2)

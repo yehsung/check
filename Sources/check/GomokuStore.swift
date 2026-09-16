@@ -1092,6 +1092,9 @@ final class GomokuStore {
         setNotice(nil)
         let generation = resetGeneration
         defer { if generation == resetGeneration { isBusy = false } }
+        // 채팅 세대 캡처는 조회 경로(refreshMatch)와 **같은 시점**이다 — 요청을 띄우기 직전.
+        // 이 응답이 싣고 오는 state 묶음의 채팅 부분도, 그 사이 음소거를 토글했으면 앞 판정이라 버려야 한다.
+        let requestChatGeneration = chatGeneration
         guard let result = await perform({
             try await $0.gomokuRespond(accessToken: $1, matchID: id, accept: accept)
         }) else { return }
@@ -1115,7 +1118,7 @@ final class GomokuStore {
                 if outgoing != nil { outgoing = nil }
                 if !incoming.isEmpty { incoming = [] }
                 if let state = response.state {
-                    applyState(state)
+                    applyState(state, chatGeneration: requestChatGeneration)
                 } else {
                     await refreshMatch(id: id)
                 }
@@ -1150,6 +1153,9 @@ final class GomokuStore {
         setNotice(nil)
         let generation = resetGeneration
         defer { if generation == resetGeneration { isBusy = false } }
+        // 세대 캡처는 조회 경로와 **같은 시점**이다(요청 직전). "껐는데 곧바로 돌을 둔다"는 흔한 순서에서
+        // 이 착수의 응답이 옛 my_muted 를 싣고 뒤늦게 도착한다 — 채팅은 버리고 착수 결과는 받아야 한다.
+        let requestChatGeneration = chatGeneration
         guard let result = await perform({
             try await $0.gomokuMove(accessToken: $1, matchID: id, expectedSeq: expected, x: point.x, y: point.y)
         }) else { return }
@@ -1174,9 +1180,12 @@ final class GomokuStore {
             default: needsRefresh = false
             }
             if let state = response.state {
-                if applyState(state, requestedSince: expected, blackPassedHint: response.blackPassed) == .needsFull {
-                    needsRefresh = true
-                }
+                // 세대는 **채팅 부분만** 거른다 — 판·기록 수·차례는 세대와 무관하게 받는다(applyChat 이 갈라 놓았다).
+                let outcome = applyState(
+                    state, requestedSince: expected, chatGeneration: requestChatGeneration,
+                    blackPassedHint: response.blackPassed
+                )
+                if outcome == .needsFull { needsRefresh = true }
             } else if response.status == .ok || response.status == .timeout || response.status == .autoPlaced {
                 // 상태를 안 실어 준 성공·시간 경과는 판을 다시 읽어야 한다(자동 착수는 내 수 말고 **남의 수까지** 바꾼다).
                 needsRefresh = true
@@ -1192,6 +1201,8 @@ final class GomokuStore {
         setNotice(nil)
         let generation = resetGeneration
         defer { if generation == resetGeneration { isBusy = false } }
+        // 세대 캡처는 조회 경로와 **같은 시점**이다(요청 직전).
+        let requestChatGeneration = chatGeneration
         guard let result = await perform({ try await $0.gomokuResign(accessToken: $1, matchID: id) }) else { return }
         switch result {
         case .failure:
@@ -1200,7 +1211,7 @@ final class GomokuStore {
             noteServerNow(response.serverNowMs)
             applyRuby(response.rubyBalance)
             setNotice(GomokuNoticeText.resign(response.status))
-            if let state = response.state { applyState(state) }
+            if let state = response.state { applyState(state, chatGeneration: requestChatGeneration) }
             if response.status != .ok || response.state == nil { await refreshMatch(id: id) }
         }
     }
@@ -1558,12 +1569,15 @@ final class GomokuStore {
         _ payload: GomokuStatePayload, matchID id: String, requestedSince: Int, generation: Int?
     ) {
         if chatMatchID != id { clearMatchScopedState(for: id) }
-        // 이 조회가 나간 **뒤에** 음소거를 토글했다. 그 응답의 my_muted 는 방금 누른 값을 되감고 그 chat_seq 는
-        // 줄 없이 기준선만 올린다 — 값을 하나씩 고르지 말고 통째로 버린다.
-        // (세대를 안 넘긴 자리 = 쓰기 RPC 가 싣는 state 묶음·테스트의 직접 주입은 nil 이라 그냥 간다.)
+        // 이 요청이 나간 **뒤에** 음소거를 토글했다. 그 응답의 my_muted 는 방금 누른 값을 되감고 그 chat_seq 는
+        // 줄 없이 기준선만 올린다 — 값을 하나씩 고르지 말고 통째로 버린다. 버리는 것은 **채팅 부분뿐**이라
+        // 부르는 쪽의 판·착수 결과는 그대로 반영된다(조회·수락·착수·기권 네 경로가 모두 세대를 넘긴다).
+        // (nil = 세대를 안 넘긴 자리 — 테스트의 직접 주입뿐이다.)
         if let generation, generation != chatGeneration { return }
-        if let limit = payload.chatMaxLen, limit > 0, chatMaxLength != limit { chatMaxLength = limit }
         if let serverSeq = payload.chatSeq, serverSeq < chatSeq { return }
+        // 상한·상대 상태는 **두 방어(세대·역행)를 지난 뒤에만** 받는다 — 늦은 옛 응답이 서버가 올린 상한을
+        // 되돌리면 화면은 여유가 있다는데 서버만 거절한다.
+        if let limit = payload.chatMaxLen, limit > 0, chatMaxLength != limit { chatMaxLength = limit }
         if let capable = payload.chatCapable, opponentChatCapable != capable { opponentChatCapable = capable }
         // 음소거가 **뒤집혀 오면**(두 번째 맥에서 눌렀다) 서버가 보여 주는 줄의 집합이 통째로 달라진다.
         // 들고 있는 줄은 앞 판정으로 걸러진 것이라 비우고, 이 응답이 전체가 아니면 다음 한 번을 처음부터 받는다 —

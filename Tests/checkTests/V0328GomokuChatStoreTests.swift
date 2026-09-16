@@ -680,6 +680,96 @@ func 음소거를_켜면_상대_말이_사라지고_끄면_돌아온다() async 
     #expect(gomoku.chatSeq == 4)
 }
 
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 늦게_온_착수_응답은_음소거를_되감지_못하고_착수_결과는_그대로_반영된다() async throws {
+    // 쓰기 RPC 도 state 묶음을 싣는다 — "껐는데 곧바로 돌을 둔다"는 아주 흔한 순서에서, 토글보다 **먼저** 나간
+    // 착수의 응답이 옛 my_muted 를 싣고 뒤늦게 도착한다. 채팅은 버려야 하고 **판은 받아야 한다**(둘은 다른 사실이다).
+    let (_, gomoku, host) = makeChatStore("write-late-move") { rpc, _, _ in
+        switch rpc {
+        case "gomoku_move":
+            return reply(["status": "ok",
+                          "state": statePayload(turn: "white", moveCount: 1, moves: [moveRow(1, "black", 7, 7)],
+                                                chat: [chatRow(1, "약올리기"), chatRow(2, "그럼", mine: true)],
+                                                chatSeq: 2, myMuted: false)],
+                         delay: 0.6)
+        case "gomoku_chat_mute":
+            return reply(["status": "ok", "muted": true, "server_now_ms": nowMs()])
+        case "gomoku_state":
+            // 껐으니 상대 줄(1)은 서버가 걸러 낸다.
+            return reply(statePayload(turn: "white", moveCount: 1, moves: [moveRow(1, "black", 7, 7)],
+                                      chat: [chatRow(2, "그럼", mine: true)], chatSeq: 2, myMuted: true))
+        default:
+            return nil
+        }
+    }
+    gomoku.applyState(decodePayload(statePayload(
+        turn: "black", chat: [chatRow(1, "약올리기"), chatRow(2, "그럼", mine: true)], chatSeq: 2)))
+    #expect(gomoku.isMuted == false)
+
+    let pending = Task { await gomoku.place(GomokuPoint(x: 7, y: 7)!) }
+    await chatWait { GomokuStubProtocol.count(host: host, rpc: "gomoku_move") == 1 }
+    gomoku.setChatMuted(true)
+    await chatWait { !gomoku.isSendingChat }
+    #expect(gomoku.isMuted, "토글 왕복은 착수 응답을 기다리지 않는다")
+    await pending.value
+
+    #expect(gomoku.isMuted, "늦게 온 착수 응답의 옛 my_muted 가 방금 누른 토글을 되감았다")
+    #expect(gomoku.chat.map(\.seq) == [2], "껐는데 상대 줄이 늦은 착수 응답에 되살아났다")
+    // 채팅을 버린다고 착수 결과까지 버리면 방금 둔 돌이 화면에서 사라진다.
+    #expect(gomoku.match?.moveCount == 1, "늦은 응답의 채팅을 버리느라 착수 결과까지 버렸다")
+    #expect(gomoku.match?.board[GomokuPoint(x: 7, y: 7)!] == .black)
+    #expect(gomoku.match?.turn == .white)
+
+    // 배선은 소스로도 못 박는다 — 쓰기 세 경로 모두 요청 시점 세대를 함께 옮긴다(조회 경로와 같은 캡처 시점).
+    // 이름만으로는 못 찾는다: 문구 표(GomokuNoticeText)에 같은 이름의 static func respond/resign 이 **먼저** 있어
+    // 조각이 짧으면 그쪽 몸통을 읽는다. 인자까지 적어 스토어의 선언을 가리킨다.
+    let code = gomokuCollapsed(V0317ShopTests.stripped(try V0317ShopTests.source("GomokuStore.swift")))
+    for signature in ["func place(_ point: GomokuPoint)", "func respond(inviteID: String, accept: Bool)",
+                      "func resign() async"] {
+        #expect(gomokuBody(of: signature, in: code)?.contains("chatGeneration: requestChatGeneration") == true,
+                "쓰기 응답의 state 묶음이 세대 없이 들어간다: \(signature)")
+    }
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 늦게_온_기권_응답도_음소거를_되감지_못하고_판은_끝난다() async {
+    let (_, gomoku, host) = makeChatStore("write-late-resign") { rpc, _, _ in
+        switch rpc {
+        case "gomoku_resign":
+            return reply(["status": "ok",
+                          "state": statePayload(matchStatus: "finished", turn: nil, result: "white_win",
+                                                endReason: "resign",
+                                                chat: [chatRow(1, "약올리기"), chatRow(2, "그럼", mine: true)],
+                                                chatSeq: 2, myMuted: false)],
+                         delay: 0.6)
+        case "gomoku_chat_mute":
+            return reply(["status": "ok", "muted": true, "server_now_ms": nowMs()])
+        case "gomoku_state":
+            return reply(statePayload(turn: "black", chat: [chatRow(2, "그럼", mine: true)],
+                                      chatSeq: 2, myMuted: true))
+        default:
+            return nil
+        }
+    }
+    gomoku.applyState(decodePayload(statePayload(
+        turn: "black", chat: [chatRow(1, "약올리기"), chatRow(2, "그럼", mine: true)], chatSeq: 2)))
+
+    let pending = Task { await gomoku.resign() }
+    await chatWait { GomokuStubProtocol.count(host: host, rpc: "gomoku_resign") == 1 }
+    gomoku.setChatMuted(true)
+    await chatWait { !gomoku.isSendingChat }
+    await pending.value
+
+    #expect(gomoku.isMuted, "늦게 온 기권 응답의 옛 my_muted 가 방금 누른 토글을 되감았다")
+    #expect(gomoku.chat.map(\.seq) == [2], "껐는데 상대 줄이 늦은 기권 응답에 되살아났다")
+    // 끝남은 되돌릴 수 없는 사실이다 — 채팅과 무관하게 받는다(결과 화면이 안 서면 루비·전적을 못 본다).
+    #expect(gomoku.match?.isFinished == true, "채팅을 버리느라 기권 결과까지 버렸다")
+    #expect(gomoku.match?.outcome == .lost)
+    #expect(gomoku.phase == .result)
+}
+
 // MARK: - 5. 판이 바뀌면 비운다
 
 @MainActor

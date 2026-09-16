@@ -725,7 +725,7 @@ func 늦게_온_착수_응답은_음소거를_되감지_못하고_착수_결과�
     // 이름만으로는 못 찾는다: 문구 표(GomokuNoticeText)에 같은 이름의 static func respond/resign 이 **먼저** 있어
     // 조각이 짧으면 그쪽 몸통을 읽는다. 인자까지 적어 스토어의 선언을 가리킨다.
     let code = gomokuCollapsed(V0317ShopTests.stripped(try V0317ShopTests.source("GomokuStore.swift")))
-    for signature in ["func place(_ point: GomokuPoint)", "func respond(inviteID: String, accept: Bool)",
+    for signature in ["func place(_ point: GomokuPoint, seen: GomokuSeenTurn? = nil)", "func respond(inviteID: String, accept: Bool)",
                       "func resign() async"] {
         #expect(gomokuBody(of: signature, in: code)?.contains("chatGeneration: requestChatGeneration") == true,
                 "쓰기 응답의 state 묶음이 세대 없이 들어간다: \(signature)")

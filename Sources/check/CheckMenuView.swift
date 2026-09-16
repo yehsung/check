@@ -57,6 +57,8 @@ struct CheckMenuView: View {
         case longSession
         /// 받은 오목 대결 신청(v0.3.27). 60초면 만료되는 **사람이 기다리는** 요청이라 회고·답장·업데이트보다 급하고,
         /// 자동 마감이 걸린 12시간 확인보다는 덜 급하다. 신청은 서버에 남아 있어 밀려도 대결 창 로비에서 다시 보인다.
+        /// v0.3.30: **그리는 자리만** 헤더 카드 아래로 옮겼다(`gomokuInviteBanner`). 순위·"한 번에 하나" 예산은 그대로다.
+        /// 근무 여부를 보지 않는다 — 근무 밖에도 신청이 오고, 그때는 캐릭터 말풍선이 없어 이 배너와 메뉴바 점이 전부다.
         case gomokuInvite
         /// 지난주 회고 안내(주 1회).
         case retro
@@ -117,6 +119,28 @@ struct CheckMenuView: View {
         let gomoku = store.gomoku
         Task { @MainActor in
             await gomoku.respond(inviteID: invite.id, accept: false)
+        }
+    }
+
+    /// 배너 [보기](v0.3.30): 응답하지 않고 대결 창을 열어 **그 신청**을 보여 준다(로비 오른쪽 열의 받은 신청 카드 —
+    /// 거기서 남은 초·판돈·수락/거절을 본다). 순서는 [수락]과 같다: **창 먼저, 팝오버 나중**, 닫기는 이 한 곳에서만.
+    private func openGomokuInvite(_ invite: GomokuInvite) {
+        store.gomoku.openWindow(focusMatchID: invite.id)
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    /// 받은 오목 신청 배너(v0.3.30 — 헤더 카드 아래 · 무소속 화면 맨 위). 그릴지는 `topBanner` 하나가 정한다 —
+    /// 배너는 **한 번에 하나**라는 창 높이 예산(`TopBanner` 주석)은 자리가 옮겨 가도 그대로다.
+    /// 남은 초는 배너 안의 **잎**(`GomokuInviteBannerCountdown`)만 읽는다 — 이 프로퍼티가 시계를 읽으면 팝오버 전체가 매초 돈다.
+    @ViewBuilder
+    private var gomokuInviteBanner: some View {
+        if topBanner == .gomokuInvite, let invite = gomokuBannerInvite {
+            GomokuInviteBanner(
+                invite: invite,
+                onAccept: { acceptGomokuInvite(invite) },
+                onDecline: { declineGomokuInvite(invite) },
+                onOpen: { openGomokuInvite(invite) }
+            )
         }
     }
 
@@ -283,15 +307,8 @@ struct CheckMenuView: View {
             if topBanner == .update {
                 UpdateBanner(versionText: updateBannerVersionText, notes: updateBannerNotes)
             }
-            // 받은 오목 대결 신청(v0.3.27). 12시간 배너와 같은 모양 [수락][거절]. 남은 초는 **여기서 그리지 않는다** —
-            // 팝오버 트리에서 시계를 읽으면 전체가 매초 무효화된다(초는 대결 창 로비의 잎 뷰가 보여 준다).
-            if topBanner == .gomokuInvite, let invite = gomokuBannerInvite {
-                GomokuInviteBanner(
-                    invite: invite,
-                    onAccept: { acceptGomokuInvite(invite) },
-                    onDecline: { declineGomokuInvite(invite) }
-                )
-            }
+            // 받은 오목 대결 신청은 **여기(최상단)가 아니다** — v0.3.30 부터 헤더 카드 바로 아래다(`gomokuInviteBanner`).
+            // 무소속 화면에는 헤더 카드가 없어 그 화면 맨 위에 선다. 배너가 하나뿐이라는 예산(topBanner)은 그대로다.
             // 그 아래: 지난주 회고 안내 배너(주당 1회, 월요일 첫 팝오버). [보기]로 개인 기록 패널을 열고,
             // X 로 닫으면 이번 주는 다시 뜨지 않는다(markRetroBannerSeen 이 주 키를 기록).
             if topBanner == .retro {
@@ -337,6 +354,8 @@ struct CheckMenuView: View {
             if store.isTeamless {
                 // 로그인은 됐지만 소속 팀이 없다 — 메인 대신 팀 코드 입력/새 팀 만들기 패널을 보여 준다.
                 VStack(spacing: 10) {
+                    // 무소속이어도 오목 신청은 온다(앱 사용자 전체가 상대다). 헤더 카드가 없는 화면이라 맨 위에 선다.
+                    gomokuInviteBanner
                     TeamlessPanel(store: store)
                     FooterBar(store: store)
                 }
@@ -356,6 +375,10 @@ struct CheckMenuView: View {
                         store: store,
                         previewGoalEditing: previewGoalEditing
                     )
+                    // 받은 오목 신청(v0.3.30 자리 이동 — 머리 카드 바로 아래). 근무 밖에도 신청이 오고(서버가 근무 조건을 지웠다)
+                    // 그때는 캐릭터 말풍선이 없어서, 팝오버를 연 사람이 가장 먼저 읽는 줄(내 상태) 바로 밑이 알릴 자리다.
+                    // 근무 중이어도 같은 배너다(캐릭터 말풍선과 겹쳐도 된다 — 신청은 60초짜리라 두 번 말하는 편이 낫다).
+                    gomokuInviteBanner
                     // v0.2.47 — 자리 비움 [되돌리기] 배너는 없앴다. 최근 30분 안에 자동 마감된 내 세션은
                     // 사용자가 버튼을 누를 필요 없이 복귀가 감지되는 순간 스스로 재개된다
                     // (WorkTimerStore.canResumeRecentlyClosedSession → CheckOverlayController.nudgeAutoStart).
@@ -759,9 +782,16 @@ private struct CheckMenuRailButton: View {
     var glyphTint: Color? = nil
     /// 우상단 잔량 배지(숫자 또는 ∞). nil 이면 배지 자체를 그리지 않는다.
     var badge: String? = nil
+    /// 우상단 **안 읽음 점**(v0.3.30 — 콕찌르기 칸 전용: 안 읽은 메시지가 있다). 배지와 같은 모서리라 배지가 있으면 배지가 이긴다
+    /// (지금 둘을 함께 쓰는 칸은 없다). 모양은 콕찌르기 목록 행의 말풍선 점과 **같다** — 같은 사실이 두 자리에서 다른 얼굴이면
+    /// 사용자는 다른 일로 읽는다. 색이 danger 가 아니라 accent 인 이유도 그 행과 같다(안 읽은 메시지는 사고가 아니다).
+    var showsDot: Bool = false
     let action: () -> Void
 
     @State private var hovering = false
+
+    /// 안 읽음 점 지름(pt). 콕찌르기 목록 행의 말풍선 점(7pt)과 같은 값이다.
+    static let dotDiameter: CGFloat = 7
 
     private var glyphColor: Color {
         if let glyphTint { return glyphTint }
@@ -806,6 +836,12 @@ private struct CheckMenuRailButton: View {
                         .background(Capsule().fill(CheckTheme.accent.opacity(0.85)))
                         // 카드 모서리에 살짝 걸치게 — 안쪽이면 아이콘과 겹치고, 더 빼면 창 밖으로 나간다.
                         .offset(x: 3, y: -3)
+                } else if showsDot {
+                    Circle()
+                        .fill(CheckTheme.accent)
+                        .frame(width: Self.dotDiameter, height: Self.dotDiameter)
+                        .overlay(Circle().stroke(CheckTheme.panel, lineWidth: 1.5))
+                        .offset(x: 2, y: -2)
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: CheckMenuSideRail.cornerRadius, style: .continuous))
@@ -839,6 +875,21 @@ struct MenuBarStatusLabel: View {
     ///   보이스오버 문구도 같은 이유로 `.accessibilityLabel` 이 아니라 NSImage 의 `accessibilityDescription` 에 싣는다 —
     ///   같은 재현 앱에서 버튼의 accessibilityLabel 은 nil 이었고, 버튼까지 건너온 것은 이미지 객체 자체뿐이었다.
     var updateAvailable: Bool = false
+    /// 안 읽은 메시지가 있는가(`WorkTimerStore.hasUnreadMessages`, v0.3.30). 켜지면 **업데이트와 같은 빨간 점**이다.
+    ///
+    /// 근무 밖에서도 메시지가 온다(서버가 근무 조건을 지웠다) — 캐릭터 말풍선이 없고 팝오버도 안 여는 사람에게 그 사실을
+    /// 알릴 곳은 늘 떠 있는 이 아이콘뿐이다(업데이트 점이 생긴 이유와 같다). 점 모양을 사유마다 가르지 않는 이유:
+    /// 6pt 점의 색·모양으로 사유를 말하면 메뉴바에서 구별이 안 되고, 사유는 팝오버를 열면 각자 자리(레일 점·배너)가 말한다.
+    /// 기본값 false 라 인자 없는 호출부·기존 테스트는 그대로 컴파일되고, 셋 다 꺼지면 **예전 그림과 바이트가 같다**.
+    var hasUnreadMessages: Bool = false
+    /// 만료되지 않은 받은 오목 신청이 있는가(`GomokuStore.pendingIncomingInvites` 가 비어 있지 않음, v0.3.30).
+    /// 신청은 60초면 만료되므로 이 값은 스토어의 만료 **타이머**가 내린다 — 라벨이 시계를 읽지 않는다.
+    var hasGomokuInvite: Bool = false
+
+    /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
+    var dotReasons: MenuBarDotReasons {
+        MenuBarDotReasons(unreadMessages: hasUnreadMessages, gomokuInvite: hasGomokuInvite, updateAvailable: updateAvailable)
+    }
 
     /// 캐릭터 선택 방송. **읽기만 한다** — 이 한 줄이 관찰을 등록해, 설정에서 캐릭터를 바꾸면
     /// 이 라벨이 다시 그려진다.
@@ -857,11 +908,14 @@ struct MenuBarStatusLabel: View {
                 // `.id` 가 두 가지를 함께 한다 — body 에서 revision 을 **읽어** 관찰을 등록하고,
                 // 값이 바뀌면 이미지 뷰를 새로 만들어 옛 NSImage 가 남지 않게 한다.
                 // 점은 **새 이미지**에 굽는다 — `mascot` 은 캐시의 공유 인스턴스라 여기서 건드리면 점이 꺼진 뒤에도 남는다.
-                Image(nsImage: updateAvailable ? Self.updateBadged(mascot) : mascot).id(characterRevision)
-            } else if updateAvailable,
+                // 사유(v0.3.30: 새 메시지 · 오목 신청 · 업데이트)가 하나라도 있으면 같은 점이고, 보이스오버 설명만 사유를 잇는다.
+                // 사유가 없으면 `mascot` 그대로 — 점이 생기기 전과 같은 경로다.
+                Image(nsImage: dotReasons.isEmpty ? mascot : Self.describing(Self.updateBadged(mascot), dotReasons))
+                    .id(characterRevision)
+            } else if !dotReasons.isEmpty,
                       let badged = Self.updateBadgedSymbol(named: MenuBarStatusFormatter.symbolName(for: snapshot)) {
                 // 아잉 PNG 마저 없는 폴백에도 점을 얹는다. 점이 꺼져 있으면 아래 예전 심볼 경로를 한 글자도 안 바꾸고 탄다.
-                Image(nsImage: badged)
+                Image(nsImage: Self.describing(badged, dotReasons))
             } else {
                 Image(systemName: MenuBarStatusFormatter.symbolName(for: snapshot))
                     .symbolRenderingMode(.hierarchical)
@@ -918,6 +972,42 @@ struct MenuBarStatusLabel: View {
         guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
             .withSymbolConfiguration(configuration) else { return nil }
         return updateBadged(symbol)
+    }
+
+    /// 점을 구운 이미지에 **켜진 사유들**의 보이스오버 설명을 싣는다(v0.3.30).
+    ///
+    /// `badged` 는 `updateBadged` 가 방금 만든 **새 인스턴스**여야 한다 — 캐시의 공유 인스턴스에 쓰면 사유가 꺼진 뒤에도
+    /// 설명이 남는다(`updateBadged` 주석). 설명을 SwiftUI `.accessibilityLabel` 이 아니라 이미지에 싣는 이유도 그 주석과 같다:
+    /// 상태바 버튼까지 건너가는 것은 이미지 객체뿐이다. 사유가 없으면(부르는 쪽이 부르지 않지만) 예전 문구를 그대로 둔다.
+    nonisolated static func describing(_ badged: NSImage, _ reasons: MenuBarDotReasons) -> NSImage {
+        if let description = reasons.accessibilityDescription {
+            badged.accessibilityDescription = description
+        }
+        return badged
+    }
+}
+
+/// 메뉴바 빨간 점을 켜는 사유들(v0.3.30 — 순수 값).
+///
+/// **점은 하나다.** 사유가 몇 개든 같은 6pt 빨간 점을 굽고(`MenuBarStatusLabel.updateBadged`), 무엇 때문에 켜졌는지는
+/// 보이스오버 설명이 " · " 로 이어 말한다. 순서는 사람이 기다리는 급한 것부터다: 새 메시지 → 오목 신청 → 업데이트.
+struct MenuBarDotReasons: Equatable, Sendable {
+    var unreadMessages: Bool = false
+    var gomokuInvite: Bool = false
+    var updateAvailable: Bool = false
+
+    static let unreadMessagesText = "새 메시지"
+    static let gomokuInviteText = "오목 신청"
+
+    var isEmpty: Bool { !unreadMessages && !gomokuInvite && !updateAvailable }
+
+    /// 켜진 사유들의 문구(순서 고정). 하나도 없으면 nil — 점이 없으니 설명할 것도 없다.
+    var accessibilityDescription: String? {
+        var parts: [String] = []
+        if unreadMessages { parts.append(Self.unreadMessagesText) }
+        if gomokuInvite { parts.append(Self.gomokuInviteText) }
+        if updateAvailable { parts.append(MenuBarStatusLabel.updateDotAccessibilityDescription) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 
@@ -2941,6 +3031,13 @@ private struct PokePanel: View {
     }
 }
 
+/// 근무 밖 메시지(v0.3.30)가 바꾼 안내 문구. **한 줄에 들어가야 한다**(292pt · caption2) — 줄이 늘면 콕찌르기 패널이
+/// 목록 행수 예산에 안 잡힌 높이만큼 자라 비근무 사용자의 팝오버만 700pt 상한에 다가간다(V0330 테스트가 한 줄임을 잰다).
+enum MessageAnytimeNotice {
+    /// 비근무 사용자의 콕찌르기 안내줄. 찌르기만 막혔고 메시지는 된다는 두 사실을 함께 말한다.
+    static let pokeOffWork = "콕 찌르기는 근무 중에만 · 메시지는 언제든 보낼 수 있어요"
+}
+
 /// 콕찌르기 패널의 안내줄(연결 끊김 / 메시지 결과 / 찌르기 결과 / 비근무 / 집중 모드 중 하나, 없으면 아무것도 안 그린다).
 ///
 /// 왜 잎인가: 연결 끊김 판정(isPokeDisconnected)이 시계를 읽는다(재연결 유예 경과 여부). 그 판정을 패널 body 에 두면
@@ -3002,7 +3099,9 @@ private struct PokePanelNoticeLine: View {
             return (notice, true)
         }
         if !isMyselfWorking {
-            return ("근무 중일 때만 콕 찌를 수 있어요", false)
+            // 찌르기 **전용** 차단 사유다(v0.3.30). 이 화면은 이제 근무 밖 사용자가 메시지를 보내러 들어오는 문이기도 해서,
+            // "근무 중일 때만 …"만 떠 있으면 행의 말풍선 버튼까지 막힌 것처럼 읽힌다 — 메시지는 된다는 사실을 같은 줄에 붙인다.
+            return (MessageAnytimeNotice.pokeOffWork, false)
         }
         if let focusText = PokeFocusNotice.text(for: focusStage) {
             return (focusText, false)
@@ -3148,8 +3247,11 @@ struct PokeDirectoryRowView: View {
     //   ① 최소 빌드 게이트는 폐기됐다(모든 버전이 받는다 — `target_outdated` 는 서버가 더 이상 내지 않는다).
     //   ② 이 버튼은 **아무것도 보내지 않는다.** 창을 여는 일에 근무 여부를 물을 이유가 없고,
     //      자리비움인 사람과 나눈 **지난 대화를 읽는 것**은 오히려 그때 가장 하고 싶은 일이다.
-    //   ③ 못 보내는 사정(내 비근무·상대 자리비움·상대 집중)은 **보낼 때** 서버가 판정해 창 안에서 말한다.
+    //   ③ 못 보내는 사정(상대 집중 · 옛 서버라면 내 비근무·상대 자리비움)은 **보낼 때** 서버가 판정해 창 안에서 말한다.
     //      화면이 미리 잠그면 그 문장을 말할 자리가 사라진다.
+    //   ④ v0.3.30 부터는 근무 밖에서도 **보내진다**(서버가 send_message 의 근무 조건을 지웠다). 여기에 `canPoke`(내 근무)나
+    //      `entry.isWorking`(상대 근무)를 얹으면 서버·스토어를 다 풀어도 비근무 사용자는 대화에 들어가지도 못한다 —
+    //      찌르기 버튼의 근무 조건은 서버 규칙이 그대로라 남지만, 이 버튼에는 옮겨 오지 마라.
     @ViewBuilder
     private var messageButton: some View {
         Button(action: onOpenMessages) {
@@ -4222,17 +4324,34 @@ private struct PokeEntryIconButton: View {
 
     var body: some View {
         let warns = PokeConnectionNotice.shouldWarn(state: store.realtimeState, now: store.displayNow)
+        // 안 읽은 메시지(v0.3.30). 메시지를 여는 문이 이 칸 → 목록 행 말풍선이라, 점이 목록 행에만 있으면 팝오버를 열어도
+        // 이 칸을 누르기 전에는 아무 말이 없다. 시계를 읽는 값이 아니지만 **여기(잎)에서 읽는다** — 레일 본체가 읽으면
+        // 메시지가 올 때마다 레일 여섯 칸이 통째로 다시 그려진다(값이 바뀌는 칸은 이 하나뿐이다).
+        let unread = store.hasUnreadMessages
         CheckMenuRailButton(
             icon: "hand.point.right.fill",
             label: "콕찌르기",
-            help: warns ? PokeConnectionNotice.iconHelp : "콕 찌르기",
+            help: MessageUnreadRailHelp.text(warns: warns, hasUnreadMessages: unread),
             isActive: store.isPokePanelVisible,
             // 착색만 바꾼다 — 아이콘을 바꾸면 사용자가 이 버튼을 찾던 모양이 사라진다.
             // 열려 있으면서 끊긴 상태에서는 카드가 accent(열림), 글리프가 pending(끊김)으로 갈라 말한다.
-            glyphTint: warns ? CheckTheme.pending : nil
+            glyphTint: warns ? CheckTheme.pending : nil,
+            showsDot: unread
         ) {
             store.togglePokePanel()
         }
+    }
+}
+
+/// 레일 [콕찌르기] 칸의 툴팁 = 보이스오버 문구(v0.3.30 — 순수). 점은 색으로만 말하므로 **글자로도** 말한다
+/// (이 저장소의 규약: 색·그림만으로 정보를 주지 않는다). 연결 경고가 이긴다 — 이 칸이 리얼타임 고장을 표면화하는 유일한 자리다.
+enum MessageUnreadRailHelp {
+    static let plain = "콕 찌르기"
+    static let unreadMessages = "콕 찌르기 · 안 읽은 메시지가 있어요"
+
+    static func text(warns: Bool, hasUnreadMessages: Bool) -> String {
+        if warns { return PokeConnectionNotice.iconHelp }
+        return hasUnreadMessages ? unreadMessages : plain
     }
 }
 

@@ -82,6 +82,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 복구할 수 있는데, 그 순간 표시 전환과 리액션/찔림 싱크(store.onReactionTrigger / onPokesReceived)가
         // 이미 배선돼 있어야 캐릭터 등장과 밀린 찔림이 통째로 유실되지 않는다.
         overlayController = CheckOverlayController(store: store, updateCheck: updateCheck)
+        // 열린 대화에 도착한 메시지를 곧바로 그리려면 "대화가 보이는가"를 알아야 한다(v0.3.31 M4). 팝오버 표시 칸(`isMenuPresented`)은
+        // 두 출처가 겹쳐 써서 떠 있는데 false 로 남는 순서가 있다 — 창 서버에 직접 묻는 문을 **여기서만** 꽂는다(스토어 기본값은 "모름").
+        // 이 줄이 빠져도 컴파일과 스토어 테스트는 초록이다: 판정은 대화 뷰의 생명주기로 내려가 대부분 맞지만, 앱 비활성으로 팝오버가 화면에서만
+        // 사라진 동안 읽음 처리를 막는 거부권이 사라진다 — 그래서 V0331MessageArrivalTests 의 소스 계약이 이 배선을 글자로 되묻는다.
+        store.menuPopoverOnScreenProbe = { WindowTopAnchor.menuPopoverOnScreen() }
         wireTodoBoard()
         wireSettingsWindow()
         // 1:1 오목(v0.3.27) — 창 여는 문 · 받은 신청 말풍선 · 로그아웃 닫기. **오버레이 컨트롤러를 만든 뒤에** 잇는다

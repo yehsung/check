@@ -521,11 +521,10 @@ extension WorkTimerStore {
             // 한 행이 두 경로를 동시에 타는 일은 없다.
             // v0.3.30: 근무 밖에서 쌓였다가 근무 시작 drain 으로 들어온 메시지 중 **이미 읽은 것**(서버 기준 · 낙관 읽음)은
             // 말풍선으로 띄우지 않는다. 소비는 이미 서버에서 끝났고 이력에는 남아 있으므로 잃는 것이 없다.
-            // 5분 넘은 것은 위 신선도 필터가 원래대로 말풍선 없이 버린다.
-            enqueueReceivedMessages(
-                WorkTimerStore.freshReceivedMessages(rows: rows, now: now)
-                    .filter { !isMessageAlreadyReadForBubble($0) }
-            )
+            // 5분 넘은 것은 신선도 필터가 원래대로 말풍선 없이 버린다.
+            // v0.3.31 M4: 그 앞에 **보이는 대화에 곧바로 넣는다**(신선도와 무관) — 본문을 이미 들고 왔는데 이력 왕복을 기다리지 않는다.
+            // 도착 새로고침도 말풍선 큐가 아니라 **소비한 메시지 행**을 기준으로 부른다(신선도가 큐를 비우면 갱신까지 건너뛰던 틈).
+            receiveConsumedMessages(rows: rows, now: now)
             // count 는 **소비된 행 전체 수**(신선도 필터 이전)다. 초인종 페이로드의 pending 과 견주면
             // 소비 경로가 새는지 보이는데, 필터 뒤 개수를 세면 '오래돼서 안 보여준 것'까지 유실로 오진한다.
             return .ok(count: rows.count)
@@ -724,21 +723,29 @@ extension WorkTimerStore {
     /// 그때 말풍선이 같은 말을 두 번 띄우면 사용자는 상대가 두 번 보냈다고 읽는다.
     /// 상한을 넘으면 **오래된 쪽부터** 버린다 — 지금 부르는 사람을 놓치는 편이 더 나쁘다.
     func enqueueReceivedMessages(_ messages: [ReceivedMessage]) {
-        guard !messages.isEmpty else { return }
+        guard appendToMessageBubbleQueue(messages) else { return }
+        // ★ 새 타이머를 만들지 않고 이미 도는 수신(초인종 drain·폴링)에 얹는다 — 무료 플랜에 상시 요청을
+        //   하나 더 얹지 않는다는 규약(제보 목록·미니게임 순위와 같다).
+        //   v0.3.30 m-fix(F2): 도착 1건 묶음마다 **안 읽음 요약**도 받는다 — 말풍선으로 본 것은 읽음이 아니라서(M1.8) 이게 없으면
+        //   근무 중 받은 메시지의 메뉴바·레일 점이 안 켜진다. 이력은 여전히 대화가 화면에 떠 있을 때만이다.
+        //   v0.3.31 M4: drain 은 이 문이 아니라 `receiveConsumedMessages` 를 지난다(보이는 대화에 즉시 삽입 + 소비한 행 기준 새로고침).
+        //   이 문은 말풍선 큐에 직접 넣는 호출부(테스트·옛 경로)용으로 예전 동작 그대로 남는다.
+        refreshMessageHistoryOnArrival()
+    }
+
+    /// 말풍선 큐에 붙인다(새로고침 없음). 새로 붙은 것이 있으면 true. 중복·상한 규칙은 위 `enqueueReceivedMessages` 주석 그대로다.
+    @discardableResult
+    func appendToMessageBubbleQueue(_ messages: [ReceivedMessage]) -> Bool {
+        guard !messages.isEmpty else { return false }
         let known = Set(receivedMessages.map(\.id))
         let arrivals = messages.filter { !known.contains($0.id) }
-        guard !arrivals.isEmpty else { return }
+        guard !arrivals.isEmpty else { return false }
         var queue = receivedMessages + arrivals
         if queue.count > Self.messageQueueLimit {
             queue.removeFirst(queue.count - Self.messageQueueLimit)
         }
         receivedMessages = queue
-        // ★ **여기가 "창을 열어 둔 채로 메시지가 오면 그 자리에서 나타난다"의 유일한 근거다**(v0.2.49).
-        //   새 타이머를 만들지 않고 이미 도는 수신(초인종 drain·폴링)에 얹는다 — 무료 플랜에 상시 요청을
-        //   하나 더 얹지 않는다는 규약(제보 목록·미니게임 순위와 같다).
-        //   v0.3.30 m-fix(F2): 도착 1건 묶음마다 **안 읽음 요약**도 받는다 — 말풍선으로 본 것은 읽음이 아니라서(M1.8) 이게 없으면
-        //   근무 중 받은 메시지의 메뉴바·레일 점이 안 켜진다. 이력은 여전히 대화가 팝오버에 보일 때만이다.
-        refreshMessageHistoryOnArrival()
+        return true
     }
 
     /// 로그인 후 내 토큰 사용량 공개·수집 설정을 서버값으로 1회 로드한다(폴링 첫 유효 tick 에서 부른다).

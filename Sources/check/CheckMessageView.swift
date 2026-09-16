@@ -217,6 +217,13 @@ struct CheckMessageView: View {
     var now: Date = Date()
     let onBack: () -> Void
 
+    /// 스크롤 따라가기 상태가 바뀔 때마다 알린다(**테스트 전용 관찰 문** — 앱은 nil). 호스팅 렌더로 "위로 올려 둔 채 새 말 → 버튼"을 잰다.
+    var onFollowChange: ((MessageScrollFollow) -> Void)? = nil
+
+    /// 이 뷰 인스턴스의 표식(v0.3.31 M4). 스토어가 "대화가 화면에 서 있는가"를 뷰마다 따로 센다 — 이유는
+    /// `WorkTimerStore.messageConversationViewTokens` 주석(나타남·사라짐이 어느 순서로 와도 수렴).
+    @State private var viewToken = UUID()
+
     private var thread: MessageThread? { store.selectedMessageThread }
     private var hasPeer: Bool { store.selectedMessagePeerID != nil }
 
@@ -229,6 +236,10 @@ struct CheckMessageView: View {
         }
         .padding(12)
         .panelStyle()
+        // ★ 도착한 메시지를 **재진입 없이** 그리는 판정의 한 축이다(v0.3.31 M4). 팝오버 표시 칸(`isMenuPresented`)만 보던 0.3.29 는
+        //   떠 있는 팝오버에서 그 칸이 false 로 남으면 [뒤로] 뒤 다시 들어가야 새 말이 떴다. 이 두 줄을 지우면 판정이 그 한 칸으로 돌아간다.
+        .onAppear { store.messageConversationViewDidAppear(viewToken) }
+        .onDisappear { store.messageConversationViewDidDisappear(viewToken) }
     }
 
     // MARK: 머리 — 뒤로 + 아바타 + 상대 이름
@@ -278,9 +289,12 @@ struct CheckMessageView: View {
                 items: items,
                 peerUserID: thread.peerUserID,
                 lastMessageID: thread.messages.last?.id,
+                // 내가 보낸 말은 위로 올려 둔 상태여도 바닥으로 따라간다(v0.3.31 M4 — 메신저 감각: 방금 친 말이 화면 밖에 붙으면 안 된다).
+                lastMessageIsMine: thread.messages.last?.isMine ?? false,
                 // 읽음 기능 여부는 **값**으로 내린다(v0.3.30). 시계가 아니라 이력 응답이 바꾸는 값이라 잎으로 가둘 이유가 없다.
                 readReceiptsAvailable: store.messageReadReceiptsAvailable,
-                clipsInsteadOfScrolling: clipsOverflowInsteadOfScroll
+                clipsInsteadOfScrolling: clipsOverflowInsteadOfScroll,
+                onFollowChange: onFollowChange
             )
             .frame(height: min(cap, natural))
             .frame(maxWidth: .infinity)
@@ -349,13 +363,23 @@ struct MessageConversationView: View {
     let peerUserID: String
     /// 새 말이 도착했는지 알기 위한 키(같은 트리거의 애니메이션 갈래).
     let lastMessageID: String?
+    /// 마지막 말이 내가 보낸 것인가(v0.3.31 M4). 보낸 말은 위로 올려 둔 상태여도 바닥으로 따라간다.
+    var lastMessageIsMine: Bool = false
     /// 서버가 읽음을 아는가(`WorkTimerStore.messageReadReceiptsAvailable`). false 면 보낸 말풍선 옆 1을 하나도 그리지 않는다.
     /// **기본값 false** — 모르는 쪽으로 틀리는 것이 안전하다(없는 1을 그리면 상대가 안 읽었다는 거짓말이 된다).
     var readReceiptsAvailable: Bool = false
     var clipsInsteadOfScrolling: Bool = false
+    /// 따라가기 상태가 바뀔 때마다 알린다(테스트 전용 관찰 문 — 앱은 nil).
+    var onFollowChange: ((MessageScrollFollow) -> Void)? = nil
 
     /// 맨 아래로 보낼 앵커. 마지막 말풍선 id 를 쓰지 않는 이유는 그 뒤의 아래 여백까지 보이게 하기 위해서다.
     private static let bottomAnchorID = "message-thread-bottom"
+
+    /// 바닥 따라가기 / "새 메시지 ↓" 판정(v0.3.31 M4). 규칙은 `MessageScrollFollow` 한 곳이다.
+    @State private var follow = MessageScrollFollow()
+    /// 스크롤 틀의 높이(pt)와 내용 전체의 틀(스크롤 좌표계 기준 — minY 가 곧 −스크롤 위치).
+    @State private var viewportHeight: CGFloat = 0
+    @State private var contentFrame: CGRect = .zero
 
     var body: some View {
         if clipsInsteadOfScrolling {
@@ -368,17 +392,55 @@ struct MessageConversationView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: true) {
-                    content
-                    Color.clear.frame(height: 1).id(Self.bottomAnchorID)
+                    VStack {
+                        content
+                        Color.clear.frame(height: 1).id(Self.bottomAnchorID)
+                    }
+                    // 내용의 틀을 스크롤 좌표계로 잰다 — 바닥까지 남은 거리와 "내용이 자랐는가"를 한 번에 안다.
+                    .onGeometryChange(for: CGRect.self) { proxy in
+                        proxy.frame(in: .named(MessageScrollFollow.coordinateSpaceName))
+                    } action: { frame in
+                        contentFrame = frame
+                        follow.measured(contentHeight: frame.height, viewportHeight: viewportHeight, contentMaxY: frame.maxY)
+                    }
+                }
+                .coordinateSpace(.named(MessageScrollFollow.coordinateSpaceName))
+                .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.height } action: { height in
+                    viewportHeight = height
+                    follow.measured(contentHeight: contentFrame.height, viewportHeight: height, contentMaxY: contentFrame.maxY)
                 }
                 // 내용이 화면보다 짧아도 **아래에 붙인다**(메신저의 기본 감각이고, 스냅샷의 클립 갈래와
                 // 같은 그림이 되게 하는 값이기도 하다 — 두 그림이 다르면 스냅샷으로 아무것도 확인할 수 없다).
                 .defaultScrollAnchor(.bottom)
-                // 처음 열 때 · 상대를 바꿀 때 · 새 말이 도착할 때 전부 맨 아래로. 셋을 한 함수로 모은 이유는
-                // 세 자리가 갈리면 그중 하나만 고쳐지는 날이 오기 때문이다.
-                .onAppear { scrollToBottom(proxy, animated: false) }
-                .onChange(of: peerUserID) { _, _ in scrollToBottom(proxy, animated: false) }
-                .onChange(of: lastMessageID) { _, _ in scrollToBottom(proxy, animated: true) }
+                // 위로 올려 두고 읽는 중에 새 말이 오면 끌어내리지 않고 이 버튼만 띄운다(v0.3.31 M4).
+                .overlay(alignment: .bottom) {
+                    if follow.showsNewMessageButton {
+                        MessageNewMessageJumpButton {
+                            follow.jumpedToBottom()
+                            scrollToBottom(proxy, animated: true)
+                        }
+                        .padding(.bottom, 6)
+                    }
+                }
+                // 처음 열 때 · 상대를 바꿀 때는 무조건 맨 아래로. 새 말이 도착하면 **바닥 근처였거나 내가 보낸 말일 때만** 따라간다.
+                .onAppear {
+                    follow.jumpedToBottom()
+                    scrollToBottom(proxy, animated: false)
+                }
+                .onChange(of: peerUserID) { _, _ in
+                    follow.jumpedToBottom()
+                    scrollToBottom(proxy, animated: false)
+                }
+                .onChange(of: lastMessageID) { _, _ in
+                    // ★ **애니메이션 없이** 보낸다(v0.3.31 M4). 새 줄이 붙는 바로 그 갱신 안의 애니메이션 스크롤은 도착을 확인할 길이 없었다 —
+                    //   화면 밖 호스팅 측정(V0331MessageArrivalViewTests ④)에서 애니메이션 갈래는 위로 올려 둔 대화를 제자리에 두었고, 즉시 갈래는
+                    //   바닥에 닿았다(화면 밖이라 애니메이션이 안 도는 것인지 목표가 새 줄 배치 전 높이로 잡힌 것인지는 가르지 못했다).
+                    //   요구가 "바로 뜨게"라, 검증되는 쪽을 쓴다. [새 메시지 ↓] 버튼은 새 줄과 같은 갱신이 아니라 애니메이션을 남겼다.
+                    if follow.lastMessageChanged(isMine: lastMessageIsMine) {
+                        scrollToBottom(proxy, animated: false)
+                    }
+                }
+                .onChange(of: follow) { _, next in onFollowChange?(next) }
             }
         }
     }
@@ -412,6 +474,80 @@ struct MessageConversationView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 대화 스크롤의 **바닥 따라가기** 판정(v0.3.31 M4 — 순수 · 결정적 검증 지점).
+///
+/// 사용자 요구: "실제 메신저앱처럼 메시지마다 바로 대화창에 뜨게". 메신저의 두 감각을 그대로 옮긴다:
+///  · 바닥 근처(`nearBottomThreshold` 안)에서 보고 있으면 새 말이 오는 대로 따라 내려간다.
+///  · 위로 올려 옛 말을 읽는 중이면 **끌어내리지 않는다** — 대신 "새 메시지 ↓" 버튼을 띄우고, 누르거나 스스로 바닥에 닿으면 사라진다.
+///  · 내가 보낸 말은 어디서 보냈든 따라간다(방금 친 말이 화면 밖에 붙으면 전송이 실패한 것처럼 보인다).
+///
+/// ★ **내용이 자라서 멀어진 것은 "위로 올렸다"가 아니다.** 바닥에서 보던 중에 새 말이 붙으면 그 말의 높이만큼 바닥이 멀어진 측정이
+///   따라가기 판정보다 먼저 올 수 있다(레이아웃과 onChange 의 순서는 SwiftUI 가 약속하지 않는다). 그 측정으로 `isNearBottom` 을 내리면
+///   바닥에서 보던 사람에게 버튼만 뜨고 새 말은 화면 밖에 붙는다 — 정확히 신고의 모양이다. 그래서 내용 높이가 바뀐 측정은 "가까워짐"만 반영한다.
+struct MessageScrollFollow: Equatable, Sendable {
+    /// 바닥 근처의 폭(pt). 말풍선 두 줄 남짓 — 마지막 말을 읽으며 살짝 올린 정도는 "바닥에서 보는 중"으로 친다.
+    static let nearBottomThreshold: CGFloat = 60
+    /// 스크롤 좌표계 이름(측정 전용).
+    static let coordinateSpaceName = "message-conversation-scroll"
+
+    private(set) var isNearBottom = true
+    private(set) var showsNewMessageButton = false
+    /// 마지막 측정의 내용 높이(내용이 자랐는지 가르는 기준). nil = 아직 못 쟀다.
+    private var lastContentHeight: CGFloat?
+
+    /// 스크롤 위치·틀·내용이 새로 측정됐다. `contentMaxY` 는 스크롤 좌표계에서 내용 바닥의 y(= 내용 높이 − 스크롤 위치).
+    mutating func measured(contentHeight: CGFloat, viewportHeight: CGFloat, contentMaxY: CGFloat) {
+        guard viewportHeight > 0, contentHeight > 0 else { return }
+        let distance = contentMaxY - viewportHeight
+        let grew = lastContentHeight.map { abs($0 - contentHeight) > 0.5 } ?? true
+        lastContentHeight = contentHeight
+        if distance <= Self.nearBottomThreshold {
+            isNearBottom = true
+            showsNewMessageButton = false
+        } else if !grew {
+            // 내용은 그대로인데 바닥이 멀어졌다 = 사람이 위로 올렸다.
+            isNearBottom = false
+        }
+    }
+
+    /// 마지막 말이 바뀌었다. **바닥으로 따라가야 하면 true.** 못 따라가면 버튼을 세운다.
+    mutating func lastMessageChanged(isMine: Bool) -> Bool {
+        if isNearBottom || isMine {
+            isNearBottom = true
+            showsNewMessageButton = false
+            return true
+        }
+        showsNewMessageButton = true
+        return false
+    }
+
+    /// 코드가 바닥으로 보냈다(처음 열기 · 상대 바꾸기 · 버튼).
+    mutating func jumpedToBottom() {
+        isNearBottom = true
+        showsNewMessageButton = false
+    }
+}
+
+/// "새 메시지 ↓" — 위로 올려 둔 대화에 새 말이 왔다는 작은 알약. 누르면 바닥으로 간다.
+struct MessageNewMessageJumpButton: View {
+    static let title = "새 메시지 ↓"
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(Self.title)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .frame(height: 22)
+                .background(Capsule().fill(CheckTheme.accent))
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("새 메시지로 이동")
     }
 }
 

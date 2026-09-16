@@ -1,11 +1,12 @@
 {
+  "chat": [],
   "match": {
-    "id": "e6c642ab-ba42-4351-92e9-796f9b909739",
+    "id": "efd4cb74-2aba-44a4-8ac9-40866997a263",
     "turn": "black",
-    "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "black": "3e240c02-8972-478e-a674-014f498a641b",
     "board": ".................................................................................................................................................................................................................................",
     "stake": 3,
-    "white": "3e240c02-8972-478e-a674-014f498a641b",
+    "white": "267a3495-643c-40cc-b1a7-14967166eae1",
     "result": null,
     "status": "active",
     "winner": null,
@@ -13,20 +14,21 @@
     "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
     "end_reason": null,
     "move_count": 0,
-    "deadline_ms": 1789500102522,
+    "deadline_ms": 1789547600150,
     "finished_ms": null,
-    "turn_started_ms": 1789500072522,
-    "invite_expires_ms": 1789500132506
+    "turn_started_ms": 1789547570150,
+    "invite_expires_ms": 1789547630129
   },
   "moves": [],
   "state": {
+    "chat": [],
     "match": {
-      "id": "e6c642ab-ba42-4351-92e9-796f9b909739",
+      "id": "efd4cb74-2aba-44a4-8ac9-40866997a263",
       "turn": "black",
-      "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "black": "3e240c02-8972-478e-a674-014f498a641b",
       "board": ".................................................................................................................................................................................................................................",
       "stake": 3,
-      "white": "3e240c02-8972-478e-a674-014f498a641b",
+      "white": "267a3495-643c-40cc-b1a7-14967166eae1",
       "result": null,
       "status": "active",
       "winner": null,
@@ -34,30 +36,64 @@
       "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
       "end_reason": null,
       "move_count": 0,
-      "deadline_ms": 1789500102522,
+      "deadline_ms": 1789547600150,
       "finished_ms": null,
-      "turn_started_ms": 1789500072522,
-      "invite_expires_ms": 1789500132506
+      "turn_started_ms": 1789547570150,
+      "invite_expires_ms": 1789547630129
     },
     "moves": [],
+    "chat_seq": 0,
     "my_color": "black",
+    "my_muted": false,
     "opponent": {
-      "user_id": "3e240c02-8972-478e-a674-014f498a641b",
-      "character": "jellyfish",
-      "avatar_url": "https://example.invalid/avatar-b.png",
-      "display_name": "코덱스토큰도둑예은"
+      "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "character": "aing",
+      "avatar_url": null,
+      "display_name": "abto.app"
     },
+    "chat_capable": false,
+    "chat_max_len": 100,
     "ruby_balance": 97,
-    "server_now_ms": 1789500072537
+    "server_now_ms": 1789547570171,
+    "my_auto_streak": 0,
+    "opponent_muted": false,
+    "chat_quick_codes": [
+      "hi",
+      "gg",
+      "nice",
+      "hurry",
+      "sorry",
+      "think",
+      "oops",
+      "rematch"
+    ],
+    "opponent_auto_streak": 0
   },
   "status": "ok",
+  "chat_seq": 0,
   "my_color": "black",
+  "my_muted": false,
   "opponent": {
-    "user_id": "3e240c02-8972-478e-a674-014f498a641b",
-    "character": "jellyfish",
-    "avatar_url": "https://example.invalid/avatar-b.png",
-    "display_name": "코덱스토큰도둑예은"
+    "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "character": "aing",
+    "avatar_url": null,
+    "display_name": "abto.app"
   },
+  "chat_capable": false,
+  "chat_max_len": 100,
   "ruby_balance": 97,
-  "server_now_ms": 1789500072537
+  "server_now_ms": 1789547570171,
+  "my_auto_streak": 0,
+  "opponent_muted": false,
+  "chat_quick_codes": [
+    "hi",
+    "gg",
+    "nice",
+    "hurry",
+    "sorry",
+    "think",
+    "oops",
+    "rematch"
+  ],
+  "opponent_auto_streak": 0
 }

@@ -2,11 +2,17 @@ import Foundation
 import Testing
 @testable import check
 
-// v0.3.27 — 1:1 오목 서버↔앱 **응답 계약**(실제 SQL 출력).
+// v0.3.27 → **0.3.28 로 다시 떴다** — 1:1 오목 서버↔앱 **응답 계약**(실제 SQL 출력).
 //
-// 픽스처 `Fixtures/gomoku-rpc/*.json` 은 스텁 추측이 아니다. 로컬 하네스(마이그레이션 체인 88개 + 20260916120000_gomoku_duel.sql)에
-// harness.login 으로 authenticated 흉내를 내 RPC 를 **실제로 부른 jsonb 출력 그대로**다. 생성기는 `_gen_fixtures.py.txt`,
+// 픽스처 `Fixtures/gomoku-rpc/*.json` 은 스텁 추측이 아니다. 로컬 하네스(마이그레이션 체인 + 20260916120000_gomoku_duel.sql
+// + 20260916200000_gomoku_chat.sql + 20260916210000_gomoku_timeout_autoplace.sql)에 harness.login 으로 authenticated
+// 흉내를 내 RPC 를 **실제로 부른 jsonb 출력 그대로**다. 생성기는 `_gen_fixtures.py.txt`,
 // 호출자·준비 SQL·M1 흐름 순서는 `_manifest.json` 에 있다(흑백은 서버 random() 이라 흐름은 manifest 가 말한다).
+//
+// ⚠️ 0.3.28 에서 **사라진 응답**은 픽스처도 지웠다: `gomoku_move__timeout` · `gomoku_resign__timeout`.
+//    판은 더 이상 시간으로 죽지 않는다 — 마감이 지나면 서버가 무작위로 대신 놓고(`auto_placed`),
+//    연속 3회면 `end_reason='abandoned'` 로 끝난다. 그 자리를 아래 자동 착수 테스트가 대신 지킨다.
+//    (`GomokuRPCStatus.timeout` 과 `GomokuEndReason.timeout` 은 **모델에 남겨 둔다** — 배포 중간 창의 옛 서버가 아직 보낸다.)
 //
 // 여기서 보는 것: ① 모든 응답이 앱의 실제 응답 모델로 throw 없이 디코드되고 status 가 .unknown 으로 접히지 않는다
 // ② 그 응답을 GomokuStore 에 먹이면(호스트별 URLProtocol 스텁이 픽스처를 순서대로 돌려준다) 화면 상태 — phase·board·turn·
@@ -666,24 +672,70 @@ func 실서버_끝난_판에_둔_not_active_는_결과로_옮기고_since_9_로_
     #expect(gomoku.match?.outcome == .lost && gomoku.match?.endReason == .five && gomoku.match?.rubyDelta == -5)
 }
 
-// MARK: - 6. 시간 초과 · 기권
+// MARK: - 6. 자동 착수 · 자리 비움 · 기권
 
 @MainActor
 @Test(.gomokuDefaultsCleanup)
-func 실서버_착수_timeout_은_진_결과와_루비와_시간_초과_문구다() async throws {
-    let facts = try ServerFacts(fixture: "gomoku_move__timeout")
-    let (store, gomoku, host) = makeContractStore("timeout", me: facts.myID, queues: [
-        "gomoku_move": [try fixtureText("gomoku_move__timeout")]
+func 실서버_auto_placed_는_진_것이_아니라_서버가_대신_놓은_것이다() async throws {
+    // 0.3.27 의 gomoku_move__timeout 을 대신하는 자리다. 마감이 지나도 **판은 계속된다** —
+    // 서버가 빈칸 하나에 대신 놓고 차례를 넘긴다. 여기서 결과 화면으로 넘어가면 사용자는 진 줄 안다.
+    let facts = try ServerFacts(fixture: "gomoku_move__auto_placed")
+    let object = try fixtureJSON("gomoku_move__auto_placed")
+    let (_, gomoku, host) = makeContractStore("auto-placed", me: facts.myID, queues: [
+        "gomoku_move": [try fixtureText("gomoku_move__auto_placed")]
     ])
-    try seed(gomoku, "gomoku_state__ok_white_to_move")
-    #expect(gomoku.match?.turn == .white && gomoku.match?.myColor == .white)
+    // 이 기기는 아직 자동 착수 전(내 차례, 기록 1수)으로 알고 있다.
+    try seed(gomoku, "gomoku_move__auto_placed") { object in
+        var match = object["match"] as? [String: Any] ?? [:]
+        match["move_count"] = 1
+        match["turn"] = facts.myColor
+        match.removeValue(forKey: "board")
+        object["match"] = match
+        object["moves"] = []
+        object["my_auto_streak"] = 0
+    }
+    #expect(gomoku.match?.moveCount == 1 && gomoku.match?.turn?.rawValue == facts.myColor)
+
+    await gomoku.place(GomokuPoint(x: 8, y: 8)!)
+
+    #expect(lastBody(host, "gomoku_move")["p_expected_seq"] as? Int == 1)
+    #expect(object["auto_placed_count"] as? Int == 1, "픽스처: 한 수가 자동으로 놓였다")
+    // ① 판은 끝나지 않았고 ② 내 돌이 아니라 **서버가 놓은 돌**이 하나 늘었고 ③ 차례가 상대에게 갔다
+    #expect(gomoku.match?.isFinished == false && gomoku.phase == .playing, "자동 착수를 결과 화면으로 옮겼다")
+    #expect(gomoku.match?.moveCount == facts.moveCount)
+    #expect(gomoku.match?.board.serverString == facts.board)
+    #expect(gomoku.match?.turn?.rawValue == facts.turn)
+    #expect(gomoku.match?.outcome == nil && gomoku.match?.endReason == nil)
+    #expect(gomoku.match?.lastMoveWasAuto == true, "자동으로 놓인 수가 회색 점으로 구분되지 않는다")
+    #expect(gomoku.myAutoStreak == 1 && gomoku.autoStreakWarning == nil, "첫 번째부터 겁을 주지 않는다")
+    #expect(gomoku.notice == GomokuNoticeText.autoPlaced)
+    #expect(gomoku.notice != GomokuNoticeText.timedOut, "옛 시간 초과 문구가 남아 있다")
+    #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_state") == 0, "상태를 함께 실어 줬는데 또 물었다")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 실서버_상대_돌만_자동으로_놓이면_stale_로_판만_맞춘다() async throws {
+    // 내 색이 colors 에 없으면 auto_placed 가 아니다 — 내 차례는 그대로이고 기록 수만 밀렸다.
+    let facts = try ServerFacts(fixture: "gomoku_move__stale_opponent_auto")
+    let (_, gomoku, host) = makeContractStore("stale-auto", me: facts.myID, queues: [
+        "gomoku_move": [try fixtureText("gomoku_move__stale_opponent_auto")]
+    ])
+    try seed(gomoku, "gomoku_move__stale_opponent_auto") { object in
+        var match = object["match"] as? [String: Any] ?? [:]
+        match["move_count"] = 1
+        match.removeValue(forKey: "board")
+        object["match"] = match
+        object["moves"] = []
+        object["opponent_auto_streak"] = 0
+    }
     await gomoku.place(GomokuPoint(x: 8, y: 8)!)
     #expect(lastBody(host, "gomoku_move")["p_expected_seq"] as? Int == 1)
-    expectMatchEqualsServer(gomoku, facts, clock: contractClock, lastMove: .some(GomokuPoint(x: 7, y: 7)))
-    #expect(gomoku.match?.outcome == .lost && gomoku.match?.endReason == .timeout && gomoku.match?.rubyDelta == -10)
-    #expect(gomoku.rubyBalance == 90 && store.rubyBalance == 90)   // 100 → 수락 −10, 패자 추가 이동 없음
-    #expect(gomoku.notice == "시간이 지나 대국이 끝났어요")
-    #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_state") == 0)
+    #expect(gomoku.match?.moveCount == facts.moveCount)
+    #expect(gomoku.match?.turn?.rawValue == facts.myColor, "상대가 자동으로 둬서 다시 내 차례다")
+    #expect(gomoku.myAutoStreak == 0, "내가 놓친 게 아닌데 내 연속 횟수가 올랐다")
+    #expect(gomoku.opponentAutoStreak == 1)
+    #expect(gomoku.notice == nil, "stale 은 말없이 판만 맞춘다")
 }
 
 @MainActor
@@ -704,21 +756,27 @@ func 실서버_기권_ok_는_진_결과와_판돈만큼의_루비다() async thr
 
 @MainActor
 @Test(.gomokuDefaultsCleanup)
-func 실서버_시간이_넘은_뒤_기권은_timeout_이고_결과는_시간_초과로_옮긴다() async throws {
-    let facts = try ServerFacts(fixture: "gomoku_resign__timeout")
-    let (_, gomoku, _) = makeContractStore("resign-timeout", me: facts.myID, queues: [
-        "gomoku_resign": [try fixtureText("gomoku_resign__timeout")]
-    ])
-    try seed(gomoku, "gomoku_state__ok_black_to_move_empty")
-    await gomoku.resign()
+func 실서버_자리_비움으로_끝난_판은_abandoned_이고_연속_횟수가_임계값이다() throws {
+    // 0.3.27 의 gomoku_resign__timeout 을 대신하는 자리다. 이제 판을 끝내는 것은 시계가 아니라
+    // **연속 3회 자동 착수**이고, 사유 어휘도 timeout 이 아니라 abandoned 다.
+    let facts = try ServerFacts(fixture: "gomoku_state__abandoned")
+    let object = try fixtureJSON("gomoku_state__abandoned")
+    #expect(facts.endReason == "abandoned")
+    #expect(facts.turn == nil && facts.deadlineMs == nil, "끝난 판인데 차례·마감이 남아 있다")
+
+    let (_, gomoku, _) = makeContractStore("abandoned", me: facts.myID, queues: [:])
+    try seed(gomoku, "gomoku_state__abandoned")
     expectMatchEqualsServer(gomoku, facts, clock: contractClock)
-    #expect(gomoku.match?.outcome == .lost && gomoku.match?.endReason == .timeout && gomoku.match?.rubyDelta == -3)
-    #expect(gomoku.rubyBalance == 97)
-    // 서버는 '이미 시간이 넘은 판의 기권'을 status timeout + 끝난 상태로 돌려준다(흐름 테스트 T3). 결과 화면이 시간 초과를
-    // 말하는 동안 안내줄이 "잠시 후 다시 시도해 주세요"(일반 실패)를 말하면 사용자는 기권이 안 된 줄 안다.
-    // 앱 문구표가 착수와 같은 말("시간이 지나 대국이 끝났어요")을 한다(2차 검증 set #4 수리).
-    #expect(gomoku.notice != GomokuNoticeText.tryAgain, "기권 timeout 에 일반 실패 문구: \(gomoku.notice ?? "nil")")
-    #expect(gomoku.notice == GomokuNoticeText.timedOut)
+    #expect(gomoku.match?.endReason == .abandoned, "abandoned 가 모르는 사유로 접혔다")
+    #expect(gomoku.match?.outcome == .lost && gomoku.match?.rubyDelta == -facts.stake)
+    // 자리를 비운 쪽의 연속 횟수는 임계값 그대로다. 경고는 **한 번 남았을 때만** 뜨므로 여기선 안 뜬다.
+    #expect(object["my_auto_streak"] as? Int == GomokuStore.autoPlaceLossStreak)
+    #expect(gomoku.myAutoStreak == GomokuStore.autoPlaceLossStreak)
+    #expect(gomoku.autoStreakWarning == nil, "이미 끝난 판에서 '한 번 더 놓치면 집니다'가 뜬다")
+    // 자동으로 놓인 수와 사람이 둔 수가 한 기록에 섞여 온다.
+    let moves = try #require(object["moves"] as? [[String: Any]])
+    #expect(moves.contains { $0["auto"] as? Bool == true } && moves.contains { $0["auto"] as? Bool == false },
+            "auto true/false 가 섞인 기록이 아니다")
 }
 
 // MARK: - 7. 흑 자동 패스 · 판 가득 무승부
@@ -888,4 +946,107 @@ func 실서버_받은함은_받은_신청_둘과_보낸_신청과_만료를_서�
     #expect(states.count == 1, "최근 끝난 판의 결과를 읽지 않았다(또는 두 번 읽었다)")
     #expect((states.first?.json["p_match_id"] as? String)?.lowercased() == finishedID.lowercased())
     #expect(states.first?.json["p_since_seq"] as? Int == 0)
+}
+
+// MARK: - 10. 0.3.28 — 실제 출력이 앱 모델을 조용히 무너뜨릴 수 있는 자리들
+//
+// 아래 다섯은 "스텁으로는 절대 안 잡히는" 자리만 모았다. 전부 **실서버 출력에서 읽은 사실**이고,
+// 하나라도 모델을 잘못 적으면 응답 **전체가 throw** 하거나(타입) 화면이 조용히 멈춘다(어휘·루프).
+
+@Test(.gomokuDefaultsCleanup)
+func 실서버_나가기의_chat_deleted_는_참거짓이_아니라_지운_개수다() throws {
+    // JSON 에서 0 과 false 는 눈으로 구분되지 않는다. Bool 로 적었다면 4 에서, Int 로 적었다면 false 에서 throw 한다.
+    for (name, expected) in [("gomoku_leave__ok_one", 0), ("gomoku_leave__ok_both", 4)] {
+        let raw = try #require(try fixtureJSON(name)["chat_deleted"] as? NSNumber, "\(name): chat_deleted 가 없다")
+        #expect(raw.objCType.pointee != CChar(UInt8(ascii: "c")), "\(name): chat_deleted 가 Bool 로 왔다")
+        #expect(raw.intValue == expected, "\(name): chat_deleted \(raw.intValue)")
+        // 앱 모델은 이 키를 **일부러 안 읽는다**(화면이 쓸 데가 없다). 그래도 응답 전체는 읽혀야 한다.
+        let response = try contractDecoder().decode(GomokuLeaveResponse.self, from: try fixtureData(name))
+        #expect(response.status == .ok, "\(name)")
+        #expect(response.bothLeft == (expected > 0), "\(name): both_left")
+    }
+    // 아직 안 끝난 판의 거절 어휘. .unknown 으로 접히면 나가기 실패가 '모르는 status' 로 기록되고 원인이 안 보인다.
+    let refused = try contractDecoder().decode(
+        GomokuLeaveResponse.self, from: try fixtureData("gomoku_leave__not_finished"))
+    #expect(refused.status == .notFinished, "not_finished 가 '\(refused.status.rawValue)' 로 접혔다")
+    #expect(refused.matchStatus == "active")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 실서버_음소거_응답의_번호_구멍은_정상이고_전체_재요청_루프를_만들지_않는다() async throws {
+    // 내가 껐으면 **서버가** 상대 줄을 빼고 준다 → chat[] 의 번호가 뛴다. 그런데 chat_seq 는 안 뛴다.
+    // 앱이 이 어긋남을 '구멍'으로 읽으면 since 0 으로 전체를 다시 받고, 그 응답도 똑같이 어긋나 무한 반복이 된다.
+    let object = try fixtureJSON("gomoku_state__ok_chat_my_muted")
+    let seqs = try #require(object["chat"] as? [[String: Any]]).compactMap { $0["seq"] as? Int }
+    let chatSeq = try #require(object["chat_seq"] as? Int)
+    #expect(object["my_muted"] as? Bool == true)
+    #expect(seqs == [1, 3], "음소거로 상대 줄이 빠진 모양이 아니다: \(seqs)")
+    #expect(chatSeq == 4 && chatSeq > (seqs.last ?? 0),
+            "chat_seq(\(chatSeq))와 마지막 줄(\(seqs.last ?? 0))이 어긋나야 이 테스트가 뜻을 갖는다")
+
+    let facts = try ServerFacts(fixture: "gomoku_state__ok_chat_my_muted")
+    let (_, gomoku, host) = makeContractStore("muted-gap", me: facts.myID, queues: [
+        "gomoku_state": [try fixtureText("gomoku_state__ok_chat_my_muted")]
+    ])
+    try seed(gomoku, "gomoku_state__ok_chat_my_muted")
+    #expect(gomoku.isMuted)
+    #expect(gomoku.chat.map(\.seq) == seqs, "가려진 번호를 구멍으로 보고 줄을 버렸다")
+    #expect(gomoku.chatSeq == chatSeq, "다음 since 는 마지막 줄이 아니라 서버 발급 번호다")
+
+    await gomoku.refreshMatch()
+
+    #expect(lastBody(host, "gomoku_state")["p_since_chat_seq"] as? Int == chatSeq,
+            "가려진 구간을 0 부터 다시 물으면 매번 전체를 받는다")
+    #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_state") == 1,
+            "음소거로 빠진 번호를 구멍으로 읽어 전체 재요청 루프에 빠졌다")
+    #expect(gomoku.chat.map(\.seq) == seqs && gomoku.chatSeq == chatSeq, "두 번째 응답이 대화를 흔들었다")
+}
+
+@Test(.gomokuDefaultsCleanup)
+func 실서버_not_found_응답은_키가_status_하나뿐이다() throws {
+    // 여기엔 server_now_ms 조차 없다 — 이 응답으로 시계 보정이나 잔액 갱신을 하려 들면 그 경로가 조용히 죽는다.
+    for name in ["gomoku_chat_send__not_found", "gomoku_state__not_found"] {
+        let object = try fixtureJSON(name)
+        #expect(Array(object.keys) == ["status"], "\(name): 키가 \(object.keys.sorted())")
+        #expect(object["status"] as? String == "not_found", "\(name)")
+    }
+    let chat = try contractDecoder().decode(
+        GomokuChatResponse.self, from: try fixtureData("gomoku_chat_send__not_found"))
+    #expect(chat.status == .notFound && chat.serverNowMs == nil && chat.chatSeq == nil)
+    let state = try contractDecoder().decode(
+        GomokuStateResponse.self, from: try fixtureData("gomoku_state__not_found"))
+    #expect(state.status == .notFound && state.state.match == nil)
+}
+
+@Test(.gomokuDefaultsCleanup)
+func 실서버_시각은_13자리_epoch_밀리초라_32비트로는_넘친다() throws {
+    let object = try fixtureJSON("gomoku_state__ok_since0")
+    let now = try #require(number(object["server_now_ms"]))
+    #expect(now > 1_000_000_000_000, "epoch 밀리초가 아니다: \(now)")
+    #expect(Int32(exactly: now) == nil, "32비트에 들어가는 값이라 이 픽스처로는 넘침을 못 잡는다")
+    // 앱 모델이 Double 로 받는 이유가 여기다(정수로 오든 소수로 오든 한 번에, 그리고 32비트 넘침이 없다).
+    let decoded = try contractDecoder().decode(
+        GomokuStateResponse.self, from: try fixtureData("gomoku_state__ok_since0"))
+    #expect(decoded.state.serverNowMs == now)
+    let deadline = try #require(decoded.state.match?.deadlineMs)
+    #expect(deadline > 1_000_000_000_000)
+    #expect(Double(Int64(now)) == now, "밀리초가 Double 의 정확 정수 범위를 벗어났다")
+}
+
+@Test(.gomokuDefaultsCleanup)
+func 실서버_패스_수는_x_y_가_null_이고_자동_표시가_붙는다() throws {
+    // 앱이 실제로 만나는 경로다: 흑이 둘 곳이 하나도 없으면 서버가 좌표 없는 pass 행을 적는다.
+    // x·y 를 Int(non-optional)로 받으면 이 행 하나에서 **응답 전체가** throw 한다.
+    for name in ["gomoku_state__ok_pass_since0", "gomoku_state__ok_pass_since223", "gomoku_move__ok_black_passed"] {
+        let rows = try #require(try fixtureJSON(name)["moves"] as? [[String: Any]])
+        let pass = try #require(rows.first { $0["kind"] as? String == "pass" }, "\(name): 패스 수가 없다")
+        #expect(pass["x"] is NSNull && pass["y"] is NSNull, "\(name): 패스인데 좌표가 실려 있다")
+        #expect(pass["auto"] as? Bool == true, "\(name): 0.3.28 서버는 규칙 패스도 auto 로 적는다")
+        let decoded = try contractDecoder().decode(GomokuStatePayload.self, from: try fixtureData(name))
+        let row = try #require(decoded.moves?.first { $0.kind == "pass" }, "\(name): 디코드된 패스 수가 없다")
+        #expect(row.x == nil && row.y == nil, "\(name): 좌표가 Optional 이 아니면 여기서 throw 한다")
+        #expect(row.auto == true, "\(name)")
+        #expect(row.seq == 225, "\(name)")
+    }
 }

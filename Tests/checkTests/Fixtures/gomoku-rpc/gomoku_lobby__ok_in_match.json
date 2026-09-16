@@ -4,7 +4,7 @@
     "draws": 0,
     "losses": 0,
     "ruby_balance": 95,
-    "active_match_id": "7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc",
+    "active_match_id": "e9dad1f2-c34a-4837-8f70-83f2fc90e0ef",
     "outgoing_match_id": null
   },
   "users": [
@@ -60,9 +60,46 @@
     10
   ],
   "status": "ok",
+  "matches": [
+    {
+      "a": {
+        "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
+        "character": "aing",
+        "avatar_url": null,
+        "display_name": "abto.app"
+      },
+      "b": {
+        "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+        "character": "jellyfish",
+        "avatar_url": "https://example.invalid/avatar-b.png",
+        "display_name": "코덱스토큰도둑예은"
+      },
+      "stake": 5,
+      "match_id": "e9dad1f2-c34a-4837-8f70-83f2fc90e0ef",
+      "started_ms": 1789547568904
+    },
+    {
+      "a": {
+        "user_id": "544e3837-f01c-4560-b82f-4d44c269f044",
+        "character": "fox",
+        "avatar_url": null,
+        "display_name": "코덱스토큰도둑지유"
+      },
+      "b": {
+        "user_id": "f46dc1d0-4dff-416e-81f0-91d4fb413def",
+        "character": null,
+        "avatar_url": null,
+        "display_name": "거부목록사용자"
+      },
+      "stake": 3,
+      "match_id": "8afbef7d-7d2e-40d0-b29c-288378a12189",
+      "started_ms": 1789547568472
+    }
+  ],
   "ruby_balance": 95,
   "turn_seconds": 30,
-  "server_now_ms": 1789500071595,
+  "server_now_ms": 1789547568927,
   "invite_ttl_seconds": 60,
-  "turn_grace_seconds": 2
+  "turn_grace_seconds": 2,
+  "auto_abandon_streak": 3
 }

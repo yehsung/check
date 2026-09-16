@@ -1,6 +1,6 @@
 {
   "match": {
-    "id": "82216cde-011c-47b5-9707-42a98a3fb455",
+    "id": "6fc3e861-5480-4130-8cf3-e07118578be2",
     "turn": "black",
     "black": "267a3495-643c-40cc-b1a7-14967166eae1",
     "board": "w.............................w.............................w.............................w.......................bb...........b..............b..................................................................................",
@@ -13,15 +13,15 @@
     "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
     "end_reason": null,
     "move_count": 8,
-    "deadline_ms": 1789500102305,
+    "deadline_ms": 1789547599872,
     "finished_ms": null,
-    "turn_started_ms": 1789500072305,
-    "invite_expires_ms": 1789500132161
+    "turn_started_ms": 1789547569872,
+    "invite_expires_ms": 1789547629677
   },
   "moves": [],
   "state": {
     "match": {
-      "id": "82216cde-011c-47b5-9707-42a98a3fb455",
+      "id": "6fc3e861-5480-4130-8cf3-e07118578be2",
       "turn": "black",
       "black": "267a3495-643c-40cc-b1a7-14967166eae1",
       "board": "w.............................w.............................w.............................w.......................bb...........b..............b..................................................................................",
@@ -34,10 +34,10 @@
       "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
       "end_reason": null,
       "move_count": 8,
-      "deadline_ms": 1789500102305,
+      "deadline_ms": 1789547599872,
       "finished_ms": null,
-      "turn_started_ms": 1789500072305,
-      "invite_expires_ms": 1789500132161
+      "turn_started_ms": 1789547569872,
+      "invite_expires_ms": 1789547629677
     },
     "moves": [],
     "my_color": "black",
@@ -48,7 +48,9 @@
       "display_name": "코덱스토큰도둑예은"
     },
     "ruby_balance": 97,
-    "server_now_ms": 1789500072339
+    "server_now_ms": 1789547569914,
+    "my_auto_streak": 0,
+    "opponent_auto_streak": 0
   },
   "reason": "double-three",
   "status": "forbidden",
@@ -61,5 +63,7 @@
     "display_name": "코덱스토큰도둑예은"
   },
   "ruby_balance": 97,
-  "server_now_ms": 1789500072339
+  "server_now_ms": 1789547569914,
+  "my_auto_streak": 0,
+  "opponent_auto_streak": 0
 }

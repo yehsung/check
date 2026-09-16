@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
-"""오목 RPC 응답 픽스처 생성기 — 로컬 하네스(127.0.0.1:55481) 전용.
+"""오목 RPC 응답 픽스처 생성기 (0.3.28) — 로컬 하네스(127.0.0.1:55473) 전용.
+
+0.3.27 의 contract/gen_fixtures.py 를 **새 서버**(20260916200000_gomoku_chat +
+20260916210000_gomoku_timeout_autoplace 적용) 위에서 다시 돌리고, 채팅·자동 착수 시나리오를 뒤에 잇는다.
 
 단계마다 psql 세션 하나: migrator → set role postgres → begin → (준비 SQL) → harness.login(호출자) → RPC → commit|rollback.
-출력은 jsonb 그대로(키 순서 보존) fixtures/<rpc>__<status>.json 에 쓴다. 호출자·인자는 fixtures/_manifest.json.
+출력은 jsonb 그대로(키 순서 보존) fixtures/<rpc>__<상황>.json. 호출자·인자는 fixtures/_manifest.json.
+
+0.3.27 과 달라진 것:
+  · gomoku_move 의 status 'timeout' 은 **사라졌다**(판은 시간으로 죽지 않는다) → gomoku_move__timeout 을 뜨지 않는다.
+  · '시간이 넘은 판의 기권'도 이제 그냥 ok 다 → gomoku_resign__timeout 을 뜨지 않는다.
+  · 모든 상태 응답에 채팅 7키 + my_auto_streak/opponent_auto_streak 가, moves[] 에 auto 가 붙는다.
+  · gomoku_lobby 에 matches[] 와 auto_abandon_streak 가 붙는다.
 """
 import json
 import os
@@ -13,7 +22,7 @@ from collections import OrderedDict
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "fixtures")
 PSQL = "/opt/homebrew/opt/postgresql@15/bin/psql"
-PORT = "55481"
+PORT = "55473"
 
 A = "267a3495-643c-40cc-b1a7-14967166eae1"  # abto.app
 B = "3e240c02-8972-478e-a674-014f498a641b"  # 코덱스토큰도둑예은
@@ -22,6 +31,9 @@ D = "f46dc1d0-4dff-416e-81f0-91d4fb413def"  # 거부목록사용자
 E = "785b5732-75fe-4a71-931a-2e3f06e63505"  # 씨앗다섯 — 근무 안 함(가능 build)
 F = "6a6a6a6a-0000-4000-8000-00000000000f"  # 여섯째 — 근무 중·구버전(build 76)
 TEAM = "fa11fa11-0000-4000-8000-000000000001"
+LABEL = {A: "A", B: "B", C: "C", D: "D", E: "E", F: "F"}
+
+SEED = "select setseed(0.4242) \\g /dev/null\n"   # 자동 착수의 random() 고정
 
 env = {k: v for k, v in os.environ.items() if not k.startswith("PG")}
 env.update(PGHOST="127.0.0.1", PGPORT=PORT, PGDATABASE="postgres", PGCONNECT_TIMEOUT="5",
@@ -41,21 +53,20 @@ def psql(sql, user="migrator"):
 
 
 def call(caller, rpc_sql, setup="", end="rollback", name=None, note=""):
-    """caller 로 rpc_sql(jsonb 식)을 부르고 파싱한 dict 를 돌려준다. name 이 있으면 파일로 뜬다."""
     sql = "set role postgres;\nbegin;\n" + setup + "\n"
     sql += f"select harness.login('{caller}') \\g /dev/null\n"
     sql += f"select '@@' || ({rpc_sql})::text;\n{end};\n"
     out = psql(sql)
     lines = [l for l in out.splitlines() if l.startswith("@@")]
     assert len(lines) == 1, out
-    text = lines[0][2:]
-    obj = json.loads(text, object_pairs_hook=OrderedDict)
+    obj = json.loads(lines[0][2:], object_pairs_hook=OrderedDict)
     if name:
         with open(os.path.join(OUT, name + ".json"), "w", encoding="utf-8") as fh:
             json.dump(obj, fh, ensure_ascii=False, indent=2)
             fh.write("\n")
-        manifest[name] = OrderedDict(caller=caller, rpc=rpc_sql, setup=setup.strip() or None, end=end, note=note or None)
-        print(f"{name:52s} status={obj.get('status')}")
+        manifest[name] = OrderedDict(caller=caller, caller_label=LABEL.get(caller), rpc=rpc_sql,
+                                     setup=setup.strip() or None, end=end, note=note or None)
+        print(f"{name:46s} status={obj.get('status')}")
     return obj
 
 
@@ -78,6 +89,17 @@ def pair(challenger, opponent, stake):
 
 def move(caller, m, seq, x, y, name=None, end="commit", setup=""):
     return call(caller, f"public.gomoku_move(1, '{m}', {seq}, {x}, {y})", end=end, name=name, setup=setup)
+
+
+def drop_match(m):
+    admin(f"delete from public.gomoku_matches where id = '{m}';")
+
+
+TOUCH_ACTIVE = "update public.gomoku_matches set turn_started_at = clock_timestamp() where status = 'active';\n"
+
+
+def back(match_id, secs):
+    return f"update public.gomoku_matches set turn_started_at = clock_timestamp() - interval '{secs} seconds' where id = '{match_id}';\n"
 
 
 def main():
@@ -103,9 +125,16 @@ begin
   end if;
 end $f$;
 """)
+    # F(여섯째)는 씨앗에 없다 — 가입 트리거로 만든다(프로필·멤버십·근무상태가 따라온다).
+    admin(f"""
+insert into auth.users (id, email, raw_user_meta_data, created_at) values
+  ('{F}', 'sixth@example.invalid', '{{"display_name":"여섯째"}}', '2026-01-06T00:00:00Z')
+on conflict (id) do nothing;
+""")
     admin(f"""
 insert into public.memberships(team_id, user_id) select '{TEAM}', '{F}'
  where not exists (select 1 from public.memberships where user_id = '{F}');
+delete from public.gomoku_chat;
 delete from public.gomoku_matches;
 update public.work_sessions set ended_at = now() where ended_at is null;
 insert into public.work_sessions(team_id, user_id, started_at)
@@ -117,6 +146,7 @@ update public.profiles set app_build = 76, focus_mode = false where id = '{F}';
 update public.profiles set character = 'aing' where id = '{A}';
 update public.profiles set character = 'jellyfish', avatar_url = 'https://example.invalid/avatar-b.png' where id = '{B}';
 update public.profiles set character = 'fox' where id = '{C}';
+update public.profiles set character = null, avatar_url = null where id in ('{D}','{E}','{F}');
 """)
     for u in (A, B, C, D, E, F):
         admin(set_ruby_sql(u, 100))
@@ -168,28 +198,25 @@ update public.profiles set character = 'fox' where id = '{C}';
     call(A, "public.gomoku_lobby(1)", name="gomoku_lobby__ok_in_match")
 
     # ── M1 흐름: 두 사람의 스토어가 실제로 낼 요청 순서 그대로 뜬다 ──────────────────────────────
-    # 수락자(B)는 respond 응답으로 판을 연다. 신청자(A)는 신호 → 인박스(active_match_id) → state since 0.
     flow.append(OrderedDict(perspective=role[B], kind="respond", file="gomoku_respond__accept_ok"))
     call(A, "public.gomoku_inbox(1)", name="gomoku_inbox__ok_active")
     flow.append(OrderedDict(perspective=role[A], kind="inbox", file="gomoku_inbox__ok_active"))
-    call(A, f"public.gomoku_state(1, '{m1}', 0)", name="flow_m1_challenger_state_since0")
+    call(A, f"public.gomoku_state(1, '{m1}', 0, 0)", name="flow_m1_challenger_state_since0")
     flow.append(OrderedDict(perspective=role[A], kind="state", since=0, file="flow_m1_challenger_state_since0"))
     points = [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1), (3, 0), (3, 1), (4, 0)]
     for k, (x, y) in enumerate(points):
         actor = blk if k % 2 == 0 else wht
         other = wht if actor == blk else blk
         if k == 2:
-            # 두 번째 맥 시나리오: 흑의 한 기기는 count 0 에 머물러 있다가 둔다 → stale(since 0) → state since 2
             move(blk, m1, 0, 5, 5, name="gomoku_move__stale", end="rollback")
-            call(blk, f"public.gomoku_state(1, '{m1}', 2)", name="gomoku_state__ok_black_since2_count2")
-            # 백의 한 기기는 count 1(자기 차례)로 알고 있다가 둔다 → not_your_turn(since 1) → state since 2
+            call(blk, f"public.gomoku_state(1, '{m1}', 2, 0)", name="gomoku_state__ok_black_since2_count2")
             move(wht, m1, 1, 5, 5, name="gomoku_move__not_your_turn", end="rollback")
-            call(wht, f"public.gomoku_state(1, '{m1}', 2)", name="gomoku_state__ok_white_since2_count2")
+            call(wht, f"public.gomoku_state(1, '{m1}', 2, 0)", name="gomoku_state__ok_white_since2_count2")
         if k == 4:
-            call(blk, f"public.gomoku_state(1, '{m1}', 0)", name="gomoku_state__ok_since0")
-            call(wht, f"public.gomoku_state(1, '{m1}', 2)", name="gomoku_state__ok_since2")
+            call(blk, f"public.gomoku_state(1, '{m1}', 0, 0)", name="gomoku_state__ok_since0")
+            call(wht, f"public.gomoku_state(1, '{m1}', 2, 0)", name="gomoku_state__ok_since2")
             move(blk, m1, 4, 0, 0, name="gomoku_move__invalid_occupied", end="rollback")
-            call(blk, f"public.gomoku_state(1, '{m1}', 4)", name="gomoku_state__ok_black_since4_count4")
+            call(blk, f"public.gomoku_state(1, '{m1}', 4, 0)", name="gomoku_state__ok_black_since4_count4")
         name = "gomoku_move__win_black_five" if k == 8 else f"flow_m1_k{k}_{role[actor]}_move"
         if k == 0:
             name = "gomoku_move__ok_black_first"
@@ -199,15 +226,14 @@ update public.profiles set character = 'fox' where id = '{C}';
         assert r["status"] == "ok", r
         flow.append(OrderedDict(perspective=role[actor], kind="place", expected=k, x=x, y=y, file=name))
         sname = f"flow_m1_k{k}_{role[other]}_state_since{k}"
-        call(other, f"public.gomoku_state(1, '{m1}', {k})", name=sname)
+        call(other, f"public.gomoku_state(1, '{m1}', {k}, 0)", name=sname)
         flow.append(OrderedDict(perspective=role[other], kind="state", since=k, file=sname))
     call(blk, "public.gomoku_lobby(1)", name="gomoku_lobby__ok_after_win_black")
     call(wht, "public.gomoku_lobby(1)", name="gomoku_lobby__ok_after_win_white")
-    call(wht, f"public.gomoku_state(1, '{m1}', 0)", name="gomoku_state__finished_loser_since0")
-    # 백의 한 기기가 판이 끝난 줄 모르고(count 8) 둔다 → not_active(since 8) → state since 9
+    call(wht, f"public.gomoku_state(1, '{m1}', 0, 0)", name="gomoku_state__finished_loser_since0")
     move(wht, m1, 8, 5, 5, name="gomoku_move__not_active", end="rollback")
-    call(wht, f"public.gomoku_state(1, '{m1}', 9)", name="gomoku_state__finished_since9")
-    call(C, f"public.gomoku_state(1, '{m1}', 0)", name="gomoku_state__not_found", note="비참가자")
+    call(wht, f"public.gomoku_state(1, '{m1}', 9, 0)", name="gomoku_state__finished_since9")
+    call(C, f"public.gomoku_state(1, '{m1}', 0, 0)", name="gomoku_state__not_found", note="비참가자")
 
     # ── 금수 · 기권 (M2 판돈 3) ─────────────────────────────────────────────────────────────
     admin(set_ruby_sql(A, 100)); admin(set_ruby_sql(B, 100))
@@ -217,26 +243,27 @@ update public.profiles set character = 'fox' where id = '{C}';
         r = move(who, m2, seq, x, y)
         assert r["status"] == "ok", r
         seq += 1
-    call(blk, f"public.gomoku_state(1, '{m2}', 0)", name="gomoku_state__ok_before_forbidden_black")
+    call(blk, f"public.gomoku_state(1, '{m2}', 0, 0)", name="gomoku_state__ok_before_forbidden_black")
     move(blk, m2, 8, 7, 7, name="gomoku_move__forbidden_double_three", end="rollback")
     call(blk, f"public.gomoku_resign(1, '{m2}')", name="gomoku_resign__ok", end="commit", note="흑 기권")
 
-    # ── 시간 초과 (M3 판돈 10) ──────────────────────────────────────────────────────────────
+    # ── 백 차례 상태 (M3 판돈 10) ───────────────────────────────────────────────────────────
+    # 0.3.27 의 gomoku_move__timeout 은 **뜨지 않는다** — 새 서버는 시간이 지나도 판을 죽이지 않는다.
     admin(set_ruby_sql(A, 100)); admin(set_ruby_sql(B, 100))
     m3, blk, wht = pair(A, B, 10)
     move(blk, m3, 0, 7, 7)
-    call(wht, f"public.gomoku_state(1, '{m3}', 0)", name="gomoku_state__ok_white_to_move")
-    move(wht, m3, 1, 8, 8, name="gomoku_move__timeout",
-         setup=f"update public.gomoku_matches set turn_started_at = clock_timestamp() - interval '40 seconds' where id = '{m3}';")
+    call(wht, f"public.gomoku_state(1, '{m3}', 0, 0)", name="gomoku_state__ok_white_to_move")
+    drop_match(m3)   # 판을 닫아 A·B 를 풀어 준다(옛 판은 timeout 정산이 했다)
 
-    # 기권하려는데 이미 시간이 넘은 판(M4 판돈 3, 흑 차례에서 흑이 기권)
+    # ── 흑 차례 빈 판 상태 (M4 판돈 3) ──────────────────────────────────────────────────────
+    # 0.3.27 의 gomoku_resign__timeout 도 뜨지 않는다 — 마감이 지난 판의 기권은 이제 그냥 ok 다.
     admin(set_ruby_sql(A, 100)); admin(set_ruby_sql(B, 100))
     m4, blk, wht = pair(A, B, 3)
-    call(blk, f"public.gomoku_state(1, '{m4}', 0)", name="gomoku_state__ok_black_to_move_empty")
-    call(blk, f"public.gomoku_resign(1, '{m4}')", name="gomoku_resign__timeout", end="commit",
-         setup=f"update public.gomoku_matches set turn_started_at = clock_timestamp() - interval '35 seconds' where id = '{m4}';")
+    call(blk, f"public.gomoku_state(1, '{m4}', 0, 0)", name="gomoku_state__ok_black_to_move_empty")
+    drop_match(m4)
 
     # ── 흑 자동 패스 · 판 가득 무승부 (M5 판돈 5) ───────────────────────────────────────────
+    # 여기서 나오는 pass 수가 **x·y 가 null 인 행**이다(0.3.28 부터 auto=true 도 함께 온다).
     admin(set_ruby_sql(A, 100)); admin(set_ruby_sql(B, 100))
     m5, blk, wht = pair(A, B, 5)
     admin(f"""
@@ -248,11 +275,11 @@ update public.gomoku_matches
        move_count = 223, turn = 'white', turn_started_at = clock_timestamp()
  where id = '{m5}';
 """)
-    call(wht, f"public.gomoku_state(1, '{m5}', 0)", name="gomoku_state__ok_before_pass_white")
-    call(blk, f"public.gomoku_state(1, '{m5}', 0)", name="gomoku_state__ok_before_pass_black")
+    call(wht, f"public.gomoku_state(1, '{m5}', 0, 0)", name="gomoku_state__ok_before_pass_white")
+    call(blk, f"public.gomoku_state(1, '{m5}', 0, 0)", name="gomoku_state__ok_before_pass_black")
     move(wht, m5, 223, 2, 0, name="gomoku_move__ok_black_passed")
-    call(blk, f"public.gomoku_state(1, '{m5}', 0)", name="gomoku_state__ok_pass_since0")
-    call(blk, f"public.gomoku_state(1, '{m5}', 223)", name="gomoku_state__ok_pass_since223")
+    call(blk, f"public.gomoku_state(1, '{m5}', 0, 0)", name="gomoku_state__ok_pass_since0")
+    call(blk, f"public.gomoku_state(1, '{m5}', 223, 0)", name="gomoku_state__ok_pass_since223")
     move(wht, m5, 225, 3, 2, name="gomoku_move__board_full_draw")
 
     # ── 받은함: B 에게 받은 신청 둘(A·F) + 보낸 신청(B→A) + 최근 끝난 판(M5 무승부) ─────────────
@@ -260,10 +287,104 @@ update public.gomoku_matches
     call(A, f"public.gomoku_challenge(1, '{B}', 3)", end="commit")
     call(F, f"public.gomoku_challenge(1, '{B}', 10)", end="commit")
     call(B, f"public.gomoku_challenge(1, '{A}', 5)", end="commit")
-    call(B, "public.gomoku_inbox(1)", name="gomoku_inbox__ok")
-    call(A, "public.gomoku_lobby(1)", name="gomoku_lobby__ok")
+    call(B, "public.gomoku_inbox(1)", name="gomoku_inbox__ok", setup=TOUCH_ACTIVE)
+    call(A, "public.gomoku_lobby(1)", name="gomoku_lobby__ok", setup=TOUCH_ACTIVE)
 
-    ids = OrderedDict(A=A, B=B, C=C, D=D, E=E, F=F, m1=m1, m2=m2, m3=m3, m4=m4, m5=m5)
+    # ══ 0.3.28 — 채팅 · 나가기 · 자동 착수 ═════════════════════════════════════════════════
+    # 판을 전부 걷고 새로 연다. D 만 build 79 로 남겨 chat_capable=false 를 만든다.
+    admin(f"""
+delete from public.gomoku_chat;
+delete from public.gomoku_matches;
+update public.profiles set app_build = 80 where id in ('{A}','{B}','{C}','{E}');
+update public.profiles set app_build = 79 where id = '{D}';
+insert into public.work_sessions(team_id, user_id, started_at)
+select m.team_id, '{E}', now() - interval '1 hour'
+  from (select team_id from public.memberships where user_id = '{E}' limit 1) m
+ where not exists (select 1 from public.work_sessions where user_id = '{E}' and ended_at is null);
+""")
+    for u in (A, B, C, D, E):
+        admin(set_ruby_sql(u, 100))
+
+    call(E, "public.gomoku_lobby(1)", name="gomoku_lobby__ok_no_matches",
+         note="구경꾼 E · 진행 중 대국 0 → matches[] 빈 배열. auto_abandon_streak 포함.")
+
+    m_old, old_blk, old_wht = pair(C, D, 3)
+    m_chat, blk, wht = pair(A, B, 5)
+    role = {blk: "black", wht: "white"}
+
+    call(E, "public.gomoku_lobby(1)", name="gomoku_lobby__ok_matches",
+         note="구경꾼 E · 진행 중 대국 2(A-B · C-D). accepted_at 내림차순, a/b 는 uuid 오름차순, 판 내용 없음.")
+
+    call(C, f"public.gomoku_state(1, '{m_old}', 0, 0)", name="gomoku_state__ok_chat_empty",
+         note="C 시점 · 채팅 0 + 상대 D 가 build 79 라 chat_capable=false. 상대 avatar_url·character 는 null.")
+
+    call(A, f"public.gomoku_chat_send(2, '{m_chat}', 'text', '좋은 대국 부탁드려요!')",
+         name="gomoku_chat_send__ok", end="commit", note="A(신청자)의 자유 입력 한 줄 → chat_seq 1.")
+    call(B, f"public.gomoku_chat_send(2, '{m_chat}', 'quick', 'hi')", end="commit")
+    call(A, f"public.gomoku_chat_send(2, '{m_chat}', 'text', '천천히 두세요 🙂')", end="commit")
+    call(B, f"public.gomoku_chat_send(2, '{m_chat}', 'quick', 'gg')", end="commit")
+
+    call(A, f"public.gomoku_state(1, '{m_chat}', 0, 0)", name="gomoku_state__ok_chat_multi",
+         note="A 시점 · chat 4줄(text 2 + quick 2), mine 섞임, chat_capable true.")
+    call(A, f"public.gomoku_state(1, '{m_chat}', 0, 2)", name="gomoku_state__ok_chat_since",
+         note="A 시점 · p_since_chat_seq=2 → seq 3·4 만(chat_seq 는 여전히 4).")
+
+    call(A, f"public.gomoku_chat_mute(2, '{m_chat}', true)", name="gomoku_chat_mute__ok_on", end="commit")
+    call(A, f"public.gomoku_state(1, '{m_chat}', 0, 0)", name="gomoku_state__ok_chat_my_muted",
+         note="A 시점 · my_muted true — 상대 줄이 chat[] 에서 통째로 빠진다. chat_seq(4)와 마지막 seq(3)가 어긋난다.")
+    call(B, f"public.gomoku_state(1, '{m_chat}', 0, 0)", name="gomoku_state__ok_chat_opponent_muted",
+         note="B 시점 · opponent_muted true(상대 A 가 껐다) — B 의 chat[] 은 그대로 다 보인다.")
+    call(A, f"public.gomoku_chat_mute(2, '{m_chat}', false)", name="gomoku_chat_mute__ok_off", end="commit")
+
+    call(A, f"public.gomoku_chat_send(1, '{m_chat}', 'text', '안녕하세요')",
+         name="gomoku_chat_send__unsupported_client", note="p_protocol=1 < gomoku_chat_protocol() 2.")
+    call(A, f"public.gomoku_chat_send(2, '{m_chat}', 'text', repeat('가', 101))",
+         name="gomoku_chat_send__invalid_too_long", note="101자 — gomoku_chat_max_len() 100 초과.")
+    call(A, f"public.gomoku_chat_send(2, '{m_chat}', 'quick', 'nope')",
+         name="gomoku_chat_send__invalid_quick_code", note="quick 인데 gomoku_chat_quick_codes() 에 없는 코드.")
+    call(C, f"public.gomoku_chat_send(2, '{m_chat}', 'text', '남의 판에 끼어들기')",
+         name="gomoku_chat_send__not_found", note="C 는 이 판의 참가자가 아니다 — 키가 status 하나뿐이다.")
+    call(A, f"public.gomoku_chat_send(2, '{m_chat}', 'text', '서른한 번째')",
+         name="gomoku_chat_send__flood",
+         setup=f"""
+insert into public.gomoku_chat(match_id, seq, sender, kind, body, created_at)
+select '{m_chat}', 100 + g, '{A}', 'text', 'flood ' || g, clock_timestamp() - make_interval(secs => g)
+  from generate_series(1, 30) g;
+update public.gomoku_matches set chat_seq = 130 where id = '{m_chat}';
+""",
+         note="A 가 1분 안에 이미 30건(gomoku_chat_flood_limit) — 31번째가 거절된다.")
+
+    # 실제로 한 수(흑) → auto=false 인 수를 남긴다. 이제 move_count=1, 백 차례.
+    r = move(blk, m_chat, 0, 7, 7)
+    assert r["status"] == "ok", r
+
+    call(wht, f"public.gomoku_move(1, '{m_chat}', 1, 8, 8)", name="gomoku_move__auto_placed",
+         setup=SEED + back(m_chat, 40), end="rollback",
+         note=f"{role[wht]}({LABEL[wht]}) 시점 — 마감이 지나 내 돌이 이미 자동으로 놓인 뒤에 두려 했다.")
+    call(blk, f"public.gomoku_move(1, '{m_chat}', 1, 8, 8)", name="gomoku_move__stale_opponent_auto",
+         setup=SEED + back(m_chat, 40), end="rollback",
+         note=f"{role[blk]}({LABEL[blk]}) 시점 — 상대 돌만 자동으로 놓였다(내 색은 colors 에 없다) → stale.")
+    call(wht, f"public.gomoku_state(1, '{m_chat}', 0, 0)", name="gomoku_state__ok_auto_moves",
+         setup=SEED + back(m_chat, 100), end="rollback",
+         note=f"{role[wht]}({LABEL[wht]}) 시점 — 따라잡기로 자동 착수 여럿. moves[].auto 가 true/false 섞이고 연속 횟수가 0이 아니다.")
+
+    call(wht, f"public.gomoku_state(1, '{m_chat}', 0, 0)", name="gomoku_state__abandoned",
+         setup=SEED + back(m_chat, 250), end="commit",
+         note=f"{role[wht]}({LABEL[wht]}) 시점 — 연속 3회(gomoku_auto_abandon_streak)로 자리 비움 패배. end_reason='abandoned'.")
+
+    call(C, f"public.gomoku_leave(2, '{m_old}')", name="gomoku_leave__not_finished",
+         note="아직 진행 중인 판 — 대국 중 이탈은 기권뿐이다.")
+    call(A, f"public.gomoku_chat_send(2, '{m_chat}', 'text', '수고하셨어요')",
+         name="gomoku_chat_send__not_active",
+         setup=f"update public.gomoku_matches set finished_at = clock_timestamp() - interval '300 seconds' where id = '{m_chat}';",
+         note="끝난 지 300초(유예 120 초과) — 인사 창이 닫혔다.")
+    call(A, f"public.gomoku_leave(2, '{m_chat}')", name="gomoku_leave__ok_one", end="commit",
+         note="A(신청자)만 나갔다 — both_left false, chat_deleted 0(개수다, 참/거짓이 아니다).")
+    call(B, f"public.gomoku_leave(2, '{m_chat}')", name="gomoku_leave__ok_both", end="commit",
+         note="B 까지 나갔다 — both_left true, chat_deleted 4. chat_seq 는 줄이지 않는다.")
+
+    ids = OrderedDict(A=A, B=B, C=C, D=D, E=E, F=F, m1=m1, m2=m2, m3=m3, m4=m4, m5=m5,
+                      m_old=m_old, m_chat=m_chat, m_chat_black=blk, m_chat_white=wht)
     with open(os.path.join(OUT, "_manifest.json"), "w", encoding="utf-8") as fh:
         json.dump(OrderedDict(users=ids, flow_m1=flow, fixtures=manifest), fh, ensure_ascii=False, indent=2)
         fh.write("\n")

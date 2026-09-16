@@ -1,79 +1,85 @@
 {
   "match": {
-    "id": "7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc",
+    "id": "e9dad1f2-c34a-4837-8f70-83f2fc90e0ef",
     "turn": null,
-    "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "black": "3e240c02-8972-478e-a674-014f498a641b",
     "board": "bbbbb..........wwww..............................................................................................................................................................................................................",
     "stake": 5,
-    "white": "3e240c02-8972-478e-a674-014f498a641b",
+    "white": "267a3495-643c-40cc-b1a7-14967166eae1",
     "result": "black_win",
     "status": "finished",
-    "winner": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "winner": "3e240c02-8972-478e-a674-014f498a641b",
     "opponent": "3e240c02-8972-478e-a674-014f498a641b",
     "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
     "end_reason": "five",
     "move_count": 9,
     "deadline_ms": null,
-    "finished_ms": 1789500072014,
-    "turn_started_ms": 1789500071982,
-    "invite_expires_ms": 1789500131403
+    "finished_ms": 1789547569482,
+    "turn_started_ms": 1789547569440,
+    "invite_expires_ms": 1789547628683
   },
   "moves": [
     {
       "x": 4,
       "y": 0,
       "seq": 9,
+      "auto": false,
       "kind": "stone",
       "color": "black"
     }
   ],
   "state": {
     "match": {
-      "id": "7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc",
+      "id": "e9dad1f2-c34a-4837-8f70-83f2fc90e0ef",
       "turn": null,
-      "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "black": "3e240c02-8972-478e-a674-014f498a641b",
       "board": "bbbbb..........wwww..............................................................................................................................................................................................................",
       "stake": 5,
-      "white": "3e240c02-8972-478e-a674-014f498a641b",
+      "white": "267a3495-643c-40cc-b1a7-14967166eae1",
       "result": "black_win",
       "status": "finished",
-      "winner": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "winner": "3e240c02-8972-478e-a674-014f498a641b",
       "opponent": "3e240c02-8972-478e-a674-014f498a641b",
       "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
       "end_reason": "five",
       "move_count": 9,
       "deadline_ms": null,
-      "finished_ms": 1789500072014,
-      "turn_started_ms": 1789500071982,
-      "invite_expires_ms": 1789500131403
+      "finished_ms": 1789547569482,
+      "turn_started_ms": 1789547569440,
+      "invite_expires_ms": 1789547628683
     },
     "moves": [
       {
         "x": 4,
         "y": 0,
         "seq": 9,
+        "auto": false,
         "kind": "stone",
         "color": "black"
       }
     ],
     "my_color": "white",
     "opponent": {
-      "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "character": "aing",
-      "avatar_url": null,
-      "display_name": "abto.app"
+      "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+      "character": "jellyfish",
+      "avatar_url": "https://example.invalid/avatar-b.png",
+      "display_name": "코덱스토큰도둑예은"
     },
     "ruby_balance": 95,
-    "server_now_ms": 1789500072090
+    "server_now_ms": 1789547569583,
+    "my_auto_streak": 0,
+    "opponent_auto_streak": 0
   },
   "status": "not_active",
   "my_color": "white",
   "opponent": {
-    "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
-    "character": "aing",
-    "avatar_url": null,
-    "display_name": "abto.app"
+    "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+    "character": "jellyfish",
+    "avatar_url": "https://example.invalid/avatar-b.png",
+    "display_name": "코덱스토큰도둑예은"
   },
   "ruby_balance": 95,
-  "server_now_ms": 1789500072090
+  "server_now_ms": 1789547569583,
+  "my_auto_streak": 0,
+  "opponent_auto_streak": 0
 }

@@ -3169,6 +3169,9 @@ nonisolated enum GomokuRPCStatus: String, Equatable, Hashable, Sendable, Decodab
     case notPending = "not_pending"
     case expired
     case notActive = "not_active"
+    /// 0.3.28 — `gomoku_leave` 가 **아직 안 끝난 판**에서 거절하는 값(대국 중 이탈은 기권뿐이다).
+    /// 없으면 `.unknown` 으로 접혀 나가기 응답이 "모르는 status" 가 된다 — 실측 픽스처 `gomoku_leave__not_finished`.
+    case notFinished = "not_finished"
     /// 시간 초과 패배(**옛 어휘**). 0.3.28 서버는 이 status 를 새로 보내지 않는다 — 시간이 지나면 지는 게 아니라
     /// 서버가 무작위 자리에 대신 놓기 때문이다(`autoPlaced`). **지우지 마라**: 배포 중간 창의 옛 서버가 아직 보낸다.
     case timeout

@@ -339,6 +339,10 @@ func todoContractRejectedNewItemsMerge() throws {
     let b0 = try #require(try todoContractRows("todo_sync__rejected_mixed").first { $0.id == todoContractID("b0") })
     #expect(list.items.first { $0.id == b0.id } == b0)
     #expect(list.pendingIDs.isEmpty, "거절·확정 항목이 pending 에 남았다")
+    // 부록 B-3: 로컬에 있는 거절 id 만 붙잡는다(b2·b3 는 기기가 만들 수 없는 모양이라 로컬에 없다).
+    #expect(list.heldRejectedIDs == [todoContractID("a6"), todoContractID("a7"), todoContractID("a8"), todoContractID("a9")],
+            "실제 거절 응답을 붙잡지 않았다 — 다음 응답의 서버 행·full 에 덮이거나 지워진다")
+    #expect(Set(try TodoFileStore.load(from: list.fileURL).sync.heldRejectedIDs) == list.heldRejectedIDs)
 }
 
 @MainActor
@@ -361,6 +365,7 @@ func todoContractQuotaMerge() throws {
     #expect(list.items.first { $0.id == fresh.id } == fresh, "quota 로 거절된 새 줄이 로컬에서 사라졌다")
     #expect(list.items.first { $0.id == edit.id } == (try todoContractRows("todo_sync__quota").first))
     #expect(list.pendingIDs.isEmpty)
+    #expect(list.heldRejectedIDs == [fresh.id], "quota 로 거절된 새 줄을 붙잡지 않았다 — 뒤 full 동기화에서 지워진다(X2 F2)")
 }
 
 @MainActor

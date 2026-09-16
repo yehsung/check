@@ -47,20 +47,28 @@ struct TodoFileSyncState: Codable, Equatable, Sendable {
     var watermarkMs: Int64?
     /// 아직 서버에 확정되지 않은 항목 id. 순서는 뜻이 없지만 파일 diff 가 흔들리지 않게 정렬해 쓴다.
     var pendingIDs: [UUID]
+    /// 서버가 거절해(`rejected`) **붙잡아 둔** 항목 id(부록 B-3). 이 id 의 로컬 사본은 서버 행이 와도 덮지 않고 full 동기화에서도
+    /// 지우지 않는다 — 사용자가 다시 고칠 때까지. **선택 필드**다: 이 키가 없던 파일(붙잡기 이전 2세대)은 빈 목록으로 읽는다.
+    var heldRejectedIDs: [UUID]
 
     enum CodingKeys: String, CodingKey {
-        case watermarkMs, pendingIDs
+        case watermarkMs, pendingIDs, heldRejectedIDs
     }
 
-    init(watermarkMs: Int64?, pendingIDs: [UUID]) {
+    init(watermarkMs: Int64?, pendingIDs: [UUID], heldRejectedIDs: [UUID] = []) {
         self.watermarkMs = watermarkMs
         self.pendingIDs = pendingIDs
+        self.heldRejectedIDs = heldRejectedIDs
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         watermarkMs = try c.decodeIfPresent(Int64.self, forKey: .watermarkMs)
         pendingIDs = try c.decode([UUID].self, forKey: .pendingIDs)
+        // 키가 없으면 빈 목록. 키가 있는데 깨졌으면 **던진다** — 빈 목록으로 접으면 붙잡혀 있던 줄이 보낼 것도 붙잡기도 아닌 채
+        // 남아 다음 응답의 서버 옛 행에 덮이거나 full 에서 지워진다. 던지면 파일 쪽 관용(sync 통째로 "전부 보낼 것")을 타고,
+        // 다시 보낸 줄은 또 거절돼 다시 붙잡힌다.
+        heldRejectedIDs = try c.decodeIfPresent([UUID].self, forKey: .heldRejectedIDs) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -68,13 +76,15 @@ struct TodoFileSyncState: Codable, Equatable, Sendable {
         // null 을 **싣는다**(키를 빼지 않는다) — 명세의 파일 모양 `watermarkMs: int|null` 을 글자 그대로 지킨다.
         try c.encode(watermarkMs, forKey: .watermarkMs)
         try c.encode(pendingIDs, forKey: .pendingIDs)
+        try c.encode(heldRejectedIDs, forKey: .heldRejectedIDs)
     }
 }
 
 /// 디스크에 실리는 파일 전체. 항목 배열을 그냥 쓰지 않고 봉투를 씌우는 이유는 version 한 칸 때문이다 —
 /// 나중에 스키마가 바뀌어도 "이 파일이 몇 세대인지"를 알아야 마이그레이션할지 그냥 읽을지 판단할 수 있다.
 ///
-/// 2세대(v0.3.30): `{"version":2,"items":[…],"sync":{"watermarkMs":int|null,"pendingIDs":[uuid…]}}`.
+/// 2세대(v0.3.30): `{"version":2,"items":[…],"sync":{"watermarkMs":int|null,"pendingIDs":[uuid…],"heldRejectedIDs":[uuid…]}}`
+/// (`heldRejectedIDs` 는 선택 — 없으면 빈 목록).
 /// 0.3.29 의 디코더는 version·items 두 키만 읽고 **모르는 키(sync)를 무시한다** — 되돌려 설치해도 목록은 그대로 읽힌다
 /// (V0330TodoFileMigrationTests 가 옛 디코더 사본으로 실제 바이트를 읽어 확인한다).
 struct TodoFile: Codable, Equatable {
@@ -318,25 +328,30 @@ enum TodoRules {
 
     /// 서버 응답을 로컬 사본에 합친다. **서버 `todo_sync` 의 LWW 와 같은 규칙**이라 두 기기와 서버가 같은 값으로 수렴한다.
     ///
-    /// 규칙(명세 A4-3):
-    /// ⓪ pending 중 로컬에 없는 id 는 버린다 — 보낼 항목이 없는 id 는 뜻이 없고, 남기면 같은 응답을 두 번 합칠 때 결과가 갈린다.
+    /// 규칙(명세 A4-3 · 부록 B-3):
+    /// ⓪ pending·붙잡기 중 로컬에 없는 id 는 버린다 — 항목이 없는 id 는 뜻이 없고, 남기면 같은 응답을 두 번 합칠 때 결과가 갈린다.
+    ///    pending 이면서 붙잡힌 id 는 pending 이 이긴다(사용자가 다시 고친 값이다 — 붙잡기는 "안 고친 채 거절됐다"는 뜻이라서).
     /// ① **보낸 스냅샷**: 응답을 받은 시점의 로컬 updatedAtMs 가 **보낸 값과 같을 때만** pending 에서 뺀다(보낸 뒤 또 고쳤으면
     ///    그 새 값은 서버가 아직 모른다). 합치기 **전** 값으로 본다 — 서버가 미래 시각을 눌러(clamp) 더 작은 값으로 돌려준
     ///    경우에도 "안 고쳤다"가 성립해야 서버 값으로 수렴한다.
-    /// ② rejected: pending 에서 빼고 로컬엔 남긴다. 단 보낸 뒤 또 고쳤으면(①과 같은 판정) 새 값은 통과할 수 있으니 남긴다.
-    /// ③ 같은 id: 로컬이 (①② 뒤에도) pending 이고 로컬 updatedAtMs > 서버 updatedAtMs 면 로컬 유지. 아니면 서버 것으로
+    /// ② rejected: 보낸 뒤 안 고쳤으면(①과 같은 판정) pending 에서 빼고 **붙잡는다**. 보낸 뒤 또 고쳤으면 새 값은 통과할 수
+    ///    있으니 pending 으로 둔다(붙잡지 않는다). 어느 쪽이든 로컬 사본은 남는다. 로컬에 없는 id, 서버가 로컬과 **똑같은**
+    ///    행을 돌려준 id 는 붙잡지도 다시 보내지도 않는다(지킬 로컬 수정이 없다).
+    /// ③ 같은 id: 붙잡힌 id 면 **로컬 유지**(서버 행이 와도 — X2 F1: 60초 겹침 창 안이면 서버가 거절된 수정의 옛 행을 돌려준다).
+    ///    아니면 로컬이 (①② 뒤에도) pending 이고 로컬 updatedAtMs > 서버 updatedAtMs 면 로컬 유지. 아니면 서버 것으로
     ///    교체하고 pending 에서 뺀다(서버가 이긴 값은 보낼 것이 아니다 — 같은 ms 동률도 서버 유지, 서버 LWW 와 같다).
-    /// ④ full 이면 서버에 없고 pending·rejected 도 아닌 로컬 항목을 지운다(80일 넘게 못 맞춘 기기 — 그사이 서버가 정리한 것).
-    ///    단 **서버가 받을 수 없는 제목**(`titleFitsLimits` 밖 — 글자만 세던 0.3.29 파일에서 온 줄)은 지우지 않는다. 그 줄은 올릴
-    ///    때마다 거절돼 원래 이 기기에만 있는 줄이라, "서버에 없다"가 "서버가 정리했다"는 뜻이 아니다(X2 S7a: 81일 뒤 full 에서
-    ///    조용히 사라졌다). 멱등은 그대로다 — 판정이 로컬 제목만 본다.
+    /// ④ full 이면 서버에 없고 pending 도 붙잡기도 아닌 로컬 항목을 지운다(80일 넘게 못 맞춘 기기 — 그사이 서버가 정리한 것).
+    ///    붙잡힌 줄은 올릴 때마다 거절돼 원래 이 기기에만 있는 줄이라 "서버에 없다"가 "서버가 정리했다"는 뜻이 아니다(X2 F2:
+    ///    예전 응답에서 거절된 id 를 기억하지 않아 81일 뒤 full 에서 조용히 사라졌다 — 넘친 제목이든 quota 든).
+    ///    이번 응답의 rejected 는 ②를 거쳐 전부 pending 이거나 붙잡기라 따로 예외를 두지 않는다(두 곳에 두면 한쪽을 지워도 초록이다).
     /// ⑤ 서버에만 있는 항목은 뒤에 붙인다. 로컬에만 있는 새 항목은 그대로.
     ///
     /// `protected`(편집 중 · 삭제 되돌리기 창)는 ③④를 **미룬다**: 로컬을 그대로 두고, 바뀌었어야 할 id 는 pending 에 다시
     /// 넣어 `deferredIDs` 로 알린다. 다음 요청이 그 id 를 보내면 서버는 LWW 로 판정하고 **자기 현재 행을 돌려주므로**
-    /// (계약: 이번 p_changes 의 id 는 since 와 무관하게 온다) watermark 가 지나가도 놓치지 않는다.
+    /// (계약: 이번 p_changes 의 id 는 since 와 무관하게 온다) watermark 가 지나가도 놓치지 않는다. 붙잡힌 id 는 미루지 않는다 —
+    /// 다시 보내 봐야 또 거절되고, 로컬은 어차피 그대로다.
     ///
-    /// 멱등: 같은 응답을 결과에 한 번 더 합쳐도 결과가 같다(속성 테스트).
+    /// 멱등: 같은 응답을 결과에 한 번 더 합쳐도 결과(items·pending·붙잡기)가 같다(속성 테스트).
     static func mergedSync(
         local: [TodoItem],
         pending: Set<UUID>,
@@ -344,6 +359,7 @@ enum TodoRules {
         server: [TodoItem],
         rejected: Set<UUID>,
         full: Bool,
+        held: Set<UUID> = [],
         protected: Set<UUID> = []
     ) -> TodoSyncMergeResult {
         var localByID: [UUID: TodoItem] = [:]
@@ -357,14 +373,24 @@ enum TodoRules {
 
         // ⓪
         var nextPending = pending.filter { localByID[$0] != nil }
+        var nextHeld = held.filter { localByID[$0] != nil && !nextPending.contains($0) }
         // ①
         for (id, sentMs) in sent where localByID[id]?.updatedAtMs == sentMs {
             nextPending.remove(id)
         }
         // ②
-        for id in rejected {
+        for id in rejected where localByID[id] != nil {
             let unchangedSinceSent = sent[id] == nil || localByID[id]?.updatedAtMs == sent[id]
-            if unchangedSinceSent { nextPending.remove(id) }
+            // 서버 행이 로컬과 똑같이 왔으면 지킬 것도 다시 보낼 것도 없다. 이 조건이 없으면 첫 병합에서 서버 값으로 바뀐(또는
+            // 서버에서 새로 붙은) 줄이 같은 응답을 한 번 더 합칠 때만 붙잡기·pending 에 들어가 멱등이 깨진다.
+            let serverRowDiffers = serverByID[id] != localByID[id]
+            if unchangedSinceSent {
+                nextPending.remove(id)
+                if serverRowDiffers { nextHeld.insert(id) }
+            } else {
+                nextHeld.remove(id)
+                if serverRowDiffers { nextPending.insert(id) }
+            }
         }
 
         var deferred: Set<UUID> = []
@@ -374,7 +400,9 @@ enum TodoRules {
             emitted.insert(item.id)
             if let incoming = serverByID[item.id] {
                 // ③
-                if nextPending.contains(item.id), item.updatedAtMs > incoming.updatedAtMs {
+                if nextHeld.contains(item.id) {
+                    merged.append(item)
+                } else if nextPending.contains(item.id), item.updatedAtMs > incoming.updatedAtMs {
                     merged.append(item)
                 } else if protected.contains(item.id) {
                     merged.append(item)
@@ -386,7 +414,7 @@ enum TodoRules {
                     merged.append(incoming)
                     nextPending.remove(item.id)
                 }
-            } else if full, !nextPending.contains(item.id), !rejected.contains(item.id), titleFitsLimits(item.title) {
+            } else if full, !nextPending.contains(item.id), !nextHeld.contains(item.id) {
                 // ④
                 if protected.contains(item.id) {
                     merged.append(item)
@@ -401,7 +429,7 @@ enum TodoRules {
         for id in serverOrder where !emitted.contains(id) {
             if let incoming = serverByID[id] { merged.append(incoming) }
         }
-        return TodoSyncMergeResult(items: merged, pending: nextPending, deferredIDs: deferred)
+        return TodoSyncMergeResult(items: merged, pending: nextPending, heldRejectedIDs: nextHeld, deferredIDs: deferred)
     }
 }
 
@@ -409,7 +437,9 @@ enum TodoRules {
 struct TodoSyncMergeResult: Equatable, Sendable {
     var items: [TodoItem]
     var pending: Set<UUID>
-    /// 편집 중이라 반영을 미룬 id(비면 미룬 것이 없다). 병합 결과의 동치 비교에는 참여하지만 멱등 판정은 items·pending 으로 한다.
+    /// 서버가 거절해 붙잡아 둔 id(부록 B-3). 언제나 `items` 에 있고 `pending` 과 겹치지 않는다.
+    var heldRejectedIDs: Set<UUID>
+    /// 편집 중이라 반영을 미룬 id(비면 미룬 것이 없다). 병합 결과의 동치 비교에는 참여하지만 멱등 판정은 items·pending·붙잡기로 한다.
     var deferredIDs: Set<UUID>
 }
 
@@ -486,6 +516,10 @@ enum TodoFileStore {
     private(set) var items: [TodoItem] = []
     /// 아직 서버에 확정되지 않은 항목 id(파일의 `sync.pendingIDs`).
     private(set) var pendingIDs: Set<UUID> = []
+    /// 서버가 거절해 붙잡아 둔 항목 id(파일의 `sync.heldRejectedIDs`, 부록 B-3). 서버 행에 덮이지 않고 full 에서도 안 지워진다.
+    /// 사용자가 그 줄을 다시 고치면(`didChangeLocally`) 빠져 pending 으로 돌아가고, 줄이 목록에서 정리되면 함께 빠진다.
+    /// 언제나 `items` 의 id 이고 `pendingIDs` 와 겹치지 않는다.
+    private(set) var heldRejectedIDs: Set<UUID> = []
     /// 마지막으로 맞춘 서버 시각(epoch ms). nil = 다음 요청은 전체를 받는다.
     private(set) var watermarkMs: Int64?
     /// 지금 쓰는 파일. **계정이 바뀌면 바뀐다**(`switchFile`) — 예전에는 실행 때 고른 파일을 끝까지 써서, 실행 중에
@@ -538,15 +572,20 @@ enum TodoFileStore {
         }
         let normalized = loaded.items.map { $0.withMillisecondTimes() }
         let kept = TodoRules.pruned(normalized, now: now)
-        let pending = Set(loaded.sync.pendingIDs).intersection(kept.map(\.id))
+        let keptIDs = Set(kept.map(\.id))
+        let pending = Set(loaded.sync.pendingIDs).intersection(keptIDs)
+        // 붙잡기는 정리된 줄에서 빠지고, 보낼 것과 겹치면 보낼 것이 이긴다(다시 고친 값 — 병합 ⓪ 과 같은 규칙).
+        let held = Set(loaded.sync.heldRejectedIDs).intersection(keptIDs).subtracting(pending)
         if items != kept { items = kept }      // @Observable 은 같은 값 재대입도 관찰자를 깨운다
         if pendingIDs != pending { pendingIDs = pending }
+        if heldRejectedIDs != held { heldRejectedIDs = held }
         if watermarkMs != loaded.sync.watermarkMs { watermarkMs = loaded.sync.watermarkMs }
         deferredSyncIDs = []
         // 정리로 줄었으면 그 결과를 디스크에도 반영해, 다음 실행이 같은 낡은 항목을 또 읽고 또 버리지 않게 한다.
         let rewrite = kept.count != loaded.items.count
             || normalized != loaded.items
             || pending.count != loaded.sync.pendingIDs.count
+            || held.count != loaded.sync.heldRejectedIDs.count
             || loaded.version < TodoFile.currentVersion
         if rewrite { persist() }
     }
@@ -625,8 +664,11 @@ enum TodoFileStore {
 
     /// 사용자 변경 공통 꼬리: 보낼 목록에 넣고 → 저장하고 → 동기화에 알린다(순서가 곧 계약이다 — 저장 전에 알리면
     /// 디바운스가 끝나기 전 앱이 죽었을 때 pending 이 파일에 없다).
+    /// 거절돼 붙잡혀 있던 줄이면 여기서 **풀린다**(부록 B-3) — 사용자가 다시 고친 값은 서버가 받을 수도 있으니 다시 보낸다.
+    /// 완료·수정·삭제·되돌리기가 전부 이 문을 지나므로 풀어 주는 자리는 여기 하나다.
     private func didChangeLocally(_ id: UUID) {
         pendingIDs.insert(id)
+        heldRejectedIDs.remove(id)
         persist()
         onLocalChange?()
     }
@@ -662,13 +704,17 @@ enum TodoFileStore {
             server: result.items,
             rejected: result.rejectedIDs,
             full: result.full,
+            held: heldRejectedIDs,
             protected: syncProtectedIDs()
         )
-        // 서버에서 온 오래된 톰스톤도 로컬 90일 정리를 똑같이 거친다. 정리된 id 는 보낼 목록에서도 뺀다(명세 A4-9).
+        // 서버에서 온 오래된 톰스톤도 로컬 90일 정리를 똑같이 거친다. 정리된 id 는 보낼 목록·붙잡기에서도 뺀다(명세 A4-9 · B-3).
         let kept = TodoRules.pruned(merged.items, now: clock())
-        let pending = merged.pending.intersection(kept.map(\.id))
+        let keptIDs = Set(kept.map(\.id))
+        let pending = merged.pending.intersection(keptIDs)
+        let held = merged.heldRejectedIDs.intersection(keptIDs)
         if items != kept { items = kept }
         if pendingIDs != pending { pendingIDs = pending }
+        if heldRejectedIDs != held { heldRejectedIDs = held }
         if watermarkMs != result.watermarkMs { watermarkMs = result.watermarkMs }
         deferredSyncIDs.formUnion(merged.deferredIDs)
         persist()
@@ -689,7 +735,8 @@ enum TodoFileStore {
     private func persist() {
         let sync = TodoFileSyncState(
             watermarkMs: watermarkMs,
-            pendingIDs: pendingIDs.sorted { $0.uuidString < $1.uuidString }
+            pendingIDs: pendingIDs.sorted { $0.uuidString < $1.uuidString },
+            heldRejectedIDs: heldRejectedIDs.sorted { $0.uuidString < $1.uuidString }
         )
         try? TodoFileStore.save(TodoFile(items: items, sync: sync), to: fileURL)
     }

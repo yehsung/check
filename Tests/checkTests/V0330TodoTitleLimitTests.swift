@@ -10,7 +10,8 @@ import Testing
 // (a4-verify PROBE-P8 · 실서버 하네스 `rejected=[invalid]`). 그래서 기기가 **두 잣대를 함께** 본다:
 // · 입력칸(뷰)·초안(컨트롤러)·추가·수정 네 문이 같은 판정 `TodoRules.titleFitsLimits` 를 쓴다(자르지 않고 막는다 — 기존 제품 결정).
 // · 이미 파일에 있는 넘친 줄(0.3.29 는 글자만 셌다)은 서버가 거절해 **이 기기에만 남는다**. full 병합이 그 줄을
-//   "서버가 정리한 줄"로 오인해 지우면 안 된다(X2 S7a 에서 81일 뒤 full 로 조용히 사라졌다).
+//   "서버가 정리한 줄"로 오인해 지우면 안 된다(X2 S7a 에서 81일 뒤 full 로 조용히 사라졌다). 지키는 것은 제목 모양이 아니라
+//   거절 붙잡기(`heldRejectedIDs`, 부록 B-3)다 — quota 로 거절된 정상 제목도 같은 길이라서(V0330TodoHeldRejectTests).
 
 /// 코드 포인트 `perGrapheme` 개짜리 글자 하나. 결합 문자(U+0363…)는 NFC 로 합쳐지지 않아 정규화 뒤에도 개수가 그대로다.
 private func todoTitleLimitGrapheme(scalars perGrapheme: Int) -> String {
@@ -76,6 +77,12 @@ func todoTitleLimitDraftInputBlocksOverServerCodePoints() {
     let shorter = String(legacyHeavy.dropLast())
     #expect(TodoDraftInput.accepted(current: legacyHeavy, proposed: shorter) == shorter)
     #expect(TodoDraftInput.accepted(current: legacyHeavy, proposed: "").isEmpty)
+    // 글자 수는 줄지만 코드 포인트는 느는 바꿔치기(100자 줄을 선택해 가족 이모지 99자 = 코드 포인트 1089 로 붙여 넣기)는
+    // "줄이는 방향" 예외로 새지 않는다(a4-reverify T7 — 이 조건을 지워도 초록이었다).
+    let plain100 = String(repeating: "a", count: 100)
+    let family99 = String(repeating: todoTitleLimitFamily, count: 99)
+    #expect(family99.count == 99 && family99.unicodeScalars.count == 1089)
+    #expect(TodoDraftInput.accepted(current: plain100, proposed: family99) == plain100, "글자 수만 줄었다고 코드 포인트 1089 를 받았다")
 
     // 컨트롤러(초안의 주인) — 뷰와 판정이 갈리면 화면엔 보이는데 초안은 안 바뀌는 엇갈림이 생긴다.
     let list = TodoListStore(fileURL: todoSyncV0330TempURL())
@@ -91,9 +98,18 @@ func todoTitleLimitDraftInputBlocksOverServerCodePoints() {
     controller.submitDraft()
     #expect(controller.draft.isEmpty)
     #expect(list.items.first?.title == atLimit)
+
+    // 초안도 같다 — 줄이는 방향이라도 코드 포인트가 늘면 막는다(a4-reverify T8). 풀리면 뷰와 초안이 서로 다른 값을 든다.
+    controller.setDraft(plain100)
+    #expect(controller.draft == plain100)
+    controller.setDraft(family99)
+    #expect(controller.draft == plain100, "초안이 글자 수만 줄었다고 코드 포인트 1089 를 받았다 — Enter 가 말없이 먹힌다")
+    // 대조: 두 잣대가 다 줄면 통과한다(지워서 빠져나오는 길).
+    controller.setDraft(String(plain100.dropLast()))
+    #expect(controller.draft.count == 99)
 }
 
-@Test("full 병합은 서버가 받을 수 없는 제목의 로컬 줄(옛 파일에서 온 것)을 '서버가 정리한 줄'로 오인해 지우지 않는다")
+@Test("full 병합은 거절돼 붙잡힌 넘친 제목의 로컬 줄(옛 파일에서 온 것)을 '서버가 정리한 줄'로 오인해 지우지 않는다 — 기준은 제목이 아니라 붙잡기다")
 func todoTitleLimitFullMergeKeepsLocalOnlyOverLimitRow() {
     let base: Int64 = 1_726_500_000_000
     func row(_ title: String, _ updated: Int64) -> TodoItem {
@@ -102,18 +118,34 @@ func todoTitleLimitFullMergeKeepsLocalOnlyOverLimitRow() {
             updatedAt: TodoRules.date(milliseconds: updated), originDayKey: "20260915"
         )
     }
-    let heavy = row(todoTitleLimitTitle(graphemes: 100, scalarsEach: 11), base + 1)     // 거절돼 이 기기에만 남은 줄
+    let heavy = row(todoTitleLimitTitle(graphemes: 100, scalarsEach: 11), base + 1)     // 거절될 옛 줄
     let purged = row("서버가 정리한 줄", base + 2)
+    // 첫 업로드: 넘친 줄은 거절돼 붙잡힌다(1세대 파일이라 둘 다 보낼 것이었다).
+    let upload = TodoRules.mergedSync(
+        local: [heavy, purged], pending: [heavy.id, purged.id],
+        sent: [heavy.id: heavy.updatedAtMs, purged.id: purged.updatedAtMs],
+        server: [purged], rejected: [heavy.id], full: false
+    )
+    #expect(upload.heldRejectedIDs == [heavy.id] && upload.pending.isEmpty)
+    // 80일 넘게 못 맞춘 뒤 full: 서버가 둘 다 정리했다(넘친 줄은 원래 서버에 없었다).
     let result = TodoRules.mergedSync(
-        local: [heavy, purged], pending: [], sent: [:], server: [], rejected: [], full: true
+        local: upload.items, pending: upload.pending, sent: [:], server: [], rejected: [], full: true,
+        held: upload.heldRejectedIDs
     )
     #expect(result.items == [heavy], "거절돼 로컬에만 남긴 할 일이 full 동기화에서 지워졌다")
     #expect(result.pending.isEmpty, "서버가 영원히 거절할 줄을 다시 보낼 것으로 되돌렸다")
+    #expect(result.heldRejectedIDs == [heavy.id])
     // 멱등
     let again = TodoRules.mergedSync(
-        local: result.items, pending: result.pending, sent: [:], server: [], rejected: [], full: true
+        local: result.items, pending: result.pending, sent: [:], server: [], rejected: [], full: true,
+        held: result.heldRejectedIDs
     )
-    #expect(again.items == result.items && again.pending == result.pending)
+    #expect(again == result)
+    // 대조: 붙잡기가 없으면(제목만으로는) 지운다 — 판정이 제목 모양에 기대지 않는다.
+    let unheld = TodoRules.mergedSync(
+        local: upload.items, pending: [], sent: [:], server: [], rejected: [], full: true
+    )
+    #expect(unheld.items.isEmpty)
 }
 
 @MainActor

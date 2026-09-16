@@ -5,9 +5,10 @@ import Testing
 // MARK: - v0.3.30 할 일 동기화 ② 병합 규칙(순수) · 멱등 · 두 기기 수렴
 //
 // 병합 규칙은 `TodoRules.mergedSync` 하나다. 표로 한 줄씩 못 박고, 속성 두 개로 전체를 흔든다:
-// · 멱등 — 같은 응답을 두 번 합쳐도 결과(items·pending)가 같다.
+// · 멱등 — 같은 응답을 두 번 합쳐도 결과(items·pending·붙잡기)가 같다.
 // · 수렴 — 두 기기가 무작위 순서로 고치고 맞추는 것을 **서버 LWW 모형**(아래 `TodoSyncV0330Server`, 계약 1.2 를 옮긴 것)과
-//   함께 돌리면 끝에 두 기기와 서버가 같은 값에 선다.
+//   함께 돌리면 끝에 두 기기와 서버가 같은 값에 선다. 거절(quota · 서버가 못 받는 제목)도 섞는다 — 거절된 줄은 붙잡혀
+//   그 기기에만 남고(부록 B-3), 사용자가 다시 고치면 풀려 수렴한다.
 
 // MARK: 서버 모형(계약 1.2)
 
@@ -26,6 +27,8 @@ final class TodoSyncV0330Server {
     var nowMs: Int64
     var quota = 5000
     private(set) var callCount = 0
+    /// 지금까지 거절한 항목 수(속성 테스트가 거절 경로를 실제로 밟았는지 보는 진단).
+    private(set) var rejectedCount = 0
 
     init(nowMs: Int64) {
         self.nowMs = nowMs
@@ -68,6 +71,7 @@ final class TodoSyncV0330Server {
             table[id] = Row(item: incoming, serverUpdatedMs: now)
         }
         rows[userID] = table
+        rejectedCount += rejected.count
         let eightyDays: Int64 = 80 * 86_400_000
         // 미래 since 도 full(S2 최종 SQL 이 명세 식에 더한 안전 규칙 — X2 S15 futureSince).
         let full = request.sinceMs.map { $0 < now - eightyDays || $0 > now } ?? true
@@ -248,7 +252,7 @@ func todoMergeGhostPendingAndProtection() {
 
 // MARK: 속성 — 멱등
 
-@Test("같은 응답을 두 번 합쳐도 결과가 같다(무작위 3000건)")
+@Test("같은 응답을 두 번 합쳐도 결과가 같다 — 붙잡기 포함(무작위 3000건) · 붙잡기는 언제나 목록 안에 있고 pending 과 겹치지 않는다")
 func todoMergeIsIdempotent() {
     var rng = TodoSyncV0330RNG(seed: 0xA4_1DE)
     let pool = (0..<8).map { _ in UUID() }
@@ -256,6 +260,7 @@ func todoMergeIsIdempotent() {
         let deleted: Int64? = Bool.random(using: &rng) ? nil : base + Int64.random(in: 0...40, using: &rng)
         return item("t\(Int.random(in: 0...3, using: &rng))", id: id, updated: base + Int64.random(in: 0...40, using: &rng), deleted: deleted)
     }
+    var heldRounds = 0
     for round in 0..<3000 {
         let local = pool.filter { _ in Bool.random(using: &rng) }.map(randomItem)
         let server = pool.filter { _ in Bool.random(using: &rng) }.map(randomItem)
@@ -265,12 +270,32 @@ func todoMergeIsIdempotent() {
         let rejected = Set(pool.filter { _ in Int.random(in: 0..<6, using: &rng) == 0 })
         let full = Bool.random(using: &rng)
         let protected = Set(pool.filter { _ in Int.random(in: 0..<6, using: &rng) == 0 })
+        // 앞 응답들이 남긴 붙잡기(pending 과 겹치거나 로컬에 없는 찌꺼기도 일부러 섞는다).
+        let held = Set(pool.filter { _ in Int.random(in: 0..<4, using: &rng) == 0 })
 
-        let once = TodoRules.mergedSync(local: local, pending: pending, sent: sent, server: server, rejected: rejected, full: full, protected: protected)
-        let twice = TodoRules.mergedSync(local: once.items, pending: once.pending, sent: sent, server: server, rejected: rejected, full: full, protected: protected)
-        #expect(once.items == twice.items && once.pending == twice.pending, "round \(round)")
-        if once.items != twice.items || once.pending != twice.pending { return }
+        let once = TodoRules.mergedSync(
+            local: local, pending: pending, sent: sent, server: server, rejected: rejected, full: full,
+            held: held, protected: protected
+        )
+        let twice = TodoRules.mergedSync(
+            local: once.items, pending: once.pending, sent: sent, server: server, rejected: rejected, full: full,
+            held: once.heldRejectedIDs, protected: protected
+        )
+        let same = once.items == twice.items && once.pending == twice.pending && once.heldRejectedIDs == twice.heldRejectedIDs
+        let ids = Set(once.items.map(\.id))
+        let shaped = once.heldRejectedIDs.isSubset(of: ids) && once.heldRejectedIDs.isDisjoint(with: once.pending)
+        // 이번 응답의 거절 id 중 로컬에 있던 줄은 full 이어도 사라지지 않는다(pending 이거나 붙잡기 — 서버 행이 더 새로우면
+        // 보낸 뒤 또 고친 줄은 보통의 LWW 로 서버 값이 될 수 있지만, 줄 자체는 남는다).
+        let rejectedKept = rejected.filter { id in local.contains { $0.id == id } }.allSatisfy { ids.contains($0) }
+        func tag(_ id: UUID) -> Int { pool.firstIndex(of: id) ?? -1 }
+        func show(_ items: [TodoItem]) -> String { items.map { "\(tag($0.id)):\($0.title):\($0.updatedAtMs - base):\($0.deletedAt == nil ? "-" : "D")" }.joined(separator: " ") }
+        #expect(same, "round \(round): 두 번째 병합이 결과를 바꿨다 — 재현 입력 local=[\(show(local))] server=[\(show(server))] pending=\(pending.map(tag).sorted()) sent=\(sent.map { "\(tag($0.key)):\($0.value - base)" }.sorted()) rejected=\(rejected.map(tag).sorted()) full=\(full) held=\(held.map(tag).sorted()) protected=\(protected.map(tag).sorted()) || once=[\(show(once.items))] p=\(once.pending.map(tag).sorted()) h=\(once.heldRejectedIDs.map(tag).sorted()) || twice=[\(show(twice.items))] p=\(twice.pending.map(tag).sorted()) h=\(twice.heldRejectedIDs.map(tag).sorted())")
+        #expect(shaped, "round \(round): 붙잡기 \(once.heldRejectedIDs) · pending \(once.pending)")
+        #expect(rejectedKept, "round \(round): 거절된 로컬 줄이 사라졌거나 어디에도 안 들었다")
+        if !once.heldRejectedIDs.isEmpty { heldRounds += 1 }
+        if !same || !shaped || !rejectedKept { return }
     }
+    #expect(heldRounds > 500, "붙잡기가 거의 안 생겼다(검사 공허): \(heldRounds)")
 }
 
 // MARK: 속성 — 두 기기 수렴
@@ -322,19 +347,29 @@ final class TodoSyncV0330Device {
 }
 
 @MainActor
-@Test("두 기기가 무작위로 고치고 맞춰도(응답 전 재수정·삭제 vs 수정·되돌리기 포함) 끝에 두 기기와 서버가 같은 값에 선다")
+@Test("두 기기가 무작위로 고치고 맞춰도(응답 전 재수정·삭제 vs 수정·되돌리기·거절과 붙잡기 포함) 끝에 두 기기와 서버가 같은 값에 선다")
 func todoTwoDevicesConvergeWithServerLWW() async throws {
+    // 서버가 못 받는 제목(글자 100 · 코드 포인트 1100). 기기 입력으로는 못 만들어 파일로 주입한다(0.3.29 가 쓴 줄과 같은 모양).
+    let heavy: String = {
+        let marks = (0x0363..<0x036D).compactMap { Unicode.Scalar($0) }.map(String.init).joined()
+        return String(repeating: "h" + marks, count: 100)
+    }()
+    var totalRejected = 0
+    var heldObservedSeeds = 0
     for seed in UInt64(1)...12 {
         var rng = TodoSyncV0330RNG(seed: seed &* 7919)
         let server = TodoSyncV0330Server(nowMs: base)
+        // 앞 절반은 quota 가 낮아 새 줄이 거절된다(붙잡힌다). 뒤에서 자리가 난다.
+        server.quota = 8 + Int.random(in: 0...12, using: &rng)
         let a = TodoSyncV0330Device(server: server, userID: "u1", nowMs: base)
         let b = TodoSyncV0330Device(server: server, userID: "u1", nowMs: base + 90_000)   // B 시계는 1.5분 빠르다
         await todoSyncV0330Idle(a.sync)
         await todoSyncV0330Idle(b.sync)
 
-        func randomEdit(_ device: TodoSyncV0330Device) {
+        /// `inFlight` 이면 파일 주입을 하지 않는다 — 프로덕션에서 응답을 기다리는 사이 파일을 다시 읽는 길은 없다.
+        func randomEdit(_ device: TodoSyncV0330Device, inFlight: Bool) {
             let ids = device.list.items.map(\.id)
-            switch Int.random(in: 0..<6, using: &rng) {
+            switch Int.random(in: 0..<7, using: &rng) {
             case 0:
                 device.list.add("할 일 \(Int.random(in: 0...999, using: &rng))")
             case 1:
@@ -345,40 +380,76 @@ func todoTwoDevicesConvergeWithServerLWW() async throws {
                 if let id = ids.randomElement(using: &rng) { device.list.delete(id) }
             case 4:
                 if let id = ids.randomElement(using: &rng) { device.list.undoDelete(id) }
+            case 5 where !inFlight && Int.random(in: 0..<3, using: &rng) == 0:
+                // 서버가 거절할 수정(넘친 제목)을 파일로 주입 — 고친 시각은 스토어 규칙처럼 이전보다 크다.
+                if let id = ids.randomElement(using: &rng), let current = device.list.items.first(where: { $0.id == id }) {
+                    try? todoHeldInjectEdit(device.list, id: id, title: heavy, updatedMs: max(device.nowMs, current.updatedAtMs + 1))
+                }
             default:
                 device.list.add("또 \(Int.random(in: 0...999, using: &rng))")
             }
         }
 
-        for _ in 0..<150 {
+        var heldObserved = false
+        for stepIndex in 0..<150 {
             let step = Int64.random(in: 1...4_000, using: &rng)
             server.nowMs += step
             a.nowMs += step
             b.nowMs += step
+            if stepIndex == 100 { server.quota = 5000 }
             let device = Bool.random(using: &rng) ? a : b
             switch Int.random(in: 0..<10, using: &rng) {
             case 0..<6:
-                randomEdit(device)
+                randomEdit(device, inFlight: false)
             case 6..<8:
                 await device.syncNow()
             default:
-                device.duringFlight = { randomEdit(device) }
+                device.duringFlight = { randomEdit(device, inFlight: true) }
                 await device.syncNow()
             }
+            for d in [a, b] {
+                let ids = Set(d.list.items.map(\.id))
+                #expect(d.list.heldRejectedIDs.isSubset(of: ids) && d.list.heldRejectedIDs.isDisjoint(with: d.list.pendingIDs),
+                        "seed \(seed) step \(stepIndex): 붙잡기 모양이 깨졌다")
+                if !d.list.heldRejectedIDs.isEmpty { heldObserved = true }
+            }
         }
-        // 조용해진 뒤 번갈아 맞춘다.
-        for device in [a, b, a, b] {
-            server.nowMs += 1_000
-            a.nowMs += 1_000
-            b.nowMs += 1_000
-            await device.syncNow()
+        #expect(server.quota == 5000)
+        if heldObserved { heldObservedSeeds += 1 }
+
+        // 붙잡힌 줄은 사용자가 다시 고칠 때까지 그 기기에만 남는다 — 끝에 사용자가 전부 고친다(정상 제목으로).
+        var fixes = 0
+        for _ in 0..<8 {
+            for device in [a, b] {
+                for id in device.list.heldRejectedIDs.sorted(by: { $0.uuidString < $1.uuidString }) {
+                    fixes += 1
+                    device.list.rename(id, to: "붙잡기 풀기 \(fixes)")
+                }
+                // 아직 안 보낸 넘친 제목(주입 뒤 한 번도 못 맞춘 줄)도 고친다.
+                for item in device.list.items where !TodoRules.titleFitsLimits(item.title) {
+                    fixes += 1
+                    device.list.rename(item.id, to: "넘친 제목 고침 \(fixes)")
+                }
+            }
+            for device in [a, b, a, b] {
+                server.nowMs += 1_000
+                a.nowMs += 1_000
+                b.nowMs += 1_000
+                await device.syncNow()
+            }
+            if a.list.heldRejectedIDs.isEmpty && b.list.heldRejectedIDs.isEmpty
+                && a.list.pendingIDs.isEmpty && b.list.pendingIDs.isEmpty { break }
         }
         let sortedA = a.list.items.sorted { $0.id.uuidString < $1.id.uuidString }
         let sortedB = b.list.items.sorted { $0.id.uuidString < $1.id.uuidString }
         #expect(sortedA == sortedB, "seed \(seed): 두 기기가 갈렸다")
         #expect(sortedA == server.items(for: "u1"), "seed \(seed): 기기와 서버가 갈렸다")
         #expect(a.list.pendingIDs.isEmpty && b.list.pendingIDs.isEmpty, "seed \(seed): 끝났는데 보낼 것이 남았다")
+        #expect(a.list.heldRejectedIDs.isEmpty && b.list.heldRejectedIDs.isEmpty, "seed \(seed): 고쳤는데 붙잡기가 남았다")
         #expect(!sortedA.isEmpty)
+        totalRejected += server.rejectedCount
         if sortedA != sortedB || sortedA != server.items(for: "u1") { return }
     }
+    #expect(totalRejected > 20, "거절이 거의 안 일어났다(검사 공허): \(totalRejected)")
+    #expect(heldObservedSeeds >= 10, "붙잡기가 생긴 시드가 적다(검사 공허): \(heldObservedSeeds)")
 }

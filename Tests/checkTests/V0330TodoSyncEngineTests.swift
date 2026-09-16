@@ -497,6 +497,59 @@ func todoSyncDefersMergeForEditingAndUndoRows() async throws {
     _ = coordinator
 }
 
+@MainActor
+@Test("Esc(cancelEdit)·제목을 안 바꾼 Enter(commitEdit) 로 편집을 끝내도 보호가 풀려 1.5초 뒤 다시 맞추고, 미뤘던 다른 기기 삭제로 수렴한다 — 조정자 배선 그대로")
+func todoSyncEscAndUnchangedCommitReleaseProtection() async throws {
+    // a4-reverify V16: cancelEdit 의 syncProtectionDidEnd() 를 지워도 초록이었다(위 테스트의 cancelEdit 은 미룬 것이 없는 줄이다).
+    // 그 줄이 빠지면 Esc 로 편집을 끝낸 줄은 다음 5분 주기까지 옛 값(지워진 줄)에 머물고 pending 에 남는다.
+    for exit in ["esc", "enterUnchanged"] {
+        let server = TodoSyncV0330Server(nowMs: base)
+        let transport = serverTransport(server)
+        var nowMs = base
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("check-v0330-esc-\(UUID().uuidString)")
+        let fileFor: (String?) -> URL = { directory.appendingPathComponent("todos.\($0 ?? "local").json") }
+        let session = TodoSyncV0330Session(userID: userA)
+        let list = TodoListStore(fileURL: fileFor(userA), clock: { TodoRules.date(milliseconds: nowMs) })
+        let editing = try #require(list.add("Esc 로 끝낼 줄"))
+        let board = CheckTodoBoardController(store: list, undoSeconds: 600)
+        let scheduler = TodoSyncV0330Scheduler()
+        let sync = TodoSync(list: list, transport: transport, scheduler: scheduler, clock: { TodoRules.date(milliseconds: nowMs) })
+        let coordinator = TodoSyncCoordinator(
+            sync: sync, board: board, userID: { session.userID }, fileURL: fileFor, wakeNotifications: nil
+        )
+        coordinator.start()
+        await todoSyncV0330Idle(sync)
+        #expect(transport.requests.count == 1 && list.pendingIDs.isEmpty, "\(exit)")
+
+        nowMs += 10_000
+        server.nowMs = nowMs
+        var deletedElsewhere = editing
+        deletedElsewhere.deletedAt = TodoRules.date(milliseconds: nowMs)
+        deletedElsewhere.updatedAt = TodoRules.date(milliseconds: nowMs)
+        server.seed(userID: userA, deletedElsewhere)
+
+        board.beginEdit(editing.id)
+        sync.requestSync(.periodic)
+        await todoSyncV0330Idle(sync)
+        #expect(transport.requests.count == 2, "\(exit)")
+        #expect(list.items.first { $0.id == editing.id } == editing, "\(exit): 편집 중인 줄이 병합으로 바뀌었다(전제)")
+        #expect(list.pendingIDs == [editing.id], "\(exit): 미룬 병합이 없다(검사 공허)")
+
+        if exit == "esc" {
+            board.cancelEdit()
+        } else {
+            board.commitEdit(editing.id, to: editing.title)
+        }
+        #expect(board.editingID == nil, "\(exit)")
+        scheduler.advance(by: TodoSync.debounceSeconds)
+        await todoSyncV0330Idle(sync)
+        #expect(transport.requests.count == 3, "\(exit): 편집을 끝냈는데 미룬 병합을 다시 맞추지 않았다 — 지워진 줄이 옛 값에 머문다")
+        #expect(list.items.first { $0.id == editing.id } == deletedElsewhere, "\(exit)")
+        #expect(list.pendingIDs.isEmpty, "\(exit)")
+        _ = coordinator
+    }
+}
+
 // MARK: 프로덕션 전송(스토어 세션)
 
 /// 호스트별 응답 대기열 + 요청 기록. 경로마다 응답을 차례로 꺼내고, 마지막 응답은 계속 되풀이한다.

@@ -6,11 +6,12 @@ import SwiftUI
 // `CheckGomokuWindowController` 가 담는 화면이다: 로비(상대 고르기·판돈·신청) → 대국(15×15 판) → 결과, 그리고
 // 어느 화면에서든 [규칙] 로 여는 렌주 설명 오버레이. 상태·동작은 전부 `GomokuStore`(§6.3 선언)에 있고 여기는 그리기만 한다.
 //
-// 열 수는 화면마다 다르다(v0.3.29): 대국·결과는 **세 열** [판 | 두 사람·판돈·기권 | 채팅]이고, 채팅은
-// **결과 화면에도 남는다**(끝난 뒤 인사 유예 120초). 로비는 **두 열** [상대 목록 | 오른쪽]이다 —
-// 오른쪽 위가 "지금 대결 중"(남는 높이 전부 · 넘치면 그 칸 안에서 스크롤), 아래가 "받은 신청"과
-// 그 맨 아래 "보낸 신청 한 줄 + [취소]". **판돈 카드는 없다** — 판돈은 [도전]을 누를 때
-// 화면 가운데 작은 창(`GomokuStakePrompt`)에서 고른다.
+// 화면은 전부 **두 열**이다(v0.3.30). 대국은 [판 | 오른쪽 열]이고 오른쪽 열이 위에서부터 상대 카드 · 내 카드 ·
+// 판돈과 상태줄 · **채팅 카드** · [기권]이다 — 옛 세 번째 채팅 열을 카드와 [기권] 사이 빈 공간으로 옮겼고,
+// 보낸 말은 그 사람 카드 안 말풍선으로도 5초 뜬다. 결과는 [판 | 결과 카드 · 채팅 카드](끝난 뒤 인사 유예 120초).
+// 로비는 [상대 목록 | 오른쪽]이다 — 오른쪽 위가 "지금 대결 중"(남는 높이 전부 · 넘치면 그 칸 안에서 스크롤),
+// 아래가 "받은 신청"과 그 맨 아래 "보낸 신청 한 줄 + [취소]". **판돈 카드는 없다** — 판돈은 [도전]을 누를 때
+// 화면 가운데 작은 창(`GomokuStakePrompt`)에서 고르고, 고르기 전에는 [취소]만, 고른 뒤에는 [도전하기]가 선다.
 //
 // 이 파일이 지키는 약속:
 //   · **Picker/Menu/TextField 를 쓰지 않는다.** ImageRenderer 가 노란 상자(255,204,0)로 그려 렌더 검증이 그 자리에서
@@ -91,6 +92,11 @@ enum GomokuText {
     /// 판돈 창(v0.3.29 — [도전]을 누르면 화면 가운데에 뜬다).
     static func stakePromptTitle(name: String) -> String { "\(name) 에게 신청" }
     static let stakePromptCaption = "판돈을 고르세요"
+    /// 판돈을 고른 뒤 캡션 자리(v0.3.30) — 무엇을 걸었는지와 이기면 얼마인지를 대국 화면 판돈 줄과 **같은 말**로.
+    static func stakePromptChosen(_ stake: Int) -> String { "판돈 \(stakeLine(stake))" }
+    /// 판돈을 고르면 [취소] 자리에 서는 버튼(v0.3.30). 누르기 전에 무엇을 거는지 한 번 더 읽히게 숫자를 싣는다.
+    static func challengeWithStake(_ stake: Int) -> String { "\(stake) 걸고 도전하기" }
+    static let challengeNowHelp = "고른 판돈으로 신청해요 (↩)"
     /// 루비가 모자라 못 고르는 판돈의 이유 한 줄. 정본은 `WorkTimerStore.shortfallNotice(need:have:)` 의
     /// 모르는 경우 문구와 **같은 말**이다(같은 사실이 화면마다 다른 말을 하면 그게 곧 다음 조사거리다).
     static let stakeShortfall = "루비가 모자라요"
@@ -232,7 +238,7 @@ enum GomokuText {
     /// placeholder 는 비어 있을 때만 보이므로 **줄바꿈 방법을 말하는 자리는 여기뿐이다**(메시지 칸과 같은 규약).
     static let chatSendHelp = "보내기 (↩) · 줄바꿈은 ⇧↩"
 
-    // MARK: 세 번째 열 — 지금 대결 중(v0.3.28)
+    // MARK: 로비 — 지금 대결 중(v0.3.28)
 
     static let liveTitle = "지금 대결 중"
     static let noLiveMatches = "지금 대결 중인 사람이 없어요"
@@ -514,6 +520,13 @@ struct GomokuPanel: View {
     /// 스냅샷 전용: 판돈 창을 이 상대에게 띄운 채로 그린다. `@State` 는 밖에서 못 채우기 때문에 두는 문이고
     /// (`CheckMenuView(previewGomokuInvite:)` 와 같은 수법), **앱은 언제나 nil** 이다.
     var previewStakeTarget: GomokuUser? = nil
+    /// 스냅샷 전용: 판돈 창에서 이 판돈을 **고른 상태**로 그린다(앱은 nil — 창은 언제나 미선택으로 열린다).
+    var previewStakeSelection: GomokuStake? = nil
+    /// 스냅샷 전용: [기권] 자리를 확인 상태(기권하기 · 계속 두기)로 그린다. 앱은 false.
+    var previewConfirmResign: Bool = false
+    /// 스냅샷 전용: 카드 말풍선이 읽는 시계. ImageRenderer 는 `.task` 를 안 돌리므로 "지금"을 넘겨 그 순간의
+    /// 말풍선을 그린다. **앱은 nil** — 말풍선 잎 뷰가 스스로 켜고 끈다.
+    var previewBubbleNow: Date? = nil
 
     @State private var hovered: GomokuPoint?
     @State private var confirmResign = false
@@ -538,7 +551,8 @@ struct GomokuPanel: View {
             if store.isRulesVisible {
                 GomokuRulesOverlay(onClose: { store.isRulesVisible = false })
             } else if let target = activeStakeTarget {
-                GomokuStakePrompt(store: store, target: target, onClose: { stakeTarget = nil })
+                GomokuStakePrompt(store: store, target: target, initialSelection: previewStakeSelection,
+                                  onClose: { stakeTarget = nil })
             }
         }
         .frame(width: GomokuWindowLayout.contentSize.width, height: GomokuWindowLayout.contentSize.height, alignment: .topLeading)
@@ -552,6 +566,10 @@ struct GomokuPanel: View {
             // 판이 시작되면 로비가 사라진다 — 열려 있던 판돈 창을 들고 있으면 로비로 돌아올 때 되살아난다.
             stakeTarget = nil
         }
+        // 기권 확인은 **그 판 그 화면에서 연 것**만 산다(v0.3.30). 화면이 바뀌거나(대국 → 결과 → 로비) 창이
+        // 내려갔다 다시 뜨면 접는다 — 돌아온 사용자가 자기가 열지 않은 확인을 보게 두지 않는다.
+        .onChange(of: store.phase) { _, _ in confirmResign = false }
+        .onChange(of: store.isWindowVisible) { _, _ in confirmResign = false }
     }
 
     @ViewBuilder
@@ -584,6 +602,7 @@ struct GomokuPanel: View {
 
     // MARK: 대국
 
+    /// 대국은 **두 열**이다(v0.3.30): [판 | 오른쪽 열 572]. 채팅은 오른쪽 열 안(카드와 [기권] 사이)에 선다.
     private func playing(_ match: GomokuMatchState) -> some View {
         let showsForbidden = !match.isFinished && match.myColor == .black && match.turn == .black
         let forbidden = showsForbidden ? forbiddenMemo.points(for: match.board) : [:]
@@ -593,16 +612,20 @@ struct GomokuPanel: View {
             GomokuMatchSide(
                 store: store, match: match, me: me(),
                 hoveredReason: hovered.flatMap { forbidden[$0] },
-                confirmResign: $confirmResign
+                confirmResign: $confirmResign,
+                showsConfirmPreview: previewConfirmResign,
+                rendersPlainText: clipsOverflowInsteadOfScroll,
+                bubbleNow: previewBubbleNow
             )
             .frame(width: GomokuWindowLayout.sideColumnWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
-            GomokuChatColumn(store: store, rendersPlainText: clipsOverflowInsteadOfScroll)
-                .frame(width: GomokuWindowLayout.chatWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
+            // 안쪽 칸이 예산을 넘겨도 창 아래 여백을 칠하지 않는 보험(로비 오른쪽 열과 같다).
+            .clipped()
         }
     }
 
     // MARK: 결과
 
+    /// 결과도 **두 열**이다: [판 | 결과 카드 · 채팅 카드]. 판이 끝난 뒤 120초 동안 인사할 수 있다(설계서 A-6).
     private func result(_ match: GomokuMatchState) -> some View {
         HStack(alignment: .top, spacing: GomokuWindowLayout.columnSpacing) {
             GomokuBoardView(
@@ -610,11 +633,14 @@ struct GomokuPanel: View {
                 geometry: GomokuBoardGeometry(side: GomokuWindowLayout.boardSide),
                 lastMove: match.lastMove
             )
-            GomokuResultCard(store: store, match: match)
-                .frame(width: GomokuWindowLayout.sideColumnWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
-            // 결과 화면에도 채팅을 남긴다 — 판이 끝난 뒤 120초 동안 인사할 수 있다(설계서 A-6).
-            GomokuChatColumn(store: store, rendersPlainText: clipsOverflowInsteadOfScroll)
-                .frame(width: GomokuWindowLayout.chatWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
+            VStack(alignment: .leading, spacing: GomokuWindowLayout.matchSideSpacing) {
+                GomokuResultCard(store: store, match: match)
+                    .fixedSize(horizontal: false, vertical: true)
+                GomokuChatCard(store: store, rendersPlainText: clipsOverflowInsteadOfScroll)
+                    .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+            }
+            .frame(width: GomokuWindowLayout.sideColumnWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
+            .clipped()
         }
     }
 }
@@ -1113,12 +1139,67 @@ private struct GomokuPlayBoard: View {
 
 // MARK: - 대국: 오른쪽 열
 
+/// [기권] 누름을 받을지 가르는 규칙(순수 — 결정적 검증 지점, v0.3.30).
+///
+/// **왜 있나(2026-09-17 재현):** 로비 받은 신청의 [수락] 아래쪽 가장자리(창 위 기준 y 648~652)와 대국 화면 [기권]
+/// (y 646~680)이 같은 자리였다. [수락]을 두 번 누르면(더블클릭의 두 번째 누름) 그 사이 판이 열려 **두 번째 누름이
+/// [기권]에 떨어졌다** — 사용자는 판에 들어오자마자 "기권하기 · 계속 두기"가 떠 있는 것으로 보았다. 실제 창
+/// 하네스에서 같은 좌표 두 번 누름으로 재현했다. 오른쪽 열이 572pt 로 넓어진 뒤로는 겹치는 폭이 더 넓다.
+/// 그래서 **화면이 나타난 직후의 누름은 사용자가 이 화면을 보고 누른 것이 아니다**로 본다.
+enum GomokuResignGuard {
+    /// 대국 화면이 나타난 뒤(판이 바뀐 뒤) 이 시간 안의 [기권] 누름은 무시한다. 더블클릭 간격(시스템 기본 0.5초)을
+    /// 넉넉히 덮고, 판을 보고 기권을 결심하는 사람에게는 느껴지지 않는 값이다.
+    static let armDelay: TimeInterval = 1.0
+    /// 확인이 이 시간 동안 아무 선택 없이 서 있으면 스스로 접는다 — 확인이 판 내내 남아 있으면 다음 누름 하나가 곧 기권이다.
+    static let confirmTimeout: TimeInterval = 6
+
+    /// 이 누름을 받는가. `shownAt` 을 모르면(화면이 아직 나타났다고 기록되지 않았으면) 받는다 — 버튼이 영영 죽는 쪽이 더 나쁘다.
+    static func acceptsTap(shownAt: Date?, now: Date) -> Bool {
+        guard let shownAt else { return true }
+        return now.timeIntervalSince(shownAt) >= armDelay
+    }
+
+    /// 누름 판정이 읽는 시계. 앱은 언제나 실제 시각이고, 창 하네스 시험만 시각을 밀어 1초를 기다리지 않는다.
+    @MainActor static var clock: () -> Date = { Date() }
+
+    #if DEBUG
+    /// 창 하네스 시험 전용: [기권] 누름이 확인을 **실제로 연** 횟수. 확인은 뷰의 `@State` 라 밖에서 못 읽는다.
+    @MainActor static var confirmOpensForTesting = 0
+    #endif
+}
+
+/// 카드 말풍선 규칙(순수, v0.3.30). 그 사람의 **가장 최근 말 한 줄**을 보낸 시각부터 `visibleSeconds` 동안 띄운다.
+enum GomokuSpeechBubbleRule {
+    static let visibleSeconds: TimeInterval = 5
+
+    /// 남은 표시 시간(초). 0 이하면 띄우지 않는다 — 창을 열었을 때 이미 지난 옛 말이 튀어나오지 않는다.
+    /// 기기 시계 보정 오차로 보낸 시각이 "지금"보다 살짝 뒤면 전체 시간으로 자른다(더 오래 떠 있지 않게).
+    static func remaining(sentAt: Date, now: Date) -> TimeInterval {
+        min(visibleSeconds, visibleSeconds - now.timeIntervalSince(sentAt))
+    }
+
+    /// 카드에 띄울 후보. **내가 채팅을 껐으면 상대 말은 없다**(로그에도 안 보이는 말을 카드로 흘리지 않는다). 내 말은 띄운다.
+    static func latest(in chat: [GomokuChatMessage], mine: Bool, isMuted: Bool) -> GomokuChatMessage? {
+        if !mine && isMuted { return nil }
+        return chat.last { $0.isMine == mine }
+    }
+}
+
 private struct GomokuMatchSide: View {
     let store: GomokuStore
     let match: GomokuMatchState
     let me: GomokuPlayerFace
     let hoveredReason: GomokuForbiddenReason?
     @Binding var confirmResign: Bool
+    /// 스냅샷 전용 확인 상태(부모의 `previewConfirmResign`). 앱은 false.
+    let showsConfirmPreview: Bool
+    /// 스냅샷 전용(부모의 `clipsOverflowInsteadOfScroll`) — 채팅 카드에 그대로 넘긴다.
+    let rendersPlainText: Bool
+    /// 스냅샷 전용 말풍선 시계(부모의 `previewBubbleNow`). 앱은 nil.
+    let bubbleNow: Date?
+
+    /// 이 화면(이 판)이 나타난 시각 — [기권] 누름 판정의 기준(`GomokuResignGuard`). 매초 읽지 않는다: 나타날 때 한 번 적는다.
+    @State private var shownAt: Date?
 
     private var statusLine: (text: String, tint: Color) {
         if let hoveredReason { return (GomokuText.forbiddenStatus(hoveredReason), CheckTheme.danger) }
@@ -1127,113 +1208,181 @@ private struct GomokuMatchSide: View {
         return (GomokuText.opponentTurn, CheckTheme.secondaryText)
     }
 
+    private var isConfirming: Bool { confirmResign || showsConfirmPreview }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: GomokuWindowLayout.matchSideSpacing) {
             GomokuPlayerCard(store: store, face: .of(match.opponent), color: match.myColor.opponent,
-                             isTurn: match.turn == match.myColor.opponent, isMe: false)
+                             isTurn: match.turn == match.myColor.opponent, isMe: false,
+                             bubble: GomokuSpeechBubbleRule.latest(in: store.chat, mine: false, isMuted: store.isMuted),
+                             bubbleNow: bubbleNow)
+                .frame(height: GomokuWindowLayout.playerCardHeight)
             GomokuPlayerCard(store: store, face: me, color: match.myColor,
-                             isTurn: match.turn == match.myColor, isMe: true)
+                             isTurn: match.turn == match.myColor, isMe: true,
+                             bubble: GomokuSpeechBubbleRule.latest(in: store.chat, mine: true, isMuted: store.isMuted),
+                             bubbleNow: bubbleNow)
+                .frame(height: GomokuWindowLayout.playerCardHeight)
 
-            HStack(spacing: 6) {
-                Text(GomokuText.stakeTitle)
+            // 판돈 칩 | 상태 상자 — 한 줄. 상태 상자에 줄이 붙으면(흑 패스 · 자동 착수 · 연속 경고) 이 줄만 아래로 자란다.
+            HStack(alignment: .top, spacing: GomokuWindowLayout.matchSideSpacing) {
+                stakeChip
+                    .frame(width: GomokuWindowLayout.stakeChipWidth)
+                statusBox
+            }
+            .fixedSize(horizontal: false, vertical: true)
+
+            // 채팅 — 카드들과 [기권] 사이의 남는 높이 전부(v0.3.30 사용자 요구).
+            GomokuChatCard(store: store, rendersPlainText: rendersPlainText)
+                .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+
+            resignArea
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .onAppear { shownAt = GomokuResignGuard.clock() }
+        .onChange(of: match.id) { _, _ in
+            shownAt = GomokuResignGuard.clock()
+            confirmResign = false
+        }
+        // 창이 다시 떴다 — 다른 곳을 누르다 창이 앞으로 온 순간의 누름도 이 화면을 보고 누른 것이 아니다.
+        .onChange(of: store.isWindowVisible) { _, visible in
+            if visible { shownAt = GomokuResignGuard.clock() }
+        }
+        // 확인이 아무 선택 없이 오래 서 있으면 스스로 접는다.
+        .task(id: confirmResign) {
+            guard confirmResign else { return }
+            try? await Task.sleep(for: .seconds(GomokuResignGuard.confirmTimeout))
+            guard !Task.isCancelled else { return }
+            confirmResign = false
+        }
+    }
+
+    private var stakeChip: some View {
+        HStack(spacing: 6) {
+            Text(GomokuText.stakeTitle)
+                .foregroundStyle(CheckTheme.secondaryText)
+            RubyIcon(size: 16)
+            Text(GomokuText.stakeLine(match.stake))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .font(.callout.weight(.semibold))
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+    }
+
+    private var statusBox: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(statusLine.text)
+                .font(.headline)
+                .foregroundStyle(statusLine.tint)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            if match.blackPassed {
+                Text(GomokuText.blackPassed)
+                    .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
-                RubyIcon(size: 16)
-                Text(GomokuText.stakeLine(match.stake)).monospacedDigit()
-            }
-            .font(.callout.weight(.semibold))
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 40)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(statusLine.text)
-                    .font(.headline)
-                    .foregroundStyle(statusLine.tint)
-                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                if match.blackPassed {
-                    Text(GomokuText.blackPassed)
-                        .font(.caption)
-                        .foregroundStyle(CheckTheme.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                // 자동 착수(v0.3.28). 판 위 회색 점과 그 툴팁이 말하는 것을 **글자로도** 말한다 —
-                // 툴팁은 픽셀을 안 만들어 렌더 검증이 못 보고, 사용자도 호버하기 전에는 모른다.
-                if !match.autoPoints.isEmpty {
-                    Text(GomokuText.autoPlacedCount(match.autoPoints.count))
-                        .font(.caption)
-                        .foregroundStyle(CheckTheme.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                // 한 번 더 놓치면 지는 순간에만 뜬다(문구가 임계값을 안다 — `autoStreakWarning`).
-                if let warning = GomokuNoticeText.autoStreakWarning(store.myAutoStreak) {
-                    Text(warning)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(CheckTheme.danger)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // 보이스오버: 상태줄(내 차례 · 금수 이유 · 안내)은 한 문장으로 읽힌다 — 금수 X 의 이유는 여기서 들린다.
-            .accessibilityElement(children: .combine)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(statusLine.tint.opacity(0.10)))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(statusLine.tint.opacity(0.35), lineWidth: 1))
+            // 자동 착수(v0.3.28). 판 위 회색 점과 그 툴팁이 말하는 것을 **글자로도** 말한다 —
+            // 툴팁은 픽셀을 안 만들어 렌더 검증이 못 보고, 사용자도 호버하기 전에는 모른다.
+            if !match.autoPoints.isEmpty {
+                Text(GomokuText.autoPlacedCount(match.autoPoints.count))
+                    .font(.caption)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            // 한 번 더 놓치면 지는 순간에만 뜬다(문구가 임계값을 안다 — `autoStreakWarning`).
+            if let warning = GomokuNoticeText.autoStreakWarning(store.myAutoStreak) {
+                Text(warning)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(CheckTheme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        // 보이스오버: 상태줄(내 차례 · 금수 이유 · 안내)은 한 문장으로 읽힌다 — 금수 X 의 이유는 여기서 들린다.
+        .accessibilityElement(children: .combine)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(statusLine.tint.opacity(0.10)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(statusLine.tint.opacity(0.35), lineWidth: 1))
+    }
 
-            Spacer(minLength: 0)
-
-            if confirmResign {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(GomokuText.resignConfirm)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(CheckTheme.danger)
-                    HStack(spacing: 8) {
-                        GomokuActionButton(title: GomokuText.resignNow, icon: "flag.fill", tint: CheckTheme.danger,
-                                           height: 34, fullWidth: true, isEnabled: !store.isBusy) {
-                            confirmResign = false
-                            Task { await store.resign() }
-                        }
-                        GomokuActionButton(title: GomokuText.keepPlaying, style: .outline, height: 34, fullWidth: true) {
-                            confirmResign = false
-                        }
+    @ViewBuilder
+    private var resignArea: some View {
+        if isConfirming {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(GomokuText.resignConfirm)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(CheckTheme.danger)
+                HStack(spacing: 8) {
+                    GomokuActionButton(title: GomokuText.resignNow, icon: "flag.fill", tint: CheckTheme.danger,
+                                       height: 34, fullWidth: true, isEnabled: !store.isBusy) {
+                        confirmResign = false
+                        Task { await store.resign() }
+                    }
+                    // 스페이스·↩ 로 눌리지 않는다 — 키보드 탐색이 켜진 맥에서 채팅을 치려던 키가 기권이 되면 안 된다.
+                    .focusable(false)
+                    GomokuActionButton(title: GomokuText.keepPlaying, style: .outline, height: 34, fullWidth: true) {
+                        confirmResign = false
                     }
                 }
-            } else {
-                GomokuActionButton(title: GomokuText.resign, icon: "flag", tint: CheckTheme.danger, style: .outline,
-                                   height: 34, fullWidth: true, isEnabled: !match.isFinished && !store.isBusy) {
-                    confirmResign = true
-                }
-                .checkTooltip("한 번 더 확인한 뒤 기권해요")
             }
+        } else {
+            GomokuActionButton(title: GomokuText.resign, icon: "flag", tint: CheckTheme.danger, style: .outline,
+                               height: 34, fullWidth: true, isEnabled: !match.isFinished && !store.isBusy) {
+                // 화면이 막 나타난 직후의 누름(로비 [수락] 더블클릭의 두 번째 누름)은 이 화면을 보고 누른 것이 아니다.
+                guard GomokuResignGuard.acceptsTap(shownAt: shownAt, now: GomokuResignGuard.clock()) else { return }
+                confirmResign = true
+                #if DEBUG
+                GomokuResignGuard.confirmOpensForTesting += 1
+                #endif
+            }
+            .focusable(false)
+            .checkTooltip("한 번 더 확인한 뒤 기권해요")
         }
     }
 }
 
+/// 두 사람 카드 한 장. **높이는 부모가 못 박는다**(`playerCardHeight`) — 말풍선이 떠도 열이 흔들리지 않는다.
+///
+/// 가로 자리는 언제나 같다: 초상 | 이름·돌(고정 폭) | 말풍선 자리(남는 폭) | 차례 링 자리(고정 폭, 차례가 아니면 비어 있다).
+/// 링 자리를 비워 두는 이유 — 차례가 넘어갈 때마다 말풍선 폭이 바뀌면 떠 있던 말이 줄바꿈을 다시 해 출렁인다.
 private struct GomokuPlayerCard: View {
     let store: GomokuStore
     let face: GomokuPlayerFace
     let color: GomokuColor
     let isTurn: Bool
     let isMe: Bool
+    /// 이 사람의 가장 최근 말(없으면 nil). 띄울지 말지는 말풍선 잎 뷰가 시각으로 정한다.
+    let bubble: GomokuChatMessage?
+    /// 스냅샷 전용 시계. 앱은 nil.
+    let bubbleNow: Date?
+
+    static let portraitSize: CGFloat = 60
+    static let nameColumnWidth: CGFloat = 132
+    static let clockSize: CGFloat = 54
 
     var body: some View {
         HStack(spacing: 12) {
             CharacterPortrait(characterID: face.characterID)
-                .frame(width: 60, height: 60)
+                .frame(width: Self.portraitSize, height: Self.portraitSize)
                 // 이 카드에서 '얼굴'은 아바타가 아니라 캐릭터 초상이다 — 센터 배지는 아바타와 **같은 자리**
                 // (오른쪽 아래 모서리)에 얹는다. overlay 라 카드 폭·높이는 1pt 도 안 움직인다.
                 .overlay(alignment: .bottomTrailing) {
-                    if let center = face.center { CenterCornerBadge(label: center, avatarSize: 60) }
+                    if let center = face.center { CenterCornerBadge(label: center, avatarSize: Self.portraitSize) }
                 }
-                .padding(5)
+                .padding(4)
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.06)))
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(face.name)
                         .font(.callout.weight(.bold))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     if isMe {
                         Text("나")
                             .font(.caption2.weight(.bold))
@@ -1248,16 +1397,22 @@ private struct GomokuPlayerCard: View {
                     Text(GomokuText.stoneName(color))
                         .font(.caption)
                         .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
                 }
             }
-            Spacer(minLength: 6)
-            if isTurn {
-                GomokuTurnClock(store: store)
-                    .frame(width: 54, height: 54)
+            .frame(width: Self.nameColumnWidth, alignment: .leading)
+            GomokuSpeechBubbleSlot(message: bubble, isMine: isMe, previewNow: bubbleNow)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            ZStack {
+                if isTurn {
+                    GomokuTurnClock(store: store)
+                }
             }
+            .frame(width: Self.clockSize, height: Self.clockSize)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(isTurn ? CheckTheme.accent.opacity(0.12) : CheckTheme.panel.opacity(0.9))
@@ -1266,6 +1421,103 @@ private struct GomokuPlayerCard: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(isTurn ? CheckTheme.accent.opacity(0.6) : CheckTheme.border, lineWidth: isTurn ? 1.5 : 1)
         )
+    }
+}
+
+/// 카드 안 말풍선 자리 — **잎 뷰**(v0.3.30). 부모는 시계를 읽지 않는다: 켜고 끄는 일은 이 뷰의 `.task` 가
+/// 메시지 하나당 한 번 잠들었다 깨는 것으로 한다(초마다 다시 그리지 않는다).
+///
+/// 앱 갈래: 새 말(seq)이 오면 남은 표시 시간을 계산해 켜고, 그만큼 잔 뒤 끈다. 새 말이 또 오면 `.task(id:)` 가
+/// 앞 잠을 취소하고 다시 잰다. 창이 내려가 있어도 뷰는 살아 있어 제시간에 꺼진다.
+/// 스냅샷 갈래(`previewNow`): ImageRenderer 는 `.task` 를 안 돌리므로 주어진 시각으로 그 자리에서 판정한다.
+private struct GomokuSpeechBubbleSlot: View {
+    let message: GomokuChatMessage?
+    let isMine: Bool
+    let previewNow: Date?
+
+    /// 지금 떠 있는 말의 seq(앱 갈래).
+    @State private var shownSeq: Int?
+
+    private var visibleMessage: GomokuChatMessage? {
+        guard let message else { return nil }
+        if let previewNow {
+            return GomokuSpeechBubbleRule.remaining(sentAt: message.sentAt, now: previewNow) > 0 ? message : nil
+        }
+        return shownSeq == message.seq ? message : nil
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if let visible = visibleMessage {
+                GomokuSpeechBubble(text: visible.body, isMine: isMine)
+                    .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .leading)))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .task(id: message?.seq) {
+            guard previewNow == nil else { return }
+            guard let message else {
+                if shownSeq != nil { withAnimation(.easeOut(duration: 0.18)) { shownSeq = nil } }
+                return
+            }
+            let remaining = GomokuSpeechBubbleRule.remaining(sentAt: message.sentAt, now: Date())
+            guard remaining > 0 else {
+                if shownSeq != nil { withAnimation(.easeOut(duration: 0.18)) { shownSeq = nil } }
+                return
+            }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) { shownSeq = message.seq }
+            try? await Task.sleep(for: .seconds(remaining))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.25)) { shownSeq = nil }
+        }
+    }
+}
+
+/// 말풍선 그림 한 장. 꼬리는 **왼쪽**(이름·초상 쪽)을 가리킨다. 색은 대화 로그의 내 말/상대 말과 같다
+/// (`GomokuChatBubble` — 내 것 accent, 받은 것 흰색 10%). 받은 말은 카드 바탕 위에서 너무 흐려 테두리를 한 겹 더한다.
+private struct GomokuSpeechBubble: View {
+    let text: String
+    let isMine: Bool
+
+    static let tailSize = CGSize(width: 7, height: 12)
+
+    private var fill: Color { isMine ? CheckTheme.accent.opacity(0.85) : Color.white.opacity(0.10) }
+
+    var body: some View {
+        Text(text)
+            .font(.callout.weight(.medium))
+            .foregroundStyle(isMine ? Color.white : CheckTheme.primaryText)
+            .lineLimit(2)
+            .truncationMode(.tail)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(GomokuSpeechBubbleShape(tail: Self.tailSize).fill(fill))
+            .overlay(
+                GomokuSpeechBubbleShape(tail: Self.tailSize)
+                    .stroke(isMine ? Color.clear : CheckTheme.border, lineWidth: 1)
+            )
+            .padding(.leading, Self.tailSize.width)
+            .accessibilityElement(children: .combine)
+    }
+}
+
+/// 왼쪽 가운데에 꼬리가 달린 둥근 사각형. 꼬리는 틀 **밖**(왼쪽 `tail.width`)으로 나간다 — 부모가 그만큼 비워 둔다.
+private struct GomokuSpeechBubbleShape: Shape {
+    let tail: CGSize
+    var cornerRadius: CGFloat = 10
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path(roundedRect: rect, cornerRadius: min(cornerRadius, rect.height / 2), style: .continuous)
+        let midY = rect.midY
+        var tailPath = Path()
+        tailPath.move(to: CGPoint(x: rect.minX + 1, y: midY - tail.height / 2))
+        tailPath.addLine(to: CGPoint(x: rect.minX - tail.width, y: midY))
+        tailPath.addLine(to: CGPoint(x: rect.minX + 1, y: midY + tail.height / 2))
+        tailPath.closeSubpath()
+        path.addPath(tailPath)
+        return path
     }
 }
 
@@ -1312,6 +1564,8 @@ struct GomokuTurnClock: View {
 
 // MARK: - 결과
 
+/// 결과 카드(v0.3.30 — 오른쪽 열 위쪽, 아래는 채팅 카드). 결과를 **가로 한 장**으로 접었다: 아이콘 | 승패·이유·상대 | 루비 변화,
+/// 그 아래 안내 한 줄과 두 버튼 한 줄. 세로로 쌓던 옛 카드(약 430pt)는 채팅 자리를 170pt 로 줄여 인사 한두 줄도 못 봤다.
 private struct GomokuResultCard: View {
     let store: GomokuStore
     let match: GomokuMatchState
@@ -1342,82 +1596,91 @@ private struct GomokuResultCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: GomokuWindowLayout.matchSideSpacing) {
+            HStack(alignment: .center, spacing: 16) {
                 Image(systemName: icon)
-                    .font(.system(size: 30, weight: .bold))
+                    .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(tint)
-                    .frame(width: 72, height: 72)
+                    .frame(width: 68, height: 68)
                     .background(Circle().fill(tint.opacity(0.16)))
                     .overlay(Circle().stroke(tint.opacity(0.45), lineWidth: 1))
-                Text(GomokuText.outcomeTitle(match.outcome))
-                    .font(.system(size: 30, weight: .bold))
-                Text(GomokuText.endReason(match.endReason, outcome: match.outcome))
-                    .font(.callout)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(GomokuText.outcomeTitle(match.outcome))
+                        .font(.system(size: 26, weight: .bold))
+                    Text(GomokuText.endReason(match.endReason, outcome: match.outcome))
+                        .font(.callout)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // 상대 아바타를 함께 그린다 — 이 줄이 결과 화면에서 상대를 말하는 유일한 자리라,
+                    // 센터 배지가 설 얼굴이 여기 없으면 끝난 판에서만 소속이 사라진다.
+                    HStack(spacing: 8) {
+                        CheckAvatarView(name: match.opponent.displayName,
+                                        avatarURL: match.opponent.avatarURL.flatMap(URL.init(string:)),
+                                        size: 22, center: match.opponent.center)
+                        Text("상대 · \(match.opponent.displayName)")
+                            .font(.caption)
+                            .foregroundStyle(CheckTheme.secondaryText)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 8)
                 HStack(spacing: 8) {
                     RubyIcon(size: 26)
                     Text(GomokuText.rubyDelta(delta))
-                        .font(.system(size: 26, weight: .bold))
+                        .font(.system(size: 28, weight: .bold))
                         .monospacedDigit()
                         .foregroundStyle(delta > 0 ? CheckTheme.working : (delta < 0 ? CheckTheme.danger : CheckTheme.primaryText))
                 }
-                .padding(.top, 4)
-                // 상대 아바타를 함께 그린다 — 이 줄이 결과 화면에서 상대를 말하는 유일한 자리라,
-                // 센터 배지가 설 얼굴이 여기 없으면 끝난 판에서만 소속이 사라진다.
-                HStack(spacing: 8) {
-                    CheckAvatarView(name: match.opponent.displayName,
-                                    avatarURL: match.opponent.avatarURL.flatMap(URL.init(string:)),
-                                    size: 22, center: match.opponent.center)
-                    Text("상대 · \(match.opponent.displayName)")
-                        .font(.caption)
-                        .foregroundStyle(CheckTheme.secondaryText)
-                }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 22)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(tint.opacity(0.08)))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(tint.opacity(0.35), lineWidth: 1))
-
-            Spacer(minLength: 0)
 
             if let notice = store.notice {
                 GomokuNoticeLine(text: notice)
             }
-            GomokuActionButton(title: GomokuText.rematch, icon: "arrow.clockwise", height: 40, fullWidth: true,
-                               isEnabled: !store.isBusy && store.outgoing == nil) {
-                Task { await store.rematch() }
-            }
-            .checkTooltip("같은 상대에게 \(match.stake)루비로 다시 신청해요")
-            GomokuActionButton(title: GomokuText.backToLobby, style: .outline, height: 40, fullWidth: true) {
-                store.backToLobby()
+            HStack(spacing: 10) {
+                GomokuActionButton(title: GomokuText.rematch, icon: "arrow.clockwise", height: 40, fullWidth: true,
+                                   isEnabled: !store.isBusy && store.outgoing == nil) {
+                    Task { await store.rematch() }
+                }
+                .checkTooltip("같은 상대에게 \(match.stake)루비로 다시 신청해요")
+                GomokuActionButton(title: GomokuText.backToLobby, style: .outline, height: 40, fullWidth: true) {
+                    store.backToLobby()
+                }
             }
         }
     }
 }
 
-// MARK: - 세 번째 열: 대국 채팅 (v0.3.28)
+// MARK: - 대국 채팅 카드 (v0.3.28 · v0.3.30 오른쪽 열 안으로)
 
-/// 대국·결과 화면의 세 번째 열. 위에서부터 **대화 로그 · 빠른 문구 8개 · 입력칸**이다.
+/// 대국·결과 화면 오른쪽 열의 채팅 카드. 위에서부터 **머리글 · 대화 로그 · 빠른 문구 여덟 · 입력 줄**이다.
+/// v0.3.30 에 세 번째 열(220pt)에서 오른쪽 열 안(카드와 [기권] 사이, 572pt)으로 옮겼다 — 넓어진 폭에 맞춰
+/// 빠른 문구는 4열 × 2줄, 입력칸과 [보내기]는 가로 한 줄이다. 높이는 부모가 준 남는 높이 전부를 쓴다.
 ///
 /// 음소거는 내 화면 설정이 아니라 **서버가 아는 판 상태**라, 내가 끄면 상대 화면에도 그 사실이 뜬다
 /// (사용자 요구: "끄면 상대에게 티가 나게"). 그래서 토글은 머리글에 있고, 세 가지 사정을
 /// **조건이 참인 동안 계속** 말한다: 내가 껐다 / 상대가 껐다 / 상대가 옛 버전이라 못 받는다.
-private struct GomokuChatColumn: View {
+private struct GomokuChatCard: View {
     let store: GomokuStore
     /// 스냅샷 전용(부모의 `clipsOverflowInsteadOfScroll`): 로그를 ScrollView 대신 클립으로, 입력칸을
     /// AppKit 뷰 대신 글자로 그린다. **앱은 언제나 false** — 진짜 `CheckTextEditor` 가 선다.
     let rendersPlainText: Bool
 
+    /// 카드 안 칸 사이 간격. 좁은 세로 예산(가장 꽉 찬 대국 화면 245pt)에서 로그 두 줄을 지키는 값이다.
+    static let spacing: CGFloat = 8
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Self.spacing) {
             header
             log
             GomokuQuickPhraseGrid(store: store)
             GomokuChatComposer(store: store, rendersPlainText: rendersPlainText)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .gomokuCard(padding: 12)
     }
 
@@ -1521,9 +1784,10 @@ private struct GomokuChatColumn: View {
 private struct GomokuChatBubble: View {
     let message: GomokuChatMessage
 
-    /// 말풍선 **반대쪽** 최소 여백(pt). 폭은 프레임으로 못 박지 않는다 — 220pt 열에서 프레임을 박으면
-    /// 짧은 말도 열을 다 차지해 누가 한 말인지가 한눈에 안 보인다(`MessagePanelLayout.bubbleOppositeInset` 과 같은 수법).
-    static let oppositeInset: CGFloat = 34
+    /// 말풍선 **반대쪽** 최소 여백(pt). 폭은 프레임으로 못 박지 않는다 — 프레임을 박으면 짧은 말도 칸을 다 차지해
+    /// 누가 한 말인지가 한눈에 안 보인다(`MessagePanelLayout.bubbleOppositeInset` 과 같은 수법).
+    /// v0.3.30 에 칸이 220 → 548pt 로 넓어져 34 → 140 으로 키웠다: 긴 말도 칸의 3/4 을 안 넘어 좌우가 갈린다.
+    static let oppositeInset: CGFloat = 140
 
     var body: some View {
         HStack(spacing: 0) {
@@ -1545,23 +1809,29 @@ private struct GomokuChatBubble: View {
     }
 }
 
-/// 빠른 문구 여덟(2열 × 4행). 누르면 곧바로 나간다 — **쓰다 만 초안은 건드리지 않는다**(`sendQuick`).
+/// 빠른 문구 여덟(4열 × 2줄 — v0.3.30, 넓어진 칸에서 세로를 아낀다). 누르면 곧바로 나간다 —
+/// **쓰다 만 초안은 건드리지 않는다**(`sendQuick`).
 private struct GomokuQuickPhraseGrid: View {
     let store: GomokuStore
 
+    static let columns = 4
+    static let chipHeight: CGFloat = 24
+    static let gap: CGFloat = 5
+
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: 2), spacing: 5) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Self.gap), count: Self.columns),
+                  spacing: Self.gap) {
             ForEach(GomokuQuickPhrase.allCases, id: \.rawValue) { phrase in
                 Button {
                     store.sendQuick(phrase)
                 } label: {
                     Text(phrase.text)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                         .foregroundStyle(CheckTheme.primaryText)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 22)
+                        .frame(height: Self.chipHeight)
                         .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.06)))
                         .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
                         .contentShape(Rectangle())
@@ -1586,8 +1856,10 @@ private struct GomokuChatComposer: View {
     @Bindable var store: GomokuStore
     let rendersPlainText: Bool
 
-    /// 입력칸 높이(pt). 캡션 한 줄 13pt × 2줄 + 세로 여백 7×2 = 40 에 여유를 둔 값.
-    static let editorHeight: CGFloat = 44
+    /// 입력칸 높이(pt). 캡션 한 줄 13pt × 2줄 + 세로 여백 7×2 = 40(v0.3.30 가로 한 줄로 옮기며 44 → 40).
+    static let editorHeight: CGFloat = 40
+    /// [보내기] 폭 — 입력 줄 오른쪽 끝.
+    static let sendWidth: CGFloat = 68
     /// 글자 수는 **상한 근처에서만** 보인다(할 일 목록 관례) — 100자 중 80자를 넘겨야 뜬다.
     static let counterFromRatio = 0.8
 
@@ -1611,23 +1883,28 @@ private struct GomokuChatComposer: View {
             if !store.opponentChatCapable {
                 statusLine(GomokuNoticeText.chatOpponentOutdated, tint: CheckTheme.secondaryText)
             }
-            editor
-            HStack(spacing: 6) {
+            // 입력 줄: 입력칸 | (상한 근처면) 글자 수 | [보내기] — **가로 한 줄**(v0.3.30). 줄 높이는 입력칸 높이 그대로라
+            // 글자 수가 떠도 카드가 자라지 않는다.
+            HStack(alignment: .center, spacing: 8) {
+                editor
                 if showsCounter {
                     Text("\(length)/\(store.chatMaxLength)")
                         .font(.system(size: 9, weight: .semibold).monospacedDigit())
                         .foregroundStyle(isOverflowing ? CheckTheme.danger : CheckTheme.secondaryText)
                         .fixedSize()
                 }
-                Spacer(minLength: 4)
                 Button(action: send) {
-                    Text(GomokuText.chatSend)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .frame(height: 22)
-                        .background(Capsule().fill(CheckTheme.accent.opacity(store.canSendChatNow ? 1 : 0.35)))
-                        .fixedSize()
+                    HStack(spacing: 4) {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(GomokuText.chatSend)
+                            .font(.caption.weight(.bold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(width: Self.sendWidth, height: 32)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(CheckTheme.accent.opacity(store.canSendChatNow ? 1 : 0.35)))
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!store.canSendChatNow)
@@ -1715,13 +1992,30 @@ private struct GomokuLiveMatchColumn: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(GomokuText.liveTitle).font(.subheadline.weight(.bold))
+            HStack(spacing: 6) {
+                Text(GomokuText.liveTitle).font(.subheadline.weight(.bold))
+                if !store.liveMatches.isEmpty {
+                    Text("\(store.liveMatches.count)")
+                        .font(.caption2.weight(.bold))
+                        .monospacedDigit()
+                        .foregroundStyle(CheckTheme.pending)
+                        .padding(.horizontal, 6)
+                        .frame(height: 16)
+                        .background(Capsule().fill(CheckTheme.pending.opacity(0.16)))
+                }
+            }
             if store.liveMatches.isEmpty {
-                Text(GomokuText.noLiveMatches)
-                    .font(.caption)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
+                // 빈 칸은 **가운데**에 조용히 말한다. 글자만 두면 칸 위쪽 한 줄에 붙어 "칸이 고장 났다"로 읽힌다.
+                VStack(spacing: 8) {
+                    Image(systemName: "person.2")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(CheckTheme.secondaryText.opacity(0.7))
+                    Text(GomokuText.noLiveMatches)
+                        .font(.caption)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if clipsOverflowInsteadOfScroll {
                 cards
                     .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
@@ -1734,6 +2028,10 @@ private struct GomokuLiveMatchColumn: View {
                 .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
             }
         }
+        // ★ 크롬(`gomokuCard`) **전에** 칸을 열 폭·높이로 편다(v0.3.30). 이 한 줄이 없으면 빈 목록 갈래에서 카드가
+        //   글자 폭(약 140pt)만 감싸고, 바깥 `maxWidth: .infinity` 틀이 그 좁은 카드를 가운데로 민다 — 400pt 열에
+        //   세로로 긴 막대만 섰다(2026-09-17 사용자 스크린샷). 목록이 있으면 ScrollView 가 폭을 펴서 안 보였다.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .gomokuCard(padding: 12)
     }
 
@@ -1964,26 +2262,57 @@ private struct GomokuRulesOverlay: View {
     }
 }
 
-// MARK: - 판돈 고르기(도전 → 가운데 작은 창, v0.3.29)
+// MARK: - 판돈 고르기(도전 → 가운데 작은 창, v0.3.29 · v0.3.30 고른 뒤 [도전하기])
+
+/// 판돈 창의 고르기 규칙(순수 — 결정적 검증 지점, v0.3.30). 누른 판돈이 이미 골라져 있으면 **해제**, 아니면 그것을 고른다.
+enum GomokuStakeSelection {
+    static func toggled(current: GomokuStake?, tapped: GomokuStake) -> GomokuStake? {
+        current == tapped ? nil : tapped
+    }
+}
 
 /// [도전]을 누르면 화면 **가운데**에 뜨는 작은 창. 덮개·닫기 관례는 `GomokuRulesOverlay` 그대로다
 /// (바깥을 누르면 닫히고, 떠 있는 동안 뒤의 [도전]은 덮개에 막혀 안 눌린다).
 ///
-/// 판돈을 고르면 **즉시 신청하고 닫힌다** — 고른 값은 `store.selectedStake` 에 남아 다음 창의 기본
-/// 강조가 되고, 결과 화면 [다시 신청]도 그 값을 쓴다. 실패 문구는 로비 안내 자리(`store.notice`)에 뜬다.
+/// v0.3.30 흐름(사용자 요구): 창은 **아무 판돈도 안 골라진 채** 열린다 — 옛 창은 지난번 판돈을 강조해 둬서
+/// 한 번 누르면 곧바로 신청이 나갔고, 무엇을 걸었는지 되돌아볼 틈이 없었다. 이제
+///   · 판돈 버튼은 **고르기만** 한다(한 번 더 누르면 해제),
+///   · 맨 아래 버튼이 미선택이면 [취소], 고르면 그 자리에서 **[N 걸고 도전하기]** 로 바뀌고, 그것을 눌러야 신청이 나간다.
+/// Esc·바깥 클릭은 고른 여부와 상관없이 닫는다(바깥 클릭·Esc·[취소]가 같은 문). 고른 뒤의 ↩ 는 [도전하기]다.
+/// 신청할 때 고른 값을 `store.selectedStake` 에 적는다 — 결과 화면 [다시 신청]이 그 값을 쓴다.
+/// 실패 문구는 로비 안내 자리(`store.notice`)에 뜬다.
 ///
 /// **`Menu`·`Picker` 를 쓰지 않는다** — ImageRenderer 가 그 자리를 노란 상자로 그려 픽셀 검증이 눈이 먼다.
 /// 판돈은 버튼 셋이다. 툴팁 레이어(`.checkTooltipLayer()`)는 **창 루트 하나뿐**이라 여기에 또 달지 않는다.
 private struct GomokuStakePrompt: View {
     let store: GomokuStore
     let target: GomokuUser
+    /// 스냅샷 전용 첫 선택(부모의 `previewStakeSelection`). 앱은 nil — 창은 언제나 미선택으로 열린다.
+    let initialSelection: GomokuStake?
     let onClose: () -> Void
+
+    /// 이 창에서 고른 판돈. **창이 뜰 때마다 새로 만들어진다**(`stakeTarget` 이 nil → 값으로 바뀌며 뷰가 새로 선다).
+    @State private var selected: GomokuStake?
+
+    init(store: GomokuStore, target: GomokuUser, initialSelection: GomokuStake?, onClose: @escaping () -> Void) {
+        self.store = store
+        self.target = target
+        self.initialSelection = initialSelection
+        self.onClose = onClose
+        _selected = State(initialValue: initialSelection)
+    }
 
     /// 이 판돈을 걸 수 있는가. **잔액을 모르면(nil) 막지 않는다** — 서버가 거절하면 그때 안내가 뜬다.
     /// 여기서 모른다고 막으면 잔액 조회가 한 번 늦은 사람은 아무것도 못 건다.
     private func affordable(_ stake: GomokuStake) -> Bool {
         guard let balance = store.rubyBalance else { return true }
         return balance >= stake.rawValue
+    }
+
+    /// 지금 신청을 보낼 수 있는 판돈(고른 값이 있고, 걸 수 있고, 왕복 중이 아니다).
+    private var sendable: GomokuStake? {
+        guard let selected, affordable(selected), !store.isBusy else { return nil }
+        return selected
     }
 
     var body: some View {
@@ -1996,19 +2325,20 @@ private struct GomokuStakePrompt: View {
                     .font(.headline)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                Text(GomokuText.stakePromptCaption)
+                Text(selected.map { GomokuText.stakePromptChosen($0.rawValue) } ?? GomokuText.stakePromptCaption)
                     .font(.caption)
-                    .foregroundStyle(CheckTheme.secondaryText)
+                    .foregroundStyle(selected == nil ? CheckTheme.secondaryText : CheckTheme.primaryText)
                 HStack(spacing: 8) {
                     ForEach(GomokuStake.allCases, id: \.rawValue) { stake in
                         GomokuStakeButton(
                             stake: stake.rawValue,
-                            isSelected: store.selectedStake == stake,
+                            isSelected: selected == stake,
                             isEnabled: affordable(stake) && !store.isBusy
                         ) {
-                            store.selectedStake = stake
-                            onClose()
-                            Task { await store.challenge(userID: target.id) }
+                            // 고르기만 한다 — 신청은 맨 아래 [도전하기]가 보낸다.
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                selected = GomokuStakeSelection.toggled(current: selected, tapped: stake)
+                            }
                         }
                     }
                 }
@@ -2023,19 +2353,71 @@ private struct GomokuStakePrompt: View {
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
-                // Esc 로도 닫힌다(`.cancelAction`) — 바깥 클릭·[취소]와 **같은 문**을 지난다.
-                GomokuActionButton(title: GomokuText.cancel, style: .outline, height: 32, fullWidth: true,
-                                   action: onClose)
-                    .keyboardShortcut(.cancelAction)
+                bottomButton
             }
             .padding(20)
             .frame(width: GomokuWindowLayout.stakePromptWidth)
             .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(CheckTheme.panel))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
             .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
+            // Esc 는 **고른 여부와 상관없이** 닫는다 — 바깥 클릭·[취소]와 같은 문이다. 버튼이 [도전하기]로 바뀌어도
+            // 이 지름길은 남는다(버튼에 매달면 고른 순간 Esc 가 사라진다).
+            .background {
+                // 시스템 모양 버튼을 쓰지 않는다 — ImageRenderer 가 AppKit 컨트롤 자리를 노란 상자로 그린다. 키보드 탐색으로
+                // 보이지 않는 버튼에 초점이 앉지 않게 `focusable(false)`.
+                Button(action: onClose) { Color.clear.frame(width: 1, height: 1) }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.cancelAction)
+                    .focusable(false)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
         }
         .frame(width: GomokuWindowLayout.contentSize.width, height: GomokuWindowLayout.contentSize.height)
     }
+
+    /// 맨 아래 버튼 — 미선택이면 [취소], 고르면 **같은 자리**에서 [N 걸고 도전하기]. 높이·폭이 같아 창이 출렁이지 않는다.
+    @ViewBuilder
+    private var bottomButton: some View {
+        ZStack {
+            if let selected {
+                Button {
+                    guard let stake = sendable else { return }
+                    store.selectedStake = stake
+                    onClose()
+                    Task { await store.challenge(userID: target.id) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 12, weight: .bold))
+                        RubyIcon(size: 15)
+                        Text(GomokuText.challengeWithStake(selected.rawValue))
+                            .font(.callout.weight(.bold))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: Self.bottomButtonHeight)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(CheckTheme.accent.opacity(sendable == nil ? 0.4 : 1)))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(sendable == nil)
+                .keyboardShortcut(.defaultAction)
+                .checkTooltip(GomokuText.challengeNowHelp)
+                .transition(.opacity)
+            } else {
+                GomokuActionButton(title: GomokuText.cancel, style: .outline, height: Self.bottomButtonHeight,
+                                   fullWidth: true, action: onClose)
+                    .transition(.opacity)
+            }
+        }
+        .frame(height: Self.bottomButtonHeight)
+    }
+
+    /// 맨 아래 버튼 높이 — [취소]와 [도전하기]가 같은 값을 써서 바뀔 때 창 높이가 안 흔들린다.
+    static let bottomButtonHeight: CGFloat = 36
 }
 
 // MARK: - 팝오버 배너(받은 신청)

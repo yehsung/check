@@ -271,16 +271,20 @@ func rulesOverlayRendersAllSixExamples() throws {
     #expect(GomokuRuleExample.all.count == 6)
 }
 
-// MARK: - 세 번째 열(v0.3.28): 채팅 · 지금 대결 중 · 자동 착수
+// MARK: - 대국 채팅(v0.3.28 · v0.3.30 오른쪽 열 안) · 지금 대결 중 · 자동 착수
 
-/// 대국·결과 화면 **세 번째 열**(채팅)의 창 좌표 — 숫자를 적지 않고 레이아웃 상수에서만 뽑는다.
-/// v0.3.29 부터 **로비에는 세 번째 열이 없다**(두 열): 로비 오른쪽은 `gpLobbySideColumn` 이다.
-private var gpThirdColumn: CGRect {
-    CGRect(x: GomokuWindowLayout.contentPadding + GomokuWindowLayout.innerSize.width - GomokuWindowLayout.chatWidth,
-           y: gpBoardOrigin.y, width: GomokuWindowLayout.chatWidth, height: GomokuWindowLayout.bodyHeight)
+/// 대국 화면 **채팅 카드**의 창 좌표(v0.3.30 — 오른쪽 열 안, 카드들과 [기권] 사이). 숫자는 레이아웃 상수에서만 뽑는다.
+/// 위: 두 카드(84×2) + 간격 10×2 + 판돈 줄(상태 상자 한 줄 = 최소 높이 44) + 간격 10. 아래: [기권] 34 + 간격 10.
+/// 실측(2026-09-17): 넓은 획 행 72·156(상대 카드) · 314(채팅 카드 윗변) · 523·547·552·576(칩 두 줄) ·
+/// 584·624(입력칸) · 636(채팅 카드 아랫변) · 646~680([기권]).
+private var gpChatCard: CGRect {
+    let top = gpMatchSideColumn.minY + GomokuWindowLayout.playerCardHeight * 2
+        + GomokuWindowLayout.matchSideSpacing * 3 + 44
+    let bottom = gpMatchSideColumn.maxY - 34 - GomokuWindowLayout.matchSideSpacing
+    return CGRect(x: gpMatchSideColumn.minX, y: top, width: gpMatchSideColumn.width, height: bottom - top)
 }
 
-/// 대국 화면 가운데 열(두 사람·판돈·상태줄).
+/// 대국 화면 오른쪽 열(두 사람·판돈·상태줄·채팅·기권 — v0.3.30 부터 이 열 하나다).
 private var gpMatchSideColumn: CGRect {
     CGRect(x: gpBoardOrigin.x + GomokuWindowLayout.boardSide + GomokuWindowLayout.columnSpacing,
            y: gpBoardOrigin.y, width: GomokuWindowLayout.sideColumnWidth, height: GomokuWindowLayout.bodyHeight)
@@ -317,7 +321,7 @@ private func gpLiveMatches(_ count: Int) -> [GomokuLiveMatch] {
     }
 }
 
-/// 채팅 열이 **실제로 픽셀을 그리는지** 재는 장. 빈 로그 · 말풍선 둘 · 음소거 셋이 서로 달라야 한다
+/// 채팅 카드가 **실제로 픽셀을 그리는지** 재는 장. 빈 로그 · 말풍선 둘 · 음소거 셋이 서로 달라야 한다
 /// (셋 다 "아무것도 안 그림"이면 세 비교가 전부 0 이 되어 한꺼번에 빨개진다).
 @MainActor
 @Test
@@ -332,29 +336,33 @@ func chatColumnDrawsLogQuickPhrasesAndComposer() throws {
         // 입력칸이 노란 상자로 그려지면(진짜 AppKit 위젯이 스냅샷에 섞이면) 이 자리의 픽셀 검증이 통째로 눈이 먼다.
         #expect(gpYellowPixels(bitmap) == 0, "\(name) 에 노란 상자가 있다 — 채팅 입력칸이 대체 경로를 안 탔다")
     }
-    #expect(gpMaxChannelDifference(empty, talking, rect: gpThirdColumn) > 60, "말풍선이 그려지지 않았다")
-    #expect(gpMaxChannelDifference(empty, muted, rect: gpThirdColumn) > 30, "음소거해도 대화 자리가 그대로다")
-    #expect(gpMaxChannelDifference(empty, typed, rect: gpThirdColumn) > 30, "입력칸에 친 글자가 안 그려졌다")
+    #expect(gpMaxChannelDifference(empty, talking, rect: gpChatCard) > 60, "말풍선이 그려지지 않았다")
+    #expect(gpMaxChannelDifference(empty, muted, rect: gpChatCard) > 30, "음소거해도 대화 자리가 그대로다")
+    #expect(gpMaxChannelDifference(empty, typed, rect: gpChatCard) > 30, "입력칸에 친 글자가 안 그려졌다")
     // 내 말풍선은 accent 배경이다 — 빈 로그보다 파란 잉크가 확실히 많아야 한다(머리글 토글도 accent 라 '차이'로 잰다).
-    #expect(gpAccentInk(talking, rect: gpThirdColumn) > gpAccentInk(empty, rect: gpThirdColumn) + 200,
+    #expect(gpAccentInk(talking, rect: gpChatCard) > gpAccentInk(empty, rect: gpChatCard) + 200,
             "내 말풍선(accent 배경)이 안 보인다")
-    // 판·가운데 열은 채팅이 바뀐다고 흔들리지 않는다(세 열이 서로의 자리를 침범하지 않는다).
+    // 판·두 사람 카드·[기권]은 채팅이 바뀐다고 흔들리지 않는다(채팅 카드가 제 자리 밖을 침범하지 않는다).
     let board = CGRect(x: gpBoardOrigin.x, y: gpBoardOrigin.y,
                        width: GomokuWindowLayout.boardSide, height: GomokuWindowLayout.boardSide)
     #expect(gpMaxChannelDifference(empty, talking, rect: board) <= 2, "채팅이 판 그림을 흔들었다")
+    let resign = CGRect(x: gpMatchSideColumn.minX, y: gpChatCard.maxY + 2,
+                        width: gpMatchSideColumn.width, height: gpMatchSideColumn.maxY - gpChatCard.maxY - 2)
+    #expect(gpMaxChannelDifference(empty, talking, rect: resign) <= 2, "대화가 쌓이자 [기권]이 밀렸다")
 
     // --- 빠른 문구 격자를 **따로** 잰다 ---
     // 위 네 장은 격자에 대해 모두 같은 입력(isSendingChat·isOpponentMuted·opponentChatCapable·chatNotice 가
     // 전부 같다)이라 격자가 네 장에서 같은 자리·같은 픽셀로 앉아 **모든 차이값에서 상쇄된다** —
     // `GomokuQuickPhraseGrid(store: store)` 한 줄을 지워도 위 단언이 전부 초록이었다(2026-09-16 실측).
-    // 칩 줄 높이 22pt · 줄 간격 5pt · 네 줄 → 격자 높이 4×22 + 3×5 = 103pt.
-    // 격자 아래는 간격 10 + 입력칸 44 + 간격 5 + 보내기 줄 22 + 카드 안쪽 여백 12 = 93pt 다.
-    let chipHeight = 22, chipGap = 5, chipRows = 4
+    // v0.3.30: 칩 4열 × 2줄 · 칩 높이 24pt · 줄 간격 5pt → 격자 높이 2×24 + 5 = 53pt.
+    // 격자 아래는 간격 8 + 입력 줄 40 + 카드 안쪽 여백 12 = 60pt 다.
+    let chipHeight = 24, chipGap = 5, chipRows = 2
     let gridHeight = CGFloat(chipRows * chipHeight + (chipRows - 1) * chipGap)
-    let gridBand = CGRect(x: gpThirdColumn.minX, y: gpThirdColumn.maxY - 93 - gridHeight,
-                          width: gpThirdColumn.width, height: gridHeight)
-    // ① 칩이 **실제로 픽셀을 그린다** — 높이 22pt 짜리 상자 네 줄이 예산 자리에 정확히 선다.
-    let chipTops = gpBoxTops(talking, rect: gpThirdColumn, height: chipHeight)
+    let gridBand = CGRect(x: gpChatCard.minX, y: gpChatCard.maxY - 60 - gridHeight,
+                          width: gpChatCard.width, height: gridHeight)
+    // ① 칩이 **실제로 픽셀을 그린다** — 높이 24pt 짜리 상자 두 줄이 예산 자리에 정확히 선다.
+    //    (재는 사각형을 채팅 카드로 좁힌다 — [기권]의 채운 면은 연속한 넓은 행이라 24pt 짝을 가짜로 만든다.)
+    let chipTops = gpBoxTops(talking, rect: gpChatCard, height: chipHeight)
     #expect(chipTops == (0..<chipRows).map { Int(gridBand.minY) + $0 * (chipHeight + chipGap) },
             "빠른 문구 칩 \(chipRows)줄(높이 \(chipHeight)pt · 간격 \(chipGap)pt)이 예산 자리에 없다 — 찾은 줄 \(chipTops)")
     // ② 격자는 로그 **아래 고정**이다 — 말이 오가도, 음소거해도 그 자리가 안 움직인다.
@@ -370,15 +378,17 @@ func chatColumnDrawsLogQuickPhrasesAndComposer() throws {
     #expect(gpMaxChannelDifference(talking, sending, rect: gridBand) > 30,
             "보내는 중인데 빠른 문구 칩이 그대로다 — 그 자리에 격자가 없다")
 
-    // 결과 화면에도 채팅 열이 남는다(끝난 뒤 인사 120초).
+    // 결과 화면에도 채팅 카드가 남는다(끝난 뒤 인사 120초) — 오른쪽 열 아래쪽(결과 카드 밑)에서 잰다.
     let finished = gpResultStore(outcome: .won, reason: .five)
     finished.chat = gpChatStore().chat
     let result = try gpBitmap(gpPanel(finished))
     gpSave(result, name: "result-chat")
     #expect(gpYellowPixels(result) == 0)
+    let resultChat = CGRect(x: gpMatchSideColumn.minX, y: gpMatchSideColumn.minY + 300,
+                            width: gpMatchSideColumn.width, height: gpMatchSideColumn.height - 300)
     #expect(gpMaxChannelDifference(try gpBitmap(gpPanel(gpResultStore(outcome: .won, reason: .five))),
-                                   result, rect: gpThirdColumn) > 60,
-            "결과 화면에서 채팅 열이 사라졌다 — 끝난 뒤 인사할 자리가 없다")
+                                   result, rect: resultChat) > 60,
+            "결과 화면에서 채팅 카드가 사라졌다 — 끝난 뒤 인사할 자리가 없다")
 }
 
 /// 채팅 로그는 **언제나 최신 말에 붙는다**.
@@ -391,7 +401,7 @@ func chatColumnDrawsLogQuickPhrasesAndComposer() throws {
 @Test
 func chatLogSticksToTheNewestMessageInBothBranches() throws {
     let panel = gpStripped(try gpSource("GomokuPanel.swift"))
-    let column = try #require(gpRegion(panel, from: "private struct GomokuChatColumn: View {",
+    let column = try #require(gpRegion(panel, from: "private struct GomokuChatCard: View {",
                                        to: "private struct GomokuChatBubble: View {"))
     #expect(column.contains("ScrollViewReader"), "채팅 로그가 ScrollViewReader 없이 그려진다 — 최신 말로 못 내려간다")
     #expect(column.contains(".defaultScrollAnchor(.bottom)"), "채팅 로그가 처음부터 맨 아래에 서지 않는다")
@@ -525,21 +535,26 @@ func lobbyIsTwoColumnsAndTheStakeCardIsGone() throws {
 /// 버튼 셋을 세는 법: 고른 판돈만 accent 로 꽉 차고 나머지는 테두리뿐이다. 그래서 버튼 줄을 셋으로 쪼개면
 /// **고른 칸에만** 잉크가 있다 — 3·5·10 을 차례로 골라 잉크가 왼쪽→가운데→오른쪽으로 옮겨 가면 세 자리가
 /// 모두 실재한다는 뜻이다(버튼 하나를 지우면 나머지가 넓어져 칸이 어긋난다).
+///
+/// v0.3.30: 창은 **아무것도 안 골라진 채** 열리고(지난번 판돈 `store.selectedStake` 로 강조하지 않는다),
+/// 맨 아래 버튼이 미선택이면 [취소](테두리), 고르면 같은 자리에서 [N 걸고 도전하기](채운 accent)로 바뀐다.
 @MainActor
 @Test
 func stakePromptDimsTheLobbyAndDrawsThreeStakeButtons() throws {
     let card = CGRect(x: (GomokuWindowLayout.contentSize.width - GomokuWindowLayout.stakePromptWidth) / 2, y: 0,
                       width: GomokuWindowLayout.stakePromptWidth, height: GomokuWindowLayout.contentSize.height)
-    func lobbyStore(stake: GomokuStake, balance: Int?) -> GomokuStore {
+    func lobbyStore(balance: Int?) -> GomokuStore {
         let store = gpLobbyStore(outgoing: false)
         store.liveMatches = gpLiveMatches(3)
-        store.selectedStake = stake
+        // 지난번에 10 을 걸었다 — 새 창이 이 값을 강조하면 v0.3.29 의 "열자마자 골라져 있음"이 되살아난 것이다.
+        store.selectedStake = .ten
         store.rubyBalance = balance
         return store
     }
-    func promptBitmap(stake: GomokuStake, balance: Int?) throws -> NSBitmapImageRep {
-        try gpBitmap(GomokuPanel(store: lobbyStore(stake: stake, balance: balance), me: { gpMe },
-                                 clipsOverflowInsteadOfScroll: true, previewStakeTarget: gpMinsu))
+    func promptBitmap(selection: GomokuStake?, balance: Int?) throws -> NSBitmapImageRep {
+        try gpBitmap(GomokuPanel(store: lobbyStore(balance: balance), me: { gpMe },
+                                 clipsOverflowInsteadOfScroll: true, previewStakeTarget: gpMinsu,
+                                 previewStakeSelection: selection))
     }
     /// 판돈 버튼 줄(창 위 y 319~363 에 선다 — 2026-09-16 실측)을 셋으로 쪼갠 각 칸의 accent 잉크.
     func thirds(_ bitmap: NSBitmapImageRep) -> [Int] {
@@ -550,9 +565,12 @@ func stakePromptDimsTheLobbyAndDrawsThreeStakeButtons() throws {
                                                 width: third, height: row.height)).count
         }
     }
+    /// 맨 아래 버튼 띠(판돈 줄 아래 · 카드 안). 채운 [도전하기]는 이 띠를 accent 로 거의 다 칠하고,
+    /// 테두리뿐인 [취소]는 획과 글자만 칠한다(실측: 미선택 수천 px · 선택 수만 px).
+    let bottomBand = CGRect(x: card.minX + 20, y: 395, width: card.width - 40, height: 60)
 
-    let closed = try gpBitmap(gpPanel(lobbyStore(stake: .five, balance: 42)))
-    let open = try promptBitmap(stake: .five, balance: 42)
+    let closed = try gpBitmap(gpPanel(lobbyStore(balance: 42)))
+    let open = try promptBitmap(selection: nil, balance: 42)
     gpSave(open, name: "lobby-stake-prompt")
     #expect(gpYellowPixels(open) == 0, "판돈 창에 노란 상자가 있다 — Menu/Picker 가 섞였다")
 
@@ -562,26 +580,59 @@ func stakePromptDimsTheLobbyAndDrawsThreeStakeButtons() throws {
             "판돈 창을 열었는데 뒤가 안 어두워졌다 \(corner) → \(dimmed)")
     #expect(gpMaxChannelDifference(closed, open, rect: gpLobbyListColumn) > 60, "덮개가 상대 목록을 안 덮는다")
 
-    // ② 판돈 버튼 셋이 각자 자리에 있다.
+    // ② 처음 열면 **아무것도 안 골라져 있다** — 지난번 판돈(10)이 가게에 남아 있어도 세 칸 모두 비었다.
+    #expect(thirds(open) == [0, 0, 0], "판돈 창이 이미 골라진 채 열렸다 \(thirds(open))")
+
+    // ③ 판돈 버튼 셋이 각자 자리에 있다.
+    var chosen: [NSBitmapImageRep] = []
     for (index, stake) in [GomokuStake.three, .five, .ten].enumerated() {
-        let counts = thirds(try promptBitmap(stake: stake, balance: 42))
+        let bitmap = try promptBitmap(selection: stake, balance: 42)
+        chosen.append(bitmap)
+        let counts = thirds(bitmap)
         #expect(counts[index] > 1500, "판돈 \(stake.rawValue)을 골랐는데 \(index + 1)번째 칸이 안 찼다 \(counts)")
         for other in 0..<3 where other != index {
             #expect(counts[other] == 0, "판돈 \(stake.rawValue)을 골랐는데 \(other + 1)번째 칸도 찼다 \(counts)")
         }
     }
+    gpSave(chosen[1], name: "lobby-stake-prompt-chosen")
+    #expect(gpYellowPixels(chosen[1]) == 0, "판돈을 고른 창에 노란 상자가 있다")
 
-    // ③ 루비가 모자란 판돈은 비활성 — **골라 둔 값이어도** 안 찬다(+ 이유 한 줄이 뜬다).
-    let rich = try promptBitmap(stake: .ten, balance: 42)
-    let poor = try promptBitmap(stake: .ten, balance: 4)
+    // ④ 맨 아래 버튼이 [취소] → [도전하기]로 바뀐다(같은 자리에서 테두리 → 채운 accent).
+    let cancelInk = gpAccentInk(open, rect: bottomBand)
+    let challengeInk = gpAccentInk(chosen[1], rect: bottomBand)
+    #expect(cancelInk < 8_000, "고르기 전인데 맨 아래가 채운 버튼이다(accent \(cancelInk)px) — [취소]가 아니다")
+    #expect(challengeInk > 20_000, "판돈을 골랐는데 맨 아래가 [도전하기](채운 accent)로 안 바뀌었다(\(challengeInk)px)")
+    // 캡션도 고른 판돈을 말한다("판돈을 고르세요" → "판돈 5 · 이기면 +5").
+    let caption = CGRect(x: card.minX + 20, y: 280, width: card.width - 40, height: 24)
+    #expect(gpMaxChannelDifference(open, chosen[1], rect: caption) > 60, "판돈을 골랐는데 캡션이 그대로다")
+
+    // ⑤ 루비가 모자란 판돈은 비활성 — **골라 둔 값이어도** 안 찬다(+ 이유 한 줄이 뜬다) · [도전하기]도 흐리다.
+    let rich = try promptBitmap(selection: .ten, balance: 42)
+    let poor = try promptBitmap(selection: .ten, balance: 4)
     gpSave(poor, name: "lobby-stake-prompt-short")
     #expect(gpYellowPixels(poor) == 0, "모자람 안내가 뜬 판돈 창에 노란 상자가 있다")
     #expect(thirds(rich)[2] > 1500, "루비가 넉넉한데 판돈 10이 안 골라졌다 \(thirds(rich))")
     #expect(thirds(poor)[2] == 0, "루비 4개로 판돈 10을 고를 수 있게 그려졌다 \(thirds(poor))")
     #expect(gpMaxChannelDifference(rich, poor, rect: card) > 60, "모자란 이유 한 줄이 안 뜬다")
+    // 모자람 줄이 한 줄 끼어 버튼 띠가 아래로 밀린다 — 띠를 넉넉히 잡아 흐린 [도전하기]를 잰다.
+    let poorBand = CGRect(x: bottomBand.minX, y: bottomBand.minY, width: bottomBand.width, height: bottomBand.height + 30)
+    #expect(gpAccentInk(poor, rect: poorBand) < 8_000,
+            "루비가 모자란데 [도전하기]가 또렷하다(\(gpAccentInk(poor, rect: poorBand))px) — 누를 수 있어 보인다")
     // 같은 사실은 앱 어디서나 같은 말로 — 상점·신청 거절과 한 출처를 쓴다.
     #expect(GomokuText.stakeShortfall == WorkTimerStore.shortfallNotice(need: nil, have: nil),
             "판돈 창의 모자람 문구가 앱의 다른 화면과 다른 말을 한다")
+
+    // 소스 계약 — 판돈 버튼은 **고르기만** 하고, 신청은 [도전하기] 한 곳에서만 나간다. Esc 는 언제나 닫는다.
+    let panel = gpStripped(try gpSource("GomokuPanel.swift"))
+    let prompt = try #require(gpRegion(panel, from: "private struct GomokuStakePrompt: View {",
+                                       to: "struct GomokuInviteBanner: View {"))
+    #expect(prompt.components(separatedBy: "store.challenge(").count - 1 == 1, "신청이 나가는 자리가 하나가 아니다")
+    let stakeButtons = try #require(gpRegion(prompt, from: "GomokuStakeButton(", to: "if GomokuStake.allCases.contains"))
+    #expect(!stakeButtons.contains("store.challenge("), "판돈 버튼이 아직 누르자마자 신청한다")
+    #expect(stakeButtons.contains("GomokuStakeSelection.toggled("), "판돈 버튼이 고르기 규칙(한 번 더 누르면 해제)을 안 지난다")
+    #expect(!prompt.contains("isSelected: store.selectedStake"), "판돈 창이 지난번 판돈으로 강조된 채 열린다")
+    #expect(prompt.contains(".keyboardShortcut(.cancelAction)"), "Esc 로 판돈 창이 안 닫힌다")
+    #expect(prompt.contains(".keyboardShortcut(.defaultAction)"), "판돈을 고른 뒤 ↩ 로 신청할 수 없다")
 }
 
 /// 받은 신청이 늘수록 오른쪽 열 **아래 칸**이 자라고 **위 칸**이 그만큼 줄어든다 — 그리고 둘은 언제나
@@ -729,10 +780,11 @@ func centerBadgesDrawPixelsOnEveryGomokuFace() throws {
     let badgedPlayingBitmap = try gpBitmap(gpPanel(badgedPlaying, me: gpMeCentered))
     gpSave(badgedPlayingBitmap, name: "playing-center-badges")
     #expect(gpYellowPixels(badgedPlayingBitmap) == 0, "배지를 단 대국 화면에 노란 상자가 있다")
-    // 두 카드의 얼굴(캐릭터 초상)은 가운데 열 **왼쪽 90pt** 에 선다(오른쪽 끝의 차례 시계는 매초 바뀐다).
-    // 카드 한 장 = 초상 60 + 안쪽 여백 5×2 + 카드 여백 12×2 = 94pt, 두 장 사이 간격 12pt.
-    let opponentFace = CGRect(x: gpMatchSideColumn.minX, y: gpMatchSideColumn.minY, width: 90, height: 94)
-    let myFace = CGRect(x: gpMatchSideColumn.minX, y: gpMatchSideColumn.minY + 106, width: 90, height: 94)
+    // 두 카드의 얼굴(캐릭터 초상)은 오른쪽 열 **왼쪽 90pt** 에 선다(오른쪽 끝의 차례 시계는 매초 바뀐다).
+    // v0.3.30: 카드 한 장 = 고정 높이 84pt(초상 60 + 안쪽 여백 4×2 + 카드 위아래 여백 8×2), 두 장 사이 간격 10pt.
+    let card = GomokuWindowLayout.playerCardHeight, gap = GomokuWindowLayout.matchSideSpacing
+    let opponentFace = CGRect(x: gpMatchSideColumn.minX, y: gpMatchSideColumn.minY, width: 90, height: card)
+    let myFace = CGRect(x: gpMatchSideColumn.minX, y: gpMatchSideColumn.minY + card + gap, width: 90, height: card)
     #expect(gpMaxChannelDifference(barePlayingBitmap, badgedPlayingBitmap, rect: opponentFace) > 60,
             "대국 화면 상대 카드에 센터 배지가 없다")
     #expect(gpMaxChannelDifference(barePlayingBitmap, badgedPlayingBitmap, rect: myFace) > 60,
@@ -835,6 +887,225 @@ private func gpAccentBounds(_ bitmap: NSBitmapImageRep, rect: CGRect) -> (count:
     guard count > 0 else { return (0, .null) }
     return (count, CGRect(x: CGFloat(minX) / 2, y: CGFloat(minY) / 2,
                           width: CGFloat(maxX - minX) / 2, height: CGFloat(maxY - minY) / 2))
+}
+
+// MARK: - v0.3.30: 빈 대결 칸 폭 · 카드 말풍선 · 오른쪽 열 세로 예산 · 기권 방어
+
+/// 로비 "지금 대결 중" 칸은 **대결이 하나도 없어도** 오른쪽 열 폭(400pt)을 다 채운다.
+///
+/// 2026-09-17 사용자 스크린샷: 빈 목록일 때 카드가 글자 폭(약 140pt)만 감싸 400pt 열 가운데에 세로 막대로 섰다.
+/// 목록이 있으면 ScrollView 가 폭을 펴서 옛 시험(전부 3건 이상)이 한 번도 못 봤다. 여기서는 **빈 목록**으로 잰다:
+/// 카드 윗변·아랫변 획이 열 폭 거의 전부(둥근 모서리 두 개를 뺀 368pt = 736px 이상)에 깔려야 한다.
+@MainActor
+@Test
+func lobbyLiveMatchesCardFillsTheColumnWhenEmpty() throws {
+    let store = gpLobbyStore(outgoing: false)
+    store.incoming = []
+    store.notice = nil
+    store.liveMatches = []
+    let bitmap = try gpBitmap(gpPanel(store))
+    gpSave(bitmap, name: "lobby-live-empty")
+    #expect(gpYellowPixels(bitmap) == 0)
+    let wide = gpWideRows(bitmap, rect: gpLobbySideColumn, minimum: 700)
+    let top = Int(gpLobbySideColumn.minY)
+    #expect(wide.contains(top),
+            "빈 '지금 대결 중' 카드의 윗변이 열 폭을 못 채운다 — 가운데 좁은 막대로 섰다(넓은 획 행 \(wide))")
+    // 아랫변도 같다(윗변만 넓고 아래가 좁은 '종이 접힘'이 아니다). 받은 신청 칸 윗변과 12pt 떨어진 짝으로 찾는다.
+    let spacing = Int(GomokuWindowLayout.lobbySideSpacing)
+    #expect(wide.contains { $0 > top && wide.contains($0 + spacing) },
+            "빈 '지금 대결 중' 카드의 아랫변이 열 폭을 못 채운다(넓은 획 행 \(wide))")
+}
+
+/// 카드 말풍선 판정 시각. 말은 T0(상대)·T0+2(나)에 왔다.
+private let gpBubbleT0 = Date(timeIntervalSince1970: 1_790_000_000)
+
+@MainActor
+private func gpBubbleStore(muted: Bool = false, withChat: Bool = true) -> GomokuStore {
+    let store = gpPlayingStore(turn: .black)
+    store.isMuted = muted
+    if withChat {
+        store.chat = [
+            GomokuChatMessage(seq: 1, isMine: false, sentAt: gpBubbleT0, quick: nil, body: "잘 부탁해요! 살살 둬 주세요"),
+            GomokuChatMessage(seq: 2, isMine: true, sentAt: gpBubbleT0.addingTimeInterval(2),
+                              quick: .think, body: GomokuQuickPhrase.think.text)
+        ]
+        store.chatSeq = 2
+    }
+    return store
+}
+
+@MainActor
+private func gpBubblePanel(_ store: GomokuStore, now: Date?) -> some View {
+    GomokuPanel(store: store, me: { gpMe }, clipsOverflowInsteadOfScroll: true, previewBubbleNow: now)
+}
+
+/// 카드 한 장의 **말풍선 자리**(pt). 초상·이름 칸 오른쪽부터, 차례 링 자리 왼쪽까지 — 링(초 단위로 바뀐다)은 뺀다.
+private func gpBubbleSlot(card index: Int) -> CGRect {
+    let x = gpMatchSideColumn.minX + 12 + 68 + 12 + 132 + 12
+    let right = gpMatchSideColumn.maxX - 12 - 54 - 12
+    let y = gpMatchSideColumn.minY + CGFloat(index) * (GomokuWindowLayout.playerCardHeight + GomokuWindowLayout.matchSideSpacing)
+    return CGRect(x: x, y: y + 4, width: right - x, height: GomokuWindowLayout.playerCardHeight - 8)
+}
+
+/// 채팅을 보내면 **그 사람 카드 옆 말풍선**으로도 5초 뜬다(v0.3.30 사용자 요구).
+///
+/// 재는 것: ① 보낸 직후 두 카드 모두 말풍선 자리에 픽셀이 선다(내 것은 accent) ② 5초가 지난 말은 사라진다(각자 시각대로)
+/// ③ 내가 채팅을 껐으면 상대 말풍선은 안 뜨고 내 것은 뜬다 ④ 말풍선이 떠도 **열의 나머지는 한 픽셀도 안 움직인다**
+/// (카드 높이 고정 — 같은 대화에서 시각만 다른 두 장을 비교한다).
+@MainActor
+@Test
+func playerCardsShowTheLatestLineAsASpeechBubble() throws {
+    let noChat = try gpBitmap(gpBubblePanel(gpBubbleStore(withChat: false), now: gpBubbleT0.addingTimeInterval(3)))
+    let both = try gpBitmap(gpBubblePanel(gpBubbleStore(), now: gpBubbleT0.addingTimeInterval(3)))
+    let mineOnly = try gpBitmap(gpBubblePanel(gpBubbleStore(), now: gpBubbleT0.addingTimeInterval(6)))
+    let none = try gpBitmap(gpBubblePanel(gpBubbleStore(), now: gpBubbleT0.addingTimeInterval(8)))
+    let muted = try gpBitmap(gpBubblePanel(gpBubbleStore(muted: true), now: gpBubbleT0.addingTimeInterval(3)))
+    gpSave(both, name: "playing-speech-bubbles")
+    gpSave(muted, name: "playing-speech-bubbles-muted")
+    for (name, bitmap) in [("both", both), ("mineOnly", mineOnly), ("none", none), ("muted", muted)] {
+        #expect(gpYellowPixels(bitmap) == 0, "\(name) 에 노란 상자가 있다")
+    }
+    let opponentSlot = gpBubbleSlot(card: 0), mySlot = gpBubbleSlot(card: 1)
+
+    // ① 보낸 직후: 두 카드 모두 말풍선 — 내 것은 accent 배경.
+    #expect(gpMaxChannelDifference(noChat, both, rect: opponentSlot) > 60, "상대가 보낸 말이 상대 카드 옆에 안 뜬다")
+    #expect(gpMaxChannelDifference(noChat, both, rect: mySlot) > 60, "내가 보낸 말이 내 카드 옆에 안 뜬다")
+    #expect(gpAccentInk(both, rect: mySlot) > gpAccentInk(noChat, rect: mySlot) + 1_000,
+            "내 말풍선이 내 말 색(accent)이 아니다")
+    #expect(gpAccentInk(both, rect: opponentSlot) <= gpAccentInk(noChat, rect: opponentSlot) + 50,
+            "상대 말풍선이 내 말 색(accent)으로 칠해졌다")
+
+    // ② 5초: 상대 말(T0)은 T0+6 에 사라지고 내 말(T0+2)은 남는다 · T0+8 에는 둘 다 없다.
+    #expect(gpMaxChannelDifference(noChat, mineOnly, rect: opponentSlot) <= 2, "5초가 지난 상대 말풍선이 남아 있다")
+    #expect(gpMaxChannelDifference(noChat, mineOnly, rect: mySlot) > 60, "아직 5초가 안 된 내 말풍선이 사라졌다")
+    #expect(gpMaxChannelDifference(noChat, none, rect: opponentSlot) <= 2, "옛 말이 상대 카드에 남아 있다")
+    #expect(gpMaxChannelDifference(noChat, none, rect: mySlot) <= 2, "옛 말이 내 카드에 남아 있다")
+
+    // ③ 내가 채팅을 껐다: 상대 말풍선 없음, 내 말풍선 있음.
+    #expect(gpMaxChannelDifference(noChat, muted, rect: opponentSlot) <= 2, "채팅을 껐는데 상대 말이 카드로 샌다")
+    #expect(gpMaxChannelDifference(noChat, muted, rect: mySlot) > 60, "채팅을 껐다고 내 말풍선까지 사라졌다")
+
+    // ④ 카드 높이 고정 — 같은 대화에서 말풍선만 켜고 끈 두 장은 두 카드 **아래** 전부가 같다.
+    let below = CGRect(x: gpMatchSideColumn.minX,
+                       y: gpMatchSideColumn.minY + GomokuWindowLayout.playerCardHeight * 2 + GomokuWindowLayout.matchSideSpacing * 2,
+                       width: gpMatchSideColumn.width, height: gpMatchSideColumn.height - GomokuWindowLayout.playerCardHeight * 2 - 20)
+    #expect(gpMaxChannelDifference(both, none, rect: below) <= 2, "말풍선이 뜨자 판돈 줄·채팅·기권이 밀렸다")
+    // 판도 그대로다.
+    let board = CGRect(x: gpBoardOrigin.x, y: gpBoardOrigin.y, width: GomokuWindowLayout.boardSide, height: GomokuWindowLayout.boardSide)
+    #expect(gpMaxChannelDifference(both, none, rect: board) <= 2, "말풍선이 판 그림을 흔들었다")
+}
+
+/// 오른쪽 열 **가장 꽉 찬 경우**에도 채팅 로그가 두 줄 이상 보이고, [기권] 확인이 잘리지 않는다.
+///
+/// 가장 꽉 찬 경우 = 상태 상자 네 줄(내 차례 · 흑 패스 · 자동 착수 개수 · 연속 경고) + 상대가 채팅을 껐다는 줄 +
+/// 글자 수(상한 근처) + [기권] 확인 상태(문구 + 두 버튼). 로그 높이는 **대화가 가득한 장과 빈 장의 차이가 서는
+/// 세로 범위**로 잰다 — 말풍선은 로그 틀에 잘려 위아래를 꽉 채우고, 머리글·격자·입력 줄은 두 장이 같다.
+@MainActor
+@Test
+func fullestMatchColumnKeepsTheChatLogReadable() throws {
+    func fullest(messages: Bool) throws -> GomokuStore {
+        let store = gpPlayingStore(turn: .black)
+        var match = try #require(store.match)
+        match.blackPassed = true
+        match.autoPoints = [try #require(GomokuPoint(notation: "L4"))]
+        store.match = match
+        store.myAutoStreak = GomokuStore.autoPlaceLossStreak - 1
+        store.isOpponentMuted = true
+        store.chatDraft = String(repeating: "가", count: 90)
+        if messages {
+            let t0 = Date(timeIntervalSince1970: 1_784_000_000)
+            store.chat = (1...14).map {
+                GomokuChatMessage(seq: $0, isMine: $0.isMultiple(of: 2), sentAt: t0.addingTimeInterval(Double($0)),
+                                  quick: nil, body: "\($0)번째 말이에요")
+            }
+            store.chatSeq = 14
+        }
+        return store
+    }
+    func render(_ store: GomokuStore) throws -> NSBitmapImageRep {
+        try gpBitmap(GomokuPanel(store: store, me: { gpMe }, clipsOverflowInsteadOfScroll: true, previewConfirmResign: true))
+    }
+    let full = try render(try fullest(messages: true))
+    let empty = try render(try fullest(messages: false))
+    gpSave(full, name: "playing-fullest-confirm")
+    #expect(gpYellowPixels(full) == 0)
+
+    let extent = try #require(gpDiffRowExtent(full, empty, rect: gpMatchSideColumn),
+                              "대화가 가득한 장과 빈 장이 오른쪽 열에서 같다 — 로그가 한 줄도 안 보인다")
+    let logHeight = extent.maxY - extent.minY
+    #expect(logHeight >= GomokuWindowLayout.chatLogMinHeight,
+            "가장 꽉 찬 경우 채팅 로그가 \(logHeight)pt 로 최소 \(Int(GomokuWindowLayout.chatLogMinHeight))pt 보다 얇다")
+
+    // [기권] 확인(채운 빨강 [기권하기])이 열 **안**에 온전히 선다 — 열 아래 40pt 에 빨강 면이 있다.
+    let bottom = CGRect(x: gpMatchSideColumn.minX, y: gpMatchSideColumn.maxY - 40, width: gpMatchSideColumn.width, height: 40)
+    #expect(gpRedFill(full, rect: bottom) > 10_000, "가장 꽉 찬 경우 [기권하기]가 열 아래로 잘렸다(\(gpRedFill(full, rect: bottom))px)")
+    // 창 아래 여백 띠는 평범한 대국 화면과 한 픽셀도 다르지 않다(열이 창 밖으로 안 자란다).
+    let plain = try gpBitmap(gpPanel(gpPlayingStore(turn: .black)))
+    let size = GomokuWindowLayout.contentSize
+    let band = CGRect(x: 0, y: size.height - GomokuWindowLayout.contentPadding + 2,
+                      width: size.width, height: GomokuWindowLayout.contentPadding - 4)
+    #expect(gpMaxChannelDifference(plain, full, rect: band) <= 2, "가장 꽉 찬 오른쪽 열이 창 아래 여백까지 자란다")
+}
+
+/// 두 장이 채널 차 30 을 넘게 다른 행들의 세로 범위(pt). 다른 행이 없으면 nil.
+private func gpDiffRowExtent(_ lhs: NSBitmapImageRep, _ rhs: NSBitmapImageRep, rect: CGRect) -> (minY: CGFloat, maxY: CGFloat)? {
+    guard let a = lhs.bitmapData, let b = rhs.bitmapData,
+          lhs.pixelsWide == rhs.pixelsWide, lhs.pixelsHigh == rhs.pixelsHigh else { return nil }
+    let spp = lhs.samplesPerPixel, bpr = lhs.bytesPerRow
+    let x0 = max(0, Int(rect.minX * 2)), x1 = min(lhs.pixelsWide - 1, Int(rect.maxX * 2))
+    let y0 = max(0, Int(rect.minY * 2)), y1 = min(lhs.pixelsHigh - 1, Int(rect.maxY * 2))
+    var first: Int?, last: Int?
+    for y in y0...y1 {
+        var differs = false
+        for x in x0...x1 where !differs {
+            let o = y * bpr + x * spp
+            for c in 0..<min(3, spp) where abs(Int(a[o + c]) - Int(b[o + c])) > 30 { differs = true; break }
+        }
+        if differs {
+            if first == nil { first = y }
+            last = y
+        }
+    }
+    guard let first, let last else { return nil }
+    return (CGFloat(first) / 2, CGFloat(last) / 2)
+}
+
+/// 채운 빨강(CheckTheme.danger 면) 픽셀 수.
+private func gpRedFill(_ bitmap: NSBitmapImageRep, rect: CGRect) -> Int {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return 0 }
+    let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+    let x0 = max(0, Int(rect.minX * 2)), x1 = min(bitmap.pixelsWide - 1, Int(rect.maxX * 2))
+    let y0 = max(0, Int(rect.minY * 2)), y1 = min(bitmap.pixelsHigh - 1, Int(rect.maxY * 2))
+    var count = 0
+    for y in y0...y1 {
+        for x in x0...x1 {
+            let o = y * bpr + x * spp
+            let r = Int(data[o]), g = Int(data[o + 1]), b = Int(data[o + 2])
+            if r > 170 && r > g + 60 && r > b + 60 { count += 1 }
+        }
+    }
+    return count
+}
+
+/// 기권 방어의 소스 계약(v0.3.30). 누름 판정·키보드 차단·확인 접기·화면 전환 리셋이 **제자리에** 서 있는가.
+/// 행동 자체는 실제 창 하네스(`V0330GomokuMatchLayoutTests` — 수락 자리 두 번 누름 재현)가 잰다.
+@Test
+func resignButtonIsGuardedAgainstStrayTapsAndKeys() throws {
+    let panel = gpStripped(try gpSource("GomokuPanel.swift"))
+    let side = try #require(gpRegion(panel, from: "private struct GomokuMatchSide: View {", to: "private struct GomokuPlayerCard: View {"))
+    #expect(side.contains("guard GomokuResignGuard.acceptsTap(shownAt: shownAt, now: GomokuResignGuard.clock()) else { return }"),
+            "[기권]이 화면이 막 나타난 직후의 누름을 거르지 않는다 — 로비 [수락] 더블클릭이 기권 확인을 연다")
+    #expect(side.components(separatedBy: ".focusable(false)").count - 1 >= 2,
+            "[기권]·[기권하기]가 키보드(스페이스·↩)로 눌린다")
+    #expect(side.contains(".task(id: confirmResign)"), "기권 확인이 스스로 접히지 않는다")
+    #expect(side.contains(".onChange(of: match.id)"), "판이 바뀌어도 누름 기준 시각을 새로 안 적는다")
+    let root = try #require(gpRegion(panel, from: "struct GomokuPanel: View {", to: "private struct GomokuHeader: View {"))
+    #expect(root.contains(".onChange(of: store.phase)"), "화면이 바뀌어도 기권 확인이 남는다")
+    #expect(root.contains(".onChange(of: store.isWindowVisible)"), "창이 다시 떠도 기권 확인이 남는다")
+    // 대국·결과는 두 열이다 — 세 번째 채팅 열이 없다.
+    #expect(!root.contains("chatWidth"), "대국·결과 화면이 아직 세 번째 채팅 열을 그린다")
+    #expect(root.components(separatedBy: "GomokuChatCard(").count - 1 == 1, "결과 화면에 채팅 카드가 없다")
+    #expect(side.contains("GomokuChatCard("), "대국 오른쪽 열 안에 채팅 카드가 없다")
 }
 
 // MARK: - 팝오버 배너
@@ -987,6 +1258,8 @@ func gomokuTextIsPlainUserLanguage() throws {
         // v0.3.29 판돈 창 · [도전] 툴팁 · 보낸 신청 한 줄.
         GomokuText.stakePromptTitle(name: "민수"), GomokuText.stakePromptCaption, GomokuText.stakeShortfall,
         GomokuText.challengeHelp, GomokuText.outgoingTitle(name: "준호"), GomokuText.outgoingTitle,
+        // v0.3.30 판돈 창 고른 뒤 캡션 · [도전하기].
+        GomokuText.stakePromptChosen(5), GomokuText.challengeWithStake(5), GomokuText.challengeNowHelp,
         GomokuNoticeText.chatMutedByMe, GomokuNoticeText.chatMutedByOpponent,
         GomokuNoticeText.chatOpponentOutdated, GomokuNoticeText.chatBlocked,
         GomokuNoticeText.chatTooLong(100), GomokuNoticeText.autoPlaced, GomokuNoticeText.autoPlacedStone,

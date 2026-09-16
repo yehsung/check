@@ -18,23 +18,25 @@ import SwiftUI
 //   · 스페이스/ESC 모니터·주사율 감시자가 없다 — 턴제라 프레임 루프가 없고, 미니게임 전용 전역 싱글턴
 //     (`MiniGameSpaceKey`·`MiniGameFrameRateMonitor.shared`)과 부딪칠 일을 원천적으로 만들지 않는다.
 //   · 크기는 **1240×700 고정**이다(`GomokuWindowLayout.contentSize`). 15×15 판의 칸이 손가락 대신 마우스로
-//     정확히 찍을 만큼 커야 하고(칸 38pt), 오른쪽에 두 사람 카드와 판돈·기권이, 그 오른쪽에 채팅 열이 함께 서야 한다.
+//     정확히 찍을 만큼 커야 하고(칸 38pt), 오른쪽 열에 두 사람 카드·판돈·채팅·기권이 함께 서야 한다.
 //     v0.3.28 에서 1000 → 1240 으로 넓혔다(+220 채팅 + 20 간격). **판(608)과 높이(700)는 안 건드렸다** —
-//     그 둘을 건드리면 칸 크기와 판 좌표계가 함께 흔들린다.
+//     그 둘을 건드리면 칸 크기와 판 좌표계가 함께 흔들린다. v0.3.30 에 채팅 열을 오른쪽 열 **안으로** 넣었지만
+//     창 크기는 그대로다(로비 두 열과 같은 창이라 화면이 바뀔 때 창이 출렁이지 않는다).
 
 /// 오목 창의 **고정** 레이아웃. 순수 상수 — 창 크기를 두 곳에 적지 않는다.
 ///
-/// 열 수는 **화면마다 다르다**(v0.3.29):
-///   · 대국·결과는 **세 열** — [판 | 두 사람·판돈·기권 | 채팅]. 채팅은 결과 화면에도 남는다(끝난 뒤 인사).
-///   · 로비는 **두 열** — [상대 목록 | 오른쪽(위 지금 대결 중 · 아래 받은/보낸 신청)].
-///     v0.3.28 의 로비 세 열(목록 540 | 판돈·신청 400 | 대결 중 220)에서 **판돈 카드를 들어내며** 합쳤다:
-///     판돈은 이제 [도전]을 누를 때 가운데 작은 창에서 고른다(`GomokuStakePrompt`). 남은 240pt 는
-///     상대 목록이 가져간다 — 이름·상태 칩·[도전]이 한 줄에 여유 있게 선다.
+/// 화면은 전부 **두 열**이다(v0.3.30):
+///   · 대국은 [판 | 오른쪽 열]. 오른쪽 열은 위에서부터 상대 카드 · 내 카드 · 판돈과 상태줄 한 줄 · 채팅 카드 · [기권].
+///     v0.3.28~29 의 세 번째 채팅 열(220)을 없애고 **카드들과 [기권] 사이 빈 공간**에 채팅을 넣었다(사용자 요구:
+///     "채팅창을 오른쪽으로 따로 빼지 말고 그 사이 빈 공간에"). 보낸 말은 그 사람 카드 옆 말풍선으로도 뜬다.
+///   · 결과는 [판 | 오른쪽 열(결과 카드 · 채팅 카드)]. 채팅은 결과 화면에도 남는다(끝난 뒤 인사).
+///   · 로비는 [상대 목록 | 오른쪽(위 지금 대결 중 · 아래 받은/보낸 신청)] — 판돈은 [도전]을 누를 때
+///     가운데 작은 창(`GomokuStakePrompt`)에서 고른다.
 ///
 /// 산식:
 ///   · 안쪽 = 1240−40 × 700−40 = 1200 × 660
 ///   · 본문 높이 = 660 − 머리글 40 − 간격 12 = 608
-///   · 대국: 판 608×608(정사각) | 오른쪽 열 332 | 채팅 220 → 608 + 20 + 332 + 20 + 220 = 1200
+///   · 대국·결과: 판 608×608(정사각) | 오른쪽 열 572 → 608 + 20 + 572 = 1200
 ///   · 로비: 상대 목록 780 | 오른쪽 열 400 → 780 + 20 + 400 = 1200
 enum GomokuWindowLayout {
     /// 창 콘텐츠 크기(고정). 컨트롤러의 min/max 도 이 값 하나를 쓴다.
@@ -45,8 +47,6 @@ enum GomokuWindowLayout {
     static let headerSpacing: CGFloat = 12
     /// 로비 왼쪽(상대 목록) 폭. v0.3.29 에서 540 → 780(로비가 두 열이 되며 판돈 카드 자리를 흡수했다).
     static let lobbyListWidth: CGFloat = 780
-    /// 대국·결과 세 번째 열(채팅) 폭. 말풍선이 두 줄 안에 서는 최소치다.
-    static let chatWidth: CGFloat = 220
 
     static var innerSize: CGSize {
         CGSize(width: contentSize.width - contentPadding * 2, height: contentSize.height - contentPadding * 2)
@@ -54,10 +54,23 @@ enum GomokuWindowLayout {
     static var bodyHeight: CGFloat { innerSize.height - headerHeight - headerSpacing }
     /// 판 한 변 = 본문 높이(정사각).
     static var boardSide: CGFloat { bodyHeight }
-    /// 대국·결과 화면의 가운데 열 = 판과 채팅을 뺀 나머지.
-    static var sideColumnWidth: CGFloat { innerSize.width - columnSpacing * 2 - boardSide - chatWidth }
+    /// 대국·결과 화면의 오른쪽 열 = 판을 뺀 나머지(v0.3.30 — 채팅 열이 이 열 안으로 들어와 **두 열**이다).
+    static var sideColumnWidth: CGFloat { innerSize.width - columnSpacing - boardSide }
     /// 로비 오른쪽 열 = 상대 목록을 뺀 나머지(**두 열**이라 간격은 하나다).
     static var lobbySideWidth: CGFloat { innerSize.width - columnSpacing - lobbyListWidth }
+
+    // MARK: 대국 오른쪽 열의 세로 예산 (v0.3.30)
+
+    /// 위아래 칸 사이 간격(카드 · 판돈 줄 · 채팅 · 기권).
+    static let matchSideSpacing: CGFloat = 10
+    /// 두 사람 카드의 **고정** 높이. 말풍선이 떠도 열이 한 픽셀도 안 흔들리게 못 박는다
+    /// (초상 60 + 안쪽 여백 4×2 = 68, 카드 위아래 여백 8×2 → 84).
+    static let playerCardHeight: CGFloat = 84
+    /// 판돈 칩 폭(판돈 줄 왼쪽). 나머지 폭은 상태 상자가 쓴다.
+    static let stakeChipWidth: CGFloat = 176
+    /// 채팅 로그의 최소 높이 — 가장 꽉 찬 경우(상태 상자 네 줄 · 상대가 껐다는 줄 · 글자 수 · 기권 확인)에도
+    /// 두 줄은 보인다. 렌더 실측 시험이 이 값 아래로 내려가는지 지킨다(자르지 않는다 — 로그는 `minHeight: 0` 이다).
+    static let chatLogMinHeight: CGFloat = 64
 
     // MARK: 로비 오른쪽 열의 세로 예산 (v0.3.29)
 

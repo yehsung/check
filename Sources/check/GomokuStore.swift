@@ -154,6 +154,33 @@ nonisolated struct GomokuChatMessage: Identifiable, Equatable, Sendable {
     var id: Int { seq }
 }
 
+// MARK: - 탭 거절 사유 (v0.3.28)
+
+/// 판을 눌렀는데 돌이 안 놓인 **이유**. 여기서 갈라 두 곳으로 나간다: 사용자에게는 `GomokuNoticeText.tapRefusal(_:)`
+/// 한 줄, 진단에는 `Logger` 한 줄(`tap refused reason=…`).
+///
+/// 이 열거값이 생긴 까닭: 0.3.27 까지 네 가지 거절(내 차례 아님 · 왕복 중이라 잠김 · 이미 돌이 있음 · 판이 끝남)이
+/// 뷰와 스토어의 `guard` 한 줄씩에 뭉쳐 **전부 무음**이었다. 운영에서 사용자가 돌을 못 놓아 판돈을 잃었는데 앱이
+/// 거부 사유를 하나도 말해 주지 않아 원인 규명이 며칠치 조사로 번졌다. 이제 이 한 줄이 갈래를 갈라 준다.
+///
+/// rawValue 는 **로그 어휘**다 — 사람 이름·판 내용과 무관한 고정 문자열이라 그대로 공개(.public)로 찍어도 된다.
+nonisolated enum GomokuTapRefusal: String, CaseIterable, Sendable {
+    /// 상대 차례다.
+    case notYourTurn = "not-your-turn"
+    /// 앞 착수·기권이 아직 왕복 중이라 잠겨 있다(`isBusy`).
+    case busy
+    /// 이미 돌이 있는 자리다.
+    case occupied
+    /// 판이 끝났다.
+    case finished
+    /// 로그인이 풀렸다.
+    case signedOut = "signed-out"
+    /// 들고 있는 판이 없다. **말하지 않는다** — 판이 없으면 볼 화면도 없다(로그만 남는다).
+    case noMatch = "no-match"
+    /// 흑 금수다. 사유는 따로 싣는다.
+    case forbidden
+}
+
 // MARK: - 문구 표 (사용자 어휘 — 이 표 밖에서 문구를 만들지 마라)
 
 /// 오목 안내 한 줄의 **유일한 출처**. status → 문구 변환이 여러 곳에 흩어지면 같은 거절이 화면마다 다른 말을 한다.
@@ -172,6 +199,10 @@ nonisolated enum GomokuNoticeText {
     static let finishedInvite = "이미 끝난 신청이에요"
     static let finishedMatch = "이미 끝난 대국이에요"
     static let cannotPlace = "둘 수 없는 자리예요"
+    /// 앞 착수·기권이 아직 왕복 중이라 잠긴 동안 또 눌렀다. "기다려라"가 아니라 **지금 무슨 일이 일어나는지**를 말한다.
+    static let sending = "보내는 중이에요"
+    /// 이미 돌이 있는 교차점을 눌렀다(내 돌이든 상대 돌이든 같은 말이다 — 사용자가 할 일은 다른 자리를 고르는 것뿐).
+    static let occupied = "이미 돌이 놓인 자리예요"
     static let busy = "이미 진행 중인 대국이 있어요"
     static let targetBusy = "상대가 다른 대국 중이에요"
 
@@ -219,6 +250,20 @@ nonisolated enum GomokuNoticeText {
         case .doubleFour: return "4-4 금수라 둘 수 없어요"
         case .overline: return "장목 금수라 둘 수 없어요"
         case .budget: return "판정할 수 없는 자리예요"
+        }
+    }
+
+    /// 탭 거절 한 줄(v0.3.28). `nil` 이면 **말할 것이 없다** — `noMatch` 는 판이 없다는 뜻이라 볼 화면도 없다.
+    /// 나머지는 전부 이미 있는 문구를 **다시 쓴다**: 같은 사실이 화면마다 다른 말을 하면 그게 곧 다음 조사거리다.
+    static func tapRefusal(_ refusal: GomokuTapRefusal, reason: GomokuForbiddenReason? = nil) -> String? {
+        switch refusal {
+        case .notYourTurn: return notYourTurn
+        case .busy: return sending
+        case .occupied: return occupied
+        case .finished: return finishedMatch
+        case .signedOut: return signInAgain
+        case .noMatch: return nil
+        case .forbidden: return reason.map(forbidden) ?? cannotPlace
         }
     }
 
@@ -1134,19 +1179,20 @@ final class GomokuStore {
     }
 
     func place(_ point: GomokuPoint) async {
-        guard !isBusy, let current = match, !current.isFinished else { return }
-        guard current.turn == current.myColor else {
-            setNotice(GomokuNoticeText.notYourTurn)
-            return
-        }
-        guard current.board[point] == nil else { return }
+        // **거절은 전부 이유를 남긴다**(v0.3.28 — 전에는 이 중 넷이 통째로 무음이었다). 보는 순서는 0.3.27 그대로다:
+        // 같은 상황에서 같은 말을 해야 하고, 순서를 바꾸면 조용하던 갈래가 다른 문구로 바뀐다.
+        guard !isBusy else { refuseTap(.busy, at: point); return }
+        guard let current = match else { refuseTap(.noMatch, at: point); return }
+        guard !current.isFinished else { refuseTap(.finished, at: point); return }
+        guard current.turn == current.myColor else { refuseTap(.notYourTurn, at: point); return }
+        guard current.board[point] == nil else { refuseTap(.occupied, at: point); return }
         // 흑 금수는 서버에 보내기 전에 막는다(헛왕복 절감). 판정은 서버 gomoku_judge 와 같은 규범·같은 예산이다.
         if current.myColor == .black,
            case .forbidden(let reason) = GomokuRules.judge(board: current.board, point: point, color: .black) {
-            setNotice(GomokuNoticeText.forbidden(reason))
+            refuseTap(.forbidden, at: point, reason: reason)
             return
         }
-        guard host?.session != nil else { return }
+        guard host?.session != nil else { refuseTap(.signedOut, at: point); return }
         let id = current.id
         let expected = current.moveCount
         isBusy = true
@@ -1707,6 +1753,26 @@ final class GomokuStore {
 
     private func setNotice(_ text: String?) {
         if notice != text { notice = text }
+    }
+
+    /// 착수 거절 하나를 **두 곳**에 남긴다: 오른쪽 상태줄 한 줄(`notice`)과 진단 한 줄(`Logger`).
+    ///
+    /// 상태줄은 호버 이유(금수)를 1순위로 보여 주는 기존 규칙 그대로다 — 여기서는 `notice` 경로로만 흘려보낸다.
+    ///
+    /// 진단 줄에는 **좌표와 사유만** 싣는다. 닉네임·판 내용·판 id·토큰은 넣지 않는다(로그는 사용자 기기에 남고
+    /// 제보에 실려 나간다). 싣는 넷은 전부 고정 어휘라 그대로 공개로 찍는다:
+    /// `tap refused reason=occupied point=D10 turn=white mine=white busy=false`.
+    /// 다음에 "눌렀는데 아무 반응이 없다"가 오면 이 한 줄이 갈래를 갈라 준다.
+    private func refuseTap(_ refusal: GomokuTapRefusal, at point: GomokuPoint,
+                           reason: GomokuForbiddenReason? = nil) {
+        if let text = GomokuNoticeText.tapRefusal(refusal, reason: reason) { setNotice(text) }
+        Self.logger.notice("""
+            tap refused reason=\(refusal.rawValue, privacy: .public) \
+            point=\(point.notation, privacy: .public) \
+            turn=\(self.match?.turn?.rawValue ?? "none", privacy: .public) \
+            mine=\(self.match?.myColor.rawValue ?? "none", privacy: .public) \
+            busy=\(self.isBusy ? "true" : "false", privacy: .public)
+            """)
     }
 
     private func applyRuby(_ value: Int?) {

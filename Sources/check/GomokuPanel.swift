@@ -1029,13 +1029,15 @@ private struct GomokuPlayBoard: View {
             }
             .gesture(
                 SpatialTapGesture().onEnded { value in
+                    // **조용해도 되는 길은 이 하나뿐이다** — 격자 바깥은 거절이 아니라 빈 곳을 누른 것이다.
                     guard let point = g.point(at: value.location) else { return }
-                    // 금수 자리는 서버에 보내지 않는다 — 상태줄이 이유를 말하도록 그 자리를 짚어 둔다.
-                    if forbidden[point] != nil {
-                        hovered = point
-                        return
-                    }
-                    guard canPlace, match.board[point] == nil else { return }
+                    // 금수 자리는 호버 이유가 1순위로 서도록 그 자리를 짚어 둔다(상태줄이 danger 색으로 말한다).
+                    // 되돌아가지는 않는다 — 스토어가 같은 사유를 진단 줄로도 남기고, 서버에는 안 보낸다.
+                    if forbidden[point] != nil { hovered = point }
+                    // 나머지 거절(내 차례 아님 · 보내는 중 · 이미 놓인 자리 · 끝난 판 · 로그인 풀림)은
+                    // **스토어 한 곳**이 문구와 진단 줄을 남긴다. 여기서 미리 걸러 조용히 삼키지 않는다 —
+                    // 뭉쳐 둔 무음 guard 하나가 "눌렀는데 아무 반응이 없다"의 원인이었다(0.3.27).
+                    // 가드를 푼 것이 아니다: `place(_:)` 가 같은 조건을 **먼저** 보고 서버로는 안 나간다.
                     Task { await store.place(point) }
                 }
             )

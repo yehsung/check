@@ -65,6 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 울트라 프레임 복귀·드래그 위치 영속·클릭통과 기계가 전부 얽힌다.
     // 셋을 낱개가 아니라 한 묶음으로 드는 이유는 TodoBoardWiring.Board 주석 참고(스토어 중복 생성 방지).
     private var todoBoard: TodoBoardWiring.Board?
+    // 할 일 서버 동기화(v0.3.30). 보드의 목록을 계정에 맞추고, 계정이 바뀌면 파일을 갈아 끼운다. 조정자가 깨어남 구독과
+    // 주기 타이머를 들고 있으므로 이 참조가 앱 수명 동안 살아 있어야 한다.
+    private var todoSync: TodoSyncCoordinator?
     // 근무 시작·종료 전역 단축키(v0.3.23). 조정자가 등록기를 붙들고, 등록기는 Carbon 처리기에 자기 주소를 소유권 없이
     // 넘긴다 — 그래서 이 참조가 **앱 수명 동안** 살아 있어야 한다(CarbonWorkShortcutRegistrar 주석).
     private var workShortcut: WorkShortcutCoordinator?
@@ -157,6 +160,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///
     /// 목록 파일은 계정별로 나눈다 — 한 맥을 여러 사람이 쓰거나 계정을 갈아탔을 때 남의 할 일이 보이면 안 된다.
     /// 로그인 전에는 `todos.local.json` 을 쓰고, 이 실행에서 세션이 이미 복구돼 있으면 그 계정 파일로 연다.
+    /// **실행 중에 계정이 바뀌면 파일도 바뀐다**(v0.3.30 — 예전에는 실행 때 고른 파일을 끝까지 썼다). 그 전환과 서버 동기화
+    /// (실행·로그인 직후 · 보드 열기 · 고친 뒤 1.5초 · 5분마다 · 깨어날 때)는 `TodoSyncWiring.live` 가 건다.
+    /// 로그아웃 상태의 `todos.local.json` 은 동기화하지 않는다.
     ///
     /// **투명도는 반대로 계정별이 아니다.** 목록은 '내가 쓴 내용'이라 남에게 보이면 안 되지만, 투명도는
     /// 이 맥의 화면 사정(바탕화면 밝기·모니터·주변 조명)에 대한 답이라 계정과 아무 상관이 없고 새는 정보도
@@ -167,12 +173,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 사고를 아무도 못 막는다 — 그 함수 주석 참고). 이 메서드는 실행당 1회, 수명 소유만 갖는다.
     private func wireTodoBoard() {
         guard let overlay = overlayController else { return }
-        todoBoard = TodoBoardWiring.assemble(
+        let board = TodoBoardWiring.assemble(
             overlay: overlay,
             listFileURL: TodoFileStore.defaultURL(userID: store.session?.userID),
             defaults: .standard,
             isTodoEnabled: { [weak self] in self?.store.isTodoEnabled ?? false }
         )
+        todoBoard = board
+        todoSync = TodoSyncWiring.live(board: board, store: store)
     }
 
     /// 설정 창을 배선한다(실행당 1회). **창의 수명은 컨트롤러가 들고, 여는 경로는 세 갈래로 모인다**:

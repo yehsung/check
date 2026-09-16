@@ -20,9 +20,12 @@ enum TodoBoardStrings {
     static let emptyHint = "위에 적고 Enter를 누르세요"
     static let deleted = "삭제됨"
     static let undo = "되돌리기"
-    /// 하단 캡션은 항상 떠 있는다. 같은 앱 안에서 근무 기록은 팀으로 나가기 때문에, 이 목록만은
-    /// 서버로 가지 않는다는 사실을 매번 보여 줘야 사용자가 사적인 메모를 마음 놓고 적는다.
-    static let footer = "이 목록은 내 맥에만 저장돼요"
+    /// 하단 캡션은 항상 떠 있는다. 이 목록이 **어디에 저장되는지**를 매번 보여 주는 자리다.
+    ///
+    /// v0.3.30 부터 할 일은 내 계정에 저장돼 다른 기기(다른 맥·폰)와 맞춰진다. 예전 문구("이 목록은 내 맥에만 저장돼요")를
+    /// 그대로 두면 사실과 반대인 약속을 매번 하게 된다 — 사적인 메모를 이 맥에만 둔다고 믿고 적은 사람이 폰에서 그걸 보게 된다.
+    /// 팀에 공개된다는 뜻으로 읽히지 않게 "내 계정"을 주어로 둔다(서버에서도 본인만 읽는다 — todo_items RLS).
+    static let footer = "내 계정에 저장돼 다른 기기와 맞춰져요"
     static let markDone = "완료로 표시"
     static let markUndone = "완료 취소"
     static let deleteItem = "삭제"

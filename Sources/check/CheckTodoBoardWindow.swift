@@ -546,13 +546,20 @@ final class CheckTodoBoardController {
     /// 런루프로 밀린다.
     func open(anchor: NSRect, screenVisibleFrame: NSRect) {
         syncTodayKey()
+        let wasOpen = isBoardOpen
         let board = panel
         board.setFrame(TodoBoardAnchor.frame(anchor: anchor, in: screenVisibleFrame), display: false)
         board.orderFrontRegardless()
         isBoardOpen = true
         installScrollMonitor()
         armStuckPanelWatchdog(anchor: anchor, screenVisibleFrame: screenVisibleFrame)
+        // 닫혀 있다가 **열린 순간에만** 알린다(v0.3.30 동기화: 보드를 열 때 맞춘다). 못 뜬 창을 다시 만드는 복구 경로도
+        // open 을 다시 부르는데, 그건 사용자가 연 것이 아니라서 요청을 한 번 더 쏘지 않는다.
+        if !wasOpen { onOpened?() }
     }
+
+    /// 보드가 닫혀 있다가 열렸다(동기화 조정자가 건다). nil 이면 아무 일도 없다.
+    var onOpened: (() -> Void)?
 
     // MARK: - 창이 화면에 못 올라갔을 때의 복구
 
@@ -788,6 +795,8 @@ final class CheckTodoBoardController {
 
     func beginEdit(_ id: UUID) {
         if ui.editingID != id { ui.editingID = id }
+        // 다른 줄을 고치다 넘어왔다면 그 줄의 보호는 여기서 끝난다(미룬 병합이 있으면 한 번 더 맞춘다).
+        store.syncProtectionDidEnd()
     }
 
     /// 인라인 수정 Enter. 저장 여부(빈 제목 거절 등)는 store 의 규칙에 맡기고, 수정 모드는 어느 쪽이든 닫는다 —
@@ -801,6 +810,7 @@ final class CheckTodoBoardController {
     /// 수정 모드 종료(Esc·커밋 후 공용). 원래 제목은 store 가 계속 들고 있으므로 여기서 되돌릴 것이 없다.
     func cancelEdit() {
         if ui.editingID != nil { ui.editingID = nil }
+        store.syncProtectionDidEnd()
     }
 
     func toggleOldSection() {
@@ -844,6 +854,7 @@ final class CheckTodoBoardController {
             undoTask?.cancel()
             undoTask = nil
             ui.pendingDeleteID = nil
+            store.syncProtectionDidEnd()
             return
         }
         store.undoDelete(id)
@@ -856,6 +867,33 @@ final class CheckTodoBoardController {
         guard let id = ui.pendingDeleteID else { return }
         ui.pendingDeleteID = nil
         store.delete(id)
+        store.syncProtectionDidEnd()
+    }
+
+    // MARK: - 서버 동기화와의 접점(v0.3.30)
+
+    /// 지금 서버 병합을 **미뤄야 하는** 줄: 편집 중인 줄과 '삭제됨 [되돌리기]' 로 서 있는 줄.
+    ///
+    /// 왜 미루는가 — 보드가 열린 채 다른 기기의 변경이 들어오면:
+    /// · 편집 중인 줄이 서버 톰스톤·전체 정리로 목록에서 빠지면 그 자리의 편집기가 통째로 사라져 **치던 글이 증발한다**.
+    ///   (제목만 바뀐 경우는 편집기가 자기 `@State` 를 들고 있어 안 깨지지만, 커밋 전까지 화면이 엇갈린다.)
+    /// · 되돌리기 창의 줄은 아직 스토어에서 안 지웠으므로(유예 중) 다른 기기의 삭제·정리가 덮으면 '삭제됨 [되돌리기]' 행이
+    ///   눈앞에서 사라지고, 눌러야 할 버튼이 없어진다.
+    /// 그래서 이 id 들은 병합에서 로컬을 그대로 두고 pending 으로 되돌린다. 보호가 끝나면(커밋·취소·확정·되돌리기) 스토어가
+    /// 한 번 더 맞추고, 서버는 LWW 로 판정한 현재 행을 돌려준다 — 사용자가 고쳐 커밋했으면 그 수정이 새 값이라 이긴다.
+    var syncProtectedIDs: Set<UUID> {
+        var ids: Set<UUID> = []
+        if let editing = ui.editingID { ids.insert(editing) }
+        if let pending = ui.pendingDeleteID { ids.insert(pending) }
+        return ids
+    }
+
+    /// 계정이 바뀌었다. 되돌리기 창의 삭제는 **지금 파일(앞 계정)에** 확정하고, 편집·초안은 버린다 —
+    /// 다음 사람이 앞 사람이 적다 만 글을 입력칸에서 보면 안 된다. 보드 자체는 닫지 않는다(로그아웃이면 근무가 끝나며 이미 닫힌다).
+    func resetForAccountSwitch() {
+        commitPendingDelete()
+        if ui.editingID != nil { ui.editingID = nil }
+        if !ui.draft.isEmpty { ui.draft = "" }
     }
 
     // MARK: - 하루 경계

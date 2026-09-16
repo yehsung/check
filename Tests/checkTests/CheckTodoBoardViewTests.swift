@@ -14,7 +14,8 @@ func todoBoardStringsAreTheConfirmedProductCopy() {
     #expect(TodoBoardStrings.emptyHint == "위에 적고 Enter를 누르세요")
     #expect(TodoBoardStrings.deleted == "삭제됨")
     #expect(TodoBoardStrings.undo == "되돌리기")
-    #expect(TodoBoardStrings.footer == "이 목록은 내 맥에만 저장돼요")
+    // v0.3.30: 할 일이 계정에 저장·동기화되면서 "내 맥에만" 약속이 사실과 반대가 됐다(V0330TodoSyncEngineTests 가 문구 전수 확인).
+    #expect(TodoBoardStrings.footer == "내 계정에 저장돼 다른 기기와 맞춰져요")
     // 조절 컨트롤은 헤더 버튼(조작 안내 있음)과 슬라이더(값 컨트롤, 안내 없음)로 이름이 갈린다.
     // '투명도'가 아니라 '진하기'다 — 옆 숫자(opacity × 100)는 1에 가까울수록 커지므로, '투명도'로 부르면
     // 가장 투명한 끝이 "20%" 로 읽혀 뜻이 뒤집힌다(문구 방향 반전 회귀 방지).

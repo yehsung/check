@@ -382,69 +382,13 @@ func 로그아웃_상태에서_뚜껑을_닫아도_suspended가_되지_않는다
     #expect(apply(&link, .didWake, t0 + 1) == [])
 }
 
-// MARK: - 6-b. 근무 게이트 (v0.2.34 — 소켓은 근무 중에만 뜬다)
-
-@Test
-func 근무_종료는_로그아웃이_아니라_토큰을_남긴다() {
-    var link = subscribedLink(token: "tok-a")
-
-    #expect(apply(&link, .workEnded, t0) == [.disconnect, .cancelRetry])
-    #expect(link.state == .idle(.notWorking))
-    // **이 한 줄이 `.signedOut` 과의 차이 전부다.** 지우면 근무를 다시 시작할 때 링이 붙을 근거를 잃고
-    // `.idle(.signedOut)` 으로 떨어져, 로그인해 둔 사용자가 로그아웃된 것처럼 보인다.
-    #expect(link.accessToken == "tok-a")
-
-    // 그래서 근무를 다시 시작하면 **다시 로그인하지 않고** 그 토큰으로 곧바로 붙는다.
-    #expect(apply(&link, .signedIn(accessToken: "tok-a"), t0 + 10)
-        .contains(.connect(accessToken: "tok-a")))
-    apply(&link, .transport(.joined), t0 + 11)
-    #expect(link.state.isSubscribed)
-
-    // 두 번째 `.workEnded` 는 no-op 이다 — 되맞춤이 주기적으로 넣으므로, 여기서 매번 disconnect 를
-    // 돌려주면 비근무 구간 내내 죽은 소켓에 대고 끊기를 되풀이한다.
-    apply(&link, .workEnded, t0 + 12)
-    #expect(apply(&link, .workEnded, t0 + 13) == [])
-    #expect(link.state == .idle(.notWorking))
-}
-
-@Test
-func 비근무_상태에서_뚜껑을_닫아도_suspended가_되지_않는다() {
-    // `.suspended` 로 접히면 `.didWake` 가 근무하지도 않는 맥의 소켓을 다시 올린다
-    // (로그아웃에서 같은 결함을 막는 가지가 바로 위에 있다).
-    var link = subscribedLink()
-    apply(&link, .workEnded, t0)
-    #expect(link.state == .idle(.notWorking))
-
-    apply(&link, .willSleep, t0 + 10)
-    #expect(link.state == .idle(.notWorking),
-            "notWorking 이 suspended 가 되면 뚜껑을 여는 순간 근무 없이 다시 붙는다")
-    #expect(apply(&link, .didWake, t0 + 7200) == [])
-    #expect(link.state == .idle(.notWorking))
-}
-
-@Test
-func 뚜껑을_닫은_채_근무가_끝나면_사유가_정정된다() {
-    // 뚜껑을 닫은 사이에 근무가 끝날 수 있다(잠자기 자동 마감·서버 마감). 사유를 정정하지 않으면
-    // 뚜껑을 여는 순간 `.didWake` 가 `.idle(.suspended)` 를 보고 근무 없이 다시 붙는다.
-    var link = subscribedLink()
-    apply(&link, .willSleep, t0)
-    #expect(link.state == .idle(.suspended))
-
-    #expect(apply(&link, .workEnded, t0 + 5) == [], "이미 내려간 소켓에 disconnect 를 또 쏘면 안 된다")
-    #expect(link.state == .idle(.notWorking))
-    #expect(apply(&link, .didWake, t0 + 10) == [])
-    #expect(link.state == .idle(.notWorking))
-}
-
-@Test
-func 전송자가_없으면_근무_종료도_링을_움직이지_못한다() {
-    // `.idle(.disabled)` 은 **어떤 이벤트로도** 벗어나지 않는다(fail-closed). `.workEnded` 가 이
-    // 잠금을 뚫으면 킬스위치를 끈 빌드가 조용히 링을 갖게 된다.
-    var link = RealtimeLink(transportAvailable: false)
-    apply(&link, .signedIn(accessToken: "tok"), t0)
-    #expect(apply(&link, .workEnded, t0 + 1) == [])
-    #expect(link.state == .idle(.disabled))
-}
+// MARK: - 6-b. 근무 게이트는 사라졌다 (v0.3.30 — 소켓 기준은 로그인)
+//
+// v0.2.34 의 `.workEnded` 사건과 `.idle(.notWorking)` 사유를 **지웠다**(RealtimeLink.swift 의 IdleReason 주석).
+// 서버가 메시지·오목 신청의 근무 조건을 풀어 근무하지 않는 사람에게도 신호가 오기 때문이다. 그래서 여기 있던
+// 순수 링 테스트 넷(근무 종료는 토큰을 남긴다 · 비근무 뚜껑 · 뚜껑 닫은 채 근무 종료 정정 · 전송자 없는 근무 종료)은
+// 검증할 사건 자체가 없어져 함께 걷었다. 로그인 기준 연결과 소비 게이트의 새 계약은 V0330MessageRealtimeTests 가 지킨다.
+// 되살리려는 사람은 그 파일의 `비근무_로그인_맥도_소켓을_붙인다` 가 왜 빨개지는지부터 읽어라.
 
 // MARK: - 7. Phoenix 프레임 (순수 — 소켓 없음)
 
@@ -527,52 +471,50 @@ func 프레임_해석이_남의_토픽을_우리_것으로_오인하지_않는�
 
 @MainActor
 @Test
-func 비근무_맥은_소켓을_아예_붙이지_않는다() async {
-    // ★ blocker(리얼타임 #5)의 **더 강한 형태**(v0.2.34). 예전엔 소켓이 로그인만으로 떠 있고,
-    //   두 맥 모두에 도착한 초인종을 take_pokes 게이트가 집 맥에서 막았다. 이제는 애초에 붙지 않는다 —
-    //   서버의 poke_user / ultra_poke_user / send_message 가 전부 target_not_working 게이트를 갖기 때문에
-    //   (20260819030000_poke_economy_and_ring.sql:69, :156, :215) 비근무 맥에게 올 신호가 원리적으로 없고,
-    //   그 소켓은 25초 하트비트만 태운다.
+func 비근무_맥도_로그인이면_붙고_take_pokes_는_부르지_않는다() async {
+    // ★ v0.3.30 에 뒤집힌 계약(옛 이름: 비근무_맥은_소켓을_아예_붙이지_않는다 — v0.2.34). 서버가 메시지·오목 신청의
+    //   근무 조건을 풀어 비근무 맥에게도 신호가 온다 — 그래서 소켓은 **로그인 기준**으로 붙는다. 대신 소비 게이트는
+    //   그대로라 조인 직후 따라잡기가 take_pokes 를 부르지 않는다(비근무 맥이 소비하면 회사 맥의 찌르기·말풍선을 훔친다).
     let host = "realtime-idle-mac"
     let (store, transport) = makeRealtimeStore(host: host)
 
     #expect(store.startedAt == nil)
     store.startRealtimeIfPossible()
-
-    #expect(transport.commands.contains { $0.hasPrefix("connect(") } == false, "비근무인데 소켓을 열었다")
-    #expect(store.realtimeState == .idle(.notWorking))
-    // 막혔다는 **사실이 화면까지 온다.** 조용히 반환하면 초기값 `.idle(.disabled)` 이 남아
-    // 설정 창 진단이 로그인해 둔 사용자에게 '전송자 없음'과 같은 얼굴을 보여 준다.
-    #expect(store.realtimeDiagnosticsLine.contains("idle(notWorking)"))
-
-    // 근무를 시작하면 같은 호출이 이번엔 실제로 붙고, 초인종이 소비로 이어진다
-    // (게이트가 '언제나 막는' 것이 아님을 증명한다).
-    store.startedAt = Date()
-    store.startRealtimeIfPossible()
+    #expect(transport.commands.contains { $0.hasPrefix("connect(") }, "로그인했는데 소켓을 안 열었다 — 근무 밖 메시지가 안 들린다")
     transport.emit(.joined)
-    await waitUntil { takePokesCount(host: host) >= 1 }
     await waitUntil { realtimeIdle(store) }
     #expect(store.realtimeState.isSubscribed)
+    #expect(takePokesCount(host: host) == 0, "비근무 맥이 조인 따라잡기로 take_pokes 를 쐈다")
+    #expect(store.realtime.catchUpDeferred, "소비 못 한 따라잡기를 빚으로 남기지 않았다 — 근무를 시작해도 회수가 없다")
+
+    // 소비할 수 있게 되면(서버가 근무를 복원) 그 순간 한 번 가져온다 — 게이트가 '언제나 막는' 것이 아님을 증명한다.
+    store.startedAt = Date()
+    store.reconcileRealtimeWithWorkState()
+    await waitUntil { takePokesCount(host: host) >= 1 }
+    await waitUntil { realtimeIdle(store) }
     #expect(takePokesCount(host: host) == 1)
 }
 
 @MainActor
 @Test
-func 흡수세션인_맥은_붙지도_소비하지도_않는다() async {
+func 흡수세션인_맥은_붙지만_소비하지_않는다() async {
+    // v0.3.30: 흡수 세션 맥도 로그인이면 붙는다(메시지·읽음·오목 신청은 두 맥 모두의 것이다). 남의 찌르기를 훔치지 않는
+    // 장치는 **소비 게이트** 하나로 좁혀졌다 — 그래서 이 테스트가 지키는 것이 그 게이트다(옛 이름: 흡수세션인_맥은_붙지도_소비하지도_않는다).
     let host = "realtime-adopted-mac"
     let (store, transport) = makeRealtimeStore(host: host)
     store.startedAt = Date()
     store.adoptedRemoteSession = true      // 이 근무의 주인은 다른 맥이다
 
     store.startRealtimeIfPossible()
-    #expect(transport.commands.contains { $0.hasPrefix("connect(") } == false,
-            "흡수 세션의 주인은 다른 맥이다 — 그 초인종을 받아 가면 진짜 주인에게 아무것도 안 간다")
-    #expect(store.realtimeState == .idle(.notWorking))
-
-    // 표식을 내리면 붙는다(게이트가 '언제나 막는' 것이 아님).
-    store.adoptedRemoteSession = false
-    store.startRealtimeIfPossible()
+    #expect(transport.commands.contains { $0.hasPrefix("connect(") })
     transport.emit(.joined)
+    await waitUntil { realtimeIdle(store) }
+    #expect(takePokesCount(host: host) == 0,
+            "흡수 세션의 주인은 다른 맥이다 — 그 따라잡기를 받아 가면 진짜 주인에게 아무것도 안 간다")
+
+    // 표식을 내리면(이 맥이 주인이 됐다) 빚진 따라잡기를 한 번 갚는다.
+    store.adoptedRemoteSession = false
+    store.reconcileRealtimeWithWorkState()
     await waitUntil { takePokesCount(host: host) >= 1 }
     await waitUntil { realtimeIdle(store) }
     let afterCatchUp = takePokesCount(host: host)
@@ -580,10 +522,9 @@ func 흡수세션인_맥은_붙지도_소비하지도_않는다() async {
 
     // **소비 게이트는 따로 살아 있어야 한다.** 붙어 있는 동안 폴링이 "이 세션의 주인은 다른 맥"이라고
     // 알려 오면(재흡수), 소켓이 아직 살아 있어도 소비는 즉시 멈춘다 — `run(_:now:)` 의 `.drain` 가지다.
-    // 붙는 것을 막는 게이트만 있고 이게 없으면, 흡수로 뒤집힌 그 창에서 집 맥이 남의 찌르기를 훔친다.
     store.adoptedRemoteSession = true
     transport.emit(.broadcast(event: "ring"))
-    await waitUntil { realtimeIdle(store) }
+    await waitUntil { realtimeIdle(store) && store.messageReadRuntime.activityTask == nil }
     #expect(takePokesCount(host: host) == afterCatchUp, "흡수 표식이 선 뒤에도 남의 찌르기를 훔쳤다")
 }
 
@@ -709,26 +650,33 @@ func 구독중_근무종료도_꼬리를_한번_더_회수한다() async throws 
 
 @MainActor
 @Test
-func 근무를_시작하면_그때_소켓이_붙는다() async {
-    // 링이 출발하는 자리는 로그인 지점(startStatusRefreshLoop)이 아니라 **start()** 다.
+func 로그인하면_붙고_근무_시작은_다시_조인하지_않는다() async {
+    // v0.3.30: 링이 출발하는 자리는 다시 **로그인 지점**이다(옛 이름: 근무를_시작하면_그때_소켓이_붙는다 — v0.2.34).
+    // 근무 시작이 붙어 있는 링에 `.signedIn` 을 또 넣으면 링은 멀쩡한 구독을 끊고 다시 조인한다(조인마다 따라잡기 한 번 더).
     let host = "realtime-work-start"
     let (store, transport) = makeRealtimeStore(host: host)
 
-    store.startRealtimeIfPossible()          // 로그인만으로는 붙지 않는다
-    #expect(store.realtimeState == .idle(.notWorking))
+    store.startRealtimeIfPossible()
+    if case .connecting = store.realtimeState {} else {
+        Issue.record("로그인했는데 소켓이 안 붙는다: \(store.realtimeState)")
+    }
+    transport.emit(.joined)
+    await waitUntil { realtimeIdle(store) }
+    let connects = transport.commands.filter { $0.hasPrefix("connect(") }.count
+    #expect(connects == 1)
 
     store.start()
-
-    if case .connecting = store.realtimeState {} else {
-        Issue.record("근무를 시작했는데 소켓이 안 붙는다: \(store.realtimeState)")
-    }
-    #expect(transport.commands.contains { $0.hasPrefix("connect(") })
+    #expect(store.realtimeState.isSubscribed, "근무 시작이 멀쩡한 구독을 끊었다")
+    #expect(transport.commands.filter { $0.hasPrefix("connect(") }.count == connects,
+            "근무 시작이 다시 조인했다 — 조인마다 따라잡기가 한 번 더 돈다")
     await waitUntil { realtimeIdle(store) }
 }
 
 @MainActor
 @Test
-func 근무를_끝내면_소켓이_내려가고_꼬리_회수는_그대로_돈다() async {
+func 근무를_끝내도_소켓은_남고_꼬리_회수는_그대로_돈다() async {
+    // v0.3.30(옛 이름: 근무를_끝내면_소켓이_내려가고_꼬리_회수는_그대로_돈다): 근무 밖에서도 메시지·읽음·오목 신청 신호가
+    // 오므로 근무 종료는 링을 내리지 않는다. 꼬리 회수(폴링 경로)는 예전 그대로 한 번 돈다.
     let host = "realtime-work-end"
     let (store, transport) = makeRealtimeStore(host: host)
     store.startedAt = Date()
@@ -741,44 +689,51 @@ func 근무를_끝내면_소켓이_내려가고_꼬리_회수는_그대로_돈�
 
     store.stop()
 
-    // ① 링이 내려간다. 사유는 `.signedOut` 이 아니라 `.notWorking` 이다 — 로그아웃이 아니므로.
-    #expect(store.realtimeState == .idle(.notWorking))
-    #expect(transport.commands.contains("disconnect"))
-    // ② **순서 계약**: 링을 내렸어도 꼬리 회수는 그대로 돈다. 회수는 폴링 경로라 리얼타임과 무관해야
-    //    하는데, stop() 안에서 링을 내리는 위치를 잘못 잡으면 그 회수가 조용히 죽는다
-    //    (그러면 마지막 폴링 이후 도착한 찔림이 신선도 1시간을 넘겨 영구 소실된다).
+    // ① 링은 그대로다.
+    #expect(store.realtimeState.isSubscribed, "근무를 끝냈다고 소켓을 내렸다 — 근무 밖 메시지가 안 들린다")
+    #expect(transport.commands.contains("disconnect") == false)
+    // ② 꼬리 회수는 그대로 돈다(마지막 폴링 이후 도착한 찔림이 신선도 1시간을 넘겨 영구 소실되지 않게).
     await waitUntil { takePokesCount(host: host) >= afterCatchUp + 1 }
     await waitUntil { realtimeIdle(store) }
-    #expect(takePokesCount(host: host) == afterCatchUp + 1,
-            "근무 종료 꼬리 회수가 링을 내리는 순서에 걸려 죽었다")
+    #expect(takePokesCount(host: host) == afterCatchUp + 1, "근무 종료 꼬리 회수가 죽었다")
+    // ③ 끝난 뒤의 초인종은 take_pokes 로 가지 않는다(소비 게이트).
+    transport.emit(.broadcast(event: "ring"))
+    await waitUntil { realtimeIdle(store) && store.messageReadRuntime.activityTask == nil }
+    #expect(takePokesCount(host: host) == afterCatchUp + 1, "근무가 끝난 맥이 초인종에 take_pokes 를 쐈다")
 }
 
 @MainActor
 @Test
-func 서버가_근무를_복원하면_되맞춤이_소켓을_올린다() async {
+func 서버가_근무를_복원하면_되맞춤이_빚진_따라잡기를_갚는다() async {
     // 근무 중에 앱을 재시작하면 start() 를 타지 않는다 — 서버에 열려 있던 내 세션을
-    // refreshTeamStatus(adoptRemoteSession)가 로컬 startedAt 으로 되살린다. 되맞춤이 없으면
-    // 그 맥의 초인종은 영영 안 붙고 15초 폴링만 남는다(열화이지 침묵은 아니라 아무도 신고하지 않는다).
+    // refreshTeamStatus(adoptRemoteSession)가 로컬 startedAt 으로 되살린다. v0.3.30 부터 소켓은 이미 로그인으로 붙어 있고
+    // (옛 이름: 서버가_근무를_복원하면_되맞춤이_소켓을_올린다), 되맞춤이 하는 일은 비근무 조인이 남긴 빚을 **한 번** 갚는 것이다.
     let host = "realtime-reconcile-up"
     let (store, transport) = makeRealtimeStore(host: host)
     store.startRealtimeIfPossible()
-    #expect(store.realtimeState == .idle(.notWorking))
+    transport.emit(.joined)
+    await waitUntil { realtimeIdle(store) }
+    #expect(takePokesCount(host: host) == 0)
 
     store.startedAt = Date()                 // 서버 세션 복원
     store.reconcileRealtimeWithWorkState()
-
-    if case .connecting = store.realtimeState {} else {
-        Issue.record("서버가 근무를 복원했는데 소켓이 안 붙는다: \(store.realtimeState)")
-    }
-    #expect(transport.commands.contains { $0.hasPrefix("connect(") })
+    await waitUntil { takePokesCount(host: host) >= 1 }
     await waitUntil { realtimeIdle(store) }
+    #expect(takePokesCount(host: host) == 1)
+
+    // 빚은 한 번만 갚는다 — 다음 되맞춤·티커는 아무것도 안 쏜다.
+    store.reconcileRealtimeWithWorkState()
+    store.realtimeTick(at: store.realtime.diagnostics.recent.last.map { $0.at + 1 } ?? Date())
+    await waitUntil { realtimeIdle(store) }
+    #expect(takePokesCount(host: host) == 1, "같은 빚을 두 번 갚았다")
+    #expect(transport.commands.filter { $0.hasPrefix("connect(") }.count == 1, "되맞춤이 붙어 있는 소켓을 다시 열었다")
 }
 
 @MainActor
 @Test
-func 서버가_근무를_닫으면_되맞춤이_소켓을_내린다() async {
-    // applyRemoteOwnStatus 의 (.offWork, .some) 가지 — 서버가 내 세션을 닫았다. stop() 을 타지 않으므로
-    // 되맞춤이 없으면 비근무인 채로 소켓이 하루 종일 떠서 25초 하트비트만 태운다.
+func 서버가_근무를_닫아도_되맞춤은_소켓을_내리지_않는다() async {
+    // applyRemoteOwnStatus 의 (.offWork, .some) 가지 — 서버가 내 세션을 닫았다. v0.3.30 부터 소켓은 로그인 기준이라
+    // 되맞춤이 내리지 않는다(옛 이름: 서버가_근무를_닫으면_되맞춤이_소켓을_내린다).
     let host = "realtime-reconcile-down"
     let (store, transport) = makeRealtimeStore(host: host)
     store.startedAt = Date()
@@ -789,19 +744,15 @@ func 서버가_근무를_닫으면_되맞춤이_소켓을_내린다() async {
 
     store.startedAt = nil
     store.reconcileRealtimeWithWorkState()
-    #expect(store.realtimeState == .idle(.notWorking))
-    #expect(transport.commands.contains("disconnect"))
-
-    // 그리고 되맞춤은 **뚜껑을 닫아 둔 맥을 깨우지 않는다** — `.suspended` 의 주인은 잠자기이지
-    // 근무가 아니다. 여기서 함께 되살리면 근무 중인 채로 잠든 맥이 매 주기마다 소켓을 다시 연다.
-    store.startedAt = Date()
-    store.reconcileRealtimeWithWorkState()
-    transport.emit(.joined)
     #expect(store.realtimeState.isSubscribed)
+    #expect(transport.commands.contains("disconnect") == false)
+
+    // 그리고 되맞춤은 **뚜껑을 닫아 둔 맥을 깨우지 않는다** — `.suspended` 의 주인은 잠자기다.
+    // 여기서 함께 되살리면 잠든 맥이 매 주기마다 소켓을 다시 연다.
     store.handleSleep(at: Date())
     #expect(store.realtimeState == .idle(.suspended))
-
     let before = transport.commands.count
+    store.startedAt = Date()
     store.reconcileRealtimeWithWorkState()
     #expect(store.realtimeState == .idle(.suspended))
     #expect(transport.commands.count == before)
@@ -827,20 +778,22 @@ func 근무중_잠자기는_소켓을_내리고_사유는_suspended다() {
 
 @MainActor
 @Test
-func 비근무로_뚜껑을_닫아도_사유는_notWorking_그대로다() {
-    // `.suspended` 로 접히면 뚜껑을 여는 순간 `.didWake` 가 **근무하지도 않는 맥의** 소켓을 다시 올린다 —
-    // 로그아웃 상태에서 닫아도 `.suspended` 가 되면 안 되는 것과 정확히 같은 이유다
-    // (RealtimeLink.swift 의 `.willSleep` 가지).
+func 비근무_로그인_맥도_뚜껑을_닫으면_suspended_이고_열면_다시_붙는다() {
+    // v0.3.30(옛 이름: 비근무로_뚜껑을_닫아도_사유는_notWorking_그대로다): 로그인해 둔 맥은 근무와 무관하게 붙어 있으므로
+    // 잠자기·깨어남도 근무와 무관하게 내렸다 올린다. 안 올리면 퇴근 뒤 뚜껑을 열어 둔 맥에 메시지 점이 영영 안 뜬다.
     let (store, transport) = makeRealtimeStore(host: "realtime-sleep-idle")
     store.startRealtimeIfPossible()
-    #expect(store.realtimeState == .idle(.notWorking))
+    transport.emit(.joined)
+    #expect(store.realtimeState.isSubscribed)
 
     store.handleSleep(at: t0)
-    #expect(store.realtimeState == .idle(.notWorking))
+    #expect(store.realtimeState == .idle(.suspended))
 
     store.handleWake(at: t0 + 7200)
-    #expect(store.realtimeState == .idle(.notWorking), "근무하지 않는 맥이 뚜껑을 열었다고 붙으면 안 된다")
-    #expect(transport.commands.contains { $0.hasPrefix("connect(") } == false)
+    if case .connecting = store.realtimeState {} else {
+        Issue.record("근무하지 않는 로그인 맥이 뚜껑을 열었는데 다시 안 붙는다: \(store.realtimeState)")
+    }
+    #expect(transport.commands.filter { $0.hasPrefix("connect(") }.count == 2)
 }
 
 @MainActor

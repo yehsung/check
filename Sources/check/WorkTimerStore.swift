@@ -265,7 +265,14 @@ final class WorkTimerStore {
             // 팀원이 바꾼 주간 목표/이름/역할/참여코드를 팝오버 열 때 60초 스로틀로 재조회해 반영한다.
             refreshTeamMetaIfStale()
             // 오목 받은 신청을 60초 스로틀로 한 번 본다(v0.3.27) — 창이 안 보일 때의 확인 시점 중 하나다.
-            gomoku.menuDidOpen()
+            // v0.3.30 부터 근무 밖에서도 신청이 오므로 팝오버 배너·메뉴바 점의 신선도가 이 한 줄에 기댄다.
+            gomoku.refreshInboxIfStale()
+            // 메시지 요약 + 이력을 60초 스로틀로 한 번 받는다(v0.3.30) — 대화 패널이 안 보여도 받는다: 안 읽음 점과
+            // 메뉴바 점이 이력·요약 중 최신 쪽을 기준으로 계산되기 때문이다(unreadMessagePeerIDs).
+            refreshMessageActivityOnMenuOpen()
+            // 대화 패널이 떠 있는 채로 다시 열었으면 지금 보이는 대화를 읽음으로 올린다(들고 있는 이력 기준 — 새 이력이
+            // 도착하면 그 응답 자리에서 한 번 더 판정한다).
+            evaluateMessageReadMarking()
             // 팝오버 열림 시점에 내 월간 토큰을 게이트/스로틀 하에 1회 올린다(대부분 즉시 반환 — Task 남발 아님).
             Task { @MainActor [weak self] in await self?.uploadTokenUsageIfNeeded() }
         } else {
@@ -1005,12 +1012,40 @@ final class WorkTimerStore {
     /// 입력 초안. **스토어에 두는 이유**는 전송 성공에 이것을 비우는 일이 스토어의 책임이기 때문이다 —
     /// 뷰 `@State` 에 두면 "성공했는데 글이 그대로 남아 두 번 보낸다"를 헤드리스로 잴 방법이 없다(제보 초안과 같은 규약).
     var messageDraft: String = ""
-    /// 상대별 '여기까지 읽었다' 시각. 안 읽은 점 표시의 근거다.
+    /// 상대별 '여기까지 읽었다' 시각. **읽음 기능을 모르는 서버에서만** 안 읽은 점의 근거다(v0.3.30 부터).
     ///
-    /// **영속하지 않는다**(ultraPokeSpentDay 와 같은 판단): 12시간이면 사라지는 이력에 계정 전환·기기 간
+    /// 서버가 읽음을 알면(`message_history_with_reads`·`message_unread_summary`) 점은 서버 판정 + 낙관 읽음
+    /// (`messageOptimisticReads`)으로 계산되고 이 값은 쓰이지 않는다 — 기기 시계로 서버 시각을 다시 비교하면 같은 초 안의
+    /// 메시지들이 서로 뒤바뀐다. db push 가 앱보다 늦은 창(옛 서버)을 위해 남겨 둔다.
+    ///
+    /// **영속하지 않는다**(ultraPokeSpentDay 와 같은 판단): 하루면 사라지는 이력에 계정 전환·기기 간
     /// 불일치라는 버그 종을 들여올 이유가 없다. 앱을 다시 켜면 전부 '안 읽음'으로 시작하고, 그건
     /// 틀린 쪽으로 틀려도 안전한 방향이다(못 본 말을 못 봤다고 말한다).
     var messageReadStamps: [String: Date] = [:]
+
+    // ── 메시지 읽음(v0.3.30) — 서버 경계 · 낙관 읽음 · 요약 ──
+    //
+    // 로직은 `WorkTimerStoreMessages.swift` 의 읽음 절에 있다(저장 프로퍼티만 언어 제약으로 여기 산다).
+    // **셋 다 계정에 묶인다** — clearPersistedSession 이 지운다(남기면 다음 사람 화면에 앞 사람의 점이 뜬다).
+
+    /// 서버가 읽음 기능을 지원하는가(마지막 이력 조회가 `message_history_with_reads` 로 성공했는가).
+    /// false 면 뷰는 보낸 말풍선 옆 1 을 숨긴다 — 모르는 것을 "안 읽음"이라고 그리면 거짓이다.
+    var messageReadReceiptsAvailable = false
+    /// 마지막으로 받은 안 읽음 요약(서버 판정)과 그 요청의 일련번호. nil = 아직 못 받았다(옛 서버 포함).
+    var messageUnreadSummary: MessageUnreadSummarySnapshot?
+    /// 마지막 이력이 읽음 칸을 실어 왔을 때의 일련번호와 **서버 순서**. nil = 이력이 읽음을 모른다(옛 서버·아직 안 받음).
+    var messageHistoryReadSnapshot: MessageHistoryReadSnapshot?
+    /// 상대별 낙관 읽음 — 읽음 처리를 보낸 순간 점을 바로 끄기 위한 기록. 서버 스냅샷이 이 기록보다 **나중에**
+    /// 나간 요청이면 서버가 이긴다(`MessageUnreadRules`). 실패해도 되돌리지 않는다(다음 새로고침이 사실을 말한다).
+    var messageOptimisticReads: [String: MessageOptimisticRead] = [:]
+    /// 읽음 절의 비관찰 장부(일련번호 · 왕복 직렬화 · 스로틀). 한 덩어리로 들어 로그아웃에서 한 줄로 비운다
+    /// (RealtimeRuntime 과 같은 이유 — 흩뿌리면 "하나를 안 지웠다"가 이 계층에서 가장 흔한 누수다).
+    @ObservationIgnored var messageReadRuntime = MessageReadRuntime()
+    /// 메시지 활동 합치기 창의 잠(주입, v0.3.30 m-fix2 · 부록 B-2). `wakeGateSleep` 과 같은 규약 — 프로덕션은 실제 수면이고
+    /// (`messageReadSignalCoalesceSeconds` 초), 테스트는 짧게 줄이거나 문으로 갈아 끼워 창이 닫히는 순간을 **정한다**.
+    @ObservationIgnored var messageReadSignalSleep: @Sendable (TimeInterval) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
 
     // ── 내 앱 버전 보고(profiles.app_build / app_version) ──
     /// 이 프로세스가 읽어 올 버전. 기본은 번들이고 테스트가 갈아 끼운다 — Bundle.main 은 프로세스가 정하는
@@ -1401,14 +1436,18 @@ final class WorkTimerStore {
         // 근무 시작 직후의 창을 닫는다: takePokesIfWorking 은 `startedAt != nil` 을 요구하는데,
         // 그 값이 방금 섰으므로 다음 폴링 tick(최대 15초) 전까지 도착한 찔림이 붕 뜬다.
         // 리얼타임이 켜진 뒤에도 이 1회는 남는다 — 구독 전이보다 근무 시작이 먼저인 순서가 존재한다.
+        // v0.3.30: 근무 밖에서 쌓인(소비 안 된) 메시지도 이 한 번으로 들어온다. 서버 기준 이미 읽은 것은 말풍선으로
+        // 안 띄운다(drainReceivedPokes 의 읽음 필터) — 5분 넘은 것은 원래대로 말풍선 없이 소비된다.
         requestDrain()
-        // ★ 초인종은 **근무 중에만** 붙는다(v0.2.34). 서버의 poke_user / ultra_poke_user / send_message 가
-        //   전부 target_not_working 게이트를 갖기 때문에 비근무 소켓은 받을 것이 원리적으로 없다.
-        //   그래서 로그인 지점(startStatusRefreshLoop)이 아니라 **여기**가 링이 출발하는 자리다 —
-        //   위 requestDrain 바로 뒤인 이유는 근무 게이트(realtimeMayConsumePokes)가 startedAt 을 보는데
-        //   그 값이 이 함수 앞부분에서 이미 섰기 때문이다.
+        // 이 drain 이 곧 "소비 불가 → 가능" 전이의 따라잡기다. 비근무 동안 조인·초인종이 적어 둔 빚을 **여기서 지운다** —
+        // 안 지우면 다음 5초 티커·30초 되맞춤이 같은 빚을 또 갚아 근무 시작 한 번에 take_pokes 가 두 번 나간다.
+        realtime.catchUpDeferred = false
+        // 링은 v0.3.30 부터 **로그인 지점**(startStatusRefreshLoop)에서 이미 붙어 있다 — 근무와 무관하게 메시지·읽음·
+        // 오목 신청 신호가 오기 때문이다. 여기서 한 번 더 부르는 것은 로그인 시점에 못 붙었던 링(로그아웃 상태로 남은 링)의
+        // 안전망이고, 이미 붙어 있으면 아무 일도 하지 않는다(startRealtimeIfPossible 의 상태 가드).
         startRealtimeIfPossible()
-        // 오목 신청은 근무 중인 사람에게만 온다(서버 target_not_working) — 근무가 시작된 이 순간 한 번 본다(v0.3.27).
+        // 근무 시작 순간 오목 받은 신청을 한 번 본다(v0.3.27). v0.3.30 부터 신청은 근무 밖에서도 오므로 이 계기는
+        // 필수가 아니라 신선도 보강이다(소켓·팝오버 열기가 주 경로).
         gomoku.workDidStart()
     }
 
@@ -1461,13 +1500,8 @@ final class WorkTimerStore {
         if !isTerminating {
             flushPokesOnWorkEnd()
         }
-        // ★ 링은 **꼬리 회수 뒤에** 내린다. 회수는 폴링 경로이고 `pollingIsPausedByRealtime` 하나를
-        //   보는데, 순서를 뒤집으면 그 판정이 "이미 안 붙어 있다"로 바뀌어 의미가 조용히 달라진다.
-        //   지금은 상수가 억제를 꺼 두어 둘 다 같은 결과지만, v0.2.35 에서 상수를 지우는 날 이 순서가
-        //   회수를 살릴지 죽일지를 결정한다 — 그때 판단할 근거를 여기 순서로 남긴다.
-        //   `.signedOut` 이 아니라 `.workEnded` 인 것이 핵심이다: 로그아웃이 아니므로 accessToken 을
-        //   지우지 않고, 다시 근무를 시작하면 그 토큰으로 곧바로 붙는다.
-        realtimeApply(.workEnded, at: now)
+        // ★ 링은 **내리지 않는다**(v0.3.30). 근무가 끝나도 메시지·읽음·오목 신청 신호는 계속 온다(서버가 근무 조건을 풀었다).
+        //   끝난 뒤 도착한 초인종은 소비 게이트(realtimeMayConsumePokes)가 take_pokes 대신 서버 표 읽기로 돌린다.
     }
 
     // MARK: - 첫 출근 인사 (오늘 팀에서 내가 1등)
@@ -1845,10 +1879,8 @@ final class WorkTimerStore {
             autoCloseReason: reason
         )
         syncMessage = message
-        // 자동 마감(잠자기·12시간 미확인·자리비움)도 근무 종료다. 여기 한 줄이 없으면 뚜껑을 열어
-        // `.didWake` 로 막 다시 붙은 소켓이 곧바로 이어지는 자동 마감 뒤에도 그대로 떠 있다 —
-        // 받을 것이 없는 연결이 하루 종일 하트비트만 태우는 정확히 그 모양이다.
-        realtimeApply(.workEnded, at: endedAt)
+        // 자동 마감(잠자기·12시간 미확인·자리비움)도 근무 종료지만 **링은 그대로 둔다**(v0.3.30 — stop() 과 같은 이유:
+        // 근무 밖에서도 메시지·읽음·오목 신청 신호가 온다).
     }
 
     @discardableResult
@@ -2446,13 +2478,15 @@ final class WorkTimerStore {
     func startStatusRefreshLoop() {
         // 수신 찔림 폴링은 refresh 루프와 수명을 같이한다(로그인/활성화 지점에서 함께 시작, 자체 idempotent 가드).
         startPokePolling()
-        // 초인종도 같은 자리에서 시도한다. 다만 **로그인만으로는 붙지 않는다**(v0.2.34) — 이 호출은
-        // 이미 근무 중인 맥(저장 세션으로 재실행한 경우)만 통과시키고, 그 밖에는 근무 게이트에서
-        // 조용히 되돌아온다. 근무가 시작되는 자리는 start() 이고, 서버 동기화로 근무가 복원되는 자리는
-        // 위 루프의 reconcileRealtimeWithWorkState() 다.
+        // 초인종도 같은 자리에서 붙는다 — **로그인이 기준이다**(v0.3.30. v0.2.34 의 근무 게이트를 걷었다: 서버가
+        // 메시지·오목 신청의 근무 조건을 풀어 근무하지 않는 사람에게도 신호가 온다). take_pokes 소비는 여전히
+        // 근무 중 + 이 맥이 주인일 때만이다(realtimeMayConsumePokes).
         // 전송자가 없으면(킬스위치 off·테스트) 이 호출은 아무 일도 하지 않고, 폴링은 위 한 줄 그대로
         // 돈다 — 리얼타임을 통째로 빼도 나머지가 온전히 동작해야 한다는 계약이 이것이다.
         startRealtimeIfPossible()
+        // 로그인·실행 직후 안 읽은 메시지 요약을 한 번 받는다(v0.3.30) — 근무 밖에서 쌓인 메시지가 팝오버를 열기 전에도
+        // 메뉴바 점으로 뜨는 근거다. 겹치면 뒤따르는 한 번으로 합쳐진다(조인 직후 따라잡기와 몰려도 요청이 불어나지 않는다).
+        requestMessageActivityRefresh()
         guard refreshTask == nil else { return }
         startRefreshLoopTask(runBodyFirst: false)
     }
@@ -3078,6 +3112,16 @@ extension WorkTimerStore {
         // 여기는 반대다: 남기면 앞 사람이 쓰다 만 말이 새 계정의 입력칸에 남아 엉뚱한 사람에게 나갈 수 있다.
         messageDraft = ""
         messageReadStamps = [:]
+        // 읽음(v0.3.30)도 계정에 묶인다. 요약·낙관 읽음을 남기면 다음 계정의 메뉴바에 **앞 사람의 안 읽음 점**이 뜨고,
+        // 장부(왕복 직렬화)를 남기면 앞 계정의 늦은 왕복이 새 계정의 요약 조회를 "이미 도는 중"으로 막는다.
+        messageReadReceiptsAvailable = false
+        messageUnreadSummary = nil
+        messageHistoryReadSnapshot = nil
+        messageOptimisticReads = [:]
+        // 장부는 **통째로 새것**으로 바꾼다 — 앞 계정의 늦은 Task 는 옛 장부를 붙잡고 있으므로 새 장부의 직렬화·스로틀을
+        // 건드릴 수 없다(세대 가드와 이중 안전).
+        messageReadRuntime.cancelAll()
+        messageReadRuntime = MessageReadRuntime()
         // 버전 보고 도장도 계정에 묶인다. 남기면 다음 계정이 자기 프로필에 버전을 못 남겨,
         // 그 사람은 근무 중인데도 아무에게서 메시지를 못 받는다(서버가 app_build 를 null 로 본다).
         reportedAppVersionStamp = nil

@@ -967,14 +967,14 @@ func 팝오버_열림_인박스는_60초_스로틀이다() async throws {
     let clock = Clock()
     gomoku.clock = { clock.now }
 
-    gomoku.menuDidOpen()
+    gomoku.refreshInboxIfStale()
     await gomokuWait { GomokuStubProtocol.count(host: host, rpc: "gomoku_inbox") == 1 }
     clock.now = clock.now.addingTimeInterval(30)
-    gomoku.menuDidOpen()
+    gomoku.refreshInboxIfStale()
     try? await Task.sleep(for: .milliseconds(200))
     #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_inbox") == 1)
     clock.now = clock.now.addingTimeInterval(31)
-    gomoku.menuDidOpen()
+    gomoku.refreshInboxIfStale()
     await gomokuWait { GomokuStubProtocol.count(host: host, rpc: "gomoku_inbox") == 2 }
     #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_inbox") == 2)
 
@@ -985,14 +985,14 @@ func 팝오버_열림_인박스는_60초_스로틀이다() async throws {
 
     // 세션이 없으면 계기가 와도 요청을 내지 않는다.
     let bare = GomokuStore()
-    bare.menuDidOpen()
+    bare.refreshInboxIfStale()
     bare.workDidStart()
     bare.handleSignal()
     #expect(bare.syncTask == nil)
 
     // 호출 자리는 소스로 못 박는다 — 계기가 호출되지 않으면 위 동작은 코드에만 있고 앱엔 없다.
     let code = gomokuCollapsed(V0317ShopTests.stripped(try V0317ShopTests.source("WorkTimerStore.swift")))
-    #expect(gomokuBody(of: "func setMenuPresented(", in: code)?.contains("gomoku.menuDidOpen()") == true)
+    #expect(gomokuBody(of: "func setMenuPresented(", in: code)?.contains("gomoku.refreshInboxIfStale()") == true)
     #expect(gomokuBody(of: "func start(now: Date = Date())", in: code)?.contains("gomoku.workDidStart()") == true)
 }
 

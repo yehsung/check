@@ -78,7 +78,9 @@ enum GomokuText {
     static let turnSeconds: Double = 30
 
     static let lobbyTitle = "상대 고르기"
-    static let lobbyCaption = "둘 다 근무 중일 때 신청하고 받을 수 있어요"
+    /// v0.3.30 — 서버가 신청·수락의 근무 조건을 지웠다. 옛 문구("둘 다 근무 중일 때 신청하고 받을 수 있어요")를 남기면
+    /// 근무 안 하는 사람의 [도전]이 켜져 있는데 안내는 못 한다고 말하는, 화면끼리 싸우는 줄이 된다.
+    static let lobbyCaption = "근무 중이 아니어도 신청하고 받을 수 있어요"
     static let emptyUsers = "지금 대결할 수 있는 사람이 없어요"
     /// 상대 목록을 아직 한 번도 받지 못했다(첫 조회가 도는 중).
     static let loadingUsers = "상대 목록을 불러오고 있어요"
@@ -223,6 +225,9 @@ enum GomokuText {
     static func outgoingTitle(name: String) -> String { "\(name)님에게 신청했어요" }
     static func incomingTitle(name: String) -> String { "\(name)님의 신청" }
     static let inviteBannerSubtitle = "수락하면 대결 창이 열려요"
+    /// 팝오버 배너 [보기](v0.3.30) — 응답하지 않고 대결 창의 받은 신청 카드로 간다.
+    static let viewInvite = "보기"
+    static let viewInviteHelp = "대결 창에서 이 신청을 봐요"
 
     // MARK: 세 번째 열 — 채팅(v0.3.28)
 
@@ -800,13 +805,27 @@ private struct GomokuOpponentList: View {
     }
 }
 
+/// 로비 [도전] 버튼의 활성 조건(순수 — 결정적 검증 지점).
+///
+/// **근무 여부를 보지 않는다**(v0.3.30). 서버 `gomoku_challenge`·`gomoku_respond` 가 근무 조건을 지웠으므로, 여기서
+/// `user.isWorking` 을 요구하면 서버가 허락하는 신청을 화면이 막는다 — 서버만 풀고 이 줄이 남으면 초록인 채로 아무것도
+/// 안 바뀌는 "두 겹 게이트"의 뷰 쪽 짝이다. 남는 조건은 **지금 신청이 성립할 수 없는 사정**뿐이다:
+/// 상대가 오목을 아는 버전인가 · 상대가 대국 중이 아닌가 · 내가 보낸 신청이 이미 떠 있지 않은가 · 내가 대국 중이 아닌가 ·
+/// 왕복이 진행 중이 아닌가. 근무 중인 사람을 목록 위로 올리는 **정렬**(`GomokuOpponentList.rank`)은 보기 좋게 두는 용도로 남는다.
+enum GomokuChallengeGate {
+    @MainActor
+    static func isEnabled(user: GomokuUser, store: GomokuStore) -> Bool {
+        user.isCapable && !user.inMatch && store.outgoing == nil && store.match == nil && !store.isBusy
+    }
+}
+
 private struct GomokuOpponentRow: View {
     let store: GomokuStore
     let user: GomokuUser
     let onChallenge: (GomokuUser) -> Void
 
     private var canChallenge: Bool {
-        user.isWorking && user.isCapable && !user.inMatch && store.outgoing == nil && store.match == nil && !store.isBusy
+        GomokuChallengeGate.isEnabled(user: user, store: store)
     }
 
     private var chipTint: Color {
@@ -1043,6 +1062,22 @@ struct GomokuCountdownText: View {
                 .frame(height: 22)
                 .background(Capsule().fill(CheckTheme.pending.opacity(0.14)))
         }
+    }
+}
+
+/// 팝오버 배너의 남은 초(v0.3.30) — **잎**이다. 초를 읽는 것은 이 뷰 안의 `GomokuCountdownText`(TimelineView)뿐이라
+/// 매초 다시 그려지는 것은 이 캡슐 하나다(배너·팝오버 루트는 안 돈다).
+///
+/// 팝오버의 다른 초 단위 잎(`MenuClockLeaf`)은 스토어 시계(`menuClockNow`)를 읽는데, 그 시계를 미는 티커는 **근무 중이거나
+/// 근무 중인 팀원이 있을 때만** 돈다(`stopTimerIfIdle`). 이 배너의 주인공은 근무 밖 사용자라 그 시계로는 초가 멈춘다 —
+/// 그래서 창 시계(TimelineView)를 쓰고, 멈춤은 창의 활성 상태로 건다: 팝오버가 닫혀 창이 비활성이면 멈추고, 다시 열려
+/// 키를 얻으면 이 환경값이 바뀌어 곧바로 다시 돈다(MenuClockLeaf 가 재오픈을 아는 것과 같은 창 사건).
+struct GomokuInviteBannerCountdown: View {
+    let invite: GomokuInvite
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    var body: some View {
+        GomokuCountdownText(expiresAt: invite.expiresAt, isLive: controlActiveState != .inactive)
     }
 }
 
@@ -2424,13 +2459,20 @@ private struct GomokuStakePrompt: View {
 
 // MARK: - 팝오버 배너(받은 신청)
 
-/// 팝오버 최상단 배너 — `LongSessionBanner` 와 **같은 모양**(두 줄 + 같은 폭 두 버튼, 높이 28)이다.
-/// 높이도 같아야 `CheckMenuView.gomokuInviteBannerHeight` 예산이 맞는다. **초 단위 값을 그리지 않는다** —
-/// 이 뷰는 팝오버 트리 안이라 시계를 읽으면 팝오버 전체가 매초 다시 그려진다(V0238 무효화 계약).
+/// 팝오버 배너 — `LongSessionBanner` 와 **같은 모양**(두 줄 + 같은 폭 버튼 줄, 높이 28)이다.
+/// 높이도 같아야 `CheckMenuView.gomokuInviteBannerHeight` 예산이 맞는다. **이 뷰 본체는 시계를 읽지 않는다** —
+/// 팝오버 트리 안이라 여기서 시계를 읽으면 팝오버 전체가 매초 다시 그려진다(V0238 무효화 계약).
+///
+/// v0.3.30 에 둘을 더했다(근무 밖 신청 — 캐릭터 말풍선이 없는 사람에게 이 배너가 신청의 전부다):
+///  · **남은 초** — 60초짜리 요청이라 "얼마나 남았나"가 곧 급한 정도다. 초는 **잎**(`GomokuInviteBannerCountdown`)이 읽는다.
+///  · **[보기]** — 응답하지 않고 대결 창의 받은 신청 카드로 간다(`onOpen`). nil 이면 버튼이 없다(예전 두 버튼 모양).
+/// 자리는 팝오버 최상단에서 **헤더 카드 아래**로 옮겼다(`CheckMenuView.gomokuInviteBanner`).
 struct GomokuInviteBanner: View {
     let invite: GomokuInvite
     let onAccept: () -> Void
     let onDecline: () -> Void
+    /// [보기] — 대결 창을 열어 이 신청을 보여 준다. **맨 끝 · 기본값 nil** 이라 기존 호출부(렌더 테스트)는 그대로 컴파일된다.
+    var onOpen: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -2454,6 +2496,7 @@ struct GomokuInviteBanner: View {
                     .lineLimit(1)
                 }
                 Spacer(minLength: 6)
+                GomokuInviteBannerCountdown(invite: invite)
             }
             HStack(spacing: 8) {
                 Button(action: onAccept) {
@@ -2479,6 +2522,22 @@ struct GomokuInviteBanner: View {
                         )
                 }
                 .buttonStyle(.plain)
+                if let onOpen {
+                    Button(action: onOpen) {
+                        Text(GomokuText.viewInvite)
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(CheckTheme.accent)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 28)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(CheckTheme.accent.opacity(0.14))
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(CheckTheme.accent.opacity(0.45), lineWidth: 1))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .checkTooltip(GomokuText.viewInviteHelp)
+                }
             }
         }
         .padding(.horizontal, 11)

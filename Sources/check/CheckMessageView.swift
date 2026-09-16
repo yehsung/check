@@ -181,6 +181,26 @@ struct MessagePanelEmptyState: Equatable {
     let showsRetry: Bool
 }
 
+/// 내가 보낸 말풍선 옆 **안 읽음 1**의 판정과 모양 상수(v0.3.30 — 순수 · 결정적 검증 지점).
+///
+/// 조건은 셋이 **모두** 맞을 때뿐이다: 서버가 읽음을 안다(`messageReadReceiptsAvailable`) · 내가 보낸 말이다 ·
+/// 서버가 "상대가 아직 안 읽었다"(`readByPeer == false`)고 말했다.
+///  · `readByPeer == nil` 은 "모름"이다(받은 말 · 옛 `message_history`). 모르는 것을 1로 그리면 거짓이다.
+///  · 서버가 읽음을 모르면(옛 서버로 접힌 이력) 행에 값이 남아 있어도 그리지 않는다 — 스토어가 두 사실을 따로 들고
+///    있어서, 한쪽만 보면 db push 가 되돌아간 날 낡은 1이 영영 남는다.
+/// **시각을 비교하지 않는다** — 읽음 판정은 서버가 마이크로초로 끝냈고, 뷰가 `createdAt`(초)으로 다시 세면 같은 초 안의
+/// 말들이 서로 뒤바뀐다(`MessageHistoryEntry.isUnread` 주석).
+enum MessageReadReceiptMark {
+    /// 말풍선 옆에 찍는 글자. 카톡과 같은 "1" — 남은 안 읽은 사람 수가 아니라 1:1 대화라 늘 1이다.
+    static let text = "1"
+    /// 보이스오버 문구(글자 "1"만 읽히면 무엇의 1인지 모른다).
+    static let accessibilityLabel = "안 읽음"
+
+    static func showsUnreadOne(for entry: MessageHistoryEntry, receiptsAvailable: Bool) -> Bool {
+        receiptsAvailable && entry.isMine && entry.readByPeer == false
+    }
+}
+
 // MARK: - 패널 본체
 
 /// 한 사람과의 대화 패널. 리그·토큰 보드·콕찌르기·내 기록·울트라와 **같은 뼈대**다:
@@ -258,6 +278,8 @@ struct CheckMessageView: View {
                 items: items,
                 peerUserID: thread.peerUserID,
                 lastMessageID: thread.messages.last?.id,
+                // 읽음 기능 여부는 **값**으로 내린다(v0.3.30). 시계가 아니라 이력 응답이 바꾸는 값이라 잎으로 가둘 이유가 없다.
+                readReceiptsAvailable: store.messageReadReceiptsAvailable,
                 clipsInsteadOfScrolling: clipsOverflowInsteadOfScroll
             )
             .frame(height: min(cap, natural))
@@ -327,6 +349,9 @@ struct MessageConversationView: View {
     let peerUserID: String
     /// 새 말이 도착했는지 알기 위한 키(같은 트리거의 애니메이션 갈래).
     let lastMessageID: String?
+    /// 서버가 읽음을 아는가(`WorkTimerStore.messageReadReceiptsAvailable`). false 면 보낸 말풍선 옆 1을 하나도 그리지 않는다.
+    /// **기본값 false** — 모르는 쪽으로 틀리는 것이 안전하다(없는 1을 그리면 상대가 안 읽었다는 거짓말이 된다).
+    var readReceiptsAvailable: Bool = false
     var clipsInsteadOfScrolling: Bool = false
 
     /// 맨 아래로 보낼 앵커. 마지막 말풍선 id 를 쓰지 않는 이유는 그 뒤의 아래 여백까지 보이게 하기 위해서다.
@@ -375,7 +400,12 @@ struct MessageConversationView: View {
                 case .day(_, let label):
                     MessageDaySeparator(label: label)
                 case .bubble(let entry):
-                    MessageBubbleRow(entry: entry)
+                    MessageBubbleRow(
+                        entry: entry,
+                        showsUnreadOne: MessageReadReceiptMark.showsUnreadOne(
+                            for: entry, receiptsAvailable: readReceiptsAvailable
+                        )
+                    )
                 }
             }
         }
@@ -408,6 +438,8 @@ private struct MessageDaySeparator: View {
 /// 말풍선 한 줄. 받은 것은 왼쪽(아바타 있음), 보낸 것은 오른쪽(아바타 없음 — 내 얼굴은 내가 안다).
 private struct MessageBubbleRow: View {
     let entry: MessageHistoryEntry
+    /// 이 말풍선 옆에 안 읽음 1을 찍는가. 판정은 `MessageReadReceiptMark.showsUnreadOne` 하나다 — 행이 조건을 다시 세지 않는다.
+    var showsUnreadOne: Bool = false
 
     private var clockText: String { MessageThreadBuilder.clockText(entry.createdAt) }
 
@@ -416,7 +448,7 @@ private struct MessageBubbleRow: View {
             if entry.isMine {
                 // 보낸 것: 왼쪽을 비우고 시각을 말풍선 **왼쪽**에 둔다(오른쪽 끝은 화면 가장자리다).
                 Spacer(minLength: MessagePanelLayout.bubbleOppositeInset)
-                timeLabel
+                sentMeta
                 bubble
             } else {
                 CheckAvatarView(name: entry.peerName, avatarURL: entry.peerAvatarURL, size: 20)
@@ -433,6 +465,28 @@ private struct MessageBubbleRow: View {
             .font(.system(size: 9).monospacedDigit())
             .foregroundStyle(CheckTheme.secondaryText.opacity(0.8))
             .fixedSize()
+    }
+
+    /// 보낸 말풍선의 바깥 아래쪽 곁 — 안 읽음 1(있으면) 위, 시각 아래(v0.3.30).
+    ///
+    /// **옆이 아니라 위아래로 쌓는다**: 말풍선 폭은 반대쪽 여백(`bubbleOppositeInset`)이 정하는데, 1을 시각 옆에 세우면
+    /// 긴 말풍선이 그만큼 좁아져 줄이 하나 늘 수 있다(틀 높이 추정 `conversationContentHeight` 가 모르는 변화다).
+    /// 쌓으면 폭은 시각 글자 그대로이고, 높이는 말풍선 한 줄(25pt) 안에 1(11pt)과 시각(11pt)이 들어간다.
+    /// 1이 없으면 예전과 **같은 뷰**(시각 하나)다 — 읽음을 모르는 서버에서 화면이 한 픽셀도 달라지지 않는다.
+    @ViewBuilder
+    private var sentMeta: some View {
+        if showsUnreadOne {
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(MessageReadReceiptMark.text)
+                    .font(.system(size: 9, weight: .bold).monospacedDigit())
+                    .foregroundStyle(CheckTheme.accent)
+                    .fixedSize()
+                    .accessibilityLabel(MessageReadReceiptMark.accessibilityLabel)
+                timeLabel
+            }
+        } else {
+            timeLabel
+        }
     }
 
     /// 본문. **폭을 프레임으로 못 박지 않는다** — 그 이유는 `bubbleOppositeInset` 주석에 있다.
@@ -546,8 +600,13 @@ struct MessageComposerView: View {
     ///
     /// 확정 뒤에도 `sendDraftMessage()` 의 `canSendMessageNow` 가 한 번 더 거른다(빈 칸·200자 초과·상대
     /// 없음·전송 중) — 여기서 조건을 다시 세지 않는 이유는 위 `canSendNow` 주석과 같다.
+    ///
+    /// **근무 여부를 보지 않는다**(v0.3.30 — 서버가 send_message 의 근무 조건을 지웠다). 여기에 근무 선게이트를 얹으면
+    /// 스토어·서버를 다 풀어도 비근무 사용자의 [보내기]는 조용히 아무 일도 안 한다(두 겹 게이트의 뷰 쪽 짝).
+    /// `private` 이 아닌 이유: 테스트가 **이 문을 그대로** 눌러 비근무 사용자의 전송이 서버까지 가는지 센다
+    /// (`sendHelp` 와 같은 근거 — 스토어 함수만 부르면 뷰에 다시 생긴 게이트를 못 잡는다).
     @MainActor
-    private func send() {
+    func send() {
         CheckEditorSend.commitThenSend { store.sendDraftMessage() }
     }
 

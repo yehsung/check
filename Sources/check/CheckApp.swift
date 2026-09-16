@@ -27,10 +27,15 @@ struct CheckApp: App {
             // 업데이트 점: 근무를 안 하면 캐릭터 말풍선이 뜰 자리가 없고, 팝오버를 안 열면 배너도 못 본다 — 그런 사람에게
             // 새 버전을 알릴 곳은 늘 떠 있는 이 아이콘뿐이다. 업데이트 스토어가 @Observable 이라 여기서 읽는 것만으로
             // 새 릴리스가 잡힌 순간 라벨이 다시 그려진다.
+            // v0.3.30: 같은 점이 **안 읽은 메시지**와 **받은 오목 신청**에도 켜진다 — 둘 다 근무 밖에서 오게 됐고(서버가 근무
+            // 조건을 지웠다), 캐릭터가 없는 사람에게 알릴 곳이 여기뿐인 사정이 업데이트와 같다. 두 스토어 모두 @Observable 이라
+            // 읽는 것만으로 값이 바뀐 순간 라벨이 다시 그려진다(신청 만료는 오목 스토어의 타이머가 `incoming` 을 비워서 내린다).
             MenuBarStatusLabel(
                 snapshot: appDelegate.store.snapshot,
                 title: appDelegate.store.menuBarTitle,
-                updateAvailable: appDelegate.updateCheck.isUpdateAvailable
+                updateAvailable: appDelegate.updateCheck.isUpdateAvailable,
+                hasUnreadMessages: appDelegate.store.hasUnreadMessages,
+                hasGomokuInvite: !appDelegate.store.gomoku.pendingIncomingInvites.isEmpty
             )
         }
         .menuBarExtraStyle(.window)

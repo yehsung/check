@@ -1,0 +1,295 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# X1 — 메시지 RPC 계약 픽스처 생성기 (aing-check 모바일 1차 묶음 · 2026-09-16)
+#
+# 무엇을 만드나: 로컬 하네스(마이그레이션 체인 + S1 최종 SQL 20260917100000_messages_anytime_read_receipts.sql)에서
+#   harness.login 으로 authenticated 사용자를 흉내 내 메시지 RPC 를 **실제로 부른 출력 그대로**를
+#   Tests/checkTests/Fixtures/message-rpc/*.json 모양으로 떨군다. 스텁 추측이 아니다.
+#
+# 직렬화는 PostgREST 와 같게:
+#   · 표 반환(message_history_with_reads · message_history · take_pokes) → select coalesce(json_agg(t), '[]'::json) from f(...) t
+#   · jsonb 반환(message_unread_summary · mark_messages_read · send_message) → select f(...)::text (값 그대로)
+#   파일 끝의 psql 줄바꿈 한 개만 걷는다(서버 출력 바이트 그대로 — json_agg 가 넣는 원소 사이 줄바꿈은 남는다).
+#
+# 단계마다 psql 세션 하나(= PostgREST 요청 하나): migrator → set role postgres → begin → (준비 SQL) →
+#   harness.login(호출자) → RPC → commit | rollback. 읽음 경계를 올리는 호출은 commit, 나머지 들여다보기는 rollback.
+#
+# 사용: generate.sh [DEST]
+#   DEST 가 있으면 완성된 픽스처를 그 폴더로 복사한다(예: <워크트리>/Tests/checkTests/Fixtures/message-rpc).
+#   환경: HARNESS_PORT(기본 55521) · SKIP_INIT=1(이미 켜 둔 클러스터를 쓴다) · STOP_CLUSTER=1(끝나면 클러스터를 끈다)
+# 운영에는 닿지 않는다 — lib.sh 가 PG* 를 지우고 127.0.0.1:$HARNESS_PORT 로 못 박는다.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+X1=/private/tmp/claude-501/-Users-yesung-check/d8f83a43-382e-4c7f-b26a-d6a9a1856a0a/scratchpad/w1/x1
+HARNESS=$X1/h/replay-harness-v2
+S1_SQL=/private/tmp/claude-501/-Users-yesung-check/d8f83a43-382e-4c7f-b26a-d6a9a1856a0a/scratchpad/w1/s1/20260917100000_messages_anytime_read_receipts.sql
+MIGRATIONS=/Users/yesung/check/supabase/migrations
+OUT=$X1/fixtures
+FACTS=$X1/facts
+DEST="${1:-}"
+
+export HARNESS_PORT="${HARNESS_PORT:-55521}"
+# shellcheck disable=SC1091
+. "$HARNESS/lib.sh"
+
+A=267a3495-643c-40cc-b1a7-14967166eae1   # abto.app
+B=3e240c02-8972-478e-a674-014f498a641b   # 코덱스토큰도둑예은
+C=544e3837-f01c-4560-b82f-4d44c269f044   # 코덱스토큰도둑지유
+
+# 메시지 id. **같은 초 묶음 안에서는 id 사전순이 시간순의 반대다** — 서버 순서(created_at 마이크로초)와
+# 클라 화면 정렬(created_epoch 초 → id)이 갈리는 자리를 실제 출력으로 드러내려고 일부러 그렇게 골랐다.
+C1=00000000-0000-4000-8000-00000000c002; C2=00000000-0000-4000-8000-00000000c001; C3=00000000-0000-4000-8000-00000000c003
+B1=00000000-0000-4000-8000-00000000b003; B2=00000000-0000-4000-8000-00000000b002; B3=00000000-0000-4000-8000-00000000b001
+A1=00000000-0000-4000-8000-00000000a003; A2=00000000-0000-4000-8000-00000000a002; A3=00000000-0000-4000-8000-00000000a001
+B4=00000000-0000-4000-8000-00000000b006; A4=00000000-0000-4000-8000-00000000a004; B5=00000000-0000-4000-8000-00000000b005
+
+if [ "${SKIP_INIT:-0}" != 1 ]; then
+  echo "== 하네스: 체인 재생 + S1 3회 적용 (포트 $HARNESS_PORT, KEEP_CLUSTER=1)"
+  KEEP_CLUSTER=1 MIG_DIR="$MIGRATIONS" "$HARNESS/verify_new.sh" "$S1_SQL" "$X1/x1_pre.sql"
+fi
+cluster_running || { echo "ERROR: 클러스터가 꺼져 있다(SKIP_INIT=1 이면 먼저 켜라)"; exit 10; }
+
+rm -rf "$OUT" "$FACTS"; mkdir -p "$OUT" "$FACTS"
+
+# 한 트랜잭션 = 한 요청. 표준입력의 SQL 을 begin … <end> 로 감싼다.
+tx() {
+  local end="$1"
+  # \o /dev/null: 단언(harness.expect)의 빈 줄을 버린다. \g <파일> 은 \o 와 무관하게 그 파일로 간다.
+  { printf "\\\\o /dev/null\nset role postgres;\nbegin;\n"; cat; printf "%s;\n" "$end"; } \
+    | "$PGBIN/psql" -X -q -At -v ON_ERROR_STOP=1 -U migrator -d postgres
+}
+
+# ── 0) 전제: 셋 다 근무 안 함 · 집중 모드 아님 · 발표 주간 아님 ──────────────────────────────────
+echo "== 0) 전제"
+tx rollback <<SQL
+select harness.expect((select count(*) from public.work_sessions
+                        where user_id in ('$A','$B','$C') and ended_at is null) = 0, '셋 다 열린 근무 세션 없음');
+select harness.expect((select bool_and(not focus_mode) from public.profiles where id in ('$A','$B','$C')), '집중 모드 아님');
+select harness.expect(not public.poke_blackout_active(), '발표 주간 차단 아님');
+select json_build_object(
+  'open_work_sessions', (select count(*) from public.work_sessions where user_id in ('$A','$B','$C') and ended_at is null),
+  'work_statuses', (select json_object_agg(user_id, status) from public.work_statuses where user_id in ('$A','$B','$C')),
+  'focus_mode', (select json_object_agg(id, focus_mode) from public.profiles where id in ('$A','$B','$C')),
+  'blackout_active', public.poke_blackout_active(),
+  'message_retention_hours', public.message_retention_hours(),
+  'display_names', (select json_object_agg(id, display_name) from public.profiles where id in ('$A','$B','$C'))
+)::text \g '$FACTS/preconditions.json'
+SQL
+
+# ── 1) send_message: 근무 없이 보내기(ok). 시나리오 데이터를 흐리지 않게 롤백한다 ───────────────────
+echo "== 1) send_message"
+tx rollback <<SQL
+select harness.login('$A'::uuid) \g /dev/null
+select public.send_message('$B'::uuid, '  근무 안 해도 보내져요  ')::text \g '$OUT/send_message__ok_not_working.json'
+SQL
+
+# ── 2) 시나리오 메시지(커밋). 마이크로초를 손으로 정하려고 표에 직접 넣는다(send_message 는 now() 한 값이다) ──
+echo "== 2) 시나리오 메시지"
+tx commit <<SQL
+delete from realtime.messages where event = 'message_read';
+delete from public.message_reads;
+delete from public.messages where from_user in ('$A','$B','$C') or to_user in ('$A','$B','$C');
+insert into public.messages (id, from_user, to_user, body, created_at)
+select v.id::uuid, v.f::uuid, v.t::uuid, v.body, base.t0 + v.off_s * interval '1 second' + v.off_us * interval '1 microsecond'
+  from (select date_trunc('second', now()) - interval '150 seconds' as t0) base,
+       (values
+         -- S0: C → A 두 개, C → B 한 개
+         ('$C1', '$C', '$A', '[c1] 점심 뭐 먹어요?',        0, 100100),
+         ('$C2', '$C', '$A', '[c2] 저는 국수요',             0, 100200),
+         ('$C3', '$C', '$B', '[c3] 예은님 회의록 봤어요',    0, 100300),
+         -- S1: B → A 세 개(같은 초)
+         ('$B1', '$B', '$A', '[b1] 배포 노트 봤어요?',      30, 100100),
+         ('$B2', '$B', '$A', '[b2] 두 줄 고쳤어요',         30, 100200),
+         ('$B3', '$B', '$A', '[b3] 확인 부탁해요',          30, 100300),
+         -- S2: A → B 세 개(같은 초)
+         ('$A1', '$A', '$B', '[a1] 네 지금 볼게요',         60, 100100),
+         ('$A2', '$A', '$B', '[a2] 좋아요',                 60, 100200),
+         ('$A3', '$A', '$B', '[a3] 올려 주세요',            60, 100300),
+         -- S3: 같은 초 안에서 오간 말 — B, A, B
+         ('$B4', '$B', '$A', '[b4] 올렸어요',               90, 100100),
+         ('$A4', '$A', '$B', '[a4] 고마워요',               90, 100200),
+         ('$B5', '$B', '$A', '[b5] 오목 한 판?',            90, 100300)
+       ) as v(id, f, t, body, off_s, off_us);
+select harness.expect((select count(*) = 12 and count(distinct created_at) = 12 from public.messages
+                        where from_user in ('$A','$B','$C')), '열두 메시지 · 시각 전부 다름');
+select harness.expect((select bool_and(n = 1) from (
+                         select count(distinct extract(epoch from created_at)::bigint) n
+                           from public.messages where from_user in ('$A','$B','$C')
+                          group by date_trunc('second', created_at)) g), '같은 초 묶음은 created_epoch 도 같다(클라는 초로 못 가른다)');
+SQL
+
+# ── 3) 읽음 경계 올리기(커밋 — PostgREST 요청 하나씩) ─────────────────────────────────────────────
+echo "== 3) mark_messages_read"
+tx commit <<SQL
+select harness.login('$A'::uuid) \g /dev/null
+select public.mark_messages_read('$B'::uuid, '$B2'::uuid)::text \g '$OUT/mark_messages_read__advanced.json'
+SQL
+tx commit <<SQL
+select harness.login('$B'::uuid) \g /dev/null
+select public.mark_messages_read('$A'::uuid, '$A2'::uuid)::text \g '$OUT/mark_messages_read__advanced_b_through_a2.json'
+SQL
+tx commit <<SQL
+select harness.login('$B'::uuid) \g /dev/null
+select public.mark_messages_read('$C'::uuid)::text \g '$OUT/mark_messages_read__advanced_latest.json'
+SQL
+# 경계를 되돌리려는 요청(작은 p_through)과 내가 보낸 id — 둘 다 안 커져야 하고 신호도 0건이어야 한다.
+tx rollback <<SQL
+set local role postgres;
+create temp table x1_rt_before on commit drop as select count(*) n from realtime.messages where event = 'message_read';
+grant select on x1_rt_before to authenticated;
+select harness.login('$A'::uuid) \g /dev/null
+select public.mark_messages_read('$B'::uuid, '$B1'::uuid)::text \g '$OUT/mark_messages_read__not_advanced.json'
+select public.mark_messages_read('$B'::uuid, '$A1'::uuid)::text \g '$OUT/mark_messages_read__not_advanced_own_message.json'
+set local role postgres;
+select json_build_object('realtime_rows_added', (select count(*) from realtime.messages where event = 'message_read') - (select n from x1_rt_before))::text
+  \g '$FACTS/not_advanced.json'
+SQL
+tx rollback <<SQL
+select harness.login('$A'::uuid) \g /dev/null
+select public.mark_messages_read('$A'::uuid)::text \g '$OUT/mark_messages_read__invalid_self.json'
+select public.mark_messages_read(null::uuid)::text \g '$OUT/mark_messages_read__invalid_null_peer.json'
+SQL
+tx rollback <<SQL
+select harness.login(null::uuid, 'authenticated') \g /dev/null
+select public.mark_messages_read('$B'::uuid)::text \g '$OUT/mark_messages_read__unauthorized.json'
+select public.message_unread_summary()::text \g '$OUT/message_unread_summary__unauthorized.json'
+SQL
+
+# ── 4) 지금 상태 들여다보기(롤백) ───────────────────────────────────────────────────────────────
+echo "== 4) 이력 · 요약 · take_pokes · 실시간 행"
+tx rollback <<SQL
+select harness.login('$A'::uuid) \g /dev/null
+select coalesce(json_agg(t), '[]'::json) from public.message_history_with_reads(24, 200) t \g '$OUT/message_history_with_reads__a.json'
+select coalesce(json_agg(t), '[]'::json) from public.message_history(24, 200) t \g '$OUT/message_history__a.json'
+select public.message_unread_summary()::text \g '$OUT/message_unread_summary__a.json'
+select harness.login('$B'::uuid) \g /dev/null
+select coalesce(json_agg(t), '[]'::json) from public.message_history_with_reads(24, 200) t \g '$OUT/message_history_with_reads__b.json'
+select public.message_unread_summary()::text \g '$OUT/message_unread_summary__b.json'
+SQL
+tx rollback <<SQL
+select harness.login('$A'::uuid) \g /dev/null
+select coalesce(json_agg(t), '[]'::json) from public.take_pokes(true) t \g '$OUT/take_pokes__a.json'
+select json_build_object('server_now_ms', floor(extract(epoch from now()) * 1000)::bigint)::text \g '$FACTS/take_pokes.json'
+SQL
+tx rollback <<SQL
+select coalesce(json_agg(json_build_object(
+         'event', r.event, 'topic', r.topic, 'private', r.private,
+         'payload_without_id', r.payload - 'id', 'payload_has_id', r.payload ? 'id')
+       order by r.inserted_at, r.topic), '[]'::json)
+  from realtime.messages r where r.event = 'message_read' \g '$OUT/realtime__message_read_rows.json'
+SQL
+
+# ── 5) 흐름(롤백): A 가 이 맥에서 B 대화를 연다 → 서버 순서의 마지막 받은 메시지(b5)까지 읽음 ─────────────
+echo "== 5) 흐름: A 가 B 대화를 읽는다"
+tx rollback <<SQL
+set local role postgres;
+create temp table x1_rt_before on commit drop as select count(*) n from realtime.messages where event = 'message_read';
+grant select on x1_rt_before to authenticated;
+select harness.login('$A'::uuid) \g /dev/null
+select public.mark_messages_read('$B'::uuid, '$B5'::uuid)::text \g '$OUT/flow_a_reads_b__mark.json'
+select public.message_unread_summary()::text \g '$OUT/flow_a_reads_b__summary.json'
+select coalesce(json_agg(t), '[]'::json) from public.message_history_with_reads(24, 200) t \g '$OUT/flow_a_reads_b__with_reads_a.json'
+select harness.login('$B'::uuid) \g /dev/null
+select coalesce(json_agg(t), '[]'::json) from public.message_history_with_reads(24, 200) t \g '$OUT/flow_a_reads_b__with_reads_b.json'
+set local role postgres;
+select json_build_object('realtime_rows_added', (select count(*) from realtime.messages where event = 'message_read') - (select n from x1_rt_before))::text
+  \g '$FACTS/flow_a_reads_b.json'
+SQL
+
+# ── 6) 흐름(롤백): A 가 다른 기기(폰)에서 전부 읽는다 → 요약 total 0 ────────────────────────────────
+echo "== 6) 흐름: 다른 기기에서 전부 읽음"
+tx rollback <<SQL
+select harness.login('$A'::uuid) \g /dev/null
+select public.mark_messages_read('$B'::uuid)::text \g /dev/null
+select public.mark_messages_read('$C'::uuid)::text \g /dev/null
+select public.message_unread_summary()::text \g '$OUT/flow_a_reads_all__summary.json'
+select coalesce(json_agg(t), '[]'::json) from public.message_history_with_reads(24, 200) t \g '$OUT/flow_a_reads_all__with_reads_a.json'
+SQL
+
+# ── 7) 메시지 사실(라벨 → id·시각) ─────────────────────────────────────────────────────────────
+tx rollback <<SQL
+select json_object_agg(substring(m.body from 2 for 2), json_build_object(
+         'id', m.id, 'from', m.from_user, 'to', m.to_user, 'body', m.body,
+         'created_at', m.created_at,
+         'created_at_us', (extract(epoch from m.created_at) * 1000000)::bigint,
+         'created_epoch', extract(epoch from m.created_at)::bigint))
+  from public.messages m where m.from_user in ('$A','$B','$C') \g '$FACTS/messages.json'
+SQL
+
+# psql 이 붙인 마지막 줄바꿈 한 개만 걷는다.
+for f in "$OUT"/*.json "$FACTS"/*.json; do perl -0pi -e 's/\n\z//' "$f"; done
+
+# ── 8) 매니페스트 ─────────────────────────────────────────────────────────────────────────────
+python3 - "$OUT" "$FACTS" "$A" "$B" "$C" <<'PY'
+import json, os, sys
+out, facts, a, b, c = sys.argv[1:6]
+def load(name):
+    with open(os.path.join(facts, name), encoding="utf-8") as fh:
+        return json.load(fh)
+fixtures = {
+  "send_message__ok_not_working": {"caller": "A", "call": "send_message(B, '  근무 안 해도 보내져요  ')", "end": "rollback"},
+  "mark_messages_read__advanced": {"caller": "A", "call": "mark_messages_read(B, b2)", "end": "commit"},
+  "mark_messages_read__advanced_b_through_a2": {"caller": "B", "call": "mark_messages_read(A, a2)", "end": "commit"},
+  "mark_messages_read__advanced_latest": {"caller": "B", "call": "mark_messages_read(C)", "end": "commit"},
+  "mark_messages_read__not_advanced": {"caller": "A", "call": "mark_messages_read(B, b1) — 경계 b2 뒤", "end": "rollback"},
+  "mark_messages_read__not_advanced_own_message": {"caller": "A", "call": "mark_messages_read(B, a1) — 내가 보낸 id", "end": "rollback"},
+  "mark_messages_read__invalid_self": {"caller": "A", "call": "mark_messages_read(A)", "end": "rollback"},
+  "mark_messages_read__invalid_null_peer": {"caller": "A", "call": "mark_messages_read(null)", "end": "rollback"},
+  "mark_messages_read__unauthorized": {"caller": None, "call": "mark_messages_read(B) — sub 없음", "end": "rollback"},
+  "message_unread_summary__unauthorized": {"caller": None, "call": "message_unread_summary() — sub 없음", "end": "rollback"},
+  "message_history_with_reads__a": {"caller": "A", "call": "message_history_with_reads(24, 200)", "end": "rollback"},
+  "message_history__a": {"caller": "A", "call": "message_history(24, 200)", "end": "rollback"},
+  "message_unread_summary__a": {"caller": "A", "call": "message_unread_summary()", "end": "rollback"},
+  "message_history_with_reads__b": {"caller": "B", "call": "message_history_with_reads(24, 200)", "end": "rollback"},
+  "message_unread_summary__b": {"caller": "B", "call": "message_unread_summary()", "end": "rollback"},
+  "take_pokes__a": {"caller": "A", "call": "take_pokes(true)", "end": "rollback"},
+  "realtime__message_read_rows": {"caller": "postgres", "call": "realtime.messages where event='message_read' (3단계 커밋분)", "end": "rollback"},
+  "flow_a_reads_b__mark": {"caller": "A", "call": "mark_messages_read(B, b5)", "end": "rollback(흐름)"},
+  "flow_a_reads_b__summary": {"caller": "A", "call": "message_unread_summary() — 위 mark 뒤", "end": "rollback(흐름)"},
+  "flow_a_reads_b__with_reads_a": {"caller": "A", "call": "message_history_with_reads(24, 200) — 위 mark 뒤", "end": "rollback(흐름)"},
+  "flow_a_reads_b__with_reads_b": {"caller": "B", "call": "message_history_with_reads(24, 200) — A 의 mark 뒤", "end": "rollback(흐름)"},
+  "flow_a_reads_all__summary": {"caller": "A", "call": "mark(B) · mark(C) 뒤 message_unread_summary()", "end": "rollback(흐름)"},
+  "flow_a_reads_all__with_reads_a": {"caller": "A", "call": "mark(B) · mark(C) 뒤 message_history_with_reads(24, 200)", "end": "rollback(흐름)"},
+}
+missing = sorted(set(fixtures) - {f[:-5] for f in os.listdir(out) if f.endswith(".json")})
+extra = sorted({f[:-5] for f in os.listdir(out) if f.endswith(".json")} - set(fixtures))
+if missing or extra:
+    sys.exit(f"manifest 불일치: missing={missing} extra={extra}")
+manifest = {
+  "generator": "W1/x1/generate.sh (사본: _generate.sh.txt)",
+  "server": "migrations ≤ 20260916220000 + S1 20260917100000_messages_anytime_read_receipts.sql (하네스 v2 사본, 127.0.0.1:55521)",
+  "serialization": "표 반환 = coalesce(json_agg(t), '[]'::json) · jsonb 반환 = 값::text — PostgREST 와 같다",
+  "users": {"A": a, "B": b, "C": c},
+  "preconditions": load("preconditions.json"),
+  "scenario": [
+    "S0(t0 = now − 150초): C→A c1·c2, C→B c3 — 같은 초, 마이크로초만 다름",
+    "S1(+30초): B→A b1·b2·b3 — 같은 초",
+    "S2(+60초): A→B a1·a2·a3 — 같은 초",
+    "S3(+90초): B→A b4 · A→B a4 · B→A b5 — 같은 초 안에서 오간 말",
+    "같은 초 묶음 안에서 id 사전순은 시간순의 반대다(서버 순서 ≠ 클라 초→id 정렬이 드러나게)",
+    "커밋된 읽음: A 는 B 를 b2 까지 · B 는 A 를 a2 까지 · B 는 C 를 최신(c3)까지",
+    "흐름(롤백): A 가 B 를 b5 까지 읽음 / A 가 다른 기기에서 B·C 를 전부 읽음"
+  ],
+  "messages": load("messages.json"),
+  "take_pokes_server_now_ms": load("take_pokes.json")["server_now_ms"],
+  "realtime_rows_added": {
+    "not_advanced_calls": load("not_advanced.json")["realtime_rows_added"],
+    "flow_a_reads_b": load("flow_a_reads_b.json")["realtime_rows_added"]
+  },
+  "fixtures": fixtures,
+}
+with open(os.path.join(out, "_manifest.json"), "w", encoding="utf-8") as fh:
+    json.dump(manifest, fh, ensure_ascii=False, indent=2, sort_keys=True)
+    fh.write("\n")
+PY
+cp "$0" "$OUT/_generate.sh.txt"
+
+echo "== 픽스처 $(ls -1 "$OUT"/*.json | wc -l | tr -d ' ')개 → $OUT"
+if [ -n "$DEST" ]; then
+  mkdir -p "$DEST"
+  rm -f "$DEST"/*.json "$DEST"/_generate.sh.txt
+  cp "$OUT"/*.json "$OUT"/_generate.sh.txt "$DEST"/
+  echo "== 복사 → $DEST"
+fi
+if [ "${STOP_CLUSTER:-0}" = 1 ]; then cluster_stop && echo "== 클러스터 멈춤"; fi

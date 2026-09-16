@@ -107,9 +107,10 @@ import Testing
 
     // MARK: - 보내기: 클라 선게이트
 
-    /// 근무중이 아니면 **요청 자체를 안 낸다**(sendPoke 의 선게이트와 같은 눈금 — startedAt).
-    /// 서버도 not_working 으로 이중 강제하지만, 안 나가는 요청이 무료 플랜에선 그 자체로 값이다.
-    @Test func sendMessageGatesWhenIAmNotWorking() async {
+    /// v0.3.30 에 **뒤집힌** 계약(옛 이름: sendMessageGatesWhenIAmNotWorking). 서버 send_message 가 보낸이·받는이 근무 조건을
+    /// 지웠으므로 클라 선게이트(startedAt)도 걷었다 — 서버만 풀고 스토어가 막으면 초록인 채로 아무것도 안 바뀐다.
+    /// 요청은 실제로 나가고, 결과 문구는 서버 응답이 정한다.
+    @Test func sendMessageGoesOutEvenWhenIAmNotWorking() async {
         let host = "msg-gate-not-working"
         let store = makeStore(host: host)
         store.startedAt = nil
@@ -117,8 +118,8 @@ import Testing
         store.sendMessage(to: "target", body: "굿")
         await waitUntil { store.messageNotice != nil }
 
-        #expect(store.messageNotice == WorkTimerStore.messageNotWorkingNotice)
-        #expect(sendRequestCount(host: host) == 0)
+        #expect(sendRequestCount(host: host) == 1, "근무 중이 아니라고 스토어가 전송을 막았다")
+        #expect(store.messageNotice == WorkTimerStore.messageSentNotice)
     }
 
     /// 로그아웃 상태에서는 문구조차 남기지 않는다(sendPoke 와 같다 — 그 화면엔 볼 사람이 없다).

@@ -110,8 +110,14 @@ extension WorkTimerStore {
     /// 대화 상대별로 묶은 목록(최근 대화순). **왕복을 늘리지 않는다** — `message_history` 한 번으로 받은 것을
     /// 클라에서 나눈다. 상대마다 조회하면 26명 규모에서 요청이 26배가 된다(무료 플랜).
     /// 같은 초 안의 말은 **서버 순서**로 깬다(m-fix F7) — 이력이 읽음 칸을 실어 왔을 때만 그 순서를 안다.
+    /// 서버가 아직 모르는 즉시 삽입분(M4)은 그 뒤에 **도착 순서**로 선다(m4-fix). 스토어가 이력을 세울 때와 **같은 두 표**를 넘긴다 —
+    /// 한쪽만 넘기면 `messageHistory`(읽음 경계 판정의 자리 순서)와 화면의 순서가 갈린다.
     var messageThreads: [MessageThread] {
-        MessageThreadBuilder.threads(from: messageHistory, serverOrder: messageHistoryReadSnapshot?.serverOrder)
+        MessageThreadBuilder.threads(
+            from: messageHistory,
+            serverOrder: messageHistoryReadSnapshot?.serverOrder,
+            arrivalOrder: messageReadRuntime.localArrivalSerials
+        )
     }
 
     /// 지금 고른 대화(아무도 안 골랐거나 그 사람과의 대화가 사라졌으면 nil).
@@ -306,14 +312,14 @@ extension WorkTimerStore {
         Task { @MainActor in await performLoadMessageHistory() }
     }
 
-    /// 수신(take_pokes drain)이 새 메시지를 물어왔을 때의 갱신(`enqueueReceivedMessages` 가 부른다).
+    /// 수신(take_pokes drain)이 새 메시지를 물어왔을 때의 갱신(`enqueueReceivedMessages`·`receiveConsumedMessages` 가 부른다).
     ///
     /// v0.3.30 m-fix(F2): **메시지 활동 새로고침**이다 — 안 읽음 요약 1회 + 대화가 팝오버에 보이면 이력 1회.
     /// 근무 중인 맥은 초인종을 take_pokes 로 소비하고 말풍선으로 띄우는데, 말풍선으로 본 것은 읽음이 아니다(M1.8).
     /// 여기서 요약을 안 받으면 서버는 "안 읽음"이라 말하는데 메뉴바·레일·목록 점이 꺼진 채다(이력만 받던 v0.2.49~ 의 틈).
     ///
-    /// **이력은 여전히 볼 사람이 있을 때만** 받는다(팝오버가 떠 있고 대화 패널이 보임 — 그 판정은 새로고침이 부르는 순간 한다).
-    /// 패널 깃발은 팝오버를 닫아도 안 내려가므로 깃발만 보면 닫힌 팝오버에도 이력 조회가 붙는다(v0.2.50 의 `isMenuPresented`).
+    /// **이력은 여전히 볼 사람이 있을 때만** 받는다(대화 화면이 떠 있을 수 있음 — `isMessageConversationOnScreen`, 부르는 순간 판정).
+    /// 패널 깃발은 팝오버를 닫아도 안 내려가므로 깃발만 보면 닫힌 팝오버에도 이력 조회가 붙는다(v0.2.50).
     /// 건너뛴 이력은 "낡음"으로 적혀 대화가 보이는 채로 팝오버를 다시 열 때 받는다(F1). 폴링이 아니다 — 도착 1건당 1회다.
     func refreshMessageHistoryOnArrival() {
         guard session != nil else { return }
@@ -347,8 +353,18 @@ extension WorkTimerStore {
             messageReadRuntime.lastAppliedHistorySerial = serial
             // 이 조회가 "낡음" 표시보다 나중에 띄워졌으면 그 계기를 반영했다(F1).
             messageReadRuntime.clearHistoryStale(appliedSerial: serial)
+            // 즉시 삽입(v0.3.31 M4)한 도착분 중 **이 조회보다 나중에 넣은 것**은 남긴다. 넣기 전에 띄운 조회는 그 말을 모를 수 있다 —
+            // 그 응답이 판을 통째로 갈면 방금 그려진 말이 사라졌다가 다음 조회에 되살아난다(0.3.29 대조군 c4 의 "늦게 온 옛 이력").
+            // 서버 값이 이기는 것은 **그 말을 아는** 조회다: 같은 id 가 응답에 있으면 서버 행이, 넣은 뒤에 띄운 조회에 없으면(보관 창 밖) 서버가 이긴다.
+            let kept = messageReadRuntime.survivingLocalArrivals(
+                historySerial: serial, current: messageHistory, server: loaded.entries
+            )
             // 같은 초의 동률은 서버 순서로 깬다(F7). 읽음 칸이 없는 옛 서버는 id 로(예전 그대로).
-            let sorted = loaded.entries.sortedForMessageHistory(serverOrder: loaded.hasReadReceipts ? loaded.serverOrder : nil)
+            // 남긴 즉시 삽입분은 서버가 모르는 말이라 그 뒤에 **도착 순서**로 선다(m4-fix — 위 정리 뒤라 표에는 남긴 것만 있다).
+            let sorted = (loaded.entries + kept).sortedForMessageHistory(
+                serverOrder: loaded.hasReadReceipts ? loaded.serverOrder : nil,
+                arrivalOrder: messageReadRuntime.localArrivalSerials
+            )
             if messageHistory != sorted { messageHistory = sorted }
             applyMessageHistoryReadCapability(loaded, serial: serial)
             if !messageHistoryLoaded { messageHistoryLoaded = true }
@@ -556,7 +572,8 @@ extension WorkTimerStore {
 
 @MainActor
 extension WorkTimerStore {
-    /// **메시지 활동 새로고침** — 안 읽음 요약 1회(+ 대화가 팝오버에 보이거나 `includeHistory` 면 이력 1회).
+    /// **메시지 활동 새로고침** — 안 읽음 요약 1회(+ 대화가 팝오버에 보이거나 `includeHistory` 면 이력 1회 — 요약과 **나란히** 띄운다,
+    /// `performLoadMessageSummaryAlongsideHistory`).
     ///
     /// 부르는 자리: 소비할 수 없는 맥의 초인종·조인 직후 따라잡기(근무 여부 무관)·로그인 직후·팝오버 열기(스로틀)·
     /// **drain 이 메시지를 받았을 때**(m-fix F2)·합치기 창이 닫힐 때(읽음 신호 `message_read`·읽음 처리 성공 뒤 — m-fix2,
@@ -571,7 +588,7 @@ extension WorkTimerStore {
     func requestMessageActivityRefresh(includeHistory: Bool = false) -> Task<Void, Never>? {
         guard session != nil else { return nil }
         let runtime = messageReadRuntime
-        if includeHistory || (isMenuPresented && isMessagePanelVisible) {
+        if includeHistory || isMessageConversationOnScreen {
             runtime.activityWantsHistory = true
         } else {
             runtime.markHistoryStale()
@@ -588,12 +605,12 @@ extension WorkTimerStore {
                 runtime.activityAgain = false
                 let wantsHistory = runtime.activityWantsHistory
                 runtime.activityWantsHistory = false
-                await self.performLoadMessageUnreadSummary()
-                guard generation == self.sessionGeneration else { return }
                 if wantsHistory {
-                    await self.performLoadMessageHistory()
-                    guard generation == self.sessionGeneration else { return }
+                    await self.performLoadMessageSummaryAlongsideHistory()
+                } else {
+                    await self.performLoadMessageUnreadSummary()
                 }
+                guard generation == self.sessionGeneration else { return }
             } while runtime.activityAgain
             runtime.activityTask = nil
         }
@@ -613,7 +630,7 @@ extension WorkTimerStore {
     func requestMessageActivityRefreshCoalesced() {
         guard session != nil else { return }
         let runtime = messageReadRuntime
-        if !(isMenuPresented && isMessagePanelVisible) { runtime.markHistoryStale() }
+        if !isMessageConversationOnScreen { runtime.markHistoryStale() }
         // 이 계기를 반영하려면 **지금 이후에 띄운** 조회여야 한다(창이 닫힐 때 이미 그런 조회가 나갔으면 다시 묻지 않는다).
         runtime.activityWindowSerial = runtime.serial
         guard runtime.activityWindowTask == nil else { return }
@@ -636,7 +653,7 @@ extension WorkTimerStore {
     /// 신호를 받은 뒤 띄운 조회는 그 변화를 본다).
     private func closeMessageActivityWindow(pendingSerial: Int) {
         let runtime = messageReadRuntime
-        let conversationOnScreen = isMenuPresented && isMessagePanelVisible
+        let conversationOnScreen = isMessageConversationOnScreen
         let historyTaken = runtime.lastHistoryLaunchSerial > pendingSerial
         let summaryTaken = runtime.lastSummaryLaunchSerial > pendingSerial
         if !conversationOnScreen, !historyTaken {
@@ -678,15 +695,45 @@ extension WorkTimerStore {
         guard session != nil else { return }
         let generation = sessionGeneration
         let serial = messageReadRuntime.nextSummarySerial()
+        guard let summary = await fetchMessageUnreadSummary(generation: generation) else { return }
+        applyMessageUnreadSummary(summary, serial: serial)
+    }
+
+    /// 요약과 이력을 **나란히** 띄우고, 요약은 이력 왕복이 끝난 **뒤에** 반영한다(v0.3.31 m4-fix). 새로고침이 이력을 원할 때의 한 차례다.
+    ///
+    /// 옛 순서는 요약 왕복 → 이력 왕복의 줄 서기였다. 근무 밖 맥의 초인종(소비할 수 없어 본문이 없다 — 이력이 곧 새 말)은 그 줄 뒤에 서서
+    /// 보이는 대화에 새 말이 **요약이 늦는 만큼** 늦게 그려졌다(적대적 검증 P2: 요약만 1.2초 붙잡으면 이력이 한 건도 안 떠남 ·
+    /// P2c: 왕복 0.3초에서 근무 중 0.31초 대 근무 밖 0.83초). 명세의 "대화가 떠 있으면 즉시 이력 재조회"가 아니었다.
+    ///
+    /// · **번호는 요약이 먼저**다(이 함수가 동기로 받는다). 둘 다 반영되면 더 나중에 띄운 이력이 판정한다 — 옛 순서와 같은 선후라
+    ///   `MessageUnreadRules` 의 "더 나중에 띄운 쪽" 규칙이 그대로 산다. 응답 도착 순서는 선후에 끼지 않는다.
+    /// · **반영은 이력 뒤**다. 요약이 먼저 반영되면 보고 있는 대화에 막 온 말이 그려지기(이력 → 읽음 처리 → 낙관 읽음) 전에 요약이 그 상대를
+    ///   안 읽음으로 세워 메뉴바·레일 점이 한 왕복 동안 켜졌다(검증 P2b). 이력이 먼저 반영되면 읽음 판정이 낙관 읽음을 먼저 세우므로 켜질 틈이 없다.
+    ///   대가는 다른 상대의 점이 이력 왕복만큼 늦는 것이다(요약 왕복과 같은 눈금).
+    /// · 이력이 실패해도 요약은 반영한다 — 이력 실패에 다른 사람의 점을 묶지 않는다.
+    private func performLoadMessageSummaryAlongsideHistory() async {
+        guard session != nil else { return }
+        let generation = sessionGeneration
+        let summarySerial = messageReadRuntime.nextSummarySerial()
+        async let summary = fetchMessageUnreadSummary(generation: generation)
+        await performLoadMessageHistory()
+        let fetched = await summary
+        guard generation == sessionGeneration, let fetched else { return }
+        applyMessageUnreadSummary(fetched, serial: summarySerial)
+    }
+
+    /// `message_unread_summary` 를 받아 **돌려준다**(반영은 부르는 쪽 — 번호도 부르는 쪽이 띄운 순간에 받는다).
+    /// 함수가 없는 서버·실패·세대 변경은 nil 로 **조용히** 접는다 — 못 물어봤다는 사실은 "안 읽은 것이 없다"는 답이 아니다.
+    private func fetchMessageUnreadSummary(generation: Int) async -> MessageUnreadSummary? {
         do {
             let response = try await withSessionRetry { activeSession in
                 try await service.fetchMessageUnreadSummary(accessToken: activeSession.accessToken)
             }
-            guard generation == sessionGeneration else { return }
-            guard let summary = response.summary else { return }
-            applyMessageUnreadSummary(summary, serial: serial)
+            guard generation == sessionGeneration else { return nil }
+            return response.summary
         } catch {
             // 취소·스키마 부재(옛 서버)·네트워크 — 전부 조용히. 점은 다음 계기(신호·팝오버 열기)에 다시 맞춰진다.
+            return nil
         }
     }
 
@@ -698,13 +745,17 @@ extension WorkTimerStore {
     }
 
     /// **읽음을 올리는 유일한 판정.** 조건이 전부 맞을 때만 `mark_messages_read` 를 부른다(위 머리 주석 ①):
-    ///  · 로그인 · 팝오버가 떠 있음(`isMenuPresented`) · 대화 패널이 보임 · 그 상대가 골라져 있음
+    ///  · 로그인 · 대화가 **실제로 보인다**(`isMessageConversationSeen` — 대화 패널 · 대화 뷰/팝오버 표시, 창 서버가 "없다"고 하지 않음) · 상대가 골라져 있음
     ///  · 서버가 읽음을 앎(마지막 이력이 읽음 칸을 실어 옴)
     ///  · 그 대화에 서버 기준 안 읽은 받은 메시지가 있고, 같은 경계로 이미 올린(또는 올리는 중인) 기록이 없음
-    /// 경계는 **그 대화의 마지막 받은 메시지 id**(서버 순서 기준)다 — 이력을 받은 뒤 도착해 아직 안 그려진 말까지
+    /// 경계는 **그 대화의 마지막 받은 메시지 id**(서버 순서, 그 뒤에 즉시 삽입된 말은 그 뒤 — `effectiveOrder`)다 — 이력에 없는 말까지
     /// 읽음으로 올리지 않게.
+    ///
+    /// v0.3.31 M4: 옛 게이트는 `isMenuPresented` 한 칸이었다. 그 칸은 두 출처(팝오버 루트 onAppear·키 창 통지)의 마지막 쓰기라 **떠 있는
+    /// 팝오버에서 false 로 남는 순서**가 있고(우리 다른 창이 활성화와 함께 키를 가져가도 팝오버는 안 닫힌다 — CheckWindowAnchor 의 실측 표),
+    /// 그 동안 본 메시지가 읽음으로 안 올라가 대화를 닫으면 점이 됐다("이미 읽은 메시지에 점이 자꾸 생긴다").
     func evaluateMessageReadMarking() {
-        guard session != nil, isMenuPresented, isMessagePanelVisible,
+        guard session != nil, isMessageConversationSeen,
               let peer = selectedMessagePeerID,
               let snapshot = messageHistoryReadSnapshot,
               let through = MessageUnreadRules.markTarget(
@@ -784,6 +835,164 @@ extension WorkTimerStore {
     }
 }
 
+// MARK: - 열린 대화에 즉시 (v0.3.31 M4)
+//
+// 사용자 신고(2026-09-17, 0.3.29): "상대와의 채팅창에 접속해 있는 상태에서 메시지 받으면 그 메시지가 채팅창에 바로 안 뜨고 시간이 좀 지난
+// 다음에 뜨거나, 아예 창 뒤로 갔다가 다시 들어와야 뜬다. 실제 메신저앱처럼 메시지마다 바로 대화창에 뜨게."
+//
+// 서버는 결백했다(운영 실측: 24시간 156건 전부 consumed_at − created_at p95 0.2초). 받는 맥이 받은 **뒤**에 틈이 셋 있었다 —
+// 전부 헤드리스 재현(0.3.29 사본 대조군 CtlM4Tests · 수정 전 mobile-int 사본 CtlPreM4Tests, 결과는 V0331MessageArrivalTests 머리)으로 가렸다:
+//  ① **보이는가의 판정이 `isMenuPresented` 한 칸이었다.** 그 칸은 팝오버 루트의 onAppear/onDisappear 와 창 키 획득/상실 통지가
+//     마지막 쓰기로 겹쳐 쓴다. 우리 다른 창이 활성화와 함께 키를 가져가도 팝오버는 **안 닫힌다**(CheckWindowAnchor 의 실측 표) — 그때 키 상실이
+//     false 를 쓰면 그 뒤 도착은 이력 조회를 건너뛰었고, [뒤로] 뒤 다시 들어가야(openMessagePanel 의 무조건 조회) 떴다. 신고의 두 번째 모양이다.
+//     (사용자 세션에서 **어느** 순서가 실제로 일어났는지는 실행 중 앱을 재지 못해 확정하지 못했다 — 그래서 한 순서에 맞춰 고치지 않고
+//     순서와 무관한 사실로 판정을 바꿨다. 모형은 V0331MessageArrivalTests.)
+//  ② **도착한 내용을 대화에 넣지 않고 이력 재조회만 했다.** take_pokes 가 본문을 이미 들고 왔는데 한 왕복을 더 기다렸고, 0.3.29 는
+//     겹친 조회의 늦은 옛 응답이 방금 뜬 말을 지웠다(첫 번째 모양 "시간이 좀 지난 다음에").
+//  ③ **말풍선용 5분 신선도 필터가 갱신 자체를 막았다.** 맥 시계가 서버보다 5분 넘게 빠르면 도착이 비어 갱신을 안 불렀다.
+//
+// 그래서: 보이는가는 **대화 뷰 자신의 생명주기 + 팝오버 창의 실제 표시(창 서버)** 로 본다(①). 소비한 메시지 행은 신선도와 무관하게
+// 보이는 대화에 **곧바로 넣고** 이력·읽음 재조회로 서버 값에 맞춘다(②③). 판정이 "안 보이는데 보인다"로 틀려도 값은 도착당 이력 1건이다 —
+// 그쪽으로 기운다. 단 **읽음 처리**는 창 서버가 "안 떠 있다"고 답하면 올리지 않는다(못 본 말을 읽었다고 상대에게 알리면 거짓이다).
+
+@MainActor
+extension WorkTimerStore {
+    /// 대화 화면이 **떠 있을 수 있는가** — 도착 갱신(이력 조회)과 즉시 삽입의 게이트. 판정은 `MessageConversationVisibility` 하나다.
+    var isMessageConversationOnScreen: Bool {
+        MessageConversationVisibility.mayBeOnScreen(currentMessageConversationSignals)
+    }
+
+    /// 대화를 **실제로 보고 있는가** — 읽음 처리의 게이트(위보다 엄격: 창 서버가 "없다"고 하면 거짓).
+    var isMessageConversationSeen: Bool {
+        MessageConversationVisibility.isSeen(currentMessageConversationSignals)
+    }
+
+    private var currentMessageConversationSignals: MessageConversationVisibility.Signals {
+        MessageConversationVisibility.Signals(
+            signedIn: session != nil,
+            panelVisible: isMessagePanelVisible,
+            conversationViewShown: !messageConversationViewTokens.isEmpty,
+            menuPresented: isMenuPresented,
+            // 창 서버 질의는 로그인 + 대화 패널일 때만 한다(대화 패널이 아닌 화면에서 도착마다 창 목록을 읽지 않게).
+            popoverOnScreen: (session != nil && isMessagePanelVisible) ? menuPopoverOnScreenProbe() : nil
+        )
+    }
+
+    /// 대화 뷰가 화면에 섰다(`CheckMessageView.onAppear`). 표식을 넣고, 보이는 대화의 안 읽은 말을 읽음으로 올린다(멱등 — 같은 경계는 한 번).
+    func messageConversationViewDidAppear(_ token: UUID) {
+        messageConversationViewTokens.insert(token)
+        evaluateMessageReadMarking()
+    }
+
+    /// 대화 뷰가 화면에서 내려갔다(`CheckMessageView.onDisappear`). **자기 표식만** 뺀다 — 다른 뷰의 나타남이 먼저 왔어도 남는다.
+    func messageConversationViewDidDisappear(_ token: UUID) {
+        messageConversationViewTokens.remove(token)
+    }
+
+    /// take_pokes 가 **소비한** 행에서 메시지를 받아들인다(drain 이 부르는 유일한 문, v0.3.31 M4).
+    ///
+    /// 순서가 뜻이다:
+    ///  1. 보이는 대화의 상대가 보낸 행을 **곧바로** 그 대화에 넣는다(`insertConsumedMessagesIntoVisibleConversation`) — 신선도와 무관.
+    ///  2. 말풍선 큐에는 예전 그대로 **신선한 것 중 이미 읽지 않은 것만** 올린다(5분 규칙 · 읽은 것 필터).
+    ///     1 에서 **보고 있는 대화에 들어가 읽음으로 올라간 말**은 이 필터가 거른다 — 대화창에 방금 뜬 말을 캐릭터 머리 위로 한 번 더
+    ///     띄우지 않는다(메신저가 열린 대화의 알림을 안 띄우는 것과 같다). 창 서버가 "안 떠 있다"고 하면 읽음이 안 올라가 말풍선은 그대로 뜬다.
+    ///  3. 소비한 메시지 행이 **하나라도** 있으면 도착 새로고침 1회(요약 + 보이면 이력). 말풍선 큐가 비었어도 부른다 — 0.3.29 는 신선도가
+    ///     큐를 비우면 갱신까지 건너뛰었다(③).
+    func receiveConsumedMessages(rows: [TakenPokeRow], now: Date) {
+        let consumed = Self.consumedMessageEntries(rows: rows, receiptsKnown: messageReadReceiptsAvailable)
+        insertConsumedMessagesIntoVisibleConversation(consumed)
+        appendToMessageBubbleQueue(
+            Self.freshReceivedMessages(rows: rows, now: now).filter { !isMessageAlreadyReadForBubble($0) }
+        )
+        guard !consumed.isEmpty else { return }
+        refreshMessageHistoryOnArrival()
+    }
+
+    /// 소비한 메시지 행 → 대화 한 줄(순수). 옮김 규칙은 이력 행과 같다(본문 정규화 · 보이는 글자 없음 버림 · 보낸이 없음 버림 · 이름 폴백).
+    /// 받은 말이므로 `isUnread` 는 서버가 읽음을 알면 true(방금 왔다), 모르면 nil(옛 서버 — 도장 규칙이 판정한다).
+    nonisolated static func consumedMessageEntries(rows: [TakenPokeRow], receiptsKnown: Bool) -> [MessageHistoryEntry] {
+        rows.compactMap { row -> MessageHistoryEntry? in
+            guard PokeKind(rawServerValue: row.kind) == .message, !row.id.isEmpty, !row.fromUser.isEmpty else { return nil }
+            let body = MessageBody.sanitized(row.body ?? "")
+            guard MessageBody.hasVisibleContent(body) else { return nil }
+            return MessageHistoryEntry(
+                id: row.id,
+                peerUserID: row.fromUser,
+                peerName: row.fromDisplayName.isEmpty ? "사용자" : row.fromDisplayName,
+                peerAvatarURL: row.fromAvatarUrl.flatMap { URL(string: $0) },
+                body: body,
+                createdAt: Date(timeIntervalSince1970: TimeInterval(row.createdEpoch)),
+                isMine: false,
+                readByPeer: nil,
+                isUnread: receiptsKnown ? true : nil
+            )
+        }
+    }
+
+    /// 보이는 대화의 상대가 보낸 것만 **지금** 이력에 넣는다. 반환값은 넣은 개수.
+    ///
+    /// · 다른 사람의 말·닫힌 대화는 넣지 않는다 — 그쪽은 도착 새로고침이 요약(점)으로 알리고, 이력은 볼 때 받는다(서버 판이 정본).
+    /// · 이미 있는 id 는 건드리지 않는다(서버 행이 이긴다 — 중복도 없다).
+    /// · 정렬은 이력 응답과 **같은 규칙**(`sortedForMessageHistory`, 서버 순서를 모르는 새 id 는 같은 초 안에서 뒤, 그들끼리는 도착 순서)이다.
+    /// · 넣은 id 는 장부에 "넣은 순간의 일련번호"(한 줄에 하나, 행 순서대로)로 적는다 — 그보다 먼저 띄운 이력 응답이 이 말을 지우지 않게
+    ///   (`survivingLocalArrivals`), 그리고 같은 초 동률의 도착 순서표로(m4-fix).
+    /// · 넣은 뒤 곧바로 읽음 판정을 돈다(보고 있는 대화의 말이다 — 기존 규칙 그대로 `evaluateMessageReadMarking`).
+    @discardableResult
+    func insertConsumedMessagesIntoVisibleConversation(_ entries: [MessageHistoryEntry]) -> Int {
+        guard !entries.isEmpty, isMessageConversationOnScreen, let peer = selectedMessagePeerID else { return 0 }
+        var known = Set(messageHistory.map(\.id))
+        var additions: [MessageHistoryEntry] = []
+        for entry in entries where entry.peerUserID == peer && !known.contains(entry.id) {
+            known.insert(entry.id)
+            additions.append(entry)
+        }
+        guard !additions.isEmpty else { return 0 }
+        // 한 줄에 번호 **하나씩**, take_pokes 행 순서(= 서버 created_at 순서)대로(m4-fix). 이 번호가 곧 같은 초 동률의 도착 순서표다 —
+        // 한 번 삽입에 번호 하나를 같이 주면 같은 초의 두 말이 id 사전순으로 뒤집혀 그려지고 읽음 경계를 앞 말로 올렸다(검증 P1).
+        // "넣은 순간" 비교(`survivingLocalArrivals`)는 그대로 산다: 이 반복 사이에 띄운 이력은 없다(동기).
+        for entry in additions { messageReadRuntime.localArrivalSerials[entry.id] = messageReadRuntime.nextSerial() }
+        let merged = (messageHistory + additions).sortedForMessageHistory(
+            serverOrder: messageHistoryReadSnapshot?.serverOrder,
+            arrivalOrder: messageReadRuntime.localArrivalSerials
+        )
+        if messageHistory != merged { messageHistory = merged }
+        evaluateMessageReadMarking()
+        return additions.count
+    }
+}
+
+/// 대화 화면이 보이는가의 **순수 판정**(v0.3.31 M4). 입력은 사실들, 출력은 두 질문의 답이다.
+///
+/// 사실은 셋이고 각자 틀리는 방향이 다르다:
+///  · `menuPresented`(`isMenuPresented`) — 두 출처의 마지막 쓰기. **떠 있는데 false** 로 남는 순서가 있다(키 상실만 오고 팝오버는 그대로).
+///  · `conversationViewShown`(대화 뷰의 onAppear/onDisappear 표식 집합) — 순서에 강하다. 다만 앱 비활성으로 팝오버가 화면에서만 사라지고
+///    SwiftUI 가 모르는 경로에서는 **안 보이는데 true** 로 남을 수 있다.
+///  · `popoverOnScreen`(창 서버 질의) — 이 저장소가 믿는 사실(`NSWindow.isVisible` 이 거짓말한 전례). 창을 못 잡으면 nil.
+enum MessageConversationVisibility {
+    /// 상대(`selectedMessagePeerID`)는 여기서 보지 않는다 — 대화 패널은 상대 없이 열리지 않고(`openMessagePanel(peer:)`),
+    /// 상대가 필요한 두 자리(즉시 삽입·읽음 처리)는 각자 그 상대를 꺼내며 확인한다.
+    struct Signals: Equatable, Sendable {
+        var signedIn: Bool
+        var panelVisible: Bool
+        var conversationViewShown: Bool
+        var menuPresented: Bool
+        var popoverOnScreen: Bool?
+    }
+
+    /// 떠 있을 수 있는가(도착 갱신 · 즉시 삽입). **긍정 신호 하나면 참**이다 — 틀려도 값은 도착당 이력 1건이고, 거짓으로 틀리면 신고 그대로
+    /// "다시 들어가야 뜬다"가 된다. 대화 패널·로그인은 필수(닫힌 대화에 조회를 붙이지 않는다).
+    static func mayBeOnScreen(_ s: Signals) -> Bool {
+        guard s.signedIn, s.panelVisible else { return false }
+        return s.conversationViewShown || s.menuPresented || s.popoverOnScreen == true
+    }
+
+    /// 실제로 보고 있는가(읽음 처리). 위가 참이고 **창 서버가 "안 떠 있다"고 하지 않을 때**만 참이다 — 못 본 말을 읽었다고 올리면
+    /// 상대 화면의 1 이 지워지고 이 맥의 점도 안 뜬다(되돌릴 길이 없다). 창 서버가 모르면(nil) 생명주기 신호를 믿는다.
+    static func isSeen(_ s: Signals) -> Bool {
+        mayBeOnScreen(s) && s.popoverOnScreen != false
+    }
+}
+
 // MARK: - 읽음 값 타입 · 규칙 (순수)
 
 /// 이력 한 번의 결과(v0.3.30). `entries` 는 **서버 순서 그대로**다.
@@ -860,8 +1069,36 @@ final class MessageReadRuntime {
     /// 마지막으로 **띄운**(응답 여부와 무관) 요약·이력 요청의 번호. 창이 닫힐 때 "이미 맡은 조회가 있나"의 근거다.
     private(set) var lastSummaryLaunchSerial = 0
     private(set) var lastHistoryLaunchSerial = 0
+    /// 보이는 대화에 **즉시 삽입한** 도착분(v0.3.31 M4): 메시지 id → 넣은 순간의 일련번호(한 줄에 하나 — take_pokes 행 순서대로 커진다).
+    /// 그보다 **먼저 띄운** 이력 응답은 그 말을 모를 수 있으므로 판을 갈 때 이 말을 남기고, **나중에 띄운** 응답이 오면 서버가 이긴다.
+    /// 같은 표가 서버가 아직 모르는 말끼리의 **같은 초 도착 순서**다(m4-fix · `sortedForMessageHistory(arrivalOrder:)`).
+    var localArrivalSerials: [String: Int] = [:]
 
     nonisolated init() {}
+
+    /// 일련번호 `historySerial` 로 띄운 이력 응답(`server`)을 반영할 때 **남겨야 할 즉시 삽입분**을 고르고 장부를 정리한다.
+    ///  · 응답에 같은 id 가 있으면 → 서버 행이 이긴다(장부에서 뺀다).
+    ///  · 응답이 삽입보다 **나중에** 띄운 것인데 없으면 → 서버가 답했다(보관 창 밖 등). 장부에서 빼고 남기지 않는다.
+    ///  · 응답이 삽입보다 **먼저** 띄운 것이면 → 그 조회는 이 말을 모를 수 있다. 지금 이력에 있는 그 줄을 남긴다.
+    func survivingLocalArrivals(
+        historySerial: Int,
+        current: [MessageHistoryEntry],
+        server: [MessageHistoryEntry]
+    ) -> [MessageHistoryEntry] {
+        guard !localArrivalSerials.isEmpty else { return [] }
+        let serverIDs = Set(server.map(\.id))
+        var keepIDs: Set<String> = []
+        for (id, inserted) in localArrivalSerials {
+            if serverIDs.contains(id) || historySerial > inserted {
+                localArrivalSerials[id] = nil
+            } else {
+                keepIDs.insert(id)
+            }
+        }
+        guard !keepIDs.isEmpty else { return [] }
+        var seen: Set<String> = []
+        return current.filter { keepIDs.contains($0.id) && seen.insert($0.id).inserted }
+    }
 
     func nextSerial() -> Int {
         serial += 1
@@ -937,10 +1174,11 @@ enum MessageUnreadRules {
         case (.some(let h), .some(let s)): useHistory = h.serial > s.serial
         }
         if useHistory, let snapshot = historySnapshot {
+            let order = effectiveOrder(history: history, serverOrder: snapshot.serverOrder)
             var peers: Set<String> = []
             for entry in history where !entry.isMine && entry.isUnread == true {
                 if let record = optimistic[entry.peerUserID], !record.isKnown(bySnapshotSerial: snapshot.serial),
-                   isCovered(entry, by: record, order: snapshot.serverOrder) {
+                   isCovered(entry, by: record, order: order) {
                     continue
                 }
                 peers.insert(entry.peerUserID)
@@ -977,10 +1215,12 @@ enum MessageUnreadRules {
     ) -> String? {
         let received = history.enumerated().filter { $0.element.peerUserID == peer && !$0.element.isMine }
         guard received.contains(where: { $0.element.isUnread == true }) else { return nil }
-        // 서버 순서가 정본이고, 모르면(테스트가 손으로 만든 이력 등) 화면 정렬 자리로 가른다.
+        // 서버 순서가 정본이고, 그 뒤에 즉시 삽입된 말(v0.3.31 M4)은 서버 순서 **뒤**다(`effectiveOrder`).
+        // 둘 다 모르면(테스트가 손으로 만든 이력 등) 화면 정렬 자리로 가른다.
+        let order = effectiveOrder(history: history, serverOrder: snapshot.serverOrder)
         guard let last = received.max(by: { lhs, rhs in
-            let l = snapshot.serverOrder[lhs.element.id] ?? -1
-            let r = snapshot.serverOrder[rhs.element.id] ?? -1
+            let l = order[lhs.element.id] ?? -1
+            let r = order[rhs.element.id] ?? -1
             return l != r ? l < r : lhs.offset < rhs.offset
         })?.element else { return nil }
         if let optimistic, optimistic.throughID == last.id, !optimistic.failed { return nil }
@@ -1001,11 +1241,32 @@ enum MessageUnreadRules {
     ) -> Bool {
         guard let snapshot, let entry = history.first(where: { $0.id == messageID }), !entry.isMine else { return false }
         if entry.isUnread == false { return true }
-        if let record = optimistic[entry.peerUserID], isCovered(entry, by: record, order: snapshot.serverOrder) { return true }
+        if let record = optimistic[entry.peerUserID],
+           isCovered(entry, by: record, order: effectiveOrder(history: history, serverOrder: snapshot.serverOrder)) {
+            return true
+        }
         if let summary, summary.serial > snapshot.serial, !summary.summary.unreadPeerIDs.contains(entry.peerUserID) {
             return true
         }
         return false
+    }
+
+    /// 선후 판정에 쓰는 순서표(v0.3.31 M4): 서버 순서 + **이력에 있지만 서버 순서가 모르는 id**(즉시 삽입한 도착분)를 그 뒤에 이력 자리 순으로.
+    ///
+    /// 즉시 삽입한 말은 마지막으로 반영된 이력 응답보다 나중에 도착했다(그 응답이 알았다면 서버 행이 이미 있다) — 그래서 서버 순서 **뒤**다.
+    /// 이력 자리 순서를 따르는 이유: 스토어는 이력을 세울 때마다 같은 초의 즉시 삽입분을 **도착 순서**로 정렬해 둔다(m4-fix — 삽입·이력 반영 둘 다
+    /// `arrivalOrder` 를 넘긴다). 그래서 자리 순서가 곧 화면 순서이고, 초가 다른 말도 화면과 같은 선후로 읽힌다.
+    /// 이력에 아예 없는 id(만료로 사라진 경계 등)는 여전히 표에 없다 — `isCovered` 의 "경계를 못 찾으면 덮이지 않음"이 그대로 산다.
+    /// 모르는 id 가 없으면 서버 순서를 그대로 돌려준다(뷰가 자주 읽는 점 계산에서 복사를 만들지 않게).
+    static func effectiveOrder(history: [MessageHistoryEntry], serverOrder: [String: Int]) -> [String: Int] {
+        guard history.contains(where: { serverOrder[$0.id] == nil }) else { return serverOrder }
+        var order = serverOrder
+        var next = (serverOrder.values.max() ?? -1) + 1
+        for entry in history where order[entry.id] == nil {
+            order[entry.id] = next
+            next += 1
+        }
+        return order
     }
 
     /// 받은 메시지가 낙관 읽음 경계 **안쪽**(경계 자신 포함)인가. 서버 순서로만 판정한다 — 경계나 그 메시지를 순서표에서
@@ -1027,7 +1288,12 @@ extension Array where Element == MessageHistoryEntry {
     ///   깨면 실제 출력으로 답장이 질문보다 위에 그려졌다(X1). 서버는 created_at(마이크로초) 순서로 주므로 `serverOrder`(응답 안의 자리)가
     ///   그 선후다. 반올림은 단조라 초가 다른 두 말의 순서를 서버 순서와 거꾸로 만들지 않는다 — 초가 1차 키여도 어긋나지 않는다.
     ///   순서표에 없는 id 는 맨 뒤(`Int.max`)로 보내 비교가 언제나 전순서가 되게 한다(섞인 입력에서 정렬이 흔들리지 않게).
-    func sortedForMessageHistory(serverOrder: [String: Int]? = nil) -> [MessageHistoryEntry] {
+    ///
+    /// ★ 도착 순서(m4-fix): 서버 순서가 모르는 **즉시 삽입분**(M4 — take_pokes 가 들고 온 말)끼리의 같은 초 동률은 id 가 아니라
+    ///   `arrivalOrder`(메시지 id → 삽입 번호, take_pokes 행 순서)로 깬다. take_pokes 도 created_at 순서로 주므로 그 순서가 곧 서버 선후다 —
+    ///   id 로 깨면 서버가 첫째→둘째로 준 두 말이 둘째→첫째로 그려지고, 읽음 경계를 앞 말로 올렸다(검증 P1). 도착분은 같은 초의 다른 말
+    ///   **뒤**다(표에 없으면 -1) — 서버가 아는 말보다 늦게 왔다. 키는 (초, 서버 자리, 도착 번호, id) 사전식이라 여전히 전순서다.
+    func sortedForMessageHistory(serverOrder: [String: Int]? = nil, arrivalOrder: [String: Int] = [:]) -> [MessageHistoryEntry] {
         sorted { lhs, rhs in
             if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
             if let serverOrder {
@@ -1035,6 +1301,9 @@ extension Array where Element == MessageHistoryEntry {
                 let r = serverOrder[rhs.id] ?? Int.max
                 if l != r { return l < r }
             }
+            let la = arrivalOrder[lhs.id] ?? -1
+            let ra = arrivalOrder[rhs.id] ?? -1
+            if la != ra { return la < ra }
             return lhs.id < rhs.id
         }
     }
@@ -1079,10 +1348,15 @@ enum MessageThreadBuilder {
     /// 상대 이름·아바타는 **가장 최근 행의 것**을 쓴다 — 별명을 바꾼 사람의 옛 행이 목록에 옛 이름을 남기면
     /// 사용자는 같은 사람을 두 사람으로 읽는다(서버가 행마다 그때의 표시명을 실어 줄 수 있다).
     /// `serverOrder` 는 같은 초 동률을 깨는 서버 순서다(`sortedForMessageHistory` — 모르면 nil, 옛 규칙 id).
-    static func threads(from entries: [MessageHistoryEntry], serverOrder: [String: Int]? = nil) -> [MessageThread] {
+    /// `arrivalOrder` 는 서버가 아직 모르는 즉시 삽입분의 도착 순서다(m4-fix — 없으면 빈 표).
+    static func threads(
+        from entries: [MessageHistoryEntry],
+        serverOrder: [String: Int]? = nil,
+        arrivalOrder: [String: Int] = [:]
+    ) -> [MessageThread] {
         var order: [String] = []
         var grouped: [String: [MessageHistoryEntry]] = [:]
-        for entry in entries.sortedForMessageHistory(serverOrder: serverOrder) {
+        for entry in entries.sortedForMessageHistory(serverOrder: serverOrder, arrivalOrder: arrivalOrder) {
             if grouped[entry.peerUserID] == nil { order.append(entry.peerUserID) }
             grouped[entry.peerUserID, default: []].append(entry)
         }

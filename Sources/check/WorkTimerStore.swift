@@ -1047,6 +1047,18 @@ final class WorkTimerStore {
     @ObservationIgnored var messageReadSignalSleep: @Sendable (TimeInterval) async -> Void = {
         try? await Task.sleep(for: .seconds($0))
     }
+    /// 지금 화면에 서 있는 **대화 뷰들**의 표식(v0.3.31 M4). `CheckMessageView` 가 나타날 때 넣고 사라질 때 뺀다.
+    ///
+    /// Bool 한 칸이 아니라 집합인 이유: 뷰 정체성이 바뀌는 순간(패널을 다시 세우는 조합) SwiftUI 는 **새 뷰의 나타남과 옛 뷰의
+    /// 사라짐을 어느 순서로든** 부를 수 있다. 한 칸에 마지막 쓰기로 적으면 "새 뷰 나타남 → 옛 뷰 사라짐" 순서에서 떠 있는 대화가
+    /// 안 보인다고 남는다 — `isMenuPresented` 가 두 출처(onAppear·키 창 통지)로 정확히 그렇게 굳어 도착한 메시지가 안 그려졌다
+    /// (V0331MessageArrivalTests 의 콜백 순서 모형). 뷰마다 제 표식을 넣고 빼면 순서와 무관하게 수렴한다.
+    @ObservationIgnored var messageConversationViewTokens: Set<UUID> = []
+    /// 팝오버 창이 **창 서버 기준으로** 지금 화면에 서 있는가(v0.3.31 M4). nil = 모른다(창을 못 잡았다·질의 실패·테스트).
+    ///
+    /// **기본값이 nil 을 돌려준다** — 프로덕션 조립(CheckApp)만 실제 질의(`WindowTopAnchor.menuPopoverOnScreen`)를 꽂는다.
+    /// 기본값이 실제 질의면 창 앵커 테스트가 남긴 `current` 가 병렬로 도는 메시지 스위트의 판정에 새어 든다.
+    @ObservationIgnored var menuPopoverOnScreenProbe: @MainActor () -> Bool? = { nil }
 
     // ── 내 앱 버전 보고(profiles.app_build / app_version) ──
     /// 이 프로세스가 읽어 올 버전. 기본은 번들이고 테스트가 갈아 끼운다 — Bundle.main 은 프로세스가 정하는

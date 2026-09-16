@@ -518,6 +518,15 @@ extension WindowTopAnchor {
         return window.isVisible
     }
 
+    /// 팝오버가 창 서버 기준으로 지금 화면에 서 있는가 — **모르면 nil**(v0.3.31 M4, 메시지 대화의 "보이는가" 판정 재료).
+    ///
+    /// 위 `isMenuPopoverPresented()` 와 질의는 같지만 "모른다"를 접지 않는다. 그 함수는 팝오버 안 버튼이 부르는 자리라 모르면 떠 있다고 보지만,
+    /// 이 값은 읽음 처리의 거부권으로도 쓰여서(`MessageConversationVisibility.isSeen`) 창을 못 잡은 것을 "안 떠 있다"로 바꾸면 안 된다.
+    static func menuPopoverOnScreen() -> Bool? {
+        guard let window = current?.window else { return nil }
+        return CheckTodoBoardController.isOnScreen(window)
+    }
+
     /// 우리 상태 아이템의 버튼. `NSStatusBarButton` 은 공개 클래스라 클래스 이름 문자열을 더듬지 않는다.
     /// 이 앱의 상태 아이템은 `MenuBarExtra` 하나뿐이라 처음 찾은 것이 곧 그것이다.
     ///

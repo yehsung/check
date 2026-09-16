@@ -352,8 +352,8 @@ struct V0330MenuBarDotTests {
     }
 
     @Test func 레일_점은_잎에서_읽고_툴팁도_사실을_말한다() throws {
-        #expect(MessageUnreadRailHelp.text(warns: false, hasUnreadMessages: false) == "콕 찌르기")
-        #expect(MessageUnreadRailHelp.text(warns: false, hasUnreadMessages: true) == "콕 찌르기 · 안 읽은 메시지가 있어요")
+        #expect(MessageUnreadRailHelp.text(warns: false, hasUnreadMessages: false) == "콕 찌르기 · 메시지")
+        #expect(MessageUnreadRailHelp.text(warns: false, hasUnreadMessages: true) == "콕 찌르기 · 메시지 — 안 읽은 메시지가 있어요")
         // 연결 경고가 이긴다(이 칸이 리얼타임 고장을 표면화하는 유일한 자리다).
         #expect(MessageUnreadRailHelp.text(warns: true, hasUnreadMessages: true) == PokeConnectionNotice.iconHelp)
 

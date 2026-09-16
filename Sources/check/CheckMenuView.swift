@@ -620,7 +620,7 @@ struct CheckMenuView: View {
 struct CheckMenuSideRail: View {
     let store: WorkTimerStore
 
-    /// 레일 폭. 라벨("콕찌르기" 4글자 @9pt ≈ 37pt)이 좌우 여백 안에 들어가는 최소치에서 잡았다.
+    /// 레일 폭. 가장 긴 라벨("콕 / 메시지" @9pt semibold 실측 39.3pt)이 좌우 여백 안에 들어가는 폭이다.
     static let width: CGFloat = 64
     /// 칸 하나의 높이(pt).
     ///
@@ -4330,7 +4330,9 @@ private struct PokeEntryIconButton: View {
         let unread = store.hasUnreadMessages
         CheckMenuRailButton(
             icon: "hand.point.right.fill",
-            label: "콕찌르기",
+            // 2026-09-17 사용자: "콕찌르기 버튼 이름을 콕 / 메시지로 — 메시지 기능 있다는 게 하나도 안 드러난다".
+            // 이 칸이 대화로 들어가는 유일한 문이라 이름에 메시지를 싣는다(9pt 실측 39.3pt, 레일 폭 64 안).
+            label: "콕 / 메시지",
             help: MessageUnreadRailHelp.text(warns: warns, hasUnreadMessages: unread),
             isActive: store.isPokePanelVisible,
             // 착색만 바꾼다 — 아이콘을 바꾸면 사용자가 이 버튼을 찾던 모양이 사라진다.
@@ -4343,11 +4345,11 @@ private struct PokeEntryIconButton: View {
     }
 }
 
-/// 레일 [콕찌르기] 칸의 툴팁 = 보이스오버 문구(v0.3.30 — 순수). 점은 색으로만 말하므로 **글자로도** 말한다
+/// 레일 [콕 / 메시지] 칸의 툴팁 = 보이스오버 문구(v0.3.30 — 순수). 점은 색으로만 말하므로 **글자로도** 말한다
 /// (이 저장소의 규약: 색·그림만으로 정보를 주지 않는다). 연결 경고가 이긴다 — 이 칸이 리얼타임 고장을 표면화하는 유일한 자리다.
 enum MessageUnreadRailHelp {
-    static let plain = "콕 찌르기"
-    static let unreadMessages = "콕 찌르기 · 안 읽은 메시지가 있어요"
+    static let plain = "콕 찌르기 · 메시지"
+    static let unreadMessages = "콕 찌르기 · 메시지 — 안 읽은 메시지가 있어요"
 
     static func text(warns: Bool, hasUnreadMessages: Bool) -> String {
         if warns { return PokeConnectionNotice.iconHelp }

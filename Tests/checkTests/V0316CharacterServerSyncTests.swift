@@ -78,15 +78,19 @@ struct V0316CharacterServerSyncTests {
         }
     }
 
-    /// 오프라인에서 바꾼 선택이 사라지지 않게, **세션이 생기는 두 경로**가 각각 한 번씩 민다.
-    /// (재시도 큐 대신 쓰는 장치다 — 멱등이라 여러 번 불려도 안전하다.)
-    @Test("세션이 생기는 두 경로가 모두 캐릭터를 민다")
-    func bothSessionPathsPush() throws {
+    /// **세션이 생기는 두 경로**(저장 세션 활성화 · 로그인 마무리)는 v0.3.30 부터 **밀지 않고 읽는다.**
+    /// 0.3.16~0.3.29 에는 여기서 로컬 선택을 밀었는데, 폰에서 캐릭터를 바꾸면 맥이 다음에 켜질 때 그걸 말없이
+    /// 되돌렸다(R8). 동작은 `V0330CharacterSyncTests` 가 스텁으로 재고, 여기는 배선 개수만 못 박는다.
+    @Test("세션이 생기는 두 경로는 밀지 않고 서버값을 읽는다")
+    func bothSessionPathsReadInsteadOfPush() throws {
         let code = csStripped(try csSource("WorkTimerStoreAuth.swift"))
-        let hits = code.components(separatedBy: "pushSelectedCharacter(announcesFailure: false)").count - 1
-        #expect(hits == 2, Comment(rawValue:
-                "세션 확립 경로에서 \(hits)번 민다(기대 2 — 저장 세션 활성화 · 로그인 마무리). "
-                + "한 쪽만 있으면 그 경로로 들어온 사용자는 오프라인 변경이 영영 안 올라간다"))
+        let pushes = code.components(separatedBy: "pushSelectedCharacter(announcesFailure: false)").count - 1
+        #expect(pushes == 0, Comment(rawValue:
+                "세션 확립 경로에서 \(pushes)번 민다(기대 0) — 폰에서 바꾼 캐릭터를 맥이 켜질 때 되돌린다"))
+        let reads = code.components(separatedBy: "syncEquippedCharacterFromServer(reason: .launch)").count - 1
+            + code.components(separatedBy: "syncEquippedCharacterFromServer(reason: .signIn)").count - 1
+        #expect(reads == 2, Comment(rawValue:
+                "세션 확립 경로에서 \(reads)번 읽는다(기대 2 — 저장 세션 활성화 · 로그인 마무리)"))
     }
 
     /// ★ 기준선이 실제로 다른가: 위 계약들이 "원래부터 그랬다"로 초록이 되지 않게,

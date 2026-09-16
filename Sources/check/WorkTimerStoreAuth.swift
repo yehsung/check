@@ -64,7 +64,7 @@ extension WorkTimerStore {
         // 지갑을 한 번 맞춘다. 기본 p_days_back=1 이라 **어제 3시간을 채우고 앱을 껐던 사용자의 몫이
         // 여기서 소급된다** — 이 호출이 없으면 그 코인은 영영 안 들어온다.
         syncUltraWallet(reason: .signIn)
-        pushSelectedCharacter(announcesFailure: false)
+        syncEquippedCharacterFromServer(reason: .launch)
     }
 
     func signIn(email: String, password: String) async {
@@ -105,7 +105,7 @@ extension WorkTimerStore {
         if needsInsightsReload { await performLoadInsights() }
         // 저장 세션 활성화 경로와 같은 이유로 지갑을 맞춘다(어제 몫 소급).
         syncUltraWallet(reason: .signIn)
-        pushSelectedCharacter(announcesFailure: false)
+        syncEquippedCharacterFromServer(reason: .signIn)
     }
 
     func signUp(email: String, password: String, displayName: String, center: String? = nil) async {
@@ -274,29 +274,43 @@ extension WorkTimerStore {
     /// 내 화면만 바뀌고 **남에게는 영원히 아잉**으로 보인다 — 캐릭터가 남에게 보이는 유일한 순간인
     /// 울트라 찌르기가 `take_pokes` 의 `from_character`(= 서버 컬럼)를 읽기 때문이다.
     ///
-    /// **왜 로그인 때도 부르는가**: 오프라인에서 캐릭터를 바꾸면 그 쓰기가 사라진다. 재시도 큐를 따로
-    /// 두는 대신 **세션이 생기는 두 경로**(저장 세션 활성화 · 로그인 마무리)에서 한 번씩 밀어 넣는다.
-    /// 멱등이라 여러 번 불려도 안전하고, 그 두 곳이 이미 지갑 동기화가 지나는 자리라 새 훅이 아니다.
+    /// **부르는 곳은 사용자가 이 맥에서 직접 고른 순간뿐이다**(선택기 두 곳의 `onChosen`). 0.3.29 까지는 세션이
+    /// 생기는 두 경로(저장 세션 활성화 · 로그인 마무리)에서도 밀었지만, 폰에서도 캐릭터를 바꾸게 되면서 그 밀기가
+    /// 폰의 변경을 **말없이 되돌리는** 장치가 됐다(R8). 그 두 경로는 이제 `syncEquippedCharacterFromServer` 로
+    /// **읽어서 따른다**.
     ///
-    /// `announcesFailure` 가 거짓이면 조용히 넘긴다(로그인 경로 — 사용자가 한 행동이 아니라서
-    /// 실패 문구를 띄우면 원인 없는 경고가 된다). 사용자가 직접 고른 순간에는 참으로 부른다.
+    /// `announcesFailure` 가 거짓이면 조용히 넘긴다(사용자가 한 행동이 아닌 경로 — 실패 문구를 띄우면 원인 없는
+    /// 경고가 된다). 사용자가 직접 고른 순간에는 참으로 부른다.
     func pushSelectedCharacter(announcesFailure: Bool) {
         let id = CharacterSelection(defaults: characterDefaults,
                                     catalog: CheckCharacter3DScene.catalog).selectedID
+        // ★ **Task 를 띄우기 전에** 로컬 쓰기를 적는다. 선택기는 이 함수보다 먼저 로컬을 바꿨는데, Task 첫 줄
+        //   (pushCharacter 의 beginPush)이 돌기 전에 떠 있던 서버 조회 응답이 먼저 메인 액터를 잡으면 **방금 고른
+        //   캐릭터를 옛 서버값으로 덮는다**. 여기서 적어 두면 그 응답은 낡은 것으로 버려진다.
+        characterSync.noteLocalWrite()
         Task { [weak self] in
             await self?.pushCharacter(id, announcesFailure: announcesFailure)
         }
     }
 
     /// 위의 실제 본체. 로컬 선택은 **되돌리지 않는다** — 서버가 거절해도 내 화면의 캐릭터는 그대로 둔다
-    /// (모르는 id 는 어차피 클라 카탈로그가 아잉으로 접으므로 화면이 깨지지 않는다).
-    func pushCharacter(_ id: String?, announcesFailure: Bool) async {
+    /// (모르는 id 는 어차피 클라 카탈로그가 아잉으로 접으므로 화면이 깨지지 않는다). `not_owned` 만 예외(아래).
+    ///
+    /// 반환: 서버가 대답한 status. 네트워크 실패·취소·계정 전환(세대 바뀜)이면 nil — 옮겨 가기 도장이 이 값으로
+    /// "판정이 끝났는가"를 가른다(`CharacterSyncDecision.migrationSettled`).
+    @discardableResult
+    func pushCharacter(_ id: String?, announcesFailure: Bool) async -> String? {
+        // 밀기가 떠 있는 동안(시작~끝) 겹친 서버 조회 응답은 전부 버린다 — 그 GET 이 이 쓰기 전의 값을
+        // 읽었는지 후의 값을 읽었는지 클라는 알 수 없다(performEquippedCharacterSync 의 가드).
+        let sync = characterSync
+        sync.beginPush()
+        defer { sync.endPush() }
         let generation = sessionGeneration
         do {
             let response = try await withSessionRetry { activeSession in
                 try await service.setCharacter(accessToken: activeSession.accessToken, id: id)
             }
-            guard generation == sessionGeneration else { return }
+            guard generation == sessionGeneration else { return nil }
             switch response.status {
             case "ok":
                 break
@@ -307,17 +321,20 @@ extension WorkTimerStore {
                 //   두 쪽이 갈린 채로 두지 않는다.
                 //
                 //   실제로 이 경로로 들어오는 사람: (가) 상점이 붙기 전 빌드에서 이미 캐릭터를 골라 둔
-                //   사람(로컬 선택은 있는데 소유권 행이 없다) (나) 기기 두 대 중 한쪽에서만 산 사람.
+                //   사람(로컬 선택은 있는데 소유권 행이 없다 — 0.3.30 부터는 옮겨 가기 1회 밀기에서)
+                //   (나) 기기 두 대 중 한쪽에서만 산 사람.
                 revertCharacterToDefault()
             default:
                 // unknown_character = 서버 CHECK 에 없는 id. 앱 번들과 서버 명단이 갈린 것이라
                 // 사용자가 할 수 있는 일이 없다 — 그래도 조용히 성공한 척하지는 않는다.
                 if announcesFailure { syncMessage = "캐릭터 저장 실패" }
             }
+            return response.status
         } catch {
-            guard generation == sessionGeneration else { return }
-            if case .cancelled = classifyAuthError(error) { return }
+            guard generation == sessionGeneration else { return nil }
+            if case .cancelled = classifyAuthError(error) { return nil }
             if announcesFailure { syncMessage = "캐릭터 저장 실패" }
+            return nil
         }
     }
 
@@ -331,12 +348,118 @@ extension WorkTimerStore {
         let selection = CharacterSelection(defaults: characterDefaults, catalog: catalog)
         guard selection.selectedID != CharacterCatalog.builtInAingID else { return }
         CheckCharacterPicker.choose(CharacterCatalog.builtInAingID,
-                                    selection: selection, broadcast: .shared)
+                                    selection: selection, broadcast: characterSync.broadcast)
         syncMessage = Self.notOwnedRevertNotice
     }
 
     /// 되돌렸을 때의 문구(순수 — 값으로 검증한다). 상점으로 가는 길을 함께 말한다.
     nonisolated static let notOwnedRevertNotice = "안 산 캐릭터라 기본으로 돌아갔어요 — 상점에서 살 수 있어요"
+
+    // MARK: - 착용 캐릭터 서버 기준 동기화 (v0.3.30)
+
+    /// 팝오버를 열 때(`setMenuPresented`) 부른다. 60초 스로틀 — 폰에서 바꾼 캐릭터가 맥에 반영되는 길이다.
+    func refreshEquippedCharacterIfStale() {
+        syncEquippedCharacterFromServer(reason: .popover)
+    }
+
+    /// 서버 착용값(`profiles.character`)을 읽어 **로컬 선택을 서버에 맞춘다.** 실행(저장 세션 활성화)·로그인
+    /// 마무리·팝오버 열기가 부른다. 이 경로는 원칙적으로 **밀지 않는다** — 쓰기는 사용자가 이 맥에서 고른 순간뿐이다.
+    ///
+    /// - 서버값이 로컬과 다르면 로컬을 바꾸고 **방송**한다(`CheckCharacterPicker.choose` — 메뉴바·헤더·오버레이가
+    ///   고르기와 똑같은 길로 다시 그려진다). 이 빌드가 모르는 캐릭터·가지지 않은 캐릭터면 아잉.
+    /// - **조회가 실패하면(네트워크·옛 서버·행 없음) 로컬을 그대로 두고 밀지도 않는다.** 모르는 것을 "기본"으로
+    ///   단정하면 선택을 근거 없이 지우고, 밀면 폰의 변경을 되돌린다.
+    /// - 예외 한 번: 옮겨 가기(`CharacterSyncDecision` 머리말) — 서버 null · 도장 없음 · 로컬 비기본이면 한 번 민다.
+    ///
+    /// 팝오버만 60초 스로틀과 겹침 방지를 건다. 실행·로그인은 세션이 생기는 순간이라 늘 읽는다(스로틀 시각은
+    /// 찍으므로 실행 직후 팝오버를 열어도 두 번 읽지 않는다). 반환 Task 는 테스트가 완료를 기다리는 손잡이다.
+    @discardableResult
+    func syncEquippedCharacterFromServer(reason: CharacterSyncReason) -> Task<Void, Never>? {
+        guard session != nil else { return nil }
+        let sync = characterSync
+        let now = clock()
+        if reason == .popover {
+            guard sync.fetchingToken == nil,
+                  now.timeIntervalSince(sync.lastFetchAt) >= CharacterSyncState.popoverThrottleSeconds
+            else { return nil }
+        }
+        sync.lastFetchAt = now
+        sync.tokenSeed &+= 1
+        let token = sync.tokenSeed
+        sync.fetchingToken = token
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performEquippedCharacterSync(token: token)
+        }
+        sync.lastTask = task
+        return task
+    }
+
+    private func performEquippedCharacterSync(token: Int) async {
+        let sync = characterSync
+        // 겹침 표시는 **자기 것일 때만** 내린다 — 로그아웃 뒤 다음 계정의 조회가 이미 새 표를 세웠을 수 있다.
+        defer { if sync.fetchingToken == token { sync.fetchingToken = nil } }
+        let generation = sessionGeneration
+        let writeRevision = sync.localWriteRevision
+        let serverID: String?
+        do {
+            serverID = try await withSessionRetry { activeSession in
+                try await service.fetchEquippedCharacter(accessToken: activeSession.accessToken,
+                                                         userID: activeSession.userID)
+            }
+        } catch {
+            // 네트워크·옛 서버(컬럼 없음 400)·행 없음·취소: 로컬 그대로, 밀지도 않는다. 다음 기회에 다시 읽는다.
+            return
+        }
+        // 로그아웃 뒤 늦게 온 응답이 다음 계정의 선택을 바꾸지 않게.
+        guard generation == sessionGeneration else { return }
+        // 조회가 떠 있는 동안 사용자가 이 맥에서 골랐거나 밀기가 오갔으면 이 응답은 그 전의 서버값일 수 있다 —
+        // 따라가면 방금 고른 캐릭터가 옛 값으로 튄다. 버리고 다음 팝오버(60초 뒤)에 다시 읽는다.
+        guard sync.localWriteRevision == writeRevision, sync.pushesInFlight == 0 else { return }
+
+        let catalog = CheckCharacter3DScene.catalog
+        let selection = CharacterSelection(defaults: characterDefaults, catalog: catalog)
+        let decision = CharacterSyncDecision.decide(
+            serverID: serverID,
+            localID: selection.selectedID,
+            migrated: defaults.bool(forKey: CharacterSyncDecision.migrationDefaultsKey),
+            isKnown: { catalog.manifest(id: $0) != nil },
+            isUnlocked: { isCharacterUnlocked($0) }
+        )
+        switch decision {
+        case .keep:
+            markCharacterMigrationSettled()
+        case .adopt(let id):
+            markCharacterMigrationSettled()
+            CheckCharacterPicker.choose(id, selection: selection, broadcast: sync.broadcast)
+        case .migrate(let id):
+            let status = await pushCharacter(id, announcesFailure: false)
+            if CharacterSyncDecision.migrationSettled(byStatus: status) { markCharacterMigrationSettled() }
+        }
+    }
+
+    /// 옮겨 가기 도장. **스토어의 `defaults`** 에 둔다(다른 1회 도장들과 같은 곳, 앱에선 `characterDefaults` 와 같은
+    /// `.standard`). `characterDefaults` 에 두지 않는 이유: 그 값을 `.standard` 로 둔 채 실행 경로를 태우는 기존
+    /// 테스트들이 이 도장을 **테스트 프로세스의 전역 도메인**에 남기게 된다.
+    private func markCharacterMigrationSettled() {
+        guard !defaults.bool(forKey: CharacterSyncDecision.migrationDefaultsKey) else { return }
+        defaults.set(true, forKey: CharacterSyncDecision.migrationDefaultsKey)
+    }
+
+    /// 이 스토어의 캐릭터 동기화 상태(스로틀·겹침·로컬 쓰기 세대·방송 통로).
+    ///
+    /// ★ 저장 프로퍼티가 아니라 **연관 객체**다. `WorkTimerStore.swift` 는 같은 묶음의 여러 갈래가 동시에 고치는
+    ///   파일이라 이 갈래는 거기에 줄을 더하지 않는다(병합 충돌 최소화). 수명은 스토어와 같고, 스토어마다 따로다 —
+    ///   `ObjectIdentifier` 사전으로 두면 테스트가 스토어를 만들고 버릴 때 주소가 재사용돼 **남의 스로틀 시각**을
+    ///   물려받는다. 병합 뒤 저장 프로퍼티로 옮겨도 된다(`@ObservationIgnored` — 화면이 읽는 값이 아니다).
+    var characterSync: CharacterSyncState {
+        if let existing = objc_getAssociatedObject(self, &CharacterSyncState.associationKey) as? CharacterSyncState {
+            return existing
+        }
+        let created = CharacterSyncState()
+        objc_setAssociatedObject(self, &CharacterSyncState.associationKey, created, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        return created
+    }
 
     // MARK: - 상점 / 루비 (v0.3.17)
 
@@ -1275,5 +1398,44 @@ extension WorkTimerStore {
         default:
             return Self.passwordResetUpdateFailedMessage
         }
+    }
+}
+
+/// 착용 캐릭터 서버 동기화의 스토어 곁 상태(v0.3.30). `WorkTimerStore.characterSync` 가 스토어마다 하나 붙인다.
+/// 화면이 읽는 값이 없다 — 관찰 대상이 아니다.
+@MainActor
+final class CharacterSyncState {
+    /// 팝오버 열기 스로틀. 팀 메타·오목 받은 신청과 같은 60초다(무료 플랜 — 여닫이마다 GET 을 내지 않는다).
+    static let popoverThrottleSeconds: TimeInterval = 60
+
+    /// 연관 객체 키. 주소만 쓰고 값은 안 읽는다.
+    nonisolated(unsafe) static var associationKey: UInt8 = 0
+
+    /// 마지막 조회를 **발사한** 시각(성공 여부 무관 — 실패한 서버를 여닫이마다 두드리지 않게).
+    var lastFetchAt: Date = .distantPast
+    /// 떠 있는 조회의 표. nil 이면 안 떠 있다.
+    var fetchingToken: Int?
+    var tokenSeed = 0
+    /// 마지막으로 띄운 조회 Task(테스트가 완료를 기다린다).
+    var lastTask: Task<Void, Never>?
+
+    /// 이 맥의 로컬 쓰기(사용자 고르기·밀기 시작/끝) 세대. 조회는 발사 때 이 값을 붙잡고, 응답 때 달라졌으면 버린다.
+    private(set) var localWriteRevision = 0
+    /// 떠 있는 `set_character` 수.
+    private(set) var pushesInFlight = 0
+
+    /// 되그릴 쪽에 알리는 통로. 앱은 `.shared`, **테스트는 자기 인스턴스**(전역을 흔들면 병렬 스위트가 빨개진다).
+    var broadcast: CharacterSelectionBroadcast = .shared
+
+    func noteLocalWrite() { localWriteRevision &+= 1 }
+
+    func beginPush() {
+        pushesInFlight += 1
+        localWriteRevision &+= 1
+    }
+
+    func endPush() {
+        pushesInFlight -= 1
+        localWriteRevision &+= 1
     }
 }

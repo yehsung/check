@@ -262,6 +262,7 @@ final class WorkTimerStore {
             // 폴링에 걸지 않는 이유는 `refreshFeedbackOpenCount` 주석 그대로 — 무료 플랜에 40명이 상시로
             // 물으면 그 자체가 요금제를 넘는다. 서버 RPC 가 아직 없으면 조용히 아무 일도 일어나지 않는다.
             refreshFeedbackReplyBadge()
+            refreshEquippedCharacterIfStale()
             // 팀원이 바꾼 주간 목표/이름/역할/참여코드를 팝오버 열 때 60초 스로틀로 재조회해 반영한다.
             refreshTeamMetaIfStale()
             // 오목 받은 신청을 60초 스로틀로 한 번 본다(v0.3.27) — 창이 안 보일 때의 확인 시점 중 하나다.

@@ -230,6 +230,34 @@ func 이력_낡음_표시는_그보다_나중에_띄운_이력만_지운다() {
     #expect(runtime.historyStaleSerial == nil)
 }
 
+@MainActor
+@Test
+func 낡음_우회는_그보다_나중에_띄운_이력이_실패할_때만_다_쓰고_새_계기는_다시_한_번_우회한다() {
+    // m-fix2 · m-reverify R3: 이력 조회가 실패로 끝나도 낡음 표시는 남긴다(아직 못 받았다). 대신 그 표시로는 스로틀을 다시 건너뛰지 않는다.
+    let runtime = MessageReadRuntime()
+    #expect(!runtime.staleHistoryMayBypassThrottle, "표시가 없는데 우회한다")
+    let early = runtime.nextHistorySerial()   // 계기 전에 띄운 이력
+    runtime.markHistoryStale()
+    #expect(runtime.staleHistoryMayBypassThrottle)
+    runtime.noteHistoryFailed(serial: early)
+    #expect(runtime.staleHistoryMayBypassThrottle, "계기보다 먼저 띄운 조회의 실패가 그 계기의 우회를 빼앗았다")
+
+    let attempt = runtime.nextHistorySerial()  // 우회로 띄운 조회 — 실패
+    runtime.noteHistoryFailed(serial: attempt)
+    #expect(runtime.historyStaleSerial != nil, "실패했는데 낡음 표시를 지웠다(다음 계기·60초 스로틀이 못 받는다)")
+    #expect(!runtime.staleHistoryMayBypassThrottle, "실패한 우회가 같은 표시로 또 우회한다")
+
+    runtime.markHistoryStale()                 // 새 계기 — 표시가 더 새 번호로 옮는다
+    #expect(runtime.staleHistoryMayBypassThrottle, "새 계기에 우회가 막혔다(상한이 영구 차단이 됐다)")
+    let success = runtime.nextHistorySerial()
+    runtime.clearHistoryStale(appliedSerial: success)
+    #expect(!runtime.staleHistoryMayBypassThrottle)
+    // 띄운 번호는 종류별로 적힌다(합치기 창이 "이미 맡은 조회"를 가르는 근거).
+    let summary = runtime.nextSummarySerial()
+    #expect(runtime.lastHistoryLaunchSerial == success)
+    #expect(runtime.lastSummaryLaunchSerial == summary)
+}
+
 @Test
 func 요약_응답은_ok_일_때만_스냅샷이고_0_인_상대는_뺀다() throws {
     let decoder = JSONDecoder()

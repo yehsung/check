@@ -517,33 +517,77 @@ func 대화를_열면_서버_순서의_마지막_받은_메시지까지_읽고_�
 }
 
 @Test
-func 읽음_신호_실제_행은_보낸_사람_채널로_앱이_가르는_이벤트_이름으로_간다() throws {
+func 읽음_신호_실제_행은_보낸_사람과_읽은_사람_채널로_앱이_가르는_이벤트_이름으로_간다() throws {
     let scenario = try MessageContractScenario()
     let rows = try messageContractRows("realtime__message_read_rows")
     // 커밋된 읽음 셋: A 가 B 를 · B 가 A 를 · B 가 C 를.
     let expected: [(reader: String, sender: String)] = [(scenario.a, scenario.b), (scenario.b, scenario.a), (scenario.b, scenario.c)]
-    #expect(rows.count == expected.count)
+    // 신호는 **보낸 사람 채널**(명세 §1.1)과 — 부록 B-1(m-fix2 결정) 뒤로는 — **읽은 사람 자신의 채널**에 같은 payload 로 간다.
+    // 이 픽스처는 X1 이 S1 초안(B-1 전)으로 뽑았다. S1 수리본으로 다시 뽑으면 읽은 사람 채널 행이 읽음마다 하나씩 붙는다 —
+    // 그래서 읽은 사람 채널 행은 "없거나(B-1 전) 읽음마다 정확히 하나(B-1 뒤)"로 잰다. 섞인 개수·남의 채널·다른 payload 는 결함이다.
+    // (행 순서는 inserted_at·topic 이라 한 커밋의 두 행 순서는 사용자 id 사전순에 달렸다 — 순서가 아니라 짝으로 맞춘다.)
+    let senderRows = rows.filter { row in
+        expected.contains { RealtimeLinkConstants.pokeChannel(userID: $0.sender) == row["topic"] as? String
+            && ($0.reader == ((row["payload_without_id"] as? [String: Any])?["r"] as? String)) }
+    }
+    let selfRows = rows.filter { row in
+        let reader = (row["payload_without_id"] as? [String: Any])?["r"] as? String
+        return reader.map { RealtimeLinkConstants.pokeChannel(userID: $0) } == row["topic"] as? String
+    }
+    #expect(senderRows.count == expected.count, "보낸 사람 채널 신호가 읽음마다 하나가 아니다")
+    #expect(selfRows.isEmpty || selfRows.count == expected.count,
+            "읽은 사람 채널 신호가 읽음마다 하나가 아니다(\(selfRows.count)건 — B-1 은 advanced 마다 정확히 한 번)")
+    #expect(rows.count == senderRows.count + selfRows.count, "보낸 사람·읽은 사람 채널이 아닌 곳으로 간 신호가 있다")
+    for pair in expected {
+        let sender = RealtimeLinkConstants.pokeChannel(userID: pair.sender)
+        #expect(senderRows.filter { $0["topic"] as? String == sender && messageContractReader($0) == pair.reader }.count == 1)
+    }
+    if !selfRows.isEmpty {
+        // 읽은 사람 채널 행은 (채널, payload) 가 같아 읽음끼리 구별되지 않는다(B 가 A 를·C 를 읽은 두 행은 똑같다) — 사람별 개수로 잰다.
+        for reader in Set(expected.map(\.reader)) {
+            let channel = RealtimeLinkConstants.pokeChannel(userID: reader)
+            #expect(selfRows.filter { $0["topic"] as? String == channel }.count == expected.filter { $0.reader == reader }.count,
+                    "읽은 사람 채널 신호 수가 그 사람의 읽음 수와 다르다")
+        }
+    }
+
     let t0 = Date(timeIntervalSince1970: 1_800_000_000)
-    for (row, pair) in zip(rows, expected) {
+    for row in rows {
         let event = try #require(row["event"] as? String)
+        let topic = try #require(row["topic"] as? String)
         #expect(event == RealtimeLinkConstants.messageReadBroadcastEvent)
-        // 보낸 사람 채널로만 간다(명세 §1.1). 읽은 사람 자신의 다른 기기에는 신호가 없다 — X1 보고서 findings 참고.
-        #expect(row["topic"] as? String == RealtimeLinkConstants.pokeChannel(userID: pair.sender), "보낸 사람 채널이 아니다")
         #expect(messageContractBool(row["private"]) == true)
         let payload = try #require(row["payload_without_id"] as? [String: Any])
         #expect((payload["v"] as? NSNumber)?.intValue == 1)
-        #expect(payload["r"] as? String == pair.reader)
         #expect(Set(payload.keys) == ["v", "r"])
         #expect(messageContractBool(row["payload_has_id"]) == true, "realtime.send 가 id 를 덧붙이는 모양이 아니다(셰임 확인)")
+
+        // 그 채널을 구독한 맥이 받는 Phoenix 프레임(payload 에 id 가 붙은 모양)으로 전선에서 잰다: 이름만 넘기고 payload 는 안 본다.
+        var delivered = payload
+        delivered["id"] = "00000000-0000-4000-8000-0000000000ff"
+        let frame = MessageReadFixture.json([
+            "event": "broadcast",
+            "topic": RealtimeFrame.wireTopic(channel: topic),
+            "payload": ["event": event, "payload": delivered, "type": "broadcast"],
+            "ref": NSNull()
+        ])
+        #expect(RealtimeFrame.decode(text: frame, channel: topic, joinRef: "1") == .broadcast(event: event))
+        // 남의 채널 프레임은 우리 것으로 오인하지 않는다.
+        #expect(RealtimeFrame.decode(text: frame, channel: RealtimeLinkConstants.pokeChannel(userID: "someone-else"), joinRef: "1") == nil)
 
         var link = RealtimeLink(transportAvailable: true)
         _ = link.apply(.signedIn(accessToken: "tok"), now: t0, jitter: { $0 })
         _ = link.apply(.transport(.joined), now: t0, jitter: { $0 })
         #expect(link.apply(.transport(.broadcast(event: event)), now: t0 + 1, jitter: { $0 }) == [.messageReadSignal])
     }
-    // 경계가 안 커진 호출(작은 p_through · 내가 보낸 id)은 신호 0건, 흐름의 읽음 한 번은 1건.
+    // 경계가 안 커진 호출(작은 p_through · 내가 보낸 id)은 신호 0건, 흐름의 읽음 한 번은 채널 수만큼(B-1 전 1 · 뒤 2).
     #expect(scenario.realtimeRowsAdded("not_advanced_calls") == 0)
-    #expect(scenario.realtimeRowsAdded("flow_a_reads_b") == 1)
+    #expect(scenario.realtimeRowsAdded("flow_a_reads_b") == (selfRows.isEmpty ? 1 : 2))
+}
+
+/// 신호 행 payload 의 읽은 사람(`r`).
+private func messageContractReader(_ row: [String: Any]) -> String? {
+    (row["payload_without_id"] as? [String: Any])?["r"] as? String
 }
 
 // MARK: - 5. 보내기 · drain 말풍선

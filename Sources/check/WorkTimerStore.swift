@@ -1041,6 +1041,11 @@ final class WorkTimerStore {
     /// 읽음 절의 비관찰 장부(일련번호 · 왕복 직렬화 · 스로틀). 한 덩어리로 들어 로그아웃에서 한 줄로 비운다
     /// (RealtimeRuntime 과 같은 이유 — 흩뿌리면 "하나를 안 지웠다"가 이 계층에서 가장 흔한 누수다).
     @ObservationIgnored var messageReadRuntime = MessageReadRuntime()
+    /// 메시지 활동 합치기 창의 잠(주입, v0.3.30 m-fix2 · 부록 B-2). `wakeGateSleep` 과 같은 규약 — 프로덕션은 실제 수면이고
+    /// (`messageReadSignalCoalesceSeconds` 초), 테스트는 짧게 줄이거나 문으로 갈아 끼워 창이 닫히는 순간을 **정한다**.
+    @ObservationIgnored var messageReadSignalSleep: @Sendable (TimeInterval) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
 
     // ── 내 앱 버전 보고(profiles.app_build / app_version) ──
     /// 이 프로세스가 읽어 올 버전. 기본은 번들이고 테스트가 갈아 끼운다 — Bundle.main 은 프로세스가 정하는

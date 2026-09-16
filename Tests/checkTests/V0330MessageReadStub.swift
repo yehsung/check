@@ -305,8 +305,61 @@ func makeMessageReadStore(
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: MessageReadFixture.me)
     store.clock = { MessageReadFixture.now }
     store.gomoku.clock = { MessageReadFixture.now }
+    // 합치기 창(프로덕션 1초)을 짧게 줄인다 — 창은 여전히 **진짜 잠**이라 한 차례에 몰린 신호는 합쳐진다. 창이 닫히는 순간을
+    // 테스트가 정해야 하는 단언은 `MessageReadSleepGate` 로 갈아 끼운다.
+    store.messageReadSignalSleep = { _ in try? await Task.sleep(for: .milliseconds(10)) }
     MessageReadTestRetention.stores.append(store)
     return (store, host)
+}
+
+/// 합치기 창의 잠을 **테스트가 여는 문**으로 바꾼다(m-fix2). 요청된 초를 적고, `open()` 전에는 깨지 않는다(취소도 무시 —
+/// 창 Task 의 취소·세대 가드가 스스로 나가는지를 재기 위해서다). 열린 뒤의 잠은 곧바로 돌아온다.
+final class MessageReadSleepGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isOpen = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    private var requested: [TimeInterval] = []
+
+    init() {}
+
+    /// 지금 문 앞에서 자고 있는 창의 수.
+    var sleepers: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return waiting.count
+    }
+
+    /// 지금까지 요청된 잠의 길이(초).
+    var requestedSeconds: [TimeInterval] {
+        lock.lock()
+        defer { lock.unlock() }
+        return requested
+    }
+
+    var sleep: @Sendable (TimeInterval) async -> Void {
+        { [self] seconds in
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                lock.lock()
+                requested.append(seconds)
+                if isOpen {
+                    lock.unlock()
+                    continuation.resume()
+                    return
+                }
+                waiting.append(continuation)
+                lock.unlock()
+            }
+        }
+    }
+
+    func open() {
+        lock.lock()
+        isOpen = true
+        let resumed = waiting
+        waiting = []
+        lock.unlock()
+        resumed.forEach { $0.resume() }
+    }
 }
 
 /// 조건이 참이 될 때까지 기다린다. 상한은 **재개 횟수**다(V0327 realtimeWait 과 같은 해법 — 전체 스위트 부하에서 벽시계 상한은
@@ -325,6 +378,7 @@ func messageReadIdle(_ store: WorkTimerStore) -> Bool {
     store.drainInFlight == nil
         && store.realtime.catchUpTask == nil
         && store.messageReadRuntime.activityTask == nil
+        && store.messageReadRuntime.activityWindowTask == nil
         && store.messageReadRuntime.markInFlight.isEmpty
         && !store.messageHistoryLoading
 }

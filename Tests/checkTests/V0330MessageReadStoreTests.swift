@@ -397,9 +397,10 @@ func 계정을_바꾸면_앞_계정의_요약은_점으로_남지_않고_새_계
 
 @MainActor
 @Test(.gomokuDefaultsCleanup)
-func 안_읽음_점이_켜져_있으면_60초_안에_다시_열어도_요약을_다시_받는다() async {
-    // X1-F1(다른 기기에서 읽음): 서버의 'message_read' 는 **보낸 사람** 채널로만 간다 — 읽은 사람의 맥에는 신호가 없다.
-    // 점이 켜진 채 60초 스로틀에 걸리면 사용자가 점을 보고 팝오버를 열어도 점이 그대로다. 점이 켜져 있을 때는 짧은 스로틀이다.
+func 안_읽음_점이_켜져_있어도_팝오버_열기는_60초_스로틀이고_다른_기기의_읽음은_신호가_끈다() async {
+    // m-fix2(부록 B-2): m-fix 는 "다른 기기에서 읽어도 이 맥엔 신호가 없다"를 **점이 켜져 있으면 10초 스로틀**로 메웠다.
+    // 서버가 읽은 사람 자신의 채널에도 'message_read' 를 보내게 되어(B-1) 그 예외를 걷었다 — 점을 끄는 것은 신호다.
+    // 남겨 두면 안 읽은 말을 일부러 남긴 사람이 팝오버를 열 때마다 요약·이력 두 건을 낸다.
     final class Clock: @unchecked Sendable { var now = MessageReadFixture.now }
     let clock = Clock()
     let (store, host) = makeMessageReadStore("reopen-with-dot") { call, index in
@@ -416,21 +417,29 @@ func 안_읽음_점이_켜져_있으면_60초_안에_다시_열어도_요약을_
     await messageReadWait { v0330Rpc(host, "message_history_with_reads") >= 1 && messageReadIdle(store) }
     #expect(store.hasUnreadMessages, "전제: peerA 안 읽음")
 
-    // 폰에서 읽었다 — 이 맥엔 신호 없음. 30초 뒤 팝오버를 다시 연다.
-    store.setMenuPresented(false)
-    clock.now = clock.now.addingTimeInterval(30)
-    store.setMenuPresented(true)
-    await messageReadWait { v0330Rpc(host, "message_unread_summary") >= 2 && messageReadIdle(store) }
-    #expect(v0330Rpc(host, "message_unread_summary") == 2, "점이 켜져 있는데 60초 스로틀로 요약을 안 물었다")
-    #expect(!store.hasUnreadMessages, "폰에서 읽었는데 맥의 점이 남았다")
-
-    // 점이 꺼진 뒤에는 원래 스로틀(60초)이다 — 30초 뒤 다시 열어도 요청 없음.
+    // 폰에서 읽었지만 신호가 아직 안 왔다. 점이 켜져 있어도 30초 뒤 재오픈은 스로틀이다(시계는 앞으로만 민다).
     store.setMenuPresented(false)
     clock.now = clock.now.addingTimeInterval(30)
     store.setMenuPresented(true)
     try? await Task.sleep(for: .milliseconds(120))
     await messageReadWait { messageReadIdle(store) }
-    #expect(v0330Rpc(host, "message_unread_summary") == 2, "점이 꺼졌는데 스로틀을 건너뛰었다")
+    #expect(v0330Rpc(host, "message_unread_summary") == 1, "점이 켜진 팝오버 열기가 60초 스로틀을 건너뛰었다(10초 예외가 되살아났다)")
+    #expect(v0330Rpc(host, "message_history_with_reads") == 1)
+
+    // 읽은 사람 채널로 온 신호가 점을 끈다 — 팝오버를 닫은 채로.
+    store.setMenuPresented(false)
+    store.requestMessageActivityRefreshCoalesced()
+    await messageReadWait { v0330Rpc(host, "message_unread_summary") >= 2 && messageReadIdle(store) }
+    #expect(v0330Rpc(host, "message_unread_summary") == 2)
+    #expect(!store.hasUnreadMessages, "폰에서 읽은 신호를 받았는데 맥의 점이 남았다")
+    #expect(v0330Rpc(host, "message_history_with_reads") == 1, "닫힌 팝오버에서 이력까지 받았다(볼 사람이 없다)")
+
+    // 61초가 지나면 원래대로 다시 받는다.
+    clock.now = clock.now.addingTimeInterval(31)
+    store.setMenuPresented(true)
+    await messageReadWait { v0330Rpc(host, "message_unread_summary") >= 3 && messageReadIdle(store) }
+    #expect(v0330Rpc(host, "message_unread_summary") == 3)
+    #expect(v0330Rpc(host, "message_history_with_reads") == 2)
     store.tickerTask?.cancel()
 }
 
@@ -443,8 +452,8 @@ func 팝오버를_열면_요약과_이력을_60초에_한_번_받고_오목_인�
     let clock = Clock()
     let (store, host) = makeMessageReadStore("menu-open") { call, _ in
         switch call.rpc {
-        // 안 읽음이 **없는** 서버다(m-fix) — 점이 켜져 있으면 짧은 스로틀을 쓰므로(아래 `안_읽음_점이_켜져_있으면_…`) 이 테스트는
-        // 점이 꺼진 맥의 60초 눈금만 잰다. 같은 새로고침 안에서는 이력이 요약보다 나중에 띄워진다 — 두 응답이 같은 사실을 말하게 한다.
+        // 안 읽음이 **없는** 서버다(점이 켜진 맥의 60초는 위 `안_읽음_점이_켜져_있어도_…` 가 잰다). 같은 새로고침 안에서는 이력이
+        // 요약보다 나중에 띄워진다 — 두 응답이 같은 사실을 말하게 한다.
         case "message_unread_summary": return Fx.summaryReply([])
         case "message_history_with_reads": return Fx.historyReply([Fx.readsRow(id: "b1", peer: Fx.peerB, isMine: false, unread: false)])
         case "gomoku_inbox": return MessageReadStubProtocol.Reply(body: #"{"status":"ok","incoming":[],"outgoing":null}"#)
@@ -506,39 +515,9 @@ func 메시지_활동_새로고침은_겹치지_않고_뒤따르는_한_번으�
 
 @MainActor
 @Test(.gomokuDefaultsCleanup)
-func 점이_켜져_있어도_짧은_스로틀_안의_재오픈은_요청하지_않는다() async {
-    final class Clock: @unchecked Sendable { var now = MessageReadFixture.now }
-    let clock = Clock()
-    let (store, host) = makeMessageReadStore("reopen-with-dot-burst") { call, _ in
-        switch call.rpc {
-        case "message_unread_summary": return Fx.summaryReply([(Fx.peerA, 1)])
-        case "message_history_with_reads":
-            return Fx.historyReply([Fx.readsRow(id: "m1", peer: Fx.peerA, isMine: false, unread: true)])
-        default: return nil
-        }
-    }
-    store.clock = { clock.now }
-    store.setMenuPresented(true)
-    await messageReadWait { v0330Rpc(host, "message_history_with_reads") >= 1 && messageReadIdle(store) }
-    #expect(store.hasUnreadMessages)
-    // 연타(짧은 스로틀의 절반 뒤)는 요청을 내지 않는다. 시계는 앞으로만 민다 — "상한 − 1초"로 밀면 상한이 0 으로
-    // 무너진 날 시계가 뒤로 가서 요청이 안 나가고 초록이 된다(m-fix 변이 MF15 에서 실측).
-    store.setMenuPresented(false)
-    clock.now = clock.now.addingTimeInterval(WorkTimerStore.messageMenuRefreshUnreadThrottleSeconds / 2)
-    store.setMenuPresented(true)
-    try? await Task.sleep(for: .milliseconds(120))
-    await messageReadWait { messageReadIdle(store) }
-    #expect(v0330Rpc(host, "message_unread_summary") == 1, "점이 켜진 팝오버 연타마다 요약을 쐈다")
-    #expect(WorkTimerStore.messageMenuRefreshUnreadThrottleSeconds > 0)
-    #expect(WorkTimerStore.messageMenuRefreshUnreadThrottleSeconds < WorkTimerStore.messageMenuRefreshThrottleSeconds)
-    store.tickerTask?.cancel()
-}
-
-@MainActor
-@Test(.gomokuDefaultsCleanup)
-func 읽음을_모르는_옛_서버의_도장_점에는_짧은_스로틀을_주지_않는다() async {
-    // 옛 서버(db push 전 창)의 점은 도장 규칙이라 앱을 켤 때마다 켜져 있다. 짧은 스로틀을 주면 여닫이마다 404 폴백까지 세 건이
-    // 붙는데, 다시 물어도 꺼질 점이 아니다 — 짧은 스로틀은 서버가 판정한 점에만 준다.
+func 읽음을_모르는_옛_서버의_도장_점도_60초_스로틀을_지킨다() async {
+    // 옛 서버(db push 전 창)의 점은 도장 규칙이라 앱을 켤 때마다 켜져 있다. 스로틀을 줄이면 여닫이마다 404 폴백까지 세 건이
+    // 붙는데, 다시 물어도 꺼질 점이 아니다(m-fix 의 10초 예외가 서버 판정 점에만 걸렸던 이유 — m-fix2 에서 예외 자체를 걷었다).
     final class Clock: @unchecked Sendable { var now = MessageReadFixture.now }
     let clock = Clock()
     let (store, host) = makeMessageReadStore("legacy-dot-throttle") { call, _ in
@@ -563,7 +542,7 @@ func 읽음을_모르는_옛_서버의_도장_점에는_짧은_스로틀을_주�
     store.setMenuPresented(true)
     try? await Task.sleep(for: .milliseconds(120))
     await messageReadWait { messageReadIdle(store) }
-    #expect(v0330Rpc(host, "message_unread_summary") == 1, "옛 서버의 도장 점에 짧은 스로틀을 줬다")
+    #expect(v0330Rpc(host, "message_unread_summary") == 1, "옛 서버의 도장 점이 60초 스로틀을 건너뛰었다")
     #expect(v0330Rpc(host, "message_history") == 1)
     store.tickerTask?.cancel()
 }

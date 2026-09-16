@@ -237,8 +237,10 @@ extension WorkTimerStore {
                 }
                 requestDrain()
             case .messageReadSignal:
-                // 읽음 신호는 소비할 것이 없다 — 근무 여부와 무관하게 서버 표를 다시 읽는다(말풍선 옆 1 · 안 읽음 점).
-                requestMessageActivityRefresh()
+                // 읽음 신호는 소비할 것이 없다 — 근무 여부와 **팝오버가 닫혀 있는지와** 무관하게 서버 표를 다시 읽는다(말풍선 옆 1 ·
+                // 안 읽음 점). 1초 합치기 창을 거친다(m-fix2 · 부록 B-2): 서버가 읽은 사람 자신의 채널에도 보내므로(B-1) 폰에서 연달아
+                // 읽은 신호와 이 맥이 읽은 뒤의 메아리가 몰려 온다 — 창 하나에 모아 요약(+ 보이는 대화의 이력) 한 번으로 갚는다.
+                requestMessageActivityRefreshCoalesced()
             case .gomokuSignal:
                 // 오목 신호는 take_pokes 로 가지 않는다. 대국·신청 상태는 서버 표가 권위이고 조회는
                 // 소비가 아니므로, 두 맥 모두가 받아도 누구의 것을 훔치지 않는다 — 그래서 게이트가 없다.

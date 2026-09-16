@@ -93,10 +93,12 @@ enum RealtimeLinkConstants {
     static let gomokuBroadcastEvent = "gomoku"
 
     /// 메시지 읽음 신호의 브로드캐스트 이벤트 이름(v0.3.30). 서버 `mark_messages_read` 의
-    /// `realtime.send(…, 'message_read', poke_topic(보낸 사람), true)` 와 **문자 그대로 같다**.
-    /// 누군가 **내가 보낸** 메시지를 읽어 경계가 실제로 커졌다는 신호다. payload(`{v:1, r:<읽은 사람>}`)는 믿지 않고
-    /// "이력·요약을 다시 받아라"로만 쓴다. **take_pokes 로 보내지 않는다** — 소비할 것이 없는 원자 소비 RPC 를
-    /// 읽힐 때마다 한 번씩 더 쏘게 된다(옛 맥 ≤ build 81 이 바로 그렇게 한다 — 그래서 서버는 경계가 커질 때만 보낸다).
+    /// `realtime.send(…, 'message_read', poke_topic(…), true)` 와 **문자 그대로 같다**.
+    /// 경계가 실제로 커졌다는 신호이고 두 채널로 온다: **보낸 사람**(누군가 내가 보낸 말을 읽었다)과 **읽은 사람 자신**
+    /// (내가 다른 기기에서 읽었다 — 부록 B-1, 이 맥의 안 읽음 점을 끄는 근거). 이 맥은 둘을 가르지 않는다 — payload
+    /// (`{v:1, r:<읽은 사람>}` + realtime 이 붙이는 id)는 믿지 않고 "이력·요약을 다시 받아라"로만 쓴다(1초 합치기 — 스토어).
+    /// **take_pokes 로 보내지 않는다** — 소비할 것이 없는 원자 소비 RPC 를 읽힐 때마다 한 번씩 더 쏘게 된다
+    /// (옛 맥 ≤ build 81 이 바로 그렇게 한다 — 그래서 서버는 경계가 커질 때만 보낸다).
     static let messageReadBroadcastEvent = "message_read"
 }
 
@@ -431,7 +433,8 @@ struct RealtimeLink: Equatable, Sendable {
             // 구버전(build ≤ 78) 앱은 이름을 보지 않고 모든 broadcast 를 drain 으로 보낸다. 그래서 같은 계정의 구버전
             // 두 번째 맥은 'gomoku' 신호(신청·취소·수락·착수·정산)마다 take_pokes 를 한 번씩 더 부른다. 소비할 행이 없어
             // 화면은 바뀌지 않고 요청만 는다(수당 10초 판 기준 시간당 약 180건) — 채널을 바꾸면 구독 정책이 새로 필요해 수용했다.
-            // 'message_read'(v0.3.30)도 같은 사정이다: build ≤ 81 맥은 읽힐 때마다 take_pokes 를 한 번 더 부른다 — 서버가
+            // 'message_read'(v0.3.30)도 같은 사정이다: build ≤ 81 맥은 읽힐 때마다(부록 B-1 뒤로는 같은 계정이 다른 기기에서 읽을 때도)
+            // take_pokes 를 한 번 더 부른다 — 서버가
             // 경계가 **실제로 커질 때만** 보내는 이유다. 이 줄을 오목 줄 **앞**에 두는 것은 순서에 뜻이 있어서가 아니라
             // 오목 가지와 drain 기본값이 한 문장으로 붙어 있어야 하는 소스 계약(V0327GomokuRealtimeTests)을 지키기 위해서다.
             if event == RealtimeLinkConstants.messageReadBroadcastEvent { return [.messageReadSignal] }

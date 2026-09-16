@@ -57,10 +57,17 @@ extension WorkTimerStore {
     /// 팝오버를 열 때 요약·이력을 다시 받는 최소 간격(초, v0.3.30). 여닫이마다 두 요청을 내면 무료 플랜 예산을 태운다 —
     /// 그 사이의 변화는 소켓 신호(초인종·읽음)가 메운다. 오목 받은 신청의 60초(GomokuStore.menuInboxThrottleSeconds)와 같은 눈금이다.
     nonisolated static let messageMenuRefreshThrottleSeconds: TimeInterval = 60
-    /// **안 읽음 점이 켜져 있을 때**의 팝오버 열기 간격(초, v0.3.30 m-fix). 다른 기기(폰)에서 읽으면 서버의 `message_read` 는
-    /// **보낸 사람** 채널로만 가서 이 맥에는 신호가 없다 — 점을 보고 팝오버를 연 사람에게 60초 스로틀로 낡은 점을 보여 주면 안 된다.
-    /// 0 이 아닌 이유는 연타다(여닫이 한 번에 요청 두 건). 점이 꺼져 있으면 위 60초 그대로다.
-    nonisolated static let messageMenuRefreshUnreadThrottleSeconds: TimeInterval = 10
+    /// 읽음 신호('message_read')와 읽음 처리 성공 뒤의 새로고침을 **한 번으로 모으는 창**(초, v0.3.30 m-fix2 · 부록 B-2).
+    ///
+    /// 서버는 경계가 커지면 보낸 사람 채널과 **읽은 사람 자신의 채널**에 신호를 보낸다(B-1). 그래서 폰에서 대화 몇 개를 연달아
+    /// 읽으면 이 맥에 신호가 몰려 오고, 이 맥이 스스로 읽으면 성공 뒤 새로고침과 **자기 신호의 메아리**가 겹친다 — 창 하나에 모아
+    /// 요약(과 보이는 대화의 이력) 한 번으로 갚는다. 1초인 이유: 점이 꺼지는 데 "몇 초 안"이면 충분하고, 메아리는 대개 그 안에 온다.
+    ///
+    /// ★ m-fix 의 **점이 켜져 있을 때 10초 스로틀**(`messageMenuRefreshUnreadThrottleSeconds`)은 m-fix2 에서 걷었다. 그 예외는
+    ///   "다른 기기에서 읽어도 이 맥엔 신호가 없다"를 팝오버 열기로 메우던 것인데, 이제 그 신호가 온다. 남기면 안 읽은 말을 일부러
+    ///   남겨 둔 사람이 팝오버를 열 때마다(10초 넘게 벌어지면) 요약·이력 두 건을 내고, 소켓이 끊겨 있던 틈은 조인 직후 따라잡기가
+    ///   이미 요약을 받는다. 되살리려는 사람은 V0330MessageReadStoreTests 의 60초 테스트를 먼저 읽어라.
+    nonisolated static let messageReadSignalCoalesceSeconds: TimeInterval = 1
 
     // MARK: 안내 문구 (서버 status 아홉 개의 사람 말 번역)
     //
@@ -325,7 +332,7 @@ extension WorkTimerStore {
         let generation = sessionGeneration
         // 요청을 **띄우는 순간**의 일련번호(v0.3.30). 응답 도착 순서가 아니라 요청 순서가 서버 상태의 순서다 —
         // 늦게 도착한 옛 응답이 새 응답을 덮지 않게 하고, 요약과 어느 쪽이 더 최신인지 가르는 근거다.
-        let serial = messageReadRuntime.nextSerial()
+        let serial = messageReadRuntime.nextHistorySerial()
         if !messageHistoryLoading { messageHistoryLoading = true }
         if messageHistoryFailed { messageHistoryFailed = false }
         defer { if generation == sessionGeneration, messageHistoryLoading { messageHistoryLoading = false } }
@@ -392,9 +399,15 @@ extension WorkTimerStore {
                 // 두 함수가 다 없는 서버다 — 읽음도 모른다(1 을 그리지 않는다).
                 if messageReadReceiptsAvailable { messageReadReceiptsAvailable = false }
                 // 받을 이력이 없는 서버다 — 낡음 표시를 붙들고 있으면 열 때마다 헛조회한다.
+                // 이것은 실패가 아니라 "받을 것이 없다"는 답이라 아래 실패 가지의 우회 소진과 다르다: 소진은 같은 계기로 한 번 더
+                // 막을 뿐이고, 지우기는 표시 자체를 내린다(m-reverify R8 — 이 줄이 없으면 여닫을 때마다 헛조회 세 건).
                 messageReadRuntime.clearHistoryStale(appliedSerial: serial)
-            } else if !messageHistoryFailed {
-                messageHistoryFailed = true
+            } else {
+                // 5xx·네트워크 — 낡음 표시는 **남긴다**(아직 못 받았다). 대신 이 조회가 그 표시보다 나중에 띄운 것이면 그 표시로는
+                // 스로틀을 다시 우회하지 않는다(m-fix2 · m-reverify R3). 안 막으면 장애 동안 여닫이마다 요약·이력 두 건이 나간다.
+                // 다음 계기(새 신호)나 60초 스로틀, 화면의 [다시 시도]가 다시 받는다.
+                messageReadRuntime.noteHistoryFailed(serial: serial)
+                if !messageHistoryFailed { messageHistoryFailed = true }
             }
         }
     }
@@ -537,14 +550,17 @@ extension WorkTimerStore {
 //     새어 들어온다. 부르는 자리(패널 열기·상대 고르기·이력 도착·팝오버 열기)는 판정하지 않고 부르기만 한다.
 //  ② **시각을 비교하지 않는다.** 안 읽음은 서버 플래그, 경계는 메시지 id, 선후는 서버 순서·요청 일련번호다.
 //  ③ **메시지 활동 새로고침은 겹치지 않는다**(진행 중이면 뒤따르는 한 번으로 합친다 — requestDrain 과 같은 모양).
+//     읽음 신호와 읽음 처리 성공 뒤는 그 앞에 **1초 합치기 창**을 더 거친다(m-fix2 · 부록 B-2 — 서버가 읽은 사람 채널에도 신호를 보내
+//     몰려 오는 신호와 자기 메아리를 한 번으로 갚는다).
 //  ④ 세대 가드: 로그아웃 뒤 도착한 응답은 다음 계정의 점·경계를 건드리지 않는다.
 
 @MainActor
 extension WorkTimerStore {
     /// **메시지 활동 새로고침** — 안 읽음 요약 1회(+ 대화가 팝오버에 보이거나 `includeHistory` 면 이력 1회).
     ///
-    /// 부르는 자리: 소비할 수 없는 맥의 초인종·읽음 신호(`message_read`)·조인 직후 따라잡기(근무 여부 무관)·로그인 직후·
-    /// 팝오버 열기(스로틀)·읽음 처리 성공 뒤·**drain 이 메시지를 받았을 때**(m-fix F2). **폴링이 아니다** — 이벤트마다 한 번이다.
+    /// 부르는 자리: 소비할 수 없는 맥의 초인종·조인 직후 따라잡기(근무 여부 무관)·로그인 직후·팝오버 열기(스로틀)·
+    /// **drain 이 메시지를 받았을 때**(m-fix F2)·합치기 창이 닫힐 때(읽음 신호 `message_read`·읽음 처리 성공 뒤 — m-fix2,
+    /// `requestMessageActivityRefreshCoalesced`). **폴링이 아니다** — 이벤트마다 한 번이다.
     /// 도는 중에 또 불리면 새 Task 를 만들지 않고 뒤따르는 한 번을 예약한다(버리면 조회가 나간 뒤 도착한 신호가 안 보이고,
     /// 셋 다 쏘면 무료 플랜 왕복만 는다). 반환 Task 는 기다려야 하는 호출부(조인 따라잡기)와 테스트용이다.
     ///
@@ -585,26 +601,73 @@ extension WorkTimerStore {
         return task
     }
 
+    /// 합치기 창을 거친 **메시지 활동 새로고침**(v0.3.30 m-fix2 · 부록 B-2). 읽음 신호(`message_read`)와 읽음 처리 성공 뒤가 부른다.
+    ///
+    /// 창이 없으면 열고(`messageReadSignalCoalesceSeconds` 뒤 닫힌다), 있으면 그 창에 합친다 — 신호가 몰려도, 이 맥의 읽음 처리와
+    /// 서버가 읽은 사람 채널로 되돌려 보내는 메아리가 겹쳐도 새로고침은 한 번이다. **팝오버가 닫혀 있어도 요약은 받는다**
+    /// (다른 기기에서 읽은 것이 메뉴바·레일·목록 점에 몇 초 안에 닿는 근거). 창이 닫힐 때 새로고침이 도는 중이면 뒤따르는 한 번으로
+    /// 합쳐진다(`requestMessageActivityRefresh` 의 직렬화).
+    ///
+    /// 이력은 부르는 순간 대화가 안 보이면 **지금** 낡음으로 적는다 — 창이 닫히기 전에 대화를 띄운 채 팝오버를 열어도
+    /// `refreshMessageActivityOnMenuOpen` 의 우회가 곧바로 받게. 대화가 보이면 창이 닫힐 때 받는다.
+    func requestMessageActivityRefreshCoalesced() {
+        guard session != nil else { return }
+        let runtime = messageReadRuntime
+        if !(isMenuPresented && isMessagePanelVisible) { runtime.markHistoryStale() }
+        // 이 계기를 반영하려면 **지금 이후에 띄운** 조회여야 한다(창이 닫힐 때 이미 그런 조회가 나갔으면 다시 묻지 않는다).
+        runtime.activityWindowSerial = runtime.serial
+        guard runtime.activityWindowTask == nil else { return }
+        let generation = sessionGeneration
+        let sleep = messageReadSignalSleep
+        let seconds = Self.messageReadSignalCoalesceSeconds
+        runtime.activityWindowTask = Task { @MainActor [weak self] in
+            await sleep(seconds)
+            // 어느 가지로 나가든 창은 닫는다 — 안 닫으면 이후 신호가 전부 죽은 창에 합쳐져 영영 새로고침이 없다.
+            // (로그아웃 뒤 깬 창이 닫는 것은 옛 장부의 창이다 — clearPersistedSession 이 장부를 통째로 바꾼다.)
+            runtime.activityWindowTask = nil
+            // 로그아웃·계정 전환 뒤 깬 창은 새 계정에 새로고침을 쏘지 않는다(취소 + 세대 가드).
+            guard !Task.isCancelled, let self, generation == self.sessionGeneration else { return }
+            self.closeMessageActivityWindow(pendingSerial: runtime.activityWindowSerial)
+        }
+    }
+
+    /// 합치기 창이 닫혔다. 창에 모인 계기(`pendingSerial` 순간까지의 서버 변화)를 **그보다 나중에 띄운** 조회가 이미 맡았으면
+    /// 다시 묻지 않는다 — 창이 열린 사이 팝오버를 열어 요약·이력을 받았으면 그게 이 계기의 답이다(신호는 커밋 뒤에 오므로
+    /// 신호를 받은 뒤 띄운 조회는 그 변화를 본다).
+    private func closeMessageActivityWindow(pendingSerial: Int) {
+        let runtime = messageReadRuntime
+        let conversationOnScreen = isMenuPresented && isMessagePanelVisible
+        let historyTaken = runtime.lastHistoryLaunchSerial > pendingSerial
+        let summaryTaken = runtime.lastSummaryLaunchSerial > pendingSerial
+        if !conversationOnScreen, !historyTaken {
+            // 볼 사람이 없는 이력은 낡음으로 적는다(창이 열린 사이 팝오버가 닫혔을 수 있다 — 다시 열 때 우회가 받는다).
+            runtime.markHistoryStale()
+        }
+        // 안 보이는 대화의 이력은 위 낡음 표시가 맡는다. 보이는 대화는 창 뒤에 띄운 이력이 있어야 맡은 것이다.
+        let historyCovered = historyTaken || !conversationOnScreen
+        if summaryTaken, historyCovered { return }
+        requestMessageActivityRefresh()
+    }
+
     /// 팝오버를 열 때(스로틀). **대화 패널이 안 보여도 이력까지 받는다** — 안 읽음 점은 이력·요약 중 더 나중에 띄운
     /// 쪽을 기준으로 계산되고, 이력만이 "어느 메시지가" 안 읽혔는지 안다(요약은 개수뿐이다).
     ///
-    /// 스로틀은 셋으로 갈린다(m-fix):
-    ///  · 대화가 보이는데 이력이 낡았다(닫힌 동안 온 신호가 이력을 건너뛰었다) → **스로틀 없이** 받는다. 계기 1건당 1회라 폴링이 아니다.
-    ///  · 안 읽음 점이 켜져 있다 → 짧은 스로틀(`messageMenuRefreshUnreadThrottleSeconds`). 다른 기기에서 읽은 것은 이 맥에 신호가
-    ///    없으므로(서버 신호는 보낸 사람 채널로만 간다) 점을 보고 연 사람에게 낡은 점을 60초 동안 보여 주지 않는다.
-    ///  · 그 밖 → 60초.
+    /// 스로틀은 둘로 갈린다:
+    ///  · 대화가 보이는데 이력이 낡았다(닫힌 동안 온 계기가 이력을 건너뛰었다) → **스로틀 없이** 받는다(m-fix F1).
+    ///    **같은 낡음 표시로는 한 번만**이다(m-fix2 · m-reverify R3): 그 조회가 실패하면 표시는 남지만 우회는 다 썼다 — 안 그러면
+    ///    이력 장애 동안 여닫이마다 요청 두 건이 나간다. 새 계기가 새 표시를 적으면 다시 한 번 우회한다.
+    ///  · 그 밖 → 60초. 점이 켜져 있어도 같다(m-fix 의 10초 예외는 m-fix2 에서 걷었다 — 다른 기기의 읽음은 이제 신호가 온다,
+    ///    `messageReadSignalCoalesceSeconds` 주석).
     func refreshMessageActivityOnMenuOpen() {
         guard session != nil else { return }
         let now = clock()
         let runtime = messageReadRuntime
-        let staleConversationOnScreen = isMessagePanelVisible && runtime.historyStaleSerial != nil
-        // 짧은 스로틀은 **서버가 판정한 점**에만 준다. 읽음을 모르는 옛 서버(db push 전 창)의 점은 도장 규칙이라 앱을 켤 때마다
-        // 켜져 있고, 거기에 짧은 스로틀을 주면 여닫이마다 헛조회(404 폴백 포함 세 건)가 붙는다 — 다시 물어도 꺼질 점이 아니다.
-        let serverJudgedDot = (messageHistoryReadSnapshot != nil || messageUnreadSummary != nil) && hasUnreadMessages
-        let throttle = serverJudgedDot
-            ? Self.messageMenuRefreshUnreadThrottleSeconds
-            : Self.messageMenuRefreshThrottleSeconds
-        guard staleConversationOnScreen || now.timeIntervalSince(runtime.lastMenuRefreshAt) >= throttle else { return }
+        // 대화 패널 조건을 빼지 마라(m-reverify R4 · MR09): 로그인 직후·닫힌 팝오버의 거의 모든 새로고침이 낡음을 적으므로,
+        // 빠지면 팝오버 열기 60초 스로틀이 사실상 사라진다.
+        let staleConversationOnScreen = isMessagePanelVisible && runtime.staleHistoryMayBypassThrottle
+        guard staleConversationOnScreen
+            || now.timeIntervalSince(runtime.lastMenuRefreshAt) >= Self.messageMenuRefreshThrottleSeconds
+        else { return }
         runtime.lastMenuRefreshAt = now
         requestMessageActivityRefresh(includeHistory: true)
     }
@@ -614,7 +677,7 @@ extension WorkTimerStore {
     func performLoadMessageUnreadSummary() async {
         guard session != nil else { return }
         let generation = sessionGeneration
-        let serial = messageReadRuntime.nextSerial()
+        let serial = messageReadRuntime.nextSummarySerial()
         do {
             let response = try await withSessionRetry { activeSession in
                 try await service.fetchMessageUnreadSummary(accessToken: activeSession.accessToken)
@@ -688,7 +751,9 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             runtime.markInFlight.remove(peer)
             settleOptimisticRead(peer: peer, through: through, succeeded: succeeded)
-            if succeeded { requestMessageActivityRefresh() }
+            // 성공 뒤 새로고침은 **합치기 창**으로 간다(m-fix2): 서버가 읽은 사람 채널(= 이 맥)로 같은 경계의 'message_read' 를
+            // 되돌려 보내므로(부록 B-1) 곧바로 쏘면 메아리가 한 번 더 부른다. 점은 낙관 읽음이 이미 껐다 — 1초 늦은 서버 확인은 안 보인다.
+            if succeeded { requestMessageActivityRefreshCoalesced() }
             if runtime.markAgain.remove(peer) != nil { evaluateMessageReadMarking() }
         }
     }
@@ -785,12 +850,36 @@ final class MessageReadRuntime {
     /// 새로고침이 **이력을 건너뛴** 마지막 순간의 일련번호(m-fix F1). nil = 그 뒤에 띄운 이력이 반영됐다(낡지 않았다).
     /// 볼 사람이 없어 건너뛴 계기(닫힌 팝오버에 온 읽음·새 말)를, 대화가 보이는 채로 팝오버를 다시 열 때 스로틀과 무관하게 받는 근거다.
     private(set) var historyStaleSerial: Int?
+    /// 스로틀 우회를 **다 쓴** 낡음 표시(m-fix2 · m-reverify R3). 그 표시보다 나중에 띄운 이력 조회가 실패로 끝났을 때 적힌다 —
+    /// 같은 표시로는 다시 우회하지 않는다. 새 계기는 더 큰 번호로 표시를 옮기므로 다시 한 번 우회한다.
+    private(set) var staleBypassSpentSerial: Int?
+    /// 합치기 창(m-fix2 · 부록 B-2). nil = 열린 창 없음.
+    var activityWindowTask: Task<Void, Never>?
+    /// 창에 모인 **마지막 계기**의 순간(그때의 `serial`). 이보다 나중에 띄운 조회만 그 계기를 반영한다.
+    var activityWindowSerial = 0
+    /// 마지막으로 **띄운**(응답 여부와 무관) 요약·이력 요청의 번호. 창이 닫힐 때 "이미 맡은 조회가 있나"의 근거다.
+    private(set) var lastSummaryLaunchSerial = 0
+    private(set) var lastHistoryLaunchSerial = 0
 
     nonisolated init() {}
 
     func nextSerial() -> Int {
         serial += 1
         return serial
+    }
+
+    /// 요약 요청을 띄운다(번호를 받고 "띄움"을 적는다).
+    func nextSummarySerial() -> Int {
+        let next = nextSerial()
+        lastSummaryLaunchSerial = next
+        return next
+    }
+
+    /// 이력 요청을 띄운다(번호를 받고 "띄움"을 적는다).
+    func nextHistorySerial() -> Int {
+        let next = nextSerial()
+        lastHistoryLaunchSerial = next
+        return next
     }
 
     /// 이번 계기가 이력을 건너뛰었다. 지금까지의 번호로 적는다 — 이보다 **나중에 띄운** 이력만 이 표시를 지운다.
@@ -804,10 +893,25 @@ final class MessageReadRuntime {
         historyStaleSerial = nil
     }
 
-    /// 로그아웃에서 부른다. 도는 새로고침은 끊는다(세대 가드가 결과를 버리지만 왕복 자체를 줄인다).
+    /// 일련번호 `failedSerial` 로 띄운 이력이 실패로 끝났다(5xx·네트워크). 낡음 표시보다 나중에 띄운 것이면 그 표시의 우회를 다 썼다
+    /// (먼저 띄운 조회의 실패는 이 표시를 맡은 적이 없으니 우회를 빼앗지 않는다 — `clearHistoryStale` 과 같은 비교).
+    func noteHistoryFailed(serial failedSerial: Int) {
+        guard let stale = historyStaleSerial, failedSerial > stale else { return }
+        staleBypassSpentSerial = stale
+    }
+
+    /// 팝오버 열기가 이 낡음 표시로 60초 스로틀을 건너뛸 수 있는가(표시가 있고, 그 표시의 우회를 아직 안 썼다).
+    var staleHistoryMayBypassThrottle: Bool {
+        guard let stale = historyStaleSerial else { return false }
+        return stale != staleBypassSpentSerial
+    }
+
+    /// 로그아웃에서 부른다. 도는 새로고침과 열린 합치기 창은 끊는다(세대 가드가 결과를 버리지만 왕복 자체를 줄인다).
     func cancelAll() {
         activityTask?.cancel()
         activityTask = nil
+        activityWindowTask?.cancel()
+        activityWindowTask = nil
     }
 }
 

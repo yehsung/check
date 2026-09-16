@@ -58,16 +58,26 @@ final class WorkTimerStoreTodoSyncTransport: TodoSyncTransport {
 
 /// 앱 조립 지점. AppDelegate 는 이 함수 하나만 부르고 결과를 붙든다(만드는 자리가 흩어지면 엔진이 둘이 된다 —
 /// 두 엔진이 같은 파일을 번갈아 쓰면 한쪽의 pending 이 다른 쪽 저장으로 지워진다).
+///
+/// 파일 결정자와 깨어남 센터는 **호출자가 넘긴다**(기본값 없음). 기본값을 두면 테스트가 이 함수를 부르는 순간 실제
+/// Application Support 의 할 일 파일을 열고 NSWorkspace 통지에 붙는다 — 그래서 아무도 이 조립을 테스트하지 않았고,
+/// `start()` 를 지우거나 센터를 빼도 스위트가 초록이었다(a4-verify V4·V5). 프로덕션 값은 AppDelegate 가 적고
+/// 소스 계약 테스트가 그 두 인자를 못 박는다(V0330TodoSyncEngineTests).
 enum TodoSyncWiring {
     @MainActor
-    static func live(board: TodoBoardWiring.Board, store: WorkTimerStore) -> TodoSyncCoordinator {
+    static func live(
+        board: TodoBoardWiring.Board,
+        store: WorkTimerStore,
+        fileURL: @escaping (String?) -> URL,
+        wakeNotifications: NotificationCenter?
+    ) -> TodoSyncCoordinator {
         let sync = TodoSync(list: board.list, transport: WorkTimerStoreTodoSyncTransport(store: store))
         let coordinator = TodoSyncCoordinator(
             sync: sync,
             board: board.board,
             userID: { [weak store] in store?.session?.userID },
-            fileURL: { TodoFileStore.defaultURL(userID: $0) },
-            wakeNotifications: NSWorkspace.shared.notificationCenter
+            fileURL: fileURL,
+            wakeNotifications: wakeNotifications
         )
         coordinator.start()
         return coordinator

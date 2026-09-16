@@ -180,7 +180,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             isTodoEnabled: { [weak self] in self?.store.isTodoEnabled ?? false }
         )
         todoBoard = board
-        todoSync = TodoSyncWiring.live(board: board, store: store)
+        // 파일 결정자는 위 목록 파일과 **같은 함수**여야 한다(다르면 조정자가 실행 직후 "계정이 바뀌었다"로 읽고 파일을 갈아 끼운다).
+        // 깨어남 통지는 NSWorkspace 의 센터에서만 온다 — 기본 센터(NotificationCenter.default)로는 didWake 가 안 온다.
+        todoSync = TodoSyncWiring.live(
+            board: board,
+            store: store,
+            fileURL: { TodoFileStore.defaultURL(userID: $0) },
+            wakeNotifications: NSWorkspace.shared.notificationCenter
+        )
     }
 
     /// 설정 창을 배선한다(실행당 1회). **창의 수명은 컨트롤러가 들고, 여는 경로는 세 갈래로 모인다**:

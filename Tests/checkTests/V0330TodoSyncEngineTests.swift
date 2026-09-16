@@ -421,22 +421,31 @@ func todoSyncPruneAfterMergeDropsPending() async throws {
 // MARK: 편집 중 병합
 
 @MainActor
-@Test("보드에서 고치는 줄·되돌리기 창의 줄은 서버 병합에 깨지지 않고, 보호가 끝나면 다시 맞춰 서버 값으로 수렴한다")
+@Test("보드에서 고치는 줄·되돌리기 창의 줄은 서버 병합에 깨지지 않고, 보호가 끝나면(취소 없이 다른 줄로 옮겨도) 다시 맞춰 서버 값으로 수렴한다 — 조정자 배선 그대로")
 func todoSyncDefersMergeForEditingAndUndoRows() async throws {
     let server = TodoSyncV0330Server(nowMs: base)
     let transport = serverTransport(server)
     var nowMs = base
-    let list = TodoListStore(fileURL: todoSyncV0330TempURL(), clock: { TodoRules.date(milliseconds: nowMs) })
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("check-v0330-protect-\(UUID().uuidString)")
+    let fileFor: (String?) -> URL = { directory.appendingPathComponent("todos.\($0 ?? "local").json") }
+    let session = TodoSyncV0330Session(userID: userA)
+    let list = TodoListStore(fileURL: fileFor(userA), clock: { TodoRules.date(milliseconds: nowMs) })
     let editing = try #require(list.add("고치는 중인 줄"))
     nowMs += 1
     let undoing = try #require(list.add("되돌리기 창의 줄"))
+    nowMs += 1
+    let other = try #require(list.add("다음에 고칠 줄"))
     let board = CheckTodoBoardController(store: list, undoSeconds: 600)
-    list.syncProtectedIDs = { [weak board] in board?.syncProtectedIDs ?? [] }
-    var localChanges = 0
-    list.onLocalChange = { localChanges += 1 }
-    let sync = TodoSync(list: list, transport: transport, scheduler: TodoSyncV0330Scheduler())
-    sync.activate(userID: userA)
+    let scheduler = TodoSyncV0330Scheduler()
+    let sync = TodoSync(list: list, transport: transport, scheduler: scheduler, clock: { TodoRules.date(milliseconds: nowMs) })
+    // ★ 보호(list.syncProtectedIDs)와 변경 알림(list.onLocalChange)을 테스트가 손으로 걸지 않는다 — 프로덕션에서 그 연결은
+    //   조정자의 start() 한 곳뿐이라, 손으로 걸면 그 줄을 지워도 이 테스트는 초록이다(a4-verify V3).
+    let coordinator = TodoSyncCoordinator(
+        sync: sync, board: board, userID: { session.userID }, fileURL: fileFor, wakeNotifications: nil
+    )
+    coordinator.start()
     await todoSyncV0330Idle(sync)
+    #expect(transport.requests.count == 1)
     #expect(list.pendingIDs.isEmpty)
 
     // 다른 기기: 고치는 줄은 지웠고, 되돌리기 창의 줄은 제목을 바꿨다.
@@ -453,9 +462,9 @@ func todoSyncDefersMergeForEditingAndUndoRows() async throws {
 
     board.beginEdit(editing.id)
     board.requestDelete(undoing.id)
-    localChanges = 0
     sync.requestSync(.periodic)
     await todoSyncV0330Idle(sync)
+    #expect(transport.requests.count == 2)
 
     #expect(list.items.first { $0.id == editing.id } == editing, "편집 중인 줄이 병합으로 바뀌었다 — 편집기가 사라진다")
     #expect(TodoRules.visible(list.items, todayKey: list.todayKey).contains { $0.id == editing.id })
@@ -463,15 +472,29 @@ func todoSyncDefersMergeForEditingAndUndoRows() async throws {
     #expect(list.pendingIDs == [editing.id, undoing.id])
     #expect(board.editingID == editing.id && board.pendingDeleteID == undoing.id)
 
-    board.cancelEdit()
-    #expect(localChanges == 1, "편집이 끝났는데 미룬 병합을 다시 맞추자고 알리지 않았다")
-    board.undoDelete(undoing.id)
-    #expect(localChanges == 2)
-    sync.requestSync(.edit)
+    // 취소·커밋 없이 다른 줄 편집으로 넘어간다 → 앞 줄의 보호가 여기서 끝나 1.5초 뒤 다시 맞춘다(되돌리기 창의 줄은 아직 보호 중).
+    board.beginEdit(other.id)
+    scheduler.advance(by: TodoSync.debounceSeconds)
     await todoSyncV0330Idle(sync)
+    #expect(transport.requests.count == 3, "편집을 다른 줄로 옮겼는데 미룬 병합을 다시 맞추지 않았다 — 앞 줄이 옛 값에 머문다")
     #expect(list.items.first { $0.id == editing.id } == deletedElsewhere)
+    #expect(list.items.first { $0.id == undoing.id } == undoing, "되돌리기 창의 줄이 아직 보호 중인데 병합으로 바뀌었다")
+    #expect(list.pendingIDs == [undoing.id])
+
+    // 되돌리기(유예 중) → 보호 끝 → 1.5초 뒤 맞춰 다른 기기의 제목으로 수렴.
+    board.undoDelete(undoing.id)
+    scheduler.advance(by: TodoSync.debounceSeconds)
+    await todoSyncV0330Idle(sync)
+    #expect(transport.requests.count == 4, "되돌리기로 보호가 끝났는데 다시 맞추지 않았다")
     #expect(list.items.first { $0.id == undoing.id } == renamedElsewhere)
     #expect(list.pendingIDs.isEmpty)
+
+    // 미룬 것이 없는 줄의 편집 종료는 요청을 더 만들지 않는다.
+    board.cancelEdit()
+    scheduler.advance(by: TodoSync.debounceSeconds)
+    await todoSyncV0330Idle(sync)
+    #expect(transport.requests.count == 4)
+    _ = coordinator
 }
 
 // MARK: 프로덕션 전송(스토어 세션)
@@ -778,6 +801,58 @@ func todoSyncCoordinatorTriggersAndAccountSwitch() async throws {
 }
 
 @MainActor
+@Test("5분 주기는 첫 번만이 아니라 계속 돈다 · 로그아웃으로 실행했다 로그인하면 그때 주기가 선다 · 전환 전에 걸린 디바운스는 새 계정에서 쏘지 않는다")
+func todoSyncPeriodicRepeatsAndStartsAtLogin() async throws {
+    let server = TodoSyncV0330Server(nowMs: base)
+    let transport = serverTransport(server)
+    let scheduler = TodoSyncV0330Scheduler()
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("check-v0330-periodic-\(UUID().uuidString)")
+    let fileFor: (String?) -> URL = { directory.appendingPathComponent("todos.\($0 ?? "local").json") }
+    let session = TodoSyncV0330Session(userID: nil)                  // 로그아웃 상태로 실행
+    let list = TodoListStore(fileURL: fileFor(nil), clock: fixedClock(base))
+    let board = CheckTodoBoardController(store: list)
+    let sync = TodoSync(list: list, transport: transport, scheduler: scheduler, clock: fixedClock(base))
+    let coordinator = TodoSyncCoordinator(
+        sync: sync, board: board, userID: { session.userID }, fileURL: fileFor, wakeNotifications: nil
+    )
+    coordinator.start()
+    await todoSyncV0330Idle(sync)
+    scheduler.advance(by: TodoSync.periodicSeconds * 2)
+    await todoSyncV0330Idle(sync)
+    #expect(transport.requests.isEmpty, "로그아웃 상태에서 맞췄다")
+
+    session.userID = userB
+    await todoSyncV0330Eventually { list.fileURL == fileFor(userB) }
+    await todoSyncV0330Idle(sync)
+    #expect(transport.requests.count == 1, "로그인 직후 맞추지 않았다")
+
+    for tick in 1...3 {
+        scheduler.advance(by: TodoSync.periodicSeconds)
+        await todoSyncV0330Idle(sync)
+        #expect(transport.requests.count == 1 + tick, "로그인 뒤 \(tick)번째 5분에 맞추지 않았다 — 주기가 안 섰거나 첫 번만 돌고 멈췄다")
+    }
+
+    // B 에서 막 고치고(디바운스 1.5초 대기) 0.5초 만에 A 로 전환 → 로그인 맞춤 한 번뿐이어야 한다.
+    board.setDraft("B 가 막 적은 줄")
+    board.submitDraft()
+    scheduler.advance(by: 0.5)
+    session.userID = userA
+    await todoSyncV0330Eventually { list.fileURL == fileFor(userA) }
+    await todoSyncV0330Idle(sync)
+    #expect(transport.requests.count == 5)
+    #expect(transport.requests.last?.userID == userA)
+    scheduler.advance(by: TodoSync.debounceSeconds)
+    await todoSyncV0330Idle(sync)
+    #expect(transport.requests.count == 5, "전환 전에 B 에서 걸린 디바운스가 A 로 요청을 한 번 더 쐈다")
+    // 계정끼리 바로 넘어가도 주기는 새 계정 기준으로 다시 선다.
+    scheduler.advance(by: TodoSync.periodicSeconds)
+    await todoSyncV0330Idle(sync)
+    #expect(transport.requests.count == 6)
+    #expect(transport.requests.last?.userID == userA)
+    _ = coordinator
+}
+
+@MainActor
 @Test("보드 열림 알림은 닫힘→열림에서만 온다 — 못 뜬 창을 다시 만드는 복구 경로는 요청을 더 쏘지 않는다")
 func todoBoardOpenedFiresOnlyOnTransition() {
     let list = TodoListStore(fileURL: todoSyncV0330TempURL(), clock: fixedClock(base))
@@ -823,6 +898,164 @@ func todoSyncAccountSwitchResetsBoardInputState() async throws {
     let aFile = try TodoFileStore.load(from: fileFor(userA))
     #expect(aFile.items.first { $0.id == doomed.id }?.deletedAt != nil, "되돌리기 창의 삭제가 앞 계정 파일에 확정되지 않았다")
     #expect(list.items.isEmpty)
+}
+
+// MARK: 앱 조립(프로덕션 배선) · 실제 타이머
+//
+// a4-verify 가 찾은 구멍: 조정자를 조립하지 않거나(CheckApp) start() 를 지우거나 깨어남 센터를 빼도, 실제 타이머의 취소
+// 검사를 지워도 124개가 초록이었다 — 테스트는 전부 조정자를 손으로 만들고 가짜 타이머만 썼기 때문이다. 여기서는
+// `TodoSyncWiring.live` 를 **그대로** 부르고(파일·센터만 주입), AppDelegate 가 그 함수에 프로덕션 값을 넘기는지를 소스로 못 박는다.
+
+/// 앱 조립 테스트용 응답(증분 — full 병합이 로컬 줄을 지우는 부수 효과 없이 "요청이 나갔나"만 본다).
+private let liveWiringBody = "{\"status\":\"ok\",\"items\":[],\"watermark_ms\":1726500000000,\"rejected\":[],\"full\":false}"
+
+@MainActor
+@Test("앱 조립(TodoSyncWiring.live) — 보드의 목록으로 엔진을 만들고 켜서 실행 직후 한 번, 넘긴 깨어남 센터의 didWake 에 한 번 더 맞춘다(실제 세션 전송)")
+func todoSyncLiveWiringStartsAndListensForWake() async throws {
+    let host = "v0330-todo-live-\(UUID().uuidString.prefix(8))"
+    TodoSyncV0330URLProtocol.set(host: host, path: "/rest/v1/rpc/todo_sync", [.init(status: 200, body: liveWiringBody)])
+    let store = transportStore(host: host)
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("check-v0330-live-\(UUID().uuidString)")
+    let fileFor: (String?) -> URL = { directory.appendingPathComponent("todos.\($0 ?? "local").json") }
+    let suite = "check-v0330-live-\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defaults.removePersistentDomain(forName: suite)
+    let list = TodoListStore(fileURL: fileFor(userA), clock: fixedClock(base))
+    let item = try #require(list.add("조립 확인 줄"))
+    let appearance = TodoBoardAppearanceStore(defaults: defaults)
+    let controller = CheckTodoBoardController(store: list, appearance: appearance)
+    let board = TodoBoardWiring.Board(list: list, appearance: appearance, board: controller)
+    let center = NotificationCenter()
+    func todoSyncCalls() -> [TodoSyncV0330URLProtocol.Logged] {
+        TodoSyncV0330URLProtocol.log(host: host).filter { $0.path == "/rest/v1/rpc/todo_sync" }
+    }
+
+    let coordinator = TodoSyncWiring.live(board: board, store: store, fileURL: fileFor, wakeNotifications: center)
+    #expect(coordinator.sync.list === list, "조립이 보드의 목록이 아닌 목록으로 엔진을 만들었다 — 보드와 동기화가 다른 사본을 본다")
+    await todoSyncV0330Eventually { todoSyncCalls().count == 1 }
+    await todoSyncV0330Idle(coordinator.sync)
+    #expect(todoSyncCalls().count == 1, "조립한 조정자가 실행 직후 맞추지 않았다 — start() 가 빠지면 이 실행 내내 동기화가 한 번도 없다")
+    #expect(todoSyncCalls().first?.authorization == "Bearer token-1")
+    #expect(todoSyncCalls().first?.body.contains(item.id.uuidString.lowercased()) == true, "실행 직후 요청이 보낼 줄을 싣지 않았다")
+    #expect(coordinator.sync.lastOutcome == .synced)
+    #expect(list.pendingIDs.isEmpty)
+    #expect(list.fileURL == fileFor(userA), "넘긴 파일 결정자를 쓰지 않아 실행 직후 계정 전환으로 읽었다")
+
+    center.post(name: NSWorkspace.didWakeNotification, object: nil)
+    await todoSyncV0330Eventually { todoSyncCalls().count == 2 }
+    await todoSyncV0330Idle(coordinator.sync)
+    #expect(todoSyncCalls().count == 2, "넘긴 센터의 didWake 에 맞추지 않았다 — 조립이 깨어남 센터를 조정자에 안 넘긴다")
+}
+
+@MainActor
+@Test("프로덕션 타이머(TodoSyncTaskScheduler) — 기다렸다가 한 번 쏘고, 취소한 예약은 끝내 쏘지 않는다")
+func todoSyncTaskSchedulerFiresOnceAndHonorsCancel() async {
+    let scheduler = TodoSyncTaskScheduler()
+    var fired = 0
+    var cancelledFired = 0
+    let kept = scheduler.schedule(after: 0.05) { fired += 1 }
+    let cancelled = scheduler.schedule(after: 0.05) { cancelledFired += 1 }
+    cancelled.cancel()
+    #expect(fired == 0, "예약이 기다리지 않고 곧바로 쐈다")
+    // 대기 상한은 벽시계가 아니라 재개 횟수로 둔다(부하 걸린 스위트에서 0.05초 예약이 늦게 깨도 흔들리지 않게).
+    for _ in 0..<1_000 where fired == 0 {
+        try? await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(fired == 1)
+    // 취소된 쪽이 쏠 기회를 넉넉히 준다(취소 검사가 없으면 Task.sleep 이 취소로 **즉시** 끝나 이미 쐈을 것이다).
+    for _ in 0..<20 { try? await Task.sleep(for: .milliseconds(5)) }
+    #expect(fired == 1, "한 예약이 두 번 쐈다")
+    #expect(cancelledFired == 0, "취소한 예약이 쐈다 — 디바운스를 다시 걸 때마다 앞 예약이 즉시 실행돼 타이핑마다 요청이 나간다")
+    kept.cancel()
+}
+
+/// `//` 줄 주석과 `/* */` 블록 주석을 걷어낸 코드(V0320ServerReleaseTests 의 srStrippingComments 와 같은 규칙).
+/// 걷어내지 않으면 설명문의 낱말이 단언에 걸려, 다음 사람이 초록을 만들려고 **설명을 지운다**.
+private func todoSyncWiringStrippingComments(_ source: String) -> String {
+    var output = ""
+    var inBlock = false
+    for line in source.split(separator: "\n", omittingEmptySubsequences: false) {
+        var rest = Substring(line)
+        var kept = ""
+        while !rest.isEmpty {
+            if inBlock {
+                if let close = rest.range(of: "*/") {
+                    rest = rest[close.upperBound...]
+                    inBlock = false
+                } else {
+                    rest = ""
+                }
+                continue
+            }
+            let lineComment = rest.range(of: "//")
+            let blockComment = rest.range(of: "/*")
+            if let block = blockComment, lineComment.map({ block.lowerBound < $0.lowerBound }) ?? true {
+                kept += rest[..<block.lowerBound]
+                rest = rest[block.upperBound...]
+                inBlock = true
+                continue
+            }
+            if let comment = lineComment {
+                kept += rest[..<comment.lowerBound]
+                rest = ""
+                continue
+            }
+            kept += rest
+            rest = ""
+        }
+        output += kept + "\n"
+    }
+    return output
+}
+
+private func todoSyncWiringSource(_ name: String) throws -> String {
+    let url = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Sources/check/\(name)")
+    return try String(contentsOf: url, encoding: .utf8)
+}
+
+/// 공백(줄바꿈 포함)을 한 칸으로 접는다 — 인자를 줄마다 나눠 적든 한 줄로 적든 같은 계약으로 읽게.
+private func todoSyncWiringCollapsed(_ code: String) -> String {
+    code.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+}
+
+@Test("AppDelegate 는 wireTodoBoard 에서 TodoSyncWiring.live 를 한 번 불러 붙들고, 목록 파일과 같은 파일 결정자 · NSWorkspace 센터를 넘긴다(소스 계약)")
+func todoSyncAppDelegateAssemblesLiveWiring() throws {
+    let app = todoSyncWiringCollapsed(todoSyncWiringStrippingComments(try todoSyncWiringSource("CheckApp.swift")))
+    let start = try #require(app.range(of: "private func wireTodoBoard() {"), "wireTodoBoard 를 못 찾았다")
+    let end = try #require(app.range(of: "private func wireSettingsWindow()", range: start.upperBound..<app.endIndex))
+    let body = String(app[start.upperBound..<end.lowerBound])
+
+    #expect(body.contains("todoSync = TodoSyncWiring.live("),
+            "AppDelegate 가 동기화 조정자를 조립해 붙들지 않는다 — 앱은 뜨는데 할 일이 서버와 한 번도 안 맞춰진다")
+    #expect(body.components(separatedBy: "TodoSyncWiring.live(").count - 1 == 1)
+    #expect(body.contains("wakeNotifications: NSWorkspace.shared.notificationCenter"),
+            "깨어남 통지를 NSWorkspace 센터에서 받지 않는다 — 잠에서 깬 뒤 다음 5분 주기까지 다른 기기 변경이 안 보인다")
+    #expect(body.contains("fileURL: { TodoFileStore.defaultURL(userID: $0) }"),
+            "조정자의 파일 결정자가 목록 파일(TodoFileStore.defaultURL)과 다르다 — 실행 직후 계정 전환으로 오인해 파일을 갈아 끼운다")
+    #expect(body.contains("listFileURL: TodoFileStore.defaultURL(userID: store.session?.userID)"))
+    #expect(body.contains("board: board, store: store,"))
+    #expect(app.contains("private var todoSync: TodoSyncCoordinator?"),
+            "조정자를 붙드는 참조가 없다 — 조립 직후 해제돼 깨어남 구독·주기 타이머가 사라진다")
+
+    let launch = try #require(app.range(of: "func applicationDidFinishLaunching(_ notification: Notification) {"))
+    let launchBody = app[launch.upperBound..<start.lowerBound]
+    let overlay = try #require(launchBody.range(of: "overlayController = CheckOverlayController("))
+    let wire = try #require(launchBody.range(of: "wireTodoBoard()"), "실행 때 wireTodoBoard() 를 안 부른다")
+    #expect(overlay.lowerBound < wire.lowerBound, "오버레이보다 먼저 보드를 잇는다 — wireTodoBoard 의 overlay 가드에 걸려 조립이 통째로 빠진다")
+
+    // 엔진·조정자를 만드는 자리는 조립 함수 하나뿐이다(둘이 되면 같은 파일을 번갈아 써 한쪽의 pending 이 지워진다).
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Sources/check")
+    var engineSites: [String: Int] = [:]
+    for file in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) where file.pathExtension == "swift" {
+        let code = todoSyncWiringStrippingComments(try String(contentsOf: file, encoding: .utf8))
+        let hits = code.components(separatedBy: "TodoSyncCoordinator(").count - 1 + code.components(separatedBy: " TodoSync(list:").count - 1
+        if hits > 0 { engineSites[file.lastPathComponent] = hits }
+    }
+    #expect(engineSites == ["WorkTimerStoreTodoSync.swift": 2], "엔진·조정자를 만드는 곳: \(engineSites)")
 }
 
 // MARK: 문구

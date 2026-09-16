@@ -131,6 +131,11 @@ extension TodoFile {
 enum TodoRules {
     /// 제목 상한. 넘으면 **거부**한다(잘라 저장하지 않는다) — 사용자가 쓴 문장을 앱이 몰래 훼손하면 안 된다.
     static let maxTitleLength = 100
+    /// 제목의 **코드 포인트** 상한(v0.3.30). 서버 `todo_items.title` 이 `char_length(title) between 1 and 1000` 이고, UTF-8 DB 의
+    /// char_length 는 글자(그래핌)가 아니라 코드 포인트를 센다. 이모지 한 글자가 코드 포인트 11개일 수 있어(👨🏽‍👩🏽‍👧🏽‍👦🏽)
+    /// 글자 100 만 보면 코드 포인트 1100 짜리 제목이 이 맥에 저장되고 서버에서 영구 거절된다 — 다른 기기에 끝내 안 가고
+    /// 사용자는 모른다(a4-verify PROBE-P8). 화면에 보이는 한도(카운터 `/100`)는 그대로 두고, 이 값은 드문 극단만 막는다.
+    static let maxTitleCodePoints = 1000
     /// 글자수 카운터를 노출하기 시작하는 길이. 평소엔 숨겨 두고 한계에 다가갈 때만 보여준다.
     static let counterVisibleFrom = 90
     /// 이 일수 이상 이월된 미완료는 '오래된 항목' 접힌 영역으로 조용히 내린다(지우지는 않는다).
@@ -165,6 +170,12 @@ enum TodoRules {
         return String(cleaned)
             .split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
+    }
+
+    /// 제목이 두 상한(글자 100 · 코드 포인트 1000) 안에 드는가. **입력칸(뷰)·초안(컨트롤러)·추가·수정 네 문이 이 판정 하나를
+    /// 쓴다** — 한 문만 글자 수를 보면 그 경로로 서버가 못 받는 줄이 들어온다. 빈 제목 판정은 호출부 몫이다(입력 중엔 빈 값도 정상).
+    static func titleFitsLimits(_ title: String) -> Bool {
+        title.count <= maxTitleLength && title.unicodeScalars.count <= maxTitleCodePoints
     }
 
     // MARK: 날짜
@@ -316,6 +327,9 @@ enum TodoRules {
     /// ③ 같은 id: 로컬이 (①② 뒤에도) pending 이고 로컬 updatedAtMs > 서버 updatedAtMs 면 로컬 유지. 아니면 서버 것으로
     ///    교체하고 pending 에서 뺀다(서버가 이긴 값은 보낼 것이 아니다 — 같은 ms 동률도 서버 유지, 서버 LWW 와 같다).
     /// ④ full 이면 서버에 없고 pending·rejected 도 아닌 로컬 항목을 지운다(80일 넘게 못 맞춘 기기 — 그사이 서버가 정리한 것).
+    ///    단 **서버가 받을 수 없는 제목**(`titleFitsLimits` 밖 — 글자만 세던 0.3.29 파일에서 온 줄)은 지우지 않는다. 그 줄은 올릴
+    ///    때마다 거절돼 원래 이 기기에만 있는 줄이라, "서버에 없다"가 "서버가 정리했다"는 뜻이 아니다(X2 S7a: 81일 뒤 full 에서
+    ///    조용히 사라졌다). 멱등은 그대로다 — 판정이 로컬 제목만 본다.
     /// ⑤ 서버에만 있는 항목은 뒤에 붙인다. 로컬에만 있는 새 항목은 그대로.
     ///
     /// `protected`(편집 중 · 삭제 되돌리기 창)는 ③④를 **미룬다**: 로컬을 그대로 두고, 바뀌었어야 할 id 는 pending 에 다시
@@ -372,7 +386,7 @@ enum TodoRules {
                     merged.append(incoming)
                     nextPending.remove(item.id)
                 }
-            } else if full, !nextPending.contains(item.id), !rejected.contains(item.id) {
+            } else if full, !nextPending.contains(item.id), !rejected.contains(item.id), titleFitsLimits(item.title) {
                 // ④
                 if protected.contains(item.id) {
                     merged.append(item)
@@ -537,12 +551,12 @@ enum TodoFileStore {
         if rewrite { persist() }
     }
 
-    /// 새 항목을 목록 맨 앞에 넣는다. 빈 제목과 상한 초과는 **아무 일도 하지 않고 nil** 이다 —
+    /// 새 항목을 목록 맨 앞에 넣는다. 빈 제목과 상한 초과(글자 100 · 코드 포인트 1000)는 **아무 일도 하지 않고 nil** 이다 —
     /// 특히 초과는 잘라서 저장하지 않는다(입력 단계에서 이미 막지만, 붙여넣기 경로를 위해 여기서도 거절한다).
     @discardableResult
     func add(_ rawTitle: String) -> TodoItem? {
         let title = TodoRules.normalizedTitle(rawTitle)
-        guard !title.isEmpty, title.count <= TodoRules.maxTitleLength else { return nil }
+        guard !title.isEmpty, TodoRules.titleFitsLimits(title) else { return nil }
         let now = TodoRules.normalizedTime(clock())
         let item = TodoItem(
             id: UUID(),
@@ -575,7 +589,7 @@ enum TodoFileStore {
     func rename(_ id: UUID, to rawTitle: String) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         let title = TodoRules.normalizedTitle(rawTitle)
-        guard !title.isEmpty, title.count <= TodoRules.maxTitleLength else { return }
+        guard !title.isEmpty, TodoRules.titleFitsLimits(title) else { return }
         guard items[idx].title != title else { return }
         items[idx].title = title
         items[idx].updatedAt = Self.nextUpdatedAt(now: TodoRules.normalizedTime(clock()), previous: items[idx].updatedAt)

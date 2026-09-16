@@ -775,8 +775,12 @@ final class CheckTodoBoardController {
     /// 화면이 그대로 멈춰 "더는 안 들어간다"가 보인다(90자부터 뜨는 카운터가 그 이유를 설명한다).
     /// 길이는 정규화 전 **사용자가 보는 글자 수**로 잰다(정규화는 저장 시점의 일이다).
     /// 짧아지는 방향은 언제나 허용되므로, 어떤 경로로 100자를 넘겨 들어왔더라도 지워서 빠져나올 수 있다.
+    /// 상한은 뷰(`TodoDraftInput.accepted`)·스토어와 같은 `TodoRules.titleFitsLimits`(글자 100 · 코드 포인트 1000)다 — 여기만
+    /// 글자 수를 보면 서버가 못 받는 초안이 들어와 Enter 가 말없이 먹힌다. 짧아지는 방향도 코드 포인트는 늘지 않아야 한다.
     func setDraft(_ text: String) {
-        guard text.count <= TodoRules.maxTitleLength || text.count < ui.draft.count else { return }
+        guard TodoRules.titleFitsLimits(text)
+                || (text.count < ui.draft.count && text.unicodeScalars.count <= ui.draft.unicodeScalars.count)
+        else { return }
         if ui.draft != text { ui.draft = text }
     }
 

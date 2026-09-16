@@ -40,8 +40,9 @@ final class TodoSyncV0330Server {
         var validIDs: [String] = []
         for change in request.changes {
             guard let rawID = change.id, let uuid = UUID(uuidString: rawID),
-                  let title = change.title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  title.count <= 1000,
+                  let title = change.title, !Self.isBlankTitle(title),
+                  // 서버 char_length 는 코드 포인트를 센다(글자 수로 세면 이모지 제목을 실서버와 달리 받아 준다 — X2 S15 heavyTitle).
+                  title.unicodeScalars.count <= 1000,
                   let created = change.createdAtMs, created >= 0,
                   let updated = change.updatedAtMs, updated >= 0,
                   (change.completedAtMs ?? 0) >= 0, (change.deletedAtMs ?? 0) >= 0,
@@ -68,7 +69,8 @@ final class TodoSyncV0330Server {
         }
         rows[userID] = table
         let eightyDays: Int64 = 80 * 86_400_000
-        let full = request.sinceMs.map { $0 < now - eightyDays } ?? true
+        // 미래 since 도 full(S2 최종 SQL 이 명세 식에 더한 안전 규칙 — X2 S15 futureSince).
+        let full = request.sinceMs.map { $0 < now - eightyDays || $0 > now } ?? true
         var picked: [String: Row] = [:]
         if full {
             picked = table
@@ -83,6 +85,20 @@ final class TodoSyncV0330Server {
             rejected: rejected,
             full: full
         )
+    }
+
+    /// 서버의 "공백뿐인 제목" 정규식 `^[[:space:]\u0085\u00a0\u1680\u180e\u2000-\u200b\u2028\u2029\u202f\u205f\u3000\ufeff]*$` 와
+    /// 같은 집합(하네스 로캘 C 의 [[:space:]] 는 ASCII 공백류). Foundation 의 whitespacesAndNewlines 는 U+200B·U+180E·U+FEFF 를
+    /// 공백으로 안 봐 실서버가 거절하는 제목을 받아 줬다(X2 S15 cfOnlyTitle).
+    private static func isBlankTitle(_ title: String) -> Bool {
+        title.unicodeScalars.allSatisfy { scalar in
+            switch scalar.value {
+            case 0x09...0x0D, 0x20, 0x85, 0xA0, 0x1680, 0x180E, 0x2000...0x200B, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF:
+                return true
+            default:
+                return false
+            }
+        }
     }
 
     /// 서버가 들고 있는 이 사용자의 할 일(로컬 모양, id 순).

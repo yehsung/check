@@ -90,6 +90,25 @@ func todoStoreStampsMillisecondTimes() throws {
     #expect(done.completedAt == TodoRules.date(milliseconds: 1_726_500_060_988))
     #expect(done.updatedAt == TodoRules.date(milliseconds: 1_726_500_060_988))
 
+    // 고치는 문은 넷이 더 있다 — 하나라도 소수 ms 를 그대로 적으면 "보낸 값 == 지금 값" 판정이 그 경로에서만 흔들린다.
+    now = Date(timeIntervalSince1970: 1_726_500_120.456_789_1)
+    store.rename(item.id, to: "정규화 고침")
+    let renamed = try #require(store.items.first)
+    #expect(renamed.title == "정규화 고침")
+    #expect(renamed.updatedAt == TodoRules.date(milliseconds: 1_726_500_120_457), "rename 이 소수 ms 시각을 그대로 적었다")
+
+    now = Date(timeIntervalSince1970: 1_726_500_180.000_4)
+    store.delete(item.id)
+    let deleted = try #require(store.items.first)
+    #expect(deleted.deletedAt == TodoRules.date(milliseconds: 1_726_500_180_000), "delete 가 소수 ms 톰스톤 시각을 적었다")
+    #expect(deleted.updatedAt == TodoRules.date(milliseconds: 1_726_500_180_000), "delete 가 소수 ms 고친 시각을 적었다")
+
+    now = Date(timeIntervalSince1970: 1_726_500_240.777_7)
+    store.undoDelete(item.id)
+    let restored = try #require(store.items.first)
+    #expect(restored.deletedAt == nil)
+    #expect(restored.updatedAt == TodoRules.date(milliseconds: 1_726_500_240_778), "undoDelete 가 소수 ms 고친 시각을 적었다")
+
     let reread = TodoListStore(fileURL: url, clock: { now })
     #expect(reread.items == store.items)
 }

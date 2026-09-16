@@ -63,10 +63,12 @@ enum TodoDraftInput {
     static func accepted(current: String, proposed: String) -> String {
         // 지우는 방향(길이가 줄어듦)은 무조건 통과시킨다. 어떤 경로로든 100자를 넘긴 값이 필드에 들어와도
         // 이 예외가 없으면 사용자가 한 글자도 못 지우고 갇힌다.
-        if proposed.count <= current.count { return proposed }
-        // 늘리는 방향은 100자까지. 초과분만 잘라 넣는 게 아니라 변경 자체를 되돌린다 —
+        // 길이는 두 잣대(글자 · 코드 포인트)로 잰다 — 글자 수는 줄면서 코드 포인트만 느는 바꿔치기로 서버 상한을 넘지 못하게.
+        if proposed.count <= current.count, proposed.unicodeScalars.count <= current.unicodeScalars.count { return proposed }
+        // 늘리는 방향은 100자(코드 포인트 1000)까지. 초과분만 잘라 넣는 게 아니라 변경 자체를 되돌린다 —
         // 자동 절단은 붙여넣은 문장 끝이 소리 없이 사라져 '분명 적었는데 없어졌다'로 읽힌다.
-        return proposed.count <= TodoRules.maxTitleLength ? proposed : current
+        // 판정은 스토어·컨트롤러와 같은 `TodoRules.titleFitsLimits` 하나다(뷰만 받고 스토어가 거절하면 Enter 가 말없이 먹힌다).
+        return TodoRules.titleFitsLimits(proposed) ? proposed : current
     }
 
     /// 카운터 문구. 한계에서 멀 땐 nil 이라 숫자가 아예 안 뜬다 — 평소에 늘 떠 있으면 글자 수를 세는 도구처럼

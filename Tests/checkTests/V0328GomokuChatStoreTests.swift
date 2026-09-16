@@ -21,6 +21,7 @@ import Testing
 
 private let me = "00000000-0000-0000-0000-0000000000a1"
 private let rival = "00000000-0000-0000-0000-0000000000b2"
+private let third = "00000000-0000-0000-0000-0000000000c3"
 private let matchID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 private let otherMatchID = "11112222-3333-4444-5555-666677778888"
 
@@ -43,21 +44,47 @@ private func chatRow(
     ["seq": seq, "kind": kind, "body": body, "mine": mine, "created_ms": createdMs ?? nowMs()]
 }
 
-/// gomoku_state 의 ok 묶음. 채팅 키는 **넣을 때만** 실린다 — 안 실은 응답(채팅을 모르는 서버)도 그대로 디코드돼야 한다.
+/// 사람 한 명(로비 matches[] 의 a·b).
+private func userObject(_ id: String, _ name: String) -> [String: Any] {
+    ["user_id": id, "display_name": name, "avatar_url": NSNull(), "character": "aing"]
+}
+
+/// 수 기록 한 줄. `auto` 는 **넣을 때만** 실린다 — 안 실은 응답(옛 서버)은 전부 사람이 둔 수여야 한다.
+private func moveRow(_ seq: Int, _ color: String, _ x: Int?, _ y: Int?, auto: Bool? = nil) -> [String: Any] {
+    var row: [String: Any] = [
+        "seq": seq, "color": color,
+        "x": x.map { $0 as Any } ?? NSNull(), "y": y.map { $0 as Any } ?? NSNull(),
+        "kind": x == nil ? "pass" : "stone"
+    ]
+    if let auto { row["auto"] = auto }
+    return row
+}
+
+/// gomoku_state 의 ok 묶음. 채팅·자동 착수 키는 **넣을 때만** 실린다 — 안 실은 응답(그것을 모르는 서버)도
+/// 그대로 디코드돼야 한다.
 private func statePayload(
     id: String = matchID,
     matchStatus: String = "active",
     myColor: String = "black",
     turn: String? = "black",
+    result: String? = nil,
+    endReason: String? = nil,
     moveCount: Int = 0,
+    moves: [[String: Any]] = [],
     chat: [[String: Any]]? = nil,
     chatSeq: Int? = nil,
     myMuted: Bool? = nil,
     opponentMuted: Bool? = nil,
     chatCapable: Bool? = nil,
     chatMaxLen: Int? = nil,
+    myAutoStreak: Int? = nil,
+    opponentAutoStreak: Int? = nil,
     serverNowMs: Double? = nil
 ) -> [String: Any] {
+    var resultValue: Any = NSNull()
+    if let result { resultValue = result } else if matchStatus == "finished" { resultValue = "white_win" }
+    var endReasonValue: Any = NSNull()
+    if let endReason { endReasonValue = endReason } else if matchStatus == "finished" { endReasonValue = "resign" }
     var payload: [String: Any] = [
         "status": "ok",
         "match": [
@@ -71,12 +98,12 @@ private func statePayload(
             "move_count": moveCount,
             "turn": turn ?? NSNull(),
             "deadline_ms": NSNull(),
-            "result": matchStatus == "finished" ? "white_win" : NSNull(),
-            "end_reason": matchStatus == "finished" ? "resign" : NSNull(),
+            "result": resultValue,
+            "end_reason": endReasonValue,
             "winner": NSNull(),
             "invite_expires_ms": NSNull()
         ],
-        "moves": [],
+        "moves": moves,
         "my_color": myColor,
         "opponent": ["user_id": rival, "display_name": "라이벌", "avatar_url": NSNull(), "character": "aing"],
         "ruby_balance": NSNull(),
@@ -88,6 +115,8 @@ private func statePayload(
     if let opponentMuted { payload["opponent_muted"] = opponentMuted }
     if let chatCapable { payload["chat_capable"] = chatCapable }
     if let chatMaxLen { payload["chat_max_len"] = chatMaxLen }
+    if let myAutoStreak { payload["my_auto_streak"] = myAutoStreak }
+    if let opponentAutoStreak { payload["opponent_auto_streak"] = opponentAutoStreak }
     return payload
 }
 
@@ -575,4 +604,164 @@ func 판이_바뀌면_대화와_초안과_음소거를_비운다() async {
     #expect(gomoku.isMuted == false)
     #expect(gomoku.isSendingChat == false)
     #expect(gomoku.chatNotice == nil)
+}
+
+// MARK: - 6. 로비 "지금 대결 중"
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 지금_대결_중_목록은_서버_순서_그대로이고_시작_시각을_기기_시계로_보정한다() async {
+    let serverNow = nowMs() + 100_000          // 서버 시계가 기기보다 100초 빠르다
+    let (_, gomoku, _) = makeChatStore("live") { rpc, _, index in
+        guard rpc == "gomoku_lobby" else { return nil }
+        if index >= 2 { return GomokuStubProtocol.Reply(status: 500, body: #"{"message":"boom"}"#) }
+        // 두 번째 응답은 **채팅·대결 목록을 모르는 옛 서버**다(matches 키가 아예 없다).
+        if index == 1 { return reply(["status": "ok", "users": [], "server_now_ms": serverNow]) }
+        return reply([
+            "status": "ok", "users": [], "server_now_ms": serverNow,
+            "matches": [
+                ["match_id": "M-LATE", "a": userObject(rival, "라이벌"), "b": userObject(third, "셋째"),
+                 "stake": 10, "started_ms": serverNow - 90_000],
+                ["match_id": "m-early", "a": userObject(me, "나"), "b": userObject(third, "셋째"),
+                 "stake": 3, "started_ms": serverNow - 12_000]
+            ]
+        ])
+    }
+
+    await gomoku.refreshLobby()
+
+    #expect(gomoku.liveMatches.map(\.id) == ["m-late", "m-early"], "서버 순서(accepted_at desc)를 클라가 다시 정렬했다")
+    let first = gomoku.liveMatches.first
+    #expect(first?.a.displayName == "라이벌" && first?.b.displayName == "셋째")
+    #expect(first?.a.id == rival && first?.b.id == third)
+    #expect(first?.stake == .ten)
+    #expect(gomoku.liveMatches.last?.stake == .three)
+    // 서버가 100초 빨라도 경과는 기기 시계로 90초다.
+    let elapsed = Date().timeIntervalSince(first?.startedAt ?? Date())
+    #expect(abs(elapsed - 90) < 3, "보정된 경과 \(elapsed)초")
+
+    // 옛 서버(키 없음)는 들고 있던 목록을 지우지 않는다.
+    await gomoku.refreshLobby()
+    #expect(gomoku.liveMatches.count == 2)
+    // 조회 실패도 마찬가지다 — 빈 목록을 "아무도 안 두고 있다"로 보여 주지 않는다.
+    await gomoku.refreshLobby()
+    #expect(gomoku.liveMatches.count == 2)
+    #expect(gomoku.lobbyLoadFailed)
+    // 로그아웃·계정 전환은 비운다.
+    gomoku.reset()
+    #expect(gomoku.liveMatches.isEmpty)
+}
+
+// MARK: - 7. 자동 착수 (시간 초과 = 패배 아님)
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 자동으로_놓인_수를_구분해_들고_마지막_수가_자동인지_안다() {
+    let (_, gomoku, _) = makeChatStore("auto-moves")
+    gomoku.applyState(decodePayload(statePayload(
+        turn: "black", moveCount: 2,
+        moves: [moveRow(1, "black", 7, 7, auto: false), moveRow(2, "white", 8, 7, auto: true)])))
+
+    #expect(gomoku.match?.autoPoints == [GomokuPoint(x: 8, y: 7)!])
+    #expect(gomoku.match?.lastMoveWasAuto == true)
+    #expect(gomoku.match?.board[GomokuPoint(x: 8, y: 7)!] == .white, "자동으로 놓인 수도 정상 수다")
+
+    // 사람이 이어 두면 마지막 수는 사람 수이고, 앞의 회색 점은 그대로 남는다.
+    gomoku.applyState(decodePayload(statePayload(
+        turn: "white", moveCount: 3, moves: [moveRow(3, "black", 6, 6, auto: false)])))
+    #expect(gomoku.match?.lastMoveWasAuto == false)
+    #expect(gomoku.match?.autoPoints == [GomokuPoint(x: 8, y: 7)!])
+
+    // `auto` 키가 없는 옛 서버 응답은 **전부 사람 수**다 — 모른다고 회색 점을 찍으면 판이 거짓말을 한다.
+    let (_, old, _) = makeChatStore("auto-old")
+    old.applyState(decodePayload(statePayload(
+        turn: "white", moveCount: 2, moves: [moveRow(1, "black", 7, 7), moveRow(2, "white", 8, 7)])))
+    #expect(old.match?.autoPoints.isEmpty == true)
+    #expect(old.match?.lastMoveWasAuto == false)
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 연속_자동_착수는_서버가_세고_한_번_남았을_때만_경고한다() {
+    #expect(GomokuStore.autoPlaceLossStreak == 3)
+    #expect(GomokuNoticeText.autoStreakWarning(0) == nil)
+    #expect(GomokuNoticeText.autoStreakWarning(1) == nil, "첫 번째부터 겁을 주면 매 판 뜨고 아무도 안 읽는다")
+    #expect(GomokuNoticeText.autoStreakWarning(2) == "한 번 더 놓치면 집니다")
+    #expect(GomokuNoticeText.autoStreakWarning(3) == nil, "3이면 판이 이미 끝났다")
+
+    let (_, gomoku, _) = makeChatStore("streak")
+    gomoku.applyState(decodePayload(statePayload(myAutoStreak: 2, opponentAutoStreak: 1)))
+    #expect(gomoku.myAutoStreak == 2 && gomoku.opponentAutoStreak == 1)
+
+    // 직접 두면 **서버가** 0으로 되돌린다(클라가 세지 않는다). 말 안 한 값은 그대로 둔다.
+    gomoku.applyState(decodePayload(statePayload(
+        moveCount: 1, moves: [moveRow(1, "black", 7, 7)], myAutoStreak: 0)))
+    #expect(gomoku.myAutoStreak == 0)
+    #expect(gomoku.opponentAutoStreak == 1)
+
+    // 판마다 따로 세는 값이라 판이 바뀌면 0이다(안 그러면 새 판 첫 수부터 경고가 뜬다).
+    gomoku.applyState(decodePayload(statePayload(id: otherMatchID)))
+    #expect(gomoku.myAutoStreak == 0 && gomoku.opponentAutoStreak == 0)
+
+    for text in [GomokuNoticeText.autoPlaced, GomokuNoticeText.autoPlacedStone,
+                 GomokuNoticeText.autoStreakWarning(2) ?? "",
+                 GomokuNoticeText.abandoned(outcome: .won), GomokuNoticeText.abandoned(outcome: .lost)] {
+        #expect(!text.isEmpty)
+        for word in diagnosticWords {
+            #expect(!text.contains(word), "안내 문구에 진단 어휘 '\(word)': \(text)")
+        }
+    }
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 시간_초과는_패배가_아니라_자동_착수로_돌아온다() async {
+    let (_, gomoku, _) = makeChatStore("auto-placed") { rpc, _, _ in
+        guard rpc == "gomoku_move" else { return nil }
+        return reply([
+            "status": "auto_placed",
+            "state": statePayload(
+                turn: "black", moveCount: 2,
+                moves: [moveRow(1, "black", 7, 7), moveRow(2, "white", 0, 0, auto: true)],
+                myAutoStreak: 0, opponentAutoStreak: 1)
+        ])
+    }
+    gomoku.applyState(decodePayload(statePayload(
+        turn: "black", moveCount: 1, moves: [moveRow(1, "black", 7, 7)])))
+
+    await gomoku.place(GomokuPoint(x: 5, y: 5)!)
+
+    #expect(gomoku.notice == "시간이 지나 자동으로 놓였어요")
+    #expect(gomoku.notice == GomokuNoticeText.move(.autoPlaced))
+    #expect(gomoku.match?.isFinished == false, "시간이 지났다고 지지 않는다 — 서버가 대신 놓는다")
+    #expect(gomoku.phase == .playing)
+    #expect(gomoku.opponentAutoStreak == 1)
+    #expect(gomoku.match?.autoPoints.contains(GomokuPoint(x: 0, y: 0)!) == true)
+    #expect(gomoku.isBusy == false)
+
+    // 옛 어휘는 살아 있다 — 옛 판 기록과 배포 중간 창의 옛 서버가 아직 쓴다.
+    #expect(GomokuNoticeText.move(.timeout) == GomokuNoticeText.timedOut)
+    #expect(GomokuEndReason(rawValue: "timeout") == .timeout)
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 자리를_비워_끝난_판은_결과_문구를_갖는다() {
+    #expect(GomokuNoticeText.abandoned(outcome: .lost) == "자리를 비워 졌어요")
+    #expect(GomokuNoticeText.abandoned(outcome: .won) == "상대가 자리를 비웠어요")
+
+    let (_, gomoku, _) = makeChatStore("abandoned")
+    gomoku.applyState(decodePayload(statePayload(
+        matchStatus: "finished", turn: nil, result: "white_win", endReason: "abandoned")))
+
+    // 서버가 보낸 사실을 nil 로 삼키지 않는다(열거값을 넓히면 UI 전수 스위치가 깨진다 — GomokuEndReason 주석 참고).
+    #expect(gomoku.match?.endedByAbandon == true)
+    #expect(gomoku.match?.outcome == .lost)
+    #expect(gomoku.phase == .result)
+
+    // 옛 사유들은 그대로 열거값으로 읽힌다.
+    gomoku.applyState(decodePayload(statePayload(
+        id: otherMatchID, matchStatus: "finished", turn: nil, result: "black_win", endReason: "resign")))
+    #expect(gomoku.match?.endReason == .resign)
+    #expect(gomoku.match?.endedByAbandon == false)
 }

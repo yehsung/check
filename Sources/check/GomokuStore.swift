@@ -40,7 +40,25 @@ nonisolated struct GomokuInvite: Identifiable, Equatable, Sendable {
     let expiresAt: Date            // 기기 시계로 보정된 시각
 }
 
-nonisolated enum GomokuEndReason: String, Sendable { case five, timeout, resign, boardFull = "board_full" }
+nonisolated enum GomokuEndReason: String, Sendable {
+    case five
+    /// **옛 어휘**(0.3.27: 시간 초과 = 즉시 패배). 새 서버는 이 사유로 판을 끝내지 않지만 **옛 판 기록에 남아 있고**
+    /// 배포 중간 창의 옛 서버가 아직 보낸다 — 지우지 마라.
+    case timeout
+    case resign
+    case boardFull = "board_full"
+
+    // ★ `case abandoned` (0.3.28 자리 비움 패배)는 **아직 여기 없다 — 일부러 없다.**
+    //   이 열거값을 넓히는 순간 UI 트랙 소유 파일이 컴파일에서 깨진다(실측, 2026-09-16):
+    //     GomokuPanel.swift:170  error: switch must be exhaustive
+    //                            note: add missing case: '(.some(.abandoned), _)'
+    //   `GomokuText.endReason(_:outcome:)` 이 default 없는 전수 스위치라 그렇다. 그래서 케이스 추가와
+    //   아래 두 줄은 **같은 커밋에서** 가야 한다(문구는 이미 GomokuNoticeText 에 단일 출처로 있다):
+    //       case (.abandoned?, .won?): return GomokuNoticeText.abandoned(outcome: .won)
+    //       case (.abandoned?, _):     return GomokuNoticeText.abandoned(outcome: outcome)
+    //   그때까지 자리 비움은 `GomokuMatchState.endedByAbandon` 이 들고 있다 — 서버가 보내는 값을
+    //   nil 로 삼키지 않기 위한 자리이고, 케이스가 들어오는 날 그 프로퍼티는 지우면 된다.
+}
 
 nonisolated enum GomokuOutcome: Equatable, Sendable { case won, lost, draw }
 
@@ -59,6 +77,32 @@ nonisolated struct GomokuMatchState: Identifiable, Equatable, Sendable {
     var endReason: GomokuEndReason?
     var rubyDelta: Int?            // 이 판으로 내 루비가 변한 양(승 +stake, 패 -stake, 무 0)
     var blackPassed: Bool          // 직전에 흑 자동 패스가 있었다
+    /// 0.3.28 — 시간이 지나 **서버가 대신 놓은** 자리들(뷰가 작은 회색 점으로 구분해 그린다).
+    /// **기본값이 있는 채로 맨 끝에 둔다** — 멤버와이즈 초기화를 쓰는 렌더·창 테스트가 그대로 컴파일돼야 한다.
+    var autoPoints: Set<GomokuPoint> = []
+    /// 마지막 수가 자동으로 놓인 것인가(상태줄·툴팁이 "시간이 지나 자동으로 놓인 수"를 말할 근거).
+    var lastMoveWasAuto: Bool = false
+    /// 0.3.28 — 자동 착수가 연속 3번 놓여 끝난 판(`end_reason = 'abandoned'`).
+    ///
+    /// **왜 `endReason` 열거값이 아니라 여기 있는가**: 그 열거값을 넓히면 UI 트랙 소유 파일의 전수 스위치가
+    /// 컴파일에서 깨진다(GomokuEndReason 주석에 실측과 패치가 있다). 서버가 보내는 사실을 nil 로 삼키지 않으려고
+    /// 둔 자리다 — 결과 화면은 이 값이 참이면 `GomokuNoticeText.abandoned(outcome:)` 를 쓴다.
+    var endedByAbandon: Bool = false
+
+    /// 서버 `end_reason` 의 자리 비움 값. 문자열을 여기 한 번만 쓴다.
+    nonisolated static let abandonedEndReason = "abandoned"
+}
+
+/// 로비 "지금 대결 중" 한 건. **판 내용을 들고 있지 않다** — 누구와 누가, 얼마를 걸고, 언제 시작했는지뿐이다.
+/// 경과(m:ss)는 뷰의 잎(TimelineView)이 `startedAt` 으로 잰다 — 이 스토어는 초를 세지 않는다(팝오버 무효화 계약).
+nonisolated struct GomokuLiveMatch: Identifiable, Equatable, Sendable {
+    let id: String
+    /// 서버가 uuid 로 고정한 좌우 순서 그대로다(조회마다 자리가 바뀌면 같은 판이 다른 판으로 보인다).
+    let a: GomokuUser
+    let b: GomokuUser
+    let stake: GomokuStake
+    /// 기기 시계로 보정된 시작 시각(서버 `started_ms` = accepted_at).
+    let startedAt: Date
 }
 
 nonisolated enum GomokuPhase: Equatable, Sendable { case lobby, playing, result }
@@ -155,6 +199,24 @@ nonisolated enum GomokuNoticeText {
     /// 길이 초과. 숫자는 **서버가 알려 준 상한이 있으면 그것**을 쓴다(둘이 갈리는 날 진실은 거절하는 쪽에 있다).
     static func chatTooLong(_ maxLength: Int) -> String { "채팅은 \(maxLength)자까지예요" }
 
+    // 자동 착수(v0.3.28). 시간이 지나면 **지는 게 아니라 서버가 대신 놓는다** — 그래서 문구도 '졌다'가 아니라 '놓였다'다.
+    /// 내 차례가 시간 초과로 지나가 서버가 대신 놓았다(gomoku_move 의 auto_placed).
+    static let autoPlaced = "시간이 지나 자동으로 놓였어요"
+    /// 판 위 회색 점 하나의 설명(툴팁·보이스오버).
+    static let autoPlacedStone = "시간이 지나 자동으로 놓인 수"
+
+    /// 자동 착수 연속 경고. **한 번 남았을 때만** 말한다 — 첫 번째부터 겁을 주면 매 판 뜨고, 그러면 아무도 안 읽는다.
+    /// 판을 잃는 횟수(`GomokuStore.autoPlaceLossStreak`)에서 파생시킨다: 리터럴을 따로 쓰면 값을 바꾼 날 문구만 옛 숫자로 남는다.
+    static func autoStreakWarning(_ streak: Int) -> String? {
+        guard streak == GomokuStore.autoPlaceLossStreak - 1 else { return nil }
+        return "한 번 더 놓치면 집니다"
+    }
+
+    /// 자리 비움으로 끝난 판의 결과 한 줄(연속 자동 착수). 이긴 쪽과 진 쪽이 다른 문장을 본다.
+    static func abandoned(outcome: GomokuOutcome?) -> String {
+        outcome == .won ? "상대가 자리를 비웠어요" : "자리를 비워 졌어요"
+    }
+
     /// 금수 사유별 문구. 상태줄과 호버 이유가 같은 말을 한다.
     static func forbidden(_ reason: GomokuForbiddenReason) -> String {
         switch reason {
@@ -215,6 +277,8 @@ nonisolated enum GomokuNoticeText {
     static func move(_ status: GomokuRPCStatus, reason: String? = nil) -> String? {
         switch status {
         case .ok, .stale: return nil
+        // 내 차례가 지나 서버가 대신 놓았다. 판은 함께 온 state 가 말하고, 이 줄은 **왜** 그렇게 됐는지를 말한다.
+        case .autoPlaced: return autoPlaced
         case .forbidden:
             return GomokuForbiddenReason(serverReason: reason).map(forbidden) ?? cannotPlace
         case .timeout: return timedOut
@@ -283,6 +347,9 @@ final class GomokuStore {
     nonisolated static let lobbyPollSeconds: TimeInterval = 30
     /// 팝오버를 열 때 받은 신청을 보는 스로틀(초). 팀 메타 재조회와 같은 눈금이다.
     nonisolated static let menuInboxThrottleSeconds: TimeInterval = 60
+    /// 연속 자동 착수 몇 번에 판을 잃는가. 서버 `gomoku_abandon_streak()` 와 같은 값이다 —
+    /// 경고 문구도 이 숫자에서 나온다(리터럴을 따로 쓰면 값을 바꾼 날 안내만 옛 숫자로 남는다).
+    nonisolated static let autoPlaceLossStreak = 3
     /// 서버가 턴 제한에 더하는 네트워크 유예(초). 서버 `gomoku_turn_grace_seconds()` 와 같은 값 — 표시 마감이 이만큼
     /// 지나도 결과가 안 왔으면 내 차례여도 한 번 물어본다(서버는 누가 부르든 시간 초과를 먼저 정산한다).
     nonisolated static let turnGraceSeconds: TimeInterval = 2
@@ -333,6 +400,18 @@ final class GomokuStore {
     var lobbyLoadFailed = false
     /// 이번 로그인에서 상대 목록을 한 번이라도 받았다.
     var hasLoadedLobby = false
+
+    /// 로비 "지금 대결 중" 목록(0.3.28). **서버 순서를 그대로 쓴다**(accepted_at desc) — 클라가 다시 정렬하면
+    /// 스토어 정렬과 뷰 정렬이 갈리고, 그때 같은 목록이 화면마다 다른 순서로 보인다(users 가 겪은 그것).
+    /// 옛 서버(키 없음)면 빈 배열이고 화면은 "지금 대결 중인 사람이 없어요"로 접힌다.
+    var liveMatches: [GomokuLiveMatch] = []
+
+    // MARK: 자동 착수 (v0.3.28) — 시간 초과는 패배가 아니라 **무작위 대리 착수**다
+
+    /// 내가 **연속으로** 자동 착수당한 횟수. 직접 한 수라도 두면 0으로 돌아간다.
+    /// `autoPlaceLossStreak` 에 닿으면 그 판을 잃는다(서버가 `abandoned` 로 끝낸다).
+    var myAutoStreak = 0
+    var opponentAutoStreak = 0
 
     // MARK: 채팅 상태 (v0.3.28) — **`isBusy` 를 쓰지 않는다**
 
@@ -551,6 +630,12 @@ final class GomokuStore {
             let mapped = Self.sortedForLobby(rows.compactMap(Self.user(from:)))
             if users != mapped { users = mapped }
         }
+        // **서버 순서 그대로**(accepted_at desc) — 여기서 다시 정렬하지 마라. 키가 아예 없으면(옛 서버)
+        // 들고 있던 목록을 지우지 않는다: 조회 실패와 같은 규약이다(빈 목록을 사실로 보여 주지 않는다).
+        if let rows = response.matches {
+            let live = rows.compactMap(liveMatch(from:))
+            if liveMatches != live { liveMatches = live }
+        }
         if let active = activeMatchID, match?.id != active {
             Task { [weak self] in await self?.refreshMatch(id: active) }
         }
@@ -762,12 +847,14 @@ final class GomokuStore {
             return .ignored
         }
         let tolerateGaps = requestedSince == 0
-        let records: [(seq: Int, color: GomokuColor, point: GomokuPoint?)] = (payload.moves ?? [])
+        // `auto` 가 없는 응답(옛 서버)은 **사람이 둔 수**로 읽는다 — 모른다고 회색 점을 찍으면 판 전체가 거짓말이 된다.
+        let records: [(seq: Int, color: GomokuColor, point: GomokuPoint?, auto: Bool)] = (payload.moves ?? [])
             .compactMap { move in
                 guard let seq = move.seq, let color = GomokuColor(rawValue: move.color ?? "") else { return nil }
-                if move.kind == "pass" || move.x == nil || move.y == nil { return (seq, color, nil) }
+                let auto = move.auto ?? false
+                if move.kind == "pass" || move.x == nil || move.y == nil { return (seq, color, nil, auto) }
                 guard let point = GomokuPoint(x: move.x ?? -1, y: move.y ?? -1) else { return nil }
-                return (seq, color, point)
+                return (seq, color, point, auto)
             }
             .sorted { $0.seq < $1.seq }
 
@@ -775,15 +862,21 @@ final class GomokuStore {
         var lastMove: GomokuPoint?
         var appliedCount: Int
         var lastRecordIsBlackPass: Bool?
+        var autoPoints: Set<GomokuPoint>
+        var lastMoveWasAuto: Bool
         let rebuild = base == nil || records.first?.seq == 1
         if rebuild {
             board = GomokuBoard()
             lastMove = nil
             appliedCount = 0
+            autoPoints = []
+            lastMoveWasAuto = false
         } else {
             board = base?.board ?? GomokuBoard()
             lastMove = base?.lastMove
             appliedCount = base?.moveCount ?? 0
+            autoPoints = base?.autoPoints ?? []
+            lastMoveWasAuto = base?.lastMoveWasAuto ?? false
         }
         for record in records where record.seq > appliedCount {
             if record.seq != appliedCount + 1, !tolerateGaps { return .needsFull }
@@ -791,9 +884,12 @@ final class GomokuStore {
                 board[point] = record.color
                 lastMove = point
                 lastRecordIsBlackPass = false
+                // 같은 자리를 두 번 쓰는 길은 없지만, 다시 받은 기록이 사람 수라고 말하면 그 말을 따른다.
+                if record.auto { autoPoints.insert(point) } else { autoPoints.remove(point) }
             } else {
                 lastRecordIsBlackPass = record.color == .black
             }
+            lastMoveWasAuto = record.auto
             appliedCount = record.seq
         }
         if let serverBoard = row.board.flatMap(GomokuBoard.init(serverString:)) {
@@ -846,7 +942,8 @@ final class GomokuStore {
             id: id, stake: stake, myColor: myColor, opponent: opponent, board: board, lastMove: lastMove,
             moveCount: appliedCount, turn: turn, deadline: deadline, isFinished: isFinished, outcome: outcome,
             endReason: row.endReason.flatMap(GomokuEndReason.init(rawValue:)), rubyDelta: rubyDelta,
-            blackPassed: blackPassed
+            blackPassed: blackPassed, autoPoints: autoPoints, lastMoveWasAuto: lastMoveWasAuto,
+            endedByAbandon: row.endReason == GomokuMatchState.abandonedEndReason
         )
         let justFinished = isFinished && base?.isFinished == false
         let previous = match
@@ -857,6 +954,9 @@ final class GomokuStore {
         // 채팅은 판을 옮긴 **뒤에** 옮긴다 — 순서가 바뀌면 방금 비운 대화 위에 옛 판의 줄이 다시 붙는다.
         // 끝난 판에서도 계속 받는다(결과 화면의 인사 120초).
         applyChat(payload, matchID: id, requestedSince: requestedSinceChat)
+        // 연속 횟수는 **서버가 센다**(직접 두면 0으로 되돌리는 것도 서버다). 키가 없는 응답이면 들고 있던 값을 둔다.
+        if let streak = payload.myAutoStreak, myAutoStreak != streak { myAutoStreak = streak }
+        if let streak = payload.opponentAutoStreak, opponentAutoStreak != streak { opponentAutoStreak = streak }
         activeMatchID = isFinished ? nil : id
         if !isFinished {
             // 내 신청이 수락됐거나 내가 수락한 판이다 — 대기 카드를 걷는다.
@@ -1048,7 +1148,8 @@ final class GomokuStore {
                 if applyState(state, requestedSince: expected, blackPassedHint: response.blackPassed) == .needsFull {
                     needsRefresh = true
                 }
-            } else if response.status == .ok || response.status == .timeout {
+            } else if response.status == .ok || response.status == .timeout || response.status == .autoPlaced {
+                // 상태를 안 실어 준 성공·시간 경과는 판을 다시 읽어야 한다(자동 착수는 내 수 말고 **남의 수까지** 바꾼다).
                 needsRefresh = true
             }
             if needsRefresh { await refreshMatch(id: id) }
@@ -1086,7 +1187,7 @@ final class GomokuStore {
         }
         if phase != .lobby { phase = .lobby }
         // 로비로 나가면 그 판의 대화는 끝이다(서버도 하루 뒤 지운다). 초안까지 함께 내린다.
-        clearChat()
+        clearMatchScopedState()
         setNotice(nil)
         guard host?.session != nil else { return }
         Task { [weak self] in
@@ -1108,7 +1209,7 @@ final class GomokuStore {
             match = nil
         }
         if phase != .lobby { phase = .lobby }
-        clearChat()
+        clearMatchScopedState()
         await challenge(userID: opponent.id, peerHint: opponent)
     }
 
@@ -1268,13 +1369,14 @@ final class GomokuStore {
         if notice != nil { notice = nil }
         if isBusy { isBusy = false }
         if isSendingChat { isSendingChat = false }
-        clearChat()
+        clearMatchScopedState()
         if isWindowVisible { isWindowVisible = false }
         if isRulesVisible { isRulesVisible = false }
         if rubyBalance != nil { rubyBalance = nil }
         if turnSeconds != 30 { turnSeconds = 30 }
         if lobbyLoadFailed { lobbyLoadFailed = false }
         if hasLoadedLobby { hasLoadedLobby = false }
+        if !liveMatches.isEmpty { liveMatches = [] }
         serverClockOffset = 0
         hasServerClockOffset = false
         isWindowOccluded = false
@@ -1405,7 +1507,7 @@ final class GomokuStore {
     ///  · 서버 발급 번호가 **역행하면 통째로 버린다**(옛 스냅숏이 방금 켠 음소거를 되돌리지 못하게 값보다 먼저 본다),
     ///  · 기록에 구멍이 나면 다음 한 번을 처음부터 받게 표시한다.
     private func applyChat(_ payload: GomokuStatePayload, matchID id: String, requestedSince: Int) {
-        if chatMatchID != id { clearChat(for: id) }
+        if chatMatchID != id { clearMatchScopedState(for: id) }
         if let limit = payload.chatMaxLen, limit > 0, chatMaxLength != limit { chatMaxLength = limit }
         if let serverSeq = payload.chatSeq, serverSeq < chatSeq { return }
         if let capable = payload.chatCapable, opponentChatCapable != capable { opponentChatCapable = capable }
@@ -1452,10 +1554,13 @@ final class GomokuStore {
         return chatWantsFull
     }
 
-    /// 대화를 비운다(판이 바뀌었다 · 로비로 나갔다 · 로그아웃했다).
-    /// 초안과 음소거 표시까지 함께 내린다 — 앞 판에 쓰던 말이 다음 판 입력칸에 남아 나가면 그게 곧 사고다
-    /// (메시지의 '상대 바꾸기'가 세운 규약 그대로다).
-    private func clearChat(for id: String? = nil) {
+    /// **한 판에만 속하는 것**을 전부 비운다(판이 바뀌었다 · 로비로 나갔다 · 로그아웃했다):
+    /// 대화 · 초안 · 음소거 표시 · 자동 착수 연속 횟수.
+    ///
+    /// 초안까지 내리는 이유는 앞 판에 쓰던 말이 다음 판 입력칸에 남아 나가면 그게 곧 사고이기 때문이고
+    /// (메시지의 '상대 바꾸기'가 세운 규약), 연속 횟수를 내리는 이유는 그것이 **판마다 따로 세는 값**이라
+    /// 남겨 두면 새 판 첫 수부터 "한 번 더 놓치면 집니다"가 뜨기 때문이다.
+    private func clearMatchScopedState(for id: String? = nil) {
         chatMatchID = id
         chatWantsFull = false
         if !chat.isEmpty { chat = [] }
@@ -1466,6 +1571,8 @@ final class GomokuStore {
         if !chatDraft.isEmpty { chatDraft = "" }
         if chatNotice != nil { chatNotice = nil }
         if chatMaxLength != GomokuChatBody.maxLength { chatMaxLength = GomokuChatBody.maxLength }
+        if myAutoStreak != 0 { myAutoStreak = 0 }
+        if opponentAutoStreak != 0 { opponentAutoStreak = 0 }
     }
 
     private func setChatNotice(_ text: String?) {
@@ -1507,7 +1614,7 @@ final class GomokuStore {
     private func clearMatch() {
         if match != nil { match = nil }
         if phase != .lobby { phase = .lobby }
-        clearChat()
+        clearMatchScopedState()
     }
 
     private func removeIncoming(_ id: String) {
@@ -1557,6 +1664,19 @@ final class GomokuStore {
               let peer = peerUser(peerRow, working: true, capable: true, inMatch: false) ?? fallbackPeer
         else { return nil }
         return GomokuInvite(id: id, peer: peer, stake: stake, expiresAt: expiresAt)
+    }
+
+    /// 로비 "지금 대결 중" 한 줄 → 화면 값. 하나라도 모르면 **그 카드를 만들지 않는다** —
+    /// 이름도 판돈도 모르는 카드는 사용자에게 아무것도 알려 주지 않는다.
+    private func liveMatch(from row: GomokuLobbyMatchRow) -> GomokuLiveMatch? {
+        guard let id = row.matchId?.lowercased(), !id.isEmpty,
+              let a = peerUser(row.a, working: true, capable: true, inMatch: true),
+              let b = peerUser(row.b, working: true, capable: true, inMatch: true),
+              // 판돈은 서버 CHECK 가 3·5·10 으로 묶어 둔 값이다. 서버가 그 표를 넓히는 날 이 줄이 먼저 막는다.
+              let stake = row.stake.flatMap(GomokuStake.init(rawValue:)),
+              let startedAt = deviceDate(serverMs: row.startedMs)
+        else { return nil }
+        return GomokuLiveMatch(id: id, a: a, b: b, stake: stake, startedAt: startedAt)
     }
 
     /// 사람 행 → GomokuUser. 행에 없는 칸(근무·가능·대국 중)은 로비 목록에서 빌리고, 거기에도 없으면 문맥 기본값이다.

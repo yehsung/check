@@ -3169,7 +3169,11 @@ nonisolated enum GomokuRPCStatus: String, Equatable, Hashable, Sendable, Decodab
     case notPending = "not_pending"
     case expired
     case notActive = "not_active"
+    /// 시간 초과 패배(**옛 어휘**). 0.3.28 서버는 이 status 를 새로 보내지 않는다 — 시간이 지나면 지는 게 아니라
+    /// 서버가 무작위 자리에 대신 놓기 때문이다(`autoPlaced`). **지우지 마라**: 배포 중간 창의 옛 서버가 아직 보낸다.
     case timeout
+    /// 0.3.28 — 내 차례가 시간 초과로 지나가 **서버가 대신 놓았다**. 판은 함께 오는 state 가 말한다.
+    case autoPlaced = "auto_placed"
     case notYourTurn = "not_your_turn"
     case stale
     case forbidden
@@ -3280,7 +3284,21 @@ struct GomokuLobbyMe: Decodable, Equatable, Sendable {
     var outgoingMatchId: String?
 }
 
-/// gomoku_lobby 응답: { status, server_now_ms, stakes, turn_seconds, invite_ttl_seconds, me{…}, users[…] }.
+/// 로비 "지금 대결 중" 한 줄(0.3.28).
+///
+/// **판 내용이 없다** — board·turn·move_count 를 서버가 아예 싣지 않는다(구경꾼에게 남의 판을 보여 주지 않는다).
+/// 여기에 그 키들을 더하지 마라: 서버 사후 단언이 `gomoku_lobby` 소스에서 그 낱말들을 막고 있다.
+/// a/b 순서는 서버가 uuid 로 고정하므로 조회마다 좌우가 흔들리지 않는다.
+struct GomokuLobbyMatchRow: Decodable, Equatable, Sendable {
+    var matchId: String?
+    var a: GomokuUserRow?
+    var b: GomokuUserRow?
+    var stake: Int?
+    /// 대국이 시작된 서버 시각(accepted_at). 경과는 앱이 잰다.
+    var startedMs: Double?
+}
+
+/// gomoku_lobby 응답: { status, server_now_ms, stakes, turn_seconds, invite_ttl_seconds, me{…}, users[…], matches[…] }.
 struct GomokuLobbyResponse: Decodable, Equatable, Sendable {
     let status: GomokuRPCStatus
     var serverNowMs: Double?
@@ -3289,6 +3307,8 @@ struct GomokuLobbyResponse: Decodable, Equatable, Sendable {
     var inviteTtlSeconds: Int?
     var me: GomokuLobbyMe?
     var users: [GomokuUserRow]?
+    /// 0.3.28 — 지금 뜨고 있는 판들(accepted_at desc, 최대 20). 옛 서버는 이 키를 안 싣는다(nil).
+    var matches: [GomokuLobbyMatchRow]?
 }
 
 /// 대국 한 판의 서버 행(gomoku_state 의 match). `board` 는 설계서에 없는 키지만 서버가 실어 주면 권위로 쓴다.
@@ -3317,6 +3337,9 @@ struct GomokuMoveRow: Decodable, Equatable, Sendable {
     var kind: String?
     var x: Int?
     var y: Int?
+    /// 0.3.28 — 시간이 지나 **서버가 대신 놓은** 수. nil 은 "모른다"이고 **사람이 둔 것으로 읽는다**
+    /// (이 키를 안 싣는 옛 서버의 판이 통째로 회색 점이 되면 안 된다).
+    var auto: Bool?
 }
 
 /// 대국 채팅 한 줄(서버 `chat[]`). `mine` 은 서버가 판정한다 — 앱이 sender 를 내 id 와 대조하지 않는다.
@@ -3355,6 +3378,9 @@ struct GomokuStatePayload: Decodable, Equatable, Sendable {
     /// 상대 앱이 채팅을 받을 수 있다(app_build >= 80). false 면 앱이 먼저 말한다 — 조용히 삼키지 않는다.
     var chatCapable: Bool?
     var chatMaxLen: Int?
+    /// 0.3.28 — 내가 **연속으로** 자동 착수당한 횟수(직접 한 수라도 두면 0으로 돌아간다). 3이면 그 판을 잃는다.
+    var myAutoStreak: Int?
+    var opponentAutoStreak: Int?
 }
 
 /// gomoku_state 응답: { status, match{…}, moves[…], my_color, opponent{…}, ruby_balance, server_now_ms }.

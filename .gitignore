@@ -10,3 +10,6 @@ Config/Supabase.local.xcconfig
 # 로컬 파일은 그대로 남아 `supabase db push` 는 정상 동작한다. 과거 히스토리는 별도 정리 필요.
 supabase/
 __pycache__/
+
+# D1: XcodeGen 생성물(원본은 ios/project.yml)
+ios/AingCheck.xcodeproj/

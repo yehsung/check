@@ -1,0 +1,116 @@
+# aing-check iOS — XcodeGen 명세(개발 도구, 앱에 실리지 않는다).
+#
+# 생성: `cd ios && xcodegen generate` → ios/AingCheck.xcodeproj (생성물은 커밋하지 않는다 — 이 파일이 원본).
+# 화면·스토어 코드는 저장소 루트 Swift 패키지(CheckMobileKit · CheckWidgetsKit → CheckCore)에 두고,
+# 여기 두 타깃은 @main 껍데기만 가진다. 에이전트가 고치기 쉽고 병합 충돌이 적다(계획서 "iOS 앱" 절).
+#
+# 식별자(SPEC-ios §1): 앱 com.yehsung.aingcheck · 위젯 com.yehsung.aingcheck.widgets ·
+# App Group group.com.yehsung.aingcheck · 키체인 그룹 MQ2KQK37WD.com.yehsung.aingcheck.shared · 팀 MQ2KQK37WD.
+# 맥 번들 ID(kingcheck)와는 별개다. 두 타깃이 같은 App Group·키체인 그룹을 가진다 — 위젯이 앱이 쓴 스냅샷과
+# 토큰을 읽는다(위젯은 토큰 갱신을 하지 않는다 — SPEC-ios §4). 값은 Sources/CheckMobileShared 의 상수와 같아야 한다.
+name: AingCheck
+
+options:
+  bundleIdPrefix: com.yehsung
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+  developmentLanguage: ko
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: MQ2KQK37WD
+    CODE_SIGN_STYLE: Automatic
+    # 아이폰 전용
+    TARGETED_DEVICE_FAMILY: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+  configs:
+    # 푸시 환경: Debug 는 APNs sandbox, Release(TestFlight·App Store)는 production. 앱 엔타이틀먼트가 이 값을 읽는다.
+    Debug:
+      APS_ENVIRONMENT: development
+    Release:
+      APS_ENVIRONMENT: production
+
+packages:
+  # 저장소 루트 패키지(Package.swift). 이름은 패키지 선언의 name 과 같아야 한다.
+  check:
+    path: ..
+
+targets:
+  AingCheck:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: check
+        product: CheckMobileKit
+      - target: AingCheckWidgets
+        embed: true
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: aing-check
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # D9 푸시 받기 자리 — 원격 알림으로 깨어나는 백그라운드 모드
+        UIBackgroundModes:
+          - remote-notification
+        ITSAppUsesNonExemptEncryption: false
+        # 120Hz 화면에서 미니게임이 60Hz 에 묶이지 않게(맥의 60Hz 고정 상한 저더 전례 — SPEC-ios §1)
+        CADisableMinimumFrameDurationOnPhone: true
+    entitlements:
+      path: App/AingCheck.entitlements
+      properties:
+        aps-environment: $(APS_ENVIRONMENT)
+        com.apple.security.application-groups:
+          - group.com.yehsung.aingcheck
+        keychain-access-groups:
+          - MQ2KQK37WD.com.yehsung.aingcheck.shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yehsung.aingcheck
+        PRODUCT_NAME: AingCheck
+        # 아이폰 전용. **타깃 단에 다시 적어야 한다** — XcodeGen 의 iOS 앱 기본 설정이 타깃 단에 "1,2" 를 넣어
+        # 프로젝트 단 값을 덮는다(실측: 프로젝트 단에만 두면 빌드된 Info.plist 의 UIDeviceFamily 가 [1, 2]).
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+
+  AingCheckWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+    dependencies:
+      - package: check
+        product: CheckWidgetsKit
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: aing-check
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widgets/AingCheckWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.yehsung.aingcheck
+        keychain-access-groups:
+          - MQ2KQK37WD.com.yehsung.aingcheck.shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yehsung.aingcheck.widgets
+        PRODUCT_NAME: AingCheckWidgets
+        TARGETED_DEVICE_FAMILY: "1"

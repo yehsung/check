@@ -11,13 +11,31 @@ let package = Package(
     ],
     products: [
         .executable(name: "check", targets: ["check"]),
-        .library(name: "CheckCore", targets: ["CheckCore"])
+        .library(name: "CheckCore", targets: ["CheckCore"]),
+        // D1: 폰 앱·위젯 확장이 링크하는 자리 모듈(SPEC-ios §1). 화면 코드는 #if os(iOS) — 맥 빌드에서는 빈 모듈이다.
+        .library(name: "CheckMobileShared", targets: ["CheckMobileShared"]),
+        .library(name: "CheckMobileKit", targets: ["CheckMobileKit"]),
+        .library(name: "CheckWidgetsKit", targets: ["CheckWidgetsKit"])
     ],
     targets: [
         // B3: 맥·폰 공유 코어 — 서버 통신 · 모델 · 실시간 · 세션·키체인 · 오목 · 근무 통계 · 캐릭터 킷 · 토큰 모델 · 할 일 · 게임 규칙.
         // 화면(AppKit·맥 뷰)은 없다. 모듈 사이 접근은 package.
         .target(
             name: "CheckCore"
+        ),
+        // D1: 폰 앱·위젯 공용(App Group 경로 · 키체인 설정 · 위젯 스냅샷 모델 · 할 일 파일 위치 · 기기 식별자). 플랫폼 무관.
+        .target(
+            name: "CheckMobileShared"
+        ),
+        // D1: 폰 스토어(플랫폼 무관 — macOS swift test 로 검증)와 화면(#if os(iOS)). Xcode 앱 타깃(ios/project.yml)은 이 모듈의 public 만 본다.
+        .target(
+            name: "CheckMobileKit",
+            dependencies: ["CheckCore", "CheckMobileShared"]
+        ),
+        // D1: 위젯 화면 · 타임라인 · AppIntent(#if os(iOS)).
+        .target(
+            name: "CheckWidgetsKit",
+            dependencies: ["CheckCore", "CheckMobileShared"]
         ),
         .executableTarget(
             name: "check",

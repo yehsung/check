@@ -7,7 +7,7 @@ import Testing
 //
 // 창은 미니게임 창의 수명 규약을 그대로 쓰고, 다른 점을 여기서 못 박는다:
 //   · 키를 잃거나 닫혀도 **대국이 끝나지 않는다**(판 중단 신호가 아예 없다) — 알리는 것은 표시 상태뿐이다.
-//   · 자동저장 이름이 저장소 안 모든 창과 겹치지 않는다 · 크기 1000×700 고정.
+//   · 자동저장 이름이 저장소 안 모든 창과 겹치지 않는다 · 크기 1240×700 고정(v0.3.28 세 열).
 //   · CheckApp 배선 네 문(창 · 신청 도착 · 말풍선 클릭 · 로그아웃 닫기)이 실제로 물려 있다(소스 계약).
 //
 // 창을 실제로 띄우는 검증은 `CheckPanelVisibility` 알파 0 을 지나고, 직렬이다(AppKit 창을 동시에 만들면 SIGSEGV 실측).
@@ -85,7 +85,7 @@ struct GomokuWindowLifecycleTests {
         #expect(CheckGomokuWindowController.frameAutosaveName == "check.gomoku.window")
         #expect(CheckGomokuWindowController.frameAutosaveName != CheckMiniGameWindowController.frameAutosaveName)
         #expect(CheckGomokuWindowController.frameAutosaveName != CheckSettingsWindowController.frameAutosaveName)
-        #expect(CheckGomokuWindowController.fixedContentSize == NSSize(width: 1000, height: 700))
+        #expect(CheckGomokuWindowController.fixedContentSize == NSSize(width: 1240, height: 700))
 
         let window = CheckGomokuWindowController.makeWindow()
         defer { window.close() }
@@ -490,15 +490,21 @@ func inviteBubbleTextAlwaysFitsTheCapsule() {
 @MainActor
 @Test
 func gomokuWindowLayoutIsAFixedConstantTable() {
-    #expect(GomokuWindowLayout.contentSize == CGSize(width: 1000, height: 700))
-    #expect(GomokuWindowLayout.innerSize == CGSize(width: 960, height: 660))
+    // v0.3.28: 세 열로 넓혔다(+ 채팅 220 + 간격 20). **판 608·높이 700·가운데 열 332·로비 540/400 은 그대로다.**
+    #expect(GomokuWindowLayout.contentSize == CGSize(width: 1240, height: 700))
+    #expect(GomokuWindowLayout.innerSize == CGSize(width: 1200, height: 660))
     #expect(GomokuWindowLayout.bodyHeight == 608)
     #expect(GomokuWindowLayout.boardSide == 608)
     #expect(GomokuWindowLayout.sideColumnWidth == 332)
     #expect(GomokuWindowLayout.lobbySideWidth == 400)
+    #expect(GomokuWindowLayout.lobbyListWidth == 540)
+    #expect(GomokuWindowLayout.chatWidth == 220)
+    // 항등식 둘 — 세 열이 간격까지 더해 안쪽 폭을 **정확히** 채운다(한 항이라도 어긋나면 열이 잘리거나 뜬다).
     #expect(GomokuWindowLayout.lobbyListWidth + GomokuWindowLayout.columnSpacing + GomokuWindowLayout.lobbySideWidth
+            + GomokuWindowLayout.columnSpacing + GomokuWindowLayout.chatWidth
             == GomokuWindowLayout.innerSize.width)
     #expect(GomokuWindowLayout.boardSide + GomokuWindowLayout.columnSpacing + GomokuWindowLayout.sideColumnWidth
+            + GomokuWindowLayout.columnSpacing + GomokuWindowLayout.chatWidth
             == GomokuWindowLayout.innerSize.width)
     // 창 상수와 레이아웃 상수는 한 곳에서 온다.
     #expect(CheckGomokuWindowController.fixedContentSize.width == GomokuWindowLayout.contentSize.width)

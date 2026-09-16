@@ -48,16 +48,11 @@ nonisolated enum GomokuEndReason: String, Sendable {
     case resign
     case boardFull = "board_full"
 
-    // ★ `case abandoned` (0.3.28 자리 비움 패배)는 **아직 여기 없다 — 일부러 없다.**
-    //   이 열거값을 넓히는 순간 UI 트랙 소유 파일이 컴파일에서 깨진다(실측, 2026-09-16):
-    //     GomokuPanel.swift:170  error: switch must be exhaustive
-    //                            note: add missing case: '(.some(.abandoned), _)'
-    //   `GomokuText.endReason(_:outcome:)` 이 default 없는 전수 스위치라 그렇다. 그래서 케이스 추가와
-    //   아래 두 줄은 **같은 커밋에서** 가야 한다(문구는 이미 GomokuNoticeText 에 단일 출처로 있다):
-    //       case (.abandoned?, .won?): return GomokuNoticeText.abandoned(outcome: .won)
-    //       case (.abandoned?, _):     return GomokuNoticeText.abandoned(outcome: outcome)
-    //   그때까지 자리 비움은 `GomokuMatchState.endedByAbandon` 이 들고 있다 — 서버가 보내는 값을
-    //   nil 로 삼키지 않기 위한 자리이고, 케이스가 들어오는 날 그 프로퍼티는 지우면 된다.
+    /// 0.3.28 — 자동 착수가 **연속 3번** 놓여 끝난 판(자리 비움 패배). 문구는 `GomokuNoticeText.abandoned(outcome:)`.
+    ///
+    /// 이 케이스와 `GomokuText.endReason(_:outcome:)` 의 두 줄은 **같은 커밋에서** 갔다 — 그 함수가 default
+    /// 없는 전수 스위치라, 케이스만 넣으면 컴파일이 깨진다(코어가 이 자리를 비워 두고 UI 트랙에 넘긴 이유).
+    case abandoned
 }
 
 nonisolated enum GomokuOutcome: Equatable, Sendable { case won, lost, draw }
@@ -82,15 +77,10 @@ nonisolated struct GomokuMatchState: Identifiable, Equatable, Sendable {
     var autoPoints: Set<GomokuPoint> = []
     /// 마지막 수가 자동으로 놓인 것인가(상태줄·툴팁이 "시간이 지나 자동으로 놓인 수"를 말할 근거).
     var lastMoveWasAuto: Bool = false
-    /// 0.3.28 — 자동 착수가 연속 3번 놓여 끝난 판(`end_reason = 'abandoned'`).
-    ///
-    /// **왜 `endReason` 열거값이 아니라 여기 있는가**: 그 열거값을 넓히면 UI 트랙 소유 파일의 전수 스위치가
-    /// 컴파일에서 깨진다(GomokuEndReason 주석에 실측과 패치가 있다). 서버가 보내는 사실을 nil 로 삼키지 않으려고
-    /// 둔 자리다 — 결과 화면은 이 값이 참이면 `GomokuNoticeText.abandoned(outcome:)` 를 쓴다.
-    var endedByAbandon: Bool = false
-
-    /// 서버 `end_reason` 의 자리 비움 값. 문자열을 여기 한 번만 쓴다.
-    nonisolated static let abandonedEndReason = "abandoned"
+    /// 자동 착수가 연속 3번 놓여 끝난 판인가. **저장 칸이 아니라 `endReason` 에서 파생된다**(0.3.28) —
+    /// 열거값 `.abandoned` 가 들어오면서 사실의 출처가 하나로 합쳐졌고, 같은 사실을 두 칸에 들고 있으면
+    /// 언젠가 둘이 갈린다. 부르는 쪽(결과 화면·코어 테스트)은 그대로 이 이름을 쓴다.
+    var endedByAbandon: Bool { endReason == .abandoned }
 }
 
 /// 로비 "지금 대결 중" 한 건. **판 내용을 들고 있지 않다** — 누구와 누가, 얼마를 걸고, 언제 시작했는지뿐이다.
@@ -942,8 +932,7 @@ final class GomokuStore {
             id: id, stake: stake, myColor: myColor, opponent: opponent, board: board, lastMove: lastMove,
             moveCount: appliedCount, turn: turn, deadline: deadline, isFinished: isFinished, outcome: outcome,
             endReason: row.endReason.flatMap(GomokuEndReason.init(rawValue:)), rubyDelta: rubyDelta,
-            blackPassed: blackPassed, autoPoints: autoPoints, lastMoveWasAuto: lastMoveWasAuto,
-            endedByAbandon: row.endReason == GomokuMatchState.abandonedEndReason
+            blackPassed: blackPassed, autoPoints: autoPoints, lastMoveWasAuto: lastMoveWasAuto
         )
         let justFinished = isFinished && base?.isFinished == false
         let previous = match

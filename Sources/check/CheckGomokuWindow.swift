@@ -17,25 +17,32 @@ import SwiftUI
 //     되살리면 다시 '보임'을 알린다.
 //   · 스페이스/ESC 모니터·주사율 감시자가 없다 — 턴제라 프레임 루프가 없고, 미니게임 전용 전역 싱글턴
 //     (`MiniGameSpaceKey`·`MiniGameFrameRateMonitor.shared`)과 부딪칠 일을 원천적으로 만들지 않는다.
-//   · 크기는 **1000×700 고정**이다(`GomokuWindowLayout.contentSize`). 15×15 판의 칸이 손가락 대신 마우스로
-//     정확히 찍을 만큼 커야 하고(칸 38pt), 오른쪽에 두 사람 카드와 판돈·기권이 함께 서야 한다.
+//   · 크기는 **1240×700 고정**이다(`GomokuWindowLayout.contentSize`). 15×15 판의 칸이 손가락 대신 마우스로
+//     정확히 찍을 만큼 커야 하고(칸 38pt), 오른쪽에 두 사람 카드와 판돈·기권이, 그 오른쪽에 채팅 열이 함께 서야 한다.
+//     v0.3.28 에서 1000 → 1240 으로 넓혔다(+220 채팅 + 20 간격). **판(608)과 높이(700)는 안 건드렸다** —
+//     그 둘을 건드리면 칸 크기와 판 좌표계가 함께 흔들린다.
 
 /// 오목 창의 **고정** 레이아웃. 순수 상수 — 창 크기를 두 곳에 적지 않는다.
 ///
+/// v0.3.28 부터 **세 열**이다. 세 번째 열의 폭은 어느 화면에서나 `chatWidth` 로 같고, 담는 것만 다르다:
+/// 로비는 "지금 대결 중" 목록, 대국·결과는 채팅(결과 화면에도 남긴다 — 끝난 뒤 인사).
+///
 /// 산식:
-///   · 안쪽 = 1000−40 × 700−40 = 960 × 660
+///   · 안쪽 = 1240−40 × 700−40 = 1200 × 660
 ///   · 본문 높이 = 660 − 머리글 40 − 간격 12 = 608
-///   · 대국: 판 608×608(정사각) | 오른쪽 열 960 − 20 − 608 = 332
-///   · 로비: 상대 목록 540 | 오른쪽 열 960 − 20 − 540 = 400
+///   · 대국: 판 608×608(정사각) | 오른쪽 열 332 | 채팅 220 → 608 + 20 + 332 + 20 + 220 = 1200
+///   · 로비: 상대 목록 540 | 오른쪽 열 400 | 대결 중 220 → 540 + 20 + 400 + 20 + 220 = 1200
 enum GomokuWindowLayout {
     /// 창 콘텐츠 크기(고정). 컨트롤러의 min/max 도 이 값 하나를 쓴다.
-    static let contentSize = CGSize(width: 1000, height: 700)
+    static let contentSize = CGSize(width: 1240, height: 700)
     static let contentPadding: CGFloat = 20
     static let columnSpacing: CGFloat = 20
     static let headerHeight: CGFloat = 40
     static let headerSpacing: CGFloat = 12
     /// 로비 왼쪽(상대 목록) 폭.
     static let lobbyListWidth: CGFloat = 540
+    /// 세 번째 열(로비 = 지금 대결 중 · 대국/결과 = 채팅) 폭. 말풍선이 두 줄 안에 서는 최소치다.
+    static let chatWidth: CGFloat = 220
 
     static var innerSize: CGSize {
         CGSize(width: contentSize.width - contentPadding * 2, height: contentSize.height - contentPadding * 2)
@@ -43,10 +50,10 @@ enum GomokuWindowLayout {
     static var bodyHeight: CGFloat { innerSize.height - headerHeight - headerSpacing }
     /// 판 한 변 = 본문 높이(정사각).
     static var boardSide: CGFloat { bodyHeight }
-    /// 대국·결과 화면의 오른쪽 열 = 나머지.
-    static var sideColumnWidth: CGFloat { innerSize.width - columnSpacing - boardSide }
-    /// 로비 오른쪽 열 = 나머지.
-    static var lobbySideWidth: CGFloat { innerSize.width - columnSpacing - lobbyListWidth }
+    /// 대국·결과 화면의 가운데 열 = 판과 채팅을 뺀 나머지.
+    static var sideColumnWidth: CGFloat { innerSize.width - columnSpacing * 2 - boardSide - chatWidth }
+    /// 로비 가운데 열 = 상대 목록과 세 번째 열을 뺀 나머지.
+    static var lobbySideWidth: CGFloat { innerSize.width - columnSpacing * 2 - lobbyListWidth - chatWidth }
 }
 
 /// 오목 창의 수명·표시·복구를 쥐는 단 하나의 지점. **공개 진입점은 `show()` 하나다** —

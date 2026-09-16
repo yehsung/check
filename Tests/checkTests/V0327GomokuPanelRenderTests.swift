@@ -263,6 +263,173 @@ func rulesOverlayRendersAllSixExamples() throws {
     #expect(GomokuRuleExample.all.count == 6)
 }
 
+// MARK: - 세 번째 열(v0.3.28): 채팅 · 지금 대결 중 · 자동 착수
+
+/// 세 번째 열(로비 = 지금 대결 중 · 대국/결과 = 채팅)의 창 좌표. **두 화면에서 x 가 같다**
+/// (540+400 = 608+332 = 940) — 숫자를 적지 않고 레이아웃 상수에서만 뽑는다.
+private var gpThirdColumn: CGRect {
+    CGRect(x: GomokuWindowLayout.contentPadding + GomokuWindowLayout.innerSize.width - GomokuWindowLayout.chatWidth,
+           y: gpBoardOrigin.y, width: GomokuWindowLayout.chatWidth, height: GomokuWindowLayout.bodyHeight)
+}
+
+/// 대국 화면 가운데 열(두 사람·판돈·상태줄).
+private var gpMatchSideColumn: CGRect {
+    CGRect(x: gpBoardOrigin.x + GomokuWindowLayout.boardSide + GomokuWindowLayout.columnSpacing,
+           y: gpBoardOrigin.y, width: GomokuWindowLayout.sideColumnWidth, height: GomokuWindowLayout.bodyHeight)
+}
+
+@MainActor
+private func gpChatStore(muted: Bool = false, messages: Bool = true, draft: String = "") -> GomokuStore {
+    let store = gpPlayingStore(turn: .black)
+    store.isMuted = muted
+    store.chatDraft = draft
+    if messages {
+        let now = Date(timeIntervalSince1970: 1_784_000_000)
+        store.chat = [
+            GomokuChatMessage(seq: 1, isMine: false, sentAt: now, quick: nil, body: "안녕하세요, 잘 부탁해요"),
+            GomokuChatMessage(seq: 2, isMine: true, sentAt: now.addingTimeInterval(20),
+                              quick: .gg, body: GomokuQuickPhrase.gg.text)
+        ]
+        store.chatSeq = 2
+    }
+    return store
+}
+
+@MainActor
+private func gpLiveMatches(_ count: Int) -> [GomokuLiveMatch] {
+    let now = Date()
+    return (0..<count).map { index in
+        GomokuLiveMatch(
+            id: "live-\(index)",
+            a: gpUser("대결자\(index)", 30 + index, inMatch: true),
+            b: gpUser("상대\(index)", 60 + index, inMatch: true),
+            stake: [GomokuStake.three, .five, .ten][index % 3],
+            startedAt: now.addingTimeInterval(-Double(60 * (index + 1) + 15))
+        )
+    }
+}
+
+/// 채팅 열이 **실제로 픽셀을 그리는지** 재는 장. 빈 로그 · 말풍선 둘 · 음소거 셋이 서로 달라야 한다
+/// (셋 다 "아무것도 안 그림"이면 세 비교가 전부 0 이 되어 한꺼번에 빨개진다).
+@MainActor
+@Test
+func chatColumnDrawsLogQuickPhrasesAndComposer() throws {
+    let empty = try gpBitmap(gpPanel(gpChatStore(messages: false)))
+    let talking = try gpBitmap(gpPanel(gpChatStore()))
+    let muted = try gpBitmap(gpPanel(gpChatStore(muted: true)))
+    let typed = try gpBitmap(gpPanel(gpChatStore(messages: false, draft: "한 수만 더 생각해 볼게요")))
+    gpSave(talking, name: "playing-chat")
+    gpSave(muted, name: "playing-chat-muted")
+    for (name, bitmap) in [("empty", empty), ("talking", talking), ("muted", muted), ("typed", typed)] {
+        // 입력칸이 노란 상자로 그려지면(진짜 AppKit 위젯이 스냅샷에 섞이면) 이 자리의 픽셀 검증이 통째로 눈이 먼다.
+        #expect(gpYellowPixels(bitmap) == 0, "\(name) 에 노란 상자가 있다 — 채팅 입력칸이 대체 경로를 안 탔다")
+    }
+    #expect(gpMaxChannelDifference(empty, talking, rect: gpThirdColumn) > 60, "말풍선이 그려지지 않았다")
+    #expect(gpMaxChannelDifference(empty, muted, rect: gpThirdColumn) > 30, "음소거해도 대화 자리가 그대로다")
+    #expect(gpMaxChannelDifference(empty, typed, rect: gpThirdColumn) > 30, "입력칸에 친 글자가 안 그려졌다")
+    // 내 말풍선은 accent 배경이다 — 빈 로그보다 파란 잉크가 확실히 많아야 한다(머리글 토글도 accent 라 '차이'로 잰다).
+    #expect(gpAccentInk(talking, rect: gpThirdColumn) > gpAccentInk(empty, rect: gpThirdColumn) + 200,
+            "내 말풍선(accent 배경)이 안 보인다")
+    // 판·가운데 열은 채팅이 바뀐다고 흔들리지 않는다(세 열이 서로의 자리를 침범하지 않는다).
+    let board = CGRect(x: gpBoardOrigin.x, y: gpBoardOrigin.y,
+                       width: GomokuWindowLayout.boardSide, height: GomokuWindowLayout.boardSide)
+    #expect(gpMaxChannelDifference(empty, talking, rect: board) <= 2, "채팅이 판 그림을 흔들었다")
+
+    // 결과 화면에도 채팅 열이 남는다(끝난 뒤 인사 120초).
+    let finished = gpResultStore(outcome: .won, reason: .five)
+    finished.chat = gpChatStore().chat
+    let result = try gpBitmap(gpPanel(finished))
+    gpSave(result, name: "result-chat")
+    #expect(gpYellowPixels(result) == 0)
+    #expect(gpMaxChannelDifference(try gpBitmap(gpPanel(gpResultStore(outcome: .won, reason: .five))),
+                                   result, rect: gpThirdColumn) > 60,
+            "결과 화면에서 채팅 열이 사라졌다 — 끝난 뒤 인사할 자리가 없다")
+}
+
+/// 로비 세 번째 열: "지금 대결 중" 카드. 상한 여섯을 넘겨도 열이 본문(608pt)을 뚫지 않는다.
+@MainActor
+@Test
+func lobbyThirdColumnShowsLiveMatches() throws {
+    let quiet = gpLobbyStore(outgoing: false)
+    let busy = gpLobbyStore(outgoing: false)
+    busy.liveMatches = gpLiveMatches(3)
+    let crowded = gpLobbyStore(outgoing: false)
+    crowded.liveMatches = gpLiveMatches(9)
+
+    let quietBitmap = try gpBitmap(gpPanel(quiet))
+    let busyBitmap = try gpBitmap(gpPanel(busy))
+    let crowdedBitmap = try gpBitmap(gpPanel(crowded))
+    gpSave(busyBitmap, name: "lobby-live-matches")
+    gpSave(crowdedBitmap, name: "lobby-live-matches-crowded")
+    #expect(gpYellowPixels(busyBitmap) == 0 && gpYellowPixels(crowdedBitmap) == 0)
+    #expect(gpMaxChannelDifference(quietBitmap, busyBitmap, rect: gpThirdColumn) > 60,
+            "'지금 대결 중' 카드가 안 그려졌다")
+    // 상대 목록·판돈 열은 세 번째 열이 차도 그대로다.
+    let list = CGRect(x: GomokuWindowLayout.contentPadding, y: gpBoardOrigin.y,
+                      width: GomokuWindowLayout.lobbyListWidth, height: GomokuWindowLayout.bodyHeight)
+    #expect(gpMaxChannelDifference(quietBitmap, busyBitmap, rect: list) <= 2, "대결 중 목록이 상대 목록을 흔들었다")
+    // 아홉 건이어도 창 아래 여백 띠는 한 픽셀도 달라지지 않는다("외 N건"으로 접힌다).
+    let size = GomokuWindowLayout.contentSize
+    let band = CGRect(x: 0, y: size.height - GomokuWindowLayout.contentPadding + 2,
+                      width: size.width, height: GomokuWindowLayout.contentPadding - 4)
+    #expect(gpMaxChannelDifference(busyBitmap, crowdedBitmap, rect: band) <= 2,
+            "대결이 많을 때 목록이 본문 아래 여백까지 자란다 — 창 밖으로 잘린다")
+}
+
+/// 자동으로 놓인 돌은 **작은 회색 점**으로 구분되고, 같은 사실이 상태줄에 글자로도 뜬다(툴팁은 픽셀을 안 만든다).
+@MainActor
+@Test
+func autoPlacedStonesGetAGreyDotAndASpokenStatusLine() throws {
+    let plain = gpPlayingStore(turn: .black)
+    let auto = gpPlayingStore(turn: .black)
+    var match = try #require(auto.match)
+    let l4 = try #require(GomokuPoint(notation: "L4"))     // 흑돌이 있고 **마지막 수가 아닌** 자리(D12 가 마지막 수)
+    match.autoPoints = [l4]
+    auto.match = match
+    auto.myAutoStreak = GomokuStore.autoPlaceLossStreak - 1
+
+    let plainBitmap = try gpBitmap(gpPanel(plain))
+    let autoBitmap = try gpBitmap(gpPanel(auto))
+    gpSave(autoBitmap, name: "playing-auto-placed")
+    #expect(gpYellowPixels(autoBitmap) == 0)
+
+    let geometry = GomokuBoardGeometry(side: GomokuWindowLayout.boardSide)
+    let spot = geometry.location(of: l4)
+    let dot = gpPixel(autoBitmap, x: gpBoardOrigin.x + spot.x, y: gpBoardOrigin.y + spot.y)
+    let bare = gpPixel(plainBitmap, x: gpBoardOrigin.x + spot.x, y: gpBoardOrigin.y + spot.y)
+    #expect(gpIsAutoGrey(dot), "자동으로 놓인 흑돌에 회색 점이 없다 \(dot)")
+    #expect(!gpIsAutoGrey(bare), "사람이 둔 돌에 회색 점이 그려졌다 \(bare)")
+
+    // 툴팁에만 두지 않는다 — 상태줄에 "자동으로 놓인 수 N개"와 연속 경고가 글자로 선다.
+    #expect(gpMaxChannelDifference(plainBitmap, autoBitmap, rect: gpMatchSideColumn) > 60,
+            "상태줄에 자동 착수 안내·경고가 안 뜬다 — 호버하지 않으면 아무도 모른다")
+}
+
+/// 자동 착수 표시색(회색 0.62)인가 — 흑돌 가운데(어둡다)·백돌(밝다) 어느 쪽과도 갈린다.
+private func gpIsAutoGrey(_ pixel: (Int, Int, Int)) -> Bool {
+    let channels = [pixel.0, pixel.1, pixel.2]
+    guard let low = channels.min(), let high = channels.max() else { return false }
+    return low >= 130 && high <= 190 && high - low <= 25
+}
+
+/// 사각형(pt) 안에서 파랑이 확실히 앞서는 픽셀 수(CheckTheme.accent 계열 — 내 말풍선 배경·강조 글자).
+private func gpAccentInk(_ bitmap: NSBitmapImageRep, rect: CGRect) -> Int {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return 0 }
+    let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+    let x0 = max(0, Int(rect.minX * 2)), x1 = min(bitmap.pixelsWide - 1, Int(rect.maxX * 2))
+    let y0 = max(0, Int(rect.minY * 2)), y1 = min(bitmap.pixelsHigh - 1, Int(rect.maxY * 2))
+    guard x0 <= x1, y0 <= y1 else { return 0 }
+    var count = 0
+    for y in y0...y1 {
+        for x in x0...x1 {
+            let o = y * bpr + x * spp
+            let r = Int(data[o]), g = Int(data[o + 1]), b = Int(data[o + 2])
+            if b > 140 && b > r + 60 && b > g + 30 { count += 1 }
+        }
+    }
+    return count
+}
+
 // MARK: - 팝오버 배너
 
 @MainActor
@@ -397,11 +564,32 @@ func gomokuTextIsPlainUserLanguage() throws {
     for reason in [GomokuForbiddenReason.doubleThree, .doubleFour, .overline, .budget] {
         shown += [GomokuText.forbiddenStatus(reason), GomokuText.forbiddenTooltip(reason)]
     }
-    for reason in [GomokuEndReason.five, .timeout, .resign, .boardFull] {
+    for reason in [GomokuEndReason.five, .timeout, .resign, .boardFull, .abandoned] {
         for outcome in [GomokuOutcome.won, .lost, .draw] {
             shown.append(GomokuText.endReason(reason, outcome: outcome))
         }
     }
+    // v0.3.28 세 번째 열(채팅 · 지금 대결 중)과 자동 착수 문구도 같은 잣대를 지난다.
+    shown += GomokuQuickPhrase.allCases.map(\.text)
+    shown += [
+        GomokuText.chatTitle, GomokuText.chatMute, GomokuText.chatUnmute, GomokuText.chatEmpty,
+        GomokuText.chatPlaceholder, GomokuText.chatSend, GomokuText.chatSendHelp,
+        GomokuText.chatMuteHelp, GomokuText.chatUnmuteHelp,
+        GomokuText.liveTitle, GomokuText.noLiveMatches, GomokuText.elapsed(75), GomokuText.more(3),
+        GomokuText.autoPlacedCount(2),
+        GomokuNoticeText.chatMutedByMe, GomokuNoticeText.chatMutedByOpponent,
+        GomokuNoticeText.chatOpponentOutdated, GomokuNoticeText.chatBlocked,
+        GomokuNoticeText.chatTooLong(100), GomokuNoticeText.autoPlaced, GomokuNoticeText.autoPlacedStone,
+        GomokuNoticeText.abandoned(outcome: .won), GomokuNoticeText.abandoned(outcome: .lost)
+    ]
+    shown += [GomokuNoticeText.autoStreakWarning(GomokuStore.autoPlaceLossStreak - 1)].compactMap { $0 }
+    // 경고는 **한 번 남았을 때만** 뜬다(첫 번째부터 겁을 주면 매 판 뜨고, 그러면 아무도 안 읽는다).
+    #expect(GomokuNoticeText.autoStreakWarning(GomokuStore.autoPlaceLossStreak - 1) != nil)
+    #expect(GomokuNoticeText.autoStreakWarning(0) == nil)
+    // 규칙 보기의 시간 설명이 새 규칙을 말한다(시간 초과 = 패배가 아니라 무작위 대리 착수).
+    #expect(GomokuRuleExample.ruleLines[4].contains("무작위") && GomokuRuleExample.ruleLines[4].contains("3번 연속"))
+    #expect(!GomokuRuleExample.ruleLines[4].contains("차례인 사람이 져요"), "옛 시간 규칙이 규칙 보기에 남아 있다")
+    #expect(GomokuText.elapsed(75) == "1:15" && GomokuText.elapsed(0) == "0:00" && GomokuText.elapsed(-5) == "0:00")
     shown += GomokuRuleExample.ruleLines
     shown += GomokuRuleExample.all.flatMap { [$0.title, $0.detail] }
     let banned = ["서버", "로컬", "계정", "실시간", "RPC", "rpc", "status", "timeout", "budget", "forbidden", "null", "오류 코드"]
@@ -418,9 +606,20 @@ func gomokuTextIsPlainUserLanguage() throws {
 func gomokuPanelKeepsClocksInLeavesAndUsesNoYellowBoxControls() throws {
     let panel = gpStripped(try gpSource("GomokuPanel.swift"))
     #expect(panel.components(separatedBy: ".checkTooltipLayer()").count - 1 == 1, "툴팁 레이어가 루트 하나가 아니다")
+    // 금지 목록은 **그대로다**. 다만 채팅 입력칸의 정본 위젯 `CheckTextEditor(` 는 문자열로 보면
+    // `TextEditor(` 를 품고 있어(부분 문자열), 그대로 검사하면 써야 할 위젯이 금지에 걸린다.
+    // 그래서 그 이름만 먼저 가리고 **맨몸 `TextEditor(`** 가 남는지 본다 — 목록을 푸는 것이 아니라 두 이름을 가르는 것이다.
+    let bare = panel.replacingOccurrences(of: "CheckTextEditor(", with: "CheckEditorWidget<")
     for forbidden in ["Picker(", "Menu(", "TextField(", "TextEditor(", ".help("] {
-        #expect(!panel.contains(forbidden), "오목 화면에 \(forbidden) 가 있다")
+        #expect(!bare.contains(forbidden), "오목 화면에 \(forbidden) 가 있다")
     }
+    // 가려 놓고 아무것도 안 쓰면 위 검사가 헐거워진다 — 그 위젯이 실제로 서 있는지 되묻는다.
+    #expect(panel.contains("CheckTextEditor("), "채팅 입력칸이 정본 위젯(CheckTextEditor)을 안 쓴다")
+    // 전송 세 갈래가 **한 문**을 지난다(확정 먼저 — IME 마지막 음절 유실 방지).
+    #expect(panel.contains("CheckEditorSend.commitThenSend { store.sendChatDraft() }"),
+            "채팅 전송이 조합 확정 문을 안 지난다 — 마지막 음절이 빠진 채 나간다")
+    #expect(panel.contains(".keyboardShortcut(.return, modifiers: .command)"), "채팅 ⌘↩ 경로가 없다")
+    #expect(panel.contains("onRenderedEmptyChange:"), "placeholder 를 스토어 값으로 판정한다 — 조합 중 글자와 겹친다")
     // 창 루트(GomokuPanel)는 시계를 읽지 않는다 — 초 단위 값은 잎 뷰 둘에서만.
     let root = try #require(gpRegion(panel, from: "struct GomokuPanel: View {", to: "private struct GomokuHeader: View {"))
     for clock in ["TimelineView", "remainingSeconds", "Date()", "expiresAt"] {

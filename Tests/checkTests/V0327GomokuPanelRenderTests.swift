@@ -335,6 +335,33 @@ func chatColumnDrawsLogQuickPhrasesAndComposer() throws {
                        width: GomokuWindowLayout.boardSide, height: GomokuWindowLayout.boardSide)
     #expect(gpMaxChannelDifference(empty, talking, rect: board) <= 2, "채팅이 판 그림을 흔들었다")
 
+    // --- 빠른 문구 격자를 **따로** 잰다 ---
+    // 위 네 장은 격자에 대해 모두 같은 입력(isSendingChat·isOpponentMuted·opponentChatCapable·chatNotice 가
+    // 전부 같다)이라 격자가 네 장에서 같은 자리·같은 픽셀로 앉아 **모든 차이값에서 상쇄된다** —
+    // `GomokuQuickPhraseGrid(store: store)` 한 줄을 지워도 위 단언이 전부 초록이었다(2026-09-16 실측).
+    // 칩 줄 높이 22pt · 줄 간격 5pt · 네 줄 → 격자 높이 4×22 + 3×5 = 103pt.
+    // 격자 아래는 간격 10 + 입력칸 44 + 간격 5 + 보내기 줄 22 + 카드 안쪽 여백 12 = 93pt 다.
+    let chipHeight = 22, chipGap = 5, chipRows = 4
+    let gridHeight = CGFloat(chipRows * chipHeight + (chipRows - 1) * chipGap)
+    let gridBand = CGRect(x: gpThirdColumn.minX, y: gpThirdColumn.maxY - 93 - gridHeight,
+                          width: gpThirdColumn.width, height: gridHeight)
+    // ① 칩이 **실제로 픽셀을 그린다** — 높이 22pt 짜리 상자 네 줄이 예산 자리에 정확히 선다.
+    let chipTops = gpBoxTops(talking, rect: gpThirdColumn, height: chipHeight)
+    #expect(chipTops == (0..<chipRows).map { Int(gridBand.minY) + $0 * (chipHeight + chipGap) },
+            "빠른 문구 칩 \(chipRows)줄(높이 \(chipHeight)pt · 간격 \(chipGap)pt)이 예산 자리에 없다 — 찾은 줄 \(chipTops)")
+    // ② 격자는 로그 **아래 고정**이다 — 말이 오가도, 음소거해도 그 자리가 안 움직인다.
+    #expect(gpMaxChannelDifference(empty, talking, rect: gridBand) <= 2, "대화가 쌓이자 빠른 문구 격자가 밀렸다")
+    #expect(gpMaxChannelDifference(empty, muted, rect: gridBand) <= 2, "음소거하자 빠른 문구 격자가 밀렸다")
+    // ③ 보내는 중이면 칩이 비활성으로 흐려진다(`.disabled(store.isSendingChat)`). 격자 자리에서만 재서
+    //    머리글 토글·보내기 버튼이 같이 흐려지는 것과 섞이지 않게 한다.
+    let sendingStore = gpChatStore()
+    sendingStore.isSendingChat = true
+    let sending = try gpBitmap(gpPanel(sendingStore))
+    gpSave(sending, name: "playing-chat-sending")
+    #expect(gpYellowPixels(sending) == 0, "sending 에 노란 상자가 있다")
+    #expect(gpMaxChannelDifference(talking, sending, rect: gridBand) > 30,
+            "보내는 중인데 빠른 문구 칩이 그대로다 — 그 자리에 격자가 없다")
+
     // 결과 화면에도 채팅 열이 남는다(끝난 뒤 인사 120초).
     let finished = gpResultStore(outcome: .won, reason: .five)
     finished.chat = gpChatStore().chat
@@ -344,6 +371,29 @@ func chatColumnDrawsLogQuickPhrasesAndComposer() throws {
     #expect(gpMaxChannelDifference(try gpBitmap(gpPanel(gpResultStore(outcome: .won, reason: .five))),
                                    result, rect: gpThirdColumn) > 60,
             "결과 화면에서 채팅 열이 사라졌다 — 끝난 뒤 인사할 자리가 없다")
+}
+
+/// 채팅 로그는 **언제나 최신 말에 붙는다**.
+///
+/// 이 자리는 픽셀로 못 잰다: 앱 갈래는 `ScrollView` 인데 ImageRenderer 는 그 안을 못 그려서, 스냅샷은
+/// 언제나 클립 갈래(맨 아래 = 최신)만 본다. 그래서 앱만 맨 위에 멈춰 있어도 렌더 검증이 전부 초록이었다
+/// (2026-09-16 실측: 앱 갈래에 `ScrollViewReader`·`defaultScrollAnchor`·`scrollTo` 가 하나도 없었다).
+/// 정본은 `MessageConversationView`(CheckMessageView.swift) — 두 갈래가 **같은 끝**을 그리고, 맨 아래로
+/// 보내는 계기 셋이 **한 함수 안에** 모여 있다. 여기서는 그 네 조각이 서 있는지를 소스로 묻는다.
+@Test
+func chatLogSticksToTheNewestMessageInBothBranches() throws {
+    let panel = gpStripped(try gpSource("GomokuPanel.swift"))
+    let column = try #require(gpRegion(panel, from: "private struct GomokuChatColumn: View {",
+                                       to: "private struct GomokuChatBubble: View {"))
+    #expect(column.contains("ScrollViewReader"), "채팅 로그가 ScrollViewReader 없이 그려진다 — 최신 말로 못 내려간다")
+    #expect(column.contains(".defaultScrollAnchor(.bottom)"), "채팅 로그가 처음부터 맨 아래에 서지 않는다")
+    #expect(column.contains("proxy.scrollTo("), "맨 아래로 보내는 호출이 없다")
+    // 계기 셋 — 하나만 빠져도 **그 상황에서만** 위에 멈춘다(그래서 셋을 따로 묻는다).
+    #expect(column.contains(".onAppear"), "처음 열 때 맨 아래로 가지 않는다")
+    #expect(column.contains("onChange(of: store.match?.id)"), "판이 바뀌어도 앞 판 자리에 멈춰 있다")
+    #expect(column.contains("onChange(of: store.chat.last?.seq)"), "새 말이 와도 따라 내려가지 않는다")
+    // 클립 갈래(스냅샷)도 **같은 끝**이다 — 두 그림이 다르면 스냅샷으로 아무것도 확인할 수 없다.
+    #expect(column.contains("overlay(alignment: .bottom)"), "스냅샷 갈래가 아래(최신)를 기준으로 그리지 않는다")
 }
 
 /// 로비 세 번째 열: "지금 대결 중" 카드. 상한 여섯을 넘겨도 열이 본문(608pt)을 뚫지 않는다.
@@ -374,6 +424,37 @@ func lobbyThirdColumnShowsLiveMatches() throws {
                       width: size.width, height: GomokuWindowLayout.contentPadding - 4)
     #expect(gpMaxChannelDifference(busyBitmap, crowdedBitmap, rect: band) <= 2,
             "대결이 많을 때 목록이 본문 아래 여백까지 자란다 — 창 밖으로 잘린다")
+
+    // --- 상한 여섯을 **실제로** 잰다 ---
+    // 위 여백 띠 단언만으로는 아무것도 증명되지 않는다: 카드 한 장이 48pt(간격 8pt)라 아홉 장(542pt)은
+    // **상한이 없어도** 본문 608pt 안에 들어가고, 첫 넘침은 열한 장부터다. 실제로 `prefix(maxCards)` 와
+    // "외 N건" 블록을 지워도 이 시험은 전부 초록이었다(2026-09-16 실측).
+    // 그래서 **보이는 카드를 직접 센다** — 위·아래 획이 48pt 떨어진 짝의 개수가 곧 카드 수다.
+    let maxCards = 6, cardHeight = 48
+    #expect(gpStripped(try gpSource("GomokuPanel.swift")).contains("static let maxCards = \(maxCards)"),
+            "시험이 아는 상한(\(maxCards))이 소스와 다르다")
+    let six = gpLobbyStore(outgoing: false)
+    six.liveMatches = gpLiveMatches(maxCards)
+    let sixBitmap = try gpBitmap(gpPanel(six))
+    let many = gpLobbyStore(outgoing: false)
+    many.liveMatches = gpLiveMatches(12)          // 상한이 없으면 열 장이 보이고 아래로 뚫는다
+    let manyBitmap = try gpBitmap(gpPanel(many))
+    gpSave(manyBitmap, name: "lobby-live-matches-many")
+    #expect(gpYellowPixels(manyBitmap) == 0, "many 에 노란 상자가 있다")
+    for (name, bitmap, expected) in [("3건", busyBitmap, 3), ("6건", sixBitmap, maxCards),
+                                     ("9건", crowdedBitmap, maxCards), ("12건", manyBitmap, maxCards)] {
+        let cards = gpBoxTops(bitmap, rect: gpThirdColumn, height: cardHeight)
+        #expect(cards.count == expected,
+                "\(name)에서 카드가 \(cards.count)장 보인다 — \(expected)장이어야 한다(윗변 \(cards))")
+    }
+    // 접힌 수는 **글자로** 말한다 — 여섯 번째 카드 바로 아래에 "외 N건"이 서고, 여섯 건일 땐 그 자리가 비어 있다.
+    let sixthBottom = try #require(gpBoxTops(sixBitmap, rect: gpThirdColumn, height: cardHeight).last) + cardHeight
+    let moreLine = CGRect(x: gpThirdColumn.minX, y: CGFloat(sixthBottom + 2), width: gpThirdColumn.width, height: 22)
+    #expect(gpMaxChannelDifference(sixBitmap, manyBitmap, rect: moreLine) > 60,
+            "열두 건인데 여섯 장 아래에 '외 N건' 줄이 없다 — 접힌 여섯 건을 아무도 못 본다")
+    // 열두 건이어도 열은 제 틀(220×608) 밖을 칠하지 않는다(`.clipped()`).
+    #expect(gpMaxChannelDifference(busyBitmap, manyBitmap, rect: band) <= 2,
+            "열두 건에서 '지금 대결 중' 열이 창 아래 여백까지 자란다")
 }
 
 /// 자동으로 놓인 돌은 **작은 회색 점**으로 구분되고, 같은 사실이 상태줄에 글자로도 뜬다(툴팁은 픽셀을 안 만든다).
@@ -790,6 +871,35 @@ private func gpRegion(_ source: String, from start: String, to end: String) -> S
     guard let head = source.range(of: start) else { return nil }
     let tail = source.range(of: end, range: head.upperBound..<source.endIndex)?.lowerBound ?? source.endIndex
     return String(source[head.upperBound..<tail])
+}
+
+/// 사각형 안에서 **중성(흰 계열) 테두리 획이 가로로 넓게 깔린** pt 행 목록 — 상자를 **세는** 자다.
+///
+/// 칩·카드의 위아래 획은 열 폭을 거의 채우므로(측정: 337~390px) `minimum` 을 넘고, 말풍선·글자는
+/// 좁거나(≤ 222px) 파랗다(accent 는 R−B 가 170 이라 중성 조건에서 걸린다). 그래서 "높이 h 인 상자 n 개"를
+/// `행 y 와 y+h 가 둘 다 넓다` 는 짝으로 셀 수 있다 — **상자를 지우면 짝이 사라져 수가 어긋난다**.
+private func gpWideRows(_ bitmap: NSBitmapImageRep, rect: CGRect, minimum: Int) -> [Int] {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return [] }
+    let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+    let ax0 = max(0, Int(rect.minX * 2)), ax1 = min(bitmap.pixelsWide - 1, Int(rect.maxX * 2))
+    var rows: [Int] = []
+    for y in Int(rect.minY)...Int(rect.maxY) {
+        let py = min(max(y * 2, 0), bitmap.pixelsHigh - 1)
+        var hits = 0
+        for x in ax0...ax1 {
+            let o = py * bpr + x * spp
+            let r = Int(data[o]), b = Int(data[o + 2])
+            if r >= 62 && r <= 120 && abs(r - b) <= 40 { hits += 1 }
+        }
+        if hits >= minimum { rows.append(y) }
+    }
+    return rows
+}
+
+/// 높이 `height` pt 인 상자가 몇 개 서 있는가 — 위 획과 아래 획이 짝지어진 행들의 목록(각 상자의 윗변 y).
+private func gpBoxTops(_ bitmap: NSBitmapImageRep, rect: CGRect, height: Int, minimum: Int = 300) -> [Int] {
+    let wide = gpWideRows(bitmap, rect: rect, minimum: minimum)
+    return wide.filter { wide.contains($0 + height) }
 }
 
 /// 주석을 걷어내고 공백을 한 칸으로 접는다(V0317ShopTests.stripped 와 같은 규칙).

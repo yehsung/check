@@ -28,6 +28,9 @@ struct GomokuPlayerFace: Equatable {
     let name: String
     let avatarURL: URL?
     let characterID: String
+    /// 소속 센터의 **화면 글자**("서울"/"부산"). 얼굴 모서리 배지로 그린다. nil 이면 배지가 없다.
+    /// **기본값이 있는 채로 맨 끝** — 이 타입을 멤버와이즈로 만드는 테스트가 그대로 컴파일돼야 한다.
+    var center: String? = nil
 
     /// 캐릭터를 모를 때 쓰는 기본 캐릭터(앱의 첫 캐릭터).
     static let fallbackCharacterID = "aing"
@@ -39,14 +42,19 @@ struct GomokuPlayerFace: Equatable {
         let myID = store.session?.userID
         let mine = store.teamMembers.first { $0.id == myID }
         let character = CheckCharacter3DScene.selectedCharacter(defaults: .standard).id
-        return GomokuPlayerFace(name: mine?.name ?? "나", avatarURL: mine?.avatarURL, characterID: character)
+        // 내 센터는 오목 응답에 없다(로비 목록엔 내가 없고, 상태의 opponent 는 상대다) — 앱이 이미 아는 값을 쓴다.
+        // `myCenter` 는 서버 어휘라 여기서 한 번 `CenterLabel` 을 지난다. 아직 못 받았으면 nil = 배지 없음.
+        return GomokuPlayerFace(name: mine?.name ?? "나", avatarURL: mine?.avatarURL, characterID: character,
+                                center: CenterLabel.display(store.myCenter))
     }
 
     static func of(_ user: GomokuUser) -> GomokuPlayerFace {
         GomokuPlayerFace(
             name: user.displayName,
             avatarURL: user.avatarURL.flatMap(URL.init(string:)),
-            characterID: user.characterID ?? fallbackCharacterID
+            characterID: user.characterID ?? fallbackCharacterID,
+            // 이미 화면 글자다(스토어 경계에서 한 번 변환했다) — 여기서 또 바꾸지 마라.
+            center: user.center
         )
     }
 }
@@ -756,7 +764,8 @@ private struct GomokuOpponentRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            CheckAvatarView(name: user.displayName, avatarURL: user.avatarURL.flatMap(URL.init(string:)), size: 34)
+            CheckAvatarView(name: user.displayName, avatarURL: user.avatarURL.flatMap(URL.init(string:)), size: 34,
+                            center: user.center)
             VStack(alignment: .leading, spacing: 4) {
                 Text(user.displayName)
                     .font(.callout.weight(.semibold))
@@ -890,7 +899,8 @@ private struct GomokuInviteCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                CheckAvatarView(name: invite.peer.displayName, avatarURL: invite.peer.avatarURL.flatMap(URL.init(string:)), size: 32)
+                CheckAvatarView(name: invite.peer.displayName, avatarURL: invite.peer.avatarURL.flatMap(URL.init(string:)),
+                                size: 32, center: invite.peer.center)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(isIncoming ? GomokuText.incomingTitle(name: invite.peer.displayName)
                                     : GomokuText.outgoingTitle(name: invite.peer.displayName))
@@ -1158,6 +1168,11 @@ private struct GomokuPlayerCard: View {
         HStack(spacing: 12) {
             CharacterPortrait(characterID: face.characterID)
                 .frame(width: 60, height: 60)
+                // 이 카드에서 '얼굴'은 아바타가 아니라 캐릭터 초상이다 — 센터 배지는 아바타와 **같은 자리**
+                // (오른쪽 아래 모서리)에 얹는다. overlay 라 카드 폭·높이는 1pt 도 안 움직인다.
+                .overlay(alignment: .bottomTrailing) {
+                    if let center = face.center { CenterCornerBadge(label: center, avatarSize: 60) }
+                }
                 .padding(5)
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.06)))
             VStack(alignment: .leading, spacing: 6) {
@@ -1296,9 +1311,16 @@ private struct GomokuResultCard: View {
                         .foregroundStyle(delta > 0 ? CheckTheme.working : (delta < 0 ? CheckTheme.danger : CheckTheme.primaryText))
                 }
                 .padding(.top, 4)
-                Text("상대 · \(match.opponent.displayName)")
-                    .font(.caption)
-                    .foregroundStyle(CheckTheme.secondaryText)
+                // 상대 아바타를 함께 그린다 — 이 줄이 결과 화면에서 상대를 말하는 유일한 자리라,
+                // 센터 배지가 설 얼굴이 여기 없으면 끝난 판에서만 소속이 사라진다.
+                HStack(spacing: 8) {
+                    CheckAvatarView(name: match.opponent.displayName,
+                                    avatarURL: match.opponent.avatarURL.flatMap(URL.init(string:)),
+                                    size: 22, center: match.opponent.center)
+                    Text("상대 · \(match.opponent.displayName)")
+                        .font(.caption)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 22)
@@ -1660,20 +1682,31 @@ private struct GomokuLiveMatchCard: View {
     let live: GomokuLiveMatch
     let isLive: Bool
 
+    /// 이름 앞 얼굴. 센터 배지가 설 자리를 만드는 것이 이 아바타의 목적이다 — 이름만 있는 카드에는
+    /// 배지를 얹을 모서리가 없다(배지 자리는 언제나 얼굴 모서리다 — CheckAvatarView).
+    private static let faceSize: CGFloat = 18
+    /// 아바타와 이름 사이. 배지는 아바타 오른쪽으로 4pt 넘쳐 그려지므로 그보다 넓어야 이름을 안 덮는다.
+    private static let faceGap: CGFloat = 7
+
+    private func face(_ user: GomokuUser) -> some View {
+        HStack(spacing: Self.faceGap) {
+            CheckAvatarView(name: user.displayName, avatarURL: user.avatarURL.flatMap(URL.init(string:)),
+                            size: Self.faceSize, center: user.center)
+            Text(user.displayName)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
-                Text(live.a.displayName)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                face(live.a)
                 Text("vs")
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
-                Text(live.b.displayName)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                face(live.b)
             }
             HStack(spacing: 5) {
                 RubyIcon(size: 11)

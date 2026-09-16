@@ -3273,6 +3273,11 @@ struct GomokuUserRow: Decodable, Equatable, Sendable {
     var displayName: String?
     var avatarUrl: String?
     var character: String?
+    /// 0.3.29 — 소속 센터의 **서버 어휘**('seoul'|'busan'|null). 다른 다섯 RPC(app_user_directory ·
+    /// token_usage_board · minigame_board · minigame_yesterday_winner · team_weekly_leaderboard)와 **같은 키 이름**이다.
+    /// 화면 글자로 바꾸는 자리는 `GomokuStore` 의 경계 둘(`peerUser` · `user(from:)`)뿐이다 — CenterLabel 규약.
+    /// 이 키를 안 싣는 옛 서버면 nil 이고, 그때는 배지만 안 뜬다(화면은 그대로 돈다).
+    var center: String?
     var isWorking: Bool?
     var capable: Bool?
     var inMatch: Bool?

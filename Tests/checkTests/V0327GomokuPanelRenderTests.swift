@@ -16,12 +16,20 @@ import Testing
 // MARK: - 픽스처
 
 private func gpUser(_ name: String, _ suffix: Int, working: Bool = true, capable: Bool = true,
-                    inMatch: Bool = false, character: String? = "shiba") -> GomokuUser {
+                    inMatch: Bool = false, character: String? = "shiba", center: String? = nil) -> GomokuUser {
     GomokuUser(
         id: "00000000-0000-0000-0000-\(String(format: "%012d", suffix))",
         displayName: name, avatarURL: nil, characterID: character,
-        isWorking: working, isCapable: capable, inMatch: inMatch
+        isWorking: working, isCapable: capable, inMatch: inMatch, center: center
     )
+}
+
+/// 같은 사람에 **센터만** 얹은 사본. 다른 칸은 한 글자도 안 바꾼다 — 그래야 두 그림의 차이가
+/// 오직 배지에서만 온다(이름·상태가 함께 바뀌면 배선이 끊겨도 차이가 나서 초록이 된다).
+private func gpWithCenter(_ user: GomokuUser, _ center: String) -> GomokuUser {
+    var copy = user
+    copy.center = center
+    return copy
 }
 
 private let gpMinsu = gpUser("민수", 11, character: "fox")
@@ -118,8 +126,8 @@ private func gpResultStore(outcome: GomokuOutcome, reason: GomokuEndReason) -> G
 private let gpMe = GomokuPlayerFace(name: "영식", avatarURL: nil, characterID: "shiba")
 
 @MainActor
-private func gpPanel(_ store: GomokuStore) -> some View {
-    GomokuPanel(store: store, me: { gpMe }, clipsOverflowInsteadOfScroll: true)
+private func gpPanel(_ store: GomokuStore, me: GomokuPlayerFace = gpMe) -> some View {
+    GomokuPanel(store: store, me: { me }, clipsOverflowInsteadOfScroll: true)
 }
 
 /// 판 왼쪽 위(창 좌표, pt). 레이아웃 상수에서만 나온다.
@@ -430,7 +438,7 @@ func lobbyThirdColumnShowsLiveMatches() throws {
     // **상한이 없어도** 본문 608pt 안에 들어가고, 첫 넘침은 열한 장부터다. 실제로 `prefix(maxCards)` 와
     // "외 N건" 블록을 지워도 이 시험은 전부 초록이었다(2026-09-16 실측).
     // 그래서 **보이는 카드를 직접 센다** — 위·아래 획이 48pt 떨어진 짝의 개수가 곧 카드 수다.
-    let maxCards = 6, cardHeight = 48
+    let maxCards = 6, cardHeight = gpLiveCardHeight
     #expect(gpStripped(try gpSource("GomokuPanel.swift")).contains("static let maxCards = \(maxCards)"),
             "시험이 아는 상한(\(maxCards))이 소스와 다르다")
     let six = gpLobbyStore(outgoing: false)
@@ -455,6 +463,135 @@ func lobbyThirdColumnShowsLiveMatches() throws {
     // 열두 건이어도 열은 제 틀(220×608) 밖을 칠하지 않는다(`.clipped()`).
     #expect(gpMaxChannelDifference(busyBitmap, manyBitmap, rect: band) <= 2,
             "열두 건에서 '지금 대결 중' 열이 창 아래 여백까지 자란다")
+}
+
+// MARK: - 소속 센터 배지 (v0.3.29)
+
+/// "지금 대결 중" 카드 한 장의 높이(pt). **두 시험이 같은 값을 읽는다** — 갈리면 한쪽이 카드를
+/// 못 세거나 엉뚱한 띠를 잰다.
+///
+/// 0.3.29 에서 48 → 53 으로 커졌다: 이름 줄에 18pt 얼굴(센터 배지가 설 자리)이 들어와 그 줄이
+/// 글자 높이(13pt)가 아니라 얼굴 높이로 선다. 실측(ImageRenderer scale 2, 세 건):
+/// 넓은 획 행 [72, 106, 159, 167, 220, 228, 281] — 카드 윗변 106·167·228, 아랫변이 각각 +53,
+/// 카드 사이 간격은 8pt(159 → 167). 72 는 열을 감싼 카드의 윗변이다.
+private let gpLiveCardHeight = 53
+
+/// 로비 왼쪽(상대 목록) 열.
+@MainActor
+private var gpLobbyListColumn: CGRect {
+    CGRect(x: GomokuWindowLayout.contentPadding, y: gpBoardOrigin.y,
+           width: GomokuWindowLayout.lobbyListWidth, height: GomokuWindowLayout.bodyHeight)
+}
+
+/// 로비 가운데(판돈·신청) 열.
+@MainActor
+private var gpLobbySideColumn: CGRect {
+    CGRect(x: GomokuWindowLayout.contentPadding + GomokuWindowLayout.lobbyListWidth + GomokuWindowLayout.columnSpacing,
+           y: gpBoardOrigin.y, width: GomokuWindowLayout.lobbySideWidth, height: GomokuWindowLayout.bodyHeight)
+}
+
+/// 센터를 아는 나(대국 화면 내 카드 — 앱은 `WorkTimerStore.myCenter` 에서 읽어 넘긴다).
+private let gpMeCentered = GomokuPlayerFace(name: "영식", avatarURL: nil, characterID: "shiba", center: "서울")
+
+/// 센터 배지(서울·부산)가 오목 **다섯 자리 모두**에서 실제 픽셀을 만든다.
+///
+/// ★ 자리마다 **따로** 잰다. 한 장에서 한 번만 재면 다섯 중 하나만 배선돼도 초록이다 —
+///   그러면 `center:` 를 넘기는 걸 잊어도 통과하는, 이 변경이 답하려는 질문을 못 답하는 시험이 된다.
+/// ★ 시각이 흐르는 글자(신청 카운트다운 · 대결 경과 m:ss · 차례 시계)는 재는 자리에서 **뺀다.**
+///   두 렌더 사이에 초가 바뀌기만 해도 픽셀이 달라져서, 배선이 끊겨도 초록을 만든다.
+/// ★ 두 그림의 입력은 **센터 말고 전부 같다**(만료·시작 시각까지 bare 에서 그대로 가져온다) —
+///   기준선이 다르면 그 시험은 배지가 아니라 다른 것을 잰다.
+@MainActor
+@Test
+func centerBadgesDrawPixelsOnEveryGomokuFace() throws {
+    // ── 로비: 상대 행 · 받은 신청 카드 · 지금 대결 중 카드 ──────────────────────────────
+    let live = gpLiveMatches(3)
+    let bare = gpLobbyStore(outgoing: false)
+    bare.liveMatches = live
+    let badged = gpLobbyStore(outgoing: false)
+    badged.users = bare.users.enumerated().map { gpWithCenter($1, $0.isMultiple(of: 2) ? "서울" : "부산") }
+    badged.incoming = bare.incoming.map {
+        GomokuInvite(id: $0.id, peer: gpWithCenter($0.peer, "부산"), stake: $0.stake, expiresAt: $0.expiresAt)
+    }
+    badged.liveMatches = live.map {
+        GomokuLiveMatch(id: $0.id, a: gpWithCenter($0.a, "서울"), b: gpWithCenter($0.b, "부산"),
+                        stake: $0.stake, startedAt: $0.startedAt)
+    }
+    let bareLobby = try gpBitmap(gpPanel(bare))
+    let badgedLobby = try gpBitmap(gpPanel(badged))
+    gpSave(badgedLobby, name: "lobby-center-badges")
+    #expect(gpYellowPixels(badgedLobby) == 0, "배지를 단 로비에 노란 상자가 있다")
+    #expect(gpMaxChannelDifference(bareLobby, badgedLobby, rect: gpLobbyListColumn) > 60,
+            "상대 목록 행의 아바타에 센터 배지가 없다")
+    // 신청 카드는 **왼쪽 90pt** 만 잰다 — 카드 오른쪽 끝의 '남은 초'는 두 렌더 사이에 달라진다.
+    let inviteFaces = CGRect(x: gpLobbySideColumn.minX, y: gpLobbySideColumn.minY,
+                             width: 90, height: gpLobbySideColumn.height)
+    #expect(gpMaxChannelDifference(bareLobby, badgedLobby, rect: inviteFaces) > 60,
+            "받은 신청 카드의 아바타에 센터 배지가 없다")
+    // 대결 카드는 **윗줄(두 사람 줄)만** 잰다 — 아랫줄의 경과 m:ss 는 초가 바뀐다.
+    let cardTops = gpBoxTops(bareLobby, rect: gpThirdColumn, height: gpLiveCardHeight)
+    // 실패하면 **잰 값**을 함께 보여 준다 — 카드 높이가 바뀌었을 때 다음 사람이 숫자를 찾아 헤매지 않게.
+    #expect(cardTops.count == live.count,
+            """
+            지금 대결 중 카드가 \(cardTops.count)장 보인다(기대 \(live.count)장) — 카드 높이 상수 \
+            \(gpLiveCardHeight)pt 가 틀렸다. 이 그림의 넓은 획 행: \
+            \(gpWideRows(bareLobby, rect: gpThirdColumn, minimum: 300))
+            """)
+    // 띠는 카드 안쪽 여백 8 + 얼굴 18 + 배지가 아래로 넘치는 2pt 까지 덮고, 아랫줄(판돈·경과)이 시작하는
+    // top+32 앞에서 끝난다 — 그래야 배지를 놓치지도, 매초 바뀌는 경과 글자를 집지도 않는다.
+    for top in cardTops {
+        let nameRow = CGRect(x: gpThirdColumn.minX, y: CGFloat(top) + 2, width: gpThirdColumn.width, height: 28)
+        #expect(gpMaxChannelDifference(bareLobby, badgedLobby, rect: nameRow) > 60,
+                "지금 대결 중 카드(윗변 \(top))의 두 사람에 센터 배지가 없다")
+    }
+
+    // ── 대국: 상대 카드 · 내 카드 ───────────────────────────────────────────────────────
+    let barePlaying = gpPlayingStore(turn: .black)
+    let badgedPlaying = gpPlayingStore(turn: .black)
+    badgedPlaying.match?.opponent = gpWithCenter(gpMinsu, "부산")
+    let barePlayingBitmap = try gpBitmap(gpPanel(barePlaying))
+    let badgedPlayingBitmap = try gpBitmap(gpPanel(badgedPlaying, me: gpMeCentered))
+    gpSave(badgedPlayingBitmap, name: "playing-center-badges")
+    #expect(gpYellowPixels(badgedPlayingBitmap) == 0, "배지를 단 대국 화면에 노란 상자가 있다")
+    // 두 카드의 얼굴(캐릭터 초상)은 가운데 열 **왼쪽 90pt** 에 선다(오른쪽 끝의 차례 시계는 매초 바뀐다).
+    // 카드 한 장 = 초상 60 + 안쪽 여백 5×2 + 카드 여백 12×2 = 94pt, 두 장 사이 간격 12pt.
+    let opponentFace = CGRect(x: gpMatchSideColumn.minX, y: gpMatchSideColumn.minY, width: 90, height: 94)
+    let myFace = CGRect(x: gpMatchSideColumn.minX, y: gpMatchSideColumn.minY + 106, width: 90, height: 94)
+    #expect(gpMaxChannelDifference(barePlayingBitmap, badgedPlayingBitmap, rect: opponentFace) > 60,
+            "대국 화면 상대 카드에 센터 배지가 없다")
+    #expect(gpMaxChannelDifference(barePlayingBitmap, badgedPlayingBitmap, rect: myFace) > 60,
+            "대국 화면 내 카드에 센터 배지가 없다 — 내 센터는 앱이 아는 값(myCenter)에서 온다")
+
+    // ── 결과 카드 ──────────────────────────────────────────────────────────────────────
+    let bareResult = gpResultStore(outcome: .won, reason: .five)
+    let badgedResult = gpResultStore(outcome: .won, reason: .five)
+    badgedResult.match?.opponent = gpWithCenter(gpMinsu, "부산")
+    let bareResultBitmap = try gpBitmap(gpPanel(bareResult))
+    let badgedResultBitmap = try gpBitmap(gpPanel(badgedResult))
+    gpSave(badgedResultBitmap, name: "result-center-badge")
+    #expect(gpYellowPixels(badgedResultBitmap) == 0, "배지를 단 결과 화면에 노란 상자가 있다")
+    #expect(gpMaxChannelDifference(bareResultBitmap, badgedResultBitmap, rect: gpMatchSideColumn) > 60,
+            "결과 카드의 상대 아바타에 센터 배지가 없다")
+}
+
+/// 서버 어휘('seoul'/'busan') → 화면 글자("서울"/"부산") 변환은 **스토어 경계 한 번**이다(CenterLabel 규약).
+/// 여기서 지키는 것 셋: ① 두 값이 옳게 바뀐다 ② 키가 없는 **옛 서버**에서도 디코드가 통째로 실패하지 않는다
+/// ③ 서버가 셋째 센터를 여는 날 옛 앱이 그 사람을 조용히 '서울'로 **단정하지 않는다**(모르면 배지 없음).
+@Test
+func gomokuRowsTranslateCenterThroughCenterLabel() throws {
+    func center(_ json: String) throws -> String?? {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let row = try decoder.decode(GomokuUserRow.self, from: Data(json.utf8))
+        return GomokuStore.user(from: row)?.center
+    }
+    #expect(try center(#"{"user_id":"U","display_name":"민수","center":"busan"}"#) == "부산")
+    #expect(try center(#"{"user_id":"U","display_name":"민수","center":"seoul"}"#) == "서울")
+    #expect(try center(#"{"user_id":"U","display_name":"민수","center":null}"#) == .some(nil))
+    #expect(try center(#"{"user_id":"U","display_name":"민수"}"#) == .some(nil),
+            "center 를 안 싣는 옛 서버의 응답이 통째로 버려졌다")
+    #expect(try center(#"{"user_id":"U","display_name":"민수","center":"daejeon"}"#) == .some(nil),
+            "모르는 센터를 접어서 그리고 있다 — 모르면 배지가 없어야 한다")
 }
 
 /// 자동으로 놓인 돌은 **작은 회색 점**으로 구분되고, 같은 사실이 상태줄에 글자로도 뜬다(툴팁은 픽셀을 안 만든다).

@@ -30,6 +30,11 @@ nonisolated struct GomokuUser: Identifiable, Equatable, Sendable {
     let isWorking: Bool
     let isCapable: Bool            // 상대 앱이 오목을 아는 버전
     let inMatch: Bool
+    /// 0.3.29 — 소속 센터의 **화면 글자**("서울"/"부산"). 서버 어휘가 아니다: 경계 둘(`peerUser` · `user(from:)`)에서
+    /// `CenterLabel.display` 를 **한 번만** 지나 들어온다(변환이 두 벌이 되면 한쪽이 언젠가 틀린다 — CenterLabel 머리말).
+    /// 모르는 값·안 싣는 옛 서버는 nil = 배지 없음이다.
+    /// **기본값이 있는 채로 맨 끝에 둔다** — 멤버와이즈 초기화를 쓰는 렌더·스토어 테스트가 그대로 컴파일돼야 한다.
+    var center: String? = nil
 }
 
 nonisolated struct GomokuRecord: Equatable, Sendable { let wins: Int; let losses: Int; let draws: Int }
@@ -1860,7 +1865,10 @@ final class GomokuStore {
             characterID: row.character ?? known?.characterID,
             isWorking: row.isWorking ?? known?.isWorking ?? working,
             isCapable: row.capable ?? known?.isCapable ?? capable,
-            inMatch: row.inMatch ?? inMatch
+            inMatch: row.inMatch ?? inMatch,
+            // 서버 어휘 → 화면 글자는 **이 줄과 아래 `user(from:)` 두 곳뿐**이다(CenterLabel 규약).
+            // 키를 안 싣는 옛 서버면 로비 목록에서 빌린다 — 이름·아바타와 같은 규칙이다.
+            center: CenterLabel.display(row.center) ?? known?.center
         )
     }
 
@@ -1907,7 +1915,8 @@ final class GomokuStore {
             characterID: row.character,
             isWorking: row.isWorking ?? false,
             isCapable: row.capable ?? false,
-            inMatch: row.inMatch ?? false
+            inMatch: row.inMatch ?? false,
+            center: CenterLabel.display(row.center)
         )
     }
 

@@ -63,10 +63,16 @@ import Testing
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Sources/check/CheckTextEditor.swift")
     let source = try String(contentsOf: url, encoding: .utf8)
-    #expect(source.contains("takePooledScroll()"),
+    #expect(source.contains("takePooledScroll(slot: slot)"),
             "makeNSView 의 재사용 분기가 사라졌다 — 한글 자모 분리가 되살아난다")
     #expect(source.contains("static func dismantleNSView"),
             "반납 문이 없으면 대기열이 영영 비어 매번 새 칸이 만들어진다")
-    #expect(source.contains("CheckTextEditor.pooledScroll = nil"),
-            "꺼내 갈 때 대기열을 안 비우면 두 곳이 같은 칸을 쥔다(병렬 렌더 테스트가 서로의 글자를 본다)")
+    #expect(source.contains("CheckTextEditor.pooledScrolls[slot] = nil"),
+            "꺼내 갈 때 그 자리를 안 비우면 두 곳이 같은 칸을 쥔다(병렬 렌더 테스트가 서로의 글자를 본다)")
+    // ★ v0.3.28: 대기 칸은 **자리(호출부)마다 한 벌**이다. 한 칸짜리 풀로 되돌리면 세 번째 사용처
+    //   (오목 채팅칸)가 대화·제보 칸의 칸을 쥔 채 남아, 나중에 선 칸이 새로 만들어지고 조합이 죽는다.
+    #expect(source.contains("var slot: CheckEditorSlot"),
+            "재사용 자리가 호출부별로 안 갈린다 — 동시에 선 칸 중 하나가 새로 만들어져 한글 조합이 죽는다")
+    #expect(source.contains("file: String = #fileID"),
+            "자리 키가 호출 자리에서 안 만들어진다 — 기본값을 보간·중첩 호출로 감싸면 선언 자리로 굳어 세 호출부가 같은 자리를 받는다")
 }

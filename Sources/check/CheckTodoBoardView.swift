@@ -20,9 +20,12 @@ enum TodoBoardStrings {
     static let emptyHint = "위에 적고 Enter를 누르세요"
     static let deleted = "삭제됨"
     static let undo = "되돌리기"
-    /// 하단 캡션은 항상 떠 있는다. 같은 앱 안에서 근무 기록은 팀으로 나가기 때문에, 이 목록만은
-    /// 서버로 가지 않는다는 사실을 매번 보여 줘야 사용자가 사적인 메모를 마음 놓고 적는다.
-    static let footer = "이 목록은 내 맥에만 저장돼요"
+    /// 하단 캡션은 항상 떠 있는다. 이 목록이 **어디에 저장되는지**를 매번 보여 주는 자리다.
+    ///
+    /// v0.3.30 부터 할 일은 내 계정에 저장돼 다른 기기(다른 맥·폰)와 맞춰진다. 예전 문구("이 목록은 내 맥에만 저장돼요")를
+    /// 그대로 두면 사실과 반대인 약속을 매번 하게 된다 — 사적인 메모를 이 맥에만 둔다고 믿고 적은 사람이 폰에서 그걸 보게 된다.
+    /// 팀에 공개된다는 뜻으로 읽히지 않게 "내 계정"을 주어로 둔다(서버에서도 본인만 읽는다 — todo_items RLS).
+    static let footer = "내 계정에 저장돼 다른 기기와 맞춰져요"
     static let markDone = "완료로 표시"
     static let markUndone = "완료 취소"
     static let deleteItem = "삭제"
@@ -60,10 +63,12 @@ enum TodoDraftInput {
     static func accepted(current: String, proposed: String) -> String {
         // 지우는 방향(길이가 줄어듦)은 무조건 통과시킨다. 어떤 경로로든 100자를 넘긴 값이 필드에 들어와도
         // 이 예외가 없으면 사용자가 한 글자도 못 지우고 갇힌다.
-        if proposed.count <= current.count { return proposed }
-        // 늘리는 방향은 100자까지. 초과분만 잘라 넣는 게 아니라 변경 자체를 되돌린다 —
+        // 길이는 두 잣대(글자 · 코드 포인트)로 잰다 — 글자 수는 줄면서 코드 포인트만 느는 바꿔치기로 서버 상한을 넘지 못하게.
+        if proposed.count <= current.count, proposed.unicodeScalars.count <= current.unicodeScalars.count { return proposed }
+        // 늘리는 방향은 100자(코드 포인트 1000)까지. 초과분만 잘라 넣는 게 아니라 변경 자체를 되돌린다 —
         // 자동 절단은 붙여넣은 문장 끝이 소리 없이 사라져 '분명 적었는데 없어졌다'로 읽힌다.
-        return proposed.count <= TodoRules.maxTitleLength ? proposed : current
+        // 판정은 스토어·컨트롤러와 같은 `TodoRules.titleFitsLimits` 하나다(뷰만 받고 스토어가 거절하면 Enter 가 말없이 먹힌다).
+        return TodoRules.titleFitsLimits(proposed) ? proposed : current
     }
 
     /// 카운터 문구. 한계에서 멀 땐 nil 이라 숫자가 아예 안 뜬다 — 평소에 늘 떠 있으면 글자 수를 세는 도구처럼

@@ -1,0 +1,196 @@
+{
+  "generator": "scratchpad/w1/x2/generate.py (저장소 밖 — 이 파일은 요청 인자 기록)",
+  "server_sql": "20260917110000_todo_sync.sql (S2 수리본, 하네스 체인 + 3회 적용 통과)",
+  "serialization": "select public.todo_sync(p_changes, p_since_ms)::text — jsonb 값 그대로",
+  "users": {
+    "A": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "B": "3e240c02-8972-478e-a674-014f498a641b",
+    "C": "544e3837-f01c-4560-b82f-4d44c269f044"
+  },
+  "fixtures": {
+    "todo_sync__empty_user_full": {
+      "caller": "C",
+      "p_since_ms": null,
+      "note": "행이 하나도 없는 사용자의 첫 동기화(since null) — full=true, items 빈 배열",
+      "p_changes": []
+    },
+    "todo_sync__first_upload_full": {
+      "caller": "A",
+      "p_since_ms": null,
+      "note": "첫 업로드: 4줄(미완료·완료·톰스톤·1970 경계 999/1000ms·따옴표/역슬래시/ZWJ 이모지) — full=true, 톰스톤 포함 전부",
+      "p_changes": [
+        {
+          "id": "00000000-0000-4000-8000-0000000000a1",
+          "title": "배포 노트 정리",
+          "created_at_ms": 1726500000999,
+          "updated_at_ms": 1726500001000,
+          "completed_at_ms": null,
+          "deleted_at_ms": null,
+          "origin_day_key": "20240917"
+        },
+        {
+          "id": "00000000-0000-4000-8000-0000000000a2",
+          "title": "오목 로비 확인 ✅",
+          "created_at_ms": 1726500000000,
+          "updated_at_ms": 1726500002001,
+          "completed_at_ms": 1726500002001,
+          "deleted_at_ms": null,
+          "origin_day_key": "20240917"
+        },
+        {
+          "id": "00000000-0000-4000-8000-0000000000a3",
+          "title": "지운 할 일",
+          "created_at_ms": 1726500000001,
+          "updated_at_ms": 1726500003999,
+          "completed_at_ms": null,
+          "deleted_at_ms": 1726500003999,
+          "origin_day_key": "20240917"
+        },
+        {
+          "id": "00000000-0000-4000-8000-0000000000a4",
+          "title": "\"따옴표\" \\역슬래시 👨‍👩‍👧‍👦 가족",
+          "created_at_ms": 999,
+          "updated_at_ms": 1000,
+          "completed_at_ms": null,
+          "deleted_at_ms": null,
+          "origin_day_key": "19700101"
+        }
+      ]
+    },
+    "todo_sync__incremental_overlap": {
+      "caller": "A",
+      "p_since_ms": 1789572279787,
+      "note": "since=앞 watermark, 보낼 것 없음 — 60초 겹침으로 방금 쓴 행이 다시 온다(full=false)",
+      "p_changes": [],
+      "prev_watermark_ms": 1789572279787
+    },
+    "todo_sync__lww_lost_and_won": {
+      "caller": "A",
+      "p_since_ms": 1789572279804,
+      "note": "a1 은 서버보다 옛 updated_at → 서버 행 유지(진 항목도 items 로 온다), a2 는 더 새 값 → 모든 칸 덮음(completed 비움)",
+      "p_changes": [
+        {
+          "id": "00000000-0000-4000-8000-0000000000a1",
+          "title": "옛 수정(진다)",
+          "created_at_ms": 1726500000999,
+          "updated_at_ms": 1726500000500,
+          "completed_at_ms": null,
+          "deleted_at_ms": null,
+          "origin_day_key": "20240917"
+        },
+        {
+          "id": "00000000-0000-4000-8000-0000000000a2",
+          "title": "새 수정(이긴다)",
+          "created_at_ms": 1726500000000,
+          "updated_at_ms": 1726500009000,
+          "completed_at_ms": null,
+          "deleted_at_ms": null,
+          "origin_day_key": "20240917"
+        }
+      ],
+      "prev_watermark_ms": 1789572279804
+    },
+    "todo_sync__same_ms_tie": {
+      "caller": "A",
+      "p_since_ms": 1789572279821,
+      "note": "a1 을 서버와 같은 updated_at_ms 로 보냄 → 서버 유지",
+      "p_changes": [
+        {
+          "id": "00000000-0000-4000-8000-0000000000a1",
+          "title": "동률(서버가 이긴다)",
+          "created_at_ms": 1726500000999,
+          "updated_at_ms": 1726500001000,
+          "completed_at_ms": null,
+          "deleted_at_ms": null,
+          "origin_day_key": "20240917"
+        }
+      ],
+      "prev_watermark_ms": 1789572279821
+    },
+    "todo_sync__future_clamped": {
+      "caller": "A",
+      "p_since_ms": 1789572279839,
+      "note": "created·updated 가 2100년(5분 초과 미래) → 둘 다 watermark_ms 로 눌려 저장·반환",
+      "p_changes": [
+        {
+          "id": "00000000-0000-4000-8000-0000000000a5",
+          "title": "시계가 빠른 맥",
+          "created_at_ms": 4102444800000,
+          "updated_at_ms": 4102444800000,
+          "completed_at_ms": null,
+          "deleted_at_ms": null,
+          "origin_day_key": "20260917"
+        }
+      ],
+      "prev_watermark_ms": 1789572279839
+    },
+    "todo_sync__rejected_mixed": {
+      "caller": "A",
+      "p_since_ms": 1789572279856,
+      "note": "잘못된 항목 8개(형식 id · 공백뿐 제목 · 100자지만 1100 코드 포인트 · day key · 음수 · 숫자 id · 문자열 ms · 소수 ms)는 그것만 rejected(원문 id, 숫자 id 는 null), 정상 항목 b0 은 적용",
+      "p_changes_text": "[{\"completed_at_ms\":null,\"created_at_ms\":1726500000000,\"deleted_at_ms\":null,\"id\":\"not-a-uuid\",\"origin_day_key\":\"20240917\",\"title\":\"형식이 틀린 id\",\"updated_at_ms\":1726500000000},{\"completed_at_ms\":null,\"created_at_ms\":1726500000000,\"deleted_at_ms\":null,\"id\":\"00000000-0000-4000-8000-0000000000a6\",\"origin_day_key\":\"20240917\",\"title\":\"   \",\"updated_at_ms\":1726500000000},{\"completed_at_ms\":null,\"created_at_ms\":1726500000000,\"deleted_at_ms\":null,\"id\":\"00000000-0000-4000-8000-0000000000a7\",\"origin_day_key\":\"20240917\",\"title\":\"xͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬxͣͤͥͦͧͨͩͪͫͬ\",\"updated_at_ms\":1726500000000},{\"completed_at_ms\":null,\"created_at_ms\":1726500000000,\"deleted_at_ms\":null,\"id\":\"00000000-0000-4000-8000-0000000000a8\",\"origin_day_key\":\"2026-09-1\",\"title\":\"날짜 키가 틀림\",\"updated_at_ms\":1726500000000},{\"completed_at_ms\":null,\"created_at_ms\":-1,\"deleted_at_ms\":null,\"id\":\"00000000-0000-4000-8000-0000000000a9\",\"origin_day_key\":\"20240917\",\"title\":\"음수 시각\",\"updated_at_ms\":1726500000000},{\"completed_at_ms\":null,\"created_at_ms\":1726500000000,\"deleted_at_ms\":null,\"id\":\"00000000-0000-4000-8000-0000000000b0\",\"origin_day_key\":\"20240917\",\"title\":\"정상 항목\",\"updated_at_ms\":1726500000000},{\"id\":12345,\"title\":\"숫자 id\",\"created_at_ms\":1726500000000,\"updated_at_ms\":1726500000000,\"completed_at_ms\":null,\"deleted_at_ms\":null,\"origin_day_key\":\"20240917\"},{\"id\":\"00000000-0000-4000-8000-0000000000b2\",\"title\":\"문자열 ms\",\"created_at_ms\":\"1726500000000\",\"updated_at_ms\":1726500000000,\"completed_at_ms\":null,\"deleted_at_ms\":null,\"origin_day_key\":\"20240917\"},{\"id\":\"00000000-0000-4000-8000-0000000000b3\",\"title\":\"소수 ms\",\"created_at_ms\":1726500000000.5,\"updated_at_ms\":1726500000000,\"completed_at_ms\":null,\"deleted_at_ms\":null,\"origin_day_key\":\"20240917\"}]",
+      "prev_watermark_ms": 1789572279856
+    },
+    "todo_sync__since_81days_full": {
+      "caller": "A",
+      "p_since_ms": 1782573879873,
+      "note": "since 가 80일보다 오래됨 → full=true, 사용자 행 전부",
+      "p_changes": [],
+      "prev_watermark_ms": 1789572279873
+    },
+    "todo_sync__since_future_full": {
+      "caller": "A",
+      "p_since_ms": 1789572879891,
+      "note": "since 가 서버 지금보다 미래(파일 손상 등) → full=true",
+      "p_changes": [],
+      "prev_watermark_ms": 1789572279891
+    },
+    "todo_sync__too_many": {
+      "caller": "A",
+      "p_since_ms": 1789572279908,
+      "note": "501개 → too_many{max:500}, 행 수 변화 없음",
+      "p_changes_count": 501,
+      "prev_watermark_ms": 1789572279908,
+      "rows_before": 6,
+      "rows_after": 6
+    },
+    "todo_sync__invalid_not_array": {
+      "caller": "A",
+      "p_since_ms": null,
+      "note": "p_changes = {} (배열 아님) → invalid",
+      "p_changes_text": "{}"
+    },
+    "todo_sync__unauthorized": {
+      "caller": null,
+      "p_since_ms": null,
+      "note": "authenticated 역할이지만 sub 가 비었다(auth.uid() null) → unauthorized",
+      "p_changes": []
+    },
+    "todo_sync__quota": {
+      "caller": "B",
+      "p_since_ms": 1789572279037,
+      "note": "행 5000개(하루 전에 쓰임)인 사용자: 새 id 는 quota 로 거절, 있는 id 의 더 새 수정은 적용 — items 는 보낸 id 의 서버 행만(겹침 창 밖)",
+      "p_changes": [
+        {
+          "id": "00000000-0000-4000-8000-00000000c0de",
+          "title": "5001번째 새 줄",
+          "created_at_ms": 1726500000000,
+          "updated_at_ms": 1726500000000,
+          "completed_at_ms": null,
+          "deleted_at_ms": null,
+          "origin_day_key": "20240917"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "title": "심은 줄 1 을 고침",
+          "created_at_ms": 1726500000000,
+          "updated_at_ms": 1726500005000,
+          "completed_at_ms": null,
+          "deleted_at_ms": null,
+          "origin_day_key": "20240917"
+        }
+      ],
+      "seeded_rows": 5000
+    }
+  }
+}

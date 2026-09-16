@@ -14,7 +14,7 @@ import SwiftUI
 ///
 /// `.nonactivatingPanel` 은 그대로 둔다 — 키가 되어도 **앱을 활성화하지 않는다**. 즉 사용자가 쓰던
 /// 앱의 창은 계속 앞에 있고, 우리 보드만 키를 가져가 입력을 받는다.
-final class TodoBoardPanel: NSPanel {
+final class TodoBoardPanel: CheckMousePanel {
     override var canBecomeKey: Bool { true }
 }
 

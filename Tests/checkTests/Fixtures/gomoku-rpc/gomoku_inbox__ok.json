@@ -1,0 +1,49 @@
+{
+  "status": "ok",
+  "incoming": [
+    {
+      "stake": 3,
+      "match_id": "4d847e6d-3af0-46cd-ae20-4077070d2d28",
+      "challenger": {
+        "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
+        "character": "aing",
+        "avatar_url": null,
+        "display_name": "abto.app"
+      },
+      "invite_expires_ms": 1789500132749
+    },
+    {
+      "stake": 10,
+      "match_id": "9e03e634-d89a-418c-b038-ecc8c88b15c9",
+      "challenger": {
+        "user_id": "6a6a6a6a-0000-4000-8000-00000000000f",
+        "character": null,
+        "avatar_url": null,
+        "display_name": "여섯째"
+      },
+      "invite_expires_ms": 1789500132765
+    }
+  ],
+  "outgoing": {
+    "stake": 5,
+    "match_id": "feeec858-1066-42bd-95ce-1d440ee656ad",
+    "opponent": {
+      "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "character": "aing",
+      "avatar_url": null,
+      "display_name": "abto.app"
+    },
+    "invite_expires_ms": 1789500132781
+  },
+  "ruby_balance": 100,
+  "last_finished": {
+    "stake": 5,
+    "result": "draw",
+    "winner": null,
+    "match_id": "6e795c26-d006-4487-88aa-ee0f6f915ddb",
+    "end_reason": "board_full",
+    "finished_ms": 1789500072719
+  },
+  "server_now_ms": 1789500072796,
+  "active_match_id": null
+}

@@ -32,6 +32,9 @@ struct CheckMenuView: View {
     /// 앱은 전부 `.standard` 하나를 보고, 테스트는 자기 스위트를 넣어 표준 도메인을 건드리지 않는다
     /// (같은 순간 병렬로 아잉 픽셀을 재는 스위트가 있다).
     var characterDefaults: UserDefaults = .standard
+    // 스냅샷 전용: 받은 오목 대결 신청 배너(v0.3.27)를 강제로 그린다. 앱에서는 store.gomoku.bannerInvite 로만 결정.
+    // 맨 끝에 둔 이유: 기존 호출부의 인자 순서(memberwise init)를 한 글자도 바꾸지 않기 위해서다.
+    var previewGomokuInvite: GomokuInvite? = nil
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
@@ -52,6 +55,9 @@ struct CheckMenuView: View {
     enum TopBanner {
         /// 12시간 확인 — 무응답 30분이면 자동 마감되므로 가장 급하다.
         case longSession
+        /// 받은 오목 대결 신청(v0.3.27). 60초면 만료되는 **사람이 기다리는** 요청이라 회고·답장·업데이트보다 급하고,
+        /// 자동 마감이 걸린 12시간 확인보다는 덜 급하다. 신청은 서버에 남아 있어 밀려도 대결 창 로비에서 다시 보인다.
+        case gomokuInvite
         /// 지난주 회고 안내(주 1회).
         case retro
         /// 내 제보에 답장이 왔다는 안내(v0.3.14). 회고보다 덜 급한 이유는 회고가 '이번 주에 딱 하루'
@@ -70,6 +76,9 @@ struct CheckMenuView: View {
     static let updateNoteLineHeight: CGFloat = 15
     static let updateNoteBlockPadding: CGFloat = 8
     static let longSessionBannerHeight: CGFloat = 92
+    /// 받은 오목 대결 신청 배너(v0.3.27). `GomokuInviteBanner` 는 12시간 배너와 같은 모양(두 줄 + 28pt 버튼 한 줄)이라
+    /// 높이도 같다 — 렌더 테스트(V0327GomokuPanelRenderTests)가 배너를 얹기 전후 팝오버 높이 차와 대조한다.
+    static let gomokuInviteBannerHeight: CGFloat = 92
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
     /// 헤더 주간 목표 편집 인라인 행 높이(pt). 배너는 아니지만 헤더를 그만큼 부풀리므로 같은 예산에 넣는다.
@@ -85,8 +94,35 @@ struct CheckMenuView: View {
     /// store.displayNow 뿐이라, body 최상단인 이 프로퍼티가 그것을 관찰 등록해 팝오버 전체 서브트리가
     /// 매초 무효화된다(잎 뷰 격리 불변식 위반 — 실제 회귀 지점이었다). 유예형 배너가 다시 생기면
     /// 스토어가 판정 **결과만** 상태로 밀어 넣게 하고 여기서는 그 상태만 읽어라.
+    /// 팝오버에 띄울 받은 오목 신청(없으면 nil). **스토어가 만료 판정을 끝낸 결과만 읽는다**(`bannerInvite`) —
+    /// 여기서 `expiresAt` 을 시각과 비교하면 아래 경고의 매초 무효화가 그대로 재발한다. 스냅샷은 previewGomokuInvite 로 주입한다.
+    private var gomokuBannerInvite: GomokuInvite? {
+        previewGomokuInvite ?? store.gomoku.bannerInvite
+    }
+
+    /// 배너 [수락]: 서버 수락 → 대결 창 → 팝오버 닫기. **창 먼저, 팝오버 나중**이다(미니게임 창과 같은 순서 —
+    /// 팝오버를 먼저 닫으면 창이 뜨기 전 한 틱 동안 아무 표면도 없다). 닫기는 이 한 곳에서만 부른다
+    /// (두 곳에서 부르면 토글이 두 번 일어나 도로 열린다). 수락이 실패해도(만료 등) 창은 연다 — 로비 안내줄이 이유를 말한다.
+    private func acceptGomokuInvite(_ invite: GomokuInvite) {
+        let gomoku = store.gomoku
+        Task { @MainActor in
+            await gomoku.respond(inviteID: invite.id, accept: true)
+            gomoku.openWindow(focusMatchID: invite.id)
+            WindowTopAnchor.dismissMenuPopover()
+        }
+    }
+
+    /// 배너 [거절]: 서버에 거절만 알린다(창도 팝오버 닫기도 없다 — 하던 일을 계속한다).
+    private func declineGomokuInvite(_ invite: GomokuInvite) {
+        let gomoku = store.gomoku
+        Task { @MainActor in
+            await gomoku.respond(inviteID: invite.id, accept: false)
+        }
+    }
+
     private var topBanner: TopBanner? {
         if isMainScreen, showsLongSessionBanner { return .longSession }
+        if store.isSignedIn, gomokuBannerInvite != nil { return .gomokuInvite }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
         // 답장은 새 버전 안내보다 급하다(내가 쓴 글에 온 답이라 사람이 기다리고 있다).
         // 판정은 스토어가 끝내 둔 것을 읽기만 한다 — 위 경고 그대로, 여기서 시각을 비교하지 않는다.
@@ -98,6 +134,7 @@ struct CheckMenuView: View {
     private var topBannerHeight: CGFloat {
         switch topBanner {
         case .longSession: return Self.longSessionBannerHeight
+        case .gomokuInvite: return Self.gomokuInviteBannerHeight
         case .retro: return Self.inlineBannerHeight
         // 회고와 같은 InlineActionBanner 한 줄이라 높이도 같다(배너는 동시에 하나뿐이므로 더하지 않는다).
         case .feedbackReply: return Self.inlineBannerHeight
@@ -245,6 +282,15 @@ struct CheckMenuView: View {
             // 더 급한 배너가 있으면 이번 팝오버에서는 양보한다(topBanner — 배너는 한 번에 하나만).
             if topBanner == .update {
                 UpdateBanner(versionText: updateBannerVersionText, notes: updateBannerNotes)
+            }
+            // 받은 오목 대결 신청(v0.3.27). 12시간 배너와 같은 모양 [수락][거절]. 남은 초는 **여기서 그리지 않는다** —
+            // 팝오버 트리에서 시계를 읽으면 전체가 매초 무효화된다(초는 대결 창 로비의 잎 뷰가 보여 준다).
+            if topBanner == .gomokuInvite, let invite = gomokuBannerInvite {
+                GomokuInviteBanner(
+                    invite: invite,
+                    onAccept: { acceptGomokuInvite(invite) },
+                    onDecline: { declineGomokuInvite(invite) }
+                )
             }
             // 그 아래: 지난주 회고 안내 배너(주당 1회, 월요일 첫 팝오버). [보기]로 개인 기록 패널을 열고,
             // X 로 닫으면 이번 주는 다시 뜨지 않는다(markRetroBannerSeen 이 주 키를 기록).

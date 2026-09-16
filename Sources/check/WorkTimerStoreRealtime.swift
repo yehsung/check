@@ -183,6 +183,16 @@ extension WorkTimerStore {
         // `.tick` 과 주기 되맞춤의 `.workEnded` 로 **상태가 안 바뀌는 호출**을 훨씬 자주 받는다.
         if realtimeState != after { realtimeState = after }
         run(effects, now: now)
+        // 깨어남(결합 게이트가 열린 뒤 넣는 `.didWake`)은 오목 받은 신청·대국을 다시 볼 시점이기도 하다.
+        // **전송자가 있으면 여기서 쏘지 않는다** — 이 `.didWake` 가 곧 재조인이고, 조인이 성공하면 `.catchUp`
+        // 가지가 오목 따라잡기(realtimeDidJoin)를 한다. 여기서도 쏘면 조인 직후에 요청이 하나 더 나가
+        // 깨움 결합 게이트 계약("본문 1회 → 조인, 조인 뒤엔 추가 요청 없음")을 깬다(V0238ClockTests 실측).
+        // 전송자가 없는 맥(킬스위치)만 조인이 없으므로 여기서 직접 한 번 본다.
+        // 근무 중이고 이 맥이 그 근무의 주인일 때만이다: 신청은 근무 중인 사람에게만 오고(서버
+        // target_not_working), 흡수 세션 맥은 찌르기와 같은 이유로 주인 맥에 맡긴다.
+        if case .didWake = event, realtimeMayConsumePokes, !realtime.transportAvailable {
+            gomoku.systemDidWake()
+        }
     }
 
     /// full jitter 의 난수원. 링은 순수해야 하므로 난수는 **주입**이다.
@@ -217,11 +227,18 @@ extension WorkTimerStore {
                 realtime.retryTask = nil
             case .catchUp:
                 startCatchUp()
+                // 오목 받은 신청·진행 중 대국도 조인 직후 한 번 따라잡는다(브로드캐스트엔 재생이 없다).
+                // 소비가 아니라 조회라 근무 게이트(realtimeMayConsumePokes)를 지나지 않는다.
+                gomoku.realtimeDidJoin()
             case .drain:
                 // 근무중 게이트를 지난 뒤에만 소비한다. 여기서 requestDrain 을 무조건 부르면
                 // 집 맥이 회사 맥의 찌르기를 훔친다(위 realtimeMayConsumePokes 주석).
                 guard realtimeMayConsumePokes else { continue }
                 requestDrain()
+            case .gomokuSignal:
+                // 오목 신호는 take_pokes 로 가지 않는다. 대국·신청 상태는 서버 표가 권위이고 조회는
+                // 소비가 아니므로, 두 맥 모두가 받아도 누구의 것을 훔치지 않는다 — 그래서 게이트가 없다.
+                gomoku.handleSignal()
             case .pushAccessToken(let token):
                 realtime.transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

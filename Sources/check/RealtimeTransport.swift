@@ -154,7 +154,8 @@ enum RealtimeFrame {
             let reason = (response["reason"] as? String) ?? (response["error"] as? String) ?? status ?? ""
             return .joinRejected(classifyJoinError(reason: reason))
         case "broadcast":
-            // Supabase 는 브로드캐스트 이름을 payload.event 에 싣는다(우리는 'ring' 하나만 쓴다).
+            // Supabase 는 브로드캐스트 이름을 payload.event 에 싣는다. 쓰는 이름은 'ring'(찌르기·메시지)과
+            // 'gomoku'(1:1 오목, v0.3.27) 둘이고, 가르는 일은 링(RealtimeLink)이 한다 — 여기선 이름만 넘긴다.
             return .broadcast(event: (payload["event"] as? String) ?? "")
         case "phx_error", "phx_close":
             return .closed(code: nil)

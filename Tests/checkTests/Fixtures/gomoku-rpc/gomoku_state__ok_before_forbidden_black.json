@@ -1,0 +1,177 @@
+{
+  "match": {
+    "id": "82216cde-011c-47b5-9707-42a98a3fb455",
+    "turn": "black",
+    "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "board": "w.............................w.............................w.............................w.......................bb...........b..............b..................................................................................",
+    "stake": 3,
+    "white": "3e240c02-8972-478e-a674-014f498a641b",
+    "result": null,
+    "status": "active",
+    "winner": null,
+    "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+    "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "end_reason": null,
+    "move_count": 8,
+    "deadline_ms": 1789500102305,
+    "finished_ms": null,
+    "turn_started_ms": 1789500072305,
+    "invite_expires_ms": 1789500132161
+  },
+  "moves": [
+    {
+      "x": 7,
+      "y": 8,
+      "seq": 1,
+      "kind": "stone",
+      "color": "black"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "seq": 2,
+      "kind": "stone",
+      "color": "white"
+    },
+    {
+      "x": 7,
+      "y": 9,
+      "seq": 3,
+      "kind": "stone",
+      "color": "black"
+    },
+    {
+      "x": 0,
+      "y": 2,
+      "seq": 4,
+      "kind": "stone",
+      "color": "white"
+    },
+    {
+      "x": 9,
+      "y": 7,
+      "seq": 5,
+      "kind": "stone",
+      "color": "black"
+    },
+    {
+      "x": 0,
+      "y": 4,
+      "seq": 6,
+      "kind": "stone",
+      "color": "white"
+    },
+    {
+      "x": 10,
+      "y": 7,
+      "seq": 7,
+      "kind": "stone",
+      "color": "black"
+    },
+    {
+      "x": 0,
+      "y": 6,
+      "seq": 8,
+      "kind": "stone",
+      "color": "white"
+    }
+  ],
+  "state": {
+    "match": {
+      "id": "82216cde-011c-47b5-9707-42a98a3fb455",
+      "turn": "black",
+      "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "board": "w.............................w.............................w.............................w.......................bb...........b..............b..................................................................................",
+      "stake": 3,
+      "white": "3e240c02-8972-478e-a674-014f498a641b",
+      "result": null,
+      "status": "active",
+      "winner": null,
+      "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+      "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "end_reason": null,
+      "move_count": 8,
+      "deadline_ms": 1789500102305,
+      "finished_ms": null,
+      "turn_started_ms": 1789500072305,
+      "invite_expires_ms": 1789500132161
+    },
+    "moves": [
+      {
+        "x": 7,
+        "y": 8,
+        "seq": 1,
+        "kind": "stone",
+        "color": "black"
+      },
+      {
+        "x": 0,
+        "y": 0,
+        "seq": 2,
+        "kind": "stone",
+        "color": "white"
+      },
+      {
+        "x": 7,
+        "y": 9,
+        "seq": 3,
+        "kind": "stone",
+        "color": "black"
+      },
+      {
+        "x": 0,
+        "y": 2,
+        "seq": 4,
+        "kind": "stone",
+        "color": "white"
+      },
+      {
+        "x": 9,
+        "y": 7,
+        "seq": 5,
+        "kind": "stone",
+        "color": "black"
+      },
+      {
+        "x": 0,
+        "y": 4,
+        "seq": 6,
+        "kind": "stone",
+        "color": "white"
+      },
+      {
+        "x": 10,
+        "y": 7,
+        "seq": 7,
+        "kind": "stone",
+        "color": "black"
+      },
+      {
+        "x": 0,
+        "y": 6,
+        "seq": 8,
+        "kind": "stone",
+        "color": "white"
+      }
+    ],
+    "my_color": "black",
+    "opponent": {
+      "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+      "character": "jellyfish",
+      "avatar_url": "https://example.invalid/avatar-b.png",
+      "display_name": "코덱스토큰도둑예은"
+    },
+    "ruby_balance": 97,
+    "server_now_ms": 1789500072322
+  },
+  "status": "ok",
+  "my_color": "black",
+  "opponent": {
+    "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+    "character": "jellyfish",
+    "avatar_url": "https://example.invalid/avatar-b.png",
+    "display_name": "코덱스토큰도둑예은"
+  },
+  "ruby_balance": 97,
+  "server_now_ms": 1789500072322
+}

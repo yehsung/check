@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import CheckCore
 
 // MARK: - 할 일 동기화 ↔ 로그인 세션 (v0.3.30)
 

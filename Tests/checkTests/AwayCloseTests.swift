@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - AF: 자리 비움 자동 마감 — 사람 시나리오 고정 (v0.2.35 / docs/away-close.md)
 //
@@ -926,10 +927,10 @@ private func afkRepoFile(_ relativePath: String) -> URL {
 
 private func afkClientSources() throws -> [String: String] {
     let directory = afkRepoFile("Sources/check")
-    let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+    let names = try FileManager.default.checkSourcesContentsOfDirectory(atPath: directory.path)
     var sources: [String: String] = [:]
     for name in names where name.hasSuffix(".swift") {
-        sources[name] = try String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8)
+        sources[name] = try String(contentsOf: directory.appendingCheckSourcePath(name), encoding: .utf8)
     }
     return sources
 }

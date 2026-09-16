@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.28 — 1:1 오목 **대국 채팅** 코어(모델·서비스·스토어) 계약.
 //

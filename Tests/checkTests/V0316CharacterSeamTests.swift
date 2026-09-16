@@ -2,6 +2,7 @@ import ImageIO
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 /// 갈래 1(코어)과 갈래 2(에셋)의 **이음매**를 잰다.
 ///

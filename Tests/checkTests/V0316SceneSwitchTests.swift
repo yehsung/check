@@ -3,6 +3,7 @@ import CoreGraphics
 import SceneKit
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.15 2-A: 씬 분기(아잉 3D ↔ 스프라이트 평면) · 노드 교체 · 스프라이트 런타임
 //

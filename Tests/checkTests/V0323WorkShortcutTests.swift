@@ -4,6 +4,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.23 근무 시작·종료 전역 단축키
 //
@@ -1177,11 +1178,11 @@ private func v0323SourcesDirectory() -> URL {
 }
 
 private func v0323SourceNames() throws -> [String] {
-    try FileManager.default.contentsOfDirectory(atPath: v0323SourcesDirectory().path).filter { $0.hasSuffix(".swift") }
+    try FileManager.default.checkSourcesContentsOfDirectory(atPath: v0323SourcesDirectory().path).filter { $0.hasSuffix(".swift") }
 }
 
 private func v0323Source(_ name: String) throws -> String {
-    try String(contentsOf: v0323SourcesDirectory().appendingPathComponent(name), encoding: .utf8)
+    try String(contentsOf: v0323SourcesDirectory().appendingCheckSourcePath(name), encoding: .utf8)
 }
 
 /// 주석을 걷어낸 코드(줄바꿈은 남긴다). 안 걷어내면 **설명을 지워야만 초록이 되는** 테스트가 된다 — 이 파일의 설명문에도

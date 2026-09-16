@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.27 1:1 오목 **화면** 렌더 — 로비 · 대국(흑 차례 X) · 결과 · 규칙 보기 · 팝오버 배너 · 미니게임 헤더 입구.
 //
@@ -1465,7 +1466,7 @@ private func gpSource(_ name: String) throws -> String {
     let directory = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Sources/check", isDirectory: true)
-    return try String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8)
+    return try String(contentsOf: directory.appendingCheckSourcePath(name), encoding: .utf8)
 }
 
 /// `from` 부터 그 뒤 첫 `to` 직전까지(없으면 nil).

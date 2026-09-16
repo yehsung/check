@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.31 M4 — **화면** 쪽: 열린 대화에 새 줄이 재오픈 없이 그려지는가 · 바닥 따라가기 · "새 메시지 ↓".
 //

@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 M2(B2) — 오목 **화면**의 근무 조건 삭제 · 근무 밖 신청 배너.
 //
@@ -59,7 +60,7 @@ private func m2gFirstDifferentRow(_ lhs: NSBitmapImageRep, _ rhs: NSBitmapImageR
 private func m2gSource(_ name: String) throws -> String {
     let url = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
     return m2gStripComments(try String(contentsOf: url, encoding: .utf8))
 }
 

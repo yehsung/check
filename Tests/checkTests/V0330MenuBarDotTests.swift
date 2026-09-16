@@ -4,6 +4,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 M2 — 메뉴바 빨간 점의 사유가 셋이 됐다(새 메시지 · 오목 신청 · 업데이트) + 레일 [콕찌르기] 칸의 안 읽음 점.
 //
@@ -112,7 +113,7 @@ private func m2dLabelPixels(_ label: some View) throws -> M2DLabelPixels {
 private func m2dSource(_ name: String) throws -> String {
     let url = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
     return m2dStripComments(try String(contentsOf: url, encoding: .utf8))
 }
 

@@ -3,6 +3,7 @@ import SceneKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 /// **실제 오버레이 패널**을 화면에 올려 스프라이트 캐릭터를 캡처한다.
 ///

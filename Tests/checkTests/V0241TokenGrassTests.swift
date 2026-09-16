@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.41: 토큰 잔디(일별 토큰 기록 + 내 기록 잔디, issue #3 의 토큰 절반) 회귀 그물
 //
@@ -869,7 +870,7 @@ func sourceContractDailyUploadSitsAfterTheMonthlyUpsert() throws {
     // 서비스는 키 모양(옵셔널 **다섯** — claude_total · codex_total · codex_utc_total · codex_account · antigravity_total 의
     // 유무, v0.3.12)으로 **묶음을 갈라** 보낸다 — 혼합 키 배열은 PostgREST 가 400 PGRST102 로 통째 거절하므로(리뷰 P0),
     // 배열을 그대로 싣는 경로가 남으면 Codex 사용자의 일별 행이 한 줄도 안 올라간다.
-    let service = tgStrippingComments(try String(contentsOf: tgRepoURL("Sources/check/SupabaseWorkService.swift"), encoding: .utf8))
+    let service = tgStrippingComments(try String(contentsOf: tgRepoURL("Sources/CheckCore/SupabaseWorkService.swift"), encoding: .utf8))
     // 항을 하나씩 되묻는다(v0.3.12): 다섯이 되면서 식이 한 줄에 안 들어가는데, 한 줄 리터럴로 박아 두면
     // **줄바꿈만으로** 이 계약이 빨개져 "형식을 맞추려고 계약을 지우는" 압력이 생긴다. 빠진 항은 그대로 잡힌다.
     for term in [

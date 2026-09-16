@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import os
+import CheckCore
 
 /// MenuBarExtra(.window) 팝오버 창의 위쪽(그리고 오른쪽) 모서리를 고정해, 콘텐츠 높이가 변해도
 /// 창이 위로 튀어 상단이 화면 밖으로 잘리지 않게 한다.

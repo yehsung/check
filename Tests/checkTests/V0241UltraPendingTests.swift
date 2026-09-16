@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.41: 가득 찬 상태의 3시간 달성은 **소멸이 아니라 대기**다
 //

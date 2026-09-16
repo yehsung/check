@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 /// 울트라 찌르기 **버튼 쪽**(충전 시각 규약 · 제목 행 힌트 · 패널 높이 예산) 회귀.
 /// 오버레이/스토어/서비스 쪽 울트라 회귀는 다른 파일이 맡는다.

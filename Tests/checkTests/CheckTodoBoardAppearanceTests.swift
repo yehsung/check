@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 할 일 보드 투명도 **설정 모델**의 계약.
 //

@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.46 미니게임 **창** 렌더 — 가로 2단(게임 | 오늘 순위) 스냅샷 · 순위 열 고정 폭 · 내 행 강조 · 어제 챔피언 카드 ·
 // 팝오버에서 패널이 빠졌는데 홈 높이가 그대로인지(캡션 행 버튼은 남았다).

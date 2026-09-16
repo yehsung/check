@@ -3,6 +3,7 @@ import Observation
 import ServiceManagement
 import SwiftUI
 import os
+import CheckCore
 
 @main
 struct CheckApp: App {

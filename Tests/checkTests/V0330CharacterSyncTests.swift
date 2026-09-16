@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 — 착용 캐릭터를 **서버 기준**으로(폰과 공존).
 //

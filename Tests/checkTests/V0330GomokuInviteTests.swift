@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 — 오목 신청의 근무 조건 삭제(스토어 쪽).
 //

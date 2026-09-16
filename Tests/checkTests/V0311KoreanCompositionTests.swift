@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.11 한글 조합 결함 세 가지 (2026-09-11)
 //
@@ -162,7 +163,7 @@ private func kcSource(_ name: String) throws -> String {
         .deletingLastPathComponent()                // Tests/checkTests
         .deletingLastPathComponent()                // Tests
         .deletingLastPathComponent()                // (repo root)
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
     return kcStripComments(try String(contentsOf: url, encoding: .utf8))
 }
 

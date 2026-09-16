@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.27 → **0.3.28 로 다시 떴다** — 1:1 오목 서버↔앱 **응답 계약**(실제 SQL 출력).
 //

@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.37 G2: 토큰 금고(Keychain) 전환
 //
@@ -267,13 +268,13 @@ private func v0237SourceURL(_ name: String) -> URL {
         .deletingLastPathComponent() // Tests/checkTests
         .deletingLastPathComponent() // Tests
         .deletingLastPathComponent() // repo root
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }
 
 private func v0237SourceFiles() throws -> [URL] {
     let root = v0237SourceURL("WorkTimerStore.swift").deletingLastPathComponent()
     return try FileManager.default
-        .contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+        .checkSourcesContentsOfDirectory(at: root, includingPropertiesForKeys: nil)
         .filter { $0.pathExtension == "swift" }
 }
 

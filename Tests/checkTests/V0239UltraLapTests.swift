@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.39: 3시간 미션이 "하루 1회"에서 "3시간마다 반복 지급(랩)"으로 바뀐다
 //

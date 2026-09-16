@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 /// 번들에 실린 캐릭터 **명단**이 바뀌면 여기서 한 번에 걸린다.
 ///

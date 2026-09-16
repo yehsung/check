@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.43 — Codex 계정 우선 산식(issue #6 후속).
 //

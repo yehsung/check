@@ -1,4 +1,5 @@
 import SwiftUI
+import CheckCore
 
 // MARK: - 1:1 대화 패널 (v0.2.50)
 //

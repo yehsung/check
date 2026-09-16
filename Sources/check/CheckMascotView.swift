@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CheckCore
 
 struct CheckMascotView: View {
     let snapshot: WorkStatusSnapshot

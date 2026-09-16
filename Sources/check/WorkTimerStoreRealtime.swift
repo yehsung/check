@@ -1,4 +1,5 @@
 import Foundation
+import CheckCore
 
 // 초인종 링을 **스토어에 배선**하는 곳. 링(RealtimeLink)은 순수하고, 소켓(RealtimeTransport)은 무지하며,
 // 둘 사이에서 시간을 만들고 네트워크를 부르는 유일한 계층이 여기다.
@@ -459,12 +460,7 @@ extension WorkTimerStore {
         return parts.joined(separator: " · ")
     }
 
-    nonisolated static let realtimeDiagnosticsTime: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "HH:mm:ss"
-        return f
-    }()
+    nonisolated static let realtimeDiagnosticsTime: DateFormatter = CheckCoreShared.realtimeDiagnosticsTime
 
     private static func cause(of event: RealtimeEvent) -> String {
         switch event {

@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.20 서버가 알리는 새 버전 (app_latest_release → UpdateCheckStore)
 //
@@ -557,7 +558,7 @@ private func srSourceURL(_ name: String) -> URL {
         .deletingLastPathComponent()   // Tests/checkTests
         .deletingLastPathComponent()   // Tests
         .deletingLastPathComponent()   // (repo root)
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }
 
 /// `//` 줄 주석과 `/* */` 블록 주석을 걷어낸 코드. V0320MenuBarUpdateDotTests 의 v0320StrippingComments 와 같은 규칙이다

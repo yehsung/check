@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 — 안 읽음·읽음 경계·말풍선 필터의 **순수 규칙**(MessageUnreadRules). 네트워크 0, 시계 0.
 //

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.46 — 서버 마이그레이션 계약(20260907140000_codex_fork_safe_tail.sql): 계정 스냅샷이 있는 사용자의 로컬 Codex 증거는
 // 포크 억제 빌드(codex_diag_build ≥ 52 = v0.2.43 CodexForkTracker) 기기에서만 센다. 2026-09-07 abto.app 사고(메인 맥 build 51 이
@@ -136,7 +137,7 @@ func migrationContractCodexForkSafeTail() throws {
 /// (V0243AccountFirstTests 가 숫자를 고정한다 — 여기서는 규칙 타입이 서버 게이트 어휘를 갖지 않음만 못 박는다.)
 @Test
 func clientRuleIsUntouchedByTheServerGate() throws {
-    let source = try String(contentsOf: fsRepoURL("Sources/check/CodexEffectiveRule.swift"), encoding: .utf8)
+    let source = try String(contentsOf: fsRepoURL("Sources/CheckCore/CodexEffectiveRule.swift"), encoding: .utf8)
     #expect(!source.contains("fork_safe"))
     #expect(!source.contains("codexDiagBuild"))
 }

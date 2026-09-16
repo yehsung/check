@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 별명(표시명) 변경과 울트라 찌르기의 **와이어 계약** 테스트 — 모델(디코드/매핑)과 서비스(경로/본문)만 다룬다.
 // 스토어·UI 계약은 별도 파일이 맡는다.

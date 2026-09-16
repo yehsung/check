@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.38 "가벼워지기" 트랙 ε — 시계 분리(M1)와 깨움 결합(M7) 계약 고정.
 //
@@ -301,7 +302,7 @@ private func sourceURL(_ name: String) -> URL {
         .deletingLastPathComponent() // Tests/checkTests
         .deletingLastPathComponent() // Tests
         .deletingLastPathComponent() // repo root
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }
 
 // MARK: - 테스트

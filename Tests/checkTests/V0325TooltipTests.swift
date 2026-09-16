@@ -4,6 +4,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.25 자체 말풍선 툴팁
 //
@@ -663,7 +664,7 @@ struct V0325TooltipTests {
         #expect(total >= 30, ".checkTooltip( 호출 \(total)곳")
         let perFile: [String: Int] = [
             "CheckMenuView.swift": 11, "CheckTodoBoardView.swift": 4, "MiniGamePanel.swift": 3, "CheckComponents.swift": 3,
-            "CheckTokenUsage.swift": 2, "CheckSettingsView.swift": 2, "CheckShopPanel.swift": 1, "CheckMessageView.swift": 1,
+            "CheckTokenUsageRow.swift": 2, "CheckSettingsView.swift": 2, "CheckShopPanel.swift": 1, "CheckMessageView.swift": 1,
             "CheckCharacterPanel.swift": 1, "CheckFocusModeButton.swift": 1, "CheckAvatarView.swift": 1,
         ]
         for (name, minimum) in perFile {
@@ -682,7 +683,7 @@ struct V0325TooltipTests {
             ("CheckComponents.swift", #".checkTooltip("닫기")"#),
             ("CheckAvatarView.swift", #".checkTooltip("아바타 변경")"#),
             ("CheckFocusModeButton.swift", ".checkTooltip(FocusModeButtonText.tooltip(face))"),
-            ("CheckTokenUsage.swift", #".checkTooltip("앱 사용자 전체의 AI 토큰 순위를 봅니다")"#),
+            ("CheckTokenUsageRow.swift", #".checkTooltip("앱 사용자 전체의 AI 토큰 순위를 봅니다")"#),
             ("CheckMenuView.swift", #".checkTooltip("잠시 후 다시 찌를 수 있어요")"#),
             ("CheckMenuView.swift", ".checkTooltip(UltraBalanceText.rowTooltip(balance: ultraBalance, unlimited: ultraUnlimited))"),
             ("CheckMenuView.swift", ".checkTooltip(UltraBalanceText.badgeHelp(balance: balance, unlimited: isUnlimited))"),
@@ -869,7 +870,7 @@ struct V0325TooltipTests {
     /// 주석 제거는 상점 테스트의 도우미(`V0317ShopTests.stripped`)를 그대로 쓴다 — 공백은 한 칸으로 접힌다.
     static func strippedSources() throws -> [String: String] {
         let root = sourcesDirectory().standardizedFileURL.resolvingSymlinksInPath()
-        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { return [:] }
+        guard let walker = FileManager.default.checkSourcesEnumerator(at: root, includingPropertiesForKeys: nil) else { return [:] }
         var out: [String: String] = [:]
         for case let file as URL in walker where file.pathExtension == "swift" {
             let path = file.standardizedFileURL.resolvingSymlinksInPath().path

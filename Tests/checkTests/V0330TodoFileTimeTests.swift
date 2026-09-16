@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.30 할 일 동기화 ① 시각 정규화 · 파일 2세대
 //

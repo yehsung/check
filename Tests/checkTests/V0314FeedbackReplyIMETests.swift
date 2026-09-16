@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.14 답장 칸의 한글 조합 (2026-09-12 실측)
 //
@@ -172,7 +173,7 @@ private func frSource(_ name: String) throws -> String {
         .deletingLastPathComponent()                // Tests/checkTests
         .deletingLastPathComponent()                // Tests
         .deletingLastPathComponent()                // (repo root)
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
     return frStripComments(try String(contentsOf: url, encoding: .utf8))
 }
 

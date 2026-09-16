@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.30 할 일 동기화 ③ 엔진 · 전송 · 조정자
 //
@@ -1064,7 +1065,7 @@ private func todoSyncWiringStrippingComments(_ source: String) -> String {
 private func todoSyncWiringSource(_ name: String) throws -> String {
     let url = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
     return try String(contentsOf: url, encoding: .utf8)
 }
 
@@ -1103,7 +1104,7 @@ func todoSyncAppDelegateAssemblesLiveWiring() throws {
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Sources/check")
     var engineSites: [String: Int] = [:]
-    for file in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) where file.pathExtension == "swift" {
+    for file in try FileManager.default.checkSourcesContentsOfDirectory(at: root, includingPropertiesForKeys: nil) where file.pathExtension == "swift" {
         let code = todoSyncWiringStrippingComments(try String(contentsOf: file, encoding: .utf8))
         let hits = code.components(separatedBy: "TodoSyncCoordinator(").count - 1 + code.components(separatedBy: " TodoSync(list:").count - 1
         if hits > 0 { engineSites[file.lastPathComponent] = hits }
@@ -1120,7 +1121,7 @@ func todoNoLocalOnlyStorageCopyRemains() throws {
     let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Sources/check")
-    let files = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+    let files = try FileManager.default.checkSourcesContentsOfDirectory(at: root, includingPropertiesForKeys: nil)
         .filter { $0.pathExtension == "swift" }
     #expect(files.count > 20)
     for file in files {

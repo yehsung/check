@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 @Test
 func signUpSendsEmailAndPasswordToSupabaseAuth() async throws {

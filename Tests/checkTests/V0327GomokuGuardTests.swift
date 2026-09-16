@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.27 오목 — 뮤테이션 검증(set #5)에서 **살아남은** 뮤턴트를 잡는 가드.
 //

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // Codex 집계 진단의 **시각 정합**을 고정하는 스위트.
 //

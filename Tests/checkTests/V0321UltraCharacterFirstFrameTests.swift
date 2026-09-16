@@ -2,6 +2,7 @@ import AppKit
 import SceneKit
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.21 — 울트라는 **보낸 사람의 캐릭터로 갈아입은 뒤에** 동작한다.
 //

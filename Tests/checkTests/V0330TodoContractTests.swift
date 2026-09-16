@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 — 할 일 동기화 서버↔앱 **응답 계약**(실제 SQL 출력).
 //

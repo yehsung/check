@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.27 — 렌주 판정(GomokuRules) 계약.
 //

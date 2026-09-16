@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 — 메시지 읽음의 **스토어 계약**(스텁 기반).
 //

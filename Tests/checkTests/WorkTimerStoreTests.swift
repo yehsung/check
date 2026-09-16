@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import Testing
 @testable import check
+@testable import CheckCore
 
 @MainActor
 @Test
@@ -5978,7 +5979,7 @@ private func awaySourceURL(_ name: String) -> URL {
         .deletingLastPathComponent()          // Tests/checkTests
         .deletingLastPathComponent()          // Tests
         .deletingLastPathComponent()          // (repo root)
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }
 
 /// `//` 줄 주석과 `/* */` 블록 주석을 걷어낸다(하우스 규칙 — 안 걷어내면 설명을 지워야 초록이 된다).

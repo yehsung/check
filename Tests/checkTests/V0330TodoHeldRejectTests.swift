@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.30 할 일 동기화 ④ 거절 항목 붙잡기(부록 B-3 · X2 F1·F2)
 //

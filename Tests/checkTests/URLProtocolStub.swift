@@ -1,5 +1,6 @@
 import Foundation
 @testable import check
+@testable import CheckCore
 
 extension URLSessionConfiguration {
     static var stubbed: URLSessionConfiguration {

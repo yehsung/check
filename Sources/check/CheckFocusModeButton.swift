@@ -1,4 +1,5 @@
 import SwiftUI
+import CheckCore
 
 // MARK: - 집중 모드 2단 버튼 (v0.3.0 · 모양은 v0.3.01)
 //

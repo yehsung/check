@@ -2,6 +2,7 @@ import Foundation
 import SQLite3
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.12: 안티그래비티 CLI(agy) 사용량 파서 + 스캐너 회귀 그물
 //

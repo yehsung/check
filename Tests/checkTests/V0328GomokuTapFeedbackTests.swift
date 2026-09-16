@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.28 — 판을 눌렀는데 **아무 반응이 없다**를 없앤 자리.
 //

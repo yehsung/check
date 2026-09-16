@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 초인종(Supabase Realtime Broadcast) 테스트.
 //
@@ -1093,13 +1094,13 @@ private func sourceURL(_ name: String, in directory: String = "Sources/check") -
         .deletingLastPathComponent()   // Tests/checkTests
         .deletingLastPathComponent()   // Tests
         .deletingLastPathComponent()   // repo root
-        .appendingPathComponent("\(directory)/\(name)")
+        .appendingPathComponent("\(directory == "Sources/check" ? CheckCoreSourceLayout.directory(for: name) : directory)/\(name)")
 }
 
 private func sourceFiles() throws -> [URL] {
     let root = sourceURL("CheckApp.swift").deletingLastPathComponent()
     return try FileManager.default
-        .contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+        .checkSourcesContentsOfDirectory(at: root, includingPropertiesForKeys: nil)
         .filter { $0.pathExtension == "swift" }
 }
 

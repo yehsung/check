@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import CheckCore
 
 /// SwiftPM 리소스 번들(check_check.bundle) 위치 해석기.
 ///s

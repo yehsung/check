@@ -4,6 +4,7 @@ import Metal
 import os
 import SceneKit
 import SwiftUI
+import CheckCore
 
 /// 아잉 3D 캐릭터 씬 구성.
 ///

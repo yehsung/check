@@ -2,6 +2,7 @@ import Foundation
 
 #if canImport(Carbon)
 import Carbon.HIToolbox
+import CheckCore
 #endif
 
 /// 이메일·비밀번호처럼 영문만 받아야 하는 필드가 포커스를 얻는 순간

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.15: 재시작한 내 세션의 소유권 (check.session.ownedWorkSessionID)
 //

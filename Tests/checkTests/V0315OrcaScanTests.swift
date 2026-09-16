@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.15: Orca 로 쓴 Codex/Claude 로컬 사용량 집계
 //

@@ -3,6 +3,7 @@ import CoreGraphics
 import SceneKit
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.15 2-B: 오버레이 스프라이트 통합(졸기 · 알파 클릭 · 방향 · 걷기 · 울트라 갈아입기)
 //

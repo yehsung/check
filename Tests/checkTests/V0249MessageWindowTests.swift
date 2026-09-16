@@ -4,6 +4,7 @@ import Observation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 메시지 — 순수 경계(길이·묶음·구분선·정렬) · 스토어 왕복 · 쿨타임 부재의 소스 계약 · 렌더 스냅샷.
 //
@@ -636,7 +637,7 @@ private func mwSource(_ name: String) throws -> String {
         .deletingLastPathComponent()                    // Tests/checkTests
         .deletingLastPathComponent()                    // Tests
         .deletingLastPathComponent()                    // (repo root)
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
     return mwStripComments(try String(contentsOf: url, encoding: .utf8))
 }
 
@@ -1055,7 +1056,7 @@ func theMessageWindowIsGoneAndNothingStillWiresIt() throws {
     let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     for name in ["CheckMessageWindow.swift", "CheckFeedbackWindow.swift"] {
-        let url = root.appendingPathComponent("Sources/check/\(name)")
+        let url = root.appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
         #expect(!FileManager.default.fileExists(atPath: url.path), "\(name) 이 아직 있다")
     }
     // 배선도 함께 사라졌다(남아 있으면 컴파일은 되는데 아무도 안 여는 창 컨트롤러가 앱에 산다).

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.36 [F5]: 서버/자동 마감 뒤 넛지 쿨다운 이월 결함
 //

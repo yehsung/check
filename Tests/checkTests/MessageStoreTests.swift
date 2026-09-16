@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 메시지의 **스토어 계약** — 보내기 결과 아홉 종의 상태/문구와 "메시지는 찔림 리액션을 타지 않는다"는 수신 라우팅.
 //

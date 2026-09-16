@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 제보 답장을 "보내는 것"으로 만든 변경(v0.3.14) — 계약 둘을 못 박는다.
 //
@@ -613,7 +614,7 @@ func aFiveHundredCharacterReplyNeverPushesTheFooterOffTheScreen() throws {
 private func rpSource(_ name: String) throws -> String {
     let url = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
     return rpStrippingComments(try String(contentsOf: url, encoding: .utf8))
 }
 

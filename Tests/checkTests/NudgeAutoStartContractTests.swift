@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 자동 시작 v0.2.17 계약: 시간창·의미 있는 입력·잠금 배제·수동 종료 억제(1시간 부재 재무장)
 //

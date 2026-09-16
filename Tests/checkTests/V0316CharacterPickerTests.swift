@@ -4,6 +4,7 @@ import SceneKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.15 2-D 캐릭터 선택기 + 초기 마운트 배선
 //
@@ -363,7 +364,7 @@ private func v0316SourcesDirectory() -> URL {
 }
 
 private func v0316Source(_ name: String) throws -> String {
-    try String(contentsOf: v0316SourcesDirectory().appendingPathComponent(name), encoding: .utf8)
+    try String(contentsOf: v0316SourcesDirectory().appendingCheckSourcePath(name), encoding: .utf8)
 }
 
 private func v0316SettingsSource() throws -> String {

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.30 할 일 제목 상한 — 기기(글자 100) × 서버(코드 포인트 1000)
 //

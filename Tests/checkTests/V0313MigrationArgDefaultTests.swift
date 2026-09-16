@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.13 — **RPC 인자의 default 를 지키는 소스 계약** (2026-09-12 PGRST202 장애의 재발 방지선 두 번째).
 //

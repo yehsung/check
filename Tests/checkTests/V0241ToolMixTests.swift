@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.41 — 순위판에 "누가 어떤 AI 를 얼마나 썼는지"(GitHub issue #5).
 //

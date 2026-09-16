@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 — 메시지 읽음 서버↔앱 **응답 계약**(실제 SQL 출력). 모바일 1차 묶음 X1.
 //

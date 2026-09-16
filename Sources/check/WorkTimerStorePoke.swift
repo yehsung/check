@@ -1,4 +1,5 @@
 import Foundation
+import CheckCore
 
 // 콕찌르기 + 토큰 사용량 공개 설정의 스토어 계층.
 // 서버 계약:

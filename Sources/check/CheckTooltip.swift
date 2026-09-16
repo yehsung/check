@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import CheckCore
 
 // MARK: - 왜 시스템 툴팁을 버렸는가 (v0.3.25)
 //

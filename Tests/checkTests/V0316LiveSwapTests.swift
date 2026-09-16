@@ -2,6 +2,7 @@ import AppKit
 import SceneKit
 import Testing
 @testable import check
+@testable import CheckCore
 
 /// 설정에서 캐릭터를 바꿨을 때 **실행 중인 오버레이가 그 자리에서** 갈아 끼워지는가.
 ///

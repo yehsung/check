@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.27 1:1 오목 **창**과 받는 쪽 알림(캐릭터 말풍선 큐)·앱 배선.
 //
@@ -609,7 +610,7 @@ func theGomokuWindowNeverEndsTheMatchOnItsOwn() throws {
 @Test
 func everyWindowAutosaveNameIsUnique() throws {
     let directory = gwSourcesDirectory()
-    let enumerator = try #require(FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil))
+    let enumerator = try #require(FileManager.default.checkSourcesEnumerator(at: directory, includingPropertiesForKeys: nil))
     var names: [String] = []
     for case let file as URL in enumerator where file.pathExtension == "swift" {
         let text = gwStripped(try String(contentsOf: file, encoding: .utf8))
@@ -635,7 +636,7 @@ private func gwSourcesDirectory() -> URL {
 }
 
 private func gwSource(_ name: String) throws -> String {
-    try String(contentsOf: gwSourcesDirectory().appendingPathComponent(name), encoding: .utf8)
+    try String(contentsOf: gwSourcesDirectory().appendingCheckSourcePath(name), encoding: .utf8)
 }
 
 /// 주석을 걷어내고 공백을 한 칸으로 접는다. 안 걷어내면 **설명을 지워야만 초록이 되는** 테스트가 된다.

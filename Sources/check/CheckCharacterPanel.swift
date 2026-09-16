@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CheckCore
 
 // MARK: - 캐릭터 선택 패널 (v0.3.15)
 //

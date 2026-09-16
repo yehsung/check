@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 울트라 찌르기의 **스토어 계약** — 남은 횟수 미러, 안내 문구, KST 자정 리셋, 살아 있어야 하는 발사 게이트,
 // 그리고 "울트라 소진이 일반 찌르기를 막지 않는다"는 대조군.

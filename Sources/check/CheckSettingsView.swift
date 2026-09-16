@@ -1,5 +1,6 @@
 import Observation
 import SwiftUI
+import CheckCore
 
 // MARK: - Switch (커스텀 토글)
 //

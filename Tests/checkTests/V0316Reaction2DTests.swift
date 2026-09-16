@@ -3,6 +3,7 @@ import Metal
 import SceneKit
 import Testing
 @testable import check
+@testable import CheckCore
 
 /// 스프라이트(2D 평면) 캐릭터가 **3D 축 회전을 쓰지 않는다**는 계약.
 ///

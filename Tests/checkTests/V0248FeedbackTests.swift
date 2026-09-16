@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 제보(버그·요청) — 순수 경계 · 서버 어휘 · 스토어 왕복 · 패널 계약 · 렌더 스냅샷.
 //
@@ -1616,7 +1617,7 @@ private func fbSourceURL(_ name: String) -> URL {
         .deletingLastPathComponent()   // Tests/checkTests
         .deletingLastPathComponent()   // Tests
         .deletingLastPathComponent()   // repo root
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }
 
 /// `//` 줄 주석과 `/* */` 블록 주석을 걷어낸다(문자열 리터럴 안의 `//` 는 남긴다).

@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.43 배터리 3번 — 시:분 시계와 분 경계 틱 계약.
 //
@@ -483,5 +484,5 @@ private func sourceURL(_ name: String) -> URL {
         .deletingLastPathComponent() // Tests/checkTests
         .deletingLastPathComponent() // Tests
         .deletingLastPathComponent() // repo root
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }

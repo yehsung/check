@@ -3,6 +3,7 @@ import CryptoKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 /// PNG 바이트를 **해시로** 비교하기 위한 도구. 판정력은 바이트 비교와 완전히 같다(바이트가 같아야 해시가 같다).
 ///
@@ -3273,7 +3274,7 @@ func everyWindowThatOpensFromTheRailClosesThePopoverFromExactlyOnePlace() throws
     func storeSource(_ name: String) throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/check/\(name)")
+            .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
         return swiftCodeStrippingComments(try String(contentsOf: url, encoding: .utf8))
     }
     let game = try storeSource("WorkTimerStoreMiniGame.swift")
@@ -4458,7 +4459,7 @@ private func checkSourceURL(_ name: String) -> URL {
         .deletingLastPathComponent()          // Tests/checkTests
         .deletingLastPathComponent()          // Tests
         .deletingLastPathComponent()          // (repo root)
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }
 
 /// 소스에서 주석(`//` 줄 주석 · `/* */` 블록 주석)을 걷어낸 코드만 남긴다.
@@ -5597,7 +5598,7 @@ func grassColorsFollowTheAgreedPaletteAndTheHeatmapStaysBlue() throws {
     let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     func stripped(_ path: String) throws -> String {
-        let text = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+        let text = try String(contentsOf: root.appendingCheckSourcePath(path), encoding: .utf8)
         return text.split(separator: "\n", omittingEmptySubsequences: false)
             .map { line -> String in
                 guard let slash = line.range(of: "//") else { return String(line) }
@@ -5607,7 +5608,7 @@ func grassColorsFollowTheAgreedPaletteAndTheHeatmapStaysBlue() throws {
     }
     let menu = try stripped("Sources/check/CheckMenuView.swift")
     let components = try stripped("Sources/check/CheckComponents.swift")
-    let theme = try stripped("Sources/check/CheckTheme.swift")
+    let theme = try stripped("Sources/CheckCore/CheckTheme.swift")
 
     // ① 새 보라가 테마에 있고, ② 두 잔디가 각각 자기 상수를 쓴다.
     #expect(theme.contains("static let aiToken = Color("))

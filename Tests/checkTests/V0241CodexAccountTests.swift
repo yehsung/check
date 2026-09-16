@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.41: Codex 집계 정확화(issue #6 + #2) 회귀 그물
 //
@@ -1732,11 +1733,11 @@ private func c41StrippingComments(_ source: String) -> String {
 /// 프로덕션 조립 계약: 라이브 프로브는 CheckApp 한 곳에서만, 스토어 기본값은 무해 인스턴스, 행은 표시 산식을 쓴다.
 @Test
 func sourceContractLiveAccountStoreIsBuiltOnlyInCheckApp() throws {
-    let sources = try FileManager.default.contentsOfDirectory(atPath: c41RepoURL("Sources/check").path)
+    let sources = try FileManager.default.checkSourcesContentsOfDirectory(atPath: c41RepoURL("Sources/check").path)
         .filter { $0.hasSuffix(".swift") }
     var liveSites: [String] = []
     for name in sources {
-        let code = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/check/\(name)"), encoding: .utf8))
+        let code = c41StrippingComments(try String(contentsOf: c41RepoURL("\(CheckCoreSourceLayout.directory(for: name))/\(name)"), encoding: .utf8))
         let n = code.components(separatedBy: "CodexAccountUsageStore.live(").count - 1
         if n > 0 { liveSites.append("\(name):\(n)") }
     }
@@ -1747,7 +1748,7 @@ func sourceContractLiveAccountStoreIsBuiltOnlyInCheckApp() throws {
     let store = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/check/WorkTimerStore.swift"), encoding: .utf8))
     #expect(store.contains("codexAccount: CodexAccountUsageStore? = nil"))
     #expect(store.contains("self.codexAccount = codexAccount ?? CodexAccountUsageStore.inert()"))
-    let row = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/check/CheckTokenUsage.swift"), encoding: .utf8))
+    let row = c41StrippingComments(try CheckCoreSourceLayout.joinedSplitSource("CheckTokenUsage.swift"))
     // v0.2.43: 계정 우선 규칙은 월합만으로는 못 세고(꼬리·마지막 버킷) 스냅샷이 필요하다 — 뷰가 스냅샷 자체를 넘긴다.
     // v0.3.12: 그 호출이 `usage.displayTotal(account:)` 로 한 겹 감싸졌다(세 번째 종류를 더하는 자리). 감싼 쪽도
     // 스냅샷 자체를 그대로 받아 넘기므로 이 계약의 뜻은 그대로다 — 아래 두 줄이 그 사실을 함께 되묻는다.
@@ -1757,12 +1758,12 @@ func sourceContractLiveAccountStoreIsBuiltOnlyInCheckApp() throws {
     let menu = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/check/CheckMenuView.swift"), encoding: .utf8))
     #expect(menu.contains("CheckTokenUsageRow(store: store.tokenUsage, account: store.codexAccount"))
     // 하트비트 본문은 여전히 다섯 필드다(구조체에 let 이 5개).
-    let models = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/check/SupabaseWorkModels.swift"), encoding: .utf8))
+    let models = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/CheckCore/SupabaseWorkModels.swift"), encoding: .utf8))
     let heartbeat = try #require(models.components(separatedBy: "struct TokenScanHeartbeatRequest: Encodable {").last?
         .components(separatedBy: "}").first)
     #expect(heartbeat.components(separatedBy: "let ").count - 1 == 5)
     // 프로브 스토어는 auth.json 을 읽지 않고 존재만 본다(내용엔 토큰이 있다).
-    let probe = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/check/CheckCodexAccountUsage.swift"), encoding: .utf8))
+    let probe = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/CheckCore/CheckCodexAccountUsage.swift"), encoding: .utf8))
     #expect(probe.contains("FileManager.default.fileExists(atPath: authPath)"))
     #expect(!probe.contains("contentsOf: authPath") && !probe.contains("Data(contentsOf: home"))
     #expect(probe.contains("standardError = FileHandle.nullDevice"))

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CheckCore
 
 // MARK: - 상점 패널 (v0.3.17)
 //

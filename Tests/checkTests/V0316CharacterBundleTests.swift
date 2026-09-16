@@ -4,6 +4,7 @@ import Foundation
 import ImageIO
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.15 — **캐릭터 에셋이 번들에 폴더째 살아 들어갔는가**(갈래 2: 에셋 파이프라인).
 //

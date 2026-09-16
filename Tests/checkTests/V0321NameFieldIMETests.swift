@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 별명·팀 이름 칸의 한글 조합 (사용자 신고 2026-09-14)
 //
@@ -150,7 +151,7 @@ private func nfSource(_ name: String) throws -> String {
         .deletingLastPathComponent()                // Tests/checkTests
         .deletingLastPathComponent()                // Tests
         .deletingLastPathComponent()                // (repo root)
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
     return nfStripComments(try String(contentsOf: url, encoding: .utf8))
 }
 

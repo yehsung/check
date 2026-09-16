@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 살아 있는 눈(깜빡임) · 첫 출근 인사
 

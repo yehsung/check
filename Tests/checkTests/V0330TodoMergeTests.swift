@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.30 할 일 동기화 ② 병합 규칙(순수) · 멱등 · 두 기기 수렴
 //

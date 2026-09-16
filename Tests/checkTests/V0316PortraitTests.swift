@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 /// v0.3.15 — 메뉴바(18pt)·팝오버(46pt) **초상화가 착용 캐릭터를 따라간다**.
 ///

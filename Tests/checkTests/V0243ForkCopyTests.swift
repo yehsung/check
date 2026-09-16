@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.43 — Codex 포크 복사 구간 · 캐시 스키마 v2 · Claude 12주 창
 //

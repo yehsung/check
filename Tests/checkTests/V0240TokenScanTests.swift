@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.40: 토큰 스캔·업로드를 팝오버에서 떼어 근무 게이트로 옮긴 것의 회귀 그물
 //

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.27 — 실시간 'gomoku' 신호 라우팅.
 //

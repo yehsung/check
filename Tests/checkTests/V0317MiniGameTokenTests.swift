@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.17 — 미니게임 점수 제출의 **위조 차단 계약**.
 //
@@ -157,9 +158,9 @@ private func tkAllSources() throws -> [String: String] {
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Sources/check", isDirectory: true)
     var out: [String: String] = [:]
-    let names = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+    let names = try FileManager.default.checkSourcesContentsOfDirectory(atPath: dir.path)
     for name in names where name.hasSuffix(".swift") {
-        out[name] = try String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8)
+        out[name] = try String(contentsOf: dir.appendingCheckSourcePath(name), encoding: .utf8)
     }
     return out
 }

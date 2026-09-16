@@ -3,6 +3,7 @@ import SceneKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 울트라 찌르기 **수신 측**(전체화면 격발 5초)의 회귀 방어.
 //

@@ -4,6 +4,7 @@ import SQLite3
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.12: 안티그래비티를 스토어·업로드·표시에 꽂은 것의 회귀 그물
 //
@@ -852,7 +853,7 @@ private func agSourceURL(_ name: String) -> URL {
         .deletingLastPathComponent() // Tests/checkTests
         .deletingLastPathComponent() // Tests
         .deletingLastPathComponent() // repo root
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }
 
 private func agOccurrences(of needle: String, in haystack: String) -> Int {

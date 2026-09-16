@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftUI
+import CheckCore
 
 // MARK: - 재질 실측 상수(정본)
 

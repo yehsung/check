@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 — 새 RPC 셋의 **전선 모양**(요청 본문 · 응답 옮김). SPEC-wave1 §1.1 의 JSON 을 글자 그대로 쓴다.
 //

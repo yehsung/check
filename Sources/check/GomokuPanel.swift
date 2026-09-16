@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CheckCore
 
 // MARK: - 1:1 오목 창 화면 (v0.3.27)
 //

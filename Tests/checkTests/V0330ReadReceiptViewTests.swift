@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 M2 — 메시지 **화면** 쪽: 보낸 말풍선 옆 안 읽음 1 · 근무 밖에서 [보내기]가 서버까지 가는가 · 콕찌르기 안내줄.
 //
@@ -82,7 +83,7 @@ private func m2rConversation(_ entries: [MessageHistoryEntry], receipts: Bool) t
 private func m2rSource(_ name: String) throws -> String {
     let url = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
     return m2rStripComments(try String(contentsOf: url, encoding: .utf8))
 }
 

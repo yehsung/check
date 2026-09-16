@@ -1,4 +1,5 @@
 import Foundation
+import CheckCore
 
 @MainActor
 extension WorkTimerStore {

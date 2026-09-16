@@ -5,6 +5,7 @@
 // · 블러용 NSViewRepresentable 을 되살리지 마라(아래 삭제 사유 주석 참고).
 import AppKit
 import SwiftUI
+import CheckCore
 
 // MARK: - 문구
 

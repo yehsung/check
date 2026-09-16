@@ -4,6 +4,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 제보 답장 **알림 배너**(v0.3.14, 갈래 C) — 사용자 요구(원문):
 //   "본인이 보낸 제보에 답장이 오면, 예시로 지난주 근무기록 알림으로 보여주는것처럼.

@@ -3,6 +3,7 @@ import CryptoKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.20 메뉴바 업데이트 점
 //
@@ -538,7 +539,7 @@ private func v0320SourceURL(_ name: String) -> URL {
         .deletingLastPathComponent()   // Tests/checkTests
         .deletingLastPathComponent()   // Tests
         .deletingLastPathComponent()   // (repo root)
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }
 
 /// `//` 줄 주석과 `/* */` 블록 주석을 걷어낸 코드(CheckMenuRenderTests 의 swiftCodeStrippingComments 와 같은 규칙).

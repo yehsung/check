@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.43 코드 리뷰(wf_cf10d462-66e)가 확정한 결함의 회귀 테스트 — 클라 쪽(E-1 · E-3 · E-4).
 //

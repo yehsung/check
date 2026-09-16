@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.46 미니게임 서비스 계약 — 요청 모양(경로·쿼리·본문 키)과 응답 디코드(소수초 유무·어제 1등·공개 여부).
 // 스텁은 보낸 값을 되돌리고 시계가 안 흐른다(메모리) — 서버 정규화·자정 경계는 여기서 못 잡고 마이그레이션 프로브가 맡는다.

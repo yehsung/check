@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import CheckCore
 
 // MARK: - 미니게임 허브 (v0.2.46) — 패널 상태 · 최고기록 · 오늘 순위 · 공개 설정
 //

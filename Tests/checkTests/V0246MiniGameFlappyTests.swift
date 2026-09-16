@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.46 플래피 아잉 — 규칙(순수)·난이도 곡선·상태 전이·dt 클램프·렌더·프레임 프로브·소스 계약.
 //
@@ -1699,7 +1700,7 @@ private func swiftCodeStrippingComments(_ source: String) -> String {
 @Test
 func flappySourceKeepsTheLeafViewContract() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    let raw = try String(contentsOf: root.appendingPathComponent("Sources/check/MiniGameFlappy.swift"), encoding: .utf8)
+    let raw = try CheckCoreSourceLayout.joinedSplitSource("MiniGameFlappy.swift")
     let code = swiftCodeStrippingComments(raw)
     for forbidden in ["SCNView", "renderSnapshotPNG", "Timer.publish", "store.", "Double.random", "Int.random",
                       ".size =", "lockFocus", "DispatchSource", "aiToken",
@@ -2280,7 +2281,7 @@ struct V0316MiniGameAingFixedTests {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         func code(_ path: String) throws -> String {
             swiftCodeStrippingComments(
-                try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8))
+                try String(contentsOf: root.appendingCheckSourcePath(path), encoding: .utf8))
         }
 
         let mascot = try code("Sources/check/MiniGameMascot.swift")

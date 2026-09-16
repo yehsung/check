@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.13 소속 센터(서울/부산)
 //
@@ -700,12 +701,12 @@ private func v0313SourcesDirectory() -> URL {
 }
 
 private func v0313Source(_ name: String) throws -> String {
-    try String(contentsOf: v0313SourcesDirectory().appendingPathComponent(name), encoding: .utf8)
+    try String(contentsOf: v0313SourcesDirectory().appendingCheckSourcePath(name), encoding: .utf8)
 }
 
 private func v0313SourceFiles() throws -> [URL] {
     try FileManager.default
-        .contentsOfDirectory(at: v0313SourcesDirectory(), includingPropertiesForKeys: nil)
+        .checkSourcesContentsOfDirectory(at: v0313SourcesDirectory(), includingPropertiesForKeys: nil)
         .filter { $0.pathExtension == "swift" }
         .sorted { $0.lastPathComponent < $1.lastPathComponent }
 }

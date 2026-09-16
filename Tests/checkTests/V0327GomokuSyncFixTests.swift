@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.27 오목 스토어 — 2차 검증(클라 적대 검토 set #1 · 계약 검토 set #4 · 서버 set #2 교착)에서 나온 결함의 정식 회귀.
 //

@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 오목 창 — 순수 규칙(판돈 고르기 · 기권 누름 방어 · 카드 말풍선), 판 시작 때 로비 안내 지우기,
 // 그리고 **실제 창에서 재현한 결함** 하나: 로비 [수락] 자리를 두 번 누르면 두 번째 누름이 대국 화면 [기권]에 떨어져

@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import CheckCore
 
 /// 비근무 상태에서 사용자가 "실제로" 컴퓨터를 쓰는 시간이 최근 10분 창 안에 5분 누적되면 근무 시작을
 /// 제안(넛지)하는 스케줄러.

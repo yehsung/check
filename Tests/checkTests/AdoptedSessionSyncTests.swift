@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - D2: 흡수 세션 소유권 표식 (adoptedRemoteSession)
 //

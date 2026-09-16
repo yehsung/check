@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - O1: 콕찌르기 폴링을 근무 중으로 제한
 //

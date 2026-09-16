@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.46 미니게임 — 타이밍 바. 규칙(순수 값 타입)·상태 기계·dt 클램프·렌더·프레임 프로브·소스 계약.
 // 시드를 고정하면 판이 결정적이라(MiniGameRandom 만 쓴다) 목표 중심을 읽어 "정중앙에서 멈추는 시각"을 역산할 수 있다.
@@ -855,7 +856,7 @@ private func tbStrippingComments(_ source: String) -> String {
 
 @Test
 func timingBarSourceContract() throws {
-    let raw = try String(contentsOf: tbSourceURL(), encoding: .utf8)
+    let raw = try CheckCoreSourceLayout.joinedSplitSource("MiniGameTimingBar.swift")
     let code = tbStrippingComments(raw)
     #expect(!code.contains("Timer.publish"), "상시 타이머 금지 — 프레임은 TimelineView 로만")
     #expect(!code.contains("DispatchSource"), "디스패치 타이머 금지")

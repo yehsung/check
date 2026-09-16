@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.13 — **클라가 실제로 보내는 본문 그대로** 서버를 치는 계약 감시망.
 //

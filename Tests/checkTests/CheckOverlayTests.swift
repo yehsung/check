@@ -3,6 +3,7 @@ import SceneKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - J1: 오버레이 패널 설정
 

@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import CheckCore
 
 // MARK: - 근무 시작·종료 전역 단축키 (v0.3.23)
 //

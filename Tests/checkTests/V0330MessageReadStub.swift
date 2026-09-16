@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 — 메시지 읽음·근무 밖 수신 테스트가 함께 쓰는 **스텁 네트워크와 스토어 조립**.
 //

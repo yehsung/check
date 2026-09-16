@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.27 — 1:1 오목 스토어(GomokuStore) 계약.
 //

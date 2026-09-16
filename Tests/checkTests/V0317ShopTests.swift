@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 /// 상점(루비) 화면의 계약.
 ///
@@ -658,7 +659,7 @@ struct V0317ShopTests {
         let dir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/check", isDirectory: true)
-        return try String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8)
+        return try String(contentsOf: dir.appendingCheckSourcePath(name), encoding: .utf8)
     }
 
     /// 주석을 걷어내고 공백을 한 칸으로 접는다. 안 걷어내면 **설명을 지워야만 초록이 되는** 테스트가 된다.

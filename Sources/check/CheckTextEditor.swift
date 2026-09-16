@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CheckCore
 
 // MARK: - 공용 여러 줄 입력칸 (v0.2.51)
 //

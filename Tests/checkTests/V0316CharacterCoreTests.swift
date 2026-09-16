@@ -5,6 +5,7 @@ import Metal
 import SceneKit
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.15 스프라이트 캐릭터 코어
 //

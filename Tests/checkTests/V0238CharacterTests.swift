@@ -4,6 +4,7 @@ import SceneKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.38 β2 "가벼워지기": 캐릭터 렌더 진짜 정지(Q2) + USDZ → .scn 프리베이크(M3)
 //

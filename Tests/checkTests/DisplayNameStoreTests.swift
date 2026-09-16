@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 별명(표시명) 변경의 **스토어 계약** — 서버 status → 화면 문구/상태 매핑, 쿨타임 잠금, 로컬 미러 전파,
 // 그리고 "실패한 시도는 쿨타임을 태우지 않는다".

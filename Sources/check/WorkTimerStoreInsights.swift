@@ -1,4 +1,5 @@
 import Foundation
+import CheckCore
 
 // 개인 기록(히트맵·주간 회고·12주 잔디) + 토큰 순위 월 이동의 스토어 계층.
 // 데이터 출처는 서버 work_sessions 의 내 완료 세션뿐이고(타인 데이터 미조회), 요일/주 계산은 전부

@@ -1,5 +1,6 @@
 import Testing
 @testable import check
+@testable import CheckCore
 
 @Test
 func workingShowsDotAndElapsedTime() {

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import CheckCore
 
 // MARK: - 제보(버그·요청) (v0.2.48, 답장 v0.3.14) — 창 열고 닫기 · 보내기 · 목록 · 상태 변경 · 답장
 //

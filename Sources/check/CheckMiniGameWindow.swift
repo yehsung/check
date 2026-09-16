@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CheckCore
 
 // MARK: - 왜 팝오버 패널이 아니라 별도 창인가 (v0.2.46)
 //

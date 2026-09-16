@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.38 S3-클라이언트 — 근무 틱 통합 RPC `work_tick` 계약 고정(docs/work-tick.md).
 //
@@ -935,7 +936,7 @@ private func repoURL(_ relative: String) -> URL {
 }
 
 private func sourceURL(_ name: String) -> URL {
-    repoURL("Sources/check/\(name)")
+    repoURL("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }
 
 /// `//` 줄 주석과 `/* */` 블록 주석을 걷어낸다(하우스 규칙 — 안 걷어내면 설명을 지워야만 초록이 되는 테스트가 된다).

@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Network
 import Observation
+import CheckCore
 
 /// 비밀번호 재설정(메일 OTP) 진행 단계. **화면 선택의 유일한 근거**라 별도 Bool 플래그를 두지 않는다 —
 /// "보내는 중"과 "입력 대기"를 각각의 Bool 로 표현하면 둘 다 true 인 불가능한 조합이 언제든 만들어진다.
@@ -90,7 +91,7 @@ final class WorkTimerStore {
     /// `nonisolated` 인 이유: 이 상수를 읽는 곳에 **메인 액터 밖**이 있다(순수 폭 예산 테스트의 `#expect`
     /// 자동클로저는 nonisolated 로 합성된다). 액터에 묶어 두면 그 자리에서 컴파일이 깨지고, 그러면 상한의
     /// 유일한 근거인 폭 예산 단언을 못 세운다. 값은 불변 상수라 액터 격리로 지킬 상태가 애초에 없다.
-    nonisolated static let displayNameMaxLength = 12
+    nonisolated static let displayNameMaxLength = CheckCoreShared.displayNameMaxLength
     /// 별명 변경 쿨타임(초) = 1주일. 서버가 강제하고 클라는 버튼을 미리 잠그기 위한 거울만 갖는다
     /// (콕찌르기 쿨타임과 같은 규약 — 최종 판정자는 언제나 서버다). `nonisolated` 근거는 위와 같다.
     nonisolated static let displayNameCooldownSeconds: TimeInterval = 7 * 24 * 3600

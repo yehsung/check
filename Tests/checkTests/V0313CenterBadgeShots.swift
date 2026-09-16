@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.13 소속 센터 배지 — 육안 비교용 행 목록 스냅샷
 //

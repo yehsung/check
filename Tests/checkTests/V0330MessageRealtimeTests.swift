@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.30 — 근무 밖 메시지 수신: 소켓 기준(로그인) · 소비 분기(take_pokes vs 요약) · 'message_read' 가지 · 근무 시작 따라잡기.
 //

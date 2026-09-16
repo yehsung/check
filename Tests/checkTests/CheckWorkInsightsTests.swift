@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 개인 기록(히트맵·주간 회고) 순수 계산 + 토큰 순위 월 네비게이터 고정 검증.
 // 전부 KST(TeamWeeklyGoal.kstCalendar) 규약이라 픽스처도 KST 컴포넌트로 만들고, 서버가 준 문자열을 파싱하는

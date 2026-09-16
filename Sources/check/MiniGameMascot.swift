@@ -2,6 +2,7 @@ import AppKit
 import Metal
 import os
 import SceneKit
+import CheckCore
 
 /// 플래피 캐릭터의 **옆모습 스프라이트 한 장**.
 ///

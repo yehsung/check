@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.46 미니게임 **창**(팝오버 패널에서 이사). 설정 창(CheckSettingsWindowController)과 같은 수명 규약을 쓰고,
 // 다른 점만 여기서 못 박는다: 제목·자동저장 이름·기본/최소 크기, 창이 키를 잃거나 닫히면 진행 중인 판이 끝난다(interruptToken),
@@ -318,7 +319,7 @@ private func mgwSourceURL(_ name: String) -> URL {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }
 
 private func mgwStrippingComments(_ source: String) -> String {

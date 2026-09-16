@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 @Test
 func mascotResourcesResolveAndLoad() throws {

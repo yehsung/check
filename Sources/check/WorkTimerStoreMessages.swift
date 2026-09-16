@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import CheckCore
 
 // MARK: - 메시지 (v0.2.49) — 창 열고 닫기 · 12시간 이력 · 보내기
 //

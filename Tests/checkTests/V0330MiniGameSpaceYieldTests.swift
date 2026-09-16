@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 스페이스 모니터가 다른 창에 키를 양보한다 (v0.3.30 — 2026-09-17 실사용 제보)
 //

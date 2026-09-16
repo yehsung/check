@@ -3,6 +3,7 @@ import CryptoKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 별명(표시명) UI 회귀.
 //

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - Semver 비교 (접두/자릿수/프리릴리스 규칙)
 

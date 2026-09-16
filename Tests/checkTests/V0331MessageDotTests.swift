@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.31 M4 — 두 번째 신고: "이미 읽은 메시지인데도 메시지 아이콘 옆에 점이 자꾸 생긴다."
 //
@@ -249,7 +250,7 @@ func 점이_뜨는_세_자리가_모두_같은_판정_하나를_읽는다() thro
     let sourcesURL = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Sources/check")
-    let files = try FileManager.default.contentsOfDirectory(atPath: sourcesURL.path).filter { $0.hasSuffix(".swift") }
+    let files = try FileManager.default.checkSourcesContentsOfDirectory(atPath: sourcesURL.path).filter { $0.hasSuffix(".swift") }
     let ingredients = ["isUnread", "messageReadStamps", "messageUnreadSummary", "messageOptimisticReads", "legacyUnreadPeerIDs"]
     var offenders: [String] = []
     for file in files where !allowed.contains(file) {

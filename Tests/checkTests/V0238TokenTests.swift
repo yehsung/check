@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.38 트랙 γ: 토큰 사용량 캐시 가벼워지기 (Q5 저장 스로틀 · Q6 48h 보관 경계 · M4 해시 키/핫·콜드 분리)
 //

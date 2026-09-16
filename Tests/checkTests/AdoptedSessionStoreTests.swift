@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // D2 흡수 세션 소유권 표식(adoptedRemoteSession)의 스토어 쪽 계약 고정.
 //

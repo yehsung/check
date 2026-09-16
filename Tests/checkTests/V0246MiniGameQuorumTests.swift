@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.46 — 서버 마이그레이션 계약(20260908180000_minigame_prize_quorum.sql): 자정 상품에 최소 참가자 수(정족수 5) 조건.
 //

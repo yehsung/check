@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.3.31 M4 — **열린 대화에 메시지가 즉시 뜬다**(스토어 · 콜백 순서 모형).
 //
@@ -860,7 +861,7 @@ func 대화_뷰가_생명주기를_스토어에_알리고_앱이_창_서버_질�
 func v0331Source(_ name: String) throws -> String {
     let url = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
     return v0331StripComments(try String(contentsOf: url, encoding: .utf8))
 }
 

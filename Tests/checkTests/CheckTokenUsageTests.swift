@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 픽스처 헬퍼 (임시 홈에 jsonl 을 써서 실제 파일 순회·mtime·파싱·이어읽기 경로를 검증한다)
 //

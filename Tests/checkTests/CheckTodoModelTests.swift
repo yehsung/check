@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 픽스처 (시간은 전부 주입 · 실제 '지금'을 절대 읽지 않는다)
 

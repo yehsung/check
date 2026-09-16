@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import CheckCore
 
 // MARK: - Semver 비교 (순수 함수)
 

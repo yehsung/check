@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CheckCore
 
 // MARK: - 미니게임 창 콘텐츠 (v0.2.46 → v0.2.48 개편)
 //

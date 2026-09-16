@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.22 설정의 '자동 근무 시작' 스위치
 //
@@ -191,7 +192,7 @@ struct V0322AutoWorkStartToggleTests {
 
 /// 소스 파일 URL(이 테스트 파일에서 저장소 루트로 올라간다).
 private func v0322SourceURL(_ name: String) -> URL {
-    v0322SourcesDirectory().appendingPathComponent(name)
+    v0322SourcesDirectory().appendingCheckSourcePath(name)
 }
 
 private func v0322SourcesDirectory() -> URL {
@@ -205,9 +206,9 @@ private func v0322SourcesDirectory() -> URL {
 /// Sources/check 의 모든 .swift 에서 주석을 걷어낸 뒤 needle 이 나오는 횟수.
 private func v0322CountInSources(_ needle: String) throws -> Int {
     let directory = v0322SourcesDirectory()
-    let names = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".swift") }
+    let names = try FileManager.default.checkSourcesContentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".swift") }
     return try names.reduce(0) { total, name in
-        let code = v0322StrippingComments(try String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8))
+        let code = v0322StrippingComments(try String(contentsOf: directory.appendingCheckSourcePath(name), encoding: .utf8))
         return total + code.components(separatedBy: needle).count - 1
     }
 }

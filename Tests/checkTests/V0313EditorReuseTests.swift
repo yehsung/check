@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.13 입력칸 재사용 — 한글 자모 분리 회귀 방어
 //

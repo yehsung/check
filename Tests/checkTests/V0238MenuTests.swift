@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.38 α: 콕찌르기 패널의 초 단위 의존을 잎으로 (성능 감사 결함)
 //

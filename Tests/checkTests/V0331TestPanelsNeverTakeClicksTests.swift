@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 테스트가 띄운 투명 패널이 사용자 클릭을 먹지 않는다 (2026-09-17 실사용 신고)
 //

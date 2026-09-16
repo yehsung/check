@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.46 미니게임 허브 — 패널 상호 배타 · 인터럽트 토큰 · 최고기록/업로드 게이트 · 오늘 순위 · 높이 예산 · 로그아웃 리셋 · 소스 계약.
 // 게임 규칙은 여기 없다(각 게임 스위트). 네트워크는 URLProtocolStub(테스트별 고유 호스트)로 격리한다.
@@ -358,7 +359,7 @@ private func mgSourceURL(_ name: String) -> URL {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }
 
 private func mgStrippingComments(_ source: String) -> String {

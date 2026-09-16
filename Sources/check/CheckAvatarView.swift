@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+import CheckCore
 
 // MARK: - Avatar view
 

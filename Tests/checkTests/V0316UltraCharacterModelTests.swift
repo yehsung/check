@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 /// 보낸 사람의 착용 캐릭터가 **찔림 한 건에 실려 오는** 계약.
 ///

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.43 — Codex 로컬 일별을 **UTC 축**으로도 묶는다(계정 우선 산식 검토 P1, 2026-09-06).
 //
@@ -318,10 +319,10 @@ func dayAxisNoteLivesOnlyOnTheGrassHeader() throws {
     #expect(!entry.detailTooltip.contains("9시"))
     // 소스 계약: 리터럴은 한 곳(TokenUsageMonthly)에만 있고, 잔디 헤더만 그 상수를 부른다 — 순위판 툴팁은 부르지 않는다.
     // 진단 상수(accountDrivenTotalNote · localExceedsAccountNote)는 사라졌다.
-    let usageSource = uaStrippingComments(try String(contentsOf: uaRepoURL("Sources/check/CheckTokenUsage.swift"), encoding: .utf8))
-    let models = uaStrippingComments(try String(contentsOf: uaRepoURL("Sources/check/SupabaseWorkModels.swift"), encoding: .utf8))
+    let usageSource = uaStrippingComments(try CheckCoreSourceLayout.joinedSplitSource("CheckTokenUsage.swift"))
+    let models = uaStrippingComments(try String(contentsOf: uaRepoURL("Sources/CheckCore/SupabaseWorkModels.swift"), encoding: .utf8))
     let menu = uaStrippingComments(try String(contentsOf: uaRepoURL("Sources/check/CheckMenuView.swift"), encoding: .utf8))
-    let rule = uaStrippingComments(try String(contentsOf: uaRepoURL("Sources/check/CodexEffectiveRule.swift"), encoding: .utf8))
+    let rule = uaStrippingComments(try String(contentsOf: uaRepoURL("Sources/CheckCore/CodexEffectiveRule.swift"), encoding: .utf8))
     #expect(usageSource.components(separatedBy: "\"Codex 는 오전 9시 기준").count - 1 == 1)
     #expect(!models.contains("\"Codex 는 오전 9시 기준") && !menu.contains("\"Codex 는 오전 9시 기준"))
     #expect(!models.contains("tokenDayAxisNote"))

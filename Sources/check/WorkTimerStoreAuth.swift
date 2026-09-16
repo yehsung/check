@@ -1,4 +1,5 @@
 import Foundation
+import CheckCore
 
 @MainActor
 extension WorkTimerStore {
@@ -649,8 +650,7 @@ extension WorkTimerStore {
 
     /// 모자란 만큼을 말하는 문구(순수 — 값으로 검증한다). 서버가 숫자를 안 줬으면 **수를 지어내지 않는다.**
     nonisolated static func shortfallNotice(need: Int?, have: Int?) -> String {
-        guard let need, let have, need > have else { return "루비가 모자라요" }
-        return "루비 \(need - have)개 더 필요해요"
+        CheckCoreShared.shortfallNotice(need: need, have: have)
     }
 
     /// 팀 주간 목표시간을 바꾼다(팀원 누구나). 범위(1~168) 밖이거나 이미 변경 중이면 즉시 false 로 무시한다.
@@ -796,7 +796,7 @@ extension WorkTimerStore {
 
     /// 인증 경로 에러 처분. 취소는 아무 상태도 바꾸지 않고, 일시 네트워크 오류는 세션을 유지하며,
     /// 진짜 만료(SupabaseWorkServiceError 등)만 로그아웃 대상이다. .task 취소로 강제 로그아웃되는 회귀를 막는다.
-    enum AuthErrorDisposition { case cancelled, transient, fatal }
+    typealias AuthErrorDisposition = CheckCore.AuthErrorDisposition
 
     func classifyAuthError(_ error: Error) -> AuthErrorDisposition {
         if error is CancellationError || (error as? URLError)?.code == .cancelled {

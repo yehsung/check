@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import CheckCore
 
 // MARK: - 패널
 

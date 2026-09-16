@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.46 — 서버 마이그레이션 계약(20260908090000_minigame_scores.sql): 미니게임 일별 최고기록 원장 · 오늘 순위 RPC ·
 // 순위 공개 토글 · 자정 상품(전날 게임별 1·2·3등에게 루비 20·10·5, pg_cron 매시 멱등).

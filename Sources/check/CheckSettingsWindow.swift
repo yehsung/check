@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CheckCore
 
 // MARK: - 왜 직접 만든 NSWindow 인가 (버린 쪽: SwiftUI `Settings` scene)
 //

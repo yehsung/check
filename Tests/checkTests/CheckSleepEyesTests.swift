@@ -2,6 +2,7 @@ import AppKit
 import SceneKit
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 감은 눈(sleeping) 텍스처 커버 + 3D 감은 선 오버레이 + 드래그 방향 바라보기
 

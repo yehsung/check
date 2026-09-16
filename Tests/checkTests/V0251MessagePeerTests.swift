@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.51 — **고른 대화 상대는 서버 응답이 뭐라 하든 놓지 않는다.**
 //
@@ -601,7 +602,7 @@ private func mpSourcesDirectory() -> URL {
 }
 
 private func mpStrippedSource(_ name: String) throws -> String {
-    mpStripComments(try String(contentsOf: mpSourcesDirectory().appendingPathComponent(name), encoding: .utf8))
+    mpStripComments(try String(contentsOf: mpSourcesDirectory().appendingCheckSourcePath(name), encoding: .utf8))
 }
 
 /// 앱 소스 중 `needle` 을 **코드로**(주석이 아니라) 담은 파일들의 주석 제거본. 원문에서 먼저 거른 뒤에만
@@ -609,10 +610,10 @@ private func mpStrippedSource(_ name: String) throws -> String {
 /// 경로를 잘못 짚으면 빈 배열이 나오고, 그러면 호출부의 "정확히 이 목록" 단언이 **빨갛게** 떨어진다(조용히 초록이 되지 않는다).
 private func mpStrippedSources(containing needle: String) throws -> [(name: String, code: String)] {
     let root = mpSourcesDirectory()
-    guard let walker = FileManager.default.enumerator(atPath: root.path) else { return [] }
+    guard let walker = FileManager.default.checkSourcesEnumerator(atPath: root.path) else { return [] }
     var found: [(name: String, code: String)] = []
     for case let relative as String in walker where relative.hasSuffix(".swift") {
-        let raw = try String(contentsOf: root.appendingPathComponent(relative), encoding: .utf8)
+        let raw = try String(contentsOf: root.appendingCheckSourcePath(relative), encoding: .utf8)
         guard raw.contains(needle) else { continue }
         let code = mpStripComments(raw)
         if code.contains(needle) { found.append((name: relative, code: code)) }

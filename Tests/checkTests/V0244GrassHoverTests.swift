@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.44: 잔디 호버 말풍선(근무·AI 토큰 잔디 셀에 즉시 뜨는 날짜·값 카드)
 //

@@ -3,6 +3,7 @@ import Metal
 import SceneKit
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.38 "가벼워지기" β1 — 유휴 6fps · 보이지 않을 때만 렌더 정지 · 깜빡임 GPU 텍스처
 //

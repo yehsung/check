@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.3.28 입력칸 재사용 자리 — 세 번째 사용처가 생겨도 한글 조합이 안 죽는다
 //

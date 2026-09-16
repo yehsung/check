@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 탭 순간 화면이 본 판을 로그로 남긴다 (v0.3.31 진단 — 2026-09-17 재발)
 //
@@ -73,7 +74,7 @@ func transitionLineIsWrittenOnlyWhenMovesTurnOrFinishChange() {
 func theBoardTapCarriesWhatTheScreenDrewAndMatchChangesAreLogged() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     func stripped(_ name: String) throws -> String {
-        let text = try String(contentsOf: root.appendingPathComponent("Sources/check/\(name)"), encoding: .utf8)
+        let text = try String(contentsOf: root.appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)"), encoding: .utf8)
         return text.split(separator: "\n", omittingEmptySubsequences: false).map { line -> Substring in
             guard let comment = line.range(of: "//") else { return line }
             return line[..<comment.lowerBound]

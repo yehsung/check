@@ -2,6 +2,7 @@ import Foundation
 import ServiceManagement
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 넛지 스케줄러 (활성 5분 누적 발동 / idle 유지 / 쿨다운 / 깨어남·자격 리셋)
 

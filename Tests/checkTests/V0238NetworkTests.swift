@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.38 "가벼워지기" 트랙 δ — 네트워크 다이어트 계약 고정.
 //
@@ -521,7 +522,7 @@ private func sourceURL(_ name: String, in directory: String = "Sources/check") -
         .deletingLastPathComponent()   // Tests/checkTests
         .deletingLastPathComponent()   // Tests
         .deletingLastPathComponent()   // repo root
-        .appendingPathComponent("\(directory)/\(name)")
+        .appendingPathComponent("\(directory == "Sources/check" ? CheckCoreSourceLayout.directory(for: name) : directory)/\(name)")
 }
 
 /// `//` 줄 주석과 `/* */` 블록 주석을 걷어낸다(하우스 규칙 — 안 걷어내면 설명을 지워야만 초록이 되는 테스트가 된다).

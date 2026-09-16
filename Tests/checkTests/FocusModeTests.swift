@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 집중 모드(콕찌르기 수신 거부)
 //

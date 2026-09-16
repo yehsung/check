@@ -3,6 +3,7 @@ import SceneKit
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // 실사용 신고("캐릭터가 드래그로 아예 안 움직인다 / 근무 종료-시작으로도 안 풀린다 / 울트라를 맞으면 풀린다")의
 // 재현·회귀 방어.

@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - v0.2.51 집중 모드 2단 (클라이언트만 — 서버 불변)
 //
@@ -762,7 +763,7 @@ private func focusCheckSourceURL(_ name: String) -> URL {
         .deletingLastPathComponent()   // Tests/checkTests
         .deletingLastPathComponent()   // Tests
         .deletingLastPathComponent()   // 저장소 루트
-        .appendingPathComponent("Sources/check/\(name)")
+        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
 }
 
 /// `//` 줄 주석과 `/* */` 블록 주석을 걷어낸다. 문자열 리터럴 안은 남긴다.

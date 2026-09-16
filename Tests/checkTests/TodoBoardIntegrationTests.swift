@@ -3,6 +3,7 @@ import Foundation
 import SceneKit
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 투두 보드 ↔ 오버레이 배선 계약
 //

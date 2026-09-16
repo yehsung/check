@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // MARK: - 증분 경로 vs 전량 재파싱 차분(differential) 조사
 //

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 /// 실제 `codex app-server` 를 띄우는 **opt-in 라이브 프로브**. `CHECK_LIVE_CODEX_PROBE=1` 일 때만 돈다(기본은 즉시 통과).
 ///

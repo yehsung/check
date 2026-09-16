@@ -1,4 +1,5 @@
 import SwiftUI
+import CheckCore
 
 // MARK: - 제보 패널 (v0.2.50)
 //

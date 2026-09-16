@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import check
+@testable import CheckCore
 
 // v0.2.36 Sync(B) 계약 고정 — W2/W3 근본 원인에 대한 폴링 수용 지점의 정정·통보.
 //

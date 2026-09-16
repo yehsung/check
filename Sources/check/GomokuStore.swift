@@ -159,6 +159,32 @@ nonisolated struct GomokuChatMessage: Identifiable, Equatable, Sendable {
     var id: Int { seq }
 }
 
+// MARK: - 화면이 본 판 (v0.3.31 진단)
+
+/// 판을 누른 **그 순간 화면이 그리고 있던** 판의 요약. 착수 판정은 언제나 스토어 값으로 하고, 이 값은 **로그에만** 쓴다.
+///
+/// 생긴 까닭(2026-09-17 재발): 사용자는 "화면은 내 차례였고 다른 칸엔 미리보기가 떴는데 한 영역만 안 놓였다"고 했고,
+/// 같은 순간 스토어는 그 클릭을 `not-your-turn` 으로 거절했으며 서버도 상대 차례였다. 화면이 옛 판을 그렸는지(어긋남)
+/// 차례를 잘못 읽었는지(착각) 가를 값이 없었다 — 탭마다 둘을 나란히 적어 다음 재발에서 가른다(`tap diverged`).
+/// 화면에는 아무것도 띄우지 않는다(사용자 결정: 로그만).
+nonisolated struct GomokuSeenTurn: Equatable, Sendable {
+    let matchID: String
+    let moveCount: Int
+    let turn: GomokuColor?
+
+    init(_ match: GomokuMatchState) {
+        matchID = match.id
+        moveCount = match.moveCount
+        turn = match.turn
+    }
+
+    /// 스토어 판과 다른가. 스토어에 판이 없으면 다르다.
+    func differs(from match: GomokuMatchState?) -> Bool {
+        guard let match else { return true }
+        return matchID != match.id || moveCount != match.moveCount || turn != match.turn
+    }
+}
+
 // MARK: - 탭 거절 사유 (v0.3.28)
 
 /// 판을 눌렀는데 돌이 안 놓인 **이유**. 여기서 갈라 두 곳으로 나간다: 사용자에게는 `GomokuNoticeText.tapRefusal(_:)`
@@ -432,7 +458,14 @@ final class GomokuStore {
     var selectedStake: GomokuStake = .three
     var incoming: [GomokuInvite] = []
     var outgoing: GomokuInvite?
-    var match: GomokuMatchState?
+    var match: GomokuMatchState? {
+        // 수·차례·끝남이 바뀔 때만 한 줄 남긴다(v0.3.31 진단 — `GomokuSeenTurn` 주석). 같은 값을 다시 넣는 되맞춤은 조용하다.
+        didSet {
+            if let line = Self.matchTransitionLine(from: oldValue, to: match) { Self.logger.notice("\(line, privacy: .public)") }
+        }
+    }
+    /// 탭 순간 화면이 본 판과 스토어 판이 달랐던 횟수(진단·테스트 지점). 화면을 다시 그리게 하지 않도록 관찰에서 뺀다.
+    @ObservationIgnored private(set) var tapDivergenceCount = 0
     /// 사용자 어휘 안내 한 줄.
     var notice: String?
     var isBusy = false
@@ -1185,7 +1218,9 @@ final class GomokuStore {
         }
     }
 
-    func place(_ point: GomokuPoint) async {
+    func place(_ point: GomokuPoint, seen: GomokuSeenTurn? = nil) async {
+        // 화면이 본 판과 다르면 먼저 적는다 — 판정은 아래 가드가 **스토어 값으로** 한다(진단만, 동작 무변경).
+        if let seen, seen.differs(from: match) { noteTapDivergence(seen, at: point) }
         // **거절은 전부 이유를 남긴다**(v0.3.28 — 전에는 이 중 넷이 통째로 무음이었다). 보는 순서는 0.3.27 그대로다:
         // 같은 상황에서 같은 말을 해야 하고, 순서를 바꾸면 조용하던 갈래가 다른 문구로 바뀐다.
         guard !isBusy else { refuseTap(.busy, at: point); return }
@@ -1780,6 +1815,28 @@ final class GomokuStore {
             mine=\(self.match?.myColor.rawValue ?? "none", privacy: .public) \
             busy=\(self.isBusy ? "true" : "false", privacy: .public)
             """)
+    }
+
+    /// 탭 순간 화면과 스토어가 다른 판을 보고 있었다 — 한 줄(`tap refused` 와 같은 공개 어휘 규약, 이름·판 내용 없음).
+    private func noteTapDivergence(_ seen: GomokuSeenTurn, at point: GomokuPoint) {
+        tapDivergenceCount += 1
+        Self.logger.notice("""
+            tap diverged point=\(point.notation, privacy: .public) \
+            sameMatch=\(seen.matchID == self.match?.id ? "true" : "false", privacy: .public) \
+            view=(moves=\(seen.moveCount, privacy: .public) turn=\(seen.turn?.rawValue ?? "none", privacy: .public)) \
+            store=(moves=\(self.match?.moveCount ?? -1, privacy: .public) turn=\(self.match?.turn?.rawValue ?? "none", privacy: .public))
+            """)
+    }
+
+    /// 판 상태 변화 한 줄(없으면 nil). 수·차례·끝남·판 교체만 본다 — 시계·채팅·루비는 이 줄을 만들지 않는다.
+    nonisolated static func matchTransitionLine(from old: GomokuMatchState?, to new: GomokuMatchState?) -> String? {
+        func turn(_ m: GomokuMatchState?) -> String { m?.turn?.rawValue ?? "none" }
+        func moves(_ m: GomokuMatchState?) -> String { m.map { String($0.moveCount) } ?? "-" }
+        func finished(_ m: GomokuMatchState?) -> Bool { m?.isFinished ?? false }
+        let sameMatch = old?.id == new?.id
+        guard !sameMatch || moves(old) != moves(new) || turn(old) != turn(new) || finished(old) != finished(new) else { return nil }
+        return "state moves=\(moves(old))→\(moves(new)) turn=\(turn(old))→\(turn(new)) "
+            + "finished=\(finished(new)) sameMatch=\(sameMatch)"
     }
 
     private func applyRuby(_ value: Int?) {

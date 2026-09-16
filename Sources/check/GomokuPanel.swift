@@ -1128,7 +1128,9 @@ private struct GomokuPlayBoard: View {
                     // **스토어 한 곳**이 문구와 진단 줄을 남긴다. 여기서 미리 걸러 조용히 삼키지 않는다 —
                     // 뭉쳐 둔 무음 guard 하나가 "눌렀는데 아무 반응이 없다"의 원인이었다(0.3.27).
                     // 가드를 푼 것이 아니다: `place(_:)` 가 같은 조건을 **먼저** 보고 서버로는 안 나간다.
-                    Task { await store.place(point) }
+                    // 누른 순간 **이 화면이 그린 판**을 함께 넘긴다 — 스토어 판과 다르면 로그 한 줄(`tap diverged`)만 남는다.
+                    let seen = GomokuSeenTurn(match)
+                    Task { await store.place(point, seen: seen) }
                 }
             )
             // 보이스오버: 판 전체를 한 요소로 읽는다(교차점별 요소·착수 동작은 아직 없다 — 둘 곳은 마우스로 고른다).

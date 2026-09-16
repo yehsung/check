@@ -248,11 +248,11 @@ func 탭_경로와_착수에는_말없이_되돌아가는_길이_없다() throws
     // 뭉쳐 있던 무음 가드가 되살아나지 않는다(그 한 줄이 세 가지 거절을 통째로 삼켰다).
     #expect(!tap.contains("canPlace"), "탭 경로가 canPlace 로 다시 조용히 걸러 낸다")
     #expect(!tap.contains("match.board[point]"), "탭 경로가 이미 놓인 자리를 조용히 걸러 낸다")
-    #expect(tap.contains("store.place(point)"), "탭이 스토어를 안 부른다")
+    #expect(tap.contains("store.place(point, seen:"), "탭이 스토어를 안 부른다")
 
     // ② place(_:) 의 **보내기 전 구간** — 모든 return 앞에 refuseTap( 이 선다.
     //    (보낸 뒤의 `perform` nil 은 계정이 바뀌었거나 스토어가 리셋된 길이라 일부러 조용하다 — 아래에서 따로 짚는다.)
-    let body = try #require(gomokuBody(of: "func place(_ point: GomokuPoint)", in: store))
+    let body = try #require(gomokuBody(of: "func place(_ point: GomokuPoint, seen: GomokuSeenTurn? = nil)", in: store))
     let send = try #require(body.range(of: "await perform("))
     let guards = String(body[body.startIndex..<send.lowerBound])
     let lines = guards.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)

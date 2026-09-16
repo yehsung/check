@@ -597,7 +597,7 @@ struct CheckMenuView: View {
 struct CheckMenuSideRail: View {
     let store: WorkTimerStore
 
-    /// 레일 폭. 라벨("콕찌르기" 4글자 @9pt ≈ 37pt)이 좌우 여백 안에 들어가는 최소치에서 잡았다.
+    /// 레일 폭. 가장 긴 라벨("콕 / 메시지" @9pt semibold 실측 39.3pt)이 좌우 여백 안에 들어가는 폭이다.
     static let width: CGFloat = 64
     /// 칸 하나의 높이(pt).
     ///
@@ -4224,8 +4224,10 @@ private struct PokeEntryIconButton: View {
         let warns = PokeConnectionNotice.shouldWarn(state: store.realtimeState, now: store.displayNow)
         CheckMenuRailButton(
             icon: "hand.point.right.fill",
-            label: "콕찌르기",
-            help: warns ? PokeConnectionNotice.iconHelp : "콕 찌르기",
+            // 2026-09-17 사용자: "콕찌르기 버튼 이름을 콕 / 메시지로 — 메시지 기능 있다는 게 하나도 안 드러난다".
+            // 이 칸이 대화로 들어가는 유일한 문이라 이름에 메시지를 싣는다(9pt 실측 39.3pt, 레일 폭 64 안).
+            label: "콕 / 메시지",
+            help: warns ? PokeConnectionNotice.iconHelp : "콕 찌르기 · 메시지",
             isActive: store.isPokePanelVisible,
             // 착색만 바꾼다 — 아이콘을 바꾸면 사용자가 이 버튼을 찾던 모양이 사라진다.
             // 열려 있으면서 끊긴 상태에서는 카드가 accent(열림), 글리프가 pending(끊김)으로 갈라 말한다.

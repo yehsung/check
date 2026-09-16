@@ -3139,10 +3139,15 @@ enum OSVersionReport {
 // 시각은 전부 epoch **밀리초**다. `Double` 로 읽는다 — bigint 정수로 오든 소수로 오든 한 번에 받는다
 // (정수 타입으로 두면 서버가 소수를 싣는 날 응답 전체가 throw 한다). 기기 시계 보정은 스토어 몫이다.
 
-/// 오목 RPC 프로토콜 버전. 서버 `gomoku_protocol()` 과 같은 값이다 — 이보다 작으면 서버가 `unsupported_client`
-/// 로 막는다(계정은 새 버전인데 두 번째 맥이 옛 앱인 경우를 막는 겹).
+/// 오목 RPC 프로토콜 버전. 이보다 **작으면** 서버가 `unsupported_client` 로 막는다(계정은 새 버전인데
+/// 두 번째 맥이 옛 앱인 경우를 막는 겹).
+///
+/// **0.3.28 에서 1 → 2 로 올렸다.** 서버 `gomoku_protocol()` 은 **1 그대로**이고(0.3.27 앱이 계속 돌아야 한다),
+/// 채팅 RPC 두 개만 자기 게이트 `gomoku_chat_protocol() = 2` 를 쓴다. 즉 여기서 2 를 실어도 기존 여덟 RPC 는
+/// `2 < 1` 이 거짓이라 그대로 통과하고, 채팅은 2 를 실어야만 열린다 — **한 숫자로 두 게이트를 지난다.**
+/// 되돌리지 마라: 1 로 내리면 채팅만 조용히 `unsupported_client` 가 되고 판은 멀쩡히 돌아가, 원인이 안 보인다.
 nonisolated enum GomokuWire {
-    static let protocolVersion = 1
+    static let protocolVersion = 2
 }
 
 /// 오목 RPC 의 status 어휘. **모르는 값은 `.unknown`** 이다(위 ②).
@@ -3168,6 +3173,9 @@ nonisolated enum GomokuRPCStatus: String, Equatable, Hashable, Sendable, Decodab
     case notYourTurn = "not_your_turn"
     case stale
     case forbidden
+    /// 1분 30건을 넘긴 대국 채팅. **케이스를 둔 이유는 접는 것이 보이게 하기 위해서다** —
+    /// 문구 표가 `invalid` 와 **같은 한 줄**로 접는다(메시지와 같은 철학: 남은 초를 세면 그건 쿨타임이다).
+    case flood
     case unknown
 
     init(from decoder: any Decoder) throws {
@@ -3216,11 +3224,39 @@ struct GomokuMoveRequest: Encodable {
     let pY: Int
 }
 
-/// gomoku_state 본문. { p_protocol, p_match_id, p_since_seq }. since 는 서버 default(0)가 있지만 **언제나 싣는다**.
+/// gomoku_state 본문. { p_protocol, p_match_id, p_since_seq, p_since_chat_seq }.
+/// since 두 개는 서버 default(0)가 있지만 **언제나 싣는다**(PostgREST 는 본문의 키 집합으로 함수를 고른다).
+///
+/// 0.3.28 서버는 인자 4개짜리 한 벌뿐이다(옛 3인자 판을 drop 했다) — 그래서 키 3개로 부르는 0.3.27 앱도
+/// 4번째 default 로 그대로 붙고, 후보가 하나뿐이라 모호성이 없다.
 struct GomokuStateRequest: Encodable {
     var pProtocol = GomokuWire.protocolVersion
     let pMatchId: String
     let pSinceSeq: Int
+    /// 내가 이미 받은 채팅 번호. 이보다 큰 것만 받는다(착수의 `p_since_seq` 와 같은 자리·같은 규칙).
+    let pSinceChatSeq: Int
+}
+
+/// gomoku_chat_send 본문. { p_protocol, p_match_id, p_kind, p_body }.
+/// `kind == .quick` 이면 `p_body` 는 **문구가 아니라 코드**(hi·gg…)다 — 한국어 문구는 앱만 갖는다.
+struct GomokuChatSendRequest: Encodable {
+    var pProtocol = GomokuWire.protocolVersion
+    let pMatchId: String
+    let pKind: String
+    let pBody: String
+}
+
+/// gomoku_chat_mute 본문. { p_protocol, p_match_id, p_muted }.
+struct GomokuChatMuteRequest: Encodable {
+    var pProtocol = GomokuWire.protocolVersion
+    let pMatchId: String
+    let pMuted: Bool
+}
+
+/// 채팅 한 줄의 종류. 서버 `gomoku_chat.kind` 의 두 값 그대로다.
+nonisolated enum GomokuChatKind: String, Equatable, Sendable {
+    case text
+    case quick
 }
 
 /// 사람 한 명(로비 목록·신청자·대국 상대). 로비에만 is_working·capable·in_match 가 실린다.
@@ -3283,8 +3319,24 @@ struct GomokuMoveRow: Decodable, Equatable, Sendable {
     var y: Int?
 }
 
+/// 대국 채팅 한 줄(서버 `chat[]`). `mine` 은 서버가 판정한다 — 앱이 sender 를 내 id 와 대조하지 않는다.
+///
+/// **내가 음소거했으면 상대 행은 아예 안 온다**(서버가 거른다). 그래서 이 배열의 `seq` 는 **이가 빠질 수 있고**,
+/// 그건 구멍이 아니라 정상이다(스토어의 구멍 판정이 `my_muted` 일 때 쉬는 이유).
+struct GomokuChatRow: Decodable, Equatable, Sendable {
+    var seq: Int?
+    /// 'text' | 'quick'. quick 이면 `body` 는 코드(hi·gg…)이고 한국어 문구는 앱 표에서 나온다.
+    var kind: String?
+    var body: String?
+    var mine: Bool?
+    var createdMs: Double?
+}
+
 /// 대국 상태 묶음. gomoku_state 는 이것을 **최상위**에 싣고, 쓰기 RPC(respond·move·resign·timeout·stale·forbidden)는
 /// `state` 키 안에 싣는다.
+///
+/// 채팅 다섯 키(0.3.28)는 `gomoku__chat` 이 얹은 것이다. **전부 Optional 이라** 채팅을 모르는 0.3.27 서버의
+/// 응답도 그대로 디코드된다(그 창에서는 대국만 돌고 채팅 칸이 비어 있을 뿐, 창이 죽지 않는다).
 struct GomokuStatePayload: Decodable, Equatable, Sendable {
     var match: GomokuMatchRow?
     var moves: [GomokuMoveRow]?
@@ -3292,6 +3344,17 @@ struct GomokuStatePayload: Decodable, Equatable, Sendable {
     var opponent: GomokuUserRow?
     var rubyBalance: Int?
     var serverNowMs: Double?
+    /// `since_chat_seq` 보다 큰 줄만, seq 오름차순.
+    var chat: [GomokuChatRow]?
+    /// 판의 현재 채팅 발급 번호. **다음 요청의 since 는 이 값이다** — 마지막 줄의 seq 가 아니다
+    /// (음소거로 가려진 줄이 있으면 둘이 갈리고, 줄 번호로 물으면 가려진 구간을 영원히 다시 묻는다).
+    var chatSeq: Int?
+    var myMuted: Bool?
+    /// 상대가 이 판 채팅을 껐다. **티내기의 근거** — 내 화면이 이걸 읽어 입력창 위에 계속 말한다.
+    var opponentMuted: Bool?
+    /// 상대 앱이 채팅을 받을 수 있다(app_build >= 80). false 면 앱이 먼저 말한다 — 조용히 삼키지 않는다.
+    var chatCapable: Bool?
+    var chatMaxLen: Int?
 }
 
 /// gomoku_state 응답: { status, match{…}, moves[…], my_color, opponent{…}, ruby_balance, server_now_ms }.
@@ -3381,4 +3444,50 @@ struct GomokuInboxResponse: Decodable, Equatable, Sendable {
     var lastFinished: GomokuLastFinishedRow?
     var rubyBalance: Int?
     var serverNowMs: Double?
+}
+
+/// gomoku_chat_send / gomoku_chat_mute 공용 응답.
+/// send ok: { status, chat_seq, opponent_muted, chat_capable, server_now_ms } · mute ok: { status, muted, server_now_ms }.
+///
+/// ★ **`retry_after_seconds` 를 여기 두지 않았다.** 서버는 `flood` 에 그 숫자를 싣지만, 앱이 그것을 읽는 순간
+///   화면에 카운트다운이 생기고 그건 이름만 다른 쿨타임이다 — 메시지에서 폐지한 바로 그것이다
+///   (`WorkTimerStoreMessages` 머리 주석 ③). flood 는 `invalid` 와 같은 한 문장으로 접는다.
+///   되살리려는 사람에게: 필드를 더하는 순간 그 값을 쓰는 뷰가 반드시 따라온다.
+struct GomokuChatResponse: Decodable, Equatable, Sendable {
+    let status: GomokuRPCStatus
+    /// send ok — 방금 내 글이 받은 번호.
+    var chatSeq: Int?
+    /// send ok — 상대가 껐다. **전송은 성공했고** 이 값이 "티내기"의 재료다.
+    var opponentMuted: Bool?
+    var chatCapable: Bool?
+    /// invalid — 서버가 말한 상한. 클라 상수와 갈리는 날 사용자가 보는 숫자는 거절한 쪽의 것이어야 한다.
+    var chatMaxLen: Int?
+    /// mute ok — 적용된 값(요청한 값과 같아야 하지만 **서버 값을 쓴다**).
+    var muted: Bool?
+    /// not_active — 그때 판의 status(진단용이 아니라 로그용. 화면 문구는 이 값을 쓰지 않는다).
+    var matchStatus: String?
+    var serverNowMs: Double?
+}
+
+/// 대국 채팅 본문의 정규화·길이 판정. **MessageBody 의 정규화·눈금을 그대로 빌린다** — 상한(100)만 다르다.
+///
+/// 새 정규식·새 trim 을 만들지 않는 것이 요점이다: 서버도 `normalize_message_body()` + `is_message_body()` 라는
+/// **같은 한 벌**을 쓰고 그 위에 길이만 따로 본다. 두 벌이 갈리면 한쪽만 통과하는 글이 생기고, 그 글은
+/// "화면은 보내졌다는데 상대에게 없는 말"이 된다.
+enum GomokuChatBody {
+    /// 상한. 단위는 **유니코드 스칼라**이고 서버 `char_length`·`gomoku_chat_max_len()` 과 같은 눈금이다.
+    static let maxLength = 100
+
+    /// 서버와 같은 눈금의 길이(정규화 후 코드포인트 수). 화면 카운터도 이 값을 쓴다.
+    static func length(_ raw: String) -> Int { MessageBody.length(raw) }
+
+    /// 검사 순서는 MessageBody 와 같다 — **빈 판정이 먼저다**(공백만 친 입력에 "100자까지예요"라고 하면
+    /// 사용자는 글자를 줄이려 들고, 줄여도 계속 거부당한다).
+    /// `maxLength` 를 인자로 받는 이유: 서버가 응답으로 알려 준 상한이 있으면 그 값으로 재야 한다.
+    static func validate(_ raw: String, maxLength limit: Int = maxLength) -> MessageBodyValidation {
+        let normalized = MessageBody.sanitized(raw)
+        if !MessageBody.hasVisibleContent(normalized) { return .empty }
+        if normalized.unicodeScalars.count > limit { return .tooLong(maxLength: limit) }
+        return .ok(normalized)
+    }
 }

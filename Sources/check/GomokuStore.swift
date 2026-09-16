@@ -80,6 +80,45 @@ nonisolated struct GomokuAttention: Equatable, Sendable {
     let moveCount: Int
 }
 
+// MARK: - 대국 채팅 (v0.3.28)
+
+/// 빠른 문구 여덟. **코드는 서버와 나누고 한국어 문구는 앱만 갖는다** — 서버 `gomoku_chat_quick_codes()` 는
+/// 같은 여덟 코드만 검사하고 표에 저장되는 것도 코드다. 그래서 문구를 다듬는 날 서버를 배포할 필요가 없다.
+/// 반대로 서버가 코드를 넓히는 날 옛 앱은 그 코드를 모르는데, 그때 말이 사라지지 않게 받는 쪽에서
+/// `GomokuNoticeText.chatUnknownQuick` 한 줄로 접는다(소실은 오배달보다 나쁘다).
+nonisolated enum GomokuQuickPhrase: String, CaseIterable, Sendable {
+    case hi, gg, nice, hurry, sorry, think, oops, rematch
+
+    var text: String {
+        switch self {
+        case .hi: return "안녕하세요"
+        case .gg: return "잘 뒀어요"
+        case .nice: return "좋은 수네요"
+        case .hurry: return "한 수 부탁해요"
+        case .sorry: return "미안해요"
+        case .think: return "생각 중이에요"
+        case .oops: return "실수했어요"
+        case .rematch: return "한 판 더 할까요?"
+        }
+    }
+}
+
+/// 대국 채팅 한 줄(화면 값). `seq` 가 곧 id 다 — 서버가 판마다 1부터 매기는 번호라 한 판 안에서 유일하고,
+/// 판이 바뀌면 대화를 통째로 비우므로 판을 가로질러 겹칠 일이 없다.
+nonisolated struct GomokuChatMessage: Identifiable, Equatable, Sendable {
+    let seq: Int
+    /// 서버가 판정한다(앱이 sender 를 내 id 와 대조하지 않는다 — 두 판정이 갈리면 내 말이 남의 말이 된다).
+    let isMine: Bool
+    /// 기기 시계로 보정된 시각.
+    let sentAt: Date
+    /// 빠른 문구면 그 코드, 자유 입력이면 nil.
+    let quick: GomokuQuickPhrase?
+    /// 화면에 그대로 그리는 글(빠른 문구면 `quick.text`).
+    let body: String
+
+    var id: Int { seq }
+}
+
 // MARK: - 문구 표 (사용자 어휘 — 이 표 밖에서 문구를 만들지 마라)
 
 /// 오목 안내 한 줄의 **유일한 출처**. status → 문구 변환이 여러 곳에 흩어지면 같은 거절이 화면마다 다른 말을 한다.
@@ -100,6 +139,21 @@ nonisolated enum GomokuNoticeText {
     static let cannotPlace = "둘 수 없는 자리예요"
     static let busy = "이미 진행 중인 대국이 있어요"
     static let targetBusy = "상대가 다른 대국 중이에요"
+
+    // 채팅(v0.3.28). 아래 셋은 **안내가 아니라 상태 표시**다 — 한 번 뜨고 마는 것이 아니라 그 조건이 참인 동안 서 있다.
+    /// 내가 상대 말을 껐다(대화 자리에 선다).
+    static let chatMutedByMe = "상대 말을 껐어요"
+    /// 상대가 껐다. **입력창 위에 계속 뜬다** — 사용자 요구가 "끄면 상대에게 티가 나게"였다.
+    static let chatMutedByOpponent = "상대가 채팅을 껐어요"
+    /// 상대가 옛 버전이라 못 받는다. **조용히 삼키지 않는다** — 안 그러면 혼잣말을 대화로 착각한다.
+    static let chatOpponentOutdated = "상대는 옛 버전이라 채팅을 못 받아요"
+    /// 앱이 모르는 빠른 문구 코드(서버가 표를 넓힌 날). 그 줄을 지우는 대신 이렇게 남긴다.
+    static let chatUnknownQuick = "앱을 업데이트하면 볼 수 있는 문구예요"
+    /// 보낼 수 없는 글(못 쓰는 문자)과 도배를 **한 문장으로** 접는다. 숫자도 카운트다운도 두지 않는다.
+    static let chatBlocked = "지금은 채팅을 보낼 수 없어요. 잠시 후 다시 시도해 주세요"
+
+    /// 길이 초과. 숫자는 **서버가 알려 준 상한이 있으면 그것**을 쓴다(둘이 갈리는 날 진실은 거절하는 쪽에 있다).
+    static func chatTooLong(_ maxLength: Int) -> String { "채팅은 \(maxLength)자까지예요" }
 
     /// 금수 사유별 문구. 상태줄과 호버 이유가 같은 말을 한다.
     static func forbidden(_ reason: GomokuForbiddenReason) -> String {
@@ -182,6 +236,29 @@ nonisolated enum GomokuNoticeText {
         }
     }
 
+    /// 채팅 전송(gomoku_chat_send) 결과. **성공은 말하지 않는다**(nil) — 글이 그 자리에 뜨는 것이 곧 답이고,
+    /// "보냈어요"를 띄우면 한 판에 스무 번 뜬다.
+    ///
+    /// `flood` 를 `invalid` 와 같은 줄로 접는 것이 계약이다: 남은 초를 세거나 버튼을 잠그면 그건 이름만 다른
+    /// 쿨타임이고, 메시지에서 없앤 바로 그것이다.
+    static func chat(_ status: GomokuRPCStatus) -> String? {
+        switch status {
+        case .ok: return nil
+        case .invalid, .flood: return chatBlocked
+        case .notActive, .notFound: return finishedMatch
+        default: return common(status)
+        }
+    }
+
+    /// 음소거 전환(gomoku_chat_mute) 결과. 성공은 토글과 대화 자리의 한 줄이 이미 말한다(nil).
+    static func chatMute(_ status: GomokuRPCStatus) -> String? {
+        switch status {
+        case .ok: return nil
+        case .notFound, .notActive: return finishedMatch
+        default: return common(status)
+        }
+    }
+
     private static func common(_ status: GomokuRPCStatus) -> String {
         switch status {
         case .unsupportedClient: return updateMine
@@ -257,6 +334,46 @@ final class GomokuStore {
     /// 이번 로그인에서 상대 목록을 한 번이라도 받았다.
     var hasLoadedLobby = false
 
+    // MARK: 채팅 상태 (v0.3.28) — **`isBusy` 를 쓰지 않는다**
+
+    /// 지금 판의 대화(오래된 것 → 최신). 판이 바뀌면 비운다.
+    var chat: [GomokuChatMessage] = []
+    /// 판의 채팅 발급 번호 = **다음 요청의 since**. 서버가 말한 값이고 역행하지 않는다.
+    /// 마지막 줄의 seq 가 아닌 이유: 내가 음소거하면 상대 줄이 빠져 둘이 갈리고, 줄 번호로 물으면
+    /// 가려진 구간을 영원히 다시 묻는다.
+    var chatSeq = 0
+    /// **내가** 이 판 채팅을 껐다. 서버가 아는 판 상태다(내 화면 설정이 아니다) — 그래야 상대에게 티가 난다.
+    var isMuted = false
+    /// **상대가** 껐다. 티내기의 근거 — 이 값이 참인 동안 입력창 위에 한 줄이 서 있다.
+    var isOpponentMuted = false
+    /// 상대 앱이 채팅을 받을 수 있는 버전인가(서버 `chat_capable`).
+    /// **모르면 받을 수 있다고 본다** — 아직 안 물어본 판에서 "상대는 옛 버전"이라 말하면 그건 거짓말이다.
+    var opponentChatCapable = true
+    /// 입력칸의 글. 비우는 자리는 **전송 성공**과 판이 바뀔 때 둘뿐이다(실패해도 남는다 — 쓴 말은 사용자 것이다).
+    var chatDraft = ""
+    /// 채팅 전용 안내 한 줄(실패만). 성공은 글이 뜨는 것으로 답한다.
+    var chatNotice: String?
+    /// **`isBusy` 와 별개다.** 채팅 왕복이 착수·기권 버튼을 잠그면 한 수 30초짜리 판에서 그건 곧 패배다.
+    var isSendingChat = false
+    /// 한 줄 상한. 서버가 `chat_max_len` 을 말해 주면 그 값으로 간다.
+    var chatMaxLength = GomokuChatBody.maxLength
+
+    /// 지금 입력칸에 있는 글의 길이(코드포인트 — 서버 `char_length` 와 같은 눈금).
+    var chatDraftLength: Int { GomokuChatBody.length(chatDraft) }
+
+    /// 지금 채팅을 보낼 수 있는가.
+    ///
+    /// **시계를 읽지 않는다.** 끝난 판의 인사 유예(120초)는 서버가 재고, 여기서 `Date()` 를 읽으면 입력칸이
+    /// 초마다 다시 그려진다(`bannerInvite` 가 세운 규약 그대로다). 유예가 지난 판의 전송은 서버가
+    /// `not_active` 로 답하고 그 문구가 사정을 말한다.
+    /// 음소거·상대 버전도 여기서 잠그지 않는다 — 껐어도 내 말은 가고(상대 화면에 안 보일 뿐),
+    /// 옛 버전 상대에게도 **왜 안 보이는지를 말해 주는 것**이 잠그는 것보다 낫다.
+    var canSendChatNow: Bool {
+        guard !isSendingChat, match != nil else { return false }
+        if case .ok = GomokuChatBody.validate(chatDraft, maxLength: chatMaxLength) { return true }
+        return false
+    }
+
     /// 팝오버 배너·말풍선이 쓰는 대표 신청(만료 안 된 받은 신청 중 가장 오래된 것).
     /// **시계를 읽지 않는다** — 만료된 신청은 스토어가 만료 시각에 `incoming` 에서 걷어낸다(pruneExpiredInvites).
     /// 여기서 Date() 를 읽으면 배너 body 가 시각 판정을 하게 되어 팝오버 전체가 시계에 묶인다.
@@ -325,6 +442,10 @@ final class GomokuStore {
     @ObservationIgnored var lastLobbyRequestAt: Date = .distantPast
     @ObservationIgnored private var lastMenuInboxAt: Date = .distantPast
     @ObservationIgnored private var inviteTTLSeconds: TimeInterval = 60
+    /// 지금 들고 있는 대화가 **어느 판의 것인가**. 다른 판의 상태가 오면 이 값이 달라 대화를 비운다.
+    @ObservationIgnored private(set) var chatMatchID: String?
+    /// 채팅 기록에 구멍이 났다 — 다음 한 번은 `since_chat_seq = 0` 으로 전체를 받는다(착수 needsFull 과 같은 규칙).
+    @ObservationIgnored private var chatWantsFull = false
     @ObservationIgnored private var lastOpponent: GomokuUser?
     @ObservationIgnored private var lastStake: Int?
 
@@ -555,18 +676,30 @@ final class GomokuStore {
             nextID = nil
             stateInFlightID = id
             var forceFull = false
+            var forceChatFull = false
             repeat {
                 stateAgain = false
                 let since = (!forceFull && match?.id == id) ? (match?.moveCount ?? 0) : 0
+                let sinceChat = (!forceChatFull && chatMatchID == id) ? chatSeq : 0
                 lastStateRequestAt = clock()
-                let result = await perform({ try await $0.gomokuState(accessToken: $1, matchID: id, sinceSeq: since) })
+                let result = await perform({
+                    try await $0.gomokuState(accessToken: $1, matchID: id, sinceSeq: since, sinceChatSeq: sinceChat)
+                })
                 guard generation == resetGeneration else { return }
                 forceFull = false
+                forceChatFull = false
                 guard case .success(let response)? = result else { continue }
                 switch response.status {
                 case .ok:
-                    if applyState(response.state, requestedSince: since) == .needsFull, since > 0 {
+                    if applyState(response.state, requestedSince: since, requestedSinceChat: sinceChat) == .needsFull,
+                       since > 0 {
                         forceFull = true
+                        stateAgain = true
+                    }
+                    // 채팅 구멍은 착수와 **따로** 센다. 하나로 묶으면 수가 한 건도 없는 판(since 0)에서 재요청이
+                    // 아예 안 걸리고, 반대로 대화만 이가 빠진 응답에 판 전체를 다시 받는다.
+                    if takeChatWantsFull(), sinceChat > 0 {
+                        forceChatFull = true
                         stateAgain = true
                     }
                 case .notFound:
@@ -597,7 +730,8 @@ final class GomokuStore {
     /// 안 맞으면 그 판은 있는 그대로 반영한다(차례·결과는 서버 행이 말하므로 결과 화면이 막히지 않는다).
     @discardableResult
     func applyState(
-        _ payload: GomokuStatePayload, requestedSince: Int = 0, blackPassedHint: Bool? = nil
+        _ payload: GomokuStatePayload, requestedSince: Int = 0, requestedSinceChat: Int = 0,
+        blackPassedHint: Bool? = nil
     ) -> StateApplyOutcome {
         guard let row = payload.match, let id = row.id?.lowercased(), !id.isEmpty else { return .ignored }
         noteServerNow(payload.serverNowMs)
@@ -720,6 +854,9 @@ final class GomokuStore {
         if match != next { match = next }
         let nextPhase: GomokuPhase = isFinished ? .result : .playing
         if phase != nextPhase { phase = nextPhase }
+        // 채팅은 판을 옮긴 **뒤에** 옮긴다 — 순서가 바뀌면 방금 비운 대화 위에 옛 판의 줄이 다시 붙는다.
+        // 끝난 판에서도 계속 받는다(결과 화면의 인사 120초).
+        applyChat(payload, matchID: id, requestedSince: requestedSinceChat)
         activeMatchID = isFinished ? nil : id
         if !isFinished {
             // 내 신청이 수락됐거나 내가 수락한 판이다 — 대기 카드를 걷는다.
@@ -948,6 +1085,8 @@ final class GomokuStore {
             match = nil
         }
         if phase != .lobby { phase = .lobby }
+        // 로비로 나가면 그 판의 대화는 끝이다(서버도 하루 뒤 지운다). 초안까지 함께 내린다.
+        clearChat()
         setNotice(nil)
         guard host?.session != nil else { return }
         Task { [weak self] in
@@ -969,6 +1108,7 @@ final class GomokuStore {
             match = nil
         }
         if phase != .lobby { phase = .lobby }
+        clearChat()
         await challenge(userID: opponent.id, peerHint: opponent)
     }
 
@@ -1127,6 +1267,8 @@ final class GomokuStore {
         if match != nil { match = nil }
         if notice != nil { notice = nil }
         if isBusy { isBusy = false }
+        if isSendingChat { isSendingChat = false }
+        clearChat()
         if isWindowVisible { isWindowVisible = false }
         if isRulesVisible { isRulesVisible = false }
         if rubyBalance != nil { rubyBalance = nil }
@@ -1155,7 +1297,180 @@ final class GomokuStore {
         dismissWindow?()
     }
 
+    // MARK: - 채팅 동작
+
+    /// 입력칸의 글을 보낸다(보내기 버튼 · ↩ · ⌘↩ 세 경로가 전부 여기로 온다).
+    ///
+    /// 판정은 `canSendChatNow` 와 같은 한 벌이고 여기서 다시 세지 않는다 — 다만 길이 초과만은 **여기서 말한다**
+    /// (버튼은 잠겨 있어도 ↩ 로 들어오는 길이 있고, 그때 아무 말도 없으면 사용자는 앱이 먹었다고 읽는다).
+    func sendChatDraft() {
+        guard !isSendingChat, let current = match else { return }
+        switch GomokuChatBody.validate(chatDraft, maxLength: chatMaxLength) {
+        case .empty:
+            // 빈 입력은 말없이 무시한다. 여기서 안내를 띄우면 ↩ 를 한 번 헛친 사람이 혼난다.
+            return
+        case .tooLong(let limit):
+            setChatNotice(GomokuNoticeText.chatTooLong(limit))
+        case .ok(let body):
+            // 보내는 것은 **정규화된 값**이다 — NFD 로 들어온 한글은 Swift 가 2자로 세고 서버가 6자로 센다.
+            sendChat(kind: .text, body: body, matchID: current.id, clearsDraft: true)
+        }
+    }
+
+    /// 빠른 문구 한 건. 서버로 가는 것은 **코드**이고, 쓰다 만 초안은 건드리지 않는다.
+    func sendQuick(_ phrase: GomokuQuickPhrase) {
+        guard !isSendingChat, let current = match else { return }
+        sendChat(kind: .quick, body: phrase.rawValue, matchID: current.id, clearsDraft: false)
+    }
+
+    /// 이 판 채팅 끄기·켜기. 음소거는 내 화면 설정이 아니라 **서버가 아는 판 상태**라 상대 화면에도 뜬다
+    /// (사용자 요구: "끄면 상대에게 티가 나게").
+    func setChatMuted(_ muted: Bool) {
+        guard !isSendingChat, let current = match, host?.session != nil else { return }
+        let id = current.id
+        isSendingChat = true
+        setChatNotice(nil)
+        let generation = resetGeneration
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { if generation == self.resetGeneration { self.isSendingChat = false } }
+            guard let result = await self.perform({
+                try await $0.gomokuChatMute(accessToken: $1, matchID: id, muted: muted)
+            }) else { return }
+            switch result {
+            case .failure:
+                self.setChatNotice(GomokuNoticeText.checkConnection)
+            case .success(let response):
+                self.noteServerNow(response.serverNowMs)
+                self.setChatNotice(GomokuNoticeText.chatMute(response.status))
+                guard response.status == .ok else {
+                    Self.logger.notice("chat mute refused status=\(response.status.rawValue, privacy: .public)")
+                    return
+                }
+                // 요청한 값이 아니라 **서버가 적용했다고 말한 값**을 쓴다.
+                let applied = response.muted ?? muted
+                if self.isMuted != applied { self.isMuted = applied }
+                // 가려짐은 서버가 정한다: 껐으면 상대 줄이 `chat[]` 에서 통째로 빠지고, 켜면 가려졌던 줄이 돌아온다.
+                // 로컬에서 걸러 내면 두 판정이 갈리므로 대화를 비우고 그 판 채팅을 처음부터 다시 받는다.
+                if !self.chat.isEmpty { self.chat = [] }
+                if self.chatSeq != 0 { self.chatSeq = 0 }
+                await self.refreshMatch(id: id)
+            }
+        }
+    }
+
+    /// 채팅 한 줄 보내기의 공통 몸통. **`isBusy` 를 세우지 않는다**(착수·기권을 잠그지 않는다).
+    private func sendChat(kind: GomokuChatKind, body: String, matchID id: String, clearsDraft: Bool) {
+        guard host?.session != nil else { return }
+        isSendingChat = true
+        setChatNotice(nil)
+        let generation = resetGeneration
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { if generation == self.resetGeneration { self.isSendingChat = false } }
+            guard let result = await self.perform({
+                try await $0.gomokuChatSend(accessToken: $1, matchID: id, kind: kind, body: body)
+            }) else { return }
+            switch result {
+            case .failure:
+                self.setChatNotice(GomokuNoticeText.checkConnection)
+            case .success(let response):
+                self.noteServerNow(response.serverNowMs)
+                if let limit = response.chatMaxLen, limit > 0, self.chatMaxLength != limit {
+                    self.chatMaxLength = limit
+                }
+                // 보낸 사람이 **여기서** 안다: 상대가 껐다 / 상대가 못 받는 버전이다. 조용히 삼키지 않는다.
+                if let muted = response.opponentMuted, self.isOpponentMuted != muted { self.isOpponentMuted = muted }
+                if let capable = response.chatCapable, self.opponentChatCapable != capable {
+                    self.opponentChatCapable = capable
+                }
+                self.setChatNotice(GomokuNoticeText.chat(response.status))
+                guard response.status == .ok else {
+                    // **자동 재전송은 없고 초안도 비우지 않는다.** 실패한 말은 사용자가 다시 누를 때만 나간다.
+                    Self.logger.notice("chat refused status=\(response.status.rawValue, privacy: .public)")
+                    return
+                }
+                if clearsDraft, self.match?.id == id { self.chatDraft = "" }
+                // 낙관 삽입을 하지 않는다: 서버가 본문을 정규화하고 번호·시각을 정한다. 내가 지어낸 줄과
+                // 다음 응답의 진짜 줄이 다르면 같은 말이 두 줄로 보이거나 순서가 튄다(메시지와 같은 판단).
+                await self.refreshMatch(id: id)
+            }
+        }
+    }
+
     // MARK: - 내부
+
+    /// 상태 응답의 채팅 부분을 옮긴다. 늦게 온 응답 방어를 착수와 **같은 겹으로** 얹는다:
+    ///  · 판이 바뀌면 비운다(다른 판의 말이 섞이면 그건 사고다),
+    ///  · 서버 발급 번호가 **역행하면 통째로 버린다**(옛 스냅숏이 방금 켠 음소거를 되돌리지 못하게 값보다 먼저 본다),
+    ///  · 기록에 구멍이 나면 다음 한 번을 처음부터 받게 표시한다.
+    private func applyChat(_ payload: GomokuStatePayload, matchID id: String, requestedSince: Int) {
+        if chatMatchID != id { clearChat(for: id) }
+        if let limit = payload.chatMaxLen, limit > 0, chatMaxLength != limit { chatMaxLength = limit }
+        if let serverSeq = payload.chatSeq, serverSeq < chatSeq { return }
+        if let capable = payload.chatCapable, opponentChatCapable != capable { opponentChatCapable = capable }
+        if let muted = payload.myMuted, isMuted != muted { isMuted = muted }
+        if let muted = payload.opponentMuted, isOpponentMuted != muted { isOpponentMuted = muted }
+        // 채팅 키가 아예 없는 응답(채팅을 모르는 서버·쓰기 RPC 가 싣는 state 묶음)은 **지우지 않고 그냥 둔다**.
+        guard let rows = payload.chat else { return }
+        var lastSeq = chat.last?.seq ?? 0
+        var appended: [GomokuChatMessage] = []
+        for message in rows.compactMap(chatMessage(from:)).sorted(by: { $0.seq < $1.seq }) where message.seq > lastSeq {
+            // 내가 껐으면 상대 줄이 서버에서 빠져 번호가 건너뛴다 — 그건 구멍이 아니라 음소거의 모습이다.
+            if message.seq != lastSeq + 1, requestedSince > 0, !isMuted {
+                chatWantsFull = true
+                return
+            }
+            appended.append(message)
+            lastSeq = message.seq
+        }
+        if !appended.isEmpty { chat.append(contentsOf: appended) }
+        let nextSeq = max(payload.chatSeq ?? 0, lastSeq)
+        if nextSeq > chatSeq { chatSeq = nextSeq }
+    }
+
+    /// 서버 채팅 행 → 화면 값. 빠른 문구는 코드를 문구로 편다.
+    private func chatMessage(from row: GomokuChatRow) -> GomokuChatMessage? {
+        guard let seq = row.seq, seq >= 1 else { return nil }
+        let isQuick = row.kind == GomokuChatKind.quick.rawValue
+        let quick = isQuick ? GomokuQuickPhrase(rawValue: row.body ?? "") : nil
+        // 앱이 모르는 코드(서버가 표를 넓힌 날)는 줄을 **지우지 않고** 한 문장으로 접는다 — 소실은 오배달보다 나쁘다.
+        let body = isQuick ? (quick?.text ?? GomokuNoticeText.chatUnknownQuick) : (row.body ?? "")
+        guard !body.isEmpty else { return nil }
+        return GomokuChatMessage(
+            seq: seq,
+            isMine: row.mine ?? false,
+            sentAt: deviceDate(serverMs: row.createdMs) ?? clock(),
+            quick: quick,
+            body: body
+        )
+    }
+
+    /// 구멍 표시를 읽고 내린다. **한 번만 다시 묻는다** — 서버가 계속 이 빠진 것을 주면 무한히 되묻지 않게.
+    private func takeChatWantsFull() -> Bool {
+        defer { chatWantsFull = false }
+        return chatWantsFull
+    }
+
+    /// 대화를 비운다(판이 바뀌었다 · 로비로 나갔다 · 로그아웃했다).
+    /// 초안과 음소거 표시까지 함께 내린다 — 앞 판에 쓰던 말이 다음 판 입력칸에 남아 나가면 그게 곧 사고다
+    /// (메시지의 '상대 바꾸기'가 세운 규약 그대로다).
+    private func clearChat(for id: String? = nil) {
+        chatMatchID = id
+        chatWantsFull = false
+        if !chat.isEmpty { chat = [] }
+        if chatSeq != 0 { chatSeq = 0 }
+        if isMuted { isMuted = false }
+        if isOpponentMuted { isOpponentMuted = false }
+        if !opponentChatCapable { opponentChatCapable = true }
+        if !chatDraft.isEmpty { chatDraft = "" }
+        if chatNotice != nil { chatNotice = nil }
+        if chatMaxLength != GomokuChatBody.maxLength { chatMaxLength = GomokuChatBody.maxLength }
+    }
+
+    private func setChatNotice(_ text: String?) {
+        if chatNotice != text { chatNotice = text }
+    }
 
     /// 공용 호출 관용구: 세션 가드 → 두 세대 캡처 → withSessionRetry → 두 세대 대조.
     /// nil = 버린 결과(세션 없음·세대가 밀림·취소). 호출부는 nil 이면 **아무것도 바꾸지 않는다.**
@@ -1192,6 +1507,7 @@ final class GomokuStore {
     private func clearMatch() {
         if match != nil { match = nil }
         if phase != .lobby { phase = .lobby }
+        clearChat()
     }
 
     private func removeIncoming(_ id: String) {

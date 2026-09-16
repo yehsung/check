@@ -2221,16 +2221,45 @@ extension SupabaseWorkService {
         )
     }
 
-    func gomokuState(accessToken: String, matchID: String, sinceSeq: Int) async throws -> GomokuStateResponse {
+    /// `sinceChatSeq` 는 **기본값을 두지 않는다.** 두면 부르는 자리가 조용히 0 으로 떨어져 매번 판 전체 채팅을
+    /// 다시 받고(무료 플랜 왕복), 그 사실이 아무 데서도 안 보인다. 부르는 쪽이 자기 번호를 말해야 한다.
+    func gomokuState(
+        accessToken: String, matchID: String, sinceSeq: Int, sinceChatSeq: Int
+    ) async throws -> GomokuStateResponse {
         try await gomokuRPC(
             "gomoku_state",
-            body: GomokuStateRequest(pMatchId: matchID, pSinceSeq: sinceSeq),
+            body: GomokuStateRequest(pMatchId: matchID, pSinceSeq: sinceSeq, pSinceChatSeq: sinceChatSeq),
             accessToken: accessToken
         )
     }
 
     func gomokuInbox(accessToken: String) async throws -> GomokuInboxResponse {
         try await gomokuRPC("gomoku_inbox", body: GomokuInboxRequest(), accessToken: accessToken)
+    }
+
+    /// 대국 채팅 한 줄 보내기(0.3.28). `kind == .quick` 이면 `body` 는 **코드**(hi·gg…)다.
+    ///
+    /// **쓰기라서 `retriesDeadlockOnce` 를 켠다.** 교착으로 죽은 트랜잭션은 통째로 되돌아가므로(채팅 행·seq 증가·신호 전부 0)
+    /// 재시도는 첫 시도와 같은 요청이고, 그사이 판이 끝났으면 서버가 `not_active` 로 멱등하게 거절한다.
+    func gomokuChatSend(
+        accessToken: String, matchID: String, kind: GomokuChatKind, body: String
+    ) async throws -> GomokuChatResponse {
+        try await gomokuRPC(
+            "gomoku_chat_send",
+            body: GomokuChatSendRequest(pMatchId: matchID, pKind: kind.rawValue, pBody: body),
+            accessToken: accessToken,
+            retriesDeadlockOnce: true
+        )
+    }
+
+    /// 이 판 채팅 끄기·켜기(0.3.28). 음소거는 내 화면 설정이 아니라 **서버가 아는 판 상태**다 — 상대에게 티가 나야 한다.
+    func gomokuChatMute(accessToken: String, matchID: String, muted: Bool) async throws -> GomokuChatResponse {
+        try await gomokuRPC(
+            "gomoku_chat_mute",
+            body: GomokuChatMuteRequest(pMatchId: matchID, pMuted: muted),
+            accessToken: accessToken,
+            retriesDeadlockOnce: true
+        )
     }
 
     /// Postgres 교착(SQLSTATE 40P01). PostgREST 는 500 + 본문 `code` 로 싣는다 — 공용 `send` 의 매핑은 5xx 를

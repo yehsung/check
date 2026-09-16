@@ -353,7 +353,7 @@ func 모르는_status_는_unknown_으로_접고_status_만_필수다() throws {
 }
 
 @Test(.gomokuDefaultsCleanup)
-func 오목_RPC_여덟은_p_protocol_1_과_p_snake_키를_싣는다() async throws {
+func 오목_RPC_열은_p_protocol_2_와_p_snake_키를_싣는다() async throws {
     let host = "v0327-g-shape-\(UUID().uuidString.prefix(8))".lowercased()
     GomokuStubProtocol.register(host: host) { _, _, _ in GomokuStubProtocol.Reply(body: #"{"status":"ok"}"#) }
     let service = SupabaseWorkService(
@@ -365,7 +365,9 @@ func 오목_RPC_여덟은_p_protocol_1_과_p_snake_키를_싣는다() async thro
     _ = try await service.gomokuRespond(accessToken: "t", matchID: matchID, accept: true)
     _ = try await service.gomokuMove(accessToken: "t", matchID: matchID, expectedSeq: 4, x: 7, y: 8)
     _ = try await service.gomokuResign(accessToken: "t", matchID: matchID)
-    _ = try await service.gomokuState(accessToken: "t", matchID: matchID, sinceSeq: 3)
+    _ = try await service.gomokuState(accessToken: "t", matchID: matchID, sinceSeq: 3, sinceChatSeq: 1)
+    _ = try await service.gomokuChatSend(accessToken: "t", matchID: matchID, kind: .text, body: "안녕")
+    _ = try await service.gomokuChatMute(accessToken: "t", matchID: matchID, muted: true)
 
     let expected: [String: Set<String>] = [
         "gomoku_lobby": ["p_protocol"],
@@ -375,14 +377,20 @@ func 오목_RPC_여덟은_p_protocol_1_과_p_snake_키를_싣는다() async thro
         "gomoku_respond": ["p_protocol", "p_match_id", "p_accept"],
         "gomoku_move": ["p_protocol", "p_match_id", "p_expected_seq", "p_x", "p_y"],
         "gomoku_resign": ["p_protocol", "p_match_id"],
-        "gomoku_state": ["p_protocol", "p_match_id", "p_since_seq"]
+        "gomoku_state": ["p_protocol", "p_match_id", "p_since_seq", "p_since_chat_seq"],
+        "gomoku_chat_send": ["p_protocol", "p_match_id", "p_kind", "p_body"],
+        "gomoku_chat_mute": ["p_protocol", "p_match_id", "p_muted"]
     ]
     let calls = GomokuStubProtocol.calls(host: host)
     #expect(Set(calls.map(\.rpc)) == Set(expected.keys))
     for call in calls {
         #expect(Set(call.json.keys) == expected[call.rpc], "\(call.rpc) 본문: \(call.body)")
-        #expect(call.json["p_protocol"] as? Int == 1, "\(call.rpc) 의 p_protocol")
+        // 0.3.28 부터 2 다. 서버 `gomoku_protocol()` 은 1 그대로라 **기존 여덟도 그대로 통과한다**
+        // (2 < 1 이 거짓) — 채팅 두 개만 자기 게이트 `gomoku_chat_protocol() = 2` 를 지난다.
+        #expect(call.json["p_protocol"] as? Int == 2, "\(call.rpc) 의 p_protocol")
     }
+    let state = try #require(calls.first { $0.rpc == "gomoku_state" }).json
+    #expect(state["p_since_seq"] as? Int == 3 && state["p_since_chat_seq"] as? Int == 1)
     let move = try #require(calls.first { $0.rpc == "gomoku_move" }).json
     #expect(move["p_expected_seq"] as? Int == 4 && move["p_x"] as? Int == 7 && move["p_y"] as? Int == 8)
     let challenge = try #require(calls.first { $0.rpc == "gomoku_challenge" }).json

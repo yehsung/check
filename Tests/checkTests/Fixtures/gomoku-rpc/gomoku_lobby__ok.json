@@ -1,11 +1,11 @@
 {
   "me": {
-    "wins": 2,
+    "wins": 0,
     "draws": 1,
     "losses": 2,
     "ruby_balance": 100,
     "active_match_id": null,
-    "outgoing_match_id": "4d847e6d-3af0-46cd-ae20-4077070d2d28"
+    "outgoing_match_id": "4ffb43b0-0437-42f0-a7f9-32b540cbb62b"
   },
   "users": [
     {
@@ -60,9 +60,29 @@
     10
   ],
   "status": "ok",
+  "matches": [
+    {
+      "a": {
+        "user_id": "544e3837-f01c-4560-b82f-4d44c269f044",
+        "character": "fox",
+        "avatar_url": null,
+        "display_name": "코덱스토큰도둑지유"
+      },
+      "b": {
+        "user_id": "f46dc1d0-4dff-416e-81f0-91d4fb413def",
+        "character": null,
+        "avatar_url": null,
+        "display_name": "거부목록사용자"
+      },
+      "stake": 3,
+      "match_id": "8afbef7d-7d2e-40d0-b29c-288378a12189",
+      "started_ms": 1789547568472
+    }
+  ],
   "ruby_balance": 100,
   "turn_seconds": 30,
-  "server_now_ms": 1789500072812,
+  "server_now_ms": 1789547570535,
   "invite_ttl_seconds": 60,
-  "turn_grace_seconds": 2
+  "turn_grace_seconds": 2,
+  "auto_abandon_streak": 3
 }

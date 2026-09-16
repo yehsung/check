@@ -1,28 +1,30 @@
 {
+  "chat": [],
   "match": {
-    "id": "7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc",
+    "id": "e9dad1f2-c34a-4837-8f70-83f2fc90e0ef",
     "turn": null,
-    "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "black": "3e240c02-8972-478e-a674-014f498a641b",
     "board": "bbbbb..........wwww..............................................................................................................................................................................................................",
     "stake": 5,
-    "white": "3e240c02-8972-478e-a674-014f498a641b",
+    "white": "267a3495-643c-40cc-b1a7-14967166eae1",
     "result": "black_win",
     "status": "finished",
-    "winner": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "winner": "3e240c02-8972-478e-a674-014f498a641b",
     "opponent": "3e240c02-8972-478e-a674-014f498a641b",
     "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
     "end_reason": "five",
     "move_count": 9,
     "deadline_ms": null,
-    "finished_ms": 1789500072014,
-    "turn_started_ms": 1789500071982,
-    "invite_expires_ms": 1789500131403
+    "finished_ms": 1789547569482,
+    "turn_started_ms": 1789547569440,
+    "invite_expires_ms": 1789547628683
   },
   "moves": [
     {
       "x": 0,
       "y": 0,
       "seq": 1,
+      "auto": false,
       "kind": "stone",
       "color": "black"
     },
@@ -30,6 +32,7 @@
       "x": 0,
       "y": 1,
       "seq": 2,
+      "auto": false,
       "kind": "stone",
       "color": "white"
     },
@@ -37,6 +40,7 @@
       "x": 1,
       "y": 0,
       "seq": 3,
+      "auto": false,
       "kind": "stone",
       "color": "black"
     },
@@ -44,6 +48,7 @@
       "x": 1,
       "y": 1,
       "seq": 4,
+      "auto": false,
       "kind": "stone",
       "color": "white"
     },
@@ -51,6 +56,7 @@
       "x": 2,
       "y": 0,
       "seq": 5,
+      "auto": false,
       "kind": "stone",
       "color": "black"
     },
@@ -58,6 +64,7 @@
       "x": 2,
       "y": 1,
       "seq": 6,
+      "auto": false,
       "kind": "stone",
       "color": "white"
     },
@@ -65,6 +72,7 @@
       "x": 3,
       "y": 0,
       "seq": 7,
+      "auto": false,
       "kind": "stone",
       "color": "black"
     },
@@ -72,6 +80,7 @@
       "x": 3,
       "y": 1,
       "seq": 8,
+      "auto": false,
       "kind": "stone",
       "color": "white"
     },
@@ -79,35 +88,38 @@
       "x": 4,
       "y": 0,
       "seq": 9,
+      "auto": false,
       "kind": "stone",
       "color": "black"
     }
   ],
   "state": {
+    "chat": [],
     "match": {
-      "id": "7e7d3029-208b-4a12-95aa-5eb0c6e7b0cc",
+      "id": "e9dad1f2-c34a-4837-8f70-83f2fc90e0ef",
       "turn": null,
-      "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "black": "3e240c02-8972-478e-a674-014f498a641b",
       "board": "bbbbb..........wwww..............................................................................................................................................................................................................",
       "stake": 5,
-      "white": "3e240c02-8972-478e-a674-014f498a641b",
+      "white": "267a3495-643c-40cc-b1a7-14967166eae1",
       "result": "black_win",
       "status": "finished",
-      "winner": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "winner": "3e240c02-8972-478e-a674-014f498a641b",
       "opponent": "3e240c02-8972-478e-a674-014f498a641b",
       "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
       "end_reason": "five",
       "move_count": 9,
       "deadline_ms": null,
-      "finished_ms": 1789500072014,
-      "turn_started_ms": 1789500071982,
-      "invite_expires_ms": 1789500131403
+      "finished_ms": 1789547569482,
+      "turn_started_ms": 1789547569440,
+      "invite_expires_ms": 1789547628683
     },
     "moves": [
       {
         "x": 0,
         "y": 0,
         "seq": 1,
+        "auto": false,
         "kind": "stone",
         "color": "black"
       },
@@ -115,6 +127,7 @@
         "x": 0,
         "y": 1,
         "seq": 2,
+        "auto": false,
         "kind": "stone",
         "color": "white"
       },
@@ -122,6 +135,7 @@
         "x": 1,
         "y": 0,
         "seq": 3,
+        "auto": false,
         "kind": "stone",
         "color": "black"
       },
@@ -129,6 +143,7 @@
         "x": 1,
         "y": 1,
         "seq": 4,
+        "auto": false,
         "kind": "stone",
         "color": "white"
       },
@@ -136,6 +151,7 @@
         "x": 2,
         "y": 0,
         "seq": 5,
+        "auto": false,
         "kind": "stone",
         "color": "black"
       },
@@ -143,6 +159,7 @@
         "x": 2,
         "y": 1,
         "seq": 6,
+        "auto": false,
         "kind": "stone",
         "color": "white"
       },
@@ -150,6 +167,7 @@
         "x": 3,
         "y": 0,
         "seq": 7,
+        "auto": false,
         "kind": "stone",
         "color": "black"
       },
@@ -157,6 +175,7 @@
         "x": 3,
         "y": 1,
         "seq": 8,
+        "auto": false,
         "kind": "stone",
         "color": "white"
       },
@@ -164,28 +183,63 @@
         "x": 4,
         "y": 0,
         "seq": 9,
+        "auto": false,
         "kind": "stone",
         "color": "black"
       }
     ],
+    "chat_seq": 0,
     "my_color": "white",
+    "my_muted": false,
     "opponent": {
-      "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
-      "character": "aing",
-      "avatar_url": null,
-      "display_name": "abto.app"
+      "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+      "character": "jellyfish",
+      "avatar_url": "https://example.invalid/avatar-b.png",
+      "display_name": "코덱스토큰도둑예은"
     },
+    "chat_capable": false,
+    "chat_max_len": 100,
     "ruby_balance": 95,
-    "server_now_ms": 1789500072075
+    "server_now_ms": 1789547569563,
+    "my_auto_streak": 0,
+    "opponent_muted": false,
+    "chat_quick_codes": [
+      "hi",
+      "gg",
+      "nice",
+      "hurry",
+      "sorry",
+      "think",
+      "oops",
+      "rematch"
+    ],
+    "opponent_auto_streak": 0
   },
   "status": "ok",
+  "chat_seq": 0,
   "my_color": "white",
+  "my_muted": false,
   "opponent": {
-    "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
-    "character": "aing",
-    "avatar_url": null,
-    "display_name": "abto.app"
+    "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+    "character": "jellyfish",
+    "avatar_url": "https://example.invalid/avatar-b.png",
+    "display_name": "코덱스토큰도둑예은"
   },
+  "chat_capable": false,
+  "chat_max_len": 100,
   "ruby_balance": 95,
-  "server_now_ms": 1789500072075
+  "server_now_ms": 1789547569563,
+  "my_auto_streak": 0,
+  "opponent_muted": false,
+  "chat_quick_codes": [
+    "hi",
+    "gg",
+    "nice",
+    "hurry",
+    "sorry",
+    "think",
+    "oops",
+    "rematch"
+  ],
+  "opponent_auto_streak": 0
 }

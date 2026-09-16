@@ -1,0 +1,129 @@
+{
+  "chat": [
+    {
+      "seq": 3,
+      "body": "천천히 두세요 🙂",
+      "kind": "text",
+      "mine": true,
+      "created_ms": 1789547570857
+    },
+    {
+      "seq": 4,
+      "body": "gg",
+      "kind": "quick",
+      "mine": false,
+      "created_ms": 1789547570877
+    }
+  ],
+  "match": {
+    "id": "8d07766a-8034-4d93-8d84-b5b34f130882",
+    "turn": "black",
+    "black": "3e240c02-8972-478e-a674-014f498a641b",
+    "board": ".................................................................................................................................................................................................................................",
+    "stake": 5,
+    "white": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "result": null,
+    "status": "active",
+    "winner": null,
+    "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+    "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "end_reason": null,
+    "move_count": 0,
+    "deadline_ms": 1789547600752,
+    "finished_ms": null,
+    "turn_started_ms": 1789547570752,
+    "invite_expires_ms": 1789547630731
+  },
+  "moves": [],
+  "state": {
+    "chat": [
+      {
+        "seq": 3,
+        "body": "천천히 두세요 🙂",
+        "kind": "text",
+        "mine": true,
+        "created_ms": 1789547570857
+      },
+      {
+        "seq": 4,
+        "body": "gg",
+        "kind": "quick",
+        "mine": false,
+        "created_ms": 1789547570877
+      }
+    ],
+    "match": {
+      "id": "8d07766a-8034-4d93-8d84-b5b34f130882",
+      "turn": "black",
+      "black": "3e240c02-8972-478e-a674-014f498a641b",
+      "board": ".................................................................................................................................................................................................................................",
+      "stake": 5,
+      "white": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "result": null,
+      "status": "active",
+      "winner": null,
+      "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+      "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "end_reason": null,
+      "move_count": 0,
+      "deadline_ms": 1789547600752,
+      "finished_ms": null,
+      "turn_started_ms": 1789547570752,
+      "invite_expires_ms": 1789547630731
+    },
+    "moves": [],
+    "chat_seq": 4,
+    "my_color": "white",
+    "my_muted": false,
+    "opponent": {
+      "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+      "character": "jellyfish",
+      "avatar_url": "https://example.invalid/avatar-b.png",
+      "display_name": "코덱스토큰도둑예은"
+    },
+    "chat_capable": true,
+    "chat_max_len": 100,
+    "ruby_balance": 95,
+    "server_now_ms": 1789547570920,
+    "my_auto_streak": 0,
+    "opponent_muted": false,
+    "chat_quick_codes": [
+      "hi",
+      "gg",
+      "nice",
+      "hurry",
+      "sorry",
+      "think",
+      "oops",
+      "rematch"
+    ],
+    "opponent_auto_streak": 0
+  },
+  "status": "ok",
+  "chat_seq": 4,
+  "my_color": "white",
+  "my_muted": false,
+  "opponent": {
+    "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+    "character": "jellyfish",
+    "avatar_url": "https://example.invalid/avatar-b.png",
+    "display_name": "코덱스토큰도둑예은"
+  },
+  "chat_capable": true,
+  "chat_max_len": 100,
+  "ruby_balance": 95,
+  "server_now_ms": 1789547570920,
+  "my_auto_streak": 0,
+  "opponent_muted": false,
+  "chat_quick_codes": [
+    "hi",
+    "gg",
+    "nice",
+    "hurry",
+    "sorry",
+    "think",
+    "oops",
+    "rematch"
+  ],
+  "opponent_auto_streak": 0
+}

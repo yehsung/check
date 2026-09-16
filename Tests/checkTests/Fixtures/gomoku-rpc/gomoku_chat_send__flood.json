@@ -1,0 +1,5 @@
+{
+  "code": "GOMOKU_CHAT_FLOOD",
+  "status": "flood",
+  "retry_after_seconds": 60
+}

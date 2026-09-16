@@ -20,8 +20,12 @@ cask "aing-check" do
 
   # quit 훅과 짝: 설치/업그레이드가 끝나면 앱을 백그라운드로 재실행한다.
   # 이게 없으면 업그레이드가 앱을 종료만 하고 방치해, 사용자가 눈치채기 전까지 근무가 기록되지 않는다.
-  postflight do
-    system_command "/usr/bin/open", args: ["-g", "#{appdir}/aing-check.app"]
+  # brew 7: 블록형 postflight 은 낡음 경고 → postflight_steps. 경로는 Ruby 보간이 아니라 {{appdir}} 토큰이어야 한다
+  # (보간을 두면 cask 가 통째로 안 읽힌다). must_succeed: false — 재실행은 덤이다. 새 맥에선 옮긴 직후
+  # LaunchServices 등록이 늦어 open 이 kLSNoExecutableErr(-10827)로 실패할 수 있고, run 의 기본값(true)은
+  # 그 실패로 설치 전체를 되돌린다(2026-09-17 신규 설치 실패 신고).
+  postflight_steps do
+    run "/usr/bin/open", args: ["-g", "{{appdir}}/aing-check.app"], must_succeed: false
   end
 
   # 삭제/업그레이드 시 실행 중인 앱을 먼저 종료한다(앱의 종료 훅이 근무중이면 퇴근 동기화 후 종료).

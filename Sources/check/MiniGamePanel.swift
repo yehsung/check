@@ -152,9 +152,11 @@ enum MiniGameSpaceKey {
     /// (2026-09-09 실사용 제보). 항상 최신 화면의 클로저를 쥐게 갈아 끼운다.
     ///
     /// - Parameter onEscape: ESC 처리기. **참을 돌려준 경우에만** 이벤트를 삼킨다(기본값은 "안 씀").
+    /// - Parameter gameWindow: 게임 창. 다른 창으로 향한 키를 양보할지 가를 때 "게임 창이 아닌가"를 이것으로 잰다.
     static func install(shouldConsume: @escaping @MainActor () -> Bool,
                         action: @escaping @MainActor () -> Void,
-                        onEscape: @escaping @MainActor () -> Bool = { false }) {
+                        onEscape: @escaping @MainActor () -> Bool = { false },
+                        gameWindow: @escaping @MainActor () -> NSWindow? = { nil }) {
         remove()
         armed = action
         armedEscape = onEscape
@@ -170,7 +172,12 @@ enum MiniGameSpaceKey {
             //   창이 실제로 떠 있는지는 아래 shouldConsume(컨트롤러의 창 가시성 + 이 화면의 생존)이 판정한다.
             // 키 반복(누르고 있기)은 삼키기만 한다 — 점프 연타가 되면 게임이 아니다.
             let isRepeat = event.isARepeat
+            // 창은 번호로 넘긴다 — NSEvent 를 메인 액터 클로저로 보내면 Swift 6 가 데이터 경쟁으로 막는다.
+            let windowNumber = event.windowNumber
             let consumed = MainActor.assumeIsolated { () -> Bool in
+                // 다른 창에서 글을 쓰는 중이거나 다른 독립 창으로 간 키는 그 창 몫이다(v0.3.30 — `yieldsToOtherWindow`).
+                let target = NSApp.window(withWindowNumber: windowNumber)
+                guard !yieldsToOtherWindow(target, gameWindow: gameWindow()) else { return false }
                 guard shouldConsume() else { return false }
                 guard !isRepeat else { return true }
                 // ESC 는 화면이 실제로 정지/재개를 했을 때만 삼킨다 — 아니면 그대로 흘려 보낸다.
@@ -187,6 +194,29 @@ enum MiniGameSpaceKey {
         token = nil
         armed = nil
         armedEscape = nil
+    }
+
+    /// 이 키를 **다른 창에 양보하는가**(v0.3.30). 순수 판정이라 실제 창으로 잰다.
+    ///
+    /// 게이트가 "게임 창이 화면에 떠 있는가" 하나뿐이어서, 게임 창을 띄워 둔 채 **다른 창에서** 누른 스페이스까지
+    /// 점프로 삼켰다 — 미니게임 창에서 [1:1 오목]으로 넘어가 대국 채팅을 치면 띄어쓰기가 통째로 안 됐다
+    /// (2026-09-17 실사용 제보). 그렇다고 키 창을 요구하면 창을 막 연 순간이 죽는다(install 의 ★). 그래서
+    /// **양보할 근거가 분명할 때만** 양보한다 — 키가 향한 창이 게임 창이 아니고 화면에 떠 있으면서:
+    ///  · 그 창에서 글을 쓰는 중이다(첫 응답자가 텍스트 — 팝오버의 메시지 입력칸도 여기에 든다), 또는
+    ///  · 스페이스를 게임에 넘길 이유가 없는 우리 독립 창(오목·설정)이다.
+    /// 키가 향한 창이 없거나(키가 아직 안 넘어온 그 순간) 게임 창이면 예전 그대로 `shouldConsume` 이 판정한다.
+    @MainActor
+    static func yieldsToOtherWindow(_ eventWindow: NSWindow?, gameWindow: NSWindow?) -> Bool {
+        guard let eventWindow, eventWindow !== gameWindow, eventWindow.isVisible else { return false }
+        if eventWindow.firstResponder is NSText { return true }
+        guard let id = eventWindow.identifier?.rawValue else { return false }
+        return standaloneWindowIDs.contains(id)
+    }
+
+    /// 스페이스를 게임에 넘기지 않는 우리 독립 창들(창 식별자 = 각 컨트롤러의 자리 저장 키).
+    @MainActor
+    static var standaloneWindowIDs: Set<String> {
+        [CheckGomokuWindowController.frameAutosaveName, CheckSettingsWindowController.frameAutosaveName]
     }
 
     /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(창 가시성)를 통과했을 때 실행되는 바로 그 클로저다 —
@@ -539,7 +569,8 @@ struct CheckMiniGameWindowView: View {
                 guard !pauseState.isFrozen else { return }
                 input.actionCount += 1
             },
-            onEscape: { togglePause() }
+            onEscape: { togglePause() },
+            gameWindow: { CheckMiniGameWindowController.shared.currentWindow }
         )
     }
 

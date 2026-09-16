@@ -7,7 +7,7 @@ import Testing
 //
 // 창은 미니게임 창의 수명 규약을 그대로 쓰고, 다른 점을 여기서 못 박는다:
 //   · 키를 잃거나 닫혀도 **대국이 끝나지 않는다**(판 중단 신호가 아예 없다) — 알리는 것은 표시 상태뿐이다.
-//   · 자동저장 이름이 저장소 안 모든 창과 겹치지 않는다 · 크기 1240×700 고정(v0.3.28 세 열).
+//   · 자동저장 이름이 저장소 안 모든 창과 겹치지 않는다 · 크기 1240×700 고정(v0.3.30 대국·결과·로비 모두 두 열).
 //   · CheckApp 배선 네 문(창 · 신청 도착 · 말풍선 클릭 · 로그아웃 닫기)이 실제로 물려 있다(소스 계약).
 //
 // 창을 실제로 띄우는 검증은 `CheckPanelVisibility` 알파 0 을 지나고, 직렬이다(AppKit 창을 동시에 만들면 SIGSEGV 실측).
@@ -490,24 +490,30 @@ func inviteBubbleTextAlwaysFitsTheCapsule() {
 @MainActor
 @Test
 func gomokuWindowLayoutIsAFixedConstantTable() {
-    // v0.3.29: **화면마다 열 수가 다르다.** 대국·결과는 세 열(판 608 | 가운데 332 | 채팅 220) 그대로이고,
-    // 로비만 두 열이 됐다 — 판돈 카드를 들어내면서 상대 목록이 540 → 780 으로 그 자리를 가져갔다.
-    // **창 크기·판·높이·가운데 열·채팅 폭은 한 항도 안 건드렸다.**
+    // v0.3.30: **모든 화면이 두 열이다.** 대국·결과의 세 번째 채팅 열(220)을 오른쪽 열 안(카드와 [기권] 사이)으로
+    // 넣으면서 오른쪽 열이 332 → 572 로 그 자리를 가져갔다(332 + 20 + 220). 로비는 v0.3.29 두 열 그대로다.
+    // **창 크기·판·높이는 한 항도 안 건드렸다** — 화면이 바뀔 때 창이 출렁이지 않는다.
     #expect(GomokuWindowLayout.contentSize == CGSize(width: 1240, height: 700))
     #expect(GomokuWindowLayout.innerSize == CGSize(width: 1200, height: 660))
     #expect(GomokuWindowLayout.bodyHeight == 608)
     #expect(GomokuWindowLayout.boardSide == 608)
-    #expect(GomokuWindowLayout.sideColumnWidth == 332)
+    #expect(GomokuWindowLayout.sideColumnWidth == 572)
     #expect(GomokuWindowLayout.lobbySideWidth == 400)
     #expect(GomokuWindowLayout.lobbyListWidth == 780)
-    #expect(GomokuWindowLayout.chatWidth == 220)
     // 항등식 둘 — 간격까지 더해 안쪽 폭을 **정확히** 채운다(한 항이라도 어긋나면 열이 잘리거나 뜬다).
-    // 로비는 두 열이라 간격이 **하나**다: 780 + 20 + 400 = 1200.
+    // 두 열이라 간격이 **하나**다: 780 + 20 + 400 = 1200 · 608 + 20 + 572 = 1200.
     #expect(GomokuWindowLayout.lobbyListWidth + GomokuWindowLayout.columnSpacing + GomokuWindowLayout.lobbySideWidth
             == GomokuWindowLayout.innerSize.width)
     #expect(GomokuWindowLayout.boardSide + GomokuWindowLayout.columnSpacing + GomokuWindowLayout.sideColumnWidth
-            + GomokuWindowLayout.columnSpacing + GomokuWindowLayout.chatWidth
             == GomokuWindowLayout.innerSize.width)
+    // 대국 오른쪽 열의 고정 칸(두 카드 + 기권 + 간격 넷)이 본문을 넘지 않고, 판돈 줄·채팅에 넉넉히 남긴다.
+    // 채팅이 실제로 로그 최소 높이를 지키는지는 렌더 실측 시험(`fullestMatchColumnKeepsTheChatLogReadable`)이 잰다.
+    // 항을 나눠 적는다 — 리터럴과 CGFloat 을 한 식에 섞으면 컴파일러 타입 추론이 시간을 넘긴다(부하 중 빌드 실패).
+    let cards: CGFloat = GomokuWindowLayout.playerCardHeight * 2
+    let resignRow: CGFloat = 34
+    let gaps: CGFloat = GomokuWindowLayout.matchSideSpacing * 4
+    let fixedRows: CGFloat = cards + resignRow + gaps + GomokuWindowLayout.chatLogMinHeight
+    #expect(fixedRows <= GomokuWindowLayout.bodyHeight - 200)
     // 로비 오른쪽 열의 **세로** 예산(v0.3.29): 아래 칸(받은·보낸 신청)이 상한까지 가득 차도
     // 위 칸(지금 대결 중)의 최소 높이가 지켜진다 — 320 + 12 + 220 = 552 ≤ 608.
     #expect(GomokuWindowLayout.lobbyInvitesMaxHeight + GomokuWindowLayout.lobbySideSpacing

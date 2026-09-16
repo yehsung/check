@@ -1062,6 +1062,8 @@ final class GomokuStore {
         lastOpponent = opponent
         lastStake = stake
         if !isFinished {
+            // 새 판이 열렸다 — 로비에서 남긴 안내("신청을 보냈어요" 따위)는 대국 상태줄에서 "내 차례예요"를 가린다(v0.3.30).
+            if previous?.id != id || previous?.isFinished == true { setNotice(nil) }
             noteMatchProgress(previous: previous, next: next, windowWasVisible: windowWasVisible)
         }
         if justFinished {

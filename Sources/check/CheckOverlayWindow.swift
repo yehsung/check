@@ -70,6 +70,39 @@ enum CheckPanelVisibility {
     }
 }
 
+/// 우리 떠 있는 패널(캐릭터·할 일 보드)의 공통 바탕 — **테스트 실행에서만** 마우스 받기를 창 서버에 내리지 않는다.
+///
+/// 2026-09-17 실측: 테스트는 이 패널들을 알파 0 으로 **실제 화면에** 띄운다(`CheckPanelVisibility`). 그런데 알파 0 이어도
+/// `ignoresMouseEvents = false` 를 **명시한** 떠 있는 패널은 그 자리 클릭을 가로챘다(실험 앱 실클릭: 명시 false 는 가로챔,
+/// 미지정 패널·일반 창은 통과). 할 일 보드(언제나 false)와 캐릭터(몸체 위에서 false)가 바로 그 모양이라, AI 세션이 테스트를
+/// 돌리는 동안 사용자 화면 곳곳의 보이지 않는 사각형이 클릭을 먹었다 — "오목판 한 영역만 안 놓인다", "평소에도 특정 영역만
+/// 안 눌린다"(같은 시각 화면에 테스트 프로세스의 알파 0 레벨 3 창이 25개 떠 있었다).
+///
+/// 그래서 테스트 실행에서는 창 서버 값을 언제나 통과(true)로 두고, 읽기는 **앱이 의도한 값**을 돌려준다 — 기존 테스트가
+/// 단언하는 히트-스루·못 박기 규칙은 손대지 않고 그대로 잰다. 프로덕션은 부모 구현을 그대로 탄다.
+class CheckMousePanel: NSPanel {
+    /// 테스트 실행에서 앱이 마지막으로 정한 값. nil 이면 아직 안 정했다(부모 기본값을 돌려준다).
+    private var intendedIgnoresMouseEvents: Bool?
+
+    override var ignoresMouseEvents: Bool {
+        get {
+            guard CheckPanelVisibility.isRunningTests else { return super.ignoresMouseEvents }
+            return intendedIgnoresMouseEvents ?? super.ignoresMouseEvents
+        }
+        set {
+            guard CheckPanelVisibility.isRunningTests else {
+                super.ignoresMouseEvents = newValue
+                return
+            }
+            intendedIgnoresMouseEvents = newValue
+            super.ignoresMouseEvents = true
+        }
+    }
+
+    /// 창 서버에 실제로 내린 값(검증 지점) — 테스트 실행에서는 언제나 true 여야 한다.
+    var windowServerIgnoresMouseEvents: Bool { super.ignoresMouseEvents }
+}
+
 /// 블록 기반 노티 옵저버 토큰과 그 센터를 함께 담는 상자(Sendable).
 ///
 /// 왜 `NSObjectProtocol?` 을 그냥 들고 있지 않은가 — 해제 경로가 `deinit` 이기 때문이다. Swift 6 에서 deinit 은
@@ -1914,7 +1947,8 @@ final class CheckOverlayController {
 
     /// 클릭 통과·항상 위·전(全) Space/전체화면 유지·투명 배경으로 설정된 오버레이 패널을 만든다.
     static func makePanel(size: NSSize) -> NSPanel {
-        let panel = NSPanel(
+        // 바탕은 `CheckMousePanel` — 테스트가 띄운 투명 패널이 사용자 클릭을 먹지 않게 한다(그 타입 주석).
+        let panel = CheckMousePanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,

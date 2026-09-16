@@ -13,6 +13,7 @@ import OSLog
 //     'gomoku' 신호·조인 직후 따라잡기·근무 시작·깨어남에서만 본다.
 //  ④ **늦게 온 응답은 버린다.** 로그아웃·계정 전환(host.sessionGeneration)과 이 스토어의 reset(resetGeneration)
 //     두 세대를 모두 대조한다 — 하나만 보면 로그아웃 직후 도착한 앞 계정의 판이 새 계정 화면에 뜬다.
+//     채팅에는 세대가 하나 더 있다(chatGeneration) — 음소거 토글 전에 나간 조회의 응답은 값도 줄도 앞 판정이다.
 //  ⑤ **사용자 문구는 GomokuNoticeText 한 곳에만 있다.** status 이름·서버·동기화 같은 진단 어휘는 화면에 싣지 않는다.
 //  ⑥ **초 단위 값은 창의 잎 뷰만 읽는다.** remainingSeconds(now:) 는 잎 뷰 TimelineView 가 now 를 넘겨 부르는
 //     순수 계산이고, 이 스토어는 매초 아무것도 대입하지 않는다(팝오버 V0238 무효화 계약).
@@ -528,8 +529,17 @@ final class GomokuStore {
     @ObservationIgnored private var inviteTTLSeconds: TimeInterval = 60
     /// 지금 들고 있는 대화가 **어느 판의 것인가**. 다른 판의 상태가 오면 이 값이 달라 대화를 비운다.
     @ObservationIgnored private(set) var chatMatchID: String?
-    /// 채팅 기록에 구멍이 났다 — 다음 한 번은 `since_chat_seq = 0` 으로 전체를 받는다(착수 needsFull 과 같은 규칙).
+    /// 채팅을 **처음부터 다시 받아야 한다**: 기록에 구멍이 났다 · 음소거가 뒤집혔다(가려지는 줄의 집합이 달라진다).
+    /// 다음 조회 한 번을 `since_chat_seq = 0` 으로 띄운다(착수 needsFull 과 같은 규칙). 내리는 것은 **그 전체를
+    /// 실어 온 응답**이다 — 요청을 띄울 때 내리면 실패하거나 버린 응답에 표시가 사라져 구멍이 그대로 남는다.
     @ObservationIgnored private var chatWantsFull = false
+    /// 음소거 토글마다 오른다. 토글 **전에** 나간 조회의 응답을 통째로 버리기 위한 세대다
+    /// (`resetGeneration`·`outgoingRevision` 과 같은 결의 방어).
+    ///
+    /// 기준선(`chatSeq`)을 0 으로 내려 막으려 들면 안 된다: 0 밑으로는 어떤 옛 스냅숏도 역행이 아니라
+    /// (`serverSeq >= 0`) 늦은 응답이 방금 누른 값을 되감고, 줄은 한 줄도 안 담긴 채 번호만 서버 값으로 되올라
+    /// 다음 회차가 그 뒤만 물어 가려졌던 줄이 그 판 내내 안 돌아온다.
+    @ObservationIgnored private(set) var chatGeneration = 0
     @ObservationIgnored private var lastOpponent: GomokuUser?
     @ObservationIgnored private var lastStake: Int?
 
@@ -777,7 +787,11 @@ final class GomokuStore {
             repeat {
                 stateAgain = false
                 let since = (!forceFull && match?.id == id) ? (match?.moveCount ?? 0) : 0
-                let sinceChat = (!forceChatFull && chatMatchID == id) ? chatSeq : 0
+                // 전체 재요청 표시는 **요청을 띄울 때 본다**(내리는 것은 그것을 실어 온 응답이다). 음소거 토글·
+                // 다른 기기의 변경이 세운 표시가 이 요청에 실려야 가려졌던 줄이 이번 회차에 돌아온다.
+                let wantsChatFull = forceChatFull || chatWantsFull
+                let sinceChat = (!wantsChatFull && chatMatchID == id) ? chatSeq : 0
+                let requestChatGeneration = chatGeneration
                 lastStateRequestAt = clock()
                 let result = await perform({
                     try await $0.gomokuState(accessToken: $1, matchID: id, sinceSeq: since, sinceChatSeq: sinceChat)
@@ -788,14 +802,18 @@ final class GomokuStore {
                 guard case .success(let response)? = result else { continue }
                 switch response.status {
                 case .ok:
-                    if applyState(response.state, requestedSince: since, requestedSinceChat: sinceChat) == .needsFull,
-                       since > 0 {
+                    let outcome = applyState(
+                        response.state, requestedSince: since, requestedSinceChat: sinceChat,
+                        chatGeneration: requestChatGeneration
+                    )
+                    if outcome == .needsFull, since > 0 {
                         forceFull = true
                         stateAgain = true
                     }
-                    // 채팅 구멍은 착수와 **따로** 센다. 하나로 묶으면 수가 한 건도 없는 판(since 0)에서 재요청이
-                    // 아예 안 걸리고, 반대로 대화만 이가 빠진 응답에 판 전체를 다시 받는다.
-                    if takeChatWantsFull(), sinceChat > 0 {
+                    // 채팅 구멍·음소거 뒤집힘은 착수와 **따로** 센다. 하나로 묶으면 수가 한 건도 없는 판(since 0)에서
+                    // 재요청이 아예 안 걸리고, 반대로 대화만 이가 빠진 응답에 판 전체를 다시 받는다.
+                    // 표시는 전체를 실어 온 응답이 내린다 — 그래서 되묻기가 고리를 만들지 않는다(재요청은 since 0 이다).
+                    if chatWantsFull, sinceChat > 0 {
                         forceChatFull = true
                         stateAgain = true
                     }
@@ -828,7 +846,7 @@ final class GomokuStore {
     @discardableResult
     func applyState(
         _ payload: GomokuStatePayload, requestedSince: Int = 0, requestedSinceChat: Int = 0,
-        blackPassedHint: Bool? = nil
+        chatGeneration: Int? = nil, blackPassedHint: Bool? = nil
     ) -> StateApplyOutcome {
         guard let row = payload.match, let id = row.id?.lowercased(), !id.isEmpty else { return .ignored }
         noteServerNow(payload.serverNowMs)
@@ -964,7 +982,7 @@ final class GomokuStore {
         if phase != nextPhase { phase = nextPhase }
         // 채팅은 판을 옮긴 **뒤에** 옮긴다 — 순서가 바뀌면 방금 비운 대화 위에 옛 판의 줄이 다시 붙는다.
         // 끝난 판에서도 계속 받는다(결과 화면의 인사 120초).
-        applyChat(payload, matchID: id, requestedSince: requestedSinceChat)
+        applyChat(payload, matchID: id, requestedSince: requestedSinceChat, generation: chatGeneration)
         // 연속 횟수는 **서버가 센다**(직접 두면 0으로 되돌리는 것도 서버다). 키가 없는 응답이면 들고 있던 값을 둔다.
         if let streak = payload.myAutoStreak, myAutoStreak != streak { myAutoStreak = streak }
         if let streak = payload.opponentAutoStreak, opponentAutoStreak != streak { opponentAutoStreak = streak }
@@ -1476,8 +1494,14 @@ final class GomokuStore {
                 if self.isMuted != applied { self.isMuted = applied }
                 // 가려짐은 서버가 정한다: 껐으면 상대 줄이 `chat[]` 에서 통째로 빠지고, 켜면 가려졌던 줄이 돌아온다.
                 // 로컬에서 걸러 내면 두 판정이 갈리므로 대화를 비우고 그 판 채팅을 처음부터 다시 받는다.
+                //
+                // **기준선(`chatSeq`)은 내리지 않는다.** 0 으로 내리면 토글 직전에 나간 조회의 늦은 응답이 역행
+                // 방어에 안 걸려(어떤 옛 스냅숏도 `serverSeq >= 0`) 방금 누른 값을 되감고 번호만 서버 값으로
+                // 되올린다 — 줄은 한 줄도 안 담긴 채로. 대신 **세대를 올려** 그 응답을 통째로 버리고,
+                // 전체 재요청은 표시로 건다(그 판 조회가 이미 돌고 있으면 그것이 뒤이어 한 번 더 돈다).
+                self.chatGeneration &+= 1
+                self.chatWantsFull = true
                 if !self.chat.isEmpty { self.chat = [] }
-                if self.chatSeq != 0 { self.chatSeq = 0 }
                 await self.refreshMatch(id: id)
             }
         }
@@ -1526,17 +1550,38 @@ final class GomokuStore {
 
     /// 상태 응답의 채팅 부분을 옮긴다. 늦게 온 응답 방어를 착수와 **같은 겹으로** 얹는다:
     ///  · 판이 바뀌면 비운다(다른 판의 말이 섞이면 그건 사고다),
+    ///  · 음소거 토글 **뒤에** 도착한 응답은 세대가 달라 통째로 버린다(값도 줄도 앞 판정이다),
     ///  · 서버 발급 번호가 **역행하면 통째로 버린다**(옛 스냅숏이 방금 켠 음소거를 되돌리지 못하게 값보다 먼저 본다),
+    ///  · 음소거가 뒤집혀 오면(다른 기기에서 눌렀다) 대화를 비우고 전체 재요청을 표시한다,
     ///  · 기록에 구멍이 나면 다음 한 번을 처음부터 받게 표시한다.
-    private func applyChat(_ payload: GomokuStatePayload, matchID id: String, requestedSince: Int) {
+    private func applyChat(
+        _ payload: GomokuStatePayload, matchID id: String, requestedSince: Int, generation: Int?
+    ) {
         if chatMatchID != id { clearMatchScopedState(for: id) }
+        // 이 조회가 나간 **뒤에** 음소거를 토글했다. 그 응답의 my_muted 는 방금 누른 값을 되감고 그 chat_seq 는
+        // 줄 없이 기준선만 올린다 — 값을 하나씩 고르지 말고 통째로 버린다.
+        // (세대를 안 넘긴 자리 = 쓰기 RPC 가 싣는 state 묶음·테스트의 직접 주입은 nil 이라 그냥 간다.)
+        if let generation, generation != chatGeneration { return }
         if let limit = payload.chatMaxLen, limit > 0, chatMaxLength != limit { chatMaxLength = limit }
         if let serverSeq = payload.chatSeq, serverSeq < chatSeq { return }
         if let capable = payload.chatCapable, opponentChatCapable != capable { opponentChatCapable = capable }
-        if let muted = payload.myMuted, isMuted != muted { isMuted = muted }
+        // 음소거가 **뒤집혀 오면**(두 번째 맥에서 눌렀다) 서버가 보여 주는 줄의 집합이 통째로 달라진다.
+        // 들고 있는 줄은 앞 판정으로 걸러진 것이라 비우고, 이 응답이 전체가 아니면 다음 한 번을 처음부터 받는다 —
+        // 안 그러면 켠 뒤에도 가려졌던 줄이 그 판 내내 안 돌아온다(경합 없이도 열리는 같은 구멍이다).
+        var mutedFlipped = false
+        if let muted = payload.myMuted, isMuted != muted {
+            isMuted = muted
+            mutedFlipped = true
+        }
         if let muted = payload.opponentMuted, isOpponentMuted != muted { isOpponentMuted = muted }
+        if mutedFlipped {
+            if !chat.isEmpty { chat = [] }
+            if requestedSince > 0 || payload.chat == nil { chatWantsFull = true }
+        }
         // 채팅 키가 아예 없는 응답(채팅을 모르는 서버·쓰기 RPC 가 싣는 state 묶음)은 **지우지 않고 그냥 둔다**.
         guard let rows = payload.chat else { return }
+        // 표시는 **전체를 실어 온 응답**이 내린다(요청을 띄울 때 내리면 실패하거나 버린 응답에 구멍이 그대로 남는다).
+        if requestedSince == 0 { chatWantsFull = false }
         var lastSeq = chat.last?.seq ?? 0
         var appended: [GomokuChatMessage] = []
         for message in rows.compactMap(chatMessage(from:)).sorted(by: { $0.seq < $1.seq }) where message.seq > lastSeq {
@@ -1568,12 +1613,6 @@ final class GomokuStore {
             quick: quick,
             body: body
         )
-    }
-
-    /// 구멍 표시를 읽고 내린다. **한 번만 다시 묻는다** — 서버가 계속 이 빠진 것을 주면 무한히 되묻지 않게.
-    private func takeChatWantsFull() -> Bool {
-        defer { chatWantsFull = false }
-        return chatWantsFull
     }
 
     /// **한 판에만 속하는 것**을 전부 비운다(판이 바뀌었다 · 로비로 나갔다 · 로그아웃했다):

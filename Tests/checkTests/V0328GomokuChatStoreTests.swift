@@ -8,12 +8,14 @@ import Testing
 // 안 덮는다) · 대기 상한은 벽시계가 아니라 **재개 횟수** · `WorkTimerStore` 를 `_` 로 버리지 않는다(오목 스토어가
 // 약참조라 해제되면 요청이 한 건도 안 나간다) · UserDefaults 스위트는 `.gomokuDefaultsCleanup` 이 지운다.
 //
-// 여기서 지키는 것은 다섯이다:
+// 여기서 지키는 것은 여섯이다:
 //  ① 채팅은 `isBusy` 를 쓰지 않는다 — 채팅 왕복이 착수·기권을 잠그면 한 수 30초짜리 판에서 그건 곧 패배다.
 //  ② 실패해도 자동 재전송하지 않고, 초안은 **성공했을 때만** 비운다.
 //  ③ 늦게 온 응답과 구멍은 착수와 같은 겹으로 막는다(번호 역행은 버리고, 구멍은 since 0 으로 한 번 전체 재요청).
 //  ④ 상대가 껐거나 옛 버전이면 **앱이 말한다** — 조용히 삼키지 않는다.
 //  ⑤ 판이 바뀌면 대화·초안·음소거를 비운다.
+//  ⑥ 음소거 토글은 **기준선을 내리지 않는다** — 세대를 올려 늦은 응답을 버리고, 전체 재요청은 표시로 건다.
+//     기준선(`chatSeq`)을 0 으로 내리면 어떤 옛 스냅숏도 역행에 안 걸려 토글이 되감기고 대화가 사라진다.
 //
 // 스텁이 못 잡는 것(서버 정규화·실제 배달·음소거된 상대 화면)은 통합자의 두 계정 e2e 몫이다.
 
@@ -562,6 +564,120 @@ func 상대가_껐거나_옛_버전이면_상태로_남아_화면이_말한다()
     // 그래도 보내는 길은 막지 않는다 — 왜 안 보이는지 말해 주는 것이 잠그는 것보다 낫다.
     gomoku.chatDraft = "안녕"
     #expect(gomoku.canSendChatNow)
+}
+
+// MARK: - 4-1. 음소거 토글 × 늦게 온 조회 (기준선을 내리지 않는다)
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 음소거를_켜는_사이_늦게_온_조회는_토글도_가려졌던_줄도_되돌리지_못한다() async throws {
+    // 재현: 음소거로 두던 판(서버 chat_seq = 8)에서 조회가 나간 **뒤** [켜기] 를 누른다.
+    // 늦게 온 응답은 my_muted = true · chat_seq = 8 을 싣고 있다 — 그것을 받으면 방금 누른 토글이 되감기고,
+    // 줄은 한 줄도 안 담긴 채 번호만 서버 값으로 되올라 다음 회차는 since = 8 로 물어 여덟 줄이 통째로 안 보인다.
+    let (_, gomoku, host) = makeChatStore("mute-race") { rpc, body, index in
+        switch rpc {
+        case "gomoku_chat_mute":
+            return reply(["status": "ok", "muted": false, "server_now_ms": nowMs()])
+        case "gomoku_state":
+            // 음소거 직전에 나간 조회. 가려진 줄은 안 실리고 발급 번호만 8이다 — 토글 **뒤에** 도착한다.
+            if index == 0 { return reply(statePayload(chat: [], chatSeq: 8, myMuted: true), delay: 0.6) }
+            // 서버는 **물은 번호 뒤만** 답한다. 0 으로 묻지 않으면 가려졌던 여덟 줄은 영영 안 온다.
+            guard sinceChat(body) == 0 else { return reply(statePayload(chat: [], chatSeq: 8, myMuted: false)) }
+            return reply(statePayload(chat: (1...8).map { chatRow($0, "줄 \($0)", mine: $0.isMultiple(of: 2)) },
+                                      chatSeq: 8, myMuted: false))
+        default:
+            return nil
+        }
+    }
+    gomoku.applyState(decodePayload(statePayload(
+        chat: [2, 4, 6, 8].map { chatRow($0, "줄 \($0)", mine: true) }, chatSeq: 8, myMuted: true)))
+    #expect(gomoku.isMuted && gomoku.chatSeq == 8)
+    #expect(gomoku.chat.map(\.seq) == [2, 4, 6, 8], "껐으니 상대 줄은 서버가 걸러 낸다")
+
+    let pending = Task { await gomoku.refreshMatch() }
+    await chatWait { GomokuStubProtocol.count(host: host, rpc: "gomoku_state") == 1 }
+    gomoku.setChatMuted(false)
+    await pending.value
+    await chatWait { !gomoku.isSendingChat && gomoku.chat.count == 8 }
+
+    #expect(gomoku.isMuted == false, "늦게 온 옛 스냅숏이 방금 누른 [켜기] 를 되감았다")
+    let sinces = GomokuStubProtocol.calls(host: host, rpc: "gomoku_state").map { sinceChat($0.body) }
+    #expect(sinces == [8, 0], "켠 뒤에는 그 판 대화를 처음부터 받아야 한다: \(sinces)")
+    #expect(gomoku.chat.map(\.seq) == [1, 2, 3, 4, 5, 6, 7, 8], "가려졌던 줄이 켠 뒤에도 안 돌아왔다")
+    #expect(gomoku.chatSeq == 8)
+    #expect(GomokuStubProtocol.calls(host: host, rpc: "gomoku_chat_mute").first?.json["p_muted"] as? Bool == false)
+
+    // 뿌리는 소스로도 못 박는다(주석을 걷어낸 뒤 — 안 그러면 설명을 지워야만 초록이 된다).
+    let code = gomokuCollapsed(V0317ShopTests.stripped(try V0317ShopTests.source("GomokuStore.swift")))
+    let mute = gomokuBody(of: "func setChatMuted(", in: code) ?? ""
+    #expect(mute.contains("chatSeq = 0") == false,
+            "기준선을 0 으로 내리면 어떤 옛 스냅숏도 역행(serverSeq < chatSeq)에 안 걸린다")
+    #expect(mute.contains("chatGeneration") && mute.contains("chatWantsFull"),
+            "토글은 세대를 올려 늦은 응답을 버리고, 전체 재요청은 표시로 건다")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 다른_기기에서_음소거가_풀리면_가려졌던_줄을_한_번_전체로_다시_받는다() async {
+    // 경합이 없어도 같은 구멍이 열린다: 두 번째 맥에서 껐던 것을 켜면 이 맥의 응답은 my_muted 만 뒤집혀 오고,
+    // 들고 있는 대화·기준선은 앞 판정(가려진 줄이 빠진 것) 그대로다.
+    let (_, gomoku, host) = makeChatStore("mute-remote") { rpc, body, _ in
+        guard rpc == "gomoku_state" else { return nil }
+        if sinceChat(body) == 0 {
+            return reply(statePayload(chat: (1...8).map { chatRow($0, "줄 \($0)", mine: $0.isMultiple(of: 2)) },
+                                      chatSeq: 8, myMuted: false))
+        }
+        return reply(statePayload(chat: [], chatSeq: 8, myMuted: false))
+    }
+    gomoku.applyState(decodePayload(statePayload(
+        chat: [2, 4, 6, 8].map { chatRow($0, "줄 \($0)", mine: true) }, chatSeq: 8, myMuted: true)))
+    #expect(gomoku.isMuted)
+
+    await gomoku.refreshMatch()
+
+    #expect(gomoku.isMuted == false)
+    let sinces = GomokuStubProtocol.calls(host: host, rpc: "gomoku_state").map { sinceChat($0.body) }
+    #expect(sinces == [8, 0], "음소거가 뒤집혀 왔는데 전체 재요청을 안 걸었다: \(sinces)")
+    #expect(gomoku.chat.map(\.seq) == [1, 2, 3, 4, 5, 6, 7, 8], "가려졌던 줄이 안 돌아왔다")
+    #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_state") == 2, "전체 재요청은 한 번이다(되묻기 고리)")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 음소거를_켜면_상대_말이_사라지고_끄면_돌아온다() async {
+    // 왕복. 끄는 쪽만 맞고 켜는 쪽이 안 돌아오면 사용자는 그 판 대화를 잃는다.
+    let (_, gomoku, host) = makeChatStore("mute-roundtrip") { rpc, _, index in
+        switch rpc {
+        case "gomoku_chat_mute":
+            // 첫 호출이 [끄기], 두 번째가 [켜기] 다(토글마다 조회가 한 번 뒤따른다).
+            return reply(["status": "ok", "muted": index == 0, "server_now_ms": nowMs()])
+        case "gomoku_state":
+            if index == 0 {
+                return reply(statePayload(chat: [2, 4].map { chatRow($0, "줄 \($0)", mine: true) },
+                                          chatSeq: 4, myMuted: true))
+            }
+            return reply(statePayload(chat: (1...4).map { chatRow($0, "줄 \($0)", mine: $0.isMultiple(of: 2)) },
+                                      chatSeq: 4, myMuted: false))
+        default:
+            return nil
+        }
+    }
+    gomoku.applyState(decodePayload(statePayload(
+        chat: (1...4).map { chatRow($0, "줄 \($0)", mine: $0.isMultiple(of: 2)) }, chatSeq: 4)))
+    #expect(gomoku.chat.count == 4)
+
+    gomoku.setChatMuted(true)
+    await chatWait { !gomoku.isSendingChat && gomoku.chat.count == 2 }
+    #expect(gomoku.isMuted)
+    #expect(gomoku.chat.map(\.seq) == [2, 4], "끈 뒤에는 상대 말이 화면에서 사라진다")
+
+    gomoku.setChatMuted(false)
+    await chatWait { !gomoku.isSendingChat && gomoku.chat.count == 4 }
+    #expect(gomoku.isMuted == false)
+    #expect(gomoku.chat.map(\.seq) == [1, 2, 3, 4], "켠 뒤에도 가려졌던 말이 안 돌아왔다")
+    let sinces = GomokuStubProtocol.calls(host: host, rpc: "gomoku_state").map { sinceChat($0.body) }
+    #expect(sinces == [0, 0], "토글마다 그 판 대화를 처음부터 받는다: \(sinces)")
+    #expect(gomoku.chatSeq == 4)
 }
 
 // MARK: - 5. 판이 바뀌면 비운다

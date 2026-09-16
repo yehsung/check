@@ -490,22 +490,28 @@ func inviteBubbleTextAlwaysFitsTheCapsule() {
 @MainActor
 @Test
 func gomokuWindowLayoutIsAFixedConstantTable() {
-    // v0.3.28: 세 열로 넓혔다(+ 채팅 220 + 간격 20). **판 608·높이 700·가운데 열 332·로비 540/400 은 그대로다.**
+    // v0.3.29: **화면마다 열 수가 다르다.** 대국·결과는 세 열(판 608 | 가운데 332 | 채팅 220) 그대로이고,
+    // 로비만 두 열이 됐다 — 판돈 카드를 들어내면서 상대 목록이 540 → 780 으로 그 자리를 가져갔다.
+    // **창 크기·판·높이·가운데 열·채팅 폭은 한 항도 안 건드렸다.**
     #expect(GomokuWindowLayout.contentSize == CGSize(width: 1240, height: 700))
     #expect(GomokuWindowLayout.innerSize == CGSize(width: 1200, height: 660))
     #expect(GomokuWindowLayout.bodyHeight == 608)
     #expect(GomokuWindowLayout.boardSide == 608)
     #expect(GomokuWindowLayout.sideColumnWidth == 332)
     #expect(GomokuWindowLayout.lobbySideWidth == 400)
-    #expect(GomokuWindowLayout.lobbyListWidth == 540)
+    #expect(GomokuWindowLayout.lobbyListWidth == 780)
     #expect(GomokuWindowLayout.chatWidth == 220)
-    // 항등식 둘 — 세 열이 간격까지 더해 안쪽 폭을 **정확히** 채운다(한 항이라도 어긋나면 열이 잘리거나 뜬다).
+    // 항등식 둘 — 간격까지 더해 안쪽 폭을 **정확히** 채운다(한 항이라도 어긋나면 열이 잘리거나 뜬다).
+    // 로비는 두 열이라 간격이 **하나**다: 780 + 20 + 400 = 1200.
     #expect(GomokuWindowLayout.lobbyListWidth + GomokuWindowLayout.columnSpacing + GomokuWindowLayout.lobbySideWidth
-            + GomokuWindowLayout.columnSpacing + GomokuWindowLayout.chatWidth
             == GomokuWindowLayout.innerSize.width)
     #expect(GomokuWindowLayout.boardSide + GomokuWindowLayout.columnSpacing + GomokuWindowLayout.sideColumnWidth
             + GomokuWindowLayout.columnSpacing + GomokuWindowLayout.chatWidth
             == GomokuWindowLayout.innerSize.width)
+    // 로비 오른쪽 열의 **세로** 예산(v0.3.29): 아래 칸(받은·보낸 신청)이 상한까지 가득 차도
+    // 위 칸(지금 대결 중)의 최소 높이가 지켜진다 — 320 + 12 + 220 = 552 ≤ 608.
+    #expect(GomokuWindowLayout.lobbyInvitesMaxHeight + GomokuWindowLayout.lobbySideSpacing
+            + GomokuWindowLayout.lobbyLiveMinHeight <= GomokuWindowLayout.bodyHeight)
     // 창 상수와 레이아웃 상수는 한 곳에서 온다.
     #expect(CheckGomokuWindowController.fixedContentSize.width == GomokuWindowLayout.contentSize.width)
     #expect(CheckGomokuWindowController.fixedContentSize.height == GomokuWindowLayout.contentSize.height)

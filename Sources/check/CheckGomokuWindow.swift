@@ -24,14 +24,18 @@ import SwiftUI
 
 /// 오목 창의 **고정** 레이아웃. 순수 상수 — 창 크기를 두 곳에 적지 않는다.
 ///
-/// v0.3.28 부터 **세 열**이다. 세 번째 열의 폭은 어느 화면에서나 `chatWidth` 로 같고, 담는 것만 다르다:
-/// 로비는 "지금 대결 중" 목록, 대국·결과는 채팅(결과 화면에도 남긴다 — 끝난 뒤 인사).
+/// 열 수는 **화면마다 다르다**(v0.3.29):
+///   · 대국·결과는 **세 열** — [판 | 두 사람·판돈·기권 | 채팅]. 채팅은 결과 화면에도 남는다(끝난 뒤 인사).
+///   · 로비는 **두 열** — [상대 목록 | 오른쪽(위 지금 대결 중 · 아래 받은/보낸 신청)].
+///     v0.3.28 의 로비 세 열(목록 540 | 판돈·신청 400 | 대결 중 220)에서 **판돈 카드를 들어내며** 합쳤다:
+///     판돈은 이제 [도전]을 누를 때 가운데 작은 창에서 고른다(`GomokuStakePrompt`). 남은 240pt 는
+///     상대 목록이 가져간다 — 이름·상태 칩·[도전]이 한 줄에 여유 있게 선다.
 ///
 /// 산식:
 ///   · 안쪽 = 1240−40 × 700−40 = 1200 × 660
 ///   · 본문 높이 = 660 − 머리글 40 − 간격 12 = 608
 ///   · 대국: 판 608×608(정사각) | 오른쪽 열 332 | 채팅 220 → 608 + 20 + 332 + 20 + 220 = 1200
-///   · 로비: 상대 목록 540 | 오른쪽 열 400 | 대결 중 220 → 540 + 20 + 400 + 20 + 220 = 1200
+///   · 로비: 상대 목록 780 | 오른쪽 열 400 → 780 + 20 + 400 = 1200
 enum GomokuWindowLayout {
     /// 창 콘텐츠 크기(고정). 컨트롤러의 min/max 도 이 값 하나를 쓴다.
     static let contentSize = CGSize(width: 1240, height: 700)
@@ -39,9 +43,9 @@ enum GomokuWindowLayout {
     static let columnSpacing: CGFloat = 20
     static let headerHeight: CGFloat = 40
     static let headerSpacing: CGFloat = 12
-    /// 로비 왼쪽(상대 목록) 폭.
-    static let lobbyListWidth: CGFloat = 540
-    /// 세 번째 열(로비 = 지금 대결 중 · 대국/결과 = 채팅) 폭. 말풍선이 두 줄 안에 서는 최소치다.
+    /// 로비 왼쪽(상대 목록) 폭. v0.3.29 에서 540 → 780(로비가 두 열이 되며 판돈 카드 자리를 흡수했다).
+    static let lobbyListWidth: CGFloat = 780
+    /// 대국·결과 세 번째 열(채팅) 폭. 말풍선이 두 줄 안에 서는 최소치다.
     static let chatWidth: CGFloat = 220
 
     static var innerSize: CGSize {
@@ -52,8 +56,24 @@ enum GomokuWindowLayout {
     static var boardSide: CGFloat { bodyHeight }
     /// 대국·결과 화면의 가운데 열 = 판과 채팅을 뺀 나머지.
     static var sideColumnWidth: CGFloat { innerSize.width - columnSpacing * 2 - boardSide - chatWidth }
-    /// 로비 가운데 열 = 상대 목록과 세 번째 열을 뺀 나머지.
-    static var lobbySideWidth: CGFloat { innerSize.width - columnSpacing * 2 - lobbyListWidth - chatWidth }
+    /// 로비 오른쪽 열 = 상대 목록을 뺀 나머지(**두 열**이라 간격은 하나다).
+    static var lobbySideWidth: CGFloat { innerSize.width - columnSpacing - lobbyListWidth }
+
+    // MARK: 로비 오른쪽 열의 세로 예산 (v0.3.29)
+
+    /// 오른쪽 열 위아래 칸 사이 간격.
+    static let lobbySideSpacing: CGFloat = 12
+    /// 아래 칸(받은 신청 + 보낸 신청 한 줄)의 **높이 예산**. 아래 칸은 내용만큼(ideal) 쓰고 위 칸이 나머지를
+    /// 전부 먹는데, 그 '내용만큼'이 이 값을 넘으면 위 칸의 최소 높이가 깨진다. 그래서 프레임으로 자르지 않고
+    /// **가장 꽉 찬 경우를 렌더로 실측해 이 값 아래인지** 시험이 지킨다(자르면 [취소]가 사라져 보낸 신청을
+    /// 못 거둔다 — 눈에 안 보이는 고장이 된다).
+    static let lobbyInvitesMaxHeight: CGFloat = 320
+    /// 위 칸(지금 대결 중)의 **최소** 높이 — 카드 세 장은 언제나 보인다.
+    /// 608 − 12 − 320 = 276 이라 아래 칸이 예산을 다 써도 이 값은 지켜진다.
+    static let lobbyLiveMinHeight: CGFloat = 220
+    /// 판돈 고르기 창(가운데 작은 창)의 폭. 판돈 버튼 셋이 한 줄에 여유 있게 서는 값이고,
+    /// 렌더 검증이 그 셋의 자리를 이 값에서 계산한다 — 그래서 뷰가 아니라 여기 산다.
+    static let stakePromptWidth: CGFloat = 340
 }
 
 /// 오목 창의 수명·표시·복구를 쥐는 단 하나의 지점. **공개 진입점은 `show()` 하나다** —

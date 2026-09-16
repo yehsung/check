@@ -273,8 +273,8 @@ func rulesOverlayRendersAllSixExamples() throws {
 
 // MARK: - 세 번째 열(v0.3.28): 채팅 · 지금 대결 중 · 자동 착수
 
-/// 세 번째 열(로비 = 지금 대결 중 · 대국/결과 = 채팅)의 창 좌표. **두 화면에서 x 가 같다**
-/// (540+400 = 608+332 = 940) — 숫자를 적지 않고 레이아웃 상수에서만 뽑는다.
+/// 대국·결과 화면 **세 번째 열**(채팅)의 창 좌표 — 숫자를 적지 않고 레이아웃 상수에서만 뽑는다.
+/// v0.3.29 부터 **로비에는 세 번째 열이 없다**(두 열): 로비 오른쪽은 `gpLobbySideColumn` 이다.
 private var gpThirdColumn: CGRect {
     CGRect(x: GomokuWindowLayout.contentPadding + GomokuWindowLayout.innerSize.width - GomokuWindowLayout.chatWidth,
            y: gpBoardOrigin.y, width: GomokuWindowLayout.chatWidth, height: GomokuWindowLayout.bodyHeight)
@@ -404,65 +404,238 @@ func chatLogSticksToTheNewestMessageInBothBranches() throws {
     #expect(column.contains("overlay(alignment: .bottom)"), "스냅샷 갈래가 아래(최신)를 기준으로 그리지 않는다")
 }
 
-/// 로비 세 번째 열: "지금 대결 중" 카드. 상한 여섯을 넘겨도 열이 본문(608pt)을 뚫지 않는다.
+/// 로비 오른쪽 **위** 칸: "지금 대결 중". v0.3.29 부터 **자르지 않고 스크롤한다** —
+/// 옛 상한(`maxCards = 6`)과 "외 N건" 줄은 없앴다(사용자 요구).
+///
+/// 스냅샷은 클립 갈래를 타므로(ImageRenderer 는 ScrollView 안을 못 그린다) **칸에 들어가는 만큼만** 보인다.
+/// 그래서 "12건과 20건이 한 픽셀도 다르지 않다"가 곧 '접은 것이 아니라 잘랐다'의 증거다 — 상한으로
+/// 접는 화면이었다면 그 자리에 '외 6건'과 '외 14건'이라는 **서로 다른 글자**가 섰을 것이다.
 @MainActor
 @Test
-func lobbyThirdColumnShowsLiveMatches() throws {
+func lobbyRightColumnScrollsLiveMatchesInsteadOfTruncating() throws {
     let quiet = gpLobbyStore(outgoing: false)
     let busy = gpLobbyStore(outgoing: false)
     busy.liveMatches = gpLiveMatches(3)
     let crowded = gpLobbyStore(outgoing: false)
     crowded.liveMatches = gpLiveMatches(9)
+    let many = gpLobbyStore(outgoing: false)
+    many.liveMatches = gpLiveMatches(12)
+    let tooMany = gpLobbyStore(outgoing: false)
+    tooMany.liveMatches = gpLiveMatches(20)
 
     let quietBitmap = try gpBitmap(gpPanel(quiet))
     let busyBitmap = try gpBitmap(gpPanel(busy))
     let crowdedBitmap = try gpBitmap(gpPanel(crowded))
+    let manyBitmap = try gpBitmap(gpPanel(many))
+    let tooManyBitmap = try gpBitmap(gpPanel(tooMany))
     gpSave(busyBitmap, name: "lobby-live-matches")
     gpSave(crowdedBitmap, name: "lobby-live-matches-crowded")
-    #expect(gpYellowPixels(busyBitmap) == 0 && gpYellowPixels(crowdedBitmap) == 0)
-    #expect(gpMaxChannelDifference(quietBitmap, busyBitmap, rect: gpThirdColumn) > 60,
+    gpSave(manyBitmap, name: "lobby-live-matches-many")
+    for (name, bitmap) in [("3건", busyBitmap), ("9건", crowdedBitmap), ("12건", manyBitmap), ("20건", tooManyBitmap)] {
+        #expect(gpYellowPixels(bitmap) == 0, "\(name) 에 노란 상자가 있다")
+    }
+    #expect(gpMaxChannelDifference(quietBitmap, busyBitmap, rect: gpLobbySideColumn) > 60,
             "'지금 대결 중' 카드가 안 그려졌다")
-    // 상대 목록·판돈 열은 세 번째 열이 차도 그대로다.
-    let list = CGRect(x: GomokuWindowLayout.contentPadding, y: gpBoardOrigin.y,
-                      width: GomokuWindowLayout.lobbyListWidth, height: GomokuWindowLayout.bodyHeight)
-    #expect(gpMaxChannelDifference(quietBitmap, busyBitmap, rect: list) <= 2, "대결 중 목록이 상대 목록을 흔들었다")
-    // 아홉 건이어도 창 아래 여백 띠는 한 픽셀도 달라지지 않는다("외 N건"으로 접힌다).
+    // 상대 목록은 오른쪽 열이 차도 그대로다(두 열이 서로의 자리를 침범하지 않는다).
+    #expect(gpMaxChannelDifference(quietBitmap, busyBitmap, rect: gpLobbyListColumn) <= 2,
+            "대결 중 목록이 상대 목록을 흔들었다")
+
+    // --- 자르지 않는다: **보이는 카드를 직접 센다** ---
+    // 여백 띠 단언만으로는 아무것도 증명되지 않는다(옛 시험의 교훈: `prefix(maxCards)` 를 지워도 초록이었다).
+    let three = gpBoxTops(busyBitmap, rect: gpLobbySideColumn, height: gpLiveCardHeight)
+    let twelve = gpBoxTops(manyBitmap, rect: gpLobbySideColumn, height: gpLiveCardHeight)
+    let twenty = gpBoxTops(tooManyBitmap, rect: gpLobbySideColumn, height: gpLiveCardHeight)
+    #expect(three.count == 3, "3건인데 카드가 \(three.count)장이다(윗변 \(three))")
+    #expect(twelve.count > 3,
+            "12건인데 카드가 \(twelve.count)장뿐이다 — 칸이 남는데 옛 상한이 아직 자른다(윗변 \(twelve))")
+    #expect(twelve == twenty,
+            "20건과 12건이 다르게 보인다 — 칸 안에서 잘리는 것이 아니라 건수를 세어 접고 있다 \(twelve) vs \(twenty)")
+
+    // 옛 "외 N건" 줄이 사라졌다 — 마지막 카드 **아래**가 12건과 20건에서 한 픽셀도 다르지 않다.
+    let lastBottom = try #require(twelve.last) + gpLiveCardHeight
+    let moreLine = CGRect(x: gpLobbySideColumn.minX, y: CGFloat(lastBottom) + 2,
+                          width: gpLobbySideColumn.width, height: 20)
+    #expect(gpMaxChannelDifference(manyBitmap, tooManyBitmap, rect: moreLine) <= 2,
+            "마지막 카드 아래에서 12건과 20건이 다르다 — '외 N건' 같은 글자가 아직 남아 있다")
+
+    // 창 아래 여백 띠는 몇 건이든 한 픽셀도 달라지지 않는다(칸 밖으로 안 자란다).
     let size = GomokuWindowLayout.contentSize
     let band = CGRect(x: 0, y: size.height - GomokuWindowLayout.contentPadding + 2,
                       width: size.width, height: GomokuWindowLayout.contentPadding - 4)
-    #expect(gpMaxChannelDifference(busyBitmap, crowdedBitmap, rect: band) <= 2,
-            "대결이 많을 때 목록이 본문 아래 여백까지 자란다 — 창 밖으로 잘린다")
-
-    // --- 상한 여섯을 **실제로** 잰다 ---
-    // 위 여백 띠 단언만으로는 아무것도 증명되지 않는다: 카드 한 장이 48pt(간격 8pt)라 아홉 장(542pt)은
-    // **상한이 없어도** 본문 608pt 안에 들어가고, 첫 넘침은 열한 장부터다. 실제로 `prefix(maxCards)` 와
-    // "외 N건" 블록을 지워도 이 시험은 전부 초록이었다(2026-09-16 실측).
-    // 그래서 **보이는 카드를 직접 센다** — 위·아래 획이 48pt 떨어진 짝의 개수가 곧 카드 수다.
-    let maxCards = 6, cardHeight = gpLiveCardHeight
-    #expect(gpStripped(try gpSource("GomokuPanel.swift")).contains("static let maxCards = \(maxCards)"),
-            "시험이 아는 상한(\(maxCards))이 소스와 다르다")
-    let six = gpLobbyStore(outgoing: false)
-    six.liveMatches = gpLiveMatches(maxCards)
-    let sixBitmap = try gpBitmap(gpPanel(six))
-    let many = gpLobbyStore(outgoing: false)
-    many.liveMatches = gpLiveMatches(12)          // 상한이 없으면 열 장이 보이고 아래로 뚫는다
-    let manyBitmap = try gpBitmap(gpPanel(many))
-    gpSave(manyBitmap, name: "lobby-live-matches-many")
-    #expect(gpYellowPixels(manyBitmap) == 0, "many 에 노란 상자가 있다")
-    for (name, bitmap, expected) in [("3건", busyBitmap, 3), ("6건", sixBitmap, maxCards),
-                                     ("9건", crowdedBitmap, maxCards), ("12건", manyBitmap, maxCards)] {
-        let cards = gpBoxTops(bitmap, rect: gpThirdColumn, height: cardHeight)
-        #expect(cards.count == expected,
-                "\(name)에서 카드가 \(cards.count)장 보인다 — \(expected)장이어야 한다(윗변 \(cards))")
+    for (name, bitmap) in [("9건", crowdedBitmap), ("12건", manyBitmap), ("20건", tooManyBitmap)] {
+        #expect(gpMaxChannelDifference(busyBitmap, bitmap, rect: band) <= 2,
+                "\(name)에서 '지금 대결 중'이 창 아래 여백까지 자란다 — 창 밖으로 잘린다")
     }
-    // 접힌 수는 **글자로** 말한다 — 여섯 번째 카드 바로 아래에 "외 N건"이 서고, 여섯 건일 땐 그 자리가 비어 있다.
-    let sixthBottom = try #require(gpBoxTops(sixBitmap, rect: gpThirdColumn, height: cardHeight).last) + cardHeight
-    let moreLine = CGRect(x: gpThirdColumn.minX, y: CGFloat(sixthBottom + 2), width: gpThirdColumn.width, height: 22)
-    #expect(gpMaxChannelDifference(sixBitmap, manyBitmap, rect: moreLine) > 60,
-            "열두 건인데 여섯 장 아래에 '외 N건' 줄이 없다 — 접힌 여섯 건을 아무도 못 본다")
-    // 열두 건이어도 열은 제 틀(220×608) 밖을 칠하지 않는다(`.clipped()`).
-    #expect(gpMaxChannelDifference(busyBitmap, manyBitmap, rect: band) <= 2,
-            "열두 건에서 '지금 대결 중' 열이 창 아래 여백까지 자란다")
+
+    // 소스 계약 — 상한·접기가 정말 없어졌고, 스크롤 두 갈래가 서 있다.
+    let panel = gpStripped(try gpSource("GomokuPanel.swift"))
+    let column = try #require(gpRegion(panel, from: "private struct GomokuLiveMatchColumn: View {",
+                                       to: "private struct GomokuLiveMatchCard: View {"))
+    #expect(!column.contains("maxCards"), "'지금 대결 중'이 아직 상한으로 자른다")
+    #expect(!column.contains("GomokuText.more("), "'지금 대결 중'이 아직 '외 N건'으로 접는다")
+    #expect(column.contains("ScrollView"), "앱 갈래에 스크롤이 없다 — 넘치는 대결을 볼 길이 아예 없다")
+    #expect(column.contains("clipsOverflowInsteadOfScroll"),
+            "스냅샷 갈래가 없다 — ImageRenderer 는 ScrollView 안을 못 그려 이 칸에서 눈이 먼다")
+    #expect(column.contains("minHeight: 0"), "minHeight 0 이 없다 — 카드가 608pt 본문을 뚫는다")
+}
+
+/// 로비가 **두 열**이다(v0.3.29): 상대 목록 780 · 오른쪽 400, 가운데 판돈 카드는 없다.
+///
+/// 두 가지를 픽셀로 잰다. ① 상대 행의 [도전] 버튼이 780pt 목록의 오른쪽 끝(실측 771.5pt)까지 간다 —
+/// 옛 540pt 열이었다면 x 530 언저리에서 멈춘다. ② 오른쪽 열 **맨 위**가 "지금 대결 중"이다 —
+/// 대결 건수를 바꾸면 그 자리 픽셀이 바뀐다(옛 화면에서 그 자리는 판돈 카드라 꿈쩍도 안 했다).
+@MainActor
+@Test
+func lobbyIsTwoColumnsAndTheStakeCardIsGone() throws {
+    let store = gpLobbyStore(outgoing: false)
+    store.liveMatches = gpLiveMatches(3)
+    let bitmap = try gpBitmap(gpPanel(store))
+    gpSave(bitmap, name: "lobby-two-columns")
+    #expect(gpYellowPixels(bitmap) == 0, "두 열 로비에 노란 상자가 있다")
+
+    // ① [도전] 버튼(채운 accent)이 목록 오른쪽 끝까지 간다.
+    let challenge = gpAccentBounds(bitmap, rect: gpLobbyListColumn)
+    #expect(challenge.count > 1000, "상대 목록에 [도전] 버튼이 안 보인다")
+    #expect(challenge.box.maxX > 700,
+            "[도전] 버튼이 x \(challenge.box.maxX)pt 에서 끝난다 — 상대 목록이 아직 540pt 열이다")
+    #expect(challenge.box.maxX < gpLobbyListColumn.maxX, "[도전] 버튼이 목록 열 밖으로 넘친다")
+
+    // ② 오른쪽 열 맨 위가 '지금 대결 중'이다(그 자리가 대결 건수에 반응한다).
+    let noneBitmap = try gpBitmap(gpPanel(gpLobbyStore(outgoing: false)))
+    let topBand = CGRect(x: gpLobbySideColumn.minX, y: gpLobbySideColumn.minY + 28,
+                         width: gpLobbySideColumn.width, height: 60)
+    #expect(gpMaxChannelDifference(noneBitmap, bitmap, rect: topBand) > 60,
+            "오른쪽 열 맨 위가 대결 건수에 반응하지 않는다 — 그 자리가 아직 판돈 카드다")
+
+    // 소스 계약 — 판돈 버튼은 로비 열에서 사라지고 **판돈 창에만** 있다.
+    let panel = gpStripped(try gpSource("GomokuPanel.swift"))
+    let side = try #require(gpRegion(panel, from: "private struct GomokuLobbySide: View {",
+                                     to: "private struct GomokuOutgoingLine: View {"))
+    #expect(!side.contains("GomokuStakeButton("), "로비 오른쪽 열에 아직 판돈 카드가 있다")
+    let prompt = try #require(gpRegion(panel, from: "private struct GomokuStakePrompt: View {",
+                                       to: "struct GomokuInviteBanner: View {"))
+    #expect(prompt.contains("GomokuStakeButton("), "판돈 창에 판돈 버튼이 없다")
+    // 로비는 두 열이라 세 번째 열(채팅 폭)을 그리지 않는다.
+    let lobby = try #require(gpRegion(panel, from: "private var lobby: some View {", to: "private func playing("))
+    #expect(!lobby.contains("chatWidth"), "로비가 아직 세 번째 열(chatWidth)을 그린다")
+}
+
+/// 판돈 창: [도전]을 누르면 화면 **가운데**에 뜨고, 뒤가 어두워지고, 판돈 버튼 **셋**이 각자 자리에 선다.
+///
+/// 버튼 셋을 세는 법: 고른 판돈만 accent 로 꽉 차고 나머지는 테두리뿐이다. 그래서 버튼 줄을 셋으로 쪼개면
+/// **고른 칸에만** 잉크가 있다 — 3·5·10 을 차례로 골라 잉크가 왼쪽→가운데→오른쪽으로 옮겨 가면 세 자리가
+/// 모두 실재한다는 뜻이다(버튼 하나를 지우면 나머지가 넓어져 칸이 어긋난다).
+@MainActor
+@Test
+func stakePromptDimsTheLobbyAndDrawsThreeStakeButtons() throws {
+    let card = CGRect(x: (GomokuWindowLayout.contentSize.width - GomokuWindowLayout.stakePromptWidth) / 2, y: 0,
+                      width: GomokuWindowLayout.stakePromptWidth, height: GomokuWindowLayout.contentSize.height)
+    func lobbyStore(stake: GomokuStake, balance: Int?) -> GomokuStore {
+        let store = gpLobbyStore(outgoing: false)
+        store.liveMatches = gpLiveMatches(3)
+        store.selectedStake = stake
+        store.rubyBalance = balance
+        return store
+    }
+    func promptBitmap(stake: GomokuStake, balance: Int?) throws -> NSBitmapImageRep {
+        try gpBitmap(GomokuPanel(store: lobbyStore(stake: stake, balance: balance), me: { gpMe },
+                                 clipsOverflowInsteadOfScroll: true, previewStakeTarget: gpMinsu))
+    }
+    /// 판돈 버튼 줄(창 위 y 319~363 에 선다 — 2026-09-16 실측)을 셋으로 쪼갠 각 칸의 accent 잉크.
+    func thirds(_ bitmap: NSBitmapImageRep) -> [Int] {
+        let row = CGRect(x: card.minX + 20, y: 340, width: card.width - 40, height: 8)
+        let third = row.width / 3
+        return (0..<3).map { index in
+            gpAccentBounds(bitmap, rect: CGRect(x: row.minX + third * CGFloat(index), y: row.minY,
+                                                width: third, height: row.height)).count
+        }
+    }
+
+    let closed = try gpBitmap(gpPanel(lobbyStore(stake: .five, balance: 42)))
+    let open = try promptBitmap(stake: .five, balance: 42)
+    gpSave(open, name: "lobby-stake-prompt")
+    #expect(gpYellowPixels(open) == 0, "판돈 창에 노란 상자가 있다 — Menu/Picker 가 섞였다")
+
+    // ① 뒤가 어두워진다 — 창에서 먼 상대 목록 구석까지 덮개가 깔린다(실측 (50,52,66) → (19,20,25)).
+    let corner = gpPixel(closed, x: 40, y: 600), dimmed = gpPixel(open, x: 40, y: 600)
+    #expect(dimmed.0 < corner.0 - 15 && dimmed.1 < corner.1 - 15 && dimmed.2 < corner.2 - 15,
+            "판돈 창을 열었는데 뒤가 안 어두워졌다 \(corner) → \(dimmed)")
+    #expect(gpMaxChannelDifference(closed, open, rect: gpLobbyListColumn) > 60, "덮개가 상대 목록을 안 덮는다")
+
+    // ② 판돈 버튼 셋이 각자 자리에 있다.
+    for (index, stake) in [GomokuStake.three, .five, .ten].enumerated() {
+        let counts = thirds(try promptBitmap(stake: stake, balance: 42))
+        #expect(counts[index] > 1500, "판돈 \(stake.rawValue)을 골랐는데 \(index + 1)번째 칸이 안 찼다 \(counts)")
+        for other in 0..<3 where other != index {
+            #expect(counts[other] == 0, "판돈 \(stake.rawValue)을 골랐는데 \(other + 1)번째 칸도 찼다 \(counts)")
+        }
+    }
+
+    // ③ 루비가 모자란 판돈은 비활성 — **골라 둔 값이어도** 안 찬다(+ 이유 한 줄이 뜬다).
+    let rich = try promptBitmap(stake: .ten, balance: 42)
+    let poor = try promptBitmap(stake: .ten, balance: 4)
+    gpSave(poor, name: "lobby-stake-prompt-short")
+    #expect(gpYellowPixels(poor) == 0, "모자람 안내가 뜬 판돈 창에 노란 상자가 있다")
+    #expect(thirds(rich)[2] > 1500, "루비가 넉넉한데 판돈 10이 안 골라졌다 \(thirds(rich))")
+    #expect(thirds(poor)[2] == 0, "루비 4개로 판돈 10을 고를 수 있게 그려졌다 \(thirds(poor))")
+    #expect(gpMaxChannelDifference(rich, poor, rect: card) > 60, "모자란 이유 한 줄이 안 뜬다")
+    // 같은 사실은 앱 어디서나 같은 말로 — 상점·신청 거절과 한 출처를 쓴다.
+    #expect(GomokuText.stakeShortfall == WorkTimerStore.shortfallNotice(need: nil, have: nil),
+            "판돈 창의 모자람 문구가 앱의 다른 화면과 다른 말을 한다")
+}
+
+/// 받은 신청이 늘수록 오른쪽 열 **아래 칸**이 자라고 **위 칸**이 그만큼 줄어든다 — 그리고 둘은 언제나
+/// 열을 정확히 채운다(`위 + 12 + 아래 = 608`). 받은 신청이 없으면 아래 칸은 한 줄로 접힌다.
+///
+/// 잰 값(2026-09-16, 안내 줄 없는 가게): 0건 → 537+12+59 · 2건 → 350+12+246 · 5건 → 329+12+267 ·
+/// 5건+보낸 신청 → 286+12+310. 아래 칸이 가장 두꺼운 경우(310)도 예산(320) 안이고, 위 칸은 언제나
+/// 최소 높이(220) 위다 — 이 둘이 깨지면 [취소]가 잘려 보낸 신청을 거둘 길이 사라진다.
+@MainActor
+@Test
+func lobbyInvitesBoxCollapsesAndTheLiveBoxTakesTheRest() throws {
+    func store(incoming: Int, outgoing: Bool) -> GomokuStore {
+        let store = gpLobbyStore(outgoing: false)
+        store.notice = nil                    // 안내 줄은 이 시험이 재는 두 칸 밖의 세 번째 칸이다
+        store.liveMatches = gpLiveMatches(3)
+        let frozen = Date(timeIntervalSince1970: 2_000_000_000)
+        store.incoming = (0..<incoming).map {
+            GomokuInvite(id: "in-\($0)", peer: gpUser("신청자\($0)", 70 + $0), stake: 5, expiresAt: frozen)
+        }
+        store.outgoing = outgoing ? GomokuInvite(id: "out-1", peer: gpJunho, stake: 10, expiresAt: frozen) : nil
+        return store
+    }
+    /// 두 칸의 경계를 그림에서 찾는다: 넓은 획 둘이 **정확히 칸 간격(12pt)** 만큼 떨어진 마지막 짝이
+    /// 위 칸의 아랫변과 아래 칸의 윗변이다(카드 사이 간격은 8pt 라 섞이지 않는다).
+    func split(_ bitmap: NSBitmapImageRep) -> (live: Int, invites: Int)? {
+        let spacing = Int(GomokuWindowLayout.lobbySideSpacing)
+        let rows = gpWideRows(bitmap, rect: gpLobbySideColumn, minimum: 600)
+        guard let boundary = rows.last(where: { rows.contains($0 + spacing) }) else { return nil }
+        return (live: boundary - Int(gpLobbySideColumn.minY),
+                invites: Int(gpLobbySideColumn.maxY) - (boundary + spacing))
+    }
+
+    var lives: [Int] = [], invites: [Int] = []
+    for (name, incoming, outgoing) in [("0건", 0, false), ("2건", 2, false), ("5건", 5, false),
+                                       ("5건+보낸신청", 5, true)] {
+        let bitmap = try gpBitmap(gpPanel(store(incoming: incoming, outgoing: outgoing)))
+        gpSave(bitmap, name: "lobby-invites-\(incoming)\(outgoing ? "-out" : "")")
+        #expect(gpYellowPixels(bitmap) == 0, "\(name) 에 노란 상자가 있다")
+        let measured = try #require(split(bitmap), "\(name): 오른쪽 열에서 두 칸의 경계를 못 찾았다")
+        lives.append(measured.live)
+        invites.append(measured.invites)
+        #expect(measured.live + Int(GomokuWindowLayout.lobbySideSpacing) + measured.invites
+                == Int(GomokuWindowLayout.bodyHeight),
+                "\(name): 위 \(measured.live) + 12 + 아래 \(measured.invites) 가 608 이 아니다 — 열이 뜨거나 넘친다")
+        #expect(CGFloat(measured.invites) <= GomokuWindowLayout.lobbyInvitesMaxHeight,
+                "\(name): 아래 칸이 \(measured.invites)pt 로 예산 \(Int(GomokuWindowLayout.lobbyInvitesMaxHeight))pt 를 넘는다")
+        #expect(CGFloat(measured.live) >= GomokuWindowLayout.lobbyLiveMinHeight,
+                "\(name): 위 칸이 \(measured.live)pt 로 최소 \(Int(GomokuWindowLayout.lobbyLiveMinHeight))pt 보다 얇다")
+    }
+    #expect(invites == invites.sorted(), "받은 신청이 늘어도 아래 칸이 안 자란다 \(invites)")
+    #expect(invites[0] < 100, "받은 신청이 없는데 아래 칸이 \(invites[0])pt 다 — 한 줄로 안 접혔다")
+    #expect(lives[0] > lives[1] && lives[1] > lives[2] && lives[2] > lives[3],
+            "받은 신청이 늘었는데 위 칸이 그만큼 안 줄었다 \(lives)")
+    #expect(invites[3] > invites[2], "보낸 신청 한 줄이 아래 칸에 안 붙었다 \(invites)")
 }
 
 // MARK: - 소속 센터 배지 (v0.3.29)
@@ -483,7 +656,7 @@ private var gpLobbyListColumn: CGRect {
            width: GomokuWindowLayout.lobbyListWidth, height: GomokuWindowLayout.bodyHeight)
 }
 
-/// 로비 가운데(판돈·신청) 열.
+/// 로비 **오른쪽** 열(v0.3.29 — 위 칸 지금 대결 중 · 아래 칸 받은/보낸 신청). 두 열이라 이 열이 끝이다.
 @MainActor
 private var gpLobbySideColumn: CGRect {
     CGRect(x: GomokuWindowLayout.contentPadding + GomokuWindowLayout.lobbyListWidth + GomokuWindowLayout.columnSpacing,
@@ -524,23 +697,26 @@ func centerBadgesDrawPixelsOnEveryGomokuFace() throws {
     #expect(gpMaxChannelDifference(bareLobby, badgedLobby, rect: gpLobbyListColumn) > 60,
             "상대 목록 행의 아바타에 센터 배지가 없다")
     // 신청 카드는 **왼쪽 90pt** 만 잰다 — 카드 오른쪽 끝의 '남은 초'는 두 렌더 사이에 달라진다.
-    let inviteFaces = CGRect(x: gpLobbySideColumn.minX, y: gpLobbySideColumn.minY,
-                             width: 90, height: gpLobbySideColumn.height)
+    // v0.3.29 부터 받은 신청은 오른쪽 열 **아래 칸**이다. 열 전체를 재면 위 칸(대결 카드)의 얼굴에만
+    // 배지가 달려도 이 단언이 초록이 되므로 **아래 칸만** 잘라 잰다.
+    // 실측(이 가게): 위 칸 72..377 · 아래 칸 389..635 · 안내 줄 647..680.
+    let inviteFaces = CGRect(x: gpLobbySideColumn.minX, y: 389, width: 90, height: 635 - 389)
     #expect(gpMaxChannelDifference(bareLobby, badgedLobby, rect: inviteFaces) > 60,
             "받은 신청 카드의 아바타에 센터 배지가 없다")
     // 대결 카드는 **윗줄(두 사람 줄)만** 잰다 — 아랫줄의 경과 m:ss 는 초가 바뀐다.
-    let cardTops = gpBoxTops(bareLobby, rect: gpThirdColumn, height: gpLiveCardHeight)
+    let cardTops = gpBoxTops(bareLobby, rect: gpLobbySideColumn, height: gpLiveCardHeight)
     // 실패하면 **잰 값**을 함께 보여 준다 — 카드 높이가 바뀌었을 때 다음 사람이 숫자를 찾아 헤매지 않게.
     #expect(cardTops.count == live.count,
             """
             지금 대결 중 카드가 \(cardTops.count)장 보인다(기대 \(live.count)장) — 카드 높이 상수 \
             \(gpLiveCardHeight)pt 가 틀렸다. 이 그림의 넓은 획 행: \
-            \(gpWideRows(bareLobby, rect: gpThirdColumn, minimum: 300))
+            \(gpWideRows(bareLobby, rect: gpLobbySideColumn, minimum: 300))
             """)
     // 띠는 카드 안쪽 여백 8 + 얼굴 18 + 배지가 아래로 넘치는 2pt 까지 덮고, 아랫줄(판돈·경과)이 시작하는
     // top+32 앞에서 끝난다 — 그래야 배지를 놓치지도, 매초 바뀌는 경과 글자를 집지도 않는다.
     for top in cardTops {
-        let nameRow = CGRect(x: gpThirdColumn.minX, y: CGFloat(top) + 2, width: gpThirdColumn.width, height: 28)
+        let nameRow = CGRect(x: gpLobbySideColumn.minX, y: CGFloat(top) + 2,
+                             width: gpLobbySideColumn.width, height: 28)
         #expect(gpMaxChannelDifference(bareLobby, badgedLobby, rect: nameRow) > 60,
                 "지금 대결 중 카드(윗변 \(top))의 두 사람에 센터 배지가 없다")
     }
@@ -632,20 +808,33 @@ private func gpIsAutoGrey(_ pixel: (Int, Int, Int)) -> Bool {
 
 /// 사각형(pt) 안에서 파랑이 확실히 앞서는 픽셀 수(CheckTheme.accent 계열 — 내 말풍선 배경·강조 글자).
 private func gpAccentInk(_ bitmap: NSBitmapImageRep, rect: CGRect) -> Int {
-    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return 0 }
+    gpAccentBounds(bitmap, rect: rect).count
+}
+
+/// 같은 accent 잉크를 **어디에** 칠했는지까지 — 픽셀 수와 그 잉크를 감싸는 상자(pt).
+/// 잉크가 없으면 `.null` 상자를 돌려준다. 나란히 선 버튼 중 **어느 것이 골라졌는지**를 자리로 재는 자다.
+private func gpAccentBounds(_ bitmap: NSBitmapImageRep, rect: CGRect) -> (count: Int, box: CGRect) {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return (0, .null) }
     let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
     let x0 = max(0, Int(rect.minX * 2)), x1 = min(bitmap.pixelsWide - 1, Int(rect.maxX * 2))
     let y0 = max(0, Int(rect.minY * 2)), y1 = min(bitmap.pixelsHigh - 1, Int(rect.maxY * 2))
-    guard x0 <= x1, y0 <= y1 else { return 0 }
+    guard x0 <= x1, y0 <= y1 else { return (0, .null) }
     var count = 0
+    var minX = Int.max, maxX = Int.min, minY = Int.max, maxY = Int.min
     for y in y0...y1 {
         for x in x0...x1 {
             let o = y * bpr + x * spp
             let r = Int(data[o]), g = Int(data[o + 1]), b = Int(data[o + 2])
-            if b > 140 && b > r + 60 && b > g + 30 { count += 1 }
+            if b > 140 && b > r + 60 && b > g + 30 {
+                count += 1
+                minX = min(minX, x); maxX = max(maxX, x)
+                minY = min(minY, y); maxY = max(maxY, y)
+            }
         }
     }
-    return count
+    guard count > 0 else { return (0, .null) }
+    return (count, CGRect(x: CGFloat(minX) / 2, y: CGFloat(minY) / 2,
+                          width: CGFloat(maxX - minX) / 2, height: CGFloat(maxY - minY) / 2))
 }
 
 // MARK: - 팝오버 배너
@@ -795,6 +984,9 @@ func gomokuTextIsPlainUserLanguage() throws {
         GomokuText.chatMuteHelp, GomokuText.chatUnmuteHelp,
         GomokuText.liveTitle, GomokuText.noLiveMatches, GomokuText.elapsed(75), GomokuText.more(3),
         GomokuText.autoPlacedCount(2),
+        // v0.3.29 판돈 창 · [도전] 툴팁 · 보낸 신청 한 줄.
+        GomokuText.stakePromptTitle(name: "민수"), GomokuText.stakePromptCaption, GomokuText.stakeShortfall,
+        GomokuText.challengeHelp, GomokuText.outgoingTitle(name: "준호"), GomokuText.outgoingTitle,
         GomokuNoticeText.chatMutedByMe, GomokuNoticeText.chatMutedByOpponent,
         GomokuNoticeText.chatOpponentOutdated, GomokuNoticeText.chatBlocked,
         GomokuNoticeText.chatTooLong(100), GomokuNoticeText.autoPlaced, GomokuNoticeText.autoPlacedStone,

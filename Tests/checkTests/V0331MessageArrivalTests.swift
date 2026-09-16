@@ -537,6 +537,309 @@ func 로그아웃_뒤_늦게_온_take_pokes_는_다음_계정의_대화에_안_�
     await messageReadWait { messageReadIdle(store) }
 }
 
+// MARK: - M4 수리(m4-fix) — 적대적 검증이 실측으로 찾은 틈
+//
+// 검증자 프로브(스크래치 사본, 6138a45)의 실제 출력:
+//  · P2  근무 밖 초인종에서 요약 응답만 1.2초 붙잡으면 보이는 대화의 이력이 **한 건도 안 떠났다**(historyLaunched=0 · ids=["m0"]).
+//        요약 왕복 → 이력 왕복의 줄 서기라 근무 밖은 2~3왕복(P2c: 근무 중 0.31초 대 근무 밖 0.83초).
+//  · P2b 요약이 이력보다 먼저 반영돼, 보고 있는 대화인데 새 말이 그려지기 전에 메뉴바·레일 점이 한 왕복 동안 켜졌다.
+//  · P1  같은 초의 두 말(서버 순서 z-first → a-second)을 즉시 삽입하면 id 사전순으로 뒤집혀 그려지고 읽음 경계를 앞 말로 올렸다.
+//  · H05/H06 즉시 삽입분을 서버 순서 뒤에 두는 가드(effectiveOrder)를 점·말풍선 판정에서 걷어도 스위트가 초록이었다.
+
+/// 수리 테스트의 서버 모형(보냄 · 읽음 경계). 읽음 경계는 서버처럼 **더 나중 말로만** 커진다.
+final class V0331FixServerBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var sentFlag = false
+    private var through: String?
+    private let laterIDs: [String]
+
+    /// `laterIDs` = 서버 순서(앞 → 뒤). 경계 비교에 쓴다.
+    init(order laterIDs: [String] = []) { self.laterIDs = laterIDs }
+
+    var sent: Bool { lock.lock(); defer { lock.unlock() }; return sentFlag }
+    var readThrough: String? { lock.lock(); defer { lock.unlock() }; return through }
+    func markSent() { lock.lock(); sentFlag = true; lock.unlock() }
+    func markRead(_ id: String?) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let id else { return }
+        let old = through.flatMap { laterIDs.firstIndex(of: $0) } ?? -1
+        let new = laterIDs.firstIndex(of: id) ?? -1
+        if through == nil || new > old { through = id }
+    }
+    /// 경계가 `id` 를 덮었는가(서버 순서 기준).
+    func isRead(_ id: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let through, let t = laterIDs.firstIndex(of: through), let i = laterIDs.firstIndex(of: id) else { return false }
+        return i <= t
+    }
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 근무_밖_초인종은_요약_응답을_기다리지_않고_보이는_대화의_이력을_곧바로_띄운다() async {
+    let epoch = Int(Date().timeIntervalSince1970)
+    let state = V0331ServerState()
+    let summaryGate = MessageReadStubGate()
+    let transport = FakeRealtimeTransport()
+    let base = v0331Server(epoch: epoch, state: state)
+    let (store, host) = makeMessageReadStore("idle-ring-parallel", transport: transport) { call, index in
+        guard var reply = base(call, index) else { return nil }
+        // 보낸 뒤의 요약 응답은 **전부 문에 붙잡는다** — 새 말이 요약 왕복 없이 그려지는지 본다(검증 P2 모양).
+        if call.rpc == "message_unread_summary", state.hasSent { reply.gate = summaryGate }
+        return reply
+    }
+    // 비근무 맥 · 팝오버와 대화가 떠 있다.
+    await v0331OpenConversation(store, viewToken: UUID(), menu: true)
+    store.startRealtimeIfPossible()
+    transport.emit(.joined)
+    await messageReadWait { messageReadIdle(store) }
+    let historyBefore = v0331Count(host, "message_history_with_reads")
+    let summaryBefore = v0331Count(host, "message_unread_summary")
+
+    state.markSent()
+    transport.emit(.broadcast(event: "ring"))
+    await messageReadWait(3) { store.selectedMessageThread?.messages.map(\.id) == ["m0", "m1"] }
+    await messageReadWait(3) { v0331Count(host, "message_unread_summary") > summaryBefore }
+    #expect(v0331Count(host, "take_pokes") == 0, "비근무 맥이 take_pokes 를 쐈다")
+    #expect(v0331Count(host, "message_unread_summary") == summaryBefore + 1, "전제: 초인종이 요약을 띄웠다(응답은 붙잡힘)")
+    #expect(v0331Count(host, "message_history_with_reads") > historyBefore,
+            "보이는 대화의 초인종인데 요약 응답을 기다리느라 이력 조회가 안 떠났다")
+    #expect(store.selectedMessageThread?.messages.map(\.id) == ["m0", "m1"],
+            "요약 응답이 붙잡혀 있다고 보이는 대화에 새 말이 안 그려졌다(요약 → 이력 줄 서기)")
+
+    // 붙잡혔던 요약도 끝내 반영된다(나란히 띄웠을 뿐 버리지 않는다).
+    summaryGate.open()
+    await messageReadWait { messageReadIdle(store) && store.messageUnreadSummary != nil }
+    #expect(store.messageUnreadSummary != nil, "붙잡혔던 요약이 반영되지 않았다")
+    store.tickerTask?.cancel()
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 근무_밖_초인종에서_이력이_도는_동안_요약이_보고_있는_대화의_점을_먼저_켜지_않는다() async {
+    let epoch = Int(Date().timeIntervalSince1970)
+    let box = V0331FixServerBox(order: ["m0", "m1"])
+    let historyGate = MessageReadStubGate()
+    let transport = FakeRealtimeTransport()
+    let (store, host) = makeMessageReadStore("idle-ring-dot", transport: transport) { call, _ in
+        switch call.rpc {
+        case "message_history_with_reads":
+            var rows = [Fx.readsRow(id: "m0", peer: Fx.peerA, isMine: false, body: "먼저", epoch: epoch - 120, unread: false)]
+            guard box.sent else { return Fx.historyReply(rows) }
+            rows.append(Fx.readsRow(id: "m1", peer: Fx.peerA, isMine: false, body: "새 말", epoch: epoch - 1, unread: !box.isRead("m1")))
+            return Fx.historyReply(rows, gate: historyGate)
+        case "message_unread_summary":
+            // 서버는 사실대로 답한다: 보냈고 아직 안 읽었으면 그 상대 1건.
+            return (box.sent && !box.isRead("m1")) ? Fx.summaryReply([(Fx.peerA, 1)]) : Fx.summaryReply([])
+        case "mark_messages_read":
+            box.markRead(call.json["p_through"] as? String)
+            return Fx.markReply()
+        default: return nil
+        }
+    }
+    await v0331OpenConversation(store, viewToken: UUID(), menu: true)
+    store.startRealtimeIfPossible()
+    transport.emit(.joined)
+    await messageReadWait { messageReadIdle(store) }
+    #expect(!store.hasUnreadMessages, "전제: 점 없음")
+    let historyBefore = v0331Count(host, "message_history_with_reads")
+    let summaryBefore = v0331Count(host, "message_unread_summary")
+
+    box.markSent()
+    transport.emit(.broadcast(event: "ring"))
+    await messageReadWait(3) {
+        v0331Count(host, "message_history_with_reads") > historyBefore && v0331Count(host, "message_unread_summary") > summaryBefore
+    }
+    // 요약 응답(붙잡지 않음)이 돌아와 처리될 틈 — 그 사이 점이 한 번이라도 켜지면 곧바로 빨강.
+    await messageReadWait(0.6) { store.hasUnreadMessages }
+    #expect(store.selectedMessageThread?.messages.map(\.id) == ["m0"], "전제: 이력 응답은 아직 붙잡혀 있다")
+    #expect(!store.hasUnreadMessages, "보고 있는 대화에 온 말인데, 새 말이 그려지기 전에 요약이 메뉴바·레일 점을 먼저 켰다")
+
+    historyGate.open()
+    await messageReadWait { messageReadIdle(store) && store.selectedMessageThread?.messages.count == 2 }
+    try? await Task.sleep(for: .milliseconds(40))
+    await messageReadWait { messageReadIdle(store) }
+    #expect(store.selectedMessageThread?.messages.map(\.id) == ["m0", "m1"])
+    #expect(!store.hasUnreadMessages, "보고 있는 대화의 새 말이 반영된 뒤에도 점이 남았다")
+    #expect(box.isRead("m1"), "보고 있는 대화의 새 말을 읽음으로 안 올렸다")
+    store.tickerTask?.cancel()
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 이력_조회가_실패해도_나란히_띄운_요약은_반영된다() async {
+    // 요약을 이력 뒤에 반영하는 대가가 "이력이 실패하면 요약도 잃는다"가 되면 안 된다 — 다른 사람의 점이 그 실패에 묶인다.
+    let (store, host) = makeMessageReadStore("history-fails-summary-lands") { call, _ in
+        switch call.rpc {
+        case "message_history_with_reads": return MessageReadStubProtocol.Reply(status: 503, body: "{}")
+        case "message_unread_summary": return Fx.summaryReply([(Fx.peerB, 2)])
+        default: return nil
+        }
+    }
+    await store.requestMessageActivityRefresh(includeHistory: true)?.value
+    await messageReadWait { messageReadIdle(store) }
+    #expect(v0331Count(host, "message_history_with_reads") >= 1)
+    #expect(store.messageUnreadSummary?.summary.unreadPeerIDs == [Fx.peerB], "이력 실패에 요약까지 버려졌다")
+    #expect(store.unreadMessagePeerIDs == [Fx.peerB])
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup, arguments: [true, false])
+func 같은_초에_온_두_말은_도착_순서대로_그려지고_읽음_경계는_나중_말이다(oneDrain: Bool) async {
+    // 서버 순서(created_at 마이크로초) = z-first → a-second. **id 사전순과 반대**로 둔다 — 같으면 id 로 깨도 초록이다(검증 P1).
+    let epoch = Int(Date().timeIntervalSince1970)
+    let box = V0331FixServerBox(order: ["m0", "z-first", "a-second"])
+    let hold = MessageReadStubGate()
+    let (store, host) = makeMessageReadStore("same-second-\(oneDrain)") { call, index in
+        switch call.rpc {
+        case "message_history_with_reads":
+            var rows = [Fx.readsRow(id: "m0", peer: Fx.peerA, isMine: false, body: "먼저", epoch: epoch - 120, unread: false)]
+            if box.sent {
+                rows.append(Fx.readsRow(id: "z-first", peer: Fx.peerA, isMine: false, body: "첫째", epoch: epoch, unread: !box.isRead("z-first")))
+                rows.append(Fx.readsRow(id: "a-second", peer: Fx.peerA, isMine: false, body: "둘째", epoch: epoch, unread: !box.isRead("a-second")))
+            }
+            // 대화 열기(0) 뒤의 이력은 전부 붙잡는다 — 재는 순간은 take_pokes 응답 직후(서버 순서를 아직 모른다)다.
+            return Fx.historyReply(rows, gate: index >= 1 ? hold : nil)
+        case "message_unread_summary": return Fx.summaryReply([])
+        case "mark_messages_read":
+            box.markRead(call.json["p_through"] as? String)
+            return Fx.markReply()
+        case "take_pokes":
+            box.markSent()
+            let first = Fx.takenMessageRow(id: "z-first", from: Fx.peerA, epoch: epoch, body: "첫째")
+            let second = Fx.takenMessageRow(id: "a-second", from: Fx.peerA, epoch: epoch, body: "둘째")
+            let rows: [[String: Any]]
+            if oneDrain {
+                rows = index == 0 ? [first, second] : []
+            } else {
+                rows = index == 0 ? [first] : (index == 1 ? [second] : [])
+            }
+            return MessageReadStubProtocol.Reply(body: Fx.json(rows))
+        default: return nil
+        }
+    }
+    store.startedAt = Date().addingTimeInterval(-600)
+    await v0331OpenConversation(store, viewToken: UUID(), menu: true)
+
+    _ = await store.drainReceivedPokes()
+    if !oneDrain { _ = await store.drainReceivedPokes() }
+    let label = "oneDrain=\(oneDrain)"
+    #expect(store.messageHistory.map(\.id) == ["m0", "z-first", "a-second"], "같은 초 두 말이 id 사전순으로 뒤집혀 들어갔다 — \(label)")
+    #expect(store.selectedMessageThread?.messages.map(\.body) == ["먼저", "첫째", "둘째"], "열린 대화에 같은 초 두 말이 뒤집혀 그려졌다 — \(label)")
+    // 읽음 경계: 한 번에 왔으면 나중 말 하나로. 두 번에 왔으면 온 차례대로(앞 말 → 나중 말) — 어느 쪽이든 이력 응답을 기다리지 않는다.
+    let expectedMarks = oneDrain ? ["a-second"] : ["z-first", "a-second"]
+    let marks = { MessageReadStubProtocol.calls(host: host, rpc: "mark_messages_read").map { $0.json["p_through"] as? String ?? "nil" } }
+    await messageReadWait(3) { marks() == expectedMarks }
+    #expect(marks() == expectedMarks, "이력 응답 전 읽음 경계가 \(marks()) 다 — \(label)")
+
+    hold.open()
+    await messageReadWait { messageReadIdle(store) }
+    try? await Task.sleep(for: .milliseconds(40))
+    await messageReadWait { messageReadIdle(store) }
+    #expect(store.selectedMessageThread?.messages.map(\.body) == ["먼저", "첫째", "둘째"], "서버 이력 뒤 순서가 바뀌었다 — \(label)")
+    #expect(marks() == expectedMarks, "서버 이력 뒤 읽음 처리가 한 번 더 나갔다(경계를 앞 말로 올렸었다): \(marks()) — \(label)")
+    #expect(!store.hasUnreadMessages)
+    #expect(store.messageReadRuntime.localArrivalSerials.isEmpty)
+}
+
+@Test
+func 같은_초_동률은_서버_자리_다음_도착_번호_다음_id_로_깬다() {
+    let at = Date(timeIntervalSince1970: 1_790_000_000)
+    let entry = { (id: String) in
+        MessageHistoryEntry(id: id, peerUserID: Fx.peerA, peerName: "상대", peerAvatarURL: nil, body: id, createdAt: at, isMine: false)
+    }
+    let earlier = MessageHistoryEntry(id: "zz-earlier", peerUserID: Fx.peerA, peerName: "상대", peerAvatarURL: nil, body: "앞",
+                                      createdAt: at.addingTimeInterval(-1), isMine: false)
+    let entries = [entry("a-arrived-late"), entry("m-known"), entry("b-arrived-first"), entry("c-unknown"), earlier]
+    let arrival = ["b-arrived-first": 7, "a-arrived-late": 9]
+    // 서버 순서가 있으면: 서버가 아는 말 → 모르는 말(도착분 아님, id) → 도착분(도착 번호). 초가 다르면 초가 먼저다.
+    let withServer = entries.sortedForMessageHistory(serverOrder: ["m-known": 0], arrivalOrder: arrival).map(\.id)
+    #expect(withServer == ["zz-earlier", "m-known", "c-unknown", "b-arrived-first", "a-arrived-late"])
+    // 옛 서버(서버 순서 없음)도 도착분은 같은 초의 다른 말 뒤, 그들끼리는 도착 순서.
+    let legacy = Array(entries.reversed()).sortedForMessageHistory(serverOrder: nil, arrivalOrder: arrival).map(\.id)
+    #expect(legacy == ["zz-earlier", "c-unknown", "m-known", "b-arrived-first", "a-arrived-late"])
+    // 표가 비면 예전 규칙 그대로(id).
+    #expect(entries.sortedForMessageHistory().map(\.id) == ["zz-earlier", "a-arrived-late", "b-arrived-first", "c-unknown", "m-known"])
+    // 대화 묶음도 같은 표를 쓴다.
+    #expect(MessageThreadBuilder.threads(from: entries, serverOrder: ["m-known": 0], arrivalOrder: arrival).first?.messages.map(\.id) == withServer)
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 삽입보다_먼저_띄운_이력이_반영돼도_같은_초_도착분은_도착_순서를_지킨다() async {
+    let epoch = Int(Date().timeIntervalSince1970)
+    let gate = MessageReadStubGate()
+    let (store, host) = makeMessageReadStore("same-second-kept") { call, index in
+        switch call.rpc {
+        case "message_history_with_reads":
+            let rows = [Fx.readsRow(id: "m0", peer: Fx.peerA, isMine: false, body: "먼저", epoch: epoch - 120, unread: false)]
+            return Fx.historyReply(rows, gate: index == 1 ? gate : nil)
+        case "message_unread_summary": return Fx.summaryReply([])
+        case "mark_messages_read": return Fx.markReply()
+        default: return nil
+        }
+    }
+    await v0331OpenConversation(store, viewToken: UUID(), menu: true)
+    // 삽입 전에 띄운 이력(두 말을 모른다) — 붙잡힌다.
+    let early = Task { @MainActor in await store.performLoadMessageHistory() }
+    await messageReadWait { v0331Count(host, "message_history_with_reads") == 2 }
+    let row = { (id: String, body: String) in
+        TakenPokeRow(id: id, fromUser: Fx.peerA, fromDisplayName: "상대", fromAvatarUrl: nil, createdEpoch: epoch, kind: "message", body: body)
+    }
+    // take_pokes 행 순서 = 서버 순서(z-first → a-second), id 사전순의 반대.
+    let inserted = store.insertConsumedMessagesIntoVisibleConversation(
+        WorkTimerStore.consumedMessageEntries(rows: [row("z-first", "첫째"), row("a-second", "둘째")], receiptsKnown: true)
+    )
+    #expect(inserted == 2)
+    #expect(store.messageHistory.map(\.id) == ["m0", "z-first", "a-second"])
+
+    gate.open()
+    await early.value
+    #expect(store.messageHistory.map(\.id) == ["m0", "z-first", "a-second"],
+            "삽입 전에 띄운 이력을 반영하며 남긴 도착분이 id 사전순으로 뒤집혔다")
+    #expect(store.selectedMessageThread?.messages.map(\.id) == ["m0", "z-first", "a-second"])
+    await messageReadWait { messageReadIdle(store) }
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 한_번의_drain_으로_같은_상대의_두_말이_보이는_대화에_들어와도_점도_말풍선도_없다() async {
+    // 요약·이력·읽음 응답을 전부 붙잡는다 — 즉시 삽입한 두 말의 판정이 **서버 순서가 모르는 id** 로만 서는 순간을 잰다(검증 P6).
+    // 앞 말(m1)은 낙관 읽음 경계(m2)의 id 와 같지 않으므로, 즉시 삽입분을 서버 순서 뒤에 두는 순서표 없이는 "덮이지 않음"으로 읽힌다.
+    let epoch = Int(Date().timeIntervalSince1970)
+    let box = V0331FixServerBox()
+    let hold = MessageReadStubGate()
+    let (store, _) = makeMessageReadStore("two-in-one-drain") { call, index in
+        switch call.rpc {
+        case "message_history_with_reads":
+            let rows = [Fx.readsRow(id: "m0", peer: Fx.peerA, isMine: false, body: "먼저", epoch: epoch - 120, unread: false)]
+            return Fx.historyReply(rows, gate: box.sent ? hold : nil)
+        case "message_unread_summary": return Fx.summaryReply([], gate: box.sent ? hold : nil)
+        case "mark_messages_read":
+            return MessageReadStubProtocol.Reply(body: Fx.json(["status": "ok", "advanced": true, "unread": 0]), gate: hold)
+        case "take_pokes":
+            box.markSent()
+            let rows = index == 0 ? [Fx.takenMessageRow(id: "m1", from: Fx.peerA, epoch: epoch - 2, body: "하나"),
+                                     Fx.takenMessageRow(id: "m2", from: Fx.peerA, epoch: epoch - 1, body: "둘")] : []
+            return MessageReadStubProtocol.Reply(body: Fx.json(rows))
+        default: return nil
+        }
+    }
+    store.startedAt = Date().addingTimeInterval(-600)
+    await v0331OpenConversation(store, viewToken: UUID(), menu: true)
+
+    _ = await store.drainReceivedPokes()
+    #expect(store.selectedMessageThread?.messages.map(\.id) == ["m0", "m1", "m2"])
+    #expect(store.messageOptimisticReads[Fx.peerA]?.throughID == "m2", "전제: 경계는 나중 말")
+    #expect(!store.hasUnreadMessages, "보고 있는 대화에 한 번에 들어온 두 말 중 앞 말이 메뉴바·레일·목록 점을 켰다")
+    #expect(store.unreadMessagePeerIDs.isEmpty)
+    #expect(store.receivedMessages.isEmpty, "보고 있는 대화에 방금 뜬 앞 말이 캐릭터 말풍선 큐에도 올랐다: \(store.receivedMessages.map(\.id))")
+    hold.open()
+    await messageReadWait { messageReadIdle(store) }
+}
+
 // MARK: - 뷰 ↔ 스토어 배선 (소스 계약)
 
 @Test

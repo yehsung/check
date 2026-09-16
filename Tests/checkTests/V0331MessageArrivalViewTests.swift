@@ -156,6 +156,45 @@ func 열린_대화_화면에_도착한_새_줄이_재오픈_없이_그려진다(
     await messageReadWaitSync(store)
 }
 
+// MARK: - 대화 뷰 생명주기 배선(런타임)
+//
+// m4-fix: 소스 계약(V0331MessageArrivalTests)은 호출 **글자**만 본다 — `.onDisappear { if Int("0") == 1 { … } }` 로 죽여도 초록이었다
+// (검증 변이 H01 생존). 깨지면 표식이 새서 닫힌 팝오버를 계속 "보인다"로 판정하고, 도착마다 삽입·이력 조회가 붙는다.
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 대화_뷰가_창에서_내려가면_스토어의_표식이_빠지고_다시_올리면_돌아온다() async throws {
+    let (store, _) = makeMessageReadStore("view-lifecycle") { call, _ in
+        call.rpc == "message_unread_summary" ? Fx.summaryReply([]) : nil
+    }
+    store.messageHistory = [v0331Entry("m0", "안녕", secondsAgo: 60)]
+    store.messageHistoryLoaded = true
+    store.isMessagePanelVisible = true
+    store.selectedMessagePeerID = Fx.peerA
+    store.isMenuPresented = false
+    let make = { CheckMessageView(store: store, rendersPlainTextEditor: true, now: Date(), onBack: {}) }
+    let width = CheckMenuView.contentColumnWidth
+
+    let (window, host) = v0331Mount(make(), width: width, height: 400)
+    defer { window.contentView = nil; window.close() }
+    #expect(store.messageConversationViewTokens.count == 1, "대화 뷰가 나타남을 스토어에 알리지 않았다")
+    #expect(store.isMessageConversationOnScreen)
+
+    // 대화 뷰를 다른 화면으로 갈아 끼운다([뒤로]·팝오버 콘텐츠 내려감과 같은 SwiftUI 사라짐). 창은 화면에 올리지 않는다.
+    host.rootView = AnyView(Color.clear.frame(width: 10, height: 10))
+    host.layoutSubtreeIfNeeded()
+    v0331Spin(0.3)
+    #expect(store.messageConversationViewTokens.isEmpty, "대화 뷰가 내려갔는데 표식이 남았다 — 닫힌 대화를 계속 '보인다'로 판정한다")
+    #expect(!store.isMessageConversationOnScreen, "대화 뷰가 내려갔는데 스토어가 대화가 떠 있을 수 있다고 판정한다")
+
+    // 다시 올리면 새 표식 하나(옛 표식이 되살아나 둘이 되지 않는다).
+    host.rootView = AnyView(make().frame(width: width, height: 400, alignment: .top))
+    host.layoutSubtreeIfNeeded()
+    v0331Spin(0.3)
+    #expect(store.messageConversationViewTokens.count == 1, "다시 올린 대화 뷰의 표식이 \(store.messageConversationViewTokens.count) 개다")
+    await messageReadWaitSync(store)
+}
+
 /// 스토어가 띄운 요약 조회 등이 끝나도록 런루프를 잠깐 돌린다(동기 테스트용).
 @MainActor
 private func messageReadWaitSync(_ store: WorkTimerStore) async {

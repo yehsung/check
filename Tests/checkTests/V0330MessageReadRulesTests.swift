@@ -163,6 +163,74 @@ func 말풍선_필터는_서버_읽음과_낙관_경계만_거른다() {
 }
 
 @Test
+func 말풍선_필터는_이력보다_나중에_띄운_요약의_0건도_읽음으로_본다() {
+    // m-fix F3: 이력(안 읽음)보다 나중에 띄운 요약이 그 상대를 안 읽음 목록에 안 두면 그 사이 다른 기기에서 읽혔다.
+    let history = [rulesEntry("a1", peer: "u1", unread: true), rulesEntry("b1", peer: "u2", unread: true)]
+    let snapshot = MessageHistoryReadSnapshot(serial: 5, serverOrder: ["a1": 0, "b1": 1])
+    func read(_ id: String, summary: MessageUnreadSummarySnapshot?) -> Bool {
+        MessageUnreadRules.isAlreadyRead(messageID: id, history: history, snapshot: snapshot, optimistic: [:], summary: summary)
+    }
+    let later = rulesSummary(serial: 6, [("u2", 1)])
+    #expect(read("a1", summary: later), "나중 요약이 0건이라 말한 상대의 메시지를 말풍선으로 띄운다")
+    #expect(!read("b1", summary: later), "나중 요약이 안 읽음이라 말한 상대의 메시지를 뺐다")
+    // 이력보다 **먼저** 띄운 요약은 이력보다 낡았다 — 판정에 쓰지 않는다.
+    #expect(!read("a1", summary: rulesSummary(serial: 4, [])))
+    // 같은 번호(있을 수 없지만)도 나중이 아니다.
+    #expect(!read("a1", summary: rulesSummary(serial: 5, [])))
+    #expect(!read("a1", summary: nil))
+    // 이력에 없는(이력 뒤에 도착한) 메시지는 요약이 0건이어도 판정하지 않는다 — 요약 요청보다 늦었을 수 있다.
+    #expect(!MessageUnreadRules.isAlreadyRead(
+        messageID: "new", history: history, snapshot: snapshot, optimistic: [:], summary: rulesSummary(serial: 9, [])
+    ))
+    // 읽음을 모르는 서버(스냅샷 없음)는 요약이 있어도 옛 동작이다.
+    #expect(!MessageUnreadRules.isAlreadyRead(
+        messageID: "a1", history: history, snapshot: nil, optimistic: [:], summary: rulesSummary(serial: 9, [])
+    ))
+}
+
+@Test
+func 같은_초의_동률은_서버_순서로_깨고_모르면_id_다() {
+    // m-fix F7: created_epoch 은 초라 같은 초에 오간 말이 동률이다. 서버 순서(응답 안의 자리)가 마이크로초 선후다.
+    let entries = [
+        rulesEntry("c", peer: "u1"), rulesEntry("b", peer: "u1", mine: true),
+        rulesEntry("a", peer: "u1"), rulesEntry("z-later", peer: "u1", at: 1), rulesEntry("y-earlier", peer: "u1", at: -1)
+    ]
+    let order = ["c": 0, "b": 1, "a": 2, "y-earlier": 3, "z-later": 4]
+    #expect(entries.sortedForMessageHistory(serverOrder: order).map(\.id) == ["y-earlier", "c", "b", "a", "z-later"])
+    #expect(Array(entries.reversed()).sortedForMessageHistory(serverOrder: order).map(\.id) == ["y-earlier", "c", "b", "a", "z-later"],
+            "입력 순서에 따라 결과가 흔들린다")
+    // 순서를 모르면(옛 서버) 예전 규칙 — 초 → id.
+    #expect(entries.sortedForMessageHistory().map(\.id) == ["y-earlier", "a", "b", "c", "z-later"])
+    // 순서표에 없는 id 는 같은 초의 맨 뒤(전순서 — 섞여도 결정적이다).
+    let partial = ["c": 0, "a": 1]
+    #expect(entries.sortedForMessageHistory(serverOrder: partial).map(\.id) == ["y-earlier", "c", "a", "b", "z-later"])
+    #expect(Array(entries.reversed()).sortedForMessageHistory(serverOrder: partial).map(\.id) == ["y-earlier", "c", "a", "b", "z-later"])
+    // 대화 묶음도 같은 순서를 쓴다(화면이 읽는 길).
+    #expect(MessageThreadBuilder.threads(from: entries, serverOrder: order).first?.messages.map(\.id)
+            == ["y-earlier", "c", "b", "a", "z-later"])
+}
+
+@MainActor
+@Test
+func 이력_낡음_표시는_그보다_나중에_띄운_이력만_지운다() {
+    // m-fix F1: 닫힌 팝오버에서 이력을 건너뛴 계기를 적어 두고, 그 뒤에 **띄운** 이력이 반영될 때만 지운다.
+    let runtime = MessageReadRuntime()
+    let early = runtime.nextSerial()          // 계기 전에 띄운 이력(늦게 도착한다)
+    #expect(runtime.historyStaleSerial == nil)
+    runtime.markHistoryStale()
+    #expect(runtime.historyStaleSerial == early)
+    runtime.clearHistoryStale(appliedSerial: early)
+    #expect(runtime.historyStaleSerial != nil, "계기보다 먼저 띄운 늦은 이력이 낡음 표시를 지웠다")
+    let later = runtime.nextSerial()
+    runtime.markHistoryStale()                // 또 다른 계기 — 표시는 더 새 번호로 옮는다
+    runtime.clearHistoryStale(appliedSerial: later)
+    #expect(runtime.historyStaleSerial != nil, "두 번째 계기보다 먼저 띄운 이력이 표시를 지웠다")
+    let latest = runtime.nextSerial()
+    runtime.clearHistoryStale(appliedSerial: latest)
+    #expect(runtime.historyStaleSerial == nil)
+}
+
+@Test
 func 요약_응답은_ok_일_때만_스냅샷이고_0_인_상대는_뺀다() throws {
     let decoder = JSONDecoder()
     decoder.keyDecodingStrategy = .convertFromSnakeCase

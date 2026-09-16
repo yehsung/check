@@ -221,6 +221,184 @@ func 근무를_시작하는_순간_drain_따라잡기는_정확히_한_번이다
     store.tickerTask?.cancel()
 }
 
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 비근무_맥에_빚이_있어도_티커와_되맞춤은_요약을_다시_쏘지_않는다() async {
+    // m-fix F4: 빚 갚기(resumeDeferredCatchUpIfPossible)의 소비 게이트를 지워도 초록이던 자리(MV15 생존). 게이트가 없으면
+    // 비근무 맥이 5초 티커·30초 되맞춤마다 따라잡기 → "소비 불가" 가지 → 요약 RPC 를 쏜다(한 대가 하루 약 1.7만 건).
+    let (store, transport, host) = v0330RealtimeStore("tick-debt")
+    store.startRealtimeIfPossible()
+    transport.emit(.joined)
+    await messageReadWait { v0330Count(host, "message_unread_summary") >= 1 && messageReadIdle(store) }
+    #expect(store.realtime.catchUpDeferred, "전제: 비근무 조인이 빚을 적었다")
+    let base = v0330Count(host, "message_unread_summary")
+
+    var now = Date()
+    for _ in 0..<5 {
+        now = now.addingTimeInterval(5)
+        store.realtimeTick(at: now)
+        store.reconcileRealtimeWithWorkState()
+        await messageReadWait { messageReadIdle(store) }
+    }
+    try? await Task.sleep(for: .milliseconds(80))
+    await messageReadWait { messageReadIdle(store) }
+    #expect(v0330Count(host, "message_unread_summary") == base, "비근무 맥의 티커·되맞춤이 요약 RPC 를 반복해서 쐈다")
+    #expect(v0330Count(host, "take_pokes") == 0)
+    #expect(store.realtime.catchUpDeferred, "갚지도 않은 빚이 지워졌다")
+}
+
+// MARK: - m-fix: 근무 중 수신 · 닫힌 팝오버 동안의 신호
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 근무_중_drain_으로_받은_메시지는_요약을_다시_받아_안_읽음_점을_켠다() async {
+    // m-fix F2 · X1: 근무 중인 맥은 초인종을 take_pokes 로 소비한다. 말풍선으로 본 것은 읽음이 아니므로(M1.8) 서버 기준 안 읽음인데,
+    // drain 경로가 요약·이력을 다시 안 받아 메뉴바·레일·목록 점이 꺼진 채였다.
+    let epoch = Int(Date().timeIntervalSince1970)
+    let (store, transport, host) = v0330RealtimeStore("working-drain-dot") { call, index in
+        switch call.rpc {
+        case "take_pokes":
+            // 조인 따라잡기(0번)는 빈손, 초인종(1번)에 메시지 한 건.
+            return index == 0
+                ? MessageReadStubProtocol.Reply(body: "[]")
+                : MessageReadStubProtocol.Reply(body: MessageReadFixture.json([
+                    MessageReadFixture.takenMessageRow(id: "wd-1", from: MessageReadFixture.peerA, epoch: epoch - 5)
+                ]))
+        case "message_unread_summary":
+            // 메시지 도착 전엔 0, 도착 뒤엔 peerA 1건(서버의 사실).
+            return MessageReadStubProtocol.count(host: call.url.host ?? "", rpc: "take_pokes") < 2
+                ? MessageReadFixture.summaryReply([])
+                : MessageReadFixture.summaryReply([(MessageReadFixture.peerA, 1)])
+        default: return nil
+        }
+    }
+    store.startedAt = MessageReadFixture.now
+    store.startRealtimeIfPossible()
+    transport.emit(.joined)
+    await messageReadWait { v0330Count(host, "take_pokes") >= 1 && messageReadIdle(store) }
+    #expect(!store.hasUnreadMessages, "전제: 도착 전엔 점 없음")
+    let summaries = v0330Count(host, "message_unread_summary")
+
+    transport.emit(.broadcast(event: "ring"))
+    await messageReadWait { v0330Count(host, "take_pokes") >= 2 && messageReadIdle(store) }
+    try? await Task.sleep(for: .milliseconds(80))
+    await messageReadWait { messageReadIdle(store) }
+    #expect(store.receivedMessages.map(\.id) == ["wd-1"], "전제: 말풍선 큐에 들어왔다")
+    #expect(v0330Count(host, "message_unread_summary") == summaries + 1, "근무 중 받은 메시지가 요약을 다시 안 받았다")
+    #expect(store.hasUnreadMessages, "근무 중 받은 안 읽은 메시지가 메뉴바·레일 점을 켜지 못한다")
+    #expect(store.unreadMessagePeerIDs == [MessageReadFixture.peerA])
+    // 팝오버가 닫혀 있으니 이력은 안 받는다(볼 사람이 없다).
+    #expect(v0330Count(host, "message_history_with_reads") == 0)
+    #expect(v0330Count(host, "mark_messages_read") == 0, "말풍선으로 본 것을 읽음으로 올렸다")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 근무_중_조인_따라잡기도_요약을_한_번_받는다() async {
+    // m-fix(F2 와 같은 틈): 소켓이 끊겨 있던 동안의 메시지·읽음 신호는 재생되지 않는다. 비근무 조인은 요약을 받는데
+    // 근무 중 조인은 take_pokes 만 불러, 끊긴 동안 온(5분 넘어 말풍선으로 안 오는) 메시지의 점이 팝오버를 열 때까지 안 떴다.
+    let (store, transport, host) = v0330RealtimeStore("working-join-summary")
+    store.startedAt = MessageReadFixture.now
+    store.startRealtimeIfPossible()
+    transport.emit(.joined)
+    await messageReadWait {
+        v0330Count(host, "take_pokes") >= 1 && v0330Count(host, "message_unread_summary") >= 1 && messageReadIdle(store)
+    }
+    try? await Task.sleep(for: .milliseconds(80))
+    await messageReadWait { messageReadIdle(store) }
+    #expect(v0330Count(host, "take_pokes") == 1)
+    #expect(v0330Count(host, "message_unread_summary") == 1, "근무 중 조인이 요약을 안 받았다")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 닫힌_팝오버에서_받은_읽음_신호는_다시_열_때_보이는_대화의_이력을_스로틀과_무관하게_받는다() async {
+    // m-fix F1 ⑧: 대화 패널을 띄운 채 팝오버를 닫았다 → 상대가 읽음(message_read) → 60초 안에 다시 연다.
+    // 닫힌 동안의 새로고침은 이력을 건너뛰므로(볼 사람이 없다) 다시 열 때 받지 않으면 보낸 말 옆 1 이 남는다.
+    let (store, transport, host) = v0330RealtimeStore("read-while-closed") { call, index in
+        switch call.rpc {
+        case "message_unread_summary": return MessageReadFixture.summaryReply([])
+        case "message_history_with_reads":
+            // 0·1번(패널 열기·팝오버 열기): 상대가 아직 안 읽음 · 2번부터: 읽음
+            return MessageReadFixture.historyReply([
+                MessageReadFixture.readsRow(id: "rw-1", peer: MessageReadFixture.peerA, isMine: true, readByPeer: index >= 2)
+            ])
+        default: return nil
+        }
+    }
+    store.startRealtimeIfPossible()
+    transport.emit(.joined)
+    await messageReadWait { messageReadIdle(store) }
+    store.openMessagePanel(peer: MessageReadFixture.peerA)
+    store.setMenuPresented(true)
+    await messageReadWait { v0330Count(host, "message_history_with_reads") >= 2 && messageReadIdle(store) }
+    #expect(store.messageHistory.first?.readByPeer == false, "전제: 상대가 아직 안 읽었다")
+    let historiesBeforeClose = v0330Count(host, "message_history_with_reads")
+
+    store.setMenuPresented(false)
+    transport.emit(.broadcast(event: "message_read"))
+    await messageReadWait { messageReadIdle(store) }
+    #expect(v0330Count(host, "message_history_with_reads") == historiesBeforeClose, "닫힌 팝오버에서 이력을 받았다(볼 사람이 없다)")
+
+    store.setMenuPresented(true)   // 얼린 시계 = 60초 스로틀 안
+    await messageReadWait { v0330Count(host, "message_history_with_reads") >= historiesBeforeClose + 1 && messageReadIdle(store) }
+    try? await Task.sleep(for: .milliseconds(80))
+    await messageReadWait { messageReadIdle(store) }
+    #expect(v0330Count(host, "message_history_with_reads") == historiesBeforeClose + 1)
+    #expect(store.messageHistory.first?.readByPeer == true, "상대가 읽었다는 신호를 받았는데 다시 연 대화에 1 이 남았다")
+
+    // 한 번 받았으면 더는 낡지 않았다 — 같은 스로틀 안에서 다시 열어도 요청 없음.
+    store.setMenuPresented(false)
+    store.setMenuPresented(true)
+    try? await Task.sleep(for: .milliseconds(80))
+    await messageReadWait { messageReadIdle(store) }
+    #expect(v0330Count(host, "message_history_with_reads") == historiesBeforeClose + 1, "낡음 표시가 안 지워져 열 때마다 이력을 받는다")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 닫힌_팝오버에서_온_새_말은_다시_열_때_보이는_대화에_나타나고_읽음으로_올린다() async {
+    // m-fix F1 ⑨: 비근무 · 대화 패널을 띄운 채 팝오버를 닫았다 → 그 상대가 새 말(초인종) → 60초 안에 다시 연다.
+    // 요약만 받으면 같은 상대에게 점은 켜지는데 열린 대화엔 새 말이 없고 읽음 처리도 0회였다.
+    let epoch = Int(Date().timeIntervalSince1970)
+    let (store, transport, host) = v0330RealtimeStore("new-while-closed") { call, index in
+        // 서버의 사실: 읽음 처리가 한 번 나가면 nw-1 은 읽혔다.
+        let marked = MessageReadStubProtocol.count(host: call.url.host ?? "", rpc: "mark_messages_read") > 0
+        switch call.rpc {
+        case "message_unread_summary":
+            return index <= 1 || marked
+                ? MessageReadFixture.summaryReply([])
+                : MessageReadFixture.summaryReply([(MessageReadFixture.peerA, 1)])
+        case "message_history_with_reads":
+            var rows = [MessageReadFixture.readsRow(id: "nw-0", peer: MessageReadFixture.peerA, isMine: true, epoch: epoch - 60, readByPeer: true)]
+            if index >= 2 {
+                rows.append(MessageReadFixture.readsRow(id: "nw-1", peer: MessageReadFixture.peerA, isMine: false, epoch: epoch, unread: !marked))
+            }
+            return MessageReadFixture.historyReply(rows)
+        case "mark_messages_read": return MessageReadFixture.markReply()
+        default: return nil
+        }
+    }
+    store.startRealtimeIfPossible()
+    transport.emit(.joined)
+    await messageReadWait { messageReadIdle(store) }
+    store.openMessagePanel(peer: MessageReadFixture.peerA)
+    store.setMenuPresented(true)
+    await messageReadWait { v0330Count(host, "message_history_with_reads") >= 2 && messageReadIdle(store) }
+
+    store.setMenuPresented(false)
+    transport.emit(.broadcast(event: "ring"))
+    await messageReadWait { v0330Count(host, "message_unread_summary") >= 3 && messageReadIdle(store) }
+    #expect(store.hasUnreadMessages, "전제: 닫힌 동안 온 말이 점을 켰다")
+    #expect(v0330Count(host, "take_pokes") == 0)
+
+    store.setMenuPresented(true)
+    await messageReadWait { v0330Count(host, "mark_messages_read") >= 1 && messageReadIdle(store) }
+    #expect(store.messageHistory.map(\.id).contains("nw-1"), "다시 연 대화에 새 말이 안 그려졌다")
+    #expect(v0330Count(host, "mark_messages_read") == 1, "보이는 대화의 새 말을 읽음으로 안 올렸다")
+    #expect(!store.hasUnreadMessages, "대화 화면에 떠 있는 상대의 점이 켜져 있다")
+}
+
 // MARK: - 소스 계약 (주석을 걷어낸 뒤)
 
 @Test

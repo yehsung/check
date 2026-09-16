@@ -413,6 +413,10 @@ extension WorkTimerStore {
             return
         }
         realtime.catchUpDeferred = false
+        // 근무 중 조인도 서버 표를 한 번 읽는다(m-fix — F2 와 같은 틈). 소켓이 끊겨 있던 동안의 메시지·읽음 신호는 재생되지 않고,
+        // take_pokes 는 5분 넘은 메시지를 말풍선으로 안 돌려주므로 drain 만으로는 그 구간의 안 읽음 점이 팝오버를 열 때까지 안 뜬다.
+        // 기다리지 않는다(위 소비 불가 가지와 같은 이유 — 따라잡기 수명에 조회 왕복을 얹지 않는다).
+        requestMessageActivityRefresh()
         for attempt in 0..<Self.catchUpAttempts {
             realtime.diagnostics.lastCatchUpAttempts = attempt + 1
             let outcome = await drainReceivedPokes()

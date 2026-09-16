@@ -16,6 +16,9 @@ final class MessageReadStubProtocol: URLProtocol {
         var status: Int = 200
         var body: String
         var delay: TimeInterval = 0
+        /// 열릴 때까지 응답을 붙잡는 문(m-fix F6). 벽시계 지연(`delay`)은 전체 스위트 부하에서 뒤에 띄운 요청이 전선에
+        /// 오르기도 전에 풀려 "늦게 온 옛 응답" 순서가 뒤집힌다 — 도착 순서를 테스트가 **정하게** 하려면 이것을 쓴다.
+        var gate: MessageReadStubGate? = nil
     }
 
     struct Call: Sendable {
@@ -98,7 +101,9 @@ final class MessageReadStubProtocol: URLProtocol {
             headerFields: ["Content-Type": "application/json"]
         )!
         let delivery = MessageReadStubDelivery(proto: self, response: response, data: Data(reply.body.utf8))
-        if reply.delay > 0 {
+        if let gate = reply.gate {
+            gate.whenOpen { DispatchQueue.global().async { delivery.run() } }
+        } else if reply.delay > 0 {
             DispatchQueue.global().asyncAfter(deadline: .now() + reply.delay) { delivery.run() }
         } else {
             delivery.run()
@@ -122,6 +127,35 @@ final class MessageReadStubProtocol: URLProtocol {
             data.append(buffer, count: count)
         }
         return String(decoding: data, as: UTF8.self)
+    }
+}
+
+/// 응답 문(m-fix F6). `open()` 전에 도착한 요청의 응답은 붙잡혀 있다가 열리는 순간 한꺼번에 나간다.
+final class MessageReadStubGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isOpen = false
+    private var pending: [@Sendable () -> Void] = []
+
+    init() {}
+
+    func open() {
+        lock.lock()
+        isOpen = true
+        let waiting = pending
+        pending = []
+        lock.unlock()
+        waiting.forEach { $0() }
+    }
+
+    func whenOpen(_ work: @escaping @Sendable () -> Void) {
+        lock.lock()
+        if isOpen {
+            lock.unlock()
+            work()
+            return
+        }
+        pending.append(work)
+        lock.unlock()
     }
 }
 
@@ -190,17 +224,21 @@ enum MessageReadFixture {
         ]
     }
 
-    static func historyReply(_ rows: [[String: Any]], delay: TimeInterval = 0) -> MessageReadStubProtocol.Reply {
-        MessageReadStubProtocol.Reply(body: json(rows), delay: delay)
+    static func historyReply(
+        _ rows: [[String: Any]], delay: TimeInterval = 0, gate: MessageReadStubGate? = nil
+    ) -> MessageReadStubProtocol.Reply {
+        MessageReadStubProtocol.Reply(body: json(rows), delay: delay, gate: gate)
     }
 
-    static func summaryReply(_ peers: [(String, Int)], delay: TimeInterval = 0) -> MessageReadStubProtocol.Reply {
+    static func summaryReply(
+        _ peers: [(String, Int)], delay: TimeInterval = 0, gate: MessageReadStubGate? = nil
+    ) -> MessageReadStubProtocol.Reply {
         let rows: [[String: Any]] = peers.enumerated().map { index, pair in
             ["peer_user_id": pair.0, "count": pair.1, "last_epoch_ms": 1_790_000_000_000 - index * 1000]
         }
         let total = peers.reduce(0) { $0 + $1.1 }
         return MessageReadStubProtocol.Reply(
-            body: json(["status": "ok", "total": total, "peers": rows]), delay: delay
+            body: json(["status": "ok", "total": total, "peers": rows]), delay: delay, gate: gate
         )
     }
 

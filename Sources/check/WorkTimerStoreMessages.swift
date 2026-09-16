@@ -57,6 +57,10 @@ extension WorkTimerStore {
     /// 팝오버를 열 때 요약·이력을 다시 받는 최소 간격(초, v0.3.30). 여닫이마다 두 요청을 내면 무료 플랜 예산을 태운다 —
     /// 그 사이의 변화는 소켓 신호(초인종·읽음)가 메운다. 오목 받은 신청의 60초(GomokuStore.menuInboxThrottleSeconds)와 같은 눈금이다.
     nonisolated static let messageMenuRefreshThrottleSeconds: TimeInterval = 60
+    /// **안 읽음 점이 켜져 있을 때**의 팝오버 열기 간격(초, v0.3.30 m-fix). 다른 기기(폰)에서 읽으면 서버의 `message_read` 는
+    /// **보낸 사람** 채널로만 가서 이 맥에는 신호가 없다 — 점을 보고 팝오버를 연 사람에게 60초 스로틀로 낡은 점을 보여 주면 안 된다.
+    /// 0 이 아닌 이유는 연타다(여닫이 한 번에 요청 두 건). 점이 꺼져 있으면 위 60초 그대로다.
+    nonisolated static let messageMenuRefreshUnreadThrottleSeconds: TimeInterval = 10
 
     // MARK: 안내 문구 (서버 status 아홉 개의 사람 말 번역)
     //
@@ -98,7 +102,10 @@ extension WorkTimerStore {
 
     /// 대화 상대별로 묶은 목록(최근 대화순). **왕복을 늘리지 않는다** — `message_history` 한 번으로 받은 것을
     /// 클라에서 나눈다. 상대마다 조회하면 26명 규모에서 요청이 26배가 된다(무료 플랜).
-    var messageThreads: [MessageThread] { MessageThreadBuilder.threads(from: messageHistory) }
+    /// 같은 초 안의 말은 **서버 순서**로 깬다(m-fix F7) — 이력이 읽음 칸을 실어 왔을 때만 그 순서를 안다.
+    var messageThreads: [MessageThread] {
+        MessageThreadBuilder.threads(from: messageHistory, serverOrder: messageHistoryReadSnapshot?.serverOrder)
+    }
 
     /// 지금 고른 대화(아무도 안 골랐거나 그 사람과의 대화가 사라졌으면 nil).
     var selectedMessageThread: MessageThread? {
@@ -292,17 +299,18 @@ extension WorkTimerStore {
         Task { @MainActor in await performLoadMessageHistory() }
     }
 
-    /// 수신 폴링이 새 메시지를 물어왔을 때의 갱신(`enqueueReceivedMessages` 가 부른다).
+    /// 수신(take_pokes drain)이 새 메시지를 물어왔을 때의 갱신(`enqueueReceivedMessages` 가 부른다).
     ///
-    /// **창이 닫혀 있으면 아무 요청도 내지 않는다.** 볼 사람이 없는 갱신에 무료 플랜의 왕복을 쓰지 않는다 —
-    /// 이력은 창을 열 때 어차피 한 번 받는다. 이 게이트가 "폴링을 새로 만들지 않는다"는 규약의 실제 내용이다.
+    /// v0.3.30 m-fix(F2): **메시지 활동 새로고침**이다 — 안 읽음 요약 1회 + 대화가 팝오버에 보이면 이력 1회.
+    /// 근무 중인 맥은 초인종을 take_pokes 로 소비하고 말풍선으로 띄우는데, 말풍선으로 본 것은 읽음이 아니다(M1.8).
+    /// 여기서 요약을 안 받으면 서버는 "안 읽음"이라 말하는데 메뉴바·레일·목록 점이 꺼진 채다(이력만 받던 v0.2.49~ 의 틈).
+    ///
+    /// **이력은 여전히 볼 사람이 있을 때만** 받는다(팝오버가 떠 있고 대화 패널이 보임 — 그 판정은 새로고침이 부르는 순간 한다).
+    /// 패널 깃발은 팝오버를 닫아도 안 내려가므로 깃발만 보면 닫힌 팝오버에도 이력 조회가 붙는다(v0.2.50 의 `isMenuPresented`).
+    /// 건너뛴 이력은 "낡음"으로 적혀 대화가 보이는 채로 팝오버를 다시 열 때 받는다(F1). 폴링이 아니다 — 도착 1건당 1회다.
     func refreshMessageHistoryOnArrival() {
-        // 팝오버가 닫혀 있으면 아무 요청도 내지 않는다 — 볼 사람이 없는 갱신에 무료 플랜의 왕복을 쓰지 않는다.
-        // **`isMenuPresented` 를 함께 보는 것이 v0.2.50 의 차이다**: 패널 깃발은 팝오버를 닫아도 내려가지
-        // 않으므로(마지막으로 본 화면을 다음 오픈에 그대로 보여 주는 규약) 깃발만 보면 닫힌 팝오버에도
-        // 15초마다 이력 조회가 붙는다. 이 게이트가 "폴링을 새로 만들지 않는다"의 실제 내용이다.
-        guard isMenuPresented, isMessagePanelVisible, session != nil else { return }
-        loadMessageHistory()
+        guard session != nil else { return }
+        requestMessageActivityRefresh()
     }
 
     /// `message_history_with_reads`(없는 서버면 `message_history`)를 받아 반영한다.
@@ -330,7 +338,10 @@ extension WorkTimerStore {
             // 더 나중에 띄운 조회가 이미 반영됐다 — 이 응답은 그보다 낡은 서버 상태다(읽음 1 이 되살아나면 안 된다).
             guard serial > messageReadRuntime.lastAppliedHistorySerial else { return }
             messageReadRuntime.lastAppliedHistorySerial = serial
-            let sorted = loaded.entries.sortedForMessageHistory()
+            // 이 조회가 "낡음" 표시보다 나중에 띄워졌으면 그 계기를 반영했다(F1).
+            messageReadRuntime.clearHistoryStale(appliedSerial: serial)
+            // 같은 초의 동률은 서버 순서로 깬다(F7). 읽음 칸이 없는 옛 서버는 id 로(예전 그대로).
+            let sorted = loaded.entries.sortedForMessageHistory(serverOrder: loaded.hasReadReceipts ? loaded.serverOrder : nil)
             if messageHistory != sorted { messageHistory = sorted }
             applyMessageHistoryReadCapability(loaded, serial: serial)
             if !messageHistoryLoaded { messageHistoryLoaded = true }
@@ -380,6 +391,8 @@ extension WorkTimerStore {
                 if !messageHistoryLoaded { messageHistoryLoaded = true }
                 // 두 함수가 다 없는 서버다 — 읽음도 모른다(1 을 그리지 않는다).
                 if messageReadReceiptsAvailable { messageReadReceiptsAvailable = false }
+                // 받을 이력이 없는 서버다 — 낡음 표시를 붙들고 있으면 열 때마다 헛조회한다.
+                messageReadRuntime.clearHistoryStale(appliedSerial: serial)
             } else if !messageHistoryFailed {
                 messageHistoryFailed = true
             }
@@ -428,11 +441,7 @@ extension WorkTimerStore {
             if messageReadReceiptsAvailable { messageReadReceiptsAvailable = false }
             return
         }
-        var order: [String: Int] = [:]
-        for (index, entry) in loaded.entries.enumerated() where order[entry.id] == nil {
-            order[entry.id] = index
-        }
-        let snapshot = MessageHistoryReadSnapshot(serial: serial, serverOrder: order)
+        let snapshot = MessageHistoryReadSnapshot(serial: serial, serverOrder: loaded.serverOrder)
         if messageHistoryReadSnapshot != snapshot { messageHistoryReadSnapshot = snapshot }
         if !messageReadReceiptsAvailable { messageReadReceiptsAvailable = true }
     }
@@ -532,17 +541,25 @@ extension WorkTimerStore {
 
 @MainActor
 extension WorkTimerStore {
-    /// **메시지 활동 새로고침** — 안 읽음 요약 1회(+ 대화 패널이 보이거나 `includeHistory` 면 이력 1회).
+    /// **메시지 활동 새로고침** — 안 읽음 요약 1회(+ 대화가 팝오버에 보이거나 `includeHistory` 면 이력 1회).
     ///
-    /// 부르는 자리: 소비할 수 없는 맥의 초인종·읽음 신호(`message_read`)·조인 직후 따라잡기(소비 불가)·로그인 직후·
-    /// 팝오버 열기(60초 스로틀)·읽음 처리 성공 뒤. **폴링이 아니다** — 이벤트마다 한 번이다.
+    /// 부르는 자리: 소비할 수 없는 맥의 초인종·읽음 신호(`message_read`)·조인 직후 따라잡기(근무 여부 무관)·로그인 직후·
+    /// 팝오버 열기(스로틀)·읽음 처리 성공 뒤·**drain 이 메시지를 받았을 때**(m-fix F2). **폴링이 아니다** — 이벤트마다 한 번이다.
     /// 도는 중에 또 불리면 새 Task 를 만들지 않고 뒤따르는 한 번을 예약한다(버리면 조회가 나간 뒤 도착한 신호가 안 보이고,
     /// 셋 다 쏘면 무료 플랜 왕복만 는다). 반환 Task 는 기다려야 하는 호출부(조인 따라잡기)와 테스트용이다.
+    ///
+    /// 이력을 받을지는 **부르는 순간** 정한다(m-fix F1). 그 계기를 볼 사람이 없어(팝오버 닫힘·패널 안 보임) 이력을 건너뛰면
+    /// "이력 낡음"을 적는다 — 대화가 보이는 채로 팝오버를 다시 열면 스로틀과 무관하게 받는다(`refreshMessageActivityOnMenuOpen`).
+    /// 안 적으면 닫힌 동안 온 읽음·새 말이 60초 안에 다시 연 대화에 안 그려진다(1 이 안 사라지고, 점은 켜졌는데 새 말은 없다).
     @discardableResult
     func requestMessageActivityRefresh(includeHistory: Bool = false) -> Task<Void, Never>? {
         guard session != nil else { return nil }
         let runtime = messageReadRuntime
-        if includeHistory { runtime.activityWantsHistory = true }
+        if includeHistory || (isMenuPresented && isMessagePanelVisible) {
+            runtime.activityWantsHistory = true
+        } else {
+            runtime.markHistoryStale()
+        }
         if let running = runtime.activityTask {
             runtime.activityAgain = true
             return running
@@ -553,7 +570,7 @@ extension WorkTimerStore {
             repeat {
                 // 루프 **안에서 먼저** 내린다. 뒤에 내리면 이번 조회가 도는 동안 도착한 신호를 지운다(requestDrain 규약).
                 runtime.activityAgain = false
-                let wantsHistory = runtime.activityWantsHistory || (self.isMenuPresented && self.isMessagePanelVisible)
+                let wantsHistory = runtime.activityWantsHistory
                 runtime.activityWantsHistory = false
                 await self.performLoadMessageUnreadSummary()
                 guard generation == self.sessionGeneration else { return }
@@ -568,13 +585,26 @@ extension WorkTimerStore {
         return task
     }
 
-    /// 팝오버를 열 때(60초 스로틀). **대화 패널이 안 보여도 이력까지 받는다** — 안 읽음 점은 이력·요약 중 더 나중에 띄운
+    /// 팝오버를 열 때(스로틀). **대화 패널이 안 보여도 이력까지 받는다** — 안 읽음 점은 이력·요약 중 더 나중에 띄운
     /// 쪽을 기준으로 계산되고, 이력만이 "어느 메시지가" 안 읽혔는지 안다(요약은 개수뿐이다).
+    ///
+    /// 스로틀은 셋으로 갈린다(m-fix):
+    ///  · 대화가 보이는데 이력이 낡았다(닫힌 동안 온 신호가 이력을 건너뛰었다) → **스로틀 없이** 받는다. 계기 1건당 1회라 폴링이 아니다.
+    ///  · 안 읽음 점이 켜져 있다 → 짧은 스로틀(`messageMenuRefreshUnreadThrottleSeconds`). 다른 기기에서 읽은 것은 이 맥에 신호가
+    ///    없으므로(서버 신호는 보낸 사람 채널로만 간다) 점을 보고 연 사람에게 낡은 점을 60초 동안 보여 주지 않는다.
+    ///  · 그 밖 → 60초.
     func refreshMessageActivityOnMenuOpen() {
         guard session != nil else { return }
         let now = clock()
         let runtime = messageReadRuntime
-        guard now.timeIntervalSince(runtime.lastMenuRefreshAt) >= Self.messageMenuRefreshThrottleSeconds else { return }
+        let staleConversationOnScreen = isMessagePanelVisible && runtime.historyStaleSerial != nil
+        // 짧은 스로틀은 **서버가 판정한 점**에만 준다. 읽음을 모르는 옛 서버(db push 전 창)의 점은 도장 규칙이라 앱을 켤 때마다
+        // 켜져 있고, 거기에 짧은 스로틀을 주면 여닫이마다 헛조회(404 폴백 포함 세 건)가 붙는다 — 다시 물어도 꺼질 점이 아니다.
+        let serverJudgedDot = (messageHistoryReadSnapshot != nil || messageUnreadSummary != nil) && hasUnreadMessages
+        let throttle = serverJudgedDot
+            ? Self.messageMenuRefreshUnreadThrottleSeconds
+            : Self.messageMenuRefreshThrottleSeconds
+        guard staleConversationOnScreen || now.timeIntervalSince(runtime.lastMenuRefreshAt) >= throttle else { return }
         runtime.lastMenuRefreshAt = now
         requestMessageActivityRefresh(includeHistory: true)
     }
@@ -676,12 +706,15 @@ extension WorkTimerStore {
     /// 근무 시작 drain 으로 들어온 메시지를 **말풍선으로 띄우지 않을 것인가**(v0.3.30).
     /// 서버 기준 이미 읽은 것(`isUnread == false`)이나 로컬 낙관 읽음으로 덮인 것은 띄우지 않는다 — 대화 창에서 읽은 말이
     /// 근무를 시작하는 순간 캐릭터 머리 위로 다시 튀어나오면 그건 알림이 아니라 소음이다.
+    /// "서버 기준"은 **서버의 최신 판정**이다(m-fix F3): 이력보다 나중에 띄운 요약이 그 상대 0건이라 말하면(다른 기기에서 읽음)
+    /// 점은 꺼져 있는데 말풍선만 뜨는 어긋남이 생기므로 그것도 읽은 것으로 본다.
     func isMessageAlreadyReadForBubble(_ message: ReceivedMessage) -> Bool {
         MessageUnreadRules.isAlreadyRead(
             messageID: message.id,
             history: messageHistory,
             snapshot: messageHistoryReadSnapshot,
-            optimistic: messageOptimisticReads
+            optimistic: messageOptimisticReads,
+            summary: messageUnreadSummary
         )
     }
 }
@@ -693,6 +726,15 @@ struct MessageHistoryLoad: Sendable {
     let entries: [MessageHistoryEntry]
     /// 읽음 칸을 실어 온 응답인가(`message_history_with_reads` 성공).
     let hasReadReceipts: Bool
+
+    /// 메시지 id → 서버 응답 안의 자리(0부터, 같은 id 는 처음 자리). 스냅샷과 화면 정렬(F7)이 같은 표를 쓴다.
+    var serverOrder: [String: Int] {
+        var order: [String: Int] = [:]
+        for (index, entry) in entries.enumerated() where order[entry.id] == nil {
+            order[entry.id] = index
+        }
+        return order
+    }
 }
 
 /// 읽음 칸을 실어 온 이력 한 번의 사실: 그 요청의 일련번호와 서버가 준 순서.
@@ -740,12 +782,26 @@ final class MessageReadRuntime {
     var lastMenuRefreshAt: Date = .distantPast
     var markInFlight: Set<String> = []
     var markAgain: Set<String> = []
+    /// 새로고침이 **이력을 건너뛴** 마지막 순간의 일련번호(m-fix F1). nil = 그 뒤에 띄운 이력이 반영됐다(낡지 않았다).
+    /// 볼 사람이 없어 건너뛴 계기(닫힌 팝오버에 온 읽음·새 말)를, 대화가 보이는 채로 팝오버를 다시 열 때 스로틀과 무관하게 받는 근거다.
+    private(set) var historyStaleSerial: Int?
 
     nonisolated init() {}
 
     func nextSerial() -> Int {
         serial += 1
         return serial
+    }
+
+    /// 이번 계기가 이력을 건너뛰었다. 지금까지의 번호로 적는다 — 이보다 **나중에 띄운** 이력만 이 표시를 지운다.
+    func markHistoryStale() {
+        historyStaleSerial = serial
+    }
+
+    /// 일련번호 `appliedSerial` 로 띄운 이력이 반영됐다. 낡음 표시보다 나중에 띄운 것이면 지운다(먼저 띄운 늦은 응답은 못 지운다).
+    func clearHistoryStale(appliedSerial: Int) {
+        guard let stale = historyStaleSerial, appliedSerial > stale else { return }
+        historyStaleSerial = nil
     }
 
     /// 로그아웃에서 부른다. 도는 새로고침은 끊는다(세대 가드가 결과를 버리지만 왕복 자체를 줄인다).
@@ -828,15 +884,23 @@ enum MessageUnreadRules {
     }
 
     /// 말풍선으로 띄우지 않을 받은 메시지인가(서버 기준 읽음 · 낙관 읽음으로 덮임). 읽음 기능을 모르면 언제나 false(옛 동작).
+    ///
+    /// 서버 기준은 **최신 판정**이다(m-fix F3): 이력보다 나중에 띄운 요약이 그 상대를 안 읽음 목록에 안 두면, 이력에 이미 있던
+    /// 이 말은 그 사이 읽혔다(다른 기기) — 요약은 그 요청 순간 보관 창 안의 안 읽은 말을 전부 센다. 이력에 없는 말(이력 뒤에 도착)은
+    /// 요약 요청보다 늦었을 수 있으므로 판정하지 않는다(띄운다).
     static func isAlreadyRead(
         messageID: String,
         history: [MessageHistoryEntry],
         snapshot: MessageHistoryReadSnapshot?,
-        optimistic: [String: MessageOptimisticRead]
+        optimistic: [String: MessageOptimisticRead],
+        summary: MessageUnreadSummarySnapshot? = nil
     ) -> Bool {
         guard let snapshot, let entry = history.first(where: { $0.id == messageID }), !entry.isMine else { return false }
         if entry.isUnread == false { return true }
         if let record = optimistic[entry.peerUserID], isCovered(entry, by: record, order: snapshot.serverOrder) { return true }
+        if let summary, summary.serial > snapshot.serial, !summary.summary.unreadPeerIDs.contains(entry.peerUserID) {
+            return true
+        }
         return false
     }
 
@@ -852,11 +916,21 @@ enum MessageUnreadRules {
 // MARK: - 정렬
 
 extension Array where Element == MessageHistoryEntry {
-    /// 서버 정렬을 신뢰하지 않고 다시 세운다: **오래된 것 → 최신**, 같은 시각이면 id.
-    /// 같은 시각 동점을 id 로 깨는 이유는 결정성이다 — 안 깨면 새로고침마다 두 말풍선의 순서가 뒤바뀐다.
-    func sortedForMessageHistory() -> [MessageHistoryEntry] {
+    /// 서버 정렬을 신뢰하지 않고 다시 세운다: **오래된 것 → 최신**, 같은 시각이면 서버 순서, 그것도 모르면 id.
+    /// 같은 시각 동점을 깨는 이유는 결정성이다 — 안 깨면 새로고침마다 두 말풍선의 순서가 뒤바뀐다.
+    ///
+    /// ★ 서버 순서(m-fix F7): `createdAt` 은 `created_epoch`(초, 반올림)이라 같은 초 안에서 오간 말이 동률이다. 동률을 id 사전순으로
+    ///   깨면 실제 출력으로 답장이 질문보다 위에 그려졌다(X1). 서버는 created_at(마이크로초) 순서로 주므로 `serverOrder`(응답 안의 자리)가
+    ///   그 선후다. 반올림은 단조라 초가 다른 두 말의 순서를 서버 순서와 거꾸로 만들지 않는다 — 초가 1차 키여도 어긋나지 않는다.
+    ///   순서표에 없는 id 는 맨 뒤(`Int.max`)로 보내 비교가 언제나 전순서가 되게 한다(섞인 입력에서 정렬이 흔들리지 않게).
+    func sortedForMessageHistory(serverOrder: [String: Int]? = nil) -> [MessageHistoryEntry] {
         sorted { lhs, rhs in
             if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+            if let serverOrder {
+                let l = serverOrder[lhs.id] ?? Int.max
+                let r = serverOrder[rhs.id] ?? Int.max
+                if l != r { return l < r }
+            }
             return lhs.id < rhs.id
         }
     }
@@ -900,10 +974,11 @@ enum MessageThreadBuilder {
     ///
     /// 상대 이름·아바타는 **가장 최근 행의 것**을 쓴다 — 별명을 바꾼 사람의 옛 행이 목록에 옛 이름을 남기면
     /// 사용자는 같은 사람을 두 사람으로 읽는다(서버가 행마다 그때의 표시명을 실어 줄 수 있다).
-    static func threads(from entries: [MessageHistoryEntry]) -> [MessageThread] {
+    /// `serverOrder` 는 같은 초 동률을 깨는 서버 순서다(`sortedForMessageHistory` — 모르면 nil, 옛 규칙 id).
+    static func threads(from entries: [MessageHistoryEntry], serverOrder: [String: Int]? = nil) -> [MessageThread] {
         var order: [String] = []
         var grouped: [String: [MessageHistoryEntry]] = [:]
-        for entry in entries.sortedForMessageHistory() {
+        for entry in entries.sortedForMessageHistory(serverOrder: serverOrder) {
             if grouped[entry.peerUserID] == nil { order.append(entry.peerUserID) }
             grouped[entry.peerUserID, default: []].append(entry)
         }

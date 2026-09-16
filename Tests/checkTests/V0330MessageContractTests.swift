@@ -604,7 +604,7 @@ func 근무_시작_drain_은_실제_take_pokes_중_서버가_읽었다고_한_�
             "서버가 읽었다고 한 b1·b2 만 빠져야 한다: \(scenario.labels(bubbles.map(\.id)))")
 }
 
-// MARK: - 6. 알려진 불일치 (고치지 않고 보고 — X1)
+// MARK: - 6. 같은 초 안의 표시 순서 (X1 이 찾고 m-fix F7 이 고쳤다)
 
 @MainActor
 @Test(.gomokuDefaultsCleanup)
@@ -615,12 +615,13 @@ func 같은_초_안에서_오간_대화의_표시_순서는_서버_순서와_같
         call.rpc == "message_history_with_reads" ? MessageReadStubProtocol.Reply(body: body) : nil
     }
     await store.performLoadMessageHistory()
-    let thread = try #require(MessageThreadBuilder.threads(from: store.messageHistory).first { $0.peerUserID == scenario.b })
+    store.selectedMessagePeerID = scenario.b
+    // 화면이 실제로 읽는 길(`selectedMessageThread` → `messageThreads`)로 잰다.
+    let thread = try #require(store.selectedMessageThread)
     let shown = scenario.labels(thread.messages.map(\.id))
     let server = ["b1", "b2", "b3", "a1", "a2", "a3", "b4", "a4", "b5"]
-    // created_epoch 은 초(반올림)라 같은 초 안의 말은 동률이고, 화면 정렬이 동률을 **id 사전순**으로 깬다.
-    // 서버는 created_at(마이크로초) 순서로 준다 — 실제 출력으로는 [b3 b2 b1 a3 a2 a1 a4 b5 b4] 로 그려진다(답장이 질문보다 위).
-    withKnownIssue("X1: 같은 초 안의 말풍선 순서가 서버 순서가 아니라 id 사전순이다(sortedForMessageHistory)") {
-        #expect(shown == server, "화면 순서 \(shown)")
-    }
+    // created_epoch 은 초(반올림)라 같은 초 안의 말은 동률이다. 동률을 **id 사전순**으로 깨면 실제 출력으로
+    // [b3 b2 b1 a3 a2 a1 a4 b5 b4] 로 그려졌다(답장이 질문보다 위 — X1). 동률은 서버 순서로 깬다.
+    #expect(shown == server, "화면 순서 \(shown)")
+    #expect(scenario.labels(store.messageHistory.filter { $0.peerUserID == scenario.b }.map(\.id)) == server)
 }

@@ -3309,6 +3309,9 @@ struct GomokuLobbyResponse: Decodable, Equatable, Sendable {
     var users: [GomokuUserRow]?
     /// 0.3.28 — 지금 뜨고 있는 판들(accepted_at desc, 최대 20). 옛 서버는 이 키를 안 싣는다(nil).
     var matches: [GomokuLobbyMatchRow]?
+    /// 0.3.28 — 연속 자동 착수 몇 번에 판을 잃는가(서버 `gomoku_abandon_streak()`, 지금 3).
+    /// **규칙의 주인은 서버다** — 경고 문구가 이 숫자에서 나오므로, 서버가 바꾸는 날 앱이 따라가야 한다.
+    var autoAbandonStreak: Int?
 }
 
 /// 대국 한 판의 서버 행(gomoku_state 의 match). `board` 는 설계서에 없는 키지만 서버가 실어 주면 권위로 쓴다.
@@ -3491,6 +3494,20 @@ struct GomokuChatResponse: Decodable, Equatable, Sendable {
     /// mute ok — 적용된 값(요청한 값과 같아야 하지만 **서버 값을 쓴다**).
     var muted: Bool?
     /// not_active — 그때 판의 status(진단용이 아니라 로그용. 화면 문구는 이 값을 쓰지 않는다).
+    var matchStatus: String?
+    var serverNowMs: Double?
+}
+
+/// gomoku_leave 응답(0.3.28). 요청 본문은 `GomokuMatchRequest` 를 그대로 쓴다({ p_protocol, p_match_id }).
+///
+/// `chat_deleted` 는 **일부러 디코드하지 않는다**: 화면이 그 숫자로 할 수 있는 일이 없고(서버 장부다),
+/// 계약이 개수인지 참/거짓인지 못 박지 않아 타입을 잘못 적으면 **응답 전체가 throw** 한다.
+/// 안 적으면 어느 쪽으로 오든 Decodable 이 조용히 지나간다 — 모르는 키를 안 읽는 것이 가장 안전한 읽기다.
+struct GomokuLeaveResponse: Decodable, Equatable, Sendable {
+    let status: GomokuRPCStatus
+    /// ok — 둘 다 나가서 그 판 채팅이 서버에서 즉시 지워졌다.
+    var bothLeft: Bool?
+    /// not_finished — 그때 판의 status(로그용. 화면 문구는 이 값을 쓰지 않는다).
     var matchStatus: String?
     var serverNowMs: Double?
 }

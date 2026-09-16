@@ -2252,6 +2252,17 @@ extension SupabaseWorkService {
         )
     }
 
+    /// **끝난 판에서 나간다**(0.3.28). 둘 다 나간 순간 서버가 그 판 채팅을 즉시 지운다. 멱등이고 초인종은 울리지 않는다.
+    ///
+    /// 쓰기라서 `retriesDeadlockOnce` 를 켠다 — 교착으로 죽은 트랜잭션은 통째로 되돌아가므로 재시도는 같은 요청이고,
+    /// 이미 나간 뒤라면 서버가 멱등하게 같은 ok 를 돌려준다.
+    func gomokuLeave(accessToken: String, matchID: String) async throws -> GomokuLeaveResponse {
+        try await gomokuRPC(
+            "gomoku_leave", body: GomokuMatchRequest(pMatchId: matchID), accessToken: accessToken,
+            retriesDeadlockOnce: true
+        )
+    }
+
     /// 이 판 채팅 끄기·켜기(0.3.28). 음소거는 내 화면 설정이 아니라 **서버가 아는 판 상태**다 — 상대에게 티가 나야 한다.
     func gomokuChatMute(accessToken: String, matchID: String, muted: Bool) async throws -> GomokuChatResponse {
         try await gomokuRPC(

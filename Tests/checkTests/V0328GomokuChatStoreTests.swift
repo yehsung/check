@@ -765,3 +765,95 @@ func 자리를_비워_끝난_판은_결과_문구를_갖는다() {
     #expect(gomoku.match?.endReason == .resign)
     #expect(gomoku.match?.endedByAbandon == false)
 }
+
+// MARK: - 8. 끝난 판에서 나가기 (gomoku_leave)
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 끝난_판에서만_나가고_같은_판을_두_번_부르지_않는다() async {
+    let (_, gomoku, host) = makeChatStore("leave") { rpc, _, _ in
+        switch rpc {
+        case "gomoku_leave":
+            return reply(["status": "ok", "both_left": true, "chat_deleted": 4, "server_now_ms": nowMs()])
+        case "gomoku_lobby":
+            return reply(["status": "ok", "users": []])
+        case "gomoku_inbox":
+            return reply(["status": "ok", "incoming": [], "outgoing": NSNull()])
+        default:
+            return nil
+        }
+    }
+
+    // 진행 중인 판에서는 창을 닫아도 [로비로] 를 눌러도 나가지 않는다 — 대국은 계속된다.
+    gomoku.applyState(decodePayload(statePayload(turn: "black")))
+    gomoku.windowDidHide()
+    gomoku.backToLobby()
+    try? await Task.sleep(for: .milliseconds(150))
+    #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_leave") == 0, "진행 중 판에서 나가기를 불렀다")
+    #expect(gomoku.phase == .playing, "진행 중이면 [로비로] 는 아무것도 하지 않는다")
+
+    // 결과 화면인 채로 창을 닫으면 나간다.
+    gomoku.applyState(decodePayload(statePayload(
+        matchStatus: "finished", turn: nil, result: "white_win", endReason: "resign")))
+    #expect(gomoku.phase == .result)
+    gomoku.windowDidHide()
+    await chatWait { GomokuStubProtocol.count(host: host, rpc: "gomoku_leave") == 1 }
+
+    let body = GomokuStubProtocol.calls(host: host, rpc: "gomoku_leave").first?.json ?? [:]
+    #expect(Set(body.keys) == ["p_protocol", "p_match_id"], "나가기 본문: \(body)")
+    #expect(body["p_protocol"] as? Int == 2)
+    #expect(body["p_match_id"] as? String == matchID)
+
+    // 이어서 [로비로] 까지 눌러도 **같은 판을 두 번 부르지 않는다**(멱등이지만 왕복을 늘리지 않는다).
+    gomoku.backToLobby()
+    try? await Task.sleep(for: .milliseconds(150))
+    #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_leave") == 1)
+    #expect(gomoku.phase == .lobby)
+    #expect(gomoku.match == nil)
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 나가기가_실패해도_화면은_로비로_가고_아무_말도_하지_않는다() async {
+    let (_, gomoku, host) = makeChatStore("leave-fail") { rpc, _, _ in
+        rpc == "gomoku_leave" ? GomokuStubProtocol.Reply(status: 500, body: #"{"message":"boom"}"#) : nil
+    }
+    gomoku.applyState(decodePayload(statePayload(
+        matchStatus: "finished", turn: nil, result: "white_win", endReason: "abandoned")))
+    gomoku.chatDraft = "잘 뒀어요"
+
+    gomoku.backToLobby()
+    await chatWait { GomokuStubProtocol.count(host: host, rpc: "gomoku_leave") == 1 }
+
+    // 화면 전환은 나가기 결과를 기다리지도, 그것 때문에 멈추지도 않는다.
+    #expect(gomoku.phase == .lobby)
+    #expect(gomoku.match == nil)
+    #expect(gomoku.chat.isEmpty && gomoku.chatDraft == "")
+    // 사용자가 할 수 있는 일이 없는 실패는 말하지 않는다(서버 백스톱이 하루 뒤 지운다).
+    #expect(gomoku.notice == nil)
+    #expect(gomoku.chatNotice == nil)
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 자리_비움_임계값은_서버가_말하면_그_값을_쓴다() async {
+    let (_, gomoku, _) = makeChatStore("streak-server") { rpc, _, _ in
+        rpc == "gomoku_lobby" ? reply(["status": "ok", "users": [], "auto_abandon_streak": 5]) : nil
+    }
+    #expect(GomokuStore.autoPlaceLossStreak == 3, "폴백은 3")
+    #expect(gomoku.autoAbandonStreak == 3, "로비를 받기 전에는 폴백을 쓴다")
+
+    await gomoku.refreshLobby()
+    #expect(gomoku.autoAbandonStreak == 5)
+
+    gomoku.applyState(decodePayload(statePayload(myAutoStreak: 4)))
+    #expect(gomoku.autoStreakWarning == "한 번 더 놓치면 집니다", "서버가 5라고 했으면 4에서 경고한다")
+    gomoku.applyState(decodePayload(statePayload(myAutoStreak: 2)))
+    #expect(gomoku.autoStreakWarning == nil, "폴백 숫자(3)에 묶여 있으면 여기서 경고가 뜬다")
+
+    // 한 인자로 부르는 자리(화면·렌더 테스트)는 폴백 임계값으로 그대로 컴파일·동작한다.
+    #expect(GomokuNoticeText.autoStreakWarning(2) == "한 번 더 놓치면 집니다")
+
+    gomoku.reset()
+    #expect(gomoku.autoAbandonStreak == 3, "계정이 바뀌면 서버가 다시 말해 줄 때까지 폴백이다")
+}

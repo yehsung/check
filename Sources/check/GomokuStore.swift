@@ -196,9 +196,13 @@ nonisolated enum GomokuNoticeText {
     static let autoPlacedStone = "시간이 지나 자동으로 놓인 수"
 
     /// 자동 착수 연속 경고. **한 번 남았을 때만** 말한다 — 첫 번째부터 겁을 주면 매 판 뜨고, 그러면 아무도 안 읽는다.
-    /// 판을 잃는 횟수(`GomokuStore.autoPlaceLossStreak`)에서 파생시킨다: 리터럴을 따로 쓰면 값을 바꾼 날 문구만 옛 숫자로 남는다.
-    static func autoStreakWarning(_ streak: Int) -> String? {
-        guard streak == GomokuStore.autoPlaceLossStreak - 1 else { return nil }
+    /// 판을 잃는 횟수에서 파생시킨다: 리터럴을 따로 쓰면 값을 바꾼 날 문구만 옛 숫자로 남는다.
+    ///
+    /// `lossStreak` 의 기본값은 **폴백 상수**다. 서버가 로비로 말해 준 값을 따르려면 스토어의
+    /// `autoStreakWarning`(인자 없는 계산 프로퍼티)을 읽어라 — 그쪽이 `autoAbandonStreak` 를 넘긴다.
+    /// 기본값을 둔 이유는 한 인자로 부르는 자리(화면·렌더 테스트)가 그대로 컴파일되게 하기 위해서다.
+    static func autoStreakWarning(_ streak: Int, lossStreak: Int = GomokuStore.autoPlaceLossStreak) -> String? {
+        guard streak == lossStreak - 1 else { return nil }
         return "한 번 더 놓치면 집니다"
     }
 
@@ -337,8 +341,9 @@ final class GomokuStore {
     nonisolated static let lobbyPollSeconds: TimeInterval = 30
     /// 팝오버를 열 때 받은 신청을 보는 스로틀(초). 팀 메타 재조회와 같은 눈금이다.
     nonisolated static let menuInboxThrottleSeconds: TimeInterval = 60
-    /// 연속 자동 착수 몇 번에 판을 잃는가. 서버 `gomoku_abandon_streak()` 와 같은 값이다 —
-    /// 경고 문구도 이 숫자에서 나온다(리터럴을 따로 쓰면 값을 바꾼 날 안내만 옛 숫자로 남는다).
+    /// 연속 자동 착수 몇 번에 판을 잃는가의 **폴백**. 서버가 로비 응답 `auto_abandon_streak` 로 말해 주면
+    /// 인스턴스의 `autoAbandonStreak` 가 그 값을 든다 — 규칙의 주인은 서버이고, 바뀌는 날 앱이 따라가야 한다.
+    /// 이 상수는 아직 로비를 못 받은 창에서 쓰는 기본값이자 문구의 기본 임계값이다.
     nonisolated static let autoPlaceLossStreak = 3
     /// 서버가 턴 제한에 더하는 네트워크 유예(초). 서버 `gomoku_turn_grace_seconds()` 와 같은 값 — 표시 마감이 이만큼
     /// 지나도 결과가 안 왔으면 내 차례여도 한 번 물어본다(서버는 누가 부르든 시간 초과를 먼저 정산한다).
@@ -402,6 +407,14 @@ final class GomokuStore {
     /// `autoPlaceLossStreak` 에 닿으면 그 판을 잃는다(서버가 `abandoned` 로 끝낸다).
     var myAutoStreak = 0
     var opponentAutoStreak = 0
+    /// 판을 잃는 연속 횟수. **서버가 말한 값**(로비 `auto_abandon_streak`)이고, 아직 못 받았으면 폴백이다.
+    var autoAbandonStreak = GomokuStore.autoPlaceLossStreak
+
+    /// 지금 내 연속 횟수에 대한 경고 한 줄(없으면 nil). **서버가 말한 임계값으로 판정한다** —
+    /// 화면이 이 값을 읽으면 서버가 규칙을 바꾸는 날 따라가고, 문구 표를 직접 부르면 폴백 숫자에 묶인다.
+    var autoStreakWarning: String? {
+        GomokuNoticeText.autoStreakWarning(myAutoStreak, lossStreak: autoAbandonStreak)
+    }
 
     // MARK: 채팅 상태 (v0.3.28) — **`isBusy` 를 쓰지 않는다**
 
@@ -496,6 +509,8 @@ final class GomokuStore {
     @ObservationIgnored private(set) var seenInviteIDs: Set<String> = []
     /// [로비로] 로 접은 끝난 판. 늦게 온 그 판의 상태 응답이 사용자를 결과 화면으로 끌고 가지 않게 한다.
     @ObservationIgnored private(set) var dismissedMatchIDs: Set<String> = []
+    /// 이 기기에서 이미 "나갔다"고 서버에 말한 판. 멱등이지만 **판마다 한 번만** 부르기 위한 장부다.
+    @ObservationIgnored private(set) var leftMatchIDs: Set<String> = []
     @ObservationIgnored private(set) var pollTask: Task<Void, Never>?
     @ObservationIgnored private var pollToken = 0
     @ObservationIgnored private(set) var syncTask: Task<Void, Never>?
@@ -566,6 +581,9 @@ final class GomokuStore {
         if isWindowVisible { isWindowVisible = false }
         isWindowOccluded = false
         stopPolling()
+        // 결과 화면인 채로 창을 닫았다 = 그 판에서 나간 것이다. **진행 중이면 부르지 않는다**(창을 닫아도 대국은
+        // 계속된다). 가려짐은 나간 게 아니므로 `windowOcclusionDidChange` 는 이 문을 지나지 않는다.
+        if let current = match, current.isFinished { leaveMatch(current.id) }
     }
 
     /// 창의 가림 상태가 바뀌었다(다른 창 뒤·다른 Space·잠금 화면). **폴링만** 멈추고 되살린다.
@@ -609,6 +627,10 @@ final class GomokuStore {
         if lobbyLoadFailed { lobbyLoadFailed = false }
         if !hasLoadedLobby { hasLoadedLobby = true }
         if let seconds = response.turnSeconds, seconds > 0, turnSeconds != seconds { turnSeconds = seconds }
+        // 1 이하는 받지 않는다 — 임계값이 1이면 경고 조건(streak == 0)이 판 시작부터 참이 되어 매 판 뜬다.
+        if let streak = response.autoAbandonStreak, streak > 1, autoAbandonStreak != streak {
+            autoAbandonStreak = streak
+        }
         if let ttl = response.inviteTtlSeconds, ttl > 0 { inviteTTLSeconds = TimeInterval(ttl) }
         if let me = response.me {
             applyRuby(me.rubyBalance)
@@ -1170,6 +1192,8 @@ final class GomokuStore {
         if let current = match {
             guard current.isFinished else { return }
             dismissedMatchIDs.insert(current.id)
+            // 결과 화면을 떠났다 = 그 판에서 나간 것이다. 둘 다 나가면 서버가 그 판 채팅을 즉시 지운다.
+            leaveMatch(current.id)
             lastOpponent = current.opponent
             lastStake = current.stake
             match = nil
@@ -1336,6 +1360,11 @@ final class GomokuStore {
 
     /// 로그아웃·계정 전환. 창을 닫고 오목 상태를 전부 비운다 — 남기면 다음 사람이 앞 사람의 판·신청·루비를 본다.
     func reset() {
+        // 나가기는 **세대를 올리기 전에** 쏜다(응답은 어차피 버려도 된다 — 요청이 나가는 것이 전부다).
+        // 다만 로그아웃 경로에서는 이미 session 이 nil 이라 아무것도 안 나간다(실측: WorkTimerStore 의
+        // clearPersistedSession 이 session 을 먼저 지우고 이 reset 을 부른다). 그래서 **best-effort** 다 —
+        // 못 나간 판은 서버 백스톱이 하루 뒤 지운다. 여기서 세션을 붙잡아 두려 들지 마라.
+        if let current = match, current.isFinished { leaveMatch(current.id) }
         resetGeneration &+= 1
         stopPolling()
         syncTask?.cancel()
@@ -1366,6 +1395,9 @@ final class GomokuStore {
         if lobbyLoadFailed { lobbyLoadFailed = false }
         if hasLoadedLobby { hasLoadedLobby = false }
         if !liveMatches.isEmpty { liveMatches = [] }
+        if autoAbandonStreak != GomokuStore.autoPlaceLossStreak {
+            autoAbandonStreak = GomokuStore.autoPlaceLossStreak
+        }
         serverClockOffset = 0
         hasServerClockOffset = false
         isWindowOccluded = false
@@ -1378,6 +1410,7 @@ final class GomokuStore {
         activeMatchID = nil
         seenInviteIDs = []
         dismissedMatchIDs = []
+        leftMatchIDs = []
         lastStateRequestAt = .distantPast
         lastInboxRequestAt = .distantPast
         lastLobbyRequestAt = .distantPast
@@ -1587,6 +1620,35 @@ final class GomokuStore {
             guard host.sessionGeneration == sessionGeneration, generation == resetGeneration else { return nil }
             if case .cancelled = host.classifyAuthError(error) { return nil }
             return .failure(error)
+        }
+    }
+
+    /// **끝난 판에서 나간다**(결과 화면을 떠났다 · 결과 화면인 채로 창을 닫았다 · 로그아웃했다).
+    ///
+    /// 둘 다 나간 순간 서버가 그 판 채팅을 지운다 — 즉 이 호출의 뜻은 "이 대화는 끝났다"이고 **화면을 바꾸는 일과는
+    /// 아무 상관이 없다.** 그래서 실패해도 안내하지 않고 화면 전환도 막지 않는다: 사용자가 할 수 있는 일이 없고,
+    /// 못 나간 판은 서버 백스톱이 하루 뒤 지운다.
+    ///
+    /// **진행 중인 판에서는 절대 부르지 않는다**(부르는 쪽 셋이 전부 `isFinished` 를 먼저 본다) — 창을 닫아도
+    /// 대국은 계속되기 때문이다. 서버도 `not_finished` 로 막지만, 확정으로 거절당할 요청을 내보내지 않는 것이
+    /// 부르는 쪽 몫이다(무료 플랜).
+    ///
+    /// 멱등이지만 **판마다 한 번만** 부른다. 폴링·재진입마다 부르면 왕복이 판 수만큼 늘어난다.
+    private func leaveMatch(_ rawID: String) {
+        let id = rawID.lowercased()
+        guard !id.isEmpty, !leftMatchIDs.contains(id), host?.session != nil else { return }
+        leftMatchIDs.insert(id)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard case .success(let response)? = await self.perform({
+                try await $0.gomokuLeave(accessToken: $1, matchID: id)
+            }) else { return }
+            self.noteServerNow(response.serverNowMs)
+            if response.status == .ok {
+                if response.bothLeft == true { Self.logger.notice("left match, chat purged") }
+            } else {
+                Self.logger.notice("leave refused status=\(response.status.rawValue, privacy: .public)")
+            }
         }
     }
 

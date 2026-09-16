@@ -1,0 +1,271 @@
+{
+  "fixtures": {
+    "flow_a_reads_all__summary": {
+      "call": "mark(B) · mark(C) 뒤 message_unread_summary()",
+      "caller": "A",
+      "end": "rollback(흐름)"
+    },
+    "flow_a_reads_all__with_reads_a": {
+      "call": "mark(B) · mark(C) 뒤 message_history_with_reads(24, 200)",
+      "caller": "A",
+      "end": "rollback(흐름)"
+    },
+    "flow_a_reads_b__mark": {
+      "call": "mark_messages_read(B, b5)",
+      "caller": "A",
+      "end": "rollback(흐름)"
+    },
+    "flow_a_reads_b__summary": {
+      "call": "message_unread_summary() — 위 mark 뒤",
+      "caller": "A",
+      "end": "rollback(흐름)"
+    },
+    "flow_a_reads_b__with_reads_a": {
+      "call": "message_history_with_reads(24, 200) — 위 mark 뒤",
+      "caller": "A",
+      "end": "rollback(흐름)"
+    },
+    "flow_a_reads_b__with_reads_b": {
+      "call": "message_history_with_reads(24, 200) — A 의 mark 뒤",
+      "caller": "B",
+      "end": "rollback(흐름)"
+    },
+    "mark_messages_read__advanced": {
+      "call": "mark_messages_read(B, b2)",
+      "caller": "A",
+      "end": "commit"
+    },
+    "mark_messages_read__advanced_b_through_a2": {
+      "call": "mark_messages_read(A, a2)",
+      "caller": "B",
+      "end": "commit"
+    },
+    "mark_messages_read__advanced_latest": {
+      "call": "mark_messages_read(C)",
+      "caller": "B",
+      "end": "commit"
+    },
+    "mark_messages_read__invalid_null_peer": {
+      "call": "mark_messages_read(null)",
+      "caller": "A",
+      "end": "rollback"
+    },
+    "mark_messages_read__invalid_self": {
+      "call": "mark_messages_read(A)",
+      "caller": "A",
+      "end": "rollback"
+    },
+    "mark_messages_read__not_advanced": {
+      "call": "mark_messages_read(B, b1) — 경계 b2 뒤",
+      "caller": "A",
+      "end": "rollback"
+    },
+    "mark_messages_read__not_advanced_own_message": {
+      "call": "mark_messages_read(B, a1) — 내가 보낸 id",
+      "caller": "A",
+      "end": "rollback"
+    },
+    "mark_messages_read__unauthorized": {
+      "call": "mark_messages_read(B) — sub 없음",
+      "caller": null,
+      "end": "rollback"
+    },
+    "message_history__a": {
+      "call": "message_history(24, 200)",
+      "caller": "A",
+      "end": "rollback"
+    },
+    "message_history_with_reads__a": {
+      "call": "message_history_with_reads(24, 200)",
+      "caller": "A",
+      "end": "rollback"
+    },
+    "message_history_with_reads__b": {
+      "call": "message_history_with_reads(24, 200)",
+      "caller": "B",
+      "end": "rollback"
+    },
+    "message_unread_summary__a": {
+      "call": "message_unread_summary()",
+      "caller": "A",
+      "end": "rollback"
+    },
+    "message_unread_summary__b": {
+      "call": "message_unread_summary()",
+      "caller": "B",
+      "end": "rollback"
+    },
+    "message_unread_summary__unauthorized": {
+      "call": "message_unread_summary() — sub 없음",
+      "caller": null,
+      "end": "rollback"
+    },
+    "realtime__message_read_rows": {
+      "call": "realtime.messages where event='message_read' (3단계 커밋분)",
+      "caller": "postgres",
+      "end": "rollback"
+    },
+    "send_message__ok_not_working": {
+      "call": "send_message(B, '  근무 안 해도 보내져요  ')",
+      "caller": "A",
+      "end": "rollback"
+    },
+    "take_pokes__a": {
+      "call": "take_pokes(true)",
+      "caller": "A",
+      "end": "rollback"
+    }
+  },
+  "generator": "W1/x1/generate.sh (사본: _generate.sh.txt)",
+  "messages": {
+    "a1": {
+      "body": "[a1] 네 지금 볼게요",
+      "created_at": "2026-09-16T14:47:00.1001+00:00",
+      "created_at_us": 1789570020100100,
+      "created_epoch": 1789570020,
+      "from": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "id": "00000000-0000-4000-8000-00000000a003",
+      "to": "3e240c02-8972-478e-a674-014f498a641b"
+    },
+    "a2": {
+      "body": "[a2] 좋아요",
+      "created_at": "2026-09-16T14:47:00.1002+00:00",
+      "created_at_us": 1789570020100200,
+      "created_epoch": 1789570020,
+      "from": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "id": "00000000-0000-4000-8000-00000000a002",
+      "to": "3e240c02-8972-478e-a674-014f498a641b"
+    },
+    "a3": {
+      "body": "[a3] 올려 주세요",
+      "created_at": "2026-09-16T14:47:00.1003+00:00",
+      "created_at_us": 1789570020100300,
+      "created_epoch": 1789570020,
+      "from": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "id": "00000000-0000-4000-8000-00000000a001",
+      "to": "3e240c02-8972-478e-a674-014f498a641b"
+    },
+    "a4": {
+      "body": "[a4] 고마워요",
+      "created_at": "2026-09-16T14:47:30.1002+00:00",
+      "created_at_us": 1789570050100200,
+      "created_epoch": 1789570050,
+      "from": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "id": "00000000-0000-4000-8000-00000000a004",
+      "to": "3e240c02-8972-478e-a674-014f498a641b"
+    },
+    "b1": {
+      "body": "[b1] 배포 노트 봤어요?",
+      "created_at": "2026-09-16T14:46:30.1001+00:00",
+      "created_at_us": 1789569990100100,
+      "created_epoch": 1789569990,
+      "from": "3e240c02-8972-478e-a674-014f498a641b",
+      "id": "00000000-0000-4000-8000-00000000b003",
+      "to": "267a3495-643c-40cc-b1a7-14967166eae1"
+    },
+    "b2": {
+      "body": "[b2] 두 줄 고쳤어요",
+      "created_at": "2026-09-16T14:46:30.1002+00:00",
+      "created_at_us": 1789569990100200,
+      "created_epoch": 1789569990,
+      "from": "3e240c02-8972-478e-a674-014f498a641b",
+      "id": "00000000-0000-4000-8000-00000000b002",
+      "to": "267a3495-643c-40cc-b1a7-14967166eae1"
+    },
+    "b3": {
+      "body": "[b3] 확인 부탁해요",
+      "created_at": "2026-09-16T14:46:30.1003+00:00",
+      "created_at_us": 1789569990100300,
+      "created_epoch": 1789569990,
+      "from": "3e240c02-8972-478e-a674-014f498a641b",
+      "id": "00000000-0000-4000-8000-00000000b001",
+      "to": "267a3495-643c-40cc-b1a7-14967166eae1"
+    },
+    "b4": {
+      "body": "[b4] 올렸어요",
+      "created_at": "2026-09-16T14:47:30.1001+00:00",
+      "created_at_us": 1789570050100100,
+      "created_epoch": 1789570050,
+      "from": "3e240c02-8972-478e-a674-014f498a641b",
+      "id": "00000000-0000-4000-8000-00000000b006",
+      "to": "267a3495-643c-40cc-b1a7-14967166eae1"
+    },
+    "b5": {
+      "body": "[b5] 오목 한 판?",
+      "created_at": "2026-09-16T14:47:30.1003+00:00",
+      "created_at_us": 1789570050100300,
+      "created_epoch": 1789570050,
+      "from": "3e240c02-8972-478e-a674-014f498a641b",
+      "id": "00000000-0000-4000-8000-00000000b005",
+      "to": "267a3495-643c-40cc-b1a7-14967166eae1"
+    },
+    "c1": {
+      "body": "[c1] 점심 뭐 먹어요?",
+      "created_at": "2026-09-16T14:46:00.1001+00:00",
+      "created_at_us": 1789569960100100,
+      "created_epoch": 1789569960,
+      "from": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "id": "00000000-0000-4000-8000-00000000c002",
+      "to": "267a3495-643c-40cc-b1a7-14967166eae1"
+    },
+    "c2": {
+      "body": "[c2] 저는 국수요",
+      "created_at": "2026-09-16T14:46:00.1002+00:00",
+      "created_at_us": 1789569960100200,
+      "created_epoch": 1789569960,
+      "from": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "id": "00000000-0000-4000-8000-00000000c001",
+      "to": "267a3495-643c-40cc-b1a7-14967166eae1"
+    },
+    "c3": {
+      "body": "[c3] 예은님 회의록 봤어요",
+      "created_at": "2026-09-16T14:46:00.1003+00:00",
+      "created_at_us": 1789569960100300,
+      "created_epoch": 1789569960,
+      "from": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "id": "00000000-0000-4000-8000-00000000c003",
+      "to": "3e240c02-8972-478e-a674-014f498a641b"
+    }
+  },
+  "preconditions": {
+    "blackout_active": false,
+    "display_names": {
+      "267a3495-643c-40cc-b1a7-14967166eae1": "abto.app",
+      "3e240c02-8972-478e-a674-014f498a641b": "코덱스토큰도둑예은",
+      "544e3837-f01c-4560-b82f-4d44c269f044": "코덱스토큰도둑지유"
+    },
+    "focus_mode": {
+      "267a3495-643c-40cc-b1a7-14967166eae1": false,
+      "3e240c02-8972-478e-a674-014f498a641b": false,
+      "544e3837-f01c-4560-b82f-4d44c269f044": false
+    },
+    "message_retention_hours": 24,
+    "open_work_sessions": 0,
+    "work_statuses": {
+      "267a3495-643c-40cc-b1a7-14967166eae1": "off_work",
+      "3e240c02-8972-478e-a674-014f498a641b": "off_work",
+      "544e3837-f01c-4560-b82f-4d44c269f044": "off_work"
+    }
+  },
+  "realtime_rows_added": {
+    "flow_a_reads_b": 1,
+    "not_advanced_calls": 0
+  },
+  "scenario": [
+    "S0(t0 = now − 150초): C→A c1·c2, C→B c3 — 같은 초, 마이크로초만 다름",
+    "S1(+30초): B→A b1·b2·b3 — 같은 초",
+    "S2(+60초): A→B a1·a2·a3 — 같은 초",
+    "S3(+90초): B→A b4 · A→B a4 · B→A b5 — 같은 초 안에서 오간 말",
+    "같은 초 묶음 안에서 id 사전순은 시간순의 반대다(서버 순서 ≠ 클라 초→id 정렬이 드러나게)",
+    "커밋된 읽음: A 는 B 를 b2 까지 · B 는 A 를 a2 까지 · B 는 C 를 최신(c3)까지",
+    "흐름(롤백): A 가 B 를 b5 까지 읽음 / A 가 다른 기기에서 B·C 를 전부 읽음"
+  ],
+  "serialization": "표 반환 = coalesce(json_agg(t), '[]'::json) · jsonb 반환 = 값::text — PostgREST 와 같다",
+  "server": "migrations ≤ 20260916220000 + S1 20260917100000_messages_anytime_read_receipts.sql (하네스 v2 사본, 127.0.0.1:55521)",
+  "take_pokes_server_now_ms": 1789570110875,
+  "users": {
+    "A": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "B": "3e240c02-8972-478e-a674-014f498a641b",
+    "C": "544e3837-f01c-4560-b82f-4d44c269f044"
+  }
+}

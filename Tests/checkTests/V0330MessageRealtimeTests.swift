@@ -602,10 +602,13 @@ func 로그아웃하면_열린_합치기_창은_다음_계정에_새로고침을
     transport.emit(.broadcast(event: "message_read"))
     await messageReadWait { gate.sleepers == 1 }
     let summaries = v0330Count(host, "message_unread_summary")
+    let oldWindow = store.messageReadRuntime.activityWindowTask
 
     store.clearPersistedSession()
     store.session = SupabaseSession(accessToken: "next-token", refreshToken: nil, userID: MessageReadFixture.peerB)
     #expect(store.messageReadRuntime.activityWindowTask == nil, "새 계정의 장부에 앞 계정의 창이 남았다")
+    // 앞 계정의 창은 **취소**된다 — 프로덕션 잠(Task.sleep)은 취소에 곧바로 깨어 1초를 헛되이 붙잡지 않는다.
+    #expect(oldWindow?.isCancelled == true, "로그아웃이 열린 합치기 창을 취소하지 않았다")
     gate.open()
     try? await Task.sleep(for: .milliseconds(150))
     await v0330Settle(store)

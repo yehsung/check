@@ -43,6 +43,14 @@ private func mwDefaults() -> UserDefaults {
 @MainActor
 private func mwStore(host: String, signedIn: Bool = true, working: Bool = true) -> WorkTimerStore {
     FeedbackURLProtocol.reset(host: host)
+    // v0.3.30: 스토어는 이력을 `message_history_with_reads` 로 먼저 묻는다. 이 스위트는 **옛 `message_history` 경로**를
+    // 재는 것이라 새 함수가 없는 서버(실서버와 같은 404 PGRST202)를 기본으로 깐다 — 스텁의 미등록 기본값(200 `[]`)이면
+    // 스토어가 "읽음을 아는 빈 서버"로 읽어 옛 경로를 아예 안 부른다. 새 경로는 V0330MessageReadStoreTests 가 잰다.
+    FeedbackURLProtocol.set(
+        .init(status: 404, body: #"{"code":"PGRST202","message":"Could not find the function public.message_history_with_reads(p_hours, p_limit) in the schema cache"}"#),
+        host: host,
+        path: "/rest/v1/rpc/message_history_with_reads"
+    )
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
@@ -355,7 +363,7 @@ func closingThePanelKeepsTheDraft() {
 
 @MainActor
 @Test
-func historyLoadsAndSortsAndAsksForTwelveHours() async {
+func historyLoadsAndSortsAndAsksForTheRetentionWindow() async {
     let host = "mw-history-load"
     let store = mwStore(host: host)
     let epoch = Int(mwNow.timeIntervalSince1970)
@@ -372,9 +380,9 @@ func historyLoadsAndSortsAndAsksForTwelveHours() async {
     #expect(store.messageHistory.map(\.isMine) == [false, true])
     #expect(!store.messageHistoryFailed)
     #expect(!store.messageHistoryLoading)
-    // 요청은 화면이 약속한 창(12시간)을 그대로 싣는다 — 기본값에 기대면 서버가 바꾼 날 안내가 거짓이 된다.
+    // 요청은 화면이 약속한 창(v0.3.30 부터 24시간)을 그대로 싣는다 — 기본값에 기대면 서버가 바꾼 날 안내가 거짓이 된다.
     let sent = FeedbackURLProtocol.sentBodies(host: host, path: mwHistoryPath).first ?? ""
-    #expect(sent.contains("\"p_hours\":12"))
+    #expect(sent.contains("\"p_hours\":24"))
     #expect(sent.contains("\"p_limit\":200"))
 }
 

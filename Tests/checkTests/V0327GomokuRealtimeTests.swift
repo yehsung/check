@@ -211,30 +211,32 @@ private func makeKillSwitchGomokuStore(
 
 @MainActor
 @Test(.gomokuDefaultsCleanup)
-func 전송자가_없는_맥은_깨어나면_근무_중인_주인일_때만_오목을_다시_본다() async {
+func 전송자가_없는_맥은_깨어나면_근무와_무관하게_오목을_다시_본다() async {
+    // v0.3.30(옛 이름: 전송자가_없는_맥은_깨어나면_근무_중인_주인일_때만_오목을_다시_본다): 서버가 신청·수락의 근무 조건을
+    // 지워 비근무·흡수 세션 맥에도 신청이 온다. 조회는 소비가 아니라 두 맥 모두가 봐도 누구의 것을 훔치지 않는다.
     let (store, host) = makeKillSwitchGomokuStore("wake") { rpc, _, _ in
         rpc == "gomoku_inbox" ? inboxReply() : nil
     }
     func inbox() -> Int { GomokuStubProtocol.count(host: host, rpc: "gomoku_inbox") }
     #expect(store.realtime.transportAvailable == false)
 
-    // 비근무: 신청이 올 수 없는 맥이다.
-    store.realtimeApply(.didWake, at: t0)
-    try? await Task.sleep(for: .milliseconds(150))
-    #expect(inbox() == 0)
-
-    // 흡수 세션(주인은 다른 맥).
-    store.startedAt = Date()
-    store.adoptedRemoteSession = true
-    store.realtimeApply(.didWake, at: t0)
-    try? await Task.sleep(for: .milliseconds(150))
-    #expect(inbox() == 0)
-
-    // 근무 중인 주인 맥 — 조인이 없으니 깨어남이 직접 한 번 본다.
-    store.adoptedRemoteSession = false
+    // 비근무: 이제는 신청이 올 수 있는 맥이다 — 깨어나면 본다.
     store.realtimeApply(.didWake, at: t0)
     await realtimeWait { inbox() == 1 }
     #expect(inbox() == 1)
+
+    // 흡수 세션(주인은 다른 맥)도 본다.
+    store.startedAt = Date()
+    store.adoptedRemoteSession = true
+    store.realtimeApply(.didWake, at: t0)
+    await realtimeWait { inbox() == 2 }
+    #expect(inbox() == 2)
+
+    // 로그아웃이면 보지 않는다(세션 가드는 그대로다).
+    store.session = nil
+    store.realtimeApply(.didWake, at: t0)
+    try? await Task.sleep(for: .milliseconds(150))
+    #expect(inbox() == 2)
 }
 
 @MainActor
@@ -270,10 +272,13 @@ func 오목_라우팅_배선은_소스에_그대로_있다() throws {
     let realtime = gomokuCollapsed(V0317ShopTests.stripped(try V0317ShopTests.source("WorkTimerStoreRealtime.swift")))
     #expect(realtime.contains("case .gomokuSignal: gomoku.handleSignal()"))
     #expect(realtime.contains("case .catchUp: startCatchUp() gomoku.realtimeDidJoin()"))
+    // v0.3.30: 깨어남의 오목 조회는 근무 게이트를 지나지 않는다(서버가 신청의 근무 조건을 지웠다).
     #expect(realtime.contains(
-        "if case .didWake = event, realtimeMayConsumePokes, !realtime.transportAvailable { gomoku.systemDidWake() }"))
-    // `.drain` 가지는 근무 게이트 뒤에 그대로다(오목이 그 게이트를 풀지 않았다).
-    #expect(realtime.contains("case .drain: guard realtimeMayConsumePokes else { continue } requestDrain()"))
+        "if case .didWake = event, !realtime.transportAvailable { gomoku.systemDidWake() }"))
+    // `.drain` 가지는 근무 게이트 뒤에 그대로다(오목이 그 게이트를 풀지 않았다). 막힌 맥은 v0.3.30 부터 take_pokes 대신
+    // 빚을 적고 메시지 활동을 새로 읽는다 — 그 가지 안에 requestDrain 이 없어야 한다.
+    #expect(realtime.contains(
+        "case .drain: guard realtimeMayConsumePokes else { realtime.catchUpDeferred = true requestMessageActivityRefresh() continue } requestDrain()"))
 
     let link = gomokuCollapsed(V0317ShopTests.stripped(try V0317ShopTests.source("RealtimeLink.swift")))
     #expect(link.contains("if event == RealtimeLinkConstants.gomokuBroadcastEvent { return [.gomokuSignal] } return [.drain]"))

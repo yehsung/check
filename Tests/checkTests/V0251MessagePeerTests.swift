@@ -166,6 +166,13 @@ private func mpTokenStore() -> TokenUsageStore {
 @MainActor
 private func mpStore(host: String) -> WorkTimerStore {
     MPStub.reset(host: host)
+    // v0.3.30: 스토어는 이력을 `message_history_with_reads` 로 먼저 묻는다. 이 스위트는 옛 `message_history` 경로의 응답
+    // 얼굴을 재므로 새 함수가 없는 서버(404 PGRST202)를 기본으로 깐다(스텁 미등록 기본값 200 `[]` 이면 옛 경로를 안 부른다).
+    MPStub.set(
+        .init(status: 404, body: #"{"code":"PGRST202","message":"Could not find the function public.message_history_with_reads(p_hours, p_limit) in the schema cache"}"#),
+        host: host,
+        path: "/rest/v1/rpc/message_history_with_reads"
+    )
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",

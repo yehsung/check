@@ -22,12 +22,14 @@ final class RealtimeRuntime {
     var catchUpTask: Task<Void, Never>?
     /// onEvent 배선을 두 번 걸지 않기 위한 도장(startStatusRefreshLoop 는 idempotent 해야 한다).
     var wired = false
-    /// 구독은 했는데 **근무중 게이트에 막혀** 따라잡기를 못 돌린 상태인가.
+    /// **소비 게이트에 막혀 take_pokes 한 번을 빚지고 있는가.**
     ///
-    /// v0.2.34 의 근무 게이트가 이 창을 크게 줄였지만 **없애지는 못한다**: 조인은 근무 중에 나가는데
-    /// 응답이 오기까지의 몇 초 사이에 폴링이 "이 세션의 주인은 다른 맥"(adoptedRemoteSession)이라고
-    /// 알려 올 수 있고, 그러면 도착한 `.joined` 의 따라잡기가 게이트에 막힌다. 재구독은 다시 일어나지
-    /// 않으므로(그 링은 이미 subscribed 다) 잊으면 그 구간의 밀린 찌르기는 회수 경로가 0이다.
+    /// v0.3.30 부터 소켓은 로그인 중이면 붙어 있으므로(근무 밖 메시지·읽음·오목 신청) 이 빚은 흔하다:
+    ///  ① 소비할 수 없는 동안(비근무·흡수 세션) 조인했다 — 구독 전이의 따라잡기를 못 돌렸다.
+    ///  ② 소비할 수 없는 동안 초인종(`.drain`)이 울렸다 — 서버에 미소비 행이 앉아 있을 수 있다.
+    /// 소비할 수 있게 되는 순간(근무 시작·흡수 해제·서버 복원) **한 번만** 갚는다. 재구독은 다시 일어나지 않으므로
+    /// (그 링은 이미 subscribed 다) 잊으면 그 구간의 밀린 찌르기·메시지 말풍선은 다음 폴링까지 안 온다.
+    /// start() 는 자기 drain 으로 이 빚을 갚고 지운다 — 안 지우면 근무 시작 한 번에 take_pokes 가 두 번 나간다.
     var catchUpDeferred = false
 
     init(transport: RealtimeTransport?) {
@@ -93,7 +95,6 @@ struct RealtimeDiagnostics: Equatable, Sendable {
         case .idle(.signedOut): return "idle(signedOut)"
         case .idle(.suspended): return "idle(suspended)"
         case .idle(.disabled): return "idle(disabled)"
-        case .idle(.notWorking): return "idle(notWorking)"
         case .connecting(let attempt, _): return "connecting(\(attempt))"
         case .subscribed: return "subscribed"
         case .reconnecting(let b): return "reconnecting(\(b.attempt))"
@@ -117,30 +118,19 @@ extension WorkTimerStore {
 
     // MARK: - 진입점
 
-    /// 로그인/활성화 지점과 **근무 시작 지점**에서 부른다(idempotent).
+    /// 로그인/활성화 지점(startStatusRefreshLoop)과 근무 시작 지점에서 부른다(idempotent).
     /// 전송자가 없으면(킬스위치 off·테스트) **아무 일도 하지 않는다** — 그동안 폴링이 예전 그대로 돈다.
+    ///
+    /// ★ **기준은 로그인이다**(v0.3.30 — v0.2.34 의 근무 게이트를 걷었다). 서버가 send_message 와 오목 신청·수락의
+    ///   근무 조건을 풀었으므로 근무하지 않는 사람에게도 메시지·읽음·오목 신청 신호가 온다. 흡수 세션 맥도 붙는다 —
+    ///   남의 찌르기를 훔치지 않는 장치는 **소비 게이트**(`realtimeMayConsumePokes`, `.drain`·따라잡기 가지)가 그대로 쥔다.
+    ///   소켓을 다시 근무에 묶지 마라: 묶는 순간 근무 밖에서 온 메시지가 메뉴바 점으로도 안 뜬다.
     func startRealtimeIfPossible() {
         guard let activeSession = session else { return }
         realtime.diagnostics.transportAvailable = realtime.transportAvailable
         // anon 키가 없으면 소켓 URL 자체를 만들 수 없다. 링을 출발시키면 조인 타임아웃 → 재연결을
         // 영원히 반복하는 빈 루프가 된다(그 사이 폴링은 정상적으로 돈다 — isSubscribed 가 거짓이므로).
         guard let transport = realtime.transport, service.anonKey != nil else { return }
-        // ★ 근무 게이트(v0.2.34). 판정은 폴링과 **같은 것 하나**(realtimeMayConsumePokes = startedAt != nil
-        //   && !adoptedRemoteSession)를 쓴다 — takePokesIfWorking 이 이미 그 조건인데 리얼타임만 로그인
-        //   기준으로 붙어 있던 것이 두 경로가 어긋나 있던 자리다.
-        //
-        //   왜 근무 중에만인가: 서버의 poke_user / ultra_poke_user / send_message 가 전부
-        //   `target_not_working` 게이트를 갖는다 — 근무 중이 아닌 사람은 아무도 찌를 수 없으므로,
-        //   비근무 소켓은 받을 것이 원리적으로 없는 연결이고 25초 하트비트만 태운다.
-        //   흡수 세션(다른 맥이 주인)에서 붙지 않는 것은 blocker(리얼타임 #5)의 **더 강한 형태**다:
-        //   소비를 게이트로 막는 대신 아예 신호를 받지 않는다.
-        guard realtimeMayConsumePokes else {
-            // 막혔다는 **사실을 남긴다.** 조용히 반환하면 realtimeState 가 초기값 `.idle(.disabled)` 에
-            // 머물러, 설정 창 진단이 로그인해 둔 사용자에게 "전송자 없음"과 같은 라벨을 보여 준다 —
-            // 이 저장소가 가장 경계하는 '조용한 결말'의 표시가 정확히 그것이다.
-            realtimeApply(.workEnded)
-            return
-        }
         if !realtime.wired {
             realtime.wired = true
             transport.onEvent = { [weak self] event in
@@ -148,27 +138,31 @@ extension WorkTimerStore {
             }
             startRealtimeTicker()
         }
+        // **로그아웃 상태의 링만** 출발시킨다. 근무 시작(start())이 이미 붙어 있는 링에 `.signedIn` 을 넣으면
+        // 링은 그것을 새 로그인으로 읽어 멀쩡한 구독을 끊고 다시 조인한다 — 조인마다 따라잡기가 한 번 더 돈다.
+        // 나머지 상태는 각자 주인이 있다(suspended ← 뚜껑, connecting/reconnecting/failed ← 백오프, disabled ← 전송자 없음).
+        guard realtime.link.state == .idle(.signedOut) else { return }
         realtimeApply(.signedIn(accessToken: activeSession.accessToken))
     }
 
-    /// 링을 **지금의 근무 상태에 되맞춘다.** 주기 새로고침 루프가 팀 상태를 반영한 직후에 부른다.
+    /// 주기 새로고침 루프가 팀 상태를 반영한 직후에 부른다. **소비 게이트가 방금 열렸으면 빚진 drain 을 갚는다.**
     ///
-    /// 근무 상태를 바꾸는 경로는 start()/stop() 만이 아니다: 앱 재시작 복구·다른 맥이 연 세션 흡수·
-    /// 서버가 세션을 닫음(applyRemoteOwnStatus)·자동 마감이 전부 startedAt / adoptedRemoteSession 을
-    /// 뒤집는다. 그 경로마다 링 이벤트를 흩뿌리면 **앞으로 생길 경로가 조용히 빠진다** — 이 저장소가
-    /// 자동 마감 가드에서 이미 겪은 모양이라(autoStop 의 흡수 세션 가드 주석) 되맞춤을 한 곳에 둔다.
+    /// 소비 게이트를 뒤집는 경로는 start()/stop() 만이 아니다: 앱 재시작 복구·다른 맥이 연 세션 흡수·흡수 해제·
+    /// 서버가 세션을 닫음(applyRemoteOwnStatus)이 전부 startedAt / adoptedRemoteSession 을 뒤집는다. 그 경로마다
+    /// 따라잡기를 흩뿌리면 **앞으로 생길 경로가 조용히 빠진다** — 그래서 한 곳(여기와 5초 티커)에서 되맞춘다.
+    /// v0.3.30 부터 링을 올리고 내리는 일은 하지 않는다(소켓 기준이 로그인이다 — startRealtimeIfPossible 주석).
+    /// 이름은 루프 배선의 소스 계약(V0238TickTests·RealtimeLinkTests)이 읽는 그대로 둔다.
     func reconcileRealtimeWithWorkState() {
-        guard realtimeMayConsumePokes else {
-            // 이미 내려가 있으면 링이 스스로 no-op 이다(`.workEnded` 의 idle 가지). 그래서 여기에
-            // 두 번째 판정을 두지 않는다 — 두 곳이 어긋나는 순간 한쪽이 조용히 거짓말한다.
-            realtimeApply(.workEnded)
-            return
-        }
-        // 근무 게이트가 열렸다. **`.idle(.notWorking)` 에서만** 다시 올린다 — 다른 사유는 각자 주인이
-        // 따로 있고(signedOut ← 로그아웃, suspended ← 뚜껑, disabled ← 전송자 없음), 여기서 함께
-        // 되살리면 뚜껑을 닫아 둔 맥이 근무 중이라는 이유로 소켓을 다시 연다.
-        guard realtime.link.state == .idle(.notWorking) else { return }
-        startRealtimeIfPossible()
+        resumeDeferredCatchUpIfPossible()
+    }
+
+    /// 빚진 따라잡기(`realtime.catchUpDeferred`)를 **소비할 수 있게 된 첫 순간에 한 번** 갚는다.
+    /// 조건 넷이 모두 필요하다: 구독 중(조인 성공 = 네트워크가 실제로 산다) · 빚이 있음 · 소비 게이트 열림 · 도는 따라잡기 없음.
+    func resumeDeferredCatchUpIfPossible() {
+        guard realtimeState.isSubscribed, realtime.catchUpDeferred, realtimeMayConsumePokes,
+              realtime.catchUpTask == nil
+        else { return }
+        startCatchUp()
     }
 
     /// 링에 사건을 넣고 나온 effect 를 실행한다. **스토어가 링에 시각을 주는 유일한 문.**
@@ -180,7 +174,7 @@ extension WorkTimerStore {
         // **화면이 읽는 값은 여기서만 쓴다.** 다른 곳에서 realtimeState 를 직접 대입하면
         // 링의 상태와 화면의 상태가 갈리고, 갈린 순간 폴링 억제 판정이 거짓말한다.
         // `!=` 가드인 이유는 @Observable 이다: 같은 값 대입도 관찰자를 발화시키는데, 이 문은 5초 티커의
-        // `.tick` 과 주기 되맞춤의 `.workEnded` 로 **상태가 안 바뀌는 호출**을 훨씬 자주 받는다.
+        // `.tick` 으로 **상태가 안 바뀌는 호출**을 훨씬 자주 받는다.
         if realtimeState != after { realtimeState = after }
         run(effects, now: now)
         // 깨어남(결합 게이트가 열린 뒤 넣는 `.didWake`)은 오목 받은 신청·대국을 다시 볼 시점이기도 하다.
@@ -188,9 +182,9 @@ extension WorkTimerStore {
         // 가지가 오목 따라잡기(realtimeDidJoin)를 한다. 여기서도 쏘면 조인 직후에 요청이 하나 더 나가
         // 깨움 결합 게이트 계약("본문 1회 → 조인, 조인 뒤엔 추가 요청 없음")을 깬다(V0238ClockTests 실측).
         // 전송자가 없는 맥(킬스위치)만 조인이 없으므로 여기서 직접 한 번 본다.
-        // 근무 중이고 이 맥이 그 근무의 주인일 때만이다: 신청은 근무 중인 사람에게만 오고(서버
-        // target_not_working), 흡수 세션 맥은 찌르기와 같은 이유로 주인 맥에 맡긴다.
-        if case .didWake = event, realtimeMayConsumePokes, !realtime.transportAvailable {
+        // **근무 여부는 보지 않는다**(v0.3.30): 서버가 오목 신청의 근무 조건을 풀어 비근무·흡수 세션 맥에도 신청이 온다.
+        // 조회는 소비가 아니라 두 맥 모두가 봐도 누구의 것을 훔치지 않는다(`.gomokuSignal` 가지와 같은 근거).
+        if case .didWake = event, !realtime.transportAvailable {
             gomoku.systemDidWake()
         }
     }
@@ -233,8 +227,18 @@ extension WorkTimerStore {
             case .drain:
                 // 근무중 게이트를 지난 뒤에만 소비한다. 여기서 requestDrain 을 무조건 부르면
                 // 집 맥이 회사 맥의 찌르기를 훔친다(위 realtimeMayConsumePokes 주석).
-                guard realtimeMayConsumePokes else { continue }
+                // 소비할 수 없는 맥(v0.3.30 부터 비근무·흡수 세션 맥도 붙어 있다)은 **take_pokes 를 부르지 않고**
+                // 서버 표를 읽기만 한다 — 근무 밖에 온 메시지가 메뉴바 점·목록 점으로 뜨는 근거가 이 가지다.
+                // 그리고 빚을 적어 둔다: 소비할 수 있게 되는 순간(근무 시작 등) 이 신호가 남긴 미소비 행을 한 번 가져온다.
+                guard realtimeMayConsumePokes else {
+                    realtime.catchUpDeferred = true
+                    requestMessageActivityRefresh()
+                    continue
+                }
                 requestDrain()
+            case .messageReadSignal:
+                // 읽음 신호는 소비할 것이 없다 — 근무 여부와 무관하게 서버 표를 다시 읽는다(말풍선 옆 1 · 안 읽음 점).
+                requestMessageActivityRefresh()
             case .gomokuSignal:
                 // 오목 신호는 take_pokes 로 가지 않는다. 대국·신청 상태는 서버 표가 권위이고 조회는
                 // 소비가 아니므로, 두 맥 모두가 받아도 누구의 것을 훔치지 않는다 — 그래서 게이트가 없다.
@@ -365,10 +369,8 @@ extension WorkTimerStore {
         }
         // 게이트에 막혀 건너뛴 따라잡기를 근무 시작 뒤 회수한다. **구독 전이는 다시 일어나지 않으므로**
         // 이 한 줄이 없으면 그 구간의 찌르기는 영구 소실이다(폴링은 구독 중이라 쉬고 있다).
-        if realtimeState.isSubscribed, realtime.catchUpDeferred, realtimeMayConsumePokes,
-           realtime.catchUpTask == nil {
-            startCatchUp()
-        }
+        // 판정은 30초 되맞춤과 **같은 함수 하나**다 — 두 자리에 조건을 따로 적으면 한쪽만 고쳐지는 날 빚이 두 번 갚아진다.
+        resumeDeferredCatchUpIfPossible()
     }
 
     // MARK: - 캐치업
@@ -396,13 +398,18 @@ extension WorkTimerStore {
     /// 유실되면 그 찌르기는 영구 소실인데, 조인 성공은 "네트워크가 지금 실제로 살아 있다"의 실증이다.
     /// 그래서 didWake 직후가 아니라 subscribed 직후다.
     func catchUpAfterSubscribe() async {
-        // 비근무 맥은 따라잡을 것이 원리적으로 없다(서버가 열린 세션을 요구한다). 여기서 경고 플래그를
+        // 소비할 수 없는 맥(비근무·흡수 세션)은 take_pokes 를 부르지 않는다. 여기서 경고 플래그를
         // 세우면 로그인만 해 둔 맥 전부가 상시 "놓친 찌르기를 못 받아왔어요"를 띄운다.
         guard realtimeMayConsumePokes else {
-            // 지금은 돌릴 수 없다. **잊지 않는다** — 근무중이 되는 순간 tick 이 다시 부른다(위 catchUpDeferred 주석).
+            // 지금은 돌릴 수 없다. **잊지 않는다** — 소비할 수 있게 되는 순간 되맞춤·tick 이 다시 부른다(위 catchUpDeferred 주석).
             realtime.catchUpDeferred = true
             realtimeCatchUpFailedAt = nil
             realtime.diagnostics.lastCatchUpAttempts = 0
+            // 대신 서버 표를 읽는다(v0.3.30) — 소켓이 내려가 있던 동안 온 메시지·읽음은 재생되지 않으므로, 조인 직후가
+            // "안 읽음 점"을 사실에 맞출 첫 기회다. **기다리지 않는다**: 따라잡기는 take_pokes 의 문이고, 그 문의 수명
+            // (catchUpTask)에 조회 왕복을 얹으면 메인 액터가 붐빌 때 "소비할 수 있게 된 순간의 빚 갚기"(catchUpTask == nil 조건)가
+            // 그만큼 늦어진다. 조회는 자기 직렬화(requestMessageActivityRefresh)가 따로 센다.
+            requestMessageActivityRefresh()
             return
         }
         realtime.catchUpDeferred = false
@@ -463,7 +470,6 @@ extension WorkTimerStore {
         case .tick: return "tick"
         case .tokenRefreshed: return "tokenRefreshed"
         case .tokenRefreshFailed(let fatal): return fatal ? "tokenRefreshFailed(fatal)" : "tokenRefreshFailed"
-        case .workEnded: return "workEnded"
         case .transport(let t):
             switch t {
             case .opened: return "opened"

@@ -487,6 +487,10 @@ extension WorkTimerStore {
     ///
     /// `adoptedRemoteSession` 도 함께 막는다: 흡수 세션의 주인은 다른 맥이다. 로컬 startedAt 이
     /// 서 있어도 그 근무는 이 맥의 것이 아니므로, 여기서 소비하면 진짜 주인이 못 본다.
+    ///
+    /// ★ v0.3.30: 서버가 send_message 의 근무 조건을 풀어 **비근무 구간에도 메시지 행은 쌓인다**(찌르기는 여전히 안 쌓인다).
+    ///   그래도 이 게이트는 그대로다 — 비근무 맥이 소비하면 말풍선을 볼 캐릭터가 없고 회사 맥의 말풍선을 훔친다.
+    ///   근무 밖 메시지는 소켓 신호가 **요약 조회**로 알리고(메뉴바 점), 근무를 시작하는 순간 start() 의 drain 이 가져온다.
     func takePokesIfWorking() async {
         guard startedAt != nil, !adoptedRemoteSession else { return }
         await drainReceivedPokes()
@@ -515,7 +519,13 @@ extension WorkTimerStore {
             // 같은 응답이 둘로 갈리는 **유일한 지점**. 메시지는 찔림 리액션(움찔·"콕 찔렀어요" 말풍선)을 타지 않고
             // 자기 큐로 간다 — 위 batch 에는 메시지가 애초에 들어 있지 않으므로(freshReceivedPokes 의 kind 가드)
             // 한 행이 두 경로를 동시에 타는 일은 없다.
-            enqueueReceivedMessages(WorkTimerStore.freshReceivedMessages(rows: rows, now: now))
+            // v0.3.30: 근무 밖에서 쌓였다가 근무 시작 drain 으로 들어온 메시지 중 **이미 읽은 것**(서버 기준 · 낙관 읽음)은
+            // 말풍선으로 띄우지 않는다. 소비는 이미 서버에서 끝났고 이력에는 남아 있으므로 잃는 것이 없다.
+            // 5분 넘은 것은 위 신선도 필터가 원래대로 말풍선 없이 버린다.
+            enqueueReceivedMessages(
+                WorkTimerStore.freshReceivedMessages(rows: rows, now: now)
+                    .filter { !isMessageAlreadyReadForBubble($0) }
+            )
             // count 는 **소비된 행 전체 수**(신선도 필터 이전)다. 초인종 페이로드의 pending 과 견주면
             // 소비 경로가 새는지 보이는데, 필터 뒤 개수를 세면 '오래돼서 안 보여준 것'까지 유실로 오진한다.
             return .ok(count: rows.count)

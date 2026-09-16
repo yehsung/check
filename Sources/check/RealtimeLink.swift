@@ -33,18 +33,11 @@ enum RealtimeState: Equatable, Sendable {
         case suspended
         /// 전송자가 없다(테스트·킬스위치·미배포). **출시 시점의 값이다.**
         case disabled
-        /// 이 맥이 **찌르기를 받을 자격이 있는 근무 중이 아니다**(비근무이거나, 근무 중이어도 그 세션의
-        /// 주인이 다른 맥이다). 로그아웃도 잠자기도 아니라서 새 사유를 따로 둔다 — 셋 중 아무것에나
-        /// 접어 넣으면 `.willSleep`/`.didWake` 가 그 사유를 잘못 해석해 근무하지 않는 맥이 뚜껑을 열 때
-        /// 소켓을 다시 올린다.
-        ///
-        /// **왜 근무 중에만 붙는가**: 서버의 세 함수(poke_user / ultra_poke_user / send_message)가 전부
-        /// `target_not_working` 게이트를 갖는다(20260819030000_poke_economy_and_ring.sql:69, :156, :215).
-        /// 근무 중이 아닌 사람은 **아무도 찌를 수 없으므로** 그때의 소켓은 받을 것이 원리적으로 없는
-        /// 연결이고, 25초 하트비트만 태운다(무료 플랜 동시연결 200 / 메시지 200만·월).
-        /// 폴링(`takePokesIfWorking`)이 이미 같은 눈금을 쓰고 있었다 — 리얼타임만 로그인 기준이던 것이
-        /// 두 경로가 어긋나 있던 자리다.
-        case notWorking
+        // ★ v0.3.30 에서 `notWorking`(근무 중에만 붙는다, v0.2.34)을 **지웠다.** 서버가 메시지·오목 신청의 근무 조건을
+        //   풀었으므로(send_message · gomoku_challenge 의 not_working/target_not_working 삭제) 근무하지 않는 사람에게도
+        //   신호가 온다 — 소켓 기준은 다시 **로그인**이다. take_pokes 소비의 근무 게이트는 링이 아니라 스토어의
+        //   `realtimeMayConsumePokes` 가 그대로 쥔다(집 맥이 회사 맥의 찌르기를 훔치지 않게). 사유를 되살리지 마라 —
+        //   되살리는 순간 근무 밖에서 온 메시지·읽음·오목 신청이 다시 안 들린다.
     }
 
     /// **폴링을 재우는 유일한 스위치.** 여기가 참일 때만 take_pokes 폴링이 쉰다.
@@ -98,6 +91,13 @@ enum RealtimeLinkConstants {
     /// 그 밖의 이름('ring' 포함, 빈 이름 포함)은 전부 예전처럼 drain 이다 — 모르는 이름을 버리면 서버가
     /// 이벤트 이름을 바꾸는 날 찌르기가 조용히 끊긴다.
     static let gomokuBroadcastEvent = "gomoku"
+
+    /// 메시지 읽음 신호의 브로드캐스트 이벤트 이름(v0.3.30). 서버 `mark_messages_read` 의
+    /// `realtime.send(…, 'message_read', poke_topic(보낸 사람), true)` 와 **문자 그대로 같다**.
+    /// 누군가 **내가 보낸** 메시지를 읽어 경계가 실제로 커졌다는 신호다. payload(`{v:1, r:<읽은 사람>}`)는 믿지 않고
+    /// "이력·요약을 다시 받아라"로만 쓴다. **take_pokes 로 보내지 않는다** — 소비할 것이 없는 원자 소비 RPC 를
+    /// 읽힐 때마다 한 번씩 더 쏘게 된다(옛 맥 ≤ build 81 이 바로 그렇게 한다 — 그래서 서버는 경계가 커질 때만 보낸다).
+    static let messageReadBroadcastEvent = "message_read"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,13 +150,8 @@ enum RealtimeEvent: Equatable, Sendable {
     case tokenRefreshed(accessToken: String)
     /// fatal = 이 세션은 끝났다(refresh token 이 무효). false = 일시 실패(네트워크).
     case tokenRefreshFailed(fatal: Bool)
-    /// 이 맥의 근무가 끝났다(종료·자동 마감·서버가 세션을 닫음·다른 맥에 세션을 넘겨줌).
-    ///
-    /// **`.signedOut` 과 다른 점은 accessToken 을 지우지 않는다는 것 하나다.** 로그아웃이 아니므로
-    /// 토큰은 여전히 유효하고, 근무를 다시 시작하면 `startRealtimeIfPossible()` 이 그 토큰으로 곧바로
-    /// 붙는다. 여기서 지우면 근무를 껐다 켤 때마다 세션을 다시 읽어야 하고, 그 사이 `beginConnecting`
-    /// 이 토큰 없음을 보고 `.idle(.signedOut)` 으로 떨어뜨려 로그인하지 않은 것처럼 보인다.
-    case workEnded
+    // ★ `workEnded`(근무가 끝나면 소켓을 내린다)는 v0.3.30 에 `IdleReason.notWorking` 과 함께 지웠다 — 소켓 기준이
+    //   로그인으로 돌아갔다(위 IdleReason 주석). 근무 종료는 이제 링의 사건이 아니다.
 }
 
 /// 링이 스토어에게 **시키는 일**. 링은 스스로 아무것도 하지 않는다.
@@ -167,11 +162,15 @@ enum RealtimeEffect: Equatable, Sendable {
     case cancelRetry
     /// 구독 직후 1회 따라잡기. **폴백이 아니라 정확성이다** — 근거는 `catchUpAfterSubscribe` 주석.
     case catchUp
-    /// 브로드캐스트를 받았다 → take_pokes 1회(직렬화는 requestDrain 이 한다).
+    /// 브로드캐스트를 받았다 → 소비할 수 있는 맥이면 take_pokes 1회(직렬화는 requestDrain 이 한다), 아니면
+    /// take_pokes 없이 메시지 활동 새로고침(v0.3.30). 가르는 것은 링이 아니라 스토어의 `realtimeMayConsumePokes` 다.
     case drain
     /// 오목 신호('gomoku')를 받았다 → 오목 상태 재조회 1회(직렬화는 GomokuStore.handleSignal 이 한다).
     /// **take_pokes 가 아니다** — 수마다 원자 소비 RPC 를 한 번씩 더 쏘면 무료 플랜 요청만 태운다.
     case gomokuSignal
+    /// 읽음 신호('message_read')를 받았다 → 메시지 활동 새로고침(요약 + 대화 패널이 보이면 이력) 1회.
+    /// **take_pokes 가 아니다**(v0.3.30) — 읽음은 소비할 행을 만들지 않는다.
+    case messageReadSignal
     case pushAccessToken(String)
     case scheduleTokenRefresh(at: Date)
     /// 강제 갱신(만료 토큰 조인 거절 직후). force=true 는 "예정보다 앞당겨서라도 지금".
@@ -292,13 +291,13 @@ struct RealtimeLink: Equatable, Sendable {
             return [.disconnect, .cancelRetry]
 
         case .willSleep:
-            // 로그아웃/비근무 상태에서 뚜껑을 닫아도 `.suspended` 가 되면 안 된다 — 그러면 wake 가
-            // 로그인 없이(또는 근무하지 않는 채로) 연결을 시도한다. `.disabled` 는 위에서 이미 걸렀다.
+            // 로그아웃 상태에서 뚜껑을 닫아도 `.suspended` 가 되면 안 된다 — 그러면 wake 가
+            // 로그인 없이 연결을 시도한다. `.disabled` 는 위에서 이미 걸렀다.
             // `if case` 두 줄이 아니라 망라 switch 인 이유: IdleReason 이 또 넓어지는 날 컴파일러가
             // **이 자리**를 짚어 줘야 한다(사유를 하나 빠뜨린 채 suspended 로 접히는 것이 이 파일에서
             // 가장 조용한 결함이다).
             switch state {
-            case .idle(.signedOut), .idle(.notWorking):
+            case .idle(.signedOut):
                 return []
             case .idle(.suspended), .idle(.disabled), .connecting, .subscribed, .reconnecting, .failed:
                 break
@@ -382,30 +381,6 @@ struct RealtimeLink: Equatable, Sendable {
             failingSince = nil
             state = .idle(.signedOut)
             return [.disconnect, .cancelRetry]
-
-        case .workEnded:
-            switch state {
-            case .idle(.notWorking), .idle(.disabled):
-                // 이미 그 자리다. `.disabled` 는 위에서 이미 걸러 여기 오지 않지만, 사유가 늘어나는 날
-                // 컴파일러가 짚어 주려면 자리를 비워 둘 수 없다.
-                return []
-            case .idle(.signedOut), .idle(.suspended):
-                // 소켓은 이미 내려가 있다 — **사유만** 정정한다(effect 는 비운다). 죽은 소켓에 대고
-                // disconnect 를 되풀이하면 진단 로그가 그 반복으로 덮인다.
-                // 이 정정이 필요한 이유: 근무 게이트에 막혀 한 번도 출발하지 못한 링은 `.idle(.signedOut)`
-                // 인 채로 남는데, 그러면 로그인해 둔 사용자의 설정 창이 "로그아웃"이라고 말한다.
-                // `.suspended` 에서 오는 경우는 더 중요하다 — 정정하지 않으면 `.didWake` 가 근무하지도
-                // 않는 맥의 소켓을 다시 올린다.
-                state = .idle(.notWorking)
-                return []
-            case .connecting, .subscribed, .reconnecting, .failed:
-                break
-            }
-            // **accessToken 은 남긴다**(위 `.workEnded` 주석). 실패 시계만 접는다 — 근무를 다시 시작하면
-            // 그것은 새 연결 구간이고, 옛 실패를 물려받으면 시작하자마자 빨간 글씨가 뜬다.
-            failingSince = nil
-            state = .idle(.notWorking)
-            return [.disconnect, .cancelRetry]
         }
     }
 
@@ -452,10 +427,14 @@ struct RealtimeLink: Equatable, Sendable {
             // 어떤 트래픽이든 소켓이 살아 있다는 증거다(하트비트 응답만 증거로 삼으면 바쁜 소켓이
             // 하트비트 창을 놓쳤을 때 멀쩡한 연결을 끊는다). 오목 신호도 같은 증거다.
             state = .subscribed(since: since, lastHeardAt: now)
-            // 이름으로 가르는 것은 오목 하나뿐이다. 나머지는 이름을 보지 않던 예전 그대로 drain 이다.
+            // 이름으로 가르는 것은 읽음과 오목 둘뿐이다. 나머지는 이름을 보지 않던 예전 그대로 drain 이다.
             // 구버전(build ≤ 78) 앱은 이름을 보지 않고 모든 broadcast 를 drain 으로 보낸다. 그래서 같은 계정의 구버전
             // 두 번째 맥은 'gomoku' 신호(신청·취소·수락·착수·정산)마다 take_pokes 를 한 번씩 더 부른다. 소비할 행이 없어
             // 화면은 바뀌지 않고 요청만 는다(수당 10초 판 기준 시간당 약 180건) — 채널을 바꾸면 구독 정책이 새로 필요해 수용했다.
+            // 'message_read'(v0.3.30)도 같은 사정이다: build ≤ 81 맥은 읽힐 때마다 take_pokes 를 한 번 더 부른다 — 서버가
+            // 경계가 **실제로 커질 때만** 보내는 이유다. 이 줄을 오목 줄 **앞**에 두는 것은 순서에 뜻이 있어서가 아니라
+            // 오목 가지와 drain 기본값이 한 문장으로 붙어 있어야 하는 소스 계약(V0327GomokuRealtimeTests)을 지키기 위해서다.
+            if event == RealtimeLinkConstants.messageReadBroadcastEvent { return [.messageReadSignal] }
             if event == RealtimeLinkConstants.gomokuBroadcastEvent { return [.gomokuSignal] }
             return [.drain]
 

@@ -741,10 +741,13 @@ actor SupabaseWorkService {
         return avatarURL
     }
 
+    /// 로그아웃. **`scope=local` 이 요점이다**(v0.3.30 · A5) — Supabase Auth 의 기본 scope 는 global 이라, 빼면 이 맥에서
+    /// 로그아웃하는 순간 같은 계정의 **다른 기기(다른 맥·폰) 세션까지 전부** 끊긴다. local 은 이 토큰의 세션 하나만 닫는다.
     func signOut(accessToken: String) async {
         _ = try? await send(
             path: "/auth/v1/logout",
             method: "POST",
+            queryItems: [URLQueryItem(name: "scope", value: "local")],
             body: Optional<EmptyBody>.none,
             accessToken: accessToken,
             prefer: nil

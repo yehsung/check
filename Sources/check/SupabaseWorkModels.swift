@@ -2221,6 +2221,13 @@ struct MessageHistoryEntry: Identifiable, Equatable, Sendable {
     let createdAt: Date
     /// true = 내가 보낸 것(오른쪽 정렬), false = 받은 것(왼쪽 정렬 + 아바타).
     let isMine: Bool
+    /// v0.3.30 — **내가 보낸 것에만** 값이 있다: 상대가 읽었으면 true, 아직이면 false(말풍선 옆 1).
+    /// 받은 것이거나 서버가 읽음 기능을 모르면(옛 `message_history`) nil = "모름" — 뷰는 nil 에 1을 그리지 않는다.
+    /// `var` + 기본값으로 **맨 끝에** 둔다: 멤버와이즈 초기화를 쓰는 기존 호출부(테스트 픽스처 포함)가 그대로 컴파일돼야 한다.
+    var readByPeer: Bool? = nil
+    /// v0.3.30 — **받은 것에만** 값이 있다: 서버 기준 내가 아직 안 읽었으면 true. 보낸 것·옛 서버는 nil.
+    /// 서버가 마이크로초로 비교한 결과다 — 클라가 `createdAt`(초 단위)으로 다시 판정하지 마라.
+    var isUnread: Bool? = nil
 }
 
 /// profiles.token_usage_public 자기 행 조회 응답.

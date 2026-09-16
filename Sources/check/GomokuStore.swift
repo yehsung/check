@@ -10,7 +10,8 @@ import OSLog
 //  ② **시각은 서버 시계로 보정한다.** 마감·신청 만료는 서버 epoch 밀리초로 오고, 같은 응답의 server_now_ms 와의
 //     차이로 기기 시계 어긋남을 지운다(`serverClockOffset`). 기기 시계가 5초 빠른 맥이 "25초 남음"을 보면 안 된다.
 //  ③ **폴링은 창이 보일 때만 돈다**(무료 플랜 예산). 창이 안 보이면 받은 신청은 팝오버 열기(60초 스로틀)·실시간
-//     'gomoku' 신호·조인 직후 따라잡기·근무 시작·깨어남에서만 본다.
+//     'gomoku' 신호·조인 직후 따라잡기·근무 시작·깨어남에서만 본다. v0.3.30 부터 이 계기들은 **근무 여부를 보지 않는다** —
+//     서버가 신청·수락의 근무 조건을 지웠고, 소켓은 로그인 중이면 붙어 있다(WorkTimerStoreRealtime).
 //  ④ **늦게 온 응답은 버린다.** 로그아웃·계정 전환(host.sessionGeneration)과 이 스토어의 reset(resetGeneration)
 //     두 세대를 모두 대조한다 — 하나만 보면 로그아웃 직후 도착한 앞 계정의 판이 새 계정 화면에 뜬다.
 //     채팅에는 세대가 하나 더 있다(chatGeneration) — 음소거 토글 전에 나간 조회의 응답은 값도 줄도 앞 판정이다.
@@ -273,6 +274,9 @@ nonisolated enum GomokuNoticeText {
     }
 
     /// 신청(gomoku_challenge) 결과.
+    ///
+    /// v0.3.30 부터 서버는 `not_working`·`target_not_working` 을 **내지 않는다**(신청·수락의 근무 조건 삭제). 두 문구는
+    /// db push 가 앱보다 늦은 창의 옛 서버가 그 status 를 줄 때만 쓰인다 — 클라가 먼저 근무를 보고 막는 선게이트로 되살리지 마라.
     static func challenge(_ status: GomokuRPCStatus, need: Int? = nil, have: Int? = nil) -> String {
         switch status {
         case .ok: return "신청을 보냈어요"
@@ -505,6 +509,17 @@ final class GomokuStore {
         guard !isSendingChat, match != nil else { return false }
         if case .ok = GomokuChatBody.validate(chatDraft, maxLength: chatMaxLength) { return true }
         return false
+    }
+
+    /// 만료되지 않은 받은 신청 전부(만료가 이른 것부터, v0.3.30 — M2 의 근무 밖 신청 배너·메뉴바 점이 읽는다).
+    ///
+    /// **시계를 읽지 않는다**(`bannerInvite` 와 같은 규약) — 만료된 신청은 스토어가 **만료 시각에 타이머로**
+    /// `incoming` 에서 걷어낸다(`scheduleInviteExpiry` → `pruneExpiredInvites`). 관찰 갱신은 시간 흐름만으로는 일어나지 않으므로,
+    /// 여기서 `Date()` 로 거르면 값은 맞아도 그 값을 그린 메뉴바 점은 다음 무관한 갱신까지 켜진 채로 남는다.
+    var pendingIncomingInvites: [GomokuInvite] {
+        incoming.sorted { lhs, rhs in
+            lhs.expiresAt != rhs.expiresAt ? lhs.expiresAt < rhs.expiresAt : lhs.id < rhs.id
+        }
     }
 
     /// 팝오버 배너·말풍선이 쓰는 대표 신청(만료 안 된 받은 신청 중 가장 오래된 것).
@@ -1360,14 +1375,18 @@ final class GomokuStore {
         Task { [weak self] in await self?.catchUp() }
     }
 
-    /// 근무 시작. 신청은 근무 중인 사람에게만 오므로 이 순간 한 번 본다.
+    /// 근무 시작. v0.3.27 에는 "신청은 근무 중인 사람에게만 온다"가 근거였고, v0.3.30 에 서버가 그 조건을 지운 뒤로는
+    /// 신선도 보강이다(주 경로는 소켓 신호·팝오버 열기).
     func workDidStart() {
         guard host?.session != nil else { return }
         Task { [weak self] in await self?.loadInbox() }
     }
 
-    /// 팝오버 열림. 60초 스로틀.
-    func menuDidOpen() {
+    /// 팝오버 열림(60초 스로틀). `WorkTimerStore.setMenuPresented(true)` 가 부른다.
+    ///
+    /// v0.3.30 부터 **근무 밖에서도** 신청이 온다(서버 gomoku_challenge 의 근무 조건 삭제) — 캐릭터가 없는 비근무 사용자에게
+    /// 팝오버 배너·메뉴바 점(`pendingIncomingInvites`)의 신선도가 이 계기와 소켓 신호에 달려 있다.
+    func refreshInboxIfStale() {
         guard host?.session != nil else { return }
         let now = clock()
         guard now.timeIntervalSince(lastMenuInboxAt) >= Self.menuInboxThrottleSeconds else { return }

@@ -544,6 +544,9 @@ struct GomokuPanel: View {
                 .frame(width: GomokuWindowLayout.lobbySideWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
             GomokuLiveMatchColumn(store: store)
                 .frame(width: GomokuWindowLayout.chatWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
+                // 상대 목록과 같은 보험 — 카드가 예산을 넘겨도 제 틀 밖(창 아래 여백)을 칠하지 않는다.
+                // 접는 일은 `GomokuLiveMatchColumn.maxCards` 가 하고, 이건 그게 틀렸을 때의 안전망이다.
+                .clipped()
         }
     }
 
@@ -1358,7 +1361,15 @@ private struct GomokuChatColumn: View {
         }
     }
 
-    /// 대화 로그(오래된 것 → 최신, 아래로 쌓인다).
+    /// 대화 로그(오래된 것 → 최신, 아래로 쌓인다). **두 갈래가 같은 끝을 그린다 — 맨 아래(최신)다.**
+    ///
+    /// 정본은 `MessageConversationView`(CheckMessageView.swift) 이고 규칙을 그대로 가져왔다: 클립 갈래는
+    /// `overlay(alignment: .bottom)`, 스크롤 갈래는 `ScrollViewReader` + 바닥 앵커 + `.defaultScrollAnchor(.bottom)`.
+    /// **두 그림이 다르면 스냅샷으로 아무것도 확인할 수 없다** — 실제로 스냅샷은 최신을 보여 주는데 앱만
+    /// 맨 위에 멈춰 있어서(앵커가 하나도 없었다) 사용자가 매번 손으로 내려야 했고, 렌더 검증은 전부 초록이었다.
+    ///
+    /// 맨 아래로 보내는 계기 셋(처음 열 때 · 판이 바뀔 때 · 새 말이 올 때)을 **한 함수로 모은** 이유도 정본과 같다:
+    /// 세 자리가 갈리면 그중 하나만 고쳐지는 날이 온다.
     ///
     /// **`minHeight: 0` 을 빠뜨리지 마라** — 없으면 이 틀이 말풍선들의 자연 높이를 그대로 보고해
     /// 카드가 608pt 본문을 뚫고 창 밖으로 자란다(상대 목록이 겪은 그것). 스냅샷 경로가 `ScrollView` 를
@@ -1371,14 +1382,42 @@ private struct GomokuChatColumn: View {
             } else if store.chat.isEmpty {
                 centered(GomokuText.chatEmpty)
             } else if rendersPlainText {
-                bubbles
+                // 스냅샷 전용. **아래쪽이 최신이므로 위를 자른다** — 틀 크기가 말풍선 높이에 끌려가지 않게
+                // 빈 색을 깔고 그 위에 얹는다(정본과 같은 수법).
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(alignment: .bottom) { bubbles.fixedSize(horizontal: false, vertical: true) }
             } else {
-                ScrollView { bubbles }
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        bubbles
+                        // 마지막 말풍선 id 를 앵커로 쓰지 않는 이유는 그 뒤의 아래 여백까지 보이게 하기 위해서다.
+                        Color.clear.frame(height: 1).id(Self.bottomAnchorID)
+                    }
                     .scrollIndicators(.automatic)
+                    // 내용이 틀보다 짧아도 **아래에 붙인다** — 메신저의 기본 감각이고, 클립 갈래와 같은 그림이 되는 값이다.
+                    .defaultScrollAnchor(.bottom)
+                    .onAppear { scrollToBottom(proxy, animated: false) }
+                    .onChange(of: store.match?.id) { _, _ in scrollToBottom(proxy, animated: false) }
+                    .onChange(of: store.chat.last?.seq) { _, _ in scrollToBottom(proxy, animated: true) }
+                }
             }
         }
         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .bottom)
         .clipped()
+    }
+
+    /// 맨 아래로 보낼 앵커. 판이 바뀌어도 같은 id 를 쓴다(앵커는 자리이지 내용이 아니다).
+    private static let bottomAnchorID = "gomoku-chat-bottom"
+
+    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool) {
+        guard animated else {
+            proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+            return
+        }
+        withAnimation(.easeOut(duration: 0.18)) {
+            proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+        }
     }
 
     private func centered(_ text: String) -> some View {

@@ -205,6 +205,10 @@ class CheckEditorTextView: NSTextView {
     /// 제보 칸에는 주지 마라(요청 밖이고, 제보 화면은 목록을 먼저 읽는 화면이다).
     var focusesWhenShown = false
 
+    /// 이 칸이 **돌아갈 재사용 자리**(`CheckEditorSlot`). `dismantleNSView` 가 자기 자리로만 반납한다 —
+    /// 남의 자리에 넣으면 그 자리의 칸을 밀어내고, 밀려난 칸은 다시는 안 쓰인다(재사용이 조용히 끊긴다).
+    var poolSlot: CheckEditorSlot?
+
     /// **뷰에 그려진 글자가 비었는가**를 바깥(placeholder)에 알리는 통로. 조합 중 표시 글자도 "그려진 것"이다.
     ///
     /// **왜 바인딩(스토어)으로는 안 되나**(2026-09-11 실측 run5-markedtext.log 4.43~5.47s): 표시 글자 구간에는
@@ -229,13 +233,71 @@ class CheckEditorTextView: NSTextView {
     ///   사용자가 일부러 누른 ⇧↩ 의 줄바꿈까지 먹는다 — 그래서 **한 턴**이다.
     private var swallowsNextNewline = false
 
-    /// 지금 포커스를 쥔 입력칸(약참조). **전송 문이 "확정할 대상"을 찾는 유일한 통로다.**
+    /// 마지막으로 첫 응답자가 된 입력칸(약참조). **이제 이 값 하나로 대상을 정하지 않는다** —
+    /// 아래 `focusedEditor` 가 실제 첫 응답자를 먼저 묻고, 이것은 그 갈래의 **마지막 보루**일 뿐이다.
+    private static weak var lastFocused: CheckEditorTextView?
+
+    /// 첫 응답자가 된 적 있는 입력칸들(약참조 모음 — 창이 사라지면 항목도 저절로 빠진다).
+    /// `focusedEditor` 가 후보를 여기서 고른다.
+    private static let knownEditors = NSHashTable<CheckEditorTextView>.weakObjects()
+
+    /// 내가 **내 창의** 첫 응답자인가.
     ///
-    /// 왜 필요한가: [보내기] 버튼과 ⌘↩ 은 **키 이벤트가 이 뷰로 오지 않는다**(버튼의 동작 클로저와 SwiftUI
-    /// 단축키다). 그래서 그 두 갈래는 자기 손으로 조합을 확정할 수 없고, 확정 없이 보내면 스토어에 아직
-    /// 없는 마지막 음절이 빠진 문장이 나간다(증상 ③ — run8-note.log 23.94s: `SEND read="안녕하세"`).
-    /// 약참조인 이유는 창과 같다 — 수명은 SwiftUI/AppKit 이 쥔다.
-    private(set) static weak var focusedEditor: CheckEditorTextView?
+    /// ★ 첫 응답자는 **창마다 따로**다. 창이 둘이면 두 칸이 **동시에** 참일 수 있다(2026-09-16 헤드리스
+    ///   실측: 창 A·B 에 각각 `makeFirstResponder` → `wa.firstResponder === a` 와 `wb.firstResponder === b`
+    ///   가 같이 true, 각자 `becomeFirstResponder` 는 한 번씩만 왔다). 그 사실이 아래 판정의 전부다.
+    var holdsFirstResponder: Bool { window?.firstResponder === self }
+
+    /// 전송 문이 **조합을 확정할 칸**. [보내기] 버튼과 ⌘↩ 은 키 이벤트가 뷰로 오지 않아(버튼의 동작
+    /// 클로저와 SwiftUI 단축키다) 자기 손으로 확정할 수 없고, 확정 없이 보내면 스토어에 아직 없는 마지막
+    /// 음절이 빠진 문장이 나간다(증상 ③ — run8-note.log 23.94s: `SEND read="안녕하세"`).
+    ///
+    /// ⚠︎ **왜 정적 한 칸(`lastFocused`)으로는 안 되나**(2026-09-16, v0.3.28 오목 채팅칸이 생기며 드러났다).
+    ///   그 값은 `becomeFirstResponder` 에서만 갱신되는데, **창이 둘이면 그 알림이 안 온다**: 칸 B(다른 창)로
+    ///   갔다가 창 A 로 돌아와도 A 는 이미 자기 창의 첫 응답자라 AppKit 이 `becomeFirstResponder` 를 다시
+    ///   부르지 않는다(2026-09-16 실측: 이미 첫 응답자인 칸에 `makeFirstResponder` → become 횟수 1 → 1,
+    ///   즉 **다시 안 불린다**). 그러면 정적 한 칸은 B 를 가리킨 채 굳고, 사용자가 A 에 쓰던 글을 보낼 때
+    ///   전송 문이 **B 의 조합을 확정한다** — A 의 마지막 음절은 그대로 사라진다(증상 ③이 창 두 개에서 부활).
+    ///
+    /// **그래서 실제 첫 응답자를 따라간다.** 순서가 뜻이다:
+    ///   ① 자기 창의 첫 응답자인 칸만 후보다. 하나뿐이면 고를 것이 없다(앱의 보통 상태 = 옛 동작 그대로).
+    ///   ② 후보가 둘 이상(창이 둘 이상 서 있다)이면 **조합이 떠 있는 칸**이 정답이다. 이 문이 하는 일이
+    ///      곧 "조합 확정"이라, 확정할 것을 가진 칸이 사용자가 방금까지 치던 칸이다. 이 갈래는 **음절을
+    ///      잃지 않는다**: 조합 중인 칸이 하나뿐이면 그 칸이 유일하게 잃을 것이 있는 칸이다.
+    ///   ③ 그래도 못 가리면 키 창의 칸. ⚠︎ **헤드리스에서는 이 갈래가 못 산다** — 2026-09-16 실측에서
+    ///      `makeKeyAndOrderFront`·`makeKey` 를 불러도 `isKeyWindow` 가 끝까지 false 였다(NSApplication 이
+    ///      제대로 안 서는 프로세스라 그렇다). 그러니 이 줄을 테스트로 지킬 수는 없고, 앱에서만 쓰인다.
+    ///   ④ 마지막으로 포커스를 받은 칸이 후보 안에 있으면 그것(옛 규칙 — 팝오버는 `nonactivatingPanel` 이라
+    ///      키 창이 아무도 아닐 수 있다. v0.3.11 로그의 `keyWin=none` 이 그 상태다).
+    ///   ⑤ 그래도 못 가리면 **아무 일도 안 한다.** 엉뚱한 칸을 확정하느니 안 하는 쪽이 낫다.
+    static var focusedEditor: CheckEditorTextView? {
+        let candidates = knownEditors.allObjects.filter { $0.holdsFirstResponder }
+        guard !candidates.isEmpty else {
+            // 창 없이 포커스만 받은 칸(헤드리스 검증 경로). 풀에 반납된 칸은 여기 안 걸린다 —
+            // 반납할 때 이 참조를 지운다(`forgetFocus`).
+            if let cached = lastFocused, cached.window == nil { return cached }
+            return nil
+        }
+        if candidates.count == 1 { return candidates[0] }
+        let composing = candidates.filter { $0.hasMarkedText() }
+        if composing.count == 1 { return composing[0] }
+        let pool = composing.isEmpty ? candidates : composing
+        if let keyed = pool.first(where: { $0.window?.isKeyWindow == true }) { return keyed }
+        if let cached = lastFocused, pool.contains(where: { $0 === cached }) { return cached }
+        return nil
+    }
+
+    /// 첫 응답자가 된 칸을 적어 둔다(`becomeFirstResponder` 전용).
+    private static func rememberFocus(_ editor: CheckEditorTextView) {
+        knownEditors.add(editor)
+        lastFocused = editor
+    }
+
+    /// 풀에 반납되는 칸을 후보에서 뺀다. 반납된 칸은 창이 없어 ①의 후보는 아니지만, `lastFocused` 로
+    /// 남아 있으면 "창 없이 포커스만 받은 칸" 갈래에 걸려 **이미 내려간 칸**을 가리킨다.
+    static func forgetFocus(_ editor: CheckEditorTextView) {
+        if lastFocused === editor { lastFocused = nil }
+    }
 
     override func keyDown(with event: NSEvent) {
         // ★ 키가 여기까지 왔다 = **사용자가 이 칸에 타이핑하고 있다**(로컬 키 이벤트는 우리 앱 창에만 온다).
@@ -433,9 +495,9 @@ class CheckEditorTextView: NSTextView {
     override func becomeFirstResponder() -> Bool {
         let accepted = super.becomeFirstResponder()
         guard accepted else { return false }
-        // 전송 문이 조합을 확정할 대상. **여기 말고 다른 데서 대입하지 마라** — 두 곳이 되면 방금 닫힌 칸을
-        // 가리킨 채 남는 창이 생기고, 그러면 전송이 엉뚱한 칸의 조합을 확정한다.
-        Self.focusedEditor = self
+        // 전송 문이 확정할 대상을 고르는 **재료**(그 판정은 `focusedEditor` 에 있다). **여기 말고 다른 데서
+        // 적지 마라** — 두 곳이 되면 방금 닫힌 칸을 가리킨 채 남는 창이 생긴다.
+        Self.rememberFocus(self)
         // ★ **여기서 앱을 활성화하지 않는다.** 이 자리에는 "사용자가 우리에게 타이핑하고 있다"는 증거가 없다 —
         //   코드가 포커스를 옮기기만 해도(대화 패널 진입) 다른 앱의 앞자리를 빼앗게 된다.
         //   문맥을 되살리는 일은 키가 실제로 들어오는 자리에서만 한다(`keyDown`).
@@ -446,7 +508,7 @@ class CheckEditorTextView: NSTextView {
         let resigned = super.resignFirstResponder()
         // 내가 쥐고 있었을 때만 자리를 비운다(새 칸이 먼저 잡고 옛 칸의 resign 이 뒤늦게 오는 순서가 있다 —
         // `WindowTopAnchor.detach` 가 같은 이유로 같은 모양을 쓴다).
-        if resigned, Self.focusedEditor === self { Self.focusedEditor = nil }
+        if resigned, Self.lastFocused === self { Self.lastFocused = nil }
         return resigned
     }
 
@@ -580,6 +642,35 @@ class CheckEditorTextView: NSTextView {
 
 // MARK: - SwiftUI 래퍼
 
+/// 입력칸 재사용 풀의 **자리**(키). 소스에서 `CheckTextEditor(...)` 를 쓴 **호출 자리 하나가 자리 하나**다.
+///
+/// **왜 자리가 필요해졌나**(2026-09-16, v0.3.28). 이 칸을 쓰는 곳이 셋이 됐다 — 대화(`CheckMessageView`) ·
+/// 제보(`CheckFeedbackView`) · **오목 채팅**(`GomokuPanel`). 앞의 둘은 `CheckMenuView` 의 `if / else if` 로
+/// 서로 배타라 한 벌로 충분했지만, 오목 채팅칸은 팝오버가 아니라 **별도 창**에 살고 그 창의 `close()` 는
+/// `orderOut` 뿐이라(`CheckGomokuWindow.close`) 창을 내려도 호스팅 뷰가 계속 살아 있다. 즉 대국·결과 화면이
+/// 서 있는 동안 오목 채팅칸이 풀의 유일한 칸을 `superview != nil` 로 **쥔 채** 남는다. 그 상태에서 팝오버의
+/// 대화 패널이 서면 풀이 비어 **새 NSTextView 가 만들어지고**, 새로 만들어진 칸은 한글 입력기 세션을 받지
+/// 못해 자모가 하나씩 박힌다(`makeNSView` 주석의 실측 — 제보 ①, v0.3.0~v0.3.12 가 바로 그 결함이다).
+///
+/// **자리는 유한하다**: 키가 소스 위치(`#fileID` + `#line`)라 컴파일 시점에 굳고, 호출 자리 수를 넘어
+/// 늘어날 수 없다. 자리마다 대기 칸은 **최대 한 벌**이다(`CheckTextEditor.pooledScrolls`).
+///
+/// ⚠︎ 이 키를 **보간이나 중첩 호출로 만들지 마라.** 2026-09-16 실측: 기본값이 `"\(#fileID):\(#line)"` 처럼
+///   보간이거나 `.callSite()` 같은 중첩 호출이면 매직 리터럴이 **선언한 자리**로 굳어(`CheckTextEditor.swift`
+///   의 그 줄) 세 호출부가 **같은 키**를 받는다 — 고치려던 결함이 그대로 남는다. 매직 리터럴을 **맨 기본값
+///   그대로** 둔 경우에만 호출 자리에서 펼쳐진다(같은 실측에서 `b.swift:1` · `b.swift:4` · `main.swift:4`).
+struct CheckEditorSlot: Hashable, CustomStringConvertible {
+    let id: String
+
+    init(id: String) { self.id = id }
+
+    /// 테스트가 쓰는 **고정** 자리. 매직 리터럴을 쓰지 않는다 — 세우는 줄과 꺼내는 줄이 달라 자리가 갈리면
+    /// 테스트가 자기가 넣은 칸을 못 찾는다.
+    static let testing = CheckEditorSlot(id: "testing")
+
+    var description: String { id }
+}
+
 /// 팝오버 안에서 쓰는 여러 줄 입력칸. 배경·테두리·placeholder 는 **부모가 그린다** —
 /// 이 뷰는 자기 배경을 그리지 않는다(다크 화면에 흰 상자가 뚫린다).
 ///
@@ -587,26 +678,42 @@ class CheckEditorTextView: NSTextView {
 /// 테두리에서 물러나는 폭(`CheckEditorMetrics.frameInset`)은 **여기서 한 번만** 준다 — 부모마다 따로 주게 두면
 /// 한 칸이 잊는 순간 그 칸의 글자만 2pt 어긋나고, 그게 사용자 지시 ③이 생긴 경위 그대로다.
 struct CheckTextEditor: View {
-    /// **반납되어 대기 중인** 입력칸. 위 `makeNSView` 주석이 이 프로퍼티의 존재 이유다 — 새로 만든 칸은
-    /// 한글 입력기 세션을 못 받아 자모가 하나씩 박힌다.
+    /// **반납되어 대기 중인** 입력칸 — **자리마다 한 벌**(`CheckEditorSlot`). 위 `makeNSView` 주석이 이
+    /// 프로퍼티의 존재 이유다 — 새로 만든 칸은 한글 입력기 세션을 못 받아 자모가 하나씩 박힌다.
     ///
-    /// ★ **쥐고 있는 칸은 여기 없다.** `makeNSView` 가 꺼내 갈 때 nil 로 비우고, `dismantleNSView`(패널이
+    /// ★ **쥐고 있는 칸은 여기 없다.** `makeNSView` 가 꺼내 갈 때 그 자리를 비우고, `dismantleNSView`(패널이
     ///   내려갈 때)가 되돌려 놓는다. 그래서 **두 곳이 같은 칸을 동시에 쥘 수 없다** — 한 벌을 그냥 공유하게
     ///   두었더니 병렬 렌더 테스트들이 같은 칸을 나눠 쓰며 서로의 글자를 봤다(2026-09-12 전체 스위트에서
     ///   `footerButtonsAreRealButtonsNotMenus` · `theMountedMessageEditorIgnoresEnterWhenTheStoreCannotSend` ·
     ///   `todoSwitch…` 셋이 동시에 빨개졌고, 재사용을 끄면 셋 다 초록이었다).
     ///   대기 칸이 비어 있으면 새로 만든다 — 동시에 여러 칸이 필요한 경우(테스트)에도 안전하다.
     ///
+    /// ★ **왜 한 칸이 아니라 자리별인가**(2026-09-16, v0.3.28): 세 번째 사용처(오목 채팅칸)가 생겼고 그 칸은
+    ///   별도 창에 살아 **대화·제보 칸과 동시에 마운트된 채로 남는다**. 한 칸짜리 풀이면 먼저 선 칸이 그
+    ///   한 칸을 쥐고, 나중에 선 칸은 **새로 만들어져 한글 조합이 죽는다**(`CheckEditorSlot` 주석에 전말).
+    ///
     /// `nonisolated(unsafe)`: SwiftUI 의 make/dismantle 는 메인에서만 불린다.
-    nonisolated(unsafe) fileprivate static var pooledScroll: NSScrollView?
+    nonisolated(unsafe) fileprivate static var pooledScrolls: [CheckEditorSlot: NSScrollView] = [:]
 
-    /// 테스트 전용. 앱이 쓰는 재사용 규칙(`CheckEditorScrollView.reusableScrollIfAvailable`)을 그대로 되묻는다.
+    /// 테스트 전용. 앱이 쓰는 재사용 규칙(`CheckEditorScrollView.takePooledScroll`)을 그대로 되묻는다.
     @MainActor
-    static func reusableScrollForTesting() -> NSScrollView? { CheckEditorScrollView.takePooledScroll()?.scroll }
+    static func reusableScrollForTesting(slot: CheckEditorSlot = .testing) -> NSScrollView? {
+        CheckEditorScrollView.takePooledScroll(slot: slot)?.scroll
+    }
 
     /// 테스트 전용. 재사용 칸을 세우거나 비운다(테스트끼리 상태를 물려주면 순서에 따라 결과가 갈린다).
     @MainActor
-    static func setReusableScrollForTesting(_ scroll: NSScrollView?) { pooledScroll = scroll }
+    static func setReusableScrollForTesting(_ scroll: NSScrollView?, slot: CheckEditorSlot = .testing) {
+        pooledScrolls[slot] = scroll
+    }
+
+    /// 테스트 전용. 풀을 통째로 비운다 — 자리가 여럿이 된 뒤로는 자리 하나만 비워서는 격리가 안 된다.
+    @MainActor
+    static func resetPoolForTesting() { pooledScrolls.removeAll() }
+
+    /// 테스트 전용. 지금 대기 칸을 들고 있는 **자리 수**. "풀이 자라지 않는다"를 재는 눈금이다.
+    @MainActor
+    static func pooledSlotCountForTesting() -> Int { pooledScrolls.count }
 
     @Binding var text: String
     /// Enter 로 보내는 칸인가. 기본은 false — **새로 쓰는 칸의 기본값은 "Enter 는 줄바꿈"이어야 한다**
@@ -620,6 +727,35 @@ struct CheckTextEditor: View {
     /// `CheckEditorTextView.onRenderedEmptyChange` 주석에 "왜 스토어 값으로는 안 되는가"가 있다.
     var onRenderedEmptyChange: ((Bool) -> Void)?
 
+    /// 이 칸이 쓰는 재사용 자리. 기본값은 **이 뷰를 세운 소스 위치**다(아래 `init` 의 `#fileID`/`#line`) —
+    /// 그래서 호출부는 **한 글자도 안 바뀌고도** 각자 자기 자리를 갖는다.
+    let slot: CheckEditorSlot
+
+    /// ★ **기본값이 있는 `file`/`line` 을 지우지 마라.** 이 둘이 자리(`slot`)를 만든다. 매직 리터럴은
+    ///   **맨 기본값 그대로** 두었을 때만 호출 자리에서 펼쳐진다 — 보간(`"\(#fileID)"`)이나 중첩 호출로
+    ///   감싸면 선언한 자리로 굳어 세 호출부가 같은 자리를 받는다(`CheckEditorSlot` 주석의 실측).
+    ///
+    /// 메모리로 적어 두는 이유: 이 `init` 은 **기본값만으로 기존 호출부 셋을 그대로 받는다**(대화 ·
+    /// 제보 · 오목 채팅). 인자 순서를 바꾸거나 기본값을 빼면 그 세 파일이 깨진다.
+    init(
+        text: Binding<String>,
+        sendsOnReturn: Bool = false,
+        focusesWhenShown: Bool = false,
+        canSendNow: @escaping () -> Bool = { false },
+        onSend: @escaping () -> Void = {},
+        onRenderedEmptyChange: ((Bool) -> Void)? = nil,
+        file: String = #fileID,
+        line: Int = #line
+    ) {
+        self._text = text
+        self.sendsOnReturn = sendsOnReturn
+        self.focusesWhenShown = focusesWhenShown
+        self.canSendNow = canSendNow
+        self.onSend = onSend
+        self.onRenderedEmptyChange = onRenderedEmptyChange
+        self.slot = CheckEditorSlot(id: "\(file):\(line)")
+    }
+
     var body: some View {
         CheckEditorScrollView(
             text: $text,
@@ -627,7 +763,8 @@ struct CheckTextEditor: View {
             focusesWhenShown: focusesWhenShown,
             canSendNow: canSendNow,
             onSend: onSend,
-            onRenderedEmptyChange: onRenderedEmptyChange
+            onRenderedEmptyChange: onRenderedEmptyChange,
+            slot: slot
         )
             // ★ 스크롤 뷰를 테두리 안쪽으로 물린다. 이 줄을 지우면 넘친 글이 빨간 테두리를 덮고,
             //   `textContainerInset` 이 이 폭을 뺀 값이라 글자 자리도 2pt 어긋난다(`CheckEditorMetrics.frameInset`).
@@ -653,28 +790,36 @@ private struct CheckEditorScrollView: NSViewRepresentable {
     var canSendNow: () -> Bool
     var onSend: () -> Void
     var onRenderedEmptyChange: ((Bool) -> Void)?
+    /// 이 칸의 재사용 자리(호출 자리 하나 = 자리 하나 — `CheckEditorSlot`).
+    var slot: CheckEditorSlot
 
-    /// 재사용할 수 있는 입력칸이 있으면 돌려준다. **판정 규칙은 여기 한 곳에만 있다** —
+    /// 그 **자리**에 재사용할 수 있는 입력칸이 있으면 돌려준다. **판정 규칙은 여기 한 곳에만 있다** —
     /// 테스트가 `Context` 없이 이 규칙을 되묻는다(SwiftUI 의 Context 는 테스트에서 만들 수 없다).
     /// 붙어 있는(superview != nil) 칸은 재사용하지 않는다 — 한 뷰는 두 곳에 못 붙는다.
     @MainActor
-    static func takePooledScroll() -> (scroll: NSScrollView, text: CheckEditorTextView)? {
-        guard let cached = CheckTextEditor.pooledScroll, cached.superview == nil,
+    static func takePooledScroll(slot: CheckEditorSlot) -> (scroll: NSScrollView, text: CheckEditorTextView)? {
+        guard let cached = CheckTextEditor.pooledScrolls[slot], cached.superview == nil,
               let text = cached.documentView as? CheckEditorTextView else { return nil }
-        CheckTextEditor.pooledScroll = nil   // ★ 꺼내 갔으면 대기열에서 뺀다(두 곳이 같이 쥐지 못하게)
+        CheckTextEditor.pooledScrolls[slot] = nil   // ★ 꺼내 갔으면 그 자리를 비운다(두 곳이 같이 쥐지 못하게)
         return (cached, text)
     }
 
-    /// 패널이 내려갈 때 SwiftUI 가 부른다. 쓰던 칸을 **대기열에 되돌려** 다음 마운트가 같은 칸을 쓰게 한다.
-    /// 이 문이 없으면 대기열이 영영 비어 있어 매번 새 칸이 만들어지고, 한글 조합이 다시 죽는다.
+    /// 패널이 내려갈 때 SwiftUI 가 부른다. 쓰던 칸을 **자기 자리에 되돌려** 다음 마운트가 같은 칸을 쓰게 한다.
+    /// 이 문이 없으면 자리가 영영 비어 있어 매번 새 칸이 만들어지고, 한글 조합이 다시 죽는다.
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
         nsView.removeFromSuperview()
-        if let text = nsView.documentView as? CheckEditorTextView {
+        let text = nsView.documentView as? CheckEditorTextView
+        if let text {
             text.delegate = nil
             // 다음 사람이 옛 글을 물려받지 않게 비운다(내용은 `updateNSView` 가 다시 채운다).
             text.string = ""
+            // 내려간 칸이 전송 문의 대상으로 남지 않게 한다(`focusedEditor` 의 마지막 갈래).
+            CheckEditorTextView.forgetFocus(text)
         }
-        CheckTextEditor.pooledScroll = nsView
+        // ★ **자기 자리로만 돌아간다.** 자리를 모르는 칸은 풀에 넣지 않는다 — 남의 자리에 넣으면 그 자리의
+        //   칸을 밀어내고, 밀려난 칸은 다시는 안 쓰인다(자리 수는 그대로여도 재사용이 조용히 끊긴다).
+        guard let slot = text?.poolSlot ?? coordinator.slot else { return }
+        CheckTextEditor.pooledScrolls[slot] = nsView
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -700,13 +845,19 @@ private struct CheckEditorScrollView: NSViewRepresentable {
         //   즉 문맥·활성·되쓰기 어느 쪽도 아니고, 남은 사실은 "새 뷰는 조합을 못 받는다" 하나였다.
         //   그래서 세션을 되살리려 싸우는 대신 **뷰를 갈지 않는다.** 12회 연속 상대 교체에서 고장 0건.
         //
-        //   왜 한 벌로 충분한가: 이 칸을 쓰는 두 패널(대화·제보)은 `CheckMenuView` 의 `if / else if` 로
-        //   **서로 배타**라 동시에 서지 않는다. 그래도 혹시 둘이 겹치면(한 뷰는 두 곳에 못 붙는다)
-        //   `superview != nil` 로 걸러 그때만 새로 만든다.
-        if let cached = Self.takePooledScroll() {
+        //   ★ **대기 칸은 자리(호출부)마다 한 벌이다**(2026-09-16, v0.3.28). 한동안 여기에는 "이 칸을 쓰는
+        //   두 패널(대화·제보)은 `CheckMenuView` 의 `if / else if` 로 서로 배타라 한 벌로 충분하다"고 적혀
+        //   있었다. **그 전제는 깨졌다**: 세 번째 사용처인 오목 채팅칸은 팝오버가 아니라 별도 창에 살고,
+        //   그 창의 `close()` 는 `orderOut` 뿐이라 창을 내려도 호스팅 뷰가 계속 살아 있다. 그래서 오목 칸이
+        //   한 벌짜리 대기 칸을 쥔 채 남고, 그때 선 대화 칸은 **새로 만들어져 한글 조합이 죽었다**
+        //   (`CheckEditorSlot` 주석에 전말). 자리를 나눈 지금은 셋이 동시에 서도 각자 제 칸을 돌려받는다.
+        //   그래도 혹시 같은 자리가 겹치면(한 뷰는 두 곳에 못 붙는다) `superview != nil` 로 걸러 새로 만든다.
+        if let cached = Self.takePooledScroll(slot: slot) {
             // 대리자·바인딩은 이번 마운트의 것으로 갈아 끼운다(칸의 내용물은 `updateNSView` 가 맞춘다).
             cached.text.delegate = context.coordinator
+            cached.text.poolSlot = slot
             context.coordinator.textView = cached.text
+            context.coordinator.slot = slot
             apply(to: cached.text, coordinator: context.coordinator)
             return cached.scroll
         }
@@ -757,7 +908,10 @@ private struct CheckEditorScrollView: NSViewRepresentable {
         textView.delegate = context.coordinator
 
         scroll.documentView = textView
+        // 새로 만든 칸도 **자기 자리를 안고 태어난다** — 안 그러면 내려갈 때 어디로 돌아갈지 모른다.
+        textView.poolSlot = slot
         context.coordinator.textView = textView
+        context.coordinator.slot = slot
         apply(to: textView, coordinator: context.coordinator)
         return scroll
     }
@@ -805,6 +959,9 @@ private struct CheckEditorScrollView: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         weak var textView: CheckEditorTextView?
+        /// 이 마운트가 쓰는 자리. `dismantleNSView` 가 텍스트 뷰를 못 읽는 경우의 대비책이다
+        /// (반납 자리를 모르면 그 칸은 풀에 안 들어간다 — 자리가 뒤섞이는 것보다 낫다).
+        var slot: CheckEditorSlot?
 
         init(text: Binding<String>) { self.text = text }
 

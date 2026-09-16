@@ -90,7 +90,7 @@ enum GomokuText {
     /// 판돈 문구는 **순수익** 기준이다(수락 때 건 판돈을 빼고 이기면 판돈만큼 더 받는다) — 결과 카드의 +판돈과 같은 눈금.
     static let stakeCaption = "수락하는 순간 두 사람 모두 걸고, 이기면 판돈만큼 더 받아요"
     /// 판돈 창(v0.3.29 — [도전]을 누르면 화면 가운데에 뜬다).
-    static func stakePromptTitle(name: String) -> String { "\(name) 에게 신청" }
+    static func stakePromptTitle(name: String) -> String { "\(name)님에게 신청" }
     static let stakePromptCaption = "판돈을 고르세요"
     /// 판돈을 고른 뒤 캡션 자리(v0.3.30) — 무엇을 걸었는지와 이기면 얼마인지를 대국 화면 판돈 줄과 **같은 말**로.
     static func stakePromptChosen(_ stake: Int) -> String { "판돈 \(stakeLine(stake))" }

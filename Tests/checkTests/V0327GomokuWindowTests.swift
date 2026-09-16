@@ -508,8 +508,12 @@ func gomokuWindowLayoutIsAFixedConstantTable() {
             == GomokuWindowLayout.innerSize.width)
     // 대국 오른쪽 열의 고정 칸(두 카드 + 기권 + 간격 넷)이 본문을 넘지 않고, 판돈 줄·채팅에 넉넉히 남긴다.
     // 채팅이 실제로 로그 최소 높이를 지키는지는 렌더 실측 시험(`fullestMatchColumnKeepsTheChatLogReadable`)이 잰다.
-    #expect(GomokuWindowLayout.playerCardHeight * 2 + 34 + GomokuWindowLayout.matchSideSpacing * 4
-            + GomokuWindowLayout.chatLogMinHeight <= GomokuWindowLayout.bodyHeight - 200)
+    // 항을 나눠 적는다 — 리터럴과 CGFloat 을 한 식에 섞으면 컴파일러 타입 추론이 시간을 넘긴다(부하 중 빌드 실패).
+    let cards: CGFloat = GomokuWindowLayout.playerCardHeight * 2
+    let resignRow: CGFloat = 34
+    let gaps: CGFloat = GomokuWindowLayout.matchSideSpacing * 4
+    let fixedRows: CGFloat = cards + resignRow + gaps + GomokuWindowLayout.chatLogMinHeight
+    #expect(fixedRows <= GomokuWindowLayout.bodyHeight - 200)
     // 로비 오른쪽 열의 **세로** 예산(v0.3.29): 아래 칸(받은·보낸 신청)이 상한까지 가득 차도
     // 위 칸(지금 대결 중)의 최소 높이가 지켜진다 — 320 + 12 + 220 = 552 ≤ 608.
     #expect(GomokuWindowLayout.lobbyInvitesMaxHeight + GomokuWindowLayout.lobbySideSpacing

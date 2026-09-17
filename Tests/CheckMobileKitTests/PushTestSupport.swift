@@ -1,0 +1,260 @@
+import CheckCore
+import CheckMobileShared
+import Foundation
+import Testing
+@testable import CheckMobileKit
+
+// 푸시(D9) 테스트 도우미. 기반 도우미(BaseTestSupport)를 고치지 않고 이 파일에 더한다.
+
+/// 시스템 알림 어댑터 가짜 — 권한 상태를 테스트가 정하고, 시킨 일을 기록한다.
+@MainActor
+final class PushFakeSystem: PushNotificationSystem {
+    var status: PushAuthorizationStatus = .notDetermined
+    /// 권한 창에서 사용자가 고를 답.
+    var grantsOnRequest = true
+    /// 권한 읽기를 늦춘다(세대 경합 재현).
+    var statusDelay: Duration = .zero
+
+    private(set) var statusReads = 0
+    private(set) var authorizationRequests = 0
+    private(set) var remoteRegistrations = 0
+    private(set) var badgeCounts: [Int] = []
+    private(set) var notices: [(identifier: String, title: String, body: String, threadID: String?)] = []
+    private(set) var settingsOpened = 0
+    private(set) var primerPresentations = 0
+    private(set) var primerDismissals = 0
+
+    /// 시작할 때의 값을 늦게 돌려준다. 실제 시스템 콜백처럼 **작업 취소를 모른다**(취소돼도 제때 끝나지 않는다).
+    func authorizationStatus() async -> PushAuthorizationStatus {
+        statusReads += 1
+        let result = status
+        if statusDelay > .zero {
+            let seconds = Double(statusDelay.components.seconds) + Double(statusDelay.components.attoseconds) / 1e18
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.global().asyncAfter(deadline: .now() + seconds) { continuation.resume() }
+            }
+        }
+        return result
+    }
+
+    func requestAuthorization() async -> Bool {
+        authorizationRequests += 1
+        if status == .notDetermined {
+            status = grantsOnRequest ? .authorized : .denied
+        }
+        return status.allowsDelivery
+    }
+
+    func registerForRemoteNotifications() {
+        remoteRegistrations += 1
+    }
+
+    private(set) var remoteUnregistrations = 0
+    private(set) var deliveredRemovals = 0
+
+    func unregisterForRemoteNotifications() {
+        remoteUnregistrations += 1
+    }
+
+    func removeAllDeliveredNotifications() {
+        deliveredRemovals += 1
+    }
+
+    func setBadgeCount(_ count: Int) {
+        badgeCounts.append(count)
+    }
+
+    func postLocalNotice(identifier: String, title: String, body: String, threadID: String?) {
+        notices.append((identifier, title, body, threadID))
+    }
+
+    func openSystemSettings() {
+        settingsOpened += 1
+    }
+
+    func presentPermissionPrimer(_ coordinator: PushCoordinator) {
+        primerPresentations += 1
+    }
+
+    func dismissPermissionPrimer() {
+        primerDismissals += 1
+    }
+}
+
+/// 관찰 가능한 배지 값(탭 스토어 배지 대신).
+@MainActor
+@Observable
+final class PushFakeBadges {
+    var messages = 0
+    var games = 0
+}
+
+/// 푸시 시나리오 한 벌: 스텁 서버(RPC 이름 → 응답) · 앱 모델 · 가짜 시스템.
+@MainActor
+final class PushHarness {
+    nonisolated static let userID = "a1111111-2222-4333-8444-000000000001"
+    nonisolated static let peerID = "b2222222-3333-4444-8555-000000000002"
+    nonisolated static let messageID = "c3333333-4444-4555-8666-000000000003"
+    nonisolated static let matchID = "e4444444-5555-4666-8777-000000000004"
+    nonisolated static let reportID = "f5555555-6666-4777-8888-000000000005"
+    nonisolated static let deviceToken = Data((0..<32).map { UInt8($0 * 7 % 256) })
+
+    let host: String
+    let storage: AingSharedStorage
+    let clock: BaseTestClock
+    let model: MobileAppModel
+    let system = PushFakeSystem()
+    /// RPC 이름 → 응답(없으면 404 PGRST202). 스텁 스레드에서 읽으므로 잠금 상자.
+    let rpc = BaseLockedBox<[String: MobileStubResponse]>([:])
+    /// 이 이름의 RPC 가 몇 번째 부름부터 이 응답을 쓸지(401 한 번 → 성공 재현).
+    let firstCallOverride = BaseLockedBox<[String: MobileStubResponse]>([:])
+    private let callCounts = BaseLockedBox<[String: Int]>([:])
+    let access: String
+    let refreshed: String
+
+    init(label: String = "push", apnsEnvironment: String? = "sandbox") {
+        host = BaseStub.makeHost(label)
+        storage = BaseStub.makeStorage()
+        clock = BaseTestClock()
+        access = BaseStub.jwt(exp: clock.now.addingTimeInterval(3600), subject: Self.userID, salt: "a")
+        refreshed = BaseStub.jwt(exp: clock.now.addingTimeInterval(7200), subject: Self.userID, salt: "b")
+        rpc.mutate {
+            $0["client_release"] = BaseStub.releaseOK
+            $0["register_device"] = BaseStub.registerOK
+            $0["unregister_device"] = .json(#"{"status":"ok","removed":true}"#)
+        }
+        let rpcBox = rpc
+        let overrideBox = firstCallOverride
+        let counts = callCounts
+        let access = access
+        let refreshed = refreshed
+        MobileStubURLProtocol.register(host: host) { request in
+            if let name = request.rpcName {
+                var index = 0
+                counts.mutate { index = $0[name, default: 0]; $0[name] = index + 1 }
+                if index == 0, let first = overrideBox.get()[name] { return first }
+                return rpcBox.get()[name] ?? .missingFunction(name)
+            }
+            switch request.path {
+            case "/auth/v1/token":
+                if request.queryValue("grant_type") == "refresh_token" {
+                    return BaseStub.authResponse(access: refreshed, refresh: "r2", userID: PushHarness.userID)
+                }
+                return BaseStub.authResponse(access: access, refresh: "r1", userID: PushHarness.userID)
+            case "/auth/v1/logout": return .json("{}")
+            case "/rest/v1/memberships": return BaseStub.membershipOK
+            default: return .missingFunction(request.path)
+            }
+        }
+        let environment = MobileEnvironment(
+            service: BaseStub.makeService(host: host),
+            vault: InMemoryTokenVault(),
+            storage: storage,
+            appInfo: MobileAppInfo(build: 1, version: "0.1.0", osVersion: "iOS 18.0", apnsEnvironment: apnsEnvironment),
+            clock: clock.clock,
+            installationID: "11111111-2222-4333-8444-555555555555",
+            realtimeTransport: nil,
+            runsTimers: false,
+            reloadWidgetTimelines: {}
+        )
+        model = MobileAppModel(environment: environment)
+        model.push.sessionSettleTimeoutSeconds = 2
+    }
+
+    var push: PushCoordinator { model.push }
+
+    /// 가짜 시스템을 붙이고(앱 델리게이트 didFinishLaunching 과 같은 자리) 실행 → 로그인 → active.
+    func launchSignedIn(active: Bool = true) async {
+        push.attach(system: system)
+        model.start()
+        _ = await baseWaitUntil { self.model.session.phase == .signedOut }
+        await model.session.signIn(email: "push@aing-check.invalid", password: "pw")
+        if active { model.sceneDidBecomeActive() }
+        await settle()
+    }
+
+    /// 진행 중인 권한 확인 · 등록이 끝날 때까지.
+    func settle() async {
+        for _ in 0..<5 {
+            await push.pendingStatusCheck?.value
+            await model.session.pendingDeviceRegistration?.value
+            await Task.yield()
+        }
+    }
+
+    func requests() -> [MobileStubRequest] {
+        MobileStubURLProtocol.requests(host: host)
+    }
+
+    func calls(_ rpcName: String) -> [MobileStubRequest] {
+        requests().filter { $0.rpcName == rpcName }
+    }
+
+    func clearRequests() {
+        MobileStubURLProtocol.clearRequests(host: host)
+        callCounts.mutate { $0 = [:] }
+    }
+
+    func setRPC(_ name: String, _ response: MobileStubResponse) {
+        rpc.mutate { $0[name] = response }
+    }
+
+    var forbiddenViolations: [String] {
+        MobileForbiddenCalls.violations(in: requests())
+    }
+
+    func tearDown() {
+        BaseStub.tearDown(host: host, storage: storage)
+    }
+
+    /// 서버 트리거가 만드는 모양 그대로의 본문(SPEC-wave1 §1.5 — `_apns` 칸까지).
+    static func messageUserInfo(peer: String = peerID, message: String? = messageID) -> [AnyHashable: Any] {
+        var info: [AnyHashable: Any] = [
+            "aps": ["alert": ["title": "하늘", "body": "점심 뭐 먹을래요?"], "sound": "default", "category": "MESSAGE", "thread-id": "message-\(peer)"],
+            "type": "message",
+            "peer_id": peer,
+            "_apns": ["expiration": 1_789_700_000, "collapse_id": NSNull()],
+        ]
+        if let message { info["message_id"] = message }
+        return info
+    }
+
+    static func gomokuUserInfo(match: String = matchID) -> [AnyHashable: Any] {
+        [
+            "aps": ["alert": ["title": "오목 신청", "body": "하늘님이 오목 대결을 신청했어요 · 루비 5"], "sound": "default", "category": "GOMOKU_INVITE", "thread-id": "gomoku"],
+            "type": "gomoku_invite",
+            "match_id": match,
+            "_apns": ["expiration": 1_789_700_000, "collapse_id": match],
+        ]
+    }
+
+    static func feedbackUserInfo(report: Any? = reportID) -> [AnyHashable: Any] {
+        var info: [AnyHashable: Any] = [
+            "aps": ["alert": ["title": "제보에 답장이 왔어요", "body": "고칠게요"], "sound": "default", "category": "FEEDBACK_REPLY"],
+            "type": "feedback_reply",
+        ]
+        if let report { info["report_id"] = report }
+        return info
+    }
+
+    /// message_history_with_reads 응답(받은 메시지 한 건 — 지어낸 이름).
+    static func historyWithReceived(id: String = messageID, peer: String = peerID) -> MobileStubResponse {
+        .json(#"[{"id":"\#(id)","from_user":"\#(peer)","to_user":"\#(userID)","body":"점심 뭐 먹을래요?","created_at":"2026-09-17T05:00:00Z","created_epoch":1789621200,"is_mine":false,"peer_user_id":"\#(peer)","peer_display_name":"하늘","peer_avatar_url":null,"read_by_peer":null,"unread":true}]"#)
+    }
+
+    /// gomoku_respond(accept) 성공 — 판 상태 묶음 포함(지어낸 이름).
+    static func respondAcceptOK(match: String = matchID) -> MobileStubResponse {
+        let matchRow = #"{"id":"\#(match)","turn":"black","black":"\#(userID)","board":"\#(String(repeating: ".", count: 225))","stake":5,"white":"\#(peerID)","result":null,"status":"active","winner":null,"opponent":"\#(userID)","challenger":"\#(peerID)","end_reason":null,"move_count":0,"deadline_ms":1789621530000,"finished_ms":null,"turn_started_ms":1789621500000,"invite_expires_ms":1789621560000}"#
+        let opponent = #"{"user_id":"\#(peerID)","character":"aing","avatar_url":null,"display_name":"하늘"}"#
+        let state = #"{"match":\#(matchRow),"moves":[],"my_color":"black","opponent":\#(opponent),"ruby_balance":95,"server_now_ms":1789621500000,"my_auto_streak":0,"opponent_auto_streak":0}"#
+        return .json(#"{"status":"ok","accepted":true,"state":\#(state),"ruby_balance":95,"server_now_ms":1789621500000}"#)
+    }
+}
+
+/// JSON 본문의 한 키 값(문자열·불·null).
+func pushBodyValue(_ request: MobileStubRequest, _ key: String) -> Any? {
+    guard let data = request.bodyText.data(using: .utf8),
+          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return nil }
+    return object[key]
+}

@@ -2,7 +2,7 @@ import CheckMobileKit
 import UIKit
 
 /// `UIApplicationDelegate` 어댑터 — 앱 모델을 만들고, 원격 알림 콜백을 모델(→ PushCoordinator)로 넘긴다.
-/// 본문은 D9(푸시 받기)가 소유한다. 알림 센터 delegate·카테고리 등록은 PushCoordinator 안에서 한다.
+/// 판단은 패키지(CheckMobileKit/Push)가 한다. 여기는 시스템 콜백을 옮기기만 한다.
 @MainActor
 final class AingCheckAppDelegate: NSObject, UIApplicationDelegate {
     /// 앱 실행 동안 하나. DEBUG 빌드의 `-AingCheckDemo YES` 면 데모 조립이다.
@@ -13,7 +13,10 @@ final class AingCheckAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        true
+        // 알림 센터 delegate 는 **여기서** 붙어야 한다 — 알림을 눌러 앱이 켜지면 응답 콜백이 이 함수 직후에 온다.
+        // 카테고리(답장 · 읽음 · 수락 · 거절)도 같은 자리에서 등록한다.
+        model.installPushNotifications()
+        return true
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {

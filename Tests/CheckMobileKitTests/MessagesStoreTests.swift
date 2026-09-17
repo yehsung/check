@@ -368,6 +368,8 @@ import Testing
         h.store.conversationDidAppear(peerID: Self.peerA, token: UUID())
         await h.settle()
         h.store.setDraft("  안녕하세요\n반가워요  ", for: Self.peerA)
+        // 보내기부터의 요청만 잰다(지금 탭 활성화의 work_statuses·work_sessions GET 은 보내기와 무관한 병합 이웃 몫).
+        let requestsBeforeSend = h.requests.count
         #expect(h.store.canSend(to: Self.peerA))
         #expect(h.store.sendDraft(to: Self.peerA, isComposing: false))
         #expect(h.store.draft(for: Self.peerA).isEmpty)
@@ -385,7 +387,7 @@ import Testing
         let sendBody = h.bodies("send_message").first ?? ""
         #expect(sendBody.contains(#""p_to":"peer-a""#))
         #expect(sendBody.contains("반가워요"))
-        #expect(!h.requests.contains { $0.path.contains("work_") }, "근무 경로를 건드렸다")
+        #expect(!h.requests.dropFirst(requestsBeforeSend).contains { $0.path.contains("work_") }, "보내기가 근무 경로를 건드렸다")
         h.expectNoForbiddenCalls()
     }
 
@@ -498,17 +500,19 @@ import Testing
             """)
         }
         defer { h.tearDown() }
+        // 지금 탭 활성화도 같은 RPC 를 부른다(병합 이웃) — 메시지 스토어가 더한 수만 잰다.
+        let directoryBefore = h.count("app_user_directory")
         #expect(h.store.peerName(for: "peer-z") == nil)
         h.store.conversationDidAppear(peerID: "peer-z", token: UUID())
         await h.settle()
-        #expect(h.count("app_user_directory") == 1)
+        #expect(h.count("app_user_directory") == directoryBefore + 1)
         #expect(h.store.directory.map(\.name) == ["하린", "지우"])
         #expect(h.store.directory.first?.center == "서울")
         #expect(h.store.peerName(for: "peer-z") == "지우")
         #expect(h.store.filteredDirectory(query: "ㅈㅇ").map(\.userID) == ["peer-z"])
         h.store.loadDirectory()
         await h.settle()
-        #expect(h.count("app_user_directory") == 1, "60초 안 재조회")
+        #expect(h.count("app_user_directory") == directoryBefore + 1, "60초 안 재조회")
         h.expectNoForbiddenCalls()
     }
 
@@ -608,8 +612,9 @@ import Testing
             #"[{"user_id":"old-friend","display_name":"앞계정친구","avatar_url":null,"is_working":true,"message_capable":true,"center":"seoul"}]"#,
             delay: 0.6
         ))
+        let directoryBefore = h.count("app_user_directory")
         h.store.loadDirectory()
-        #expect(await baseWaitUntil { h.count("app_user_directory") == 1 })
+        #expect(await baseWaitUntil { h.count("app_user_directory") == directoryBefore + 1 })
         #expect(h.store.directoryLoading, "사람 찾기가 로그아웃 전에 이미 돌아와 늦은 응답을 재지 못한다")
         await h.switchAccount()
         let clean = await h.staysFalse(for: 1.5) { h.store.directoryLoaded || !h.store.directory.isEmpty }

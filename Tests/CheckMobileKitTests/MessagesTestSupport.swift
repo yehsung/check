@@ -211,9 +211,14 @@ struct MessagesHarness {
     }
 
     /// 떠 있는 새로고침·읽음 왕복이 끝날 때까지.
+    /// 병합 뒤: 같은 앱 모델의 지금 탭도 활성화 때 `app_user_directory`·`work_*` GET 을 부른다 — 그 새로고침까지 끝나야 테스트의
+    /// 요청 수 기준선(`count` 전후 차)이 메시지 스토어 몫만 잰다.
     func settle() async {
         for _ in 0..<3 {
-            _ = await baseWaitUntil { store.pendingActivityTask == nil && !store.isMarkingRead && !store.isSending && !store.directoryLoading }
+            _ = await baseWaitUntil {
+                store.pendingActivityTask == nil && !store.isMarkingRead && !store.isSending && !store.directoryLoading
+                    && model.now.refreshTask == nil
+            }
             try? await Task.sleep(for: .milliseconds(20))
         }
     }

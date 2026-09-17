@@ -1,0 +1,8 @@
+[
+  {"team_id": "d0000000-0000-4000-8000-00000000c0f1", "team_name": "새벽 커피단", "weekly_goal_hours": 40, "total_seconds": 452100, "working_count": 3, "member_count": 5, "center": "seoul"},
+  {"team_id": "d0000000-0000-4000-8000-000000007ea1", "team_name": "아잉 데모팀", "weekly_goal_hours": 40, "total_seconds": 318600, "working_count": 2, "member_count": 4, "center": "seoul"},
+  {"team_id": "d0000000-0000-4000-8000-00000000b0d1", "team_name": "구름 공방", "weekly_goal_hours": 35, "total_seconds": 265200, "working_count": 1, "member_count": 4, "center": "busan"},
+  {"team_id": "d0000000-0000-4000-8000-00000000d0d2", "team_name": "호두 연구소", "weekly_goal_hours": 45, "total_seconds": 198000, "working_count": 0, "member_count": 3, "center": null},
+  {"team_id": "d0000000-0000-4000-8000-00000000e0e3", "team_name": "보리밭 스튜디오", "weekly_goal_hours": 30, "total_seconds": 61200, "working_count": 1, "member_count": 2, "center": "busan"},
+  {"team_id": "d0000000-0000-4000-8000-00000000f0f4", "team_name": "아직 쉬는 팀", "weekly_goal_hours": 40, "total_seconds": 0, "working_count": 0, "member_count": 3, "center": null}
+]

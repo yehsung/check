@@ -1,0 +1,13 @@
+{
+  "ruby_balance": 47,
+  "ultra_balance": 2,
+  "ultra_price": 3,
+  "ultra_buy_max": 20,
+  "characters": [
+    {"id": "fox", "price": 30, "owned": true},
+    {"id": "ghost", "price": 30, "owned": false},
+    {"id": "jellyfish", "price": 50, "owned": false},
+    {"id": "shiba", "price": 30, "owned": true},
+    {"id": "squirrel", "price": 80, "owned": false}
+  ]
+}

@@ -1,0 +1,241 @@
+import CheckCore
+import CheckMobileShared
+import Foundation
+import Testing
+@testable import CheckMobileKit
+
+@MainActor
+@Suite("순위 탭 스토어(rankme)")
+struct RankingsStoreTests {
+    // MARK: 응답 모양
+
+    nonisolated static let league = #"""
+    [
+      {"team_id":"t-low","team_name":"낮은팀","weekly_goal_hours":40,"total_seconds":36000,"working_count":0,"member_count":2,"center":null},
+      {"team_id":"team-rankme-1","team_name":"테스트팀","weekly_goal_hours":40,"total_seconds":0,"working_count":0,"member_count":3,"center":"seoul"},
+      {"team_id":"t-high","team_name":"높은팀","weekly_goal_hours":40,"total_seconds":288000,"working_count":2,"member_count":4,"center":"busan"},
+      {"team_id":"t-zero","team_name":"쉬는팀","weekly_goal_hours":40,"total_seconds":0,"working_count":0,"member_count":3,"center":null}
+    ]
+    """#
+
+    nonisolated static func tokenRow(_ user: String, name: String, total: Int, today: Int = 0, todayDate: String = "2026-09-17") -> String {
+        #"{"user_id":"\#(user)","display_name":"\#(name)","avatar_url":null,"claude_input":\#(total),"claude_output":0,"claude_cache_read":0,"claude_cache_creation":0,"codex_input":0,"codex_output":0,"total":\#(total),"today_total":\#(today),"today_date":"\#(todayDate)","codex_effective":0,"center":null}"#
+    }
+
+    nonisolated static func boardRow(_ user: String, name: String, score: Int, at: String) -> String {
+        #"{"user_id":"\#(user)","display_name":"\#(name)","avatar_url":null,"best_score":\#(score),"best_at":"\#(at)","plays":3,"center":"seoul"}"#
+    }
+
+    // MARK: 시나리오
+
+    @Test("시나리오: 탭 표시 → 리그(평균순·0시간 팀 숨김·내 팀은 유지) → 토큰(달 넘기기·비공개 칩) → 미니게임(종류 전환·어제 1등) · 쓰기 0건")
+    func fullScenario() async throws {
+        let harness = await RankMeHarness(label: "rank-scenario") { request in
+            switch request.rpcName {
+            case "team_weekly_leaderboard": return .json(Self.league)
+            case "token_usage_board":
+                if request.bodyText.contains("2026-08") {
+                    return .json("[\(Self.tokenRow("u-aug", name: "팔월", total: 900))]")
+                }
+                return .json("[\(Self.tokenRow("u-small", name: "작은", total: 10)),\(Self.tokenRow(RankMeFixture.userID, name: "나", total: 5000, today: 70)),\(Self.tokenRow("u-old", name: "옛날", total: 300, today: 99, todayDate: "2026-09-10"))]")
+            case "minigame_board":
+                if request.bodyText.contains("flappy") {
+                    return .json("[\(Self.boardRow("u-f", name: "플래피", score: 12, at: "2026-09-17T01:00:00Z"))]")
+                }
+                return .json("[\(Self.boardRow("u-b", name: "늦게", score: 900, at: "2026-09-17T03:00:00Z")),\(Self.boardRow(RankMeFixture.userID, name: "나", score: 950, at: "2026-09-17T02:00:00Z")),\(Self.boardRow("u-a", name: "먼저", score: 900, at: "2026-09-17T01:00:00Z"))]")
+            case "minigame_yesterday_winner":
+                if request.bodyText.contains("flappy") { return .json("[]") }
+                return .json(#"[{"day":"2026-09-16","user_id":"u-a","display_name":"먼저","avatar_url":null,"score":990,"awarded":true,"center":"busan"}]"#)
+            default: break
+            }
+            if request.path == "/rest/v1/profiles", request.method == "GET", request.query.contains("token_usage_collect") {
+                return .json(#"[{"token_usage_public":false,"token_usage_collect":true,"focus_mode":true}]"#)
+            }
+            return nil
+        }
+        defer { harness.tearDown() }
+        let store = harness.rankings
+
+        // 보이지 않는 탭은 서버를 두드리지 않는다.
+        store.appDidBecomeActive()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(harness.requests(rpc: "team_weekly_leaderboard").isEmpty)
+
+        store.tabDidAppear()
+        #expect(await baseWaitUntil { store.leagueState.hasLoaded })
+        #expect(store.leagueDisplay.map(\.id) == ["t-high", "t-low", "team-rankme-1"], "평균 내림차순 + 0시간 팀 숨김 + 내 팀 유지")
+        #expect(store.league.count == 4)
+        #expect(store.myTeamID == RankMeFixture.teamID)
+        #expect(RankingsText.leagueCaption(store.leagueDisplay[0]) == "각자 목표 40시간 · 총 80시간 00분 · 4명 · 2명 근무중")
+        #expect(RankingsText.leagueAverage(store.leagueDisplay[0]) == "평균 20시간 00분")
+        #expect(RankingsText.leaguePercent(store.leagueDisplay[0]) == 50)
+
+        // 신선한 판은 다시 부르지 않는다.
+        store.tabDidAppear()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(harness.requests(rpc: "team_weekly_leaderboard").count == 1)
+        harness.clock.advance(RankingsStore.staleSeconds + 1)
+        store.appDidBecomeActive()
+        #expect(await baseWaitUntil { harness.requests(rpc: "team_weekly_leaderboard").count == 2 })
+
+        // AI 토큰
+        store.select(board: .tokens)
+        #expect(await baseWaitUntil { store.tokenState.hasLoaded })
+        #expect(store.tokenMonth == "2026-09")
+        #expect(store.tokenBoard.map(\.userID) == [RankMeFixture.userID, "u-old", "u-small"])
+        #expect(store.myTokenUsagePublic == false, "내 행 비공개 칩")
+        #expect(store.isCurrentTokenMonth)
+        #expect(store.tokenTitle == "9월 AI 토큰 소모량")
+        #expect(RankingsText.tokenToday(store.tokenBoard[0], todayKey: store.todayKey) == "오늘 +70 토큰")
+        #expect(RankingsText.tokenToday(store.tokenBoard[1], todayKey: store.todayKey) == "오늘 +0 토큰", "어제 이후 스테일 행은 0")
+        #expect(harness.requests(rpc: "token_usage_board").first?.jsonBody["p_month"] as? String == "2026-09")
+
+        store.stepTokenMonth(by: 1)
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(store.tokenMonth == "2026-09", "미래 달로는 못 간다")
+        #expect(harness.requests(rpc: "token_usage_board").count == 1, "값이 그대로면 요청도 없다")
+
+        store.stepTokenMonth(by: -1)
+        #expect(store.tokenBoard.isEmpty, "옮기는 순간 이전 달 행을 비운다")
+        #expect(await baseWaitUntil { store.tokenState.hasLoaded && store.tokenMonth == "2026-08" })
+        #expect(store.tokenBoard.map(\.userID) == ["u-aug"])
+        #expect(!store.isCurrentTokenMonth)
+        #expect(harness.requests(rpc: "token_usage_board").last?.jsonBody["p_month"] as? String == "2026-08")
+
+        // 미니게임
+        store.select(board: .minigame)
+        #expect(await baseWaitUntil { store.miniGameState.hasLoaded && store.miniGameWinner != nil })
+        #expect(store.miniGameBoard.map(\.userID) == [RankMeFixture.userID, "u-a", "u-b"], "점수 → 먼저 낸 사람")
+        #expect(store.myMiniGameRank == 1)
+        #expect(store.miniGameWinner?.awarded == true)
+        #expect(harness.requests(rpc: "minigame_board").first?.jsonBody["p_game"] as? String == "timing_bar")
+
+        store.select(miniGame: .flappy)
+        #expect(store.miniGameBoard.isEmpty && store.miniGameWinner == nil)
+        #expect(await baseWaitUntil { store.miniGameState.hasLoaded && store.miniGameKind == .flappy && !store.miniGameBoard.isEmpty })
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(store.miniGameBoard.map(\.userID) == ["u-f"])
+        #expect(store.miniGameWinner == nil)
+        #expect(store.myMiniGameRank == nil)
+
+        // 읽기만 한다: RPC 는 전부 조회, 표는 GET 만.
+        let writes = harness.requests.filter { $0.rpcName == nil && $0.method.uppercased() != "GET" }
+        #expect(writes.isEmpty, "순위 탭이 쓰기를 냈다: \(writes.map { "\($0.method) \($0.path)" })")
+        harness.expectNoForbiddenCalls()
+    }
+
+    @Test("딥링크: rankings/<board> 가 세그먼트를 고른다")
+    func deepLinkSelectsBoard() async {
+        let harness = await RankMeHarness(label: "rank-link") { _ in nil }
+        defer { harness.tearDown() }
+        harness.rankings.open(.rankings(.minigame))
+        #expect(harness.rankings.board == .minigame)
+        harness.rankings.open(.me)
+        #expect(harness.rankings.board == .minigame, "다른 탭 라우트는 무시")
+    }
+
+    @Test("늦은 응답: 달을 옮긴 뒤 도착한 이전 달 응답은 버린다 · 게임 종류를 바꾼 뒤 도착한 응답도")
+    func staleMonthAndKindResponsesAreDropped() async throws {
+        let harness = await RankMeHarness(label: "rank-stale") { request in
+            switch request.rpcName {
+            case "token_usage_board":
+                if request.bodyText.contains("2026-09") {
+                    return MobileStubResponse(status: 200, body: Data("[\(Self.tokenRow("u-sept", name: "구월", total: 1))]".utf8), delay: 0.4)
+                }
+                return .json("[\(Self.tokenRow("u-aug", name: "팔월", total: 2))]")
+            case "minigame_board":
+                if request.bodyText.contains("timing_bar") {
+                    return MobileStubResponse(status: 200, body: Data("[\(Self.boardRow("u-timing", name: "타이밍", score: 5, at: "2026-09-17T01:00:00Z"))]".utf8), delay: 0.4)
+                }
+                return .json("[\(Self.boardRow("u-flappy", name: "플래피", score: 7, at: "2026-09-17T01:00:00Z"))]")
+            default:
+                return nil
+            }
+        }
+        defer { harness.tearDown() }
+        let store = harness.rankings
+        store.select(board: .tokens)
+        store.tabDidAppear()
+        #expect(await baseWaitUntil { !harness.requests(rpc: "token_usage_board").isEmpty })
+        store.stepTokenMonth(by: -1)
+        #expect(await baseWaitUntil { store.tokenState.hasLoaded })
+        try await Task.sleep(for: .milliseconds(600))
+        #expect(store.tokenMonth == "2026-08")
+        #expect(store.tokenBoard.map(\.userID) == ["u-aug"], "늦게 온 9월 응답이 8월 화면을 덮었다")
+
+        store.select(board: .minigame)
+        #expect(await baseWaitUntil { !harness.requests(rpc: "minigame_board").isEmpty })
+        store.select(miniGame: .flappy)
+        #expect(await baseWaitUntil { store.miniGameState.hasLoaded })
+        try await Task.sleep(for: .milliseconds(600))
+        #expect(store.miniGameBoard.map(\.userID) == ["u-flappy"], "늦게 온 타이밍 바 응답이 플래피 화면을 덮었다")
+        harness.expectNoForbiddenCalls()
+    }
+
+    @Test("로그아웃 세대: 떠 있던 리그 응답은 로그아웃 뒤 버리고, reset 이 모든 판을 비운다")
+    func generationGuardAndReset() async throws {
+        let harness = await RankMeHarness(label: "rank-gen") { request in
+            if request.rpcName == "team_weekly_leaderboard" {
+                return MobileStubResponse(status: 200, body: Data(Self.league.utf8), delay: 0.4)
+            }
+            if request.path == "/auth/v1/logout" { return .json("{}") }
+            if request.rpcName == "unregister_device" { return .json(#"{"status":"ok","removed":true}"#) }
+            return nil
+        }
+        defer { harness.tearDown() }
+        let store = harness.rankings
+        // 당겨서 새로고침(refreshable)처럼 스토어 inflight 밖에서 부른 조회 — reset 의 취소가 닿지 않으므로 세대·순번 가드만이 막는다.
+        let pull = Task { await store.loadLeague() }
+        #expect(await baseWaitUntil { store.leagueState.isLoading })
+        await harness.model.session.signOut()
+        await pull.value
+        #expect(store.league.isEmpty, "로그아웃 뒤 늦게 온 리그가 화면에 섰다")
+        store.tabDidAppear()
+        #expect(await baseWaitUntil(timeout: 0.2) { store.leagueState.isLoading } == false, "로그아웃 상태에서 조회를 시작했다")
+        #expect(!store.leagueState.hasLoaded)
+        #expect(store.board == .league && store.tokenMonth == "2026-09" && store.myTokenUsagePublic == nil)
+        harness.expectNoForbiddenCalls()
+    }
+
+    @Test("실패 상태: 리그 500 은 실패+다시 시도, 미니게임 함수 없음(PGRST202)은 실패가 아니라 '아직 없음'")
+    func failureStates() async {
+        let harness = await RankMeHarness(label: "rank-fail") { request in
+            switch request.rpcName {
+            case "team_weekly_leaderboard": return .json(#"{"message":"boom"}"#, status: 500)
+            case "minigame_board": return .missingFunction("minigame_board")
+            default: return nil
+            }
+        }
+        defer { harness.tearDown() }
+        let store = harness.rankings
+        await store.loadLeague()
+        #expect(store.leagueState.hasFailed && !store.leagueState.hasLoaded)
+        #expect(RankingsText.leagueEmpty(hasLoaded: false, isLoading: false, hasFailed: true, unfilteredCount: 0) == RankingsText.leagueFailed)
+        await store.loadMiniGame()
+        #expect(store.miniGameState.hasLoaded && !store.miniGameState.hasFailed)
+        #expect(RankingsText.miniGameEmptyText(hasLoaded: true, hasFailed: false) == RankingsText.miniGameEmpty)
+        #expect(harness.model.session.isSignedIn, "5xx 로 로그아웃되면 안 된다")
+    }
+
+    // MARK: 순수 문구
+
+    @Test("문구: 빈 목록 갈림 · 정족수 · 점수 · 토큰 제목 · 나 탭 공개 설정 반영")
+    func texts() async {
+        #expect(RankingsText.tokenEmpty(hasLoaded: false, isLoading: true, hasFailed: false, isCurrentMonth: true) == "불러오는 중…")
+        #expect(RankingsText.tokenEmpty(hasLoaded: false, isLoading: false, hasFailed: true, isCurrentMonth: true) == "순위를 불러오지 못했어요")
+        #expect(RankingsText.tokenEmpty(hasLoaded: true, isLoading: false, hasFailed: false, isCurrentMonth: true) == "아직 이번 달 소모량을 올린 사용자가 없어요")
+        #expect(RankingsText.tokenEmpty(hasLoaded: true, isLoading: false, hasFailed: false, isCurrentMonth: false) == "이 달에는 기록이 없어요")
+        #expect(RankingsText.leagueEmpty(hasLoaded: true, isLoading: false, hasFailed: false, unfilteredCount: 3) == "아직 이번 주 근무한 팀이 없어요")
+        #expect(RankingsText.quorumCaption(players: 0) == "오늘은 아직 아무도 안 했어요 · 5명부터 지급")
+        #expect(RankingsText.quorumCaption(players: 3) == "오늘 3명 참여 · 5명부터 지급")
+        #expect(RankingsText.quorumCaption(players: 5) == "오늘 5명 참여 · 지급 조건 충족")
+        #expect(RankingsText.score(1000) == "1000점")
+        #expect(RankingsText.prizeCaption == "자정에 1·2·3등에게 루비 20·10·5")
+        #expect(RankingsText.tokenTitle(month: "2025-12", now: RankMeFixture.now) == "2025년 12월 AI 토큰 소모량")
+
+        let harness = await RankMeHarness(label: "rank-note") { _ in nil }
+        defer { harness.tearDown() }
+        harness.rankings.noteTokenUsagePublic(true)
+        #expect(harness.rankings.myTokenUsagePublic == true)
+    }
+}

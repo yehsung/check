@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  App Store Connect 용 ipa 내보내기(w5/signing 리허설, 2026-09-17). 비밀 없음 — 팀 ID·프로파일 이름뿐.
+
+  사용: xcodebuild -exportArchive -archivePath <AingCheck.xcarchive> -exportPath <out> -exportOptionsPlist ios/ExportOptions.plist
+
+  왜 manual 인가: ASC API 키 'aing-check CI'(JT2GT9FY5N, App Manager)로 signingStyle automatic 을 쓰면 Xcode 27 은
+  클라우드 관리 배포 인증서(DISTRIBUTION_MANAGED)만 찾고 403("You haven't been given access to cloud-managed
+  distribution certificates")으로 실패한다 — 로컬 Apple Distribution 인증서가 키체인에 있어도, signingCertificate 를 줘도 같다.
+  그래서 로컬 인증서(Apple Distribution: yesung kim (MQ2KQK37WD), 만료 2027-09-17)와 API 로 만든 App Store 프로파일 둘을 이름으로 묶는다.
+  프로파일은 인증서와 같은 날(2027-09-17) 만료된다 — 갱신 때 이름을 같게 유지할 것.
+  destination 은 export 만 쓴다(업로드는 별도 단계).
+-->
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>export</string>
+	<key>signingStyle</key>
+	<string>manual</string>
+	<key>signingCertificate</key>
+	<string>Apple Distribution</string>
+	<key>provisioningProfiles</key>
+	<dict>
+		<key>com.yehsung.aingcheck</key>
+		<string>aing check AppStore</string>
+		<key>com.yehsung.aingcheck.widgets</key>
+		<string>aing check Widgets AppStore</string>
+	</dict>
+	<key>teamID</key>
+	<string>MQ2KQK37WD</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+</dict>
+</plist>

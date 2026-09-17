@@ -132,16 +132,21 @@ struct NowTodoSection: View {
     }
 
     private func todoRow(_ row: NowTodoRow) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        // 체크 칸은 44pt(글리프 20pt)이고 제목과 붙여 둔다 — 28pt 칸 + 12pt 틈이면 체크를 조금 빗맞은 손가락이 제목의
+        // "눌러서 수정"에 떨어져 키보드가 떴다. 누르는 칸만 키우고 자리(레이아웃)는 예전 28pt 줄 높이를 지킨다:
+        // 위아래 8pt · 왼쪽 12pt 는 줄의 여백(같은 셀 안) 쪽으로 내민다 — 줄마다 16pt 씩 목록이 길어지지 않게(스크린샷 실측 58 → 74pt).
+        HStack(alignment: .center, spacing: 4) {
             Button {
                 store.toggleTodo(row.id)
             } label: {
                 Image(systemName: row.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(row.isDone ? MobileTheme.working : MobileTheme.secondaryText)
-                    .frame(minWidth: 28, minHeight: 28)
+                    .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Rectangle())
             }
+            .padding(.vertical, -8)
+            .padding(.leading, -12)
             .buttonStyle(.borderless)
             .accessibilityLabel(Text(row.isDone ? NowText.todoMarkUndone : NowText.todoMarkDone))
             .accessibilityValue(Text(row.title))
@@ -210,14 +215,22 @@ struct NowUndoToast: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(MobileTheme.primaryText)
                 Spacer(minLength: 8)
-                Button(NowText.todoUndo) {
+                // 5초만 뜨는 토스트라 누르기 쉬워야 한다 — 글자만이면 높이 20pt 안팎이었다. 칸을 44pt 로 키우고 토스트 위아래 여백을 그만큼 줄였다.
+                Button {
                     store.undoDelete()
+                } label: {
+                    Text(NowText.todoUndo)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(MobileTheme.accent)
+                        .padding(.horizontal, 12)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(MobileTheme.accent)
+                .buttonStyle(.borderless)
+                .padding(.trailing, -12)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(MobileTheme.cardElevated)

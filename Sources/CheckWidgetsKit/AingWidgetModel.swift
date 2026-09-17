@@ -18,6 +18,8 @@ package enum AingWidgetKind {
 package enum AingWidgetText {
     package static let signedOut = "앱에서 로그인해 주세요"
     package static let noData = "앱을 열면 채워져요"
+    /// 소속 없는 사용자의 "내 오늘"(앱 지금 탭의 "팀에 속해 있지 않아요"와 같은 뜻 — 앱을 열어도 채워지지 않는다).
+    package static let noTeam = "맥 앱에서 팀에 참여하면 보여요"
 
     package static let workingTitle = "지금 근무 중"
     package static let workingEmpty = "지금 근무 중인 사람이 없어요"
@@ -136,6 +138,28 @@ package struct AingWidgetMe: Equatable, Sendable {
 
     /// "24.8/40시간"
     package var weekCaption: String { "\(AingWidgetFormat.hoursOneDecimal(weekSeconds))/\(goalHours)시간" }
+}
+
+/// "내 오늘" 위젯이 그릴 것.
+package enum AingWidgetMyTodayState: Equatable, Sendable {
+    /// 앱이 아직 내 상태를 한 번도 못 받았다 → "앱을 열면 채워져요".
+    case noData
+    /// 팀 소속이 없다 → "맥 앱에서 팀에 참여하면 보여요". 앱은 **목표 0시간인 me** 로 싣는다(`NowStore.widgetNoTeamMe`) —
+    /// 스냅샷 모양에 소속 칸이 없어서다. 서버 목표는 1~168 이라 소속 있는 사용자의 me 는 0 이 아니다.
+    case noTeam
+    case me(AingWidgetMe)
+
+    package init(snapshot: WidgetSnapshot, at date: Date) {
+        guard let me = snapshot.me else {
+            self = .noData
+            return
+        }
+        if me.goalHours <= 0 {
+            self = .noTeam
+            return
+        }
+        self = .me(AingWidgetMe(me: me, generatedAt: snapshot.generatedAt, at: date))
+    }
 }
 
 // MARK: - 지금 근무 중(고르기)

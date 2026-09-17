@@ -51,8 +51,17 @@ package enum NowText {
     package static func todoRemaining(count: Int) -> String { "남은 \(count)개" }
     package static func todoCounter(current: Int) -> String { "\(current)/\(TodoRules.maxTitleLength)" }
 
+    /// 불러오기가 끝났는데 팀 상태를 모를 때(스피너 대신).
+    package static let statusUnavailableTitle = "내 상태를 불러오지 못했어요"
+    package static let workingUnavailable = "근무 중인 사람을 불러오지 못했어요"
+    package static let retry = "다시 시도"
+
     // 지금 근무 중
-    package static func workingTitle(count: Int) -> String { "지금 근무 중 \(count)" }
+    /// 머리글. 모를 때(nil)는 숫자를 숨긴다 — 불러오지 못했는데 "0"이면 아무도 일하지 않는다는 말이 된다.
+    package static func workingTitle(count: Int?) -> String {
+        guard let count else { return "지금 근무 중" }
+        return "지금 근무 중 \(count)"
+    }
     package static let ourTeam = "우리 팀"
     package static let otherTeams = "다른 팀"
     package static let workingEmpty = "지금 근무 중인 사람이 없어요"
@@ -136,26 +145,32 @@ package struct NowWorkingPerson: Identifiable, Equatable, Sendable {
 
 /// 폰이 세는 오늘·이번 주(서버 세션 시각 기준). 맥 `TeamMemberStatus` 의 live 계산을 쓰되, **오늘은 KST 자정으로 자른다** —
 /// 코어 `liveTodayDurationSeconds` 는 진행 세션을 시작 시각부터 통째로 더해 자정을 넘긴 세션이 어제 몫까지 오늘로 센다.
+///
+/// **신호 끊김(stale) 판정 시각 `presenceAt`** 은 화면 시각 `now` 와 따로 받는다. 맥은 30초마다 자기 팀 상태를 다시 읽어
+/// "지금 − 마지막 신호 > 90초"를 now 로 재도 되지만, 폰은 60초마다(또 background 에서 돌아와서야) 받는다 — now 로 재면
+/// 받을 때 29초 묵은 신호가 다음 응답 직전 몇 초 동안, background 에서 돌아온 직후에는 응답이 올 때까지 "연결 끊김"으로
+/// 뒤집히고 오늘 누적이 마지막 신호 지점으로 뒤로 뛴다(now-verify R1·R2). 스토어가 판정 시각을 고른다(`NowStore.presenceJudgedAt`).
 package enum NowTimeMath {
     /// 오늘 누적(초). `fetchedAt` = 그 행을 받은 시각 — 받은 뒤 자정이 지났으면 서버가 준 "오늘 끝난 세션 합"은 어제 몫이라 버린다.
-    package static func todaySeconds(_ member: TeamMemberStatus, fetchedAt: Date, now: Date) -> Int {
+    package static func todaySeconds(_ member: TeamMemberStatus, fetchedAt: Date, now: Date, presenceAt: Date? = nil) -> Int {
         let dayStart = TeamWeeklyGoal.koreanDayStart(for: now)
         let closed = TeamWeeklyGoal.koreanDayStart(for: fetchedAt) == dayStart ? member.todayDurationSeconds : 0
-        return max(0, closed) + currentContribution(member, windowStart: dayStart, now: now)
+        return max(0, closed) + currentContribution(member, windowStart: dayStart, now: now, presenceAt: presenceAt)
     }
 
     /// 이번 주 누적(초). 받은 뒤 주가 바뀌었으면 지난 주 합은 버린다.
-    package static func weekSeconds(_ member: TeamMemberStatus, fetchedAt: Date, now: Date) -> Int {
+    package static func weekSeconds(_ member: TeamMemberStatus, fetchedAt: Date, now: Date, presenceAt: Date? = nil) -> Int {
         let weekStart = TeamWeeklyGoal.koreanWeekStart(for: now)
         let closed = TeamWeeklyGoal.koreanWeekStart(for: fetchedAt) == weekStart ? member.weeklyDurationSeconds : 0
-        return max(0, closed) + currentContribution(member, windowStart: weekStart, now: now)
+        return max(0, closed) + currentContribution(member, windowStart: weekStart, now: now, presenceAt: presenceAt)
     }
 
     /// 진행 세션의 [windowStart, 끝] 기여. 끝은 살아 있으면 now, 신호가 끊겼으면 마지막 신호(맥 규칙과 같다).
-    package static func currentContribution(_ member: TeamMemberStatus, windowStart: Date, now: Date) -> Int {
+    /// 끊김 판정은 `presenceAt`(없으면 now) 에서 한다.
+    package static func currentContribution(_ member: TeamMemberStatus, windowStart: Date, now: Date, presenceAt: Date? = nil) -> Int {
         guard member.status == .working, let started = member.currentSessionStartedAt else { return 0 }
         let end: Date
-        if case .staleWorking = member.presence(now: now) {
+        if isStale(member, now: presenceAt ?? now) {
             end = member.lastSeenAt ?? member.updatedAt ?? started
         } else {
             end = now
@@ -163,10 +178,30 @@ package enum NowTimeMath {
         return max(0, Int(min(end, now).timeIntervalSince(max(started, windowStart))))
     }
 
+    /// 진행 세션 경과(초 — 우리 팀 "지금 근무 중" 줄). 끊겼으면 마지막 신호에서 멈춘 값, 아니면 now 까지.
+    package static func elapsedSeconds(_ member: TeamMemberStatus, now: Date, presenceAt: Date? = nil) -> Int {
+        guard member.status == .working, let started = member.currentSessionStartedAt else { return 0 }
+        if case .staleWorking(let frozen) = member.presence(now: presenceAt ?? now) { return frozen }
+        return max(0, Int(now.timeIntervalSince(started)))
+    }
+
     package static func isStale(_ member: TeamMemberStatus, now: Date) -> Bool {
         if case .staleWorking = member.presence(now: now) { return true }
         return false
     }
+}
+
+// MARK: - 불러오기 상태
+
+/// 우리 팀 상태(내 카드 · 지금 근무 중)를 화면이 어떻게 그릴지.
+/// - loading: 이 세대에서 새로고침이 아직 한 번도 끝나지 않았다(스피너).
+/// - failed: 시도는 끝났는데 팀 상태를 모른다(오프라인 · 5xx) — 스피너를 남기지 않고 "불러오지 못했어요"를 보인다.
+///   다시 시도하는 동안에도 failed 를 유지한다(60초 주기마다 스피너 ↔ 실패 줄이 깜빡이지 않게 — 당겨서 새로고침 표시가 진행을 말한다).
+/// - loaded: 팀 상태를 받았거나 소속 없음이 확정됐다.
+package enum NowLoadState: Equatable, Sendable {
+    case loading
+    case failed
+    case loaded
 }
 
 // MARK: - 서식(순수)

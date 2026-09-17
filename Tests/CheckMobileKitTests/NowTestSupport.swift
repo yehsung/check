@@ -217,8 +217,12 @@ final class NowHarness {
     let model: MobileAppModel
     let store: NowStore
     private let currentUser = BaseLockedBox(NowStubServer.me)
+    /// 위젯 타임라인 새로고침 요청 수(쓰기 창구 · 세션 · 스토어의 touch 가 모두 이 한 함수를 부른다).
+    private let reloads = BaseLockedBox(0)
+    var widgetReloadCount: Int { reloads.get() }
 
-    init(userID: String = NowStubServer.me, runsPeriodicRefresh: Bool = true) {
+    /// `seedSnapshot`: 앞 실행이 남긴 위젯 스냅샷 파일(쓰기 창구는 만들 때 파일을 읽는다).
+    init(userID: String = NowStubServer.me, runsPeriodicRefresh: Bool = true, seedSnapshot: WidgetSnapshot? = nil) {
         host = BaseStub.makeHost("now")
         storage = BaseStub.makeStorage()
         currentUser.mutate { $0 = userID }
@@ -230,6 +234,10 @@ final class NowHarness {
         vault.write(BaseStub.jwt(exp: clock.now.addingTimeInterval(3600), subject: userID), key: AingKeychain.accessTokenKey)
         vault.write("refresh-1", key: AingKeychain.refreshTokenKey)
         storage.defaults.set(userID, forKey: AingSharedKeys.userID)
+        if let seedSnapshot {
+            try? WidgetSnapshotCodec.write(seedSnapshot, to: storage.widgetSnapshotURL)
+        }
+        let reloads = self.reloads
         model = MobileAppModel(environment: MobileEnvironment(
             service: BaseStub.makeService(host: host),
             vault: vault,
@@ -239,9 +247,31 @@ final class NowHarness {
             installationID: "11111111-2222-4333-8444-555555555555",
             realtimeTransport: nil,
             runsTimers: false,
-            reloadWidgetTimelines: {}
+            reloadWidgetTimelines: { reloads.mutate { $0 += 1 } }
         ))
         store = NowStore(context: model.context, timers: scheduler, runsPeriodicRefresh: runsPeriodicRefresh)
+    }
+
+    /// 지금 계정으로 다른 사람이 로그인한다(키체인 복원이 아니라 로그인 흐름 — 세대가 바뀐다).
+    func signIn(as userID: String) async {
+        let access = BaseStub.jwt(exp: clock.now.addingTimeInterval(3600), subject: userID, salt: "signin-\(userID)")
+        server.override("auth.token", BaseStub.authResponse(access: access, refresh: "r-\(userID)", userID: userID))
+        currentUser.mutate { $0 = userID }
+        await model.session.signIn(email: "\(userID)@x.invalid", password: "pw")
+    }
+
+    /// 쉬는 사용자의 팀 상태(근무 안 함 · 세션 없음) — 새로고침마다 값이 같다.
+    static let idleStatuses = #"""
+    [{"user_id":"u-me","status":"offWork","updated_at":"2026-09-17T03:00:00Z","last_seen_at":"2026-09-17T03:00:00Z","profiles":{"display_name":"나","avatar_url":null}}]
+    """#
+
+    /// 나 · 민트가 근무 중이고 마지막 신호가 `seen`(맥은 30초마다 하트비트).
+    static func statuses(meSeen: String, mintSeen: String? = nil) -> String {
+        let mint = mintSeen ?? meSeen
+        return #"""
+        [{"user_id":"u-me","status":"working","updated_at":"\#(meSeen)","last_seen_at":"\#(meSeen)","profiles":{"display_name":"나","avatar_url":null}},
+         {"user_id":"u-mint","status":"working","updated_at":"\#(mint)","last_seen_at":"\#(mint)","profiles":{"display_name":"민트","avatar_url":null}}]
+        """#
     }
 
     /// 키체인 복원으로 로그인 상태가 될 때까지.

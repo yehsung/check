@@ -31,8 +31,12 @@ package final class NowStore {
     /// 멤버십 조회가 "소속 없음"으로 확정됐다.
     package private(set) var hasNoTeam = false
     package private(set) var teamMembers: [TeamMemberStatus] = []
-    /// 팀 상태를 받은 시각(nil = 아직 못 받음). 오늘·이번 주 경계 판정의 기준.
+    /// 팀 상태를 받은 시각(nil = 아직 못 받음). 오늘·이번 주 경계 판정의 기준이고, 끊김 판정도 이 시각에 한다(`presenceJudgedAt`).
     package private(set) var teamFetchedAt: Date?
+    /// 받아 둔 팀 상태 뒤로 팀 상태 요청이 실패했다(오프라인 · 5xx). 이때만 끊김을 화면 시각으로 판정한다.
+    package private(set) var teamStatusFailedSinceFetch = false
+    /// 이 세대에서 새로고침이 한 번이라도 끝났다(성공 · 실패 무관). 스피너를 영원히 남기지 않는 기준.
+    package private(set) var hasFinishedRefreshAttempt = false
     package private(set) var directory: [PokeDirectoryRow] = []
     package private(set) var hasLoadedDirectory = false
     package private(set) var isRefreshing = false
@@ -115,8 +119,9 @@ package final class NowStore {
         guard context.session.isSignedIn, let userID = context.session.userID else { return }
         isActive = true
         todoScheduler.resume()
-        prepareTodos(for: userID)
+        // 새로고침을 먼저 띄운다 — 할 일 준비가 부르는 스냅샷 쓰기가 "응답을 기다리는 중"을 알아 낡은 팀 상태로 쓰지 않게.
         refresh()
+        prepareTodos(for: userID)
         armRefreshTimer()
     }
 
@@ -142,6 +147,8 @@ package final class NowStore {
         hasNoTeam = false
         teamMembers = []
         teamFetchedAt = nil
+        teamStatusFailedSinceFetch = false
+        hasFinishedRefreshAttempt = false
         directory = []
         hasLoadedDirectory = false
         isRefreshing = false
@@ -241,6 +248,7 @@ package final class NowStore {
                 hasNoTeam = true
                 teamMembers = []
                 teamFetchedAt = nil
+                teamStatusFailedSinceFetch = false
             }
         } catch {
             guard stillCurrent() else { return }
@@ -276,15 +284,20 @@ package final class NowStore {
                 guard stillCurrent() else { return }
                 teamMembers = statuses
                 teamFetchedAt = now
+                teamStatusFailedSinceFetch = false
             } catch {
                 guard stillCurrent() else { return }
                 failures.append(error)
+                if AuthErrorRules.classify(error) != .cancelled { teamStatusFailedSinceFetch = true }
             }
         }
 
         notice = Self.notice(for: failures)
-        if failures.isEmpty { lastRefreshedAt = context.clock.now() }
-        writeWidgetSnapshot()
+        hasFinishedRefreshAttempt = true
+        let finishedAt = context.clock.now()
+        if failures.isEmpty { lastRefreshedAt = finishedAt }
+        writeWidgetSnapshot(deferWhileRefreshing: false)
+        if failures.isEmpty { touchWidgetSnapshot(at: finishedAt) }
     }
 
     /// 실패 목록 → 한 줄 안내. 취소만 있으면 nil.
@@ -338,6 +351,31 @@ package final class NowStore {
 
     package var hasLoadedTeam: Bool { teamFetchedAt != nil }
 
+    /// 내 카드 자리를 어떻게 그릴지(불러오는 중 · 불러오지 못함 · 받음).
+    package var teamLoadState: NowLoadState {
+        if hasNoTeam || hasLoadedTeam { return .loaded }
+        return hasFinishedRefreshAttempt ? .failed : .loading
+    }
+
+    /// "지금 근무 중" 자리를 어떻게 그릴지. 우리 팀 상태를 받았으면 받음(다른 팀은 받아 둔 디렉터리로).
+    /// 소속이 없으면 디렉터리가 전부라 디렉터리를 받아야 받음 — 못 받았는데 "근무 중인 사람이 없어요"라고 하지 않는다.
+    package var workingLoadState: NowLoadState {
+        if hasLoadedTeam || (hasNoTeam && hasLoadedDirectory) { return .loaded }
+        return hasFinishedRefreshAttempt ? .failed : .loading
+    }
+
+    /// 신호 끊김(stale) 판정 시각.
+    ///
+    /// 받은 팀 상태는 **받은 시각에 판정하고 다음 응답까지 그 판정을 유지**한다. 폰은 60초마다(background 에서 돌아오면 그때) 받으므로
+    /// 화면 시각으로 재면 "받을 때 신호 나이 + 60초 + 응답 지연 > 90초"인 순간마다 멀쩡한 맥이 "연결 끊김"으로 뒤집히고
+    /// 오늘 누적이 마지막 신호 지점으로 뒤로 뛴다(now-verify R1 · R2). 진짜로 끊긴 세션은 다음 응답이 "신호 90초 넘게 없음"을
+    /// 싣고 와서 그때 멈춘다 — 늦어도 한 새로고침 주기.
+    /// 다만 그 뒤 팀 상태 요청이 **실패**했으면(오프라인 · 5xx) 모르는 채로 살려 두지 않는다 — 화면 시각으로 판정한다(맥 팀 카드와 같다).
+    package func presenceJudgedAt(now: Date) -> Date {
+        guard let fetchedAt = teamFetchedAt, !teamStatusFailedSinceFetch else { return now }
+        return min(now, fetchedAt)
+    }
+
     package var myStatus: TeamMemberStatus? {
         guard let id = context.session.userID else { return nil }
         return teamMembers.first { $0.id == id }
@@ -351,12 +389,13 @@ package final class NowStore {
             return NowMyCard(isWorking: false, isStale: false, sessionStartedAt: nil, todaySeconds: 0, weekSeconds: 0, goalHours: goalHours)
         }
         let working = me.status == .working
+        let judgedAt = presenceJudgedAt(now: now)
         return NowMyCard(
             isWorking: working,
-            isStale: working && NowTimeMath.isStale(me, now: now),
+            isStale: working && NowTimeMath.isStale(me, now: judgedAt),
             sessionStartedAt: working ? me.currentSessionStartedAt : nil,
-            todaySeconds: NowTimeMath.todaySeconds(me, fetchedAt: fetchedAt, now: now),
-            weekSeconds: NowTimeMath.weekSeconds(me, fetchedAt: fetchedAt, now: now),
+            todaySeconds: NowTimeMath.todaySeconds(me, fetchedAt: fetchedAt, now: now, presenceAt: judgedAt),
+            weekSeconds: NowTimeMath.weekSeconds(me, fetchedAt: fetchedAt, now: now, presenceAt: judgedAt),
             goalHours: goalHours
         )
     }
@@ -365,6 +404,7 @@ package final class NowStore {
     /// 다른 팀은 **우리 팀 상태를 받은 뒤에만** 가른다 — 모르는 채로 가르면 우리 팀원이 "다른 팀"에 시간 없이 섞인다.
     package func workingPeople(now: Date) -> [NowWorkingPerson] {
         let me = context.session.userID
+        let judgedAt = presenceJudgedAt(now: now)
         var directoryByID: [String: PokeDirectoryRow] = [:]
         for row in directory where directoryByID[row.userId] == nil { directoryByID[row.userId] = row }
         let teammates = teamMembers
@@ -378,8 +418,8 @@ package final class NowStore {
                     center: entry?.center,
                     isTeammate: true,
                     startedAt: member.currentSessionStartedAt,
-                    elapsedSeconds: member.currentDurationSeconds(now: now),
-                    isStale: NowTimeMath.isStale(member, now: now)
+                    elapsedSeconds: NowTimeMath.elapsedSeconds(member, now: now, presenceAt: judgedAt),
+                    isStale: NowTimeMath.isStale(member, now: judgedAt)
                 )
             }
             .sorted(by: Self.teammateOrder)
@@ -557,12 +597,35 @@ package final class NowStore {
 
     // MARK: - 위젯 스냅샷
 
+    /// 소속 없음 표시(위젯 "내 오늘"이 "앱을 열면 채워져요" 대신 팀 참여 안내를 그린다 — `AingWidgetMyTodayState`).
+    ///
+    /// 스냅샷 모양(D-base `WidgetSnapshot`)에 소속 칸이 없어 **목표 0시간인 me** 로 싣는다. 서버 목표는 1~168(teams CHECK)이고
+    /// 소속 있는 카드는 `max(1, …)` 로 싣으므로 0 은 이 뜻으로만 쓰인다. 기반 수정 요청: 스냅샷에 옵셔널 `noTeam` 칸.
+    package static let widgetNoTeamMe = WidgetSnapshot.Me(working: false, sessionStartedAt: nil, todaySeconds: 0, weekSeconds: 0, goalHours: 0)
+
+    /// 성공한 새로고침 뒤 스냅샷이 이 초보다 낡았으면 generatedAt 만 옮긴다(`touchWidgetSnapshot`). 위젯 "N분 전"은 60초부터 뜬다.
+    package nonisolated static let widgetTouchAgeSeconds: Double = 60
+
     /// 받은 값으로 위젯 스냅샷을 고친다(같은 값이면 쓰기·새로고침 없음 — 쓰기 창구가 가른다). 아직 모르는 칸은 건드리지 않는다.
+    /// 할 일 변경 · 목표 저장 · active 진입이 부른다 — 낡은 팀 상태로 새로고침 응답을 기다리는 중이면 미룬다(응답 끝에서 쓴다).
     package func writeWidgetSnapshot() {
+        writeWidgetSnapshot(deferWhileRefreshing: true)
+    }
+
+    /// `deferWhileRefreshing`: 새로고침이 도는데 받아 둔 팀 상태가 끊김 임계(90초)보다 낡았으면 쓰지 않는다.
+    /// background 에서 돌아온 직후의 값은 몇 분 전 판정을 늘려 센 추정이다 — 응답이 몇 초 뒤 오는데 그 추정을 먼저 쓰면
+    /// 쓰기 창구의 30초 새로고침 스로틀 때문에 위젯이 추정을 30초 동안 붙든다. 스냅샷의 me 누적은 generatedAt 기준이라
+    /// 할 일만 따로 쓸 수는 없다(시각이 옮겨지면 세는 me 가 그 사이 시간을 잃는다) — 통째로 미룬다.
+    private func writeWidgetSnapshot(deferWhileRefreshing: Bool) {
         guard context.session.isSignedIn, let userID = context.session.userID else { return }
         let now = context.clock.now()
+        if deferWhileRefreshing, refreshTask != nil, let fetchedAt = teamFetchedAt,
+           now.timeIntervalSince(fetchedAt) > TeamMemberStatus.stalePresenceSeconds {
+            return
+        }
         let card = myCard(now: now)
         let noTeam = hasNoTeam
+        let hasMembership = membership != nil
         let people = (hasLoadedTeam || hasNoTeam) ? workingPeople(now: now) : nil
         let previews = todoSync.userID == userID ? widgetTodoPreviews() : nil
         context.widgetSnapshots.update { snapshot in
@@ -573,9 +636,12 @@ package final class NowStore {
                     sessionStartedAt: card.isStale ? nil : card.sessionStartedAt,
                     todaySeconds: card.todaySeconds,
                     weekSeconds: card.weekSeconds,
-                    goalHours: card.goalHours
+                    goalHours: max(1, card.goalHours)
                 )
             } else if noTeam {
+                snapshot.me = Self.widgetNoTeamMe
+            } else if hasMembership, snapshot.me == Self.widgetNoTeamMe {
+                // 소속이 생겼는데 팀 상태는 아직 모른다 — "팀에 참여하면" 안내를 남기지 않는다(모름 = "앱을 열면 채워져요").
                 snapshot.me = nil
             }
             if let people {
@@ -587,6 +653,24 @@ package final class NowStore {
                 snapshot.todosPreview = previews
             }
         }
+    }
+
+    /// 새로고침이 성공했는데 값이 같아 쓰기 창구가 파일을 건드리지 않았으면, 위젯 "N분 전"이 방금 확인한 값을 낡았다고 말한다
+    /// (근무 안 하는 사용자 — now-verify R4). 쓰기 창구는 generatedAt 을 뺀 값으로 비교한다(D-base).
+    ///
+    /// 기반 수정 요청(쓰기 창구의 touch, 또는 스냅샷의 옵셔널 refreshedAt 칸)이 들어오기 전까지의 우회:
+    /// 디스크 스냅샷의 generatedAt 만 옮겨 다시 쓰고 위젯을 새로고침한다. 60초 넘게 낡았을 때만이라 새로고침 주기(60초)보다 잦지 않다.
+    /// 세는 me(근무 중 · 시작 시각 있음)는 건드리지 않는다 — 누적이 generatedAt 기준이라 옮기면 그 사이 시간이 빠진다
+    /// (그런 값은 새로고침마다 누적이 달라져 쓰기 창구가 이미 새로 썼다).
+    private func touchWidgetSnapshot(at now: Date) {
+        guard context.session.isSignedIn else { return }
+        let url = context.storage.widgetSnapshotURL
+        guard var snapshot = WidgetSnapshotCodec.read(from: url),
+              now.timeIntervalSince(snapshot.generatedAt) >= Self.widgetTouchAgeSeconds else { return }
+        if let me = snapshot.me, me.working, me.sessionStartedAt != nil { return }
+        snapshot.generatedAt = now
+        guard (try? WidgetSnapshotCodec.write(snapshot, to: url)) != nil else { return }
+        context.session.reloadWidgetTimelines()
     }
 
     private func widgetTodoPreviews() -> [WidgetSnapshot.TodoPreview] {

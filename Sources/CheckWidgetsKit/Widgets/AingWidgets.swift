@@ -304,6 +304,17 @@ struct AingWorkingNowContent: View {
     }
 
     private func nameRow(_ person: WidgetSnapshot.WorkingPerson) -> some View {
+        // "우리 팀" 라벨은 온전히 들어갈 때만 붙인다 — 칸이 좁으면(2열 · 큰 글자 · 긴 별명) 라벨이 먼저 줄어 초록 "…"만 남았다.
+        // 라벨이 빠져도 우리 팀은 초록 점 · 굵은 이름으로 갈린다.
+        ViewThatFits(in: .horizontal) {
+            nameLine(person, showsTeamLabel: person.teammate)
+            nameLine(person, showsTeamLabel: false)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(person.teammate ? "\(person.name), \(AingWidgetText.teammate)" : person.name))
+    }
+
+    private func nameLine(_ person: WidgetSnapshot.WorkingPerson, showsTeamLabel: Bool) -> some View {
         HStack(spacing: 5) {
             Circle()
                 .fill(person.teammate ? AingWidgetColors.working : AingWidgetColors.offWork)
@@ -312,16 +323,14 @@ struct AingWorkingNowContent: View {
                 .font(.footnote.weight(person.teammate ? .semibold : .regular))
                 .foregroundStyle(AingWidgetColors.primary)
                 .lineLimit(1)
-            if person.teammate {
+            if showsTeamLabel {
                 Text(AingWidgetText.teammate)
                     .font(.caption2)
                     .foregroundStyle(AingWidgetColors.working)
                     .lineLimit(1)
-                    .layoutPriority(-1)
+                    .fixedSize()
             }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(person.teammate ? "\(person.name), \(AingWidgetText.teammate)" : person.name))
     }
 
     private func moreText(_ working: AingWidgetWorking) -> String? {
@@ -336,21 +345,29 @@ struct AingMyTodayContent: View {
 
     var body: some View {
         if let snapshot = entry.snapshot {
-            if let me = snapshot.me {
-                content(AingWidgetMe(me: me, generatedAt: snapshot.generatedAt, at: entry.date), snapshot: snapshot)
-            } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    AingWidgetHeader(title: AingWidgetText.today, dot: nil)
-                    Text(AingWidgetText.noData)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AingWidgetColors.primary)
-                    Spacer(minLength: 0)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            switch AingWidgetMyTodayState(snapshot: snapshot, at: entry.date) {
+            case .me(let me):
+                content(me, snapshot: snapshot)
+            case .noTeam:
+                message(AingWidgetText.noTeam)
+            case .noData:
+                message(AingWidgetText.noData)
             }
         } else {
             AingWidgetSignedOut()
         }
+    }
+
+    private func message(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            AingWidgetHeader(title: AingWidgetText.today, dot: nil)
+            Text(text)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AingWidgetColors.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func content(_ me: AingWidgetMe, snapshot: WidgetSnapshot) -> some View {
@@ -479,32 +496,37 @@ struct AingTodoContent: View {
         }
     }
 
+    /// 줄 전체가 체크 버튼이다 — 위젯 줄은 높이가 24pt 안팎이라(medium 3줄) 동그라미만 누르게 하면 손가락 크기(44pt)에 한참 못 미친다.
+    /// 위젯에는 "눌러서 수정"이 없어 줄을 누를 다른 뜻이 없다(칸 밖은 `widgetURL` 로 앱을 연다).
     private func todoRow(_ row: WidgetSnapshot.TodoPreview) -> some View {
-        HStack(spacing: 8) {
-            Button(intent: ToggleTodoIntent(todoID: row.id)) {
+        Button(intent: ToggleTodoIntent(todoID: row.id)) {
+            HStack(spacing: 8) {
                 Image(systemName: row.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(row.isCompleted ? AingWidgetColors.working : AingWidgetColors.secondary)
                     .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(row.isCompleted ? AingWidgetText.todoMarkUndone : AingWidgetText.todoMarkDone))
-            .accessibilityValue(Text(row.title))
-            Text(row.title)
-                .font(.footnote)
-                .strikethrough(row.isCompleted)
-                .foregroundStyle(row.isCompleted ? AingWidgetColors.secondary : AingWidgetColors.primary)
-                .lineLimit(1)
-            Spacer(minLength: 4)
-            if let badge = AingWidgetTodos.carryBadge(row) {
-                Text(badge)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(AingWidgetColors.pending)
+                Text(row.title)
+                    .font(.footnote)
+                    .strikethrough(row.isCompleted)
+                    .foregroundStyle(row.isCompleted ? AingWidgetColors.secondary : AingWidgetColors.primary)
                     .lineLimit(1)
-                    .fixedSize()
+                Spacer(minLength: 4)
+                if let badge = AingWidgetTodos.carryBadge(row) {
+                    Text(badge)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(AingWidgetColors.pending)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(row.isCompleted ? AingWidgetText.todoMarkUndone : AingWidgetText.todoMarkDone))
+        .accessibilityValue(Text(row.title))
+        .accessibilityAddTraits(.isButton)
     }
 }
 

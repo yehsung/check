@@ -61,6 +61,26 @@ import Testing
         #expect(old.todaySeconds == 1_000 + 12 * 3_600, "12시간 지점에서 멈춘다")
     }
 
+    @Test("내 오늘 상태: me 없음 → 앱을 열면 채워져요 · 목표 0(소속 없음 표시) → 팀 참여 안내 · 목표 1 이상 → 내 값")
+    func myTodayState() {
+        let empty = WidgetSnapshot(generatedAt: Self.now)
+        #expect(AingWidgetMyTodayState(snapshot: empty, at: Self.now) == .noData)
+
+        var noTeam = empty
+        noTeam.me = NowStore.widgetNoTeamMe
+        #expect(AingWidgetMyTodayState(snapshot: noTeam, at: Self.now) == .noTeam)
+        #expect(NowStore.widgetNoTeamMe.goalHours == 0 && !NowStore.widgetNoTeamMe.working)
+
+        var member = empty
+        member.me = .init(working: false, sessionStartedAt: nil, todaySeconds: 0, weekSeconds: 0, goalHours: 1)
+        guard case .me(let me) = AingWidgetMyTodayState(snapshot: member, at: Self.now) else {
+            Issue.record("목표 1시간인 팀원을 소속 없음으로 그렸다")
+            return
+        }
+        #expect(me.goalHours == 1 && me.percent == 0)
+        #expect(AingWidgetText.noTeam != AingWidgetText.noData)
+    }
+
     // MARK: - 고르기 · 서식 · 타임라인
 
     @Test("지금 근무 중 고르기: 우리 팀 먼저(순서 유지) · 한도 · 외 N명 / 할 일 고르기: 한도 · 남은 수 · 이월 배지")
@@ -350,6 +370,14 @@ import Testing
         #expect(rows.main.last?.isDone == true)
         #expect(rows.old.map(\.title) == ["온보딩 문서 링크 모으기"])
         #expect(store.notice == nil)
+
+        // 계약(SPEC-wave1 §1.2): full = (p_since_ms is null) or 80일보다 오래됨. 데모 첫 동기화는 워터마크가 없다.
+        let firstSync = try #require(MobileStubURLProtocol.requests(host: host).first { $0.rpcName == "todo_sync" })
+        let syncBody = try #require(try JSONSerialization.jsonObject(with: Data(firstSync.bodyText.utf8)) as? [String: Any])
+        #expect(syncBody["p_since_ms"] is NSNull, "데모 첫 동기화에 since 가 실렸다")
+        let fixture = index.response(for: firstSync, scenario: "now")
+        let reply = try #require(try JSONSerialization.jsonObject(with: fixture.body) as? [String: Any])
+        #expect(reply["full"] as? Bool == true, "since=null 요청에 full:false 픽스처")
         #expect(MobileForbiddenCalls.violations(in: MobileStubURLProtocol.requests(host: host)).isEmpty)
         model.sceneDidEnterBackground()
     }

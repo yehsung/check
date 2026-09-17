@@ -26,6 +26,15 @@ enum NowDemoStage {
         return false
     }
 
+    /// 첫 새로고침이 끝날 때까지(성공 · 실패 무관, 최대 6초). 실패 장면(픽스처를 503 으로 바꾼 빌드)에서도 스크롤이 움직이게.
+    static func waitForAttempt(_ store: NowStore) async -> Bool {
+        for _ in 0..<120 {
+            if store.workingLoadState != .loading, !store.todos.items.isEmpty { return true }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return false
+    }
+
     /// 탭 화면 단 장면(시트 · 토스트).
     static func apply(store: NowStore, openGoalSheet: () -> Void) async {
         let stages = stages()

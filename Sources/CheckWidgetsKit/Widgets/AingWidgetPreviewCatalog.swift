@@ -29,6 +29,15 @@ public enum AingWidgetPreviewCatalog {
         many.todosPreview += (1...5).map {
             .init(id: String(format: "9E4F2D8E-1B4E-4B7A-9E0B-3E8E2A6D2C%02d", $0), title: "추가 할 일 \($0) — 긴 제목이 한 줄에서 말줄임되는지 확인", isCompleted: false, carryOverDays: 0)
         }
+        // 긴 별명(12자) 우리 팀원 — 2열 칸에서 "우리 팀" 라벨이 말줄임표만 남지 않는지.
+        var longNames = sample
+        longNames.working = [
+            .init(name: "가나다라마바사아자차카타", center: "seoul", teammate: true, startedAt: now.addingTimeInterval(-7_500)),
+            .init(name: "민트", center: "seoul", teammate: true, startedAt: now.addingTimeInterval(-3_000)),
+            .init(name: "코랄", center: "busan", teammate: false, startedAt: nil),
+        ]
+        var noTeam = idle
+        noTeam.me = WidgetSnapshot.Me(working: false, sessionStartedAt: nil, todaySeconds: 0, weekSeconds: 0, goalHours: 0)
         let entry = AingWidgetEntry(date: now, snapshot: sample)
         let idleEntry = AingWidgetEntry(date: now, snapshot: idle)
         let manyEntry = AingWidgetEntry(date: now, snapshot: many)
@@ -36,9 +45,11 @@ public enum AingWidgetPreviewCatalog {
         return [
             item("working-small", smallSize, AingWorkingNowContent(entry: entry, family: .systemSmall)),
             item("working-medium", mediumSize, AingWorkingNowContent(entry: manyEntry, family: .systemMedium)),
+            item("working-medium-long", mediumSize, AingWorkingNowContent(entry: AingWidgetEntry(date: now, snapshot: longNames), family: .systemMedium)),
             item("working-small-empty", smallSize, AingWorkingNowContent(entry: idleEntry, family: .systemSmall)),
             item("today-small-working", smallSize, AingMyTodayContent(entry: entry)),
             item("today-small-idle", smallSize, AingMyTodayContent(entry: idleEntry)),
+            item("today-small-noteam", smallSize, AingMyTodayContent(entry: AingWidgetEntry(date: now, snapshot: noTeam))),
             item("todos-medium", mediumSize, AingTodoContent(entry: entry, family: .systemMedium)),
             item("todos-large", largeSize, AingTodoContent(entry: manyEntry, family: .systemLarge)),
             item("todos-medium-empty", mediumSize, AingTodoContent(entry: idleEntry, family: .systemMedium)),

@@ -28,7 +28,9 @@ struct NowTab: View {
                 }
                 #if DEBUG
                 .task {
-                    guard store.context.isDemo, NowDemoStage.stages().contains("working"), await NowDemoStage.waitForData(store) else { return }
+                    guard store.context.isDemo, NowDemoStage.stages().contains("working"), await NowDemoStage.waitForAttempt(store) else { return }
+                    // 행이 그려질 틈(첫 응답 직후 스크롤하면 아직 없는 절로 가지 못한다).
+                    try? await Task.sleep(for: .milliseconds(300))
                     proxy.scrollTo(NowTab.workingSectionID, anchor: .top)
                 }
                 #endif
@@ -104,9 +106,54 @@ struct NowStatusSection: View {
             .accessibilityElement(children: .combine)
         } else if let card = store.myCard(now: now) {
             NowStatusCard(card: card, teamName: store.membership?.teamName, onEditGoal: onEditGoal)
+        } else if store.teamLoadState == .failed {
+            // 시도는 끝났는데 모른다(오프라인 · 5xx) — 도는 요청이 없는데 "불러오는 중"을 남기지 않는다.
+            NowUnavailableRow(title: NowText.statusUnavailableTitle, isRetrying: store.isRefreshing) { store.refresh() }
         } else {
             LoadingRow()
         }
+    }
+}
+
+/// 불러오지 못한 자리(스피너 대신): 한 줄 설명 + 다시 시도(44pt). 위쪽 안내 줄이 원인(네트워크 · 서버)을 말한다.
+struct NowUnavailableRow: View {
+    let title: String
+    let isRetrying: Bool
+    let retry: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
+        layout {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "exclamationmark.circle")
+                    .foregroundStyle(MobileTheme.pending)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(MobileTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
+            Button(action: retry) {
+                ZStack {
+                    // 글자 폭을 잡아 두고 도는 동안만 스피너로 바꾼다(버튼 폭이 흔들리지 않게).
+                    Text(NowText.retry).opacity(isRetrying ? 0 : 1)
+                    if isRetrying { ProgressView() }
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(MobileTheme.accent)
+                .padding(.horizontal, 12)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .disabled(isRetrying)
+            .accessibilityLabel(Text(NowText.retry))
+        }
+        .padding(.vertical, 2)
     }
 }
 
@@ -154,13 +201,17 @@ struct NowStatusCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
                     Button(action: onEditGoal) {
+                        // 원은 글자 크기를 따르되 누르는 칸은 44pt 이상(원만 누르게 하면 기본 글자에서 36pt 였다 — 스크린샷 실측).
                         Image(systemName: "pencil")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(MobileTheme.accent)
                             .padding(10)
                             .background(Circle().fill(MobileTheme.cardElevated))
-                            .contentShape(Circle())
+                            .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+                            .contentShape(Rectangle())
                     }
+                    // 칸은 44pt 로 키우되 카드 높이는 원(36pt) 기준 그대로 — 위아래 4pt 는 줄 간격 쪽으로 내민다.
+                    .padding(.vertical, -4)
                     .buttonStyle(.borderless)
                     .accessibilityLabel(Text(NowText.goalEdit))
                 }
@@ -242,10 +293,17 @@ struct NowWorkingSection: View {
         let people = store.workingPeople(now: now)
         let teammates = people.filter(\.isTeammate)
         let others = people.filter { !$0.isTeammate }
-        let loading = !store.hasLoadedTeam && !store.hasNoTeam && !store.hasLoadedDirectory
+        let state = store.workingLoadState
         Section {
-            if loading {
+            if state == .loading {
                 LoadingRow()
+            } else if state == .failed {
+                // 모르는데 "근무 중인 사람이 없어요"나 스피너를 보이지 않는다. 다시 시도는 내 카드 자리 버튼 · 당겨서 새로고침.
+                Text(NowText.workingUnavailable)
+                    .font(.subheadline)
+                    .foregroundStyle(MobileTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 4)
             } else if people.isEmpty {
                 Text(NowText.workingEmpty)
                     .font(.subheadline)
@@ -266,7 +324,7 @@ struct NowWorkingSection: View {
                 }
             }
         } header: {
-            Text(NowText.workingTitle(count: people.count))
+            Text(NowText.workingTitle(count: state == .loaded ? people.count : nil))
                 .font(.headline)
                 .foregroundStyle(MobileTheme.primaryText)
                 .textCase(nil)
@@ -292,42 +350,79 @@ struct NowGroupLabel: View {
 struct NowWorkingRow: View {
     let person: NowWorkingPerson
     let clock: MobileClock
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: 12) {
-            AvatarView(name: person.name, url: person.avatarURL, size: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(person.name)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(MobileTheme.primaryText)
-                        .lineLimit(2)
-                    CenterBadge(person.center)
-                }
-                if person.isStale {
-                    Text(NowText.connectionLost)
-                        .font(.caption)
-                        .foregroundStyle(MobileTheme.pending)
-                }
-            }
-            Spacer(minLength: 8)
-            if person.isTeammate {
-                // 경과 h:mm 는 분 단위라 1분마다만 다시 그린다. 신호가 끊긴 사람은 스토어가 멈춘 값을 준다.
-                TimelineView(.everyMinute) { _ in
-                    let seconds = elapsed(now: clock.now())
-                    Text(NowFormat.hoursMinutes(seconds))
-                        .font(MobileTheme.number(.body))
-                        .monospacedDigit()
-                        .foregroundStyle(person.isStale ? MobileTheme.pending : MobileTheme.working)
-                        .fixedSize()
-                        .accessibilityLabel(Text("근무 \(NowFormat.spokenDuration(seconds))째"))
+        Group {
+            if typeSize.isAccessibilitySize {
+                // 접근성 글자 크기: 한 줄에 아바타 · 이름 · 배지 · 시간을 두면 이름과 "서울"이 한 글자씩 세로로 꺾였다(AX5 스크린샷 실측).
+                // 이름은 아바타 옆 한 줄을 통째로 쓰고, 배지 · 끊김 · 시간은 아랫줄로 내린다(줄바꿈이 필요하면 다시 아래로).
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .center, spacing: 12) {
+                        AvatarView(name: person.name, url: person.avatarURL, size: 36)
+                        nameText
+                    }
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .center, spacing: 8) { detailItems }
+                        VStack(alignment: .leading, spacing: 4) { detailItems }
+                    }
                 }
             } else {
-                NowChip(text: NowText.workingChip, tint: MobileTheme.working)
+                HStack(spacing: 12) {
+                    AvatarView(name: person.name, url: person.avatarURL, size: 36)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            nameText
+                            CenterBadge(person.center).fixedSize()
+                        }
+                        if person.isStale { staleText }
+                    }
+                    Spacer(minLength: 8)
+                    trailing
+                }
             }
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
+    }
+
+    private var nameText: some View {
+        Text(person.name)
+            .font(.body.weight(.semibold))
+            .foregroundStyle(MobileTheme.primaryText)
+            .lineLimit(2)
+    }
+
+    private var staleText: some View {
+        Text(NowText.connectionLost)
+            .font(.caption)
+            .foregroundStyle(MobileTheme.pending)
+            .fixedSize()
+    }
+
+    @ViewBuilder
+    private var detailItems: some View {
+        CenterBadge(person.center).fixedSize()
+        if person.isStale { staleText }
+        trailing
+    }
+
+    @ViewBuilder
+    private var trailing: some View {
+        if person.isTeammate {
+            // 경과 h:mm 는 분 단위라 1분마다만 다시 그린다. 신호가 끊긴 사람은 스토어가 멈춘 값을 준다.
+            TimelineView(.everyMinute) { _ in
+                let seconds = elapsed(now: clock.now())
+                Text(NowFormat.hoursMinutes(seconds))
+                    .font(MobileTheme.number(.body))
+                    .monospacedDigit()
+                    .foregroundStyle(person.isStale ? MobileTheme.pending : MobileTheme.working)
+                    .fixedSize()
+                    .accessibilityLabel(Text("근무 \(NowFormat.spokenDuration(seconds))째"))
+            }
+        } else {
+            NowChip(text: NowText.workingChip, tint: MobileTheme.working)
+        }
     }
 
     private func elapsed(now: Date) -> Int {

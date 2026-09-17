@@ -70,8 +70,8 @@ import Testing
         #expect(h.model.widgetSnapshots.current?.working.isEmpty ?? true, "모르는 칸은 스냅샷에 쓰지 않는다")
     }
 
-    @Test("소속 없음: 카드 대신 안내, 다른 팀 근무자는 보이고, 스냅샷 me 는 비운다")
-    func noTeam() async {
+    @Test("소속 없음: 카드 대신 안내, 다른 팀 근무자는 보이고, 스냅샷 me 는 '소속 없음'(목표 0) — 위젯은 팀 참여 안내를 그린다")
+    func noTeam() async throws {
         let h = NowHarness()
         defer { h.tearDown() }
         h.server.override("memberships", .json("[]"))
@@ -82,7 +82,348 @@ import Testing
         #expect(h.requests("work_statuses").isEmpty, "팀이 없으면 팀 상태를 부르지 않는다")
         let people = h.store.workingPeople(now: Self.now)
         #expect(people.count == 6 && people.allSatisfy { !$0.isTeammate })
-        #expect(h.model.widgetSnapshots.current?.me == nil)
+        #expect(h.store.teamLoadState == .loaded && h.store.workingLoadState == .loaded)
+        let snapshot = try #require(WidgetSnapshotCodec.read(from: h.storage.widgetSnapshotURL))
+        #expect(snapshot.me == NowStore.widgetNoTeamMe)
+        #expect(AingWidgetMyTodayState(snapshot: snapshot, at: Self.now) == .noTeam, "앱을 열어도 채워지지 않는 '앱을 열면 채워져요'를 그렸다")
+    }
+
+    // MARK: - 수리(now-fix) 회귀
+
+    @Test("끊김 판정은 받은 시각에: 5분 background 뒤 active — 응답을 기다리는 동안 내 카드가 '연결 끊김'으로 뒤집히거나 오늘 누적이 뒤로 가지 않고, 위젯 스냅샷은 응답 뒤에만 쓴다")
+    func presenceHeldAcrossForeground() async throws {
+        let h = NowHarness()
+        defer { h.tearDown() }
+        await h.launch()
+        await h.activate()
+        let before = try #require(h.store.myCard(now: h.clock.now))
+        #expect(!before.isStale && before.todaySeconds == 18_600)
+        let snapshotBefore = try #require(h.model.widgetSnapshots.current)
+        #expect(snapshotBefore.me?.sessionStartedAt != nil)
+
+        h.store.appDidEnterBackground()
+        await h.settle()
+        h.clock.advance(300) // 폰만 5분 잠겼다(맥은 계속 근무 · 30초 하트비트)
+        h.server.override("work_statuses", MobileStubResponse(
+            status: 200, body: Data(NowHarness.statuses(meSeen: "2026-09-17T05:09:50Z").utf8), delay: 0.4
+        ))
+        h.store.appDidBecomeActive()
+
+        // 응답 전: 받은 시각(05:05:00)의 판정을 유지하고 now 까지 센다.
+        #expect(h.store.refreshTask != nil)
+        let during = try #require(h.store.myCard(now: h.clock.now))
+        #expect(!during.isStale, "응답을 기다리는 동안 멀쩡한 맥이 '연결 끊김'으로 뒤집혔다")
+        #expect(during.todaySeconds == 18_900, "오늘 누적이 마지막 신호 지점으로 뒤로 뛰었다(\(during.todaySeconds))")
+        let people = h.store.workingPeople(now: h.clock.now)
+        #expect(people.first { $0.id == NowStubServer.mint }?.isStale == false)
+        #expect(people.first { $0.id == NowStubServer.mint }?.elapsedSeconds == 15_300, "민트 경과(00:55 → 05:10)가 마지막 신호에서 멈췄다")
+        #expect(people.first { $0.id == NowStubServer.bori }?.isStale == true, "받을 때 이미 끊겼던 사람은 그대로 멈춘다")
+        #expect(h.model.widgetSnapshots.current == snapshotBefore, "응답 전 추정(몇 분 전 판정)으로 위젯 스냅샷을 썼다")
+
+        await h.settle()
+        let after = try #require(h.store.myCard(now: h.clock.now))
+        #expect(!after.isStale && after.todaySeconds == 18_900)
+        let snapshot = try #require(h.model.widgetSnapshots.current)
+        #expect(snapshot.generatedAt == h.clock.now)
+        #expect(snapshot.me?.sessionStartedAt == ISO8601DateFormatter().date(from: "2026-09-17T01:20:00Z") && snapshot.me?.todaySeconds == 18_900)
+        #expect(h.violations.isEmpty)
+    }
+
+    @Test("끊김 판정은 받은 시각에: 받을 때 29초 묵은 신호면 60초 뒤 다음 응답 전까지도 끊김이 아니다 · 다음 응답이 90초 넘게 끊긴 신호를 싣고 오면 그때 멈추고 위젯도 세지 않는다")
+    func presenceHeldBetweenRefreshes() async throws {
+        let h = NowHarness()
+        defer { h.tearDown() }
+        h.server.override("work_statuses", .json(NowHarness.statuses(meSeen: "2026-09-17T05:04:31Z")))
+        await h.launch()
+        await h.activate()
+        #expect(h.store.myCard(now: h.clock.now)?.isStale == false)
+
+        // 60초 주기 새로고침이 떠났다. 그사이 맥이 멈췄다 — 다음 응답은 90초 넘게 끊긴 신호(05:04:20)를 싣고 온다.
+        h.server.override("work_statuses", .json(NowHarness.statuses(meSeen: "2026-09-17T05:04:20Z")))
+        h.clock.advance(60)
+        h.scheduler.advance(60)
+        #expect(h.store.refreshTask != nil)
+        for step in 1...4 {
+            h.clock.advance(0.5)
+            let card = try #require(h.store.myCard(now: h.clock.now))
+            #expect(!card.isStale, "응답 전 t+\(60 + Double(step) * 0.5)초에 끊김으로 뒤집혔다")
+            #expect(card.todaySeconds == 18_660 + step / 2, "오늘 누적이 뒤로 뛰었다(\(card.todaySeconds))")
+        }
+
+        await h.settle()
+        let card = try #require(h.store.myCard(now: h.clock.now))
+        #expect(card.isStale, "다음 응답의 신호가 90초 넘게 끊겼는데 계속 셌다")
+        #expect(card.todaySeconds == 5_100 + 13_460, "마지막 신호(05:04:20)에서 멈춘다")
+        let me = try #require(h.model.widgetSnapshots.current?.me)
+        #expect(me.working && me.sessionStartedAt == nil, "끊긴 세션은 위젯이 스스로 세지 않게 시작 시각을 싣지 않는다")
+        #expect(me.todaySeconds == 18_560)
+    }
+
+    @Test("팀 상태 요청이 실패하면 모르는 채로 살려 두지 않는다: 끊김은 화면 시각으로(마지막 신호에서 멈춤) · 다시 받으면 풀린다")
+    func presenceFallsBackToNowAfterFailure() async throws {
+        let h = NowHarness()
+        defer { h.tearDown() }
+        await h.launch()
+        await h.activate()
+        h.clock.advance(120)
+        h.server.override("work_statuses", .networkFailure())
+        await h.store.refreshNow()
+        #expect(h.store.teamStatusFailedSinceFetch)
+        #expect(h.store.presenceJudgedAt(now: h.clock.now) == h.clock.now)
+        let card = try #require(h.store.myCard(now: h.clock.now))
+        #expect(card.isStale && card.todaySeconds == 5_100 + 13_480, "나: 마지막 신호 05:04:40 에서 멈춘다")
+        #expect(h.model.widgetSnapshots.current?.me?.sessionStartedAt == nil)
+
+        h.server.override("work_statuses", .json(NowHarness.statuses(meSeen: "2026-09-17T05:06:50Z")))
+        await h.store.refreshNow()
+        #expect(!h.store.teamStatusFailedSinceFetch)
+        let fresh = try #require(h.store.myCard(now: h.clock.now))
+        #expect(!fresh.isStale && fresh.todaySeconds == 5_100 + 13_620, "05:07:00 까지 다시 센다")
+    }
+
+    @Test("오프라인 첫 화면: 새로고침이 끝나면 '불러오는 중'에 머물지 않고 '불러오지 못함'(머리글 숫자 숨김) · 다시 시도 중에도 깜빡이지 않고 · 받으면 채워진다")
+    func offlineColdStartIsNotLoadingForever() async throws {
+        let h = NowHarness()
+        defer { h.tearDown() }
+        let keys = ["memberships", "rpc.app_user_directory", "work_statuses"]
+        for key in keys { h.server.override(key, .networkFailure()) }
+        await h.launch()
+        #expect(h.store.teamLoadState == .loading && h.store.workingLoadState == .loading, "시도 전은 불러오는 중")
+        await h.activate()
+        #expect(h.store.notice == NowText.networkFailed)
+        #expect(!h.store.isRefreshing && h.store.refreshTask == nil, "도는 요청이 없다")
+        #expect(h.store.teamLoadState == .failed, "도는 요청이 없는데 내 카드 자리가 '불러오는 중'이다")
+        #expect(h.store.workingLoadState == .failed)
+        #expect(NowText.workingTitle(count: nil) == "지금 근무 중", "모를 때 '지금 근무 중 0' 이라고 하지 않는다")
+
+        for key in keys { h.server.override(key, nil) }
+        h.store.refresh()
+        #expect(h.store.teamLoadState == .failed, "다시 시도하는 동안 실패 줄 ↔ 스피너로 깜빡인다")
+        await h.settle()
+        #expect(h.store.teamLoadState == .loaded && h.store.workingLoadState == .loaded)
+        #expect(h.store.myCard(now: h.clock.now) != nil && h.store.notice == nil)
+
+        h.store.reset()
+        #expect(h.store.teamLoadState == .loading, "세대가 바뀌면 처음부터")
+    }
+
+    @Test("소속 없음인데 디렉터리를 못 받으면 '근무 중인 사람이 없어요'가 아니라 불러오지 못함")
+    func noTeamWithoutDirectoryIsUnknown() async {
+        let h = NowHarness()
+        defer { h.tearDown() }
+        h.server.override("memberships", .json("[]"))
+        h.server.override("rpc.app_user_directory", .json(#"{"message":"boom"}"#, status: 503))
+        await h.launch()
+        await h.activate()
+        #expect(h.store.teamLoadState == .loaded, "내 카드 자리는 소속 없음 안내")
+        #expect(h.store.workingLoadState == .failed)
+        #expect(h.store.notice == NowText.loadFailed)
+    }
+
+    @Test("값이 같은 새로고침도 위젯 'N분 전'을 방금으로: 세지 않는 스냅샷은 generatedAt 만 옮기고 위젯을 새로고침한다 · 60초 안이거나 실패면 그대로")
+    func idleSnapshotIsTouchedAfterRefresh() async throws {
+        let h = NowHarness()
+        defer { h.tearDown() }
+        h.server.override("work_statuses", .json(NowHarness.idleStatuses))
+        await h.launch()
+        await h.activate()
+        let first = try #require(WidgetSnapshotCodec.read(from: h.storage.widgetSnapshotURL))
+        #expect(first.generatedAt == Self.now && first.me?.working == false)
+
+        h.clock.advance(30)
+        var reloads = h.widgetReloadCount
+        await h.store.refreshNow()
+        #expect(WidgetSnapshotCodec.read(from: h.storage.widgetSnapshotURL)?.generatedAt == first.generatedAt, "60초 안이면 옮기지 않는다")
+        #expect(h.widgetReloadCount == reloads)
+
+        h.clock.advance(20 * 60)
+        reloads = h.widgetReloadCount
+        await h.store.refreshNow()
+        let refreshedAt = try #require(h.store.lastRefreshedAt)
+        let touched = try #require(WidgetSnapshotCodec.read(from: h.storage.widgetSnapshotURL))
+        #expect(touched.generatedAt == refreshedAt, "방금 새로고침했는데 위젯은 '\(AingWidgetFormat.ago(from: touched.generatedAt, now: refreshedAt))'")
+        #expect(AingWidgetFormat.ago(from: touched.generatedAt, now: refreshedAt) == "방금")
+        #expect(touched.me == first.me && touched.working == first.working && touched.todosPreview == first.todosPreview, "시각만 옮긴다")
+        #expect(h.widgetReloadCount == reloads + 1, "옮긴 뒤 위젯을 한 번 새로고침한다")
+
+        h.clock.advance(10 * 60)
+        h.server.override("work_statuses", .networkFailure())
+        await h.store.refreshNow()
+        #expect(WidgetSnapshotCodec.read(from: h.storage.widgetSnapshotURL)?.generatedAt == touched.generatedAt, "실패한 새로고침은 방금이라고 하지 않는다")
+    }
+
+    @Test("앞 실행이 남긴 스냅샷: 우리 팀 상태를 못 받은 첫 새로고침은 근무 중 · 내 칸을 비우지 않는다(모르는 칸은 쓰지 않는다)")
+    func unknownTeamKeepsPreviousSnapshot() async throws {
+        let seed = WidgetSnapshot(
+            generatedAt: Self.now.addingTimeInterval(-600),
+            me: .init(working: true, sessionStartedAt: Self.now.addingTimeInterval(-3_600), todaySeconds: 3_000, weekSeconds: 9_000, goalHours: 40),
+            working: [
+                .init(name: "민트", center: "seoul", teammate: true, startedAt: Self.now.addingTimeInterval(-7_200)),
+                .init(name: "코랄", center: "busan", teammate: false, startedAt: nil),
+            ]
+        )
+        let h = NowHarness(seedSnapshot: seed)
+        defer { h.tearDown() }
+        h.server.override("work_statuses", .networkFailure())
+        await h.launch()
+        await h.activate()
+        #expect(h.store.hasLoadedDirectory && !h.store.hasLoadedTeam)
+        let snapshot = try #require(WidgetSnapshotCodec.read(from: h.storage.widgetSnapshotURL))
+        #expect(snapshot.working == seed.working, "모르는 근무 중 칸을 빈 목록으로 덮었다")
+        #expect(snapshot.me == seed.me)
+    }
+
+    @Test("팀이 있다가 소속 없음으로 바뀌면 옛 팀원을 비운다 — 다른 팀 근무자만 남고 위젯 '내 오늘'은 팀 참여 안내")
+    func teamToNoTeamClearsTeammates() async throws {
+        let h = NowHarness()
+        defer { h.tearDown() }
+        await h.launch()
+        await h.activate()
+        #expect(h.store.workingPeople(now: Self.now).filter(\.isTeammate).count == 3)
+        #expect(AingWidgetMyTodayState(snapshot: try #require(h.model.widgetSnapshots.current), at: Self.now) != .noTeam)
+
+        h.server.override("memberships", .json("[]"))
+        await h.store.refreshNow()
+        #expect(h.store.hasNoTeam && h.store.teamMembers.isEmpty && !h.store.hasLoadedTeam)
+        let people = h.store.workingPeople(now: Self.now)
+        #expect(people.count == 6 && people.allSatisfy { !$0.isTeammate && $0.elapsedSeconds == nil }, "옛 팀원이 '우리 팀'으로 남았다")
+        let snapshot = try #require(h.model.widgetSnapshots.current)
+        #expect(snapshot.working.allSatisfy { !$0.teammate })
+        #expect(AingWidgetMyTodayState(snapshot: snapshot, at: Self.now) == .noTeam)
+
+        // 다시 팀에 들어왔는데 팀 상태는 아직 못 받았다 — "팀에 참여하면 보여요"를 남기지 않는다(모름).
+        h.server.override("memberships", nil)
+        h.server.override("work_statuses", .networkFailure())
+        await h.store.refreshNow()
+        #expect(h.store.membership != nil && !h.store.hasLoadedTeam)
+        let rejoined = try #require(h.model.widgetSnapshots.current)
+        #expect(AingWidgetMyTodayState(snapshot: rejoined, at: Self.now) == .noData, "팀에 들어왔는데 위젯은 여전히 팀 참여 안내")
+        h.server.override("work_statuses", nil)
+        await h.store.refreshNow()
+        guard case .me = AingWidgetMyTodayState(snapshot: try #require(h.model.widgetSnapshots.current), at: Self.now) else {
+            Issue.record("팀 상태를 받았는데 위젯 내 오늘이 채워지지 않았다")
+            return
+        }
+    }
+
+    @Test("목표 저장 응답이 로그아웃 뒤에 오면 버린다: 시트를 닫지 않고(false) 새 계정의 목표를 바꾸지 않는다")
+    func lateGoalSaveAfterAccountSwitchIsDropped() async throws {
+        let h = NowHarness()
+        defer { h.tearDown() }
+        await h.launch()
+        await h.activate()
+        h.server.override("rpc.set_team_weekly_goal", .json(#"[{"weekly_goal_hours":45}]"#, delay: 0.8))
+        let save = Task { await h.store.saveGoal(hours: 45) }
+        _ = await baseWaitUntil { h.requests("rpc.set_team_weekly_goal").count == 1 }
+
+        await h.model.session.signOut()
+        h.store.reset()
+        h.server.override("memberships", .json(#"[{"team_id":"team-other","role":"member","teams":{"name":"다른팀","weekly_goal_hours":30}}]"#))
+        await h.signIn(as: "u-other")
+        #expect(h.model.session.userID == "u-other")
+        h.store.appDidBecomeActive()
+        await h.settle()
+        #expect(h.store.membership?.teamID == "team-other" && h.store.goalHours == 30)
+
+        #expect(await save.value == false, "앞 계정 저장 응답에 시트를 닫았다")
+        #expect(h.store.goalHours == 30, "앞 계정의 늦은 저장 응답이 새 계정 목표를 바꿨다")
+        #expect(h.model.widgetSnapshots.current?.me?.goalHours != 45)
+    }
+
+    @Test("새로고침은 한 번에 하나: 도는 중에 여러 번 불러도 겹치지 않고 끝난 뒤 한 번만 더 돈다")
+    func refreshIsSingleFlight() async {
+        let h = NowHarness(runsPeriodicRefresh: false)
+        defer { h.tearDown() }
+        await h.launch()
+        // 디렉터리는 지금 탭만 부른다(멤버십은 세션의 프로필 조회도 부른다).
+        h.server.override("rpc.app_user_directory", .json(NowStubServer.directory, delay: 0.3))
+        h.store.refresh()
+        _ = await baseWaitUntil { h.requests("rpc.app_user_directory").count == 1 }
+        // 첫 새로고침이 도는 중에 두 번 더 — 겹치지 않고, 끝난 뒤 한 번으로 합쳐 돈다.
+        h.store.refresh()
+        h.store.refresh()
+        #expect(h.store.refreshCount == 1)
+        await h.store.refreshTask?.value
+        try? await Task.sleep(for: .milliseconds(500))
+        #expect(h.store.refreshCount == 2, "겹친 새로고침 \(h.store.refreshCount)번")
+        #expect(h.requests("rpc.app_user_directory").count == 2)
+    }
+
+    @Test("탭을 다시 볼 때 30초 안에 받았으면 새로고침을 건너뛰고, 그보다 오래됐으면 한 번 받는다")
+    func tabAppearSkipsFreshData() async {
+        let h = NowHarness(runsPeriodicRefresh: false)
+        defer { h.tearDown() }
+        await h.launch()
+        await h.activate()
+        let count = h.store.refreshCount
+        h.clock.advance(29)
+        h.store.tabDidAppear()
+        await h.settle()
+        #expect(h.store.refreshCount == count, "30초 안에 받은 값을 다시 받았다")
+        h.clock.advance(2)
+        h.store.tabDidAppear()
+        await h.settle()
+        #expect(h.store.refreshCount == count + 1)
+    }
+
+    @Test("60초 주기는 조립이 켤 때만(runsPeriodicRefresh) — 끈 조립은 시간이 흘러도 스스로 새로고침하지 않는다")
+    func periodicRefreshNeedsOptIn() async {
+        let h = NowHarness(runsPeriodicRefresh: false)
+        defer { h.tearDown() }
+        await h.launch()
+        await h.activate()
+        let count = h.store.refreshCount
+        h.scheduler.advance(180)
+        await h.settle()
+        #expect(h.store.refreshCount == count)
+    }
+
+    @Test("할 일 미리보기는 지금 계정 파일일 때만: 로그인 직후 active 전(로그아웃 파일을 든 채)에는 스냅샷에 싣지 않는다")
+    func todoPreviewNeedsCurrentAccountFile() async {
+        let h = NowHarness()
+        defer { h.tearDown() }
+        await h.launch()
+        await h.activate()
+        await h.model.session.signOut()
+        h.store.reset()
+        _ = h.store.todos.add("로그아웃 파일의 줄") // todos.local.json
+        await h.signIn(as: "u-other")
+        #expect(h.store.todoSync.userID == nil && h.model.session.isSignedIn)
+        h.store.writeWidgetSnapshot()
+        #expect(!(h.model.widgetSnapshots.current?.todosPreview.contains { $0.title == "로그아웃 파일의 줄" } ?? false), "로그아웃 파일의 할 일이 새 계정 위젯에 샜다")
+    }
+
+    @Test("background 로 가면 되돌리기 토스트를 닫는다(삭제는 파일에 남는다)")
+    func backgroundClosesUndoWindow() async throws {
+        let h = NowHarness()
+        defer { h.tearDown() }
+        await h.launch()
+        await h.activate()
+        #expect(h.store.addTodo("지울 일"))
+        let item = try #require(h.store.todos.items.first)
+        h.store.deleteTodo(item.id)
+        #expect(h.store.undoTodoID == item.id)
+        h.store.appDidEnterBackground()
+        #expect(h.store.undoTodoID == nil, "돌아왔을 때 몇 시간 지난 되돌리기 토스트가 남는다")
+        #expect(h.store.todoRows().main.isEmpty)
+    }
+
+    @Test("할 일 전송: 응답을 기다리는 사이 로그아웃했다가 같은 계정으로 다시 들어와도(세대가 바뀜) 앞 세대 응답은 버린다")
+    func transportDropsResponseAcrossGenerations() async throws {
+        let h = NowHarness()
+        defer { h.tearDown() }
+        await h.launch()
+        let transport = NowTodoSyncTransport(context: h.model.context)
+        h.server.todo.delay = 0.8
+        let call = Task { try await transport.todoSync(userID: NowStubServer.me, request: TodoSyncRequest(changes: [], sinceMs: nil)) }
+        _ = await baseWaitUntil { h.server.todo.calls == 1 }
+        await h.model.session.signOut()
+        h.server.todo.delay = 0
+        await h.signIn(as: NowStubServer.me)
+        #expect(h.model.session.userID == NowStubServer.me)
+        await #expect(throws: TodoSyncTransportError.accountMismatch) {
+            _ = try await call.value
+        }
     }
 
     // MARK: - 세대 가드 · 실패

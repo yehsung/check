@@ -872,8 +872,48 @@ func workingMemberWeeklyDurationAdvancesLocally() {
 @MainActor
 @Test
 func refreshTeamStatusRestoresRemoteOwnSessionStart() async throws {
+    // 픽스처의 생존신호와 스토어 시계를 **같은 고정 시각**(weeklyFixtureNow)에 둔다. 벽시계 픽스처일 때는 응답과 반영 사이
+    // 메인 액터 대기가 자리 비움 임계(7분)를 넘은 전체 스위트 회차에서 복원 대신 자동 마감으로 뒤집혔다
+    // (URLProtocolStub.ownSessionFixedClockHost 주석). 대조군은 바로 아래 테스트다.
+    let store = remoteOwnSessionStore(now: URLProtocolStub.weeklyFixtureNow)
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    await store.refreshTeamStatus()
+
+    let expectedStart = ISO8601DateFormatter().date(from: "2026-07-01T01:00:00Z")
+    #expect(store.startedAt == expectedStart)
+    #expect(store.snapshot.isWorking)
+    #expect(store.snapshot.elapsedSeconds > 0)
+}
+
+/// 위 테스트의 대조군 — 같은 픽스처에서 **시계만** 자리 비움 임계 밖으로 옮기면 복원이 아니라 자동 마감이다.
+/// 이게 있어야 위의 "복원"이 시각과 무관하게 늘 참인 단언이 아니라는 것이 선다(벽시계 시절 전체 스위트에서 뒤집히던 바로 그 갈래).
+@MainActor
+@Test
+func refreshTeamStatusAutoClosesTheRemoteOwnSessionOnceTheSignalIsPastTheContract() async throws {
+    let store = remoteOwnSessionStore(
+        now: URLProtocolStub.weeklyFixtureNow.addingTimeInterval(WorkTimerStore.adoptedReclaimStaleSeconds + 60)
+    )
+    defer {
+        store.tickerTask?.cancel()
+        store.refreshTask?.cancel()
+    }
+
+    await store.refreshTeamStatus()
+
+    let remoteStart = ISO8601DateFormatter().date(from: "2026-07-01T01:00:00Z")
+    #expect(store.startedAt != remoteStart)
+    #expect(!store.snapshot.isWorking)
+}
+
+/// 원격(다른 맥)에 열린 내 세션이 있는 팀 픽스처 + 고정 시계 스토어.
+@MainActor
+private func remoteOwnSessionStore(now: Date) -> WorkTimerStore {
     let service = SupabaseWorkService(
-        projectURL: URL(string: "http://team-hours-test")!,
+        projectURL: URL(string: "http://\(URLProtocolStub.ownSessionFixedClockHost)")!,
         anonKey: "anon-test-key",
         session: URLSession(configuration: .stubbed)
     )
@@ -882,23 +922,14 @@ func refreshTeamStatusRestoresRemoteOwnSessionStart() async throws {
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
         defaults: isolatedDefaults()
     )
-    defer {
-        store.tickerTask?.cancel()
-        store.refreshTask?.cancel()
-    }
+    pinClock(store, to: now)
     store.session = SupabaseSession(
         accessToken: "access-token",
         refreshToken: nil,
         userID: "00000000-0000-0000-0000-000000000002"
     )
     store.currentTeamID = URLProtocolStub.stubTeamID
-
-    await store.refreshTeamStatus()
-
-    let expectedStart = ISO8601DateFormatter().date(from: "2026-07-01T01:00:00Z")
-    #expect(store.startedAt == expectedStart)
-    #expect(store.snapshot.isWorking)
-    #expect(store.snapshot.elapsedSeconds > 0)
+    return store
 }
 
 @MainActor

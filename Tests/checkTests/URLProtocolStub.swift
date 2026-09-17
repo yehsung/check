@@ -435,6 +435,15 @@ final class URLProtocolStub: URLProtocol {
     /// 주간 누적 픽스처의 고정 기준시각(2026-07-14 12:33 KST — 화요일 낮). 주 경계(월요일 00시)에 걸려
     /// 클리핑이 0이 되는 시각 의존을 없애려고, 이 값을 쓰는 테스트는 같은 값을 서비스에 now 로 주입한다.
     static let weeklyFixtureNow = Date(timeIntervalSince1970: 1_784_000_000)
+    /// 팀 픽스처(team-hours-test 와 같은 행)지만 근무 멤버의 생존신호(last_seen_at)가 벽시계가 아니라 **weeklyFixtureNow** 인 호스트.
+    /// 이 호스트를 쓰는 테스트는 스토어 시계도 같은 값으로 고정한다(refreshTeamStatusRestoresRemoteOwnSessionStart).
+    ///
+    /// **왜 따로 두는가**: 벽시계 픽스처는 응답을 만든 시각(URLProtocol 워커 스레드)과 스토어가 판정하는 시각(메인 액터)이 달라,
+    /// 그 사이 메인 액터 대기가 자리 비움 임계(adoptedReclaimStaleSeconds = 7분)를 넘으면 "원격 세션 복원" 대신 자동 마감으로
+    /// 갈라진다. B3(CheckCore 분리)로 테스트 순서가 바뀐 뒤 전체 스위트가 650초를 넘긴 회차마다 그 테스트의 startedAt·isWorking
+    /// 단언이 빨갰다(검증 실측 3/4, 시계를 8분 앞당긴 프로브로 결정적 재현). team-hours-test 자체를 고정 시각으로 바꾸지 않는 것은
+    /// 그 호스트를 벽시계 스토어로 쓰는 다른 테스트(멤버십 확정·목표 스로틀·재오픈)가 매번 자동 마감 갈래로 넘어가기 때문이다.
+    static let ownSessionFixedClockHost = "team-hours-fixed-clock-test"
 
     // 옛 표(token_usage_monthly) 현재 값 조회 픽스처(덮어쓰기 전 게이트가 읽는 그 요청).
     // host 에 "legacy-bigger" 가 들어가면 **아직 v0.2.10 인 다른 맥**이 올려 둔 큰 누적치 한 줄을,
@@ -665,6 +674,8 @@ final class URLProtocolStub: URLProtocol {
         }
 
         // 팀 픽스처의 근무중 멤버는 생존신호(last_seen_at)를 현재 시각으로 둬 stale/자동 마감으로 오판되지 않게 한다.
+        // 고정 시각 호스트(ownSessionFixedClockHost)만 벽시계 대신 weeklyFixtureNow 를 싣는다 — 스토어 시계도 그 값이다.
+        let lastSeenAt = host == Self.ownSessionFixedClockHost ? iso(weeklyFixtureNow) : isoNow()
         return Data(
             """
             [
@@ -672,7 +683,7 @@ final class URLProtocolStub: URLProtocol {
                 "user_id": "00000000-0000-0000-0000-000000000002",
                 "status": "working",
                 "updated_at": "2026-07-01T01:00:00Z",
-                "last_seen_at": "\(isoNow())",
+                "last_seen_at": "\(lastSeenAt)",
                 "active_session_id": "30000000-0000-0000-0000-000000000001",
                 "profiles": { "display_name": "영식", "email": "member@example.com" }
               }
@@ -1096,6 +1107,7 @@ final class URLProtocolStub: URLProtocol {
     private static func hasTeamFixture(for request: URLRequest) -> Bool {
         let host = request.url?.host
         return host == "team-hours-test"
+            || host == ownSessionFixedClockHost
             || host == "expired-token"
             || host == "stop-fails"
             || host == "signout-refresh-race"

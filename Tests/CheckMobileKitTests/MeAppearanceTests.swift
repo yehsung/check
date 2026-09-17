@@ -164,4 +164,14 @@ struct MeAppearanceTests {
         MobileDemo.seedAppearance(arguments: ["app", "-AingCheckDemoAppearance", "light"], into: scratch.defaults)
         #expect(MobileAppearanceStore(defaults: scratch.defaults).mode == .light)
     }
+
+    @Test("실제 앱 조립은 화면 모드를 앱 자신의 UserDefaults.standard 에 둔다 — 공용 suite(로그아웃이 치우는 곳)가 아니다")
+    func liveEnvironmentStoresAppearanceInStandardDefaults() throws {
+        // live() 는 키체인 · App Group 을 만져 테스트에서 부르기 어렵다 — 조립 줄을 소스 계약으로 묶는다(w9 검증 발견).
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let raw = try String(contentsOf: root.appendingPathComponent("Sources/CheckMobileKit/App/MobileEnvironment.swift"), encoding: .utf8)
+        let code = stripComments(raw).filter { !$0.isWhitespace }
+        let live = try #require(code.range(of: "packagestaticfunclive("), "live() 조립을 못 찾았다")
+        #expect(code[live.lowerBound...].contains("appearanceDefaults:.standard"), "실제 앱이 화면 모드를 .standard 에 두지 않는다")
+    }
 }

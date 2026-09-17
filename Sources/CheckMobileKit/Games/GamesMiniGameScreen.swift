@@ -31,13 +31,14 @@ struct GamesMiniGameScreen: View {
                 canvas
                     .frame(width: width, height: height)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
+                    VStack(alignment: .leading, spacing: 0) {
                         if !hub.isPublic {
                             InlineNotice(text: GamesMiniGameText.privateNotice, kind: .info)
+                                .padding(.bottom, MobileTheme.space2)
                         }
                         rankings
                     }
-                    .padding(.bottom, MobileTheme.rowSpacing)
+                    .padding(.bottom, MobileTheme.space6)
                 }
                 .scrollIndicators(.hidden)
                 .gamesDemoScrollAnchor(isDemo: store.context.isDemo)
@@ -50,7 +51,7 @@ struct GamesMiniGameScreen: View {
         .background(MobileTheme.background.ignoresSafeArea())
         .navigationTitle(kind.title)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar(for: .miniGamePlay)
         .onAppear {
             refreshHz = GamesDisplay.maximumFramesPerSecond
             hub.openScreen(kind)
@@ -91,20 +92,31 @@ struct GamesMiniGameScreen: View {
         Label {
             Text(GamesMiniGameText.bestLine(best)).monospacedDigit()
         } icon: {
-            Image(systemName: "trophy.fill").foregroundStyle(MobileTheme.pending)
+            // 트로피는 금(순위 메달 색) — 앰버는 연결 끊김·대기 전용이다.
+            Image(systemName: "trophy.fill").foregroundStyle(MobileTheme.gold)
         }
         .font(.subheadline.weight(.semibold))
         .foregroundStyle(MobileTheme.label)
     }
 
     /// 오늘 순위 한 줄. 순위표를 모르면(불러오는 중·실패) 그리지 않는다 — 실패는 아래 순위 카드가 말한다.
+    /// 순위가 있으면 공용 순위 원(금은동) — 예전 파랑 글자는 링크처럼 보였다(비평 14~19).
     @ViewBuilder
     private func rankLabel(_ line: String?) -> some View {
-        if let line {
+        if let rank = hub.myRank(kind) {
+            HStack(spacing: 6) {
+                Text("오늘")
+                    .font(.subheadline)
+                    .foregroundStyle(MobileTheme.label2)
+                RankBadge(rank: rank)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(line ?? "오늘 \(rank)위")
+        } else if let line {
             Text(line)
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline)
                 .monospacedDigit()
-                .foregroundStyle(hub.myRank(kind) == nil ? MobileTheme.label2 : MobileTheme.accent)
+                .foregroundStyle(MobileTheme.label2)
         }
     }
 
@@ -173,68 +185,47 @@ struct GamesMiniGameScreen: View {
 
     // MARK: 오늘 순위
 
+    @ViewBuilder
     private var rankings: some View {
         let state = hub.boards[kind] ?? GamesMiniGameBoard()
-        return AingCard {
-            // 정족수 줄은 사람 수를 알 때만 — 불러오지 못했거나 불러오는 중이면 "아무도 안 했어요"라고 말하지 않는다.
-            if state.knowsPlayerCount {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .firstTextBaseline) {
-                        rankTitle
-                        Spacer(minLength: 8)
-                        quorum(state.entries.count)
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        rankTitle
-                        quorum(state.entries.count)
-                    }
-                }
-            } else {
-                rankTitle
-            }
+        let myID = store.context.session.session?.userID.lowercased()
+        // 정족수 줄은 사람 수를 알 때만 — 불러오지 못했거나 불러오는 중이면 "아무도 안 했어요"라고 말하지 않는다.
+        SectionHeader(GamesMiniGameText.rankTitle,
+                      trailing: state.knowsPlayerCount ? .text(GamesMiniGameText.quorumCaption(players: state.entries.count)) : .none,
+                      padded: true)
+            .padding(.top, -18)
+        InsetGroup {
             if let winner = state.yesterdayWinner {
                 GamesChampionRow(winner: winner)
             }
             if state.entries.isEmpty {
-                switch state.placeholder {
-                case .failed:
-                    LoadFailureRow(GamesMiniGameText.failedCaption, isRetrying: state.loading) {
-                        Task { await hub.loadBoard(kind, withWinner: true) }
+                GroupRow(divider: .none) {
+                    switch state.placeholder {
+                    case .failed:
+                        LoadFailureRow(GamesMiniGameText.failedCaption, isRetrying: state.loading) {
+                            Task { await hub.loadBoard(kind, withWinner: true) }
+                        }
+                    case .loading:
+                        LoadingRow(GamesMiniGameText.loadingCaption)
+                    case .empty, .rows:
+                        Text(GamesMiniGameText.emptyBoard)
+                            .font(.subheadline)
+                            .foregroundStyle(MobileTheme.label2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                case .loading:
-                    LoadingRow(GamesMiniGameText.loadingCaption)
-                case .empty, .rows:
-                    Text(GamesMiniGameText.emptyBoard)
-                        .font(.subheadline)
-                        .foregroundStyle(MobileTheme.label2)
                 }
             } else {
-                VStack(spacing: 2) {
-                    ForEach(Array(state.entries.enumerated()), id: \.element.userID) { index, entry in
-                        GamesRankRow(rank: index + 1, entry: entry,
-                                        isMe: entry.userID == store.context.session.session?.userID.lowercased())
-                    }
+                ForEach(Array(state.entries.enumerated()), id: \.element.userID) { index, entry in
+                    GamesRankRow(store: store, rank: index + 1, entry: entry, isMe: entry.userID == myID,
+                                 isLast: index == state.entries.count - 1)
                 }
             }
-            Text(GamesMiniGameText.prizeCaption)
-                .font(.caption)
-                .foregroundStyle(MobileTheme.label2)
         }
-    }
-
-    private var rankTitle: some View {
-        Text(GamesMiniGameText.rankTitle)
-            .font(.headline)
-            .foregroundStyle(MobileTheme.label)
-            .accessibilityAddTraits(.isHeader)
-            .fixedSize()
-    }
-
-    private func quorum(_ players: Int) -> some View {
-        Text(GamesMiniGameText.quorumCaption(players: players))
-            .font(.caption)
+        Text(GamesMiniGameText.prizeCaption)
+            .font(MobileTheme.rowSubtitle)
             .foregroundStyle(MobileTheme.label2)
-            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+            .padding(.top, MobileTheme.space2)
     }
 
     // MARK: 데모
@@ -255,34 +246,48 @@ struct GamesMiniGameScreen: View {
     }
 }
 
-/// 오늘 순위 한 줄: 등수 · 아바타 · 이름(+나) · 점수. 순위 원·"나" 칩·내 행 강조는 순위 탭과 같은 공용 부품이다
-/// (`RankBadge` · `AingChip` · `rankRowSurface` — 같은 순위가 두 탭에서 다른 색으로 보이던 결함).
+/// 오늘 순위 한 줄(인셋 그룹 안 · 48pt): 등수 원 · 얼굴(내 행은 착용 캐릭터 초상) · 이름(+ 센터 · '나') · 점수.
+/// 순위 원·"나" 칩·내 행 강조는 순위 탭과 같은 공용 부품이다(`RankBadge` · `PersonName` · `rankRowSurface` — 같은 순위가 두 탭에서
+/// 다른 색으로 보이던 결함).
 private struct GamesRankRow: View {
+    let store: GamesStore
     let rank: Int
     let entry: MiniGameBoardEntry
     let isMe: Bool
+    let isLast: Bool
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         Group {
             if typeSize.isAccessibilitySize {
-                // 큰 글자: 등수·아바타 한 줄, 이름·점수는 그 아래로(한 줄에 몰면 이름이 0 폭으로 눌린다).
+                // 큰 글자: 등수·얼굴 한 줄, 이름·점수는 그 아래로(한 줄에 몰면 이름이 0 폭으로 눌린다).
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 10) { rankBadge; AvatarView(name: entry.name, url: entry.avatarURL, size: 30); Spacer(minLength: 0); score }
+                    HStack(spacing: MobileTheme.space3) { rankBadge; face; Spacer(minLength: 0); score }
                     nameLine
                 }
             } else {
-                HStack(spacing: 10) {
+                HStack(spacing: MobileTheme.space3) {
                     rankBadge
-                    AvatarView(name: entry.name, url: entry.avatarURL, size: 30)
+                    face
                     nameLine
                     Spacer(minLength: 6)
                     score
                 }
             }
         }
-        .rankRowSurface(isMine: isMe, standsAlone: false, padding: 8, cornerRadius: 12)
+        .padding(.horizontal, MobileTheme.cardPadding)
+        .padding(.vertical, 8)
+        .frame(minHeight: 48)
+        .rankRowSurface(isMine: isMe, standsAlone: false, padding: 0, cornerRadius: 0)
+        .overlay(alignment: .bottom) {
+            if !isLast {
+                Rectangle()
+                    .fill(MobileTheme.separator)
+                    .frame(height: MobileTheme.hairline)
+                    .padding(.leading, MobileTheme.cardPadding + 24 + 30 + MobileTheme.space3 * 2)
+            }
+        }
         .accessibilityElement(children: .combine)
     }
 
@@ -290,72 +295,61 @@ private struct GamesRankRow: View {
         RankBadge(rank: rank)
     }
 
-    private var nameLine: some View {
-        HStack(spacing: 6) {
-            Text(entry.name)
-                .font(.subheadline.weight(isMe ? .bold : .regular))
-                .foregroundStyle(MobileTheme.label)
-                .lineLimit(2)
-            if isMe {
-                AingChip(text: GomokuPhoneText.me)
-            }
-            CenterBadge(CenterLabel.serverValue(forDisplay: entry.center))
+    @ViewBuilder
+    private var face: some View {
+        if isMe {
+            let me = GamesMeIdentity.current(store.context)
+            CharacterPortrait(id: me.characterID, mood: me.mood, size: 30, ringGap: MobileTheme.surface)
+        } else {
+            PersonAvatar(name: entry.name, colorSeed: entry.userID, url: entry.avatarURL, size: 30)
         }
+    }
+
+    private var nameLine: some View {
+        PersonName(entry.name, center: CenterLabel.serverValue(forDisplay: entry.center), isMe: isMe)
     }
 
     private var score: some View {
         Text(GamesMiniGameText.score(entry.bestScore))
-            .font(MobileTheme.number(.subheadline))
+            .font(.system(.subheadline, weight: .semibold))
             .monospacedDigit()
             .foregroundStyle(MobileTheme.label)
             .fixedSize()
     }
 }
 
-/// 어제 1등 한 줄(왕관 · 이름 · 점수 · 상 받음).
+/// 어제 1등 한 줄(시안 B 06 — 순위 탭과 같은 부품): 왕관 원 · 이름·점수 · 초록 획득 칩 [보석]+20 받음.
 private struct GamesChampionRow: View {
     let winner: MiniGameWinner
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        Group {
+        GroupRow(divider: .inset(MobileTheme.cardPadding), minHeight: 56) {
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 10) { crown; AvatarView(name: winner.name, url: winner.avatarURL, size: 28) }
+                    CrownBadge()
                     texts
                     if winner.awarded { awarded }
                 }
             } else {
-                HStack(spacing: 10) {
-                    crown
-                    AvatarView(name: winner.name, url: winner.avatarURL, size: 28)
-                    texts
-                    Spacer(minLength: 6)
-                    if winner.awarded { awarded }
-                }
+                CrownBadge()
+                texts
+                Spacer(minLength: 6)
+                if winner.awarded { awarded }
             }
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(MobileTheme.pending.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(MobileTheme.pending.opacity(0.35), lineWidth: 1))
         .accessibilityElement(children: .combine)
     }
 
-    private var crown: some View {
-        Image(systemName: "crown.fill")
-            .foregroundStyle(MobileTheme.pending)
-            .accessibilityHidden(true)
-    }
-
     private var texts: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             Text(GamesMiniGameText.yesterdayChampion)
-                .font(.caption)
+                .font(MobileTheme.rowSubtitle)
                 .foregroundStyle(MobileTheme.label2)
             Text(winner.name + " · " + GamesMiniGameText.score(winner.score))
-                .font(.subheadline.weight(.semibold))
+                .font(MobileTheme.rowTitle)
+                .monospacedDigit()
                 .foregroundStyle(MobileTheme.label)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -363,13 +357,7 @@ private struct GamesChampionRow: View {
     }
 
     private var awarded: some View {
-        Text(GamesMiniGameText.awardedChip)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(MobileTheme.pending)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(MobileTheme.pending.opacity(0.14)))
-            .fixedSize()
+        RubyGain(GamesMiniGameText.rubyPrizes[0], suffix: "받음", style: .chip)
     }
 }
 #endif

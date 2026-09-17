@@ -13,6 +13,8 @@ struct GamesGomokuBoardCanvas: View {
     var marks: [GomokuPoint: GomokuPhoneRuleExample.Mark] = [:]
     var preview: (point: GomokuPoint, color: GomokuColor)?
     var showsCoordinates = true
+    /// 끝난 판의 승리선 양 끝(`GomokuPhoneWinLine`) — 돌 위로 굵은 선을 긋는다.
+    var winLine: (from: GomokuPoint, to: GomokuPoint)?
 
     static let woodLight = Color(red: 0.88, green: 0.73, blue: 0.49)
     static let woodDark = Color(red: 0.79, green: 0.62, blue: 0.38)
@@ -22,6 +24,8 @@ struct GamesGomokuBoardCanvas: View {
     static let autoStoneColor = Color(white: 0.62)
     /// 미리보기 돌을 두르는 고리(폰 전용 — 호버가 없어 "지금 고른 칸"이 더 또렷해야 한다).
     static let previewRing = Color(red: 0.10, green: 0.45, blue: 0.95)
+    /// 승리선(판은 물건이라 외관과 무관하게 같은 색 — 마지막 수 점과 같은 붉은 계열로 "여기서 끝났다"를 잇는다).
+    static let winLineColor = Color(red: 0.95, green: 0.30, blue: 0.26)
 
     var body: some View {
         Canvas { context, _ in draw(&context) }
@@ -54,19 +58,20 @@ struct GamesGomokuBoardCanvas: View {
         }
         if showsCoordinates {
             let letters = Array("ABCDEFGHIJKLMNO")
-            let size = max(7, g.inset * 0.36)
+            // 좌표 글자: 비평 "판 좌표 숫자가 작다" — 여백(6%) 안에서 가장 크게(369pt 판에서 약 9.7pt).
+            let size = max(8, g.inset * 0.44)
             for i in 0..<g.lines {
                 let offset = g.inset + CGFloat(i) * g.cell
                 let column = g.originX + i
                 if column < letters.count {
                     context.draw(Text(String(letters[column])).font(.system(size: size, weight: .semibold))
                         .foregroundStyle(Self.lineColor.opacity(0.8)),
-                                 at: CGPoint(x: offset, y: side - g.inset * 0.3), anchor: .center)
+                                 at: CGPoint(x: offset, y: side - g.inset * 0.38), anchor: .center)
                 }
                 let row = g.originY + g.lines - i
                 context.draw(Text("\(row)").font(.system(size: size, weight: .semibold))
                     .foregroundStyle(Self.lineColor.opacity(0.8)),
-                             at: CGPoint(x: g.inset * 0.3, y: offset), anchor: .center)
+                             at: CGPoint(x: g.inset * 0.4, y: offset), anchor: .center)
             }
         }
         let radius = g.cell * 0.46
@@ -85,6 +90,15 @@ struct GamesGomokuBoardCanvas: View {
             let c = g.location(of: lastMove)
             let r = max(2.5, g.cell * 0.13)
             context.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(Self.lastMoveColor))
+        }
+        if let winLine, g.contains(winLine.from), g.contains(winLine.to) {
+            let a = g.location(of: winLine.from)
+            let b = g.location(of: winLine.to)
+            var line = Path()
+            line.move(to: a)
+            line.addLine(to: b)
+            context.stroke(line, with: .color(.black.opacity(0.35)), style: StrokeStyle(lineWidth: max(4, g.cell * 0.24), lineCap: .round))
+            context.stroke(line, with: .color(Self.winLineColor), style: StrokeStyle(lineWidth: max(2.5, g.cell * 0.16), lineCap: .round))
         }
         if let preview, g.contains(preview.point), board[preview.point] == nil {
             let c = g.location(of: preview.point)

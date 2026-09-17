@@ -14,8 +14,10 @@ import Foundation
 ///     -AingCheckGamesDemo rules     오목: 규칙 시트
 ///     -AingCheckGamesDemo resign    오목 대국: 기권 확인
 ///     -AingCheckGamesDemo bottom    스크롤 화면을 맨 아래(채팅 · 지금 대결 중 · 순위 끝)에서 시작
+///     -AingCheckGamesDemo visited   게임 탭: 오목 로비를 한 번 다녀온 뒤(전적 · 지금 대결 중이 채워진 첫 화면)
+///     -AingCheckGamesDemo leave     오목 결과: 2.5초 뒤 [로비로] — 같은 화면 안에서 단계가 바뀔 때 탭 막대가 되살아나는지 보는 장면
 enum GamesDemoSeed: String {
-    case playing, result, preview, stake, rules, resign, bottom
+    case playing, result, preview, stake, rules, resign, bottom, visited, leave
 
     static let argument = "-AingCheckGamesDemo"
 

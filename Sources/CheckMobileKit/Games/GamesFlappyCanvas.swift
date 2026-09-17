@@ -153,19 +153,23 @@ struct GamesFlappyCanvas: View {
             Group {
                 switch game.phase {
                 case .ready:
-                    GamesOverlayCard(
-                        title: MiniGameKind.flappy.title,
-                        subtitle: GamesMiniGameText.howToPlay(.flappy),
-                        action: GamesMiniGameText.startAction,
-                        icon: MiniGameKind.flappy.icon,
-                        tint: game.stage.glow, scale: scale)
+                    // 시작 카드는 아래로 — 가운데에 두면 대기 중인 아잉(판 가운데 높이)을 불투명 카드가 가린다.
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        GamesOverlayCard(
+                            title: MiniGameKind.flappy.title,
+                            subtitle: GamesMiniGameText.howToPlay(.flappy),
+                            action: GamesMiniGameText.startAction,
+                            tint: game.stage.glow, scale: scale * 0.82)
+                    }
+                    .padding(.bottom, 10 * scale)
                 case .result:
                     GamesOverlayCard(
                         title: "\(game.score)점", titleIsScore: true,
                         subtitle: game.score > bestScore ? "신기록!" : "최고 \(bestScore)",
                         subtitleIsHighlighted: game.score > bestScore,
                         action: GamesMiniGameText.againAction,
-                        icon: MiniGameKind.flappy.icon,
+                        showsAing: true,
                         tint: game.stage.glow, scale: scale)
                 case .running, .over:
                     EmptyView()

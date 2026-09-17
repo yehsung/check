@@ -984,6 +984,13 @@ package final class GomokuStore {
         if let base, !base.isFinished, !isFinished, let serverCount = row.moveCount, serverCount < base.moveCount {
             return .ignored
         }
+        // 같은 판을 이미 끝남으로 들고 있으면 진행 중 응답은 전부 끝나기 전에 읽힌 옛 스냅숏이다(끝남은 서버 응답으로만 서고
+        // 되돌아가지 않는다). 수 개수가 같으면 위 가드를 지나 결과 화면이 대국 화면으로 되돌아갔다(조회 → 기권 → 기권 응답 → 조회 응답).
+        // 판은 두되 채팅은 옮긴다 — 기권 요청 뒤에 누른 음소거를 반영한 조회가 이 모양으로 온다(채팅은 번호·세대 가드가 따로 막는다).
+        if let base, base.isFinished, !isFinished {
+            applyChat(payload, matchID: id, requestedSince: requestedSinceChat, generation: chatGeneration)
+            return .ignored
+        }
         let tolerateGaps = requestedSince == 0
         // `auto` 가 없는 응답(옛 서버)은 **사람이 둔 수**로 읽는다 — 모른다고 회색 점을 찍으면 판 전체가 거짓말이 된다.
         let records: [(seq: Int, color: GomokuColor, point: GomokuPoint?, auto: Bool)] = (payload.moves ?? [])

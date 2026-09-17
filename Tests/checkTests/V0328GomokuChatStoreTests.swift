@@ -735,6 +735,24 @@ func 늦게_온_착수_응답은_음소거를_되감지_못하고_착수_결과�
 
 @MainActor
 @Test(.gomokuDefaultsCleanup)
+func 끝난_판에_늦게_온_진행_중_스냅숏은_결과를_되돌리지_못한다() {
+    let (_, gomoku, _) = makeChatStore("stale-active-after-finish")
+    // 조회(진행 중) → 기권 → 기권 응답(끝남) → 조회 응답 순서. 수 개수가 같아 '기록 수 역행' 가드에는 안 걸린다.
+    gomoku.applyState(decodePayload(statePayload(turn: "black", moveCount: 0)))
+    gomoku.applyState(decodePayload(statePayload(matchStatus: "finished", turn: nil, result: "white_win",
+                                                 endReason: "resign", moveCount: 0)))
+    #expect(gomoku.phase == .result)
+
+    let outcome = gomoku.applyState(decodePayload(statePayload(turn: "black", moveCount: 0)))
+
+    #expect(outcome == .ignored, "끝남은 서버가 확정한 되돌릴 수 없는 사실이다")
+    #expect(gomoku.match?.isFinished == true, "늦은 진행 중 스냅숏이 끝난 판을 다시 열었다")
+    #expect(gomoku.match?.outcome == .lost)
+    #expect(gomoku.phase == .result, "결과 화면이 대국 화면으로 되돌아갔다")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
 func 늦게_온_기권_응답도_음소거를_되감지_못하고_판은_끝난다() async {
     let (_, gomoku, host) = makeChatStore("write-late-resign") { rpc, _, _ in
         switch rpc {

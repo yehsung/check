@@ -9,17 +9,16 @@ import Testing
 ///
 /// 원칙: 조회가 **떠날 때** 사용자가 그 칸을 바꾼 흔적(순번)을 찍어 두고, 도착했을 때 달라졌으면 덮지 않는다. '저장 중' 깃발만 보면
 /// 저장이 **끝난 뒤** 도착한 옛 응답을 못 막는다.
+///
+/// 순서는 벽시계 지연이 아니라 **응답 붙잡기**(`BaseHold`)로 만든다 — 지연으로 짠 "저장 중에 도착"은 전체 스위트 포화에서 저장이 먼저
+/// 끝나 전제가 뒤집혔다. 붙잡힌 요청은 놓아준 뒤에야 스텁 기록에 선다.
 @MainActor
 @Suite("나 탭 늦은 응답·신선도(rankme-fix)")
 struct MeStoreRaceTests {
     nonisolated static let me = RankMeFixture.userID
 
-    nonisolated static func delayed(_ body: String, _ delay: TimeInterval) -> MobileStubResponse {
-        MobileStubResponse(status: 200, body: Data(body.utf8), delay: delay)
-    }
-
-    nonisolated static func noContent(delay: TimeInterval = 0) -> MobileStubResponse {
-        MobileStubResponse(status: 204, body: Data(), delay: delay)
+    nonisolated static func noContent() -> MobileStubResponse {
+        MobileStubResponse(status: 204, body: Data())
     }
 
     nonisolated static func isTokenSettingsGET(_ request: MobileStubRequest) -> Bool {
@@ -42,6 +41,10 @@ struct MeStoreRaceTests {
         request.path == "/rest/v1/profiles" && request.method == "GET" && request.query.contains("display_name_changed_at")
     }
 
+    nonisolated static func isProfilePATCH(_ request: MobileStubRequest) -> Bool {
+        request.path == "/rest/v1/profiles" && request.method == "PATCH"
+    }
+
     /// 기록 조회의 나머지 GET(빈 응답).
     nonisolated static func recordsFiller(_ request: MobileStubRequest) -> MobileStubResponse? {
         guard request.method == "GET" else { return nil }
@@ -59,19 +62,25 @@ struct MeStoreRaceTests {
     func recordsGetDuringPrivacySave() async throws {
         let harness = await RankMeHarness(label: "fix-r1-during") { request in
             if Self.isTokenSettingsGET(request) {
-                return Self.delayed(#"[{"token_usage_public":true,"token_usage_collect":true,"focus_mode":false}]"#, 0.3)
+                return .json(#"[{"token_usage_public":true,"token_usage_collect":true,"focus_mode":false}]"#)
             }
-            if request.path == "/rest/v1/profiles", request.method == "PATCH" { return Self.noContent(delay: 0.8) }
+            if request.path == "/rest/v1/profiles", request.method == "PATCH" { return Self.noContent() }
             return Self.recordsFiller(request)
         }
         defer { harness.tearDown() }
         let store = harness.me
+        let getHold = BaseHold.install(host: harness.host, Self.isTokenSettingsGET)
+        let patchHold = BaseHold.install(host: harness.host, Self.isProfilePATCH)
         await store.loadSettingsForTest(tokenPublic: true)
         let records = Task { await store.loadRecords() }
-        #expect(await baseWaitUntil { harness.requests.contains(where: Self.isTokenSettingsGET) })
+        #expect(await getHold.waitHeld())
         store.setTokenUsagePublic(false)
+        #expect(await patchHold.waitHeld())
+        #expect(await getHold.releaseAndWaitDelivered())
         await records.value
+        #expect(patchHold.finished == 0 && store.isSavingPrivacy("token"), "전제: 저장이 아직 떠 있다")
         #expect(store.tokenUsagePublic == false, "저장 중인데 기록 조회가 스위치를 켰다")
+        #expect(await patchHold.releaseAndWaitDelivered())
         #expect(await baseWaitUntil { harness.rankings.myTokenUsagePublic == false })
         #expect(store.tokenUsagePublic == false, "서버엔 비공개로 저장됐는데 설정 스위치는 공개로 보인다")
         #expect(harness.requests(path: "/rest/v1/profiles", method: "PATCH").map(\.bodyText) == [#"{"token_usage_public":false}"#])
@@ -82,18 +91,20 @@ struct MeStoreRaceTests {
     func recordsGetAfterPrivacySave() async throws {
         let harness = await RankMeHarness(label: "fix-r1-after") { request in
             if Self.isTokenSettingsGET(request) {
-                return Self.delayed(#"[{"token_usage_public":true,"token_usage_collect":true,"focus_mode":false}]"#, 0.7)
+                return .json(#"[{"token_usage_public":true,"token_usage_collect":true,"focus_mode":false}]"#)
             }
             if request.path == "/rest/v1/profiles", request.method == "PATCH" { return Self.noContent() }
             return Self.recordsFiller(request)
         }
         defer { harness.tearDown() }
         let store = harness.me
+        let getHold = BaseHold.install(host: harness.host, Self.isTokenSettingsGET)
         await store.loadSettingsForTest(tokenPublic: true)
         let records = Task { await store.loadRecords() }
-        #expect(await baseWaitUntil { harness.requests.contains(where: Self.isTokenSettingsGET) })
+        #expect(await getHold.waitHeld())
         store.setTokenUsagePublic(false)
         #expect(await baseWaitUntil { store.savingPrivacyKeys.isEmpty && harness.rankings.myTokenUsagePublic == false })
+        #expect(await getHold.releaseAndWaitDelivered())
         await records.value
         #expect(store.tokenUsagePublic == false, "저장이 끝난 뒤 도착한 옛 GET 이 스위치를 켰다")
         #expect(store.recordsState.hasLoaded, "기록 자체는 정상으로 끝나야 한다")
@@ -101,16 +112,13 @@ struct MeStoreRaceTests {
 
     @Test("MU3 설정 화면 GET(토큰 공개)이 저장 중에 와도 · 저장 뒤에 와도 스위치를 되돌리지 않는다 — 미니게임 공개도 같다")
     func settingsGetVersusPrivacySave() async throws {
-        let tokenDelay = BaseLockedBox(0.3)
-        let miniDelay = BaseLockedBox(0.0)
-        let patchDelay = BaseLockedBox(0.8)
         let harness = await RankMeHarness(label: "fix-mu3") { request in
             if Self.isTokenSettingsGET(request) {
-                return Self.delayed(#"[{"token_usage_public":true,"token_usage_collect":true,"focus_mode":false}]"#, tokenDelay.get())
+                return .json(#"[{"token_usage_public":true,"token_usage_collect":true,"focus_mode":false}]"#)
             }
-            if Self.isMiniGamePublicGET(request) { return Self.delayed(#"[{"minigame_public":true}]"#, miniDelay.get()) }
+            if Self.isMiniGamePublicGET(request) { return .json(#"[{"minigame_public":true}]"#) }
             if request.rpcName == "my_team_invite_code" { return .json(#"[{"invite_code":"ABCD1234"}]"#) }
-            if request.path == "/rest/v1/profiles", request.method == "PATCH" { return Self.noContent(delay: patchDelay.get()) }
+            if request.path == "/rest/v1/profiles", request.method == "PATCH" { return Self.noContent() }
             return nil
         }
         defer { harness.tearDown() }
@@ -118,23 +126,27 @@ struct MeStoreRaceTests {
         await store.loadSettings()
         #expect(store.tokenUsagePublic && store.miniGamePublic)
 
-        // ① 토큰 GET 이 저장 중에 도착(PATCH 0.8초).
+        // ① 토큰 GET 이 저장 중에 도착(PATCH 를 붙잡아 둔 채 GET 을 놓는다).
+        let tokenGet1 = BaseHold.install(host: harness.host, Self.isTokenSettingsGET)
+        let patch1 = BaseHold.install(host: harness.host, Self.isProfilePATCH)
         let during = Task { await store.loadSettings() }
-        #expect(await baseWaitUntil { harness.requests.filter(Self.isTokenSettingsGET).count == 2 })
+        #expect(await tokenGet1.waitHeld())
         store.setTokenUsagePublic(false)
+        #expect(await patch1.waitHeld())
+        #expect(await tokenGet1.releaseAndWaitDelivered())
         await during.value
-        #expect(store.savingPrivacyKeys.contains("token"), "전제: 저장이 아직 떠 있다")
+        #expect(store.savingPrivacyKeys.contains("token") && patch1.finished == 0, "전제: 저장이 아직 떠 있다")
         #expect(store.tokenUsagePublic == false, "저장 중에 도착한 옛 GET 이 스위치를 켰다")
+        #expect(await patch1.releaseAndWaitDelivered())
         #expect(await baseWaitUntil { store.savingPrivacyKeys.isEmpty })
 
-        // ② 미니게임 GET 이 저장이 끝난 뒤 도착(GET 0.6초 · PATCH 즉시).
-        miniDelay.mutate { $0 = 0.6 }
-        tokenDelay.mutate { $0 = 0 }
-        patchDelay.mutate { $0 = 0 }
+        // ② 미니게임 GET 이 저장이 끝난 뒤 도착(GET 을 붙잡고 저장을 끝낸 뒤 놓는다).
+        let miniGet = BaseHold.install(host: harness.host, Self.isMiniGamePublicGET)
         let after = Task { await store.loadSettings() }
-        #expect(await baseWaitUntil { harness.requests.filter(Self.isMiniGamePublicGET).count == 3 })
+        #expect(await miniGet.waitHeld())
         store.setMiniGamePublic(false)
         #expect(await baseWaitUntil { store.savingPrivacyKeys.isEmpty })
+        #expect(await miniGet.releaseAndWaitDelivered())
         await after.value
         #expect(store.miniGamePublic == false, "저장이 끝난 뒤 도착한 옛 미니게임 GET 이 스위치를 켰다")
         #expect(store.tokenUsagePublic, "이번에 안 건드린 토큰 칸은 서버값(스텁은 공개)을 따른다")
@@ -145,11 +157,15 @@ struct MeStoreRaceTests {
         #expect(store.tokenUsagePublic && store.miniGamePublic, "건드리지 않은 칸은 서버값(공개)을 따라야 한다")
 
         // ④ 저장이 떠 있는 **동안 나간** GET 이 저장이 끝난 뒤 도착: 서버가 저장 전에 읽었을 수 있으니 믿지 않는다(스텁은 옛 값 공개).
-        tokenDelay.mutate { $0 = 0.6 }
-        patchDelay.mutate { $0 = 0.2 }
+        let patch4 = BaseHold.install(host: harness.host, Self.isProfilePATCH)
+        let tokenGet4 = BaseHold.install(host: harness.host, Self.isTokenSettingsGET)
         store.setTokenUsagePublic(false)
+        #expect(await patch4.waitHeld())
         let sentDuringSave = Task { await store.loadSettings() }
+        #expect(await tokenGet4.waitHeld())
+        #expect(await patch4.releaseAndWaitDelivered())
         #expect(await baseWaitUntil { store.savingPrivacyKeys.isEmpty })
+        #expect(await tokenGet4.releaseAndWaitDelivered())
         await sentDuringSave.value
         #expect(store.tokenUsagePublic == false, "저장 중에 나가 저장 뒤 도착한 옛 GET 이 스위치를 켰다")
         harness.expectNoForbiddenCalls()
@@ -163,18 +179,20 @@ struct MeStoreRaceTests {
             if request.rpcName == "shop_state" {
                 return .json(#"{"ruby_balance":40,"characters":[{"id":"fox","price":30,"owned":true},{"id":"shiba","price":30,"owned":true}]}"#)
             }
-            if Self.isEquippedGET(request) { return Self.delayed(#"[{"character":"fox"}]"#, 0.5) }
+            if Self.isEquippedGET(request) { return .json(#"[{"character":"fox"}]"#) }
             if request.rpcName == "set_character" { return .json(#"{"status":"ok","character":"shiba"}"#) }
             return nil
         }
         defer { harness.tearDown() }
         let store = harness.me
         await store.loadShop()
+        let getHold = BaseHold.install(host: harness.host, Self.isEquippedGET)
         store.charactersDidAppear()
-        #expect(await baseWaitUntil { harness.requests.filter(Self.isEquippedGET).count == 1 })
+        #expect(await getHold.waitHeld())
         store.chooseCharacter("shiba")
         #expect(await baseWaitUntil { store.savingCharacterID == nil && store.equippedServerID == "shiba" })
-        try await Task.sleep(for: .milliseconds(700))
+        #expect(await getHold.releaseAndWaitDelivered())
+        await harness.quiesceMe()
         #expect(store.equippedCharacterID == "shiba", "서버엔 시바를 입혔는데 화면은 \(store.equippedCharacterID)")
         #expect(store.equippedLoaded)
         harness.expectNoForbiddenCalls()
@@ -182,35 +200,40 @@ struct MeStoreRaceTests {
 
     @Test("MU2 저장 중에 나간 착용 GET: 저장 중 도착하면 표시를 흔들지 않고 · 저장 뒤 도착해도 덮지 않는다")
     func equippedGetSentDuringSave() async throws {
-        let getDelay = BaseLockedBox(0.1)
-        let setDelay = BaseLockedBox(0.6)
         let harness = await RankMeHarness(label: "fix-mu2") { request in
-            if Self.isEquippedGET(request) { return Self.delayed(#"[{"character":"fox"}]"#, getDelay.get()) }
+            if Self.isEquippedGET(request) { return .json(#"[{"character":"fox"}]"#) }
             if request.rpcName == "set_character" {
                 let body = request.bodyText.contains("shiba") ? #"{"status":"ok","character":"shiba"}"# : #"{"status":"ok","character":"ghost"}"#
-                return Self.delayed(body, setDelay.get())
+                return .json(body)
             }
             return nil
         }
         defer { harness.tearDown() }
         let store = harness.me
-        // 착용값을 아직 모르는 채로(상점도 안 읽음 → 막지 않는다) 고른다.
+        // 착용값을 아직 모르는 채로(상점도 안 읽음 → 막지 않는다) 고른다. 저장은 붙잡아 둔다.
         #expect(!store.equippedLoaded)
+        let save1 = BaseHold.rpc("set_character", host: harness.host)
         store.chooseCharacter("shiba")
         #expect(store.savingCharacterID == "shiba")
+        #expect(await save1.waitHeld())
         let during = Task { await store.loadEquippedCharacter() }
         await during.value
-        #expect(store.savingCharacterID == "shiba", "전제: 저장이 아직 떠 있다")
+        #expect(store.savingCharacterID == "shiba" && save1.finished == 0, "전제: 저장이 아직 떠 있다")
         #expect(store.equippedServerID == nil && !store.equippedLoaded, "저장 중 도착한 GET 이 표시를 옛 값(fox)으로 세웠다")
+        #expect(await save1.releaseAndWaitDelivered())
         #expect(await baseWaitUntil { store.savingCharacterID == nil })
         #expect(store.equippedCharacterID == "shiba")
 
         // 저장 중에 나간 GET 이 저장이 끝난 **뒤** 도착.
-        getDelay.mutate { $0 = 0.7 }
-        setDelay.mutate { $0 = 0.2 }
+        let save2 = BaseHold.rpc("set_character", host: harness.host)
+        let get2 = BaseHold.install(host: harness.host, Self.isEquippedGET)
         store.chooseCharacter("ghost")
+        #expect(await save2.waitHeld())
         let late = Task { await store.loadEquippedCharacter() }
+        #expect(await get2.waitHeld())
+        #expect(await save2.releaseAndWaitDelivered())
         #expect(await baseWaitUntil { store.savingCharacterID == nil && store.equippedServerID == "ghost" })
+        #expect(await get2.releaseAndWaitDelivered())
         await late.value
         #expect(store.equippedCharacterID == "ghost", "저장 뒤 도착한 옛 GET 이 착용을 \(store.equippedCharacterID) 로 되돌렸다")
     }
@@ -220,17 +243,20 @@ struct MeStoreRaceTests {
     @Test("R3 머리 GET 이 별명 저장보다 늦게 와도 방금 바꾼 이름을 되돌리지 않는다 · 센터는 채우고 로딩은 끝난다")
     func lateHeaderAfterDisplayNameSave() async throws {
         let harness = await RankMeHarness(label: "fix-r3") { request in
-            if Self.isHeaderGET(request) { return Self.delayed(#"[{"display_name":"옛이름","avatar_url":null}]"#, 0.5) }
+            if Self.isHeaderGET(request) { return .json(#"[{"display_name":"옛이름","avatar_url":null}]"#) }
             if request.path == "/rest/v1/profiles", request.query.contains("select=center") { return .json(#"[{"center":"busan"}]"#) }
             if request.rpcName == "set_display_name" { return .json(#"{"status":"ok","display_name":"새이름"}"#) }
             return nil
         }
         defer { harness.tearDown() }
         let store = harness.me
+        let headerHold = BaseHold.install(host: harness.host, Self.isHeaderGET)
         let header = Task { await store.loadHeader() }
         #expect(await baseWaitUntil { store.headerState.isLoading })
+        #expect(await headerHold.waitHeld())
         store.displayNameDraft = "새이름"
         #expect(await store.saveDisplayName())
+        #expect(await headerHold.releaseAndWaitDelivered())
         await header.value
         #expect(store.displayName == "새이름", "저장 성공 뒤 늦은 머리 응답이 이름을 되돌렸다")
         #expect(store.centerServerValue == "busan")
@@ -240,18 +266,21 @@ struct MeStoreRaceTests {
     @Test("R5 머리 GET 이 사진 업로드보다 늦게 와도 방금 올린 사진(캐시버스터 URL)을 되돌리지 않는다")
     func lateHeaderAfterAvatarUpload() async throws {
         let harness = await RankMeHarness(label: "fix-r5") { request in
-            if Self.isHeaderGET(request) { return Self.delayed(#"[{"display_name":"새벽","avatar_url":"https://example.invalid/old.jpg"}]"#, 0.6) }
+            if Self.isHeaderGET(request) { return .json(#"[{"display_name":"새벽","avatar_url":"https://example.invalid/old.jpg"}]"#) }
             if request.path.hasPrefix("/storage/v1/object/avatars/") { return .json(#"{"Key":"avatars/x.jpg"}"#) }
             if request.path == "/rest/v1/profiles", request.method == "PATCH" { return Self.noContent() }
             return nil
         }
         defer { harness.tearDown() }
         let store = harness.me
+        let headerHold = BaseHold.install(host: harness.host, Self.isHeaderGET)
         let header = Task { await store.loadHeader() }
         #expect(await baseWaitUntil { store.headerState.isLoading })
+        #expect(await headerHold.waitHeld())
         await store.uploadAvatar(imageData: try MeStoreTests.pngData(width: 400, height: 400))
         let uploaded = try #require(store.avatarURL?.absoluteString)
         #expect(uploaded.contains("?v="))
+        #expect(await headerHold.releaseAndWaitDelivered())
         await header.value
         #expect(store.avatarURL?.absoluteString == uploaded, "업로드 성공 뒤 늦은 머리 응답이 옛 사진으로 되돌렸다")
         #expect(store.displayName == "새벽", "건드리지 않은 이름은 머리 응답을 따른다")
@@ -263,39 +292,40 @@ struct MeStoreRaceTests {
     @Test("MU9 쿨타임 GET: 별명 저장 중 도착하면 잠금 안내를 세우지 않고 · 저장 전에 나가 저장 뒤 도착해도 새 잠금을 풀지 않는다")
     func cooldownGetVersusDisplayNameSave() async throws {
         let changedAt = BaseLockedBox(RankMeFixture.iso(RankMeFixture.now.addingTimeInterval(-86_400)))
-        let getDelay = BaseLockedBox(0.1)
-        let setDelay = BaseLockedBox(0.6)
         let harness = await RankMeHarness(label: "fix-mu9") { request in
             if Self.isCooldownGET(request) {
-                return Self.delayed(#"[{"display_name_changed_at":"\#(changedAt.get())"}]"#, getDelay.get())
+                return .json(#"[{"display_name_changed_at":"\#(changedAt.get())"}]"#)
             }
-            if request.rpcName == "set_display_name" { return Self.delayed(#"{"status":"ok","display_name":"새이름"}"#, setDelay.get()) }
+            if request.rpcName == "set_display_name" { return .json(#"{"status":"ok","display_name":"새이름"}"#) }
             return nil
         }
         defer { harness.tearDown() }
         let store = harness.me
-        // ① 저장 중(0.6초)에 도착한 쿨타임 GET(하루 전에 바꿨다 = 잠김)은 저장 중 화면을 건드리지 않는다.
+        // ① 저장 중(붙잡힘)에 도착한 쿨타임 GET(하루 전에 바꿨다 = 잠김)은 저장 중 화면을 건드리지 않는다.
+        let saveHold = BaseHold.rpc("set_display_name", host: harness.host)
         store.displayNameDraft = "새이름"
         let save = Task { await store.saveDisplayName() }
         #expect(await baseWaitUntil { store.isUpdatingDisplayName })
+        #expect(await saveHold.waitHeld())
         await store.loadDisplayNameCooldown()
-        #expect(store.isUpdatingDisplayName, "전제: 저장이 아직 떠 있다")
+        #expect(store.isUpdatingDisplayName && saveHold.finished == 0, "전제: 저장이 아직 떠 있다")
         #expect(store.displayNameAvailableAt == nil && store.displayNameNotice == nil, "저장 중 도착한 GET 이 잠금 안내를 세웠다")
+        #expect(await saveHold.releaseAndWaitDelivered())
         #expect(await save.value)
         let unlock = MeText.displayNameUnlockDate(changedAt: harness.clock.now)
         #expect(store.displayNameAvailableAt == unlock)
 
         // ② 저장 **전**에 나간 GET(30일 전 = 안 잠김)이 저장이 끝난 뒤 도착해도 방금 생긴 잠금을 풀지 않는다.
         changedAt.mutate { $0 = RankMeFixture.iso(RankMeFixture.now.addingTimeInterval(-30 * 86_400)) }
-        getDelay.mutate { $0 = 0.6 }
-        setDelay.mutate { $0 = 0 }
         harness.clock.advance(8 * 86_400)
         #expect(!store.isDisplayNameLocked)
+        let getHold = BaseHold.install(host: harness.host, Self.isCooldownGET)
         let late = Task { await store.loadDisplayNameCooldown() }
-        #expect(await baseWaitUntil { harness.requests.filter(Self.isCooldownGET).count == 2 })
+        #expect(await getHold.waitHeld())
         store.displayNameDraft = "더새이름"
         #expect(await store.saveDisplayName())
         #expect(store.isDisplayNameLocked)
+        #expect(await getHold.releaseAndWaitDelivered())
         await late.value
         #expect(store.isDisplayNameLocked, "저장 뒤 도착한 옛 쿨타임 GET 이 잠금을 풀었다")
         #expect(store.displayNameAvailableAt == MeText.displayNameUnlockDate(changedAt: harness.clock.now))
@@ -312,9 +342,10 @@ struct MeStoreRaceTests {
         #expect(await baseWaitUntil { store.headerState.hasLoaded && store.shopState.hasLoaded && store.recordsState.hasLoaded && store.equippedLoaded })
         #expect(harness.requests(rpc: "shop_state").count == 1)
 
+        await harness.quiesceMe()
         harness.clock.advance(MeStore.staleSeconds - 1)
         store.appDidBecomeActive()
-        try await Task.sleep(for: .milliseconds(80))
+        await harness.quiesceMe()
         #expect(harness.requests(rpc: "shop_state").count == 1, "신선한 루트를 active 에서 다시 읽었다")
 
         harness.clock.advance(2)
@@ -443,7 +474,7 @@ struct MeStoreRaceTests {
         let harness = await RankMeHarness(label: "fix-mu10") { request in
             if request.rpcName == "shop_state" { return .json(MeStoreTests.shopState) }
             if request.rpcName == "buy_character" {
-                return Self.delayed(#"{"status":"ok","character":"ghost","price":30,"ruby_balance":10}"#, 0.4)
+                return .json(#"{"status":"ok","character":"ghost","price":30,"ruby_balance":10}"#)
             }
             if request.rpcName == "unregister_device" { return .json(#"{"status":"ok","removed":true}"#) }
             if request.path == "/auth/v1/logout" { return .json("{}") }
@@ -467,11 +498,17 @@ struct MeStoreRaceTests {
         #expect(!store.ownedCharacterIDs.contains("ghost") && store.rubyBalance == 40)
         store.selectShopItem("ghost")
         let oldGeneration = store.context.generation
+        let buyHold = BaseHold.rpc("buy_character", host: harness.host)
         store.confirmPurchase()
         #expect(store.purchasingID == "ghost")
-        #expect(await baseWaitUntil { !harness.requests(rpc: "buy_character").isEmpty })
+        #expect(await buyHold.waitHeld())
+        let purchaseTasks = store.inflight
         await harness.model.session.signOut()
-        try await Task.sleep(for: .milliseconds(600))
+        // 로그아웃(reset)이 구매 작업을 취소했다. 붙잡힌 응답은 로그아웃 **뒤에** 놓고(취소가 URL 계층에 닿았으면 넘길 것이 없다),
+        // 그 작업이 끝난 뒤에 잰다.
+        #expect(await buyHold.releaseAndWaitDelivered())
+        for task in purchaseTasks { await task.value }
+        await harness.barrier()
         #expect(!harness.model.session.isSignedIn)
         #expect(harness.model.gomokuHost.rubyBalance == nil && store.ownedCharacterIDs == [MeCharacterCards.aingID])
 

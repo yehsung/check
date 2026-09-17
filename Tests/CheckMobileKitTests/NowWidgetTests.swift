@@ -319,7 +319,8 @@ import Testing
         #expect(outcome == .synced)
         let requests = MobileStubURLProtocol.requests(host: host)
         #expect(requests.map(\.path) == ["/rest/v1/rpc/todo_sync"])
-        #expect(BaseStub.bearer(requests[0]).hasPrefix("Bearer "))
+        let sync = try #require(requests.first, "todo_sync 가 나가지 않았다 — 인덱스 읽기 전에 멈춘다")
+        #expect(BaseStub.bearer(sync).hasPrefix("Bearer "))
         #expect(MobileForbiddenCalls.violations(in: requests).isEmpty)
 
         // 401 이면 갱신하지 않고 한 번으로 끝난다.
@@ -351,6 +352,7 @@ import Testing
             clock: .fixed(Self.now), installationID: MobileDemo.installationID, realtimeTransport: nil,
             runsTimers: false, reloadWidgetTimelines: {}
         ))
+        model.session.clientReleaseTimeoutSeconds = 0   // 벽시계 상한 없음
         model.start()
         #expect(await baseWaitUntil { model.session.phase == .signedIn })
         model.sceneDidBecomeActive()
@@ -364,6 +366,7 @@ import Testing
         #expect(NowFormat.clock(card.todaySeconds) == "5:10:00")
         let people = store.workingPeople(now: Self.now)
         #expect(people.map(\.name) == ["민트", "보리", "라임", "모래", "코랄", "하늘"])
+        try #require(people.count >= 2, "근무 중 목록이 안 섰다 — 인덱스 읽기 전에 멈춘다")
         #expect(people[1].isStale)
         let rows = store.todoRows()
         #expect(rows.main.map(\.carryBadge) == [nil, "어제", "3일 전", nil])

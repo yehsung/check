@@ -25,17 +25,23 @@ import Testing
         let h = PushHarness(label: "push-badge-markread")
         h.system.status = .authorized
         defer { h.tearDown() }
-        h.setRPC("client_release", .json(#"{"status":"ok","platform":"ios","min_build":1,"latest_build":1}"#, delay: 0.2))
+        h.setRPC("client_release", .json(#"{"status":"ok","platform":"ios","min_build":1,"latest_build":1}"#))
         h.setRPC("mark_messages_read", .json(#"{"status":"ok","advanced":true,"unread":2}"#))
         h.setRPC("message_unread_summary", PushHarness.unreadSummary(total: 2))
         h.setRPC("gomoku_inbox", Self.inboxEmpty)
 
+        // 실행 복원을 client_release 에서 붙잡아 둔 채 액션이 온다.
+        let slowRelease = BaseHold.rpc("client_release", host: h.host)
         let model = h.makeRestoredModel()
         #expect(model.session.phase == .launching)
-        try? await Task.sleep(for: .milliseconds(100))
+        let action = Task { await model.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .markRead) }
+        #expect(await slowRelease.waitHeld())
+        await baseYield()
+        #expect(model.session.phase == .launching, "전제: 복원이 아직 떠 있다")
         #expect(h.system.badgeCounts.isEmpty, "실행 복원 중에 모르는 값을 적었다")
+        #expect(await slowRelease.releaseAndWaitDelivered())
 
-        await model.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .markRead)
+        await action.value
         #expect(model.session.isSignedIn)
         #expect(h.system.badgeCounts == [2], "남은 안 읽은 2건 — 0 을 먼저 적거나 지웠다: \(h.system.badgeCounts)")
         #expect(model.push.badgeState == .server)
@@ -111,7 +117,9 @@ import Testing
         update.setRPC("client_release", .json(#"{"status":"ok","platform":"ios","min_build":99,"latest_build":99}"#))
         let updating = update.makeRestoredModel()
         #expect(await baseWaitUntil { if case .needsUpdate = updating.session.phase { return true } else { return false } })
-        try? await Task.sleep(for: .milliseconds(100))
+        await updating.push.pendingBadgeConfirmation?.value
+        await baseYield()
+        await baseBarrier(updating.context.service)
         #expect(update.system.badgeCounts.isEmpty, "업데이트 화면에서 앞 실행의 배지를 지웠다")
 
         let empty = PushHarness(label: "push-badge-empty")
@@ -139,15 +147,19 @@ import Testing
         model.sceneDidBecomeActive()
         await model.push.pendingBadgeConfirmation?.value
         #expect(model.push.badgeState == .unknown)
-        try? await Task.sleep(for: .milliseconds(50))
+        await baseYield()
+        await baseBarrier(model.context.service)
         #expect(h.system.badgeCounts.isEmpty, "오프라인 활성화에서 읽지 못한 0 을 적었다")
 
-        // 망이 돌아오고 오목 신청 알림이 앞에서 왔다 → 확인을 다시 하고, 답한 뒤에 적는다.
+        // 망이 돌아오고 오목 신청 알림이 앞에서 왔다 → 확인을 다시 하고, 답한 뒤에 적는다(요약을 붙잡아 "답하기 전"을 사건으로).
         badges.messages = 2
-        h.setRPC("message_unread_summary", PushHarness.unreadSummary(total: 2, delay: 0.3))
+        h.setRPC("message_unread_summary", PushHarness.unreadSummary(total: 2))
+        let summaryHold = BaseHold.rpc("message_unread_summary", host: h.host)
         _ = model.push.presentation(for: PushPayload(userInfo: PushHarness.gomokuUserInfo()))
-        try? await Task.sleep(for: .milliseconds(100))
+        #expect(await summaryHold.waitHeld())
+        await baseYield()
         #expect(h.system.badgeCounts.isEmpty, "요약이 답하기 전에 적었다")
+        #expect(await summaryHold.releaseAndWaitDelivered())
         await model.push.pendingBadgeConfirmation?.value
         #expect(model.push.badgeState == .stores)
         #expect(h.system.badgeCounts == [2])

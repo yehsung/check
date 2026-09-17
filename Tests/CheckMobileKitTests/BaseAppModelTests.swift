@@ -64,6 +64,7 @@ import Testing
             #expect(environment.isDemo)
             #expect(environment.clock.now() == MobileClock.demoInstant)
             let model = MobileAppModel(environment: environment)
+            model.session.clientReleaseTimeoutSeconds = 0   // 벽시계 상한 없음(update 장면은 client_release 답에 달렸다)
             model.start()
             #expect(await baseWaitUntil { model.session.phase == expected }, "\(route): \(model.session.phase)")
             if route == "rankings/tokens" {
@@ -71,7 +72,8 @@ import Testing
                 #expect(model.router.consumePendingRoute(for: .rankings) == .rankings(.tokens))
                 #expect(await baseWaitUntil { model.session.profile?.teamName == "아잉 데모팀" })
             }
-            try? await Task.sleep(for: .milliseconds(100))
+            await model.session.pendingDeviceRegistration?.value
+            await baseBarrier(model.context.service)
             #expect(MobileForbiddenCalls.violations(in: MobileStubURLProtocol.requests(host: MobileDemo.host)).isEmpty)
         }
         BaseStub.tearDown(host: MobileDemo.host, storage: .temporary(name: "demo"))

@@ -56,11 +56,12 @@ enum BaseStub {
         "\(label)-\(UUID().uuidString.lowercased().prefix(12)).stub.invalid"
     }
 
+    /// 응답 붙잡기(`BaseHold`)가 스텁 앞에 서는 세션. 붙잡기를 걸지 않은 호스트는 곧바로 스텁으로 간다.
     static func makeService(host: String) -> SupabaseWorkService {
         SupabaseWorkService(
             projectURL: URL(string: "https://\(host)")!,
             anonKey: "stub-anon-key",
-            session: MobileStubURLProtocol.makeSession()
+            session: BaseHoldURLProtocol.makeSession()
         )
     }
 
@@ -71,6 +72,7 @@ enum BaseStub {
     }
 
     static func tearDown(host: String, storage: AingSharedStorage) {
+        BaseHoldURLProtocol.uninstall(host: host)
         MobileStubURLProtocol.unregister(host: host)
         try? FileManager.default.removeItem(at: storage.directory)
         if let suite = storage.defaultsSuiteName {
@@ -102,20 +104,15 @@ enum BaseStub {
 
     static let appInfo = MobileAppInfo(build: 1, version: "0.1.0", osVersion: "iOS 18.0", apnsEnvironment: "sandbox")
 
+    /// 제품의 벽시계 상한(푸시의 실행 복원 대기 등)을 테스트가 재지 않을 때 넣는 값 — 포화에서도 먼저 지나지 않는다.
+    static let patientSeconds: TimeInterval = 600
+
     static func bearer(_ request: MobileStubRequest) -> String {
         request.headers["Authorization"] ?? request.headers["authorization"] ?? ""
     }
 }
 
-@MainActor
-func baseWaitUntil(timeout: TimeInterval = 5, _ condition: @MainActor () -> Bool) async -> Bool {
-    let deadline = Date().addingTimeInterval(timeout)
-    while Date() < deadline {
-        if condition() { return true }
-        try? await Task.sleep(for: .milliseconds(10))
-    }
-    return condition()
-}
+// `baseWaitUntil` · `baseYield` · `BaseHold` · `baseBarrier` · `BaseGate` 는 BaseLoadSupport.swift(부하 내성 — 벽시계 대기 없음).
 
 /// 테스트용 소켓: 명령을 기록하고, 테스트가 `emit` 으로 사건을 넣는다.
 @MainActor

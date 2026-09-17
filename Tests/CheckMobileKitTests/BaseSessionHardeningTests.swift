@@ -16,7 +16,7 @@ import Testing
         let vault: InMemoryTokenVault
         let clock: BaseTestClock
 
-        var requests: [MobileStubRequest] { MobileStubURLProtocol.requests(host: host) }
+        var requests: [MobileStubRequest] { baseRequests(host: host) }
 
         func paths() -> [String] {
             requests.map { $0.rpcName.map { "rpc/\($0)" } ?? $0.path }
@@ -26,9 +26,10 @@ import Testing
             requests.filter(filter).map { BaseStub.bearer($0).replacingOccurrences(of: "Bearer ", with: "") }
         }
 
+        /// 벽시계 상한(client_release)은 끈다 — 상한 자체를 재는 테스트가 따로 넣는다.
         @MainActor
         func makeSession() -> MobileSessionStore {
-            MobileSessionStore(
+            let session = MobileSessionStore(
                 service: BaseStub.makeService(host: host),
                 vault: vault,
                 storage: storage,
@@ -36,11 +37,13 @@ import Testing
                 installationID: BaseSessionHardeningTests.installation,
                 clock: clock.clock
             )
+            session.clientReleaseTimeoutSeconds = 0
+            return session
         }
 
         @MainActor
         func makeModel(transport: BaseFakeTransport? = nil) -> MobileAppModel {
-            MobileAppModel(environment: MobileEnvironment(
+            let model = MobileAppModel(environment: MobileEnvironment(
                 service: BaseStub.makeService(host: host),
                 vault: vault,
                 storage: storage,
@@ -51,6 +54,8 @@ import Testing
                 runsTimers: false,
                 reloadWidgetTimelines: {}
             ))
+            model.session.clientReleaseTimeoutSeconds = 0
+            return model
         }
 
         func tearDown() { BaseStub.tearDown(host: host, storage: storage) }
@@ -262,21 +267,21 @@ import Testing
     @Test("실행 복원 중(launching)에 온 딥링크는 붙잡아 두었다가 로그인 상태가 되면 연다")
     func deepLinkDuringLaunchOpensAfterRestore() async {
         let access = BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(3600))
-        let h = makeHarness(label: "fix-link", access: access, responder: Self.server { request in
-            guard request.rpcName == "client_release" else { return nil }
-            var slow = BaseStub.releaseOK
-            slow.delay = 0.3   // 실서버 왕복 흉내 — 그 사이 onOpenURL 이 먼저 온다
-            return slow
-        })
+        let h = makeHarness(label: "fix-link", access: access, responder: Self.server())
         defer { h.tearDown() }
+        // 실서버 왕복 흉내 — client_release 를 붙잡아 둔 사이 onOpenURL 이 먼저 온다.
+        let slowRelease = BaseHold.rpc("client_release", host: h.host)
         let model = h.makeModel()
 
         // MobileRootView.onAppear 순서 그대로: start() → scenePhase active → (콜드 스타트 URL) onOpenURL
         model.start()
         model.sceneDidBecomeActive()
         #expect(model.session.phase == .launching)
+        #expect(await slowRelease.waitHeld())
+        #expect(model.session.phase == .launching)
         #expect(model.handleOpenURL(URL(string: "aingcheck://message/peer-42")!), "복원 중 링크를 버렸다")
         #expect(model.router.selectedTab == .now, "로그인 전에 탭을 바꾸면 안 된다")
+        #expect(await slowRelease.releaseAndWaitDelivered())
 
         #expect(await baseWaitUntil { model.session.phase == .signedIn })
         #expect(model.router.selectedTab == .messages)
@@ -287,19 +292,18 @@ import Testing
     func deepLinkDuringLaunchIsDroppedWhenSignedOut() async {
         let fresh = BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(3600))
         let h = makeHarness(label: "fix-link-out", access: nil, responder: Self.server { request in
-            if request.rpcName == "client_release" {
-                var slow = BaseStub.releaseOK
-                slow.delay = 0.3
-                return slow
-            }
             if request.path == "/auth/v1/token" { return BaseStub.authResponse(access: fresh, refresh: "r", userID: "user-1") }
             return nil
         })
         defer { h.tearDown() }
+        let slowRelease = BaseHold.rpc("client_release", host: h.host)
         let model = h.makeModel()
         model.start()
         model.sceneDidBecomeActive()
+        #expect(await slowRelease.waitHeld())
+        #expect(model.session.phase == .launching)
         _ = model.handleOpenURL(URL(string: "aingcheck://gomoku/invite/match-1")!)
+        #expect(await slowRelease.releaseAndWaitDelivered())
         #expect(await baseWaitUntil { model.session.phase == .signedOut })
         #expect(model.router.selectedTab == .now)
         #expect(!model.handleOpenURL(URL(string: "aingcheck://message/p1")!), "로그아웃 상태에서 링크를 열었다")
@@ -320,9 +324,7 @@ import Testing
         let h = makeHarness(label: "fix-rt", access: first, refresh: "r-first", responder: Self.server { request in
             guard request.path == "/auth/v1/token" else { return nil }
             if request.queryValue("grant_type") == "refresh_token" {
-                var slow = BaseStub.authResponse(access: refreshed, refresh: "r-refreshed", userID: "user-1")
-                slow.delay = 0.8
-                return slow
+                return BaseStub.authResponse(access: refreshed, refresh: "r-refreshed", userID: "user-1")
             }
             return BaseStub.authResponse(access: second, refresh: "r-second", userID: "user-1")
         })
@@ -334,15 +336,18 @@ import Testing
         model.sceneDidBecomeActive()
         #expect(transport.connects.count == 1)
 
-        transport.emit(.joinRejected(.expiredToken))   // → .refreshToken → refreshForRealtime(0.8초)
-        #expect(await baseWaitUntil { MobileStubURLProtocol.requests(host: h.host).contains { $0.queryValue("grant_type") == "refresh_token" } })
+        // 옛 갱신 응답을 붙잡아 두었다가 재로그인 뒤에 놓는다.
+        let refreshHold = BaseHold.install(host: h.host, limit: 1) { $0.path == "/auth/v1/token" && $0.queryValue("grant_type") == "refresh_token" }
+        transport.emit(.joinRejected(.expiredToken))   // → .refreshToken → refreshForRealtime(붙잡힘)
+        #expect(await refreshHold.waitHeld())
         await model.session.signOut()
         await model.session.signIn(email: "a@b.c", password: "pw")
         #expect(model.session.phase == .signedIn)
         #expect(transport.connects.count == 2)
         let disconnectsBefore = transport.disconnectCount
 
-        try? await Task.sleep(for: .milliseconds(1200))   // 옛 갱신 응답 도착
+        #expect(await refreshHold.releaseAndWaitDelivered())   // 옛 갱신 응답 도착
+        await baseBarrier(model.context.service)
         #expect(model.realtime.state != .idle(.signedOut), "옛 세대의 갱신 결과가 새 세션의 링을 로그아웃으로 접었다: \(model.realtime.state)")
         #expect(transport.disconnectCount == disconnectsBefore)
         transport.emit(.joined)
@@ -355,28 +360,25 @@ import Testing
     @Test("client_release 가 느리면 짧은 제한 시간 뒤 키체인 복원으로 넘어간다 — 대조: 제한 안에 온 최소 빌드는 여전히 막는다")
     func slowClientReleaseDoesNotHoldLaunch() async {
         let access = BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(3600))
-        let slow = makeHarness(label: "fix-slow", access: access, responder: Self.server { request in
-            guard request.rpcName == "client_release" else { return nil }
-            var response = BaseStub.releaseOK
-            response.delay = 2.0
-            return response
-        })
+        let slow = makeHarness(label: "fix-slow", access: access, responder: Self.server())
         defer { slow.tearDown() }
+        // client_release 응답을 붙잡는다(끝내 안 오는 느린 망). 벽시계로 "몇 초 안에 끝났다"를 재지 않고,
+        // 응답이 **넘어가기 전에** launch 가 복원으로 끝났다는 사건 순서로 잰다.
+        let neverAnswers = BaseHold.rpc("client_release", host: slow.host)
         let session = slow.makeSession()
         session.clientReleaseTimeoutSeconds = 0.3
-        let started = Date()
         await session.launch()
-        let elapsed = Date().timeIntervalSince(started)
         #expect(session.phase == .signedIn)
-        #expect(elapsed < 1.5, "느린 client_release 를 \(elapsed)초 기다렸다")
+        #expect(neverAnswers.held == 1 && neverAnswers.delivered == 0, "느린 client_release 의 응답을 기다린 뒤에야 복원했다")
 
+        // 대조: 상한 안에 온 최소 빌드는 여전히 막는다(상한은 포화에서도 먼저 지나지 않게 넉넉히).
         let blocked = makeHarness(label: "fix-slow-min", access: access, responder: Self.server { request in
             guard request.rpcName == "client_release" else { return nil }
-            return .json(#"{"status":"ok","platform":"ios","min_build":5,"latest_build":6}"#, delay: 0.05)
+            return .json(#"{"status":"ok","platform":"ios","min_build":5,"latest_build":6}"#)
         })
         defer { blocked.tearDown() }
         let gated = blocked.makeSession()
-        gated.clientReleaseTimeoutSeconds = 0.3
+        gated.clientReleaseTimeoutSeconds = BaseStub.patientSeconds
         await gated.launch()
         #expect(gated.phase == .needsUpdate(minBuild: 5))
         #expect(MobileSessionStore.defaultClientReleaseTimeoutSeconds <= 5, "기본 제한이 운영 요청 타임아웃(15초)과 같으면 고친 것이 아니다")

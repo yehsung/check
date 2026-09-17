@@ -29,20 +29,25 @@ import Testing
 
         h.model.sceneDidBecomeActive()
         // 활성화 새로고침(메시지 탭)이 나갔다 — 자리 스토어가 아니라 실제 메시지 탭 스토어가 앱 모델에 있다.
-        #expect(await baseWaitUntil(timeout: 1.5) {
+        #expect(await baseWaitUntil {
             h.requests().contains { ["message_unread_summary", "message_history_with_reads", "message_history"].contains($0.rpcName ?? "") }
         }, "활성화에서 메시지 탭이 아무것도 읽지 않았다 — 앱 모델의 메시지 스토어가 자리 스토어인가")
-        try? await Task.sleep(for: .milliseconds(200))
+        // 활성화 새로고침(메시지·지금 탭)이 멎은 뒤에 기록을 비운다.
+        _ = await baseWaitUntil {
+            h.model.messages.pendingActivityTask == nil && !h.model.messages.isMarkingRead && !h.model.messages.directoryLoading
+                && h.model.now.refreshTask == nil
+        }
+        await h.barrier()
 
         h.clearRequests()
         #expect(h.push.presentation(for: PushPayload(userInfo: PushHarness.messageUserInfo())) == .banner)
-        #expect(await baseWaitUntil(timeout: 1.5) { !h.calls("message_unread_summary").isEmpty },
+        #expect(await baseWaitUntil { !h.calls("message_unread_summary").isEmpty },
                 "포그라운드 메시지 푸시가 메시지 탭 새로고침(message_unread_summary)으로 이어지지 않았다")
 
         h.clearRequests()
         await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .markRead)
         #expect(h.calls("mark_messages_read").count == 1)
-        #expect(await baseWaitUntil(timeout: 1.5) { !h.calls("message_unread_summary").isEmpty }, "읽음 액션 뒤 메시지 탭 새로고침이 없었다")
+        #expect(await baseWaitUntil { !h.calls("message_unread_summary").isEmpty }, "읽음 액션 뒤 메시지 탭 새로고침이 없었다")
 
         // 배너 숨김은 메시지 탭이 대화 화면 표시에 맞춰 적는 router.visibleConversationPeerID 를 읽는다(두 탭 사이 배선).
         let token = UUID()
@@ -67,9 +72,9 @@ import Testing
         #expect(h.model.me.badgeCount == 0)
 
         _ = h.push.presentation(for: PushPayload(userInfo: PushHarness.feedbackUserInfo()))
-        #expect(await baseWaitUntil(timeout: 1.5) { !h.calls("feedback_reply_latest").isEmpty },
+        #expect(await baseWaitUntil { !h.calls("feedback_reply_latest").isEmpty },
                 "제보 답장 푸시가 나 탭 새로고침(feedback_reply_latest)으로 이어지지 않았다")
-        #expect(await baseWaitUntil(timeout: 1.5) { h.model.me.badgeCount == 1 }, "새 답장 표시가 서지 않았다")
+        #expect(await baseWaitUntil { h.model.me.badgeCount == 1 }, "새 답장 표시가 서지 않았다")
         #expect(h.calls("feedback_list").isEmpty, "목록을 한 번도 안 연 채면 목록까지 읽지 않는다")
 
         await h.push.handleResponse(PushPayload(userInfo: PushHarness.feedbackUserInfo()), action: .open)
@@ -90,7 +95,7 @@ import Testing
         h.setRPC("gomoku_inbox", PushBadgeTests.inboxWithInvite(now: h.clock.now))
         h.clearRequests()
         _ = h.push.presentation(for: PushPayload(userInfo: PushHarness.gomokuUserInfo()))
-        #expect(await baseWaitUntil(timeout: 2) { h.model.games.badgeCount == 1 }, "받은 신청이 게임 탭 배지에 오지 않았다")
+        #expect(await baseWaitUntil { h.model.games.badgeCount == 1 }, "받은 신청이 게임 탭 배지에 오지 않았다")
         #expect(!h.calls("gomoku_inbox").isEmpty)
         #expect(h.model.badges.badge(for: .games) == 1)
         #expect(h.model.badges.appBadgeTotal == h.model.messages.badgeCount + 1)

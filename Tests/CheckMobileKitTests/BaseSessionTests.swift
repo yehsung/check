@@ -15,7 +15,7 @@ import Testing
         let service: SupabaseWorkService
         let session: MobileSessionStore
 
-        var requests: [MobileStubRequest] { MobileStubURLProtocol.requests(host: host) }
+        var requests: [MobileStubRequest] { baseRequests(host: host) }
 
         func paths(_ filter: (MobileStubRequest) -> Bool = { _ in true }) -> [String] {
             requests.filter(filter).map { $0.rpcName.map { "rpc/\($0)" } ?? $0.path }
@@ -58,6 +58,7 @@ import Testing
             installationID: "11111111-2222-4333-8444-555555555555",
             clock: clock.clock
         )
+        session.clientReleaseTimeoutSeconds = 0   // 벽시계 상한 없음(포화에서 최소 빌드 답이 3초를 넘어도 같은 경로)
         return Harness(host: host, storage: storage, vault: vault, clock: clock, service: service, session: session)
     }
 
@@ -192,9 +193,7 @@ import Testing
         let fresh = BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(7200), salt: "fresh")
         let h = makeHarness(seedAccess: old, responder: Self.happyServer(extra: { request in
             if request.path == "/auth/v1/token" {
-                var response = BaseStub.authResponse(access: fresh, refresh: "refresh-new", userID: "user-1")
-                response.delay = 0.2
-                return response
+                return BaseStub.authResponse(access: fresh, refresh: "refresh-new", userID: "user-1")
             }
             if request.rpcName == "my_team_invite_code" {
                 return BaseStub.bearer(request) == "Bearer \(fresh)" ? .json(#"[{"invite_code":"ABC123"}]"#) : BaseStub.jwtExpired
@@ -208,6 +207,8 @@ import Testing
 
         let service = h.service
         let session = h.session
+        // 갱신 응답을 붙잡는다 — 두 요청이 모두 401 을 맞은 뒤에야 갱신이 끝난다(경합을 벽시계 지연 없이 만든다).
+        let refreshHold = BaseHold.install(host: h.host) { $0.path == "/auth/v1/token" && $0.queryValue("grant_type") == "refresh_token" }
         let first = Task { @MainActor in
             try await session.withMobileSessionRetry { current in
                 try await service.fetchMyInviteCode(accessToken: current.accessToken)
@@ -218,6 +219,9 @@ import Testing
                 try await service.fetchMyInviteCode(accessToken: current.accessToken)
             }
         }
+        #expect(await refreshHold.waitHeld())
+        #expect(await baseWaitUntil { h.count(rpc: "my_team_invite_code") == 2 }, "둘 다 옛 토큰으로 떠나지 않았다")
+        #expect(await refreshHold.releaseAndWaitDelivered())
         let results = [try await first.value, try await second.value]
         #expect(results == ["ABC123", "ABC123"])
         #expect(h.count(rpc: "my_team_invite_code") == 4, "둘 다 401 을 맞고 둘 다 재시도했다(대조: 경합이 실제로 일어났다)")
@@ -342,17 +346,17 @@ import Testing
         let access = BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(3600))
         let h = makeHarness(seedAccess: access, responder: Self.happyServer(extra: { request in
             guard request.path == "/rest/v1/memberships" else { return nil }
-            var slow = BaseStub.membershipOK
-            slow.delay = 0.4
-            return slow
+            return BaseStub.membershipOK
         }))
         defer { h.tearDown() }
+        let membershipHold = BaseHold.install(host: h.host) { $0.path == "/rest/v1/memberships" }
         await h.session.launch()
-        // launch 가 띄운 프로필 읽기(0.4초 지연)가 **서버에 닿은 뒤**(= 응답을 기다리는 중에) 로그아웃한다.
+        // launch 가 띄운 프로필 읽기가 **서버에 닿은 뒤**(= 붙잡혀 응답을 기다리는 중에) 로그아웃한다.
         // 요청이 떠나기 전에 로그아웃하면 세션 가드가 먼저 막아 세대 가드를 시험하지 못한다(변이 M9 실측).
-        #expect(await baseWaitUntil { h.requests.contains { $0.path == "/rest/v1/memberships" } })
+        #expect(await membershipHold.waitHeld())
         await h.session.signOut()
-        try? await Task.sleep(for: .milliseconds(700))
+        #expect(await membershipHold.releaseAndWaitDelivered())
+        await baseBarrier(h.service)
         #expect(h.session.profile == nil, "로그아웃 뒤 도착한 소속 응답이 프로필을 되살렸다")
         #expect(h.session.phase == .signedOut)
     }

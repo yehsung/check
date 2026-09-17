@@ -36,10 +36,12 @@ final class RankMeHarness {
     var me: MeStore { model.me }
 
     /// - responder: 요청마다 먼저 묻는다(nil 이면 기본 응답 → 없으면 404 PGRST202).
+    /// - beforeStart: 실행 복원이 시작되기 전에 호스트를 받는다(복원이 띄우는 요청을 `BaseHold` 로 붙잡을 때).
     init(
         label: String,
         clockStart: Date = RankMeFixture.now,
         waitsForProfile: Bool = true,
+        beforeStart: (String) -> Void = { _ in },
         responder: @escaping @Sendable (MobileStubRequest) -> MobileStubResponse?
     ) async {
         host = BaseStub.makeHost(label)
@@ -84,6 +86,8 @@ final class RankMeHarness {
             reloadWidgetTimelines: {}
         )
         model = MobileAppModel(environment: environment)
+        model.session.clientReleaseTimeoutSeconds = 0   // 벽시계 상한 없음(포화에서 client_release 가 3초를 넘어도 같은 경로)
+        beforeStart(host)
         model.start()
         _ = await baseWaitUntil {
             self.model.session.isSignedIn && (!waitsForProfile || self.model.session.profile?.teamID == RankMeFixture.teamID)
@@ -95,7 +99,7 @@ final class RankMeHarness {
         responses.mutate { $0[rpc, default: []].append(response) }
     }
 
-    var requests: [MobileStubRequest] { MobileStubURLProtocol.requests(host: host) }
+    var requests: [MobileStubRequest] { baseRequests(host: host) }
 
     func requests(rpc: String) -> [MobileStubRequest] {
         requests.filter { $0.rpcName == rpc }
@@ -115,6 +119,25 @@ final class RankMeHarness {
 
     func tearDown() {
         BaseStub.tearDown(host: host, storage: storage)
+    }
+
+    /// 사건 장벽(같은 서비스·세션 한 바퀴).
+    func barrier() async {
+        await baseBarrier(model.context.service)
+    }
+
+    /// 나 탭이 띄운 작업(`MeStore.launch`)이 모두 끝날 때까지 — 끝난 작업이 새로 띄운 것까지. 그 뒤 장벽.
+    func quiesceMe() async {
+        var awaited = Set<Task<Void, Never>>()
+        while true {
+            let pending = me.inflight.filter { !awaited.contains($0) }
+            if pending.isEmpty { break }
+            for task in pending {
+                await task.value
+                awaited.insert(task)
+            }
+        }
+        await barrier()
     }
 }
 

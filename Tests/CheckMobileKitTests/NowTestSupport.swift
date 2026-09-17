@@ -56,7 +56,6 @@ final class NowFakeTodoServer: @unchecked Sendable {
     private(set) var callCount = 0
     private(set) var lastChangeIDs: [String] = []
     var watermarkMs: Int64 = 1_789_621_500_000
-    var delay: TimeInterval = 0
     var failure: MobileStubResponse?
 
     func seed(_ item: [String: Any]) {
@@ -104,7 +103,7 @@ final class NowFakeTodoServer: @unchecked Sendable {
             "status": "ok", "items": items, "watermark_ms": watermarkMs, "rejected": [Any](), "full": since == nil,
         ]
         let data = (try? JSONSerialization.data(withJSONObject: object)) ?? Data("{}".utf8)
-        return MobileStubResponse(status: 200, body: data, delay: delay)
+        return MobileStubResponse(status: 200, body: data)
     }
 }
 
@@ -249,6 +248,7 @@ final class NowHarness {
             runsTimers: false,
             reloadWidgetTimelines: { reloads.mutate { $0 += 1 } }
         ))
+        model.session.clientReleaseTimeoutSeconds = 0   // 벽시계 상한 없음(포화에서 client_release 가 3초를 넘어도 같은 경로)
         store = NowStore(context: model.context, timers: scheduler, runsPeriodicRefresh: runsPeriodicRefresh)
     }
 
@@ -292,7 +292,12 @@ final class NowHarness {
         await store.refreshTask?.value
     }
 
-    var requests: [MobileStubRequest] { MobileStubURLProtocol.requests(host: host) }
+    var requests: [MobileStubRequest] { baseRequests(host: host) }
+
+    /// 사건 장벽(같은 서비스·세션 한 바퀴).
+    func barrier() async {
+        await baseBarrier(model.context.service)
+    }
 
     func requests(_ key: String) -> [MobileStubRequest] {
         requests.filter { NowStubServer.key(for: $0) == key }

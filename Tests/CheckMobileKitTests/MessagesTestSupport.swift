@@ -42,26 +42,14 @@ final class MessagesStubServer: @unchecked Sendable {
     private var sendResponse: MobileStubResponse = .json(#"{"status":"ok","body":"x","ring":"sent"}"#)
     private var markResponse: MobileStubResponse = .json(#"{"status":"ok","advanced":true,"unread":0}"#)
     private var withReadsMissing = false
-    /// 이력 요청마다 하나씩 꺼내 쓰는 (지연, 그때의 행) — 비면 지금 행을 즉시.
-    private var historyScript: [(delay: TimeInterval, rows: [Row])] = []
-    private var markDelay: TimeInterval = 0
-    private var sendDelay: TimeInterval = 0
+    /// 이력 요청마다 하나씩 꺼내 쓰는 그때의 행 — 비면 지금 행. (늦게 오는 응답은 벽시계 지연이 아니라 `BaseHold` 로 만든다.)
+    private var historyScript: [[Row]] = []
     /// RPC 이름별 덮어쓰기 응답기(nil 을 돌려주면 기본 응답). 계정 전환 · 겹친 늦은 응답 시나리오가 쓴다.
     private var overrides: [String: @Sendable (MobileStubRequest) -> MobileStubResponse?] = [:]
 
     /// `rpc` 요청에 먼저 물어볼 응답기. **잠금 밖에서** 부른다 — 응답기 안에서 이 서버의 다른 메서드를 불러도 된다.
     func override(_ rpc: String, _ responder: @escaping @Sendable (MobileStubRequest) -> MobileStubResponse?) {
         lock.lock(); overrides[rpc] = responder; lock.unlock()
-    }
-
-    /// 덮어쓴 뒤 **처음 한 번만** `first` 로 답하고(늦게 오는 앞선 응답), 그다음부터는 `rest`(nil 이면 기본 응답).
-    func overrideFirst(_ rpc: String, _ first: MobileStubResponse, then rest: MobileStubResponse? = nil) {
-        let calls = BaseLockedBox(0)
-        override(rpc) { _ in
-            var isFirst = false
-            calls.mutate { $0 += 1; isFirst = $0 == 1 }
-            return isFirst ? first : rest
-        }
     }
 
     func setRows(_ value: [Row]) { lock.lock(); rows = value; lock.unlock() }
@@ -72,9 +60,7 @@ final class MessagesStubServer: @unchecked Sendable {
     func setSend(_ response: MobileStubResponse) { lock.lock(); sendResponse = response; lock.unlock() }
     func setMark(_ response: MobileStubResponse) { lock.lock(); markResponse = response; lock.unlock() }
     func setWithReadsMissing(_ value: Bool) { lock.lock(); withReadsMissing = value; lock.unlock() }
-    func scriptHistory(_ steps: [(delay: TimeInterval, rows: [Row])]) { lock.lock(); historyScript = steps; lock.unlock() }
-    func setMarkDelay(_ value: TimeInterval) { lock.lock(); markDelay = value; lock.unlock() }
-    func setSendDelay(_ value: TimeInterval) { lock.lock(); sendDelay = value; lock.unlock() }
+    func scriptHistory(_ steps: [[Row]]) { lock.lock(); historyScript = steps; lock.unlock() }
     func setRead(peer: String) {
         lock.lock()
         rows = rows.map { row in
@@ -105,12 +91,9 @@ final class MessagesStubServer: @unchecked Sendable {
             if request.rpcName == "message_history_with_reads", withReadsMissing {
                 return .missingFunction("message_history_with_reads")
             }
-            var delay: TimeInterval = 0
             var current = rows
             if !historyScript.isEmpty {
-                let step = historyScript.removeFirst()
-                delay = step.delay
-                current = step.rows
+                current = historyScript.removeFirst()
             }
             let body = "[" + current.map { row -> String in
                 if request.rpcName == "message_history" {
@@ -121,17 +104,13 @@ final class MessagesStubServer: @unchecked Sendable {
                 }
                 return row.json
             }.joined(separator: ",") + "]"
-            return .json(body, delay: delay)
+            return .json(body)
         case "message_unread_summary":
             return summaryText.isEmpty ? .missingFunction("message_unread_summary") : .json(summaryText)
         case "mark_messages_read":
-            var response = markResponse
-            response.delay = markDelay
-            return response
+            return markResponse
         case "send_message":
-            var response = sendResponse
-            response.delay = sendDelay
-            return response
+            return sendResponse
         case "app_user_directory": return .json(directoryText)
         default: break
         }
@@ -156,6 +135,8 @@ struct MessagesHarness {
     /// 계정 전환 시나리오의 다음 계정.
     nonisolated static let secondUser = "user-two"
     nonisolated static let base = 1_789_621_000   // 2026-09-17 13:56:40 KST 무렵(데모 시계 14:05 보다 조금 앞)
+    /// 첫 계정의 access token(키체인 복원). 계정 전환 시나리오의 스텁이 "앞 계정이 띄운 요청"을 이 값으로 알아본다.
+    nonisolated static let firstAccessToken = BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(7200), subject: me)
 
     let host: String
     let storage: AingSharedStorage
@@ -164,13 +145,23 @@ struct MessagesHarness {
     let transport: BaseFakeTransport
     let model: MobileAppModel
     var store: MessagesStore { model.messages }
-    var requests: [MobileStubRequest] { MobileStubURLProtocol.requests(host: host) }
+    var requests: [MobileStubRequest] { baseRequests(host: host) }
 
     func count(_ rpc: String) -> Int { requests.filter { $0.rpcName == rpc }.count }
     func bodies(_ rpc: String) -> [String] { requests.filter { $0.rpcName == rpc }.map(\.bodyText) }
 
     func tearDown() {
         BaseStub.tearDown(host: host, storage: storage)
+    }
+
+    /// 앞 계정(키체인 복원 계정)이 보낸 요청인가.
+    nonisolated static func isFirstAccount(_ request: MobileStubRequest) -> Bool {
+        BaseStub.bearer(request) == "Bearer \(firstAccessToken)"
+    }
+
+    /// 사건 장벽(같은 서비스·세션 한 바퀴) — 늦게 넘긴 응답의 이어짐이 메인 액터에서 돈 뒤.
+    func barrier() async {
+        await baseBarrier(model.context.service)
     }
 
     /// 로그인된 채로 시작해 scene active 까지(첫 활성화 새로고침이 끝날 때까지 기다린다).
@@ -181,7 +172,7 @@ struct MessagesHarness {
         MobileStubURLProtocol.register(host: host) { server.respond($0) }
         let storage = BaseStub.makeStorage()
         let vault = InMemoryTokenVault()
-        vault.write(BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(7200), subject: me), key: AingKeychain.accessTokenKey)
+        vault.write(firstAccessToken, key: AingKeychain.accessTokenKey)
         vault.write("refresh-me", key: AingKeychain.refreshTokenKey)
         storage.defaults.set(me, forKey: AingSharedKeys.userID)
         let clock = BaseTestClock()
@@ -200,6 +191,7 @@ struct MessagesHarness {
         let model = MobileAppModel(environment: environment)
         model.realtime.coalesceSeconds = 3600   // 창은 테스트가 flushCoalescedSignals 로 닫는다
         model.messages.postMarkRefreshSeconds = 3600
+        model.session.clientReleaseTimeoutSeconds = 0   // 벽시계 상한 없음(포화에서 client_release 가 3초를 넘어도 같은 경로)
         model.start()
         _ = await baseWaitUntil { model.session.phase == .signedIn }
         let harness = MessagesHarness(host: host, storage: storage, server: server, clock: clock, transport: transport, model: model)
@@ -213,13 +205,14 @@ struct MessagesHarness {
     /// 떠 있는 새로고침·읽음 왕복이 끝날 때까지.
     /// 병합 뒤: 같은 앱 모델의 지금 탭도 활성화 때 `app_user_directory`·`work_*` GET 을 부른다 — 그 새로고침까지 끝나야 테스트의
     /// 요청 수 기준선(`count` 전후 차)이 메시지 스토어 몫만 잰다.
+    /// 스토어는 다음 걸음을 앞 걸음이 끝나는 같은 메인 액터 차례에 깃발로 세운다 — 깃발이 모두 내려간 채 몇 차례 양보해도 그대로면 멎었다.
     func settle() async {
         for _ in 0..<3 {
             _ = await baseWaitUntil {
                 store.pendingActivityTask == nil && !store.isMarkingRead && !store.isSending && !store.directoryLoading
                     && model.now.refreshTask == nil
             }
-            try? await Task.sleep(for: .milliseconds(20))
+            await baseYield()
         }
     }
 
@@ -232,11 +225,6 @@ struct MessagesHarness {
         #expect(model.session.session?.userID == Self.secondUser, sourceLocation: sourceLocation)
         #expect(model.session.generation > before, sourceLocation: sourceLocation)
         await settle()
-    }
-
-    /// `window` 초 동안 `condition` 이 한 번도 참이 되지 않으면 true(늦게 오는 응답이 **새지 않았다**를 재는 창 — 새면 곧바로 false).
-    func staysFalse(for window: TimeInterval, _ condition: @MainActor () -> Bool) async -> Bool {
-        !(await baseWaitUntil(timeout: window, condition))
     }
 
     /// 금지 경로 0건(데모·실 모드 공통 단언).

@@ -144,7 +144,9 @@ import Testing
         forced.sceneDidBecomeActive()
         #expect(await baseWaitUntil { forced.push.isPrimerPresented })
         #expect(forcedSystem.primerPresentations == 1)
-        try? await Task.sleep(for: .milliseconds(100))
+        await forced.push.pendingStatusCheck?.value
+        await forced.session.pendingDeviceRegistration?.value
+        await baseBarrier(forced.context.service)
         #expect(MobileForbiddenCalls.violations(in: MobileStubURLProtocol.requests(host: MobileDemo.host)).isEmpty)
         #expect(h.forbiddenViolations.isEmpty)
     }
@@ -169,16 +171,20 @@ import Testing
         // 느린 권한 확인(시스템 콜백은 취소를 모른다)이 떠 있는 동안 로그아웃 → 곧바로 다시 로그인.
         // 앞 세대에서 시작한 확인은 "허락"을 읽었고, 지금 기기는 "거절"이다 — 늦게 온 앞 결과가 새 세대에 등록·표시를 만들면 안 된다.
         h.system.status = .authorized
-        h.system.statusDelay = .milliseconds(300)
+        let slowStatus = BaseGate()
+        h.system.statusGate = slowStatus
         let reads = h.system.statusReads
         await h.model.session.signIn(email: "push@aing-check.invalid", password: "pw")
-        #expect(await baseWaitUntil { h.system.statusReads > reads }, "권한 확인이 시작되지 않았다")
+        #expect(await baseWaitUntil { h.system.statusReads > reads && slowStatus.arrivals == 1 }, "권한 확인이 시작되지 않았다")
+        let lateCheck = h.push.pendingStatusCheck
         h.system.status = .denied
         await h.model.session.signOut()
-        h.system.statusDelay = .zero
+        h.system.statusGate = nil
         await h.model.session.signIn(email: "push@aing-check.invalid", password: "pw")
+        // 새 세대의 로그인이 끝난 **뒤에** 앞 세대 확인("허락")이 돌아온다.
+        slowStatus.open()
+        await lateCheck?.value
         await h.settle()
-        try? await Task.sleep(for: .milliseconds(500))
         #expect(h.system.remoteRegistrations == 0, "로그아웃 전에 시작한 권한 확인이 새 세대에서 원격 등록을 했다")
         #expect(h.push.authorization == .denied, "늦게 온 앞 세대 권한 값이 화면 값을 덮었다")
         #expect(h.forbiddenViolations.isEmpty)
@@ -267,13 +273,19 @@ import Testing
             reloadWidgetTimelines: {}
         )
         h.storage.defaults.set(PushHarness.userID, forKey: AingSharedKeys.userID)
-        h.setRPC("client_release", .json(#"{"status":"ok","platform":"ios","min_build":1,"latest_build":1}"#, delay: 0.3))
+        h.setRPC("client_release", .json(#"{"status":"ok","platform":"ios","min_build":1,"latest_build":1}"#))
+        let slowRelease = BaseHold.rpc("client_release", host: h.host)
         let model = MobileAppModel(environment: vaultEnvironment)
         model.push.attach(system: h.system)
-        model.push.sessionSettleTimeoutSeconds = 3
+        model.push.sessionSettleTimeoutSeconds = BaseStub.patientSeconds
+        model.session.clientReleaseTimeoutSeconds = 0
         #expect(model.session.phase == .launching)
         model.start()
-        await model.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .open)
+        let tap = Task { await model.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .open) }
+        #expect(await slowRelease.waitHeld())
+        #expect(model.session.phase == .launching, "전제: 복원이 아직 떠 있다")
+        #expect(await slowRelease.releaseAndWaitDelivered())
+        await tap.value
         #expect(model.session.isSignedIn)
         #expect(model.router.consumePendingRoute(for: .messages) == .message(peerID: PushHarness.peerID))
 
@@ -488,16 +500,25 @@ import Testing
         badges.games = 2
         #expect(await baseWaitUntil { h.system.badgeCounts.last == 5 })
         let writes = h.system.badgeCounts.count
-        badges.games = 2 // 같은 값
-        try? await Task.sleep(for: .milliseconds(50))
+        // 같은 합: 재료는 바뀌었는데(관찰이 깨어난다) 합은 5 그대로 — 다시 적지 않는다. (같은 값 대입은 Observation 이 알리지 않아 재지 못한다.)
+        badges.messages = 4
+        badges.games = 1
+        await baseYield()
         #expect(h.system.badgeCounts.count == writes, "같은 값을 다시 적었다")
+        // 사건 순서 대조: 뒤에 바꾼 다른 값은 한 번만 적힌다(같은 값이 적혔다면 그보다 앞에 끼었다).
+        badges.messages = 5
+        #expect(await baseWaitUntil { h.system.badgeCounts.last == 6 })
+        #expect(h.system.badgeCounts.count == writes + 1, "같은 값을 다시 적었다: \(h.system.badgeCounts)")
 
         await h.model.session.signOut()
         #expect(await baseWaitUntil { h.system.badgeCounts.last == 0 })
         #expect(h.push.badgeState == .unknown)
+        let signedOutWrites = h.system.badgeCounts.count
         badges.messages = 9
-        try? await Task.sleep(for: .milliseconds(50))
+        await baseYield()
+        await h.barrier()
         #expect(h.system.badgeCounts.last == 0, "로그아웃 상태에서 배지를 올렸다")
+        #expect(h.system.badgeCounts.count == signedOutWrites)
 
         // 기본 출처는 탭 배지 합(자리 스토어는 0) — 링크가 채워진 모델에서 0 을 읽는다
         #expect(h.model.links.badges.appBadgeTotal == 0)
@@ -514,11 +535,14 @@ import Testing
         await h.launchSignedIn()
         #expect(h.push.prefs == PushPrefs(message: true, gomokuInvite: false, feedbackReply: true), "register_device 응답의 설정")
 
-        h.setRPC("set_push_prefs", .json(#"{"status":"ok","push_prefs":{"message":false,"gomoku_invite":false,"feedback_reply":true}}"#, delay: 0.15))
+        h.setRPC("set_push_prefs", .json(#"{"status":"ok","push_prefs":{"message":false,"gomoku_invite":false,"feedback_reply":true}}"#))
         h.clearRequests()
+        let saveHold = BaseHold.rpc("set_push_prefs", host: h.host)
         let saving = Task { await h.push.setPreference(.message, enabled: false) }
         #expect(await baseWaitUntil { h.push.isSavingPrefs })
+        #expect(await saveHold.waitHeld())
         #expect(!h.push.isEnabled(.message), "저장 중에 누른 값이 보이지 않는다")
+        #expect(await saveHold.releaseAndWaitDelivered())
         #expect(await saving.value)
         #expect(!h.push.isSavingPrefs)
         #expect(h.push.prefs == PushPrefs(message: false, gomokuInvite: false, feedbackReply: true))
@@ -624,24 +648,29 @@ import Testing
         // 앞 저장(A: message 끄기)의 응답은 늦다. 뒤 저장(B: feedback_reply 끄기)은 빠르다 — 예전에는 B 가 먼저 끝나 저장 중을 내리고
         // 늦게 온 A 응답(feedback_reply=true)이 화면 값을 덮었다.
         h.firstCallOverride.mutate {
-            $0["set_push_prefs"] = .json(#"{"status":"ok","push_prefs":{"message":false,"gomoku_invite":false,"feedback_reply":true}}"#, delay: 0.5)
+            $0["set_push_prefs"] = .json(#"{"status":"ok","push_prefs":{"message":false,"gomoku_invite":false,"feedback_reply":true}}"#)
         }
-        h.setRPC("set_push_prefs", .json(#"{"status":"ok","push_prefs":{"message":false,"gomoku_invite":false,"feedback_reply":false}}"#, delay: 0.05))
+        h.setRPC("set_push_prefs", .json(#"{"status":"ok","push_prefs":{"message":false,"gomoku_invite":false,"feedback_reply":false}}"#))
         h.clearRequests()
 
+        // 앞 저장(A)도 뒤 저장(B)도 붙잡는다 — 응답 순서를 테스트가 정한다.
+        let saveA = BaseHold.rpc("set_push_prefs", host: h.host)
         let a = Task { await h.push.setPreference(.message, enabled: false) }
-        #expect(await baseWaitUntil { h.calls("set_push_prefs").count == 1 })
+        #expect(await saveA.waitHeld())
+        let saveB = BaseHold.rpc("set_push_prefs", host: h.host)
         let b = Task { await h.push.setPreference(.feedbackReply, enabled: false) }
         #expect(await baseWaitUntil { !h.push.isEnabled(.feedbackReply) }, "저장 중에 새로 누른 값이 보이지 않는다")
-        try? await Task.sleep(for: .milliseconds(200))
-        #expect(h.calls("set_push_prefs").count == 1, "앞 저장이 도는데 뒤 저장을 겹쳐 보냈다")
+        await h.barrier()
+        #expect(saveB.held == 0, "앞 저장이 도는데 뒤 저장을 겹쳐 보냈다")
         #expect(h.push.isSavingPrefs)
         #expect(!h.push.isEnabled(.message) && !h.push.isEnabled(.feedbackReply))
 
         // 앞 응답이 도착한 뒤에도(뒤 저장이 아직 돈다) 화면은 마지막으로 누른 값이고 저장 중이다.
-        #expect(await baseWaitUntil { h.calls("set_push_prefs").count == 2 })
+        #expect(await saveA.releaseAndWaitDelivered())
+        #expect(await saveB.waitHeld())
         #expect(h.push.isSavingPrefs, "보낼 저장이 남았는데 저장 중 표시가 내려갔다")
         #expect(!h.push.isEnabled(.feedbackReply), "늦게 온 앞 응답이 뒤에 누른 값을 덮었다")
+        #expect(await saveB.releaseAndWaitDelivered())
 
         let aResult = await a.value
         let bResult = await b.value
@@ -658,13 +687,16 @@ import Testing
 
         // 뒤 저장이 실패하면: 안내 한 줄, 화면은 서버가 마지막으로 준 값(앞 저장 성공분)으로 돌아간다.
         h.firstCallOverride.mutate {
-            $0["set_push_prefs"] = .json(#"{"status":"ok","push_prefs":{"message":true,"gomoku_invite":false,"feedback_reply":false}}"#, delay: 0.3)
+            $0["set_push_prefs"] = .json(#"{"status":"ok","push_prefs":{"message":true,"gomoku_invite":false,"feedback_reply":false}}"#)
         }
         h.setRPC("set_push_prefs", .networkFailure())
         h.clearRequests()
+        let saveC = BaseHold.rpc("set_push_prefs", host: h.host)
         let c = Task { await h.push.setPreference(.message, enabled: true) }
-        #expect(await baseWaitUntil { h.calls("set_push_prefs").count == 1 })
+        #expect(await saveC.waitHeld())
         let d = Task { await h.push.setPreference(.gomokuInvite, enabled: true) }
+        #expect(await baseWaitUntil { h.push.isEnabled(.gomokuInvite) }, "저장 중에 새로 누른 값이 보이지 않는다")
+        #expect(await saveC.releaseAndWaitDelivered())
         let cResult = await c.value
         let dResult = await d.value
         #expect(!cResult && !dResult)
@@ -718,7 +750,9 @@ import Testing
             #expect(await baseWaitUntil { model.router.lastOpenedRoute == route }, "\(raw): \(String(describing: model.router.lastOpenedRoute))")
             #expect(model.router.selectedTab == tab)
             #expect(PushPayload(json: PushDemo.payloadJSON(PushKind(rawValue: raw)!))?.route == route)
-            try? await Task.sleep(for: .milliseconds(100))
+            await model.push.pendingStatusCheck?.value
+            await model.session.pendingDeviceRegistration?.value
+            await baseBarrier(model.context.service)
             #expect(MobileForbiddenCalls.violations(in: MobileStubURLProtocol.requests(host: MobileDemo.host)).isEmpty)
         }
         BaseStub.tearDown(host: MobileDemo.host, storage: .temporary(name: "demo"))

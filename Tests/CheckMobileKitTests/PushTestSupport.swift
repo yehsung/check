@@ -12,8 +12,8 @@ final class PushFakeSystem: PushNotificationSystem {
     var status: PushAuthorizationStatus = .notDetermined
     /// 권한 창에서 사용자가 고를 답.
     var grantsOnRequest = true
-    /// 권한 읽기를 늦춘다(세대 경합 재현).
-    var statusDelay: Duration = .zero
+    /// 권한 읽기를 이 문이 열릴 때까지 붙잡는다(세대 경합 재현 — 벽시계 지연 대신 테스트가 연다). 부를 때의 문을 쓴다.
+    var statusGate: BaseGate?
 
     private(set) var statusReads = 0
     private(set) var authorizationRequests = 0
@@ -26,15 +26,12 @@ final class PushFakeSystem: PushNotificationSystem {
     private(set) var primerPresentations = 0
     private(set) var primerDismissals = 0
 
-    /// 시작할 때의 값을 늦게 돌려준다. 실제 시스템 콜백처럼 **작업 취소를 모른다**(취소돼도 제때 끝나지 않는다).
+    /// 시작할 때의 값을 늦게 돌려준다. 실제 시스템 콜백처럼 **작업 취소를 모른다**(취소돼도 문이 열리기 전엔 끝나지 않는다).
     func authorizationStatus() async -> PushAuthorizationStatus {
         statusReads += 1
         let result = status
-        if statusDelay > .zero {
-            let seconds = Double(statusDelay.components.seconds) + Double(statusDelay.components.attoseconds) / 1e18
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                DispatchQueue.global().asyncAfter(deadline: .now() + seconds) { continuation.resume() }
-            }
+        if let gate = statusGate {
+            await gate.wait()
         }
         return result
     }
@@ -163,7 +160,9 @@ final class PushHarness {
             reloadWidgetTimelines: {}
         )
         model = MobileAppModel(environment: environment)
-        model.push.sessionSettleTimeoutSeconds = 2
+        // 제품의 벽시계 상한은 테스트가 재는 대상이 아니면 끈다(포화에서 상한이 먼저 지나 다른 갈래로 새지 않게).
+        model.push.sessionSettleTimeoutSeconds = BaseStub.patientSeconds
+        model.session.clientReleaseTimeoutSeconds = 0
     }
 
     var push: PushCoordinator { model.push }
@@ -207,22 +206,28 @@ final class PushHarness {
         )
         storage.defaults.set(Self.userID, forKey: AingSharedKeys.userID)
         let restored = MobileAppModel(environment: environment)
-        restored.push.sessionSettleTimeoutSeconds = 3
+        restored.push.sessionSettleTimeoutSeconds = BaseStub.patientSeconds
+        restored.session.clientReleaseTimeoutSeconds = 0
         restored.push.attach(system: system)
         if start { restored.start() }
         return restored
     }
 
     /// message_unread_summary 응답(다른 상대에게서 온 안 읽은 메시지 `total` 건).
-    static func unreadSummary(total: Int, delay: TimeInterval = 0) -> MobileStubResponse {
+    static func unreadSummary(total: Int) -> MobileStubResponse {
         let peers = total > 0
             ? #"[{"peer_user_id":"b9999999-3333-4444-8555-000000000009","count":\#(total),"last_epoch_ms":1789621110000}]"#
             : "[]"
-        return .json(#"{"status":"ok","total":\#(total),"peers":\#(peers)}"#, delay: delay)
+        return .json(#"{"status":"ok","total":\#(total),"peers":\#(peers)}"#)
     }
 
     func requests() -> [MobileStubRequest] {
-        MobileStubURLProtocol.requests(host: host)
+        baseRequests(host: host)
+    }
+
+    /// 사건 장벽(이 하네스 모델의 서비스 한 바퀴).
+    func barrier() async {
+        await baseBarrier(model.context.service)
     }
 
     func calls(_ rpcName: String) -> [MobileStubRequest] {

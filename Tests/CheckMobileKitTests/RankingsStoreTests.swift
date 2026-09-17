@@ -56,23 +56,25 @@ struct RankingsStoreTests {
         defer { harness.tearDown() }
         let store = harness.rankings
 
-        // 보이지 않는 탭은 서버를 두드리지 않는다.
+        // 보이지 않는 탭은 서버를 두드리지 않는다(장벽 뒤에 잰다 — 띄웠다면 장벽보다 먼저 기록된다).
         store.appDidBecomeActive()
-        try await Task.sleep(for: .milliseconds(50))
+        await harness.barrier()
         #expect(harness.requests(rpc: "team_weekly_leaderboard").isEmpty)
+        #expect(!store.leagueState.isLoading)
 
         store.tabDidAppear()
         #expect(await baseWaitUntil { store.leagueState.hasLoaded })
         #expect(store.leagueDisplay.map(\.id) == ["t-high", "t-low", "team-rankme-1"], "평균 내림차순 + 0시간 팀 숨김 + 내 팀 유지")
         #expect(store.league.count == 4)
         #expect(store.myTeamID == RankMeFixture.teamID)
+        try #require(store.leagueDisplay.count == 3, "리그가 안 섰다 — 인덱스 읽기 전에 멈춘다")
         #expect(RankingsText.leagueCaption(store.leagueDisplay[0]) == "각자 목표 40시간 · 총 80시간 00분 · 4명 · 2명 근무중")
         #expect(RankingsText.leagueAverage(store.leagueDisplay[0]) == "평균 20시간 00분")
         #expect(RankingsText.leaguePercent(store.leagueDisplay[0]) == 50)
 
         // 신선한 판은 다시 부르지 않는다.
         store.tabDidAppear()
-        try await Task.sleep(for: .milliseconds(50))
+        await harness.barrier()
         #expect(harness.requests(rpc: "team_weekly_leaderboard").count == 1)
         harness.clock.advance(RankingsStore.staleSeconds + 1)
         store.appDidBecomeActive()
@@ -86,12 +88,13 @@ struct RankingsStoreTests {
         #expect(store.myTokenUsagePublic == false, "내 행 비공개 칩")
         #expect(store.isCurrentTokenMonth)
         #expect(store.tokenTitle == "9월 AI 토큰 소모량")
+        try #require(store.tokenBoard.count == 3, "토큰 판이 안 섰다 — 인덱스 읽기 전에 멈춘다")
         #expect(RankingsText.tokenToday(store.tokenBoard[0], todayKey: store.todayKey) == "오늘 +70 토큰")
         #expect(RankingsText.tokenToday(store.tokenBoard[1], todayKey: store.todayKey) == "오늘 +0 토큰", "어제 이후 스테일 행은 0")
         #expect(harness.requests(rpc: "token_usage_board").first?.jsonBody["p_month"] as? String == "2026-09")
 
         store.stepTokenMonth(by: 1)
-        try await Task.sleep(for: .milliseconds(30))
+        await harness.barrier()
         #expect(store.tokenMonth == "2026-09", "미래 달로는 못 간다")
         #expect(harness.requests(rpc: "token_usage_board").count == 1, "값이 그대로면 요청도 없다")
 
@@ -113,7 +116,7 @@ struct RankingsStoreTests {
         store.select(miniGame: .flappy)
         #expect(store.miniGameBoard.isEmpty && store.miniGameWinner == nil)
         #expect(await baseWaitUntil { store.miniGameState.hasLoaded && store.miniGameKind == .flappy && !store.miniGameBoard.isEmpty })
-        try await Task.sleep(for: .milliseconds(50))
+        await harness.barrier()
         #expect(store.miniGameBoard.map(\.userID) == ["u-f"])
         #expect(store.miniGameWinner == nil)
         #expect(store.myMiniGameRank == nil)
@@ -140,12 +143,12 @@ struct RankingsStoreTests {
             switch request.rpcName {
             case "token_usage_board":
                 if request.bodyText.contains("2026-09") {
-                    return MobileStubResponse(status: 200, body: Data("[\(Self.tokenRow("u-sept", name: "구월", total: 1))]".utf8), delay: 0.4)
+                    return .json("[\(Self.tokenRow("u-sept", name: "구월", total: 1))]")
                 }
                 return .json("[\(Self.tokenRow("u-aug", name: "팔월", total: 2))]")
             case "minigame_board":
                 if request.bodyText.contains("timing_bar") {
-                    return MobileStubResponse(status: 200, body: Data("[\(Self.boardRow("u-timing", name: "타이밍", score: 5, at: "2026-09-17T01:00:00Z"))]".utf8), delay: 0.4)
+                    return .json("[\(Self.boardRow("u-timing", name: "타이밍", score: 5, at: "2026-09-17T01:00:00Z"))]")
                 }
                 return .json("[\(Self.boardRow("u-flappy", name: "플래피", score: 7, at: "2026-09-17T01:00:00Z"))]")
             default:
@@ -154,20 +157,24 @@ struct RankingsStoreTests {
         }
         defer { harness.tearDown() }
         let store = harness.rankings
+        let september = BaseHold.rpc("token_usage_board", host: harness.host)
         store.select(board: .tokens)
         store.tabDidAppear()
-        #expect(await baseWaitUntil { !harness.requests(rpc: "token_usage_board").isEmpty })
+        #expect(await september.waitHeld())
         store.stepTokenMonth(by: -1)
-        #expect(await baseWaitUntil { store.tokenState.hasLoaded })
-        try await Task.sleep(for: .milliseconds(600))
+        #expect(await baseWaitUntil { store.tokenState.hasLoaded && store.tokenMonth == "2026-08" })
+        #expect(await september.releaseAndWaitDelivered())
+        await harness.barrier()
         #expect(store.tokenMonth == "2026-08")
         #expect(store.tokenBoard.map(\.userID) == ["u-aug"], "늦게 온 9월 응답이 8월 화면을 덮었다")
 
+        let timing = BaseHold.rpc("minigame_board", host: harness.host)
         store.select(board: .minigame)
-        #expect(await baseWaitUntil { !harness.requests(rpc: "minigame_board").isEmpty })
+        #expect(await timing.waitHeld())
         store.select(miniGame: .flappy)
-        #expect(await baseWaitUntil { store.miniGameState.hasLoaded })
-        try await Task.sleep(for: .milliseconds(600))
+        #expect(await baseWaitUntil { store.miniGameState.hasLoaded && store.miniGameKind == .flappy })
+        #expect(await timing.releaseAndWaitDelivered())
+        await harness.barrier()
         #expect(store.miniGameBoard.map(\.userID) == ["u-flappy"], "늦게 온 타이밍 바 응답이 플래피 화면을 덮었다")
         harness.expectNoForbiddenCalls()
     }
@@ -176,7 +183,7 @@ struct RankingsStoreTests {
     func generationGuardAndReset() async throws {
         let harness = await RankMeHarness(label: "rank-gen") { request in
             if request.rpcName == "team_weekly_leaderboard" {
-                return MobileStubResponse(status: 200, body: Data(Self.league.utf8), delay: 0.4)
+                return .json(Self.league)
             }
             if request.path == "/auth/v1/logout" { return .json("{}") }
             if request.rpcName == "unregister_device" { return .json(#"{"status":"ok","removed":true}"#) }
@@ -185,13 +192,18 @@ struct RankingsStoreTests {
         defer { harness.tearDown() }
         let store = harness.rankings
         // 당겨서 새로고침(refreshable)처럼 스토어 inflight 밖에서 부른 조회 — reset 의 취소가 닿지 않으므로 세대·순번 가드만이 막는다.
+        let hold = BaseHold.rpc("team_weekly_leaderboard", host: harness.host)
         let pull = Task { await store.loadLeague() }
         #expect(await baseWaitUntil { store.leagueState.isLoading })
+        #expect(await hold.waitHeld())
         await harness.model.session.signOut()
+        #expect(await hold.releaseAndWaitDelivered())
         await pull.value
         #expect(store.league.isEmpty, "로그아웃 뒤 늦게 온 리그가 화면에 섰다")
+        let leagueCalls = harness.requests(rpc: "team_weekly_leaderboard").count
         store.tabDidAppear()
-        #expect(await baseWaitUntil(timeout: 0.2) { store.leagueState.isLoading } == false, "로그아웃 상태에서 조회를 시작했다")
+        await harness.barrier()
+        #expect(!store.leagueState.isLoading && harness.requests(rpc: "team_weekly_leaderboard").count == leagueCalls, "로그아웃 상태에서 조회를 시작했다")
         #expect(!store.leagueState.hasLoaded)
         #expect(store.board == .league && store.tokenMonth == "2026-09" && store.myTokenUsagePublic == nil)
         harness.expectNoForbiddenCalls()
@@ -239,7 +251,7 @@ struct RankingsStoreTests {
         #expect(await baseWaitUntil { harness.requests(rpc: "team_weekly_leaderboard").count == 3 }, "실패한 판을 신선하다고 보고 다시 읽지 않았다")
         #expect(await baseWaitUntil { !store.leagueState.hasFailed && !store.leagueState.isLoading })
         store.appDidBecomeActive()
-        try await Task.sleep(for: .milliseconds(60))
+        await harness.barrier()
         #expect(harness.requests(rpc: "team_weekly_leaderboard").count == 3, "성공한 신선한 판을 다시 읽었다")
     }
 
@@ -281,15 +293,17 @@ struct RankingsStoreTests {
         let harness = await RankMeHarness(label: "rank-fix-chip") { request in
             if request.rpcName == "token_usage_board" { return .json("[\(Self.tokenRow(RankMeFixture.userID, name: "나", total: 5))]") }
             if request.path == "/rest/v1/profiles", request.method == "GET", request.query.contains("token_usage_collect") {
-                return MobileStubResponse(status: 200, body: Data(#"[{"token_usage_public":true,"token_usage_collect":true,"focus_mode":false}]"#.utf8), delay: 0.5)
+                return .json(#"[{"token_usage_public":true,"token_usage_collect":true,"focus_mode":false}]"#)
             }
             return nil
         }
         defer { harness.tearDown() }
         let store = harness.rankings
+        let privacyHold = BaseHold.install(host: harness.host) { $0.query.contains("token_usage_collect") }
         let load = Task { await store.loadTokens() }
-        #expect(await baseWaitUntil { harness.requests.contains { $0.query.contains("token_usage_collect") } })
+        #expect(await privacyHold.waitHeld())
         store.noteTokenUsagePublic(false)
+        #expect(await privacyHold.releaseAndWaitDelivered())
         await load.value
         #expect(store.tokenState.hasLoaded)
         #expect(store.myTokenUsagePublic == false, "저장 성공 뒤 늦게 온 옛 공개 여부가 '비공개' 칩을 지웠다")

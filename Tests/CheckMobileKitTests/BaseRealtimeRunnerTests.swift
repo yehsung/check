@@ -45,6 +45,7 @@ import Testing
         let clock = BaseTestClock()
         let session = MobileSessionStore(service: service, vault: vault, storage: storage, appInfo: BaseStub.appInfo,
                                          installationID: "11111111-2222-4333-8444-555555555555", clock: clock.clock)
+        session.clientReleaseTimeoutSeconds = 0   // 벽시계 상한 없음
         let transport = BaseFakeTransport()
         let runner = MobileRealtimeRunner(service: service, transport: transport, clock: clock.clock, runsTimers: false,
                                           jitter: { $0 })
@@ -62,7 +63,7 @@ import Testing
     }
 
     @Test("로그인 상태라도 앱이 active 가 아니면 붙지 않는다 — active 가 되면 poke:<uid> private 채널로 지금 토큰을 들고 붙는다")
-    func connectsOnlyWhenActive() async {
+    func connectsOnlyWhenActive() async throws {
         let h = await makeHarness()
         defer { h.tearDown() }
         #expect(h.session.phase == .signedIn)
@@ -70,7 +71,7 @@ import Testing
 
         h.runner.appDidBecomeActive()
         #expect(h.transport.connects.count == 1)
-        let connect = h.transport.connects[0]
+        let connect = try #require(h.transport.connects.first, "소켓을 열지 않았다 — 인덱스 읽기 전에 멈춘다")
         #expect(connect.channel == "poke:user-7")
         #expect(connect.isPrivate)
         #expect(connect.accessToken == h.session.session?.accessToken)
@@ -115,7 +116,7 @@ import Testing
         #expect(await baseWaitUntil { h.requests.contains { $0.rpcName == "message_unread_summary" } })
         #expect(await baseWaitUntil { h.requests.contains { ($0.rpcName ?? "").hasPrefix("gomoku_") } },
                 "오목 신호·조인 따라잡기가 오목 조회를 부르지 않았다")
-        try? await Task.sleep(for: .milliseconds(200))
+        await baseBarrier(h.session.service)
 
         let paths = h.requests.map(\.path)
         #expect(!paths.contains("/rest/v1/rpc/take_pokes"), "폰이 take_pokes 를 불렀다(맥 말풍선 훔치기 — R3)")

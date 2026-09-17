@@ -37,7 +37,7 @@ final class GamesStubServer: @unchecked Sendable {
         queues[key, default: []].append(responder)
     }
 
-    var requests: [MobileStubRequest] { MobileStubURLProtocol.requests(host: host) }
+    var requests: [MobileStubRequest] { baseRequests(host: host) }
 
     func requests(_ key: String) -> [MobileStubRequest] {
         requests.filter { Self.key($0) == key }
@@ -95,9 +95,15 @@ final class GamesHarness {
             reloadWidgetTimelines: {}
         )
         model = MobileAppModel(environment: environment)
+        model.session.clientReleaseTimeoutSeconds = 0   // 벽시계 상한 없음(포화에서 client_release 가 3초를 넘어도 같은 경로)
     }
 
     var games: GamesStore { model.games }
+
+    /// 사건 장벽(같은 서비스·세션 한 바퀴) — 스토어가 띄운 `Task { }` 의 요청·늦은 응답 처리가 이보다 앞선다.
+    func barrier() async {
+        await baseBarrier(model.context.service)
+    }
     var hub: GamesMiniGameHub { model.games.miniGames }
     var gomoku: GomokuStore { model.gomoku }
 

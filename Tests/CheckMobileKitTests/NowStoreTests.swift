@@ -35,7 +35,7 @@ import Testing
         let people = h.store.workingPeople(now: Self.now)
         #expect(people.map(\.id) == [NowStubServer.mint, NowStubServer.bori, NowStubServer.lime, NowStubServer.morae, NowStubServer.coral, NowStubServer.haneul])
         #expect(people.prefix(3).allSatisfy(\.isTeammate) && people.dropFirst(3).allSatisfy { !$0.isTeammate })
-        try #require(people.count >= 3, "근무 중 목록이 비면 아래 인덱스 읽기가 프로세스를 죽인다")
+        try #require(people.count >= 4, "근무 중 목록이 비면 아래 인덱스 읽기가 프로세스를 죽인다")
         #expect(people[0].elapsedSeconds == 15_000 && people[0].center == "seoul")
         #expect(people[1].isStale && people[1].elapsedSeconds == 10_320, "끊긴 신호는 마지막 신호에서 멈춘다")
         #expect(people[2].avatarURL?.absoluteString == "https://x.invalid/lime.jpg")
@@ -105,9 +105,8 @@ import Testing
         h.store.appDidEnterBackground()
         await h.settle()
         h.clock.advance(300) // 폰만 5분 잠겼다(맥은 계속 근무 · 30초 하트비트)
-        h.server.override("work_statuses", MobileStubResponse(
-            status: 200, body: Data(NowHarness.statuses(meSeen: "2026-09-17T05:09:50Z").utf8), delay: 0.4
-        ))
+        h.server.override("work_statuses", .json(NowHarness.statuses(meSeen: "2026-09-17T05:09:50Z")))
+        let statusesHold = BaseHold.install(host: h.host) { NowStubServer.key(for: $0) == "work_statuses" }
         h.store.appDidBecomeActive()
 
         // 응답 전: 받은 시각(05:05:00)의 판정을 유지하고 now 까지 센다.
@@ -121,6 +120,7 @@ import Testing
         #expect(people.first { $0.id == NowStubServer.bori }?.isStale == true, "받을 때 이미 끊겼던 사람은 그대로 멈춘다")
         #expect(h.model.widgetSnapshots.current == snapshotBefore, "응답 전 추정(몇 분 전 판정)으로 위젯 스냅샷을 썼다")
 
+        #expect(await statusesHold.releaseAndWaitDelivered())
         await h.settle()
         let after = try #require(h.store.myCard(now: h.clock.now))
         #expect(!after.isStale && after.todaySeconds == 18_900)
@@ -231,21 +231,24 @@ import Testing
         let first = try #require(WidgetSnapshotCodec.read(from: h.storage.widgetSnapshotURL))
         #expect(first.generatedAt == Self.now && first.me?.working == false)
 
+        // 쓰기 창구의 30초 스로틀은 끝자락 새로고침을 **벽시계** 잠으로 민다(주입할 시계 없음) — 포화로 테스트가 30초를 넘기면 그 한 번이
+        // 아래 창에 끼어든다. 옮기기(touch)는 창구를 거치지 않으므로 "창구 밖 새로고침 수"로 잰다.
+        func touchReloads() -> Int { h.widgetReloadCount - h.model.widgetSnapshots.reloadCount }
         h.clock.advance(30)
-        var reloads = h.widgetReloadCount
+        var reloads = touchReloads()
         await h.store.refreshNow()
         #expect(WidgetSnapshotCodec.read(from: h.storage.widgetSnapshotURL)?.generatedAt == first.generatedAt, "60초 안이면 옮기지 않는다")
-        #expect(h.widgetReloadCount == reloads)
+        #expect(touchReloads() == reloads)
 
         h.clock.advance(20 * 60)
-        reloads = h.widgetReloadCount
+        reloads = touchReloads()
         await h.store.refreshNow()
         let refreshedAt = try #require(h.store.lastRefreshedAt)
         let touched = try #require(WidgetSnapshotCodec.read(from: h.storage.widgetSnapshotURL))
         #expect(touched.generatedAt == refreshedAt, "방금 새로고침했는데 위젯은 '\(AingWidgetFormat.ago(from: touched.generatedAt, now: refreshedAt))'")
         #expect(AingWidgetFormat.ago(from: touched.generatedAt, now: refreshedAt) == "방금")
         #expect(touched.me == first.me && touched.working == first.working && touched.todosPreview == first.todosPreview, "시각만 옮긴다")
-        #expect(h.widgetReloadCount == reloads + 1, "옮긴 뒤 위젯을 한 번 새로고침한다")
+        #expect(touchReloads() == reloads + 1, "옮긴 뒤 위젯을 한 번 새로고침한다")
 
         h.clock.advance(10 * 60)
         h.server.override("work_statuses", .networkFailure())
@@ -313,9 +316,10 @@ import Testing
         defer { h.tearDown() }
         await h.launch()
         await h.activate()
-        h.server.override("rpc.set_team_weekly_goal", .json(#"[{"weekly_goal_hours":45}]"#, delay: 0.8))
+        h.server.override("rpc.set_team_weekly_goal", .json(#"[{"weekly_goal_hours":45}]"#))
+        let saveHold = BaseHold.rpc("set_team_weekly_goal", host: h.host)
         let save = Task { await h.store.saveGoal(hours: 45) }
-        _ = await baseWaitUntil { h.requests("rpc.set_team_weekly_goal").count == 1 }
+        #expect(await saveHold.waitHeld())
 
         await h.model.session.signOut()
         h.store.reset()
@@ -326,6 +330,7 @@ import Testing
         await h.settle()
         #expect(h.store.membership?.teamID == "team-other" && h.store.goalHours == 30)
 
+        #expect(await saveHold.releaseAndWaitDelivered())
         #expect(await save.value == false, "앞 계정 저장 응답에 시트를 닫았다")
         #expect(h.store.goalHours == 30, "앞 계정의 늦은 저장 응답이 새 계정 목표를 바꿨다")
         #expect(h.model.widgetSnapshots.current?.me?.goalHours != 45)
@@ -337,16 +342,17 @@ import Testing
         defer { h.tearDown() }
         await h.launch()
         // 디렉터리는 지금 탭만 부른다(멤버십은 세션의 프로필 조회도 부른다).
-        h.server.override("rpc.app_user_directory", .json(NowStubServer.directory, delay: 0.3))
+        let directoryHold = BaseHold.rpc("app_user_directory", host: h.host)
         h.store.refresh()
-        _ = await baseWaitUntil { h.requests("rpc.app_user_directory").count == 1 }
-        // 첫 새로고침이 도는 중에 두 번 더 — 겹치지 않고, 끝난 뒤 한 번으로 합쳐 돈다.
+        #expect(await directoryHold.waitHeld())
+        // 첫 새로고침이 도는 중에(디렉터리 응답을 붙잡았다) 두 번 더 — 겹치지 않고, 끝난 뒤 한 번으로 합쳐 돈다.
         h.store.refresh()
         h.store.refresh()
         #expect(h.store.refreshCount == 1)
+        #expect(await directoryHold.releaseAndWaitDelivered())
         await h.store.refreshTask?.value
-        try? await Task.sleep(for: .milliseconds(500))
-        #expect(h.store.refreshCount == 2, "겹친 새로고침 \(h.store.refreshCount)번")
+        await h.barrier()
+        #expect(h.store.refreshTask == nil && h.store.refreshCount == 2, "겹친 새로고침 \(h.store.refreshCount)번")
         #expect(h.requests("rpc.app_user_directory").count == 2)
     }
 
@@ -415,13 +421,13 @@ import Testing
         defer { h.tearDown() }
         await h.launch()
         let transport = NowTodoSyncTransport(context: h.model.context)
-        h.server.todo.delay = 0.8
+        let syncHold = BaseHold.rpc("todo_sync", host: h.host)
         let call = Task { try await transport.todoSync(userID: NowStubServer.me, request: TodoSyncRequest(changes: [], sinceMs: nil)) }
-        _ = await baseWaitUntil { h.server.todo.calls == 1 }
+        #expect(await syncHold.waitHeld())
         await h.model.session.signOut()
-        h.server.todo.delay = 0
         await h.signIn(as: NowStubServer.me)
         #expect(h.model.session.userID == NowStubServer.me)
+        #expect(await syncHold.releaseAndWaitDelivered())
         await #expect(throws: TodoSyncTransportError.accountMismatch) {
             _ = try await call.value
         }
@@ -434,14 +440,17 @@ import Testing
         let h = NowHarness()
         defer { h.tearDown() }
         await h.launch()
-        h.server.override("work_statuses", MobileStubResponse(status: 200, body: Data(NowStubServer.statuses.utf8), delay: 0.6))
+        let statusesHold = BaseHold.install(host: h.host) { NowStubServer.key(for: $0) == "work_statuses" }
         h.store.appDidBecomeActive()
         #expect(h.store.addTodo("로그아웃 전 할 일"), "reset 이 목록을 비우며 스냅샷 쓰기를 깨우게 한 줄 둔다")
-        _ = await baseWaitUntil { h.requests("work_statuses").count == 1 }
+        #expect(await statusesHold.waitHeld())
+        let lateRefresh = h.store.refreshTask
         await h.model.session.signOut()
         h.store.reset()
+        #expect(await statusesHold.releaseAndWaitDelivered())
+        await lateRefresh?.value
         await h.store.refreshTask?.value
-        try? await Task.sleep(for: .milliseconds(100))
+        await h.barrier()
         #expect(h.store.todos.items.isEmpty)
         #expect(h.store.teamMembers.isEmpty && h.store.teamFetchedAt == nil)
         #expect(h.store.membership == nil && h.store.directory.isEmpty)
@@ -487,19 +496,16 @@ import Testing
         #expect(await h.store.saveGoal(hours: 169) == false)
         #expect(h.requests("rpc.set_team_weekly_goal").isEmpty)
 
-        // 옛 목표(40)를 싣고 늦게 오는 멤버십 조회를 먼저 띄운다.
-        h.server.override("memberships", MobileStubResponse(
-            status: 200,
-            body: Data(#"[{"team_id":"team-now","role":"member","teams":{"name":"지금팀","weekly_goal_hours":40}}]"#.utf8),
-            delay: 0.5
-        ))
-        let membershipCalls = h.requests("memberships").count
+        // 옛 목표(40)를 싣고 늦게 오는 멤버십 조회를 먼저 띄운다(붙잡아 저장 뒤에 놓는다).
+        h.server.override("memberships", .json(#"[{"team_id":"team-now","role":"member","teams":{"name":"지금팀","weekly_goal_hours":40}}]"#))
+        let membershipHold = BaseHold.install(host: h.host) { NowStubServer.key(for: $0) == "memberships" }
         h.store.refresh()
-        _ = await baseWaitUntil { h.requests("memberships").count > membershipCalls }
+        #expect(await membershipHold.waitHeld())
         #expect(await h.store.saveGoal(hours: 45))
         let saveBody = try #require(h.requests("rpc.set_team_weekly_goal").last?.bodyText)
         #expect(saveBody.contains("45"))
         #expect(h.store.goalHours == 45)
+        #expect(await membershipHold.releaseAndWaitDelivered())
         await h.store.refreshTask?.value
         #expect(h.store.goalHours == 45, "저장 전에 떠난 조회가 목표를 40 으로 되돌렸다")
         #expect(h.store.myCard(now: Self.now)?.weekLine == "이번 주 24.8시간 · 목표 45시간 · 55%")
@@ -675,21 +681,24 @@ import Testing
         await h.launch()
         await h.activate()
         #expect(h.store.addTodo("앞 계정 할 일"))
-        h.server.todo.delay = 0.6
+        let syncHold = BaseHold.rpc("todo_sync", host: h.host)
         h.store.todoSync.requestSync(.periodic)
-        _ = await baseWaitUntil { h.server.todo.calls >= 2 }
+        #expect(await syncHold.waitHeld())
+        let lateRun = h.store.todoSync.runTask
 
         await h.model.session.signOut()
         h.store.reset()
         #expect(h.store.todos.items.isEmpty, "앞 계정 목록이 메모리에 남았다")
         #expect(!h.store.canEditTodos && !h.store.addTodo("로그아웃 중"))
         #expect(h.store.todoSync.userID == nil)
+        #expect(await syncHold.releaseAndWaitDelivered())
+        await lateRun?.value
         await h.store.todoSync.runTask?.value
+        await h.barrier()
         #expect(h.store.todos.items.isEmpty, "앞 계정의 늦은 응답이 들어왔다")
         let firstFile = try TodoFileStore.load(from: h.storage.todoFileURL(userID: NowStubServer.me))
         #expect(firstFile.items.map(\.title) == ["앞 계정 할 일"], "로그아웃은 파일을 지우지 않는다")
 
-        h.server.todo.delay = 0
         h.vault.write(BaseStub.jwt(exp: h.clock.now.addingTimeInterval(3600), subject: "u-other"), key: AingKeychain.accessTokenKey)
         h.storage.defaults.set("u-other", forKey: AingSharedKeys.userID)
         h.server.override("auth.token", BaseStub.authResponse(access: BaseStub.jwt(exp: h.clock.now.addingTimeInterval(3600), subject: "u-other"), refresh: "r2", userID: "u-other"))

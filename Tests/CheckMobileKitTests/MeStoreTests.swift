@@ -58,7 +58,8 @@ struct MeStoreTests {
         let store = harness.me
 
         store.appDidBecomeActive()
-        try await Task.sleep(for: .milliseconds(50))
+        #expect(store.inflight.isEmpty, "보이지 않는 나 탭이 조회를 띄웠다")
+        await harness.barrier()
         #expect(harness.requests(rpc: "shop_state").isEmpty, "보이지 않는 나 탭이 서버를 두드렸다")
 
         store.tabDidAppear()
@@ -92,9 +93,10 @@ struct MeStoreTests {
         #expect(store.badgeCount == 1)
 
         // 신선하면 다시 부르지 않는다.
+        await harness.quiesceMe()
         let before = harness.requests.count
         store.tabDidAppear()
-        try await Task.sleep(for: .milliseconds(80))
+        await harness.quiesceMe()
         #expect(harness.requests.filter { $0.rpcName == "shop_state" }.count == 1)
         #expect(harness.requests.count - before <= 1, "신선한 루트를 다시 읽었다(답장 시각만 허용)")
 
@@ -105,14 +107,19 @@ struct MeStoreTests {
 
     @Test("기록: 멤버십보다 먼저 불려도 목표는 팀 목표(40시간)다 — 기본값 60시간에 굳지 않는다")
     func recordsWaitForTeamGoal() async throws {
-        let harness = await RankMeHarness(label: "me-goal", waitsForProfile: false) { request in
+        var membershipHold: BaseHold?
+        let harness = await RankMeHarness(label: "me-goal", waitsForProfile: false, beforeStart: { host in
+            membershipHold = BaseHold.install(host: host) { $0.path == "/rest/v1/memberships" }
+        }) { request in
             if request.path == "/rest/v1/memberships" {
-                return MobileStubResponse(status: 200, body: Data(#"[{"team_id":"team-rankme-1","role":"member","teams":{"name":"테스트팀","weekly_goal_hours":40}}]"#.utf8), delay: 0.3)
+                return .json(#"[{"team_id":"team-rankme-1","role":"member","teams":{"name":"테스트팀","weekly_goal_hours":40}}]"#)
             }
             return Self.rootResponder(request)
         }
         defer { harness.tearDown() }
+        let hold = try #require(membershipHold)
         #expect(harness.model.session.isSignedIn)
+        #expect(await hold.waitHeld(), "실행 복원이 멤버십을 읽지 않았다")
         #expect(harness.model.session.profile?.teamID == nil, "전제: 멤버십이 아직 안 왔다")
         await harness.me.loadRecords()
         let retro = try #require(harness.me.retroForDisplay)
@@ -182,15 +189,18 @@ struct MeStoreTests {
         #expect(store.shopSelection == "squirrel")
         #expect(!store.canConfirmPurchase, "40 루비로 80 짜리를 살 수 있다고 했다")
         #expect(store.shopBarDetail == "루비 40개 더 필요해요")
+        let launchedBefore = store.inflight.count
         store.confirmPurchase()
         #expect(store.shopNotice == "루비 40개 더 필요해요")
-        try await Task.sleep(for: .milliseconds(50))
+        #expect(store.inflight.count == launchedBefore, "모자란데 구매 작업을 띄웠다")
+        await harness.barrier()
         #expect(harness.requests(rpc: "buy_character").isEmpty, "모자란데 요청을 냈다")
 
         store.selectShopItem("squirrel")
         #expect(store.shopSelection == nil, "같은 카드를 다시 누르면 선택을 푼다")
         store.selectShopItem("ghost")
-        try await Task.sleep(for: .milliseconds(50))
+        #expect(store.inflight.count == launchedBefore, "고르기만 했는데 작업을 띄웠다")
+        await harness.barrier()
         #expect(harness.requests(rpc: "buy_character").isEmpty, "고르기만 했는데 샀다")
         #expect(store.canConfirmPurchase)
 
@@ -245,9 +255,11 @@ struct MeStoreTests {
         await store.loadEquippedCharacter()
         #expect(store.equippedCharacterID == "aing")
 
+        let launchedBefore = store.inflight.count
         store.chooseCharacter("ghost")
         #expect(store.characterNotice == "유령은 아직 없어요 — 상점에서 살 수 있어요")
-        try await Task.sleep(for: .milliseconds(40))
+        #expect(store.inflight.count == launchedBefore && store.savingCharacterID == nil)
+        await harness.barrier()
         #expect(harness.requests(rpc: "set_character").isEmpty)
 
         harness.enqueue("set_character", .json(#"{"status":"ok","character":"fox"}"#))
@@ -407,6 +419,7 @@ struct MeStoreTests {
 
         #expect(store.feedbackList.map(\.id) == ["r-open-newest", "r-open", "r-done", "r-open-new"], "내 것만 · 미해결 먼저 → 최신순(모르는 상태는 미해결이 아니다)")
         #expect(store.feedbackList.last?.status.label == "wontfix_later", "모르는 상태는 원문 그대로")
+        try #require(store.feedbackList.count == 4, "제보 목록이 안 섰다 — 인덱스 읽기 전에 멈춘다")
         #expect(store.feedbackList[2].reply == "고쳤어요")
         harness.expectNoForbiddenCalls()
     }
@@ -431,12 +444,16 @@ struct MeStoreTests {
         store.feedbackDidAppear()
         #expect(await baseWaitUntil { store.feedbackState.hasLoaded })
         #expect(store.focusedReport?.id == "r1")
-        #expect(store.isUnseenReply(store.feedbackList[0]), "읽는 동안 점이 먼저 사라졌다")
-        #expect(store.feedbackList[1].id == "r0")
-        #expect(!store.isUnseenReply(store.feedbackList[1]), "처음 본 폰에서 몇 주 전 답장까지 새 답장으로 칠했다")
+        // 목록이 안 섰으면(대기 실패) 인덱스로 읽기 전에 멈춘다 — 예전엔 여기서 Index out of range 로 테스트 프로세스가 죽었다.
+        try #require(store.feedbackList.count == 2, "제보 목록이 안 섰다: \(store.feedbackList.map(\.id))")
+        let newest = store.feedbackList[0]
+        let older = store.feedbackList[1]
+        #expect(store.isUnseenReply(newest), "읽는 동안 점이 먼저 사라졌다")
+        #expect(older.id == "r0")
+        #expect(!store.isUnseenReply(older), "처음 본 폰에서 몇 주 전 답장까지 새 답장으로 칠했다")
         store.feedbackDidDisappear()
         #expect(store.badgeCount == 0)
-        #expect(!store.isUnseenReply(store.feedbackList[0]))
+        #expect(!store.isUnseenReply(newest))
         let key = "aing.me.feedbackReplySeenAt.\(Self.me)"
         let stored = try #require(harness.storage.defaults.object(forKey: key) as? Double)
         #expect(stored == ISO8601DateFormatter().date(from: "2026-09-16T08:00:00Z")!.timeIntervalSince1970, "기기 시계가 아니라 서버 답장 시각을 적는다")
@@ -500,13 +517,17 @@ struct MeStoreTests {
         #expect(push.knowsPrefs)
         #expect(push.prefs == PushPrefs(message: true, gomokuInvite: false, feedbackReply: true))
 
-        harness.enqueue("set_push_prefs", .json(#"{"status":"ok","push_prefs":{"message":true,"gomoku_invite":true,"feedback_reply":true}}"#, delay: 0.2))
+        harness.enqueue("set_push_prefs", .json(#"{"status":"ok","push_prefs":{"message":true,"gomoku_invite":true,"feedback_reply":true}}"#))
         harness.enqueue("set_push_prefs", .json(#"{"status":"ok","push_prefs":{"message":false,"gomoku_invite":true,"feedback_reply":true}}"#))
+        let firstSave = BaseHold.rpc("set_push_prefs", host: harness.host)
         let first = Task { await push.setPreference(.gomokuInvite, enabled: true) }
-        #expect(await baseWaitUntil { harness.requests(rpc: "set_push_prefs").count == 1 })
+        #expect(await firstSave.waitHeld())
         #expect(push.isSavingPrefs && push.isEnabled(.gomokuInvite))
         let second = Task { await push.setPreference(.message, enabled: false) }
         #expect(await baseWaitUntil { !push.isEnabled(.message) }, "저장 중에 누른 값이 보이지 않는다")
+        await harness.barrier()
+        #expect(harness.requests(rpc: "set_push_prefs").isEmpty, "앞 저장이 도는데 뒤 저장을 겹쳐 보냈다")
+        #expect(await firstSave.releaseAndWaitDelivered())
         let firstSaved = await first.value
         let secondSaved = await second.value
         #expect(firstSaved && secondSaved)
@@ -536,12 +557,12 @@ struct MeStoreTests {
         defer { harness.tearDown() }
         let push = try #require(harness.me.push)
         #expect(await baseWaitUntil { !harness.requests(rpc: "register_device").isEmpty })
-        try await Task.sleep(for: .milliseconds(50))
+        await harness.model.session.pendingDeviceRegistration?.value
         #expect(harness.model.session.pushPrefs == nil)
         #expect(!push.knowsPrefs)
         #expect(await push.setPreference(.message, enabled: false) == false)
         #expect(await push.setPreference(.gomokuInvite, enabled: true) == false)
-        try await Task.sleep(for: .milliseconds(80))
+        await harness.barrier()
         #expect(harness.requests(rpc: "set_push_prefs").isEmpty, "모르는 칸을 기본값으로 채워 보냈다")
         #expect(!push.isSavingPrefs)
         #expect(push.prefsNotice == nil)
@@ -551,7 +572,7 @@ struct MeStoreTests {
     func signOutResets() async throws {
         let harness = await RankMeHarness(label: "me-signout") { request in
             if request.path == "/rest/v1/profiles", request.query.contains("display_name,avatar_url") {
-                return MobileStubResponse(status: 200, body: Data(#"[{"display_name":"늦은이름","avatar_url":null}]"#.utf8), delay: 0.4)
+                return .json(#"[{"display_name":"늦은이름","avatar_url":null}]"#)
             }
             if request.rpcName == "shop_state" { return .json(Self.shopState) }
             if request.rpcName == "unregister_device" { return .json(#"{"status":"ok","removed":true}"#) }
@@ -563,11 +584,14 @@ struct MeStoreTests {
         await store.loadShop()
         store.feedbackDraft = "쓰던 글"
         // 당겨서 새로고침(refreshRoot)처럼 스토어 inflight 밖에서 부른 조회 — reset 의 취소가 닿지 않으므로 세대·순번 가드만이 막는다.
+        let headerHold = BaseHold.install(host: harness.host) { $0.path == "/rest/v1/profiles" && $0.query.contains("display_name,avatar_url") }
         let pull = Task { await store.loadHeader() }
         #expect(await baseWaitUntil { store.headerState.isLoading })
+        #expect(await headerHold.waitHeld())
         await store.signOut()
         #expect(!harness.model.session.isSignedIn)
         #expect(harness.requests.contains { $0.path == "/auth/v1/logout" && $0.queryValue("scope") == "local" })
+        #expect(await headerHold.releaseAndWaitDelivered())
         await pull.value
         #expect(store.displayName == nil, "로그아웃 뒤 늦은 응답이 이름을 세웠다")
         #expect(store.shopCharacters.isEmpty && store.feedbackDraft.isEmpty && !store.isSigningOut)
@@ -576,18 +600,18 @@ struct MeStoreTests {
     }
 
     @Test("딥링크: me 는 루트로 · me/shop · me/settings 는 한 칸 쌓기")
-    func deepLinks() async {
+    func deepLinks() async throws {
         let harness = await RankMeHarness(label: "me-links") { _ in nil }
         defer { harness.tearDown() }
         let router = harness.model.router
         router.open(.shop)
-        harness.me.open(router.consumePendingRoute(for: .me)!)
+        harness.me.open(try #require(router.consumePendingRoute(for: .me)))
         #expect(router.path(for: .me).count == 1)
         router.open(.me)
-        harness.me.open(router.consumePendingRoute(for: .me)!)
+        harness.me.open(try #require(router.consumePendingRoute(for: .me)))
         #expect(router.path(for: .me).isEmpty)
         router.open(.settings)
-        harness.me.open(router.consumePendingRoute(for: .me)!)
+        harness.me.open(try #require(router.consumePendingRoute(for: .me)))
         #expect(router.path(for: .me).count == 1)
     }
 

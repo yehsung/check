@@ -21,7 +21,7 @@ import Testing
     // MARK: - 순위 공개 여부
 
     @Test("순위 공개를 끈 사람: 공개 여부 조회가 한 번 실패해도 아는 값(비공개)을 지킨다 — 토큰도 제출도 없다")
-    func privateFlagSurvivesTransientLookupFailure() async {
+    func privateFlagSurvivesTransientLookupFailure() async throws {
         let harness = GamesHarness(label: "games-private-flip")
         let failProfiles = BaseLockedBox(false)
         harness.server.setDefault("minigame_board", json: Self.boardJSON)
@@ -44,10 +44,10 @@ import Testing
         #expect(await baseWaitUntil { harness.server.requests("minigame_board").count >= 2 }, "조회 실패 뒤 화면 흐름이 멈췄다")
         #expect(!harness.hub.isPublic, "조회 한 번 실패로 비공개를 공개로 덮었다")
 
-        let controller = try! #require(harness.hub.controller)
+        let controller = try #require(harness.hub.controller)
         playFlappyToResult(controller, from: harness.clock.now)
         #expect(controller.flappy.phase == .result)
-        try? await Task.sleep(for: .milliseconds(200))
+        await harness.barrier()
         #expect(harness.server.requests("minigame_start_round").isEmpty, "공개를 끈 사람에게 토큰을 받았다")
         #expect(harness.server.requests("minigame_submit_score").isEmpty, "순위 공개를 끈 사람의 점수가 올라갔다(조회 일시 실패 뒤)")
         #expect(harness.violations.isEmpty, "\(harness.violations)")
@@ -82,7 +82,7 @@ import Testing
     // MARK: - 딥링크
 
     @Test("오목 화면이 이미 보이는 중에 온 gomoku/match/<id> 딥링크: 대상 판을 바로 연다 · 대상 id 를 남기지 않는다 · 로그아웃은 남은 id 를 비운다")
-    func deepLinkWhileGomokuScreenVisibleAppliesFocus() async {
+    func deepLinkWhileGomokuScreenVisibleAppliesFocus() async throws {
         let harness = GamesHarness(label: "games-focus")
         let nowMs = harness.serverNowMs
         harness.server.setDefault("gomoku_inbox", json: GamesGomokuJSON.inbox(nowMs: nowMs))
@@ -103,7 +103,7 @@ import Testing
 
         // 푸시 탭 = 라우터가 경로를 비우고 링크를 남긴다 → 게임 탭이 꺼내 스토어에 묻는다.
         router.open(.gomokuMatch(matchID: "m-focus-2"))
-        let route = try! #require(router.consumePendingRoute(for: .games))
+        let route = try #require(router.consumePendingRoute(for: .games))
         #expect(harness.games.routeStep(for: route) == .push(.gomoku), "비워진 경로를 되돌려야 화면이 닫히지 않는다")
         #expect(harness.games.pendingGomokuFocusID == nil, "보이는 화면에 대상 id 를 남겼다 — 나중의 무관한 진입에 쓰인다")
         #expect(await baseWaitUntil { harness.gomoku.match?.id == "m-focus-2" }, "보이는 오목 화면에 온 대상 판이 적용되지 않았다")
@@ -112,7 +112,7 @@ import Testing
         // 화면을 떠난 뒤 온 대상 링크는 다음 표시가 꺼내 쓴다.
         harness.games.gomokuScreenDidDisappear()
         router.open(.gomokuInvite(matchID: "i-9"))
-        let invite = try! #require(router.consumePendingRoute(for: .games))
+        let invite = try #require(router.consumePendingRoute(for: .games))
         #expect(harness.games.routeStep(for: invite) == .push(.gomoku))
         #expect(harness.games.pendingGomokuFocusID == "i-9")
 
@@ -132,7 +132,7 @@ import Testing
     // MARK: - 화면 꺼짐 방지
 
     @Test("대국 중 화면 꺼짐 방지는 스토어 하나가 쥔다 — 오목 화면을 떠나도(뒤로) 판이 도는 동안 유지 · background·끝·로그아웃이면 푼다")
-    func idleTimerFollowsMatchNotScreen() async {
+    func idleTimerFollowsMatchNotScreen() async throws {
         let harness = GamesHarness(label: "games-idle")
         let nowMs = harness.serverNowMs
         harness.server.setDefault("gomoku_inbox", json: GamesGomokuJSON.inbox(nowMs: nowMs))
@@ -150,7 +150,7 @@ import Testing
         #expect(applied.get() == [false])
         await harness.signIn()
 
-        let active = try! JSONDecoder.gamesSnake.decode(GomokuStateResponse.self, from: Data(
+        let active = try JSONDecoder.gamesSnake.decode(GomokuStateResponse.self, from: Data(
             GamesGomokuJSON.state(nowMs: nowMs, matchID: "m-idle", moves: [("black", "H8"), ("white", "I9")]).utf8))
         harness.gomoku.applyState(active.state)
         #expect(await baseWaitUntil { applied.get().last == true }, "판이 시작됐는데 화면 꺼짐 방지를 켜지 않았다")
@@ -159,7 +159,8 @@ import Testing
         harness.games.gomokuScreenDidAppear()
         harness.games.gomokuScreenDidDisappear()
         harness.model.router.popToRoot(.games)
-        try? await Task.sleep(for: .milliseconds(150))
+        await baseYield()
+        await harness.barrier()
         #expect(applied.get().last == true, "대국 중 오목 화면을 떠났더니 화면 꺼짐 방지가 풀렸다")
         #expect(harness.games.appliedIdleTimerDisabled == true)
 
@@ -168,7 +169,7 @@ import Testing
         harness.model.sceneDidBecomeActive()
         #expect(await baseWaitUntil { applied.get().last == true })
 
-        let finished = try! JSONDecoder.gamesSnake.decode(GomokuStateResponse.self, from: Data(
+        let finished = try JSONDecoder.gamesSnake.decode(GomokuStateResponse.self, from: Data(
             GamesGomokuJSON.state(nowMs: nowMs, matchID: "m-idle", finished: true, moves: [("black", "H8"), ("white", "I9")]).utf8))
         serverFinished.mutate { $0 = true }
         harness.gomoku.applyState(finished.state)
@@ -188,24 +189,23 @@ import Testing
     // MARK: - 늦은 응답 · 세대
 
     @Test("로그아웃 → 다른 계정 로그인 사이에 늦게 온 옛 계정의 순위·제출 응답은 새 계정의 화면·로컬 최고에 쓰지 않는다")
-    func lateResponsesAfterReloginAreDropped() async {
+    func lateResponsesAfterReloginAreDropped() async throws {
         let harness = GamesHarness(label: "games-relogin")
         harness.server.setDefault("/rest/v1/profiles", json: #"[{"minigame_public":true}]"#)
         harness.server.setDefault("minigame_yesterday_winner", json: "[]")
         harness.server.setDefault("minigame_start_round", json: Self.tokenJSON)
-        harness.server.setDefault("minigame_board") { _ in
-            MobileStubResponse(status: 200, body: Data(Self.boardJSON.utf8), delay: 1.5)
-        }
-        harness.server.setDefault("minigame_submit_score") { _ in
-            MobileStubResponse(status: 200, body: Data(#"{"status":"ok","best_score":999,"plays":9,"improved":true}"#.utf8), delay: 1.5)
-        }
+        harness.server.setDefault("minigame_board", json: Self.boardJSON)
+        harness.server.setDefault("minigame_submit_score", json: #"{"status":"ok","best_score":999,"plays":9,"improved":true}"#)
         await harness.signIn()
+        // 옛 계정의 순위·제출 응답을 붙잡아 두었다가 다른 계정 로그인 뒤에 놓는다.
+        let boardHold = BaseHold.rpc("minigame_board", host: harness.server.host)
+        let submitHold = BaseHold.rpc("minigame_submit_score", host: harness.server.host)
 
         harness.hub.openScreen(.flappy)
-        #expect(await baseWaitUntil { harness.hub.roundToken == "tok-hard" && harness.server.requests("minigame_board").count == 1 })
-        let controller = try! #require(harness.hub.controller)
+        #expect(await baseWaitUntil { harness.hub.roundToken == "tok-hard" && boardHold.held == 1 })
+        let controller = try #require(harness.hub.controller)
         playFlappyToResult(controller, from: harness.clock.now)
-        #expect(await baseWaitUntil { harness.server.requests("minigame_submit_score").count == 1 })
+        #expect(await submitHold.waitHeld())
 
         // 두 응답이 도는 동안 로그아웃하고 다른 계정으로 들어간다.
         await harness.model.session.signOut()
@@ -214,7 +214,9 @@ import Testing
         await harness.model.session.signIn(email: "other@aing.invalid", password: "pw")
         #expect(harness.model.session.session?.userID.lowercased() == "u-other")
 
-        try? await Task.sleep(for: .milliseconds(2000))
+        #expect(await boardHold.releaseAndWaitDelivered())
+        #expect(await submitHold.releaseAndWaitDelivered())
+        await harness.barrier()
         #expect(harness.hub.boards[.flappy] == nil, "옛 계정의 늦은 순위 응답이 새 계정 화면에 들어왔다")
         #expect((harness.hub.localBest[.flappy] ?? 0) == 0, "옛 계정의 늦은 제출 응답이 새 계정의 최고로 보인다")
         #expect(harness.storage.defaults.integer(forKey: GamesMiniGameHub.bestKey(userID: "u-other", kind: .flappy)) == 0,
@@ -227,7 +229,7 @@ import Testing
     // MARK: - 순위 조회 접기
 
     @Test("순위 조회: 함수가 없는 서버(404 PGRST202)는 실패가 아니라 빈 기록 · 5xx 는 실패 — 실패면 사람 수를 모른다")
-    func boardMissingFunctionFoldsAndFailureHidesQuorum() async {
+    func boardMissingFunctionFoldsAndFailureHidesQuorum() async throws {
         let harness = GamesHarness(label: "games-board-fold")
         let mode = BaseLockedBox(0)
         harness.server.setDefault("minigame_board") { _ in
@@ -240,14 +242,14 @@ import Testing
         await harness.signIn()
 
         await harness.hub.loadBoard(.timingBar, withWinner: false)
-        var state = try! #require(harness.hub.boards[.timingBar])
+        var state = try #require(harness.hub.boards[.timingBar])
         #expect(state.loaded && !state.failed && state.entries.isEmpty, "404 를 실패로 봤다: \(state)")
         #expect(state.knowsPlayerCount, "함수 없는 서버는 '아직 아무도 안 했다'가 맞다")
 
         await harness.hub.loadBoard(.flappy, withWinner: false)
         mode.mutate { $0 = 1 }
         await harness.hub.loadBoard(.flappy, withWinner: false)
-        state = try! #require(harness.hub.boards[.flappy])
+        state = try #require(harness.hub.boards[.flappy])
         #expect(state.failed && state.entries.isEmpty)
         #expect(!state.knowsPlayerCount, "불러오지 못한 순위를 '아무도 안 했어요'로 말한다")
 
@@ -255,7 +257,7 @@ import Testing
         await harness.hub.loadBoard(.flappy, withWinner: false)
         mode.mutate { $0 = 1 }
         await harness.hub.loadBoard(.flappy, withWinner: false)
-        state = try! #require(harness.hub.boards[.flappy])
+        state = try #require(harness.hub.boards[.flappy])
         #expect(state.failed && state.entries.count == 2 && state.knowsPlayerCount, "줄이 있으면 적어도 그만큼은 했다")
 
         #expect(!GamesMiniGameBoard().knowsPlayerCount, "불러오는 중(아직 모름)")
@@ -279,7 +281,7 @@ import Testing
 
         harness.hub.recordScore(kind: .flappy, score: MiniGameKind.flappy.maxScore + 1)
         harness.hub.recordScore(kind: .flappy, score: -1)
-        try? await Task.sleep(for: .milliseconds(200))
+        await harness.barrier()
         #expect(harness.server.requests("minigame_submit_score").isEmpty, "상한을 넘는 점수를 올렸다")
         #expect((harness.hub.localBest[.flappy] ?? 0) == 0, "범위 밖 점수로 로컬 최고를 올렸다")
         #expect(harness.hub.roundToken == "tok-hard", "범위 밖 점수가 토큰을 써 버렸다")

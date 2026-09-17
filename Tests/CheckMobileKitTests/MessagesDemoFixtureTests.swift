@@ -28,7 +28,7 @@ import Testing
         func settle() async {
             for _ in 0..<3 {
                 _ = await baseWaitUntil { store.pendingActivityTask == nil && !store.isMarkingRead && !store.isSending && !store.directoryLoading }
-                try? await Task.sleep(for: .milliseconds(20))
+                await baseYield()
             }
         }
     }
@@ -57,6 +57,7 @@ import Testing
         )
         let model = MobileAppModel(environment: environment)
         model.messages.postMarkRefreshSeconds = 3600
+        model.session.clientReleaseTimeoutSeconds = 0   // 벽시계 상한 없음
         model.start()
         _ = await baseWaitUntil { model.session.phase == .signedIn }
         model.sceneDidBecomeActive()

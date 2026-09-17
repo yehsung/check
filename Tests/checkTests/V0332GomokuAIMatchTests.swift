@@ -734,7 +734,8 @@ func aiMatchScreensFitTheWindowAndReplaceChatWithTheNoRecordCard() throws {
         let store = GomokuStore()
         store.rubyBalance = 42
         store.record = GomokuRecord(wins: 3, losses: 1, draws: 0)
-        seat(store, GomokuAIGame(humanColor: .black, board: stones, turn: turn, now: Date(timeIntervalSince1970: 2_000_000_000)))
+        // 차례 링은 렌더 순간의 시계로 남은 초를 그린다 — 먼 미래 마감이면 링 글자가 넘쳐 스냅샷을 읽을 수 없다.
+        seat(store, GomokuAIGame(humanColor: .black, board: stones, turn: turn, now: Date()))
         return store
     }
     func pvpPlaying(turn: GomokuColor) -> GomokuStore {
@@ -745,7 +746,7 @@ func aiMatchScreensFitTheWindowAndReplaceChatWithTheNoRecordCard() throws {
             id: aiPvPMatchID, stake: 5, myColor: .black,
             opponent: GomokuUser(id: aiRival, displayName: "민수", avatarURL: nil, characterID: "fox",
                                  isWorking: true, isCapable: true, inMatch: true),
-            board: stones, lastMove: nil, moveCount: 6, turn: turn, deadline: Date(timeIntervalSince1970: 2_000_000_000),
+            board: stones, lastMove: nil, moveCount: 6, turn: turn, deadline: Date().addingTimeInterval(30),
             isFinished: false, outcome: nil, endReason: nil, rubyDelta: nil, blackPassed: false
         )
         store.phase = .playing

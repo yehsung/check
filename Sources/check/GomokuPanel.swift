@@ -1333,7 +1333,7 @@ private struct GomokuMatchSide: View {
 
             // 채팅 — 카드들과 [기권] 사이의 남는 높이 전부(v0.3.30 사용자 요구). AI 판은 그 자리에 안내 카드.
             if isAI {
-                GomokuAIInfoCard()
+                GomokuAIInfoCard(showsNoRecord: false)
                     .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             } else {
                 GomokuChatCard(store: store, rendersPlainText: rendersPlainText)
@@ -1751,13 +1751,13 @@ private struct GomokuResultCard: View {
                         .foregroundStyle(CheckTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                     if isAI {
-                        // AI 판: 얼굴 대신 기호, 루비·기록이 없다는 것을 같은 줄에서 말한다.
+                        // AI 판: 얼굴 대신 기호. 기록이 없다는 말은 아래 안내 카드가 한다(같은 화면에 두 번 쓰지 않는다).
                         HStack(spacing: 8) {
                             Image(systemName: "cpu")
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundStyle(CheckTheme.accent)
                                 .frame(width: 22, height: 22)
-                            Text("\(GomokuText.aiOpponentLine) · \(GomokuText.aiNoRecord)")
+                            Text(GomokuText.aiOpponentLine)
                                 .font(.caption)
                                 .foregroundStyle(CheckTheme.secondaryText)
                                 .lineLimit(1)
@@ -2772,7 +2772,10 @@ private struct GomokuAIColorButton: View {
 }
 
 /// AI 판에서 채팅 카드 자리에 서는 안내 카드 — 기록이 안 남는다는 것과 시계가 멈추는 조건을 말한다.
+/// 대국 화면에서는 "기록 없음" 칩이 이미 같은 말을 해서 첫 줄을 뺀다(`showsNoRecord: false`) — 한 화면에 같은 말을 두 번 하지 않는다.
 private struct GomokuAIInfoCard: View {
+    var showsNoRecord: Bool = true
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
@@ -2781,9 +2784,11 @@ private struct GomokuAIInfoCard: View {
                 Text(GomokuText.aiInfoTitle)
                     .font(.subheadline.weight(.bold))
             }
-            Text(GomokuText.aiNoRecord)
-                .font(.callout)
-                .fixedSize(horizontal: false, vertical: true)
+            if showsNoRecord {
+                Text(GomokuText.aiNoRecord)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text(GomokuText.aiInfoClock)
                 .font(.caption)
                 .foregroundStyle(CheckTheme.secondaryText)

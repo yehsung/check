@@ -1,4 +1,5 @@
 #if os(iOS)
+import CheckCore
 import SwiftUI
 
 // 순위판 행 문법 — **순위 탭**(팀 리그 · AI 토큰 · 미니게임)과 **게임 탭**(미니게임 '오늘 순위' · 결과 화면)이 한 벌을 쓴다.

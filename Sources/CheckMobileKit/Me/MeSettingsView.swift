@@ -5,6 +5,10 @@ import SwiftUI
 import UIKit
 
 /// 설정: 공개 설정 · 알림(푸시 코디네이터 — 시스템 권한 · 알림 켜기 · 종류별 3토글) · 화면 모드 · 팀 코드 공유 · 로그아웃 · 버전.
+///
+/// w15 정돈: 절마다 인셋 그룹 한 장 안의 행(구분선 0.5pt) · 토글은 **파랑**(초록은 근무 중·달성 전용 — w14 비평 30) · 알림 권한을
+/// 아직 정하지 않았거나 꺼져 있으면 종류별 토글은 **꺼진 모양으로** 흐리게 선다(켜진 채 흐린 모양이 '켜졌는데 고장'처럼 읽혔다) ·
+/// 채운 버튼은 [알림 켜기] 하나(팀 코드 공유는 틴트) · 맨 아래 버전 줄은 탭 막대와 띄운다.
 struct MeSettingsView: View {
     let store: MeStore
     @Environment(\.scenePhase) private var scenePhase
@@ -23,7 +27,7 @@ struct MeSettingsView: View {
 
     private var content: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: MobileTheme.space2) {
                 privacySection
                 pushSection
                 appearanceSection
@@ -36,7 +40,8 @@ struct MeSettingsView: View {
                     .monospacedDigit()
                     .foregroundStyle(MobileTheme.label2)
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 4)
+                    .padding(.top, MobileTheme.space4)
+                    .padding(.bottom, MobileTheme.space6)
                     .id("version")
             }
             .padding(.horizontal, MobileTheme.sideMargin)
@@ -68,27 +73,33 @@ struct MeSettingsView: View {
     // MARK: 공개
 
     private var privacySection: some View {
-        VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-            SectionHeader(MeText.privacySection)
-            AingCard {
-                toggleRow(
-                    title: MeText.tokenPublicTitle,
-                    detail: MeText.tokenPublicDetail,
-                    isOn: Binding(get: { store.tokenUsagePublic }, set: { store.setTokenUsagePublic($0) }),
-                    enabled: store.tokenUsagePublicLoaded
-                )
-                Divider().overlay(MobileTheme.separator)
-                toggleRow(
-                    title: MeText.miniGamePublicTitle,
-                    detail: MeText.miniGamePublicDetail,
-                    isOn: Binding(get: { store.miniGamePublic }, set: { store.setMiniGamePublic($0) }),
-                    enabled: store.miniGamePublicLoaded
-                )
+        section(MeText.privacySection) {
+            InsetGroup {
+                GroupRow(divider: .inset(MobileTheme.cardPadding), minHeight: MobileTheme.rowHeightTwoLine) {
+                    toggleRow(
+                        title: MeText.tokenPublicTitle,
+                        detail: MeText.tokenPublicDetail,
+                        isOn: Binding(get: { store.tokenUsagePublic }, set: { store.setTokenUsagePublic($0) }),
+                        enabled: store.tokenUsagePublicLoaded
+                    )
+                }
+                GroupRow(divider: store.privacyLoadFailed || store.settingsNotice != nil ? .inset(MobileTheme.cardPadding) : .none, minHeight: MobileTheme.rowHeightTwoLine) {
+                    toggleRow(
+                        title: MeText.miniGamePublicTitle,
+                        detail: MeText.miniGamePublicDetail,
+                        isOn: Binding(get: { store.miniGamePublic }, set: { store.setMiniGamePublic($0) }),
+                        enabled: store.miniGamePublicLoaded
+                    )
+                }
                 if store.privacyLoadFailed {
-                    loadFailureRow(MeText.privacyLoadFailed)
+                    GroupRow(divider: store.settingsNotice != nil ? .inset(MobileTheme.cardPadding) : .none) {
+                        loadFailureRow(MeText.privacyLoadFailed)
+                    }
                 }
                 if let notice = store.settingsNotice {
-                    InlineNotice(text: notice, kind: .error)
+                    GroupRow(divider: .none) {
+                        InlineNotice(text: notice, kind: .error)
+                    }
                 }
             }
         }
@@ -98,71 +109,78 @@ struct MeSettingsView: View {
 
     /// 알림: 권한 상태 · 권한 요청(알림 켜기) · 설정 앱 · 종류별 3토글 — 전부 푸시 코디네이터 공개 API(나 탭은 따로 저장하지 않는다).
     /// 토글은 권한이 있고 서버값을 알 때만 켠다. 저장은 코디네이터가 직렬로 보내므로 저장 중에도 다른 토글을 누를 수 있다.
+    /// 권한이 없으면(미결정 · 꺼짐) 토글은 **꺼진 모양**으로 보인다 — 알림이 오지 않는다는 사실 그대로(서버 선호값은 건드리지 않는다).
     @ViewBuilder
     private var pushSection: some View {
         if let push = store.push {
             let authorization = push.authorization
             let togglesEnabled = authorization.allowsDelivery && push.knowsPrefs
-            VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-                SectionHeader(MeText.pushSection)
-                AingCard {
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: authorization.allowsDelivery ? "bell.badge.fill" : "bell.slash.fill")
-                            .foregroundStyle(authorization.allowsDelivery ? MobileTheme.working : MobileTheme.label2)
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(authorization.meTitle)
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(MobileTheme.label)
-                            if let detail = authorization.meDetail {
-                                Text(detail)
-                                    .font(.footnote)
-                                    .foregroundStyle(MobileTheme.label2)
-                                    .fixedSize(horizontal: false, vertical: true)
+            section(MeText.pushSection) {
+                InsetGroup {
+                    GroupRow(divider: .inset(MobileTheme.cardPadding), minHeight: MobileTheme.rowHeightTwoLine) {
+                        VStack(alignment: .leading, spacing: MobileTheme.space3) {
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: authorization.allowsDelivery ? "bell.badge.fill" : "bell.slash.fill")
+                                    .foregroundStyle(authorization.allowsDelivery ? MobileTheme.accent : MobileTheme.label2)
+                                    .frame(minWidth: 22)
+                                    .accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(authorization.meTitle)
+                                        .font(.body.weight(.semibold))
+                                        .foregroundStyle(MobileTheme.label)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    if let detail = authorization.meDetail {
+                                        Text(detail)
+                                            .font(.footnote)
+                                            .foregroundStyle(MobileTheme.label2)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                                if push.isSavingPrefs {
+                                    ProgressView()
+                                        .accessibilityLabel(Text("알림 설정 저장 중"))
+                                }
+                            }
+                            .accessibilityElement(children: .combine)
+                            switch authorization {
+                            case .notDetermined:
+                                AingButton(PushText.settingsEnable, systemImage: "bell.badge", kind: .filled, size: .md, fillsWidth: true,
+                                           isBusy: push.isRequestingAuthorization) {
+                                    Task { await push.enableNotifications() }
+                                }
+                            case .denied, .provisional:
+                                AingButton(MeText.openSystemSettings, kind: .tinted, size: .md, fillsWidth: true) {
+                                    push.openSystemSettings()
+                                }
+                            case .unknown, .authorized, .ephemeral:
+                                EmptyView()
                             }
                         }
-                        Spacer(minLength: 0)
-                        if push.isSavingPrefs {
-                            ProgressView()
-                                .accessibilityLabel(Text("알림 설정 저장 중"))
-                        }
                     }
-                    .accessibilityElement(children: .combine)
-                    switch authorization {
-                    case .notDetermined:
-                        Button {
-                            Task { await push.enableNotifications() }
-                        } label: {
-                            Label(PushText.settingsEnable, systemImage: "bell.badge")
-                                .frame(maxWidth: .infinity, minHeight: 44)
+                    ForEach(Array(PushKind.allCases.enumerated()), id: \.element) { index, kind in
+                        let isLast = index == PushKind.allCases.count - 1 && !(!push.knowsPrefs && authorization.allowsDelivery) && push.prefsNotice == nil
+                        GroupRow(divider: isLast ? .none : .inset(MobileTheme.cardPadding), minHeight: MobileTheme.rowHeightTwoLine) {
+                            toggleRow(
+                                title: kind.settingTitle,
+                                detail: MeText.pushDetail(kind),
+                                isOn: Binding(
+                                    get: { togglesEnabled && push.isEnabled(kind) },
+                                    set: { enabled in Task { await push.setPreference(kind, enabled: enabled) } }
+                                ),
+                                enabled: togglesEnabled
+                            )
                         }
-                        .buttonStyle(AingPrimaryButtonStyle())
-                        .disabled(push.isRequestingAuthorization)
-                    case .denied, .provisional:
-                        Button(MeText.openSystemSettings) {
-                            push.openSystemSettings()
-                        }
-                        .buttonStyle(AingSecondaryButtonStyle())
-                    case .unknown, .authorized, .ephemeral:
-                        EmptyView()
-                    }
-                    Divider().overlay(MobileTheme.separator)
-                    ForEach(PushKind.allCases, id: \.self) { kind in
-                        toggleRow(
-                            title: kind.settingTitle,
-                            detail: MeText.pushDetail(kind),
-                            isOn: Binding(
-                                get: { push.isEnabled(kind) },
-                                set: { enabled in Task { await push.setPreference(kind, enabled: enabled) } }
-                            ),
-                            enabled: togglesEnabled
-                        )
                     }
                     if !push.knowsPrefs, authorization.allowsDelivery {
-                        InlineNotice(text: MeText.pushPrefsUnknown, kind: .info)
+                        GroupRow(divider: push.prefsNotice == nil ? .none : .inset(MobileTheme.cardPadding)) {
+                            InlineNotice(text: MeText.pushPrefsUnknown, kind: .info)
+                        }
                     }
                     if let notice = push.prefsNotice {
-                        InlineNotice(text: notice, kind: .error)
+                        GroupRow(divider: .none) {
+                            InlineNotice(text: notice, kind: .error)
+                        }
                     }
                 }
             }
@@ -174,74 +192,61 @@ struct MeSettingsView: View {
     /// 시스템 설정 따르기(기본) · 라이트 · 다크 — 고른 행에 체크. 행 전체가 44pt 이상 누름 영역이고, 큰 글자에서는 제목이 줄바꿈한다.
     /// 알림 절 바로 아래(이 기기에 딸린 설정끼리), 계정에 딸린 팀 · 계정 절 위에 둔다.
     private var appearanceSection: some View {
-        VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-            SectionHeader(MeText.appearanceSection)
-            AingCard {
-                VStack(spacing: 0) {
-                    ForEach(Array(MobileAppearanceMode.allCases.enumerated()), id: \.element) { index, mode in
-                        if index > 0 {
-                            Divider().overlay(MobileTheme.separator)
-                        }
-                        appearanceRow(mode)
-                    }
+        section(MeText.appearanceSection, footer: MeText.appearanceWidgetNote) {
+            InsetGroup {
+                ForEach(Array(MobileAppearanceMode.allCases.enumerated()), id: \.element) { index, mode in
+                    appearanceRow(mode, isLast: index == MobileAppearanceMode.allCases.count - 1)
                 }
             }
-            Text(MeText.appearanceWidgetNote)
-                .font(.footnote)
-                .foregroundStyle(MobileTheme.label2)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 4)
         }
     }
 
-    private func appearanceRow(_ mode: MobileAppearanceMode) -> some View {
+    private func appearanceRow(_ mode: MobileAppearanceMode, isLast: Bool) -> some View {
         let isSelected = store.appearanceMode == mode
         return Button {
             store.selectAppearance(mode)
         } label: {
-            HStack(spacing: 12) {
+            GroupRow(divider: isLast ? .none : .inset(MobileTheme.cardPadding + 24 + MobileTheme.space3)) {
                 Image(systemName: MeText.appearanceSymbol(mode))
                     .font(.body)
                     .foregroundStyle(isSelected ? MobileTheme.accent : MobileTheme.label2)
-                    .frame(minWidth: 24)
+                    .frame(width: 24)
                     .accessibilityHidden(true)
                 Text(MeText.appearanceTitle(mode))
-                    .font(.body.weight(.semibold))
+                    .font(.body)
                     .foregroundStyle(MobileTheme.label)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
+                Spacer(minLength: MobileTheme.space2)
                 Image(systemName: "checkmark")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(MobileTheme.accent)
                     .opacity(isSelected ? 1 : 0)
                     .accessibilityHidden(true)
             }
-            .padding(.vertical, 4)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MeRowButtonStyle())
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: 팀
 
     private var teamSection: some View {
-        VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-            SectionHeader(MeText.teamSection)
-            AingCard {
-                HStack(alignment: .firstTextBaseline) {
+        section(MeText.teamSection) {
+            InsetGroup {
+                GroupRow {
                     Text(store.teamName ?? MeText.noTeam)
                         .font(.body.weight(.semibold))
                         .foregroundStyle(MobileTheme.label)
-                    Spacer(minLength: 8)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: MobileTheme.space2)
                 }
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                GroupRow(divider: store.inviteCodeFailed || store.inviteCode != nil ? .inset(MobileTheme.cardPadding) : .none) {
                     Text(MeText.inviteCodeTitle)
                         .font(.subheadline)
                         .foregroundStyle(MobileTheme.label2)
-                    Spacer(minLength: 8)
+                    Spacer(minLength: MobileTheme.space2)
                     if let code = store.inviteCode {
                         Text(code)
                             .font(MobileTheme.number(.title3, weight: .bold))
@@ -256,14 +261,17 @@ struct MeSettingsView: View {
                     }
                 }
                 if store.inviteCodeFailed {
-                    loadFailureRow(MeText.inviteCodeMissing)
+                    GroupRow(divider: store.inviteCode != nil ? .inset(MobileTheme.cardPadding) : .none) {
+                        loadFailureRow(MeText.inviteCodeMissing)
+                    }
                 }
                 if let code = store.inviteCode {
-                    ShareLink(item: MeText.inviteShareMessage(teamName: store.teamName, code: code)) {
-                        Label(MeText.inviteCodeShare, systemImage: "square.and.arrow.up")
-                            .frame(maxWidth: .infinity)
+                    GroupRow(divider: .none) {
+                        ShareLink(item: MeText.inviteShareMessage(teamName: store.teamName, code: code)) {
+                            Label(MeText.inviteCodeShare, systemImage: "square.and.arrow.up")
+                        }
+                        .buttonStyle(AingButtonStyle(.tinted, size: .md, fillsWidth: true))
                     }
-                    .buttonStyle(AingPrimaryButtonStyle())
                 }
             }
         }
@@ -272,35 +280,46 @@ struct MeSettingsView: View {
     // MARK: 계정
 
     private var accountSection: some View {
-        VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-            SectionHeader(MeText.accountSection)
-            AingCard {
+        section(MeText.accountSection) {
+            InsetGroup {
                 if let email = store.context.session.profile?.email ?? store.context.session.storedEmail {
-                    Text(email)
-                        .font(.subheadline)
-                        .foregroundStyle(MobileTheme.label2)
-                        .textSelection(.enabled)
-                }
-                Button(role: .destructive) {
-                    confirmingSignOut = true
-                } label: {
-                    HStack {
-                        if store.isSigningOut { ProgressView() }
-                        Text(store.isSigningOut ? MeText.signingOut : MeText.signOut)
-                            .font(.headline)
+                    GroupRow {
+                        Text(email)
+                            .font(.subheadline)
+                            .foregroundStyle(MobileTheme.label2)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(MobileTheme.danger.opacity(0.12)))
-                    .foregroundStyle(MobileTheme.danger)
                 }
-                .buttonStyle(.plain)
-                .disabled(store.isSigningOut)
+                GroupRow(divider: .none) {
+                    AingButton(store.isSigningOut ? MeText.signingOut : MeText.signOut, kind: .destructive, size: .md, fillsWidth: true,
+                               isBusy: store.isSigningOut) {
+                        confirmingSignOut = true
+                    }
+                }
             }
         }
     }
 
     // MARK: 조각
+
+    /// 절 머리(19 bold · 좌우 20) + 본문 + 선택 꼬리말.
+    private func section<Content: View>(_ title: String, footer: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: MobileTheme.space2) {
+            SectionHeader(title)
+                .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+                .padding(.top, MobileTheme.space3)
+            content()
+            if let footer {
+                Text(footer)
+                    .font(.footnote)
+                    .foregroundStyle(MobileTheme.label2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+            }
+        }
+    }
 
     /// 조회 실패 안내 + [다시 시도](SPEC-ios §0.5 — 원인과 할 일을 말한다). 공용 `LoadFailureRow`(44pt 버튼). 당겨서 새로고침도 같은 조회다.
     private func loadFailureRow(_ text: String) -> some View {
@@ -311,15 +330,16 @@ struct MeSettingsView: View {
         Toggle(isOn: isOn) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.body.weight(.semibold))
+                    .font(.body)
                     .foregroundStyle(MobileTheme.label)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(detail)
                     .font(.footnote)
                     .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .tint(MobileTheme.working)
+        .tint(MobileTheme.accentFill)
         .disabled(!enabled)
     }
 

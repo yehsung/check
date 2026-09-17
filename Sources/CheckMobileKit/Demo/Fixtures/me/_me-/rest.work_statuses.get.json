@@ -1,0 +1,13 @@
+[
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000001",
+    "status": "offWork",
+    "updated_at": "2026-09-17T02:10:00.000Z",
+    "last_seen_at": "2026-09-17T02:10:00.000Z",
+    "active_session_id": null,
+    "profiles": {
+      "display_name": "새벽",
+      "avatar_url": null
+    }
+  }
+]

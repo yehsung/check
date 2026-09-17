@@ -3,17 +3,33 @@ import CheckCore
 import CheckMobileShared
 import SwiftUI
 
-/// 지금 탭 화면(SPEC-ios §3.2): 날짜 머리 · 내 상태 카드(오늘 누적 · 이번 주 목표) · 오늘 할 일 · 지금 근무 중.
+/// 지금 탭 화면(SPEC-ios §3.2 · 재디자인 B 01·02): 큰 제목 + 부제(날짜 · 팀) · 내 상태 카드(착용 캐릭터 초상 · 큰 타이머 · 이번 주 막대) ·
+/// 오늘 할 일 · 지금 근무 중(우리 팀 경과 / 다른 팀 말 걸기). 스크롤하면 제목이 접히고 부제가 "5:10:00 · 이번 주 62%"로 바뀐다.
 /// 경로는 `router.pathBinding(for: .now)`, 딥링크(`aingcheck://now` — 위젯 탭)는 `consumePendingRoute(for: .now)` 로 꺼낸다.
 struct NowTab: View {
     let store: NowStore
     @State private var isGoalSheetPresented = false
+    /// 큰 제목이 접혔는가(부제를 날짜 · 팀 → 시계 · 퍼센트로 바꾼다).
+    @State private var isTitleCollapsed = false
 
     var body: some View {
         let router = store.context.router
         NavigationStack(path: router.pathBinding(for: .now)) {
             ScrollViewReader { proxy in
                 List {
+                    if #available(iOS 26, *) {
+                        // 부제는 내비 막대가 그린다(`NowNavigationSubtitle`).
+                    } else {
+                        // iOS 26 전에는 내비 부제가 없다 — 큰 제목 바로 아래 줄로 둔다(접힌 제목의 시계 부제는 없음).
+                        Section {
+                            Text(NowTab.expandedSubtitle(store: store))
+                                .font(.subheadline)
+                                .foregroundStyle(MobileTheme.label2)
+                                .listRowInsets(EdgeInsets(top: 0, leading: MobileTheme.titleMargin, bottom: 0, trailing: MobileTheme.titleMargin))
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
+                    }
                     if let notice = store.notice {
                         Section {
                             InlineNotice(text: notice, kind: .warning)
@@ -23,7 +39,6 @@ struct NowTab: View {
                     NowStatusSection(store: store, onEditGoal: { isGoalSheetPresented = true })
                     NowTodoSection(store: store)
                     NowWorkingSection(store: store)
-                        .id(NowTab.workingSectionID)
                 }
                 #if DEBUG
                 .task {
@@ -36,13 +51,20 @@ struct NowTab: View {
                 // grouped(셀이 화면 폭) — 카드는 행이 `cardSegmentRow` 로 직접 그린다(insetGrouped 는 셀을 시스템 반경으로 잘랐다).
                 .listStyle(.grouped)
                 .listSectionSpacing(.compact)
-                // 묶음 이름 줄("다른 팀")이 44pt 빈 행처럼 보이지 않게 — 다른 행은 내용이 이보다 높다.
-                .environment(\.defaultMinListRowHeight, 30)
+                // 묶음 이름 줄("우리 팀 · 3명")이 44pt 빈 행처럼 보이지 않게 — 다른 행은 내용이 이보다 높다.
+                .environment(\.defaultMinListRowHeight, 26)
+                .contentMargins(.top, NowTab.listTopMargin, for: .scrollContent)
                 .scrollContentBackground(.hidden)
                 .background(MobileTheme.background.ignoresSafeArea())
                 .scrollDismissesKeyboard(.interactively)
                 .refreshable { await store.refreshNow() }
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    geometry.contentOffset.y + geometry.contentInsets.top > NowTab.collapseOffset
+                } action: { _, collapsed in
+                    isTitleCollapsed = collapsed
+                }
                 .navigationTitle(NowText.title)
+                .modifier(NowNavigationSubtitle(store: store, isCollapsed: isTitleCollapsed))
                 .overlay(alignment: .bottom) { NowUndoToast(store: store) }
                 .animation(.snappy, value: store.undoTodoID)
                 .sheet(isPresented: $isGoalSheetPresented) {
@@ -61,10 +83,66 @@ struct NowTab: View {
     }
 
     static let workingSectionID = "now.working"
+    /// 이만큼 내려가면 큰 제목이 접힌 것으로 본다(큰 제목 줄 높이 약 52pt).
+    static let collapseOffset: CGFloat = 44
+    /// 부제와 첫 카드 사이(시안 14pt) — grouped 목록의 첫 절 위 기본 틈을 줄인다.
+    static let listTopMargin: CGFloat = 4
+
+    /// 펼친 큰 제목 부제 "9월 17일 목요일 · 아잉 데모팀".
+    static func expandedSubtitle(store: NowStore) -> String {
+        NowText.expandedSubtitle(date: NowFormat.longDate(store.context.clock.now()), teamName: store.membership?.teamName)
+    }
 
     private func consumeRoute() {
         // aingcheck://now(위젯 탭)는 탭 자체다 — 이 탭은 쌓는 화면이 없으니 꺼내 비우기만 한다(라우터가 이미 탭을 골랐다).
         _ = store.context.router.consumePendingRoute(for: .now)
+    }
+}
+
+/// 내비 부제(iOS 26+): 펼침 = 날짜 · 팀, 접힘 = 오늘 누적 시계 · 이번 주 퍼센트(접힌 동안만 1초마다 다시 센다).
+private struct NowNavigationSubtitle: ViewModifier {
+    let store: NowStore
+    let isCollapsed: Bool
+    @State private var tick = 0
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .navigationSubtitle(subtitle)
+                .task(id: isCollapsed) {
+                    guard isCollapsed else { return }
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .seconds(1))
+                        tick &+= 1
+                    }
+                }
+        } else {
+            content
+        }
+    }
+
+    private var subtitle: String {
+        _ = tick
+        let now = store.context.clock.now()
+        if isCollapsed, let card = store.myCard(now: now) {
+            return NowText.collapsedSubtitle(clock: NowFormat.clock(card.todaySeconds), percent: card.percent)
+        }
+        return NowTab.expandedSubtitle(store: store)
+    }
+}
+
+// MARK: - 절 머리
+
+/// 목록 절 머리(시안 `.b-sh`): 19 bold 제목 + 오른쪽 보조 글자. 좌우 20 · 아래 8. 위는 16 — grouped 목록의 절 사이 틈이 더해져
+/// 시안의 22pt 와 같은 간격이 된다(스크린샷 대조).
+struct NowSectionHeader: View {
+    let title: String
+    let trailing: String?
+
+    var body: some View {
+        SectionHeader(title, trailing: trailing.map { .text($0) } ?? .none)
+            .textCase(nil)
+            .listRowInsets(EdgeInsets(top: 16, leading: MobileTheme.titleMargin, bottom: 8, trailing: MobileTheme.titleMargin))
     }
 }
 
@@ -80,14 +158,7 @@ struct NowStatusSection: View {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 content(now: store.context.clock.now())
             }
-            // 카드 모양은 다른 탭의 `AingCard` 와 같게(반경 16 · 1px 테두리) — 시스템 절 모양을 쓰지 않는다.
-            .cardSegmentRow(.single)
-        } header: {
-            Text(MobileRelativeTime.headerDate(store.context.clock.now()))
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(MobileTheme.label)
-                .textCase(nil)
-                .accessibilityAddTraits(.isHeader)
+            .cardSegmentRow(.single, padding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
         }
     }
 
@@ -103,10 +174,9 @@ struct NowStatusSection: View {
                     .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 6)
             .accessibilityElement(children: .combine)
         } else if let card = store.myCard(now: now) {
-            NowStatusCard(card: card, teamName: store.membership?.teamName, onEditGoal: onEditGoal)
+            NowStatusCard(card: card, characterID: store.displayedCharacterID, onEditGoal: onEditGoal)
         } else if store.teamLoadState == .failed {
             // 시도는 끝났는데 모른다(오프라인 · 5xx) — 도는 요청이 없는데 "불러오는 중"을 남기지 않는다.
             NowUnavailableRow(title: NowText.statusUnavailableTitle, isRetrying: store.isRefreshing) { store.refresh() }
@@ -129,128 +199,137 @@ struct NowUnavailableRow: View {
     }
 }
 
+/// 상태 카드(시안 `.b-hero`): [초상 · 상태 글자 · 부제 · 목표 연필] / 큰 타이머 / 이번 주 줄 + 막대.
+/// 초상의 표정·링과 상태 글자 색이 근무 상태를 말한다(초록 근무 중 · 앰버 연결 끊김 · 청회색 근무 안 함).
 struct NowStatusCard: View {
     let card: NowMyCard
-    let teamName: String?
+    let characterID: String?
     let onEditGoal: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // 접근성 글자 크기에서는 팀 이름을 아래 줄로 내린다 — 한 줄에 두면 상태 문구가 두 줄로 꺾이고 점이 어긋난다(스크린샷 실측).
-            if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 4) {
-                    statusLine
-                    teamLabel
-                }
-            } else {
-                HStack(alignment: .center, spacing: 8) {
-                    statusLine
-                    Spacer(minLength: 8)
-                    teamLabel
-                }
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(NowText.todayLabel)
-                    .font(.caption)
-                    .foregroundStyle(MobileTheme.label2)
-                Text(NowFormat.clock(card.todaySeconds))
-                    .font(MobileTheme.number(.largeTitle, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(MobileTheme.label)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text("\(NowText.todayLabel) \(NowFormat.spokenDuration(card.todaySeconds))"))
-            VStack(alignment: .leading, spacing: 8) {
-                NowProgressBar(progress: card.progress, tint: card.isGoalComplete ? MobileTheme.working : MobileTheme.accent)
-                HStack(alignment: .center, spacing: 8) {
-                    Text(card.weekLine)
-                        .font(.footnote)
-                        .monospacedDigit()
-                        .foregroundStyle(MobileTheme.label2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 4)
-                    Button(action: onEditGoal) {
-                        // 원은 글자 크기를 따르되 누르는 칸은 44pt 이상(원만 누르게 하면 기본 글자에서 36pt 였다 — 스크린샷 실측).
-                        Image(systemName: "pencil")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(MobileTheme.accent)
-                            .padding(10)
-                            .background(Circle().fill(MobileTheme.fill))
-                            .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
-                            .contentShape(Rectangle())
-                    }
-                    // 칸은 44pt 로 키우되 카드 높이는 원(36pt) 기준 그대로 — 위아래 4pt 는 줄 간격 쪽으로 내민다.
-                    .padding(.vertical, -4)
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel(Text(NowText.goalEdit))
-                }
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            top
+            Text(NowFormat.clock(card.todaySeconds))
+                .scaledFont(size: 48, weight: .semibold)
+                .monospacedDigit()
+                .kerning(-1)
+                .foregroundStyle(MobileTheme.label)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.top, 12)
+                .accessibilityLabel(Text("\(NowText.todayLabel) \(NowFormat.spokenDuration(card.todaySeconds))"))
+            meter
+                .padding(.top, 10)
         }
-        .padding(.vertical, 6)
     }
 
-    private var statusLine: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            // 점은 글자와 같은 글꼴의 기호라 기준선에 앉고 글자 크기를 따라 커진다(고정 10pt 원은 AX 크기에서 글자 발치에 붙었다 — 스크린샷 실측).
-            Image(systemName: "circle.fill")
-                .font(.subheadline)
-                .imageScale(.small)
-                .foregroundStyle(card.isWorking ? (card.isStale ? MobileTheme.pending : MobileTheme.working) : MobileTheme.offWork)
-                .accessibilityHidden(true)
-            Text(card.isWorking ? NowText.workingOnMac : NowText.notWorking)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(MobileTheme.label)
-                .fixedSize(horizontal: false, vertical: true)
-            if card.isStale {
-                NowChip(text: NowText.connectionLost, tint: MobileTheme.pending)
-            }
-        }
-        .layoutPriority(1)
+    private var mood: CharacterMood {
+        card.isWorking ? (card.isStale ? .lost : .working) : .off
     }
 
     @ViewBuilder
-    private var teamLabel: some View {
-        if let teamName {
-            Text(teamName)
-                .font(.caption)
-                .foregroundStyle(MobileTheme.label2)
-                .lineLimit(1)
-        }
-    }
-}
-
-struct NowProgressBar: View {
-    let progress: Double
-    let tint: Color
-
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule().fill(MobileTheme.fill)
-                Capsule()
-                    .fill(tint)
-                    .frame(width: max(0, proxy.size.width * min(1, max(0, progress))))
+    private var top: some View {
+        if typeSize.isAccessibilitySize {
+            // 접근성 글자: 상태 글자가 초상 옆에서 한 글자씩 꺾이지 않게 아래 줄로 내린다.
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center) {
+                    portrait
+                    Spacer(minLength: 8)
+                    editButton
+                }
+                stateText
+            }
+        } else {
+            HStack(alignment: .center, spacing: 14) {
+                portrait
+                stateText
+                Spacer(minLength: 8)
+                editButton
             }
         }
-        .frame(height: 8)
-        .accessibilityHidden(true)
     }
-}
 
-struct NowChip: View {
-    let text: String
-    let tint: Color
+    private var portrait: some View {
+        CharacterPortrait(id: characterID, mood: mood, size: 54)
+    }
 
-    var body: some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(tint.opacity(0.14)))
+    private var stateText: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(card.isWorking ? NowText.workingOnMac : NowText.notWorking)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(stateColor)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(subtitle)
+                .font(.footnote)
+                .foregroundStyle(card.isStale ? MobileTheme.pending : MobileTheme.label2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var stateColor: Color {
+        guard card.isWorking else { return MobileTheme.offWork }
+        return card.isStale ? MobileTheme.pending : MobileTheme.working
+    }
+
+    private var subtitle: String {
+        if card.isStale { return NowText.staleSubtitle }
+        if card.isWorking, let started = card.sessionStartedAt { return NowText.sessionSince(NowFormat.clockTime(started)) }
+        return NowText.offSubtitle
+    }
+
+    private var editButton: some View {
+        Button(action: onEditGoal) {
+            // 원 34pt(시안 `.b-ibtn`) · 누르는 칸 44pt.
+            Image(systemName: "pencil")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(MobileTheme.label2)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(MobileTheme.fill))
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .padding(-5)
+        .buttonStyle(.borderless)
+        .accessibilityLabel(Text(NowText.goalEdit))
+    }
+
+    private var meter: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    weekText
+                    Spacer(minLength: 8)
+                    percentText
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    weekText
+                    percentText
+                }
+            }
+            ProgressBar(card.progress, style: card.isGoalComplete ? .done : .accent)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(card.weekLine))
+    }
+
+    private var weekText: some View {
+        let worked = Text(NowFormat.hoursMinutesText(card.weekSeconds))
+            .fontWeight(.semibold)
+            .foregroundStyle(MobileTheme.label)
+        return Text("\(NowText.weekPrefix) \(worked) \(NowText.goalSuffix(hours: card.goalHours))")
+            .font(.subheadline)
+            .monospacedDigit()
+            .foregroundStyle(MobileTheme.label2)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var percentText: some View {
+        Text("\(card.percent)%")
+            .font(.subheadline.weight(.semibold))
+            .monospacedDigit()
+            .foregroundStyle(card.isGoalComplete ? MobileTheme.working : MobileTheme.label)
             .fixedSize()
     }
 }
@@ -266,93 +345,132 @@ struct NowWorkingSection: View {
         let teammates = people.filter(\.isTeammate)
         let others = people.filter { !$0.isTeammate }
         let state = store.workingLoadState
-        // 행 자리(카드 조각): [우리 팀 이름 · 팀원…] [다른 팀 · 사람…] 을 한 장으로 잇는다.
-        let othersStart = teammates.isEmpty ? 0 : 1 + teammates.count
-        let rowCount = othersStart + (others.isEmpty ? 0 : 1 + others.count)
-        Section {
-            if state == .loading {
-                LoadingRow()
-                    .cardSegmentRow(.single)
-            } else if state == .failed {
-                // 모르는데 "근무 중인 사람이 없어요"나 스피너를 보이지 않는다. 다시 시도는 내 카드 자리 버튼 · 당겨서 새로고침.
-                LoadFailureRow(NowText.workingUnavailable, retry: nil)
-                    .cardSegmentRow(.single)
-            } else if people.isEmpty {
-                Text(NowText.workingEmpty)
-                    .font(.subheadline)
-                    .foregroundStyle(MobileTheme.label2)
-                    .cardSegmentRow(.single)
-            } else {
-                if !teammates.isEmpty {
-                    NowGroupLabel(text: store.membership?.teamName ?? NowText.ourTeam, position: .of(index: 0, count: rowCount))
-                    ForEach(Array(teammates.enumerated()), id: \.element.id) { offset, person in
-                        NowWorkingRow(person: person, clock: store.context.clock)
-                            .cardSegmentRow(.of(index: 1 + offset, count: rowCount))
+        let header = NowSectionHeader(
+            title: NowText.workingTitle(count: nil),
+            trailing: state == .loaded ? NowText.peopleCount(people.count) : nil
+        )
+        if state != .loaded || people.isEmpty {
+            Section {
+                Group {
+                    if state == .loading {
+                        LoadingRow()
+                    } else if state == .failed {
+                        // 모르는데 "근무 중인 사람이 없어요"나 스피너를 보이지 않는다. 다시 시도는 내 카드 자리 버튼 · 당겨서 새로고침.
+                        LoadFailureRow(NowText.workingUnavailable, retry: nil)
+                    } else {
+                        Text(NowText.workingEmpty)
+                            .font(.subheadline)
+                            .foregroundStyle(MobileTheme.label2)
                     }
                 }
-                if !others.isEmpty {
-                    NowGroupLabel(text: NowText.otherTeams, position: .of(index: othersStart, count: rowCount))
-                    ForEach(Array(others.enumerated()), id: \.element.id) { offset, person in
-                        NowWorkingRow(person: person, clock: store.context.clock)
-                            .cardSegmentRow(.of(index: othersStart + 1 + offset, count: rowCount))
-                    }
-                }
+                .cardSegmentRow(.single)
+                .id(NowTab.workingSectionID)
+            } header: {
+                header
+            } footer: {
+                NowWorkingFooter()
             }
-        } header: {
-            Text(NowText.workingTitle(count: state == .loaded ? people.count : nil))
-                .font(.headline)
-                .foregroundStyle(MobileTheme.label)
-                .textCase(nil)
-                .accessibilityAddTraits(.isHeader)
+        } else if !teammates.isEmpty, !others.isEmpty {
+            // 우리 팀 · 다른 팀은 그룹 두 장(시안 02 — 사이 12pt).
+            Section {
+                NowWorkingGroup(store: store, label: NowText.ourTeam, people: teammates, anchorID: NowTab.workingSectionID)
+            } header: {
+                header
+            }
+            .listSectionSpacing(12)
+            Section {
+                NowWorkingGroup(store: store, label: NowText.otherTeams, people: others, anchorID: nil)
+            } footer: {
+                NowWorkingFooter()
+            }
+        } else {
+            Section {
+                NowWorkingGroup(store: store, label: teammates.isEmpty ? NowText.otherTeams : NowText.ourTeam, people: people, anchorID: NowTab.workingSectionID)
+            } header: {
+                header
+            } footer: {
+                NowWorkingFooter()
+            }
         }
     }
 }
 
-struct NowGroupLabel: View {
-    let text: String
-    let position: CardSegmentPosition
-
+/// 절 아래 한 줄 "근무 시작과 종료는 맥 앱에서 해요"(시안 `.b-foot`).
+struct NowWorkingFooter: View {
     var body: some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
+        Text(NowText.workingFooter)
+            .font(.footnote)
             .foregroundStyle(MobileTheme.label2)
-            .accessibilityAddTraits(.isHeader)
-            .cardSegmentRow(
-                position,
-                padding: EdgeInsets(top: 12, leading: MobileTheme.cardPadding, bottom: 2, trailing: MobileTheme.cardPadding),
-                separatorVisible: false
-            )
+            .fixedSize(horizontal: false, vertical: true)
+            .listRowInsets(EdgeInsets(top: 8, leading: MobileTheme.titleMargin, bottom: 12, trailing: MobileTheme.titleMargin))
     }
 }
 
+/// 한 그룹(인셋 그룹 한 장): 이름 줄 "우리 팀 · 3명" + 사람 줄들. 구분선은 글자 시작점(64pt)부터.
+struct NowWorkingGroup: View {
+    let store: NowStore
+    let label: String
+    let people: [NowWorkingPerson]
+    /// 데모 장면 `working` 이 스크롤해 갈 자리(첫 그룹만).
+    let anchorID: String?
+
+    static let dividerLeading: CGFloat = 64
+
+    var body: some View {
+        let count = people.count + 1
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            Text(NowText.peopleCount(people.count))
+                .monospacedDigit()
+        }
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(MobileTheme.label2)
+        .cardSegmentRow(
+            .of(index: 0, count: count),
+            padding: EdgeInsets(top: 12, leading: MobileTheme.cardPadding, bottom: 4, trailing: MobileTheme.cardPadding),
+            dividerLeading: Self.dividerLeading
+        )
+        .id(anchorID ?? label)
+        ForEach(Array(people.enumerated()), id: \.element.id) { offset, person in
+            NowWorkingRow(person: person, clock: store.context.clock) {
+                store.context.router.open(.message(peerID: person.id))
+            }
+            .cardSegmentRow(.of(index: 1 + offset, count: count), dividerLeading: Self.dividerLeading)
+        }
+    }
+}
+
+/// 사람 한 줄(시안 B 사람 행): 이니셜 원 + 상태 점(초록 · 앰버) · 이름 뒤 센터 배지 · (끊김 부제) · 오른쪽 = 우리 팀 경과 / 다른 팀 말 걸기.
 struct NowWorkingRow: View {
     let person: NowWorkingPerson
     let clock: MobileClock
+    let onTalk: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         Group {
             if typeSize.isAccessibilitySize {
-                // 접근성 글자 크기: 한 줄에 아바타 · 이름 · 배지 · 시간을 두면 이름과 "서울"이 한 글자씩 세로로 꺾였다(AX5 스크린샷 실측).
-                // 이름은 아바타 옆 한 줄을 통째로 쓰고, 배지 · 끊김 · 시간은 아랫줄로 내린다(줄바꿈이 필요하면 다시 아래로).
+                // 접근성 글자 크기: 한 줄에 아바타 · 이름 · 배지 · 시간을 두면 이름이 한 글자씩 세로로 꺾였다(AX5 스크린샷 실측).
+                // 첫 줄은 아바타 · 이름(+ 다른 팀 말 걸기 버튼), 끊김 부제와 우리 팀 경과는 아랫줄로 내린다.
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .center, spacing: 12) {
-                        AvatarView(name: person.name, url: person.avatarURL, size: 36)
-                        nameText
+                        avatar
+                        PersonName(person.name, center: person.center)
+                        if !person.isTeammate {
+                            Spacer(minLength: 8)
+                            trailing
+                        }
                     }
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .center, spacing: 8) { detailItems }
-                        VStack(alignment: .leading, spacing: 4) { detailItems }
-                    }
+                    if person.isStale { staleText }
+                    if person.isTeammate { trailing }
                 }
             } else {
                 HStack(spacing: 12) {
-                    AvatarView(name: person.name, url: person.avatarURL, size: 36)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            nameText
-                            CenterBadge(person.center).fixedSize()
-                        }
+                    avatar
+                    VStack(alignment: .leading, spacing: 1) {
+                        PersonName(person.name, center: person.center)
                         if person.isStale { staleText }
                     }
                     Spacer(minLength: 8)
@@ -360,46 +478,48 @@ struct NowWorkingRow: View {
                 }
             }
         }
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
+        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
     }
 
-    private var nameText: some View {
-        Text(person.name)
-            .font(.body.weight(.semibold))
-            .foregroundStyle(MobileTheme.label)
-            .lineLimit(2)
+    private var avatar: some View {
+        PersonAvatar(name: person.name, status: person.isStale ? .pending : .working, url: person.avatarURL, size: 36)
     }
 
     private var staleText: some View {
-        Text(NowText.connectionLost)
-            .font(.caption)
+        let relative = person.lastSeenAt.map { MobileRelativeTime.text(for: $0, now: clock.now()) }
+        return Text(NowText.staleLastSeen(relative))
+            .font(MobileTheme.rowSubtitle)
             .foregroundStyle(MobileTheme.pending)
-            .fixedSize()
-    }
-
-    @ViewBuilder
-    private var detailItems: some View {
-        CenterBadge(person.center).fixedSize()
-        if person.isStale { staleText }
-        trailing
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
     private var trailing: some View {
         if person.isTeammate {
-            // 경과 h:mm 는 분 단위라 1분마다만 다시 그린다. 신호가 끊긴 사람은 스토어가 멈춘 값을 준다.
+            // 경과는 분 단위라 1분마다만 다시 그린다. 신호가 끊긴 사람은 스토어가 멈춘 값을 준다.
             TimelineView(.everyMinute) { _ in
                 let seconds = elapsed(now: clock.now())
-                Text(NowFormat.hoursMinutes(seconds))
-                    .font(MobileTheme.number(.body))
+                Text(NowFormat.hoursMinutesText(seconds))
+                    .font(.subheadline)
                     .monospacedDigit()
-                    .foregroundStyle(person.isStale ? MobileTheme.pending : MobileTheme.working)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize()
                     .accessibilityLabel(Text("근무 \(NowFormat.spokenDuration(seconds))째"))
             }
         } else {
-            NowChip(text: NowText.workingChip, tint: MobileTheme.working)
+            Button(action: onTalk) {
+                Image(systemName: "bubble.left")
+                    .font(.body)
+                    // 기호는 XXXL 에서 멈춘다(누르는 칸은 44pt 그대로) — 접근성 크기에서 카드 끝을 넘었다(AX3 실측).
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .foregroundStyle(MobileTheme.accent)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .padding(.vertical, -4)
+            .padding(.trailing, -12)
+            .accessibilityLabel(Text(NowText.talkTo(person.name)))
         }
     }
 

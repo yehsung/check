@@ -19,6 +19,9 @@ package struct MobileEnvironment {
     package var reloadWidgetTimelines: @MainActor () -> Void
     /// 데모 실행이면 시작 라우트(`-AingCheckDemoRoute`). nil = 실제 서버.
     package var demoRoute: String?
+    /// 화면 모드(`MobileAppearanceStore`)를 두는 곳 — 계정과 무관한 기기 설정이라 로그아웃이 치우는 키 밖에 둔다.
+    /// 프로덕션은 앱 자신의 `.standard`(위젯은 읽지 않는다), 데모는 실행마다 비우는 전용 suite. nil(테스트 기본)이면 `storage.defaults`.
+    package var appearanceDefaults: UserDefaults?
 
     package init(
         service: SupabaseWorkService,
@@ -30,7 +33,8 @@ package struct MobileEnvironment {
         realtimeTransport: RealtimeTransport?,
         runsTimers: Bool,
         reloadWidgetTimelines: @escaping @MainActor () -> Void,
-        demoRoute: String? = nil
+        demoRoute: String? = nil,
+        appearanceDefaults: UserDefaults? = nil
     ) {
         self.service = service
         self.vault = vault
@@ -42,6 +46,7 @@ package struct MobileEnvironment {
         self.runsTimers = runsTimers
         self.reloadWidgetTimelines = reloadWidgetTimelines
         self.demoRoute = demoRoute
+        self.appearanceDefaults = appearanceDefaults
     }
 
     package var isDemo: Bool { demoRoute != nil }
@@ -63,7 +68,8 @@ package struct MobileEnvironment {
             installationID: InstallationID.current(store: vault, fallback: storage.defaults),
             realtimeTransport: RealtimeFeature.isEnabled(defaults: storage.defaults) ? LiveRealtimeTransport() : nil,
             runsTimers: true,
-            reloadWidgetTimelines: MobileWidgetTimelines.reloadAll
+            reloadWidgetTimelines: MobileWidgetTimelines.reloadAll,
+            appearanceDefaults: .standard
         )
     }
 }

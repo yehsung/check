@@ -28,6 +28,8 @@ public final class MobileAppModel {
     package let rankings: RankingsStore
     package let games: GamesStore
     package let me: MeStore
+    /// 화면 모드(기기 설정). `sessionDidSignOut` 의 reset 사슬에 넣지 않는다 — 로그아웃해도 남는다.
+    package let appearance: MobileAppearanceStore
 
     package private(set) var isSceneActive = false
     @ObservationIgnored private var started = false
@@ -75,6 +77,7 @@ public final class MobileAppModel {
         gomoku.clock = { clock.now() }
         realtime.gomoku = gomoku
         let links = MobileStoreLinks()
+        let appearance = MobileAppearanceStore(defaults: env.appearanceDefaults ?? env.storage.defaults)
         let context = MobileContext(
             service: env.service,
             session: session,
@@ -87,7 +90,8 @@ public final class MobileAppModel {
             storage: env.storage,
             appInfo: env.appInfo,
             isDemo: env.isDemo,
-            links: links
+            links: links,
+            appearance: appearance
         )
 
         self.session = session
@@ -97,6 +101,7 @@ public final class MobileAppModel {
         self.gomokuHost = host
         self.gomoku = gomoku
         self.links = links
+        self.appearance = appearance
         self.context = context
         self.push = PushCoordinator(context: context)
         self.now = NowStore(context: context)

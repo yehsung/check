@@ -10,6 +10,7 @@ import Foundation
 /// - 시계: 2026-09-17 14:05 KST 에 멈춰 있다(`MobileClock.demoInstant`).
 /// - 세션: 로그인된 데모 계정(라우트 `login` 이면 로그아웃 상태, `update` 면 업데이트 필요 화면).
 /// - 실시간 없음(소켓 nil) · 키체인·App Group 을 건드리지 않는다(메모리 금고 · 임시 저장소 — 실행마다 비운다).
+/// - 화면 모드: `-AingCheckDemoAppearance light|dark|system`(없으면 시스템). 실행 중 바꾸기는 `MobileAppearanceDemo`(Darwin 알림).
 ///
 /// 라우트: `now|messages|messages/<peer>|rankings/league|rankings/tokens|rankings/minigame|games|games/timing|games/flappy|
 /// games/gomoku/lobby|games/gomoku/match|me|me/shop|me/feedback|me/settings|login|update` (`AingRoute(path:)` 로 연다).
@@ -59,6 +60,10 @@ package enum MobileDemo {
         }
         storage.ensureDirectory()
 
+        // 화면 모드: 기기 설정(`.standard`)을 건드리지 않게 전용 suite 에 두고 실행마다 시작값으로 되돌린다.
+        let appearanceDefaults = UserDefaults(suiteName: appearanceSuiteName) ?? storage.defaults
+        seedAppearance(arguments: arguments, into: appearanceDefaults)
+
         let vault = InMemoryTokenVault()
         if route != "login" {
             vault.write(accessToken, key: AingKeychain.accessTokenKey)
@@ -81,8 +86,19 @@ package enum MobileDemo {
             realtimeTransport: nil,
             runsTimers: false,
             reloadWidgetTimelines: {},
-            demoRoute: route
+            demoRoute: route,
+            appearanceDefaults: appearanceDefaults
         )
+    }
+
+    package static let appearanceSuiteName = "com.yehsung.aingcheck.scratch.demo-appearance"
+
+    /// 데모 실행의 화면 모드 시작값: `-AingCheckDemoAppearance light|dark|system` 이면 그 값, 없으면 지난 실행에서 고른 값을 지워 시스템.
+    package static func seedAppearance(arguments: [String], into defaults: UserDefaults) {
+        defaults.removeObject(forKey: MobileAppearanceStore.defaultsKey)
+        if let raw = value(of: "-AingCheckDemoAppearance", in: arguments)?.lowercased() {
+            defaults.set(raw, forKey: MobileAppearanceStore.defaultsKey)
+        }
     }
 
     /// exp 가 2100-01-01 인 가짜 JWT(서명 없음 — 데모 스텁은 검증하지 않는다). 실행 직후 갱신이 돌지 않게 한다.

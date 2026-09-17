@@ -33,6 +33,8 @@ package struct MobileContext {
     /// 데모 모드인가(DEBUG 빌드의 `-AingCheckDemo YES`). 스토어는 이 값으로 동작을 바꾸지 않는다 — 스텁 서버가 다를 뿐이다.
     package let isDemo: Bool
     package let links: MobileStoreLinks
+    /// 화면 모드(기기 설정 — 세대 · 로그아웃과 무관하게 앱 실행 동안 하나). 나 → 설정이 고르고, iOS 창 적용기가 모든 창에 건다.
+    package let appearance: MobileAppearanceStore
 
     package init(
         service: SupabaseWorkService,
@@ -46,7 +48,8 @@ package struct MobileContext {
         storage: AingSharedStorage,
         appInfo: MobileAppInfo,
         isDemo: Bool,
-        links: MobileStoreLinks
+        links: MobileStoreLinks,
+        appearance: MobileAppearanceStore
     ) {
         self.service = service
         self.session = session
@@ -60,6 +63,7 @@ package struct MobileContext {
         self.appInfo = appInfo
         self.isDemo = isDemo
         self.links = links
+        self.appearance = appearance
     }
 
     /// 지금 세션 세대. 응답 적용 전에 캡처값과 비교한다.

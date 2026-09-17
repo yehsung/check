@@ -324,6 +324,28 @@ package enum MeText {
     package static let pushPrefsUnknown = "알림 종류 설정을 아직 못 읽었어요 — 잠시 뒤 다시 열어 주세요"
     package static let openSystemSettings = "설정 앱에서 켜기"
 
+    // MARK: 화면 모드 (폰만의 문장 — 기기 설정, 서버에 올리지 않는다)
+
+    package static let appearanceSection = "화면 모드"
+    /// 위젯은 iOS 가 홈 화면 모드로 그린다 — 앱 설정을 따르지 않는다는 것을 칸 아래 한 줄로 밝힌다.
+    package static let appearanceWidgetNote = "위젯은 이 설정과 상관없이 아이폰 설정을 따라요."
+
+    package static func appearanceTitle(_ mode: MobileAppearanceMode) -> String {
+        switch mode {
+        case .system: return "시스템 설정 따르기"
+        case .light: return "라이트"
+        case .dark: return "다크"
+        }
+    }
+
+    package static func appearanceSymbol(_ mode: MobileAppearanceMode) -> String {
+        switch mode {
+        case .system: return "circle.lefthalf.filled"
+        case .light: return "sun.max"
+        case .dark: return "moon"
+        }
+    }
+
     package static let teamSection = "팀"
     package static let inviteCodeTitle = "팀 코드"
     package static let inviteCodeShare = "팀 코드 공유"

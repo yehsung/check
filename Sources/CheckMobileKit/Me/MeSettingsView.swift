@@ -4,7 +4,7 @@ import CheckMobileShared
 import SwiftUI
 import UIKit
 
-/// 설정: 공개 설정 · 알림(푸시 코디네이터 — 시스템 권한 · 알림 켜기 · 종류별 3토글) · 팀 코드 공유 · 로그아웃 · 버전.
+/// 설정: 공개 설정 · 알림(푸시 코디네이터 — 시스템 권한 · 알림 켜기 · 종류별 3토글) · 화면 모드 · 팀 코드 공유 · 로그아웃 · 버전.
 struct MeSettingsView: View {
     let store: MeStore
     @Environment(\.scenePhase) private var scenePhase
@@ -26,6 +26,8 @@ struct MeSettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 privacySection
                 pushSection
+                appearanceSection
+                    .id("appearance")
                 teamSection
                     .id("team")
                 accountSection
@@ -165,6 +167,62 @@ struct MeSettingsView: View {
                 }
             }
         }
+    }
+
+    // MARK: 화면 모드
+
+    /// 시스템 설정 따르기(기본) · 라이트 · 다크 — 고른 행에 체크. 행 전체가 44pt 이상 누름 영역이고, 큰 글자에서는 제목이 줄바꿈한다.
+    /// 알림 절 바로 아래(이 기기에 딸린 설정끼리), 계정에 딸린 팀 · 계정 절 위에 둔다.
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
+            SectionHeader(MeText.appearanceSection)
+            AingCard {
+                VStack(spacing: 0) {
+                    ForEach(Array(MobileAppearanceMode.allCases.enumerated()), id: \.element) { index, mode in
+                        if index > 0 {
+                            Divider().overlay(MobileTheme.separator)
+                        }
+                        appearanceRow(mode)
+                    }
+                }
+            }
+            Text(MeText.appearanceWidgetNote)
+                .font(.footnote)
+                .foregroundStyle(MobileTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4)
+        }
+    }
+
+    private func appearanceRow(_ mode: MobileAppearanceMode) -> some View {
+        let isSelected = store.appearanceMode == mode
+        return Button {
+            store.selectAppearance(mode)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: MeText.appearanceSymbol(mode))
+                    .font(.body)
+                    .foregroundStyle(isSelected ? MobileTheme.accent : MobileTheme.secondaryText)
+                    .frame(minWidth: 24)
+                    .accessibilityHidden(true)
+                Text(MeText.appearanceTitle(mode))
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(MobileTheme.primaryText)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Image(systemName: "checkmark")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(MobileTheme.accent)
+                    .opacity(isSelected ? 1 : 0)
+                    .accessibilityHidden(true)
+            }
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: 팀

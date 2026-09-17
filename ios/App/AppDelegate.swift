@@ -16,6 +16,8 @@ final class AingCheckAppDelegate: NSObject, UIApplicationDelegate {
         // 알림 센터 delegate 는 **여기서** 붙어야 한다 — 알림을 눌러 앱이 켜지면 응답 콜백이 이 함수 직후에 온다.
         // 카테고리(MESSAGE · GOMOKU_INVITE 수락 · FEEDBACK_REPLY)도 같은 자리에서 등록한다.
         model.installPushNotifications()
+        // 화면 모드(나 → 설정): 창이 생기기 전에 걸어 첫 화면부터 고른 모드로 그린다.
+        model.installAppearance()
         return true
     }
 

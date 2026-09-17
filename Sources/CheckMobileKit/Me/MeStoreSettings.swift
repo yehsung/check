@@ -3,7 +3,8 @@ import CheckMobileShared
 import Foundation
 
 /// 설정: 공개 설정 2개(`profiles` 자기 행 PATCH — token_usage_public · minigame_public) · 알림(**푸시 코디네이터 공개 API 하나** —
-/// 시스템 권한 상태 · 권한 요청 · 종류별 3토글 → 직렬화된 `set_push_prefs`) · 팀 코드(`my_team_invite_code`) · 로그아웃(세션) · 버전.
+/// 시스템 권한 상태 · 권한 요청 · 종류별 3토글 → 직렬화된 `set_push_prefs`) · 화면 모드(기기 설정 — 서버 없음) · 팀 코드(`my_team_invite_code`) ·
+/// 로그아웃(세션) · 버전.
 ///
 /// 공개 토글은 맥과 같은 **낙관 반영 → 실패 시 원복**이다. 공개 설정 GET 에 딸려 오는 `focus_mode` 는 읽고 버린다(폰은 집중 모드를
 /// 바꾸지 않는다 — R9 의 PATCH 경로가 여기에 없다).
@@ -159,6 +160,16 @@ extension MeStore {
     /// 알림 설정의 유일한 구현(푸시 코디네이터). 권한 상태 · 권한 요청 · 종류별 저장(직렬) · 저장 실패 문구를 모두 거기서 읽고 부른다 —
     /// 나 탭은 따로 저장하지 않는다(예전 `session.savePushPrefs` 직접 저장은 통합에서 걷어냈다). 앱 모델이 만든 뒤에만 채워진다.
     package var push: PushCoordinator? { context.links.push }
+
+    // MARK: 화면 모드
+
+    /// 화면 모드(기기 설정 — `context.appearance`). 계정 값이 아니라 `reset()` 이 건드리지 않고, 서버 요청도 없다.
+    package var appearanceMode: MobileAppearanceMode { context.appearance.mode }
+
+    /// 고르는 즉시 저장하고 앱 전체(모든 창)에 건다 — 재실행 없음.
+    package func selectAppearance(_ mode: MobileAppearanceMode) {
+        context.appearance.select(mode)
+    }
 
     // MARK: 계정
 

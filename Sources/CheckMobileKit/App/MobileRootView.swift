@@ -18,6 +18,8 @@ public struct MobileRootView: View {
         content
             .tint(MobileTheme.accent)
             .onAppear {
+                // 화면 모드는 앱 델리게이트가 창이 생기기 전에 걸었다 — 여기서 한 번 더(앱 타깃이 빠뜨려도 첫 화면에서 걸린다).
+                model.installAppearance()
                 model.start()
                 applyScenePhase(scenePhase)
             }

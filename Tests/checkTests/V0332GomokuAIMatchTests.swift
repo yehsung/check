@@ -799,3 +799,27 @@ func aiMatchScreensFitTheWindowAndReplaceChatWithTheNoRecordCard() throws {
         #expect(aiDiff(bitmap, pvpBitmap, rect: rubyArea) > 300, "\(name): AI 결과에 루비 변화가 그려졌다")
     }
 }
+
+// MARK: - 통합: 진짜 엔진이 스토어 길로 둔다
+
+/// 위 시험들은 가짜 선택기를 끼운다 — 이 시험만 **기본 선택기(엔진)** 로 스토어의 착수 → 백그라운드 계산 → 반영 길을 끝까지 탄다.
+/// 흑 G8·H8·I8(F8 은 백이 막음)에 사람이 J8 을 두면 K8 이 유일한 막는 자리다. 엔진이 다른 곳에 두면 다음 수에 진다.
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func theRealEngineAnswersThroughTheStoreAndBlocksTheOnlyFour() async throws {
+    let (_, gomoku, host) = aiStore("real-engine")
+    gomoku.aiMoveChooser = GomokuAIRuntime.engineChooser
+    gomoku.isWindowVisible = true
+    seat(gomoku, GomokuAIGame(humanColor: .black, board: board(black: ["G8", "H8", "I8"], white: ["F8", "D3"]),
+                              turn: .black, now: Date()))
+
+    await gomoku.place(pt("J8"))
+    #expect(gomoku.match?.moveCount == 6 && gomoku.isAIThinking)
+    await aiWait(6_000) { gomoku.match?.moveCount == 7 }
+    let match = try #require(gomoku.match)
+    #expect(match.moveCount == 7, "엔진이 스토어 길로 두지 않았다")
+    #expect(match.board[pt("K8")] == .white, "유일한 막는 자리(K8)를 두지 않았다: 마지막 수 \(match.lastMove?.notation ?? "-")")
+    #expect(!match.isFinished && match.turn == .black && match.deadline != nil)
+    #expect(gomoku.aiRuntime.chooserCalls == 1)
+    #expect(GomokuStubProtocol.calls(host: host).filter { matchRPCs.contains($0.rpc) }.isEmpty)
+}

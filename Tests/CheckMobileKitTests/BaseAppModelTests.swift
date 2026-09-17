@@ -114,6 +114,7 @@ import Testing
         let model = MobileAppModel(environment: environment)
         #expect(model.links.now === model.now && model.links.push === model.push, "링크가 채워지지 않았다")
         #expect(model.gomoku.host === model.gomokuHost)
+        model.session.clientReleaseTimeoutSeconds = 0   // 벽시계 상한 없음
         model.start()
         #expect(await baseWaitUntil { model.session.phase == .signedOut })
 

@@ -232,8 +232,13 @@ final class BaseHoldURLProtocol: URLProtocol, @unchecked Sendable {
     private static let forwardSession = MobileStubURLProtocol.makeSession()
 
     /// 이 프로토콜 → 스텁 순서로 거치는 세션(캐시 없음).
+    ///
+    /// 요청 타임아웃을 넉넉히 연다: ephemeral 기본 60초는 **벽시계**라, 포화한 전체 스위트에서 붙잡힌 요청이 테스트가 놓기 전에
+    /// `timedOut` 으로 끝나 "아직 떠 있다"는 전제가 뒤집혔다(부하 실행 1회차 PushBadgeTests — 복원이 client_release 실패로 넘어감).
     static func makeSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 3_600
+        configuration.timeoutIntervalForResource = 3_600
         configuration.protocolClasses = [BaseHoldURLProtocol.self, MobileStubURLProtocol.self]
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData

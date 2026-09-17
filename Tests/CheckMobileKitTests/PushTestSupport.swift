@@ -162,6 +162,7 @@ final class PushHarness {
         model = MobileAppModel(environment: environment)
         // 제품의 벽시계 상한은 테스트가 재는 대상이 아니면 끈다(포화에서 상한이 먼저 지나 다른 갈래로 새지 않게).
         model.push.sessionSettleTimeoutSeconds = BaseStub.patientSeconds
+        model.push.gomokuBusyTimeoutSeconds = BaseStub.patientSeconds
         model.session.clientReleaseTimeoutSeconds = 0
     }
 
@@ -207,6 +208,7 @@ final class PushHarness {
         storage.defaults.set(Self.userID, forKey: AingSharedKeys.userID)
         let restored = MobileAppModel(environment: environment)
         restored.push.sessionSettleTimeoutSeconds = BaseStub.patientSeconds
+        restored.push.gomokuBusyTimeoutSeconds = BaseStub.patientSeconds
         restored.session.clientReleaseTimeoutSeconds = 0
         restored.push.attach(system: system)
         if start { restored.start() }

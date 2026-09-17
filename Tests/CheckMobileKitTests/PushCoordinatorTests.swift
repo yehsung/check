@@ -117,7 +117,7 @@ import Testing
     }
 
     @Test("앱이 뒤에 있을 때 로그인(알림 액션으로 깨어남)이면 시트를 띄우지 않는다 · 데모 조립은 명시하지 않으면 시트 없음")
-    func noPrimerInBackgroundOrDemo() async {
+    func noPrimerInBackgroundOrDemo() async throws {
         let h = PushHarness()
         defer { h.tearDown() }
         await h.launchSignedIn(active: false)
@@ -125,20 +125,22 @@ import Testing
         #expect(!h.push.isPrimerPresented)
 
         MobileStubURLProtocol.clearRequests(host: MobileDemo.host)
-        let environment = MobileDemo.environment(arguments: ["app", "-AingCheckDemo", "YES", "-AingCheckDemoRoute", "now"])!
+        let environment = try #require(MobileDemo.environment(arguments: ["app", "-AingCheckDemo", "YES", "-AingCheckDemoRoute", "now"]))
         let demo = MobileAppModel(environment: environment)
         let system = PushFakeSystem()
         demo.push.attach(system: system)
+        demo.session.clientReleaseTimeoutSeconds = 0   // 벽시계 상한 없음
         demo.start()
         #expect(await baseWaitUntil { demo.session.isSignedIn })
         demo.sceneDidBecomeActive()
         await demo.push.pendingStatusCheck?.value
         #expect(!demo.push.isPrimerPresented, "데모 스크린샷(다른 탭)이 시트에 가린다")
 
-        let forced = MobileAppModel(environment: MobileDemo.environment(arguments: ["app", "-AingCheckDemo", "YES", "-AingCheckDemoRoute", "now"])!)
+        let forced = MobileAppModel(environment: try #require(MobileDemo.environment(arguments: ["app", "-AingCheckDemo", "YES", "-AingCheckDemoRoute", "now"])))
         let forcedSystem = PushFakeSystem()
         forced.push.attach(system: forcedSystem)
         forced.applyPushDemoArguments(["app", "-AingCheckDemo", "YES", "-AingCheckDemoPushPrimer", "YES"])
+        forced.session.clientReleaseTimeoutSeconds = 0
         forced.start()
         #expect(await baseWaitUntil { forced.session.isSignedIn })
         forced.sceneDidBecomeActive()
@@ -735,7 +737,7 @@ import Testing
     // MARK: - 데모
 
     @Test("데모 -AingCheckDemoPushOpen: 로그인 뒤 그 종류의 알림을 누른 경로로 연다 · 금지 호출 0")
-    func demoPushOpen() async {
+    func demoPushOpen() async throws {
         for (raw, tab, route) in [
             ("message", AingTab.messages, AingRoute.message(peerID: PushDemo.peerID)),
             ("gomoku_invite", .games, .gomokuInvite(matchID: PushDemo.matchID)),
@@ -743,13 +745,16 @@ import Testing
         ] {
             MobileStubURLProtocol.clearRequests(host: MobileDemo.host)
             let arguments = ["app", "-AingCheckDemo", "YES", "-AingCheckDemoRoute", "now", "-AingCheckDemoPushOpen", raw]
-            let model = MobileAppModel(environment: MobileDemo.environment(arguments: arguments)!)
+            let model = MobileAppModel(environment: try #require(MobileDemo.environment(arguments: arguments)))
+            // 알림 열기는 실행 복원을 벽시계 상한(기본 10초)까지 기다린다 — 포화에서 먼저 지나 라우트를 안 여는 갈래로 새지 않게.
+            model.push.sessionSettleTimeoutSeconds = BaseStub.patientSeconds
+            model.session.clientReleaseTimeoutSeconds = 0
             model.push.attach(system: PushFakeSystem())
             model.installPushNotifications(arguments: arguments)
             model.start()
             #expect(await baseWaitUntil { model.router.lastOpenedRoute == route }, "\(raw): \(String(describing: model.router.lastOpenedRoute))")
             #expect(model.router.selectedTab == tab)
-            #expect(PushPayload(json: PushDemo.payloadJSON(PushKind(rawValue: raw)!))?.route == route)
+            #expect(PushPayload(json: PushDemo.payloadJSON(try #require(PushKind(rawValue: raw))))?.route == route)
             await model.push.pendingStatusCheck?.value
             await model.session.pendingDeviceRegistration?.value
             await baseBarrier(model.context.service)

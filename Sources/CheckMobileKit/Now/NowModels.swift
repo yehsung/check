@@ -13,6 +13,15 @@ package enum NowText {
     // 내 상태
     package static let workingOnMac = "맥에서 근무 중"
     package static let notWorking = "근무 안 함"
+    /// 상태 카드 부제(근무 중): "이번 세션 10:20부터"(KST 시각).
+    package static func sessionSince(_ time: String) -> String { "이번 세션 \(time)부터" }
+    /// 상태 카드 부제(근무 안 함) — 큰 숫자가 무엇인지 말한다.
+    package static let offSubtitle = "오늘 누적"
+    /// 상태 카드 부제(연결 끊김) — 시간이 마지막 신호에서 멈춘 까닭.
+    package static let staleSubtitle = "연결 끊김 · 마지막 신호에서 멈췄어요"
+    /// 이번 주 막대 줄 앞머리("이번 주 24시간 48분 / 40시간").
+    package static let weekPrefix = "이번 주"
+    package static func goalSuffix(hours: Int) -> String { "/ \(hours)시간" }
     /// 맥 팀 카드 `PresenceChip` 의 stale 문구와 같다.
     package static let connectionLost = "연결 끊김"
     package static let todayLabel = "오늘 누적"
@@ -42,13 +51,14 @@ package enum NowText {
     package static let todoEmptyHint = "위 칸에 적고 완료를 누르면 추가돼요"
     package static let todoDeleted = "삭제됨"
     package static let todoUndo = "되돌리기"
-    package static let todoFooter = "내 계정에 저장돼 다른 기기와 맞춰져요"
     package static let todoMarkDone = "완료로 표시"
     package static let todoMarkUndone = "완료 취소"
     package static let todoDelete = "삭제"
     package static let todoEdit = "수정"
 
     package static func todoOldSection(count: Int) -> String { "오래된 항목 (\(count))" }
+    /// 오래된 항목 머리 줄 글자(개수는 오른쪽 끝에 따로).
+    package static let todoOldTitle = "오래된 항목"
     package static func todoRemaining(count: Int) -> String { "남은 \(count)개" }
     package static func todoCounter(current: Int) -> String { "\(current)/\(TodoRules.maxTitleLength)" }
 
@@ -66,7 +76,26 @@ package enum NowText {
     package static let ourTeam = "우리 팀"
     package static let otherTeams = "다른 팀"
     package static let workingEmpty = "지금 근무 중인 사람이 없어요"
-    package static let workingChip = "근무 중"
+    /// 머리·묶음 오른쪽 사람 수("6명").
+    package static func peopleCount(_ count: Int) -> String { "\(count)명" }
+    /// 지금 근무 중 절 아래 한 줄(폰은 근무를 시작·종료하지 않는다).
+    package static let workingFooter = "근무 시작과 종료는 맥 앱에서 해요"
+    /// 끊긴 팀원 부제: "연결 끊김 · 마지막 확인 13분 전".
+    package static func staleLastSeen(_ relative: String?) -> String {
+        guard let relative else { return connectionLost }
+        return "\(connectionLost) · 마지막 확인 \(relative)"
+    }
+    /// 다른 팀 사람 줄 끝 말 걸기 버튼(VoiceOver).
+    package static func talkTo(_ name: String) -> String { "\(name)에게 말 걸기" }
+
+    // 머리(큰 제목 부제)
+    /// 펼친 큰 제목 아래: "9월 17일 목요일 · 아잉 데모팀"(팀이 없으면 날짜만).
+    package static func expandedSubtitle(date: String, teamName: String?) -> String {
+        guard let teamName, !teamName.isEmpty else { return date }
+        return "\(date) · \(teamName)"
+    }
+    /// 스크롤해 접힌 제목 아래: "5:10:00 · 이번 주 62%".
+    package static func collapsedSubtitle(clock: String, percent: Int) -> String { "\(clock) · 이번 주 \(percent)%" }
 }
 
 // MARK: - 팀 소속
@@ -126,10 +155,12 @@ package struct NowWorkingPerson: Identifiable, Equatable, Sendable {
     /// 우리 팀만: 이 시각의 경과(초). stale 이면 마지막 신호에서 멈춘 값.
     package var elapsedSeconds: Int?
     package var isStale: Bool
+    /// 우리 팀만: 마지막 생존신호 시각(끊긴 줄 부제 "마지막 확인 N분 전").
+    package var lastSeenAt: Date?
 
     package init(
         id: String, name: String, avatarURL: URL?, center: String?, isTeammate: Bool,
-        startedAt: Date?, elapsedSeconds: Int?, isStale: Bool
+        startedAt: Date?, elapsedSeconds: Int?, isStale: Bool, lastSeenAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -139,6 +170,7 @@ package struct NowWorkingPerson: Identifiable, Equatable, Sendable {
         self.startedAt = startedAt
         self.elapsedSeconds = elapsedSeconds
         self.isStale = isStale
+        self.lastSeenAt = lastSeenAt
     }
 }
 
@@ -233,6 +265,36 @@ package enum NowFormat {
         let raw = Int((Double(worked) / Double(goal) * 100).rounded())
         return min(999, max(0, raw))
     }
+
+    /// "24시간 48분" · "48분" · "3시간"(이번 주 막대 줄 · 우리 팀 경과). 내림 — 올려서 목표를 채운 것처럼 보이지 않게.
+    package static func hoursMinutesText(_ seconds: Int) -> String {
+        let s = max(0, seconds)
+        let hours = s / 3600, minutes = (s % 3600) / 60
+        if hours == 0 { return "\(minutes)분" }
+        if minutes == 0 { return "\(hours)시간" }
+        return "\(hours)시간 \(minutes)분"
+    }
+
+    /// 시각 "10:20"(KST 24시간 — 상태 카드 "이번 세션 10:20부터").
+    package static func clockTime(_ date: Date) -> String {
+        let parts = NowFormat.kst.dateComponents([.hour, .minute], from: date)
+        return String(format: "%d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+    }
+
+    /// 머리 날짜 "9월 17일 목요일"(KST).
+    package static func longDate(_ date: Date) -> String {
+        let parts = NowFormat.kst.dateComponents([.month, .day, .weekday], from: date)
+        let weekdays = ["일", "월", "화", "수", "목", "금", "토"]
+        let weekday = parts.weekday.map { weekdays[($0 - 1 + 7) % 7] + "요일" } ?? ""
+        return "\(parts.month ?? 0)월 \(parts.day ?? 0)일 \(weekday)"
+    }
+
+    static let kst: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+        calendar.locale = Locale(identifier: "ko_KR")
+        return calendar
+    }()
 
     /// VoiceOver 용 "3시간 25분".
     package static func spokenDuration(_ seconds: Int) -> String {

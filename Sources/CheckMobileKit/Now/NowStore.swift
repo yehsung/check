@@ -422,7 +422,8 @@ package final class NowStore {
                     isTeammate: true,
                     startedAt: member.currentSessionStartedAt,
                     elapsedSeconds: NowTimeMath.elapsedSeconds(member, now: now, presenceAt: judgedAt),
-                    isStale: NowTimeMath.isStale(member, now: judgedAt)
+                    isStale: NowTimeMath.isStale(member, now: judgedAt),
+                    lastSeenAt: member.lastSeenAt ?? member.updatedAt
                 )
             }
             .sorted(by: Self.teammateOrder)
@@ -623,6 +624,11 @@ package final class NowStore {
     private var knownEquippedCharacterID: String? {
         guard let me = context.links.me, me.equippedLoaded else { return nil }
         return me.equippedCharacterID
+    }
+
+    /// 상태 카드 초상에 세울 착용 캐릭터(읽기만 — 새 서버 호출 없음): 나 탭이 알아 온 값 → 위젯 스냅숏 파일에 남은 지난 값 → nil(초상이 아잉으로 선다).
+    package var displayedCharacterID: String? {
+        knownEquippedCharacterID ?? context.widgetSnapshots.current?.characterID
     }
 
     // MARK: - 위젯 스냅샷

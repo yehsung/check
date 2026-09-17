@@ -8,7 +8,8 @@ struct MeProfileView: View {
     let store: MeStore
     @State private var pickerItem: PhotosPickerItem?
     @FocusState private var nameFocused: Bool
-    @ScaledMetric(relativeTo: .largeTitle) private var avatarSize: CGFloat = 112
+    /// 기본 글자 크기의 지름 — 큰 글자에서는 `AvatarView` 공용 규칙이 키운다.
+    private let avatarSize: CGFloat = 112
 
     var body: some View {
         @Bindable var store = store
@@ -16,14 +17,14 @@ struct MeProfileView: View {
             VStack(alignment: .leading, spacing: 20) {
                 AingCard {
                     VStack(spacing: 12) {
-                        ZStack {
-                            AvatarView(name: store.displayName ?? "나", url: store.avatarURL, size: avatarSize)
-                            if store.isUploadingAvatar {
-                                Circle().fill(Color.black.opacity(0.35))
-                                    .frame(width: avatarSize, height: avatarSize)
-                                ProgressView().tint(.white)
+                        AvatarView(name: store.displayName ?? "나", url: store.avatarURL, size: avatarSize)
+                            .overlay {
+                                // 덮개는 아바타 자신의 틀을 따른다(글자 배율로 커진 지름과 같게).
+                                if store.isUploadingAvatar {
+                                    Circle().fill(Color.black.opacity(0.35))
+                                    ProgressView().tint(.white)
+                                }
                             }
-                        }
                         let pickerTitle = store.isUploadingAvatar ? MeText.avatarUploading : MeText.avatarChange
                         PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
                             Label(pickerTitle, systemImage: "photo.on.rectangle")

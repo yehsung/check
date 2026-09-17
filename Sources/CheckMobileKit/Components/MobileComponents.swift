@@ -62,19 +62,32 @@ package struct SectionHeader: View {
 }
 
 /// 아바타: 원격 이미지(AsyncImage — URLCache) → 없거나 실패하면 이니셜 원. 해시색은 맥 `CheckTheme.avatarColor(for:)` 와 같은 규칙.
+///
+/// **크기 정책은 여기 하나다**(`MobileAvatarScale`): 탭은 기본 글자 크기에서의 지름(`size`)만 넘기고, 글자가 커지면 이 부품이
+/// 본문 글자 배율을 따라 키운다(작아지지는 않고, 상한 `MobileAvatarScale.maximum`). 예전에는 순위·나 탭만 제 `@ScaledMetric` 으로
+/// 약 2.5배까지 키우고 메시지·오목은 그대로라, 같은 AX 크기에서 탭마다 아바타 크기가 달랐다(통합 검증 sheet-X).
+/// 자리를 맞춰야 하는 빈 칸은 `AvatarSpacer` 를 쓴다. 내비게이션 막대처럼 높이가 고정된 곳은 `scalesWithText: false`.
 package struct AvatarView: View {
     private let name: String
     private let url: URL?
-    private let size: CGFloat
+    private let baseSize: CGFloat
+    private let scalesWithText: Bool
+    @ScaledMetric(relativeTo: .body) private var textScale: CGFloat = 1
 
-    package init(name: String, url: URL?, size: CGFloat = 36) {
+    package init(name: String, url: URL?, size: CGFloat = 36, scalesWithText: Bool = true) {
         self.name = name
         self.url = url
-        self.size = size
+        self.baseSize = size
+        self.scalesWithText = scalesWithText
+    }
+
+    private var size: CGFloat {
+        scalesWithText ? MobileAvatarScale.side(base: baseSize, textScale: textScale) : baseSize
     }
 
     package var body: some View {
-        Group {
+        let size = self.size
+        return Group {
             if let url {
                 AsyncImage(url: url, transaction: Transaction(animation: nil)) { phase in
                     switch phase {
@@ -91,6 +104,20 @@ package struct AvatarView: View {
         .frame(width: size, height: size)
         .clipShape(Circle())
         .accessibilityLabel(Text("\(name) 프로필 사진"))
+    }
+}
+
+/// `AvatarView` 와 같은 폭의 빈 칸(묶음 말풍선의 아바타 자리 등). 같은 규칙으로 커진다.
+package struct AvatarSpacer: View {
+    private let baseSize: CGFloat
+    @ScaledMetric(relativeTo: .body) private var textScale: CGFloat = 1
+
+    package init(size: CGFloat) {
+        self.baseSize = size
+    }
+
+    package var body: some View {
+        Color.clear.frame(width: MobileAvatarScale.side(base: baseSize, textScale: textScale), height: 1)
     }
 }
 
@@ -280,6 +307,96 @@ package struct InlineNotice: View {
         .padding(.vertical, 10)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tint.opacity(0.12)))
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// 공용 [다시 시도] — 아이콘 · 문구 `MobileLoadText.retry` · **보이는 캡슐 자체가 44pt 이상**(누르는 곳 = 보이는 곳).
+/// 탭마다 `.bordered`(약 32~35pt)·글자 링크·채운 버튼으로 갈리던 것을 하나로 모았다(통합 검증 E-rank-league · E-me-*).
+/// 도는 중이면 스피너 + `MobileLoadText.retrying` 이고 눌리지 않는다(연타가 요청을 겹치지 않게).
+package struct RetryButton: View {
+    private let isRetrying: Bool
+    private let action: () -> Void
+
+    package init(isRetrying: Bool = false, action: @escaping () -> Void) {
+        self.isRetrying = isRetrying
+        self.action = action
+    }
+
+    package var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if isRetrying {
+                    ProgressView().controlSize(.small)
+                    Text(MobileLoadText.retrying)
+                } else {
+                    Image(systemName: "arrow.clockwise").accessibilityHidden(true)
+                    Text(MobileLoadText.retry)
+                }
+            }
+        }
+        .buttonStyle(AingSecondaryButtonStyle())
+        .disabled(isRetrying)
+    }
+}
+
+/// 보조 버튼 모양(캡슐 · accent 옅은 채움 · **보이는 캡슐이 최소 44×44**) — `RetryButton` · 설정 앱 열기 같은 한 줄 보조 동작.
+/// `.buttonStyle(.bordered)` 는 캡슐이 약 32~35pt 라 쓰지 않는다(통합 검증 실측).
+package struct AingSecondaryButtonStyle: ButtonStyle {
+    /// HIG 최소 누름 영역(pt).
+    package static let minimumTarget: CGFloat = 44
+    @Environment(\.isEnabled) private var isEnabled
+
+    package init() {}
+
+    package func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(MobileTheme.accent)
+            .lineLimit(1)
+            .padding(.horizontal, 16)
+            .frame(minWidth: Self.minimumTarget, minHeight: Self.minimumTarget)
+            .background(Capsule().fill(MobileTheme.accent.opacity(configuration.isPressed ? 0.22 : 0.12)))
+            .opacity(isEnabled ? 1 : 0.6)
+            .contentShape(Capsule())
+            .fixedSize()
+    }
+}
+
+/// 카드 안 한 절의 조회 실패: 경고 한 줄(무엇을 못 불러왔나) + `RetryButton`. 큰 글자에서는 버튼을 아래 줄로 내린다.
+/// 탭 첫 화면 전체가 비었으면 이 행 대신 `EmptyStateView` 를 쓴다(`MobileLoadText` 머리 주석의 규칙).
+package struct LoadFailureRow: View {
+    private let text: String
+    private let isRetrying: Bool
+    private let retry: (() -> Void)?
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// - Parameter retry: nil 이면 버튼 없이 한 줄만(같은 조회의 버튼이 바로 위 절에 있을 때).
+    package init(_ text: String, isRetrying: Bool = false, retry: (() -> Void)?) {
+        self.text = text
+        self.isRetrying = isRetrying
+        self.retry = retry
+    }
+
+    package var body: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 10))
+        layout {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(MobileTheme.pending)
+                    .accessibilityHidden(true)
+                Text(text)
+                    .font(.subheadline)
+                    .foregroundStyle(MobileTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let retry {
+                if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
+                RetryButton(isRetrying: isRetrying, action: retry)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

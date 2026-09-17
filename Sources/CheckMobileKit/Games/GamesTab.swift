@@ -48,7 +48,7 @@ struct GamesTab: View {
 
     private func miniGameCard(_ kind: MiniGameKind) -> some View {
         let hub = store.miniGames
-        let line = GamesText.todayLine(best: hub.myTodayBest(kind), rank: hub.myRank(kind))
+        let line = GamesText.todayLine(best: hub.myTodayBest(kind), rank: hub.myRank(kind), board: hub.boards[kind] ?? GamesMiniGameBoard())
         return Button {
             store.context.router.push(GamesDestination.miniGame(kind), on: .games)
         } label: {
@@ -66,7 +66,11 @@ struct GamesTab: View {
     private var gomokuCard: some View {
         let incoming = store.badgeCount
         let active = store.hasActiveGomokuMatch
-        let line = GamesText.gomokuLine(incoming: incoming, hasActiveMatch: active, hasOutgoing: store.context.gomoku.outgoing != nil)
+        let gomoku = store.context.gomoku
+        let line = GamesText.gomokuLine(
+            incoming: incoming, hasActiveMatch: active, hasOutgoing: gomoku.outgoing != nil,
+            inboxFailed: gomoku.inboxLoadFailed && gomoku.incoming.isEmpty
+        )
         return Button {
             store.context.router.push(GamesDestination.gomoku, on: .games)
         } label: {

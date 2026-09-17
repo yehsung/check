@@ -22,7 +22,7 @@ package enum RankingsText {
     /// 맥 `TokenBoardEmptyMessage.loading` · `InsightsEmptyMessage.loading` 과 같은 문장.
     package static let loading = "불러오는 중…"
     /// 맥 `PanelRetryButton` 의 글자.
-    package static let retry = "다시 시도"
+    package static let retry = MobileLoadText.retry
 
     // MARK: 팀 리그 (맥 LeaderboardPanel · LeaderboardRow)
 

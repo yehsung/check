@@ -15,19 +15,35 @@ package enum GamesText {
     // MARK: 첫 화면 카드
 
     /// 카드의 오늘 한 줄(최고·순위). 순위 밖이면 최고만.
-    package static func todayLine(best: Int?, rank: Int?) -> String {
-        guard let best else { return GamesMiniGameText.noRankToday }
+    ///
+    /// 내 줄이 없을 때 "오늘 기록 없음"은 **순위표를 알 때만**이다(`board.knowsPlayerCount` — 공용 `MobileLoadKnowledge`).
+    /// 불러오지 못했으면 실패 문구, 아직 모르면 불러오는 중 — 오프라인에서 "오늘 기록 없음"이라 말하던 결함(통합 검증 E-games).
+    package static func todayLine(best: Int?, rank: Int?, board: GamesMiniGameBoard) -> String {
+        guard let best else {
+            switch board.placeholder {
+            case .rows, .empty: return GamesMiniGameText.noRankToday
+            case .failed: return recordLoadFailed
+            case .loading: return GamesMiniGameText.loadingCaption
+            }
+        }
         // String(...) — 로캘 자리수 구분("1,000")을 붙이지 않는다(맥 게임 표기와 같다).
         if let rank { return "오늘 최고 " + String(best) + "점 · " + String(rank) + "위" }
         return "오늘 최고 " + String(best) + "점"
     }
 
+    /// 허브 카드: 오늘 순위표를 불러오지 못했다(폰).
+    package static let recordLoadFailed = "기록을 불러오지 못했어요"
+    /// 허브 오목 카드: 받은함을 불러오지 못했다(폰).
+    package static let inboxLoadFailed = "받은 신청을 불러오지 못했어요"
+
     package static let gomokuCardSubtitle = GomokuPhoneText.subtitle
 
     /// 오목 카드의 한 줄. 진행 중인 대국이 먼저다(차례 시간이 흐르고 있다).
-    package static func gomokuLine(incoming: Int, hasActiveMatch: Bool, hasOutgoing: Bool) -> String {
+    /// 받은 신청이 0건인데 받은함을 **못 불러왔으면** "상대를 골라…"(= 받은 게 없다는 뜻)로 접지 않고 실패를 말한다.
+    package static func gomokuLine(incoming: Int, hasActiveMatch: Bool, hasOutgoing: Bool, inboxFailed: Bool = false) -> String {
         if hasActiveMatch { return "진행 중인 대국이 있어요" }
         if incoming > 0 { return "받은 신청 \(incoming)건" }
+        if inboxFailed { return inboxLoadFailed }
         if hasOutgoing { return "보낸 신청을 기다리고 있어요" }
         return "상대를 골라 대결을 신청해요"
     }
@@ -46,7 +62,7 @@ package enum GamesMiniGameText {
     package static let emptyBoard = "아직 기록이 없어요 — 첫 기록의 주인공이 되세요"
     package static let loadingCaption = "불러오는 중…"
     package static let failedCaption = "순위를 불러오지 못했어요"
-    package static let retry = "다시 시도"
+    package static let retry = MobileLoadText.retry
     package static let awardedChip = "루비 +\(rubyPrizes[0]) 받음"
     package static let yesterdayChampion = "어제 1등"
     package static let noRankToday = "오늘 기록 없음"
@@ -76,8 +92,12 @@ package enum GamesMiniGameText {
     /// 머리 줄 "최고 N점"(맥 하단 스트립과 같은 표기 — 자리수 구분 없음).
     package static func bestLine(_ best: Int) -> String { "최고 " + String(best) + "점" }
 
-    /// 머리 줄 "오늘 N위".
-    package static func rankLine(_ rank: Int?) -> String { rank.map { "오늘 \($0)위" } ?? noRankToday }
+    /// 머리 줄 "오늘 N위". 순위표 밖이면 "오늘 기록 없음" — **순위표를 알 때만**. 모르면(불러오는 중·실패) nil 이고 머리 줄에서 뺀다
+    /// (실패는 아래 순위 카드가 말한다 — 머리에 "오늘 기록 없음", 아래에 "순위를 불러오지 못했어요"가 함께 뜨던 결함).
+    package static func rankLine(_ rank: Int?, knowsBoard: Bool) -> String? {
+        if let rank { return "오늘 \(rank)위" }
+        return knowsBoard ? noRankToday : nil
+    }
 
     /// 정족수 안내(맥 `MiniGamePanel.quorumCaption` 과 같은 문장).
     package static func quorumCaption(players: Int) -> String {
@@ -110,8 +130,10 @@ package enum GomokuPhoneText {
     package static let lobbyCaption = "근무 중이 아니어도 신청하고 받을 수 있어요"
     package static let emptyUsers = "지금 대결할 수 있는 사람이 없어요"
     package static let loadingUsers = "상대 목록을 불러오고 있어요"
-    package static let usersLoadFailed = GomokuNoticeText.checkConnection
-    package static let reloadUsers = "다시 불러오기"
+    /// 폰: 맥은 연결 안내 한 문장(`GomokuNoticeText.checkConnection`)이지만, 폰은 절마다 "무엇을 못 불러왔나" + 공용 [다시 시도]로 말한다
+    /// (`MobileLoadText` 규칙 — 탭마다 갈리던 실패 모양을 맞췄다).
+    package static let usersLoadFailed = "상대 목록을 불러오지 못했어요"
+    package static let reloadUsers = MobileLoadText.retry
     package static let challenge = "도전"
     package static let stakeTitle = "판돈"
     package static let stakeCaption = "수락하는 순간 두 사람 모두 걸고, 이기면 판돈만큼 더 받아요"
@@ -123,6 +145,9 @@ package enum GomokuPhoneText {
     package static let incomingTitle = "받은 신청"
     package static let outgoingTitle = "보낸 신청"
     package static let noIncoming = "받은 신청이 없어요"
+    /// 폰: 받은함을 불러오지 못했다(빈 목록을 "없어요"로 말하지 않는다).
+    package static let incomingLoadFailed = GamesText.inboxLoadFailed
+    package static let loadingIncoming = "받은 신청을 불러오고 있어요"
     package static let accept = "수락"
     package static let decline = "거절"
     package static let cancel = "취소"
@@ -224,6 +249,8 @@ package enum GomokuPhoneText {
 
     package static let liveTitle = "지금 대결 중"
     package static let noLiveMatches = "지금 대결 중인 사람이 없어요"
+    /// 폰: 로비를 불러오지 못했다(대결 중 목록은 로비 응답에 실린다 — [다시 시도]는 바로 위 상대 고르기 절에 있다).
+    package static let liveLoadFailed = "대결 중인 판을 불러오지 못했어요"
 
     /// 대결이 시작된 뒤 흐른 시간(m:ss).
     package static func elapsed(_ seconds: Double) -> String {

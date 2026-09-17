@@ -115,7 +115,7 @@ struct MessagesConversationView: View {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
                     if let avatarName = header.avatarName {
-                        AvatarView(name: avatarName, url: avatarURL, size: 28)
+                        AvatarView(name: avatarName, url: avatarURL, size: 28, scalesWithText: false)
                     } else {
                         // 이름을 모른다 — "대" 이니셜 원을 세우면 "대화"라는 사람처럼 보였다.
                         Image(systemName: MessagesConversationHeader.unknownAvatarSymbol)
@@ -157,7 +157,7 @@ struct MessagesConversationView: View {
             systemImage: state.symbol,
             title: state.title,
             message: state.hint,
-            actionTitle: state.showsRetry ? "다시 시도" : nil,
+            actionTitle: state.showsRetry ? MobileLoadText.retry : nil,
             action: state.showsRetry ? { Task { await store.retryConversation(peerID: peerID) } } : nil
         )
         .padding(.top, 40)
@@ -233,7 +233,7 @@ struct MessagesBubbleRow: View {
                     AvatarView(name: entry.peerName, url: entry.peerAvatarURL ?? avatarURL, size: Self.avatarSize)
                         .frame(maxHeight: .infinity, alignment: .top)
                 } else {
-                    Color.clear.frame(width: Self.avatarSize, height: 1)
+                    AvatarSpacer(size: Self.avatarSize)
                 }
                 bubble
                 meta(alignment: .leading)

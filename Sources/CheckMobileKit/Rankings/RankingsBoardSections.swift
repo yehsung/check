@@ -265,11 +265,12 @@ struct RankingsMiniGameSection: View {
                 }
             }
 
-            prizeFooter(players: store.miniGamePlayers)
+            prizeFooter(players: store.knowsMiniGamePlayerCount ? store.miniGamePlayers : nil)
         }
     }
 
-    private func prizeFooter(players: Int) -> some View {
+    /// 상품 안내. 정족수 줄은 사람 수를 알 때만(`players` nil = 모른다 — 불러오지 못한 순위를 "아무도 안 했어요"로 말하지 않는다).
+    private func prizeFooter(players: Int?) -> some View {
         AingCard {
             Label {
                 Text(RankingsText.prizeCaption)
@@ -277,13 +278,15 @@ struct RankingsMiniGameSection: View {
             } icon: {
                 Image(systemName: "trophy.fill").foregroundStyle(MobileTheme.pending)
             }
-            Label {
-                Text(RankingsText.quorumCaption(players: players))
-                    .monospacedDigit()
-                    .fixedSize(horizontal: false, vertical: true)
-            } icon: {
-                Image(systemName: players >= RankingsText.prizeQuorum ? "checkmark.seal.fill" : "person.2.fill")
-                    .foregroundStyle(players >= RankingsText.prizeQuorum ? MobileTheme.working : MobileTheme.secondaryText)
+            if let players {
+                Label {
+                    Text(RankingsText.quorumCaption(players: players))
+                        .monospacedDigit()
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: players >= RankingsText.prizeQuorum ? "checkmark.seal.fill" : "person.2.fill")
+                        .foregroundStyle(players >= RankingsText.prizeQuorum ? MobileTheme.working : MobileTheme.secondaryText)
+                }
             }
         }
         .font(.footnote)

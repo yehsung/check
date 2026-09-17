@@ -20,8 +20,8 @@ struct MessagesNewConversationSheet: View {
                         EmptyStateView(
                             systemImage: "exclamationmark.triangle",
                             title: "사람 목록을 불러오지 못했어요",
-                            message: "연결을 확인하고 다시 시도해 주세요",
-                            actionTitle: "다시 시도",
+                            message: MobileLoadText.checkConnection,
+                            actionTitle: MobileLoadText.retry,
                             action: { store.loadDirectory(force: true) }
                         )
                     }

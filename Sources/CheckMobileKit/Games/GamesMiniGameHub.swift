@@ -18,7 +18,12 @@ package struct GamesMiniGameBoard: Equatable {
     /// 줄이 하나라도 있으면 적어도 그만큼은 했다. 비어 있으면 받은 적이 있고 마지막 조회가 실패하지 않았을 때만 0명이다 —
     /// 불러오지 못한 순위를 "아무도 안 했다"로 말하지 않는다(games-verify: 실패 카드에 두 말이 함께 떴다).
     package var knowsPlayerCount: Bool {
-        !entries.isEmpty || (loaded && !failed)
+        MobileLoadKnowledge.knowsCount(hasRows: !entries.isEmpty, hasLoaded: loaded, lastFailed: failed)
+    }
+
+    /// 빈 순위 자리를 무엇으로 채우는가(공용 규칙 — 순위 탭 미니게임 판과 같다).
+    package var placeholder: MobileLoadKnowledge.Placeholder {
+        MobileLoadKnowledge.placeholder(hasRows: !entries.isEmpty, hasLoaded: loaded, lastFailed: failed)
     }
 }
 

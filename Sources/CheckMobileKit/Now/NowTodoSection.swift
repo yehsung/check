@@ -19,9 +19,15 @@ struct NowTodoSection: View {
     var body: some View {
         let rows = store.todoRows()
         let remaining = store.remainingTodoCount
+        // 행 자리(카드 조각 — 다른 탭 `AingCard` 와 같은 모양): 입력 · (빈 안내) · 오늘 줄… · (오래된 항목 머리 · 펼친 줄…).
+        let isEmpty = rows.main.isEmpty && rows.old.isEmpty
+        let mainStart = isEmpty ? 2 : 1
+        let oldHeader = mainStart + rows.main.count
+        let rowCount = oldHeader + (rows.old.isEmpty ? 0 : 1 + (isOldExpanded ? rows.old.count : 0))
         Section {
             inputRow
-            if rows.main.isEmpty && rows.old.isEmpty {
+                .cardSegmentRow(.of(index: 0, count: rowCount))
+            if isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(NowText.todoEmptyTitle)
                         .font(.subheadline.weight(.semibold))
@@ -32,21 +38,22 @@ struct NowTodoSection: View {
                 }
                 .padding(.vertical, 4)
                 .accessibilityElement(children: .combine)
+                .cardSegmentRow(.of(index: 1, count: rowCount))
             }
-            ForEach(rows.main) { row in
+            ForEach(Array(rows.main.enumerated()), id: \.element.id) { offset, row in
                 todoRow(row)
+                    .cardSegmentRow(.of(index: mainStart + offset, count: rowCount))
             }
             if !rows.old.isEmpty {
-                DisclosureGroup(isExpanded: $isOldExpanded) {
-                    ForEach(rows.old) { row in
+                // 시스템 DisclosureGroup 대신 머리 줄 + 펼친 줄 — 펼친 줄도 같은 카드 조각으로 이어 그리려면 행 자리를 알아야 한다.
+                oldHeaderRow(count: rows.old.count)
+                    .cardSegmentRow(.of(index: oldHeader, count: rowCount))
+                if isOldExpanded {
+                    ForEach(Array(rows.old.enumerated()), id: \.element.id) { offset, row in
                         todoRow(row)
+                            .cardSegmentRow(.of(index: oldHeader + 1 + offset, count: rowCount))
                     }
-                } label: {
-                    Text(NowText.todoOldSection(count: rows.old.count))
-                        .font(.subheadline)
-                        .foregroundStyle(MobileTheme.secondaryText)
                 }
-                .tint(MobileTheme.secondaryText)
             }
         } header: {
             HStack(alignment: .firstTextBaseline) {
@@ -68,7 +75,6 @@ struct NowTodoSection: View {
                 .font(.footnote)
                 .foregroundStyle(MobileTheme.secondaryText)
         }
-        .listRowBackground(MobileTheme.card)
         .onChange(of: focus) { old, new in
             // 고치던 줄에서 포커스가 떠나면(다른 곳 탭 · 키보드 내림) 확정한다 — iOS 목록 편집의 관례.
             if case .edit(let id)? = old, new != .edit(id), store.editingTodoID == id {
@@ -122,6 +128,30 @@ struct NowTodoSection: View {
             }
         }
         .padding(.vertical, 2)
+    }
+
+    /// "오래된 항목 (n)" 머리 줄(누르면 펼치고 접는다). 누르는 칸은 줄 전체(44pt 이상).
+    private func oldHeaderRow(count: Int) -> some View {
+        Button {
+            withAnimation(.snappy) { isOldExpanded.toggle() }
+        } label: {
+            HStack(spacing: 8) {
+                Text(NowText.todoOldSection(count: count))
+                    .font(.subheadline)
+                    .foregroundStyle(MobileTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MobileTheme.secondaryText)
+                    .rotationEffect(.degrees(isOldExpanded ? 90 : 0))
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityValue(Text(isOldExpanded ? "펼침" : "접힘"))
     }
 
     private func submitDraft() {

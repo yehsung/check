@@ -19,7 +19,8 @@ package enum NowText {
     package static let noTeamTitle = "팀에 속해 있지 않아요"
     package static let noTeamBody = "맥 앱에서 팀에 참여하면 근무 시간과 주간 목표가 여기에 보여요"
     package static let loadFailed = "지금 상태를 불러오지 못했어요. 아래로 당겨 다시 시도해 주세요"
-    package static let networkFailed = "네트워크를 확인하고 아래로 당겨 다시 시도해 주세요"
+    /// 네트워크 실패 띠 — 탭 공용 문장(`MobileLoadText.checkConnection`). 절마다 [다시 시도]가 곁에 있다.
+    package static let networkFailed = MobileLoadText.checkConnection
 
     // 주간 목표(맥 `updateTeamGoal` 문구)
     package static let goalEdit = "주간 목표 수정"
@@ -54,7 +55,7 @@ package enum NowText {
     /// 불러오기가 끝났는데 팀 상태를 모를 때(스피너 대신).
     package static let statusUnavailableTitle = "내 상태를 불러오지 못했어요"
     package static let workingUnavailable = "근무 중인 사람을 불러오지 못했어요"
-    package static let retry = "다시 시도"
+    package static let retry = MobileLoadText.retry
 
     // 지금 근무 중
     /// 머리글. 모를 때(nil)는 숫자를 숨긴다 — 불러오지 못했는데 "0"이면 아무도 일하지 않는다는 말이 된다.

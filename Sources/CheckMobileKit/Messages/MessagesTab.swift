@@ -80,24 +80,22 @@ struct MessagesListView: View {
         List {
             if store.historyFailed, !threads.isEmpty {
                 InlineNotice(text: "새 메시지를 불러오지 못했어요. 당겨서 다시 시도해 주세요", kind: .error)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                    .cardListPlainRow()
             }
             if threads.isEmpty {
                 emptyContent
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                    .cardListPlainRow()
             } else {
                 Section {
-                    ForEach(threads) { thread in
+                    ForEach(Array(threads.enumerated()), id: \.element.id) { offset, thread in
                         Button {
                             onOpen(thread.peerUserID)
                         } label: {
                             MessagesThreadRow(thread: thread, isUnread: unread.contains(thread.peerUserID), now: now)
                         }
                         .buttonStyle(.plain)
-                        .listRowBackground(MobileTheme.card)
-                        .listRowSeparatorTint(MobileTheme.separator)
+                        // 카드 모양은 다른 탭의 `AingCard` 와 같게(반경 16 · 1px 테두리) — 시스템 절 모양을 쓰지 않는다.
+                        .cardSegmentRow(.of(index: offset, count: threads.count), dividerLeading: MessagesThreadRow.dividerLeading)
                     }
                 } footer: {
                     Text(MessageNoticeText.expiry)
@@ -106,7 +104,8 @@ struct MessagesListView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        // grouped(셀이 화면 폭) — 카드는 행이 `cardSegmentRow` 로 직접 그린다(insetGrouped 는 셀을 시스템 반경으로 잘랐다).
+        .listStyle(.grouped)
         .scrollContentBackground(.hidden)
         .background(MobileTheme.background.ignoresSafeArea())
         .refreshable { await store.refreshNow() }
@@ -121,8 +120,8 @@ struct MessagesListView: View {
                 EmptyStateView(
                     systemImage: "exclamationmark.triangle",
                     title: "메시지를 불러오지 못했어요",
-                    message: "연결을 확인하고 다시 시도해 주세요",
-                    actionTitle: "다시 시도",
+                    message: MobileLoadText.checkConnection,
+                    actionTitle: MobileLoadText.retry,
                     action: { Task { await store.refreshNow() } }
                 )
             }
@@ -144,6 +143,9 @@ struct MessagesListView: View {
 
 /// 목록 한 줄.
 struct MessagesThreadRow: View {
+    /// 줄 사이 구분선이 시작하는 곳(카드 왼쪽에서) — 이름 글자 줄에 맞춘다(카드 안쪽 여백 16 + 아바타 48 + 사이 12).
+    static let dividerLeading: CGFloat = MobileTheme.cardPadding + 48 + 12
+
     let thread: MessageThread
     let isUnread: Bool
     let now: Date

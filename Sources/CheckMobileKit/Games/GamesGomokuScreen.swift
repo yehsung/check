@@ -184,14 +184,22 @@ struct GamesGomokuLobby: View {
     private var invites: some View {
         AingCard {
             SectionHeader(GomokuPhoneText.incomingTitle)
-            if gomoku.incoming.isEmpty {
-                Text(GomokuPhoneText.noIncoming)
-                    .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
-            } else {
+            // 빈 받은함을 "없어요"로 말하는 것은 **받은함을 알 때만**(공용 `MobileLoadKnowledge`) — 오프라인에서 "받은 신청이 없어요"가 떴다.
+            switch MobileLoadKnowledge.placeholder(
+                hasRows: !gomoku.incoming.isEmpty, hasLoaded: gomoku.hasLoadedInbox, lastFailed: gomoku.inboxLoadFailed
+            ) {
+            case .rows:
                 ForEach(gomoku.pendingIncomingInvites) { invite in
                     GamesGomokuInviteCard(store: store, invite: invite)
                 }
+            case .empty:
+                Text(GomokuPhoneText.noIncoming)
+                    .font(.subheadline)
+                    .foregroundStyle(MobileTheme.secondaryText)
+            case .failed:
+                LoadFailureRow(GomokuPhoneText.incomingLoadFailed) { Task { await gomoku.loadInbox() } }
+            case .loading:
+                LoadingRow(GomokuPhoneText.loadingIncoming)
             }
             if let outgoing = gomoku.outgoing {
                 Divider().overlay(MobileTheme.separator)
@@ -209,13 +217,7 @@ struct GamesGomokuLobby: View {
                 .font(.caption)
                 .foregroundStyle(MobileTheme.secondaryText)
             if gomoku.lobbyLoadFailed {
-                HStack(spacing: 8) {
-                    InlineNotice(text: GomokuPhoneText.usersLoadFailed, kind: .warning)
-                    Button(GomokuPhoneText.reloadUsers) { Task { await gomoku.refreshLobby() } }
-                        .font(.subheadline.weight(.semibold))
-                        .gamesTouchTarget()
-                        .fixedSize()
-                }
+                LoadFailureRow(GomokuPhoneText.usersLoadFailed) { Task { await gomoku.refreshLobby() } }
             }
             if gomoku.users.isEmpty {
                 if !gomoku.lobbyLoadFailed {
@@ -242,14 +244,22 @@ struct GamesGomokuLobby: View {
     private var liveMatches: some View {
         AingCard {
             SectionHeader(GomokuPhoneText.liveTitle)
-            if gomoku.liveMatches.isEmpty {
-                Text(GomokuPhoneText.noLiveMatches)
-                    .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
-            } else {
+            switch MobileLoadKnowledge.placeholder(
+                hasRows: !gomoku.liveMatches.isEmpty, hasLoaded: gomoku.hasLoadedLobby, lastFailed: gomoku.lobbyLoadFailed
+            ) {
+            case .rows:
                 ForEach(gomoku.liveMatches) { live in
                     GamesGomokuLiveMatchRow(store: store, live: live)
                 }
+            case .empty:
+                Text(GomokuPhoneText.noLiveMatches)
+                    .font(.subheadline)
+                    .foregroundStyle(MobileTheme.secondaryText)
+            case .failed:
+                // 같은 조회(로비)의 [다시 시도]는 바로 위 상대 고르기 절에 있다 — 여기선 한 줄만.
+                LoadFailureRow(GomokuPhoneText.liveLoadFailed, retry: nil)
+            case .loading:
+                LoadingRow(GomokuPhoneText.loadingUsers)
             }
         }
     }

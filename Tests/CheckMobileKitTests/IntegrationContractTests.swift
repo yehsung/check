@@ -29,9 +29,24 @@ import Testing
 
     @Test("알림 설정 저장은 푸시 코디네이터 하나(나 탭은 공개 API 만) · 오목 창 열기 문과 화면 꺼짐 방지는 게임 탭만")
     func singleOwners() throws {
-        let prefsSavers = try Self.files(containing: ["savePushPrefs("], under: "Sources/CheckMobileKit")
-        #expect(Set(prefsSavers) == ["Sources/CheckMobileKit/Push/PushCoordinator.swift", "Sources/CheckMobileKit/Session/MobileSessionStore.swift"],
-                "알림 설정 저장 구현이 두 벌이다: \(prefsSavers)")
+        // 저장 경로는 세 층이다 — 코디네이터(`savePushPrefs` 호출) → 세션(`savePushPrefs` 정의 · `setPushPrefs` 호출) → 서비스
+        // (`setPushPrefs` 정의 · RPC 경로). 층마다 **이름이 나오는 파일 집합**을 못 박는다: 세션 메서드 이름만 보면 서비스
+        // `setPushPrefs` 나 RPC 경로를 직접 부르는 두 번째 구현이 초록으로 지나갔다(int-verify M7).
+        let layers: [(needles: [String], owners: Set<String>)] = [
+            (["savePushPrefs("], ["Sources/CheckMobileKit/Push/PushCoordinator.swift", "Sources/CheckMobileKit/Session/MobileSessionStore.swift"]),
+            (["setPushPrefs("], ["Sources/CheckMobileKit/Session/MobileSessionStore.swift", "Sources/CheckMobileKit/Session/MobileDeviceService.swift"]),
+            (["set_push_prefs", "SetPushPrefsRequest("], ["Sources/CheckMobileKit/Session/MobileDeviceService.swift"]),
+        ]
+        for layer in layers {
+            let hits = try Self.files(containing: layer.needles, under: "Sources/CheckMobileKit")
+            #expect(Set(hits) == layer.owners, "알림 설정 저장 구현이 두 벌이다(\(layer.needles)): \(hits)")
+        }
+        // 나 탭은 **폴더 전체**에서 저장·권한 읽기를 코디네이터 공개 API 로만 한다(뷰뿐 아니라 스토어 확장 파일도).
+        let meFolder = try Self.files(
+            containing: ["savePushPrefs(", "setPushPrefs(", "set_push_prefs", "PushPrefs(", "UNUserNotificationCenter", "requestAuthorization("],
+            under: "Sources/CheckMobileKit/Me"
+        )
+        #expect(meFolder.isEmpty, "나 탭이 알림 설정을 코디네이터 밖에서 만들거나 저장한다: \(meFolder)")
         let meSettings = try Self.code("Sources/CheckMobileKit/Me/MeSettingsView.swift")
         for api in ["push.setPreference(", "push.enableNotifications()", "push.refreshAuthorization()", "push.openSystemSettings()", "push.knowsPrefs"] {
             #expect(meSettings.contains(api), "나 탭 설정 화면이 코디네이터 \(api) 를 쓰지 않는다")

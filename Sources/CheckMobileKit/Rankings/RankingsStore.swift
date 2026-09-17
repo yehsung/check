@@ -293,6 +293,12 @@ package final class RankingsStore {
 
     package var miniGamePlayers: Int { miniGameBoard.count }
 
+    /// 오늘 한 사람 수를 **안다**(정족수 줄 "오늘은 아직 아무도 안 했어요 · 5명부터 지급"을 그려도 된다). 게임 탭
+    /// `GamesMiniGameBoard.knowsPlayerCount` 와 같은 공용 규칙(`MobileLoadKnowledge`) — 실패로 0 인 값을 "아무도 안 했다"로 말하지 않는다.
+    package var knowsMiniGamePlayerCount: Bool {
+        MobileLoadKnowledge.knowsCount(hasRows: !miniGameBoard.isEmpty, hasLoaded: miniGameState.hasLoaded, lastFailed: miniGameState.hasFailed)
+    }
+
     /// 오늘 순위 + 어제 1등. 두 조회는 **독립 실패**(맥 performLoadMiniGameBoard). 표·함수가 없는 서버(PGRST202)는 실패가 아니라
     /// "아직 없음"으로 조용히 접는다.
     package func loadMiniGame() async {

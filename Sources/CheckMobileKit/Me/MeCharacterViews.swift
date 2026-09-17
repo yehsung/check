@@ -27,7 +27,11 @@ struct MeShopView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if store.shopState.hasFailed, !store.shopState.hasLoaded {
-                    InlineNotice(text: MeText.shopFailed, kind: .warning)
+                    AingCard {
+                        LoadFailureRow(MeText.shopFailed, isRetrying: store.shopState.isLoading) {
+                            Task { await store.loadShop() }
+                        }
+                    }
                 }
                 SectionHeader(MeText.charactersTitle)
                 LazyVGrid(columns: columns, spacing: 10) {

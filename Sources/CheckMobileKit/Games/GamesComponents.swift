@@ -47,12 +47,6 @@ struct GamesCompactButtonStyle: ButtonStyle {
 }
 
 extension View {
-    /// 글자만 있는 버튼([다시 시도] · [다시 불러오기])의 누름 영역을 44×44 로 넓힌다. 모양은 그대로다.
-    func gamesTouchTarget() -> some View {
-        frame(minWidth: GamesTouchTarget.minimum, minHeight: GamesTouchTarget.minimum)
-            .contentShape(Rectangle())
-    }
-
     /// 데모 스크린샷(`-AingCheckGamesDemo bottom`)에서만 스크롤을 맨 아래에서 시작한다. Release 에서는 아무것도 안 한다.
     @ViewBuilder
     func gamesDemoScrollAnchor(isDemo: Bool) -> some View {

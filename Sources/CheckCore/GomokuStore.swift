@@ -483,6 +483,11 @@ package final class GomokuStore {
     package var lobbyLoadFailed = false
     /// 이번 로그인에서 상대 목록을 한 번이라도 받았다.
     package var hasLoadedLobby = false
+    /// 마지막 받은함 조회가 실패했다(오프라인·5xx·거절 응답). 빈 `incoming` 을 "받은 신청이 없다"로 보여 주지 않기 위한 값이다 —
+    /// `lobbyLoadFailed` 와 같은 규약. 맥 패널은 아직 읽지 않는다(폰 게임 탭이 읽는다).
+    package var inboxLoadFailed = false
+    /// 이번 로그인에서 받은함을 한 번이라도 받았다.
+    package var hasLoadedInbox = false
 
     /// 로비 "지금 대결 중" 목록(0.3.28). **서버 순서를 그대로 쓴다**(accepted_at desc) — 클라가 다시 정렬하면
     /// 스토어 정렬과 뷰 정렬이 갈리고, 그때 같은 목록이 화면마다 다른 순서로 보인다(users 가 겪은 그것).
@@ -783,6 +788,7 @@ package final class GomokuStore {
                 guard generation == resetGeneration else { return }
             case .failure?:
                 Self.logger.notice("inbox request failed")
+                if !inboxLoadFailed { inboxLoadFailed = true }
             case nil:
                 break
             }
@@ -794,8 +800,12 @@ package final class GomokuStore {
         guard response.status == .ok else {
             Self.logger.notice("inbox refused status=\(response.status.rawValue, privacy: .public)")
             if response.status == .unsupportedClient { setNotice(GomokuNoticeText.updateMine) }
+            // 거절 응답도 받은 신청을 **모르는** 채다 — 빈 목록을 사실로 그리지 않게 실패로 적는다.
+            if !inboxLoadFailed { inboxLoadFailed = true }
             return
         }
+        if inboxLoadFailed { inboxLoadFailed = false }
+        if !hasLoadedInbox { hasLoadedInbox = true }
         noteServerNow(response.serverNowMs)
         applyRuby(response.rubyBalance)
         let now = clock()
@@ -1530,6 +1540,8 @@ package final class GomokuStore {
         if turnSeconds != 30 { turnSeconds = 30 }
         if lobbyLoadFailed { lobbyLoadFailed = false }
         if hasLoadedLobby { hasLoadedLobby = false }
+        if inboxLoadFailed { inboxLoadFailed = false }
+        if hasLoadedInbox { hasLoadedInbox = false }
         if !liveMatches.isEmpty { liveMatches = [] }
         if autoAbandonStreak != GomokuStore.autoPlaceLossStreak {
             autoAbandonStreak = GomokuStore.autoPlaceLossStreak

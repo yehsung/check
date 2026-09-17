@@ -17,9 +17,8 @@ struct NowTab: View {
                     if let notice = store.notice {
                         Section {
                             InlineNotice(text: notice, kind: .warning)
+                                .cardListPlainRow(top: 0, bottom: 0)
                         }
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
                     }
                     NowStatusSection(store: store, onEditGoal: { isGoalSheetPresented = true })
                     NowTodoSection(store: store)
@@ -34,7 +33,8 @@ struct NowTab: View {
                     proxy.scrollTo(NowTab.workingSectionID, anchor: .top)
                 }
                 #endif
-                .listStyle(.insetGrouped)
+                // grouped(셀이 화면 폭) — 카드는 행이 `cardSegmentRow` 로 직접 그린다(insetGrouped 는 셀을 시스템 반경으로 잘랐다).
+                .listStyle(.grouped)
                 .listSectionSpacing(.compact)
                 // 묶음 이름 줄("다른 팀")이 44pt 빈 행처럼 보이지 않게 — 다른 행은 내용이 이보다 높다.
                 .environment(\.defaultMinListRowHeight, 30)
@@ -80,6 +80,8 @@ struct NowStatusSection: View {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 content(now: store.context.clock.now())
             }
+            // 카드 모양은 다른 탭의 `AingCard` 와 같게(반경 16 · 1px 테두리) — 시스템 절 모양을 쓰지 않는다.
+            .cardSegmentRow(.single)
         } header: {
             Text(MobileRelativeTime.headerDate(store.context.clock.now()))
                 .font(.title3.weight(.semibold))
@@ -87,7 +89,6 @@ struct NowStatusSection: View {
                 .textCase(nil)
                 .accessibilityAddTraits(.isHeader)
         }
-        .listRowBackground(MobileTheme.card)
     }
 
     @ViewBuilder
@@ -115,45 +116,16 @@ struct NowStatusSection: View {
     }
 }
 
-/// 불러오지 못한 자리(스피너 대신): 한 줄 설명 + 다시 시도(44pt). 위쪽 안내 줄이 원인(네트워크 · 서버)을 말한다.
+/// 불러오지 못한 자리(스피너 대신): 공용 `LoadFailureRow`(경고 한 줄 + 44pt [다시 시도]) — 순위·나·게임 탭과 같은 모양.
+/// 위쪽 안내 줄이 원인(네트워크 · 서버)을 말한다.
 struct NowUnavailableRow: View {
     let title: String
     let isRetrying: Bool
     let retry: () -> Void
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
-        layout {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "exclamationmark.circle")
-                    .foregroundStyle(MobileTheme.pending)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
-            Button(action: retry) {
-                ZStack {
-                    // 글자 폭을 잡아 두고 도는 동안만 스피너로 바꾼다(버튼 폭이 흔들리지 않게).
-                    Text(NowText.retry).opacity(isRetrying ? 0 : 1)
-                    if isRetrying { ProgressView() }
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(MobileTheme.accent)
-                .padding(.horizontal, 12)
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.borderless)
-            .disabled(isRetrying)
-            .accessibilityLabel(Text(NowText.retry))
-        }
-        .padding(.vertical, 2)
+        LoadFailureRow(title, isRetrying: isRetrying, retry: retry)
+            .padding(.vertical, 2)
     }
 }
 
@@ -294,32 +266,35 @@ struct NowWorkingSection: View {
         let teammates = people.filter(\.isTeammate)
         let others = people.filter { !$0.isTeammate }
         let state = store.workingLoadState
+        // 행 자리(카드 조각): [우리 팀 이름 · 팀원…] [다른 팀 · 사람…] 을 한 장으로 잇는다.
+        let othersStart = teammates.isEmpty ? 0 : 1 + teammates.count
+        let rowCount = othersStart + (others.isEmpty ? 0 : 1 + others.count)
         Section {
             if state == .loading {
                 LoadingRow()
+                    .cardSegmentRow(.single)
             } else if state == .failed {
                 // 모르는데 "근무 중인 사람이 없어요"나 스피너를 보이지 않는다. 다시 시도는 내 카드 자리 버튼 · 당겨서 새로고침.
-                Text(NowText.workingUnavailable)
-                    .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.vertical, 4)
+                LoadFailureRow(NowText.workingUnavailable, retry: nil)
+                    .cardSegmentRow(.single)
             } else if people.isEmpty {
                 Text(NowText.workingEmpty)
                     .font(.subheadline)
                     .foregroundStyle(MobileTheme.secondaryText)
-                    .padding(.vertical, 4)
+                    .cardSegmentRow(.single)
             } else {
                 if !teammates.isEmpty {
-                    NowGroupLabel(text: store.membership?.teamName ?? NowText.ourTeam)
-                    ForEach(teammates) { person in
+                    NowGroupLabel(text: store.membership?.teamName ?? NowText.ourTeam, position: .of(index: 0, count: rowCount))
+                    ForEach(Array(teammates.enumerated()), id: \.element.id) { offset, person in
                         NowWorkingRow(person: person, clock: store.context.clock)
+                            .cardSegmentRow(.of(index: 1 + offset, count: rowCount))
                     }
                 }
                 if !others.isEmpty {
-                    NowGroupLabel(text: NowText.otherTeams)
-                    ForEach(others) { person in
+                    NowGroupLabel(text: NowText.otherTeams, position: .of(index: othersStart, count: rowCount))
+                    ForEach(Array(others.enumerated()), id: \.element.id) { offset, person in
                         NowWorkingRow(person: person, clock: store.context.clock)
+                            .cardSegmentRow(.of(index: othersStart + 1 + offset, count: rowCount))
                     }
                 }
             }
@@ -330,20 +305,23 @@ struct NowWorkingSection: View {
                 .textCase(nil)
                 .accessibilityAddTraits(.isHeader)
         }
-        .listRowBackground(MobileTheme.card)
     }
 }
 
 struct NowGroupLabel: View {
     let text: String
+    let position: CardSegmentPosition
 
     var body: some View {
         Text(text)
             .font(.caption.weight(.semibold))
             .foregroundStyle(MobileTheme.secondaryText)
-            .listRowInsets(EdgeInsets(top: 12, leading: MobileTheme.sideMargin, bottom: 0, trailing: MobileTheme.sideMargin))
-            .listRowSeparator(.hidden, edges: .bottom)
             .accessibilityAddTraits(.isHeader)
+            .cardSegmentRow(
+                position,
+                padding: EdgeInsets(top: 12, leading: MobileTheme.cardPadding, bottom: 2, trailing: MobileTheme.cardPadding),
+                separatorVisible: false
+            )
     }
 }
 

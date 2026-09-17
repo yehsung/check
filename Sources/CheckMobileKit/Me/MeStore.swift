@@ -89,6 +89,9 @@ package final class MeStore {
     package internal(set) var feedbackReplyLatestAt: Date?
     /// 딥링크(`aingcheck://feedback/<id>`)나 알림이 가리킨 제보 — 목록에서 펼치고 강조한다.
     package internal(set) var focusedReportID: String?
+    /// 딥링크·알림이 제보를 가리킬 때마다 오른다(같은 id 여도). 제보 화면이 **이미 떠 있으면** 라우터의 [제보]→[]→[제보] 를 SwiftUI 가
+    /// 같은 화면으로 봐 onAppear 가 없고, 목록도 같으면 onChange(목록)도 없다 — 화면은 이 값을 보고 펼치고 스크롤한다(통합 검증 A1·A4).
+    package internal(set) var feedbackFocusSerial = 0
     package internal(set) var isFeedbackVisible = false
     /// 이 계정이 '봤다'고 적어 둔 마지막 답장 시각(공용 suite, 계정별 키).
     package internal(set) var feedbackReplySeenAt: Date?
@@ -177,6 +180,7 @@ package final class MeStore {
         feedbackReplyLatestAt = nil
         feedbackReplySeenAt = nil
         focusedReportID = nil
+        feedbackFocusSerial = 0
         tokenUsagePublic = true
         tokenUsagePublicLoaded = false
         miniGamePublic = true
@@ -217,6 +221,7 @@ package final class MeStore {
             context.router.push(MeDestination.settings, on: .me)
         case .feedback(let reportID):
             focusedReportID = reportID
+            feedbackFocusSerial &+= 1
             context.router.push(MeDestination.feedback, on: .me)
         default:
             break

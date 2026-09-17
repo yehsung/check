@@ -11,23 +11,16 @@ struct MeRecordsSection: View {
             AingCard {
                 if store.recordsState.isLoading, !store.recordsState.hasLoaded {
                     LoadingRow(placeholder)
-                } else {
-                    HStack(spacing: 10) {
-                        Text(placeholder)
-                            .font(.subheadline)
-                            .foregroundStyle(MobileTheme.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 8)
-                        if store.recordsState.hasFailed {
-                            Button {
-                                Task { await store.loadRecords() }
-                            } label: {
-                                Label(MeText.retry, systemImage: "arrow.clockwise")
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(MobileTheme.accent)
-                        }
+                } else if store.recordsState.hasFailed {
+                    LoadFailureRow(placeholder, isRetrying: store.recordsState.isLoading) {
+                        Task { await store.loadRecords() }
                     }
+                } else {
+                    Text(placeholder)
+                        .font(.subheadline)
+                        .foregroundStyle(MobileTheme.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         } else {

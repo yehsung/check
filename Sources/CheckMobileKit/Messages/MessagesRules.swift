@@ -358,7 +358,7 @@ package enum MessagesConversationRules {
     /// 빈 자리 문구(맥 `MessagePanelEmptyMessage` 와 같은 갈래·같은 문장 — 상대는 폰에서 늘 정해져 있다).
     package static func emptyState(loaded: Bool, failed: Bool) -> MessagesEmptyState {
         if failed, !loaded {
-            return MessagesEmptyState(symbol: "exclamationmark.triangle", title: "대화를 불러오지 못했어요", hint: nil, showsRetry: true)
+            return MessagesEmptyState(symbol: "exclamationmark.triangle", title: "대화를 불러오지 못했어요", hint: MobileLoadText.checkConnection, showsRetry: true)
         }
         if !loaded {
             return MessagesEmptyState(symbol: "hourglass", title: "불러오는 중…", hint: nil, showsRetry: false)

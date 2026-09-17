@@ -80,81 +80,22 @@ enum RankingsDemoHooks {
 
 // MARK: - 공용 조각
 
-/// 순위 숫자 원. 1·2·3위는 메달 색(안의 글자는 늘 숫자 — 색만으로 말하지 않는다), 나머지는 흐린 숫자.
-struct RankingsRankBadge: View {
-    let rank: Int
-    var usesMedals = true
-    @ScaledMetric(relativeTo: .subheadline) private var size: CGFloat = 28
+/// 순위 원·메달·칩은 게임 탭과 같은 공용 부품(`Components/MobileRankComponents.swift`) — 같은 순위를 두 탭이 다른 색으로 그리던 결함.
+typealias RankingsRankBadge = RankBadge
+typealias RankingsMedal = RankMedal
+typealias RankingsChip = AingChip
 
-    var body: some View {
-        let medal = usesMedals ? RankingsMedal.color(rank: rank) : nil
-        Text("\(rank)")
-            .font(MobileTheme.number(.subheadline, weight: .heavy))
-            .monospacedDigit()
-            .minimumScaleFactor(0.6)
-            .lineLimit(1)
-            .foregroundStyle(medal == nil ? MobileTheme.secondaryText : RankingsMedal.ink)
-            .frame(width: size, height: size)
-            .background(Circle().fill(medal ?? MobileTheme.cardElevated))
-            .accessibilityHidden(true)
-    }
-}
-
-/// 메달 색(맥 `MiniGameMedal` 과 같은 숫자). 메달 위 글자는 짙은 잉크 — 금·은 위 흰 글자는 대비가 무너진다.
-enum RankingsMedal {
-    static let gold = Color(red: 1.00, green: 0.824, blue: 0.290)
-    static let silver = Color(red: 0.839, green: 0.863, blue: 0.902)
-    static let bronze = Color(red: 0.878, green: 0.584, blue: 0.353)
-    static let ink = Color.black.opacity(0.82)
-
-    static func color(rank: Int) -> Color? {
-        switch rank {
-        case 1: return gold
-        case 2: return silver
-        case 3: return bronze
-        default: return nil
-        }
-    }
-}
-
-/// 작은 캡슐 칩("우리 팀" · "나" · "비공개" · "루비 +20 받음").
-struct RankingsChip: View {
-    let text: String
-    var tint: Color = MobileTheme.accent
-
-    var body: some View {
-        Text(text)
-            .font(.caption2.weight(.bold))
-            .foregroundStyle(tint)
-            .lineLimit(1)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(tint.opacity(0.16)))
-            .fixedSize()
-    }
-}
-
-/// 한 행 카드(내 행은 accent 테두리).
+/// 한 행 카드(내 행·내 팀은 공용 강조 — `RankRowSurface`).
 struct RankingsRowCard<Content: View>: View {
     var highlighted = false
     @ViewBuilder let content: Content
 
     var body: some View {
-        content
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(highlighted ? MobileTheme.accent.opacity(0.08) : MobileTheme.card)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(highlighted ? MobileTheme.accent.opacity(0.7) : MobileTheme.separator, lineWidth: highlighted ? 1.5 : 1)
-            )
+        content.rankRowSurface(isMine: highlighted, standsAlone: true)
     }
 }
 
-/// 빈 목록·실패 카드(실패면 [다시 시도]).
+/// 빈 목록·실패 카드(실패면 공용 `LoadFailureRow` — 경고 한 줄 + 44pt [다시 시도]).
 struct RankingsEmptyCard: View {
     let text: String
     let showsRetry: Bool
@@ -165,22 +106,14 @@ struct RankingsEmptyCard: View {
         AingCard {
             if isLoading {
                 LoadingRow(text)
+            } else if showsRetry {
+                LoadFailureRow(text, retry: retry)
             } else {
-                HStack(alignment: .center, spacing: 10) {
-                    Text(text)
-                        .font(.subheadline)
-                        .foregroundStyle(MobileTheme.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 8)
-                    if showsRetry {
-                        Button(action: retry) {
-                            Label(RankingsText.retry, systemImage: "arrow.clockwise")
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(MobileTheme.accent)
-                    }
-                }
+                Text(text)
+                    .font(.subheadline)
+                    .foregroundStyle(MobileTheme.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -257,11 +190,11 @@ struct RankingsAvatar: View {
     let name: String
     let url: URL?
     let centerLabel: String?
-    @ScaledMetric(relativeTo: .body) private var size: CGFloat = 40
 
     var body: some View {
         VStack(spacing: 3) {
-            AvatarView(name: name, url: url, size: size)
+            // 크기는 공용 규칙(`AvatarView` 가 글자 배율을 따라 키운다 · 상한 있음) — 제 `@ScaledMetric` 으로 따로 키우지 않는다.
+            AvatarView(name: name, url: url, size: 40)
             if let serverValue = CenterLabel.serverValue(forDisplay: centerLabel) {
                 CenterBadge(serverValue)
             } else {

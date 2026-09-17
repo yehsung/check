@@ -63,7 +63,7 @@ struct GamesMiniGameScreen: View {
 
     private var header: some View {
         let best = hub.best(for: kind)
-        let rank = hub.myRank(kind)
+        let rank = GamesMiniGameText.rankLine(hub.myRank(kind), knowsBoard: (hub.boards[kind] ?? GamesMiniGameBoard()).knowsPlayerCount)
         return VStack(alignment: .leading, spacing: 4) {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
@@ -97,11 +97,15 @@ struct GamesMiniGameScreen: View {
         .foregroundStyle(MobileTheme.primaryText)
     }
 
-    private func rankLabel(_ rank: Int?) -> some View {
-        Text(GamesMiniGameText.rankLine(rank))
-            .font(.subheadline.weight(.semibold))
-            .monospacedDigit()
-            .foregroundStyle(rank == nil ? MobileTheme.secondaryText : MobileTheme.accent)
+    /// 오늘 순위 한 줄. 순위표를 모르면(불러오는 중·실패) 그리지 않는다 — 실패는 아래 순위 카드가 말한다.
+    @ViewBuilder
+    private func rankLabel(_ line: String?) -> some View {
+        if let line {
+            Text(line)
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(hub.myRank(kind) == nil ? MobileTheme.secondaryText : MobileTheme.accent)
+        }
     }
 
     // MARK: 캔버스
@@ -192,25 +196,20 @@ struct GamesMiniGameScreen: View {
                 GamesChampionRow(winner: winner)
             }
             if state.entries.isEmpty {
-                if state.failed {
-                    HStack {
-                        Text(GamesMiniGameText.failedCaption)
-                            .font(.subheadline)
-                            .foregroundStyle(MobileTheme.secondaryText)
-                        Spacer()
-                        Button(GamesMiniGameText.retry) { Task { await hub.loadBoard(kind, withWinner: true) } }
-                            .font(.subheadline.weight(.semibold))
-                            .gamesTouchTarget()
+                switch state.placeholder {
+                case .failed:
+                    LoadFailureRow(GamesMiniGameText.failedCaption, isRetrying: state.loading) {
+                        Task { await hub.loadBoard(kind, withWinner: true) }
                     }
-                } else if !state.loaded {
+                case .loading:
                     LoadingRow(GamesMiniGameText.loadingCaption)
-                } else {
+                case .empty, .rows:
                     Text(GamesMiniGameText.emptyBoard)
                         .font(.subheadline)
                         .foregroundStyle(MobileTheme.secondaryText)
                 }
             } else {
-                VStack(spacing: 8) {
+                VStack(spacing: 2) {
                     ForEach(Array(state.entries.enumerated()), id: \.element.userID) { index, entry in
                         GamesRankRow(rank: index + 1, entry: entry,
                                         isMe: entry.userID == store.context.session.session?.userID.lowercased())
@@ -256,7 +255,8 @@ struct GamesMiniGameScreen: View {
     }
 }
 
-/// 오늘 순위 한 줄: 등수 · 아바타 · 이름(+나) · 점수.
+/// 오늘 순위 한 줄: 등수 · 아바타 · 이름(+나) · 점수. 순위 원·"나" 칩·내 행 강조는 순위 탭과 같은 공용 부품이다
+/// (`RankBadge` · `AingChip` · `rankRowSurface` — 같은 순위가 두 탭에서 다른 색으로 보이던 결함).
 private struct GamesRankRow: View {
     let rank: Int
     let entry: MiniGameBoardEntry
@@ -282,17 +282,12 @@ private struct GamesRankRow: View {
                 }
             }
         }
+        .rankRowSurface(isMine: isMe, standsAlone: false, padding: 8, cornerRadius: 12)
         .accessibilityElement(children: .combine)
     }
 
     private var rankBadge: some View {
-        Text("\(rank)")
-            .font(MobileTheme.number(.subheadline, weight: .bold))
-            .monospacedDigit()
-            .foregroundStyle(rank <= 3 ? MobileTheme.onAccent : MobileTheme.secondaryText)
-            .frame(minWidth: 26, minHeight: 26)
-            .padding(.horizontal, 2)
-            .background(Capsule().fill(rank <= 3 ? rankTint : MobileTheme.cardElevated))
+        RankBadge(rank: rank)
     }
 
     private var nameLine: some View {
@@ -302,12 +297,7 @@ private struct GamesRankRow: View {
                 .foregroundStyle(MobileTheme.primaryText)
                 .lineLimit(2)
             if isMe {
-                Text(GomokuPhoneText.me)
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(MobileTheme.accent)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(MobileTheme.accent.opacity(0.16)))
+                AingChip(text: GomokuPhoneText.me)
             }
             CenterBadge(CenterLabel.serverValue(forDisplay: entry.center))
         }
@@ -319,14 +309,6 @@ private struct GamesRankRow: View {
             .monospacedDigit()
             .foregroundStyle(MobileTheme.primaryText)
             .fixedSize()
-    }
-
-    private var rankTint: Color {
-        switch rank {
-        case 1: return MobileTheme.pending
-        case 2: return MobileTheme.offWork
-        default: return MobileTheme.aiToken
-        }
     }
 }
 

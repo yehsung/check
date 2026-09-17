@@ -83,30 +83,37 @@ enum MeAnchor: String {
 /// 프로필 머리: 사진 · 이름 · 팀 · 센터 · 루비.
 struct MeHeaderCard: View {
     let store: MeStore
-    @ScaledMetric(relativeTo: .title2) private var avatarSize: CGFloat = 64
+    /// 기본 글자 크기의 지름 — 큰 글자에서는 `AvatarView` 공용 규칙이 키운다(탭마다 따로 키우지 않는다).
+    private let avatarSize: CGFloat = 64
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        let name = store.displayName ?? store.context.session.profile?.email ?? "나"
+        // 이메일은 프로필을 **받았는데** 별명이 비었을 때만 제목으로 쓴다 — 못 받은 채(오프라인) 이메일을 제목으로 세우던 결함(통합 검증 E-me).
+        let email = store.headerState.hasLoaded ? store.context.session.profile?.email : nil
+        let name = store.displayName ?? email ?? MeText.meFallbackName
         AingCard {
             // 접근성 글자 크기에서는 사진을 위로 올리고 팀 이름·센터를 줄로 나눈다(가로 그대로면 팀 이름이 "아…"로 잘렸다 — 실측).
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 8) {
-                    AvatarView(name: name, url: store.avatarURL, size: min(avatarSize, 96))
-                    identity(name: name, stacked: true)
-                }
-            } else {
-                HStack(alignment: .center, spacing: 14) {
-                    AvatarView(name: name, url: store.avatarURL, size: avatarSize)
-                    identity(name: name, stacked: false)
-                    Spacer(minLength: 0)
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 8) {
+                        AvatarView(name: name, url: store.avatarURL, size: avatarSize)
+                        identity(name: name, stacked: true)
+                    }
+                } else {
+                    HStack(alignment: .center, spacing: 14) {
+                        AvatarView(name: name, url: store.avatarURL, size: avatarSize)
+                        identity(name: name, stacked: false)
+                        Spacer(minLength: 0)
+                    }
                 }
             }
+            .accessibilityElement(children: .combine)
             if store.headerState.hasFailed, !store.headerState.hasLoaded {
-                InlineNotice(text: "프로필을 불러오지 못했어요 — 당겨서 다시 시도해 주세요", kind: .warning)
+                LoadFailureRow(MeText.headerLoadFailed, isRetrying: store.headerState.isLoading) {
+                    Task { await store.loadHeader() }
+                }
             }
         }
-        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder

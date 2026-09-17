@@ -650,7 +650,8 @@ package enum MobileSessionText {
     package static let missingCredentials = "이메일과 비밀번호를 입력해 주세요"
     package static let signInFailed = "로그인 실패"
     package static let signInAgain = "다시 로그인 필요"
-    package static let network = "네트워크를 확인하고 다시 시도해 주세요"
+    /// 탭 공용 연결 안내와 같은 문장(`MobileLoadText.checkConnection` — 통합에서 "네트워크를…"·"연결을…" 두 갈래를 하나로).
+    package static let network = MobileLoadText.checkConnection
     package static let signUpOnMac = "가입은 맥 앱에서 해요"
     package static let passwordResetOnMac = "비밀번호를 잊었다면 맥 앱의 로그인 화면에서 재설정해 주세요"
     package static let updateTitle = "새 버전이 필요해요"

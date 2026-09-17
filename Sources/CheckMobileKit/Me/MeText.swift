@@ -9,7 +9,9 @@ package enum MeText {
     // MARK: 공통
 
     package static let loading = "불러오는 중…"
-    package static let retry = "다시 시도"
+    /// 머리 카드 제목: 별명·이메일을 아직 모른다(맥 `GomokuPlayerFace.fallback` 과 같은 "나").
+    package static let meFallbackName = "나"
+    package static let retry = MobileLoadText.retry
     package static let noTeam = "팀 없음"
 
     // MARK: 기록 (맥 InsightsPanel · InsightsEmptyMessage · GoalPercentFormatter)
@@ -165,7 +167,9 @@ package enum MeText {
     package static let owned = "보유"
     package static let equipped = "착용 중"
     /// 착용값 조회 실패(요약 줄 — 루트는 당겨서 새로고침이 다시 묻는다).
-    package static let equippedLoadFailed = "착용 정보를 불러오지 못했어요 — 당겨서 다시 시도해 주세요"
+    package static let equippedLoadFailed = "착용 정보를 불러오지 못했어요"
+    /// 머리 카드: 프로필 조회가 한 번도 성공하지 못했다(곁에 [다시 시도]).
+    package static let headerLoadFailed = "프로필을 불러오지 못했어요"
     package static let characterSaved = "캐릭터를 바꿨어요"
     package static let characterSaveFailed = "캐릭터 저장 실패"
     package static let characterNotOwned = "안 산 캐릭터예요 — 상점에서 살 수 있어요"
@@ -305,7 +309,8 @@ package enum MeText {
     package static let miniGamePublicDetail = "끄면 내 최고기록이 순위표에 안 보이고 올라가지도 않아요."
     package static let privacySaveFailed = "공개 설정을 저장하지 못했어요 — 잠시 뒤 다시 시도해 주세요"
     /// 공개 설정을 한 번도 못 읽었다(스위치가 꺼져 있는 이유 · 폰만의 문장).
-    package static let privacyLoadFailed = "공개 설정을 불러오지 못했어요 — 연결을 확인하고 다시 시도해 주세요"
+    /// 공용 `LoadFailureRow` 가 [다시 시도]를 곁에 둔다 — 문장에 할 일을 또 적지 않는다(탭 사이 실패 문구 맞춤).
+    package static let privacyLoadFailed = "공개 설정을 불러오지 못했어요"
 
     package static let pushSection = "알림"
     /// 종류별 토글 아래 한 줄(제목은 `PushKind.settingTitle` — 설명 시트와 같은 이름).

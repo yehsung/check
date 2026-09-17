@@ -140,9 +140,7 @@ struct MeSettingsView: View {
                         Button(MeText.openSystemSettings) {
                             push.openSystemSettings()
                         }
-                        .buttonStyle(.bordered)
-                        .tint(MobileTheme.accent)
-                        .frame(minHeight: 44)
+                        .buttonStyle(AingSecondaryButtonStyle())
                     case .unknown, .authorized, .ephemeral:
                         EmptyView()
                     }
@@ -246,23 +244,9 @@ struct MeSettingsView: View {
 
     // MARK: 조각
 
-    /// 조회 실패 안내 + [다시 시도](SPEC-ios §0.5 — 원인과 할 일을 말한다). 당겨서 새로고침도 같은 조회다.
+    /// 조회 실패 안내 + [다시 시도](SPEC-ios §0.5 — 원인과 할 일을 말한다). 공용 `LoadFailureRow`(44pt 버튼). 당겨서 새로고침도 같은 조회다.
     private func loadFailureRow(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            InlineNotice(text: text, kind: .warning)
-            Button {
-                store.retrySettings()
-            } label: {
-                if store.isLoadingSettings {
-                    Text(MeText.loading)
-                } else {
-                    Label(MeText.retry, systemImage: "arrow.clockwise")
-                }
-            }
-            .buttonStyle(.bordered)
-            .tint(MobileTheme.accent)
-            .disabled(store.isLoadingSettings)
-        }
+        LoadFailureRow(text, isRetrying: store.isLoadingSettings) { store.retrySettings() }
     }
 
     private func toggleRow(title: String, detail: String, isOn: Binding<Bool>, enabled: Bool) -> some View {

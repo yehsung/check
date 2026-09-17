@@ -31,17 +31,23 @@ struct MeFeedbackView: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 store.feedbackDidAppear()
+                revealFocusedReport(proxy)
                 if let target = MeDemoHooks.scrollTarget() {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { proxy.scrollTo(target, anchor: .top) }
                 }
             }
             .onDisappear { store.feedbackDidDisappear() }
-            .onChange(of: store.feedbackList) { _, _ in
-                guard let focused = store.focusedReport else { return }
-                expanded.insert(focused.id)
-                DispatchQueue.main.async { proxy.scrollTo(focused.id, anchor: .top) }
-            }
+            // 두 계기 — 목록이 새로 왔다(처음 연 화면) · 딥링크·알림이 또 가리켰다(이미 떠 있는 화면, 목록은 그대로일 수 있다).
+            .onChange(of: store.feedbackList) { _, _ in revealFocusedReport(proxy) }
+            .onChange(of: store.feedbackFocusSerial) { _, _ in revealFocusedReport(proxy) }
         }
+    }
+
+    /// 가리킨 제보가 목록에 있으면 펼치고 그 줄로 스크롤한다(없으면 목록이 올 때 다시 불린다).
+    private func revealFocusedReport(_ proxy: ScrollViewProxy) {
+        guard let focused = store.focusedReport else { return }
+        expanded.insert(focused.id)
+        DispatchQueue.main.async { proxy.scrollTo(focused.id, anchor: .top) }
     }
 
     private func composeCard(store: MeStore) -> some View {
@@ -109,18 +115,8 @@ struct MeFeedbackView: View {
                 if state.isLoading, !state.hasLoaded {
                     LoadingRow(FeedbackText.loading)
                 } else if state.hasFailed, !state.hasLoaded {
-                    HStack {
-                        Text(FeedbackText.failed)
-                            .font(.subheadline)
-                            .foregroundStyle(MobileTheme.secondaryText)
-                        Spacer(minLength: 8)
-                        Button {
-                            Task { await store.loadFeedback() }
-                        } label: {
-                            Label(FeedbackText.retry, systemImage: "arrow.clockwise")
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(MobileTheme.accent)
+                    LoadFailureRow(FeedbackText.failed, isRetrying: state.isLoading) {
+                        Task { await store.loadFeedback() }
                     }
                 } else {
                     Text(FeedbackText.mineEmpty)

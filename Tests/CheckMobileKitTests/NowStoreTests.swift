@@ -35,6 +35,7 @@ import Testing
         let people = h.store.workingPeople(now: Self.now)
         #expect(people.map(\.id) == [NowStubServer.mint, NowStubServer.bori, NowStubServer.lime, NowStubServer.morae, NowStubServer.coral, NowStubServer.haneul])
         #expect(people.prefix(3).allSatisfy(\.isTeammate) && people.dropFirst(3).allSatisfy { !$0.isTeammate })
+        try #require(people.count >= 3, "근무 중 목록이 비면 아래 인덱스 읽기가 프로세스를 죽인다")
         #expect(people[0].elapsedSeconds == 15_000 && people[0].center == "seoul")
         #expect(people[1].isStale && people[1].elapsedSeconds == 10_320, "끊긴 신호는 마지막 신호에서 멈춘다")
         #expect(people[2].avatarURL?.absoluteString == "https://x.invalid/lime.jpg")

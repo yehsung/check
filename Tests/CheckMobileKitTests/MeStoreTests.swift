@@ -146,8 +146,11 @@ struct MeStoreTests {
             await harness.me.loadRecords()
             let todayWeek = harness.me.dailyGrid.weeks - 1
             let todayIndex = WorkInsightsCalendar.weekdayIndex(for: now)
-            #expect(harness.me.recordsState.hasLoaded, "\(label)")
-            #expect(harness.me.dailyGrid.seconds[todayWeek][todayIndex] == expectedToday, "\(label): 오늘 칸 \(harness.me.dailyGrid.seconds[todayWeek][todayIndex])")
+            // 로드가 안 됐으면(전체 스위트 부하 등) 칸이 비어 있다 — 인덱스로 읽기 전에 멈춰야 테스트 프로세스가 통째로 죽지 않는다.
+            try #require(harness.me.recordsState.hasLoaded, "\(label)")
+            let grid = harness.me.dailyGrid.seconds
+            try #require(grid.indices.contains(todayWeek) && grid[todayWeek].indices.contains(todayIndex), "\(label): 칸 모양 \(grid.count)")
+            #expect(grid[todayWeek][todayIndex] == expectedToday, "\(label): 오늘 칸 \(grid[todayWeek][todayIndex])")
             // 팀 상태는 읽기만: 근무 세션·상태·기기 표 쓰기 0.
             harness.expectNoForbiddenCalls()
             harness.tearDown()

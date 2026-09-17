@@ -140,8 +140,9 @@ import Testing
         harness.server.setDefault("gomoku_leave", json: #"{"status":"ok","both_left":false}"#)
         // 서버 판 상태(화면이 나타나며 다시 읽는 판이 테스트가 넣은 상태와 같게).
         let serverFinished = BaseLockedBox(false)
+        let serverMatchID = BaseLockedBox("m-idle")
         harness.server.setDefault("gomoku_state") { _ in
-            .json(GamesGomokuJSON.state(nowMs: nowMs, matchID: "m-idle", finished: serverFinished.get(),
+            .json(GamesGomokuJSON.state(nowMs: nowMs, matchID: serverMatchID.get(), finished: serverFinished.get(),
                                         moves: [("black", "H8"), ("white", "I9")]))
         }
         let applied = BaseLockedBox<[Bool]>([])
@@ -175,7 +176,16 @@ import Testing
         harness.gomoku.applyState(finished.state)
         #expect(await baseWaitUntil { applied.get().last == false }, "끝난 판인데 화면 꺼짐 방지를 쥐고 있다")
 
+        // 끝난 판은 다시 열리지 않는다(같은 판의 늦은 진행 중 스냅숏은 버린다) — 다시 켜지는 길은 **새 판**이다.
         harness.gomoku.applyState(active.state)
+        await baseYield()
+        await harness.barrier()
+        #expect(applied.get().last == false, "끝난 판에 늦게 온 진행 중 스냅숏이 화면 꺼짐 방지를 다시 켰다")
+        let next = try JSONDecoder.gamesSnake.decode(GomokuStateResponse.self, from: Data(
+            GamesGomokuJSON.state(nowMs: nowMs, matchID: "m-idle-2", moves: [("black", "H8"), ("white", "I9")]).utf8))
+        serverMatchID.mutate { $0 = "m-idle-2" }
+        serverFinished.mutate { $0 = false }
+        harness.gomoku.applyState(next.state)
         #expect(await baseWaitUntil { applied.get().last == true })
         await harness.model.session.signOut()
         #expect(await baseWaitUntil { applied.get().last == false }, "로그아웃했는데 화면 꺼짐 방지를 쥐고 있다")

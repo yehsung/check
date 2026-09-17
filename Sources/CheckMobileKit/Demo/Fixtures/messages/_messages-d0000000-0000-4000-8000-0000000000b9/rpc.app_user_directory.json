@@ -1,0 +1,66 @@
+[
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b1",
+    "display_name": "한결",
+    "avatar_url": null,
+    "is_working": true,
+    "message_capable": true,
+    "center": "seoul"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b2",
+    "display_name": "소라",
+    "avatar_url": null,
+    "is_working": true,
+    "message_capable": true,
+    "center": "busan"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b5",
+    "display_name": "하린",
+    "avatar_url": null,
+    "is_working": true,
+    "message_capable": true,
+    "center": "seoul"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b4",
+    "display_name": "도윤",
+    "avatar_url": null,
+    "is_working": false,
+    "message_capable": true,
+    "center": "busan"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b3",
+    "display_name": "민재",
+    "avatar_url": null,
+    "is_working": false,
+    "message_capable": true,
+    "center": "seoul"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b6",
+    "display_name": "은비",
+    "avatar_url": null,
+    "is_working": false,
+    "message_capable": true,
+    "center": null
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b9",
+    "display_name": "지우",
+    "avatar_url": null,
+    "is_working": false,
+    "message_capable": true,
+    "center": "busan"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b7",
+    "display_name": "태오",
+    "avatar_url": null,
+    "is_working": false,
+    "message_capable": true,
+    "center": "seoul"
+  }
+]

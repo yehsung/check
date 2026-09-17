@@ -100,9 +100,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.3.31</string>
+  <string>0.3.32</string>
   <key>CFBundleVersion</key>
-  <string>83</string>
+  <string>84</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>

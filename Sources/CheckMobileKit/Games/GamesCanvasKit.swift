@@ -6,7 +6,8 @@ import SwiftUI
 // MiniGameScorePop 을 옮겼다). 캔버스는 무대 하늘이 늘 어둡기 때문에 라이트 모드에서도 맥 패널 색(CheckTheme)을 쓴다 —
 // 게임 화면은 라이트·다크와 무관하게 같은 그림이다. 글자 크기는 캔버스 배율(`scale`)을 따라 커진다(판이 커진 만큼 같은 비율).
 
-/// 시작 안내·결과 카드(맥과 같은 모양).
+/// 시작 안내·결과 카드. w15: **불투명**(비평 14~19 — 반투명이라 플래피 기둥 선이 점수 뒤로 비치고 아잉이 카드 뒤에 흐리게 갇혔다) ·
+/// 조작 안내는 버튼처럼 생긴 캡슐 대신 손가락 기호 + 글자(캔버스 전체가 누름 영역이다) · 보조 글은 한 단계 밝게.
 struct GamesOverlayCard: View {
     let title: String
     var titleIsScore = false
@@ -14,18 +15,22 @@ struct GamesOverlayCard: View {
     var subtitleIsHighlighted = false
     let action: String
     var icon: String?
+    /// 플래피: 기호 대신 실제 아잉 옆모습(벌새 기호 금지).
+    var showsAing = false
     var tint: Color = CheckTheme.accent
     var scale: CGFloat = 1
 
     var body: some View {
         VStack(spacing: 6 * scale) {
-            if let icon {
+            if showsAing {
+                FlappyAingArt(size: 40 * scale)
+                    .accessibilityHidden(true)
+            } else if let icon {
                 Image(systemName: icon)
                     .font(.system(size: 16 * scale, weight: .semibold))
                     .foregroundStyle(tint)
                     .frame(width: 34 * scale, height: 34 * scale)
                     .background(Circle().fill(tint.opacity(0.16)))
-                    .overlay(Circle().stroke(tint.opacity(0.40), lineWidth: 1))
                     .accessibilityHidden(true)
             }
             Text(title)
@@ -37,28 +42,28 @@ struct GamesOverlayCard: View {
             Text(subtitle)
                 .font(.system(size: (subtitleIsHighlighted ? 13 : 12) * scale, weight: subtitleIsHighlighted ? .bold : .regular))
                 .monospacedDigit()
-                .foregroundStyle(subtitleIsHighlighted ? CheckTheme.working : CheckTheme.secondaryText)
+                .foregroundStyle(subtitleIsHighlighted ? CheckTheme.working : CheckTheme.primaryText.opacity(0.78))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(action)
-                .font(.system(size: 13 * scale, weight: .semibold))
-                .foregroundStyle(tint)
-                .padding(.horizontal, 12 * scale)
-                .padding(.vertical, 5 * scale)
-                .background(Capsule().fill(tint.opacity(0.16)))
-                .overlay(Capsule().stroke(tint.opacity(0.35), lineWidth: 1))
-                .padding(.top, 2 * scale)
+            HStack(spacing: 4 * scale) {
+                Image(systemName: "hand.tap.fill")
+                    .accessibilityHidden(true)
+                Text(action)
+            }
+            .font(.system(size: 13 * scale, weight: .semibold))
+            .foregroundStyle(tint)
+            .padding(.top, 4 * scale)
         }
         .padding(.horizontal, 18 * scale)
         .padding(.vertical, 14 * scale)
         .frame(maxWidth: 240 * scale)
         .background(
             RoundedRectangle(cornerRadius: 14 * scale, style: .continuous)
-                .fill(CheckTheme.panelElevated.opacity(0.94))
+                .fill(CheckTheme.panelElevated)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14 * scale, style: .continuous)
-                        .stroke(LinearGradient(colors: [tint.opacity(0.45), CheckTheme.border],
-                                               startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+                        .strokeBorder(LinearGradient(colors: [tint.opacity(0.45), CheckTheme.border],
+                                                     startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
         )

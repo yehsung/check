@@ -160,3 +160,26 @@ package enum GomokuPhoneChallengeGate {
         user.isCapable && !user.inMatch && store.outgoing == nil && store.match == nil && !store.isBusy
     }
 }
+
+/// 끝난 판의 승리선(w15 — 비평 "이긴 5목이 강조되지 않는다"). 마지막 수를 지나는 가로·세로·두 대각선 중
+/// 같은 색이 **5개 이상** 이어진 줄의 양 끝 돌을 돌려준다(장목이면 그 전체). 5목으로 끝난 판이 아니면 nil.
+package enum GomokuPhoneWinLine {
+    package static func ends(board: GomokuBoard, lastMove: GomokuPoint?) -> (from: GomokuPoint, to: GomokuPoint)? {
+        guard let lastMove, let color = board[lastMove] else { return nil }
+        for (dx, dy) in [(1, 0), (0, 1), (1, 1), (1, -1)] {
+            var from = lastMove
+            var to = lastMove
+            var count = 1
+            while let next = GomokuPoint(x: to.x + dx, y: to.y + dy), board[next] == color {
+                to = next
+                count += 1
+            }
+            while let next = GomokuPoint(x: from.x - dx, y: from.y - dy), board[next] == color {
+                from = next
+                count += 1
+            }
+            if count >= 5 { return (from, to) }
+        }
+        return nil
+    }
+}

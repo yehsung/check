@@ -49,6 +49,28 @@ package enum GamesText {
     }
 
     package static let openGame = "하기"
+
+    // MARK: w15 재디자인(시안 B 07) — 폰에서 새로 쓴 줄
+
+    /// 오른쪽 위 루비 알약을 누르면(보이스오버 힌트).
+    package static let rubyPillHint = "상점을 열어요"
+    package static let todayRankTitle = "오늘 내 순위"
+    package static let seeAllRankings = "순위 탭에서 전체 보기"
+    /// 허브 오목 칩: 진행 중인 판.
+    package static let activeMatchChip = "대국 중"
+    package static func incomingChip(_ count: Int) -> String { "받은 신청 \(count)건" }
+
+    /// "오늘 내 순위" 행 부제 — 1등 한 줄과 참여 수("1위 민트별 962점 · 8명 참여"). 순위표를 모르면 불러오는 중·실패를 말한다.
+    package static func hubRankSubtitle(board: GamesMiniGameBoard) -> String {
+        switch board.placeholder {
+        case .rows:
+            guard let leader = board.entries.first else { return GamesMiniGameText.noRankToday }
+            return "1위 " + leader.name + " " + GamesMiniGameText.score(leader.bestScore) + " · \(board.entries.count)명 참여"
+        case .empty: return "오늘은 아직 아무도 안 했어요"
+        case .failed: return GamesMiniGameText.failedCaption
+        case .loading: return GamesMiniGameText.loadingCaption
+        }
+    }
 }
 
 /// 미니게임 허브 문구(맥 `MiniGamePanel` · `WorkTimerStoreMiniGame` 과 같은 말).
@@ -246,6 +268,68 @@ package enum GomokuPhoneText {
     package static let chatSend = "보내기"
     /// 글자 수는 상한 근처에서만(맥 `GomokuChatComposer.counterFromRatio` 0.8 — 100자 중 80자부터).
     package static let chatCounterFromRatio = 0.8
+
+    // MARK: w15 재디자인(시안 B 08·09) — 폰에서 새로 쓴 줄
+
+    package static let recordTitle = "전적"
+    package static let myRubyTitle = "내 루비"
+    package static func peopleCount(_ count: Int) -> String { "\(count)명" }
+    package static func liveCount(_ count: Int) -> String { "\(count)판" }
+    package static let inMatchButton = "대국 중"
+    package static let needsUpdate = "앱 업데이트가 필요해요"
+    /// " · 이기면 +5"(판돈 줄 꼬리).
+    package static func stakeGainSuffix(_ stake: Int) -> String { " · 이기면 +\(stake)" }
+    /// "42초 남음"(받은 신청 머리 · 보낸 신청 부제).
+    package static func remainingPhrase(_ seconds: Double) -> String { "\(remaining(seconds)) 남음" }
+    /// "민트별 · 달토끼".
+    package static func livePair(_ live: GomokuLiveMatch) -> String { live.a.displayName + " · " + live.b.displayName }
+
+    /// 대결이 시작된 뒤 흐른 시간을 말로("35초째" · "1분 35초째" · "1시간 2분째").
+    package static func elapsedPhrase(_ seconds: Double) -> String {
+        let total = Int(max(0, seconds))
+        if total < 60 { return "\(total)초째" }
+        if total < 3600 { return "\(total / 60)분 \(total % 60)초째" }
+        return "\(total / 3600)시간 \((total % 3600) / 60)분째"
+    }
+
+    /// 상대 행 부제(칩 대신 회색 글 — 시안 B 08). 대국 중이면 누구와 두는지(로비의 대결 중 목록에서 찾는다).
+    package static func opponentStatus(for user: GomokuUser, liveMatches: [GomokuLiveMatch]) -> String {
+        if user.inMatch {
+            let partner = liveMatches.first { $0.a.id == user.id || $0.b.id == user.id }
+                .map { $0.a.id == user.id ? $0.b.displayName : $0.a.displayName }
+            return partner.map { "대국 중 · \($0)\(withParticle($0))" } ?? "대국 중"
+        }
+        if !user.isCapable { return needsUpdate }
+        return user.isWorking ? "근무 중" : "근무 안 함"
+    }
+
+    /// 받침이 있으면 "과", 없으면(한글이 아니어도) "와" — "달토끼와" · "민트별과".
+    package static func withParticle(_ name: String) -> String {
+        guard let scalar = name.unicodeScalars.last, (0xAC00...0xD7A3).contains(scalar.value) else { return "와" }
+        return (scalar.value - 0xAC00) % 28 == 0 ? "와" : "과"
+    }
+
+    package static func stoneShort(_ color: GomokuColor) -> String { color == .black ? "흑" : "백" }
+    /// 상대 카드 부제 "백 · 근무 중".
+    package static func playerSubtitle(color: GomokuColor, isWorking: Bool) -> String {
+        stoneShort(color) + " · " + (isWorking ? "근무 중" : "근무 안 함")
+    }
+    /// 내 차례 부제 꼬리 — 미리보기 돌이 섰으면 그 칸("I8 한 번 더 누르면 둬요"), 아니면 규칙 한 줄.
+    package static func myTurnHint(preview: GomokuPoint?) -> String {
+        guard let preview else { return placeHint }
+        return "\(preview.notation) 한 번 더 누르면 둬요"
+    }
+    /// 내 카드 부제(상대 차례) "흑 · 상대 차례예요".
+    package static func myWaitingLine(color: GomokuColor) -> String { stoneShort(color) + " · " + opponentTurn }
+
+    /// 대화 음소거 — 무엇을 끄는지 말한다(비평: '끄기'만으로는 소리인지 알림인지 모른다).
+    package static let chatMuteAction = "대화 끄기"
+    package static let chatUnmuteAction = "대화 켜기"
+    package static let chatOpen = "대화 펼치기"
+    package static let chatClose = "대화 접기"
+    package static let chatWrite = "메시지 쓰기"
+    package static let moreMenu = "더보기"
+    package static func resultOpponent(_ name: String) -> String { "상대 · \(name)" }
 
     package static let liveTitle = "지금 대결 중"
     package static let noLiveMatches = "지금 대결 중인 사람이 없어요"

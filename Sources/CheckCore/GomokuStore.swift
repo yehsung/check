@@ -466,8 +466,14 @@ package final class GomokuStore {
         // 수·차례·끝남이 바뀔 때만 한 줄 남긴다(v0.3.31 진단 — `GomokuSeenTurn` 주석). 같은 값을 다시 넣는 되맞춤은 조용하다.
         didSet {
             if let line = Self.matchTransitionLine(from: oldValue, to: match) { Self.logger.notice("\(line, privacy: .public)") }
+            // AI 판은 `match` 가 그 판 id 를 들고 있는 동안만 산다 — 1:1 판이 열리거나 판이 내려가면 버린다(GomokuStoreAI.swift).
+            if let game = aiGame, match?.id != game.id { discardAIGame() }
         }
     }
+    /// 지금 AI 대국(로컬 판, docs/plan/gomoku-ai.md). 서버 판과 섞이지 않는다 — 확장 파일 머리 주석.
+    package internal(set) var aiGame: GomokuAIGame?
+    /// AI 갈래 장부(선택기·작업·세대). 관찰 대상이 아니다.
+    @ObservationIgnored package let aiRuntime = GomokuAIRuntime()
     /// 탭 순간 화면이 본 판과 스토어 판이 달랐던 횟수(진단·테스트 지점). 화면을 다시 그리게 하지 않도록 관찰에서 뺀다.
     @ObservationIgnored package private(set) var tapDivergenceCount = 0
     /// 사용자 어휘 안내 한 줄.
@@ -678,6 +684,7 @@ package final class GomokuStore {
         if !isWindowVisible { isWindowVisible = true }
         // 막 앞으로 올라온 창이다. 숨기기 전의 가림 기록이 남아 폴링을 영영 막지 않게 지운다(가려지면 통지가 다시 온다).
         isWindowOccluded = false
+        resumeAIClockIfVisible()
         startPolling()
         guard host?.session != nil else { return }
         let now = clock()
@@ -694,6 +701,7 @@ package final class GomokuStore {
         if isWindowVisible { isWindowVisible = false }
         isWindowOccluded = false
         stopPolling()
+        pauseAIClock()
         // 결과 화면인 채로 창을 닫았다 = 그 판에서 나간 것이다. **진행 중이면 부르지 않는다**(창을 닫아도 대국은
         // 계속된다). 가려짐은 나간 게 아니므로 `windowOcclusionDidChange` 는 이 문을 지나지 않는다.
         if let current = match, current.isFinished { leaveMatch(current.id) }
@@ -705,8 +713,10 @@ package final class GomokuStore {
     package func windowOcclusionDidChange(visible: Bool) {
         isWindowOccluded = !visible
         if visible {
+            resumeAIClockIfVisible()
             startPolling()
         } else {
+            pauseAIClock()
             stopPolling()
         }
     }
@@ -875,7 +885,9 @@ package final class GomokuStore {
     /// 도는 중에 **다른 판** id 가 들어오면 합치지 않고 기억했다가 지금 판이 끝난 뒤 그 판을 한 번 읽는다 —
     /// 합치면 뒤따르는 반복이 앞 판만 다시 읽어, 막 수락된 판이 다음 계기까지 화면에 안 온다.
     package func refreshMatch(id rawID: String?) async {
-        guard let requested = rawID?.lowercased(), !requested.isEmpty, host?.session != nil else { return }
+        // AI 판 id 는 서버에 없다 — 어느 경로로 와도 여기서 막는다(열기·받은함·동기화·폴링이 전부 이 문을 지난다).
+        guard let requested = rawID?.lowercased(), !requested.isEmpty, !GomokuAIGame.isAIMatchID(requested),
+              host?.session != nil else { return }
         if stateInFlight {
             if requested == stateInFlightID {
                 stateAgain = true
@@ -1266,6 +1278,11 @@ package final class GomokuStore {
             refuseTap(.forbidden, at: point, reason: reason)
             return
         }
+        // AI 판은 위 거절 가드를 **같이** 지난 뒤 로컬 판에 둔다 — 서버로는 안 나간다(로그인 여부도 안 본다).
+        if isAIMatch {
+            if let refusal = placeInAIMatch(point) { refuseTap(refusal.kind, at: point, reason: refusal.reason) }
+            return
+        }
         guard host?.session != nil else { refuseTap(.signedOut, at: point); return }
         let id = current.id
         let expected = current.moveCount
@@ -1315,6 +1332,10 @@ package final class GomokuStore {
     }
 
     package func resign() async {
+        if isAIMatch {
+            resignAIMatch()
+            return
+        }
         guard !isBusy, let current = match, !current.isFinished, host?.session != nil else { return }
         let id = current.id
         isBusy = true
@@ -1338,6 +1359,8 @@ package final class GomokuStore {
 
     /// 결과 화면에서 로비로. **진행 중인 판에서는 아무것도 하지 않는다**(빠져나가는 길은 기권뿐이다).
     package func backToLobby() {
+        // 끝난 AI 판이면 판만 내리고 나머지는 아래 1:1 길을 그대로 탄다(진행 중이면 아래 가드가 막는다).
+        if isAIMatch { backToLobbyFromAIMatch() }
         if let current = match {
             guard current.isFinished else { return }
             dismissedMatchIDs.insert(current.id)
@@ -1360,6 +1383,11 @@ package final class GomokuStore {
 
     /// 같은 상대·같은 판돈으로 다시 신청.
     package func rematch() async {
+        // AI 판의 "다시"는 신청이 아니라 새 로컬 판이다("ai" 는 서버 사람이 아니다).
+        if isAIMatch {
+            restartAIMatch()
+            return
+        }
         if let current = match, !current.isFinished { return }
         guard let opponent = match?.opponent ?? lastOpponent else { return }
         if let stake = GomokuStake(rawValue: match?.stake ?? lastStake ?? selectedStake.rawValue),
@@ -1402,7 +1430,8 @@ package final class GomokuStore {
 
     /// 신호 한 번의 조회: 진행 중 판이 있으면 그 판(since_seq), 아니면 인박스.
     package func syncOnce() async {
-        if let current = match, !current.isFinished {
+        // AI 판은 서버에 없다 — 그동안 온 신호는 받은함(1:1 신청·수락)으로 본다.
+        if let current = match, !current.isFinished, !isAIMatch {
             await refreshMatch(id: current.id)
         } else {
             await loadInbox()
@@ -1480,7 +1509,7 @@ package final class GomokuStore {
     ///  · 로비를 보고 있으면 30초마다 목록.
     package func pollTick(at now: Date) async {
         guard isWindowVisible, !isWindowOccluded, host?.session != nil else { return }
-        if let current = match, !current.isFinished {
+        if let current = match, !current.isFinished, !isAIMatch {
             let waiting = current.turn != current.myColor
             let overdue = current.deadline.map { now.timeIntervalSince($0) > Self.turnGraceSeconds } ?? false
             if waiting || overdue {
@@ -1520,6 +1549,7 @@ package final class GomokuStore {
         if let current = match, current.isFinished { leaveMatch(current.id) }
         resetGeneration &+= 1
         stopPolling()
+        discardAIGame()
         syncTask?.cancel()
         syncTask = nil
         syncPendingTrailing = false
@@ -1605,7 +1635,7 @@ package final class GomokuStore {
     /// 이 판 채팅 끄기·켜기. 음소거는 내 화면 설정이 아니라 **서버가 아는 판 상태**라 상대 화면에도 뜬다
     /// (사용자 요구: "끄면 상대에게 티가 나게").
     package func setChatMuted(_ muted: Bool) {
-        guard !isSendingChat, let current = match, host?.session != nil else { return }
+        guard !isSendingChat, let current = match, !GomokuAIGame.isAIMatchID(current.id), host?.session != nil else { return }
         let id = current.id
         isSendingChat = true
         setChatNotice(nil)
@@ -1646,7 +1676,7 @@ package final class GomokuStore {
 
     /// 채팅 한 줄 보내기의 공통 몸통. **`isBusy` 를 세우지 않는다**(착수·기권을 잠그지 않는다).
     private func sendChat(kind: GomokuChatKind, body: String, matchID id: String, clearsDraft: Bool) {
-        guard host?.session != nil else { return }
+        guard host?.session != nil, !GomokuAIGame.isAIMatchID(id) else { return }
         isSendingChat = true
         setChatNotice(nil)
         let generation = resetGeneration
@@ -1815,7 +1845,7 @@ package final class GomokuStore {
     /// 멱등이지만 **판마다 한 번만** 부른다. 폴링·재진입마다 부르면 왕복이 판 수만큼 늘어난다.
     private func leaveMatch(_ rawID: String) {
         let id = rawID.lowercased()
-        guard !id.isEmpty, !leftMatchIDs.contains(id), host?.session != nil else { return }
+        guard !id.isEmpty, !GomokuAIGame.isAIMatchID(id), !leftMatchIDs.contains(id), host?.session != nil else { return }
         leftMatchIDs.insert(id)
         Task { @MainActor [weak self] in
             guard let self else { return }

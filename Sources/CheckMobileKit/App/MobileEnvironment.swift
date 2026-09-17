@@ -51,13 +51,16 @@ package struct MobileEnvironment {
         let vault = KeychainTokenVault(service: AingKeychain.service, accessGroup: AingKeychain.accessGroup)
         let storage = AingSharedStorage.live()
         storage.ensureDirectory()
+        #if DEBUG
+        MobileKeychainProbe.warnIfEntitlementsMissing(storage: storage)
+        #endif
         return MobileEnvironment(
             service: SupabaseWorkService(anonKey: SupabaseConfig.anonKey(bundle: bundle)),
             vault: vault,
             storage: storage,
             appInfo: .fromBundle(bundle),
             clock: .system,
-            installationID: InstallationID.current(store: vault),
+            installationID: InstallationID.current(store: vault, fallback: storage.defaults),
             realtimeTransport: RealtimeFeature.isEnabled(defaults: storage.defaults) ? LiveRealtimeTransport() : nil,
             runsTimers: true,
             reloadWidgetTimelines: MobileWidgetTimelines.reloadAll

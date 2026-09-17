@@ -302,6 +302,9 @@ package final class MobileRealtimeRunner {
                 // 세션 스토어의 onAccessTokenChanged 가 이미 `.tokenRefreshed` 를 넣었다(accessTokenDidChange).
                 break
             case .failure(let failure):
+                // 갱신이 도는 사이 로그아웃·재로그인으로 세대가 바뀌었다 — 옛 링의 결과다. 새 세션의 링에 넣으면
+                // fatal 로 접혀 막 붙은 소켓을 내린다(dbase-fix · 검증 V3). 새 링은 자기 토큰으로 이미 움직이고 있다.
+                guard !failure.stale else { return }
                 self.apply(.tokenRefreshFailed(fatal: failure.fatal))
             }
         }

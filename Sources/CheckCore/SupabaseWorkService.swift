@@ -32,10 +32,13 @@ package actor SupabaseWorkService {
         return URLSession(configuration: configuration)
     }()
 
+    #if os(macOS)
     /// `work_tick` 실행 단위 가용성(v0.2.38 S3). 스토어 파일에 저장 프로퍼티를 더하지 않으려고 서비스가 들고 있다 —
     /// 서비스는 스토어당 하나(테스트도 스토어마다 새로 만든다)라 수명이 "이 실행 동안" 과 정확히 같다.
     /// 잠금으로 보호되는 Sendable 클래스라 메인 액터가 await 없이 읽고 쓴다(폴백 판정이 틱마다 도는 자리다).
+    /// 맥 전용(dbase-fix): 저장 프로퍼티라 확장 파일로 못 옮겨 여기서 가린다 — 폰 바이너리에 게이트 타입·진단 문구가 실리지 않는다.
     package nonisolated let workTickGate = WorkTickGate()
+    #endif
 
     package init(
         projectURL: URL = SupabaseConfig.projectURL,
@@ -1015,128 +1018,6 @@ extension SupabaseWorkService {
             }
         }
         return digits.isEmpty ? nil : Int(String(digits.reversed()))
-    }
-}
-
-// MARK: - work_tick 가용성 게이트 (v0.2.38 S3 / docs/work-tick.md 4.1·4.5)
-
-/// `work_tick` 을 **이 실행 동안** 쓸 수 있는가와, 왜 못 쓰는가. 컴파일 상수 킬스위치(`WorkTimerStore.workTickEnabled`)
-/// 뒤의 실행 단위 스위치다. 규칙은 계약 문서 4.5 그대로다:
-///  · 404/PGRST202(함수 없음·모르는 키) · 403/42501(실행권 회수) · `v != 1` · 디코드 실패 → **이 실행 동안 끈다**
-///  · 5xx·그 밖의 실패 → 연속 3회면 **1시간** 폴백 후 재시도(지속 오류 시 "실패 1 + 폴백 7" 폭주의 상한)
-/// 어느 쪽이든 그 틱은 호출부가 기존 경로로 즉시 재수행한다 — 하트비트 유실 창을 만들지 않는 것이 규칙의 전부다.
-///
-/// 폴백 사유는 `syncMessage` 가 아니라 여기(진단 문자열)에 남긴다. 사용자에게 "동기화 실패" 를 보일 상황이 아니라
-/// 이득만 사라진 상태이기 때문이다. NSLock 으로 보호하는 `@unchecked Sendable` — 액터 밖(메인 액터)에서 동기로 읽는다.
-package final class WorkTickGate: @unchecked Sendable {
-    /// 연속 일시 실패 상한. 도달하면 `suspensionSeconds` 동안 폴백.
-    package static let transientFailureLimit = 3
-    package static let suspensionSeconds: TimeInterval = 60 * 60
-
-    private let lock = NSLock()
-    private var disabledReason: String?
-    private var disabledAt: Date?
-    private var consecutiveTransientFailures = 0
-    private var suspendedUntil: Date?
-    private var lastTransientReason: String?
-    private var successCount = 0
-    private var fallbackCount = 0
-    /// server_now − 로컬 시계(초). 양수면 서버가 앞선다. 판정에는 쓰지 않는다(계측 전용).
-    private var lastClockSkewSeconds: TimeInterval?
-
-    /// 지금 work_tick 을 시도해도 되는가. 1시간 정지는 `now` 가 지나면 스스로 풀린다(카운터도 새로 센다).
-    package func isAvailable(now: Date) -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        if disabledReason != nil { return false }
-        if let until = suspendedUntil {
-            if now < until { return false }
-            suspendedUntil = nil
-            consecutiveTransientFailures = 0
-        }
-        return true
-    }
-
-    /// 이 실행 동안 끈다(함수 없음·실행권 회수·계약 불일치·디코드 실패).
-    package func disable(reason: String, at now: Date) {
-        lock.lock(); defer { lock.unlock() }
-        guard disabledReason == nil else { return }
-        disabledReason = reason
-        disabledAt = now
-    }
-
-    /// 일시 실패 1회(5xx·네트워크·그 밖의 4xx). 연속 3회면 1시간 정지.
-    package func recordTransientFailure(reason: String, at now: Date) {
-        lock.lock(); defer { lock.unlock() }
-        lastTransientReason = reason
-        consecutiveTransientFailures += 1
-        if consecutiveTransientFailures >= Self.transientFailureLimit {
-            suspendedUntil = now.addingTimeInterval(Self.suspensionSeconds)
-        }
-    }
-
-    /// 성공 1회. 연속 실패 장부를 지우고 시계 차를 계측한다.
-    package func recordSuccess(serverNow: Date?, localNow: Date) {
-        lock.lock(); defer { lock.unlock() }
-        successCount += 1
-        consecutiveTransientFailures = 0
-        lastTransientReason = nil
-        if let serverNow { lastClockSkewSeconds = serverNow.timeIntervalSince(localNow) }
-    }
-
-    /// 폴백 경로로 수행한 틱 1회(진단 카운터).
-    package func recordFallback() {
-        lock.lock(); defer { lock.unlock() }
-        fallbackCount += 1
-    }
-
-    /// 상태 스냅샷(테스트·진단용).
-    package var snapshot: Snapshot {
-        lock.lock(); defer { lock.unlock() }
-        return Snapshot(
-            disabledReason: disabledReason,
-            disabledAt: disabledAt,
-            consecutiveTransientFailures: consecutiveTransientFailures,
-            suspendedUntil: suspendedUntil,
-            lastTransientReason: lastTransientReason,
-            successCount: successCount,
-            fallbackCount: fallbackCount,
-            lastClockSkewSeconds: lastClockSkewSeconds
-        )
-    }
-
-    package struct Snapshot: Equatable, Sendable {
-        package let disabledReason: String?
-        package let disabledAt: Date?
-        package let consecutiveTransientFailures: Int
-        package let suspendedUntil: Date?
-        package let lastTransientReason: String?
-        package let successCount: Int
-        package let fallbackCount: Int
-        package let lastClockSkewSeconds: TimeInterval?
-    }
-
-    /// 설정 창용 한 줄(값 사이 구분자는 ` · ` — realtimeDiagnosticsLine 과 같은 규약).
-    package func diagnosticsLine(now: Date) -> String {
-        let s = snapshot
-        var parts: [String] = []
-        if let reason = s.disabledReason {
-            parts.append("폴백 고정(\(reason))")
-            if let at = s.disabledAt { parts.append("\(CheckCoreShared.realtimeDiagnosticsTime.string(from: at)) 부터") }
-        } else if let until = s.suspendedUntil, now < until {
-            parts.append("1시간 폴백(\(s.lastTransientReason ?? "연속 실패"))")
-            parts.append("\(CheckCoreShared.realtimeDiagnosticsTime.string(from: until)) 까지")
-        } else {
-            parts.append("work_tick 사용")
-            if s.consecutiveTransientFailures > 0, let reason = s.lastTransientReason {
-                parts.append("연속 실패 \(s.consecutiveTransientFailures)회(\(reason))")
-            }
-        }
-        parts.append("성공 \(s.successCount)회")
-        parts.append("폴백 \(s.fallbackCount)회")
-        if let skew = s.lastClockSkewSeconds {
-            parts.append(String(format: "시계차 %+.1fs", skew))
-        }
-        return parts.joined(separator: " · ")
     }
 }
 

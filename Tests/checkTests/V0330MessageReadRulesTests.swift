@@ -164,6 +164,30 @@ func 말풍선_필터는_서버_읽음과_낙관_경계만_거른다() {
 }
 
 @Test
+func 서버_순서가_모르는_즉시_삽입분은_서버_순서_뒤라_앞_말까지의_낙관_경계에_덮이지_않는다() {
+    // dbase-verify M7: effectiveOrder 가 즉시 삽입분(서버 순서가 모르는 c)의 번호를 0 부터 매기면 경계 a 가 c 를 덮어 점이 꺼졌다.
+    // a·b 는 서버가 아는 말(b 는 이미 읽음), c 는 이력 응답 뒤에 즉시 삽입된 새 말이다.
+    let history = [
+        rulesEntry("a", peer: "u1", unread: true), rulesEntry("b", peer: "u1", unread: false, at: 1),
+        rulesEntry("c", peer: "u1", unread: true, at: 2)
+    ]
+    let snapshot = MessageHistoryReadSnapshot(serial: 1, serverOrder: ["a": 0, "b": 1])
+    let order = MessageUnreadRules.effectiveOrder(history: history, serverOrder: snapshot.serverOrder)
+    #expect(order == ["a": 0, "b": 1, "c": 2])
+    let boundary = MessageOptimisticRead(throughID: "a", recordedSerial: 2)
+    #expect(!MessageUnreadRules.isCovered(history[2], by: boundary, order: order), "경계 뒤에 온 새 말을 읽음으로 덮었다")
+    #expect(MessageUnreadRules.unreadPeerIDs(
+        history: history, historySnapshot: snapshot, summary: nil, optimistic: ["u1": boundary], legacyStamps: [:]
+    ) == ["u1"])
+    #expect(!MessageUnreadRules.isAlreadyRead(messageID: "c", history: history, snapshot: snapshot, optimistic: ["u1": boundary]))
+    // 대조: 경계가 삽입분 자신이면 덮인다.
+    #expect(MessageUnreadRules.unreadPeerIDs(
+        history: history, historySnapshot: snapshot, summary: nil,
+        optimistic: ["u1": MessageOptimisticRead(throughID: "c", recordedSerial: 2)], legacyStamps: [:]
+    ).isEmpty)
+}
+
+@Test
 func 말풍선_필터는_이력보다_나중에_띄운_요약의_0건도_읽음으로_본다() {
     // m-fix F3: 이력(안 읽음)보다 나중에 띄운 요약이 그 상대를 안 읽음 목록에 안 두면 그 사이 다른 기기에서 읽혔다.
     let history = [rulesEntry("a1", peer: "u1", unread: true), rulesEntry("b1", peer: "u2", unread: true)]

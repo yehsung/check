@@ -17,6 +17,9 @@ public enum AingKeychain {
     public static let refreshTokenKey = "aingcheck.session.refreshToken"
     /// 설치 식별자(`InstallationID`)의 account 이름. 로그아웃해도 지우지 않는다(기기 값).
     public static let installationIDKey = "aingcheck.device.installationID"
+    /// 로그아웃 때 서버에 다 알리지 못한 정리(unregister_device · logout?scope=local)의 장부(JSON 배열). 옛 세션 토큰이 들어 있어
+    /// 공용 suite 가 아니라 키체인에 둔다. **위젯은 읽지 않는다.** 앱이 실행·active·로그인 때 갚고 비운다(`MobileSessionStore`).
+    public static let signOutCleanupKey = "aingcheck.session.signOutCleanup"
 }
 
 /// 문자열 비밀 금고의 최소 계약. 코어 `TokenVault` 와 모양이 같다 — 앱 모듈이 `KeychainTokenVault` 를 여기에 적합시킨다.
@@ -30,14 +33,26 @@ public protocol AingSecretStore: AnyObject {
 /// 앱 설치마다 하나인 식별자(`register_device(p_installation_id)`). 키체인에 없으면 만든다.
 public enum InstallationID {
     /// 있으면 그 값, 없거나 UUID 모양이 아니면 새 UUID(소문자)를 만들어 저장하고 돌려준다.
-    /// 저장이 실패해도 이번 실행에는 같은 값을 돌려준다 — 다음 실행에 새 값이 나오면 서버에 기기 행이 하나 더 생길 뿐이다
-    /// (서버가 사용자당 10대를 넘으면 오래된 것부터 지운다).
-    public static func current(store: AingSecretStore, makeUUID: () -> UUID = UUID.init) -> String {
-        if let existing = store.read(AingKeychain.installationIDKey), let uuid = UUID(uuidString: existing) {
+    ///
+    /// 키체인이 먼저다(앱을 지웠다 깔아도 남는다). **키체인 저장이 실패하는 빌드**(엔타이틀먼트가 안 실린 서명 없는 시뮬레이터 빌드 —
+    /// securityd -34018, dbase-verify 실측)에서는 `fallback`(공용 suite)에 둔다 — 두지 않으면 실행마다 새 id 가 나와
+    /// register_device 마다 서버에 기기 행이 하나씩 늘고(사용자당 10대 상한을 밀어낸다) 푸시 설정이 매번 기본값으로 돌아간다.
+    /// id 는 비밀이 아니다(무작위 uuid) — 공용 suite 에 두어도 새는 것이 없다.
+    public static func current(store: AingSecretStore, fallback: UserDefaults? = nil, makeUUID: () -> UUID = UUID.init) -> String {
+        let key = AingKeychain.installationIDKey
+        if let existing = store.read(key), let uuid = UUID(uuidString: existing) {
             return uuid.uuidString.lowercased()
         }
+        if let fallback, let existing = fallback.string(forKey: key), let uuid = UUID(uuidString: existing) {
+            let value = uuid.uuidString.lowercased()
+            store.write(value, key: key)   // 키체인이 되살아났으면 그쪽으로 옮긴다(실패해도 이 값을 그대로 쓴다)
+            return value
+        }
         let fresh = makeUUID().uuidString.lowercased()
-        store.write(fresh, key: AingKeychain.installationIDKey)
+        store.write(fresh, key: key)
+        if store.read(key) != fresh {
+            fallback?.set(fresh, forKey: key)
+        }
         return fresh
     }
 }

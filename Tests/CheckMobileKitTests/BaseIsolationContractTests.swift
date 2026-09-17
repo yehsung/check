@@ -41,6 +41,17 @@ import Testing
         }
         #expect(macOnly.contains("ProfileAppVersionUpdateRequest"), "app_build PATCH 본문 모델도 격리한다")
         #expect(!stripComments(try source("Sources/CheckCore/SupabaseWorkModels.swift")).contains("struct ProfileAppVersionUpdateRequest"))
+
+        // work_tick 가용성 게이트(타입 · 서비스 프로퍼티 · 진단 문구 "work_tick 사용")도 맥 전용이다 — 폰 Release 바이너리 strings 에
+        // work_tick 이 남던 자리(dbase-verify). 프로퍼티는 저장 프로퍼티라 확장으로 못 옮겨 actor 본문 안에서 #if os(macOS) 로 가린다.
+        #expect(macOnly.contains("package final class WorkTickGate"), "게이트 타입이 격리 조각에 없다")
+        #expect(!shared.contains("class WorkTickGate"), "게이트 타입이 공유 서비스에 남았다")
+        #expect(!shared.contains("\"work_tick"), "공유 서비스 코드에 work_tick 문자열이 남았다")
+        let property = try #require(shared.range(of: "let workTickGate = WorkTickGate()"), "대조: 프로퍼티를 못 찾았다(이름이 바뀌었나)")
+        let before = shared[shared.startIndex..<property.lowerBound]
+        let lastIf = before.range(of: "#if os(macOS)", options: .backwards)?.lowerBound
+        let lastEnd = before.range(of: "#endif", options: .backwards)?.lowerBound
+        #expect(lastIf != nil && (lastEnd == nil || lastEnd! < lastIf!), "workTickGate 프로퍼티가 #if os(macOS) 안에 있지 않다")
     }
 
     @Test("폰 소스(CheckMobileKit · CheckMobileShared · CheckWidgetsKit)는 WorkTimerStore 와 맥 전용 호출을 부르지 않는다")

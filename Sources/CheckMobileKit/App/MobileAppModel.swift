@@ -31,6 +31,9 @@ public final class MobileAppModel {
 
     package private(set) var isSceneActive = false
     @ObservationIgnored private var started = false
+    /// 실행 복원(`.launching`) 중에 온 딥링크. 로그인 상태가 되는 순간 연다 — 복원이 로그아웃·업데이트 필요로 끝나면 버린다.
+    /// 앱이 꺼진 채 위젯·링크로 열리면 `onOpenURL` 이 client_release 왕복보다 먼저 오고, 위젯은 URL 을 다시 주지 않는다(dbase-fix · 검증 V1).
+    @ObservationIgnored package private(set) var pendingLaunchRoute: AingRoute?
 
     /// 프로덕션 진입점. DEBUG 빌드에서 `-AingCheckDemo YES` 가 있으면 데모 조립(스텁 서버·고정 시계)을 쓴다.
     public static func bootstrap(arguments: [String] = ProcessInfo.processInfo.arguments) -> MobileAppModel {
@@ -126,6 +129,10 @@ public final class MobileAppModel {
         Task { [weak self] in
             guard let self else { return }
             await self.session.launch()
+            if !self.session.isSignedIn {
+                // 로그아웃·업데이트 필요로 끝났다 — 복원 중에 붙잡은 링크는 버린다(나중에 로그인해도 열지 않는다).
+                self.pendingLaunchRoute = nil
+            }
             self.openDemoRouteIfNeeded()
         }
     }
@@ -151,9 +158,16 @@ public final class MobileAppModel {
         push.appDidEnterBackground()
     }
 
-    /// `onOpenURL`(위젯 · 외부 링크). 로그인 전이면 무시한다(로그인 뒤 링크는 푸시·위젯이 다시 준다).
+    /// `onOpenURL`(위젯 · 외부 링크).
+    /// - 실행 복원 중(`.launching`)이면 붙잡아 두었다가 로그인 상태가 되면 연다(true). 모르는 URL 은 false.
+    /// - 로그아웃·업데이트 필요 상태면 무시한다(false) — 로그인 화면 뒤에 남의 대화가 열리지 않게.
     @discardableResult
     public func handleOpenURL(_ url: URL) -> Bool {
+        if session.phase == .launching {
+            guard let route = AingRoute(url: url) else { return false }
+            pendingLaunchRoute = route
+            return true
+        }
         guard session.isSignedIn else { return false }
         return router.open(url: url)
     }
@@ -175,6 +189,10 @@ public final class MobileAppModel {
         push.sessionDidSignIn()
         if isSceneActive {
             activateStores()
+        }
+        if let route = pendingLaunchRoute {
+            pendingLaunchRoute = nil
+            router.open(route)
         }
     }
 

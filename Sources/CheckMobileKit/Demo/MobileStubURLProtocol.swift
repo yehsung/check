@@ -29,15 +29,23 @@ package struct MobileStubResponse: Sendable {
     package var body: Data
     /// 응답을 늦출 초(경합 재현).
     package var delay: TimeInterval
+    /// 값이 있으면 HTTP 응답 대신 이 `URLError` 로 실패한다(오프라인·연결 끊김 재현).
+    package var failure: URLError.Code?
 
-    package init(status: Int = 200, body: Data, delay: TimeInterval = 0) {
+    package init(status: Int = 200, body: Data, delay: TimeInterval = 0, failure: URLError.Code? = nil) {
         self.status = status
         self.body = body
         self.delay = delay
+        self.failure = failure
     }
 
     package static func json(_ text: String, status: Int = 200, delay: TimeInterval = 0) -> MobileStubResponse {
         MobileStubResponse(status: status, body: Data(text.utf8), delay: delay)
+    }
+
+    /// 네트워크 실패(기본: 인터넷 연결 없음). 서비스는 `URLError` 를 그대로 던진다 — 일시 오류(`AuthErrorRules` .transient).
+    package static func networkFailure(_ code: URLError.Code = .notConnectedToInternet, delay: TimeInterval = 0) -> MobileStubResponse {
+        MobileStubResponse(status: 0, body: Data(), delay: delay, failure: code)
     }
 
     /// PostgREST 가 함수·표를 못 찾을 때의 모양(서비스가 `.databaseSchemaMissing` 으로 접는다).
@@ -114,7 +122,7 @@ package final class MobileStubURLProtocol: URLProtocol, @unchecked Sendable {
         let response = responder?(stubRequest) ?? .json(#"{"message":"no stub for host"}"#, status: 599)
         let http = HTTPURLResponse(
             url: url ?? URL(string: "https://stub.invalid")!,
-            statusCode: response.status,
+            statusCode: response.failure == nil ? response.status : 599,
             httpVersion: "HTTP/1.1",
             headerFields: ["Content-Type": "application/json"]
         )!
@@ -123,6 +131,10 @@ package final class MobileStubURLProtocol: URLProtocol, @unchecked Sendable {
             let isStopped = stopped
             stateLock.unlock()
             guard !isStopped else { return }
+            if let failure = response.failure {
+                client?.urlProtocol(self, didFailWithError: URLError(failure))
+                return
+            }
             client?.urlProtocol(self, didReceive: http, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: response.body)
             client?.urlProtocolDidFinishLoading(self)

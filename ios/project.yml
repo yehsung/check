@@ -117,6 +117,25 @@ targets:
           fi
           /usr/bin/plutil -create xml1 "$OUT"
           /usr/bin/plutil -insert CHECK_SUPABASE_ANON_KEY -string "$KEY" "$OUT"
+    postBuildScripts:
+      # dbase-fix: 데모 픽스처(Demo/Fixtures/**.json — 지어낸 사람·대화)를 **Release 번들에서 뺀다**. 읽는 코드(Demo/*.swift)는 #if DEBUG 라
+      # Release 에 컴파일되지 않지만, SwiftPM 리소스(Package.swift 의 .copy("Demo/Fixtures"))는 구성과 무관하게 앱에 복사된다.
+      # 서명(CodeSign)은 이 단계 뒤라 번들 봉인이 깨지지 않는다. 검사: ios/scripts/check-release-app.sh <AingCheck.app>.
+      - name: Release 번들에서 데모 픽스처 빼기
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/check_CheckMobileKit.bundle/Fixtures
+        script: |
+          set -eu
+          if [ "${CONFIGURATION}" != "Release" ]; then
+            exit 0
+          fi
+          FIXTURES="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/check_CheckMobileKit.bundle/Fixtures"
+          rm -rf "$FIXTURES"
+          if [ -e "$FIXTURES" ]; then
+            echo "error: Release 번들에서 데모 픽스처를 지우지 못했다: $FIXTURES"
+            exit 1
+          fi
 
   AingCheckWidgets:
     type: app-extension

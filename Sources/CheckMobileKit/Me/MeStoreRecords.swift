@@ -36,11 +36,14 @@ extension MeStore {
             guard generation == context.generation, isCurrent("records", serial) else { return }
 
             // 토큰 설정(독립 실패 — 못 읽으면 지난 값, 처음이면 수집 중으로 본다).
+            // 공개 여부는 설정 화면 스위치와 같은 칸이다 — 이 GET 이 떠 있는 사이 사용자가 스위치를 바꿨으면(저장 중이든 끝났든) 옮기지
+            // 않는다. 루트가 뜨자마자 이 조회가 시작되고 곧바로 설정에서 스위치를 바꾸는 흔한 순서에서 방금 끈 스위치를 켰다(rankme-verify R1).
+            let privacyStamp = privacyReadStamp("token")
             let settings = try? await context.withMobileSessionRetry { session in
                 try await service.fetchTokenUsageSettings(accessToken: session.accessToken, userID: session.userID)
             }
             guard generation == context.generation, isCurrent("records", serial) else { return }
-            if let settings {
+            if let settings, canApplyPrivacyRead("token", stamp: privacyStamp) {
                 // focus_mode 는 읽기만 하고 버린다 — 폰은 집중 모드를 건드리지 않는다(R9).
                 tokenUsagePublic = settings.isPublic
                 tokenUsagePublicLoaded = true

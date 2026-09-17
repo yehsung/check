@@ -153,6 +153,7 @@ struct MeFeedbackRow: View {
     let isFocused: Bool
     let isUnseenReply: Bool
     let toggle: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         Button(action: toggle) {
@@ -180,25 +181,7 @@ struct MeFeedbackRow: View {
                 }
                 if let reply = report.reply {
                     VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Label(FeedbackText.replyBlockTitle, systemImage: "arrowshape.turn.up.left.fill")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(MobileTheme.accent)
-                            if isUnseenReply {
-                                Text(MeText.feedbackReplyBadge)
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(MobileTheme.onAccent)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Capsule().fill(MobileTheme.accent))
-                            }
-                            Spacer(minLength: 4)
-                            if let at = report.adminNoteAt {
-                                Text(FeedbackText.ageText(at, now: now))
-                                    .font(.caption)
-                                    .foregroundStyle(MobileTheme.secondaryText)
-                            }
-                        }
+                        replyHeader
                         Text(reply)
                             .font(.subheadline)
                             .foregroundStyle(MobileTheme.primaryText)
@@ -223,6 +206,53 @@ struct MeFeedbackRow: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityHint(Text(isExpanded ? "눌러서 접기" : "눌러서 펼치기"))
+    }
+
+    /// 답장 머리: '답장' · '새 답장' 캡슐 · 시각. 접근성 글자 크기에서는 줄로 나눈다 — 가로 그대로면 '답/장'·'21시간/전'이 꺾이고
+    /// 캡슐이 원으로 눌려 글자가 밖으로 넘쳤다(AX5 실측). 캡슐은 늘 제 크기(`fixedSize`)를 지킨다.
+    @ViewBuilder
+    private var replyHeader: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 4) {
+                replyTitle
+                if isUnseenReply { replyBadge }
+                replyTime
+            }
+        } else {
+            HStack(spacing: 6) {
+                replyTitle
+                if isUnseenReply { replyBadge }
+                Spacer(minLength: 4)
+                replyTime
+            }
+        }
+    }
+
+    private var replyTitle: some View {
+        Label(FeedbackText.replyBlockTitle, systemImage: "arrowshape.turn.up.left.fill")
+            .font(.caption.weight(.bold))
+            .foregroundStyle(MobileTheme.accent)
+            .fixedSize()
+    }
+
+    private var replyBadge: some View {
+        Text(MeText.feedbackReplyBadge)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(MobileTheme.onAccent)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(MobileTheme.accent))
+            .fixedSize()
+    }
+
+    @ViewBuilder
+    private var replyTime: some View {
+        if let at = report.adminNoteAt {
+            Text(FeedbackText.ageText(at, now: now))
+                .font(.caption)
+                .foregroundStyle(MobileTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func chip(_ text: String, tint: Color) -> some View {

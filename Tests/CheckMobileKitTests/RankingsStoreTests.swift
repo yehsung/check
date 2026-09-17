@@ -217,6 +217,87 @@ struct RankingsStoreTests {
         #expect(harness.model.session.isSignedIn, "5xx 로 로그아웃되면 안 된다")
     }
 
+    // MARK: 신선도 · 달 넘김 · 칩 (rankme-fix)
+
+    @Test("MU5 실패한 판은 30초 신선도 창 안이라도 탭 표시·active 에서 다시 읽는다(성공한 판은 안 읽는다)")
+    func failedBoardRetriesInsideFreshWindow() async throws {
+        let harness = await RankMeHarness(label: "rank-fix-mu5") { _ in nil }
+        defer { harness.tearDown() }
+        let store = harness.rankings
+        harness.enqueue("team_weekly_leaderboard", .json(Self.league))
+        harness.enqueue("team_weekly_leaderboard", .json(#"{"message":"boom"}"#, status: 500))
+        harness.enqueue("team_weekly_leaderboard", .json(Self.league))
+        store.tabDidAppear()
+        #expect(await baseWaitUntil { store.leagueState.hasLoaded && !store.leagueState.isLoading })
+        // 당겨서 새로고침이 실패했다 — 마지막 성공 시각(loadedAt)은 방금이다.
+        harness.clock.advance(1)
+        await store.refresh()
+        #expect(store.leagueState.hasFailed && store.leagueState.loadedAt != nil)
+        store.tabDidDisappear()
+        harness.clock.advance(1)
+        store.tabDidAppear()
+        #expect(await baseWaitUntil { harness.requests(rpc: "team_weekly_leaderboard").count == 3 }, "실패한 판을 신선하다고 보고 다시 읽지 않았다")
+        #expect(await baseWaitUntil { !store.leagueState.hasFailed && !store.leagueState.isLoading })
+        store.appDidBecomeActive()
+        try await Task.sleep(for: .milliseconds(60))
+        #expect(harness.requests(rpc: "team_weekly_leaderboard").count == 3, "성공한 신선한 판을 다시 읽었다")
+    }
+
+    @Test("MU6 앱을 켜 둔 채 달이 바뀌면 이번 달을 따라간다 · 사용자가 과거 달로 옮겼으면 그 달에 머문다")
+    func tokenMonthFollowsMonthRollover() async throws {
+        // 2026-09-30 23:59 KST.
+        let lastMinute = ISO8601DateFormatter().date(from: "2026-09-30T14:59:00Z")!
+        let harness = await RankMeHarness(label: "rank-fix-mu6", clockStart: lastMinute) { request in
+            if request.rpcName == "token_usage_board" {
+                return .json("[\(Self.tokenRow("u-\(request.bodyText.contains("2026-10") ? "oct" : "sep")", name: "달", total: 1))]")
+            }
+            return nil
+        }
+        defer { harness.tearDown() }
+        let store = harness.rankings
+        store.select(board: .tokens)
+        store.tabDidAppear()
+        #expect(await baseWaitUntil { store.tokenState.hasLoaded && !store.tokenState.isLoading })
+        #expect(store.tokenMonth == "2026-09")
+        store.tabDidDisappear()
+
+        harness.clock.advance(120) // 10/1 00:01 KST
+        store.tabDidAppear()
+        #expect(store.tokenMonth == "2026-10", "달이 바뀌었는데 9월에 머문다")
+        #expect(await baseWaitUntil { store.tokenState.hasLoaded && store.tokenBoard.map(\.userID) == ["u-oct"] })
+        #expect(harness.requests(rpc: "token_usage_board").last?.jsonBody["p_month"] as? String == "2026-10")
+        #expect(store.isCurrentTokenMonth)
+
+        // 사용자가 9월로 옮긴 뒤 11월이 되면 9월에 머문다.
+        store.stepTokenMonth(by: -1)
+        #expect(await baseWaitUntil { store.tokenState.hasLoaded && store.tokenMonth == "2026-09" })
+        harness.clock.advance(31 * 86_400)
+        store.appDidBecomeActive()
+        #expect(store.tokenMonth == "2026-09", "사용자가 고른 과거 달을 멋대로 옮겼다")
+    }
+
+    @Test("칩: 토큰 판 조회가 떠 있는 동안 나 탭에서 공개 설정을 바꾸면, 늦게 온 조회의 옛 공개 여부가 칩을 되돌리지 않는다")
+    func lateTokenPrivacyDoesNotRevertChip() async throws {
+        let harness = await RankMeHarness(label: "rank-fix-chip") { request in
+            if request.rpcName == "token_usage_board" { return .json("[\(Self.tokenRow(RankMeFixture.userID, name: "나", total: 5))]") }
+            if request.path == "/rest/v1/profiles", request.method == "GET", request.query.contains("token_usage_collect") {
+                return MobileStubResponse(status: 200, body: Data(#"[{"token_usage_public":true,"token_usage_collect":true,"focus_mode":false}]"#.utf8), delay: 0.5)
+            }
+            return nil
+        }
+        defer { harness.tearDown() }
+        let store = harness.rankings
+        let load = Task { await store.loadTokens() }
+        #expect(await baseWaitUntil { harness.requests.contains { $0.query.contains("token_usage_collect") } })
+        store.noteTokenUsagePublic(false)
+        await load.value
+        #expect(store.tokenState.hasLoaded)
+        #expect(store.myTokenUsagePublic == false, "저장 성공 뒤 늦게 온 옛 공개 여부가 '비공개' 칩을 지웠다")
+        // 아무도 안 바꿨으면 서버값을 따른다.
+        await store.loadTokens()
+        #expect(store.myTokenUsagePublic == true)
+    }
+
     // MARK: 순수 문구
 
     @Test("문구: 빈 목록 갈림 · 정족수 · 점수 · 토큰 제목 · 나 탭 공개 설정 반영")

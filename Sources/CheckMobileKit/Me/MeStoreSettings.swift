@@ -19,36 +19,83 @@ extension MeStore {
     }
 
     /// 공개 설정 두 칸 + 팀 코드. 셋은 독립 실패다.
+    ///
+    /// 공개 설정은 **떠날 때 찍은 표**(`privacyReadStamp`)가 그대로일 때만 스위치에 옮긴다 — 저장 중에 도착한 응답도, 저장이 끝난 뒤
+    /// 도착한 옛 응답도 방금 바꾼 스위치를 되돌리지 않는다. 실패는 칸마다 깃발로 남겨 화면이 '불러오는 중…'·죽은 스위치에 머물지 않고
+    /// 원인과 [다시 시도]를 말한다(SPEC-ios §0.5 · rankme-verify 낮음 3).
     package func loadSettings() async {
         guard context.session.isSignedIn else { return }
         let serial = nextSerial("settings")
         let generation = context.generation
         let service = context.service
+        isLoadingSettings = true
+        tokenUsagePublicLoadFailed = false
+        miniGamePublicLoadFailed = false
+        inviteCodeLoadFailed = false
+        defer { if isCurrent("settings", serial) { isLoadingSettings = false } }
+
+        let tokenStamp = privacyReadStamp("token")
         let token = await attempt { session in
             try await service.fetchTokenUsageSettings(accessToken: session.accessToken, userID: session.userID)
         }
         guard generation == context.generation, isCurrent("settings", serial) else { return }
-        if case .success(let value) = token, !isSavingPrivacy("token") {
-            tokenUsagePublic = value.isPublic
-            tokenUsagePublicLoaded = true
+        switch token {
+        case .success(let value):
+            if canApplyPrivacyRead("token", stamp: tokenStamp) {
+                tokenUsagePublic = value.isPublic
+                tokenUsagePublicLoaded = true
+            }
+        case .failure(let error):
+            if AuthErrorRules.classify(error) == .cancelled { return }
+            tokenUsagePublicLoadFailed = true
         }
+
+        let miniGameStamp = privacyReadStamp("minigame")
         let miniGame = await attempt { session in
             try await service.fetchMiniGamePublic(accessToken: session.accessToken, userID: session.userID)
         }
         guard generation == context.generation, isCurrent("settings", serial) else { return }
-        if case .success(let value) = miniGame, !isSavingPrivacy("minigame") {
-            // 컬럼·행이 없으면 nil → 공개로 본다(맥 fetchMiniGamePublic 주석).
-            miniGamePublic = value ?? true
-            miniGamePublicLoaded = true
+        switch miniGame {
+        case .success(let value):
+            if canApplyPrivacyRead("minigame", stamp: miniGameStamp) {
+                // 컬럼·행이 없으면 nil → 공개로 본다(맥 fetchMiniGamePublic 주석).
+                miniGamePublic = value ?? true
+                miniGamePublicLoaded = true
+            }
+        case .failure(let error):
+            if AuthErrorRules.classify(error) == .cancelled { return }
+            miniGamePublicLoadFailed = true
         }
+
         let code = await attempt { session in
             try await service.fetchMyInviteCode(accessToken: session.accessToken)
         }
         guard generation == context.generation, isCurrent("settings", serial) else { return }
-        if case .success(let value) = code {
+        switch code {
+        case .success(let value):
             inviteCode = value
             inviteCodeLoaded = true
+        case .failure(let error):
+            if AuthErrorRules.classify(error) == .cancelled { return }
+            inviteCodeLoadFailed = true
         }
+    }
+
+    /// 공개 설정을 **아직 한 번도** 못 읽었고 마지막 조회가 실패했다(스위치가 죽어 있는 이유를 말한다).
+    package var privacyLoadFailed: Bool {
+        (tokenUsagePublicLoadFailed && !tokenUsagePublicLoaded) || (miniGamePublicLoadFailed && !miniGamePublicLoaded)
+    }
+
+    /// 팀 코드를 아직 못 읽었고 마지막 조회가 실패했다.
+    package var inviteCodeFailed: Bool {
+        inviteCodeLoadFailed && !inviteCodeLoaded
+    }
+
+    /// [다시 시도] — 떠 있는 조회가 있으면 새로 내지 않는다. 누르는 즉시 '불러오는 중'으로 바꿔 연타가 요청을 겹치지 않게 한다.
+    package func retrySettings() {
+        guard context.session.isSignedIn, !isLoadingSettings else { return }
+        isLoadingSettings = true
+        launch { [weak self] in await self?.loadSettings() }
     }
 
     // MARK: 공개 설정
@@ -105,11 +152,6 @@ extension MeStore {
             if self.isCurrent("privacy.minigame", serial) { self.savingPrivacyKeys.remove("minigame") }
         }
         savingPrivacyKeys.insert("minigame")
-    }
-
-    /// 저장이 떠 있는 동안 늦게 온 GET 이 방금 바꾼 스위치를 되돌리지 않게.
-    private func isSavingPrivacy(_ key: String) -> Bool {
-        savingPrivacyKeys.contains(key)
     }
 
     // MARK: 알림

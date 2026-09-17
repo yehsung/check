@@ -164,6 +164,8 @@ package enum MeText {
     package static let buyAction = "구매하기"
     package static let owned = "보유"
     package static let equipped = "착용 중"
+    /// 착용값 조회 실패(요약 줄 — 루트는 당겨서 새로고침이 다시 묻는다).
+    package static let equippedLoadFailed = "착용 정보를 불러오지 못했어요 — 당겨서 다시 시도해 주세요"
     package static let characterSaved = "캐릭터를 바꿨어요"
     package static let characterSaveFailed = "캐릭터 저장 실패"
     package static let characterNotOwned = "안 산 캐릭터예요 — 상점에서 살 수 있어요"
@@ -302,6 +304,8 @@ package enum MeText {
     package static let miniGamePublicTitle = "미니게임 순위 공개"
     package static let miniGamePublicDetail = "끄면 내 최고기록이 순위표에 안 보이고 올라가지도 않아요."
     package static let privacySaveFailed = "공개 설정을 저장하지 못했어요 — 잠시 뒤 다시 시도해 주세요"
+    /// 공개 설정을 한 번도 못 읽었다(스위치가 꺼져 있는 이유 · 폰만의 문장).
+    package static let privacyLoadFailed = "공개 설정을 불러오지 못했어요 — 연결을 확인하고 다시 시도해 주세요"
 
     package static let pushSection = "알림"
     package static let pushMessageTitle = "메시지"

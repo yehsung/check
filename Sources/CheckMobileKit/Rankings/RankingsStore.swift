@@ -63,6 +63,8 @@ package final class RankingsStore {
     @ObservationIgnored private var miniGameSerial = 0
     /// 사용자가 달을 옮기지 않았으면 true — 앱을 켜 둔 채 달이 바뀌면 새 달로 따라간다(맥 WorkTimerStore.swift:2003 의 결함).
     @ObservationIgnored private var tokenMonthFollowsCurrent = true
+    /// 나 탭이 공개 설정 저장 성공을 알린 횟수 — 토큰 판 조회가 떠날 때 찍고, 도착했을 때 달라졌으면 그 응답의 공개 여부는 저장 전 값이다.
+    @ObservationIgnored private var privacyNoteSerial = 0
     @ObservationIgnored private var inflight: [Task<Void, Never>] = []
 
     package init(context: MobileContext) {
@@ -226,6 +228,7 @@ package final class RankingsStore {
         let serial = tokenSerial
         let month = tokenMonth
         let generation = context.generation
+        let privacyStamp = privacyNoteSerial
         tokenState.isLoading = true
         tokenState.hasFailed = false
         defer { if serial == tokenSerial { tokenState.isLoading = false } }
@@ -242,7 +245,8 @@ package final class RankingsStore {
             guard generation == context.generation, serial == tokenSerial, month == tokenMonth else { return }
             let entries = rows.toTokenBoardEntries().sortedByTotalDescending()
             if tokenBoard != entries { tokenBoard = entries }
-            if let isPublic { myTokenUsagePublic = isPublic }
+            // 조회가 떠 있는 사이 나 탭 저장이 끝났으면(칩이 이미 새 값) 옛 공개 여부로 되돌리지 않는다.
+            if let isPublic, privacyStamp == privacyNoteSerial { myTokenUsagePublic = isPublic }
             tokenState.hasLoaded = true
             tokenState.hasFailed = false
             tokenState.loadedAt = context.clock.now()
@@ -256,6 +260,7 @@ package final class RankingsStore {
 
     /// 나 탭에서 공개 설정을 바꿨다(서버 저장 성공 뒤) — 내 행 "비공개" 칩을 바로 맞춘다.
     package func noteTokenUsagePublic(_ isPublic: Bool) {
+        privacyNoteSerial &+= 1
         myTokenUsagePublic = isPublic
     }
 

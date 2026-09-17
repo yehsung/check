@@ -42,6 +42,7 @@ struct MeSettingsView: View {
             .padding(.horizontal, MobileTheme.sideMargin)
             .padding(.vertical, MobileTheme.rowSpacing)
         }
+        .refreshable { await store.loadSettings() }
         .background(MobileTheme.background.ignoresSafeArea())
         .navigationTitle(MeText.settingsTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -83,6 +84,9 @@ struct MeSettingsView: View {
                     isOn: Binding(get: { store.miniGamePublic }, set: { store.setMiniGamePublic($0) }),
                     enabled: store.miniGamePublicLoaded
                 )
+                if store.privacyLoadFailed {
+                    loadFailureRow(MeText.privacyLoadFailed)
+                }
                 if let notice = store.settingsNotice {
                     InlineNotice(text: notice, kind: .error)
                 }
@@ -178,10 +182,13 @@ struct MeSettingsView: View {
                             .textSelection(.enabled)
                             .accessibilityLabel(Text("팀 코드 \(code.map(String.init).joined(separator: " "))"))
                     } else {
-                        Text(store.inviteCodeLoaded ? "—" : MeText.loading)
+                        Text(store.inviteCodeLoaded || (store.inviteCodeFailed && !store.isLoadingSettings) ? "—" : MeText.loading)
                             .font(.subheadline)
                             .foregroundStyle(MobileTheme.secondaryText)
                     }
+                }
+                if store.inviteCodeFailed {
+                    loadFailureRow(MeText.inviteCodeMissing)
                 }
                 if let code = store.inviteCode {
                     ShareLink(item: MeText.inviteShareMessage(teamName: store.teamName, code: code)) {
@@ -226,6 +233,25 @@ struct MeSettingsView: View {
     }
 
     // MARK: 조각
+
+    /// 조회 실패 안내 + [다시 시도](SPEC-ios §0.5 — 원인과 할 일을 말한다). 당겨서 새로고침도 같은 조회다.
+    private func loadFailureRow(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            InlineNotice(text: text, kind: .warning)
+            Button {
+                store.retrySettings()
+            } label: {
+                if store.isLoadingSettings {
+                    Text(MeText.loading)
+                } else {
+                    Label(MeText.retry, systemImage: "arrow.clockwise")
+                }
+            }
+            .buttonStyle(.bordered)
+            .tint(MobileTheme.accent)
+            .disabled(store.isLoadingSettings)
+        }
+    }
 
     private func toggleRow(title: String, detail: String, isOn: Binding<Bool>, enabled: Bool) -> some View {
         Toggle(isOn: isOn) {

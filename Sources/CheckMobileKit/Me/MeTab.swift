@@ -141,22 +141,27 @@ struct MeHeaderCard: View {
 struct MeCharacterSummaryCard: View {
     let store: MeStore
     @ScaledMetric(relativeTo: .title) private var artSize: CGFloat = 72
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         let id = store.equippedCharacterID
         AingCard {
-            HStack(alignment: .center, spacing: 14) {
-                MeCharacterArt(id: id)
-                    .frame(width: artSize, height: artSize)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(MeCharacterCards.displayName(for: id))
-                        .font(.headline)
-                        .foregroundStyle(MobileTheme.primaryText)
-                    Text(store.equippedLoaded ? MeText.equipped : MeText.loading)
-                        .font(.subheadline)
-                        .foregroundStyle(MobileTheme.secondaryText)
+            // 접근성 글자 크기에서는 그림을 위로 올린다 — 옆에 두면 커진 그림이 폭을 먹어 실패 안내가 두세 글자씩 꺾였다(AX5 실측).
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 8) {
+                        MeCharacterArt(id: id)
+                            .frame(width: min(artSize, 96), height: min(artSize, 96))
+                        caption(id: id)
+                    }
+                } else {
+                    HStack(alignment: .center, spacing: 14) {
+                        MeCharacterArt(id: id)
+                            .frame(width: artSize, height: artSize)
+                        caption(id: id)
+                        Spacer(minLength: 0)
+                    }
                 }
-                Spacer(minLength: 0)
             }
             .accessibilityElement(children: .combine)
             // 큰 글자에서 한 줄에 안 들어가면(한 버튼만 두 줄이 되어 높이가 갈리기 전에) 세로로 쌓는다.
@@ -165,6 +170,25 @@ struct MeCharacterSummaryCard: View {
                 VStack(spacing: 10) { buttons(lineLimit: nil) }
             }
         }
+    }
+
+    private func caption(id: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(MeCharacterCards.displayName(for: id))
+                .font(.headline)
+                .foregroundStyle(MobileTheme.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(equippedCaption)
+                .font(.subheadline)
+                .foregroundStyle(store.equippedLoadFailed && !store.equippedLoaded ? MobileTheme.pending : MobileTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// 착용 요약 둘째 줄: 알면 '착용 중' · 조회가 실패했으면 그 사실과 할 일 · 아직이면 '불러오는 중…'.
+    private var equippedCaption: String {
+        if store.equippedLoaded { return MeText.equipped }
+        return store.equippedLoadFailed ? MeText.equippedLoadFailed : MeText.loading
     }
 
     @ViewBuilder
@@ -193,6 +217,7 @@ struct MeCharacterSummaryCard: View {
 /// 프로필 · 제보 · 설정 줄.
 struct MeMenuCard: View {
     let store: MeStore
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         AingCard(padding: 0) {
@@ -218,20 +243,20 @@ struct MeMenuCard: View {
                     Text(title)
                         .font(.body.weight(.semibold))
                         .foregroundStyle(MobileTheme.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(detail)
                         .font(.footnote)
                         .foregroundStyle(MobileTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
+                    // 접근성 글자 크기에서는 '새 답장' 배지를 설명 아래 줄로 내린다(옆에 두면 배지가 폭을 먹어 제목·설명이 한 글자씩 세로로 쌓였다 — AX5 실측).
+                    if showsDot, dynamicTypeSize.isAccessibilitySize {
+                        replyBadge
+                            .padding(.top, 4)
+                    }
                 }
                 Spacer(minLength: 8)
-                if showsDot {
-                    Text(MeText.feedbackReplyBadge)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(MobileTheme.onAccent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(MobileTheme.accent))
-                        .fixedSize()
+                if showsDot, !dynamicTypeSize.isAccessibilitySize {
+                    replyBadge
                 }
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
@@ -245,6 +270,16 @@ struct MeMenuCard: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityHint(Text(showsDot ? "새 답장이 있어요" : ""))
+    }
+
+    private var replyBadge: some View {
+        Text(MeText.feedbackReplyBadge)
+            .font(.caption.weight(.bold))
+            .foregroundStyle(MobileTheme.onAccent)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(MobileTheme.accent))
+            .fixedSize()
     }
 }
 

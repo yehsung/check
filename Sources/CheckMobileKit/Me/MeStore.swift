@@ -60,6 +60,8 @@ package final class MeStore {
     /// 서버 착용값(`profiles.character`, 원문). nil = 기본(아잉) 또는 아직 모름(`equippedLoaded` 로 가른다).
     package internal(set) var equippedServerID: String?
     package internal(set) var equippedLoaded = false
+    /// 마지막 착용값 조회가 실패로 끝났다(오프라인·5xx·행 없음). 요약이 '불러오는 중…'에 머물지 않게 한다.
+    package internal(set) var equippedLoadFailed = false
     package internal(set) var savingCharacterID: String?
     package internal(set) var characterNotice: String?
     package internal(set) var isCharacterNoticeError = false
@@ -98,6 +100,11 @@ package final class MeStore {
     package internal(set) var miniGamePublicLoaded = false
     package internal(set) var inviteCode: String?
     package internal(set) var inviteCodeLoaded = false
+    /// 설정 조회 세 칸의 마지막 실패(칸마다 독립). 한 번이라도 읽었으면(…Loaded) 화면은 지난 값을 그대로 둔다.
+    package internal(set) var tokenUsagePublicLoadFailed = false
+    package internal(set) var miniGamePublicLoadFailed = false
+    package internal(set) var inviteCodeLoadFailed = false
+    package internal(set) var isLoadingSettings = false
     package internal(set) var settingsNotice: String?
     package internal(set) var pushAuthorization: MePushAuthorization = .unknown
     /// 저장 중인 알림 종류 값(낙관 표시). nil 이면 세션이 아는 서버값을 그린다.
@@ -151,6 +158,7 @@ package final class MeStore {
         purchasingID = nil
         equippedServerID = nil
         equippedLoaded = false
+        equippedLoadFailed = false
         savingCharacterID = nil
         characterNotice = nil
         isCharacterNoticeError = false
@@ -179,6 +187,10 @@ package final class MeStore {
         miniGamePublicLoaded = false
         inviteCode = nil
         inviteCodeLoaded = false
+        tokenUsagePublicLoadFailed = false
+        miniGamePublicLoadFailed = false
+        inviteCodeLoadFailed = false
+        isLoadingSettings = false
         settingsNotice = nil
         pushPrefsPending = nil
         pushPrefsNotice = nil
@@ -246,10 +258,16 @@ package final class MeStore {
     package var myUserID: String? { context.session.userID }
 
     /// 이름·사진(한 GET) + 센터(코어 별도 GET). 둘은 독립 실패다.
+    ///
+    /// 이름·사진은 **떠날 때 찍은 쓰기 표**가 그대로일 때만 옮긴다 — 이 GET 이 떠 있는 사이 별명 저장·사진 업로드가 성공했으면 응답은
+    /// 그 전 값이라 방금 바꾼 이름·사진(캐시버스터 URL)을 되돌린다(rankme-verify R3·R5). 머리 순번을 올려 통째로 버리면 센터와
+    /// '불러오는 중'이 갇히므로 칸 단위로 가른다.
     package func loadHeader() async {
         guard context.session.isSignedIn else { return }
         let serial = nextSerial("header")
         let generation = context.generation
+        let nameStamp = writeStamp(Self.displayNameWriteKey)
+        let avatarStamp = writeStamp(Self.avatarWriteKey)
         headerState.isLoading = true
         headerState.hasFailed = false
         defer { if isCurrent("header", serial) { headerState.isLoading = false } }
@@ -259,11 +277,15 @@ package final class MeStore {
                 try await service.fetchMyProfileCard(accessToken: session.accessToken, userID: session.userID)
             }
             guard generation == context.generation, isCurrent("header", serial) else { return }
-            let name = card?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
-            displayName = (name?.isEmpty == false) ? name : nil
-            // 편집 화면을 먼저 열었으면(머리가 늦게 옴) 빈 입력을 지금 이름으로 채운다 — 사용자가 치기 시작했으면 건드리지 않는다.
-            if isProfileVisible, displayNameDraft.isEmpty, !isUpdatingDisplayName, let displayName { displayNameDraft = displayName }
-            avatarURL = card?.avatarUrl.flatMap { URL(string: $0) }
+            if writeStamp(Self.displayNameWriteKey) == nameStamp {
+                let name = card?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                displayName = (name?.isEmpty == false) ? name : nil
+                // 편집 화면을 먼저 열었으면(머리가 늦게 옴) 빈 입력을 지금 이름으로 채운다 — 사용자가 치기 시작했으면 건드리지 않는다.
+                if isProfileVisible, displayNameDraft.isEmpty, !isUpdatingDisplayName, let displayName { displayNameDraft = displayName }
+            }
+            if writeStamp(Self.avatarWriteKey) == avatarStamp {
+                avatarURL = card?.avatarUrl.flatMap { URL(string: $0) }
+            }
             // 센터는 독립 실패 — 못 읽으면 지난 값을 둔다(모르는 것을 "미지정"으로 단정하지 않는다).
             let center = await attempt { session in
                 try await service.fetchMyCenter(accessToken: session.accessToken, userID: session.userID)
@@ -294,6 +316,35 @@ package final class MeStore {
 
     func isCurrent(_ key: String, _ serial: Int) -> Bool {
         serials[key, default: 0] == serial
+    }
+
+    nonisolated static let displayNameWriteKey = "write.displayName"
+    nonisolated static let avatarWriteKey = "write.avatar"
+
+    /// 사용자가 이 칸을 서버에 **써서 성공한** 횟수. 조회가 떠날 때 찍고, 도착했을 때 달라졌으면 그 응답의 이 칸은 옛 값이다.
+    func writeStamp(_ key: String) -> Int {
+        serials[key, default: 0]
+    }
+
+    func noteLocalWrite(_ key: String) {
+        serials[key, default: 0] &+= 1
+    }
+
+    /// 공개 설정 조회를 **떠날 때** 찍는 표. 그 칸 저장이 떠 있었으면 nil — 서버가 저장 전에 읽었을 수 있어 응답을 믿지 않는다.
+    func privacyReadStamp(_ key: String) -> Int? {
+        isSavingPrivacy(key) ? nil : serials["privacy.\(key)", default: 0]
+    }
+
+    /// 도착한 공개 설정 값을 스위치에 옮겨도 되는가: 떠날 때 저장이 없었고 · 그 사이 사용자가 스위치를 바꾸지 않았다.
+    /// (지금 저장 중이라면 떠난 뒤에 바꾼 것이므로 순번이 이미 다르다 — 따로 보지 않는다.)
+    /// '저장 중'만 보면 저장이 **끝난 뒤** 도착한 옛 GET 이 방금 끈 스위치를 켠다(rankme-verify R1 — 서버는 비공개인데 화면은 공개).
+    func canApplyPrivacyRead(_ key: String, stamp: Int?) -> Bool {
+        guard let stamp else { return false }
+        return serials["privacy.\(key)", default: 0] == stamp
+    }
+
+    func isSavingPrivacy(_ key: String) -> Bool {
+        savingPrivacyKeys.contains(key)
     }
 
     /// 401 재시도를 지난 호출을 `Result` 로(`try?` 는 옵셔널 결과를 납작하게 접어 "서버가 nil 이라고 했다"와 "실패했다"를 못 가른다).

@@ -45,11 +45,14 @@ extension MeStore {
         ownedCharacterIDs = owned
     }
 
+    /// 착용값 읽기. `set_character` 가 **끝날 때** 이 순번을 올리므로, 저장 전·저장 중에 나간 GET 은 저장이 끝난 뒤 도착해도 버려진다
+    /// (방금 입은 캐릭터를 옛 값으로 되돌리지 않는다 — rankme-verify 낮음 1). 저장 중에 도착한 GET 은 저장 중 깃발이 막는다.
     package func loadEquippedCharacter() async {
         guard context.session.isSignedIn else { return }
         let serial = nextSerial("equipped")
         let generation = context.generation
         let service = context.service
+        equippedLoadFailed = false
         do {
             let serverID = try await context.withMobileSessionRetry { session in
                 try await service.fetchEquippedCharacter(accessToken: session.accessToken, userID: session.userID)
@@ -58,7 +61,11 @@ extension MeStore {
             equippedServerID = CharacterSyncDecision.normalized(serverID)
             equippedLoaded = true
         } catch {
-            // 행 없음·옛 서버·네트워크: 모르는 채로 둔다(아잉으로 단정하지 않는다 — 맥 performEquippedCharacterSync 와 같은 관용).
+            // 행 없음·옛 서버·네트워크: 값은 모르는 채로 둔다(아잉으로 단정하지 않는다 — 맥 performEquippedCharacterSync 와 같은 관용).
+            // 다만 실패였다는 사실은 남긴다 — 요약이 '불러오는 중…'에 끝없이 머물지 않게.
+            guard generation == context.generation, isCurrent("equipped", serial) else { return }
+            if AuthErrorRules.classify(error) == .cancelled { return }
+            equippedLoadFailed = true
         }
     }
 
@@ -149,24 +156,31 @@ extension MeStore {
                 let response = try await self.context.withMobileSessionRetry { session in
                     try await service.buyCharacter(accessToken: session.accessToken, id: id)
                 }
-                guard generation == self.context.generation else { return }
-                if let ruby = response.rubyBalance { self.context.gomokuHost.rubyBalance = ruby }
-                switch response.status {
-                case "ok", "already_owned":
-                    self.ownedCharacterIDs.insert(id)
-                    self.shopSelection = nil
-                    self.shopNotice = response.status == "ok" ? MeText.bought : MeText.alreadyOwned
-                    await self.loadShop()
-                case "insufficient":
-                    self.shopNotice = CheckCoreShared.shortfallNotice(need: response.need, have: response.have)
-                default:
-                    self.shopNotice = MeText.buyFailed
-                }
+                await self.applyPurchaseResponse(response, id: id, generation: generation)
             } catch {
                 guard generation == self.context.generation else { return }
                 if AuthErrorRules.classify(error) == .cancelled { return }
                 self.shopNotice = MeText.buyFailed
             }
+        }
+    }
+
+    /// 구매 응답을 화면에 옮긴다. **보낼 때의 세대가 아니면 아무것도 안 한다** — 응답이 도착한 뒤 메인 액터 차례를 기다리는 사이
+    /// 로그아웃(reset)이 먼저 돌면, 취소가 이미 끝난 요청에는 닿지 않아 앞 계정의 루비·보유·안내가 다음 계정 화면에 선다.
+    /// (그 창은 실제 요청으로는 결정적으로 못 만든다 — 이 함수로 떼어 직접 시험한다.)
+    func applyPurchaseResponse(_ response: BuyCharacterResponse, id: String, generation: Int) async {
+        guard generation == context.generation else { return }
+        if let ruby = response.rubyBalance { context.gomokuHost.rubyBalance = ruby }
+        switch response.status {
+        case "ok", "already_owned":
+            ownedCharacterIDs.insert(id)
+            shopSelection = nil
+            shopNotice = response.status == "ok" ? MeText.bought : MeText.alreadyOwned
+            await loadShop()
+        case "insufficient":
+            shopNotice = CheckCoreShared.shortfallNotice(need: response.need, have: response.have)
+        default:
+            shopNotice = MeText.buyFailed
         }
     }
 
@@ -189,33 +203,45 @@ extension MeStore {
         let target: String? = id == MeCharacterCards.aingID ? nil : id
         launch { [weak self] in
             guard let self else { return }
-            defer { if generation == self.context.generation { self.savingCharacterID = nil } }
+            var needsReread = false
             do {
                 let response = try await self.context.withMobileSessionRetry { session in
                     try await service.setCharacter(accessToken: session.accessToken, id: target)
                 }
                 guard generation == self.context.generation else { return }
+                // 저장 전·저장 중에 나간 착용 GET 은 서버가 저장 전에 읽었을 수 있다 — 끝나는 순간 순번을 올려, 늦게 도착해도 버린다
+                // (저장 중에 도착한 것은 `savingCharacterID` 가드가 막는다 — 시작 때 따로 올릴 필요가 없다: 변이 MF4 로 확인).
+                _ = self.nextSerial("equipped")
+                self.savingCharacterID = nil
                 switch response.status {
                 case "ok":
                     self.equippedServerID = CharacterSyncDecision.normalized(response.character) ?? target
                     self.equippedLoaded = true
+                    self.equippedLoadFailed = false
                     self.characterNotice = MeText.characterSaved
                 case "not_owned":
                     // 다른 기기에서 환불·운영자 정리 등으로 소유가 사라졌다 — 상점 상태를 다시 읽어 화면을 사실에 맞춘다.
                     self.ownedCharacterIDs.remove(id)
                     self.characterNotice = MeText.characterNotOwned
                     self.isCharacterNoticeError = true
+                    needsReread = !self.equippedLoaded
                     await self.loadShop()
                 default:
                     self.characterNotice = MeText.characterSaveFailed
                     self.isCharacterNoticeError = true
+                    needsReread = !self.equippedLoaded
                 }
             } catch {
                 guard generation == self.context.generation else { return }
+                _ = self.nextSerial("equipped")
+                self.savingCharacterID = nil
                 if AuthErrorRules.classify(error) == .cancelled { return }
                 self.characterNotice = MeText.characterSaveFailed
                 self.isCharacterNoticeError = true
+                needsReread = !self.equippedLoaded
             }
+            // 버린 GET 이 착용값을 처음 알려 줄 참이었다면(아직 모름) 저장이 실패한 지금 다시 묻는다.
+            if needsReread, generation == self.context.generation { await self.loadEquippedCharacter() }
         }
     }
 

@@ -32,11 +32,14 @@ extension MeStore {
         let serial = nextSerial("nameCooldown")
         let generation = context.generation
         let service = context.service
+        let nameStamp = writeStamp(Self.displayNameWriteKey)
         // 컬럼이 없는 서버·네트워크 실패는 조용히(맥과 같다 — 서버가 set_display_name 에서 어차피 거른다).
         guard case .success(let changedAt) = await attempt({ session in
             try await service.fetchDisplayNameChangedAt(accessToken: session.accessToken, userID: session.userID)
         }) else { return }
-        guard generation == context.generation, isCurrent("nameCooldown", serial), !isUpdatingDisplayName else { return }
+        // 저장 중에 도착했거나(결과가 곧 덮는다) · 이 GET 이 떠 있는 사이 별명 저장이 성공했으면(옛 기준 시각이라 방금 생긴 잠금을 푼다) 버린다.
+        guard generation == context.generation, isCurrent("nameCooldown", serial), !isUpdatingDisplayName,
+              writeStamp(Self.displayNameWriteKey) == nameStamp else { return }
         displayNameChangedAt = changedAt
         displayNameAvailableAt = changedAt.map { MeText.displayNameUnlockDate(changedAt: $0) }
         refreshDisplayNameLockNotice()
@@ -92,6 +95,8 @@ extension MeStore {
             switch DisplayNameChangeOutcome(response: response) {
             case .ok(let applied):
                 let stored = applied.isEmpty ? name : applied
+                // 떠 있던 머리·쿨타임 GET 은 저장 전 값이다 — 도착해도 이 이름·잠금을 덮지 않게 표를 올린다(rankme-verify R3).
+                noteLocalWrite(Self.displayNameWriteKey)
                 displayName = stored
                 displayNameDraft = stored
                 let now = context.clock.now()
@@ -157,6 +162,8 @@ extension MeStore {
                 try await service.uploadAvatar(accessToken: session.accessToken, userID: session.userID, imageData: jpeg)
             }
             guard generation == context.generation else { return }
+            // 떠 있던 머리 GET 은 업로드 전 사진 URL(캐시버스터 없음)이다 — 도착해도 덮지 않게(rankme-verify R5).
+            noteLocalWrite(Self.avatarWriteKey)
             avatarURL = URL(string: url)
             avatarNotice = MeText.avatarSaved
             isAvatarNoticeError = false

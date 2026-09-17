@@ -82,19 +82,21 @@ struct MeRecordsSection: View {
 /// 지난주 회고 카드(맥 InsightsPanel.retroCard).
 struct MeRetroCard: View {
     let retro: WeeklyRetro?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         AingCard {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Label(MeText.retroTitle, systemImage: "calendar.badge.clock")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(MobileTheme.primaryText)
-                Spacer(minLength: 4)
-                if let retro, retro.metGoal {
-                    Label(MeText.metGoalChip, systemImage: "checkmark.seal.fill")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(MobileTheme.working)
-                        .fixedSize()
+            // 접근성 글자 크기에서는 '목표 달성' 칩을 제목 아래 줄로 내린다(가로 그대로면 칩이 폭을 다 먹어 제목이 한 글자씩 세로로 섰다 — AX5 실측).
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    titleLabel
+                    if let retro, retro.metGoal { metGoalChip }
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    titleLabel
+                    Spacer(minLength: 4)
+                    if let retro, retro.metGoal { metGoalChip }
                 }
             }
             if let retro {
@@ -132,6 +134,20 @@ struct MeRetroCard: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    private var titleLabel: some View {
+        Label(MeText.retroTitle, systemImage: "calendar.badge.clock")
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(MobileTheme.primaryText)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var metGoalChip: some View {
+        Label(MeText.metGoalChip, systemImage: "checkmark.seal.fill")
+            .font(.caption.weight(.bold))
+            .foregroundStyle(MobileTheme.working)
+            .fixedSize()
     }
 }
 

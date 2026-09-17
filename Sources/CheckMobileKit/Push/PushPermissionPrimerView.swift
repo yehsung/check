@@ -63,6 +63,8 @@ struct PushPermissionPrimerView: View {
                         .fixedSize()
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
+                        // 터치 높이 44pt 이상(HIG). 글자 높이 + 세로 여백만으로는 기본 글자 크기에서 40pt 였다(push-verify 발견 5 실측).
+                        .frame(minHeight: 44)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

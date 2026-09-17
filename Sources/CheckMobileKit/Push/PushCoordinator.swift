@@ -16,15 +16,20 @@ import Observation
 ///    허락이면(또는 이미 허락돼 있으면) 실행마다 한 번 원격 등록 → 토큰 hex → `session.updateAPNsToken`(바뀌면 즉시 register_device,
 ///    환경은 Info.plist `AingAPNsEnvironment` — Debug sandbox / Release production, 세션 스토어가 싣는다).
 /// 2. **포그라운드 표시**: 지금 보고 있는 대화의 메시지면 숨기고, 아니면 배너. 어느 쪽이든 해당 스토어를 새로고침한다.
+///    앱이 띄운 안내 알림(답장 실패 — `userInfo` 에 대화 상대가 실려 누르면 그 대화가 열린다)은 숨기지 않는다.
 /// 3. **응답**(앱 프로세스 — 401 이면 세션 조정자 경유 갱신 허용): 탭 → 라우트 · 답장 → send_message + mark_messages_read ·
 ///    읽음 → mark · 수락 → gomoku_respond(accept) 후 대국 열기 · 거절 → gomoku_respond(decline).
 ///    알림 액션으로 앱이 깨어났으면 실행 복원(`.launching`)이 끝날 때까지 기다린다.
-/// 4. **앱 배지** = 메시지 안 읽은 수 + 받은 오목 신청 수(`context.links.badges.appBadgeTotal`)를 관찰해 바뀔 때마다 적는다.
+/// 4. **앱 배지** = 메시지 안 읽은 수 + 받은 오목 신청 수. **모르면 적지 않는다**(push-verify 발견 2): 이번 세대에 서버 값을 받기 전
+///    (실행 복원 중 · 업데이트 필요 · 알림 액션으로 뒤에서 켜져 탭 스토어가 아무것도 안 읽은 실행)에는 아이콘을 건드리지 않는다.
+///    - 앱이 앞: 서버 확인(`message_unread_summary`) 한 번이 지나면 탭 배지 합(`context.links.badges.appBadgeTotal`)을 관찰해 적는다.
+///    - 앱이 뒤(알림 액션): 액션 끝에 요약 · 오목 받은함을 직접 읽어 합을 적는다(끝날 때까지 기다린다 — 시스템이 곧 앱을 재운다).
+///    - 로그아웃(확정된 `.signedOut`) · 치명 만료: 0.
 /// 5. **알림 설정 공개 API**(나 탭): `authorization` · `prefs` · `setPreference(_:enabled:)` · `enableNotifications()` ·
-///    `refreshAuthorization()` · `openSystemSettings()`.
+///    `refreshAuthorization()` · `openSystemSettings()`. 설정 저장은 직렬이다(겹쳐 누르면 끝난 뒤 최신 값으로 한 번 더).
 ///
 /// 폰 금지 호출 없음: 이 파일이 부르는 서버 함수는 send_message · mark_messages_read · message_history(_with_reads) ·
-/// gomoku_respond(오목 스토어 경유) · register_device/set_push_prefs(세션 경유)뿐이다.
+/// message_unread_summary(배지 확인) · gomoku_respond · gomoku_inbox(오목 스토어 경유) · register_device/set_push_prefs(세션 경유)뿐이다.
 @MainActor
 @Observable
 package final class PushCoordinator {
@@ -59,11 +64,24 @@ package final class PushCoordinator {
 
     @ObservationIgnored private var isAppActive = false
     @ObservationIgnored private var registeredThisLaunch = false
-    @ObservationIgnored private var pendingPrefs: PushPrefs?
     @ObservationIgnored private var statusTask: Task<Void, Never>?
     @ObservationIgnored private var statusCheckAgain = false
     @ObservationIgnored private var statusCheckWantsPrimer = false
+
+    /// 사용자가 마지막으로 누른 알림 설정(저장이 끝날 때까지 화면이 이 값을 그린다). **관찰한다** — 저장 중에 다른 토글을 눌러도
+    /// `isSavingPrefs` 는 그대로라, 이 값이 관찰되지 않으면 화면이 새로 누른 값을 그리지 않는다.
+    private var desiredPrefs: PushPrefs?
+    /// 알림 설정 저장은 **한 번에 하나**(push-verify 발견 4). 도는 동안 누른 값은 `desiredPrefs` 에 쌓이고 끝난 뒤 한 번 더 보낸다.
+    @ObservationIgnored private var prefsSaveTask: Task<Bool, Never>?
+    @ObservationIgnored private var prefsSaveAgain = false
+
+    /// 앱 배지의 앎(관찰한다 — 바뀌면 배지 관찰이 다시 계산한다).
+    private var badgeKnowledge: BadgeKnowledge = .unknown
     @ObservationIgnored private var isTrackingBadges = false
+    /// 이번 세대에 탭 스토어가 활성화됐는가(앱이 로그인 상태로 한 번이라도 앞에 왔다). 뒤에서 켜진 실행의 스토어는 아무것도 안 읽었다.
+    @ObservationIgnored private var storesActivated = false
+    @ObservationIgnored private var badgeConfirmTask: Task<Void, Never>?
+    @ObservationIgnored private var badgeConfirmAgain = false
     @ObservationIgnored package private(set) var lastAppliedBadge: Int?
     /// 마지막 원격 등록 실패(진단). 시뮬레이터 · 엔타이틀먼트 없는 빌드에서 온다.
     @ObservationIgnored package private(set) var lastRegistrationError: String?
@@ -74,7 +92,21 @@ package final class PushCoordinator {
     #endif
 
     /// 앱 배지 합의 출처(기본: 메시지 · 게임 탭 배지 합). 관찰 가능한 값을 읽어야 한다 — 바뀌면 다시 적는다. 테스트가 바꾼다.
+    /// 앱이 앞에 있고 서버 확인이 끝난 뒤에만 읽는다(`badgeTarget`).
     @ObservationIgnored package var badgeTotalSource: @MainActor () -> Int
+
+    /// 앱 배지를 얼마나 아는가.
+    package enum BadgeKnowledge: Equatable, Sendable {
+        /// 이번 세대에 서버 값을 아직 모른다 — 아이콘을 건드리지 않는다(앞 실행이 적은 값을 둔다).
+        case unknown
+        /// 앱이 뒤에 있을 때 코디네이터가 서버에서 직접 읽어 적었다. 탭 스토어는 아직 안 읽었을 수 있어 관찰값을 적지 않는다.
+        case server
+        /// 앱이 앞에서 서버 확인을 마쳤다 — 탭 배지 합을 관찰해 적는다.
+        case stores
+    }
+
+    /// 지금 앎(테스트 · 진단).
+    package var badgeState: BadgeKnowledge { badgeKnowledge }
 
     package init(context: MobileContext) {
         self.context = context
@@ -83,6 +115,7 @@ package final class PushCoordinator {
     }
 
     /// iOS 어댑터를 붙인다(앱 델리게이트 didFinishLaunching — `MobileAppModel.installPushNotifications()`).
+    /// 배지 관찰만 건다 — 실행 복원 중에는 모르는 값이라 아무것도 적지 않는다.
     package func attach(system: PushNotificationSystem) {
         self.system = system
         startBadgeTracking()
@@ -92,8 +125,14 @@ package final class PushCoordinator {
 
     package func appDidBecomeActive() {
         isAppActive = true
+        storesActivated = true
         startBadgeTracking()
-        applyBadge()
+        if badgeKnowledge == .stores {
+            applyBadge()
+        } else {
+            // 탭 스토어가 방금 새로고침을 띄웠다. 서버가 한 번 답한 뒤부터 합을 적는다(오프라인이면 앞 실행 값을 둔다).
+            confirmBadge()
+        }
         requestStatusCheck(allowPrimer: true)
     }
 
@@ -116,10 +155,18 @@ package final class PushCoordinator {
             system?.dismissPermissionPrimer()
         }
         isRequestingAuthorization = false
-        pendingPrefs = nil
+        desiredPrefs = nil
+        prefsSaveTask = nil
+        prefsSaveAgain = false
         isSavingPrefs = false
         prefsNotice = nil
-        applyBadge()
+        badgeConfirmTask?.cancel()
+        badgeConfirmTask = nil
+        badgeConfirmAgain = false
+        storesActivated = false
+        badgeKnowledge = .unknown
+        // 로그아웃의 0 은 확정값이다(다음 계정 값을 모르는 채 앞 계정 숫자를 남기지 않는다).
+        apply(badge: 0)
         if let system {
             system.removeAllDeliveredNotifications()
             system.unregisterForRemoteNotifications()
@@ -251,9 +298,9 @@ package final class PushCoordinator {
 
     // MARK: - 알림 설정 공개 API(나 탭)
 
-    /// 지금 보여 줄 종류별 설정. 저장 중이면 누른 값, 아니면 서버가 마지막으로 알려 준 값(모르면 전부 켜짐 — 서버 기본값).
+    /// 지금 보여 줄 종류별 설정. 저장 중이면 마지막으로 누른 값, 아니면 서버가 마지막으로 알려 준 값(모르면 전부 켜짐 — 서버 기본값).
     package var prefs: PushPrefs {
-        pendingPrefs ?? context.session.pushPrefs ?? PushPrefs()
+        desiredPrefs ?? context.session.pushPrefs ?? PushPrefs()
     }
 
     package func isEnabled(_ kind: PushKind) -> Bool {
@@ -305,46 +352,88 @@ package final class PushCoordinator {
     }
 
     /// 종류 하나를 켜고 끈다 → set_push_prefs. 이 설치의 기기 행이 아직 없으면(not_found) 등록을 한 번 기다려 다시 저장한다.
+    ///
+    /// **저장은 직렬이다**(push-verify 발견 4). 예전에는 겹친 저장이 각자 그때의 3키를 보내고, 먼저 끝난 쪽이 "저장 중"을 내리고,
+    /// 늦게 온 앞 응답이 뒤 값을 덮었다(서버가 앞 요청을 나중에 처리하면 서버 값까지 되돌아갔다). 이제
+    /// - 도는 저장이 있으면 누른 값을 `desiredPrefs` 에 합쳐 두고 그 저장이 끝난 뒤 **최신 값으로 한 번 더** 보낸다(요청이 겹치지 않으니
+    ///   서버 처리 순서 = 누른 순서, 응답도 순서대로 `session.pushPrefs` 에 앉는다).
+    /// - `isSavingPrefs` 는 보낼 것이 모두 끝났을 때만 내린다. 돌려주는 값은 마지막 저장의 성공 여부(함께 기다린 호출 모두 같은 값).
     @discardableResult
     package func setPreference(_ kind: PushKind, enabled: Bool) async -> Bool {
         guard context.session.isSignedIn else { return false }
-        let generation = context.generation
-        let next = kind.setting(enabled, in: prefs)
-        pendingPrefs = next
-        isSavingPrefs = true
+        desiredPrefs = kind.setting(enabled, in: prefs)
+        if !isSavingPrefs { isSavingPrefs = true }
         prefsNotice = nil
-        defer {
-            if generation == context.generation {
-                pendingPrefs = nil
-                isSavingPrefs = false
-            }
+        if let running = prefsSaveTask {
+            prefsSaveAgain = true
+            return await running.value
         }
+        let generation = context.generation
+        let task = Task { [weak self] () -> Bool in
+            guard let self else { return false }
+            return await self.runPrefsSaves(generation: generation)
+        }
+        prefsSaveTask = task
+        return await task.value
+    }
+
+    private enum PrefsSaveOutcome {
+        case saved
+        case failed
+        /// 취소 · 세대 바뀜 — 안내하지 않는다.
+        case cancelled
+    }
+
+    private func runPrefsSaves(generation: Int) async -> Bool {
+        var outcome = PrefsSaveOutcome.cancelled
+        repeat {
+            prefsSaveAgain = false
+            guard let target = desiredPrefs else { break }
+            outcome = await savePrefsOnce(target, generation: generation)
+            // 세대가 바뀌었으면 reset 이 상태를 이미 비웠다 — 새 세대의 저장을 건드리지 않고 나간다.
+            guard generation == context.generation else { return false }
+        } while prefsSaveAgain
+        prefsSaveTask = nil
+        desiredPrefs = nil
+        isSavingPrefs = false
+        switch outcome {
+        case .saved:
+            return true
+        case .failed:
+            prefsNotice = PushText.settingsSaveFailed
+            return false
+        case .cancelled:
+            return false
+        }
+    }
+
+    private func savePrefsOnce(_ target: PushPrefs, generation: Int) async -> PrefsSaveOutcome {
         for attempt in 0..<2 {
             do {
-                if try await context.session.savePushPrefs(next) != nil { return true }
+                if try await context.session.savePushPrefs(target) != nil { return .saved }
             } catch {
-                guard generation == context.generation else { return false }
-                if AuthErrorRules.classify(error) != .cancelled { prefsNotice = PushText.settingsSaveFailed }
-                return false
+                guard generation == context.generation else { return .cancelled }
+                return AuthErrorRules.classify(error) == .cancelled ? .cancelled : .failed
             }
-            guard generation == context.generation else { return false }
+            guard generation == context.generation else { return .cancelled }
             guard attempt == 0 else { break }
             // not_found: 기기 행이 없다(첫 등록이 실패했거나 아직 안 끝났다) — 등록을 끝까지 기다린 뒤 한 번 더.
             context.session.requestDeviceRegistration(.signIn)
             await context.session.pendingDeviceRegistration?.value
-            guard generation == context.generation else { return false }
+            guard generation == context.generation else { return .cancelled }
         }
-        prefsNotice = PushText.settingsSaveFailed
-        return false
+        return .failed
     }
 
     // MARK: - 포그라운드 표시
 
     /// 앱이 앞에 있을 때 알림이 왔다(`willPresent`). 해당 스토어를 새로고침하고 보일지 정한다.
+    /// 앱이 띄운 안내 알림(답장 실패)은 언제나 보인다 — 지금 그 대화를 보고 있어도 보내지 못했다는 말은 숨기지 않는다.
     package func presentation(for payload: PushPayload?) -> PushPresentation {
-        guard let payload else { return .banner }
+        guard let payload, !payload.isLocalNotice else { return .banner }
         guard context.session.isSignedIn else { return .banner }
         refreshStores(for: payload)
+        settleBadgeInForeground()
         if let peer = payload.messagePeerID, isAppActive,
            let visible = context.router.visibleConversationPeerID, visible.lowercased() == peer {
             return .hidden
@@ -369,7 +458,7 @@ package final class PushCoordinator {
         deliverMessagePush(messages, peerID: peerID)
     }
 
-    /// 제네릭으로 부른다 — 증인 테이블을 지나 메시지 탭의 같은 이름 메서드(있으면)가 불린다.
+    /// 요구 서명(`PushMessageRefreshing`)으로 부른다 — 기본 구현이 없으니 증인은 언제나 스토어의 문이다(D4 병합 전에는 대역).
     private func deliverMessagePush<Store: PushMessageRefreshing>(_ store: Store, peerID: String) {
         store.didReceiveMessagePush(peerID: peerID)
     }
@@ -394,22 +483,36 @@ package final class PushCoordinator {
 
         switch (action, payload.content) {
         case (.open, _):
+            // 앱이 앞으로 온다 — 배지는 활성화(appDidBecomeActive)의 서버 확인이 맡는다.
             context.router.open(payload.route)
             refreshStores(for: payload)
         case (.reply(let text), .message(let peer, let messageID)):
-            await reply(text: text, peerID: peer, messageID: messageID)
+            // 안 읽은 수가 바뀌는 것은 읽음이 올라갔을 때뿐이다(보내기는 내 안 읽은 수를 바꾸지 않는다).
+            if await reply(text: text, peerID: peer, messageID: messageID) {
+                await settleBadgeAfterBackgroundAction()
+            }
         case (.markRead, .message(let peer, let messageID)):
             if await markRead(peerID: peer, messageID: messageID) {
-                notifyMessages(peerID: peer)
+                notifyMessagesIfActivated(peerID: peer)
+                await settleBadgeAfterBackgroundAction()
             }
         case (.acceptInvite, .gomokuInvite(let match)):
+            // 수락은 앱을 연다(카테고리 옵션 foreground) — 배지는 활성화가 맡는다.
             await respondInvite(matchID: match, accept: true)
         case (.declineInvite, .gomokuInvite(let match)):
             await respondInvite(matchID: match, accept: false)
+            await settleBadgeAfterBackgroundAction()
         default:
             // 카테고리와 맞지 않는 액션(서버·앱 버전이 어긋난 경우) — 아무것도 하지 않는다.
             break
         }
+    }
+
+    /// 뒤에서 한 액션(답장 · 읽음) 뒤 메시지 탭 새로고침. 탭 스토어가 이번 세대에 활성화된 적이 없으면(알림 액션으로 켜진 실행)
+    /// 부르지 않는다 — 그 스토어는 화면도 앎도 없고, 배지는 `settleBadgeAfterBackgroundAction` 이 서버에서 직접 읽는다.
+    private func notifyMessagesIfActivated(peerID: String) {
+        guard storesActivated else { return }
+        notifyMessages(peerID: peerID)
     }
 
     /// 실행 복원이 끝날 때까지(상한) 기다린 뒤 로그인 상태인지. 벽시계가 아니라 단조 시계로 잰다(데모 시계는 멈춰 있다).
@@ -426,25 +529,33 @@ package final class PushCoordinator {
     ///
     /// ①이 필요한 이유: 알림 센터에 남은 **앞 계정의** 메시지 알림에 다른 계정으로 로그인한 뒤 답장하면, 페이로드에 받는 사람이 없어
     /// 지금 계정 이름으로 그 사람에게 보내진다. 지금 계정의 24시간 이력에서 그 메시지 id 를 받은 메시지로 찾을 때만 보낸다.
-    private func reply(text: String, peerID: String, messageID: String?) async {
+    ///
+    /// **적은 글이 말없이 사라지지 않게**: 보내졌다는 것을 모르는 채로 끝나는 모든 갈래가 안내 알림을 남긴다. 답장 도중 세션이 치명 만료돼
+    /// 세대가 바뀐 경우도 마찬가지다(push-verify 발견 3 — 예전에는 세대 가드에서 그냥 돌아갔다). 그 경우 `reset()` 이 이미 알림 센터를
+    /// 비운 뒤라 안내가 지워지지 않는다(`expireSession` 은 `onSignedOut` 을 동기로 부른 뒤에 던진다).
+    ///
+    /// 돌려주는 값: 읽음 경계가 올라갔는가(앱 배지를 다시 읽을 이유).
+    private func reply(text: String, peerID: String, messageID: String?) async -> Bool {
         let generation = context.generation
         guard let messageID else {
             postReplyFailure(PushText.replyMessageGone, peerID: peerID)
-            return
+            return false
         }
-        switch await verifyReceivedMessage(peerID: peerID, messageID: messageID) {
+        let verification = await verifyReceivedMessage(peerID: peerID, messageID: messageID)
+        guard generation == context.generation else {
+            postReplyLostSession(peerID: peerID)
+            return false
+        }
+        switch verification {
         case .confirmed:
             break
         case .notFound:
-            guard generation == context.generation else { return }
             postReplyFailure(PushText.replyMessageGone, peerID: peerID)
-            return
+            return false
         case .failed:
-            guard generation == context.generation else { return }
             postReplyFailure(PushText.connectionUnstable, peerID: peerID)
-            return
+            return false
         }
-        guard generation == context.generation else { return }
 
         if case .empty = MessageBody.validate(text) {
             // 빈 답장은 보내지 않는다(서버 왕복 없이 invalid) — 읽음만.
@@ -453,21 +564,37 @@ package final class PushCoordinator {
                 let response = try await context.withMobileSessionRetry { session in
                     try await context.service.sendMessage(accessToken: session.accessToken, to: peerID, body: text)
                 }
-                guard generation == context.generation else { return }
-                if let failure = Self.sendFailureNotice(response) {
+                let failure = Self.sendFailureNotice(response)
+                guard generation == context.generation else {
+                    // 서버가 받았으면(ok) 할 말이 없다. 거절됐는데 그 사이 세션이 끝났으면 다시 로그인하라고 남긴다.
+                    if failure != nil { postReplyLostSession(peerID: peerID) }
+                    return false
+                }
+                if let failure {
                     postReplyFailure(failure, peerID: peerID)
                 }
             } catch {
-                guard generation == context.generation else { return }
+                guard generation == context.generation else {
+                    postReplyLostSession(peerID: peerID)
+                    return false
+                }
                 if AuthErrorRules.classify(error) != .cancelled {
                     postReplyFailure(PushText.connectionUnstable, peerID: peerID)
                 }
             }
         }
-        guard generation == context.generation else { return }
-        _ = await markRead(peerID: peerID, messageID: messageID)
-        guard generation == context.generation else { return }
-        notifyMessages(peerID: peerID)
+        guard generation == context.generation else { return false }
+        let marked = await markRead(peerID: peerID, messageID: messageID)
+        guard generation == context.generation else { return false }
+        notifyMessagesIfActivated(peerID: peerID)
+        return marked
+    }
+
+    /// 답장이 보내졌는지 모르는 채 세대가 바뀌었다(답장 안의 치명 만료 · 그 사이 로그아웃·재로그인). 로그인이 풀려 있으면 로그인 안내,
+    /// 다른 세션이 이미 서 있으면(앞 세션의 알림이다) 대화를 열어 보내라는 안내.
+    private func postReplyLostSession(peerID: String) {
+        let body = context.session.isSignedIn ? PushText.replyMessageGone : PushText.replyNeedsSignIn
+        postReplyFailure(body, peerID: peerID)
     }
 
     /// 보내기 결과 → 실패 문구(성공이면 nil). 맥 `WorkTimerStore.sendMessage` 의 분기와 같은 문장(코어 `MessageNoticeText`).
@@ -553,18 +680,26 @@ package final class PushCoordinator {
         }
     }
 
+    /// 답장 실패 안내 알림. 누르면 그 대화가 열린다(push-verify 발견 6 — 본문이 "앱에서 대화를 열어 보내 주세요"다):
+    /// `type`=message · `peer_id` 만 싣는다. `message_id` 는 싣지 않고 카테고리도 없다(안내에서 답장·읽음을 다시 하지 않는다).
     private func postReplyFailure(_ body: String, peerID: String) {
         system?.postLocalNotice(
             identifier: PushIdentifiers.localNoticePrefix + "reply." + peerID,
             title: PushText.replyFailedTitle,
             body: body,
-            threadID: "message-\(peerID)"
+            threadID: "message-\(peerID)",
+            userInfo: Self.replyFailureUserInfo(peerID: peerID)
         )
+    }
+
+    /// 안내 알림 본문(`PushPayload(userInfo:)` 가 `.message(peerID:, messageID: nil)` · 안내 표지로 읽는다).
+    package nonisolated static func replyFailureUserInfo(peerID: String) -> [String: String] {
+        ["type": PushKind.message.rawValue, "peer_id": peerID, PushIdentifiers.localNoticeKey: "1"]
     }
 
     // MARK: - 앱 배지
 
-    /// 메시지·게임 배지 합을 관찰해 바뀔 때마다 아이콘에 적는다(로그아웃이면 0).
+    /// 배지 관찰을 건다(한 번). 적을지는 `badgeTarget` 이 정한다 — 모르면 적지 않는다.
     private func startBadgeTracking() {
         guard !isTrackingBadges, system != nil else { return }
         isTrackingBadges = true
@@ -572,25 +707,123 @@ package final class PushCoordinator {
     }
 
     private func observeBadges() {
-        let total = withObservationTracking {
-            currentBadgeTotal
+        let target = withObservationTracking {
+            badgeTarget
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in self?.observeBadges() }
         }
-        apply(badge: total)
+        if let target { apply(badge: target) }
     }
 
-    private var currentBadgeTotal: Int {
-        context.session.isSignedIn ? max(0, badgeTotalSource()) : 0
+    /// 지금 아이콘에 적을 값. nil = 모른다(적지 않는다 — 앞 실행이 적은 값을 둔다).
+    /// - 실행 복원 중 · 업데이트 필요: 계정도 숫자도 모른다.
+    /// - 확정된 로그아웃: 0.
+    /// - 로그인: 앱이 앞에서 서버 확인을 마친 뒤(`.stores`)에만 탭 배지 합. 뒤에서 직접 읽어 적은 값(`.server`)은 관찰로 덮지 않는다.
+    private var badgeTarget: Int? {
+        switch context.session.phase {
+        case .signedOut:
+            return 0
+        case .launching, .needsUpdate:
+            return nil
+        case .signedIn:
+            guard badgeKnowledge == .stores else { return nil }
+            return max(0, badgeTotalSource())
+        }
     }
 
     private func applyBadge() {
-        apply(badge: currentBadgeTotal)
+        if let target = badgeTarget { apply(badge: target) }
     }
 
     private func apply(badge total: Int) {
         guard let system, lastAppliedBadge != total else { return }
         lastAppliedBadge = total
         system.setBadgeCount(total)
+    }
+
+    /// 포그라운드 알림 뒤: 아직 서버 확인을 못 했으면(오프라인이었다) 다시 해 본다. 확인이 끝났으면 관찰이 적는다.
+    private func settleBadgeInForeground() {
+        guard isAppActive, badgeKnowledge != .stores else { return }
+        confirmBadge()
+    }
+
+    /// 뒤에서 한 알림 액션(답장 · 읽음 · 거절)의 끝: 앱이 뒤에 있으면 서버에서 직접 읽어 적고 **끝날 때까지 기다린다**
+    /// (완료 콜백 뒤 시스템이 곧 앱을 재운다). 앱이 앞이면 스토어가 새로고침했고 관찰이 적는다.
+    private func settleBadgeAfterBackgroundAction() async {
+        guard system != nil, context.session.isSignedIn else { return }
+        if isAppActive {
+            settleBadgeInForeground()
+            return
+        }
+        await confirmBadge()?.value
+    }
+
+    /// 진행 중인 배지 확인(테스트가 기다린다).
+    package var pendingBadgeConfirmation: Task<Void, Never>? { badgeConfirmTask }
+
+    /// 서버에서 배지 재료를 읽어 앎을 세운다. 도는 중이면 뒤따르는 한 번으로 합치고 그 작업을 돌려준다(기다릴 수 있다).
+    @discardableResult
+    private func confirmBadge() -> Task<Void, Never>? {
+        guard system != nil, context.session.isSignedIn else { return nil }
+        if let running = badgeConfirmTask {
+            badgeConfirmAgain = true
+            return running
+        }
+        let generation = context.generation
+        let task = Task { [weak self] in
+            guard let self else { return }
+            repeat {
+                self.badgeConfirmAgain = false
+                await self.performBadgeConfirmation(generation: generation)
+                // 세대가 바뀌었으면 reset 이 작업 칸을 이미 비웠다.
+                guard generation == self.context.generation else { return }
+            } while self.badgeConfirmAgain
+            self.badgeConfirmTask = nil
+        }
+        badgeConfirmTask = task
+        return task
+    }
+
+    private enum BadgeSummaryRead {
+        case total(Int)
+        /// 요약 함수가 없는 서버(404 PGRST202) — 서버는 답했다. 메시지 탭이 옛 이력 규칙으로 접는다.
+        case serverLacksSummary
+        case failed
+    }
+
+    /// 한 번의 확인.
+    /// - 앱이 앞: 요약이 한 번 답하면(`.stores`) 그때부터 탭 배지 합을 적는다. 탭 스토어는 활성화 때 같은 요약을 띄웠으므로 이 응답이
+    ///   올 즈음에는 합이 서버 값을 담고 있다. 실패(오프라인)면 아무것도 적지 않는다 — 다음 활성화 · 포그라운드 알림이 다시 한다.
+    /// - 앱이 뒤: 요약 total + 오목 받은함을 읽은 뒤 게임 탭 배지를 더해 적는다(`.server`). 요약을 못 읽으면 적지 않는다.
+    ///   메시지 몫에 요약 total 을 쓰는 이유: 이 실행의 메시지 탭은 아무것도 안 읽었고, 읽었다면 같은 요약에서 같은 수를 낸다.
+    private func performBadgeConfirmation(generation: Int) async {
+        guard context.session.isSignedIn else { return }
+        let read: BadgeSummaryRead
+        do {
+            let response = try await context.withMobileSessionRetry { session in
+                try await context.service.fetchMessageUnreadSummary(accessToken: session.accessToken)
+            }
+            read = response.summary.map { .total($0.total) } ?? .failed
+        } catch SupabaseWorkServiceError.databaseSchemaMissing {
+            read = .serverLacksSummary
+        } catch {
+            read = .failed
+        }
+        guard generation == context.generation, context.session.isSignedIn else { return }
+
+        if isAppActive {
+            if case .failed = read { return }
+            badgeKnowledge = .stores
+            applyBadge()
+            return
+        }
+
+        guard case .total(let messages) = read else { return }
+        await context.gomoku.loadInbox()
+        guard generation == context.generation, context.session.isSignedIn else { return }
+        // 기다리는 사이 앱이 앞으로 왔으면 활성화의 확인이 맡는다(탭 스토어 합을 적는다).
+        guard !isAppActive else { return }
+        badgeKnowledge = .server
+        apply(badge: messages + max(0, context.links.games?.badgeCount ?? 0))
     }
 }

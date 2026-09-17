@@ -126,12 +126,14 @@ final class PushNotificationCenterAdapter: NSObject, UNUserNotificationCenterDel
         UNUserNotificationCenter.current().setBadgeCount(max(0, count), withCompletionHandler: nil)
     }
 
-    func postLocalNotice(identifier: String, title: String, body: String, threadID: String?) {
+    func postLocalNotice(identifier: String, title: String, body: String, threadID: String?, userInfo: [String: String]) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
         if let threadID { content.threadIdentifier = threadID }
+        // 누르면 didReceive → PushPayload 가 이 칸을 읽어 그 대화를 연다(카테고리를 붙이지 않는다 — 안내에 답장·읽음 버튼은 없다).
+        content.userInfo = userInfo
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }

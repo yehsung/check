@@ -81,9 +81,12 @@ package struct PushPayload: Equatable, Sendable {
     }
 
     package let content: Content
+    /// 앱이 스스로 띄운 안내 알림(답장 실패 등)인가 — 서버 알림이 아니다. 포그라운드에서 숨기지 않고 스토어도 새로고침하지 않는다.
+    package let isLocalNotice: Bool
 
-    package init(content: Content) {
+    package init(content: Content, isLocalNotice: Bool = false) {
         self.content = content
+        self.isLocalNotice = isLocalNotice
     }
 
     package var kind: PushKind {
@@ -122,6 +125,7 @@ package struct PushPayload: Equatable, Sendable {
         guard let rawType = text("type")?.trimmingCharacters(in: .whitespaces).lowercased(),
               let kind = PushKind(rawValue: rawType)
         else { return nil }
+        isLocalNotice = text(PushIdentifiers.localNoticeKey) == "1"
         switch kind {
         case .message:
             guard let peer = text("peer_id").flatMap(Self.safeID) else { return nil }
@@ -195,6 +199,8 @@ package enum PushIdentifiers {
 
     /// 앱이 스스로 띄우는 안내 알림(답장 실패 등)의 식별자 접두사.
     package static let localNoticePrefix = "aingcheck.local."
+    /// 안내 알림 본문(`userInfo`)의 표지 키(값 "1"). 서버 트리거는 이 키를 싣지 않는다.
+    package static let localNoticeKey = "aingcheck_local"
 }
 
 /// 카테고리 · 액션의 **플랫폼 무관 설명**. iOS 어댑터가 이것을 `UNNotificationCategory` 로 옮긴다(등록 모양을 테스트가 못 박는다).

@@ -19,7 +19,8 @@ package protocol PushNotificationSystem: AnyObject {
     /// 앱 아이콘 배지.
     func setBadgeCount(_ count: Int)
     /// 앱이 스스로 띄우는 안내 알림(알림 액션이 실패했을 때 — 앱 화면이 없으니 알림으로 말한다).
-    func postLocalNotice(identifier: String, title: String, body: String, threadID: String?)
+    /// `userInfo` 는 알림 본문(`content.userInfo`)에 그대로 싣는다 — 누르면 `PushPayload` 로 읽혀 그 화면이 열린다(카테고리 없음).
+    func postLocalNotice(identifier: String, title: String, body: String, threadID: String?, userInfo: [String: String])
     /// 설정 앱의 이 앱 알림 화면.
     func openSystemSettings()
     /// 권한 설명 시트 띄우기 · 내리기.
@@ -27,31 +28,28 @@ package protocol PushNotificationSystem: AnyObject {
     func dismissPermissionPrimer()
 }
 
-/// 메시지 탭 스토어가 푸시 도착을 받는 진입점(SPEC-ios-build D4 `didReceiveMessagePush(peerID:)`).
+/// 메시지 탭 스토어가 푸시 도착을 받는 진입점(SPEC-ios-build D4 `didReceiveMessagePush(peerID:)` — w4/messages 의 서명 `String?`).
 ///
-/// **왜 프로토콜인가**: 메시지 탭(D4)과 푸시(D9)는 동시에 만들어지고 병합 순서가 정해져 있지 않다. 푸시가 `MessagesStore` 의
-/// 메서드를 직접 부르면 D4 가 없는 브랜치에서 컴파일이 깨진다. 기본 구현(아무것도 안 함)을 둔 프로토콜에 `MessagesStore` 를
-/// 적합시키면 D4 전에는 기본 구현이, D4 뒤에는 **스토어의 같은 이름 메서드가** 증인이 된다(어느 순서로 병합해도 컴파일된다).
+/// **기본 구현을 두지 않는다**(push-verify 발견 1). 예전에는 no-op 기본 구현이 있어서 D4 의 서명(`String?`)이 요구(`String`)와 달라도
+/// 조용히 컴파일됐고, 푸시 경로는 기본 구현을 불러 메시지 새로고침이 통째로 사라졌다(D4 자기 테스트의 `String` 인자 호출까지 그리로 갔다).
+/// 이제 서명이 어긋나면 **컴파일 오류**로 드러난다. D4 가 병합되기 전 이 브랜치에서는 `PushTabEntryPointStandIns.swift` 의 대역이 자리
+/// 스토어에 문을 붙이고, 병합하면 그 대역이 '재선언' 오류를 내어 지우게 만든다(절차는 그 파일 머리 주석).
 /// 접근 수준을 internal 로 둔 이유: 스토어 쪽 메서드가 internal 이든 package 든 증인이 될 수 있게.
 @MainActor
 protocol PushMessageRefreshing: AnyObject {
-    func didReceiveMessagePush(peerID: String)
+    func didReceiveMessagePush(peerID: String?)
 }
 
-extension PushMessageRefreshing {
-    /// 메시지 탭이 진입점을 아직 갖지 않았을 때. 앱이 앞에 있으면 실시간 신호(`onMessageActivity`)가 같은 일을 한다.
-    func didReceiveMessagePush(peerID: String) {}
-}
-
-/// 나 탭 스토어가 제보 답장 푸시를 받는 진입점(같은 이유로 기본 구현을 둔다).
+/// 나 탭 스토어가 제보 답장 푸시를 받는 진입점. 같은 이유로 기본 구현이 없다 — 서명은 `reportID: String?`.
 @MainActor
 protocol PushFeedbackRefreshing: AnyObject {
     func didReceiveFeedbackReplyPush(reportID: String?)
 }
 
-extension PushFeedbackRefreshing {
-    func didReceiveFeedbackReplyPush(reportID: String?) {}
-}
+/// 병합 대역 표지. `PushTabEntryPointStandIns.swift` 의 대역이 붙은 스토어만 적합한다 — 병합 계약 테스트가 "대역이 남은 채 탭 스토어가
+/// 들어왔는가"를 가르는 데 쓴다. 대역 파일을 지워도 이 표지는 남는다(테스트가 계속 컴파일되게).
+@MainActor
+protocol PushTabEntryPointStandIn: AnyObject {}
 
 extension MessagesStore: PushMessageRefreshing {}
 extension MeStore: PushFeedbackRefreshing {}

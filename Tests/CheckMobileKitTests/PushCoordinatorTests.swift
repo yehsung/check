@@ -308,7 +308,8 @@ import Testing
 
         await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("  곧 가요  "))
         let names = h.requests().compactMap(\.rpcName)
-        #expect(names == ["message_history_with_reads", "send_message", "mark_messages_read"], "\(names)")
+        // 뒤따르는 요약 읽기는 앱 배지 확인(뒤에서 켜진 실행 — PushBadgeTests)이다.
+        #expect(names == ["message_history_with_reads", "send_message", "mark_messages_read", "message_unread_summary"], "\(names)")
         let send = try #require(h.calls("send_message").first)
         #expect(pushBodyValue(send, "p_to") as? String == PushHarness.peerID)
         #expect((pushBodyValue(send, "p_body") as? String)?.contains("곧 가요") == true)
@@ -344,7 +345,7 @@ import Testing
         h.setRPC("message_history", PushHarness.historyWithReceived())
         h.clearRequests()
         await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("곧 가요"))
-        #expect(h.requests().compactMap(\.rpcName) == ["message_history_with_reads", "message_history", "send_message", "mark_messages_read"])
+        #expect(h.requests().compactMap(\.rpcName) == ["message_history_with_reads", "message_history", "send_message", "mark_messages_read", "message_unread_summary"])
 
         // message_id 가 없는 알림: 확인할 수 없으니 보내지 않는다
         h.clearRequests()
@@ -414,7 +415,7 @@ import Testing
         h.clearRequests()
 
         await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .markRead)
-        #expect(h.requests().compactMap(\.rpcName) == ["mark_messages_read"])
+        #expect(h.requests().compactMap(\.rpcName) == ["mark_messages_read", "message_unread_summary"], "읽음 뒤 배지 확인만 따른다")
         let mark = try #require(h.calls("mark_messages_read").first)
         #expect(pushBodyValue(mark, "p_through") as? String == PushHarness.messageID)
 
@@ -470,14 +471,16 @@ import Testing
 
     // MARK: - 앱 배지
 
-    @Test("앱 배지 = 메시지 + 게임 배지 합을 관찰해 바뀔 때마다 적고, 로그아웃이면 0")
+    @Test("앱 배지 = 메시지 + 게임 배지 합을 관찰해 바뀔 때마다 적고(서버 확인 뒤), 로그아웃이면 0")
     func appBadgeFollowsTabBadges() async {
         let h = PushHarness()
         h.system.status = .authorized
         defer { h.tearDown() }
         let badges = PushFakeBadges()
         h.push.badgeTotalSource = { badges.messages + badges.games }
+        h.setRPC("message_unread_summary", PushHarness.unreadSummary(total: 0))
         await h.launchSignedIn()
+        #expect(h.push.badgeState == .stores)
         #expect(h.system.badgeCounts.last == 0)
 
         badges.messages = 3
@@ -491,6 +494,7 @@ import Testing
 
         await h.model.session.signOut()
         #expect(await baseWaitUntil { h.system.badgeCounts.last == 0 })
+        #expect(h.push.badgeState == .unknown)
         badges.messages = 9
         try? await Task.sleep(for: .milliseconds(50))
         #expect(h.system.badgeCounts.last == 0, "로그아웃 상태에서 배지를 올렸다")
@@ -557,6 +561,142 @@ import Testing
         h.model.sceneDidBecomeActive()
         await h.settle()
         #expect(h.system.remoteRegistrations == 2)
+        #expect(h.forbiddenViolations.isEmpty)
+    }
+
+    // MARK: - push-verify 수리 회귀
+
+    @Test("답장 중 치명 만료(이력 401 → 갱신 invalid_grant): 보내지 않고, 알림 센터를 비운 **뒤에** 로그인 안내를 남긴다 · 보내기 단계의 만료도 같다")
+    func replyDuringFatalExpiryLeavesNotice() async throws {
+        for stage in ["history", "send"] {
+            let h = PushHarness(label: "push-fatal-\(stage)")
+            h.system.status = .authorized
+            defer { h.tearDown() }
+            await h.launchSignedIn(active: false)
+            h.setRPC("message_history_with_reads", PushHarness.historyWithReceived())
+            h.setRPC("send_message", .json(#"{"status":"ok"}"#))
+            h.setRPC("mark_messages_read", .json(#"{"status":"ok","advanced":true,"unread":0}"#))
+            // 응답기 교체: 그 단계의 RPC 는 언제나 401, 갱신은 invalid_grant(다른 기기에서 비밀번호를 바꾼 경우 등).
+            let rpcBox = h.rpc
+            let access = h.access
+            let expiring = stage == "history" ? "message_history_with_reads" : "send_message"
+            MobileStubURLProtocol.register(host: h.host) { request in
+                if let name = request.rpcName {
+                    if name == expiring { return BaseStub.jwtExpired }
+                    return rpcBox.get()[name] ?? .missingFunction(name)
+                }
+                switch request.path {
+                case "/auth/v1/token":
+                    if request.queryValue("grant_type") == "refresh_token" { return BaseStub.invalidGrant }
+                    return BaseStub.authResponse(access: access, refresh: "r1", userID: PushHarness.userID)
+                case "/auth/v1/logout": return .json("{}")
+                case "/rest/v1/memberships": return BaseStub.membershipOK
+                default: return .missingFunction(request.path)
+                }
+            }
+            h.clearRequests()
+            let removalsBefore = h.system.deliveredRemovals
+
+            await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("곧 갈게요"))
+            #expect(!h.model.session.isSignedIn, "\(stage): 전제 — 치명 만료로 로그아웃")
+            #expect(h.system.deliveredRemovals == removalsBefore + 1, "\(stage): 전제 — reset 이 알림 센터를 비웠다")
+            let notice = try #require(h.system.notices.last, "\(stage): 적은 답장이 안내 없이 사라졌다")
+            #expect(notice.title == PushText.replyFailedTitle)
+            #expect(notice.body == PushText.replyNeedsSignIn)
+            #expect(notice.userInfo["peer_id"] == PushHarness.peerID)
+            let lastRemoval = try #require(h.system.events.lastIndex(of: "removeAllDelivered"))
+            let lastNotice = try #require(h.system.events.lastIndex(of: "notice"))
+            #expect(lastRemoval < lastNotice, "\(stage): 안내가 알림 센터 비우기보다 먼저 올라가 함께 지워진다")
+            #expect(h.calls("mark_messages_read").isEmpty)
+            if stage == "history" { #expect(h.calls("send_message").isEmpty) }
+            #expect(h.forbiddenViolations.isEmpty)
+        }
+    }
+
+    @Test("알림 설정 연달아 누르기: 저장은 한 번에 하나 · 도는 동안 '저장 중'과 마지막으로 누른 값 유지 · 끝나면 최신 값으로 한 번 더 · 최종 화면 = 마지막 서버 값")
+    func overlappingPreferenceSavesAreSerialized() async throws {
+        let h = PushHarness(label: "push-prefs-serial")
+        h.system.status = .authorized
+        defer { h.tearDown() }
+        await h.launchSignedIn()
+        #expect(h.push.prefs == PushPrefs(message: true, gomokuInvite: false, feedbackReply: true))
+
+        // 앞 저장(A: message 끄기)의 응답은 늦다. 뒤 저장(B: feedback_reply 끄기)은 빠르다 — 예전에는 B 가 먼저 끝나 저장 중을 내리고
+        // 늦게 온 A 응답(feedback_reply=true)이 화면 값을 덮었다.
+        h.firstCallOverride.mutate {
+            $0["set_push_prefs"] = .json(#"{"status":"ok","push_prefs":{"message":false,"gomoku_invite":false,"feedback_reply":true}}"#, delay: 0.5)
+        }
+        h.setRPC("set_push_prefs", .json(#"{"status":"ok","push_prefs":{"message":false,"gomoku_invite":false,"feedback_reply":false}}"#, delay: 0.05))
+        h.clearRequests()
+
+        let a = Task { await h.push.setPreference(.message, enabled: false) }
+        #expect(await baseWaitUntil { h.calls("set_push_prefs").count == 1 })
+        let b = Task { await h.push.setPreference(.feedbackReply, enabled: false) }
+        #expect(await baseWaitUntil { !h.push.isEnabled(.feedbackReply) }, "저장 중에 새로 누른 값이 보이지 않는다")
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(h.calls("set_push_prefs").count == 1, "앞 저장이 도는데 뒤 저장을 겹쳐 보냈다")
+        #expect(h.push.isSavingPrefs)
+        #expect(!h.push.isEnabled(.message) && !h.push.isEnabled(.feedbackReply))
+
+        // 앞 응답이 도착한 뒤에도(뒤 저장이 아직 돈다) 화면은 마지막으로 누른 값이고 저장 중이다.
+        #expect(await baseWaitUntil { h.calls("set_push_prefs").count == 2 })
+        #expect(h.push.isSavingPrefs, "보낼 저장이 남았는데 저장 중 표시가 내려갔다")
+        #expect(!h.push.isEnabled(.feedbackReply), "늦게 온 앞 응답이 뒤에 누른 값을 덮었다")
+
+        let aResult = await a.value
+        let bResult = await b.value
+        #expect(aResult && bResult)
+        #expect(!h.push.isSavingPrefs)
+        #expect(h.push.prefsNotice == nil)
+        let bodies = h.calls("set_push_prefs").map { request -> String in
+            let prefs = pushBodyValue(request, "p_prefs") as? [String: Any] ?? [:]
+            return "\(prefs["message"] as? Bool == true ? 1 : 0)/\(prefs["gomoku_invite"] as? Bool == true ? 1 : 0)/\(prefs["feedback_reply"] as? Bool == true ? 1 : 0)"
+        }
+        #expect(bodies == ["0/0/1", "0/0/0"], "둘째 저장은 두 번 누른 값을 모두 싣는다: \(bodies)")
+        #expect(h.push.prefs == PushPrefs(message: false, gomokuInvite: false, feedbackReply: false))
+        #expect(h.model.session.pushPrefs == PushPrefs(message: false, gomokuInvite: false, feedbackReply: false))
+
+        // 뒤 저장이 실패하면: 안내 한 줄, 화면은 서버가 마지막으로 준 값(앞 저장 성공분)으로 돌아간다.
+        h.firstCallOverride.mutate {
+            $0["set_push_prefs"] = .json(#"{"status":"ok","push_prefs":{"message":true,"gomoku_invite":false,"feedback_reply":false}}"#, delay: 0.3)
+        }
+        h.setRPC("set_push_prefs", .networkFailure())
+        h.clearRequests()
+        let c = Task { await h.push.setPreference(.message, enabled: true) }
+        #expect(await baseWaitUntil { h.calls("set_push_prefs").count == 1 })
+        let d = Task { await h.push.setPreference(.gomokuInvite, enabled: true) }
+        let cResult = await c.value
+        let dResult = await d.value
+        #expect(!cResult && !dResult)
+        #expect(h.push.prefsNotice == PushText.settingsSaveFailed)
+        #expect(h.push.prefs == PushPrefs(message: true, gomokuInvite: false, feedbackReply: false))
+        #expect(!h.push.isSavingPrefs)
+        #expect(h.forbiddenViolations.isEmpty)
+    }
+
+    @Test("답장 실패 안내를 누르면 그 대화가 열린다 · 그 대화를 보고 있어도 안내는 숨기지 않는다(서버 메시지 알림은 숨긴다)")
+    func replyFailureNoticeOpensConversation() async throws {
+        let h = PushHarness(label: "push-local-notice")
+        h.system.status = .authorized
+        defer { h.tearDown() }
+        await h.launchSignedIn(active: false)
+        h.setRPC("message_history_with_reads", PushHarness.historyWithReceived(id: "99999999-0000-4000-8000-000000000000"))
+        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("곧 가요"))
+        let notice = try #require(h.system.notices.last)
+        #expect(notice.body == PushText.replyMessageGone)
+
+        // 알림 센터가 돌려주는 모양([AnyHashable: Any])으로 누른다.
+        let delivered: [AnyHashable: Any] = Dictionary(uniqueKeysWithValues: notice.userInfo.map { (AnyHashable($0.key), $0.value as Any) })
+        let tapped = try #require(PushPayload(userInfo: delivered), "안내 알림 본문을 읽지 못한다 — 눌러도 아무 화면도 열리지 않는다")
+        await h.push.handleResponse(tapped, action: .open)
+        #expect(h.model.router.lastOpenedRoute == .message(peerID: PushHarness.peerID))
+        #expect(h.model.router.selectedTab == .messages)
+
+        h.model.sceneDidBecomeActive()
+        await h.settle()
+        h.model.router.visibleConversationPeerID = PushHarness.peerID
+        #expect(h.push.presentation(for: tapped) == .banner, "보고 있는 대화라도 답장 실패 안내는 보여야 한다")
+        #expect(h.push.presentation(for: PushPayload(userInfo: PushHarness.messageUserInfo())) == .hidden, "대조: 서버 메시지 알림은 숨긴다")
         #expect(h.forbiddenViolations.isEmpty)
     }
 

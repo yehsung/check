@@ -19,7 +19,9 @@ final class PushFakeSystem: PushNotificationSystem {
     private(set) var authorizationRequests = 0
     private(set) var remoteRegistrations = 0
     private(set) var badgeCounts: [Int] = []
-    private(set) var notices: [(identifier: String, title: String, body: String, threadID: String?)] = []
+    private(set) var notices: [(identifier: String, title: String, body: String, threadID: String?, userInfo: [String: String])] = []
+    /// 시스템에 시킨 일의 순서(알림 센터 비우기 뒤에 안내를 올렸는지 확인한다).
+    private(set) var events: [String] = []
     private(set) var settingsOpened = 0
     private(set) var primerPresentations = 0
     private(set) var primerDismissals = 0
@@ -58,14 +60,17 @@ final class PushFakeSystem: PushNotificationSystem {
 
     func removeAllDeliveredNotifications() {
         deliveredRemovals += 1
+        events.append("removeAllDelivered")
     }
 
     func setBadgeCount(_ count: Int) {
         badgeCounts.append(count)
+        events.append("badge \(count)")
     }
 
-    func postLocalNotice(identifier: String, title: String, body: String, threadID: String?) {
-        notices.append((identifier, title, body, threadID))
+    func postLocalNotice(identifier: String, title: String, body: String, threadID: String?, userInfo: [String: String]) {
+        notices.append((identifier, title, body, threadID, userInfo))
+        events.append("notice")
     }
 
     func openSystemSettings() {
@@ -173,13 +178,47 @@ final class PushHarness {
         await settle()
     }
 
-    /// 진행 중인 권한 확인 · 등록이 끝날 때까지.
+    /// 진행 중인 권한 확인 · 등록 · 배지 확인이 끝날 때까지.
     func settle() async {
         for _ in 0..<5 {
             await push.pendingStatusCheck?.value
             await model.session.pendingDeviceRegistration?.value
+            await push.pendingBadgeConfirmation?.value
             await Task.yield()
         }
+    }
+
+    /// 앱이 꺼져 있다가 **키체인에 세션이 있는 채** 새로 켜지는 실행(알림 액션으로 뒤에서 켜짐 등). 같은 스텁 호스트 · 저장소를 쓴다.
+    /// 반환한 모델은 시작만 해 둔다(장면 active 없음) — 어댑터 `handle()` 가 부르는 것과 같다.
+    func makeRestoredModel(start: Bool = true) -> MobileAppModel {
+        let vault = InMemoryTokenVault()
+        vault.write(access, key: AingKeychain.accessTokenKey)
+        vault.write("r1", key: AingKeychain.refreshTokenKey)
+        let environment = MobileEnvironment(
+            service: BaseStub.makeService(host: host),
+            vault: vault,
+            storage: storage,
+            appInfo: BaseStub.appInfo,
+            clock: clock.clock,
+            installationID: "11111111-2222-4333-8444-555555555555",
+            realtimeTransport: nil,
+            runsTimers: false,
+            reloadWidgetTimelines: {}
+        )
+        storage.defaults.set(Self.userID, forKey: AingSharedKeys.userID)
+        let restored = MobileAppModel(environment: environment)
+        restored.push.sessionSettleTimeoutSeconds = 3
+        restored.push.attach(system: system)
+        if start { restored.start() }
+        return restored
+    }
+
+    /// message_unread_summary 응답(다른 상대에게서 온 안 읽은 메시지 `total` 건).
+    static func unreadSummary(total: Int, delay: TimeInterval = 0) -> MobileStubResponse {
+        let peers = total > 0
+            ? #"[{"peer_user_id":"b9999999-3333-4444-8555-000000000009","count":\#(total),"last_epoch_ms":1789621110000}]"#
+            : "[]"
+        return .json(#"{"status":"ok","total":\#(total),"peers":\#(peers)}"#, delay: delay)
     }
 
     func requests() -> [MobileStubRequest] {

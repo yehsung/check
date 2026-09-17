@@ -132,22 +132,18 @@ import UserNotifications
         #expect(blocking.filter { $0.allowsDelivery }.isEmpty)
     }
 
-    @Test("병합 계약: 메시지·나 탭 스토어가 같은 이름 메서드를 가지면 기본 구현이 아니라 그 메서드가 불린다")
-    func witnessPrefersStoreMethod() {
-        final class StoreWithEntry: PushMessageRefreshing, PushFeedbackRefreshing {
-            var peers: [String] = []
-            var reports: [String?] = []
-            func didReceiveMessagePush(peerID: String) { peers.append(peerID) }
-            func didReceiveFeedbackReplyPush(reportID: String?) { reports.append(reportID) }
-        }
-        final class StoreWithoutEntry: PushMessageRefreshing {}
-        func deliver<S: PushMessageRefreshing>(_ store: S) { store.didReceiveMessagePush(peerID: "p") }
-        func deliverFeedback<S: PushFeedbackRefreshing>(_ store: S) { store.didReceiveFeedbackReplyPush(reportID: "r") }
-        let with = StoreWithEntry()
-        deliver(with)
-        deliverFeedback(with)
-        #expect(with.peers == ["p"] && with.reports == ["r"])
-        deliver(StoreWithoutEntry()) // 기본 구현 — 아무 일도 없고 죽지 않는다
+    @Test("앱이 띄운 답장 실패 안내의 본문: 누르면 그 대화로 · message_id 없음(답장·읽음 안 함) · 안내 표지 — 서버 알림은 표지가 없다")
+    func localNoticeUserInfo() throws {
+        let info = PushCoordinator.replyFailureUserInfo(peerID: PushHarness.peerID)
+        #expect(info["message_id"] == nil)
+        // 알림 센터를 지나면 userInfo 는 [AnyHashable: Any] 로 돌아온다.
+        let bridged: [AnyHashable: Any] = Dictionary(uniqueKeysWithValues: info.map { (AnyHashable($0.key), $0.value as Any) })
+        let payload = try #require(PushPayload(userInfo: bridged))
+        #expect(payload.isLocalNotice)
+        #expect(payload.content == .message(peerID: PushHarness.peerID, messageID: nil))
+        #expect(payload.route == .message(peerID: PushHarness.peerID))
+        #expect(PushPayload(userInfo: PushHarness.messageUserInfo())?.isLocalNotice == false)
+        #expect(PushPayload(userInfo: PushHarness.gomokuUserInfo())?.isLocalNotice == false)
     }
 }
 

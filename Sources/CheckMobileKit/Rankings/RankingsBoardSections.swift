@@ -481,72 +481,18 @@ struct RankingsGameMenu: View {
     }
 }
 
-/// 어제 1등 한 줄(게임 화면과 같은 문법): 왕관 원 · "어제 1등" / 이름 + 센터 + 점수 · 오른쪽 초록 획득 칩 [보석]+20 받음.
-/// 오늘 순위 그룹과 **다른 그룹**으로 떼어 '오늘 순위' 첫 행처럼 읽히지 않게 한다.
+/// 어제 1등 한 줄 — **게임 탭과 같은 공용 부품** `ChampionRow`(통합 때 승격, 비평 4a). 순위 탭은 문구와 점수 꾸밈만 넘긴다.
 struct RankingsChampionRow: View {
     let winner: MiniGameWinner
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        InsetGroup {
-            GroupRow(divider: .none, padding: EdgeInsets(top: 12, leading: MobileTheme.cardPadding, bottom: 12, trailing: MobileTheme.cardPadding)) {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 8) {
-                        CrownBadge()
-                        texts
-                        gain
-                    }
-                } else {
-                    CrownBadge()
-                    texts
-                    Spacer(minLength: 8)
-                    gain
-                }
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("\(RankingsText.yesterdayChampion), \(winner.name), \(RankingsText.score(winner.score))" + (winner.awarded ? ", \(RankingsText.awardedChip)" : "")))
-    }
-
-    private var texts: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(RankingsText.yesterdayChampion)
-                .font(MobileTheme.rowSubtitle)
-                .foregroundStyle(MobileTheme.label2)
-            if dynamicTypeSize.isAccessibilitySize {
-                // 접근성 글자에서는 이름 줄이 늘 두 줄(이름 / 배지)이라 점수를 옆에 두면 가운데에 떠 보였다(실측) — 아래 줄로.
-                VStack(alignment: .leading, spacing: 2) {
-                    RankingsNameLine(name: winner.name, center: winner.center)
-                    score
-                }
-            } else {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .center, spacing: 6) {
-                        RankingsNameLine(name: winner.name, center: winner.center)
-                        score
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        RankingsNameLine(name: winner.name, center: winner.center)
-                        score
-                    }
-                }
-            }
-        }
-    }
-
-    private var score: some View {
-        Text(RankingsText.score(winner.score))
-            .font(MobileTheme.number(.callout, weight: .semibold))
-            .monospacedDigit()
-            .foregroundStyle(MobileTheme.label)
-            .fixedSize()
-    }
-
-    @ViewBuilder
-    private var gain: some View {
-        if winner.awarded {
-            RubyGain(RankingsText.rubyPrizes[0], suffix: "받음", style: .chip)
-        }
+        ChampionRow(
+            caption: RankingsText.yesterdayChampion,
+            name: winner.name,
+            center: CenterLabel.serverValue(forDisplay: winner.center),
+            score: RankingsText.score(winner.score),
+            awarded: winner.awarded ? RankingsText.rubyPrizes[0] : nil
+        )
     }
 }
 

@@ -112,31 +112,67 @@ package struct PersonAvatar: View {
     }
 }
 
-/// 이름 줄: 이름 + (센터 배지) + ('나' 칩). 센터 배지는 **늘 이름 뒤**(아바타 아래·부제에 두지 않는다).
+/// 이름 줄: 이름 + (센터 배지) + 칩('나' · '우리 팀' · '비공개'). 센터 배지는 **늘 이름 뒤**(아바타 아래·부제에 두지 않는다).
+///
+/// 순위 탭·게임 탭·지금 탭·메시지가 모두 이 한 벌을 쓴다(같은 이름 줄이 화면마다 다른 부품으로 그려지던 결함 —
+/// 비평 4b). 한 줄에 들어가면 이름 뒤에 배지, 안 들어가면(긴 이름) 이름을 줄바꿈하고 배지를 아래 줄로 — 잘라 먹지
+/// 않는다. 접근성 글자 크기에서는 늘 아래 줄로 내린다(실측: 가로로 몰면 이름이 한 글자씩 꺾였다).
 package struct PersonName: View {
+    /// 이름 뒤 칩. 센터 배지는 칩이 아니라 늘 먼저 오는 배지다.
+    package enum Chip: Hashable, Sendable {
+        /// '나'(파랑).
+        case me
+        /// '우리 팀' 같은 파랑 강조 칩.
+        case accent(String)
+        /// '비공개' 같은 회색 칩.
+        case muted(String)
+    }
+
     private let name: String
     private let center: String?
-    private let isMe: Bool
+    private let chips: [Chip]
     private let font: Font
+    private let onTint: Bool
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    package init(_ name: String, center: String? = nil, isMe: Bool = false, font: Font = MobileTheme.rowTitle) {
+    /// - Parameters:
+    ///   - center: 센터 **서버 값**(`CenterLabel` 규약 — 모르는 값·nil 은 배지를 그리지 않는다).
+    ///   - isMe: `chips` 앞에 '나' 칩을 넣는 줄임.
+    ///   - onTint: 파랑 틴트 행(내 행) 안이면 true — 다크에서 파랑 칩을 테두리형으로 바꾼다(틴트 위 틴트가 3.5:1).
+    package init(
+        _ name: String,
+        center: String? = nil,
+        isMe: Bool = false,
+        chips: [Chip] = [],
+        font: Font = MobileTheme.rowTitle,
+        onTint: Bool = false
+    ) {
         self.name = name
         self.center = center
-        self.isMe = isMe
+        self.chips = isMe ? [.me] + chips : chips
         self.font = font
+        self.onTint = onTint
     }
 
     package var body: some View {
-        // 한 줄에 들어가면 이름 뒤에 배지, 안 들어가면(긴 이름 · 큰 글자) 이름을 줄바꿈하고 배지를 아래 줄로 — 잘라 먹지 않는다.
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: 6) {
-                nameText.lineLimit(1)
-                badges
+        if dynamicTypeSize.isAccessibilitySize {
+            stacked
+        } else {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 6) {
+                    nameText.lineLimit(1)
+                    badges
+                }
+                stacked
             }
-            VStack(alignment: .leading, spacing: 2) {
-                nameText.fixedSize(horizontal: false, vertical: true)
-                if hasBadges { HStack(spacing: 6) { badges } }
-            }
+        }
+    }
+
+    private var stacked: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            nameText.fixedSize(horizontal: false, vertical: true)
+            if hasBadges { HStack(spacing: 6) { badges } }
         }
     }
 
@@ -146,16 +182,31 @@ package struct PersonName: View {
             .foregroundStyle(MobileTheme.label)
     }
 
-    private var hasBadges: Bool { isMe || CenterLabel.display(center) != nil }
+    private var hasBadges: Bool { !chips.isEmpty || CenterLabel.display(center) != nil }
+
+    /// 파랑 칩을 테두리형으로 — 틴트 행 안 + 다크에서만(시안 B 다크 보정).
+    private var outlinesAccent: Bool { onTint && colorScheme == .dark }
 
     @ViewBuilder
     private var badges: some View {
         CenterBadge(center)
-        if isMe { MeChip() }
+        ForEach(chips, id: \.self) { chip in
+            switch chip {
+            case .me:
+                MeChip(outlined: outlinesAccent)
+            case .accent(let text):
+                AingChip(text: text, tint: MobileTheme.accent, background: MobileTheme.accentTint,
+                         outlined: outlinesAccent, size: .small, border: MobileTheme.accentLine)
+            case .muted(let text):
+                AingChip(text: text, tint: MobileTheme.label2, background: MobileTheme.fill,
+                         outlined: false, size: .small)
+            }
+        }
     }
 }
 
-/// '나' 칩(파랑 틴트 · 11pt bold). `outlined` 는 틴트 행(내 행) 안에서 쓰는 테두리형(다크에서 틴트 위 틴트가 3.5:1 로 떨어진다).
+/// '나' 칩(파랑 틴트 · 이름 줄 키 `AingChip.Size.small`). `outlined` 는 틴트 행(내 행) 안에서 쓰는 테두리형
+/// (다크에서 틴트 위 틴트가 3.5:1 로 떨어진다).
 package struct MeChip: View {
     private let outlined: Bool
 
@@ -164,19 +215,8 @@ package struct MeChip: View {
     }
 
     package var body: some View {
-        Text("나")
-            .font(.system(.caption2, weight: .bold))
-            .foregroundStyle(MobileTheme.accent)
-            .padding(.horizontal, 6)
-            .frame(minHeight: 18)
-            .background {
-                if outlined {
-                    Capsule().strokeBorder(MobileTheme.accentLine, lineWidth: 1)
-                } else {
-                    Capsule().fill(MobileTheme.accentTint)
-                }
-            }
-            .fixedSize()
+        AingChip(text: "나", tint: MobileTheme.accent, background: MobileTheme.accentTint,
+                 outlined: outlined, size: .small, border: MobileTheme.accentLine)
             .accessibilityLabel(Text("나"))
     }
 }

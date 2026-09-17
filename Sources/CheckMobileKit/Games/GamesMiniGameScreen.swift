@@ -194,10 +194,18 @@ struct GamesMiniGameScreen: View {
                       trailing: state.knowsPlayerCount ? .text(GamesMiniGameText.quorumCaption(players: state.entries.count)) : .none,
                       padded: true)
             .padding(.top, -18)
+        // 어제 1등은 **자기 그룹**(순위 탭과 같은 공용 `ChampionRow`) — '오늘 순위' 첫 행처럼 읽히지 않게 떼어 둔다(시안 B 06).
+        if let winner = state.yesterdayWinner {
+            ChampionRow(
+                caption: GamesMiniGameText.yesterdayChampion,
+                name: winner.name,
+                center: CenterLabel.serverValue(forDisplay: winner.center),
+                score: GamesMiniGameText.score(winner.score),
+                awarded: winner.awarded ? GamesMiniGameText.rubyPrizes[0] : nil
+            )
+            .padding(.bottom, 12)
+        }
         InsetGroup {
-            if let winner = state.yesterdayWinner {
-                GamesChampionRow(winner: winner)
-            }
             if state.entries.isEmpty {
                 GroupRow(divider: .none) {
                     switch state.placeholder {
@@ -246,9 +254,9 @@ struct GamesMiniGameScreen: View {
     }
 }
 
-/// 오늘 순위 한 줄(인셋 그룹 안 · 48pt): 등수 원 · 얼굴(내 행은 착용 캐릭터 초상) · 이름(+ 센터 · '나') · 점수.
-/// 순위 원·"나" 칩·내 행 강조는 순위 탭과 같은 공용 부품이다(`RankBadge` · `PersonName` · `rankRowSurface` — 같은 순위가 두 탭에서
-/// 다른 색으로 보이던 결함).
+/// 오늘 순위 한 줄 — **순위 탭과 같은 공용 부품**(통합 때 승격: `RankRow`·`RankRowBody`·`RankRowFace`·`PersonName`).
+/// 인셋 그룹 안 48pt: 등수 원 · 얼굴(내 행은 착용 캐릭터 초상) · 이름(+ 센터 · '나') · 점수. 구분선 시작점·큰 글자 접힘·
+/// 내 행 강조가 두 탭에서 같아진다(비평 4 "같은 데이터 다른 부품").
 private struct GamesRankRow: View {
     let store: GamesStore
     let rank: Int
@@ -256,108 +264,43 @@ private struct GamesRankRow: View {
     let isMe: Bool
     let isLast: Bool
 
+    private let metrics = RankRowScaledMetrics()
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        Group {
-            if typeSize.isAccessibilitySize {
-                // 큰 글자: 등수·얼굴 한 줄, 이름·점수는 그 아래로(한 줄에 몰면 이름이 0 폭으로 눌린다).
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: MobileTheme.space3) { rankBadge; face; Spacer(minLength: 0); score }
-                    nameLine
+        RankRow(isMine: isMe, isLast: isLast, dividerInset: metrics.dividerInset(faceBase: 30),
+                minHeight: 48, verticalPadding: (7, 7)) {
+            RankRowBody(rank: rank, alignment: .center) {
+                RankRowFace(name: entry.name, colorSeed: entry.userID, url: entry.avatarURL, base: 30,
+                            me: isMe ? GamesMeIdentity.current(store.context).rankFace : nil)
+            } content: {
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 4) {
+                        nameLine
+                        score
+                    }
+                } else {
+                    HStack(alignment: .center, spacing: 8) {
+                        nameLine
+                        Spacer(minLength: 4)
+                        score
+                    }
                 }
-            } else {
-                HStack(spacing: MobileTheme.space3) {
-                    rankBadge
-                    face
-                    nameLine
-                    Spacer(minLength: 6)
-                    score
-                }
-            }
-        }
-        .padding(.horizontal, MobileTheme.cardPadding)
-        .padding(.vertical, 8)
-        .frame(minHeight: 48)
-        .rankRowSurface(isMine: isMe, standsAlone: false, padding: 0, cornerRadius: 0)
-        .overlay(alignment: .bottom) {
-            if !isLast {
-                Rectangle()
-                    .fill(MobileTheme.separator)
-                    .frame(height: MobileTheme.hairline)
-                    .padding(.leading, MobileTheme.cardPadding + 24 + 30 + MobileTheme.space3 * 2)
             }
         }
         .accessibilityElement(children: .combine)
     }
 
-    private var rankBadge: some View {
-        RankBadge(rank: rank)
-    }
-
-    @ViewBuilder
-    private var face: some View {
-        if isMe {
-            let me = GamesMeIdentity.current(store.context)
-            CharacterPortrait(id: me.characterID, mood: me.mood, size: 30, ringGap: MobileTheme.surface)
-        } else {
-            PersonAvatar(name: entry.name, colorSeed: entry.userID, url: entry.avatarURL, size: 30)
-        }
-    }
-
     private var nameLine: some View {
-        PersonName(entry.name, center: CenterLabel.serverValue(forDisplay: entry.center), isMe: isMe)
+        PersonName(entry.name, center: CenterLabel.serverValue(forDisplay: entry.center), isMe: isMe, onTint: true)
     }
 
     private var score: some View {
         Text(GamesMiniGameText.score(entry.bestScore))
-            .font(.system(.subheadline, weight: .semibold))
+            .font(MobileTheme.number(.callout, weight: .semibold))
             .monospacedDigit()
             .foregroundStyle(MobileTheme.label)
             .fixedSize()
-    }
-}
-
-/// 어제 1등 한 줄(시안 B 06 — 순위 탭과 같은 부품): 왕관 원 · 이름·점수 · 초록 획득 칩 [보석]+20 받음.
-private struct GamesChampionRow: View {
-    let winner: MiniGameWinner
-
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        GroupRow(divider: .inset(MobileTheme.cardPadding), minHeight: 56) {
-            if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 8) {
-                    CrownBadge()
-                    texts
-                    if winner.awarded { awarded }
-                }
-            } else {
-                CrownBadge()
-                texts
-                Spacer(minLength: 6)
-                if winner.awarded { awarded }
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var texts: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(GamesMiniGameText.yesterdayChampion)
-                .font(MobileTheme.rowSubtitle)
-                .foregroundStyle(MobileTheme.label2)
-            Text(winner.name + " · " + GamesMiniGameText.score(winner.score))
-                .font(MobileTheme.rowTitle)
-                .monospacedDigit()
-                .foregroundStyle(MobileTheme.label)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .layoutPriority(1)
-    }
-
-    private var awarded: some View {
-        RubyGain(GamesMiniGameText.rubyPrizes[0], suffix: "받음", style: .chip)
     }
 }
 #endif

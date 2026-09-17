@@ -136,6 +136,49 @@ package struct SectionHeader: View {
     }
 }
 
+/// 섹션 머리 + **오른쪽에 아무 뷰**(게임 고르기 메뉴 알약 · 달 넘기기 · 잔량 칩). `SectionHeader.Trailing` 은 글자·링크만 받아
+/// 순위 탭이 자기 것을 따로 만들었다 — 통합 때 승격했다. 접근성 글자 크기에서는 부속을 아래 줄로 내린다(가로로 몰면 제목이 꺾인다).
+package struct SectionHeaderBar<Trailing: View>: View {
+    private let title: String
+    private let topPadding: CGFloat
+    private let trailing: Trailing
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    package init(_ title: String, topPadding: CGFloat = 22, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.topPadding = topPadding
+        self.trailing = trailing()
+    }
+
+    package var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    titleText
+                    trailing
+                }
+            } else {
+                HStack(alignment: .center, spacing: 8) {
+                    titleText
+                    Spacer(minLength: 8)
+                    trailing
+                }
+            }
+        }
+        .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+        .padding(.top, topPadding)
+        .padding(.bottom, 8)
+    }
+
+    private var titleText: some View {
+        Text(title)
+            .font(MobileTheme.sectionTitle)
+            .foregroundStyle(MobileTheme.label)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
 /// 진행 막대(높이 6 · 얇게 4 · 트랙 `fill`). `.accent` 진행(미달) · `.gauge` '우리 팀' 게이지(그라디언트) · `.done` 달성(초록) · `.ai` AI 토큰.
 package struct ProgressBar: View {
     package enum Style: String, CaseIterable, Sendable { case accent, gauge, done, ai }

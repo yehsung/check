@@ -194,10 +194,17 @@ import Testing
         #expect(medalDefinitions == ["Sources/CheckMobileKit/Theme/MobileThemePalette.swift"], "메달 색 정의가 두 벌이다: \(medalDefinitions)")
         let legacyMedals = try IntegrationContractTests.files(containing: ["Color(red: 1.00, green: 0.824", "0xF5B700", "0xFFD24A"], under: "Sources/CheckMobileKit")
         #expect(legacyMedals == ["Sources/CheckMobileKit/Theme/MobileThemePalette.swift"], "메달 숫자가 토큰 표 밖에 있다: \(legacyMedals)")
-        for file in ["Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift", "Sources/CheckMobileKit/Rankings/RankingsTab.swift"] {
+        // 순위 원·내 행 강조는 통합 때 승격한 공용 행(`RankRow` — 그 안에서 `rankRowSurface` 를 건다)을 거친다.
+        // 강조 칠이 두 벌로 갈리지 않게 `rankRowSurface(isMine:` 를 거는 곳은 Components 한 곳뿐이다.
+        let surfaceCallers = try IntegrationContractTests.files(containing: [".rankRowSurface(isMine:"], under: "Sources/CheckMobileKit")
+        #expect(surfaceCallers == ["Sources/CheckMobileKit/Components/RankBoardParts.swift"],
+                "내 행 강조를 거는 곳이 공용 행 밖으로 흩어졌다: \(surfaceCallers)")
+        for file in ["Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift", "Sources/CheckMobileKit/Rankings/RankingsBoardSections.swift"] {
             let code = try IntegrationContractTests.code(file)
-            #expect(code.contains("RankBadge"), "\(file) 가 공용 순위 원을 쓰지 않는다")
-            #expect(code.contains("rankRowSurface(isMine:"), "\(file) 가 공용 내 행 강조를 쓰지 않는다")
+            #expect(code.contains("RankRowBody(") || code.contains("RankingsAdaptiveRow("),
+                    "\(file) 가 공용 순위 원·얼굴 조립(승격한 `RankRowBody`)을 쓰지 않는다")
+            #expect(code.contains("RankRow(isMine:") || code.contains("RankingsGroupRow(isMine:"),
+                    "\(file) 가 공용 내 행 강조(승격한 `RankRow`)를 쓰지 않는다")
         }
 
         let scaledAvatars = try IntegrationContractTests.files(containing: ["@ScaledMetric(relativeTo: .body) private var size", "var avatarSize: CGFloat = "], under: "Sources/CheckMobileKit")

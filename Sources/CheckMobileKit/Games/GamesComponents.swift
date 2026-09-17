@@ -42,6 +42,9 @@ struct GamesMeIdentity {
         let name = rawName?.trimmingCharacters(in: .whitespacesAndNewlines)
         return GamesMeIdentity(name: (name?.isEmpty ?? true) ? nil : name, characterID: characterID, mood: mood)
     }
+
+    /// 공용 순위 행 얼굴(`RankRowFace`)에 넘길 짝.
+    var rankFace: (id: String?, mood: CharacterMood) { (characterID, mood) }
 }
 
 extension GomokuUser {
@@ -98,37 +101,16 @@ struct GamesStakeLine: View {
     }
 }
 
-/// 오른쪽 위 루비 잔량 유리 알약(시안 `.b-gpill`) — 누르면 상점. iOS 26 은 도구 막대가 유리를 입히므로 알맹이만,
-/// 그 전 버전은 공용 유리 바탕을 직접 두른다.
+/// 오른쪽 위 루비 잔량 유리 알약(시안 `.b-gpill`) — 누르면 상점.
+///
+/// 도구 막대 유리 이중 겹침(iOS 26 은 막대가 스스로 유리를 두른다)은 공용 `RubyBalanceChip(.toolbar)` 가 안다 —
+/// 게임 탭과 나 탭 상점이 각자 같은 분기를 쓰던 것을 통합 때 한 벌로 승격했다.
 struct GamesToolbarRubyPill: View {
     let balance: Int?
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            if #available(iOS 26, *) {
-                label.padding(.horizontal, 4)
-            } else {
-                label
-                    .padding(.leading, 10)
-                    .padding(.trailing, 14)
-                    .frame(minHeight: GamesTouchTarget.minimum)
-                    .background(GlassBackground(shape: Capsule()))
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(balance.map { "루비 \($0)개" } ?? "루비 잔액 모름"))
-        .accessibilityHint(Text(GamesText.rubyPillHint))
-    }
-
-    private var label: some View {
-        HStack(spacing: 6) {
-            RubyIcon(size: 22, scalesWithText: false)
-            Text(balance.map { "\($0)" } ?? "–")
-                .font(.system(size: 16, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(MobileTheme.label)
-        }
+        RubyBalanceChip(balance, style: .toolbar, hint: GamesText.rubyPillHint, action: action)
     }
 }
 

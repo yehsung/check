@@ -26,29 +26,69 @@ package struct RubyIcon: View {
     }
 }
 
-/// 루비 잔량 칩. `.small`(높이 24 · 보석 17) · `.large`(34 · 24) · `.glass`(44 유리 알약 — 게임·상점 오른쪽 위).
+/// 루비 잔량 칩. `.small`(높이 24 · 보석 17) · `.large`(34 · 24) · `.glass`(44 유리 알약) ·
+/// `.toolbar`(**도구 막대 안** 유리 알약 — 게임 탭·상점 오른쪽 위, 시안 `.b-gpill` 보석 22 · 숫자 16).
 /// nil 은 "–"(모른다 — 0 으로 지어내지 않는다). `action` 이 있으면 버튼(예: 나 탭 → 상점).
+///
+/// `.toolbar` 는 iOS 26 내비 막대가 도구 항목에 유리를 **스스로** 두르는 것을 안다: 그 판에서는 알맹이만 두고,
+/// 그 전 판에서만 유리를 직접 두른다(게임 탭과 상점이 각자 같은 분기를 쓰던 것을 한 벌로 — 유리가 두 겹으로 겹치던 결함).
 package struct RubyBalanceChip: View {
-    package enum Style: Sendable { case small, large, glass }
+    package enum Style: Sendable { case small, large, glass, toolbar }
 
     private let count: Int?
     private let style: Style
     private let action: (() -> Void)?
+    private let hint: String?
 
-    package init(_ count: Int?, style: Style = .small, action: (() -> Void)? = nil) {
+    /// - Parameter hint: 보이스오버 힌트(`.toolbar` 에서만 — "눌러서 상점").
+    package init(_ count: Int?, style: Style = .small, hint: String? = nil, action: (() -> Void)? = nil) {
         self.count = count
         self.style = style
+        self.hint = hint
         self.action = action
     }
 
     package var body: some View {
-        if let action {
+        if style == .toolbar {
+            toolbarPill
+        } else if let action {
             Button(action: action) { chip }
                 .buttonStyle(.plain)
                 .frame(minHeight: AingButtonMetrics.minimumTarget)
                 .contentShape(Rectangle())
         } else {
             chip
+        }
+    }
+
+    /// 도구 막대 알약. iOS 26 은 막대가 유리를 입히므로 알맹이만(좌우 4), 그 전 판은 공용 유리 바탕 + 44pt 누름 칸.
+    @ViewBuilder
+    private var toolbarPill: some View {
+        Button(action: action ?? {}) {
+            if #available(iOS 26, *) {
+                toolbarLabel.padding(.horizontal, 4)
+            } else {
+                toolbarLabel
+                    .padding(.leading, 10)
+                    .padding(.trailing, 14)
+                    .frame(minHeight: AingButtonMetrics.minimumTarget)
+                    .background(GlassBackground(shape: Capsule()))
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(action == nil)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(count.map { "루비 \($0)개" } ?? "루비 잔액 모름"))
+        .accessibilityHint(hint.map { Text($0) } ?? Text(""))
+    }
+
+    private var toolbarLabel: some View {
+        HStack(spacing: 6) {
+            RubyIcon(size: 22, scalesWithText: false)
+            Text(count.map { "\($0)" } ?? "–")
+                .font(.system(size: 16, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(MobileTheme.label)
         }
     }
 
@@ -75,6 +115,7 @@ package struct RubyBalanceChip: View {
         case .small: return 17
         case .large: return 24
         case .glass: return 20
+        case .toolbar: return 22
         }
     }
 
@@ -83,6 +124,7 @@ package struct RubyBalanceChip: View {
         case .small: return .system(.subheadline, weight: .bold)
         case .large: return .system(.title3, weight: .bold)
         case .glass: return .system(.headline, weight: .semibold)
+        case .toolbar: return .system(size: 16, weight: .semibold)
         }
     }
 
@@ -90,7 +132,7 @@ package struct RubyBalanceChip: View {
         switch style {
         case .small: return 24
         case .large: return 34
-        case .glass: return 44
+        case .glass, .toolbar: return 44
         }
     }
 
@@ -104,7 +146,7 @@ package struct RubyBalanceChip: View {
             Capsule()
                 .fill(MobileTheme.accentTint)
                 .overlay(Capsule().strokeBorder(MobileTheme.accentLine, lineWidth: 1))
-        case .glass:
+        case .glass, .toolbar:
             GlassBackground(shape: Capsule())
         }
     }

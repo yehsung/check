@@ -78,32 +78,75 @@ package struct CrownBadge: View {
 }
 
 /// 작은 캡슐 칩("우리 팀" · "비공개" · "목표 달성"). 뜻 색 틴트 + 같은 색 글자. `outlined` 는 틴트 행 안에서 테두리형.
+///
+/// 높이 두 벌만 있다(그 사이 값을 만들지 않는다 — 순위 탭과 게임 탭이 각자 18pt 칩을 따로 만들어 같은 이름 줄이
+/// 화면마다 다른 높이로 보였다):
+/// - `.regular` 22pt · 13pt semibold · 좌우 8(시안 `.b-chip`) — 카드 안 상태 칩.
+/// - `.small` 18pt · 11pt bold · 좌우 6(시안 `.b-me-chip`) — **이름 줄**. `CenterBadge` 와 같은 키라 이름 뒤에서 높이가 맞는다.
 package struct AingChip: View {
+    package enum Size: Sendable {
+        case regular
+        case small
+
+        var font: Font {
+            switch self {
+            case .regular: return .system(.caption, weight: .semibold)
+            case .small: return .system(.caption2, weight: .bold)
+            }
+        }
+
+        var horizontalPadding: CGFloat {
+            switch self {
+            case .regular: return 8
+            case .small: return 6
+            }
+        }
+
+        var minHeight: CGFloat {
+            switch self {
+            case .regular: return 22
+            case .small: return 18
+            }
+        }
+    }
+
     private let text: String
     private let tint: Color
     private let background: Color?
     private let outlined: Bool
+    private let size: Size
+    private let border: Color?
 
     /// - Parameters:
     ///   - tint: 글자 색(뜻 색 — 파랑 accent · 초록 working · 앰버 pending · 회색 label2).
     ///   - background: 칩 바탕. nil 이면 글자 색 14%(회색 글자면 `MobileTheme.fill` 을 넘긴다).
-    package init(text: String, tint: Color = MobileTheme.accent, background: Color? = nil, outlined: Bool = false) {
+    ///   - border: 테두리형 선 색. nil 이면 글자 색 38%(파랑 칩은 `MobileTheme.accentLine` 을 넘긴다 — 다크 보정값).
+    package init(
+        text: String,
+        tint: Color = MobileTheme.accent,
+        background: Color? = nil,
+        outlined: Bool = false,
+        size: Size = .regular,
+        border: Color? = nil
+    ) {
         self.text = text
         self.tint = tint
         self.background = background
         self.outlined = outlined
+        self.size = size
+        self.border = border
     }
 
     package var body: some View {
         Text(text)
-            .font(.system(.caption, weight: .semibold))
+            .font(size.font)
             .foregroundStyle(tint)
             .lineLimit(1)
-            .padding(.horizontal, 8)
-            .frame(minHeight: 22)
+            .padding(.horizontal, size.horizontalPadding)
+            .frame(minHeight: size.minHeight)
             .background {
                 if outlined {
-                    Capsule().strokeBorder(tint.opacity(0.38), lineWidth: 1)
+                    Capsule().strokeBorder(border ?? tint.opacity(0.38), lineWidth: 1)
                 } else {
                     Capsule().fill(background ?? tint.opacity(0.14))
                 }

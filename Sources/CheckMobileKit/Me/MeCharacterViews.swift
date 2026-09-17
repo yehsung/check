@@ -80,23 +80,10 @@ struct MeShopView: View {
         store.shopSelection ?? (store.equippedLoaded ? store.equippedCharacterID : nil)
     }
 
-    /// 오른쪽 위 잔량. iOS 26 도구 막대는 항목에 유리 알약을 스스로 두르므로 알맹이만, 그 전 판은 유리 칩을 직접.
-    @ViewBuilder
+    /// 오른쪽 위 잔량 — 게임 탭 오른쪽 위와 **같은 공용 부품**(`RubyBalanceChip(.toolbar)`, 통합 때 승격).
+    /// iOS 26 도구 막대가 유리를 스스로 두르는 것(이중 겹침)은 그 부품이 안다. 상점 안이라 누를 곳은 없다.
     private var balancePill: some View {
-        if #available(iOS 26.0, *) {
-            HStack(spacing: 4) {
-                RubyIcon(size: 20)
-                Text(store.rubyBalance.map { "\($0)" } ?? "–")
-                    .font(.headline)
-                    .monospacedDigit()
-                    .foregroundStyle(MobileTheme.label)
-            }
-            .padding(.horizontal, 4)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(store.rubyBalance.map { "내 루비 \($0)개" } ?? "루비 잔액 모름"))
-        } else {
-            RubyBalanceChip(store.rubyBalance, style: .glass)
-        }
+        RubyBalanceChip(store.rubyBalance, style: .toolbar)
     }
 
     private var confirmTitle: String {

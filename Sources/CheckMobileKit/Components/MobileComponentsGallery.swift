@@ -150,6 +150,16 @@ private struct GalleryPageButtons: View {
                 MeChip(outlined: true)
                 CenterBadge("busan")
             }
+            // 이름 줄 키(18pt) — 센터 배지·'나' 칩과 높이가 맞는다(통합 때 승격한 `AingChip.Size.small`).
+            HStack(spacing: 8) {
+                AingChip(text: "우리 팀", size: .small)
+                AingChip(text: "비공개", tint: MobileTheme.label2, background: MobileTheme.fill, size: .small)
+                CenterBadge("seoul")
+                MeChip()
+                Spacer()
+            }
+            PersonName("아주아주긴이름의사람", center: "seoul", isMe: true,
+                       chips: [.accent("우리 팀"), .muted("비공개")], onTint: true)
             HStack(spacing: 8) {
                 StatusDot(.working); StatusDot(.pending); StatusDot(.off)
                 ProgressBar(0.3, style: .ai, thin: true)
@@ -225,16 +235,39 @@ private struct GalleryPageRows: View {
                 Text("941점").font(MobileTheme.roundedNumber(.callout)).monospacedDigit().foregroundStyle(MobileTheme.label)
             }
         }
-        SectionHeader("순위", padded: true)
+        // 순위판 머리 + 어제 1등 + 그룹 안 행 — 순위 탭과 게임 탭이 함께 쓰는 승격 부품(`SectionHeaderBar`·`ChampionRow`·`RankRow`).
+        SectionHeaderBar("순위", topPadding: 18) {
+            AingChip(text: "타이밍 바", tint: MobileTheme.label2, background: MobileTheme.fill)
+        }
+        ChampionRow(caption: "어제 1등", name: "라떼", center: "seoul", score: "972점", awarded: 20)
+        RankRow(isMine: false, isLast: false, dividerInset: 84, minHeight: 48, verticalPadding: (7, 7)) {
+            RankRowBody(rank: 2) {
+                RankRowFace(name: "구름", colorSeed: "구름", url: nil, base: 30, me: nil)
+            } content: {
+                HStack(spacing: 8) {
+                    PersonName("구름", center: "busan")
+                    Spacer(minLength: 4)
+                    Text("968점").font(MobileTheme.number(.callout, weight: .semibold)).monospacedDigit()
+                }
+            }
+        }
+        RankRow(isMine: true, isLast: true, dividerInset: 84, minHeight: 48, verticalPadding: (7, 7)) {
+            RankRowBody(rank: 3) {
+                RankRowFace(name: "나", colorSeed: "나", url: nil, base: 30, me: ("fox", .working))
+            } content: {
+                HStack(spacing: 8) {
+                    PersonName("새벽", center: "seoul", isMe: true, onTint: true)
+                    Spacer(minLength: 4)
+                    Text("941점").font(MobileTheme.number(.callout, weight: .semibold)).monospacedDigit()
+                }
+            }
+        }
+        SectionHeader("순위 조각", padded: true)
         InsetGroup {
             GroupRow(divider: .inset(16)) {
-                CrownBadge()
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("어제 1등").font(MobileTheme.rowSubtitle).foregroundStyle(MobileTheme.label2)
-                    PersonName("라떼", center: "seoul")
-                }
+                RubyBalanceChip(37, style: .toolbar)
                 Spacer()
-                RubyGain(20, suffix: "받음", style: .chip)
+                GalleryCaption(text: "도구 막대 알약")
             }
             GroupRow(divider: .none) {
                 ForEach(1...4, id: \.self) { RankBadge(rank: $0) }

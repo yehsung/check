@@ -82,13 +82,20 @@ struct RankingsRedesignTests {
         let sections = try IntegrationContractTests.code("Sources/CheckMobileKit/Rankings/RankingsBoardSections.swift")
         let tab = try IntegrationContractTests.code("Sources/CheckMobileKit/Rankings/RankingsTab.swift")
         let folder = sections + tab
+        // 행 조립·어제 1등·이름 줄은 통합 때 Components 로 승격했다(게임 탭과 한 벌) — 순위 탭은 그 부품을 쓰고,
+        // 초상·'나' 칩·루비 획득 칩은 승격한 부품 안에서 확인한다.
+        let rankParts = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/RankBoardParts.swift")
+        let personParts = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/PersonComponents.swift")
         #expect(!folder.contains("AingCard {"), "순위 행이 다시 행마다 카드가 됐다(비평: 목록 밀도)")
         #expect(sections.components(separatedBy: "InsetGroup {").count - 1 >= 3, "리그·토큰·미니게임 목록이 인셋 그룹 안의 행이 아니다")
         #expect(folder.components(separatedBy: ".pickerStyle(.segmented)").count - 1 == 1, "세그먼트가 두 줄로 쌓였다(게임 고르기는 메뉴 알약)")
         #expect(sections.contains("Menu {"), "미니게임 게임 고르기가 메뉴 알약이 아니다")
-        #expect(tab.contains("CharacterPortrait("), "내 행에 착용 캐릭터 초상이 없다")
-        #expect(tab.contains("MeChip("), "내 행에 '나' 칩이 없다")
-        #expect(sections.contains("RubyGain("), "어제 1등 획득이 실제 루비 획득 칩이 아니다")
+        #expect(sections.contains("RankingsFace(") && tab.contains("typealias RankingsFace = RankRowFace"),
+                "순위 행 얼굴이 공용 부품이 아니다")
+        #expect(rankParts.contains("CharacterPortrait("), "내 행에 착용 캐릭터 초상이 없다")
+        #expect(tab.contains("case .me: return .me") && personParts.contains("MeChip("), "내 행에 '나' 칩이 없다")
+        #expect(sections.contains("awarded: winner.awarded") && rankParts.contains("RubyGain("),
+                "어제 1등 획득이 실제 루비 획득 칩이 아니다")
         #expect(sections.contains("RubyIcon("), "상품 문구에 실제 보석이 없다")
         #expect(!folder.contains("diamond.fill"))
         #expect(!sections.contains("style: .gauge") || sections.contains("case .gauge: return .gauge"), "게이지 그라디언트가 '우리 팀' 판정을 거치지 않는다")

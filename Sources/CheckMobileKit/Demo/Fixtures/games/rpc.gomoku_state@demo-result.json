@@ -1,0 +1,128 @@
+{
+  "status": "ok",
+  "match": {
+    "id": "demo-result",
+    "status": "finished",
+    "stake": 10,
+    "black": "d0000000-0000-4000-8000-000000000001",
+    "white": "d0000000-0000-4000-8000-0000000000b4",
+    "challenger": "d0000000-0000-4000-8000-000000000001",
+    "opponent": "d0000000-0000-4000-8000-0000000000b4",
+    "move_count": 9,
+    "turn": null,
+    "deadline_ms": null,
+    "result": "black_win",
+    "end_reason": "five",
+    "winner": "d0000000-0000-4000-8000-000000000001"
+  },
+  "moves": [
+    {
+      "seq": 1,
+      "color": "black",
+      "kind": "move",
+      "x": 3,
+      "y": 4,
+      "auto": false
+    },
+    {
+      "seq": 2,
+      "color": "white",
+      "kind": "move",
+      "x": 7,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 3,
+      "color": "black",
+      "kind": "move",
+      "x": 4,
+      "y": 5,
+      "auto": false
+    },
+    {
+      "seq": 4,
+      "color": "white",
+      "kind": "move",
+      "x": 8,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 5,
+      "color": "black",
+      "kind": "move",
+      "x": 5,
+      "y": 6,
+      "auto": false
+    },
+    {
+      "seq": 6,
+      "color": "white",
+      "kind": "move",
+      "x": 9,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 7,
+      "color": "black",
+      "kind": "move",
+      "x": 6,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 8,
+      "color": "white",
+      "kind": "move",
+      "x": 10,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 9,
+      "color": "black",
+      "kind": "move",
+      "x": 7,
+      "y": 8,
+      "auto": false
+    }
+  ],
+  "my_color": "black",
+  "opponent": {
+    "user_id": "d0000000-0000-4000-8000-0000000000b4",
+    "display_name": "호두과자",
+    "avatar_url": null,
+    "character": null,
+    "center": null,
+    "is_working": true,
+    "capable": true,
+    "in_match": false
+  },
+  "ruby_balance": 47,
+  "server_now_ms": 1789621500000,
+  "chat": [
+    {
+      "seq": 1,
+      "kind": "quick",
+      "body": "gg",
+      "mine": false,
+      "created_ms": 1789621485000
+    },
+    {
+      "seq": 2,
+      "kind": "quick",
+      "body": "rematch",
+      "mine": false,
+      "created_ms": 1789621491000
+    }
+  ],
+  "chat_seq": 2,
+  "my_muted": false,
+  "opponent_muted": false,
+  "chat_capable": true,
+  "chat_max_len": 100,
+  "my_auto_streak": 0,
+  "opponent_auto_streak": 0
+}

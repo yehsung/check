@@ -1,0 +1,93 @@
+{
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "turn_seconds": 30,
+  "invite_ttl_seconds": 60,
+  "auto_abandon_streak": 3,
+  "me": {
+    "ruby_balance": 37,
+    "wins": 12,
+    "losses": 7,
+    "draws": 1,
+    "active_match_id": "d0000000-0000-4000-8000-00000000a0b1",
+    "outgoing_match_id": null
+  },
+  "users": [
+    {
+      "user_id": "d0000000-0000-4000-8000-0000000000b1",
+      "display_name": "구름빵",
+      "avatar_url": null,
+      "character": null,
+      "center": "seoul",
+      "is_working": true,
+      "capable": true,
+      "in_match": false
+    },
+    {
+      "user_id": "d0000000-0000-4000-8000-0000000000b2",
+      "display_name": "초코칩",
+      "avatar_url": null,
+      "character": null,
+      "center": "busan",
+      "is_working": false,
+      "capable": true,
+      "in_match": false
+    },
+    {
+      "user_id": "d0000000-0000-4000-8000-0000000000b3",
+      "display_name": "민트별",
+      "avatar_url": null,
+      "character": null,
+      "center": "seoul",
+      "is_working": true,
+      "capable": true,
+      "in_match": true
+    },
+    {
+      "user_id": "d0000000-0000-4000-8000-0000000000b4",
+      "display_name": "호두과자",
+      "avatar_url": null,
+      "character": null,
+      "center": null,
+      "is_working": true,
+      "capable": true,
+      "in_match": false
+    },
+    {
+      "user_id": "d0000000-0000-4000-8000-0000000000b5",
+      "display_name": "보리차",
+      "avatar_url": null,
+      "character": null,
+      "center": "busan",
+      "is_working": false,
+      "capable": false,
+      "in_match": false
+    },
+    {
+      "user_id": "d0000000-0000-4000-8000-0000000000b6",
+      "display_name": "달토끼",
+      "avatar_url": null,
+      "character": null,
+      "center": "seoul",
+      "is_working": true,
+      "capable": true,
+      "in_match": true
+    },
+    {
+      "user_id": "d0000000-0000-4000-8000-0000000000b7",
+      "display_name": "솜사탕",
+      "avatar_url": null,
+      "character": null,
+      "center": "busan",
+      "is_working": true,
+      "capable": true,
+      "in_match": false
+    }
+  ],
+  "matches": []
+}

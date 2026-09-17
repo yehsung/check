@@ -1,0 +1,143 @@
+{
+  "status": "ok",
+  "match": {
+    "id": "d0000000-0000-4000-8000-00000000a0b1",
+    "status": "active",
+    "stake": 5,
+    "black": "d0000000-0000-4000-8000-000000000001",
+    "white": "d0000000-0000-4000-8000-0000000000b1",
+    "challenger": "d0000000-0000-4000-8000-0000000000b1",
+    "opponent": "d0000000-0000-4000-8000-000000000001",
+    "move_count": 10,
+    "turn": "black",
+    "deadline_ms": 1789621522000,
+    "result": null,
+    "end_reason": null,
+    "winner": null
+  },
+  "moves": [
+    {
+      "seq": 1,
+      "color": "black",
+      "kind": "move",
+      "x": 7,
+      "y": 6,
+      "auto": false
+    },
+    {
+      "seq": 2,
+      "color": "white",
+      "kind": "move",
+      "x": 8,
+      "y": 8,
+      "auto": false
+    },
+    {
+      "seq": 3,
+      "color": "black",
+      "kind": "move",
+      "x": 6,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 4,
+      "color": "white",
+      "kind": "move",
+      "x": 4,
+      "y": 6,
+      "auto": false
+    },
+    {
+      "seq": 5,
+      "color": "black",
+      "kind": "move",
+      "x": 7,
+      "y": 5,
+      "auto": false
+    },
+    {
+      "seq": 6,
+      "color": "white",
+      "kind": "move",
+      "x": 9,
+      "y": 6,
+      "auto": false
+    },
+    {
+      "seq": 7,
+      "color": "black",
+      "kind": "move",
+      "x": 5,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 8,
+      "color": "white",
+      "kind": "move",
+      "x": 6,
+      "y": 9,
+      "auto": false
+    },
+    {
+      "seq": 9,
+      "color": "black",
+      "kind": "move",
+      "x": 9,
+      "y": 9,
+      "auto": false
+    },
+    {
+      "seq": 10,
+      "color": "white",
+      "kind": "move",
+      "x": 10,
+      "y": 8,
+      "auto": false
+    }
+  ],
+  "my_color": "black",
+  "opponent": {
+    "user_id": "d0000000-0000-4000-8000-0000000000b1",
+    "display_name": "구름빵",
+    "avatar_url": null,
+    "character": null,
+    "center": "seoul",
+    "is_working": true,
+    "capable": true,
+    "in_match": true
+  },
+  "ruby_balance": 37,
+  "server_now_ms": 1789621500000,
+  "chat": [
+    {
+      "seq": 1,
+      "kind": "quick",
+      "body": "hi",
+      "mine": false,
+      "created_ms": 1789621420000
+    },
+    {
+      "seq": 2,
+      "kind": "text",
+      "body": "잘 부탁해요! 오늘은 안 져요",
+      "mine": true,
+      "created_ms": 1789621425000
+    },
+    {
+      "seq": 3,
+      "kind": "quick",
+      "body": "think",
+      "mine": false,
+      "created_ms": 1789621488000
+    }
+  ],
+  "chat_seq": 3,
+  "my_muted": false,
+  "opponent_muted": false,
+  "chat_capable": true,
+  "chat_max_len": 100,
+  "my_auto_streak": 0,
+  "opponent_auto_streak": 0
+}

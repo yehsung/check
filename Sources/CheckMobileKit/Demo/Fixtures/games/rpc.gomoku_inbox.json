@@ -1,0 +1,25 @@
+{
+  "status": "ok",
+  "incoming": [
+    {
+      "match_id": "d0000000-0000-4000-8000-00000000a0a1",
+      "challenger": {
+        "user_id": "d0000000-0000-4000-8000-0000000000b7",
+        "display_name": "솜사탕",
+        "avatar_url": null,
+        "character": null,
+        "center": "busan",
+        "is_working": true,
+        "capable": true,
+        "in_match": false
+      },
+      "stake": 5,
+      "invite_expires_ms": 1789621542000
+    }
+  ],
+  "outgoing": null,
+  "active_match_id": null,
+  "last_finished": null,
+  "ruby_balance": 37,
+  "server_now_ms": 1789621500000
+}

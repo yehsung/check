@@ -1,0 +1,56 @@
+[
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b6",
+    "display_name": "달토끼",
+    "avatar_url": null,
+    "best_score": 41,
+    "best_at": "2026-09-17T02:22:00Z",
+    "plays": 15,
+    "center": "seoul"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000001",
+    "display_name": "아잉 데모",
+    "avatar_url": null,
+    "best_score": 23,
+    "best_at": "2026-09-17T04:44:00Z",
+    "plays": 7,
+    "center": "seoul"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b1",
+    "display_name": "구름빵",
+    "avatar_url": null,
+    "best_score": 19,
+    "best_at": "2026-09-17T01:18:00Z",
+    "plays": 4,
+    "center": "seoul"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b4",
+    "display_name": "호두과자",
+    "avatar_url": null,
+    "best_score": 12,
+    "best_at": "2026-09-17T03:48:00Z",
+    "plays": 8,
+    "center": null
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b2",
+    "display_name": "초코칩",
+    "avatar_url": null,
+    "best_score": 9,
+    "best_at": "2026-09-17T00:31:00Z",
+    "plays": 3,
+    "center": "busan"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-0000000000b7",
+    "display_name": "솜사탕",
+    "avatar_url": null,
+    "best_score": 4,
+    "best_at": "2026-09-17T04:58:00Z",
+    "plays": 2,
+    "center": "busan"
+  }
+]

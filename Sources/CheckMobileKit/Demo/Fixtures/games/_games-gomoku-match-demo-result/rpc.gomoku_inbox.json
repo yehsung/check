@@ -1,0 +1,16 @@
+{
+  "status": "ok",
+  "incoming": [],
+  "outgoing": null,
+  "active_match_id": null,
+  "last_finished": {
+    "match_id": "demo-result",
+    "result": "black_win",
+    "end_reason": "five",
+    "winner": "d0000000-0000-4000-8000-000000000001",
+    "stake": 10,
+    "finished_ms": 1789621480000
+  },
+  "ruby_balance": 47,
+  "server_now_ms": 1789621500000
+}

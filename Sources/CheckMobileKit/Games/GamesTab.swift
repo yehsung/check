@@ -1,9 +1,17 @@
 #if os(iOS)
+import CheckCore
 import CheckMobileShared
 import SwiftUI
+import UIKit
 
-/// 게임 탭 화면 — **자리 파일**(탭 작업자가 통째로 소유한다). 경로는 `router.pathBinding(for: .games)`,
-/// 딥링크는 `router.consumePendingRoute(for: .games)` 로 꺼낸다(`routeSerial` 이 바뀔 때마다).
+/// 게임 탭에서 쌓는 화면.
+enum GamesDestination: Hashable {
+    case miniGame(MiniGameKind)
+    case gomoku
+}
+
+/// 게임 탭(SPEC-ios §3.5): 카드 세 장 — 타이밍 바 · 플래피 아잉(오늘 내 최고·순위) · 1:1 오목(받은 신청 수·진행 중 판).
+/// 경로는 `router.pathBinding(for: .games)`, 딥링크(`games/<game>` · `gomoku/lobby|invite|match`)는 `consumePendingRoute`.
 struct GamesTab: View {
     let store: GamesStore
 
@@ -12,31 +20,156 @@ struct GamesTab: View {
         NavigationStack(path: router.pathBinding(for: .games)) {
             ScrollView {
                 VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-                    AingCard {
-                        EmptyStateView(
-                            systemImage: "gamecontroller.fill",
-                            title: "게임 탭 준비 중",
-                            message: "타이밍 바 · 플래피 아잉 · 1:1 오목"
-                        )
+                    ForEach(MiniGameKind.allCases) { kind in
+                        miniGameCard(kind)
                     }
-                    if let route = store.lastRoute {
-                        InlineNotice(text: "열린 링크 · \(route.url.absoluteString)", kind: .info)
-                    }
+                    gomokuCard
                 }
                 .padding(.horizontal, MobileTheme.sideMargin)
                 .padding(.vertical, MobileTheme.rowSpacing)
             }
             .background(MobileTheme.background.ignoresSafeArea())
-            .navigationTitle("게임")
+            .navigationTitle(GamesText.tabTitle)
+            .refreshable {
+                for kind in MiniGameKind.allCases { await store.miniGames.loadBoard(kind, withWinner: false) }
+                await store.context.gomoku.loadInbox()
+            }
+            .navigationDestination(for: GamesDestination.self) { destination in
+                switch destination {
+                case .miniGame(let kind):
+                    GamesMiniGameScreen(store: store, kind: kind)
+                case .gomoku:
+                    GamesGomokuScreen(store: store)
+                }
+            }
         }
-        .onAppear { consumeRoute() }
+        .onAppear {
+            store.hubDidAppear()
+            consumeRoute()
+        }
         .onChange(of: router.routeSerial) { consumeRoute() }
+        // 대국 중에는 화면이 꺼지지 않는다 — 오목 화면 밖(다른 게임·첫 화면)에서도 판이 도는 동안은 같다.
+        .onChange(of: store.wantsIdleTimerDisabled, initial: true) { _, wants in
+            UIApplication.shared.isIdleTimerDisabled = wants
+        }
     }
 
-    private func consumeRoute() {
-        if let route = store.context.router.consumePendingRoute(for: .games) {
-            store.lastRoute = route
+    // MARK: 카드
+
+    private func miniGameCard(_ kind: MiniGameKind) -> some View {
+        let hub = store.miniGames
+        let line = GamesText.todayLine(best: hub.myTodayBest(kind), rank: hub.myRank(kind))
+        return Button {
+            store.context.router.push(GamesDestination.miniGame(kind), on: .games)
+        } label: {
+            GamesCardLabel(
+                icon: kind.icon, tint: kind == .timingBar ? MobileTheme.accent : MobileTheme.working,
+                title: kind.title, subtitle: GamesMiniGameText.howToPlay(kind), detail: line,
+                detailTint: hub.myRank(kind) == nil ? MobileTheme.secondaryText : MobileTheme.primaryText,
+                badge: nil
+            )
         }
+        .buttonStyle(.plain)
+        .accessibilityHint("\(kind.title) 게임을 열어요")
+    }
+
+    private var gomokuCard: some View {
+        let incoming = store.badgeCount
+        let active = store.hasActiveGomokuMatch
+        let line = GamesText.gomokuLine(incoming: incoming, hasActiveMatch: active, hasOutgoing: store.context.gomoku.outgoing != nil)
+        return Button {
+            store.context.router.push(GamesDestination.gomoku, on: .games)
+        } label: {
+            GamesCardLabel(
+                icon: "circle.grid.3x3.fill", tint: MobileTheme.aiToken,
+                title: GomokuPhoneText.title, subtitle: GamesText.gomokuCardSubtitle, detail: line,
+                detailTint: (incoming > 0 || active) ? MobileTheme.pending : MobileTheme.secondaryText,
+                badge: incoming > 0 ? incoming : nil
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("오목 대결 화면을 열어요")
+    }
+
+    // MARK: 딥링크
+
+    private func consumeRoute() {
+        let router = store.context.router
+        guard let route = router.consumePendingRoute(for: .games) else { return }
+        switch route {
+        case .games:
+            router.popToRoot(.games)
+        case .miniGame(let game):
+            router.push(GamesDestination.miniGame(game == .timing ? .timingBar : .flappy), on: .games)
+        case .gomokuLobby:
+            store.pendingGomokuFocusID = nil
+            router.push(GamesDestination.gomoku, on: .games)
+        case .gomokuInvite(let id), .gomokuMatch(matchID: .some(let id)):
+            store.pendingGomokuFocusID = id
+            router.push(GamesDestination.gomoku, on: .games)
+        case .gomokuMatch(matchID: nil):
+            store.pendingGomokuFocusID = nil
+            router.push(GamesDestination.gomoku, on: .games)
+        default:
+            break
+        }
+    }
+}
+
+/// 게임 카드 한 장의 모양(아이콘 원판 · 제목 · 규칙 한 줄 · 오늘 줄 · 배지 · 화살표).
+private struct GamesCardLabel: View {
+    let icon: String
+    let tint: Color
+    let title: String
+    let subtitle: String
+    let detail: String
+    let detailTint: Color
+    let badge: Int?
+
+    var body: some View {
+        AingCard {
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: icon)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 52, height: 52)
+                    .background(Circle().fill(tint.opacity(0.16)))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(title)
+                            .font(MobileTheme.title(.title3))
+                            .foregroundStyle(MobileTheme.primaryText)
+                        if let badge {
+                            Text("\(badge)")
+                                .font(.caption.weight(.bold))
+                                .monospacedDigit()
+                                .foregroundStyle(MobileTheme.onAccent)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(MobileTheme.danger))
+                                .accessibilityLabel("받은 신청 \(badge)건")
+                        }
+                    }
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(MobileTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(detail)
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(detailTint)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MobileTheme.secondaryText)
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }
 #endif

@@ -40,16 +40,6 @@ final class PushNotificationCenterAdapter: NSObject, UNUserNotificationCenterDel
                 var options: UNNotificationActionOptions = []
                 if action.opensApp { options.insert(.foreground) }
                 if action.requiresUnlock { options.insert(.authenticationRequired) }
-                if action.isDestructive { options.insert(.destructive) }
-                if let input = action.textInput {
-                    return UNTextInputNotificationAction(
-                        identifier: action.identifier,
-                        title: action.title,
-                        options: options,
-                        textInputButtonTitle: input.button,
-                        textInputPlaceholder: input.placeholder
-                    )
-                }
                 return UNNotificationAction(identifier: action.identifier, title: action.title, options: options)
             }
             return UNNotificationCategory(identifier: spec.identifier, actions: actions, intentIdentifiers: [], options: [])
@@ -76,22 +66,18 @@ final class PushNotificationCenterAdapter: NSObject, UNUserNotificationCenterDel
         didReceive response: UNNotificationResponse
     ) async {
         let payload = PushPayload(userInfo: response.notification.request.content.userInfo)
-        let action = PushAction(
-            actionIdentifier: response.actionIdentifier,
-            textInput: (response as? UNTextInputNotificationResponse)?.userText
-        )
-        Self.logger.notice("didReceive kind=\(payload?.kind.rawValue ?? "unknown", privacy: .public) action=\(Self.actionName(action), privacy: .public)")
+        let action = PushAction(actionIdentifier: response.actionIdentifier)
+        // 탭이 아닌 식별자를 탭으로 접었으면(옛 카테고리의 답장 · 읽음 · 거절 등) 표시한다. 식별자 글자는 남기지 않는다.
+        let folded = action == .open && response.actionIdentifier != UNNotificationDefaultActionIdentifier
+        Self.logger.notice("didReceive kind=\(payload?.kind.rawValue ?? "unknown", privacy: .public) action=\(Self.actionName(action), privacy: .public) folded=\(folded, privacy: .public)")
         await handle(payload, action: action)
     }
 
     nonisolated static func actionName(_ action: PushAction) -> String {
         switch action {
         case .open: return "open"
-        case .reply: return "reply"
-        case .markRead: return "markRead"
         case .acceptInvite: return "accept"
-        case .declineInvite: return "decline"
-        case .ignore: return "ignore"
+        case .dismiss: return "dismiss"
         }
     }
 
@@ -101,7 +87,8 @@ final class PushNotificationCenterAdapter: NSObject, UNUserNotificationCenterDel
 
     private func handle(_ payload: PushPayload?, action: PushAction) async {
         guard let model else { return }
-        // 알림 액션으로 앱이 백그라운드에서 켜졌으면 화면(onAppear)이 없어 실행 복원이 시작되지 않았다 — 여기서 시작한다(한 번만 돈다).
+        // 알림으로 앱이 켜졌는데 화면(onAppear)보다 응답이 먼저 왔거나, 옛 카테고리 액션(앱을 열지 않는 버튼)으로 뒤에서 켜졌으면
+        // 실행 복원이 아직 시작되지 않았다 — 여기서 시작한다(한 번만 돈다).
         model.start()
         await model.push.handleResponse(payload, action: action)
     }
@@ -130,18 +117,6 @@ final class PushNotificationCenterAdapter: NSObject, UNUserNotificationCenterDel
 
     func setBadgeCount(_ count: Int) {
         UNUserNotificationCenter.current().setBadgeCount(max(0, count), withCompletionHandler: nil)
-    }
-
-    func postLocalNotice(identifier: String, title: String, body: String, threadID: String?, userInfo: [String: String]) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        if let threadID { content.threadIdentifier = threadID }
-        // 누르면 didReceive → PushPayload 가 이 칸을 읽어 그 대화를 연다(카테고리를 붙이지 않는다 — 안내에 답장·읽음 버튼은 없다).
-        content.userInfo = userInfo
-        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
 
     func openSystemSettings() {

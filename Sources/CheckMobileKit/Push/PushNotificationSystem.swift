@@ -18,9 +18,6 @@ package protocol PushNotificationSystem: AnyObject {
     func removeAllDeliveredNotifications()
     /// 앱 아이콘 배지.
     func setBadgeCount(_ count: Int)
-    /// 앱이 스스로 띄우는 안내 알림(알림 액션이 실패했을 때 — 앱 화면이 없으니 알림으로 말한다).
-    /// `userInfo` 는 알림 본문(`content.userInfo`)에 그대로 싣는다 — 누르면 `PushPayload` 로 읽혀 그 화면이 열린다(카테고리 없음).
-    func postLocalNotice(identifier: String, title: String, body: String, threadID: String?, userInfo: [String: String])
     /// 설정 앱의 이 앱 알림 화면.
     func openSystemSettings()
     /// 권한 설명 시트 띄우기 · 내리기.

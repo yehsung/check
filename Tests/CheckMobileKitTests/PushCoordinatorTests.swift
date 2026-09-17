@@ -116,7 +116,7 @@ import Testing
         #expect(h.forbiddenViolations.isEmpty)
     }
 
-    @Test("앱이 뒤에 있을 때 로그인(알림 액션으로 깨어남)이면 시트를 띄우지 않는다 · 데모 조립은 명시하지 않으면 시트 없음")
+    @Test("앱이 뒤에 있을 때 로그인(알림으로 뒤에서 깨어남)이면 시트를 띄우지 않는다 · 데모 조립은 명시하지 않으면 시트 없음")
     func noPrimerInBackgroundOrDemo() async throws {
         let h = PushHarness()
         defer { h.tearDown() }
@@ -216,7 +216,7 @@ import Testing
         #expect(h.push.presentation(for: PushPayload(userInfo: PushHarness.gomokuUserInfo())) == .banner)
         #expect(await baseWaitUntil { !h.calls("gomoku_inbox").isEmpty }, "오목 신청 알림이 받은함을 다시 읽지 않았다")
         #expect(h.push.presentation(for: PushPayload(userInfo: PushHarness.feedbackUserInfo())) == .banner)
-        #expect(h.push.presentation(for: nil) == .banner, "모르는 알림(앱이 띄운 안내 등)은 그대로 보인다")
+        #expect(h.push.presentation(for: nil) == .banner, "모르는 알림은 그대로 보인다")
         #expect(h.model.router.lastOpenedRoute == nil, "표시만으로 화면을 바꾸면 안 된다")
         #expect(h.forbiddenViolations.isEmpty)
     }
@@ -246,7 +246,7 @@ import Testing
         // 모르는 알림 · 지우기 액션은 아무것도 열지 않는다
         h.model.router.reset()
         await h.push.handleResponse(nil, action: .open)
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .ignore)
+        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .dismiss)
         #expect(h.model.router.lastOpenedRoute == .feedback(reportID: nil))
         #expect(h.model.router.selectedTab == .now)
         #expect(h.forbiddenViolations.isEmpty)
@@ -299,153 +299,87 @@ import Testing
         await empty.push.handleResponse(PushPayload(userInfo: PushHarness.gomokuUserInfo()), action: .open)
         #expect(empty.model.session.phase == .signedOut)
         #expect(empty.model.router.lastOpenedRoute == nil)
-        // 답장이었다면 로그인 안내를 알림으로 남긴다(적은 글이 말없이 사라지지 않게)
-        await empty.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("곧 가요"))
-        #expect(empty.system.notices.last?.body == PushText.replyNeedsSignIn)
-        #expect(empty.calls("send_message").isEmpty)
         #expect(MobileForbiddenCalls.violations(in: MobileStubURLProtocol.requests(host: h.host)).isEmpty)
         #expect(empty.forbiddenViolations.isEmpty)
     }
 
-    // MARK: - 답장 · 읽음
+    // MARK: - 옛 카테고리 액션(w10 — 답장 · 읽음 · 거절을 걷어냈다)
 
-    @Test("답장: 이 계정의 받은 메시지인지 확인 → send_message(p_to, p_body) → mark_messages_read(p_peer, p_through=그 메시지) 순서")
-    func replySendsThenMarks() async throws {
-        let h = PushHarness()
+    /// 이미 설치된 앱이 등록했던 카테고리의 버튼 식별자. 새 빌드가 카테고리를 다시 등록하기 전에 눌리면 이 글자로 온다.
+    static let legacyActions: [(identifier: String, userInfo: [AnyHashable: Any], tab: AingTab, route: AingRoute)] = [
+        ("MESSAGE_REPLY", PushHarness.messageUserInfo(), .messages, .message(peerID: PushHarness.peerID)),
+        ("MESSAGE_READ", PushHarness.messageUserInfo(), .messages, .message(peerID: PushHarness.peerID)),
+        ("GOMOKU_DECLINE", PushHarness.gomokuUserInfo(), .games, .gomokuInvite(matchID: PushHarness.matchID)),
+    ]
+
+    @Test("옛 알림의 답장 · 읽음 · 거절 식별자(앱이 앞): 버리지 않고 탭처럼 그 화면을 연다 · 보내기 · 읽음 · 오목 응답 요청 0 · 스토어 새로고침은 탭과 같다")
+    func legacyActionIdentifiersOpenLikeTap() async throws {
+        let h = PushHarness(label: "push-legacy-front")
         h.system.status = .authorized
         defer { h.tearDown() }
-        await h.launchSignedIn(active: false)
-        h.setRPC("message_history_with_reads", PushHarness.historyWithReceived())
-        h.setRPC("send_message", .json(#"{"status":"ok"}"#))
-        h.setRPC("mark_messages_read", .json(#"{"status":"ok","advanced":true,"unread":0}"#))
-        h.clearRequests()
+        h.setRPC("gomoku_inbox", PushBadgeTests.inboxEmpty)
+        await h.launchSignedIn()
 
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("  곧 가요  "))
-        let names = h.requests().compactMap(\.rpcName)
-        // 뒤따르는 요약 읽기는 앱 배지 확인(뒤에서 켜진 실행 — PushBadgeTests)이다.
-        #expect(names == ["message_history_with_reads", "send_message", "mark_messages_read", "message_unread_summary"], "\(names)")
-        let send = try #require(h.calls("send_message").first)
-        #expect(pushBodyValue(send, "p_to") as? String == PushHarness.peerID)
-        #expect((pushBodyValue(send, "p_body") as? String)?.contains("곧 가요") == true)
-        let mark = try #require(h.calls("mark_messages_read").first)
-        #expect(pushBodyValue(mark, "p_peer") as? String == PushHarness.peerID)
-        #expect(pushBodyValue(mark, "p_through") as? String == PushHarness.messageID)
-        #expect(h.system.notices.isEmpty)
-        #expect(h.model.router.lastOpenedRoute == nil, "백그라운드 답장이 화면을 바꾸면 안 된다")
-        #expect(h.forbiddenViolations.isEmpty)
-    }
-
-    @Test("답장 대조: 지금 계정 이력에 없는 메시지(앞 계정 알림)면 보내지 않고 안내 알림 · 읽음 칸 함수가 없는 서버는 옛 이력으로 확인")
-    func replyRefusesForeignMessage() async {
-        let h = PushHarness()
-        h.system.status = .authorized
-        defer { h.tearDown() }
-        await h.launchSignedIn(active: false)
-        h.setRPC("message_history_with_reads", PushHarness.historyWithReceived(id: "99999999-0000-4000-8000-000000000000"))
-        h.setRPC("send_message", .json(#"{"status":"ok"}"#))
-        h.setRPC("mark_messages_read", .json(#"{"status":"ok","advanced":true,"unread":0}"#))
-        h.clearRequests()
-
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("곧 가요"))
-        #expect(h.calls("send_message").isEmpty, "다른 계정 이름으로 보냈다")
-        #expect(h.calls("mark_messages_read").isEmpty)
-        #expect(h.system.notices.count == 1)
-        #expect(h.system.notices.first?.title == PushText.replyFailedTitle)
-        #expect(h.system.notices.first?.body == PushText.replyMessageGone)
-        #expect(h.system.notices.first?.threadID == "message-\(PushHarness.peerID)")
-
-        // 옛 서버: with_reads 없음(404 PGRST202) → message_history 로 확인해 보낸다
-        h.setRPC("message_history_with_reads", .missingFunction("message_history_with_reads"))
-        h.setRPC("message_history", PushHarness.historyWithReceived())
-        h.clearRequests()
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("곧 가요"))
-        #expect(h.requests().compactMap(\.rpcName) == ["message_history_with_reads", "message_history", "send_message", "mark_messages_read", "message_unread_summary"])
-
-        // message_id 가 없는 알림: 확인할 수 없으니 보내지 않는다
-        h.clearRequests()
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo(message: nil)), action: .reply("곧 가요"))
-        #expect(h.requests().compactMap(\.rpcName).isEmpty)
-        #expect(h.forbiddenViolations.isEmpty)
-    }
-
-    @Test("답장 실패: 서버 거절은 맥과 같은 문장으로 안내하고 읽음은 올린다 · 네트워크 실패는 연결 안내 · 빈 답장은 보내지 않고 읽음만")
-    func replyFailures() async {
-        let h = PushHarness()
-        h.system.status = .authorized
-        defer { h.tearDown() }
-        await h.launchSignedIn(active: false)
-        h.setRPC("message_history_with_reads", PushHarness.historyWithReceived())
-        h.setRPC("mark_messages_read", .json(#"{"status":"ok","advanced":true,"unread":0}"#))
-
-        h.setRPC("send_message", .json(#"{"status":"target_focused"}"#))
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("곧 가요"))
-        #expect(h.system.notices.last?.body == MessageNoticeText.targetFocused)
-        #expect(h.calls("mark_messages_read").count == 1)
-
-        h.setRPC("send_message", .networkFailure())
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("곧 가요"))
-        #expect(h.system.notices.last?.body == PushText.connectionUnstable)
-
-        h.clearRequests()
-        let before = h.system.notices.count
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("   \n "))
-        #expect(h.calls("send_message").isEmpty)
-        #expect(h.calls("mark_messages_read").count == 1)
-        #expect(h.system.notices.count == before)
-        #expect(h.forbiddenViolations.isEmpty)
-    }
-
-    @Test("백그라운드 답장 안의 401: 세션 조정자 경유로 한 번 갱신하고 새 토큰으로 다시 보낸다(로그아웃하지 않는다)")
-    func replyRefreshesSessionOn401() async throws {
-        let h = PushHarness()
-        h.system.status = .authorized
-        defer { h.tearDown() }
-        await h.launchSignedIn(active: false)
-        h.setRPC("message_history_with_reads", PushHarness.historyWithReceived())
-        h.setRPC("send_message", .json(#"{"status":"ok"}"#))
-        h.setRPC("mark_messages_read", .json(#"{"status":"ok","advanced":true,"unread":0}"#))
-        h.clearRequests()
-        h.firstCallOverride.mutate { $0["message_history_with_reads"] = BaseStub.jwtExpired }
-
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("곧 가요"))
-        let refreshes = h.requests().filter { $0.path == "/auth/v1/token" && $0.queryValue("grant_type") == "refresh_token" }
-        #expect(refreshes.count == 1)
+        for legacy in Self.legacyActions {
+            h.model.router.reset()
+            h.clearRequests()
+            // 어댑터와 같은 길: 식별자 글자 → PushAction → 코디네이터.
+            let action = PushAction(actionIdentifier: legacy.identifier)
+            await h.push.handleResponse(PushPayload(userInfo: legacy.userInfo), action: action)
+            #expect(h.model.router.selectedTab == legacy.tab, "\(legacy.identifier)")
+            #expect(h.model.router.consumePendingRoute(for: legacy.tab) == legacy.route, "\(legacy.identifier): 탭과 같은 화면이 아니다")
+            if legacy.tab == .games {
+                #expect(await baseWaitUntil { !h.calls("gomoku_inbox").isEmpty }, "탭처럼 받은함을 다시 읽지 않았다")
+            }
+            await h.barrier()
+            let names = h.requests().compactMap(\.rpcName)
+            #expect(!names.contains("send_message") && !names.contains("mark_messages_read") && !names.contains("gomoku_respond"),
+                    "\(legacy.identifier): 걷어낸 액션의 서버 호출이 나갔다: \(names)")
+        }
+        #expect(h.system.remoteUnregistrations == 0 && h.system.deliveredRemovals == 0, "옛 액션이 로그아웃 정리를 부르면 안 된다")
         #expect(h.model.session.isSignedIn)
-        #expect(h.model.session.session?.accessToken == h.refreshed)
-        let send = try #require(h.calls("send_message").first)
-        #expect(BaseStub.bearer(send) == "Bearer \(h.refreshed)")
-        #expect(h.calls("mark_messages_read").count == 1)
-        #expect(h.system.notices.isEmpty)
         #expect(h.forbiddenViolations.isEmpty)
     }
 
-    @Test("읽음 액션: 그 메시지까지만 mark · message_id 없으면 서버 왕복 0")
-    func markReadAction() async throws {
-        let h = PushHarness()
-        h.system.status = .authorized
-        defer { h.tearDown() }
-        await h.launchSignedIn(active: false)
-        h.setRPC("mark_messages_read", .json(#"{"status":"ok","advanced":true,"unread":2}"#))
-        h.clearRequests()
+    @Test("옛 알림 액션으로 **뒤에서 켜진 실행**(키체인 세션, 복원 중에 도착): 복원 뒤 그 화면을 열어 두고, 아이콘 배지는 건드리지 않는다 · 걷어낸 액션 요청 0")
+    func legacyActionIdentifiersInBackgroundLaunch() async throws {
+        for legacy in Self.legacyActions {
+            let h = PushHarness(label: "push-legacy-back-\(legacy.identifier.lowercased())")
+            h.system.status = .authorized
+            defer { h.tearDown() }
+            h.setRPC("client_release", .json(#"{"status":"ok","platform":"ios","min_build":1,"latest_build":1}"#))
+            h.setRPC("gomoku_inbox", PushBadgeTests.inboxEmpty)
+            h.setRPC("message_unread_summary", PushHarness.unreadSummary(total: 2))
 
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .markRead)
-        #expect(h.requests().compactMap(\.rpcName) == ["mark_messages_read", "message_unread_summary"], "읽음 뒤 배지 확인만 따른다")
-        let mark = try #require(h.calls("mark_messages_read").first)
-        #expect(pushBodyValue(mark, "p_through") as? String == PushHarness.messageID)
+            let slowRelease = BaseHold.rpc("client_release", host: h.host)
+            let model = h.makeRestoredModel()
+            #expect(model.session.phase == .launching)
+            let response = Task { await model.push.handleResponse(PushPayload(userInfo: legacy.userInfo), action: PushAction(actionIdentifier: legacy.identifier)) }
+            #expect(await slowRelease.waitHeld())
+            await baseYield()
+            #expect(model.session.phase == .launching, "전제: 복원이 아직 떠 있다")
+            #expect(model.router.lastOpenedRoute == nil, "복원이 끝나기 전에 열었다")
+            #expect(await slowRelease.releaseAndWaitDelivered())
+            await response.value
 
-        h.clearRequests()
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo(message: nil)), action: .markRead)
-        #expect(h.requests().isEmpty, "경계 없이 최신까지 읽음을 올렸다")
-        // 카테고리와 맞지 않는 액션(오목 알림에 읽음)은 아무것도 하지 않는다
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.gomokuUserInfo()), action: .markRead)
-        #expect(h.requests().isEmpty)
-        #expect(h.forbiddenViolations.isEmpty)
+            #expect(model.session.isSignedIn)
+            #expect(model.router.selectedTab == legacy.tab, "\(legacy.identifier)")
+            #expect(model.router.consumePendingRoute(for: legacy.tab) == legacy.route, "\(legacy.identifier)")
+            await baseBarrier(model.context.service)
+            await baseYield()
+            #expect(h.system.badgeCounts.isEmpty, "\(legacy.identifier): 앱이 앞에 오기 전에 배지를 적었다: \(h.system.badgeCounts)")
+            #expect(model.push.badgeState == .unknown)
+            let names = h.requests().compactMap(\.rpcName)
+            #expect(!names.contains("send_message") && !names.contains("mark_messages_read") && !names.contains("gomoku_respond"),
+                    "\(legacy.identifier): \(names)")
+            #expect(h.forbiddenViolations.isEmpty)
+        }
     }
 
-    // MARK: - 오목 수락 · 거절
+    // MARK: - 오목 수락
 
-    @Test("수락: gomoku_respond(accept) → 판이 열리면 대국으로 · 만료면 신청 화면으로 · 거절: respond(false) 만, 화면 안 바뀜")
-    func gomokuAcceptDecline() async throws {
+    @Test("수락: gomoku_respond(accept) → 판이 열리면 대국으로 · 만료면 신청 화면으로 · 오목이 아닌 알림의 수락은 탭처럼 그 화면")
+    func gomokuAccept() async throws {
         let h = PushHarness()
         h.system.status = .authorized
         defer { h.tearDown() }
@@ -471,14 +405,12 @@ import Testing
         #expect(expired.model.router.lastOpenedRoute == .gomokuInvite(matchID: PushHarness.matchID))
         #expect(expired.model.gomoku.notice == GomokuNoticeText.respond(accept: true, .expired))
 
+        // 카테고리와 맞지 않는 수락(서버·앱 버전이 어긋남): 오목 응답 없이 탭처럼 그 알림의 화면.
         expired.clearRequests()
         expired.model.router.reset()
-        expired.setRPC("gomoku_respond", .json(#"{"status":"ok","accepted":false,"ruby_balance":100}"#))
-        await expired.push.handleResponse(PushPayload(userInfo: PushHarness.gomokuUserInfo()), action: .declineInvite)
-        let decline = try #require(expired.calls("gomoku_respond").first)
-        #expect(pushBodyValue(decline, "p_accept") as? Bool == false)
-        #expect(expired.model.router.lastOpenedRoute == .gomokuInvite(matchID: PushHarness.matchID), "거절은 새 화면을 열지 않는다(앞의 기록 그대로)")
-        #expect(expired.model.router.selectedTab == .now)
+        await expired.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .acceptInvite)
+        #expect(expired.calls("gomoku_respond").isEmpty)
+        #expect(expired.model.router.lastOpenedRoute == .message(peerID: PushHarness.peerID))
         #expect(h.forbiddenViolations.isEmpty)
         #expect(expired.forbiddenViolations.isEmpty)
     }
@@ -592,53 +524,6 @@ import Testing
 
     // MARK: - push-verify 수리 회귀
 
-    @Test("답장 중 치명 만료(이력 401 → 갱신 invalid_grant): 보내지 않고, 알림 센터를 비운 **뒤에** 로그인 안내를 남긴다 · 보내기 단계의 만료도 같다")
-    func replyDuringFatalExpiryLeavesNotice() async throws {
-        for stage in ["history", "send"] {
-            let h = PushHarness(label: "push-fatal-\(stage)")
-            h.system.status = .authorized
-            defer { h.tearDown() }
-            await h.launchSignedIn(active: false)
-            h.setRPC("message_history_with_reads", PushHarness.historyWithReceived())
-            h.setRPC("send_message", .json(#"{"status":"ok"}"#))
-            h.setRPC("mark_messages_read", .json(#"{"status":"ok","advanced":true,"unread":0}"#))
-            // 응답기 교체: 그 단계의 RPC 는 언제나 401, 갱신은 invalid_grant(다른 기기에서 비밀번호를 바꾼 경우 등).
-            let rpcBox = h.rpc
-            let access = h.access
-            let expiring = stage == "history" ? "message_history_with_reads" : "send_message"
-            MobileStubURLProtocol.register(host: h.host) { request in
-                if let name = request.rpcName {
-                    if name == expiring { return BaseStub.jwtExpired }
-                    return rpcBox.get()[name] ?? .missingFunction(name)
-                }
-                switch request.path {
-                case "/auth/v1/token":
-                    if request.queryValue("grant_type") == "refresh_token" { return BaseStub.invalidGrant }
-                    return BaseStub.authResponse(access: access, refresh: "r1", userID: PushHarness.userID)
-                case "/auth/v1/logout": return .json("{}")
-                case "/rest/v1/memberships": return BaseStub.membershipOK
-                default: return .missingFunction(request.path)
-                }
-            }
-            h.clearRequests()
-            let removalsBefore = h.system.deliveredRemovals
-
-            await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("곧 갈게요"))
-            #expect(!h.model.session.isSignedIn, "\(stage): 전제 — 치명 만료로 로그아웃")
-            #expect(h.system.deliveredRemovals == removalsBefore + 1, "\(stage): 전제 — reset 이 알림 센터를 비웠다")
-            let notice = try #require(h.system.notices.last, "\(stage): 적은 답장이 안내 없이 사라졌다")
-            #expect(notice.title == PushText.replyFailedTitle)
-            #expect(notice.body == PushText.replyNeedsSignIn)
-            #expect(notice.userInfo["peer_id"] == PushHarness.peerID)
-            let lastRemoval = try #require(h.system.events.lastIndex(of: "removeAllDelivered"))
-            let lastNotice = try #require(h.system.events.lastIndex(of: "notice"))
-            #expect(lastRemoval < lastNotice, "\(stage): 안내가 알림 센터 비우기보다 먼저 올라가 함께 지워진다")
-            #expect(h.calls("mark_messages_read").isEmpty)
-            if stage == "history" { #expect(h.calls("send_message").isEmpty) }
-            #expect(h.forbiddenViolations.isEmpty)
-        }
-    }
-
     @Test("알림 설정 연달아 누르기: 저장은 한 번에 하나 · 도는 동안 '저장 중'과 마지막으로 누른 값 유지 · 끝나면 최신 값으로 한 번 더 · 최종 화면 = 마지막 서버 값")
     func overlappingPreferenceSavesAreSerialized() async throws {
         let h = PushHarness(label: "push-prefs-serial")
@@ -705,32 +590,6 @@ import Testing
         #expect(h.push.prefsNotice == PushText.settingsSaveFailed)
         #expect(h.push.prefs == PushPrefs(message: true, gomokuInvite: false, feedbackReply: false))
         #expect(!h.push.isSavingPrefs)
-        #expect(h.forbiddenViolations.isEmpty)
-    }
-
-    @Test("답장 실패 안내를 누르면 그 대화가 열린다 · 그 대화를 보고 있어도 안내는 숨기지 않는다(서버 메시지 알림은 숨긴다)")
-    func replyFailureNoticeOpensConversation() async throws {
-        let h = PushHarness(label: "push-local-notice")
-        h.system.status = .authorized
-        defer { h.tearDown() }
-        await h.launchSignedIn(active: false)
-        h.setRPC("message_history_with_reads", PushHarness.historyWithReceived(id: "99999999-0000-4000-8000-000000000000"))
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .reply("곧 가요"))
-        let notice = try #require(h.system.notices.last)
-        #expect(notice.body == PushText.replyMessageGone)
-
-        // 알림 센터가 돌려주는 모양([AnyHashable: Any])으로 누른다.
-        let delivered: [AnyHashable: Any] = Dictionary(uniqueKeysWithValues: notice.userInfo.map { (AnyHashable($0.key), $0.value as Any) })
-        let tapped = try #require(PushPayload(userInfo: delivered), "안내 알림 본문을 읽지 못한다 — 눌러도 아무 화면도 열리지 않는다")
-        await h.push.handleResponse(tapped, action: .open)
-        #expect(h.model.router.lastOpenedRoute == .message(peerID: PushHarness.peerID))
-        #expect(h.model.router.selectedTab == .messages)
-
-        h.model.sceneDidBecomeActive()
-        await h.settle()
-        h.model.router.visibleConversationPeerID = PushHarness.peerID
-        #expect(h.push.presentation(for: tapped) == .banner, "보고 있는 대화라도 답장 실패 안내는 보여야 한다")
-        #expect(h.push.presentation(for: PushPayload(userInfo: PushHarness.messageUserInfo())) == .hidden, "대조: 서버 메시지 알림은 숨긴다")
         #expect(h.forbiddenViolations.isEmpty)
     }
 

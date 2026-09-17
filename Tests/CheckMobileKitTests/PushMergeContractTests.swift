@@ -11,16 +11,15 @@ import Testing
 /// 이제 증인은 언제나 실제 스토어다 — 아래는 그 문이 **요청까지** 이어지는지 잰다.
 ///
 /// 메시지 시나리오는 시스템 어댑터를 **붙이지 않는다**: 붙이면 코디네이터가 배지 확인으로 같은 요약을 읽어 메시지 탭의 요청과 섞인다.
-/// 붙이지 않아도 표시 판단 · 읽음 액션 · 스토어 새로고침은 그대로 돈다.
+/// 붙이지 않아도 표시 판단 · 탭 응답 · 스토어 새로고침은 그대로 돈다.
 @MainActor
 @Suite(.serialized) struct PushMergeContractTests {
-    @Test("푸시↔메시지: 포그라운드 표시 · 읽음 액션 → 실제 MessagesStore 새로고침(message_unread_summary) · 보고 있는 대화는 배너 숨김")
+    @Test("푸시↔메시지: 포그라운드 표시 · 탭(옛 읽음 액션 식별자 포함) → 실제 MessagesStore 새로고침(message_unread_summary) · 보고 있는 대화는 배너 숨김")
     func messagePushReachesRealMessagesStore() async {
         let h = PushHarness(label: "push-merge-messages")
         defer { h.tearDown() }
         h.setRPC("message_unread_summary", PushHarness.unreadSummary(total: 0))
         h.setRPC("message_history_with_reads", .json("[]"))
-        h.setRPC("mark_messages_read", .json(#"{"status":"ok","advanced":true,"unread":0}"#))
         h.model.start()
         #expect(await baseWaitUntil { h.model.session.phase == .signedOut })
         await h.model.session.signIn(email: "push@aing-check.invalid", password: "pw")
@@ -44,10 +43,14 @@ import Testing
         #expect(await baseWaitUntil { !h.calls("message_unread_summary").isEmpty },
                 "포그라운드 메시지 푸시가 메시지 탭 새로고침(message_unread_summary)으로 이어지지 않았다")
 
-        h.clearRequests()
-        await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: .markRead)
-        #expect(h.calls("mark_messages_read").count == 1)
-        #expect(await baseWaitUntil { !h.calls("message_unread_summary").isEmpty }, "읽음 액션 뒤 메시지 탭 새로고침이 없었다")
+        for identifier in ["com.apple.UNNotificationDefaultActionIdentifier", "MESSAGE_READ"] {
+            h.clearRequests()
+            h.model.router.reset()
+            await h.push.handleResponse(PushPayload(userInfo: PushHarness.messageUserInfo()), action: PushAction(actionIdentifier: identifier))
+            #expect(h.model.router.consumePendingRoute(for: .messages) == .message(peerID: PushHarness.peerID), "\(identifier)")
+            #expect(await baseWaitUntil { !h.calls("message_unread_summary").isEmpty }, "\(identifier): 응답 뒤 메시지 탭 새로고침이 없었다")
+            #expect(h.calls("mark_messages_read").isEmpty, "\(identifier): 알림 응답이 읽음을 올렸다")
+        }
 
         // 배너 숨김은 메시지 탭이 대화 화면 표시에 맞춰 적는 router.visibleConversationPeerID 를 읽는다(두 탭 사이 배선).
         let token = UUID()

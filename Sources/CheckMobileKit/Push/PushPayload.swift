@@ -8,6 +8,7 @@ import Foundation
 //   gomoku_invite  {"aps":{…,"category":"GOMOKU_INVITE","thread-id":"gomoku"},"type":"gomoku_invite","match_id":uuid}
 //   feedback_reply {"aps":{…,"category":"FEEDBACK_REPLY"},"type":"feedback_reply","report_id":uuid}
 // 오목 차례·결과·읽음은 푸시하지 않는다(서버가 만들지 않는다). 모르는 type·id 가 빠진 페이로드는 nil — 조용히 "지금" 탭으로 접지 않는다.
+// `message_id` 는 서버가 계속 싣지만 앱은 읽지 않는다 — 그것을 쓰던 알림 액션(답장 · 읽음)을 걷어냈다(w10). 있든 없든 · 모양이 틀리든 알림은 산다.
 
 /// 푸시 종류 세 개(서버 `push_outbox.kind` · `client_devices.push_prefs` 의 키와 같은 이름).
 package enum PushKind: String, CaseIterable, Sendable, Hashable {
@@ -73,20 +74,16 @@ package enum PushKind: String, CaseIterable, Sendable, Hashable {
 /// 알림 한 건이 가리키는 것(서버 페이로드를 그대로 옮긴 값).
 package struct PushPayload: Equatable, Sendable {
     package enum Content: Equatable, Sendable {
-        /// `message_id` 가 없으면 답장·읽음 액션을 하지 않는다(경계 없이 읽음을 올리면 아직 못 본 말까지 읽음이 된다).
-        case message(peerID: String, messageID: String?)
+        case message(peerID: String)
         case gomokuInvite(matchID: String)
         /// `report_id` 가 없으면 제보 목록으로 연다.
         case feedbackReply(reportID: String?)
     }
 
     package let content: Content
-    /// 앱이 스스로 띄운 안내 알림(답장 실패 등)인가 — 서버 알림이 아니다. 포그라운드에서 숨기지 않고 스토어도 새로고침하지 않는다.
-    package let isLocalNotice: Bool
 
-    package init(content: Content, isLocalNotice: Bool = false) {
+    package init(content: Content) {
         self.content = content
-        self.isLocalNotice = isLocalNotice
     }
 
     package var kind: PushKind {
@@ -100,7 +97,7 @@ package struct PushPayload: Equatable, Sendable {
     /// 알림을 눌렀을 때 여는 화면(SPEC-ios §3 딥링크).
     package var route: AingRoute {
         switch content {
-        case .message(let peer, _): return .message(peerID: peer)
+        case .message(let peer): return .message(peerID: peer)
         case .gomokuInvite(let match): return .gomokuInvite(matchID: match)
         case .feedbackReply(let report): return .feedback(reportID: report)
         }
@@ -108,7 +105,7 @@ package struct PushPayload: Equatable, Sendable {
 
     /// 메시지 알림이면 보낸 사람(대화 상대).
     package var messagePeerID: String? {
-        if case .message(let peer, _) = content { return peer }
+        if case .message(let peer) = content { return peer }
         return nil
     }
 
@@ -125,11 +122,10 @@ package struct PushPayload: Equatable, Sendable {
         guard let rawType = text("type")?.trimmingCharacters(in: .whitespaces).lowercased(),
               let kind = PushKind(rawValue: rawType)
         else { return nil }
-        isLocalNotice = text(PushIdentifiers.localNoticeKey) == "1"
         switch kind {
         case .message:
             guard let peer = text("peer_id").flatMap(Self.safeID) else { return nil }
-            content = .message(peerID: peer, messageID: text("message_id").flatMap(Self.safeID))
+            content = .message(peerID: peer)
         case .gomokuInvite:
             guard let match = text("match_id").flatMap(Self.safeID) else { return nil }
             content = .gomokuInvite(matchID: match)
@@ -155,71 +151,49 @@ package struct PushPayload: Equatable, Sendable {
 }
 
 /// 사용자가 알림에 한 일(액션 식별자 → 뜻).
+///
+/// 앱을 열지 않고 도는 액션(MESSAGE 답장 · 읽음, GOMOKU_INVITE 거절)은 없다(w10 — 실기기에서 잠금 화면 답장이 실패했고, 알림을 눌러 앱에서
+/// 하면 된다는 사용자 결정). **모르는 액션 식별자는 탭으로 접는다**: 시스템은 앱이 마지막으로 등록한 카테고리를 기억하므로, 새 빌드가 다시
+/// 등록하기 전(업데이트 뒤 첫 실행 전)에는 옛 버튼(`MESSAGE_REPLY` · `MESSAGE_READ` · `GOMOKU_DECLINE`)이 보일 수 있고 누르면 그 식별자가
+/// 새 빌드로 온다. 버리지 않고 그 화면을 연다 — 옛 답장 칸에 적은 글은 보내지 않는다(대화 화면에서 다시 보낸다).
 package enum PushAction: Equatable, Sendable {
-    /// 알림 본문을 눌렀다 → 화면 열기.
+    /// 알림 본문을 눌렀다 · 모르는 액션 → 그 화면 열기.
     case open
-    /// MESSAGE "답장"(텍스트 입력).
-    case reply(String)
-    /// MESSAGE "읽음".
-    case markRead
     /// GOMOKU_INVITE "수락"(앱을 연다).
     case acceptInvite
-    /// GOMOKU_INVITE "거절".
-    case declineInvite
-    /// 지우기·모르는 액션 — 아무것도 하지 않는다.
-    case ignore
+    /// 알림 지우기 — 아무것도 하지 않는다(`customDismissAction` 카테고리에서만 오고, 지금은 그런 카테고리가 없다).
+    case dismiss
 
-    package init(actionIdentifier: String, textInput: String?) {
+    package init(actionIdentifier: String) {
         switch actionIdentifier {
-        case PushIdentifiers.defaultAction: self = .open
-        case PushIdentifiers.replyAction: self = .reply(textInput ?? "")
-        case PushIdentifiers.markReadAction: self = .markRead
         case PushIdentifiers.acceptAction: self = .acceptInvite
-        case PushIdentifiers.declineAction: self = .declineInvite
-        default: self = .ignore
+        case PushIdentifiers.dismissAction: self = .dismiss
+        // 기본 액션(`UNNotificationDefaultActionIdentifier`) · 옛 카테고리 액션 · 앞으로 모를 액션.
+        default: self = .open
         }
     }
 }
 
-/// 식별자 상수. 카테고리 이름은 서버 트리거의 `aps.category` 와 **글자까지 같아야** 액션 버튼이 붙는다.
+/// 식별자 상수. 카테고리 이름은 서버 트리거의 `aps.category` 와 **글자까지 같아야** 액션 버튼이 붙는다(서버 변경 없음 — 이름을 바꾸지 않는다).
 package enum PushIdentifiers {
     package static let messageCategory = "MESSAGE"
     package static let gomokuInviteCategory = "GOMOKU_INVITE"
     package static let feedbackReplyCategory = "FEEDBACK_REPLY"
 
-    package static let replyAction = "MESSAGE_REPLY"
-    package static let markReadAction = "MESSAGE_READ"
     package static let acceptAction = "GOMOKU_ACCEPT"
-    package static let declineAction = "GOMOKU_DECLINE"
 
-    /// `UNNotificationDefaultActionIdentifier` · `UNNotificationDismissActionIdentifier` 의 값(UserNotifications 없이 비교하려고 적어 둔다 —
-    /// iOS 어댑터 테스트가 실제 상수와 같은지 확인한다).
-    package static let defaultAction = "com.apple.UNNotificationDefaultActionIdentifier"
+    /// `UNNotificationDismissActionIdentifier` 의 값(UserNotifications 없이 비교하려고 적어 둔다 — 테스트가 실제 상수와 같은지 확인한다).
     package static let dismissAction = "com.apple.UNNotificationDismissActionIdentifier"
-
-    /// 앱이 스스로 띄우는 안내 알림(답장 실패 등)의 식별자 접두사.
-    package static let localNoticePrefix = "aingcheck.local."
-    /// 안내 알림 본문(`userInfo`)의 표지 키(값 "1"). 서버 트리거는 이 키를 싣지 않는다.
-    package static let localNoticeKey = "aingcheck_local"
 }
 
 /// 카테고리 · 액션의 **플랫폼 무관 설명**. iOS 어댑터가 이것을 `UNNotificationCategory` 로 옮긴다(등록 모양을 테스트가 못 박는다).
 package struct PushActionSpec: Equatable, Sendable {
     package var identifier: String
     package var title: String
-    /// 텍스트 입력 액션이면 보내기 버튼 이름과 자리표시자.
-    package var textInput: (button: String, placeholder: String)?
     /// 누르면 앱을 앞으로 연다.
     package var opensApp: Bool
-    /// 잠금 화면에서는 기기 잠금을 풀어야 실행된다(내 계정으로 보내거나 거절하는 일).
+    /// 잠금 화면에서는 기기 잠금을 풀어야 실행된다(내 계정으로 하는 일).
     package var requiresUnlock: Bool
-    package var isDestructive: Bool
-
-    package static func == (lhs: PushActionSpec, rhs: PushActionSpec) -> Bool {
-        lhs.identifier == rhs.identifier && lhs.title == rhs.title
-            && lhs.textInput?.button == rhs.textInput?.button && lhs.textInput?.placeholder == rhs.textInput?.placeholder
-            && lhs.opensApp == rhs.opensApp && lhs.requiresUnlock == rhs.requiresUnlock && lhs.isDestructive == rhs.isDestructive
-    }
 }
 
 package struct PushCategorySpec: Equatable, Sendable {
@@ -228,42 +202,16 @@ package struct PushCategorySpec: Equatable, Sendable {
 }
 
 package enum PushCategories {
-    /// SPEC-ios §5: MESSAGE(답장 텍스트 입력 · 읽음) · GOMOKU_INVITE(수락 — 앱 열기 · 거절) · FEEDBACK_REPLY(액션 없음).
+    /// MESSAGE(액션 없음 — 누르면 대화) · GOMOKU_INVITE(수락 — 앱 열기) · FEEDBACK_REPLY(액션 없음).
+    /// 액션이 없는 카테고리도 등록한다: 서버가 싣는 `aps.category` 이름을 앱이 안다는 표시이고, 옛 빌드가 등록한 버튼을 새 등록이 덮는다.
     package static let all: [PushCategorySpec] = [
-        PushCategorySpec(identifier: PushIdentifiers.messageCategory, actions: [
-            PushActionSpec(
-                identifier: PushIdentifiers.replyAction,
-                title: PushText.replyAction,
-                textInput: (PushText.replySend, PushText.replyPlaceholder),
-                opensApp: false,
-                requiresUnlock: true,
-                isDestructive: false
-            ),
-            PushActionSpec(
-                identifier: PushIdentifiers.markReadAction,
-                title: PushText.markReadAction,
-                textInput: nil,
-                opensApp: false,
-                requiresUnlock: false,
-                isDestructive: false
-            ),
-        ]),
+        PushCategorySpec(identifier: PushIdentifiers.messageCategory, actions: []),
         PushCategorySpec(identifier: PushIdentifiers.gomokuInviteCategory, actions: [
             PushActionSpec(
                 identifier: PushIdentifiers.acceptAction,
                 title: PushText.acceptAction,
-                textInput: nil,
                 opensApp: true,
-                requiresUnlock: true,
-                isDestructive: false
-            ),
-            PushActionSpec(
-                identifier: PushIdentifiers.declineAction,
-                title: PushText.declineAction,
-                textInput: nil,
-                opensApp: false,
-                requiresUnlock: true,
-                isDestructive: true
+                requiresUnlock: true
             ),
         ]),
         PushCategorySpec(identifier: PushIdentifiers.feedbackReplyCategory, actions: []),
@@ -304,15 +252,10 @@ package enum PushTokenFormatter {
     }
 }
 
-/// 푸시 화면 문구. 맥과 뜻이 같은 것은 코어 상수를 쓴다(보내기 실패 사유는 `MessageNoticeText`).
+/// 푸시 화면 문구.
 package enum PushText {
     // 액션 버튼
-    package static let replyAction = "답장"
-    package static let replySend = "보내기"
-    package static let replyPlaceholder = "메시지 입력"
-    package static let markReadAction = "읽음"
     package static let acceptAction = "수락"
-    package static let declineAction = "거절"
 
     // 권한 설명 시트
     package static let primerTitle = "알림을 켜 둘까요?"
@@ -331,11 +274,4 @@ package enum PushText {
     package static let settingsOpenSystem = "설정 앱 열기"
     package static let settingsEnable = "알림 켜기"
     package static let settingsSaveFailed = "알림 설정을 저장하지 못했어요. 잠시 후 다시 시도해 주세요"
-
-    // 알림 액션 결과(앱이 스스로 띄우는 안내 알림)
-    package static let replyFailedTitle = "답장을 보내지 못했어요"
-    package static let replyNeedsSignIn = "앱에서 다시 로그인한 뒤 보내 주세요"
-    package static let replyMessageGone = "메시지를 찾지 못했어요. 앱에서 대화를 열어 보내 주세요"
-    /// 맥 `WorkTimerStore.sendMessage` 의 연결 실패 문장과 같다.
-    package static let connectionUnstable = "연결이 불안정해요. 잠시 후 다시 시도해 주세요"
 }

@@ -19,9 +19,6 @@ final class PushFakeSystem: PushNotificationSystem {
     private(set) var authorizationRequests = 0
     private(set) var remoteRegistrations = 0
     private(set) var badgeCounts: [Int] = []
-    private(set) var notices: [(identifier: String, title: String, body: String, threadID: String?, userInfo: [String: String])] = []
-    /// 시스템에 시킨 일의 순서(알림 센터 비우기 뒤에 안내를 올렸는지 확인한다).
-    private(set) var events: [String] = []
     private(set) var settingsOpened = 0
     private(set) var primerPresentations = 0
     private(set) var primerDismissals = 0
@@ -57,17 +54,10 @@ final class PushFakeSystem: PushNotificationSystem {
 
     func removeAllDeliveredNotifications() {
         deliveredRemovals += 1
-        events.append("removeAllDelivered")
     }
 
     func setBadgeCount(_ count: Int) {
         badgeCounts.append(count)
-        events.append("badge \(count)")
-    }
-
-    func postLocalNotice(identifier: String, title: String, body: String, threadID: String?, userInfo: [String: String]) {
-        notices.append((identifier, title, body, threadID, userInfo))
-        events.append("notice")
     }
 
     func openSystemSettings() {
@@ -216,7 +206,7 @@ final class PushHarness {
         }
     }
 
-    /// 앱이 꺼져 있다가 **키체인에 세션이 있는 채** 새로 켜지는 실행(알림 액션으로 뒤에서 켜짐 등). 같은 스텁 호스트 · 저장소를 쓴다.
+    /// 앱이 꺼져 있다가 **키체인에 세션이 있는 채** 새로 켜지는 실행(알림을 눌러 켜짐 · 옛 카테고리 액션으로 뒤에서 켜짐 등). 같은 스텁 호스트 · 저장소를 쓴다.
     /// 반환한 모델은 시작만 해 둔다(장면 active 없음) — 어댑터 `handle()` 가 부르는 것과 같다.
     func makeRestoredModel(start: Bool = true) -> MobileAppModel {
         let vault = InMemoryTokenVault()
@@ -282,7 +272,7 @@ final class PushHarness {
         BaseStub.tearDown(host: host, storage: storage)
     }
 
-    /// 서버 트리거가 만드는 모양 그대로의 본문(SPEC-wave1 §1.5 — `_apns` 칸까지).
+    /// 서버 트리거가 만드는 모양 그대로의 본문(SPEC-wave1 §1.5 — `_apns` 칸까지). `message_id` 는 서버가 싣지만 앱은 읽지 않는다.
     static func messageUserInfo(peer: String = peerID, message: String? = messageID) -> [AnyHashable: Any] {
         var info: [AnyHashable: Any] = [
             "aps": ["alert": ["title": "하늘", "body": "점심 뭐 먹을래요?"], "sound": "default", "category": "MESSAGE", "thread-id": "message-\(peer)"],
@@ -310,11 +300,6 @@ final class PushHarness {
         ]
         if let report { info["report_id"] = report }
         return info
-    }
-
-    /// message_history_with_reads 응답(받은 메시지 한 건 — 지어낸 이름).
-    static func historyWithReceived(id: String = messageID, peer: String = peerID) -> MobileStubResponse {
-        .json(#"[{"id":"\#(id)","from_user":"\#(peer)","to_user":"\#(userID)","body":"점심 뭐 먹을래요?","created_at":"2026-09-17T05:00:00Z","created_epoch":1789621200,"is_mine":false,"peer_user_id":"\#(peer)","peer_display_name":"하늘","peer_avatar_url":null,"read_by_peer":null,"unread":true}]"#)
     }
 
     /// gomoku_respond(accept) 성공 — 판 상태 묶음 포함(지어낸 이름).

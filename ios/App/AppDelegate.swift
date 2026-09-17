@@ -14,7 +14,7 @@ final class AingCheckAppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         // 알림 센터 delegate 는 **여기서** 붙어야 한다 — 알림을 눌러 앱이 켜지면 응답 콜백이 이 함수 직후에 온다.
-        // 카테고리(답장 · 읽음 · 수락 · 거절)도 같은 자리에서 등록한다.
+        // 카테고리(MESSAGE · GOMOKU_INVITE 수락 · FEEDBACK_REPLY)도 같은 자리에서 등록한다.
         model.installPushNotifications()
         return true
     }

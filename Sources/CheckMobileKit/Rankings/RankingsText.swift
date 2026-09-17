@@ -17,6 +17,15 @@ package enum RankingsText {
         }
     }
 
+    /// 큰 제목 아래 한 줄(시안 B 05·06): 판마다 기간과 마감을 말한다.
+    package static func boardSubtitle(_ board: AingRoute.RankingsBoard) -> String {
+        switch board {
+        case .league: return "이번 주 · 월요일 0시에 새로 시작해요"
+        case .tokens: return "이번 달 · 1일에 새로 시작해요"
+        case .minigame: return "오늘 · 자정에 마감해요"
+        }
+    }
+
     // MARK: 공통
 
     /// 맥 `TokenBoardEmptyMessage.loading` · `InsightsEmptyMessage.loading` 과 같은 문장.
@@ -43,6 +52,51 @@ package enum RankingsText {
     package static func leagueCaption(_ entry: TeamLeaderboardEntry) -> String {
         "각자 목표 \(entry.weeklyGoalHours)시간 · 총 \(MenuBarStatusFormatter.hoursMinutes(entry.totalSeconds)) · \(entry.memberCount)명 · \(entry.workingCount)명 근무중"
     }
+
+    /// 섹션 머리 오른쪽 보조 글자(시안 B 05 — 행의 큰 숫자가 무엇의 평균인지).
+    package static let leagueHeaderTrailing = "1인당 평균"
+
+    /// 행 오른쪽 끝 큰 숫자 "25시간 07분"(머리가 '1인당 평균'이라 "평균" 을 떼었다). 이번 주 기록이 없는 팀(내 팀만 남는다)은 "—".
+    package static func leagueValue(_ entry: TeamLeaderboardEntry) -> String {
+        entry.averageSeconds > 0 ? MenuBarStatusFormatter.hoursMinutes(entry.averageSeconds) : noValue
+    }
+
+    /// 막대 끝 퍼센트 "63%" — 기록 없는 팀은 "—"(0% 로 지어내지 않는다).
+    package static func leaguePercentText(_ entry: TeamLeaderboardEntry) -> String {
+        entry.averageSeconds > 0 ? "\(leaguePercent(entry))%" : noValue
+    }
+
+    /// 부제 조각: 인원 "5명".
+    package static func leagueMembers(_ entry: TeamLeaderboardEntry) -> String {
+        "\(entry.memberCount)명"
+    }
+
+    /// 부제 조각: 근무 상태 "3명 근무 중"(앞에 초록 점) · "근무 중 없음" · 이번 주 기록이 없으면 "이번 주 기록 없음".
+    package static func leagueWorking(_ entry: TeamLeaderboardEntry) -> String {
+        if entry.workingCount > 0 { return "\(entry.workingCount)명 근무 중" }
+        return entry.totalSeconds > 0 ? "근무 중 없음" : "이번 주 기록 없음"
+    }
+
+    /// 부제 조각: 1인 목표 "목표 40시간".
+    package static func leagueGoal(_ entry: TeamLeaderboardEntry) -> String {
+        "목표 \(entry.weeklyGoalHours)시간"
+    }
+
+    /// 부제 한 줄 "5명 · 3명 근무 중 · 목표 40시간"(화면은 근무 중 앞에 초록 점을 끼운다). 구분점은 늘 두 조각 **사이**에만.
+    package static func leagueSubtitle(_ entry: TeamLeaderboardEntry) -> String {
+        [leagueMembers(entry), leagueWorking(entry), leagueGoal(entry)].joined(separator: " · ")
+    }
+
+    /// 막대 색 뜻: 달성 = 초록 · '우리 팀' = 게이지 그라디언트(이 판에서 그라디언트는 우리 팀만) · 나머지 = 진행 파랑.
+    package enum LeagueBarKind: Equatable, Sendable { case done, gauge, accent }
+
+    package static func leagueBarKind(_ entry: TeamLeaderboardEntry, isMyTeam: Bool) -> LeagueBarKind {
+        if entry.goal.isComplete { return .done }
+        return isMyTeam ? .gauge : .accent
+    }
+
+    /// 숫자가 없는 칸.
+    package static let noValue = "—"
 
     /// 게이지 퍼센트(맥 `LeaderboardRow.percent` — 0~100 클램프된 진행률을 반올림).
     package static func leaguePercent(_ entry: TeamLeaderboardEntry) -> Int {
@@ -83,6 +137,24 @@ package enum RankingsText {
     /// "1,234,567 토큰"(축약 없이 전체 숫자).
     package static func tokenTotal(_ entry: TokenBoardEntry) -> String {
         "\(TokenNumberFormatter.grouped(entry.total)) 토큰"
+    }
+
+    /// 행 오른쪽 끝 큰 숫자 — **억/만 한 단위 체계**(비평 "한 행에 단위 체계가 둘"): "50.1억" · "638만" · "8,432".
+    /// 이름 밑 도구 줄(`toolUsageLabel`)과 같은 축약(`TokenNumberFormatter.compactKorean`)이라 한 행 안의 숫자가 같은 말로 읽힌다.
+    /// 1의 자리까지의 정확한 값은 보이스오버(`tokenRowAccessibility` — `tokenTotal`)가 읽는다. 말줄임이 아니라 단위 축약이다.
+    package static func tokenTotalCompact(_ entry: TokenBoardEntry) -> String {
+        TokenNumberFormatter.compactKorean(entry.total)
+    }
+
+    /// "오늘 +1.8억" — 이번 달 보드에서만(같은 억/만 체계).
+    package static func tokenTodayCompact(_ entry: TokenBoardEntry, todayKey: String) -> String {
+        "오늘 +\(TokenNumberFormatter.compactKorean(entry.todayDelta(currentDate: todayKey)))"
+    }
+
+    /// 비교 막대 길이(1등 = 1). 1등이 0 이면 전부 0. 막대가 없던 행에서 1위와 5위의 785배 차이가 숫자 길이로만 보였다.
+    package static func tokenBarFraction(total: Int, top: Int) -> Double {
+        guard top > 0 else { return 0 }
+        return min(1, max(0, Double(total) / Double(top)))
     }
 
     /// "오늘 +12,345 토큰" — 이번 달 보드에서만(과거 달에는 '오늘'이 없다).

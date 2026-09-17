@@ -353,6 +353,10 @@ package final class PushCoordinator {
                 isPrimerPresented = false
                 system?.dismissPermissionPrimer()
                 primerDeferral = .systemOverlay
+                #if DEBUG
+                // 데모 강제 시트는 띄울 때 소모된다 — 거둬들인 것은 보여 준 것이 아니므로 되살려 창이 끝난 뒤 다시 뜨게 한다.
+                if context.isDemo { demoForcesPrimer = true }
+                #endif
             }
         } else if primerDeferral == .systemOverlay {
             primerDeferral = nil

@@ -202,6 +202,29 @@ import Testing
         #expect(grace.arrivals == 1, "앞으로 돌아왔는데 로그인 유예를 다시 걸었다")
         #expect(h.system.primerPresentations == 1)
         #expect(!cooldownRecorded(h))
+
+        // 시트가 떠 있는 채 뒤로 가도 창 관찰은 멈춘다(닫힌 앱에서 0.15초 타이머가 돌지 않게 — 검증 변이 M8).
+        #expect(h.system.isObservingOverlay)
+        h.model.sceneDidEnterBackground()
+        #expect(!h.system.isObservingOverlay, "시트가 떠 있는 채 뒤로 갔더니 창 관찰이 계속 돈다")
+        #expect(h.forbiddenViolations.isEmpty)
+    }
+
+    @Test("유예 중 뒤로 갔다가 창 없이 앞으로 오면 유예 없이 곧바로 띄운다")
+    func backgroundThenForegroundWithoutPromptSkipsGrace() async {
+        let h = PushHarness(label: "primer-overlay-background-clear")
+        defer { h.tearDown() }
+        let grace = BaseGate()
+        await signInFromForm(h, grace: grace)
+        #expect(await baseWaitUntil { h.push.primerDeferralState == .credentialPromptGrace && grace.arrivals == 1 })
+
+        h.model.sceneDidEnterBackground()
+        h.model.sceneDidBecomeActive()
+        #expect(await baseWaitUntil { h.push.isPrimerPresented }, "앞으로 돌아왔는데 로그인 유예에 다시 묶였다(검증 변이 M15)")
+        #expect(grace.arrivals == 1, "앞으로 돌아왔는데 로그인 유예를 다시 걸었다")
+        #expect(h.system.primerPresentations == 1)
+        #expect(!cooldownRecorded(h))
+        grace.open()
         #expect(h.forbiddenViolations.isEmpty)
     }
 

@@ -1,0 +1,7 @@
+{
+  "__status": 500,
+  "__body": {
+    "code": "XX000",
+    "message": "demo: history unavailable"
+  }
+}

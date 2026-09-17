@@ -15,12 +15,15 @@ struct MessagesComposerView: View {
 
     @State private var editor = MessagesComposerEditorHandle()
     @State private var isComposing = false
-    @State private var editorHeight: CGFloat = 36
+    @State private var editorHeight: CGFloat = 44
+    /// 보내기 원 지름: 44 를 본문 글자 크기로 키운 값(상한·하한은 `MessagesComposerRules.sendButtonMetrics`).
+    @ScaledMetric(relativeTo: .body) private var scaledSendDiameter: CGFloat = CGFloat(MessagesComposerRules.minimumTouchTarget)
 
     var body: some View {
         let draft = store.draft(for: peerID)
         let counter = MessagesComposerRules.counterText(for: draft)
         let overflowing = MessagesComposerRules.isOverflowing(draft)
+        let sendMetrics = MessagesComposerRules.sendButtonMetrics(scaledDiameter: Double(scaledSendDiameter))
         VStack(alignment: .leading, spacing: 6) {
             if let notice = store.sendNotices[peerID] {
                 InlineNotice(text: notice, kind: .warning)
@@ -69,13 +72,16 @@ struct MessagesComposerView: View {
                             if store.isSending {
                                 ProgressView().tint(MobileTheme.onAccent)
                             } else {
+                                // 글리프는 원 지름에서 정한 고정 크기다 — `.body` 를 따르면 AX3 에서 화살촉이 원 밖으로 빠져 모양이 사라졌다.
                                 Image(systemName: "arrow.up")
-                                    .font(.body.weight(.bold))
+                                    .font(.system(size: CGFloat(sendMetrics.glyphSize), weight: .bold))
                             }
                         }
                         .foregroundStyle(MobileTheme.onAccent)
-                        .frame(width: 40, height: 40)
+                        // 원 = 누르는 자리(44pt 이상). 예전 40×40 은 HIG 최소보다 작았다.
+                        .frame(width: CGFloat(sendMetrics.diameter), height: CGFloat(sendMetrics.diameter))
                         .background(Circle().fill(MobileTheme.accent))
+                        .contentShape(Rectangle())
                         .opacity(sendEnabled ? 1 : 0.4)
                     }
                     .disabled(!sendEnabled)
@@ -137,7 +143,8 @@ final class MessagesComposerEditorHandle {
 /// 여러 줄 입력칸. 글자는 Dynamic Type(`.body`)을 따라 커지고, 높이는 내용에 맞춰 1~5줄 사이에서 자란다.
 struct MessagesComposerTextView: UIViewRepresentable {
     static let horizontalInset: CGFloat = 10
-    static let verticalInset: CGFloat = 8
+    /// 위아래 12 — 한 줄일 때 입력칸 높이(본문 줄 높이 + 24 ≈ 44)가 보내기 원(44)과 맞는다.
+    static let verticalInset: CGFloat = 12
     static let maxLines: CGFloat = 5
     /// 손쉬운 사용 글자 크기에서는 3줄 — 5줄이면 키보드와 함께 대화가 한 줄도 안 보인다.
     static let accessibilityMaxLines: CGFloat = 3

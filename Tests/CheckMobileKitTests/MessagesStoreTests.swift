@@ -226,25 +226,73 @@ import Testing
         h.expectNoForbiddenCalls()
     }
 
-    @Test("읽음 신호(message_read): 열린 대화의 이력을 다시 받아 내 말풍선 옆 1 이 사라진다")
+    @Test("읽음 신호(message_read) 한 번만으로 열린 대화의 이력을 다시 받아 내 말풍선 옆 1 이 사라진다 — 조인 따라잡기는 미리 끝내 둔다")
     func readSignalClearsUnreadOne() async {
         let h = await MessagesHarness.make { server in
             server.setRows([.received("a1", from: Self.peerA, at: 0, unread: false), .sent("m1", to: Self.peerA, at: 10, read: false)])
         }
         defer { h.tearDown() }
+        // 조인 따라잡기(catchUp → 이력)를 1 을 보기 **전에** 끝낸다 — 그 새로고침이 읽음 신호의 몫을 대신해 테스트가 공허했다(messages-verify M33).
+        h.transport.emit(.joined)
+        h.model.realtime.flushCoalescedSignals()
+        await h.settle()
         h.store.conversationDidAppear(peerID: Self.peerA, token: UUID())
         await h.settle()
         func showsOne() -> Bool {
             h.store.conversationItems(for: Self.peerA).contains { if case .bubble(let line) = $0 { return line.showsUnreadOne } else { return false } }
         }
         #expect(showsOne())
+        let historyBefore = h.count("message_history_with_reads")
         h.server.setRead(peer: Self.peerA)
-        h.transport.emit(.joined)
-        h.model.realtime.flushCoalescedSignals()
-        await h.settle()
         h.transport.emit(.broadcast(event: "message_read"))
         h.model.realtime.flushCoalescedSignals()
-        #expect(await baseWaitUntil { !showsOne() }, "읽음 신호 뒤에도 1 이 남았다")
+        #expect(await baseWaitUntil(timeout: 2) { !showsOne() }, "읽음 신호 뒤에도 1 이 남았다")
+        await h.settle()
+        #expect(h.count("message_history_with_reads") == historyBefore + 1, "읽음 신호 한 번에 열린 대화 이력 한 번")
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("읽음 처리가 네트워크로 실패하면 점은 낙관으로 꺼진 채, 다음 이력에서 같은 경계로 다시 올린다(나가도 점이 되살아나지 않게)")
+    func failedMarkRetriesOnNextHistory() async {
+        let h = await MessagesHarness.make { server in
+            server.setRows([.received("a1", from: Self.peerA, at: 0)])
+            server.setSummary(MessagesStubServer.summary([(Self.peerA, 1)]))
+            server.setMark(.networkFailure())
+        }
+        defer { h.tearDown() }
+        h.store.conversationDidAppear(peerID: Self.peerA, token: UUID())
+        await h.settle()
+        #expect(h.count("mark_messages_read") == 1)
+        #expect(h.store.optimisticReads[Self.peerA]?.failed == true, "실패한 읽음이 실패로 정산되지 않았다")
+        #expect(h.store.badgeCount == 0, "낙관 읽음은 실패해도 되돌리지 않는다")
+
+        h.server.setMark(.json(#"{"status":"ok","advanced":true,"unread":0}"#))
+        await h.store.refreshNow()
+        await h.settle()
+        #expect(h.count("mark_messages_read") == 2, "실패한 읽음 처리를 다음 이력에서 다시 올리지 않았다")
+        #expect(h.bodies("mark_messages_read").last?.contains(#""p_through":"a1""#) == true)
+        #expect(h.store.optimisticReads[Self.peerA]?.failed == false)
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("읽음 왕복 중에 새 말이 오면 겹쳐 띄우지 않고, 그 왕복이 끝나는 대로 새 경계로 한 번 더 올린다")
+    func markAgainAfterInFlight() async {
+        let h = await MessagesHarness.make { server in
+            server.setRows([.received("a1", from: Self.peerA, at: 0)])
+            server.setMarkDelay(0.5)
+        }
+        defer { h.tearDown() }
+        h.store.conversationDidAppear(peerID: Self.peerA, token: UUID())
+        #expect(await baseWaitUntil { h.store.isMarkingRead })
+        #expect(await baseWaitUntil { h.store.pendingActivityTask == nil })
+        h.server.appendRow(.received("a2", from: Self.peerA, at: 20))
+        await h.store.refreshNow()
+        #expect(h.store.isMarkingRead, "왕복(0.5초)이 이미 끝나 이 시나리오를 재지 못한다")
+        #expect(h.count("mark_messages_read") == 1, "왕복 중에 두 번째 읽음을 나란히 띄웠다")
+        #expect(await baseWaitUntil { h.bodies("mark_messages_read").contains { $0.contains(#""p_through":"a2""#) } },
+                "왕복이 끝난 뒤 a2 로 다시 올리지 않았다")
+        await h.settle()
+        #expect(h.count("mark_messages_read") == 2)
         h.expectNoForbiddenCalls()
     }
 
@@ -266,6 +314,45 @@ import Testing
         #expect(h.count("mark_messages_read") == 0)
         #expect(h.store.unreadPeerIDs.isEmpty, "대화를 본 도장이 점을 꺼야 한다")
         #expect(!h.store.conversationItems(for: Self.peerA).contains { if case .bubble(let l) = $0 { return l.showsUnreadOne } else { return false } })
+        h.expectNoForbiddenCalls()
+    }
+
+    // MARK: - 불러오기 실패
+
+    @Test("오프라인 첫 진입: 이력·사람 찾기가 실패하면 '불러오는 중'에 멈추지 않고 실패 화면 · 머리는 가짜 이름 대신 일반 아이콘 · 다시 시도로 둘 다 회복")
+    func offlineFirstEntryShowsFailureAndRecovers() async {
+        let h = await MessagesHarness.make { server in
+            server.setDirectory(#"[{"user_id":"peer-z","display_name":"지우","avatar_url":null,"is_working":true,"message_capable":true,"center":"seoul"}]"#)
+        }
+        defer { h.tearDown() }
+        let offline = BaseLockedBox(true)
+        for rpc in ["message_history_with_reads", "app_user_directory"] {
+            h.server.override(rpc) { _ in offline.get() ? .networkFailure() : nil }
+        }
+        h.store.conversationDidAppear(peerID: "peer-z", token: UUID())
+        await h.settle()
+        #expect(h.store.historyFailed, "오프라인 이력 실패가 실패로 적히지 않았다")
+        #expect(!h.store.historyLoaded)
+        #expect(!h.store.historyLoading)
+        let failure = MessagesConversationRules.emptyState(loaded: h.store.historyLoaded, failed: h.store.historyFailed)
+        #expect(failure.title == "대화를 불러오지 못했어요")
+        #expect(failure.showsRetry)
+        #expect(h.store.directoryFailed)
+        let unknown = h.store.conversationHeader(for: "peer-z")
+        #expect(unknown.title == MessagesConversationHeader.fallbackTitle)
+        #expect(unknown.avatarName == nil, "이름을 모르는데 이니셜 아바타를 세웠다")
+        #expect(unknown.accessibilityLabel == MessagesConversationHeader.unknownAccessibilityLabel)
+
+        offline.mutate { $0 = false }
+        await h.store.retryConversation(peerID: "peer-z")
+        await h.settle()
+        #expect(!h.store.historyFailed)
+        #expect(h.store.historyLoaded)
+        #expect(h.store.directoryLoaded)
+        let known = h.store.conversationHeader(for: "peer-z")
+        #expect(known.title == "지우")
+        #expect(known.avatarName == "지우")
+        #expect(MessagesConversationRules.emptyState(loaded: h.store.historyLoaded, failed: h.store.historyFailed).title == "아직 주고받은 메시지가 없어요")
         h.expectNoForbiddenCalls()
     }
 
@@ -450,6 +537,104 @@ import Testing
         #expect(h.store.history.isEmpty, "로그아웃 뒤 늦게 온 이력이 들어왔다")
         #expect(!h.store.historyLoading)
         #expect(h.store.summary == nil)
+        h.expectNoForbiddenCalls()
+    }
+
+    // 계정 전환(로그아웃 → 다른 사용자로 로그인) 뒤에 앞 계정의 늦은 응답이 도착하는 경로 — 세대 가드마다 한 시나리오(messages-verify M17·M18·M20·M22).
+    // 늦은 응답은 0.6초 뒤에 온다. 새는지 보는 창(1.5초)은 다음 계정 로그인이 끝난 뒤부터 잰다 — 새면 곧바로 잡힌다.
+
+    @Test("계정 전환: 앞 계정이 띄운 요약이 늦게 와도 다음 계정 배지에 안 들어간다")
+    func lateSummaryDoesNotLeakIntoNextAccount() async {
+        let h = await MessagesHarness.make()
+        defer { h.tearDown() }
+        let summariesBefore = h.count("message_unread_summary")
+        h.server.overrideFirst("message_unread_summary", .json(MessagesStubServer.summary([(Self.peerA, 5)]), delay: 0.6))
+        let late = Task { await h.store.performLoadSummary() }
+        #expect(await baseWaitUntil { h.count("message_unread_summary") == summariesBefore + 1 })
+        await h.switchAccount()
+        #expect(h.count("message_unread_summary") >= summariesBefore + 2, "다음 계정의 활성화 요약을 받지 않았다")
+        await late.value
+        await h.settle()
+        #expect(h.store.badgeCount == 0, "앞 계정 요약이 다음 계정 배지로 들어왔다: \(h.store.badgeCount)")
+        #expect(h.store.summary?.summary.total ?? 0 == 0)
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("계정 전환: 앞 계정이 누른 전송의 늦은 거절(target_focused)이 다음 계정 입력칸·문구에 안 들어간다")
+    func lateSendRejectionDoesNotLeakIntoNextAccount() async {
+        let h = await MessagesHarness.make()
+        defer { h.tearDown() }
+        h.server.setSend(.json(#"{"status":"target_focused"}"#))
+        h.server.setSendDelay(0.6)
+        h.store.setDraft("앞 계정의 글", for: Self.peerA)
+        #expect(h.store.sendDraft(to: Self.peerA, isComposing: false))
+        #expect(await baseWaitUntil { h.count("send_message") == 1 })
+        #expect(h.store.isSending, "거절이 로그아웃 전에 이미 돌아와 늦은 응답을 재지 못한다")
+        await h.switchAccount()
+        #expect(h.store.drafts.isEmpty && h.store.pendingOutgoing.isEmpty && !h.store.isSending)
+        let clean = await h.staysFalse(for: 1.5) {
+            !h.store.drafts.isEmpty || !h.store.sendNotices.isEmpty || !h.store.pendingOutgoing.isEmpty
+        }
+        #expect(clean, "앞 계정 글·문구가 다음 계정에 섰다: \(h.store.drafts) \(h.store.sendNotices)")
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("계정 전환: 앞 계정이 누른 전송의 늦은 네트워크 실패가 다음 계정 입력칸·연결 문구로 안 들어간다")
+    func lateSendFailureDoesNotLeakIntoNextAccount() async {
+        let h = await MessagesHarness.make()
+        defer { h.tearDown() }
+        // 스텁은 전송 응답의 지연을 `setSendDelay` 로 덮어쓴다 — 실패 응답에 지연을 실으면 0 으로 지워져 로그아웃 전에 끝났다(첫 변이 실행에서 M18 이 살아남은 원인).
+        h.server.setSend(.networkFailure())
+        h.server.setSendDelay(0.6)
+        h.store.setDraft("앞 계정의 글", for: Self.peerA)
+        #expect(h.store.sendDraft(to: Self.peerA, isComposing: false))
+        #expect(await baseWaitUntil { h.count("send_message") == 1 })
+        #expect(h.store.isSending, "전송 실패가 로그아웃 전에 이미 돌아와 늦은 응답을 재지 못한다")
+        await h.switchAccount()
+        let clean = await h.staysFalse(for: 1.5) {
+            !h.store.drafts.isEmpty || !h.store.sendNotices.isEmpty || !h.store.pendingOutgoing.isEmpty
+        }
+        #expect(clean, "앞 계정 글·연결 문구가 다음 계정에 섰다: \(h.store.drafts) \(h.store.sendNotices)")
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("계정 전환: 앞 계정이 띄운 사람 찾기가 늦게 와도 다음 계정 목록에 안 들어가고, 다음 계정은 자기 목록을 받는다")
+    func lateDirectoryDoesNotLeakIntoNextAccount() async {
+        let h = await MessagesHarness.make { server in
+            server.setDirectory(#"[{"user_id":"new-friend","display_name":"새계정친구","avatar_url":null,"is_working":true,"message_capable":true,"center":"seoul"}]"#)
+        }
+        defer { h.tearDown() }
+        h.server.overrideFirst("app_user_directory", .json(
+            #"[{"user_id":"old-friend","display_name":"앞계정친구","avatar_url":null,"is_working":true,"message_capable":true,"center":"seoul"}]"#,
+            delay: 0.6
+        ))
+        h.store.loadDirectory()
+        #expect(await baseWaitUntil { h.count("app_user_directory") == 1 })
+        #expect(h.store.directoryLoading, "사람 찾기가 로그아웃 전에 이미 돌아와 늦은 응답을 재지 못한다")
+        await h.switchAccount()
+        let clean = await h.staysFalse(for: 1.5) { h.store.directoryLoaded || !h.store.directory.isEmpty }
+        #expect(clean, "앞 계정 사람 목록이 다음 계정에 들어왔다: \(h.store.directory.map(\.userID))")
+        h.store.loadDirectory()
+        await h.settle()
+        #expect(h.store.directory.map(\.userID) == ["new-friend"], "다음 계정이 자기 사람 목록을 받지 못했다")
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("겹친 요약: 먼저 띄운 요약이 늦게 와도 나중 요약을 덮지 않는다(배지가 옛 숫자로 되살아나지 않는다)")
+    func lateOverlappingSummaryDoesNotOverwrite() async {
+        let h = await MessagesHarness.make()
+        defer { h.tearDown() }
+        let summariesBefore = h.count("message_unread_summary")
+        h.server.overrideFirst("message_unread_summary", .json(MessagesStubServer.summary([(Self.peerA, 3)]), delay: 0.5))
+        let early = Task { await h.store.performLoadSummary() }
+        #expect(await baseWaitUntil { h.count("message_unread_summary") == summariesBefore + 1 })
+        await h.store.performLoadSummary()
+        #expect(h.store.badgeCount == 0)
+        let newerSerial = h.store.summary?.serial
+        #expect(newerSerial != nil)
+        await early.value
+        #expect(h.store.badgeCount == 0, "먼저 띄운 늦은 요약(3)이 새 요약(0)을 덮었다: \(h.store.badgeCount)")
+        #expect(h.store.summary?.serial == newerSerial)
         h.expectNoForbiddenCalls()
     }
 }

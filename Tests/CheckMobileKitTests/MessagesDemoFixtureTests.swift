@@ -142,6 +142,27 @@ import Testing
         #expect(MessagesConversationRules.emptyState(loaded: demo.store.historyLoaded, failed: demo.store.historyFailed).title == "아직 주고받은 메시지가 없어요")
         #expect(!MessagesDemoLaunch.opensNewConversation(isDemo: false, arguments: ["app", "-AingCheckDemoMessages", "new"]))
         #expect(MessagesDemoLaunch.opensNewConversation(isDemo: true, arguments: ["app", "-AingCheckDemoMessages", "new"]))
+        #expect(!MessagesDemoLaunch.forcesNewMessageButton(isDemo: false, arguments: ["app", "-AingCheckDemoMessages", "newbutton"]))
+        #expect(MessagesDemoLaunch.forcesNewMessageButton(isDemo: true, arguments: ["app", "-AingCheckDemoMessages", "newbutton"]))
+        #expect(!MessagesDemoLaunch.forcesNewMessageButton(isDemo: true, arguments: ["app", "-AingCheckDemoMessages", "new"]))
+        #expect(MobileForbiddenCalls.violations(in: demo.requests).isEmpty)
+    }
+
+    @Test("이력 실패 장면(c1): 이력 500 · 사람 찾기 없음 → 실패 화면과 다시 시도 · 머리는 '대화' + 이니셜 없음 · 보이스오버 '이름을 불러오지 못한 대화' · 금지 호출 0")
+    func historyFailureScene() async {
+        let peer = "d0000000-0000-4000-8000-0000000000c1"
+        let demo = await Self.make(route: "messages/\(peer)")
+        defer { demo.tearDown() }
+        demo.store.conversationDidAppear(peerID: peer, token: UUID())
+        await demo.settle()
+        #expect(demo.store.historyFailed)
+        #expect(!demo.store.historyLoaded)
+        #expect(MessagesConversationRules.emptyState(loaded: demo.store.historyLoaded, failed: demo.store.historyFailed).showsRetry)
+        #expect(demo.store.peerName(for: peer) == nil)
+        let header = demo.store.conversationHeader(for: peer)
+        #expect(header.title == "대화")
+        #expect(header.avatarName == nil)
+        #expect(header.accessibilityLabel == MessagesConversationHeader.unknownAccessibilityLabel)
         #expect(MobileForbiddenCalls.violations(in: demo.requests).isEmpty)
     }
 }

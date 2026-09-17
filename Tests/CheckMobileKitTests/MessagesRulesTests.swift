@@ -263,4 +263,42 @@ import Testing
         #expect(MessagesListRules.destinations(for: AingRoute(url: URL(string: "aingcheck://message/abc-1")!)!) == [.conversation(peerID: "abc-1")])
         #expect(MessagesListRules.preview("안녕\n\n  잘 지내?\t응") == "안녕 잘 지내? 응")
     }
+
+    // MARK: 누르는 자리 · 대화 머리(messages-fix)
+
+    @Test("보내기 버튼: 모든 글자 크기에서 원은 44pt 이상·52pt 이하, 화살표 글리프는 원 지름의 절반을 넘지 않는다(AX3 에서 원 밖으로 넘치던 결함)")
+    func sendButtonMetricsStayInsideCircle() {
+        // 본문(.body) 글자 크기(pt) — xSmall … AX5. @ScaledMetric(relativeTo: .body) 는 44 를 (크기 / 17) 배로 키운다.
+        let bodySizes: [Double] = [14, 15, 16, 17, 19, 21, 23, 28, 33, 40, 47, 53]
+        var diameters: [Double] = []
+        for size in bodySizes {
+            let metrics = MessagesComposerRules.sendButtonMetrics(scaledDiameter: 44 * size / 17)
+            diameters.append(metrics.diameter)
+            #expect(metrics.diameter >= MessagesComposerRules.minimumTouchTarget, "글자 \(size)pt: 원 \(metrics.diameter)pt < 44")
+            #expect(metrics.diameter <= MessagesComposerRules.sendButtonMaxDiameter)
+            #expect(metrics.glyphSize <= metrics.diameter * 0.5, "글자 \(size)pt: 글리프 \(metrics.glyphSize)pt 가 원 \(metrics.diameter)pt 를 넘친다")
+            #expect(metrics.glyphSize >= 16, "글리프가 너무 작아 알아보기 어렵다")
+        }
+        #expect(diameters == diameters.sorted(), "글자가 커지는데 원이 줄었다")
+        #expect(MessagesComposerRules.sendButtonMetrics(scaledDiameter: 44).diameter == 44)
+        #expect(MessagesComposerRules.sendButtonMetrics(scaledDiameter: .nan).diameter == 44)
+        #expect(MessagesComposerRules.minimumTouchTarget >= 44)
+        #expect(MessagesScrollFollow.newMessageButtonMinHeight >= 44, "'새 메시지 ↓' 버튼 높이가 44pt 아래(예전 31.7pt)")
+    }
+
+    @Test("대화 머리: 이름을 알면 이름·이니셜, 모르면 '대화' 제목에 이니셜 없음(일반 아이콘) · 보이스오버는 받는 중/못 받음을 가른다")
+    func conversationHeaderNeverFakesAPerson() {
+        let known = MessagesConversationRules.header(peerName: "한결", isResolving: false)
+        #expect(known == MessagesConversationHeader(title: "한결", avatarName: "한결", accessibilityLabel: "한결"))
+        for name in [nil, "", "  \n"] as [String?] {
+            let resolving = MessagesConversationRules.header(peerName: name, isResolving: true)
+            #expect(resolving.title == "대화")
+            #expect(resolving.avatarName == nil, "이름을 모르는데 이니셜 아바타 이름을 넘겼다")
+            #expect(resolving.accessibilityLabel == MessagesConversationHeader.resolvingAccessibilityLabel)
+            let unknown = MessagesConversationRules.header(peerName: name, isResolving: false)
+            #expect(unknown.avatarName == nil)
+            #expect(unknown.accessibilityLabel == "이름을 불러오지 못한 대화")
+        }
+        #expect(MessagesConversationRules.header(peerName: " 소라 ", isResolving: false).title == "소라")
+    }
 }

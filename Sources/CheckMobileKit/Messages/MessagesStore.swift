@@ -181,6 +181,13 @@ package final class MessagesStore {
         return directory.first { $0.userID == peerID }?.name
     }
 
+    /// 대화 머리. 이름을 모르면 가짜 이니셜 대신 일반 인물 아이콘(`MessagesConversationRules.header`).
+    /// "받는 중" = 이력·사람 찾기 중 하나라도 날아가는 중이거나, 이력이 아직 한 번도 끝나지 않았다(실패도 아님).
+    package func conversationHeader(for peerID: String) -> MessagesConversationHeader {
+        let resolving = historyLoading || directoryLoading || (!historyLoaded && !historyFailed)
+        return MessagesConversationRules.header(peerName: peerName(for: peerID), isResolving: resolving)
+    }
+
     package func peerAvatarURL(for peerID: String) -> URL? {
         if let url = thread(for: peerID)?.peerAvatarURL { return url }
         return directory.first { $0.userID == peerID }?.avatarURL
@@ -237,6 +244,15 @@ package final class MessagesStore {
         guard isSignedIn else { return }
         runtime.lastListRefreshAt = context.clock.now()
         await requestActivityRefresh(includeHistory: true)?.value
+    }
+
+    /// 대화 화면의 [다시 시도]. 이력을 곧바로 다시 받고, 그래도 상대 이름을 모르면 사람 찾기를 다시 받는다(스로틀 무시) —
+    /// 오프라인에서 연 대화는 두 조회가 다 실패해 이력만 다시 받으면 머리가 계속 "대화"로 남는다.
+    package func retryConversation(peerID: String) async {
+        guard isSignedIn, !peerID.isEmpty else { return }
+        await refreshNow()
+        guard isSignedIn, peerName(for: peerID) == nil else { return }
+        loadDirectory(force: true)
     }
 
     /// 대화 화면이 섰다. `token` 은 뷰 인스턴스마다 다르다 — 같은 상대의 새 화면이 옛 화면의 사라짐보다 먼저 서도 표시가 꺼지지 않게.

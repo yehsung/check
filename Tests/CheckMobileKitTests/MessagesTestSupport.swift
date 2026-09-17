@@ -46,6 +46,23 @@ final class MessagesStubServer: @unchecked Sendable {
     private var historyScript: [(delay: TimeInterval, rows: [Row])] = []
     private var markDelay: TimeInterval = 0
     private var sendDelay: TimeInterval = 0
+    /// RPC 이름별 덮어쓰기 응답기(nil 을 돌려주면 기본 응답). 계정 전환 · 겹친 늦은 응답 시나리오가 쓴다.
+    private var overrides: [String: @Sendable (MobileStubRequest) -> MobileStubResponse?] = [:]
+
+    /// `rpc` 요청에 먼저 물어볼 응답기. **잠금 밖에서** 부른다 — 응답기 안에서 이 서버의 다른 메서드를 불러도 된다.
+    func override(_ rpc: String, _ responder: @escaping @Sendable (MobileStubRequest) -> MobileStubResponse?) {
+        lock.lock(); overrides[rpc] = responder; lock.unlock()
+    }
+
+    /// 덮어쓴 뒤 **처음 한 번만** `first` 로 답하고(늦게 오는 앞선 응답), 그다음부터는 `rest`(nil 이면 기본 응답).
+    func overrideFirst(_ rpc: String, _ first: MobileStubResponse, then rest: MobileStubResponse? = nil) {
+        let calls = BaseLockedBox(0)
+        override(rpc) { _ in
+            var isFirst = false
+            calls.mutate { $0 += 1; isFirst = $0 == 1 }
+            return isFirst ? first : rest
+        }
+    }
 
     func setRows(_ value: [Row]) { lock.lock(); rows = value; lock.unlock() }
     func appendRow(_ value: Row) { lock.lock(); rows.append(value); lock.unlock() }
@@ -74,6 +91,11 @@ final class MessagesStubServer: @unchecked Sendable {
     }
 
     func respond(_ request: MobileStubRequest) -> MobileStubResponse {
+        let overrideResponder: (@Sendable (MobileStubRequest) -> MobileStubResponse?)? = {
+            lock.lock(); defer { lock.unlock() }
+            return request.rpcName.flatMap { overrides[$0] }
+        }()
+        if let overrideResponder, let response = overrideResponder(request) { return response }
         lock.lock(); defer { lock.unlock() }
         switch request.rpcName {
         case "client_release": return BaseStub.releaseOK
@@ -114,6 +136,14 @@ final class MessagesStubServer: @unchecked Sendable {
         default: break
         }
         if request.path == "/rest/v1/memberships" { return BaseStub.membershipOK }
+        if request.path == "/auth/v1/token" {
+            // 계정 전환: 비밀번호 로그인은 두 번째 사용자로 답한다.
+            return BaseStub.authResponse(
+                access: BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(7200), subject: MessagesHarness.secondUser),
+                refresh: "refresh-two",
+                userID: MessagesHarness.secondUser
+            )
+        }
         if request.path == "/auth/v1/logout" { return .json("{}") }
         return .missingFunction(request.path)
     }
@@ -123,6 +153,8 @@ final class MessagesStubServer: @unchecked Sendable {
 @MainActor
 struct MessagesHarness {
     nonisolated static let me = "user-me"
+    /// 계정 전환 시나리오의 다음 계정.
+    nonisolated static let secondUser = "user-two"
     nonisolated static let base = 1_789_621_000   // 2026-09-17 13:56:40 KST 무렵(데모 시계 14:05 보다 조금 앞)
 
     let host: String
@@ -184,6 +216,22 @@ struct MessagesHarness {
             _ = await baseWaitUntil { store.pendingActivityTask == nil && !store.isMarkingRead && !store.isSending && !store.directoryLoading }
             try? await Task.sleep(for: .milliseconds(20))
         }
+    }
+
+    /// 로그아웃 → 다른 사용자로 로그인(같은 앱 모델 · scene 은 active 그대로). 끝나면 새 계정의 활성화 새로고침까지 기다린다.
+    func switchAccount(sourceLocation: SourceLocation = #_sourceLocation) async {
+        let before = model.session.generation
+        await model.session.signOut()
+        await model.session.signIn(email: "two@example.invalid", password: "pw-two")
+        #expect(model.session.isSignedIn, "두 번째 계정 로그인 실패: \(String(describing: model.session.notice))", sourceLocation: sourceLocation)
+        #expect(model.session.session?.userID == Self.secondUser, sourceLocation: sourceLocation)
+        #expect(model.session.generation > before, sourceLocation: sourceLocation)
+        await settle()
+    }
+
+    /// `window` 초 동안 `condition` 이 한 번도 참이 되지 않으면 true(늦게 오는 응답이 **새지 않았다**를 재는 창 — 새면 곧바로 false).
+    func staysFalse(for window: TimeInterval, _ condition: @MainActor () -> Bool) async -> Bool {
+        !(await baseWaitUntil(timeout: window, condition))
     }
 
     /// 금지 경로 0건(데모·실 모드 공통 단언).

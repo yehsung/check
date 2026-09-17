@@ -172,6 +172,30 @@ package enum MessagesComposerRules {
         MessageBody.length(draft) > MessageBody.maxLength
     }
 
+    /// 손가락으로 누르는 자리의 최소 변(pt · HIG 44). 보내기 원 · "새 메시지 ↓" 버튼이 이 값 아래로 내려가지 않는다
+    /// (messages-verify 실측: 보내기 40×40 · 새 메시지 버튼 높이 31.7).
+    package static let minimumTouchTarget: Double = 44
+    /// 보내기 원 지름의 상한(pt). 원은 본문 글자 크기(`@ScaledMetric`)를 따라 44 에서 여기까지 자란다 — 입력칸 폭을 너무 먹지 않게.
+    package static let sendButtonMaxDiameter: Double = 52
+    /// 화살표 글리프 크기 = 원 지름 × 이 비율. **글리프는 글자 크기를 직접 따르지 않는다** — `.body` 를 따르면 손쉬운 사용 큰 글자(AX3)에서
+    /// 화살촉이 고정 원 밖으로 빠져 원이 두 조각처럼 보이고 화살표 모양이 사라졌다(messages-verify 스크린샷).
+    package static let sendGlyphRatio: Double = 0.4
+
+    package struct SendButtonMetrics: Equatable, Sendable {
+        /// 원 지름 = 누르는 자리의 변(pt).
+        package let diameter: Double
+        /// 화살표 글리프 글꼴 크기(pt).
+        package let glyphSize: Double
+    }
+
+    /// 보내기 버튼 치수. `scaledDiameter` = 44 를 본문 글자 크기로 키운 값(`@ScaledMetric(relativeTo: .body)`).
+    package static func sendButtonMetrics(scaledDiameter: Double) -> SendButtonMetrics {
+        let scaled = scaledDiameter.isFinite ? scaledDiameter : minimumTouchTarget
+        let diameter = min(max(scaled, minimumTouchTarget), sendButtonMaxDiameter)
+        let glyph = (diameter * sendGlyphRatio).rounded()
+        return SendButtonMetrics(diameter: diameter, glyphSize: glyph)
+    }
+
     /// [보내기]를 눌렀을 때 화면이 할 일. **한글 조합 중에는 보내지 않는다** — 조합 중인 마지막 글자는 아직 입력칸 값에 확정되지 않았다
     /// (맥 v0.3.11 "뒤에 한 글자가 사라져요"). 화면은 조합을 먼저 확정하고(`commitThenSend`), 확정된 값으로 다시 판정해 보낸다.
     package enum SendAction: Equatable, Sendable {
@@ -348,6 +372,39 @@ package enum MessagesConversationRules {
     }
 }
 
+extension MessagesConversationRules {
+    /// 대화 머리(제목 · 아바타 · 보이스오버). **이름을 모르면 사람처럼 꾸미지 않는다** — 예전에는 "대화"라는 글자를 이름 자리에 넣어
+    /// "대" 이니셜 원 + "대화"가 사람처럼 섰다(오프라인에서 푸시·딥링크로 대화를 열어 이력·사람 찾기가 모두 실패한 경우 · messages-verify).
+    ///
+    /// - 이름을 안다: 제목 = 이름, 이니셜 아바타, 보이스오버 = 이름.
+    /// - 모른다: 제목 "대화", 아바타 대신 일반 인물 아이콘(`avatarName == nil`), 보이스오버는 아직 받는 중인지 · 못 받았는지를 말한다.
+    package static func header(peerName: String?, isResolving: Bool) -> MessagesConversationHeader {
+        if let name = peerName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return MessagesConversationHeader(title: name, avatarName: name, accessibilityLabel: name)
+        }
+        return MessagesConversationHeader(
+            title: MessagesConversationHeader.fallbackTitle,
+            avatarName: nil,
+            accessibilityLabel: isResolving
+                ? MessagesConversationHeader.resolvingAccessibilityLabel
+                : MessagesConversationHeader.unknownAccessibilityLabel
+        )
+    }
+}
+
+package struct MessagesConversationHeader: Equatable, Sendable {
+    package static let fallbackTitle = "대화"
+    package static let resolvingAccessibilityLabel = "대화 상대를 불러오는 중"
+    package static let unknownAccessibilityLabel = "이름을 불러오지 못한 대화"
+    /// 일반 인물 아이콘(SF Symbol) — 이름을 모를 때 이니셜 원 대신.
+    package static let unknownAvatarSymbol = "person.crop.circle"
+
+    package let title: String
+    /// 이니셜 아바타에 넘길 이름. nil = 이름을 모른다 → 일반 인물 아이콘(가짜 이니셜 금지).
+    package let avatarName: String?
+    package let accessibilityLabel: String
+}
+
 package struct MessagesEmptyState: Equatable, Sendable {
     package let symbol: String
     package let title: String
@@ -372,6 +429,8 @@ private extension MessageTimelineItem {
 package struct MessagesScrollFollow: Equatable, Sendable {
     package static let nearBottomThreshold: Double = 60
     package static let newMessageButtonTitle = "새 메시지 ↓"
+    /// "새 메시지 ↓" 캡슐의 최소 높이(누르는 자리).
+    package static let newMessageButtonMinHeight: Double = MessagesComposerRules.minimumTouchTarget
 
     package private(set) var isNearBottom = true
     package private(set) var showsNewMessageButton = false

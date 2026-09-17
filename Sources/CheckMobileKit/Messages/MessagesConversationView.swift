@@ -19,7 +19,8 @@ struct MessagesConversationView: View {
 
     var body: some View {
         let items = store.conversationItems(for: peerID)
-        let name = store.peerName(for: peerID) ?? "대화"
+        let header = store.conversationHeader(for: peerID)
+        let name = header.title
         let avatarURL = store.peerAvatarURL(for: peerID)
         ScrollViewReader { proxy in
             ScrollView {
@@ -78,17 +79,27 @@ struct MessagesConversationView: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if follow.showsNewMessageButton {
+                if follow.showsNewMessageButton || demoForcesNewMessageButton {
                     Button {
                         follow.jumpedToBottom()
                         withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom) }
                     } label: {
                         Text(MessagesScrollFollow.newMessageButtonTitle)
                             .font(.footnote.weight(.bold))
+                            .lineLimit(1)
+                            .fixedSize()
+                            // 떠 있는 작은 버튼이다 — 가장 큰 글자에서 캡슐이 화면 폭을 채우며 말풍선을 덮었다(AX3 실측).
+                            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                             .foregroundStyle(MobileTheme.onAccent)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                            // 누르는 자리 44pt 이상(예전 세로 여백 8 로는 31.7pt).
+                            .frame(minHeight: CGFloat(MessagesScrollFollow.newMessageButtonMinHeight))
                             .background(Capsule().fill(MobileTheme.accent))
+                            // 바탕색 테두리 + 그림자 — 같은 accent 색인 내 말풍선 위에 떠도 경계가 보인다(예전엔 '새 메시지 ↓`요'로 섞였다).
+                            .padding(2)
+                            .background(Capsule().fill(MobileTheme.background))
+                            .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 2)
+                            .contentShape(Capsule())
                     }
                     .accessibilityLabel(Text("새 메시지로 이동"))
                     .padding(.bottom, 8)
@@ -103,13 +114,22 @@ struct MessagesConversationView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
-                    AvatarView(name: name, url: avatarURL, size: 28)
-                    Text(name)
+                    if let avatarName = header.avatarName {
+                        AvatarView(name: avatarName, url: avatarURL, size: 28)
+                    } else {
+                        // 이름을 모른다 — "대" 이니셜 원을 세우면 "대화"라는 사람처럼 보였다.
+                        Image(systemName: MessagesConversationHeader.unknownAvatarSymbol)
+                            .font(.system(size: 26, weight: .regular))
+                            .foregroundStyle(MobileTheme.secondaryText)
+                            .frame(width: 28, height: 28)
+                    }
+                    Text(header.title)
                         .font(.headline)
                         .foregroundStyle(MobileTheme.primaryText)
                         .lineLimit(1)
                 }
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(header.accessibilityLabel))
                 .accessibilityAddTraits(.isHeader)
             }
         }
@@ -121,6 +141,15 @@ struct MessagesConversationView: View {
         #endif
     }
 
+    /// 데모 스크린샷 고리(`-AingCheckDemoMessages newbutton`). Release 에서는 늘 false.
+    private var demoForcesNewMessageButton: Bool {
+        #if DEBUG
+        MessagesDemoLaunch.forcesNewMessageButton(isDemo: store.context.isDemo)
+        #else
+        false
+        #endif
+    }
+
     @ViewBuilder
     private var emptyState: some View {
         let state = MessagesConversationRules.emptyState(loaded: store.historyLoaded, failed: store.historyFailed)
@@ -129,7 +158,7 @@ struct MessagesConversationView: View {
             title: state.title,
             message: state.hint,
             actionTitle: state.showsRetry ? "다시 시도" : nil,
-            action: state.showsRetry ? { Task { await store.refreshNow() } } : nil
+            action: state.showsRetry ? { Task { await store.retryConversation(peerID: peerID) } } : nil
         )
         .padding(.top, 40)
     }

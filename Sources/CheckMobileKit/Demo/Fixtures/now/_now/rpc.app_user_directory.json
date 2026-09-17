@@ -1,0 +1,74 @@
+[
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000102",
+    "display_name": "민트",
+    "avatar_url": null,
+    "is_working": true,
+    "message_capable": true,
+    "center": "seoul"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000103",
+    "display_name": "라임",
+    "avatar_url": null,
+    "is_working": true,
+    "message_capable": true,
+    "center": "seoul"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000104",
+    "display_name": "보리",
+    "avatar_url": null,
+    "is_working": true,
+    "message_capable": true,
+    "center": "busan"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000201",
+    "display_name": "코랄",
+    "avatar_url": null,
+    "is_working": true,
+    "message_capable": true,
+    "center": "busan"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000203",
+    "display_name": "모래",
+    "avatar_url": null,
+    "is_working": true,
+    "message_capable": true,
+    "center": "seoul"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000202",
+    "display_name": "하늘",
+    "avatar_url": null,
+    "is_working": true,
+    "message_capable": true,
+    "center": null
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000105",
+    "display_name": "자두",
+    "avatar_url": null,
+    "is_working": false,
+    "message_capable": true,
+    "center": "seoul"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000204",
+    "display_name": "구름",
+    "avatar_url": null,
+    "is_working": false,
+    "message_capable": true,
+    "center": "seoul"
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000205",
+    "display_name": "바다",
+    "avatar_url": null,
+    "is_working": false,
+    "message_capable": true,
+    "center": "busan"
+  }
+]

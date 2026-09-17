@@ -1,0 +1,62 @@
+{
+  "status": "ok",
+  "items": [
+    {
+      "id": "d0000000-0000-4000-8000-00000000c001",
+      "title": "주간 회고 초안 쓰기",
+      "created_at_ms": 1789545600000,
+      "updated_at_ms": 1789545600000,
+      "completed_at_ms": null,
+      "deleted_at_ms": null,
+      "origin_day_key": "20260916"
+    },
+    {
+      "id": "d0000000-0000-4000-8000-00000000c002",
+      "title": "디자인 리뷰 피드백 반영하고 스크린샷 다시 찍기",
+      "created_at_ms": 1789605000000,
+      "updated_at_ms": 1789605000000,
+      "completed_at_ms": null,
+      "deleted_at_ms": null,
+      "origin_day_key": "20260917"
+    },
+    {
+      "id": "d0000000-0000-4000-8000-00000000c003",
+      "title": "점심 전에 PR 올리기",
+      "created_at_ms": 1789604400000,
+      "updated_at_ms": 1789614600000,
+      "completed_at_ms": 1789614600000,
+      "deleted_at_ms": null,
+      "origin_day_key": "20260917"
+    },
+    {
+      "id": "d0000000-0000-4000-8000-00000000c004",
+      "title": "팀 회의 안건 정리",
+      "created_at_ms": 1789351200000,
+      "updated_at_ms": 1789351200000,
+      "completed_at_ms": null,
+      "deleted_at_ms": null,
+      "origin_day_key": "20260914"
+    },
+    {
+      "id": "d0000000-0000-4000-8000-00000000c005",
+      "title": "온보딩 문서 링크 모으기",
+      "created_at_ms": 1788832800000,
+      "updated_at_ms": 1788832800000,
+      "completed_at_ms": null,
+      "deleted_at_ms": null,
+      "origin_day_key": "20260908"
+    },
+    {
+      "id": "d0000000-0000-4000-8000-00000000c006",
+      "title": "지난주에 지운 줄",
+      "created_at_ms": 1789005600000,
+      "updated_at_ms": 1789009200000,
+      "completed_at_ms": null,
+      "deleted_at_ms": 1789009200000,
+      "origin_day_key": "20260910"
+    }
+  ],
+  "watermark_ms": 1789621500000,
+  "rejected": [],
+  "full": false
+}

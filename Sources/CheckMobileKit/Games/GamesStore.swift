@@ -3,6 +3,18 @@ import CheckMobileShared
 import Foundation
 import Observation
 
+/// 게임 탭에서 쌓는 화면(경로 원소).
+package enum GamesDestination: Hashable, Sendable {
+    case miniGame(MiniGameKind)
+    case gomoku
+}
+
+/// 딥링크 한 건을 게임 탭 경로에 옮기는 동작(`GamesStore.routeStep(for:)`). 뷰는 돌려받은 대로 경로만 바꾼다.
+package enum GamesRouteStep: Equatable, Sendable {
+    case popToRoot
+    case push(GamesDestination)
+}
+
 /// 게임 탭 스토어(SPEC-ios §3.5) — 탭 자리 API 를 지키고, 두 갈래를 잇는다.
 ///
 /// 1. **미니게임** — `miniGames`(`GamesMiniGameHub`): 오늘 순위 · 로컬 최고 · 라운드 토큰 · 제출. 엔진은 코어 규칙.
@@ -27,7 +39,13 @@ package final class GamesStore {
     /// 앱이 active 다(로그인 상태에서 appDidBecomeActive ~ appDidEnterBackground).
     package private(set) var isAppActive = false
     /// 오목 화면을 열 때 보여 줄 신청·판 id(딥링크 `gomoku/invite/<id>` · `gomoku/match/<id>`). 화면이 한 번 꺼내 쓴다.
+    /// 화면이 **이미 보이면** 여기 남기지 않는다(`routeStep(for:)` 이 코어에 바로 넘긴다).
     package var pendingGomokuFocusID: String?
+
+    /// 화면 꺼짐 방지를 실제로 거는 곳(iOS 는 init 이 `GamesSystemIdleTimer` 를 단다 · 테스트는 기록용).
+    @ObservationIgnored private var idleTimerSink: (@MainActor (Bool) -> Void)?
+    /// 마지막으로 싱크에 넘긴 값(같은 값은 다시 넘기지 않는다). 싱크가 없으면 nil.
+    @ObservationIgnored package private(set) var appliedIdleTimerDisabled: Bool?
 
     package init(context: MobileContext) {
         self.context = context
@@ -35,6 +53,10 @@ package final class GamesStore {
         // 판이 막 시작됐다(내 신청이 수락됨 · 내가 수락함 · 앱을 다시 켜니 진행 중인 판) — 오목 화면을 연다.
         // 네트워크가 아니라 문을 다는 것이라 init 에서 해도 된다.
         context.gomoku.presentWindow = { [weak self] in self?.presentGomokuScreen() }
+        #if os(iOS)
+        // 화면 꺼짐 방지의 주인은 이 스토어다 — 게임 탭을 한 번도 안 열었어도(다른 탭에서 판이 시작돼도) 값이 따라간다.
+        installIdleTimerSink { GamesSystemIdleTimer.apply(disabled: $0) }
+        #endif
     }
 
     // MARK: 자리 API
@@ -112,9 +134,73 @@ package final class GamesStore {
     }
 
     /// 대국 중이라 화면이 꺼지면 안 된다(`UIApplication.isIdleTimerDisabled`, SPEC-ios §3.5). 앱이 active 이고 끝나지 않은 판이 있을 때.
+    /// **어느 화면에 있든 같다**(오목 화면 밖 — 게임 첫 화면 · 다른 탭 — 에서도 판이 도는 동안은 켠다).
     package var wantsIdleTimerDisabled: Bool {
         guard isAppActive, context.session.isSignedIn, let match = context.gomoku.match else { return false }
         return !match.isFinished
+    }
+
+    // MARK: 화면 꺼짐 방지(주인은 이 스토어 하나)
+
+    /// 화면 꺼짐 방지 싱크를 단다(첫 한 번만 — 뒤의 호출은 무시). 이후 `wantsIdleTimerDisabled` 가 바뀔 때마다 이 스토어가 넘긴다.
+    /// iOS 는 init 이 시스템 대입(`GamesSystemIdleTimer`)을 단다. macOS 테스트는 기록용 싱크를 단다.
+    ///
+    /// 예전에는 오목 화면(onDisappear 에서 무조건 false · onChange)과 게임 첫 화면(onChange)이 제각각 썼다. 대국 중 [뒤로]로
+    /// 오목 화면을 떠나면 false 가 써지고, 첫 화면의 onChange 는 값이 안 바뀌어 다시 쓰지 않아, 같은 상태인데 이동 경로에 따라
+    /// 값이 달랐다(games-verify probe-back). 이제 어느 뷰도 이 값을 쓰지 않는다.
+    package func installIdleTimerSink(_ sink: @escaping @MainActor (Bool) -> Void) {
+        guard idleTimerSink == nil else { return }
+        idleTimerSink = sink
+        syncIdleTimer()
+    }
+
+    /// 지금 값을 싱크에 넘기고, 재료(앱 active · 로그인 · 판)가 바뀌면 다시 불리도록 관찰을 건다(한 줄로 이어지는 관찰 하나).
+    private func syncIdleTimer() {
+        guard let sink = idleTimerSink else { return }
+        let wants = withObservationTracking {
+            wantsIdleTimerDisabled
+        } onChange: { [weak self] in
+            // willSet 에서 불린다 — 값이 실제로 바뀐 뒤에 읽도록 다음 차례로 미룬다.
+            Task { @MainActor [weak self] in self?.syncIdleTimer() }
+        }
+        guard appliedIdleTimerDisabled != wants else { return }
+        appliedIdleTimerDisabled = wants
+        sink(wants)
+    }
+
+    // MARK: 딥링크
+
+    /// 게임 탭이 꺼낸 딥링크(`router.consumePendingRoute(for: .games)`)를 경로 동작으로 바꾼다. 게임 탭 밖 라우트면 nil.
+    ///
+    /// 오목 라우트에서 **오목 화면이 이미 보이면** 대상 id 를 코어에 바로 넘긴다(`openWindow(focusMatchID:)`). 라우터가 경로를
+    /// [오목] → [] → [오목] 으로 한 번에 바꾸면 SwiftUI 는 같은 화면으로 보아 onDisappear/onAppear 를 부르지 않으므로,
+    /// `gomokuScreenDidAppear` 에 기대면 대상이 적용되지 않고 남아 나중의 무관한 진입에 쓰였다(games-verify probe-focus).
+    /// 경로는 그래도 다시 쌓는다 — 라우터가 비운 경로를 되돌려야 화면이 닫히지 않는다.
+    package func routeStep(for route: AingRoute) -> GamesRouteStep? {
+        switch route {
+        case .games:
+            return .popToRoot
+        case .miniGame(let game):
+            return .push(.miniGame(game == .timing ? .timingBar : .flappy))
+        case .gomokuLobby, .gomokuMatch(matchID: nil):
+            openGomoku(focusID: nil)
+            return .push(.gomoku)
+        case .gomokuInvite(let id), .gomokuMatch(matchID: .some(let id)):
+            openGomoku(focusID: id)
+            return .push(.gomoku)
+        default:
+            return nil
+        }
+    }
+
+    private func openGomoku(focusID: String?) {
+        guard isGomokuScreenVisible else {
+            // 화면이 곧 나타난다(push) — 나타날 때 꺼내 쓴다.
+            pendingGomokuFocusID = focusID
+            return
+        }
+        pendingGomokuFocusID = nil
+        context.gomoku.openWindow(focusMatchID: focusID)
     }
 
     private func presentGomokuScreen() {

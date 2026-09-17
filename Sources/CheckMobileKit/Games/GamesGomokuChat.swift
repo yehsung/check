@@ -10,6 +10,7 @@ struct GamesGomokuChatCard: View {
     @Bindable var store: GomokuStore
 
     @FocusState private var inputFocused: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private static let bottomAnchor = "gomoku-phone-chat-bottom"
 
@@ -81,8 +82,16 @@ struct GamesGomokuChatCard: View {
             .padding(.vertical, 10)
     }
 
+    /// 빠른 문구 열 — 접근성 글자 크기에서는 한 열(세 열에 두면 "한 수 부탁…"처럼 잘렸다, AX5 스크린샷 실측).
+    private var quickPhraseColumns: [GridItem] {
+        typeSize.isAccessibilitySize
+            ? [GridItem(.flexible(), spacing: 6)]
+            : [GridItem(.adaptive(minimum: 104), spacing: 6)]
+    }
+
     private var quickPhrases: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 6)], spacing: 6) {
+        let wraps = typeSize.isAccessibilitySize
+        return LazyVGrid(columns: quickPhraseColumns, spacing: 6) {
             ForEach(GomokuQuickPhrase.allCases, id: \.rawValue) { phrase in
                 Button {
                     store.sendQuick(phrase)
@@ -90,13 +99,15 @@ struct GamesGomokuChatCard: View {
                     Text(phrase.text)
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(MobileTheme.primaryText)
-                        .lineLimit(2)
+                        .lineLimit(wraps ? nil : 2)
                         .multilineTextAlignment(.center)
-                        .minimumScaleFactor(0.85)
-                        .frame(maxWidth: .infinity, minHeight: 32)
+                        .minimumScaleFactor(wraps ? 1 : 0.85)
+                        .fixedSize(horizontal: false, vertical: wraps)
+                        .frame(maxWidth: .infinity, minHeight: GamesTouchTarget.minimum)
                         .padding(.horizontal, 4)
                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(MobileTheme.cardElevated))
                         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(MobileTheme.separator, lineWidth: 1))
+                        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .disabled(store.isSendingChat)

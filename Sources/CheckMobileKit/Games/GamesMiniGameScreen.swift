@@ -172,16 +172,21 @@ struct GamesMiniGameScreen: View {
     private var rankings: some View {
         let state = hub.boards[kind] ?? GamesMiniGameBoard()
         return AingCard {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline) {
-                    rankTitle
-                    Spacer(minLength: 8)
-                    quorum(state.entries.count)
+            // 정족수 줄은 사람 수를 알 때만 — 불러오지 못했거나 불러오는 중이면 "아무도 안 했어요"라고 말하지 않는다.
+            if state.knowsPlayerCount {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline) {
+                        rankTitle
+                        Spacer(minLength: 8)
+                        quorum(state.entries.count)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        rankTitle
+                        quorum(state.entries.count)
+                    }
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    rankTitle
-                    quorum(state.entries.count)
-                }
+            } else {
+                rankTitle
             }
             if let winner = state.yesterdayWinner {
                 GamesChampionRow(winner: winner)
@@ -195,6 +200,7 @@ struct GamesMiniGameScreen: View {
                         Spacer()
                         Button(GamesMiniGameText.retry) { Task { await hub.loadBoard(kind, withWinner: true) } }
                             .font(.subheadline.weight(.semibold))
+                            .gamesTouchTarget()
                     }
                 } else if !state.loaded {
                     LoadingRow(GamesMiniGameText.loadingCaption)

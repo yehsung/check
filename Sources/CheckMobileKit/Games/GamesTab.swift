@@ -2,13 +2,6 @@
 import CheckCore
 import CheckMobileShared
 import SwiftUI
-import UIKit
-
-/// 게임 탭에서 쌓는 화면.
-enum GamesDestination: Hashable {
-    case miniGame(MiniGameKind)
-    case gomoku
-}
 
 /// 게임 탭(SPEC-ios §3.5): 카드 세 장 — 타이밍 바 · 플래피 아잉(오늘 내 최고·순위) · 1:1 오목(받은 신청 수·진행 중 판).
 /// 경로는 `router.pathBinding(for: .games)`, 딥링크(`games/<game>` · `gomoku/lobby|invite|match`)는 `consumePendingRoute`.
@@ -43,15 +36,12 @@ struct GamesTab: View {
                 }
             }
         }
+        // 대국 중 화면 꺼짐 방지는 뷰가 쓰지 않는다 — 주인은 스토어 하나(`GamesStore.installIdleTimerSink`, init 에서 단다).
         .onAppear {
             store.hubDidAppear()
             consumeRoute()
         }
         .onChange(of: router.routeSerial) { consumeRoute() }
-        // 대국 중에는 화면이 꺼지지 않는다 — 오목 화면 밖(다른 게임·첫 화면)에서도 판이 도는 동안은 같다.
-        .onChange(of: store.wantsIdleTimerDisabled, initial: true) { _, wants in
-            UIApplication.shared.isIdleTimerDisabled = wants
-        }
     }
 
     // MARK: 카드
@@ -93,25 +83,15 @@ struct GamesTab: View {
 
     // MARK: 딥링크
 
+    /// 라우터가 남긴 링크를 꺼내 경로를 바꾼다. 무엇을 할지는 스토어가 정한다(오목 화면이 이미 보이면 대상 판을 코어에 바로 넘긴다).
     private func consumeRoute() {
         let router = store.context.router
-        guard let route = router.consumePendingRoute(for: .games) else { return }
-        switch route {
-        case .games:
+        guard let route = router.consumePendingRoute(for: .games), let step = store.routeStep(for: route) else { return }
+        switch step {
+        case .popToRoot:
             router.popToRoot(.games)
-        case .miniGame(let game):
-            router.push(GamesDestination.miniGame(game == .timing ? .timingBar : .flappy), on: .games)
-        case .gomokuLobby:
-            store.pendingGomokuFocusID = nil
-            router.push(GamesDestination.gomoku, on: .games)
-        case .gomokuInvite(let id), .gomokuMatch(matchID: .some(let id)):
-            store.pendingGomokuFocusID = id
-            router.push(GamesDestination.gomoku, on: .games)
-        case .gomokuMatch(matchID: nil):
-            store.pendingGomokuFocusID = nil
-            router.push(GamesDestination.gomoku, on: .games)
-        default:
-            break
+        case .push(let destination):
+            router.push(destination, on: .games)
         }
     }
 }

@@ -13,6 +13,13 @@ package struct GamesMiniGameBoard: Equatable {
     package var failed = false
 
     package init() {}
+
+    /// 오늘 한 사람 수를 **안다**(정족수 줄 "오늘은 아직 아무도 안 했어요 · 5명부터 지급"을 그려도 된다).
+    /// 줄이 하나라도 있으면 적어도 그만큼은 했다. 비어 있으면 받은 적이 있고 마지막 조회가 실패하지 않았을 때만 0명이다 —
+    /// 불러오지 못한 순위를 "아무도 안 했다"로 말하지 않는다(games-verify: 실패 카드에 두 말이 함께 떴다).
+    package var knowsPlayerCount: Bool {
+        !entries.isEmpty || (loaded && !failed)
+    }
 }
 
 /// 미니게임 허브(SPEC-ios §3.5) — 오늘 순위 · 로컬 최고 · 라운드 토큰 · 점수 제출 · 공개 여부. 맥 `WorkTimerStoreMiniGame` 의
@@ -46,7 +53,8 @@ package final class GamesMiniGameHub {
     /// 열린 화면의 엔진 구동기. 화면마다 새로 만든다.
     package private(set) var controller: GamesPlayController?
     package private(set) var boards: [MiniGameKind: GamesMiniGameBoard] = [:]
-    /// 내 순위 공개 여부(profiles.minigame_public). 모르면 공개로 본다(맥과 같다 — 컬럼 없는 서버).
+    /// 내 순위 공개 여부(profiles.minigame_public). 이번 로그인에서 아직 모르면 공개로 본다(맥과 같다 — 컬럼 없는 서버).
+    /// 한 번 안 값은 조회 실패로 바뀌지 않는다(`refreshPublic`).
     package private(set) var isPublic = true
     /// 제출 실패·판 끝남 안내 한 줄.
     package private(set) var submitNotice: String?
@@ -270,17 +278,34 @@ package final class GamesMiniGameHub {
 
     // MARK: 조회
 
-    /// 공개 여부를 읽는다(설정은 나 탭이 바꾼다 — 화면을 열 때마다 다시 읽는다). 모르면 공개.
+    /// 공개 여부를 읽는다(설정은 나 탭이 바꾼다 — 화면을 열 때마다 다시 읽는다).
+    ///
+    /// - 서버가 답했다: 그 값. 행·컬럼이 없어 값이 없으면(nil) 공개(맥과 같다 — 컬럼 없는 서버).
+    /// - 표·함수가 아직 없는 서버(`databaseSchemaMissing`): 공개.
+    /// - **그 밖의 실패(오프라인·5xx·만료)는 아는 값을 그대로 둔다** — 예전에는 `try?` 가 실패를 nil 로 바꿔 "모름 = 공개"로
+    ///   덮었고, 순위 공개를 끈 사람의 점수가 조회 한 번 실패 뒤 서버로 나갔다(games-verify PROBE-1). 맥
+    ///   `miniGamePublicLoaded` 도 실패는 값을 바꾸지 않는다.
     package func refreshPublic() async {
         guard context.session.isSignedIn, let userID = context.session.session?.userID else { return }
         let sessionGeneration = context.generation
         let generation = resetGeneration
         let service = context.service
-        let value = try? await context.withMobileSessionRetry { session in
-            try await service.fetchMiniGamePublic(accessToken: session.accessToken, userID: userID)
+        let resolved: Bool
+        do {
+            let value = try await context.withMobileSessionRetry { session in
+                try await service.fetchMiniGamePublic(accessToken: session.accessToken, userID: userID)
+            }
+            resolved = value ?? true
+        } catch SupabaseWorkServiceError.databaseSchemaMissing {
+            resolved = true
+        } catch {
+            if case .cancelled = AuthErrorRules.classify(error) { return }
+            guard sessionGeneration == context.generation, generation == resetGeneration else { return }
+            let kept = isPublic
+            Self.logger.notice("minigame public lookup failed — keeping isPublic=\(kept, privacy: .public)")
+            return
         }
         guard sessionGeneration == context.generation, generation == resetGeneration else { return }
-        let resolved = value ?? true
         if isPublic != resolved { isPublic = resolved }
         if !resolved {
             // 꺼져 있으면 들고 있는 토큰은 쓸 일이 없다.

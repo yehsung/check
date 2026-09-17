@@ -1,12 +1,11 @@
 #if os(iOS)
 import CheckCore
 import SwiftUI
-import UIKit
 
 /// 1:1 오목 화면(SPEC-ios §3.5) — 코어 `GomokuStore` 의 단계(로비 · 대국 · 결과)를 한 화면에서 갈아 끼운다.
 ///
 /// 수명: 나타나면 `GamesStore.gomokuScreenDidAppear`(로비·인박스·진행 판 + 폴링), 사라지면 `gomokuScreenDidDisappear`.
-/// 대국 중에는 화면이 꺼지지 않는다(`isIdleTimerDisabled`) — 끝나거나 화면을 떠나면 푼다.
+/// 대국 중 화면 꺼짐 방지는 이 화면이 쓰지 않는다 — 주인은 `GamesStore`(판이 도는 동안은 화면을 떠나도 유지, 끝나면 푼다).
 struct GamesGomokuScreen: View {
     let store: GamesStore
 
@@ -44,10 +43,6 @@ struct GamesGomokuScreen: View {
             }
             .onDisappear {
                 store.gomokuScreenDidDisappear()
-                UIApplication.shared.isIdleTimerDisabled = false
-            }
-            .onChange(of: store.wantsIdleTimerDisabled, initial: true) { _, wants in
-                UIApplication.shared.isIdleTimerDisabled = wants
             }
             .onChange(of: gomoku.match?.id) { _, _ in
                 stakeTarget = nil
@@ -218,6 +213,7 @@ struct GamesGomokuLobby: View {
                     InlineNotice(text: GomokuPhoneText.usersLoadFailed, kind: .warning)
                     Button(GomokuPhoneText.reloadUsers) { Task { await gomoku.refreshLobby() } }
                         .font(.subheadline.weight(.semibold))
+                        .gamesTouchTarget()
                         .fixedSize()
                 }
             }
@@ -335,6 +331,8 @@ struct GamesGomokuInviteCard: View {
     let store: GamesStore
     let invite: GomokuInvite
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     private var gomoku: GomokuStore { store.context.gomoku }
 
     var body: some View {
@@ -343,24 +341,34 @@ struct GamesGomokuInviteCard: View {
                 HStack(spacing: 10) { inviteAvatar; inviteTexts; Spacer(minLength: 6); countdown }
                 VStack(alignment: .leading, spacing: 8) { HStack(spacing: 10) { inviteAvatar; countdown }; inviteTexts }
             }
-            HStack(spacing: 8) {
-                Button {
-                    Task { await gomoku.respond(inviteID: invite.id, accept: true) }
-                } label: {
-                    Label(GomokuPhoneText.accept, systemImage: "checkmark")
-                }
-                .buttonStyle(GamesCompactButtonStyle(kind: .filled, fillsWidth: true))
-                .disabled(gomoku.isBusy)
-                Button(GomokuPhoneText.decline) {
-                    Task { await gomoku.respond(inviteID: invite.id, accept: false) }
-                }
-                .buttonStyle(GamesCompactButtonStyle(kind: .outline, fillsWidth: true))
-                .disabled(gomoku.isBusy)
+            // 큰 글자(접근성 크기): 위아래로 — 버튼 글자가 줄을 바꾸게 되어(잘림 대신), 반 폭 둘에 두면 낱글자로 꺾일 수 있다.
+            if typeSize.isAccessibilitySize {
+                VStack(spacing: 8) { acceptButton; declineButton }
+            } else {
+                HStack(spacing: 8) { acceptButton; declineButton }
             }
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(MobileTheme.accent.opacity(0.10)))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(MobileTheme.accent.opacity(0.45), lineWidth: 1))
+    }
+
+    private var acceptButton: some View {
+        Button {
+            Task { await gomoku.respond(inviteID: invite.id, accept: true) }
+        } label: {
+            Label(GomokuPhoneText.accept, systemImage: "checkmark")
+        }
+        .buttonStyle(GamesCompactButtonStyle(kind: .filled, fillsWidth: true))
+        .disabled(gomoku.isBusy)
+    }
+
+    private var declineButton: some View {
+        Button(GomokuPhoneText.decline) {
+            Task { await gomoku.respond(inviteID: invite.id, accept: false) }
+        }
+        .buttonStyle(GamesCompactButtonStyle(kind: .outline, fillsWidth: true))
+        .disabled(gomoku.isBusy)
     }
 
     private var inviteAvatar: some View {

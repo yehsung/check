@@ -261,6 +261,41 @@ enum GomokuText {
 
     /// 상한을 넘은 만큼은 "외 N건"으로 접는다(받은 신청 카드와 같은 수법).
     static func more(_ count: Int) -> String { "외 \(count)건" }
+
+    // MARK: AI 대국 (docs/plan/gomoku-ai.md §5)
+
+    static let aiButton = "AI와 두기"
+    static let aiButtonHelp = "루비·전적 없이 AI와 연습해요"
+    static let aiPromptTitle = "AI와 두기"
+    static let aiPromptCaption = "돌 색을 고르면 바로 시작해요"
+    /// 사용자 결정 둘(루비 안 걸기 · 기록 안 남기기)을 **시작 전에** 한 번, 대국 중 안내 카드에서 한 번 더 말한다.
+    static let aiNoRecord = "루비·전적·순위에 남지 않아요"
+    static let aiPlayBlack = "흑 · 먼저 둬요"
+    static let aiPlayWhite = "백 · 나중에 둬요"
+    static let aiOpponentName = "AI"
+    static let aiThinking = "AI가 생각 중이에요"
+    static let aiThinkingShort = "생각 중"
+    static let aiStakeChip = "AI 대국 · 기록 없음"
+    static let aiInfoTitle = "AI 대국"
+    /// 창을 닫거나 가리면 내 시계가 멈춘다(기다리는 상대가 없다) — 1:1 과 달라 글자로 말한다.
+    static let aiInfoClock = "창을 닫거나 가리면 내 시계가 멈춰요 · 한 수 30초가 지나면 자동으로 놓여요"
+    static let aiResignConfirm = "기권하면 이 판은 AI가 이겨요"
+    static let aiRematch = "같은 색으로 다시 두기"
+    static let aiRematchHelp = "같은 돌 색으로 AI와 새 판을 시작해요"
+    static let aiOpponentLine = "상대 · AI"
+
+    /// AI 판 결과 이유. 1:1 문구는 루비("건 루비는 돌려받아요")·"상대"를 말해서 AI 판에는 쓰지 않는다.
+    static func aiEndReason(_ reason: GomokuEndReason?, outcome: GomokuOutcome?) -> String {
+        switch (reason, outcome) {
+        case (.five?, .won?): return "5목을 완성했어요"
+        case (.five?, _): return "AI가 5목을 완성했어요"
+        case (.resign?, _): return "기권했어요"
+        case (.boardFull?, _): return "판이 가득 찼어요"
+        case (.abandoned?, _): return GomokuNoticeText.abandoned(outcome: outcome)
+        case (.timeout?, _): return "시간이 다 됐어요"
+        case (nil, _): return ""
+        }
+    }
 }
 
 // MARK: - 판 좌표
@@ -533,12 +568,16 @@ struct GomokuPanel: View {
     /// 스냅샷 전용: 카드 말풍선이 읽는 시계. ImageRenderer 는 `.task` 를 안 돌리므로 "지금"을 넘겨 그 순간의
     /// 말풍선을 그린다. **앱은 nil** — 말풍선 잎 뷰가 스스로 켜고 끈다.
     var previewBubbleNow: Date? = nil
+    /// 스냅샷 전용: AI 돌 색 고르기 창을 띄운 채로 그린다. 앱은 false.
+    var previewAIPrompt: Bool = false
 
     @State private var hovered: GomokuPoint?
     @State private var confirmResign = false
     @State private var forbiddenMemo = GomokuForbiddenMemo()
     /// [도전]을 누른 상대 — 판돈 창이 이 값으로 열린다. nil 이면 닫혀 있다.
     @State private var stakeTarget: GomokuUser?
+    /// 머리글 [AI와 두기] 를 눌렀다 — 돌 색 고르기 창이 뜬다.
+    @State private var aiPromptVisible = false
 
     /// 지금 판돈 창이 서야 하는 상대(앱은 `stakeTarget`, 스냅샷은 주입값).
     private var activeStakeTarget: GomokuUser? { stakeTarget ?? previewStakeTarget }
@@ -546,7 +585,7 @@ struct GomokuPanel: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: GomokuWindowLayout.headerSpacing) {
-                GomokuHeader(store: store)
+                GomokuHeader(store: store, onAIMatch: { aiPromptVisible = true })
                     .frame(height: GomokuWindowLayout.headerHeight)
                 content
                     .frame(width: GomokuWindowLayout.innerSize.width, height: GomokuWindowLayout.bodyHeight, alignment: .topLeading)
@@ -559,6 +598,8 @@ struct GomokuPanel: View {
             } else if let target = activeStakeTarget {
                 GomokuStakePrompt(store: store, target: target, initialSelection: previewStakeSelection,
                                   onClose: { stakeTarget = nil })
+            } else if aiPromptVisible || previewAIPrompt {
+                GomokuAIPrompt(store: store, onClose: { aiPromptVisible = false })
             }
         }
         .frame(width: GomokuWindowLayout.contentSize.width, height: GomokuWindowLayout.contentSize.height, alignment: .topLeading)
@@ -571,6 +612,7 @@ struct GomokuPanel: View {
             hovered = nil
             // 판이 시작되면 로비가 사라진다 — 열려 있던 판돈 창을 들고 있으면 로비로 돌아올 때 되살아난다.
             stakeTarget = nil
+            aiPromptVisible = false
         }
         // 기권 확인은 **그 판 그 화면에서 연 것**만 산다(v0.3.30). 화면이 바뀌거나(대국 → 결과 → 로비) 창이
         // 내려갔다 다시 뜨면 접는다 — 돌아온 사용자가 자기가 열지 않은 확인을 보게 두지 않는다.
@@ -642,8 +684,14 @@ struct GomokuPanel: View {
             VStack(alignment: .leading, spacing: GomokuWindowLayout.matchSideSpacing) {
                 GomokuResultCard(store: store, match: match)
                     .fixedSize(horizontal: false, vertical: true)
-                GomokuChatCard(store: store, rendersPlainText: clipsOverflowInsteadOfScroll)
-                    .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                // AI 판에는 대화 상대가 없다 — 채팅 자리에 기록이 안 남는다는 안내 카드가 선다.
+                if store.isAIMatch {
+                    GomokuAIInfoCard()
+                        .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                } else {
+                    GomokuChatCard(store: store, rendersPlainText: clipsOverflowInsteadOfScroll)
+                        .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                }
             }
             .frame(width: GomokuWindowLayout.sideColumnWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
             .clipped()
@@ -655,6 +703,8 @@ struct GomokuPanel: View {
 
 private struct GomokuHeader: View {
     let store: GomokuStore
+    /// [AI와 두기] — 창 루트가 돌 색 고르기 창을 띄운다(판돈 창과 같은 관례: 가운데 창은 루트만 띄운다).
+    var onAIMatch: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 12) {
@@ -685,6 +735,12 @@ private struct GomokuHeader: View {
             .checkTooltip("내 오목 전적")
             RubyBalanceChip(balance: store.rubyBalance, large: true)
                 .checkTooltip("내 루비")
+            // 로비에서만 선다 — 대국·결과 화면의 머리글은 1:1 그대로다(판 중에 새 판을 열 길을 두지 않는다).
+            if store.phase == .lobby {
+                GomokuActionButton(title: GomokuText.aiButton, icon: "cpu", style: .outline, height: 30,
+                                   isEnabled: store.canStartAIMatch, action: onAIMatch)
+                    .checkTooltip(GomokuText.aiButtonHelp)
+            }
             GomokuActionButton(title: GomokuText.rulesButton, icon: "book.fill", style: .outline, height: 30) {
                 store.isRulesVisible = true
             }
@@ -1243,17 +1299,21 @@ private struct GomokuMatchSide: View {
         if let hoveredReason { return (GomokuText.forbiddenStatus(hoveredReason), CheckTheme.danger) }
         if let notice = store.notice { return (notice, CheckTheme.pending) }
         if match.turn == match.myColor { return (GomokuText.myTurn, CheckTheme.working) }
+        if isAI { return (GomokuText.aiThinking, CheckTheme.secondaryText) }
         return (GomokuText.opponentTurn, CheckTheme.secondaryText)
     }
 
     private var isConfirming: Bool { confirmResign || showsConfirmPreview }
+
+    /// 이 판이 AI 판인가(docs/plan/gomoku-ai.md §5) — 판돈 칩·채팅 카드·기권 확인 문구·상대 카드가 갈린다.
+    private var isAI: Bool { store.isAIMatch }
 
     var body: some View {
         VStack(alignment: .leading, spacing: GomokuWindowLayout.matchSideSpacing) {
             GomokuPlayerCard(store: store, face: .of(match.opponent), color: match.myColor.opponent,
                              isTurn: match.turn == match.myColor.opponent, isMe: false,
                              bubble: GomokuSpeechBubbleRule.latest(in: store.chat, mine: false, isMuted: store.isMuted),
-                             bubbleNow: bubbleNow)
+                             bubbleNow: bubbleNow, isAI: isAI)
                 .frame(height: GomokuWindowLayout.playerCardHeight)
             GomokuPlayerCard(store: store, face: me, color: match.myColor,
                              isTurn: match.turn == match.myColor, isMe: true,
@@ -1263,15 +1323,22 @@ private struct GomokuMatchSide: View {
 
             // 판돈 칩 | 상태 상자 — 한 줄. 상태 상자에 줄이 붙으면(흑 패스 · 자동 착수 · 연속 경고) 이 줄만 아래로 자란다.
             HStack(alignment: .top, spacing: GomokuWindowLayout.matchSideSpacing) {
-                stakeChip
-                    .frame(width: GomokuWindowLayout.stakeChipWidth)
+                Group {
+                    if isAI { aiChip } else { stakeChip }
+                }
+                .frame(width: GomokuWindowLayout.stakeChipWidth)
                 statusBox
             }
             .fixedSize(horizontal: false, vertical: true)
 
-            // 채팅 — 카드들과 [기권] 사이의 남는 높이 전부(v0.3.30 사용자 요구).
-            GomokuChatCard(store: store, rendersPlainText: rendersPlainText)
-                .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+            // 채팅 — 카드들과 [기권] 사이의 남는 높이 전부(v0.3.30 사용자 요구). AI 판은 그 자리에 안내 카드.
+            if isAI {
+                GomokuAIInfoCard()
+                    .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+            } else {
+                GomokuChatCard(store: store, rendersPlainText: rendersPlainText)
+                    .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+            }
 
             resignArea
                 .fixedSize(horizontal: false, vertical: true)
@@ -1301,6 +1368,22 @@ private struct GomokuMatchSide: View {
             RubyIcon(size: 16)
             Text(GomokuText.stakeLine(match.stake))
                 .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .font(.callout.weight(.semibold))
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+    }
+
+    /// AI 판의 판돈 칩 자리 — 걸린 루비가 없다는 것을 같은 모양의 칩으로 말한다.
+    private var aiChip: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "cpu")
+                .foregroundStyle(CheckTheme.accent)
+            Text(GomokuText.aiStakeChip)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
@@ -1353,7 +1436,7 @@ private struct GomokuMatchSide: View {
     private var resignArea: some View {
         if isConfirming {
             VStack(alignment: .leading, spacing: 6) {
-                Text(GomokuText.resignConfirm)
+                Text(isAI ? GomokuText.aiResignConfirm : GomokuText.resignConfirm)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(CheckTheme.danger)
                 HStack(spacing: 8) {
@@ -1399,6 +1482,9 @@ private struct GomokuPlayerCard: View {
     let bubble: GomokuChatMessage?
     /// 스냅샷 전용 시계. 앱은 nil.
     let bubbleNow: Date?
+    /// AI 상대 카드(docs/plan/gomoku-ai.md §5) — 캐릭터 대신 `cpu` 기호, 차례 링 대신 "생각 중". **맨 끝 · 기본값** 이라
+    /// 1:1 호출부는 그대로다.
+    var isAI: Bool = false
 
     static let portraitSize: CGFloat = 60
     static let nameColumnWidth: CGFloat = 132
@@ -1406,7 +1492,13 @@ private struct GomokuPlayerCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            CharacterPortrait(characterID: face.characterID)
+            Group {
+                if isAI {
+                    GomokuAIPortrait()
+                } else {
+                    CharacterPortrait(characterID: face.characterID)
+                }
+            }
                 .frame(width: Self.portraitSize, height: Self.portraitSize)
                 // 이 카드에서 '얼굴'은 아바타가 아니라 캐릭터 초상이다 — 센터 배지는 아바타와 **같은 자리**
                 // (오른쪽 아래 모서리)에 얹는다. overlay 라 카드 폭·높이는 1pt 도 안 움직인다.
@@ -1443,7 +1535,12 @@ private struct GomokuPlayerCard: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             ZStack {
                 if isTurn {
-                    GomokuTurnClock(store: store)
+                    // AI 차례에는 시계가 없다(마감이 없어 링이 0초로 빨갛게 선다) — "생각 중" 표시가 그 자리에 선다.
+                    if isAI {
+                        GomokuAIThinkingMark()
+                    } else {
+                        GomokuTurnClock(store: store)
+                    }
                 }
             }
             .frame(width: Self.clockSize, height: Self.clockSize)
@@ -1608,6 +1705,9 @@ private struct GomokuResultCard: View {
     let store: GomokuStore
     let match: GomokuMatchState
 
+    /// AI 판 결과(docs/plan/gomoku-ai.md §5) — 루비 줄이 없고 [다시 두기]는 새 로컬 판이다.
+    private var isAI: Bool { store.isAIMatch }
+
     private var delta: Int {
         if let rubyDelta = match.rubyDelta { return rubyDelta }
         switch match.outcome {
@@ -1645,29 +1745,47 @@ private struct GomokuResultCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(GomokuText.outcomeTitle(match.outcome))
                         .font(.system(size: 26, weight: .bold))
-                    Text(GomokuText.endReason(match.endReason, outcome: match.outcome))
+                    Text(isAI ? GomokuText.aiEndReason(match.endReason, outcome: match.outcome)
+                              : GomokuText.endReason(match.endReason, outcome: match.outcome))
                         .font(.callout)
                         .foregroundStyle(CheckTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
-                    // 상대 아바타를 함께 그린다 — 이 줄이 결과 화면에서 상대를 말하는 유일한 자리라,
-                    // 센터 배지가 설 얼굴이 여기 없으면 끝난 판에서만 소속이 사라진다.
-                    HStack(spacing: 8) {
-                        CheckAvatarView(name: match.opponent.displayName,
-                                        avatarURL: match.opponent.avatarURL.flatMap(URL.init(string:)),
-                                        size: 22, center: match.opponent.center)
-                        Text("상대 · \(match.opponent.displayName)")
-                            .font(.caption)
-                            .foregroundStyle(CheckTheme.secondaryText)
-                            .lineLimit(1)
+                    if isAI {
+                        // AI 판: 얼굴 대신 기호, 루비·기록이 없다는 것을 같은 줄에서 말한다.
+                        HStack(spacing: 8) {
+                            Image(systemName: "cpu")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(CheckTheme.accent)
+                                .frame(width: 22, height: 22)
+                            Text("\(GomokuText.aiOpponentLine) · \(GomokuText.aiNoRecord)")
+                                .font(.caption)
+                                .foregroundStyle(CheckTheme.secondaryText)
+                                .lineLimit(1)
+                        }
+                    } else {
+                        // 상대 아바타를 함께 그린다 — 이 줄이 결과 화면에서 상대를 말하는 유일한 자리라,
+                        // 센터 배지가 설 얼굴이 여기 없으면 끝난 판에서만 소속이 사라진다.
+                        HStack(spacing: 8) {
+                            CheckAvatarView(name: match.opponent.displayName,
+                                            avatarURL: match.opponent.avatarURL.flatMap(URL.init(string:)),
+                                            size: 22, center: match.opponent.center)
+                            Text("상대 · \(match.opponent.displayName)")
+                                .font(.caption)
+                                .foregroundStyle(CheckTheme.secondaryText)
+                                .lineLimit(1)
+                        }
                     }
                 }
                 Spacer(minLength: 8)
-                HStack(spacing: 8) {
-                    RubyIcon(size: 26)
-                    Text(GomokuText.rubyDelta(delta))
-                        .font(.system(size: 28, weight: .bold))
-                        .monospacedDigit()
-                        .foregroundStyle(delta > 0 ? CheckTheme.working : (delta < 0 ? CheckTheme.danger : CheckTheme.primaryText))
+                // AI 판은 루비가 걸리지 않는다(사용자 결정) — ±0 을 그리면 걸었다가 돌려받은 것처럼 읽힌다.
+                if !isAI {
+                    HStack(spacing: 8) {
+                        RubyIcon(size: 26)
+                        Text(GomokuText.rubyDelta(delta))
+                            .font(.system(size: 28, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(delta > 0 ? CheckTheme.working : (delta < 0 ? CheckTheme.danger : CheckTheme.primaryText))
+                    }
                 }
             }
             .padding(.horizontal, 20)
@@ -1680,11 +1798,18 @@ private struct GomokuResultCard: View {
                 GomokuNoticeLine(text: notice)
             }
             HStack(spacing: 10) {
-                GomokuActionButton(title: GomokuText.rematch, icon: "arrow.clockwise", height: 40, fullWidth: true,
-                                   isEnabled: !store.isBusy && store.outgoing == nil) {
-                    Task { await store.rematch() }
+                if isAI {
+                    GomokuActionButton(title: GomokuText.aiRematch, icon: "arrow.clockwise", height: 40, fullWidth: true) {
+                        store.restartAIMatch()
+                    }
+                    .checkTooltip(GomokuText.aiRematchHelp)
+                } else {
+                    GomokuActionButton(title: GomokuText.rematch, icon: "arrow.clockwise", height: 40, fullWidth: true,
+                                       isEnabled: !store.isBusy && store.outgoing == nil) {
+                        Task { await store.rematch() }
+                    }
+                    .checkTooltip("같은 상대에게 \(match.stake)루비로 다시 신청해요")
                 }
-                .checkTooltip("같은 상대에게 \(match.stake)루비로 다시 신청해요")
                 GomokuActionButton(title: GomokuText.backToLobby, style: .outline, height: 40, fullWidth: true) {
                     store.backToLobby()
                 }
@@ -2552,6 +2677,152 @@ struct GomokuInviteBanner: View {
                         .stroke(CheckTheme.accent.opacity(0.55), lineWidth: 1)
                 )
         )
+    }
+}
+
+// MARK: - AI 대국 (docs/plan/gomoku-ai.md §5)
+
+/// 머리글 [AI와 두기] 를 누르면 화면 **가운데**에 뜨는 돌 색 고르기 창. 덮개·닫기 관례는 판돈 창(`GomokuStakePrompt`) 그대로다
+/// (바깥 클릭·Esc·[취소]가 같은 문). 색을 누르면 곧바로 시작한다 — 걸 것이 없어 확인 단계를 두지 않는다.
+/// 창이 떠 있는 동안 1:1 판이 열리거나 신청을 보내면 두 버튼이 흐려진다(`canStartAIMatch`).
+private struct GomokuAIPrompt: View {
+    let store: GomokuStore
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.62)
+                .contentShape(Rectangle())
+                .onTapGesture { onClose() }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(CheckTheme.accent)
+                    Text(GomokuText.aiPromptTitle)
+                        .font(.headline)
+                }
+                Text(GomokuText.aiPromptCaption)
+                    .font(.caption)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                HStack(spacing: 8) {
+                    GomokuAIColorButton(color: .black, title: GomokuText.aiPlayBlack, isEnabled: store.canStartAIMatch) {
+                        start(.black)
+                    }
+                    GomokuAIColorButton(color: .white, title: GomokuText.aiPlayWhite, isEnabled: store.canStartAIMatch) {
+                        start(.white)
+                    }
+                }
+                Text(GomokuText.aiNoRecord)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                GomokuActionButton(title: GomokuText.cancel, style: .outline, height: 36, fullWidth: true, action: onClose)
+            }
+            .padding(20)
+            .frame(width: GomokuWindowLayout.stakePromptWidth)
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(CheckTheme.panel))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+            .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
+            .background {
+                // 판돈 창과 같은 Esc 문(시스템 모양 버튼은 ImageRenderer 가 노란 상자로 그린다).
+                Button(action: onClose) { Color.clear.frame(width: 1, height: 1) }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.cancelAction)
+                    .focusable(false)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(width: GomokuWindowLayout.contentSize.width, height: GomokuWindowLayout.contentSize.height)
+    }
+
+    private func start(_ color: GomokuColor) {
+        onClose()
+        store.startAIMatch(humanColor: color)
+    }
+}
+
+/// 돌 색 버튼 한 개(돌 그림 + 글자).
+private struct GomokuAIColorButton: View {
+    let color: GomokuColor
+    let title: String
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                GomokuStoneDot(color: color, size: 22)
+                Text(title)
+                    .font(.caption.weight(.bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(CheckTheme.primaryText)
+            .frame(maxWidth: .infinity)
+            .frame(height: 64)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
+    }
+}
+
+/// AI 판에서 채팅 카드 자리에 서는 안내 카드 — 기록이 안 남는다는 것과 시계가 멈추는 조건을 말한다.
+private struct GomokuAIInfoCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "cpu")
+                    .foregroundStyle(CheckTheme.accent)
+                Text(GomokuText.aiInfoTitle)
+                    .font(.subheadline.weight(.bold))
+            }
+            Text(GomokuText.aiNoRecord)
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(GomokuText.aiInfoClock)
+                .font(.caption)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .gomokuCard(padding: 12)
+    }
+}
+
+/// AI 상대 카드의 초상(캐릭터 자리).
+private struct GomokuAIPortrait: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(CheckTheme.accent.opacity(0.16))
+            .overlay(
+                Image(systemName: "cpu")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(CheckTheme.accent)
+            )
+    }
+}
+
+/// AI 차례에 차례 링 자리에 서는 표시. 시계를 읽지 않는다(AI 차례엔 마감이 없다).
+private struct GomokuAIThinkingMark: View {
+    var body: some View {
+        ZStack {
+            Circle().stroke(CheckTheme.accent.opacity(0.35), lineWidth: 5)
+            VStack(spacing: 1) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13, weight: .bold))
+                Text(GomokuText.aiThinkingShort)
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .foregroundStyle(CheckTheme.accent)
+        }
+        .padding(3)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(GomokuText.aiThinking)
     }
 }
 

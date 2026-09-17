@@ -3,7 +3,7 @@ import CheckCore
 import SwiftUI
 import UIKit
 
-/// 입력줄: 전송 실패 안내 한 줄 · 여러 줄 입력칸(최대 5줄까지 자라고 그 뒤 스크롤) · 180자부터 카운터 · [보내기].
+/// 입력줄(시안 B 04): 전송 실패 안내 한 줄 · 180자부터 카운터 · 여러 줄 입력칸(최대 5줄까지 자라고 그 뒤 스크롤) 안 오른쪽 [보내기].
 ///
 /// ★ **한글 조합 중에는 보내지 않는다.** 입력칸은 `UITextView` 다 — SwiftUI `TextField` 는 조합 중인 글자(marked text)를 알려 주지 않아
 ///   [보내기] 순간의 마지막 음절이 빠지거나, 비운 칸에 조합 중이던 글자가 되살아난다. 여기서는 조합 중이면 먼저 확정(`unmarkText`)하고
@@ -24,11 +24,24 @@ struct MessagesComposerView: View {
         let counter = MessagesComposerRules.counterText(for: draft)
         let overflowing = MessagesComposerRules.isOverflowing(draft)
         let sendMetrics = MessagesComposerRules.sendButtonMetrics(scaledDiameter: Double(scaledSendDiameter))
-        VStack(alignment: .leading, spacing: 6) {
+        let fieldShape = RoundedRectangle(cornerRadius: MessagesComposerRules.minimumTouchTarget / 2, style: .continuous)
+        VStack(alignment: .trailing, spacing: 6) {
             if let notice = store.sendNotices[peerID] {
                 InlineNotice(text: notice, kind: .warning)
             }
-            HStack(alignment: .bottom, spacing: 8) {
+            if let counter {
+                Text(counter)
+                    .font(.caption2.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(overflowing ? MobileTheme.danger : MobileTheme.label2)
+                    .fixedSize()
+                    // 카운터는 곁 글자다 — 가장 큰 글자에서 입력칸 위를 먹지 않게 상한을 둔다(AX3 스크린샷 실측).
+                    .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                    .padding(.trailing, 8)
+                    .accessibilityLabel(Text("\(counter.replacingOccurrences(of: "/", with: "자 중 "))자"))
+            }
+            // 시안 B 04: 입력칸 하나(surface 캡슐 · 0.5pt 선) 안 오른쪽에 보내기 원. 흰 띠를 깔지 않는다 — 바탕과 같은 면에 입력칸만 뜬다.
+            HStack(alignment: .bottom, spacing: 0) {
                 ZStack(alignment: .topLeading) {
                     MessagesComposerTextView(
                         text: Binding(get: { store.draft(for: peerID) }, set: { store.setDraft($0, for: peerID) }),
@@ -38,63 +51,53 @@ struct MessagesComposerView: View {
                     )
                     .frame(height: editorHeight)
                     if draft.isEmpty && !isComposing {
-                        Text("메시지를 입력하세요")
+                        Text(MessagesComposerRules.placeholder)
                             .font(.body)
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
-                            .foregroundStyle(MobileTheme.label2)
+                            .foregroundStyle(MobileTheme.label3Text)
                             .padding(.horizontal, MessagesComposerTextView.horizontalInset + 5)
                             .padding(.vertical, MessagesComposerTextView.verticalInset)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
                     }
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(MobileTheme.fill)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(overflowing ? MobileTheme.danger : MobileTheme.separator, lineWidth: 1)
-                )
-                VStack(alignment: .trailing, spacing: 4) {
-                    if let counter {
-                        Text(counter)
-                            .font(.caption2.weight(.semibold))
-                            .monospacedDigit()
-                            .foregroundStyle(overflowing ? MobileTheme.danger : MobileTheme.label2)
-                            .fixedSize()
-                            // 카운터는 입력칸 폭을 먹는다 — 가장 큰 글자에서 입력칸이 절반으로 줄었다(AX3 스크린샷 실측).
-                            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-                            .accessibilityLabel(Text("\(counter.replacingOccurrences(of: "/", with: "자 중 "))자"))
-                    }
-                    Button(action: send) {
-                        Group {
-                            if store.isSending {
-                                ProgressView().tint(MobileTheme.onAccentFill)
-                            } else {
-                                // 글리프는 원 지름에서 정한 고정 크기다 — `.body` 를 따르면 AX3 에서 화살촉이 원 밖으로 빠져 모양이 사라졌다.
-                                Image(systemName: "arrow.up")
-                                    .font(.system(size: CGFloat(sendMetrics.glyphSize), weight: .bold))
-                            }
+                Button(action: send) {
+                    Group {
+                        if store.isSending {
+                            ProgressView().tint(MobileTheme.onAccentFill)
+                        } else {
+                            // 글리프는 원 지름에서 정한 고정 크기다 — `.body` 를 따르면 AX3 에서 화살촉이 원 밖으로 빠져 모양이 사라졌다.
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: CGFloat(sendMetrics.visibleGlyphSize), weight: .bold))
                         }
-                        .foregroundStyle(MobileTheme.onAccentFill)
-                        // 원 = 누르는 자리(44pt 이상). 예전 40×40 은 HIG 최소보다 작았다.
-                        .frame(width: CGFloat(sendMetrics.diameter), height: CGFloat(sendMetrics.diameter))
-                        .background(Circle().fill(MobileTheme.accentFill))
-                        .contentShape(Rectangle())
-                        .opacity(sendEnabled ? 1 : 0.4)
                     }
-                    .disabled(!sendEnabled)
-                    .accessibilityLabel(Text(store.isSending ? "보내는 중" : "보내기"))
+                    // 켜짐 = 파랑 채움 · 흰 화살표(이 화면의 채운 버튼 하나) / 꺼짐 = 회색 칠 · 3단 기호(시안 `.b-send`).
+                    .foregroundStyle(sendLooksEnabled ? MobileTheme.onAccentFill : MobileTheme.label3)
+                    .frame(width: CGFloat(sendMetrics.visibleDiameter), height: CGFloat(sendMetrics.visibleDiameter))
+                    .background(Circle().fill(sendLooksEnabled ? MobileTheme.accentFill : MobileTheme.fill))
+                    // 누르는 자리 = 44pt 이상(보이는 원은 입력칸 안의 작은 원).
+                    .frame(width: CGFloat(sendMetrics.diameter), height: CGFloat(sendMetrics.diameter))
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .disabled(!sendEnabled)
+                .accessibilityLabel(Text(store.isSending ? "보내는 중" : "보내기"))
             }
+            .background(fieldShape.fill(MobileTheme.surface))
+            .overlay(
+                fieldShape.strokeBorder(overflowing ? MobileTheme.danger : MobileTheme.separator, lineWidth: overflowing ? 1 : 0.5)
+            )
         }
         .padding(.horizontal, MobileTheme.sideMargin)
-        .padding(.vertical, 8)
-        .background(MobileTheme.surface.ignoresSafeArea(edges: .bottom))
-        .overlay(alignment: .top) {
-            Rectangle().fill(MobileTheme.separator).frame(height: 1)
-        }
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+        .background(MobileTheme.background.ignoresSafeArea(edges: .bottom))
+    }
+
+    /// 보내기 원을 파랑으로 칠할지(보내는 중에도 파랑 — 스피너가 흰색이다).
+    private var sendLooksEnabled: Bool {
+        store.isSending || sendEnabled
     }
 
     /// 버튼을 켤지: 조합 중이면 켠다(누르면 확정한 뒤 판정한다) — 아니면 스토어 판정 그대로.
@@ -142,7 +145,8 @@ final class MessagesComposerEditorHandle {
 
 /// 여러 줄 입력칸. 글자는 Dynamic Type(`.body`)을 따라 커지고, 높이는 내용에 맞춰 1~5줄 사이에서 자란다.
 struct MessagesComposerTextView: UIViewRepresentable {
-    static let horizontalInset: CGFloat = 10
+    /// 왼쪽 11 + 줄 조각 여백 5 = 글자 시작 16(시안 `.b-field` 왼쪽 여백).
+    static let horizontalInset: CGFloat = 11
     /// 위아래 12 — 한 줄일 때 입력칸 높이(본문 줄 높이 + 24 ≈ 44)가 보내기 원(44)과 맞는다.
     static let verticalInset: CGFloat = 12
     static let maxLines: CGFloat = 5

@@ -169,7 +169,7 @@ import Testing
 
     // MARK: 대화 줄
 
-    @Test("대화 줄: 날짜 구분선(KST) · 같은 쪽 같은 분은 마지막에만 시각 · 받은 묶음 첫 줄에만 아바타 · 1 은 읽음을 아는 서버의 안 읽힌 내 말에만")
+    @Test("대화 줄: 날짜 구분선(KST) · 같은 쪽 같은 분은 마지막에만 시각 · 말한 쪽이 바뀐 첫 말풍선만 띄움 · 1 은 읽음을 아는 서버의 안 읽힌 내 말에만")
     func conversationItems() {
         // 어제 23:59 KST 에 받은 말 하나, 오늘 14:00 에 받은 말 둘(같은 분), 14:01 내 말 둘(읽음·안 읽음).
         let messages = [
@@ -192,10 +192,11 @@ import Testing
         }
         #expect(line(1)?.clockText == "23:59")
         #expect(line(3)?.showsTime == false && line(4)?.showsTime == true, "같은 분의 받은 말은 마지막에만 시각")
-        #expect(line(3)?.showsAvatar == true && line(4)?.showsAvatar == false)
+        #expect(line(1)?.startsGroup == false && line(3)?.startsGroup == false, "대화 첫 줄·날짜 줄 바로 뒤는 더 띄우지 않는다")
+        #expect(line(4)?.startsGroup == false, "같은 쪽이 이어지면 띄우지 않는다")
         #expect(line(5)?.showsTime == false && line(6)?.showsTime == true)
         #expect(line(5)?.showsUnreadOne == false && line(6)?.showsUnreadOne == true)
-        #expect(line(6)?.showsAvatar == false)
+        #expect(line(5)?.startsGroup == true && line(6)?.startsGroup == false, "말한 쪽이 바뀐 첫 말풍선만 띄운다")
         // 읽음을 모르는 서버면 1 이 없다.
         let unknown = MessagesConversationRules.items(messages: messages, pending: [], receiptsAvailable: false, now: Self.now)
         #expect(!unknown.contains { if case .bubble(let l) = $0 { return l.showsUnreadOne } else { return false } })

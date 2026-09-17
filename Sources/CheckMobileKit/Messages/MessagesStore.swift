@@ -171,6 +171,34 @@ package final class MessagesStore {
         )
     }
 
+    /// 상대별 안 읽은 메시지 수(목록 줄 개수 배지). 합 = `badgeCount`.
+    package var unreadCountsByPeer: [String: Int] {
+        MessagesBadgeRules.unreadCountsByPeer(
+            history: history,
+            historySnapshot: historySnapshot,
+            summary: summary,
+            optimistic: optimisticReads,
+            legacyStamps: legacyReadStamps
+        )
+    }
+
+    /// 사람들의 근무 여부·센터(목록 줄 점 · "지금 근무 중" 줄 · 대화 머리). **서버를 부르지 않는다** — 지금 탭이 1분마다 받아 두는 팀 상태·
+    /// 사람 목록과, 새 대화 시트가 받은 사람 목록을 겹쳐 읽는다(`MessagesPresenceRules.board`). 지금 탭 스토어가 관찰 대상이라 값이 바뀌면 다시 그린다.
+    package func presenceBoard(now: Date) -> MessagesPresenceBoard {
+        let nowStore = context.links.now
+        let working = nowStore?.workingPeople(now: now) ?? []
+        let teamIDs: Set<String> = nowStore.map { store in store.hasLoadedTeam ? Set(store.teamMembers.map(\.id)) : [] } ?? []
+        return MessagesPresenceRules.board(
+            nowWorking: working.map {
+                MessagesPresenceRules.Working(id: $0.id, name: $0.name, avatarURL: $0.avatarURL, center: $0.center, isStale: $0.isStale)
+            },
+            teamMemberIDs: teamIDs,
+            nowDirectory: nowStore.flatMap { $0.hasLoadedDirectory ? $0.directory : nil },
+            messagesDirectory: directoryLoaded ? directory : nil,
+            me: context.session.userID
+        )
+    }
+
     package func thread(for peerID: String) -> MessageThread? {
         threads.first { $0.peerUserID == peerID }
     }

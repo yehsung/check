@@ -63,6 +63,53 @@ package enum MessagesBadgeRules {
             return count + peer.count
         }
     }
+
+    /// 상대별 안 읽은 메시지 수(목록 줄 오른쪽 개수 배지 — 시안 B 03 "점이 아니라 개수"). `unreadCount` 와 **같은 갈래 · 같은 재료**다:
+    /// 값의 합 = `unreadCount`, 키 ⊆ `MessageUnreadRules.unreadPeerIDs`(`MessagesRulesTests` 가 같은 표로 잰다). 0 인 상대는 넣지 않는다 —
+    /// 요약이 개수 0 인 상대 행을 보내도 점 집합에는 들어가므로, 화면은 "점 집합에 있으면 최소 1"로 그린다(`MessagesListRules.countBadge`).
+    package static func unreadCountsByPeer(
+        history: [MessageHistoryEntry],
+        historySnapshot: MessageHistoryReadSnapshot?,
+        summary: MessageUnreadSummarySnapshot?,
+        optimistic: [String: MessageOptimisticRead],
+        legacyStamps: [String: Date]
+    ) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        let useHistory: Bool
+        switch (historySnapshot, summary) {
+        case (nil, nil):
+            for peer in MessageUnreadRules.legacyUnreadPeerIDs(history: history, stamps: legacyStamps) {
+                let stamp = legacyStamps[peer]
+                let count = history.filter { entry in
+                    guard entry.peerUserID == peer, !entry.isMine else { return false }
+                    guard let stamp else { return true }
+                    return entry.createdAt > stamp
+                }.count
+                if count > 0 { counts[peer] = count }
+            }
+            return counts
+        case (.some, nil): useHistory = true
+        case (nil, .some): useHistory = false
+        case (.some(let h), .some(let s)): useHistory = h.serial > s.serial
+        }
+        if useHistory, let snapshot = historySnapshot {
+            let order = MessageUnreadRules.effectiveOrder(history: history, serverOrder: snapshot.serverOrder)
+            for entry in history where !entry.isMine && entry.isUnread == true {
+                if let record = optimistic[entry.peerUserID], !record.isKnown(bySnapshotSerial: snapshot.serial),
+                   MessageUnreadRules.isCovered(entry, by: record, order: order) {
+                    continue
+                }
+                counts[entry.peerUserID, default: 0] += 1
+            }
+            return counts
+        }
+        guard let summary else { return [:] }
+        for peer in summary.summary.peers where peer.count > 0 {
+            if let record = optimistic[peer.peerUserID], !record.isKnown(bySnapshotSerial: summary.serial) { continue }
+            counts[peer.peerUserID, default: 0] += peer.count
+        }
+        return counts
+    }
 }
 
 // MARK: - 보내는 중 말풍선
@@ -172,6 +219,9 @@ package enum MessagesComposerRules {
         MessageBody.length(draft) > MessageBody.maxLength
     }
 
+    /// 입력칸 자리표시(시안 B 04 — 짧게).
+    package static let placeholder = "메시지 입력"
+
     /// 손가락으로 누르는 자리의 최소 변(pt · HIG 44). 보내기 원 · "새 메시지 ↓" 버튼이 이 값 아래로 내려가지 않는다
     /// (messages-verify 실측: 보내기 40×40 · 새 메시지 버튼 높이 31.7).
     package static let minimumTouchTarget: Double = 44
@@ -181,11 +231,19 @@ package enum MessagesComposerRules {
     /// 화살촉이 고정 원 밖으로 빠져 원이 두 조각처럼 보이고 화살표 모양이 사라졌다(messages-verify 스크린샷).
     package static let sendGlyphRatio: Double = 0.4
 
+    /// 보이는 원 = 누르는 자리 × 이 비율(시안 B 04: 입력칸 안 오른쪽 30pt 원). 누르는 자리는 44pt 그대로 둔다.
+    package static let sendVisibleRatio: Double = 0.73
+
     package struct SendButtonMetrics: Equatable, Sendable {
-        /// 원 지름 = 누르는 자리의 변(pt).
+        /// 누르는 자리의 변(pt · 44 이상).
         package let diameter: Double
         /// 화살표 글리프 글꼴 크기(pt).
         package let glyphSize: Double
+
+        /// 입력칸 안에 그리는 원 지름(pt). 글리프(`glyphSize`)는 SF 화살표라 글꼴 크기의 약 0.75 배 높이로 그려진다 — 이 원 안에 든다.
+        package var visibleDiameter: Double { (diameter * MessagesComposerRules.sendVisibleRatio).rounded() }
+        /// 보이는 원 안 화살표 글꼴 크기(pt) — 원 지름의 절반 이하(시안 30pt 원 · 16pt 화살표).
+        package var visibleGlyphSize: Double { min((glyphSize * 0.85).rounded(), (visibleDiameter * 0.5).rounded()) }
     }
 
     /// 보내기 버튼 치수. `scaledDiameter` = 44 를 본문 글자 크기로 키운 값(`@ScaledMetric(relativeTo: .body)`).
@@ -258,6 +316,27 @@ package enum MessagesListRules {
         body.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).joined(separator: " ")
     }
 
+    /// 목록 줄 오른쪽 위 시각(시안 B 03): 오늘이면 "13:58"(24시간제 — 대화 말풍선 곁 시각과 같은 글자), 아니면 "어제"·"9월 8일".
+    /// 상대 시각("6분 전")을 쓰지 않는 이유: 대화 화면의 시각과 같은 눈금이어야 줄과 말풍선을 맞춰 읽는다. 보관 창이 24시간이라 "어제"까지만 나온다.
+    package static func timeText(_ date: Date, now: Date, calendar: Calendar = MobileRelativeTime.kst) -> String {
+        if calendar.isDate(date, inSameDayAs: now) {
+            return MessageThreadBuilder.clockText(date, calendar: calendar)
+        }
+        return MessageThreadBuilder.dayLabel(date, now: now, calendar: calendar)
+    }
+
+    /// 큰 제목 아래 한 줄("안 읽은 메시지 3"). 0 이면 nil(한 줄을 비운다 — "0" 을 세우지 않는다).
+    package static func subtitle(unreadCount: Int) -> String? {
+        unreadCount > 0 ? "안 읽은 메시지 \(unreadCount)" : nil
+    }
+
+    /// 목록 줄 개수 배지. 점 집합(`unreadPeerIDs`)에 있으면 최소 1(요약이 개수 0 행을 보낸 경우) · 없으면 nil · 100 부터 "99+".
+    package static func countBadge(isUnread: Bool, count: Int?) -> String? {
+        guard isUnread else { return nil }
+        let value = max(count ?? 0, 1)
+        return value > 99 ? "99+" : "\(value)"
+    }
+
     /// 딥링크 → 메시지 탭 경로. 메시지 탭 라우트가 아니면 nil. `.messages` 는 빈 경로(목록 맨 위).
     package static func destinations(for route: AingRoute) -> [MessagesDestination]? {
         switch route {
@@ -291,8 +370,10 @@ package struct MessagesBubbleLine: Equatable {
     package let clockText: String
     /// 시각을 이 말풍선 옆에 찍는가 — 같은 쪽·같은 분의 다음 말풍선이 이어지면 마지막 것에만 찍는다.
     package let showsTime: Bool
-    /// 받은 말 묶음의 첫 말풍선에만 아바타·이름.
-    package let showsAvatar: Bool
+    /// 말한 쪽이 바뀐 첫 말풍선(앞 줄이 **다른 쪽 말풍선**) — 화면은 그 위를 조금 더 띄운다(시안 B 04 `.b-gap`).
+    /// 날짜 구분선 바로 뒤·대화 첫 줄은 false(구분선·안내가 이미 띄운다).
+    /// 폰 1:1 대화는 받은 말풍선 옆에 상대 아바타를 두지 않는다 — 머리가 이미 상대를 말한다(시안 B 04).
+    package let startsGroup: Bool
     /// 내 말풍선 옆 **1**(서버가 읽음을 알고 · 내 말이고 · `readByPeer == false`). 맥 `MessageReadReceiptMark` 와 같은 조건.
     package let showsUnreadOne: Bool
 }
@@ -327,12 +408,11 @@ package enum MessagesConversationRules {
                 let continuesToNext = next.map {
                     $0.isMine == entry.isMine && MessageThreadBuilder.clockText($0.createdAt, calendar: calendar) == clock
                 } ?? false
-                let startsRun = previous.map { $0.isMine != entry.isMine } ?? true
                 items.append(.bubble(MessagesBubbleLine(
                     entry: entry,
                     clockText: clock,
                     showsTime: !continuesToNext,
-                    showsAvatar: !entry.isMine && startsRun,
+                    startsGroup: previous.map { $0.isMine != entry.isMine } ?? false,
                     showsUnreadOne: showsUnreadOne(for: entry, receiptsAvailable: receiptsAvailable)
                 )))
             }
@@ -403,6 +483,144 @@ package struct MessagesConversationHeader: Equatable, Sendable {
     /// 이니셜 아바타에 넘길 이름. nil = 이름을 모른다 → 일반 인물 아이콘(가짜 이니셜 금지).
     package let avatarName: String?
     package let accessibilityLabel: String
+}
+
+// MARK: - 사람들의 근무 여부 · 센터
+
+/// 한 사람의 근무 여부와 센터(목록 줄 아바타 점 · 이름 뒤 센터 배지 · 대화 머리 한 줄).
+package struct MessagesPeerPresence: Equatable, Sendable {
+    /// `.working` 초록 점 · `.pending` 앰버 점(연결 끊김 — 우리 팀만 안다) · `.off` 점 없음.
+    package let status: PresenceStatus
+    /// 센터 **서버값**("seoul") — 글자로 바꾸는 곳은 `CenterBadge`/`CenterLabel` 하나다.
+    package let center: String?
+
+    package init(status: PresenceStatus, center: String?) {
+        self.status = status
+        self.center = center
+    }
+}
+
+/// "지금 근무 중 · 바로 말 걸기" 줄의 한 사람.
+package struct MessagesWorkingPerson: Identifiable, Equatable, Sendable {
+    package let id: String
+    package let name: String
+    package let avatarURL: URL?
+    /// `.working` 또는 `.pending`.
+    package let status: PresenceStatus
+    package let center: String?
+
+    package init(id: String, name: String, avatarURL: URL?, status: PresenceStatus, center: String?) {
+        self.id = id
+        self.name = name
+        self.avatarURL = avatarURL
+        self.status = status
+        self.center = center
+    }
+}
+
+/// 메시지 탭이 그리는 사람들의 근무 판.
+package struct MessagesPresenceBoard: Equatable, Sendable {
+    package static let unknown = MessagesPresenceBoard(isKnown: false, peers: [:], working: [])
+
+    /// 근무 여부를 한 번이라도 받았는가. false 면 점·"지금 근무 중" 줄을 그리지 않는다(모르면서 "아무도 없어요"라고 하지 않는다).
+    package let isKnown: Bool
+    package let peers: [String: MessagesPeerPresence]
+    /// 근무 중(나 제외) — 우리 팀(오래 일한 순) 먼저, 그다음 이름순.
+    package let working: [MessagesWorkingPerson]
+
+    package init(isKnown: Bool, peers: [String: MessagesPeerPresence], working: [MessagesWorkingPerson]) {
+        self.isKnown = isKnown
+        self.peers = peers
+        self.working = working
+    }
+}
+
+package enum MessagesPresenceRules {
+    /// 지금 탭이 가른 근무 중 한 사람(`NowStore.workingPeople(now:)` 의 필요한 칸만 — 메시지 규칙이 지금 탭 모델에 묶이지 않게).
+    package struct Working: Equatable, Sendable {
+        package let id: String
+        package let name: String
+        package let avatarURL: URL?
+        package let center: String?
+        package let isStale: Bool
+
+        package init(id: String, name: String, avatarURL: URL?, center: String?, isStale: Bool) {
+            self.id = id
+            self.name = name
+            self.avatarURL = avatarURL
+            self.center = center
+            self.isStale = isStale
+        }
+    }
+
+    /// 판 만들기. **새 서버 호출이 없다** — 이미 받아 둔 값만 겹친다(뒤가 앞을 덮는다):
+    ///  1. `messagesDirectory` — 새 대화 시트가 받은 사람 목록(센터는 화면 글자라 서버값으로 되돌린다). nil = 못 받음.
+    ///  2. `nowDirectory` — 지금 탭이 1분마다 받는 같은 목록(서버값 그대로). nil = 못 받음.
+    ///  3. `teamMemberIDs` + `nowWorking` — 지금 탭이 받은 **우리 팀 상태**(가장 정확 · 연결 끊김까지 안다). 우리 팀원은 이 판정이 목록을 이긴다
+    ///     (지금 탭 "지금 근무 중"과 같은 사람이 초록이게). 팀 상태를 아직 못 받았으면 `teamMemberIDs` 는 빈 집합.
+    /// 나(`me`)는 판에 넣지 않는다.
+    package static func board(
+        nowWorking: [Working],
+        teamMemberIDs: Set<String>,
+        nowDirectory: [PokeDirectoryRow]?,
+        messagesDirectory: [PokeDirectoryEntry]?,
+        me: String?
+    ) -> MessagesPresenceBoard {
+        let isKnown = nowDirectory != nil || messagesDirectory != nil || !teamMemberIDs.isEmpty
+        guard isKnown else { return .unknown }
+        var peers: [String: MessagesPeerPresence] = [:]
+        var names: [String: (name: String, avatarURL: URL?)] = [:]
+        for entry in messagesDirectory ?? [] where entry.userID != me {
+            peers[entry.userID] = MessagesPeerPresence(
+                status: entry.isWorking ? .working : .off,
+                center: CenterLabel.serverValue(forDisplay: entry.center)
+            )
+            names[entry.userID] = (entry.name, entry.avatarURL)
+        }
+        for row in nowDirectory ?? [] where row.userId != me {
+            peers[row.userId] = MessagesPeerPresence(status: row.isWorking ? .working : .off, center: row.center ?? peers[row.userId]?.center)
+            names[row.userId] = (row.displayName, row.avatarUrl.flatMap(URL.init(string:)) ?? names[row.userId]?.avatarURL)
+        }
+        for id in teamMemberIDs where id != me {
+            if let current = peers[id] {
+                peers[id] = MessagesPeerPresence(status: .off, center: current.center)
+            }
+        }
+        var working: [MessagesWorkingPerson] = []
+        var seen: Set<String> = []
+        for person in nowWorking where person.id != me && seen.insert(person.id).inserted {
+            let status: PresenceStatus = person.isStale ? .pending : .working
+            let center = person.center ?? peers[person.id]?.center
+            peers[person.id] = MessagesPeerPresence(status: status, center: center)
+            working.append(MessagesWorkingPerson(
+                id: person.id, name: person.name, avatarURL: person.avatarURL ?? names[person.id]?.avatarURL,
+                status: status, center: center
+            ))
+        }
+        let others = peers
+            .filter { id, presence in presence.status == .working && !seen.contains(id) }
+            .map { id, presence in
+                MessagesWorkingPerson(id: id, name: names[id]?.name ?? "", avatarURL: names[id]?.avatarURL, status: .working, center: presence.center)
+            }
+            .sorted { lhs, rhs in
+                let order = lhs.name.localizedStandardCompare(rhs.name)
+                return order == .orderedSame ? lhs.id < rhs.id : order == .orderedAscending
+            }
+        return MessagesPresenceBoard(isKnown: true, peers: peers, working: working + others)
+    }
+
+    /// 대화 머리 이름 아래 한 줄("근무 중 · 서울" · "연결 끊김" · "근무 안 함 · 부산"). 근무 여부를 모르면 nil(센터만 있어도 세우지 않는다 — 머리는 이름만).
+    package static func headerLine(_ presence: MessagesPeerPresence?) -> String? {
+        guard let presence else { return nil }
+        let state: String
+        switch presence.status {
+        case .working: state = "근무 중"
+        case .pending: state = "연결 끊김"
+        case .off: state = "근무 안 함"
+        }
+        guard let center = CenterLabel.display(presence.center) else { return state }
+        return "\(state) · \(center)"
+    }
 }
 
 package struct MessagesEmptyState: Equatable, Sendable {

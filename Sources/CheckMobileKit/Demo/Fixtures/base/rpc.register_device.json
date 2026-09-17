@@ -1,0 +1,9 @@
+{
+  "status": "ok",
+  "device_id": "d0000000-0000-4000-8000-0000000000dd",
+  "push_prefs": {
+    "message": true,
+    "gomoku_invite": true,
+    "feedback_reply": true
+  }
+}

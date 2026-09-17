@@ -3283,8 +3283,10 @@ func everyWindowThatOpensFromTheRailClosesThePopoverFromExactlyOnePlace() throws
 
     // 반대로 **패널이 된 둘은 한 곳도 닫으면 안 된다.** 닫으면 사용자가 방금 연 화면이 사라진다
     // (v0.2.50 — 사용자 지시: "제보창도 팝오버 창 안에서만 뜨게", "그 창 안에서 1대1 메시지 화면으로만").
-    for file in ["WorkTimerStoreFeedback.swift", "WorkTimerStoreMessages.swift"] {
-        let code = try storeSource(file)
+    // 메시지 스토어는 맥 파일 + 코어 조각(MessageRules)으로 쪼개져 있다 — 이어 읽는다(반쪽 읽기 금지).
+    let feedbackCode = try storeSource("WorkTimerStoreFeedback.swift")
+    let messagesCode = swiftCodeStrippingComments(try CheckCoreSourceLayout.joinedSplitSource("WorkTimerStoreMessages.swift"))
+    for (file, code) in [("제보 스토어", feedbackCode), ("메시지 스토어", messagesCode)] {
         #expect(
             !code.contains("dismissMenuPopover"),
             "\(file) 이 아직 팝오버를 닫는다 — 그 화면은 팝오버 안에 산다"
@@ -5325,7 +5327,7 @@ func popoverDrawsNoBannerWhenTheServerStillOffersToResume() async throws {
 /// 이 둘은 서버 RLS 가 팀 범위라 **요청하면 보인다**. 막는 것은 select 목록 한 줄뿐이므로 여기서 못 박는다.
 @Test
 func teamQueriesNeverAskForAwayColumns() throws {
-    let source = try String(contentsOf: checkSourceURL("SupabaseWorkService.swift"), encoding: .utf8)
+    let source = try CheckCoreSourceLayout.joinedSplitSource("SupabaseWorkService.swift")
     let code = swiftCodeStrippingComments(source)
 
     var selects: [String] = []

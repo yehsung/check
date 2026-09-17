@@ -149,7 +149,7 @@ func bothGamesReachTheSingleTokenWiring() throws {
 
     // ★ 기준선이 실제로 다르다: 위 검사가 "원래부터 그랬다"로 초록이 되지 않게, 제출이 정말
     //   토큰 경로를 쓰는지 서비스 쪽에서 확인한다.
-    let service = tkStripped(try #require(sources["SupabaseWorkService.swift"]))
+    let service = tkStripped(try CheckCoreSourceLayout.joinedSplitSource("SupabaseWorkService.swift"))
     #expect(service.contains("/rest/v1/rpc/minigame_start_round"), "시작 RPC 가 서비스에 없다")
     #expect(service.contains("/rest/v1/rpc/minigame_submit_score"), "제출 RPC 가 서비스에 없다")
 }

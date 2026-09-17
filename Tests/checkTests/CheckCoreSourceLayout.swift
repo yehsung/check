@@ -34,6 +34,10 @@ enum CheckCoreSourceLayout {
         "CheckOverlayWindow.swift": ["Sources/check/CheckOverlayWindow.swift", "Sources/CheckCore/CheckPanelVisibility.swift"],
         "CheckOverlayReactions.swift": ["Sources/check/CheckOverlayReactions.swift", "Sources/CheckCore/MilestoneTracker.swift"],
         "TodoSync.swift": ["Sources/CheckCore/TodoSync.swift", "Sources/check/TodoSyncCoordinator.swift"],
+        // D-base(iOS 0.1): 맥 전용 쓰기(take_pokes·work_tick·세션/상태 쓰기·토큰 업로드·찌르기·울트라·app_build 등)를 #if os(macOS) 조각으로 뗐다.
+        "SupabaseWorkService.swift": ["Sources/CheckCore/SupabaseWorkService.swift", "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift"],
+        // D-base(iOS 0.1): 메시지 순수 규칙(읽음 값 타입 · MessageUnreadRules · 정렬 · MessageThreadBuilder · 안내 문장)을 코어로 뗐다.
+        "WorkTimerStoreMessages.swift": ["Sources/check/WorkTimerStoreMessages.swift", "Sources/CheckCore/MessageRules.swift"],
     ]
 
     /// 쪼갠 파일에 속하는 파일 이름 전부(떼기 전 이름 + 각 조각의 파일 이름). 이 이름들은 `joinedSplitSource(_:)` 로만 읽는다.

@@ -681,9 +681,12 @@ func noCooldownSurvivesAnywhereOnTheMessagePath() throws {
     // ★ 사장님 요구: "찌르기만 60초 쿨타임 있고 메시지는 쿨타임 없이 갈 거야."
     //   스토어만 고치고 뷰가 막으면 **초록인 채로 아무것도 안 바뀐다**(이 저장소가 겪은 함정).
     //   그래서 스토어·모델·뷰 네 파일을 전수로 센다.
-    for name in ["WorkTimerStoreMessages.swift", "WorkTimerStorePoke.swift",
-                 "CheckMessageView.swift", "CheckMenuView.swift", "WorkTimerStore.swift"] {
-        let source = try mwSource(name)
+    // 메시지 스토어는 맥 파일 + 코어 조각(MessageRules)으로 쪼개져 있다 — 이어 읽는다(반쪽 읽기 금지).
+    var named: [(String, String)] = [("메시지 스토어", mwStripComments(try CheckCoreSourceLayout.joinedSplitSource("WorkTimerStoreMessages.swift")))]
+    for name in ["WorkTimerStorePoke.swift", "CheckMessageView.swift", "CheckMenuView.swift", "WorkTimerStore.swift"] {
+        named.append((name, try mwSource(name)))
+    }
+    for (name, source) in named {
         #expect(!source.contains("messageCooldownRemaining"), "\(name) 에 메시지 쿨타임 잔여 계산이 남아 있다")
         #expect(!source.contains("messageCooldownUntil"), "\(name) 에 메시지 쿨타임 미러가 남아 있다")
         #expect(!source.contains("messageCooldownSeconds"), "\(name) 에 메시지 쿨타임 상수가 남아 있다")
@@ -1086,7 +1089,7 @@ func openingTheConversationClosesEveryOtherPanelAndNeverTouchesThePopover() thro
 
     // ★ **팝오버를 닫지 않는다.** 창이던 시절에는 진입점이 `dismissMenuPopover()` 를 불렀는데,
     //   지금 그러면 방금 연 대화가 그 자리에서 사라진다. 주석은 걷어내고 본다.
-    let code = try mwSource("WorkTimerStoreMessages.swift")
+    let code = mwStripComments(try CheckCoreSourceLayout.joinedSplitSource("WorkTimerStoreMessages.swift"))
     #expect(!code.contains("dismissMenuPopover"), "대화 진입점이 아직 팝오버를 닫는다 — 패널은 팝오버 안에 산다")
 }
 

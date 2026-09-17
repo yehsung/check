@@ -30,11 +30,14 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
   configs:
-    # 푸시 환경: Debug 는 APNs sandbox, Release(TestFlight·App Store)는 production. 앱 엔타이틀먼트가 이 값을 읽는다.
+    # 푸시 환경: Debug 는 APNs sandbox, Release(TestFlight·App Store)는 production. 앱 엔타이틀먼트가 APS_ENVIRONMENT 를,
+    # Info.plist 의 AingAPNsEnvironment 가 AING_APNS_ENVIRONMENT 를 읽는다(register_device 의 p_apns_env — 서버 어휘 sandbox/production).
     Debug:
       APS_ENVIRONMENT: development
+      AING_APNS_ENVIRONMENT: sandbox
     Release:
       APS_ENVIRONMENT: production
+      AING_APNS_ENVIRONMENT: production
 
 packages:
   # 저장소 루트 패키지(Package.swift). 이름은 패키지 선언의 name 과 같아야 한다.
@@ -47,6 +50,11 @@ targets:
     platform: iOS
     sources:
       - path: App
+    # D-base: Supabase anon 키는 커밋하지 않는다. ios/scripts/sync-local-config.sh 가 저장소 루트 .env.local 에서
+    # ios/Config/Local.xcconfig(gitignore)를 만들고, 아래 xcconfig 가 그것을 있으면 포함한다(없어도 빌드는 된다 — 데모 모드만 동작).
+    configFiles:
+      Debug: Config/AingCheck.xcconfig
+      Release: Config/AingCheck.xcconfig
     dependencies:
       - package: check
         product: CheckMobileKit
@@ -67,6 +75,13 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         # 120Hz 화면에서 미니게임이 60Hz 에 묶이지 않게(맥의 60Hz 고정 상한 저더 전례 — SPEC-ios §1)
         CADisableMinimumFrameDurationOnPhone: true
+        # 딥링크 aingcheck://…(푸시·위젯 — Sources/CheckMobileShared/AingRoute.swift)
+        CFBundleURLTypes:
+          - CFBundleURLName: com.yehsung.aingcheck
+            CFBundleURLSchemes:
+              - aingcheck
+        # register_device 의 p_apns_env(Debug sandbox / Release production — MobileAppInfo.apnsEnvironmentInfoKey)
+        AingAPNsEnvironment: $(AING_APNS_ENVIRONMENT)
     entitlements:
       path: App/AingCheck.entitlements
       properties:
@@ -83,6 +98,25 @@ targets:
         # 프로젝트 단 값을 덮는다(실측: 프로젝트 단에만 두면 빌드된 Info.plist 의 UIDeviceFamily 가 [1, 2]).
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+        # 앱 아이콘: App/Assets.xcassets/AppIcon(맥 packaging/appicon/icon-1024.png 에서 여백·투명 모서리를 걷어 낸 1024 한 장)
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    postCompileScripts:
+      # CheckConfig.plist 생성(맥 scripts/build-local.sh 와 같은 방식 — 키가 없으면 만들지 않는다). 키 값은 로그에 찍지 않는다.
+      - name: CheckConfig.plist
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/CheckConfig.plist
+        script: |
+          set -eu
+          OUT="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/CheckConfig.plist"
+          KEY="${CHECK_SUPABASE_ANON_KEY:-}"
+          if [ -z "$KEY" ]; then
+            rm -f "$OUT"
+            echo "warning: CHECK_SUPABASE_ANON_KEY 가 없어 CheckConfig.plist 를 만들지 않았다 — 실서버 로그인은 안 되고 데모 모드만 된다(ios/scripts/sync-local-config.sh)."
+            exit 0
+          fi
+          /usr/bin/plutil -create xml1 "$OUT"
+          /usr/bin/plutil -insert CHECK_SUPABASE_ANON_KEY -string "$KEY" "$OUT"
 
   AingCheckWidgets:
     type: app-extension

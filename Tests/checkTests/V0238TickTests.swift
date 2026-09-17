@@ -914,7 +914,7 @@ private struct StoreSnapshot: Equatable, CustomStringConvertible {
     /// 조립 함수는 한 벌이다: 서비스에 정의 1 + fetchTeamStatuses 호출 1, 스토어(Sync)의 RPC 경로 호출 1.
     /// 팀 상태 반영도 한 벌이다: applyFetchedTeamStatuses 를 refreshTeamStatus / workTickIfPossible / refreshTeamStatusOnDemand 가 부른다.
     @Test func assemblyAndApplyFunctionsAreSingleSourced() throws {
-        let service = strippingComments(try String(contentsOf: sourceURL("SupabaseWorkService.swift"), encoding: .utf8))
+        let service = strippingComments(try CheckCoreSourceLayout.joinedSplitSource("SupabaseWorkService.swift"))
         #expect(service.components(separatedBy: "assembleTeamStatuses(").count - 1 == 2)
         #expect(service.components(separatedBy: "return rows.map { row in").count - 1 == 1, "행 → TeamMemberStatus 매핑이 두 벌이다")
         let sync = strippingComments(try String(contentsOf: sourceURL("WorkTimerStoreSync.swift"), encoding: .utf8))

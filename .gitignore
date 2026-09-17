@@ -13,3 +13,5 @@ __pycache__/
 
 # D1: XcodeGen 생성물(원본은 ios/project.yml)
 ios/AingCheck.xcodeproj/
+# D-base: .env.local 의 anon 키로 만든 xcconfig(ios/scripts/sync-local-config.sh) — 커밋 금지
+ios/Config/Local.xcconfig

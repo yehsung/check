@@ -852,7 +852,7 @@ func 대화_뷰가_생명주기를_스토어에_알리고_앱이_창_서버_질�
     #expect(app.contains("store.menuPopoverOnScreenProbe = { WindowTopAnchor.menuPopoverOnScreen() }"), "앱이 창 서버 질의를 스토어에 꽂지 않는다")
     let poke = try v0331Source("WorkTimerStorePoke.swift")
     #expect(poke.contains("receiveConsumedMessages(rows: rows, now: now)"), "drain 이 즉시 삽입 문을 지나지 않는다")
-    let messages = try v0331Source("WorkTimerStoreMessages.swift")
+    let messages = v0331StripComments(try CheckCoreSourceLayout.joinedSplitSource("WorkTimerStoreMessages.swift"))
     // 옛 한 칸 게이트가 되살아나지 않았다.
     #expect(!messages.contains("isMenuPresented && isMessagePanelVisible"), "도착 갱신 게이트가 옛 isMenuPresented 한 칸으로 돌아갔다")
     #expect(!messages.contains("guard session != nil, isMenuPresented, isMessagePanelVisible"), "읽음 판정이 옛 한 칸으로 돌아갔다")

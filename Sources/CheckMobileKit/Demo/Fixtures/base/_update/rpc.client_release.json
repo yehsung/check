@@ -1,0 +1,7 @@
+{
+  "status": "ok",
+  "platform": "ios",
+  "min_build": 99,
+  "latest_build": 99,
+  "notes": "데모: 최소 빌드 99"
+}

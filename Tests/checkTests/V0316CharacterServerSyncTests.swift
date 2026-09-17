@@ -98,7 +98,7 @@ struct V0316CharacterServerSyncTests {
     ///   서버 호출이 **정말 새로 생긴 것**인지 서비스 쪽에서 확인한다.
     @Test("서비스가 set_character RPC 를 실제로 부른다")
     func serviceCallsTheRPC() throws {
-        let code = csStripped(try csSource("SupabaseWorkService.swift"))
+        let code = csStripped(try CheckCoreSourceLayout.joinedSplitSource("SupabaseWorkService.swift"))
         #expect(code.contains("/rest/v1/rpc/set_character"),
                 "set_character RPC 경로가 서비스에 없다 — 쓰기 경로가 통째로 없다")
     }

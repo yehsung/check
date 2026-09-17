@@ -385,7 +385,7 @@ private func mpRowJSON(id: String, peer: String, body: String, minutesAgo: Doubl
     /// 호출부(콕찌르기 행 · 말풍선 배선 · 테스트)는 **전부 그대로 컴파일된다** — nil 이 들어올 문이 아무 신호 없이
     /// 다시 열린다. 그래서 시그니처 자체를 문자열로 본다.
     @Test func thereIsNoWayIntoTheConversationWithoutAPeer() throws {
-        let messages = try mpStrippedSource("WorkTimerStoreMessages.swift")
+        let messages = mpStripComments(try CheckCoreSourceLayout.joinedSplitSource("WorkTimerStoreMessages.swift"))
         #expect(
             messages.contains("func openMessagePanel(peer: String, from origin: MessagePanelOrigin"),
             "진입점의 상대가 옵셔널로 넓혀졌다 — nil 로 들어와 '대화 상대를 고르지 않았어요'가 다시 뜬다"
@@ -510,7 +510,7 @@ private func mpRowJSON(id: String, peer: String, body: String, minutesAgo: Doubl
     ///    다음 사람은 테스트를 통과시키려 그 설명을 지운다(이 저장소가 겪은 함정).
     @Test func nothingButSignOutDropsTheSelectedPeer() throws {
         // 단언에 소스 전체를 넣지 않는다 — 실패 로그가 파일 하나를 통째로 토해 내면 아무도 안 읽는다.
-        let messages = try mpStrippedSource("WorkTimerStoreMessages.swift")
+        let messages = mpStripComments(try CheckCoreSourceLayout.joinedSplitSource("WorkTimerStoreMessages.swift"))
         // 대입은 `selectMessagePeer` 안의 한 줄뿐이다(진입점 인자와 목록 선택이 전부 그 문을 지난다).
         let assignments = messages.components(separatedBy: "selectedMessagePeerID = ").count - 1
         #expect(assignments == 1, "메시지 파일에서 선택을 대입하는 자리가 \(assignments)곳이다 — 문은 하나여야 한다")

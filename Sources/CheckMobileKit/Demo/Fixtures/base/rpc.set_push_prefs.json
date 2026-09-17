@@ -1,0 +1,8 @@
+{
+  "status": "ok",
+  "push_prefs": {
+    "message": true,
+    "gomoku_invite": true,
+    "feedback_reply": true
+  }
+}

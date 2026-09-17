@@ -30,7 +30,10 @@ let package = Package(
         // D1: 폰 스토어(플랫폼 무관 — macOS swift test 로 검증)와 화면(#if os(iOS)). Xcode 앱 타깃(ios/project.yml)은 이 모듈의 public 만 본다.
         .target(
             name: "CheckMobileKit",
-            dependencies: ["CheckCore", "CheckMobileShared"]
+            dependencies: ["CheckCore", "CheckMobileShared"],
+            // D-base: 데모 모드 픽스처(서버 계약 모양 그대로의 고정 JSON). 읽는 코드(Demo/*.swift)는 #if DEBUG 라 Release 에서
+            // 컴파일되지 않는다 — 번들에는 JSON 만 남고 그걸 여는 길이 없다. 탭 작업자는 Demo/Fixtures/<탭>/ 에 더한다.
+            resources: [.copy("Demo/Fixtures")]
         ),
         // D1: 위젯 화면 · 타임라인 · AppIntent(#if os(iOS)).
         .target(
@@ -45,6 +48,12 @@ let package = Package(
                 // 캐릭터는 `.copy` 다: `.process` 는 하위 폴더를 평탄화해서 동명 파일(캐릭터마다 atlas.png)이면 빌드가 죽는다.
                 .copy("Characters")
             ]
+        ),
+        // D-base: 폰 스토어·세션·라우터·실시간 러너 테스트(macOS `swift test --filter CheckMobileKitTests`). 스텁 서버는
+        // CheckMobileKit 의 DEBUG 전용 `MobileStubURLProtocol`(호스트별 응답기 · 요청 기록 · 금지 호출 판정)을 쓴다.
+        .testTarget(
+            name: "CheckMobileKitTests",
+            dependencies: ["CheckMobileKit", "CheckMobileShared", "CheckWidgetsKit", "CheckCore"]
         ),
         .testTarget(
             name: "checkTests",

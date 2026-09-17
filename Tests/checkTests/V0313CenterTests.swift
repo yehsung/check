@@ -401,7 +401,7 @@ func 설정에서_센터를_바꾸는_길이_클라에_하나도_없다() throws
     }
 
     // 읽는 길은 그대로 남아 있어야 한다(설정 창은 '보여만 준다' — 아예 사라지면 그것도 회귀다).
-    let service = v0313StrippingComments(try v0313Source("SupabaseWorkService.swift"))
+    let service = v0313StrippingComments(try CheckCoreSourceLayout.joinedSplitSource("SupabaseWorkService.swift"))
     #expect(service.contains("func fetchMyCenter"))
     #expect(v0313StrippingComments(try v0313Source("SupabaseWorkModels.swift")).contains("struct ProfileCenterRow"))
 
@@ -482,7 +482,7 @@ func 내_센터는_별도_GET_이다() async throws {
     // 그 요청이 다른 컬럼을 끌고 가면 별도 GET 의 의미가 없다.
     #expect(!queries.contains { $0.contains("select=center") && $0.contains("token_usage") })
 
-    let settingsSource = v0313StrippingComments(try v0313Source("SupabaseWorkService.swift"))
+    let settingsSource = v0313StrippingComments(try CheckCoreSourceLayout.joinedSplitSource("SupabaseWorkService.swift"))
     #expect(!settingsSource.contains("token_usage_public,token_usage_collect,focus_mode,center"),
             "센터를 기존 설정 GET 의 select 에 끼워 넣지 마라")
 }

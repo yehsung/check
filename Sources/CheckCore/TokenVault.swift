@@ -30,19 +30,29 @@ package protocol TokenVault {
 /// 테스트 프로세스의 기본 금고 선택은 WorkTimerStore.defaultTokenVault 가 한다.
 package final class KeychainTokenVault: TokenVault {
     private let service: String
+    /// 키체인 접근 그룹(D-base · 폰 앱과 위젯이 같은 토큰을 읽는다 — SPEC-ios §2). **맥은 nil 이다** — 식별 쿼리에
+    /// 키가 아예 안 실리므로 맥의 요청 바이트는 이 인자가 생기기 전과 같다(entitlement 없는 맥이 그룹을 실으면 -34018).
+    /// iOS 는 늘 data protection 키체인이라 그룹이 곧 엔타이틀먼트 `keychain-access-groups` 의 값이다.
+    private let accessGroup: String?
 
-    package init(service: String = "kingcheck") {
+    package init(service: String = "kingcheck", accessGroup: String? = nil) {
         self.service = service
+        self.accessGroup = accessGroup
     }
 
     /// 세 연산이 공유하는 식별 쿼리. 식별을 한곳에 두어 read 가 찾는 항목과 write 가 만드는 항목이
     /// 어긋나지 않게 한다(service/account 가 한 글자라도 갈리면 '저장은 되는데 복원이 안 되는' 금고가 된다).
+    /// 접근 그룹도 식별의 일부다 — 쓰기만 그룹에 넣고 읽기가 빠지면 위젯이 앱 토큰을 못 찾는다.
     private func identity(_ key: String) -> [String: Any] {
-        [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
+        if let accessGroup {
+            query[kSecAttrAccessGroup as String] = accessGroup
+        }
+        return query
     }
 
     package func read(_ key: String) -> String? {
@@ -88,6 +98,9 @@ package final class InMemoryTokenVault: TokenVault {
     /// true 면 write 가 키체인 고장 환경처럼 행동한다: 값이 저장되지 않고, 그 키의 기존 값도 지워진다
     /// (KeychainTokenVault.write 의 실패 분기와 같은 계약 — 낡은 토큰을 돌려주지 않는다).
     package var failsWrites = false
+
+    /// D-base: 폰 데모·테스트(다른 모듈)가 만든다 — 합성 init 은 internal 이라 명시했다.
+    package init() {}
 
     package func read(_ key: String) -> String? {
         storage[key]

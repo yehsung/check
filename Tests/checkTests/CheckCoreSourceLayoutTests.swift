@@ -16,6 +16,12 @@ import Testing
 private let splitReadAllowlist: [(file: String, name: String, why: String)] = [
     ("V0325TooltipTests.swift", "CheckTokenUsageRow.swift",
      "폴더 훑기로 만든 '파일 이름 → 주석 제거본' 표에서 조각 파일의 .checkTooltip( 개수 **하한**을 센다 — 양의 단언이라 반쪽이어도 조용히 초록이 되지 않는다"),
+    ("V0251MessagePeerTests.swift", "WorkTimerStoreMessages.swift",
+     "폴더 훑기 결과(파일 이름 × 호출 수)와 비교하는 **기대값** 글자다 — 읽기가 아니다. 훑기는 두 조각을 각자 이름으로 모두 본다"),
+    ("V0331MessageDotTests.swift", "WorkTimerStoreMessages.swift",
+     "폴더 훑기의 허용 목록·제외 조건에 쓰는 파일 이름이다 — 읽기가 아니다(읽기는 joinedSplitSource). 훑기는 두 조각을 각자 이름으로 본다"),
+    ("V0331MessageDotTests.swift", "MessageRules.swift",
+     "같은 허용 목록의 코어 조각 이름(안 읽음 재료를 만지는 판정 규칙 본문) — 읽기가 아니다"),
 ]
 
 /// 테스트 소스의 문자열 리터럴 하나(주석 밖). `precedingCode` 는 리터럴 바로 앞 코드의 끝 80글자(주석·공백 제외).

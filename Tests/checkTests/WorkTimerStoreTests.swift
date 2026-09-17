@@ -5996,7 +5996,7 @@ func failedAwaySyncStopsClosingInsteadOfKeepingStalePolicy() async {
 @Test
 func teamScopedSelectsNeverRequestInputOrCloseReason() throws {
     let code = strippingSwiftComments(
-        try String(contentsOf: awaySourceURL("SupabaseWorkService.swift"), encoding: .utf8)
+        try CheckCoreSourceLayout.joinedSplitSource("SupabaseWorkService.swift")
     )
     for select in code.components(separatedBy: "URLQueryItem(name: \"select\", value: \"").dropFirst() {
         let list = select.components(separatedBy: "\"").first ?? ""

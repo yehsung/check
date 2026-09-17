@@ -229,7 +229,7 @@ func 로그아웃하고_다른_계정으로_들어가면_앞_계정의_점이_�
 @Test
 func 점이_뜨는_세_자리가_모두_같은_판정_하나를_읽는다() throws {
     // 판정: `unreadMessagePeerIDs`(MessageUnreadRules 한 곳) → `hasUnreadMessages` 는 그 비어 있음.
-    let messages = try v0331Source("WorkTimerStoreMessages.swift")
+    let messages = v0331StripComments(try CheckCoreSourceLayout.joinedSplitSource("WorkTimerStoreMessages.swift"))
     #expect(messages.contains("var hasUnreadMessages: Bool { !unreadMessagePeerIDs.isEmpty }"))
     #expect(messages.contains("MessageUnreadRules.unreadPeerIDs("))
     // ① 메뉴바 아이콘
@@ -242,7 +242,8 @@ func 점이_뜨는_세_자리가_모두_같은_판정_하나를_읽는다() thro
 
     // 그 밖의 **어느 소스도** 안 읽음을 따로 계산하지 않는다: 읽음 재료(서버 플래그·요약·도장·낙관 읽음)를 만지는 파일은 정해져 있다.
     let allowed: Set<String> = [
-        "WorkTimerStoreMessages.swift",            // 판정(MessageUnreadRules)과 그 재료의 주인
+        "WorkTimerStoreMessages.swift",            // 판정(MessageUnreadRules)의 배선과 그 재료의 주인
+        "MessageRules.swift",                      // 판정 규칙 본문(D-base 에서 코어로 뗀 조각 — 같은 파일의 나머지 반쪽)
         "WorkTimerStore.swift",                    // 저장 프로퍼티 선언 · 로그아웃 비우기
         "SupabaseWorkServiceMessageReads.swift",   // 서버 응답 → 재료
         "SupabaseWorkModels.swift"                 // 모델 필드 선언

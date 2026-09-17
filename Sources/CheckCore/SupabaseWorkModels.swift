@@ -2352,15 +2352,6 @@ package struct AppVersionReport: Equatable {
     }
 }
 
-/// profiles.app_build / app_version 자기 행 갱신 요청(PATCH).
-/// **두 컬럼을 한 요청에 싣는다** — 집중 모드를 따로 보낸 이유(권한이 한쪽에만 있는 서버)가 여기엔 없다:
-/// 두 컬럼은 같은 마이그레이션이 함께 만들고 함께 grant 하므로 한쪽만 쓸 수 있는 서버가 존재하지 않는다.
-/// 나누면 같은 사실을 알리는 데 왕복이 두 배가 될 뿐이다(무료 플랜).
-package struct ProfileAppVersionUpdateRequest: Encodable {
-    package let appBuild: Int
-    package let appVersion: String
-}
-
 /// `app_latest_release()` RPC 응답(v0.3.20). 릴리스 스크립트가 brew 탭 반영을 원격에서 확인한 **뒤에만** 서버에 적는
 /// 최신 릴리스 한 줄이다 — 실행 중인 앱은 GitHub 하루 1회 폴링을 기다리지 않고 이걸로 새 버전을 안다.
 ///

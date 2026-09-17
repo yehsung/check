@@ -41,10 +41,10 @@ struct MeProfileView: View {
                 AingCard {
                     Text(MeText.displayNameLabel)
                         .font(.headline)
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                     Text(MeText.displayNameHelp)
                         .font(.footnote)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
                         TextField(MeText.displayNameLabel, text: $store.displayNameDraft)
@@ -56,12 +56,12 @@ struct MeProfileView: View {
                             .disabled(store.isDisplayNameLocked || store.isUpdatingDisplayName)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
-                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.cardElevated))
+                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.fill))
                             .accessibilityLabel(Text(MeText.displayNameLabel))
                         Text("\(store.displayNameDraftLength)/\(MeStore.displayNameMaxLength)")
                             .font(MobileTheme.number(.footnote))
                             .monospacedDigit()
-                            .foregroundStyle(store.displayNameDraftLength > MeStore.displayNameMaxLength ? MobileTheme.danger : MobileTheme.secondaryText)
+                            .foregroundStyle(store.displayNameDraftLength > MeStore.displayNameMaxLength ? MobileTheme.danger : MobileTheme.label2)
                             .fixedSize()
                             .accessibilityLabel(Text("\(store.displayNameDraftLength)자, 최대 \(MeStore.displayNameMaxLength)자"))
                     }
@@ -70,7 +70,7 @@ struct MeProfileView: View {
                     }
                     Button(action: save) {
                         if store.isUpdatingDisplayName {
-                            ProgressView().tint(MobileTheme.onAccent)
+                            ProgressView().tint(MobileTheme.onAccentFill)
                         } else {
                             Text(MeText.displayNameSave)
                         }

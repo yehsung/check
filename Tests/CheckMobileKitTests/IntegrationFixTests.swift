@@ -189,8 +189,11 @@ import Testing
             #expect(failureRows.contains { $0.hasPrefix("Sources/CheckMobileKit/\(folder)/") }, "\(folder) 탭이 공용 실패 행을 쓰지 않는다")
         }
 
-        let medalDefinitions = try IntegrationContractTests.files(containing: ["Color(red: 1.00, green: 0.824"], under: "Sources/CheckMobileKit")
-        #expect(medalDefinitions == ["Sources/CheckMobileKit/Components/MobileRankComponents.swift"], "메달 색 정의가 두 벌이다: \(medalDefinitions)")
+        // 메달 색 숫자는 토큰 표 한 곳(w15 기반 — 시안 B 금·은·동). 옛 맥 숫자 리터럴이 어디에도 남지 않는다.
+        let medalDefinitions = try IntegrationContractTests.files(containing: ["static let gold = Pair("], under: "Sources/CheckMobileKit")
+        #expect(medalDefinitions == ["Sources/CheckMobileKit/Theme/MobileThemePalette.swift"], "메달 색 정의가 두 벌이다: \(medalDefinitions)")
+        let legacyMedals = try IntegrationContractTests.files(containing: ["Color(red: 1.00, green: 0.824", "0xF5B700", "0xFFD24A"], under: "Sources/CheckMobileKit")
+        #expect(legacyMedals == ["Sources/CheckMobileKit/Theme/MobileThemePalette.swift"], "메달 숫자가 토큰 표 밖에 있다: \(legacyMedals)")
         for file in ["Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift", "Sources/CheckMobileKit/Rankings/RankingsTab.swift"] {
             let code = try IntegrationContractTests.code(file)
             #expect(code.contains("RankBadge"), "\(file) 가 공용 순위 원을 쓰지 않는다")
@@ -227,8 +230,12 @@ import Testing
         }
         #expect(!(try IntegrationContractTests.code("Sources/CheckMobileKit/Now/NowTodoSection.swift")).contains("DisclosureGroup("),
                 "시스템 DisclosureGroup 은 펼친 줄의 자리를 몰라 카드 조각이 끊긴다")
+        // 시안 B: 인셋 그룹·카드는 반경 22 · surface · 테두리 없음. 카드 조각과 AingCard 가 같은 토큰을 쓴다.
         let segment = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/MobileCardSegment.swift")
-        #expect(segment.contains("MobileTheme.cardRadius") && segment.contains(".stroke(MobileTheme.separator, lineWidth: 1)"),
-                "카드 조각이 AingCard 토큰(반경 · 1px 선)을 쓰지 않는다")
+        let card = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/MobileComponents.swift")
+        for (name, code) in [("카드 조각", segment), ("AingCard", card)] {
+            #expect(code.contains("MobileTheme.groupRadius") && code.contains("fill(MobileTheme.surface)"), "\(name) 가 그룹 토큰(반경 · surface)을 쓰지 않는다")
+        }
+        #expect(!segment.contains(".stroke(MobileTheme.separator"), "카드 조각에 테두리가 남았다(시안 B 그룹은 테두리가 없다)")
     }
 }

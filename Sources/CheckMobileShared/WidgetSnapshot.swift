@@ -21,19 +21,40 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public var working: [WorkingPerson]
     /// 오늘 할 일 앞부분(위젯 medium 3개 · large 6개를 그릴 만큼).
     public var todosPreview: [TodoPreview]
+    /// 착용 캐릭터 id(서버 `profiles.character` 를 이 빌드가 아는 id 로 접은 값 — 기본은 "aing"). nil = 아직 모른다(옛 스냅샷 포함).
+    /// **읽을 때는 `resolvedCharacterID`** — 모르는 id·nil 은 아잉으로 선다. `me` 와 따로 둔다: 지금 탭이 `me` 를 통째로 갈아 끼워도
+    /// 착용값이 지워지지 않게(착용값은 나 탭이 알아 오고, 쓰는 주체는 여전히 지금 탭 하나다).
+    public var characterID: String?
 
     public init(
         version: Int = WidgetSnapshot.currentVersion,
         generatedAt: Date,
         me: Me? = nil,
         working: [WorkingPerson] = [],
-        todosPreview: [TodoPreview] = []
+        todosPreview: [TodoPreview] = [],
+        characterID: String? = nil
     ) {
         self.version = version
         self.generatedAt = generatedAt
         self.me = me
         self.working = working
         self.todosPreview = todosPreview
+        self.characterID = characterID
+    }
+
+    /// 위젯이 세울 캐릭터 id — 이 빌드에 초상이 없는 id·nil 은 아잉(맥 `CharacterSyncDecision` 과 같은 접기).
+    public var resolvedCharacterID: String {
+        AingCharacterArt.resolvedID(characterID)
+    }
+
+    /// 내 근무 상태(위젯 초상 표정·링). 옛 스냅샷은 `working` 깃발만 있다 — 그때는 근무 중/안 함 둘로 읽는다.
+    public enum WorkState: String, Codable, Equatable, Sendable, CaseIterable {
+        /// 맥에서 근무 중(신호 신선).
+        case working
+        /// 근무 중인데 맥 신호가 끊겼다(90초 넘게 — 코어 `MemberPresence.staleWorking`).
+        case disconnected
+        /// 근무 안 함.
+        case off
     }
 
     public struct Me: Codable, Equatable, Sendable {
@@ -47,13 +68,23 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         public var weekSeconds: Int
         /// 팀 1인당 주간 목표(시간).
         public var goalHours: Int
+        /// 근무 상태 3갈래. nil = 옛 스냅샷(이 칸이 없다) · 이 빌드가 모르는 값 — **읽을 때는 `resolvedStatus`**.
+        public var status: WorkState?
 
-        public init(working: Bool, sessionStartedAt: Date?, todaySeconds: Int, weekSeconds: Int, goalHours: Int) {
+        public init(working: Bool, sessionStartedAt: Date?, todaySeconds: Int, weekSeconds: Int, goalHours: Int, status: WorkState? = nil) {
             self.working = working
             self.sessionStartedAt = sessionStartedAt
             self.todaySeconds = todaySeconds
             self.weekSeconds = weekSeconds
             self.goalHours = goalHours
+            self.status = status
+        }
+
+        /// 상태 칸이 있으면 그 값, 없으면 `working` 깃발로(근무 중 / 안 함). 상태가 `working` 깃발과 어긋나면 깃발을 믿는다
+        /// (깃발은 옛 판부터 늘 써 온 칸이다 — 근무 안 함인데 "연결 끊김"을 그리지 않는다).
+        public var resolvedStatus: WorkState {
+            guard working else { return .off }
+            return status == .disconnected ? .disconnected : .working
         }
 
         public init(from decoder: Decoder) throws {
@@ -63,6 +94,8 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
             todaySeconds = max(0, (try? c.decodeIfPresent(Int.self, forKey: .todaySeconds)) ?? 0)
             weekSeconds = max(0, (try? c.decodeIfPresent(Int.self, forKey: .weekSeconds)) ?? 0)
             goalHours = (try? c.decodeIfPresent(Int.self, forKey: .goalHours)) ?? 0
+            // 모르는 문자열(다음 판이 더한 상태)은 nil — 깃발로 읽는다.
+            status = (try? c.decodeIfPresent(String.self, forKey: .status)).flatMap(WorkState.init(rawValue:))
         }
     }
 
@@ -123,6 +156,7 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         // 칸 하나가 깨져도 스냅샷 전체를 버리지 않는다 — 원소 단위로 건너뛴다(위젯이 통째로 비는 것보다 낫다).
         working = (try? c.decodeIfPresent(LossyArray<WorkingPerson>.self, forKey: .working))?.elements ?? []
         todosPreview = (try? c.decodeIfPresent(LossyArray<TodoPreview>.self, forKey: .todosPreview))?.elements ?? []
+        characterID = try? c.decodeIfPresent(String.self, forKey: .characterID)
     }
 }
 

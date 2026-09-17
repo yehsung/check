@@ -81,7 +81,7 @@ struct GamesGomokuMatch: View {
         if let focusedForbidden { return (GomokuPhoneText.forbiddenStatus(focusedForbidden), MobileTheme.danger) }
         if let notice = gomoku.notice { return (notice, MobileTheme.pending) }
         if match.turn == match.myColor { return (GomokuPhoneText.myTurn, MobileTheme.working) }
-        return (GomokuPhoneText.opponentTurn, MobileTheme.secondaryText)
+        return (GomokuPhoneText.opponentTurn, MobileTheme.label2)
     }
 
     private var statusBox: some View {
@@ -94,19 +94,19 @@ struct GamesGomokuMatch: View {
             if match.turn == match.myColor, gomoku.notice == nil, focusedForbidden == nil {
                 Text(GomokuPhoneText.placeHint)
                     .font(.footnote)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if match.blackPassed {
                 Text(GomokuPhoneText.blackPassed)
                     .font(.footnote)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !match.autoPoints.isEmpty {
                 Text(GomokuPhoneText.autoPlacedCount(match.autoPoints.count))
                     .font(.footnote)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let warning = gomoku.autoStreakWarning {
@@ -128,19 +128,16 @@ struct GamesGomokuMatch: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(GomokuPhoneText.stakeTitle)
-                    .foregroundStyle(MobileTheme.secondaryText)
-                Image(systemName: "diamond.fill")
-                    .foregroundStyle(MobileTheme.ruby)
-                    .imageScale(.small)
-                    .accessibilityHidden(true)
+                    .foregroundStyle(MobileTheme.label2)
+                RubyIcon(size: 17)
                 Text(GomokuPhoneText.stakeLine(match.stake))
                     .monospacedDigit()
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
             }
             .font(.subheadline.weight(.semibold))
             Label(GomokuPhoneText.clockRunsInBackground, systemImage: "clock")
                 .font(.footnote)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
         }
         .accessibilityElement(children: .combine)
     }
@@ -177,7 +174,7 @@ struct GamesGomokuPlayerStrip: View {
                 HStack(spacing: 6) {
                     Text(name)
                         .font(.body.weight(.bold))
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     if !isMe { CenterBadge(CenterLabel.serverValue(forDisplay: center)) }
@@ -189,7 +186,7 @@ struct GamesGomokuPlayerStrip: View {
                     GamesGomokuStoneDot(color: color, size: 14)
                     Text(GomokuPhoneText.stoneName(color))
                         .font(.caption)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                 }
             }
             .accessibilityElement(children: .combine)
@@ -204,11 +201,11 @@ struct GamesGomokuPlayerStrip: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: MobileTheme.cardRadius, style: .continuous)
-                .fill(isTurn ? MobileTheme.accent.opacity(0.12) : MobileTheme.card)
+            RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous)
+                .fill(isTurn ? MobileTheme.accent.opacity(0.12) : MobileTheme.surface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: MobileTheme.cardRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous)
                 .stroke(isTurn ? MobileTheme.accent.opacity(0.6) : MobileTheme.separator, lineWidth: isTurn ? 1.5 : 1)
         )
     }
@@ -241,7 +238,7 @@ struct GamesGomokuTurnRing: View {
             let fraction = min(1, max(0, remaining / total))
             let tint = remaining <= 5 ? MobileTheme.danger : (remaining <= 10 ? MobileTheme.pending : MobileTheme.working)
             ZStack {
-                Circle().stroke(MobileTheme.track, lineWidth: 5)
+                Circle().stroke(MobileTheme.fill, lineWidth: 5)
                 Circle()
                     .trim(from: 0, to: fraction)
                     .stroke(tint, style: StrokeStyle(lineWidth: 5, lineCap: .round))
@@ -357,17 +354,17 @@ struct GamesGomokuResult: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(GomokuPhoneText.outcomeTitle(match.outcome))
                     .font(MobileTheme.title(.title2))
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                     .fixedSize()
                 Text(GomokuPhoneText.endReason(match.endReason, outcome: match.outcome))
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 6) {
                     AvatarView(name: match.opponent.displayName, url: match.opponent.avatarURL.flatMap(URL.init(string:)), size: 22)
                     Text("상대 · \(match.opponent.displayName)")
                         .font(.caption)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -375,13 +372,11 @@ struct GamesGomokuResult: View {
 
     private var rubyDeltaLabel: some View {
             HStack(spacing: 4) {
-                Image(systemName: "diamond.fill")
-                    .foregroundStyle(MobileTheme.ruby)
-                    .accessibilityHidden(true)
+                RubyIcon(size: 24)
                 Text(GomokuPhoneText.rubyDelta(delta))
                     .font(MobileTheme.number(.title2, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(delta > 0 ? MobileTheme.working : (delta < 0 ? MobileTheme.danger : MobileTheme.primaryText))
+                    .foregroundStyle(delta > 0 ? MobileTheme.working : (delta < 0 ? MobileTheme.danger : MobileTheme.label))
             }
             .fixedSize()
             .accessibilityLabel("루비 \(GomokuPhoneText.rubyDelta(delta))")

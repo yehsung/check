@@ -119,19 +119,22 @@ import Testing
         #expect(Set(AingWidgetKind.all).count == 3)
     }
 
-    @Test("위젯 색 표는 앱 토큰(MobileThemePalette)과 같은 값이다")
+    @Test("위젯 색 표는 앱 토큰(MobileThemePalette)을 위젯 바탕에 겹친 값과 같다")
     func paletteMatchesApp() {
         func same(_ widget: AingWidgetPalette.Pair, _ app: MobileThemePalette.Pair, _ name: String) {
-            for (hex, rgb) in [(widget.light, app.light), (widget.dark, app.dark)] {
+            let backdrop = MobileThemePalette.widgetBackground
+            for (hex, rgb, base) in [(widget.light, app.light, backdrop.light), (widget.dark, app.dark, backdrop.dark)] {
+                let expected = rgb.alpha < 1 ? rgb.composited(over: base) : rgb
                 let c = AingWidgetPalette.components(hex)
-                let delta = max(abs(c.r - rgb.r), abs(c.g - rgb.g), abs(c.b - rgb.b))
+                let delta = max(abs(c.r - expected.r), abs(c.g - expected.g), abs(c.b - expected.b))
                 #expect(delta <= 0.5 / 255 + 1e-9, "\(name) 이 앱 토큰과 다르다(\(String(hex, radix: 16)))")
             }
         }
-        same(AingWidgetPalette.background, MobileThemePalette.background, "background")
-        same(AingWidgetPalette.cardElevated, MobileThemePalette.cardElevated, "cardElevated")
-        same(AingWidgetPalette.primaryText, MobileThemePalette.primaryText, "primaryText")
-        same(AingWidgetPalette.secondaryText, MobileThemePalette.secondaryText, "secondaryText")
+        same(AingWidgetPalette.background, MobileThemePalette.widgetBackground, "background")
+        same(AingWidgetPalette.cardElevated, MobileThemePalette.fill, "cardElevated")
+        same(AingWidgetPalette.track, MobileThemePalette.fill, "track")
+        same(AingWidgetPalette.primaryText, MobileThemePalette.label, "primaryText")
+        same(AingWidgetPalette.secondaryText, MobileThemePalette.label2, "secondaryText")
         same(AingWidgetPalette.working, MobileThemePalette.working, "working")
         same(AingWidgetPalette.offWork, MobileThemePalette.offWork, "offWork")
         same(AingWidgetPalette.pending, MobileThemePalette.pending, "pending")

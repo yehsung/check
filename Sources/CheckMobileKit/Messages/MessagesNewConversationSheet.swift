@@ -29,7 +29,7 @@ struct MessagesNewConversationSheet: View {
                     .listRowSeparator(.hidden)
                 } else if !store.directoryLoaded {
                     LoadingRow()
-                        .listRowBackground(MobileTheme.card)
+                        .listRowBackground(MobileTheme.surface)
                 } else if people.isEmpty {
                     EmptyStateView(
                         systemImage: "person.crop.circle.badge.questionmark",
@@ -47,13 +47,13 @@ struct MessagesNewConversationSheet: View {
                                 MessagesPersonRow(person: person)
                             }
                             .buttonStyle(.plain)
-                            .listRowBackground(MobileTheme.card)
+                            .listRowBackground(MobileTheme.surface)
                             .listRowSeparatorTint(MobileTheme.separator)
                         }
                     } footer: {
                         Text("근무 중이 아니어도 메시지를 보낼 수 있어요")
                             .font(.footnote)
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                     }
                 }
             }
@@ -85,15 +85,15 @@ struct MessagesPersonRow: View {
                 HStack(spacing: 6) {
                     Text(person.name)
                         .font(.headline)
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                         .lineLimit(1)
                     if let center = person.center {
                         Text(center)
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Capsule().fill(MobileTheme.cardElevated))
+                            .background(Capsule().fill(MobileTheme.fill))
                             .overlay(Capsule().stroke(MobileTheme.separator, lineWidth: 0.5))
                             .fixedSize()
                     }
@@ -104,13 +104,13 @@ struct MessagesPersonRow: View {
                         .frame(width: 8, height: 8)
                     Text(person.isWorking ? "근무 중" : "근무 안 함")
                         .font(.subheadline)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                 }
             }
             Spacer(minLength: 8)
             Image(systemName: "chevron.right")
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
                 .accessibilityHidden(true)
         }
         .padding(.vertical, 4)

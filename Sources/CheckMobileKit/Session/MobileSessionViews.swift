@@ -17,10 +17,10 @@ struct MobileLoginView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("aing-check")
                         .font(MobileTheme.title(.largeTitle))
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                     Text("맥의 aing-check 와 같은 계정으로 로그인해요")
                         .font(.subheadline)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 32)
@@ -49,7 +49,7 @@ struct MobileLoginView: View {
                         }
                         Button(action: signIn) {
                             if session.isSigningIn {
-                                ProgressView().tint(MobileTheme.onAccent)
+                                ProgressView().tint(MobileTheme.onAccentFill)
                             } else {
                                 Text("로그인")
                             }
@@ -65,7 +65,7 @@ struct MobileLoginView: View {
                     Label(MobileSessionText.passwordResetOnMac, systemImage: "key.fill")
                 }
                 .font(.footnote)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
                 .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, MobileTheme.sideMargin)
@@ -83,13 +83,13 @@ struct MobileLoginView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
             content()
                 .font(.body)
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.cardElevated))
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.fill))
         }
     }
 
@@ -118,32 +118,32 @@ struct MobileUpdateRequiredView: View {
                     .accessibilityHidden(true)
                 Text(MobileSessionText.updateTitle)
                     .font(MobileTheme.title())
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                     .multilineTextAlignment(.center)
                 Text(MobileSessionText.updateBody)
                     .font(.body)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 AingCard {
                     HStack {
                         Text("지금 빌드")
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                         Spacer()
                         Text("\(currentBuild)")
                             .font(MobileTheme.number(.body))
                             .monospacedDigit()
-                            .foregroundStyle(MobileTheme.primaryText)
+                            .foregroundStyle(MobileTheme.label)
                     }
                     Divider().overlay(MobileTheme.separator)
                     HStack {
                         Text("필요한 빌드")
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                         Spacer()
                         Text("\(minBuild) 이상")
                             .font(MobileTheme.number(.body))
                             .monospacedDigit()
-                            .foregroundStyle(MobileTheme.primaryText)
+                            .foregroundStyle(MobileTheme.label)
                     }
                 }
                 Button(MobileSessionText.updateButton) {
@@ -164,7 +164,7 @@ struct MobileLaunchingView: View {
         VStack(spacing: 16) {
             Text("aing-check")
                 .font(MobileTheme.title(.largeTitle))
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
             ProgressView()
                 .accessibilityLabel(Text("불러오는 중"))
         }

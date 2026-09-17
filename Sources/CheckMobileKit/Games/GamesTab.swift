@@ -55,7 +55,7 @@ struct GamesTab: View {
             GamesCardLabel(
                 icon: kind.icon, tint: kind == .timingBar ? MobileTheme.accent : MobileTheme.working,
                 title: kind.title, subtitle: GamesMiniGameText.howToPlay(kind), detail: line,
-                detailTint: hub.myRank(kind) == nil ? MobileTheme.secondaryText : MobileTheme.primaryText,
+                detailTint: hub.myRank(kind) == nil ? MobileTheme.label2 : MobileTheme.label,
                 badge: nil
             )
         }
@@ -77,7 +77,7 @@ struct GamesTab: View {
             GamesCardLabel(
                 icon: "circle.grid.3x3.fill", tint: MobileTheme.aiToken,
                 title: GomokuPhoneText.title, subtitle: GamesText.gomokuCardSubtitle, detail: line,
-                detailTint: (incoming > 0 || active) ? MobileTheme.pending : MobileTheme.secondaryText,
+                detailTint: (incoming > 0 || active) ? MobileTheme.pending : MobileTheme.label2,
                 badge: incoming > 0 ? incoming : nil
             )
         }
@@ -123,21 +123,21 @@ private struct GamesCardLabel: View {
                     HStack(spacing: 8) {
                         Text(title)
                             .font(MobileTheme.title(.title3))
-                            .foregroundStyle(MobileTheme.primaryText)
+                            .foregroundStyle(MobileTheme.label)
                         if let badge {
                             Text("\(badge)")
                                 .font(.caption.weight(.bold))
                                 .monospacedDigit()
-                                .foregroundStyle(MobileTheme.onAccent)
+                                .foregroundStyle(MobileTheme.onAccentFill)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 2)
-                                .background(Capsule().fill(MobileTheme.danger))
+                                .background(Capsule().fill(MobileTheme.badge))
                                 .accessibilityLabel("받은 신청 \(badge)건")
                         }
                     }
                     Text(subtitle)
                         .font(.footnote)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(detail)
                         .font(.subheadline.weight(.semibold))
@@ -148,7 +148,7 @@ private struct GamesCardLabel: View {
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .accessibilityHidden(true)
             }
         }

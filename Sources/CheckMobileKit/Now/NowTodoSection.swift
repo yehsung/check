@@ -31,10 +31,10 @@ struct NowTodoSection: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(NowText.todoEmptyTitle)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                     Text(NowText.todoEmptyHint)
                         .font(.footnote)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                 }
                 .padding(.vertical, 4)
                 .accessibilityElement(children: .combine)
@@ -59,21 +59,21 @@ struct NowTodoSection: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(NowText.todoTitle)
                     .font(.headline)
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 8)
                 if remaining > 0 {
                     Text(NowText.todoRemaining(count: remaining))
                         .font(.subheadline)
                         .monospacedDigit()
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                 }
             }
             .textCase(nil)
         } footer: {
             Text(NowText.todoFooter)
                 .font(.footnote)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
         }
         .onChange(of: focus) { old, new in
             // 고치던 줄에서 포커스가 떠나면(다른 곳 탭 · 키보드 내림) 확정한다 — iOS 목록 편집의 관례.
@@ -99,11 +99,11 @@ struct NowTodoSection: View {
         HStack(spacing: 10) {
             Image(systemName: "plus.circle.fill")
                 .font(.title3)
-                .foregroundStyle(store.canEditTodos ? MobileTheme.accent : MobileTheme.secondaryText)
+                .foregroundStyle(store.canEditTodos ? MobileTheme.accent : MobileTheme.label2)
                 .accessibilityHidden(true)
             TextField(NowText.todoPlaceholder, text: $draft)
                 .font(.body)
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .focused($focus, equals: .draft)
                 .submitLabel(.done)
                 .onSubmit(submitDraft)
@@ -116,7 +116,7 @@ struct NowTodoSection: View {
                 Text(counter)
                     .font(.caption)
                     .monospacedDigit()
-                    .foregroundStyle(draft.count >= TodoRules.maxTitleLength ? MobileTheme.pending : MobileTheme.secondaryText)
+                    .foregroundStyle(draft.count >= TodoRules.maxTitleLength ? MobileTheme.pending : MobileTheme.label2)
                     .fixedSize()
             }
             if !TodoRules.normalizedTitle(draft).isEmpty {
@@ -138,12 +138,12 @@ struct NowTodoSection: View {
             HStack(spacing: 8) {
                 Text(NowText.todoOldSection(count: count))
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .rotationEffect(.degrees(isOldExpanded ? 90 : 0))
                     .accessibilityHidden(true)
             }
@@ -171,7 +171,7 @@ struct NowTodoSection: View {
             } label: {
                 Image(systemName: row.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
-                    .foregroundStyle(row.isDone ? MobileTheme.working : MobileTheme.secondaryText)
+                    .foregroundStyle(row.isDone ? MobileTheme.working : MobileTheme.label2)
                     .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Rectangle())
             }
@@ -184,7 +184,7 @@ struct NowTodoSection: View {
             if store.editingTodoID == row.id {
                 TextField(NowText.todoEditPlaceholder, text: $editingText)
                     .font(.body)
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                     .focused($focus, equals: .edit(row.id))
                     .submitLabel(.done)
                     .onSubmit { store.commitEditing(row.id, title: editingText) }
@@ -196,7 +196,7 @@ struct NowTodoSection: View {
                 Text(row.title)
                     .font(.body)
                     .strikethrough(row.isDone)
-                    .foregroundStyle(row.isDone ? MobileTheme.secondaryText : MobileTheme.primaryText)
+                    .foregroundStyle(row.isDone ? MobileTheme.label2 : MobileTheme.label)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .contentShape(Rectangle())
@@ -239,11 +239,11 @@ struct NowUndoToast: View {
         if store.undoTodoID != nil {
             HStack(spacing: 12) {
                 Image(systemName: "trash")
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .accessibilityHidden(true)
                 Text(NowText.todoDeleted)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                 Spacer(minLength: 8)
                 // 5초만 뜨는 토스트라 누르기 쉬워야 한다 — 글자만이면 높이 20pt 안팎이었다. 칸을 44pt 로 키우고 토스트 위아래 여백을 그만큼 줄였다.
                 Button {
@@ -263,7 +263,7 @@ struct NowUndoToast: View {
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(MobileTheme.cardElevated)
+                    .fill(MobileTheme.fill)
                     .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
             )
             .overlay(
@@ -297,11 +297,11 @@ struct NowGoalSheet: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(NowText.goalStepperLabel)
                                     .font(.subheadline)
-                                    .foregroundStyle(MobileTheme.secondaryText)
+                                    .foregroundStyle(MobileTheme.label2)
                                 Text("\(hours)시간")
                                     .font(MobileTheme.number(.title2, weight: .bold))
                                     .monospacedDigit()
-                                    .foregroundStyle(MobileTheme.primaryText)
+                                    .foregroundStyle(MobileTheme.label)
                             }
                         }
                         .accessibilityValue(Text("\(hours)시간"))
@@ -316,7 +316,7 @@ struct NowGoalSheet: View {
                         }
                     } label: {
                         HStack(spacing: 8) {
-                            if store.isSavingGoal { ProgressView().tint(MobileTheme.onAccent) }
+                            if store.isSavingGoal { ProgressView().tint(MobileTheme.onAccentFill) }
                             Text(NowText.goalSave)
                         }
                     }

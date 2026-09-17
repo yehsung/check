@@ -34,7 +34,7 @@ struct MeSettingsView: View {
                 Text(store.versionLine)
                     .font(.footnote)
                     .monospacedDigit()
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 4)
                     .id("version")
@@ -108,16 +108,16 @@ struct MeSettingsView: View {
                 AingCard {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: authorization.allowsDelivery ? "bell.badge.fill" : "bell.slash.fill")
-                            .foregroundStyle(authorization.allowsDelivery ? MobileTheme.working : MobileTheme.secondaryText)
+                            .foregroundStyle(authorization.allowsDelivery ? MobileTheme.working : MobileTheme.label2)
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(authorization.meTitle)
                                 .font(.body.weight(.semibold))
-                                .foregroundStyle(MobileTheme.primaryText)
+                                .foregroundStyle(MobileTheme.label)
                             if let detail = authorization.meDetail {
                                 Text(detail)
                                     .font(.footnote)
-                                    .foregroundStyle(MobileTheme.secondaryText)
+                                    .foregroundStyle(MobileTheme.label2)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -188,7 +188,7 @@ struct MeSettingsView: View {
             }
             Text(MeText.appearanceWidgetNote)
                 .font(.footnote)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 4)
         }
@@ -202,12 +202,12 @@ struct MeSettingsView: View {
             HStack(spacing: 12) {
                 Image(systemName: MeText.appearanceSymbol(mode))
                     .font(.body)
-                    .foregroundStyle(isSelected ? MobileTheme.accent : MobileTheme.secondaryText)
+                    .foregroundStyle(isSelected ? MobileTheme.accent : MobileTheme.label2)
                     .frame(minWidth: 24)
                     .accessibilityHidden(true)
                 Text(MeText.appearanceTitle(mode))
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
@@ -234,25 +234,25 @@ struct MeSettingsView: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(store.teamName ?? MeText.noTeam)
                         .font(.body.weight(.semibold))
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                     Spacer(minLength: 8)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(MeText.inviteCodeTitle)
                         .font(.subheadline)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                     Spacer(minLength: 8)
                     if let code = store.inviteCode {
                         Text(code)
                             .font(MobileTheme.number(.title3, weight: .bold))
                             .monospaced()
-                            .foregroundStyle(MobileTheme.primaryText)
+                            .foregroundStyle(MobileTheme.label)
                             .textSelection(.enabled)
                             .accessibilityLabel(Text("팀 코드 \(code.map(String.init).joined(separator: " "))"))
                     } else {
                         Text(store.inviteCodeLoaded || (store.inviteCodeFailed && !store.isLoadingSettings) ? "—" : MeText.loading)
                             .font(.subheadline)
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                     }
                 }
                 if store.inviteCodeFailed {
@@ -278,7 +278,7 @@ struct MeSettingsView: View {
                 if let email = store.context.session.profile?.email ?? store.context.session.storedEmail {
                     Text(email)
                         .font(.subheadline)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .textSelection(.enabled)
                 }
                 Button(role: .destructive) {
@@ -312,10 +312,10 @@ struct MeSettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                 Text(detail)
                     .font(.footnote)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

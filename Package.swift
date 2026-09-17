@@ -25,7 +25,10 @@ let package = Package(
         ),
         // D1: 폰 앱·위젯 공용(App Group 경로 · 키체인 설정 · 위젯 스냅샷 모델 · 할 일 파일 위치 · 기기 식별자). 플랫폼 무관.
         .target(
-            name: "CheckMobileShared"
+            name: "CheckMobileShared",
+            // w15 기반: 캐릭터 초상 12장(맥 원본 사본 192px — `AingCharacterArt`). 위젯 확장도 그리므로 앱 모듈이 아니라 여기다
+            // (위젯은 CheckMobileKit 을 링크하지 않는다). `.copy` 라 폴더(Portraits/)가 번들에 그대로 남는다.
+            resources: [.copy("Resources/Portraits")]
         ),
         // D1: 폰 스토어(플랫폼 무관 — macOS swift test 로 검증)와 화면(#if os(iOS)). Xcode 앱 타깃(ios/project.yml)은 이 모듈의 public 만 본다.
         .target(
@@ -33,7 +36,8 @@ let package = Package(
             dependencies: ["CheckCore", "CheckMobileShared"],
             // D-base: 데모 모드 픽스처(서버 계약 모양 그대로의 고정 JSON). 읽는 코드(Demo/*.swift)는 #if DEBUG 라 Release 에서
             // 컴파일되지 않는다 — 번들에는 JSON 만 남고 그걸 여는 길이 없다. 탭 작업자는 Demo/Fixtures/<탭>/ 에 더한다.
-            resources: [.copy("Demo/Fixtures")]
+            // w15 기반: 앱 전용 그림(루비 ruby.png 원본 + 48/96px 축소본 · 무대용 고해상 초상 · 플래피 아잉 옆모습 — `MobileArt`).
+            resources: [.copy("Demo/Fixtures"), .copy("Resources/Art")]
         ),
         // D1: 위젯 화면 · 타임라인 · AppIntent(#if os(iOS)).
         .target(

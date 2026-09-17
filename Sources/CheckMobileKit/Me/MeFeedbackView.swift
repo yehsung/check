@@ -65,12 +65,12 @@ struct MeFeedbackView: View {
                     .frame(minHeight: 140)
                     .scrollContentBackground(.hidden)
                     .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.cardElevated))
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.fill))
                     .accessibilityLabel(Text("제보 내용"))
                 if store.feedbackDraft.isEmpty {
                     Text(FeedbackText.placeholder)
                         .font(.body)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .padding(.horizontal, 13)
                         .padding(.vertical, 16)
                         .allowsHitTesting(false)
@@ -80,13 +80,13 @@ struct MeFeedbackView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(store.feedbackAutoAttachNotice)
                     .font(.caption)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 Text(FeedbackComposer.counterText(store.feedbackDraft))
                     .font(MobileTheme.number(.caption))
                     .monospacedDigit()
-                    .foregroundStyle(FeedbackComposer.isCounterWarning(store.feedbackDraft) ? MobileTheme.pending : MobileTheme.secondaryText)
+                    .foregroundStyle(FeedbackComposer.isCounterWarning(store.feedbackDraft) ? MobileTheme.pending : MobileTheme.label2)
                     .fixedSize()
             }
             if let notice = store.feedbackNotice {
@@ -121,7 +121,7 @@ struct MeFeedbackView: View {
                 } else {
                     Text(FeedbackText.mineEmpty)
                         .font(.subheadline)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                 }
             }
         } else {
@@ -160,12 +160,12 @@ struct MeFeedbackRow: View {
                     Spacer(minLength: 4)
                     Text(FeedbackText.ageText(report.createdAt, now: now))
                         .font(.caption)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize()
                 }
                 Text(report.body)
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                     .lineLimit(isExpanded ? nil : 3)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -173,14 +173,14 @@ struct MeFeedbackRow: View {
                     Text([version, report.osVersion].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.caption)
                         .monospacedDigit()
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                 }
                 if let reply = report.reply {
                     VStack(alignment: .leading, spacing: 4) {
                         replyHeader
                         Text(reply)
                             .font(.subheadline)
-                            .foregroundStyle(MobileTheme.primaryText)
+                            .foregroundStyle(MobileTheme.label)
                             .lineLimit(isExpanded ? nil : 3)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
@@ -192,9 +192,9 @@ struct MeFeedbackRow: View {
             }
             .padding(MobileTheme.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: MobileTheme.cardRadius, style: .continuous).fill(MobileTheme.card))
+            .background(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous).fill(MobileTheme.surface))
             .overlay(
-                RoundedRectangle(cornerRadius: MobileTheme.cardRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous)
                     .stroke(isFocused ? MobileTheme.accent : MobileTheme.separator, lineWidth: isFocused ? 2 : 1)
             )
             .contentShape(Rectangle())
@@ -234,10 +234,10 @@ struct MeFeedbackRow: View {
     private var replyBadge: some View {
         Text(MeText.feedbackReplyBadge)
             .font(.caption2.weight(.bold))
-            .foregroundStyle(MobileTheme.onAccent)
+            .foregroundStyle(MobileTheme.onAccentFill)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(MobileTheme.accent))
+            .background(Capsule().fill(MobileTheme.accentFill))
             .fixedSize()
     }
 
@@ -246,7 +246,7 @@ struct MeFeedbackRow: View {
         if let at = report.adminNoteAt {
             Text(FeedbackText.ageText(at, now: now))
                 .font(.caption)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

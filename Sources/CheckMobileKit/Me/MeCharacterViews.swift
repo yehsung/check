@@ -17,13 +17,13 @@ struct MeShopView: View {
                     HStack(alignment: .center) {
                         Text("내 루비")
                             .font(.headline)
-                            .foregroundStyle(MobileTheme.primaryText)
+                            .foregroundStyle(MobileTheme.label)
                         Spacer(minLength: 8)
                         RubyLabel(store.rubyBalance, style: .title3)
                     }
                     Text("루비는 미니게임 순위 상품과 근무 미션으로 모여요. 산 캐릭터는 계속 가져요.")
                         .font(.footnote)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if store.shopState.hasFailed, !store.shopState.hasLoaded {
@@ -86,19 +86,17 @@ struct MeShopView: View {
                     .opacity(owned || affordable || row.price == nil || store.rubyBalance == nil ? 1 : 0.5)
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 HStack(spacing: 3) {
                     if !owned {
-                        Image(systemName: "diamond.fill")
-                            .imageScale(.small)
-                            .foregroundStyle(MobileTheme.ruby)
+                        RubyIcon(size: 14)
                     }
                     Text(busy ? "…" : MeText.cardPrice(owned: owned, price: row.price))
                         .font(MobileTheme.number(.subheadline, weight: .bold))
                         .monospacedDigit()
-                        .foregroundStyle(owned ? MobileTheme.secondaryText : MobileTheme.primaryText)
+                        .foregroundStyle(owned ? MobileTheme.label2 : MobileTheme.label)
                 }
             }
             .padding(.vertical, 10)
@@ -106,7 +104,7 @@ struct MeShopView: View {
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(picked ? MobileTheme.accent.opacity(0.12) : MobileTheme.card)
+                    .fill(picked ? MobileTheme.accent.opacity(0.12) : MobileTheme.surface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -152,11 +150,11 @@ struct MeShopView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(selection.map(MeCharacterCards.displayName(for:)) ?? MeText.pickSomething)
                 .font(.headline)
-                .foregroundStyle(selection == nil ? MobileTheme.secondaryText : MobileTheme.primaryText)
+                .foregroundStyle(selection == nil ? MobileTheme.label2 : MobileTheme.label)
             if let detail = store.shopBarDetail {
                 Text(detail)
                     .font(.footnote)
-                    .foregroundStyle(detail == MeText.bought ? MobileTheme.working : MobileTheme.secondaryText)
+                    .foregroundStyle(detail == MeText.bought ? MobileTheme.working : MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -169,10 +167,10 @@ struct MeShopView: View {
         } label: {
             HStack(spacing: 6) {
                 if store.purchasingID != nil {
-                    ProgressView().tint(MobileTheme.onAccent)
+                    ProgressView().tint(MobileTheme.onAccentFill)
                 } else {
                     if let price = store.shopSelectionPrice {
-                        Image(systemName: "diamond.fill").imageScale(.small)
+                        RubyIcon(size: 17)
                         Text("\(price)").monospacedDigit()
                     }
                     Text(MeText.buyAction)
@@ -195,7 +193,7 @@ struct MeCharacterPickerView: View {
             VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
                 Text(MeText.pickerCaption)
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
                 if let notice = store.characterNotice {
                     InlineNotice(text: notice, kind: store.isCharacterNoticeError ? .warning : .info)
@@ -241,7 +239,7 @@ struct MeCharacterPickerView: View {
                     .opacity(unlocked ? 1 : 0.45)
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(isOn ? MobileTheme.primaryText : MobileTheme.secondaryText)
+                    .foregroundStyle(isOn ? MobileTheme.label : MobileTheme.label2)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 if saving {
@@ -254,7 +252,7 @@ struct MeCharacterPickerView: View {
                     Label(store.price(of: id).map { "\($0)" } ?? "잠김", systemImage: "lock.fill")
                         .font(.caption.weight(.bold))
                         .monospacedDigit()
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                 } else {
                     Text(" ").font(.caption)
                 }
@@ -264,7 +262,7 @@ struct MeCharacterPickerView: View {
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isOn ? MobileTheme.accent.opacity(0.12) : MobileTheme.card)
+                    .fill(isOn ? MobileTheme.accent.opacity(0.12) : MobileTheme.surface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)

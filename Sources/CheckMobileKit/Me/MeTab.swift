@@ -121,7 +121,7 @@ struct MeHeaderCard: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(name)
                 .font(MobileTheme.title(.title2))
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .fixedSize(horizontal: false, vertical: true)
             if stacked {
                 team
@@ -139,7 +139,7 @@ struct MeHeaderCard: View {
     private var team: some View {
         Label(store.teamName ?? MeText.noTeam, systemImage: "person.3.fill")
             .font(.subheadline)
-            .foregroundStyle(MobileTheme.secondaryText)
+            .foregroundStyle(MobileTheme.label2)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -183,11 +183,11 @@ struct MeCharacterSummaryCard: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(MeCharacterCards.displayName(for: id))
                 .font(.headline)
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .fixedSize(horizontal: false, vertical: true)
             Text(equippedCaption)
                 .font(.subheadline)
-                .foregroundStyle(store.equippedLoadFailed && !store.equippedLoaded ? MobileTheme.pending : MobileTheme.secondaryText)
+                .foregroundStyle(store.equippedLoadFailed && !store.equippedLoaded ? MobileTheme.pending : MobileTheme.label2)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -249,11 +249,11 @@ struct MeMenuCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.body.weight(.semibold))
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(detail)
                         .font(.footnote)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
                     // 접근성 글자 크기에서는 '새 답장' 배지를 설명 아래 줄로 내린다(옆에 두면 배지가 폭을 먹어 제목·설명이 한 글자씩 세로로 쌓였다 — AX5 실측).
                     if showsDot, dynamicTypeSize.isAccessibilitySize {
@@ -267,7 +267,7 @@ struct MeMenuCard: View {
                 }
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, MobileTheme.cardPadding)
@@ -282,10 +282,10 @@ struct MeMenuCard: View {
     private var replyBadge: some View {
         Text(MeText.feedbackReplyBadge)
             .font(.caption.weight(.bold))
-            .foregroundStyle(MobileTheme.onAccent)
+            .foregroundStyle(MobileTheme.onAccentFill)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(Capsule().fill(MobileTheme.accent))
+            .background(Capsule().fill(MobileTheme.accentFill))
             .fixedSize()
     }
 }
@@ -304,7 +304,7 @@ struct MeCharacterArt: View {
             Image(systemName: "person.crop.circle.badge.questionmark")
                 .resizable()
                 .scaledToFit()
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
                 .padding(8)
         }
     }

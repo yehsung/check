@@ -2,34 +2,89 @@ import Foundation
 import Testing
 @testable import CheckMobileKit
 
-/// 테마 토큰(SPEC-ios §3.1): 글자 토큰의 대비 4.5:1(라이트: 흰 카드·배경 / 다크: 카드), 다크 상태색 = 맥 CheckTheme 숫자.
+/// 테마 토큰(재디자인 방향 B — `b2.html` 토큰 표): 글자 토큰의 대비 4.5:1(라이트·다크 모두 카드와 바탕 위), 틴트 칩 위 글자,
+/// 채운 버튼 위 흰 글자, 메달 잉크, 이니셜 원 글자, 다크 뜻 색 = 맥 CheckTheme 숫자.
 @Suite struct BaseThemeTests {
-    @Test("라이트: 글자로 쓰는 토큰이 흰 카드와 배경 위에서 모두 4.5:1 이상")
-    func lightContrast() {
-        let card = MobileThemePalette.card.light
-        let background = MobileThemePalette.background.light
+    @Test("라이트·다크: 글자로 쓰는 토큰이 카드(surface)와 바탕(background) 위에서 모두 4.5:1 이상")
+    func textContrast() {
         for (name, pair) in MobileThemePalette.textTokens {
-            #expect(pair.light.contrast(against: card) >= 4.5, "\(name) 라이트 카드 대비 \(pair.light.contrast(against: card))")
-            #expect(pair.light.contrast(against: background) >= 4.5, "\(name) 라이트 배경 대비 \(pair.light.contrast(against: background))")
+            for (mode, text, surface, background) in [
+                ("라이트", pair.light, MobileThemePalette.surface.light, MobileThemePalette.background.light),
+                ("다크", pair.dark, MobileThemePalette.surface.dark, MobileThemePalette.background.dark),
+            ] {
+                #expect(text.contrast(against: surface) >= 4.5, "\(name) \(mode) 카드 대비 \(text.contrast(against: surface))")
+                #expect(text.contrast(against: background) >= 4.5, "\(name) \(mode) 바탕 대비 \(text.contrast(against: background))")
+            }
         }
     }
 
-    @Test("다크: 글자로 쓰는 토큰이 다크 카드(#2B2E3D) 위에서 4.5:1 이상")
-    func darkContrast() {
-        let card = MobileThemePalette.card.dark
-        for (name, pair) in MobileThemePalette.textTokens {
-            #expect(pair.dark.contrast(against: card) >= 4.5, "\(name) 다크 대비 \(pair.dark.contrast(against: card))")
+    @Test("틴트 칩·버튼(카드 위에 겹친 틴트) 위 같은 가족 글자가 라이트·다크 모두 4.5:1 이상")
+    func tintedTextContrast() {
+        for (name, text, tint) in MobileThemePalette.tintedTextPairs {
+            let lightBack = tint.light.composited(over: MobileThemePalette.surface.light)
+            let darkBack = tint.dark.composited(over: MobileThemePalette.surface.dark)
+            #expect(text.light.contrast(against: lightBack) >= 4.5, "\(name) 라이트 \(text.light.contrast(against: lightBack))")
+            #expect(text.dark.contrast(against: darkBack) >= 4.5, "\(name) 다크 \(text.dark.contrast(against: darkBack))")
         }
     }
 
-    @Test("accent 로 채운 버튼의 글자(onAccent)가 라이트·다크 모두 4.5:1 이상")
+    @Test("채운 버튼(accentFill) 위 흰 글자가 라이트·다크 모두 4.5:1 · 대조: 다크 accent(밝은 파랑) 판 위 흰 글자는 모자라다")
     func accentFillContrast() {
-        let pair = MobileThemePalette.onAccent
-        #expect(pair.light.contrast(against: MobileThemePalette.accent.light) >= 4.5)
-        #expect(pair.dark.contrast(against: MobileThemePalette.accent.dark) >= 4.5,
-                "다크 accent 위 글자 대비 \(pair.dark.contrast(against: MobileThemePalette.accent.dark))")
+        let pair = MobileThemePalette.onAccentFill
+        #expect(pair.light.contrast(against: MobileThemePalette.accentFill.light) >= 4.5)
+        #expect(pair.dark.contrast(against: MobileThemePalette.accentFill.dark) >= 4.5,
+                "다크 accentFill 위 글자 대비 \(pair.dark.contrast(against: MobileThemePalette.accentFill.dark))")
         #expect(MobileThemePalette.RGB(hex: 0xFFFFFF).contrast(against: MobileThemePalette.accent.dark) < 4.5,
-                "대조: 다크 accent 위 흰 글자는 모자라다(이 토큰이 필요한 이유)")
+                "대조: 다크 accent 위 흰 글자는 모자라다(채움 판은 accentFill 이어야 하는 이유)")
+        let tab = MobileThemePalette.tabSelected.dark
+        let glass = MobileThemePalette.glass.dark.composited(over: MobileThemePalette.surface.dark)
+        #expect(tab.contrast(against: glass) >= 4.5, "다크 선택 탭 글자 \(tab.contrast(against: glass))")
+    }
+
+    @Test("3단 글자(label3Text)는 4.5:1 · 3단 기호(label3)는 글자 목록에 없다(대조: 라이트 34% 는 글자로 모자라다)")
+    func tertiaryTokensSplit() {
+        #expect(!MobileThemePalette.textTokens.contains { $0.name == "label3" })
+        #expect(MobileThemePalette.label3.light.contrast(against: MobileThemePalette.surface.light) < 3)
+        #expect(MobileThemePalette.label3Text.dark.alpha == 0.56, "시안 다크 보정값(흰 56%)")
+    }
+
+    @Test("메달 원 안 짙은 숫자 4.5:1 · 이니셜 원 글자는 자기 틴트 원 위 4.5:1(라이트·다크)")
+    func medalAndAvatarContrast() {
+        let medals: [(String, MobileThemePalette.Pair, MobileThemePalette.Pair)] = [
+            ("gold", MobileThemePalette.gold, MobileThemePalette.goldInk),
+            ("silver", MobileThemePalette.silver, MobileThemePalette.silverInk),
+            ("bronze", MobileThemePalette.bronze, MobileThemePalette.bronzeInk),
+        ]
+        for (name, fill, ink) in medals {
+            #expect(ink.light.contrast(against: fill.light) >= 4.5, "\(name) 라이트")
+            #expect(ink.dark.contrast(against: fill.dark) >= 4.5, "\(name) 다크")
+        }
+        let opacity = MobileThemePalette.avatarTintOpacity
+        for (index, ink) in MobileThemePalette.avatarInks.enumerated() {
+            let lightBack = ink.light.opacity(opacity.light).composited(over: MobileThemePalette.surface.light)
+            let darkBack = ink.dark.opacity(opacity.dark).composited(over: MobileThemePalette.surface.dark)
+            #expect(ink.light.contrast(against: lightBack) >= 4.5, "이니셜 \(index) 라이트 \(ink.light.contrast(against: lightBack))")
+            #expect(ink.dark.contrast(against: darkBack) >= 4.5, "이니셜 \(index) 다크 \(ink.dark.contrast(against: darkBack))")
+        }
+    }
+
+    @Test("이니셜 색 칸은 맥 CheckTheme.avatarColor(for:) 와 같은 해시(유니코드 스칼라 합 mod 6)")
+    func avatarHashMatchesMac() {
+        for name in ["민트", "보리", "라임", "모래", "코랄", "하늘", "a", "", "Zed"] {
+            let sum = name.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+            #expect(MobileThemePalette.avatarIndex(for: name) == sum % 6, "\(name)")
+        }
+        #expect(MobileThemePalette.avatarInks.count == 6)
+    }
+
+    @Test("시안 토큰 표 값: 바탕·카드·다크 남색(맥 panel) · 위젯 바탕 · 게이지 그라디언트")
+    func tokenTableValues() {
+        #expect(MobileThemePalette.background.light.hex == 0xF2F2F7 && MobileThemePalette.background.dark.hex == 0x1A1C26)
+        #expect(MobileThemePalette.surface.light.hex == 0xFFFFFF && MobileThemePalette.surface.dark.hex == 0x2B2E3D)
+        #expect(MobileThemePalette.surface2.dark.hex == 0x353848)
+        #expect(MobileThemePalette.accentFill.dark.hex == 0x2A74DE, "다크 채운 버튼은 한 단계 깊은 파랑(밝은 하늘색 판 금지)")
+        #expect(MobileThemePalette.widgetBackground.dark.hex == 0x232633)
+        #expect(MobileThemePalette.gaugeStops.map(\.hex) == [0x59E0A1, 0x54ABFF])
     }
 
     @Test("대조군: 대비 계산이 실제로 가른다(흰 위 흰 = 1, 흰 위 검정 = 21)")

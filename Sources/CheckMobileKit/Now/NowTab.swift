@@ -85,7 +85,7 @@ struct NowStatusSection: View {
         } header: {
             Text(MobileRelativeTime.headerDate(store.context.clock.now()))
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .textCase(nil)
                 .accessibilityAddTraits(.isHeader)
         }
@@ -97,10 +97,10 @@ struct NowStatusSection: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(NowText.noTeamTitle)
                     .font(.headline)
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                 Text(NowText.noTeamBody)
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.vertical, 6)
@@ -153,11 +153,11 @@ struct NowStatusCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(NowText.todayLabel)
                     .font(.caption)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                 Text(NowFormat.clock(card.todaySeconds))
                     .font(MobileTheme.number(.largeTitle, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -169,7 +169,7 @@ struct NowStatusCard: View {
                     Text(card.weekLine)
                         .font(.footnote)
                         .monospacedDigit()
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
                     Button(action: onEditGoal) {
@@ -178,7 +178,7 @@ struct NowStatusCard: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(MobileTheme.accent)
                             .padding(10)
-                            .background(Circle().fill(MobileTheme.cardElevated))
+                            .background(Circle().fill(MobileTheme.fill))
                             .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
                             .contentShape(Rectangle())
                     }
@@ -202,7 +202,7 @@ struct NowStatusCard: View {
                 .accessibilityHidden(true)
             Text(card.isWorking ? NowText.workingOnMac : NowText.notWorking)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .fixedSize(horizontal: false, vertical: true)
             if card.isStale {
                 NowChip(text: NowText.connectionLost, tint: MobileTheme.pending)
@@ -216,7 +216,7 @@ struct NowStatusCard: View {
         if let teamName {
             Text(teamName)
                 .font(.caption)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
                 .lineLimit(1)
         }
     }
@@ -229,7 +229,7 @@ struct NowProgressBar: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(MobileTheme.track)
+                Capsule().fill(MobileTheme.fill)
                 Capsule()
                     .fill(tint)
                     .frame(width: max(0, proxy.size.width * min(1, max(0, progress))))
@@ -280,7 +280,7 @@ struct NowWorkingSection: View {
             } else if people.isEmpty {
                 Text(NowText.workingEmpty)
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .cardSegmentRow(.single)
             } else {
                 if !teammates.isEmpty {
@@ -301,7 +301,7 @@ struct NowWorkingSection: View {
         } header: {
             Text(NowText.workingTitle(count: state == .loaded ? people.count : nil))
                 .font(.headline)
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .textCase(nil)
                 .accessibilityAddTraits(.isHeader)
         }
@@ -315,7 +315,7 @@ struct NowGroupLabel: View {
     var body: some View {
         Text(text)
             .font(.caption.weight(.semibold))
-            .foregroundStyle(MobileTheme.secondaryText)
+            .foregroundStyle(MobileTheme.label2)
             .accessibilityAddTraits(.isHeader)
             .cardSegmentRow(
                 position,
@@ -367,7 +367,7 @@ struct NowWorkingRow: View {
     private var nameText: some View {
         Text(person.name)
             .font(.body.weight(.semibold))
-            .foregroundStyle(MobileTheme.primaryText)
+            .foregroundStyle(MobileTheme.label)
             .lineLimit(2)
     }
 

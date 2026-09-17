@@ -18,7 +18,7 @@ struct MeRecordsSection: View {
                 } else {
                     Text(placeholder)
                         .font(.subheadline)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -63,7 +63,7 @@ struct MeRecordsSection: View {
                     if let peak = MeText.peakLine(store.heatmap) {
                         Text(peak)
                             .font(.footnote)
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                             .accessibilityHidden(true)
                     }
                 }
@@ -96,10 +96,10 @@ struct MeRetroCard: View {
                 Text(MeText.retroTotal(retro))
                     .font(MobileTheme.number(.title2, weight: .heavy))
                     .monospacedDigit()
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(MobileTheme.track)
+                        Capsule().fill(MobileTheme.fill)
                         Capsule()
                             .fill(retro.metGoal ? MobileTheme.working : MobileTheme.accent)
                             .frame(width: max(0, proxy.size.width * MeText.retroProgress(retro)))
@@ -109,21 +109,21 @@ struct MeRetroCard: View {
                 .accessibilityHidden(true)
                 Text(MeText.retroGoalLine(retro))
                     .font(.footnote.weight(.semibold))
-                    .foregroundStyle(retro.metGoal ? MobileTheme.working : MobileTheme.secondaryText)
+                    .foregroundStyle(retro.metGoal ? MobileTheme.working : MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
                 if let delta = MeText.retroDeltaLine(retro) {
                     Text(delta)
                         .font(.footnote)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                 }
                 Text(MeText.retroDetailLine(retro))
                     .font(.footnote)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(MeText.noRetro)
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
             }
         }
         .accessibilityElement(children: .combine)
@@ -132,7 +132,7 @@ struct MeRetroCard: View {
     private var titleLabel: some View {
         Label(MeText.retroTitle, systemImage: "calendar.badge.clock")
             .font(.subheadline.weight(.bold))
-            .foregroundStyle(MobileTheme.primaryText)
+            .foregroundStyle(MobileTheme.label)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -167,7 +167,7 @@ struct MeGridHeader: View {
     private var label: some View {
         Label(title, systemImage: systemImage)
             .font(.subheadline.weight(.bold))
-            .foregroundStyle(MobileTheme.primaryText)
+            .foregroundStyle(MobileTheme.label)
             .accessibilityAddTraits(.isHeader)
     }
 }
@@ -181,13 +181,13 @@ struct MeGridLegend: View {
             Text("적음")
             ForEach(0...MeText.gridLevels, id: \.self) { level in
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(level == 0 ? MobileTheme.track : tint.opacity(MeText.gridOpacity(level: level)))
+                    .fill(level == 0 ? MobileTheme.fill : tint.opacity(MeText.gridOpacity(level: level)))
                     .frame(width: 10, height: 10)
             }
             Text("많음")
         }
         .font(.caption2)
-        .foregroundStyle(MobileTheme.secondaryText)
+        .foregroundStyle(MobileTheme.label2)
         .accessibilityHidden(true)
     }
 }
@@ -211,7 +211,7 @@ struct MeContributionGrid: View {
                 ForEach(0..<max(0, weeks), id: \.self) { week in
                     Text(months.indices.contains(week) ? months[week].map { "\($0)월" } ?? "" : "")
                         .font(.caption2)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .lineLimit(1)
                         .fixedSize()
                         .frame(width: 0, alignment: .leading)
@@ -222,7 +222,7 @@ struct MeContributionGrid: View {
                 GridRow {
                     Text(Self.dayLabels[weekday])
                         .font(.caption2)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .gridColumnAlignment(.trailing)
                     ForEach(0..<max(0, weeks), id: \.self) { week in
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -238,7 +238,7 @@ struct MeContributionGrid: View {
         if isFuture(week, weekday) { return Color.clear }
         let value = values.indices.contains(week) && values[week].indices.contains(weekday) ? values[week][weekday] : 0
         let level = MeText.gridLevel(value: value, denominator: denominator)
-        return level == 0 ? MobileTheme.track : tint.opacity(MeText.gridOpacity(level: level))
+        return level == 0 ? MobileTheme.fill : tint.opacity(MeText.gridOpacity(level: level))
     }
 }
 
@@ -256,7 +256,7 @@ struct MeHeatmapGrid: View {
                     Text(Self.markedHours.contains(hour) ? "\(hour)" : "")
                         .font(.caption2)
                         .monospacedDigit()
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .lineLimit(1)
                         .fixedSize()
                         .frame(width: 0, alignment: .leading)
@@ -267,7 +267,7 @@ struct MeHeatmapGrid: View {
                 GridRow {
                     Text(MeText.dayNames[day])
                         .font(.caption2)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .gridColumnAlignment(.trailing)
                     ForEach(0..<WorkRhythmHeatmap.hourCount, id: \.self) { hour in
                         RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -282,7 +282,7 @@ struct MeHeatmapGrid: View {
     private func color(day: Int, hour: Int) -> Color {
         let seconds = heatmap.buckets.indices.contains(day) && heatmap.buckets[day].indices.contains(hour) ? heatmap.buckets[day][hour] : 0
         let value = MeText.heatmapIntensity(seconds: seconds)
-        return value > 0 ? MobileTheme.accent.opacity(0.20 + 0.80 * value) : MobileTheme.track
+        return value > 0 ? MobileTheme.accent.opacity(0.20 + 0.80 * value) : MobileTheme.fill
     }
 }
 #endif

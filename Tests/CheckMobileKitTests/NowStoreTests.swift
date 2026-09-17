@@ -43,7 +43,7 @@ import Testing
         #expect(people[3].avatarURL?.absoluteString == "https://x.invalid/morae.jpg")
 
         let snapshot = try #require(h.model.widgetSnapshots.current)
-        #expect(snapshot.me == WidgetSnapshot.Me(working: true, sessionStartedAt: card.sessionStartedAt, todaySeconds: 18_600, weekSeconds: 89_280, goalHours: 40))
+        #expect(snapshot.me == WidgetSnapshot.Me(working: true, sessionStartedAt: card.sessionStartedAt, todaySeconds: 18_600, weekSeconds: 89_280, goalHours: 40, status: .working))
         #expect(snapshot.working.map(\.name) == ["민트", "보리", "라임", "모래", "코랄", "하늘"])
         #expect(snapshot.working.map(\.teammate) == [true, true, true, false, false, false])
         #expect(snapshot.working.dropFirst(3).allSatisfy { $0.startedAt == nil })

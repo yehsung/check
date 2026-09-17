@@ -100,7 +100,7 @@ struct MessagesListView: View {
                 } footer: {
                     Text(MessageNoticeText.expiry)
                         .font(.footnote)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                 }
             }
         }
@@ -163,19 +163,19 @@ struct MessagesThreadRow: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(thread.peerName)
                         .font(.headline)
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                         .lineLimit(previewLines)
                     Spacer(minLength: 4)
                     if let last {
                         RelativeTimeText(last.createdAt, now: now)
                             .font(.caption)
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                     }
                 }
                 HStack(alignment: .center, spacing: 8) {
                     Text(last.map { MessagesListRules.preview($0.body) } ?? "")
                         .font(.subheadline.weight(isUnread ? .semibold : .regular))
-                        .foregroundStyle(isUnread ? MobileTheme.primaryText : MobileTheme.secondaryText)
+                        .foregroundStyle(isUnread ? MobileTheme.label : MobileTheme.label2)
                         .lineLimit(previewLines)
                     Spacer(minLength: 4)
                     if isUnread {

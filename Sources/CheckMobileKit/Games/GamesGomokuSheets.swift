@@ -30,11 +30,11 @@ struct GamesGomokuStakeSheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(GomokuPhoneText.stakePromptTitle(name: target.displayName))
                                 .font(.headline)
-                                .foregroundStyle(MobileTheme.primaryText)
+                                .foregroundStyle(MobileTheme.label)
                                 .fixedSize(horizontal: false, vertical: true)
                             Text(selected.map { GomokuPhoneText.stakePromptChosen($0.rawValue) } ?? GomokuPhoneText.stakePromptCaption)
                                 .font(.subheadline)
-                                .foregroundStyle(selected == nil ? MobileTheme.secondaryText : MobileTheme.primaryText)
+                                .foregroundStyle(selected == nil ? MobileTheme.label2 : MobileTheme.label)
                         }
                     }
                     .accessibilityElement(children: .combine)
@@ -57,12 +57,12 @@ struct GamesGomokuStakeSheet: View {
                     HStack(spacing: 6) {
                         Text("내 루비")
                             .font(.footnote)
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                         RubyLabel(balance, style: .footnote)
                     }
                     Text(GomokuPhoneText.stakeCaption)
                         .font(.footnote)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
                     bottomButton
                 }
@@ -89,18 +89,17 @@ struct GamesGomokuStakeSheet: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "diamond.fill")
-                    .foregroundStyle(isSelected ? MobileTheme.onAccent : MobileTheme.ruby)
+                RubyIcon(size: 20)
                 Text("\(stake.rawValue)")
                     .font(MobileTheme.number(.title3, weight: .bold))
                     .monospacedDigit()
                     .lineLimit(1)
                     .fixedSize()
-                    .foregroundStyle(isSelected ? MobileTheme.onAccent : MobileTheme.primaryText)
+                    .foregroundStyle(isSelected ? MobileTheme.onAccentFill : MobileTheme.label)
             }
             .frame(maxWidth: .infinity, minHeight: 52)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(isSelected ? MobileTheme.accent : MobileTheme.cardElevated))
+                .fill(isSelected ? MobileTheme.accentFill : MobileTheme.fill))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(isSelected ? MobileTheme.accent : MobileTheme.separator, lineWidth: isSelected ? 1.5 : 1))
             .contentShape(Rectangle())
@@ -152,7 +151,7 @@ struct GamesGomokuRulesSheet: View {
                                     .accessibilityHidden(true)
                                 Text(line)
                                     .font(.subheadline)
-                                    .foregroundStyle(MobileTheme.primaryText)
+                                    .foregroundStyle(MobileTheme.label)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -199,7 +198,7 @@ struct GamesGomokuRulesSheet: View {
                 .foregroundStyle(good ? MobileTheme.working : MobileTheme.danger)
             Text(example.detail)
                 .font(.caption)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)

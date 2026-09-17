@@ -49,6 +49,94 @@ import Testing
         #expect(empty.me == nil && empty.working.isEmpty && empty.todosPreview.isEmpty)
     }
 
+    @Test("w15 칸: 착용 캐릭터 id · 근무 상태 3갈래 왕복 · 판(version)은 그대로 1")
+    func characterAndStatusRoundTrip() throws {
+        var snapshot = Self.sample
+        snapshot.characterID = "fox"
+        snapshot.me?.status = .disconnected
+        let data = try WidgetSnapshotCodec.encode(snapshot)
+        let text = String(decoding: data, as: UTF8.self)
+        #expect(text.contains(#""characterID":"fox""#) && text.contains(#""status":"disconnected""#))
+        #expect(text.contains(#""version":1"#), "더하기만 한 칸이라 판을 올리지 않는다")
+        let decoded = try #require(WidgetSnapshotCodec.decode(data))
+        #expect(decoded == snapshot)
+        #expect(decoded.resolvedCharacterID == "fox")
+        #expect(decoded.me?.resolvedStatus == .disconnected)
+        for state in WidgetSnapshot.WorkState.allCases {
+            var each = Self.sample
+            each.me?.working = state != .off
+            each.me?.status = state
+            #expect(WidgetSnapshotCodec.decode(try WidgetSnapshotCodec.encode(each))?.me?.resolvedStatus == state)
+        }
+    }
+
+    @Test("w15 칸 호환: 옛 스냅샷(칸 없음)은 아잉 · working 깃발로 상태 · 모르는 상태 문자열·모르는 캐릭터도 깨지지 않는다 · 옛 읽기는 새 칸을 무시")
+    func characterAndStatusCompatibility() throws {
+        // 이 판 이전 앱이 쓴 파일(= 기존 sample 의 JSON 에서 새 칸이 없는 모양).
+        let old = #"{"version":1,"generatedAt":1789621500000,"me":{"working":true,"todaySeconds":10,"weekSeconds":20,"goalHours":40},"working":[],"todosPreview":[]}"#
+        let decodedOld = try #require(WidgetSnapshotCodec.decode(Data(old.utf8)))
+        #expect(decodedOld.characterID == nil && decodedOld.resolvedCharacterID == "aing")
+        #expect(decodedOld.me?.status == nil && decodedOld.me?.resolvedStatus == .working)
+        let idleOld = #"{"version":1,"generatedAt":1789621500000,"me":{"working":false,"todaySeconds":10,"weekSeconds":20,"goalHours":40}}"#
+        #expect(WidgetSnapshotCodec.decode(Data(idleOld.utf8))?.me?.resolvedStatus == .off)
+
+        let future = #"{"version":1,"generatedAt":1789621500000,"characterID":"dragon","me":{"working":true,"status":"onBreak","todaySeconds":10,"weekSeconds":20,"goalHours":40}}"#
+        let decodedFuture = try #require(WidgetSnapshotCodec.decode(Data(future.utf8)), "모르는 값 하나로 스냅샷 전체를 버렸다")
+        #expect(decodedFuture.characterID == "dragon" && decodedFuture.resolvedCharacterID == "aing", "모르는 캐릭터는 아잉으로 선다")
+        #expect(decodedFuture.me?.status == nil && decodedFuture.me?.resolvedStatus == .working, "모르는 상태는 깃발로 읽는다")
+        #expect(decodedFuture.me?.todaySeconds == 10, "상태 칸이 깨져도 me 는 산다")
+
+        let wrongTypes = #"{"version":1,"generatedAt":1789621500000,"characterID":42,"me":{"working":false,"status":7,"todaySeconds":1,"weekSeconds":2,"goalHours":40}}"#
+        let decodedWrong = try #require(WidgetSnapshotCodec.decode(Data(wrongTypes.utf8)))
+        #expect(decodedWrong.characterID == nil && decodedWrong.me?.resolvedStatus == .off)
+
+        let contradictory = #"{"version":1,"generatedAt":1789621500000,"me":{"working":false,"status":"disconnected","todaySeconds":1,"weekSeconds":2,"goalHours":40}}"#
+        #expect(WidgetSnapshotCodec.decode(Data(contradictory.utf8))?.me?.resolvedStatus == .off, "근무 안 함 깃발이 상태보다 앞선다")
+
+        // 옛 읽기 모양(새 칸을 모르는 디코더)이 새 파일을 그대로 읽는가 — 옛 구조체를 흉내 내 새 JSON 을 넣는다.
+        struct LegacySnapshot: Decodable { let version: Int; let generatedAt: Date; let me: LegacyMe? }
+        struct LegacyMe: Decodable { let working: Bool; let todaySeconds: Int }
+        var fresh = Self.sample
+        fresh.characterID = "ghost"
+        fresh.me?.status = .working
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .millisecondsSince1970
+        let legacy = try decoder.decode(LegacySnapshot.self, from: try WidgetSnapshotCodec.encode(fresh))
+        #expect(legacy.version == 1 && legacy.me?.working == true && legacy.me?.todaySeconds == 11_500)
+    }
+
+    @Test("지금 탭 → 위젯 상태: 근무 중 · 연결 끊김(근무 중 + 끊긴 신호) · 근무 안 함")
+    func nowCardToWidgetState() {
+        func card(working: Bool, stale: Bool) -> NowMyCard {
+            NowMyCard(isWorking: working, isStale: stale, sessionStartedAt: nil, todaySeconds: 0, weekSeconds: 0, goalHours: 40)
+        }
+        #expect(NowStore.widgetWorkState(card(working: true, stale: false)) == .working)
+        #expect(NowStore.widgetWorkState(card(working: true, stale: true)) == .disconnected)
+        #expect(NowStore.widgetWorkState(card(working: false, stale: false)) == .off)
+        #expect(NowStore.widgetWorkState(card(working: false, stale: true)) == .off)
+    }
+
+    @Test("착용 캐릭터: 모르는 동안은 파일의 지난 값을 지키고, 나 탭이 알아 오면 지금 탭이 스냅샷에 싣는다 · 지금 탭은 착용값을 묻지 않는다")
+    func equippedCharacterReachesSnapshot() async throws {
+        let seed = WidgetSnapshot(generatedAt: MobileClock.demoInstant, characterID: "ghost")
+        let h = NowHarness(seedSnapshot: seed)
+        defer { h.tearDown() }
+        h.server.override("profiles", .json(#"[{"character":"fox"}]"#))
+        await h.launch()
+        await h.activate()
+        let first = try #require(h.model.widgetSnapshots.current)
+        #expect(first.characterID == "ghost", "나 탭이 모르는 동안 지난 착용값을 지웠다")
+        #expect(first.me?.resolvedStatus == .working)
+        #expect(h.requests("profiles").isEmpty, "지금 탭이 착용값을 따로 물었다(새 서버 호출 금지)")
+
+        await h.model.me.loadEquippedCharacter()
+        #expect(h.model.me.equippedCharacterID == "fox")
+        let arrived = await baseWaitUntil { h.model.widgetSnapshots.current?.characterID == "fox" }
+        #expect(arrived, "착용값이 스냅샷에 닿지 않았다")
+        #expect(WidgetSnapshotCodec.read(from: h.storage.widgetSnapshotURL)?.resolvedCharacterID == "fox", "파일에도 같은 값")
+        #expect(h.violations.isEmpty, "\(h.violations)")
+    }
+
     @Test("판 없음·0 판·JSON 아님은 nil(위젯은 로그아웃 화면)")
     func rejectsUnknownShapes() {
         #expect(WidgetSnapshotCodec.decode(Data(#"{"generatedAt":1}"#.utf8)) == nil)

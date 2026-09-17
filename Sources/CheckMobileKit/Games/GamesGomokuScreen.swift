@@ -141,10 +141,10 @@ struct GamesGomokuLobby: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(GomokuPhoneText.title)
                 .font(MobileTheme.title(.title3))
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
             Text(GomokuPhoneText.subtitle)
                 .font(.caption)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
         }
         .accessibilityElement(children: .combine)
     }
@@ -161,10 +161,10 @@ struct GamesGomokuLobby: View {
             Label(GomokuPhoneText.record(gomoku.record), systemImage: "flag.checkered")
                 .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(MobileTheme.cardElevated))
+                .background(Capsule().fill(MobileTheme.fill))
                 .accessibilityLabel("내 오목 전적 \(GomokuPhoneText.record(gomoku.record))")
                 .fixedSize()
         }
@@ -174,7 +174,7 @@ struct GamesGomokuLobby: View {
         RubyLabel(store.rubyBalance)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Capsule().fill(MobileTheme.cardElevated))
+            .background(Capsule().fill(MobileTheme.fill))
             .fixedSize()
     }
 
@@ -195,7 +195,7 @@ struct GamesGomokuLobby: View {
             case .empty:
                 Text(GomokuPhoneText.noIncoming)
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
             case .failed:
                 LoadFailureRow(GomokuPhoneText.incomingLoadFailed) { Task { await gomoku.loadInbox() } }
             case .loading:
@@ -215,7 +215,7 @@ struct GamesGomokuLobby: View {
             SectionHeader(GomokuPhoneText.lobbyTitle)
             Text(GomokuPhoneText.lobbyCaption)
                 .font(.caption)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
             if gomoku.lobbyLoadFailed {
                 LoadFailureRow(GomokuPhoneText.usersLoadFailed) { Task { await gomoku.refreshLobby() } }
             }
@@ -224,7 +224,7 @@ struct GamesGomokuLobby: View {
                     if gomoku.hasLoadedLobby {
                         Text(GomokuPhoneText.emptyUsers)
                             .font(.subheadline)
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                     } else {
                         LoadingRow(GomokuPhoneText.loadingUsers)
                     }
@@ -254,7 +254,7 @@ struct GamesGomokuLobby: View {
             case .empty:
                 Text(GomokuPhoneText.noLiveMatches)
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
             case .failed:
                 // 같은 조회(로비)의 [다시 시도]는 바로 위 상대 고르기 절에 있다 — 여기선 한 줄만.
                 LoadFailureRow(GomokuPhoneText.liveLoadFailed, retry: nil)
@@ -276,7 +276,7 @@ private struct GamesGomokuOpponentRow: View {
 
     private var chipTint: Color {
         if user.inMatch { return MobileTheme.pending }
-        if !user.isCapable { return MobileTheme.secondaryText }
+        if !user.isCapable { return MobileTheme.label2 }
         return user.isWorking ? MobileTheme.working : MobileTheme.offWork
     }
 
@@ -306,7 +306,7 @@ private struct GamesGomokuOpponentRow: View {
             HStack(spacing: 6) {
                 Text(user.displayName)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                     .lineLimit(2)
                 CenterBadge(CenterLabel.serverValue(forDisplay: user.center))
                     .fixedSize()
@@ -389,14 +389,14 @@ struct GamesGomokuInviteCard: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(GomokuPhoneText.incomingTitle(name: invite.peer.displayName))
                 .font(.body.weight(.semibold))
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 4) {
                 Text(GomokuPhoneText.stakeTitle)
                 RubyLabel(invite.stake, style: .caption)
             }
             .font(.caption)
-            .foregroundStyle(MobileTheme.secondaryText)
+            .foregroundStyle(MobileTheme.label2)
         }
     }
 
@@ -421,7 +421,7 @@ private struct GamesGomokuOutgoingRow: View {
             AvatarView(name: invite.peer.displayName, url: invite.peer.avatarURL.flatMap(URL.init(string:)), size: 26)
             Text(GomokuPhoneText.outgoingTitle(name: invite.peer.displayName))
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -450,14 +450,14 @@ private struct GamesGomokuLiveMatchRow: View {
                 face(live.a)
                 Text("vs")
                     .font(.caption)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                 face(live.b)
                 meta
             }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(MobileTheme.cardElevated))
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(MobileTheme.fill))
         .accessibilityElement(children: .combine)
     }
 
@@ -466,7 +466,7 @@ private struct GamesGomokuLiveMatchRow: View {
             face(live.a)
             Text("vs")
                 .font(.caption)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
             face(live.b)
         }
     }
@@ -484,7 +484,7 @@ private struct GamesGomokuLiveMatchRow: View {
             AvatarView(name: user.displayName, url: user.avatarURL.flatMap(URL.init(string:)), size: 24)
             Text(user.displayName)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .fixedSize()
         }
     }
@@ -523,7 +523,7 @@ struct GamesGomokuElapsed: View {
             Text(GomokuPhoneText.elapsed(store.context.clock.now().timeIntervalSince(startedAt)))
                 .font(.caption.weight(.bold))
                 .monospacedDigit()
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
         }
     }
 }

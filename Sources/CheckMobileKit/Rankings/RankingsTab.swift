@@ -111,7 +111,7 @@ struct RankingsEmptyCard: View {
             } else {
                 Text(text)
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -176,7 +176,7 @@ struct RankingsNameLine: View {
     private var nameText: some View {
         Text(name)
             .font(.headline)
-            .foregroundStyle(MobileTheme.primaryText)
+            .foregroundStyle(MobileTheme.label)
             .fixedSize(horizontal: false, vertical: true)
     }
 

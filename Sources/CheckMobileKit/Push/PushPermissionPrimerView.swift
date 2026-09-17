@@ -19,12 +19,12 @@ struct PushPermissionPrimerView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(PushText.primerTitle)
                         .font(MobileTheme.title(.title2))
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                         .fixedSize()
                         .accessibilityAddTraits(.isHeader)
                     Text(PushText.primerBody)
                         .font(.body)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize()
                 }
 
@@ -59,7 +59,7 @@ struct PushPermissionPrimerView: View {
                 } label: {
                     Text(PushText.primerLater)
                         .font(.body.weight(.semibold))
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize()
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -82,11 +82,11 @@ struct PushPermissionPrimerView: View {
     private func note(_ text: String, systemImage: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: systemImage)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
                 .accessibilityHidden(true)
             Text(text)
                 .font(.footnote)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
                 .fixedSize()
         }
     }
@@ -106,18 +106,18 @@ private struct PushKindRow: View {
                 .font(.body.weight(.semibold))
                 // 접근성 크기에서 원이 글자 폭을 먹지 않게 상한(실측: 상한 없이 두면 설명이 두 글자씩 줄바꿈).
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                .foregroundStyle(MobileTheme.onAccent)
+                .foregroundStyle(tint)
                 .frame(width: min(iconSize, 48), height: min(iconSize, 48))
-                .background(Circle().fill(tint))
+                .background(Circle().fill(tint.opacity(0.16)))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(kind.settingTitle)
                     .font(.headline)
-                    .foregroundStyle(MobileTheme.primaryText)
+                    .foregroundStyle(MobileTheme.label)
                     .fixedSize()
                 Text(kind.settingDetail)
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize()
             }
             Spacer(minLength: 0)

@@ -5,7 +5,7 @@ import SwiftUI
 // 기반 공용 부품(SPEC-ios-build §1-2). 전부 `MobileTheme` 토큰만 쓰고, 글자는 Dynamic Type 텍스트 스타일이라
 // 큰 글자에서 잘리지 않고 줄바꿈한다. 탭 작업자는 고치지 말고 조합한다(모양을 바꿔야 하면 "기반 수정 요청").
 
-/// 카드(반경 16 · 안쪽 여백 16 · 다크에서 가는 선).
+/// 카드(시안 B 인셋 그룹 한 장: 반경 22 · surface · 테두리 없음 · 안쪽 여백 16). 행 목록은 `InsetGroup` + `GroupRow`.
 package struct AingCard<Content: View>: View {
     private let padding: CGFloat
     private let content: Content
@@ -23,41 +23,9 @@ package struct AingCard<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(padding)
             .background(
-                RoundedRectangle(cornerRadius: MobileTheme.cardRadius, style: .continuous)
-                    .fill(MobileTheme.card)
+                RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous)
+                    .fill(MobileTheme.surface)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: MobileTheme.cardRadius, style: .continuous)
-                    .stroke(MobileTheme.separator, lineWidth: 1)
-            )
-    }
-}
-
-/// 섹션 머리: 제목 + (선택) 오른쪽 버튼.
-package struct SectionHeader: View {
-    private let title: String
-    private let actionTitle: String?
-    private let action: (() -> Void)?
-
-    package init(_ title: String, actionTitle: String? = nil, action: (() -> Void)? = nil) {
-        self.title = title
-        self.actionTitle = actionTitle
-        self.action = action
-    }
-
-    package var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(MobileTheme.primaryText)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 8)
-            if let actionTitle, let action {
-                Button(actionTitle, action: action)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(MobileTheme.accent)
-            }
-        }
     }
 }
 
@@ -121,82 +89,6 @@ package struct AvatarSpacer: View {
     }
 }
 
-/// 이니셜 원(맥 `InitialAvatar` 와 같은 모양: 첫 글자 · 해시색 그라데이션 · 흰 18% 테두리).
-package struct InitialAvatar: View {
-    let name: String
-    let size: CGFloat
-
-    package init(name: String, size: CGFloat) {
-        self.name = name
-        self.size = size
-    }
-
-    package static func initial(of name: String) -> String {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "?" : String(trimmed.prefix(1))
-    }
-
-    package var body: some View {
-        let color = CheckTheme.avatarColor(for: name)
-        Text(Self.initial(of: name))
-            .font(.system(size: size * 0.44, weight: .bold, design: .rounded))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(
-                Circle().fill(LinearGradient(colors: [color, color.opacity(0.72)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            )
-            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
-            .accessibilityHidden(true)
-    }
-}
-
-/// 센터 배지("서울"/"부산"). 모르는 값·nil 은 아무것도 그리지 않는다(코어 `CenterLabel` 규칙).
-package struct CenterBadge: View {
-    private let serverValue: String?
-
-    package init(_ serverValue: String?) {
-        self.serverValue = serverValue
-    }
-
-    package var body: some View {
-        if let label = CenterLabel.display(serverValue) {
-            Text(label)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(MobileTheme.secondaryText)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(MobileTheme.cardElevated))
-                .overlay(Capsule().stroke(MobileTheme.separator, lineWidth: 0.5))
-                .accessibilityLabel(Text("\(label)센터"))
-        }
-    }
-}
-
-/// 루비 잔액. nil 은 "–"(모른다 — 0 으로 지어내지 않는다).
-package struct RubyLabel: View {
-    private let count: Int?
-    private let style: Font.TextStyle
-
-    package init(_ count: Int?, style: Font.TextStyle = .subheadline) {
-        self.count = count
-        self.style = style
-    }
-
-    package var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "diamond.fill")
-                .foregroundStyle(MobileTheme.ruby)
-                .imageScale(.small)
-            Text(count.map { "\($0)" } ?? "–")
-                .font(MobileTheme.number(style))
-                .monospacedDigit()
-                .foregroundStyle(MobileTheme.primaryText)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(count.map { "루비 \($0)개" } ?? "루비 잔액 모름"))
-    }
-}
-
 /// 빈 상태(아이콘 · 제목 · 설명 · 선택 버튼).
 package struct EmptyStateView: View {
     private let systemImage: String
@@ -221,12 +113,12 @@ package struct EmptyStateView: View {
                 .accessibilityHidden(true)
             Text(title)
                 .font(.headline)
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .multilineTextAlignment(.center)
             if let message {
                 Text(message)
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -242,25 +134,17 @@ package struct EmptyStateView: View {
     }
 }
 
-/// 주 버튼: accent 채움 + `onAccent` 글자(라이트·다크 모두 대비 4.5:1 — `.borderedProminent` 는 다크에서 흰 글자라 모자라다).
+/// 주 버튼(예전 이름) = `AingButtonStyle(.filled, size: .lg)` — 캡슐 · accentFill · 흰 글자 · 보이는 높이 50.
+/// 새 코드는 `AingButtonStyle` · `AingButton` 을 바로 쓴다. 화면당 채운 버튼은 하나.
 package struct AingPrimaryButtonStyle: ButtonStyle {
     private let fillsWidth: Bool
-    @Environment(\.isEnabled) private var isEnabled
 
     package init(fillsWidth: Bool = true) {
         self.fillsWidth = fillsWidth
     }
 
     package func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.headline)
-            .foregroundStyle(MobileTheme.onAccent)
-            .frame(maxWidth: fillsWidth ? .infinity : nil)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(MobileTheme.accent))
-            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.5)
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        AingButtonStyle(.filled, size: .lg, fillsWidth: fillsWidth).makeBody(configuration: configuration)
     }
 }
 
@@ -299,7 +183,7 @@ package struct InlineNotice: View {
                 .accessibilityHidden(true)
             Text(text)
                 .font(.footnote)
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
@@ -339,7 +223,7 @@ package struct RetryButton: View {
     }
 }
 
-/// 보조 버튼 모양(캡슐 · accent 옅은 채움 · **보이는 캡슐이 최소 44×44**) — `RetryButton` · 설정 앱 열기 같은 한 줄 보조 동작.
+/// 보조 버튼 모양(캡슐 · accentTint 틴트 · **보이는 캡슐이 최소 44×44** — `AingButtonStyle(.tinted)` 의 44pt 판) — `RetryButton` · 설정 앱 열기 같은 한 줄 보조 동작.
 /// `.buttonStyle(.bordered)` 는 캡슐이 약 32~35pt 라 쓰지 않는다(통합 검증 실측).
 package struct AingSecondaryButtonStyle: ButtonStyle {
     /// HIG 최소 누름 영역(pt).
@@ -355,7 +239,7 @@ package struct AingSecondaryButtonStyle: ButtonStyle {
             .lineLimit(1)
             .padding(.horizontal, 16)
             .frame(minWidth: Self.minimumTarget, minHeight: Self.minimumTarget)
-            .background(Capsule().fill(MobileTheme.accent.opacity(configuration.isPressed ? 0.22 : 0.12)))
+            .background(Capsule().fill(configuration.isPressed ? MobileTheme.accent.opacity(0.22) : MobileTheme.accentTint))
             .opacity(isEnabled ? 1 : 0.6)
             .contentShape(Capsule())
             .fixedSize()
@@ -388,7 +272,7 @@ package struct LoadFailureRow: View {
                     .accessibilityHidden(true)
                 Text(text)
                     .font(.subheadline)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let retry {
@@ -413,7 +297,7 @@ package struct LoadingRow: View {
             ProgressView()
             Text(text)
                 .font(.subheadline)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
             Spacer(minLength: 0)
         }
         .padding(.vertical, 8)

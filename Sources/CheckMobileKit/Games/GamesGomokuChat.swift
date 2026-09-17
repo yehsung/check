@@ -32,7 +32,7 @@ struct GamesGomokuChatCard: View {
         HStack {
             Text(GomokuPhoneText.chatTitle)
                 .font(.headline)
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             Button {
@@ -76,7 +76,7 @@ struct GamesGomokuChatCard: View {
     private func centered(_ text: String) -> some View {
         Text(text)
             .font(.footnote)
-            .foregroundStyle(MobileTheme.secondaryText)
+            .foregroundStyle(MobileTheme.label2)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
@@ -98,14 +98,14 @@ struct GamesGomokuChatCard: View {
                 } label: {
                     Text(phrase.text)
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                         .lineLimit(wraps ? nil : 2)
                         .multilineTextAlignment(.center)
                         .minimumScaleFactor(wraps ? 1 : 0.85)
                         .fixedSize(horizontal: false, vertical: wraps)
                         .frame(maxWidth: .infinity, minHeight: GamesTouchTarget.minimum)
                         .padding(.horizontal, 4)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(MobileTheme.cardElevated))
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(MobileTheme.fill))
                         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(MobileTheme.separator, lineWidth: 1))
                         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
@@ -124,7 +124,7 @@ struct GamesGomokuChatCard: View {
             statusLine(GomokuNoticeText.chatMutedByOpponent, tint: MobileTheme.pending)
         }
         if !store.opponentChatCapable {
-            statusLine(GomokuNoticeText.chatOpponentOutdated, tint: MobileTheme.secondaryText)
+            statusLine(GomokuNoticeText.chatOpponentOutdated, tint: MobileTheme.label2)
         }
     }
 
@@ -147,7 +147,7 @@ struct GamesGomokuChatCard: View {
                 .onSubmit { store.sendChatDraft() }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.cardElevated))
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.fill))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(isOverflowing ? MobileTheme.danger : MobileTheme.separator, lineWidth: 1))
             VStack(alignment: .trailing, spacing: 2) {
@@ -155,7 +155,7 @@ struct GamesGomokuChatCard: View {
                     Text("\(length)/\(store.chatMaxLength)")
                         .font(.caption2.weight(.semibold))
                         .monospacedDigit()
-                        .foregroundStyle(isOverflowing ? MobileTheme.danger : MobileTheme.secondaryText)
+                        .foregroundStyle(isOverflowing ? MobileTheme.danger : MobileTheme.label2)
                 }
                 Button {
                     store.sendChatDraft()
@@ -179,14 +179,14 @@ private struct GamesGomokuChatBubble: View {
             if message.isMine { Spacer(minLength: 48) }
             Text(message.body)
                 .font(.subheadline)
-                .foregroundStyle(message.isMine ? MobileTheme.onAccent : MobileTheme.primaryText)
+                .foregroundStyle(message.isMine ? MobileTheme.onAccentFill : MobileTheme.label)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(message.isMine ? MobileTheme.accent : MobileTheme.cardElevated)
+                        .fill(message.isMine ? MobileTheme.accentFill : MobileTheme.fill)
                 )
             if !message.isMine { Spacer(minLength: 48) }
         }

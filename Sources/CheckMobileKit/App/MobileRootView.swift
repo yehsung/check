@@ -33,6 +33,20 @@ public struct MobileRootView: View {
 
     @ViewBuilder
     private var content: some View {
+        #if DEBUG
+        // w15 기반: 부품 견본(데모 라우트 `components/…` — `MobileComponentsGallery`). Release 에는 이 갈래가 없다.
+        if let route = model.environment.demoRoute, route.hasPrefix("components") {
+            MobileComponentsGallery(route: route)
+        } else {
+            phases
+        }
+        #else
+        phases
+        #endif
+    }
+
+    @ViewBuilder
+    private var phases: some View {
         switch model.session.phase {
         case .launching:
             MobileLaunchingView()

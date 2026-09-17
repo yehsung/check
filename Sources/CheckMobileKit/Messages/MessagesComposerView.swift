@@ -42,7 +42,7 @@ struct MessagesComposerView: View {
                             .font(.body)
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                             .padding(.horizontal, MessagesComposerTextView.horizontalInset + 5)
                             .padding(.vertical, MessagesComposerTextView.verticalInset)
                             .allowsHitTesting(false)
@@ -50,7 +50,7 @@ struct MessagesComposerView: View {
                     }
                 }
                 .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(MobileTheme.cardElevated)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(MobileTheme.fill)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -61,7 +61,7 @@ struct MessagesComposerView: View {
                         Text(counter)
                             .font(.caption2.weight(.semibold))
                             .monospacedDigit()
-                            .foregroundStyle(overflowing ? MobileTheme.danger : MobileTheme.secondaryText)
+                            .foregroundStyle(overflowing ? MobileTheme.danger : MobileTheme.label2)
                             .fixedSize()
                             // 카운터는 입력칸 폭을 먹는다 — 가장 큰 글자에서 입력칸이 절반으로 줄었다(AX3 스크린샷 실측).
                             .dynamicTypeSize(...DynamicTypeSize.xxLarge)
@@ -70,17 +70,17 @@ struct MessagesComposerView: View {
                     Button(action: send) {
                         Group {
                             if store.isSending {
-                                ProgressView().tint(MobileTheme.onAccent)
+                                ProgressView().tint(MobileTheme.onAccentFill)
                             } else {
                                 // 글리프는 원 지름에서 정한 고정 크기다 — `.body` 를 따르면 AX3 에서 화살촉이 원 밖으로 빠져 모양이 사라졌다.
                                 Image(systemName: "arrow.up")
                                     .font(.system(size: CGFloat(sendMetrics.glyphSize), weight: .bold))
                             }
                         }
-                        .foregroundStyle(MobileTheme.onAccent)
+                        .foregroundStyle(MobileTheme.onAccentFill)
                         // 원 = 누르는 자리(44pt 이상). 예전 40×40 은 HIG 최소보다 작았다.
                         .frame(width: CGFloat(sendMetrics.diameter), height: CGFloat(sendMetrics.diameter))
-                        .background(Circle().fill(MobileTheme.accent))
+                        .background(Circle().fill(MobileTheme.accentFill))
                         .contentShape(Rectangle())
                         .opacity(sendEnabled ? 1 : 0.4)
                     }
@@ -91,7 +91,7 @@ struct MessagesComposerView: View {
         }
         .padding(.horizontal, MobileTheme.sideMargin)
         .padding(.vertical, 8)
-        .background(MobileTheme.card.ignoresSafeArea(edges: .bottom))
+        .background(MobileTheme.surface.ignoresSafeArea(edges: .bottom))
         .overlay(alignment: .top) {
             Rectangle().fill(MobileTheme.separator).frame(height: 1)
         }
@@ -160,7 +160,7 @@ struct MessagesComposerTextView: UIViewRepresentable {
         view.font = UIFont.preferredFont(forTextStyle: .body)
         view.adjustsFontForContentSizeCategory = true
         view.backgroundColor = .clear
-        view.textColor = UIColor(MobileTheme.primaryText)
+        view.textColor = UIColor(MobileTheme.label)
         view.tintColor = UIColor(MobileTheme.accent)
         view.typingAttributes = Self.textAttributes()
         view.textContainerInset = UIEdgeInsets(top: Self.verticalInset, left: Self.horizontalInset, bottom: Self.verticalInset, right: Self.horizontalInset)
@@ -180,7 +180,7 @@ struct MessagesComposerTextView: UIViewRepresentable {
         paragraph.lineBreakStrategy = [.standard, .hangulWordPriority]
         return [
             .font: UIFont.preferredFont(forTextStyle: .body),
-            .foregroundColor: UIColor(MobileTheme.primaryText),
+            .foregroundColor: UIColor(MobileTheme.label),
             .paragraphStyle: paragraph,
         ]
     }

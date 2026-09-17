@@ -25,7 +25,7 @@ struct GamesCompactButtonStyle: ButtonStyle {
         let wraps = typeSize.isAccessibilitySize
         return configuration.label
             .font(.subheadline.weight(.bold))
-            .foregroundStyle(kind == .filled ? MobileTheme.onAccent : tint)
+            .foregroundStyle(kind == .filled ? MobileTheme.onAccentFill : tint)
             .multilineTextAlignment(.center)
             .lineLimit(wraps ? nil : 1)
             .minimumScaleFactor(wraps ? 1 : 0.8)
@@ -35,7 +35,7 @@ struct GamesCompactButtonStyle: ButtonStyle {
             .frame(minWidth: GamesTouchTarget.minimum, maxWidth: fillsWidth ? .infinity : nil, minHeight: GamesTouchTarget.minimum)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(kind == .filled ? tint : tint.opacity(0.12))
+                    .fill(kind == .filled ? MobileTheme.accentFill : tint.opacity(0.12))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)

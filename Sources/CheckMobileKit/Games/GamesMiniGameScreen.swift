@@ -94,7 +94,7 @@ struct GamesMiniGameScreen: View {
             Image(systemName: "trophy.fill").foregroundStyle(MobileTheme.pending)
         }
         .font(.subheadline.weight(.semibold))
-        .foregroundStyle(MobileTheme.primaryText)
+        .foregroundStyle(MobileTheme.label)
     }
 
     /// 오늘 순위 한 줄. 순위표를 모르면(불러오는 중·실패) 그리지 않는다 — 실패는 아래 순위 카드가 말한다.
@@ -104,7 +104,7 @@ struct GamesMiniGameScreen: View {
             Text(line)
                 .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(hub.myRank(kind) == nil ? MobileTheme.secondaryText : MobileTheme.accent)
+                .foregroundStyle(hub.myRank(kind) == nil ? MobileTheme.label2 : MobileTheme.accent)
         }
     }
 
@@ -206,7 +206,7 @@ struct GamesMiniGameScreen: View {
                 case .empty, .rows:
                     Text(GamesMiniGameText.emptyBoard)
                         .font(.subheadline)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                 }
             } else {
                 VStack(spacing: 2) {
@@ -218,14 +218,14 @@ struct GamesMiniGameScreen: View {
             }
             Text(GamesMiniGameText.prizeCaption)
                 .font(.caption)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
         }
     }
 
     private var rankTitle: some View {
         Text(GamesMiniGameText.rankTitle)
             .font(.headline)
-            .foregroundStyle(MobileTheme.primaryText)
+            .foregroundStyle(MobileTheme.label)
             .accessibilityAddTraits(.isHeader)
             .fixedSize()
     }
@@ -233,7 +233,7 @@ struct GamesMiniGameScreen: View {
     private func quorum(_ players: Int) -> some View {
         Text(GamesMiniGameText.quorumCaption(players: players))
             .font(.caption)
-            .foregroundStyle(MobileTheme.secondaryText)
+            .foregroundStyle(MobileTheme.label2)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -294,7 +294,7 @@ private struct GamesRankRow: View {
         HStack(spacing: 6) {
             Text(entry.name)
                 .font(.subheadline.weight(isMe ? .bold : .regular))
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .lineLimit(2)
             if isMe {
                 AingChip(text: GomokuPhoneText.me)
@@ -307,7 +307,7 @@ private struct GamesRankRow: View {
         Text(GamesMiniGameText.score(entry.bestScore))
             .font(MobileTheme.number(.subheadline))
             .monospacedDigit()
-            .foregroundStyle(MobileTheme.primaryText)
+            .foregroundStyle(MobileTheme.label)
             .fixedSize()
     }
 }
@@ -353,10 +353,10 @@ private struct GamesChampionRow: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(GamesMiniGameText.yesterdayChampion)
                 .font(.caption)
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
             Text(winner.name + " · " + GamesMiniGameText.score(winner.score))
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .layoutPriority(1)

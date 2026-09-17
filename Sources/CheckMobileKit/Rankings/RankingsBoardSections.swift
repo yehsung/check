@@ -16,7 +16,7 @@ struct RankingsLeagueSection: View {
                 SectionHeader(RankingsText.leagueTitle)
                 Text(RankingsText.leagueCaption)
                     .font(.footnote)
-                    .foregroundStyle(MobileTheme.secondaryText)
+                    .foregroundStyle(MobileTheme.label2)
             }
             if entries.isEmpty {
                 RankingsEmptyCard(
@@ -55,18 +55,18 @@ struct RankingsLeagueRow: View {
                     Text(RankingsText.leagueAverage(entry))
                         .font(MobileTheme.number(.subheadline, weight: .bold))
                         .monospacedDigit()
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                     HStack(spacing: 8) {
                         RankingsGauge(progress: entry.goal.progress, tint: entry.goal.isComplete ? MobileTheme.working : MobileTheme.accent)
                         Text("\(RankingsText.leaguePercent(entry))%")
                             .font(MobileTheme.number(.caption, weight: .semibold))
                             .monospacedDigit()
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                             .fixedSize()
                     }
                     Text(RankingsText.leagueCaption(entry))
                         .font(.caption)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -83,7 +83,7 @@ struct RankingsGauge: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(MobileTheme.track)
+                Capsule().fill(MobileTheme.fill)
                 Capsule()
                     .fill(tint)
                     .frame(width: max(6, proxy.size.width * min(1, max(0, progress))))
@@ -144,7 +144,7 @@ struct RankingsTokenSection: View {
             Spacer(minLength: 4)
             Text(store.tokenTitle)
                 .font(MobileTheme.title(.headline))
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
@@ -156,14 +156,14 @@ struct RankingsTokenSection: View {
                     .font(.headline)
                     .frame(minWidth: 44, minHeight: 44)
                     // 이번 달이면 미래로 못 간다 — 명시 색이 비활성 흐림을 덮으므로 색으로도 꺼 보이게 한다.
-                    .foregroundStyle(isCurrent ? MobileTheme.secondaryText.opacity(0.35) : MobileTheme.accent)
+                    .foregroundStyle(isCurrent ? MobileTheme.label2.opacity(0.35) : MobileTheme.accent)
             }
             .disabled(isCurrent)
             .accessibilityLabel(Text(RankingsText.nextMonth))
         }
         .foregroundStyle(MobileTheme.accent)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(MobileTheme.card)
+            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(MobileTheme.surface)
         )
     }
 }
@@ -185,7 +185,7 @@ struct RankingsTokenRow: View {
                         Text(label)
                             .font(.caption)
                             .monospacedDigit()
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     // ★ 숫자는 **자르지 않는다** — 말줄임("5,014,407,…")은 자릿수 오독이다(맥 TokenBoardRowView 의 회귀 지점).
@@ -193,7 +193,7 @@ struct RankingsTokenRow: View {
                     Text(RankingsText.tokenTotal(entry))
                         .font(MobileTheme.number(.subheadline, weight: .bold))
                         .monospacedDigit()
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                         .fixedSize(horizontal: false, vertical: true)
                     if let todayKey {
                         Text(RankingsText.tokenToday(entry, todayKey: todayKey))
@@ -212,7 +212,7 @@ struct RankingsTokenRow: View {
     private var chips: [RankingsChip] {
         var result: [RankingsChip] = []
         if isMe { result.append(RankingsChip(text: RankingsText.meChip)) }
-        if showsPrivateChip { result.append(RankingsChip(text: RankingsText.privateChip, tint: MobileTheme.secondaryText)) }
+        if showsPrivateChip { result.append(RankingsChip(text: RankingsText.privateChip, tint: MobileTheme.label2)) }
         return result
     }
 }
@@ -242,7 +242,7 @@ struct RankingsMiniGameSection: View {
                     Label("\(store.miniGamePlayers)명", systemImage: "person.2.fill")
                         .font(.caption.weight(.bold))
                         .monospacedDigit()
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .fixedSize()
                         .accessibilityLabel(Text("오늘 \(store.miniGamePlayers)명 참여"))
                 }
@@ -285,12 +285,12 @@ struct RankingsMiniGameSection: View {
                         .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: players >= RankingsText.prizeQuorum ? "checkmark.seal.fill" : "person.2.fill")
-                        .foregroundStyle(players >= RankingsText.prizeQuorum ? MobileTheme.working : MobileTheme.secondaryText)
+                        .foregroundStyle(players >= RankingsText.prizeQuorum ? MobileTheme.working : MobileTheme.label2)
                 }
             }
         }
         .font(.footnote)
-        .foregroundStyle(MobileTheme.secondaryText)
+        .foregroundStyle(MobileTheme.label2)
     }
 }
 
@@ -338,7 +338,7 @@ struct RankingsChampionCard: View {
                 .foregroundStyle(MobileTheme.pending)
             Text(winner.name)
                 .font(.headline)
-                .foregroundStyle(MobileTheme.primaryText)
+                .foregroundStyle(MobileTheme.label)
                 .fixedSize(horizontal: false, vertical: true)
             if winner.awarded {
                 RankingsChip(text: RankingsText.awardedChip, tint: MobileTheme.working)
@@ -350,7 +350,7 @@ struct RankingsChampionCard: View {
         Text(RankingsText.score(winner.score))
             .font(MobileTheme.number(.headline, weight: .bold))
             .monospacedDigit()
-            .foregroundStyle(MobileTheme.primaryText)
+            .foregroundStyle(MobileTheme.label)
             .fixedSize()
     }
 }
@@ -386,7 +386,7 @@ struct RankingsMiniGameRow: View {
         Text(RankingsText.score(entry.bestScore))
             .font(MobileTheme.number(.headline, weight: .bold))
             .monospacedDigit()
-            .foregroundStyle(MobileTheme.primaryText)
+            .foregroundStyle(MobileTheme.label)
             .fixedSize()
     }
 }

@@ -77,6 +77,8 @@ package final class NowStore {
     /// 데모 스크린샷 전용(`-AingCheckDemoNow undo`): 되돌리기 토스트를 5초 뒤에도 닫지 않는다.
     @ObservationIgnored package var demoHoldsUndo = false
     #endif
+    /// 착용 캐릭터 관찰을 걸었는가(w15 기반 — 위젯 스냅샷 `characterID`). 링크(`context.links.me`)는 init 뒤에 채워지므로 활성화 때 한 번 건다.
+    @ObservationIgnored private var observesEquippedCharacter = false
 
     package nonisolated static let refreshIntervalSeconds: Double = 60
     /// 탭을 다시 볼 때 이 초 안에 받았으면 새로고침을 건너뛴다.
@@ -118,6 +120,7 @@ package final class NowStore {
     package func appDidBecomeActive() {
         guard context.session.isSignedIn, let userID = context.session.userID else { return }
         isActive = true
+        observeEquippedCharacter()
         todoScheduler.resume()
         // 새로고침을 먼저 띄운다 — 할 일 준비가 부르는 스냅샷 쓰기가 "응답을 기다리는 중"을 알아 낡은 팀 상태로 쓰지 않게.
         refresh()
@@ -595,6 +598,33 @@ package final class NowStore {
         }
     }
 
+    /// 나 탭이 착용값을 알아 오거나 바꾸면 스냅샷을 다시 쓴다(쓰는 주체는 지금 탭 하나 — 나 탭은 값만 가진다).
+    /// 새 서버 호출은 없다: 착용값은 나 탭이 읽은 것만 싣고, 모르는 동안은 파일에 남은 지난 값을 건드리지 않는다.
+    private func observeEquippedCharacter() {
+        guard !observesEquippedCharacter, context.links.me != nil else { return }
+        observesEquippedCharacter = true
+        trackEquippedCharacter()
+    }
+
+    private func trackEquippedCharacter() {
+        withObservationTracking {
+            _ = context.links.me?.equippedLoaded
+            _ = context.links.me?.equippedServerID
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.writeWidgetSnapshot()
+                self.trackEquippedCharacter()
+            }
+        }
+    }
+
+    /// 위젯 스냅샷의 착용 캐릭터(나 탭이 아는 값만 — 모르면 nil 로 두어 지난 값을 지키게).
+    private var knownEquippedCharacterID: String? {
+        guard let me = context.links.me, me.equippedLoaded else { return nil }
+        return me.equippedCharacterID
+    }
+
     // MARK: - 위젯 스냅샷
 
     /// 소속 없음 표시(위젯 "내 오늘"이 "앱을 열면 채워져요" 대신 팀 참여 안내를 그린다 — `AingWidgetMyTodayState`).
@@ -602,6 +632,12 @@ package final class NowStore {
     /// 스냅샷 모양(D-base `WidgetSnapshot`)에 소속 칸이 없어 **목표 0시간인 me** 로 싣는다. 서버 목표는 1~168(teams CHECK)이고
     /// 소속 있는 카드는 `max(1, …)` 로 싣으므로 0 은 이 뜻으로만 쓰인다. 기반 수정 요청: 스냅샷에 옵셔널 `noTeam` 칸.
     package static let widgetNoTeamMe = WidgetSnapshot.Me(working: false, sessionStartedAt: nil, todaySeconds: 0, weekSeconds: 0, goalHours: 0)
+
+    /// 내 카드 → 위젯 근무 상태 3갈래(초상 표정·링). 연결 끊김 = 근무 중인데 신호가 끊긴 카드(`NowMyCard.isStale`).
+    package static func widgetWorkState(_ card: NowMyCard) -> WidgetSnapshot.WorkState {
+        guard card.isWorking else { return .off }
+        return card.isStale ? .disconnected : .working
+    }
 
     /// 성공한 새로고침 뒤 스냅샷이 이 초보다 낡았으면 generatedAt 만 옮긴다(`touchWidgetSnapshot`). 위젯 "N분 전"은 60초부터 뜬다.
     package nonisolated static let widgetTouchAgeSeconds: Double = 60
@@ -628,7 +664,11 @@ package final class NowStore {
         let hasMembership = membership != nil
         let people = (hasLoadedTeam || hasNoTeam) ? workingPeople(now: now) : nil
         let previews = todoSync.userID == userID ? widgetTodoPreviews() : nil
+        let characterID = knownEquippedCharacterID
         context.widgetSnapshots.update { snapshot in
+            if let characterID {
+                snapshot.characterID = characterID
+            }
             if let card {
                 snapshot.me = WidgetSnapshot.Me(
                     working: card.isWorking,
@@ -636,7 +676,8 @@ package final class NowStore {
                     sessionStartedAt: card.isStale ? nil : card.sessionStartedAt,
                     todaySeconds: card.todaySeconds,
                     weekSeconds: card.weekSeconds,
-                    goalHours: max(1, card.goalHours)
+                    goalHours: max(1, card.goalHours),
+                    status: Self.widgetWorkState(card)
                 )
             } else if noTeam {
                 snapshot.me = Self.widgetNoTeamMe

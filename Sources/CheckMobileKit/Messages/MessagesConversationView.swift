@@ -28,7 +28,7 @@ struct MessagesConversationView: View {
                 VStack(spacing: 6) {
                     Text(MessageNoticeText.expiry)
                         .font(.caption)
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
@@ -90,11 +90,11 @@ struct MessagesConversationView: View {
                             .fixedSize()
                             // 떠 있는 작은 버튼이다 — 가장 큰 글자에서 캡슐이 화면 폭을 채우며 말풍선을 덮었다(AX3 실측).
                             .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-                            .foregroundStyle(MobileTheme.onAccent)
+                            .foregroundStyle(MobileTheme.onAccentFill)
                             .padding(.horizontal, 16)
                             // 누르는 자리 44pt 이상(예전 세로 여백 8 로는 31.7pt).
                             .frame(minHeight: CGFloat(MessagesScrollFollow.newMessageButtonMinHeight))
-                            .background(Capsule().fill(MobileTheme.accent))
+                            .background(Capsule().fill(MobileTheme.accentFill))
                             // 바탕색 테두리 + 그림자 — 같은 accent 색인 내 말풍선 위에 떠도 경계가 보인다(예전엔 '새 메시지 ↓`요'로 섞였다).
                             .padding(2)
                             .background(Capsule().fill(MobileTheme.background))
@@ -120,12 +120,12 @@ struct MessagesConversationView: View {
                         // 이름을 모른다 — "대" 이니셜 원을 세우면 "대화"라는 사람처럼 보였다.
                         Image(systemName: MessagesConversationHeader.unknownAvatarSymbol)
                             .font(.system(size: 26, weight: .regular))
-                            .foregroundStyle(MobileTheme.secondaryText)
+                            .foregroundStyle(MobileTheme.label2)
                             .frame(width: 28, height: 28)
                     }
                     Text(header.title)
                         .font(.headline)
-                        .foregroundStyle(MobileTheme.primaryText)
+                        .foregroundStyle(MobileTheme.label)
                         .lineLimit(1)
                 }
                 .accessibilityElement(children: .ignore)
@@ -194,10 +194,10 @@ struct MessagesDaySeparator: View {
             Rectangle().fill(MobileTheme.separator).frame(height: 1)
             Text(label)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(MobileTheme.secondaryText)
+                .foregroundStyle(MobileTheme.label2)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 3)
-                .background(Capsule().fill(MobileTheme.cardElevated))
+                .background(Capsule().fill(MobileTheme.fill))
                 .fixedSize()
             Rectangle().fill(MobileTheme.separator).frame(height: 1)
         }
@@ -249,14 +249,14 @@ struct MessagesBubbleRow: View {
     private var bubble: some View {
         Text(line.entry.body)
             .font(.body)
-            .foregroundStyle(line.entry.isMine ? MobileTheme.onAccent : MobileTheme.primaryText)
+            .foregroundStyle(line.entry.isMine ? MobileTheme.onAccentFill : MobileTheme.label)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(line.entry.isMine ? MobileTheme.accent : MobileTheme.card)
+                    .fill(line.entry.isMine ? MobileTheme.accentFill : MobileTheme.surface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -279,7 +279,7 @@ struct MessagesBubbleRow: View {
                     Text(line.clockText)
                         .font(.caption2)
                         .monospacedDigit()
-                        .foregroundStyle(MobileTheme.secondaryText)
+                        .foregroundStyle(MobileTheme.label2)
                 }
             }
             .fixedSize()
@@ -311,14 +311,14 @@ struct MessagesPendingBubbleRow: View {
             }
             Text(item.body)
                 .font(.body)
-                .foregroundStyle(MobileTheme.onAccent)
+                .foregroundStyle(MobileTheme.onAccentFill)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(MobileTheme.accent.opacity(0.6))
+                        .fill(MobileTheme.accentFill.opacity(0.6))
                 )
         }
         .frame(maxWidth: .infinity, alignment: .trailing)

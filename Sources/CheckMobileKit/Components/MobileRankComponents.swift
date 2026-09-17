@@ -1,15 +1,15 @@
 #if os(iOS)
 import SwiftUI
 
-// 순위 목록 공용 부품 — 순위 탭(리그·AI 토큰·미니게임)과 게임 탭(미니게임 오늘 순위)이 **같은 순위를 같은 모양으로** 그린다.
-// 통합 검증: 같은 "미니게임 오늘 순위"가 순위 탭은 금·은·동 + 짙은 숫자 · 내 행 파란 테두리, 게임 탭은 갈색·청회·보라 + 흰 숫자 ·
-// 칩만으로 갈려 있었다(crop-rank-colors-L.png).
+// 순위 공용 부품 — 순위 탭(리그·AI 토큰·미니게임)과 게임 탭(미니게임 오늘 순위)이 **같은 순위를 같은 모양으로** 그린다.
+// 시안 B: 1–3 금·은·동 원 24(짙은 숫자) · 나머지는 원 없이 흐린 숫자 · 내 행 = 파랑 6% + '나' 칩. 메달 규칙은 모든 순위판에서 같다
+// (AI 토큰 탭도 1–3 메달 — 비평 "순위 배지").
 
-/// 순위 숫자 원. 1·2·3위는 메달 색(안의 글자는 늘 숫자 — 색만으로 말하지 않는다), 나머지는 흐린 숫자.
+/// 순위 숫자 원(24 · 둥근 숫자). 1·2·3위는 메달 원 + 짙은 글자(색만으로 말하지 않는다 — 숫자는 늘 있다), 나머지는 원 없이 `label2`.
 package struct RankBadge: View {
     private let rank: Int
     private let usesMedals: Bool
-    @ScaledMetric(relativeTo: .subheadline) private var size: CGFloat = 28
+    @ScaledMetric(relativeTo: .subheadline) private var size: CGFloat = 24
 
     package init(rank: Int, usesMedals: Bool = true) {
         self.rank = rank
@@ -17,64 +17,105 @@ package struct RankBadge: View {
     }
 
     package var body: some View {
-        let medal = usesMedals ? RankMedal.color(rank: rank) : nil
+        let medal = usesMedals ? RankMedal.medal(rank: rank) : nil
         Text("\(rank)")
-            .font(MobileTheme.number(.subheadline, weight: .heavy))
+            .font(MobileTheme.roundedNumber(.footnote, weight: .bold))
             .monospacedDigit()
             .minimumScaleFactor(0.6)
             .lineLimit(1)
-            .foregroundStyle(medal == nil ? MobileTheme.secondaryText : RankMedal.ink)
+            .foregroundStyle(medal?.ink ?? MobileTheme.label2)
             .frame(width: size, height: size)
-            .background(Circle().fill(medal ?? MobileTheme.cardElevated))
+            .background {
+                if let medal { Circle().fill(medal.fill) }
+            }
             .accessibilityHidden(true)
     }
 }
 
-/// 메달 색(맥 `MiniGameMedal` 과 같은 숫자). 메달 위 글자는 짙은 잉크 — 금·은 위 흰 글자는 대비가 무너진다.
+/// 메달 색(토큰 `gold` · `silver` · `bronze` + 짙은 잉크 — 숫자는 `MobileThemePalette` 한 곳).
 package enum RankMedal {
-    package static let gold = Color(red: 1.00, green: 0.824, blue: 0.290)
-    package static let silver = Color(red: 0.839, green: 0.863, blue: 0.902)
-    package static let bronze = Color(red: 0.878, green: 0.584, blue: 0.353)
-    package static let ink = Color.black.opacity(0.82)
+    package struct Medal {
+        package let fill: Color
+        package let ink: Color
+    }
 
-    package static func color(rank: Int) -> Color? {
+    package static let gold = MobileTheme.gold
+    package static let silver = MobileTheme.silver
+    package static let bronze = MobileTheme.bronze
+
+    package static func medal(rank: Int) -> Medal? {
         switch rank {
-        case 1: return gold
-        case 2: return silver
-        case 3: return bronze
+        case 1: return Medal(fill: MobileTheme.gold, ink: color(MobileThemePalette.goldInk))
+        case 2: return Medal(fill: MobileTheme.silver, ink: color(MobileThemePalette.silverInk))
+        case 3: return Medal(fill: MobileTheme.bronze, ink: color(MobileThemePalette.bronzeInk))
         default: return nil
         }
     }
+
+    package static func color(rank: Int) -> Color? {
+        medal(rank: rank)?.fill
+    }
+
+    private static func color(_ pair: MobileThemePalette.Pair) -> Color {
+        Color(red: pair.light.r, green: pair.light.g, blue: pair.light.b)
+    }
 }
 
-/// 작은 캡슐 칩("나" · "우리 팀" · "비공개" · "루비 +20 받음").
+/// 어제 1등 왕관 원(32 · 금 바탕 · 짙은 왕관). 행: 왕관 원 + 이름·점수 + `RubyGain(_, suffix: "받음", style: .chip)`.
+package struct CrownBadge: View {
+    @ScaledMetric(relativeTo: .body) private var diameter: CGFloat = 32
+
+    package init() {}
+
+    package var body: some View {
+        Image(systemName: "crown.fill")
+            .font(.system(size: diameter * 0.5, weight: .bold))
+            .foregroundStyle(MobileTheme.crownInk)
+            .frame(width: diameter, height: diameter)
+            .background(Circle().fill(MobileTheme.gold))
+            .accessibilityHidden(true)
+    }
+}
+
+/// 작은 캡슐 칩("우리 팀" · "비공개" · "목표 달성"). 뜻 색 틴트 + 같은 색 글자. `outlined` 는 틴트 행 안에서 테두리형.
 package struct AingChip: View {
     private let text: String
     private let tint: Color
+    private let background: Color?
+    private let outlined: Bool
 
-    package init(text: String, tint: Color = MobileTheme.accent) {
+    /// - Parameters:
+    ///   - tint: 글자 색(뜻 색 — 파랑 accent · 초록 working · 앰버 pending · 회색 label2).
+    ///   - background: 칩 바탕. nil 이면 글자 색 14%(회색 글자면 `MobileTheme.fill` 을 넘긴다).
+    package init(text: String, tint: Color = MobileTheme.accent, background: Color? = nil, outlined: Bool = false) {
         self.text = text
         self.tint = tint
+        self.background = background
+        self.outlined = outlined
     }
 
     package var body: some View {
         Text(text)
-            .font(.caption2.weight(.bold))
+            .font(.system(.caption, weight: .semibold))
             .foregroundStyle(tint)
             .lineLimit(1)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(tint.opacity(0.16)))
+            .padding(.horizontal, 8)
+            .frame(minHeight: 22)
+            .background {
+                if outlined {
+                    Capsule().strokeBorder(tint.opacity(0.38), lineWidth: 1)
+                } else {
+                    Capsule().fill(background ?? tint.opacity(0.14))
+                }
+            }
             .fixedSize()
     }
 }
 
-/// 순위 한 행의 면. **내 행(내 팀)** 은 accent 옅은 채움 + accent 테두리 — 두 탭 공통 강조 규칙.
-/// - `standsAlone`: 행마다 카드인 목록(순위 탭)이면 남의 행도 카드 면·선을 그린다. 한 카드 안에 줄지은 목록(게임 탭)이면 남의 행은 면이 없다.
+/// 순위 한 행의 면. **내 행(내 팀)** 은 파랑 6% 칠(시안 `.b-mine` — 테두리 없음). 남의 행은 면이 없다(인셋 그룹 안의 행).
+/// - `standsAlone`: 행마다 카드인 옛 목록(순위 탭)이면 남의 행도 카드 면을 그린다 — 탭 담당이 인셋 그룹으로 옮기면 false.
 package struct RankRowSurface: ViewModifier {
-    package static let highlightFill = 0.08
-    package static let highlightStroke = 0.7
-    package static let highlightLineWidth: CGFloat = 1.5
+    package static let highlightFill = 0.06
 
     private let isMine: Bool
     private let standsAlone: Bool
@@ -93,13 +134,12 @@ package struct RankRowSurface: ViewModifier {
         content
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(padding)
-            .background(shape.fill(isMine ? MobileTheme.accent.opacity(Self.highlightFill) : (standsAlone ? MobileTheme.card : Color.clear)))
-            .overlay(
-                shape.stroke(
-                    isMine ? MobileTheme.accent.opacity(Self.highlightStroke) : (standsAlone ? MobileTheme.separator : Color.clear),
-                    lineWidth: isMine ? Self.highlightLineWidth : 1
-                )
-            )
+            .background {
+                ZStack {
+                    if standsAlone { shape.fill(MobileTheme.surface) }
+                    if isMine { shape.fill(MobileTheme.accent.opacity(Self.highlightFill)) }
+                }
+            }
     }
 }
 

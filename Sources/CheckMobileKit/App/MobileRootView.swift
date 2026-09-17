@@ -17,6 +17,8 @@ public struct MobileRootView: View {
     public var body: some View {
         content
             .tint(MobileTheme.accent)
+            // 스크롤한 내용이 접힌 내비 머리 뒤로 비치지 않게 — 앱 전체에 한 번 건다(스크롤 뷰로 내려간다).
+            .opaqueNavigationEdge()
             .onAppear {
                 // 화면 모드는 앱 델리게이트가 창이 생기기 전에 걸었다 — 여기서 한 번 더(앱 타깃이 빠뜨려도 첫 화면에서 걸린다).
                 model.installAppearance()
@@ -75,8 +77,13 @@ public struct MobileRootView: View {
 }
 
 /// 탭 막대. 각 탭 화면이 자기 NavigationStack 을 쥔다(경로는 라우터).
+///
+/// '나' 탭 기호만 SF 기호가 아니라 **착용 캐릭터 초상 + 근무 상태 링**이다(시안 b2 — "나 = 착용 캐릭터"가 탭 막대에서도 보인다).
+/// 그림이 없는 빌드(리소스 누락)에서는 SF 기호로 접는다.
 struct MobileTabsView: View {
     let model: MobileAppModel
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         @Bindable var router = model.router
@@ -97,8 +104,24 @@ struct MobileTabsView: View {
                 .badge(badges.badge(for: .games) ?? 0)
                 .tag(AingTab.games)
             MeTab(store: model.me)
-                .tabItem { Label(AingTab.me.title, systemImage: AingTab.me.systemImage) }
+                .tabItem { meLabel }
                 .tag(AingTab.me)
+        }
+    }
+
+    /// '나' 탭 이름 + 초상 기호. 착용 캐릭터·근무 상태·화면 모드가 바뀌면 이 본문이 다시 돌아 새 이미지를 받는다
+    /// (`displayedCharacterID`·`displayedMood` 는 관찰되는 값이라 스토어가 바뀌면 탭 막대도 따라 바뀐다).
+    @ViewBuilder
+    private var meLabel: some View {
+        if let icon = CharacterTabIcon.image(
+            id: model.now.displayedCharacterID,
+            mood: model.now.displayedMood,
+            isDark: colorScheme == .dark,
+            scale: displayScale
+        ) {
+            Label { Text(AingTab.me.title) } icon: { Image(uiImage: icon) }
+        } else {
+            Label(AingTab.me.title, systemImage: AingTab.me.systemImage)
         }
     }
 }

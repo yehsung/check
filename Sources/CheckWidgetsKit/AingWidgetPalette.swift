@@ -58,15 +58,21 @@ package enum AingWidgetPalette {
     package static let avatarTintOpacity = (light: 0.15, dark: 0.16)
 
     /// 틴트·투명 렌더링의 불투명도(시안 `.b-is-tint` · `.b-is-clear`). 색은 시스템이 정한다 — 여기는 위계만.
-    /// 보조 글자를 시안 62%보다 올린 이유: 투명 라이트(옅은 유리 위 흰 글자)에서 보조 글자가 읽히지 않았다(비평 · w11 clear-light).
+    ///
+    /// **글자는 불투명도로 위계를 나누지 않는다**(w15 검증 낮음 1): 시안 62% → 86% 로 올리고도 옅은 배경화면 위 투명 모드에서
+    /// 보조 글자가 1.84~1.91:1 이었다(실측 '우리 팀 3 / 다른 팀 3' 1.84 · '2분 전' 1.91 · '남은 4개 · 외 2개' 1.87).
+    /// 투명·틴트에서 최종 색은 시스템이 정하므로 앱이 올릴 수 있는 것은 불투명도뿐이다 — 글자는 전부 1.0 으로 올리고
+    /// 위계는 **글자 크기·굵기**가 말한다(원색 모드는 그대로 색으로 나눈다). 끝난 할 일처럼 흐림이 곧 뜻인 글자만 한 단계 낮춘다.
+    /// 칩·받침(`fill`)은 글자 뒤를 받쳐 주도록 함께 올렸다.
     package enum Accented {
-        package static let secondaryText = 0.86
-        package static let tertiaryText = 0.66
-        package static let symbol = 0.5
-        /// 막대 트랙(시안 "트랙 35%").
+        package static let secondaryText = 1.0
+        /// 끝난 할 일(취소선과 함께 흐림이 뜻) — 글자 중 유일하게 낮춘 값.
+        package static let tertiaryText = 0.82
+        package static let symbol = 0.62
+        /// 막대 트랙(시안 "트랙 35%"). 채운 쪽(1.0)과 갈려야 하므로 올리지 않는다.
         package static let track = 0.35
-        package static let fill = 0.22
-        package static let separator = 0.24
+        package static let fill = 0.32
+        package static let separator = 0.3
     }
 
     /// 0xRRGGBB → (r, g, b) 0…1.

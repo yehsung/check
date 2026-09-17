@@ -57,6 +57,86 @@ extension SheetHeader where Trailing == EmptyView {
     }
 }
 
+// MARK: - 위험한 동작 확인
+
+/// 위험한 동작 확인(기권 · 삭제)을 **불투명 시트**로 묻는다.
+///
+/// 시스템 알림창(`.alert`)을 쓰지 않는 이유(w15 검증 medium 1 · 실측): 알림창 재질이 뒤 화면 색을 빨아들여 오목 나무판 위에서
+/// 크림색(#D0BEA4)이 되고, 그 위 시스템 빨강 글자가 **1.9:1**(라이트) · 2.8:1(다크)까지 떨어졌다. 버튼 글자도 앱 토큰(`danger`)이
+/// 아니라 시스템 빨강이라 색 뜻 규칙 밖이었다. 시트는 `presentationBackground` 로 카드 색을 불투명하게 깔 수 있어 뒤 화면과 무관하게
+/// dangerTint 위 danger(4.5:1)가 보장된다.
+///
+/// 버튼 두 개는 세로로 쌓는다(큰 글자에서 가로 두 칸은 글자가 두 줄로 접힌다). 위가 위험한 동작(`.destructive`), 아래가 취소(`.gray`).
+package struct AingConfirmSheet: View {
+    private let title: String
+    private let message: String?
+    private let confirmTitle: String
+    private let cancelTitle: String
+    private let onConfirm: () -> Void
+    private let onCancel: () -> Void
+    @State private var measured: CGFloat = 200
+
+    package init(
+        title: String,
+        message: String? = nil,
+        confirmTitle: String,
+        cancelTitle: String,
+        onConfirm: @escaping () -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.title = title
+        self.message = message
+        self.confirmTitle = confirmTitle
+        self.cancelTitle = cancelTitle
+        self.onConfirm = onConfirm
+        self.onCancel = onCancel
+    }
+
+    package var body: some View {
+        VStack(spacing: MobileTheme.space3) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(MobileTheme.label)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            if let message {
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(MobileTheme.label2)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            AingButton(confirmTitle, kind: .destructive, fillsWidth: true, action: onConfirm)
+                .padding(.top, MobileTheme.space1)
+            AingButton(cancelTitle, kind: .gray, fillsWidth: true, action: onCancel)
+        }
+        .padding(.horizontal, MobileTheme.sideMargin)
+        .padding(.top, MobileTheme.space4)
+        .padding(.bottom, MobileTheme.space4)
+        .frame(maxWidth: .infinity)
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(key: ConfirmSheetHeightKey.self, value: geo.size.height)
+            }
+        }
+        .onPreferenceChange(ConfirmSheetHeightKey.self) { height in
+            // 큰 글자에서 글이 접히면 시트도 그만큼 높아진다(고정 높이면 버튼이 잘린다).
+            if height > 0 { measured = height }
+        }
+        .presentationDetents([.height(measured)])
+        .presentationBackground(MobileTheme.surface)
+        .presentationDragIndicator(.visible)
+    }
+}
+
+private struct ConfirmSheetHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 extension View {
     /// `NavigationStack` 안 시트의 닫기: 왼쪽 위(`cancellationAction`) 유리 ✕ — `SheetHeader` 와 같은 자리·모양.
     package func sheetCloseButton(_ action: @escaping () -> Void) -> some View {
@@ -69,6 +149,31 @@ extension View {
                 }
                 .accessibilityLabel(Text(SheetChromeText.close))
             }
+        }
+    }
+}
+
+// MARK: - 내비 머리
+
+extension View {
+    /// 스크롤한 내용이 **접힌 내비 머리 뒤로 비치지 않게** 한다 — 스크롤 뷰에 건다.
+    ///
+    /// 실측 결함(w15 검증 medium 5 · 낮음 4): iOS 26 기본 머리는 가장자리 효과가 물러서 제목·부제 뒤로 내용이 또렷하게 읽혔다.
+    /// 오목 로비에서는 부제 '한 수 30초'가 밑으로 지나가는 파랑 [수락] 버튼 위에 얹혀 4.0:1 로 떨어졌고, 지금·설정·제보에서는
+    /// 할 일 한 줄이 제목 옆에 그대로 겹쳐 보였다. `.hard` 는 머리 아래를 불투명하게 끊는다(시안 b2 의 머리도 불투명이다).
+    /// iOS 18 에는 그 효과가 없어 `toolbarBackground(.visible)` 로 접는다.
+    package func opaqueNavigationEdge() -> some View {
+        modifier(AingHardScrollEdge())
+    }
+}
+
+private struct AingHardScrollEdge: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            // iOS 26 에서는 `toolbarBackground(.visible)` 이 더해도 달라지지 않는다(실측: 같은 픽셀) — 가장자리 효과가 주인이다.
+            content.scrollEdgeEffectStyle(.hard, for: .top)
+        } else {
+            content.toolbarBackground(.visible, for: .navigationBar)
         }
     }
 }

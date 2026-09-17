@@ -47,8 +47,11 @@ struct PromotedComponentsTests {
         let person = try IntegrationContractTests.code(Self.personComponents)
         #expect(person.contains("enum Chip") && person.contains("case accent(String)") && person.contains("case muted(String)"),
                 "이름 줄 칩(우리 팀·비공개)이 공용 부품으로 들어오지 않았다")
-        #expect(person.contains("onTint && colorScheme == .dark"),
-                "틴트 행 안 파랑 칩이 다크에서 테두리형으로 바뀌지 않는다(틴트 위 틴트 3.5:1)")
+        // w15 수리: 라이트도 틴트 위 틴트가 4.464:1 로 4.5:1 에 못 미쳤다 — 모드를 가리지 않고 테두리형이다.
+        #expect(person.contains("outlinesAccent: Bool { onTint }"),
+                "틴트 행 안 파랑 칩이 테두리형으로 바뀌지 않는다(틴트 위 틴트 라이트 4.46:1 · 다크 3.5:1)")
+        #expect(!person.contains("onTint && colorScheme == .dark"),
+                "라이트에서만 칠한 칩으로 되돌아갔다(라이트 4.46:1)")
         // '나' 칩을 그리는 곳은 공용 이름 줄 하나(탭이 제 칩·제 이름 줄을 다시 만들지 않는다 — 비평 4b).
         // 견본 화면(Gallery)은 부품을 보여 주는 자리라 예외다.
         let meChipUsers = try IntegrationContractTests.files(containing: ["MeChip("], under: "Sources/CheckMobileKit")

@@ -627,8 +627,23 @@ package final class NowStore {
     }
 
     /// 상태 카드 초상에 세울 착용 캐릭터(읽기만 — 새 서버 호출 없음): 나 탭이 알아 온 값 → 위젯 스냅숏 파일에 남은 지난 값 → nil(초상이 아잉으로 선다).
+    ///
+    /// 로그인 직후에는 앱 컨테이너(`MobileAppModel.sessionDidSignIn`)가 착용값 한 칸을 먼저 받아 둔다 — 그 전에는 나 탭을 열기 전까지
+    /// 전 화면이 아잉으로 서서 "나 = 착용 캐릭터"(§0)가 깨졌다(w15 검증 medium 3).
     package var displayedCharacterID: String? {
         knownEquippedCharacterID ?? context.widgetSnapshots.current?.characterID
+    }
+
+    /// 내 초상 표정 = 지금 근무 상태(내 카드 → 위젯 스냅숏 → 둘 다 모르면 링 없는 기본 얼굴).
+    /// 순위·게임·탭 막대가 같은 규칙을 쓴다(`GamesMeIdentity` · `RankingsStore.myCharacterMood`).
+    package var displayedMood: CharacterMood {
+        if let card = myCard(now: context.clock.now()) {
+            return card.isWorking ? (card.isStale ? .lost : .working) : .off
+        }
+        if let state = context.widgetSnapshots.current?.me?.resolvedStatus {
+            return CharacterMood(state)
+        }
+        return .plain
     }
 
     // MARK: - 위젯 스냅샷

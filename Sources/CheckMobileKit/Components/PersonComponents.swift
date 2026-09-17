@@ -133,7 +133,6 @@ package struct PersonName: View {
     private let chips: [Chip]
     private let font: Font
     private let onTint: Bool
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// - Parameters:
@@ -184,8 +183,10 @@ package struct PersonName: View {
 
     private var hasBadges: Bool { !chips.isEmpty || CenterLabel.display(center) != nil }
 
-    /// 파랑 칩을 테두리형으로 — 틴트 행 안 + 다크에서만(시안 B 다크 보정).
-    private var outlinesAccent: Bool { onTint && colorScheme == .dark }
+    /// 파랑 칩을 테두리형으로 — **틴트 행 안이면 라이트·다크 모두**. 틴트 위 틴트는 라이트 4.46:1 · 다크 3.5:1 로 둘 다 4.5:1 에 못 미친다
+    /// (w15 검증 낮음 3 실측: 내 행 accent 6% 위 칩 accentTint 10% → 글자 4.464:1). 테두리형은 칠을 빼 글자가 행 바탕 위에 바로 앉아
+    /// 라이트 4.9:1 로 올라간다.
+    private var outlinesAccent: Bool { onTint }
 
     @ViewBuilder
     private var badges: some View {
@@ -206,7 +207,7 @@ package struct PersonName: View {
 }
 
 /// '나' 칩(파랑 틴트 · 이름 줄 키 `AingChip.Size.small`). `outlined` 는 틴트 행(내 행) 안에서 쓰는 테두리형
-/// (다크에서 틴트 위 틴트가 3.5:1 로 떨어진다).
+/// (틴트 위 틴트가 라이트 4.46:1 · 다크 3.5:1 로 둘 다 4.5:1 에 못 미친다 — 내 행 안에서는 라이트·다크 모두 테두리형).
 package struct MeChip: View {
     private let outlined: Bool
 

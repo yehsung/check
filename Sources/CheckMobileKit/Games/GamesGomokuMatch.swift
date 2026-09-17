@@ -19,6 +19,7 @@ struct GamesGomokuMatch: View {
     @State private var chatExpanded = false
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var gomoku: GomokuStore { store.context.gomoku }
 
@@ -28,10 +29,16 @@ struct GamesGomokuMatch: View {
     }
 
     var body: some View {
+        GeometryReader { screen in
+            matchBody(visible: screen.size)
+        }
+    }
+
+    private func matchBody(visible: CGSize) -> some View {
         let forbidden = forbidden
         let me = GamesMeIdentity.current(store.context)
         let previewPoint = preview.visiblePoint(match: match, isBusy: gomoku.isBusy, forbidden: forbidden)
-        ScrollView {
+        return ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 GamesGomokuPlayerCard(
                     store: store, characterID: match.opponent.characterID, mood: match.opponent.mood,
@@ -39,17 +46,7 @@ struct GamesGomokuMatch: View {
                     subtitle: (GomokuPhoneText.playerSubtitle(color: match.myColor.opponent, isWorking: match.opponent.isWorking), MobileTheme.label2),
                     isTurn: match.turn == match.myColor.opponent
                 )
-                Color.clear
-                    .aspectRatio(1, contentMode: .fit)
-                    .overlay {
-                        GeometryReader { geo in
-                            GamesGomokuPlayBoard(store: gomoku, match: match, side: geo.size.width, forbidden: forbidden,
-                                                 preview: $preview, focusedForbidden: $focusedForbidden)
-                        }
-                    }
-                    .shadow(color: colorScheme == .dark ? .black.opacity(0.35) : Color(red: 80 / 255, green: 50 / 255, blue: 10 / 255).opacity(0.18),
-                            radius: 9, y: 6)
-                    .padding(.horizontal, 12 - MobileTheme.sideMargin)
+                board(side: boardSide(in: visible), forbidden: forbidden)
                 GamesGomokuPlayerCard(
                     store: store, characterID: me.characterID, mood: me.mood,
                     name: me.name ?? GomokuPhoneText.me, center: nil, isMe: me.name != nil, color: match.myColor,
@@ -108,13 +105,43 @@ struct GamesGomokuMatch: View {
             guard let point else { return }
             _ = preview.tap(point, match: match, isBusy: gomoku.isBusy, forbidden: forbidden)
         }
-        // 확인은 알림창으로 — iOS 26 의 확인 대화상자는 화면 위쪽 말풍선으로 떠 [계속 두기]가 안 보였다(데모 스크린샷 실측).
-        .alert(GomokuPhoneText.resignConfirm, isPresented: $showsResignConfirm) {
-            Button(GomokuPhoneText.resignNow, role: .destructive) {
-                Task { await gomoku.resign() }
-            }
-            Button(GomokuPhoneText.keepPlaying, role: .cancel) {}
+        // 확인은 **불투명 시트**로(`AingConfirmSheet`) — 확인 대화상자는 iOS 26 에서 화면 위쪽 말풍선으로 떠 [계속 두기]가 안 보였고,
+        // 알림창은 재질이 나무판 색을 빨아들여 '기권하기' 글자가 1.9:1 이었다(w15 검증 medium 1). 시트는 카드 색을 깔아 대비가 고정된다.
+        .sheet(isPresented: $showsResignConfirm) {
+            AingConfirmSheet(
+                title: GomokuPhoneText.resignConfirm,
+                message: GomokuPhoneText.resignConfirmMessage,
+                confirmTitle: GomokuPhoneText.resignNow,
+                cancelTitle: GomokuPhoneText.keepPlaying,
+                onConfirm: {
+                    showsResignConfirm = false
+                    Task { await gomoku.resign() }
+                },
+                onCancel: { showsResignConfirm = false }
+            )
         }
+    }
+
+    // MARK: 판
+
+    /// 판 한 장(가운데 정렬 — 기본 글자에서는 화면 폭 − 24 라 좌우 카드보다 4pt 씩 넓다).
+    private func board(side: CGFloat, forbidden: [GomokuPoint: GomokuForbiddenReason]) -> some View {
+        GamesGomokuPlayBoard(store: gomoku, match: match, side: side, forbidden: forbidden,
+                             preview: $preview, focusedForbidden: $focusedForbidden)
+            .frame(width: side, height: side)
+            .shadow(color: colorScheme == .dark ? .black.opacity(0.35) : Color(red: 80 / 255, green: 50 / 255, blue: 10 / 255).opacity(0.18),
+                    radius: 9, y: 6)
+            .frame(maxWidth: .infinity)
+    }
+
+    /// 판 한 변. 기본 글자에서는 **화면 폭 최대**(시안 B 09)지만, 글자가 커지면 플레이어 카드 두 장이 훨씬 높아져 판과
+    /// '내 차례 · 남은 초' 카드가 한 화면에 들어가지 못했다(w15 검증 medium 6). 그때만 보이는 높이에 맞춰 판을 줄인다 —
+    /// 대국에서 가장 중요한 상태(내 차례·남은 초)가 판보다 먼저다.
+    private func boardSide(in visible: CGSize) -> CGFloat {
+        let full = max(240, visible.width - 24)
+        guard visible.height > 0, typeSize >= .xLarge else { return full }
+        let fraction: CGFloat = typeSize.isAccessibilitySize ? 0.40 : 0.52
+        return max(240, min(full, (visible.height * fraction).rounded()))
     }
 
     // MARK: 내 카드 부제

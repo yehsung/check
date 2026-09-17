@@ -58,9 +58,13 @@ struct MeStoreTests {
         let store = harness.me
 
         store.appDidBecomeActive()
-        #expect(store.inflight.isEmpty, "보이지 않는 나 탭이 조회를 띄웠다")
-        await harness.barrier()
+        await harness.quiesceMe()
         #expect(harness.requests(rpc: "shop_state").isEmpty, "보이지 않는 나 탭이 서버를 두드렸다")
+        // w15 수리: 로그인 직후 **착용 캐릭터 한 칸**만 미리 받는다(나 탭을 열기 전에도 전 화면이 내 캐릭터로 선다).
+        // 그 하나 말고 나 탭의 조회(머리·기록·제보)는 탭이 보이기 전에 나가지 않는다.
+        let primed = harness.requests(path: "/rest/v1/profiles", method: "GET").filter { $0.queryValue("select") == "character" }
+        #expect(primed.count == 1, "로그인 직후 착용값 조회가 \(primed.count)번 나갔다(한 번이어야 한다)")
+        #expect(harness.requests(path: "/rest/v1/profiles", method: "GET").count == primed.count, "보이지 않는 나 탭이 머리(이름·사진)까지 물었다")
 
         store.tabDidAppear()
         #expect(await baseWaitUntil { store.headerState.hasLoaded && store.shopState.hasLoaded && store.equippedLoaded && store.recordsState.hasLoaded && store.feedbackReplyLatestAt != nil })

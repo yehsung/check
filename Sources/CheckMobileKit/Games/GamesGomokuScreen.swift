@@ -121,6 +121,14 @@ struct GamesGomokuLobby: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 summary
+                // 규칙 한 줄은 **머리가 아니라 첫 카드 아래**에 둔다 — 접힌 내비 부제는 밑으로 지나가는 파랑 [수락] 버튼 위에 얹혀
+                // 4.0:1 까지 떨어졌고, 가장자리를 끊어도 4.4:1 에 머물렀다(w15 검증 medium 5 · 실측). 바탕 위에서는 4.7:1 이다.
+                Text(GomokuPhoneText.subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(MobileTheme.label2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+                    .padding(.top, MobileTheme.space2)
                 if let notice = gomoku.notice {
                     InlineNotice(text: notice, kind: .warning)
                         .padding(.top, MobileTheme.rowSpacing)
@@ -139,10 +147,8 @@ struct GamesGomokuLobby: View {
             await gomoku.loadInbox()
         }
         .gamesDemoScrollAnchor(isDemo: store.context.isDemo)
+        // 로비 머리는 제목 하나다(부제는 첫 카드 아래로 내렸다 — 위 주석). 제목은 화면이 이미 `navigationTitle` 로 세웠다.
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                GamesNavTitle(title: GomokuPhoneText.title) { Text(GomokuPhoneText.subtitle) }
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 GamesGomokuRulesButton(store: gomoku)
             }

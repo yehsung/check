@@ -179,6 +179,8 @@ package enum GomokuPhoneText {
     package static let blackPassed = "흑이 둘 곳이 없어 차례가 백으로 넘어갔어요"
     package static let resign = "기권"
     package static let resignConfirm = "기권하면 건 루비를 잃어요"
+    /// 확인 시트 본문 — 되돌릴 수 없다는 것만 한 줄로.
+    package static let resignConfirmMessage = "지금 기권하면 이 판은 상대가 이겨요."
     package static let resignNow = "기권하기"
     package static let keepPlaying = "계속 두기"
 

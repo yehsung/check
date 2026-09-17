@@ -192,6 +192,8 @@ public final class MobileAppModel {
     private func sessionDidSignIn() {
         realtime.sessionDidSignIn()
         push.sessionDidSignIn()
+        // 착용 캐릭터 한 칸(`profiles.character`)만 미리 받는다 — 나 탭을 열기 전에도 지금·순위·게임·오목·탭 막대가 내 캐릭터로 선다.
+        me.primeEquippedCharacter()
         if isSceneActive {
             activateStores()
         }

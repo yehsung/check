@@ -200,8 +200,17 @@ struct MeStoreRaceTests {
 
     @Test("MU2 저장 중에 나간 착용 GET: 저장 중 도착하면 표시를 흔들지 않고 · 저장 뒤 도착해도 덮지 않는다")
     func equippedGetSentDuringSave() async throws {
+        // 로그인 직후 앱 컨테이너가 착용값을 한 번 미리 받는다(w15 수리) — 이 시나리오의 전제("착용값을 아직 모른다")를 만들려고
+        // **그 첫 번째만** 연결 실패로 돌려준다(오프라인 실행과 같은 자리). 그 뒤의 GET 은 fox 다.
+        let primeSpent = BaseLockedBox(false)
         let harness = await RankMeHarness(label: "fix-mu2") { request in
-            if Self.isEquippedGET(request) { return .json(#"[{"character":"fox"}]"#) }
+            if Self.isEquippedGET(request) {
+                var isPrime = false
+                primeSpent.mutate { spent in
+                    if !spent { isPrime = true; spent = true }
+                }
+                return isPrime ? .networkFailure() : .json(#"[{"character":"fox"}]"#)
+            }
             if request.rpcName == "set_character" {
                 let body = request.bodyText.contains("shiba") ? #"{"status":"ok","character":"shiba"}"# : #"{"status":"ok","character":"ghost"}"#
                 return .json(body)
@@ -211,6 +220,8 @@ struct MeStoreRaceTests {
         defer { harness.tearDown() }
         let store = harness.me
         // 착용값을 아직 모르는 채로(상점도 안 읽음 → 막지 않는다) 고른다. 저장은 붙잡아 둔다.
+        #expect(await baseWaitUntil { primeSpent.get() }, "전제: 로그인 직후 미리 받기가 한 번 나갔다")
+        await harness.quiesceMe()
         #expect(!store.equippedLoaded)
         let save1 = BaseHold.rpc("set_character", host: harness.host)
         store.chooseCharacter("shiba")

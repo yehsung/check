@@ -116,7 +116,7 @@ import Testing
         #expect(NowStore.widgetWorkState(card(working: false, stale: true)) == .off)
     }
 
-    @Test("착용 캐릭터: 모르는 동안은 파일의 지난 값을 지키고, 나 탭이 알아 오면 지금 탭이 스냅샷에 싣는다 · 지금 탭은 착용값을 묻지 않는다")
+    @Test("착용 캐릭터: 로그인 직후 한 번 받아 스냅샷에 싣는다(나 탭을 열기 전) · 지금 탭은 스스로 묻지 않는다")
     func equippedCharacterReachesSnapshot() async throws {
         let seed = WidgetSnapshot(generatedAt: MobileClock.demoInstant, characterID: "ghost")
         let h = NowHarness(seedSnapshot: seed)
@@ -124,17 +124,31 @@ import Testing
         h.server.override("profiles", .json(#"[{"character":"fox"}]"#))
         await h.launch()
         await h.activate()
-        let first = try #require(h.model.widgetSnapshots.current)
-        #expect(first.characterID == "ghost", "나 탭이 모르는 동안 지난 착용값을 지웠다")
-        #expect(first.me?.resolvedStatus == .working)
-        #expect(h.requests("profiles").isEmpty, "지금 탭이 착용값을 따로 물었다(새 서버 호출 금지)")
-
-        await h.model.me.loadEquippedCharacter()
+        // w15 수리(검증 medium 3): 나 탭을 한 번도 열지 않아도 지금·순위·게임·탭 막대가 내 캐릭터로 선다.
+        // 그 한 칸(`profiles?select=character`)은 앱 컨테이너가 로그인 직후 받는다 — 지금 탭은 여전히 스스로 묻지 않는다.
+        #expect(h.requests("profiles").count == 1, "착용값 조회가 \(h.requests("profiles").count)번 나갔다(로그인 직후 한 번이어야 한다)")
         #expect(h.model.me.equippedCharacterID == "fox")
+        #expect(h.model.now.displayedCharacterID == "fox", "지금 탭 초상이 착용값을 따라가지 않는다")
         let arrived = await baseWaitUntil { h.model.widgetSnapshots.current?.characterID == "fox" }
         #expect(arrived, "착용값이 스냅샷에 닿지 않았다")
+        #expect(h.model.widgetSnapshots.current?.me?.resolvedStatus == .working)
         #expect(WidgetSnapshotCodec.read(from: h.storage.widgetSnapshotURL)?.resolvedCharacterID == "fox", "파일에도 같은 값")
         #expect(h.violations.isEmpty, "\(h.violations)")
+    }
+
+    @Test("착용 캐릭터: 로그인 직후 조회가 실패하면 파일의 지난 값을 지킨다(아잉으로 단정하지 않는다)")
+    func equippedCharacterKeepsLastKnownWhenPrimeFails() async throws {
+        let seed = WidgetSnapshot(generatedAt: MobileClock.demoInstant, characterID: "ghost")
+        let h = NowHarness(seedSnapshot: seed)
+        defer { h.tearDown() }
+        h.server.override("profiles", .networkFailure())
+        await h.launch()
+        await h.activate()
+        #expect(h.model.me.equippedLoadFailed, "전제: 미리 받기가 실패로 끝났다")
+        #expect(!h.model.me.equippedLoaded)
+        let current = try #require(h.model.widgetSnapshots.current)
+        #expect(current.characterID == "ghost", "모르는 동안 지난 착용값을 지웠다")
+        #expect(h.model.now.displayedCharacterID == "ghost", "지금 탭이 지난 값 대신 아잉으로 섰다")
     }
 
     @Test("판 없음·0 판·JSON 아님은 nil(위젯은 로그아웃 화면)")

@@ -239,6 +239,15 @@ package final class MeStore {
         launch { [weak self] in await self?.loadFeedbackReplyLatest() }
     }
 
+    /// **로그인 직후 한 번** 착용 캐릭터만 미리 받는다(`profiles.character` GET 하나 — 상점·기록은 건드리지 않는다).
+    ///
+    /// 나 탭을 아직 열지 않은 상태(설치 직후 · 로그아웃 후 재로그인 — 세션 스토어가 위젯 스냅숏을 지운다)에서는 지금·순위·게임·오목이
+    /// 전부 아잉으로 서서 "나 = 착용 캐릭터"(§0)가 깨졌다(w15 검증 medium 3). 이미 알고 있으면 아무것도 하지 않는다.
+    package func primeEquippedCharacter() {
+        guard context.session.isSignedIn, !equippedLoaded else { return }
+        launch { [weak self] in await self?.loadEquippedCharacter() }
+    }
+
     /// 당겨서 새로고침(루트): 신선도와 무관하게 전부.
     package func refreshRoot() async {
         guard context.session.isSignedIn else { return }

@@ -23,7 +23,6 @@ package struct AingButtonStyle: ButtonStyle {
     private let size: AingButtonMetrics.Size
     private let fillsWidth: Bool
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.colorScheme) private var colorScheme
 
     package init(_ kind: Kind = .filled, size: AingButtonMetrics.Size = .lg, fillsWidth: Bool = false) {
         self.kind = kind
@@ -32,17 +31,20 @@ package struct AingButtonStyle: ButtonStyle {
     }
 
     package func makeBody(configuration: Configuration) -> some View {
-        let darkDisabled = !isEnabled && colorScheme == .dark && kind != .plain
+        // 비활성은 **라이트·다크 모두** 회색 판(fill2) + 보조 글자(label2)다 — 흐리게만 하면 라이트에서 옅은 파랑 판 위 흰 글자가 되어
+        // 1.1~1.3:1 로 사실상 안 보였다(w15 검증 medium 2: 제보 '보내기' 1.26 · 판돈 시트 1.30 · 상점 '사기' 1.12).
+        // fill2 위 label2 는 카드 위 4.7:1 · 바탕 위 4.5:1 이고, 켜진 버튼과 색이 갈려 "켜진 것처럼 보인다"(비평 7)도 함께 풀린다.
+        let disabledFill = !isEnabled && kind != .plain
         configuration.label
             .font(font)
             .lineLimit(2)
             .multilineTextAlignment(.center)
-            .foregroundStyle(darkDisabled ? MobileTheme.label2 : foreground)
+            .foregroundStyle(disabledFill ? MobileTheme.label2 : foreground)
             .padding(.horizontal, size.horizontalPadding)
             .padding(.vertical, 4)
             .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: size.height)
-            .background(Capsule().fill(darkDisabled ? MobileTheme.fill2 : background))
-            .opacity(isEnabled || darkDisabled ? (configuration.isPressed ? 0.75 : 1) : AingButtonMetrics.disabledOpacity)
+            .background(Capsule().fill(disabledFill ? MobileTheme.fill2 : background))
+            .opacity(isEnabled || disabledFill ? (configuration.isPressed ? 0.75 : 1) : AingButtonMetrics.disabledOpacity)
             .frame(minHeight: AingButtonMetrics.targetHeight(for: size))
             .contentShape(Rectangle())
     }

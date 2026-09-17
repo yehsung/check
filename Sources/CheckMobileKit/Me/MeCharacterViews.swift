@@ -110,7 +110,8 @@ struct MeShopView: View {
         return Button {
             store.selectShopItem(id)
         } label: {
-            MeCharacterTile(id: id, name: name, status: status, isSelected: picked, isLocked: false)
+            // 상점의 표시는 '고름'(틴트 바탕)이고, 체크 + 테두리는 착용 중에만 — 두 뜻이 같은 모양이면 안 된다.
+            MeCharacterTile(id: id, name: name, status: status, mark: equipped ? .equipped : (picked ? .picked : .none))
         }
         .buttonStyle(.plain)
         .disabled(store.purchasingID != nil)
@@ -361,7 +362,7 @@ struct MeCharacterPickerView: View {
         return Button {
             store.chooseCharacter(id)
         } label: {
-            MeCharacterTile(id: id, name: name, status: status, isSelected: isOn, isLocked: !unlocked)
+            MeCharacterTile(id: id, name: name, status: status, mark: isOn ? .equipped : .none)
         }
         .buttonStyle(.plain)
         .disabled(store.savingCharacterID != nil)
@@ -372,8 +373,15 @@ struct MeCharacterPickerView: View {
 
 // MARK: - 타일(상점 · 고르기 공용)
 
-/// 캐릭터 타일: 받침(surface2) 위 그림 · 이름 · 상태 한 줄(착용 중 파랑 · 보유 회색 · 가격 `RubyPrice`). 선택 = 파랑 테두리 + 체크.
-/// 잠김(고르기에서 안 가진 것)은 그림만 같은 정도로 흐리게(채도를 덜고 반투명 — 흰 유령이 바탕에 녹아 사라지지 않을 만큼, w14 비평 27).
+/// 캐릭터 타일: 받침(surface2) 위 그림 · 이름 · 상태 한 줄(착용 중 파랑 · 보유 회색 · 가격 `RubyPrice`).
+///
+/// **표시 둘은 뜻이 다르니 모양도 다르다**(w15 검증 medium 7 — 상점의 '사려고 고른 것'과 고르기의 '착용 중'이 똑같이 파랑 테두리 +
+/// 파랑 체크라 비평 26 의 뜻 겹침이 자리만 옮겨 남아 있었다):
+/// - `.equipped` 지금 입은 것 — 파랑 2pt 테두리 + 파랑 체크 배지(두 화면 같다).
+/// - `.picked` 상점에서 사려고 고른 것 — 파랑 틴트 바탕 + 파랑 이름(테두리·체크 없음). 아래 구매 막대가 이름·가격을 다시 말한다.
+///
+/// 그림은 **두 화면에서 똑같이** 원색으로 그린다. 고르기에서만 안 가진 캐릭터를 흐리게 그리던 것을 걷었다 — 같은 데이터가 화면마다
+/// 다르게 보였고(비평 5), 안 가진 것은 상태 줄의 `RubyPrice`(가격)가 두 화면에서 똑같이 말한다.
 struct MeCharacterTile: View {
     enum Status: Equatable {
         case equipped
@@ -384,11 +392,19 @@ struct MeCharacterTile: View {
         case none
     }
 
+    /// 타일에 얹는 표시. 뜻이 다르면 모양도 다르다.
+    enum Mark: Equatable {
+        case none
+        /// 상점에서 사려고 고른 것(파랑 틴트 바탕 · 파랑 이름).
+        case picked
+        /// 지금 입고 있는 것(파랑 테두리 + 체크).
+        case equipped
+    }
+
     let id: String
     let name: String
     let status: Status
-    let isSelected: Bool
-    let isLocked: Bool
+    let mark: Mark
 
     /// 두 화면 같은 순서: 가진 것 먼저(아잉 → 나머지는 받은 순서), 그다음 안 가진 것(받은 순서). 안정 정렬.
     static func ordered(_ ids: [String], isOwned: (String) -> Bool) -> [String] {
@@ -412,16 +428,15 @@ struct MeCharacterTile: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
+        let shape = RoundedRectangle(cornerRadius: MobileTheme.tileRadius, style: .continuous)
+        return VStack(spacing: 6) {
             MeCharacterArt(id: id, size: 76)
-                .saturation(isLocked ? 0.35 : 1)
-                .opacity(isLocked ? 0.7 : 1)
                 .frame(maxWidth: .infinity)
                 .frame(height: 88)
                 .background(RoundedRectangle(cornerRadius: MobileTheme.innerRadius, style: .continuous).fill(MobileTheme.surface2))
             Text(name)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(MobileTheme.label)
+                .foregroundStyle(mark == .picked ? MobileTheme.accent : MobileTheme.label)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             statusLine
@@ -429,15 +444,19 @@ struct MeCharacterTile: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: MobileTheme.tileRadius, style: .continuous).fill(MobileTheme.surface))
+        .background {
+            ZStack {
+                shape.fill(MobileTheme.surface)
+                if mark == .picked { shape.fill(MobileTheme.accentTint) }
+            }
+        }
         .overlay {
-            if isSelected {
-                RoundedRectangle(cornerRadius: MobileTheme.tileRadius, style: .continuous)
-                    .strokeBorder(MobileTheme.accent, lineWidth: 2)
+            if mark == .equipped {
+                shape.strokeBorder(MobileTheme.accent, lineWidth: 2)
             }
         }
         .overlay(alignment: .topTrailing) {
-            if isSelected {
+            if mark == .equipped {
                 Image(systemName: "checkmark")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(MobileTheme.onAccentFill)
@@ -448,7 +467,7 @@ struct MeCharacterTile: View {
                     .accessibilityHidden(true)
             }
         }
-        .contentShape(RoundedRectangle(cornerRadius: MobileTheme.tileRadius, style: .continuous))
+        .contentShape(shape)
     }
 
     @ViewBuilder

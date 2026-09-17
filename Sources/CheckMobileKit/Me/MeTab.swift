@@ -4,7 +4,7 @@ import CheckMobileShared
 import SwiftUI
 
 /// 나 탭 화면(SPEC-ios §3.6 · w15 재디자인). 루트: **무대**(착용 캐릭터 · 이름 · 팀 · 센터 · 큰 루비 칩 · 근무 상태 · [캐릭터 바꾸기][상점])
-/// → **기록**(회고 한 줄 + 12주 근무 · AI 토큰 잔디가 스크롤 없이 한눈에) → 프로필 · 제보 · 설정 그룹 → 지난주 근무 리듬.
+/// → **기록**(회고 한 줄 + 12주 근무 · AI 토큰 잔디가 스크롤 없이 한눈에 + 지난주 근무 리듬) → 프로필 · 제보 · 설정 그룹.
 /// 하위 화면은 `MeDestination` 을 `router.pathBinding(for: .me)` 에 쌓는다. 딥링크 `me` · `me/shop` · `me/settings` · `feedback[/<id>]`.
 struct MeTab: View {
     let store: MeStore
@@ -54,10 +54,12 @@ struct MeHomeView: View {
                         .id(MeAnchor.header)
                     MeRecordsCard(store: store)
                         .id(MeAnchor.records)
-                    MeMenuGroup(store: store)
-                        .id(MeAnchor.menu)
+                    // 기록(회고·잔디 둘·근무 리듬)이 먼저, 메뉴 그룹이 마지막이다 — 설정 메뉴 **아래** 내용 카드가 한 장 더 있는 배치는
+                    // 명세 §3-1 E 순서와도, iOS 관용과도 어긋났다(w15 검증 낮음 2).
                     MeRhythmCard(store: store)
                         .id(MeAnchor.rhythm)
+                    MeMenuGroup(store: store)
+                        .id(MeAnchor.menu)
                 }
                 .padding(.horizontal, MobileTheme.sideMargin)
                 .padding(.top, MobileTheme.space1)

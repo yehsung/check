@@ -24,15 +24,24 @@ struct GamesGomokuChatDrawer: View {
     private var isOverflowing: Bool { length > store.chatMaxLength }
     private var showsCounter: Bool { Double(length) >= Double(store.chatMaxLength) * GomokuPhoneText.chatCounterFromRatio }
 
+    /// 접근성 글자 크기 + 접힘 = **머리 한 줄만**. 최근 말·빠른 문구까지 그리면 서랍이 판과 '내 차례 · 남은 초' 카드를 통째로 덮었다
+    /// (w15 검증 medium 6 — AX 실측: 초록 테두리 카드의 윗선만 남았다). 대국에서 가장 중요한 상태가 가려지는 것보다, 말하려면 한 번 펴는 쪽이 낫다.
+    private var isCompact: Bool { typeSize.isAccessibilitySize && !isExpanded }
+
+    /// 접힌 서랍에 남기는 최근 말 수 — 글자가 커질수록 줄인다(XL 이상은 한 줄).
+    private var collapsedLogCount: Int { typeSize >= .xxLarge ? 1 : 2 }
+
     var body: some View {
         let shape = UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
             grabber
             header
-            log
-                .padding(.top, 4)
-            quickPhrases
-                .padding(.top, 6)
+            if !isCompact {
+                log
+                    .padding(.top, 4)
+                quickPhrases
+                    .padding(.top, 6)
+            }
             statusLines
             if isExpanded {
                 composer
@@ -88,6 +97,8 @@ struct GamesGomokuChatDrawer: View {
             .accessibilityAddTraits(.isHeader)
             .accessibilityHint(isExpanded ? GomokuPhoneText.chatClose : GomokuPhoneText.chatOpen)
             Spacer(minLength: 8)
+            // 접혀서 빠른 문구 줄이 없는 동안에도 쓰는 길은 한 번에 — 머리 안으로 들인다.
+            if isCompact { keyboardButton }
             Button {
                 store.setChatMuted(!store.isMuted)
             } label: {
@@ -138,9 +149,9 @@ struct GamesGomokuChatDrawer: View {
                 }
             }
         } else {
-            // 접힘: 최근 둘만(판을 가리지 않는 높이).
+            // 접힘: 최근 둘만(판을 가리지 않는 높이) · 글자가 크면 하나만.
             VStack(alignment: .leading, spacing: 4) {
-                ForEach(store.chat.suffix(typeSize.isAccessibilitySize ? 1 : 2)) { message in
+                ForEach(store.chat.suffix(collapsedLogCount)) { message in
                     GamesGomokuChatBubble(message: message)
                 }
             }

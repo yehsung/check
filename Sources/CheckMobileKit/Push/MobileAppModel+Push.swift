@@ -44,21 +44,23 @@ extension MobileAppModel {
 }
 
 /// 데모 · 시뮬레이터 확인용 알림 본문(서버 트리거가 만드는 모양 그대로 — SPEC-wave1 §1.5). 이름은 지어낸 값.
+/// id 는 탭 데모 픽스처에 **실제로 있는 값**이다(통합 w4/int): 누르면 열리는 화면이 빈 자리("대화" 머리 · 없는 신청 · 없는 제보)가
+/// 아니라 그 대화(한결 · 메시지 픽스처) · 그 신청(솜사탕 · 오목 받은함) · 답장 달린 제보(나 탭 제보 목록)로 선다.
 package enum PushDemo {
-    package static let peerID = "d0000000-0000-4000-8000-000000000002"
-    package static let messageID = "d0000000-0000-4000-8000-00000000a001"
-    package static let matchID = "d0000000-0000-4000-8000-00000000b001"
-    package static let reportID = "d0000000-0000-4000-8000-00000000c001"
+    package static let peerID = "d0000000-0000-4000-8000-0000000000b1"
+    package static let messageID = "d0000000-0000-4000-8000-00000000e00a"
+    package static let matchID = "d0000000-0000-4000-8000-00000000a0a1"
+    package static let reportID = "d0000000-0000-4000-8000-00000000fb02"
 
     package static func payloadJSON(_ kind: PushKind) -> Data {
         let text: String
         switch kind {
         case .message:
-            text = #"{"aps":{"alert":{"title":"하늘","body":"점심 뭐 먹을래요?"},"sound":"default","category":"MESSAGE","thread-id":"message-\#(peerID)"},"type":"message","peer_id":"\#(peerID)","message_id":"\#(messageID)"}"#
+            text = #"{"aps":{"alert":{"title":"한결","body":"오후에 디자인 리뷰 10분만 가능할까요?"},"sound":"default","category":"MESSAGE","thread-id":"message-\#(peerID)"},"type":"message","peer_id":"\#(peerID)","message_id":"\#(messageID)"}"#
         case .gomokuInvite:
-            text = #"{"aps":{"alert":{"title":"오목 신청","body":"하늘님이 오목 대결을 신청했어요 · 루비 5"},"sound":"default","category":"GOMOKU_INVITE","thread-id":"gomoku"},"type":"gomoku_invite","match_id":"\#(matchID)"}"#
+            text = #"{"aps":{"alert":{"title":"오목 신청","body":"솜사탕님이 오목 대결을 신청했어요 · 루비 5"},"sound":"default","category":"GOMOKU_INVITE","thread-id":"gomoku"},"type":"gomoku_invite","match_id":"\#(matchID)"}"#
         case .feedbackReply:
-            text = #"{"aps":{"alert":{"title":"제보에 답장이 왔어요","body":"알려 주셔서 고마워요. 다음 버전에서 고칠게요."},"sound":"default","category":"FEEDBACK_REPLY"},"type":"feedback_reply","report_id":"\#(reportID)"}"#
+            text = #"{"aps":{"alert":{"title":"제보에 답장이 왔어요","body":"알려 주셔서 고마워요! 원인을 찾았고 다음 버전에서 고칠게요."},"sound":"default","category":"FEEDBACK_REPLY"},"type":"feedback_reply","report_id":"\#(reportID)"}"#
         }
         return Data(text.utf8)
     }

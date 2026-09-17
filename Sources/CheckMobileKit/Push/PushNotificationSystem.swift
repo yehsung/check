@@ -28,12 +28,12 @@ package protocol PushNotificationSystem: AnyObject {
     func dismissPermissionPrimer()
 }
 
-/// 메시지 탭 스토어가 푸시 도착을 받는 진입점(SPEC-ios-build D4 `didReceiveMessagePush(peerID:)` — w4/messages 의 서명 `String?`).
+/// 메시지 탭 스토어가 푸시 도착을 받는 진입점(SPEC-ios-build D4 `didReceiveMessagePush(peerID:)` — 서명 `String?`).
 ///
-/// **기본 구현을 두지 않는다**(push-verify 발견 1). 예전에는 no-op 기본 구현이 있어서 D4 의 서명(`String?`)이 요구(`String`)와 달라도
-/// 조용히 컴파일됐고, 푸시 경로는 기본 구현을 불러 메시지 새로고침이 통째로 사라졌다(D4 자기 테스트의 `String` 인자 호출까지 그리로 갔다).
-/// 이제 서명이 어긋나면 **컴파일 오류**로 드러난다. D4 가 병합되기 전 이 브랜치에서는 `PushTabEntryPointStandIns.swift` 의 대역이 자리
-/// 스토어에 문을 붙이고, 병합하면 그 대역이 '재선언' 오류를 내어 지우게 만든다(절차는 그 파일 머리 주석).
+/// **기본 구현을 두지 않는다**(push-verify 발견 1). 예전에는 no-op 기본 구현이 있어서 탭 쪽 서명이 요구와 한 글자만 달라도 조용히
+/// 컴파일됐고, 푸시 경로는 기본 구현을 불러 메시지 새로고침이 통째로 사라졌다. 이제 서명이 어긋나면 **컴파일 오류**로 드러난다.
+/// 병합 전 대역(`PushTabEntryPointStandIns.swift`)은 통합(w4/int)에서 지웠다 — 증인은 언제나 실제 스토어의 문이고,
+/// `PushMergeContractTests` 가 실제 스토어로 요청까지 잰다.
 /// 접근 수준을 internal 로 둔 이유: 스토어 쪽 메서드가 internal 이든 package 든 증인이 될 수 있게.
 @MainActor
 protocol PushMessageRefreshing: AnyObject {
@@ -45,11 +45,6 @@ protocol PushMessageRefreshing: AnyObject {
 protocol PushFeedbackRefreshing: AnyObject {
     func didReceiveFeedbackReplyPush(reportID: String?)
 }
-
-/// 병합 대역 표지. `PushTabEntryPointStandIns.swift` 의 대역이 붙은 스토어만 적합한다 — 병합 계약 테스트가 "대역이 남은 채 탭 스토어가
-/// 들어왔는가"를 가르는 데 쓴다. 대역 파일을 지워도 이 표지는 남는다(테스트가 계속 컴파일되게).
-@MainActor
-protocol PushTabEntryPointStandIn: AnyObject {}
 
 extension MessagesStore: PushMessageRefreshing {}
 extension MeStore: PushFeedbackRefreshing {}

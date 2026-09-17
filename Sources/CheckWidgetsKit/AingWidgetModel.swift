@@ -218,12 +218,10 @@ package enum AingWidgetTimelinePlan {
 // MARK: - 설정
 
 package enum AingWidgetConfig {
-    /// anon 키. 위젯 확장 번들에는 `CheckConfig.plist` 가 없다(앱 타깃 빌드 단계가 앱 번들에만 만든다) — 확장을 담은 앱 번들
-    /// (`AingCheck.app/PlugIns/AingCheckWidgets.appex` 의 두 단계 위)에서 읽는다.
+    /// anon 키 — 위젯 확장 **자기 번들**의 `CheckConfig.plist`(ios/project.yml 의 위젯 타깃 생성 단계가 앱과 같은 키로 만든다).
+    /// 예전에는 확장 번들에 파일이 없어 앱 번들(PlugIns 두 단계 위)을 거슬러 읽었다 — 통합(w4/int)에서 확장도 파일을 싣게 하고 우회를 걷어냈다.
+    /// 없으면 nil(키 없는 빌드 — 인텐트는 파일에만 남기고 앱이 active 때 올린다).
     package static func anonKey(bundle: Bundle = .main) -> String? {
-        if let key = SupabaseConfig.anonKey(environment: [:], bundle: bundle) { return key }
-        let appURL = bundle.bundleURL.deletingLastPathComponent().deletingLastPathComponent()
-        guard appURL.pathExtension == "app", let app = Bundle(url: appURL) else { return nil }
-        return SupabaseConfig.anonKey(environment: [:], bundle: app)
+        SupabaseConfig.anonKey(environment: [:], bundle: bundle)
     }
 }

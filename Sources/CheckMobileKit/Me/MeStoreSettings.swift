@@ -2,8 +2,8 @@ import CheckCore
 import CheckMobileShared
 import Foundation
 
-/// 설정: 공개 설정 2개(`profiles` 자기 행 PATCH — token_usage_public · minigame_public) · 알림(시스템 권한 상태 + 종류별 3토글 →
-/// 세션의 `savePushPrefs` = `set_push_prefs`) · 팀 코드(`my_team_invite_code`) · 로그아웃(세션) · 버전.
+/// 설정: 공개 설정 2개(`profiles` 자기 행 PATCH — token_usage_public · minigame_public) · 알림(**푸시 코디네이터 공개 API 하나** —
+/// 시스템 권한 상태 · 권한 요청 · 종류별 3토글 → 직렬화된 `set_push_prefs`) · 팀 코드(`my_team_invite_code`) · 로그아웃(세션) · 버전.
 ///
 /// 공개 토글은 맥과 같은 **낙관 반영 → 실패 시 원복**이다. 공개 설정 GET 에 딸려 오는 `focus_mode` 는 읽고 버린다(폰은 집중 모드를
 /// 바꾸지 않는다 — R9 의 PATCH 경로가 여기에 없다).
@@ -15,7 +15,7 @@ extension MeStore {
 
     package func settingsDidDisappear() {
         settingsNotice = nil
-        pushPrefsNotice = nil
+        context.links.push?.prefsNotice = nil
     }
 
     /// 공개 설정 두 칸 + 팀 코드. 셋은 독립 실패다.
@@ -156,43 +156,9 @@ extension MeStore {
 
     // MARK: 알림
 
-    /// iOS 어댑터(설정 화면)가 `UNUserNotificationCenter` 에서 읽은 권한 상태를 넣는다.
-    package func updatePushAuthorization(_ status: MePushAuthorization) {
-        if pushAuthorization != status { pushAuthorization = status }
-    }
-
-    /// 화면에 그릴 종류별 값. 저장 중이면 낙관값, 아니면 세션이 아는 서버값(register_device · set_push_prefs 응답). 모르면 nil.
-    package var displayedPushPrefs: PushPrefs? {
-        pushPrefsPending ?? context.session.pushPrefs
-    }
-
-    package var isSavingPushPrefs: Bool { pushPrefsPending != nil }
-
-    /// 종류별 알림 한 칸 바꾸기. **서버값을 모르면 바꾸지 않는다** — 세 칸을 통째로 보내는 RPC 라, 모르는 칸을 기본값으로 채워 보내면
-    /// 다른 기기에서 끈 알림을 되살린다. 저장이 끝날 때까지 다음 토글은 막는다(뷰가 비활성).
-    package func setPushPref(_ keyPath: WritableKeyPath<PushPrefs, Bool>, to value: Bool) {
-        guard context.session.isSignedIn, pushPrefsPending == nil, var next = context.session.pushPrefs else { return }
-        guard next[keyPath: keyPath] != value else { return }
-        next[keyPath: keyPath] = value
-        pushPrefsPending = next
-        pushPrefsNotice = nil
-        let generation = context.generation
-        let session = context.session
-        launch { [weak self] in
-            guard let self else { return }
-            do {
-                let saved = try await session.savePushPrefs(next)
-                guard generation == self.context.generation else { return }
-                if saved == nil { self.pushPrefsNotice = MeText.pushPrefsSaveFailed }
-            } catch {
-                guard generation == self.context.generation else { return }
-                if AuthErrorRules.classify(error) != .cancelled {
-                    self.pushPrefsNotice = MeText.pushPrefsSaveFailed
-                }
-            }
-            self.pushPrefsPending = nil
-        }
-    }
+    /// 알림 설정의 유일한 구현(푸시 코디네이터). 권한 상태 · 권한 요청 · 종류별 저장(직렬) · 저장 실패 문구를 모두 거기서 읽고 부른다 —
+    /// 나 탭은 따로 저장하지 않는다(예전 `session.savePushPrefs` 직접 저장은 통합에서 걷어냈다). 앱 모델이 만든 뒤에만 채워진다.
+    package var push: PushCoordinator? { context.links.push }
 
     // MARK: 계정
 

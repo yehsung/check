@@ -25,8 +25,10 @@ import Observation
 ///    - 앱이 앞: 서버 확인(`message_unread_summary`) 한 번이 지나면 탭 배지 합(`context.links.badges.appBadgeTotal`)을 관찰해 적는다.
 ///    - 앱이 뒤(알림 액션): 액션 끝에 요약 · 오목 받은함을 직접 읽어 합을 적는다(끝날 때까지 기다린다 — 시스템이 곧 앱을 재운다).
 ///    - 로그아웃(확정된 `.signedOut`) · 치명 만료: 0.
-/// 5. **알림 설정 공개 API**(나 탭): `authorization` · `prefs` · `setPreference(_:enabled:)` · `enableNotifications()` ·
-///    `refreshAuthorization()` · `openSystemSettings()`. 설정 저장은 직렬이다(겹쳐 누르면 끝난 뒤 최신 값으로 한 번 더).
+/// 5. **알림 설정 공개 API**(나 탭 설정 화면이 쓰는 유일한 구현 — 통합 w4/int 에서 나 탭의 `session.savePushPrefs` 직접 저장을 걷어냈다):
+///    `authorization` · `authorizationText` · `prefs` · `knowsPrefs` · `isEnabled(_:)` · `isSavingPrefs` · `prefsNotice` ·
+///    `setPreference(_:enabled:)` · `enableNotifications()`(권한 요청 진입점) · `refreshAuthorization()` · `openSystemSettings()`.
+///    설정 저장은 직렬이다(겹쳐 누르면 끝난 뒤 최신 값으로 한 번 더). 서버값을 모르면 보내지 않는다(`knowsPrefs`).
 ///
 /// 폰 금지 호출 없음: 이 파일이 부르는 서버 함수는 send_message · mark_messages_read · message_history(_with_reads) ·
 /// message_unread_summary(배지 확인) · gomoku_respond · gomoku_inbox(오목 스토어 경유) · register_device/set_push_prefs(세션 경유)뿐이다.
@@ -307,6 +309,13 @@ package final class PushCoordinator {
         kind.isEnabled(in: prefs)
     }
 
+    /// 이 설치의 종류별 설정을 서버에서 받은 적이 있는가(register_device · set_push_prefs 응답, 또는 저장 중인 값).
+    /// **모르면 토글을 잠그고 `setPreference` 도 보내지 않는다** — set_push_prefs 는 세 칸을 통째로 보내므로, 모르는 칸을 기본값(전부 켜짐)으로
+    /// 채워 보내면 이 기기에서 꺼 둔 알림을 되살린다(나 탭 rankme 규칙을 한 구현으로 옮김).
+    package var knowsPrefs: Bool {
+        desiredPrefs != nil || context.session.pushPrefs != nil
+    }
+
     /// 권한 한 줄("켜짐" · "꺼짐 — 설정 앱에서 켤 수 있어요" …).
     package var authorizationText: String {
         switch authorization {
@@ -360,7 +369,7 @@ package final class PushCoordinator {
     /// - `isSavingPrefs` 는 보낼 것이 모두 끝났을 때만 내린다. 돌려주는 값은 마지막 저장의 성공 여부(함께 기다린 호출 모두 같은 값).
     @discardableResult
     package func setPreference(_ kind: PushKind, enabled: Bool) async -> Bool {
-        guard context.session.isSignedIn else { return false }
+        guard context.session.isSignedIn, knowsPrefs else { return false }
         desiredPrefs = kind.setting(enabled, in: prefs)
         if !isSavingPrefs { isSavingPrefs = true }
         prefsNotice = nil
@@ -458,7 +467,7 @@ package final class PushCoordinator {
         deliverMessagePush(messages, peerID: peerID)
     }
 
-    /// 요구 서명(`PushMessageRefreshing`)으로 부른다 — 기본 구현이 없으니 증인은 언제나 스토어의 문이다(D4 병합 전에는 대역).
+    /// 요구 서명(`PushMessageRefreshing`)으로 부른다 — 기본 구현이 없으니 증인은 언제나 메시지 탭 스토어의 문이다.
     private func deliverMessagePush<Store: PushMessageRefreshing>(_ store: Store, peerID: String) {
         store.didReceiveMessagePush(peerID: peerID)
     }

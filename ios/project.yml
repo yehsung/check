@@ -123,6 +123,10 @@ targets:
       # 서명(CodeSign)은 이 단계 뒤라 번들 봉인이 깨지지 않는다. 검사: ios/scripts/check-release-app.sh <AingCheck.app>.
       - name: Release 번들에서 데모 픽스처 빼기
         basedOnDependencyAnalysis: false
+        # 통합(w4/int): 앱 안으로 복사된 패키지 리소스 번들을 **입력**으로 선언해 복사 뒤에 돌게 한다. 입력이 없을 때는 같은 derivedData
+        # 증분 Release 에서 이 단계가 번들 복사보다 먼저 돌아 픽스처가 남았다(games 보고 · 통합에서 재현: 로그상 스크립트 → Copy 순).
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/check_CheckMobileKit.bundle
         outputFiles:
           - $(TARGET_BUILD_DIR)/$(WRAPPER_NAME)/check_CheckMobileKit.bundle/Fixtures
         script: |
@@ -142,6 +146,11 @@ targets:
     platform: iOS
     sources:
       - path: Widgets
+    # 위젯 확장도 자기 번들에 CheckConfig.plist 를 싣는다(통합 w4/int — 지금 탭 base_request 4). 확장이 앱 번들(PlugIns 두 단계 위)을
+    # 거슬러 읽는 우회는 걷어냈다: 샌드박스에서 되는지 보장이 없고, 확장 번들만으로 anon 키를 찾는 것이 맞다. 키 원천은 앱과 같은 xcconfig.
+    configFiles:
+      Debug: Config/AingCheck.xcconfig
+      Release: Config/AingCheck.xcconfig
     dependencies:
       - package: check
         product: CheckWidgetsKit
@@ -167,3 +176,20 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.yehsung.aingcheck.widgets
         PRODUCT_NAME: AingCheckWidgets
         TARGETED_DEVICE_FAMILY: "1"
+    postCompileScripts:
+      # 앱 타깃과 같은 생성 단계(키가 없으면 만들지 않는다 — 위젯은 체크를 파일에만 남기고 앱이 active 때 올린다). 키 값은 로그에 찍지 않는다.
+      - name: CheckConfig.plist
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/CheckConfig.plist
+        script: |
+          set -eu
+          OUT="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/CheckConfig.plist"
+          KEY="${CHECK_SUPABASE_ANON_KEY:-}"
+          if [ -z "$KEY" ]; then
+            rm -f "$OUT"
+            echo "warning: CHECK_SUPABASE_ANON_KEY 가 없어 위젯 CheckConfig.plist 를 만들지 않았다 — 위젯 체크는 앱이 active 때 올린다(ios/scripts/sync-local-config.sh)."
+            exit 0
+          fi
+          /usr/bin/plutil -create xml1 "$OUT"
+          /usr/bin/plutil -insert CHECK_SUPABASE_ANON_KEY -string "$KEY" "$OUT"

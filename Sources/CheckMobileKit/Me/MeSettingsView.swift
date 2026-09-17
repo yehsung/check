@@ -3,13 +3,11 @@ import CheckCore
 import CheckMobileShared
 import SwiftUI
 import UIKit
-import UserNotifications
 
-/// 설정: 공개 설정 · 알림(시스템 권한 + 종류별 3토글) · 팀 코드 공유 · 로그아웃 · 버전.
+/// 설정: 공개 설정 · 알림(푸시 코디네이터 — 시스템 권한 · 알림 켜기 · 종류별 3토글) · 팀 코드 공유 · 로그아웃 · 버전.
 struct MeSettingsView: View {
     let store: MeStore
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.openURL) private var openURL
     @State private var confirmingSignOut = false
 
     var body: some View {
@@ -96,62 +94,76 @@ struct MeSettingsView: View {
 
     // MARK: 알림
 
+    /// 알림: 권한 상태 · 권한 요청(알림 켜기) · 설정 앱 · 종류별 3토글 — 전부 푸시 코디네이터 공개 API(나 탭은 따로 저장하지 않는다).
+    /// 토글은 권한이 있고 서버값을 알 때만 켠다. 저장은 코디네이터가 직렬로 보내므로 저장 중에도 다른 토글을 누를 수 있다.
+    @ViewBuilder
     private var pushSection: some View {
-        let authorization = store.pushAuthorization
-        let prefs = store.displayedPushPrefs
-        let togglesEnabled = authorization.allowsDelivery && prefs != nil && !store.isSavingPushPrefs
-        return VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-            SectionHeader(MeText.pushSection)
-            AingCard {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: authorization.allowsDelivery ? "bell.badge.fill" : "bell.slash.fill")
-                        .foregroundStyle(authorization.allowsDelivery ? MobileTheme.working : MobileTheme.secondaryText)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(authorization.title)
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(MobileTheme.primaryText)
-                        if let detail = authorization.detail {
-                            Text(detail)
-                                .font(.footnote)
-                                .foregroundStyle(MobileTheme.secondaryText)
-                                .fixedSize(horizontal: false, vertical: true)
+        if let push = store.push {
+            let authorization = push.authorization
+            let togglesEnabled = authorization.allowsDelivery && push.knowsPrefs
+            VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
+                SectionHeader(MeText.pushSection)
+                AingCard {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: authorization.allowsDelivery ? "bell.badge.fill" : "bell.slash.fill")
+                            .foregroundStyle(authorization.allowsDelivery ? MobileTheme.working : MobileTheme.secondaryText)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(authorization.meTitle)
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(MobileTheme.primaryText)
+                            if let detail = authorization.meDetail {
+                                Text(detail)
+                                    .font(.footnote)
+                                    .foregroundStyle(MobileTheme.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        if push.isSavingPrefs {
+                            ProgressView()
+                                .accessibilityLabel(Text("알림 설정 저장 중"))
                         }
                     }
-                    Spacer(minLength: 0)
-                }
-                .accessibilityElement(children: .combine)
-                if authorization == .denied || authorization == .provisional {
-                    Button(MeText.openSystemSettings) {
-                        if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
+                    .accessibilityElement(children: .combine)
+                    switch authorization {
+                    case .notDetermined:
+                        Button {
+                            Task { await push.enableNotifications() }
+                        } label: {
+                            Label(PushText.settingsEnable, systemImage: "bell.badge")
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(AingPrimaryButtonStyle())
+                        .disabled(push.isRequestingAuthorization)
+                    case .denied, .provisional:
+                        Button(MeText.openSystemSettings) {
+                            push.openSystemSettings()
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(MobileTheme.accent)
+                        .frame(minHeight: 44)
+                    case .unknown, .authorized, .ephemeral:
+                        EmptyView()
                     }
-                    .buttonStyle(.bordered)
-                    .tint(MobileTheme.accent)
-                }
-                Divider().overlay(MobileTheme.separator)
-                toggleRow(
-                    title: MeText.pushMessageTitle,
-                    detail: MeText.pushMessageDetail,
-                    isOn: Binding(get: { prefs?.message ?? false }, set: { store.setPushPref(\.message, to: $0) }),
-                    enabled: togglesEnabled
-                )
-                toggleRow(
-                    title: MeText.pushGomokuTitle,
-                    detail: MeText.pushGomokuDetail,
-                    isOn: Binding(get: { prefs?.gomokuInvite ?? false }, set: { store.setPushPref(\.gomokuInvite, to: $0) }),
-                    enabled: togglesEnabled
-                )
-                toggleRow(
-                    title: MeText.pushFeedbackTitle,
-                    detail: MeText.pushFeedbackDetail,
-                    isOn: Binding(get: { prefs?.feedbackReply ?? false }, set: { store.setPushPref(\.feedbackReply, to: $0) }),
-                    enabled: togglesEnabled
-                )
-                if prefs == nil, authorization.allowsDelivery {
-                    InlineNotice(text: MeText.pushPrefsUnknown, kind: .info)
-                }
-                if let notice = store.pushPrefsNotice {
-                    InlineNotice(text: notice, kind: .error)
+                    Divider().overlay(MobileTheme.separator)
+                    ForEach(PushKind.allCases, id: \.self) { kind in
+                        toggleRow(
+                            title: kind.settingTitle,
+                            detail: MeText.pushDetail(kind),
+                            isOn: Binding(
+                                get: { push.isEnabled(kind) },
+                                set: { enabled in Task { await push.setPreference(kind, enabled: enabled) } }
+                            ),
+                            enabled: togglesEnabled
+                        )
+                    }
+                    if !push.knowsPrefs, authorization.allowsDelivery {
+                        InlineNotice(text: MeText.pushPrefsUnknown, kind: .info)
+                    }
+                    if let notice = push.prefsNotice {
+                        InlineNotice(text: notice, kind: .error)
+                    }
                 }
             }
         }
@@ -269,23 +281,10 @@ struct MeSettingsView: View {
         .disabled(!enabled)
     }
 
+    /// 권한 다시 읽기(표시 · 설정 앱에서 돌아왔을 때) — 코디네이터가 읽고, 받을 수 있으면 원격 등록까지 한다.
     private func refreshAuthorization() {
-        Task { store.updatePushAuthorization(await MePushPermission.current()) }
-    }
-}
-
-/// 시스템 알림 권한 읽기(읽기만 — 권한 **요청**은 푸시 코디네이터(D9)의 설명 시트가 한다).
-enum MePushPermission {
-    static func current() async -> MePushAuthorization {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        switch settings.authorizationStatus {
-        case .notDetermined: return .notDetermined
-        case .denied: return .denied
-        case .authorized: return .authorized
-        case .provisional: return .provisional
-        case .ephemeral: return .ephemeral
-        @unknown default: return .unknown
-        }
+        guard let push = store.push else { return }
+        Task { await push.refreshAuthorization() }
     }
 }
 #endif

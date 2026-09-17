@@ -109,6 +109,17 @@ extension MeStore {
         return at > seen
     }
 
+    /// 제보 답장 푸시가 왔다(푸시 코디네이터가 포그라운드 표시에서 부른다 — `PushFeedbackRefreshing`, 서명 `reportID: String?`).
+    /// 답장 시각을 다시 읽어 '새 답장' 표시를 세우고, 목록을 이미 읽었거나 보고 있으면 목록도 다시 읽는다(답장 본문이 곧바로 보이게).
+    /// 누르면 여는 것은 라우트(`.feedback(reportID:)`)가 한다 — 여기서는 화면을 바꾸지 않는다.
+    package func didReceiveFeedbackReplyPush(reportID: String?) {
+        guard context.session.isSignedIn else { return }
+        launch { [weak self] in await self?.loadFeedbackReplyLatest() }
+        if isFeedbackVisible || feedbackState.hasLoaded {
+            launch { [weak self] in await self?.loadFeedback() }
+        }
+    }
+
     package func feedbackDidAppear() {
         isFeedbackVisible = true
         guard context.session.isSignedIn else { return }

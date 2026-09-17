@@ -97,6 +97,11 @@ package final class GamesStore {
     /// 탭 배지: 만료 안 된 받은 오목 신청 수.
     package var badgeCount: Int { context.gomoku.pendingIncomingInvites.count }
 
+    /// 게임 탭이 보여 주는 루비 잔액 — **공유 미러**(`context.gomokuHost.rubyBalance`)를 먼저 읽는다(통합 w4/int).
+    /// 미러에는 두 쓰기가 모두 온다: 오목 응답 정산(코어 `applyRuby` 가 코어 값과 미러를 함께 적는다) · 나 탭 상점(`shop_state` · 구매 응답은
+    /// 미러만 적는다). 코어 값을 먼저 읽으면 나 탭에서 캐릭터를 산 뒤 다음 오목 조회 전까지 옛 잔액이 보였다. 미러를 모르면 코어 값.
+    package var rubyBalance: Int? { context.gomokuHost.rubyBalance ?? context.gomoku.rubyBalance }
+
     // MARK: 첫 화면
 
     /// 게임 탭 첫 화면이 보였다: 카드의 오늘 최고·순위 · 받은 신청.

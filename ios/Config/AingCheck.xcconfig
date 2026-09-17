@@ -1,6 +1,6 @@
-// aing-check iOS 앱 타깃 설정(D-base).
+// aing-check iOS 앱 · 위젯 확장 타깃 설정(D-base · 통합에서 위젯도 같은 파일을 쓴다).
 //
 // Supabase anon 키(CHECK_SUPABASE_ANON_KEY)는 커밋하지 않는다. `ios/scripts/sync-local-config.sh` 가 저장소 루트 `.env.local` 에서
-// 아래 Local.xcconfig(gitignore)를 만든다. 파일이 없으면 포함을 건너뛰고(#include?) 빌드 단계가 CheckConfig.plist 를 만들지 않는다
+// 아래 Local.xcconfig(gitignore)를 만든다. 파일이 없으면 포함을 건너뛰고(#include?) 두 타깃의 빌드 단계가 CheckConfig.plist 를 만들지 않는다
 // — 그 빌드는 데모 모드(-AingCheckDemo YES)로만 쓸 수 있다.
 #include? "Local.xcconfig"

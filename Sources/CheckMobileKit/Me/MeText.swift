@@ -308,14 +308,15 @@ package enum MeText {
     package static let privacyLoadFailed = "공개 설정을 불러오지 못했어요 — 연결을 확인하고 다시 시도해 주세요"
 
     package static let pushSection = "알림"
-    package static let pushMessageTitle = "메시지"
-    package static let pushMessageDetail = "누가 메시지를 보내면 알려 줘요."
-    package static let pushGomokuTitle = "오목 신청"
-    package static let pushGomokuDetail = "1:1 오목 대결 신청이 오면 알려 줘요."
-    package static let pushFeedbackTitle = "제보 답장"
-    package static let pushFeedbackDetail = "보낸 제보에 답장이 오면 알려 줘요."
+    /// 종류별 토글 아래 한 줄(제목은 `PushKind.settingTitle` — 설명 시트와 같은 이름).
+    package static func pushDetail(_ kind: PushKind) -> String {
+        switch kind {
+        case .message: return "누가 메시지를 보내면 알려 줘요."
+        case .gomokuInvite: return "1:1 오목 대결 신청이 오면 알려 줘요."
+        case .feedbackReply: return "보낸 제보에 답장이 오면 알려 줘요."
+        }
+    }
     package static let pushPrefsUnknown = "알림 종류 설정을 아직 못 읽었어요 — 잠시 뒤 다시 열어 주세요"
-    package static let pushPrefsSaveFailed = "알림 설정을 저장하지 못했어요 — 잠시 뒤 다시 시도해 주세요"
     package static let openSystemSettings = "설정 앱에서 켜기"
 
     package static let teamSection = "팀"
@@ -339,23 +340,9 @@ package enum MeText {
     }
 }
 
-/// 시스템 알림 권한(UNAuthorizationStatus 의 플랫폼 무관 거울 — iOS 어댑터가 채운다).
-package enum MePushAuthorization: Equatable, Sendable {
-    case unknown
-    case notDetermined
-    case denied
-    case authorized
-    case provisional
-    case ephemeral
-
-    package var allowsDelivery: Bool {
-        switch self {
-        case .authorized, .provisional, .ephemeral: return true
-        case .unknown, .notDetermined, .denied: return false
-        }
-    }
-
-    package var title: String {
+/// 설정 화면의 알림 권한 머리 줄(권한 값은 푸시 코디네이터 `authorization` — 나 탭이 따로 읽지 않는다).
+extension PushAuthorizationStatus {
+    package var meTitle: String {
         switch self {
         case .unknown: return "알림 권한 확인 중…"
         case .notDetermined: return "알림 허용을 아직 정하지 않았어요"
@@ -366,10 +353,10 @@ package enum MePushAuthorization: Equatable, Sendable {
         }
     }
 
-    package var detail: String? {
+    package var meDetail: String? {
         switch self {
         case .denied: return "설정 앱 › aing-check › 알림에서 켤 수 있어요."
-        case .notDetermined: return "로그인 뒤 알림 허용을 물어봐요. 허용하면 아래 종류별로 고를 수 있어요."
+        case .notDetermined: return "허용하면 아래 종류별로 고를 수 있어요."
         case .provisional: return "알림 센터에만 조용히 쌓여요. 설정 앱에서 배너로 바꿀 수 있어요."
         case .unknown, .authorized, .ephemeral: return nil
         }

@@ -182,7 +182,7 @@ struct GamesGomokuPlayerStrip: View {
                         .minimumScaleFactor(0.8)
                     if !isMe { CenterBadge(CenterLabel.serverValue(forDisplay: center)) }
                     if isMe {
-                        RubyLabel(store.context.gomoku.rubyBalance ?? store.context.gomokuHost.rubyBalance, style: .footnote)
+                        RubyLabel(store.rubyBalance, style: .footnote)
                     }
                 }
                 HStack(spacing: 6) {

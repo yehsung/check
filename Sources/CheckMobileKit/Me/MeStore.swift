@@ -106,10 +106,6 @@ package final class MeStore {
     package internal(set) var inviteCodeLoadFailed = false
     package internal(set) var isLoadingSettings = false
     package internal(set) var settingsNotice: String?
-    package internal(set) var pushAuthorization: MePushAuthorization = .unknown
-    /// 저장 중인 알림 종류 값(낙관 표시). nil 이면 세션이 아는 서버값을 그린다.
-    package internal(set) var pushPrefsPending: PushPrefs?
-    package internal(set) var pushPrefsNotice: String?
     package internal(set) var isSigningOut = false
 
     /// 루트 화면이 낡았다고 보는 초.
@@ -192,8 +188,6 @@ package final class MeStore {
         inviteCodeLoadFailed = false
         isLoadingSettings = false
         settingsNotice = nil
-        pushPrefsPending = nil
-        pushPrefsNotice = nil
         isSigningOut = false
         savingPrivacyKeys.removeAll()
     }

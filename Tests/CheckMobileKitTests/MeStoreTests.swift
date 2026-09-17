@@ -485,49 +485,63 @@ struct MeStoreTests {
         harness.expectNoForbiddenCalls()
     }
 
-    @Test("알림 종류: 서버값을 모르면 보내지 않는다 · 알면 세 칸을 통째로 set_push_prefs · 실패면 안내하고 서버값으로 돌아간다")
+    @Test("알림 종류(나 탭 → 푸시 코디네이터 공개 API 하나): 알면 세 칸을 통째로 set_push_prefs · 저장 중 누른 값은 직렬로 한 번 더 · 실패면 코디네이터 문구 · 나가면 문구 지움")
     func pushPrefs() async throws {
         let harness = await RankMeHarness(label: "me-push") { _ in nil }
         defer { harness.tearDown() }
         let store = harness.me
+        let push = try #require(store.push, "나 탭이 푸시 코디네이터를 못 본다")
+        #expect(push === harness.model.push)
         // 기본 register_device 응답이 {message:true, gomoku_invite:false, feedback_reply:true} 를 준다.
         #expect(await baseWaitUntil { harness.model.session.pushPrefs != nil })
-        store.updatePushAuthorization(.authorized)
-        #expect(store.displayedPushPrefs == PushPrefs(message: true, gomokuInvite: false, feedbackReply: true))
+        #expect(push.knowsPrefs)
+        #expect(push.prefs == PushPrefs(message: true, gomokuInvite: false, feedbackReply: true))
 
-        harness.enqueue("set_push_prefs", .json(#"{"status":"ok","push_prefs":{"message":true,"gomoku_invite":true,"feedback_reply":true}}"#))
-        store.setPushPref(\.gomokuInvite, to: true)
-        #expect(store.isSavingPushPrefs && store.displayedPushPrefs?.gomokuInvite == true)
-        store.setPushPref(\.message, to: false)
-        #expect(await baseWaitUntil { !store.isSavingPushPrefs })
-        #expect(harness.requests(rpc: "set_push_prefs").count == 1, "저장 중에 두 번째 토글이 나갔다")
-        let body = try #require(harness.requests(rpc: "set_push_prefs").first?.jsonBody["p_prefs"] as? [String: Bool])
-        #expect(body == ["message": true, "gomoku_invite": true, "feedback_reply": true])
-        #expect(harness.model.session.pushPrefs?.gomokuInvite == true)
+        harness.enqueue("set_push_prefs", .json(#"{"status":"ok","push_prefs":{"message":true,"gomoku_invite":true,"feedback_reply":true}}"#, delay: 0.2))
+        harness.enqueue("set_push_prefs", .json(#"{"status":"ok","push_prefs":{"message":false,"gomoku_invite":true,"feedback_reply":true}}"#))
+        let first = Task { await push.setPreference(.gomokuInvite, enabled: true) }
+        #expect(await baseWaitUntil { harness.requests(rpc: "set_push_prefs").count == 1 })
+        #expect(push.isSavingPrefs && push.isEnabled(.gomokuInvite))
+        let second = Task { await push.setPreference(.message, enabled: false) }
+        #expect(await baseWaitUntil { !push.isEnabled(.message) }, "저장 중에 누른 값이 보이지 않는다")
+        let firstSaved = await first.value
+        let secondSaved = await second.value
+        #expect(firstSaved && secondSaved)
+        #expect(!push.isSavingPrefs)
+        let bodies = harness.requests(rpc: "set_push_prefs").compactMap { $0.jsonBody["p_prefs"] as? [String: Bool] }
+        #expect(bodies == [
+            ["message": true, "gomoku_invite": true, "feedback_reply": true],
+            ["message": false, "gomoku_invite": true, "feedback_reply": true],
+        ], "저장이 겹치거나 둘째 저장이 최신 값을 싣지 않았다: \(bodies)")
+        #expect(harness.model.session.pushPrefs == PushPrefs(message: false, gomokuInvite: true, feedbackReply: true))
 
         harness.enqueue("set_push_prefs", .json(#"{"message":"boom"}"#, status: 500))
-        store.setPushPref(\.message, to: false)
-        #expect(await baseWaitUntil { !store.isSavingPushPrefs && store.pushPrefsNotice == MeText.pushPrefsSaveFailed })
-        #expect(store.displayedPushPrefs?.message == true, "실패했는데 꺼진 채로 보인다")
+        #expect(await push.setPreference(.message, enabled: true) == false)
+        #expect(push.prefsNotice == PushText.settingsSaveFailed)
+        #expect(!push.isEnabled(.message), "실패했는데 켜진 채로 보인다")
+        store.settingsDidDisappear()
+        #expect(push.prefsNotice == nil, "설정 화면을 떠났는데 저장 실패 문구가 남았다")
         harness.expectNoForbiddenCalls()
     }
 
-    @Test("알림 종류: register_device 가 종류 설정을 안 줬으면(모름) 토글이 아무것도 보내지 않는다")
+    @Test("알림 종류: register_device 가 종류 설정을 안 줬으면(모름) 코디네이터가 아무것도 보내지 않는다 · 토글 잠금 근거 knowsPrefs=false")
     func pushPrefsUnknownSendsNothing() async throws {
         let harness = await RankMeHarness(label: "me-push-unknown") { request in
             if request.rpcName == "register_device" { return .json(#"{"status":"ok","device_id":"dev-1"}"#) }
             return nil
         }
         defer { harness.tearDown() }
+        let push = try #require(harness.me.push)
         #expect(await baseWaitUntil { !harness.requests(rpc: "register_device").isEmpty })
         try await Task.sleep(for: .milliseconds(50))
         #expect(harness.model.session.pushPrefs == nil)
-        #expect(harness.me.displayedPushPrefs == nil)
-        harness.me.setPushPref(\.message, to: false)
-        harness.me.setPushPref(\.gomokuInvite, to: true)
+        #expect(!push.knowsPrefs)
+        #expect(await push.setPreference(.message, enabled: false) == false)
+        #expect(await push.setPreference(.gomokuInvite, enabled: true) == false)
         try await Task.sleep(for: .milliseconds(80))
         #expect(harness.requests(rpc: "set_push_prefs").isEmpty, "모르는 칸을 기본값으로 채워 보냈다")
-        #expect(!harness.me.isSavingPushPrefs)
+        #expect(!push.isSavingPrefs)
+        #expect(push.prefsNotice == nil)
     }
 
     @Test("로그아웃: 세션 로그아웃을 부르고 · 떠 있던 머리 응답은 버리고 · 나 탭 값이 전부 비워진다")

@@ -13,7 +13,8 @@ struct GamesGomokuStakeSheet: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var selected: GomokuStake?
 
-    private var balance: Int? { store.rubyBalance ?? store.host?.rubyBalance }
+    /// 공유 미러(나 탭 상점 구매도 적는다) 먼저 — `GamesStore.rubyBalance` 와 같은 순서.
+    private var balance: Int? { store.host?.rubyBalance ?? store.rubyBalance }
 
     private var sendable: GomokuStake? {
         guard let selected, GomokuPhoneStakeSelection.affordable(selected, balance: balance), !store.isBusy else { return nil }

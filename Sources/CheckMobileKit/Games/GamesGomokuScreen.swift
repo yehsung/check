@@ -171,7 +171,7 @@ struct GamesGomokuLobby: View {
     }
 
     private var rubyChip: some View {
-        RubyLabel(gomoku.rubyBalance ?? store.context.gomokuHost.rubyBalance)
+        RubyLabel(store.rubyBalance)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(Capsule().fill(MobileTheme.cardElevated))

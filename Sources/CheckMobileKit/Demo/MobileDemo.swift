@@ -206,6 +206,8 @@ package final class MobileDemoFixtures: Sendable {
             return .json(#"{"message":"forbidden on phone"}"#, status: 403)
         }
         guard let entry = entry(for: request, scenario: scenario) else {
+            // 통합 점검용 한 줄: 데모 라우트마다 어떤 키가 픽스처 없이 404 로 접혔는지 콘솔(simctl launch --stdout)에서 센다.
+            print("[AingCheckDemo] 픽스처 없음: \(Self.key(for: request)) 장면=\(scenario ?? "-")")
             return .missingFunction(Self.key(for: request))
         }
         if let object = try? JSONSerialization.jsonObject(with: entry.data) as? [String: Any],

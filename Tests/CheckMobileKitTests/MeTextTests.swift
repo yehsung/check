@@ -89,8 +89,9 @@ struct MeTextTests {
 
     @Test("알림 권한 문구 · 버전 줄 · 카드 가격")
     func miscTexts() {
-        #expect(MePushAuthorization.denied.detail?.contains("설정 앱") == true)
-        #expect(!MePushAuthorization.notDetermined.allowsDelivery && MePushAuthorization.provisional.allowsDelivery)
+        #expect(PushAuthorizationStatus.denied.meDetail?.contains("설정 앱") == true)
+        #expect(PushAuthorizationStatus.notDetermined.meDetail?.contains("로그인 뒤") == false, "권한 요청은 이제 설정 화면의 [알림 켜기]로도 한다")
+        #expect(MeText.pushDetail(.gomokuInvite).contains("오목"))
         #expect(MeText.versionLine(version: "0.1.0", build: 1) == "aing-check iOS 0.1.0 (1)")
         #expect(MeText.cardPrice(owned: true, price: 30) == "보유")
         #expect(MeText.cardPrice(owned: false, price: nil) == "—")

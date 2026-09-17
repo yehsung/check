@@ -3,7 +3,8 @@ import CheckCore
 import CheckMobileShared
 import SwiftUI
 
-/// 나 탭 화면(SPEC-ios §3.6). 루트: 프로필 머리 · 루비 → 기록 → 캐릭터 → 프로필·제보·설정 줄.
+/// 나 탭 화면(SPEC-ios §3.6 · w15 재디자인). 루트: **무대**(착용 캐릭터 · 이름 · 팀 · 센터 · 큰 루비 칩 · 근무 상태 · [캐릭터 바꾸기][상점])
+/// → **기록**(회고 한 줄 + 12주 근무 · AI 토큰 잔디가 스크롤 없이 한눈에) → 프로필 · 제보 · 설정 그룹 → 지난주 근무 리듬.
 /// 하위 화면은 `MeDestination` 을 `router.pathBinding(for: .me)` 에 쌓는다. 딥링크 `me` · `me/shop` · `me/settings` · `feedback[/<id>]`.
 struct MeTab: View {
     let store: MeStore
@@ -48,28 +49,35 @@ struct MeHomeView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    MeHeaderCard(store: store)
+                VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
+                    MeStageCard(store: store)
                         .id(MeAnchor.header)
-                    VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-                        SectionHeader(MeText.recordsTitle)
-                        MeRecordsSection(store: store)
-                    }
-                    .id(MeAnchor.records)
-                    VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-                        SectionHeader(MeText.charactersTitle)
-                        MeCharacterSummaryCard(store: store)
-                    }
-                    .id(MeAnchor.characters)
-                    MeMenuCard(store: store)
+                    MeRecordsCard(store: store)
+                        .id(MeAnchor.records)
+                    MeMenuGroup(store: store)
                         .id(MeAnchor.menu)
+                    MeRhythmCard(store: store)
+                        .id(MeAnchor.rhythm)
                 }
                 .padding(.horizontal, MobileTheme.sideMargin)
-                .padding(.vertical, MobileTheme.rowSpacing)
+                .padding(.top, MobileTheme.space1)
+                .padding(.bottom, MobileTheme.space6)
             }
             .refreshable { await store.refreshRoot() }
             .background(MobileTheme.background.ignoresSafeArea())
             .navigationTitle(AingTab.me.title)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        store.context.router.push(MeDestination.settings, on: .me)
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(MobileTheme.label)
+                    }
+                    .accessibilityLabel(Text(MeText.settingsTitle))
+                }
+            }
             .onAppear { MeDemoHooks.scrollIfRequested(proxy) }
         }
     }
@@ -77,206 +85,248 @@ struct MeHomeView: View {
 
 /// 루트 스크롤 앵커(데모 스크린샷이 아래 절을 찍을 때 쓴다).
 enum MeAnchor: String {
-    case header, records, tokenGrass, characters, menu
+    case header, records, tokenGrass, characters, menu, rhythm
 }
 
-/// 프로필 머리: 사진 · 이름 · 팀 · 센터 · 루비.
-struct MeHeaderCard: View {
+// MARK: - 무대(A 09 구성)
+
+/// 착용 캐릭터를 크게 세운 무대 카드. 캐릭터 132pt(원·링 없이 전신) + 발밑 빛(근무 상태 색) · 이름 · 팀 · 센터 · 큰 루비 칩(→ 상점) ·
+/// 근무 상태 한 줄 · [캐릭터 바꾸기][상점]. 접근성 글자 크기에서는 캐릭터를 위로 올리고 버튼을 세로로 쌓는다.
+struct MeStageCard: View {
     let store: MeStore
-    /// 기본 글자 크기의 지름 — 큰 글자에서는 `AvatarView` 공용 규칙이 키운다(탭마다 따로 키우지 않는다).
-    private let avatarSize: CGFloat = 64
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// 무대 캐릭터 크기(시안 A 112×126 · 명세 120~140).
+    private let artSize: CGFloat = 132
 
     var body: some View {
-        // 이메일은 프로필을 **받았는데** 별명이 비었을 때만 제목으로 쓴다 — 못 받은 채(오프라인) 이메일을 제목으로 세우던 결함(통합 검증 E-me).
-        let email = store.headerState.hasLoaded ? store.context.session.profile?.email : nil
-        let name = store.displayName ?? email ?? MeText.meFallbackName
-        AingCard {
-            // 접근성 글자 크기에서는 사진을 위로 올리고 팀 이름·센터를 줄로 나눈다(가로 그대로면 팀 이름이 "아…"로 잘렸다 — 실측).
+        let mood = presence
+        let id = store.equippedCharacterID
+        VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
             Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 8) {
-                        AvatarView(name: name, url: store.avatarURL, size: avatarSize)
-                        identity(name: name, stacked: true)
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
+                        stage(id: id, mood: mood)
+                            .frame(maxWidth: .infinity)
+                        identity(mood: mood)
                     }
                 } else {
-                    HStack(alignment: .center, spacing: 14) {
-                        AvatarView(name: name, url: store.avatarURL, size: avatarSize)
-                        identity(name: name, stacked: false)
+                    HStack(alignment: .center, spacing: MobileTheme.space2) {
+                        stage(id: id, mood: mood)
+                        identity(mood: mood)
                         Spacer(minLength: 0)
                     }
                 }
             }
-            .accessibilityElement(children: .combine)
             if store.headerState.hasFailed, !store.headerState.hasLoaded {
                 LoadFailureRow(MeText.headerLoadFailed, isRetrying: store.headerState.isLoading) {
                     Task { await store.loadHeader() }
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private func identity(name: String, stacked: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(name)
-                .font(MobileTheme.title(.title2))
-                .foregroundStyle(MobileTheme.label)
-                .fixedSize(horizontal: false, vertical: true)
-            if stacked {
-                team
-                CenterBadge(store.centerServerValue)
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    team
-                    CenterBadge(store.centerServerValue)
-                }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: MobileTheme.space2) { actions }
+                VStack(spacing: MobileTheme.space2) { actions }
             }
-            RubyLabel(store.rubyBalance, style: .headline)
+        }
+        .padding(.top, MobileTheme.space2)
+        .padding([.horizontal, .bottom], MobileTheme.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous).fill(MobileTheme.surface))
+    }
+
+    /// 내 근무 상태: 지금 탭 내 카드(가장 새 값) → 없으면 위젯 스냅샷의 지난 값 → 둘 다 없으면 모름(nil).
+    private var presence: CharacterMood? {
+        if let card = store.context.links.now?.myCard(now: store.context.clock.now()) {
+            return MeText.stageMood(isWorking: card.isWorking, isStale: card.isStale)
+        }
+        return store.context.widgetSnapshots.current?.me.map { CharacterMood($0.resolvedStatus) }
+    }
+
+    private func stage(id: String, mood: CharacterMood?) -> some View {
+        ZStack(alignment: .bottom) {
+            // 발밑 빛(시안 A .a-floor) — 색은 근무 상태 뜻 색(모르면 회색).
+            Ellipse()
+                .fill(RadialGradient(
+                    colors: [floorTint(mood).opacity(0.45), floorTint(mood).opacity(0.12), .clear],
+                    center: .center, startRadius: 0, endRadius: 62
+                ))
+                .frame(width: 122, height: 28)
+                .accessibilityHidden(true)
+            CharacterPortrait(id: id, mood: mood ?? .plain, size: artSize, framed: false)
+                .shadow(color: .black.opacity(0.22), radius: 8, y: 6)
+                .padding(.bottom, 10)
+        }
+        .frame(width: artSize + 6, height: artSize + 12)
+    }
+
+    private func floorTint(_ mood: CharacterMood?) -> Color {
+        switch mood {
+        case .working: return MobileTheme.workingDot
+        case .lost: return MobileTheme.pendingDot
+        case .off: return MobileTheme.offWorkDot
+        case .plain, nil: return MobileTheme.label3
         }
     }
 
-    private var team: some View {
-        Label(store.teamName ?? MeText.noTeam, systemImage: "person.3.fill")
+    private func identity(mood: CharacterMood?) -> some View {
+        // 이메일은 프로필을 **받았는데** 별명이 비었을 때만 제목으로 쓴다 — 못 받은 채(오프라인) 이메일을 제목으로 세우던 결함(통합 검증 E-me).
+        let email = store.headerState.hasLoaded ? store.context.session.profile?.email : nil
+        let name = store.displayName ?? email ?? MeText.meFallbackName
+        return VStack(alignment: .leading, spacing: 7) {
+            Text(name)
+                .font(MobileTheme.title(.title))
+                .foregroundStyle(MobileTheme.label)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
+            teamLine
+            RubyBalanceChip(store.rubyBalance, style: .large) {
+                store.context.router.push(MeDestination.shop, on: .me)
+            }
+            .accessibilityHint(Text("상점 열기"))
+            .padding(.vertical, -5)
+            statusLine(mood: mood)
+        }
+    }
+
+    /// 팀 이름 + 센터 배지(이름 뒤). 한 줄에 안 들어가면 배지를 아래 줄로(잘리지 않게).
+    private var teamLine: some View {
+        let team = Text(store.teamName ?? MeText.noTeam)
             .font(.subheadline)
             .foregroundStyle(MobileTheme.label2)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
-/// 착용 캐릭터 + 고르기 · 상점 버튼.
-struct MeCharacterSummaryCard: View {
-    let store: MeStore
-    @ScaledMetric(relativeTo: .title) private var artSize: CGFloat = 72
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        let id = store.equippedCharacterID
-        AingCard {
-            // 접근성 글자 크기에서는 그림을 위로 올린다 — 옆에 두면 커진 그림이 폭을 먹어 실패 안내가 두세 글자씩 꺾였다(AX5 실측).
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 8) {
-                        MeCharacterArt(id: id)
-                            .frame(width: min(artSize, 96), height: min(artSize, 96))
-                        caption(id: id)
-                    }
-                } else {
-                    HStack(alignment: .center, spacing: 14) {
-                        MeCharacterArt(id: id)
-                            .frame(width: artSize, height: artSize)
-                        caption(id: id)
-                        Spacer(minLength: 0)
-                    }
-                }
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                team.lineLimit(1)
+                CenterBadge(store.centerServerValue)
             }
-            .accessibilityElement(children: .combine)
-            // 큰 글자에서 한 줄에 안 들어가면(한 버튼만 두 줄이 되어 높이가 갈리기 전에) 세로로 쌓는다.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) { buttons(lineLimit: 1) }
-                VStack(spacing: 10) { buttons(lineLimit: nil) }
+            VStack(alignment: .leading, spacing: 4) {
+                team.fixedSize(horizontal: false, vertical: true)
+                CenterBadge(store.centerServerValue)
             }
         }
     }
 
-    private func caption(id: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(MeCharacterCards.displayName(for: id))
-                .font(.headline)
-                .foregroundStyle(MobileTheme.label)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(equippedCaption)
-                .font(.subheadline)
-                .foregroundStyle(store.equippedLoadFailed && !store.equippedLoaded ? MobileTheme.pending : MobileTheme.label2)
+    /// "● 근무 중 · 여우 착용 중". 착용값을 모르면 불러오는 중 · 실패 문구.
+    private func statusLine(mood: CharacterMood?) -> some View {
+        let wear: Text
+        if store.equippedLoaded {
+            wear = Text(MeText.wearing(MeCharacterCards.displayName(for: store.equippedCharacterID)))
+                .foregroundStyle(MobileTheme.label2)
+        } else if store.equippedLoadFailed {
+            wear = Text(MeText.equippedLoadFailed).foregroundStyle(MobileTheme.pending)
+        } else {
+            wear = Text(MeText.loading).foregroundStyle(MobileTheme.label2)
+        }
+        let status = mood.flatMap(MeText.stageStatus)
+        let line = status.map { Text($0).fontWeight(.semibold).foregroundStyle(statusColor(mood)) + Text(" · ").foregroundStyle(MobileTheme.label2) + wear } ?? wear
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if let mood, let dot = mood.ring {
+                StatusDot(dot)
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+            }
+            line
+                .font(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .accessibilityElement(children: .combine)
     }
 
-    /// 착용 요약 둘째 줄: 알면 '착용 중' · 조회가 실패했으면 그 사실과 할 일 · 아직이면 '불러오는 중…'.
-    private var equippedCaption: String {
-        if store.equippedLoaded { return MeText.equipped }
-        return store.equippedLoadFailed ? MeText.equippedLoadFailed : MeText.loading
+    private func statusColor(_ mood: CharacterMood?) -> Color {
+        switch mood {
+        case .working: return MobileTheme.working
+        case .lost: return MobileTheme.pending
+        case .off: return MobileTheme.offWork
+        case .plain, nil: return MobileTheme.label2
+        }
     }
 
     @ViewBuilder
-    private func buttons(lineLimit: Int?) -> some View {
-        NavigationLink(value: MeDestination.characters) {
-            Label(MeText.pickerTitle, systemImage: "person.crop.square")
-                .lineLimit(lineLimit)
-                .fixedSize(horizontal: lineLimit != nil, vertical: false)
-                .frame(maxWidth: .infinity)
+    private var actions: some View {
+        AingButton(MeText.changeCharacter, systemImage: "person.crop.square", kind: .tinted, size: .md, fillsWidth: true) {
+            store.context.router.push(MeDestination.characters, on: .me)
         }
-        .buttonStyle(AingPrimaryButtonStyle())
-        NavigationLink(value: MeDestination.shop) {
-            Label(MeText.shopTitle, systemImage: "bag.fill")
-                .lineLimit(lineLimit)
-                .fixedSize(horizontal: lineLimit != nil, vertical: false)
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .foregroundStyle(MobileTheme.accent)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(MobileTheme.accent.opacity(0.14)))
+        AingButton(MeText.shopTitle, systemImage: "bag", kind: .tinted, size: .md, fillsWidth: true) {
+            store.context.router.push(MeDestination.shop, on: .me)
         }
-        .buttonStyle(.plain)
     }
 }
 
-/// 프로필 · 제보 · 설정 줄.
-struct MeMenuCard: View {
+// MARK: - 메뉴 그룹(시안 B)
+
+/// 프로필 · 제보 · 설정 — 인셋 그룹 한 장 안의 행(회색 기호 타일 · 제목 · 오른쪽 보조 글자 또는 '새 답장' · ›).
+struct MeMenuGroup: View {
     let store: MeStore
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        AingCard(padding: 0) {
-            VStack(spacing: 0) {
-                row(.profile, title: MeText.profileTitle, detail: "사진 · 별명", systemImage: "person.crop.circle")
-                Divider().overlay(MobileTheme.separator)
-                row(.feedback, title: MeText.feedbackTitle, detail: "버그 · 요청 보내기와 답장", systemImage: "exclamationmark.bubble", showsDot: store.hasUnseenFeedbackReply)
-                Divider().overlay(MobileTheme.separator)
-                row(.settings, title: MeText.settingsTitle, detail: "공개 · 알림 · 팀 코드 · 로그아웃", systemImage: "gearshape")
-            }
+        InsetGroup {
+            row(.profile, title: MeText.profileTitle, detail: MeText.profileMenuDetail, systemImage: "person.fill", divider: .inset(Self.textInset))
+            row(.feedback, title: MeText.feedbackTitle, detail: MeText.feedbackMenuDetail, systemImage: "exclamationmark.bubble.fill",
+                showsReply: store.hasUnseenFeedbackReply, divider: .inset(Self.textInset))
+            row(.settings, title: MeText.settingsTitle, detail: MeText.settingsMenuDetail, systemImage: "gearshape.fill", divider: .none)
         }
     }
 
-    private func row(_ destination: MeDestination, title: String, detail: String, systemImage: String, showsDot: Bool = false) -> some View {
-        NavigationLink(value: destination) {
-            HStack(spacing: 12) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                    .foregroundStyle(MobileTheme.accent)
-                    .frame(minWidth: 28)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(MobileTheme.label)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(detail)
-                        .font(.footnote)
-                        .foregroundStyle(MobileTheme.label2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    // 접근성 글자 크기에서는 '새 답장' 배지를 설명 아래 줄로 내린다(옆에 두면 배지가 폭을 먹어 제목·설명이 한 글자씩 세로로 쌓였다 — AX5 실측).
-                    if showsDot, dynamicTypeSize.isAccessibilitySize {
-                        replyBadge
-                            .padding(.top, 4)
-                    }
-                }
-                Spacer(minLength: 8)
-                if showsDot, !dynamicTypeSize.isAccessibilitySize {
-                    replyBadge
-                }
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(MobileTheme.label2)
-                    .accessibilityHidden(true)
+    /// 구분선 시작 = 좌 여백 16 + 타일 30 + 틈 12.
+    private static let textInset: CGFloat = MobileTheme.cardPadding + 30 + MobileTheme.space3
+
+    private func row(_ destination: MeDestination, title: String, detail: String, systemImage: String, showsReply: Bool = false, divider: GroupRow<AnyView>.Divider) -> some View {
+        Button {
+            store.context.router.push(destination, on: .me)
+        } label: {
+            GroupRow(divider: divider, minHeight: 50) {
+                AnyView(MeMenuRowContent(title: title, detail: detail, systemImage: systemImage, showsReply: showsReply))
             }
-            .padding(.horizontal, MobileTheme.cardPadding)
-            .padding(.vertical, 14)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MeRowButtonStyle())
         .accessibilityElement(children: .combine)
-        .accessibilityHint(Text(showsDot ? "새 답장이 있어요" : ""))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(Text(showsReply ? "새 답장이 있어요" : ""))
+    }
+}
+
+private struct MeMenuRowContent: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+    let showsReply: Bool
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 30, height: 30)
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color(uiColor: .systemGray)))
+            .accessibilityHidden(true)
+        // 큰 글자에서 보조 글자가 제목을 밀어내면 보조 글자를 뺀다(제목·'새 답장'·› 는 남는다).
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: MobileTheme.space2) {
+                titleText.lineLimit(1)
+                Spacer(minLength: MobileTheme.space2)
+                if showsReply { replyBadge } else { detailText.lineLimit(1) }
+            }
+            HStack(spacing: MobileTheme.space2) {
+                titleText.fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: MobileTheme.space2)
+                if showsReply { replyBadge }
+            }
+        }
+        Image(systemName: "chevron.right")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(MobileTheme.label3)
+            .accessibilityHidden(true)
+    }
+
+    private var titleText: some View {
+        Text(title)
+            .font(.body)
+            .foregroundStyle(MobileTheme.label)
+    }
+
+    private var detailText: some View {
+        Text(detail)
+            .font(.subheadline)
+            .foregroundStyle(MobileTheme.label2)
     }
 
     private var replyBadge: some View {
@@ -284,36 +334,27 @@ struct MeMenuCard: View {
             .font(.caption.weight(.bold))
             .foregroundStyle(MobileTheme.onAccentFill)
             .padding(.horizontal, 8)
-            .padding(.vertical, 3)
+            .frame(minHeight: 20)
             .background(Capsule().fill(MobileTheme.accentFill))
             .fixedSize()
     }
 }
 
-/// 캐릭터 카드 그림(박힌 HEIC). 모르는 캐릭터는 자리표시.
-struct MeCharacterArt: View {
-    let id: String
-
-    var body: some View {
-        if let image = MeCharacterCards.image(id: id) {
-            Image(decorative: image, scale: 1)
-                .resizable()
-                .interpolation(MeCharacterCards.card(id: id)?.pixelArt == true ? .none : .high)
-                .scaledToFit()
-        } else {
-            Image(systemName: "person.crop.circle.badge.questionmark")
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(MobileTheme.label2)
-                .padding(8)
-        }
+/// 그룹 행 누름 모양: 누르는 동안 옅은 칠.
+struct MeRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? MobileTheme.fill2 : Color.clear)
     }
 }
 
 // MARK: - 데모 훅(DEBUG 전용)
 
-/// 데모 스크린샷용: `-AingCheckDemoMeAnchor records|characters|menu` 이면 루트를 그 절까지 내린다.
+/// 데모 스크린샷용: `-AingCheckDemoMeAnchor records|menu|rhythm` 이면 루트를 그 절까지 내린다.
 /// 스토어 동작은 바꾸지 않는다(스크롤 위치만). Release 에서는 아무것도 하지 않는다.
+///
+/// 기록 없는 계정 장면: `-AingCheckDemoRoute me/` — 라우트 해석은 `me` 와 같고(끝 `/` 는 빈 조각이라 버려진다) 픽스처 장면 이름만
+/// `me-` 가 된다(`Demo/Fixtures/me/_me-/` — 완료 세션 0 · 토큰 0 · 근무 안 함 · 기본 캐릭터). 빈 잔디 격자 스크린샷용.
 @MainActor
 enum MeDemoHooks {
     private static var initialDestinationTaken = false
@@ -338,6 +379,15 @@ enum MeDemoHooks {
     static func scrollTarget() -> String? {
         #if DEBUG
         return argument("-AingCheckDemoMeScroll")
+        #else
+        return nil
+        #endif
+    }
+
+    /// 상점에서 미리 골라 둘 캐릭터(`-AingCheckDemoMeSelect <id>`) — 구매 막대·미리 보기 스크린샷용(고르기만, 사지 않는다).
+    static func shopSelection() -> String? {
+        #if DEBUG
+        return argument("-AingCheckDemoMeSelect")
         #else
         return nil
         #endif

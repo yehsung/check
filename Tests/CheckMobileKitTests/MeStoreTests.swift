@@ -391,7 +391,7 @@ struct MeStoreTests {
         defer { harness.tearDown() }
         let store = harness.me
 
-        #expect(store.feedbackAutoAttachNotice == "iOS 0.1.0 (1) · iOS 18.0 정보가 함께 전송돼요")
+        #expect(store.feedbackAutoAttachNotice == "앱 0.1.0 (1) · iOS 18.0 정보가 함께 전송돼요")
         store.feedbackDraft = "   "
         #expect(!store.canSendFeedback)
 

@@ -65,12 +65,12 @@ struct MeFeedbackView: View {
                     .frame(minHeight: 140)
                     .scrollContentBackground(.hidden)
                     .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.fill))
+                    .background(RoundedRectangle(cornerRadius: MobileTheme.innerRadius, style: .continuous).fill(MobileTheme.fill))
                     .accessibilityLabel(Text("제보 내용"))
                 if store.feedbackDraft.isEmpty {
                     Text(FeedbackText.placeholder)
                         .font(.body)
-                        .foregroundStyle(MobileTheme.label2)
+                        .foregroundStyle(MobileTheme.label3Text)
                         .padding(.horizontal, 13)
                         .padding(.vertical, 16)
                         .allowsHitTesting(false)
@@ -92,17 +92,14 @@ struct MeFeedbackView: View {
             if let notice = store.feedbackNotice {
                 InlineNotice(text: notice, kind: FeedbackText.isSuccessNotice(notice) ? .info : .warning)
             }
-            Button {
+            AingButton(
+                store.isSendingFeedback ? FeedbackText.sending : FeedbackText.sendAction,
+                systemImage: store.isSendingFeedback ? nil : "paperplane.fill",
+                kind: .filled, size: .lg, fillsWidth: true
+            ) {
                 editorFocused = false
                 Task { await store.sendFeedback() }
-            } label: {
-                if store.isSendingFeedback {
-                    Text(FeedbackText.sending)
-                } else {
-                    Label(FeedbackText.sendAction, systemImage: "paperplane.fill")
-                }
             }
-            .buttonStyle(AingPrimaryButtonStyle())
             .disabled(!store.canSendFeedback)
         }
     }
@@ -154,14 +151,14 @@ struct MeFeedbackRow: View {
     var body: some View {
         Button(action: toggle) {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    chip(report.kind.label, tint: report.kind.isDanger ? MobileTheme.danger : MobileTheme.accent)
-                    chip(report.status.label, tint: report.status.isOpen ? MobileTheme.pending : MobileTheme.working)
-                    Spacer(minLength: 4)
-                    Text(FeedbackText.ageText(report.createdAt, now: now))
+                // 칩은 상태 하나(뜻 색 — 초록 금지). 종류는 칩이 아니라 시각 앞 글자로(한 카드에 칩 셋이던 것, w14 비평 29).
+                HStack(alignment: .center, spacing: 6) {
+                    statusChip
+                    Text("\(report.kind.label) · \(FeedbackText.ageText(report.createdAt, now: now))")
                         .font(.caption)
                         .foregroundStyle(MobileTheme.label2)
-                        .fixedSize()
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
                 }
                 Text(report.body)
                     .font(.subheadline)
@@ -170,7 +167,7 @@ struct MeFeedbackRow: View {
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 if isExpanded, let version = report.appVersion, !version.isEmpty {
-                    Text([version, report.osVersion].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text(MeText.feedbackVersionLine(appVersion: version, osVersion: report.osVersion))
                         .font(.caption)
                         .monospacedDigit()
                         .foregroundStyle(MobileTheme.label2)
@@ -185,18 +182,26 @@ struct MeFeedbackRow: View {
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(10)
+                    .padding(.leading, 12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.accent.opacity(0.10)))
+                    // 카드 안 카드(파랑 틴트 상자) 대신 왼쪽 선 하나로 답장을 가른다.
+                    .overlay(alignment: .leading) {
+                        Capsule()
+                            .fill(MobileTheme.accentLine)
+                            .frame(width: 3)
+                    }
+                    .padding(.top, 2)
                 }
             }
             .padding(MobileTheme.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous).fill(MobileTheme.surface))
-            .overlay(
-                RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous)
-                    .stroke(isFocused ? MobileTheme.accent : MobileTheme.separator, lineWidth: isFocused ? 2 : 1)
-            )
+            .overlay {
+                if isFocused {
+                    RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous)
+                        .strokeBorder(MobileTheme.accent, lineWidth: 2)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -227,18 +232,12 @@ struct MeFeedbackRow: View {
     private var replyTitle: some View {
         Label(FeedbackText.replyBlockTitle, systemImage: "arrowshape.turn.up.left.fill")
             .font(.caption.weight(.bold))
-            .foregroundStyle(MobileTheme.accent)
+            .foregroundStyle(MobileTheme.label2)
             .fixedSize()
     }
 
     private var replyBadge: some View {
-        Text(MeText.feedbackReplyBadge)
-            .font(.caption2.weight(.bold))
-            .foregroundStyle(MobileTheme.onAccentFill)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(MobileTheme.accentFill))
-            .fixedSize()
+        AingChip(text: MeText.feedbackReplyBadge, tint: MobileTheme.accent)
     }
 
     @ViewBuilder
@@ -251,14 +250,14 @@ struct MeFeedbackRow: View {
         }
     }
 
-    private func chip(_ text: String, tint: Color) -> some View {
-        Text(text)
-            .font(.caption.weight(.bold))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(tint.opacity(0.14)))
-            .fixedSize()
+    /// 상태 칩: 미해결 = 대기(앰버) · 진행 = 파랑 · 완료·보류 = 회색(`MeText.feedbackStatusTone`).
+    @ViewBuilder
+    private var statusChip: some View {
+        switch MeText.feedbackStatusTone(report.status) {
+        case .pending: AingChip(text: report.status.label, tint: MobileTheme.pending)
+        case .accent: AingChip(text: report.status.label, tint: MobileTheme.accent)
+        case .neutral: AingChip(text: report.status.label, tint: MobileTheme.label2, background: MobileTheme.fill)
+        }
     }
 }
 #endif

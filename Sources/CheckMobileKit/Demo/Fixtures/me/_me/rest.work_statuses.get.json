@@ -1,0 +1,57 @@
+[
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000001",
+    "status": "working",
+    "updated_at": "2026-09-17T05:04:40.000Z",
+    "last_seen_at": "2026-09-17T05:04:40.000Z",
+    "active_session_id": "d0000000-0000-4000-8000-00000000a001",
+    "profiles": {
+      "display_name": "새벽",
+      "avatar_url": null
+    }
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000102",
+    "status": "working",
+    "updated_at": "2026-09-17T05:04:10.000Z",
+    "last_seen_at": "2026-09-17T05:04:10.000Z",
+    "active_session_id": "d0000000-0000-4000-8000-00000000a002",
+    "profiles": {
+      "display_name": "민트",
+      "avatar_url": null
+    }
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000103",
+    "status": "working",
+    "updated_at": "2026-09-17T05:04:55.000Z",
+    "last_seen_at": "2026-09-17T05:04:55.000Z",
+    "active_session_id": "d0000000-0000-4000-8000-00000000a003",
+    "profiles": {
+      "display_name": "라임",
+      "avatar_url": null
+    }
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000104",
+    "status": "working",
+    "updated_at": "2026-09-17T04:52:00.000Z",
+    "last_seen_at": "2026-09-17T04:52:00.000Z",
+    "active_session_id": "d0000000-0000-4000-8000-00000000a004",
+    "profiles": {
+      "display_name": "보리",
+      "avatar_url": null
+    }
+  },
+  {
+    "user_id": "d0000000-0000-4000-8000-000000000105",
+    "status": "offWork",
+    "updated_at": "2026-09-17T02:10:00.000Z",
+    "last_seen_at": "2026-09-17T02:10:00.000Z",
+    "active_session_id": null,
+    "profiles": {
+      "display_name": "자두",
+      "avatar_url": null
+    }
+  }
+]

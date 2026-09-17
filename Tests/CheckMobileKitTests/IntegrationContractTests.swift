@@ -104,6 +104,8 @@ import Testing
     static let demoRoutes = [
         "now", "messages", "rankings/league", "rankings/tokens", "rankings/minigame", "games", "games/timing", "games/flappy",
         "games/gomoku/lobby", "games/gomoku/match", "me", "me/shop", "me/feedback", "me/settings", "login", "update",
+        // 나 탭 기록 없는 계정(w15 E): 라우트는 `me` 와 같게 열리고(끝 `/` 는 버려진다) 장면만 `_me-`.
+        "me/",
     ]
 
     @Test("데모 픽스처: 합친 뒤 키 유일 · 모든 장면 폴더가 실제 데모 라우트의 장면이다(오타 장면은 조용히 안 쓰인다)")

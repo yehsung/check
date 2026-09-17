@@ -151,7 +151,87 @@ package enum MeText {
         return "\(tokenGrassTitle), 쓴 날 \(days)일, 합계 \(TokenNumberFormatter.compactKorean(grid.totalTokens)) 토큰"
     }
 
+    // MARK: 무대 · 기록 카드 (w15 재디자인 — 나 탭 첫 화면)
+
+    /// 무대 버튼 · 고르기 화면으로 가는 말(화면 제목은 `pickerTitle`).
+    package static let changeCharacter = "캐릭터 바꾸기"
+
+    /// 무대 상태 한 줄의 근무 상태 말. `nil` 기분(모름)은 상태 말 없이 착용 줄만.
+    package static func stageStatus(_ mood: CharacterMood) -> String? {
+        switch mood {
+        case .working: return "근무 중"
+        case .lost: return "연결 끊김"
+        case .off: return "근무 안 함"
+        case .plain: return nil
+        }
+    }
+
+    /// 내 근무 상태(지금 탭 내 카드 · 위젯 스냅샷에서 읽은 값) → 무대 기분. 모르면 nil(지어내지 않는다 — 표정은 기본 웃음, 상태 말 없음).
+    package static func stageMood(isWorking: Bool?, isStale: Bool) -> CharacterMood? {
+        guard let isWorking else { return nil }
+        guard isWorking else { return .off }
+        return isStale ? .lost : .working
+    }
+
+    /// "여우 착용 중".
+    package static func wearing(_ name: String) -> String {
+        "\(name) \(equipped)"
+    }
+
+    /// 회고 큰 숫자("40시간 30분") — 제목이 이미 '지난주 회고'라 "지난주"를 또 붙이지 않는다.
+    package static func retroHeadline(_ retro: WeeklyRetro) -> String {
+        MenuBarStatusFormatter.hoursMinutes(retro.totalSeconds)
+    }
+
+    /// 회고 한 줄 아래 보조 줄: "전주 대비 +8시간 45분 · 세션 10회"(비교선이 없으면 세션만).
+    package static func retroSummaryLine(_ retro: WeeklyRetro) -> String {
+        [retroDeltaLine(retro), "세션 \(retro.sessionCount)회"].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// 회고 칩: 달성이면 "목표 달성"(초록), 아니면 "목표의 85%"(회색 — 초록은 달성에만).
+    package static func retroChip(_ retro: WeeklyRetro) -> String {
+        retro.metGoal ? metGoalChip : "목표의 \(shortfallPercent(workedSeconds: retro.totalSeconds, goalSeconds: retro.goalSeconds))%"
+    }
+
+    /// 근무 리듬 격자 아래 한 줄: 가장 활발한 시간 · 없으면 빈 기록 문구.
+    package static func rhythmCaption(_ heatmap: WorkRhythmHeatmap) -> String {
+        peakLine(heatmap) ?? noRetro
+    }
+
+    /// 근무 리듬 칸 농도 단계(0…4) — 잔디와 같은 초록 사다리(`ContributionLevels.opacity`)로 칠한다. 한 칸 3600초가 가장 진하다.
+    package static func rhythmLevel(seconds: Int) -> Int {
+        guard seconds > 0 else { return 0 }
+        return ContributionLevels.level(value: min(seconds, 3_600), denominator: 3_600)
+    }
+
+    // MARK: 메뉴 그룹
+
+    package static let profileMenuDetail = "사진 · 별명"
+    package static let feedbackMenuDetail = "버그 · 요청"
+    package static let settingsMenuDetail = "알림 · 화면 모드"
+
     // MARK: 캐릭터 · 상점 (맥 ShopText · WorkTimerStore 상점 문구)
+
+    package static let shopLede = "루비는 미니게임 순위 상품과 근무 미션으로 모여요. 산 캐릭터는 계속 가져요."
+    package static let buyShort = "사기"
+    package static let previewCaption = "근무 중이면 웃고, 쉬면 시무룩해요"
+    package static let previewWorking = "근무 중"
+    package static let previewOff = "근무 안 함"
+
+    /// "유령 미리 보기".
+    package static func previewTitle(_ name: String) -> String {
+        "\(name) 미리 보기"
+    }
+
+    /// "3/6 보유".
+    package static func ownedCount(owned: Int, total: Int) -> String {
+        "\(max(0, owned))/\(max(0, total)) \(MeText.owned)"
+    }
+
+    /// 구매 막대 둘째 줄(살 수 있을 때): "사고 나면 루비 17개 남아요".
+    package static func remainingAfterPurchase(price: Int, balance: Int) -> String {
+        "사고 나면 루비 \(max(0, balance - price))개 남아요"
+    }
 
     package static let charactersTitle = "캐릭터"
     package static let shopTitle = "상점"
@@ -219,6 +299,10 @@ package enum MeText {
     package static let avatarFailed = "사진 업로드 실패"
     package static let avatarUnreadable = "사진을 읽지 못했어요 — 다른 사진을 골라 주세요"
     package static let avatarUploading = "올리는 중…"
+    /// 사진과 캐릭터 중 무엇이 '나'로 쓰이는지(w14 비평 28).
+    package static let avatarRoleNote = "사진과 별명은 메시지·순위에서 다른 사람에게 보여요."
+    package static let characterRoleTitle = "내 화면에는 캐릭터가 나와요"
+    package static let characterRoleNote = "지금·나 탭과 맥 메뉴바·오버레이에서 착용 캐릭터가 나를 대신해요."
     /// 서버 쿨타임(7일). 맥 `WorkTimerStore.displayNameCooldownSeconds`.
     package static let displayNameCooldownSeconds: TimeInterval = 7 * 24 * 3600
 
@@ -264,7 +348,28 @@ package enum MeText {
     /// "iOS 0.1.0 (1) · iOS 18.2 정보가 함께 전송돼요" — 자동으로 실리는 것을 밝히는 한 줄(맥 `FeedbackText.autoAttachNotice` 의 폰판).
     /// 진단 줄(실시간·work_tick)은 폰에서 싣지 않는다(SPEC-ios-build §2 D5+D7).
     package static func feedbackAutoAttach(appVersion: String, osVersion: String) -> String {
-        "\(appVersion) · \(osVersion) 정보가 함께 전송돼요"
+        "\(feedbackVersionLine(appVersion: appVersion, osVersion: osVersion)) 정보가 함께 전송돼요"
+    }
+
+    /// "앱 0.1.0 (1) · iOS 18.2" — 서버에 싣는 앱 버전 값은 "iOS 0.1.0 (1)"(맥 제보와 가르는 머리말)이라 운영체제 줄과 'iOS' 가 두 번
+    /// 겹쳤다. **보여 줄 때만** 앞의 "iOS " 를 "앱 " 으로 바꾼다(보내는 값은 그대로). 운영체제 값이 없으면 앱 버전만.
+    package static func feedbackVersionLine(appVersion: String, osVersion: String?) -> String {
+        let app = appVersion.hasPrefix("iOS ") ? "앱 \(appVersion.dropFirst(4))" : appVersion
+        guard let osVersion, !osVersion.isEmpty else { return app }
+        return "\(app) · \(osVersion)"
+    }
+
+    /// 제보 상태 칩의 뜻 색 갈래(초록 금지 — 초록은 근무·달성 전용): 미해결 = 대기(앰버) · 진행 = 파랑 · 완료·보류·모름 = 회색.
+    package enum FeedbackStatusTone: Equatable, Sendable {
+        case pending, accent, neutral
+    }
+
+    package static func feedbackStatusTone(_ status: FeedbackStatus) -> FeedbackStatusTone {
+        switch status {
+        case .open: return .pending
+        case .inProgress: return .accent
+        case .done, .held, .other: return .neutral
+        }
     }
 
     /// 맥 `FeedbackFailure.notice` 와 같은 갈림(원문 서버 예외는 절대 보여 주지 않는다).

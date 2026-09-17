@@ -84,7 +84,55 @@ struct MeTextTests {
         #expect(MeText.feedbackFailure(SupabaseWorkServiceError.authMessage("FEEDBACK_FORBIDDEN"), fallback: "x") == FeedbackText.forbidden)
         #expect(MeText.feedbackFailure(SupabaseWorkServiceError.authMessage("SOMETHING_INTERNAL"), fallback: "x") == "x")
         #expect(MeText.feedbackFailure(SupabaseWorkServiceError.databaseSchemaMissing, fallback: "x", schemaMissing: "y") == "y")
-        #expect(MeText.feedbackAutoAttach(appVersion: "iOS 0.1.0 (1)", osVersion: "iOS 18.2") == "iOS 0.1.0 (1) · iOS 18.2 정보가 함께 전송돼요")
+        // 보여 줄 때 'iOS' 가 두 번 겹치지 않는다(보내는 앱 버전 값 "iOS 0.1.0 (1)" 은 그대로 — w11 캡처 36).
+        #expect(MeText.feedbackAutoAttach(appVersion: "iOS 0.1.0 (1)", osVersion: "iOS 18.2") == "앱 0.1.0 (1) · iOS 18.2 정보가 함께 전송돼요")
+        #expect(MeText.feedbackVersionLine(appVersion: "iOS 0.1.0 (1)", osVersion: nil) == "앱 0.1.0 (1)")
+        #expect(MeText.feedbackVersionLine(appVersion: "0.3.32 (84)", osVersion: "macOS 15.6") == "0.3.32 (84) · macOS 15.6", "머리말이 없으면 그대로")
+        // 상태 칩 뜻 색: 초록 없음 · 진행과 완료가 같은 색이 아니다(w14 비평 29).
+        #expect(MeText.feedbackStatusTone(.open) == .pending)
+        #expect(MeText.feedbackStatusTone(.inProgress) == .accent)
+        #expect(MeText.feedbackStatusTone(.done) == .neutral)
+        #expect(MeText.feedbackStatusTone(.held) == .neutral)
+        #expect(MeText.feedbackStatusTone(.other("x")) == .neutral)
+    }
+
+    @Test("무대 문구: 기분 매핑(모르면 nil) · 상태 말 · 착용 줄 · 리듬 단계(잔디 사다리) · 상점 문구")
+    func stageTexts() {
+        #expect(MeText.stageMood(isWorking: nil, isStale: false) == nil, "모르는 상태를 '근무 안 함'으로 지어내지 않는다")
+        #expect(MeText.stageMood(isWorking: false, isStale: true) == .off)
+        #expect(MeText.stageMood(isWorking: true, isStale: false) == .working)
+        #expect(MeText.stageMood(isWorking: true, isStale: true) == .lost)
+        #expect(MeText.stageStatus(.working) == "근무 중")
+        #expect(MeText.stageStatus(.lost) == "연결 끊김")
+        #expect(MeText.stageStatus(.off) == "근무 안 함")
+        #expect(MeText.stageStatus(.plain) == nil)
+        #expect(MeText.wearing("여우") == "여우 착용 중")
+
+        #expect(MeText.rhythmLevel(seconds: 0) == 0)
+        #expect(MeText.rhythmLevel(seconds: 1) == 1)
+        #expect(MeText.rhythmLevel(seconds: 1_800) == 2)
+        #expect(MeText.rhythmLevel(seconds: 3_600) == 4)
+        #expect(MeText.rhythmLevel(seconds: 9_000) == 4, "한 칸에 3600초 넘게 쌓여도 상한")
+        #expect(MeText.rhythmCaption(.empty) == MeText.noRetro)
+
+        #expect(MeText.ownedCount(owned: 3, total: 6) == "3/6 보유")
+        #expect(MeText.remainingAfterPurchase(price: 30, balance: 47) == "사고 나면 루비 17개 남아요")
+        #expect(MeText.previewTitle("유령") == "유령 미리 보기")
+    }
+
+    @Test("회고 한 줄: 큰 숫자에 '지난주'를 또 붙이지 않는다 · 보조 줄 = 전주 대비 · 세션 · 칩은 달성만 '목표 달성'(미달은 퍼센트)")
+    func retroOneLine() throws {
+        let now = MobileClock.demoInstant
+        let rows = try Self.sessions([(7, 9, 480), (8, 9, 480), (9, 9, 540), (10, 9, 480), (11, 9, 420)])
+            + Self.sessions([(31, 9, 360)], month: 8) + Self.sessions([(1, 9, 360), (2, 9, 360), (3, 9, 360), (4, 9, 360)])
+        let met = try #require(WeeklyRetro.build(sessions: rows, now: now, goalSeconds: 40 * 3600))
+        #expect(MeText.retroHeadline(met) == "40시간 00분")
+        #expect(MeText.retroSummaryLine(met) == "전주 대비 +10시간 00분 · 세션 5회")
+        #expect(MeText.retroChip(met) == "목표 달성")
+        let short = met.withGoal(50 * 3600)
+        #expect(MeText.retroChip(short) == "목표의 80%")
+        let alone = try #require(WeeklyRetro.build(sessions: try Self.sessions([(7, 9, 60)]), now: now, goalSeconds: 40 * 3600))
+        #expect(MeText.retroSummaryLine(alone) == "세션 1회", "비교할 전주가 없으면 세션만")
     }
 
     @Test("알림 권한 문구 · 버전 줄 · 카드 가격")

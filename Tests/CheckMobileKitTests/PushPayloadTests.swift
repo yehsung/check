@@ -91,6 +91,17 @@ import UserNotifications
         #expect(allActions.allSatisfy { PushAction(actionIdentifier: $0.identifier) != .open })
     }
 
+    @Test("어댑터가 opensApp · requiresUnlock 을 시스템 옵션(.foreground · .authenticationRequired)으로 옮긴다 — iOS 전용이라 소스 계약으로 본다")
+    func adapterMapsActionOptions() throws {
+        // makeCategories 는 #if os(iOS) 안이라 macOS swift test 로는 컴파일되지 않는다. 여기서 .foreground 가 빠지면
+        // [수락]이 앱을 열지 않고 뒤에서만 켜져 사용자 눈에는 아무 일도 안 일어난다(w10 검증 발견).
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let raw = try String(contentsOf: root.appendingPathComponent("Sources/CheckMobileKit/Push/PushNotificationCenterAdapter.swift"), encoding: .utf8)
+        let code = stripComments(raw).filter { !$0.isWhitespace }
+        #expect(code.contains("ifaction.opensApp{options.insert(.foreground)}"), "opensApp 이 .foreground 로 옮겨지지 않는다")
+        #expect(code.contains("ifaction.requiresUnlock{options.insert(.authenticationRequired)}"), "requiresUnlock 이 .authenticationRequired 로 옮겨지지 않는다")
+    }
+
     @Test("APNs 토큰 → hex 소문자(서버 ^[0-9a-f]{32,200}$ 를 지난다)")
     func tokenHex() {
         #expect(PushTokenFormatter.hex(Data([0x00, 0xAB, 0xFF, 0x10])) == "00abff10")

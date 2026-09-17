@@ -85,7 +85,7 @@ public struct AingSharedStorage: Sendable, Equatable {
 public enum AingSharedKeys {
     /// 로그인한 사용자 id. 위젯은 이 값으로 할 일 파일을 고른다.
     public static let userID = "aingcheck.session.userID"
-    /// 로그인 이메일(로그인 화면 채우기).
+    /// 로그인 이메일(로그인 중 프로필 표시 · 세션 만료 뒤 로그인 화면 채우기). 스스로 로그아웃하면 지운다.
     public static let email = "aingcheck.session.email"
     /// 마지막 register_device 성공 시각(1시간 스로틀).
     public static let deviceRegisteredAt = "aingcheck.device.registeredAt"
@@ -94,6 +94,7 @@ public enum AingSharedKeys {
     /// 마지막으로 받은 APNs 토큰(hex 소문자). 실행 사이에 유지해 foreground 재등록이 토큰을 잃지 않게 한다.
     public static let apnsToken = "aingcheck.push.apnsToken"
 
-    /// 로그아웃 때 지우는 키. 이메일은 남긴다(다음 로그인 화면 채우기 — 맥과 같은 관용). APNs 토큰도 기기 값이라 남긴다.
+    /// 로그아웃·만료 때 지우는 키. 이메일은 만료 뒤 다시 들어올 때 채우려고 여기서 빼고, 스스로 로그아웃할 때만 따로 지운다.
+    /// APNs 토큰은 기기 값이라 남긴다.
     public static let userScopedKeys: [String] = [userID, deviceRegisteredAt, deviceRegisteredSignature]
 }

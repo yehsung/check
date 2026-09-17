@@ -201,7 +201,8 @@ func minigame_board_의_최종_정의는_default_를_되돌린_파일이다() th
     let (file, _) = try finalDefinition(of: "minigame_board")
     let why = "최종 정의가 바뀌었다: \(file.lastPathComponent). 새 파일이 minigame_board 를 다시 정의했다면 "
         + "그 파일도 p_day 의 default 를 갖고 있는지 위 테스트로 확인된다 — 이 줄만 새 이름으로 고쳐라."
-    #expect(file.lastPathComponent == "20260912151142_minigame_board_default_restore.sql", Comment(rawValue: why))
+    // 2026-09-17 숨김 계정(20260917160000)이 순위 격리 조건을 넣으려 다시 정의했다 — p_day 의 DEFAULT NULL 은 ① 이 지킨다.
+    #expect(file.lastPathComponent == "20260917160000_hidden_accounts.sql", Comment(rawValue: why))
 
     // 사고를 낸 파일은 그대로 남아 있다(이미 적용된 마이그레이션이라 본문을 고치지 않는다).
     // 그 파일이 default 를 **안** 갖고 있다는 사실 자체가 '최종 정의로만 판정한다'는 이 파일의 전제다.
@@ -221,9 +222,12 @@ func minigame_board_의_최종_정의는_default_를_되돌린_파일이다() th
 
 /// 핫픽스 파일은 적용 직후 `pg_get_function_arguments` 로 자기 결과를 되묻는다.
 /// 이 do$$ 블록이 사라지면 "적용했는데 default 가 안 붙은" 상태가 다시 무음이 된다.
+/// 최종 정의가 아니라 **핫픽스 파일 자체**를 읽는다 — 뒤 파일이 함수를 다시 정의해도 이미 적용된 핫픽스의 단언은 그대로다
+/// (뒤 파일의 default 는 ① 이 선언으로 지키고, Postgres 는 `create or replace` 로 기존 default 를 지우는 것을 거부한다).
 @Test
 func 핫픽스는_적용_직후_카탈로그로_자기_결과를_확인한다() throws {
-    let (file, sql) = try finalDefinition(of: "minigame_board")
+    let file = try migrationsDirectory().appendingPathComponent("20260912151142_minigame_board_default_restore.sql")
+    let sql = stripSQLLineComments(try String(contentsOf: file, encoding: .utf8))
     #expect(sql.contains("pg_get_function_arguments"), "\(file.lastPathComponent): 사후 단언이 사라졌다")
     #expect(
         sql.contains("'p_game text, p_day date DEFAULT NULL::date'"),

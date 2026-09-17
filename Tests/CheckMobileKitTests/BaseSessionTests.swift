@@ -170,11 +170,13 @@ import Testing
             request.path == "/auth/v1/token" ? BaseStub.invalidGrant : nil
         }))
         defer { fatal.tearDown() }
+        fatal.storage.defaults.set("a@b.c", forKey: AingSharedKeys.email)
         await fatal.session.launch()
         #expect(fatal.session.phase == .signedOut)
         #expect(fatal.session.notice == "다시 로그인 필요")
         #expect(fatal.vault.read(AingKeychain.accessTokenKey) == nil)
         #expect(fatal.storage.defaults.string(forKey: AingSharedKeys.userID) == nil)
+        #expect(fatal.session.storedEmail == "a@b.c", "만료는 같은 사람이 다시 들어오는 길 — 로그인 칸을 채울 이메일은 남긴다")
 
         let transient = makeHarness(seedAccess: old, responder: Self.happyServer(extra: { request in
             request.path == "/auth/v1/token" ? .json(#"{"msg":"upstream"}"#, status: 503) : nil
@@ -322,6 +324,7 @@ import Testing
         h.session.reloadWidgetTimelines = { reloads += 1 }
         h.session.onSignedOut = { signedOutEvents += 1 }
         let generation = h.session.generation
+        h.storage.defaults.set("a@b.c", forKey: AingSharedKeys.email)
         MobileStubURLProtocol.clearRequests(host: h.host)
 
         await h.session.signOut()
@@ -329,6 +332,7 @@ import Testing
         #expect(h.session.phase == .signedOut)
         #expect(h.session.generation == generation + 1)
         #expect(h.session.session == nil)
+        #expect(h.session.storedEmail == nil, "스스로 로그아웃하면 다음 사람 로그인 칸에 앞 이메일이 남지 않는다")
         #expect(h.vault.read(AingKeychain.accessTokenKey) == nil)
         #expect(h.vault.read(AingKeychain.refreshTokenKey) == nil)
         #expect(h.storage.defaults.string(forKey: AingSharedKeys.userID) == nil)
@@ -400,6 +404,41 @@ import Testing
         await h.session.pendingDeviceRegistration?.value
         #expect(h.session.apnsToken == nil, "형식이 틀린 토큰은 저장하지 않는다")
         #expect(MobileForbiddenCalls.violations(in: h.requests).isEmpty)
+    }
+
+    @Test("1시간 안에 재실행해도 알림 종류 설정을 모르면 한 번은 등록해 설정을 받는다 — 받은 뒤 포그라운드는 다시 스로틀")
+    func relaunchInsideThrottleStillLearnsPushPrefs() async {
+        let access = BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(86_400))
+        let h = makeHarness(seedAccess: access, responder: Self.happyServer())
+        defer { h.tearDown() }
+        await h.session.launch()
+        await h.session.pendingDeviceRegistration?.value
+        #expect(h.count(rpc: "register_device") == 1)
+        #expect(h.session.pushPrefs != nil)
+
+        // 같은 설치(공용 suite · 키체인 · 스텁 서버)로 10분 뒤 새 프로세스 — 메모리의 설정은 없다.
+        h.clock.advance(10 * 60)
+        var info = BaseStub.appInfo
+        info.build = 1
+        let relaunched = MobileSessionStore(
+            service: h.service,
+            vault: h.vault,
+            storage: h.storage,
+            appInfo: info,
+            installationID: "11111111-2222-4333-8444-555555555555",
+            clock: h.clock.clock
+        )
+        relaunched.clientReleaseTimeoutSeconds = 0
+        #expect(relaunched.pushPrefs == nil)
+        await relaunched.launch()
+        await relaunched.pendingDeviceRegistration?.value
+        #expect(h.count(rpc: "register_device") == 2, "설정을 모르는 채 스로틀에 걸리면 나 탭 토글이 최대 1시간 잠긴다")
+        #expect(relaunched.pushPrefs == PushPrefs(message: true, gomokuInvite: false, feedbackReply: true))
+
+        h.clock.advance(5 * 60)
+        relaunched.appDidBecomeActive()
+        await relaunched.pendingDeviceRegistration?.value
+        #expect(h.count(rpc: "register_device") == 2, "설정을 안 뒤의 포그라운드는 다시 1시간 스로틀")
     }
 
     @Test("register_device 가 없는 서버(404)는 조용히 접고 스탬프를 찍지 않는다 — 다음 포그라운드가 다시 시도")

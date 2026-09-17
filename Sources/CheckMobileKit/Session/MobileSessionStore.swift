@@ -247,6 +247,9 @@ package final class MobileSessionStore {
         )
         MobileSignOutCleanupLedger.update(vault) { $0.append(cleanup) }
         clearLocalUserData()
+        // 스스로 로그아웃하면 이메일도 잊는다(폰을 넘기거나 계정을 바꿀 때 앞 사람 이메일이 로그인 칸에 남지 않게 — e2e 결함 2).
+        // 치명 만료(`expireSession`)는 같은 사람이 다시 들어오는 길이라 남긴다.
+        storage.defaults.removeObject(forKey: AingSharedKeys.email)
         session = nil
         profile = nil
         pushPrefs = nil
@@ -411,7 +414,10 @@ package final class MobileSessionStore {
         let defaults = storage.defaults
         let signature = registrationSignature(userID: current.userID)
         let now = clock.now()
+        // 스로틀은 알림 종류 설정을 이미 알 때만 건다 — 설정은 이 응답으로만 오므로, 1시간 안에 재실행한 프로세스가
+        // 건너뛰면 나 탭 토글이 최대 1시간 잠긴다(e2e 결함 1). 프로세스당 한 번 더 보내는 비용뿐이다.
         if reason == .foreground,
+           pushPrefs != nil,
            defaults.string(forKey: AingSharedKeys.deviceRegisteredSignature) == signature,
            let last = defaults.object(forKey: AingSharedKeys.deviceRegisteredAt) as? Date,
            now.timeIntervalSince(last) < Self.deviceRegistrationThrottleSeconds,

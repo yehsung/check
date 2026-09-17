@@ -139,8 +139,11 @@ func bothGamesReachTheSingleTokenWiring() throws {
     #expect(panelWiresStart,
             "허브가 판 시작에서 토큰을 안 받는다 — 끝날 때 받으면 경과가 0 이라 서버가 전부 거절한다")
 
-    for game in ["MiniGameTimingBar.swift", "MiniGameFlappy.swift"] {
-        let signals = tkStripped(try #require(sources[game])).contains("host.onPlayingChanged(")
+    for (game, source) in [
+        ("MiniGameTimingBar", try CheckCoreSourceLayout.joinedSplitSource("MiniGameTimingBar.swift")),
+        ("MiniGameFlappy", try CheckCoreSourceLayout.joinedSplitSource("MiniGameFlappy.swift")),
+    ] {
+        let signals = tkStripped(source).contains("host.onPlayingChanged(")
         #expect(signals, Comment(rawValue: "\(game) 이 시작 신호를 안 보낸다 — 그 게임만 점수가 안 올라간다"))
     }
 

@@ -821,14 +821,6 @@ func timingBarPausedGameDoesNotTickEither() throws {
 
 // MARK: - (6) 소스 계약
 
-private func tbSourceURL() -> URL {
-    URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .appendingPathComponent("Sources/check/MiniGameTimingBar.swift")
-}
-
 /// 주석(`//` · `/* */`)을 걷어낸 코드만 남긴다 — 설명문에 든 이름이 단언에 걸리지 않게.
 private func tbStrippingComments(_ source: String) -> String {
     var output = ""

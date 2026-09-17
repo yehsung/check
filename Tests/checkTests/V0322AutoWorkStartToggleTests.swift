@@ -151,7 +151,7 @@ struct V0322AutoWorkStartToggleTests {
     func thirtyMinuteResumeSitsBehindTheSameGate() throws {
         // 재개는 비동기 왕복이라 "끄면 재개가 안 일어난다"를 동기 단언으로 가를 수 없다. 대신 구조를 못 박는다:
         // 재개 호출자가 nudgeAutoStart 하나뿐이고 그 안에서 자격 가드 뒤에 있으면, ②가 증명한 스위치가 재개도 막는다.
-        let overlay = v0322StrippingComments(try String(contentsOf: v0322SourceURL("CheckOverlayWindow.swift"), encoding: .utf8))
+        let overlay = v0322StrippingComments(try CheckCoreSourceLayout.joinedSplitSource("CheckOverlayWindow.swift"))
         let function = try #require(overlay.range(of: "func nudgeAutoStart()"), "넛지 발동 함수가 사라졌다")
         let body = overlay[function.upperBound...]
         let guardLine = try #require(body.range(of: "guard isNudgeEligible else { return }"), "넛지 발동이 자격을 다시 보지 않는다")

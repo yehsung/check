@@ -118,10 +118,7 @@ func v0321RefreshKeepsTheFirstSwap() throws {
 
 @Test("격발 순서: 갈아입는다 → 덮는다 → (뷰가 덮는 순간 선 사용자면) 한 번 더 갈아입는다 → 울트라 동작")
 func v0321TakeoverOrderIsPinnedInSource() throws {
-    let url = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("Sources/check/CheckOverlayWindow.swift")
-    let code = v0321StrippingComments(try String(contentsOf: url, encoding: .utf8))
+    let code = v0321StrippingComments(try CheckCoreSourceLayout.joinedSplitSource("CheckOverlayWindow.swift"))
     let start = try #require(code.range(of: "private func beginUltraTakeover("))
     let end = try #require(code.range(of: "static func ultraCharacter(for", range: start.upperBound..<code.endIndex))
     let body = String(code[start.upperBound..<end.lowerBound])

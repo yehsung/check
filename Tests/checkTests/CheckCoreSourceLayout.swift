@@ -8,6 +8,14 @@ import Foundation
 //   · 파일 이름으로 읽기 → 맥 자리에 없고 코어 자리에 있으면 코어에서 읽는다(판정은 실제 파일 존재로 — 목록을 적어 두지 않는다).
 //   · 폴더 훑기 → Sources/check 를 물으면 Sources/CheckCore 도 합친다.
 //   · 반쪽만 옮긴 파일(쪼갠 파일) → 두 조각을 이어 읽는다(떼기 전 한 파일이던 내용 그대로).
+//
+// ⚠️ 쪼갠 파일은 **이름 하나로 읽지 마라** — `joinedSplitSource(_:)` 로만 읽는다. `directory(for:)` · `appendingCheckSourcePath` ·
+// 글자 그대로의 경로("Sources/check/MiniGameFlappy.swift")는 조각 하나만 준다. 그러면 떼기 전 한 파일이던 내용의 반쪽만
+// 검사해서 "이 파일에 X 가 없다" 같은 부정 단언이 다른 반쪽의 위반을 **조용히 통과**시킨다(B3 검증에서 실측 — V0312 의
+// `#if DEBUG` 금지가 CheckTokenUsageRow.swift 쪽을 못 봤다). 이 두 도우미에 실행 중 가드를 두지 않은 까닭: 폴더 훑기 루프
+// (AwayCloseTests · V0241 · V0251 · V0317 · V0322)도 같은 도우미로 조각 이름을 하나씩 읽는데, 거기서는 두 조각이 모두 목록에
+// 있어 빠짐이 없다 — 실행 중에는 "훑기의 한 칸"과 "이름 하나 읽기"를 가를 수 없다. 대신 CheckCoreSourceLayoutTests 가
+// 테스트 소스를 훑어, 쪼갠 파일 이름이 든 문자열 리터럴이 `joinedSplitSource(` 의 인자 말고 다른 자리에 있으면 빨개진다.
 enum CheckCoreSourceLayout {
     static let repoRoot: URL = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()   // Tests/checkTests
@@ -27,6 +35,11 @@ enum CheckCoreSourceLayout {
         "CheckOverlayReactions.swift": ["Sources/check/CheckOverlayReactions.swift", "Sources/CheckCore/MilestoneTracker.swift"],
         "TodoSync.swift": ["Sources/CheckCore/TodoSync.swift", "Sources/check/TodoSyncCoordinator.swift"],
     ]
+
+    /// 쪼갠 파일에 속하는 파일 이름 전부(떼기 전 이름 + 각 조각의 파일 이름). 이 이름들은 `joinedSplitSource(_:)` 로만 읽는다.
+    static var splitFileNames: Set<String> {
+        Set(splitParts.keys).union(splitParts.values.flatMap { $0.map { ($0 as NSString).lastPathComponent } })
+    }
 
     /// 파일 이름(Sources/check 기준 상대경로)이 실제로 있는 폴더("Sources/check" 또는 "Sources/CheckCore").
     static func directory(for name: String) -> String {

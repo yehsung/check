@@ -561,11 +561,7 @@ func v0316bUltraFallsBackToAingNotMine() throws {
 /// 이게 정확히 실사용 신고의 모양이었다(`if let characterID { applyUltraCharacter(characterID) }`).
 @Test("격발 호출부가 nil 을 걸러내지 않는다")
 func v0316bTakeoverDoesNotFilterNilCharacter() throws {
-    let source = try String(
-        contentsOf: URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/check/CheckOverlayWindow.swift"),
-        encoding: .utf8)
+    let source = try CheckCoreSourceLayout.joinedSplitSource("CheckOverlayWindow.swift")
     let code = source
         .split(separator: "\n")
         .map { line -> String in

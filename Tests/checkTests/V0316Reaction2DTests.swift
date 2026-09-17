@@ -172,10 +172,7 @@ struct V0316Reaction2DTests {
     func flatSourceUsesOnlyZRotation() throws {
         // ⚠️ 소스 계약은 **주석을 걷어낸 뒤** 검사한다. 안 그러면 설명을 지워야만 초록이 되는 테스트가 된다
         //    (이 저장소가 실제로 밟은 함정이다).
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/check/CheckOverlayReactions.swift")
-        let raw = try String(contentsOf: url, encoding: .utf8)
+        let raw = try CheckCoreSourceLayout.joinedSplitSource("CheckOverlayReactions.swift")
         let source = raw.split(separator: "\n", omittingEmptySubsequences: false)
             .map { line -> String in
                 guard let range = line.range(of: "//") else { return String(line) }

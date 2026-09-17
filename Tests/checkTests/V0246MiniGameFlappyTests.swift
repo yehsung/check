@@ -2290,7 +2290,7 @@ struct V0316MiniGameAingFixedTests {
         #expect(mascot.contains("character ?? CharacterCatalog.builtInAing"),
                 "옆모습 기본값이 아잉이 아니다")
 
-        let flappy = try code("Sources/check/MiniGameFlappy.swift")
+        let flappy = swiftCodeStrippingComments(try CheckCoreSourceLayout.joinedSplitSource("MiniGameFlappy.swift"))
         #expect(!flappy.contains("selectedCharacter("),
                 "MiniGameFlappy 가 착용 캐릭터를 읽는다")
         // `CheckMascotAssets.image(...)` / `menuBarImage(...)` 는 **인자 1개짜리가 착용 캐릭터**다.

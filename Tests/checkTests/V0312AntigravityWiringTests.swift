@@ -848,14 +848,6 @@ private func agFileFingerprint(_ url: URL) -> String {
     return "\(size)|\(mtime)"
 }
 
-private func agSourceURL(_ name: String) -> URL {
-    URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent() // Tests/checkTests
-        .deletingLastPathComponent() // Tests
-        .deletingLastPathComponent() // repo root
-        .appendingPathComponent("\(CheckCoreSourceLayout.directory(for: name))/\(name)")
-}
-
 private func agOccurrences(of needle: String, in haystack: String) -> Int {
     haystack.components(separatedBy: needle).count - 1
 }
@@ -950,7 +942,7 @@ func v0312BlockedRealHomeScanTouchesNothingAndReturnsEmpty() async {
 /// (3) 이 파일에 `#if DEBUG` 같은 빌드 갈래가 없다(어느 갈래가 배포되는지 추적 불가능해진다).
 @Test
 func v0312RealHomeScanBlockIsGatedOnTheTestBundleAlone() throws {
-    let raw = try String(contentsOf: agSourceURL("CheckTokenUsage.swift"), encoding: .utf8)
+    let raw = try CheckCoreSourceLayout.joinedSplitSource("CheckTokenUsage.swift")
     let source = agStrippingComments(raw)
 
     guard let start = source.range(of: "static func realHomeScanIsBlocked"),

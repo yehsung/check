@@ -1,0 +1,8 @@
+[
+  {"user_id": "d0000000-0000-4000-8000-0000000000b3", "display_name": "구름", "avatar_url": null, "best_score": 968, "best_at": "2026-09-17T01:12:45.123456+00:00", "plays": 14, "center": "busan"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b1", "display_name": "라떼", "avatar_url": null, "best_score": 955, "best_at": "2026-09-17T00:40:02+00:00", "plays": 9, "center": "seoul"},
+  {"user_id": "d0000000-0000-4000-8000-000000000001", "display_name": "새벽", "avatar_url": null, "best_score": 941, "best_at": "2026-09-17T03:20:11+00:00", "plays": 6, "center": "seoul"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b4", "display_name": "호두", "avatar_url": null, "best_score": 902, "best_at": "2026-09-16T23:59:30+00:00", "plays": 3, "center": null},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b5", "display_name": "모카", "avatar_url": null, "best_score": 877, "best_at": "2026-09-17T02:05:00+00:00", "plays": 21, "center": "busan"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b6", "display_name": "단비", "avatar_url": null, "best_score": 710, "best_at": "2026-09-17T04:44:44+00:00", "plays": 2, "center": "seoul"}
+]

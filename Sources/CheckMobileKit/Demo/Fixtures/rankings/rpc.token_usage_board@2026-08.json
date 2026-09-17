@@ -1,0 +1,4 @@
+[
+  {"user_id": "d0000000-0000-4000-8000-000000000001", "display_name": "새벽", "avatar_url": null, "claude_input": 902345678, "claude_output": 91234567, "claude_cache_read": 3920456789, "claude_cache_creation": 402345678, "codex_input": 0, "codex_output": 0, "total": 5316382712, "today_total": 0, "today_date": "2026-08-31", "codex_cache_read": 0, "codex_account_month": null, "codex_effective": 0, "center": "seoul"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b1", "display_name": "라떼", "avatar_url": null, "claude_input": 612345678, "claude_output": 71234567, "claude_cache_read": 2120456789, "claude_cache_creation": 302345678, "codex_input": 323456789, "codex_output": 44567890, "total": 3474407391, "today_total": 0, "today_date": "2026-08-31", "codex_cache_read": 0, "codex_account_month": null, "codex_effective": 368024679, "center": "seoul"}
+]

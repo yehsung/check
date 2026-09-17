@@ -1,0 +1,546 @@
+[
+ {
+  "day": "2026-09-17",
+  "device_id": "demo-mac-1",
+  "claude_total": 25951977,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-09-16",
+  "device_id": "demo-mac-1",
+  "claude_total": 55606557,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-09-15",
+  "device_id": "demo-mac-1",
+  "claude_total": 24821496,
+  "codex_total": 3096123,
+  "codex_utc_total": 3096123,
+  "codex_account": null
+ },
+ {
+  "day": "2026-09-14",
+  "device_id": "demo-mac-1",
+  "claude_total": 24787817,
+  "codex_total": 16584882,
+  "codex_utc_total": 16584882,
+  "codex_account": null
+ },
+ {
+  "day": "2026-09-11",
+  "device_id": "demo-mac-1",
+  "claude_total": 53413907,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-09-10",
+  "device_id": "demo-mac-1",
+  "claude_total": 34784236,
+  "codex_total": 10835309,
+  "codex_utc_total": 10835309,
+  "codex_account": null
+ },
+ {
+  "day": "2026-09-09",
+  "device_id": "demo-mac-1",
+  "claude_total": 36801377,
+  "codex_total": 8837454,
+  "codex_utc_total": 8837454,
+  "codex_account": null
+ },
+ {
+  "day": "2026-09-08",
+  "device_id": "demo-mac-1",
+  "claude_total": 61475327,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-09-07",
+  "device_id": "demo-mac-1",
+  "claude_total": 53896032,
+  "codex_total": 6489842,
+  "codex_utc_total": 6489842,
+  "codex_account": null
+ },
+ {
+  "day": "2026-09-04",
+  "device_id": "demo-mac-1",
+  "claude_total": 6291937,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-09-03",
+  "device_id": "demo-mac-1",
+  "claude_total": 58285028,
+  "codex_total": 13844140,
+  "codex_utc_total": 13844140,
+  "codex_account": null
+ },
+ {
+  "day": "2026-09-02",
+  "device_id": "demo-mac-1",
+  "claude_total": 15265393,
+  "codex_total": 10533527,
+  "codex_utc_total": 10533527,
+  "codex_account": null
+ },
+ {
+  "day": "2026-09-01",
+  "device_id": "demo-mac-1",
+  "claude_total": 9983087,
+  "codex_total": 3131225,
+  "codex_utc_total": 3131225,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-31",
+  "device_id": "demo-mac-1",
+  "claude_total": 35253565,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-28",
+  "device_id": "demo-mac-1",
+  "claude_total": 55269136,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-27",
+  "device_id": "demo-mac-1",
+  "claude_total": 61195077,
+  "codex_total": 2086355,
+  "codex_utc_total": 2086355,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-26",
+  "device_id": "demo-mac-1",
+  "claude_total": 14929186,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-25",
+  "device_id": "demo-mac-1",
+  "claude_total": 18080818,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-24",
+  "device_id": "demo-mac-1",
+  "claude_total": 27780396,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-21",
+  "device_id": "demo-mac-1",
+  "claude_total": 11010339,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-20",
+  "device_id": "demo-mac-1",
+  "claude_total": 14854177,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-19",
+  "device_id": "demo-mac-1",
+  "claude_total": 34403150,
+  "codex_total": 9982153,
+  "codex_utc_total": 9982153,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-18",
+  "device_id": "demo-mac-1",
+  "claude_total": 38120877,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-17",
+  "device_id": "demo-mac-1",
+  "claude_total": 25689561,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-14",
+  "device_id": "demo-mac-1",
+  "claude_total": 24896148,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-13",
+  "device_id": "demo-mac-1",
+  "claude_total": 20633220,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-12",
+  "device_id": "demo-mac-1",
+  "claude_total": 10013490,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-11",
+  "device_id": "demo-mac-1",
+  "claude_total": 51700322,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-10",
+  "device_id": "demo-mac-1",
+  "claude_total": 32337151,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-08",
+  "device_id": "demo-mac-1",
+  "claude_total": 35397398,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-07",
+  "device_id": "demo-mac-1",
+  "claude_total": 13442683,
+  "codex_total": 1607491,
+  "codex_utc_total": 1607491,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-06",
+  "device_id": "demo-mac-1",
+  "claude_total": 22780056,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-05",
+  "device_id": "demo-mac-1",
+  "claude_total": 48111012,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-04",
+  "device_id": "demo-mac-1",
+  "claude_total": 15619896,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-03",
+  "device_id": "demo-mac-1",
+  "claude_total": 33853216,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-08-02",
+  "device_id": "demo-mac-1",
+  "claude_total": 34470371,
+  "codex_total": 6135533,
+  "codex_utc_total": 6135533,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-31",
+  "device_id": "demo-mac-1",
+  "claude_total": 33698706,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-30",
+  "device_id": "demo-mac-1",
+  "claude_total": 20018598,
+  "codex_total": 9917726,
+  "codex_utc_total": 9917726,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-29",
+  "device_id": "demo-mac-1",
+  "claude_total": 44832979,
+  "codex_total": 11637737,
+  "codex_utc_total": 11637737,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-28",
+  "device_id": "demo-mac-1",
+  "claude_total": 15590160,
+  "codex_total": 13025005,
+  "codex_utc_total": 13025005,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-27",
+  "device_id": "demo-mac-1",
+  "claude_total": 43719722,
+  "codex_total": 11782494,
+  "codex_utc_total": 11782494,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-26",
+  "device_id": "demo-mac-1",
+  "claude_total": 54765319,
+  "codex_total": 11865929,
+  "codex_utc_total": 11865929,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-25",
+  "device_id": "demo-mac-1",
+  "claude_total": 39854839,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-24",
+  "device_id": "demo-mac-1",
+  "claude_total": 28275931,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-23",
+  "device_id": "demo-mac-1",
+  "claude_total": 7431444,
+  "codex_total": 9776214,
+  "codex_utc_total": 9776214,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-22",
+  "device_id": "demo-mac-1",
+  "claude_total": 20730076,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-21",
+  "device_id": "demo-mac-1",
+  "claude_total": 7519913,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-20",
+  "device_id": "demo-mac-1",
+  "claude_total": 28512620,
+  "codex_total": 15662023,
+  "codex_utc_total": 15662023,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-17",
+  "device_id": "demo-mac-1",
+  "claude_total": 10641128,
+  "codex_total": 7878271,
+  "codex_utc_total": 7878271,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-16",
+  "device_id": "demo-mac-1",
+  "claude_total": 25123186,
+  "codex_total": 8080557,
+  "codex_utc_total": 8080557,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-15",
+  "device_id": "demo-mac-1",
+  "claude_total": 48140874,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-14",
+  "device_id": "demo-mac-1",
+  "claude_total": 18898308,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-13",
+  "device_id": "demo-mac-1",
+  "claude_total": 31165084,
+  "codex_total": 5341031,
+  "codex_utc_total": 5341031,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-10",
+  "device_id": "demo-mac-1",
+  "claude_total": 57543500,
+  "codex_total": 9838434,
+  "codex_utc_total": 9838434,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-09",
+  "device_id": "demo-mac-1",
+  "claude_total": 36835744,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-08",
+  "device_id": "demo-mac-1",
+  "claude_total": 11243503,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-07",
+  "device_id": "demo-mac-1",
+  "claude_total": 54231694,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-06",
+  "device_id": "demo-mac-1",
+  "claude_total": 42393015,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-03",
+  "device_id": "demo-mac-1",
+  "claude_total": 49449552,
+  "codex_total": 11811968,
+  "codex_utc_total": 11811968,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-02",
+  "device_id": "demo-mac-1",
+  "claude_total": 43600366,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-07-01",
+  "device_id": "demo-mac-1",
+  "claude_total": 44765685,
+  "codex_total": 5122833,
+  "codex_utc_total": 5122833,
+  "codex_account": null
+ },
+ {
+  "day": "2026-06-30",
+  "device_id": "demo-mac-1",
+  "claude_total": 10250318,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-06-29",
+  "device_id": "demo-mac-1",
+  "claude_total": 34818168,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-06-26",
+  "device_id": "demo-mac-1",
+  "claude_total": 34961255,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-06-25",
+  "device_id": "demo-mac-1",
+  "claude_total": 29755985,
+  "codex_total": 1104411,
+  "codex_utc_total": 1104411,
+  "codex_account": null
+ },
+ {
+  "day": "2026-06-24",
+  "device_id": "demo-mac-1",
+  "claude_total": 5116877,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ },
+ {
+  "day": "2026-06-23",
+  "device_id": "demo-mac-1",
+  "claude_total": 44663874,
+  "codex_total": 12096348,
+  "codex_utc_total": 12096348,
+  "codex_account": null
+ },
+ {
+  "day": "2026-06-22",
+  "device_id": "demo-mac-1",
+  "claude_total": 57001786,
+  "codex_total": 0,
+  "codex_utc_total": 0,
+  "codex_account": null
+ }
+]

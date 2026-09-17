@@ -50,6 +50,11 @@ targets:
     platform: iOS
     sources:
       - path: App
+    # w5/e2e: 실서버 e2e UI 테스트(AingCheckUITests)를 이 스킴의 test 에 싣는다. build/run 은 전과 같다(-scheme AingCheck build 영향 없음).
+    # 실행 방법은 ios/UITests/AingCheckE2ETests.swift 머리 주석 — 자격 증명은 TEST_RUNNER_AING_E2E_* 환경변수로만, 없으면 전부 skip.
+    scheme:
+      testTargets:
+        - AingCheckUITests
     # D-base: Supabase anon 키는 커밋하지 않는다. ios/scripts/sync-local-config.sh 가 저장소 루트 .env.local 에서
     # ios/Config/Local.xcconfig(gitignore)를 만들고, 아래 xcconfig 가 그것을 있으면 포함한다(없어도 빌드는 된다 — 데모 모드만 동작).
     configFiles:
@@ -193,3 +198,23 @@ targets:
           fi
           /usr/bin/plutil -create xml1 "$OUT"
           /usr/bin/plutil -insert CHECK_SUPABASE_ANON_KEY -string "$KEY" "$OUT"
+
+  # w5/e2e: 실서버 e2e(XCUITest). 운영 서버의 숨김 심사 계정 전용 — 자격 증명·토큰은 저장소에 두지 않고 실행 환경변수로만 받는다.
+  # 앱 동작은 바꾸지 않는다(앱 번들에 실리지 않는 테스트 번들). 헤드리스 시뮬레이터에서 `xcodebuild test` 로만 돈다.
+  AingCheckUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: AingCheck
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yehsung.aingcheck.uitests
+        PRODUCT_NAME: AingCheckUITests
+        TEST_TARGET_NAME: AingCheck
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        # UI 테스트 번들은 XCTest 의 메인 액터 API 와 JSON 사전을 오가므로 Swift 5 모드로 둔다(앱·패키지는 Swift 6 그대로).
+        SWIFT_VERSION: "5.0"
+        SWIFT_STRICT_CONCURRENCY: minimal

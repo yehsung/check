@@ -9,6 +9,7 @@ import XCTest
 //   3) TEST_RUNNER_AING_E2E_{SUPABASE_URL,ANON_KEY,A_EMAIL,A_PASSWORD,A_ID,A_NAME,A_TOKEN,B_EMAIL,B_PASSWORD,B_ID,B_NAME,B_TOKEN}=… \
 //      xcodebuild test-without-building -only-testing:AingCheckUITests/AingCheckE2ETests/<단계>
 //      선택: TEST_RUNNER_AING_E2E_NONCE(메시지·할 일 꼬리표 고정) · TEST_RUNNER_AING_E2E_KEEP_TODO(test04 가 남긴 "e2e 남김 <nonce>" — test10 이 B 화면에 안 보이는지 본다)
+//      · TEST_RUNNER_AING_E2E_PASSWORD_PROMPT=save|notnow(폼 로그인 직후 시스템 암호 저장 창에 답할 갈래, 기본 notnow — 창이 떠 있는 동안 알림 설명 시트가 없어야 한다)
 // 단계는 이름 순서대로 돈다(하나씩 부르면 단계 사이에 호스트가 서버 조회·simctl 을 끼울 수 있다). 환경변수가 없으면 전부 skip.
 // B 는 앱이 아니라 REST(B 의 사용자 JWT)로 흉내 낸다. 서버 쓰기는 두 계정의 정상 앱 동작(RPC)뿐이다.
 // 남는 것: test04 의 "e2e 남김" 할 일(test10 확인용 — 끝나면 A 토큰 todo_sync 톰스톤으로 지운다) · test06 의 끝난 오목 판 · 루비 ±3.
@@ -32,7 +33,8 @@ final class AingCheckE2ETests: XCTestCase {
         app.launch()
         let viaForm = E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
         log("signIn viaForm=\(viaForm)")
-        let primer = E2EUI.handlePushPrimer(app, allow: true, test: self)
+        // w6: 폼 로그인이면 암호 저장 창이 먼저 끝나고 그 뒤에 설명 시트가 뜬다(겹치지 않는다) — 도우미가 겹침을 단언한다.
+        let primer = E2EUI.handlePushPrimer(app, allow: true, test: self, viaForm: viaForm)
         log("primer=\(primer)")
         E2EUI.tab(app, "지금")
         let team = app.staticTexts["앱 심사 팀"]
@@ -99,8 +101,8 @@ final class AingCheckE2ETests: XCTestCase {
         let (env, server) = try loadEnv()
         let app = XCUIApplication()
         app.launch()
-        E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
-        _ = E2EUI.handlePushPrimer(app, allow: true, test: self)
+        let viaForm = E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
+        _ = E2EUI.handlePushPrimer(app, allow: true, test: self, viaForm: viaForm)
         E2EUI.tab(app, "메시지")
         sleep(2)
         shot("c0-list-before")
@@ -256,8 +258,8 @@ final class AingCheckE2ETests: XCTestCase {
         let (env, server) = try loadEnv()
         let app = XCUIApplication()
         app.launch()
-        E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
-        _ = E2EUI.handlePushPrimer(app, allow: true, test: self)
+        let viaForm = E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
+        _ = E2EUI.handlePushPrimer(app, allow: true, test: self, viaForm: viaForm)
         E2EUI.tab(app, "지금")
         let field = app.textFields["할 일 추가"]
         XCTAssertTrue(field.waitForExistence(timeout: 15), "할 일 입력칸이 없다")
@@ -373,8 +375,8 @@ final class AingCheckE2ETests: XCTestCase {
         let (env, server) = try loadEnv()
         let app = XCUIApplication()
         app.launch()
-        E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
-        _ = E2EUI.handlePushPrimer(app, allow: true, test: self)
+        let viaForm = E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
+        _ = E2EUI.handlePushPrimer(app, allow: true, test: self, viaForm: viaForm)
         E2EUI.tab(app, "지금")
         let before = try await serverGoal(server)
         log("e0 server goal before=\(String(describing: before))")
@@ -428,8 +430,8 @@ final class AingCheckE2ETests: XCTestCase {
         let (env, server) = try loadEnv()
         let app = XCUIApplication()
         app.launch()
-        E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
-        _ = E2EUI.handlePushPrimer(app, allow: true, test: self)
+        let viaForm = E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
+        _ = E2EUI.handlePushPrimer(app, allow: true, test: self, viaForm: viaForm)
         E2EUI.tab(app, "지금")
 
         let rubyA0 = try await lobbyRuby(server, .a)
@@ -566,8 +568,8 @@ final class AingCheckE2ETests: XCTestCase {
         let (env, server) = try loadEnv()
         let app = XCUIApplication()
         app.launch()
-        E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
-        _ = E2EUI.handlePushPrimer(app, allow: true, test: self)
+        let viaForm = E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
+        _ = E2EUI.handlePushPrimer(app, allow: true, test: self, viaForm: viaForm)
         let before = try await boardEntries(server, as: .a, game: "timing_bar")
         log("g0 board(A view) before rows=\(before.count) mine=\(String(describing: before.first(where: { ($0["user_id"] as? String)?.lowercased() == env.aID })))")
 
@@ -612,13 +614,72 @@ final class AingCheckE2ETests: XCTestCase {
 
     // MARK: h — 나 탭(별명 · 공개 설정 · 상점 · 제보)
 
+    /// A 의 이 기기 행 알림 설정(사용자 JWT · RLS 로 본인 행만). 기기 행이 하나가 아니면 nil.
+    @MainActor
+    private func serverPushPrefs(_ server: E2EServer) async throws -> [String: Bool]? {
+        let rows = try await server.get("client_devices?select=push_prefs", as: .a) as? [[String: Any]] ?? []
+        guard rows.count == 1 else {
+            log("h6 client_devices rows(A)=\(rows.count)")
+            return nil
+        }
+        return rows[0]["push_prefs"] as? [String: Bool]
+    }
+
+    /// 결함 1 회귀(ff51e74): 등록 성공 뒤 1시간 안에 재실행해도 알림 종류 토글 3개가 잠기지 않고 서버 값으로 보인다. 하나를 바꿨다 되돌려
+    /// set_push_prefs 가 서버에 닿는지 본다. 스크린샷은 계정 칸(이메일) 위에서 자른다.
+    @MainActor
+    private func checkPushPrefToggles(_ app: XCUIApplication, server: E2EServer) async throws {
+        let kinds: [(label: String, key: String)] = [("메시지", "message"), ("오목 신청", "gomoku_invite"), ("제보 답장", "feedback_reply")]
+        func toggle(_ label: String) -> XCUIElement {
+            app.switches.matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
+        }
+        let last = toggle(kinds[2].label)
+        for _ in 0..<4 where !(last.exists && last.isHittable) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(last.waitForExistence(timeout: 10), "알림 종류 토글이 없다")
+        sleep(2)
+        let unknown = E2EUI.anyElement(app, labelContains: "알림 종류 설정을 아직 못 읽었어요")
+        let server0 = try await serverPushPrefs(server)
+        var states: [String] = []
+        for kind in kinds {
+            let element = toggle(kind.label)
+            let on = (element.value as? String) == "1"
+            states.append("\(kind.key)=enabled:\(element.isEnabled),on:\(on),server:\(String(describing: server0?[kind.key]))")
+            XCTAssertTrue(element.isEnabled, "재실행 뒤 '\(kind.label)' 알림 토글이 잠겨 있다")
+            if let value = server0?[kind.key] { XCTAssertEqual(on, value, "'\(kind.label)' 토글이 서버 값과 다르다") }
+        }
+        log("h6 push toggles \(states) unknownNotice=\(unknown.exists)")
+        XCTAssertFalse(unknown.exists, "'알림 종류 설정을 아직 못 읽었어요' 가 떴다")
+        shot("h6-push-toggles", cutAbove: app.staticTexts["계정"], in: app)
+
+        // 하나(제보 답장)를 바꿨다가 되돌린다 → 서버 push_prefs 가 따라온다.
+        guard let original = server0?["feedback_reply"] else {
+            XCTFail("서버 알림 설정을 못 읽었다")
+            return
+        }
+        let target = toggle("제보 답장")
+        target.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        let flipped = try await eventually(timeout: 15) { try await self.serverPushPrefs(server)?["feedback_reply"] == !original }
+        log("h7 set_push_prefs feedback_reply → \(!original) server after=\(flipped.map { String(format: "%.2fs", $0) } ?? "TIMEOUT") ui=\(String(describing: target.value))")
+        XCTAssertNotNil(flipped, "토글을 바꿨는데 서버 push_prefs 가 안 바뀌었다")
+        shot("h7-toggle-flipped", cutAbove: app.staticTexts["계정"], in: app)
+        _ = waitUntil(timeout: 5) { target.isEnabled }
+        target.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        let restored = try await eventually(timeout: 15) { try await self.serverPushPrefs(server)?["feedback_reply"] == original }
+        log("h8 set_push_prefs feedback_reply → \(original) (restore) server after=\(restored.map { String(format: "%.2fs", $0) } ?? "TIMEOUT") ui=\(String(describing: target.value))")
+        XCTAssertNotNil(restored, "토글을 되돌렸는데 서버 push_prefs 가 원래 값으로 안 돌아왔다")
+        app.swipeDown()
+        app.swipeDown()
+    }
+
     @MainActor
     func test08_MeTab() async throws {
-        let (env, _) = try loadEnv()
+        let (env, server) = try loadEnv()
         let app = XCUIApplication()
         app.launch()
-        E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
-        _ = E2EUI.handlePushPrimer(app, allow: true, test: self)
+        let viaForm = E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
+        _ = E2EUI.handlePushPrimer(app, allow: true, test: self, viaForm: viaForm)
         E2EUI.tab(app, "나")
         let name = E2EUI.anyElement(app, labelContains: env.aName)
         XCTAssertTrue(name.waitForExistence(timeout: 15), "나 탭 머리에 별명이 없다")
@@ -636,8 +697,10 @@ final class AingCheckE2ETests: XCTestCase {
         XCTAssertTrue(tokenToggle.waitForExistence(timeout: 10), "토큰 공개 토글이 없다")
         sleep(2)
         log("h2 toggles token=\(String(describing: tokenToggle.value)) minigame=\(String(describing: miniToggle.exists ? miniToggle.value : "-")) switches=\(app.switches.allElementsBoundByIndex.map { "\($0.label)=\(String(describing: $0.value))" })")
-        // 설정 화면 아래 계정 칸에는 이메일이 보인다 — 그 부분은 찍지도(스크린샷) 덤프하지도 않는다.
-        shot("h2-settings")
+        // 설정 화면 아래 계정 칸에는 이메일이 보인다 — "계정" 머리 윗변에서 잘라 찍고, 덤프하지 않는다
+        // (w6: 전체 화면으로 찍으면 iPhone 17 화면 맨 아래에 이메일이 걸렸다).
+        shot("h2-settings", cutAbove: app.staticTexts["계정"], in: app)
+        try await checkPushPrefToggles(app, server: server)
         app.navigationBars.firstMatch.buttons.firstMatch.tap()
 
         // 상점
@@ -684,8 +747,8 @@ final class AingCheckE2ETests: XCTestCase {
         let (env, server) = try loadEnv()
         let app = XCUIApplication()
         app.launch()
-        E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
-        _ = E2EUI.handlePushPrimer(app, allow: true, test: self)
+        let viaForm = E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
+        _ = E2EUI.handlePushPrimer(app, allow: true, test: self, viaForm: viaForm)
         E2EUI.tab(app, "메시지")
         sleep(2)
 
@@ -751,14 +814,20 @@ final class AingCheckE2ETests: XCTestCase {
         let keepTodo = ProcessInfo.processInfo.environment["AING_E2E_KEEP_TODO"] ?? ""
         let app = XCUIApplication()
         app.launch()
-        E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
-        _ = E2EUI.handlePushPrimer(app, allow: true, test: self)
+        let viaForm = E2EUI.signInIfNeeded(app, email: env.aEmail, password: env.aPassword, test: self)
+        _ = E2EUI.handlePushPrimer(app, allow: true, test: self, viaForm: viaForm)
         signOutFromSettings(app)
         log("j1 signed out (login screen shown)")
+        // 결함 2 회귀(ff51e74): 스스로 로그아웃하면 로그인 화면 이메일 칸이 비어 있다(placeholder 만). 값은 적지 않고 길이만.
+        let emailField = app.textFields.firstMatch
+        XCTAssertTrue(emailField.waitForExistence(timeout: 10), "로그인 화면 이메일 칸이 없다")
+        let leftover = (emailField.value as? String).flatMap { $0 == "name@example.com" ? nil : $0 } ?? ""
+        log("j1 email field after sign-out: empty=\(leftover.isEmpty) length=\(leftover.count) isA=\(leftover == env.aEmail)")
+        XCTAssertTrue(leftover.isEmpty, "로그아웃 뒤 로그인 화면 이메일 칸에 앞 계정 이메일이 남았다")
         sleep(3)
 
-        E2EUI.signInIfNeeded(app, email: env.bEmail, password: env.bPassword, test: self)
-        let primer = E2EUI.handlePushPrimer(app, allow: true, test: self)
+        let bViaForm = E2EUI.signInIfNeeded(app, email: env.bEmail, password: env.bPassword, test: self)
+        let primer = E2EUI.handlePushPrimer(app, allow: true, test: self, viaForm: bViaForm)
         log("j2 signed in as B primer=\(primer)")
         E2EUI.tab(app, "지금")
         XCTAssertTrue(app.staticTexts["앱 심사 팀"].waitForExistence(timeout: 20))
@@ -801,7 +870,10 @@ final class AingCheckE2ETests: XCTestCase {
             _ = E2EUI.handlePushPrimer(app, allow: false, test: self)
             signOutFromSettings(app)
         }
-        log("k signed out: loginButton=\(app.buttons["로그인"].exists)")
+        let emailField = app.textFields.firstMatch
+        let leftover = emailField.exists ? ((emailField.value as? String).flatMap { $0 == "name@example.com" ? nil : $0 } ?? "") : ""
+        log("k signed out: loginButton=\(app.buttons["로그인"].exists) emailFieldEmpty=\(leftover.isEmpty)")
+        XCTAssertTrue(leftover.isEmpty, "로그아웃 뒤 로그인 화면 이메일 칸이 비어 있지 않다")
     }
 
     // MARK: 진단 — 실행 중인 앱의 로그인 화면 상태(자격 증명은 값 대신 일치 여부만 적는다)

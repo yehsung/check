@@ -108,6 +108,27 @@ extension XCTestCase {
         log("shot \(name)")
     }
 
+    /// 화면을 찍되 `element` 윗변 아래를 잘라 낸다(설정 화면의 계정 칸 — 이메일 — 을 남기지 않는다). 요소가 화면 위로 올라가 있으면
+    /// 남길 것이 없어 찍지 않는다. 요소가 없거나 화면 아래에 있으면 화면 전체.
+    @MainActor
+    func shot(_ name: String, cutAbove element: XCUIElement, in app: XCUIApplication) {
+        let image = XCUIScreen.main.screenshot().image
+        let height = app.windows.firstMatch.frame.height
+        guard let cgImage = image.cgImage, height > 0 else { return }
+        let cut = element.exists ? min(max(element.frame.minY, 0), height) : height
+        let scale = CGFloat(cgImage.height) / height
+        let rect = CGRect(x: 0, y: 0, width: CGFloat(cgImage.width), height: (cut * scale).rounded(.down))
+        guard rect.height >= 1, let cropped = cgImage.cropping(to: rect) else {
+            log("shot \(name) skipped (account section at top)")
+            return
+        }
+        let attachment = XCTAttachment(image: UIImage(cgImage: cropped))
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        log("shot \(name) cutAbove=\(Int(cut))pt of \(Int(height))pt")
+    }
+
     @MainActor
     func dumpTree(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(string: app.debugDescription)
@@ -199,10 +220,80 @@ enum E2EUI {
         return true
     }
 
-    /// 로그인 직후 시스템 "암호를 저장하겠습니까?" 창이 뜨면 "지금 안 함"(시뮬레이터 실측 — 이 창이 알림 설명 시트를 가려
-    /// 시트 버튼이 눌리지 않았다). 창은 앱 또는 SpringBoard 쪽에 잡힌다.
+    /// 알림 설명 시트 제목.
+    static let primerTitle = "알림을 켜 둘까요?"
+
+    /// 로그인 폼 제출 직후의 시스템 "암호를 저장하겠습니까?" 창.
+    ///
+    /// w6 실측: 이 창은 SafariViewService 원격 화면이 **앱 프로세스의** 텍스트 효과 창에 모달로 붙은 것이라 XCUI 는 **앱 트리**에서 찾는다
+    /// (SpringBoard 트리에는 없다). 앱 상태는 active 그대로다. 창은 폼이 사라진 뒤 0.4초(원격 서비스가 떠 있음)~2.2초(처음) 뒤에 뜬다.
+    struct PasswordPrompt {
+        /// 창을 봤는가(이미 저장된 계정 · 자동 완성 꺼짐이면 안 뜬다).
+        var shown = false
+        /// 앱 트리에서 찾았는가(false 면 SpringBoard 트리).
+        var inApp = false
+        /// 창이 떠 있는 동안 설명 시트가 트리에 있었는가 — **수리 뒤에는 false 여야 한다**(겹침).
+        var primerDuringPrompt = false
+        /// 창보다 설명 시트가 먼저 떴는가(그 뒤에 창이 뜨면 시트가 창 아래에 깔린다 — 수리 뒤에는 시트를 거둬들인다).
+        var primerBeforePrompt = false
+        /// 폼 로그인 뒤 창이 뜨기까지(초).
+        var appearedAfter: TimeInterval?
+        var tapped = "-"
+    }
+
+    /// 창을 기다렸다가(없으면 그대로) `choice` 로 답한다: "save"(암호 저장) · 그 밖(지금 안 함). 떠 있는 동안 설명 시트가 함께 있는지 잰다.
+    static func answerSavePasswordPrompt(_ app: XCUIApplication, choice: String, appearTimeout: TimeInterval = 10, test: XCTestCase) -> PasswordPrompt {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let primer = app.staticTexts[primerTitle]
+        var result = PasswordPrompt()
+        let start = Date()
+        var notNow: XCUIElement?
+        while Date().timeIntervalSince(start) < appearTimeout {
+            if primer.exists, !result.primerBeforePrompt {
+                result.primerBeforePrompt = true
+                test.log("password-prompt: primer visible before prompt at +\(String(format: "%.2f", Date().timeIntervalSince(start)))s")
+            }
+            if app.buttons["지금 안 함"].exists {
+                notNow = app.buttons["지금 안 함"]
+                result.inApp = true
+                break
+            }
+            if springboard.buttons["지금 안 함"].exists {
+                notNow = springboard.buttons["지금 안 함"]
+                break
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        guard let notNow else {
+            test.log("password-prompt: not shown within \(Int(appearTimeout))s primerVisible=\(primer.exists)")
+            return result
+        }
+        result.shown = true
+        result.appearedAfter = Date().timeIntervalSince(start)
+        test.shot("password-prompt")
+        // 창이 떠 있는 2초 동안 설명 시트가 트리에 한 번이라도 있으면 겹침이다(가려진 요소도 트리에는 잡힌다 — w5 겹침 실측).
+        let watch = Date()
+        while Date().timeIntervalSince(watch) < 2 {
+            if primer.exists { result.primerDuringPrompt = true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        let owner = result.inApp ? app : springboard
+        let target: XCUIElement
+        if choice == "save", let save = ["저장", "암호 저장"].map({ owner.buttons[$0] }).first(where: { $0.exists }) {
+            target = save
+            result.tapped = "save"
+        } else {
+            target = notNow
+            result.tapped = "notNow"
+        }
+        target.tap()
+        test.log("password-prompt: shown inApp=\(result.inApp) after=\(String(format: "%.2f", result.appearedAfter ?? -1))s primerDuringPrompt=\(result.primerDuringPrompt) primerBeforePrompt=\(result.primerBeforePrompt) tapped=\(result.tapped)")
+        return result
+    }
+
+    /// 폼을 거치지 않은 실행에 앞 실행의 창이 남아 있으면 "지금 안 함".
     @discardableResult
-    static func dismissSavePasswordPrompt(_ app: XCUIApplication, timeout: TimeInterval = 4) -> Bool {
+    static func dismissSavePasswordPrompt(_ app: XCUIApplication, timeout: TimeInterval = 2) -> Bool {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let candidates = ["지금 안 함", "Not Now"].flatMap { [app.buttons[$0], springboard.buttons[$0]] }
         let deadline = Date().addingTimeInterval(timeout)
@@ -217,26 +308,49 @@ enum E2EUI {
     }
 
     /// 로그인 직후 알림 설명 시트 → 시스템 권한 창. allow 면 켜고, 아니면 "나중에".
-    static func handlePushPrimer(_ app: XCUIApplication, allow: Bool, test: XCTestCase) -> String {
-        let passwordPrompt = dismissSavePasswordPrompt(app)
-        if passwordPrompt { test.log("save-password prompt dismissed") }
-        let title = app.staticTexts["알림을 켜 둘까요?"]
-        guard title.waitForExistence(timeout: 8) else { return "primer-not-shown" }
+    ///
+    /// `viaForm`(방금 폼으로 로그인): 암호 저장 창을 먼저 답하고(`AING_E2E_PASSWORD_PROMPT` = save | notnow, 기본 notnow),
+    /// **창이 떠 있는 동안 설명 시트가 없어야** 한다(w6 수리 — 시트는 창이 끝난 뒤에 뜬다). 시트의 "알림 켜기"는 눌릴 수 있어야 한다.
+    static func handlePushPrimer(_ app: XCUIApplication, allow: Bool, test: XCTestCase, viaForm: Bool = false) -> String {
+        var note = "form=\(viaForm)"
+        if viaForm {
+            let choice = ProcessInfo.processInfo.environment["AING_E2E_PASSWORD_PROMPT"] ?? "notnow"
+            let prompt = answerSavePasswordPrompt(app, choice: choice, test: test)
+            XCTAssertFalse(prompt.primerDuringPrompt, "암호 저장 창이 떠 있는 동안 알림 설명 시트가 함께 떴다(겹침)")
+            note += " prompt=\(prompt.shown) inApp=\(prompt.inApp) tapped=\(prompt.tapped) overlap=\(prompt.primerDuringPrompt)"
+        } else if dismissSavePasswordPrompt(app) {
+            test.log("save-password prompt dismissed (not via form)")
+        }
+        let title = app.staticTexts[primerTitle]
+        let shownAt = Date()
+        guard title.waitForExistence(timeout: 8) else { return note + " primer-not-shown" }
+        note += String(format: " primerAfter=%.2fs", Date().timeIntervalSince(shownAt))
         test.shot("push-primer")
         if !allow {
             app.buttons["나중에"].tap()
-            return "primer-later"
+            return note + " primer-later"
         }
-        app.buttons["알림 켜기"].tap()
+        let allowButton = app.buttons["알림 켜기"]
+        // 겹침이면 버튼이 창 아래에 깔려 hit point {-1,-1} 이었다(w5 결함 3).
+        _ = test.waitUntil(timeout: 3) { allowButton.isHittable }
+        XCTAssertTrue(allowButton.isHittable, "설명 시트의 '알림 켜기'를 누를 수 없다")
+        allowButton.tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for label in ["Allow", "허용"] {
             let button = springboard.alerts.buttons[label]
             if button.waitForExistence(timeout: 6) {
                 test.shot("push-system-alert")
                 button.tap()
-                return "system-alert-\(label)"
+                return note + " system-alert-\(label)"
             }
         }
-        return "system-alert-not-found"
+        return note + " system-alert-not-found"
+    }
+
+    /// 요소가 지금 화면 안에 있는가(스크롤 밖 요소도 트리에는 있다).
+    static func isOnScreen(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        guard element.exists else { return false }
+        let frame = element.frame
+        return !frame.isEmpty && app.windows.firstMatch.frame.intersects(frame)
     }
 }

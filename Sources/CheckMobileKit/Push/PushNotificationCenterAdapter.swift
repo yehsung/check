@@ -15,6 +15,12 @@ final class PushNotificationCenterAdapter: NSObject, UNUserNotificationCenterDel
     nonisolated static let logger = Logger(subsystem: "com.yehsung.aingcheck", category: "push")
     private weak var model: MobileAppModel?
     private weak var primerController: UIViewController?
+    /// 시스템 화면 관찰(코디네이터가 켠 동안만 도는 짧은 주기 확인). 알림 이름이 아니라 공개 API(창 · 모달 사슬)만 읽는다.
+    private var overlayTimer: Timer?
+    private var overlayHandler: (@MainActor (Bool) -> Void)?
+    private var lastOverlayPresented = false
+    /// 관찰 주기(초). 창이 뜨고 지는 애니메이션(0.5초)보다 짧게.
+    private static let overlayPollSeconds: TimeInterval = 0.15
 
     init(model: MobileAppModel) {
         self.model = model
@@ -184,6 +190,63 @@ final class PushNotificationCenterAdapter: NSObject, UNUserNotificationCenterDel
             self.primerController = nil
             self.model?.push.primerDidDisappear()
         }
+    }
+
+    // MARK: - 시스템 화면(암호 저장 창) 관찰
+
+    var isSystemOverlayPresented: Bool {
+        Self.systemOverlayPresented()
+    }
+
+    func startObservingSystemOverlay(_ onChange: @escaping @MainActor (Bool) -> Void) {
+        overlayHandler = onChange
+        lastOverlayPresented = Self.systemOverlayPresented()
+        guard overlayTimer == nil else { return }
+        let timer = Timer(timeInterval: Self.overlayPollSeconds, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pollSystemOverlay() }
+        }
+        // 시트 끌기 · 스크롤 중(tracking 모드)에도 돈다.
+        RunLoop.main.add(timer, forMode: .common)
+        overlayTimer = timer
+    }
+
+    func stopObservingSystemOverlay() {
+        overlayTimer?.invalidate()
+        overlayTimer = nil
+        overlayHandler = nil
+    }
+
+    private func pollSystemOverlay() {
+        let presented = Self.systemOverlayPresented()
+        guard presented != lastOverlayPresented else { return }
+        lastOverlayPresented = presented
+        Self.logger.notice("systemOverlay presented=\(presented, privacy: .public)")
+        overlayHandler?(presented)
+    }
+
+    /// 앱 주 창보다 **위 레벨**의 보이는 창에, 내려가는 중이 아닌 모달이 붙어 있는가.
+    /// 로그인 직후의 암호 저장 창은 `UITextEffectsWindow`(레벨 1) 루트에 `UIKeyboardHiddenViewController_Save` →
+    /// `_SFAppPasswordSavingViewController` 사슬로 붙고, 창을 닫으면 사슬이 비었다(w6 실측). 앱 주 창(레벨 0 — 설명 시트 · 우리 시트가
+    /// 붙는 곳)은 보지 않는다: 우리가 띄운 시트를 시스템 화면으로 잘못 보면 시트를 거둬들이고 다시 띄우기를 되풀이한다.
+    /// 클래스 이름은 보지 않는다(비공개 · 바뀔 수 있다).
+    static func systemOverlayPresented() -> Bool {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter { !$0.isHidden }
+        guard let baseLevel = windows.map(\.windowLevel.rawValue).min() else { return false }
+        return windows.contains { window in
+            window.windowLevel.rawValue > baseLevel && hasLivePresentation(on: window.rootViewController)
+        }
+    }
+
+    private static func hasLivePresentation(on root: UIViewController?) -> Bool {
+        var next = root?.presentedViewController
+        while let controller = next {
+            if !controller.isBeingDismissed { return true }
+            next = controller.presentedViewController
+        }
+        return false
     }
 
     private static func topViewController() -> UIViewController? {

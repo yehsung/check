@@ -13,6 +13,9 @@ import Observation
 ///
 /// 하는 일
 /// 1. **권한**: 로그인 뒤 앱이 앞에 있고 권한을 아직 묻지 않았으면 설명 시트를 먼저 띄운다("나중에"는 7일 쉰다).
+///    시스템 "암호를 저장하겠습니까?" 창과 겹치지 않게(w6 — 창이 시트를 덮어 "알림 켜기"가 안 눌렸다): 그 창이 떠 있으면 사라진 뒤에,
+///    로그인 폼 제출 직후면 창이 뜰 수 있는 유예(`credentialPromptGraceSeconds`) 뒤에 띄우고, 유예보다 늦게 뜬 창은 시트를 거둬들였다가
+///    창이 끝나면 다시 띄운다. 실행 복원 · 앞으로 돌아옴은 유예 없이 곧바로다. 7일 쉼은 사용자가 고른 "나중에" · 끌어내림에서만 적는다.
 ///    허락이면(또는 이미 허락돼 있으면) 실행마다 한 번 원격 등록 → 토큰 hex → `session.updateAPNsToken`(바뀌면 즉시 register_device,
 ///    환경은 Info.plist `AingAPNsEnvironment` — Debug sandbox / Release production, 세션 스토어가 싣는다).
 /// 2. **포그라운드 표시**: 지금 보고 있는 대화의 메시지면 숨기고, 아니면 배너. 어느 쪽이든 해당 스토어를 새로고침한다.
@@ -61,6 +64,14 @@ package final class PushCoordinator {
     @ObservationIgnored package var sessionSettleTimeoutSeconds: TimeInterval = 10
     /// 다른 오목 요청이 끝나기를 기다리는 상한(초).
     @ObservationIgnored package var gomokuBusyTimeoutSeconds: TimeInterval = 3
+    /// 로그인 폼을 제출한 뒤 시스템 "암호 저장" 창이 **뜨기를** 기다리는 유예(초). 창은 폼이 사라진 0.1~0.2초 뒤 요청되고, 원격 화면
+    /// (SafariViewService)이 떠 있으면 0.4초, 처음 띄우면 2.2초 뒤에 나타났다(w6 시뮬레이터 실측). 창이 먼저 뜨면 유예는 곧바로 끝나고,
+    /// 유예보다 늦게 뜬 창은 떠 있는 설명 시트를 거둬들이는 쪽이 받는다(`systemOverlayDidChange`).
+    @ObservationIgnored package var credentialPromptGraceSeconds: TimeInterval = 3
+    /// 유예를 재는 잠. 작업이 취소되면 곧바로 돌아온다(끝난 뒤의 판정은 표지로 거른다). 테스트는 벽시계 대신 문으로 바꾼다.
+    @ObservationIgnored package var credentialPromptGraceSleep: @MainActor (TimeInterval) async -> Void = { seconds in
+        try? await Task.sleep(for: .seconds(seconds))
+    }
 
     // MARK: 내부
 
@@ -69,6 +80,16 @@ package final class PushCoordinator {
     @ObservationIgnored private var statusTask: Task<Void, Never>?
     @ObservationIgnored private var statusCheckAgain = false
     @ObservationIgnored private var statusCheckWantsPrimer = false
+
+    /// 이번 로그인이 폼 제출로 시작됐고 아직 설명 시트 판정을 끝내지 않았다 — 판정 전에 시스템 암호 저장 창을 유예만큼 기다린다.
+    /// 실행 복원 · 앞으로 돌아옴에는 창이 없으므로 서지 않는다(곧바로 판정).
+    @ObservationIgnored private var awaitsCredentialPrompt = false
+    /// 설명 시트를 미룬 이유(nil = 미루지 않음).
+    @ObservationIgnored private var primerDeferral: PrimerDeferral?
+    @ObservationIgnored private var credentialGraceTask: Task<Void, Never>?
+    /// 유예 표지. 취소 · 새 유예마다 올린다 — 늦게 끝난 잠(취소를 모르는 대역 포함)이 지금 상태를 건드리지 않게.
+    @ObservationIgnored private var credentialGraceToken = 0
+    @ObservationIgnored private var isObservingSystemOverlay = false
 
     /// 사용자가 마지막으로 누른 알림 설정(저장이 끝날 때까지 화면이 이 값을 그린다). **관찰한다** — 저장 중에 다른 토글을 눌러도
     /// `isSavingPrefs` 는 그대로라, 이 값이 관찰되지 않으면 화면이 새로 누른 값을 그리지 않는다.
@@ -110,6 +131,21 @@ package final class PushCoordinator {
     /// 지금 앎(테스트 · 진단).
     package var badgeState: BadgeKnowledge { badgeKnowledge }
 
+    /// 설명 시트를 미룬 이유.
+    package enum PrimerDeferral: Equatable, Sendable {
+        /// 폼 로그인 직후 — 시스템 암호 저장 창이 뜰 수 있는 유예 중.
+        case credentialPromptGrace
+        /// 우리가 띄우지 않은 시스템 화면(암호 저장 창)이 앱 위에 있다 — 사라지면 다시 판정한다.
+        case systemOverlay
+    }
+
+    /// 지금 미룬 이유(테스트 · 진단).
+    package var primerDeferralState: PrimerDeferral? { primerDeferral }
+    /// 진행 중인 유예(테스트가 기다린다).
+    package var pendingCredentialPromptGrace: Task<Void, Never>? { credentialGraceTask }
+    /// 시스템 화면을 관찰하는 중인가(테스트 · 진단 — 닫힌 앱 · 로그아웃 뒤에는 꺼져 있어야 한다).
+    package var isObservingSystemOverlayState: Bool { isObservingSystemOverlay }
+
     package init(context: MobileContext) {
         self.context = context
         let links = context.links
@@ -135,11 +171,19 @@ package final class PushCoordinator {
             // 탭 스토어가 방금 새로고침을 띄웠다. 서버가 한 번 답한 뒤부터 합을 적는다(오프라인이면 앞 실행 값을 둔다).
             confirmBadge()
         }
+        // 설명 시트를 띄워 둔 채 돌아왔으면 시스템 화면 관찰을 다시 켠다.
+        updateSystemOverlayObservation()
         requestStatusCheck(allowPrimer: true)
     }
 
     package func appDidEnterBackground() {
         isAppActive = false
+        // 닫힌 앱에서 유예 · 시스템 화면 관찰을 계속 돌리지 않는다. 다시 앞에 오면 활성화의 판정이 그때 화면을 보고 새로 정한다
+        // (그때 창이 떠 있으면 미루고, 늦게 뜨면 시트를 거둬들인다).
+        cancelCredentialGrace()
+        awaitsCredentialPrompt = false
+        primerDeferral = nil
+        updateSystemOverlayObservation()
     }
 
     /// 로그아웃 · 치명 만료(세대가 바뀐 직후).
@@ -152,10 +196,14 @@ package final class PushCoordinator {
         statusTask = nil
         statusCheckAgain = false
         statusCheckWantsPrimer = false
+        cancelCredentialGrace()
+        awaitsCredentialPrompt = false
+        primerDeferral = nil
         if isPrimerPresented {
             isPrimerPresented = false
             system?.dismissPermissionPrimer()
         }
+        updateSystemOverlayObservation()
         isRequestingAuthorization = false
         desiredPrefs = nil
         prefsSaveTask = nil
@@ -179,6 +227,8 @@ package final class PushCoordinator {
 
     package func sessionDidSignIn() {
         startBadgeTracking()
+        // 폼으로 들어왔으면(실행 복원이 아니면) 이번 로그인의 첫 설명 시트 판정은 시스템 암호 저장 창을 먼저 기다린다.
+        awaitsCredentialPrompt = context.session.signedInViaForm
         // 앱이 앞에 있으면 앱 모델이 곧바로 appDidBecomeActive 를 부른다(설명 시트는 그쪽에서) — 여기서는 등록만.
         requestStatusCheck(allowPrimer: false)
     }
@@ -228,9 +278,101 @@ package final class PushCoordinator {
         if authorization != status { authorization = status }
         // 시트 판정이 먼저다(실제로는 미결정일 때만 참이라 순서가 갈리지 않는다 — 데모 강제 시트가 허락된 기기에서도 뜨게).
         if allowPrimer, shouldPresentPrimer(status: status) {
+            decidePrimerPresentation()
+        } else {
+            // 시트가 필요 없다고 판정한 것도 이번 로그인의 판정이다 — 나중(7일 뒤 등)의 판정에 로그인 유예를 끌고 가지 않는다.
+            if allowPrimer { awaitsCredentialPrompt = false }
+            if status.allowsDelivery { registerIfNeeded() }
+        }
+    }
+
+    /// 띄울 때라고 판정한 뒤: 시스템 화면이 떠 있으면 사라질 때까지, 폼 로그인 직후면 유예만큼 미룬다. 아니면 곧바로 띄운다.
+    private func decidePrimerPresentation() {
+        guard let system else { return }
+        if system.isSystemOverlayPresented {
+            // 암호 저장 창이 이미 떠 있다 — 창이 왔으니 유예는 할 일을 마쳤다. 창이 사라지면(`systemOverlayDidChange(false)`) 다시 판정한다.
+            awaitsCredentialPrompt = false
+            cancelCredentialGrace()
+            primerDeferral = .systemOverlay
+        } else if awaitsCredentialPrompt {
+            primerDeferral = .credentialPromptGrace
+            startCredentialGraceIfNeeded()
+        } else {
+            primerDeferral = nil
             presentPrimer()
-        } else if status.allowsDelivery {
-            registerIfNeeded()
+        }
+        updateSystemOverlayObservation()
+    }
+
+    private func startCredentialGraceIfNeeded() {
+        guard credentialGraceTask == nil else { return }
+        credentialGraceToken += 1
+        let token = credentialGraceToken
+        let generation = context.generation
+        let seconds = credentialPromptGraceSeconds
+        credentialGraceTask = Task { [weak self] in
+            guard let self else { return }
+            await self.credentialPromptGraceSleep(seconds)
+            self.credentialGraceDidEnd(token: token, generation: generation)
+        }
+    }
+
+    /// 유예가 창 없이 끝났다 → 다시 판정(그 사이 권한이 바뀌었을 수 있어 권한부터 다시 읽는다).
+    private func credentialGraceDidEnd(token: Int, generation: Int) {
+        // 취소된 유예(로그아웃 · 뒤로 감 · 창이 먼저 뜸)는 아무것도 하지 않는다. 표지가 다르면 지금의 작업 칸도 남의 것이다.
+        guard token == credentialGraceToken else { return }
+        credentialGraceTask = nil
+        guard generation == context.generation, context.session.isSignedIn else { return }
+        awaitsCredentialPrompt = false
+        guard primerDeferral == .credentialPromptGrace else { return }
+        primerDeferral = nil
+        updateSystemOverlayObservation()
+        guard isAppActive else { return }
+        requestStatusCheck(allowPrimer: true)
+    }
+
+    private func cancelCredentialGrace() {
+        credentialGraceToken += 1
+        credentialGraceTask?.cancel()
+        credentialGraceTask = nil
+    }
+
+    /// 어댑터가 부른다(관찰을 켠 동안, 값이 바뀔 때만): 우리가 띄우지 않은 시스템 화면(암호 저장 창)이 떴다(true) · 사라졌다(false).
+    /// - 떴다: 유예를 끝내고, 설명 시트가 이미 떠 있으면(유예보다 늦게 온 창 — 시트가 창 아래에 깔려 누를 수 없다) **거둬들인다**.
+    ///   사용자가 고른 것이 아니므로 7일 쉼을 적지 않는다.
+    /// - 사라졌다: 그 창 때문에 미뤘거나 거둬들인 시트를 다시 판정한다.
+    package func systemOverlayDidChange(presented: Bool) {
+        guard context.session.isSignedIn else { return }
+        if presented {
+            awaitsCredentialPrompt = false
+            if primerDeferral == .credentialPromptGrace {
+                cancelCredentialGrace()
+                primerDeferral = .systemOverlay
+            }
+            if isPrimerPresented, !isRequestingAuthorization {
+                isPrimerPresented = false
+                system?.dismissPermissionPrimer()
+                primerDeferral = .systemOverlay
+            }
+        } else if primerDeferral == .systemOverlay {
+            primerDeferral = nil
+            if isAppActive { requestStatusCheck(allowPrimer: true) }
+        }
+        updateSystemOverlayObservation()
+    }
+
+    /// 관찰은 필요한 동안만: 로그인 · 앱이 앞 · (시트를 미뤘거나 띄워 둔 동안). 닫힌 앱 · 로그아웃 뒤에는 끈다.
+    private func updateSystemOverlayObservation() {
+        guard let system else { return }
+        let wanted = isAppActive && context.session.isSignedIn && (primerDeferral != nil || isPrimerPresented)
+        guard wanted != isObservingSystemOverlay else { return }
+        isObservingSystemOverlay = wanted
+        if wanted {
+            system.startObservingSystemOverlay { [weak self] presented in
+                self?.systemOverlayDidChange(presented: presented)
+            }
+        } else {
+            system.stopObservingSystemOverlay()
         }
     }
 
@@ -256,6 +398,7 @@ package final class PushCoordinator {
         #endif
         isPrimerPresented = true
         system?.presentPermissionPrimer(self)
+        updateSystemOverlayObservation()
     }
 
     /// 실행마다 한 번(애플 권장 — 토큰은 바뀔 수 있다). 결과는 앱 델리게이트 콜백으로 온다.
@@ -275,27 +418,33 @@ package final class PushCoordinator {
         guard generation == context.generation else { return }
         isPrimerPresented = false
         system.dismissPermissionPrimer()
+        updateSystemOverlayObservation()
         await refreshAuthorization()
     }
 
-    /// 설명 시트 "나중에"(또는 끌어내려 닫음): 7일 쉰다.
+    /// 설명 시트 "나중에"(사용자가 누름): 7일 쉰다. **7일 쉼은 사용자가 직접 고른 두 길(이 버튼 · 끌어내림)에서만 적는다** —
+    /// 시스템 화면 때문에 거둬들이거나(`systemOverlayDidChange`) 못 띄운 경우(`primerCouldNotPresent`) · 로그아웃은 적지 않는다.
     package func primerLater() {
         guard isPrimerPresented, !isRequestingAuthorization else { return }
         context.storage.defaults.set(context.clock.now(), forKey: Self.primerDismissedAtKey)
         isPrimerPresented = false
         system?.dismissPermissionPrimer()
+        updateSystemOverlayObservation()
     }
 
-    /// 시트가 사용자 제스처로 사라졌다(어댑터가 부른다). "나중에"와 같다 — 권한 창을 기다리는 중이면 무시.
+    /// 시트가 사용자 제스처로 사라졌다(어댑터가 부른다 — UIKit 은 사용자가 끌어내린 경우에만 이 콜백을 주고, 코드로 내린 경우는 주지 않는다).
+    /// "나중에"와 같다 — 권한 창을 기다리는 중이거나 이미 거둬들인 시트면 무시.
     package func primerDidDisappear() {
         guard isPrimerPresented, !isRequestingAuthorization else { return }
         context.storage.defaults.set(context.clock.now(), forKey: Self.primerDismissedAtKey)
         isPrimerPresented = false
+        updateSystemOverlayObservation()
     }
 
     /// 띄울 창이 끝내 없었다(어댑터가 부른다). 사용자가 거절한 것이 아니므로 쉬는 기간을 적지 않는다 — 다음 active 에 다시 본다.
     package func primerCouldNotPresent() {
         isPrimerPresented = false
+        updateSystemOverlayObservation()
     }
 
     // MARK: - 알림 설정 공개 API(나 탭)

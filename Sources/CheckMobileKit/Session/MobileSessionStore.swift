@@ -61,6 +61,9 @@ package final class MobileSessionStore {
     /// 로그인 화면 한 줄(실패 원인 · "다시 로그인 필요").
     package var notice: String?
     package private(set) var isSigningIn = false
+    /// 지금 로그인 상태가 **로그인 폼 제출**로 시작됐는가(실행 복원이면 false). 폼을 제출한 직후에는 시스템 "암호를 저장하겠습니까?" 창이
+    /// 앱 위에 뜰 수 있어 푸시 설명 시트가 그 창을 기다린다(`PushCoordinator` — w6 실측).
+    @ObservationIgnored package private(set) var signedInViaForm = false
     /// 마지막으로 받은 알림 설정(register_device 응답). 나 탭 설정 화면이 읽는다.
     package private(set) var pushPrefs: PushPrefs?
     /// 서버가 알려 준 최신 빌드(업데이트 안내 — 최소 빌드 이상이면 막지는 않는다).
@@ -613,6 +616,7 @@ package final class MobileSessionStore {
             profile = MobileProfile(userID: current.userID, email: storedEmail)
         }
         notice = nil
+        signedInViaForm = registrationReason == .signIn
         phase = .signedIn
         onSignedIn?()
         requestDeviceRegistration(registrationReason)

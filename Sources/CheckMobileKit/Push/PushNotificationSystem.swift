@@ -26,6 +26,16 @@ package protocol PushNotificationSystem: AnyObject {
     /// 권한 설명 시트 띄우기 · 내리기.
     func presentPermissionPrimer(_ coordinator: PushCoordinator)
     func dismissPermissionPrimer()
+
+    /// **우리가 띄우지 않은** 시스템 화면이 지금 앱 위에 떠 있는가 — 로그인 폼 제출 직후의 "암호를 저장하겠습니까?" 창.
+    ///
+    /// w6 실측(iOS 27 시뮬레이터): 그 창은 SafariViewService 원격 화면(`_SFAppPasswordSavingViewController`)이 **앱 프로세스의**
+    /// 텍스트 효과 창(`UITextEffectsWindow`, 레벨 1) 루트에 모달로 붙은 것이다. 앱 상태(active) · 장면 활성 상태 · scenePhase ·
+    /// 키 윈도 · willResignActive/didBecomeActive 는 **하나도 바뀌지 않는다** — 남는 신호는 "앱 주 창이 아닌 창에 떠 있는 모달" 뿐이다.
+    var isSystemOverlayPresented: Bool { get }
+    /// 그 화면이 뜨고 사라질 때 알려 달라(값이 바뀔 때만, 메인 액터). 코디네이터가 필요한 동안만 켠다(설명 시트를 미뤘거나 띄워 둔 동안).
+    func startObservingSystemOverlay(_ onChange: @escaping @MainActor (Bool) -> Void)
+    func stopObservingSystemOverlay()
 }
 
 /// 메시지 탭 스토어가 푸시 도착을 받는 진입점(SPEC-ios-build D4 `didReceiveMessagePush(peerID:)` — 서명 `String?`).

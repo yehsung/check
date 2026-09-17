@@ -81,6 +81,31 @@ final class PushFakeSystem: PushNotificationSystem {
     func dismissPermissionPrimer() {
         primerDismissals += 1
     }
+
+    // 시스템 화면(암호 저장 창) — 테스트가 `setSystemOverlay` 로 띄우고 내린다. 어댑터처럼 **관찰을 켠 동안에만** 알린다.
+    private(set) var systemOverlay = false
+    private(set) var overlayObservationStarts = 0
+    private(set) var overlayObservationStops = 0
+    private var overlayHandler: (@MainActor (Bool) -> Void)?
+    var isObservingOverlay: Bool { overlayHandler != nil }
+
+    var isSystemOverlayPresented: Bool { systemOverlay }
+
+    func startObservingSystemOverlay(_ onChange: @escaping @MainActor (Bool) -> Void) {
+        overlayObservationStarts += 1
+        overlayHandler = onChange
+    }
+
+    func stopObservingSystemOverlay() {
+        overlayObservationStops += 1
+        overlayHandler = nil
+    }
+
+    func setSystemOverlay(_ presented: Bool) {
+        guard systemOverlay != presented else { return }
+        systemOverlay = presented
+        overlayHandler?(presented)
+    }
 }
 
 /// 관찰 가능한 배지 값(탭 스토어 배지 대신).
@@ -164,6 +189,8 @@ final class PushHarness {
         model.push.sessionSettleTimeoutSeconds = BaseStub.patientSeconds
         model.push.gomokuBusyTimeoutSeconds = BaseStub.patientSeconds
         model.session.clientReleaseTimeoutSeconds = 0
+        // 폼 로그인 뒤 암호 저장 창 유예: 벽시계 대신 곧바로 끝난다(창이 안 뜬 경우). 유예 중 사건을 재는 테스트는 문으로 바꾼다.
+        model.push.credentialPromptGraceSleep = { _ in }
     }
 
     var push: PushCoordinator { model.push }
@@ -182,6 +209,7 @@ final class PushHarness {
     func settle() async {
         for _ in 0..<5 {
             await push.pendingStatusCheck?.value
+            await push.pendingCredentialPromptGrace?.value
             await model.session.pendingDeviceRegistration?.value
             await push.pendingBadgeConfirmation?.value
             await Task.yield()
@@ -210,6 +238,7 @@ final class PushHarness {
         restored.push.sessionSettleTimeoutSeconds = BaseStub.patientSeconds
         restored.push.gomokuBusyTimeoutSeconds = BaseStub.patientSeconds
         restored.session.clientReleaseTimeoutSeconds = 0
+        restored.push.credentialPromptGraceSleep = { _ in }
         restored.push.attach(system: system)
         if start { restored.start() }
         return restored

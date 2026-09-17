@@ -1,0 +1,178 @@
+{
+  "puzzles": [
+    {
+      "id": "white-win-in-1",
+      "note": "백 H8~K8 넷, 양끝 G8·L8 이 비었다 — 어느 쪽이든 5목.",
+      "black": ["H9", "I9", "J9", "G10", "M12"],
+      "white": ["H8", "I8", "J8", "K8"],
+      "toMove": "white",
+      "expect": ["G8", "L8"]
+    },
+    {
+      "id": "black-win-in-1",
+      "note": "흑 H8~K8 넷 — G8·L8 모두 정확히 5.",
+      "black": ["H8", "I8", "J8", "K8"],
+      "white": ["H9", "I9", "J9", "H10"],
+      "toMove": "black",
+      "expect": ["G8", "L8"]
+    },
+    {
+      "id": "black-overline-is-not-five",
+      "note": "흑 H8~K8 + M8. L8 은 6목(장목·금수)이라 승이 아니고, G8 만 정확히 5.",
+      "black": ["H8", "I8", "J8", "K8", "M8"],
+      "white": ["A1", "C1", "E1", "A3", "C3"],
+      "toMove": "black",
+      "expect": ["G8"],
+      "reject": ["L8"]
+    },
+    {
+      "id": "black-overline-only",
+      "note": "흑 H8~K8 + M8, G8 은 백. 5목처럼 보이는 자리는 L8 뿐인데 6목(장목)이라 금수다 — 두면 안 된다.",
+      "black": ["H8", "I8", "J8", "K8", "M8", "N14"],
+      "white": ["G8", "A1", "C1", "E1", "A3", "C3"],
+      "toMove": "black",
+      "reject": ["L8"]
+    },
+    {
+      "id": "white-blocks-black-four",
+      "note": "흑 4(H8~K8, G8 은 백)의 5목 자리는 L8 하나 — 백은 막아야 한다.",
+      "black": ["H8", "I8", "J8", "K8", "N13"],
+      "white": ["G8", "B2", "D2", "F2"],
+      "toMove": "white",
+      "expect": ["L8"]
+    },
+    {
+      "id": "black-blocks-white-four",
+      "note": "백 4(H8~K8, G8 은 흑)의 5목 자리는 L8 하나 — 흑은 막아야 한다(L8 은 흑에게 합법).",
+      "black": ["G8", "B2", "D2", "F2"],
+      "white": ["H8", "I8", "J8", "K8"],
+      "toMove": "black",
+      "expect": ["L8"]
+    },
+    {
+      "id": "black-makes-open-four",
+      "note": "흑 열린 3(G8·H8·I8) — F8 이나 J8 이면 열린 4.",
+      "black": ["G8", "H8", "I8"],
+      "white": ["B2", "D2", "B4"],
+      "toMove": "black",
+      "expect": ["F8", "J8"]
+    },
+    {
+      "id": "white-blocks-open-three",
+      "note": "흑 열린 3(G8·H8·I8). 바로 옆 F8·J8 만 막는 수다 — E8·K8 은 반대쪽 열린 4 를 허락한다.",
+      "black": ["G8", "H8", "I8"],
+      "white": ["B2", "D2"],
+      "toMove": "white",
+      "expect": ["F8", "J8"],
+      "reject": ["E8", "K8"]
+    },
+    {
+      "id": "white-exploits-forbidden-block",
+      "note": "백 J10 이면 F6·G7·_·I9·J10 의 5목 자리가 H8 하나인데, H8 은 흑에게 3-3 금수라 못 막는다. H8(백) 은 E5 가 흑이라 막히는 4 일 뿐.",
+      "black": ["G8", "I8", "H7", "H9", "E5"],
+      "white": ["F6", "G7", "I9", "A15"],
+      "toMove": "white",
+      "expect": ["J10"],
+      "winWithin": 2
+    },
+    {
+      "id": "white-vcf",
+      "note": "백 VCF: H7(가로 4 + 세로 열린 3 = 4-3, 흑 G7 강제 → H4·H8 열린 4) 또는 H8(가로 4, 흑 I8 강제 → H7 가로 4 + 세로 4 = 4-4). 흑 G6 은 E8·F7·G6·H5 대각 열린 4 를 미리 막아 둔 돌.",
+      "black": ["C7", "D8", "H9", "G6", "A1", "O1", "A15", "O15", "C13"],
+      "white": ["D7", "E7", "F7", "E8", "F8", "G8", "H5", "H6"],
+      "toMove": "white",
+      "expect": ["H7", "H8"],
+      "winWithin": 4
+    },
+    {
+      "id": "black-defends-forbidden-trap",
+      "note": "흑 차례. 백은 J10 하나로 이긴다(5목 자리 H8 이 흑의 3-3 금수). 흑은 J10 을 먼저 차지하거나 H8 을 4-3(합법)으로 바꾸는 수(F8·J8·H6·H10 …)로 끊어야 한다. 엉뚱한 곳(A2)은 진다.",
+      "black": ["G8", "I8", "H7", "H9", "E5"],
+      "white": ["F6", "G7", "I9", "A15", "O1"],
+      "toMove": "black",
+      "holdFor": 3,
+      "loseAfter": "A2"
+    },
+    {
+      "id": "white-defends-black-vcf",
+      "note": "백 차례. 흑은 H7(가로 4, 백 G7 강제) → H8(세로 4 + 가로 열린 3 = 4-3) VCF 가 있다. 백은 H7·G7·H8·H9·F8·J8 같은 수로 끊어야 한다. 엉뚱한 곳(A2)은 진다.",
+      "black": ["D7", "E7", "F7", "H5", "H6", "G8", "I8"],
+      "white": ["C7", "H4", "A1", "O1", "A15", "O15"],
+      "toMove": "white",
+      "holdFor": 4,
+      "loseAfter": "A2"
+    },
+    {
+      "id": "black-vcf-four-three",
+      "note": "흑 VCF: H7(가로 D7·E7·F7·_·H7 의 4, 백 G7 강제) → H8(세로 4 + 가로 열린 3 = 합법 4-3) → 열린 4 → 5목. 흑은 4-4 로 끝낼 수 없다.",
+      "black": ["D7", "E7", "F7", "H5", "H6", "G8", "I8"],
+      "white": ["C7", "H4", "A1", "O1", "A15", "O15", "M14"],
+      "toMove": "black",
+      "expect": ["H7"],
+      "winWithin": 4
+    },
+    {
+      "id": "white-double-three",
+      "note": "백 G8·H8(가로) + I6·I7(세로) — I8 이면 열린 3 둘(3-3). 백에게는 금수가 없어 이기는 수다.",
+      "black": ["A1", "O1", "A15", "O15", "C3"],
+      "white": ["G8", "H8", "I6", "I7"],
+      "toMove": "white",
+      "expect": ["I8"],
+      "winWithin": 3
+    },
+    {
+      "id": "black-double-three-is-forbidden",
+      "note": "같은 모양의 흑 — I8 은 흑에게 3-3 금수라 두면 안 된다.",
+      "black": ["G8", "H8", "I6", "I7"],
+      "white": ["A1", "O1", "A15", "O15"],
+      "toMove": "black",
+      "reject": ["I8"]
+    },
+    {
+      "id": "black-stops-white-double-three",
+      "note": "흑 차례, 백이 I8 로 3-3 을 노린다. 흑은 I8(또는 한 줄을 미리 닫는 수)으로 끊어야 한다. 엉뚱한 곳(A2)은 진다.",
+      "black": ["A1", "O1", "A15", "O15"],
+      "white": ["G8", "H8", "I6", "I7"],
+      "toMove": "black",
+      "holdFor": 3,
+      "loseAfter": "A2"
+    }
+  ],
+  "midgames": [
+    {
+      "id": "selfplay-16",
+      "note": "AI 대 AI(1.5초) 한 판의 16수 뒤 국면.",
+      "black": ["H8", "I7", "I9", "I8", "G8", "I11", "J10", "J12"],
+      "white": ["H9", "G9", "G7", "I6", "J8", "I10", "K11", "J9"],
+      "toMove": "black"
+    },
+    {
+      "id": "selfplay-19",
+      "note": "AI 대 AI(1.5초) 한 판의 19수 뒤 국면.",
+      "black": ["H8", "I7", "I9", "I8", "G8", "I11", "J10", "J12", "H11", "G11"],
+      "white": ["H9", "G9", "G7", "I6", "J8", "I10", "K11", "J9", "K8"],
+      "toMove": "white"
+    },
+    {
+      "id": "selfplay-22",
+      "note": "AI 대 AI(1.5초) 한 판의 22수 뒤 국면.",
+      "black": ["H8", "I7", "I9", "I8", "G8", "I11", "J10", "J12", "H11", "G11", "H10"],
+      "white": ["H9", "G9", "G7", "I6", "J8", "I10", "K11", "J9", "K8", "J11", "F9"],
+      "toMove": "black"
+    },
+    {
+      "id": "selfplay-25",
+      "note": "AI 대 AI(1.5초) 한 판의 25수 뒤 국면.",
+      "black": ["H8", "I7", "I9", "I8", "G8", "I11", "J10", "J12", "H11", "G11", "H10", "H12", "D9"],
+      "white": ["H9", "G9", "G7", "I6", "J8", "I10", "K11", "J9", "K8", "J11", "F9", "E9"],
+      "toMove": "white"
+    },
+    {
+      "id": "selfplay-30",
+      "note": "AI 대 AI(1.5초) 한 판의 30수 뒤 국면.",
+      "black": ["H8", "I7", "I9", "I8", "G8", "I11", "J10", "J12", "H11", "G11", "H10", "H12", "D9", "L7", "L13"],
+      "white": ["H9", "G9", "G7", "I6", "J8", "I10", "K11", "J9", "K8", "J11", "F9", "E9", "M6", "K12", "K9"],
+      "toMove": "black"
+    }
+  ]
+}

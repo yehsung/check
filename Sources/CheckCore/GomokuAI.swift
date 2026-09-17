@@ -2,10 +2,8 @@ import Foundation
 
 // 오목 AI(렌주룰, 단일 난이도 — 항상 최선의 수). 설계: docs/plan/gomoku-ai.md §2.
 //
-// ── 계약 스텁 ──
-// 이 파일은 병렬 작업의 **서명 계약**이다. 대국·화면 쪽은 아래 서명만 믿고 짜고, 엔진 쪽이 몸통을 갈아 끼운다.
-// 서명(이름·인자·반환)을 바꾸면 두 갈래가 병합에서 어긋난다 — 바꾸려면 설계 문서부터 고친다.
-// 지금 몸통은 임시다: 천원에서 가장 가까운 합법 수를 둔다(흑은 금수 제외).
+// 공개 서명(`GomokuAISearchLimits` · `GomokuAI.bestMove`)은 대국·화면 갈래와의 계약이다 — 바꾸려면 설계 문서부터 고친다.
+// 몸통은 GomokuAIEngine.swift 에 있다: 줄 모양 증분 평가 · 즉결 판단 · VCF · 상대 VCF 끊기 · 반복 심화 알파베타 · 렌주 금수.
 
 /// 한 수를 고를 때의 한도.
 package nonisolated struct GomokuAISearchLimits: Sendable {
@@ -32,24 +30,23 @@ package nonisolated enum GomokuAI {
         limits: GomokuAISearchLimits = .init(),
         isCancelled: @Sendable () -> Bool = { false }
     ) -> GomokuPoint? {
-        let center = GomokuBoard.size / 2
-        var candidates: [GomokuPoint] = []
-        for y in 0..<GomokuBoard.size {
-            for x in 0..<GomokuBoard.size {
-                if let point = GomokuPoint(x: x, y: y), board[point] == nil { candidates.append(point) }
+        // 빈 판: 천원(H8). 흑 첫 수 자리이고 백이어도 가장 좋은 자리다.
+        guard board.stoneCount > 0 else { return GomokuPoint(x: GomokuBoard.size / 2, y: GomokuBoard.size / 2) }
+        guard board.stoneCount < GomokuBoard.cellCount else { return nil }
+        let side = toMove == .black ? 1 : 2
+        let depth = max(1, limits.maxDepth)
+        // 엔진은 이 호출 안에서만 산다 — 취소 문을 들고 있어도 호출 밖으로 새지 않는다(블록 안에서 해제된다).
+        let move: Int? = withoutActuallyEscaping(isCancelled) { cancelled in
+            let engine = GomokuAIEngine(board: board, budget: limits.timeBudget, isCancelled: cancelled)
+            if let seed = limits.tieBreakSeed {
+                var rng = GomokuAISplitMix64(seed: seed)
+                return engine.chooseMove(side: side, maxDepth: depth, rng: &rng)
             }
+            var rng = SystemRandomNumberGenerator()
+            return engine.chooseMove(side: side, maxDepth: depth, rng: &rng)
         }
-        candidates.sort {
-            let a = abs($0.x - center) + abs($0.y - center)
-            let b = abs($1.x - center) + abs($1.y - center)
-            return a != b ? a < b : ($0.y, $0.x) < ($1.y, $1.x)
-        }
-        for point in candidates {
-            switch GomokuRules.judge(board: board, point: point, color: toMove) {
-            case .legal, .win: return point
-            default: continue
-            }
-        }
-        return nil
+        guard let move else { return nil }
+        let (x, y) = GomokuAIEngine.coordinates(move)
+        return GomokuPoint(x: x, y: y)
     }
 }

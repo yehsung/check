@@ -369,3 +369,40 @@ private nonisolated struct RenjuEngine {
         return .legal
     }
 }
+
+// MARK: - AI 엔진용 도우미 (docs/plan/gomoku-ai.md §2)
+//
+// 엔진은 탐색 중 흑 후보가 금수인지 수만 번 묻는다. `GomokuRules.judge` 는 부를 때마다 판 배열(225칸)을 복사하므로,
+// 엔진이 들고 있는 판과 **같은 판정기**를 제자리에서 고쳐 가며 묻는 문을 둔다. 판정 자체는 위 `RenjuEngine.judgeBlack`
+// 그대로라 순서·노드 계수·예산(10,000)이 한 벌이다 — 예산 초과는 서버와 똑같이 금수(`.forbidden(.budget)`)다.
+
+/// 제자리에서 고쳐 쓰는 흑 판정기. 판 좌표는 `GomokuBoard` 와 같다(x 열 0…14, y 행 0…14).
+package nonisolated struct GomokuRenjuProbe {
+    private var engine: RenjuEngine
+
+    package init(board: GomokuBoard) {
+        engine = RenjuEngine(cells: board.cells, budget: GomokuRules.nodeBudget)
+    }
+
+    /// 칸 하나를 바꾼다(엔진의 착수·되돌리기와 짝을 맞춘다).
+    package mutating func setCell(x: Int, y: Int, to color: GomokuColor?) {
+        let value: UInt8
+        switch color {
+        case .black?: value = RenjuEngine.black
+        case .white?: value = RenjuEngine.white
+        case nil: value = RenjuEngine.empty
+        }
+        engine.cells[y * GomokuBoard.size + x] = value
+    }
+
+    /// 빈칸 (x, y) 에 흑이 두면? `GomokuRules.judge(board:point:color: .black)` 와 같은 값(빈칸이 아니면 `.occupied`).
+    package mutating func blackJudgement(x: Int, y: Int) -> GomokuJudgement {
+        guard engine.cells[y * GomokuBoard.size + x] == RenjuEngine.empty else { return .occupied }
+        engine.nodes = 0
+        do {
+            return try engine.judgeBlack(x, y).judgement
+        } catch {
+            return .forbidden(.budget)
+        }
+    }
+}

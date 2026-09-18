@@ -963,10 +963,31 @@ package struct SignInResponse: Decodable {
     package let user: AuthUser
 }
 
+/// POST /auth/v1/signup 응답. **모양이 둘이다**: 세션이 있으면 로그인과 같은 봉투 `{access_token, refresh_token, user}`,
+/// 세션이 없으면(가입 확인을 켠 서버 — 확인 메일이 나간 상태) **사용자 객체 그대로**(`{id, email, identities, …}` — user 키 없음)다
+/// (GoTrue signup.go: 확인된 사용자만 토큰 응답을 만들고, 아니면 user 를 그대로 보낸다). 봉투만 알던 옛 디코드는 두 번째
+/// 모양에서 `user` 키 부재로 죽어, 스토어가 nil 신호를 받기도 전에 "계정 생성 실패"를 띄웠다 — 공유 스텁이 늘 세션을 줘서
+/// 그 경로가 한 번도 실제 모양으로 검증된 적이 없었다.
 package struct SignUpResponse: Decodable {
     package let accessToken: String?
     package let refreshToken: String?
     package let user: AuthUser
+
+    private enum CodingKeys: String, CodingKey {
+        case accessToken, refreshToken, user
+    }
+
+    package init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        accessToken = try container.decodeIfPresent(String.self, forKey: .accessToken)
+        refreshToken = try container.decodeIfPresent(String.self, forKey: .refreshToken)
+        if let wrapped = try container.decodeIfPresent(AuthUser.self, forKey: .user) {
+            user = wrapped
+        } else {
+            // user 키가 없으면 최상위가 곧 사용자 객체다(id·identities 를 같은 컨테이너에서 읽는다).
+            user = try AuthUser(from: decoder)
+        }
+    }
 }
 
 package struct RefreshSessionRequest: Encodable {
@@ -975,6 +996,15 @@ package struct RefreshSessionRequest: Encodable {
 
 package struct AuthUser: Decodable {
     package let id: String
+    /// 가입 응답의 identities. **가입 확인 켜진 서버가 '이미 인증된 기존 계정'을 가리는 유일한 단서**다 — GoTrue 는 그때
+    /// 422 대신 200 + `identities: []` 인 가짜 사용자를 돌려준다(존재 여부를 흘리지 않으려는 문서화된 동작). Optional 인
+    /// 이유는 로그인·verify·refresh 응답이 같은 타입을 쓰고 옛 GoTrue 는 키를 안 실을 수 있어서다 — 없으면 판정하지 않는다.
+    package let identities: [AuthUserIdentity]?
+}
+
+/// AuthUser.identities 의 원소. 읽는 것은 **개수뿐**이라 필드는 하나만 두고 그마저 Optional 이다(모양이 바뀌어도 디코드가 안 깨지게).
+package struct AuthUserIdentity: Decodable {
+    package let id: String?
 }
 
 package struct ProfileRow: Decodable {

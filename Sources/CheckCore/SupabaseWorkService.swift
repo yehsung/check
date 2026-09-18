@@ -88,6 +88,15 @@ package actor SupabaseWorkService {
         )
         let response = try decoder.decode(SignUpResponse.self, from: data)
         guard let accessToken = response.accessToken else {
+            // 세션 없음 = 확인 메일이 나갔다(가입 확인을 켠 서버). **그 nil 이 코드 화면의 신호다**(SupabaseWorkServiceSignUpOTP).
+            //
+            // 단, 그 서버는 **이미 인증된 기존 계정**의 가입 시도에도 422 대신 200 + `identities: []` 인 가짜 사용자를 준다
+            // (계정 존재를 흘리지 않으려는 GoTrue 의 문서화된 동작). 그걸 nil 로 접으면 스토어가 코드 화면을 띄우고 사용자는
+            // 영영 오지 않을 메일을 기다린다. 옛 서버의 422 와 같은 값으로 던져 두 서버 모드의 문구를 같게 한다.
+            // 키가 없는 응답(옛 GoTrue·로그인류)은 판정하지 않는다 — 진짜 새 계정은 identities 가 비지 않는다.
+            if let identities = response.user.identities, identities.isEmpty {
+                throw SupabaseWorkServiceError.emailAlreadyRegistered
+            }
             return nil
         }
         return SupabaseSession(accessToken: accessToken, refreshToken: response.refreshToken, userID: response.user.id)

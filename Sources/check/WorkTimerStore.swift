@@ -24,6 +24,19 @@ enum PasswordResetPhase: Equatable, Sendable {
     case submitting
 }
 
+/// 가입 이메일 인증(코드) 진행 단계. 재설정과 같은 이유로 Bool 플래그 대신 단계 하나다. 화면은 재설정의 코드 화면을
+/// 그대로 빌려 쓰므로(PasswordResetPanel · purpose: .signUpConfirmation) 단계도 그 화면이 아는 것만 있다.
+enum SignUpConfirmPhase: Equatable, Sendable {
+    /// 코드 화면을 띄우지 않음(기본). **지금 서버(가입 즉시 세션)에서는 이 값을 떠나지 않는다.**
+    case idle
+    /// 코드 입력 대기. 계정은 이미 만들어져 있고 미확인 상태다.
+    case enterCode
+    /// 코드 검증 왕복 중(취소 가능).
+    case verifying
+    /// 코드 재전송 왕복 중(취소 가능). 화면은 코드 단계에 머문다 — 재설정과 달리 이메일 화면이 따로 없다.
+    case resending
+}
+
 @Observable
 @MainActor
 final class WorkTimerStore {
@@ -1146,6 +1159,32 @@ final class WorkTimerStore {
     @ObservationIgnored var passwordResetSleep: @Sendable (Double) async -> Void = {
         try? await Task.sleep(for: .seconds($0))
     }
+
+    // ── 가입 이메일 인증(코드) ──
+    // 재설정과 같은 짝(단계·문구·주소·남은 초 + 비관찰 Task/세대/차수)이다. 재설정 상태와 **합치지 않는** 이유:
+    // 같은 값을 두 흐름이 쓰면 "재설정 중 가입"처럼 불가능한 조합이 생기고, 한쪽의 청소가 다른 쪽 왕복을 끊는다.
+    // 카운트다운 시계·수면은 재설정 것(clock · passwordResetSleep)을 그대로 쓴다 — 주입 지점을 둘로 늘리지 않는다.
+    /// 가입 확인 진행 단계. idle 이 아니면 로그인 카드 대신 코드 화면이 뜬다(재설정 화면이 우선 — 둘이 동시에 idle 을 떠날 길은 없다).
+    var signUpConfirmPhase: SignUpConfirmPhase = .idle
+    /// 사용자에게 보일 안내/오류 한 줄(재설정 상수 + 가입 전용 상수 — WorkTimerStoreSignUpOTP.swift).
+    var signUpConfirmMessage: String?
+    /// 코드를 보낸 주소(**정규화된 값** — 가입 요청과 verify 가 같은 문자열이어야 GoTrue 가 같은 사용자로 본다).
+    var signUpConfirmEmail = ""
+    /// 재발송까지 남은 초. >0 이면 [다시 받기]가 잠기고 숫자가 보인다.
+    var signUpConfirmResendSeconds = 0
+
+    /// 떠 있는 가입 확인 왕복(검증/재전송) Task. 취소가 URLSession 요청 자체를 끊는다(재설정과 같은 규약). 관찰 대상 아님.
+    @ObservationIgnored var signUpConfirmTask: Task<Void, Never>?
+    /// 재발송 카운트다운 Task. 관찰 대상 아님.
+    @ObservationIgnored var signUpConfirmCooldownTask: Task<Void, Never>?
+    /// 가입 확인 흐름의 세대 토큰(취소/새 시작마다 +1 — 늦게 온 응답이 닫힌 흐름을 되살려 **사용자를 로그인시키지 못한다**). 관찰 대상 아님.
+    @ObservationIgnored var signUpConfirmGeneration = 0
+    /// 이번 흐름에서 코드를 몇 번 보냈는가(첫 발송 뒤 5초 · 그 뒤 60초 — 재설정과 같은 규칙). 관찰 대상 아님.
+    @ObservationIgnored var signUpConfirmSendCount = 0
+    /// 가입 요청에 실어 보낸 별명·센터. 코드가 통과해 세션이 생기면 즉시 세션이 온 경로와 **같은 마무리**(completeSignUp)에
+    /// 넘긴다. 재시작 뒤 코드 입력 출구(beginSignUpConfirmation)로 들어온 사람은 모를 수 있어 Optional 이다. 관찰 대상 아님.
+    @ObservationIgnored var signUpConfirmDisplayName: String?
+    @ObservationIgnored var signUpConfirmCenter: String?
 
     // 잠자기 정책: willSleep 시각을 기록해 didWake 에서 잠든 시간을 판정한다.
     var sleepBeganAt: Date?

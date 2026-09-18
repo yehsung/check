@@ -4502,8 +4502,42 @@ private struct LoginPanel: View {
                 previewASCIIWarning: previewWarning,
                 perform: dispatchReset
             )
+        } else if store.signUpConfirmPhase != .idle {
+            // 가입 확인 코드 화면 — 재설정의 코드 화면을 purpose 만 바꿔 빌린다(같은 부품·같은 배선·같은 문구 표).
+            // 로그인 카드를 **대체**하는 이유도 재설정과 같다(팝오버 높이 예산). 지금 서버(가입 즉시 세션)에서는 이 분기가
+            // 한 번도 참이 되지 않는다 — signUpConfirmPhase 는 signUp 이 nil 세션을 받았을 때만 idle 을 떠난다.
+            PasswordResetPanel(
+                purpose: .signUpConfirmation,
+                phase: store.signUpConfirmPhase.otpPanelPhase,
+                message: store.signUpConfirmMessage,
+                sentToEmail: store.signUpConfirmEmail,
+                resendSeconds: store.signUpConfirmResendSeconds,
+                previewASCIIWarning: previewWarning,
+                perform: dispatchSignUpConfirm
+            )
         } else {
             loginCard
+        }
+    }
+
+    // 가입 확인 화면의 버튼이 낸 동작을 스토어 호출로 옮기는 자리(dispatchReset 과 같은 이유로 여기 한 곳). 같은
+    // PasswordResetAction 을 받지만 가는 곳이 다르다 — 화면은 어느 흐름인지 모른 채 값만 내보낸다.
+    private func dispatchSignUpConfirm(_ action: PasswordResetAction) {
+        switch action {
+        case .requestCode:
+            // 재전송 대상은 스토어가 기억하는 주소다(화면이 넘긴 값은 sentToEmail 과 같다 — 가입 확인엔 주소 칸이 없다).
+            Task { await store.resendSignUpCode() }
+        case .verifyCode(let code):
+            Task { await store.verifySignUpCode(code: code) }
+        case .submitNewPassword:
+            // 가입 확인엔 비밀번호 화면이 없다(purpose 가 step 을 코드로 고정한다) — 올 수 없는 값이라 아무것도 하지 않는다.
+            break
+        case .cancel:
+            // 계정은 이미 있다(미확인). 돌아갈 곳은 로그인이다 — 링크 글자("로그인으로 돌아가기")와 같은 뜻이고, 거기서 로그인을
+            // 시도하면 "이메일 확인 필요" 출구가 다시 코드 화면으로 데려온다. 가입 폼으로 돌려보내면 [가입]을 또 눌러 메일을
+            // 한 통 더 보내게 된다.
+            store.cancelSignUpConfirmation()
+            mode = .signIn
         }
     }
 
@@ -4541,6 +4575,14 @@ private struct LoginPanel: View {
                 AuthStatusLine(message: store.syncMessage)
                     .opacity(store.syncMessage == "로그인 필요" ? 0 : 1)
                     .accessibilityHidden(store.syncMessage == "로그인 필요")
+                // 미확인 계정의 **출구**. "이미 가입된 이메일"(가입 재시도) · "이메일 확인 필요"(로그인 시도) · "확인 메일 필요"
+                // (코드 화면을 닫고 온 사람)에만 단다 — 가입 도중 앱을 닫은 사람이 이 링크 없이는 그 계정을 영영 못 쓴다.
+                // 판정은 스토어의 순수 함수다(문구가 곧 계약이라 뷰가 글자를 따로 들지 않는다).
+                if WorkTimerStore.offersSignUpConfirmationExit(for: store.syncMessage) {
+                    SignUpConfirmEntryLink(email: store.email) { email in
+                        Task { await store.beginSignUpConfirmation(email: email) }
+                    }
+                }
                 links
             }
         }
@@ -4781,6 +4823,26 @@ enum PasswordResetAction: Equatable {
     case cancel
 }
 
+/// PasswordResetPanel 이 어느 흐름을 그리는가. 가입 확인은 재설정의 **코드 화면 하나**만 빌린다 — 이메일은 가입 폼이 이미
+/// 받았고 새 비밀번호는 없다. 부품·배선·문구 표를 한 벌로 두려고 화면을 새로 만들지 않고 purpose 로 가른다.
+enum OTPPanelPurpose: Equatable {
+    case passwordReset
+    case signUpConfirmation
+}
+
+extension SignUpConfirmPhase {
+    /// 가입 확인 단계 → 빌려 쓰는 재설정 화면의 단계. 재전송은 sending 으로 접는다(진행 문구 "코드 보내는 중"·버튼 잠금이 같다).
+    /// 화면이 이메일 단계로 물러나지 않는 것은 모델이 purpose 로 보장한다(PasswordResetFormModel.step).
+    var otpPanelPhase: PasswordResetPhase {
+        switch self {
+        case .idle: return .idle
+        case .enterCode: return .enterCode
+        case .verifying: return .verifying
+        case .resending: return .sending
+        }
+    }
+}
+
 /// 재설정 화면이 지금 어느 칸에 서 있는가. 단계(phase)는 7가지지만 **화면은 3개**다 —
 /// 왕복 중(sending/verifying/submitting)은 직전 입력 화면을 그대로 유지해야 하기 때문에
 /// phase 를 그대로 분기 조건으로 쓰면 화면이 깜빡이며 사라진다.
@@ -4815,6 +4877,8 @@ struct PasswordResetFormModel: Equatable {
     let newPassword: String
     let resendSeconds: Int
     let message: String?
+    /// 어느 흐름의 화면인가. 기본은 재설정이라 기존 호출부·테스트가 그대로다(마지막 자리 — 멤버와이즈 init 인자 순서를 지킨다).
+    var purpose: OTPPanelPurpose = .passwordReset
 
     /// 메일로 오는 OTP 자릿수. Supabase 기본값이 6자리다.
     static let codeLength = 6
@@ -4824,6 +4888,9 @@ struct PasswordResetFormModel: Equatable {
     /// 지금 서 있는 화면. 왕복 중인 단계는 **직전 입력 화면에 머무른다**(sending→이메일, verifying→코드,
     /// submitting→새 비밀번호). 그래야 진행 문구가 뜨는 동안 방금 친 값이 눈앞에 남는다.
     var step: PasswordResetStep {
+        // 가입 확인은 화면이 코드 하나뿐이다. 재전송 왕복(sending)도 코드 화면에 머문다 — 재설정처럼 이메일 화면으로
+        // 물러나면 가입 확인엔 그 화면이 없어 방금 친 코드가 사라진다.
+        if purpose == .signUpConfirmation { return .code }
         switch phase {
         case .enterCode, .verifying:
             return .code
@@ -4884,6 +4951,8 @@ struct PasswordResetFormModel: Equatable {
     /// 헤더 부제. 3단계는 "재설정" 이 아니라 **이미 통과했다**는 사실을 먼저 알린다 —
     /// 코드 화면과 같은 부제를 달아 두면 "왜 또 입력하지?"로 읽힌다.
     var headerSubtitle: String {
+        // 가입 확인은 "재설정"이 아니다 — 같은 부제를 달면 방금 가입한 사람이 비밀번호를 잃은 줄 안다.
+        if purpose == .signUpConfirmation { return "이메일 인증" }
         switch step {
         case .email, .code: return "비밀번호 재설정"
         case .newPassword: return "코드 확인 완료"
@@ -4920,7 +4989,10 @@ struct PasswordResetFormModel: Equatable {
         switch text {
         case WorkTimerStore.passwordResetSentMessage,
              WorkTimerStore.passwordResetAlreadySentMessage,
-             WorkTimerStore.passwordResetCooldownMessage:
+             WorkTimerStore.passwordResetCooldownMessage,
+             // 가입 확인의 발송 안내 둘도 안내다 — 빠지면 "코드를 보냈어요"가 빨간 경고로 그려진다.
+             WorkTimerStore.signUpConfirmSentMessage,
+             WorkTimerStore.signUpConfirmResentMessage:
             return true
         default:
             return false
@@ -4972,6 +5044,27 @@ struct PasswordResetEntryLink: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+    }
+}
+
+/// 로그인 카드의 "가입을 마치지 못했나요? 인증 코드 다시 받기" 출구. 미확인 계정이 코드 화면으로 돌아오는 **유일한 길**이다
+/// (가입 도중 앱을 닫은 사람 · 가입을 다시 눌러 "이미 가입된 이메일"을 본 사람 · 로그인해서 "이메일 확인 필요"를 본 사람).
+/// PasswordResetEntryLink 와 같은 골격 — 지금 입력돼 있는 이메일을 그대로 넘기고, press() 를 순수 함수로 빼 값으로 단언한다.
+struct SignUpConfirmEntryLink: View {
+    static let prompt = "가입을 마치지 못했나요?"
+    static let title = "인증 코드 다시 받기"
+
+    let email: String
+    let begin: (String) -> Void
+
+    /// 눌린 그 순간의 동작(오프스크린에서 버튼 action 은 증명 불가 — PasswordResetEntryLink.press 와 같은 관례).
+    func press() {
+        begin(PasswordResetEntryLink.emailToCarry(email))
+    }
+
+    var body: some View {
+        // 상태줄 바로 아래 한 줄 링크. 아래 "가입하기/로그인" 전환 링크와 같은 부품이라 톤이 같다.
+        AuthLinkButton(prompt: Self.prompt, action: Self.title, perform: press)
     }
 }
 
@@ -5030,6 +5123,8 @@ private struct PasswordResetNoticeLine: View {
 /// 스토어를 통째로 받지 않고 **값 + 클로저**로만 받는다(PokePanel/LeaderboardPanel 선례) —
 /// 렌더 테스트가 어떤 단계든 스토어 없이 그대로 그릴 수 있어야 하기 때문이다.
 struct PasswordResetPanel: View {
+    /// 재설정인가 가입 확인인가(기본 재설정). 가입 확인은 코드 화면 하나만 쓰고 부제가 다르다 — 그 차이는 전부 모델 안이다.
+    let purpose: OTPPanelPurpose
     let phase: PasswordResetPhase
     let message: String?
     /// 스토어가 기억하는 "코드를 보낸 주소". 2단계 안내와 재발송 대상에 쓴다.
@@ -5047,6 +5142,7 @@ struct PasswordResetPanel: View {
     @FocusState private var focus: AuthFocusField?
 
     init(
+        purpose: OTPPanelPurpose = .passwordReset,
         phase: PasswordResetPhase,
         message: String?,
         sentToEmail: String,
@@ -5054,6 +5150,7 @@ struct PasswordResetPanel: View {
         previewASCIIWarning: Bool = false,
         perform: @escaping (PasswordResetAction) -> Void
     ) {
+        self.purpose = purpose
         self.phase = phase
         self.message = message
         self.sentToEmail = sentToEmail
@@ -5071,7 +5168,8 @@ struct PasswordResetPanel: View {
             code: code,
             newPassword: newPassword,
             resendSeconds: resendSeconds,
-            message: message
+            message: message,
+            purpose: purpose
         )
     }
 

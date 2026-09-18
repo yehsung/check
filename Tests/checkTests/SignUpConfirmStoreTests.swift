@@ -516,6 +516,56 @@ private func expectNotSignedInAndNoTeamRoundTrip(_ store: WorkTimerStore, host: 
         #expect(store.signUpConfirmResendSeconds == 51)
     }
 
+    /// ★ 코드를 한 번 틀리면 [다시 받기]가 **영영 안 풀리던** 결함의 회귀.
+    ///
+    /// 카운트다운은 세대를 캡처해 매 틱 가드했는데, 검증(verifySignUpCode)이 왕복마다 그 세대를 올린다. 그래서 403 한 번에
+    /// 카운트다운이 남은 초를 0 으로 내리지 못한 채 빠져나가고, 화면엔 회색 "다시 받기 (47초)" 가 굳었다 — 그 화면에서
+    /// 재전송은 다시 열리지 않고 탈출구는 "로그인으로 돌아가기"뿐인데 화면이 그걸 말해 주지 않는다.
+    ///
+    /// 재는 것: 재전송 → 60초 → 틀린 코드 403 → 남은 초가 **계속 줄어 0** 이 되고 [다시 받기]가 실제로 다시 나간다.
+    @MainActor
+    @Test
+    func failedVerifyKeepsTheResendCountdownRunning() async {
+        let host = "signup-otp-confirm-badcode-cooldown"
+        let store = makeSignUpStore(host: host)
+        let ticker = freezeSignUpCooldownClock(store)
+        defer { stopBackground(store) }
+        fillJoinSignUpForm(store)
+        await store.signUp()?.value
+        #expect(store.signUpConfirmPhase == .enterCode)
+
+        // 첫 잠금 5초를 실시간 없이 소진하고 재전송 — 이제 60초 잠금이다.
+        ticker.release()
+        await store.signUpConfirmCooldownTask?.value
+        ticker.freeze()
+        await store.resendSignUpCode()
+        #expect(store.signUpConfirmResendSeconds == WorkTimerStore.passwordResetResendCooldownSeconds)
+        #expect(SignUpOTPURLProtocolStub.paths(forHost: host).filter { $0 == "/auth/v1/resend" }.count == 1)
+
+        // 그 60초 안에 코드를 한 번 틀린다(403). 화면은 코드 화면에 머문다.
+        await store.verifySignUpCode(code: "000000")
+        #expect(store.signUpConfirmPhase == .enterCode)
+        #expect(store.signUpConfirmMessage == WorkTimerStore.passwordResetCodeRejectedMessage)
+        // 틀렸다고 잠금이 풀리지도 않는다(서버 간격은 그대로다) — 굳는 것과 풀리는 것은 다른 결함이다.
+        #expect(store.signUpConfirmResendSeconds > 0)
+
+        // 카운트다운은 그 뒤로도 살아 있어야 한다: 남은 초가 0 까지 내려가고 버튼이 다시 열린다.
+        ticker.release()
+        await store.signUpConfirmCooldownTask?.value
+        #expect(store.signUpConfirmResendSeconds == 0)
+        ticker.freeze()
+        #expect(
+            PasswordResetFormModel(
+                phase: .enterCode, email: "", code: "", newPassword: "",
+                resendSeconds: store.signUpConfirmResendSeconds, message: nil, purpose: .signUpConfirmation
+            ).isResendEnabled
+        )
+
+        // 회색으로 굳은 버튼이 아니다 — 실제로 한 발 더 나간다.
+        await store.resendSignUpCode()
+        #expect(SignUpOTPURLProtocolStub.paths(forHost: host).filter { $0 == "/auth/v1/resend" }.count == 2)
+    }
+
     /// 취소 뒤 **늦게 도착한 검증 성공**이 사람을 로그인시키지 않는다 — 닫힌 흐름의 세션은 버려진다.
     @MainActor
     @Test
@@ -663,6 +713,36 @@ private func expectNotSignedInAndNoTeamRoundTrip(_ store: WorkTimerStore, host: 
         #expect(SignUpConfirmPhase.enterCode.otpPanelPhase == .enterCode)
         #expect(SignUpConfirmPhase.verifying.otpPanelPhase == .verifying)
         #expect(SignUpConfirmPhase.resending.otpPanelPhase == .sending)
+    }
+
+    /// 코드 화면이 **말해야 하는 사실**. 두 앱이 같은 메일을 설명하므로 폰(MobileSignUpText)과 같은 낱말·띄어쓰기를 쓴다.
+    ///
+    /// ★ 재전송은 **앞 코드를 즉시 무효화한다**(프로덕션 실측). 첫 메일이 늦게 도착한 사람이 그 코드를 넣으면 403 인데,
+    /// 안내가 그 사실을 말하지 않으면 왜 틀렸는지 알 길이 없다.
+    @MainActor
+    @Test
+    func codeScreenNoticesMatchThePhoneAndSayTheOldCodeIsVoid() {
+        // 첫 안내 — 폰과 같은 문장(낱말·띄어쓰기까지).
+        #expect(WorkTimerStore.signUpConfirmSentMessage == "인증 코드를 보냈어요 · 안 오면 스팸함을 확인해 주세요")
+        // 재전송 안내 — 앞 코드가 죽었다는 사실이 여기 있어야 한다.
+        #expect(WorkTimerStore.signUpConfirmResentMessage == "새 코드를 보냈어요 · 앞 코드는 이제 쓸 수 없어요, 마지막 메일의 코드를 넣어 주세요")
+        // "이미 인증된 계정" 이야기는 재전송 결과와 무관하게 늘 참이라 재전송 안내가 아니라 고정 안내 줄로 간다
+        // (재전송을 눌러야만 보이면, 누르지 않은 사람은 영영 못 본다).
+        #expect(!WorkTimerStore.signUpConfirmResentMessage.contains("이미 인증"))
+        #expect(WorkTimerStore.signUpConfirmHelpMessage == "이미 인증을 마친 계정이면 메일이 오지 않아요 · 그때는 로그인해 주세요")
+
+        // 고정 안내 줄은 가입 확인 코드 화면에만, 그리고 그 화면의 **모든 단계**에 붙는다(재전송 왕복 중에도 사라지지 않는다).
+        func model(_ phase: PasswordResetPhase, _ purpose: OTPPanelPurpose) -> PasswordResetFormModel {
+            PasswordResetFormModel(
+                phase: phase, email: "", code: "", newPassword: "", resendSeconds: 0, message: nil, purpose: purpose
+            )
+        }
+        #expect(model(.enterCode, .signUpConfirmation).codeScreenHelpText == WorkTimerStore.signUpConfirmHelpMessage)
+        #expect(model(.verifying, .signUpConfirmation).codeScreenHelpText == WorkTimerStore.signUpConfirmHelpMessage)
+        #expect(model(.sending, .signUpConfirmation).codeScreenHelpText == WorkTimerStore.signUpConfirmHelpMessage)
+        // 재설정엔 "이미 인증된 계정"이라는 개념이 없다 — 그 화면엔 붙지 않는다.
+        #expect(model(.enterCode, .passwordReset).codeScreenHelpText == nil)
+        #expect(model(.enterNewPassword, .passwordReset).codeScreenHelpText == nil)
     }
 
     @MainActor

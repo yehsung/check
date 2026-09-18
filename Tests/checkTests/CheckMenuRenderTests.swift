@@ -3819,8 +3819,16 @@ func signUpConfirmationBorrowsTheCodeScreenAndStaysThereWhileResending() throws 
     let resetCode = try renderBitmap(passwordResetPanel(phase: .enterCode, resendSeconds: 0)).pixelsHigh
     let resetSending = try renderBitmap(passwordResetPanel(phase: .sending, resendSeconds: 0)).pixelsHigh
     #expect(resetCode != resetSending, "재설정의 코드 화면과 이메일 화면은 높이가 달라야 대조가 성립한다")
-    // 그리고 가입 확인의 코드 화면은 재설정의 코드 화면 **그대로**다(부제 한 줄만 다르고 높이는 같다).
-    #expect(heights.first == resetCode, "가입 확인 코드 화면 높이 \(heights.first ?? -1) ≠ 재설정 코드 화면 \(resetCode)")
+    // 가입 확인의 코드 화면은 재설정의 코드 화면에 **고정 안내 줄 한 줄**을 더한 것이다("이미 인증을 마친 계정이면
+    // 메일이 오지 않아요"). 그 사실은 재전송 결과와 무관하게 늘 참이라 사라지는 안내 줄이 아니라 고정 도움말이어야 한다 —
+    // 재전송을 눌러야만 보이면 누르지 않은 사람은 영영 못 본다. 그래서 두 화면 높이는 **같으면 안 된다**(그 줄만큼 높다).
+    let signUpCodeHeight = try #require(heights.first)
+    #expect(
+        signUpCodeHeight > resetCode,
+        "가입 확인 코드 화면에 고정 안내 줄이 없다 — 높이 \(signUpCodeHeight) vs 재설정 코드 화면 \(resetCode)"
+    )
+    // 도움말 한 줄(캡션)보다 크게 벌어지면 다른 것이 끼어든 것이다 — 두 줄 이상이면 예산(팝오버 높이)을 다시 봐야 한다.
+    #expect(signUpCodeHeight - resetCode <= 60, "고정 안내 줄이 한 줄을 넘는다 (실측 \(signUpCodeHeight - resetCode)px)")
 }
 
 @MainActor

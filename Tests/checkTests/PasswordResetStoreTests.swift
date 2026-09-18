@@ -421,6 +421,45 @@ private func expectNoSessionAndNoBackground(_ store: WorkTimerStore, host: Strin
         #expect(!PasswordResetURLProtocolStub.paths(forHost: host).contains(PasswordResetURLProtocolStub.updateUserPath))
     }
 
+    /// ★ 코드를 한 번 틀리면 [다시 받기]가 **영영 안 풀리던** 결함의 회귀(가입 확인과 같은 뿌리 — 공용 runResendCountdown).
+    ///
+    /// 카운트다운이 세대를 캡처해 매 틱 가드했는데, 검증(verifyPasswordResetCode)이 왕복마다 그 세대를 올린다.
+    /// 그래서 403 한 번에 카운트다운이 남은 초를 0 으로 내리지 못한 채 빠져나가고 버튼이 회색으로 굳었다.
+    @MainActor
+    @Test
+    func failedVerifyKeepsTheResendCountdownRunning() async {
+        let host = "otp-badcode-resend"
+        let store = makeResetStore(host: host)
+        let ticker = freezeCooldownClock(store)
+        defer { store.cancelPasswordReset() }
+
+        store.beginPasswordReset(email: "member@example.com")
+        await store.requestPasswordResetCode(email: "member@example.com")
+        #expect(store.passwordResetResendSeconds == 5)
+
+        // 첫 잠금을 소진하고 재전송 — 이제 60초 잠금이다.
+        ticker.release()
+        await store.passwordResetCooldownTask?.value
+        ticker.freeze()
+        await store.requestPasswordResetCode(email: "member@example.com")
+        #expect(store.passwordResetResendSeconds == WorkTimerStore.passwordResetResendCooldownSeconds)
+        let sentBeforeVerify = PasswordResetURLProtocolStub.paths(forHost: host).count
+
+        // 그 60초 안에 코드를 한 번 틀린다(403).
+        await store.verifyPasswordResetCode(code: "000000")
+        #expect(store.passwordResetPhase == .enterCode)
+        #expect(store.passwordResetMessage == WorkTimerStore.passwordResetCodeRejectedMessage)
+        #expect(store.passwordResetResendSeconds > 0)
+
+        // 카운트다운은 그 뒤로도 살아 있어야 한다 — 0 까지 내려가고 [다시 받기]가 실제로 다시 나간다.
+        ticker.release()
+        await store.passwordResetCooldownTask?.value
+        #expect(store.passwordResetResendSeconds == 0)
+        ticker.freeze()
+        await store.requestPasswordResetCode(email: "member@example.com")
+        #expect(PasswordResetURLProtocolStub.paths(forHost: host).count == sentBeforeVerify + 2)
+    }
+
     /// 쿨다운 두 단계: **첫 발송 뒤 5초, 재전송 뒤 60초.**
     /// 5초가 필요한 이유는 첫 메일이 실제로 안 오는 일이 있어서고, 그 뒤 60초는 서버(GoTrue)가 강제하는 간격이다.
     @MainActor

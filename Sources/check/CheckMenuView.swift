@@ -4941,6 +4941,18 @@ struct PasswordResetFormModel: Equatable {
         }
     }
 
+    /// 코드 화면에 **늘 붙는 고정 안내 줄**(가입 확인 전용). 안내 슬롯(noticeText)과 달리 문구가 바뀌어도 사라지지 않는다 —
+    /// "이미 인증을 마친 계정이면 메일이 오지 않는다"는 사실은 재전송 결과와 상관없이 늘 참이고, 그걸 재전송 안내에만
+    /// 실어 두면 [다시 받기]를 누른 사람만 보게 된다(정작 알아야 할 사람은 오지 않는 메일을 기다리는 사람이다).
+    /// 재설정에는 이 개념이 없으므로 nil 이다.
+    /// (@MainActor 인 이유: 문구가 @MainActor 타입(WorkTimerStore)의 상수라 nonisolated 문맥에서는 못 읽는다.
+    /// 읽는 쪽은 전부 MainActor 다 — SwiftUI 뷰 본문과 테스트.)
+    @MainActor
+    var codeScreenHelpText: String? {
+        guard purpose == .signUpConfirmation, step == .code else { return nil }
+        return WorkTimerStore.signUpConfirmHelpMessage
+    }
+
     /// 재발송은 **코드 화면에만** 있다. 3단계에서는 코드가 이미 소모돼 다시 받아 봐야 쓸 곳이 없고,
     /// 새로 받은 코드로 검증 상태를 갈아엎으면 지금 화면이 근거를 잃는다.
     var showsResend: Bool { step == .code }
@@ -5254,6 +5266,14 @@ struct PasswordResetPanel: View {
                     submitLabel: .go,
                     onSubmit: { submitIfReady() }
                 )
+                // 고정 안내 줄(가입 확인 전용). 안내 슬롯과 달리 늘 떠 있다 — 근거는 모델의 codeScreenHelpText 주석.
+                if let help = model.codeScreenHelpText {
+                    Text(help)
+                        .font(.caption)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             case .newPassword:
                 verifiedBanner
                 // 새 비밀번호만 남는다. 코드 필드는 여기 없다 — 이미 소모된 코드를 다시 보여 주면

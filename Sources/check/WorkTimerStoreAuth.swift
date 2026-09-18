@@ -1149,10 +1149,9 @@ extension WorkTimerStore {
         passwordResetCooldownTask?.cancel()
         passwordResetResendSeconds = seconds
         let deadline = clock().addingTimeInterval(TimeInterval(seconds))
-        let generation = passwordResetGeneration
+        // 세대를 캡처하지 않는다 — 카운트다운을 멈추는 길은 이 Task 의 취소뿐이다(위 cancel + clearPasswordResetState).
         passwordResetCooldownTask = runResendCountdown(
             deadline: deadline,
-            isCurrent: { [weak self] in self?.passwordResetGeneration == generation },
             apply: { [weak self] remaining in
                 guard let self, self.passwordResetResendSeconds != remaining else { return }
                 self.passwordResetResendSeconds = remaining
@@ -1162,16 +1161,22 @@ extension WorkTimerStore {
 
     /// 재발송 카운트다운 루프 **본체**(비밀번호 재설정 · 가입 확인 공용). 남은 초는 주입 clock 기준 데드라인에서 매 틱
     /// 다시 계산하고, 대기는 주입 passwordResetSleep 이다 — 두 흐름이 같은 시계·같은 수면을 쓰므로 테스트의 얼린 시계가
-    /// 양쪽에 그대로 통한다. `isCurrent` 가 거짓이 되면(흐름 취소/재시작 = 세대 변화) 그 자리에서 끝난다.
+    /// 양쪽에 그대로 통한다.
     /// 값 대입은 호출자의 `apply` 가 한다(같은 값이면 대입하지 않는 == 가드도 호출자 몫 — 관찰 무효화를 아끼는 기존 규약).
+    ///
+    /// ★ **끊는 것은 Task 취소뿐이다 — 세대(generation)를 보지 않는다.** 예전엔 호출자가 캡처한 세대를 매 틱 확인했고,
+    /// 그 때문에 코드를 한 번 틀리면 [다시 받기]가 **영영 안 풀렸다**: 검증·재전송은 '늦게 온 응답을 버리려고' 왕복마다
+    /// 세대를 올리는데, 카운트다운은 그 신호를 '멈추라'로 읽고 남은 초를 0 으로 내리지 못한 채 빠져나갔다(회색 "다시 받기
+    /// (47초)" 가 굳고 탈출구는 "로그인으로 돌아가기"뿐인데 화면이 그걸 말해 주지 않는다).
+    /// 두 장치는 뜻이 다르다 — 세대는 **응답 폐기**, Task 취소는 **중단**이다. 카운트다운을 실제로 멈춰야 하는 자리
+    /// (흐름 청소 clear*State · 새 쿨다운 시작 start*Cooldown)는 전부 이 Task 를 직접 취소하므로 이것으로 충분하다.
     func runResendCountdown(
         deadline: Date,
-        isCurrent: @escaping @MainActor () -> Bool,
         apply: @escaping @MainActor (Int) -> Void
     ) -> Task<Void, Never> {
         Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                guard let self, isCurrent() else { return }
+                guard let self else { return }
                 let remaining = Int(ceil(deadline.timeIntervalSince(self.clock())))
                 guard remaining > 0 else {
                     apply(0)

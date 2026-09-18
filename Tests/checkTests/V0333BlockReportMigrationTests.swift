@@ -35,7 +35,15 @@ private let blockMigrationName = "20260918180000_blocks_and_reports.sql"
 private let gatedFunctions: [String] = [
     "send_message", "message_history", "message_unread_summary",
     "app_user_directory", "gomoku_lobby", "gomoku_challenge", "gomoku_respond",
+    "poke_user", "ultra_poke_user",
 ]
+
+/// 숨김 격리(20260917160000)가 **쓰기 경로**로 보고 신원 검사와 같은 if 에서 막은 RPC 를 찾는 표식.
+/// 그 파일이 이 한 줄로 막은 함수는 셋이다 — send_message · poke_user · ultra_poke_user.
+private let writeGateMarker = "or not public.same_visibility(uid, p_to) then"
+
+/// 숨김 격리의 정본 파일(이 파일이 게이트를 얹는 쓰기 경로의 원천).
+private let hiddenAccountsMigrationName = "20260917160000_hidden_accounts.sql"
 
 /// 이 파일이 새로 만드는 RPC 넷(전부 authenticated 전용 · security definer).
 private let newRPCs: [(name: String, signature: String)] = [
@@ -142,6 +150,25 @@ private func canonicalSource(of function: String) throws -> (file: URL, body: St
     return found
 }
 
+/// 한 마이그레이션이 정의하는 `public.<이름>` 전부(이름은 중복 없이, 본문은 **그 파일의 마지막 정의**).
+/// 이름을 손으로 적지 않고 파일에서 뽑으려고 쓴다 — 손으로 적으면 새로 생긴 쓰기 경로가 목록에 안 들어온다.
+private func definedFunctionNames(in sql: String) -> [String] {
+    var names: [String] = []
+    var seen = Set<String>()
+    var searchStart = sql.startIndex
+    while let found = sql.range(of: "function public.", options: .caseInsensitive, range: searchStart..<sql.endIndex) {
+        searchStart = found.upperBound
+        let lineStart = sql[sql.startIndex..<found.lowerBound].lastIndex(of: "\n").map { sql.index(after: $0) } ?? sql.startIndex
+        guard sql[lineStart..<found.lowerBound].lowercased().contains("create") else { continue }
+        let rest = sql[found.upperBound...]
+        guard let paren = rest.firstIndex(of: "(") else { continue }
+        let name = String(rest[rest.startIndex..<paren]).trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, !name.contains(" "), seen.insert(name).inserted else { continue }
+        names.append(name)
+    }
+    return names
+}
+
 // MARK: - ① 본문을 새로 쓰지 않았다
 
 /// 정본에는 있었는데 새 정의에서 **사라져도 되는** 줄 — 차단 조건을 끼우느라 두 줄로 갈라진 자리뿐이다.
@@ -198,8 +225,66 @@ func 허용_목록은_같은_줄의_갈라진_반쪽끼리만_짝이다() {
     }
 }
 
+/// 숨김 격리가 **쓰기 경로**로 보고 막은 RPC 는 차단도 같이 막아야 한다.
+///
+/// 차단의 약속은 '학대하는 사용자와의 상호작용 차단'이다. 메시지만 막고 찌르기를 두면 차단한 사람이
+/// 화면을 통째로 덮는 울트라 찌르기를 그대로 받는다 — 게다가 **사람 찾기에서 서로 안 보이는 것은 목록일 뿐**이라
+/// 토큰을 쥔 사람은 rpc/ultra_poke_user 를 상대 uuid 로 직접 부를 수 있다. 목록 필터는 차단이 아니고, 게이트가 차단이다.
+///
+/// 목록을 손으로 적지 않고 **정본 파일에서 뽑는다**: 20260917160000 이 신원 검사와 같은 if 에서 `same_visibility(uid, p_to)`
+/// 로 막은 함수 = 그 파일이 '쓰기 경로'로 판정한 집합이다. 거기에 새 쓰기 RPC 가 생기면 이 테스트가 그것도 요구한다.
 @Test
-func 이_파일이_고친_일곱_함수의_최종_정의다() throws {
+func 숨김_격리가_막은_쓰기_경로는_차단도_막는다() throws {
+    let (_, sql) = try blockMigrationSQL()
+    let hidden = try String(
+        contentsOf: try blockMigrationsDirectory().appendingPathComponent(hiddenAccountsMigrationName), encoding: .utf8
+    )
+    var writePaths: [String] = []
+    for name in definedFunctionNames(in: hidden) {
+        guard let body = functionBody(of: name, in: hidden) else { continue }
+        if codeLines(body).contains(where: { $0.contains(writeGateMarker) }) { writePaths.append(name) }
+    }
+    #expect(writePaths.count >= 3,
+            "정본에서 쓰기 경로를 \(writePaths.count)개밖에 못 찾았다(\(writePaths)) — 표식(\(writeGateMarker))이 낡았다")
+
+    for name in writePaths {
+        guard let body = functionBody(of: name, in: sql) else {
+            Issue.record("\(name): 숨김 격리가 쓰기 경로로 막은 함수인데 차단 마이그레이션이 다시 정의하지 않는다 — 차단해도 그 길로는 상대에게 닿는다(목록에서 안 보이는 것은 화면일 뿐, 서버는 uuid 로 부르면 받는다)")
+            continue
+        }
+        #expect(codeLines(body).contains { $0.contains("blocked_between") },
+                "\(name) 본문에 차단 게이트(blocked_between)가 없다")
+    }
+}
+
+/// 찌르기의 차단 게이트도 **신원 검사와 같은 if** 에 있어야 한다(블랙아웃이 '신원 검사 직후'라는 기존 계약을 흔들지 않게).
+/// 같은 이유로 쿨타임 기록·잔량 차감·장부·초인종보다 앞이라, 차단된 시도가 보낸이의 60초도 루비도 태우지 않는다.
+@Test
+func 찌르기_차단_게이트는_블랙아웃보다_앞이다() throws {
+    let (_, sql) = try blockMigrationSQL()
+    for function in ["poke_user", "ultra_poke_user"] {
+        guard let body = functionBody(of: function, in: sql) else {
+            Issue.record("\(function) 을 이 마이그레이션이 다시 정의하지 않는다"); continue
+        }
+        let flat = squash(stripLineComments(body)).lowercased()
+        guard let gate = flat.range(of: "public.blocked_between(uid, p_to)") else {
+            Issue.record("\(function) 에 차단 게이트가 없다"); continue
+        }
+        guard let blackout = flat.range(of: "public.poke_blackout_active()") else {
+            Issue.record("\(function) 에서 블랙아웃 게이트를 못 찾았다 — 정본이 낡았다"); continue
+        }
+        #expect(gate.lowerBound < blackout.lowerBound,
+                "\(function) 의 차단 게이트가 블랙아웃 뒤로 갔다 — 블랙아웃은 신원 검사 **직후**가 계약이다")
+        // 쿨타임·잔량·장부보다 앞이라는 것도 같은 한 줄로 보장된다(신원 if 안에 있으면 그 아래 전부보다 앞이다).
+        if let insert = flat.range(of: "insert into public.pokes") {
+            #expect(gate.lowerBound < insert.lowerBound,
+                    "\(function): 차단된 시도가 pokes 행을 남긴다 — 보낸이의 60초 쿨타임이 탄다")
+        }
+    }
+}
+
+@Test
+func 이_파일이_고친_아홉_함수의_최종_정의다() throws {
     // 뒤 번호 파일이 다시 정의하면 차단 게이트가 조용히 사라진다(20260917140000 이 그렇게 검사를 지운 전례).
     var laterRedefinitions: [String] = []
     for file in try migrationFiles() where file.lastPathComponent > blockMigrationName {
@@ -252,7 +337,7 @@ func 차단_판정_함수는_클라가_못_부른다() throws {
 @Test
 func 차단_거절은_기존_invalid_어휘를_쓴다() throws {
     let (_, sql) = try blockMigrationSQL()
-    for function in ["send_message", "gomoku_challenge", "gomoku_respond"] {
+    for function in ["send_message", "gomoku_challenge", "gomoku_respond", "poke_user", "ultra_poke_user"] {
         guard let body = functionBody(of: function, in: sql) else { continue }
         let flat = squash(stripLineComments(body)).lowercased()
         for invented in ["'blocked'", "'you_are_blocked'", "'target_blocked'", "'block'"] {
@@ -424,4 +509,50 @@ func 마이그레이션은_적용_직후_자기_결과를_되묻고_삭제_경�
     #expect(flat.contains("notify pgrst, 'reload schema'"), "PostgREST 스키마 재적재가 없다 — 첫 호출이 PGRST202/404 다")
     // 최상위 begin/commit 은 두지 않는다(같은 파일 3회 적용이 같은 결과여야 한다).
     #expect(!flat.hasPrefix("begin;"), "최상위 begin 이 있다")
+}
+
+// MARK: - ⑦ 처리방침이 서버 사실과 어긋나지 않는다
+
+/// `docs/` 가 있는 저장소 뿌리(워크트리·본 저장소 어느 쪽에서 돌려도).
+private func repositoryRoot() throws -> URL {
+    var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    while directory.path != "/" {
+        if FileManager.default.fileExists(atPath: directory.appendingPathComponent("docs/privacy.md").path) {
+            return directory
+        }
+        directory = directory.deletingLastPathComponent()
+    }
+    throw BlockContractError("docs/privacy.md 를 못 찾았다")
+}
+
+/// 신고는 **남의 메시지 본문을 복사해 기한 없이** 들고 있다. 그 사실이 공개 처리방침과 어긋나면 안 된다.
+///
+/// 처리방침은 1:1 메시지를 "서버가 24시간 뒤 자동 삭제합니다"라고 **단정**한다. 이 마이그레이션이 붙인
+/// `content_reports.message_body` 는 신고당한 메시지 본문을 스냅숏해 두고(24시간 청소가 지워도 남게 하려는 것이 목적이다),
+/// 지우는 길은 authenticated·service_role 어느 쪽에도 없다. 애플 심사에 그 URL 이 들어가므로 문장이 사실이어야 한다.
+@Test
+func 처리방침이_신고_본문_스냅숏을_적는다() throws {
+    let (_, sql) = try blockMigrationSQL()
+    let flat = squash(sql).lowercased()
+    // 전제 — 스냅숏이 진짜 있고, 지우는 길이 없다(전제가 사라지면 이 계약도 함께 고쳐야 한다).
+    #expect(flat.contains("message_body text"), "content_reports 에 본문 스냅숏 칸이 없다 — 이 계약의 전제가 사라졌다")
+    #expect(!flat.contains("grant select, update, delete on public.content_reports"),
+            "신고에 DELETE 를 열었다면 '기한 없이 남는다'가 아니다 — 처리방침 문장과 함께 이 테스트를 고쳐라")
+
+    let privacy = try String(contentsOf: try repositoryRoot().appendingPathComponent("docs/privacy.md"), encoding: .utf8)
+    let lines = privacy.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+
+    let messageBullet = try #require(lines.first { $0.contains("1:1 메시지(") }, "처리방침에 1:1 메시지 항목이 없다")
+    #expect(messageBullet.contains("신고"),
+            "처리방침이 1:1 메시지를 '24시간 뒤 자동 삭제'라고 단정하는데 신고 본문 스냅숏(message_body)은 기한 없이 남는다 — 그 예외를 같은 줄에 적어라: \(messageBullet)")
+
+    #expect(lines.contains { $0.contains("신고") && $0.contains("보관 기간") },
+            "처리방침의 '수집하는 데이터'에 신고 기록(대상·사유·자유 입력·본문 스냅숏)과 그 보관 기간이 없다 — 제보함 항목과 같은 방식으로 적어라")
+    #expect(lines.contains { $0.contains("차단") && $0.contains("본인만") },
+            "처리방침에 차단 기록(누구를 언제 차단했는지)이 없다 — 서버가 새로 저장하는 항목이다")
+
+    // 계정 삭제 절: 신고가 어떻게 되는지(내가 낸 것은 익명으로 남고, 내가 신고당한 것은 사라진다)를 적어야 한다.
+    let deletionSection = try #require(privacy.range(of: "같이 처리되는 것:"), "계정 삭제 절을 못 찾았다")
+    #expect(privacy[deletionSection.upperBound...].contains("신고"),
+            "계정 삭제 절이 신고를 안 적는다 — 내가 낸 신고는 작성자 연결만 끊기고(set null) 내가 신고당한 기록은 함께 사라진다(cascade)")
 }

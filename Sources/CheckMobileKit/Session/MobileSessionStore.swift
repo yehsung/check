@@ -74,7 +74,8 @@ package final class MobileSessionStore {
     @ObservationIgnored package let storage: AingSharedStorage
     @ObservationIgnored package let installationID: String
     @ObservationIgnored private let vault: TokenVault
-    @ObservationIgnored private let clock: MobileClock
+    /// 세션 시계. 로그인 아래 화면(재설정 쿨다운)이 같은 시계를 쓴다 — 데모는 멈춘 시계, 테스트는 조작 시계.
+    @ObservationIgnored package let clock: MobileClock
     @ObservationIgnored package let refreshCoordinator = SessionRefreshCoordinator()
 
     /// 위젯 타임라인 새로고침(iOS 조립이 `WidgetCenter.reloadAllTimelines` 를 넣는다). 로그아웃 뒤 부른다.
@@ -205,12 +206,7 @@ package final class MobileSessionStore {
         do {
             let signedIn = try await service.signIn(email: trimmedEmail, password: password)
             guard startGeneration == generation else { return }
-            persist(signedIn)
-            storage.defaults.set(trimmedEmail, forKey: AingSharedKeys.email)
-            session = signedIn
-            enterSignedIn(registrationReason: .signIn)
-            // 네트워크가 확실히 있는 순간 — 지난 로그아웃의 못 한 정리를 갚는다(같은 계정이면 새 기기 행은 건드리지 않는다).
-            settleSignOutCleanup()
+            adoptSignedInSession(signedIn, email: trimmedEmail)
         } catch {
             guard startGeneration == generation else { return }
             switch AuthErrorRules.classify(error) {
@@ -222,6 +218,21 @@ package final class MobileSessionStore {
                 notice = AuthErrorRules.message(for: error, fallback: MobileSessionText.signInFailed)
             }
         }
+    }
+
+    /// 세션을 손에 넣은 직후의 **공통 마무리**(맥 `completeSignIn` 과 같은 뜻의 자리 — 가져온 일은 폰 몫뿐이다).
+    /// 비밀번호 로그인·가입(w16 `MobileSignUpStore`)·비밀번호 재설정(w16 `MobilePasswordResetStore`)이 세션을 얻는 길은 셋이지만
+    /// 로그인 이후의 일(키체인 저장 · 이메일 기억 · 기기 등록 · 소속 읽기 · 못 한 로그아웃 정리)은 반드시 여기 한 곳을 지난다 —
+    /// 복제하면 언젠가 갈리고, 갈린 쪽은 "로그인은 됐는데 위젯이 비어 있다 / 푸시가 안 온다"처럼 화면상 정상으로 보이는 결함으로만 드러난다.
+    ///
+    /// 호출하는 쪽이 세대 가드를 지난 뒤 부른다(이 안에서는 세대를 다시 보지 않는다 — 두 번 재면 호출부의 가드가 공허해진다).
+    package func adoptSignedInSession(_ signedIn: SupabaseSession, email: String) {
+        persist(signedIn)
+        storage.defaults.set(email, forKey: AingSharedKeys.email)
+        session = signedIn
+        enterSignedIn(registrationReason: .signIn)
+        // 네트워크가 확실히 있는 순간 — 지난 로그아웃의 못 한 정리를 갚는다(같은 계정이면 새 기기 행은 건드리지 않는다).
+        settleSignOutCleanup()
     }
 
     /// 로그아웃(SPEC-ios §2): 세대를 올리고 **로컬을 먼저 비운 뒤** 서버에 unregister_device → logout?scope=local 순서로 알린다.
@@ -662,8 +673,10 @@ package enum MobileSessionText {
     package static let signInAgain = "다시 로그인 필요"
     /// 탭 공용 연결 안내와 같은 문장(`MobileLoadText.checkConnection` — 통합에서 "네트워크를…"·"연결을…" 두 갈래를 하나로).
     package static let network = MobileLoadText.checkConnection
-    package static let signUpOnMac = "가입은 맥 앱에서 해요"
-    package static let passwordResetOnMac = "비밀번호를 잊었다면 맥 앱의 로그인 화면에서 재설정해 주세요"
+    /// 로그인 화면 맨 아래 두 길(w16 — 예전엔 "가입은 맥 앱에서 해요 / 재설정은 맥 앱에서" 두 줄이었다. 맥이 없는 사용자가 생긴다).
+    package static let signUpPrompt = "계정이 없나요?"
+    package static let signUpAction = "가입하기"
+    package static let forgotPassword = "비밀번호를 잊었어요"
     package static let updateTitle = "새 버전이 필요해요"
     package static let updateBody = "이 버전은 더 이상 서버와 맞지 않아요. TestFlight 에서 최신 버전으로 업데이트해 주세요."
     package static let updateButton = "TestFlight 열기"

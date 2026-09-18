@@ -173,10 +173,11 @@ package final class MobileStubURLProtocol: URLProtocol, @unchecked Sendable {
 /// 폰이 **절대 부르면 안 되는** 서버 호출 판정(SPEC-ios §0-2 · ios-inventory §3). 스토어 시나리오 테스트 끝에
 /// `#expect(MobileForbiddenCalls.violations(in: MobileStubURLProtocol.requests(host: host)).isEmpty)` 로 단언한다.
 package enum MobileForbiddenCalls {
-    /// 이름만으로 금지인 RPC.
+    /// 이름만으로 금지인 RPC. `join_team`·`create_team` 은 w16 에 목록에서 **빠졌다** — 폰 가입 화면이 부른다
+    /// (본인 계정의 멤버십·팀만 만들고 남의 행에 닿지 않는다 — SupabaseWorkServiceSignUp.swift 머리 주석).
     package static let forbiddenRPCs: Set<String> = [
         "take_pokes", "work_tick", "close_abandoned_work_sessions", "ultra_wallet_sync", "buy_ultra",
-        "poke_user", "ultra_poke_user", "away_sync", "join_team", "create_team",
+        "poke_user", "ultra_poke_user", "away_sync",
     ]
     /// 읽기(GET) 말고는 금지인 표(근무·기기 상태·토큰 원장).
     package static let readOnlyTables: Set<String> = [

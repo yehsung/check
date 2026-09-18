@@ -55,7 +55,8 @@ public struct MobileRootView: View {
         case .needsUpdate(let minBuild):
             MobileUpdateRequiredView(minBuild: minBuild, currentBuild: model.session.appInfo.build)
         case .signedOut:
-            MobileLoginView(session: model.session)
+            // w16: 데모 라우트 `signup` · `signup/create` · `reset` 은 로그인 아래 화면을 바로 연다(앱스토어 스크린샷). 실제 실행은 nil.
+            MobileLoginView(session: model.session, initialRoute: MobileAuthRoute.demo(model.environment.demoRoute))
         case .signedIn:
             MobileTabsView(model: model)
         }

@@ -56,9 +56,13 @@ import Testing
         #expect(fixtures.response(for: request("POST", "/rest/v1/rpc/take_pokes"), scenario: nil).status == 403)
     }
 
-    @Test("데모 조립: now → 로그인 상태로 시작해 라우트를 연다 · login → 로그아웃 · update → 업데이트 화면 · 금지 호출 0")
+    @Test("데모 조립: now → 로그인 상태로 시작해 라우트를 연다 · login·signup·reset → 로그아웃 · update → 업데이트 화면 · 금지 호출 0")
     func demoEnvironments() async throws {
-        for (route, expected) in [("rankings/tokens", MobileSessionPhase.signedIn), ("login", .signedOut), ("update", .needsUpdate(minBuild: 99))] {
+        // w16: 가입·재설정 장면(`signup` · `signup/create` · `reset`)도 로그아웃으로 시작한다 — 전역 데모 호스트를 쓰는 유일한 자리라 여기서 함께 돈다.
+        for (route, expected) in [
+            ("rankings/tokens", MobileSessionPhase.signedIn), ("login", .signedOut), ("update", .needsUpdate(minBuild: 99)),
+            ("signup", .signedOut), ("signup/create", .signedOut), ("reset", .signedOut),
+        ] {
             MobileStubURLProtocol.clearRequests(host: MobileDemo.host)
             let environment = try #require(MobileDemo.environment(arguments: ["app", "-AingCheckDemo", "YES", "-AingCheckDemoRoute", route]))
             #expect(environment.isDemo)
@@ -67,6 +71,9 @@ import Testing
             model.session.clientReleaseTimeoutSeconds = 0   // 벽시계 상한 없음(update 장면은 client_release 답에 달렸다)
             model.start()
             #expect(await baseWaitUntil { model.session.phase == expected }, "\(route): \(model.session.phase)")
+            if expected == .signedOut {
+                #expect(model.session.storedEmail == nil, "\(route): 로그아웃 장면인데 데모 이메일이 심어졌다")
+            }
             if route == "rankings/tokens" {
                 #expect(await baseWaitUntil { model.router.selectedTab == .rankings })
                 #expect(model.router.consumePendingRoute(for: .rankings) == .rankings(.tokens))

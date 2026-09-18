@@ -1,0 +1,7 @@
+{
+  "access_token": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJkMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEiLCJleHAiOjQxMDI0NDQ4MDAsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.demo",
+  "refresh_token": "demo-refresh-token",
+  "user": {
+    "id": "d0000000-0000-4000-8000-000000000001"
+  }
+}

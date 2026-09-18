@@ -249,7 +249,9 @@ func splitReadScannerCatchesHalfReadsAndIgnoresLookAlikes() {
 @Test("쪼갠 파일 표의 조각은 전부 실제로 있고, 떼기 전 이름은 조각 하나의 이름이다")
 func splitPartsTablePointsAtRealFiles() {
     for (name, parts) in CheckCoreSourceLayout.splitParts {
-        #expect(parts.count == 2, "\(name): 조각 \(parts.count)개")
+        // 둘이 기본이고, SupabaseWorkService.swift 만 셋이다(w16 — 가입의 join_team·create_team 을 게이트 없는 SignUp 조각으로 뗐다).
+        let expectedCount = name == "SupabaseWorkService.swift" ? 3 : 2
+        #expect(parts.count == expectedCount, "\(name): 조각 \(parts.count)개")
         for part in parts {
             let exists = FileManager.default.fileExists(atPath: CheckCoreSourceLayout.repoRoot.appendingPathComponent(part).path)
             #expect(exists, "\(name) 의 조각 \(part) 가 없다 — joinedSplitSource 가 던진다. 이름이 바뀌었으면 표를 고쳐라")

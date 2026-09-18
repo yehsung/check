@@ -20,11 +20,19 @@ import CheckCore
 extension WorkTimerStore {
     /// 가입 직후(세션 없음) 코드 화면의 첫 안내. 첫 메일은 **가입 요청 자체**가 보냈다(여기서 다시 보내지 않는다).
     /// "메일이 안 와요"의 첫 답은 스팸함이다 — 커스텀 SMTP 발신(aing-check)이라 첫 메일이 거기로 가는 일이 실제로 있다.
-    static let signUpConfirmSentMessage = "가입 확인 코드를 보냈어요 · 안 오면 스팸함을 확인해주세요"
-    /// 재전송 성공 안내. **"이미 인증된 계정이면 오지 않는다"를 반드시 말한다** — resend 는 인증된 계정에도 빈 200 이라
+    /// 문장은 폰(`MobileSignUpText.confirmSent`)과 **한 글자도 다르지 않다** — 두 앱이 같은 메일을 설명한다.
+    static let signUpConfirmSentMessage = "인증 코드를 보냈어요 · 안 오면 스팸함을 확인해 주세요"
+    /// 재전송 성공 안내(폰 `MobileSignUpText.confirmResent` 와 같은 문장).
+    /// ★ **재전송은 앞 코드를 즉시 무효화한다**(프로덕션 실측). 첫 메일이 늦게 도착한 사람이 그 코드를 넣으면 403 인데,
+    /// 이 문장이 그 사실을 말하지 않으면 왜 틀렸는지 알 길이 없다 — "코드가 맞지 않거나 만료됐어요"만 반복해서 본다.
+    static let signUpConfirmResentMessage = "새 코드를 보냈어요 · 앞 코드는 이제 쓸 수 없어요, 마지막 메일의 코드를 넣어 주세요"
+    /// 코드 화면에 **늘 붙는 고정 안내 줄**(폰 `MobileSignUpText.confirmHelp`). resend 는 인증된 계정에도 빈 200 이라
     /// (계정 존재를 흘리지 않는 GoTrue), "이미 가입된 이메일" 출구로 들어온 사람이 인증된 계정이면 메일은 영영 안 온다.
     /// 그 사람이 할 일은 로그인이다. 지금 서버(가입 확인 꺼짐)에서는 모든 계정이 그 경우다.
-    static let signUpConfirmResentMessage = "코드를 다시 보냈어요 · 이미 인증된 계정이면 메일이 오지 않아요, 로그인해주세요"
+    ///
+    /// 사라지는 안내 줄(signUpConfirmMessage)이 아니라 고정 도움말인 이유: 그 사실은 재전송 결과와 **상관없이 늘 참**이다.
+    /// 재전송 안내에 실어 두면 [다시 받기]를 누른 사람만 보게 되는데, 정작 알아야 할 사람은 메일을 기다리다 지친 사람이다.
+    static let signUpConfirmHelpMessage = "이미 인증을 마친 계정이면 메일이 오지 않아요 · 그때는 로그인해 주세요"
 
     /// 로그인 카드가 [인증 코드 다시 받기] 출구를 달아야 하는 상태줄 문구인가(순수 — 값으로 검증한다).
     /// "이미 가입된 이메일"(가입 재시도) · "이메일 확인 필요"(로그인 시도) · "확인 메일 필요"(코드 화면을 닫고 돌아온 사람).
@@ -154,10 +162,10 @@ extension WorkTimerStore {
         signUpConfirmCooldownTask?.cancel()
         signUpConfirmResendSeconds = seconds
         let deadline = clock().addingTimeInterval(TimeInterval(seconds))
-        let generation = signUpConfirmGeneration
+        // 세대를 캡처하지 않는다 — verifySignUpCode 가 왕복마다 세대를 올리므로(늦은 응답 폐기용) 세대로 가드하면
+        // 코드를 한 번 틀린 순간 카운트다운이 남은 초에 굳는다. 멈추는 길은 이 Task 의 취소뿐이다(runResendCountdown 주석).
         signUpConfirmCooldownTask = runResendCountdown(
             deadline: deadline,
-            isCurrent: { [weak self] in self?.signUpConfirmGeneration == generation },
             apply: { [weak self] remaining in
                 guard let self, self.signUpConfirmResendSeconds != remaining else { return }
                 self.signUpConfirmResendSeconds = remaining

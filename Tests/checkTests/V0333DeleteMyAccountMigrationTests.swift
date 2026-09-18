@@ -320,7 +320,15 @@ func 계정삭제는_진행_중_오목_판을_기권_정산한_뒤에_auth_users
     #expect(flat.contains("status = 'active'") && flat.contains("insert into public.gomoku_matches"), "§4 프로브에 진행 중 판 픽스처가 없다")
 }
 
-// MARK: - ④ cascade 전제 — 삭제 경로의 FK 는 전부 on delete cascade(제보함만 set null)
+// MARK: - ④ cascade 전제 — 삭제 경로의 FK 는 전부 on delete cascade(제보함·신고함의 작성자 칸만 set null)
+
+/// set null 이 허용되는 **칸**(파일 + 줄 앞머리로 못 박는다 — 파일 단위로 열어 주면 그 파일의 다른 FK 까지 통과한다).
+/// 둘 다 "작성자만 지우고 본문은 남긴다"(익명화)가 의도된 동작이고, 각 마이그레이션의 §0/§8 이 같은 예외를 카탈로그
+/// 단언에도 적어 둔다. 셋째를 더하려면 그 파일 머리말에 이유를 적고 여기에도 적어라.
+private let deleteAccountSetNullExceptions: [(file: String, columnPrefix: String)] = [
+    ("20260910120000_feedback_reports.sql", "user_id uuid references auth.users(id)"),
+    ("20260918180000_blocks_and_reports.sql", "reporter uuid references auth.users(id)"),
+]
 
 @Test
 func 사용자_프로필_팀을_가리키는_FK_는_전부_cascade_이고_예외는_제보함_set_null_뿐이다() throws {
@@ -340,7 +348,15 @@ func 사용자_프로필_팀을_가리키는_FK_는_전부_cascade_이고_예외
             guard targets.contains(where: { lowered.contains($0) }) else { continue }
             seen += 1
             if lowered.contains("on delete cascade") { continue }
-            if file.lastPathComponent == "20260910120000_feedback_reports.sql", lowered.contains("on delete set null") { continue }
+            // set null 예외는 **둘뿐이다**: 제보함(feedback_reports.user_id)과 신고함(content_reports.reporter).
+            // 둘 다 "작성자만 지우고 본문은 남긴다"(익명화)가 의도된 동작이고, 두 마이그레이션의 §0/§8 이 그 예외를
+            // 카탈로그 단언의 예외 목록에도 똑같이 적어 둔다. 셋째를 더하려면 그 파일 머리말에 이유를 적고 여기에도 적어라.
+            if lowered.contains("on delete set null"),
+               deleteAccountSetNullExceptions.contains(where: {
+                   file.lastPathComponent == $0.file && squashWhitespace(lowered).hasPrefix($0.columnPrefix)
+               }) {
+                continue
+            }
             offenders.append("\(file.lastPathComponent):\(index + 1): \(line.trimmingCharacters(in: .whitespaces))")
         }
     }

@@ -22,11 +22,12 @@ struct MeAppearanceTests {
         }
     }
 
-    @Test("기본값: 저장값이 없으면 시스템 설정 따르기")
-    func defaultsToSystem() {
+    /// 기본은 **다크**다(사용자 결정 2026-09-18) — 앱의 그림이 어두운 바탕을 전제로 만들어졌다.
+    @Test("기본값: 저장값이 없으면 다크")
+    func defaultsToDark() {
         let scratch = ScratchDefaults()
         let store = MobileAppearanceStore(defaults: scratch.defaults)
-        #expect(store.mode == .system)
+        #expect(store.mode == .dark)
         #expect(scratch.defaults.object(forKey: MobileAppearanceStore.defaultsKey) == nil, "읽기만 했는데 값을 썼다")
     }
 
@@ -42,16 +43,16 @@ struct MeAppearanceTests {
         }
     }
 
-    @Test("모르는 저장값(다음 버전 값 · 대소문자 다름 · 빈 문자열 · 숫자 · 불린)은 시스템으로 읽고, 고르기 전에는 지우지 않는다")
-    func unknownStoredValueFallsBackToSystem() {
+    @Test("모르는 저장값(다음 버전 값 · 대소문자 다름 · 빈 문자열 · 숫자 · 불린)은 기본(다크)으로 읽고, 고르기 전에는 지우지 않는다")
+    func unknownStoredValueFallsBackToDefault() {
         let scratch = ScratchDefaults()
         let key = MobileAppearanceStore.defaultsKey
         let unknowns: [Any] = ["sepia", "Dark", "", 2, true]
         for value in unknowns {
             scratch.defaults.set(value, forKey: key)
-            #expect(MobileAppearanceStore(defaults: scratch.defaults).mode == .system, "\(value) 를 시스템으로 접지 않았다")
+            #expect(MobileAppearanceStore(defaults: scratch.defaults).mode == .dark, "\(value) 를 기본(다크)으로 접지 않았다")
         }
-        #expect(MobileAppearanceMode(storedValue: nil) == .system)
+        #expect(MobileAppearanceMode(storedValue: nil) == .dark)
         #expect(MobileAppearanceMode(storedValue: "light") == .light)
 
         scratch.defaults.set("sepia", forKey: key)
@@ -68,21 +69,22 @@ struct MeAppearanceTests {
         let store = MobileAppearanceStore(defaults: scratch.defaults)
         var received: [MobileAppearanceMode] = []
         store.onChange = { received.append($0) }
+        // 시작값이 다크이므로 첫 .dark 는 알림이 없다 — '바뀔 때만' 이 그 뜻이다.
+        store.select(.dark)
         store.select(.system)
-        store.select(.dark)
-        store.select(.dark)
+        store.select(.system)
         store.select(.light)
-        store.select(.system)
-        #expect(received == [.dark, .light, .system])
+        store.select(.dark)
+        #expect(received == [.system, .light, .dark])
     }
 
     @Test("문구: 세 칸 제목이 서로 다르고 비지 않았다 · 위젯 안내가 칸 아래에 있다")
     func texts() {
         let titles = MobileAppearanceMode.allCases.map(MeText.appearanceTitle)
-        #expect(titles == ["시스템 설정 따르기", "라이트", "다크"])
+        #expect(titles == ["다크", "라이트", "시스템 설정 따르기"])
         #expect(Set(MobileAppearanceMode.allCases.map(MeText.appearanceSymbol)).count == 3)
         #expect(MeText.appearanceWidgetNote.contains("위젯"))
-        #expect(MobileAppearanceMode.allCases == [.system, .light, .dark], "기본(시스템)이 맨 위가 아니다")
+        #expect(MobileAppearanceMode.allCases == [.dark, .light, .system], "기본(다크)이 맨 위가 아니다")
     }
 
     @Test("나 탭: 고르면 앱 모델의 화면 모드가 바뀌고 서버 요청은 0 · 로그아웃(세대 · reset) 뒤에도 남고 · 같은 저장소로 다시 만든 앱이 복원한다")
@@ -95,7 +97,7 @@ struct MeAppearanceTests {
         defer { harness.tearDown() }
         let model = harness.model
         let me = harness.me
-        #expect(me.appearanceMode == .system)
+        #expect(me.appearanceMode == .dark)
         #expect(model.appearance === model.context.appearance)
 
         await harness.barrier()
@@ -154,13 +156,13 @@ struct MeAppearanceTests {
         #expect(storage.defaults.object(forKey: MobileAppearanceStore.defaultsKey) == nil, "위젯과 나누는 공용 suite 에 썼다")
     }
 
-    @Test("데모 시작값: -AingCheckDemoAppearance 가 있으면 그 값, 없으면 지난 실행 값을 지워 시스템")
+    @Test("데모 시작값: -AingCheckDemoAppearance 가 있으면 그 값, 없으면 지난 실행 값을 지워 기본(다크)")
     func demoSeed() {
         let scratch = ScratchDefaults()
         MobileDemo.seedAppearance(arguments: ["app", "-AingCheckDemo", "YES", "-AingCheckDemoAppearance", "DARK"], into: scratch.defaults)
         #expect(MobileAppearanceStore(defaults: scratch.defaults).mode == .dark)
         MobileDemo.seedAppearance(arguments: ["app", "-AingCheckDemo", "YES"], into: scratch.defaults)
-        #expect(MobileAppearanceStore(defaults: scratch.defaults).mode == .system)
+        #expect(MobileAppearanceStore(defaults: scratch.defaults).mode == .dark, "인자가 없으면 지난 실행 값을 지우고 기본으로 돌아간다")
         MobileDemo.seedAppearance(arguments: ["app", "-AingCheckDemoAppearance", "light"], into: scratch.defaults)
         #expect(MobileAppearanceStore(defaults: scratch.defaults).mode == .light)
     }

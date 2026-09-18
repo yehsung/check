@@ -1,18 +1,27 @@
 import Foundation
 import Observation
 
-/// 화면 모드(나 → 설정 → 화면 모드). 기본은 아이폰 설정을 따른다.
+/// 화면 모드(나 → 설정 → 화면 모드). **기본은 다크다**(사용자 결정 2026-09-18).
+///
+/// 왜 시스템 따르기가 아닌가: 이 앱의 그림이 어두운 바탕에서 만들어졌다 — 캐릭터 무대·잔디·순위판·오목판이
+/// 전부 어두운 배경을 전제로 색을 골랐고, 아이콘도 어두운 바탕이다. 시스템을 따르면 낮에 앱을 처음 연 사람은
+/// 우리가 의도하지 않은 밝은 화면을 본다. 고른 적 없는 사람에게 무엇을 보일지의 문제이지 선택지를 줄이는 것이
+/// 아니다 — 라이트·시스템 따르기는 설정에 그대로 있다.
+///
+/// 목록 순서는 `allCases` 다. 기본이 맨 위다(고른 적 없는 사람이 지금 보고 있는 것이 무엇인지 먼저 읽히게).
 package enum MobileAppearanceMode: String, CaseIterable, Identifiable, Sendable {
-    case system
-    case light
     case dark
+    case light
+    case system
 
     package var id: String { rawValue }
 
-    /// 저장값 → 모드. 값이 없거나, 문자열이 아니거나, 모르는 값(다음 버전이 더한 값 · 손상)이면 시스템.
+    /// 저장값 → 모드. 값이 없거나, 문자열이 아니거나, 모르는 값(다음 버전이 더한 값 · 손상)이면 **기본(다크)**.
+    /// 모르는 값을 라이트로 접지 않는 이유: 그 저장값을 쓴 다음 버전이 무엇을 뜻했든, 구버전이 보여 줄 수 있는
+    /// 가장 안전한 화면은 우리가 설계한 화면이다.
     package init(storedValue: Any?) {
         guard let raw = storedValue as? String, let mode = MobileAppearanceMode(rawValue: raw) else {
-            self = .system
+            self = .dark
             return
         }
         self = mode

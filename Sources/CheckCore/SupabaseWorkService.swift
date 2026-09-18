@@ -326,6 +326,33 @@ package actor SupabaseWorkService {
         )
     }
 
+    // MARK: - 계정 삭제 (앱스토어 5.1.1(v) — 로그인 계정을 쓰는 앱은 앱 안에서 계정을 지울 수 있어야 한다)
+
+    /// **내 계정을 영구 삭제한다.** `delete_my_account()` RPC 를 로그인 토큰으로 호출한다(서버 계약 SPEC-public-release).
+    ///
+    /// 서버가 하는 일: 호출자 본인(`auth.uid()`)의 `auth.users` 행을 지우고 나머지(profiles · memberships · work_sessions · messages ·
+    /// todo_sync · client_devices · gomoku_* · minigame_* · token_usage_* · ruby/shop · pokes)는 FK cascade 로 따라 지운다.
+    /// 제보(`feedback_reports`)만 `set null` 이라 내용은 남고 익명이 된다. 남은 멤버가 0명이 된 팀은 서버가 같이 지운다.
+    /// 로그인 안 한 호출은 서버가 예외로 막고 `anon` 에게는 execute 가 없다 — 그래서 이 함수는 `accessToken` 을 옵셔널로 받지 않는다.
+    ///
+    /// 인자 없는 RPC 라 본문은 `{}` 다(`feedback_open_count` 와 같은 규약 — PostgREST 는 본문의 키 집합으로 함수를 고른다).
+    /// 응답 본문은 보지 않는다(204/200 모두 성공). 함수가 아직 없는 서버(PGRST202 404)는 공용 매핑을 지나
+    /// `.databaseSchemaMissing` 으로 올라가고, 그걸 "잠시 뒤"로 말하는 일은 호출부(폰 세션 스토어)의 몫이다 —
+    /// 앱이 db push 보다 먼저 나가는 창이 실제로 있다.
+    ///
+    /// ★ 맥 게이트가 **없다**(MacOnly 파일이 아니다): 이 호출은 본인 계정에만 작용하고 남의 세션·찌르기·근무 시간을 건드리지 않는다.
+    ///   맥 앱은 이번 범위가 아니라(brew 배포 — 애플 요구 대상이 아니다) 부르는 곳이 폰뿐이지만, 코어에 두는 이유는 서버 계약이
+    ///   하나이기 때문이다(재인증·로컬 정리는 플랫폼마다 다르고 RPC 는 같다).
+    package func deleteMyAccount(accessToken: String) async throws {
+        _ = try await send(
+            path: "/rest/v1/rpc/delete_my_account",
+            method: "POST",
+            body: EmptyBody(),
+            accessToken: accessToken,
+            prefer: nil
+        )
+    }
+
     /// 팀 코드 정규화: 대문자화 후 공백/하이픈 제거. 클라에서도 적용해 정규화된 코드만 서버로 보낸다.
     package static func normalizeInviteCode(_ code: String) -> String {
         code.uppercased().filter { !$0.isWhitespace && $0 != "-" }

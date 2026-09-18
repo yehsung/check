@@ -237,18 +237,33 @@ package final class MobileSessionStore {
             phase = .signedOut
             return
         }
-        generation += 1
-        refreshCoordinator.invalidate()
-        registrationTask?.cancel()
-        registrationTask = nil
-        registrationQueued = nil
         let cleanup = MobileSignOutCleanup(
             userID: current.userID,
             accessToken: current.accessToken,
             refreshToken: current.refreshToken,
             createdAt: clock.now()
         )
-        MobileSignOutCleanupLedger.update(vault) { $0.append(cleanup) }
+        endSession(cleanup: cleanup)
+
+        await settleSignOutCleanup()?.value
+    }
+
+    /// 이 기기에서 세션을 끝내는 **단 하나의 길**(로그아웃 · 계정 삭제 공용). 세대를 올리고 · 갱신·등록을 멈추고 · (있으면) 서버 정리를
+    /// 장부에 적고 · 키체인·공용 suite·위젯 스냅샷·이메일을 지우고 · 로그인 화면으로 · 앱 모델에 알린다(모든 스토어 `reset()` —
+    /// 푸시 코디네이터가 배지 0 · 원격 등록 해제 · 도착한 알림 제거까지 한다).
+    ///
+    /// `cleanup` 이 nil 인 쪽은 계정 삭제다 — 서버 행(client_devices · 세션)이 이미 cascade 로 사라졌으므로 알릴 것이 없고,
+    /// 지운 계정의 refresh token 을 장부에 30일 남겨 두는 것 자체가 "다 지웠다"는 약속에 어긋난다.
+    /// 두 경로가 이 함수를 나눠 쓰는 이유: 정리를 두 벌로 쓰면 한쪽이 빠뜨린 키가 다음 계정 화면에 남는다.
+    private func endSession(cleanup: MobileSignOutCleanup?) {
+        generation += 1
+        refreshCoordinator.invalidate()
+        registrationTask?.cancel()
+        registrationTask = nil
+        registrationQueued = nil
+        if let cleanup {
+            MobileSignOutCleanupLedger.update(vault) { $0.append(cleanup) }
+        }
         clearLocalUserData()
         // 스스로 로그아웃하면 이메일도 잊는다(폰을 넘기거나 계정을 바꿀 때 앞 사람 이메일이 로그인 칸에 남지 않게 — e2e 결함 2).
         // 치명 만료(`expireSession`)는 같은 사람이 다시 들어오는 길이라 남긴다.
@@ -259,8 +274,68 @@ package final class MobileSessionStore {
         notice = nil
         phase = .signedOut
         onSignedOut?()
+    }
 
-        await settleSignOutCleanup()?.value
+    // MARK: - 계정 삭제
+
+    /// 계정 삭제가 도는 중(재인증 → RPC → 로컬 정리). 화면은 이 동안 버튼을 잠근다.
+    package private(set) var isDeletingAccount = false
+
+    /// **계정을 영구 삭제한다**(앱스토어 5.1.1(v)). 순서가 계약이다:
+    ///  1. 재인증 — 저장된 이메일 + 입력한 비밀번호로 `signIn` 한 번. 실패하면 **RPC 를 부르지 않는다**(틀린 비밀번호로 남의 폰에서
+    ///     계정을 지우는 일이 없게 — 잠금 해제된 폰을 집은 사람이 로그인 상태만으로는 못 지운다).
+    ///  2. `delete_my_account` — 재인증으로 받은 **새 토큰**으로 부른다(방금 발급돼 401 재시도가 필요 없다).
+    ///  3. 성공하면 로그아웃과 같은 로컬 정리(`endSession`) — 장부 없이. 실패하면 로그인 상태를 **그대로** 두고 이유를 돌려준다
+    ///     (서버가 아직 함수를 모르는 404 포함 — 앱이 db push 보다 먼저 나갈 수 있다).
+    ///
+    /// 재인증이 만든 두 번째 서버 세션은 RPC 가 실패했을 때 `logout?scope=local` 로 닫는다(성공했으면 cascade 로 이미 없다).
+    /// 결과 문구는 여기서 만들지 않는다 — 갈래(`MobileAccountDeletionFailure`)만 돌려주고 문장은 나 탭(`MeText`)이 고른다.
+    package func deleteAccount(password: String) async -> MobileAccountDeletionOutcome {
+        guard isSignedIn else { return .failed(.notSignedIn) }
+        guard !isDeletingAccount else { return .failed(.alreadyRunning) }
+        guard !password.isEmpty else { return .failed(.passwordRequired) }
+        guard let email = profile?.email ?? storedEmail, !email.isEmpty else { return .failed(.emailUnknown) }
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+        let startGeneration = generation
+
+        let reauth: SupabaseSession
+        do {
+            reauth = try await service.signIn(email: email, password: password)
+        } catch {
+            guard startGeneration == generation else { return .failed(.notSignedIn) }
+            switch AuthErrorRules.classify(error) {
+            case .cancelled, .transient:
+                return .failed(.network)
+            case .fatal:
+                if (error as? SupabaseWorkServiceError) == .invalidLoginCredentials { return .failed(.wrongPassword) }
+                return .failed(.reauthRejected(AuthErrorRules.message(for: error, fallback: MobileSessionText.signInFailed)))
+            }
+        }
+        guard startGeneration == generation else {
+            // 그 사이 로그아웃·치명 만료 — 재인증 세션만 닫고 물러난다(계정은 그대로다).
+            await service.signOut(accessToken: reauth.accessToken)
+            return .failed(.notSignedIn)
+        }
+
+        do {
+            try await service.deleteMyAccount(accessToken: reauth.accessToken)
+        } catch {
+            await service.signOut(accessToken: reauth.accessToken)
+            guard startGeneration == generation else { return .failed(.notSignedIn) }
+            if MobileDeviceRPC.isMissingFunction(error) { return .failed(.serverNotReady) }
+            switch AuthErrorRules.classify(error) {
+            case .cancelled, .transient:
+                return .failed(.network)
+            case .fatal:
+                return .failed(.rejected)
+            }
+        }
+        // 서버가 지웠다. 그 사이 세대가 바뀌었으면(예: 실시간 갱신이 치명으로 끝나 이미 로그아웃) 로컬은 이미 비었다 — 다시 비우지 않는다.
+        if startGeneration == generation {
+            endSession(cleanup: nil)
+        }
+        return .deleted
     }
 
     /// 치명 만료(refresh token 무효 등). 서버에 알릴 토큰이 없으므로 로컬만 정리한다.
@@ -653,6 +728,35 @@ package final class MobileSessionStore {
         WidgetSnapshotCodec.remove(at: storage.widgetSnapshotURL)
         reloadWidgetTimelines()
     }
+}
+
+/// 계정 삭제 한 번의 결과. 문장은 여기 없다(나 탭 `MeText.deleteAccountFailure` 가 고른다).
+package enum MobileAccountDeletionOutcome: Equatable, Sendable {
+    /// 서버가 지웠고 이 기기도 비웠다(로그인 화면).
+    case deleted
+    /// 지우지 않았다 — 로그인 상태 그대로.
+    case failed(MobileAccountDeletionFailure)
+}
+
+/// 계정 삭제가 멈춘 이유(어느 단계에서 · 왜). 원문 서버 예외는 싣지 않는다.
+package enum MobileAccountDeletionFailure: Equatable, Sendable {
+    /// 로그인 상태가 아니다(그 사이 로그아웃·치명 만료).
+    case notSignedIn
+    /// 이미 한 번 도는 중(재탭).
+    case alreadyRunning
+    case passwordRequired
+    /// 재인증에 쓸 이메일이 없다(있을 수 없는 상태지만 — 없으면 지어내지 않는다).
+    case emailUnknown
+    /// 재인증 거절 — 비밀번호가 틀렸다. RPC 는 나가지 않았다.
+    case wrongPassword
+    /// 재인증이 다른 이유로 거절됐다(맥과 같은 문장 — `AuthErrorRules.message`). RPC 는 나가지 않았다.
+    case reauthRejected(String)
+    /// 네트워크 · 5xx · 429 · 취소.
+    case network
+    /// 서버에 `delete_my_account` 가 아직 없다(앱이 db push 보다 먼저 나간 창).
+    case serverNotReady
+    /// 서버가 거절했다(그 밖의 4xx).
+    case rejected
 }
 
 /// 세션 화면 문구. 맥과 뜻이 같은 것은 코어 `AuthErrorRules` 의 문장을 그대로 쓴다.

@@ -181,6 +181,42 @@ extension MeStore {
         isSigningOut = false
     }
 
+    // MARK: 계정 삭제 (앱스토어 5.1.1(v))
+
+    /// [영구 삭제] 를 누를 수 있는가 — 비밀번호를 쳤고 · 도는 중이 아니고 · 로그인 상태. 화면은 이 값으로 버튼을 잠그고,
+    /// `deleteAccount()` 는 같은 조건을 **다시** 본다(비활성만 두면 왜 막혔는지 말할 기회가 없다 — 맥 가입 폼과 같은 이유).
+    package var canDeleteAccount: Bool {
+        !accountDeletionPassword.isEmpty && !isDeletingAccount && context.session.isSignedIn
+    }
+
+    /// 영구 삭제. 재인증 → RPC → 로컬 정리는 전부 세션 스토어(`MobileSessionStore.deleteAccount`)가 한다 — 나 탭은 문구와 깃발만.
+    /// 성공하면 true(세션이 세대를 올려 `reset()` 이 이미 돌았다 — 초안·깃발은 거기서 비워졌다). 실패하면 로그인 상태 그대로 + 이유 한 줄.
+    @discardableResult
+    package func deleteAccount() async -> Bool {
+        guard context.session.isSignedIn, !isDeletingAccount else { return false }
+        let password = accountDeletionPassword
+        guard !password.isEmpty else {
+            accountDeletionNotice = MeText.deleteAccountFailure(.passwordRequired)
+            return false
+        }
+        isDeletingAccount = true
+        accountDeletionNotice = nil
+        switch await context.session.deleteAccount(password: password) {
+        case .deleted:
+            return true
+        case .failed(let reason):
+            isDeletingAccount = false
+            accountDeletionNotice = MeText.deleteAccountFailure(reason)
+            return false
+        }
+    }
+
+    /// 시트가 닫혔다 — 비밀번호와 실패 문구를 비운다(도는 중이면 시트가 닫히지 않으므로 깃발은 건드릴 것이 없다).
+    package func accountDeletionDidDisappear() {
+        accountDeletionPassword = ""
+        accountDeletionNotice = nil
+    }
+
     package var versionLine: String {
         MeText.versionLine(version: context.appInfo.version, build: context.appInfo.build)
     }

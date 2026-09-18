@@ -28,7 +28,7 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "3"
+    CURRENT_PROJECT_VERSION: "4"
   configs:
     # 푸시 환경: Debug 는 APNs sandbox, Release(TestFlight·App Store)는 production. 앱 엔타이틀먼트가 APS_ENVIRONMENT 를,
     # Info.plist 의 AingAPNsEnvironment 가 AING_APNS_ENVIRONMENT 를 읽는다(register_device 의 p_apns_env — 서버 어휘 sandbox/production).

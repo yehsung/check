@@ -111,11 +111,38 @@ struct MeAccountDeletionTests {
         #expect(harness.model.gomokuHost.rubyBalance == nil)
 
         let paths = harness.requests.map { $0.rpcName.map { "rpc/\($0)" } ?? $0.path }
-        #expect(paths == ["/auth/v1/token", "rpc/delete_my_account"], "순서가 재인증 → 삭제여야 하고 그 뒤 서버 요청이 없어야 한다: \(paths)")
+        // 사진은 **RPC 앞**이다: 서버 함수는 Storage 표에 직접 못 써서(2026-09-18 적용 로그 42501) 지우는 주체가 클라다.
+        // RPC 뒤에 두면 계정이 이미 없어 토큰이 죽은 뒤라 영영 못 지운다.
+        #expect(paths == ["/auth/v1/token", "/storage/v1/object/avatars/\(Self.me).jpg", "rpc/delete_my_account"],
+                "순서가 재인증 → 사진 → 삭제여야 하고 그 뒤 서버 요청이 없어야 한다: \(paths)")
+        let avatar = try #require(harness.requests.first { $0.path == "/storage/v1/object/avatars/\(Self.me).jpg" })
+        #expect(avatar.method == "DELETE", "사진 요청이 DELETE 가 아니다: \(avatar.method)")
+        #expect(BaseStub.bearer(avatar) == "Bearer \(Self.freshAccess)", "사진도 재인증 토큰으로 지운다(옛 토큰은 곧 죽는다)")
         let rpc = try #require(harness.requests(rpc: "delete_my_account").first)
         #expect(BaseStub.bearer(rpc) == "Bearer \(Self.freshAccess)", "재인증으로 받은 새 토큰으로 지운다")
         #expect(rpc.bodyText == "{}", "인자 없는 RPC 본문은 {} 다: \(rpc.bodyText)")
         #expect(harness.requests.filter { $0.path == "/auth/v1/logout" }.isEmpty, "지운 계정에 로그아웃을 보냈다(cascade 로 이미 없다)")
+        harness.expectNoForbiddenCalls()
+    }
+
+    /// 사진 삭제는 **최선 노력**이다. 버킷이 답을 안 주거나 5xx 를 줘도 계정 삭제는 그대로 간다 —
+    /// 사진 한 장 때문에 계정을 못 지우면 애플 5.1.1(v) 를 정면으로 어긴다(그 사람은 앱 안에서 탈퇴할 길이 없다).
+    @Test("사진 삭제가 실패해도 계정 삭제는 진행된다(최선 노력)")
+    func avatarFailureNeverBlocksDeletion() async throws {
+        let harness = await RankMeHarness(label: "acct-avatar-fail") { request in
+            if request.path == "/storage/v1/object/avatars/\(Self.me).jpg" {
+                return .json(#"{"error":"InternalError","message":"boom"}"#, status: 500)
+            }
+            if request.rpcName == "delete_my_account" { return MobileStubResponse(status: 204, body: Data()) }
+            return Self.reauthResponder(request)
+        }
+        defer { harness.tearDown() }
+        let store = harness.me
+        store.accountDeletionPassword = Self.rightPassword
+
+        #expect(await store.deleteAccount(), "사진 5xx 때문에 계정 삭제가 멈췄다: \(store.accountDeletionNotice ?? "-")")
+        expectLocalCleared(harness)
+        #expect(harness.requests(rpc: "delete_my_account").count == 1, "사진이 실패했는데 RPC 가 안 나갔다")
         harness.expectNoForbiddenCalls()
     }
 

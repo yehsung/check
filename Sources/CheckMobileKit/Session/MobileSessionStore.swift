@@ -329,6 +329,10 @@ package final class MobileSessionStore {
             return .failed(.notSignedIn)
         }
 
+        // 사진 먼저(실측 2026-09-18): 서버 함수는 Storage 표에 직접 못 써서 avatars/<uid>.jpg 를 남긴다. 실패는 무시한다 —
+        // 사진 한 장 때문에 계정 삭제가 막히면 애플이 요구하는 '앱 안에서 계정 삭제'가 통째로 깨진다.
+        await service.deleteAvatarIfAny(accessToken: reauth.accessToken, userID: reauth.userID)
+
         do {
             try await service.deleteMyAccount(accessToken: reauth.accessToken)
         } catch {

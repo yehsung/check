@@ -362,6 +362,26 @@ package actor SupabaseWorkService {
         )
     }
 
+    /// 프로필 사진 파일을 지운다. **`delete_my_account` 가 못 하는 한 가지다** — 2026-09-18 프로덕션 적용 로그 실측:
+    /// 서버 함수 안의 `delete from storage.objects` 는 `42501 Direct deletion from storage tables is not allowed.
+    /// Use the Storage API instead.` 로 거절된다(Storage 확장이 표에 직접 쓰는 것을 막는다). 함수는 그 실패를 삼키고
+    /// 계정 삭제를 계속하므로, **사진만 버킷에 남는다** — 얼굴 사진은 애플이 요구하는 '계정과 함께 지워야 하는 개인정보'다.
+    ///
+    /// 그래서 지우는 주체를 클라로 옮긴다: 정책 "avatar owner can delete"(20260711090000)가 본인 파일명
+    /// `<uid>.jpg` 에 한해 authenticated DELETE 를 허용하므로 로그인 토큰이면 된다.
+    ///
+    /// **실패를 던지지 않는다.** 사진을 못 지웠다고 계정 삭제를 막으면 사용자는 계정을 영영 못 지운다(애플 5.1.1(v) 위반).
+    /// 사진이 없던 사람(404)도 정상 경로다. 호출부는 이 함수를 계정 삭제 **직전에** 한 번 부르고 결과를 보지 않는다.
+    package func deleteAvatarIfAny(accessToken: String, userID: String) async {
+        _ = try? await send(
+            path: "/storage/v1/object/avatars/\(userID).jpg",
+            method: "DELETE",
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+    }
+
     /// 팀 코드 정규화: 대문자화 후 공백/하이픈 제거. 클라에서도 적용해 정규화된 코드만 서버로 보낸다.
     package static func normalizeInviteCode(_ code: String) -> String {
         code.uppercased().filter { !$0.isWhitespace && $0 != "-" }

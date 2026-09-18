@@ -35,7 +35,12 @@ enum CheckCoreSourceLayout {
         "CheckOverlayReactions.swift": ["Sources/check/CheckOverlayReactions.swift", "Sources/CheckCore/MilestoneTracker.swift"],
         "TodoSync.swift": ["Sources/CheckCore/TodoSync.swift", "Sources/check/TodoSyncCoordinator.swift"],
         // D-base(iOS 0.1): 맥 전용 쓰기(take_pokes·work_tick·세션/상태 쓰기·토큰 업로드·찌르기·울트라·app_build 등)를 #if os(macOS) 조각으로 뗐다.
-        "SupabaseWorkService.swift": ["Sources/CheckCore/SupabaseWorkService.swift", "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift"],
+        // w16: 가입의 팀 합류/생성(join_team·create_team)은 게이트 없는 세 번째 조각(SignUp)으로 — 폰 가입 화면이 부른다.
+        "SupabaseWorkService.swift": [
+            "Sources/CheckCore/SupabaseWorkService.swift",
+            "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+            "Sources/CheckCore/SupabaseWorkServiceSignUp.swift",
+        ],
         // D-base(iOS 0.1): 메시지 순수 규칙(읽음 값 타입 · MessageUnreadRules · 정렬 · MessageThreadBuilder · 안내 문장)을 코어로 뗐다.
         "WorkTimerStoreMessages.swift": ["Sources/check/WorkTimerStoreMessages.swift", "Sources/CheckCore/MessageRules.swift"],
     ]

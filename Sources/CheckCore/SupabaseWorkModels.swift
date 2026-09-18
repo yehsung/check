@@ -166,6 +166,14 @@ package struct TeamJoinPreview: Equatable {
     package let name: String
     package let weeklyGoalHours: Int
     package let memberCount: Int
+
+    /// w16: 모듈 밖(폰 가입 테스트)에서 쓰는 memberwise init — 합성 init 은 internal 이라 명시했다(모양 동일, `SupabaseSession` 과 같은 이유).
+    package init(teamID: String, name: String, weeklyGoalHours: Int, memberCount: Int) {
+        self.teamID = teamID
+        self.name = name
+        self.weeklyGoalHours = weeklyGoalHours
+        self.memberCount = memberCount
+    }
 }
 
 /// (레거시 호환) 가입 화면 팀 선택 항목. 초대코드 흐름 전의 뷰/렌더 테스트가 아직 참조하므로 형만 유지한다.

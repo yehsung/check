@@ -1,13 +1,21 @@
 #if os(iOS)
 import SwiftUI
 
-/// 로그인 화면(SPEC-ios §2 · 재디자인 B): 이메일·비밀번호 로그인만. 가입·비밀번호 재설정은 맥 앱 안내.
-/// 가운데 정렬 — 아잉 + 워드마크 · 입력 그룹(자리표시 회색) · 로그인 버튼(맥 startGradient — 로그인 전용) · 맨 아래 안내 두 줄.
+/// 로그인 화면(SPEC-ios §2 · 재디자인 B): 이메일·비밀번호 로그인 + 맨 아래 두 길(가입하기 · 비밀번호를 잊었어요 — w16).
+/// 가운데 정렬 — 아잉 + 워드마크 · 입력 그룹(자리표시 회색) · 로그인 버튼(맥 startGradient — 로그인 전용) · 맨 아래 두 길.
+///
+/// 로그인 아래 화면(가입 `MobileSignUpView` · 재설정 `MobilePasswordResetView`)은 이 뷰의 `NavigationStack` 에 쌓인다 —
+/// 뒤로 가는 길이 시스템 뒤로 버튼 하나라 닫기를 따로 두지 않는다. 로그인 화면 자체는 막대를 숨긴다(가운데 정렬이 막대만큼 내려앉지 않게).
+/// 예전엔 "가입은 맥 앱에서 해요 / 재설정은 맥 앱에서" 두 줄이었다 — 맥이 없는 사용자(앱스토어)가 생긴다(SPEC 작업 B).
 struct MobileLoginView: View {
     let session: MobileSessionStore
+    /// 데모 라우트(`signup` · `reset`)로 바로 열 아래 화면. 실제 실행은 nil.
+    var initialRoute: MobileAuthRoute? = nil
 
     @State private var email = ""
     @State private var password = ""
+    @State private var path: [MobileAuthRoute] = []
+    @State private var didOpenInitialRoute = false
     @FocusState private var focused: Field?
     /// 입력 줄 기호 칸 폭(글자 크기를 따라 — 고정 24pt 면 접근성 크기에서 기호가 자리표시 글자를 덮었다, AX3 실측).
     @ScaledMetric(relativeTo: .body) private var iconWidth: CGFloat = MobileLoginMetrics.iconWidth
@@ -15,6 +23,33 @@ struct MobileLoginView: View {
     private enum Field { case email, password }
 
     var body: some View {
+        NavigationStack(path: $path) {
+            loginScreen
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: MobileAuthRoute.self) { route in
+                    destination(route)
+                }
+        }
+        .onAppear {
+            if let initialRoute, !didOpenInitialRoute {
+                didOpenInitialRoute = true
+                path = [initialRoute]
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func destination(_ route: MobileAuthRoute) -> some View {
+        switch route {
+        case .signUp(let createTeam):
+            MobileSignUpView(session: session, createTeam: createTeam)
+        case .passwordReset:
+            // 지금 입력해 둔 이메일을 그대로 들고 넘어간다 — 재설정 화면에서 다시 타이핑시키지 않는다(맥 PasswordResetEntryLink).
+            MobilePasswordResetView(session: session, email: email)
+        }
+    }
+
+    private var loginScreen: some View {
         MobileCenteredScreen {
             VStack(spacing: 0) {
                 MobileBrandHeader(
@@ -68,14 +103,21 @@ struct MobileLoginView: View {
                 .padding(.top, MobileTheme.space4)
             }
         } footer: {
-            VStack(spacing: 6) {
-                Text(MobileSessionText.signUpOnMac)
-                Text(MobileSessionText.passwordResetOnMac)
+            // 두 길은 글자 버튼(채운 버튼은 로그인 하나). 큰 글자에서는 "계정이 없나요?" 와 "가입하기" 가 줄을 바꿔 선다.
+            VStack(spacing: 0) {
+                HStack(spacing: 2) {
+                    Text(MobileSessionText.signUpPrompt)
+                        .font(.footnote)
+                        .foregroundStyle(MobileTheme.label2)
+                    AingButton(MobileSessionText.signUpAction, kind: .plain, size: .sm) {
+                        path.append(.signUp(createTeam: false))
+                    }
+                }
+                AingButton(MobileSessionText.forgotPassword, kind: .plain, size: .sm) {
+                    path.append(.passwordReset)
+                }
             }
-            .font(.footnote)
-            .foregroundStyle(MobileTheme.label2)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
         .onAppear {
@@ -150,9 +192,9 @@ struct MobileUpdateRequiredView: View {
     }
 }
 
-// MARK: - 로그인 · 업데이트 공용(파일 안)
+// MARK: - 로그인 · 업데이트 · 가입 · 재설정 공용(세션 화면 네 벌이 같은 틀을 쓴다 — w16 부터 파일 밖 두 화면도)
 
-private enum MobileLoginMetrics {
+enum MobileLoginMetrics {
     /// 입력 줄 높이(시안 그룹 행 44 보다 조금 높게 — 손가락 입력칸).
     static let rowHeight: CGFloat = 52
     /// 입력 줄 기호 칸 폭.
@@ -187,7 +229,7 @@ private struct MobileStartButtonStyle: ButtonStyle {
 }
 
 /// 가운데 머리: 아잉(표정 = 상태) · 큰 제목 · 설명.
-private struct MobileBrandHeader: View {
+struct MobileBrandHeader: View {
     let mood: CharacterMood
     let title: String
     let message: String
@@ -213,7 +255,7 @@ private struct MobileBrandHeader: View {
 }
 
 /// 화면 높이 안에서 가운데로 모으고(짧은 화면의 아래 절반이 비지 않게), 넘치면 스크롤한다. `footer` 는 맨 아래에 붙는다.
-private struct MobileCenteredScreen<Content: View, Footer: View>: View {
+struct MobileCenteredScreen<Content: View, Footer: View>: View {
     private let content: Content
     private let footer: Footer
 

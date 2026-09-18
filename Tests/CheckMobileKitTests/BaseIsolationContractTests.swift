@@ -1,18 +1,23 @@
 import Foundation
 import Testing
+@testable import CheckMobileKit
 
 /// 맥 전용 쓰기 격리의 **소스 계약**(컴파일 증거는 iOS 빌드와 strings 검사가 따로 낸다).
 /// 주석은 걷어내고 본다 — 설명문에 경로 이름이 들어 있어도 계약이 흔들리지 않게(하우스 규칙).
 @Suite struct BaseIsolationContractTests {
     static let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
-    /// 폰이 부르면 안 되는 서버 경로(SPEC-ios §0-2).
+    /// 폰이 부르면 안 되는 서버 경로(SPEC-ios §0-2). `join_team`·`create_team` 은 w16 에 빠졌다 — 아래 `signUpWritesAreUngated` 가
+    /// 그 둘의 새 자리(게이트 없는 SignUp 조각)를 따로 못 박는다.
     static let macOnlyPaths = [
         "/rest/v1/rpc/take_pokes", "/rest/v1/rpc/work_tick", "/rest/v1/rpc/close_abandoned_work_sessions",
         "/rest/v1/rpc/ultra_wallet_sync", "/rest/v1/rpc/buy_ultra", "/rest/v1/rpc/poke_user", "/rest/v1/rpc/ultra_poke_user",
         "/rest/v1/work_statuses", "/rest/v1/work_status_devices", "/rest/v1/token_usage_device_monthly",
-        "/rest/v1/token_usage_monthly", "/rest/v1/rpc/join_team", "/rest/v1/rpc/create_team", "/rest/v1/rpc/away_sync",
+        "/rest/v1/token_usage_monthly", "/rest/v1/rpc/away_sync",
     ]
+    /// 가입의 팀 합류/생성 — 폰이 불러도 되는 쓰기(본인 계정에만 작용). 맥 전용 조각에도, 공유 파일에도 없어야 한다.
+    static let signUpPaths = ["/rest/v1/rpc/join_team", "/rest/v1/rpc/create_team"]
+    static let signUpMethods = ["func joinTeam(", "func createTeam("]
     static let macOnlyMethods = [
         "func takePokes(", "func workTick(", "func closeAbandonedSessions(", "func syncUltraWallet(", "func buyUltra(",
         "func updateAppVersion(", "func updateFocusMode(", "func startWork(", "func stopWork(", "func heartbeat(",
@@ -52,6 +57,28 @@ import Testing
         let lastIf = before.range(of: "#if os(macOS)", options: .backwards)?.lowerBound
         let lastEnd = before.range(of: "#endif", options: .backwards)?.lowerBound
         #expect(lastIf != nil && (lastEnd == nil || lastEnd! < lastIf!), "workTickGate 프로퍼티가 #if os(macOS) 안에 있지 않다")
+    }
+
+    @Test("가입의 join_team·create_team 은 게이트 없는 SignUp 조각에만 있다(맥 전용 조각·공유 파일에는 없음) · 금지 RPC 목록에서도 빠졌다")
+    func signUpWritesAreUngated() throws {
+        let signUp = stripComments(try source("Sources/CheckCore/SupabaseWorkServiceSignUp.swift"))
+        let macOnly = stripComments(try source("Sources/CheckCore/SupabaseWorkServiceMacOnly.swift"))
+        let shared = stripComments(try source("Sources/CheckCore/SupabaseWorkService.swift"))
+        #expect(!signUp.contains("#if os(macOS)"), "SignUp 조각에 OS 게이트가 있다 — 폰 가입 화면이 컴파일되지 않는다")
+        for path in Self.signUpPaths {
+            #expect(signUp.contains("\"\(path)\""), "\(path) 가 SignUp 조각에 없다")
+            #expect(!macOnly.contains("\"\(path)\""), "\(path) 가 맥 전용 조각에 남았다 — 폰에서 사라진다")
+            #expect(!shared.contains("\"\(path)\""), "\(path) 가 공유 파일에 있다(조각을 나눈 뜻이 없어진다)")
+        }
+        for method in Self.signUpMethods {
+            #expect(signUp.contains(method), "\(method) 가 SignUp 조각에 없다")
+            #expect(!macOnly.contains(method), "\(method) 가 맥 전용 조각에 남았다")
+            #expect(!shared.contains(method), "\(method) 가 공유 파일에 있다")
+        }
+        // 스텁의 금지 목록과 이 계약이 어긋나면 가입 시나리오 테스트가 전부 '금지 호출' 로 빨개진다(또는 반대로 조용히 통과한다).
+        #expect(!MobileForbiddenCalls.forbiddenRPCs.contains("join_team"))
+        #expect(!MobileForbiddenCalls.forbiddenRPCs.contains("create_team"))
+        #expect(MobileForbiddenCalls.forbiddenRPCs.contains("take_pokes"), "대조: 금지 목록이 통째로 비지 않았다")
     }
 
     @Test("폰 소스(CheckMobileKit · CheckMobileShared · CheckWidgetsKit)는 WorkTimerStore 와 맥 전용 호출을 부르지 않는다")

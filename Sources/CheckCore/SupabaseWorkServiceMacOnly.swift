@@ -6,7 +6,10 @@ import Foundation
 //  · take_pokes 는 원자 소비라 폰이 맥의 찌르기·메시지 말풍선을 훔친다(R3).
 //  · profiles.app_build PATCH 는 폰 빌드 번호로 맥 빌드(79~)를 덮어 오목·채팅·Codex 게이트를 틀어 버린다(R1).
 //  · work_tick·하트비트·기기 행·세션 PATCH·close_abandoned_work_sessions 는 근무 시간을 위조하거나 남의 세션을 마감한다(R2·R4).
-//  · ultra_wallet_sync 는 읽기가 아니라 적립 쓰기이고, buy_ultra·찌르기·토큰 업로드·집중 모드·가입(팀 합류/생성)은 폰 범위 밖이다.
+//  · ultra_wallet_sync 는 읽기가 아니라 적립 쓰기이고, buy_ultra·찌르기·토큰 업로드·집중 모드는 폰 범위 밖이다.
+//  · 가입(팀 합류/생성 `join_team`·`create_team`)은 w16 에 여기서 **빠졌다**(SupabaseWorkServiceSignUp.swift, 게이트 없음) —
+//    앱스토어 정식 출시에 폰 가입 화면이 필요해졌고, 이 둘은 본인 계정의 멤버십·팀만 만들 뿐 남의 세션·찌르기·근무 시간에 닿지
+//    않으므로 위의 사고 목록에 들지 않는다(그 파일 머리 주석).
 // "부르지 않기로 약속"은 코드 리뷰로만 지켜진다. 컴파일에서 사라지면 약속이 필요 없다 — iOS 에서 이 이름을 부르면
 // `value of type 'SupabaseWorkService' has no member …` 로 빌드가 멈춘다.
 //
@@ -447,37 +450,7 @@ extension SupabaseWorkService {
         try await upsertStatus(accessToken: accessToken, teamID: teamID, userID: userID, status: "working", activeSessionID: sessionID)
     }
 
-    /// 코드로 팀 합류. join_team(code) RPC 를 로그인 토큰으로 호출한다. 불일치/비로그인은 0행 → nil.
-    package func joinTeam(accessToken: String, code: String) async throws -> (teamID: String, name: String, goalHours: Int)? {
-        let data = try await send(
-            path: "/rest/v1/rpc/join_team",
-            method: "POST",
-            body: InviteCodeRequest(code: Self.normalizeInviteCode(code)),
-            accessToken: accessToken,
-            prefer: nil
-        )
-        let rows = try decoder.decode([JoinTeamRow].self, from: data)
-        guard let row = rows.first else {
-            return nil
-        }
-        return (teamID: row.teamId, name: row.name, goalHours: row.weeklyGoalHours)
-    }
-
-    /// 새 팀 만들기. create_team(team_name, goal_hours) RPC 를 로그인 토큰으로 호출하고 참여코드를 함께 받는다.
-    package func createTeam(accessToken: String, name: String, goalHours: Int) async throws -> (teamID: String, name: String, inviteCode: String, goalHours: Int) {
-        let data = try await send(
-            path: "/rest/v1/rpc/create_team",
-            method: "POST",
-            body: CreateTeamRequest(teamName: name, goalHours: goalHours),
-            accessToken: accessToken,
-            prefer: nil
-        )
-        let rows = try decoder.decode([CreateTeamRow].self, from: data)
-        guard let row = rows.first else {
-            throw SupabaseWorkServiceError.invalidResponse(200)
-        }
-        return (teamID: row.teamId, name: row.name, inviteCode: row.inviteCode, goalHours: row.weeklyGoalHours)
-    }
+    // w16: joinTeam / createTeam 은 SupabaseWorkServiceSignUp.swift 로 갔다(OS 게이트 없음 — 폰 가입 화면이 부른다).
 
     /// 내 이번 달 AI 토큰 사용량을 기기별 원장에 upsert 한다. (user_id, month, device_id) 충돌 시 merge-duplicates 로 갱신한다.
     /// 원장을 기기별로 쪼갠 이유: 맥 2대에서 같은 계정을 쓰면 (user_id, month) 키로는 나중에 켠 맥이 앞선 맥의 값을

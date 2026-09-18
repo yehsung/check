@@ -8,12 +8,14 @@ import Foundation
 /// 실행: `simctl launch <기기> com.yehsung.aingcheck -AingCheckDemo YES -AingCheckDemoRoute <라우트>`
 /// - 서버: `MobileStubURLProtocol`(호스트 `demo.aingcheck.invalid`)이 `Demo/Fixtures/**` 의 고정 JSON 을 돌려준다.
 /// - 시계: 2026-09-17 14:05 KST 에 멈춰 있다(`MobileClock.demoInstant`).
-/// - 세션: 로그인된 데모 계정(라우트 `login` 이면 로그아웃 상태, `update` 면 업데이트 필요 화면).
+/// - 세션: 로그인된 데모 계정(라우트 `login` · `signup` · `signup/create` · `reset` 이면 로그아웃 상태, `update` 면 업데이트 필요 화면).
 /// - 실시간 없음(소켓 nil) · 키체인·App Group 을 건드리지 않는다(메모리 금고 · 임시 저장소 — 실행마다 비운다).
 /// - 화면 모드: `-AingCheckDemoAppearance light|dark|system`(없으면 시스템). 실행 중 바꾸기는 `MobileAppearanceDemo`(Darwin 알림).
 ///
 /// 라우트: `now|messages|messages/<peer>|rankings/league|rankings/tokens|rankings/minigame|games|games/timing|games/flappy|
 /// games/gomoku/lobby|games/gomoku/match|me|me/shop|me/feedback|me/settings|login|update` (`AingRoute(path:)` 로 연다).
+/// 로그인 아래 화면(w16 — 앱스토어 스크린샷): `signup`(코드 합류) · `signup/create`(팀 만들기) · `reset`(비밀번호 재설정) —
+/// `MobileAuthRoute.demo` 가 열고, 픽스처는 `Demo/Fixtures/session/`(가입·합류·생성·재설정 3단 응답).
 ///
 /// ## 픽스처 규칙(탭 작업자가 자기 폴더에 더한다 — `Demo/Fixtures/<탭>/…json`)
 /// 1. 파일 이름(확장자 뺀 것)이 **요청 키**다. 폴더 이름은 소유 구분일 뿐 키에 들어가지 않는다 — 키는 모든 폴더에서 유일해야 한다
@@ -65,7 +67,8 @@ package enum MobileDemo {
         seedAppearance(arguments: arguments, into: appearanceDefaults)
 
         let vault = InMemoryTokenVault()
-        if route != "login" {
+        // 로그인·가입·재설정 장면은 로그아웃 상태로 시작한다(세션을 심지 않는다) — 그 밖은 로그인된 데모 계정.
+        if !MobileAuthRoute.startsSignedOut(demoRoute: route) {
             vault.write(accessToken, key: AingKeychain.accessTokenKey)
             vault.write("demo-refresh-token", key: AingKeychain.refreshTokenKey)
             storage.defaults.set(userID, forKey: AingSharedKeys.userID)

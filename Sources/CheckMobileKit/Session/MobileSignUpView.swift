@@ -12,14 +12,22 @@ import UIKit
 /// ★ 한글 조합(별명·팀 이름): iOS 도 조합 중인 마지막 음절은 marked text 라 바인딩에 아직 없다 — 메시지 입력줄이 겪은 결함
 ///   (`MessagesComposerView` 머리 주석 · 맥 v0.3.14 "팀명 마지막 글자 유실"). 여기서는 제출 전에 포커스를 내려 UIKit 이 조합을 확정해
 ///   바인딩에 싣게 한 뒤, 다음 차례에 스토어를 부른다(`submit()`). 키보드의 제출 키는 조합을 확정한 뒤 `onSubmit` 을 부른다(오목 채팅 실측).
+///
+/// ★ 가입 이메일 인증코드(w16 · SPEC-signup-otp 작업 P): 계정이 만들어졌는데 세션이 없으면(설정을 켠 서버) 이 화면이 **코드 단계**로
+///   바뀐다. 코드 칸은 비밀번호 재설정과 같은 부품(`MobileCodeEntryGroup`)이다. 지금 서버(가입 즉시 세션)에서는 이 단계가 아예 뜨지 않는다.
 struct MobileSignUpView: View {
     @State private var store: MobileSignUpStore
     @State private var previewDebounce: Task<Void, Never>?
     @State private var copiedCode = false
+    /// 인증 코드는 **화면이 쥔다**(스토어에 남기지 않는다 — 화면을 벗어나면 사라지는 게 맞다, 재설정과 같다).
+    @State private var code = ""
+    /// 출구로 들어왔을 때 한 번만 코드를 보낸다(뷰가 다시 그려질 때마다 메일이 나가면 서버 간격에 걸린다).
+    @State private var confirmEmail: String?
+    @State private var didBeginConfirmation = false
     @FocusState private var focused: Field?
     @ScaledMetric(relativeTo: .body) private var iconWidth: CGFloat = MobileLoginMetrics.iconWidth
 
-    private enum Field { case displayName, email, password, teamCode, teamName }
+    private enum Field { case displayName, email, password, teamCode, teamName, code }
 
     /// 코드 미리보기 디바운스(맥 `TeamCodeField` 와 같은 0.5초).
     static let previewDebounceSeconds: Double = 0.5
@@ -28,11 +36,18 @@ struct MobileSignUpView: View {
         _store = State(initialValue: MobileSignUpStore(session: session, createTeam: createTeam))
     }
 
+    /// 미확인 계정의 출구(`MobileAuthRoute.signUpConfirm`) — 가입 폼을 건너뛰고 코드 단계로 연다. 계정은 이미 있으므로
+    /// 들어가면서 코드를 **다시 보낸다**(`beginConfirmation`).
+    init(session: MobileSessionStore, confirmEmail: String) {
+        _store = State(initialValue: MobileSignUpStore(session: session))
+        _confirmEmail = State(initialValue: confirmEmail)
+    }
+
     var body: some View {
         @Bindable var store = store
         MobileCenteredScreen {
             VStack(spacing: 0) {
-                MobileBrandHeader(mood: .working, title: MobileSignUpText.title, message: store.headline)
+                MobileBrandHeader(mood: store.stage == .confirmCode ? .plain : .working, title: store.title, message: store.headline)
 
                 switch store.stage {
                 case .account:
@@ -42,6 +57,9 @@ struct MobileSignUpView: View {
                         .padding(.top, MobileTheme.space3)
                     teamBlock
                         .padding(.top, MobileTheme.space3)
+                case .confirmCode:
+                    MobileCodeEntryGroup(sentToEmail: store.confirmSentEmail, code: $code, field: Field.code, focused: $focused, onSubmit: submit)
+                        .padding(.top, MobileTheme.space6)
                 case .teamless:
                     InlineNotice(text: MobileSignUpText.accountCreatedNotice, kind: .info)
                         .padding(.top, MobileTheme.space6)
@@ -53,17 +71,38 @@ struct MobileSignUpView: View {
                 }
 
                 if let notice = store.notice {
-                    InlineNotice(text: notice, kind: .error)
+                    InlineNotice(text: notice, kind: store.noticeIsError ? .error : .info)
                         .padding(.top, MobileTheme.space3)
                 }
 
+                // 미확인 계정의 출구 — "이미 가입된 이메일"에서 코드 화면으로 간다(가입 도중 앱을 닫은 사람의 유일한 길).
+                if store.offersConfirmationExit {
+                    AingButton(MobileSignUpText.confirmExit, kind: .plain, size: .sm) { beginConfirmation(email: store.email) }
+                        .disabled(store.isSubmitting || store.isResending)
+                        .padding(.top, MobileTheme.space2)
+                }
+
                 AingButton(store.primaryTitle, kind: .filled, size: .lg, fillsWidth: true, isBusy: store.isSubmitting, action: submit)
-                    .disabled(!store.canSubmit)
+                    .disabled(!store.isPrimaryEnabled(code: code))
                     .padding(.top, MobileTheme.space4)
 
-                if case .createdTeam = store.stage {
+                switch store.stage {
+                case .createdTeam:
                     EmptyView()
-                } else {
+                case .confirmCode:
+                    // 재전송 + 고정 도움말(이미 인증된 계정이면 메일이 오지 않는다 — 그 사람이 할 일은 로그인이다).
+                    MobileResendRow(title: store.resendTitle, isEnabled: store.isResendEnabled) {
+                        Task { await store.resendCode() }
+                    }
+                    .padding(.top, MobileTheme.space2)
+                    Text(MobileSignUpText.confirmHelp)
+                        .font(.footnote)
+                        .foregroundStyle(MobileTheme.label2)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, MobileTheme.space2)
+                case .account, .teamless:
                     modeSwitch
                         .padding(.top, MobileTheme.space2)
                 }
@@ -73,6 +112,17 @@ struct MobileSignUpView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .navigationBarTitleDisplayMode(.inline)
+        .animation(.easeInOut(duration: 0.22), value: store.stage)
+        .task {
+            // 출구로 열렸으면 코드를 보내고 코드 단계에 선다. 한 번만(다시 그려질 때마다 메일이 나가면 서버 간격에 걸린다).
+            guard let confirmEmail, !didBeginConfirmation else { return }
+            didBeginConfirmation = true
+            await store.beginConfirmation(email: confirmEmail)
+        }
+        // 코드 단계로 넘어가면 커서를 코드 칸으로 — 없으면 사용자가 칸부터 눌러야 한다(재설정 화면과 같다).
+        .onChange(of: store.stage) { _, stage in
+            if stage == .confirmCode { focused = .code } else if focused == .code { focused = nil }
+        }
         .onChange(of: store.teamCode) { _, new in
             // 대문자 · 공백/하이픈 제거(맥 TeamCodeField 의 uppercases + allowsSpace:false). 바뀔 때만 되써 루프를 만들지 않는다.
             let normalized = SupabaseWorkService.normalizeInviteCode(new)
@@ -87,7 +137,12 @@ struct MobileSignUpView: View {
                 store.previewTeamCode()
             }
         }
-        .onDisappear { previewDebounce?.cancel() }
+        // 화면을 떠나면 날아가 있는 왕복과 카운트다운만 끊는다(상태는 그대로 — 서버의 계정은 미확인으로 남고,
+        // 다음 로그인/가입 시도의 문구가 다시 이 화면으로 데려온다).
+        .onDisappear {
+            previewDebounce?.cancel()
+            store.cancelPendingWork()
+        }
     }
 
     // MARK: - 계정 칸
@@ -299,11 +354,27 @@ struct MobileSignUpView: View {
     }
 
     /// 조합 확정(포커스 내리기) → 다음 차례에 스토어 제출(머리 주석 ★). 막는 일은 스토어 가드가 한다 — 여기서 먼저 끊지 않는다.
+    /// 코드 단계의 주 버튼만 다른 함수를 탄다(코드는 화면이 쥐므로 값을 실어 보낸다 — 재설정 화면과 같은 규약).
     private func submit() {
         focused = nil
+        let code = code
         Task { @MainActor in
             await Task.yield()
-            store.submit()
+            if store.stage == .confirmCode {
+                await store.verifyCode(code)
+            } else {
+                store.submit()
+            }
+        }
+    }
+
+    /// 미확인 계정의 출구(가입 화면 안 · "이미 가입된 이메일"). 코드 칸은 비우고 시작한다 — 새 코드가 올 것이다.
+    private func beginConfirmation(email: String) {
+        focused = nil
+        code = ""
+        Task { @MainActor in
+            await Task.yield()
+            await store.beginConfirmation(email: email)
         }
     }
 }

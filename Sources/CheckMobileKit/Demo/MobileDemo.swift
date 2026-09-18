@@ -14,8 +14,10 @@ import Foundation
 ///
 /// 라우트: `now|messages|messages/<peer>|rankings/league|rankings/tokens|rankings/minigame|games|games/timing|games/flappy|
 /// games/gomoku/lobby|games/gomoku/match|me|me/shop|me/feedback|me/settings|login|update` (`AingRoute(path:)` 로 연다).
-/// 로그인 아래 화면(w16 — 앱스토어 스크린샷): `signup`(코드 합류) · `signup/create`(팀 만들기) · `reset`(비밀번호 재설정) —
-/// `MobileAuthRoute.demo` 가 열고, 픽스처는 `Demo/Fixtures/session/`(가입·합류·생성·재설정 3단 응답).
+/// 로그인 아래 화면(w16 — 앱스토어 스크린샷): `signup`(코드 합류) · `signup/create`(팀 만들기) ·
+/// `signup/confirm`(가입 이메일 인증코드 — 미확인 계정의 출구) · `reset`(비밀번호 재설정) —
+/// `MobileAuthRoute.demo` 가 열고, 픽스처는 `Demo/Fixtures/session/`(가입·합류·생성·재설정 3단 · 인증코드 재전송/검증 응답).
+/// `_signup-confirm` 장면의 `auth.signup.post.json` 만 **세션 없는 가입 응답**(설정을 켠 서버)이라 코드 단계를 재현한다.
 ///
 /// ## 픽스처 규칙(탭 작업자가 자기 폴더에 더한다 — `Demo/Fixtures/<탭>/…json`)
 /// 1. 파일 이름(확장자 뺀 것)이 **요청 키**다. 폴더 이름은 소유 구분일 뿐 키에 들어가지 않는다 — 키는 모든 폴더에서 유일해야 한다
@@ -35,7 +37,9 @@ import Foundation
 package enum MobileDemo {
     package static let host = "demo.aingcheck.invalid"
     package static let userID = "d0000000-0000-4000-8000-000000000001"
-    package static let email = "demo@aing-check.invalid"
+    /// 데모 계정 주소. 값 자체는 `MobileAuthRoute` 가 쥔다 — 라우트 해석(`signup/confirm`)이 이 주소로 코드 화면을 여는데
+    /// 그 파일은 릴리스 빌드에도 들어가고 이 파일은 DEBUG 전용이라 거꾸로 참조할 수 없다(두 곳에 적으면 갈린다).
+    package static let email = MobileAuthRoute.demoEmail
     package static let installationID = "d0000000-0000-4000-8000-0000000000aa"
 
     /// 실행 인자 → 데모 라우트. 데모가 아니면 nil.

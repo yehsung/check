@@ -43,6 +43,9 @@ struct MobileLoginView: View {
         switch route {
         case .signUp(let createTeam):
             MobileSignUpView(session: session, createTeam: createTeam)
+        case .signUpConfirm(let email):
+            // 미확인 계정의 출구 — 가입 화면을 코드 단계로 연다(들어가면서 코드를 다시 보낸다).
+            MobileSignUpView(session: session, confirmEmail: email)
         case .passwordReset:
             // 지금 입력해 둔 이메일을 그대로 들고 넘어간다 — 재설정 화면에서 다시 타이핑시키지 않는다(맥 PasswordResetEntryLink).
             MobilePasswordResetView(session: session, email: email)
@@ -88,6 +91,15 @@ struct MobileLoginView: View {
                 if let notice = session.notice {
                     InlineNotice(text: notice, kind: .error)
                         .padding(.top, MobileTheme.space3)
+                    // ★ 미확인 계정의 출구(SPEC-signup-otp 작업 P). 가입 도중 앱을 닫은 사람은 계정만 만들어진 채
+                    //   미확인이라 로그인하면 "이메일 확인 필요"만 본다 — 여기서 코드 화면으로 갈 길이 없으면 그 계정은
+                    //   운영자가 Admin API 로 풀어 주기 전까지 영영 못 쓴다. 판정은 스토어(코어 매퍼의 문장)가 한다.
+                    if MobileSignUpStore.offersConfirmationExit(for: notice) {
+                        AingButton(MobileSignUpText.confirmExit, kind: .plain, size: .sm) {
+                            path.append(.signUpConfirm(email: email))
+                        }
+                        .padding(.top, MobileTheme.space2)
+                    }
                 }
 
                 Button(action: signIn) {
@@ -249,6 +261,76 @@ struct MobileBrandHeader: View {
                 .foregroundStyle(MobileTheme.label2)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// 6자리 코드 입력 그룹(비밀번호 재설정 · 가입 이메일 인증 **공용** — w16 SPEC-signup-otp 작업 P).
+///
+/// 두 흐름의 코드 단계는 화면상 완전히 같다: 어디로 보냈는지 알리는 두 줄 + 숫자 칸 하나. 한 벌로 두는 이유는 문구가 아니라
+/// **동작**이다 — `.oneTimeCode`(메일 코드 자동 채움) · 숫자 키패드 · 고정폭 숫자 · 제출 키. 복사해 두면 한쪽만 고쳐지는 날이 온다.
+///
+/// 포커스 값은 부모의 Field 타입을 그대로 받는다(두 화면의 단계 집합이 다르다) — 그래서 제네릭이다.
+struct MobileCodeEntryGroup<Field: Hashable>: View {
+    /// 코드를 보낸 주소(정규화된 값). 주소를 잘못 적었을 때 스스로 알아챌 **유일한 단서**라 코드 칸보다 위에 둔다.
+    let sentToEmail: String
+    @Binding var code: String
+    let field: Field
+    @FocusState.Binding var focused: Field?
+    let onSubmit: () -> Void
+    @ScaledMetric(relativeTo: .body) private var iconWidth: CGFloat = MobileLoginMetrics.iconWidth
+
+    var body: some View {
+        InsetGroup {
+            GroupRow(divider: .inset(MobileTheme.cardPadding), minHeight: MobileTheme.rowHeightTwoLine) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(MobilePasswordResetText.sentTo)
+                        .font(.footnote)
+                        .foregroundStyle(MobileTheme.label2)
+                    Text(sentToEmail)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(MobileTheme.label)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            GroupRow(divider: .none, minHeight: MobileLoginMetrics.rowHeight) {
+                Image(systemName: "number")
+                    .font(.body)
+                    .foregroundStyle(MobileTheme.label2)
+                    .frame(width: iconWidth)
+                    .accessibilityHidden(true)
+                TextField(text: $code, prompt: Text(MobilePasswordResetText.codeLabel).foregroundStyle(MobileTheme.label3Text)) {
+                    Text(MobilePasswordResetText.codeLabel)
+                }
+                .textContentType(.oneTimeCode)
+                .keyboardType(.numberPad)
+                .submitLabel(.go)
+                .focused($focused, equals: field)
+                .onSubmit(onSubmit)
+                .font(MobileTheme.number(.body))
+                .monospacedDigit()
+                .foregroundStyle(MobileTheme.label)
+            }
+        }
+    }
+}
+
+/// "코드가 안 왔나요? [다시 받기 (N초)]" 줄(재설정 · 가입 인증 공용). 채운 버튼은 화면당 하나라 여기선 글자 버튼이다.
+struct MobileResendRow: View {
+    let title: String
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Text(MobilePasswordResetText.resendPrompt)
+                .font(.footnote)
+                .foregroundStyle(MobileTheme.label2)
+            AingButton(title, kind: .plain, size: .sm, action: action)
+                .disabled(!isEnabled)
         }
         .frame(maxWidth: .infinity)
     }

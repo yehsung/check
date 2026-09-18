@@ -1,0 +1,14 @@
+{
+  "id": "d0000000-0000-4000-8000-000000000001",
+  "aud": "authenticated",
+  "role": "",
+  "email": "demo@aing-check.invalid",
+  "confirmation_sent_at": "2026-09-17T05:05:00Z",
+  "email_confirmed_at": null,
+  "identities": [
+    {
+      "identity_id": "d0000000-0000-4000-8000-0000000000e1",
+      "provider": "email"
+    }
+  ]
+}

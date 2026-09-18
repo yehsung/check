@@ -116,42 +116,56 @@ extension WorkTimerStore {
             if let createdSession = try await service.signUp(
                 email: email, password: password, displayName: displayName, center: center
             ) {
+                // 지금 서버(가입 즉시 확인): 예전과 완전히 같다 — 코드 화면 없이 곧장 팀 합류/만들기로 간다.
                 guard generation == sessionGeneration else { return }
-                session = createdSession
-                persistSession(createdSession, email: email, displayName: displayName)
-                // 방금 가입 메타데이터로 실어 보낸 값이다(서버 트리거가 그대로 profiles 에 넣는다).
-                // 여기서 미러를 세워 두지 않으면 가입 직후 설정 창이 '불러오는 중'으로 떠 있다가
-                // 다음 폴링에서야 값이 나타난다 — 방금 자기가 고른 것을 못 보는 화면이 된다.
-                //
-                // ★ 모르는 값은 세우지 않는다: signupCenter 는 화면이 채우지만, 그 값이 CenterLabel 의
-                //   어휘가 아니면 서버 트리거가 null 로 접으므로 미러도 '아직 모름'으로 둬야 진실과 같다.
-                if let center, CenterLabel.isKnown(center) {
-                    myCenter = center
-                    myCenterLoaded = true
-                }
-                // 새 계정이므로 앞 계정이 남긴 큐/진행 중 근무는 여기서 버려진다(오염 금지).
-                adoptWorkStateOwner(createdSession.userID)
-                self.password = ""
-                // 트리거는 더 이상 팀을 만들지 않으므로, 모드에 따라 팀을 만들거나(join 은 하지 않고) 코드로 합류한다.
-                if isCreateTeamMode {
-                    await createTeamAfterSignup()
-                } else {
-                    await joinTeamAfterSignup()
-                }
-                guard generation == sessionGeneration else { return }
-                syncMessage = "동기화됨"
-                await refreshTeamStatus()
-                guard generation == sessionGeneration else { return }
-                startStatusRefreshLoop()
+                await completeSignUp(createdSession, email: email, displayName: displayName, center: center)
             } else {
+                // 가입 확인을 켠 서버: 계정은 만들어졌고 확인 메일이 나갔다. 세션은 코드가 통과해야 생기고, 팀 합류/만들기는
+                // 그 뒤 **같은 completeSignUp** 에서 이어진다(WorkTimerStoreSignUpOTP.swift). 서버 모드를 따로 묻지 않는다 —
+                // 이 nil 이 신호다(SupabaseWorkService.signUp).
                 guard generation == sessionGeneration else { return }
                 self.password = ""
                 syncMessage = "확인 메일 필요"
+                enterSignUpConfirmation(email: email, displayName: displayName, center: center)
             }
         } catch {
             guard generation == sessionGeneration else { return }
             syncMessage = authMessage(for: error, fallback: "계정 생성 실패")
         }
+    }
+
+    /// 가입으로 **세션을 손에 넣은 직후**의 공통 마무리. 즉시 세션이 온 경로(지금 서버)와 코드 검증을 지난 경로(가입 확인을
+    /// 켠 서버)가 **둘 다 여기 하나를 지난다** — 두 벌로 갈라 두면 한쪽만 고쳐지는 날이 온다(completeSignIn 과 같은 이유).
+    /// `displayName`/`center` 는 가입 요청에 실어 보낸 값이다(서버 트리거가 profiles 에 넣는다). 재시작 뒤 코드 입력 출구로
+    /// 들어온 사람은 그 값을 모를 수 있어 Optional 이고, 모르면 미러를 세우지 않는다 — 서버 정본은 가입 때 이미 섰다.
+    func completeSignUp(_ createdSession: SupabaseSession, email: String, displayName: String?, center: String?) async {
+        let generation = sessionGeneration
+        session = createdSession
+        persistSession(createdSession, email: email, displayName: displayName)
+        // 방금 가입 메타데이터로 실어 보낸 값이다(서버 트리거가 그대로 profiles 에 넣는다).
+        // 여기서 미러를 세워 두지 않으면 가입 직후 설정 창이 '불러오는 중'으로 떠 있다가
+        // 다음 폴링에서야 값이 나타난다 — 방금 자기가 고른 것을 못 보는 화면이 된다.
+        //
+        // ★ 모르는 값은 세우지 않는다: signupCenter 는 화면이 채우지만, 그 값이 CenterLabel 의
+        //   어휘가 아니면 서버 트리거가 null 로 접으므로 미러도 '아직 모름'으로 둬야 진실과 같다.
+        if let center, CenterLabel.isKnown(center) {
+            myCenter = center
+            myCenterLoaded = true
+        }
+        // 새 계정이므로 앞 계정이 남긴 큐/진행 중 근무는 여기서 버려진다(오염 금지).
+        adoptWorkStateOwner(createdSession.userID)
+        self.password = ""
+        // 트리거는 더 이상 팀을 만들지 않으므로, 모드에 따라 팀을 만들거나(join 은 하지 않고) 코드로 합류한다.
+        if isCreateTeamMode {
+            await createTeamAfterSignup()
+        } else {
+            await joinTeamAfterSignup()
+        }
+        guard generation == sessionGeneration else { return }
+        syncMessage = "동기화됨"
+        await refreshTeamStatus()
+        guard generation == sessionGeneration else { return }
+        startStatusRefreshLoop()
     }
 
     /// 코드 모드 가입 성공 후. signupTeamCode 로 join_team 을 실행하고 confirmMembership 으로 팀을 확정한다.
@@ -162,6 +176,14 @@ extension WorkTimerStore {
     private func joinTeamAfterSignup() async {
         let generation = sessionGeneration
         let code = signupTeamCode
+        // 코드가 비어 있으면 합류 왕복을 내지 않는다. 가입 폼에서는 joinPreview 게이트가 있어 비지 않지만, 재시작 뒤
+        // 코드 입력 출구(로그인 폼의 "이메일 확인 필요")로 들어온 사람은 팀 코드를 친 적이 없다 — 빈 코드로 join_team 을
+        // 치면 서버 오류만 남기고 결과는 어차피 무소속이다. 곧장 무소속 확정으로 가면 무소속 패널이 그 사람을 받는다.
+        // 재시도(allowRetryForFreshSignup)는 방금 낸 합류의 트리거 지연을 기다리는 장치라 합류가 없으면 쓰지 않는다.
+        guard !SupabaseWorkService.normalizeInviteCode(code).isEmpty else {
+            await confirmMembership()
+            return
+        }
         do {
             let joined = try await withSessionRetry { activeSession in
                 try await service.joinTeam(accessToken: activeSession.accessToken, code: code)
@@ -184,6 +206,11 @@ extension WorkTimerStore {
         let generation = sessionGeneration
         let name = createTeamName.trimmingCharacters(in: .whitespacesAndNewlines)
         let goal = createTeamGoalHours
+        // 팀 이름이 비면 만들기 왕복을 내지 않는다(joinTeamAfterSignup 의 빈 코드와 같은 자리 — 재시작 뒤 출구로 들어온 사람).
+        guard !name.isEmpty else {
+            await confirmMembership()
+            return
+        }
         do {
             let created = try await withSessionRetry { activeSession in
                 try await service.createTeam(accessToken: activeSession.accessToken, name: name, goalHours: goal)
@@ -1123,15 +1150,34 @@ extension WorkTimerStore {
         passwordResetResendSeconds = seconds
         let deadline = clock().addingTimeInterval(TimeInterval(seconds))
         let generation = passwordResetGeneration
-        passwordResetCooldownTask = Task { @MainActor [weak self] in
+        passwordResetCooldownTask = runResendCountdown(
+            deadline: deadline,
+            isCurrent: { [weak self] in self?.passwordResetGeneration == generation },
+            apply: { [weak self] remaining in
+                guard let self, self.passwordResetResendSeconds != remaining else { return }
+                self.passwordResetResendSeconds = remaining
+            }
+        )
+    }
+
+    /// 재발송 카운트다운 루프 **본체**(비밀번호 재설정 · 가입 확인 공용). 남은 초는 주입 clock 기준 데드라인에서 매 틱
+    /// 다시 계산하고, 대기는 주입 passwordResetSleep 이다 — 두 흐름이 같은 시계·같은 수면을 쓰므로 테스트의 얼린 시계가
+    /// 양쪽에 그대로 통한다. `isCurrent` 가 거짓이 되면(흐름 취소/재시작 = 세대 변화) 그 자리에서 끝난다.
+    /// 값 대입은 호출자의 `apply` 가 한다(같은 값이면 대입하지 않는 == 가드도 호출자 몫 — 관찰 무효화를 아끼는 기존 규약).
+    func runResendCountdown(
+        deadline: Date,
+        isCurrent: @escaping @MainActor () -> Bool,
+        apply: @escaping @MainActor (Int) -> Void
+    ) -> Task<Void, Never> {
+        Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                guard let self, generation == self.passwordResetGeneration else { return }
+                guard let self, isCurrent() else { return }
                 let remaining = Int(ceil(deadline.timeIntervalSince(self.clock())))
                 guard remaining > 0 else {
-                    if self.passwordResetResendSeconds != 0 { self.passwordResetResendSeconds = 0 }
+                    apply(0)
                     return
                 }
-                if self.passwordResetResendSeconds != remaining { self.passwordResetResendSeconds = remaining }
+                apply(remaining)
                 let sleep = self.passwordResetSleep
                 await sleep(1)
             }
@@ -1305,7 +1351,9 @@ extension WorkTimerStore {
         return retryAfterSeconds ?? Self.passwordResetResendCooldownSeconds
     }
 
-    private func passwordResetSendFailureMessage(for error: Error) -> String {
+    /// 발송 실패 문구. private 이 아닌 이유: 가입 확인의 재전송(WorkTimerStoreSignUpOTP.swift)이 같은 문장을 쓴다 —
+    /// 메일이 안 나간 이유(설정·네트워크·그 밖)는 두 흐름에서 같고, 문구를 두 벌로 두면 한쪽만 낡는다.
+    func passwordResetSendFailureMessage(for error: Error) -> String {
         if let config = passwordResetConfigMessage(for: error) { return config }
         if classifyAuthError(error) == .transient { return Self.passwordResetNetworkMessage }
         return Self.passwordResetSendFailedMessage

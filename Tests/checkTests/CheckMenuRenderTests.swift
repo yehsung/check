@@ -3784,6 +3784,62 @@ func passwordResetShowsTheResendLinkOnlyOnTheCodeScreen() throws {
 
 @MainActor
 @Test
+func signUpConfirmationBorrowsTheCodeScreenAndStaysThereWhileResending() throws {
+    // 가입 확인(purpose: .signUpConfirmation)은 재설정의 **코드 화면 하나만** 빌린다. 재전송 왕복은 재설정의 sending 으로
+    // 접히는데, 재설정에서 그 phase 는 **이메일 화면**이다 — purpose 가 화면을 실제로 가르는지 픽셀로 본다.
+    // 같은 화면이면 높이가 같다(안내 슬롯은 opacity 로만 토글돼 자리를 늘 잡는다). 링크 행 수로 가르지 않는 이유:
+    // 왕복 중 진행 문구("코드 보내는 중")가 accent 색이라 링크와 같은 색 구간으로 잡힌다(실측 — 대조군이 그걸로 빨갰다).
+    func panel(_ phase: PasswordResetPhase) -> PasswordResetPanel {
+        PasswordResetPanel(
+            purpose: .signUpConfirmation,
+            phase: phase,
+            message: nil,
+            sentToEmail: "member@example.com",
+            resendSeconds: 0,
+            perform: { _ in }
+        )
+    }
+    let phases: [PasswordResetPhase] = [.enterCode, .verifying, .sending]
+    var heights: [Int] = []
+    for phase in phases {
+        let bitmap = try renderBitmap(panel(phase))
+        heights.append(bitmap.pixelsHigh)
+        #expect(
+            unavailablePlaceholderRowRuns(bitmap, top: 0, bottom: bitmap.pixelsHigh - 1).count == 1,
+            "가입 확인 화면엔 코드 칸 하나만 있어야 한다 (\(phase))"
+        )
+    }
+    #expect(Set(heights).count == 1, "가입 확인은 세 phase 가 같은 화면(같은 높이)이어야 한다 — 실측 \(heights)")
+    // 코드 화면(입력 대기)엔 accent 링크가 두 줄이다([다시 받기] + [로그인으로 돌아가기]).
+    let idle = try renderBitmap(panel(.enterCode))
+    #expect(accentRowRuns(idle, top: 0, bottom: idle.pixelsHigh - 1).count == 2)
+
+    // 대조군: 재설정의 sending 은 이메일 화면이라 코드 화면과 높이가 다르다(주소 두 줄 + 재전송 링크가 없다).
+    // 이 차이가 없으면 purpose 는 장식이고, 가입 확인도 재전송 중 이메일 화면으로 물러나 방금 친 코드를 잃는다.
+    let resetCode = try renderBitmap(passwordResetPanel(phase: .enterCode, resendSeconds: 0)).pixelsHigh
+    let resetSending = try renderBitmap(passwordResetPanel(phase: .sending, resendSeconds: 0)).pixelsHigh
+    #expect(resetCode != resetSending, "재설정의 코드 화면과 이메일 화면은 높이가 달라야 대조가 성립한다")
+    // 그리고 가입 확인의 코드 화면은 재설정의 코드 화면 **그대로**다(부제 한 줄만 다르고 높이는 같다).
+    #expect(heights.first == resetCode, "가입 확인 코드 화면 높이 \(heights.first ?? -1) ≠ 재설정 코드 화면 \(resetCode)")
+}
+
+@MainActor
+@Test
+func loginCardShowsTheSignUpConfirmationExitOnlyForUnconfirmedMessages() throws {
+    // 미확인 계정의 출구([인증 코드 다시 받기])가 로그인 카드에 **실제로 그려지는지**를 픽셀로 본다. 링크 글자는 accent 뿐이라
+    // 그 색의 행 구간 수가 곧 링크 줄 수다 — 출구가 달리는 문구에서는 평소 로그인 카드보다 정확히 한 줄이 많아야 한다.
+    func linkRows(_ message: String) throws -> Int {
+        let bitmap = try renderBitmap(CheckMenuView(store: makeLoginStore(syncMessage: message)))
+        return accentRowRuns(bitmap, top: 0, bottom: bitmap.pixelsHigh - 1).count
+    }
+    let plain = try linkRows("로그인 실패")
+    #expect(try linkRows("이미 가입된 이메일") == plain + 1, "'이미 가입된 이메일'엔 출구 링크 한 줄이 더 있어야 한다 (기준 \(plain))")
+    #expect(try linkRows("이메일 확인 필요") == plain + 1, "'이메일 확인 필요'엔 출구 링크 한 줄이 더 있어야 한다 (기준 \(plain))")
+    #expect(try linkRows("로그인 정보 오류") == plain, "출구는 미확인 계정 문구에만 달린다")
+}
+
+@MainActor
+@Test
 func passwordResetSuccessNoticeLandsOnTheLoginScreenAsSuccess() throws {
     // 성공하면 스토어가 idle 로 돌리고 안내를 **로그인 화면의 상태줄(syncMessage)** 로 옮겨 싣는다.
     // 그 문구가 AuthMessageKind 표에 없으면 default 로 떨어져 성공을 빨간 경고로 그린다 — 그걸 막는다.

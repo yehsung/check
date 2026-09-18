@@ -10,6 +10,8 @@ package enum MeDestination: Hashable, Sendable {
     case profile
     case feedback
     case settings
+    /// 설정 → 차단한 사람(앱스토어 심사 지침 1.2). 목록·해제는 메시지 스토어가 쥔다(차단은 메시지 관계다).
+    case blocked
 }
 
 /// 한 덩어리(머리·기록·상점…)의 불러오기 상태 — 순위 탭과 같은 뜻의 세 깃발 + 마지막 성공 시각.

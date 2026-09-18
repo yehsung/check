@@ -68,7 +68,7 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: aing-check
+        CFBundleDisplayName: 아잉체크
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
@@ -164,7 +164,7 @@ targets:
     info:
       path: Widgets/Info.plist
       properties:
-        CFBundleDisplayName: aing-check
+        CFBundleDisplayName: 아잉체크
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:

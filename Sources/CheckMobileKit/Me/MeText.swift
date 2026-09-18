@@ -1,4 +1,5 @@
 import CheckCore
+import CheckMobileShared
 import Foundation
 
 /// 나 탭 문구와 순수 규칙(플랫폼 무관 — macOS `swift test` 가 값으로 검증한다).
@@ -417,6 +418,10 @@ package enum MeText {
     /// 공용 `LoadFailureRow` 가 [다시 시도]를 곁에 둔다 — 문장에 할 일을 또 적지 않는다(탭 사이 실패 문구 맞춤).
     package static let privacyLoadFailed = "공개 설정을 불러오지 못했어요"
 
+    /// 안전 절(앱스토어 심사 지침 1.2) — 지금은 [차단한 사람] 한 행이다. 글자는 메시지 탭의 차단 문구
+    /// (`MessagesBlockText`)를 그대로 쓴다: 차단을 거는 곳과 푸는 곳이 두 벌의 말을 하면 안 된다.
+    package static let safetySection = "안전"
+
     package static let pushSection = "알림"
     /// 종류별 토글 아래 한 줄(제목은 `PushKind.settingTitle` — 설명 시트와 같은 이름).
     package static func pushDetail(_ kind: PushKind) -> String {
@@ -458,7 +463,7 @@ package enum MeText {
 
     package static func inviteShareMessage(teamName: String?, code: String) -> String {
         let team = teamName.map { "「\($0)」 " } ?? ""
-        return "aing-check \(team)팀 코드: \(code)\n맥 앱에서 가입할 때 이 코드를 입력하면 같은 팀이 돼요."
+        return "\(CheckMobileIdentifiers.appDisplayName) \(team)팀 코드: \(code)\n맥 앱에서 가입할 때 이 코드를 입력하면 같은 팀이 돼요."
     }
 
     package static let accountSection = "계정"
@@ -506,8 +511,9 @@ package enum MeText {
         }
     }
 
+    /// 설정 맨 아래 한 줄. 이름은 **홈 화면과 같은 표시 이름**이다(같은 앱인지 묻게 만들지 않는다).
     package static func versionLine(version: String, build: Int) -> String {
-        "aing-check iOS \(version) (\(build))"
+        "\(CheckMobileIdentifiers.appDisplayName) iOS \(version) (\(build))"
     }
 }
 
@@ -526,7 +532,8 @@ extension PushAuthorizationStatus {
 
     package var meDetail: String? {
         switch self {
-        case .denied: return "설정 앱 › aing-check › 알림에서 켤 수 있어요."
+        // 설정 앱에 뜨는 줄은 **표시 이름**이다 — 이 문장이 옛 이름을 가리키면 사람이 못 찾는다.
+        case .denied: return "설정 앱 › \(CheckMobileIdentifiers.appDisplayName) › 알림에서 켤 수 있어요."
         case .notDetermined: return "허용하면 아래 종류별로 고를 수 있어요."
         case .provisional: return "알림 센터에만 조용히 쌓여요. 설정 앱에서 배너로 바꿀 수 있어요."
         case .unknown, .authorized, .ephemeral: return nil

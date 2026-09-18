@@ -10,12 +10,18 @@ import UIKit
 ///
 /// 이 화면이 서 있는 동안 스토어는 "그 대화가 보인다"로 안다(`conversationDidAppear/Disappear` — 뷰 인스턴스 표식).
 /// 읽음 처리·즉시 이력은 스토어가 그 사실로 판정한다 — 뷰는 조건을 세지 않는다.
+///
+/// 오른쪽 위 ··· 메뉴(앱스토어 심사 지침 1.2): [신고하기] · [차단하기]. 둘 다 **시트만 연다** — 차단은 확인 시트를,
+/// 신고는 사유 시트를 지나야 서버로 나간다(소스 계약). 받은 말풍선을 길게 누르면 그 **메시지 한 건**을 신고한다.
 struct MessagesConversationView: View {
     let store: MessagesStore
     let peerID: String
 
+    @Environment(\.dismiss) private var dismiss
     @State private var token = UUID()
     @State private var follow = MessagesScrollFollow()
+    @State private var showsBlockConfirm = false
+    @State private var reportTarget: MessagesReportTarget?
 
     private static let bottomAnchorID = "messages-bottom-anchor"
 
@@ -31,6 +37,11 @@ struct MessagesConversationView: View {
                     MessagesExpiryNote(alignment: .center, font: .caption)
                         .padding(.top, 8)
                         .padding(.bottom, 2)
+                    // 차단·신고 결과 한 줄(신고 접수 · 차단 되돌림). 목록과 같은 값을 그린다 — 둘은 동시에 서지 않는다.
+                    if let notice = store.blockNotice {
+                        InlineNotice(text: notice, kind: store.blockNoticeIsError ? .error : .info)
+                            .padding(.bottom, 4)
+                    }
                     if items.isEmpty {
                         emptyState
                     }
@@ -136,12 +147,79 @@ struct MessagesConversationView: View {
                 }
                 .accessibilityHidden(true)
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                moreMenu
+            }
+        }
+        // 차단 확인 — **차단을 부르는 곳은 이 시트 하나다**(메뉴는 열기만 한다).
+        .sheet(isPresented: $showsBlockConfirm) {
+            MessagesBlockConfirmSheet(
+                peerName: store.peerName(for: peerID) ?? header.title,
+                onConfirm: confirmBlock,
+                onClose: { showsBlockConfirm = false }
+            )
+        }
+        .sheet(item: $reportTarget) { target in
+            MessagesReportSheet(
+                store: store,
+                target: target,
+                onSent: { blocked in
+                    reportTarget = nil
+                    // 신고하면서 차단했으면 이 대화는 이미 사라졌다 — 목록으로 빠져나온다.
+                    if blocked { dismiss() }
+                },
+                onClose: { reportTarget = nil }
+            )
         }
         .onAppear { store.conversationDidAppear(peerID: peerID, token: token) }
         .onDisappear { store.conversationDidDisappear(token: token) }
         #if DEBUG
         .task { MessagesDemoLaunch.seedComposerIfRequested(store: store, peerID: peerID) }
         #endif
+    }
+
+    /// 오른쪽 위 ··· — [신고하기] · [차단하기](파괴적). 메뉴는 **시트만 연다**.
+    private var moreMenu: some View {
+        Menu {
+            Button {
+                reportTarget = MessagesReportTarget(peerID: peerID, peerName: peerDisplayName)
+            } label: {
+                Label(MessagesBlockText.reportAction, systemImage: "exclamationmark.bubble")
+            }
+            Button(role: .destructive) {
+                showsBlockConfirm = true
+            } label: {
+                Label(MessagesBlockText.blockAction, systemImage: "nosign")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(MobileTheme.label)
+        }
+        .tint(MobileTheme.label)
+        .accessibilityLabel(Text(MessagesBlockText.menuAccessibilityLabel))
+    }
+
+    /// 시트·신고에 싣는 상대 이름(모르면 대화 머리 글자와 같은 폴백).
+    private var peerDisplayName: String {
+        store.peerName(for: peerID) ?? MessagesConversationHeader.fallbackTitle
+    }
+
+    /// 받은 말풍선을 길게 눌러 그 **메시지 한 건**을 신고한다(id 를 싣는다 — 운영자가 무엇을 볼지 정해진다).
+    private func reportMessage(_ entry: MessageHistoryEntry) {
+        reportTarget = MessagesReportTarget(
+            peerID: peerID,
+            peerName: entry.peerName,
+            messageID: entry.id,
+            messageBody: entry.body
+        )
+    }
+
+    /// 확인 시트의 [차단하기]. 낙관적으로 지우고(스토어) 목록으로 빠져나온다 — 서버 응답을 기다리지 않는다.
+    private func confirmBlock() {
+        showsBlockConfirm = false
+        store.blockPeer(peerID)
+        dismiss()
     }
 
     /// 데모 스크린샷 고리(`-AingCheckDemoMessages newbutton`). Release 에서는 늘 false.
@@ -172,7 +250,8 @@ struct MessagesConversationView: View {
         case .day(_, let label):
             MessagesDaySeparator(label: label)
         case .bubble(let line):
-            MessagesBubbleRow(line: line)
+            // 신고는 **받은 말풍선만**이다 — 내 말을 내가 신고하는 길은 만들지 않는다(그 메뉴는 뜻이 없다).
+            MessagesBubbleRow(line: line, onReport: line.entry.isMine ? nil : { reportMessage(line.entry) })
                 // 말한 쪽이 바뀌면 조금 더 띄운다(시안 `.b-gap` 10 = 줄 간격 3 + 7).
                 .padding(.top, line.startsGroup ? 7 : 0)
         case .pending(let pending):
@@ -273,6 +352,8 @@ struct MessagesDaySeparator: View {
 /// **가로로** — 세로로 쌓으면 연속 말풍선에서 어느 말풍선의 1 인지 헷갈렸다(비평 04).
 struct MessagesBubbleRow: View {
     let line: MessagesBubbleLine
+    /// 길게 눌러 이 메시지를 신고한다. nil 이면 메뉴에 신고가 없다(내 말풍선).
+    var onReport: (() -> Void)?
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -296,6 +377,12 @@ struct MessagesBubbleRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(accessibilityText))
         .accessibilityAction(named: Text(MessagesBubbleCopy.title)) { MessagesBubbleCopy.copy(entry.body) }
+        // 보이스오버는 길게 누름 메뉴를 못 연다 — 신고도 동작으로 단다(복사와 같은 자리).
+        .accessibilityActions {
+            if let onReport {
+                Button(MessagesBlockText.reportMessageAction, action: onReport)
+            }
+        }
     }
 
     /// 복사는 길게 눌러 메뉴로(원문 그대로). 본문이 `UILabel`(어절 줄바꿈)이라 SwiftUI `textSelection` 이 닿지 않는다.
@@ -307,6 +394,11 @@ struct MessagesBubbleRow: View {
                     MessagesBubbleCopy.copy(line.entry.body)
                 } label: {
                     Label(MessagesBubbleCopy.title, systemImage: "doc.on.doc")
+                }
+                if let onReport {
+                    Button(role: .destructive, action: onReport) {
+                        Label(MessagesBlockText.reportMessageAction, systemImage: "exclamationmark.bubble")
+                    }
                 }
             }
     }

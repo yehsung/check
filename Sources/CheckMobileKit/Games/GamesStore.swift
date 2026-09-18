@@ -102,6 +102,19 @@ package final class GamesStore {
     /// 미러만 적는다). 코어 값을 먼저 읽으면 나 탭에서 캐릭터를 산 뒤 다음 오목 조회 전까지 옛 잔액이 보였다. 미러를 모르면 코어 값.
     package var rubyBalance: Int? { context.gomokuHost.rubyBalance ?? context.gomoku.rubyBalance }
 
+    /// 오목 로비의 **상대 고르기 목록** — 차단해 숨긴 사람을 걷어낸 것. 화면이 읽는 자리는 여기 하나다.
+    ///
+    /// 차단 확인 시트가 "사람 찾기와 오목 신청에서 서로 보이지 않아요" 라고 약속하는데, 코어 `users` 는 서버 로비 응답 그대로라
+    /// 방금 차단한 사람이 [도전] 버튼과 함께 그대로 서 있었다 — 사용자가 방금 읽은 세 줄 중 한 줄이 눈앞에서 거짓이 된다
+    /// (메시지 탭 `filteredDirectory` 와 같은 근거 · 같은 방식).
+    /// **거르는 것은 화면이 읽는 이 자리뿐**이다: 코어 목록은 서버가 답한 그대로 둬야 차단이 실패했을 때 그대로 돌아온다.
+    /// 서버도 로비 응답에서 서로 차단한 사람을 빼 줘야 **반대쪽**에서도 사라진다(작업 S — `gomoku_lobby`).
+    package var gomokuLobbyUsers: [GomokuUser] {
+        let hidden = context.links.messages?.hiddenBlockedPeerIDs ?? []
+        guard !hidden.isEmpty else { return context.gomoku.users }
+        return context.gomoku.users.filter { !hidden.contains($0.id) }
+    }
+
     // MARK: 첫 화면
 
     /// 게임 탭 첫 화면이 보였다: 카드의 오늘 최고·순위 · 받은 신청.

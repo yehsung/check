@@ -1,5 +1,5 @@
-# GitHub Pages(저장소 Settings → Pages, main 의 /docs). 여기서 나가는 것은 **앱 소개(index)와 개인정보 처리방침(privacy)** 둘뿐이다.
-# 앱스토어가 요구하는 URL 두 개(지원 URL · 처리방침 URL)를 위해 켰다.
+# GitHub Pages(저장소 Settings → Pages, main 의 /docs). 여기서 나가는 것은 **앱 소개(index) · 개인정보 처리방침(privacy) ·
+# 이용약관(terms)** 셋뿐이다. 앱스토어가 요구하는 URL(지원 URL · 처리방침 URL)과 심사 지침 1.2 가 요구하는 약관을 위해 켰다.
 #
 # 나머지 docs/* 는 내부 문서라 페이지로 만들지 않는다. 저장소가 이미 퍼블릭이라 '새어 나가는' 것은 없지만,
 # 처리방침 주소 옆에 릴리스 절차·서버 설계 문서가 같이 목록으로 뜨면 사용자에게는 잡음이고 애플에게는 산만한 페이지다.
@@ -14,5 +14,5 @@ exclude:
   - images
 
 theme: jekyll-theme-minimal
-title: aing-check
+title: 아잉체크
 description: 근무 시간을 재고 팀 현황을 보는 맥·아이폰 앱

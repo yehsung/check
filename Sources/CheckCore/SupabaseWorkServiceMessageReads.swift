@@ -176,6 +176,16 @@ package struct MessageUnreadSummary: Equatable, Sendable {
     package let peers: [MessageUnreadPeer]
 
     package var unreadPeerIDs: Set<String> { Set(peers.map(\.peerUserID)) }
+
+    /// 주어진 상대들을 걷어낸 요약(폰의 차단 — 낙관적으로 숨긴 사람). **합도 같이 줄인다** — 줄이지 않으면
+    /// 목록에서 사라진 사람의 안 읽은 말이 탭 배지에서만 계속 세어진다(요약이 이력보다 새것인 창에서 실제로 그랬다).
+    /// 서버도 다음 요약부터 그 사람을 빼지만, 이 함수는 그 응답을 기다리지 않는다.
+    package func excluding(_ userIDs: Set<String>) -> MessageUnreadSummary {
+        guard !userIDs.isEmpty else { return self }
+        let kept = peers.filter { !userIDs.contains($0.peerUserID) }
+        guard kept.count != peers.count else { return self }
+        return MessageUnreadSummary(total: kept.reduce(0) { $0 + $1.count }, peers: kept)
+    }
 }
 
 package struct MessageUnreadPeer: Equatable, Sendable {

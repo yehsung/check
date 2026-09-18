@@ -86,6 +86,12 @@ struct MobileSignUpView: View {
                     .disabled(!store.isPrimaryEnabled(code: code))
                     .padding(.top, MobileTheme.space4)
 
+                // 약관 동의 한 줄(앱스토어 1.2) — 계정이 실제로 만들어지는 단계에만 선다. 이미 계정이 있는 단계
+                // (코드 확인 · 팀 없음 · 팀 생성 완료)에서 다시 말하면 "또 동의해야 하나"로 읽힌다.
+                if store.stage == .account {
+                    termsNotice
+                }
+
                 switch store.stage {
                 case .createdTeam:
                     EmptyView()
@@ -281,6 +287,19 @@ struct MobileSignUpView: View {
                     .padding(.top, MobileTheme.space2)
             }
         }
+    }
+
+    /// "가입하면 이용약관과 개인정보 처리방침에 동의하는 것으로 봅니다" — 두 낱말이 곧 링크다(`termsAgreementAttributed`).
+    /// 누르면 시스템 브라우저가 GitHub Pages 문서를 연다(약관 본문에 괴롭힘·혐오·음란물 무관용과 계정 정지가 적혀 있다).
+    private var termsNotice: some View {
+        Text(MobileSignUpText.termsAgreementAttributed)
+            .font(.footnote)
+            .foregroundStyle(MobileTheme.label2)
+            .tint(MobileTheme.accent)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
+            .padding(.top, MobileTheme.space3)
     }
 
     /// 코드 입력 ↔ 팀 만들기 전환(맥 AuthLinkButton "팀 코드가 없나요? 새 팀 만들기" / "코드로 참여하기").

@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | 번들 ID | `com.yehsung.aingcheck` | `ios/project.yml:100`, `Sources/CheckMobileShared/CheckMobileIdentifiers.swift:10` |
 | 위젯 확장 번들 ID | `com.yehsung.aingcheck.widgets` | `ios/project.yml:181`, `CheckMobileIdentifiers.swift:12` |
-| 표시 이름 | `aing-check` | `ios/project.yml:71`, `ios/App/Info.plist`(CFBundleDisplayName) |
+| 표시 이름 | `아잉체크` | `ios/project.yml:71, 167`, `ios/App/Info.plist`·`ios/Widgets/Info.plist`(CFBundleDisplayName), `Sources/CheckMobileShared/CheckMobileIdentifiers.swift`(`appDisplayName` — 앱 안 문구가 읽는 한 벌) |
 | 버전 · 빌드 | `0.1.0` · `3` | `ios/project.yml:30-31`, `Sources/CheckMobileKit/App/MobileAppInfo.swift:5-8` |
 | 팀 ID | `MQ2KQK37WD` | `ios/project.yml:23` |
 | 지원 기기 · OS | iPhone 전용(`TARGETED_DEVICE_FAMILY: "1"`) · iOS 18.0 이상 · 세로 방향만 | `ios/project.yml:26, 104`, `:15-16, 27`, `:75-76`; `Package.swift:9` |
@@ -57,10 +57,12 @@
 
 ### 1.1 이름 (30자)
 
-`aing-check` (10자)
+`아잉체크` (4자)
 
-- 그대로 쓴다. 맥 앱·brew cask·저장소 이름과 같다(`README.md:1`, `docs/release.md`). 표시 이름도 이 값이다(`ios/project.yml:71`).
-- 대안 `아잉체크 — aing-check`(15자)는 검색엔 도움되지만 브랜드 표기가 둘로 갈린다. 권장하지 않는다.
+- **2026-09-18 사용자 결정**(w19). 홈 화면 표시 이름·약관 서비스명·지원 페이지 제목이 모두 이 이름이다
+  (`ios/project.yml:71, 167`, `docs/terms.md:8`, `docs/index.md`, `docs/_config.yml`) — 앱 이름과 약관의 서비스명이 다르면 심사원이 같은 서비스인지 묻는다.
+- `aing-check` 는 **식별자**로 남는다: 번들 ID(`com.yehsung.aingcheck`)·brew cask·저장소 이름·맥 앱 번들(`/Applications/aing-check.app`).
+  약관 첫 줄이 "**아잉체크**(aing-check)" 로 둘을 한 번에 묶는다.
 
 ### 1.2 부제 (30자)
 
@@ -78,7 +80,7 @@
 
 아래 문안은 약 1,300자. 모든 문장은 코드·`docs/privacy.md`·`README.md` 의 사실만 담았다(과장 금지 — 4.2/2.3 대비).
 
-> **aing-check 는 작은 팀을 위한 근무 타이머의 아이폰 동반 앱입니다.**
+> **아잉체크(aing-check)는 작은 팀을 위한 근무 타이머의 아이폰 동반 앱입니다.**
 > 맥 메뉴바 앱(aing-check for Mac)에서 누른 근무 시작·종료가 팀 전체에 실시간으로 공유되고, 아이폰에서는 그 현황을 언제 어디서나 확인하고 팀원과 이야기할 수 있습니다.
 >
 > **지금** — 내 오늘 근무 시간과 이번 주 목표 달성률, 우리 팀에서 지금 누가 일하고 있는지, 오늘 할 일을 한 화면에서 봅니다. 할 일은 계정에 저장되어 맥과 아이폰, 홈 화면 위젯에서 같은 목록을 씁니다.
@@ -238,6 +240,8 @@
 
 애플 요구: 로그인이 필요한 앱은 데모 계정을 **만료되지 않는** 비밀번호로 제공(지침 2.1, 플랫폼 버전 정보 도움말 "Sign-in required"). 연락처 이름·이메일·전화(국제 형식) 필수.
 
+**심사 연락처(이름·이메일·전화)는 이 문서에 적지 않는다** — 저장소가 퍼블릭이라 전화번호가 그대로 공개된다. App Store Connect 의 App Review Information 에 제출자가 직접 입력한다(값은 사용자가 정한 것 그대로).
+
 ### 5.1 데모 계정 준비 (제출 전 운영자 작업)
 
 - 서버에는 **숨김 심사 계정** 장치가 이미 있다: 숨김 사용자·숨김 팀은 일반 사용자와 양방향으로 격리된다(목록·순위·로비·메시지·오목·팀 코드 전부) — `/Users/yesung/check/supabase/migrations/20260917160000_hidden_accounts.sql:1-13`(gitignore 폴더 — 워크트리엔 없음), 만드는 절차는 세션 스크래치 `w2/s7/HIDDEN_ACCOUNTS.md`(저장소 밖 — §7 위험 13).
@@ -248,7 +252,7 @@
 ### 5.2 노트 본문 (영어 — 심사원용) — 자리표시자는 제출 때 채운다
 
 > **What this app is**
-> aing-check is the iPhone companion app of "aing-check for Mac", a menu-bar work timer used by small teams. On the phone you can see who on your team is working now, your weekly goal progress, and today's to-dos; send 1:1 messages; play two mini games and 1:1 Gomoku with teammates; and manage your character with in-app points (rubies). **Starting/ending a work session is only possible in the Mac app** — the phone reads that record. All features are tied to a team account, so sign-in is required (5.1.1). No ads, no analytics, no third-party SDKs, no in-app purchases; rubies cannot be bought or cashed out.
+> 아잉체크 (aing-check) is the iPhone companion app of "aing-check for Mac", a menu-bar work timer used by small teams. On the phone you can see who on your team is working now, your weekly goal progress, and today's to-dos; send 1:1 messages; play two mini games and 1:1 Gomoku with teammates; and manage your character with in-app points (rubies). **Starting/ending a work session is only possible in the Mac app** — the phone reads that record. All features are tied to a team account, so sign-in is required (5.1.1). No ads, no analytics, no third-party SDKs, no in-app purchases; rubies cannot be bought or cashed out.
 >
 > **Demo accounts (two, so you can test messaging and Gomoku between them)**
 > Account A — email: `<A_EMAIL>` / password: `<A_PASSWORD>`
@@ -269,6 +273,9 @@
 >
 > **Gomoku (1:1)**
 > Games tab → 1:1 오목 → pick B → challenge (stake 3/5/10 rubies) → B accepts (from the push or the Games tab) → 30 seconds per move. A short chat drawer is available during the match; either player can mute it.
+>
+> **Reporting and blocking (Guideline 1.2)**
+> Every screen where users exchange their own content has both: a 1:1 conversation (Messages tab → a conversation → **···** in the top right → "신고하기" Report / "차단하기" Block; long-press a received bubble to report that single message) and the Gomoku match chat drawer (**···** in the drawer header → the same two items). Reporting asks for a reason (spam / harassment / inappropriate / other), an optional 200-character note, and has "report and block" on by default. Blocked people are listed under "나" (Me) → 설정 (Settings) → 차단한 사람 (Blocked people), where a block can be lifted. Reports are reviewed within 24 hours; the same promise is on the support page and in the terms (<https://yehsung.github.io/check/terms>).
 >
 > **Screens that will look empty for a solo account**
 > "지금 근무 중" and the team league only show data when teammates record work in the Mac app. Demo accounts have seeded records.
@@ -352,7 +359,7 @@ shoot 06-me.png         me                                            light
 | --- | --- | --- | --- | --- |
 | 1 | **내부용·동반 앱으로 보임** — 폰은 근무 시작/종료를 못 하고 로그인 첫 화면 문구가 "맥의 aing-check 와 같은 계정으로 로그인해요" 다. 심사원 시점엔 "맥 없이는 쓸모가 적은 앱" 으로 읽힐 수 있다 | 4.2 최소 기능 | `Session/MobileSessionViews.swift:22-24`, `privacy.md:99`, `MacOnly.swift:1-10` | 설명·심사 노트에서 동반 앱임을 먼저 밝히고 폰만으로 되는 것(메시지·오목·미니게임·할 일·위젯)을 앞세운다. 데모 계정에 근무 기록을 심어 화면이 차 있게 한다. 근본 해결(폰에서 근무 시작)은 별도 결정 |
 | 2 | **로그인 벽** — 모든 화면이 로그인 뒤에 있다 | 5.1.1(v) | `App/MobileRootView.swift:52-61` | 계정 기반 서비스라 허용 범위. 단 폰 안 가입(작업 B)·앱 안 계정 삭제(작업 C)·데모 계정이 **모두** 있어야 한다. 제출 전 병합 확인 |
-| 3 | **사용자 생성 콘텐츠 요건 미충족** — 1:1 메시지·오목 채팅·별명·사진이 있는데, 지침 1.2 가 요구하는 네 가지(부적절 콘텐츠 필터 · **신고 수단** · **사용자 차단** · 공개된 연락처) 중 신고·차단이 앱에 없다. 있는 것은 오목 채팅 음소거(판 단위)와 일반 제보 창뿐 | 1.2 | `Sources/CheckCore/GomokuStore.swift:243-245, 1637`(음소거), `Me/MeFeedbackView.swift`(제보), 코드 전체 grep "차단·신고·block" 0건(2026-09-18) | (a) 최소: 심사 노트에 "제보 창이 신고 통로, 메시지는 24시간 자동 삭제, 서버가 본문 길이·문자 종류를 거른다(`SupabaseWorkService.swift:712-716`)" 를 적고 지원 페이지에 연락처를 둔다. (b) 권장: **사용자 차단**(메시지·오목 신청 거부)과 **메시지 신고** RPC + 나 → 설정 행 — 별도 작업. 거절 확률이 가장 높은 항목 |
+| 3 | **사용자 생성 콘텐츠 요건 — 앱 쪽은 붙었고 서버가 남았다**. 지침 1.2 의 네 가지 중 ①거르기(길이·문자 종류·오목 채팅 음소거)·②신고·③차단이 앱에 있고 ④연락처는 지원 페이지다. 신고·차단 입구는 **두 UGC 면 모두**에 있다: 1:1 대화 화면 ···(메시지 길게 누르기 포함)와 오목 대화 서랍 ···. 남은 것은 **서버 마이그레이션(작업 S)** 이다 — `block_user`·`unblock_user`·`list_blocks`·`report_content` 와 기존 RPC 게이트(`send_message`·목록·`app_user_directory`·`gomoku_challenge`)가 아직 없어, 지금 빌드에서 차단을 누르면 "아직 서버에 준비되지 않았어요" 로 되돌아온다 | 1.2 | `Messages/MessagesConversationView.swift`·`Games/GamesGomokuChat.swift`(두 입구), `Messages/MessagesBlockSheets.swift`(신고 시트 — 사유 4 · 200자 · 24시간 약속), `Me/MeBlockedPeopleView.swift`(차단 목록·해제), `Sources/CheckCore/SupabaseWorkServiceBlocks.swift`(RPC 넷), `docs/terms.md` §3·§4, `docs/index.md` | **제출 전에 서버 마이그레이션을 적용**하고(사람이 `supabase db push`), 적용 뒤 두 계정으로 차단·신고를 한 바퀴 확인한다. 심사 노트에는 신고·차단 경로(대화 ···, 오목 대화 서랍 ···, 나 → 설정 → 차단한 사람)와 24시간 확인 약속을 적는다 — 옛 최소안(일반 제보 창으로 신고를 대신하기)은 이제 사실이 아니므로 심사 노트에 적지 않는다. 남은 구멍 하나: 서버 `gomoku_lobby` 의 `users[]` 는 아직 서로 차단을 거르지 않아 **반대쪽 로비**에는 차단한 사람이 보인다(내 로비에서는 앱이 거른다 — `GamesStore.gomokuLobbyUsers`) |
 | 4 | **연령 설문** — 오목 루비 판돈은 애플 정의상 모의 도박(드묾 13+), 매일 자정 상품은 잦은 경연(13+)에 **그대로 들어맞는다**. '아니오' 로 답해 4+ 로 내면 등급 정정·거절 사유 | 연령 등급 | §3(정의 원문 인용) | §3 대로 둘 다 '예' 로 답하고 **13+** 로 낸다. 심사 노트에 "루비는 현금 구매·환금 불가한 앱 안 포인트" 명시(`privacy.md:103`). 4+ 가 필요하면 판돈·자정 상품 제거가 먼저(사용자 결정) |
 | 5 | **처리방침이 폰 현실과 어긋남** — `docs/privacy.md` 는 맥 중심이고 폰 절에 "가입을 받지 않습니다"(`:102`), "계정·기록 삭제는 제보로 요청"(`:118`) 이 적혀 있다. 작업 B·C 뒤엔 거짓이 되고, 지침 5.1.1(i) 은 보존·삭제 정책과 삭제 요청 방법을 요구한다. **그리고 오목이 통째로 빠져 있다** — §2.1 라벨은 오목 대국 채팅(100자)을 '이메일 또는 문자 메시지' 로, 오목 신청·착수·결과·판돈을 '게임플레이 콘텐츠' 로 수집 신고하는데, `privacy.md` 에서 오목은 푸시 문장(`:108` "오목 신청") 한 마디뿐이다(`grep -n -e 오목 -e 판돈 -e 대국 docs/privacy.md` → 1건, 2026-09-18 — 표 안이라 정규식의 세로줄을 쓰지 않았다). 루비 항목(`:23`)의 늘고 주는 사유에도 오목 판돈·상금이 없고, 폰 절 첫 문장(`:95`)의 "같은 규칙" 목록에도 없다. 맥 앱도 0.3.27 부터 오목이 있으니 폰과 무관하게 이미 라벨과 처리방침이 어긋난 상태다 | 5.1.1(i) | `privacy.md:23, 93-118`, §2.1 표의 오목 두 행, `SupabaseWorkService.swift:1255-1285`(채팅·나가기·음소거 RPC), `SupabaseWorkModels.swift:3567`(100자) | 작업 B·C 병합 뒤 폰 절을 고친다: 폰 가입(별명·이메일·비밀번호·센터·팀 코드/팀 만들기), 앱 안 계정 삭제(무엇이 지워지고 제보는 익명화된다 — SPEC 서버 계약 `feedback_reports.user_id set null`), 빈 팀 자동 삭제. **오목 항목은 병합을 기다릴 것 없이 지금 "수집하는 데이터" 에 더한다** — 서버 사실은 `supabase/migrations/20260916120000_gomoku_duel.sql`(표 `:129-157`, 청소 `:1426-1433`, 로비 `:1468-1470`)·`20260916200000_gomoku_chat.sql`(표 `:144-154`, 청소 `:52-58, 116`, 나가기 `:511-514`): (a) **대국 기록** — 신청자·상대·판돈(3/5/10)·상태·판·착수·결과·사유·승자·시각. 두 당사자만 조회하고, 로비에는 앱 사용자 전체에게 별명·아바타·근무 중·**대국 중 여부**(`users[].in_match`)가 보인다. 끝난 판의 착수는 30일 뒤, 거절·취소·만료된 신청은 1일 뒤 서버가 지우며, 끝난 판의 결과 행은 전적(승·무·패)으로 남는다. (b) **대국 채팅** — 본문 100자(또는 빠른 문구 코드)·보낸 사람·시각, 두 당사자만. 둘 다 결과 화면을 닫으면 즉시 삭제, 한쪽이 안 닫아도 끝난 지 1일 뒤 삭제(`gomoku_chat_retention_days`). 판마다 상대 채팅 끄기(음소거)는 판 행에 저장돼 **상대에게 표시된다**. (c) **루비**(`:23`) — "오목 판돈으로 줄고, 이기면 두 사람 몫을 받으며, 무승부면 돌려받는다" 를 늘고 주는 사유에 더한다. (d) 폰 절(`:95`) "같은 규칙" 목록에 오목 추가. 그다음 §4 URL 로 게시하고 앱 설정에 링크 |
 | 6 | **업데이트 필요 화면이 TestFlight 를 연다** — 스토어 사용자는 TestFlight 가 없다 | 사용자 경험 | `MobileSessionStore.swift:668-671`(`updateBody` "TestFlight 에서…", `itms-beta://`) | 스토어 빌드에선 App Store 페이지(`itms-apps://apps.apple.com/app/id<APP_ID>`)로 바꾼다 — 앱 ID 는 App Store Connect 에서 앱을 만든 뒤 나온다. 코드 변경(작업 범위 밖) |
@@ -373,7 +380,7 @@ shoot 06-me.png         me                                            light
 ## 8. 제출 체크리스트 (순서)
 
 1. 작업 A·B·C 병합 → 전체 스위트 초록 → `ios/scripts/build-sim.sh` 통과.
-2. 위험 5·6·7 코드·문서 수정(별도 작은 작업) → `docs/privacy.md` 개정(가입·계정 삭제·빈 팀 + **오목 대국 기록·채팅·판돈** — 위험 5 의 (a)~(d)) → GitHub Pages 게시(§4) → 앱 설정에 처리방침 링크.
+2. **차단·신고 서버 마이그레이션 적용**(위험 3 — 사람이 `supabase db push`) → 두 계정으로 차단·신고 한 바퀴 확인. 그다음 위험 5·6·7 코드·문서 수정(별도 작은 작업) → `docs/privacy.md` 개정(가입·계정 삭제·빈 팀 + **오목 대국 기록·채팅·판돈** — 위험 5 의 (a)~(d)) → GitHub Pages 게시(§4) → 앱 설정에 처리방침 링크.
 3. 운영: 숨김 심사 계정 A·B 생성(§5.1) · 루비 지급 · 두 계정으로 폰 e2e 한 바퀴(`ios/UITests/AingCheckE2ETests.swift`).
 4. 스크린샷 6장(§6) → 알파 없음 확인.
 5. App Store Connect: 앱 생성(번들 ID·SKU·기본 언어 ko) → §1 문안 → §2 라벨 → §3 설문 → §4 URL → §5 노트·데모 계정·연락처 → 빌드 선택(`MARKETING_VERSION` 을 `1.0.0` 으로 올릴지 결정 — 지금 `0.1.0`) → 제출.

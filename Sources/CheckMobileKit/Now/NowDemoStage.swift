@@ -7,6 +7,12 @@ import Foundation
 ///
 /// - goal: 주간 목표 시트 · undo: 첫 할 일을 지운 뒤 되돌리기 토스트(닫히지 않게 붙잡음) · edit: 둘째 할 일 수정 중 · old: 오래된 항목 펼침
 /// - working: 지금 근무 중 절까지 스크롤
+///
+/// 무소속 합류 카드(라우트 `now/teamless` — 소속 픽스처가 빈 배열이다):
+///
+///     simctl launch <기기> com.yehsung.aingcheck -AingCheckDemo YES -AingCheckDemoRoute now/teamless -AingCheckDemoNow teamjoin|teamcreate
+///
+/// - teamjoin: 팀 코드를 채우고 미리보기("팀 아잉 데모팀 · 6명 · 주 40시간")까지 · teamcreate: 팀 만들기 칸(이름 · 주간 목표)
 @MainActor
 enum NowDemoStage {
     static let argument = "-AingCheckDemoNow"
@@ -35,10 +41,24 @@ enum NowDemoStage {
         return false
     }
 
-    /// 탭 화면 단 장면(시트 · 토스트).
+    /// 무소속(팀 없음)으로 설 때까지. 합류 카드 장면은 팀 상태·할 일이 오지 않으므로 `waitForData` 를 못 쓴다.
+    static func waitForTeamless(_ store: NowStore) async -> Bool {
+        for _ in 0..<120 {
+            if store.hasNoTeam { return true }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return false
+    }
+
+    /// 탭 화면 단 장면(시트 · 토스트 · 무소속 합류 카드).
     static func apply(store: NowStore, openGoalSheet: () -> Void) async {
         let stages = stages()
-        guard store.context.isDemo, !stages.isEmpty, await waitForData(store) else { return }
+        guard store.context.isDemo, !stages.isEmpty else { return }
+        if stages.contains("teamjoin") || stages.contains("teamcreate") {
+            await applyTeamJoin(store: store, stages: stages)
+            return
+        }
+        guard await waitForData(store) else { return }
         if stages.contains("goal") {
             openGoalSheet()
         }
@@ -48,6 +68,20 @@ enum NowDemoStage {
                 store.deleteTodo(first.id)
             }
         }
+    }
+
+    /// 무소속 합류 카드를 채운다(앱스토어 스크린샷). 합류·생성 **왕복은 내지 않는다** — 카드가 화면에 남아 있어야 찍는다.
+    private static func applyTeamJoin(store: NowStore, stages: Set<String>) async {
+        guard await waitForTeamless(store) else { return }
+        let join = store.teamJoin
+        if stages.contains("teamcreate") {
+            join.toggleCreateTeamMode()
+            join.form.createTeamName = "새벽 러너스"
+            join.form.createTeamGoalHours = 50
+            return
+        }
+        join.form.teamCode = "AING7K2Q"
+        await join.form.previewTeamCode().value
     }
 }
 #endif

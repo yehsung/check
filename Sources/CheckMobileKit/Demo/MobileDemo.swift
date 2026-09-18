@@ -12,8 +12,10 @@ import Foundation
 /// - 실시간 없음(소켓 nil) · 키체인·App Group 을 건드리지 않는다(메모리 금고 · 임시 저장소 — 실행마다 비운다).
 /// - 화면 모드: `-AingCheckDemoAppearance light|dark|system`(없으면 시스템). 실행 중 바꾸기는 `MobileAppearanceDemo`(Darwin 알림).
 ///
-/// 라우트: `now|messages|messages/<peer>|rankings/league|rankings/tokens|rankings/minigame|games|games/timing|games/flappy|
+/// 라우트: `now|now/teamless|messages|messages/<peer>|rankings/league|rankings/tokens|rankings/minigame|games|games/timing|games/flappy|
 /// games/gomoku/lobby|games/gomoku/match|me|me/shop|me/feedback|me/settings|login|update` (`AingRoute(path:)` 로 연다).
+/// `now/teamless` 는 **탭 라우트가 아니라 서버 상태 장면**이다(`update` 와 같은 갈래) — 소속 픽스처가 빈 배열이라 지금 탭이
+/// 무소속 합류 카드로 선다. `AingRoute` 로 열리지 않으므로 라우터는 기본 탭(지금)에 그대로 머문다.
 /// 로그인 아래 화면(w16 — 앱스토어 스크린샷): `signup`(코드 합류) · `signup/create`(팀 만들기) ·
 /// `signup/confirm`(가입 이메일 인증코드 — 미확인 계정의 출구) · `reset`(비밀번호 재설정) —
 /// `MobileAuthRoute.demo` 가 열고, 픽스처는 `Demo/Fixtures/session/`(가입·합류·생성·재설정 3단 · 인증코드 재전송/검증 응답).

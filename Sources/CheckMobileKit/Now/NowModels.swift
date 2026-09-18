@@ -26,7 +26,9 @@ package enum NowText {
     package static let connectionLost = "연결 끊김"
     package static let todayLabel = "오늘 누적"
     package static let noTeamTitle = "팀에 속해 있지 않아요"
-    package static let noTeamBody = "맥 앱에서 팀에 참여하면 근무 시간과 주간 목표가 여기에 보여요"
+    /// 예전엔 "맥 앱에서 팀에 참여하면 …"이었다. 폰에서 팀에 들어갈 길이 가입 화면 하나뿐이라, 인증 출구로 들어왔거나
+    /// 가입 도중 앱을 껐던 사람은 **맥 없이는 영영 팀에 못 들어갔다**(w16 검증 high) — 이 카드가 그 자리를 받는다.
+    package static let noTeamBody = "팀 코드로 합류하거나 새 팀을 만들면 근무 시간과 주간 목표가 여기에 보여요"
     package static let loadFailed = "지금 상태를 불러오지 못했어요. 아래로 당겨 다시 시도해 주세요"
     /// 네트워크 실패 띠 — 탭 공용 문장(`MobileLoadText.checkConnection`). 절마다 [다시 시도]가 곁에 있다.
     package static let networkFailed = MobileLoadText.checkConnection

@@ -55,14 +55,35 @@ package final class MobileSignUpStore {
     /// 소속 센터의 **서버값**(`CenterLabel.seoul`/`busan`). **nil = 미선택이 기본이다** — 맥 `signupCenter` 와 같은 이유:
     /// 기본을 서울로 두면 부산 연수생이 아무것도 안 하고 서울로 잡히고, 본인은 고르지 않았다는 사실조차 모른다.
     package var center: String?
-    /// 코드 입력 ↔ 팀 만들기. 가입은 항상 코드 입력으로 시작한다(맥 `switchMode` 와 같다 — 데모 스크린샷만 만들기로 시작).
-    package var isCreateTeamMode: Bool
-    package var teamCode = ""
+    /// 팀 칸 한 벌(코드 ↔ 만들기 · 미리보기 · 왕복). **'지금' 탭 무소속 카드와 같은 물건**이다(`MobileTeamJoinForm`) —
+    /// 아래 프로퍼티들은 그 값을 그대로 지나 보낸다(화면·테스트가 보는 이름은 한 글자도 바뀌지 않는다).
+    @ObservationIgnored package let teamForm: MobileTeamJoinForm
+
+    package var isCreateTeamMode: Bool {
+        get { teamForm.isCreateTeamMode }
+        set { teamForm.isCreateTeamMode = newValue }
+    }
+    package var teamCode: String {
+        get { teamForm.teamCode }
+        set { teamForm.teamCode = newValue }
+    }
     /// 미리보기 결과(nil = 미확인/불일치). 코드 모드 가입은 이것이 있어야 시작된다.
-    package var joinPreview: TeamJoinPreview?
-    package var joinPreviewMessage = ""
-    package var createTeamName = ""
-    package var createTeamGoalHours = MobileSignUpStore.defaultGoalHours
+    package var joinPreview: TeamJoinPreview? {
+        get { teamForm.joinPreview }
+        set { teamForm.joinPreview = newValue }
+    }
+    package var joinPreviewMessage: String {
+        get { teamForm.joinPreviewMessage }
+        set { teamForm.joinPreviewMessage = newValue }
+    }
+    package var createTeamName: String {
+        get { teamForm.createTeamName }
+        set { teamForm.createTeamName = newValue }
+    }
+    package var createTeamGoalHours: Int {
+        get { teamForm.createTeamGoalHours }
+        set { teamForm.createTeamGoalHours = newValue }
+    }
     /// 화면 한 줄(거절 이유 · 실패 원인 · 코드 화면의 안내). 미리보기 문구는 `joinPreviewMessage` 로 따로 간다(코드 칸 바로 아래).
     package private(set) var notice: String?
     package private(set) var isSubmitting = false
@@ -76,8 +97,6 @@ package final class MobileSignUpStore {
     /// 계정을 만들어 받은 세션. 팀이 정해질 때까지 **여기서만** 쥔다(머리 주석). 테스트가 읽는다.
     @ObservationIgnored package private(set) var createdSession: SupabaseSession?
     @ObservationIgnored private var createdEmail = ""
-    /// 코드 미리보기 재입력 경합 방지(마지막 요청 우선). 세션과 무관 — 비로그인에서 쓴다.
-    @ObservationIgnored private var previewGeneration = 0
     /// 코드 화면의 왕복 세대(늦은 응답 버리기). 미리보기와 따로 센다.
     @ObservationIgnored private var confirmGeneration = 0
     /// 발송 차수 — 0 이면 다음 잠금은 5초, 그 뒤는 60초(재설정 `consumeResendCooldownSeconds` 와 같은 규칙).
@@ -92,15 +111,15 @@ package final class MobileSignUpStore {
     @ObservationIgnored private let session: MobileSessionStore
     @ObservationIgnored private let clock: MobileClock
 
-    /// 맥 `createTeamGoalHours` 기본값 · `WeeklyGoalStepper` 범위와 같다.
-    package nonisolated static let defaultGoalHours = 60
-    package nonisolated static let goalHoursRange = 1...168
+    /// 맥 `createTeamGoalHours` 기본값 · `WeeklyGoalStepper` 범위와 같다(값의 주인은 팀 칸 한 벌).
+    package nonisolated static let defaultGoalHours = MobileTeamJoinForm.defaultGoalHours
+    package nonisolated static let goalHoursRange = MobileTeamJoinForm.goalHoursRange
 
     package init(session: MobileSessionStore, createTeam: Bool = false) {
         self.session = session
         self.service = session.service
         self.clock = session.clock
-        self.isCreateTeamMode = createTeam
+        self.teamForm = MobileTeamJoinForm(service: session.service, createTeam: createTeam)
         // 로그인 칸에 남아 있던 주소를 미리 채운다(가입하러 온 사람이 방금 로그인에 실패한 그 주소가 거의 항상 정답이다).
         if let stored = session.storedEmail { email = stored }
     }
@@ -188,57 +207,20 @@ package final class MobileSignUpStore {
     }
 
     /// 코드 칸 아래 한 줄: 안내/실패·확인 중(문구) · 찾은 팀 요약. 없으면 nil.
-    ///
-    /// **문구가 요약보다 먼저다.** 문구는 요약보다 늘 나중 사실이다(새 코드를 확인하기 시작했거나, 서버가 요약을 부정했거나).
-    /// 요약을 먼저 돌려주면 문구를 세우고 요약을 안 지운 모든 곳이 화면에서 사라진다 — join_team 0행의 '다른 센터 팀이에요' 가
-    /// 스토어 필드에만 있고 화면엔 성공 요약 + [참여하기] 만 남았던 결함(w16 검증)이 그 첫 사례였다.
-    package var previewLine: (text: String, isSuccess: Bool)? {
-        if !joinPreviewMessage.isEmpty { return (joinPreviewMessage, false) }
-        if let joinPreview { return (MobileSignUpText.previewLine(joinPreview), true) }
-        return nil
-    }
+    /// **문구가 요약보다 먼저다** — 그 까닭은 `MobileTeamJoinForm.previewLine` 에 있다(w16 검증 결함).
+    package var previewLine: (text: String, isSuccess: Bool)? { teamForm.previewLine }
 
-    // MARK: - 팀 코드 미리보기(맥 previewTeamCode/performPreviewTeamCode)
+    // MARK: - 팀 코드 미리보기(맥 previewTeamCode/performPreviewTeamCode — 규칙은 `MobileTeamJoinForm`)
 
     /// 디바운스는 화면 몫이고 여기선 재입력 경합만 막는다(마지막 요청 우선). 테스트가 기다릴 수 있게 Task 를 돌려준다.
     @discardableResult
-    package func previewTeamCode() -> Task<Void, Never> {
-        previewGeneration &+= 1
-        return Task { await performPreviewTeamCode() }
-    }
+    package func previewTeamCode() -> Task<Void, Never> { teamForm.previewTeamCode() }
 
-    package func performPreviewTeamCode() async {
-        let generation = previewGeneration
-        let code = teamCode
-        let normalized = SupabaseWorkService.normalizeInviteCode(code)
-        guard !normalized.isEmpty else {
-            joinPreview = nil
-            joinPreviewMessage = ""
-            return
-        }
-        joinPreviewMessage = MobileSignUpText.previewChecking
-        do {
-            let preview = try await service.lookupTeamByCode(code: code)
-            guard generation == previewGeneration else { return }
-            if let preview {
-                joinPreview = preview
-                joinPreviewMessage = ""
-            } else {
-                joinPreview = nil
-                joinPreviewMessage = MobileSignUpText.previewMiss
-            }
-        } catch {
-            guard generation == previewGeneration else { return }
-            joinPreview = nil
-            joinPreviewMessage = MobileSignUpText.previewMiss
-        }
-    }
+    package func performPreviewTeamCode() async { await teamForm.performPreviewTeamCode() }
 
     /// 코드 입력 ↔ 팀 만들기 전환. 이전 코드 미리보기 잔상을 지워 혼동을 막는다(맥 `toggleCreateTeamMode`).
     package func toggleCreateTeamMode() {
-        isCreateTeamMode.toggle()
-        joinPreview = nil
-        joinPreviewMessage = ""
+        teamForm.toggleCreateTeamMode()
         notice = nil
     }
 
@@ -296,18 +278,9 @@ package final class MobileSignUpStore {
 
     /// 코드 모드: 미리보기가 확인되어야(joinPreview != nil) 가입 가능. 만들기 모드: 팀 이름 필수. (맥 signUp())
     private func teamFieldsAreReady() -> Bool {
-        if isCreateTeamMode {
-            guard !createTeamName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                notice = MobileSignUpText.teamNameRequired
-                return false
-            }
-        } else {
-            guard joinPreview != nil else {
-                notice = MobileSignUpText.codeUnverified
-                return false
-            }
-        }
-        return true
+        guard let message = teamForm.guardMessage() else { return true }
+        notice = message
+        return false
     }
 
     private func performSignUp(email: String, password: String, displayName: String, center: String) async {
@@ -359,45 +332,23 @@ package final class MobileSignUpStore {
     }
 
     /// 팀 단계를 **왕복 없이** 시작할 수 있는가(문구를 세우지 않는 순수 판정 — 가드 문구는 `teamFieldsAreReady()` 몫).
-    private var teamFieldsArePrepared: Bool {
-        isCreateTeamMode ? !createTeamName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty : joinPreview != nil
-    }
+    private var teamFieldsArePrepared: Bool { teamForm.isPrepared }
 
     /// 계정이 있는 상태에서 팀을 정한다(맥 `joinTeamAfterSignup` / `createTeamAfterSignup`). 실패는 `.teamless` 로 남긴다.
+    /// 왕복·문구는 팀 칸 한 벌(`MobileTeamJoinForm`)이 쥐고, 여기서는 **이 화면의 단계**만 정한다.
     private func performTeamStep(session created: SupabaseSession, email: String) async {
-        if isCreateTeamMode {
-            let name = createTeamName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let goal = createTeamGoalHours
-            do {
-                let team = try await service.createTeam(accessToken: created.accessToken, name: name, goalHours: goal)
-                notice = nil
-                stage = .createdTeam(code: team.inviteCode)
-            } catch {
-                stage = .teamless
-                notice = failureMessage(error, fallback: MobileSignUpText.createTeamFailed)
-            }
-            return
-        }
-        let code = teamCode
-        do {
-            let joined = try await service.joinTeam(accessToken: created.accessToken, code: code)
-            guard joined != nil else {
-                // ★ **여기까지 왔으면 코드는 맞았다** — 미리보기(`lookup_team_by_code`)가 팀을 찾아 `joinPreview` 를 세웠다.
-                //   그런데도 서버가 0행을 냈다면 남은 이유는 하나다: **다른 센터 팀**이다(`join_team` 의 센터 게이트,
-                //   20260912185423_join_team_center_gate.sql — 둘 다 알 때만 막고, 0행은 코드 불일치와 같은 모양이다).
-                //   "코드를 확인해 주세요"라고 말하면 사용자는 멀쩡한 코드를 몇 번이고 다시 친다(맥 performJoinTeamWithCode 주석).
-                //   미리보기는 **비운다** — 서버가 '이 팀엔 못 들어간다' 고 답한 뒤에도 요약을 두면 (1) 화면 줄이 요약을 그려 이 문구가
-                //   안 보이고 (2) 같은 코드로 [참여하기] 가 헛왕복(같은 0행)을 무한히 돈다. 비우면 같은 코드 재제출은 가드가
-                //   왕복 없이 막고, 다른 코드를 치면 미리보기부터 다시 선다.
-                stage = .teamless
-                joinPreview = nil
-                joinPreviewMessage = MobileSignUpText.teamlessJoinBlocked
-                return
-            }
+        switch await teamForm.performTeamStep(accessToken: created.accessToken) {
+        case .settled(.created(_, _, let inviteCode, _)):
+            notice = nil
+            stage = .createdTeam(code: inviteCode)
+        case .settled(.joined):
             adopt(created, email: email)
-        } catch {
+        case .settled(.blocked):
+            // 코드 칸 아래 줄은 폼이 이미 '다른 센터 팀이에요' 로 바꿔 놓았다 — 여기선 무소속으로 남겨 다시 치게 한다.
             stage = .teamless
-            notice = failureMessage(error, fallback: MobileSignUpText.joinFailed)
+        case .failed(let message):
+            stage = .teamless
+            notice = message
         }
     }
 
@@ -565,17 +516,13 @@ package final class MobileSignUpStore {
     /// 서버의 계정은 미확인으로 남고, 다음에 로그인/가입을 시도하면 그 문구의 출구가 다시 코드 화면으로 데려온다.
     package func cancelPendingWork() {
         confirmGeneration &+= 1
-        previewGeneration &+= 1
+        teamForm.cancelPendingPreview()
         cooldownTask?.cancel()
         cooldownTask = nil
     }
 
     private func failureMessage(_ error: Error, fallback: String) -> String? {
-        switch AuthErrorRules.classify(error) {
-        case .cancelled: return nil
-        case .transient: return MobileSessionText.network
-        case .fatal: return AuthErrorRules.message(for: error, fallback: fallback)
-        }
+        MobileTeamJoinForm.failureMessage(error, fallback: fallback)
     }
 
     /// 로그인 성공과 같은 길(세션 스토어 `adoptSignedInSession`). 이미 다른 세션이 들어와 있으면(있을 수 없지만) 덮지 않는다.

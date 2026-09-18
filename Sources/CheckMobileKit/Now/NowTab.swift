@@ -153,29 +153,23 @@ struct NowStatusSection: View {
     let onEditGoal: () -> Void
 
     var body: some View {
-        Section {
-            // 오늘 누적은 1초마다 폰이 센다(서버 세션 시작 시각 기준). 시각은 스토어 시계에서만 읽는다(데모는 멈춘 시계).
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
-                content(now: store.context.clock.now())
+        if store.hasNoTeam {
+            // 무소속: 안내만 하고 끝내면 맥 없는 사람은 앱을 못 쓴다 — 여기가 팀에 들어가는 자리다(w16 검증 high).
+            NowTeamJoinSection(store: store.teamJoin)
+        } else {
+            Section {
+                // 오늘 누적은 1초마다 폰이 센다(서버 세션 시작 시각 기준). 시각은 스토어 시계에서만 읽는다(데모는 멈춘 시계).
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    content(now: store.context.clock.now())
+                }
+                .cardSegmentRow(.single, padding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
             }
-            .cardSegmentRow(.single, padding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
         }
     }
 
     @ViewBuilder
     private func content(now: Date) -> some View {
-        if store.hasNoTeam {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(NowText.noTeamTitle)
-                    .font(.headline)
-                    .foregroundStyle(MobileTheme.label)
-                Text(NowText.noTeamBody)
-                    .font(.subheadline)
-                    .foregroundStyle(MobileTheme.label2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .accessibilityElement(children: .combine)
-        } else if let card = store.myCard(now: now) {
+        if let card = store.myCard(now: now) {
             NowStatusCard(card: card, characterID: store.displayedCharacterID, onEditGoal: onEditGoal)
         } else if store.teamLoadState == .failed {
             // 시도는 끝났는데 모른다(오프라인 · 5xx) — 도는 요청이 없는데 "불러오는 중"을 남기지 않는다.

@@ -30,6 +30,9 @@ package final class NowStore {
     package private(set) var membership: NowMembership?
     /// 멤버십 조회가 "소속 없음"으로 확정됐다.
     package private(set) var hasNoTeam = false
+    /// 방금 팀에 들어갔는데(합류·생성) 아직 소속을 못 읽었다. 그 한 왕복 동안은 무소속 카드도, 실패 줄도 아니고 **스피너**다 —
+    /// 무소속 카드를 그대로 두면 방금 들어간 사람이 코드를 또 친다.
+    package private(set) var isSettlingTeam = false
     package private(set) var teamMembers: [TeamMemberStatus] = []
     /// 팀 상태를 받은 시각(nil = 아직 못 받음). 오늘·이번 주 경계 판정의 기준이고, 끊김 판정도 이 시각에 한다(`presenceJudgedAt`).
     package private(set) var teamFetchedAt: Date?
@@ -48,6 +51,11 @@ package final class NowStore {
 
     package private(set) var isSavingGoal = false
     package private(set) var goalNotice: String?
+
+    // MARK: 팀 합류(무소속 카드)
+
+    /// 무소속 카드의 팀 합류·만들기(가입 화면과 같은 왕복·가드·문구 — `NowTeamJoinStore`).
+    @ObservationIgnored package let teamJoin: NowTeamJoinStore
 
     // MARK: 할 일
 
@@ -70,6 +78,9 @@ package final class NowStore {
     @ObservationIgnored private var refreshRerun = false
     /// 목표를 저장할 때마다 +1. 그 전에 떠난 멤버십 조회가 옛 목표로 되돌리지 못하게 한다(맥 `teamGoalWriteGeneration`).
     @ObservationIgnored private var goalWriteSerial = 0
+    /// 팀이 정해질 때마다 +1(합류·생성). 그 전에 떠난 멤버십 조회가 **"소속 없음"으로 되돌리지 못하게** 한다 —
+    /// 60초 주기 새로고침이 도는 동안 [합류]를 누르면 그 조회는 합류 전 상태를 싣고 온다(목표 저장의 `goalWriteSerial` 과 같은 장치).
+    @ObservationIgnored private var teamSettleSerial = 0
     @ObservationIgnored package private(set) var isActive = false
     /// 실제로 돈 새로고침 횟수(테스트).
     @ObservationIgnored package private(set) var refreshCount = 0
@@ -102,6 +113,7 @@ package final class NowStore {
         let scheduler = NowPausableScheduler(base: timers)
         todos = list
         todoScheduler = scheduler
+        teamJoin = NowTeamJoinStore(context: context)
         todoSync = TodoSync(
             list: list,
             transport: NowTodoSyncTransport(context: context),
@@ -110,7 +122,23 @@ package final class NowStore {
         )
         list.onLocalChange = { [weak self] in self?.todoSync.noteLocalChange() }
         list.syncProtectedIDs = { [weak self] in self?.protectedTodoIDs ?? [] }
+        teamJoin.onTeamSettled = { [weak self] in self?.adoptSettledTeam() }
         observeTodos()
+    }
+
+    /// 무소속 카드에서 팀이 정해졌다(합류·생성). **역할·팀 상태는 서버에서 다시 읽는다** — `join_team`/`create_team` 은 역할을
+    /// 돌려주지 않아 지어내면 한 왕복 동안 거짓말이 된다(맥 `confirmMembership` 과 같은 규칙).
+    /// 그동안 무소속 카드는 내린다(`isSettlingTeam` → 스피너). 재로그인은 요구하지 않는다 — 세션은 그대로다.
+    private func adoptSettledTeam() {
+        teamSettleSerial &+= 1
+        isSettlingTeam = true
+        hasNoTeam = false
+        teamMembers = []
+        teamFetchedAt = nil
+        teamStatusFailedSinceFetch = false
+        refresh()
+        // 팀 이름·역할은 다른 탭(나 탭 설정 · 머리)도 읽는다 — 로그인 직후와 같은 길로 한 번 채운다.
+        Task { [context] in await context.session.refreshProfile() }
     }
 
     package var badgeCount: Int { 0 }
@@ -148,6 +176,9 @@ package final class NowStore {
         refreshRerun = false
         membership = nil
         hasNoTeam = false
+        isSettlingTeam = false
+        teamSettleSerial &+= 1
+        teamJoin.reset()
         teamMembers = []
         teamFetchedAt = nil
         teamStatusFailedSinceFetch = false
@@ -222,6 +253,7 @@ package final class NowStore {
         guard context.session.isSignedIn, let userID = context.session.userID else { return }
         let generation = context.generation
         let goalSerial = goalWriteSerial
+        let settleSerial = teamSettleSerial
         let service = context.service
         isRefreshing = true
         refreshCount += 1
@@ -245,14 +277,18 @@ package final class NowStore {
                 }
                 if membership != next { membership = next }
                 hasNoTeam = false
+                isSettlingTeam = false
                 teamID = row.teamID
-            } else {
+            } else if settleSerial == teamSettleSerial {
                 membership = nil
                 hasNoTeam = true
+                isSettlingTeam = false
                 teamMembers = []
                 teamFetchedAt = nil
                 teamStatusFailedSinceFetch = false
             }
+            // 그 밖: 이 조회는 **합류가 끝나기 전에** 떠났다 — 싣고 온 "소속 없음"은 이미 지난 사실이라 되돌리지 않는다
+            // (합류가 건 새로고침이 곧 진짜 소속을 싣고 온다 — `adoptSettledTeam`).
         } catch {
             guard stillCurrent() else { return }
             failures.append(error)
@@ -356,6 +392,8 @@ package final class NowStore {
 
     /// 내 카드 자리를 어떻게 그릴지(불러오는 중 · 불러오지 못함 · 받음).
     package var teamLoadState: NowLoadState {
+        // 방금 팀에 들어갔다 — 소속을 다시 읽는 한 왕복 동안은 스피너다(무소속 카드를 다시 보이면 코드를 또 친다).
+        if isSettlingTeam { return .loading }
         if hasNoTeam || hasLoadedTeam { return .loaded }
         return hasFinishedRefreshAttempt ? .failed : .loading
     }
@@ -363,6 +401,7 @@ package final class NowStore {
     /// "지금 근무 중" 자리를 어떻게 그릴지. 우리 팀 상태를 받았으면 받음(다른 팀은 받아 둔 디렉터리로).
     /// 소속이 없으면 디렉터리가 전부라 디렉터리를 받아야 받음 — 못 받았는데 "근무 중인 사람이 없어요"라고 하지 않는다.
     package var workingLoadState: NowLoadState {
+        if isSettlingTeam { return .loading }
         if hasLoadedTeam || (hasNoTeam && hasLoadedDirectory) { return .loaded }
         return hasFinishedRefreshAttempt ? .failed : .loading
     }
@@ -683,6 +722,8 @@ package final class NowStore {
         let card = myCard(now: now)
         let noTeam = hasNoTeam
         let hasMembership = membership != nil
+        // 방금 팀에 들어갔다 — 소속을 읽는 동안 위젯에 "팀에 참여하면" 을 남기지 않는다(모름 = "앱을 열면 채워져요").
+        let settling = isSettlingTeam
         let people = (hasLoadedTeam || hasNoTeam) ? workingPeople(now: now) : nil
         let previews = todoSync.userID == userID ? widgetTodoPreviews() : nil
         let characterID = knownEquippedCharacterID
@@ -702,7 +743,7 @@ package final class NowStore {
                 )
             } else if noTeam {
                 snapshot.me = Self.widgetNoTeamMe
-            } else if hasMembership, snapshot.me == Self.widgetNoTeamMe {
+            } else if hasMembership || settling, snapshot.me == Self.widgetNoTeamMe {
                 // 소속이 생겼는데 팀 상태는 아직 모른다 — "팀에 참여하면" 안내를 남기지 않는다(모름 = "앱을 열면 채워져요").
                 snapshot.me = nil
             }

@@ -102,7 +102,10 @@ import Testing
 
     /// 데모 라우트(`MobileDemo` 머리 주석 · SPEC-ios-build §1-8)와 탭 작업자가 더한 결과 장면.
     static let demoRoutes = [
-        "now", "messages", "rankings/league", "rankings/tokens", "rankings/minigame", "games", "games/timing", "games/flappy",
+        "now",
+        // 서버 상태 장면(`update` 와 같은 갈래 — 탭 라우트가 아니다): 소속이 빈 배열이라 지금 탭이 무소속 합류 카드로 선다.
+        "now/teamless",
+        "messages", "rankings/league", "rankings/tokens", "rankings/minigame", "games", "games/timing", "games/flappy",
         "games/gomoku/lobby", "games/gomoku/match", "me", "me/shop", "me/feedback", "me/settings", "login", "update",
         // 나 탭 기록 없는 계정(w15 E): 라우트는 `me` 와 같게 열리고(끝 `/` 는 버려진다) 장면만 `_me-`.
         "me/",
@@ -123,8 +126,9 @@ import Testing
             if scene.hasPrefix("games-gomoku-match-") { candidates.append("games/gomoku/match/" + scene.dropFirst("games-gomoku-match-".count)) }
             let route = candidates.first { $0.replacingOccurrences(of: "/", with: "-").lowercased() == scene }
             #expect(route != nil, "장면 폴더 _\(scene) 에 맞는 데모 라우트가 없다")
-            // 탭 라우트만 `AingRoute` 로 열린다. 로그인 화면·업데이트 화면·로그인 아래 화면(가입·재설정)은 저쪽 길이다.
-            if let route, !["login", "update"].contains(route), MobileAuthRoute.demo(route) == nil {
+            // 탭 라우트만 `AingRoute` 로 열린다. 로그인 화면·업데이트 화면·로그인 아래 화면(가입·재설정)은 저쪽 길이고,
+            // `now/teamless` 는 **서버 상태 장면**이라(소속이 빈 배열) 열 라우트가 없다 — 기본 탭(지금)에 그대로 선다.
+            if let route, !["login", "update", "now/teamless"].contains(route), MobileAuthRoute.demo(route) == nil {
                 #expect(AingRoute(path: route) != nil, "장면 _\(scene) 의 라우트 \(route) 를 앱이 열지 못한다")
             }
         }

@@ -189,10 +189,12 @@ package final class MobileSignUpStore {
     /// 지금 안내가 "계정은 이미 있다"는 신호라 [인증 코드 받기] 출구를 달아야 하는가.
     /// **코어 매퍼(`AuthErrorRules`)의 문장을 그대로 읽는다** — 여기 글자를 따로 적으면 매퍼가 바뀌는 날 출구가 조용히 사라진다
     /// (맥 `offersSignUpConfirmationExit` 와 같은 근거).
+    /// ★ **"이미 가입된 이메일"에는 달지 않는다**(2026-09-18 배포 전 검토). 그 문구가 뜨는 계정은 인증을 마친 계정이라
+    ///   재전송해도 메일이 나가지 않는다 — 화면만 "새 코드를 보냈어요"라고 말하고 사람은 오지 않을 메일을 기다린다.
+    ///   미확인 계정은 (가입 확인을 켠 서버에서) 재가입하면 메일이 다시 가고 코드 화면으로 이어지며, 로그인하면
+    ///   "이메일 확인 필요"가 떠서 그 문구가 출구를 단다. 맥도 같은 규칙이다(WorkTimerStore.offersSignUpConfirmationExit).
     package nonisolated static func offersConfirmationExit(for message: String) -> Bool {
-        let alreadyRegistered = AuthErrorRules.message(for: SupabaseWorkServiceError.emailAlreadyRegistered, fallback: "")
-        let notConfirmed = AuthErrorRules.message(for: SupabaseWorkServiceError.emailNotConfirmed, fallback: "")
-        return message == alreadyRegistered || message == notConfirmed
+        message == AuthErrorRules.message(for: SupabaseWorkServiceError.emailNotConfirmed, fallback: "")
     }
 
     /// 가입 화면(계정 칸)에서 출구를 보일 것인가 — 코드 화면에선 이미 그 안에 있으므로 달지 않는다.

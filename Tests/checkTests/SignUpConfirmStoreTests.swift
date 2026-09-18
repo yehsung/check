@@ -594,11 +594,12 @@ private func expectNotSignedInAndNoTeamRoundTrip(_ store: WorkTimerStore, host: 
 
     // MARK: 영영 막히지 않는 출구
 
-    /// 가입 도중 앱을 닫은 사람이 다시 [가입]을 누르면 "이미 가입된 이메일"이다 — 그 문구에 출구가 있고, 출구는
-    /// 재전송 → 코드 입력 → 세션 → 팀 합류로 이어진다(폼에 남은 팀 코드로).
+    /// "이미 가입된 이메일"에는 **출구를 달지 않는다**(2026-09-18 배포 전 검토). 그 계정은 인증을 마친 계정이라
+    /// 재전송해도 메일이 나가지 않는데 화면만 "새 코드를 보냈어요"라고 말한다 — 그 사람이 할 일은 로그인이다.
+    /// 출구 자체가 도는지는 아래 "이메일 확인 필요" 테스트가 끝까지 잰다.
     @MainActor
     @Test
-    func alreadyRegisteredOffersExitThatResendsAndVerifies() async {
+    func alreadyRegisteredDoesNotOfferTheCodeExit() async {
         let host = "signup-otp-dup-exit"
         let store = makeSignUpStore(host: host)
         defer { stopBackground(store) }
@@ -607,7 +608,23 @@ private func expectNotSignedInAndNoTeamRoundTrip(_ store: WorkTimerStore, host: 
         await store.signUp()?.value
         #expect(store.syncMessage == "이미 가입된 이메일")
         #expect(store.signUpConfirmPhase == .idle)
-        #expect(WorkTimerStore.offersSignUpConfirmationExit(for: store.syncMessage))
+        #expect(!WorkTimerStore.offersSignUpConfirmationExit(for: store.syncMessage),
+                "오지 않을 메일을 기다리게 하는 출구다 — 이 문구엔 달지 않는다")
+        #expect(SignUpOTPURLProtocolStub.paths(forHost: host) == ["/auth/v1/signup"], "재전송이 나가면 안 된다")
+        expectNotSignedInAndNoTeamRoundTrip(store, host: host)
+    }
+
+    /// 출구를 **직접** 열었을 때의 흐름(로그인 카드의 "이메일 확인 필요"가 부르는 길과 같은 함수다):
+    /// 재전송 → 코드 입력 → 세션 → 팀 합류(폼에 남은 팀 코드로).
+    @MainActor
+    @Test
+    func theExitResendsAndVerifiesAndJoinsWithTheFormCode() async {
+        let host = "signup-otp-dup-exit-flow"
+        let store = makeSignUpStore(host: host)
+        defer { stopBackground(store) }
+        fillJoinSignUpForm(store)
+
+        await store.signUp()?.value
 
         // 출구: 로그인 카드의 링크가 지금 입력된 이메일을 그대로 넘긴다.
         await store.beginSignUpConfirmation(email: store.email)
@@ -752,8 +769,9 @@ private func expectNotSignedInAndNoTeamRoundTrip(_ store: WorkTimerStore, host: 
         #expect(PasswordResetFormModel.isInformational(WorkTimerStore.signUpConfirmResentMessage))
         #expect(!PasswordResetFormModel.isInformational(WorkTimerStore.passwordResetCodeRejectedMessage))
 
-        // 출구는 미확인 계정을 뜻하는 세 문구에만 달린다.
-        #expect(WorkTimerStore.offersSignUpConfirmationExit(for: "이미 가입된 이메일"))
+        // 출구는 **미확인 계정**을 뜻하는 두 문구에만 달린다. "이미 가입된 이메일"은 인증을 마친 계정이라
+        // 재전송해도 메일이 안 간다 — 달면 오지 않을 메일을 기다리게 한다(2026-09-18 배포 전 검토).
+        #expect(!WorkTimerStore.offersSignUpConfirmationExit(for: "이미 가입된 이메일"))
         #expect(WorkTimerStore.offersSignUpConfirmationExit(for: "이메일 확인 필요"))
         #expect(WorkTimerStore.offersSignUpConfirmationExit(for: "확인 메일 필요"))
         #expect(!WorkTimerStore.offersSignUpConfirmationExit(for: "로그인 필요"))

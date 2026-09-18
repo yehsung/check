@@ -326,7 +326,7 @@ import Testing
 
     // MARK: - 미확인 상태로 앱을 닫은 사람의 출구(이게 없으면 그 계정은 영영 못 쓴다)
 
-    @Test("이미 인증된 이메일로 가입: 200 + identities 빈 가짜 사용자를 '이미 가입된 이메일'로 판정하고 코드 화면 출구를 연다")
+    @Test("이미 인증된 이메일로 가입: 200 + identities 빈 가짜 사용자를 '이미 가입된 이메일'로 판정한다(출구는 달지 않는다) · 출구를 직접 열면 재전송 → 코드 → 무소속 → 합류")
     func alreadyRegisteredFakeUserOffersExit() async throws {
         let h = await makeHarness(responder: Self.server(signup: .json(Self.fakeUser)))
         defer { h.tearDown() }
@@ -336,10 +336,11 @@ import Testing
         // 422 가 아니라 200 이다 — 세션 없음을 코드 화면으로 오해하면 영영 오지 않을 메일을 기다린다.
         #expect(h.store.stage == .account)
         #expect(h.store.notice == AuthErrorRules.message(for: SupabaseWorkServiceError.emailAlreadyRegistered, fallback: ""))
-        #expect(h.store.offersConfirmationExit, "출구가 없으면 미확인 계정은 운영자가 풀어 주기 전까지 못 쓴다")
+        #expect(!h.store.offersConfirmationExit, "인증을 마친 계정에 재전송 출구를 달면 오지 않을 메일을 기다린다")
         await baseBarrier(h.service)
         #expect(h.count(path: "/auth/v1/verify") == 0)
 
+        // 아래는 출구 **자체**의 흐름이다(로그인 화면의 "이메일 확인 필요"가 부르는 길과 같은 함수).
         // 출구 → 재전송 → 코드 화면. 계정은 이미 있으므로 signup 은 다시 나가지 않는다.
         await h.store.beginConfirmation(email: "  Member@Example.com ")
         #expect(h.store.stage == .confirmCode)
@@ -371,7 +372,9 @@ import Testing
     @Test("출구 판정은 코어 매퍼의 문장을 읽는다(로그인 화면의 '이메일 확인 필요' 포함) · 형식이 아닌 주소로는 코드 화면을 열지 않는다")
     func exitRulesFollowCoreMessages() async throws {
         #expect(MobileSignUpStore.offersConfirmationExit(for: AuthErrorRules.message(for: SupabaseWorkServiceError.emailNotConfirmed, fallback: "")))
-        #expect(MobileSignUpStore.offersConfirmationExit(for: AuthErrorRules.message(for: SupabaseWorkServiceError.emailAlreadyRegistered, fallback: "")))
+        // "이미 가입된 이메일"은 **인증을 마친** 계정이라 재전송해도 메일이 안 간다 — 출구를 달면 오지 않을 메일을
+        // 기다리게 한다(2026-09-18 배포 전 검토, 맥과 같은 규칙).
+        #expect(!MobileSignUpStore.offersConfirmationExit(for: AuthErrorRules.message(for: SupabaseWorkServiceError.emailAlreadyRegistered, fallback: "")))
         #expect(!MobileSignUpStore.offersConfirmationExit(for: AuthErrorRules.message(for: SupabaseWorkServiceError.invalidLoginCredentials, fallback: "")))
         #expect(!MobileSignUpStore.offersConfirmationExit(for: MobileSessionText.network))
 

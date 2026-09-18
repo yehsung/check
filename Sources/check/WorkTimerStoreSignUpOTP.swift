@@ -35,12 +35,17 @@ extension WorkTimerStore {
     static let signUpConfirmHelpMessage = "이미 인증을 마친 계정이면 메일이 오지 않아요 · 그때는 로그인해 주세요"
 
     /// 로그인 카드가 [인증 코드 다시 받기] 출구를 달아야 하는 상태줄 문구인가(순수 — 값으로 검증한다).
-    /// "이미 가입된 이메일"(가입 재시도) · "이메일 확인 필요"(로그인 시도) · "확인 메일 필요"(코드 화면을 닫고 돌아온 사람).
-    /// 앞의 둘은 코어 매퍼(AuthErrorRules)의 문장을 그대로 읽는다 — 여기 글자를 따로 적으면 매퍼가 바뀔 때 출구가 조용히 사라진다.
+    /// "이메일 확인 필요"(로그인 시도) · "확인 메일 필요"(코드 화면을 닫고 돌아온 사람). 앞의 것은 코어 매퍼
+    /// (AuthErrorRules)의 문장을 그대로 읽는다 — 여기 글자를 따로 적으면 매퍼가 바뀔 때 출구가 조용히 사라진다.
+    ///
+    /// ★ **"이미 가입된 이메일"에는 달지 않는다**(2026-09-18 배포 전 검토에서 잡음). 그 문구가 뜨는 계정은 **인증을 마친**
+    ///   계정이다 — 지금 서버(가입 확인 꺼짐)에서는 모든 계정이 그렇고, 켠 서버에서도 GoTrue 는 미확인 계정의 재가입엔
+    ///   메일을 다시 보내며 코드 화면으로 이어질 뿐 이 문구를 주지 않는다(확인된 계정에만 identities 빈 가짜 사용자를 준다).
+    ///   즉 이 문구에서 재전송을 누르면 **메일이 한 통도 나가지 않는데** 화면은 "새 코드를 보냈어요"라고 말한다.
+    ///   그 사람이 할 일은 로그인이고, 문구가 이미 그렇게 말하고 있다.
     nonisolated static func offersSignUpConfirmationExit(for syncMessage: String) -> Bool {
-        let alreadyRegistered = AuthErrorRules.message(for: SupabaseWorkServiceError.emailAlreadyRegistered, fallback: "")
         let notConfirmed = AuthErrorRules.message(for: SupabaseWorkServiceError.emailNotConfirmed, fallback: "")
-        return syncMessage == alreadyRegistered || syncMessage == notConfirmed || syncMessage == "확인 메일 필요"
+        return syncMessage == notConfirmed || syncMessage == "확인 메일 필요"
     }
 
     // MARK: 진입/종료

@@ -3841,7 +3841,9 @@ func loginCardShowsTheSignUpConfirmationExitOnlyForUnconfirmedMessages() throws 
         return accentRowRuns(bitmap, top: 0, bottom: bitmap.pixelsHigh - 1).count
     }
     let plain = try linkRows("로그인 실패")
-    #expect(try linkRows("이미 가입된 이메일") == plain + 1, "'이미 가입된 이메일'엔 출구 링크 한 줄이 더 있어야 한다 (기준 \(plain))")
+    // "이미 가입된 이메일"은 **인증을 마친** 계정이라 재전송해도 메일이 안 간다 — 출구를 달면 오지 않을 메일을
+    // 기다리게 한다(2026-09-18 배포 전 검토). 출구는 미확인을 뜻하는 문구에만.
+    #expect(try linkRows("이미 가입된 이메일") == plain, "인증을 마친 계정에 코드 재전송 출구를 달면 안 된다 (기준 \(plain))")
     #expect(try linkRows("이메일 확인 필요") == plain + 1, "'이메일 확인 필요'엔 출구 링크 한 줄이 더 있어야 한다 (기준 \(plain))")
     #expect(try linkRows("로그인 정보 오류") == plain, "출구는 미확인 계정 문구에만 달린다")
 }

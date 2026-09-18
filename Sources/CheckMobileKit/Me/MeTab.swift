@@ -20,6 +20,8 @@ struct MeTab: View {
                     case .profile: MeProfileView(store: store)
                     case .feedback: MeFeedbackView(store: store)
                     case .settings: MeSettingsView(store: store)
+                    // 차단 목록은 메시지 스토어가 쥔다(차단은 메시지 관계다 — 나 탭이 같은 목록을 두 벌 갖지 않는다).
+                    case .blocked: MeBlockedPeopleView(messages: store.context.links.messages)
                     }
                 }
         }

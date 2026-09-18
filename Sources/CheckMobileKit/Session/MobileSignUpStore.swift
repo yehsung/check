@@ -549,6 +549,31 @@ package enum MobileSignUpText {
     package static let createdBody = "팀원에게 이 코드를 전달하세요"
     package static let accountCreatedNotice = "계정은 만들어졌어요 · 합류할 팀을 정해 주세요"
 
+    // 약관 동의 한 줄(앱스토어 심사 지침 1.2 — 사용자 생성 콘텐츠 앱은 약관에 동의를 받고, 그 약관에 무관용 규칙이 있어야 한다).
+    // 체크박스가 아니라 **버튼 아래 한 줄**인 이유: 가입 버튼을 누르는 것이 곧 동의라고 적는 방식(애플이 널리 받아들이는 형태)이고,
+    // 체크박스 하나가 더 늘면 가입 이탈만 는다. 두 링크는 실제로 열리는 페이지여야 한다(GitHub Pages — docs/terms.md · docs/privacy.md).
+    package static let termsAgreement = "가입하면 이용약관과 개인정보 처리방침에 동의하는 것으로 봅니다"
+    package static let termsLink = "이용약관"
+    package static let privacyLink = "개인정보 처리방침"
+    package static let termsURL = URL(string: "https://yehsung.github.io/check/terms")!
+    /// 나 → 설정의 처리방침 링크와 **같은 주소**여야 한다(`MeText.privacyPolicyURL`).
+    package static let privacyURL = URL(string: "https://yehsung.github.io/check/privacy")!
+
+    /// 위 한 줄에 두 링크를 심은 것(화면이 그대로 그린다). 링크는 **글자 안**에 있다 — 줄 밑에 버튼 두 개를 따로 두면
+    /// 가입 버튼 아래에 누를 것이 셋이 되어 주 동작이 흐려진다. 순수 값이라 macOS 테스트가 링크 둘을 값으로 잰다.
+    package static var termsAgreementAttributed: AttributedString {
+        var text = AttributedString(termsAgreement)
+        if let range = text.range(of: termsLink) {
+            text[range].link = termsURL
+            text[range].underlineStyle = .single
+        }
+        if let range = text.range(of: privacyLink) {
+            text[range].link = privacyURL
+            text[range].underlineStyle = .single
+        }
+        return text
+    }
+
     package static let signUp = "가입"
     package static let createAndStart = "팀 만들고 시작하기"
     package static let join = "참여하기"

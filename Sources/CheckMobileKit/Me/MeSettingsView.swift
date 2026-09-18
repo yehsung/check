@@ -34,6 +34,7 @@ struct MeSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: MobileTheme.space2) {
                 privacySection
+                safetySection
                 pushSection
                 appearanceSection
                     .id("appearance")
@@ -111,6 +112,43 @@ struct MeSettingsView: View {
                     GroupRow(divider: .none) {
                         InlineNotice(text: notice, kind: .error)
                     }
+                }
+            }
+        }
+    }
+
+    // MARK: 안전(차단한 사람)
+
+    /// 앱스토어 심사 지침 1.2 는 **차단한 사람을 되돌릴 수 있는 자리**를 요구한다 — 대화 화면에서 차단하고,
+    /// 푸는 곳은 여기 하나다. 목록과 해제는 메시지 스토어가 쥔다(이 화면은 밀어 넣기만 한다).
+    private var safetySection: some View {
+        section(MeText.safetySection) {
+            InsetGroup {
+                GroupRow(divider: .none, padding: EdgeInsets(top: 0, leading: MobileTheme.cardPadding, bottom: 0, trailing: MobileTheme.cardPadding)) {
+                    Button {
+                        store.context.router.push(MeDestination.blocked, on: .me)
+                    } label: {
+                        HStack(spacing: MobileTheme.space3) {
+                            Text(MessagesBlockText.blockedListTitle)
+                                .font(.body)
+                                .foregroundStyle(MobileTheme.label)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: MobileTheme.space2)
+                            Text(MessagesBlockText.blockedListMenuDetail)
+                                .font(.subheadline)
+                                .foregroundStyle(MobileTheme.label2)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(MobileTheme.label3)
+                                .accessibilityHidden(true)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: AingButtonMetrics.minimumTarget)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
                 }
             }
         }

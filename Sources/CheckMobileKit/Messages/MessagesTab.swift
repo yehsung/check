@@ -132,6 +132,11 @@ struct MessagesListView: View {
                         .cardListPlainRow(top: 0, bottom: 4)
                 }
             }
+            // 차단·신고 결과 한 줄(신고 접수 · 차단 되돌림 실패). 당겨서 새로고침하면 사라진다.
+            if let notice = store.blockNotice {
+                InlineNotice(text: notice, kind: store.blockNoticeIsError ? .error : .info)
+                    .cardListPlainRow()
+            }
             if store.historyFailed, !threads.isEmpty {
                 InlineNotice(text: "새 메시지를 불러오지 못했어요. 당겨서 다시 시도해 주세요", kind: .error)
                     .cardListPlainRow()

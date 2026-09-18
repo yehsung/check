@@ -417,6 +417,10 @@ package enum MeText {
     /// 공용 `LoadFailureRow` 가 [다시 시도]를 곁에 둔다 — 문장에 할 일을 또 적지 않는다(탭 사이 실패 문구 맞춤).
     package static let privacyLoadFailed = "공개 설정을 불러오지 못했어요"
 
+    /// 안전 절(앱스토어 심사 지침 1.2) — 지금은 [차단한 사람] 한 행이다. 글자는 메시지 탭의 차단 문구
+    /// (`MessagesBlockText`)를 그대로 쓴다: 차단을 거는 곳과 푸는 곳이 두 벌의 말을 하면 안 된다.
+    package static let safetySection = "안전"
+
     package static let pushSection = "알림"
     /// 종류별 토글 아래 한 줄(제목은 `PushKind.settingTitle` — 설명 시트와 같은 이름).
     package static func pushDetail(_ kind: PushKind) -> String {

@@ -51,6 +51,33 @@ package final class MessagesStore {
     package private(set) var directoryLoading = false
     package private(set) var directoryFailed = false
 
+    // MARK: 차단 · 신고 (앱스토어 1.2 — 규칙과 문구는 `MessagesBlockRules`, 동작은 `MessagesBlockStore.swift`)
+
+    /// 차단해서 **화면에서 걷어낸** 상대. 서버도 다음 조회부터 그 사람의 행을 빼지만, 화면은 응답을 기다리지 않는다
+    /// (낙관적 — SPEC 작업 P 6). 실패하면 이 집합에서 빼며 대화가 그대로 되돌아온다.
+    package internal(set) var hiddenBlockedPeerIDs: Set<String> = []
+    /// 내가 차단한 사람들(`list_blocks`) — 나 → 설정 → 차단한 사람.
+    package internal(set) var blockedPeople: [BlockedUser] = []
+    package internal(set) var blocksLoaded = false
+    package internal(set) var blocksLoading = false
+    package internal(set) var blocksFailed = false
+    /// 서버가 아직 차단 RPC 를 모른다(PGRST202). 목록 화면이 "고장"이 아니라 "아직"이라고 말한다.
+    package internal(set) var blocksServerNotReady = false
+    /// 차단 왕복이 떠 있는 상대(한 번에 하나 — 확인 시트를 지난 동작이다).
+    package internal(set) var blockingPeerID: String?
+    /// 차단 해제 왕복이 떠 있는 사람들(목록의 여러 줄을 나란히 풀 수 있다).
+    package internal(set) var unblockingUserIDs: Set<String> = []
+    /// 메시지 화면 한 줄(차단 되돌림 실패 · 신고 접수). 대화와 목록 중 **지금 보이는 쪽**이 그린다(둘은 동시에 서지 않는다).
+    /// 다음 동작 · 당겨서 새로고침 · 로그아웃이 지운다.
+    package internal(set) var blockNotice: String?
+    /// 위 한 줄이 실패인가(빨강) 아니면 알림인가(파랑).
+    package internal(set) var blockNoticeIsError = false
+    /// 차단 목록 화면 안 한 줄(차단 해제 실패).
+    package internal(set) var blockedListNotice: String?
+    package internal(set) var isSendingReport = false
+    /// 신고 시트 안 한 줄(실패 이유). 성공하면 시트가 닫히므로 남지 않는다.
+    package internal(set) var reportNotice: String?
+
     // MARK: 화면 · 입력
 
     package private(set) var isAppActive = false
@@ -125,6 +152,19 @@ package final class MessagesStore {
         directoryLoaded = false
         directoryLoading = false
         directoryFailed = false
+        hiddenBlockedPeerIDs = []
+        blockedPeople = []
+        blocksLoaded = false
+        blocksLoading = false
+        blocksFailed = false
+        blocksServerNotReady = false
+        blockingPeerID = nil
+        unblockingUserIDs = []
+        blockNotice = nil
+        blockNoticeIsError = false
+        blockedListNotice = nil
+        isSendingReport = false
+        reportNotice = nil
         isListVisible = false
         openConversationPeerID = nil
         drafts = [:]
@@ -137,9 +177,9 @@ package final class MessagesStore {
     /// 탭 배지 = 안 읽은 메시지 수.
     package var badgeCount: Int {
         MessagesBadgeRules.unreadCount(
-            history: history,
+            history: visibleHistory,
             historySnapshot: historySnapshot,
-            summary: summary,
+            summary: visibleSummary,
             optimistic: optimisticReads,
             legacyStamps: legacyReadStamps
         )
@@ -156,16 +196,31 @@ package final class MessagesStore {
 
     package var isSignedIn: Bool { context.session.isSignedIn }
 
+    /// **차단해 숨긴 상대를 걷어낸 이력.** 묶음·배지·점·개수·말풍선이 전부 이 값을 읽는다 — 거르는 곳이 하나여야
+    /// "목록에서는 사라졌는데 배지 숫자는 그대로"가 생기지 않는다. 숨긴 것이 없으면 이력 그대로다(사본을 뜨지 않는다).
+    package var visibleHistory: [MessageHistoryEntry] {
+        guard !hiddenBlockedPeerIDs.isEmpty else { return history }
+        return history.filter { !hiddenBlockedPeerIDs.contains($0.peerUserID) }
+    }
+
+    /// **차단해 숨긴 상대를 걷어낸 요약.** 이력만 거르면 부족하다 — 요약이 이력보다 새것인 창에서는 배지·점이 요약을 재료로
+    /// 삼으므로, 목록에서 사라진 사람의 안 읽은 말이 탭 배지에서만 계속 세어진다(전체 스위트에서 실제로 잡힌 결함).
+    package var visibleSummary: MessageUnreadSummarySnapshot? {
+        guard let summary, !hiddenBlockedPeerIDs.isEmpty else { return summary }
+        let filtered = summary.summary.excluding(hiddenBlockedPeerIDs)
+        return filtered == summary.summary ? summary : MessageUnreadSummarySnapshot(serial: summary.serial, summary: filtered)
+    }
+
     /// 대화 목록(최근 대화순). 같은 초는 서버 순서로 깬다.
     package var threads: [MessageThread] {
-        MessageThreadBuilder.threads(from: history, serverOrder: historySnapshot?.serverOrder)
+        MessageThreadBuilder.threads(from: visibleHistory, serverOrder: historySnapshot?.serverOrder)
     }
 
     package var unreadPeerIDs: Set<String> {
         MessageUnreadRules.unreadPeerIDs(
-            history: history,
+            history: visibleHistory,
             historySnapshot: historySnapshot,
-            summary: summary,
+            summary: visibleSummary,
             optimistic: optimisticReads,
             legacyStamps: legacyReadStamps
         )
@@ -174,9 +229,9 @@ package final class MessagesStore {
     /// 상대별 안 읽은 메시지 수(목록 줄 개수 배지). 합 = `badgeCount`.
     package var unreadCountsByPeer: [String: Int] {
         MessagesBadgeRules.unreadCountsByPeer(
-            history: history,
+            history: visibleHistory,
             historySnapshot: historySnapshot,
-            summary: summary,
+            summary: visibleSummary,
             optimistic: optimisticReads,
             legacyStamps: legacyReadStamps
         )
@@ -188,7 +243,7 @@ package final class MessagesStore {
         let nowStore = context.links.now
         let working = nowStore?.workingPeople(now: now) ?? []
         let teamIDs: Set<String> = nowStore.map { store in store.hasLoadedTeam ? Set(store.teamMembers.map(\.id)) : [] } ?? []
-        return MessagesPresenceRules.board(
+        return hidingBlocked(MessagesPresenceRules.board(
             nowWorking: working.map {
                 MessagesPresenceRules.Working(id: $0.id, name: $0.name, avatarURL: $0.avatarURL, center: $0.center, isStale: $0.isStale)
             },
@@ -196,6 +251,17 @@ package final class MessagesStore {
             nowDirectory: nowStore.flatMap { $0.hasLoadedDirectory ? $0.directory : nil },
             messagesDirectory: directoryLoaded ? directory : nil,
             me: context.session.userID
+        ))
+    }
+
+    /// 차단해 숨긴 사람을 판에서 걷어낸다. **"지금 근무 중 · 바로 말 걸기" 줄이 곧 말 거는 입구**라, 여기 남아 있으면
+    /// 차단한 사람의 얼굴을 눌러 대화가 다시 열린다(판의 재료는 지금 탭·사람 목록이라 서버가 아직 빼지 못한 창이 있다).
+    private func hidingBlocked(_ board: MessagesPresenceBoard) -> MessagesPresenceBoard {
+        guard !hiddenBlockedPeerIDs.isEmpty, board.isKnown else { return board }
+        return MessagesPresenceBoard(
+            isKnown: board.isKnown,
+            peers: board.peers.filter { !hiddenBlockedPeerIDs.contains($0.key) },
+            working: board.working.filter { !hiddenBlockedPeerIDs.contains($0.id) }
         )
     }
 
@@ -219,6 +285,11 @@ package final class MessagesStore {
     package func peerAvatarURL(for peerID: String) -> URL? {
         if let url = thread(for: peerID)?.peerAvatarURL { return url }
         return directory.first { $0.userID == peerID }?.avatarURL
+    }
+
+    /// 차단해 숨긴 상대인가(대화 화면이 스스로 빠져나오는 근거 · 사람 찾기 거르기).
+    package func isHiddenByBlock(_ peerID: String) -> Bool {
+        hiddenBlockedPeerIDs.contains(peerID)
     }
 
     package func conversationItems(for peerID: String) -> [MessagesConversationItem] {
@@ -246,8 +317,11 @@ package final class MessagesStore {
         return false
     }
 
+    /// 사람 찾기 목록(검색 + 차단해 숨긴 사람 제외). 서버도 서로 차단이면 목록에서 빼지만, 차단 직후의 이 화면은
+    /// 아직 옛 목록을 쥐고 있다 — 방금 차단한 사람이 "새 대화"에 그대로 서 있으면 차단이 안 된 것처럼 보인다.
     package func filteredDirectory(query: String) -> [PokeDirectoryEntry] {
-        MessagesDirectoryRules.filter(directory, query: query)
+        let visible = hiddenBlockedPeerIDs.isEmpty ? directory : directory.filter { !hiddenBlockedPeerIDs.contains($0.userID) }
+        return MessagesDirectoryRules.filter(visible, query: query)
     }
 
     // MARK: - 화면 사건(탭 화면이 부른다)
@@ -269,6 +343,9 @@ package final class MessagesStore {
 
     /// 당겨서 새로고침(스로틀 없음 — 사람이 직접 청한 것). 끝날 때까지 기다린다.
     package func refreshNow() async {
+        // 차단 한 줄은 사람이 목록을 다시 당기는 순간 지운다 — 지나간 실패·알림이 계속 머리에 남지 않게.
+        blockNotice = nil
+        blockNoticeIsError = false
         guard isSignedIn else { return }
         runtime.lastListRefreshAt = context.clock.now()
         await requestActivityRefresh(includeHistory: true)?.value
@@ -555,7 +632,7 @@ package final class MessagesStore {
               let peer = openConversationPeerID,
               let snapshot = historySnapshot,
               let through = MessageUnreadRules.markTarget(
-                  peer: peer, history: history, snapshot: snapshot, optimistic: optimisticReads[peer]
+                  peer: peer, history: visibleHistory, snapshot: snapshot, optimistic: optimisticReads[peer]
               )
         else { return }
         markRead(peer: peer, through: through)

@@ -238,6 +238,11 @@ struct MeAccountDeletionTests {
         #expect(sheet.contains("guard store.canDeleteAccount else { return }"), "제출 가드가 비활성 하나뿐이다")
         #expect(sheet.contains("MeText.deleteAccountItems") && sheet.contains("MeText.deleteAccountIrreversible"), "지워지는 목록·되돌릴 수 없음 한 줄이 없다")
         #expect(!sheet.contains(".alert("), "확인이 시스템 알림창이다(재질 대비 — AingConfirmSheet 주석)")
+        // 키보드의 '완료' 키는 키보드만 내린다 — 되돌릴 수 없는 동작은 [영구 삭제] 버튼 하나로만 나간다(키보드 닫기 습관 한 번에 계정이 지워지면 안 된다).
+        // 로그인 폼의 `.onSubmit(signIn)` 은 되돌릴 수 있는 동작이라 같은 규칙을 쓰지 않는다.
+        #expect(!sheet.contains(".onSubmit(confirm)"), "키보드 '완료' 키가 곧 영구 삭제다")
+        #expect(sheet.contains(".onSubmit { passwordFocused = false }"), "비밀번호 칸의 제출 키가 키보드를 내리는 것 말고 다른 일을 한다")
+        #expect(sheet.components(separatedBy: "confirm").count - 1 == 2, "confirm 은 정의(func)와 버튼 action 두 곳뿐이어야 한다 — 다른 곳에서 부르면 키보드·제스처가 삭제를 쏜다")
 
         // 세션: 재인증(signIn) 이 RPC(deleteMyAccount) 보다 먼저 · 로컬 정리는 로그아웃과 같은 한 함수(endSession).
         let session = try IntegrationContractTests.code("Sources/CheckMobileKit/Session/MobileSessionStore.swift")

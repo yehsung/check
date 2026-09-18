@@ -10,11 +10,16 @@ import Testing
 //   · 호출자 본인(auth.uid())의 auth.users 행을 지운다 — 나머지는 FK on delete cascade 로 따라 지워진다.
 //   · feedback_reports.user_id 만 on delete set null(본문은 남고 익명이 된다 — 20260910120000 의 결정).
 //   · 지우기 전에 내 팀 id 를 모아 두고, 지운 뒤 **남은 멤버가 0명인 그 팀들만** 지운다. 다른 팀은 안 건드린다.
+//   · 지우기 **전에** 진행 중 오목 판을 gomoku__settle 로 닫는다(떠나는 사람 기권 → 남는 사람 승 2×판돈). 판돈은 수락 순간
+//     두 지갑에서 빠졌고 돌려주는 길은 정산뿐인데, 판 행은 challenger/opponent cascade 로 사라지므로 안 닫으면 남은 사람의
+//     판돈이 환불·원장 없이 없어진다(20260916120000 머리말 ★ 운영 절차 — 2026-09-18 검증에서 빠져 있던 것을 잡았다).
 //   · 로그인 안 한 호출은 예외. anon 은 실행권이 없고 authenticated 만 있다.
 //
 // 이 파일은 마이그레이션 **텍스트**를 읽어 그 계약이 글자로 남아 있는지 본다(V0313MigrationArgDefaultTests 와 같은 방식).
 // 행동은 로컬 Postgres 하네스(replay-harness-v2 · 체인 99개 재생 뒤 파일 안 프로브 + 사용자 흉내 테스트)가 증명했고,
 // 여기서는 그 행동을 만드는 문장이 사라지거나 넓어지는 것을 잡는다 — 특히 **다른 사람 행을 지우는 delete 가 끼어드는 것**.
+// 그 단언은 접두 검색이 아니라 **허용 목록 정확 일치**다: 첫 판(2026-09-18)의 `contains("v_uid")` 검사는
+// `where user_id <> v_uid` 같은 본인 **제외** 조건도 통과시켰다(뮤턴트 실증). 문장 전문이 셋과 같아야 초록이다.
 //
 // 하우스 규칙: `--` 줄 주석을 걷어내고 본다(안 걷어내면 설명을 지워야만 초록이 되는 테스트가 된다).
 
@@ -183,33 +188,70 @@ func 계정삭제_실행권은_authenticated_에게만_있다() throws {
 
 // MARK: - ③ 무엇을 지우는가 — 본인 행과 빈 팀뿐
 
+/// 본문의 delete 문 **허용 목록** — 이 셋과 전문이 같아야 한다. 하나라도 다르거나(조건이 넓어짐 · `<>` 로 본인 제외),
+/// 넷째 문장이 생기면 빨강. 새 delete 가 정말 필요해지면 그 문장 전문을 여기 더하고 마이그레이션 머리말에 이유를 적어라.
+private let deleteAccountAllowedDeletes: [String] = [
+    "delete from storage.objects where bucket_id = 'avatars' and name = v_uid::text || '.jpg';",
+    "delete from auth.users where id = v_uid;",
+    "delete from public.teams t where t.id = any(v_teams) and not exists (select 1 from public.memberships m where m.team_id = t.id);",
+]
+
+/// 본문의 `perform …` 문장이 부를 수 있는 것 — 지갑 키 잠금 · 오목 정산 한 벌 · 팀 행 잠금. 다른 perform 이 끼어들면 빨강.
+private let deleteAccountAllowedPerformPrefixes: [String] = [
+    "perform pg_advisory_xact_lock(hashtext('ultra_wallet:' || ",
+    "perform public.gomoku__settle(",
+    "perform 1 from public.teams t where t.id = any(v_teams) for update",
+]
+
+/// 본문을 `;` 로 나눈 문장들(공백 접음 · 소문자 · 앞뒤 공백 제거). plpgsql 의 begin/if/for 머리도 한 조각으로 나온다.
+private func bodyStatements(in body: String) -> [String] {
+    squashWhitespace(body).lowercased().split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+}
+
 @Test
-func 계정삭제의_delete_문은_전부_본인_또는_내_팀으로만_묶인다() throws {
+func 계정삭제의_delete_문은_허용_목록_셋과_전문이_같다() throws {
     let (_, sql) = try deleteAccountMigrationSQL()
     let body = try deleteAccountFunctionBody(sql)
     let statements = deleteStatements(in: body)
-    #expect(!statements.isEmpty, "본문에 delete 문이 없다")
 
-    // 정확히 하나: 본인의 auth.users 행. 다른 조건으로 auth.users 를 지우는 문장은 있을 수 없다.
-    let authDeletes = statements.filter { $0.contains("delete from auth.users") }
-    #expect(authDeletes == ["delete from auth.users where id = v_uid;"],
-            "auth.users 삭제 문장이 계약과 다르다: \(authDeletes)")
+    // 정확 일치 — 순서까지. `contains("v_uid")` 류의 접두 검색은 `where user_id <> v_uid` 를 통과시켰다(2026-09-18 뮤턴트 실증).
+    #expect(statements == deleteAccountAllowedDeletes,
+            "본문의 delete 문이 허용 목록과 다르다.\n실제: \(statements)\n허용: \(deleteAccountAllowedDeletes)")
 
-    // 나머지 delete 는 모두 v_uid(본인) 또는 v_teams(내가 있던 팀)로 묶인다 — 남의 행에 닿는 문장이 끼어들면 여기서 잡힌다.
-    for statement in statements {
-        #expect(statement.contains("v_uid") || statement.contains("v_teams"),
-                "본인·내 팀으로 묶이지 않은 delete 가 있다: \(statement)")
-        #expect(statement.contains(" where "), "where 없는 delete 가 있다: \(statement)")
-    }
-
-    // cascade 가 지우는 표를 손으로 지우지 않는다(손으로 지우기 시작하면 FK 규칙과 두 벌이 된다).
-    for table in ["public.profiles", "public.memberships", "public.work_sessions", "public.work_statuses", "public.messages",
-                  "public.todo_items", "public.client_devices", "public.ruby_ledger", "public.pokes"] {
-        #expect(!statements.contains { $0.contains("delete from \(table)") }, "\(table) 을 손으로 지운다 — cascade 에 맡겨라")
+    // 직접 쓰기는 그 delete 셋뿐이다 — update/insert/truncate/execute 문장은 본문에 없다.
+    // 루비·판 정산은 gomoku__settle 한 벌을 부른다(그 함수가 profiles·ruby_ledger 를 적는다). 손으로 적기 시작하면 두 벌이 된다.
+    let pieces = bodyStatements(in: body)
+    for piece in pieces {
+        for keyword in ["update ", "insert ", "truncate ", "execute "] where piece.hasPrefix(keyword) {
+            #expect(Bool(false), "본문에 직접 쓰기 문장이 있다(\(keyword.trimmingCharacters(in: .whitespaces))): \(piece)")
+        }
+        if piece.hasPrefix("perform ") {
+            #expect(deleteAccountAllowedPerformPrefixes.contains { piece.hasPrefix($0) },
+                    "허용되지 않은 perform 이 있다: \(piece)")
+        }
     }
     let flatBody = squashWhitespace(body).lowercased()
     #expect(!flatBody.contains("truncate"), "truncate 가 있다")
-    #expect(!flatBody.contains("delete from public.feedback_reports"), "제보를 지운다 — 제보는 set null 로 익명화되고 남아야 한다")
+    #expect(!flatBody.contains("feedback_reports"), "제보함을 건드린다 — 제보는 set null 로 익명화되고 남아야 한다")
+}
+
+@Test
+func 계정삭제_delete_허용_목록은_본인과_내_팀으로만_묶여_있다() {
+    // 허용 목록 자체의 자기 검사 — 목록을 고치는 사람이 남의 행에 닿는 문장을 넣지 못하게.
+    for statement in deleteAccountAllowedDeletes {
+        #expect(statement.contains(" where "), "where 없는 delete: \(statement)")
+        #expect(statement.contains("= v_uid") || statement.contains("any(v_teams)"),
+                "본인(= v_uid)·내 팀(any(v_teams))로 묶이지 않았다: \(statement)")
+        #expect(!statement.contains("<>") && !statement.contains("!=") && !statement.contains(" not in "),
+                "본인·내 팀을 **제외**하는 조건이 있다: \(statement)")
+        #expect(!statement.contains(" or "), "or 로 조건이 넓어졌다: \(statement)")
+    }
+    // cascade 가 지우는 표를 손으로 지우지 않는다(손으로 지우기 시작하면 FK 규칙과 두 벌이 된다).
+    for table in ["public.profiles", "public.memberships", "public.work_sessions", "public.work_statuses", "public.messages",
+                  "public.todo_items", "public.client_devices", "public.ruby_ledger", "public.pokes", "public.gomoku_matches",
+                  "public.feedback_reports"] {
+        #expect(!deleteAccountAllowedDeletes.contains { $0.contains("delete from \(table)") }, "\(table) 을 손으로 지운다 — cascade 에 맡겨라")
+    }
 }
 
 @Test
@@ -231,6 +273,51 @@ func 계정삭제는_내_팀을_먼저_적어_두고_남은_멤버가_0명인_�
     let teamStatement = try #require(deleteStatements(in: body).first { $0.contains("delete from public.teams") })
     #expect(teamStatement.contains("not exists (select 1 from public.memberships m where m.team_id = t.id)"),
             "빈 팀 조건이 다르다: \(teamStatement)")
+}
+
+// MARK: - ③-b 진행 중 오목 판 — 지우기 전에 정산(남은 사람의 판돈)
+
+@Test
+func 계정삭제는_진행_중_오목_판을_기권_정산한_뒤에_auth_users_를_지운다() throws {
+    let (_, sql) = try deleteAccountMigrationSQL()
+    let body = squashWhitespace(try deleteAccountFunctionBody(sql)).lowercased()
+
+    // 정산 호출이 있고, auth.users 삭제보다 **앞**이다(뒤면 판 행이 cascade 로 이미 사라져 정산할 것이 없다).
+    let settle = try #require(body.range(of: "perform public.gomoku__settle("),
+                              "진행 중 오목 판을 gomoku__settle 로 닫지 않는다 — 판 행이 cascade 로 사라져 남은 사람의 판돈(수락 때 차감)이 환불·원장 없이 없어진다")
+    let authDelete = try #require(body.range(of: "delete from auth.users where id = v_uid"))
+    #expect(settle.upperBound <= authDelete.lowerBound, "정산이 auth.users 삭제보다 뒤다")
+
+    // 떠나는 사람의 기권: 내가 흑이면 백 승, 아니면 흑 승 — 남는 사람이 2×판돈을 받는다(gomoku_resign 과 같은 결과).
+    let call = body[settle.lowerBound...]
+    let callEnd = try #require(call.range(of: ";"))
+    let statement = String(call[..<callEnd.upperBound])
+    #expect(statement.contains("'resign'"), "정산 사유가 'resign' 이 아니다: \(statement)")
+    #expect(statement.contains("= v_uid then 'white_win' else 'black_win' end"), "승자가 남는 사람이 아니다: \(statement)")
+
+    // 대상은 status = 'active' 이고 내가 흑 또는 백인 판 전부(루프).
+    #expect(body.contains("g.status = 'active' and v_uid in (g.black, g.white)"), "진행 중 판을 고르는 조건이 다르다")
+    let loop = try #require(body.range(of: "for v_match in select"), "판을 루프로 돌지 않는다(한 사람이 여러 판일 수 있다)")
+    #expect(loop.upperBound <= settle.lowerBound)
+
+    // 지갑 키는 행 잠금보다 먼저, 관련 사용자 전체를 uuid 오름차순으로(오목 전역 규칙 20260916120000 ★).
+    let lock = try #require(body.range(of: "pg_advisory_xact_lock(hashtext('ultra_wallet:' || v_key::text))"),
+                            "지갑 키 잠금이 없다 — 정산 중 수락·착수와 경합한다")
+    #expect(body.contains("order by k.uid"), "지갑 키를 uuid 오름차순으로 잡지 않는다")
+    #expect(lock.upperBound <= settle.lowerBound, "지갑 키 잠금이 정산보다 뒤다")
+    let teamLock = try #require(body.range(of: "for update"))
+    #expect(lock.upperBound <= teamLock.lowerBound, "지갑 키를 팀 행 잠금(for update)보다 뒤에 잡는다 — 오목 규칙은 지갑 키가 행 잠금보다 먼저다")
+
+    // 정산 뒤에도 진행 중 판이 남으면 삭제를 **중단**한다(판돈 소실보다 삭제 실패가 낫다).
+    let guardRange = try #require(body.range(of: "if exists (select 1 from public.gomoku_matches g where g.status = 'active' and v_uid in (g.black, g.white)) then raise exception"),
+                                  "정산 뒤 진행 중 판 잔존 검사가 없다")
+    #expect(settle.upperBound <= guardRange.lowerBound && guardRange.upperBound <= authDelete.lowerBound)
+
+    // §4 프로브가 판돈 픽스처(수락 모양 그대로 차감)로 상대 잔액·승리 원장 복원을 실제로 단언한다.
+    let flat = squashWhitespace(sql).lowercased()
+    #expect(flat.contains("'spend:gomoku:stake:' || v_g::text"), "§4 프로브에 판돈 차감 픽스처가 없다 — 정산 없이도 초록이 된다")
+    #expect(flat.contains("reason = 'prize:gomoku:' || v_g::text"), "§4 프로브가 남은 사람의 승리 원장을 단언하지 않는다")
+    #expect(flat.contains("status = 'active'") && flat.contains("insert into public.gomoku_matches"), "§4 프로브에 진행 중 판 픽스처가 없다")
 }
 
 // MARK: - ④ cascade 전제 — 삭제 경로의 FK 는 전부 on delete cascade(제보함만 set null)

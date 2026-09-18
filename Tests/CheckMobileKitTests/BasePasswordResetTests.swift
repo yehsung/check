@@ -135,6 +135,55 @@ import Testing
         #expect(h.store.resendSeconds == MobilePasswordResetStore.resendCooldownSeconds)
     }
 
+    @Test("코드가 거절돼도(403 · recovery 토큰 사망) 재발송 쿨다운은 계속 흘러 데드라인에 풀린다 — 왕복 세대가 쿨다운을 얼리지 않는다")
+    func cooldownSurvivesRejectedCodeAndDeadSession() async {
+        // ① 코드 틀림: 쿨다운이 남은 채 verify 가 403 — 화면은 '다시 받기를 눌러주세요' 라면서 버튼이 '(5초)' 에 영영 멈추면 안 된다.
+        let rejected = await makeHarness(responder: Self.server(
+            verify: .json(#"{"error_code":"otp_expired","msg":"Token has expired or is invalid"}"#, status: 403)
+        ))
+        defer { rejected.tearDown() }
+        await expectCooldownRunsOut(rejected) { h in
+            await h.store.verifyCode("123456")
+            #expect(h.store.phase == .enterCode)
+            #expect(h.store.message == MobilePasswordResetText.codeRejected)
+        }
+
+        // ② recovery 토큰 사망: verify 는 됐는데 PUT 이 죽어 코드 화면으로 되돌아온 뒤 — 같은 구조라 같이 잰다.
+        let dead = await makeHarness(responder: Self.server(
+            update: .json(#"{"error_code":"bad_jwt","msg":"invalid JWT: unable to parse"}"#, status: 403)
+        ))
+        defer { dead.tearDown() }
+        await expectCooldownRunsOut(dead) { h in
+            await h.store.verifyCode("123456")
+            await h.store.submitNewPassword("abcdef")
+            #expect(h.store.phase == .enterCode)
+            #expect(h.store.message == MobilePasswordResetText.codeRejected)
+        }
+    }
+
+    /// 발송(첫 쿨다운 5초, 틱은 문 뒤에서 대기) → `between`(왕복이 세대를 올린다) → 문을 연다(틱마다 시계 1초) → 데드라인에 0 이 되고
+    /// '다시 받기' 가 실제로 나간다. 문구는 쿨다운 만료가 지우지 않는다.
+    private func expectCooldownRunsOut(_ h: Harness, between: @MainActor (Harness) async -> Void) async {
+        let clock = h.clock
+        h.store.sleep = { [gate = h.sleepGate] _ in
+            clock.advance(1)
+            await gate.wait()
+        }
+        await h.store.requestCode()
+        #expect(h.store.phase == .enterCode)
+        #expect(h.store.resendSeconds == MobilePasswordResetStore.firstResendDelaySeconds)
+        await between(h)
+        #expect(!h.store.isResendEnabled, "왕복 직후엔 아직 쿨다운 중이어야 한다")
+        h.sleepGate.open()
+        #expect(await baseWaitUntil { h.store.resendSeconds == 0 }, "쿨다운이 얼었다: \(h.store.resendTitle) · \(h.store.message ?? "-")")
+        #expect(h.store.isResendEnabled)
+        #expect(h.store.resendTitle == "다시 받기")
+        #expect(h.store.message == MobilePasswordResetText.codeRejected, "쿨다운 만료가 안내를 지웠다")
+        await h.store.requestCode()
+        #expect(h.count(path: "/auth/v1/recover") == 2, "다시 받기가 실제로 나가지 않았다")
+        #expect(h.store.message == MobilePasswordResetText.sent)
+    }
+
     @Test("발송 실패: 네트워크·5xx 는 연결 안내(이메일 화면) · 429 는 코드 화면 + 서버가 준 초 · 그 밖은 '보내지 못했어요'")
     func sendFailures() async {
         let offline = await makeHarness(responder: Self.server(recover: .networkFailure()))

@@ -97,10 +97,14 @@ package final class MobileSignUpStore {
         }
     }
 
-    /// 코드 칸 아래 한 줄: 찾은 팀 요약(초록) · 안내/실패(빨강) · 확인 중. 없으면 nil.
+    /// 코드 칸 아래 한 줄: 안내/실패·확인 중(문구) · 찾은 팀 요약. 없으면 nil.
+    ///
+    /// **문구가 요약보다 먼저다.** 문구는 요약보다 늘 나중 사실이다(새 코드를 확인하기 시작했거나, 서버가 요약을 부정했거나).
+    /// 요약을 먼저 돌려주면 문구를 세우고 요약을 안 지운 모든 곳이 화면에서 사라진다 — join_team 0행의 '다른 센터 팀이에요' 가
+    /// 스토어 필드에만 있고 화면엔 성공 요약 + [참여하기] 만 남았던 결함(w16 검증)이 그 첫 사례였다.
     package var previewLine: (text: String, isSuccess: Bool)? {
-        if let joinPreview { return (MobileSignUpText.previewLine(joinPreview), true) }
         if !joinPreviewMessage.isEmpty { return (joinPreviewMessage, false) }
+        if let joinPreview { return (MobileSignUpText.previewLine(joinPreview), true) }
         return nil
     }
 
@@ -260,7 +264,11 @@ package final class MobileSignUpStore {
                 //   그런데도 서버가 0행을 냈다면 남은 이유는 하나다: **다른 센터 팀**이다(`join_team` 의 센터 게이트,
                 //   20260912185423_join_team_center_gate.sql — 둘 다 알 때만 막고, 0행은 코드 불일치와 같은 모양이다).
                 //   "코드를 확인해 주세요"라고 말하면 사용자는 멀쩡한 코드를 몇 번이고 다시 친다(맥 performJoinTeamWithCode 주석).
+                //   미리보기는 **비운다** — 서버가 '이 팀엔 못 들어간다' 고 답한 뒤에도 요약을 두면 (1) 화면 줄이 요약을 그려 이 문구가
+                //   안 보이고 (2) 같은 코드로 [참여하기] 가 헛왕복(같은 0행)을 무한히 돈다. 비우면 같은 코드 재제출은 가드가
+                //   왕복 없이 막고, 다른 코드를 치면 미리보기부터 다시 선다.
                 stage = .teamless
+                joinPreview = nil
                 joinPreviewMessage = MobileSignUpText.teamlessJoinBlocked
                 return
             }

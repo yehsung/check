@@ -186,15 +186,19 @@ package final class MobilePasswordResetStore {
     }
 
     /// 남은 초는 **시계 기준 데드라인에서 매번 다시 계산**한다 — 1초씩 빼기만 하면 잠자기·스케줄 지연이 누적 오차가 된다(맥과 같다).
+    ///
+    /// 쿨다운의 수명은 **Task 취소뿐**이다(`cancel()` · 새 쿨다운 · 비밀번호 성공). 왕복 세대(`generation`)는 보지 않는다 —
+    /// 세대는 verify·PUT 도 올리는데(늦은 응답 버리기), 그 세대를 틱마다 견주면 쿨다운이 남은 채 코드를 틀린 순간(재전송 60초 안에
+    /// 코드를 치는 게 보통이다) 루프가 `resendSeconds` 를 남긴 채 빠져나가 '다시 받기 (48초)' 가 영영 비활성이 된다(w16 검증 실측).
+    /// 맥 `startPasswordResetCooldown` 은 세대를 견준다 — 옮기며 물려받은 결함이라 여기서 끊는다.
     package func startCooldown(seconds: Int) {
         let seconds = min(max(seconds, 1), 600)
         cooldownTask?.cancel()
         resendSeconds = seconds
         let deadline = clock.now().addingTimeInterval(TimeInterval(seconds))
-        let generation = generation
         cooldownTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                guard let self, generation == self.generation else { return }
+                guard let self else { return }
                 let remaining = Int(ceil(deadline.timeIntervalSince(self.clock.now())))
                 guard remaining > 0 else {
                     if self.resendSeconds != 0 { self.resendSeconds = 0 }

@@ -275,11 +275,24 @@ import Testing
 
         #expect(h.store.stage == .teamless)
         #expect(h.store.joinPreviewMessage == MobileSignUpText.teamlessJoinBlocked)
+        // 화면이 읽는 줄은 previewLine 하나다(MobileSignUpView 의 미리보기 InlineNotice) — 스토어 필드가 아니라 **이 줄**에 문구가 서야 한다.
+        // 미리보기 요약("팀 아잉팀 · 3명 · 주 40시간")이 남아 있으면 그 줄이 덮어 '다른 센터' 는 어디에도 안 그려진다(검증자 실측).
+        let line = try #require(h.store.previewLine, "코드 칸 아래 줄이 비었다")
+        #expect(line.text == MobileSignUpText.teamlessJoinBlocked, "화면 줄이 '\(line.text)' — 다른 센터 안내가 아니다")
+        #expect(!line.isSuccess, "다른 센터 안내가 안내색(성공)으로 그려진다")
+        #expect(h.store.joinPreview == nil, "서버가 부정한 미리보기는 더 이상 '합류 가능' 이 아니다")
         #expect(h.store.notice == nil)
         #expect(h.store.createdSession?.userID == "user-new", "계정은 만들어졌다 — 세션은 스토어가 쥔다")
         #expect(h.session.phase == .signedOut, "팀이 없는 채로 탭에 들어가지 않는다(폰엔 무소속 합류 칸이 없다)")
         #expect(h.count(rpc: "register_device") == 0)
         #expect(h.store.canSubmit)
+
+        // 같은 코드로 [참여하기] 를 다시 눌러도 헛왕복(같은 0행)을 돌지 않고 가드가 이유를 말한다 — 다른 센터 안내는 그대로 남는다.
+        #expect(h.store.submit() == nil)
+        #expect(h.store.notice == MobileSignUpText.codeUnverified)
+        await baseBarrier(h.service)
+        #expect(h.count(rpc: "join_team") == 1, "같은 코드로 join_team 이 또 나갔다")
+        #expect(h.store.previewLine?.text == MobileSignUpText.teamlessJoinBlocked)
 
         // 같은 화면에서 팀 만들기로 — signup 은 다시 나가지 않는다.
         h.store.toggleCreateTeamMode()
@@ -295,6 +308,44 @@ import Testing
         await h.store.submit()?.value
         #expect(h.session.phase == .signedIn)
         #expect(h.session.storedEmail == "member@example.com")
+        #expect(MobileForbiddenCalls.violations(in: h.requests).isEmpty)
+    }
+
+    @Test("join_team 0행 뒤 같은 센터 코드를 다시 치면 미리보기 → join_team 성공 → 로그인과 같은 길 · 화면 줄은 문구가 요약보다 먼저다")
+    func joinZeroRowsThenOtherCodeSucceeds() async throws {
+        let h = await makeHarness(responder: Self.server(join: .json("[]")))
+        defer { h.tearDown() }
+        fillAccount(h)
+        h.store.teamCode = "AINGTEAM"
+        await h.store.previewTeamCode().value
+        #expect(h.store.previewLine?.isSuccess == true)
+        await h.store.submit()?.value
+        #expect(h.store.stage == .teamless)
+        #expect(h.store.previewLine?.text == MobileSignUpText.teamlessJoinBlocked)
+
+        // 화면 줄 계약: 문구가 있으면 문구가 먼저다 — 새 코드를 확인하는 동안 옛 팀 요약이 아니라 '확인 중' 이 보여야 한다
+        // (요약이 먼저면 문구를 세우고 요약을 안 지운 모든 곳이 화면에서 사라진다 — 위 0행이 그 첫 사례였다).
+        h.store.joinPreview = TeamJoinPreview(teamID: "team-1", name: "아잉팀", weeklyGoalHours: 40, memberCount: 3)
+        h.store.joinPreviewMessage = MobileSignUpText.previewChecking
+        #expect(h.store.previewLine?.text == MobileSignUpText.previewChecking)
+        #expect(h.store.previewLine?.isSuccess == false)
+        h.store.joinPreviewMessage = ""
+        #expect(h.store.previewLine?.isSuccess == true, "문구가 없으면 요약이다")
+        h.store.joinPreview = nil
+
+        // 같은 센터 팀 코드로 다시 — 미리보기가 서고, join_team 이 행을 주면 로그인과 같은 길로 들어간다(signup 은 한 번뿐).
+        MobileStubURLProtocol.register(host: h.host, responder: Self.server())
+        h.store.teamCode = "SEOUL123"
+        await h.store.previewTeamCode().value
+        #expect(h.store.previewLine?.isSuccess == true)
+        #expect(h.store.joinPreviewMessage == "")
+        await h.store.submit()?.value
+        #expect(h.session.phase == .signedIn)
+        #expect(h.session.session?.userID == "user-new")
+        #expect(h.count(path: "/auth/v1/signup") == 1)
+        #expect(h.count(rpc: "join_team") == 2)
+        #expect(h.body(path: "/rest/v1/rpc/join_team").contains(#""code":"AINGTEAM""#), "첫 합류는 첫 코드")
+        #expect(h.requests.last { $0.rpcName == "join_team" }?.bodyText.contains(#""code":"SEOUL123""#) == true, "둘째 합류는 새 코드")
         #expect(MobileForbiddenCalls.violations(in: h.requests).isEmpty)
     }
 

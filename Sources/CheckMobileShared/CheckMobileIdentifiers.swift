@@ -14,4 +14,11 @@ public enum CheckMobileIdentifiers {
     public static let appGroupID = "group.com.yehsung.aingcheck"
     /// 앱·위젯 공용 키체인 그룹(팀 접두어 포함 — `keychain-access-groups` 엔타이틀먼트 값).
     public static let keychainAccessGroup = "MQ2KQK37WD.com.yehsung.aingcheck.shared"
+
+    /// 사람에게 보이는 앱 이름(홈 화면·설정 앱·스토어). **`CFBundleDisplayName` 과 글자 그대로 같아야 한다** —
+    /// 앱이 스스로 이름을 말하는 자리(설정 앱 경로 안내·로그인 머리·버전 줄)가 홈 화면과 갈리면
+    /// "설정 앱 › aing-check" 처럼 **없는 곳을 가리키는 안내**가 되고, 심사원은 약관의 서비스명과 앱 이름이 다르면
+    /// 같은 서비스인지 묻는다(`docs/terms.md` · `docs/index.md` 도 이 이름을 쓴다).
+    /// 번들 ID·brew cask·저장소 이름(`aing-check`)은 식별자라 그대로다 — 바뀌는 것은 **표시 이름**뿐이다.
+    public static let appDisplayName = "아잉체크"
 }

@@ -1,4 +1,5 @@
 #if os(iOS)
+import CheckMobileShared
 import SwiftUI
 
 /// 로그인 화면(SPEC-ios §2 · 재디자인 B): 이메일·비밀번호 로그인 + 맨 아래 두 길(가입하기 · 비밀번호를 잊었어요 — w16).
@@ -57,7 +58,7 @@ struct MobileLoginView: View {
             VStack(spacing: 0) {
                 MobileBrandHeader(
                     mood: .working,
-                    title: "aing-check",
+                    title: CheckMobileIdentifiers.appDisplayName,
                     message: "맥의 aing-check 와 같은 계정으로 로그인해요"
                 )
 
@@ -372,7 +373,7 @@ struct MobileCenteredScreen<Content: View, Footer: View>: View {
 struct MobileLaunchingView: View {
     var body: some View {
         VStack(spacing: 16) {
-            Text("aing-check")
+            Text(CheckMobileIdentifiers.appDisplayName)
                 .font(MobileTheme.title(.largeTitle))
                 .foregroundStyle(MobileTheme.label)
             ProgressView()

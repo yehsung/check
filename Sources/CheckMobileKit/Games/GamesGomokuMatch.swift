@@ -62,7 +62,8 @@ struct GamesGomokuMatch: View {
         .scrollDismissesKeyboard(.interactively)
         .gamesDemoScrollAnchor(isDemo: store.context.isDemo)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            GamesGomokuChatDrawer(store: gomoku, isExpanded: $chatExpanded)
+            GamesGomokuChatDrawer(store: gomoku, opponent: match.opponent,
+                                  messages: store.context.links.messages, isExpanded: $chatExpanded)
         }
         .hidesTabBar(for: .gomokuMatch)
         .toolbar {
@@ -348,7 +349,8 @@ struct GamesGomokuResult: View {
         .scrollDismissesKeyboard(.interactively)
         .gamesDemoScrollAnchor(isDemo: store.context.isDemo)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            GamesGomokuChatDrawer(store: gomoku, isExpanded: $chatExpanded)
+            GamesGomokuChatDrawer(store: gomoku, opponent: match.opponent,
+                                  messages: store.context.links.messages, isExpanded: $chatExpanded)
         }
         .hidesTabBar(for: .gomokuMatch)
         .toolbar {

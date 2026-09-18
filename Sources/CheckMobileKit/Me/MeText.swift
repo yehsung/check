@@ -1,4 +1,5 @@
 import CheckCore
+import CheckMobileShared
 import Foundation
 
 /// 나 탭 문구와 순수 규칙(플랫폼 무관 — macOS `swift test` 가 값으로 검증한다).
@@ -462,7 +463,7 @@ package enum MeText {
 
     package static func inviteShareMessage(teamName: String?, code: String) -> String {
         let team = teamName.map { "「\($0)」 " } ?? ""
-        return "aing-check \(team)팀 코드: \(code)\n맥 앱에서 가입할 때 이 코드를 입력하면 같은 팀이 돼요."
+        return "\(CheckMobileIdentifiers.appDisplayName) \(team)팀 코드: \(code)\n맥 앱에서 가입할 때 이 코드를 입력하면 같은 팀이 돼요."
     }
 
     package static let accountSection = "계정"
@@ -510,8 +511,9 @@ package enum MeText {
         }
     }
 
+    /// 설정 맨 아래 한 줄. 이름은 **홈 화면과 같은 표시 이름**이다(같은 앱인지 묻게 만들지 않는다).
     package static func versionLine(version: String, build: Int) -> String {
-        "aing-check iOS \(version) (\(build))"
+        "\(CheckMobileIdentifiers.appDisplayName) iOS \(version) (\(build))"
     }
 }
 
@@ -530,7 +532,8 @@ extension PushAuthorizationStatus {
 
     package var meDetail: String? {
         switch self {
-        case .denied: return "설정 앱 › aing-check › 알림에서 켤 수 있어요."
+        // 설정 앱에 뜨는 줄은 **표시 이름**이다 — 이 문장이 옛 이름을 가리키면 사람이 못 찾는다.
+        case .denied: return "설정 앱 › \(CheckMobileIdentifiers.appDisplayName) › 알림에서 켤 수 있어요."
         case .notDetermined: return "허용하면 아래 종류별로 고를 수 있어요."
         case .provisional: return "알림 센터에만 조용히 쌓여요. 설정 앱에서 배너로 바꿀 수 있어요."
         case .unknown, .authorized, .ephemeral: return nil

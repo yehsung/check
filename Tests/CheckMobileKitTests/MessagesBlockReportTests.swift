@@ -1,4 +1,4 @@
-import CheckCore
+@testable import CheckCore
 import CheckMobileShared
 import Foundation
 import Testing
@@ -246,6 +246,68 @@ import Testing
         h.expectNoForbiddenCalls()
     }
 
+    @Test("가장 흔한 신고(사유만 고름): 다섯 키를 그대로 싣는다 — 값이 없으면 키를 빼는 게 아니라 null 이다")
+    func reportSendsNullKeysNotMissingOnes() async {
+        let h = await Self.make { server in
+            server.override("report_content") { _ in .json("null") }
+        }
+        defer { h.tearDown() }
+        // 자유 입력 없음 · 메시지 아님 · 차단도 끔 — 세 자리가 모두 '값 없음' 인 경로다.
+        let sent = await h.store.submitReport(peerID: Self.peerA, reason: .spam, detail: "   ", messageID: nil, alsoBlock: false)
+        #expect(sent)
+        #expect(h.count("report_content") == 1)
+        let body = h.bodies("report_content").first ?? ""
+        // PostgREST 는 **본문의 키 집합으로 함수를 고른다** — 키가 빠지면 PGRST202 가 나고 화면에는
+        // "아직 서버에 준비되지 않았어요" 가 뜬다(모든 사람 신고가 통째로 죽는다).
+        for piece in [#""p_target":"peer-a""#, #""p_reason":"spam""#, #""p_detail":null"#, #""p_message_id":null"#, #""p_block":false"#] {
+            #expect(body.contains(piece), "신고 본문에 \(piece) 가 없다: \(body)")
+        }
+        #expect(!h.store.isHiddenByBlock(Self.peerA), "차단을 끄고 신고했는데 대화가 사라졌다")
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("배지: 읽음을 모르는 서버(요약만 아는 창)에서도 차단한 사람 몫이 빠진다 — 목록과 탭 배지가 갈리지 않는다")
+    func badgeDropsBlockedWhenOnlySummaryIsKnown() async {
+        let h = await Self.make { server in
+            // 읽음 RPC 가 없는 서버 → 이력에는 읽음 칸이 없고(`historySnapshot` = nil) 배지의 재료는 **요약뿐**이다.
+            server.setWithReadsMissing(true)
+            server.override("block_user") { _ in .json("null") }
+        }
+        defer { h.tearDown() }
+        #expect(!h.store.readReceiptsAvailable, "대조가 무너졌다 — 읽음을 아는 서버라 배지가 요약이 아니라 이력을 센다")
+        #expect(h.store.badgeCount == 3, "대조: 요약이 배지를 세지 않는다")
+
+        h.store.blockPeer(Self.peerA)
+        #expect(h.store.threads.map(\.peerUserID) == [Self.peerB])
+        #expect(h.store.badgeCount == 1, "목록에서는 사라졌는데 탭 배지에만 옛 숫자가 남는다(요약을 안 거른 결함)")
+        #expect(h.store.unreadCountsByPeer[Self.peerA] == nil)
+        #expect(!h.store.unreadPeerIDs.contains(Self.peerA))
+
+        _ = await baseWaitUntil { h.store.blockingPeerID == nil }
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("오목 로비: 차단한 사람은 상대 고르기 목록에서 곧바로 사라진다(확인 시트가 '오목 신청에서 서로 보이지 않아요' 라고 약속한다)")
+    func gomokuLobbyHidesBlocked() async {
+        let h = await Self.make { server in
+            server.override("block_user") { _ in .json("null") }
+        }
+        defer { h.tearDown() }
+        h.model.gomoku.users = [
+            GomokuUser(id: Self.peerA, displayName: "소라", avatarURL: nil, characterID: nil, isWorking: true, isCapable: true, inMatch: false),
+            GomokuUser(id: Self.peerB, displayName: "도윤", avatarURL: nil, characterID: nil, isWorking: false, isCapable: true, inMatch: false),
+        ]
+        #expect(h.model.games.gomokuLobbyUsers.map(\.id) == [Self.peerA, Self.peerB], "대조: 거르기 전에는 둘 다 선다")
+
+        h.store.blockPeer(Self.peerA)
+        #expect(h.model.games.gomokuLobbyUsers.map(\.id) == [Self.peerB], "차단했는데 오목 로비에 [도전] 버튼과 함께 그대로 서 있다")
+        // 거르는 곳은 화면이 읽는 자리 하나다 — 코어 목록은 서버가 답한 그대로 둔다(차단이 실패하면 그대로 돌아온다).
+        #expect(h.model.gomoku.users.count == 2)
+
+        _ = await baseWaitUntil { h.store.blockingPeerID == nil }
+        h.expectNoForbiddenCalls()
+    }
+
     @Test("신고 실패: 시트는 쓴 글을 쥔 채 이유 한 줄 · 차단은 일어나지 않는다")
     func reportFailureKeepsSheet() async {
         let h = await Self.make { server in
@@ -325,15 +387,17 @@ import Testing
         #expect(conversation.contains("MessagesReportSheet("))
         #expect(conversation.contains("line.entry.isMine ? nil :"), "내 말풍선에도 신고 메뉴가 붙는다")
 
-        // 차단을 부르는 파일은 확인 시트를 지나는 대화 화면 하나다(스토어 정의 파일 제외).
+        // 차단을 부르는 파일은 **확인 시트를 지나는 두 UGC 면**뿐이다(스토어 정의 파일 제외):
+        // 1:1 대화 화면과 오목 채팅 서랍. 확인 없는 차단은 여전히 없다(둘 다 `MessagesBlockConfirmSheet` 가 유일한 입구다).
         let callers = try IntegrationContractTests.files(containing: ["blockPeer("], under: "Sources/CheckMobileKit")
         #expect(callers == [
+            "Sources/CheckMobileKit/Games/GamesGomokuChat.swift",
             "Sources/CheckMobileKit/Messages/MessagesBlockStore.swift",
             "Sources/CheckMobileKit/Messages/MessagesConversationView.swift",
         ], "차단을 부르는 파일이 늘었다: \(callers)")
         #expect(conversation.components(separatedBy: "store.blockPeer(").count - 1 == 1, "차단을 부르는 자리가 한 곳이 아니다")
 
-        // 신고를 보내는 곳도 시트 하나다.
+        // 신고를 **보내는** 곳은 시트 하나다(입구가 늘어도 보내는 문은 하나여야 한다).
         let reporters = try IntegrationContractTests.files(containing: ["submitReport("], under: "Sources/CheckMobileKit")
         #expect(reporters == [
             "Sources/CheckMobileKit/Messages/MessagesBlockSheets.swift",
@@ -384,6 +448,71 @@ import Testing
         for code in [core, try IntegrationContractTests.code("Sources/CheckMobileKit/Messages/MessagesBlockStore.swift")] {
             #expect(!code.contains("print(") && !code.contains("Logger("), "신고·차단 경로에 로그가 붙었다")
         }
+    }
+
+    @Test("소스 계약: 오목 채팅에도 신고·차단 입구가 있다 — 애플 1.2 가 세는 UGC 면은 둘이다(1:1 메시지 · 오목 채팅)")
+    func gomokuChatSourceContract() throws {
+        let chat = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesGomokuChat.swift")
+        #expect(chat.contains("MessagesBlockText.reportAction"), "오목 채팅에서 신고에 닿을 수 없다(화면을 나가 사람 찾기로 돌아가야 한다)")
+        #expect(chat.contains("MessagesBlockText.blockAction"), "오목 채팅에서 차단에 닿을 수 없다")
+        #expect(chat.contains("MessagesBlockConfirmSheet("), "오목 채팅의 차단이 확인 시트를 지나지 않는다")
+        #expect(chat.contains("MessagesReportSheet("), "오목 채팅이 메시지 탭과 다른 신고 시트를 쓴다(문구·사유가 두 벌이 된다)")
+        // 사람이 아닌 상대(AI 연습 판)에게는 입구가 서지 않는다 — 신고할 사람이 없다.
+        #expect(chat.contains("GomokuAIGame.isAIMatchID("), "AI 연습 판에도 신고·차단이 선다")
+
+        // 대국 화면·결과 화면 둘 다 서랍에 상대를 넘긴다(결과 화면에서도 신고할 수 있어야 한다 — 욕은 대개 진 뒤에 온다).
+        let match = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesGomokuMatch.swift")
+        #expect(match.components(separatedBy: "GamesGomokuChatDrawer(").count - 1 == 2, "서랍을 세우는 자리가 둘이 아니다")
+        #expect(!match.contains("GamesGomokuChatDrawer(store: gomoku, isExpanded:"), "서랍이 상대를 모른 채 선다(신고할 대상이 없다)")
+    }
+
+    @Test("앱 이름은 한 벌이다 — 홈 화면 · 앱 안 문구 · 약관 · 지원 페이지가 같은 이름을 말한다")
+    func appDisplayNameIsOne() throws {
+        let name = CheckMobileIdentifiers.appDisplayName
+        #expect(name == "아잉체크", "사용자가 정한 앱 이름이 바뀌었다: \(name)")
+        let root = IntegrationContractTests.root
+
+        // 홈 화면·설정 앱이 읽는 이름(두 타깃 모두). XcodeGen 명세와 생성된 plist 가 갈리면 빌드가 옛 이름을 싣는다.
+        let project = try String(contentsOf: root.appendingPathComponent("ios/project.yml"), encoding: .utf8)
+        let displayNames = project.split(separator: "\n").filter { $0.contains("CFBundleDisplayName:") }
+        #expect(displayNames.count == 2, "표시 이름을 적는 타깃이 둘이 아니다: \(displayNames)")
+        #expect(displayNames.allSatisfy { $0.contains(name) }, "홈 화면 이름이 \(name) 가 아니다: \(displayNames)")
+        for plist in ["ios/App/Info.plist", "ios/Widgets/Info.plist"] {
+            let text = try String(contentsOf: root.appendingPathComponent(plist), encoding: .utf8)
+                .replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: "\t", with: "")
+            #expect(text.contains("<key>CFBundleDisplayName</key><string>\(name)</string>"), "\(plist) 의 표시 이름이 project.yml 과 갈렸다")
+        }
+
+        // 앱 안에서 이름을 말하는 자리는 같은 상수를 읽는다 — 특히 알림 안내는 **설정 앱에 실제로 뜨는 이름**을 가리켜야 한다.
+        #expect(MeText.versionLine(version: "0.1.0", build: 1).hasPrefix(name))
+        #expect(PushAuthorizationStatus.denied.meDetail?.contains("설정 앱 › \(name)") == true,
+                "알림 안내가 홈 화면 이름과 다른 경로를 가리킨다: \(PushAuthorizationStatus.denied.meDetail ?? "nil")")
+
+        // 심사원이 함께 읽는 세 자리(홈 화면 · 약관 · 지원 페이지)가 같은 서비스명을 쓴다.
+        for relative in ["docs/terms.md", "docs/index.md", "docs/_config.yml"] {
+            let text = try String(contentsOf: root.appendingPathComponent(relative), encoding: .utf8)
+            #expect(text.contains(name), "\(relative) 가 앱 이름을 말하지 않는다")
+        }
+    }
+
+    @Test("제출 위험 등록부가 앱 사실을 따라온다 — 신고·차단이 붙었는데 '앱에 없다' 로 남아 있으면 심사 노트가 거짓이 된다")
+    func appStoreRegisterKnowsBlockAndReport() throws {
+        // 대조: 앱에 실제로 신고·차단 입구가 있다(이 계약의 전제).
+        let entrances = try IntegrationContractTests.files(containing: ["MessagesBlockText.reportAction"], under: "Sources/CheckMobileKit")
+        #expect(entrances.count >= 2, "대조: 신고 입구가 한 면뿐이다 — 등록부가 아니라 앱을 먼저 고쳐라: \(entrances)")
+
+        let doc = try AppStoreDocContractTests.document("docs/appstore.md")
+        let risks = try AppStoreDocContractTests.section(of: doc, heading: "## 7. 남은 위험 목록과 완화책")
+        let row = try AppStoreDocContractTests.row(in: risks, containing: "사용자 생성 콘텐츠 요건")
+        #expect(!row[1].contains("신고·차단이 앱에 없다"), "등록부가 낡았다 — 이미 붙은 기능을 '없다' 고 적어 두었다: \(row[1])")
+        #expect(!row[4].contains("제보 창이 신고 통로"), "이미 붙은 신고 화면 대신 없는 사실을 심사 노트에 적으라고 한다: \(row[4])")
+        // 남은 것(서버 게이트)을 적어야 등록부가 다시 쓸모 있다.
+        #expect(row[4].contains("서버"), "차단이 실제로 막으려면 서버 마이그레이션이 필요하다는 사실이 빠졌다: \(row[4])")
+
+        // 제출 폼에 그대로 옮기는 값 — 표시 이름 행도 같은 이름이어야 한다.
+        let facts = try AppStoreDocContractTests.section(of: doc, heading: "## 0. 앱 사실 요약")
+        let display = try AppStoreDocContractTests.row(in: facts, containing: "표시 이름")
+        #expect(display[1].contains(CheckMobileIdentifiers.appDisplayName), "제출 자료의 표시 이름이 앱과 다르다: \(display[1])")
     }
 
     @Test("문서 계약: 이용약관 페이지가 나가고(무관용 · 24시간 · 신고/차단 사용법 · 처리방침 링크) 지원 페이지가 그 자리를 알린다")

@@ -14,5 +14,5 @@ exclude:
   - images
 
 theme: jekyll-theme-minimal
-title: aing-check
+title: 아잉체크
 description: 근무 시간을 재고 팀 현황을 보는 맥·아이폰 앱

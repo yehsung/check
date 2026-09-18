@@ -193,6 +193,8 @@ package enum GomokuPhoneText {
     package static let clockRunsInBackground = "앱을 나가도 차례 시간은 흘러요"
     /// 폰: 나 카드의 이름(스토어는 상대만 들고 있다 — 맥 `GomokuPlayerFace.fallback` 과 같은 "나").
     package static let me = "나"
+    /// 별명을 모르는 상대(탈퇴·익명화·옛 응답). 신고·차단 시트가 이름을 부를 때 쓰며, 차단 목록의 폴백("사용자")과 뜻이 같다.
+    package static let opponentFallbackName = "상대"
 
     package static func record(_ record: GomokuRecord?) -> String {
         guard let record else { return "전적 —" }

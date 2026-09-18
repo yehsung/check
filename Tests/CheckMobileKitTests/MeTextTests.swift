@@ -140,7 +140,8 @@ struct MeTextTests {
         #expect(PushAuthorizationStatus.denied.meDetail?.contains("설정 앱") == true)
         #expect(PushAuthorizationStatus.notDetermined.meDetail?.contains("로그인 뒤") == false, "권한 요청은 이제 설정 화면의 [알림 켜기]로도 한다")
         #expect(MeText.pushDetail(.gomokuInvite).contains("오목"))
-        #expect(MeText.versionLine(version: "0.1.0", build: 1) == "aing-check iOS 0.1.0 (1)")
+        // 이름은 홈 화면 표시 이름과 한 벌이다(`CheckMobileIdentifiers.appDisplayName` — 2026-09-18 아잉체크).
+        #expect(MeText.versionLine(version: "0.1.0", build: 1) == "아잉체크 iOS 0.1.0 (1)")
         #expect(MeText.cardPrice(owned: true, price: 30) == "보유")
         #expect(MeText.cardPrice(owned: false, price: nil) == "—")
         #expect(MeText.cardPrice(owned: false, price: 80) == "80")

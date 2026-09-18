@@ -249,7 +249,8 @@ struct GamesGomokuLobby: View {
 
     @ViewBuilder
     private var opponents: some View {
-        let users = gomoku.users
+        // 차단해 숨긴 사람은 빼고 센다 — 목록에서만 빠지고 "N명" 은 그대로면 그 자리가 빈 것처럼 읽힌다.
+        let users = store.gomokuLobbyUsers
         SectionHeader(GomokuPhoneText.lobbyTitle, trailing: users.isEmpty ? .none : .text(GomokuPhoneText.peopleCount(users.count)), padded: true)
         InsetGroup {
             if gomoku.lobbyLoadFailed {

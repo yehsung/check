@@ -10,13 +10,37 @@ import SwiftUI
 /// 맥 `GomokuChatCard` 와 같은 규칙: 음소거는 서버가 아는 판 상태라 상대에게도 표시된다 · 실패한 말은 초안에 남는다 ·
 /// 상대가 껐다/옛 버전이다는 **조건이 참인 동안** 서 있다 · 채팅 왕복은 착수·기권을 잠그지 않는다.
 /// 말풍선(둥근 네모 · 받은 회색/보낸 파랑)과 빠른 문구(회색 알약)는 모양을 갈라 둔다(비평: 둘이 거의 같아 헷갈렸다).
+///
+/// ── 신고·차단(애플 심사 지침 1.2) ──
+/// 이 서랍은 **자유 입력 100자를 주고받는 UGC 면**이다(1:1 메시지와 함께 둘뿐이다 — `docs/appstore.md` §2.1 이 그렇게 신고한다).
+/// 여기서 욕을 먹은 사람이 쓸 수 있는 것이 음소거(①거르기)뿐이면 ②신고·③차단에 닿으려면 화면을 나가 사람 찾기에서
+/// 그 사람과 대화를 새로 열어야 했다 — 심사원이 오목 채팅을 열어 신고 버튼을 찾으면 그 자리에 없다.
+/// 그래서 머리 오른쪽 ··· 에 [신고하기]·[차단하기]를 둔다. **시트는 메시지 탭과 같은 것을 쓴다**(`MessagesBlockSheets`) —
+/// 문구·사유·확인 절차가 두 벌이 되면 한쪽이 언젠가 갈린다. 차단도 같은 확인 시트를 지난다(확인 없는 차단은 여전히 없다).
+/// AI 연습 판에는 서지 않는다(신고할 사람이 없다).
 struct GamesGomokuChatDrawer: View {
     @Bindable var store: GomokuStore
+    /// 이 판의 상대(신고·차단 대상). 대국 화면·결과 화면 둘 다 넘긴다.
+    let opponent: GomokuUser
+    /// 차단·신고를 실제로 보내는 곳(메시지 탭 스토어). 앱 모델이 모두 만든 뒤 채우는 약참조라 없을 수 있다 — 그때는 입구를 세우지 않는다.
+    let messages: MessagesStore?
     @Binding var isExpanded: Bool
 
     @FocusState private var inputFocused: Bool
+    @State private var showsBlockConfirm = false
+    @State private var reportTarget: MessagesReportTarget?
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var colorScheme
+
+    /// 신고·차단할 상대가 있는가 — 사람과 두는 판이고, 보낼 스토어가 있고, 상대 id 를 안다.
+    private var canReportOpponent: Bool {
+        guard messages != nil, !opponent.id.isEmpty else { return false }
+        return !GomokuAIGame.isAIMatchID(store.match?.id)
+    }
+
+    private var opponentName: String {
+        opponent.displayName.isEmpty ? GomokuPhoneText.opponentFallbackName : opponent.displayName
+    }
 
     private static let bottomAnchor = "gomoku-phone-chat-bottom"
 
@@ -58,6 +82,44 @@ struct GamesGomokuChatDrawer: View {
         .onChange(of: inputFocused) { _, focused in
             if focused { isExpanded = true }
         }
+        // 차단은 **확인 시트를 지나야** 일어난다(메시지 탭과 같은 시트 · 같은 세 줄).
+        .sheet(isPresented: $showsBlockConfirm) {
+            MessagesBlockConfirmSheet(
+                peerName: opponentName,
+                onConfirm: {
+                    showsBlockConfirm = false
+                    blockOpponent()
+                },
+                onClose: { showsBlockConfirm = false }
+            )
+        }
+        .sheet(item: $reportTarget) { target in
+            if let messages {
+                MessagesReportSheet(
+                    store: messages,
+                    target: target,
+                    onSent: { blocked in
+                        reportTarget = nil
+                        // '신고하면서 차단' 은 서버가 이미 차단했다 — 화면도 같은 순간에 상대 말을 덮는다.
+                        if blocked { muteAfterBlock() }
+                    },
+                    onClose: { reportTarget = nil }
+                )
+            }
+        }
+    }
+
+    /// 확인 시트를 지난 차단. 판은 건드리지 않는다 — **판돈이 걸려 있다**(SPEC 범위 결정: 진행 중인 판은 그대로 둔다).
+    /// 대신 이 판의 채팅을 끈다: 차단은 다음 조회부터 듣지만 이 판의 말은 계속 오므로, 끄지 않으면
+    /// 방금 차단한 사람의 말이 눈앞에 계속 뜬다(음소거는 서버가 아는 판 상태라 상대에게도 표시된다 — 원래 규칙 그대로다).
+    private func blockOpponent() {
+        messages?.blockPeer(opponent.id)
+        muteAfterBlock()
+    }
+
+    private func muteAfterBlock() {
+        guard !store.isMuted else { return }
+        store.setChatMuted(true)
     }
 
     // MARK: 머리
@@ -112,10 +174,39 @@ struct GamesGomokuChatDrawer: View {
             .buttonStyle(.plain)
             .disabled(store.isSendingChat)
             .accessibilityHint(store.isMuted ? "상대 말을 다시 받아요" : "상대 말을 꺼요 · 상대에게도 표시돼요")
+            if canReportOpponent { safetyMenu }
         }
         .frame(minHeight: 32)
         .padding(.top, -6)
         .padding(.bottom, -6)
+    }
+
+    /// 머리 오른쪽 ··· — [신고하기] · [차단하기](대화 화면의 ··· 와 같은 차림). 음소거는 거르기(①)이고 이 둘은 ②③다.
+    ///
+    /// 신고 대상은 **사람**이다(`messageID` 를 싣지 않는다) — 대국 채팅 줄은 1:1 메시지와 다른 표에 있어서
+    /// 그 id 를 `report_content(p_message_id)` 에 넣으면 운영자가 못 찾는 행을 가리킨다. 무슨 말이 오갔는지는 자유 입력에 적는다.
+    private var safetyMenu: some View {
+        Menu {
+            Button {
+                reportTarget = MessagesReportTarget(peerID: opponent.id, peerName: opponentName)
+            } label: {
+                Label(MessagesBlockText.reportAction, systemImage: "exclamationmark.bubble")
+            }
+            Button(role: .destructive) {
+                showsBlockConfirm = true
+            } label: {
+                Label(MessagesBlockText.blockAction, systemImage: "nosign")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(MobileTheme.label2)
+                .frame(width: 32, height: 32)
+                // 보이는 것은 32 · 누르는 곳은 44(같은 머리의 [키보드] 와 같은 규칙).
+                .frame(width: GamesTouchTarget.minimum, height: GamesTouchTarget.minimum)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(GomokuPhoneText.moreMenu)
     }
 
     private func toggle() {

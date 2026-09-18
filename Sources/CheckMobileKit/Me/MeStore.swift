@@ -111,6 +111,13 @@ package final class MeStore {
     package internal(set) var settingsNotice: String?
     package internal(set) var isSigningOut = false
 
+    // MARK: 계정 삭제 (설정 → 시트)
+    /// 시트의 비밀번호 입력(재인증용). 시트가 닫히면 비운다 — 다음에 열 때 앞 입력이 남지 않게.
+    package var accountDeletionPassword = ""
+    package internal(set) var isDeletingAccount = false
+    /// 시트 안 한 줄(실패 이유 — 로그인 상태는 그대로다).
+    package internal(set) var accountDeletionNotice: String?
+
     /// 루트 화면이 낡았다고 보는 초.
     package nonisolated static let staleSeconds: TimeInterval = 60
     /// 내 제보 목록 상한(맥 `feedbackListLimit` 과 같은 규모).
@@ -193,6 +200,9 @@ package final class MeStore {
         isLoadingSettings = false
         settingsNotice = nil
         isSigningOut = false
+        accountDeletionPassword = ""
+        isDeletingAccount = false
+        accountDeletionNotice = nil
         savingPrivacyKeys.removeAll()
     }
 

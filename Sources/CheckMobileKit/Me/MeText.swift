@@ -467,6 +467,40 @@ package enum MeText {
     package static let signOutConfirmMessage = "이 폰에서만 로그아웃돼요. 맥은 그대로예요."
     package static let signingOut = "로그아웃하는 중…"
 
+    // MARK: 계정 삭제 (앱스토어 5.1.1(v) — 폰만의 문장. 맥에는 이 화면이 없다)
+
+    package static let deleteAccount = "계정 삭제"
+    package static let deleteAccountTitle = "계정을 지울까요?"
+    /// 무엇이 사라지는지 먼저 말한다 — 목록(`deleteAccountItems`)이 그 아래.
+    package static let deleteAccountLede = "이 계정의 모든 것이 서버에서 지워져요."
+    /// 지워지는 것(서버 계약 — FK cascade). 순서는 사용자가 아까워할 것부터.
+    package static let deleteAccountItems = ["근무 기록", "메시지", "할 일", "캐릭터와 루비", "순위 기록"]
+    /// 되돌릴 수 없다는 한 줄. 맥도 같은 계정이라 다음 갱신에서 로그아웃된다.
+    package static let deleteAccountIrreversible = "되돌릴 수 없어요. 맥 앱도 같이 로그아웃돼요."
+    /// 제보는 `feedback_reports.user_id` 가 set null 이라 내용만 익명으로 남는다(서버 계약 — 의도된 동작). 숨기지 않고 밝힌다.
+    package static let deleteAccountFeedbackNote = "보낸 제보는 작성자 없이 내용만 남아요."
+    package static let deleteAccountPasswordPrompt = "비밀번호 확인"
+    /// 왜 비밀번호를 또 묻는지 — 로그인 상태만으로 지울 수 있으면 잠금 해제된 폰을 집은 사람이 지운다.
+    package static let deleteAccountPasswordHelp = "본인 확인을 위해 비밀번호를 다시 입력해 주세요."
+    package static let deleteAccountConfirm = "영구 삭제"
+    package static let deletingAccount = "지우는 중…"
+
+    /// 실패 이유 → 문장(세션 스토어는 갈래만 돌려준다). 원인과 할 일을 말하고, 원문 서버 예외는 절대 싣지 않는다.
+    package static func deleteAccountFailure(_ reason: MobileAccountDeletionFailure) -> String {
+        switch reason {
+        case .notSignedIn: return MobileSessionText.signInAgain
+        case .alreadyRunning: return deletingAccount
+        case .passwordRequired: return "비밀번호를 입력해 주세요"
+        case .emailUnknown: return "로그인 이메일을 알 수 없어요 — 로그아웃한 뒤 다시 로그인해서 시도해 주세요"
+        case .wrongPassword: return "비밀번호가 맞지 않아요"
+        case .reauthRejected(let message): return message
+        case .network: return MobileLoadText.checkConnection
+        // 앱이 서버 배포보다 먼저 나간 창 — "고장"이 아니라 "아직"이라고 말하고, 기다리는 것 말고 할 수 있는 일(제보)도 준다.
+        case .serverNotReady: return "계정 삭제가 아직 서버에 준비되지 않았어요 — 잠시 뒤 다시 시도하거나 제보로 알려 주세요"
+        case .rejected: return "계정을 지우지 못했어요 — 잠시 뒤 다시 시도해 주세요"
+        }
+    }
+
     package static func versionLine(version: String, build: Int) -> String {
         "aing-check iOS \(version) (\(build))"
     }

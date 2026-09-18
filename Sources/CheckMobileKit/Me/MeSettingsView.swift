@@ -4,15 +4,19 @@ import CheckMobileShared
 import SwiftUI
 import UIKit
 
-/// 설정: 공개 설정 · 알림(푸시 코디네이터 — 시스템 권한 · 알림 켜기 · 종류별 3토글) · 화면 모드 · 팀 코드 공유 · 로그아웃 · 버전.
+/// 설정: 공개 설정 · 알림(푸시 코디네이터 — 시스템 권한 · 알림 켜기 · 종류별 3토글) · 화면 모드 · 팀 코드 공유 · 로그아웃 · 계정 삭제 · 버전.
 ///
 /// w15 정돈: 절마다 인셋 그룹 한 장 안의 행(구분선 0.5pt) · 토글은 **파랑**(초록은 근무 중·달성 전용 — w14 비평 30) · 알림 권한을
 /// 아직 정하지 않았거나 꺼져 있으면 종류별 토글은 **꺼진 모양으로** 흐리게 선다(켜진 채 흐린 모양이 '켜졌는데 고장'처럼 읽혔다) ·
 /// 채운 버튼은 [알림 켜기] 하나(팀 코드 공유는 틴트) · 맨 아래 버전 줄은 탭 막대와 띄운다.
+///
+/// 계정 삭제(앱스토어 5.1.1(v)): 계정 절 맨 아래 빨간 글자 행 하나 — 누르면 시트(`MeAccountDeletionSheet`)가 무엇이 지워지는지 ·
+/// 되돌릴 수 없음 · 비밀번호 재입력 · [영구 삭제] 를 묻는다. **이 화면은 삭제를 부르지 않는다**(시트만 부른다 — 소스 계약).
 struct MeSettingsView: View {
     let store: MeStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var confirmingSignOut = false
+    @State private var showsAccountDeletion = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -67,6 +71,11 @@ struct MeSettingsView: View {
             Button("취소", role: .cancel) {}
         } message: {
             Text(MeText.signOutConfirmMessage)
+        }
+        // 계정 삭제는 확인 대화상자가 아니라 **시트**다 — 지워지는 것의 목록과 비밀번호 입력이 들어가야 하고, 기권 확인과 같은 이유로
+        // 알림창의 재질·시스템 빨강을 피한다(`AingConfirmSheet` 주석). 도는 중에는 시트가 닫히지 않는다.
+        .sheet(isPresented: $showsAccountDeletion) {
+            MeAccountDeletionSheet(store: store) { showsAccountDeletion = false }
         }
     }
 
@@ -292,11 +301,34 @@ struct MeSettingsView: View {
                         Spacer(minLength: 0)
                     }
                 }
-                GroupRow(divider: .none) {
+                GroupRow(divider: .inset(MobileTheme.cardPadding)) {
                     AingButton(store.isSigningOut ? MeText.signingOut : MeText.signOut, kind: .destructive, size: .md, fillsWidth: true,
                                isBusy: store.isSigningOut) {
                         confirmingSignOut = true
                     }
+                }
+                // 계정 삭제 행: 글자만 빨강(`danger`)인 목록 행 — 로그아웃(틴트 캡슐)보다 한 단 낮은 무게. 두 개를 다 캡슐로 두면
+                // 되돌릴 수 없는 쪽이 되돌릴 수 있는 쪽과 같은 무게로 읽힌다. 누르는 곳은 행 전체(44pt — 행의 위아래 여백을 버튼이 갖는다).
+                GroupRow(divider: .none, padding: EdgeInsets(top: 0, leading: MobileTheme.cardPadding, bottom: 0, trailing: MobileTheme.cardPadding)) {
+                    Button {
+                        showsAccountDeletion = true
+                    } label: {
+                        HStack(spacing: MobileTheme.space3) {
+                            Text(MeText.deleteAccount)
+                                .font(.body)
+                                .foregroundStyle(MobileTheme.danger)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: MobileTheme.space2)
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(MobileTheme.label3)
+                                .accessibilityHidden(true)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: AingButtonMetrics.minimumTarget)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(store.isSigningOut || store.isDeletingAccount)
                 }
             }
         }

@@ -85,9 +85,13 @@ package struct AingButton: View {
     private let size: AingButtonMetrics.Size
     private let fillsWidth: Bool
     private let isBusy: Bool
+    private let role: ButtonRole?
     private let action: () -> Void
 
-    /// - Parameter isBusy: 도는 중이면 스피너를 앞에 두고 눌리지 않는다.
+    /// - Parameters:
+    ///   - isBusy: 도는 중이면 스피너를 앞에 두고 눌리지 않는다.
+    ///   - role: 시스템 뜻(`.destructive` — 보이스오버가 "삭제" 성격을 읽고, 시트 안에서 되돌릴 수 없는 동작임을 시스템도 안다).
+    ///     색은 `kind` 가 정한다(역할이 색을 바꾸지 않는다 — 토큰 규칙).
     package init(
         _ title: String,
         systemImage: String? = nil,
@@ -95,6 +99,7 @@ package struct AingButton: View {
         size: AingButtonMetrics.Size = .lg,
         fillsWidth: Bool = false,
         isBusy: Bool = false,
+        role: ButtonRole? = nil,
         action: @escaping () -> Void
     ) {
         self.title = title
@@ -103,11 +108,12 @@ package struct AingButton: View {
         self.size = size
         self.fillsWidth = fillsWidth
         self.isBusy = isBusy
+        self.role = role
         self.action = action
     }
 
     package var body: some View {
-        Button(action: action) {
+        Button(role: role, action: action) {
             HStack(spacing: 6) {
                 if isBusy {
                     ProgressView()

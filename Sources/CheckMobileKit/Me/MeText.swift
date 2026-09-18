@@ -469,6 +469,11 @@ package enum MeText {
 
     // MARK: 계정 삭제 (앱스토어 5.1.1(v) — 폰만의 문장. 맥에는 이 화면이 없다)
 
+    /// 개인정보 처리방침 — 앱스토어 5.1.1(i) 는 스토어 메타데이터와 **앱 안** 둘 다에 링크를 요구한다.
+    /// 주소는 저장소 docs/ 를 GitHub Pages 로 켜 만든 것이다(같은 문서가 스토어 제출 폼의 처리방침 URL 이기도 하다).
+    package static let privacyPolicy = "개인정보 처리방침"
+    package static let privacyPolicyURL = URL(string: "https://yehsung.github.io/check/privacy")!
+
     package static let deleteAccount = "계정 삭제"
     package static let deleteAccountTitle = "계정을 지울까요?"
     /// 무엇이 사라지는지 먼저 말한다 — 목록(`deleteAccountItems`)이 그 아래.

@@ -15,6 +15,7 @@ import UIKit
 struct MeSettingsView: View {
     let store: MeStore
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
     @State private var confirmingSignOut = false
     @State private var showsAccountDeletion = false
 
@@ -39,6 +40,7 @@ struct MeSettingsView: View {
                 teamSection
                     .id("team")
                 accountSection
+                policyRow
                 Text(store.versionLine)
                     .font(.footnote)
                     .monospacedDigit()
@@ -330,6 +332,34 @@ struct MeSettingsView: View {
                     .buttonStyle(.plain)
                     .disabled(store.isSigningOut || store.isDeletingAccount)
                 }
+            }
+        }
+    }
+
+    /// 개인정보 처리방침 링크(앱스토어 5.1.1(i) — 처리방침은 **스토어 메타데이터와 앱 안 둘 다**에 있어야 한다).
+    /// 절 머리가 없다: 설정 목록의 끝, 버전 줄 바로 위에 붙는 한 행이다(로그아웃·계정 삭제 같은 '하는 일'이 아니라 '읽는 것'이라
+    /// 계정 절 안에 섞지 않았다). 주소는 저장소 docs/ 를 GitHub Pages 로 켜 만든 것이다.
+    private var policyRow: some View {
+        InsetGroup {
+            GroupRow(divider: .none, padding: EdgeInsets(top: 0, leading: MobileTheme.cardPadding, bottom: 0, trailing: MobileTheme.cardPadding)) {
+                Button {
+                    openURL(MeText.privacyPolicyURL)
+                } label: {
+                    HStack(spacing: MobileTheme.space3) {
+                        Text(MeText.privacyPolicy)
+                            .font(.body)
+                            .foregroundStyle(MobileTheme.label)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: MobileTheme.space2)
+                        Image(systemName: "arrow.up.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(MobileTheme.label3)
+                            .accessibilityHidden(true)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: AingButtonMetrics.minimumTarget)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
     }

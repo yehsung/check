@@ -24,60 +24,8 @@ struct MobilePasswordResetView: View {
             VStack(spacing: 0) {
                 MobileBrandHeader(mood: .plain, title: headerTitle, message: headerMessage)
 
-                InsetGroup {
-                    switch store.step {
-                    case .email:
-                        inputRow("envelope", last: true) {
-                            TextField(text: $store.email, prompt: prompt(MobileSignUpText.email)) { Text(MobileSignUpText.email) }
-                                .textContentType(.username)
-                                .keyboardType(.emailAddress)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .submitLabel(.send)
-                                .focused($focused, equals: .email)
-                                .onSubmit(perform)
-                                .font(.body)
-                                .foregroundStyle(MobileTheme.label)
-                        }
-                    case .code:
-                        // 어디로 보냈는지 먼저 알린다 — 주소를 잘못 적었을 때 스스로 알아챌 유일한 단서다(맥과 같은 두 줄).
-                        GroupRow(divider: .inset(MobileTheme.cardPadding), minHeight: MobileTheme.rowHeightTwoLine) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(MobilePasswordResetText.sentTo)
-                                    .font(.footnote)
-                                    .foregroundStyle(MobileTheme.label2)
-                                Text(store.email)
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(MobileTheme.label)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                            .accessibilityElement(children: .combine)
-                        }
-                        inputRow("number", last: true) {
-                            TextField(text: $code, prompt: prompt(MobilePasswordResetText.codeLabel)) { Text(MobilePasswordResetText.codeLabel) }
-                                .textContentType(.oneTimeCode)
-                                .keyboardType(.numberPad)
-                                .submitLabel(.go)
-                                .focused($focused, equals: .code)
-                                .onSubmit(perform)
-                                .font(MobileTheme.number(.body))
-                                .monospacedDigit()
-                                .foregroundStyle(MobileTheme.label)
-                        }
-                    case .newPassword:
-                        inputRow("lock.rotation", last: true) {
-                            SecureField(text: $newPassword, prompt: prompt(MobilePasswordResetText.newPasswordLabel)) { Text(MobilePasswordResetText.newPasswordLabel) }
-                                .textContentType(.newPassword)
-                                .submitLabel(.go)
-                                .focused($focused, equals: .newPassword)
-                                .onSubmit(perform)
-                                .font(.body)
-                                .foregroundStyle(MobileTheme.label)
-                        }
-                    }
-                }
-                .padding(.top, MobileTheme.space6)
+                stepGroup
+                    .padding(.top, MobileTheme.space6)
 
                 if let text = store.noticeText {
                     InlineNotice(text: text, kind: store.noticeIsError ? .error : .info)
@@ -90,16 +38,9 @@ struct MobilePasswordResetView: View {
 
                 // 재발송은 **코드 화면에만**(3단계에선 코드가 이미 소모됐다). 대상은 지금 보는 칸이 아니라 실제로 보낸 주소다.
                 if store.step == .code {
-                    HStack(spacing: 2) {
-                        Text(MobilePasswordResetText.resendPrompt)
-                            .font(.footnote)
-                            .foregroundStyle(MobileTheme.label2)
-                        AingButton(store.resendTitle, kind: .plain, size: .sm) {
-                            Task { await store.requestCode() }
-                        }
-                        .disabled(!store.isResendEnabled)
+                    MobileResendRow(title: store.resendTitle, isEnabled: store.isResendEnabled) {
+                        Task { await store.requestCode() }
                     }
-                    .frame(maxWidth: .infinity)
                     .padding(.top, MobileTheme.space2)
                 }
             }
@@ -113,6 +54,44 @@ struct MobilePasswordResetView: View {
         .onAppear { focused = focusField(for: store.step) }
         .onChange(of: store.step) { _, step in focused = focusField(for: step) }
         .onDisappear { store.cancel() }
+    }
+
+    /// 단계별 입력 그룹. 코드 단계는 가입 인증과 **같은 부품**(`MobileCodeEntryGroup`) — 동작(자동 채움·키패드·제출 키)이
+    /// 두 흐름에서 갈리지 않게 한 벌로 둔다.
+    @ViewBuilder
+    private var stepGroup: some View {
+        @Bindable var store = store
+        switch store.step {
+        case .email:
+            InsetGroup {
+                inputRow("envelope", last: true) {
+                    TextField(text: $store.email, prompt: prompt(MobileSignUpText.email)) { Text(MobileSignUpText.email) }
+                        .textContentType(.username)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.send)
+                        .focused($focused, equals: .email)
+                        .onSubmit(perform)
+                        .font(.body)
+                        .foregroundStyle(MobileTheme.label)
+                }
+            }
+        case .code:
+            MobileCodeEntryGroup(sentToEmail: store.email, code: $code, field: Field.code, focused: $focused, onSubmit: perform)
+        case .newPassword:
+            InsetGroup {
+                inputRow("lock.rotation", last: true) {
+                    SecureField(text: $newPassword, prompt: prompt(MobilePasswordResetText.newPasswordLabel)) { Text(MobilePasswordResetText.newPasswordLabel) }
+                        .textContentType(.newPassword)
+                        .submitLabel(.go)
+                        .focused($focused, equals: .newPassword)
+                        .onSubmit(perform)
+                        .font(.body)
+                        .foregroundStyle(MobileTheme.label)
+                }
+            }
+        }
     }
 
     private var headerTitle: String {

@@ -106,6 +106,9 @@ import Testing
         "games/gomoku/lobby", "games/gomoku/match", "me", "me/shop", "me/feedback", "me/settings", "login", "update",
         // 나 탭 기록 없는 계정(w15 E): 라우트는 `me` 와 같게 열리고(끝 `/` 는 버려진다) 장면만 `_me-`.
         "me/",
+        // 로그인 **아래** 화면(w16): 탭 라우트가 아니라 `MobileAuthRoute` 다. 가입 인증코드 장면(`_signup-confirm`)만
+        // 픽스처를 덮어쓴다 — 그 장면의 가입 응답은 세션이 없다(설정을 켠 서버).
+        "signup", "signup/create", "signup/confirm", "reset",
     ]
 
     @Test("데모 픽스처: 합친 뒤 키 유일 · 모든 장면 폴더가 실제 데모 라우트의 장면이다(오타 장면은 조용히 안 쓰인다)")
@@ -120,7 +123,8 @@ import Testing
             if scene.hasPrefix("games-gomoku-match-") { candidates.append("games/gomoku/match/" + scene.dropFirst("games-gomoku-match-".count)) }
             let route = candidates.first { $0.replacingOccurrences(of: "/", with: "-").lowercased() == scene }
             #expect(route != nil, "장면 폴더 _\(scene) 에 맞는 데모 라우트가 없다")
-            if let route, !["login", "update"].contains(route) {
+            // 탭 라우트만 `AingRoute` 로 열린다. 로그인 화면·업데이트 화면·로그인 아래 화면(가입·재설정)은 저쪽 길이다.
+            if let route, !["login", "update"].contains(route), MobileAuthRoute.demo(route) == nil {
                 #expect(AingRoute(path: route) != nil, "장면 _\(scene) 의 라우트 \(route) 를 앱이 열지 못한다")
             }
         }

@@ -375,16 +375,20 @@ import Testing
         #expect(h.store.createdSession == nil)
     }
 
-    @Test("세션 없는 200(확인 메일 필요): 안내만 남기고 팀 호출·세션 없음 · 비밀번호는 비운다")
+    /// 세션 없는 200 = 가입 확인을 켠 서버. 여기서는 **팀 단계로 새지 않는다**는 것만 본다 —
+    /// 코드 화면의 규칙(두 서버 모드 · 재전송 · 출구)은 `BaseSignUpConfirmTests` 가 통째로 덮는다.
+    /// 본문에 `identities` 키가 아예 없는 옛 GoTrue 응답도 같은 갈래다(빈 배열만 "이미 가입된 이메일"이다).
+    @Test("세션 없는 200(가입 확인을 켠 서버): 코드 화면으로 가고 팀 호출·세션은 없다 · 비밀번호는 비운다")
     func confirmEmailRequired() async {
         let h = await makeHarness(responder: Self.server(signup: .json(#"{"user":{"id":"user-new"}}"#)))
-        defer { h.tearDown() }
+        defer { h.store.cancelPendingWork(); h.tearDown() }
         fillAccount(h)
         h.store.teamCode = "AINGTEAM"
         await h.store.previewTeamCode().value
         await h.store.submit()?.value
-        #expect(h.store.notice == MobileSignUpText.confirmEmail)
-        #expect(h.store.stage == .account)
+        #expect(h.store.stage == .confirmCode)
+        #expect(h.store.notice == MobileSignUpText.confirmSent)
+        #expect(!h.store.noticeIsError)
         #expect(h.store.password == "")
         #expect(h.session.phase == .signedOut)
         #expect(h.count(rpc: "join_team") == 0)

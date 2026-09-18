@@ -58,10 +58,12 @@ import Testing
 
     @Test("데모 조립: now → 로그인 상태로 시작해 라우트를 연다 · login·signup·reset → 로그아웃 · update → 업데이트 화면 · 금지 호출 0")
     func demoEnvironments() async throws {
-        // w16: 가입·재설정 장면(`signup` · `signup/create` · `reset`)도 로그아웃으로 시작한다 — 전역 데모 호스트를 쓰는 유일한 자리라 여기서 함께 돈다.
+        // w16: 가입·재설정 장면(`signup` · `signup/create` · `signup/confirm` · `reset`)도 로그아웃으로 시작한다 — 여기서 함께 돈다.
+        // 전역 데모 호스트는 한 번에 하나만 쓴다(`baseWithDemoHost` 머리 주석 — 겹치면 다른 장면의 픽스처를 받는다).
+        try await baseWithDemoHost {
         for (route, expected) in [
             ("rankings/tokens", MobileSessionPhase.signedIn), ("login", .signedOut), ("update", .needsUpdate(minBuild: 99)),
-            ("signup", .signedOut), ("signup/create", .signedOut), ("reset", .signedOut),
+            ("signup", .signedOut), ("signup/create", .signedOut), ("signup/confirm", .signedOut), ("reset", .signedOut),
         ] {
             MobileStubURLProtocol.clearRequests(host: MobileDemo.host)
             let environment = try #require(MobileDemo.environment(arguments: ["app", "-AingCheckDemo", "YES", "-AingCheckDemoRoute", route]))
@@ -84,6 +86,7 @@ import Testing
             #expect(MobileForbiddenCalls.violations(in: MobileStubURLProtocol.requests(host: MobileDemo.host)).isEmpty)
         }
         BaseStub.tearDown(host: MobileDemo.host, storage: .temporary(name: "demo"))
+        }
     }
 
     // MARK: - 수명

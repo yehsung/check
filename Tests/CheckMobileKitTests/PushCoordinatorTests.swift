@@ -124,6 +124,9 @@ import Testing
         #expect(h.system.statusReads >= 1)
         #expect(!h.push.isPrimerPresented)
 
+        // 전역 데모 호스트는 한 번에 하나만 쓴다(`baseWithDemoHost` 머리 주석 — 다른 스위트의 장면 순회와 겹치면
+        // 이 조립의 로그인이 그 장면의 픽스처를 받아 83초를 기다리다 실패했다, w16 실측).
+        try await baseWithDemoHost {
         MobileStubURLProtocol.clearRequests(host: MobileDemo.host)
         let environment = try #require(MobileDemo.environment(arguments: ["app", "-AingCheckDemo", "YES", "-AingCheckDemoRoute", "now"]))
         let demo = MobileAppModel(environment: environment)
@@ -150,6 +153,7 @@ import Testing
         await forced.session.pendingDeviceRegistration?.value
         await baseBarrier(forced.context.service)
         #expect(MobileForbiddenCalls.violations(in: MobileStubURLProtocol.requests(host: MobileDemo.host)).isEmpty)
+        }
         #expect(h.forbiddenViolations.isEmpty)
     }
 
@@ -597,6 +601,8 @@ import Testing
 
     @Test("데모 -AingCheckDemoPushOpen: 로그인 뒤 그 종류의 알림을 누른 경로로 연다 · 금지 호출 0")
     func demoPushOpen() async throws {
+        // 전역 데모 호스트는 한 번에 하나만(`baseWithDemoHost`).
+        try await baseWithDemoHost {
         for (raw, tab, route) in [
             ("message", AingTab.messages, AingRoute.message(peerID: PushDemo.peerID)),
             ("gomoku_invite", .games, .gomokuInvite(matchID: PushDemo.matchID)),
@@ -620,5 +626,6 @@ import Testing
             #expect(MobileForbiddenCalls.violations(in: MobileStubURLProtocol.requests(host: MobileDemo.host)).isEmpty)
         }
         BaseStub.tearDown(host: MobileDemo.host, storage: .temporary(name: "demo"))
+        }
     }
 }

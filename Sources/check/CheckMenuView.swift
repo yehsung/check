@@ -2692,7 +2692,8 @@ struct PokeMessageReceiptStrip: View {
 
     private var strip: some View {
         HStack(spacing: 8) {
-            CheckAvatarView(name: message.fromName, userID: message.fromUserID, size: 22)
+            // 사진도 넘긴다 — 빠뜨리면 사진을 올린 사람이 이 줄에서만 캐릭터로 선다(아래 목록 행과 다른 얼굴).
+            CheckAvatarView(name: message.fromName, userID: message.fromUserID, avatarURL: message.fromAvatarURL, size: 22)
             Text("\(message.fromName)님")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(CheckTheme.primaryText)

@@ -422,7 +422,7 @@ private func avFetches(_ host: String) -> Int {
             ("CheckReportAdminView.swift", "userID: report.reporterID"),
             ("CheckReportAdminView.swift", "userID: report.targetID"),
             ("CheckFeedbackView.swift", "userID: report.userID"),
-            ("CheckMenuView.swift", "userID: message.fromUserID"),
+            ("CheckMenuView.swift", "userID: message.fromUserID, avatarURL: message.fromAvatarURL"),
             ("CheckComponents.swift", "userID: userID"),
             ("CheckAvatarView.swift", "userID: userID"),
         ]
@@ -446,6 +446,20 @@ private func avFetches(_ host: String) -> Int {
         #expect(editable.count == 1 && editable.allSatisfy { $0.text.contains("userID: userID") }, "\(editable)")
         let memberRows = try Self.calls(of: "TeamMemberRow").filter { $0.file == "CheckMenuView.swift" }
         #expect(memberRows.contains { $0.text.contains("userID: member.id") }, "팀원 행이 id 를 안 넘긴다")
+    }
+
+    /// 사진 → 캐릭터 순서는 **사진을 넘겨야** 선다. 사진을 빠뜨린 사람 자리는 사진을 올린 사람도 그 자리에서만 캐릭터(대개 아잉)로
+    /// 세운다 — 이니셜 시절엔 '정보 없음'으로 읽혔지만 이제는 **틀린 얼굴**이다(2026-09-20 검증: 콕 찌르기 '최근 받은 메시지' 줄).
+    /// 사진 칸이 없는 자리는 사람이 아닌 팀 리그 줄뿐이다.
+    @Test func 사람_아바타_호출부는_전부_사진도_넘긴다_빠진_곳은_팀_리그_줄뿐() throws {
+        let avatars = try Self.calls(of: "CheckAvatarView")
+        let withoutPhoto = avatars.filter { !$0.text.contains("avatarURL:") }
+        #expect(withoutPhoto.map(\.text) == ["CheckAvatarView(name: entry.name, userID: nil, size: 30, center: center)"],
+                "사진을 안 넘기는 사람 자리: \(withoutPhoto.map { "\($0.file): \($0.text)" })")
+        // 받은 메시지 줄의 사진은 **그 메시지를 보낸 사람의** 사진이다(take_pokes 행의 from_avatar_url 을 나른 칸).
+        let strip = avatars.filter { $0.file == "CheckMenuView.swift" && $0.text.contains("message.") }
+        #expect(strip.map(\.text) == ["CheckAvatarView(name: message.fromName, userID: message.fromUserID, avatarURL: message.fromAvatarURL, size: 22)"],
+                "\(strip.map(\.text))")
     }
 
     @Test func 이니셜_원은_얼굴_한_벌에서만_그리고_남의_초상은_아잉_폴백_경로를_타지_않는다() throws {
@@ -608,6 +622,52 @@ private func avFetches(_ host: String) -> Int {
         let aing = try Self.bitmap(Self.avatar(avPlain))
         #expect(Self.share(aing, where: Self.isLavender) > 0.2, "null 인 사람이 아잉으로 안 섰다")
         #expect(Self.meanDifference(aing, fox) > 20)
+    }
+
+    /// 콕 찌르기 '최근 받은 메시지' 줄의 아바타(22pt)만 잘라 굽는다 — 서버 행(take_pokes) → 스토어의 옮김
+    /// (`freshReceivedMessages`, drain 이 말풍선 큐에 넣는 그 함수) → 줄. 보낸 사람은 표에서 여우다.
+    static func receiptAvatar(fromAvatarUrl: String?) throws -> NSBitmapImageRep {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let row = TakenPokeRow(id: "m-receipt", fromUser: avFox, fromDisplayName: "민수", fromAvatarUrl: fromAvatarUrl,
+                               createdEpoch: Int(now.timeIntervalSince1970) - 10, kind: "message", body: "밥?")
+        guard let message = WorkTimerStore.freshReceivedMessages(rows: [row], now: now).first else {
+            throw AvatarRenderError.failed
+        }
+        let strip = try bitmap(
+            PokeMessageReceiptStrip(message: message, now: now)
+                .frame(width: 320)
+                .environment(\.appUserCharacters, directory)
+        )
+        // 줄 높이 34pt · 가로 여백 10pt · 가운데 22pt 원 → @2x 로 (20, 12) 에서 44×44.
+        guard strip.pixelsHigh == 68 else { throw AvatarRenderError.failed }
+        let rect = CGRect(x: 20, y: (strip.pixelsHigh - 44) / 2, width: 44, height: 44)
+        guard let crop = strip.cgImage?.cropping(to: rect) else { throw AvatarRenderError.failed }
+        return NSBitmapImageRep(cgImage: crop)
+    }
+
+    /// 2026-09-20 검증(medium): 이 줄만 사진을 몰라 사진을 올린 사람도 여기서만 캐릭터(대개 아잉)로 섰다 — 바로 아래 목록 행에는
+    /// 같은 사람이 사진으로 선다. 서버 행은 사진을 싣는데(from_avatar_url) 스토어가 받은 메시지로 옮길 때 버렸다.
+    @Test func 받은_메시지_줄은_보낸_사람이_올린_사진을_그리고_사진이_없을_때만_캐릭터다() throws {
+        // 기준선: 사진이 없으면 보낸 사람의 캐릭터(여우) — 자르는 자리가 맞고 표가 이 줄까지 닿는다는 증거이기도 하다.
+        let fox = try Self.receiptAvatar(fromAvatarUrl: nil)
+        #expect(Self.share(fox, where: Self.isOrange) > 0.2, "받은 메시지 줄에 보낸 사람(여우)의 캐릭터가 안 섰다")
+        // 사진을 올린 사람 — 번들의 아잉 초상 파일을 '사진'으로 준다(라벤더 · 주황 없음).
+        let photoFile = try #require(CheckMascotAssets.url(for: .negative))
+        let photo = try Self.receiptAvatar(fromAvatarUrl: photoFile.absoluteString)
+        #expect(Self.share(photo, where: Self.isOrange) < 0.05, "사진을 올린 사람이 받은 메시지 줄에서만 캐릭터로 선다")
+        #expect(Self.meanDifference(photo, fox) > 20, "받은 메시지 줄이 보낸 사람의 사진을 버린다")
+
+        // 옮김 자체(순수): 행의 사진 → 받은 메시지의 사진 · 없거나 URL 이 아니면 nil(캐릭터로 그린다).
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        func carried(_ url: String?) -> URL?? {
+            WorkTimerStore.freshReceivedMessages(rows: [
+                TakenPokeRow(id: "m", fromUser: avFox, fromDisplayName: "민수", fromAvatarUrl: url,
+                             createdEpoch: Int(now.timeIntervalSince1970) - 10, kind: "message", body: "밥?")
+            ], now: now).first.map(\.fromAvatarURL)
+        }
+        #expect(carried(photoFile.absoluteString) == .some(photoFile))
+        #expect(carried(nil) == .some(nil))
+        #expect(carried("") == .some(nil))
     }
 
     @Test func 모르는_캐릭터와_표에_없는_사람은_이니셜_그대로다() throws {

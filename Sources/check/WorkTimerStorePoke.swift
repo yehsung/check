@@ -717,7 +717,10 @@ extension WorkTimerStore {
                 body: body,
                 createdAt: createdAt,
                 // 보낸이 id 를 여기서 함께 나른다 — 팝오버의 수신 줄이 "그 사람 대화"를 열 수 있는 근거다.
-                fromUserID: row.fromUser
+                fromUserID: row.fromUser,
+                // 사진도 함께 나른다 — 버리면 그 줄의 아바타만 사진을 건너뛰고 캐릭터를 그린다(ReceivedMessage.fromAvatarURL).
+                // 옮김은 대화 이력 행과 같은 규칙(consumedMessageEntries 의 peerAvatarURL).
+                fromAvatarURL: row.fromAvatarUrl.flatMap { URL(string: $0) }
             )
         }
         .sorted { $0.createdAt < $1.createdAt }
@@ -1222,12 +1225,18 @@ struct ReceivedMessage: Equatable, Identifiable {
     /// 기본값이 nil 인 이유는 **하위호환**이다: 이 인자를 모르는 기존 호출부(테스트 픽스처 포함)가
     /// 무수정으로 컴파일된다. nil 이면 그 줄은 버튼이 아니라 표시 줄로만 그린다 — 상대 없이 대화에 들어가는 문을 만들지 않는다(2026-09-11).
     let fromUserID: String?
+    /// 보낸이가 올린 프로필 사진(take_pokes 행의 from_avatar_url · 2026-09-20). 팝오버 '최근 받은 메시지' 줄의 아바타가
+    /// 사진 → 착용 캐릭터 → 이니셜 규칙을 지키려면 사진을 알아야 한다 — 이 칸이 없으면 사진을 올린 사람도 그 줄에서만
+    /// 캐릭터(대개 아잉)로 서고, 바로 아래 목록 행에는 같은 사람이 사진으로 선다. nil = 사진 없음 · 모름(캐릭터로 그린다).
+    /// 기본값 nil 은 fromUserID 와 같은 하위호환이다(기존 픽스처 무수정).
+    let fromAvatarURL: URL?
 
-    init(id: String, fromName: String, body: String, createdAt: Date, fromUserID: String? = nil) {
+    init(id: String, fromName: String, body: String, createdAt: Date, fromUserID: String? = nil, fromAvatarURL: URL? = nil) {
         self.id = id
         self.fromName = fromName
         self.body = body
         self.createdAt = createdAt
         self.fromUserID = fromUserID
+        self.fromAvatarURL = fromAvatarURL
     }
 }

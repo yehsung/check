@@ -576,3 +576,15 @@ private final class GamesMainFlag {
         }
     }
 }
+
+// 허브 오목 카드: 두던 AI 판이 사람의 1:1 신청을 가리지 않는다(2026-09-20 검증 low — 루비가 걸린 신청을 놓친다).
+@Test("허브 카드: AI 판은 받은 신청을 가리지 않고, 사람 대국은 늘 먼저다")
+func hubCardAIMatchDoesNotHideIncoming() {
+    #expect(!GamesText.hubShowsActiveMatch(active: true, isAIMatch: true, incoming: 1), "AI 판이 받은 신청을 가렸다")
+    #expect(GamesText.hubShowsActiveMatch(active: true, isAIMatch: true, incoming: 0), "받은 신청이 없으면 두던 AI 판을 말한다")
+    #expect(GamesText.hubShowsActiveMatch(active: true, isAIMatch: false, incoming: 3), "사람 대국은 신청보다 먼저다(차례 시간이 흐른다)")
+    #expect(!GamesText.hubShowsActiveMatch(active: false, isAIMatch: false, incoming: 2))
+    let line = GamesText.gomokuLine(
+        incoming: 1, hasActiveMatch: GamesText.hubShowsActiveMatch(active: true, isAIMatch: true, incoming: 1), hasOutgoing: false)
+    #expect(line == "받은 신청 1건")
+}

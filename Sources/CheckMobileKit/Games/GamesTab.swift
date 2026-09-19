@@ -117,8 +117,10 @@ struct GamesTab: View {
 
     private var gomokuCard: some View {
         let incoming = store.badgeCount
-        let active = store.hasActiveGomokuMatch
         let gomoku = store.context.gomoku
+        // AI 판은 받은 신청을 가리지 않는다 — 규칙과 까닭은 `GamesText.hubShowsActiveMatch`.
+        let active = GamesText.hubShowsActiveMatch(
+            active: store.hasActiveGomokuMatch, isAIMatch: gomoku.isAIMatch, incoming: incoming)
         let line = GamesText.gomokuLine(
             incoming: incoming, hasActiveMatch: active, hasOutgoing: gomoku.outgoing != nil,
             inboxFailed: gomoku.inboxLoadFailed && gomoku.incoming.isEmpty

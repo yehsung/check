@@ -280,7 +280,16 @@ final class WorkTimerStore {
             // 확인합니다"라고 약속했는데 신고가 오는 곳은 폰이라, 운영자가 [제보] 화면을 열 때까지 기다리면 그 약속이 운영자의
             // 기억에 매인다. 팝오버를 안 여는 동안은 기존 15초 폴링 tick 이 5분에 한 번 묻는다(`refreshReportOpenCountIfDue`) —
             // 이 한 줄은 여는 순간의 레일 배지를 최신으로 맞출 뿐이다. 비운영자는 묻지도 않는다(가드는 그 함수 안).
-            refreshReportOpenCount()
+            //
+            // ★ [신고] 칸이 골라진 채 닫혔다면 **목록부터** 새로 받는다(2026-09-20 재검증 medium). 점이 알림 경로가 된 뒤의
+            //   평소 흐름은 "점을 보고 연다"인데, 건수만 물으면 도착한 화면이 옛 목록이나 "받은 신고가 없어요"를 말한다 —
+            //   점은 1을 말하는데 목록은 0을 말하는 화면이 된다. 목록 조회는 끝에 건수도 받으므로 두 번 묻지 않는다.
+            //   [신고] 칸이 아니면 예전과 같다(제보 칸의 왕복 수는 한 번도 안 는다).
+            if showsReportAdmin {
+                reloadReportAdminIfShowing()
+            } else {
+                refreshReportOpenCount()
+            }
             refreshEquippedCharacterIfStale()
             // 팀원이 바꾼 주간 목표/이름/역할/참여코드를 팝오버 열 때 60초 스로틀로 재조회해 반영한다.
             refreshTeamMetaIfStale()

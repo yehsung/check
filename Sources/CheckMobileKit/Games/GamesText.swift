@@ -38,6 +38,14 @@ package enum GamesText {
 
     package static let gomokuCardSubtitle = GomokuPhoneText.subtitle
 
+    /// 허브 오목 카드가 '대국 중'을 앞세울 것인가. **AI 판은 사람의 신청을 가리지 않는다**(2026-09-20 검증 low).
+    /// AI 판은 기록도 판돈도 없고 화면을 떠나면 시계가 멈춰 두던 채로 며칠이고 남을 수 있다 — 그 판이 '진행 중인 대국'으로
+    /// 카드를 차지하면 사람이 보낸 1:1 신청(루비가 걸린 진짜 대결)이 카드에서 안 보인다. AI 판 중에도 받은함은 계속 받고
+    /// 수락도 되므로(코어 `syncOnce`·`respond`), 받은 신청이 있으면 그쪽을 먼저 말한다. 사람 대국은 예전처럼 늘 먼저다.
+    package static func hubShowsActiveMatch(active: Bool, isAIMatch: Bool, incoming: Int) -> Bool {
+        active && !(isAIMatch && incoming > 0)
+    }
+
     /// 오목 카드의 한 줄. 진행 중인 대국이 먼저다(차례 시간이 흐르고 있다).
     /// 받은 신청이 0건인데 받은함을 **못 불러왔으면** "상대를 골라…"(= 받은 게 없다는 뜻)로 접지 않고 실패를 말한다.
     package static func gomokuLine(incoming: Int, hasActiveMatch: Bool, hasOutgoing: Bool, inboxFailed: Bool = false) -> String {

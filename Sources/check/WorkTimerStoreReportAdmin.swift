@@ -73,7 +73,13 @@ extension WorkTimerStore {
     /// [신고]를 고를 때마다 목록을 **다시 받는다**. 24시간 약속이 걸린 표면이라, 칸을 여는 순간이 곧 최신을 보고 싶은 순간이다.
     func selectInboxSegment(reports: Bool) {
         let target = reports && ultraUnlimited
-        guard feedbackInboxShowsReports != target else { return }
+        // 켜진 [신고] 칩을 다시 누르면 **새로 받는다**(2026-09-20 재검증 medium). 이 표면엔 당겨서 새로고침이 없어서,
+        // 예전처럼 여기서 빠지면 낡은 목록을 고칠 손잡이가 패널을 닫았다 여는 것뿐이었다. 펼침·초안은 그대로 둔다
+        // (같은 칸이다 — 쓰던 메모를 지우면 안 된다). [제보] 칩 재탭은 예전처럼 아무 일도 안 한다.
+        if feedbackInboxShowsReports == target {
+            if target { reloadReportAdminIfShowing() }
+            return
+        }
         feedbackInboxShowsReports = target
         // 양쪽의 펼침·초안·안내를 접는다 — 한 칸의 메모가 다른 칸 행에 붙거나, 한 칸의 안내가 다른 칸 아래 남으면
         // 무엇에 대한 말인지 알 수 없다(탭 전환이 이미 하는 일과 같다).

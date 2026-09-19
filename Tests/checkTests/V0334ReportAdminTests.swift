@@ -1033,3 +1033,50 @@ func 신고_칸은_팝오버_안에서_최악_조합에도_700pt_를_넘지_않�
     }
     #expect(userDiffers, "비운영자 화면이 운영자의 신고 칸과 똑같이 그려졌다")
 }
+
+// ── 점을 보고 들어온 운영자가 낡은 목록을 본다(2026-09-20 재검증 medium) ─────────────────────────────
+//
+// 평소 흐름: 운영자가 [신고] 칸을 보다가 팝오버를 닫는다(칸 선택은 스토어에 남는다) → 새 신고가 5분 폴링으로 점을 켠다 →
+// 점을 보고 팝오버를 연다. 예전에는 여는 순간 **건수만** 다시 묻고 목록은 안 받아서, 알림을 따라 들어온 바로 그 화면이
+// "받은 신고가 없어요"(또는 어제 처리한 행만)를 말했다. 켜진 [신고] 칩을 다시 눌러도 guard 에서 빠져 요청이 0건이었다.
+@MainActor
+@Test
+func 점을_보고_팝오버를_열면_신고_칸이_새_목록을_받는다() async throws {
+    // host 는 테스트마다 달라야 한다 — 요청 수 스텁이 host 로 갈린다(같은 이름을 쓰면 병렬로 도는 테스트끼리 수를 나눠 가진다).
+    let host = "ra-store-dot-reopen"
+    let store = raStore(host: host)
+    ReportAdminURLProtocol.set(.init(body: raList(
+        raRowJSON(id: "old-done", status: "done", createdAt: "2026-09-19T08:00:00+00:00")
+    )), host: host, path: raListPath)
+    ReportAdminURLProtocol.set(.init(body: "0"), host: host, path: raCountPath)
+    store.feedbackShowsInbox = true
+    store.selectInboxSegment(reports: true)
+    await raWait { store.reportAdminLoaded }
+    #expect(store.visibleReports.map(\.id) == ["old-done"])
+
+    // 팝오버를 닫은 사이 새 신고가 들어왔다.
+    store.setMenuPresented(false)
+    ReportAdminURLProtocol.set(.init(body: raList(
+        raRowJSON(id: "new-open", createdAt: "2026-09-20T09:00:00+00:00"),
+        raRowJSON(id: "old-done", status: "done", createdAt: "2026-09-19T08:00:00+00:00")
+    )), host: host, path: raListPath)
+    ReportAdminURLProtocol.set(.init(body: "1"), host: host, path: raCountPath)
+
+    // 점을 보고 다시 연다 — [신고] 칸이 골라져 있으면 목록부터 새로 받는다.
+    store.setMenuPresented(true)
+    await raWait { store.visibleReports.first?.id == "new-open" }
+    #expect(store.visibleReports.map(\.id) == ["new-open", "old-done"], "알림을 따라 들어온 화면이 새 신고를 안 보인다")
+    #expect(ReportAdminURLProtocol.count(host: host, path: raListPath) == 2)
+
+    // 켜진 [신고] 칩을 다시 누르면 새로 받는다(당겨서 새로고침이 없는 표면의 유일한 손잡이다).
+    store.selectInboxSegment(reports: true)
+    await raWait { ReportAdminURLProtocol.count(host: host, path: raListPath) == 3 }
+    #expect(ReportAdminURLProtocol.count(host: host, path: raListPath) == 3, "켜진 [신고] 칩 재탭이 조회를 내지 않았다")
+
+    // [신고] 칸이 아니면 팝오버를 열어도 목록을 받지 않는다(제보 칸의 왕복 수는 그대로).
+    store.selectInboxSegment(reports: false)
+    store.setMenuPresented(false)
+    store.setMenuPresented(true)
+    await raWait { false }
+    #expect(ReportAdminURLProtocol.count(host: host, path: raListPath) == 3, "[제보] 칸인데 신고 목록을 받았다")
+}

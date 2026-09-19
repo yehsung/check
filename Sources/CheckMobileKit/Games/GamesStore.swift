@@ -25,6 +25,9 @@ package enum GamesRouteStep: Equatable, Sendable {
 ///    - 앱이 background → **가림**(`windowOcclusionDidChange(visible: false)`) — 폴링만 멈추고 판에서 나가지 않는다.
 ///    - 앱이 active 로 돌아옴(화면이 보이는 채) → 가림 해제(또는 `windowDidShow`) + 따라잡기(인박스 + 진행 판의 놓친 수).
 ///    - 판이 막 시작됨(`presentWindow`) → 앱이 active 면 오목 화면을 연다(신청자가 수락된 순간을 모르면 흑 30초를 흘린다).
+/// 3. **AI 대국**(1.0.1) — 규칙·판·서버 차단은 코어(`GomokuStoreAI`, 맥과 한 벌). 이 스토어는 폰 선택기(`aiThinker`)를 코어에 끼우고
+///    "오목 화면이 보이고 앱이 active 인가"를 그 선택기의 허락으로 옮긴다 — 떠나면 AI 탐색을 취소하고 돌아오면 다시 생각한다
+///    (`GamesGomokuAI.swift` 머리 주석). 사람 시계 멈춤은 위 창 수명(숨김·가림)이 코어에서 이미 한다.
 ///
 /// 탭 배지 = 받은 오목 신청 수(만료 안 된 것). 받은 신청은 인박스가 채운다 — 계기는 앱 active(60초 스로틀) · 실시간
 /// 'gomoku' 신호(기반 배선) · 오목 화면.
@@ -42,6 +45,9 @@ package final class GamesStore {
     /// 화면이 **이미 보이면** 여기 남기지 않는다(`routeStep(for:)` 이 코어에 바로 넘긴다).
     package var pendingGomokuFocusID: String?
 
+    /// AI 대국의 수 선택기(코어 `aiMoveChooser` 에 끼운다). 사람 대국은 이것을 한 번도 부르지 않는다.
+    @ObservationIgnored package let aiThinker = GamesGomokuAIThinker()
+
     /// 화면 꺼짐 방지를 실제로 거는 곳(iOS 는 init 이 `GamesSystemIdleTimer` 를 단다 · 테스트는 기록용).
     @ObservationIgnored private var idleTimerSink: (@MainActor (Bool) -> Void)?
     /// 마지막으로 싱크에 넘긴 값(같은 값은 다시 넘기지 않는다). 싱크가 없으면 nil.
@@ -53,6 +59,12 @@ package final class GamesStore {
         // 판이 막 시작됐다(내 신청이 수락됨 · 내가 수락함 · 앱을 다시 켜니 진행 중인 판) — 오목 화면을 연다.
         // 네트워크가 아니라 문을 다는 것이라 init 에서 해도 된다.
         context.gomoku.presentWindow = { [weak self] in self?.presentGomokuScreen() }
+        // AI 대국: 코어 기본 선택기(창을 몰라 떠나도 계속 생각한다 — 맥 동작) 대신 화면 수명을 아는 폰 선택기. 문을 다는 것뿐이다.
+        context.gomoku.aiMoveChooser = aiThinker.chooser
+        aiThinker.isStillNeeded = { [weak gomoku = context.gomoku] board, color in
+            guard let gomoku, gomoku.isAIThinking, let game = gomoku.aiGame else { return false }
+            return game.board == board && game.aiColor == color
+        }
         #if os(iOS)
         // 화면 꺼짐 방지의 주인은 이 스토어다 — 게임 탭을 한 번도 안 열었어도(다른 탭에서 판이 시작돼도) 값이 따라간다.
         installIdleTimerSink { GamesSystemIdleTimer.apply(disabled: $0) }
@@ -63,6 +75,7 @@ package final class GamesStore {
 
     package func appDidBecomeActive() {
         isAppActive = true
+        syncAIThinker()
         let gomoku = context.gomoku
         // 받은 신청(탭 배지·첫 화면 카드)의 신선도. 60초 스로틀은 코어가 한다.
         gomoku.refreshInboxIfStale()
@@ -79,6 +92,8 @@ package final class GamesStore {
 
     package func appDidEnterBackground() {
         isAppActive = false
+        // AI 탐색은 background 에서 돌지 않는다(돌아오면 처음부터 다시 생각한다).
+        syncAIThinker()
         miniGames.appDidEnterBackground()
         // 오목은 **가림**으로 멈춘다(`windowOcclusionDidChange(visible: false)`) — 폴링만 멈추고 창은 닫지 않는다.
         // `windowDidHide` 를 부르면 결과 화면인 채로 잠깐 앱을 나갔을 뿐인데 그 판에서 '나간' 것이 되어(gomoku_leave)
@@ -92,6 +107,7 @@ package final class GamesStore {
         miniGames.reset()
         isGomokuScreenVisible = false
         pendingGomokuFocusID = nil
+        syncAIThinker()
     }
 
     /// 탭 배지: 만료 안 된 받은 오목 신청 수.
@@ -142,6 +158,7 @@ package final class GamesStore {
         pendingGomokuFocusID = nil
         gomoku.openWindow(focusMatchID: focus)
         if isAppActive { gomoku.windowDidShow() }
+        syncAIThinker()
     }
 
     /// 오목 화면이 사라졌다(뒤로 · 다른 탭으로 · 로그아웃). 폴링만 멈춘다. 결과 화면인 채로 떠나면 코어가 그 판에서 나간다.
@@ -149,12 +166,22 @@ package final class GamesStore {
         guard isGomokuScreenVisible else { return }
         isGomokuScreenVisible = false
         context.gomoku.windowDidHide()
+        syncAIThinker()
+    }
+
+    /// AI 선택기의 허락 = 오목 화면이 보이고 앱이 active. 거두면 도는 탐색이 곧바로 취소된다.
+    private func syncAIThinker() {
+        aiThinker.setAllowed(isGomokuScreenVisible && isAppActive)
     }
 
     /// 대국 중이라 화면이 꺼지면 안 된다(`UIApplication.isIdleTimerDisabled`, SPEC-ios §3.5). 앱이 active 이고 끝나지 않은 판이 있을 때.
     /// **어느 화면에 있든 같다**(오목 화면 밖 — 게임 첫 화면 · 다른 탭 — 에서도 판이 도는 동안은 켠다).
+    ///
+    /// AI 판만 예외: 오목 화면이 보일 때만 켠다. 화면을 떠나면 사람 시계가 멈추고 AI 도 생각하지 않는다 — 기다릴 것이 없는데
+    /// 다른 탭에서 화면을 켜 둘 까닭이 없다(1:1 은 서버 시계가 흐르므로 그대로다).
     package var wantsIdleTimerDisabled: Bool {
         guard isAppActive, context.session.isSignedIn, let match = context.gomoku.match else { return false }
+        if context.gomoku.isAIMatch { return !match.isFinished && isGomokuScreenVisible }
         return !match.isFinished
     }
 

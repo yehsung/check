@@ -14,6 +14,8 @@ import Foundation
 ///
 /// 라우트: `now|now/teamless|messages|messages/<peer>|rankings/league|rankings/tokens|rankings/minigame|games|games/timing|games/flappy|
 /// games/gomoku/lobby|games/gomoku/match|me|me/shop|me/feedback|me/settings|login|update` (`AingRoute(path:)` 로 연다).
+/// AI 대국 장면 `games/gomoku/ai[/white|/thinking|/result|/pick]` 은 `AingRoute` 가 모르는 데모 전용 표기다 — 앱 모델이 오목 로비로
+/// 열고 오목 화면이 대본대로 판을 세운다(`MobileDemoGomokuAI` — AI 판은 서버에 닿지 않으므로 픽스처가 필요 없다).
 /// `now/teamless` 는 **탭 라우트가 아니라 서버 상태 장면**이다(`update` 와 같은 갈래) — 소속 픽스처가 빈 배열이라 지금 탭이
 /// 무소속 합류 카드로 선다. `AingRoute` 로 열리지 않으므로 라우터는 기본 탭(지금)에 그대로 머문다.
 /// 로그인 아래 화면(w16 — 앱스토어 스크린샷): `signup`(코드 합류) · `signup/create`(팀 만들기) ·

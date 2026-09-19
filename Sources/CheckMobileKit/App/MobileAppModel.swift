@@ -227,7 +227,17 @@ public final class MobileAppModel {
     }
 
     private func openDemoRouteIfNeeded() {
-        guard let raw = environment.demoRoute, session.isSignedIn, let route = AingRoute(path: raw) else { return }
+        guard let raw = environment.demoRoute, session.isSignedIn, let route = AingRoute(path: raw) ?? Self.demoOnlyRoute(raw) else { return }
         router.open(route)
+    }
+
+    /// `AingRoute` 가 모르는 **데모 전용 표기**가 열 화면(DEBUG 전용). AI 대국 장면(`games/gomoku/ai…`)은 오목 로비로 열고,
+    /// 장면은 오목 화면이 세운다(`MobileDemoGomokuAI`). 푸시·위젯 URL 모양에는 데모 때문에 값을 더하지 않는다.
+    private static func demoOnlyRoute(_ raw: String) -> AingRoute? {
+        #if DEBUG
+        return MobileDemoGomokuAI.scene(route: raw) != nil ? .gomokuLobby : nil
+        #else
+        return nil
+        #endif
     }
 }

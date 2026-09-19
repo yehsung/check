@@ -12,6 +12,8 @@ struct GamesGomokuScreen: View {
 
     @State private var stakeTarget: GomokuUser?
     @State private var showsResignConfirm = false
+    /// 로비 [AI와 두기] → 돌 색 시트.
+    @State private var showsAIPicker = false
     @State private var demoPreview: GomokuPoint?
 
     private var gomoku: GomokuStore { store.context.gomoku }
@@ -28,6 +30,9 @@ struct GamesGomokuScreen: View {
             .sheet(item: $stakeTarget) { target in
                 GamesGomokuStakeSheet(store: gomoku, target: target)
             }
+            .sheet(isPresented: $showsAIPicker) {
+                GamesGomokuAIColorSheet(store: gomoku)
+            }
             .onAppear {
                 store.gomokuScreenDidAppear()
                 applyDemoSeed()
@@ -38,6 +43,7 @@ struct GamesGomokuScreen: View {
             .onChange(of: gomoku.match?.id) { _, _ in
                 stakeTarget = nil
                 showsResignConfirm = false
+                showsAIPicker = false
             }
     }
 
@@ -62,11 +68,20 @@ struct GamesGomokuScreen: View {
     }
 
     private var lobby: some View {
-        GamesGomokuLobby(store: store, onChallenge: { stakeTarget = $0 })
+        GamesGomokuLobby(store: store, onChallenge: { stakeTarget = $0 }, onPlayAI: { showsAIPicker = true })
     }
 
     private func applyDemoSeed() {
         #if DEBUG
+        // AI 대국 데모 라우트(`games/gomoku/ai…` — Demo/MobileDemoGomokuAI.swift): 돌 색 시트를 띄우거나 대본대로 몇 수 둔 판을 세운다.
+        if let scene = MobileDemoGomokuAI.scene(isDemo: store.context.isDemo) {
+            if scene == .pick {
+                showsAIPicker = true
+            } else {
+                Task { @MainActor in await MobileDemoGomokuAI.play(scene, games: store) }
+            }
+            return
+        }
         guard let seed = GamesDemoSeed.current(isDemo: store.context.isDemo) else { return }
         Task { @MainActor in
             switch seed {
@@ -114,6 +129,8 @@ struct GamesGomokuRulesButton: View {
 struct GamesGomokuLobby: View {
     let store: GamesStore
     let onChallenge: (GomokuUser) -> Void
+    /// [AI와 두기] — 화면 루트가 돌 색 시트를 띄운다(판돈 시트와 같은 관례: 시트는 루트만 띄운다).
+    var onPlayAI: () -> Void = {}
 
     private var gomoku: GomokuStore { store.context.gomoku }
 
@@ -135,6 +152,9 @@ struct GamesGomokuLobby: View {
                 }
                 invites
                 outgoing
+                // AI 와 두기(1.0.1) — 사람 목록 바로 위. 받은·보낸 신청(시간이 흐르는 것)보다 아래다.
+                GamesGomokuAIEntryCard(store: gomoku, onPlay: onPlayAI)
+                    .padding(.top, MobileTheme.rowSpacing)
                 opponents
                 liveMatches
             }

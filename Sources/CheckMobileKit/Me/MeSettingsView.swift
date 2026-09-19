@@ -129,12 +129,12 @@ struct MeSettingsView: View {
                         store.context.router.push(MeDestination.blocked, on: .me)
                     } label: {
                         HStack(spacing: MobileTheme.space3) {
-                            Text(MessagesBlockText.blockedListTitle)
+                            Text(BlockReportText.blockedListTitle)
                                 .font(.body)
                                 .foregroundStyle(MobileTheme.label)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: MobileTheme.space2)
-                            Text(MessagesBlockText.blockedListMenuDetail)
+                            Text(BlockReportText.blockedListMenuDetail)
                                 .font(.subheadline)
                                 .foregroundStyle(MobileTheme.label2)
                                 .lineLimit(1)

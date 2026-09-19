@@ -51,7 +51,7 @@ package final class MessagesStore {
     package private(set) var directoryLoading = false
     package private(set) var directoryFailed = false
 
-    // MARK: 차단 · 신고 (앱스토어 1.2 — 규칙과 문구는 `MessagesBlockRules`, 동작은 `MessagesBlockStore.swift`)
+    // MARK: 차단 · 신고 (앱스토어 1.2 — 규칙과 문구는 코어 `BlockReportRules`(맥과 한 벌), 동작은 `MessagesBlockStore.swift`)
 
     /// 차단해서 **화면에서 걷어낸** 상대. 서버도 다음 조회부터 그 사람의 행을 빼지만, 화면은 응답을 기다리지 않는다
     /// (낙관적 — SPEC 작업 P 6). 실패하면 이 집합에서 빼며 대화가 그대로 되돌아온다.

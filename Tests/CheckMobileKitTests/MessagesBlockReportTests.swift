@@ -32,33 +32,33 @@ import Testing
 
     @Test("[신고 보내기]는 사유를 고르고 · 상한 안이고 · 도는 중이 아닐 때만")
     func submitGate() {
-        #expect(!MessagesBlockRules.canSubmitReport(reason: nil, detail: "", isSending: false), "사유 없이 보낼 수 있다")
-        #expect(MessagesBlockRules.canSubmitReport(reason: .spam, detail: "", isSending: false))
-        #expect(!MessagesBlockRules.canSubmitReport(reason: .spam, detail: "", isSending: true))
+        #expect(!BlockReportRules.canSubmitReport(reason: nil, detail: "", isSending: false), "사유 없이 보낼 수 있다")
+        #expect(BlockReportRules.canSubmitReport(reason: .spam, detail: "", isSending: false))
+        #expect(!BlockReportRules.canSubmitReport(reason: .spam, detail: "", isSending: true))
         let tooLong = String(repeating: "가", count: 201)
-        #expect(!MessagesBlockRules.canSubmitReport(reason: .spam, detail: tooLong, isSending: false))
+        #expect(!BlockReportRules.canSubmitReport(reason: .spam, detail: tooLong, isSending: false))
         // 카운터는 상한 가까이에서만 선다.
-        #expect(MessagesBlockRules.detailCounterText("짧다") == nil)
-        #expect(MessagesBlockRules.detailCounterText(String(repeating: "가", count: 180)) == "180/200")
-        #expect(MessagesBlockRules.isDetailOverflowing(tooLong))
+        #expect(BlockReportRules.detailCounterText("짧다") == nil)
+        #expect(BlockReportRules.detailCounterText(String(repeating: "가", count: 180)) == "180/200")
+        #expect(BlockReportRules.isDetailOverflowing(tooLong))
     }
 
     @Test("실패 갈래: 함수 없음은 '아직' · 5xx·네트워크는 연결 확인 · 4xx 거절은 다시 시도 · 취소는 말하지 않는다")
     func failureNotices() {
-        #expect(MessagesBlockRules.classify(SupabaseWorkServiceError.databaseSchemaMissing) == .serverNotReady)
-        #expect(MessagesBlockRules.classify(SupabaseWorkServiceError.invalidResponse(404)) == .serverNotReady)
-        #expect(MessagesBlockRules.classify(SupabaseWorkServiceError.invalidResponse(500)) == .network)
-        #expect(MessagesBlockRules.classify(SupabaseWorkServiceError.invalidResponse(400)) == .rejected)
-        #expect(MessagesBlockRules.classify(SupabaseWorkServiceError.authMessage("self")) == .rejected)
-        #expect(MessagesBlockRules.classify(URLError(.notConnectedToInternet)) == .network)
-        #expect(MessagesBlockRules.classify(CancellationError()) == .cancelled)
+        #expect(BlockReportRules.classify(SupabaseWorkServiceError.databaseSchemaMissing) == .serverNotReady)
+        #expect(BlockReportRules.classify(SupabaseWorkServiceError.invalidResponse(404)) == .serverNotReady)
+        #expect(BlockReportRules.classify(SupabaseWorkServiceError.invalidResponse(500)) == .network)
+        #expect(BlockReportRules.classify(SupabaseWorkServiceError.invalidResponse(400)) == .rejected)
+        #expect(BlockReportRules.classify(SupabaseWorkServiceError.authMessage("self")) == .rejected)
+        #expect(BlockReportRules.classify(URLError(.notConnectedToInternet)) == .network)
+        #expect(BlockReportRules.classify(CancellationError()) == .cancelled)
 
-        #expect(MessagesBlockRules.notice(for: .cancelled, action: .block) == nil)
-        #expect(MessagesBlockRules.notice(for: .serverNotReady, action: .block) == MessagesBlockText.serverNotReady)
-        #expect(MessagesBlockText.serverNotReady.contains("아직") && MessagesBlockText.serverNotReady.contains("제보"))
-        for action in [MessagesBlockAction.block, .unblock, .report] {
-            let network = MessagesBlockRules.notice(for: .network, action: action)
-            let rejected = MessagesBlockRules.notice(for: .rejected, action: action)
+        #expect(BlockReportRules.notice(for: .cancelled, action: .block) == nil)
+        #expect(BlockReportRules.notice(for: .serverNotReady, action: .block) == BlockReportText.serverNotReady)
+        #expect(BlockReportText.serverNotReady.contains("아직") && BlockReportText.serverNotReady.contains("제보"))
+        for action in [BlockReportAction.block, .unblock, .report] {
+            let network = BlockReportRules.notice(for: .network, action: action)
+            let rejected = BlockReportRules.notice(for: .rejected, action: action)
             #expect(network?.contains("못했어요") == true, "실패 문구가 무엇이 안 됐는지 말하지 않는다: \(network ?? "nil")")
             #expect(network?.contains(MobileLoadText.checkConnection) == true)
             #expect(rejected?.contains("다시 시도") == true)
@@ -67,15 +67,44 @@ import Testing
 
     @Test("차단 확인 시트는 막히는 것 세 줄 + 안 막히는 것 한 줄 + 되돌릴 수 있다는 한 줄")
     func confirmCopy() {
-        #expect(MessagesBlockText.blockConfirmItems.count == 3)
-        #expect(MessagesBlockText.blockConfirmItems.joined().contains("메시지"))
-        #expect(MessagesBlockText.blockConfirmItems.joined().contains("오목"))
-        #expect(MessagesBlockText.blockConfirmScopeNote.contains("순위판"), "차단해도 남는 것(팀 통계)을 말하지 않는다")
-        #expect(MessagesBlockText.blockConfirmUndoNote.contains("차단한 사람"), "푸는 자리를 말하지 않는다")
-        #expect(MessagesBlockText.blockConfirmTitle("소라").contains("소라"))
+        #expect(BlockReportText.blockConfirmItems(.phone).count == 3)
+        #expect(BlockReportText.blockConfirmItems(.phone).joined().contains("메시지"))
+        #expect(BlockReportText.blockConfirmItems(.phone).joined().contains("오목"))
+        #expect(BlockReportText.blockConfirmScopeNote.contains("순위판"), "차단해도 남는 것(팀 통계)을 말하지 않는다")
+        #expect(BlockReportText.blockConfirmUndoNote(.phone).contains("차단한 사람"), "푸는 자리를 말하지 않는다")
+        #expect(BlockReportText.blockConfirmTitle("소라").contains("소라"))
         // 애플이 요구하는 '시의적절한 대응'의 약속 — 신고 시트와 지원 페이지가 같은 24시간을 말한다.
-        #expect(MessagesBlockText.reviewPromise.contains("24시간"))
-        #expect(MessagesBlockText.reportSentNotice.contains("24시간"))
+        #expect(BlockReportText.reviewPromise.contains("24시간"))
+        #expect(BlockReportText.reportSentNotice.contains("24시간"))
+    }
+
+    /// 2026-09-20: 문구·규칙을 코어(`BlockReportRules.swift`)로 옮겨 맥과 한 벌이 됐다. **폰이 받는 글자는 한 글자도 바뀌면 안 된다** —
+    /// 옮기기 전 폰 모듈에 박혀 있던 원문을 그대로 적어 두고 대조한다(플랫폼 갈래가 폰 몫을 맥 글자로 바꿔 치는 회귀를 잡는다).
+    @MainActor
+    @Test("코어로 옮긴 뒤에도 폰이 받는 글자는 원문 그대로다 — 길 안내·표면 이름·실패 문구")
+    func phoneCopyIsVerbatimAfterMovingToCore() {
+        #expect(BlockReportText.blockConfirmItems(.phone) == [
+            "서로 메시지를 주고받을 수 없어요",
+            "이 대화가 목록에서 사라져요",
+            "사람 찾기와 오목 신청에서 서로 보이지 않아요",
+        ])
+        #expect(BlockReportText.blockConfirmUndoNote(.phone) == "나 → 설정 → 차단한 사람에서 언제든 풀 수 있어요.")
+        #expect(BlockReportText.blockedListLede(.phone)
+            == "차단한 사람과는 메시지를 주고받을 수 없고, 사람 찾기와 오목 신청에서도 서로 보이지 않아요.")
+        #expect(BlockReportText.blockedEmptyMessage(.phone) == "대화 화면의 ··· 에서 차단할 수 있어요")
+        #expect(BlockReportText.reportSentNotice == "신고를 접수했어요 · 24시간 안에 확인할게요")
+        #expect(BlockReportText.reviewPromise == "접수한 신고는 24시간 안에 확인합니다.")
+        // 연결 실패 뒤 한마디는 폰 목록 문구와 같은 문장이다(코어가 오목 문장을 빌려 와도 폰 글자가 같아야 한다).
+        #expect(BlockReportText.checkConnection == MobileLoadText.checkConnection)
+        #expect(BlockReportRules.notice(for: .network, action: .block) == "차단하지 못했어요 — 연결을 확인하고 다시 시도해 주세요")
+        #expect(BlockReportRules.notice(for: .rejected, action: .unblock) == "차단을 풀지 못했어요 — 잠시 뒤 다시 시도해 주세요")
+        #expect(BlockReportRules.notice(for: .network, action: .report) == "신고를 보내지 못했어요 — 연결을 확인하고 다시 시도해 주세요")
+        // 사실(두 플랫폼 공통)은 갈래가 없다 — 첫 줄은 맥과 같은 문장이다.
+        #expect(BlockReportText.blockConfirmItems(.phone).first == BlockReportText.blockConfirmItems(.mac).first)
+        // 폰 모듈은 자기 표를 다시 들지 않는다(두 벌이 되면 한쪽이 갈린다).
+        let phone = (try? IntegrationContractTests.files(containing: ["enum MessagesBlockText", "enum MessagesBlockRules"],
+                                                          under: "Sources/CheckMobileKit")) ?? ["읽기 실패"]
+        #expect(phone.isEmpty, "폰 모듈에 문구·규칙 표가 다시 생겼다: \(phone)")
     }
 
     @Test("요약도 차단한 상대를 뺀다 — 합까지 줄인다(이력만 걸렀을 때 배지에만 옛 숫자가 남던 결함)")
@@ -95,8 +124,8 @@ import Testing
     @Test("차단한 시각 줄은 상대 시각 + '차단'(시각을 모르면 화면이 줄을 그리지 않는다)")
     func blockedAtLine() {
         let now = MobileClock.demoInstant
-        #expect(MessagesBlockText.blockedAtLine(now.addingTimeInterval(-30), now: now) == "방금 차단")
-        #expect(MessagesBlockText.blockedAtLine(now.addingTimeInterval(-7200), now: now).hasSuffix(" 차단"))
+        #expect(BlockReportText.blockedAtLine(now.addingTimeInterval(-30), now: now) == "방금 차단")
+        #expect(BlockReportText.blockedAtLine(now.addingTimeInterval(-7200), now: now).hasSuffix(" 차단"))
     }
 
     @Test("가입 화면 한 줄에 이용약관·처리방침 링크 둘 — 처리방침 주소는 설정 화면과 같다")
@@ -200,7 +229,7 @@ import Testing
         h.store.blockPeer(Self.peerA)
         _ = await baseWaitUntil { h.store.blockingPeerID == nil }
         #expect(!h.store.isHiddenByBlock(Self.peerA))
-        #expect(h.store.blockNotice == MessagesBlockText.serverNotReady)
+        #expect(h.store.blockNotice == BlockReportText.serverNotReady)
 
         h.store.blockedListDidAppear()
         _ = await baseWaitUntil { h.store.blocksLoaded }
@@ -219,7 +248,7 @@ import Testing
         // ① 사유 미선택 — 왕복 0.
         var sent = await h.store.submitReport(peerID: Self.peerA, reason: nil, detail: "", messageID: nil, alsoBlock: true)
         #expect(!sent)
-        #expect(h.store.reportNotice == MessagesBlockText.reportReasonRequired)
+        #expect(h.store.reportNotice == BlockReportText.reportReasonRequired)
         #expect(h.count("report_content") == 0)
 
         // ② 200자 초과 — 왕복 0.
@@ -241,7 +270,7 @@ import Testing
             #expect(body.contains(piece), "신고 본문에 \(piece) 가 없다: \(body)")
         }
         #expect(h.store.isHiddenByBlock(Self.peerA), "차단까지 켜고 보냈는데 화면에 남아 있다")
-        #expect(h.store.blockNotice == MessagesBlockText.reportSentNotice)
+        #expect(h.store.blockNotice == BlockReportText.reportSentNotice)
         #expect(!h.store.blockNoticeIsError)
         h.expectNoForbiddenCalls()
     }
@@ -382,7 +411,7 @@ import Testing
     func conversationSourceContract() throws {
         let conversation = try IntegrationContractTests.code("Sources/CheckMobileKit/Messages/MessagesConversationView.swift")
         #expect(conversation.contains("Menu {"), "대화 화면 오른쪽 위 ··· 메뉴가 없다")
-        #expect(conversation.contains("MessagesBlockText.blockAction") && conversation.contains("MessagesBlockText.reportAction"))
+        #expect(conversation.contains("BlockReportText.blockAction") && conversation.contains("BlockReportText.reportAction"))
         #expect(conversation.contains("MessagesBlockConfirmSheet("), "차단이 확인 시트를 지나지 않는다")
         #expect(conversation.contains("MessagesReportSheet("))
         #expect(conversation.contains("line.entry.isMine ? nil :"), "내 말풍선에도 신고 메뉴가 붙는다")
@@ -407,7 +436,7 @@ import Testing
         let sheets = try IntegrationContractTests.code("Sources/CheckMobileKit/Messages/MessagesBlockSheets.swift")
         #expect(sheets.contains("kind: .destructive") && sheets.contains("role: .destructive"), "차단 확인이 파괴적 버튼이 아니다")
         #expect(!sheets.contains(".alert("), "확인이 시스템 알림창이다(재질 대비 — AingConfirmSheet 주석)")
-        #expect(sheets.contains("MessagesBlockText.reviewPromise"), "신고 시트에 24시간 약속이 없다")
+        #expect(sheets.contains("BlockReportText.reviewPromise"), "신고 시트에 24시간 약속이 없다")
         #expect(sheets.contains("@State private var alsoBlock = true"), "'신고하면서 차단' 이 기본 켬이 아니다")
         #expect(sheets.contains("presentationBackground(MobileTheme.surface)"), "시트가 불투명하지 않다(색 토큰 밖 재질)")
 
@@ -424,7 +453,7 @@ import Testing
     @Test("소스 계약: 설정에 [차단한 사람]이 있고 · 가입 화면에 약관 한 줄이 있고 · 코어 RPC 는 로그인 토큰 필수다")
     func settingsAndSignUpContract() throws {
         let settings = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeSettingsView.swift")
-        #expect(settings.contains("MessagesBlockText.blockedListTitle"), "설정에 차단한 사람 행이 없다")
+        #expect(settings.contains("BlockReportText.blockedListTitle"), "설정에 차단한 사람 행이 없다")
         #expect(settings.contains("MeDestination.blocked"), "차단 목록으로 가는 길이 없다")
 
         let signUp = try IntegrationContractTests.code("Sources/CheckMobileKit/Session/MobileSignUpView.swift")
@@ -453,8 +482,8 @@ import Testing
     @Test("소스 계약: 오목 채팅에도 신고·차단 입구가 있다 — 애플 1.2 가 세는 UGC 면은 둘이다(1:1 메시지 · 오목 채팅)")
     func gomokuChatSourceContract() throws {
         let chat = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesGomokuChat.swift")
-        #expect(chat.contains("MessagesBlockText.reportAction"), "오목 채팅에서 신고에 닿을 수 없다(화면을 나가 사람 찾기로 돌아가야 한다)")
-        #expect(chat.contains("MessagesBlockText.blockAction"), "오목 채팅에서 차단에 닿을 수 없다")
+        #expect(chat.contains("BlockReportText.reportAction"), "오목 채팅에서 신고에 닿을 수 없다(화면을 나가 사람 찾기로 돌아가야 한다)")
+        #expect(chat.contains("BlockReportText.blockAction"), "오목 채팅에서 차단에 닿을 수 없다")
         #expect(chat.contains("MessagesBlockConfirmSheet("), "오목 채팅의 차단이 확인 시트를 지나지 않는다")
         #expect(chat.contains("MessagesReportSheet("), "오목 채팅이 메시지 탭과 다른 신고 시트를 쓴다(문구·사유가 두 벌이 된다)")
         // 사람이 아닌 상대(AI 연습 판)에게는 입구가 서지 않는다 — 신고할 사람이 없다.
@@ -498,7 +527,7 @@ import Testing
     @Test("제출 위험 등록부가 앱 사실을 따라온다 — 신고·차단이 붙었는데 '앱에 없다' 로 남아 있으면 심사 노트가 거짓이 된다")
     func appStoreRegisterKnowsBlockAndReport() throws {
         // 대조: 앱에 실제로 신고·차단 입구가 있다(이 계약의 전제).
-        let entrances = try IntegrationContractTests.files(containing: ["MessagesBlockText.reportAction"], under: "Sources/CheckMobileKit")
+        let entrances = try IntegrationContractTests.files(containing: ["BlockReportText.reportAction"], under: "Sources/CheckMobileKit")
         #expect(entrances.count >= 2, "대조: 신고 입구가 한 면뿐이다 — 등록부가 아니라 앱을 먼저 고쳐라: \(entrances)")
 
         let doc = try AppStoreDocContractTests.document("docs/appstore.md")

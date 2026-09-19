@@ -190,12 +190,12 @@ struct GamesGomokuChatDrawer: View {
             Button {
                 reportTarget = MessagesReportTarget(peerID: opponent.id, peerName: opponentName)
             } label: {
-                Label(MessagesBlockText.reportAction, systemImage: "exclamationmark.bubble")
+                Label(BlockReportText.reportAction, systemImage: "exclamationmark.bubble")
             }
             Button(role: .destructive) {
                 showsBlockConfirm = true
             } label: {
-                Label(MessagesBlockText.blockAction, systemImage: "nosign")
+                Label(BlockReportText.blockAction, systemImage: "nosign")
             }
         } label: {
             Image(systemName: "ellipsis")

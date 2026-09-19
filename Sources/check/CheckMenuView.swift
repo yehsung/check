@@ -461,11 +461,14 @@ struct CheckMenuView: View {
                         //   매초 무효화해, 찔림 패널을 마지막으로 보고 닫은 뒤 유휴 CPU 가 2.9%→4.5% 로 올랐다
                         //   (V0238MenuTests 가 루트·패널의 displayNow 무관찰을 못 박는다).
                         PokePanel(
-                            entries: store.pokeDirectory,
+                            // 차단해 걷어낸 사람은 목록에서 **곧바로** 빠진다(v0.3.34 — 서버 응답을 기다리지 않는다).
+                            // 목록 원본은 서버가 답한 그대로라, 차단이 실패하면 숨김만 풀려 그대로 돌아온다.
+                            entries: store.visiblePokeDirectory,
                             isMyselfWorking: store.snapshot.isWorking,
                             hasLoaded: store.pokeDirectoryLoaded,
                             fallbackStatus: store.syncMessage,
-                            notice: store.pokeNotice,
+                            // 차단·신고 결과 한 줄(되돌림 실패 · 신고 접수)이 찌르기 결과보다 앞이다 — 방금 한 일의 답이다.
+                            notice: store.blockReportNotice(on: .message)?.text ?? store.pokeNotice,
                             clock: { store.menuClockNow },
                             cooldownRemaining: { store.pokeCooldownRemaining(for: $0, now: store.menuClockNow) },
                             onPoke: { store.sendPoke(to: $0) },
@@ -501,7 +504,7 @@ struct CheckMenuView: View {
                             messageNotice: store.messageNotice,
                             // 큐의 맨 앞 = 아직 사용자에게 보여 주지 않은 가장 오래된 1건.
                             // ⚠︎ 말풍선(오버레이 담당)이 consumeCurrentMessage 로 큐를 밀면 이 자리도 함께 비워진다.
-                            latestMessage: store.currentMessage,
+                            latestMessage: store.visibleLatestMessage,
                             waitingMessageCount: store.waitingMessageCount,
                             onBack: { store.togglePokePanel() },
                             extraChromeHeight: listExtraChromeHeight,

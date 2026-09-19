@@ -338,11 +338,12 @@ enum ReportAdminText {
     static let failed = "신고를 불러오지 못했어요"
     static let empty = "받은 신고가 없어요"
     /// 진짜 빈 목록의 보조 한 줄. 24시간 약속을 운영자 자신에게 상기시키는 자리다.
-    static let emptyHint = "폰에서 신고가 들어오면 여기에 쌓여요 — 24시간 안에 확인해 주세요"
+    /// v0.3.34 에 "폰에서"를 뺐다 — 맥에서도 신고한다(대화 · 오목 채팅의 ··· · 받은 말풍선 우클릭).
+    static let emptyHint = "신고가 들어오면 여기에 쌓여요 — 24시간 안에 확인해 주세요"
     /// 서버에 목록 함수가 아직 없는 창(`reportAdminSchemaMissing`). **신고가 없다고 말하지 않는다** — 신고 표는 이미 운영 중이다.
     static let schemaMissingList = "신고 목록을 아직 불러올 수 없어요"
     /// 버튼 이름(`FeedbackText.retry`)을 **그대로** 부른다 — 화면에 없는 버튼을 말하면 안 된다(`filterEmptyHint` 와 같은 규약).
-    static let schemaMissingListHint = "폰 신고는 이미 쌓이고 있어요 — 서버에 신고 관리 기능이 올라가면 [\(FeedbackText.retry)]로 불러와요"
+    static let schemaMissingListHint = "신고는 이미 쌓이고 있어요 — 서버에 신고 관리 기능이 올라가면 [\(FeedbackText.retry)]로 불러와요"
     static func filterEmpty(_ status: ContentReportStatus) -> String { "\(status.reportLabel) 신고가 없어요" }
     /// 칩 이름(`filterAll`)을 **그대로** 부른다 — 화면에 없는 버튼을 말하면 안 된다.
     static let filterEmptyHint = "위 [\(filterAll)]를 누르면 나머지가 보여요"

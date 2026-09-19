@@ -18,7 +18,7 @@ struct MeBlockedPeopleView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-                Text(MessagesBlockText.blockedListLede)
+                Text(BlockReportText.blockedListLede(.phone))
                     .font(.footnote)
                     .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -30,16 +30,16 @@ struct MeBlockedPeopleView: View {
         }
         .refreshable { messages?.loadBlocks(force: true) }
         .background(MobileTheme.background.ignoresSafeArea())
-        .navigationTitle(MessagesBlockText.blockedListTitle)
+        .navigationTitle(BlockReportText.blockedListTitle)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { messages?.blockedListDidAppear() }
         // 차단 해제도 확인을 지난다 — 목록에서 손가락이 스쳐 풀리면 사용자는 그 사실을 영영 모른다.
         .sheet(item: $pendingUnblock) { person in
             AingConfirmSheet(
-                title: MessagesBlockText.unblockConfirmTitle(person.name),
-                message: MessagesBlockText.unblockConfirmMessage,
-                confirmTitle: MessagesBlockText.unblockConfirm,
-                cancelTitle: MessagesBlockText.blockCancel,
+                title: BlockReportText.unblockConfirmTitle(person.name),
+                message: BlockReportText.unblockConfirmMessage,
+                confirmTitle: BlockReportText.unblockConfirm,
+                cancelTitle: BlockReportText.blockCancel,
                 onConfirm: {
                     pendingUnblock = nil
                     messages?.unblock(person.userID)
@@ -56,7 +56,7 @@ struct MeBlockedPeopleView: View {
                 InlineNotice(text: notice, kind: .error)
             }
             if store.blocksServerNotReady {
-                InlineNotice(text: MessagesBlockText.serverNotReady, kind: .info)
+                InlineNotice(text: BlockReportText.serverNotReady, kind: .info)
             }
             if store.blockedPeople.isEmpty {
                 emptyContent(store)
@@ -69,7 +69,7 @@ struct MeBlockedPeopleView: View {
             }
         } else {
             AingCard {
-                EmptyStateView(systemImage: "nosign", title: MessagesBlockText.blockedEmptyTitle, message: MessagesBlockText.blockedEmptyMessage)
+                EmptyStateView(systemImage: "nosign", title: BlockReportText.blockedEmptyTitle, message: BlockReportText.blockedEmptyMessage(.phone))
             }
         }
     }
@@ -80,14 +80,14 @@ struct MeBlockedPeopleView: View {
             if store.blocksLoading, !store.blocksLoaded {
                 LoadingRow()
             } else if store.blocksFailed, !store.blocksLoaded {
-                LoadFailureRow(MessagesBlockText.blockedListFailed, isRetrying: store.blocksLoading) {
+                LoadFailureRow(BlockReportText.blockedListFailed, isRetrying: store.blocksLoading) {
                     store.loadBlocks(force: true)
                 }
             } else {
                 EmptyStateView(
                     systemImage: "nosign",
-                    title: MessagesBlockText.blockedEmptyTitle,
-                    message: MessagesBlockText.blockedEmptyMessage
+                    title: BlockReportText.blockedEmptyTitle,
+                    message: BlockReportText.blockedEmptyMessage(.phone)
                 )
             }
         }
@@ -104,14 +104,14 @@ struct MeBlockedPeopleView: View {
                     .foregroundStyle(MobileTheme.label)
                     .fixedSize(horizontal: false, vertical: true)
                 if let at = person.blockedAt {
-                    Text(MessagesBlockText.blockedAtLine(at, now: store.context.clock.now()))
+                    Text(BlockReportText.blockedAtLine(at, now: store.context.clock.now()))
                         .font(.footnote)
                         .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: MobileTheme.space2)
-            AingButton(MessagesBlockText.unblockAction, kind: .tinted, size: .sm, isBusy: isUnblocking) {
+            AingButton(BlockReportText.unblockAction, kind: .tinted, size: .sm, isBusy: isUnblocking) {
                 pendingUnblock = person
             }
         }

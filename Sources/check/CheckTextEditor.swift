@@ -206,6 +206,30 @@ class CheckEditorTextView: NSTextView {
     /// 제보 칸에는 주지 마라(요청 밖이고, 제보 화면은 목록을 먼저 읽는 화면이다).
     var focusesWhenShown = false
 
+    /// 이 칸이 **지금 키를 받는가**(v0.3.34 수리 — 오목 창의 신고·차단 덮개). 기본 true 이고, false 를 주는 자리는
+    /// 오목 채팅칸 하나다(덮개가 그 창을 덮고 있는 동안).
+    ///
+    /// **왜**(적대적 검토 2026-09-20): 덮개는 판 위에 ZStack 으로 얹힐 뿐이라 가려진 채팅칸이 첫 응답자로 남았다. 채팅하던 사람이
+    /// ··· → [신고하기]를 열고 곧장 설명을 치면 그 글은 **보이지 않는 채팅 초안**에 쌓였고, ↩ 가 그것을 신고하려던 바로 그 사람에게
+    /// 채팅으로 보냈다(이 칸은 ↩ 전송 칸이다). false 인 동안 이 칸은:
+    ///   · 첫 응답자가 될 수 없다(탭 · 클릭 — `acceptsFirstResponder`),
+    ///   · 쥐고 있던 포커스를 **조합을 확정한 뒤** 내려놓는다(다음 턴 — 확정 없이 놓으면 입력기가 그 음절을 버릴 수 있다),
+    ///   · 그 사이 들어온 키는 버린다(↩ 전송 포함 — `keyDown`).
+    /// 다시 true 가 되면 덮개 때문에 내려놓았던 포커스를 **되찾는다**(그 사이 다른 칸이 잡지 않았을 때만). 맥 시트가 닫히면
+    /// 부모 창의 입력칸이 그대로 첫 응답자인 것과 같은 결과다 — 쓰던 초안에 이어서 친다.
+    ///
+    /// ★ `isEditable` 을 끄는 길로 가지 마라. 편집 불가가 된 NSTextView 는 입력 문맥을 내놓고, 이 저장소는 "새 입력 세션을 받은 칸은
+    ///   한글 조합이 죽는다"를 여러 번 겪었다(`makeNSView` 주석). 칸 자체는 건드리지 않고 **키가 오는 길만** 막는다.
+    var acceptsInput = true {
+        didSet {
+            guard acceptsInput != oldValue else { return }
+            if acceptsInput { resumeFocusReleasedForBlock() } else { releaseFocusForBlock() }
+        }
+    }
+
+    /// 덮개 때문에 포커스를 내려놓았는가 — 덮개가 걷히면 되찾는다(`acceptsInput` 주석).
+    private var resumesFocusWhenInputReturns = false
+
     /// 이 칸이 **돌아갈 재사용 자리**(`CheckEditorSlot`). `dismantleNSView` 가 자기 자리로만 반납한다 —
     /// 남의 자리에 넣으면 그 자리의 칸을 밀어내고, 밀려난 칸은 다시는 안 쓰인다(재사용이 조용히 끊긴다).
     var poolSlot: CheckEditorSlot?
@@ -301,6 +325,8 @@ class CheckEditorTextView: NSTextView {
     }
 
     override func keyDown(with event: NSEvent) {
+        // 덮개가 이 칸을 가린 채 포커스를 놓기 전의 한 턴(`acceptsInput` 주석) — 가려진 초안에 글이 쌓이거나 ↩ 가 보내면 안 된다.
+        guard acceptsInput else { return }
         // ★ 키가 여기까지 왔다 = **사용자가 이 칸에 타이핑하고 있다**(로컬 키 이벤트는 우리 앱 창에만 온다).
         //   그런데 앱이 비활성이면 입력 문맥이 안 켜져 한글이 자모로 쪼개져 박힌다
         //   (증상 ① — 실측은 `activateAppForTypedInputIfNeeded` 주석). 그 상태를 여기서 되살린다.
@@ -494,6 +520,9 @@ class CheckEditorTextView: NSTextView {
     }
 
     override func becomeFirstResponder() -> Bool {
+        // 덮개가 가린 칸은 코드가 불러도(`makeFirstResponder`) 포커스를 받지 않는다 — `makeFirstResponder` 는
+        // `acceptsFirstResponder` 를 묻지 않는다(2026-09-20 헤드리스 실측: 막아 둔 칸이 그대로 첫 응답자가 됐다).
+        guard acceptsInput else { return false }
         let accepted = super.becomeFirstResponder()
         guard accepted else { return false }
         // 전송 문이 확정할 대상을 고르는 **재료**(그 판정은 `focusedEditor` 에 있다). **여기 말고 다른 데서
@@ -511,6 +540,47 @@ class CheckEditorTextView: NSTextView {
         // `WindowTopAnchor.detach` 가 같은 이유로 같은 모양을 쓴다).
         if resigned, Self.lastFocused === self { Self.lastFocused = nil }
         return resigned
+    }
+
+    // MARK: - 덮개가 가린 동안 키를 막기 (v0.3.34 수리 — `acceptsInput` 주석)
+
+    /// 덮개가 떠 있는 동안에는 탭·클릭으로도 이 칸에 들어올 수 없다.
+    override var acceptsFirstResponder: Bool { acceptsInput && super.acceptsFirstResponder }
+
+    /// 쥐고 있던 포커스를 **다음 턴에** 내려놓는다. 지금 놓지 않는 이유: 이 값은 `updateNSView` 안에서 바뀌므로, 여기서 확정하면
+    /// SwiftUI 가 그리는 중에 초안(바인딩)을 바꾸게 된다(`CheckEditorScrollView.reportSoon` 과 같은 사정). 그 한 턴 동안 온 키는
+    /// `keyDown` 이 버린다.
+    private func releaseFocusForBlock() {
+        guard holdsFirstResponder else { return }
+        resumesFocusWhenInputReturns = true
+        Self.onNextRunLoopTurn { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, !self.acceptsInput, let window = self.window, window.firstResponder === self else { return }
+                // ★ 확정이 먼저다 — 조합 중인 음절을 초안에 올려 둔다(쓰던 채팅 초안은 사용자 것이다).
+                self.commitComposition()
+                window.makeFirstResponder(nil)
+            }
+        }
+    }
+
+    /// 덮개가 걷히면 내려놓았던 포커스를 되찾는다. **비어 있을 때만**(창 자신이 첫 응답자) — 그 사이 사용자가 다른 칸을 잡았으면
+    /// 빼앗지 않는다. 덮개를 열었다 곧장 닫아 아직 놓지도 않았다면 이미 쥐고 있으므로 할 일이 없다.
+    private func resumeFocusReleasedForBlock() {
+        guard resumesFocusWhenInputReturns else { return }
+        resumesFocusWhenInputReturns = false
+        Self.onNextRunLoopTurn { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.acceptsInput, let window = self.window else { return }
+                guard window.firstResponder == nil || window.firstResponder === window else { return }
+                window.makeFirstResponder(self)
+            }
+        }
+    }
+
+    /// 풀로 돌아가는 칸의 막기 상태를 지운다 — 다음 마운트가 옛 덮개의 "되찾기"를 물려받지 않게(`dismantleNSView`).
+    func clearInputBlockForPool() {
+        resumesFocusWhenInputReturns = false
+        acceptsInput = true
     }
 
     // MARK: - "그려진 것이 비었나" 알리기 — 증상 ②
@@ -570,6 +640,8 @@ class CheckEditorTextView: NSTextView {
     /// 처리기는 첫 응답자인 자기 자신에게 메뉴와 **같은 명령**을 부른다. 처리하는 것은 이 여섯뿐이고 나머지는 흘려보낸다.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard window?.firstResponder === self else { return super.performKeyEquivalent(with: event) }
+        // 덮개가 가린 칸(`acceptsInput` false)은 포커스를 놓기 전의 한 턴에도 붙여넣기 등을 받지 않는다.
+        guard acceptsInput else { return super.performKeyEquivalent(with: event) }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         guard flags.contains(.command), !flags.contains(.control), !flags.contains(.option) else {
             return super.performKeyEquivalent(with: event)
@@ -727,6 +799,8 @@ struct CheckTextEditor: View {
     /// 뷰에 그려진 글자(조합 중 표시 글자 포함)가 비었는지 알려 준다. placeholder 를 숨기는 판정의 재료다 —
     /// `CheckEditorTextView.onRenderedEmptyChange` 주석에 "왜 스토어 값으로는 안 되는가"가 있다.
     var onRenderedEmptyChange: ((Bool) -> Void)?
+    /// 지금 키를 받는가. 기본 true — false 는 덮개가 이 칸을 가린 동안뿐이다(`CheckEditorTextView.acceptsInput` 주석).
+    var acceptsInput: Bool = true
 
     /// 이 칸이 쓰는 재사용 자리. 기본값은 **이 뷰를 세운 소스 위치**다(아래 `init` 의 `#fileID`/`#line`) —
     /// 그래서 호출부는 **한 글자도 안 바뀌고도** 각자 자기 자리를 갖는다.
@@ -745,6 +819,7 @@ struct CheckTextEditor: View {
         canSendNow: @escaping () -> Bool = { false },
         onSend: @escaping () -> Void = {},
         onRenderedEmptyChange: ((Bool) -> Void)? = nil,
+        acceptsInput: Bool = true,
         file: String = #fileID,
         line: Int = #line
     ) {
@@ -754,6 +829,7 @@ struct CheckTextEditor: View {
         self.canSendNow = canSendNow
         self.onSend = onSend
         self.onRenderedEmptyChange = onRenderedEmptyChange
+        self.acceptsInput = acceptsInput
         self.slot = CheckEditorSlot(id: "\(file):\(line)")
     }
 
@@ -765,6 +841,7 @@ struct CheckTextEditor: View {
             canSendNow: canSendNow,
             onSend: onSend,
             onRenderedEmptyChange: onRenderedEmptyChange,
+            acceptsInput: acceptsInput,
             slot: slot
         )
             // ★ 스크롤 뷰를 테두리 안쪽으로 물린다. 이 줄을 지우면 넘친 글이 빨간 테두리를 덮고,
@@ -791,6 +868,7 @@ private struct CheckEditorScrollView: NSViewRepresentable {
     var canSendNow: () -> Bool
     var onSend: () -> Void
     var onRenderedEmptyChange: ((Bool) -> Void)?
+    var acceptsInput: Bool
     /// 이 칸의 재사용 자리(호출 자리 하나 = 자리 하나 — `CheckEditorSlot`).
     var slot: CheckEditorSlot
 
@@ -816,6 +894,8 @@ private struct CheckEditorScrollView: NSViewRepresentable {
             text.string = ""
             // 내려간 칸이 전송 문의 대상으로 남지 않게 한다(`focusedEditor` 의 마지막 갈래).
             CheckEditorTextView.forgetFocus(text)
+            // 덮개 밑에서 내려간 칸이 막힌 채로(또는 "되찾기"를 쥔 채로) 다음 마운트에 가지 않게 한다.
+            text.clearInputBlockForPool()
         }
         // ★ **자기 자리로만 돌아간다.** 자리를 모르는 칸은 풀에 넣지 않는다 — 남의 자리에 넣으면 그 자리의
         //   칸을 밀어내고, 밀려난 칸은 다시는 안 쓰인다(자리 수는 그대로여도 재사용이 조용히 끊긴다).
@@ -931,6 +1011,8 @@ private struct CheckEditorScrollView: NSViewRepresentable {
         textView.canSendNow = canSendNow
         textView.onSend = onSend
         textView.onRenderedEmptyChange = onRenderedEmptyChange
+        // 바뀔 때만 움직인다(포커스 놓기 · 되찾기는 다음 턴 — 그 프로퍼티 주석).
+        textView.acceptsInput = acceptsInput
         // 첫 보고는 **다음 턴**에 넘긴다. 이 함수는 `updateNSView` 안에서도 불리므로 여기서 바로 알리면
         // SwiftUI 가 뷰를 그리는 중에 부모의 상태를 바꾸게 된다(경고 + 재평가 되돌이).
         // 조합·타이핑 경로의 보고는 이벤트 처리 중에 오므로 그쪽은 바로 알려도 된다.

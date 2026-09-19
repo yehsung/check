@@ -135,14 +135,18 @@ extension WorkTimerStore {
     /// 결과를 쓰고, 그 요청이 모르는 낙관 읽음을 뺀다. 그래서 폰에서 읽으면(요약 total 0) 맥의 점도 사라진다.
     /// 서버가 읽음을 모르면(옛 서버) 옛 규칙 — **받은 것의 마지막 시각 > 내가 그 대화를 마지막으로 연 시각** — 이다.
     /// 내가 보낸 것은 어느 쪽에서도 세지 않는다 — 내 말에 점이 붙으면 그건 아무 정보도 아니다.
+    ///
+    /// 차단해 걷어낸 상대(`blockHiddenPeerIDs`, v0.3.34)는 뺀다 — 목록에서 사라진 사람의 점이 메뉴바·레일에 남으면 그 점은
+    /// 눌러도 갈 곳이 없는 장식이 된다(폰 `MessagesStore` 가 요약·이력을 거르는 것과 같은 판단).
     var unreadMessagePeerIDs: Set<String> {
-        MessageUnreadRules.unreadPeerIDs(
+        let unread = MessageUnreadRules.unreadPeerIDs(
             history: messageHistory,
             historySnapshot: messageHistoryReadSnapshot,
             summary: messageUnreadSummary,
             optimistic: messageOptimisticReads,
             legacyStamps: messageReadStamps
         )
+        return blockHiddenPeerIDs.isEmpty ? unread : unread.subtracting(blockHiddenPeerIDs)
     }
 
     /// 안 읽은 메시지가 하나라도 있는가(메뉴바 점·레일 점의 스위치).
@@ -224,9 +228,16 @@ extension WorkTimerStore {
         //   그 함수는 `lastShownMessage` 를 죽이는데, 말풍선 버튼을 누른 것은 '그 알림을 봤다'가 아니다.
         //   take_pokes 는 서버 원자 소비라 그렇게 지운 글자는 복구할 길이 없다.
         isPokePanelVisible = false
+        // 다른 사람에 대해 열어 둔 신고·차단 시트는 이 대화의 것이 아니다(v0.3.34 수리). 대화 패널은 시트를 대화보다 먼저 그려서,
+        // 남겨 두면 A 에 대한 "A 님을 차단할까요?"가 B 와의 대화 자리에 선다. 같은 사람이면 쓰던 시트를 그대로 둔다(같은 대화다).
+        if let sheet = blockReportSheet(on: .message), sheet.target.peerID != peer {
+            dismissBlockReportSheet(on: .message)
+        }
         // 상대를 정하는 자리는 **앱 전체에서 이 한 줄뿐이다.** 이후 어떤 응답·수신 폴링·전송 성공도 이 값을
         // 바꾸지 않는다(performLoadMessageHistory 의 "다시 넣지 마라" 주석, V0251MessagePeerTests 의 소스 계약).
         selectMessagePeer(peer)
+        // 앞서 다른 사람에 대해 선 차단·신고 결과 한 줄은 이 대화의 것이 아니다(v0.3.34 — 메시지 결과 문구와 같은 규약).
+        clearBlockReportNotice(on: .message)
         // 첫 프레임부터 빈 자리에 "불러오는 중…"이 뜨게 한다(제보 목록과 같은 규약).
         // **세션이 있을 때만** 세운다 — 로그인 전이면 아래 로드가 세션 가드에서 조용히 되돌아가는데,
         // 그때 이 깃발을 세워 두면 아무도 내려 주지 않아 화면이 영영 "불러오는 중…"에 갇힌다.
@@ -276,6 +287,9 @@ extension WorkTimerStore {
         isMessagePanelVisible = false
         // 전송 결과 문구는 이 화면의 것이다. 남기면 콕찌르기 목록 안내줄에 "메시지를 보냈어요"가 떠 있다.
         if messageNotice != nil { messageNotice = nil }
+        // 신고·차단 시트(v0.3.34)도 이 화면의 것이다 — 떠나면 걷는다(레일 · [뒤로] · 다른 패널이 전부 이 문을 지난다).
+        // 남기면 다음에 연 **다른 사람의 대화** 자리에 앞사람 시트가 선다(수리 전 실측). 보내던 신고는 결과 한 줄로 돌아온다.
+        dismissBlockReportSheet(on: .message)
         if messagePanelOrigin == .poke {
             // `togglePokePanel()` 이 아니라 직접 세운다 — 그 토글은 열려 있으면 closePokePanel() 을 타서
             // 아직 안 본 메시지를 소비한다(closeUltraPanel 이 같은 이유로 같은 모양을 쓴다).
@@ -483,6 +497,8 @@ extension WorkTimerStore {
     /// 창의 [보내기] 버튼(과 ⌘Enter)이 부르는 문. 판정은 `canSendMessageNow` 하나이고 여기서 다시 세지 않는다.
     func sendDraftMessage() {
         guard canSendMessageNow, let peer = selectedMessagePeerID else { return }
+        // 신고 결과 한 줄(v0.3.34)은 입력칸 위 같은 자리를 쓴다 — 새로 보낸 말의 결과가 그 자리를 이어받는다.
+        clearBlockReportNotice(on: .message)
         sendMessage(to: peer, body: messageDraft)
     }
 

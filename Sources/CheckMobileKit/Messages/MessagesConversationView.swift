@@ -185,12 +185,12 @@ struct MessagesConversationView: View {
             Button {
                 reportTarget = MessagesReportTarget(peerID: peerID, peerName: peerDisplayName)
             } label: {
-                Label(MessagesBlockText.reportAction, systemImage: "exclamationmark.bubble")
+                Label(BlockReportText.reportAction, systemImage: "exclamationmark.bubble")
             }
             Button(role: .destructive) {
                 showsBlockConfirm = true
             } label: {
-                Label(MessagesBlockText.blockAction, systemImage: "nosign")
+                Label(BlockReportText.blockAction, systemImage: "nosign")
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -198,7 +198,7 @@ struct MessagesConversationView: View {
                 .foregroundStyle(MobileTheme.label)
         }
         .tint(MobileTheme.label)
-        .accessibilityLabel(Text(MessagesBlockText.menuAccessibilityLabel))
+        .accessibilityLabel(Text(BlockReportText.menuAccessibilityLabel))
     }
 
     /// 시트·신고에 싣는 상대 이름(모르면 대화 머리 글자와 같은 폴백).
@@ -381,7 +381,7 @@ struct MessagesBubbleRow: View {
         // 보이스오버는 길게 누름 메뉴를 못 연다 — 신고도 동작으로 단다(복사와 같은 자리).
         .accessibilityActions {
             if let onReport {
-                Button(MessagesBlockText.reportMessageAction, action: onReport)
+                Button(BlockReportText.reportMessageAction, action: onReport)
             }
         }
     }
@@ -398,7 +398,7 @@ struct MessagesBubbleRow: View {
                 }
                 if let onReport {
                     Button(role: .destructive, action: onReport) {
-                        Label(MessagesBlockText.reportMessageAction, systemImage: "exclamationmark.bubble")
+                        Label(BlockReportText.reportMessageAction, systemImage: "exclamationmark.bubble")
                     }
                 }
             }

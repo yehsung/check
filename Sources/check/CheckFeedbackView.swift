@@ -744,10 +744,31 @@ struct FeedbackListBox<Content: View>: View {
     let contentHeight: CGFloat
     let capHeight: CGFloat
     let clipsInsteadOfScrolling: Bool
+    /// **갈래를 하나로 묶는다**(v0.3.34 수리 — 팝오버 신고 시트만 켠다. 기본 false 라 제보·상점·캐릭터·신고함은 예전 그대로다).
+    ///
+    /// **왜**(적대적 검토 2026-09-20): 아래 두 갈래(그대로 · 스크롤)는 SwiftUI 에게 **다른 뷰**라, 갈래가 바뀌는 순간 그 아래를 통째로
+    /// 다시 만든다. 안에 입력칸이 있으면 그 칸은 **새 NSTextView** 가 되고 치던 포커스를 잃는다 — 새 칸은 한글 조합을 못 받는다
+    /// (`CheckTextEditor.makeNSView` 주석, v0.3.0~0.3.12). 신고 시트는 쓰는 도중에 갈래가 바뀌었다: 180자째 카운터가 서면 추정 높이가
+    /// 21pt 늘고, 보내기가 실패해 안내 줄이 서면 상한이 45pt 준다 — 상한 근처에서 둘 다 갈래를 넘긴다.
+    ///
+    /// 그래서 켜면 **늘 스크롤 상자 하나**에 앉힌다. 높이는 추정이 아니라 **내용의 실제 높이**를 상한까지 따른다
+    /// (`frame(maxHeight:)` + `fixedSize(vertical:)` — 내용이 짧으면 자연 높이라 빈 자리가 없고, 넘치면 상한에서 스크롤한다).
+    /// 글자 수·안내 줄·크롬이 바뀌어도 바뀌는 것은 상자의 높이뿐이고 **뷰는 그대로**다. 스냅샷 갈래(`clipsInsteadOfScrolling`)는
+    /// 입력칸이 글자로 그려지는 자리라 예전 그대로 둔다.
+    var keepsOneBranch: Bool = false
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        if contentHeight <= capHeight {
+        if keepsOneBranch && !clipsInsteadOfScrolling {
+            // ★ 수식어 순서가 뜻이다: `frame(maxHeight:)` 가 안, `fixedSize` 가 밖이어야 상자가 내용 높이를 따르다가 상한에서 멈춘다.
+            //   뒤집으면 상자가 내용 높이 그대로 상한을 뚫는다(스크롤이 안 붙는다).
+            ScrollView(.vertical, showsIndicators: true) {
+                content().frame(maxWidth: .infinity, alignment: .top)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: capHeight)
+            .fixedSize(horizontal: false, vertical: true)
+        } else if contentHeight <= capHeight {
             content().frame(maxWidth: .infinity, alignment: .top)
         } else if clipsInsteadOfScrolling {
             // `.fixedSize(vertical:)` 이 **없으면 스냅샷이 거짓 겹침을 그린다**(2026-09-10 실측):
@@ -783,11 +804,40 @@ struct FeedbackBodyEditor: View {
     @Binding var text: String
     var height: CGFloat
     var rendersPlainText: Bool = false
+    /// 비어 있을 때 칸 안의 안내. 기본은 제보 문구이고, 신고 시트(v0.3.34)가 자기 문구를 넘긴다 — 칸 자체는 **같은 부품**이다
+    /// (자리 맞추기·조합 중 겹침 규칙을 두 벌로 만들지 않는다).
+    var placeholder: String = FeedbackText.placeholder
+    /// 입력칸 재사용 자리(`CheckEditorSlot`)를 만드는 **이 부품을 부른 소스 위치**(v0.3.34 수리).
+    ///
+    /// 이 부품 안에서 `CheckTextEditor(...)` 를 부르면 그 호출 자리가 **한 줄뿐**이라, 이 부품을 쓰는 화면 전부가 재사용 자리
+    /// 하나를 나눠 쓴다. 두 번째 사용처(신고 시트의 자세히 칸)가 생기자 바로 그 다툼이 났다: 오목 창의 신고 덮개는 창을 닫아도
+    /// `orderOut` 뿐이라 살아 남아 제보 칸의 NSTextView 를 쥔 채 남고, 팝오버 [제보]는 칸을 **새로 만들어** 한글 조합이 죽었다
+    /// (V0328 이 대화·오목 채팅 사이에서 막았던 그 결함 — `V0334BlockReportLeaveTests`). 그래서 부른 자리를 받아 **그대로 넘긴다.**
+    ///
+    /// ★ 기본값은 **맨 매직 리터럴**이어야 부른 자리에서 펼쳐진다(`CheckEditorSlot` 주석 — 보간·중첩 호출이면 선언 자리로 굳는다).
+    private let editorFile: String
+    private let editorLine: Int
 
     /// 텍스트 뷰가 마지막으로 알린 "그려진 것이 비었나". **nil = 아직 못 들었다**(첫 그림 · 스냅샷 경로).
     /// 메시지 칸과 **같은 규칙**(`CheckEditorPlaceholder.isVisible`)을 쓴다 — 이 칸에도 같은 증상이 있었다
     /// (조합 중에는 스토어가 비어 있어 안내 문구가 사용자가 친 글자 위에 겹친다).
     @State private var editorRenderedEmpty: Bool?
+
+    init(
+        text: Binding<String>,
+        height: CGFloat,
+        rendersPlainText: Bool = false,
+        placeholder: String = FeedbackText.placeholder,
+        file: String = #fileID,
+        line: Int = #line
+    ) {
+        self._text = text
+        self.height = height
+        self.rendersPlainText = rendersPlainText
+        self.placeholder = placeholder
+        self.editorFile = file
+        self.editorLine = line
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -802,7 +852,7 @@ struct FeedbackBodyEditor: View {
             //   사용자 지시 ③("높이가 안맞아")이 이 칸에서 그대로 되살아난다.
             // ★ `text.isEmpty`(스토어 값)로 되돌리지 마라 — 조합 중 겹침이 그대로 돌아온다.
             if CheckEditorPlaceholder.isVisible(storeText: text, editorRenderedEmpty: editorRenderedEmpty) {
-                Text(FeedbackText.placeholder)
+                Text(placeholder)
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .padding(.horizontal, CheckEditorMetrics.inset.width)
@@ -820,7 +870,12 @@ struct FeedbackBodyEditor: View {
                     .padding(.vertical, CheckEditorMetrics.inset.height)
             } else {
                 // 포커스는 **잡지 않는다**(요청 밖 — 제보 화면은 목록을 먼저 읽는 화면이다).
-                CheckTextEditor(text: $text, onRenderedEmptyChange: { editorRenderedEmpty = $0 })
+                // 자리는 이 줄이 아니라 **이 부품을 부른 화면**이 정한다(위 `editorFile`/`editorLine`).
+                CheckTextEditor(
+                    text: $text,
+                    onRenderedEmptyChange: { editorRenderedEmpty = $0 },
+                    file: editorFile, line: editorLine
+                )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -1203,6 +1258,8 @@ struct FeedbackStatusChip: View {
 struct FeedbackPrimaryButton: View {
     let label: String
     let enabled: Bool
+    /// 채움 색. 기본은 accent 이고, 되돌리기 어려운 동작(차단 확인 — v0.3.34)만 danger 를 넘긴다. 모양·치수는 한 벌이다.
+    var tint: Color = CheckTheme.accent
     let action: () -> Void
 
     var body: some View {
@@ -1214,7 +1271,7 @@ struct FeedbackPrimaryButton: View {
                 .frame(height: 24)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(CheckTheme.accent.opacity(enabled ? 0.9 : 0.35))
+                        .fill(tint.opacity(enabled ? 0.9 : 0.35))
                 )
                 .fixedSize()
         }

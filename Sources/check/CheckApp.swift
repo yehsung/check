@@ -219,7 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CheckGomokuWindowController.shared.configure(store: store.gomoku, me: { [weak self] in
             guard let self else { return GomokuPlayerFace.fallback }
             return GomokuPlayerFace.me(from: self.store)
-        })
+        }, safety: store)
         // ★ **제보·메시지 창은 v0.2.50 에 사라졌다.** 둘 다 팝오버 하위 패널로 내려왔고(사용자 지시:
         //   "제보창도 팝오버 창 안에서만 뜨게", "그 창 안에서 그 사람과의 1대1 메시지 화면으로만"),
         //   패널은 배선할 창 수명이 없다 — 그리는 것은 `CheckMenuView` 이고 상태는 스토어 깃발 하나다.

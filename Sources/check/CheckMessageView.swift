@@ -229,18 +229,35 @@ struct CheckMessageView: View {
     private var hasPeer: Bool { store.selectedMessagePeerID != nil }
 
     var body: some View {
-        VStack(spacing: MessagePanelLayout.blockSpacing) {
-            header
-            PanelDivider()
-            conversation
-            composer
+        if let sheet = store.blockReportSheet(on: .message) {
+            // 신고·차단 시트(v0.3.34)는 대화 **자리에** 선다 — 팝오버는 콘텐츠 높이가 곧 창 높이라 겹쳐 띄울 자리가 없다.
+            // 본문 상한은 대화 패널의 예산을 그대로 빌린다(`BlockReportSheetLayout.popoverBodyCap` — 넘치면 스크롤로 밀린다).
+            BlockReportSheetView(
+                store: store,
+                sheet: sheet,
+                rendersPlainTextEditor: rendersPlainTextEditor,
+                clipsInsteadOfScrolling: clipsOverflowInsteadOfScroll,
+                bodyCap: BlockReportSheetLayout.popoverBodyCap(
+                    extraChromeHeight: extraChromeHeight,
+                    hasFooterNotice: sheet.kind == .report && store.reportNotice != nil
+                )
+            )
+            .padding(12)
+            .panelStyle()
+        } else {
+            VStack(spacing: MessagePanelLayout.blockSpacing) {
+                header
+                PanelDivider()
+                conversation
+                composer
+            }
+            .padding(12)
+            .panelStyle()
+            // ★ 도착한 메시지를 **재진입 없이** 그리는 판정의 한 축이다(v0.3.31 M4). 팝오버 표시 칸(`isMenuPresented`)만 보던 0.3.29 는
+            //   떠 있는 팝오버에서 그 칸이 false 로 남으면 [뒤로] 뒤 다시 들어가야 새 말이 떴다. 이 두 줄을 지우면 판정이 그 한 칸으로 돌아간다.
+            .onAppear { store.messageConversationViewDidAppear(viewToken) }
+            .onDisappear { store.messageConversationViewDidDisappear(viewToken) }
         }
-        .padding(12)
-        .panelStyle()
-        // ★ 도착한 메시지를 **재진입 없이** 그리는 판정의 한 축이다(v0.3.31 M4). 팝오버 표시 칸(`isMenuPresented`)만 보던 0.3.29 는
-        //   떠 있는 팝오버에서 그 칸이 false 로 남으면 [뒤로] 뒤 다시 들어가야 새 말이 떴다. 이 두 줄을 지우면 판정이 그 한 칸으로 돌아간다.
-        .onAppear { store.messageConversationViewDidAppear(viewToken) }
-        .onDisappear { store.messageConversationViewDidDisappear(viewToken) }
     }
 
     // MARK: 머리 — 뒤로 + 아바타 + 상대 이름
@@ -266,6 +283,16 @@ struct CheckMessageView: View {
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .fixedSize()
+            }
+            // ··· → [신고하기] · [차단하기](v0.3.34). **시트를 열 뿐**이다 — 차단은 확인 시트의 [차단하기]만 보낸다.
+            if let peer = store.selectedMessagePeerID {
+                BlockReportMoreButton { item in
+                    let target = BlockReportTarget(peerID: peer, peerName: peerName)
+                    switch item {
+                    case .report: store.openReport(target, surface: .message)
+                    case .block: store.openBlockConfirm(target, surface: .message)
+                    }
+                }
             }
         }
     }
@@ -295,7 +322,12 @@ struct CheckMessageView: View {
                 // 읽음 기능 여부는 **값**으로 내린다(v0.3.30). 시계가 아니라 이력 응답이 바꾸는 값이라 잎으로 가둘 이유가 없다.
                 readReceiptsAvailable: store.messageReadReceiptsAvailable,
                 clipsInsteadOfScrolling: clipsOverflowInsteadOfScroll,
-                onFollowChange: onFollowChange
+                onFollowChange: onFollowChange,
+                // 받은 말풍선 우클릭 → [이 메시지 신고하기](v0.3.34). 그 메시지 id 를 싣는다 — 운영자가 무엇을 볼지 정해진다.
+                onReport: { entry in
+                    guard let target = MessageBubbleReportRule.target(for: entry) else { return }
+                    store.openReport(target, surface: .message)
+                }
             )
             .frame(height: min(cap, natural))
             .frame(maxWidth: .infinity)
@@ -372,6 +404,9 @@ struct MessageConversationView: View {
     var clipsInsteadOfScrolling: Bool = false
     /// 따라가기 상태가 바뀔 때마다 알린다(테스트 전용 관찰 문 — 앱은 nil).
     var onFollowChange: ((MessageScrollFollow) -> Void)? = nil
+    /// 받은 말풍선 우클릭 → [이 메시지 신고하기](v0.3.34). nil 이면 우클릭 메뉴가 없다(스냅샷·옛 호출부). 어느 말풍선에 서는지는
+    /// `MessageBubbleReportRule.offersReport` 한 곳이 정한다 — **내 말풍선에는 서지 않는다.**
+    var onReport: ((MessageHistoryEntry) -> Void)? = nil
 
     /// 맨 아래로 보낼 앵커. 마지막 말풍선 id 를 쓰지 않는 이유는 그 뒤의 아래 여백까지 보이게 하기 위해서다.
     private static let bottomAnchorID = "message-thread-bottom"
@@ -467,7 +502,8 @@ struct MessageConversationView: View {
                         entry: entry,
                         showsUnreadOne: MessageReadReceiptMark.showsUnreadOne(
                             for: entry, receiptsAvailable: readReceiptsAvailable
-                        )
+                        ),
+                        onReport: MessageBubbleReportRule.offersReport(for: entry) ? onReport.map { report in { report(entry) } } : nil
                     )
                 }
             }
@@ -577,6 +613,8 @@ private struct MessageBubbleRow: View {
     let entry: MessageHistoryEntry
     /// 이 말풍선 옆에 안 읽음 1을 찍는가. 판정은 `MessageReadReceiptMark.showsUnreadOne` 하나다 — 행이 조건을 다시 세지 않는다.
     var showsUnreadOne: Bool = false
+    /// 우클릭 → [이 메시지 신고하기](v0.3.34). **받은 말풍선에만** 들어온다(`MessageBubbleReportRule` — 대화 뷰가 거른다).
+    var onReport: (() -> Void)? = nil
 
     private var clockText: String { MessageThreadBuilder.clockText(entry.createdAt) }
 
@@ -630,7 +668,31 @@ private struct MessageBubbleRow: View {
     /// 여기서 하는 일은 둘뿐이다: 세로로만 자라게 두고(`fixedSize(vertical:)`), 글자를 감싸는 캡슐을 그린다.
     ///
     /// **`fixedSize(horizontal: true)` 는 금지다** — 200자가 한 줄을 요구해 화면 밖으로 넘친다.
+    ///
+    /// **받은 말풍선은 우클릭 메뉴를 갖는다**(v0.3.34 — [복사] · [이 메시지 신고하기]). 그 말풍선에는 글자 선택(`textSelection`)을
+    /// 걸지 않는다: 선택 가능한 글자는 우클릭을 자기 메뉴(복사·찾아보기)로 가져가 신고 항목이 안 뜬다. 대신 [복사]를 메뉴에 둔다
+    /// (폰의 길게 누름 메뉴와 같은 차림). 내 말풍선은 예전 그대로 글자 선택이다.
+    @ViewBuilder
     private var bubble: some View {
+        if let onReport {
+            bubbleText
+                .contextMenu {
+                    Button {
+                        CheckPasteboard.copy(entry.body)
+                    } label: {
+                        Label("복사", systemImage: "doc.on.doc")
+                    }
+                    Button(role: .destructive, action: onReport) {
+                        Label(BlockReportText.reportMessageAction, systemImage: "exclamationmark.bubble")
+                    }
+                }
+        } else {
+            bubbleText
+                .textSelection(.enabled)
+        }
+    }
+
+    private var bubbleText: some View {
         Text(entry.body)
             .font(.caption)
             .foregroundStyle(entry.isMine ? .white : CheckTheme.primaryText)
@@ -642,7 +704,6 @@ private struct MessageBubbleRow: View {
                 RoundedRectangle(cornerRadius: MessagePanelLayout.corner, style: .continuous)
                     .fill(entry.isMine ? CheckTheme.accent.opacity(0.85) : Color.white.opacity(0.10))
             )
-            .textSelection(.enabled)
     }
 }
 
@@ -669,12 +730,11 @@ struct MessageComposerView: View {
         VStack(alignment: .leading, spacing: 5) {
             // 전송 결과 한 줄. **성공만 초록**이고 나머지는 경고색이다 — 사유별로 색을 더 가르면
             // 사용자가 외워야 할 색만 늘어난다(제보 화면과 같은 규약).
-            if let notice = store.messageNotice, !notice.isEmpty {
-                Text(notice)
+            // 신고 결과(v0.3.34 — "신고를 접수했어요")도 **같은 자리**에 선다: 줄을 하나 더 세우면 대화 패널의 높이 예산이 깨진다.
+            if let line = noticeLine {
+                Text(line.text)
                     .font(.caption2)
-                    .foregroundStyle(
-                        notice == WorkTimerStore.messageSentNotice ? CheckTheme.working : CheckTheme.pending
-                    )
+                    .foregroundStyle(line.isPositive ? CheckTheme.working : CheckTheme.pending)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -725,6 +785,15 @@ struct MessageComposerView: View {
                 .checkTooltip(sendHelp)
             }
         }
+    }
+
+    /// 입력칸 위 한 줄: 신고·차단 결과(이 자리 몫)가 먼저, 없으면 전송 결과. 전송하면 신고 결과는 내려간다(`sendDraftMessage`).
+    private var noticeLine: (text: String, isPositive: Bool)? {
+        if let notice = store.blockReportNotice(on: .message) {
+            return (notice.text, !notice.isError)
+        }
+        guard let notice = store.messageNotice, !notice.isEmpty else { return nil }
+        return (notice, notice == WorkTimerStore.messageSentNotice)
     }
 
     /// 전송 문 — **세 갈래(버튼 · ⌘↩ · ↩)가 전부 이 하나를 지난다.**

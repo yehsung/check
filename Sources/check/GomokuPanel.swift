@@ -570,6 +570,10 @@ struct GomokuPanel: View {
     var previewBubbleNow: Date? = nil
     /// 스냅샷 전용: AI 돌 색 고르기 창을 띄운 채로 그린다. 앱은 false.
     var previewAIPrompt: Bool = false
+    /// 신고·차단(v0.3.34)을 보내는 곳 — 앱 배선이 `WorkTimerStore` 를 넘긴다(`CheckGomokuWindowController.configure(safety:)`).
+    /// **nil 이면 채팅 머리의 ··· 가 서지 않는다**(오목 스토어만으로 그리는 렌더 테스트·미리보기). 오목 스토어는 차단을 모른다 —
+    /// 차단은 메시지·찌르기·오목을 함께 막는 관계라, 그 사실을 한 스토어가 쥔다(폰도 메시지 스토어가 쥔다).
+    var safety: WorkTimerStore? = nil
 
     @State private var hovered: GomokuPoint?
     @State private var confirmResign = false
@@ -593,7 +597,10 @@ struct GomokuPanel: View {
             .padding(GomokuWindowLayout.contentPadding)
             // 덮개는 **한 번에 하나**다. 규칙이 먼저인 이유는 판돈 창이 떠 있는 동안에는 뒤를 못 누르기 때문에
             // 규칙을 새로 열 길 자체가 없어서다(뒤집히는 조합이 생기지 않는다).
-            if store.isRulesVisible {
+            // 신고·차단 시트(v0.3.34)가 맨 앞이다 — 채팅 머리의 ··· 에서만 열리고, 그때는 다른 덮개가 설 수 없다(판 중이다).
+            if let safety, let sheet = safety.blockReportSheet(on: .gomoku) {
+                GomokuBlockReportOverlay(safety: safety, sheet: sheet, rendersPlainText: clipsOverflowInsteadOfScroll)
+            } else if store.isRulesVisible {
                 GomokuRulesOverlay(onClose: { store.isRulesVisible = false })
             } else if let target = activeStakeTarget {
                 GomokuStakePrompt(store: store, target: target, initialSelection: previewStakeSelection,
@@ -613,6 +620,10 @@ struct GomokuPanel: View {
             // 판이 시작되면 로비가 사라진다 — 열려 있던 판돈 창을 들고 있으면 로비로 돌아올 때 되살아난다.
             stakeTarget = nil
             aiPromptVisible = false
+            // 앞 판 채팅에서 선 신고·차단 결과 한 줄과 시트는 새 판의 것이 아니다(v0.3.34). 시트는 읽는 자리도 판 id 를 대조해
+            // 앞 판의 덮개가 다음 판을 가리지 않지만(`blockReportSheet(on:)`), 상태까지 여기서 걷어 둔다.
+            safety?.clearBlockReportNotice(on: .gomoku)
+            safety?.dismissBlockReportSheet(on: .gomoku)
         }
         // 기권 확인은 **그 판 그 화면에서 연 것**만 산다(v0.3.30). 화면이 바뀌거나(대국 → 결과 → 로비) 창이
         // 내려갔다 다시 뜨면 접는다 — 돌아온 사용자가 자기가 열지 않은 확인을 보게 두지 않는다.
@@ -663,7 +674,8 @@ struct GomokuPanel: View {
                 confirmResign: $confirmResign,
                 showsConfirmPreview: previewConfirmResign,
                 rendersPlainText: clipsOverflowInsteadOfScroll,
-                bubbleNow: previewBubbleNow
+                bubbleNow: previewBubbleNow,
+                safety: safety
             )
             .frame(width: GomokuWindowLayout.sideColumnWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
             // 안쪽 칸이 예산을 넘겨도 창 아래 여백을 칠하지 않는 보험(로비 오른쪽 열과 같다).
@@ -689,7 +701,7 @@ struct GomokuPanel: View {
                     GomokuAIInfoCard()
                         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                 } else {
-                    GomokuChatCard(store: store, rendersPlainText: clipsOverflowInsteadOfScroll)
+                    GomokuChatCard(store: store, rendersPlainText: clipsOverflowInsteadOfScroll, safety: safety)
                         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                 }
             }
@@ -760,9 +772,9 @@ private struct GomokuOpponentList: View {
     static let rowHeight: CGFloat = 56
     static let rowSpacing: CGFloat = 6
 
-    /// 근무 중·가능한 사람 먼저(서버 순서는 그 안에서 유지).
+    /// 근무 중·가능한 사람 먼저(서버 순서는 그 안에서 유지). 차단해 걷어낸 사람은 **곧바로** 빠진다(`visibleUsers` — v0.3.34).
     private var sortedUsers: [GomokuUser] {
-        store.users.enumerated().sorted { lhs, rhs in
+        store.visibleUsers.enumerated().sorted { lhs, rhs in
             let a = Self.rank(lhs.element), b = Self.rank(rhs.element)
             return a == b ? lhs.offset < rhs.offset : a < b
         }.map(\.element)
@@ -785,11 +797,11 @@ private struct GomokuOpponentList: View {
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)
             }
-            if store.lobbyLoadFailed, !store.users.isEmpty {
+            if store.lobbyLoadFailed, !store.visibleUsers.isEmpty {
                 // 전에 받은 목록은 그대로 두고, 지금 목록이 낡았을 수 있다는 것만 알린다.
                 failureStrip
             }
-            if store.users.isEmpty {
+            if store.visibleUsers.isEmpty {
                 if store.lobbyLoadFailed {
                     failurePanel
                 } else {
@@ -962,16 +974,18 @@ private struct GomokuLobbySide: View {
     private var invites: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(GomokuText.incomingTitle).font(.subheadline.weight(.bold))
-            if store.incoming.isEmpty {
+            // 차단해 걷어낸 사람의 신청은 **곧바로** 빠진다(`visibleIncoming` — v0.3.34). 배너·메뉴바 점도 같은 값을 읽는다.
+            let incoming = store.visibleIncoming
+            if incoming.isEmpty {
                 Text(GomokuText.noIncoming)
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
             } else {
-                ForEach(store.incoming.prefix(Self.maxIncomingCards)) { invite in
+                ForEach(incoming.prefix(Self.maxIncomingCards)) { invite in
                     GomokuInviteCard(store: store, invite: invite)
                 }
-                if store.incoming.count > Self.maxIncomingCards {
-                    Text(GomokuText.more(store.incoming.count - Self.maxIncomingCards))
+                if incoming.count > Self.maxIncomingCards {
+                    Text(GomokuText.more(incoming.count - Self.maxIncomingCards))
                         .font(.caption2)
                         .foregroundStyle(CheckTheme.secondaryText)
                 }
@@ -1291,6 +1305,8 @@ private struct GomokuMatchSide: View {
     let rendersPlainText: Bool
     /// 스냅샷 전용 말풍선 시계(부모의 `previewBubbleNow`). 앱은 nil.
     let bubbleNow: Date?
+    /// 신고·차단을 보내는 곳(창 루트의 `safety` — 채팅 카드에 그대로 넘긴다).
+    let safety: WorkTimerStore?
 
     /// 이 화면(이 판)이 나타난 시각 — [기권] 누름 판정의 기준(`GomokuResignGuard`). 매초 읽지 않는다: 나타날 때 한 번 적는다.
     @State private var shownAt: Date?
@@ -1336,7 +1352,7 @@ private struct GomokuMatchSide: View {
                 GomokuAIInfoCard(showsNoRecord: false)
                     .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             } else {
-                GomokuChatCard(store: store, rendersPlainText: rendersPlainText)
+                GomokuChatCard(store: store, rendersPlainText: rendersPlainText, safety: safety)
                     .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             }
 
@@ -1832,16 +1848,35 @@ private struct GomokuChatCard: View {
     /// 스냅샷 전용(부모의 `clipsOverflowInsteadOfScroll`): 로그를 ScrollView 대신 클립으로, 입력칸을
     /// AppKit 뷰 대신 글자로 그린다. **앱은 언제나 false** — 진짜 `CheckTextEditor` 가 선다.
     let rendersPlainText: Bool
+    /// 신고·차단을 보내는 곳(v0.3.34). nil 이면 ··· 가 서지 않는다(오목 스토어만으로 그리는 렌더 테스트).
+    var safety: WorkTimerStore? = nil
 
     /// 카드 안 칸 사이 간격. 좁은 세로 예산(가장 꽉 찬 대국 화면 245pt)에서 로그 두 줄을 지키는 값이다.
     static let spacing: CGFloat = 8
+
+    /// ··· 가 신고·차단할 상대. **사람과 두는 판**일 때만 있다(`GomokuChatSafetyRule` — AI 판에는 신고할 사람이 없다).
+    private var safetyTarget: BlockReportTarget? {
+        guard safety != nil else { return nil }
+        return GomokuChatSafetyRule.target(for: store)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             header
             log
             GomokuQuickPhraseGrid(store: store)
-            GomokuChatComposer(store: store, rendersPlainText: rendersPlainText)
+            // 신고·차단 결과 한 줄(되돌림 실패 · 신고 접수) — 이 창에서 연 것만. **성공만 초록**(메시지 결과 줄과 같은 규약).
+            if let notice = safety?.blockReportNotice(on: .gomoku) {
+                Text(notice.text)
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(notice.isError ? CheckTheme.pending : CheckTheme.working)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            // 신고·차단 덮개가 이 창을 덮고 있으면 입력칸과 [보내기](⌘↩ 포함)를 막는다(v0.3.34 수리 — 그 뷰의 `isCovered` 주석).
+            GomokuChatComposer(store: store, rendersPlainText: rendersPlainText,
+                               isCovered: safety?.blockReportSheet(on: .gomoku) != nil)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .gomokuCard(padding: 12)
@@ -1862,6 +1897,16 @@ private struct GomokuChatCard: View {
                 store.setChatMuted(!store.isMuted)
             }
             .checkTooltip(store.isMuted ? GomokuText.chatUnmuteHelp : GomokuText.chatMuteHelp)
+            // ··· → [신고하기] · [차단하기](v0.3.34). 음소거가 ①거르기라면 이 둘은 ②신고 · ③차단이다(폰 서랍과 같은 차림).
+            // 신고 대상은 **사람**이다 — 대국 채팅 줄은 1:1 메시지와 다른 표라 그 id 를 싣지 않는다. 시트를 열 뿐이다.
+            if let safety, let target = safetyTarget {
+                BlockReportMoreButton { item in
+                    switch item {
+                    case .report: safety.openReport(target, surface: .gomoku)
+                    case .block: safety.openBlockConfirm(target, surface: .gomoku)
+                    }
+                }
+            }
         }
     }
 
@@ -2018,6 +2063,17 @@ private struct GomokuQuickPhraseGrid: View {
 private struct GomokuChatComposer: View {
     @Bindable var store: GomokuStore
     let rendersPlainText: Bool
+    /// 신고·차단 덮개가 이 창을 덮고 있는가(v0.3.34 수리). 참인 동안 입력칸은 키를 받지 않고(쥐고 있던 포커스는 조합을 확정한 뒤
+    /// 내려놓는다 — `CheckEditorTextView.acceptsInput`), 전송 세 갈래(버튼 · ↩ · ⌘↩)가 모두 닫힌다. **초안은 건드리지 않는다.**
+    ///
+    /// 왜: 덮개는 판 위에 얹힐 뿐이라 막지 않으면 가려진 이 칸이 첫 응답자로 남는다. 신고 설명인 줄 알고 친 글이 보이지 않는
+    /// 채팅 초안에 쌓이고, ↩ · ⌘↩ 가 그 글(또는 써 두던 초안)을 **신고하려던 바로 그 사람에게** 채팅으로 보냈다(적대적 검토 2026-09-20).
+    /// 덮개 위의 ↩ 는 채팅과 무관하다 — 자세히 칸을 누르고 있으면 그 칸의 줄바꿈이고, 아무 칸도 안 잡았으면 아무 일도 안 한다
+    /// (덮개에는 기본 버튼이 없다: 차단은 파괴적 동작이라 ↩ 에 걸지 않는 것이 맥 관례이고, 신고는 사유를 고른 뒤 버튼으로 보낸다).
+    var isCovered: Bool = false
+
+    /// 지금 보낼 수 있는가 — 스토어의 판정에 **덮개**를 더한다. 버튼 · ↩ · ⌘↩ 가 모두 이 값 하나를 본다.
+    private var canSendNow: Bool { !isCovered && store.canSendChatNow }
 
     /// 입력칸 높이(pt). 캡션 한 줄 13pt × 2줄 + 세로 여백 7×2 = 40(v0.3.30 가로 한 줄로 옮기며 44 → 40).
     static let editorHeight: CGFloat = 40
@@ -2066,11 +2122,12 @@ private struct GomokuChatComposer: View {
                     .foregroundStyle(.white)
                     .frame(width: Self.sendWidth, height: 32)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(CheckTheme.accent.opacity(store.canSendChatNow ? 1 : 0.35)))
+                        .fill(CheckTheme.accent.opacity(canSendNow ? 1 : 0.35)))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(!store.canSendChatNow)
+                // 막힌 버튼은 ⌘↩ 지름길도 받지 않는다 — 덮개 위의 ⌘↩ 가 이 버튼을 누르던 길이 여기서 닫힌다.
+                .disabled(!canSendNow)
                 .keyboardShortcut(.return, modifiers: .command)
                 .checkTooltip(GomokuText.chatSendHelp)
             }
@@ -2119,9 +2176,10 @@ private struct GomokuChatComposer: View {
                 CheckTextEditor(
                     text: $store.chatDraft,
                     sendsOnReturn: true,
-                    canSendNow: { store.canSendChatNow },
+                    canSendNow: { canSendNow },
                     onSend: send,
-                    onRenderedEmptyChange: { editorRenderedEmpty = $0 }
+                    onRenderedEmptyChange: { editorRenderedEmpty = $0 },
+                    acceptsInput: !isCovered
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -2132,6 +2190,8 @@ private struct GomokuChatComposer: View {
     /// 전송 문 — **세 갈래(버튼 · ⌘↩ · ↩)가 전부 이 하나를 지난다.** 확정이 먼저다(그 함수 주석).
     @MainActor
     private func send() {
+        // 덮개가 덮고 있으면 어느 갈래로 와도 나가지 않는다(`isCovered` 주석 — 막는 곳을 이 문 하나에도 둔다).
+        guard !isCovered else { return }
         CheckEditorSend.commitThenSend { store.sendChatDraft() }
     }
 }
@@ -2581,6 +2641,46 @@ private struct GomokuStakePrompt: View {
 
     /// 맨 아래 버튼 높이 — [취소]와 [도전하기]가 같은 값을 써서 바뀔 때 창 높이가 안 흔들린다.
     static let bottomButtonHeight: CGFloat = 36
+}
+
+// MARK: - 신고·차단 덮개 (v0.3.34)
+
+/// 채팅 머리 ··· 에서 연 신고·차단 시트. **판돈 창과 같은 가운데 덮개**다(바깥을 누르거나 Esc 면 닫힌다 — 보내는 중에는 안 닫힌다).
+/// 본문은 팝오버와 **같은 뷰**(`BlockReportSheetView`)라 문구·사유·확인 절차가 두 벌이 되지 않는다.
+/// 차단하면 이 판의 채팅이 꺼진다(스토어 `hideBlockedPeer` — 판 자체는 건드리지 않는다, 판돈이 걸려 있다).
+/// 덮개가 서 있는 동안 아래 채팅칸은 키를 받지 않고 [보내기](⌘↩ 포함)도 닫힌다 — 덮개는 얹힐 뿐이라 막지 않으면 가려진 칸이
+/// 첫 응답자로 남는다(`GomokuChatComposer.isCovered` 주석 — ↩ 를 어디에 쓰는지도 거기 있다).
+private struct GomokuBlockReportOverlay: View {
+    let safety: WorkTimerStore
+    let sheet: BlockReportSheet
+    /// 스냅샷 전용(창 루트의 `clipsOverflowInsteadOfScroll`) — 자유 입력 칸을 글자로 그린다. 앱은 false.
+    let rendersPlainText: Bool
+
+    static let width: CGFloat = 380
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.62)
+                .contentShape(Rectangle())
+                .onTapGesture { safety.closeBlockReportSheet() }
+            BlockReportSheetView(store: safety, sheet: sheet, rendersPlainTextEditor: rendersPlainText)
+                .padding(20)
+                .frame(width: Self.width)
+                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(CheckTheme.panel))
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+                .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
+                // Esc 는 [취소]와 같은 문이다(판돈 창과 같은 수법 — 보이지 않는 버튼에 지름길만 단다).
+                .background {
+                    Button { safety.closeBlockReportSheet() } label: { Color.clear.frame(width: 1, height: 1) }
+                        .buttonStyle(.plain)
+                        .keyboardShortcut(.cancelAction)
+                        .focusable(false)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+        }
+        .frame(width: GomokuWindowLayout.contentSize.width, height: GomokuWindowLayout.contentSize.height)
+    }
 }
 
 // MARK: - 팝오버 배너(받은 신청)

@@ -23,10 +23,10 @@ struct MessagesBlockConfirmSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SheetHeader(MessagesBlockText.blockAction, onClose: onClose)
+            SheetHeader(BlockReportText.blockAction, onClose: onClose)
             ScrollView {
                 VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-                    Text(MessagesBlockText.blockConfirmTitle(peerName))
+                    Text(BlockReportText.blockConfirmTitle(peerName))
                         .font(.headline)
                         .foregroundStyle(MobileTheme.label)
                         .fixedSize(horizontal: false, vertical: true)
@@ -34,8 +34,8 @@ struct MessagesBlockConfirmSheet: View {
                         .accessibilityAddTraits(.isHeader)
 
                     InsetGroup {
-                        ForEach(Array(MessagesBlockText.blockConfirmItems.enumerated()), id: \.offset) { index, item in
-                            let isLast = index == MessagesBlockText.blockConfirmItems.count - 1
+                        ForEach(Array(BlockReportText.blockConfirmItems(.phone).enumerated()), id: \.offset) { index, item in
+                            let isLast = index == BlockReportText.blockConfirmItems(.phone).count - 1
                             GroupRow(divider: isLast ? .none : .inset(MobileTheme.cardPadding + iconWidth + MobileTheme.space3)) {
                                 Image(systemName: "nosign")
                                     .font(.body)
@@ -51,20 +51,20 @@ struct MessagesBlockConfirmSheet: View {
                         }
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel(Text("차단하면: \(MessagesBlockText.blockConfirmItems.joined(separator: ", "))"))
+                    .accessibilityLabel(Text("차단하면: \(BlockReportText.blockConfirmItems(.phone).joined(separator: ", "))"))
 
-                    Text(MessagesBlockText.blockConfirmScopeNote)
+                    Text(BlockReportText.blockConfirmScopeNote)
                         .font(.footnote)
                         .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
-                    Text(MessagesBlockText.blockConfirmUndoNote)
+                    Text(BlockReportText.blockConfirmUndoNote(.phone))
                         .font(.footnote)
                         .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
 
-                    AingButton(MessagesBlockText.blockConfirm, kind: .destructive, size: .lg, fillsWidth: true, role: .destructive, action: onConfirm)
+                    AingButton(BlockReportText.blockConfirm, kind: .destructive, size: .lg, fillsWidth: true, role: .destructive, action: onConfirm)
                         .padding(.top, MobileTheme.space1)
                 }
                 .padding(.horizontal, MobileTheme.sideMargin)
@@ -112,11 +112,11 @@ struct MessagesReportSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SheetHeader(MessagesBlockText.reportTitle, onClose: close)
+            SheetHeader(BlockReportText.reportTitle, onClose: close)
                 .disabled(store.isSendingReport)
             ScrollView {
                 VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-                    Text(target.messageID == nil ? MessagesBlockText.reportLede(target.peerName) : MessagesBlockText.reportMessageLede)
+                    Text(target.messageID == nil ? BlockReportText.reportLede(target.peerName) : BlockReportText.reportMessageLede)
                         .font(.subheadline)
                         .foregroundStyle(MobileTheme.label)
                         .fixedSize(horizontal: false, vertical: true)
@@ -126,25 +126,25 @@ struct MessagesReportSheet: View {
                         quotedMessage(body)
                     }
 
-                    header(MessagesBlockText.reportReasonHeader)
+                    header(BlockReportText.reportReasonHeader)
                     InsetGroup {
                         ForEach(Array(ContentReportReason.allCases.enumerated()), id: \.element) { index, value in
                             reasonRow(value, isLast: index == ContentReportReason.allCases.count - 1)
                         }
                     }
 
-                    header(MessagesBlockText.reportDetailHeader)
+                    header(BlockReportText.reportDetailHeader)
                     detailEditor
 
                     InsetGroup {
                         GroupRow(divider: .none, minHeight: MobileTheme.rowHeightTwoLine) {
                             Toggle(isOn: $alsoBlock) {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(MessagesBlockText.reportAlsoBlock)
+                                    Text(BlockReportText.reportAlsoBlock)
                                         .font(.body)
                                         .foregroundStyle(MobileTheme.label)
                                         .fixedSize(horizontal: false, vertical: true)
-                                    Text(MessagesBlockText.reportAlsoBlockDetail)
+                                    Text(BlockReportText.reportAlsoBlockDetail)
                                         .font(.footnote)
                                         .foregroundStyle(MobileTheme.label2)
                                         .fixedSize(horizontal: false, vertical: true)
@@ -155,7 +155,7 @@ struct MessagesReportSheet: View {
                         }
                     }
 
-                    Text(MessagesBlockText.reviewPromise)
+                    Text(BlockReportText.reviewPromise)
                         .font(.footnote)
                         .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -166,7 +166,7 @@ struct MessagesReportSheet: View {
                     }
 
                     AingButton(
-                        store.isSendingReport ? MessagesBlockText.reportSending : MessagesBlockText.reportSubmit,
+                        store.isSendingReport ? BlockReportText.reportSending : BlockReportText.reportSubmit,
                         kind: .filled,
                         size: .lg,
                         fillsWidth: true,
@@ -192,7 +192,7 @@ struct MessagesReportSheet: View {
     }
 
     private var canSubmit: Bool {
-        MessagesBlockRules.canSubmitReport(reason: reason, detail: detail, isSending: store.isSendingReport)
+        BlockReportRules.canSubmitReport(reason: reason, detail: detail, isSending: store.isSendingReport)
     }
 
     private func header(_ title: String) -> some View {
@@ -256,9 +256,9 @@ struct MessagesReportSheet: View {
                     .padding(8)
                     .background(RoundedRectangle(cornerRadius: MobileTheme.innerRadius, style: .continuous).fill(MobileTheme.fill))
                     .disabled(store.isSendingReport)
-                    .accessibilityLabel(Text(MessagesBlockText.reportDetailHeader))
+                    .accessibilityLabel(Text(BlockReportText.reportDetailHeader))
                 if detail.isEmpty {
-                    Text(MessagesBlockText.reportDetailPlaceholder)
+                    Text(BlockReportText.reportDetailPlaceholder)
                         .font(.body)
                         .foregroundStyle(MobileTheme.label3Text)
                         .padding(.horizontal, 13)
@@ -267,11 +267,11 @@ struct MessagesReportSheet: View {
                         .accessibilityHidden(true)
                 }
             }
-            if let counter = MessagesBlockRules.detailCounterText(detail) {
+            if let counter = BlockReportRules.detailCounterText(detail) {
                 Text(counter)
                     .font(MobileTheme.number(.caption))
                     .monospacedDigit()
-                    .foregroundStyle(MessagesBlockRules.isDetailOverflowing(detail) ? MobileTheme.danger : MobileTheme.label2)
+                    .foregroundStyle(BlockReportRules.isDetailOverflowing(detail) ? MobileTheme.danger : MobileTheme.label2)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
             }

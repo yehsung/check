@@ -561,7 +561,7 @@ package final class GomokuStore {
     /// `incoming` 에서 걷어낸다(`scheduleInviteExpiry` → `pruneExpiredInvites`). 관찰 갱신은 시간 흐름만으로는 일어나지 않으므로,
     /// 여기서 `Date()` 로 거르면 값은 맞아도 그 값을 그린 메뉴바 점은 다음 무관한 갱신까지 켜진 채로 남는다.
     package var pendingIncomingInvites: [GomokuInvite] {
-        incoming.sorted { lhs, rhs in
+        visibleIncoming.sorted { lhs, rhs in
             lhs.expiresAt != rhs.expiresAt ? lhs.expiresAt < rhs.expiresAt : lhs.id < rhs.id
         }
     }
@@ -570,10 +570,30 @@ package final class GomokuStore {
     /// **시계를 읽지 않는다** — 만료된 신청은 스토어가 만료 시각에 `incoming` 에서 걷어낸다(pruneExpiredInvites).
     /// 여기서 Date() 를 읽으면 배너 body 가 시각 판정을 하게 되어 팝오버 전체가 시계에 묶인다.
     package var bannerInvite: GomokuInvite? {
-        incoming.reduce(nil) { best, invite in
+        visibleIncoming.reduce(nil) { best, invite in
             guard let best else { return invite }
             return invite.expiresAt < best.expiresAt ? invite : best
         }
+    }
+
+    // MARK: 차단으로 걷어낸 상대 (2026-09-20 맥 차단·신고)
+
+    /// 이 기기에서 방금 차단해 **화면에서 걷어낸** 상대들. 소유자(맥 `WorkTimerStore.blockHiddenPeerIDs`)가 채운다 —
+    /// 폰은 이 칸을 쓰지 않는다(폰은 화면이 읽는 자리 `GamesStore.gomokuLobbyUsers` 에서 거른다). 비어 있으면 아래 셋은 예전 값 그대로다.
+    ///
+    /// **코어 목록(`users`·`incoming`)은 서버가 답한 그대로 둔다** — 거르는 것은 화면이 읽는 파생값뿐이다. 차단이 실패하면
+    /// 소유자가 이 집합에서 빼기만 하면 사람이 그대로 돌아온다(다시 묻지 않아도 된다). 서버도 다음 로비·받은함 조회부터 서로
+    /// 차단한 사람을 빼므로(마이그레이션 20260918180000) 이 집합은 그 왕복 전까지의 틈만 메운다.
+    package var hiddenPeerIDs: Set<String> = []
+
+    /// 로비 상대 목록(화면용) — 차단으로 걷어낸 사람을 뺀다.
+    package var visibleUsers: [GomokuUser] {
+        hiddenPeerIDs.isEmpty ? users : users.filter { !hiddenPeerIDs.contains($0.id) }
+    }
+
+    /// 받은 신청(화면용) — 차단으로 걷어낸 사람이 보낸 것을 뺀다. 배너·메뉴바 점(`bannerInvite`·`pendingIncomingInvites`)도 이것을 읽는다.
+    package var visibleIncoming: [GomokuInvite] {
+        hiddenPeerIDs.isEmpty ? incoming : incoming.filter { !hiddenPeerIDs.contains($0.peer.id) }
     }
 
     // MARK: UI 트랙이 CheckApp 에서 물리는 문
@@ -1565,6 +1585,8 @@ package final class GomokuStore {
         if record != nil { record = nil }
         if selectedStake != .three { selectedStake = .three }
         if !incoming.isEmpty { incoming = [] }
+        // 차단으로 걷어낸 상대도 계정에 묶인다(남기면 다음 사람 화면에서 앞 사람이 차단한 이가 안 보인다).
+        if !hiddenPeerIDs.isEmpty { hiddenPeerIDs = [] }
         if outgoing != nil { outgoing = nil }
         if match != nil { match = nil }
         if notice != nil { notice = nil }

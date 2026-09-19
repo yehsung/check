@@ -419,7 +419,7 @@ package enum MeText {
     package static let privacyLoadFailed = "공개 설정을 불러오지 못했어요"
 
     /// 안전 절(앱스토어 심사 지침 1.2) — 지금은 [차단한 사람] 한 행이다. 글자는 메시지 탭의 차단 문구
-    /// (`MessagesBlockText`)를 그대로 쓴다: 차단을 거는 곳과 푸는 곳이 두 벌의 말을 하면 안 된다.
+    /// (코어 `BlockReportText` — 맥과 한 벌)를 그대로 쓴다: 차단을 거는 곳과 푸는 곳이 두 벌의 말을 하면 안 된다.
     package static let safetySection = "안전"
 
     package static let pushSection = "알림"

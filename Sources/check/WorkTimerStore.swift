@@ -1134,6 +1134,52 @@ final class WorkTimerStore {
     /// 기본값이 실제 질의면 창 앵커 테스트가 남긴 `current` 가 병렬로 도는 메시지 스위트의 판정에 새어 든다.
     @ObservationIgnored var menuPopoverOnScreenProbe: @MainActor () -> Bool? = { nil }
 
+    // ── 차단 · 신고 (v0.3.34 — 맥, 2026-09-20) ──
+    //
+    // 로직은 `WorkTimerStoreBlocks.swift`, 문구·규칙은 코어 `BlockReportRules`(폰과 한 벌)에 있다(저장 프로퍼티만 언어 제약으로 여기 산다).
+    // **전부 계정에 묶인다** — clearPersistedSession 이 지운다(남기면 다음 사람 화면에서 앞 사람이 차단한 이가 안 보이거나,
+    // 앞 사람이 쓰던 신고 글이 새 계정 이름으로 나간다).
+
+    /// 지금 떠 있는 신고·차단 시트(nil = 없음). 시트는 **연 자리**(`BlockReportSurface`)에만 선다 — 팝오버 대화 · 오목 창.
+    var blockReportSheet: BlockReportSheet?
+    /// 신고 시트의 사유(필수 — 고르기 전에는 nil). 시트를 열 때마다 비운다.
+    var reportReason: ContentReportReason?
+    /// 신고 시트의 자유 입력(선택 · 200자). **스토어에 두는 이유**는 제보 초안과 같다 — 보내기 성공에 비우는 일이 스토어의 책임이고,
+    /// 조합 확정 문(`CheckEditorSend.commitThenSend`)을 지난 뒤 이 값을 읽는 것을 헤드리스로 잰다.
+    var reportDetailDraft: String = ""
+    /// "신고하면서 차단하기"(기본 켬 — 신고할 정도면 대개 보고 싶지 않다, 폰과 같은 결정).
+    var reportAlsoBlock = true
+    /// 신고 왕복이 떠 있는가. 도는 동안 시트를 못 닫고 [신고 보내기]가 잠긴다(연타가 24시간 10건 상한을 축낸다).
+    var isSendingReport = false
+    /// 신고 시트 안의 이유 한 줄(사유 없음 · 200자 초과 · 실패). 실패해도 시트는 쓴 글을 쥔 채 열려 있다.
+    var reportNotice: String?
+    /// 차단해서 **화면에서 걷어낸** 상대. 서버도 다음 조회부터 그 사람을 빼지만 화면은 응답을 기다리지 않는다(낙관적).
+    /// 실패하면 여기서 빼며 사람이 그대로 돌아온다. 오목 스토어의 같은 칸에 **그대로 비춘다**(로비·받은 신청·배너·메뉴바 점).
+    var blockHiddenPeerIDs: Set<String> = [] {
+        didSet {
+            if gomoku.hiddenPeerIDs != blockHiddenPeerIDs { gomoku.hiddenPeerIDs = blockHiddenPeerIDs }
+        }
+    }
+    /// 차단 왕복이 떠 있는 상대(한 번에 하나 — 확인 시트를 지난 동작이다).
+    var blockingPeerID: String?
+    /// 결과 한 줄(차단 되돌림 실패 · 신고 접수). **연 자리에만** 선다 — 팝오버(콕 찌르기 목록 · 대화) 또는 오목 채팅.
+    var blockReportNotice: BlockReportNotice?
+    /// 내가 차단한 사람들(`list_blocks`) — 설정 → 차단한 사람.
+    var blockedPeople: [BlockedUser] = []
+    var blocksLoaded = false
+    var blocksLoading = false
+    var blocksFailed = false
+    /// 서버가 아직 차단 RPC 를 모른다(PGRST202). 목록이 "고장"이 아니라 "아직"이라고 말한다.
+    var blocksServerNotReady = false
+    /// 차단 해제 왕복이 떠 있는 사람들(목록의 여러 줄을 나란히 풀 수 있다).
+    var unblockingUserIDs: Set<String> = []
+    /// 차단 목록 위 한 줄(해제 실패).
+    var blockedListNotice: String?
+    /// 설정 창이 [차단한 사람] 쪽을 보고 있는가(설정 본문과 자리를 바꾼다 — 창 높이 계약을 목록이 먹지 않게).
+    /// **팝오버 패널 깃발(`is…Visible`)이 아니다** — 설정 창 안의 쪽 전환이라 팝오버 자리를 한 톨도 안 먹는다. 그래서 이름도
+    /// 그 규약(`CheckMenuView.subPanelFlagNames` 와 대조하는 테스트가 세는 모양)을 따르지 않는다.
+    var showsBlockedPeopleInSettings = false
+
     // ── 내 앱 버전 보고(profiles.app_build / app_version) ──
     /// 이 프로세스가 읽어 올 버전. 기본은 번들이고 테스트가 갈아 끼운다 — Bundle.main 은 프로세스가 정하는
     /// 값이라 주입하지 않으면 "심어지지 않은 빌드"와 "심어진 빌드"를 같은 러너에서 둘 다 실증할 수 없다.
@@ -2144,6 +2190,8 @@ final class WorkTimerStore {
         // 수신 큐(receivedMessages)는 **건드리지 않는다**: 그건 패널이 아니라 말풍선의 것이고,
         // 패널을 닫았다고 아직 한 번도 안 뜬 글자를 버리면 take_pokes 가 이미 소비한 그 글자는 영영 사라진다.
         messageNotice = nil
+        // 차단·신고 결과 한 줄(팝오버 몫)도 같다 — 이 목록이 그 줄을 보여 주는 자리다(v0.3.34).
+        clearBlockReportNotice(on: .message)
         // 반면 '이미 뜬' 마지막 메시지는 여기서 **소비**한다. 이 패널이 그걸 보여주는 유일한 화면이라
         // 닫았다는 것이 곧 "봤다"의 증거다 — 안 지우면 5분 뒤 다시 열었을 때 같은 말이 새 메시지처럼 또 뜬다.
         // (한 번도 안 열어 본 경우는 여기로 오지 않으므로, 나이 만료는 폴링이 따로 맡는다 — expireLastShownMessage.)
@@ -3235,6 +3283,9 @@ extension WorkTimerStore {
         // 건드릴 수 없다(세대 가드와 이중 안전).
         messageReadRuntime.cancelAll()
         messageReadRuntime = MessageReadRuntime()
+        // 차단·신고(v0.3.34)도 계정에 묶인다. 숨김을 남기면 다음 사람 화면에서 앞 사람이 차단한 이가 사라져 있고,
+        // 신고 초안을 남기면 앞 사람이 쓰던 글이 새 계정 이름으로 나갈 수 있다(메시지 초안과 같은 판단).
+        clearBlockReportState()
         // 버전 보고 도장도 계정에 묶인다. 남기면 다음 계정이 자기 프로필에 버전을 못 남겨,
         // 그 사람은 근무 중인데도 아무에게서 메시지를 못 받는다(서버가 app_build 를 null 로 본다).
         reportedAppVersionStamp = nil

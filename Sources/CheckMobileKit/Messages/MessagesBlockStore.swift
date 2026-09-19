@@ -1,14 +1,14 @@
 import CheckCore
 import Foundation
 
-/// 차단·신고 동작(SPEC-block-report 작업 P). 상태는 `MessagesStore` 본체에, 문구·규칙은 `MessagesBlockRules` 에 있다.
+/// 차단·신고 동작(SPEC-block-report 작업 P). 상태는 `MessagesStore` 본체에, 문구·규칙은 코어 `BlockReportRules`(맥과 한 벌)에 있다.
 ///
 /// ── 이 확장이 지키는 것 ──
 /// ① **차단 직후 화면은 서버를 기다리지 않는다.** 확인 시트를 지나면 그 상대를 곧바로 숨기고(`hiddenBlockedPeerIDs`)
 ///    대화·목록·배지·사람 찾기에서 사라진다. 실패하면 숨김을 되돌리고 목록 위에 이유 한 줄을 세운다 — **대화는 그대로 돌아온다.**
 /// ② **확인 없이는 차단하지 않는다.** `blockPeer` 를 부르는 곳은 확인 시트 하나다(소스 계약 테스트가 센다).
 /// ③ **서버가 아직 없는 창**(앱이 db push 보다 먼저 나갔다)에서는 "고장"이 아니라 "아직"이라고 말한다
-///    (`MessagesBlockText.serverNotReady` — 계정 삭제의 `serverNotReady` 와 같은 규약).
+///    (`BlockReportText.serverNotReady` — 계정 삭제의 `serverNotReady` 와 같은 규약).
 /// ④ 세대 가드: 로그아웃 뒤 도착한 응답은 다음 계정의 숨김·목록·문구를 건드리지 않는다.
 ///
 /// ★ 신고 본문은 사람이 쓴 문장이다 — 이 파일에도 `print`/`Logger` 를 붙이지 마라.
@@ -41,10 +41,10 @@ extension MessagesStore {
             } catch {
                 guard generation == self.context.generation else { return }
                 self.blockingPeerID = nil
-                let failure = MessagesBlockRules.classify(error)
+                let failure = BlockReportRules.classify(error)
                 // 되돌리기: 숨긴 대화가 그대로 돌아온다.
                 self.hiddenBlockedPeerIDs.remove(peerID)
-                if let notice = MessagesBlockRules.notice(for: failure, action: .block) {
+                if let notice = BlockReportRules.notice(for: failure, action: .block) {
                     self.blockNotice = notice
                     self.blockNoticeIsError = true
                 }
@@ -76,8 +76,8 @@ extension MessagesStore {
             } catch {
                 guard generation == self.context.generation else { return }
                 self.unblockingUserIDs.remove(userID)
-                let failure = MessagesBlockRules.classify(error)
-                if let notice = MessagesBlockRules.notice(for: failure, action: .unblock) {
+                let failure = BlockReportRules.classify(error)
+                if let notice = BlockReportRules.notice(for: failure, action: .unblock) {
                     self.blockedListNotice = notice
                 }
             }
@@ -108,7 +108,7 @@ extension MessagesStore {
             } catch {
                 guard generation == self.context.generation else { return }
                 self.blocksLoading = false
-                switch MessagesBlockRules.classify(error) {
+                switch BlockReportRules.classify(error) {
                 case .cancelled:
                     return
                 case .serverNotReady:
@@ -144,11 +144,11 @@ extension MessagesStore {
     ) async -> Bool {
         guard isSignedIn, !peerID.isEmpty, !isSendingReport else { return false }
         guard let reason else {
-            reportNotice = MessagesBlockText.reportReasonRequired
+            reportNotice = BlockReportText.reportReasonRequired
             return false
         }
         guard ContentReportDetail.isWithinLimit(detail) else {
-            reportNotice = MessagesBlockText.reportDetailOverflow(ContentReportDetail.maxLength)
+            reportNotice = BlockReportText.reportDetailOverflow(ContentReportDetail.maxLength)
             return false
         }
         let generation = context.generation
@@ -173,14 +173,14 @@ extension MessagesStore {
                 hiddenBlockedPeerIDs.insert(peerID)
                 blocksLoaded = false
             }
-            blockNotice = MessagesBlockText.reportSentNotice
+            blockNotice = BlockReportText.reportSentNotice
             blockNoticeIsError = false
             return true
         } catch {
             guard generation == context.generation else { return false }
             isSendingReport = false
-            let failure = MessagesBlockRules.classify(error)
-            if let notice = MessagesBlockRules.notice(for: failure, action: .report) {
+            let failure = BlockReportRules.classify(error)
+            if let notice = BlockReportRules.notice(for: failure, action: .report) {
                 reportNotice = notice
             }
             return false

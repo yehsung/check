@@ -76,7 +76,12 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     /// 폭 400 이상에서는 630). 창 계약은 **그 가장 높은 상태**로 잡는다: 643 + 5 = **648**. 등록이 정상이면 아래가 24pt 비지만,
     /// 정상 상태(624)로 잡으면 겹침·실패 안내가 뜨는 바로 그 순간 맨 아래 '소속 센터' 행의 설명 줄이 잘린다 — 사용자가 설정을
     /// 고치러 들어온 순간에 화면이 깨지는 셈이다. V0316 이 가장 높은 상태를 이 값과 비교한다.
-    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 648)
+    ///
+    /// v0.3.34: '내 정보'에 [차단한 사람] 행(맥 차단·신고)이 붙어 가장 높은 상태가 **698pt**(+55 — 구분선 + 간격 + 두 줄 행,
+    /// 실측 2026-09-20 폭 380)가 됐다. 같은 5pt 여유로 **703**. 목록 자체는 이 본문에 펼치지 않는다 — 행을 누르면 본문 자리에
+    /// 목록이 서서(`CheckBlockedPeopleSettingsPage`) 사람 수가 이 계약을 흔들지 않는다. 저장된 옛 자리(648)로 열리는 사람을 위해
+    /// 열 때 모자라면 채운다(`growForContentIfNeeded`).
+    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 703)
     /// 최소 크기. 폭은 뷰가 선언한 하한(`minWidth: Self.preferredWidth`)을 그대로 따른다 — 여기에 뷰가
     /// 모르는 숫자를 새로 적으면 그 순간 두 하한이 갈리고, 갈리는 쪽이 위 높이 계약을 깬다(바로 위 실측표).
     static let minContentSize = NSSize(width: CheckSettingsView.preferredWidth, height: 260)
@@ -224,7 +229,7 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     ///   사용자가 일부러 열어 둔 것이라, 그 판단을 여기 넣으면 두 경로의 뜻이 갈린다.
     func show() {
         guard let window else { return }
-        growForAdminContentIfNeeded(window)
+        growForContentIfNeeded(window)
         // 열 때마다 전역 단축키를 다시 판정한다(v0.3.23). macOS 단축키와 겹쳐 .conflict 인 사람이 시스템 설정에서 그 단축키를
         // 끄고 돌아와 설정을 다시 열면 여기서 풀린다. 단축키 행의 onAppear 만으로는 안 된다 — 이 창은 닫아도(orderOut) 뷰가
         // 창에 붙은 채라 다시 열 때 onAppear 가 오지 않는다(실측 2026-09-15, 알파 0 테스트 창: show → close → show →
@@ -238,17 +243,22 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         armStuckWindowWatchdog()
     }
 
-    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **732pt** 까지 자란다(`CheckSettingsView.adminContentHeight`,
-    /// v0.3.23 — 단축키 안내 한 줄이 보이는 가장 높은 상태). 기본 창은 648pt 라 그대로 열면 맨 아래 행이 잘린다.
+    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **787pt** 까지 자란다(`CheckSettingsView.adminContentHeight`,
+    /// v0.3.34 — 단축키 안내 한 줄이 보이는 가장 높은 상태). 기본 창은 703pt 라 그대로 열면 맨 아래 행이 잘린다.
     ///
     /// **왜 창을 만들 때가 아니라 열 때인가**: `ultraUnlimited` 는 서버가 정하고 세션 동기화로 **늦게 도착한다**.
-    /// 창 생성 시점에 읽으면 첫 실행에서는 아직 false 라 기본 높이(648)로 굳는다.
+    /// 창 생성 시점에 읽으면 첫 실행에서는 아직 false 라 기본 높이로 굳는다.
+    ///
+    /// **v0.3.34 부터 관리자가 아니어도 채운다**: 이 창은 자리를 기억한다(`setFrameUsingName`). 옛 버전에서 648pt 로 저장된 창이
+    /// 그대로 열리면 새로 붙은 맨 아래 [차단한 사람] 행이 잘린다 — 행이 붙을 때마다 사용자가 창을 손으로 늘려야 보이는 셈이다.
+    /// 그래서 일반 사용자는 기본 높이(`defaultContentSize`)까지, 관리자는 관리자 높이까지 **모자랄 때만** 채운다.
     ///
     /// **왜 키우기만 하는가**: 사용자가 직접 줄여 둔 창을 우리가 매번 되돌리면 그 조작이 무의미해진다.
     /// 저장된 자리(`setFrameAutosaveName`)보다 우리가 세게 굴면 안 된다 — 모자랄 때만 채운다.
-    private func growForAdminContentIfNeeded(_ window: NSWindow) {
-        guard wiring?.store.ultraUnlimited == true else { return }
-        let needed = CheckSettingsView.adminContentHeight
+    private func growForContentIfNeeded(_ window: NSWindow) {
+        let needed = wiring?.store.ultraUnlimited == true
+            ? CheckSettingsView.adminContentHeight
+            : Self.defaultContentSize.height
         guard window.contentLayoutRect.height < needed else { return }
         var size = window.frame.size
         size.height += needed - window.contentLayoutRect.height
@@ -263,6 +273,8 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     /// **앱은 계속 돈다**(메뉴바 전용 앱이다 — 이 창은 앱의 마지막 창일 뿐 앱의 수명이 아니다).
     func close() {
         endWorkShortcutRecording()
+        // [차단한 사람] 쪽을 보던 채 닫아도 다시 열면 설정 본문부터 보인다(v0.3.34).
+        wiring?.store.closeBlockedPeopleSettings()
         stuckWindowWatchdog?.cancel()
         stuckWindowWatchdog = nil
         windowStorage?.orderOut(nil)
@@ -274,6 +286,7 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         guard (notification.object as AnyObject?) === windowStorage else { return }
         endWorkShortcutRecording()
+        wiring?.store.closeBlockedPeopleSettings()
         stuckWindowWatchdog?.cancel()
         stuckWindowWatchdog = nil
         isOpen = false

@@ -848,9 +848,53 @@ struct CheckSettingsView: View {
     ///
     /// ⚠️ **창 높이 계약(`CheckSettingsWindowController.defaultContentSize.height` = 648)보다 크다.** 그래서 창 쪽이
     ///    관리자일 때만 열면서 이 값까지 키운다. `V0316CharacterPickerTests` 가 가장 높은 상태를 그려 이 숫자를 되묻는다.
-    static let adminContentHeight: CGFloat = 732
+    ///
+    /// v0.3.34: '내 정보'에 [차단한 사람] 행이 붙어 일반 698 / 관리자 **787**(둘 다 +55, 실측 2026-09-20). 창 계약은 703 이다.
+    static let adminContentHeight: CGFloat = 787
 
     var body: some View {
+        Group {
+            if store.showsBlockedPeopleInSettings {
+                // 설정 → 차단한 사람(v0.3.34). 설정 본문과 **자리를 바꾼다** — 사람 수만큼 자라는 목록을 본문에 펼치면
+                // 이 창의 높이 계약(맨 아래 항목이 안 잘린다)이 사람 수에 묶인다.
+                CheckBlockedPeopleSettingsPage(store: store)
+            } else {
+                settingsSections
+            }
+        }
+        .padding(14)
+        // 창이 늘어나면 같이 늘고, 좁혀도 설명이 뭉개지지 않는 하한을 준다(창 크기는 배선 쪽 소관).
+        // maxHeight 를 열어 두는 것이 핵심이다: 창(648pt)이 콘텐츠보다 높은데 프레임을 콘텐츠 높이로
+        // 두면 배경이 그만큼만 칠해지고 창 아래에 시스템 흰 띠가 남는다. 진단 두 줄이 제보로 옮겨 간
+        // 뒤(2026-09-10) 그 여백은 더 커졌다 — 그래서 이 한 줄은 더 중요해졌다.
+        // 위 정렬(topLeading)은 이 앱의 상단 앵커 규약이기도 하다 — 늘어난 만큼 아래로만 빈다.
+        // ★ 폭 하한이 곧 **높이 계약**이다(v0.3.13 에 배운 것). 예전 하한은 320 이었는데, 그 폭에서는
+        //   설명 줄 여러 개가 두 줄로 접혀 콘텐츠가 폭에 따라 들쭉날쭉했다 —
+        //   실측(2026-09-12, 세 상태 × 별명 안내 세 종류 전부 같은 값):
+        //     320 → 517pt · 360 → 504 · 370 → 491 · 375 → 478 · **380 이상 → 465(고정)**.
+        //   창 높이 계약은 470 하나인데 콘텐츠가 517 까지 자라면 맨 아래 '소속 센터' 행이 통째로 잘린다.
+        //   그래서 하한을 preferredWidth 로 올렸다: 이 폭 위에서는 **어떤 폭에서도 465pt** 라, 높이가
+        //   사용자의 드래그에 따라 달라지지 않는다. 하한을 다시 낮추려면 창 높이부터 다시 재라.
+        //   v0.3.22: '자동 근무 시작' 행이 붙어 폭 380 에서 **533pt**, 창은 538 이었다. 이 행의 설명은 넓은 폭에서
+        //   한 줄로 펴질 수 있어 폭이 커지면 콘텐츠가 같거나 작아진다 — 계약은 여전히 폭 하한에서 잰 값이다.
+        //   v0.3.23: '근무 시작·종료 단축키' 묶음이 붙어 폭 380 에서 624pt, 안내 한 줄이 보이면 **643pt**, 창은 648 이다.
+        .frame(
+            minWidth: Self.preferredWidth, idealWidth: Self.preferredWidth, maxWidth: 520,
+            maxHeight: .infinity, alignment: .topLeading
+        )
+        .background(CheckTheme.background)
+        // 툴팁 말풍선 레이어(v0.3.25) — 설정 창 루트. 창을 채우는 프레임·배경 뒤라 말풍선 자리가 창 전체다.
+        .checkTooltipLayer()
+        .onAppear {
+            // 시드가 있으면 시스템에 묻지 않는다(렌더/테스트 경로).
+            if launchAtLoginSeed == nil {
+                launchAtLogin = LoginItemRegistrar.isLaunchAtLoginEnabled()
+            }
+        }
+    }
+
+    /// 설정 본문 두 묶음(일반 · 내 정보). `body` 가 [차단한 사람] 쪽과 자리를 바꾼다(v0.3.34).
+    private var settingsSections: some View {
         VStack(alignment: .leading, spacing: 14) {
             section("일반") {
                 CheckSettingsToggleRow(
@@ -899,6 +943,10 @@ struct CheckSettingsView: View {
                 )
                 PanelDivider()
                 CenterSettingsRow(store: store)
+                PanelDivider()
+                // 설정 → 차단한 사람(v0.3.34). 누르면 이 창의 본문 자리에 목록이 선다(`CheckBlockedPeopleSettingsPage`).
+                // 차단을 **거는** 자리는 대화 화면·오목 채팅의 ··· 이고, 여기는 푸는 자리다(폰: 나 → 설정 → 차단한 사람).
+                BlockedPeopleSettingsEntryRow(store: store)
                 // ★ 관리자에게만 연다(SPEC 2-D). 캐릭터를 파는 **상점이 아직 없다** — 일반 사용자에게
                 //   열면 "가진 적 없는 것을 고를 수 있는" 화면이 되고, 그 순간 이 창이 재화 설계보다
                 //   앞서 나간다. `ultraUnlimited` 는 서버(`profiles.role = 'admin'`)가 말해 준 사실의
@@ -928,35 +976,6 @@ struct CheckSettingsView: View {
             //
             //   되돌리려는 사람이 알아야 할 사실: 이 창은 648pt 이고 콘텐츠는 가장 높은 상태에서 643pt 다(v0.3.23) — 이제는 자리도
             //   없으니 창 높이부터 다시 재야 한다. 그보다 먼저 없는 것은 이유다.
-        }
-        .padding(14)
-        // 창이 늘어나면 같이 늘고, 좁혀도 설명이 뭉개지지 않는 하한을 준다(창 크기는 배선 쪽 소관).
-        // maxHeight 를 열어 두는 것이 핵심이다: 창(648pt)이 콘텐츠보다 높은데 프레임을 콘텐츠 높이로
-        // 두면 배경이 그만큼만 칠해지고 창 아래에 시스템 흰 띠가 남는다. 진단 두 줄이 제보로 옮겨 간
-        // 뒤(2026-09-10) 그 여백은 더 커졌다 — 그래서 이 한 줄은 더 중요해졌다.
-        // 위 정렬(topLeading)은 이 앱의 상단 앵커 규약이기도 하다 — 늘어난 만큼 아래로만 빈다.
-        // ★ 폭 하한이 곧 **높이 계약**이다(v0.3.13 에 배운 것). 예전 하한은 320 이었는데, 그 폭에서는
-        //   설명 줄 여러 개가 두 줄로 접혀 콘텐츠가 폭에 따라 들쭉날쭉했다 —
-        //   실측(2026-09-12, 세 상태 × 별명 안내 세 종류 전부 같은 값):
-        //     320 → 517pt · 360 → 504 · 370 → 491 · 375 → 478 · **380 이상 → 465(고정)**.
-        //   창 높이 계약은 470 하나인데 콘텐츠가 517 까지 자라면 맨 아래 '소속 센터' 행이 통째로 잘린다.
-        //   그래서 하한을 preferredWidth 로 올렸다: 이 폭 위에서는 **어떤 폭에서도 465pt** 라, 높이가
-        //   사용자의 드래그에 따라 달라지지 않는다. 하한을 다시 낮추려면 창 높이부터 다시 재라.
-        //   v0.3.22: '자동 근무 시작' 행이 붙어 폭 380 에서 **533pt**, 창은 538 이었다. 이 행의 설명은 넓은 폭에서
-        //   한 줄로 펴질 수 있어 폭이 커지면 콘텐츠가 같거나 작아진다 — 계약은 여전히 폭 하한에서 잰 값이다.
-        //   v0.3.23: '근무 시작·종료 단축키' 묶음이 붙어 폭 380 에서 624pt, 안내 한 줄이 보이면 **643pt**, 창은 648 이다.
-        .frame(
-            minWidth: Self.preferredWidth, idealWidth: Self.preferredWidth, maxWidth: 520,
-            maxHeight: .infinity, alignment: .topLeading
-        )
-        .background(CheckTheme.background)
-        // 툴팁 말풍선 레이어(v0.3.25) — 설정 창 루트. 창을 채우는 프레임·배경 뒤라 말풍선 자리가 창 전체다.
-        .checkTooltipLayer()
-        .onAppear {
-            // 시드가 있으면 시스템에 묻지 않는다(렌더/테스트 경로).
-            if launchAtLoginSeed == nil {
-                launchAtLogin = LoginItemRegistrar.isLaunchAtLoginEnabled()
-            }
         }
     }
 

@@ -148,14 +148,17 @@ final class CheckGomokuWindowController: NSObject, NSWindowDelegate {
 
     /// 앱 시작 시 1회. 기본 화면(`GomokuPanel`)을 물린다. `me` 는 내 이름·캐릭터를 읽는 문이다 —
     /// `GomokuStore` 는 상대만 들고 있어서(§6.3) 나는 앱 배선이 `WorkTimerStore` 에서 읽어 넘긴다.
+    ///
+    /// `safety` 는 채팅 머리 ··· 의 신고·차단을 보내는 곳이다(v0.3.34 — 앱은 `WorkTimerStore` 를 넘긴다). nil 이면 ··· 가 서지 않는다.
     func configure(
         store: GomokuStore,
-        me: @escaping @MainActor () -> GomokuPlayerFace = { GomokuPlayerFace.fallback }
+        me: @escaping @MainActor () -> GomokuPlayerFace = { GomokuPlayerFace.fallback },
+        safety: WorkTimerStore? = nil
     ) {
         configure(store: store, content: { gomoku in
             // 뷰는 고정 크기를 채운다. 배경을 창 쪽에서 채우지 않으면 화면 배율이 바뀌는 순간 시스템 회색 판이 드러난다.
             AnyView(
-                GomokuPanel(store: gomoku, me: me)
+                GomokuPanel(store: gomoku, me: me, safety: safety)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .background(CheckTheme.background)
             )

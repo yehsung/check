@@ -783,6 +783,9 @@ struct FeedbackBodyEditor: View {
     @Binding var text: String
     var height: CGFloat
     var rendersPlainText: Bool = false
+    /// 비어 있을 때 칸 안의 안내. 기본은 제보 문구이고, 신고 시트(v0.3.34)가 자기 문구를 넘긴다 — 칸 자체는 **같은 부품**이다
+    /// (자리 맞추기·조합 중 겹침 규칙을 두 벌로 만들지 않는다).
+    var placeholder: String = FeedbackText.placeholder
 
     /// 텍스트 뷰가 마지막으로 알린 "그려진 것이 비었나". **nil = 아직 못 들었다**(첫 그림 · 스냅샷 경로).
     /// 메시지 칸과 **같은 규칙**(`CheckEditorPlaceholder.isVisible`)을 쓴다 — 이 칸에도 같은 증상이 있었다
@@ -802,7 +805,7 @@ struct FeedbackBodyEditor: View {
             //   사용자 지시 ③("높이가 안맞아")이 이 칸에서 그대로 되살아난다.
             // ★ `text.isEmpty`(스토어 값)로 되돌리지 마라 — 조합 중 겹침이 그대로 돌아온다.
             if CheckEditorPlaceholder.isVisible(storeText: text, editorRenderedEmpty: editorRenderedEmpty) {
-                Text(FeedbackText.placeholder)
+                Text(placeholder)
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .padding(.horizontal, CheckEditorMetrics.inset.width)
@@ -1203,6 +1206,8 @@ struct FeedbackStatusChip: View {
 struct FeedbackPrimaryButton: View {
     let label: String
     let enabled: Bool
+    /// 채움 색. 기본은 accent 이고, 되돌리기 어려운 동작(차단 확인 — v0.3.34)만 danger 를 넘긴다. 모양·치수는 한 벌이다.
+    var tint: Color = CheckTheme.accent
     let action: () -> Void
 
     var body: some View {
@@ -1214,7 +1219,7 @@ struct FeedbackPrimaryButton: View {
                 .frame(height: 24)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(CheckTheme.accent.opacity(enabled ? 0.9 : 0.35))
+                        .fill(tint.opacity(enabled ? 0.9 : 0.35))
                 )
                 .fixedSize()
         }

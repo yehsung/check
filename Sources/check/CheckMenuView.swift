@@ -655,8 +655,11 @@ struct CheckMenuSideRail: View {
     /// 떨어지는 순간 `feedbackOpenCount` 를 0 으로 내린다. 여기서 깃발을 한 번 더 보지 않는 이유가 그것이다
     /// (두 값이 갈릴 조합 자체가 없다). 이 뷰에 `store.ultraUnlimited &&` 를 더하지 마라 —
     /// 판정을 클라로 옮기는 것이고, 위 규약을 깬다.
+    ///
+    /// **v0.3.34: 미해결 신고도 이 배지에 합친다**(`adminInboxOpenCount` = 제보 + 신고). 신고는 이 칸이 여는 "받은 제보" 탭
+    /// 안의 [신고] 칸에 쌓이므로, 이 배지가 "그 탭 안에 손 안 댄 것이 몇 개"를 말하는 것은 그대로다. 새 배지를 만들지 않는다.
     private var feedbackBadge: String? {
-        let count = store.feedbackOpenCount
+        let count = store.adminInboxOpenCount
         guard count > 0 else { return nil }
         return count > 99 ? "99+" : "\(count)"
     }
@@ -886,10 +889,24 @@ struct MenuBarStatusLabel: View {
     /// 만료되지 않은 받은 오목 신청이 있는가(`GomokuStore.pendingIncomingInvites` 가 비어 있지 않음, v0.3.30).
     /// 신청은 60초면 만료되므로 이 값은 스토어의 만료 **타이머**가 내린다 — 라벨이 시계를 읽지 않는다.
     var hasGomokuInvite: Bool = false
+    /// 운영자에게 미해결 신고가 있는가(`WorkTimerStore.reportOpenCount > 0`, v0.3.34). 켜지면 **같은 빨간 점**이다.
+    ///
+    /// 심사에 "접수한 신고는 24시간 안에 확인합니다"라고 약속했는데 신고가 오는 곳은 폰이다. 새 알림 체계를 만들지 않고 이 점에 합친다.
+    ///
+    /// ⚠️ **실시간 알림이 아니라 상기다.** 건수는 팝오버를 여는 순간 한 번 묻는다(타이머 없음 — `setMenuPresented` 의
+    /// `refreshReportOpenCount`). 그래서 팝오버를 한 번도 안 연 사이에 들어온 신고로는 이 점이 켜지지 않는다. 대신 한 번 알게 된
+    /// 미해결 신고는 **처리할 때까지** 팝오버를 닫아도 메뉴바에 남아 운영자를 붙잡는다(메시지 점이 소켓 신호로 켜지는 것과 다르다).
+    ///
+    /// 운영자 판정은 하지 않는다: 건수는 서버가 운영자에게만 0 이 아닌 값을 주고, 관리자 깃발이 내려가면 스토어가 0 으로 내린다.
+    /// 기본값 false 라 넷 다 꺼지면 **예전 그림과 바이트가 같다**.
+    var hasOpenReports: Bool = false
 
     /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
     var dotReasons: MenuBarDotReasons {
-        MenuBarDotReasons(unreadMessages: hasUnreadMessages, gomokuInvite: hasGomokuInvite, updateAvailable: updateAvailable)
+        MenuBarDotReasons(
+            unreadMessages: hasUnreadMessages, gomokuInvite: hasGomokuInvite, updateAvailable: updateAvailable,
+            openReports: hasOpenReports
+        )
     }
 
     /// 캐릭터 선택 방송. **읽기만 한다** — 이 한 줄이 관찰을 등록해, 설정에서 캐릭터를 바꾸면
@@ -991,22 +1008,30 @@ struct MenuBarStatusLabel: View {
 /// 메뉴바 빨간 점을 켜는 사유들(v0.3.30 — 순수 값).
 ///
 /// **점은 하나다.** 사유가 몇 개든 같은 6pt 빨간 점을 굽고(`MenuBarStatusLabel.updateBadged`), 무엇 때문에 켜졌는지는
-/// 보이스오버 설명이 " · " 로 이어 말한다. 순서는 사람이 기다리는 급한 것부터다: 새 메시지 → 오목 신청 → 업데이트.
+/// 보이스오버 설명이 " · " 로 이어 말한다. 순서는 사람이 기다리는 급한 것부터다: 새 메시지 → 오목 신청 → 처리할 신고 → 업데이트.
+///
+/// `openReports`(v0.3.34)는 **맨 뒤에 선언**한다 — 멤버와이즈 인자 순서가 선언 순서라, 가운데 끼우면 기존 호출
+/// `MenuBarDotReasons(unreadMessages:gomokuInvite:updateAvailable:)` 이 컴파일되지 않는다. 말하는 순서는 선언 순서와 무관하다.
 struct MenuBarDotReasons: Equatable, Sendable {
     var unreadMessages: Bool = false
     var gomokuInvite: Bool = false
     var updateAvailable: Bool = false
+    /// 운영자에게 미해결 신고가 있다(v0.3.34 — `MenuBarStatusLabel.hasOpenReports`).
+    var openReports: Bool = false
 
     static let unreadMessagesText = "새 메시지"
     static let gomokuInviteText = "오목 신청"
+    static let openReportsText = "처리할 신고"
 
-    var isEmpty: Bool { !unreadMessages && !gomokuInvite && !updateAvailable }
+    var isEmpty: Bool { !unreadMessages && !gomokuInvite && !updateAvailable && !openReports }
 
     /// 켜진 사유들의 문구(순서 고정). 하나도 없으면 nil — 점이 없으니 설명할 것도 없다.
     var accessibilityDescription: String? {
         var parts: [String] = []
         if unreadMessages { parts.append(Self.unreadMessagesText) }
         if gomokuInvite { parts.append(Self.gomokuInviteText) }
+        // 신고는 업데이트보다 급하다(24시간 약속) — 사람이 기다리는 두 사유 다음, 앱 업데이트 앞.
+        if openReports { parts.append(Self.openReportsText) }
         if updateAvailable { parts.append(MenuBarStatusLabel.updateDotAccessibilityDescription) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }

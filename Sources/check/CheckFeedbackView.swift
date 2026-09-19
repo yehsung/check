@@ -99,6 +99,8 @@ enum FeedbackPanelLayout {
     // 각 탭의 **고정** 크롬(= 스크롤 밖에 서는 것들):
     //   · 보내기      카드 padding 24 + 머리 27 + 8 + 구분선 1 + 8                    = **68pt**
     //   · 받은 제보   위 68 + 필터 줄 22 + 6                                          = **96pt**
+    //     (v0.3.34 에 맨 위 [제보]/[신고] 칩 줄 28pt 가 더해져 **124pt** — 아래 두 부등식은 여전히 성립한다:
+    //      ① 617 · ② 654. 계산은 `ReportAdminLayout.segmentRowHeight` 주석, 목록 예산은 그대로다.)
     //
     //  ① 크롬이 없을 때:    193 + 고정 + `기본 높이` ≤ 700
     //  ② 크롬이 가장 클 때: 193 + 고정 + `최소 높이` + **241** ≤ 700
@@ -178,15 +180,30 @@ struct CheckFeedbackView: View {
             header
             PanelDivider()
             if store.showsFeedbackInbox {
-                FeedbackInboxView(
-                    store: store,
-                    clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
-                    // 같은 스위치가 본문 에디터와 메모 칸을 함께 순수 SwiftUI 로 바꾼다 —
-                    // 둘 다 AppKit 을 감싼 뷰라 ImageRenderer 앞에서 같은 눈가리개가 된다.
-                    rendersPlainNoteField: rendersPlainTextEditor,
-                    extraChromeHeight: extraChromeHeight,
-                    now: now
-                )
+                // v0.3.34: 받은 제보 탭 **안에서** [제보] / [신고] 를 고른다(CheckReportAdminView 머리 주석). [제보] 칸은 예전
+                // `FeedbackInboxView` 를 인자까지 그대로 그린다 — 이 분기가 더한 것은 맨 위 칩 한 줄과 [신고] 갈래뿐이다.
+                VStack(alignment: .leading, spacing: FeedbackPanelLayout.sectionSpacing) {
+                    FeedbackInboxSegmentRow(store: store)
+                    if store.showsReportAdmin {
+                        ReportAdminInboxView(
+                            store: store,
+                            clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
+                            rendersPlainNoteField: rendersPlainTextEditor,
+                            extraChromeHeight: extraChromeHeight,
+                            now: now
+                        )
+                    } else {
+                        FeedbackInboxView(
+                            store: store,
+                            clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
+                            // 같은 스위치가 본문 에디터와 메모 칸을 함께 순수 SwiftUI 로 바꾼다 —
+                            // 둘 다 AppKit 을 감싼 뷰라 ImageRenderer 앞에서 같은 눈가리개가 된다.
+                            rendersPlainNoteField: rendersPlainTextEditor,
+                            extraChromeHeight: extraChromeHeight,
+                            now: now
+                        )
+                    }
+                }
             } else {
                 FeedbackSendView(
                     store: store,
@@ -221,7 +238,8 @@ struct CheckFeedbackView: View {
                     FeedbackTabChip(
                         label: tab.label,
                         // 미해결 배지는 받은 제보 탭에만. 0이면 안 그린다 — 0을 보여 주는 배지는 소음이다.
-                        badge: tab == .inbox ? store.feedbackOpenCount : 0,
+                        // v0.3.34: 그 탭 안의 [신고] 칸 몫까지 합친다(레일 배지와 같은 값 — `adminInboxOpenCount`).
+                        badge: tab == .inbox ? store.adminInboxOpenCount : 0,
                         isSelected: (tab == .inbox) == store.showsFeedbackInbox
                     ) {
                         store.selectFeedbackTab(inbox: tab == .inbox)

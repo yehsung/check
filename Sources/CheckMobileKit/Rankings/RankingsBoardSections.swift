@@ -65,7 +65,7 @@ struct RankingsLeagueRow: View {
     var body: some View {
         RankingsGroupRow(isMine: isMyTeam, isLast: isLast, dividerInset: metrics.dividerInset(faceBase: 36), verticalPadding: (12, 13)) {
             RankingsAdaptiveRow(rank: rank, alignment: .top, badgeTopOffset: metrics.badgeTopOffset(faceBase: 36)) {
-                RankingsFace(name: entry.name, colorSeed: entry.name, url: nil, base: 36, me: nil)
+                RankingsFace(name: entry.name, colorSeed: entry.name, url: nil, userID: nil, base: 36, me: nil)
             } content: {
                 VStack(alignment: .leading, spacing: 0) {
                     RankingsTitleLine {
@@ -267,7 +267,7 @@ struct RankingsTokenRow: View {
     var body: some View {
         RankingsGroupRow(isMine: isMe, isLast: isLast, dividerInset: metrics.dividerInset(faceBase: 36), verticalPadding: (12, 13)) {
             RankingsAdaptiveRow(rank: rank, alignment: .top, badgeTopOffset: metrics.badgeTopOffset(faceBase: 36)) {
-                RankingsFace(name: entry.name, colorSeed: entry.name, url: entry.avatarURL, base: 36, me: me)
+                RankingsFace(name: entry.name, colorSeed: entry.name, url: entry.avatarURL, userID: entry.userID, base: 36, me: me)
             } content: {
                 VStack(alignment: .leading, spacing: 0) {
                     RankingsTitleLine {
@@ -508,7 +508,7 @@ struct RankingsMiniGameRow: View {
     var body: some View {
         RankingsGroupRow(isMine: isMe, isLast: isLast, dividerInset: metrics.dividerInset(faceBase: 30), minHeight: 48, verticalPadding: (7, 7)) {
             RankingsAdaptiveRow(rank: rank, alignment: .center) {
-                RankingsFace(name: entry.name, colorSeed: entry.name, url: entry.avatarURL, base: 30, me: me)
+                RankingsFace(name: entry.name, colorSeed: entry.name, url: entry.avatarURL, userID: entry.userID, base: 30, me: me)
             } content: {
                 if dynamicTypeSize.isAccessibilitySize {
                     VStack(alignment: .leading, spacing: 4) {

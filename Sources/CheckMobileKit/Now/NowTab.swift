@@ -476,7 +476,7 @@ struct NowWorkingRow: View {
     }
 
     private var avatar: some View {
-        PersonAvatar(name: person.name, status: person.isStale ? .pending : .working, url: person.avatarURL, size: 36)
+        PersonAvatar(name: person.name, status: person.isStale ? .pending : .working, url: person.avatarURL, userID: person.id, size: 36)
     }
 
     private var staleText: some View {

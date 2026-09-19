@@ -115,6 +115,7 @@ struct MessagesPersonRow: View {
                 colorSeed: nil,
                 status: person.isWorking ? .working : nil,
                 url: person.avatarURL,
+                userID: person.userID,
                 size: Self.avatarSize
             )
             PersonName(person.name, center: CenterLabel.serverValue(forDisplay: person.center))

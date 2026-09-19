@@ -210,20 +210,52 @@ struct AingWidgetInitialAvatar: View {
     }
 }
 
+/// 다른 사람 얼굴: 착용 캐릭터를 알면 neutral 초상(받침 원 안 — 앱 `PersonCharacterFace` 와 같은 배치), 모르면 이니셜 원.
+/// 위젯은 사진을 그리지 않는다(네트워크 없음) — 사진을 올린 사람도 앱의 '사진을 못 불러왔을 때'처럼 캐릭터로 선다.
+/// 틴트·투명에서는 받침을 옅은 흰 원으로, 그림을 흑백으로(내 초상 `AingWidgetPortrait` 와 같은 규칙).
+struct AingWidgetPersonFace: View {
+    let name: String
+    /// `WidgetSnapshot.WorkingPerson.knownCharacterID`(이 빌드에 초상이 있는 id 만). nil = 이니셜.
+    let characterID: String?
+    let size: CGFloat
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    var body: some View {
+        if let characterID, let image = AingCharacterArt.portraitImage(id: characterID, expression: .neutral) {
+            let accented = renderingMode == .accented
+            ZStack {
+                Circle().fill(accented ? .white.opacity(AingWidgetPalette.Accented.fill) : AingWidgetColors.surface2)
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .interpolation(.high)
+                    .widgetAccentedRenderingMode(.desaturated)
+                    .scaledToFit()
+                    .frame(width: size * 0.88, height: size * 0.88)
+                    .offset(y: size * 0.05)
+            }
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .accessibilityHidden(true)
+        } else {
+            AingWidgetInitialAvatar(name: name, size: size)
+        }
+    }
+}
+
 /// 겹친 얼굴(시안 margin-left −7 · 둘레 2pt). 둘레를 바탕색으로 칠하지 않고 **다음 얼굴 자리를 도려낸다** — 틴트·투명에서 바탕색 둘레가
-/// 흰 고리로 보이지 않게.
+/// 흰 고리로 보이지 않게. 얼굴은 `AingWidgetPersonFace`(착용 캐릭터 → 이니셜).
 struct AingWidgetFacepile: View {
-    let names: [String]
+    let people: [WidgetSnapshot.WorkingPerson]
     let size: CGFloat
     var overlap: CGFloat = 7
     var gap: CGFloat = 2
 
     var body: some View {
         HStack(spacing: -overlap) {
-            ForEach(Array(names.enumerated()), id: \.offset) { index, name in
-                AingWidgetInitialAvatar(name: name, size: size)
+            ForEach(Array(people.enumerated()), id: \.offset) { index, person in
+                AingWidgetPersonFace(name: person.name, characterID: person.knownCharacterID, size: size)
                     .mask {
-                        if index < names.count - 1 {
+                        if index < people.count - 1 {
                             AingCutout(offsetX: size - overlap, gap: gap)
                                 .fill(style: FillStyle(eoFill: true))
                         } else {

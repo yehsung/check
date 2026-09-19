@@ -1,0 +1,20 @@
+[
+  {"user_id": "d0000000-0000-4000-8000-000000000001", "character": "fox"},
+  {"user_id": "d0000000-0000-4000-8000-000000000102", "character": "shiba"},
+  {"user_id": "d0000000-0000-4000-8000-000000000103", "character": null},
+  {"user_id": "d0000000-0000-4000-8000-000000000104", "character": "jellyfish"},
+  {"user_id": "d0000000-0000-4000-8000-000000000105", "character": "squirrel"},
+  {"user_id": "d0000000-0000-4000-8000-000000000201", "character": "ghost"},
+  {"user_id": "d0000000-0000-4000-8000-000000000202", "character": "fox"},
+  {"user_id": "d0000000-0000-4000-8000-000000000203", "character": null},
+  {"user_id": "d0000000-0000-4000-8000-000000000204", "character": "shiba"},
+  {"user_id": "d0000000-0000-4000-8000-000000000205", "character": "squirrel"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b1", "character": "jellyfish"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b2", "character": "ghost"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b3", "character": null},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b4", "character": "shiba"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b5", "character": "squirrel"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b6", "character": "fox"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b7", "character": "ghost"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b9", "character": "jellyfish"}
+]

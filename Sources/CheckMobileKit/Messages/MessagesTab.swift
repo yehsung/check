@@ -279,6 +279,7 @@ struct MessagesThreadRow: View {
                 name: thread.peerName,
                 status: presence?.status,
                 url: thread.peerAvatarURL,
+                userID: thread.peerUserID,
                 size: Self.avatarBase
             )
             VStack(alignment: .leading, spacing: 2) {
@@ -368,7 +369,7 @@ private struct MessagesWorkingStrip: View {
                             onOpen(person.id)
                         } label: {
                             tile(title: person.name, titleColor: MobileTheme.label) {
-                                PersonAvatar(name: person.name, status: person.status, url: person.avatarURL, size: 52)
+                                PersonAvatar(name: person.name, status: person.status, url: person.avatarURL, userID: person.id, size: 52)
                             }
                         }
                         .buttonStyle(.plain)

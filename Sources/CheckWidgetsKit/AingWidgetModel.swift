@@ -411,11 +411,12 @@ package enum AingWidgetSamples {
             generatedAt: now.addingTimeInterval(-120),
             me: .init(working: true, sessionStartedAt: now.addingTimeInterval(-13_620), todaySeconds: 18_480, weekSeconds: 89_280, goalHours: 40, status: .working),
             working: [
-                .init(name: "민트", center: "seoul", teammate: true, startedAt: now.addingTimeInterval(-15_000)),
-                .init(name: "보리", center: "busan", teammate: true, startedAt: now.addingTimeInterval(-10_320)),
-                .init(name: "라임", center: "seoul", teammate: true, startedAt: now.addingTimeInterval(-5_700)),
-                .init(name: "모래", center: "seoul", teammate: false, startedAt: nil),
-                .init(name: "코랄", center: "busan", teammate: false, startedAt: nil),
+                // 얼굴 = 착용 캐릭터(하늘은 캐릭터를 모르는 사람 — 이니셜로 선다).
+                .init(name: "민트", center: "seoul", teammate: true, startedAt: now.addingTimeInterval(-15_000), characterID: "shiba"),
+                .init(name: "보리", center: "busan", teammate: true, startedAt: now.addingTimeInterval(-10_320), characterID: "aing"),
+                .init(name: "라임", center: "seoul", teammate: true, startedAt: now.addingTimeInterval(-5_700), characterID: "jellyfish"),
+                .init(name: "모래", center: "seoul", teammate: false, startedAt: nil, characterID: "ghost"),
+                .init(name: "코랄", center: "busan", teammate: false, startedAt: nil, characterID: "squirrel"),
                 .init(name: "하늘", center: nil, teammate: false, startedAt: nil),
             ],
             todosPreview: [

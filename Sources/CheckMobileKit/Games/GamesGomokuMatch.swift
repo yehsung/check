@@ -450,7 +450,7 @@ struct GamesGomokuResult: View {
                 if chrome.isAI {
                     GamesGomokuAIPortrait(size: 20)
                 } else {
-                    PersonAvatar(name: match.opponent.displayName, colorSeed: match.opponent.id, url: match.opponent.avatarLink, size: 20)
+                    PersonAvatar(name: match.opponent.displayName, colorSeed: match.opponent.id, url: match.opponent.avatarLink, userID: match.opponent.id, size: 20)
                 }
                 Text(chrome.opponentLine(name: match.opponent.displayName))
                     .font(.caption)

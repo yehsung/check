@@ -271,7 +271,7 @@ private struct GamesRankRow: View {
         RankRow(isMine: isMe, isLast: isLast, dividerInset: metrics.dividerInset(faceBase: 30),
                 minHeight: 48, verticalPadding: (7, 7)) {
             RankRowBody(rank: rank, alignment: .center) {
-                RankRowFace(name: entry.name, colorSeed: entry.userID, url: entry.avatarURL, base: 30,
+                RankRowFace(name: entry.name, colorSeed: entry.userID, url: entry.avatarURL, userID: entry.userID, base: 30,
                             me: isMe ? GamesMeIdentity.current(store.context).rankFace : nil)
             } content: {
                 if typeSize.isAccessibilitySize {

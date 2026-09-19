@@ -97,7 +97,7 @@ struct MeBlockedPeopleView: View {
     private func row(store: MessagesStore, person: BlockedUser, isLast: Bool) -> some View {
         let isUnblocking = store.unblockingUserIDs.contains(person.userID)
         return GroupRow(divider: isLast ? .none : .inset(MeBlockedPeopleView.dividerLeading), minHeight: MobileTheme.rowHeightTwoLine) {
-            PersonAvatar(name: person.name, status: nil, url: person.avatarURL, size: MeBlockedPeopleView.avatarSize)
+            PersonAvatar(name: person.name, status: nil, url: person.avatarURL, userID: person.userID, size: MeBlockedPeopleView.avatarSize)
             VStack(alignment: .leading, spacing: 2) {
                 Text(person.name)
                     .font(MobileTheme.rowTitle)

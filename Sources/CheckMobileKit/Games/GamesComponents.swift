@@ -175,11 +175,11 @@ struct GamesLiveMatchRow: View {
 
     private var faces: some View {
         HStack(spacing: 8) {
-            PersonAvatar(name: live.a.displayName, colorSeed: live.a.id, url: live.a.avatarLink, size: 30)
+            PersonAvatar(name: live.a.displayName, colorSeed: live.a.id, url: live.a.avatarLink, userID: live.a.id, size: 30)
             Text("vs")
                 .font(.footnote)
                 .foregroundStyle(MobileTheme.label2)
-            PersonAvatar(name: live.b.displayName, colorSeed: live.b.id, url: live.b.avatarLink, size: 30)
+            PersonAvatar(name: live.b.displayName, colorSeed: live.b.id, url: live.b.avatarLink, userID: live.b.id, size: 30)
         }
         .accessibilityHidden(true)
     }

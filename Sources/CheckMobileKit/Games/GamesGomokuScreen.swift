@@ -369,7 +369,7 @@ private struct GamesGomokuOpponentRow: View {
     }
 
     private var avatar: some View {
-        PersonAvatar(name: user.displayName, colorSeed: user.id, status: user.presence, url: user.avatarLink, size: 36)
+        PersonAvatar(name: user.displayName, colorSeed: user.id, status: user.presence, url: user.avatarLink, userID: user.id, size: 36)
     }
 
     private var info: some View {
@@ -415,7 +415,7 @@ struct GamesGomokuInviteCard: View {
             let header = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: MobileTheme.space3))
             header {
                 PersonAvatar(name: invite.peer.displayName, colorSeed: invite.peer.id, status: invite.peer.presence,
-                             url: invite.peer.avatarLink, size: 44)
+                             url: invite.peer.avatarLink, userID: invite.peer.id, size: 44)
                 VStack(alignment: .leading, spacing: 1) {
                     PersonName(GomokuPhoneText.incomingTitle(name: invite.peer.displayName),
                                center: CenterLabel.serverValue(forDisplay: invite.peer.center))
@@ -493,7 +493,7 @@ private struct GamesGomokuOutgoingRow: View {
 
     private var avatar: some View {
         PersonAvatar(name: invite.peer.displayName, colorSeed: invite.peer.id, status: invite.peer.presence,
-                     url: invite.peer.avatarLink, size: 36)
+                     url: invite.peer.avatarLink, userID: invite.peer.id, size: 36)
     }
 
     private var texts: some View {

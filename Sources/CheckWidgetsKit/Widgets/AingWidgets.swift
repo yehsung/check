@@ -253,7 +253,7 @@ struct AingWorkingNowContent: View {
             } else {
                 // 158~170pt 칸은 기본 글자에서 딱 찬다 — 큰 글자(XL 이상)에서는 얼굴 더미를 접고 이름 줄을 남긴다(같은 정보, 글자가 잘리지 않게).
                 if dynamicTypeSize < .xLarge {
-                    AingWidgetFacepile(names: working.shown.map(\.name), size: 26)
+                    AingWidgetFacepile(people: working.shown, size: 26)
                         .padding(.top, 8)
                 }
                 Text(working.namesLine)
@@ -372,7 +372,7 @@ struct AingWorkingNowContent: View {
     private func cellLine(_ person: WidgetSnapshot.WorkingPerson, detail: String?, keepsName: Bool) -> some View {
         let ink = AingWidgetInk(renderingMode)
         return HStack(spacing: 7) {
-            AingWidgetInitialAvatar(name: person.name, size: 24)
+            AingWidgetPersonFace(name: person.name, characterID: person.knownCharacterID, size: 24)
             Text(person.name)
                 .kerning(-0.2)
                 .aingFont(14, .semibold, relativeTo: .subheadline)

@@ -133,6 +133,7 @@ struct MessagesConversationView: View {
                             name: avatarName,
                             status: presence?.status,
                             url: avatarURL,
+                            userID: peerID,
                             size: MessagesConversationNameplate.avatarSize,
                             ringColor: MobileTheme.background,
                             scalesWithText: false

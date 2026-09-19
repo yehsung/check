@@ -1,4 +1,5 @@
 #if os(iOS)
+import CheckCore
 import CheckMobileShared
 import SwiftUI
 
@@ -107,6 +108,12 @@ struct MobileTabsView: View {
             MeTab(store: model.me)
                 .tabItem { meLabel }
                 .tag(AingTab.me)
+        }
+        // 사람 아바타(사진 → 착용 캐릭터 → 이니셜)가 찾는 캐릭터 한 표 — 탭 다섯과 그 위에 뜨는 시트가 모두 이어받는다.
+        .environment(\.appUserCharacters, model.characters.directory)
+        // 탭을 바꿀 때 표를 60초 스로틀로 다시 묻는다(새 폴링 없음 — 기존 갱신 시점에 얹는다).
+        .onChange(of: router.selectedTab) { _, _ in
+            model.tabDidChange()
         }
     }
 

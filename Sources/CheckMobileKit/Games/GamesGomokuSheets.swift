@@ -29,7 +29,7 @@ struct GamesGomokuStakeSheet: View {
                 VStack(alignment: .leading, spacing: MobileTheme.space4) {
                     InsetGroup {
                         GroupRow(divider: .none, minHeight: 64) {
-                            PersonAvatar(name: target.displayName, colorSeed: target.id, status: target.presence, url: target.avatarLink, size: 44)
+                            PersonAvatar(name: target.displayName, colorSeed: target.id, status: target.presence, url: target.avatarLink, userID: target.id, size: 44)
                             VStack(alignment: .leading, spacing: 1) {
                                 PersonName(target.displayName, center: CenterLabel.serverValue(forDisplay: target.center))
                                 Text(selected.map { GomokuPhoneText.stakePromptChosen($0.rawValue) } ?? GomokuPhoneText.stakePromptCaption)

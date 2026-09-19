@@ -60,6 +60,8 @@ extension MeStore {
             guard generation == context.generation, isCurrent("equipped", serial), savingCharacterID == nil else { return }
             equippedServerID = CharacterSyncDecision.normalized(serverID)
             equippedLoaded = true
+            // 캐릭터 한 표의 내 칸도 같은 값으로 — 사람 아바타 자리의 나와 '나' 자리(지금·순위·탭 막대)가 다른 캐릭터로 서지 않게.
+            context.characters.noteMyEquipped(equippedServerID)
         } catch {
             // 행 없음·옛 서버·네트워크: 값은 모르는 채로 둔다(아잉으로 단정하지 않는다 — 맥 performEquippedCharacterSync 와 같은 관용).
             // 다만 실패였다는 사실은 남긴다 — 요약이 '불러오는 중…'에 끝없이 머물지 않게.
@@ -218,6 +220,8 @@ extension MeStore {
                     self.equippedServerID = CharacterSyncDecision.normalized(response.character) ?? target
                     self.equippedLoaded = true
                     self.equippedLoadFailed = false
+                    // 내 칸은 즉시(다음 표 조회를 기다리지 않는다 — 표를 갈아 끼울 때도 이 값을 다시 얹는다).
+                    self.context.characters.noteMyEquipped(self.equippedServerID)
                     self.characterNotice = MeText.characterSaved
                 case "not_owned":
                     // 다른 기기에서 환불·운영자 정리 등으로 소유가 사라졌다 — 상점 상태를 다시 읽어 화면을 사실에 맞춘다.

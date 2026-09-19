@@ -30,6 +30,8 @@ public final class MobileAppModel {
     package let me: MeStore
     /// 화면 모드(기기 설정). `sessionDidSignOut` 의 reset 사슬에 넣지 않는다 — 로그아웃해도 남는다.
     package let appearance: MobileAppearanceStore
+    /// 캐릭터 한 표(사람 아바타 = 사진 → 착용 캐릭터 → 이니셜). 탭 막대가 환경값으로 흘린다. 로그아웃하면 비운다.
+    package let characters: AppUserCharacterStore
 
     package private(set) var isSceneActive = false
     @ObservationIgnored private var started = false
@@ -78,6 +80,7 @@ public final class MobileAppModel {
         realtime.gomoku = gomoku
         let links = MobileStoreLinks()
         let appearance = MobileAppearanceStore(defaults: env.appearanceDefaults ?? env.storage.defaults)
+        let characters = AppUserCharacterStore(session: session, clock: env.clock)
         let context = MobileContext(
             service: env.service,
             session: session,
@@ -91,7 +94,8 @@ public final class MobileAppModel {
             appInfo: env.appInfo,
             isDemo: env.isDemo,
             links: links,
-            appearance: appearance
+            appearance: appearance,
+            characters: characters
         )
 
         self.session = session
@@ -102,6 +106,7 @@ public final class MobileAppModel {
         self.gomoku = gomoku
         self.links = links
         self.appearance = appearance
+        self.characters = characters
         self.context = context
         self.push = PushCoordinator(context: context)
         self.now = NowStore(context: context)
@@ -116,6 +121,8 @@ public final class MobileAppModel {
         links.rankings = rankings
         links.games = games
         links.me = me
+        // 표가 바뀌면 위젯 근무 중 얼굴도 다시 쓴다(지금 탭이 위젯의 유일한 작성자 — 같은 값이면 쓰기 창구가 건너뛴다).
+        characters.onDirectoryChange = { [weak now] in now?.writeWidgetSnapshot() }
 
         session.onSignedIn = { [weak self] in self?.sessionDidSignIn() }
         session.onSignedOut = { [weak self] in self?.sessionDidSignOut() }
@@ -124,6 +131,12 @@ public final class MobileAppModel {
 
     /// 탭 배지(메시지 · 게임).
     package var badges: MobileBadges { links.badges }
+
+    /// 탭을 바꿨을 때(탭 막대). 캐릭터 한 표만 60초 스로틀로 다시 묻는다 — 탭 스토어의 갱신은 각 탭 화면이 스스로 한다.
+    package func tabDidChange() {
+        guard session.isSignedIn else { return }
+        characters.refreshIfStale()
+    }
 
     // MARK: - 시작 · scenePhase · URL
 
@@ -194,6 +207,8 @@ public final class MobileAppModel {
         push.sessionDidSignIn()
         // 착용 캐릭터 한 칸(`profiles.character`)만 미리 받는다 — 나 탭을 열기 전에도 지금·순위·게임·오목·탭 막대가 내 캐릭터로 선다.
         me.primeEquippedCharacter()
+        // 캐릭터 한 표도 로그인 직후 한 번 — 사람 아바타가 첫 화면부터 착용 캐릭터로 선다(그 뒤는 기존 갱신 시점에 60초 스로틀).
+        characters.refresh()
         if isSceneActive {
             activateStores()
         }
@@ -215,6 +230,7 @@ public final class MobileAppModel {
         games.reset()
         me.reset()
         push.reset()
+        characters.reset()
     }
 
     private func activateStores() {
@@ -224,6 +240,7 @@ public final class MobileAppModel {
         games.appDidBecomeActive()
         me.appDidBecomeActive()
         push.appDidBecomeActive()
+        characters.refreshIfStale()
     }
 
     private func openDemoRouteIfNeeded() {

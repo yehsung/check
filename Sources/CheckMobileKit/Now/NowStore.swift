@@ -727,6 +727,9 @@ package final class NowStore {
         let people = (hasLoadedTeam || hasNoTeam) ? workingPeople(now: now) : nil
         let previews = todoSync.userID == userID ? widgetTodoPreviews() : nil
         let characterID = knownEquippedCharacterID
+        // 근무 중인 사람 얼굴(위젯): 캐릭터 한 표에서 찾은 착용 캐릭터(모르면 nil → 이니셜). 위젯은 사진을 못 그리므로 사진을 올린 사람도
+        // 앱의 '사진 실패' 폴백과 같은 캐릭터다(`characterID(for:)` = `avatar(...).afterPhotoFailure` 의 캐릭터).
+        let characters = context.characters.directory
         context.widgetSnapshots.update { snapshot in
             if let characterID {
                 snapshot.characterID = characterID
@@ -749,7 +752,10 @@ package final class NowStore {
             }
             if let people {
                 snapshot.working = people.map {
-                    WidgetSnapshot.WorkingPerson(name: $0.name, center: $0.center, teammate: $0.isTeammate, startedAt: $0.isTeammate ? $0.startedAt : nil)
+                    WidgetSnapshot.WorkingPerson(
+                        name: $0.name, center: $0.center, teammate: $0.isTeammate, startedAt: $0.isTeammate ? $0.startedAt : nil,
+                        characterID: characters.characterID(for: $0.id)
+                    )
                 }
             }
             if let previews {

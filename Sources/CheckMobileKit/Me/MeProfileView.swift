@@ -4,8 +4,8 @@ import PhotosUI
 import SwiftUI
 
 /// 프로필 편집: 사진(PhotosPicker → 256px JPEG → 업로드) · 별명(12자 · 7일 쿨타임).
-/// 채운 버튼은 [저장] 하나 — 드물게 쓰는 [사진 바꾸기]는 틴트(w14 비평 28). 사진·별명은 다른 사람에게 보이는 모습이고, 내 화면에는
-/// 착용 캐릭터가 선다는 것을 아래 카드가 밝힌다(무엇이 '나'로 쓰이는지).
+/// 채운 버튼은 [저장] 하나 — 드물게 쓰는 [사진 바꾸기]는 틴트(w14 비평 28). 사진·별명은 다른 사람에게 보이는 모습이고(사진이 없으면
+/// 그 자리에 착용 캐릭터 — 위 아바타도 같은 규칙으로 그린다), 내 화면에는 착용 캐릭터가 선다는 것을 아래 카드가 밝힌다(무엇이 '나'로 쓰이는지).
 struct MeProfileView: View {
     let store: MeStore
     @State private var pickerItem: PhotosPickerItem?
@@ -19,7 +19,7 @@ struct MeProfileView: View {
             VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
                 AingCard {
                     VStack(spacing: MobileTheme.rowSpacing) {
-                        AvatarView(name: store.displayName ?? "나", url: store.avatarURL, size: avatarSize)
+                        AvatarView(name: store.displayName ?? "나", url: store.avatarURL, userID: store.myUserID, size: avatarSize)
                             .overlay {
                                 // 덮개는 아바타 자신의 틀을 따른다(글자 배율로 커진 지름과 같게).
                                 if store.isUploadingAvatar {

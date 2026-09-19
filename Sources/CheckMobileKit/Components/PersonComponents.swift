@@ -1,9 +1,98 @@
 #if os(iOS)
 import CheckCore
+import CheckMobileShared
 import SwiftUI
 
-// 사람 행 문법(시안 B): 이니셜 틴트 원 + 오른쪽 아래 상태 점 + **이름 뒤** 센터 배지. 상태 칩("근무 중" 칩)은 쓰지 않는다 —
-// 이유가 필요할 때만(연결 끊김) 회색·앰버 부제로 말한다.
+// 사람 행 문법(시안 B): 얼굴(사진 → 착용 캐릭터 → 이니셜 틴트 원) + 오른쪽 아래 상태 점 + **이름 뒤** 센터 배지. 상태 칩("근무 중" 칩)은
+// 쓰지 않는다 — 이유가 필요할 때만(연결 끊김) 회색·앰버 부제로 말한다.
+
+// MARK: - 기본 아바타 = 착용 캐릭터(2026-09-20 사용자 요청)
+//
+// 사람 아바타의 우선순위(정본은 코어 `AppUserCharacterDirectory.avatar(for:photoURL:)`):
+//   ① 올린 사진 → ② 그 사람의 착용 캐릭터(neutral 초상 · 원형) → ③ 캐릭터를 **모를 때만** 이니셜(첫 조회 전 · 표에 없는 사람 · 이 빌드가
+//   모르는 새 캐릭터). 착용값 null 은 아잉이다. 사진을 불러오는 중이거나 실패하면 이니셜이 아니라 캐릭터로 떨어진다(`afterPhotoFailure`).
+// 표는 앱 모델의 `AppUserCharacterStore` 가 받고 탭 막대가 이 환경값으로 흘린다 — 호출부는 **사용자 id** 만 넘긴다.
+// 시트(`.sheet`)도 띄운 화면의 환경값을 이어받는다. 환경값이 없는 자리(부품 견본 · 미리보기)는 빈 표 = 지금처럼 이니셜.
+
+private struct AppUserCharactersKey: EnvironmentKey {
+    static let defaultValue = AppUserCharacterDirectory(knownIDs: AingCharacterArt.knownIDs)
+}
+
+extension EnvironmentValues {
+    /// 사람 아바타가 찾는 캐릭터 한 표(`MobileTabsView` 가 `AppUserCharacterStore.directory` 를 건다). 기본값은 빈 표(전원 이니셜).
+    package var appUserCharacters: AppUserCharacterDirectory {
+        get { self[AppUserCharactersKey.self] }
+        set { self[AppUserCharactersKey.self] = newValue }
+    }
+}
+
+/// 사람 아바타의 얼굴 한 벌(판정 결과 → 그림). `PersonAvatar` 와 `AvatarView` 가 같이 쓴다 — 두 부품이 다른 규칙으로 갈리지 않게.
+/// 원형 자르기 · 크기 · 상태 점은 부르는 쪽 몫이다(이 뷰는 정사각 `size` 를 채운다).
+package struct AppUserAvatarFace: View {
+    private let avatar: AppUserAvatar
+    private let name: String
+    private let colorSeed: String
+    private let size: CGFloat
+
+    package init(avatar: AppUserAvatar, name: String, colorSeed: String? = nil, size: CGFloat) {
+        self.avatar = avatar
+        self.name = name
+        self.colorSeed = colorSeed ?? name
+        self.size = size
+    }
+
+    package var body: some View {
+        if case .photo(let url, _) = avatar {
+            AsyncImage(url: url, transaction: Transaction(animation: nil)) { phase in
+                if case .success(let image) = phase {
+                    image.resizable().scaledToFill()
+                } else {
+                    // 불러오는 중 · 실패: 이니셜이 아니라 그 사람의 캐릭터(모르면 이니셜).
+                    still(avatar.afterPhotoFailure)
+                }
+            }
+        } else {
+            still(avatar)
+        }
+    }
+
+    @ViewBuilder
+    private func still(_ avatar: AppUserAvatar) -> some View {
+        if case .character(let id) = avatar {
+            PersonCharacterFace(id: id, size: size)
+        } else {
+            InitialAvatar(name: name, size: size, colorSeed: colorSeed)
+        }
+    }
+}
+
+/// 다른 사람의 착용 캐릭터 얼굴 — neutral 초상을 받침(surface2) 원 안에(초상 `.plain` 과 같은 배치: 그림 88% · 아래로 5%).
+/// 링·발광·표정 변화는 없다(남의 근무 상태는 상태 점이 말한다). `id` 는 이미 이 빌드가 아는 캐릭터다(모르면 호출부가 이니셜을 그린다).
+package struct PersonCharacterFace: View {
+    private let id: String
+    private let size: CGFloat
+    @Environment(\.displayScale) private var displayScale
+
+    package init(id: String, size: CGFloat) {
+        self.id = id
+        self.size = size
+    }
+
+    package var body: some View {
+        let side = size * 0.88
+        ZStack {
+            Circle().fill(MobileTheme.surface2)
+            ArtImage(
+                MobileArt.character(id: id, expression: .neutral, pointSize: side, displayScale: displayScale),
+                size: CGSize(width: side, height: side)
+            )
+            .offset(y: size * 0.05)
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+}
 
 /// 상태 점(8pt — 초록 근무 중 · 앰버 연결 끊김/대기 · 청회색 근무 안 함).
 package struct StatusDot: View {
@@ -31,8 +120,10 @@ package struct StatusDot: View {
     }
 }
 
-/// 다른 사람의 아바타: 사진(있으면) 또는 이니셜 틴트 원 + 오른쪽 아래 상태 점.
+/// 다른 사람의 아바타: 사진 → 착용 캐릭터 → 이니셜 틴트 원(`AppUserAvatarFace`) + 오른쪽 아래 상태 점.
 ///
+/// - `userID`: 이 사람의 사용자 id — 환경값 `\.appUserCharacters` 에서 착용 캐릭터를 찾는 열쇠. **모든 호출부가 넘긴다**(기본값이 없는
+///   이유 — 빠뜨리면 그 자리만 이니셜로 남는다). 사람이 아닌 자리(팀 줄 · 부품 견본)만 nil.
 /// - `colorSeed`: 이니셜 색을 고르는 글자(기본 = 이름 — 맥 `CheckTheme.avatarColor(for:)` 와 같은 해시). 같은 사람이 화면마다
 ///   같은 색이 되게 이름을 넘긴다.
 /// - `status`: nil·`.off` 는 점 없음(시안 B — 근무 안 함은 점을 그리지 않는다). `.working` 초록 · `.pending` 앰버.
@@ -43,16 +134,19 @@ package struct PersonAvatar: View {
     private let colorSeed: String
     private let status: PresenceStatus?
     private let url: URL?
+    private let userID: String?
     private let baseSize: CGFloat
     private let ringColor: Color
     private let scalesWithText: Bool
     @ScaledMetric(relativeTo: .body) private var textScale: CGFloat = 1
+    @Environment(\.appUserCharacters) private var characters
 
     package init(
         name: String,
         colorSeed: String? = nil,
         status: PresenceStatus? = nil,
         url: URL? = nil,
+        userID: String?,
         size: CGFloat = 32,
         ringColor: Color = MobileTheme.surface,
         scalesWithText: Bool = true
@@ -61,6 +155,7 @@ package struct PersonAvatar: View {
         self.colorSeed = colorSeed ?? name
         self.status = status
         self.url = url
+        self.userID = userID
         self.baseSize = size
         self.ringColor = ringColor
         self.scalesWithText = scalesWithText
@@ -73,7 +168,7 @@ package struct PersonAvatar: View {
     package var body: some View {
         let size = self.size
         ZStack(alignment: .bottomTrailing) {
-            face(size: size)
+            AppUserAvatarFace(avatar: characters.avatar(for: userID, photoURL: url), name: name, colorSeed: colorSeed, size: size)
                 .frame(width: size, height: size)
                 .clipShape(Circle())
             if let status, status != .off {
@@ -86,21 +181,6 @@ package struct PersonAvatar: View {
         .frame(width: size, height: size)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(accessibilityText))
-    }
-
-    @ViewBuilder
-    private func face(size: CGFloat) -> some View {
-        if let url {
-            AsyncImage(url: url, transaction: Transaction(animation: nil)) { phase in
-                if case .success(let image) = phase {
-                    image.resizable().scaledToFill()
-                } else {
-                    InitialAvatar(name: name, size: size, colorSeed: colorSeed)
-                }
-            }
-        } else {
-            InitialAvatar(name: name, size: size, colorSeed: colorSeed)
-        }
     }
 
     private var accessibilityText: String {

@@ -301,7 +301,8 @@ package enum MeText {
     package static let avatarUnreadable = "사진을 읽지 못했어요 — 다른 사진을 골라 주세요"
     package static let avatarUploading = "올리는 중…"
     /// 사진과 캐릭터 중 무엇이 '나'로 쓰이는지(w14 비평 28).
-    package static let avatarRoleNote = "사진과 별명은 메시지·순위에서 다른 사람에게 보여요."
+    /// 사진이 없으면 다른 사람 화면의 내 아바타 자리에 착용 캐릭터가 선다(2026-09-20 — 기본 아바타 = 착용 캐릭터).
+    package static let avatarRoleNote = "사진과 별명은 메시지·순위에서 다른 사람에게 보여요. 사진이 없으면 착용 캐릭터가 대신 보여요."
     package static let characterRoleTitle = "내 화면에는 캐릭터가 나와요"
     package static let characterRoleNote = "지금·나 탭과 맥 메뉴바·오버레이에서 착용 캐릭터가 나를 대신해요."
     /// 서버 쿨타임(7일). 맥 `WorkTimerStore.displayNameCooldownSeconds`.

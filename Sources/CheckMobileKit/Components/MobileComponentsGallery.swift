@@ -1,4 +1,5 @@
 #if DEBUG && os(iOS)
+import CheckCore
 import CheckMobileShared
 import SwiftUI
 
@@ -210,18 +211,24 @@ private struct GalleryPagePeople: View {
 }
 
 private struct GalleryPageRows: View {
+    /// 사람 얼굴 견본: 민트 = 착용 캐릭터(시바), 보리 = 표에 없는 사람(이니셜) — 기본 아바타 = 착용 캐릭터 규칙.
+    private static let characters = AppUserCharacterDirectory(
+        knownIDs: AingCharacterArt.knownIDs,
+        rows: [AppUserCharacterRow(userId: "gallery-mint", character: "shiba")]
+    )
+
     var body: some View {
         SectionHeader("사람 행", trailing: .text("점 · 이름 뒤 센터"), padded: true)
         InsetGroup {
             GroupRow(divider: .inset(60)) {
-                PersonAvatar(name: "민트", status: .working, size: 32)
+                PersonAvatar(name: "민트", status: .working, userID: "gallery-mint", size: 32)
                 VStack(alignment: .leading, spacing: 1) {
                     PersonName("민트", center: "seoul")
                     Text("4시간 10분").font(MobileTheme.rowSubtitle).monospacedDigit().foregroundStyle(MobileTheme.label2)
                 }
             }
             GroupRow(divider: .inset(60)) {
-                PersonAvatar(name: "보리", status: .pending, size: 32)
+                PersonAvatar(name: "보리", status: .pending, userID: nil, size: 32)
                 VStack(alignment: .leading, spacing: 1) {
                     PersonName("보리", center: "busan")
                     Text("연결 끊김 · 마지막 확인 13분 전").font(MobileTheme.rowSubtitle).foregroundStyle(MobileTheme.pending)
@@ -235,6 +242,7 @@ private struct GalleryPageRows: View {
                 Text("941점").font(MobileTheme.roundedNumber(.callout)).monospacedDigit().foregroundStyle(MobileTheme.label)
             }
         }
+        .environment(\.appUserCharacters, Self.characters)
         // 순위판 머리 + 어제 1등 + 그룹 안 행 — 순위 탭과 게임 탭이 함께 쓰는 승격 부품(`SectionHeaderBar`·`ChampionRow`·`RankRow`).
         SectionHeaderBar("순위", topPadding: 18) {
             AingChip(text: "타이밍 바", tint: MobileTheme.label2, background: MobileTheme.fill)
@@ -242,7 +250,7 @@ private struct GalleryPageRows: View {
         ChampionRow(caption: "어제 1등", name: "라떼", center: "seoul", score: "972점", awarded: 20)
         RankRow(isMine: false, isLast: false, dividerInset: 84, minHeight: 48, verticalPadding: (7, 7)) {
             RankRowBody(rank: 2) {
-                RankRowFace(name: "구름", colorSeed: "구름", url: nil, base: 30, me: nil)
+                RankRowFace(name: "구름", colorSeed: "구름", url: nil, userID: nil, base: 30, me: nil)
             } content: {
                 HStack(spacing: 8) {
                     PersonName("구름", center: "busan")
@@ -253,7 +261,7 @@ private struct GalleryPageRows: View {
         }
         RankRow(isMine: true, isLast: true, dividerInset: 84, minHeight: 48, verticalPadding: (7, 7)) {
             RankRowBody(rank: 3) {
-                RankRowFace(name: "나", colorSeed: "나", url: nil, base: 30, me: ("fox", .working))
+                RankRowFace(name: "나", colorSeed: "나", url: nil, userID: nil, base: 30, me: ("fox", .working))
             } content: {
                 HStack(spacing: 8) {
                     PersonName("새벽", center: "seoul", isMe: true, onTint: true)
@@ -272,7 +280,7 @@ private struct GalleryPageRows: View {
             GroupRow(divider: .none) {
                 ForEach(1...4, id: \.self) { RankBadge(rank: $0) }
                 Spacer(minLength: 4)
-                ForEach(["코랄", "하늘", "모래", "도윤"], id: \.self) { PersonAvatar(name: $0, size: 28) }
+                ForEach(["코랄", "하늘", "모래", "도윤"], id: \.self) { PersonAvatar(name: $0, userID: nil, size: 28) }
             }
         }
     }
@@ -377,7 +385,7 @@ private struct GalleryPageLargeText: View {
         }
         InsetGroup {
             GroupRow(divider: .inset(60)) {
-                PersonAvatar(name: "민트", status: .working, size: 32)
+                PersonAvatar(name: "민트", status: .working, userID: nil, size: 32)
                 PersonName("민트", center: "seoul", isMe: true)
             }
             GroupRow(divider: .none) {

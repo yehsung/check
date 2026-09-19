@@ -107,12 +107,25 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         /// 우리 팀인가. 다른 팀 사람은 경과 시간을 모른다(서버가 주지 않는다 — startedAt nil).
         public var teammate: Bool
         public var startedAt: Date?
+        /// 얼굴에 그릴 착용 캐릭터 id(앱의 캐릭터 한 표가 접은 값 — 착용값 null 은 이미 "aing"). nil = 모른다 → 이니셜
+        /// (옛 스냅샷 · 표를 아직 못 받음 · 앱이 모르는 캐릭터). 위젯은 사진을 그리지 않으므로(네트워크 없음) 사진을 올린 사람도
+        /// 앱의 '사진을 못 불러왔을 때'와 같이 캐릭터로 선다. **읽을 때는 `knownCharacterID`** — 이 빌드에 초상이 없는 id 는 이니셜이다
+        /// (내 초상 `resolvedCharacterID` 처럼 아잉으로 접지 않는다 — 남에게 틀린 캐릭터를 입히지 않는다).
+        public var characterID: String?
 
-        public init(name: String, center: String?, teammate: Bool, startedAt: Date?) {
+        public init(name: String, center: String?, teammate: Bool, startedAt: Date?, characterID: String? = nil) {
             self.name = name
             self.center = center
             self.teammate = teammate
             self.startedAt = startedAt
+            self.characterID = characterID
+        }
+
+        /// 위젯이 이 사람 얼굴에 세울 캐릭터. nil 이면 이니셜 원.
+        public var knownCharacterID: String? {
+            guard let trimmed = characterID?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  AingCharacterArt.knownIDs.contains(trimmed) else { return nil }
+            return trimmed
         }
 
         public init(from decoder: Decoder) throws {
@@ -121,6 +134,8 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
             center = try? c.decodeIfPresent(String.self, forKey: .center)
             teammate = (try? c.decodeIfPresent(Bool.self, forKey: .teammate)) ?? false
             startedAt = try? c.decodeIfPresent(Date.self, forKey: .startedAt)
+            // 칸이 없거나(옛 앱이 쓴 스냅샷) 타입이 어긋나면 nil — 이니셜로 선다(더하기만 하는 규칙).
+            characterID = try? c.decodeIfPresent(String.self, forKey: .characterID)
         }
     }
 

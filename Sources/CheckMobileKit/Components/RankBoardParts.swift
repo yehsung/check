@@ -125,21 +125,25 @@ package struct RankRowBody<Face: View, Content: View>: View {
     }
 }
 
-/// 순위판 행의 얼굴: **내 행**은 착용 캐릭터 초상(표정 = 근무 상태), 남은 이니셜 틴트 원(사진이 있으면 사진).
+/// 순위판 행의 얼굴: **내 행**은 착용 캐릭터 초상(표정 = 근무 상태), 남은 `PersonAvatar`(사진 → 착용 캐릭터 → 이니셜).
 /// 점은 그리지 않는다 — 순위판은 근무 상태판이 아니다.
 package struct RankRowFace: View {
     private let name: String
     private let colorSeed: String
     private let url: URL?
+    private let userID: String?
     private let base: CGFloat
     private let me: (id: String?, mood: CharacterMood)?
     @ScaledMetric(relativeTo: .body) private var textScale: CGFloat = 1
 
-    /// - Parameter me: 내 행이면 착용 캐릭터(id 가 nil 이면 아잉), 남의 행이면 nil.
-    package init(name: String, colorSeed: String, url: URL?, base: CGFloat, me: (id: String?, mood: CharacterMood)?) {
+    /// - Parameters:
+    ///   - userID: 남의 행의 사용자 id(착용 캐릭터를 찾는 열쇠). 사람이 아닌 행(팀 리그)은 nil — 이니셜로 남는다.
+    ///   - me: 내 행이면 착용 캐릭터(id 가 nil 이면 아잉), 남의 행이면 nil.
+    package init(name: String, colorSeed: String, url: URL?, userID: String?, base: CGFloat, me: (id: String?, mood: CharacterMood)?) {
         self.name = name
         self.colorSeed = colorSeed
         self.url = url
+        self.userID = userID
         self.base = base
         self.me = me
     }
@@ -148,7 +152,7 @@ package struct RankRowFace: View {
         if let me {
             CharacterPortrait(id: me.id, mood: me.mood, size: MobileAvatarScale.side(base: base, textScale: textScale))
         } else {
-            PersonAvatar(name: name, colorSeed: colorSeed, url: url, size: base)
+            PersonAvatar(name: name, colorSeed: colorSeed, url: url, userID: userID, size: base)
         }
     }
 }

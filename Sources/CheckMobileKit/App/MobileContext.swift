@@ -35,6 +35,9 @@ package struct MobileContext {
     package let links: MobileStoreLinks
     /// 화면 모드(기기 설정 — 세대 · 로그아웃과 무관하게 앱 실행 동안 하나). 나 → 설정이 고르고, iOS 창 적용기가 모든 창에 건다.
     package let appearance: MobileAppearanceStore
+    /// 캐릭터 한 표(사람 아바타 = 사진 → 착용 캐릭터 → 이니셜). 나 탭이 내 착용을 바꾸면 `noteMyEquipped` 로 내 칸을 바로 고치고,
+    /// 지금 탭이 위젯 근무 중 얼굴에 캐릭터를 싣는다. 화면은 환경값 `\.appUserCharacters` 로 읽는다.
+    package let characters: AppUserCharacterStore
 
     package init(
         service: SupabaseWorkService,
@@ -49,7 +52,8 @@ package struct MobileContext {
         appInfo: MobileAppInfo,
         isDemo: Bool,
         links: MobileStoreLinks,
-        appearance: MobileAppearanceStore
+        appearance: MobileAppearanceStore,
+        characters: AppUserCharacterStore
     ) {
         self.service = service
         self.session = session
@@ -64,6 +68,7 @@ package struct MobileContext {
         self.isDemo = isDemo
         self.links = links
         self.appearance = appearance
+        self.characters = characters
     }
 
     /// 지금 세션 세대. 응답 적용 전에 캡처값과 비교한다.

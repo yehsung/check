@@ -29,7 +29,9 @@ package struct AingCard<Content: View>: View {
     }
 }
 
-/// 아바타: 원격 이미지(AsyncImage — URLCache) → 없거나 실패하면 이니셜 원. 해시색은 맥 `CheckTheme.avatarColor(for:)` 와 같은 규칙.
+/// 아바타: 원격 이미지(AsyncImage — URLCache) → 없거나 실패하면 그 사람의 **착용 캐릭터**(환경값 `\.appUserCharacters` 를 `userID` 로
+/// 찾는다) → 캐릭터를 모를 때만 이니셜 원. 얼굴은 `PersonAvatar` 와 같은 `AppUserAvatarFace` 한 벌이다. 해시색은 맥
+/// `CheckTheme.avatarColor(for:)` 와 같은 규칙.
 ///
 /// **크기 정책은 여기 하나다**(`MobileAvatarScale`): 탭은 기본 글자 크기에서의 지름(`size`)만 넘기고, 글자가 커지면 이 부품이
 /// 본문 글자 배율을 따라 키운다(작아지지는 않고, 상한 `MobileAvatarScale.maximum`). 예전에는 순위·나 탭만 제 `@ScaledMetric` 으로
@@ -38,13 +40,17 @@ package struct AingCard<Content: View>: View {
 package struct AvatarView: View {
     private let name: String
     private let url: URL?
+    private let userID: String?
     private let baseSize: CGFloat
     private let scalesWithText: Bool
     @ScaledMetric(relativeTo: .body) private var textScale: CGFloat = 1
+    @Environment(\.appUserCharacters) private var characters
 
-    package init(name: String, url: URL?, size: CGFloat = 36, scalesWithText: Bool = true) {
+    /// - userID: 이 사람의 사용자 id(착용 캐릭터를 찾는 열쇠 — 기본값이 없다: 빠뜨리면 그 자리만 이니셜로 남는다).
+    package init(name: String, url: URL?, userID: String?, size: CGFloat = 36, scalesWithText: Bool = true) {
         self.name = name
         self.url = url
+        self.userID = userID
         self.baseSize = size
         self.scalesWithText = scalesWithText
     }
@@ -55,23 +61,10 @@ package struct AvatarView: View {
 
     package var body: some View {
         let size = self.size
-        return Group {
-            if let url {
-                AsyncImage(url: url, transaction: Transaction(animation: nil)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        InitialAvatar(name: name, size: size)
-                    }
-                }
-            } else {
-                InitialAvatar(name: name, size: size)
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-        .accessibilityLabel(Text("\(name) 프로필 사진"))
+        return AppUserAvatarFace(avatar: characters.avatar(for: userID, photoURL: url), name: name, size: size)
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .accessibilityLabel(Text("\(name) 프로필 사진"))
     }
 }
 

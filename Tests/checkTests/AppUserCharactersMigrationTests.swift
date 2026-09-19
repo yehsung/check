@@ -292,3 +292,51 @@ func 처리방침은_착용_캐릭터가_아바타_자리에_보인다고_적는
     let mineOnly = try #require(lines.first { $0.hasPrefix("**나만 보는 것**") })
     #expect(mineOnly.contains("아바타 자리"), "'나만 보는 것' 절이 착용 캐릭터의 예외를 울트라로만 적는다: \(mineOnly)")
 }
+
+/// 수리(리뷰 medium): 처리방침이 착용 캐릭터의 노출 범위를 **사진 없는 사람으로 좁혀** 적었다 — "사진을 올렸으면 사진이 보이고
+/// 캐릭터는 아바타로 쓰이지 않습니다". 두 사실과 어긋난다:
+///   · 서버 `app_user_characters()` 는 avatar_url 과 **무관하게** 같은 쪽 사용자 전원의 착용값을 로그인한 모두에게 준다
+///     (마이그레이션 §1 — 사진 조건이 없다). 사진을 올린 사람의 착용값도 앱 사용자 전체의 앱에 간다.
+///   · 코어는 사진 로딩이 실패하면 **캐릭터**로 떨어진다(`AppUserAvatar.afterPhotoFailure`). 사진을 올렸어도 캐릭터가 뜬다.
+/// 애플 심사에 들어가는 URL 이라 노출 범위는 실제보다 좁게 적으면 안 된다. 전제(서버에 사진 조건 없음 · 사진 실패 → 캐릭터)를
+/// 먼저 확인하고, 그 전제가 바뀌면 이 계약도 함께 고쳐야 한다.
+@Test
+func 처리방침은_사진을_올린_사람의_착용값도_전달되고_사진_실패시_캐릭터가_뜬다고_적는다() throws {
+    // 전제 ① — 서버 본문에 사진 조건이 없다.
+    let (_, flat) = try aucSQL()
+    let body = try #require(aucFunctionDefinition("app_user_characters", in: flat), "app_user_characters 정의가 없다")
+    #expect(!body.contains("avatar_url"), "app_user_characters 가 사진 유무로 행을 거른다 — 이 계약의 전제가 사라졌다: \(body)")
+    // 전제 ② — 사진이 실패하면 캐릭터로 떨어진다.
+    let photo = AppUserAvatar.photo(URL(string: "https://example.invalid/a.png")!, fallbackCharacterID: "fox")
+    #expect(photo.afterPhotoFailure == .character("fox"), "사진 실패가 캐릭터로 떨어지지 않는다 — 이 계약의 전제가 사라졌다")
+
+    var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    var privacyURL: URL?
+    while directory.path != "/" {
+        let candidate = directory.appendingPathComponent("docs/privacy.md")
+        if FileManager.default.fileExists(atPath: candidate.path) { privacyURL = candidate; break }
+        directory = directory.deletingLastPathComponent()
+    }
+    let privacy = try String(contentsOf: try #require(privacyURL, "docs/privacy.md 를 못 찾았다"), encoding: .utf8)
+    let lines = privacy.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    let bullet = try #require(lines.first { $0.hasPrefix("- 착용 캐릭터(") }, "처리방침에 착용 캐릭터 항목이 없다")
+
+    #expect(!bullet.contains("아바타로 쓰이지 않"),
+            "처리방침이 '사진을 올렸으면 캐릭터는 아바타로 쓰이지 않는다'고 말한다 — 사진 실패 시 캐릭터가 뜨고 착용값은 사진과 무관하게 전달된다: \(bullet)")
+    #expect(bullet.contains("불러오지 못"), "처리방침이 '올린 사진을 불러오지 못하면 착용 캐릭터가 대신 보인다'를 적지 않는다: \(bullet)")
+    #expect(bullet.contains("상관없이") && bullet.contains("전달"),
+            "처리방침이 '착용값은 사진을 올렸는지와 상관없이 앱 사용자에게 전달된다'를 적지 않는다: \(bullet)")
+
+    // '나만 보는 것' 절의 예외 문장이 '사진을 올리지 않았으면'만 조건으로 달면 사진을 올린 사람의 캐릭터는 울트라 상대만 본다고 읽힌다.
+    let mineOnly = try #require(lines.first { $0.hasPrefix("**나만 보는 것**") })
+    #expect(mineOnly.contains("상관없이") && mineOnly.contains("전달"),
+            "'나만 보는 것' 절이 착용값 전달을 '사진을 올리지 않았으면'으로 좁혀 적는다: \(mineOnly)")
+    #expect(mineOnly.contains("불러오지 못"), "'나만 보는 것' 절이 사진을 못 불러올 때 캐릭터가 뜬다는 것을 적지 않는다: \(mineOnly)")
+
+    // '같은 앱을 쓰는 모든 사용자에게 보이는 것' 절이 착용 캐릭터를 목록에 두지 않으면 그 절만 읽은 사람은 범위를 좁게 안다.
+    let everyoneStart = try #require(lines.firstIndex { $0.hasPrefix("**같은 앱을 쓰는 모든 사용자에게 보이는 것**") })
+    let everyoneEnd = try #require(lines[everyoneStart...].firstIndex { $0.hasPrefix("**나만 보는 것**") })
+    let everyone = lines[everyoneStart..<everyoneEnd]
+    #expect(everyone.contains { $0.hasPrefix("- ") && $0.contains("착용 캐릭터") },
+            "'같은 앱을 쓰는 모든 사용자에게 보이는 것' 절에 착용 캐릭터가 없다")
+}

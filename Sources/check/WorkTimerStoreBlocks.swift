@@ -41,6 +41,9 @@ struct BlockReportTarget: Equatable, Sendable {
     var messageID: String? = nil
     /// 신고하는 메시지 본문(시트에 한 번 보여 준다 — 무엇을 신고하는지 눈으로 확인하게). 서버에는 id 만 간다.
     var messageBody: String? = nil
+    /// 오목 채팅에서 연 시트가 묶인 **판 id**(서버에는 안 간다 — 대국 채팅 줄은 신고 표와 다른 표다). 그 판이 내려가면
+    /// (다음 판 · 로비) 시트는 서지 않는다(`blockReportSheet(on:)` — v0.3.34 수리: 앞 판의 시트가 다음 판을 덮었다).
+    var matchID: String? = nil
 }
 
 /// 지금 떠 있는 시트.
@@ -111,7 +114,8 @@ enum GomokuChatSafetyRule {
         guard !opponent.id.isEmpty else { return nil }
         return BlockReportTarget(
             peerID: opponent.id,
-            peerName: opponent.displayName.isEmpty ? "상대" : opponent.displayName
+            peerName: opponent.displayName.isEmpty ? "상대" : opponent.displayName,
+            matchID: match.id
         )
     }
 }
@@ -145,8 +149,13 @@ extension WorkTimerStore {
     }
 
     /// 그 자리의 시트(없으면 nil).
+    ///
+    /// 오목 판에 묶인 시트(`BlockReportTarget.matchID`)는 **그 판이 서 있는 동안만** 선다. 판이 바뀌는 길(다시 두기 · 로비 · 새 신청
+    /// 수락)은 여럿이고 오목 창은 닫아도 뷰가 살아 있어, 정리 문(`dismissBlockReportSheet`)이 한 번 빠지면 앞 판의 덮개가 다음 판의
+    /// 판을 가린다(v0.3.34 수리). 그래서 읽는 자리에서도 판 id 를 대조한다 — 떠난 판의 시트는 어느 화면에도 안 선다.
     func blockReportSheet(on surface: BlockReportSurface) -> BlockReportSheet? {
         guard let sheet = blockReportSheet, sheet.surface == surface else { return nil }
+        if let matchID = sheet.target.matchID, gomoku.match?.id != matchID { return nil }
         return sheet
     }
 
@@ -178,6 +187,20 @@ extension WorkTimerStore {
     /// 시트를 닫는다(✕ · [취소] · Esc). **보내는 중에는 닫지 않는다** — 결과가 어디로도 안 가는 신고가 된다.
     func closeBlockReportSheet() {
         guard !isSendingReport, blockReportSheet != nil else { return }
+        blockReportSheet = nil
+        reportNotice = nil
+    }
+
+    /// 연 자리를 **떠날 때** 그 자리의 시트를 걷는다(v0.3.34 수리) — 팝오버 대화를 닫거나(레일 · [뒤로] · 다른 패널) 다른 사람의
+    /// 대화로 갈 때(`WorkTimerStoreMessages`), 오목 창을 닫을 때(`CheckGomokuWindowController`)·판이 바뀔 때(`GomokuPanel`).
+    ///
+    /// 남겨 두면 시트가 **다음 화면을 덮는다**: 대화 패널은 시트를 대화보다 먼저 그려서, A 에 대해 연 "A 님을 차단할까요?"가
+    /// B 와의 대화 자리에 섰다. 오목 창은 닫아도 `orderOut` 뿐이라 덮개가 다음 판을 가렸다.
+    ///
+    /// `closeBlockReportSheet`(✕ · [취소])와 달리 **보내는 중에도 걷는다** — 사용자는 이미 그 자리를 떠났다. 보내던 신고는 계속 가고,
+    /// 결과(접수 · 실패)는 그 자리의 결과 한 줄로 선다(`sendReportFromSheet` — 시트 안 한 줄은 아무도 못 본다).
+    func dismissBlockReportSheet(on surface: BlockReportSurface) {
+        guard blockReportSheet?.surface == surface else { return }
         blockReportSheet = nil
         reportNotice = nil
     }
@@ -308,7 +331,14 @@ extension WorkTimerStore {
                 guard generation == sessionGeneration else { return false }
                 isSendingReport = false
                 if let text = BlockReportRules.notice(for: BlockReportRules.classify(error), action: .report) {
-                    reportNotice = text
+                    if blockReportSheet(on: sheet.surface) == sheet {
+                        reportNotice = text
+                    } else {
+                        // 보내는 사이 사용자가 그 자리를 떠났다(`dismissBlockReportSheet` · 판이 바뀜). 시트 안 한 줄은 아무도 못 본다 —
+                        // 그 자리의 결과 한 줄로 세운다. 안 그러면 "보내는 중…"을 보고 떠난 사람은 접수된 줄 안다.
+                        if blockReportSheet == sheet { blockReportSheet = nil }
+                        blockReportNotice = BlockReportNotice(text: text, isError: true, surface: sheet.surface)
+                    }
                 }
                 return false
             }

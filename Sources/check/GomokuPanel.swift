@@ -620,8 +620,10 @@ struct GomokuPanel: View {
             // 판이 시작되면 로비가 사라진다 — 열려 있던 판돈 창을 들고 있으면 로비로 돌아올 때 되살아난다.
             stakeTarget = nil
             aiPromptVisible = false
-            // 앞 판 채팅에서 선 신고·차단 결과 한 줄은 새 판의 것이 아니다(v0.3.34).
+            // 앞 판 채팅에서 선 신고·차단 결과 한 줄과 시트는 새 판의 것이 아니다(v0.3.34). 시트는 읽는 자리도 판 id 를 대조해
+            // 앞 판의 덮개가 다음 판을 가리지 않지만(`blockReportSheet(on:)`), 상태까지 여기서 걷어 둔다.
             safety?.clearBlockReportNotice(on: .gomoku)
+            safety?.dismissBlockReportSheet(on: .gomoku)
         }
         // 기권 확인은 **그 판 그 화면에서 연 것**만 산다(v0.3.30). 화면이 바뀌거나(대국 → 결과 → 로비) 창이
         // 내려갔다 다시 뜨면 접는다 — 돌아온 사용자가 자기가 열지 않은 확인을 보게 두지 않는다.

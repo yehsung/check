@@ -117,6 +117,10 @@ final class CheckGomokuWindowController: NSObject, NSWindowDelegate {
     }
 
     private var wiring: Wiring?
+    /// 이 창에서 연 신고·차단 시트를 거두는 곳(v0.3.34 수리 — `configure(safety:)` 가 쥔다, 앱은 `WorkTimerStore`).
+    /// 닫기는 `orderOut` 뿐이라 창 안의 뷰가 살아 있다 — 시트를 안 걷으면 다음에 창을 열 때(다른 판이어도) 앞 시트가 판을 덮고,
+    /// 그 덮개의 자세히 칸이 입력칸 하나를 쥔 채 남는다. 약참조다(스토어의 수명은 앱이 쥔다).
+    private weak var safety: WorkTimerStore?
     /// 지연 생성된 창. 닫아도 파괴하지 않는다 — 옮겨 둔 자리가 매번 초기화되는 게 더 나쁘다.
     private var windowStorage: NSWindow?
 
@@ -155,6 +159,7 @@ final class CheckGomokuWindowController: NSObject, NSWindowDelegate {
         me: @escaping @MainActor () -> GomokuPlayerFace = { GomokuPlayerFace.fallback },
         safety: WorkTimerStore? = nil
     ) {
+        self.safety = safety
         configure(store: store, content: { gomoku in
             // 뷰는 고정 크기를 채운다. 배경을 창 쪽에서 채우지 않으면 화면 배율이 바뀌는 순간 시스템 회색 판이 드러난다.
             AnyView(
@@ -246,6 +251,7 @@ final class CheckGomokuWindowController: NSObject, NSWindowDelegate {
         windowStorage?.orderOut(nil)
         isOpen = false
         notifyVisibility(false)
+        dismissSafetySheet()
     }
 
     /// 사용자가 빨간 점을 눌렀다. 의도를 맞추고 '안 보임'만 알린다 — 기권이 아니다.
@@ -255,6 +261,13 @@ final class CheckGomokuWindowController: NSObject, NSWindowDelegate {
         stuckWindowWatchdog = nil
         isOpen = false
         notifyVisibility(false)
+        dismissSafetySheet()
+    }
+
+    /// 창을 닫으면(코드 · 빨간 점) 이 창에서 연 신고·차단 시트를 걷는다(위 `safety` 주석). 최소화는 닫기가 아니다 — 쓰던 글을 둔다.
+    /// 팝오버에서 연 시트는 건드리지 않는다(연 자리만 정리한다).
+    private func dismissSafetySheet() {
+        safety?.dismissBlockReportSheet(on: .gomoku)
     }
 
     /// 최소화 — 화면에서 사라졌으니 폴링을 멈추게 한다(대국은 계속).

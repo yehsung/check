@@ -228,6 +228,11 @@ extension WorkTimerStore {
         //   그 함수는 `lastShownMessage` 를 죽이는데, 말풍선 버튼을 누른 것은 '그 알림을 봤다'가 아니다.
         //   take_pokes 는 서버 원자 소비라 그렇게 지운 글자는 복구할 길이 없다.
         isPokePanelVisible = false
+        // 다른 사람에 대해 열어 둔 신고·차단 시트는 이 대화의 것이 아니다(v0.3.34 수리). 대화 패널은 시트를 대화보다 먼저 그려서,
+        // 남겨 두면 A 에 대한 "A 님을 차단할까요?"가 B 와의 대화 자리에 선다. 같은 사람이면 쓰던 시트를 그대로 둔다(같은 대화다).
+        if let sheet = blockReportSheet(on: .message), sheet.target.peerID != peer {
+            dismissBlockReportSheet(on: .message)
+        }
         // 상대를 정하는 자리는 **앱 전체에서 이 한 줄뿐이다.** 이후 어떤 응답·수신 폴링·전송 성공도 이 값을
         // 바꾸지 않는다(performLoadMessageHistory 의 "다시 넣지 마라" 주석, V0251MessagePeerTests 의 소스 계약).
         selectMessagePeer(peer)
@@ -282,6 +287,9 @@ extension WorkTimerStore {
         isMessagePanelVisible = false
         // 전송 결과 문구는 이 화면의 것이다. 남기면 콕찌르기 목록 안내줄에 "메시지를 보냈어요"가 떠 있다.
         if messageNotice != nil { messageNotice = nil }
+        // 신고·차단 시트(v0.3.34)도 이 화면의 것이다 — 떠나면 걷는다(레일 · [뒤로] · 다른 패널이 전부 이 문을 지난다).
+        // 남기면 다음에 연 **다른 사람의 대화** 자리에 앞사람 시트가 선다(수리 전 실측). 보내던 신고는 결과 한 줄로 돌아온다.
+        dismissBlockReportSheet(on: .message)
         if messagePanelOrigin == .poke {
             // `togglePokePanel()` 이 아니라 직접 세운다 — 그 토글은 열려 있으면 closePokePanel() 을 타서
             // 아직 안 본 메시지를 소비한다(closeUltraPanel 이 같은 이유로 같은 모양을 쓴다).

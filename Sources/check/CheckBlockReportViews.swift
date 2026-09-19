@@ -153,6 +153,30 @@ struct BlockReportSheetView: View {
     var clipsInsteadOfScrolling: Bool = false
     /// 본문 상한(pt). nil 이면 자연 높이(오목 창 — 세로가 넉넉하다).
     var bodyCap: CGFloat? = nil
+    /// 자세히 칸의 입력칸 재사용 자리를 만드는 **이 시트를 부른 소스 위치**(v0.3.34 수리). 팝오버 대화 자리와 오목 창 덮개가
+    /// 각자 제 자리를 갖는다 — 오목 창은 닫아도 `orderOut` 뿐이라 그 덮개의 칸이 살아 남고, 자리를 나눠 쓰면 나중에 선 칸이
+    /// 새로 만들어져 한글 조합이 죽는다(`FeedbackBodyEditor.editorFile` 주석 · `V0334BlockReportLeaveTests`).
+    /// ★ 기본값은 **맨 매직 리터럴**이어야 부른 자리에서 펼쳐진다(`CheckEditorSlot` 주석).
+    private let editorFile: String
+    private let editorLine: Int
+
+    init(
+        store: WorkTimerStore,
+        sheet: BlockReportSheet,
+        rendersPlainTextEditor: Bool = false,
+        clipsInsteadOfScrolling: Bool = false,
+        bodyCap: CGFloat? = nil,
+        file: String = #fileID,
+        line: Int = #line
+    ) {
+        self.store = store
+        self.sheet = sheet
+        self.rendersPlainTextEditor = rendersPlainTextEditor
+        self.clipsInsteadOfScrolling = clipsInsteadOfScrolling
+        self.bodyCap = bodyCap
+        self.editorFile = file
+        self.editorLine = line
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -299,7 +323,9 @@ struct BlockReportSheetView: View {
                 text: $store.reportDetailDraft,
                 height: Layout.editorHeight,
                 rendersPlainText: rendersPlainTextEditor,
-                placeholder: BlockReportText.reportDetailPlaceholder
+                placeholder: BlockReportText.reportDetailPlaceholder,
+                // 제보 패널과 같은 부품이지만 **같은 자리가 아니다** — 이 시트를 부른 화면의 자리를 넘긴다(위 `editorFile`).
+                file: editorFile, line: editorLine
             )
             .overlay(
                 // 넘치면 테두리까지 빨갛게 — 카운터 숫자만으로는 못 보고 지나친다(메시지 입력칸과 같은 규약).

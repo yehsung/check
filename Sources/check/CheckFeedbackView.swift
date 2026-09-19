@@ -786,11 +786,37 @@ struct FeedbackBodyEditor: View {
     /// 비어 있을 때 칸 안의 안내. 기본은 제보 문구이고, 신고 시트(v0.3.34)가 자기 문구를 넘긴다 — 칸 자체는 **같은 부품**이다
     /// (자리 맞추기·조합 중 겹침 규칙을 두 벌로 만들지 않는다).
     var placeholder: String = FeedbackText.placeholder
+    /// 입력칸 재사용 자리(`CheckEditorSlot`)를 만드는 **이 부품을 부른 소스 위치**(v0.3.34 수리).
+    ///
+    /// 이 부품 안에서 `CheckTextEditor(...)` 를 부르면 그 호출 자리가 **한 줄뿐**이라, 이 부품을 쓰는 화면 전부가 재사용 자리
+    /// 하나를 나눠 쓴다. 두 번째 사용처(신고 시트의 자세히 칸)가 생기자 바로 그 다툼이 났다: 오목 창의 신고 덮개는 창을 닫아도
+    /// `orderOut` 뿐이라 살아 남아 제보 칸의 NSTextView 를 쥔 채 남고, 팝오버 [제보]는 칸을 **새로 만들어** 한글 조합이 죽었다
+    /// (V0328 이 대화·오목 채팅 사이에서 막았던 그 결함 — `V0334BlockReportLeaveTests`). 그래서 부른 자리를 받아 **그대로 넘긴다.**
+    ///
+    /// ★ 기본값은 **맨 매직 리터럴**이어야 부른 자리에서 펼쳐진다(`CheckEditorSlot` 주석 — 보간·중첩 호출이면 선언 자리로 굳는다).
+    private let editorFile: String
+    private let editorLine: Int
 
     /// 텍스트 뷰가 마지막으로 알린 "그려진 것이 비었나". **nil = 아직 못 들었다**(첫 그림 · 스냅샷 경로).
     /// 메시지 칸과 **같은 규칙**(`CheckEditorPlaceholder.isVisible`)을 쓴다 — 이 칸에도 같은 증상이 있었다
     /// (조합 중에는 스토어가 비어 있어 안내 문구가 사용자가 친 글자 위에 겹친다).
     @State private var editorRenderedEmpty: Bool?
+
+    init(
+        text: Binding<String>,
+        height: CGFloat,
+        rendersPlainText: Bool = false,
+        placeholder: String = FeedbackText.placeholder,
+        file: String = #fileID,
+        line: Int = #line
+    ) {
+        self._text = text
+        self.height = height
+        self.rendersPlainText = rendersPlainText
+        self.placeholder = placeholder
+        self.editorFile = file
+        self.editorLine = line
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -823,7 +849,12 @@ struct FeedbackBodyEditor: View {
                     .padding(.vertical, CheckEditorMetrics.inset.height)
             } else {
                 // 포커스는 **잡지 않는다**(요청 밖 — 제보 화면은 목록을 먼저 읽는 화면이다).
-                CheckTextEditor(text: $text, onRenderedEmptyChange: { editorRenderedEmpty = $0 })
+                // 자리는 이 줄이 아니라 **이 부품을 부른 화면**이 정한다(위 `editorFile`/`editorLine`).
+                CheckTextEditor(
+                    text: $text,
+                    onRenderedEmptyChange: { editorRenderedEmpty = $0 },
+                    file: editorFile, line: editorLine
+                )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }

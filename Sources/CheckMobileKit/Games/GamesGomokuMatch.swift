@@ -4,6 +4,9 @@ import SwiftUI
 
 /// 대국 화면(시안 B 09): 탭 막대 숨김 · 가운데 제목 + 판돈 부제 · 규칙 · 더보기(기권) · 상대 카드 · 판(화면 폭 − 24) · 내 카드 ·
 /// 아래 반쯤 올라온 대화 서랍(판과 함께 보인다). 두 플레이어 카드는 대칭이다 — 캐릭터 초상 + 돌 배지, 차례인 쪽만 초록 테두리 + 초 링.
+///
+/// AI 판(1.0.1)도 이 화면이다 — 판 종류별 차이는 `GomokuPhoneMatchChrome` 표 하나가 정한다: 판돈 부제 대신 "AI 대국 · 기록 없음",
+/// 대화 서랍(과 그 머리의 신고·차단)·상대 캐릭터·근무 상태 없음, AI 차례의 초 링 자리에 "생각 중", 시계 안내는 "떠나면 멈춰요".
 struct GamesGomokuMatch: View {
     let store: GamesStore
     let match: GomokuMatchState
@@ -22,6 +25,7 @@ struct GamesGomokuMatch: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var gomoku: GomokuStore { store.context.gomoku }
+    private var chrome: GomokuPhoneMatchChrome { GomokuPhoneMatchChrome(match: match) }
 
     private var forbidden: [GomokuPoint: GomokuForbiddenReason] {
         let shows = !match.isFinished && match.myColor == .black && match.turn == .black
@@ -43,8 +47,8 @@ struct GamesGomokuMatch: View {
                 GamesGomokuPlayerCard(
                     store: store, characterID: match.opponent.characterID, mood: match.opponent.mood,
                     name: match.opponent.displayName, center: match.opponent.center, isMe: false, color: match.myColor.opponent,
-                    subtitle: (GomokuPhoneText.playerSubtitle(color: match.myColor.opponent, isWorking: match.opponent.isWorking), MobileTheme.label2),
-                    isTurn: match.turn == match.myColor.opponent
+                    subtitle: (chrome.opponentSubtitle(color: match.myColor.opponent, isWorking: match.opponent.isWorking), MobileTheme.label2),
+                    isTurn: match.turn == match.myColor.opponent, isAI: chrome.isAI
                 )
                 board(side: boardSide(in: visible), forbidden: forbidden)
                 GamesGomokuPlayerCard(
@@ -62,14 +66,21 @@ struct GamesGomokuMatch: View {
         .scrollDismissesKeyboard(.interactively)
         .gamesDemoScrollAnchor(isDemo: store.context.isDemo)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            GamesGomokuChatDrawer(store: gomoku, opponent: match.opponent,
-                                  messages: store.context.links.messages, isExpanded: $chatExpanded)
+            // AI 판에는 서랍이 없다 — 말을 나눌 상대도, 신고·차단할 사람도 없다(맥 AI 판은 그 자리에 안내 카드).
+            if chrome.showsChatDrawer {
+                GamesGomokuChatDrawer(store: gomoku, opponent: match.opponent,
+                                      messages: store.context.links.messages, isExpanded: $chatExpanded)
+            }
         }
         .hidesTabBar(for: .gomokuMatch)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 GamesNavTitle(title: GomokuPhoneText.title) {
-                    GamesStakeLine(stake: match.stake, suffix: GomokuPhoneText.stakeGainSuffix(match.stake), gemSize: 13)
+                    if chrome.showsStake {
+                        GamesStakeLine(stake: match.stake, suffix: GomokuPhoneText.stakeGainSuffix(match.stake), gemSize: 13)
+                    } else {
+                        GamesAIMatchLine()
+                    }
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -110,8 +121,8 @@ struct GamesGomokuMatch: View {
         // 알림창은 재질이 나무판 색을 빨아들여 '기권하기' 글자가 1.9:1 이었다(w15 검증 medium 1). 시트는 카드 색을 깔아 대비가 고정된다.
         .sheet(isPresented: $showsResignConfirm) {
             AingConfirmSheet(
-                title: GomokuPhoneText.resignConfirm,
-                message: GomokuPhoneText.resignConfirmMessage,
+                title: chrome.resignConfirmTitle,
+                message: chrome.resignConfirmMessage,
                 confirmTitle: GomokuPhoneText.resignNow,
                 cancelTitle: GomokuPhoneText.keepPlaying,
                 onConfirm: {
@@ -154,7 +165,8 @@ struct GamesGomokuMatch: View {
         if match.turn == match.myColor {
             return (GomokuPhoneText.myTurn + " · " + GomokuPhoneText.myTurnHint(preview: previewPoint), MobileTheme.working)
         }
-        return (GomokuPhoneText.myWaitingLine(color: match.myColor), MobileTheme.label2)
+        // AI 차례면 "AI가 생각 중이에요"(맥 상태줄) — 판이 멈춘 게 아니라 생각하는 중이라고 말한다.
+        return (chrome.waitingLine(myColor: match.myColor), MobileTheme.label2)
     }
 
     /// 판 아래 작은 줄(시안 `.b-turnline`): 흑 패스 · 자동 착수 · 연속 경고 · 서버 시계 안내.
@@ -169,7 +181,7 @@ struct GamesGomokuMatch: View {
             if let warning = gomoku.autoStreakWarning {
                 footLine(warning, tint: MobileTheme.danger, weight: .semibold)
             }
-            Label(GomokuPhoneText.clockRunsInBackground, systemImage: "clock")
+            Label(chrome.clockLine, systemImage: "clock")
                 .font(.footnote)
                 .foregroundStyle(MobileTheme.label2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -202,13 +214,19 @@ struct GamesGomokuPlayerCard: View {
     let color: GomokuColor
     let subtitle: (text: String, tint: Color)
     let isTurn: Bool
+    /// AI 상대 카드(1.0.1) — 캐릭터 대신 `cpu` 얼굴, 초 링 대신 "생각 중", 말풍선 없음. **맨 끝 · 기본값**이라 사람 판 호출부는 그대로다.
+    var isAI: Bool = false
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous)
         HStack(spacing: MobileTheme.space3) {
-            CharacterPortrait(id: characterID, mood: mood, size: 44, badge: .stone(isBlack: color == .black))
+            if isAI {
+                GamesGomokuAIPortrait(size: 44, stone: color)
+            } else {
+                CharacterPortrait(id: characterID, mood: mood, size: 44, badge: .stone(isBlack: color == .black))
+            }
             VStack(alignment: .leading, spacing: 1) {
                 PersonName(name, center: CenterLabel.serverValue(forDisplay: center), isMe: isMe)
                 Text(subtitle.text)
@@ -220,9 +238,15 @@ struct GamesGomokuPlayerCard: View {
             .layoutPriority(1)
             Spacer(minLength: 4)
             if isTurn {
-                GamesGomokuTurnRing(store: store)
-                    .frame(width: 44, height: 44)
-            } else if !isMe, !typeSize.isAccessibilitySize {
+                // AI 차례에는 시계가 없다(마감이 없어 링이 0초로 빨갛게 선다) — "생각 중" 표시가 그 자리에 선다(맥과 같다).
+                if isAI {
+                    GamesGomokuAIThinkingMark()
+                        .frame(width: 44, height: 44)
+                } else {
+                    GamesGomokuTurnRing(store: store)
+                        .frame(width: 44, height: 44)
+                }
+            } else if !isMe, !isAI, !typeSize.isAccessibilitySize {
                 GamesGomokuSayBubble(store: store)
             }
         }
@@ -295,6 +319,9 @@ struct GamesGomokuTurnRing: View {
 
 /// 결과(비평 26): 내 초상 · 결과 제목 · 끝난 이유 · 상대 · 오른쪽 루비 변화(이기면 초록 [보석]+N) · [같은 판돈으로 다시 신청 채움] [로비로 회색]
 /// 같은 폭 · 승리선이 그어진 판 · 대화 서랍. 탭 막대는 대국과 같이 숨긴다.
+///
+/// AI 판(1.0.1): 루비 변화 없음(±0 을 그리면 걸었다가 돌려받은 것처럼 읽힌다 — 맥과 같은 판단) · [같은 색으로 다시 두기]는 새 로컬 판 ·
+/// 상대 줄은 "상대 · AI" · 서랍 대신 기록이 안 남는다는 한 줄.
 struct GamesGomokuResult: View {
     let store: GamesStore
     let match: GomokuMatchState
@@ -303,6 +330,7 @@ struct GamesGomokuResult: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var gomoku: GomokuStore { store.context.gomoku }
+    private var chrome: GomokuPhoneMatchChrome { GomokuPhoneMatchChrome(match: match) }
 
     private var delta: Int {
         if let rubyDelta = match.rubyDelta { return rubyDelta }
@@ -327,6 +355,18 @@ struct GamesGomokuResult: View {
                     HStack(spacing: 10) { lobbyButton; rematchButton(fillsWidth: false).fixedSize() }
                     VStack(spacing: 10) { rematchButton(fillsWidth: true); lobbyButton }
                 }
+                if chrome.isAI {
+                    Label {
+                        Text(GomokuPhoneText.aiNoRecord)
+                    } icon: {
+                        Image(systemName: "cpu")
+                            .foregroundStyle(MobileTheme.accent)
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(MobileTheme.label2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+                }
                 Color.clear
                     .aspectRatio(1, contentMode: .fit)
                     .overlay {
@@ -349,14 +389,20 @@ struct GamesGomokuResult: View {
         .scrollDismissesKeyboard(.interactively)
         .gamesDemoScrollAnchor(isDemo: store.context.isDemo)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            GamesGomokuChatDrawer(store: gomoku, opponent: match.opponent,
-                                  messages: store.context.links.messages, isExpanded: $chatExpanded)
+            if chrome.showsChatDrawer {
+                GamesGomokuChatDrawer(store: gomoku, opponent: match.opponent,
+                                      messages: store.context.links.messages, isExpanded: $chatExpanded)
+            }
         }
         .hidesTabBar(for: .gomokuMatch)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 GamesNavTitle(title: GomokuPhoneText.title) {
-                    GamesStakeLine(stake: match.stake, suffix: GomokuPhoneText.stakeGainSuffix(match.stake), gemSize: 13)
+                    if chrome.showsStake {
+                        GamesStakeLine(stake: match.stake, suffix: GomokuPhoneText.stakeGainSuffix(match.stake), gemSize: 13)
+                    } else {
+                        GamesAIMatchLine()
+                    }
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -373,11 +419,11 @@ struct GamesGomokuResult: View {
                     portrait(me)
                     resultTexts
                     Spacer(minLength: 6)
-                    GamesRubyDelta(delta: delta)
+                    if chrome.showsStake { GamesRubyDelta(delta: delta) }
                 }
                 // 큰 글자: 초상·루비 한 줄, 글은 그 아래 — 한 줄에 몰면 "이겼어요!" 가 글자마다 꺾였다(AX 스크린샷 실측).
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 14) { portrait(me); Spacer(minLength: 6); GamesRubyDelta(delta: delta) }
+                    HStack(spacing: 14) { portrait(me); Spacer(minLength: 6); if chrome.showsStake { GamesRubyDelta(delta: delta) } }
                     resultTexts
                 }
             }
@@ -396,13 +442,17 @@ struct GamesGomokuResult: View {
                 .font(MobileTheme.title(.title2))
                 .foregroundStyle(MobileTheme.label)
                 .fixedSize()
-            Text(GomokuPhoneText.endReason(match.endReason, outcome: match.outcome))
+            Text(chrome.endReason(match.endReason, outcome: match.outcome))
                 .font(.subheadline)
                 .foregroundStyle(MobileTheme.label2)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
-                PersonAvatar(name: match.opponent.displayName, colorSeed: match.opponent.id, url: match.opponent.avatarLink, size: 20)
-                Text(GomokuPhoneText.resultOpponent(match.opponent.displayName))
+                if chrome.isAI {
+                    GamesGomokuAIPortrait(size: 20)
+                } else {
+                    PersonAvatar(name: match.opponent.displayName, colorSeed: match.opponent.id, url: match.opponent.avatarLink, size: 20)
+                }
+                Text(chrome.opponentLine(name: match.opponent.displayName))
                     .font(.caption)
                     .foregroundStyle(MobileTheme.label2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -411,14 +461,31 @@ struct GamesGomokuResult: View {
     }
 
     private func rematchButton(fillsWidth: Bool) -> some View {
-        AingButton(GomokuPhoneText.rematch, systemImage: "arrow.clockwise", kind: .filled, size: .md, fillsWidth: fillsWidth) {
-            Task { await gomoku.rematch() }
+        AingButton(chrome.rematchTitle, systemImage: "arrow.clockwise", kind: .filled, size: .md, fillsWidth: fillsWidth) {
+            // AI 판의 "다시"는 신청이 아니라 같은 색의 새 로컬 판이다(맥 [같은 색으로 다시 두기]와 같은 문).
+            if chrome.isAI {
+                gomoku.restartAIMatch()
+            } else {
+                Task { await gomoku.rematch() }
+            }
         }
         .disabled(gomoku.isBusy || gomoku.outgoing != nil)
     }
 
     private var lobbyButton: some View {
         AingButton(GomokuPhoneText.backToLobby, kind: .gray, size: .md, fillsWidth: true) { gomoku.backToLobby() }
+    }
+}
+
+/// AI 판의 내비 부제(판돈 줄 자리) — 걸린 루비가 없다는 것을 같은 자리에서 말한다(맥 AI 판 판돈 칩 자리의 "AI 대국 · 기록 없음").
+private struct GamesAIMatchLine: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "cpu")
+                .accessibilityHidden(true)
+            Text(GomokuPhoneText.aiStakeChip)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

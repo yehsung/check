@@ -373,6 +373,41 @@ package enum GomokuPhoneText {
         return parts.joined(separator: ", ")
     }
 
+    // MARK: AI 대국(1.0.1) — 맥 `GomokuText` 의 AI 절(docs/plan/gomoku-ai.md §5)을 그대로 옮겼다. 폰에서 새로 쓴 줄은 `// 폰`.
+
+    package static let aiButton = "AI와 두기"
+    package static let aiButtonHelp = "루비·전적 없이 AI와 연습해요"
+    package static let aiPromptTitle = "AI와 두기"
+    package static let aiPromptCaption = "돌 색을 고르면 바로 시작해요"
+    /// 사용자 결정 둘(루비 안 걸기 · 기록 안 남기기)을 시작 전에 한 번, 대국 중에 한 번 더 말한다(맥과 같은 두 자리).
+    package static let aiNoRecord = "루비·전적·순위에 남지 않아요"
+    package static let aiPlayBlack = "흑 · 먼저 둬요"
+    package static let aiPlayWhite = "백 · 나중에 둬요"
+    package static let aiThinking = "AI가 생각 중이에요"
+    package static let aiThinkingShort = "생각 중"
+    package static let aiStakeChip = "AI 대국 · 기록 없음"
+    package static let aiResignConfirm = "기권하면 이 판은 AI가 이겨요"
+    package static let aiRematch = "같은 색으로 다시 두기"
+    package static let aiRematchHelp = "같은 돌 색으로 AI와 새 판을 시작해요"
+    package static let aiOpponentLine = "상대 · AI"
+    /// 폰: 맥 `aiInfoClock`("창을 닫거나 가리면 …")의 폰판 — 폰에는 창이 없고, 사람 시계가 멈추는 계기는 **화면을 떠남 · 앱을 나감**이다
+    /// (`GamesStore` 가 둘을 코어의 창 숨김·가림으로 옮긴다). 1:1 의 `clockRunsInBackground`("앱을 나가도 차례 시간은 흘러요")와
+    /// 정반대 사실이라 AI 판에서 그 줄을 그대로 두면 거짓말이 된다.
+    package static let aiClockPauses = "화면을 떠나거나 앱을 나가면 내 시계가 멈춰요 · 한 수 30초가 지나면 자동으로 놓여요"
+
+    /// AI 판 결과 이유. 1:1 문구는 루비("건 루비는 돌려받아요")·"상대"를 말해서 AI 판에는 쓰지 않는다(맥 `aiEndReason` 과 같은 표).
+    package static func aiEndReason(_ reason: GomokuEndReason?, outcome: GomokuOutcome?) -> String {
+        switch (reason, outcome) {
+        case (.five?, .won?): return "5목을 완성했어요"
+        case (.five?, _): return "AI가 5목을 완성했어요"
+        case (.resign?, _): return "기권했어요"
+        case (.boardFull?, _): return "판이 가득 찼어요"
+        case (.abandoned?, _): return GomokuNoticeText.abandoned(outcome: outcome)
+        case (.timeout?, _): return "시간이 다 됐어요"
+        case (nil, _): return ""
+        }
+    }
+
     /// 판 전체 요약(보이스오버 머리).
     package static func boardAccessibility(_ match: GomokuMatchState, forbiddenCount: Int) -> String {
         var black = 0

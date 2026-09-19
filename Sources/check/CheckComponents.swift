@@ -209,6 +209,8 @@ enum GoalPercentFormatter {
 
 struct TeamMemberRow: View {
     let name: String
+    /// 이 팀원의 사용자 id — 아바타가 캐릭터 한 표에서 착용 캐릭터를 찾는 열쇠(2026-09-20). nil 이면(빈 팀 자리표시 행) 이니셜.
+    var userID: String? = nil
     var avatarURL: URL? = nil
     let presence: MemberPresence
     let primaryDetail: String
@@ -312,9 +314,9 @@ struct TeamMemberRow: View {
     @ViewBuilder
     private var avatar: some View {
         if isMe, let onPickAvatar {
-            EditableAvatarView(name: name, avatarURL: avatarURL, size: 26, onPick: onPickAvatar)
+            EditableAvatarView(name: name, userID: userID, avatarURL: avatarURL, size: 26, onPick: onPickAvatar)
         } else {
-            CheckAvatarView(name: name, avatarURL: avatarURL, size: 26)
+            CheckAvatarView(name: name, userID: userID, avatarURL: avatarURL, size: 26)
         }
     }
 
@@ -372,7 +374,8 @@ struct LeaderboardRow: View {
     var body: some View {
         HStack(spacing: 11) {
             // 팀명 해시색 이니셜 아바타(팀원 행 아바타와 같은 톤). 순위 배지 대신 담백한 표식.
-            CheckAvatarView(name: entry.name, size: 30, center: center)
+            // 팀은 사람이 아니다 — 착용 캐릭터가 없으므로 id 없이(이니셜) 그린다.
+            CheckAvatarView(name: entry.name, userID: nil, size: 30, center: center)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(entry.name)

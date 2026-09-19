@@ -278,6 +278,9 @@ struct CheckMenuView: View {
             // 툴팁 말풍선 레이어(v0.3.25) — 팝오버 루트. 창 전체를 덮는 가장 바깥 시각 체인 뒤라, 목록 ScrollView·카드 clipShape
             // 안의 버튼도 말풍선이 잘리지 않고 창 가장자리(오른쪽 레일·하단 푸터) 안으로 배치된다(CheckTooltip.swift).
             .checkTooltipLayer()
+            // 사람 아바타의 캐릭터 한 표(2026-09-20) — 팝오버 루트 한 곳에서 건다. 이 아래 모든 사람 아바타가 사진 → 착용 캐릭터 →
+            // 이니셜 순으로 그린다(CheckAvatarView.swift 머리 주석). 빠지면 컴파일·스토어 테스트는 초록인 채 전원 이니셜이다.
+            .appUserAvatarCharacters(from: store)
             // 팝오버 표시/숨김을 스토어에 알려 티커/폴링 게이팅을 켠다(창 노티 콜백과 수렴 — 멱등이라 중복 무해).
             .onAppear { store.setMenuPresented(true) }
             .onDisappear { store.setMenuPresented(false) }
@@ -1707,6 +1710,7 @@ private struct TeamMemberLiveRow: View {
         ).progress
         TeamMemberRow(
             name: member.name,
+            userID: member.id,
             avatarURL: member.avatarURL,
             presence: presence,
             primaryDetail: Self.primaryDetail(member, presence: presence, now: now),
@@ -2214,7 +2218,7 @@ struct TokenBoardRowView: View {
                 .frame(width: 3)
                 .frame(maxHeight: .infinity)
                 .padding(.vertical, 3)
-            CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: 30, center: center)
+            CheckAvatarView(name: entry.name, userID: entry.userID, avatarURL: entry.avatarURL, size: 30, center: center)
             // 왼쪽 열 = 이름 줄 + (있으면) 도구별 캡션 줄. 캡션이 없으면(둘 다 0) VStack 이 한 줄로 줄어들어
             // 예전과 똑같은 행이 된다 — 빈 줄을 자리만 잡아 두지 않는다.
             VStack(alignment: .leading, spacing: 2) {
@@ -2688,7 +2692,8 @@ struct PokeMessageReceiptStrip: View {
 
     private var strip: some View {
         HStack(spacing: 8) {
-            CheckAvatarView(name: message.fromName, size: 22)
+            // 사진도 넘긴다 — 빠뜨리면 사진을 올린 사람이 이 줄에서만 캐릭터로 선다(아래 목록 행과 다른 얼굴).
+            CheckAvatarView(name: message.fromName, userID: message.fromUserID, avatarURL: message.fromAvatarURL, size: 22)
             Text("\(message.fromName)님")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(CheckTheme.primaryText)
@@ -3181,7 +3186,7 @@ struct PokeDirectoryRowView: View {
                 .frame(width: 3)
                 .frame(maxHeight: .infinity)
                 .padding(.vertical, 3)
-            CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: 26, center: center)
+            CheckAvatarView(name: entry.name, userID: entry.userID, avatarURL: entry.avatarURL, size: 26, center: center)
             Text(entry.name)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(CheckTheme.primaryText)

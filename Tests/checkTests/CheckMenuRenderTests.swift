@@ -748,14 +748,14 @@ func checkAvatarViewRendersMixedSnapshot() throws {
     let imageURL = try #require(CheckMascotAssets.url(for: .neutral))
     let view = VStack(spacing: 14) {
         HStack(spacing: 12) {
-            CheckAvatarView(name: "영식", avatarURL: imageURL, size: 26)
-            CheckAvatarView(name: "민수", size: 26)
-            CheckAvatarView(name: "yesung", size: 26)
+            CheckAvatarView(name: "영식", userID: nil, avatarURL: imageURL, size: 26)
+            CheckAvatarView(name: "민수", userID: nil, size: 26)
+            CheckAvatarView(name: "yesung", userID: nil, size: 26)
         }
         HStack(spacing: 12) {
-            CheckAvatarView(name: "영식", avatarURL: imageURL, size: 44)
-            CheckAvatarView(name: "민수", size: 44)
-            CheckAvatarView(name: "yesung", size: 44)
+            CheckAvatarView(name: "영식", userID: nil, avatarURL: imageURL, size: 44)
+            CheckAvatarView(name: "민수", userID: nil, size: 44)
+            CheckAvatarView(name: "yesung", userID: nil, size: 44)
         }
     }
     .padding(20)

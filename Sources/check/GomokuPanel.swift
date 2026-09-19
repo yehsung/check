@@ -614,6 +614,10 @@ struct GomokuPanel: View {
         .foregroundStyle(CheckTheme.primaryText)
         // 툴팁 말풍선 레이어 — 창 루트 하나. 판·목록 클리핑 바깥이다.
         .checkTooltipLayer()
+        // 사람 아바타의 캐릭터 한 표(2026-09-20) — 오목 창 루트(로비 · 받은 신청 · 대국 머리의 아바타가 이 아래다). 표는 앱 스토어가
+        // 쥐고, 이 창에 들어오는 앱 스토어는 `safety`(신고·차단 문) 하나다 — 같은 `WorkTimerStore` 다. nil(오목 스토어만으로 그리는
+        // 렌더 테스트)이면 빈 표 = 표를 모르는 사람은 행이 실은 착용값(`characterHint`) · 그마저 없으면 이니셜.
+        .appUserAvatarCharacters(from: safety)
         .onChange(of: store.match?.id) { _, _ in
             confirmResign = false
             hovered = nil
@@ -905,8 +909,8 @@ private struct GomokuOpponentRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            CheckAvatarView(name: user.displayName, avatarURL: user.avatarURL.flatMap(URL.init(string:)), size: 34,
-                            center: user.center)
+            CheckAvatarView(name: user.displayName, userID: user.id, avatarURL: user.avatarURL.flatMap(URL.init(string:)), size: 34,
+                            center: user.center, characterHint: user.characterID)
             VStack(alignment: .leading, spacing: 4) {
                 Text(user.displayName)
                     .font(.callout.weight(.semibold))
@@ -1010,9 +1014,9 @@ private struct GomokuOutgoingLine: View {
     var body: some View {
         HStack(spacing: 7) {
             // 얼굴을 남긴다 — 센터 배지가 설 자리는 언제나 얼굴 모서리다(CheckAvatarView 규약).
-            CheckAvatarView(name: invite.peer.displayName,
+            CheckAvatarView(name: invite.peer.displayName, userID: invite.peer.id,
                             avatarURL: invite.peer.avatarURL.flatMap(URL.init(string:)),
-                            size: 20, center: invite.peer.center)
+                            size: 20, center: invite.peer.center, characterHint: invite.peer.characterID)
             Text(GomokuText.outgoingTitle(name: invite.peer.displayName))
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
@@ -1077,8 +1081,9 @@ private struct GomokuInviteCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                CheckAvatarView(name: invite.peer.displayName, avatarURL: invite.peer.avatarURL.flatMap(URL.init(string:)),
-                                size: 32, center: invite.peer.center)
+                CheckAvatarView(name: invite.peer.displayName, userID: invite.peer.id,
+                                avatarURL: invite.peer.avatarURL.flatMap(URL.init(string:)),
+                                size: 32, center: invite.peer.center, characterHint: invite.peer.characterID)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(GomokuText.incomingTitle(name: invite.peer.displayName))
                         .font(.callout.weight(.semibold))
@@ -1782,9 +1787,10 @@ private struct GomokuResultCard: View {
                         // 상대 아바타를 함께 그린다 — 이 줄이 결과 화면에서 상대를 말하는 유일한 자리라,
                         // 센터 배지가 설 얼굴이 여기 없으면 끝난 판에서만 소속이 사라진다.
                         HStack(spacing: 8) {
-                            CheckAvatarView(name: match.opponent.displayName,
+                            CheckAvatarView(name: match.opponent.displayName, userID: match.opponent.id,
                                             avatarURL: match.opponent.avatarURL.flatMap(URL.init(string:)),
-                                            size: 22, center: match.opponent.center)
+                                            size: 22, center: match.opponent.center,
+                                            characterHint: match.opponent.characterID)
                             Text("상대 · \(match.opponent.displayName)")
                                 .font(.caption)
                                 .foregroundStyle(CheckTheme.secondaryText)
@@ -2281,8 +2287,8 @@ private struct GomokuLiveMatchCard: View {
 
     private func face(_ user: GomokuUser) -> some View {
         HStack(spacing: Self.faceGap) {
-            CheckAvatarView(name: user.displayName, avatarURL: user.avatarURL.flatMap(URL.init(string:)),
-                            size: Self.faceSize, center: user.center)
+            CheckAvatarView(name: user.displayName, userID: user.id, avatarURL: user.avatarURL.flatMap(URL.init(string:)),
+                            size: Self.faceSize, center: user.center, characterHint: user.characterID)
             Text(user.displayName)
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)

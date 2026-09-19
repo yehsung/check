@@ -66,6 +66,8 @@ extension WorkTimerStore {
         // 여기서 소급된다** — 이 호출이 없으면 그 코인은 영영 안 들어온다.
         syncUltraWallet(reason: .signIn)
         syncEquippedCharacterFromServer(reason: .launch)
+        // 사람 아바타의 캐릭터 한 표(2026-09-20) — 세션이 생기는 순간 한 번. 그 뒤로는 팝오버 열기의 60초 스로틀이 맡는다.
+        refreshAppUserCharacters()
     }
 
     func signIn(email: String, password: String) async {
@@ -107,6 +109,8 @@ extension WorkTimerStore {
         // 저장 세션 활성화 경로와 같은 이유로 지갑을 맞춘다(어제 몫 소급).
         syncUltraWallet(reason: .signIn)
         syncEquippedCharacterFromServer(reason: .signIn)
+        // 사람 아바타의 캐릭터 한 표(2026-09-20) — 로그인 직후 한 번(팝오버를 연 채 로그인하는 정상 동선은 열기 훅을 이미 지나쳤다).
+        refreshAppUserCharacters()
     }
 
     func signUp(email: String, password: String, displayName: String, center: String? = nil) async {
@@ -166,6 +170,8 @@ extension WorkTimerStore {
         await refreshTeamStatus()
         guard generation == sessionGeneration else { return }
         startStatusRefreshLoop()
+        // 사람 아바타의 캐릭터 한 표(2026-09-20) — 가입으로 세션이 생긴 직후 한 번(로그인 마무리와 같은 이유).
+        refreshAppUserCharacters()
     }
 
     /// 코드 모드 가입 성공 후. signupTeamCode 로 join_team 을 실행하고 confirmMembership 으로 팀을 확정한다.
@@ -316,6 +322,8 @@ extension WorkTimerStore {
         //   (pushCharacter 의 beginPush)이 돌기 전에 떠 있던 서버 조회 응답이 먼저 메인 액터를 잡으면 **방금 고른
         //   캐릭터를 옛 서버값으로 덮는다**. 여기서 적어 두면 그 응답은 낡은 것으로 버려진다.
         characterSync.noteLocalWrite()
+        // 내 아바타 칸도 같은 순간에(2026-09-20) — 서버 표는 다음 조회에야 이 값을 안다.
+        noteMyEquippedCharacter()
         Task { [weak self] in
             await self?.pushCharacter(id, announcesFailure: announcesFailure)
         }
@@ -377,6 +385,7 @@ extension WorkTimerStore {
         guard selection.selectedID != CharacterCatalog.builtInAingID else { return }
         CheckCharacterPicker.choose(CharacterCatalog.builtInAingID,
                                     selection: selection, broadcast: characterSync.broadcast)
+        noteMyEquippedCharacter()
         syncMessage = Self.notOwnedRevertNotice
     }
 
@@ -460,6 +469,8 @@ extension WorkTimerStore {
         case .adopt(let id):
             markCharacterMigrationSettled()
             CheckCharacterPicker.choose(id, selection: selection, broadcast: sync.broadcast)
+            // 폰에서 바꾼 캐릭터를 따랐다 — 내 아바타 칸도 같은 캐릭터로(2026-09-20).
+            noteMyEquippedCharacter()
         case .migrate(let id):
             let status = await pushCharacter(id, announcesFailure: false)
             if CharacterSyncDecision.migrationSettled(byStatus: status) { markCharacterMigrationSettled() }

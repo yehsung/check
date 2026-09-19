@@ -584,7 +584,7 @@ struct BlockedPersonRow: View {
     var body: some View {
         let isUnblocking = store.unblockingUserIDs.contains(person.userID)
         HStack(spacing: 10) {
-            CheckAvatarView(name: person.name, avatarURL: person.avatarURL, size: 28)
+            CheckAvatarView(name: person.name, userID: person.userID, avatarURL: person.avatarURL, size: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(person.name)
                     .font(.caption.weight(.semibold))

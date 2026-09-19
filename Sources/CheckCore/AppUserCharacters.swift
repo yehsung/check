@@ -26,16 +26,20 @@ import Foundation
 //     목록은 호출부가 준다: 맥은 번들 카탈로그(`init(catalog:)` ← `CheckMascotAssets.catalog`), 폰은 초상 번들
 //     (`init(knownIDs:)` ← `AingCharacterArt.knownIDs`). 초상이 없는 id 를 '안다'고 하면 빈 그림이 선다.
 //
-// ── 맥(작업 M)을 위한 결정 — 미리 적어 둔다(구현은 M) ──
+// ── 맥(작업 M)의 결정 — 구현은 `Sources/check/CheckAvatarView.swift` · `WorkTimerStoreAvatars.swift` ──
 //   · **초상은 맥 번들에 이미 있다.** `Sources/check/Characters/<id>/portrait-neutral.png`(스프라이트 다섯)와
-//     `Sources/check/Resources/aing-neutral.png`(아잉)가 `check_check.bundle` 에 실려 나간다(폰 `CheckMobileShared/Resources/
-//     Portraits` 가 바로 이 원본들의 사본이고 `BaseComponentTests` 가 바이트로 대조한다). 맥은 **CheckMobileShared 에 의존을
-//     더하지 않고 자원도 옮기지 않는다** — `CheckMascotAssets.portraitURL(for: .neutral, characterID:)` 가 이미 그 둘을 찾는다.
+//     `Sources/check/Resources/aing-neutral.png`(아잉)가 `check_check.bundle` 에 실려 나간다. 폰 `CheckMobileShared/Resources/
+//     Portraits` 는 이 원본들을 **무손실 재압축한 사본**이다 — 그림(픽셀)은 같고 파일 바이트는 다르다(`BaseComponentTests` 는
+//     바이트가 아니라 **픽셀**로 대조한다). 맥은 **CheckMobileShared 에 의존을 더하지 않고 자원도 옮기지 않는다** —
+//     `CheckMascotAssets.portraitURL(for: .neutral, characterID:)` 가 이미 그 둘을 찾는다.
 //   · 그래서 `scripts/build-local.sh` 는 **고칠 것이 없다**(지금처럼 `check_check.bundle` 하나만 복사한다). 새 자원 번들을
 //     만드는 길(의존 추가·자원 이동)을 고르면 그때는 그 번들도 복사해야 한다 — 안 하면 설치본에서만 캐릭터가 안 보인다.
 //   · 주의: `CheckMascotAssets.image(for:characterID:)` 는 모르는 id 를 **아잉으로 폴백**한다(내 캐릭터용 규칙). 남의 아바타는
-//     `AppUserCharacterDirectory.characterID(for:)` 가 nil 이면 이니셜을 그려야 한다 — 그 폴백을 타지 않게 id 를 먼저 거른다.
-//   · 맥 디렉터리는 `AppUserCharacterDirectory(catalog: CheckMascotAssets.catalog)` 로 만든다(번들에 없는 id = 모름).
+//     `AppUserCharacterDirectory.characterID(for:)` 가 nil 이면 이니셜을 그려야 한다 — 맥은 그 함수를 쓰지 않고 초상 URL 을 직접
+//     디코드한다(`AppUserAvatarArt.portrait(characterID:)` — 못 그리면 nil = 이니셜).
+//   · 맥 디렉터리는 `AppUserCharacterDirectory(knownIDs: AppUserAvatarArt.knownIDs)` 로 만든다 — 번들 카탈로그(`CheckMascotAssets.
+//     catalog`) 중 **neutral 초상 파일이 실제로 있는** id(아잉 포함). 지금 번들에서는 `init(catalog:)` 와 같은 여섯이지만, 초상 없는
+//     캐릭터가 카탈로그에 들어오는 날 '안다'고 해서 빈 그림을 세우지 않게 파일로 거른다.
 
 extension SupabaseWorkService {
     /// 캐릭터 한 표. `POST /rest/v1/rpc/app_user_characters` · 본문 `{}`(인자 없는 RPC — PostgREST 는 본문의 키 집합으로 함수를 고른다).

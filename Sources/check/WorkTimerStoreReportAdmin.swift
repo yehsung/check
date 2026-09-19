@@ -15,7 +15,9 @@ import CheckCore
 // ② **제보 칸의 동작은 한 걸음도 안 바뀐다.** 신고 칸은 목록·펼침·메모 초안·안내 한 줄을 **자기 것으로** 따로 든다
 //    (`WorkTimerStore` 의 report* 값들). 칸을 오갈 때 양쪽의 펼침·초안·안내를 접는 것은 탭을 오갈 때 제보가 이미 하던 일이다.
 // ③ **폴링을 새로 만들지 않는다.** 목록은 [신고] 칸을 고를 때 · 그 칸이 열린 채 패널을 열 때 · 처리 성공 뒤에만 받는다.
-//    미해결 건수는 거기에 더해 **팝오버를 여는 순간** 한 번(답장 배지와 같은 자리 — `setMenuPresented`) 묻는다.
+//    미해결 건수는 거기에 더해 **팝오버를 여는 순간** 한 번(답장 배지와 같은 자리 — `setMenuPresented`) 묻고, 팝오버를 안 여는
+//    동안은 **기존 15초 폴링 tick** 에 지갑 sync 와 같은 5분 스로틀로 얹혀 묻는다(`refreshReportOpenCountIfDue`, 운영자만).
+//    새 루프·새 타이머는 없다. 여는 순간에만 물으면 팝오버를 안 여는 날(자동 시작) 새 신고로는 메뉴바 점이 하루 종일 안 켜진다.
 // ④ **처리는 낙관 반영이 없다.** 제보 답장(`performSendFeedbackReply`)과 같은 판단이다 — 운영자가 알아야 하는 것은
 //    "처리가 **저장됐는가**"이고(24시간 약속의 증거다), 왕복 전에 칩이 바뀌면 실패한 처리도 된 것처럼 보인다. 대신 떠 있는
 //    동안 버튼을 잠그고(`reportUpdatingID`) "저장하는 중…"을 보인다. 잠금이 하나뿐이라 두 처리가 겹칠 수 없다.
@@ -45,6 +47,20 @@ extension WorkTimerStore {
     /// 운영자가 처리해야 할 것의 합(미해결 제보 + 미해결 신고). **레일 [제보] 배지와 "받은 제보" 탭 배지가 읽는 값**이다 —
     /// 두 표면 모두 "받은 제보 탭 안에 손 안 댄 것이 몇 개"를 말한다. 비운영자에게는 둘 다 서버가 0 을 준다.
     var adminInboxOpenCount: Int { max(0, feedbackOpenCount) + max(0, reportOpenCount) }
+
+    /// [신고] 칸이 비었을 때의 문구. **뷰와 테스트가 같은 값을 읽는다** — 판정 인자를 뷰에서 따로 모으면 한쪽만 고쳐진다.
+    var reportAdminEmptyState: FeedbackEmptyState {
+        ReportAdminEmptyMessage.state(
+            loaded: reportAdminLoaded,
+            failed: reportAdminFailed,
+            schemaMissing: reportAdminSchemaMissing,
+            filter: reportFilter,
+            unfilteredCount: reportAdminList.count
+        )
+    }
+
+    /// 빈 판에 [다시 시도]를 붙이는가: 첫 조회 실패 · 서버 함수 부재(db push 뒤 운영자가 다시 누를 길).
+    var reportAdminShowsRetry: Bool { (reportAdminFailed && !reportAdminLoaded) || reportAdminSchemaMissing }
 
     /// 지금 처리 버튼을 누를 수 있는가(떠 있는 처리가 없다).
     var canUpdateReport: Bool { reportUpdatingID == nil }
@@ -119,6 +135,7 @@ extension WorkTimerStore {
         let serial = reportAdminLoadSerial
         if !reportAdminLoading { reportAdminLoading = true }
         if reportAdminFailed { reportAdminFailed = false }
+        if reportAdminSchemaMissing { reportAdminSchemaMissing = false }
         defer {
             if generation == sessionGeneration, serial == reportAdminLoadSerial, reportAdminLoading { reportAdminLoading = false }
         }
@@ -135,6 +152,7 @@ extension WorkTimerStore {
             if reportAdminList != sorted { reportAdminList = sorted }
             if !reportAdminLoaded { reportAdminLoaded = true }
             if reportAdminFailed { reportAdminFailed = false }
+            if reportAdminSchemaMissing { reportAdminSchemaMissing = false }
             // 펼쳐 둔 행이 목록에서 사라졌으면 접는다(없는 행에 메모 초안이 매달려 있으면 안 된다).
             if let expanded = expandedReportID, !sorted.contains(where: { $0.id == expanded }) {
                 expandedReportID = nil
@@ -144,9 +162,11 @@ extension WorkTimerStore {
             if case .cancelled = classifyAuthError(error) { return }
             guard generation == sessionGeneration, serial == reportAdminLoadSerial else { return }
             if case SupabaseWorkServiceError.databaseSchemaMissing = error {
-                // 서버 배포 전(브루가 db push 보다 앞선 창): 실패가 아니라 '아직 표가 없다'. 빈 목록으로 조용히 접는다 —
-                // 제보 목록이 세운 관례 그대로(빨간 화면은 사용자가 고칠 수 있는 일에만 쓴다).
-                if !reportAdminLoaded { reportAdminLoaded = true }
+                // 서버 배포 전(브루가 db push 보다 앞선 창). **빈 목록으로 접지 않는다** — 제보함과 갈리는 자리다.
+                // 제보함은 "표 자체가 없다 = 정말 0건"이라 접어도 참이지만, 신고 표와 신고 입력은 이미 운영 중이라 목록 함수만
+                // 없는 동안에도 행이 쌓인다. 여기서 loaded 를 세우면 "받은 신고가 없어요"가 뜨고 24시간 약속이 조용히 깨진다.
+                // 빨간 실패로도 칠하지 않는다 — 운영자에게 필요한 말은 "못 불러왔다"가 아니라 "서버가 아직이다"다.
+                if !reportAdminSchemaMissing { reportAdminSchemaMissing = true }
             } else if !reportAdminFailed {
                 reportAdminFailed = true
             }
@@ -156,7 +176,27 @@ extension WorkTimerStore {
         await performRefreshReportOpenCount(generation: generation)
     }
 
-    /// 미해결 신고 건수만 다시 받는다(Task 발사). **폴링에 걸지 마라** — 팝오버를 여는 순간처럼 사람이 화면을 보는 시점에만.
+    /// 폴링 tick 의 건수 조회 간격. **지갑 sync 스로틀과 같은 값이다**(SPEC w20 A-4 "폴링 주기도 기존 것을 따른다") —
+    /// 새 주기를 만들지 않는다. 운영자 한두 명이 5분에 한 번이라 무료 플랜에 부담이 없고, 24시간 약속에는 넉넉히 이르다.
+    static var reportOpenCountPollSeconds: TimeInterval { ultraWalletSyncThrottleSeconds }
+
+    /// 폴링 tick 전용(`localExpiryTick`) — 운영자이고 스로틀이 열렸을 때만 건수를 묻는다. **요청 0건이 기본값이다.**
+    ///
+    /// 근무 게이트가 없다(지갑 sync 와 다른 점): 신고는 근무와 무관하게 폰에서 온다. 스탬프는 발사 시점에 찍는다 —
+    /// 성공에만 찍으면 서버가 죽어 있는 동안 15초마다 다시 나간다(`performSyncUltraWallet` 과 같은 규약·같은 이유).
+    /// 비운영자 가드는 스탬프 **앞**이다: 깃발이 나중에 올라왔을 때 다음 tick 이 곧바로 물을 수 있게.
+    func refreshReportOpenCountIfDue(now: Date) {
+        guard session != nil, ultraUnlimited else { return }
+        if let last = lastReportOpenCountPollAt,
+           now.timeIntervalSince(last) < Self.reportOpenCountPollSeconds {
+            return
+        }
+        lastReportOpenCountPollAt = now
+        refreshReportOpenCount()
+    }
+
+    /// 미해결 신고 건수만 다시 받는다(Task 발사). 부르는 자리는 팝오버를 여는 순간 · 목록 조회 뒤 · 위 폴링 tick(5분 스로틀)이다 —
+    /// **스로틀 없이 폴링에 걸지 마라**(15초마다 나간다).
     /// 비운영자는 묻지 않는다(40명이 팝오버를 열 때마다 0 을 받으러 가지 않게 — `refreshFeedbackOpenCount` 와 같은 가드).
     func refreshReportOpenCount() {
         guard session != nil, ultraUnlimited else { return }
@@ -178,7 +218,9 @@ extension WorkTimerStore {
             let clamped = max(0, count)
             if reportOpenCount != clamped { reportOpenCount = clamped }
         } catch {
-            // 취소·스키마 부재·5xx 전부 조용히. 다음에 팝오버를 열면 다시 묻는다.
+            // 취소·스키마 부재·5xx 전부 조용히(알던 건수는 지우지 않는다). 다음 폴링 tick(5분)이나 팝오버 열기에서 다시 묻는다.
+            // 스키마 부재에서도 점을 켜지 않는 이유: 점은 "처리할 신고가 있다"는 말이고, 모르는 것을 있다고 말하지 않는다 —
+            // 그 창의 진실은 운영자가 [신고] 칸을 열면 `reportAdminSchemaMissing` 문구가 말한다(없다고 단정하지 않는다).
         }
     }
 
@@ -245,6 +287,7 @@ extension WorkTimerStore {
         reportAdminLoaded = false
         reportAdminLoading = false
         reportAdminFailed = false
+        reportAdminSchemaMissing = false
         reportAdminNotice = nil
         reportFilter = nil
         expandedReportID = nil
@@ -252,6 +295,8 @@ extension WorkTimerStore {
         reportUpdatingID = nil
         reportOpenCount = 0
         reportAdminLoadSerial += 1
+        // 다음 계정이 운영자면 첫 tick 에서 곧바로 묻는다(앞 계정의 스탬프가 5분을 막지 않게).
+        lastReportOpenCountPollAt = nil
     }
 }
 
@@ -288,6 +333,10 @@ enum ReportAdminText {
     static let empty = "받은 신고가 없어요"
     /// 진짜 빈 목록의 보조 한 줄. 24시간 약속을 운영자 자신에게 상기시키는 자리다.
     static let emptyHint = "폰에서 신고가 들어오면 여기에 쌓여요 — 24시간 안에 확인해 주세요"
+    /// 서버에 목록 함수가 아직 없는 창(`reportAdminSchemaMissing`). **신고가 없다고 말하지 않는다** — 신고 표는 이미 운영 중이다.
+    static let schemaMissingList = "신고 목록을 아직 불러올 수 없어요"
+    /// 버튼 이름(`FeedbackText.retry`)을 **그대로** 부른다 — 화면에 없는 버튼을 말하면 안 된다(`filterEmptyHint` 와 같은 규약).
+    static let schemaMissingListHint = "폰 신고는 이미 쌓이고 있어요 — 서버에 신고 관리 기능이 올라가면 [\(FeedbackText.retry)]로 불러와요"
     static func filterEmpty(_ status: ContentReportStatus) -> String { "\(status.reportLabel) 신고가 없어요" }
     /// 칩 이름(`filterAll`)을 **그대로** 부른다 — 화면에 없는 버튼을 말하면 안 된다.
     static let filterEmptyHint = "위 [\(filterAll)]를 누르면 나머지가 보여요"

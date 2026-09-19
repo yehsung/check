@@ -276,10 +276,10 @@ final class WorkTimerStore {
             // 폴링에 걸지 않는 이유는 `refreshFeedbackOpenCount` 주석 그대로 — 무료 플랜에 40명이 상시로
             // 물으면 그 자체가 요금제를 넘는다. 서버 RPC 가 아직 없으면 조용히 아무 일도 일어나지 않는다.
             refreshFeedbackReplyBadge()
-            // 운영자에게만: 미해결 **신고** 건수를 여는 순간 한 번 묻는다(v0.3.34). 위 답장 배지와 같은 자리·같은 빈도이고
-            // 타이머는 없다. 심사에 "접수한 신고는 24시간 안에 확인합니다"라고 약속했는데 신고가 오는 곳은 폰이라,
-            // 운영자가 [제보] 화면을 열 때까지 기다리면 그 약속이 운영자의 기억에 매인다 — 팝오버를 여는 김에 물어 두면
-            // 레일 배지와 메뉴바 점이 그다음부터 운영자를 붙잡는다. 비운영자는 묻지도 않는다(가드는 그 함수 안).
+            // 운영자에게만: 미해결 **신고** 건수를 여는 순간 한 번 묻는다(v0.3.34). 심사에 "접수한 신고는 24시간 안에
+            // 확인합니다"라고 약속했는데 신고가 오는 곳은 폰이라, 운영자가 [제보] 화면을 열 때까지 기다리면 그 약속이 운영자의
+            // 기억에 매인다. 팝오버를 안 여는 동안은 기존 15초 폴링 tick 이 5분에 한 번 묻는다(`refreshReportOpenCountIfDue`) —
+            // 이 한 줄은 여는 순간의 레일 배지를 최신으로 맞출 뿐이다. 비운영자는 묻지도 않는다(가드는 그 함수 안).
             refreshReportOpenCount()
             refreshEquippedCharacterIfStale()
             // 팀원이 바꾼 주간 목표/이름/역할/참여코드를 팝오버 열 때 60초 스로틀로 재조회해 반영한다.
@@ -713,10 +713,17 @@ final class WorkTimerStore {
     /// 운영자 신고 목록(`report_admin_list`). 비운영자에게 서버는 0행을 준다 — 이 배열이 차 있으면 그건 서버가 운영자라고 한 것이다.
     /// 내용에 **사람이 쓴 글**(상세 · 신고된 메시지 원문)이 있다. 로그로 흘리지 마라.
     var reportAdminList: [ContentReportAdminItem] = []
-    /// 한 번이라도 받았는가(빈 목록과 로드 전을 가른다 — 제보 목록과 같은 3플래그 규약). 스키마 부재도 여기서 true.
+    /// 한 번이라도 받았는가(빈 목록과 로드 전을 가른다 — 제보 목록과 같은 3플래그 규약). 스키마 부재는 여기서 true 가 **아니다**
+    /// (아래 `reportAdminSchemaMissing`).
     var reportAdminLoaded = false
     var reportAdminLoading = false
     var reportAdminFailed = false
+    /// 마지막 목록 조회가 "서버에 신고 목록 함수가 아직 없다"(PGRST202 — brew 가 db push 보다 먼저 나간 창)로 끝났는가.
+    ///
+    /// 제보함은 이 창을 빈 목록으로 접는다(표 자체가 없다 = 정말 0건). 신고는 다르다 — 신고 표와 신고 입력(report_content)은
+    /// 20260918180000 부터 운영 중이라 **목록 함수만 없는 동안에도 행이 쌓인다.** 그래서 이 창을 "받은 신고가 없어요"로 접으면
+    /// 거짓이고, 24시간 약속이 조용히 깨진다. 빨간 실패도 아니고(운영자가 고칠 일은 db push 다) 빈 목록도 아닌 제3의 상태다.
+    var reportAdminSchemaMissing = false
     /// [신고] 칸 목록 아래 안내 한 줄(처리 결과·실패). 제보 쪽 `feedbackNotice` 와 **다른 칸**이다.
     var reportAdminNotice: String?
     /// 상태 필터. nil = 전체. 어휘는 제보와 같은 넷(`ContentReportStatus`)이고 라벨만 다르다.
@@ -734,6 +741,8 @@ final class WorkTimerStore {
     /// 목록 조회 순번. **늦게 도착한 옛 응답이 새 응답을 덮지 않게** 한다(패널을 연 조회와 처리 성공 뒤 재조회가 겹치는 경우).
     /// 화면이 읽지 않으므로 관찰 대상이 아니다.
     @ObservationIgnored var reportAdminLoadSerial = 0
+    /// 폴링 tick 이 미해결 신고 건수를 마지막으로 **발사한** 시각(`refreshReportOpenCountIfDue` 의 5분 스로틀). 판정에만 쓴다.
+    @ObservationIgnored var lastReportOpenCountPollAt: Date?
 
     /// 내 제보에 **답장이 왔다**는 상단 배너의 노출 여부(v0.3.14). 회고 배너(`showsRetroBanner`)와 같은 자리·같은 규약이다.
     ///

@@ -418,7 +418,10 @@ func 신고_칸을_고르면_목록과_건수를_한_번씩_받고_미해결_먼
 
 @MainActor
 @Test
-func 서버가_아직_신고_함수를_모르면_빈_목록으로_조용히_접는다() async {
+func 서버가_아직_신고_함수를_모르면_신고가_없다고_단정하지_않는다() async throws {
+    // 신고 표(content_reports)와 신고 입력(report_content)은 20260918180000 부터 운영 중이다. 목록 RPC 만 없는 창
+    // (brew 가 db push 보다 먼저 나간 경우)에 "받은 신고가 없어요"를 띄우면 거짓이다 — 표에는 행이 쌓이는 중이다.
+    // 제보함이 이 창을 빈 목록으로 접는 근거("표 자체가 없다 = 정말 0건")가 여기서는 성립하지 않는다.
     let host = "ra-store-schema-missing"
     let store = raStore(host: host)
     ReportAdminURLProtocol.set(
@@ -427,9 +430,31 @@ func 서버가_아직_신고_함수를_모르면_빈_목록으로_조용히_접�
     )
     store.feedbackShowsInbox = true
     store.selectInboxSegment(reports: true)
+    await raWait { ReportAdminURLProtocol.count(host: host, path: raListPath) == 1 && !store.reportAdminLoading }
+    await raWait { false }
+
+    // 뷰가 읽는 값 그대로(`ReportAdminInboxView` 는 `store.reportAdminEmptyState` · `store.reportAdminShowsRetry` 를 그린다).
+    let state = store.reportAdminEmptyState
+    #expect(state.text != ReportAdminText.empty, "서버 함수가 없는데 '받은 신고가 없어요'라고 단정했다 — 표에는 신고가 쌓이는 중이다")
+    #expect(state.hint != ReportAdminText.emptyHint, "할 일이 없다는 보조 줄이 떴다 — 24시간 약속이 조용히 깨진다")
+    #expect(state.text != ReportAdminText.loading, "응답이 왔는데 '불러오는 중…'에 멈췄다")
+    #expect(state == FeedbackEmptyState(
+        text: ReportAdminText.schemaMissingList, hint: ReportAdminText.schemaMissingListHint,
+        symbol: FeedbackEmptyMessage.loadingSymbol
+    ))
+    #expect(ReportAdminText.schemaMissingListHint.contains("[\(FeedbackText.retry)]"), "보조 줄이 화면에 없는 버튼을 부른다")
+    #expect(!store.reportAdminFailed, "db push 전 창을 빨간 실패로 칠했다 — 운영자에게 필요한 말은 '서버가 아직'이다")
+    #expect(store.reportAdminShowsRetry, "db push 뒤 다시 불러올 길이 없다")
+    let view = raStripSwiftComments(try raSource("CheckReportAdminView.swift"))
+    #expect(view.contains("state: store.reportAdminEmptyState"), "뷰가 스토어 판정을 안 읽는다 — 테스트와 화면이 갈린다")
+    #expect(view.contains("showsRetry: store.reportAdminShowsRetry"))
+
+    // 서버가 올라온 뒤 [다시 시도] → 목록이 서고 부재 상태가 풀린다.
+    ReportAdminURLProtocol.set(.init(body: raList(raRowJSON(id: "r1"))), host: host, path: raListPath)
+    store.loadReportAdmin()
     await raWait { store.reportAdminLoaded }
-    #expect(store.reportAdminLoaded && !store.reportAdminFailed, "db push 전 창을 실패로 칠했다 — 빨간 화면은 고칠 수 있는 일에만")
-    #expect(ReportAdminEmptyMessage.state(loaded: true, failed: false).text == ReportAdminText.empty)
+    #expect(store.reportAdminLoaded && !store.reportAdminSchemaMissing && store.visibleReports.map(\.id) == ["r1"])
+    #expect(!store.reportAdminShowsRetry)
 }
 
 // MARK: - 스토어: 처리(낙관 반영 없음 · 잠금 · 실패)
@@ -638,6 +663,55 @@ func 운영자는_팝오버를_열_때_신고_건수만_한_번_묻고_제보_�
     #expect(ReportAdminURLProtocol.count(host: host, path: "/rest/v1/rpc/feedback_open_count") == 1)
     #expect(ReportAdminURLProtocol.count(host: host, path: raListPath) == 0, "[제보] 칸인데 신고 목록을 받았다")
     #expect(!store.showsReportAdmin, "기본 칸이 [제보]가 아니다 — 받은 제보 탭을 여는 사람이 보던 화면이 바뀌었다")
+}
+
+@MainActor
+@Test
+func 팝오버를_안_열어도_폴링이_운영자의_신고_건수를_5분에_한_번_물어_메뉴바_점을_켠다() async {
+    // 팝오버를 연 순간에만 물으면, 10:00 에 0건을 본 운영자는 10:05 에 들어온 신고를 다음에 팝오버를 직접 열 때까지 모른다
+    // (자동 시작을 켜 두고 팝오버를 안 여는 날은 하루 종일). 기존 15초 폴링 tick 에 지갑 sync 와 같은 5분 스로틀로 얹는다.
+    // 근무 여부와 무관하다 — 이 테스트는 근무 밖(startedAt == nil)에서 돈다.
+    let host = "ra-store-poll"
+    let store = raStore(host: host)
+    let base = Date(timeIntervalSince1970: 1_789_000_000)
+    var now = base
+    store.clock = { now }
+    ReportAdminURLProtocol.set(.init(body: "3"), host: host, path: raCountPath)
+    #expect(store.startedAt == nil)
+
+    await store.localExpiryTick()
+    await raWait { store.reportOpenCount == 3 }
+    #expect(store.reportOpenCount == 3, "팝오버를 안 연 운영자에게 새 신고가 메뉴바 점을 못 켰다")
+    let label = MenuBarStatusLabel(
+        snapshot: WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0), title: "오프",
+        hasOpenReports: store.reportOpenCount > 0
+    )
+    #expect(label.dotReasons.openReports)
+    #expect(ReportAdminURLProtocol.count(host: host, path: raCountPath) == 1)
+
+    // 5분 안의 tick 은 묻지 않는다(15초마다 묻지 않는다 — 무료 플랜).
+    now = base.addingTimeInterval(WorkTimerStore.ultraWalletSyncThrottleSeconds - 1)
+    await store.localExpiryTick()
+    await raWait { false }
+    #expect(ReportAdminURLProtocol.count(host: host, path: raCountPath) == 1, "5분 스로틀 안에서 건수를 다시 물었다")
+
+    // 5분이 지나면 다시 묻는다 — 처리가 끝나 0 이 되면 점이 꺼지는 것도 같은 길이다.
+    ReportAdminURLProtocol.set(.init(body: "0"), host: host, path: raCountPath)
+    now = base.addingTimeInterval(WorkTimerStore.ultraWalletSyncThrottleSeconds)
+    await store.localExpiryTick()
+    await raWait { store.reportOpenCount == 0 }
+    #expect(ReportAdminURLProtocol.count(host: host, path: raCountPath) == 2)
+    #expect(store.reportOpenCount == 0)
+    // 목록은 폴링하지 않는다(건수 한 줄만 — 사람이 쓴 글을 5분마다 내려받을 이유가 없다).
+    #expect(ReportAdminURLProtocol.count(host: host, path: raListPath) == 0)
+
+    // 비운영자는 폴링 tick 에서도 묻지 않는다(40명이 5분마다 0 을 받으러 가지 않게).
+    let otherHost = "ra-store-poll-nonadmin"
+    let other = raStore(host: otherHost, admin: false)
+    other.clock = { now }
+    await other.localExpiryTick()
+    await raWait { false }
+    #expect(ReportAdminURLProtocol.count(host: otherHost, path: raCountPath) == 0, "비운영자가 폴링 tick 에서 신고 건수를 물었다")
 }
 
 @MainActor

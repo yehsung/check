@@ -115,13 +115,8 @@ struct ReportAdminInboxView: View {
             let rows = store.visibleReports
             if rows.isEmpty {
                 FeedbackEmptyPanel(
-                    state: ReportAdminEmptyMessage.state(
-                        loaded: store.reportAdminLoaded,
-                        failed: store.reportAdminFailed,
-                        filter: store.reportFilter,
-                        unfilteredCount: store.reportAdminList.count
-                    ),
-                    showsRetry: store.reportAdminFailed && !store.reportAdminLoaded,
+                    state: store.reportAdminEmptyState,
+                    showsRetry: store.reportAdminShowsRetry,
                     retry: { store.loadReportAdmin() }
                 )
             } else {
@@ -485,16 +480,26 @@ struct ReportNoteField: View {
     }
 }
 
-/// 빈 목록 문구의 **결정적 판정**(제보 `FeedbackEmptyMessage.inbox` 와 같은 네 갈래): 실패 · 로딩 · 필터 탓 · 진짜 빈 목록.
+/// 빈 목록 문구의 **결정적 판정**. 제보 `FeedbackEmptyMessage.inbox` 의 네 갈래(실패 · 로딩 · 필터 탓 · 진짜 빈 목록)에
+/// **서버 함수 부재**가 하나 더 붙는다 — 제보함은 그 창을 빈 목록으로 접지만, 신고 표는 이미 운영 중이라 "없어요"가 거짓이다
+/// (`WorkTimerStore.reportAdminSchemaMissing` 주석). 로딩보다 **앞**에서 본다: 부재 응답은 loaded 를 세우지 않는다.
 enum ReportAdminEmptyMessage {
     static func state(
         loaded: Bool,
         failed: Bool,
+        schemaMissing: Bool = false,
         filter: ContentReportStatus? = nil,
         unfilteredCount: Int = 0
     ) -> FeedbackEmptyState {
         if failed, !loaded {
             return FeedbackEmptyState(text: ReportAdminText.failed, hint: nil, symbol: FeedbackEmptyMessage.failedSymbol)
+        }
+        if schemaMissing {
+            return FeedbackEmptyState(
+                text: ReportAdminText.schemaMissingList,
+                hint: ReportAdminText.schemaMissingListHint,
+                symbol: FeedbackEmptyMessage.loadingSymbol
+            )
         }
         if !loaded {
             return FeedbackEmptyState(text: ReportAdminText.loading, hint: nil, symbol: FeedbackEmptyMessage.loadingSymbol)

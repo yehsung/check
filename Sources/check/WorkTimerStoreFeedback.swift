@@ -150,6 +150,9 @@ extension WorkTimerStore {
         // 그 경우 이 깃발을 세워 두면 아무도 내려 주지 않아 화면이 영영 "불러오는 중…"에 갇힌다.
         if session != nil, !feedbackLoaded { feedbackLoading = true }
         loadFeedback()
+        // v0.3.34: 받은 제보 탭의 [신고] 칸이 골라져 있으면 신고 목록도 새로 받는다. [제보] 칸이면 아무 일도 안 한다 —
+        // 제보 쪽 왕복 수는 예전 그대로다(WorkTimerStoreReportAdmin 머리 주석 ②).
+        reloadReportAdminIfShowing()
     }
 
     /// 레일 버튼을 다시 눌렀을 때(열려 있으면 닫고, 아니면 연다). 레일 칸은 토글로 읽히기 때문에 남긴다.

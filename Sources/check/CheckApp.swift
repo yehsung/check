@@ -36,7 +36,9 @@ struct CheckApp: App {
                 title: appDelegate.store.menuBarTitle,
                 updateAvailable: appDelegate.updateCheck.isUpdateAvailable,
                 hasUnreadMessages: appDelegate.store.hasUnreadMessages,
-                hasGomokuInvite: !appDelegate.store.gomoku.pendingIncomingInvites.isEmpty
+                hasGomokuInvite: !appDelegate.store.gomoku.pendingIncomingInvites.isEmpty,
+                // v0.3.34: 운영자에게 미해결 신고가 있으면 같은 점. 건수는 서버가 운영자에게만 준다(판정은 여기서 하지 않는다).
+                hasOpenReports: appDelegate.store.reportOpenCount > 0
             )
         }
         .menuBarExtraStyle(.window)

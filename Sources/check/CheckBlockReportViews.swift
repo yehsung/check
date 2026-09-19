@@ -193,7 +193,11 @@ struct BlockReportSheetView: View {
             FeedbackListBox(
                 contentHeight: estimatedBodyHeight,
                 capHeight: bodyCap ?? .greatestFiniteMagnitude,
-                clipsInsteadOfScrolling: clipsInsteadOfScrolling
+                clipsInsteadOfScrolling: clipsInsteadOfScrolling,
+                // 팝오버 신고 시트는 **갈래 하나**(v0.3.34 수리): 쓰는 도중 카운터(180자)·안내 줄(보내기 실패)이 서고 지며 상자가
+                // 그대로 ↔ 스크롤로 갈리면 자세히 칸이 새 NSTextView 가 되어 포커스와 한글 조합을 잃는다(`keepsOneBranch` 주석).
+                // 오목 덮개는 상한이 없어(자연 높이) 갈래가 바뀌지 않고, 차단 확인은 입력칸이 없어 잃을 것이 없다 — 둘은 예전 그대로다.
+                keepsOneBranch: bodyCap != nil && sheet.kind == .report
             ) {
                 switch sheet.kind {
                 case .blockConfirm: confirmBody

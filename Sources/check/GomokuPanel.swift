@@ -1874,7 +1874,9 @@ private struct GomokuChatCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            GomokuChatComposer(store: store, rendersPlainText: rendersPlainText)
+            // 신고·차단 덮개가 이 창을 덮고 있으면 입력칸과 [보내기](⌘↩ 포함)를 막는다(v0.3.34 수리 — 그 뷰의 `isCovered` 주석).
+            GomokuChatComposer(store: store, rendersPlainText: rendersPlainText,
+                               isCovered: safety?.blockReportSheet(on: .gomoku) != nil)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .gomokuCard(padding: 12)
@@ -2061,6 +2063,17 @@ private struct GomokuQuickPhraseGrid: View {
 private struct GomokuChatComposer: View {
     @Bindable var store: GomokuStore
     let rendersPlainText: Bool
+    /// 신고·차단 덮개가 이 창을 덮고 있는가(v0.3.34 수리). 참인 동안 입력칸은 키를 받지 않고(쥐고 있던 포커스는 조합을 확정한 뒤
+    /// 내려놓는다 — `CheckEditorTextView.acceptsInput`), 전송 세 갈래(버튼 · ↩ · ⌘↩)가 모두 닫힌다. **초안은 건드리지 않는다.**
+    ///
+    /// 왜: 덮개는 판 위에 얹힐 뿐이라 막지 않으면 가려진 이 칸이 첫 응답자로 남는다. 신고 설명인 줄 알고 친 글이 보이지 않는
+    /// 채팅 초안에 쌓이고, ↩ · ⌘↩ 가 그 글(또는 써 두던 초안)을 **신고하려던 바로 그 사람에게** 채팅으로 보냈다(적대적 검토 2026-09-20).
+    /// 덮개 위의 ↩ 는 채팅과 무관하다 — 자세히 칸을 누르고 있으면 그 칸의 줄바꿈이고, 아무 칸도 안 잡았으면 아무 일도 안 한다
+    /// (덮개에는 기본 버튼이 없다: 차단은 파괴적 동작이라 ↩ 에 걸지 않는 것이 맥 관례이고, 신고는 사유를 고른 뒤 버튼으로 보낸다).
+    var isCovered: Bool = false
+
+    /// 지금 보낼 수 있는가 — 스토어의 판정에 **덮개**를 더한다. 버튼 · ↩ · ⌘↩ 가 모두 이 값 하나를 본다.
+    private var canSendNow: Bool { !isCovered && store.canSendChatNow }
 
     /// 입력칸 높이(pt). 캡션 한 줄 13pt × 2줄 + 세로 여백 7×2 = 40(v0.3.30 가로 한 줄로 옮기며 44 → 40).
     static let editorHeight: CGFloat = 40
@@ -2109,11 +2122,12 @@ private struct GomokuChatComposer: View {
                     .foregroundStyle(.white)
                     .frame(width: Self.sendWidth, height: 32)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(CheckTheme.accent.opacity(store.canSendChatNow ? 1 : 0.35)))
+                        .fill(CheckTheme.accent.opacity(canSendNow ? 1 : 0.35)))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(!store.canSendChatNow)
+                // 막힌 버튼은 ⌘↩ 지름길도 받지 않는다 — 덮개 위의 ⌘↩ 가 이 버튼을 누르던 길이 여기서 닫힌다.
+                .disabled(!canSendNow)
                 .keyboardShortcut(.return, modifiers: .command)
                 .checkTooltip(GomokuText.chatSendHelp)
             }
@@ -2162,9 +2176,10 @@ private struct GomokuChatComposer: View {
                 CheckTextEditor(
                     text: $store.chatDraft,
                     sendsOnReturn: true,
-                    canSendNow: { store.canSendChatNow },
+                    canSendNow: { canSendNow },
                     onSend: send,
-                    onRenderedEmptyChange: { editorRenderedEmpty = $0 }
+                    onRenderedEmptyChange: { editorRenderedEmpty = $0 },
+                    acceptsInput: !isCovered
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -2175,6 +2190,8 @@ private struct GomokuChatComposer: View {
     /// 전송 문 — **세 갈래(버튼 · ⌘↩ · ↩)가 전부 이 하나를 지난다.** 확정이 먼저다(그 함수 주석).
     @MainActor
     private func send() {
+        // 덮개가 덮고 있으면 어느 갈래로 와도 나가지 않는다(`isCovered` 주석 — 막는 곳을 이 문 하나에도 둔다).
+        guard !isCovered else { return }
         CheckEditorSend.commitThenSend { store.sendChatDraft() }
     }
 }
@@ -2631,6 +2648,8 @@ private struct GomokuStakePrompt: View {
 /// 채팅 머리 ··· 에서 연 신고·차단 시트. **판돈 창과 같은 가운데 덮개**다(바깥을 누르거나 Esc 면 닫힌다 — 보내는 중에는 안 닫힌다).
 /// 본문은 팝오버와 **같은 뷰**(`BlockReportSheetView`)라 문구·사유·확인 절차가 두 벌이 되지 않는다.
 /// 차단하면 이 판의 채팅이 꺼진다(스토어 `hideBlockedPeer` — 판 자체는 건드리지 않는다, 판돈이 걸려 있다).
+/// 덮개가 서 있는 동안 아래 채팅칸은 키를 받지 않고 [보내기](⌘↩ 포함)도 닫힌다 — 덮개는 얹힐 뿐이라 막지 않으면 가려진 칸이
+/// 첫 응답자로 남는다(`GomokuChatComposer.isCovered` 주석 — ↩ 를 어디에 쓰는지도 거기 있다).
 private struct GomokuBlockReportOverlay: View {
     let safety: WorkTimerStore
     let sheet: BlockReportSheet

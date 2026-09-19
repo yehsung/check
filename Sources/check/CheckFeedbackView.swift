@@ -744,10 +744,31 @@ struct FeedbackListBox<Content: View>: View {
     let contentHeight: CGFloat
     let capHeight: CGFloat
     let clipsInsteadOfScrolling: Bool
+    /// **갈래를 하나로 묶는다**(v0.3.34 수리 — 팝오버 신고 시트만 켠다. 기본 false 라 제보·상점·캐릭터·신고함은 예전 그대로다).
+    ///
+    /// **왜**(적대적 검토 2026-09-20): 아래 두 갈래(그대로 · 스크롤)는 SwiftUI 에게 **다른 뷰**라, 갈래가 바뀌는 순간 그 아래를 통째로
+    /// 다시 만든다. 안에 입력칸이 있으면 그 칸은 **새 NSTextView** 가 되고 치던 포커스를 잃는다 — 새 칸은 한글 조합을 못 받는다
+    /// (`CheckTextEditor.makeNSView` 주석, v0.3.0~0.3.12). 신고 시트는 쓰는 도중에 갈래가 바뀌었다: 180자째 카운터가 서면 추정 높이가
+    /// 21pt 늘고, 보내기가 실패해 안내 줄이 서면 상한이 45pt 준다 — 상한 근처에서 둘 다 갈래를 넘긴다.
+    ///
+    /// 그래서 켜면 **늘 스크롤 상자 하나**에 앉힌다. 높이는 추정이 아니라 **내용의 실제 높이**를 상한까지 따른다
+    /// (`frame(maxHeight:)` + `fixedSize(vertical:)` — 내용이 짧으면 자연 높이라 빈 자리가 없고, 넘치면 상한에서 스크롤한다).
+    /// 글자 수·안내 줄·크롬이 바뀌어도 바뀌는 것은 상자의 높이뿐이고 **뷰는 그대로**다. 스냅샷 갈래(`clipsInsteadOfScrolling`)는
+    /// 입력칸이 글자로 그려지는 자리라 예전 그대로 둔다.
+    var keepsOneBranch: Bool = false
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        if contentHeight <= capHeight {
+        if keepsOneBranch && !clipsInsteadOfScrolling {
+            // ★ 수식어 순서가 뜻이다: `frame(maxHeight:)` 가 안, `fixedSize` 가 밖이어야 상자가 내용 높이를 따르다가 상한에서 멈춘다.
+            //   뒤집으면 상자가 내용 높이 그대로 상한을 뚫는다(스크롤이 안 붙는다).
+            ScrollView(.vertical, showsIndicators: true) {
+                content().frame(maxWidth: .infinity, alignment: .top)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: capHeight)
+            .fixedSize(horizontal: false, vertical: true)
+        } else if contentHeight <= capHeight {
             content().frame(maxWidth: .infinity, alignment: .top)
         } else if clipsInsteadOfScrolling {
             // `.fixedSize(vertical:)` 이 **없으면 스냅샷이 거짓 겹침을 그린다**(2026-09-10 실측):

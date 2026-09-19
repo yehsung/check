@@ -268,7 +268,7 @@ struct CheckMessageView: View {
         HStack(spacing: 8) {
             IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
             if hasPeer {
-                CheckAvatarView(name: peerName, avatarURL: store.selectedMessagePeerAvatarURL, size: 22)
+                CheckAvatarView(name: peerName, userID: store.selectedMessagePeerID, avatarURL: store.selectedMessagePeerAvatarURL, size: 22)
             }
             Text(hasPeer ? peerName : "메시지")
                 .font(.subheadline.weight(.bold))
@@ -626,7 +626,7 @@ private struct MessageBubbleRow: View {
                 sentMeta
                 bubble
             } else {
-                CheckAvatarView(name: entry.peerName, avatarURL: entry.peerAvatarURL, size: 20)
+                CheckAvatarView(name: entry.peerName, userID: entry.peerUserID, avatarURL: entry.peerAvatarURL, size: 20)
                 bubble
                 timeLabel
                 Spacer(minLength: MessagePanelLayout.bubbleOppositeInset)

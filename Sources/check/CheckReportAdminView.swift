@@ -256,7 +256,7 @@ struct ReportAdminRow: View {
     /// 신고자 → 대상. 둘 다 이름이 잘리지 않게 **같은 몫**을 나눈다(292pt 에서 각 100pt 남짓).
     private var names: some View {
         HStack(spacing: 5) {
-            CheckAvatarView(name: report.reporterName, avatarURL: report.reporterAvatarURL, size: 16)
+            CheckAvatarView(name: report.reporterName, userID: report.reporterID, avatarURL: report.reporterAvatarURL, size: 16)
             Text(report.reporterName)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(report.reporterDeparted ? CheckTheme.secondaryText : CheckTheme.primaryText)
@@ -266,7 +266,7 @@ struct ReportAdminRow: View {
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(CheckTheme.secondaryText)
                 .accessibilityHidden(true)
-            CheckAvatarView(name: report.targetName, avatarURL: report.targetAvatarURL, size: 16)
+            CheckAvatarView(name: report.targetName, userID: report.targetID, avatarURL: report.targetAvatarURL, size: 16)
             Text(report.targetName)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(CheckTheme.primaryText)

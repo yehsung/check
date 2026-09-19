@@ -84,9 +84,9 @@ func 배지는_아바타의_레이아웃_크기를_1pt_도_바꾸지_않는다()
     // 가장 작은 증명부터: 아바타 **자체**의 자연 크기가 같아야 한다. overlay 는 자식의 크기를 제안받을 뿐
     // 부모의 크기에 기여하지 않는다 — 이 성질이 깨지면(예: overlay 를 HStack 으로 바꾸면) 여기서 먼저 빨개진다.
     for size in [CGFloat(22), 26, 30] {
-        let bare = try v0313Bitmap(CheckAvatarView(name: "조현준", size: size).fixedSize(), scale: 2)
+        let bare = try v0313Bitmap(CheckAvatarView(name: "조현준", userID: nil, size: size).fixedSize(), scale: 2)
         let badged = try v0313Bitmap(
-            CheckAvatarView(name: "조현준", size: size, center: "부산").fixedSize(), scale: 2)
+            CheckAvatarView(name: "조현준", userID: nil, size: size, center: "부산").fixedSize(), scale: 2)
         // 배지는 아바타 **밖으로** 넘쳐 그려지므로(offset x:4 y:2) 그림의 픽셀 크기는 커질 수 있다.
         // 레이아웃이 안 바뀌었다는 증거는 그림 크기가 아니라 아래 행 렌더의 '이름 띠 동일'이다.
         // 여기서 잡는 것은 **폭발적 변화**다: 배지가 아바타 자리를 밀면 폭이 배지 폭(≈24pt)만큼 늘어난다.

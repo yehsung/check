@@ -347,6 +347,8 @@ struct CheckMiniGameWindowView: View {
         .frame(width: MiniGameWindowLayout.contentSize.width, height: MiniGameWindowLayout.contentSize.height, alignment: .topLeading)
         // 툴팁 말풍선 레이어(v0.3.25) — 미니게임 창 루트. 캔버스·순위 열의 클리핑 바깥이다.
         .checkTooltipLayer()
+        // 사람 아바타의 캐릭터 한 표(2026-09-20) — 미니게임 창 루트(오늘 순위 · 어제 1등의 아바타가 이 아래다).
+        .appUserAvatarCharacters(from: store)
         .onAppear { installSpaceKey() }
         .onDisappear {
             MiniGameSpaceKey.remove()
@@ -995,6 +997,7 @@ private struct MiniGameChampionCard: View {
             // 같은 목록의 첫 줄만 센터를 숨긴 꼴이 된다. overlay 라 열 규격(위 주석)은 1pt 도 안 움직인다.
             CheckAvatarView(
                 name: winner.name,
+                userID: winner.userID,
                 avatarURL: winner.avatarURL,
                 size: MiniGameRankRow.avatarSize,
                 center: winner.center
@@ -1061,7 +1064,7 @@ struct MiniGameRankRow: View {
     var body: some View {
         HStack(spacing: Self.columnSpacing) {
             badge
-            CheckAvatarView(name: entry.name, avatarURL: entry.avatarURL, size: Self.avatarSize, center: center)
+            CheckAvatarView(name: entry.name, userID: entry.userID, avatarURL: entry.avatarURL, size: Self.avatarSize, center: center)
             Text(entry.name)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(CheckTheme.primaryText)

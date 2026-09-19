@@ -614,7 +614,7 @@ struct FeedbackInboxRow: View {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 6) {
                         FeedbackKindBadge(kind: report.kind)
-                        CheckAvatarView(name: report.authorName, avatarURL: report.authorAvatarURL, size: 18)
+                        CheckAvatarView(name: report.authorName, userID: report.userID, avatarURL: report.authorAvatarURL, size: 18)
                         Text(report.authorName)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(CheckTheme.primaryText)

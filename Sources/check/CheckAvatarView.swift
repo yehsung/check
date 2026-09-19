@@ -1,36 +1,206 @@
 import AppKit
+import ImageIO
 import SwiftUI
 import UniformTypeIdentifiers
 import CheckCore
 
+// MARK: - 기본 아바타 = 착용 캐릭터 (2026-09-20 사용자 요청 — 맥, 작업 M)
+//
+// "유저들 프로필 기본값으로 장착중인 캐릭터로 뜨게 해줘. 지금은 별명의 첫글자가 들어가 있잖아. 그거 말고.
+//  프로필 사진 직접 업로드한 사람은 업로드한 사진으로 뜨는거 유지하고."
+//
+// 사람 아바타의 우선순위(정본은 코어 `AppUserCharacterDirectory.avatar(for:photoURL:)` — 폰과 한 규칙):
+//   ① 올린 사진 → ② 그 사람의 착용 캐릭터(neutral 초상 · 원형) → ③ 캐릭터를 **모를 때만** 이니셜(첫 조회 전 · 표에 없는 사람 ·
+//   이 빌드가 모르는 새 캐릭터). 착용값 null 은 아잉이다. 사진을 불러오는 중이거나 실패하면 이니셜이 아니라 캐릭터로 떨어진다.
+//
+// 표(`AppUserCharacterDirectory`)는 스토어가 받고(`WorkTimerStoreAvatars.swift`), **창 루트 넷**(팝오버 · 설정 · 미니게임 · 오목)이
+// `appUserAvatarCharacters(from:)` 로 이 환경값에 건다 — 호출부는 **사용자 id** 만 넘긴다. 환경값이 없는 자리(렌더 테스트가 부품만
+// 그릴 때 · 미리보기)는 빈 표 = 지금처럼 이니셜이다.
+//
+// ★ 초상은 `CheckMascotAssets.image(for:characterID:)` 로 얻지 **않는다** — 그 함수는 모르는 id·깨진 PNG 를 아잉으로 폴백한다(내 캐릭터용
+//   규칙). 여기는 **남의 사실**을 그리는 자리라, 그리지 못하면 아잉이 아니라 이니셜이다(`AppUserAvatarArt.portrait(characterID:)`).
+
+private struct AppUserCharactersKey: EnvironmentKey {
+    /// 빈 표(전원 이니셜). 창 루트가 스토어의 표를 걸기 전의 자리 · 부품만 그리는 렌더 테스트가 이 값을 본다.
+    static let defaultValue = AppUserCharacterDirectory(knownIDs: [CharacterCatalog.builtInAingID])
+}
+
+extension EnvironmentValues {
+    /// 사람 아바타가 찾는 캐릭터 한 표. 창 루트가 `appUserAvatarCharacters(from:)` 로 스토어의 표를 건다.
+    var appUserCharacters: AppUserCharacterDirectory {
+        get { self[AppUserCharactersKey.self] }
+        set { self[AppUserCharactersKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// **창 루트 한 곳에서** 부른다(팝오버 `CheckMenuView` · 설정 `CheckSettingsView` · 미니게임 `CheckMiniGameWindowView` ·
+    /// 오목 `GomokuPanel`). 이 아래 모든 사람 아바타가 이 스토어의 캐릭터 한 표에서 착용 캐릭터를 찾는다.
+    ///
+    /// 표를 읽는 것은 작은 감싸개 뷰의 body 다 — 루트 뷰의 body 가 읽으면 표가 바뀔 때마다 팝오버 전체가 다시 평가된다.
+    /// 감싸개만 다시 평가되고, 환경값이 바뀐 것을 읽는 쪽(아바타)만 다시 그려진다. `store` 가 nil 이면(스토어 없이 그리는
+    /// 오목 렌더 테스트) 빈 표 = 이니셜.
+    func appUserAvatarCharacters(from store: WorkTimerStore?) -> some View {
+        AppUserAvatarCharactersScope(store: store, content: self)
+    }
+}
+
+private struct AppUserAvatarCharactersScope<Content: View>: View {
+    let store: WorkTimerStore?
+    let content: Content
+
+    var body: some View {
+        content.environment(\.appUserCharacters, store?.appUserCharacters ?? AppUserCharactersKey.defaultValue)
+    }
+}
+
+extension AppUserCharacterDirectory {
+    /// 맥의 판정 한 곳: 표의 규칙(`avatar(for:photoURL:)`) 그대로에, **표가 이 사람을 모를 때만** 호출부가 이미 받은 착용값
+    /// (`characterHint` — 오목 로비·신청 행의 `GomokuUser.characterID`)을 쓴다.
+    ///
+    /// 힌트는 **이 빌드가 초상을 그릴 수 있는 id 일 때만** 쓴다. nil 은 아잉으로 접지 않는다 — 오목 행의 nil 은 '안 골랐다(아잉)'와
+    /// '그 응답이 칸을 안 실었다(신청 행 · 옛 서버)'를 가르지 못한다. 모르는 것을 아잉으로 단정하면 틀린 사실을 그린다.
+    /// 표가 아는 사람은 표가 이긴다(팝오버·오목 창이 같은 사람을 다른 캐릭터로 그리지 않게).
+    func avatar(for userID: String?, photoURL: URL?, characterHint: String?) -> AppUserAvatar {
+        let resolved = avatar(for: userID, photoURL: photoURL)
+        guard characterID(for: userID) == nil,
+              let hint = CharacterSyncDecision.normalized(characterHint),
+              knownIDs.contains(hint)
+        else { return resolved }
+        if case .photo(let url, _) = resolved { return .photo(url, fallbackCharacterID: hint) }
+        return .character(hint)
+    }
+}
+
 // MARK: - Avatar view
 
-/// 원형 아바타. `avatarURL`이 있으면 비동기 원격 이미지를 원형으로 그리고,
-/// 없거나 로딩 중/실패 시엔 이름 이니셜 + 해시색 폴백을 보여 준다.
+/// 원형 아바타. 사진 → 착용 캐릭터 → 이니셜 순으로 그린다(위 머리 주석). 사진은 비동기 원격 이미지를 원형으로 그리고,
+/// 불러오는 중·실패면 그 사람의 캐릭터(모르면 이니셜 + 해시색)로 떨어진다.
 /// 행 아바타 기준 크기는 26pt. 레티나 선명도를 위해 원본 비트맵을 그대로 고해상 보간한다.
 struct CheckAvatarView: View {
     let name: String
+    /// 이 사람의 사용자 id — 캐릭터 한 표에서 착용 캐릭터를 찾는 열쇠. **기본값이 없다**: 빠뜨린 호출부는 컴파일이 막는다
+    /// (기본값을 두면 그 자리만 조용히 이니셜로 남는다). 사람이 아닌 자리(팀 리그 줄)와 id 를 모르는 자리만 nil 을 **명시**한다 —
+    /// 어느 자리가 nil 인지는 `V0335AvatarCharacterTests` 의 소스 계약이 센다.
+    let userID: String?
     var avatarURL: URL? = nil
     var size: CGFloat = 26
     /// 소속 센터("서울"/"부산"). nil 이면 배지를 안 그린다 — 기존 호출부는 기본값으로 무영향이다.
     var center: String? = nil
+    /// 호출부가 이미 받은 착용값(서버 원문 — 오목 행). 표가 이 사람을 모를 때만 쓴다(`avatar(for:photoURL:characterHint:)`).
+    var characterHint: String? = nil
+
+    @Environment(\.appUserCharacters) private var characters
 
     var body: some View {
-        avatar
+        AppUserAvatarFace(
+            avatar: characters.avatar(for: userID, photoURL: avatarURL, characterHint: characterHint),
+            name: name,
+            size: size
+        )
             // overlay 라서 **레이아웃 폭을 1pt 도 안 쓴다.** 이름 몫(콕찌르기 81.05pt)이 그대로인 이유가 이것이다.
             .overlay(alignment: .bottomTrailing) {
                 if let center { CenterCornerBadge(label: center, avatarSize: size) }
             }
     }
+}
 
-    @ViewBuilder
-    private var avatar: some View {
-        if let avatarURL {
-            RemoteAvatarView(name: name, url: avatarURL, size: size)
+/// 판정 결과 → 그림(얼굴 한 벌). 원형 자르기 · 테두리는 얼굴마다 같다(사진 · 캐릭터 · 이니셜이 한 목록에 섞여도 같은 원).
+/// **이니셜 원은 이 뷰(와 사진 실패 폴백)에서만** 그린다 — 호출부가 `InitialAvatar` 를 직접 그리면 표를 건너뛴다.
+struct AppUserAvatarFace: View {
+    let avatar: AppUserAvatar
+    let name: String
+    let size: CGFloat
+
+    var body: some View {
+        if case .photo(let url, _) = avatar {
+            RemoteAvatarView(name: name, url: url, size: size, fallback: avatar.afterPhotoFailure)
         } else {
+            AppUserAvatarStill(avatar: avatar, name: name, size: size)
+        }
+    }
+}
+
+/// 사진이 아닌 얼굴(캐릭터 · 이니셜). 사진 로딩 중·실패의 폴백도 이것을 그린다.
+private struct AppUserAvatarStill: View {
+    let avatar: AppUserAvatar
+    let name: String
+    let size: CGFloat
+
+    var body: some View {
+        if case .character(let id) = avatar, let portrait = AppUserAvatarArt.portrait(characterID: id) {
+            CharacterAvatarFace(portrait: portrait, size: size)
+        } else {
+            // 모르는 사람 · 초상을 그릴 수 없는 캐릭터(에셋 결손) — 아잉으로 단정하지 않고 이니셜.
             InitialAvatar(name: name, size: size)
         }
     }
+}
+
+/// 다른 사람의 착용 캐릭터 얼굴 — neutral 초상을 받침 원 안에. 링·표정 변화는 없다(남의 근무 상태는 이 자리가 말하지 않는다).
+///
+/// ★ 26pt 에서도 얼굴이 읽히게: 초상 PNG(192² 캔버스)는 캐릭터마다 여백이 달라(아잉 실루엣은 세로 80%) 그대로 줄이면 캐릭터마다
+///   크기가 들쭉날쭉하고 작아진다. 그래서 **알파 상자로 조인 초상**(`AppUserAvatarArt`)을 원보다 조금 큰 상자에 맞추고 살짝 내려
+///   얼굴이 원 가운데 오게 한다(몸 아래쪽은 원 밖으로 잘린다 — 초상 중심).
+/// ★ `Image(nsImage:)` 는 `.interpolation` 을 무시한다(`CharacterPortrait` 주석 — 2026-09-13 실측). 그래서 CGImage 로 그린다.
+private struct CharacterAvatarFace: View {
+    let portrait: CGImage
+    let size: CGFloat
+
+    var body: some View {
+        let side = size * AppUserAvatarArt.artFraction
+        ZStack {
+            Circle().fill(AppUserAvatarArt.backdrop)
+            Image(decorative: portrait, scale: 1)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: side, height: side)
+                .offset(y: size * AppUserAvatarArt.artOffsetFraction)
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+}
+
+/// 사람 아바타에 그릴 캐릭터 초상(맥). 초상은 **이미 `check_check.bundle` 에 있다** — `Characters/<id>/portrait-neutral.png` 와
+/// 아잉 `aing-neutral.png`(`CheckMascotAssets.portraitURL(for: .neutral, characterID:)` 가 둘 다 찾는다). 새 자원 번들을 만들지 않으므로
+/// 배포 스크립트(`scripts/build-local.sh` — `check_check.bundle` 하나만 복사한다)는 고칠 것이 없다(코어 `AppUserCharacters.swift` 머리 결정).
+enum AppUserAvatarArt {
+    /// 원 지름 대비 초상 상자의 한 변. 알파 상자로 조인 그림을 이 상자에 맞춘다(가로세로 비는 그대로).
+    /// **원보다 크다(120%)** — 초상은 전신이라 원 안에 통째로 넣으면(84~88%) 26pt 에서 얼굴이 3~4pt 로 줄어 누군지 안 읽힌다.
+    /// 16·22·26·34pt × 여섯 캐릭터를 110~130% 로 나란히 구워 골랐다(2026-09-20): 120% 에서 얼굴이 원 가운데를 채우고 귀 끝이 아직
+    /// 원 안에 남는다. 130% 는 여우·시바의 귀가 잘리고, 110% 는 16pt 에서 얼굴이 작다. 발·꼬리 끝은 원 밖으로 잘린다.
+    static let artFraction: CGFloat = 1.20
+    /// 초상을 아래로 내리는 양(지름 대비). 커진 상자의 위쪽(머리·귀)이 원 위쪽 호에 잘리지 않고 얼굴이 원 가운데 오게.
+    static let artOffsetFraction: CGFloat = 0.15
+    /// 받침 원. 어두운 행 위에서 캐릭터 윤곽이 묻히지 않을 만큼만 밝다.
+    static let backdrop = Color.white.opacity(0.14)
+
+    /// 이 빌드가 **초상을 그릴 수 있는** 캐릭터 id(아잉 포함). 캐릭터 한 표의 '아는 캐릭터'다 — 목록에 있어도 초상이 없는 id 를
+    /// '안다'고 하면 빈 그림이 선다(코어 접기 규칙). 번들 카탈로그를 한 번 훑는다.
+    static let knownIDs: [String] = CheckMascotAssets.catalog.allIDs.filter { id in
+        guard let url = CheckMascotAssets.portraitURL(for: .neutral, characterID: id) else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    /// 알파 상자로 조인 neutral 초상. 캐릭터당 한 번만 디코드·조인한다(행은 hover·갱신마다 다시 그려진다).
+    /// 초상이 없거나 깨졌으면 nil — **아잉으로 폴백하지 않는다**(호출부가 이니셜을 그린다).
+    @MainActor
+    static func portrait(characterID: String) -> CGImage? {
+        if let hit = cache[characterID] { return hit }
+        guard let url = CheckMascotAssets.portraitURL(for: .neutral, characterID: characterID),
+              let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let raw = CGImageSourceCreateImageAtIndex(source, 0, nil)
+        else { return nil }
+        let tight = CharacterCardArt.tightened(raw)
+        cache[characterID] = tight
+        return tight
+    }
+
+    @MainActor private static var cache: [String: CGImage] = [:]
 }
 
 /// 아바타 모서리에 얹는 소속 센터 배지. 두 글자를 그대로 적는다.
@@ -64,8 +234,8 @@ struct CenterCornerBadge: View {
 
 // MARK: - Initial (fallback) avatar
 
-/// 이름 이니셜 + 해시색 원형 아바타. 원격 이미지가 없거나 로드 실패했을 때의 폴백이며,
-/// `CheckAvatarView`가 폴백으로 재사용한다.
+/// 이름 이니셜 + 해시색 원형 아바타. **캐릭터를 모를 때만** 쓰는 마지막 폴백이다(사진 실패는 먼저 캐릭터로 떨어진다).
+/// `AppUserAvatarStill` 이 판정 결과가 이니셜일 때 그린다 — 호출부가 직접 그리지 않는다.
 struct InitialAvatar: View {
     let name: String
     var size: CGFloat = 30
@@ -99,11 +269,13 @@ struct InitialAvatar: View {
 /// URL 기반 원형 이미지 아바타.
 /// - file URL 또는 캐시 hit은 동기 로드해 스냅샷/첫 프레임에서도 즉시 표시된다.
 /// - http(s) URL은 `URLSession`으로 비동기 로드하고 성공 시 `NSCache`에 저장한다.
-/// - 로딩 중/실패 시에는 이니셜 폴백을 유지한다.
+/// - 로딩 중/실패 시에는 `fallback`(= `AppUserAvatar.afterPhotoFailure` — 그 사람의 캐릭터, 모르면 이니셜)을 그린다.
 private struct RemoteAvatarView: View {
     let name: String
     let url: URL
     let size: CGFloat
+    /// 불러오는 중·실패 때 그릴 얼굴. 사진이 아닌 판정(캐릭터 · 이니셜)만 온다.
+    let fallback: AppUserAvatar
 
     @State private var loaded: NSImage?
 
@@ -118,7 +290,7 @@ private struct RemoteAvatarView: View {
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
             } else {
-                InitialAvatar(name: name, size: size)
+                AppUserAvatarStill(avatar: fallback, name: name, size: size)
             }
         }
         .task(id: url) {
@@ -170,8 +342,11 @@ final class AvatarImageCache: @unchecked Sendable {
 
 /// 내 행 전용 아바타. hover 시 카메라 배지를 덧씌우고, 클릭하면 이미지 파일 선택 패널을 연다.
 /// 선택된 이미지는 최장변 256px JPEG로 다운스케일해 `onPick(Data)`로 전달한다.
+/// 얼굴은 남의 아바타와 같은 규칙이다(사진 → 내 착용 캐릭터 → 이니셜) — 사진을 안 올렸으면 내 캐릭터가 선다.
 struct EditableAvatarView: View {
     let name: String
+    /// 내 사용자 id(`CheckAvatarView.userID` 와 같은 규약 — 기본값 없음).
+    let userID: String?
     var avatarURL: URL? = nil
     var size: CGFloat = 26
     let onPick: (Data) -> Void
@@ -179,7 +354,7 @@ struct EditableAvatarView: View {
     @State private var hovering = false
 
     var body: some View {
-        CheckAvatarView(name: name, avatarURL: avatarURL, size: size)
+        CheckAvatarView(name: name, userID: userID, avatarURL: avatarURL, size: size)
             .overlay {
                 if hovering {
                     ZStack {

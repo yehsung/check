@@ -885,6 +885,8 @@ struct CheckSettingsView: View {
         .background(CheckTheme.background)
         // 툴팁 말풍선 레이어(v0.3.25) — 설정 창 루트. 창을 채우는 프레임·배경 뒤라 말풍선 자리가 창 전체다.
         .checkTooltipLayer()
+        // 사람 아바타의 캐릭터 한 표(2026-09-20) — 설정 창 루트(차단한 사람 목록의 아바타가 이 아래다).
+        .appUserAvatarCharacters(from: store)
         .onAppear {
             // 시드가 있으면 시스템에 묻지 않는다(렌더/테스트 경로).
             if launchAtLoginSeed == nil {

@@ -481,6 +481,13 @@ struct CharacterEntryButton: View {
         } label: {
             CheckMascotView(
                 snapshot: store.snapshot,
+                // ★ **표정은 언제나 neutral 이다**(2026-09-21 사용자 지시: "인상 쓰는 표정을 쓰지 마라").
+                //   이 46pt 원은 사람들이 **프로필 사진처럼 읽는 자리**라, 근무 중이 아니라고 얼굴이 시무룩해지면
+                //   "이 사람 표정이 왜 이래"가 된다. 안 주면 `CheckMascotAssets.mood(for:)` 가 근무 중이 아닐 때
+                //   `negative` 를 준다 — 그것이 여기 있던 인상 쓰는 얼굴이다.
+                //   **메뉴바 아이콘은 그대로다**(`CheckMenuView` 의 `menuBarImage(for: snapshot)` — 거기는 상태를
+                //   알리는 것이 일이고, 바꾸려면 사용자 확인이 먼저다). 근무 상태는 이 원의 틴트 글로우가 계속 비춘다.
+                mood: .neutral,
                 // 기본 인자에 기대지 않고 **여기서 다시 읽는다.** 기본값은 이니셜라이저가 불릴 때 평가되므로
                 // body 가 안 돌면 옛 값이 그대로 남는다 — 위 `revision` 과 반드시 짝이어야 한다.
                 isPixelArt: CheckMascotAssets.currentCharacterIsPixelArt()

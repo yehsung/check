@@ -4,6 +4,12 @@ import CheckCore
 
 struct CheckMascotView: View {
     let snapshot: WorkStatusSnapshot
+    /// 표정을 **박을 때만** 준다. nil 이면 근무 여부를 따른다(메뉴바와 같은 규칙 — `CheckMascotAssets.mood(for:)`).
+    ///
+    /// 팝오버 헤더의 46pt 원은 `.neutral` 을 박는다(2026-09-21 사용자 지시: "인상 쓰는 표정을 쓰지 마라" —
+    /// 그 원은 프로필로 읽히는 자리라 근무 여부로 얼굴이 바뀌면 안 된다). **메뉴바 아이콘은 그대로** 근무 여부를 따른다
+    /// (`CheckMenuView` 의 `menuBarImage(for: snapshot)` — 사용자 확인 전까지 건드리지 않는다).
+    var mood: CheckMascotAssets.Mood? = nil
     /// 지금 착용한 캐릭터가 픽셀아트인가. 기본값은 카탈로그에 물어본다 — 호출부(헤더)는 아무것도 안 넘겨도 된다.
     var isPixelArt: Bool = CheckMascotAssets.currentCharacterIsPixelArt()
 
@@ -20,7 +26,8 @@ struct CheckMascotView: View {
 
     /// 헤더 초상의 CGImage. NSImage 가 비트맵 rep 하나짜리라 이 변환은 값싼 조회다(캐시는 `CheckMascotAssets`).
     private var cgImage: CGImage? {
-        CheckMascotAssets.image(for: snapshot)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        CheckMascotAssets.image(for: mood ?? CheckMascotAssets.mood(for: snapshot))?
+            .cgImage(forProposedRect: nil, context: nil, hints: nil)
     }
 
     @ViewBuilder

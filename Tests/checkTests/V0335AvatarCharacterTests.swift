@@ -473,6 +473,9 @@ private func avFetches(_ host: String) -> Int {
         #expect(avatar.contains("characters.avatar(for: userID, photoURL: avatarURL, characterHint: characterHint)"))
         #expect(avatar.contains("CheckMascotAssets.portraitURL(for: .neutral, characterID: characterID)"), "남의 캐릭터 얼굴은 neutral 초상")
         #expect(!avatar.contains("CheckMascotAssets.image("), "아잉으로 폴백하는 내 캐릭터 경로를 남의 아바타가 탄다")
+        // 2026-09-21: 한때 `CharacterCardArt.image(characterID:)`(카드 그림)로 바꿨다가 되돌렸다 — 그 함수는 초상 디코드가
+        // 실패하면 아잉으로 접는다. 되돌림이 다시 풀리면 여기서 잡힌다(근거는 `V0336AvatarArtTests` 머리 주석).
+        #expect(!avatar.contains("CharacterCardArt.image("), "남의 아바타가 아잉으로 접는 카드 그림 함수를 탄다")
         #expect(avatar.contains("Image(decorative: portrait, scale: 1)"), "Image(nsImage:) 는 보간 지정을 무시한다")
     }
 

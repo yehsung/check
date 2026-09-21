@@ -133,12 +133,19 @@ func v0312AntigravitySubtotalIncludesCacheReadButUploadTotalsDoNot() {
     #expect(usage.todayTotal == 123_456)
 }
 
-/// 굵은 총합 = 서버 순위판 산식의 **쌍둥이**.
+/// 굵은 총합의 **모양**이 서버 순위판 산식과 같다(항의 구성 — 클로드 + Codex 유효값 + 안티그래비티).
 /// SQL: `total = claude_total + codex_effective + antigravity_total` (20260911120000 device_final)
 /// Swift: `displayTotal(account:)` = TokenUsageDisplay.effectiveTotal(= claudeTotal + codexEffective) + antigravityTotal
-/// 두 식이 갈리면 내 박스의 숫자와 순위판의 내 행이 어긋나고, 사용자는 어느 쪽이 맞는지 가릴 방법이 없다.
+///
+/// ⚠️ 2026-09-22 정정 — 이 테스트가 증명하는 것은 **모양뿐이고 값의 동치가 아니다.** 좌우 양변이 같은 픽스처를 같은
+/// Swift 함수(`TokenUsageDisplay.codexEffective`)로 계산하므로, 분배 계수가 0.275 여도 영원히 초록이다
+/// (메모리 '비교 기준선이 달라야 한다'의 전형). 실제로 공유 Codex 계정 사용자에게서 두 값은 2배 넘게 갈려 있었고
+/// 이 테스트는 그 8일을 통째로 놓쳤다.
+///
+/// 값의 동치는 **비공유 사용자에 한해서만** 성립하고, 그 사실과 공유에서의 불일치·수리 후 일치는
+/// `V0336SharedCodexDisplayTests` 가 **서버가 준 고정 JSON** 을 기준선으로 못 박는다. 이름을 그에 맞게 좁혔다.
 @Test
-func v0312DisplayTotalIsTheTwinOfTheServerBoardFormula() {
+func v0312DisplayTotalHasTheSameShapeAsTheServerBoardFormula() {
     let usage = agUsage()
 
     // ⓐ 계정 스냅샷이 없을 때: codex_effective = 로컬 합.

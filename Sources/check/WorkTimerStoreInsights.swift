@@ -87,6 +87,17 @@ extension WorkTimerStore {
             let localTokenUsage = tokenUsage.currentMonthUsage
             let accountSnapshot = codexAccount.snapshot
             let previousTokenGrid = tokenDailyGrid
+            // 공유 Codex 계정 사용자의 **계정 버킷**을 내 몫으로 줄이는 비율(v0.3.36). 메인액터에서 미리 계산해
+            // 아래 detached 로 값만 캡처한다(스토어를 그 안에서 읽지 않는다).
+            //
+            // 왜 잔디도 같이 고치나: 팝오버 총합만 고치면 **같은 화면에서** 잔디가 계정 전체 사용량을 그린다 —
+            // 공유 사용자의 '내 잔디'가 사실 '계정의 잔디'였다. 비공유 사용자는 비율이 정확히 1.0 이라 산술 무변화다.
+            //
+            // 근사임을 밝혀 둔다: 잔디 창은 13주(≈3개월)인데 이 비율은 **이번 달** 보드 행에서 나온다. 공유 관계는
+            // 상시적이라 지난 달에도 대체로 같은 비율이라고 보고, 지난 달 보드를 두 번 더 부르지 않는다(무료 플랜).
+            let tokenShareRatio = TokenRowDisplayRule.accountShareRatio(
+                server: myTokenRow, account: accountSnapshot, currentMonth: TokenUsageMonthKey.current()
+            )
             // 계산은 메인액터 밖에서 한다. 히트맵·회고는 세션마다 타임스탬프를 파싱하고 시간/일 경계로 쪼개는
             // 순수 CPU 작업이라, 세션이 많은 계정(자리 비움 자동 마감이 잦으면 수백~수천 건)에서는
             // 메인액터에 올려 두면 응답이 도착하는 순간 UI 가 통째로 멈춘다 — 서버 limit 상한인 2000행에서
@@ -106,9 +117,9 @@ extension WorkTimerStore {
                 if !collectsTokens {
                     tokenGrid = .empty
                 } else {
-                    let local = TokenDailyMerge.localTotals(usage: localTokenUsage, account: accountSnapshot)
+                    let local = TokenDailyMerge.localTotals(usage: localTokenUsage, account: accountSnapshot, accountShareRatio: tokenShareRatio)
                     if let tokenRows {
-                        tokenGrid = TokenDailyGrid.build(daily: TokenDailyMerge.merged(server: TokenDailyMerge.serverTotals(tokenRows), local: local), now: now)
+                        tokenGrid = TokenDailyGrid.build(daily: TokenDailyMerge.merged(server: TokenDailyMerge.serverTotals(tokenRows, accountShareRatio: tokenShareRatio), local: local), now: now)
                     } else {
                         tokenGrid = TokenDailyGrid.build(daily: local, now: now).overlaying(previousTokenGrid)
                     }

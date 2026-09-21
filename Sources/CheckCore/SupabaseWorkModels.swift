@@ -356,7 +356,20 @@ package struct TokenBoardEntry: Identifiable, Equatable {
     /// 순위에 실제로 쓰인 Codex 몫. 서버가 계정 우선 규칙으로 계산한 `codex_effective`(20260906120000) 가 있으면 그것,
     /// 옛 RPC 면 종전 `greatest(codex_local, coalesce(codex_account, 0))` 미러로 폴백한다(서버·클라 버전이 어긋난 과도기에도
     /// 캡션의 두 값 합이 굵은 총합과 맞아야 한다 — 총합은 언제나 서버가 준 `total` 이고 캡션은 그 산식을 따라간다).
+    ///
+    /// ⚠️ 이 `max` 폴백은 **순위판 캡션 전용**이다. 옛 RPC 의 `total` 이 바로 그 `greatest` 로 계산돼서, 그때는 이 미러로만
+    /// '캡션 두 값의 합 == 굵은 총합' 이 성립한다(그래서 지우지 않는다). 하지만 max 는 이 프로젝트가 명시적으로 폐기한
+    /// 증폭기다(CodexEffectiveRule 머리 주석 — 포크 복사본으로 부푼 쪽을 정확히 고른다). 그러므로
+    /// **개인 표시(팝오버)에 쓰지 마라** — 서버가 `codex_effective` 를 안 주는 응답으로 떨어지면 공유 Codex 계정
+    /// 사용자의 숫자가 분배 전 값으로 되돌아간다. 개인 표시는 `hasServerCodexEffective` 가 참일 때만 서버 행을 쓴다
+    /// (`TokenRowServerValue.init?(entry:month:fetchedAt:)`).
     package var codexEffective: Int { codexEffectiveFromServer ?? max(codexLocalTotal, codexAccountMonth ?? 0) }
+
+    /// 이 행의 Codex 몫이 **서버가 계산한 값**인가(= `codex_effective` 칸이 실제로 왔는가).
+    /// 거짓이면 위 `codexEffective` 는 폐기된 max 미러다 — 개인 표시는 그 값을 절대 쓰지 않는다.
+    /// 현행 서버는 merged 에서 `coalesce(..., 0)` 이라 언제나 non-null 이므로(20260917160000:931), 이 값이 거짓이라는 것은
+    /// 곧 '서버가 v0.2.43 이전 RPC 로 떨어졌다'는 뜻이고, 그때 개인 표시는 로컬 산식으로 되돌아간다.
+    package var hasServerCodexEffective: Bool { codexEffectiveFromServer != nil }
 
     /// 이 행의 **안티그래비티 몫**(v0.3.12) = `total − claudeTotal − codexEffective` 의 잔차.
     ///

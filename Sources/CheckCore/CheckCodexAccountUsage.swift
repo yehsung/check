@@ -842,9 +842,19 @@ package final class CodexAccountUsageStore {
 
 // MARK: - 표시 산식 (순수)
 
-/// 내 팝오버 행의 표시 총합. 로컬 6필드 합(`TokenUsageMonthly.total`, 업로드값)은 건드리지 않고, **표시**만
-/// `claudeTotal + Codex 유효값` 으로 한다. Codex 유효값은 계정 우선 규칙(`CodexEffectiveRule.month`) — 서버 보드 RPC(20260906120000)와
-/// 같은 규칙이라 내 행과 순위판의 내 숫자가 어긋나지 않는다(업로드 지연만큼의 차이는 있다).
+/// 로컬 6필드 합(`TokenUsageMonthly.total`, 업로드값)은 건드리지 않고 **표시**만 `claudeTotal + Codex 유효값` 으로 하는 산식.
+/// Codex 유효값은 계정 우선 규칙(`CodexEffectiveRule.month`)이다.
+///
+/// ⚠️ 이 산식은 **이 맥이 아는 것만으로** 계산한 값이라 지분 개념이 없다. 공유 Codex 계정 사용자에게는 계정 원본
+/// (`account.monthTotal`)을 그대로 써서 순위판의 내 몫보다 크게 나온다(2026-09-22 실측: 맥주밤거리엠버서더 개인
+/// 11,154,164,635 vs 순위 4,614,662,772 — 약 2.4배). 서버 `codex_effective` 에는 분배(`codex_account_share`)·
+/// 축소율(`tail_factor`)·미로그인 기기 몫(`offline_local`)·그룹 버킷 화해가 들어가는데, 셋 다 남의 기기를 봐야 아는 값이라
+/// 이 함수가 따라잡을 방법이 없다.
+///
+/// 그래서 **팝오버 표시는 더 이상 이 산식을 우선하지 않는다** — `TokenRowDisplayRule` 이 서버 보드 행이 있으면 그쪽을 쓰고,
+/// 이 산식은 서버 행이 없을 때(첫 설치·이번 달 첫 업로드 전·오프라인·옛 서버 응답)의 **폴백**으로 남는다.
+/// 툴팁·잔디도 같은 규칙을 따른다(`CheckWorkInsights.TokenDailyMerge` 의 `accountShareRatio`).
+/// 비공유·단일 맥 사용자에 한해 이 산식과 서버 total 이 실측으로 일치한다(2026-09-22: 계정 있는 비공유 기기 15대 전원 차 0).
 package enum TokenUsageDisplay {
     package static func effectiveTotal(local: TokenUsageMonthly, account: CodexAccountUsage?) -> Int {
         local.claudeTotal + codexEffective(local: local, account: account)

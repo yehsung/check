@@ -305,8 +305,22 @@ final class WorkTimerStore {
             // 대화 패널이 떠 있는 채로 다시 열었으면 지금 보이는 대화를 읽음으로 올린다(들고 있는 이력 기준 — 새 이력이
             // 도착하면 그 응답 자리에서 한 번 더 판정한다).
             evaluateMessageReadMarking()
-            // 팝오버 열림 시점에 내 월간 토큰을 게이트/스로틀 하에 1회 올린다(대부분 즉시 반환 — Task 남발 아님).
-            Task { @MainActor [weak self] in await self?.uploadTokenUsageIfNeeded() }
+            // 팝오버 열림 시점에 내 월간 토큰을 게이트/스로틀 하에 1회 올리고, **그 뒤에** 내 순위판 행을 받는다.
+            // 순서가 곧 기능이다(v0.3.36): 업로드가 이 맥의 값을 서버에 올린 **뒤에** 내 행을 받아야 '연 순간 자가 치유'가
+            // 된다. 동시에 발사하면 조회가 업로드보다 먼저 닿아 한 주기 낡은 값이 고정된다.
+            //
+            // 여기서 로컬 스캔(tokenUsage.refreshIfStale)을 **부르지 않는다**: 같은 열림 이벤트에서 CheckMenuView 의
+            // .task 가 이미 runRefreshLoop → refreshIfStale 을 돌리고 있어 중복이고, 무엇보다 이 함수는 테스트가
+            // 직접 부르는 자리다(69곳). 여기서 스캔을 킥하면 토큰 스토어를 주입하지 않은 테스트가 전역 .shared 로
+            // **개발자의 실제 홈 디렉터리**를 훑게 된다(렌더 테스트가 일부러 격리 인스턴스를 주입하는 것과 같은 이유).
+            // 두 번째 줄은 **force 가 아니다**: 업로드가 실제로 닿았으면 래퍼가 이미 force 로 받아 스탬프를 찍었으므로
+            // 이 호출은 즉시 반환한다(한 번 열 때 무거운 보드 RPC 가 두 번 나가지 않는다). 업로드가 게이트에 걸려
+            // 아무것도 안 올렸을 때만 300초 스로틀 하에 내 행을 새로 받는다.
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await uploadTokenUsageIfNeeded()
+                await loadMyTokenRowIfDue()
+            }
         } else {
             // 회고 배너는 '이번 팝오버의 안내'다 — 창이 닫히면 내린다. 표시 시점에 이번 주 몫을 이미 소비했으므로
             // (markRetroBannerDisplayed) 다음 오픈의 evaluateRetroBanner 는 이 배너를 다시 올리지 않고,
@@ -477,6 +491,20 @@ final class WorkTimerStore {
     /// 그대로 떴고 재시도 수단도 없었다 — 개인 기록(insightsFailed)과 같은 대칭으로 갈라 준다.
     /// 재조회 시작(performLoadTokenBoard 진입)과 성공에 내려간다.
     var tokenBoardFailed = false
+    /// 팝오버 토큰 행 전용 **현재 달 고정** 서버 행(v0.3.36). `tokenBoard` 와 **절대 공유하지 않는다** — 그쪽은 ‹ › 로
+    /// 달이 움직여서, 8월 보드를 보다 닫고 나오면 팝오버가 8월 총합을 그리게 된다.
+    /// 이 값이 있으면 팝오버 행은 로컬 산식 대신 이 `total` 을 그린다(공유 Codex 계정 사용자의 개인 표시 == 순위표).
+    var myTokenRow: TokenRowServerValue?
+    /// 마지막 내 행 조회 시각(300초 스로틀 기준). 관찰 대상 아님.
+    @ObservationIgnored var lastMyTokenRowFetchAt: Date = .distantPast
+    /// 직전 월간 업로드가 **실제로 서버에 닿았는가**. 업로드 결정 로직(주입 오버로드)은 이 플래그만 세우고,
+    /// 왕복은 얇은 래퍼가 한다 — 그래야 주입 오버로드를 직접 부르는 기존 테스트에 새 네트워크 호출이 생기지 않는다.
+    /// 관찰 대상 아님.
+    @ObservationIgnored var didUploadTokenUsage = false
+    /// 내 행 영속 키. **영속하는 이유**: 이게 없으면 재시작 후 첫 조회가 닿기까지 공유 사용자에게 부푼 로컬값이
+    /// 한 번 떴다가 뚝 떨어진다. 11명에게 앱 내 안내를 넣지 않기로 했으므로(2026-09-22 사용자 결정) 그 깜빡임을
+    /// 설명해 줄 자리가 화면에 없다 — 그래서 깜빡임 자체를 없앤다.
+    nonisolated static let myTokenRowKey = "check.tokenBoard.myRow"
     /// 마지막으로 서버에 올린 월간 사용량. 변경 게이트 기준(같은 값이면 재업로드 안 함). 관찰 대상 아님.
     @ObservationIgnored var lastUploadedUsage: TokenUsageMonthly?
     /// 마지막으로 서버에 올린 계정 집계 키("월합|누적|상태"). usage 가 그대로여도 이 키가 바뀌면 올린다 —
@@ -1509,6 +1537,17 @@ final class WorkTimerStore {
         // 소유자 필터는 여기서 하지 않는다 — 항목마다 소유자가 붙어 있고, 로그인 확정 시점의
         // adoptWorkStateOwner 가 남의 것만 골라 버린다(강제 로그아웃 보존 계약과 같은 자리).
         pendingItems = Self.restoredPendingWorkQueue(from: defaults)
+        // 팝오버 토큰 행의 서버값을 복원한다(v0.3.36). **이번 달 + 복원된 세션의 것일 때만** 살리고, 아니면 버리고 키도 지운다:
+        // 달이 바뀌었으면 지난달 총합이고, 사람이 바뀌었으면 남의 숫자다. 이 복원이 없으면 재시작 후 첫 조회가 닿기까지
+        // 공유 Codex 계정 사용자에게 부푼 로컬값이 한 번 떴다가 뚝 떨어진다(안내 문구를 넣지 않기로 했으므로 설명할 자리가 없다).
+        if let data = defaults.data(forKey: Self.myTokenRowKey),
+           let restoredRow = try? JSONDecoder().decode(TokenRowServerValue.self, from: data),
+           restoredRow.month == TokenUsageMonthKey.current(),
+           let sessionUserID = restoredSession?.userID, restoredRow.userID == sessionUserID {
+            myTokenRow = restoredRow
+        } else {
+            defaults.removeObject(forKey: Self.myTokenRowKey)
+        }
         syncMessage = hasAnonKey ? (restoredSession == nil ? "로그인 필요" : "동기화됨") : "Supabase 키 필요"
         observeSleepWake(workspaceNotifications)
         refreshMenuBarTitle()
@@ -2188,6 +2227,11 @@ final class WorkTimerStore {
         tokenBoardLoaded = false
         // 날아가 있던 조회는 달이 바뀌어 어차피 버려진다 — 진행중 표시도 함께 내린다.
         tokenBoardLoading = false
+        // 팝오버 행의 서버값도 달에 묶인다. 남기면 달이 바뀐 뒤에도 지난달 총합이 행에 굳는다
+        // (이 값은 언제나 TokenUsageMonthKey.current() 로만 받는다 — 여기서 버리고 다음 조회가 이번 달로 다시 채운다).
+        myTokenRow = nil
+        lastMyTokenRowFetchAt = .distantPast
+        defaults.removeObject(forKey: Self.myTokenRowKey)
     }
 
     /// 토큰 사용량 행 액션. AI 토큰 순위 페이지를 토글하고, 여는 순간 보드를 로드한다. 다른 패널과 상호 배타.
@@ -3268,6 +3312,12 @@ extension WorkTimerStore {
         tokenBoardLoaded = false
         tokenBoardLoading = false
         tokenBoardFailed = false
+        // 팝오버 행의 서버값은 **사람에 묶인 숫자**다 — 안 지우면 재로그인한 다른 사람 팝오버에 앞 사람 숫자가
+        // 한 프레임 뜬다(뷰가 userID 를 한 번 더 대조하지만, 값·스탬프·영속본을 함께 비우는 것이 규약이다).
+        myTokenRow = nil
+        lastMyTokenRowFetchAt = .distantPast
+        didUploadTokenUsage = false
+        defaults.removeObject(forKey: Self.myTokenRowKey)
         lastUploadedUsage = nil
         lastUploadedAccountKey = nil
         // 일별 업로드 장부도 계정에 묶인다(user_id 행) — 남기면 다음 계정의 첫 업로드가 "이미 올린 날"로 읽혀 그 날들이 통째로 빠진다.

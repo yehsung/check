@@ -887,7 +887,16 @@ func sourceContractDailyUploadSitsAfterTheMonthlyUpsert() throws {
     #expect(insights.contains("since: TokenDailyGrid.dayString(since)"))
     #expect(insights.contains("service.fetchMyTokenDaily("))
     // 병합은 순수 함수로 — 스토어 안에 산식을 다시 쓰면 테스트가 보는 함수와 앱이 쓰는 산식이 갈라진다.
-    #expect(insights.contains("TokenDailyMerge.merged(server: TokenDailyMerge.serverTotals(tokenRows), local: local)"))
+    // v0.3.36: 두 원천에 **같은 공유 비율**을 넘긴다(공유 Codex 계정 사용자의 잔디가 '계정의 잔디'가 되지 않게).
+    // 한쪽만 줄이면 merged 의 날짜별 max 가 안 줄인 쪽을 골라 아무것도 안 바뀐다 — 그래서 둘을 한 줄로 되묻는다.
+    #expect(insights.contains(
+        "TokenDailyMerge.merged(server: TokenDailyMerge.serverTotals(tokenRows, accountShareRatio: tokenShareRatio), local: local)"
+    ))
+    #expect(insights.contains(
+        "TokenDailyMerge.localTotals(usage: localTokenUsage, account: accountSnapshot, accountShareRatio: tokenShareRatio)"
+    ))
+    // 비율은 **메인액터에서** 미리 계산해 값으로 캡처한다 — detached 안에서 스토어를 읽으면 격리 위반이다.
+    #expect(insights.contains("TokenRowDisplayRule.accountShareRatio("))
     // 조회 실패 폴백은 직전 잔디를 **통째로 물려주지 않는다** — 로컬로 새로 지은 잔디에 칸별 max 로 얹는다(리뷰 P2).
     #expect(insights.contains("TokenDailyGrid.build(daily: local, now: now).overlaying(previousTokenGrid)"))
     #expect(!insights.contains("tokenGrid = previousTokenGrid"), "직전 잔디를 통째로 물려주면 그 사이 자란 오늘 칸이 얼어붙는다")

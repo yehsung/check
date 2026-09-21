@@ -480,6 +480,19 @@ extension WorkTimerStore {
             // 성공 로드 완료 표시(빈 목록이어도 '아직 아무도 안 올림'과 로드 전/실패를 구분하기 위함).
             if !tokenBoardLoaded { tokenBoardLoaded = true }
             if tokenBoardFailed { tokenBoardFailed = false }
+            // 덤: 순위판을 연 사람은 왕복 한 번 없이 팝오버 행까지 최신화된다(같은 응답에 내 행이 들어 있다).
+            // **이번 달을 보고 있을 때만** — ‹ 로 지난 달을 보는 중이면 그 행은 팝오버가 쓸 값이 아니다.
+            if month == TokenUsageMonthKey.current(), let myID = session?.userID {
+                // 스탬프는 내 행을 못 찾았어도 찍는다 — 방금 이번 달 보드를 받아 왔다는 사실은 같고,
+                // 그래야 팝오버 경로가 같은 RPC 를 한 번 더 쏘지 않는다.
+                lastMyTokenRowFetchAt = Date()
+                if let mine = entries.first(where: { $0.userID == myID }),
+                   let value = TokenRowServerValue(entry: mine, month: month, fetchedAt: lastMyTokenRowFetchAt),
+                   myTokenRow != value {
+                    myTokenRow = value
+                    persistMyTokenRow(value)
+                }
+            }
         } catch {
             // 취소(팝오버 빨리 닫기 등)는 실패가 아니다 — 표시를 흔들지 않고 조용히 빠져나간다.
             if case .cancelled = classifyAuthError(error) { return }
@@ -490,6 +503,55 @@ extension WorkTimerStore {
             // 조합이 남았고, 그러면 본문 자리에 syncMessage("동기화됨" 등 무관한 문구)가 그대로 떴다(회귀 지점).
             if !tokenBoardFailed { tokenBoardFailed = true }
         }
+    }
+
+    /// 팝오버 토큰 행이 쓸 **내 행 하나**를 받는다(v0.3.36).
+    ///
+    /// 같은 `token_usage_board` RPC 를 **언제나 현재 달로** 부르고 내 행만 남긴 뒤 나머지는 버린다.
+    /// 새 RPC 를 만들지 않는 이유: 그러면 반올림 나머지 흡수 규칙(20260917160000:663-679 의 `row_number() … = 1` 분기)이
+    /// 서버에 **두 벌**이 되고, 이 저장소가 20260911230000 에서 보드/health 두 벌을 한 곳으로 합친 그 함정으로 되돌아간다.
+    /// 필요한 값은 이미 이 RPC 출력 16칸 안에 전부 있다(`total` · `codex_effective` · `codex_account_month`=내 몫).
+    ///
+    /// 이 RPC 는 무겁다(`codex_account_group` 을 전원에 대해 돈다) — 그래서 300초 스로틀 + 업로드 성공 직후 force 다.
+    ///
+    /// 수집 거부자(`tokenUsageCollect == false`)에게도 이 조회는 **막지 않는다**: 그 사람이 [AI 토큰 순위]를 열면
+    /// 어차피 그대로 나가는 읽기이고, 이 맥에서 나가는 새 정보가 한 톨도 없다(프로브·업로드와는 성질이 다르다).
+    /// 2026-09-22 실측으로 수집 끔 사용자는 1명이고 그 사람은 2026-09 기기 행도 보드 행도 없다 — 특례를 만들 대상이 없다.
+    func loadMyTokenRowIfDue(force: Bool = false, now: Date = Date()) async {
+        guard let userID = session?.userID else { return }
+        // ★ 순위판이 이번 달을 열어 두고 있으면 **한 번도 쏘지 않는다**. 그쪽이 같은 RPC 를 열림 1회 + 30초 루프로
+        //   돌리고 있고, 그 응답에서 내 행을 덤으로 집어 온다(performLoadTokenBoard 끝). 이 가드가 없으면
+        //   팝오버를 여는 순간 같은 무거운 RPC 가 **두 번** 나간다(V0238 의 '재오픈 1회 킥' 계약이 그 중복을 잡는다).
+        guard !(isTokenBoardVisible && tokenBoardMonth == TokenUsageMonthKey.current()) else { return }
+        guard force || now.timeIntervalSince(lastMyTokenRowFetchAt) >= 300 else { return }
+        // ★ tokenBoardMonth 를 쓰지 마라 — 그쪽은 ‹ › 로 움직인다. 팝오버 행은 언제나 이번 달이다.
+        let month = TokenUsageMonthKey.current()
+        let generation = sessionGeneration
+        // 먼저 찍어 재진입·난사를 막는다(업로드 스탬프와 같은 관용구).
+        lastMyTokenRowFetchAt = now
+        do {
+            let rows = try await withSessionRetry { activeSession in
+                try await service.fetchTokenBoard(accessToken: activeSession.accessToken, month: month)
+            }
+            guard generation == sessionGeneration, month == TokenUsageMonthKey.current() else { return }
+            guard let mine = rows.toTokenBoardEntries().first(where: { $0.userID == userID }),
+                  let value = TokenRowServerValue(entry: mine, month: month, fetchedAt: now)
+            else { return }
+            if myTokenRow != value {
+                myTokenRow = value
+                persistMyTokenRow(value)
+            }
+        } catch {
+            // 실패는 조용히. **myTokenRow 를 비우지 않는다** — 빈 값으로 밀면 공유 Codex 계정 사용자의 팝오버가
+            // 부푼 로컬값으로 되돌아간다(순위판이 실패를 다루는 규약과 같다). 사용자에게 실패 문구는 띄우지 않는다.
+        }
+    }
+
+    /// 내 행을 디스크에 남긴다(재시작 첫 프레임의 깜빡임 방지 — WorkTimerStore.myTokenRowKey 주석).
+    /// 인코딩이 실패해도 화면 값은 이미 들어가 있으므로 조용히 넘긴다.
+    func persistMyTokenRow(_ value: TokenRowServerValue) {
+        guard let data = try? JSONEncoder().encode(value) else { return }
+        defaults.set(data, forKey: WorkTimerStore.myTokenRowKey)
     }
 
     /// 팝오버 열림/refresh 루프에서 부르는 업로드 진입점. D1 의 로컬 월간 사용량을 읽어 게이트 판정 후 upsert 한다.
@@ -514,6 +576,13 @@ extension WorkTimerStore {
             await codexAccount.refreshIfDue(now: now, force: rolledOver)
         }
         await uploadTokenUsageIfNeeded(usage: usage, account: codexAccount.snapshot, accountStatus: codexAccount.lastStatus, now: now)
+        // 방금 올린 값이 서버에 닿았으면 **그 값이 반영된** 내 행을 바로 받는다(v0.3.36 — '연 순간 자가 치유').
+        // 왕복을 결정 로직(위 주입 오버로드)이 아니라 이 래퍼에 두는 것이 요건이다: 그쪽을 직접 부르는 기존 테스트에
+        // 새 네트워크 호출이 생기지 않는다.
+        if didUploadTokenUsage {
+            didUploadTokenUsage = false
+            await loadMyTokenRowIfDue(force: true, now: now)
+        }
     }
 
     /// 변경 게이트 + 60초 스로틀. 마지막 업로드 값과 다르고 60초 지났을 때만 upsert 한다.
@@ -630,6 +699,8 @@ extension WorkTimerStore {
             // 성공 시에만 마지막 업로드 값을 갱신한다 — 실패면 값이 그대로라 다음 60초 후 변경 게이트가 다시 통과한다.
             lastUploadedUsage = usage
             lastUploadedAccountKey = accountKey
+            // 래퍼가 이 표식을 보고 내 순위판 행을 다시 받는다(v0.3.36). 여기서 직접 조회하지 않는 이유는 래퍼 주석에.
+            didUploadTokenUsage = true
             // 3) 일별 표(v0.2.41 토큰 잔디): 월간 upsert 가 **성공한 직후**, 같은 게이트(로그인·수집 허용·변경·60초) 아래에서
             //    바뀐 날만 올린다. 월간 성공 뒤에 두는 이유: 일별 표 마이그레이션이 아직 없는 서버(404)에서도 월간 업로드와
             //    그 변경 게이트(lastUploadedUsage)는 정상 완결되어 순위판 사용량이 멈추지 않는다 — 일별 실패는 독립이다.

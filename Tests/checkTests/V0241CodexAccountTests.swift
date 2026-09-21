@@ -1752,11 +1752,26 @@ func sourceContractLiveAccountStoreIsBuiltOnlyInCheckApp() throws {
     // v0.2.43: 계정 우선 규칙은 월합만으로는 못 세고(꼬리·마지막 버킷) 스냅샷이 필요하다 — 뷰가 스냅샷 자체를 넘긴다.
     // v0.3.12: 그 호출이 `usage.displayTotal(account:)` 로 한 겹 감싸졌다(세 번째 종류를 더하는 자리). 감싼 쪽도
     // 스냅샷 자체를 그대로 받아 넘기므로 이 계약의 뜻은 그대로다 — 아래 두 줄이 그 사실을 함께 되묻는다.
-    #expect(row.contains("usage.displayTotal(account: account?.snapshot)"))
+    // v0.3.36: 그 호출이 한 겹 더 감싸졌다 — 값·툴팁·렌더 게이트가 전부 `TokenRowDisplayRule.resolve` 하나에서 나온다
+    // (서버 보드 행이 있으면 그 total, 없으면 이 로컬 산식). 스냅샷 자체를 넘긴다는 계약의 뜻은 그대로다:
+    // resolve 의 `account:` 인자가 여전히 `account?.snapshot` 이고, 그 안에서 같은 두 함수를 부른다.
+    #expect(row.contains("account: account?.snapshot,"))
     #expect(row.contains("TokenUsageDisplay.effectiveTotal(local: self, account: account) + antigravityTotal"))
-    #expect(row.contains(".checkTooltip(usage.detailTooltip(account: account?.snapshot))"))
+    // 폴백(서버 행이 없을 때)은 여전히 스냅샷을 그대로 받는 두 함수다 — 규칙 파일이 그 자리를 이어받았다.
+    let rule = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/CheckCore/CheckTokenRowDisplay.swift"), encoding: .utf8))
+    #expect(rule.contains("local.displayTotal(account: account)"))
+    #expect(rule.contains("local.detailTooltip(account: account)"))
+    // 개인 표시는 옛 RPC 응답의 max 미러로 **절대** 떨어지지 않는다(구조적 자물쇠).
+    #expect(rule.contains("guard entry.hasServerCodexEffective else { return nil }"))
+    // 값과 툴팁이 **같은 판정 결과**에서 나온다(반만 고치는 사고를 구조적으로 막는 자리). 뷰는 shown 만 읽는다.
+    #expect(row.contains("TokenRowDisplayRule.resolve("))
+    #expect(row.contains("Text(TokenNumberFormatter.grouped(shown.total))"))
+    #expect(row.contains(".checkTooltip(shown.tooltip)"))
+    #expect(!row.contains("usage.displayTotal(account:"), "뷰가 로컬 산식을 직접 부르면 서버 행이 무시된다")
     let menu = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/check/CheckMenuView.swift"), encoding: .utf8))
     #expect(menu.contains("CheckTokenUsageRow(store: store.tokenUsage, account: store.codexAccount"))
+    // 짝 게이트의 나머지 반쪽 — 이 두 인자가 빠지면 규칙·테스트가 전부 초록인 채 화면만 옛 숫자를 그린다.
+    #expect(menu.contains("serverRow: store.myTokenRow, userID: store.session?.userID"))
     // 하트비트 본문은 여전히 다섯 필드다(구조체에 let 이 5개).
     let models = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/CheckCore/SupabaseWorkModels.swift"), encoding: .utf8))
     let heartbeat = try #require(models.components(separatedBy: "struct TokenScanHeartbeatRequest: Encodable {").last?

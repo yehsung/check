@@ -455,7 +455,13 @@ package enum TokenDailyMerge {
     /// 마지막 버킷 날짜 = codex_account 가 non-null 인 가장 늦은 day(잔디는 달을 가르지 않으므로 조회 범위 전체에서).
     /// Codex 로컬은 **UTC 축 값**(codex_utc_total)을 쓰고, 구클라 행(null)은 KST 값(codex_total)으로 후퇴한다(v0.2.43 — 계정 버킷과
     /// 같은 축이어야 꼬리·마지막 날 차분이 9시간 어긋난 채 겹치지 않는다; 서버 산식의 `coalesce(codex_utc_total, codex_total)` 와 같은 규칙).
-    package static func serverTotals(_ rows: [TokenUsageDailyRow]) -> [String: Int] {
+    ///
+    /// `accountShareRatio`(기본 1.0): 공유 Codex 계정 사용자의 **계정 버킷만** 내 몫으로 줄이는 비율
+    /// (`TokenRowDisplayRule.accountShareRatio` = 서버가 준 내 몫 ÷ 이 맥이 본 계정 월합). 이 인자가 없던 동안
+    /// 공유 사용자의 '내 잔디'는 사실 **'계정의 잔디'** 였다 — 팝오버만 고치면 같은 화면에서 또 어긋난다.
+    /// 곱하는 자리는 계정 버킷 하나뿐이고 **로컬 몫에는 곱하지 않는다**: 로컬은 이미 내 것이고, 서버도 꼬리에는
+    /// share_ratio 가 아니라 과다계상 축소율 `tail_factor` 만 건다(20260912143000:490-500).
+    package static func serverTotals(_ rows: [TokenUsageDailyRow], accountShareRatio: Double = 1.0) -> [String: Int] {
         var claude: [String: Int] = [:]
         var codexLocal: [String: Int] = [:]
         var codexAccount: [String: Int] = [:]
@@ -466,11 +472,14 @@ package enum TokenDailyMerge {
                 codexAccount[row.day] = max(codexAccount[row.day] ?? 0, account)
             }
         }
+        // 마지막 버킷 날짜는 **축소 전** 키 집합으로 정한다 — 버킷의 '존재 여부'만 쓰는 값이라 비율이 0.27 이어도
+        // 날짜가 달라지면 안 된다(날짜가 밀리면 그 앞의 칸이 통째로 로컬로 갈아타 잔디 모양이 바뀐다).
         let lastDay = codexAccount.keys.max()
         var result: [String: Int] = [:]
         for day in Set(claude.keys).union(codexLocal.keys).union(codexAccount.keys) {
+            let bucket = codexAccount[day].map { TokenRowDisplayRule.scaledAccountBucket($0, ratio: accountShareRatio) }
             result[day] = (claude[day] ?? 0)
-                + CodexEffectiveRule.day(day, local: codexLocal[day] ?? 0, accountBucket: codexAccount[day], accountLastDay: lastDay)
+                + CodexEffectiveRule.day(day, local: codexLocal[day] ?? 0, accountBucket: bucket, accountLastDay: lastDay)
         }
         return result
     }
@@ -479,15 +488,22 @@ package enum TokenDailyMerge {
     /// 계정 버킷도 UTC 일자 키라 같은 축이다(v0.2.43 — 예전엔 KST 맵을 같은 문자열 키로 견줘 9시간이 어긋났다). 버킷은 ~70일이라 현재 월
     /// 밖의 Codex 날도 채워 준다(로컬 UTC 맵은 전월 마지막 UTC 일부터). 마지막 버킷 날짜는 스냅샷 전체의 최신 버킷(`latestBucketDate`).
     /// Claude 칸은 KST 자정 하루, Codex 칸은 UTC 하루(KST 오전 9시 경계)를 같은 날짜 라벨로 그린다 — 툴팁 `TokenUsageMonthly.tokenDayAxisNote`.
-    package static func localTotals(usage: TokenUsageMonthly?, account: CodexAccountUsage?) -> [String: Int] {
+    ///
+    /// `accountShareRatio` 의 뜻과 '계정 버킷에만 곱한다'는 규칙은 `serverTotals` 주석과 같다(같은 비율을 두 원천에 똑같이 건다 —
+    /// 한쪽만 줄이면 `merged` 의 날짜별 max 가 안 줄인 쪽을 고른다). 기본 1.0 이라 비공유 사용자·iOS 호출측은 무변화다.
+    package static func localTotals(
+        usage: TokenUsageMonthly?, account: CodexAccountUsage?, accountShareRatio: Double = 1.0
+    ) -> [String: Int] {
         let claude = usage?.claudeDaily ?? [:]
         let codex = usage?.codexDailyOnAccountAxis ?? [:]
         let buckets = account?.buckets ?? [:]
+        // 마지막 버킷 날짜는 축소 전 키로(serverTotals 와 같은 근거 — 존재 여부만 쓰는 값이다).
         let lastDay = account?.latestBucketDate
         var result: [String: Int] = [:]
         for day in Set(claude.keys).union(codex.keys).union(buckets.keys) {
+            let bucket = buckets[day].map { TokenRowDisplayRule.scaledAccountBucket($0, ratio: accountShareRatio) }
             let value = max(0, claude[day] ?? 0)
-                + CodexEffectiveRule.day(day, local: codex[day] ?? 0, accountBucket: buckets[day], accountLastDay: lastDay)
+                + CodexEffectiveRule.day(day, local: codex[day] ?? 0, accountBucket: bucket, accountLastDay: lastDay)
             if value > 0 { result[day] = value }
         }
         return result

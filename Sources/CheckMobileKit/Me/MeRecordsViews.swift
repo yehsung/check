@@ -147,14 +147,16 @@ struct MeGrassCard: View {
                 )
                 .modifier(GrassOpensDetail { open(.token) })
             }
-            .id(MeAnchor.tokenGrass)
         } else {
             ContributionGridPair {
                 work
             }
-            .id(MeAnchor.tokenGrass)
         }
     }
+
+    // 잔디 스크롤 앵커(`MeAnchor.tokenGrass`)는 이 카드 **루트에만** 붙는다(MeTab). 예전엔 카드가 없어서 격자 짝에 붙였는데,
+    // 카드가 생긴 뒤에도 안쪽에 남겨 두면 ScrollViewReader 가 같은 id 를 둘 보게 되어 `scrollTo` 대상이 불확정이 된다
+    // (데모 스크린샷이 `-AingCheckDemoMeAnchor tokenGrass` 로 이 자리를 찍는다).
 
     /// 카드 맨 아래 44pt 진입 행. 격자를 눌러 여는 길을 몰라도 여기 하나는 눈에 띈다(근무 축으로 연다).
     private var openRow: some View {

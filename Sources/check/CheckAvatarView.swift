@@ -474,51 +474,81 @@ extension CheckAvatarView {
         )
     }
 
-    /// 이미지를 최장변 256px로 다운스케일한 JPEG(압축 0.85) Data로 변환한다. 실패 시 nil.
-    /// 백그라운드에서 호출 가능하도록 nonisolated — MainActor 상태를 건드리지 않는 순수 이미지 처리다.
-    nonisolated static func downscaledJPEGData(from image: NSImage, maxDimension: CGFloat = 256, compression: CGFloat = 0.85) -> Data? {
-        guard let tiff = image.tiffRepresentation,
-              let source = NSBitmapImageRep(data: tiff) else {
-            return nil
-        }
-        let sourcePixels = CGSize(width: source.pixelsWide, height: source.pixelsHigh)
-        let target = downscaledPixelSize(for: sourcePixels, maxDimension: maxDimension)
-
-        // 원본 크기와 같으면 재드로 없이 그대로 JPEG 인코딩한다.
-        if target == sourcePixels {
-            return source.representation(using: .jpeg, properties: [.compressionFactor: compression])
-        }
-
-        guard let scaled = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: Int(target.width),
-            pixelsHigh: Int(target.height),
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        ) else {
-            return nil
-        }
-        scaled.size = target
-
-        NSGraphicsContext.saveGraphicsState()
-        defer { NSGraphicsContext.restoreGraphicsState() }
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: scaled)
-        source.draw(in: NSRect(origin: .zero, size: target))
-
-        return scaled.representation(using: .jpeg, properties: [.compressionFactor: compression])
+    /// 이미지를 최장변 256px 로 줄인 JPEG(압축 0.85) Data 로. 실패 시 nil.
+    ///
+    /// ── 왜 ImageIO 썸네일인가 (2026-09-21, 다른 세션의 램 스윕이 넘긴 실측) ──
+    /// 옛 구현은 `NSImage.tiffRepresentation`(원본 해상도 **무압축** TIFF)을 만들고 그 Data 로 `NSBitmapImageRep` 를 하나 더 떠서
+    /// **둘을 동시에** 들고 있었다. 256px 축소는 그 뒤였으므로 **피크가 원본 픽셀 수에 비례**했다 — 8064×6048 JPEG(20.7MB) 하나로
+    /// 피크 307.9MB(측정), 게다가 TIFF 가 autorelease 라 함수가 돌아온 뒤에도 바로 안 내려왔다. 사진 앱에서 고른 요즘 사진 한 장이
+    /// 메뉴바 앱의 메모리를 통째로 끌어올린다("앱이 램 1기가 먹는다" 제보의 두 번째 원인).
+    ///
+    /// ImageIO 는 축소본을 **직접** 만든다(JPEG 은 DCT 단계에서 서브샘플 디코드). 같은 입력에서 피크가 한 자릿수 MB 대로 떨어지고
+    /// 결과 바이트는 사실상 같다. 폰이 이미 같은 방식이다(`MeAvatarImage.jpegData` — 규칙·옵션까지 같은 한 벌).
+    ///
+    /// ── 규칙(옛 구현과 같다) ──
+    /// 최장변 `maxDimension` 으로 비율 유지 축소 · 원본이 더 작으면 **키우지 않는다**(`ThumbnailMaxPixelSize` 는 확대하지 않는다) ·
+    /// JPEG 품질 `compression`. 크기 계산의 정본은 여전히 `downscaledPixelSize` 이고, 이 경로의 결과가 그 계산과 일치하는지는
+    /// 테스트가 실제 픽셀로 되묻는다.
+    ///
+    /// ── EXIF 회전: 적용한다(`kCGImageSourceCreateThumbnailWithTransform: true`) ──
+    /// 옛 경로도 결과적으로 적용했다 — `NSImage` 는 EXIF 방향을 반영해 그리고 `tiffRepresentation` 은 그려진 결과를 뜬다.
+    /// 끄면 아이폰으로 세로로 찍은 사진이 **옆으로 누운 채** 올라간다. 폰도 같은 옵션이다.
+    ///
+    /// ── 투명 PNG: 흰 바탕을 **명시해서** 깐다 ──
+    /// JPEG 에는 알파가 없다. 옛 `NSBitmapImageRep` 경로도 투명 자리를 흰색으로 구웠고(벤치 실측: 완전 투명·반투명 PNG 둘 다
+    /// `rgb(255,255,255)`), 새 경로도 같은 결과를 내야 한다 — 그런데 `CGImageDestination` 은 알파를 어떻게 버릴지 보장하지 않으므로
+    /// **우리가 흰 바탕에 한 번 그려서 고정한다**. 폰도 같은 처방이다(`MeAvatarImage.flattenedOnWhite`) — 같은 사진이 맥과 폰에서
+    /// 다르게 올라가지 않게 규칙을 한 벌로 둔다.
+    nonisolated static func downscaledJPEGData(from data: Data, maxDimension: CGFloat = 256, compression: CGFloat = 0.85) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return downscaledJPEGData(from: source, maxDimension: maxDimension, compression: compression)
     }
 
-    /// 파일 URL 이미지를 백그라운드(detached)에서 디코드+다운스케일해 JPEG Data 로 돌려준다.
-    /// 무거운 디코드/재드로가 메인 액터를 막지 않도록 격리한다. 실패 시 nil.
+    /// 파일 URL 이미지를 백그라운드(detached)에서 줄여 JPEG Data 로. 실패 시 nil.
+    /// **파일을 Data 로 먼저 읽지 않는다** — `CGImageSourceCreateWithURL` 은 필요한 만큼만 읽으므로 20MB 사진의 바이트가
+    /// 통째로 메모리에 올라오지 않는다(이 경로가 실제 업로드 경로다 — `EditableAvatarView` 의 파일 선택).
     nonisolated static func decodeDownscaledJPEGData(from url: URL, maxDimension: CGFloat = 256, compression: CGFloat = 0.85) async -> Data? {
         await Task.detached(priority: .userInitiated) {
-            guard let image = NSImage(contentsOf: url) else { return nil }
-            return downscaledJPEGData(from: image, maxDimension: maxDimension, compression: compression)
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+            return downscaledJPEGData(from: source, maxDimension: maxDimension, compression: compression)
         }.value
+    }
+
+    /// 두 진입로의 공통 몸통. 이미지가 없는 파일(비이미지·깨진 바이트)이면 nil.
+    private nonisolated static func downscaledJPEGData(
+        from source: CGImageSource, maxDimension: CGFloat, compression: CGFloat
+    ) -> Data? {
+        guard CGImageSourceGetCount(source) > 0 else { return nil }
+        let options: [CFString: Any] = [
+            // 박혀 있는 EXIF 썸네일(작고 거칠다)을 쓰지 않고 본 이미지에서 만든다.
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: Int(maxDimension.rounded()),
+            kCGImageSourceShouldCacheImmediately: true
+        ]
+        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        let flattened = flattenedOnWhite(thumbnail) ?? thumbnail
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(
+            destination, flattened, [kCGImageDestinationLossyCompressionQuality: compression] as CFDictionary
+        )
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return output as Data
+    }
+
+    /// 투명 PNG 가 검게 올라가지 않게 흰 바탕에 한 번 그린다(폰 `MeAvatarImage.flattenedOnWhite` 와 같은 처방).
+    /// 썸네일 크기(≤ maxDimension)에서만 도는 그리기라 비용이 작다.
+    private nonisolated static func flattenedOnWhite(_ image: CGImage) -> CGImage? {
+        guard let context = CGContext(
+            data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ) else { return nil }
+        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return context.makeImage()
     }
 }

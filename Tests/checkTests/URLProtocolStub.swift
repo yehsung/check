@@ -532,6 +532,19 @@ final class URLProtocolStub: URLProtocol {
     private static func teamLeaderboardData(for request: URLRequest, body: String) -> Data {
         let host = request.url?.host ?? ""
         let offset = weekOffsetFixture(in: body)
+        // host 에 "league-week-slips" 가 들어가면 **물은 주와 다른 주**로 답한다 — 조회가 날아가 있는 사이 월요일
+        // 0시를 넘겨 서버가 센 '이번 주'가 클라가 센 주와 어긋난 모양이다. 클라는 서버가 답한 주를 따라야 하고,
+        // 그때 진행중 표시가 남지 않아야 한다(주 키를 바꾸면 defer 의 가드가 더는 맞지 않는다).
+        if host.contains("league-week-slips") {
+            let answered = TeamLeagueWeekNavigator.key(offset: offset + 1)
+            return Data(
+                """
+                [
+                  {"team_id": "30000000-0000-0000-0000-000000000003", "team_name": "코드 크래프터", "weekly_goal_hours": 50, "total_seconds": 12345, "working_count": 0, "member_count": 2, "week_start": "\(answered)", "participant_count": 1}
+                ]
+                """.utf8
+            )
+        }
         guard offset > 0 else {
             guard host.contains("league-new-server") else {
                 return Data(

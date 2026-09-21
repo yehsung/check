@@ -356,8 +356,9 @@ struct LeaderboardRow: View {
     /// 팀의 소속 센터. 아바타 모서리에 겹쳐 그린다.
     var center: String? = nil
     var isMyTeam: Bool = false
-    /// 보고 있는 주가 이번 주인가. 기본 true 라 **이번 주 호출부는 한 글자도 안 바뀐다**(v0.3.37 지난 주 보기).
-    var isCurrentWeek: Bool = true
+    /// 과거 주 판정에 쓰는 '지금'. **주 오프셋을 들고 다니지 않는다** — 행이 자기 주(`entry.weekStart`)를 알고,
+    /// 이 값은 그 주를 이번 주와 견주는 기준선일 뿐이다(v0.3.37). 앱은 팝오버 시계(`store.displayNow`)를 준다.
+    var now: Date = Date()
 
     // 1인당 평균 대비 목표 진행률 게이지(entry.goal 이 평균 기준으로 계산됨).
     private var goal: TeamWeeklyGoal {
@@ -370,28 +371,39 @@ struct LeaderboardRow: View {
 
     // "각자 목표 G시간 · 총 X시간 · N명 · M명 근무중" — 팀마다 목표가 다를 수 있어 각 행에 목표시간을 명시한다.
     private var caption: String {
-        Self.caption(entry, isCurrentWeek: isCurrentWeek)
+        Self.caption(entry, now: now)
     }
 
     /// 캡션 한 줄(순수 함수 — 렌더 없이 문구를 못 박는 자리).
     ///
-    /// ★ **이번 주 문장은 한 글자도 바꾸지 않았다**(회귀 금지). 과거 주에서만 세 칸의 라벨이 갈린다:
-    ///   · 목표 → **"지금 목표 G시간"**. 서버에 과거 목표 이력이 없어 과거 주 달성률도 **지금 목표**로 다시
-    ///     계산된 값이다(서버 계약 §현재값 표). "각자 목표"라고 쓰면 그 주의 목표였던 것처럼 읽힌다.
-    ///   · 인원 → **"그때 N명"**. member_count 는 (그 주 끝 이전 가입한 지금 멤버) ∪ (그 주에 그 팀으로 일한 사람)
-    ///     이라 '지금 인원'이 아니다. 1인당 평균의 분모이기도 해서 숫자가 뜻을 바꾸는 칸이다.
-    ///   · 근무중 → **"N명 근무"**(과거형). working_count 는 '지금 근무 중'이라 과거 주에는 언제나 0 이다 —
-    ///     그대로 두면 6주 전 표가 전 팀 "0명 근무중"이 된다. participant_count(그 주에 0초를 넘게 일한 사람 수)로 바꾼다.
-    ///     그 값이 없는 응답(= p_week_offset 을 모르는 옛 서버)에서는 **workingCount 로 대신하지 않는다** —
-    ///     옛 서버는 과거 주 자체를 줄 수 없으므로 그 조합은 화면에 닿기 전에 이번 주로 접히고, 그래도 닿았다면
-    ///     0 을 적느니 모른다고 적는 편이 맞다.
-    static func caption(_ entry: TeamLeaderboardEntry, isCurrentWeek: Bool) -> String {
+    /// ★ **이번 주 문장은 한 글자도 바꾸지 않았다**(회귀 금지 — 이 리터럴이 기존 화면의 계약이다).
+    ///
+    /// ── 과거 주 (2026-09-22 맥·폰 합의 문구. 폰 `RankingsText` 가 같은 문장을 쓴다) ────────────────
+    /// 과거 주는 **'근무 중' 조각을 아예 뺀다.** working_count 는 '지금 근무 중'이라 과거 주에는 언제나 0 이고,
+    /// 그대로 두면 6주 전 표가 전 팀 "0명 근무중"이 된다. "N명 근무"(과거형)로 바꿔 보기도 했는데 그것도 거짓이다 —
+    /// participant_count 는 '그 주에 근무한 사람 수'지 '그때 근무 중이던 사람 수'가 아니다. 그래서 **참여**로 말한다:
+    ///
+    ///     "각자 목표 G시간 · 총 X · N명 중 M명 참여"      (N = member_count, M = participant_count)
+    ///
+    /// 왜 "지금 목표"·"그때 N명" 이 아닌가(앞 판에서 되돌린 것):
+    ///  · **"지금 목표"** — 목표·팀 이름·센터가 현재값이라는 사실은 **화면에서 뺀다.** 사용자가 감지할 수 없는 차이고
+    ///    (과거 목표 이력이 서버에 아예 없다), 셋 중 하나만 고백하면 나머지 둘은 과거값인 척하게 되어 **오히려 덜
+    ///    정확하다.** 그 사실은 여기 주석과 서버 `comment on function` 에만 남는다.
+    ///  · **"그때 N명"** — 머리글 아래 한 줄이 이미 "인원은 그 주 기준이에요"라고 말한다. 행이 또 "그때"를 붙이면
+    ///    같은 화면이 같은 말을 두 번 하고, 머리글이 "지금 값"이라고 적혀 있던 시절엔 **서로 다른 말**을 했다.
+    ///
+    /// participant_count 가 없는 응답(= p_week_offset 을 모르는 옛 서버)에서는 **workingCount 로 대신하지 않는다** —
+    /// 옛 서버는 과거 주 자체를 줄 수 없으므로 그 조합은 화면에 닿기 전에 이번 주로 접히고, 그래도 닿았다면
+    /// 0 을 적느니 모른다고 적는 편이 맞다.
+    static func caption(_ entry: TeamLeaderboardEntry, now: Date = Date()) -> String {
         let total = MenuBarStatusFormatter.hoursMinutes(entry.totalSeconds)
-        guard !isCurrentWeek else {
+        // 과거 판정은 **행이 스스로** 한다(스토어 오프셋을 인자로 들고 다니지 않는다 — TeamLeaderboardEntry.isPastWeek).
+        guard entry.isPastWeek(now: now) else {
             return "각자 목표 \(entry.weeklyGoalHours)시간 · 총 \(total) · \(entry.memberCount)명 · \(entry.workingCount)명 근무중"
         }
-        let worked = entry.participantCount.map { "\($0)명 근무" } ?? "근무 인원 모름"
-        return "지금 목표 \(entry.weeklyGoalHours)시간 · 총 \(total) · 그때 \(entry.memberCount)명 · \(worked)"
+        let joined = entry.participantCount.map { "\(entry.memberCount)명 중 \($0)명 참여" }
+            ?? "\(entry.memberCount)명 중 참여 인원 모름"
+        return "각자 목표 \(entry.weeklyGoalHours)시간 · 총 \(total) · \(joined)"
     }
 
     var body: some View {

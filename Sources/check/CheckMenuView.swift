@@ -432,13 +432,20 @@ struct CheckMenuView: View {
                             // 뒤로도 토글과 같은 닫기 경로를 타야 보던 주가 남지 않는다(다음에 열면 늘 이번 주).
                             onBack: { store.closeLeaderboard() },
                             weekKey: store.leagueWeekKey,
-                            canStepForward: TeamLeagueWeekNavigator.canStepForward(from: store.leagueWeekKey),
-                            canStepBack: TeamLeagueWeekNavigator.canStepBack(from: store.leagueWeekKey),
+                            // 화살표도 제목·행과 같은 '지금'을 본다 — 다른 시계를 쓰면 ▸ 가 꺼져 있는데 제목은 과거 주인
+                            // (또는 그 반대의) 화면이 만들어진다.
+                            canStepForward: TeamLeagueWeekNavigator.canStepForward(from: store.leagueWeekKey, now: store.displayNow),
+                            canStepBack: TeamLeagueWeekNavigator.canStepBack(from: store.leagueWeekKey, now: store.displayNow),
                             showsWeekNavigation: store.leagueWeekOffsetSupported,
                             onStepWeek: { store.stepLeagueWeek(by: $0) },
                             myTeamMissing: leagueDisplay.myTeamMissing,
                             isLoading: store.leagueLoading,
                             hasFailed: store.leagueFailed,
+                            // 실패는 '진행중'과 다른 문구 + [다시 시도] 로 갈라 준다(토큰 순위판과 같은 자리).
+                            // 과거 주는 30초 주기 갱신이 안 도므로 이 버튼이 유일한 재시도 경로다.
+                            onRetry: { store.loadLeaderboard() },
+                            // 머리글·행이 **같은 '지금'** 으로 과거를 판정하게 한다(팝오버 시계 — 닫힌 동안 얼고 열 때 되맞춘다).
+                            now: store.displayNow,
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
@@ -1798,14 +1805,17 @@ enum LeaderboardEmptyMessage {
     /// 과거 주에 진행중/실패를 따로 세는 이유: 이번 주는 `unfilteredCount == 0` 을 '로드 전/실패'로 읽고
     /// fallbackStatus(동기화 문구)를 대신 띄웠는데, 과거 주에서는 **0 이 진짜 사실일 수 있다**
     /// (그 주엔 아직 아무 팀도 없었다 — 서버가 유령 팀을 빼 준다). 같은 0 이 두 가지 뜻이 되므로 갈라야 한다.
+    ///
+    /// 인자 이름이 `isPastWeek` 인 것은 `TeamLeaderboardEntry.isPastWeek(now:)` 와 **같은 판정**임을 이름으로 못박기
+    /// 위해서다 — 행과 빈 목록 문구가 반대 극성의 Bool 을 각자 만들면 언젠가 한쪽만 뒤집힌다.
     static func text(
-        isCurrentWeek: Bool,
+        isPastWeek: Bool,
         unfilteredCount: Int,
         isLoading: Bool = false,
         hasFailed: Bool = false,
         fallbackStatus: String
     ) -> String {
-        guard !isCurrentWeek else { return text(unfilteredCount: unfilteredCount, fallbackStatus: fallbackStatus) }
+        guard isPastWeek else { return text(unfilteredCount: unfilteredCount, fallbackStatus: fallbackStatus) }
         if isLoading { return loading }
         if hasFailed { return loadFailed }
         return pastFilteredOut
@@ -1815,20 +1825,32 @@ enum LeaderboardEmptyMessage {
 /// 과거 주 머리글 아래 **한 줄**. 사용자 규약: 툴팁·주석에 진단을 늘어놓지 않는다 — 한 줄이면 족하다.
 /// 이번 주에는 nil(줄 자체가 없다 → 목록 행수 예산도 예전 그대로다).
 ///
-/// 두 문장 중 하나만 고르는 이유는 폭이다. 본문 폭 292pt 에서 caption 한 줄은 한글 22자 남짓인데
-/// 둘을 이으면 30자가 넘어 줄어들거나 잘린다. 그래서 **사용자가 먼저 묻는 것**을 고른다:
-///   · 내 팀이 그 주 표에 아예 없으면("왜 우리 팀이 안 보이지?") 그 답이 먼저다.
-///   · 그렇지 않으면 숫자가 뜻을 바꾸는 칸(인원·목표가 **지금 값**이라는 것)을 알린다.
+/// ── 2026-09-22 맥·폰 합의 (이 값이 정본이고 폰이 같은 문장을 쓴다) ────────────────────────────
+/// 과거 주 보조 줄은 **정확히 "인원은 그 주 기준이에요"** 하나다.
+///  · 앞 판은 "인원·목표는 지금 값이에요"였는데 **두 군데가 틀렸다.** ① member_count 는 지금 값이 아니라
+///    (그 주 끝 이전 가입한 지금 멤버) ∪ (그 주에 그 팀으로 일한 사람) 의 **그 주 기준** 값이다 — 게다가
+///    1인당 평균의 **분모**라 숫자의 뜻을 바꾸는 유일한 칸이다. ② 그 줄이 "지금 값"이라고 적힌 동안 행 캡션은
+///    "그때 N명"이라고 적었다 — 같은 화면의 두 줄이 같은 숫자를 두고 반대로 말했다.
+///  · **목표·팀 이름·센터가 현재값이라는 사실은 화면에서 뺀다.** 사용자가 감지할 수 없는 차이고, 셋 중 하나만
+///    고백하면 나머지 둘이 과거값인 척하게 되어 오히려 덜 정확하다. 그 사실은 `LeaderboardRow.caption` 주석과
+///    서버 `comment on function` 에만 남는다.
+///  · 두 문장을 잇지 않는 이유는 폭이다. 본문 폭 292pt 에서 caption2 한 줄은 한글 22자 남짓인데, 이으면 30자가
+///    넘어 줄어들거나 잘린다.
+///
+/// 내 팀이 그 주 표에 아예 없으면 그 답이 **먼저**다("왜 우리 팀이 안 보이지?"). 그 단정이 정당한 근거는
+/// `[TeamLeaderboardEntry].leagueDisplay(myTeamID:)` 주석의 §실증(0시간 팀도 행은 온다 — 행이 없다는 건
+/// 그 주엔 그 팀이 없었다는 뜻)에 있다.
 enum LeagueWeekNote {
-    static let currentValues = "인원·목표는 지금 값이에요"
+    /// 과거 주 보조 줄. **이 문장 하나뿐이다**(위 합의).
+    static let pastWeek = "인원은 그 주 기준이에요"
     static let myTeamMissing = "그 주엔 아직 우리 팀이 없었어요"
     /// 이 줄이 먹는 높이(pt). 목록 행수 예산에서 그만큼 빼야 창 높이 상한(≤700pt)이 그대로 지켜진다.
     /// caption 한 줄 높이 + VStack 간격(4). 실측으로 못 박는 값이 아니라 **예산을 보수적으로 잡는** 값이다.
     static let height: CGFloat = 18
 
-    static func text(isCurrentWeek: Bool, myTeamMissing: Bool) -> String? {
-        guard !isCurrentWeek else { return nil }
-        return myTeamMissing ? Self.myTeamMissing : currentValues
+    static func text(isPastWeek: Bool, myTeamMissing: Bool) -> String? {
+        guard isPastWeek else { return nil }
+        return myTeamMissing ? Self.myTeamMissing : pastWeek
     }
 }
 
@@ -1858,6 +1880,13 @@ private struct LeaderboardPanel: View {
     /// 과거 주에서만 쓰는 조회중/실패 표시(이번 주 빈 목록 문구는 예전 그대로 fallbackStatus 를 쓴다).
     var isLoading: Bool = false
     var hasFailed: Bool = false
+    /// [다시 시도] 액션. nil 이면 버튼을 그리지 않는다(값+클로저 규약 — 렌더 테스트가 스토어 없이 재현 가능).
+    /// **과거 주에는 이 버튼이 유일한 재시도 경로다**: 이번 주는 30초 주기 갱신이 스스로 다시 시도하지만
+    /// 과거 주는 주기 갱신에서 빠져 있어(종료된 세션만 세므로) 실패하면 화면이 실패로 굳는다.
+    var onRetry: (() -> Void)? = nil
+    /// 과거 주 판정의 기준선(팝오버 시계). `TeamLeagueWeekNavigator.isCurrentWeek` 과 행의 `isPastWeek(now:)` 가
+    /// **같은 '지금'** 을 봐야 머리글과 행이 같은 말을 한다.
+    var now: Date = Date()
     // 목록 위쪽에서 배너/토큰 행이 먹은 높이(pt). 그만큼 무스크롤 표시 행수를 줄여 창 상한을 지킨다.
     var extraChromeHeight: CGFloat = 0
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
@@ -1869,13 +1898,16 @@ private struct LeaderboardPanel: View {
     // 스크롤 없이 그대로 보여 주는 최대 팀 수. 행이 팀원 행보다 높아 창 높이 상한(≤700pt)을 지키도록 6으로 둔다.
     static let maxVisibleRows = 6
 
-    // 보고 있는 주가 이번 주인가. 토큰 순위판과 같은 근거로 '▸ 비활성 == 이번 주'다(네비게이터가 미래를 막는다).
-    // 캡션·빈 목록 문구·머리글 한 줄이 **이 한 판정을 공유**해야 6주 전 표에 '이번 주'가 남지 않는다.
-    private var isCurrentWeek: Bool { !canStepForward }
+    // 보고 있는 주가 **이미 지난 주인가**. 빈 목록 문구·머리글 한 줄이 이 한 판정을 공유하고, 행은 자기 주로
+    // 같은 판정을 한다(`TeamLeaderboardEntry.isPastWeek(now:)` — 둘 다 KST 월요일 경계라 어긋날 자리가 없다).
+    //
+    // ⚠ 예전엔 `!canStepForward` 였다. 그건 **주 판정이 아니라 버튼 상태**라, 화살표를 접는 갈래(옛 서버)나
+    //   버튼 배선이 바뀌는 순간 조용히 같이 뒤집힌다. 주는 주 키로 판정한다.
+    private var isPastWeek: Bool { !TeamLeagueWeekNavigator.isCurrentWeek(weekKey, now: now) }
 
     // 과거 주 머리글 아래 한 줄(이번 주는 nil).
     private var weekNote: String? {
-        LeagueWeekNote.text(isCurrentWeek: isCurrentWeek, myTeamMissing: myTeamMissing)
+        LeagueWeekNote.text(isPastWeek: isPastWeek, myTeamMissing: myTeamMissing)
     }
 
     // 배너/토큰 행이 먹은 높이를 반영한 실제 무스크롤 표시 행수(기본은 maxVisibleRows).
@@ -1905,7 +1937,7 @@ private struct LeaderboardPanel: View {
                         IconButton(icon: "arrowtriangle.left.fill", help: "이전 주", enabled: canStepBack) { onStepWeek(-1) }
                     }
                     // 이번 주에는 "팀별 이번 주" — 제목 문자열이 예전과 **한 글자도 다르지 않다**.
-                    Text("팀별 \(TeamLeagueWeekNavigator.displayTitle(weekKey))")
+                    Text("팀별 \(TeamLeagueWeekNavigator.displayTitle(weekKey, now: now))")
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(CheckTheme.primaryText)
                         .lineLimit(1)
@@ -1965,16 +1997,24 @@ private struct LeaderboardPanel: View {
             if sortedEntries.isEmpty {
                 // 원본에 팀이 있었는데 표시 목록이 비면 필터로 전부 숨겨진 것 — 중립 문구. 원본도 비면 로드 전/실패로
                 // 보고 fallbackStatus(동기화 상태 문구)를 쓴다(결정적 판정은 LeaderboardEmptyMessage 로 격리).
-                Text(LeaderboardEmptyMessage.text(
-                    isCurrentWeek: isCurrentWeek,
-                    unfilteredCount: unfilteredCount,
-                    isLoading: isLoading,
-                    hasFailed: hasFailed,
-                    fallbackStatus: fallbackStatus
-                ))
-                    .font(.caption)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
+                HStack(spacing: 8) {
+                    Text(LeaderboardEmptyMessage.text(
+                        isPastWeek: isPastWeek,
+                        unfilteredCount: unfilteredCount,
+                        isLoading: isLoading,
+                        hasFailed: hasFailed,
+                        fallbackStatus: fallbackStatus
+                    ))
+                        .font(.caption)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                    Spacer(minLength: 4)
+                    // 실패했을 때만 재시도를 준다(토큰 순위판·개인 기록과 같은 자리·같은 버튼).
+                    // 과거 주는 30초 주기 갱신에서 빠져 있어 이 버튼이 없으면 패널을 닫았다 여는 것 말고는 길이 없었다.
+                    if hasFailed, let onRetry {
+                        PanelRetryButton(action: onRetry)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
             } else {
                 ForEach(sortedEntries, id: \.id) { entry in
                     // 우리 팀 행에도 단다 — 폭 비용이 0(overlay)이라 뺄 이유가 없고, 자기 팀의 센터를 확인할 자리다.
@@ -1982,7 +2022,7 @@ private struct LeaderboardPanel: View {
                         entry: entry,
                         center: entry.center,
                         isMyTeam: entry.id == myTeamID,
-                        isCurrentWeek: isCurrentWeek
+                        now: now
                     )
                         .frame(height: Self.rowHeight)
                 }

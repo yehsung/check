@@ -414,8 +414,12 @@ extension WorkTimerStore {
     /// setMenuPresented(true) 의 loadLeaderboard() 가 맡는다. 목표 변경(updateTeamGoal)의 호출은 열린 팝오버 안이다.
     func refreshLeaderboardIfVisible() async {
         guard isMenuPresented, isLeaderboardVisible else { return }
-        // 과거 주는 **종료된 세션만** 세므로(서버 계약) 30초마다 다시 물어도 같은 표가 온다 —
-        // 주기 갱신은 이번 주에만 돈다. 과거 주 표는 ◂ ▸ 를 누른 그 순간 한 번 받아 캐시로 산다.
+        // ① 주 롤오버 되돌림 — 팝오버를 **연 채** 월요일 0시를 넘기는 경로는 여기뿐이다(토글도 재오픈도 안 지난다).
+        //    되돌리지 않으면 아래 가드가 곧바로 막아 갱신이 영영 멈추고, 그 순간의 표(이번 주 숫자)가 과거 주 문구를
+        //    달고 굳는다 — "굳은 화면이 이번 주 숫자를 '그 주'라고 적는다"가 정확히 이 자리다.
+        revertLeagueWeekIfRolledOver()
+        // ② 과거 주는 **종료된 세션만** 세므로(서버 계약) 30초마다 다시 물어도 같은 표가 온다 —
+        //    주기 갱신은 이번 주에만 돈다. 과거 주 표는 ◂ ▸ 를 누른 그 순간 한 번 받아 캐시로 산다.
         guard TeamLeagueWeekNavigator.isCurrentWeek(leagueWeekKey) else { return }
         await performLoadLeaderboard()
     }
@@ -430,11 +434,16 @@ extension WorkTimerStore {
         // 주 키 → 서버 오프셋 환산은 여기 한 번뿐이다(접힘을 한 자리에서만 다룬다).
         let weekKey = leagueWeekKey
         let weekOffset = TeamLeagueWeekNavigator.offset(forKey: weekKey)
-        if !leagueLoading { leagueLoading = true }
+        // 진행중 표시는 **보여 줄 표가 없을 때만** 세운다. 이 값은 화면이 실제로 읽는 관찰 대상이라, 이미 그려진
+        // 표를 새로 고치는 30초 주기 갱신에서 올렸다 내리면 **한 주기마다 뷰가 두 번 공짜로 무효화된다**
+        // (화면 글자는 한 자도 안 바뀐다 — "불러오는 중…"은 빈 목록 자리에만 쓰이므로). 주를 옮기는 쪽은
+        // `stepLeagueWeek` 가 목록을 비우고 이 값을 먼저 세우므로 여기선 이미 비어 있다.
+        let showsLoading = leaderboard.isEmpty
+        if showsLoading, !leagueLoading { leagueLoading = true }
         if leagueFailed { leagueFailed = false }
         // 조회가 끝나면(성공·실패·취소 무관) 진행중 표시를 내린다. 그 사이 주가 바뀌었으면 새 조회가 이미 켜 둔
         // 표시라 건드리지 않는다 — 연달아 ◂ 를 눌러도 "불러오는 중…"이 끊기지 않는다(토큰 순위판과 같은 규약).
-        defer { if weekKey == leagueWeekKey, leagueLoading { leagueLoading = false } }
+        defer { if showsLoading, weekKey == leagueWeekKey, leagueLoading { leagueLoading = false } }
         do {
             let page = try await withSessionRetry { activeSession in
                 try await service.fetchTeamLeaderboard(accessToken: activeSession.accessToken, weekOffset: weekOffset)
@@ -447,6 +456,7 @@ extension WorkTimerStore {
             guard page.supportsWeekOffset else {
                 if leagueWeekOffsetSupported { leagueWeekOffsetSupported = false }
                 let current = TeamLeagueWeekNavigator.currentKey()
+                if leagueWeekAnchor != current { leagueWeekAnchor = current }
                 if leagueWeekKey != current {
                     leagueWeekKey = current
                     leagueWeekCache.removeAll()
@@ -466,11 +476,26 @@ extension WorkTimerStore {
             // 응답이 오는 사이 ◂ ▸ 로 주를 옮겼으면 이 응답은 낡은 주의 것이라 화면에는 반영하지 않는다
             // (위에서 캐시에는 이미 넣었다 — 그 주로 돌아오면 곧바로 보인다). 주 이동 스냅백 방지.
             guard weekKey == leagueWeekKey else { return }
-            if answered != leagueWeekKey { leagueWeekKey = answered }
+            if answered != leagueWeekKey {
+                leagueWeekKey = answered
+                // ★ 주 키를 바꾼 뒤라 위 defer 의 가드(weekKey == leagueWeekKey)가 **더는 맞지 않는다** —
+                //   여기서 직접 내리지 않으면 "불러오는 중…"이 영원히 남는다. 옛 서버 갈래(아래)는 이미 그렇게
+                //   고쳐져 있었는데 이 쌍둥이 갈래만 빠져 있었다(주 경계를 넘기며 조회하면 실제로 밟는다).
+                //   기준선도 함께 옮긴다: 서버가 답한 주가 곧 서버의 '이번 주'라, 그대로 두면 다음 틱이 한 번 더 버린다.
+                if answered == TeamLeagueWeekNavigator.currentKey() { leagueWeekAnchor = answered }
+                if leagueLoading { leagueLoading = false }
+            }
             if leaderboard != sorted { leaderboard = sorted }
         } catch {
-            // 취소는 실패 문구를 남기지 않고 조용히 빠져나간다.
-            if case .cancelled = classifyAuthError(error) { return }
+            // 취소는 실패 문구를 남기지 않고 조용히 빠져나간다 — **보여 줄 표가 있을 때만** 그렇다.
+            // 빈 채로 취소되면 화면에는 빈 표만 남는데, 과거 주에서 그건 "그 주엔 근무한 팀이 없었어요"라는
+            // **사실 주장**으로 읽힌다(이번 주 빈 표는 동기화 문구라 덜하지만 마찬가지다). 취소도 사용자에겐
+            // 못 받은 것이므로, 그 자리는 '못 받았다' + [다시 시도] 로 말한다.
+            if case .cancelled = classifyAuthError(error) {
+                guard generation == sessionGeneration, weekKey == leagueWeekKey, leaderboard.isEmpty else { return }
+                if !leagueFailed { leagueFailed = true }
+                return
+            }
             guard generation == sessionGeneration else { return }
             // 기다리는 사이 주를 옮겼으면 이 실패는 낡은 주의 것이다(새 조회가 스스로 표시를 세운다).
             guard weekKey == leagueWeekKey else { return }

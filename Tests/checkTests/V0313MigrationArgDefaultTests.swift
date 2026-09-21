@@ -235,3 +235,38 @@ func 핫픽스는_적용_직후_카탈로그로_자기_결과를_확인한다() 
     )
     #expect(sql.contains("notify pgrst"), "\(file.lastPathComponent): 스키마 캐시 리로드 신호가 없다")
 }
+
+// MARK: - ④ 팀 리그(v0.3.37) — 폰과 폴백이 기대는 default 0
+
+/// `team_weekly_leaderboard` 의 `p_week_offset` 은 **default 0** 이어야 한다.
+///
+/// 이 줄이 지키는 것은 맥이 아니다(맥은 이번 주에도 `{"p_week_offset":0}` 을 싣는다). **두 갈래가 이 default 에 매달려 있다**:
+///   ① 폰 순위판 — `fetchTeamLeaderboard(accessToken:)` 이 `{}` 를 보낸다.
+///   ② 옛 서버 폴백 — 같은 무인자 모양으로 한 번 물러서는 길(그 길이 죽으면 리그 화면이 통째로 빈다).
+/// default 가 떨어지면 PostgREST 는 본문 키 집합으로 함수를 못 찾아 **PGRST202** 를 낸다 — 2026-09-12 에
+/// `minigame_board` 의 `p_day` 로 실제로 일어난 사고와 같은 모양이고, 그때는 미니게임 창이 통째로 비었다.
+///
+/// 값까지 못박는 이유: default 가 0 이 아니면(예: 1) 폰과 폴백이 **조용히 지난주를 보여 준다** — 오류가 아니라
+/// 거짓말이라 아무도 알아채지 못한다.
+@Test
+func 팀_리그_RPC_의_p_week_offset_은_최종_정의에서_default_0_이다() throws {
+    // 왼쪽: 폰·폴백이 실제로 보내는 키(= 없음). 손으로 적지 않고 앱의 본문 구조체를 앱의 인코더로 인코딩한다.
+    let sentByPhone = try sentKeys(EmptyBody())
+    #expect(sentByPhone.isEmpty, "무인자 서명이 키를 싣기 시작했다: \(sentByPhone)")
+    // 대조군 — 맥은 같은 RPC 에 키를 싣는다(양쪽이 같은 모양이면 위 단언은 아무것도 안 지킨다).
+    #expect(try sentKeys(TeamLeaderboardRequest(pWeekOffset: 0)) == ["p_week_offset"])
+
+    // 오른쪽: 마이그레이션 **최종 정의**가 선언한 인자.
+    let (file, sql) = try finalDefinition(of: "team_weekly_leaderboard")
+    let declared = try declaredArguments(sql, function: "team_weekly_leaderboard")
+    #expect(declared.map(\.name) == ["p_week_offset"], "\(file.lastPathComponent): 인자 목록이 바뀌었다: \(declared.map(\.declaration))")
+
+    let offset = try #require(declared.first { $0.name == "p_week_offset" })
+    let flattened = offset.declaration.lowercased().replacingOccurrences(of: " ", with: "")
+    #expect(flattened.contains("default"), "\(file.lastPathComponent): p_week_offset 에 default 가 없다 — 폰 리그와 옛 서버 폴백이 PGRST202 로 죽는다. 선언=\(offset.declaration)")
+    #expect(flattened.contains("default0"), "\(file.lastPathComponent): default 가 0 이 아니다 — 폰이 조용히 지난주를 본다. 선언=\(offset.declaration)")
+
+    // 옛 무인자 시그니처는 **살아 있으면 안 된다**(오버로드가 남으면 PostgREST 가 PGRST203 으로 답해 리그가 통째로 죽는다).
+    #expect(sql.contains("drop function if exists public.team_weekly_leaderboard()"),
+            "\(file.lastPathComponent): 옛 무인자 시그니처를 drop 하는 줄이 없다")
+}

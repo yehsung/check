@@ -49,8 +49,12 @@ func 캐릭터_선택기는_관리자에게만_보인다() throws {
     // ★ 관리자 화면의 높이를 **숫자로 고정한다.** 이 값이 창 계약(648)보다 크다는 사실 자체가 인수인계다 —
     //   설정 창은 관리자일 때 열면서 창을 이만큼 키운다(`growForAdminContentIfNeeded`). 가장 높은 상태로 재야
     //   안내 한 줄이 떠도 맨 아래 캐릭터 칩 줄이 안 잘린다. 여기 고정해 두면 선택기가 조용히 더 자라는 회귀도 함께 잡힌다.
-    #expect(adminHeight == CheckSettingsView.adminContentHeight,
-            "관리자 화면이 \(adminHeight)pt 다 — 선언값 \(CheckSettingsView.adminContentHeight)pt 와 갈렸다")
+    // v0.3.36: 선언값은 이 렌더보다 **`AvatarRemovalSettingsRow.maxExtraHeight` 만큼 크다.** [프로필 사진] 행은
+    // [기본 캐릭터로 되돌리기]를 누른 뒤에만 확인 안내가 두 줄로 접혀 13pt 자라는데, 그 상태는 이 전체 렌더에
+    // 절대 안 나온다(확인은 누름으로만 열린다). 그래서 계약은 '전체 렌더 + 그 여유'이고, 이 등식이 두 숫자를 묶는다 —
+    // 행이 조용히 더 자라면 V0336 이, 전체 렌더가 자라면 여기가 빨개진다.
+    #expect(adminHeight + AvatarRemovalSettingsRow.maxExtraHeight == CheckSettingsView.adminContentHeight,
+            "관리자 화면이 \(adminHeight)pt + 여유 \(AvatarRemovalSettingsRow.maxExtraHeight)pt 다 — 선언값 \(CheckSettingsView.adminContentHeight)pt 와 갈렸다")
     #expect(CheckSettingsView.adminContentHeight > CheckSettingsWindowController.defaultContentSize.height,
             "창이 관리자 화면을 담을 만큼 커졌다면 이 줄과 adminContentHeight 주석을 같이 지워라")
 

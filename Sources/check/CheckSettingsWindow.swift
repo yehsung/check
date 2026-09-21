@@ -81,7 +81,13 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     /// 실측 2026-09-20 폭 380)가 됐다. 같은 5pt 여유로 **703**. 목록 자체는 이 본문에 펼치지 않는다 — 행을 누르면 본문 자리에
     /// 목록이 서서(`CheckBlockedPeopleSettingsPage`) 사람 수가 이 계약을 흔들지 않는다. 저장된 옛 자리(648)로 열리는 사람을 위해
     /// 열 때 모자라면 채운다(`growForContentIfNeeded`).
-    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 703)
+    ///
+    /// v0.3.36: '내 정보'에 [프로필 사진] 행(기본 캐릭터로 되돌리기)이 붙어 전체 렌더가 **753pt**(+55 — 구분선 + 간격 +
+    /// 행, 실측 2026-09-21 폭 380)가 됐다. 그런데 그 행은 **누르면 자란다**: 확인 안내와 "파일이 남았어요" 문구가
+    /// 카드 안쪽 폭(328)에서 두 줄로 접혀 46 → 59pt, 즉 **+13pt**(`AvatarRemovalSettingsRow.maxExtraHeight`).
+    /// 확인 단계는 전체 렌더에 절대 안 나타나므로(누른 뒤에만 존재한다) 가장 높은 상태는 753 + 13 = **766pt** 다.
+    /// 같은 5pt 여유로 **771**. V0336AvatarRemovalTests 가 네 상태를 실제 폭으로 그려 이 값을 되묻는다.
+    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 771)
     /// 최소 크기. 폭은 뷰가 선언한 하한(`minWidth: Self.preferredWidth`)을 그대로 따른다 — 여기에 뷰가
     /// 모르는 숫자를 새로 적으면 그 순간 두 하한이 갈리고, 갈리는 쪽이 위 높이 계약을 깬다(바로 위 실측표).
     static let minContentSize = NSSize(width: CheckSettingsView.preferredWidth, height: 260)
@@ -235,6 +241,9 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         // 창에 붙은 채라 다시 열 때 onAppear 가 오지 않는다(실측 2026-09-15, 알파 0 테스트 창: show → close → show →
         // performClose → show 에서 onAppear 1회 · onDisappear 0회).
         wiring?.store.requestWorkShortcutReapply()
+        // 사진 되돌리기의 2단 확인·결과 한 줄도 **열 때 접는다**(v0.3.36). 닫을 때만 접으면 닫기를 거치지 않은
+        // 경로(창 재생성 · 앱이 창을 잃었다 되찾는 복구)에서 빨간 [되돌리기]가 무장된 채로 사용자를 맞는다.
+        wiring?.store.resetAvatarRemovalRow()
         if !CheckPanelVisibility.isRunningTests {
             NSApp.activate()
         }
@@ -243,8 +252,8 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         armStuckWindowWatchdog()
     }
 
-    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **787pt** 까지 자란다(`CheckSettingsView.adminContentHeight`,
-    /// v0.3.34 — 단축키 안내 한 줄이 보이는 가장 높은 상태). 기본 창은 703pt 라 그대로 열면 맨 아래 행이 잘린다.
+    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **855pt** 까지 자란다(`CheckSettingsView.adminContentHeight`,
+    /// v0.3.36 — 단축키 안내 한 줄 + 사진 되돌리기 확인이 함께 열린 가장 높은 상태). 기본 창은 771pt 라 그대로 열면 맨 아래 행이 잘린다.
     ///
     /// **왜 창을 만들 때가 아니라 열 때인가**: `ultraUnlimited` 는 서버가 정하고 세션 동기화로 **늦게 도착한다**.
     /// 창 생성 시점에 읽으면 첫 실행에서는 아직 false 라 기본 높이로 굳는다.
@@ -275,6 +284,8 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         endWorkShortcutRecording()
         // [차단한 사람] 쪽을 보던 채 닫아도 다시 열면 설정 본문부터 보인다(v0.3.34).
         wiring?.store.closeBlockedPeopleSettings()
+        // 사진 되돌리기 확인을 연 채 닫아도 다음에 열면 평소 상태다(v0.3.36) — 이 창은 닫아도 뷰가 살아 있다.
+        wiring?.store.resetAvatarRemovalRow()
         stuckWindowWatchdog?.cancel()
         stuckWindowWatchdog = nil
         windowStorage?.orderOut(nil)
@@ -287,6 +298,7 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         guard (notification.object as AnyObject?) === windowStorage else { return }
         endWorkShortcutRecording()
         wiring?.store.closeBlockedPeopleSettings()
+        wiring?.store.resetAvatarRemovalRow()
         stuckWindowWatchdog?.cancel()
         stuckWindowWatchdog = nil
         isOpen = false

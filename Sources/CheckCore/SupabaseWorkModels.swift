@@ -1229,8 +1229,26 @@ package struct WorkStatusDeviceRow: Decodable, Equatable {
     package let openedSession: Bool?
 }
 
+/// `PATCH /rest/v1/profiles?id=eq.<uid>` 본문. 올릴 때는 public URL, **지울 때는 nil = null** 이다.
+///
+/// ★ **nil 일 때 키를 빼면 안 된다.** 합성 인코더는 Optional 을 `encodeIfPresent` 로 내보내 키를 **생략**하고,
+///   그러면 본문이 `{}` 가 된다 — PostgREST 는 그걸 "아무 칸도 안 고침"으로 받아 **200 을 돌려준다**.
+///   사진을 지운 사람 화면에는 성공이라 뜨고 표의 avatar_url 은 그대로다(= 옛 사진이 그대로 보인다).
+///   그래서 `encode(to:)` 를 직접 써서 **null 을 싣는다**(`SetCharacterRequest`·`ContentReportRequest` 와 같은 규약).
 package struct AvatarUpdateRequest: Encodable {
-    package let avatarUrl: String
+    package let avatarUrl: String?
+
+    package init(avatarUrl: String?) {
+        self.avatarUrl = avatarUrl
+    }
+
+    /// 카멜로 적는다 — 인코더가 `.convertToSnakeCase` 로 `avatar_url` 을 만든다(대문자 하나뿐이라 안전하다).
+    package enum CodingKeys: String, CodingKey { case avatarUrl }
+
+    package func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(avatarUrl, forKey: .avatarUrl)   // encodeIfPresent 가 아니다 — 위 주석.
+    }
 }
 
 package struct SupabaseErrorResponse: Decodable {

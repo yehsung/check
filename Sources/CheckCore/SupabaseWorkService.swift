@@ -309,7 +309,13 @@ package actor SupabaseWorkService {
             accessToken: accessToken,
             extraHeaders: ["x-upsert": "true"]
         )
-        let cacheBuster = Int(Date().timeIntervalSince1970)
+        // 캐시버스터는 **밀리초 + 무작위 조각**이다. 파일 이름이 `<uid>.jpg` 로 고정이라 이 쿼리가 유일한 구분자다.
+        //
+        // v0.3.36 에 넓혔다(전엔 `Int(timeIntervalSince1970)` — 초 단위): 사진 삭제가 생기면서 "지우고 곧바로 다시
+        // 올리기"가 실제 경로가 됐는데, 같은 초 안의 두 업로드는 **같은 URL** 을 만들어 URLSession/디스크 캐시가
+        // 방금 지운 **옛 사진**을 그대로 그렸다. 시계만으로는 모자란다 — 밀리초도 같은 값이 나올 수 있고(테스트에서
+        // 실측했다), 시계는 뒤로 갈 수도 있다. 그래서 단조성(밀리초)과 유일성(UUID 조각)을 **둘 다** 싣는다.
+        let cacheBuster = "\(Int(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString.prefix(8))"
         let avatarURL = "\(projectURL.absoluteString)/storage/v1/object/public/avatars/\(userID).jpg?v=\(cacheBuster)"
         try await sendNoBody(
             path: "/rest/v1/profiles",
@@ -320,6 +326,80 @@ package actor SupabaseWorkService {
             prefer: "return=minimal"
         )
         return avatarURL
+    }
+
+    /// 프로필 사진을 지우고 **기본 캐릭터로 되돌린다**. 새 서버 함수가 없다 — 이미 열려 있는 두 권한만 쓴다:
+    /// 스토리지 DELETE 정책 "avatar owner can delete"(20260711090000) 와 profiles 의 컬럼 화이트리스트
+    /// `grant update (avatar_url, token_usage_public)`(20260804020000).
+    ///
+    /// **순서를 뒤집지 마라.** 파일 → 표 순이다. 표를 먼저 null 로 만들고 파일 삭제가 실패하면 화면에서는 사라졌는데
+    /// 공개 버킷(`/storage/v1/object/public/avatars/<uid>.jpg`)에는 얼굴 사진이 **URL만 알면 누구나 볼 수 있게** 남는다.
+    /// 반대 순서는 최악이라도 "파일은 지웠는데 표에 옛 URL 이 남아 사진이 깨져 보인다"이고, 그건 다시 누르면 낫는다.
+    ///
+    /// ① 파일 삭제는 **막지는 않는다**(던지지 않는다). 사진을 올린 적 없는 사람은 404 가 정상이고,
+    ///    그 404 때문에 "되돌리기"가 실패하면 **사진이 없는 사람은 이 버튼을 영영 못 쓴다** — 화면은 사진 유무를 묻지 않는다.
+    ///    다만 **삼키지도 않는다**: 404 가 아닌 실패(403·5xx·연결 끊김)는 공개 버킷에 얼굴이 그대로 남았다는 뜻이라,
+    ///    반환값으로 호출부에 넘겨 화면이 다른 문구를 말하게 한다(v0.3.36 검토 지적 ③ — "되돌렸어요"는 거짓말이 된다).
+    /// ② 프로필 PATCH 가 **권위**다. 여기가 실패하면 던진다 — 표에 옛 URL 이 남으면 팀 목록·순위판·오목은 계속 옛 사진을
+    ///    그리므로 사용자에게 "지웠다"고 말하면 거짓말이 된다.
+    @discardableResult
+    package func removeAvatar(accessToken: String, userID: String) async throws -> AvatarRemovalOutcome {
+        let file = await deleteAvatarFile(accessToken: accessToken, userID: userID)
+        try await sendNoBody(
+            path: "/rest/v1/profiles",
+            method: "PATCH",
+            queryItems: [URLQueryItem(name: "id", value: "eq.\(userID)")],
+            // nil = **null 을 싣는다**(키를 빼지 않는다 — AvatarUpdateRequest 주석).
+            body: AvatarUpdateRequest(avatarUrl: nil),
+            accessToken: accessToken,
+            prefer: "return=minimal"
+        )
+        // 여기까지 왔으면 표는 비었다. 남은 질문은 하나뿐이다: **파일도 없어졌는가.**
+        return file == .gone ? .removed : .tableClearedFileLeft
+    }
+
+    /// 프로필 사진 **파일**을 지운 결과. 세 갈래(지움 · 애초에 없음 · 못 지움)를 둘로 접는다 —
+    /// 사용자에게 다른 것은 "공개 버킷에 얼굴이 남았는가" 하나뿐이고, 지운 것과 없던 것은 그 답이 같다.
+    package enum AvatarFileDeletion: Equatable {
+        /// 파일이 더는 없다 — 방금 지웠거나(2xx) 애초에 없었다(404).
+        case gone
+        /// 지우지 못했다. `/storage/v1/object/public/avatars/<uid>.jpg` 에 얼굴이 **URL 만 알면 누구나 볼 수 있게** 남아 있다.
+        case left
+    }
+
+    /// 되돌리기 한 번의 결과. 표는 어느 쪽이든 비었다(비우지 못하면 `removeAvatar` 가 던진다).
+    package enum AvatarRemovalOutcome: Equatable {
+        /// 표도 비었고 파일도 없다 = 온전한 성공.
+        case removed
+        /// 표는 비웠지만 **파일이 남았다**. 화면에서는 기본 캐릭터가 보이지만 공개 URL 로는 아직 옛 사진이 나온다.
+        case tableClearedFileLeft
+    }
+
+    /// 프로필 사진 파일 삭제 — **상태코드를 직접 본다.**
+    ///
+    /// 왜 `send(...)` 를 안 쓰나: `send` 는 실패를 `serviceError(statusCode:data:)` 로 접는데, 그 함수는 본문 메시지를
+    /// 먼저 읽는다. 스토리지 404 본문은 `{"statusCode":"404","error":"not_found","message":"Object not found"}` 라
+    /// `.authMessage("Object not found")` 로 접혀 **403·5xx 와 구분되지 않는다**. 이 함수의 존재 이유가 바로 그 구분이므로
+    /// 접기 전에 상태코드를 본다.
+    package func deleteAvatarFile(accessToken: String, userID: String) async -> AvatarFileDeletion {
+        guard let anonKey,
+              let requestURL = try? url(path: "/storage/v1/object/avatars/\(userID).jpg", queryItems: [])
+        else { return .left }
+
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "DELETE"
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        guard let (_, response) = try? await session.data(for: request),
+              let http = response as? HTTPURLResponse
+        else {
+            // 연결 자체가 안 됐다. 파일이 남았는지 **모른다** — 모를 때는 남았다고 본다(사용자에게 덜 위험한 거짓말).
+            return .left
+        }
+        // 404 = 지울 것이 없었다. 사진을 올린 적 없는 사람의 정상 경로이고, 결과는 "없다"로 같다.
+        return (200..<300 ~= http.statusCode || http.statusCode == 404) ? .gone : .left
     }
 
     /// 로그아웃. **`scope=local` 이 요점이다**(v0.3.30 · A5) — Supabase Auth 의 기본 scope 는 global 이라, 빼면 이 맥에서
@@ -373,13 +453,8 @@ package actor SupabaseWorkService {
     /// **실패를 던지지 않는다.** 사진을 못 지웠다고 계정 삭제를 막으면 사용자는 계정을 영영 못 지운다(애플 5.1.1(v) 위반).
     /// 사진이 없던 사람(404)도 정상 경로다. 호출부는 이 함수를 계정 삭제 **직전에** 한 번 부르고 결과를 보지 않는다.
     package func deleteAvatarIfAny(accessToken: String, userID: String) async {
-        _ = try? await send(
-            path: "/storage/v1/object/avatars/\(userID).jpg",
-            method: "DELETE",
-            body: Optional<EmptyBody>.none,
-            accessToken: accessToken,
-            prefer: nil
-        )
+        // 결과를 버리는 것이 **이 경로의 계약**이다(되돌리기 경로는 같은 요청의 결과를 읽는다 — `removeAvatar`).
+        _ = await deleteAvatarFile(accessToken: accessToken, userID: userID)
     }
 
     /// 팀 코드 정규화: 대문자화 후 공백/하이픈 제거. 클라에서도 적용해 정규화된 코드만 서버로 보낸다.

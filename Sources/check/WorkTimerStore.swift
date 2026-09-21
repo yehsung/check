@@ -1240,6 +1240,9 @@ final class WorkTimerStore {
     /// 저장 왕복 중인지. isUpdatingTeamGoal 과 달리 **관찰 대상**이다 — 저장 버튼을 누른 동안 비활성으로
     /// 잠가야 연타로 두 번째 요청이 나가지 않는다.
     var isUpdatingDisplayName = false
+    /// 프로필 사진 삭제 왕복 중인지. **관찰 대상이다** — 되돌리기 버튼을 누른 동안 잠가야 연타로 두 요청이 나가고
+    /// 늦게 온 쪽이 방금 세운 성공 문구를 실패로 덮는 일이 없다(별명 저장과 같은 규약).
+    var isRemovingAvatar = false
 
     // ── 비밀번호 재설정(메일 OTP) ──
     // 왜 앱 안에서 끝내는가: 재설정 메일의 링크는 `check://auth` 로 가는데 그 스킴을 등록한 앱이 없어

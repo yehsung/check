@@ -1299,6 +1299,38 @@ extension WorkTimerStore {
         }
     }
 
+    /// 프로필 사진 삭제 + 팀 새로고침. 사진이 없던 사람이 눌러도 **성공**이다(서버 404 는 코어가 삼킨다) —
+    /// 그래서 화면은 사진 유무로 이 버튼을 감추거나 잠그지 않는다.
+    func removeAvatar() {
+        Task { @MainActor in await performAvatarRemoval() }
+    }
+
+    func performAvatarRemoval() async {
+        // 연타 가드. 없으면 확인 버튼 두 번에 두 요청이 나가고, 둘째가 늦게 실패하면 방금 성공한 화면 위에
+        // 실패 문구가 덮인다(별명 저장이 같은 이유로 같은 가드를 쓴다).
+        guard session != nil, !isRemovingAvatar else { return }
+        isRemovingAvatar = true
+        defer { isRemovingAvatar = false }
+        let generation = sessionGeneration
+        do {
+            try await withSessionRetry { activeSession in
+                try await service.removeAvatar(
+                    accessToken: activeSession.accessToken,
+                    userID: activeSession.userID
+                )
+            }
+            guard generation == sessionGeneration else { return }
+            // 낙관 대입을 하지 않는다 — 표시는 서버가 돌려준 팀 목록에서 온다(아바타 업로드와 같은 규약).
+            await refreshTeamStatus()
+            guard generation == sessionGeneration else { return }
+            // ← 반드시 refresh 뒤(그 함수가 성공 경로 끝에서 syncMessage 를 "동기화됨"으로 덮는다).
+            syncMessage = AvatarRemovalText.successMessage
+        } catch {
+            guard generation == sessionGeneration else { return }
+            syncMessage = authMessage(for: error, fallback: AvatarRemovalText.failureMessage)
+        }
+    }
+
     /// 별명(표시명) 변경. 서버 set_display_name 이 정규화·길이·중복·쿨타임을 **전부** 판정하고 여기서는
     /// 그 status 를 화면 문구로 옮기기만 한다. 반환값(성공 여부)으로 뷰가 편집 행을 닫을지 정한다
     /// (실패면 입력을 유지해 바로 고쳐 재시도할 수 있게 한다).

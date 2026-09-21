@@ -337,6 +337,92 @@ private struct DisplayNameSettingsRow: View {
     }
 }
 
+// MARK: - 프로필 사진 삭제 행 (v0.3.36)
+
+/// 사진 삭제 자리의 문구 한 벌. **순수 값이라 테스트가 글자 그대로 되묻는다** — 스토어가 세우는 두 문구
+/// (성공·실패)도 여기서 가져간다. 문구가 뷰와 스토어 두 곳에 흩어지면 한쪽만 고쳐도 아무 테스트가 안 빨개진다.
+enum AvatarRemovalText {
+    static let title = "프로필 사진"
+    /// 평소 설명. **"사진이 있으면"이라고 말하지 않는다** — 이 행은 사진 유무와 무관하게 늘 같은 자리에 있다.
+    static let detail = "지우면 내 자리에 착용한 캐릭터가 대신 보여요."
+    /// 확인 단계의 설명. 되돌릴 수 없다는 사실만 말한다(겁주는 문장이 아니라 사실 한 줄).
+    static let confirmDetail = "지운 사진은 되돌릴 수 없어요. 다시 쓰려면 새로 올려야 해요."
+    static let action = "기본 캐릭터로 되돌리기"
+    static let confirm = "되돌리기"
+    static let cancel = "취소"
+    static let inFlight = "지우는 중…"
+    static let successMessage = "기본 캐릭터로 되돌렸어요"
+    static let failureMessage = "사진을 지우지 못했어요"
+}
+
+/// 프로필 사진을 지워 기본(착용 캐릭터)으로 되돌리는 행.
+///
+/// **왜 여기인가**(팝오버의 내 아바타 hover 가 아니라): 사진을 올리는 자리는 팀 목록의 내 행이지만, 그 행은
+/// **팀에 속한 사람에게만** 있다. 무소속 사용자도 사진을 올릴 수 있고(설정·가입 경로) 그러면 지울 자리가 없어진다.
+/// 설정 창은 누구에게나 같은 자리에 있다.
+///
+/// **왜 alert/sheet/Menu 가 아닌가**: 이 앱의 맥 화면에는 그 관례가 없다(오목 기권·차단 해제 전부 같은 줄에서
+/// 확인한다). 그래서 `BlockedPersonRow` 의 2단 확인을 그대로 따른다 — 평소 [기본 캐릭터로 되돌리기] →
+/// 누르면 같은 줄이 [취소]+[되돌리기] 로 바뀌고 설명이 확인 문구로 갈린다. 창 높이는 두 상태에서 같다.
+///
+/// **사진 유무를 묻지 않는다**: 행은 늘 보이고 늘 눌린다. 사진이 없으면 스토리지가 404 를 내고 코어가 그걸 삼킨
+/// 뒤 표를 null 로 덮는다(`SupabaseWorkService.removeAvatar`) — "없는 걸 지웠다"도 성공이다. 유무로 잠그면
+/// 서버 사진과 화면 사진이 어긋난 사람(캐시·폴링 지연)이 **탈출구를 잃는다**.
+///
+/// **높이 계약 때문에 internal 이다**(private 이 아니다): 두 상태의 높이가 같은지 테스트가 직접 그려서 재야 한다.
+/// 확인 단계가 한 줄 더 자라면 설정 창 맨 아래 행이 누르는 순간 잘리는데, 그건 전체 렌더로는 안 잡힌다
+/// (`confirming` 이 뷰 로컬이라 전체 렌더는 언제나 평소 상태다).
+struct AvatarRemovalSettingsRow: View {
+    let store: WorkTimerStore
+    /// 테스트가 확인 단계를 그리게 하는 씨앗. 앱 경로는 기본값(false)만 쓴다.
+    /// **`onAppear` 로 @State 를 밀지 않는다** — ImageRenderer 는 onAppear 를 부르지 않아서 그 방식은
+    /// 렌더 테스트에서 조용히 평소 상태를 그린다(= 확인 단계를 한 번도 안 재고 초록).
+    var confirmingSeed = false
+
+    @State private var pressed = false
+
+    /// 확인 단계인가. 씨앗이 켜져 있으면 눌린 적 없어도 확인 단계다(위 주석).
+    private var confirming: Bool { confirmingSeed || pressed }
+
+    var body: some View {
+        let isRemoving = store.isRemovingAvatar
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(AvatarRemovalText.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                Text(confirming ? AvatarRemovalText.confirmDetail : AvatarRemovalText.detail)
+                    .font(.caption2)
+                    .foregroundStyle(confirming ? CheckTheme.pending : CheckTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            if confirming {
+                FeedbackSegmentChip(label: AvatarRemovalText.cancel, tint: CheckTheme.accent, isSelected: false) {
+                    pressed = false
+                }
+                FeedbackPrimaryButton(
+                    label: AvatarRemovalText.confirm,
+                    enabled: !isRemoving,
+                    // 되돌릴 수 없는 동작이라 danger 로 칠한다(차단 확인과 같은 규약).
+                    tint: CheckTheme.danger
+                ) {
+                    pressed = false
+                    store.removeAvatar()
+                }
+            } else {
+                FeedbackPrimaryButton(
+                    label: isRemoving ? AvatarRemovalText.inFlight : AvatarRemovalText.action,
+                    enabled: !isRemoving
+                ) {
+                    pressed = true
+                }
+                .checkTooltip(AvatarRemovalText.detail)
+            }
+        }
+    }
+}
+
 // MARK: - 근무 시작·종료 단축키 기록 행 (v0.3.23)
 
 /// 기록 행 아래 **상태 한 줄**. 순수 값이라 테스트가 상태마다 문구를 글자 그대로 되묻는다.
@@ -846,11 +932,17 @@ struct CheckSettingsView: View {
     /// 왜 713 이 아니라 732 인가: 설정 창은 관리자에게 열 때 창을 **이 값까지** 키운다(`growForAdminContentIfNeeded`).
     /// 안내 한 줄이 없는 쪽으로 잡으면 겹침·실패 안내가 뜨는 순간 맨 아래 캐릭터 칩 줄이 19pt 잘린다.
     ///
-    /// ⚠️ **창 높이 계약(`CheckSettingsWindowController.defaultContentSize.height` = 648)보다 크다.** 그래서 창 쪽이
+    /// ⚠️ **창 높이 계약(`CheckSettingsWindowController.defaultContentSize.height`)보다 크다.** 그래서 창 쪽이
     ///    관리자일 때만 열면서 이 값까지 키운다. `V0316CharacterPickerTests` 가 가장 높은 상태를 그려 이 숫자를 되묻는다.
     ///
-    /// v0.3.34: '내 정보'에 [차단한 사람] 행이 붙어 일반 698 / 관리자 **787**(둘 다 +55, 실측 2026-09-20). 창 계약은 703 이다.
-    static let adminContentHeight: CGFloat = 787
+    /// v0.3.34: '내 정보'에 [차단한 사람] 행이 붙어 일반 698 / 관리자 787(둘 다 +55, 실측 2026-09-20). 창 계약은 703 이었다.
+    ///
+    /// v0.3.36: '내 정보'에 [프로필 사진] 행(기본 캐릭터로 되돌리기)이 붙어 일반 753 / 관리자 **842**(둘 다 +55, 실측 2026-09-21
+    /// 폭 380). 창 계약은 758 이다. 이 행의 2단 확인은 **높이를 안 바꾼다** — 확인 단계에서도 제목 한 줄 + 설명 한 줄이라
+    /// 같은 높이다(`V0336AvatarRemovalTests.되돌리기_행은_확인_단계에서도_같은_높이다` 가 두 상태를 직접 그려 잰다).
+    /// 확인 단계는 뷰 로컬 상태라 이 전체 렌더로는 절대 안 그려지므로, 그 테스트가 없으면 "누르는 순간 잘리는 창"이
+    /// 여기서는 초록으로 통과한다.
+    static let adminContentHeight: CGFloat = 842
 
     var body: some View {
         Group {
@@ -931,6 +1023,10 @@ struct CheckSettingsView: View {
             }
             section("내 정보") {
                 DisplayNameSettingsRow(store: store)
+                PanelDivider()
+                // 사진을 **지우는** 자리(v0.3.36). 올리는 자리는 팝오버 팀 목록의 내 행이지만 그 행은 팀에 속한
+                // 사람에게만 있다 — 지우기는 무소속 사용자에게도 있어야 해서 설정에 둔다(행 주석 참고).
+                AvatarRemovalSettingsRow(store: store)
                 PanelDivider()
                 CheckSettingsToggleRow(
                     title: "AI 토큰 사용량 공개",

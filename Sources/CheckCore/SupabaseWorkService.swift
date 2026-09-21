@@ -309,7 +309,13 @@ package actor SupabaseWorkService {
             accessToken: accessToken,
             extraHeaders: ["x-upsert": "true"]
         )
-        let cacheBuster = Int(Date().timeIntervalSince1970)
+        // 캐시버스터는 **밀리초 + 무작위 조각**이다. 파일 이름이 `<uid>.jpg` 로 고정이라 이 쿼리가 유일한 구분자다.
+        //
+        // v0.3.36 에 넓혔다(전엔 `Int(timeIntervalSince1970)` — 초 단위): 사진 삭제가 생기면서 "지우고 곧바로 다시
+        // 올리기"가 실제 경로가 됐는데, 같은 초 안의 두 업로드는 **같은 URL** 을 만들어 URLSession/디스크 캐시가
+        // 방금 지운 **옛 사진**을 그대로 그렸다. 시계만으로는 모자란다 — 밀리초도 같은 값이 나올 수 있고(테스트에서
+        // 실측했다), 시계는 뒤로 갈 수도 있다. 그래서 단조성(밀리초)과 유일성(UUID 조각)을 **둘 다** 싣는다.
+        let cacheBuster = "\(Int(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString.prefix(8))"
         let avatarURL = "\(projectURL.absoluteString)/storage/v1/object/public/avatars/\(userID).jpg?v=\(cacheBuster)"
         try await sendNoBody(
             path: "/rest/v1/profiles",
@@ -320,6 +326,31 @@ package actor SupabaseWorkService {
             prefer: "return=minimal"
         )
         return avatarURL
+    }
+
+    /// 프로필 사진을 지우고 **기본 캐릭터로 되돌린다**. 새 서버 함수가 없다 — 이미 열려 있는 두 권한만 쓴다:
+    /// 스토리지 DELETE 정책 "avatar owner can delete"(20260711090000) 와 profiles 의 컬럼 화이트리스트
+    /// `grant update (avatar_url, token_usage_public)`(20260804020000).
+    ///
+    /// **순서를 뒤집지 마라.** 파일 → 표 순이다. 표를 먼저 null 로 만들고 파일 삭제가 실패하면 화면에서는 사라졌는데
+    /// 공개 버킷(`/storage/v1/object/public/avatars/<uid>.jpg`)에는 얼굴 사진이 **URL만 알면 누구나 볼 수 있게** 남는다.
+    /// 반대 순서는 최악이라도 "파일은 지웠는데 표에 옛 URL 이 남아 사진이 깨져 보인다"이고, 그건 다시 누르면 낫는다.
+    ///
+    /// ① 파일 삭제는 **최선 노력**이다(`deleteAvatarIfAny` 가 실패를 삼킨다). 사진을 올린 적 없는 사람은 404 가 정상이고,
+    ///    그 404 때문에 "되돌리기"가 실패하면 **사진이 없는 사람은 이 버튼을 영영 못 쓴다** — 화면은 사진 유무를 묻지 않는다.
+    /// ② 프로필 PATCH 가 **권위**다. 여기가 실패하면 던진다 — 표에 옛 URL 이 남으면 팀 목록·순위판·오목은 계속 옛 사진을
+    ///    그리므로 사용자에게 "지웠다"고 말하면 거짓말이 된다.
+    package func removeAvatar(accessToken: String, userID: String) async throws {
+        await deleteAvatarIfAny(accessToken: accessToken, userID: userID)
+        try await sendNoBody(
+            path: "/rest/v1/profiles",
+            method: "PATCH",
+            queryItems: [URLQueryItem(name: "id", value: "eq.\(userID)")],
+            // nil = **null 을 싣는다**(키를 빼지 않는다 — AvatarUpdateRequest 주석).
+            body: AvatarUpdateRequest(avatarUrl: nil),
+            accessToken: accessToken,
+            prefer: "return=minimal"
+        )
     }
 
     /// 로그아웃. **`scope=local` 이 요점이다**(v0.3.30 · A5) — Supabase Auth 의 기본 scope 는 global 이라, 빼면 이 맥에서

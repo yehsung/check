@@ -338,97 +338,100 @@ package enum CodexUsageDiagnosticsScanner {
 
         /// 한 라인을 파싱해 상태에 반영한다. 프로덕션 Codex 경로와 같은 순서·같은 스킵 규약.
         func ingest(_ line: UnsafeRawBufferPointer) {
-            // 포크 판정(프로덕션 미러): 파일 머리의 session_meta 만 본다 — type 으로 확정하고 표식의 유무·라인 시각만 읽는다.
-            if contains(line, CodexForkRule.sessionMetaPattern),
-               let base = line.baseAddress,
-               let object = try? JSONSerialization.jsonObject(with: Data(bytes: base, count: line.count)) as? [String: Any],
-               CodexForkRule.isSessionMeta(object) {
-                fork.observeSessionMeta(object)
-                return
-            }
-            guard contains(line, tokenCountPattern) else { return }
-            guard let base = line.baseAddress,
-                  let object = try? JSONSerialization.jsonObject(
-                      with: Data(bytes: base, count: line.count)
-                  ) as? [String: Any],
-                  let payload = object["payload"] as? [String: Any],
-                  payload["type"] as? String == "token_count",
-                  let info = payload["info"] as? [String: Any],
-                  let total = info["total_token_usage"] as? [String: Any]
-            else { return }   // info null·total 결손: 건너뛰되 prevCumulative 갱신 안 함(다음 유효 이벤트가 흡수).
-            guard let timestamp = object["timestamp"] as? String,
-                  let monthKey = kstMonthKey(fromTimestamp: timestamp)
-            else { return }
+            // 라인마다 autoreleasepool — 프로덕션 Codex 경로와 같은 이유·같은 위치(CheckTokenUsage.swift 의 주석 참조).
+            autoreleasepool {
+                // 포크 판정(프로덕션 미러): 파일 머리의 session_meta 만 본다 — type 으로 확정하고 표식의 유무·라인 시각만 읽는다.
+                if contains(line, CodexForkRule.sessionMetaPattern),
+                   let base = line.baseAddress,
+                   let object = try? JSONSerialization.jsonObject(with: Data(bytes: base, count: line.count)) as? [String: Any],
+                   CodexForkRule.isSessionMeta(object) {
+                    fork.observeSessionMeta(object)
+                    return
+                }
+                guard contains(line, tokenCountPattern) else { return }
+                guard let base = line.baseAddress,
+                      let object = try? JSONSerialization.jsonObject(
+                          with: Data(bytes: base, count: line.count)
+                      ) as? [String: Any],
+                      let payload = object["payload"] as? [String: Any],
+                      payload["type"] as? String == "token_count",
+                      let info = payload["info"] as? [String: Any],
+                      let total = info["total_token_usage"] as? [String: Any]
+                else { return }   // info null·total 결손: 건너뛰되 prevCumulative 갱신 안 함(다음 유효 이벤트가 흡수).
+                guard let timestamp = object["timestamp"] as? String,
+                      let monthKey = kstMonthKey(fromTimestamp: timestamp)
+                else { return }
 
-            let isCopy = fork.isCopy(eventTimestamp: timestamp)
-            let inputCum = intField(total["input_tokens"])
-            let outputCum = intField(total["output_tokens"])
-            let cum = inputCum + outputCum
-            let inMonth = (monthKey == month)
-            // 기준선은 대상 월 밖 이벤트로도 계속 전진해야 한다 — 그래야 이 달 첫 델타의 기준선이 맞는다.
-            // 월 렌즈가 가르는 건 '무엇을 세느냐'지 '어떻게 걸어가느냐'가 아니다.
-            if firstEvent == nil { firstEvent = FirstEvent(cumulative: cum, inMonth: inMonth) }
-            if inMonth, let prev = baseline, cum < prev { drops += 1 }   // 기준선이 없으면 견줄 대상도 없다.
-            // 앱 산식(프로덕션 미러): 기준선을 아직 못 봤으면 델타를 만들지 않고 기준선만 세운다. 그 누적치는
-            // "카운터가 이미 거기 와 있었다"는 정보이지 이번에 쓴 양이 아니다. 필드별 클램프(입력·출력 각각)도 프로덕션과 같다.
-            let delta = baseline == nil
-                ? 0
-                : max(0, inputCum - baselineInput) + max(0, outputCum - baselineOutput)
-            // 옛 산식: 미관측 기준선을 '0 을 관측했다'로 취급했다 → 파일 첫 이벤트의 누적치 전액이 델타가 됐다.
-            // 이 한 줄이 legacyTotal 과 dedupTotal 을 가르는 전부다.
-            let legacyDelta = max(0, cum - (baseline ?? 0))
-            let epoch = CodexUsageDiagnosticsScanner.utcEpochSeconds(fromTimestamp: timestamp)
-            // 이 델타가 쌓이는 데 걸린 시간 = 델타의 기준선이 된 그 이벤트와의 간격. 직전이 없으면(파일 첫 이벤트) 0,
-            // 타임스탬프가 역행하면 0 으로 클램프(로그가 뒤섞여 들어온 경우 음수 간격을 보고하지 않는다).
-            let gap: Int = {
-                guard let epoch, let previous = prevEventEpoch else { return 0 }
-                return max(0, epoch - previous)
-            }()
-            baseline = cum
-            baselineInput = inputCum
-            baselineOutput = outputCum
-            prevEventEpoch = epoch
-            guard inMonth else { return }
+                let isCopy = fork.isCopy(eventTimestamp: timestamp)
+                let inputCum = intField(total["input_tokens"])
+                let outputCum = intField(total["output_tokens"])
+                let cum = inputCum + outputCum
+                let inMonth = (monthKey == month)
+                // 기준선은 대상 월 밖 이벤트로도 계속 전진해야 한다 — 그래야 이 달 첫 델타의 기준선이 맞는다.
+                // 월 렌즈가 가르는 건 '무엇을 세느냐'지 '어떻게 걸어가느냐'가 아니다.
+                if firstEvent == nil { firstEvent = FirstEvent(cumulative: cum, inMonth: inMonth) }
+                if inMonth, let prev = baseline, cum < prev { drops += 1 }   // 기준선이 없으면 견줄 대상도 없다.
+                // 앱 산식(프로덕션 미러): 기준선을 아직 못 봤으면 델타를 만들지 않고 기준선만 세운다. 그 누적치는
+                // "카운터가 이미 거기 와 있었다"는 정보이지 이번에 쓴 양이 아니다. 필드별 클램프(입력·출력 각각)도 프로덕션과 같다.
+                let delta = baseline == nil
+                    ? 0
+                    : max(0, inputCum - baselineInput) + max(0, outputCum - baselineOutput)
+                // 옛 산식: 미관측 기준선을 '0 을 관측했다'로 취급했다 → 파일 첫 이벤트의 누적치 전액이 델타가 됐다.
+                // 이 한 줄이 legacyTotal 과 dedupTotal 을 가르는 전부다.
+                let legacyDelta = max(0, cum - (baseline ?? 0))
+                let epoch = CodexUsageDiagnosticsScanner.utcEpochSeconds(fromTimestamp: timestamp)
+                // 이 델타가 쌓이는 데 걸린 시간 = 델타의 기준선이 된 그 이벤트와의 간격. 직전이 없으면(파일 첫 이벤트) 0,
+                // 타임스탬프가 역행하면 0 으로 클램프(로그가 뒤섞여 들어온 경우 음수 간격을 보고하지 않는다).
+                let gap: Int = {
+                    guard let epoch, let previous = prevEventEpoch else { return 0 }
+                    return max(0, epoch - previous)
+                }()
+                baseline = cum
+                baselineInput = inputCum
+                baselineOutput = outputCum
+                prevEventEpoch = epoch
+                guard inMonth else { return }
 
-            // 포크 복사 구간(프로덕션 미러): 앱 산식에 더하지 않고, 옛 산식이라면 더했을 몫(delta)만 forkCopyMonth 에 잰다.
-            // legacy(이월 수정 전 산식)는 포크 규칙도 없던 세대라 그대로 더한다. 델타 분포·중복 추적은 앱 산식에 든 이벤트만 본다.
-            if isCopy {
-                forkCopyMonth += delta
+                // 포크 복사 구간(프로덕션 미러): 앱 산식에 더하지 않고, 옛 산식이라면 더했을 몫(delta)만 forkCopyMonth 에 잰다.
+                // legacy(이월 수정 전 산식)는 포크 규칙도 없던 세대라 그대로 더한다. 델타 분포·중복 추적은 앱 산식에 든 이벤트만 본다.
+                if isCopy {
+                    forkCopyMonth += delta
+                    monthContribLegacy += legacyDelta
+                    eventsMonth += 1
+                    touched = true
+                    lastCumulativeInMonth = cum
+                    return
+                }
+
+                monthContrib += delta
                 monthContribLegacy += legacyDelta
                 eventsMonth += 1
                 touched = true
                 lastCumulativeInMonth = cum
-                return
-            }
-
-            monthContrib += delta
-            monthContribLegacy += legacyDelta
-            eventsMonth += 1
-            touched = true
-            lastCumulativeInMonth = cum
-            // 동점이면 먼저 나온 이벤트가 이긴다(>, not >=) — 간격이 어느 이벤트의 것인지 결정적으로 정해진다.
-            if delta > maxDelta {
-                maxDelta = delta
-                maxDeltaGapSeconds = gap
-            }
-            if delta > CodexUsageDiagnosticsScanner.bigDeltaThreshold {
-                bigDeltaCount += 1
-                bigDeltaTotal += delta
-                bigGaps.append(gap)
-            }
-
-            // 중복 계상 추적. NUL 구분자(타임스탬프에 NUL 이 들어갈 수 없어 충돌 불가).
-            let key = "\(timestamp)\u{0}\(cum)"
-            if var seen = sightings[key] {
-                if seen.lastFileIndex != fileIndex {
-                    // 다른 파일에서 같은 이벤트가 또 나왔다 = 첫 출현 이후의 재계상. 그 델타가 총합을 부풀린 몫이다.
-                    seen.lastFileIndex = fileIndex
-                    seen.fileCount += 1
-                    sightings[key] = seen
-                    dupTokens += delta
+                // 동점이면 먼저 나온 이벤트가 이긴다(>, not >=) — 간격이 어느 이벤트의 것인지 결정적으로 정해진다.
+                if delta > maxDelta {
+                    maxDelta = delta
+                    maxDeltaGapSeconds = gap
                 }
-            } else {
-                sightings[key] = KeySighting(lastFileIndex: fileIndex, fileCount: 1)
+                if delta > CodexUsageDiagnosticsScanner.bigDeltaThreshold {
+                    bigDeltaCount += 1
+                    bigDeltaTotal += delta
+                    bigGaps.append(gap)
+                }
+
+                // 중복 계상 추적. NUL 구분자(타임스탬프에 NUL 이 들어갈 수 없어 충돌 불가).
+                let key = "\(timestamp)\u{0}\(cum)"
+                if var seen = sightings[key] {
+                    if seen.lastFileIndex != fileIndex {
+                        // 다른 파일에서 같은 이벤트가 또 나왔다 = 첫 출현 이후의 재계상. 그 델타가 총합을 부풀린 몫이다.
+                        seen.lastFileIndex = fileIndex
+                        seen.fileCount += 1
+                        sightings[key] = seen
+                        dupTokens += delta
+                    }
+                } else {
+                    sightings[key] = KeySighting(lastFileIndex: fileIndex, fileCount: 1)
+                }
             }
         }
 
@@ -459,11 +462,31 @@ package enum CodexUsageDiagnosticsScanner {
             at: root, includingPropertiesForKeys: Array(keys), options: [], errorHandler: nil
         ) else { return [] }
         var out: [(url: URL, size: Int, mtimeMicros: Int)] = []
+        // ★ 항목마다 autoreleasepool — 프로덕션 `TokenUsageIncrementalScanner.recentFiles` 와 같은 관용구·같은 이유다.
+        // enumerator 가 주는 NSURL 도, `url.resourceValues(forKeys:)` 가 돌려주는 값들(NSDate·NSNumber)도
+        // 내부에서 **autorelease 객체**로 떠서, 풀이 없으면 순회가 끝날 때까지 한 개도 안 풀린다 —
+        // 읽은 **바이트**가 아니라 훑은 **파일 개수**에 비례해 쌓인다.
+        // streamLines 의 청크 풀과는 다른 층이다: 그쪽은 1MB 버퍼 자체를, 여기는 항목당 메타데이터를 돌려준다.
+        // 그래서 청크 풀만으로는 안 잡힌다 — 이 루프는 파일을 열지도 않는다.
+        // 여기가 recentFiles 보다 나쁜 자리다: **mtime 프리필터가 없어 전량을 훑는다**(위 주석 참고).
+        // v0.3.35 실측(같은 입력·같은 반환값, 풀만 추가. malloc size_in_use, 릴리스 빌드):
+        //   ~/.codex/sessions 항목 560개(rollout 499개)
+        //     풀 없음    1회 호출 피크 +0.68MB · 잔여 +0.29MB → 같은 잡 안 10회 +2.91MB(호출마다 +0.29MB, 누적)
+        //     항목마다 풀 1회 피크 +0.41MB · 잔여 +0.03MB → 10회 +0.26MB 로 평평(남는 건 반환 배열 자신)
+        //   항목 4,732개(합성 트리): 풀 없음 1회 피크 +4.95MB · 잔여 +2.04MB → 10회 +20.4MB /
+        //     항목마다 풀 1회 피크 +2.93MB · 잔여 +0.03MB → 10회 +0.24MB
+        //   진단 전체 경로(CodexUsageDiagnosticsScanner.compute) **스캔당 고수위**:
+        //     rollout 499개(197MB) 6.49MB → 5.69MB · rollout 4,531개 12.33MB → 9.34MB
+        //   진단 결과(CodexUsageDiagnostics 전 필드)는 2026-09·2026-08 둘 다 수리 전후 바이트 동일, 정렬 순서도 동일.
+        // 진단 스캔은 Task.detached(.utility) 잡 안에서 도는데 런타임이 **잡 경계에서 풀을 비우므로**
+        // 이 누적은 '하루치 누적'이 아니라 **스캔당 고수위** 문제다 — 하루 1회 자동 실행이라 사용자는 그 봉우리를 그대로 본다.
         for case let url as URL in enumerator {
-            guard url.lastPathComponent.hasPrefix("rollout-"), url.pathExtension == "jsonl" else { continue }
-            guard let values = try? url.resourceValues(forKeys: keys), values.isRegularFile == true else { continue }
-            let mtime = values.contentModificationDate.map { Int(($0.timeIntervalSince1970 * 1_000_000).rounded()) } ?? 0
-            out.append((url, values.fileSize ?? 0, mtime))
+            autoreleasepool {
+                guard url.lastPathComponent.hasPrefix("rollout-"), url.pathExtension == "jsonl" else { return }
+                guard let values = try? url.resourceValues(forKeys: keys), values.isRegularFile == true else { return }
+                let mtime = values.contentModificationDate.map { Int(($0.timeIntervalSince1970 * 1_000_000).rounded()) } ?? 0
+                out.append((url, values.fileSize ?? 0, mtime))
+            }
         }
         return out.sorted { $0.url.path < $1.url.path }
     }
@@ -476,27 +499,36 @@ package enum CodexUsageDiagnosticsScanner {
         defer { try? handle.close() }
         var carry: [UInt8] = []
         let chunkSize = 1 << 20
-        while let chunk = try? handle.read(upToCount: chunkSize), !chunk.isEmpty {
-            chunk.withUnsafeBytes { raw in
-                let bytes = raw.bindMemory(to: UInt8.self)
-                let count = bytes.count
-                var start = 0
-                var i = 0
-                while i < count {
-                    if bytes[i] == 0x0A {
-                        if carry.isEmpty {
-                            // 라인이 이 청크 안에 온전히 있다 — 복사 없이 부분 버퍼로 넘긴다.
-                            body(UnsafeRawBufferPointer(rebasing: raw[start..<i]))
-                        } else {
-                            carry.append(contentsOf: bytes[start..<i])
-                            carry.withUnsafeBytes { body($0) }
-                            carry.removeAll(keepingCapacity: true)
-                        }
-                        start = i + 1
-                    }
-                    i += 1
+        // 청크마다 autoreleasepool — 이유와 실측은 `TokenUsageIncrementalScanner.readTail` 주석에 있다.
+        // 진단 경로는 **전량 스캔**이라(이어읽기 없음) 풀이 없으면 증분 스캐너보다 더 크게 분다.
+        var reachedEOF = false
+        while !reachedEOF {
+            autoreleasepool {
+                guard let chunk = try? handle.read(upToCount: chunkSize), !chunk.isEmpty else {
+                    reachedEOF = true
+                    return
                 }
-                if start < count { carry.append(contentsOf: bytes[start..<count]) }
+                chunk.withUnsafeBytes { raw in
+                    let bytes = raw.bindMemory(to: UInt8.self)
+                    let count = bytes.count
+                    var start = 0
+                    var i = 0
+                    while i < count {
+                        if bytes[i] == 0x0A {
+                            if carry.isEmpty {
+                                // 라인이 이 청크 안에 온전히 있다 — 복사 없이 부분 버퍼로 넘긴다.
+                                body(UnsafeRawBufferPointer(rebasing: raw[start..<i]))
+                            } else {
+                                carry.append(contentsOf: bytes[start..<i])
+                                carry.withUnsafeBytes { body($0) }
+                                carry.removeAll(keepingCapacity: true)
+                            }
+                            start = i + 1
+                        }
+                        i += 1
+                    }
+                    if start < count { carry.append(contentsOf: bytes[start..<count]) }
+                }
             }
         }
         if !carry.isEmpty { carry.withUnsafeBytes { body($0) } }

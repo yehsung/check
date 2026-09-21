@@ -159,9 +159,12 @@ package struct TokenUsageMonthly: Codable, Equatable, Sendable {
 
     /// 화면에 **굵게 뜨는 표시 총합**(세 종류 = 클로드 + Codex 유효값 + 안티그래비티).
     ///
-    /// 서버 순위판 RPC(20260911120000)의 `total = claude_total + codex_effective + antigravity_total` 과 **같은 답**을
-    /// 내야 한다 — 내 박스의 굵은 숫자와 순위판의 내 행이 어긋나면 어느 쪽이 맞는지 사용자가 가릴 방법이 없다.
-    /// CodexEffectiveRule 의 Swift↔SQL 쌍둥이 규약과 같은 이유이고, 테스트(V0312)가 그 동치를 픽스처로 못 박는다.
+    /// 서버 순위판 RPC(20260911120000)의 `total = claude_total + codex_effective + antigravity_total` 과 같은 **모양**이지만,
+    /// 공유 Codex 계정에서는 **같은 답이 아니다** — 서버 `codex_effective` 에는 분배(`codex_account_share`)·축소율
+    /// (`tail_factor`)·미로그인 기기 몫(`offline_local`)·그룹 버킷 화해가 들어가는데 이 함수엔 그 개념이 없다.
+    /// 그래서 팝오버는 서버 행이 있으면 그 `total` 을 그대로 그린다(`TokenRowDisplayRule.resolve`). 이 함수는 서버 행이
+    /// 없을 때의 폴백이고, **비공유·단일 맥 사용자에 한해** 두 값이 실측으로 일치한다(2026-09-22: 기기 15대 전원 차 0).
+    /// 그 '쌍둥이' 관계를 비공유에서만 못 박는 테스트가 V0312, 공유에서 갈라짐과 수리 후 일치를 못 박는 것이 V0336 이다.
     ///
     /// 왜 `TokenUsageDisplay.effectiveTotal` 자체를 고치지 않았나: 그 타입은 이 단계의 소유 파일이 아니다
     /// (CheckCodexAccountUsage.swift). 그래서 **감싸는 자리**를 여기 두고, 표시 호출측은 전부 이 함수를 부른다.
@@ -1540,57 +1543,62 @@ package enum TokenUsageIncrementalScanner {
             }
 
             guard let read = readTail(at: f.url, from: startOffset, { line in
-                // 포크 표식은 파일 머리의 session_meta 에 있다(자기 메타의 forked_from_id / 두 번째 메타 = 복사된 부모 메타).
-                // 프리체크 바이트 패턴만으로는 본문에 그 낱말이 든 메시지 라인도 걸리므로 type 으로 확정한다. 읽는 필드는
-                // type · forked_from_id/parent_thread_id 의 유무 · 라인 timestamp 뿐이고 어떤 값도 보관하지 않는다(프라이버시 규약).
-                if contains(line, CodexForkRule.sessionMetaPattern),
-                   let base = line.baseAddress,
-                   let object = try? JSONSerialization.jsonObject(with: Data(bytes: base, count: line.count)) as? [String: Any],
-                   CodexForkRule.isSessionMeta(object) {
-                    fork.observeSessionMeta(object)
-                    return
-                }
-                guard contains(line, tokenCountPattern) else { return }
-                guard let base = line.baseAddress,
-                      let object = try? JSONSerialization.jsonObject(with: Data(bytes: base, count: line.count)) as? [String: Any],
-                      let payload = object["payload"] as? [String: Any],
-                      payload["type"] as? String == "token_count",
-                      let info = payload["info"] as? [String: Any],
-                      let total = info["total_token_usage"] as? [String: Any]
-                else { return }   // info null·total 결손: 건너뛰되 기준선 갱신 안 함(다음 유효 이벤트가 흡수).
-                // 이벤트 timestamp(UTC ISO)를 KST 월키/일키로. 파싱 실패도 동일하게 건너뜀(기준선 불변 → 흡수).
-                guard let ts = object["timestamp"] as? String,
-                      let keys = kstMonthDayKeys(fromTimestamp: ts) else { return }
-                let input = intField(total["input_tokens"])
-                let output = intField(total["output_tokens"])
-                let cached = intField(total["cached_input_tokens"])
-                // 포크 복사 구간: 부모 이력의 복사본이라 델타를 내지 않고 기준선만 갱신한다(구간 끝의 기준선 = 부모가 포크 시점까지
-                // 쓴 누적치 S → 자식 첫 이벤트의 델타 = 자식 자신의 첫 턴). 마감은 자기 session_meta 시각 + 5초(CodexForkRule 주석).
-                if fork.isCopy(eventTimestamp: ts) {
+                // 라인마다 autoreleasepool: JSONSerialization 이 만드는 브리지 임시 객체를 그 라인 안에서 돌려준다.
+                // Claude 경로(ingestClaudeLine)는 v0.2.37 에 이미 씌웠는데 Codex 경로만 빠져 있었다 — 코덱스를
+                // 많이 쓰는 사람일수록(계정 공유 사용자) 한 청크 안에서 쌓이는 양이 커진다.
+                autoreleasepool {
+                    // 포크 표식은 파일 머리의 session_meta 에 있다(자기 메타의 forked_from_id / 두 번째 메타 = 복사된 부모 메타).
+                    // 프리체크 바이트 패턴만으로는 본문에 그 낱말이 든 메시지 라인도 걸리므로 type 으로 확정한다. 읽는 필드는
+                    // type · forked_from_id/parent_thread_id 의 유무 · 라인 timestamp 뿐이고 어떤 값도 보관하지 않는다(프라이버시 규약).
+                    if contains(line, CodexForkRule.sessionMetaPattern),
+                       let base = line.baseAddress,
+                       let object = try? JSONSerialization.jsonObject(with: Data(bytes: base, count: line.count)) as? [String: Any],
+                       CodexForkRule.isSessionMeta(object) {
+                        fork.observeSessionMeta(object)
+                        return
+                    }
+                    guard contains(line, tokenCountPattern) else { return }
+                    guard let base = line.baseAddress,
+                          let object = try? JSONSerialization.jsonObject(with: Data(bytes: base, count: line.count)) as? [String: Any],
+                          let payload = object["payload"] as? [String: Any],
+                          payload["type"] as? String == "token_count",
+                          let info = payload["info"] as? [String: Any],
+                          let total = info["total_token_usage"] as? [String: Any]
+                    else { return }   // info null·total 결손: 건너뛰되 기준선 갱신 안 함(다음 유효 이벤트가 흡수).
+                    // 이벤트 timestamp(UTC ISO)를 KST 월키/일키로. 파싱 실패도 동일하게 건너뜀(기준선 불변 → 흡수).
+                    guard let ts = object["timestamp"] as? String,
+                          let keys = kstMonthDayKeys(fromTimestamp: ts) else { return }
+                    let input = intField(total["input_tokens"])
+                    let output = intField(total["output_tokens"])
+                    let cached = intField(total["cached_input_tokens"])
+                    // 포크 복사 구간: 부모 이력의 복사본이라 델타를 내지 않고 기준선만 갱신한다(구간 끝의 기준선 = 부모가 포크 시점까지
+                    // 쓴 누적치 S → 자식 첫 이벤트의 델타 = 자식 자신의 첫 턴). 마감은 자기 session_meta 시각 + 5초(CodexForkRule 주석).
+                    if fork.isCopy(eventTimestamp: ts) {
+                        baseline = (input, output, cached)
+                        copyEvents += 1
+                        return
+                    }
+                    // 첫 관측(baseline == nil)은 델타를 만들지 않고 기준선만 세운다 — 그 누적치는 "카운터가 이미 거기 와
+                    // 있었다"는 정보이지 이번에 쓴 양이 아니다(실측 근거는 CodexFileProgress 주석).
+                    if let prev = baseline {
+                        // 필드별 클램프: 누적 감소(리셋)면 그 필드만 0. 캐시는 입력의 부분집합이라 월 합계에서 따로 더하지 않는다.
+                        let dIn = max(0, input - prev.input)
+                        let dOut = max(0, output - prev.output)
+                        let dCached = max(0, cached - prev.cached)
+                        if keys.month == monthString {
+                            monthInput += dIn
+                            monthOutput += dOut
+                            monthCached += dCached
+                            // 일별 맵은 현재 월 키만 담는다(월 롤오버에 통째로 비우므로 다른 달 키가 섞이면 안 된다).
+                            if dIn + dOut > 0 { dayContrib[keys.day, default: 0] += dIn + dOut }
+                        }
+                        // UTC 축(v0.2.43): 같은 델타를 UTC 일키로 한 번 더 쌓는다 — 월 게이트 대신 보존 하한(전월 마지막 UTC 일)으로 거른다.
+                        if dIn + dOut > 0, keys.utcDay >= utcRetainFrom {
+                            dayContribUTC[keys.utcDay, default: 0] += dIn + dOut
+                        }
+                    }
                     baseline = (input, output, cached)
-                    copyEvents += 1
-                    return
                 }
-                // 첫 관측(baseline == nil)은 델타를 만들지 않고 기준선만 세운다 — 그 누적치는 "카운터가 이미 거기 와
-                // 있었다"는 정보이지 이번에 쓴 양이 아니다(실측 근거는 CodexFileProgress 주석).
-                if let prev = baseline {
-                    // 필드별 클램프: 누적 감소(리셋)면 그 필드만 0. 캐시는 입력의 부분집합이라 월 합계에서 따로 더하지 않는다.
-                    let dIn = max(0, input - prev.input)
-                    let dOut = max(0, output - prev.output)
-                    let dCached = max(0, cached - prev.cached)
-                    if keys.month == monthString {
-                        monthInput += dIn
-                        monthOutput += dOut
-                        monthCached += dCached
-                        // 일별 맵은 현재 월 키만 담는다(월 롤오버에 통째로 비우므로 다른 달 키가 섞이면 안 된다).
-                        if dIn + dOut > 0 { dayContrib[keys.day, default: 0] += dIn + dOut }
-                    }
-                    // UTC 축(v0.2.43): 같은 델타를 UTC 일키로 한 번 더 쌓는다 — 월 게이트 대신 보존 하한(전월 마지막 UTC 일)으로 거른다.
-                    if dIn + dOut > 0, keys.utcDay >= utcRetainFrom {
-                        dayContribUTC[keys.utcDay, default: 0] += dIn + dOut
-                    }
-                }
-                baseline = (input, output, cached)
             }) else { continue }
             seenPaths.insert(path)
             stats.codexFilesRead += 1
@@ -1788,11 +1796,24 @@ package enum TokenUsageIncrementalScanner {
             at: root, includingPropertiesForKeys: Array(keys), options: [], errorHandler: nil
         ) else { return [] }
         var out: [(url: URL, size: Int, mtimeMicros: Int)] = []
+        // ★ 항목마다 autoreleasepool. `url.resourceValues(forKeys:)` 가 돌려주는 값들은 내부에서
+        // **autorelease 객체**(NSDate·NSNumber)로 뜨고, enumerator 가 주는 NSURL 도 같다 — 풀이 없으면
+        // 순회가 끝날 때까지 한 개도 안 풀려, 읽은 **바이트**가 아니라 훑은 **파일 개수**에 비례해 쌓인다.
+        // readTail 의 청크 풀과는 다른 층이다: 그쪽은 1MB 버퍼 자체를, 여기는 항목당 메타데이터를 돌려준다.
+        // 그래서 청크 풀만으로는 안 잡힌다 — 이 루프는 파일을 열지도 않는다.
+        // v0.3.35 실측(~/.claude/projects, 항목 8,912개 · 일치 1,414개. 같은 입력에 풀만 추가):
+        //   풀 없음    1회 +3.5MB → 3회 +7.2MB → 10회 +19.9MB (호출마다 +1.8MB, 멈추지 않고 누적)
+        //   항목마다 풀 1회 +1.8MB → 10회 +2.3MB 로 평평(남는 건 반환 배열 자신)
+        //   N개마다 풀(N=256) 도 +1.9MB 로 같았다 — 이득이 없어 루프 모양을 그대로 두는 항목 단위를 골랐다.
+        //   push/pop 비용은 측정 불가: 20회 순회 평균 0.037~0.040s 로 세 변종이 같고 순서가 라운드마다 뒤집힌다.
+        // 스캔 한 번에 이 함수가 여러 번 불린다(projects · transcripts · codex 루트들) — 누적이 그만큼 곱해졌다.
         for case let url as URL in enumerator {
-            guard matching(url) else { continue }
-            guard let values = try? url.resourceValues(forKeys: keys), values.isRegularFile == true else { continue }
-            guard let mtime = values.contentModificationDate, mtime >= cutoff else { continue }
-            out.append((url, values.fileSize ?? 0, micros(from: mtime)))
+            autoreleasepool {
+                guard matching(url) else { return }
+                guard let values = try? url.resourceValues(forKeys: keys), values.isRegularFile == true else { return }
+                guard let mtime = values.contentModificationDate, mtime >= cutoff else { return }
+                out.append((url, values.fileSize ?? 0, micros(from: mtime)))
+            }
         }
         return out
     }
@@ -1815,34 +1836,47 @@ package enum TokenUsageIncrementalScanner {
         var absBase = startOffset    // 현재 청크 시작의 절대 오프셋
         var bytesRead = 0
         let chunkSize = 1 << 20
-        while let chunk = try? handle.read(upToCount: chunkSize), !chunk.isEmpty {
-            bytesRead += chunk.count
-            chunk.withUnsafeBytes { raw in
-                let bytes = raw.bindMemory(to: UInt8.self)
-                let count = bytes.count
-                var start = 0
-                var i = 0
-                while i < count {
-                    if bytes[i] == 0x0A {
-                        if carry.isEmpty {
-                            // 라인이 이 청크 안에 온전히 있다 — 복사 없이 부분 버퍼로 넘긴다.
-                            body(UnsafeRawBufferPointer(rebasing: raw[start..<i]))
-                        } else {
-                            // 앞 청크에서 이월된 조각과 이어 붙여 완성한 뒤 넘긴다.
-                            carry.append(contentsOf: bytes[start..<i])
-                            carry.withUnsafeBytes { body($0) }
-                            carry.removeAll(keepingCapacity: true)
+        // ★ 청크마다 autoreleasepool. `FileHandle.read` 가 돌려주는 Data 는 **autorelease 객체**라, 풀이 없으면
+        // 1MB 청크가 스캔이 끝날 때까지 한 장도 안 풀린다 — 청크로 나눠 읽는 의미가 사라지고
+        // **읽은 총 바이트 ≈ 메모리 피크**가 된다. 라인 파싱 풀(ingestClaudeLine)과는 다른 층이다:
+        // 그쪽은 파서가 만든 임시 객체를, 여기는 청크 버퍼 자체를 돌려준다. 그래서 라인 풀만으로는 안 잡힌다.
+        // v0.3.35 실측(같은 입력·같은 파싱, 풀 위치만 변경): 0.6GB 읽기 620MB · 1.5GB 읽기 1,523MB
+        // → 청크 풀을 씌우면 2.89GB 를 읽어도 20MB 로 평평(속도 차 없음). 1GB 사용 신고의 원인이 이것이었다.
+        var reachedEOF = false
+        while !reachedEOF {
+            autoreleasepool {
+                guard let chunk = try? handle.read(upToCount: chunkSize), !chunk.isEmpty else {
+                    reachedEOF = true
+                    return
+                }
+                bytesRead += chunk.count
+                chunk.withUnsafeBytes { raw in
+                    let bytes = raw.bindMemory(to: UInt8.self)
+                    let count = bytes.count
+                    var start = 0
+                    var i = 0
+                    while i < count {
+                        if bytes[i] == 0x0A {
+                            if carry.isEmpty {
+                                // 라인이 이 청크 안에 온전히 있다 — 복사 없이 부분 버퍼로 넘긴다.
+                                body(UnsafeRawBufferPointer(rebasing: raw[start..<i]))
+                            } else {
+                                // 앞 청크에서 이월된 조각과 이어 붙여 완성한 뒤 넘긴다.
+                                carry.append(contentsOf: bytes[start..<i])
+                                carry.withUnsafeBytes { body($0) }
+                                carry.removeAll(keepingCapacity: true)
+                            }
+                            consumed = absBase + i + 1
+                            start = i + 1
                         }
-                        consumed = absBase + i + 1
-                        start = i + 1
+                        i += 1
                     }
-                    i += 1
+                    // 개행 없이 남은 꼬리 조각을 다음 청크로 이월한다(소비하지 않음).
+                    if start < count {
+                        carry.append(contentsOf: bytes[start..<count])
+                    }
+                    absBase += count
                 }
-                // 개행 없이 남은 꼬리 조각을 다음 청크로 이월한다(소비하지 않음).
-                if start < count {
-                    carry.append(contentsOf: bytes[start..<count])
-                }
-                absBase += count
             }
         }
         return (consumed, bytesRead)

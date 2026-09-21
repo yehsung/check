@@ -1,3 +1,4 @@
+import CheckCore
 import CheckMobileShared
 import CoreGraphics
 import Foundation
@@ -141,38 +142,70 @@ package enum ContributionLevels {
     }
 }
 
+/// 잔디 색축. 상세 화면이 `MeDestination.grass(_:)` 의 연관값으로 들고 다니므로 **플랫폼 무관 자리**에 둔다
+/// (그리는 색 `tint` 만 iOS 층 `ContributionGrid.swift` 의 확장에 남는다). `Hashable` 은 String raw 라 자동이지만
+/// `MeDestination` 이 기대는 계약이라 적어 둔다.
+package enum ContributionAxis: String, CaseIterable, Hashable, Sendable {
+    /// 근무(초록 — workingDot 사다리).
+    case work
+    /// AI 토큰(보라 — aiToken 사다리).
+    case token
+}
+
 /// 잔디 칸 값: 주 × 요일(0=월…6=일)의 단계. nil = 미래(빈 테두리 칸).
 package struct ContributionGridData: Equatable, Sendable {
     package let weeks: Int
     package let levels: [[Int?]]
+    /// 칸의 원값(초 · 토큰). 단계만 남기면 12분과 1시간 50분이 같은 1단계로 뭉개져 상세 화면이 말할 게 없다 —
+    /// 맥 `ContributionGridView` 가 values 를 그대로 쥐는 것과 같은 모양이다(CheckComponents.swift:665).
+    package let values: [[Int]]
+    /// 0열의 월요일 00:00(KST). 고른 칸의 날짜 원점(맥 weekStart 와 같은 뜻).
+    package let weekStart: Date
 
-    package init(weeks: Int, levels: [[Int?]]) {
+    package init(weeks: Int, levels: [[Int?]], values: [[Int]] = [], weekStart: Date = .distantPast) {
         self.weeks = max(0, weeks)
         self.levels = levels
+        self.values = values
+        self.weekStart = weekStart
     }
 
-    /// 원값(초·토큰) → 단계. `isFuture(주, 요일)` 이 참이면 nil.
-    package init(weeks: Int, values: [[Int]], denominator: Int, isFuture: (Int, Int) -> Bool) {
+    /// 원값(초·토큰) → 단계. `isFuture(주, 요일)` 이 참이면 nil(원값도 0 으로 접는다 — 미래 칸 = 0 불변식).
+    ///
+    /// `weekStart` 에 **기본값을 주지 않는다** — 빠뜨려도 컴파일이 통과하면 상세 화면이 조용히 '1월 1일'을 말한다.
+    package init(weeks: Int, values: [[Int]], weekStart: Date, denominator: Int, isFuture: (Int, Int) -> Bool) {
         let columns = max(0, weeks)
         var grid: [[Int?]] = []
+        var raw: [[Int]] = []
         for week in 0..<columns {
             var column: [Int?] = []
+            var rawColumn: [Int] = []
             for weekday in 0..<ContributionGridLayout.rows {
                 if isFuture(week, weekday) {
                     column.append(nil)
+                    rawColumn.append(0)
                 } else {
                     let value = values.indices.contains(week) && values[week].indices.contains(weekday) ? values[week][weekday] : 0
                     column.append(ContributionLevels.level(value: value, denominator: denominator))
+                    rawColumn.append(value)
                 }
             }
             grid.append(column)
+            raw.append(rawColumn)
         }
-        self.init(weeks: columns, levels: grid)
+        self.init(weeks: columns, levels: grid, values: raw, weekStart: weekStart)
     }
 
     /// 기록 없음·불러오는 중·실패 자리: 칸은 전부 0단계(격자 자리를 그대로 지킨다 — 섹션을 한 줄로 접지 않는다).
+    /// 원값은 전부 0, 원점은 **없다**(`.distantPast`) — 이 격자로 날짜를 말하면 안 된다. 홈 격자는 날짜를 안 말해서
+    /// 무해했지만 상세 화면은 달 머리·주 라벨·행 날짜를 전부 원점에서 만든다. 그래서 소비자가 `hasOrigin` 으로
+    /// 먼저 물어야 한다(안 물으면 화면이 서기 1년 1~4월을 지어낸다 — 실측으로 잡힌 결함이다).
     package static func blank(weeks: Int = ContributionGridLayout.defaultWeeks) -> ContributionGridData {
-        ContributionGridData(weeks: weeks, levels: Array(repeating: Array(repeating: 0, count: ContributionGridLayout.rows), count: max(0, weeks)))
+        let columns = max(0, weeks)
+        return ContributionGridData(
+            weeks: columns,
+            levels: Array(repeating: Array(repeating: 0, count: ContributionGridLayout.rows), count: columns),
+            values: Array(repeating: Array(repeating: 0, count: ContributionGridLayout.rows), count: columns)
+        )
     }
 
     package func level(week: Int, weekday: Int) -> Int? {
@@ -180,9 +213,124 @@ package struct ContributionGridData: Equatable, Sendable {
         return levels[week][weekday]
     }
 
+    /// 칸의 원값(초·토큰). 범위 밖은 0 — 형이 어긋난 배열이 와도 크래시가 없다(맥 `value(week:weekday:)` 와 같은 규약).
+    package func value(week: Int, weekday: Int) -> Int {
+        guard values.indices.contains(week), values[week].indices.contains(weekday) else { return 0 }
+        return values[week][weekday]
+    }
+
+    /// 날짜 원점이 실재하는가. `.blank()` 자리 격자는 거짓이다 — **거짓이면 이 격자로 날짜를 한 글자도 말하면 안 된다**
+    /// (`.distantPast` 로 달·요일을 계산하면 서기 1년 1월 1일이 나온다). 값 막대만 phase 로 막고 격자·목록은 안 막았던 것이
+    /// 실제 결함이었다: 오프라인 첫 진입에서 달 머리가 "1월/2월/3월/4월", 접근성 목록이 "1월 1일 (월) · 근무 없음" 91행이었다.
+    package var hasOrigin: Bool { weekStart != .distantPast }
+
     /// 0단계보다 진한 칸이 하나라도 있는가.
     package var hasActivity: Bool {
         levels.contains { $0.contains { ($0 ?? 0) > 0 } }
+    }
+}
+
+/// 고른 칸. 튜플이 아닌 이유는 맥과 같다 — `@State` 비교에 Equatable 이 필요하다(CheckComponents.swift:682).
+package struct ContributionCell: Equatable, Hashable, Sendable {
+    package let week: Int
+    package let weekday: Int
+
+    package init(week: Int, weekday: Int) {
+        self.week = week
+        self.weekday = weekday
+    }
+}
+
+/// 잔디 상세 화면 **전치 캘린더**의 기하: 가로 7열(요일) × 세로 N행(주).
+///
+/// 왜 전치하나 — 홈처럼 가로 13열을 유지하면 칸이 어떤 폭에서도 애플 최소 터치 대상 44pt 에 못 닿는다(폭 329 에 13열을
+/// 상한 없이 넣어도 23.0pt). 전치하면 최악(iPhone SE 375 → 격자 폭 343)에서도 피치 49.0pt 다. 손가락이 이웃 날을
+/// 조용히 집어 '틀린 값을 맞다고 믿는' 결함이 이 화면에서 가장 나쁜 실패다.
+package enum ContributionCalendarLayout {
+    /// 가로 열 = 요일 7.
+    package static let columns = ContributionGridLayout.rows
+    /// 칸 사이 틈(pt). 홈(2.5)보다 넓다 — 칸이 4배 크니 틈도 따라 커져야 격자로 읽힌다.
+    package static let spacing: CGFloat = 4
+    /// 애플 최소 터치 대상. 테스트가 세 폭에서 이 값을 지키는지 되묻는다.
+    package static let minimumPitch: CGFloat = 44
+
+    /// 한 칸의 피치(칸 + 틈). 격자 폭을 7로 나눈다.
+    package static func pitch(width: CGFloat) -> CGFloat {
+        guard width > 0 else { return 0 }
+        return width / CGFloat(columns)
+    }
+
+    /// 보이는 칸 한 변 = 피치 − 틈. **누름 영역은 피치 전체**다(틈까지 앞 칸에 귀속 — 못 누르는 자리가 없다).
+    package static func cell(width: CGFloat) -> CGFloat {
+        max(0, pitch(width: width) - spacing)
+    }
+
+    /// 주 행 하나의 높이(= 피치).
+    package static func rowHeight(width: CGFloat) -> CGFloat {
+        pitch(width: width)
+    }
+
+    /// 주 행 로컬 좌표의 x → 요일(0=월 … 6=일). 격자 밖·음수는 nil.
+    /// 피치 나눗셈이 틈을 앞 칸에 귀속시킨다(맥 `ContributionGridView.cell(at:)` 와 같은 식, 라벨 보정만 없다).
+    package static func weekday(atX x: CGFloat, width: CGFloat) -> Int? {
+        let pitch = pitch(width: width)
+        guard pitch > 0, x >= 0, x < pitch * CGFloat(columns) else { return nil }
+        return min(columns - 1, Int(x / pitch))
+    }
+
+    /// 달 단위 구간 나누기: [(달, 그 달에 속한 주 인덱스 범위)]. 주의 대표 달은 **그 주 일요일의 달**로,
+    /// 맥 월 라벨(`MeText.monthLabels`)과 같은 규칙이다 — 주가 달을 걸치면 끝나는 쪽에 붙인다.
+    ///
+    /// 달 라벨을 행 **왼쪽**에 두면 라벨 폭만큼 피치가 줄어 44pt 밑으로 떨어진다 — 그래서 Section 머리로 올린다.
+    package static func monthSections(weekStart: Date, weeks: Int) -> [ContributionMonthSection] {
+        guard weeks > 0 else { return [] }
+        let calendar = TeamWeeklyGoal.kstCalendar
+        var sections: [ContributionMonthSection] = []
+        for week in 0..<weeks {
+            guard let sunday = calendar.date(
+                byAdding: .day,
+                value: week * ContributionGridLayout.rows + ContributionGridLayout.rows - 1,
+                to: weekStart
+            ) else { continue }
+            let month = calendar.component(.month, from: sunday)
+            if let last = sections.last, last.month == month {
+                sections[sections.count - 1] = ContributionMonthSection(month: month, weeks: last.weeks.lowerBound..<(week + 1))
+            } else {
+                sections.append(ContributionMonthSection(month: month, weeks: week..<(week + 1)))
+            }
+        }
+        return sections
+    }
+}
+
+/// 달 구간 한 덩어리(달 · 그 달에 속한 주 인덱스 범위). 튜플이 아닌 이유: Swift 는 튜플 키패스를 만들지 못해
+/// `ForEach(..., id: \.weeks.lowerBound)` 가 컴파일되지 않는다.
+package struct ContributionMonthSection: Equatable, Hashable, Sendable {
+    package let month: Int
+    package let weeks: Range<Int>
+
+    package init(month: Int, weeks: Range<Int>) {
+        self.month = month
+        self.weeks = weeks
+    }
+}
+
+/// 하루 이동(상세 화면 하단 막대 ‹ ›). 미래 칸은 건너뛰지 않고 **멈춘다**(오늘이 마지막 유효 칸이다).
+package enum MeGrassSelection {
+    /// `cell` 에서 `days` 일 옮긴 칸. 창(0 ..< weeks×7) 밖이거나 미래(오프셋 ≥ dayCount)면 nil → 버튼 비활성.
+    package static func stepped(_ cell: ContributionCell, by days: Int, weeks: Int, dayCount: Int) -> ContributionCell? {
+        let rows = ContributionGridLayout.rows
+        let offset = cell.week * rows + cell.weekday + days
+        guard offset >= 0, offset < weeks * rows, offset < dayCount else { return nil }
+        return ContributionCell(week: offset / rows, weekday: offset % rows)
+    }
+
+    /// 화면을 열 때 미리 고를 칸 = 마지막 유효 칸(오늘). `dayCount` 가 0 이면 nil.
+    package static func latest(weeks: Int, dayCount: Int) -> ContributionCell? {
+        let rows = ContributionGridLayout.rows
+        guard weeks > 0, dayCount > 0 else { return nil }
+        let offset = min(dayCount, weeks * rows) - 1
+        return ContributionCell(week: offset / rows, weekday: offset % rows)
     }
 }
 
@@ -215,7 +363,9 @@ package enum ContributionGridText {
 /// 잔디 칸 크기 — 주어진 폭에 12열이 딱 맞게. 나 탭 무대 아래 두 격자를 한 화면에 두는 계산이 여기 있다.
 package enum ContributionGridLayout {
     package static let rows = 7
-    package static let defaultWeeks = 12
+    /// 잔디 창 폭(주) = 이번 주 + 지난 12주. 코어 `WorkDailyGrid.defaultWeeks` 와 **반드시 같다** — 다르면 못 받았을 때(.blank)
+    /// 와 받았을 때 열 수가 달라 격자 폭이 한 칸 튄다(상세 화면에선 행 수·높이가 튄다).
+    package static let defaultWeeks = 13
     /// 칸 사이 틈(시안 2.5pt).
     package static let spacing: CGFloat = 2.5
     /// 칸이 이보다 크면 격자가 화면을 먹는다(세로로 쌓일 때 상한 — 나란히 둘 때 칸 약 10.8pt 와 너무 달라 보이지 않게).
@@ -302,5 +452,7 @@ package enum TabBarPolicy {
         case gomokuMatch
         case shop
         case miniGamePlay
+        /// 잔디 상세 — 자체 하단 값 막대를 가진다(막대 둘이 쌓이면 엄지 사정권이 좁아진다).
+        case grassDetail
     }
 }

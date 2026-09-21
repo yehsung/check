@@ -259,8 +259,14 @@ import Testing
         await s.session.pendingDeviceRegistration?.value
         #expect(await baseWaitUntil { s.session.profile?.teamName == "테스트팀" })
         // 세션을 얻은 요청(token / join_team) **뒤**의 경로만 견준다.
-        let signInTail = Array(s.paths().drop { $0 != "/auth/v1/token" }.dropFirst())
-        let signUpTail = Array(paths.drop { $0 != "rpc/join_team" }.dropFirst())
+        //
+        // **정렬해서 견준다 — 순서는 계약이 아니다.** 세션을 얻은 뒤 소속 조회(/rest/v1/memberships)와 기기 등록
+        // (rpc/register_device)은 서로 기다리지 않고 나간다(기기 등록은 `pendingDeviceRegistration` 으로 따로 기다린다).
+        // 그래서 도착 순서가 실행마다 뒤집힌다 — 예전 `==` 는 단독 실행에서도 3회 중 1회쯤 빨개졌고, 그때 잡히는 것은
+        // 결함이 아니라 경합이었다. 이 단언이 지키려던 것은 '가입 뒤와 로그인 뒤가 **같은 요청들**을 낸다'(빠지거나 더해진
+        // 왕복이 없다)이지 순서가 아니다.
+        let signInTail = s.paths().drop { $0 != "/auth/v1/token" }.dropFirst().sorted()
+        let signUpTail = paths.drop { $0 != "rpc/join_team" }.dropFirst().sorted()
         #expect(!signInTail.isEmpty && signInTail == signUpTail, "가입 뒤 경로 \(signUpTail) ≠ 로그인 뒤 경로 \(signInTail)")
     }
 

@@ -392,14 +392,23 @@ package actor SupabaseWorkService {
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        guard let (_, response) = try? await session.data(for: request),
+        guard let (data, response) = try? await session.data(for: request),
               let http = response as? HTTPURLResponse
         else {
             // 연결 자체가 안 됐다. 파일이 남았는지 **모른다** — 모를 때는 남았다고 본다(사용자에게 덜 위험한 거짓말).
             return .left
         }
+        if 200..<300 ~= http.statusCode { return .gone }
         // 404 = 지울 것이 없었다. 사진을 올린 적 없는 사람의 정상 경로이고, 결과는 "없다"로 같다.
-        return (200..<300 ~= http.statusCode || http.statusCode == 404) ? .gone : .left
+        //
+        // **상태코드만 보지 않는다**: Supabase Storage 는 버전에 따라 없는 개체에 400 을 주면서 본문에만
+        // `{"statusCode":"404","error":"not_found","message":"Object not found"}` 를 싣는다(게이트웨이가 상태를 바꾸는
+        // 배치도 있다). 상태코드 404 만 '없음'으로 읽으면 그 서버에서는 **사진을 올린 적 없는 사람이 되돌리기를 누를 때마다**
+        // "파일이 남았다"는 거짓 경고를 본다. 그래서 본문의 not_found 표식도 같은 뜻으로 받는다 — 403·5xx 는 이 표식이 없다.
+        let body = String(decoding: data, as: UTF8.self)
+        if http.statusCode == 404 { return .gone }
+        if body.contains("\"error\":\"not_found\"") || body.contains("\"statusCode\":\"404\"") { return .gone }
+        return .left
     }
 
     /// 로그아웃. **`scope=local` 이 요점이다**(v0.3.30 · A5) — Supabase Auth 의 기본 scope 는 global 이라, 빼면 이 맥에서

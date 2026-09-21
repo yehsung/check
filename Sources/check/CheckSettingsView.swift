@@ -357,6 +357,12 @@ enum AvatarRemovalText {
     /// 문구 근거: 앞부분은 일어난 사실(표는 비었다)을, 뒷부분은 이 저장소가 이미 쓰는 재시도 안내 문장
     /// ("잠시 후 다시 시도해 주세요" — 별명 행의 연결 실패 안내)을 그대로 쓴다.
     static let fileLeftMessage = "사진 파일이 아직 남아 있어요. 잠시 후 다시 시도해 주세요"
+
+    /// 팝오버 푸터(한 줄)용 짧은 쪽. 설정 행은 전문을 쓰고, 푸터만 이 값을 쓴다 — 긴 문장은 푸터에서 뒤가 잘리는데
+    /// 하필 잘리는 부분이 사용자가 할 일("다시 시도해 주세요")이다. 매핑을 여기 한 곳에 둬야 문구가 갈리지 않는다.
+    static func shortForFooter(_ message: String) -> String {
+        message == fileLeftMessage ? "사진 파일이 아직 남아 있어요" : message
+    }
     static let failureMessage = "사진을 지우지 못했어요"
     /// 로그인 전. 위젯의 "로그인하면 지금 근무 중인 사람이 떠요" 와 같은 어법이다.
     static let signedOutMessage = "로그인하면 사진을 지울 수 있어요"

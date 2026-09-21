@@ -375,8 +375,12 @@ func 파일이_남으면_되돌렸다고_말하지_않는다() async throws {
     #expect(store.avatarRemovalNotice != AvatarRemovalText.successMessage,
             "공개 버킷에 얼굴이 남았는데 '되돌렸어요'라고 말했다")
     #expect(store.avatarRemovalNoticeTone == .warning, "파일이 남은 것은 성공도 실패도 아니다")
-    #expect(store.syncMessage == AvatarRemovalText.fileLeftMessage)
-    // 문구가 다시 시도할 길을 말해야 한다 — 사용자가 할 수 있는 일이 그것뿐이다.
+    // 푸터(한 줄)는 짧은 쪽을 쓴다 — 긴 문장은 뒤가 잘리고 하필 "다시 시도해 주세요"가 잘린다(검토 지적 ①).
+    // 정본은 설정 행(avatarRemovalNotice)이고, 푸터는 곁눈질용 요약이다.
+    #expect(store.syncMessage == AvatarRemovalText.shortForFooter(AvatarRemovalText.fileLeftMessage))
+    #expect(store.syncMessage != AvatarRemovalText.fileLeftMessage, "푸터에 긴 문장이 그대로 갔다")
+    #expect(store.syncMessage.count < AvatarRemovalText.fileLeftMessage.count)
+    // 행 문구는 다시 시도할 길을 말해야 한다 — 사용자가 할 수 있는 일이 그것뿐이다.
     #expect(AvatarRemovalText.fileLeftMessage.contains("다시 시도"))
 }
 
@@ -595,7 +599,8 @@ func 되돌리기_행의_문구는_사진_유무를_묻지_않는다() throws {
 
 // MARK: - 헬퍼
 
-private enum V0336Error: Error { case renderFailed }
+// 이름이 갈래 A 의 V0336AvatarArtTests 와 겹쳐(그쪽은 internal) 병합에서 재선언 오류가 났다 — 이 파일 쪽을 좁힌다.
+private enum V0336RemovalError: Error { case renderFailed }
 
 /// 행이 가질 수 있는 네 상태. **렌더 테스트가 이 전부를 돈다** — 하나라도 빠지면 그 상태의 높이는 아무도 안 잰다.
 enum V0336RowState: CaseIterable {
@@ -664,7 +669,7 @@ private func v0336RowBitmap(state: V0336RowState, width: CGFloat? = nil) throws 
     guard let image = renderer.nsImage,
           let tiff = image.tiffRepresentation,
           let bitmap = NSBitmapImageRep(data: tiff)
-    else { throw V0336Error.renderFailed }
+    else { throw V0336RemovalError.renderFailed }
     return bitmap
 }
 
@@ -690,7 +695,7 @@ private func v0336SettingsBitmap(admin: Bool, state: V0336RowState) throws -> NS
     guard let image = renderer.nsImage,
           let tiff = image.tiffRepresentation,
           let bitmap = NSBitmapImageRep(data: tiff)
-    else { throw V0336Error.renderFailed }
+    else { throw V0336RemovalError.renderFailed }
     return bitmap
 }
 

@@ -1363,10 +1363,13 @@ extension WorkTimerStore {
     }
 
     /// 결과 한 줄을 행과 팝오버 **양쪽에** 세운다. 한 곳에서만 세우면 본 사람과 못 본 사람이 갈린다.
+    /// 되돌리기 결과를 **두 자리**에 세운다. 설정 행에는 전문(`avatarRemovalNotice`)을, 팝오버 푸터에는 짧은 쪽
+    /// (`shortForFooter`)을 둔다 — 푸터는 한 줄이라 긴 문장은 **뒤가 잘리고, 잘리는 쪽이 하필 "다시 시도해 주세요"**다
+    /// (검토 지적 ①). 버튼을 누른 사람은 설정 창을 보고 있으므로 행이 정본이고, 푸터는 곁눈질용 요약이다.
     private func setAvatarRemovalNotice(_ message: String, tone: AvatarRemovalNoticeTone) {
         avatarRemovalNotice = message
         avatarRemovalNoticeTone = tone
-        syncMessage = message
+        syncMessage = AvatarRemovalText.shortForFooter(message)
     }
 
     /// 별명(표시명) 변경. 서버 set_display_name 이 정규화·길이·중복·쿨타임을 **전부** 판정하고 여기서는

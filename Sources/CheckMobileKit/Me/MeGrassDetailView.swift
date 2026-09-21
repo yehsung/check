@@ -325,6 +325,11 @@ struct MeGrassDetailView: View {
         .frame(maxWidth: .infinity)
         // 격자가 막대 밑으로 비쳐 지나가도 글자가 읽힌다.
         .background(.bar)
+        // 이 막대는 `safeAreaInset` 이라 제 키만큼 본문을 **직접** 빼앗는다 — 상한이 없으면 AX5 에서 값 한 줄이
+        // 네 줄로 접혀 SE 세로의 절반 가까이를 고정으로 먹고, 정작 읽어야 할 격자·목록이 그만큼 밀린다.
+        // 가장 큰 일반 크기(XXXL)까지는 한 계단도 안 깎이므로 "값 막대는 Dynamic Type 을 따른다"는 그대로다.
+        // 선례·이유가 같은 자리: MessagesConversationView 의 대화 이름표.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
     @ViewBuilder
@@ -336,19 +341,27 @@ struct MeGrassDetailView: View {
             // headline = 17). 고정 `Font.system(size:weight:)` 는 배율을 안 받는다: 목록 모드는 접근성 크기에서만 켜지므로
             // 그 아래(가장 큰 일반 크기 XXXL)에서는 이 막대가 값이 서는 **유일한 자리**인데, 요일 머리·눈금·달 머리만
             // 커지고 값만 그대로 남아 있었다. 회고 헤드라인(성격이 같은 '큰 숫자')과 같은 문법이다.
+            // 목록 모드에서는 날짜가 막대의 유일한 줄이 되므로 머리 글꼴·본문 색으로 올린다(캡션으로 두면 혼자 남아 작다).
             Text(MeText.grassDetailDate(weekStart: work.weekStart, week: cell.week, weekday: cell.weekday))
-                .font(MobileTheme.number(.caption2, weight: .semibold))
-                .foregroundStyle(MobileTheme.label2)
-            Text(MeText.grassValueLine(
-                workSeconds: work.value(week: cell.week, weekday: cell.weekday),
-                tokens: token.value(week: cell.week, weekday: cell.weekday),
-                showsToken: tokenUsable
-            ))
-            .font(MobileTheme.number(.headline, weight: .bold))
-            .monospacedDigit()
-            .foregroundStyle(MobileTheme.label)
-            // 막대가 커지면 safeAreaInset 이 알아서 본문을 밀어 준다(줄바꿈도 여기서 산다).
-            .fixedSize(horizontal: false, vertical: true)
+                .font(MobileTheme.number(listMode ? .subheadline : .caption2, weight: .semibold))
+                .foregroundStyle(listMode ? MobileTheme.label : MobileTheme.label2)
+                .fixedSize(horizontal: false, vertical: true)
+            // 목록 모드에서는 값 줄을 접는다 — 행(`listRow`)이 이미 **같은** `MeText.grassValueLine` 문장을 제 안에 펴 놓는다.
+            // 접근성 글자 크기에서 같은 문장을 두 번 쓰면, 가장 크게 자란 막대가 가장 필요 없는 모드에서 목록을 밀어낸다.
+            // 그래도 막대를 지우지는 않는다: 날짜 한 줄과 양끝 `‹ ›` 가 스위치 제어·운동 장애 사용자의 주 이동 수단이고,
+            // 막대가 떴다 사라지면 그때마다 본문이 위아래로 흔들린다.
+            if !listMode {
+                Text(MeText.grassValueLine(
+                    workSeconds: work.value(week: cell.week, weekday: cell.weekday),
+                    tokens: token.value(week: cell.week, weekday: cell.weekday),
+                    showsToken: tokenUsable
+                ))
+                .font(MobileTheme.number(.headline, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(MobileTheme.label)
+                // 막대가 커지면 safeAreaInset 이 알아서 본문을 밀어 준다(줄바꿈도 여기서 산다).
+                .fixedSize(horizontal: false, vertical: true)
+            }
         } else {
             HStack(spacing: MobileTheme.space2) {
                 Text(emptyBarText(phase: phase))

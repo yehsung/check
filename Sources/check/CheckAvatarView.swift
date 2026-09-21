@@ -1,5 +1,4 @@
 import AppKit
-import ImageIO
 import SwiftUI
 import UniformTypeIdentifiers
 import CheckCore
@@ -19,6 +18,10 @@ import CheckCore
 //
 // ★ 초상은 `CheckMascotAssets.image(for:characterID:)` 로 얻지 **않는다** — 그 함수는 모르는 id·깨진 PNG 를 아잉으로 폴백한다(내 캐릭터용
 //   규칙). 여기는 **남의 사실**을 그리는 자리라, 그리지 못하면 아잉이 아니라 이니셜이다(`AppUserAvatarArt.portrait(characterID:)`).
+//
+// ★ 그림은 **'캐릭터 고르기' 카드와 같은 출처**다(`CharacterCardArt.image(characterID:)` — 스프라이트는 아틀라스 `frontIdle` 전신,
+//   아잉은 초상 PNG · 둘 다 알파 상자로 조인다). 2026-09-21 사용자 지시: "여기 나오는 기본 사진으로 해달라"에서 가리킨 그림이
+//   카드 그림이다. 전에는 이 자리만 `portrait-neutral.png`(얼굴 크롭)를 따로 디코드해, 같은 캐릭터가 카드와 프로필에서 다르게 보였다.
 
 private struct AppUserCharactersKey: EnvironmentKey {
     /// 빈 표(전원 이니셜). 창 루트가 스토어의 표를 걸기 전의 자리 · 부품만 그리는 렌더 테스트가 이 값을 본다.
@@ -137,26 +140,32 @@ private struct AppUserAvatarStill: View {
     }
 }
 
-/// 다른 사람의 착용 캐릭터 얼굴 — neutral 초상을 받침 원 안에. 링·표정 변화는 없다(남의 근무 상태는 이 자리가 말하지 않는다).
+/// 다른 사람의 착용 캐릭터 얼굴 — neutral 그림을 받침 원 안에. 링·표정 변화는 없다(남의 근무 상태는 이 자리가 말하지 않는다).
 ///
-/// ★ 26pt 에서도 얼굴이 읽히게: 초상 PNG(192² 캔버스)는 캐릭터마다 여백이 달라(아잉 실루엣은 세로 80%) 그대로 줄이면 캐릭터마다
-///   크기가 들쭉날쭉하고 작아진다. 그래서 **알파 상자로 조인 초상**(`AppUserAvatarArt`)을 원보다 조금 큰 상자에 맞추고 살짝 내려
-///   얼굴이 원 가운데 오게 한다(몸 아래쪽은 원 밖으로 잘린다 — 초상 중심).
+/// ★ 캐릭터마다 여백이 다르므로(아잉 실루엣은 192² 캔버스의 세로 80%) 원본을 그대로 줄이면 크기가 들쭉날쭉하다. 그래서
+///   **알파 상자로 조인 그림**(`CharacterCardArt`)을 `AppUserAvatarArt.portraitBox(diameter:artSize:)` 가 준 상자에 넣는다 —
+///   높이를 지름에 맞추고 폭은 원본 비대로 따라간다(가로형은 상한에 걸려 줄어든다).
+/// ★ **정사각 상자 + `scaledToFit` 이 아니다.** 그러면 가로가 세로보다 넓은 아잉만 폭 기준으로 맞춰져 혼자 작아진다 —
+///   폭·높이를 직접 준다(상자가 이미 원본 비라 `scaledToFit` 은 할 일이 없다).
 /// ★ `Image(nsImage:)` 는 `.interpolation` 을 무시한다(`CharacterPortrait` 주석 — 2026-09-13 실측). 그래서 CGImage 로 그린다.
+///   보간은 **픽셀아트도 `.high`** 다: 여기는 16~34pt 로 아틀라스 셀(600px 안팎)을 15~40배 줄이는 자리라, 이웃 보간은 픽셀을
+///   너무 많이 버린다(메뉴바 18pt 와 같은 이유 — `CheckMascotAssets.currentCharacterIsPixelArt()` 주석).
 private struct CharacterAvatarFace: View {
     let portrait: CGImage
     let size: CGFloat
 
     var body: some View {
-        let side = size * AppUserAvatarArt.artFraction
+        let box = AppUserAvatarArt.portraitBox(
+            diameter: size,
+            artSize: CGSize(width: portrait.width, height: portrait.height)
+        )
         ZStack {
             Circle().fill(AppUserAvatarArt.backdrop)
             Image(decorative: portrait, scale: 1)
                 .resizable()
                 .interpolation(.high)
-                .scaledToFit()
-                .frame(width: side, height: side)
-                .offset(y: size * AppUserAvatarArt.artOffsetFraction)
+                .frame(width: box.width, height: box.height)
+                .offset(y: box.offsetY)
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
@@ -169,38 +178,73 @@ private struct CharacterAvatarFace: View {
 /// 아잉 `aing-neutral.png`(`CheckMascotAssets.portraitURL(for: .neutral, characterID:)` 가 둘 다 찾는다). 새 자원 번들을 만들지 않으므로
 /// 배포 스크립트(`scripts/build-local.sh` — `check_check.bundle` 하나만 복사한다)는 고칠 것이 없다(코어 `AppUserCharacters.swift` 머리 결정).
 enum AppUserAvatarArt {
-    /// 원 지름 대비 초상 상자의 한 변. 알파 상자로 조인 그림을 이 상자에 맞춘다(가로세로 비는 그대로).
-    /// **원보다 크다(120%)** — 초상은 전신이라 원 안에 통째로 넣으면(84~88%) 26pt 에서 얼굴이 3~4pt 로 줄어 누군지 안 읽힌다.
-    /// 16·22·26·34pt × 여섯 캐릭터를 110~130% 로 나란히 구워 골랐다(2026-09-20): 120% 에서 얼굴이 원 가운데를 채우고 귀 끝이 아직
-    /// 원 안에 남는다. 130% 는 여우·시바의 귀가 잘리고, 110% 는 16pt 에서 얼굴이 작다. 발·꼬리 끝은 원 밖으로 잘린다.
-    static let artFraction: CGFloat = 1.20
-    /// 초상을 아래로 내리는 양(지름 대비). 커진 상자의 위쪽(머리·귀)이 원 위쪽 호에 잘리지 않고 얼굴이 원 가운데 오게.
-    static let artOffsetFraction: CGFloat = 0.15
+    /// 원 안에 놓을 그림 상자(pt). 지름과 **원본 그림의 비**만으로 정해지는 순수 계산이다 —
+    /// `portraitBox(diameter:artSize:)` 만 만든다.
+    struct PortraitBox: Equatable {
+        var width: CGFloat
+        var height: CGFloat
+        /// 위로 올리는 양(음수 = 위). 레퍼런스의 비대칭(위만 살짝 잘리고 발끝은 남는다)을 재현한다.
+        var offsetY: CGFloat
+    }
+
+    /// **높이 기준**: 조인 그림의 높이를 지름의 이 배로 맞춘다. 폭은 원본 비대로 따라간다.
+    ///
+    /// 기준은 조영서 님이 직접 캡처해 올린 프로필 사진이다(2026-09-21) — 실측 **높이 = 지름의 1.018배 · 폭 0.80배**,
+    /// 세로는 거의 가운데(위가 3.4% 잘리고 아래는 0.6% 남는다). 여섯 캐릭터 × 열한 후보를 나란히 구워 골랐다:
+    /// - 옛 값(정사각 1.20 · 아래로 +0.15)은 아래가 **19~21% 잘렸다**(전체 잘림 20~33%) — 발이 통째로 없어졌다.
+    /// - 1.02~1.03 에서 전체 잘림이 3~8% 로 레퍼런스(5.4%)와 같은 자리에 온다.
+    /// 1.03 은 그중 레퍼런스보다 아주 조금 큰 쪽이다(26pt 에서도 얼굴이 읽히려면 작은 쪽으로 기울면 안 된다).
+    static let artHeightFraction: CGFloat = 1.03
+    /// **가로 상한**: 폭이 지름의 이 배를 넘으면 폭을 여기에 맞추고 높이를 비율대로 줄인다.
+    /// 가로가 세로보다 넓은 아잉(조인 비 1.065)만 여기에 걸린다 — 안 걸면 팔이 좌우로 잘린다.
+    static let artMaxWidthFraction: CGFloat = 1.02
+    /// 그림을 **위로** 올리는 양(지름 대비). 레퍼런스가 위 3.4% / 아래 0.6% 로 비대칭이라 그만큼만 올린다.
+    /// 옛 값은 +0.15(아래로)였고, 그것이 아래 19~21% 를 잘라 먹은 범인이다.
+    static let artOffsetFraction: CGFloat = -0.015
     /// 받침 원. 어두운 행 위에서 캐릭터 윤곽이 묻히지 않을 만큼만 밝다.
     static let backdrop = Color.white.opacity(0.14)
 
-    /// 이 빌드가 **초상을 그릴 수 있는** 캐릭터 id(아잉 포함). 캐릭터 한 표의 '아는 캐릭터'다 — 목록에 있어도 초상이 없는 id 를
+    /// 지름과 원본 비로 그림 상자를 정한다. **순수 함수** — 뷰 없이 값으로 검증한다(`V0336AvatarArtTests`).
+    /// 원본 비를 모를 때(0·음수 크기)는 정사각으로 접는다 — 그림이 사라지는 것보다 낫다.
+    nonisolated static func portraitBox(diameter: CGFloat, artSize: CGSize) -> PortraitBox {
+        let offsetY = diameter * artOffsetFraction
+        guard diameter > 0, artSize.width > 0, artSize.height > 0 else {
+            let side = max(0, diameter) * artHeightFraction
+            return PortraitBox(width: side, height: side, offsetY: offsetY)
+        }
+        var height = diameter * artHeightFraction
+        var width = height * (artSize.width / artSize.height)
+        let maxWidth = diameter * artMaxWidthFraction
+        if width > maxWidth {
+            width = maxWidth
+            height = width * (artSize.height / artSize.width)
+        }
+        return PortraitBox(width: width, height: height, offsetY: offsetY)
+    }
+
+    /// 이 빌드가 **그릴 수 있는** 캐릭터 id(아잉 포함). 캐릭터 한 표의 '아는 캐릭터'다 — 목록에 있어도 그림이 없는 id 를
     /// '안다'고 하면 빈 그림이 선다(코어 접기 규칙). 번들 카탈로그를 한 번 훑는다.
+    ///
+    /// 판정은 **neutral 초상 PNG 의 존재**다. 그림 자체는 카드 그림(아틀라스 전신)을 쓰지만, 카드 그림의 마지막 폴백이
+    /// 바로 이 PNG 이므로(`CharacterCardArt.rawImage`) 이 파일이 있으면 **그 캐릭터의 그림**이 반드시 나온다.
+    /// 거꾸로 이 파일이 없으면 카드 그림은 `CheckMascotAssets` 의 접기 규칙을 타고 **아잉**을 돌려줄 수 있다 —
+    /// 남의 아바타에 아잉을 세우느니 이니셜이 낫다. 아틀라스만 있고 초상 PNG 가 없는 캐릭터가 언젠가 생기면
+    /// 그 캐릭터는 이니셜로 선다(틀린 그림이 아니라 덜 그린 것이다).
     static let knownIDs: [String] = CheckMascotAssets.catalog.allIDs.filter { id in
         guard let url = CheckMascotAssets.portraitURL(for: .neutral, characterID: id) else { return false }
         return FileManager.default.fileExists(atPath: url.path)
     }
 
-    /// 알파 상자로 조인 neutral 초상. 캐릭터당 한 번만 디코드·조인한다(행은 hover·갱신마다 다시 그려진다).
-    /// 초상이 없거나 깨졌으면 nil — **아잉으로 폴백하지 않는다**(호출부가 이니셜을 그린다).
+    /// 알파 상자로 조인 neutral 그림 — **'캐릭터 고르기' 카드와 같은 함수**(`CharacterCardArt.image(characterID:)`)다.
+    /// 캐시·알파 상자는 그쪽이 캐릭터당 한 번만 하므로 여기서는 값싼 조회다(행은 hover·갱신마다 다시 그려진다).
+    ///
+    /// 모르는 id 는 **여기서 먼저 끊는다**: 카드 그림은 내 캐릭터용 접기 규칙을 타고 아잉을 돌려줄 수 있는데,
+    /// 남의 사실을 그리는 이 자리에서는 아잉이 아니라 nil 이어야 한다(호출부가 이니셜을 그린다).
     @MainActor
     static func portrait(characterID: String) -> CGImage? {
-        if let hit = cache[characterID] { return hit }
-        guard let url = CheckMascotAssets.portraitURL(for: .neutral, characterID: characterID),
-              let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let raw = CGImageSourceCreateImageAtIndex(source, 0, nil)
-        else { return nil }
-        let tight = CharacterCardArt.tightened(raw)
-        cache[characterID] = tight
-        return tight
+        guard knownIDs.contains(characterID) else { return nil }
+        return CharacterCardArt.image(characterID: characterID)
     }
-
-    @MainActor private static var cache: [String: CGImage] = [:]
 }
 
 /// 아바타 모서리에 얹는 소속 센터 배지. 두 글자를 그대로 적는다.

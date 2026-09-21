@@ -339,8 +339,9 @@ private struct DisplayNameSettingsRow: View {
 
 // MARK: - 프로필 사진 삭제 행 (v0.3.36)
 
-/// 사진 삭제 자리의 문구 한 벌. **순수 값이라 테스트가 글자 그대로 되묻는다** — 스토어가 세우는 두 문구
-/// (성공·실패)도 여기서 가져간다. 문구가 뷰와 스토어 두 곳에 흩어지면 한쪽만 고쳐도 아무 테스트가 안 빨개진다.
+/// 사진 삭제 자리의 문구 한 벌. **순수 값이라 테스트가 글자 그대로 되묻는다** — 스토어가 세우는 네 문구
+/// (성공·파일 남음·실패·로그인 전)도 여기서 가져간다. 문구가 뷰와 스토어 두 곳에 흩어지면 한쪽만 고쳐도
+/// 아무 테스트가 안 빨개진다.
 enum AvatarRemovalText {
     static let title = "프로필 사진"
     /// 평소 설명. **"사진이 있으면"이라고 말하지 않는다** — 이 행은 사진 유무와 무관하게 늘 같은 자리에 있다.
@@ -352,7 +353,31 @@ enum AvatarRemovalText {
     static let cancel = "취소"
     static let inFlight = "지우는 중…"
     static let successMessage = "기본 캐릭터로 되돌렸어요"
+    /// 표는 비웠는데 **파일이 남은** 경우. "되돌렸어요"라고 말하면 거짓말이다 — 공개 버킷의 얼굴은 URL 만 알면 보인다.
+    /// 문구 근거: 앞부분은 일어난 사실(표는 비었다)을, 뒷부분은 이 저장소가 이미 쓰는 재시도 안내 문장
+    /// ("잠시 후 다시 시도해 주세요" — 별명 행의 연결 실패 안내)을 그대로 쓴다.
+    static let fileLeftMessage = "사진 파일이 아직 남아 있어요. 잠시 후 다시 시도해 주세요"
     static let failureMessage = "사진을 지우지 못했어요"
+    /// 로그인 전. 위젯의 "로그인하면 지금 근무 중인 사람이 떠요" 와 같은 어법이다.
+    static let signedOutMessage = "로그인하면 사진을 지울 수 있어요"
+}
+
+/// 사진 되돌리기 결과 한 줄의 색 갈래. Bool 이 아닌 이유는 `WorkTimerStore.avatarRemovalNoticeTone` 주석에 있다.
+enum AvatarRemovalNoticeTone {
+    /// 표도 파일도 비었다.
+    case success
+    /// 표는 비웠는데 파일이 남았다 — 실패는 아니지만 성공이라고 말하면 안 되는 자리.
+    case warning
+    /// 아무것도 못 했다.
+    case failure
+
+    var color: Color {
+        switch self {
+        case .success: return CheckTheme.working
+        case .warning: return CheckTheme.pending
+        case .failure: return CheckTheme.danger
+        }
+    }
 }
 
 /// 프로필 사진을 지워 기본(착용 캐릭터)으로 되돌리는 행.
@@ -363,43 +388,52 @@ enum AvatarRemovalText {
 ///
 /// **왜 alert/sheet/Menu 가 아닌가**: 이 앱의 맥 화면에는 그 관례가 없다(오목 기권·차단 해제 전부 같은 줄에서
 /// 확인한다). 그래서 `BlockedPersonRow` 의 2단 확인을 그대로 따른다 — 평소 [기본 캐릭터로 되돌리기] →
-/// 누르면 같은 줄이 [취소]+[되돌리기] 로 바뀌고 설명이 확인 문구로 갈린다. 창 높이는 두 상태에서 같다.
+/// 누르면 같은 줄이 [취소]+[되돌리기] 로 바뀐다.
 ///
-/// **사진 유무를 묻지 않는다**: 행은 늘 보이고 늘 눌린다. 사진이 없으면 스토리지가 404 를 내고 코어가 그걸 삼킨
-/// 뒤 표를 null 로 덮는다(`SupabaseWorkService.removeAvatar`) — "없는 걸 지웠다"도 성공이다. 유무로 잠그면
-/// 서버 사진과 화면 사진이 어긋난 사람(캐시·폴링 지연)이 **탈출구를 잃는다**.
+/// **설명 줄이 곧 결과 줄이다**(별명 행 `DisplayNameSettingsRow.notice` 와 같은 규약): 우선순위는
+/// 결과 > 확인 안내 > 기본 설명. 줄을 따로 더 달지 않는 이유는 이 창이 높이 계약을 가진 창이기 때문이다 —
+/// 누르는 순간 줄이 하나 생기면 맨 아래 행이 그만큼 잘린다. 대신 세 문구가 같은 폭에서 **몇 줄이 되는지**를
+/// `V0336AvatarRemovalTests` 가 실제 카드 안쪽 폭으로 그려서 재고, 가장 높은 상태가 창 예산 안인지 단언한다.
 ///
-/// **높이 계약 때문에 internal 이다**(private 이 아니다): 두 상태의 높이가 같은지 테스트가 직접 그려서 재야 한다.
-/// 확인 단계가 한 줄 더 자라면 설정 창 맨 아래 행이 누르는 순간 잘리는데, 그건 전체 렌더로는 안 잡힌다
-/// (`confirming` 이 뷰 로컬이라 전체 렌더는 언제나 평소 상태다).
+/// **사진 유무를 묻지 않는다**: 행은 늘 보이고(로그인 상태면) 늘 눌린다. 사진이 없으면 스토리지가 404 를 내고
+/// 코어가 그걸 "없다"로 읽은 뒤 표를 null 로 덮는다(`SupabaseWorkService.removeAvatar`) — "없는 걸 지웠다"도
+/// 성공이다. 유무로 잠그면 서버 사진과 화면 사진이 어긋난 사람(캐시·폴링 지연)이 **탈출구를 잃는다**.
+///
+/// **확인 단계는 스토어가 쥔다**(뷰 `@State` 가 아니다): 설정 창은 닫아도 파괴되지 않아서(`orderOut`)
+/// 뷰 로컬이면 확인이 창을 넘어 살아남는다 — 다음에 열면 빨간 [되돌리기]가 이미 무장돼 있다.
+/// 창 컨트롤러가 열 때·닫을 때 `store.resetAvatarRemovalRow()` 로 접는다.
 struct AvatarRemovalSettingsRow: View {
+    /// 이 행이 **평상 상태보다 더 자랄 수 있는 최대치**(pt, 카드 안쪽 폭 328 실측 2026-09-21).
+    ///
+    /// 설명 줄은 한 줄(46pt)이지만 두 문구에서 **두 줄(59pt)** 이 된다: 확인 안내(`confirmDetail`)와
+    /// "파일이 남았어요"(`fileLeftMessage`). 둘 다 사용자가 버튼을 누른 **뒤에야** 나타나므로 설정 화면
+    /// 전체 렌더로는 절대 안 잡힌다 — 전체 렌더는 언제나 평상 상태다. 그래서 창 높이 계약
+    /// (`CheckSettingsWindowController.defaultContentSize` · `CheckSettingsView.adminContentHeight`)은
+    /// **전체 렌더 + 이 값**으로 잡는다. `V0336AvatarRemovalTests` 가 네 상태를 실제 폭으로 그려
+    /// 이 숫자를 되묻고, 열린 상태·닫힌 상태가 둘 다 창 예산 안인지 단언한다.
+    static let maxExtraHeight: CGFloat = 13
+
     let store: WorkTimerStore
-    /// 테스트가 확인 단계를 그리게 하는 씨앗. 앱 경로는 기본값(false)만 쓴다.
-    /// **`onAppear` 로 @State 를 밀지 않는다** — ImageRenderer 는 onAppear 를 부르지 않아서 그 방식은
-    /// 렌더 테스트에서 조용히 평소 상태를 그린다(= 확인 단계를 한 번도 안 재고 초록).
-    var confirmingSeed = false
-
-    @State private var pressed = false
-
-    /// 확인 단계인가. 씨앗이 켜져 있으면 눌린 적 없어도 확인 단계다(위 주석).
-    private var confirming: Bool { confirmingSeed || pressed }
 
     var body: some View {
         let isRemoving = store.isRemovingAvatar
+        let confirming = store.isConfirmingAvatarRemoval
+        // 로그인 전에는 지울 사진도, 지울 권한도 없다. 눌러도 아무 일이 없는 버튼을 두지 않는다(검토 지적 ⑤).
+        let signedOut = store.session == nil
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(AvatarRemovalText.title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(CheckTheme.primaryText)
-                Text(confirming ? AvatarRemovalText.confirmDetail : AvatarRemovalText.detail)
+                Text(notice)
                     .font(.caption2)
-                    .foregroundStyle(confirming ? CheckTheme.pending : CheckTheme.secondaryText)
+                    .foregroundStyle(noticeColor)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
             if confirming {
                 FeedbackSegmentChip(label: AvatarRemovalText.cancel, tint: CheckTheme.accent, isSelected: false) {
-                    pressed = false
+                    store.isConfirmingAvatarRemoval = false
                 }
                 FeedbackPrimaryButton(
                     label: AvatarRemovalText.confirm,
@@ -407,19 +441,35 @@ struct AvatarRemovalSettingsRow: View {
                     // 되돌릴 수 없는 동작이라 danger 로 칠한다(차단 확인과 같은 규약).
                     tint: CheckTheme.danger
                 ) {
-                    pressed = false
+                    store.isConfirmingAvatarRemoval = false
                     store.removeAvatar()
                 }
             } else {
                 FeedbackPrimaryButton(
                     label: isRemoving ? AvatarRemovalText.inFlight : AvatarRemovalText.action,
-                    enabled: !isRemoving
+                    enabled: !isRemoving && !signedOut
                 ) {
-                    pressed = true
+                    // 누르는 순간 앞선 결과 한 줄을 치운다 — 안 치우면 새 확인 위에 옛 "되돌렸어요"가 남는다.
+                    store.avatarRemovalNotice = nil
+                    store.isConfirmingAvatarRemoval = true
                 }
-                .checkTooltip(AvatarRemovalText.detail)
+                .checkTooltip(signedOut ? AvatarRemovalText.signedOutMessage : AvatarRemovalText.detail)
             }
         }
+    }
+
+    /// 한 줄 우선순위: 스토어가 세운 결과 > 로그인 전 안내 > 확인 안내 > 기본 설명(별명 행과 같은 규약).
+    private var notice: String {
+        if let result = store.avatarRemovalNotice { return result }
+        if store.session == nil { return AvatarRemovalText.signedOutMessage }
+        if store.isConfirmingAvatarRemoval { return AvatarRemovalText.confirmDetail }
+        return AvatarRemovalText.detail
+    }
+
+    private var noticeColor: Color {
+        if store.avatarRemovalNotice != nil { return store.avatarRemovalNoticeTone.color }
+        if store.session == nil { return CheckTheme.secondaryText }
+        return store.isConfirmingAvatarRemoval ? CheckTheme.pending : CheckTheme.secondaryText
     }
 }
 
@@ -937,12 +987,14 @@ struct CheckSettingsView: View {
     ///
     /// v0.3.34: '내 정보'에 [차단한 사람] 행이 붙어 일반 698 / 관리자 787(둘 다 +55, 실측 2026-09-20). 창 계약은 703 이었다.
     ///
-    /// v0.3.36: '내 정보'에 [프로필 사진] 행(기본 캐릭터로 되돌리기)이 붙어 일반 753 / 관리자 **842**(둘 다 +55, 실측 2026-09-21
-    /// 폭 380). 창 계약은 758 이다. 이 행의 2단 확인은 **높이를 안 바꾼다** — 확인 단계에서도 제목 한 줄 + 설명 한 줄이라
-    /// 같은 높이다(`V0336AvatarRemovalTests.되돌리기_행은_확인_단계에서도_같은_높이다` 가 두 상태를 직접 그려 잰다).
-    /// 확인 단계는 뷰 로컬 상태라 이 전체 렌더로는 절대 안 그려지므로, 그 테스트가 없으면 "누르는 순간 잘리는 창"이
-    /// 여기서는 초록으로 통과한다.
-    static let adminContentHeight: CGFloat = 842
+    /// v0.3.36: '내 정보'에 [프로필 사진] 행(기본 캐릭터로 되돌리기)이 붙어 전체 렌더가 일반 753 / 관리자 842
+    /// (둘 다 +55, 실측 2026-09-21 폭 380)가 됐다. **여기서 끝이 아니다**: 그 행은 [기본 캐릭터로 되돌리기]를
+    /// 누르면 확인 안내가 두 줄로 접혀 **+13pt** 자란다(`AvatarRemovalSettingsRow.maxExtraHeight`, 실측 카드 안쪽 폭 328 —
+    /// 46 → 59). 확인 단계와 결과 문구는 전체 렌더로는 절대 안 그려지므로(누른 뒤에만 존재한다) 그 13pt 를
+    /// 더한 값이 진짜 최악값이다: 842 + 13 = **855**. 창 계약은 771 이다.
+    ///
+    /// 더하지 않으면 정확히 이 사고가 난다 — 관리자가 [되돌리기]를 누르는 **그 순간** 맨 아래 캐릭터 칩 줄이 13pt 잘린다.
+    static let adminContentHeight: CGFloat = 855
 
     var body: some View {
         Group {

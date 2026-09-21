@@ -1299,36 +1299,74 @@ extension WorkTimerStore {
         }
     }
 
-    /// 프로필 사진 삭제 + 팀 새로고침. 사진이 없던 사람이 눌러도 **성공**이다(서버 404 는 코어가 삼킨다) —
+    /// 사진 되돌리기 행을 **처음 상태로 접는다**(확인 단계 · 결과 한 줄). 설정 창 컨트롤러가 창을 열 때와
+    /// 닫을 때 부르고, 로그아웃도 부른다 — 이 창은 닫아도 뷰가 살아 있어서(`orderOut`) 아무도 안 접으면
+    /// 다음에 열 때 빨간 [되돌리기]가 이미 무장된 채로 서 있다(v0.3.36 검토 지적 ④).
+    func resetAvatarRemovalRow() {
+        isConfirmingAvatarRemoval = false
+        avatarRemovalNotice = nil
+        avatarRemovalNoticeTone = .success
+    }
+
+    /// 프로필 사진 삭제 + 팀 새로고침. 사진이 없던 사람이 눌러도 **성공**이다(서버 404 를 코어가 "없다"로 읽는다) —
     /// 그래서 화면은 사진 유무로 이 버튼을 감추거나 잠그지 않는다.
     func removeAvatar() {
         Task { @MainActor in await performAvatarRemoval() }
     }
 
-    func performAvatarRemoval() async {
+    /// 결과를 **행 안에** 남긴다(`avatarRemovalNotice`). `syncMessage` 는 팝오버에만 보이므로 그것만 세우면
+    /// 설정 창에서 누른 사람은 성공도 실패도 못 본다(v0.3.36 검토 지적 ②). 둘 다 세운다 — 팝오버를 보던 사람도 있다.
+    @discardableResult
+    func performAvatarRemoval() async -> Bool {
         // 연타 가드. 없으면 확인 버튼 두 번에 두 요청이 나가고, 둘째가 늦게 실패하면 방금 성공한 화면 위에
         // 실패 문구가 덮인다(별명 저장이 같은 이유로 같은 가드를 쓴다).
-        guard session != nil, !isRemovingAvatar else { return }
+        guard !isRemovingAvatar else { return false }
+        // 로그인 전에는 **말은 한다**. 조용히 return 하면 눌러도 아무 일이 없는 버튼이 된다(검토 지적 ⑤ —
+        // 뷰도 이 상태에서 버튼을 잠그지만, 게이트는 짝으로 있어야 한다).
+        guard session != nil else {
+            setAvatarRemovalNotice(AvatarRemovalText.signedOutMessage, tone: .failure)
+            return false
+        }
         isRemovingAvatar = true
         defer { isRemovingAvatar = false }
         let generation = sessionGeneration
         do {
-            try await withSessionRetry { activeSession in
+            let outcome = try await withSessionRetry { activeSession in
                 try await service.removeAvatar(
                     accessToken: activeSession.accessToken,
                     userID: activeSession.userID
                 )
             }
-            guard generation == sessionGeneration else { return }
+            guard generation == sessionGeneration else { return false }
             // 낙관 대입을 하지 않는다 — 표시는 서버가 돌려준 팀 목록에서 온다(아바타 업로드와 같은 규약).
             await refreshTeamStatus()
-            guard generation == sessionGeneration else { return }
-            // ← 반드시 refresh 뒤(그 함수가 성공 경로 끝에서 syncMessage 를 "동기화됨"으로 덮는다).
-            syncMessage = AvatarRemovalText.successMessage
+            guard generation == sessionGeneration else { return false }
+            switch outcome {
+            case .removed:
+                // ← 반드시 refresh 뒤(그 함수가 성공 경로 끝에서 syncMessage 를 "동기화됨"으로 덮는다).
+                setAvatarRemovalNotice(AvatarRemovalText.successMessage, tone: .success)
+                return true
+            case .tableClearedFileLeft:
+                // 표는 비었으니 화면에는 기본 캐릭터가 뜬다 — 그런데 공개 버킷에는 얼굴이 남아 있다.
+                // 이걸 "되돌렸어요"라고 말하면 거짓말이다(검토 지적 ③).
+                setAvatarRemovalNotice(AvatarRemovalText.fileLeftMessage, tone: .warning)
+                return false
+            }
         } catch {
-            guard generation == sessionGeneration else { return }
-            syncMessage = authMessage(for: error, fallback: AvatarRemovalText.failureMessage)
+            guard generation == sessionGeneration else { return false }
+            setAvatarRemovalNotice(
+                authMessage(for: error, fallback: AvatarRemovalText.failureMessage),
+                tone: .failure
+            )
+            return false
         }
+    }
+
+    /// 결과 한 줄을 행과 팝오버 **양쪽에** 세운다. 한 곳에서만 세우면 본 사람과 못 본 사람이 갈린다.
+    private func setAvatarRemovalNotice(_ message: String, tone: AvatarRemovalNoticeTone) {
+        avatarRemovalNotice = message
+        avatarRemovalNoticeTone = tone
+        syncMessage = message
     }
 
     /// 별명(표시명) 변경. 서버 set_display_name 이 정규화·길이·중복·쿨타임을 **전부** 판정하고 여기서는

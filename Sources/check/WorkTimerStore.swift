@@ -1243,6 +1243,18 @@ final class WorkTimerStore {
     /// 프로필 사진 삭제 왕복 중인지. **관찰 대상이다** — 되돌리기 버튼을 누른 동안 잠가야 연타로 두 요청이 나가고
     /// 늦게 온 쪽이 방금 세운 성공 문구를 실패로 덮는 일이 없다(별명 저장과 같은 규약).
     var isRemovingAvatar = false
+    /// 사진 되돌리기 **2단 확인이 열려 있는지**. 뷰의 `@State` 가 아니라 여기 있는 이유는 설정 창이 닫혀도
+    /// 살아 있기 때문이다 — 이 창은 닫을 때 파괴되지 않아(`orderOut`) 뷰 로컬 상태였다면 다음에 열 때
+    /// 빨간 [되돌리기]가 이미 무장된 채로 사용자를 맞는다(v0.3.36 검토 지적 ④). 창 컨트롤러가 열 때·닫을 때
+    /// `resetAvatarRemovalRow()` 로 접는다([차단한 사람] 쪽을 되돌리는 `closeBlockedPeopleSettings` 와 같은 규약).
+    var isConfirmingAvatarRemoval = false
+    /// 사진 되돌리기 결과 **한 줄**(설정 행 안에 뜬다). `syncMessage` 만 세우면 팝오버에만 보여서 설정 창에서
+    /// 누른 사람은 성공도 실패도 못 본다(v0.3.36 검토 지적 ②) — 별명 행의 `displayNameNotice` 와 같은 규약이다.
+    var avatarRemovalNotice: String?
+    /// 위 한 줄의 색. 별명 쪽은 Bool(`isDisplayNameNoticeError`) 이지만 여기는 **세 갈래**다 —
+    /// 성공 · 표는 비웠는데 파일이 남음(경고) · 실패. Bool 로 접으면 "파일이 남았다"가 성공이나 실패 중
+    /// 하나로 뭉개지는데, 그 갈래를 만들려고 코어에 `AvatarRemovalOutcome` 을 둔 것이다.
+    var avatarRemovalNoticeTone: AvatarRemovalNoticeTone = .success
 
     // ── 비밀번호 재설정(메일 OTP) ──
     // 왜 앱 안에서 끝내는가: 재설정 메일의 링크는 `check://auth` 로 가는데 그 스킴을 등록한 앱이 없어
@@ -3360,6 +3372,9 @@ extension WorkTimerStore {
         displayNameDraft = ""
         displayNameNotice = nil
         isDisplayNameNoticeError = false
+        // 사진 되돌리기 행도 계정에 묶인 상태다. 남기면 새 계정 화면에 앞 사람의 결과 한 줄이 뜨고,
+        // 확인이 열린 채면 다음 사람의 첫 누름이 곧 삭제가 된다.
+        resetAvatarRemovalRow()
         displayNameChangedAt = nil
         displayNameAvailableAt = nil
         isDisplayNameLocked = false

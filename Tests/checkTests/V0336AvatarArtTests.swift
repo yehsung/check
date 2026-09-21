@@ -7,38 +7,47 @@ import Testing
 
 // 프로필 캐릭터 그림·크롭(2026-09-21 사용자 요청 — 맥, 갈래 A).
 //
-// ① "크롭이 과하다" — 기준은 조영서 님이 직접 캡처해 올린 프로필 사진이다. 실측 **높이 = 원 지름의 1.018배 · 폭 0.80배**,
-//    세로는 거의 가운데(위가 3.4% 잘리고 아래는 0.6% 남는다). 옛 값(정사각 1.20 · 아래로 +0.15)은 아래를 19~21% 잘라
-//    발이 통째로 없어졌다(여섯 캐릭터 실측 — 전체 잘림 20~33%).
-// ② "여기 나오는 기본 사진으로 해달라" — '캐릭터 고르기' 카드와 **같은 그림**(`CharacterCardArt`)을 프로필에도 쓴다.
+// ① "크롭이 과하다" — 기준은 조영서 님이 **프로필 사진으로 올린 그림**이다(110×130 JPG). 사진 아바타는 `scaledToFill` +
+//    원형 자르기라, 그 사진 좌표에서 원은 지름 110px(=사진 폭) · 중심 (55, 65) 이다. 그 원을 기준으로 실루엣 상자를 재면
+//    x 14~101 · y 8~119 — **높이 112px = 1.018 지름 · 폭 88px = 0.800 지름**, 위 끝 −0.518 · 아래 끝 +0.500.
+//    레퍼런스도 5.4% 가 잘린다(귀 끝 60.5% · 위 15% 행 28.5% · **아래 15% 행 20.9%**) — "발끝이 남는다"가 아니라
+//    발 가장자리도 잘리되 통째로 사라지지는 않는다는 뜻이다. 옛 값(정사각 1.20 · 아래로 +0.15)은 여섯 다
+//    **아래 15% 행이 100%** 잘렸다(전체 잘림 19.9~33.3%).
+// ② "카드에 나오는 기본 그림으로 해달라" — **크롭(①)만으로 충족된다.** 카드 그림(아틀라스 `frontIdle` 셀)과 프로필이 쓰는
+//    `portrait-neutral.png` 는 같은 그림의 해상도 차이다(조인 비 실측 0.005 안에서 일치 — 아래 계약이 그것을 잰다).
+//    한때 출처를 `CharacterCardArt.image` 로 바꿨다가 **되돌렸다**. 비용은 아래 `V0336AvatarArtBakeProbe.cost` 가 잰다
+//    (실측 3회: 첫 페인트 메인스레드 **203ms 대 23ms** · 아틀라스 상주 **21.5MB** · 조인 그림 4.3MB 대 0.7MB).
+//    거기에 초상 디코드 실패 시 그 함수가 아잉으로 접어 **남의 얼굴에 아잉이 서는** 회귀까지 온다.
 // ③ "인상 쓰는 표정을 쓰지 마라" — 프로필로 읽히는 동그란 그림(팝오버 헤더 46pt 원)은 근무 여부와 무관하게 neutral.
-//    **메뉴바 아이콘은 건드리지 않는다**(사용자 확인 전).
+//    **메뉴바 아이콘은 건드리지 않는다**(사용자 확인 전) — 그것도 아래에서 픽셀로 잰다.
 //
-// 여기서 재는 것: 상자 계산(순수) · 그림 출처(같은 함수인가 · 아잉으로 접지 않는가) · 그려진 픽셀 · 소스 계약.
+// 여기서 재는 것: 상자 계산(순수) · 그림 출처(되돌림이 풀렸는가 · 아잉으로 접지 않는가) · 캐릭터별 얼굴 크기 편차 ·
+// 그려진 픽셀 · 소스 계약.
 
 // MARK: - ① 상자 계산(순수 — 뷰 없이 값으로 검증한다)
 
 @Suite("v0.3.36 아바타 상자 규칙(순수)")
 struct V0336PortraitBoxTests {
-    /// 여섯 캐릭터의 조인 그림 비(알파 상자 — 2026-09-21 실측, 아잉만 가로가 더 넓다).
+    /// 여섯 캐릭터의 **조인 초상**(`portrait-neutral.png` 를 알파 상자로 조인 것 — 2026-09-21 실측, 아잉만 가로가 더 넓다).
+    /// 번들을 안 읽는 순수 표다. 실제 그림과 갈리지 않는지는 `V0336FaceScaleTests.상자_표가_실제_그림과_맞다` 가 본다.
     static let artSizes: [(id: String, size: CGSize)] = [
-        ("fox", CGSize(width: 444, height: 512)),
-        ("ghost", CGSize(width: 504, height: 512)),
-        ("jellyfish", CGSize(width: 444, height: 512)),
-        ("shiba", CGSize(width: 402, height: 512)),
-        ("squirrel", CGSize(width: 373, height: 512)),
+        ("fox", CGSize(width: 167, height: 192)),
+        ("ghost", CGSize(width: 189, height: 192)),
+        ("jellyfish", CGSize(width: 167, height: 192)),
+        ("shiba", CGSize(width: 151, height: 192)),
+        ("squirrel", CGSize(width: 140, height: 192)),
         ("aing", CGSize(width: 164, height: 154)),
     ]
 
     @Test func 높이를_지름에_맞추고_폭은_원본_비대로_따라간다() {
-        // 세로가 긴 그림(시바 402×512)은 상한에 안 걸린다 — 높이가 1.03 지름, 폭은 비대로.
-        let shiba = CGSize(width: 402, height: 512)
+        // 세로가 긴 그림(시바 151×192)은 상한에 안 걸린다 — 높이가 1.03 지름, 폭은 비대로.
+        let shiba = CGSize(width: 151, height: 192)
         for diameter in [16.0, 22.0, 26.0, 34.0, 64.0] as [CGFloat] {
             let box = AppUserAvatarArt.portraitBox(diameter: diameter, artSize: shiba)
             #expect(abs(box.height - diameter * 1.03) < 1e-9, "\(diameter)pt 높이 \(box.height)")
-            #expect(abs(box.width - diameter * 1.03 * (402.0 / 512.0)) < 1e-9)
+            #expect(abs(box.width - diameter * 1.03 * (151.0 / 192.0)) < 1e-9)
             // 원본 비가 그대로 남는다(정사각 상자 + scaledToFit 으로 돌아가면 여기서 갈린다).
-            #expect(abs(box.width / box.height - 402.0 / 512.0) < 1e-9)
+            #expect(abs(box.width / box.height - 151.0 / 192.0) < 1e-9)
             #expect(box.width <= diameter * AppUserAvatarArt.artMaxWidthFraction)
         }
     }
@@ -78,14 +87,14 @@ struct V0336PortraitBoxTests {
 
     @Test func 세로_오프셋은_지름에_비례해_위로_올린다() {
         for diameter in [16.0, 26.0, 46.0, 64.0] as [CGFloat] {
-            let box = AppUserAvatarArt.portraitBox(diameter: diameter, artSize: CGSize(width: 402, height: 512))
+            let box = AppUserAvatarArt.portraitBox(diameter: diameter, artSize: CGSize(width: 151, height: 192))
             #expect(abs(box.offsetY - (-0.015 * diameter)) < 1e-9, "\(diameter)pt 오프셋 \(box.offsetY)")
             #expect(box.offsetY < 0, "아래로 내리면(옛 +0.15) 발이 잘린다")
         }
     }
 
     @Test func 지름에_선형이고_크기를_모르면_정사각으로_접는다() {
-        let art = CGSize(width: 444, height: 512)
+        let art = CGSize(width: 167, height: 192)
         let small = AppUserAvatarArt.portraitBox(diameter: 26, artSize: art)
         let big = AppUserAvatarArt.portraitBox(diameter: 52, artSize: art)
         #expect(abs(big.width - small.width * 2) < 1e-9 && abs(big.height - small.height * 2) < 1e-9)
@@ -102,49 +111,152 @@ struct V0336PortraitBoxTests {
     }
 }
 
-// MARK: - ② 그림 출처 — '캐릭터 고르기' 카드와 같은 함수
+// MARK: - ② 그림 출처 — neutral 초상 PNG 한 장(되돌림을 못 박는다)
 
 @MainActor
 @Suite("v0.3.36 아바타 그림 출처")
 struct V0336AvatarArtSourceTests {
-    @Test func 프로필_그림은_카드_그림과_같은_함수의_같은_한_장이다() throws {
+    @Test func 프로필_그림은_neutral_초상을_조인_것이고_캐릭터당_한_장이다() throws {
         for id in AppUserAvatarArt.knownIDs {
-            let profile = try #require(AppUserAvatarArt.portrait(characterID: id), "\(id) 프로필 그림이 없다")
-            let card = try #require(CharacterCardArt.image(characterID: id), "\(id) 카드 그림이 없다")
-            // 같은 캐시의 **같은 인스턴스**다 — 따로 디코드하면(옛 코드) 여기서 갈린다.
-            #expect(profile === card, "\(id) 프로필과 카드가 다른 그림을 쓴다")
+            let art = try #require(AppUserAvatarArt.portrait(characterID: id), "\(id) 프로필 그림이 없다")
+            let url = try #require(CheckMascotAssets.portraitURL(for: .neutral, characterID: id))
+            let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+            let raw = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+            #expect(raw.width == 192 && raw.height == 192, "\(id) 초상 캔버스가 192² 가 아니다(\(raw.width)×\(raw.height))")
+            let tight = CharacterCardArt.tightened(raw)
+            #expect(art.width == tight.width && art.height == tight.height,
+                    "\(id) 프로필이 \(art.width)×\(art.height) 인데 조인 초상은 \(tight.width)×\(tight.height) 다")
+            // 캐릭터당 한 번만 디코드·조인한다 — 두 번째 조회는 같은 인스턴스다(행은 hover·갱신마다 다시 그려진다).
+            #expect(AppUserAvatarArt.portrait(characterID: id) === art, "\(id) 가 매번 다시 디코드된다")
         }
     }
 
-    @Test func 스프라이트는_아틀라스_전신이다_초상_PNG_로_되돌아가면_빨개진다() throws {
+    /// **출처를 카드 그림으로 바꿀 이유가 없다는 증거.** 둘은 같은 그림의 해상도 차이다 —
+    /// 조인 실루엣의 가로/세로 비가 0.005 안에서 같고(실측 최대차 0.0026 — 여우), 그래서 `portraitBox` 도 같은 상자를 준다.
+    /// 어느 날 아틀라스를 다른 자세로 다시 구우면 이 비가 벌어지고, 그때는 "같은 그림"이라는 이 근거부터 다시 재야 한다.
+    @Test func 카드_그림과_초상은_같은_그림의_해상도_차이다() throws {
         let catalog = CheckCharacter3DScene.catalog
         let sprites = AppUserAvatarArt.knownIDs.filter { catalog.manifest(id: $0)?.kind == .sprite }
         #expect(sprites.count >= 4, "스프라이트가 \(sprites.count) 종뿐이다 — 기준선을 확인하라")
         for id in sprites {
             let art = try #require(AppUserAvatarArt.portrait(characterID: id))
             let cell = CharacterCardArt.tightened(try #require(CharacterCardArt.frontIdleCell(characterID: id)))
-            #expect(art.width == cell.width && art.height == cell.height,
-                    "\(id) 가 아틀라스 셀(\(cell.width)×\(cell.height))이 아니라 \(art.width)×\(art.height) 다")
-            // 초상 PNG 는 192² 캔버스다 — 되돌아가면 높이가 192 이하로 떨어진다.
-            #expect(art.height > 400, "\(id) 높이 \(art.height) — 초상 PNG(얼굴 크롭)로 되돌아갔다")
+            // 해상도는 **달라야** 한다(초상 192² · 셀 512 높이) — 같으면 '해상도 차이'라는 말이 뜻을 잃는다.
+            #expect(cell.height > art.height + 100, "\(id) 셀 높이 \(cell.height) 와 초상 \(art.height) 가 너무 가깝다")
+            let artRatio = Double(art.width) / Double(art.height)
+            let cellRatio = Double(cell.width) / Double(cell.height)
+            #expect(abs(artRatio - cellRatio) < 0.005, "\(id) 비가 초상 \(artRatio) · 셀 \(cellRatio) 로 갈렸다")
+            // 상자 규칙의 결과까지 같다 = 출처를 바꿔도 화면이 안 달라진다.
+            let a = AppUserAvatarArt.portraitBox(diameter: 26, artSize: CGSize(width: art.width, height: art.height))
+            let b = AppUserAvatarArt.portraitBox(diameter: 26, artSize: CGSize(width: cell.width, height: cell.height))
+            #expect(abs(a.width - b.width) < 0.12 && abs(a.height - b.height) < 0.12, "\(id) \(a) vs \(b)")
         }
     }
 
-    @Test func 모르는_캐릭터는_아잉으로_접지_않는다() throws {
-        // ★ 이 가드가 **일하고 있다**는 증거: 카드 그림 함수는 모르는 id 를 아잉으로 접는다(내 캐릭터용 규칙).
-        //   그대로 부르면 남의 아바타에 아잉이 선다 — 그래서 `knownIDs` 로 먼저 끊는다.
-        let aing = try #require(CharacterCardArt.image(characterID: CharacterCatalog.builtInAingID))
-        let folded = try #require(CharacterCardArt.image(characterID: "dragon"), "카드 그림이 모르는 id 에 nil 을 준다면 이 검사는 무의미하다")
-        #expect(folded.width == aing.width && folded.height == aing.height, "카드 그림이 모르는 id 를 아잉으로 접지 않는다")
-
+    @Test func 모르는_캐릭터와_깨진_초상은_아잉이_아니라_nil_이다() throws {
         #expect(AppUserAvatarArt.portrait(characterID: "dragon") == nil)
         #expect(AppUserAvatarArt.portrait(characterID: "") == nil)
         #expect(AppUserAvatarArt.portrait(characterID: "AING") == nil, "id 는 소문자 정규화된 값만 온다")
+
+        // ★ 이 불변식이 **일하고 있다**는 증거: 폴백이 있는 이웃 함수들은 같은 id 에 아잉을 돌려준다.
+        //   프로필이 그 함수들 중 하나를 타는 순간(2026-09-21 에 실제로 그랬다) 남의 얼굴에 아잉이 선다.
+        let aing = try #require(AppUserAvatarArt.portrait(characterID: CharacterCatalog.builtInAingID))
+        let cardFold = try #require(CharacterCardArt.image(characterID: "dragon"),
+                                    "카드 그림이 모르는 id 에 nil 을 준다면 이 검사는 무의미하다")
+        #expect(cardFold.width == aing.width && cardFold.height == aing.height, "카드 그림이 모르는 id 를 아잉으로 접지 않는다")
+        #expect(CheckMascotAssets.image(for: .neutral, characterID: "dragon") != nil, "마스코트 경로도 아잉으로 접는다")
+
         for id in AppUserAvatarArt.knownIDs {
             #expect(AppUserAvatarArt.portrait(characterID: id) != nil, "\(id) 를 안다고 해 놓고 못 그린다")
         }
         // 아는 캐릭터 목록은 번들 카탈로그 그대로다(빈 원이 서지 않게 — V0335 와 같은 계약).
         #expect(Set(AppUserAvatarArt.knownIDs) == Set(CheckMascotAssets.catalog.allIDs))
+    }
+}
+
+// MARK: - ②' 캐릭터별 얼굴 크기 편차 (검토 지적 "3배 갈린다"에 대한 실측)
+
+@MainActor
+@Suite("v0.3.36 캐릭터별 얼굴 크기")
+struct V0336FaceScaleTests {
+    /// 조인 그림의 **행별 가로 폭**(알파 > 8). `CharacterCardArt.alphaBounds` 와 같은 규약(좌상단 원점)으로 한 번 그려 읽는다.
+    static func rowExtents(_ image: CGImage) -> [Int] {
+        let w = image.width, h = image.height
+        guard w > 0, h > 0 else { return [] }
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        pixels.withUnsafeMutableBytes { buffer in
+            guard let ctx = CGContext(data: buffer.baseAddress, width: w, height: h, bitsPerComponent: 8,
+                                      bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        }
+        return (0..<h).map { y in
+            let row = y * w * 4
+            var lo = -1, hi = -1
+            for x in 0..<w where pixels[row + x * 4 + 3] > 8 {
+                if lo < 0 { lo = x }
+                hi = x
+            }
+            return lo < 0 ? 0 : hi - lo + 1
+        }
+    }
+
+    /// 26pt 원에 그려질 때의 **귀 끝 사이 폭**(위 절반에서 가장 넓은 행) — 캐릭터를 알아보는 크기의 대리값이다.
+    static func earWidthPt(_ id: String, diameter: CGFloat = 26) -> Double? {
+        guard let art = AppUserAvatarArt.portrait(characterID: id), art.width > 0 else { return nil }
+        let box = AppUserAvatarArt.portraitBox(diameter: diameter, artSize: CGSize(width: art.width, height: art.height))
+        let ext = rowExtents(art)
+        guard let top = ext.prefix(max(1, ext.count / 2)).max() else { return nil }
+        return Double(top) * Double(box.width) / Double(art.width)
+    }
+
+    /// 검토 지적: "얼굴 크기가 캐릭터마다 3배 갈리는데 이를 막던 계약이 무력화됐다."
+    ///
+    /// **직접 쟀다(2026-09-21, 26pt 원 기준 귀 끝 사이 폭 pt).**
+    /// - 새 규칙(높이 1.03 · 폭 상한 1.02): 다람쥐 19.4 · 여우 19.8 · 시바 20.8 · 유령 21.9 · 아잉 23.0 · 해파리 23.3 → **1.20배**
+    /// - 옛 규칙(정사각 1.20 + scaledToFit · 아래로 0.15): 22.6 ~ 27.1 → **1.20배** (편차는 그대로, 전부 더 컸을 뿐)
+    /// - 레퍼런스(조영서 캡처): 20.6 — 여섯이 만드는 띠(19.4~23.3) 안이다.
+    /// 즉 **3배로 갈리지 않고**, 편차도 옛 규칙과 같다. 두 규칙 다 캐릭터마다 **같은 기준**(조인 실루엣)으로 한 번에
+    /// 키우기 때문이다 — 얼굴 크기 차이는 그림 자체의 차이(아잉은 머리만, 시바는 전신)이지 규칙이 만든 것이 아니다.
+    /// 그래도 편차 상한은 **계약으로 남긴다**: 언젠가 캐릭터별 보정을 넣으면 여기서 먼저 빨개진다.
+    @Test func 얼굴_크기는_캐릭터마다_1_3배_안에서만_갈리고_원을_넘지_않는다() throws {
+        var widths: [(String, Double)] = []
+        for id in AppUserAvatarArt.knownIDs.sorted() {
+            widths.append((id, try #require(Self.earWidthPt(id), "\(id) 를 못 쟀다")))
+        }
+        #expect(widths.count == 6, "\(widths.count) 종만 쟀다")
+        let values = widths.map(\.1)
+        let lo = try #require(values.min()), hi = try #require(values.max())
+        #expect(hi / lo < 1.30, "얼굴 폭이 \(hi / lo) 배 갈렸다 — \(widths)")
+        // 레퍼런스 20.6pt 둘레에 모여야 한다. 위쪽(0.95 지름)을 넘으면 옛 규칙처럼 과하게 키운 것이다(옛 최대 27.1 = 1.04 지름).
+        #expect(lo > 26 * 0.70, "가장 작은 얼굴이 \(lo)pt — 26pt 에서 못 알아본다. \(widths)")
+        #expect(hi < 26 * 0.95, "가장 큰 얼굴이 \(hi)pt — 원을 넘도록 키웠다. \(widths)")
+    }
+
+    /// 순수 스위트가 쓰는 크기 표(`V0336PortraitBoxTests.artSizes`)가 **실제 번들 그림과 같은지** 본다.
+    /// 표가 낡으면 순수 테스트는 초록인 채로 실제 화면만 달라진다(아틀라스 셀 크기를 적어 두면 그런 일이 난다).
+    @Test func 상자_표가_실제_그림과_맞다() throws {
+        for (id, size) in V0336PortraitBoxTests.artSizes {
+            let art = try #require(AppUserAvatarArt.portrait(characterID: id), "\(id) 그림이 없다")
+            #expect(CGFloat(art.width) == size.width && CGFloat(art.height) == size.height,
+                    "\(id) 표는 \(size) 인데 실제는 \(art.width)×\(art.height) 다")
+        }
+        #expect(Set(V0336PortraitBoxTests.artSizes.map(\.id)) == Set(AppUserAvatarArt.knownIDs))
+    }
+
+    /// 크기 편차의 **뿌리**: 상자 높이는 여섯이 지름 대비 거의 같아야 한다(아잉만 가로 상한에 걸려 조금 작다).
+    /// 실측 0.958(아잉) ~ 1.030(나머지 다섯) = 1.075배. 캐릭터마다 다른 배율을 쓰기 시작하면 여기가 먼저 벌어진다.
+    @Test func 상자_높이는_여섯이_거의_같다() throws {
+        var heights: [(String, CGFloat)] = []
+        for id in AppUserAvatarArt.knownIDs.sorted() {
+            let art = try #require(AppUserAvatarArt.portrait(characterID: id))
+            let box = AppUserAvatarArt.portraitBox(diameter: 26, artSize: CGSize(width: art.width, height: art.height))
+            heights.append((id, box.height / 26))
+        }
+        let values = heights.map(\.1)
+        let lo = try #require(values.min()), hi = try #require(values.max())
+        #expect(lo > 0.94 && hi <= AppUserAvatarArt.artHeightFraction + 1e-9, "\(heights)")
+        #expect(hi / lo < 1.10, "상자 높이가 \(hi / lo) 배 갈렸다 — \(heights)")
     }
 }
 
@@ -198,22 +310,31 @@ struct V0336AvatarRenderTests {
         return color
     }
 
-    /// 2026-09-21 실측(64pt @2x · 세 캐릭터). 그려진 폭이 상자 규칙과 ±0.01 지름 안에서 맞고, 머리가 원 위 호까지 닿는다.
-    /// 옛 값(정사각 1.20 + scaledToFit · 아래로 +0.15)은 폭이 여우 0.922 · 시바 0.938 · 다람쥐 0.875 였고
-    /// 위 빈틈이 0.047~0.086 이었다 — 머리 위가 비고 발이 아래로 잘려 나간 그 모습이다.
+    /// 2026-09-21 실측(64pt @2x · 여섯 캐릭터 전부). 그려진 폭이 상자 규칙과 ±0.03 지름 안에서 맞고, 머리가 원 위 호까지 닿는다.
+    ///
+    /// **임계 0.039 는 옛 값과 새 값의 한가운데다.** 2026-09-21 실측 위 빈틈(64pt @2x 렌더, 지름 대비):
+    /// - 새 규칙 **0.0234~0.0312**(여섯 — 여우만 0.0312, 나머지 다섯은 0.0234)
+    /// - 옛 규칙(정사각 1.20 + scaledToFit · 아래로 +0.15) **0.0469~0.0859**
+    /// 0.035(여유 0.5px)로 조이면 옛 규칙을 더 잘 잡는 것도 아니면서 병합 한 번에 깨진다 — 지키려는 사실은
+    /// "머리 위가 옛날처럼 비어 있지 않다"이지 "0.5px 안에 있다"가 아니다. 0.039 는 새 값 위로 1.0px,
+    /// 옛 값 아래로 2.0px(@128px 비트맵)다.
+    /// 옛 규칙은 그려진 폭도 달랐다(여우 0.922 · 시바 0.938 · 다람쥐 0.875) — 정사각 상자라 원본 비를 잃었다.
     @Test func 그려진_폭이_상자_규칙과_같고_머리가_원_위까지_닿는다() throws {
         let size: CGFloat = 64
         let plate = try Self.plateColor(size: size)
-        for id in ["fox", "shiba", "squirrel"] {
+        for id in AppUserAvatarArt.knownIDs.sorted() {
             let art = try #require(AppUserAvatarArt.portrait(characterID: id))
             let box = AppUserAvatarArt.portraitBox(
                 diameter: size, artSize: CGSize(width: art.width, height: art.height))
             let rep = try V0335AvatarCharacterRenderTests.bitmap(
                 AppUserAvatarFace(avatar: .character(id), name: "민수", size: size))
             let ink = try Self.ink(rep, plate: plate)
-            #expect(abs(ink.width - box.width / size) < 0.03,
-                    "\(id) 그려진 폭 \(ink.width) · 상자 \(box.width / size) — 뷰가 상자 규칙을 안 쓴다")
-            #expect(ink.topGap < 0.035, "\(id) 머리 위가 \(ink.topGap) 비었다 — 그림이 아래로 내려갔다")
+            // 폭은 **원보다 좁은 그림에서만** 상자와 맞다 — 아잉(1.020)·유령(1.014)은 원이 좌우를 깎아 낸다.
+            if box.width <= size * 0.95 {
+                #expect(abs(ink.width - box.width / size) < 0.03,
+                        "\(id) 그려진 폭 \(ink.width) · 상자 \(box.width / size) — 뷰가 상자 규칙을 안 쓴다")
+            }
+            #expect(ink.topGap < 0.039, "\(id) 머리 위가 \(ink.topGap) 비었다 — 그림이 아래로 내려갔다(옛 규칙은 0.047~0.086)")
             #expect(ink.height > 0.90, "\(id) 세로 \(ink.height) — 원을 못 채운다")
         }
     }
@@ -263,6 +384,27 @@ struct V0336HeaderMoodTests {
                 "헤더 원이 근무 여부를 따라 시무룩해진다")
     }
 
+    /// 메뉴바 아이콘은 **그대로** 근무 여부를 따른다 — 소스 문자열이 아니라 픽셀로 잰다(③ 의 반쪽).
+    /// 헤더만 neutral 로 박았으므로, 여기가 같아지면 상태 표시가 통째로 사라진 것이다.
+    @Test func 메뉴바_아이콘은_여전히_근무_여부로_얼굴이_바뀐다() throws {
+        let working = WorkStatusSnapshot(status: .working, elapsedSeconds: 60)
+        let off = WorkStatusSnapshot(status: .offWork, elapsedSeconds: 0)
+        let a = try #require(CheckMascotAssets.menuBarImage(for: working))
+        let b = try #require(CheckMascotAssets.menuBarImage(for: off))
+        #expect(a === CheckMascotAssets.menuBarImage(for: .neutral), "근무 중이 웃는 얼굴이 아니다")
+        #expect(b === CheckMascotAssets.menuBarImage(for: .negative), "근무 중 아님이 시무룩한 얼굴이 아니다")
+        // 그림이 실제로 다른가(같은 파일이면 이 비교는 아무것도 못 가른다 — 기준선 규칙).
+        let pa = try Self.rep(a), pb = try Self.rep(b)
+        #expect(V0335AvatarCharacterRenderTests.meanDifference(pa, pb) > 3,
+                "메뉴바가 근무 여부와 상관없이 같은 얼굴이다")
+        #expect(a.size == CheckMascotAssets.menuBarSize && b.size == CheckMascotAssets.menuBarSize)
+    }
+
+    static func rep(_ image: NSImage) throws -> NSBitmapImageRep {
+        guard let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { throw V0336Error.render }
+        return rep
+    }
+
     /// 얼굴이 있는 위쪽 60% 만 비교한다(아래쪽은 헤더 버튼의 붓 배지가 있다).
     static func faceDifference(_ a: NSBitmapImageRep, _ b: NSBitmapImageRep) -> Double {
         guard a.pixelsWide == b.pixelsWide, a.pixelsHigh == b.pixelsHigh else { return 255 }
@@ -285,14 +427,16 @@ struct V0336HeaderMoodTests {
 @MainActor
 @Suite("v0.3.36 소스 계약")
 struct V0336AvatarSourceContractTests {
-    @Test func 프로필_그림_출처는_카드_그림_함수_한_곳이다() throws {
+    @Test func 프로필_그림_출처는_neutral_초상_한_곳이고_폴백이_없다() throws {
         let sources = try V0325TooltipTests.strippedSources()
         let avatar = try #require(sources["CheckAvatarView.swift"])
-        // 카드와 같은 함수 한 줄. 따로 디코드하던 옛 길(ImageIO)은 남아 있으면 안 된다.
-        #expect(avatar.contains("return CharacterCardArt.image(characterID: characterID)"))
-        #expect(!avatar.contains("CGImageSourceCreate"), "초상 PNG 를 따로 디코드하는 길이 남았다")
-        // 모르는 캐릭터를 먼저 끊는 가드(없으면 카드 그림이 아잉으로 접어 남의 아바타에 아잉이 선다).
-        #expect(avatar.contains("guard knownIDs.contains(characterID) else { return nil }"))
+        // 초상 URL 을 직접 열어 디코드한다 — 폴백이 있는 함수를 타지 않는다.
+        #expect(avatar.contains("CheckMascotAssets.portraitURL(for: .neutral, characterID: characterID)"))
+        #expect(avatar.contains("CGImageSourceCreateWithURL(url as CFURL, nil)"))
+        #expect(avatar.contains("CharacterCardArt.tightened(raw)"))
+        // ★ 되돌림(2026-09-21)을 못 박는다: 이 둘은 모르는 id·깨진 PNG 를 **아잉으로 접는다**.
+        #expect(!avatar.contains("CharacterCardArt.image("), "카드 그림 출처로 되돌아갔다 — 초상 실패가 아잉이 된다")
+        #expect(!avatar.contains("CheckMascotAssets.image("), "아잉으로 폴백하는 내 캐릭터 경로를 남의 아바타가 탄다")
 
         // 뷰가 상자 규칙을 쓴다: 폭·높이를 직접 주고(정사각 + scaledToFit 이 아니다) 위로 올린다.
         let face = try #require(V0325TooltipTests.between(avatar, "struct CharacterAvatarFace: View {", "enum AppUserAvatarArt {"))
@@ -316,9 +460,10 @@ struct V0336AvatarSourceContractTests {
         let mascot = try #require(sources["CheckMascotView.swift"])
         #expect(mascot.contains("CheckMascotAssets.image(for: mood ?? CheckMascotAssets.mood(for: snapshot))"))
 
-        // 프로덕션에서 이 마스코트를 그리는 자리는 헤더 하나뿐이다 — 다른 자리가 생기면 표정 규칙을 다시 정해야 한다.
+        // 헤더가 실제로 이 뷰를 그린다(파일 목록을 통째로 고정하지 않는다 — 다른 갈래가 뷰를 하나 더 쓰기 시작해도
+        // 이 계약이 지키려는 사실, 즉 "헤더가 neutral 을 넘긴다"는 위 두 줄이 그대로 지킨다).
         let sites = sources.filter { $0.value.contains("CheckMascotView(") }.keys.sorted()
-        #expect(sites == ["CheckCharacterPanel.swift"], "\(sites)")
+        #expect(sites.contains("CheckCharacterPanel.swift"), "헤더가 마스코트 뷰를 안 그린다: \(sites)")
 
         // ★ 메뉴바는 **그대로** 근무 여부를 따른다(사용자 확인 전까지 건드리지 않는다).
         #expect(try #require(sources["CheckMascotAssets.swift"]).contains("snapshot.isWorking ? .neutral : .negative"))
@@ -371,6 +516,52 @@ struct V0336AvatarArtBakeProbe {
                                    to: "\(dir)/header-\(id)-working.png")
             }
         }
+    }
+
+    /// ② 되돌림의 근거가 된 **비용**을 다시 잰다(머리 주석의 +ms · MB 는 이 값이다).
+    /// 캐시를 비우고 여섯 캐릭터를 한 번에 만드는 시간 = 팝오버에 아바타가 처음 뜨는 순간 메인스레드가 쓰는 시간이다.
+    ///
+    ///     CHECK_V0336_BAKE=/…/after swift test --filter V0336AvatarArtBake
+    @Test("그림 출처 비용을 잰다", .enabled(if: v0336BakeDir != nil))
+    func cost() throws {
+        let dir = try #require(v0336BakeDir)
+        let ids = AppUserAvatarArt.knownIDs.sorted()
+
+        // ① 카드 그림(아틀라스 전신) — 아틀라스 디코드 + 셀 자르기 + 알파 상자.
+        CheckCharacter3DScene.resetCharacterCachesForTesting()
+        CharacterCardArt.resetCacheForTesting()
+        var cardBytes = 0
+        let cardStart = Date()
+        for id in ids { cardBytes += (CharacterCardArt.image(characterID: id).map { $0.width * $0.height * 4 }) ?? 0 }
+        let cardMs = Date().timeIntervalSince(cardStart) * 1000
+
+        // ② 지금 쓰는 길 — 192² 초상 디코드 + 알파 상자(`AppUserAvatarArt.portrait` 와 같은 작업).
+        var portraitBytes = 0
+        let portraitStart = Date()
+        for id in ids {
+            guard let url = CheckMascotAssets.portraitURL(for: .neutral, characterID: id),
+                  let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let raw = CGImageSourceCreateImageAtIndex(src, 0, nil) else { continue }
+            let tight = CharacterCardArt.tightened(raw)
+            portraitBytes += tight.width * tight.height * 4
+        }
+        let portraitMs = Date().timeIntervalSince(portraitStart) * 1000
+
+        // ③ 아틀라스가 상주하는 바이트(캐시에 남는다 — 카드를 안 열어도 아바타가 열면 들어온다).
+        var atlasBytes = 0
+        for id in ids {
+            guard let manifest = CheckCharacter3DScene.catalog.manifest(id: id),
+                  let atlas = CheckCharacter3DScene.atlasImage(for: manifest) else { continue }
+            atlasBytes += atlas.width * atlas.height * 4
+        }
+
+        let json = """
+        {"cardMs": \(cardMs), "portraitMs": \(portraitMs), \
+        "atlasMB": \(Double(atlasBytes) / 1_048_576), \
+        "cardArtMB": \(Double(cardBytes) / 1_048_576), \
+        "portraitArtMB": \(Double(portraitBytes) / 1_048_576)}
+        """
+        try json.write(toFile: "\(dir)/cost.json", atomically: true, encoding: .utf8)
     }
 
     /// 뷰 한 장을 @2x 로 굽는다. 배경은 패널 단색 — 그라디언트면 같은 그림끼리도 배경이 달라진다(V0335 와 같은 규칙).

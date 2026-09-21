@@ -471,12 +471,11 @@ private func avFetches(_ host: String) -> Int {
         #expect(avatar.contains("AppUserAvatarStill(avatar: fallback, name: name, size: size)"), "사진 실패가 캐릭터로 떨어지지 않는다")
         #expect(avatar.contains("fallback: avatar.afterPhotoFailure"))
         #expect(avatar.contains("characters.avatar(for: userID, photoURL: avatarURL, characterHint: characterHint)"))
-        // 2026-09-21 사용자 지시로 **그림 출처가 바뀌었다**: 남의 캐릭터 얼굴도 '캐릭터 고르기' 카드와 같은 그림
-        // (`CharacterCardArt.image` — 아틀라스 전신)이다. 그래서 초상 PNG 를 따로 디코드하던 줄이 사라졌다.
-        // 아잉으로 접지 않는 규칙은 그 앞의 `knownIDs` 가드가 지킨다(계약 전체는 `V0336AvatarArtTests`).
-        #expect(avatar.contains("return CharacterCardArt.image(characterID: characterID)"), "남의 캐릭터 얼굴은 카드와 같은 그림")
-        #expect(avatar.contains("guard knownIDs.contains(characterID) else { return nil }"), "모르는 캐릭터가 카드 그림의 아잉 폴백을 탄다")
+        #expect(avatar.contains("CheckMascotAssets.portraitURL(for: .neutral, characterID: characterID)"), "남의 캐릭터 얼굴은 neutral 초상")
         #expect(!avatar.contains("CheckMascotAssets.image("), "아잉으로 폴백하는 내 캐릭터 경로를 남의 아바타가 탄다")
+        // 2026-09-21: 한때 `CharacterCardArt.image(characterID:)`(카드 그림)로 바꿨다가 되돌렸다 — 그 함수는 초상 디코드가
+        // 실패하면 아잉으로 접는다. 되돌림이 다시 풀리면 여기서 잡힌다(근거는 `V0336AvatarArtTests` 머리 주석).
+        #expect(!avatar.contains("CharacterCardArt.image("), "남의 아바타가 아잉으로 접는 카드 그림 함수를 탄다")
         #expect(avatar.contains("Image(decorative: portrait, scale: 1)"), "Image(nsImage:) 는 보간 지정을 무시한다")
     }
 

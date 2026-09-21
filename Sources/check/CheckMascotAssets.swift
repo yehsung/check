@@ -130,6 +130,10 @@ enum CheckMascotAssets {
 
     // MARK: - 이미지
 
+    /// ⚠️ **프로덕션 호출부가 없다**(2026-09-21 실측 — `Sources/` 전체에서 이 오버로드를 부르는 곳이 0개다).
+    /// 팝오버 헤더가 `CheckMascotView(mood:)` 로 표정을 박으면서 마지막 호출부가 `image(for: Mood)` 로 옮겨갔다.
+    /// **지우지 않는다**: `V0316PortraitTests` 가 "근무 여부 → 표정" 접기 규칙을 이 함수로 재고,
+    /// 메뉴바 쪽 짝(`menuBarImage(for: snapshot)` — `CheckMenuView` 가 쓴다)과 규칙이 갈리지 않는지도 여기서 본다.
     static func image(for snapshot: WorkStatusSnapshot) -> NSImage? {
         image(for: mood(for: snapshot))
     }

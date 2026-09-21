@@ -176,6 +176,12 @@ final class URLProtocolStub: URLProtocol {
         if request.url?.host == "schema-missing" && request.url?.path.hasPrefix("/rest/v1/") == true {
             return 404
         }
+        // v0.3.37 옛 서버 재현: `p_week_offset` 을 **아직 모르는** team_weekly_leaderboard.
+        // PostgREST 는 본문 키로 함수를 고르므로, 그 키가 실린 요청만 PGRST202 로 떨어지고 무인자 `{}` 는 성공한다
+        // — 클라의 '한 번에 한해 옛 모양으로 물러서기'가 실제로 도는지 보려면 이 비대칭이 필요하다.
+        if isLegacyLeagueMiss(request, body: body) {
+            return 404
+        }
         // 만료 access token 재현. 정확 일치가 아니라 **접미어** 매칭인 이유는 지연 응답 규약(alwaysDelayedHostPrefix)
         // 과 조합해야 하기 때문이다 — "delayed-expired-token" 처럼 접두어+접미어를 동시에 만족하는 호스트로만
         // "grant 가 in-flight 인 사이에 낡은 토큰으로 요청이 나가면 두 번째 grant 가 터진다"를 재현할 수 있다.
@@ -204,6 +210,12 @@ final class URLProtocolStub: URLProtocol {
         // (tokenBoardFailed) 검증용. 다른 조회(멤버십 등)는 정상 응답해야 스토어 준비가 된다.
         if request.url?.host == "token-board-fails",
            request.url?.path == "/rest/v1/rpc/token_usage_board" {
+            return 500
+        }
+        // 팀 리그 RPC 만 일시 실패(500)시키는 호스트(v0.3.37) — 과거 주 조회 실패가 "그 주엔 아무도 안 일했다"는
+        // **사실로 읽히지 않는지**(leagueFailed) 검증용. 404 계열을 쓰면 옛 서버 폴백으로 접혀 실패가 안 된다.
+        if request.url?.host?.contains("league-fails") == true,
+           request.url?.path == "/rest/v1/rpc/team_weekly_leaderboard" {
             return 500
         }
         // 새 기기별 표만 없는 서버(= v0.2.11 마이그레이션 미적용) 재현 호스트: 옛 표 업로드는 성공하고
@@ -268,6 +280,10 @@ final class URLProtocolStub: URLProtocol {
         if request.url?.host == "schema-missing" && request.url?.path.hasPrefix("/rest/v1/") == true {
             return Data(#"{"code":"PGRST205","message":"Could not find the table 'public.work_statuses' in the schema cache"}"#.utf8)
         }
+        if isLegacyLeagueMiss(request, body: body) {
+            // 2026-09-12 사고 때 실서버가 돌려준 본문 모양 그대로(함수·인자 이름만 이 건의 것으로).
+            return Data(#"{"code":"PGRST202","details":"Searched for the function public.team_weekly_leaderboard with parameter p_week_offset, but no matches were found in the schema cache.","hint":null,"message":"Could not find the function public.team_weekly_leaderboard(p_week_offset) in the schema cache"}"#.utf8)
+        }
         if request.url?.host?.hasSuffix("expired-token") == true,
            request.url?.path.hasPrefix("/rest/v1/") == true,
            request.value(forHTTPHeaderField: "Authorization") == "Bearer old-access-token" {
@@ -316,7 +332,7 @@ final class URLProtocolStub: URLProtocol {
             return myInviteCodeData(for: request)
         }
         if request.url?.path == "/rest/v1/rpc/team_weekly_leaderboard" {
-            return teamLeaderboardData()
+            return teamLeaderboardData(for: request, body: body)
         }
         if request.url?.path == "/rest/v1/memberships", request.httpMethod == "GET" {
             return membershipsData(for: request)
@@ -506,16 +522,78 @@ final class URLProtocolStub: URLProtocol {
     // 2위가 되도록(오목교 90000/3=30000 < 코드 크래프터 36000/1=36000) 인원을 준다. 정렬은 총합이 아니라
     // 평균 내림차순이라, 정렬 후 평균 [36000(코드), 30000(오목교), 24000(내 팀 72000/3)] 순이어야 한다.
     // 서버 정렬(총합 desc)을 신뢰하지 않고 클라가 평균으로 다시 정렬하는지 보이려 원본은 평균순이 아니다.
-    private static func teamLeaderboardData() -> Data {
-        Data(
+    /// 팀 리그 픽스처(v0.3.37 부터 **주 오프셋을 읽는다**).
+    ///
+    /// · 본문에 `p_week_offset` 이 없거나 0 이면 예전 그대로의 이번 주 3팀(기존 테스트 전부가 이 갈래다).
+    ///   week_start/participant_count 는 **싣지 않는다** — 옛 서버 응답 모양이 기본값이어야 Optional 폴백이 실제로 돌아 본다.
+    /// · 양수 오프셋이면 그 주의 표를 낸다: **내 팀(stubTeamID)이 빠지고**(그때 없던 팀) 두 팀만 남으며,
+    ///   week_start 와 participant_count 가 실린다(새 서버 모양).
+    /// · host 에 "league-new-server" 가 들어가면 이번 주에도 새 칸 둘을 싣는다.
+    private static func teamLeaderboardData(for request: URLRequest, body: String) -> Data {
+        let host = request.url?.host ?? ""
+        let offset = weekOffsetFixture(in: body)
+        // host 에 "league-week-slips" 가 들어가면 **물은 주와 다른 주**로 답한다 — 조회가 날아가 있는 사이 월요일
+        // 0시를 넘겨 서버가 센 '이번 주'가 클라가 센 주와 어긋난 모양이다. 클라는 서버가 답한 주를 따라야 하고,
+        // 그때 진행중 표시가 남지 않아야 한다(주 키를 바꾸면 defer 의 가드가 더는 맞지 않는다).
+        if host.contains("league-week-slips") {
+            let answered = TeamLeagueWeekNavigator.key(offset: offset + 1)
+            return Data(
+                """
+                [
+                  {"team_id": "30000000-0000-0000-0000-000000000003", "team_name": "코드 크래프터", "weekly_goal_hours": 50, "total_seconds": 12345, "working_count": 0, "member_count": 2, "week_start": "\(answered)", "participant_count": 1}
+                ]
+                """.utf8
+            )
+        }
+        guard offset > 0 else {
+            guard host.contains("league-new-server") else {
+                return Data(
+                    """
+                    [
+                      {"team_id": "30000000-0000-0000-0000-000000000003", "team_name": "코드 크래프터", "weekly_goal_hours": 50, "total_seconds": 36000, "working_count": 0, "member_count": 1},
+                      {"team_id": "20000000-0000-0000-0000-000000000002", "team_name": "오목교 브라더스", "weekly_goal_hours": 60, "total_seconds": 90000, "working_count": 1, "member_count": 3},
+                      {"team_id": "10000000-0000-0000-0000-000000000001", "team_name": "아잉팀", "weekly_goal_hours": 40, "total_seconds": 72000, "working_count": 3, "member_count": 3}
+                    ]
+                    """.utf8
+                )
+            }
+            let thisWeek = TeamLeagueWeekNavigator.currentKey()
+            return Data(
+                """
+                [
+                  {"team_id": "30000000-0000-0000-0000-000000000003", "team_name": "코드 크래프터", "weekly_goal_hours": 50, "total_seconds": 36000, "working_count": 0, "member_count": 1, "week_start": "\(thisWeek)", "participant_count": 1},
+                  {"team_id": "20000000-0000-0000-0000-000000000002", "team_name": "오목교 브라더스", "weekly_goal_hours": 60, "total_seconds": 90000, "working_count": 1, "member_count": 3, "week_start": "\(thisWeek)", "participant_count": 2},
+                  {"team_id": "10000000-0000-0000-0000-000000000001", "team_name": "아잉팀", "weekly_goal_hours": 40, "total_seconds": 72000, "working_count": 3, "member_count": 3, "week_start": "\(thisWeek)", "participant_count": 3}
+                ]
+                """.utf8
+            )
+        }
+        let weekStart = TeamLeagueWeekNavigator.key(offset: offset)
+        // 과거 주: working_count 는 서버가 0 으로 내린다(계약). 총합도 주마다 달라야 '주를 바꿨다'가 실제로 보인다.
+        let total = 36000 + offset * 1000
+        return Data(
             """
             [
-              {"team_id": "30000000-0000-0000-0000-000000000003", "team_name": "코드 크래프터", "weekly_goal_hours": 50, "total_seconds": 36000, "working_count": 0, "member_count": 1},
-              {"team_id": "20000000-0000-0000-0000-000000000002", "team_name": "오목교 브라더스", "weekly_goal_hours": 60, "total_seconds": 90000, "working_count": 1, "member_count": 3},
-              {"team_id": "10000000-0000-0000-0000-000000000001", "team_name": "아잉팀", "weekly_goal_hours": 40, "total_seconds": 72000, "working_count": 3, "member_count": 3}
+              {"team_id": "30000000-0000-0000-0000-000000000003", "team_name": "코드 크래프터", "weekly_goal_hours": 50, "total_seconds": \(total), "working_count": 0, "member_count": 2, "week_start": "\(weekStart)", "participant_count": 1},
+              {"team_id": "20000000-0000-0000-0000-000000000002", "team_name": "오목교 브라더스", "weekly_goal_hours": 60, "total_seconds": 90000, "working_count": 0, "member_count": 4, "week_start": "\(weekStart)", "participant_count": 3}
             ]
             """.utf8
         )
+    }
+
+    /// host 에 "league-old-server" 가 들어가고 `p_week_offset` 을 실은 리그 요청인가 — 그 조합만 PGRST202 다.
+    static func isLegacyLeagueMiss(_ request: URLRequest, body: String) -> Bool {
+        request.url?.host?.contains("league-old-server") == true
+            && request.url?.path == "/rest/v1/rpc/team_weekly_leaderboard"
+            && body.contains("p_week_offset")
+    }
+
+    /// 요청 본문에서 `p_week_offset` 값을 읽는다(없으면 0 = 무인자 옛 모양).
+    private static func weekOffsetFixture(in body: String) -> Int {
+        guard let object = (try? JSONSerialization.jsonObject(with: Data(body.utf8))) as? [String: Any],
+              let value = object["p_week_offset"] as? Int
+        else { return 0 }
+        return value
     }
 
     private static func membershipsData(for request: URLRequest) -> Data {

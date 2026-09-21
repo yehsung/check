@@ -526,14 +526,62 @@ package actor SupabaseWorkService {
 
     /// 팀 리그(이번 주 팀별 총 근무시간). team_weekly_leaderboard() RPC 를 로그인 토큰으로 호출한다.
     /// RPC 는 모든 팀의 총합/목표/인원/근무중 인원만 반환하며 invite_code 는 노출하지 않는다.
+    ///
+    /// **주 오프셋을 안 싣는 옛 모양**이다. 폰 순위판(RankingsStore)과 라이브 E2E 가 아직 이 서명을 쓰고,
+    /// 무엇보다 이 본문(`{}`)이 **구버전 서버 호환 경로 그 자체**다 — 서버 인자에 default 0 이 있어 같은 값이 온다.
     package func fetchTeamLeaderboard(accessToken: String) async throws -> [TeamLeaderboardEntry] {
-        let data = try await send(
-            path: "/rest/v1/rpc/team_weekly_leaderboard",
-            method: "POST",
-            body: EmptyBody(),
-            accessToken: accessToken,
-            prefer: nil
-        )
+        try await teamLeaderboardEntries(accessToken: accessToken, weekOffset: nil)
+    }
+
+    /// 팀 리그를 **보고 있는 주**로 조회한다(v0.3.37 지난 주 보기).
+    ///
+    /// `weekOffset`: 0=이번 주, 양수 N=N주 전. 서버 규약과 같은 부호이고, 여기서도 0~6 으로 **접는다**(거부하지 않는다) —
+    /// 서버가 접은 주를 화면이 모르면 제목이 거짓말을 하므로, 접기는 양쪽에서 같은 눈금으로 한 번씩 한다.
+    ///
+    /// ── 구버전 서버(앱이 db push 보다 먼저 나가는 창) ──
+    /// PostgREST 는 **본문의 키 집합으로 함수를 고른다.** 인자를 모르는 옛 `team_weekly_leaderboard()` 만 있는 서버에서는
+    /// 이 요청이 PGRST202("… in the schema cache") = `.databaseSchemaMissing` 으로 죽고, 그대로 두면 **리그 화면이 통째로
+    /// 빈다**(지난 주 보기가 아니라 이번 주까지 같이 죽는다). 그래서 그 오류에서만 **한 번에 한해** 옛 모양(`{}`)으로
+    /// 다시 부른다 — `takePokes` 와 같은 관용구다.
+    ///
+    /// **폴백을 캐시하지 않는 이유**도 `takePokes` 와 같다: 이 앱은 메뉴바 상주라 몇 주씩 살아 있고 db push 는 그 사이
+    /// 언제든 끝난다. 한 번의 실패로 옛 모양에 눌러앉으면 서버가 고쳐진 뒤에도 재시작 전까지 지난 주 보기가 영영 안 열린다.
+    ///
+    /// 폴백이 돌면 돌아온 행은 **이번 주**다(옛 서버는 과거 주를 줄 수 없다). 그래서 `supportsWeekOffset: false` 로
+    /// 그 사실을 올려 보낸다 — **호출부는 보고 있던 주를 이번 주로 되돌리고 주 이동 UI 를 접어야 한다.** 이 값을 무시하면
+    /// 화면에는 "9월 15일 주"라고 적힌 이번 주 표가 뜬다(가장 나쁜 실패 모양이다).
+    package func fetchTeamLeaderboard(accessToken: String, weekOffset: Int) async throws -> TeamLeaderboardPage {
+        let clamped = TeamLeagueWeekNavigator.clamp(weekOffset)
+        do {
+            let entries = try await teamLeaderboardEntries(accessToken: accessToken, weekOffset: clamped)
+            return TeamLeaderboardPage(entries: entries, requestedWeekOffset: clamped, supportsWeekOffset: true)
+        } catch SupabaseWorkServiceError.databaseSchemaMissing {
+            // 옛 서버. 함수를 못 찾아 실행 자체가 없었으므로 재호출이 안전하다(읽기 전용 RPC 라 더더욱).
+            let entries = try await teamLeaderboardEntries(accessToken: accessToken, weekOffset: nil)
+            return TeamLeaderboardPage(entries: entries, requestedWeekOffset: clamped, supportsWeekOffset: false)
+        }
+    }
+
+    /// 전선 한 번. `weekOffset` 이 nil 이면 인자를 **아예 안 싣는다**(`{}` — 옛 모양이자 폴백 모양).
+    private func teamLeaderboardEntries(accessToken: String, weekOffset: Int?) async throws -> [TeamLeaderboardEntry] {
+        let data: Data
+        if let weekOffset {
+            data = try await send(
+                path: Self.teamWeeklyLeaderboardPath,
+                method: "POST",
+                body: TeamLeaderboardRequest(pWeekOffset: weekOffset),
+                accessToken: accessToken,
+                prefer: nil
+            )
+        } else {
+            data = try await send(
+                path: Self.teamWeeklyLeaderboardPath,
+                method: "POST",
+                body: EmptyBody(),
+                accessToken: accessToken,
+                prefer: nil
+            )
+        }
         let rows = try decoder.decode([TeamLeaderboardRow].self, from: data)
         return rows.map {
             TeamLeaderboardEntry(
@@ -545,10 +593,16 @@ package actor SupabaseWorkService {
                 // member_count 를 안 내려주는 구버전 RPC 는 nil → 0(평균 0명 가드).
                 memberCount: $0.memberCount ?? 0,
                 // 서버값 → 화면 글자(모르는 값·섞인 팀·구버전 RPC 는 nil = 배지 없음). 리그의 유일한 변환 지점.
-                center: CenterLabel.display($0.center)
+                center: CenterLabel.display($0.center),
+                // 아래 둘은 **접지 않고 nil 그대로 올린다.** 구버전 서버의 '모름'과 새 서버의 0 은 다른 사실이고,
+                // 그 차이로 화면이 문구를 가른다(0명 근무 vs 알 수 없음).
+                weekStart: $0.weekStart,
+                participantCount: $0.participantCount
             )
         }
     }
+
+    package nonisolated static let teamWeeklyLeaderboardPath = "/rest/v1/rpc/team_weekly_leaderboard"
 
     /// 로그인 후 내 팀을 확정한다. 소속이 없으면 nil.
     /// 목표시간(goalHours)은 teams.weekly_goal_hours 를 그대로 읽어 온다(같은 쿼리라 추가 요청 없음).

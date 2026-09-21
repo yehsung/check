@@ -424,13 +424,32 @@ struct CheckMenuView: View {
                         // 돌아올 때 `evaluateFeedbackReplyBanner` 의 '패널이 떠 있음' 갈래가 받아 준다.
                         .onAppear { store.markFeedbackReplyBannerSeen() }
                     } else if store.isLeaderboardVisible {
+                        // 표시 재료는 코어가 한 번에 낸다(표시 목록 · 원본 팀 수 · 내 팀이 그 주에 있었는지).
+                        // 뷰에서 다시 세면 맥과 폰이 갈린다 — 판정은 CheckCore 에 한 벌만 둔다.
+                        let leagueDisplay = store.leaderboard.leagueDisplay(myTeamID: store.currentTeamID)
                         LeaderboardPanel(
                             // 원본 leaderboard 는 스토어에 보존하고, 표시 시점에 0시간 타팀만 숨긴다(내 팀은 0이어도 유지).
-                            entries: store.leaderboard.filteredForDisplay(myTeamID: store.currentTeamID),
+                            entries: leagueDisplay.entries,
                             myTeamID: store.currentTeamID,
                             fallbackStatus: store.syncMessage,
-                            unfilteredCount: store.leaderboard.count,
-                            onBack: { store.isLeaderboardVisible = false },
+                            unfilteredCount: leagueDisplay.unfilteredCount,
+                            // 뒤로도 토글과 같은 닫기 경로를 타야 보던 주가 남지 않는다(다음에 열면 늘 이번 주).
+                            onBack: { store.closeLeaderboard() },
+                            weekKey: store.leagueWeekKey,
+                            // 화살표도 제목·행과 같은 '지금'을 본다 — 다른 시계를 쓰면 ▸ 가 꺼져 있는데 제목은 과거 주인
+                            // (또는 그 반대의) 화면이 만들어진다.
+                            canStepForward: TeamLeagueWeekNavigator.canStepForward(from: store.leagueWeekKey, now: store.displayNow),
+                            canStepBack: TeamLeagueWeekNavigator.canStepBack(from: store.leagueWeekKey, now: store.displayNow),
+                            showsWeekNavigation: store.leagueWeekOffsetSupported,
+                            onStepWeek: { store.stepLeagueWeek(by: $0) },
+                            myTeamMissing: leagueDisplay.myTeamMissing,
+                            isLoading: store.leagueLoading,
+                            hasFailed: store.leagueFailed,
+                            // 실패는 '진행중'과 다른 문구 + [다시 시도] 로 갈라 준다(토큰 순위판과 같은 자리).
+                            // 과거 주는 30초 주기 갱신이 안 도므로 이 버튼이 유일한 재시도 경로다.
+                            onRetry: { store.loadLeaderboard() },
+                            // 머리글·행이 **같은 '지금'** 으로 과거를 판정하게 한다(팝오버 시계 — 닫힌 동안 얼고 열 때 되맞춘다).
+                            now: store.displayNow,
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
@@ -1774,8 +1793,68 @@ private struct TeamMemberLiveRow: View {
 /// fallbackStatus(동기화 상태 문구)를 그대로 노출한다 — 성공 동기화("동기화됨")가 본문에 뜨는 어색함과 구분.
 enum LeaderboardEmptyMessage {
     static let filteredOut = "아직 이번 주 근무한 팀이 없어요"
+    /// 과거 주: "아직"도 "이번 주"도 틀린 말이다. 그 주는 이미 끝났고 다시 채워지지 않는다.
+    static let pastFilteredOut = "그 주엔 근무한 팀이 없었어요"
+    /// 과거 주의 '로드 전' — 본문 자리에 동기화 문구("동기화됨")를 띄우지 않는다는 규약(토큰 순위판과 같다).
+    static let loading = "불러오는 중…"
+    /// 과거 주의 실패 — 빈 표가 "그 주엔 아무도 안 일했다"는 **사실로 읽히는 것**을 막는 유일한 문장이다.
+    static let loadFailed = "순위를 불러오지 못했어요"
+
     static func text(unfilteredCount: Int, fallbackStatus: String) -> String {
         unfilteredCount > 0 ? filteredOut : fallbackStatus
+    }
+
+    /// 보고 있는 주까지 아는 판정. **이번 주는 위 함수에 그대로 위임한다** — 이번 주 문구는 한 글자도 안 바뀐다.
+    ///
+    /// 과거 주에 진행중/실패를 따로 세는 이유: 이번 주는 `unfilteredCount == 0` 을 '로드 전/실패'로 읽고
+    /// fallbackStatus(동기화 문구)를 대신 띄웠는데, 과거 주에서는 **0 이 진짜 사실일 수 있다**
+    /// (그 주엔 아직 아무 팀도 없었다 — 서버가 유령 팀을 빼 준다). 같은 0 이 두 가지 뜻이 되므로 갈라야 한다.
+    ///
+    /// 인자 이름이 `isPastWeek` 인 것은 `TeamLeaderboardEntry.isPastWeek(now:)` 와 **같은 판정**임을 이름으로 못박기
+    /// 위해서다 — 행과 빈 목록 문구가 반대 극성의 Bool 을 각자 만들면 언젠가 한쪽만 뒤집힌다.
+    static func text(
+        isPastWeek: Bool,
+        unfilteredCount: Int,
+        isLoading: Bool = false,
+        hasFailed: Bool = false,
+        fallbackStatus: String
+    ) -> String {
+        guard isPastWeek else { return text(unfilteredCount: unfilteredCount, fallbackStatus: fallbackStatus) }
+        if isLoading { return loading }
+        if hasFailed { return loadFailed }
+        return pastFilteredOut
+    }
+}
+
+/// 과거 주 머리글 아래 **한 줄**. 사용자 규약: 툴팁·주석에 진단을 늘어놓지 않는다 — 한 줄이면 족하다.
+/// 이번 주에는 nil(줄 자체가 없다 → 목록 행수 예산도 예전 그대로다).
+///
+/// ── 2026-09-22 맥·폰 합의 (이 값이 정본이고 폰이 같은 문장을 쓴다) ────────────────────────────
+/// 과거 주 보조 줄은 **정확히 "인원은 그 주 기준이에요"** 하나다.
+///  · 앞 판은 "인원·목표는 지금 값이에요"였는데 **두 군데가 틀렸다.** ① member_count 는 지금 값이 아니라
+///    (그 주 끝 이전 가입한 지금 멤버) ∪ (그 주에 그 팀으로 일한 사람) 의 **그 주 기준** 값이다 — 게다가
+///    1인당 평균의 **분모**라 숫자의 뜻을 바꾸는 유일한 칸이다. ② 그 줄이 "지금 값"이라고 적힌 동안 행 캡션은
+///    "그때 N명"이라고 적었다 — 같은 화면의 두 줄이 같은 숫자를 두고 반대로 말했다.
+///  · **목표·팀 이름·센터가 현재값이라는 사실은 화면에서 뺀다.** 사용자가 감지할 수 없는 차이고, 셋 중 하나만
+///    고백하면 나머지 둘이 과거값인 척하게 되어 오히려 덜 정확하다. 그 사실은 `LeaderboardRow.caption` 주석과
+///    서버 `comment on function` 에만 남는다.
+///  · 두 문장을 잇지 않는 이유는 폭이다. 본문 폭 292pt 에서 caption2 한 줄은 한글 22자 남짓인데, 이으면 30자가
+///    넘어 줄어들거나 잘린다.
+///
+/// 내 팀이 그 주 표에 아예 없으면 그 답이 **먼저**다("왜 우리 팀이 안 보이지?"). 그 단정이 정당한 근거는
+/// `[TeamLeaderboardEntry].leagueDisplay(myTeamID:)` 주석의 §실증(0시간 팀도 행은 온다 — 행이 없다는 건
+/// 그 주엔 그 팀이 없었다는 뜻)에 있다.
+enum LeagueWeekNote {
+    /// 과거 주 보조 줄. **이 문장 하나뿐이다**(위 합의).
+    static let pastWeek = "인원은 그 주 기준이에요"
+    static let myTeamMissing = "그 주엔 아직 우리 팀이 없었어요"
+    /// 이 줄이 먹는 높이(pt). 목록 행수 예산에서 그만큼 빼야 창 높이 상한(≤700pt)이 그대로 지켜진다.
+    /// caption 한 줄 높이 + VStack 간격(4). 실측으로 못 박는 값이 아니라 **예산을 보수적으로 잡는** 값이다.
+    static let height: CGFloat = 18
+
+    static func text(isPastWeek: Bool, myTeamMissing: Bool) -> String? {
+        guard isPastWeek else { return nil }
+        return myTeamMissing ? Self.myTeamMissing : pastWeek
     }
 }
 
@@ -1790,6 +1869,28 @@ private struct LeaderboardPanel: View {
     // 0 이면 로드 전/실패로 보고 fallbackStatus 를 쓴다 — 둘을 구분해 성공 동기화("동기화됨")가 본문에 뜨지 않게.
     var unfilteredCount: Int = 0
     var onBack: () -> Void = {}
+    // ── 지난 주 보기 (v0.3.37) ── 기본값이 전부 '이번 주'라, 이 값들을 안 주면 예전 화면 그대로다.
+    /// 보고 있는 주(KST 월요일 'YYYY-MM-DD'). 제목·캡션·빈 목록 문구가 모두 이 한 값에서 갈린다.
+    var weekKey: String = TeamLeagueWeekNavigator.currentKey()
+    /// ▸ 를 누를 수 있는가(이번 주면 false). 토큰 순위판과 같은 규약이라 **'▸ 비활성 == 이번 주'** 가 성립한다.
+    var canStepForward: Bool = false
+    /// ◂ 를 누를 수 있는가(6주 전이면 false — 서버가 더 과거를 주지 않는다).
+    var canStepBack: Bool = true
+    /// 주 이동 화살표를 그릴지. **옛 서버(p_week_offset 미지원)에서는 통째로 접는다** — 눌러도 이번 주가 오기 때문이다.
+    var showsWeekNavigation: Bool = true
+    var onStepWeek: (Int) -> Void = { _ in }
+    /// 내 팀 행이 원본에 아예 없다(과거 주에 그때 없던 팀). 머리글 한 줄이 이 사실을 말한다.
+    var myTeamMissing: Bool = false
+    /// 과거 주에서만 쓰는 조회중/실패 표시(이번 주 빈 목록 문구는 예전 그대로 fallbackStatus 를 쓴다).
+    var isLoading: Bool = false
+    var hasFailed: Bool = false
+    /// [다시 시도] 액션. nil 이면 버튼을 그리지 않는다(값+클로저 규약 — 렌더 테스트가 스토어 없이 재현 가능).
+    /// **과거 주에는 이 버튼이 유일한 재시도 경로다**: 이번 주는 30초 주기 갱신이 스스로 다시 시도하지만
+    /// 과거 주는 주기 갱신에서 빠져 있어(종료된 세션만 세므로) 실패하면 화면이 실패로 굳는다.
+    var onRetry: (() -> Void)? = nil
+    /// 과거 주 판정의 기준선(팝오버 시계). `TeamLeagueWeekNavigator.isCurrentWeek` 과 행의 `isPastWeek(now:)` 가
+    /// **같은 '지금'** 을 봐야 머리글과 행이 같은 말을 한다.
+    var now: Date = Date()
     // 목록 위쪽에서 배너/토큰 행이 먹은 높이(pt). 그만큼 무스크롤 표시 행수를 줄여 창 상한을 지킨다.
     var extraChromeHeight: CGFloat = 0
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
@@ -1801,25 +1902,63 @@ private struct LeaderboardPanel: View {
     // 스크롤 없이 그대로 보여 주는 최대 팀 수. 행이 팀원 행보다 높아 창 높이 상한(≤700pt)을 지키도록 6으로 둔다.
     static let maxVisibleRows = 6
 
+    // 보고 있는 주가 **이미 지난 주인가**. 빈 목록 문구·머리글 한 줄이 이 한 판정을 공유하고, 행은 자기 주로
+    // 같은 판정을 한다(`TeamLeaderboardEntry.isPastWeek(now:)` — 둘 다 KST 월요일 경계라 어긋날 자리가 없다).
+    //
+    // ⚠ 예전엔 `!canStepForward` 였다. 그건 **주 판정이 아니라 버튼 상태**라, 화살표를 접는 갈래(옛 서버)나
+    //   버튼 배선이 바뀌는 순간 조용히 같이 뒤집힌다. 주는 주 키로 판정한다.
+    private var isPastWeek: Bool { !TeamLeagueWeekNavigator.isCurrentWeek(weekKey, now: now) }
+
+    // 과거 주 머리글 아래 한 줄(이번 주는 nil).
+    private var weekNote: String? {
+        LeagueWeekNote.text(isPastWeek: isPastWeek, myTeamMissing: myTeamMissing)
+    }
+
     // 배너/토큰 행이 먹은 높이를 반영한 실제 무스크롤 표시 행수(기본은 maxVisibleRows).
+    // 과거 주 한 줄도 **목록 위쪽 크롬**이므로 같은 예산에서 뺀다 — 안 빼면 그 줄만큼 창이 자라 700pt 상한을 넘는다.
     private var visibleRows: Int {
         ListRowBudget.visibleRows(
             maxVisibleRows: Self.maxVisibleRows,
             rowHeight: Self.rowHeight,
             rowSpacing: Self.rowSpacing,
-            extraChromeHeight: extraChromeHeight
+            extraChromeHeight: extraChromeHeight + (weekNote == nil ? 0 : LeagueWeekNote.height)
         )
     }
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 8) {
-                IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
-                Text("팀별 이번 주")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(CheckTheme.primaryText)
-                    .lineLimit(1)
-                Spacer(minLength: 6)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    IconButton(icon: "chevron.left", help: "뒤로", action: onBack)
+                    if showsWeekNavigation {
+                        // 뒤로(‹)와 주 이동 버튼을 세로 구분선으로 갈라 놓는다 — 토큰 순위판과 **같은 관례**다
+                        // (같은 chevron 두 개가 붙어 있으면 뒤로를 누르려다 지난주가 열린다). 아이콘 모양도
+                        // 삼각으로 달리해 툴팁 없이도 구분되게 한다.
+                        Capsule()
+                            .fill(CheckTheme.border)
+                            .frame(width: 1, height: 16)
+                        // ◂ 는 과거로(6주 전에서 비활성), ▸ 는 현재 쪽으로(이번 주면 비활성 — 미래는 볼 수 없다).
+                        IconButton(icon: "arrowtriangle.left.fill", help: "이전 주", enabled: canStepBack) { onStepWeek(-1) }
+                    }
+                    // 이번 주에는 "팀별 이번 주" — 제목 문자열이 예전과 **한 글자도 다르지 않다**.
+                    Text("팀별 \(TeamLeagueWeekNavigator.displayTitle(weekKey, now: now))")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    if showsWeekNavigation {
+                        IconButton(icon: "arrowtriangle.right.fill", help: "다음 주", enabled: canStepForward) { onStepWeek(1) }
+                    }
+                    Spacer(minLength: 2)
+                }
+                if let weekNote {
+                    Text(weekNote)
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             PanelDivider()
             entryList
@@ -1862,14 +2001,33 @@ private struct LeaderboardPanel: View {
             if sortedEntries.isEmpty {
                 // 원본에 팀이 있었는데 표시 목록이 비면 필터로 전부 숨겨진 것 — 중립 문구. 원본도 비면 로드 전/실패로
                 // 보고 fallbackStatus(동기화 상태 문구)를 쓴다(결정적 판정은 LeaderboardEmptyMessage 로 격리).
-                Text(LeaderboardEmptyMessage.text(unfilteredCount: unfilteredCount, fallbackStatus: fallbackStatus))
-                    .font(.caption)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
+                HStack(spacing: 8) {
+                    Text(LeaderboardEmptyMessage.text(
+                        isPastWeek: isPastWeek,
+                        unfilteredCount: unfilteredCount,
+                        isLoading: isLoading,
+                        hasFailed: hasFailed,
+                        fallbackStatus: fallbackStatus
+                    ))
+                        .font(.caption)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                    Spacer(minLength: 4)
+                    // 실패했을 때만 재시도를 준다(토큰 순위판·개인 기록과 같은 자리·같은 버튼).
+                    // 과거 주는 30초 주기 갱신에서 빠져 있어 이 버튼이 없으면 패널을 닫았다 여는 것 말고는 길이 없었다.
+                    if hasFailed, let onRetry {
+                        PanelRetryButton(action: onRetry)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
             } else {
                 ForEach(sortedEntries, id: \.id) { entry in
                     // 우리 팀 행에도 단다 — 폭 비용이 0(overlay)이라 뺄 이유가 없고, 자기 팀의 센터를 확인할 자리다.
-                    LeaderboardRow(entry: entry, center: entry.center, isMyTeam: entry.id == myTeamID)
+                    LeaderboardRow(
+                        entry: entry,
+                        center: entry.center,
+                        isMyTeam: entry.id == myTeamID,
+                        now: now
+                    )
                         .frame(height: Self.rowHeight)
                 }
             }
@@ -3482,20 +3640,25 @@ enum InsightsPanelChromeBudget {
     /// 본문(회고 카드 + 근무 잔디 + 토큰 잔디 + 지난주 히트맵)의 자연 높이(pt). 340pt 폭 ImageRenderer 실측값:
     /// 토큰 잔디 전 487pt(창 757pt) → 토큰 잔디(구분선 + 캡션 + 월 라벨 + 7행×16pt) 후 창 938.5pt = 668.5pt.
     /// 본문 밖 크롬은 270pt 고정이라 창 높이 − 270 이 곧 이 값이다(잔디 때와 같은 재는 법).
-    static let contentNaturalHeight: CGFloat = 668.5
+    /// (2026-09-22 재정렬) 순서를 바꿔도 높이는 그대로였다 — 같은 방법으로 잰 옛 순서와 새 순서가 **744.5pt 로 동일**했다
+    /// (섹션 집합·구분선 수가 같으니 VStack 합도 같다). 늘어난 12pt 는 묶음 경계 여백(InsightsSectionGroupGap,
+    /// 위아래 6pt)뿐이라 네 조합에 똑같이 더해진다: 668.5 → 680.5.
+    static let contentNaturalHeight: CGFloat = 680.5
     /// 크롬이 하나도 없을 때 창 상한(700pt)까지 남는 여유(pt) = 700 − 기본 상태 실측 창 높이 − 5pt 안전 여유.
-    /// 잔디 둘이 붙으면서 본문 자연 높이만으로 상한을 크게 넘겨 더 깊은 **음수**가 됐다(700 − 938.5 − 5): 크롬이
-    /// 없어도 본문을 243.5pt 깎아 스크롤로 넘기고, 그 위에 얹히는 배너/목표 편집 행은 그만큼 더 깎는다
+    /// 잔디 둘이 붙으면서 본문 자연 높이만으로 상한을 크게 넘겨 더 깊은 **음수**가 됐고(700 − 938.5 − 5 = −243.5),
+    /// 2026-09-22 묶음 경계 여백 12pt 가 붙으며 그만큼 더 깊어졌다(−255.5): 크롬이
+    /// 없어도 본문을 255.5pt 깎아 스크롤로 넘기고, 그 위에 얹히는 배너/목표 편집 행은 그만큼 더 깎는다
     /// (본문 표시 높이는 어느 조합에서도 425pt 로 수렴해 창이 늘 695pt 에 멈춘다 — 잔디 이전과 같은 착지점이다).
-    /// 회고 카드 + 근무 잔디(v0.2.41 의 새 순서에서 위 둘)는 깎인 뒤에도 거의 다 보이고, 토큰 잔디는 첫 행들만
+    /// 「지난주」 묶음(회고 카드 + 히트맵 = 307pt)은 깎인 뒤에도 **온전히** 보이고, 그 아래 근무 잔디는 첫 행들만
     /// 접힘선 위에 남는다 — 그래서 깎인 바닥엔 InsightsOverflowFade 로 "아래에 더 있다"를 알린다
-    /// (스크롤 인디케이터는 기본 설정에서 숨는다). 히트맵은 접힘선 아래로 내려갔다(구조체 머리 주석의 순서 근거).
-    static let chromeSlack: CGFloat = -243.5
+    /// (스크롤 인디케이터는 기본 설정에서 숨는다). 토큰 잔디는 접힘선 아래로 내려갔다(구조체 머리 주석의 순서 근거).
+    static let chromeSlack: CGFloat = -255.5
     /// 지난주가 비었을 때(회고 카드는 빈 줄 한 줄, 히트맵은 빈 격자에 피크 문구 없음)의 본문 자연 높이(pt).
     /// 340pt 폭 실측 창 841.5pt − 본문 밖 270pt. 이 상태는 잔디에만 기록이 있는 사용자(지난주 휴가)가 매주 만나는
     /// 화면이라 따로 잰다 — 큰 본문 기준 예산을 그대로 쓰면 스크롤 높이가 본문보다 커서 패널 바닥에 빈 띠가 남는다.
-    /// 큰 본문과의 차(97pt)는 토큰 잔디 유무와 무관하게 같다(실측: 668.5−571.5 = 487−390 = 97).
-    static let contentNaturalHeightWithoutLastWeek: CGFloat = 571.5
+    /// 큰 본문과의 차(97pt)는 토큰 잔디 유무와 무관하게 같다(재정렬 뒤 실측: 680.5−583.5 = 499−402 = 97 — 여백 12pt 는
+    /// 네 조합에 똑같이 더해지므로 이 델타는 안 변한다).
+    static let contentNaturalHeightWithoutLastWeek: CGFloat = 583.5
     /// 아무리 깎여도 본문에 남기는 최소 높이(회고 카드 한 장은 보이도록).
     static let minContentHeight: CGFloat = 190
     /// 토큰 잔디 섹션 한 덩이(구분선 + 간격 + 캡션 + 격자)의 높이(pt). 340pt 폭 ImageRenderer 실측 차이값이다.
@@ -3519,6 +3682,19 @@ enum InsightsPanelChromeBudget {
         guard overflow > 0 else { return nil }
         return max(minContentHeight, naturalHeight - overflow)
     }
+}
+
+/// 개인 기록 본문의 두 묶음(「지난주」 = 회고 + 근무 리듬 / 「최근 12주」 = 근무 잔디 + 토큰 잔디) 사이 경계를
+/// 얼마나 벌릴지. 묶음 **안**의 구분선은 여백 0 이고, 묶음 **사이**의 구분선만 위아래로 이만큼 더 받는다.
+///
+/// 왜 여백인가(292pt 폭의 제약): 폰은 묶음마다 카드를 두르지만, 맥 팝오버 본문은 292pt 고정이고 회고 카드가
+/// 이미 자기 테두리를 갖고 있어 묶음 카드를 한 겹 더 두르면 **이중 테두리 + 좌우 패딩 두 번**이 된다.
+/// 굵은 선·색 대비도 재 봤지만(패널 배경과 대비가 약해) 여백이 같은 값을 가장 싸게 낸다.
+/// 값(6pt)은 본문 섹션 간격(12pt)의 절반 — 묶음 사이 총 간격이 12+6+6+12 = 24pt 로 섹션 간격의 정확히 두 배가 된다.
+enum InsightsSectionGroupGap {
+    static let extraSpacing: CGFloat = 6
+    /// 이 여백이 본문 자연 높이에 더하는 양(위+아래). 예산 상수를 다시 잴 때 이 값이 근거다.
+    static var totalAdded: CGFloat { extraSpacing * 2 }
 }
 
 /// 개인 기록 본문이 예산에 깎여 스크롤로 넘어갔을 때 그 바닥에 까는 "아래에 더 있다" 단서 — 패널색으로 잦아드는
@@ -3572,15 +3748,26 @@ enum InsightsEmptyMessage {
 }
 
 /// 팀 카드 자리를 대체하는 개인 기록 페이지. 리그/토큰/찌르기와 4자 상호 배타이며 본인 데이터만 쓴다.
-/// 위에서부터 (a) 지난주 회고 카드, (b) 최근 12주 일별 근무 잔디, (c) 최근 12주 일별 AI 토큰 잔디,
-/// (d) 요일×시간대 지난주 근무 리듬 히트맵. 값만 받아 그리므로(스토어 미참조)
+/// 위에서부터 **「지난주」 묶음**((a) 지난주 회고 카드 → (b) 지난주 근무 리듬 히트맵), 그다음
+/// **「최근 12주」 묶음**((c) 일별 근무 잔디 → (d) 일별 AI 토큰 잔디). 값만 받아 그리므로(스토어 미참조)
 /// 렌더 테스트가 픽스처만으로 모든 상태를 재현할 수 있다.
 ///
-/// **순서가 이 모양인 이유**(v0.2.41): 본문 자연 높이가 창 상한(700pt)을 넘겨 아래쪽이 늘 접힘선 밑으로 밀린다
-/// (InsightsPanelChromeBudget). 예전 순서(회고 → 히트맵 → 잔디)에서는 새로 만든 잔디가 통째로 접힘선 아래에 숨어
-/// 스크롤하지 않으면 존재조차 몰랐다. 그래서 **새 기능 둘(잔디·토큰 잔디)을 위로 올리고**, 이미 v0.2.40 부터 있던
-/// 히트맵을 스크롤 아래로 내렸다. 캡션이 "최근 12주 …" 둘 다음에 "지난주 …" 하나라 기간도 위에서 아래로 읽힌다.
-private struct InsightsPanel: View {
+/// **순서가 이 모양인 이유**(2026-09-22, 사용자 지시로 v0.2.41 순서를 뒤집었다):
+/// 사용자 원문 — "지난주 회고 밑에는 최근 12주 잔디가 뜨고 그 밑에 지난주 근무 리듬이 뜨잖아. 이상해."
+/// 회고와 히트맵은 **같은 주 창**(WorkInsightsWeekWindow.lastWeek)에서 나오고 총합이 같은 숫자인데, 그 사이를
+/// 12주짜리 격자 둘이 갈라놓고 있었다. 그래서 묶음 경계를 **시간 범위**로 긋는다 — 폰(나 탭)이 같은 날 같은
+/// 기준으로 재정렬했고 두 플랫폼이 같은 모양이어야 한다.
+///
+/// **뒤집으면서 잃는 것(알고 택했다)**: v0.2.41 의 근거는 "본문이 창 상한을 넘겨 아래가 접힘선 밑으로 밀리니
+/// **새 기능 둘(잔디)을 위로** 올린다"였다. 이제 접힘선(본문 425pt) 위에는 회고 + 히트맵(307pt)이 온전히 서고
+/// 근무 잔디는 첫 행들만 걸친다 — **토큰 잔디는 통째로 접힘선 아래로 내려간다**(예전엔 히트맵이 그 자리였다).
+/// 받아들이는 근거: ① 잔디는 v0.2.41 당시의 '새 기능'이 아니라 자리 잡은 화면이다 ② 접힘선 아래를 알리는
+/// 장치(InsightsOverflowFade)가 그때는 없었지만 지금은 있다 ③ 같은 주를 말하는 두 칸이 갈라져 있는 쪽이
+/// 사용자가 실제로 신고한 결함이다. 되돌리려는 사람은 이 세 줄을 먼저 반박해라.
+/// `internal` 인 이유(2026-09-22): 재정렬로 토큰 잔디가 접힘선 아래로 내려가, 팝오버 전체를 클립으로 그리는
+/// 렌더 테스트로는 "토큰 값이 픽셀을 바꾸는가"를 더는 못 잰다(어떤 조합을 넣어도 그 격자가 접힘선 위로 안 온다).
+/// 그래서 값→픽셀 배선은 이 패널을 **자연 높이로 직접 그려** 잰다(extraChromeHeight 를 음수로 주면 안 깎인다).
+struct InsightsPanel: View {
     let heatmap: WorkRhythmHeatmap
     let retro: WeeklyRetro?
     // 최근 12주 일별 잔디. heatmap/retro 와 같은 조회에서 함께 계산된다.
@@ -3649,22 +3836,27 @@ private struct InsightsPanel: View {
         .panelStyle()
     }
 
-    /// 회고 카드 + 히트맵 + 12주 잔디 본문. 자연 높이만으로 창 상한을 넘기므로 크롬이 없어도 예산이 정한 높이로
+    /// 「지난주」 묶음(회고 카드 + 히트맵) + 「최근 12주」 묶음(잔디 둘) 본문. 자연 높이만으로 창 상한을 넘기므로 크롬이 없어도 예산이 정한 높이로
     /// 낮춰 스크롤로 넘긴다(InsightsPanelChromeBudget) — 팝오버는 위가 고정되고 아래로만 자라므로(CheckWindowAnchor)
     /// 상한을 넘긴 만큼 푸터가 화면 밖으로 잘린다. 배너/목표 편집 행이 얹히면 그만큼 더 낮춘다.
     @ViewBuilder
     private var insightsBody: some View {
-        // 순서는 회고 → 근무 잔디 → 토큰 잔디 → 히트맵(구조체 머리 주석의 근거 — 접힘선 위 자리를 새 기능에 준다).
+        // 순서는 「지난주」(회고 + 근무 리듬) → 「최근 12주」(근무 잔디 + 토큰 잔디). 구조체 머리 주석의 근거 참고.
+        // 묶음 **안**은 보통 구분선, 묶음 **사이**는 같은 구분선에 위아래 여백을 더 준다(InsightsSectionGroupGap) —
+        // 292pt 폭에서 카드 테두리를 한 겹 더 두르면 회고 카드(자체 테두리)와 이중 테두리가 되고 좌우 패딩을
+        // 두 번 먹는다. 묶음 제목도 두지 않는다: 네 섹션이 이미 "지난주 …"·"최근 12주 …" 캡션을 달고 있어
+        // 묶음 제목을 붙이면 한 화면에 "지난주"가 세 번 나온다.
         let content = VStack(spacing: 12) {
             retroCard
             PanelDivider()
+            heatmapSection
+            PanelDivider()
+                .padding(.vertical, InsightsSectionGroupGap.extraSpacing)
             dailyGridSection
             if showsTokenGrid {
                 PanelDivider()
                 tokenGridSection
             }
-            PanelDivider()
-            heatmapSection
         }
         // 지난주가 비면(회고 nil ⇔ 히트맵 0 — 같은 세션에서 나오므로 늘 함께 간다) 본문이 짧고, 토큰 섹션이 빠져도 짧다.
         let naturalHeight = InsightsPanelChromeBudget.naturalHeight(hasRetro: retro != nil, showsTokenGrid: showsTokenGrid)

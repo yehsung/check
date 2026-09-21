@@ -260,6 +260,10 @@ final class WorkTimerStore {
             // 감속(60초) 중이던 티커를 1초 주기로 되돌린다 — 안 그러면 최대 60초 동안 초침이 멈춘 팝오버가 보인다.
             restoreTickerCadenceIfSlowed()
             stopTimerIfIdle()
+            // 리그: **팝오버를 다시 여는 것도 '여는 경로'다.** 패널을 연 채 팝오버만 닫았다 여는 동선은 토글을
+            // 지나지 않으므로, 여기가 비어 있으면 월요일이 지난 뒤 기본 화면이 지난주로 굳는다(v0.3.37 배포 차단).
+            // 패널이 안 보여도 되돌린다 — '다음에 열 때 늘 이번 주부터'가 토글과 같은 규약이다.
+            syncLeagueWeekToCurrent()
             if isLeaderboardVisible { loadLeaderboard() }
             if isTokenBoardVisible { loadTokenBoard() }
             if isPokePanelVisible { loadPokeDirectory() }
@@ -475,6 +479,28 @@ final class WorkTimerStore {
     // 페이지가 열려 있는 동안 30초 refresh 루프가 함께 갱신하고, signOut 시 둘 다 초기화한다.
     var leaderboard: [TeamLeaderboardEntry] = []
     var isLeaderboardVisible = false
+
+    // ── 지난 주 보기 (v0.3.37) ── 토큰 순위판의 tokenBoardMonth 계열을 그대로 본뜬 자리다.
+    /// 보고 있는 주(KST 월요일 'YYYY-MM-DD'). 기본은 이번 주고 ◂ ▸ 로 6주 전까지 갈 수 있다(미래 불가).
+    /// **오프셋(Int)이 아니라 절대 주 키를 든다** — 이유는 `TeamLeagueWeekNavigator` 머리말 참고(주 롤오버).
+    var leagueWeekKey: String = TeamLeagueWeekNavigator.currentKey()
+    /// **그 주를 고른 시점의 '이번 주'.** 주 롤오버(앱을 켜 둔 채 월요일 0시를 넘김)를 사용자가 일부러 고른 과거 주와
+    /// 가르는 단 하나의 값이다 — `leagueWeekKey != currentKey()` 만 보면 ◂ 로 지난주를 보는 사람을 30초마다
+    /// 이번 주로 되돌려 버린다. 이 값이 현재 주와 어긋났을 때만 '기준선 자체가 바뀐 것'이다.
+    /// 관찰 대상 아님(뷰가 읽지 않는다 — 읽는 것은 항상 leagueWeekKey 다).
+    @ObservationIgnored var leagueWeekAnchor: String = TeamLeagueWeekNavigator.currentKey()
+    /// 주별 캐시. ◂ ▸ 를 오가도 빈 목록이 깜빡이지 않게 **직전에 본 표를 그대로 두고** 새 응답으로 갈아 끼운다
+    /// (토큰 순위판은 달을 옮길 때 비우는데, 거기엔 캐시가 없어서다. 과거 주는 종료된 세션만 세는 **거의 고정된 값**이라
+    /// 캐시가 낡을 여지가 그만큼 작다). 주가 넘어가면 통째로 버린다.
+    var leagueWeekCache: [String: [TeamLeaderboardEntry]] = [:]
+    /// 조회 중 표시. **과거 주에서만 화면에 쓴다** — 이번 주 빈 목록 문구는 예전 그대로(unfilteredCount/fallbackStatus)다.
+    var leagueLoading = false
+    /// 마지막 조회가 실패로 끝났다. 같은 이유로 과거 주에서만 화면에 쓴다(이번 주는 syncMessage 가 예전처럼 말한다).
+    var leagueFailed = false
+    /// 서버가 `p_week_offset` 을 아는가. false 면 **주 이동 UI 를 통째로 접는다** — 앱이 db push 보다 먼저 나가는
+    /// 창에서 옛 서버는 과거 주를 줄 수 없고, 그때 화살표를 남겨 두면 눌러도 이번 주 표가 과거 주 제목을 달고 뜬다.
+    /// 조회마다 다시 판정한다(서버가 고쳐지면 그 다음 조회에서 곧바로 살아난다 — takePokes 와 같은 판단).
+    var leagueWeekOffsetSupported = true
 
     // 팀원 이번 달 AI 토큰 순위 페이지 상태. isLeaderboardVisible 과 상호 배타(하나 열면 다른 것 닫기).
     // tokenBoard: total 내림차순(동률 이름)으로 정렬한 팀원 엔트리. 페이지가 열려 있는 동안 30초 refresh 루프가 갱신하고,
@@ -2205,8 +2231,80 @@ final class WorkTimerStore {
             closePokePanel()
             closeUltraPanel()
             isInsightsPanelVisible = false
+            // 앱을 켜 둔 채 주가 바뀐 경우(지난주를 보고 닫은 뒤 월요일 0시) 낡은 주가 그대로 그려지고 재조회마저
+            // 그 주로 나가지 않도록, 여는 순간 이번 주로 맞춘다(토큰 순위판 syncTokenBoardMonthToCurrent 과 같은 근거).
+            syncLeagueWeekToCurrent()
             loadLeaderboard()
         }
+    }
+
+    /// 리그 페이지를 닫는 경로(뒤로 버튼·토글 끄기). 토큰 순위판과 같은 규약으로 **보던 주를 이번 주로 되돌린다** —
+    /// 다음에 열 때 늘 이번 주부터 보이게. (다른 패널을 여는 쪽들은 `isLeaderboardVisible = false` 만 내리는데,
+    /// 그쪽은 `toggleLeaderboard` 의 여는 갈래가 같은 되돌림을 한 번 더 하므로 과거 주에 갇힐 수 없다.)
+    func closeLeaderboard() {
+        if isLeaderboardVisible { isLeaderboardVisible = false }
+        syncLeagueWeekToCurrent()
+    }
+
+    /// 보고 있던 주가 이번 주와 다르면 이번 주로 되돌리고 주별 캐시를 버린다(**리그를 여는·닫는 모든 경로 공용**).
+    /// 캐시를 통째로 버리는 이유: 과거 주 표는 주가 넘어가도 그 주의 사실 그대로지만, **이번 주 표만은** 주 경계를
+    /// 넘는 순간 '지난주 표'가 된다. 그 한 칸을 골라 버리느니 전부 버리는 편이 틀릴 자리가 없다(다음 조회 1회 비용).
+    ///
+    /// ★ 이 함수를 지나야 하는 문은 **넷**이다(하나라도 빠지면 그 문으로 들어온 사람은 과거 주에 갇힌다):
+    ///   ① 레일 트로피 버튼/토글 — `toggleLeaderboard()` 의 여는 갈래
+    ///   ② 뒤로·닫기          — `closeLeaderboard()`
+    ///   ③ **팝오버 재오픈**   — `setMenuPresented(true)`  (v0.3.37 배포 차단: 여기가 비어 있었다. 패널을 연 채
+    ///                          팝오버만 닫았다 여는 것이 가장 흔한 동선인데, 그 길은 토글을 지나지 않는다.)
+    ///   ④ 주 롤오버          — `revertLeagueWeekIfRolledOver()`(30초 주기 갱신·주 이동 진입에서)
+    private func syncLeagueWeekToCurrent() {
+        let current = TeamLeagueWeekNavigator.currentKey()
+        // 기준선은 언제나 되맞춘다 — 되돌릴 것이 없어도(이미 이번 주) 앵커가 낡아 있으면 다음 틱이 헛되돌린다.
+        if leagueWeekAnchor != current { leagueWeekAnchor = current }
+        guard leagueWeekKey != current else { return }
+        leagueWeekKey = current
+        leagueWeekCache.removeAll()
+        leaderboard = []
+        leagueLoading = false
+        leagueFailed = false
+    }
+
+    /// **주 롤오버 되돌림.** 앱을 켜 둔 채 월요일 0시를 넘기면 보고 있던 '이번 주'가 지난주가 된다 —
+    /// 그 순간 화면은 ① 기본 보기가 지난주로 굳고, ② 굳은 표(주 경계 전에 받은 **이번 주 숫자**)가 과거 주 문구를
+    /// 달고 "N명 중 M명 참여"라고 적는다. 둘 다 거짓이다.
+    ///
+    /// `syncLeagueWeekToCurrent` 와 달리 **사용자가 일부러 고른 과거 주는 건드리지 않는다.** 판정은 주 키가 아니라
+    /// 앵커로 한다: 키만 보면 ◂ 로 지난주를 펴 둔 사람도 '이번 주가 아님'이라 30초마다 끌려온다.
+    /// 앵커가 어긋났다는 것은 **기준선(이번 주) 자체가 옮겨 갔다**는 뜻이고, 그때는 보던 주가 무엇이든
+    /// 새 이번 주로 되돌린다 — 캐시에 남은 옛 '이번 주' 표가 다음 ▸ 에서 과거 주인 척 되살아나기 때문이다.
+    func revertLeagueWeekIfRolledOver() {
+        guard leagueWeekAnchor != TeamLeagueWeekNavigator.currentKey() else { return }
+        syncLeagueWeekToCurrent()
+    }
+
+    /// 리그 주 이동(-1 = ◂ 과거 · +1 = ▸ 현재 쪽). 이동 후 그 주를 다시 로드한다.
+    /// 이번 주 너머(미래)와 6주 전 너머로는 네비게이터가 클램프하므로, 값이 그대로면 아무 요청도 발사하지 않는다.
+    func stepLeagueWeek(by delta: Int) {
+        // 옛 서버에서는 과거 주 자체가 없다 — 화살표는 이미 접혀 있지만, 접힘을 지나쳐 불릴 수 있는 유일한 경로
+        // (키보드·테스트·재진입)에서도 이번 주를 벗어나지 않게 여기서 한 번 더 막는다.
+        guard leagueWeekOffsetSupported else { return }
+        // 주가 넘어간 직후의 한 번(주기 갱신보다 화살표가 빠를 수 있다) — 옮기기 전에 기준선부터 새 이번 주로 맞춘다.
+        // 안 그러면 ◂ 한 번이 '옛 이번 주 − 1' 로 가고, 곧이어 오는 틱이 그 화면을 다시 끌어당긴다.
+        revertLeagueWeekIfRolledOver()
+        let next = TeamLeagueWeekNavigator.step(leagueWeekKey, by: delta)
+        guard next != leagueWeekKey else { return }
+        leagueWeekKey = next
+        if leagueFailed { leagueFailed = false }
+        if let cached = leagueWeekCache[next] {
+            // 이미 본 주 — 빈 목록을 거치지 않고 곧바로 그 표를 되돌려 준다(그리고 아래 조회가 갈아 끼운다).
+            if leaderboard != cached { leaderboard = cached }
+            if leagueLoading { leagueLoading = false }
+        } else {
+            // 처음 보는 주 — 직전 주 행이 '그 주인 척' 남지 않도록 비우고 "불러오는 중…"으로 시작한다
+            // (본문 자리에 동기화 문구를 띄우지 않는다는 규약. 토큰 순위판 stepTokenBoardMonth 와 같다).
+            leaderboard = []
+            leagueLoading = true
+        }
+        loadLeaderboard()
     }
 
     /// 토큰 순위판을 닫는 **유일한** 경로. 뒤로 버튼·토글·다른 패널 열기가 모두 여기를 지나야
@@ -3306,6 +3404,16 @@ extension WorkTimerStore {
         // 세션이 사라지면 리그 페이지 상태도 함께 초기화한다(signOut·토큰 만료 로그아웃 공통 경로).
         leaderboard = []
         isLeaderboardVisible = false
+        // 보던 주·주별 캐시도 계정의 것이다 — 남기면 다음 사람 화면이 앞 사람이 보던 6주 전 표부터 시작한다.
+        leagueWeekKey = TeamLeagueWeekNavigator.currentKey()
+        // 기준선도 함께 되맞춘다 — 낡은 앵커를 물려주면 다음 계정의 첫 틱이 이유 없이 표를 한 번 버린다.
+        leagueWeekAnchor = TeamLeagueWeekNavigator.currentKey()
+        leagueWeekCache.removeAll()
+        leagueLoading = false
+        leagueFailed = false
+        // 서버 능력 판정은 **계정이 아니라 서버의 성질**이지만, 다음 로그인의 첫 조회가 어차피 다시 판정한다.
+        // 접힌 채로 물려주면 db push 가 끝난 뒤에도 화살표가 안 보이는 창이 남으므로 열어 둔 상태로 돌려놓는다.
+        leagueWeekOffsetSupported = true
         // 토큰 보드 상태와 업로드 게이트도 함께 비운다(리그와 동일 규약). 다음 로그인은 처음부터 다시 올린다.
         tokenBoard = []
         isTokenBoardVisible = false

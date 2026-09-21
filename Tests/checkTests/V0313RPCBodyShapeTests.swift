@@ -110,8 +110,10 @@ private func captureClientRPCCalls() async throws -> [ClientRPCCall] {
         try await captureRPC("app_user_directory") {
             _ = try await $0.fetchPokeDirectory(accessToken: "shape-token")
         },
+        // v0.3.37(지난 주 보기) — 맥 앱은 **언제나 주 오프셋을 싣는다**(이번 주도 `{"p_week_offset":0}`).
+        // 무인자 `{}` 는 이제 두 자리에만 남는다: 폰 순위판과, 옛 서버에서만 도는 폴백.
         try await captureRPC("team_weekly_leaderboard") {
-            _ = try await $0.fetchTeamLeaderboard(accessToken: "shape-token")
+            _ = try await $0.fetchTeamLeaderboard(accessToken: "shape-token", weekOffset: 0)
         }
     ]
 }
@@ -163,23 +165,56 @@ func 토큰_순위판은_p_month_하나만_보낸다() async throws {
     #expect(call.body.contains("\"p_month\":\"2026-09\""))
 }
 
-/// 인자 없는 RPC 두 개는 **빈 객체**를 보낸다(`EmptyBody`). 빈 본문(0바이트)이 아니다 —
+/// 인자 없는 RPC 는 **빈 객체**를 보낸다(`EmptyBody`). 빈 본문(0바이트)이 아니다 —
 /// 이 둘을 헷갈려 본문을 통째로 빼면 PostgREST 는 다른 해석 경로를 타고,
 /// 본문 없는 POST 는 `Content-Type` 도 안 붙어 400 이 난다.
+///
+/// v0.3.37: `team_weekly_leaderboard` 가 여기서 빠졌다(맥은 이제 p_week_offset 을 싣는다). 대신 **옛 서명**
+/// (`fetchTeamLeaderboard(accessToken:)` — 폰 순위판과 구버전 서버 폴백이 쓰는 모양)이 여전히 `{}` 인지를 같이 못박는다.
+/// 그 모양이 흔들리면 앱이 db push 보다 먼저 나가는 창에서 **리그 화면이 통째로 빈다**.
 @Test
-func 인자없는_RPC_둘은_빈_객체를_보낸다() async throws {
-    for name in ["app_user_directory", "team_weekly_leaderboard"] {
-        let call = try await captureRPC(name) { service in
-            if name == "app_user_directory" {
-                _ = try await service.fetchPokeDirectory(accessToken: "shape-token")
-            } else {
-                _ = try await service.fetchTeamLeaderboard(accessToken: "shape-token")
-            }
-        }
-        #expect(call.keys.isEmpty, "\(name) 본문에 키가 생겼다: \(call.body)")
-        #expect(call.body == "{}", "\(name) 본문이 빈 객체가 아니다: \(call.body)")
-        #expect(call.contentType == "application/json", "\(name) 에 Content-Type 이 없다")
+func 인자없는_RPC_는_빈_객체를_보낸다() async throws {
+    let directory = try await captureRPC("app_user_directory") {
+        _ = try await $0.fetchPokeDirectory(accessToken: "shape-token")
     }
+    #expect(directory.keys.isEmpty, "app_user_directory 본문에 키가 생겼다: \(directory.body)")
+    #expect(directory.body == "{}", "app_user_directory 본문이 빈 객체가 아니다: \(directory.body)")
+    #expect(directory.contentType == "application/json", "app_user_directory 에 Content-Type 이 없다")
+
+    let legacyLeague = try await captureRPC("team_weekly_leaderboard") {
+        _ = try await $0.fetchTeamLeaderboard(accessToken: "shape-token")
+    }
+    #expect(legacyLeague.body == "{}", "옛 서명/폴백 본문이 빈 객체가 아니다: \(legacyLeague.body)")
+    #expect(legacyLeague.contentType == "application/json")
+}
+
+/// 맥 리그는 **이번 주에도** p_week_offset 을 싣는다. 이 키가 빠지면 지난 주 보기가 무력화되고
+/// (서버 default 가 언제나 이번 주를 주므로) ◂ 를 눌러도 같은 표가 온다 — 조용한 실패라 여기서 못박는다.
+@Test
+func 팀_리그는_p_week_offset_하나만_보낸다() async throws {
+    let now = try await captureRPC("team_weekly_leaderboard") {
+        _ = try await $0.fetchTeamLeaderboard(accessToken: "shape-token", weekOffset: 0)
+    }
+    #expect(now.keys == ["p_week_offset"], "본문 키 집합이 바뀌었다: \(now.body)")
+    #expect(now.body.contains("\"p_week_offset\":0"))
+
+    // 대조군 — 6주 전을 물으면 **같은 키에 다른 값**이 실린다(기준선이 같은 입력이면 위 단언은 영원히 초록이다).
+    let past = try await captureRPC("team_weekly_leaderboard") {
+        _ = try await $0.fetchTeamLeaderboard(accessToken: "shape-token", weekOffset: 6)
+    }
+    #expect(past.keys == ["p_week_offset"], "본문 키 집합이 바뀌었다: \(past.body)")
+    #expect(past.body.contains("\"p_week_offset\":6"))
+
+    // 서버와 같은 눈금으로 **접는다**(거부가 아니다). 7 을 보내면 서버는 6주 전을 주는데 화면 제목만 7주 전이 된다.
+    let folded = try await captureRPC("team_weekly_leaderboard") {
+        _ = try await $0.fetchTeamLeaderboard(accessToken: "shape-token", weekOffset: 99)
+    }
+    #expect(folded.body.contains("\"p_week_offset\":6"), "상한 너머가 6 으로 안 접혔다: \(folded.body)")
+
+    let negative = try await captureRPC("team_weekly_leaderboard") {
+        _ = try await $0.fetchTeamLeaderboard(accessToken: "shape-token", weekOffset: -3)
+    }
+    #expect(negative.body.contains("\"p_week_offset\":0"), "음수가 0 으로 안 접혔다: \(negative.body)")
 }
 
 /// 본문 캡처가 실제로 '앱의 인코더'를 지났는지 — snake_case 변환은 서비스 생성자에서 한 번만 정해지고

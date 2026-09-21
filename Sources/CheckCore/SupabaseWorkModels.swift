@@ -198,6 +198,34 @@ package struct TeamLeaderboardEntry: Identifiable, Equatable {
     /// **순위에는 아무 영향이 없다**(사장님 확정 2 — 센터는 순위를 가르지 않는다). 정렬·필터에 쓰지 마라.
     package var center: String? = nil
 
+    /// 이 행이 말하는 주의 **KST 월요일**('YYYY-MM-DD', v0.3.37). 서버가 접은 주(0~6 클램프)를 클라가
+    /// 알아볼 수 있는 유일한 수단이라 제목/캡션이 이 값을 우선한다. 이 칸을 모르는 구버전 RPC 는 nil.
+    package var weekStart: String? = nil
+    /// 그 주에 이 팀으로 **0초를 넘는** 근무가 있는 distinct 사용자 수(이번 주도 같은 정의).
+    /// 과거 주에서 `workingCount`('지금 근무 중')는 언제나 0 이라, 과거 주 문구는 반드시 이 값을 쓴다.
+    /// 이 칸을 모르는 구버전 RPC 는 nil — **이번 주에 한해** workingCount 로 대신할 수 있다(과거 주는 대신하지 마라,
+    /// 구버전 서버는 과거 주 자체를 못 준다).
+    package var participantCount: Int? = nil
+
+    /// 이 행이 말하는 주가 **이미 지난 주인가** — 화면·문구 함수·접근성 라벨이 공유하는 **단 하나의** 과거 판정이다(v0.3.37).
+    ///
+    /// 왜 스토어가 아니라 엔트리에 두나:
+    ///  ① 예전에는 뷰가 스토어의 주 상태(`!canStepForward`)를 Bool 로 만들어 행마다 내려보냈다. 그러면 맥과 폰이
+    ///     **서로 다른 자리에서 같은 판정을 다시 센다** — 갈릴 자리가 둘이 되고, 실제로 머리글("인원은 지금 값")과
+    ///     행("그때 N명")이 서로 다른 말을 하는 화면이 나왔다.
+    ///  ② 앱을 켜 둔 채 월요일 0시를 넘기면 **표는 지난주인데 머리글만 이번 주**인 중간 상태가 생긴다. 행이 자기 주를
+    ///     들고 있으면 그 중간 상태에서도 행은 스스로 과거를 말한다(머리글도 같은 눈금 — `TeamLeagueWeekNavigator`).
+    ///
+    /// `weekStart` 가 nil 이면 **false**(= 이번 주)다. nil 은 주 칸 자체를 모르는 구버전 RPC 의 모양인데, 그 서버는
+    /// 과거 주를 줄 수 없으므로 돌아온 행은 언제나 이번 주다. 모른다고 과거로 몰면 **가장 흔한 화면**(이번 주)이
+    /// 과거 주 문구를 쓰게 된다 — 틀릴 때 덜 나쁜 쪽이 이번 주다.
+    ///
+    /// 경계는 `TeamLeagueWeekNavigator`/서버 `week_start` 와 같은 KST 월요일이다(같은 달력을 쓴다).
+    package func isPastWeek(now: Date = Date()) -> Bool {
+        guard let weekStart, let start = TeamLeagueWeekNavigator.date(forKey: weekStart) else { return false }
+        return start < TeamWeeklyGoal.koreanWeekStart(for: now)
+    }
+
     /// 팀원 1인당 평균 근무시간(초). 인원 0(가드)이면 0. 정렬·게이지·%의 단일 기준이다.
     package var averageSeconds: Int {
         guard memberCount > 0 else { return 0 }
@@ -230,6 +258,55 @@ extension Array where Element == TeamLeaderboardEntry {
     package func filteredForDisplay(myTeamID: String?) -> [TeamLeaderboardEntry] {
         filter { $0.totalSeconds != 0 || $0.id == myTeamID }
             .sortedByAverageDescending()
+    }
+
+    /// 표시 목록 + **화면이 문구를 가르는 데 필요한 사실 둘**을 한 번에 낸다(v0.3.37 지난 주 보기).
+    ///
+    /// 왜 `filteredForDisplay` 만으로 모자랐나: "내 팀은 0시간이어도 남긴다"는 규칙은 **내 팀 행이 원본에 있을 때만**
+    /// 성립한다. 과거 주에는 서버가 *그 주에 아직 없던 팀*을 아예 빼므로(유령 팀 제외), 내 팀이 그 주에 없었으면
+    /// 남길 행 자체가 없다 — 화면은 "우리 팀이 왜 안 보이지?"를 스스로 답해야 한다. 그 판정을 뷰에서 다시 세면
+    /// 맥과 폰이 갈리므로 여기서 한 번만 센다.
+    ///
+    /// `myTeamMissing` 은 **원본이 비었을 땐 false** 다. 로드 전/실패도 원본이 비어 있는데, 그걸 "그 주엔 팀이
+    /// 없었다"로 읽으면 통신 실패가 과거 사실로 둔갑한다.
+    ///
+    /// ── 검토 지적("알 수 없는 원인을 단정한다")에 대한 실증 (2026-09-22) ──────────────────────────
+    /// 물음: 화면이 "그 주엔 아직 우리 팀이 없었어요"라고 **단정해도 되는가** — 서버가 유령 팀을 뺀 경우와,
+    ///       그 주 근무가 0이라 빠진 경우를 우리가 구분할 수 있는가?
+    /// 답: **구분된다.** `supabase/migrations/20260921213000_team_weekly_history.sql` 의 최종 select 는
+    ///     `from public.teams t cross join bounds b left join …` 다 — 팀 표가 **드라이버**고 합계·인원·참여자는
+    ///     전부 left join 이라, **그 주에 0초를 일한 팀도 행은 온다**(total_seconds 0 · participant_count 0).
+    ///     행을 아예 빼는 조건은 where 절 둘뿐이다:
+    ///       · `t.is_hidden = public.is_hidden_user(auth.uid())`  ← 숨김 격리. **주와 무관**하다(이번 주에도 똑같이 뺀다).
+    ///       · `b.week_offset = 0 or t.created_at < b.week_end`   ← 유령 팀 제외. **주에만 달린 유일한 조건**이다.
+    ///     그러므로 "과거 주에서만 내 팀 행이 없다" = "그 주엔 그 팀이 아직 없었다" 하나로 좁혀진다.
+    ///     (0시간 팀을 걷어내는 것은 **클라의** `filteredForDisplay` 인데, 그 필터는 내 팀을 언제나 남기고,
+    ///      이 값은 애초에 **필터 전 원본**에서 센다 — 그래서 "0시간이라 안 보인다"와 섞일 자리가 없다.)
+    /// 남는 잔여 위험 하나: 숨김 격리가 어긋난 계정(profiles.is_hidden 이면서 팀은 일반)은 **어느 주에도** 내 팀이
+    ///     안 보인다. 그 계정에는 이 문장이 과거를 잘못 말한다. 다만 그 상태는 이번 주 화면에서도 똑같이 내 팀이
+    ///     빠지므로 주 보기가 만든 결함이 아니고, 운영자가 만드는 내부 계정에서만 생긴다.
+    package func leagueDisplay(myTeamID: String?) -> TeamLeagueDisplay {
+        TeamLeagueDisplay(
+            entries: filteredForDisplay(myTeamID: myTeamID),
+            unfilteredCount: count,
+            myTeamMissing: !isEmpty && myTeamID != nil && !contains { $0.id == myTeamID }
+        )
+    }
+}
+
+/// 리그 한 화면분의 표시 재료. 맥·폰이 같은 값으로 같은 문구를 고르게 하는 자리다.
+package struct TeamLeagueDisplay: Equatable {
+    /// 0시간 팀을 걷어내고 1인당 평균 내림차순으로 정렬한 표시 목록(내 팀은 0이어도 남는다).
+    package let entries: [TeamLeaderboardEntry]
+    /// 필터 전 원본 팀 수. 0 이면 '로드 전/실패', >0 인데 entries 가 비면 '그 주엔 아무도 근무 안 함'이다.
+    package let unfilteredCount: Int
+    /// 내 팀 행이 **원본에 아예 없다** — 과거 주에서는 "그 주엔 아직 우리 팀이 없었다"는 뜻이다.
+    package let myTeamMissing: Bool
+
+    package init(entries: [TeamLeaderboardEntry], unfilteredCount: Int, myTeamMissing: Bool) {
+        self.entries = entries
+        self.unfilteredCount = unfilteredCount
+        self.myTeamMissing = myTeamMissing
     }
 }
 
@@ -1078,6 +1155,36 @@ package struct SetTeamGoalRow: Decodable {
     package let weeklyGoalHours: Int
 }
 
+/// team_weekly_leaderboard(p_week_offset) 요청 본문. 인코더가 snake_case 로 바꿔 `{"p_week_offset": n}` 이 된다.
+/// **키가 하나라도 달라지면 PostgREST 는 다른 함수를 찾다가 PGRST202 로 떨어진다** — 서비스가 그걸 옛 모양 폴백의 신호로 쓴다.
+package struct TeamLeaderboardRequest: Encodable {
+    package let pWeekOffset: Int
+    package init(pWeekOffset: Int) { self.pWeekOffset = pWeekOffset }
+}
+
+/// 리그 한 판의 조회 결과 + **서버가 어떤 서버였는지**. 행만 돌려주면 옛 서버가 준 '이번 주'를 과거 주로 오해한다.
+package struct TeamLeaderboardPage: Equatable {
+    /// 서버 순서 그대로(정렬은 호출부 책임 — 서버 정렬을 믿지 않는 기존 규약 유지).
+    package let entries: [TeamLeaderboardEntry]
+    /// 이 응답을 받으려고 **보낸** 오프셋(이미 0~6 으로 접힌 값).
+    package let requestedWeekOffset: Int
+    /// 서버가 `p_week_offset` 을 아는가. **false 면 돌아온 행은 이번 주다** — 화면은 보고 있던 주를 이번 주로
+    /// 되돌리고 주 이동을 접어야 한다.
+    package let supportsWeekOffset: Bool
+
+    package init(entries: [TeamLeaderboardEntry], requestedWeekOffset: Int, supportsWeekOffset: Bool) {
+        self.entries = entries
+        self.requestedWeekOffset = requestedWeekOffset
+        self.supportsWeekOffset = supportsWeekOffset
+    }
+
+    /// 서버가 실제로 답한 주(KST 월요일). 행이 하나도 없으면 nil — 그땐 클라가 계산한 주를 그대로 믿는 수밖에 없다.
+    /// 값이 있고 클라 계산과 다르면 **서버가 접었거나 그 사이 주가 넘어간 것**이므로 제목은 이쪽을 따라야 한다.
+    package var serverWeekStart: String? {
+        entries.compactMap(\.weekStart).first
+    }
+}
+
 /// team_weekly_leaderboard() RPC 응답 행. total_seconds 는 bigint(초)라 Int(64비트)로 받는다.
 /// memberCount 는 member_count 를 아직 안 내려주는 구버전 RPC(마이그레이션 미적용)와도 호환되게
 /// optional 로 두고, 디코드 시 누락되면 0 으로 폴백한다(평균 계산은 0명 가드로 안전하다).
@@ -1092,6 +1199,10 @@ package struct TeamLeaderboardRow: Decodable {
     /// 그 판정은 여기서 하지 않는다(클라가 팀원 명부를 들고 있지 않으므로 할 수도 없다).
     /// memberCount 와 같은 이유로 Optional 이다: 이 컬럼이 없는 구버전 RPC 로도 리그가 살아야 한다.
     package let center: String?
+    /// 이 행이 말하는 주의 KST 월요일('YYYY-MM-DD'). v0.3.37 마이그레이션 전 서버에는 없다 → Optional.
+    package let weekStart: String?
+    /// 그 주에 이 팀으로 0초를 넘는 근무가 있던 distinct 사용자 수. 같은 이유로 Optional.
+    package let participantCount: Int?
 }
 
 /// memberships?select=team_id,role,teams(name,weekly_goal_hours) 응답 행. teams 는 임베드 조인.

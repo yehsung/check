@@ -2163,9 +2163,9 @@ func insightsOverflowFadeMarksTheClippedBottomOfTheBody() throws {
     //     그라데이션이 없으면 잘린 칸의 accent 가 접힘선(그 아래는 곧바로 패널 padding)까지 닿아 마지막 accent 행과
     //     패널색 연속 구간 사이가 0~4px(칸 간격)다. 그라데이션이 있으면 칸이 1/3 지점부터 accent 판정을 잃어
     //     그 사이가 그라데이션 높이의 2/3(≈29px) 이상 벌어진다.
-    //     v0.2.41 의 새 순서(회고 → 근무 잔디 → 토큰 잔디 → 히트맵)에서 접힘선에 걸리는 것은 **토큰 잔디**다.
-    //     두 픽스처 모두 1열(week 1)의 월~목이 1/2/3/4단계라 잘린 목요일 행이 가장 진한 칸이다 —
-    //     그라데이션이 빠지면 바로 그 칸이 접힘선까지 accent 로 닿는다.
+    //     2026-09-22 재정렬(「지난주」 → 「최근 12주」) 뒤로 접힘선에 걸리는 것은 **근무 잔디**다(토큰 잔디는 통째로
+    //     접힘선 아래로 내려갔다 — InsightsPanel 머리 주석). 픽스처 1열(week 1)의 월~목이 1/2/3/4단계라 잘린 행이
+    //     가장 진한 칸이고, 그라데이션이 빠지면 바로 그 칸이 접힘선까지 칸 색으로 닿는다.
     let store = makeInsightsStore()
     store.dailyGrid = sampleWorkDailyGrid()
     store.tokenDailyGrid = sampleTokenDailyGrid()
@@ -2173,10 +2173,15 @@ func insightsOverflowFadeMarksTheClippedBottomOfTheBody() throws {
     #expect(store.tokenDailyGrid.tokens[1][3] == TokenDailyGrid.fullDayTokens)
     let clipped = try renderBitmap(CheckMenuView(store: store, previewClipsOverflowList: true))
     // 1열 칸의 가운데 x: 바깥 12 + 패널 12 + 요일 라벨 20 + 간격 2 + 한 열(16 + 2) + 반 칸 8 = 72pt.
-    let column = 72 * 2
-    let gap = try #require(gapBetweenLastAccentAndPanelRun(clipped, x: column), "잔디 칸 아래에 패널색 구간이 있어야 한다")
+    // **열을 하나로 못 박지 않는다**(2026-09-22): 재정렬로 접힘선에 걸리는 격자가 토큰 잔디 → 근무 잔디로 바뀌었고,
+    // 그 격자의 1열 월요일은 픽스처에서 빈 칸이라 그 열에는 잘린 칸이 없다(그 열만 보면 마지막 칠해진 칸이 한참 위
+    // 히트맵이라 gap 이 142px 로 벌어진다 — 옛 accent 전용 시절과 같은 함정을 픽스처 좌표로 다시 밟은 셈이다).
+    // 그래서 앞 네 열을 훑어 **잘린 칸이 실제로 있는 열**(gap 이 가장 작은 열)에서 잰다.
+    let columns = [72, 90, 108, 126].map { $0 * 2 }
+    let gaps = columns.compactMap { gapBetweenLastAccentAndPanelRun(clipped, x: $0) }
+    let gap = try #require(gaps.min(), "잔디 칸 아래에 패널색 구간이 있어야 한다")
     #expect(gap >= 8, "잘린 행이 그라데이션 없이 접힘선까지 칸 색으로 닿았다(gap \(gap)px)")
-    #expect(gap <= Int(InsightsOverflowFade.height) * 2 + 4)
+    #expect(gap <= Int(InsightsOverflowFade.height) * 2 + 4, "잘린 칸이 그라데이션 없이 접힘선까지 닿았다(gap \(gap)px)")
 }
 
 /// x 열을 아래에서 위로 훑어, 마지막 accent 픽셀 행과 그 **아래**에서 시작하는 패널색(CheckTheme.panel ±4)
@@ -2229,26 +2234,26 @@ func insightsPanelShowsTheGrassEvenWhenLastWeekWasEmpty() throws {
     #expect(Double(grassHeight) / 2.0 <= 700.0)
     saveV0211Snapshot(try renderPNG(CheckMenuView(store: withGrass, previewClipsOverflowList: true)), "insights-grass-only")
 
-    // 이 본문은 회고 카드가 빈 줄 하나라 97pt 짧다 — 그 차이는 토큰 잔디 유무와 무관하게 같다(실측 668.5−571.5 = 487−390).
+    // 이 본문은 회고 카드가 빈 줄 하나라 97pt 짧다 — 그 차이는 토큰 잔디 유무와 무관하게 같다(재정렬 뒤 실측 680.5−583.5 = 499−402).
     let short = InsightsPanelChromeBudget.contentNaturalHeightWithoutLastWeek
     #expect(short < InsightsPanelChromeBudget.contentNaturalHeight)
     #expect(InsightsPanelChromeBudget.contentNaturalHeight - short == 97)
-    // 토큰 잔디까지 있는 짧은 본문(571.5pt)은 여전히 상한을 넘겨 425pt 로 깎이고 창은 695pt 에 선다.
+    // 토큰 잔디까지 있는 짧은 본문(583.5pt)은 여전히 상한을 넘겨 425pt 로 깎이고 창은 695pt 에 선다.
     #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: 0, naturalHeight: short) == 425)
     let cappedHeight = try #require(renderedPixelHeight(CheckMenuView(store: withGrass)))   // 실제 앱 경로(ScrollView)
     #expect(Double(cappedHeight) / 2.0 == 695)
 
-    // 수집 거부자는 토큰 섹션이 빠져 본문이 181.5pt 더 짧다(390pt) — 크롬이 없으면 깎지 않아 스크롤도, 바닥의 빈 띠도 없다.
-    // (큰 본문 기준 425pt 로 못 박으면 390pt 본문 아래 35pt 가 늘 비어 보인다.) 이 상태의 창은 실측 660pt.
+    // 수집 거부자는 토큰 섹션이 빠져 본문이 181.5pt 더 짧다(402pt) — 크롬이 없으면 깎지 않아 스크롤도, 바닥의 빈 띠도 없다.
+    // (큰 본문 기준 425pt 로 못 박으면 402pt 본문 아래 23pt 가 늘 비어 보인다.) 이 상태의 창은 실측 672pt.
     let shortNoToken = InsightsPanelChromeBudget.naturalHeight(hasRetro: false, showsTokenGrid: false)
-    #expect(shortNoToken == 390)
+    #expect(shortNoToken == 402)
     #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: 0, naturalHeight: shortNoToken) == nil)
     let optedOut = makeInsightsStore(withData: false, loaded: true, collectsTokens: false)
     optedOut.dailyGrid = grid
     let scrollHeight = try #require(renderedPixelHeight(CheckMenuView(store: optedOut)))
-    #expect(Double(scrollHeight) / 2.0 == 660)
-    // 목표 편집 행(92)이 얹히면 늘어난 여유(+35)를 넘긴 57pt 만 깎아 창은 다시 695pt 에 선다.
-    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: CheckMenuView.goalEditorHeight, naturalHeight: shortNoToken) == shortNoToken - 57)
+    #expect(Double(scrollHeight) / 2.0 == 672)
+    // 목표 편집 행(92)이 얹히면 늘어난 여유(+23)를 넘긴 69pt 만 깎아 창은 다시 695pt 에 선다.
+    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: CheckMenuView.goalEditorHeight, naturalHeight: shortNoToken) == shortNoToken - 69)
     let withEditor = try #require(renderedPixelHeight(CheckMenuView(store: optedOut, previewGoalEditing: true)))
     #expect(Double(withEditor) / 2.0 == 695)
 
@@ -5502,21 +5507,39 @@ private func zeroTokenDailyGrid(now: Date = dailyGridFixtureNow) -> TokenDailyGr
 func checkMenuViewRendersInsightsTokenGridSnapshot() throws {
     // 개인 기록 패널 (c) 최근 12주 AI 토큰: 캡션 + 범례 + 월 라벨 + 13열×7행. 근무 잔디와 같은 뷰·같은 칸 크기라
     // 두 격자가 위아래로 정확히 맞물려 보이는지가 이 스냅샷의 핵심 확인 지점이다.
-    let store = makeInsightsStore()
-    #expect(store.tokenDailyGrid.totalTokens > 0)
-    let painted = try renderBitmap(CheckMenuView(store: store, previewClipsOverflowList: true))
+    // ★ 2026-09-22 재정렬 뒤로 토큰 잔디는 **접힘선 아래**다(「지난주」 묶음이 앞으로 왔다 — InsightsPanel 머리 주석).
+    //   그래서 기본 스토어의 클립 렌더에는 토큰 격자가 한 줄도 안 나온다. 값→픽셀 배선을 그 화면에서 재면
+    //   "값을 바꿔도 픽셀이 그대로"가 되어 이 테스트가 배선 결함과 구분되지 않는다(재정렬 때 실제로 그렇게 빨개졌다).
+    //   그래서 **본문이 안 깎이는 가장 짧은 상태**에서 잰다: 지난주가 비어 회고·히트맵이 짧은 휴가 복귀 주.
+    //   (hasTokenGrass 가 true 라 자리 문구가 본문을 덮지 않는다.)
+    //   그래서 패널을 **자연 높이로 직접** 그린다(extraChromeHeight 를 크게 음수로 주면 capHeight 가 nil 이라 안 깎인다).
+    //   스토어 → 뷰 배선(`tokenDailyGrid: store.tokenDailyGrid`)은 이 파일의 다른 소스 계약이 따로 못 박는다.
+    func panel(_ token: TokenDailyGrid) -> some View {
+        InsightsPanel(
+            heatmap: sampleWorkRhythmHeatmap(),
+            retro: sampleWeeklyRetro(),
+            dailyGrid: sampleWorkDailyGrid(),
+            tokenDailyGrid: token,
+            showsTokenGrid: true,
+            hasLoaded: true,
+            extraChromeHeight: -5000,
+            onBack: {}
+        )
+        .frame(width: 316)
+        .fixedSize()
+    }
+    let tokenGrid = sampleTokenDailyGrid()
+    #expect(tokenGrid.totalTokens > 0)
+    let painted = try renderBitmap(panel(tokenGrid))
     saveV0211Snapshot(try #require(painted.representation(using: .png, properties: [:])), "insights-token-grid")
 
     // 값이 0 인 같은 모양의 잔디와 비교한다(레이아웃 동일 → 차이는 오직 칠해진 칸).
-    let blankStore = makeInsightsStore()
-    blankStore.tokenDailyGrid = zeroTokenDailyGrid()
-    let blank = try renderBitmap(CheckMenuView(store: blankStore, previewClipsOverflowList: true))
+    let blank = try renderBitmap(panel(zeroTokenDailyGrid()))
 
     #expect(painted.pixelsHigh == blank.pixelsHigh)          // 값은 높이를 바꾸지 않는다(칸은 고정 16pt)
-    #expect(Double(painted.pixelsHigh) / 2.0 <= 700.0)
-    // 배선: 스토어의 토큰 값이 뷰까지 닿아 픽셀을 바꾼다. 차이는 회고 카드 아래(둘째·셋째 섹션)에서 시작한다.
+    // 배선: 토큰 값이 뷰까지 닿아 픽셀을 바꾼다. 차이는 「최근 12주」 묶음(본문 아래쪽)에서만 난다.
     let diff = try #require(bitmapDiffBounds(painted, blank, tolerance: 8), "토큰 값이 패널 픽셀에 드러나야 한다")
-    #expect(diff.minY > 400, "회고 카드(상단 200pt)가 토큰 값으로 흔들렸다")
+    #expect(diff.minY > 400, "「지난주」 묶음(회고 + 히트맵)이 토큰 값으로 흔들렸다")
     // v0.2.42 부터 토큰 잔디는 **보라**다 — 예전엔 accent(파랑)를 셌는데 그대로 두면 두 그림 다 같은 값이라
     // 이 단언이 늘 빨갛다(실제로 그렇게 빨개졌다). 보라 픽셀은 칠해진 쪽에만 있다.
     #expect(grassPixelCount(painted, top: 0, bottom: painted.pixelsHigh - 1, hue: .token)
@@ -5536,7 +5559,7 @@ func checkMenuViewRendersInsightsTokenGridSnapshot() throws {
 func insightsPanelHidesTheTokenGrassWhenTokenCollectionIsOptedOut() throws {
     // 수집 거부자는 서버에 일별 행이 없고(purge) 앞으로도 안 쌓인다 — 빈 잔디를 보여 주면 "내가 안 썼다"는 거짓말이 된다.
     // 섹션이 통째로 빠졌다는 결정적 증거는 **창 높이**다: 지난주가 빈 본문은 토큰 섹션이 있으면 상한에 걸려 깎이고(695pt),
-    // 없으면 자연 높이 그대로 선다(660pt). 픽셀 차이는 "섹션이 있다/없다"를 이만큼 분명히 말하지 못한다.
+    // 없으면 자연 높이 그대로 선다(672pt). 픽셀 차이는 "섹션이 있다/없다"를 이만큼 분명히 말하지 못한다.
     // 지난주는 비었지만 최근 12주에는 근무·토큰 기록이 있는 사용자(휴가 복귀 주) — 본문이 그려지는 가장 짧은 상태다.
     let collecting = makeInsightsStore(withData: false, loaded: true, collectsTokens: true)
     collecting.dailyGrid = sampleWorkDailyGrid()
@@ -5548,7 +5571,7 @@ func insightsPanelHidesTheTokenGrassWhenTokenCollectionIsOptedOut() throws {
     let withSection = try #require(renderedPixelHeight(CheckMenuView(store: collecting)))
     let withoutSection = try #require(renderedPixelHeight(CheckMenuView(store: optedOut)))
     #expect(Double(withSection) / 2.0 == 695)
-    #expect(Double(withoutSection) / 2.0 == 660)
+    #expect(Double(withoutSection) / 2.0 == 672)
     #expect(withoutSection < withSection)
     // 같은 스토어에서 **플래그만** 뒤집어도 다음 렌더에서 섹션이 사라진다(값 배선). 서버 설정은 로그인 수십 초 뒤에
     // 도착하므로 이 전환이 실제 화면에서 일어난다 — SwiftUI 가 그 전환을 보려면 store.tokenUsageCollect 가
@@ -5582,23 +5605,31 @@ func insightsPanelHidesTheTokenGrassWhenTokenCollectionIsOptedOut() throws {
 
 @MainActor
 @Test
-func insightsPanelOrdersRetroThenBothGrassesThenTheHeatmap() throws {
-    // v0.2.41 순서 결정: 본문 자연 높이가 창 상한을 넘겨 아래쪽이 늘 접힘선 밑으로 밀리므로, **새 기능 둘을 위로** 올리고
-    // 히트맵을 스크롤 아래로 내렸다. 예전 순서(회고 → 히트맵 → 잔디)에서는 잔디가 통째로 접힘선 아래에 숨어 있었다.
+func insightsPanelGroupsLastWeekThenTheTwelveWeekGrasses() throws {
+    // 2026-09-22 사용자 지시로 v0.2.41 순서를 뒤집었다 — "지난주 회고 밑에 12주 잔디가 뜨고 그 밑에 지난주 근무
+    // 리듬이 뜨는 게 이상하다". 회고와 히트맵은 같은 주 창에서 나와 총합이 같은 숫자라 한 묶음이어야 한다.
+    // 묶음 경계는 **시간 범위**다: 「지난주」(회고 → 히트맵) → 「최근 12주」(근무 잔디 → 토큰 잔디). 폰도 같은 기준.
     let source = swiftCodeStrippingComments(try String(contentsOf: checkMenuViewSourceURL(), encoding: .utf8))
     let panel = try #require(swiftStructBody(source, name: "InsightsPanel"))
     let open = try #require(panel.range(of: "let content = VStack(spacing: 12) {"))
     let close = try #require(panel.range(of: "let naturalHeight = InsightsPanelChromeBudget.naturalHeight"))
     let content = String(panel[open.upperBound..<close.lowerBound])
-    let order = try ["retroCard", "dailyGridSection", "tokenGridSection", "heatmapSection"].map {
+    let order = try ["retroCard", "heatmapSection", "dailyGridSection", "tokenGridSection"].map {
         try #require(content.range(of: $0)?.lowerBound, "본문에 \($0) 이 없다")
     }
-    #expect(order == order.sorted(), "본문 섹션 순서가 회고 → 근무 잔디 → 토큰 잔디 → 히트맵 이 아니다")
+    #expect(order == order.sorted(), "본문 섹션 순서가 회고 → 히트맵 → 근무 잔디 → 토큰 잔디 가 아니다")
     // 섹션마다 하나씩, 구분선은 셋(섹션 넷 사이).
     for section in ["retroCard", "dailyGridSection", "tokenGridSection", "heatmapSection"] {
         #expect(content.components(separatedBy: section).count - 1 == 1, "\(section) 이 본문에 두 번 이상 나온다")
     }
     #expect(content.components(separatedBy: "PanelDivider()").count - 1 == 3)
+    // 묶음 **경계**의 구분선만 여백을 더 받는다(묶음 안 구분선은 여백 0). 경계는 히트맵과 근무 잔디 사이 하나뿐이다.
+    #expect(content.components(separatedBy: "InsightsSectionGroupGap.extraSpacing").count - 1 == 1,
+            "묶음 경계 여백이 없거나 두 곳 이상에 붙었다 — 경계는 「지난주」와 「최근 12주」 사이 하나다")
+    let boundary = try #require(content.range(of: "InsightsSectionGroupGap.extraSpacing")?.lowerBound)
+    let heatmapAt = try #require(content.range(of: "heatmapSection")?.lowerBound)
+    let dailyAt = try #require(content.range(of: "dailyGridSection")?.lowerBound)
+    #expect(heatmapAt < boundary && boundary < dailyAt, "묶음 경계 여백이 히트맵과 근무 잔디 사이에 있지 않다")
 
     // 캡션은 위에서 아래로 기간이 읽히도록 "최근 12주 …" 둘 다음에 "지난주 …" 하나다. 히트맵의 기간을 오른쪽 꼬리표로
     // 미뤄 두면(옛 모양) 위에 12주 캡션이 둘이나 있는 화면에서 "12주짜리 셋째 격자"로 읽힌다.
@@ -5614,21 +5645,21 @@ func insightsPanelOrdersRetroThenBothGrassesThenTheHeatmap() throws {
 func insightsPanelChromeBudgetMatchesTheMeasuredFourBodyCombinations() throws {
     // 예산 상수는 340pt 폭 ImageRenderer 실측값이다(본문 밖 크롬 270pt 고정 → 창 높이 − 270 = 본문 자연 높이).
     // 레이아웃이 바뀌면 여기서 걸리고, 다시 재야 한다.
-    #expect(InsightsPanelChromeBudget.naturalHeight(hasRetro: true, showsTokenGrid: true) == 668.5)
-    #expect(InsightsPanelChromeBudget.naturalHeight(hasRetro: false, showsTokenGrid: true) == 571.5)
-    #expect(InsightsPanelChromeBudget.naturalHeight(hasRetro: true, showsTokenGrid: false) == 487)
-    #expect(InsightsPanelChromeBudget.naturalHeight(hasRetro: false, showsTokenGrid: false) == 390)
+    #expect(InsightsPanelChromeBudget.naturalHeight(hasRetro: true, showsTokenGrid: true) == 680.5)
+    #expect(InsightsPanelChromeBudget.naturalHeight(hasRetro: false, showsTokenGrid: true) == 583.5)
+    #expect(InsightsPanelChromeBudget.naturalHeight(hasRetro: true, showsTokenGrid: false) == 499)
+    #expect(InsightsPanelChromeBudget.naturalHeight(hasRetro: false, showsTokenGrid: false) == 402)
     #expect(InsightsPanelChromeBudget.tokenSectionHeight == 181.5)
     // 지난주 유무의 차(97pt)는 토큰 섹션 유무와 무관하게 같다 — 두 축이 독립이라 상수 둘 + 델타 하나로 충분하다.
     #expect(InsightsPanelChromeBudget.contentNaturalHeight - InsightsPanelChromeBudget.contentNaturalHeightWithoutLastWeek == 97)
-    // 크롬이 없어도 세 조합은 깎여 본문이 425pt 로 수렴하고(창 695pt), 가장 짧은 조합만 자연 높이로 선다(창 660pt).
-    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: 0, naturalHeight: 668.5) == 425)
-    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: 0, naturalHeight: 571.5) == 425)
-    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: 0, naturalHeight: 487) == 425)
-    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: 0, naturalHeight: 390) == nil)
+    // 크롬이 없어도 세 조합은 깎여 본문이 425pt 로 수렴하고(창 695pt), 가장 짧은 조합만 자연 높이로 선다(창 672pt).
+    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: 0, naturalHeight: 680.5) == 425)
+    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: 0, naturalHeight: 583.5) == 425)
+    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: 0, naturalHeight: 499) == 425)
+    #expect(InsightsPanelChromeBudget.capHeight(extraChromeHeight: 0, naturalHeight: 402) == nil)
 
     // 실측으로 되묻는다 — 상수만 고치고 레이아웃을 안 고쳐도(또는 그 반대) 여기서 갈린다.
-    for (hasRetro, showsToken, expected) in [(true, true, 695.0), (false, true, 695.0), (true, false, 695.0), (false, false, 660.0)] {
+    for (hasRetro, showsToken, expected) in [(true, true, 695.0), (false, true, 695.0), (true, false, 695.0), (false, false, 672.0)] {
         let store = makeInsightsStore(withData: hasRetro, loaded: true, collectsTokens: showsToken)
         store.dailyGrid = sampleWorkDailyGrid()
         store.tokenDailyGrid = sampleTokenDailyGrid()
@@ -6027,3 +6058,4 @@ func dumpSideRailSnapshots() throws {
     )
     try write(CheckMenuView(store: warned), "rail-poke-warn.png")
 }
+

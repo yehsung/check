@@ -125,6 +125,21 @@ struct MeGrassDetailTests {
         #expect(ContributionGridData.blank().value(week: 0, weekday: 0) == 0)
     }
 
+    @Test("자리 격자는 '날짜 원점이 없다'고 말한다 — 안 그러면 상세 화면이 서기 1년 1~4월을 지어낸다")
+    func blankGridHasNoOrigin() {
+        let blank = ContributionGridData.blank()
+        #expect(!blank.hasOrigin, "못 받았을 때 쓰는 격자가 날짜를 말해도 된다고 답한다")
+        #expect(ContributionGridData(weeks: 1, levels: [[0]]).hasOrigin == false, "원점을 안 넘긴 격자도 마찬가지다")
+        let real = ContributionGridData(weeks: 1, values: [[0, 0, 0, 0, 0, 0, 0]],
+                                        weekStart: Self.kst(year: 2026, month: 8, day: 31), denominator: 28_800) { _, _ in false }
+        #expect(real.hasOrigin)
+        // 왜 물어야 하는지: 원점 없는 격자로 달 구간을 만들면 1·2·3·4월이 나오고, 칸은 전부 0단계(미래 nil 이 아니다)라
+        // 목록 모드가 13주 × 7 = 91행을 "근무 없음"으로 지어낸다.
+        #expect(ContributionCalendarLayout.monthSections(weekStart: blank.weekStart, weeks: 13).first?.month == 1)
+        #expect(blank.level(week: 0, weekday: 0) == 0)
+        #expect(MeText.grassDetailDate(weekStart: blank.weekStart, week: 0, weekday: 0) == "1월 1일 (월)")
+    }
+
     @Test("달 구간은 과거 → 최신 순이고 주를 빠짐없이 덮는다")
     func monthSectionsCoverEveryWeek() {
         let weekStart = Self.kst(year: 2026, month: 8, day: 31)

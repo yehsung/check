@@ -196,7 +196,9 @@ package struct ContributionGridData: Equatable, Sendable {
     }
 
     /// 기록 없음·불러오는 중·실패 자리: 칸은 전부 0단계(격자 자리를 그대로 지킨다 — 섹션을 한 줄로 접지 않는다).
-    /// 원값은 전부 0, 원점은 `.distantPast` — 고를 칸이 없는 자리 격자라 안전하다.
+    /// 원값은 전부 0, 원점은 **없다**(`.distantPast`) — 이 격자로 날짜를 말하면 안 된다. 홈 격자는 날짜를 안 말해서
+    /// 무해했지만 상세 화면은 달 머리·주 라벨·행 날짜를 전부 원점에서 만든다. 그래서 소비자가 `hasOrigin` 으로
+    /// 먼저 물어야 한다(안 물으면 화면이 서기 1년 1~4월을 지어낸다 — 실측으로 잡힌 결함이다).
     package static func blank(weeks: Int = ContributionGridLayout.defaultWeeks) -> ContributionGridData {
         let columns = max(0, weeks)
         return ContributionGridData(
@@ -216,6 +218,11 @@ package struct ContributionGridData: Equatable, Sendable {
         guard values.indices.contains(week), values[week].indices.contains(weekday) else { return 0 }
         return values[week][weekday]
     }
+
+    /// 날짜 원점이 실재하는가. `.blank()` 자리 격자는 거짓이다 — **거짓이면 이 격자로 날짜를 한 글자도 말하면 안 된다**
+    /// (`.distantPast` 로 달·요일을 계산하면 서기 1년 1월 1일이 나온다). 값 막대만 phase 로 막고 격자·목록은 안 막았던 것이
+    /// 실제 결함이었다: 오프라인 첫 진입에서 달 머리가 "1월/2월/3월/4월", 접근성 목록이 "1월 1일 (월) · 근무 없음" 91행이었다.
+    package var hasOrigin: Bool { weekStart != .distantPast }
 
     /// 0단계보다 진한 칸이 하나라도 있는가.
     package var hasActivity: Bool {

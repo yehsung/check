@@ -153,30 +153,65 @@ struct MeGrassDetailView: View {
 
     // MARK: 캘린더 본문
 
+    @ViewBuilder
     private func calendarBody(work: ContributionGridData, token: ContributionGridData, tokenUsable: Bool, width: CGFloat) -> some View {
-        let data = shown(work, token)
-        // 과거 → 최신(아래로). 달 머리가 위에서 아래로 늘어야 말이 된다(역순이면 9월이 8월 위에 선다).
-        return LazyVStack(alignment: .leading, spacing: ContributionCalendarLayout.spacing, pinnedViews: [.sectionHeaders]) {
-            ForEach(ContributionCalendarLayout.monthSections(weekStart: work.weekStart, weeks: work.weeks), id: \.weeks.lowerBound) { section in
-                Section {
-                    ForEach(section.weeks, id: \.self) { week in
-                        MeGrassWeekRow(
-                            week: week,
-                            data: data,
-                            axis: axis,
-                            width: width,
-                            isSelectedRow: selection?.week == week,
-                            selectedWeekday: selection?.week == week ? selection?.weekday : nil,
-                            select: { weekday in select(week: week, weekday: weekday, in: work) },
-                            cellLabel: { weekday in cellLabel(week: week, weekday: weekday, work: work, token: token, tokenUsable: tokenUsable) },
-                            weekLabel: MeText.grassWeekAccessibility(weekStart: work.weekStart, week: week)
-                        )
+        // **원점이 없으면 날짜를 한 글자도 말하지 않는다.** 못 받았을 때 쓰는 `.blank()` 의 weekStart 는 `.distantPast` 라
+        // 달 머리가 "1월/2월/3월/4월"이 되고 주 라벨이 "1월 1일 주"가 된다(오프라인 첫 진입에 실재하던 결함이다).
+        // 상태는 하단 막대가 말하고, 여기서는 자리만 지킨다.
+        if work.hasOrigin {
+            let data = shown(work, token)
+            // 과거 → 최신(아래로). 달 머리가 위에서 아래로 늘어야 말이 된다(역순이면 9월이 8월 위에 선다).
+            LazyVStack(alignment: .leading, spacing: ContributionCalendarLayout.spacing, pinnedViews: [.sectionHeaders]) {
+                ForEach(ContributionCalendarLayout.monthSections(weekStart: work.weekStart, weeks: work.weeks), id: \.weeks.lowerBound) { section in
+                    Section {
+                        ForEach(section.weeks, id: \.self) { week in
+                            MeGrassWeekRow(
+                                week: week,
+                                data: data,
+                                axis: axis,
+                                width: width,
+                                isSelectedRow: selection?.week == week,
+                                selectedWeekday: selection?.week == week ? selection?.weekday : nil,
+                                select: { weekday in select(week: week, weekday: weekday, in: work) },
+                                cellLabel: { weekday in cellLabel(week: week, weekday: weekday, work: work, token: token, tokenUsable: tokenUsable) },
+                                weekLabel: MeText.grassWeekAccessibility(weekStart: work.weekStart, week: week)
+                            )
+                        }
+                    } header: {
+                        monthHeader(section.month)
                     }
-                } header: {
-                    monthHeader(section.month)
                 }
             }
+        } else {
+            placeholderBody(weeks: work.weeks, width: width)
         }
+    }
+
+    /// 원점 없는 자리 격자: 달 머리도 주 라벨도 선택도 없는 13행 회색 덩어리.
+    ///
+    /// `.opacity(0.6)` 은 홈 격자와 **같은 문법**이다(ContributionGrid 가 불러오는 중에 쓰는 값) — 자리 칸은 전부 0단계라
+    /// 흐리게 하지 않으면 '진짜 0시간 근무한 날'과 픽셀이 같아진다. 보이스오버에서는 숨긴다(말할 값이 없다).
+    private func placeholderBody(weeks: Int, width: CGFloat) -> some View {
+        // 받아 둔 열 수가 0(=`WorkDailyGrid.empty`)이어도 격자 자리는 지킨다 — 창 폭만큼 회색이 서 있어야 값이 왔을 때
+        // 화면 높이가 튀지 않는다.
+        let rows = weeks > 0 ? weeks : ContributionGridLayout.defaultWeeks
+        return VStack(alignment: .leading, spacing: ContributionCalendarLayout.spacing) {
+            ForEach(0..<rows, id: \.self) { _ in
+                Canvas { context, size in
+                    let pitch = ContributionCalendarLayout.pitch(width: size.width)
+                    let cell = max(0, pitch - ContributionCalendarLayout.spacing)
+                    guard cell > 0 else { return }
+                    let radius = max(2, cell * 0.22)
+                    for weekday in 0..<ContributionGridLayout.rows {
+                        let rect = CGRect(x: CGFloat(weekday) * pitch, y: 0, width: cell, height: cell)
+                        context.fill(Path(roundedRect: rect, cornerRadius: radius, style: .continuous), with: .color(MobileTheme.fill))
+                    }
+                }
+                .frame(width: width, height: ContributionCalendarLayout.rowHeight(width: width))
+            }
+        }
+        .opacity(0.6)
+        .accessibilityHidden(true)
     }
 
     /// 달 라벨을 행 **왼쪽**에 두면 라벨 폭만큼 피치가 줄어 44pt 아래로 떨어진다. Section 머리로 올리면 폭을 한 픽셀도 안 먹고,
@@ -205,17 +240,23 @@ struct MeGrassDetailView: View {
     // MARK: 목록 본문(접근성 글자 크기)
 
     /// 값이 행 안에 이미 있어 **탭조차 필요 없다**. 행을 누르면 선택이 되고 막대가 같이 바뀐다(두 모드가 선택을 공유한다).
+    ///
+    /// 원점이 없으면 행을 **하나도** 만들지 않는다. 자리 격자는 미래 칸이 nil 이 아니라 전부 0단계라, 그냥 그리면
+    /// 13주 × 7 = 91행이 "1월 1일 (월) · 근무 없음 · 사용 없음"으로 서서 없는 기록을 지어낸다. 상태는 막대가 말한다.
+    @ViewBuilder
     private func listBody(work: ContributionGridData, token: ContributionGridData, tokenUsable: Bool) -> some View {
-        LazyVStack(alignment: .leading, spacing: MobileTheme.space2) {
-            ForEach(0..<max(0, work.weeks), id: \.self) { week in
-                let days = (0..<ContributionGridLayout.rows).filter { work.level(week: week, weekday: $0) != nil }
-                if !days.isEmpty {
-                    Text(MeText.grassWeekAccessibility(weekStart: work.weekStart, week: week))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(MobileTheme.label2)
-                        .accessibilityAddTraits(.isHeader)
-                    ForEach(days, id: \.self) { weekday in
-                        listRow(week: week, weekday: weekday, work: work, token: token, tokenUsable: tokenUsable)
+        if work.hasOrigin {
+            LazyVStack(alignment: .leading, spacing: MobileTheme.space2) {
+                ForEach(0..<max(0, work.weeks), id: \.self) { week in
+                    let days = (0..<ContributionGridLayout.rows).filter { work.level(week: week, weekday: $0) != nil }
+                    if !days.isEmpty {
+                        Text(MeText.grassWeekAccessibility(weekStart: work.weekStart, week: week))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(MobileTheme.label2)
+                            .accessibilityAddTraits(.isHeader)
+                        ForEach(days, id: \.self) { weekday in
+                            listRow(week: week, weekday: weekday, work: work, token: token, tokenUsable: tokenUsable)
+                        }
                     }
                 }
             }
@@ -288,19 +329,25 @@ struct MeGrassDetailView: View {
 
     @ViewBuilder
     private func barContent(work: ContributionGridData, token: ContributionGridData, tokenUsable: Bool, phase: ContributionGridPhase) -> some View {
-        if let cell = selection, phase == .ready {
+        if let cell = selection, phase == .ready, work.hasOrigin {
             // 맥 말풍선과 같은 두 줄 문법(날짜 11pt semibold + 값 17pt bold), 같은 함수·같은 글자.
+            //
+            // 스타일 기반 글꼴이라 **Dynamic Type 을 따라 자란다**(기본 크기는 맥과 같은 11 / 17pt — caption2 = 11,
+            // headline = 17). 고정 `Font.system(size:weight:)` 는 배율을 안 받는다: 목록 모드는 접근성 크기에서만 켜지므로
+            // 그 아래(가장 큰 일반 크기 XXXL)에서는 이 막대가 값이 서는 **유일한 자리**인데, 요일 머리·눈금·달 머리만
+            // 커지고 값만 그대로 남아 있었다. 회고 헤드라인(성격이 같은 '큰 숫자')과 같은 문법이다.
             Text(MeText.grassDetailDate(weekStart: work.weekStart, week: cell.week, weekday: cell.weekday))
-                .font(.system(size: 11, weight: .semibold))
+                .font(MobileTheme.number(.caption2, weight: .semibold))
                 .foregroundStyle(MobileTheme.label2)
             Text(MeText.grassValueLine(
                 workSeconds: work.value(week: cell.week, weekday: cell.weekday),
                 tokens: token.value(week: cell.week, weekday: cell.weekday),
                 showsToken: tokenUsable
             ))
-            .font(.system(size: 17, weight: .bold))
+            .font(MobileTheme.number(.headline, weight: .bold))
             .monospacedDigit()
             .foregroundStyle(MobileTheme.label)
+            // 막대가 커지면 safeAreaInset 이 알아서 본문을 밀어 준다(줄바꿈도 여기서 산다).
             .fixedSize(horizontal: false, vertical: true)
         } else {
             HStack(spacing: MobileTheme.space2) {

@@ -2,7 +2,12 @@
 import CheckCore
 import SwiftUI
 
-// 기록(w15 재디자인): 회고 한 줄 + 12주 근무 잔디 · 12주 AI 토큰 잔디(한 카드 안, 나란히 — 좁거나 글자가 크면 위아래) + 지난주 근무 리듬.
+// 기록. 카드 경계는 **시간 범위**로 긋는다(0.3.31 — 사용자가 "배치가 좀 이상해"라고 한 것의 답):
+//   「지난주」 카드 = 지난주 회고 + 지난주 근무 리듬   ·   「최근 12주」 카드 = 근무 잔디 + AI 토큰 잔디 + [잔디 자세히 보기]
+// 예전에는 [회고 + 잔디] 한 카드 뒤에 [리듬] 카드가 따로 서서 화면이 지난주 → 12주 → 지난주로 튀었다. 회고와 리듬은 같은 주 창
+// (`WorkInsightsWeekWindow.lastWeek`)을 공유하고 총합이 **같은 숫자**다(CheckWorkInsights.swift:44-45) — 한 덩어리인데 13주짜리가
+// 그 사이를 갈랐다. 이제 지난주 → 지난주 → 12주로 단조롭게 넓어지고, 보이스오버 제목 로터도 같은 이야기를 한다.
+//
 // **기록이 없어도 격자를 그린다**(빈 칸 + "최근 12주 기록이 없어요"). 불러오는 중 · 실패도 격자 자리를 지키고 아래 한 줄만 바뀐다 —
 // 예전 `recordsPlaceholder` 처럼 절 전체를 한 줄로 접지 않는다. 토큰 잔디는 수집을 끈 사람(`showsTokenGrid == false`)만 뺀다(안내 없음).
 
@@ -14,17 +19,25 @@ enum MeRecordsPhase {
     }
 }
 
-/// 기록 카드(시안 A 09 · B 10): "지난주 회고 [목표 달성]" · 큰 숫자 · 보조 한 줄 · 잔디 두 벌.
+/// 「지난주」 카드: 지난주 회고("지난주 회고 [목표 달성]" · 큰 숫자 · 보조 한 줄) + 구분선 + 지난주 근무 리듬.
+///
+/// 이름을 유지하는 이유: `MeDesignContractTests` 가 MeTab 안 호출 글자의 **위치**로 첫 화면 순서를 잰다(개명하면 깨진다).
 struct MeRecordsCard: View {
     let store: MeStore
 
     var body: some View {
         let state = store.recordsState
-        let phase = MeRecordsPhase.phase(state)
         let retro = state.hasLoaded ? store.retroForDisplay : nil
         VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
             retroBlock(retro: retro, loaded: state.hasLoaded)
-            grids(phase: phase)
+            // 같은 '지난주' 두 블록 사이의 옅은 선 하나. 카드 뚜껑("기록")을 새로 달지 않는다 — 제목이 하나뿐인 카드에 억지로
+            // 뚜껑을 씌우면 위계가 한 겹 더 는다.
+            Rectangle()
+                .fill(MobileTheme.separator)
+                .frame(height: 1)
+                .accessibilityHidden(true)
+            MeRhythmSection(store: store)
+                .id(MeAnchor.rhythm)
         }
         .padding(MobileTheme.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -79,13 +92,38 @@ struct MeRecordsCard: View {
             ? AingChip(text: MeText.retroChip(retro), tint: MobileTheme.working)
             : AingChip(text: MeText.retroChip(retro), tint: MobileTheme.label2, background: MobileTheme.fill)
     }
+}
+
+// MARK: - 「최근 12주」 잔디 카드
+
+/// 잔디 두 벌(근무 · AI 토큰) + [잔디 자세히 보기 ›]. 카드째로 「최근 12주」 한 시간 범위다.
+///
+/// 이 파일 안에 두는 이유: `MeDesignContractTests` 가 `MeRecordsViews.swift` 안에서 `ContributionGridPair` ·
+/// `axis: .work` · `axis: .token` · `.blank()` · `store.showsTokenGrid` 가 살아 있길 요구한다.
+struct MeGrassCard: View {
+    let store: MeStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
+            grids(phase: MeRecordsPhase.phase(store.recordsState))
+            openRow
+        }
+        .padding(MobileTheme.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous).fill(MobileTheme.surface))
+    }
+
+    /// 누른 잔디의 축으로 상세를 연다.
+    private func open(_ axis: ContributionAxis) {
+        store.context.router.push(MeDestination.grass(axis), on: .me)
+    }
 
     @ViewBuilder
     private func grids(phase: ContributionGridPhase) -> some View {
         let loaded = store.recordsState.hasLoaded
         let retry: () -> Void = { Task { await store.loadRecords() } }
         let workData = loaded
-            ? ContributionGridData(weeks: store.dailyGrid.weeks, values: store.dailyGrid.seconds,
+            ? ContributionGridData(weeks: store.dailyGrid.weeks, values: store.dailyGrid.seconds, weekStart: store.dailyGrid.weekStart,
                                    denominator: WorkDailyGrid.fullDaySeconds, isFuture: store.dailyGrid.isFuture(week:weekday:))
             : .blank()
         let work = ContributionGrid(
@@ -93,9 +131,10 @@ struct MeRecordsCard: View {
             accessibilitySummary: loaded ? MeText.workGrassAccessibility(store.dailyGrid) : nil,
             retry: retry
         )
+        .modifier(GrassOpensDetail { open(.work) })
         if store.showsTokenGrid {
             let tokenData = loaded
-                ? ContributionGridData(weeks: store.tokenGrid.weeks, values: store.tokenGrid.tokens,
+                ? ContributionGridData(weeks: store.tokenGrid.weeks, values: store.tokenGrid.tokens, weekStart: store.tokenGrid.weekStart,
                                        denominator: TokenDailyGrid.fullDayTokens, isFuture: store.tokenGrid.isFuture(week:weekday:))
                 : .blank()
             ContributionGridPair {
@@ -106,13 +145,55 @@ struct MeRecordsCard: View {
                     title: MeText.tokenGrassTitle, axis: .token, data: tokenData, phase: phase,
                     accessibilitySummary: loaded ? MeText.tokenGrassAccessibility(store.tokenGrid) : nil
                 )
+                .modifier(GrassOpensDetail { open(.token) })
             }
             .id(MeAnchor.tokenGrass)
         } else {
             ContributionGridPair {
                 work
             }
+            .id(MeAnchor.tokenGrass)
         }
+    }
+
+    /// 카드 맨 아래 44pt 진입 행. 격자를 눌러 여는 길을 몰라도 여기 하나는 눈에 띈다(근무 축으로 연다).
+    private var openRow: some View {
+        Button {
+            open(.work)
+        } label: {
+            HStack(spacing: MobileTheme.space2) {
+                Text(MeText.grassOpenRow)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MobileTheme.accent)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(MobileTheme.label3)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: AingButtonMetrics.minimumTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// 홈 잔디 격자를 "상세로 가는 문"으로 만드는 수정자.
+///
+/// - `ContributionGrid` 의 **서명은 한 글자도 건드리지 않는다**(계약 테스트가 보는 글자다) — 바깥에서 감싼다.
+/// - `Button` 으로 감싸지 않는 이유: 실패 상태의 [다시 시도]가 버튼 안 버튼이 되어 보이스오버·스위치 제어에서 둘 다 못 눌린다
+///   (`ContributionGrid.captionParts` 의 재시도 버튼).
+/// - 홈 칸은 9.7pt 라 **칸 단위 탭은 만들지 않는다** — 어떤 좌표 역산도 이 크기에서는 거짓말이고, 그 거짓말은 이웃 날 값을
+///   조용히 보여주는 오답이 된다. 칸 값은 칸이 45pt 인 상세에서만 산다.
+private struct GrassOpensDetail: ViewModifier {
+    let open: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .contentShape(Rectangle())
+            .onTapGesture(perform: open)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(Text(MeText.grassOpenHint))
     }
 }
 
@@ -120,7 +201,9 @@ struct MeRecordsCard: View {
 
 /// 지난주 근무 리듬(요일 × 시간). 근무 데이터라 잔디와 같은 **초록 사다리**(예전엔 파랑 — 같은 뜻을 두 색으로 그렸다, w14 비평 25).
 /// 기록이 없어도 격자 자리는 지킨다.
-struct MeRhythmCard: View {
+///
+/// 카드 껍데기(패딩 + 둥근 배경)가 없는 이유: 「지난주」 카드 **안**의 두 번째 블록이라 껍데기를 또 씌우면 카드 안 카드가 된다.
+struct MeRhythmSection: View {
     let store: MeStore
 
     var body: some View {
@@ -139,9 +222,7 @@ struct MeRhythmCard: View {
                 .foregroundStyle(MobileTheme.label2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(MobileTheme.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous).fill(MobileTheme.surface))
         .accessibilityElement(children: .combine)
     }
 

@@ -22,6 +22,9 @@ struct MeTab: View {
                     case .settings: MeSettingsView(store: store)
                     // 차단 목록은 메시지 스토어가 쥔다(차단은 메시지 관계다 — 나 탭이 같은 목록을 두 벌 갖지 않는다).
                     case .blocked: MeBlockedPeopleView(messages: store.context.links.messages)
+                    // 잔디 상세(칸 탭 → 그 날 실제 값). sheet 가 아니라 push 인 이유: 시트는 "돌아올 것이 전제인 짧은 확인·고르기"에 쓴다
+                    // (차단 목록 · 할 일 · 오목 대국). 잔디 상세는 제목과 뒤로가 필요한 **읽기 화면**이다.
+                    case .grass(let axis): MeGrassDetailView(store: store, initialAxis: axis)
                     }
                 }
         }
@@ -54,12 +57,13 @@ struct MeHomeView: View {
                 VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
                     MeStageCard(store: store)
                         .id(MeAnchor.header)
+                    // 카드 경계 = 시간 범위 하나. 무대 → 「지난주」(회고 + 근무 리듬) → 「최근 12주」(잔디 두 벌) → 메뉴 순으로
+                    // 범위가 단조롭게 넓어진다. 예전에는 [회고 + 잔디] 뒤에 [리듬]이 따로 서서 지난주 → 12주 → 지난주로 튀었다
+                    // (사용자 지적 0.3.31). 기록이 먼저, 메뉴 그룹이 마지막인 것은 그대로다(w15 검증 낮음 2).
                     MeRecordsCard(store: store)
                         .id(MeAnchor.records)
-                    // 기록(회고·잔디 둘·근무 리듬)이 먼저, 메뉴 그룹이 마지막이다 — 설정 메뉴 **아래** 내용 카드가 한 장 더 있는 배치는
-                    // 명세 §3-1 E 순서와도, iOS 관용과도 어긋났다(w15 검증 낮음 2).
-                    MeRhythmCard(store: store)
-                        .id(MeAnchor.rhythm)
+                    MeGrassCard(store: store)
+                        .id(MeAnchor.tokenGrass)
                     MeMenuGroup(store: store)
                         .id(MeAnchor.menu)
                 }
@@ -354,7 +358,8 @@ struct MeRowButtonStyle: ButtonStyle {
 
 // MARK: - 데모 훅(DEBUG 전용)
 
-/// 데모 스크린샷용: `-AingCheckDemoMeAnchor records|menu|rhythm` 이면 루트를 그 절까지 내린다.
+/// 데모 스크린샷용: `-AingCheckDemoMeAnchor records|menu|rhythm|tokenGrass` 이면 루트를 그 절까지 내린다.
+/// (0.3.31 배치 변경 후 잔디는 자기 카드로 나갔다 — 잔디까지 내리려면 `tokenGrass`. `rhythm` 은 기록 카드 **안** 블록을 가리킨다.)
 /// 스토어 동작은 바꾸지 않는다(스크롤 위치만). Release 에서는 아무것도 하지 않는다.
 ///
 /// 기록 없는 계정 장면: `-AingCheckDemoRoute me/` — 라우트 해석은 `me` 와 같고(끝 `/` 는 빈 조각이라 버려진다) 픽스처 장면 이름만
@@ -397,7 +402,7 @@ enum MeDemoHooks {
         #endif
     }
 
-    /// 루트 대신 열 하위 화면(`-AingCheckDemoMeScreen characters|profile`) — 라우트가 없는 화면을 찍을 때.
+    /// 루트 대신 열 하위 화면(`-AingCheckDemoMeScreen characters|profile|grass|grass-token`) — 라우트가 없는 화면을 찍을 때.
     static func initialDestination() -> MeDestination? {
         #if DEBUG
         switch argument("-AingCheckDemoMeScreen") {
@@ -406,6 +411,9 @@ enum MeDemoHooks {
         case "shop": return .shop
         case "feedback": return .feedback
         case "settings": return .settings
+        // 잔디 상세는 딥링크가 없다 — 새 깃발을 만들지 않고 이미 있는 `-AingCheckDemoMeScreen` 관용을 쓴다.
+        case "grass": return .grass(.work)
+        case "grass-token": return .grass(.token)
         default: return nil
         }
         #else

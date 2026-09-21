@@ -15,11 +15,47 @@ struct MeDesignContractTests {
         #expect(records.contains("axis: .work") && records.contains("axis: .token"))
         #expect(records.contains("store.showsTokenGrid"), "토큰 잔디를 수집 여부 말고 다른 것으로 뺀다")
         #expect(records.contains(".blank()"), "못 받았을 때 빈 격자 자리를 지키지 않는다")
+        #expect(records.contains("MeRhythmSection"), "근무 리듬이 다시 별개 카드로 튀어나왔다(지난주 → 12주 → 지난주 배치가 되돌아온다)")
         let home = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeTab.swift")
         let stage = try #require(home.range(of: "MeStageCard(store: store)"))
-        let grass = try #require(home.range(of: "MeRecordsCard(store: store)"))
+        let lastWeek = try #require(home.range(of: "MeRecordsCard(store: store)"))
+        let grass = try #require(home.range(of: "MeGrassCard(store: store)"))
         let menu = try #require(home.range(of: "MeMenuGroup(store: store)"))
-        #expect(stage.lowerBound < grass.lowerBound && grass.lowerBound < menu.lowerBound, "첫 화면 순서: 무대 → 기록(잔디) → 메뉴")
+        #expect(stage.lowerBound < lastWeek.lowerBound && lastWeek.lowerBound < grass.lowerBound && grass.lowerBound < menu.lowerBound,
+                "첫 화면 순서: 무대 → 「지난주」(회고+리듬) → 「최근 12주」(잔디) → 메뉴")
+        #expect(!home.contains("MeRhythmCard(store: store)"), "리듬이 루트에서 다시 별개 카드다")
+        // 앵커 이름을 바꾸면 저장소 밖 데모 스크린샷 명령(-AingCheckDemoMeAnchor)이 깨진다.
+        let anchors = try #require(home.range(of: "enum MeAnchor"))
+        let anchorBlock = home[anchors.lowerBound...].prefix(200)
+        for name in ["header", "records", "tokenGrass", "characters", "menu", "rhythm"] {
+            #expect(anchorBlock.contains(name), "MeAnchor.\(name) 이 사라졌다")
+        }
+    }
+
+    @Test("잔디 상세: 칸을 탭하면 그 날 실제 값 · 하단 고정 막대 · 보이스오버 라벨에 값 · AX 목록 분기 · 탭 막대 숨김")
+    func grassDetailShowsRealValues() throws {
+        let detail = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeGrassDetailView.swift")
+        // 값 문구는 MeText 를 거쳐 코어의 맥과 **같은 함수**로 간다(여기 단언이 그 통로를 지킨다).
+        #expect(detail.contains("MeText.grassValueLine"), "값 줄이 사라졌다 — 사용자가 원한 '각 실제 값들'이 없다")
+        #expect(detail.contains("MeText.grassCellAccessibility"), "보이스오버 칸 라벨에서 값이 사라졌다")
+        #expect(detail.contains("MeText.grassDetailDate"))
+        let text = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeText.swift")
+        #expect(text.contains("WorkDailyGrid.tooltipValueText") && text.contains("TokenDailyGrid.tooltipValueText"),
+                "맥 말풍선과 같은 값 함수를 안 쓴다 — 같은 잔디를 맥과 폰이 다르게 읽는다")
+        #expect(detail.contains("SpatialTapGesture"), "칸 탭이 사라졌다")
+        #expect(!detail.contains("DragGesture"), "드래그로 호버를 흉내내면 세로 스크롤을 먹는다")
+        #expect(detail.contains("safeAreaInset(edge: .bottom"), "값 막대가 하단 고정이 아니다")
+        #expect(detail.contains("isAccessibilitySize"), "접근성 글자 크기에서 목록으로 갈라지지 않는다")
+        #expect(detail.contains(".hidesTabBar(for: .grassDetail)"), "자체 하단 막대 위에 탭 막대가 또 쌓인다")
+        #expect(detail.contains("accessibilityLabel") && detail.contains("accessibilityAction"))
+        // 주 행(격자 본체)은 보이스오버에서 숨기지 않는다 — 홈 캔버스와 다른 점이다. 구조체가 파일 맨 아래라 여기부터 끝까지를 본다.
+        let row = try #require(detail.range(of: "private struct MeGrassWeekRow"))
+        #expect(!detail[row.lowerBound...].contains("accessibilityHidden"), "상세 격자를 보이스오버에서 숨겼다")
+        // 홈 잔디는 '문'이다 — 칸 단위 탭(9.7pt)을 만들지 않는다.
+        let records = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeRecordsViews.swift")
+        #expect(records.contains("MeDestination.grass(axis)"), "홈 잔디를 눌러도 상세로 가지 않는다")
+        #expect(records.contains("MeText.grassOpenRow"), "[잔디 자세히 보기] 진입 행이 없다")
+        #expect(!records.contains("SpatialTapGesture"), "9.7pt 칸에 좌표 역산을 붙였다(이웃 날 값을 조용히 보여주는 오답)")
     }
 
     @Test("무대: 착용 캐릭터 초상(원 없이 전신) · 큰 루비 칩 → 상점 · 이니셜 원 머리 없음")

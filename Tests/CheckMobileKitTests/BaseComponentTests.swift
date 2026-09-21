@@ -108,10 +108,11 @@ import Testing
         #expect((0...5).map(ContributionLevels.opacity(level:)) == [0, 0.30, 0.55, 0.78, 1, 1])
     }
 
-    @Test("잔디 칸: 원값 → 단계 · 미래 칸 nil · 빈 격자는 12주 × 7 의 0 · 활동 여부")
+    @Test("잔디 칸: 원값 → 단계 · 미래 칸 nil · 빈 격자는 13주 × 7 의 0 · 활동 여부")
     func contributionGridData() {
         let values = [[0, 28_800, 7_200], [3_600]]
-        let data = ContributionGridData(weeks: 2, values: values, denominator: 28_800) { week, weekday in week == 1 && weekday >= 1 }
+        // weekStart 는 **필수 인자**다(0.3.31) — 기본값을 주면 어느 호출부가 빠뜨려도 컴파일이 통과하고 상세 화면이 조용히 '1월 1일'을 말한다.
+        let data = ContributionGridData(weeks: 2, values: values, weekStart: Date(timeIntervalSince1970: 0), denominator: 28_800) { week, weekday in week == 1 && weekday >= 1 }
         #expect(data.level(week: 0, weekday: 0) == 0)
         #expect(data.level(week: 0, weekday: 1) == 4)
         #expect(data.level(week: 0, weekday: 2) == 1)
@@ -120,7 +121,8 @@ import Testing
         #expect(data.level(week: 1, weekday: 1) == nil, "미래")
         #expect(data.hasActivity)
         let blank = ContributionGridData.blank()
-        #expect(blank.weeks == 12 && blank.levels.count == 12 && blank.levels.allSatisfy { $0 == Array(repeating: 0, count: 7) })
+        // 13 = 이번 주 + 지난 12주(코어 WorkDailyGrid.defaultWeeks) — 달라지면 불러오는 중 격자 폭이 한 칸 튄다.
+        #expect(blank.weeks == 13 && blank.levels.count == 13 && blank.levels.allSatisfy { $0 == Array(repeating: 0, count: 7) })
         #expect(!blank.hasActivity)
     }
 
@@ -174,9 +176,10 @@ import Testing
         #expect(gems.contains("Sources/CheckMobileKit/Components/RubyComponents.swift"), "대조: 보석 부품을 못 찾았다")
     }
 
-    @Test("탭 막대 숨김은 공용 수단 하나(`hidesTabBar(for:)`)가 정의한다 · 숨기는 화면 목록 넷")
+    @Test("탭 막대 숨김은 공용 수단 하나(`hidesTabBar(for:)`)가 정의한다 · 숨기는 화면 목록 다섯")
     func tabBarPolicy() throws {
-        #expect(Set(TabBarPolicy.Screen.allCases.map { $0.rawValue }) == ["conversation", "gomokuMatch", "shop", "miniGamePlay"])
+        // grassDetail 은 0.3.31 에 늘었다 — 잔디 상세는 **자체 하단 값 막대**를 가져 탭 막대와 둘이 쌓이면 엄지 사정권이 좁아진다.
+        #expect(Set(TabBarPolicy.Screen.allCases.map { $0.rawValue }) == ["conversation", "gomokuMatch", "shop", "miniGamePlay", "grassDetail"])
         let chrome = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/SheetChrome.swift")
         #expect(chrome.contains("func hidesTabBar(for screen: TabBarPolicy.Screen)") && chrome.contains("toolbar(.hidden, for: .tabBar)"))
     }

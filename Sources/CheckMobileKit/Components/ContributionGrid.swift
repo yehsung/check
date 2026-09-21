@@ -4,13 +4,9 @@ import SwiftUI
 // 12주 잔디(주 열 × 요일 7행). **기록이 없어도 늘 격자를 그린다** — 빈 격자 + "최근 12주 기록이 없어요". 불러오는 중·실패도 격자 자리를
 // 지킨 채 아래 한 줄만 바뀐다(섹션을 한 줄로 접지 않는다). 칸 크기는 받은 폭에 맞춰 계산한다(`ContributionGridLayout`).
 
-/// 잔디 색축.
-package enum ContributionAxis: String, CaseIterable, Sendable {
-    /// 근무(초록 — workingDot 사다리).
-    case work
-    /// AI 토큰(보라 — aiToken 사다리).
-    case token
-
+// 색축(`ContributionAxis`) 본체는 `MobileComponentModels.swift`(플랫폼 무관)에 있다 — `MeDestination.grass(_:)` 가
+// 연관값으로 들어야 하는데 그 열거형은 macOS 에서도 컴파일된다. 여기 남는 건 **그리는 색** 하나뿐이다.
+extension ContributionAxis {
     var tint: Color {
         switch self {
         case .work: return MobileTheme.workingDot

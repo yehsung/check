@@ -152,6 +152,99 @@ package enum MeText {
         return "\(tokenGrassTitle), 쓴 날 \(days)일, 합계 \(TokenNumberFormatter.compactKorean(grid.totalTokens)) 토큰"
     }
 
+    // MARK: 잔디 상세 화면 (맥 ContributionGridView 의 호버 말풍선을 폰의 '탭해서 고르기'로 옮긴 것)
+
+    /// 상세 화면 제목(inline). '최근 12주'를 제목에 넣지 않는다 — 창은 13열(이번 주 + 지난 12주)이라 날짜를 다 드러내는
+    /// 이 화면에서 주 수를 주장하면 어긋나 보인다.
+    package static let grassDetailTitle = "잔디 기록"
+    /// 잔디 카드 맨 아래 44pt 진입 행(오른쪽 chevron).
+    package static let grassOpenRow = "잔디 자세히 보기"
+    /// 홈 잔디 격자의 접근성 힌트 — 보이스오버에게 '이 격자를 누르면 어디로 가는지'를 말한다.
+    package static let grassOpenHint = "칸마다 그 날 기록을 봐요"
+    /// 상세 화면 축 세그먼트 왼쪽. 제목이 이미 '잔디 기록'이라 '최근 12주 근무'를 또 쓰지 않는다.
+    package static let grassAxisWork = "근무"
+    /// 상세 화면 축 세그먼트 오른쪽.
+    package static let grassAxisToken = "AI 토큰"
+    /// 값 막대 왼쪽 ‹ 버튼의 접근성 라벨.
+    package static let grassStepBack = "하루 전"
+    /// 값 막대 오른쪽 › 버튼의 접근성 라벨.
+    package static let grassStepForward = "하루 뒤"
+
+    /// 격자 아래 눈금 한 줄(범례 대신). 분모(`WorkDailyGrid.fullDaySeconds` · `TokenDailyGrid.fullDayTokens`)를 사람 말로 옮긴 것이다.
+    ///
+    /// 값 막대는 고른 칸 하나만 말하고 나머지 90칸은 여전히 색이다. '적음 ▢▢▢▢ 많음' 범례(`ContributionLegend`)는 눈금이 없어
+    /// 그 90칸을 읽게 해 주지 못한다 — 분모를 한 번 밝히면 읽힌다.
+    package static func grassScale(_ axis: ContributionAxis) -> String {
+        switch axis {
+        case .work: return "가장 진한 칸 = 하루 8시간"
+        case .token: return "가장 진한 칸 = 하루 5천만 토큰"
+        }
+    }
+
+    /// 값 막대 1행 · 목록 모드 행 앞머리: "9월 3일 (목)".
+    /// 맥 `ContributionGridView.dateText`(CheckComponents.swift:840-848)와 **같은 표기** — 같은 잔디를 맥과 폰이 다르게 읽으면 안 된다.
+    /// 날짜 오프셋은 맥과 같은 식(주 × 7 + 요일)이다 — 하루라도 어긋나면 잔디 전체가 하루씩 밀려 보인다.
+    package static func grassDetailDate(weekStart: Date, week: Int, weekday: Int) -> String {
+        guard let parts = grassDayParts(weekStart: weekStart, week: week, weekday: weekday) else { return "" }
+        let name = dayNames.indices.contains(weekday) ? dayNames[weekday] : ""
+        return "\(parts.month)월 \(parts.day)일 (\(name))"
+    }
+
+    /// 주 행 컨테이너의 보이스오버 라벨: "9월 1일 주"(그 주 월요일).
+    /// 91칸을 한 줄씩 훑으면 스와이프 91번이다 — 13덩어리로 건너뛰게 한다. 이 묶기는 선택이 아니라 필수다.
+    package static func grassWeekAccessibility(weekStart: Date, week: Int) -> String {
+        guard let parts = grassDayParts(weekStart: weekStart, week: week, weekday: 0) else { return "" }
+        return "\(parts.month)월 \(parts.day)일 주"
+    }
+
+    /// 보이스오버 칸 요소 라벨: "9월 3일 목요일, 근무 4시간 12분, AI 12,345,678 토큰".
+    ///
+    /// 라벨에 값이 있으면 보이스오버 사용자에게는 '탭해서 값을 본다'는 문제가 아예 없다 — 선택 링과 하단 막대는 눈으로 보는 사람을
+    /// 위한 장치다.
+    package static func grassCellAccessibility(
+        weekStart: Date, week: Int, weekday: Int, workSeconds: Int, tokens: Int, showsToken: Bool
+    ) -> String {
+        var parts: [String] = []
+        if let day = grassDayParts(weekStart: weekStart, week: week, weekday: weekday) {
+            let name = dayNames.indices.contains(weekday) ? dayNames[weekday] : ""
+            parts.append("\(day.month)월 \(day.day)일 \(name)요일")
+        }
+        parts.append(grassWorkPhrase(workSeconds))
+        if showsToken { parts.append(grassTokenPhrase(tokens)) }
+        return parts.joined(separator: ", ")
+    }
+
+    /// 값 막대 2행 · 목록 모드 행 오른쪽: "근무 4시간 12분 · AI 12,345,678 토큰".
+    /// 축과 무관하게 두 축 값을 함께 말한다 — 사용자가 원한 건 '각 실제 값들'이지 축 고르기가 아니다.
+    /// (맥 말풍선은 한 축만 말한다 — 폰이 맥보다 나은 유일한 지점이다.)
+    package static func grassValueLine(workSeconds: Int, tokens: Int, showsToken: Bool) -> String {
+        var parts = [grassWorkPhrase(workSeconds)]
+        if showsToken { parts.append(grassTokenPhrase(tokens)) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// 근무 조각. 0 인 날은 코어가 이미 "근무 없음"이라 답하므로 접두어 '근무 '를 **또 붙이지 않는다**("근무 근무 없음" 방지).
+    private static func grassWorkPhrase(_ seconds: Int) -> String {
+        let text = WorkDailyGrid.tooltipValueText(seconds)
+        return seconds > 0 ? "근무 \(text)" : text
+    }
+
+    /// 토큰 조각. 0 인 날은 "사용 없음"(접두어 없음).
+    private static func grassTokenPhrase(_ tokens: Int) -> String {
+        let text = TokenDailyGrid.tooltipValueText(tokens)
+        return tokens > 0 ? "AI \(text)" : text
+    }
+
+    /// weekStart 에서 (주 × 7 + 요일)일 뒤의 KST 달·일. 날짜 계산이 **한 곳**이라 두 잔디가 갈리지 않는다
+    /// (`TokenDailyGrid` 에는 `date(week:weekday:)` 가 없다 — 그래서 원점 하나로 끝낸다).
+    private static func grassDayParts(weekStart: Date, week: Int, weekday: Int) -> (month: Int, day: Int)? {
+        let calendar = TeamWeeklyGoal.kstCalendar
+        guard let date = calendar.date(byAdding: .day, value: week * WorkRhythmHeatmap.dayCount + weekday, to: weekStart) else { return nil }
+        let c = calendar.dateComponents([.month, .day], from: date)
+        guard let month = c.month, let day = c.day else { return nil }
+        return (month, day)
+    }
+
     // MARK: 무대 · 기록 카드 (w15 재디자인 — 나 탭 첫 화면)
 
     /// 무대 버튼 · 고르기 화면으로 가는 말(화면 제목은 `pickerTitle`).

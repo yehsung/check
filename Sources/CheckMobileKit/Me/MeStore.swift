@@ -12,6 +12,9 @@ package enum MeDestination: Hashable, Sendable {
     case settings
     /// 설정 → 차단한 사람(앱스토어 심사 지침 1.2). 목록·해제는 메시지 스토어가 쥔다(차단은 메시지 관계다).
     case blocked
+    /// 잔디 상세(칸을 탭하면 그 날 실제 값). 연관값은 **처음 색으로 볼 축** — 누른 잔디의 축으로 연다.
+    /// 딥링크(`AingRoute`)는 두지 않는다 — `.characters`·`.profile`·`.blocked` 처럼 push 만 하는 화면이다(URL 로 열 이유가 없다).
+    case grass(ContributionAxis)
 }
 
 /// 한 덩어리(머리·기록·상점…)의 불러오기 상태 — 순위 탭과 같은 뜻의 세 깃발 + 마지막 성공 시각.

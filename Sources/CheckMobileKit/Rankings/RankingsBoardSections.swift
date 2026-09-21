@@ -11,23 +11,39 @@ struct RankingsLeagueSection: View {
     let store: RankingsStore
     private let metrics = RankingsScaledMetrics()
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
-        let entries = store.leagueDisplay
+        // 머리글·보조 줄·행이 **같은 '지금'** 을 본다(맥이 겪은 "머리글과 행이 다른 말" 결함을 재현하지 않는다).
+        let now = store.leagueNow
+        let page = store.leagueDisplayPage
+        let entries = page.entries
         let state = store.leagueState
+        let isPast = store.isLeaguePastWeek
         VStack(alignment: .leading, spacing: 0) {
-            RankingsSectionHeader(title: RankingsText.leagueTitle) {
-                Text(RankingsText.leagueHeaderTrailing)
-                    .font(.subheadline)
-                    .foregroundStyle(MobileTheme.label2)
-                    .fixedSize()
+            RankingsSectionHeader(title: store.leagueTitle) {
+                // 머리 오른쪽에 들어갈 자격은 **조작기**에 있다(토큰 판과 같은 자리·같은 부품). "1인당 평균" 힌트는
+                // 아래 메타 줄로 내렸다 — 라벨이 조작기를 화면 밖으로 미는 배치는 틀렸다.
+                if store.showsLeagueWeekNavigation {
+                    RankingsPeriodStepper(
+                        unit: .week,
+                        periodName: store.leagueWeekName,
+                        canStepBack: store.canStepLeagueWeekBack,
+                        canStepForward: store.canStepLeagueWeekForward,
+                        previous: { store.stepLeagueWeek(by: -1) },
+                        next: { store.stepLeagueWeek(by: 1) }
+                    )
+                }
             }
+            metaLine(note: RankingsText.leagueWeekNote(isPastWeek: isPast, myTeamMissing: page.myTeamMissing))
             if entries.isEmpty {
                 RankingsEmptyCard(
                     text: RankingsText.leagueEmpty(
                         hasLoaded: state.hasLoaded,
                         isLoading: state.isLoading,
                         hasFailed: state.hasFailed,
-                        unfilteredCount: store.league.count
+                        unfilteredCount: page.unfilteredCount,
+                        isPastWeek: isPast
                     ),
                     showsRetry: state.hasFailed && !state.isLoading && store.league.isEmpty,
                     isLoading: state.isLoading && !state.hasLoaded,
@@ -35,7 +51,7 @@ struct RankingsLeagueSection: View {
                 )
             } else {
                 if state.hasFailed {
-                    InlineNotice(text: RankingsText.leagueFailed, kind: .warning)
+                    InlineNotice(text: RankingsText.leagueFailedText(isPastWeek: isPast), kind: .warning)
                         .padding(.bottom, 8)
                 }
                 InsetGroup {
@@ -45,12 +61,40 @@ struct RankingsLeagueSection: View {
                             entry: entry,
                             isMyTeam: entry.id == store.myTeamID,
                             isLast: index == entries.count - 1,
+                            now: now,
                             metrics: metrics
                         )
                     }
                 }
             }
         }
+    }
+
+    /// 머리와 목록 사이 한 줄: 왼쪽 = 과거 주 안내(0~1줄) · 오른쪽 = "1인당 평균"(행의 큰 숫자가 무엇인지).
+    ///
+    /// **이번 주에도 늘 그린다** — 과거 주에만 생기면 ‹ 를 누를 때마다 머리 아래가 늘었다 줄었다 하며 목록이 튄다.
+    /// 이번 주 비용은 캡션 한 줄(≈18pt)뿐이고, 맥이 그 줄을 아껴야 했던 이유(창 700pt 상한 · 행 예산에서 뺀다)가 폰엔 없다(ScrollView).
+    /// `.isHeader` 는 주지 않는다 — 제목 탐색이 각주에 멈추면 안 된다.
+    private func metaLine(note: String?) -> some View {
+        let hint = Text(RankingsText.leagueAverageHint)
+        return Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let note { Text(note).fixedSize(horizontal: false, vertical: true) }
+                    hint
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    if let note { Text(note).fixedSize(horizontal: false, vertical: true) }
+                    Spacer(minLength: 8)
+                    hint.fixedSize()
+                }
+            }
+        }
+        .font(MobileTheme.rowSubtitle)
+        .foregroundStyle(MobileTheme.label2)
+        .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+        .padding(.bottom, 8)
     }
 }
 
@@ -59,6 +103,8 @@ struct RankingsLeagueRow: View {
     let entry: TeamLeaderboardEntry
     let isMyTeam: Bool
     let isLast: Bool
+    /// 섹션이 재는 '지금' 한 벌(행마다 Date() 를 새로 뜨면 머리글과 갈릴 수 있다).
+    let now: Date
     let metrics: RankingsScaledMetrics
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -92,7 +138,7 @@ struct RankingsLeagueRow: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(RankingsText.leagueRowAccessibility(rank: rank, entry: entry, isMyTeam: isMyTeam)))
+        .accessibilityLabel(Text(RankingsText.leagueRowAccessibility(rank: rank, entry: entry, isMyTeam: isMyTeam, now: now)))
     }
 
     /// "5명 · ● 3명 근무 중 · 목표 40시간" — 점은 근무 중인 사람이 있을 때만(초록 = 근무 중). 한 줄에 안 들어가면 조각 사이에서 끊어
@@ -109,8 +155,11 @@ struct RankingsLeagueRow: View {
         .foregroundStyle(MobileTheme.label2)
     }
 
-    /// "5명 · ● 3명 근무 중"(점은 근무 중인 사람이 있을 때만).
+    /// 이번 주 "5명 · ● 3명 근무 중"(점은 근무 중인 사람이 있을 때만) · 과거 주 "5명 중 4명 참여"(한 조각).
+    /// 과거 주엔 초록 점이 없다 — workingCount 는 '지금 근무 중'이라 과거 주엔 뜻이 없다.
+    /// **0 인지 따지지 않고 주 판정으로 끊는다**(값이 새어 들어와도 점이 되살아나지 않게). 과거 판정은 **행이 스스로** 한다.
     private var headText: Text {
+        if entry.isPastWeek(now: now) { return Text(RankingsText.leagueParticipation(entry)) }
         let members = RankingsText.leagueMembers(entry)
         let working = RankingsText.leagueWorking(entry)
         guard entry.workingCount > 0 else { return Text("\(members) · \(working)") }
@@ -215,26 +264,46 @@ struct RankingsTokenSection: View {
     }
 }
 
-/// 달 넘기기 알약(‹ ›). 보이는 높이 30 · 누름 영역 44. 이번 달이면 › 는 꺼진다(흐린 기호).
-struct RankingsMonthStepper: View {
+/// 기간 넘기기 알약(‹ ›). 보이는 높이 30 · 누름 영역 44. 달과 주가 **라벨과 하한만** 다르다 —
+/// 기호는 `chevron.left/right` 그대로다(맥이 삼각형을 쓴 이유는 뒤로 버튼과 붙어서인데 폰 머리엔 뒤로가 없다).
+/// 햅틱은 넣지 않는다(공용 부품이라 토큰 판 손맛까지 같이 바뀐다 — 이번 범위 밖).
+struct RankingsPeriodStepper: View {
+    enum Unit { case month, week }
+
+    let unit: Unit
+    /// 지금 보고 있는 칸 이름("9월" · "9월 14일 주"). 주면 값이 바뀔 때 보이스오버가 알아챈다. nil 이면 예전 그대로.
+    var periodName: String? = nil
+    /// 달은 과거 하한이 없어 늘 true, 주는 6주 전에서 false.
+    var canStepBack: Bool = true
     let canStepForward: Bool
     let previous: () -> Void
     let next: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
-            arrow("chevron.left", label: RankingsText.previousMonth, enabled: true, action: previous)
+            arrow("chevron.left", label: backLabel, enabled: canStepBack, disabledValue: backBlocked, action: previous)
             Rectangle()
                 .fill(MobileTheme.separator)
                 .frame(width: 1, height: 16)
                 .accessibilityHidden(true)
-            arrow("chevron.right", label: RankingsText.nextMonth, enabled: canStepForward, action: next)
+            arrow("chevron.right", label: forwardLabel, enabled: canStepForward, disabledValue: forwardBlocked, action: next)
         }
         .background(Capsule().fill(MobileTheme.fill))
         .fixedSize()
+        // 제목 글자가 바뀌어도 포커스 밖이면 보이스오버는 다시 읽지 않는다. **값 변화로** 걸어 둔다 —
+        // 누른 경우뿐 아니라 월요일 0시 스냅·옛 서버 되돌림처럼 조용히 바뀌는 경우가 오히려 알려야 할 쪽이다.
+        .onChange(of: periodName) { _, new in
+            if let new { AccessibilityNotification.Announcement(new).post() }
+        }
     }
 
-    private func arrow(_ symbol: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+    private var backLabel: String { unit == .week ? RankingsText.previousWeek : RankingsText.previousMonth }
+    private var forwardLabel: String { unit == .week ? RankingsText.nextWeek : RankingsText.nextMonth }
+    /// 달은 과거 하한이 없어 ◂ 가 막히는 일이 없다 → 읽어 줄 사유도 없다.
+    private var backBlocked: String { unit == .week ? RankingsText.noEarlierWeek : "" }
+    private var forwardBlocked: String { unit == .week ? RankingsText.noLaterWeek : RankingsText.noLaterMonth }
+
+    private func arrow(_ symbol: String, label: String, enabled: Bool, disabledValue: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.subheadline.weight(.semibold))
@@ -248,6 +317,19 @@ struct RankingsMonthStepper: View {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .accessibilityLabel(Text(label))
+        // 비활성 화살표는 **막힌 이유**를 값으로 말한다(흐린 기호만으로는 6주 상한을 알 길이 없다).
+        .accessibilityValue(Text(enabled ? "" : disabledValue))
+    }
+}
+
+/// 달 넘기기 — 위 부품의 달 설정 한 벌(과거 하한 없음). **호출부를 한 글자도 바꾸지 않으려고 이름을 남긴다.**
+struct RankingsMonthStepper: View {
+    let canStepForward: Bool
+    let previous: () -> Void
+    let next: () -> Void
+
+    var body: some View {
+        RankingsPeriodStepper(unit: .month, canStepForward: canStepForward, previous: previous, next: next)
     }
 }
 

@@ -41,6 +41,18 @@ package final class RankingsStore {
     package private(set) var league: [TeamLeaderboardEntry] = []
     package private(set) var leagueState = RankingsLoadState()
 
+    // ── 지난 6주 보기(v0.3.37 · 맥 WorkTimerStore 의 거울) ──
+    /// 보고 있는 주(KST 월요일 'YYYY-MM-DD'). **오프셋이 아니라 절대 키다** — 오프셋은 '지금'에 매달려 있어
+    /// 화면을 열어 둔 채 월요일 0시를 넘기면 같은 `1` 이 다른 주를 가리킨다(토큰 판이 'YYYY-MM' 을 드는 것과 같은 이유).
+    package private(set) var leagueWeekKey: String
+    /// 서버가 `p_week_offset` 을 아는가. false 면 주 이동 알약을 접는다. **조회마다 다시 판정한다**(기억하지 않는다 —
+    /// 앱은 며칠씩 살아 있고 db push 는 그 사이 끝난다).
+    package private(set) var leagueWeekOffsetSupported = true
+    /// **그 주를 고른 시점의 '이번 주'.** 사용자가 고른 과거 주와 '이번 주 자체가 옮겨 간 것'을 가르는 유일한 값이다.
+    /// 토큰 판의 `tokenMonthFollowsCurrent`(Bool)로는 안 된다 — 주는 창이 6주로 미끄러져 롤오버 때 **무조건** 스냅해야 한다
+    /// (안 그러면 6주 밖으로 밀려 엉뚱한 주를 보여 준다).
+    @ObservationIgnored private var leagueWeekAnchor: String
+
     // MARK: AI 토큰
     /// 보고 있는 달(KST 'YYYY-MM'). 기본은 이번 달.
     package private(set) var tokenMonth: String
@@ -69,7 +81,12 @@ package final class RankingsStore {
 
     package init(context: MobileContext) {
         self.context = context
-        self.tokenMonth = TokenUsageMonthKey.current(context.clock.now())
+        // 주입 시계만 쓴다 — 테스트가 일요일 23:59 에서 시작한다(Date() 를 섞으면 그 창이 사라진다).
+        let now = context.clock.now()
+        self.tokenMonth = TokenUsageMonthKey.current(now)
+        let currentWeek = TeamLeagueWeekNavigator.currentKey(now)
+        self.leagueWeekKey = currentWeek
+        self.leagueWeekAnchor = currentWeek
     }
 
     // MARK: - 자리 API
@@ -89,6 +106,10 @@ package final class RankingsStore {
         miniGameSerial &+= 1
         league = []
         leagueState = RankingsLoadState()
+        leagueWeekKey = TeamLeagueWeekNavigator.currentKey(context.clock.now())
+        leagueWeekAnchor = leagueWeekKey
+        // 접힌 채 물려주면 db push 가 끝난 뒤에도 다음 계정이 화살표를 못 본다(맥과 같은 이유).
+        leagueWeekOffsetSupported = true
         tokenMonth = TokenUsageMonthKey.current(context.clock.now())
         tokenMonthFollowsCurrent = true
         tokenBoard = []
@@ -107,6 +128,10 @@ package final class RankingsStore {
 
     package func tabDidAppear() {
         isTabVisible = true
+        // 여는 길은 전부 이번 주로 떨어뜨린다(탭 진입 · 보드 전환 · 재진입) — 리그를 '여는' 동작에 과거 주가 따라오면
+        // 6주 전 표가 이번 주인 척 앉아 있는다. 아이폰의 백그라운드 복귀(appDidBecomeActive)는 전화·알림 확인 같은
+        // **비자발적** 사건이라 문이 아니다(맥 팝오버 재오픈에 대응하는 폰 동작은 이 탭 재진입이다).
+        syncLeagueWeekToCurrent()
         refreshIfStale()
     }
 
@@ -122,10 +147,13 @@ package final class RankingsStore {
 
     package func select(board target: AingRoute.RankingsBoard) {
         guard board != target else {
+            // 이미 리그인 채로 다시 고르는 딥링크(`aingcheck://rankings/league`)도 명시적 "리그를 열어라"다.
+            if target == .league { syncLeagueWeekToCurrent() }
             refreshIfStale()
             return
         }
         board = target
+        if target == .league { syncLeagueWeekToCurrent() }
         refreshIfStale()
     }
 
@@ -142,9 +170,20 @@ package final class RankingsStore {
     package func refreshIfStale() {
         guard context.session.isSignedIn else { return }
         rollTokenMonthIfNeeded()
+        // ① 롤오버가 먼저다 — 뒤집으면 아래 가드가 갱신을 영영 막아, 그 순간의 이번 주 숫자가 과거 주 문구를 달고 굳는다.
+        rollLeagueWeekIfNeeded()
         let state: RankingsLoadState
         switch board {
-        case .league: state = leagueState
+        case .league:
+            // ② 과거 주는 종료된 기록만 세므로 다시 물어도 같은 표다 — 주기 갱신은 이번 주에만.
+            //    단 **아직 못 읽은 주는 예외**: 못 받은 것을 '안 변한다'로 접으면 MU5 계약에 리그 구멍이 난다.
+            //    hasFailed 만으로는 모자란다 — 취소(-999)는 폰 모양을 지키려고 실패로 올리지 않아
+            //    hasLoaded=false · hasFailed=false 인 **죽은 카드**가 되는데, 그 조합이 여기서 영영 막혔다
+            //    (◂ 를 누르자마자 앱을 전환하면 iOS 가 요청을 -999 로 끊는 흔한 경로다).
+            //    성공적으로 읽은 과거 주는 hasLoaded 라 여전히 다시 묻지 않는다.
+            guard TeamLeagueWeekNavigator.isCurrentWeek(leagueWeekKey, now: context.clock.now())
+                    || leagueState.hasFailed || !leagueState.hasLoaded else { return }
+            state = leagueState
         case .tokens: state = tokenState
         case .minigame: state = miniGameState
         }
@@ -157,35 +196,123 @@ package final class RankingsStore {
 
     // MARK: - 팀 리그
 
-    /// 표시 목록(맥 `filteredForDisplay` — 이번 주 0시간 팀은 숨기되 내 팀은 남긴다, 평균 내림차순).
-    package var leagueDisplay: [TeamLeaderboardEntry] {
-        league.filteredForDisplay(myTeamID: myTeamID)
-    }
+    /// 표시 목록 + 문구가 필요한 사실 둘(맥 `leagueDisplay(myTeamID:)` 와 같은 자리). **계산값이라 `league` 와 어긋날 수 없고**,
+    /// `myTeamMissing` 도 필터 전 원본에서 매번 다시 센다.
+    package var leagueDisplayPage: TeamLeagueDisplay { league.leagueDisplay(myTeamID: myTeamID) }
+
+    /// 표시 목록(이번 주 0시간 팀은 숨기되 내 팀은 남긴다, 평균 내림차순). 서명(배열)을 **유지한다** — 계약 테스트가 붙들고 있다.
+    package var leagueDisplay: [TeamLeaderboardEntry] { leagueDisplayPage.entries }
 
     package var myTeamID: String? { context.session.profile?.teamID }
 
+    /// 머리글·행·문구 함수가 **같은 '지금'** 을 본다(맥 `LeaderboardPanel.now` 와 같은 이유 — 머리글과 행이 서로 다른
+    /// 말을 하던 결함을 재현하지 않는다).
+    package var leagueNow: Date { context.clock.now() }
+
+    package var leagueTitle: String { RankingsText.leagueTitle(week: leagueWeekKey, now: leagueNow) }
+    package var leagueWeekName: String { RankingsText.leagueWeekName(week: leagueWeekKey, now: leagueNow) }
+    package var isLeaguePastWeek: Bool { !TeamLeagueWeekNavigator.isCurrentWeek(leagueWeekKey, now: leagueNow) }
+    package var canStepLeagueWeekBack: Bool { TeamLeagueWeekNavigator.canStepBack(from: leagueWeekKey, now: leagueNow) }
+    package var canStepLeagueWeekForward: Bool { TeamLeagueWeekNavigator.canStepForward(from: leagueWeekKey, now: leagueNow) }
+    /// 옛 서버(p_week_offset 모름)에서는 알약을 아예 그리지 않는다.
+    package var showsLeagueWeekNavigation: Bool { leagueWeekOffsetSupported }
+
+    /// 보던 주를 이번 주로 되돌린다. **요청은 부르는 쪽이 낸다** — 스냅이 스스로 로드를 걸면 스냅+스텝이 겹칠 때
+    /// 버려지는 조회가 하나 생긴다.
+    private func syncLeagueWeekToCurrent() {
+        let current = TeamLeagueWeekNavigator.currentKey(context.clock.now())
+        leagueWeekAnchor = current                      // 되돌릴 게 없어도 늘 되맞춘다(낡은 앵커는 다음 틱을 헛스냅시킨다)
+        guard leagueWeekKey != current else { return }  // 같으면 행·상태를 건드리지 않는다(탭 재진입 깜빡임 방지)
+        leagueSerial &+= 1                              // 떠 있는 과거 주 응답을 여기서 버린다
+        leagueWeekKey = current
+        league = []
+        leagueState = RankingsLoadState()
+    }
+
+    /// 주 롤오버 되돌림(열어 둔 채 월요일 0시를 넘긴 경우). 사용자가 고른 과거 주는 건드리지 않는다 —
+    /// 판정은 보고 있는 키가 아니라 **앵커**(그 주를 고른 시점의 이번 주)다.
+    private func rollLeagueWeekIfNeeded() {
+        guard leagueWeekAnchor != TeamLeagueWeekNavigator.currentKey(context.clock.now()) else { return }
+        syncLeagueWeekToCurrent()
+    }
+
+    /// 주 이동(`-1` = ◂ 과거 · `+1` = ▸ 현재 쪽). 값이 안 바뀌면 요청도 없다(토큰 판 달 이동과 같은 규약).
+    package func stepLeagueWeek(by delta: Int) {
+        guard leagueWeekOffsetSupported else { return }   // 옛 서버: 알약은 이미 접혔지만 한 번 더 막는다
+        let keyBeforeRoll = leagueWeekKey
+        rollLeagueWeekIfNeeded()                          // 경계를 막 넘은 ◂ 가 '옛 이번 주 − 1' 로 가지 않게
+        let snapped = leagueWeekKey != keyBeforeRoll      // 스냅은 행을 비우기만 하고 **요청은 안 낸다**
+        let now = context.clock.now()
+        let next = TeamLeagueWeekNavigator.step(leagueWeekKey, by: delta, now: now)
+        guard next != leagueWeekKey else {
+            // 열어 둔 채 월요일 0시를 넘긴 뒤 ▸ 를 누른 자리다. 스냅이 이미 이번 주로 옮겨 놨으니 값은 안 바뀌지만,
+            // 그 스냅이 행을 비웠으므로 채워 줄 사람이 여기밖에 없다(안 채우면 "불러오는 중…"이 스피너도 [다시 시도]도
+            // 없이 굳는다 — 폰 리그엔 주기 타이머가 없어 스스로 회복하지 못한다).
+            if snapped {
+                leagueState.isLoading = true
+                launch { [weak self] in await self?.loadLeague() }
+            }
+            return
+        }
+        leagueSerial &+= 1                                // 주 키를 바꾸는 모든 자리가 순번을 올린다(불변식)
+        leagueWeekKey = next
+        league = []                                       // 직전 주 행이 '그 주인 척' 남지 않게
+        leagueState = RankingsLoadState()                 // hasLoaded=false 가 "그 주엔 근무한 팀이 없었어요"를 막는다
+        leagueState.isLoading = true
+        launch { [weak self] in await self?.loadLeague() }
+    }
+
     package func loadLeague() async {
         guard context.session.isSignedIn else { return }
+        rollLeagueWeekIfNeeded()                          // 당겨서 새로고침·[다시 시도]는 refreshIfStale 을 안 지난다
         leagueSerial &+= 1
         let serial = leagueSerial
+        let weekKey = leagueWeekKey
+        let weekOffset = TeamLeagueWeekNavigator.offset(forKey: weekKey, now: context.clock.now())
         let generation = context.generation
         leagueState.isLoading = true
         leagueState.hasFailed = false
+        // defer 는 **순번만** 본다 — 여기에 주 키를 넣으면 아래 '서버 주 채택' 갈래에서 "불러오는 중"이 영영 남는다(맥이 두 번 고친 결함).
         defer { if serial == leagueSerial { leagueState.isLoading = false } }
         do {
             let service = context.service
-            let entries = try await context.withMobileSessionRetry { session in
-                try await service.fetchTeamLeaderboard(accessToken: session.accessToken)
+            let page = try await context.withMobileSessionRetry { session in
+                try await service.fetchTeamLeaderboard(accessToken: session.accessToken, weekOffset: weekOffset)
             }
             guard generation == context.generation, serial == leagueSerial else { return }
-            let sorted = entries.sortedByAverageDescending()
+            let sorted = page.entries.sortedByAverageDescending()
+            let now = context.clock.now()
+
+            // ── ① 옛 서버(p_week_offset 모름) ── 돌아온 행은 **이번 주**다.
+            guard page.supportsWeekOffset else {
+                leagueWeekOffsetSupported = false
+                let current = TeamLeagueWeekNavigator.currentKey(now)
+                leagueWeekAnchor = current
+                leagueWeekKey = current        // syncLeagueWeekToCurrent 을 타면 안 된다 — 그쪽은 행을 비운다.
+                league = sorted                // 이 행은 버릴 이유가 없는 이번 주 표다. **추가 요청도 내지 않는다**
+                leagueState.hasLoaded = true   // (다시 부르면 옛 서버 사용자는 조회마다 4왕복이 된다).
+                leagueState.hasFailed = false
+                leagueState.loadedAt = now
+                return
+            }
+            leagueWeekOffsetSupported = true
+
+            // ── ② 늦은 응답: 기다리는 사이 주를 옮겼으면 화면엔 안 꽂는다 ──
+            //    키를 바꾸는 자리는 전부 순번을 올리지만, 아래 '서버 주 채택'처럼 못 올리는 갈래가 실제로 있어 그물을 하나 더 둔다.
+            guard weekKey == leagueWeekKey else { return }
+            // ── ③ 서버가 답한 주를 따른다(조회 중 월요일 0시를 넘긴 경우의 유일한 어긋남) ──
+            let answered = page.serverWeekStart ?? weekKey
+            if answered != leagueWeekKey {
+                leagueWeekKey = answered
+                if answered == TeamLeagueWeekNavigator.currentKey(now) { leagueWeekAnchor = answered }
+            }
             if league != sorted { league = sorted }
             leagueState.hasLoaded = true
             leagueState.hasFailed = false
-            leagueState.loadedAt = context.clock.now()
+            leagueState.loadedAt = now
         } catch {
-            guard generation == context.generation, serial == leagueSerial else { return }
-            if AuthErrorRules.classify(error) == .cancelled { return }
+            guard generation == context.generation, serial == leagueSerial, weekKey == leagueWeekKey else { return }
+            if AuthErrorRules.classify(error) == .cancelled { return }   // 폰 모양 유지 — 빈 카드는 hasLoaded 로 갈린다
             leagueState.hasFailed = true
         }
     }

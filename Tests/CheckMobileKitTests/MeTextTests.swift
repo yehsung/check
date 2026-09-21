@@ -180,6 +180,9 @@ struct MeTextParityTests {
             RankingsText.leagueFilteredOut, RankingsText.tokenNoUploads, RankingsText.tokenNoPastRecords, RankingsText.tokenFailed,
             RankingsText.miniGameEmpty, RankingsText.miniGameFailed, "어제 1등", "우리 팀", " AI 토큰 소모량", "오늘 순위",
             "자정에 1·2·3등에게 루비 ", "명부터 지급", "지급 조건 충족", "각자 목표 ", "명 근무중",
+            // v0.3.37 지난 6주 보기 — 폰이 맥 문장을 **글자 단위로** 옮겼다는 못.
+            RankingsText.leaguePastFilteredOut, RankingsText.leagueWeekBasis, RankingsText.leagueMyTeamMissing,
+            "명 중 ", "명 참여", "참여 인원 모름", "이전 주", "다음 주",
         ]
         for sentence in sentences {
             #expect(code.contains(sentence), "맥 코드에 없는 문장: \(sentence)")

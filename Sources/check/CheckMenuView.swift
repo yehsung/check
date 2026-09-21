@@ -436,10 +436,9 @@ struct CheckMenuView: View {
                             // 뒤로도 토글과 같은 닫기 경로를 타야 보던 주가 남지 않는다(다음에 열면 늘 이번 주).
                             onBack: { store.closeLeaderboard() },
                             weekKey: store.leagueWeekKey,
-                            // 화살표도 제목·행과 같은 '지금'을 본다 — 다른 시계를 쓰면 ▸ 가 꺼져 있는데 제목은 과거 주인
-                            // (또는 그 반대의) 화면이 만들어진다.
-                            canStepForward: TeamLeagueWeekNavigator.canStepForward(from: store.leagueWeekKey, now: store.displayNow),
-                            canStepBack: TeamLeagueWeekNavigator.canStepBack(from: store.leagueWeekKey, now: store.displayNow),
+                            // 화살표 활성 여부는 **패널이 스스로** 주 키 + 자기 '지금'(아래 now 클로저)으로 구한다.
+                            // 여기서 미리 계산해 값으로 넘기면 팝오버 **루트**가 초 단위 시계를 읽게 되고,
+                            // 그 한 줄이 매초 팝오버 전체 서브트리를 무효화한다. 잎이 읽으면 무효화도 잎에서 멈춘다.
                             showsWeekNavigation: store.leagueWeekOffsetSupported,
                             onStepWeek: { store.stepLeagueWeek(by: $0) },
                             myTeamMissing: leagueDisplay.myTeamMissing,
@@ -448,8 +447,15 @@ struct CheckMenuView: View {
                             // 실패는 '진행중'과 다른 문구 + [다시 시도] 로 갈라 준다(토큰 순위판과 같은 자리).
                             // 과거 주는 30초 주기 갱신이 안 도므로 이 버튼이 유일한 재시도 경로다.
                             onRetry: { store.loadLeaderboard() },
-                            // 머리글·행이 **같은 '지금'** 으로 과거를 판정하게 한다(팝오버 시계 — 닫힌 동안 얼고 열 때 되맞춘다).
-                            now: store.displayNow,
+                            // 머리글·화살표·행이 **같은 '지금'** 으로 과거를 판정하게 한다. **값이 아니라 클로저**로
+                            // 넘긴다: 여기서 값으로 읽으면 루트가 초 단위 값을 관찰 등록해 매초 팝오버 전체가
+                            // 무효화된다(콕찌르기 패널의 `clock:` 과 같은 관용구).
+                            //
+                            // 다만 시계는 `menuClockNow` 가 **아니라** `leagueClockNow` 다. 닫힌 동안 `menuClockNow`
+                            // 는 distantPast 라, 주 판정에 주면 clamp(0...6) 이 모든 과거 주를 '이번 주'로 접는다
+                            // (6주 전 표가 전 팀 "0명 근무중"). 쿨타임·연결 경고와 달리 주 판정에는 안전한 극단이
+                            // 없다 — 자세한 근거는 `leagueClockNow` 주석.
+                            now: { store.leagueClockNow },
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList
                         )
@@ -1872,10 +1878,8 @@ private struct LeaderboardPanel: View {
     // ── 지난 주 보기 (v0.3.37) ── 기본값이 전부 '이번 주'라, 이 값들을 안 주면 예전 화면 그대로다.
     /// 보고 있는 주(KST 월요일 'YYYY-MM-DD'). 제목·캡션·빈 목록 문구가 모두 이 한 값에서 갈린다.
     var weekKey: String = TeamLeagueWeekNavigator.currentKey()
-    /// ▸ 를 누를 수 있는가(이번 주면 false). 토큰 순위판과 같은 규약이라 **'▸ 비활성 == 이번 주'** 가 성립한다.
-    var canStepForward: Bool = false
-    /// ◂ 를 누를 수 있는가(6주 전이면 false — 서버가 더 과거를 주지 않는다).
-    var canStepBack: Bool = true
+    // ▸/◂ 의 활성 여부는 **파라미터가 아니다** — 패널이 `weekKey` + `now()` 로 직접 구한다(body 참고).
+    // 호출부가 계산해 넘기던 시절엔 그 두 줄 때문에 팝오버 루트가 초 단위 시계를 읽어 매초 전체가 무효화됐다.
     /// 주 이동 화살표를 그릴지. **옛 서버(p_week_offset 미지원)에서는 통째로 접는다** — 눌러도 이번 주가 오기 때문이다.
     var showsWeekNavigation: Bool = true
     var onStepWeek: (Int) -> Void = { _ in }
@@ -1888,13 +1892,17 @@ private struct LeaderboardPanel: View {
     /// **과거 주에는 이 버튼이 유일한 재시도 경로다**: 이번 주는 30초 주기 갱신이 스스로 다시 시도하지만
     /// 과거 주는 주기 갱신에서 빠져 있어(종료된 세션만 세므로) 실패하면 화면이 실패로 굳는다.
     var onRetry: (() -> Void)? = nil
-    /// 과거 주 판정의 기준선(팝오버 시계). `TeamLeagueWeekNavigator.isCurrentWeek` 과 행의 `isPastWeek(now:)` 가
-    /// **같은 '지금'** 을 봐야 머리글과 행이 같은 말을 한다.
-    var now: Date = Date()
+    /// 과거 주 판정의 기준선(팝오버 시계)을 **읽는 클로저**. 값이 아니라 클로저인 이유는 호출부(팝오버 루트)가
+    /// 초 단위로 바뀌는 시계를 읽지 않게 하기 위함이다 — 루트가 읽으면 매초 팝오버 전체가 다시 그려진다.
+    /// body 평가당 **한 번만** 부르고, 머리글·화살표·행이 그 한 값을 같이 쓴다(`TeamLeagueWeekNavigator.isCurrentWeek`
+    /// 과 행의 `TeamLeaderboardEntry.isPastWeek(now:)` 가 **같은 '지금'** 을 봐야 둘이 같은 말을 한다).
+    var now: () -> Date = { Date() }
     // 목록 위쪽에서 배너/토큰 행이 먹은 높이(pt). 그만큼 무스크롤 표시 행수를 줄여 창 상한을 지킨다.
     var extraChromeHeight: CGFloat = 0
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
+    // 재오픈 때 얼어 있던 시계를 되살리기 위한 재평가 트리거(body 첫 줄 주석 참고). 값은 안 쓴다.
+    @Environment(\.controlActiveState) private var controlActiveState
 
     // 팀 행 고정 높이·간격. 팀원 행보다 높다(아바타 + 이름/시간 + 게이지 + 캡션 3단).
     private static let rowHeight: CGFloat = 58
@@ -1902,21 +1910,10 @@ private struct LeaderboardPanel: View {
     // 스크롤 없이 그대로 보여 주는 최대 팀 수. 행이 팀원 행보다 높아 창 높이 상한(≤700pt)을 지키도록 6으로 둔다.
     static let maxVisibleRows = 6
 
-    // 보고 있는 주가 **이미 지난 주인가**. 빈 목록 문구·머리글 한 줄이 이 한 판정을 공유하고, 행은 자기 주로
-    // 같은 판정을 한다(`TeamLeaderboardEntry.isPastWeek(now:)` — 둘 다 KST 월요일 경계라 어긋날 자리가 없다).
-    //
-    // ⚠ 예전엔 `!canStepForward` 였다. 그건 **주 판정이 아니라 버튼 상태**라, 화살표를 접는 갈래(옛 서버)나
-    //   버튼 배선이 바뀌는 순간 조용히 같이 뒤집힌다. 주는 주 키로 판정한다.
-    private var isPastWeek: Bool { !TeamLeagueWeekNavigator.isCurrentWeek(weekKey, now: now) }
-
-    // 과거 주 머리글 아래 한 줄(이번 주는 nil).
-    private var weekNote: String? {
-        LeagueWeekNote.text(isPastWeek: isPastWeek, myTeamMissing: myTeamMissing)
-    }
-
     // 배너/토큰 행이 먹은 높이를 반영한 실제 무스크롤 표시 행수(기본은 maxVisibleRows).
     // 과거 주 한 줄도 **목록 위쪽 크롬**이므로 같은 예산에서 뺀다 — 안 빼면 그 줄만큼 창이 자라 700pt 상한을 넘는다.
-    private var visibleRows: Int {
+    // 계산 프로퍼티가 아니라 함수인 이유: 과거 주 한 줄의 유무가 body 가 한 번 읽은 '지금'에서 나오기 때문이다.
+    private func visibleRows(weekNote: String?) -> Int {
         ListRowBudget.visibleRows(
             maxVisibleRows: Self.maxVisibleRows,
             rowHeight: Self.rowHeight,
@@ -1926,6 +1923,28 @@ private struct LeaderboardPanel: View {
     }
 
     var body: some View {
+        // 재오픈 트리거(MenuClockLeaf 와 같은 자리·같은 방법). 팝오버가 닫혀 있는 동안 1초 티커는 displayNow 를
+        // 밀지 않으므로(`if isMenuPresented` 게이트) `now()` 는 **마지막 실제 시각에 멈춰 있다** — 값이 멈출 뿐
+        // distantPast 로 바뀌지는 않는다(그건 `menuClockNow` 쪽이고, 주 판정에 주면 clamp(0...6) 때문에 과거 주가
+        // 전부 '이번 주'로 접힌다 — `leagueClockNow` 주석). 그래서 닫힌 채 주 경계를 넘어가도 이 패널은 스스로
+        // 다시 돌지 않는다. 창이 키를 얻는 순간 이 환경값이 바뀌어 한 번 평가되고, 그때 새 '지금'으로 제목·화살표·
+        // 한 줄을 다시 판정한다(setMenuPresented(true) 의 displayNow 되맞춤도 같은 일을 한다 — 둘은 겹치는
+        // 보험이다). 값은 판정에 쓰지 않는다.
+        let _ = controlActiveState
+        // ★ 시계는 **여기서 한 번만** 읽는다. 머리글·화살표·행이 전부 이 한 값을 쓰므로, 주 경계를 넘는 순간에도
+        //   "제목은 지난 주인데 ▸ 는 꺼져 있다" 같은 어긋남이 생기지 않는다(여러 번 부르면 그 틈이 생긴다).
+        let now = self.now()
+        // 보고 있는 주가 **이미 지난 주인가**. 빈 목록 문구·머리글 한 줄이 이 한 판정을 공유하고, 행은 자기 주로
+        // 같은 판정을 한다(`TeamLeaderboardEntry.isPastWeek(now:)` — 둘 다 KST 월요일 경계라 어긋날 자리가 없다).
+        //
+        // ⚠ 예전엔 `!canStepForward` 였다. 그건 **주 판정이 아니라 버튼 상태**라, 화살표를 접는 갈래(옛 서버)나
+        //   버튼 배선이 바뀌는 순간 조용히 같이 뒤집힌다. 주는 주 키로 판정한다.
+        let isPastWeek = !TeamLeagueWeekNavigator.isCurrentWeek(weekKey, now: now)
+        // 과거 주 머리글 아래 한 줄(이번 주는 nil).
+        let weekNote = LeagueWeekNote.text(isPastWeek: isPastWeek, myTeamMissing: myTeamMissing)
+        // ◂ 는 과거로(6주 전에서 비활성), ▸ 는 현재 쪽으로(이번 주면 비활성 — 미래는 볼 수 없다).
+        let canStepBack = TeamLeagueWeekNavigator.canStepBack(from: weekKey, now: now)
+        let canStepForward = TeamLeagueWeekNavigator.canStepForward(from: weekKey, now: now)
         VStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
@@ -1937,7 +1956,6 @@ private struct LeaderboardPanel: View {
                         Capsule()
                             .fill(CheckTheme.border)
                             .frame(width: 1, height: 16)
-                        // ◂ 는 과거로(6주 전에서 비활성), ▸ 는 현재 쪽으로(이번 주면 비활성 — 미래는 볼 수 없다).
                         IconButton(icon: "arrowtriangle.left.fill", help: "이전 주", enabled: canStepBack) { onStepWeek(-1) }
                     }
                     // 이번 주에는 "팀별 이번 주" — 제목 문자열이 예전과 **한 글자도 다르지 않다**.
@@ -1961,7 +1979,7 @@ private struct LeaderboardPanel: View {
                 }
             }
             PanelDivider()
-            entryList
+            entryList(now: now, isPastWeek: isPastWeek, visibleRows: visibleRows(weekNote: weekNote))
         }
         .padding(12)
         .panelStyle()
@@ -1977,26 +1995,27 @@ private struct LeaderboardPanel: View {
 
     // 리스트 높이 = 팀 수 비례. maxVisibleRows까지는 그대로 자라고(스크롤 없음), 초과하면 그 높이로 고정 후 스크롤.
     @ViewBuilder
-    private var entryList: some View {
-        let visibleRows = visibleRows
+    private func entryList(now: Date, isPastWeek: Bool, visibleRows: Int) -> some View {
         let capHeight = Self.listContentHeight(rowCount: visibleRows)
         if rowCount <= visibleRows {
-            rows.frame(maxWidth: .infinity, alignment: .top)
+            rows(now: now, isPastWeek: isPastWeek).frame(maxWidth: .infinity, alignment: .top)
         } else if clipsOverflowInsteadOfScroll {
             // 스냅샷 전용: 보이는 첫 visibleRows행만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
-            rows.frame(maxWidth: .infinity, alignment: .top)
+            rows(now: now, isPastWeek: isPastWeek).frame(maxWidth: .infinity, alignment: .top)
                 .frame(height: capHeight, alignment: .top)
                 .clipped()
         } else {
             ScrollView(.vertical, showsIndicators: true) {
-                rows.frame(maxWidth: .infinity)
+                rows(now: now, isPastWeek: isPastWeek).frame(maxWidth: .infinity)
             }
             .frame(height: capHeight)
         }
     }
 
+    // 목록 본문. '지금'과 그 한 값에서 나온 과거 주 판정을 **받아서** 쓴다 — 여기서 시계를 다시 읽으면
+    // 머리글과 행이 서로 다른 순간을 볼 수 있다(둘이 같은 말을 한다는 계약이 깨진다).
     @ViewBuilder
-    private var rows: some View {
+    private func rows(now: Date, isPastWeek: Bool) -> some View {
         VStack(spacing: Self.rowSpacing) {
             if sortedEntries.isEmpty {
                 // 원본에 팀이 있었는데 표시 목록이 비면 필터로 전부 숨겨진 것 — 중립 문구. 원본도 비면 로드 전/실패로
@@ -2923,6 +2942,24 @@ extension WorkTimerStore {
 
     /// 닫힌 팝오버의 시계 값(위 주석). 테스트가 같은 값을 기대치로 쓴다.
     static let menuClockFrozen = Date.distantPast
+
+    /// 리그(팀 순위판)의 **주 판정용** 시계. `displayNow` 를 그대로 돌려준다 — `menuClockNow` 와 달리
+    /// 닫힌 동안에도 `distantPast` 로 치환하지 **않는다.**
+    ///
+    /// 왜 갈라 두는가: **주 판정은 얼어붙은 값이 안전한 쪽으로 틀리지 않는다.** `distantPast` 를 '지금'으로 주면
+    /// `TeamLeagueWeekNavigator.offset(forKey:now:)` 의 clamp(0...6) 이 거대한 음수를 전부 0 으로 접어
+    /// **모든 과거 주가 offset 0 = '이번 주'로 읽힌다**(행 쪽 `TeamLeaderboardEntry.isPastWeek(now:)` 도 같이
+    /// false 가 된다). 그러면 6주 전 표가 통째로 "팀별 이번 주" 제목을 달고, 과거 주 한 줄(`LeagueWeekNote`)이
+    /// 사라지며, 행 캡션이 과거 주 갈래를 안 타서 workingCount(과거 주엔 언제나 0)를 써 **전 팀 "0명 근무중"** 이
+    /// 된다 — `CheckComponents.swift` 의 `LeaderboardRow.caption` 이 주석으로 못 박아 **없앤 바로 그 화면**이다.
+    /// 쿨타임·연결 경고와 달리 여기엔 "못 찌르는 쪽"에 해당하는 안전한 극단이 없다(distantFuture 도 clamp 로 0 이다).
+    ///
+    /// `displayNow` 는 닫혀도 **마지막 실제 시각**이라(`WorkTimerStore.swift` 의 `if isMenuPresented` 게이트가
+    /// 미는 것만 멈추고 값은 남긴다) 주 판정이 언제나 맞다. 열 때 `displayNow = clock()` 으로 되맞춰진다.
+    /// 성능은 그대로다 — 호출부가 **값이 아니라 클로저**로 넘겨 패널 body 안에서만 읽기 때문이다.
+    var leagueClockNow: Date {
+        displayNow
+    }
 }
 
 /// 초 단위 값을 **이 뷰 안에서만** 읽게 하는 잎.

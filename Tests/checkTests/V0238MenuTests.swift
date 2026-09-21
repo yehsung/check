@@ -444,6 +444,18 @@ struct V0238MenuTests {
         #expect(!PokeConnectionNotice.shouldWarn(state: .reconnecting(backoff), now: frozen))
         // .failed 는 시계와 무관하게 경고다 — 고정값이 그 사실까지 지우지는 않는다.
         #expect(PokeConnectionNotice.shouldWarn(state: .failed(backoff, .exhausted), now: frozen))
+        // ※ 아래 세 줄은 clamp 의 **성질을 기록**한 것이지 배선을 막지 않는다 — 호출부를 못 박는 것은
+        //   `popoverRootPassesTheClockAsClosuresNeverAsValues` 의 소스 계약 단언이다.
+        // ★ 리그 주 판정(v0.3.37~)은 **이 고정값을 쓰면 안 되는 소비처**다 — 여기엔 안전한 쪽이 없다.
+        //   offset(forKey:now:) 의 clamp(0...6) 이 distantPast 가 만드는 거대한 음수를 전부 0 으로 접어,
+        //   6주 전 표가 "팀별 이번 주"로 읽히고 과거 주 한 줄이 사라지며 행 캡션이 전 팀 "0명 근무중"이 된다.
+        //   그래서 팝오버 루트는 리그에 menuClockNow 가 아니라 leagueClockNow(=displayNow)를 넘긴다.
+        let sixWeeksAgo = TeamLeagueWeekNavigator.key(offset: 6, now: Self.t0)
+        #expect(!TeamLeagueWeekNavigator.isCurrentWeek(sixWeeksAgo, now: Self.t0))   // 진짜 시각: 과거 주가 맞다
+        #expect(
+            TeamLeagueWeekNavigator.isCurrentWeek(sixWeeksAgo, now: frozen),
+            "고정값이 주 판정에서 안전해졌다면 이 사실을 다시 재라 — 이 단언은 '리그는 고정 시계를 쓰면 안 된다'의 근거다."
+        )
     }
 
     // MARK: 소스 계약 — 의존이 어디에 있는지 (런타임 계측이 못 보는 자리를 문자열로 못 박는다)
@@ -456,6 +468,11 @@ struct V0238MenuTests {
             "CheckMenuView body 가 displayNow 를 값으로 읽는다 — 그 한 줄이 팝오버 전체를 매초 무효화한다(감사 결함의 원형)."
         )
         #expect(root.contains("clock: { store.menuClockNow }"), "패널의 시계는 menuClockNow 를 읽는 클로저여야 한다(닫힘 게이트 포함).")
+        // 리그만은 다른 시계를 쓴다. 이 한 줄이 배선을 못 박는 **유일한** 게이트다(런타임 계측은 호출부를 못 본다).
+        #expect(
+            root.contains("now: { store.leagueClockNow }"),
+            "리그 주 판정은 leagueClockNow 여야 한다 — menuClockNow 의 distantPast 는 clamp(0...6) 에 접혀 6주 전 표를 '이번 주'로 읽고 전 팀 '0명 근무중'을 만든다."
+        )
         #expect(root.contains("cooldownRemaining: { store.pokeCooldownRemaining(for: $0, now: store.menuClockNow) }"))
         // 메시지 쿨타임 클로저는 v0.2.49 에서 사라졌다(쿨타임 폐지). **되살아나면 실패한다** —
         // 이 한 줄이 팝오버 트리에 초 단위 의존을 다시 들이는 경로였다.

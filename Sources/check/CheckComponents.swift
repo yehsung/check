@@ -357,7 +357,9 @@ struct LeaderboardRow: View {
     var center: String? = nil
     var isMyTeam: Bool = false
     /// 과거 주 판정에 쓰는 '지금'. **주 오프셋을 들고 다니지 않는다** — 행이 자기 주(`entry.weekStart`)를 알고,
-    /// 이 값은 그 주를 이번 주와 견주는 기준선일 뿐이다(v0.3.37). 앱은 팝오버 시계(`store.displayNow`)를 준다.
+    /// 이 값은 그 주를 이번 주와 견주는 기준선일 뿐이다(v0.3.37). 앱은 `LeaderboardPanel` 이 body 에서 한 번 읽은
+    /// 리그 시계(`store.leagueClockNow` — 닫혀도 마지막 실제 시각이고, 주 판정을 접는 `menuClockNow` 의
+    /// distantPast 가 아니다)를 그대로 내려 준다. 머리글·화살표·행이 **같은 한 값**을 쓴다.
     var now: Date = Date()
 
     // 1인당 평균 대비 목표 진행률 게이지(entry.goal 이 평균 기준으로 계산됨).

@@ -176,8 +176,13 @@ package final class RankingsStore {
         switch board {
         case .league:
             // ② 과거 주는 종료된 기록만 세므로 다시 물어도 같은 표다 — 주기 갱신은 이번 주에만.
-            //    단 **실패한 과거 주는 예외**: 못 받은 것을 '안 변한다'로 접으면 MU5 계약에 리그 구멍이 난다.
-            guard TeamLeagueWeekNavigator.isCurrentWeek(leagueWeekKey, now: context.clock.now()) || leagueState.hasFailed else { return }
+            //    단 **아직 못 읽은 주는 예외**: 못 받은 것을 '안 변한다'로 접으면 MU5 계약에 리그 구멍이 난다.
+            //    hasFailed 만으로는 모자란다 — 취소(-999)는 폰 모양을 지키려고 실패로 올리지 않아
+            //    hasLoaded=false · hasFailed=false 인 **죽은 카드**가 되는데, 그 조합이 여기서 영영 막혔다
+            //    (◂ 를 누르자마자 앱을 전환하면 iOS 가 요청을 -999 로 끊는 흔한 경로다).
+            //    성공적으로 읽은 과거 주는 hasLoaded 라 여전히 다시 묻지 않는다.
+            guard TeamLeagueWeekNavigator.isCurrentWeek(leagueWeekKey, now: context.clock.now())
+                    || leagueState.hasFailed || !leagueState.hasLoaded else { return }
             state = leagueState
         case .tokens: state = tokenState
         case .minigame: state = miniGameState
@@ -234,10 +239,21 @@ package final class RankingsStore {
     /// 주 이동(`-1` = ◂ 과거 · `+1` = ▸ 현재 쪽). 값이 안 바뀌면 요청도 없다(토큰 판 달 이동과 같은 규약).
     package func stepLeagueWeek(by delta: Int) {
         guard leagueWeekOffsetSupported else { return }   // 옛 서버: 알약은 이미 접혔지만 한 번 더 막는다
+        let keyBeforeRoll = leagueWeekKey
         rollLeagueWeekIfNeeded()                          // 경계를 막 넘은 ◂ 가 '옛 이번 주 − 1' 로 가지 않게
+        let snapped = leagueWeekKey != keyBeforeRoll      // 스냅은 행을 비우기만 하고 **요청은 안 낸다**
         let now = context.clock.now()
         let next = TeamLeagueWeekNavigator.step(leagueWeekKey, by: delta, now: now)
-        guard next != leagueWeekKey else { return }
+        guard next != leagueWeekKey else {
+            // 열어 둔 채 월요일 0시를 넘긴 뒤 ▸ 를 누른 자리다. 스냅이 이미 이번 주로 옮겨 놨으니 값은 안 바뀌지만,
+            // 그 스냅이 행을 비웠으므로 채워 줄 사람이 여기밖에 없다(안 채우면 "불러오는 중…"이 스피너도 [다시 시도]도
+            // 없이 굳는다 — 폰 리그엔 주기 타이머가 없어 스스로 회복하지 못한다).
+            if snapped {
+                leagueState.isLoading = true
+                launch { [weak self] in await self?.loadLeague() }
+            }
+            return
+        }
         leagueSerial &+= 1                                // 주 키를 바꾸는 모든 자리가 순번을 올린다(불변식)
         leagueWeekKey = next
         league = []                                       // 직전 주 행이 '그 주인 척' 남지 않게

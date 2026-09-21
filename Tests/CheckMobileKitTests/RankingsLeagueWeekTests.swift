@@ -165,6 +165,141 @@ struct RankingsLeagueWeekTests {
         harness.expectNoForbiddenCalls()
     }
 
+    @Test("rank-week-rollstep: 롤오버 창에서 ▸ 를 누르면 비운 목록을 다시 채운다(요청 1건)")
+    func rollThenForwardRefills() async throws {
+        let start = Self.sundayLate
+        let clockBox = BaseLockedBox(start)
+        let harness = await RankMeHarness(label: "rank-week-rollstep", clockStart: start) { request in
+            request.rpcName == "team_weekly_leaderboard" ? Self.answer(request, now: clockBox.get()) : nil
+        }
+        defer { harness.tearDown() }
+        let store = harness.rankings
+
+        store.tabDidAppear()
+        #expect(await baseWaitUntil { store.leagueState.hasLoaded && !store.league.isEmpty })
+        #expect(Self.offsets(harness) == [0])
+
+        // 사용자는 어디로도 이동하지 않았다 — 열어 둔 채 월요일 0시가 지나면 제목이 스스로 '팀별 9월 14일 주'가 되고 ▸ 가 켜진다.
+        harness.clock.advance(120)
+        clockBox.mutate { $0 = start.addingTimeInterval(120) }
+        let newCurrent = Self.weekKey(0, now: clockBox.get())
+        #expect(newCurrent != Self.weekKey(0, now: start), "시계가 주를 안 넘겼다 — 이 테스트가 무의미해진다")
+        #expect(store.canStepLeagueWeekForward, "롤오버 창에서 ▸ 가 꺼져 있으면 이 회귀를 못 잰다")
+
+        // '이번 주로 돌아가려고 ▸ 를 누르는 것'이 가장 자연스러운 첫 동작이다.
+        // 스냅이 행을 비우고 guard 가 no-op 으로 빠지면 "불러오는 중…"이 스피너도 [다시 시도]도 없이 굳는다.
+        store.stepLeagueWeek(by: 1)
+        #expect(await baseWaitUntil { store.leagueState.hasLoaded && !store.league.isEmpty })
+        #expect(store.leagueWeekKey == newCurrent)
+        #expect(!store.isLeaguePastWeek && !store.leagueState.isLoading)
+        #expect(Self.offsets(harness) == [0, 0], "스냅이 비운 목록을 아무도 다시 채우지 않았다")
+
+        // 앵커가 맞춰졌으니 한 번 더 누르면 정말 아무 일도 없다(값도 요청도 그대로).
+        store.stepLeagueWeek(by: 1)
+        await harness.barrier()
+        #expect(Self.offsets(harness) == [0, 0] && !store.league.isEmpty)
+        harness.expectNoForbiddenCalls()
+    }
+
+    @Test("rank-week-rollback: 과거 주를 보다 주가 넘어가면 ◂ 는 **새** 이번 주 기준으로 한 칸 뒤다")
+    func rollThenBackCountsFromNewWeek() async throws {
+        let start = Self.sundayLate
+        let clockBox = BaseLockedBox(start)
+        let harness = await RankMeHarness(label: "rank-week-rollback", clockStart: start) { request in
+            request.rpcName == "team_weekly_leaderboard" ? Self.answer(request, now: clockBox.get()) : nil
+        }
+        defer { harness.tearDown() }
+        let store = harness.rankings
+
+        store.tabDidAppear()
+        #expect(await baseWaitUntil { store.leagueState.hasLoaded })
+        store.stepLeagueWeek(by: -1)
+        #expect(await baseWaitUntil { store.leagueState.hasLoaded && store.isLeaguePastWeek })
+        #expect(Self.offsets(harness) == [0, 1])
+
+        harness.clock.advance(120)
+        clockBox.mutate { $0 = start.addingTimeInterval(120) }
+        let now = clockBox.get()
+        #expect(Self.weekKey(0, now: now) != Self.weekKey(0, now: start))
+
+        // 스냅이 먼저 새 이번 주로 되돌리므로 ◂ 는 '옛 이번 주 − 1'(두 주 전)이 아니라 **새 이번 주 − 1** 이다.
+        store.stepLeagueWeek(by: -1)
+        #expect(await baseWaitUntil { store.leagueState.hasLoaded && !store.league.isEmpty })
+        #expect(store.leagueWeekKey == Self.weekKey(1, now: now), "롤오버를 무시하고 옛 주 기준으로 셌다")
+        #expect(Self.offsets(harness) == [0, 1, 1])
+        harness.expectNoForbiddenCalls()
+    }
+
+    @Test("rank-week-rollpull: 당겨서 새로고침도 롤오버를 지난다 — 시키지도 않았는데 지난주로 옮겨 가지 않는다")
+    func pullToRefreshRolls() async throws {
+        let start = Self.sundayLate
+        let clockBox = BaseLockedBox(start)
+        let harness = await RankMeHarness(label: "rank-week-rollpull", clockStart: start) { request in
+            request.rpcName == "team_weekly_leaderboard" ? Self.answer(request, now: clockBox.get()) : nil
+        }
+        defer { harness.tearDown() }
+        let store = harness.rankings
+
+        store.tabDidAppear()
+        #expect(await baseWaitUntil { store.leagueState.hasLoaded })
+        #expect(Self.offsets(harness) == [0])
+
+        harness.clock.advance(120)
+        clockBox.mutate { $0 = start.addingTimeInterval(120) }
+        let newCurrent = Self.weekKey(0, now: clockBox.get())
+        #expect(newCurrent != Self.weekKey(0, now: start))
+
+        // 당겨서 새로고침은 refreshIfStale 을 안 지난다 — loadLeague 안의 롤오버가 유일한 그물이다.
+        // 그 그물이 없으면 오프셋이 '지금' 기준으로 다시 계산되어 화면이 조용히 지난주로 옮겨 간다.
+        await store.refresh()
+        #expect(store.leagueWeekKey == newCurrent, "당겨서 새로고침이 화면을 지난주로 데려갔다")
+        #expect(store.leagueTitle == "팀별 이번 주")
+        #expect(Self.offsets(harness) == [0, 0])
+        #expect(!store.league.isEmpty && !store.leagueState.isLoading)
+        harness.expectNoForbiddenCalls()
+    }
+
+    @Test("rank-week-cancel: 취소(-999)로 끝난 과거 주는 복귀에서 다시 읽는다 — 죽은 카드로 굳지 않는다")
+    func cancelledPastWeekRecovers() async throws {
+        let now = Self.thursday
+        let cancel = BaseLockedBox(true)
+        let harness = await RankMeHarness(label: "rank-week-cancel", clockStart: now) { request in
+            guard request.rpcName == "team_weekly_leaderboard" else { return nil }
+            // 과거 주 조회만 끊는다(◂ 를 누르자마자 앱을 전환하면 iOS 가 요청을 -999 로 끊는 흔한 경로).
+            let offset = request.jsonBody["p_week_offset"] as? Int ?? 0
+            if offset > 0, cancel.get() { return .networkFailure(.cancelled) }
+            return Self.answer(request, now: now)
+        }
+        defer { harness.tearDown() }
+        let store = harness.rankings
+
+        store.tabDidAppear()
+        #expect(await baseWaitUntil { store.leagueState.hasLoaded })
+        store.stepLeagueWeek(by: -1)
+        #expect(await baseWaitUntil { Self.offsets(harness) == [0, 1] && !store.leagueState.isLoading })
+
+        // 취소는 폰 모양을 지키려고 실패로 올리지 않는다 — hasLoaded=false · hasFailed=false 인 죽은 카드다.
+        #expect(!store.leagueState.hasLoaded && !store.leagueState.hasFailed && store.league.isEmpty)
+        #expect(RankingsText.leagueEmpty(
+            hasLoaded: store.leagueState.hasLoaded, isLoading: store.leagueState.isLoading,
+            hasFailed: store.leagueState.hasFailed, unfilteredCount: 0, isPastWeek: true
+        ) == "불러오는 중…")
+
+        cancel.mutate { $0 = false }
+        harness.clock.advance(RankingsStore.staleSeconds + 1)
+        store.appDidBecomeActive()
+        #expect(await baseWaitUntil { store.leagueState.hasLoaded && !store.league.isEmpty })
+        #expect(store.isLeaguePastWeek && store.leagueWeekKey == Self.weekKey(1, now: now), "회복하면서 과거 주를 놓쳤다")
+        #expect(Self.offsets(harness) == [0, 1, 1])
+
+        // 성공적으로 읽은 과거 주는 여전히 조용하다(주기 갱신 규약은 그대로).
+        harness.clock.advance(RankingsStore.staleSeconds + 1)
+        store.appDidBecomeActive()
+        await harness.barrier()
+        #expect(Self.offsets(harness) == [0, 1, 1], "다 읽은 과거 주를 다시 물었다")
+        harness.expectNoForbiddenCalls()
+    }
+
     // MARK: 4. 문(door) 넷
 
     @Test("rank-week-doors: 탭 재진입 · 보드 전환 · 딥링크는 이번 주로 떨어진다 · 이번 주 재진입은 행을 안 비운다")
@@ -490,9 +625,10 @@ struct RankingsLeagueWeekTests {
         #expect(load.contains("defer { if serial == leagueSerial { leagueState.isLoading = false } }"))
         #expect(!load.contains("defer { if serial == leagueSerial, weekKey == leagueWeekKey"))
 
-        // ④ 과거 주는 주기 갱신을 돌리지 않되 **실패한 과거 주는 예외**(MU5 구멍 방지).
+        // ④ 과거 주는 주기 갱신을 돌리지 않되 **아직 못 읽은 주는 예외**(MU5 구멍 방지).
+        //    취소(-999)는 실패로 올리지 않으므로 hasFailed 만 예외로 두면 hasLoaded=false 인 죽은 카드가 영영 막힌다.
         let stale = try body(after: "package func refreshIfStale()")
-        #expect(stale.contains("|| leagueState.hasFailed else { return }"))
+        #expect(stale.contains("|| leagueState.hasFailed || !leagueState.hasLoaded else { return }"))
         let roll = try #require(stale.range(of: "rollLeagueWeekIfNeeded()"))
         let guardRange = try #require(stale.range(of: "TeamLeagueWeekNavigator.isCurrentWeek(leagueWeekKey"))
         #expect(roll.lowerBound < guardRange.lowerBound, "롤오버보다 가드가 앞서면 갱신이 영영 막힌다")

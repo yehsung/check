@@ -414,6 +414,9 @@ extension WorkTimerStore {
     /// setMenuPresented(true) 의 loadLeaderboard() 가 맡는다. 목표 변경(updateTeamGoal)의 호출은 열린 팝오버 안이다.
     func refreshLeaderboardIfVisible() async {
         guard isMenuPresented, isLeaderboardVisible else { return }
+        // 과거 주는 **종료된 세션만** 세므로(서버 계약) 30초마다 다시 물어도 같은 표가 온다 —
+        // 주기 갱신은 이번 주에만 돈다. 과거 주 표는 ◂ ▸ 를 누른 그 순간 한 번 받아 캐시로 산다.
+        guard TeamLeagueWeekNavigator.isCurrentWeek(leagueWeekKey) else { return }
         await performLoadLeaderboard()
     }
 
@@ -423,17 +426,55 @@ extension WorkTimerStore {
     func performLoadLeaderboard() async {
         guard session != nil else { return }
         let generation = sessionGeneration
+        // 보고 있는 주(◂ ▸ 로 이동, 기본은 이번 주)를 조회한다 — 이번 주로 하드코딩하면 지난 주 보기가 무력화된다.
+        // 주 키 → 서버 오프셋 환산은 여기 한 번뿐이다(접힘을 한 자리에서만 다룬다).
+        let weekKey = leagueWeekKey
+        let weekOffset = TeamLeagueWeekNavigator.offset(forKey: weekKey)
+        if !leagueLoading { leagueLoading = true }
+        if leagueFailed { leagueFailed = false }
+        // 조회가 끝나면(성공·실패·취소 무관) 진행중 표시를 내린다. 그 사이 주가 바뀌었으면 새 조회가 이미 켜 둔
+        // 표시라 건드리지 않는다 — 연달아 ◂ 를 눌러도 "불러오는 중…"이 끊기지 않는다(토큰 순위판과 같은 규약).
+        defer { if weekKey == leagueWeekKey, leagueLoading { leagueLoading = false } }
         do {
-            let entries = try await withSessionRetry { activeSession in
-                try await service.fetchTeamLeaderboard(accessToken: activeSession.accessToken)
+            let page = try await withSessionRetry { activeSession in
+                try await service.fetchTeamLeaderboard(accessToken: activeSession.accessToken, weekOffset: weekOffset)
             }
             guard generation == sessionGeneration else { return }
-            let sorted = entries.sortedByAverageDescending()
+            let sorted = page.entries.sortedByAverageDescending()
+
+            // ── 옛 서버(p_week_offset 을 모름) ── 돌아온 행은 **이번 주**다. 보던 주를 되돌리고 화살표를 접는다.
+            // 이 갈래가 없으면 화면에 "9월 15일 주"라고 적힌 이번 주 표가 뜬다(가장 나쁜 실패 모양).
+            guard page.supportsWeekOffset else {
+                if leagueWeekOffsetSupported { leagueWeekOffsetSupported = false }
+                let current = TeamLeagueWeekNavigator.currentKey()
+                if leagueWeekKey != current {
+                    leagueWeekKey = current
+                    leagueWeekCache.removeAll()
+                }
+                leagueWeekCache[current] = sorted
+                if leaderboard != sorted { leaderboard = sorted }
+                // 주 키를 바꾼 뒤라 위 defer 의 가드가 안 맞을 수 있다 — 진행중 표시를 여기서 직접 내린다.
+                if leagueLoading { leagueLoading = false }
+                return
+            }
+            if !leagueWeekOffsetSupported { leagueWeekOffsetSupported = true }
+
+            // 서버가 답한 주를 우선한다. 우리가 물은 주와 다를 수 있는 경우는 하나 — 조회 중에 월요일 0시를 넘겨
+            // 서버가 센 '이번 주'가 우리가 계산한 주와 어긋난 때다. 그땐 제목이 거짓말을 하지 않게 서버를 따른다.
+            let answered = page.serverWeekStart ?? weekKey
+            leagueWeekCache[answered] = sorted
+            // 응답이 오는 사이 ◂ ▸ 로 주를 옮겼으면 이 응답은 낡은 주의 것이라 화면에는 반영하지 않는다
+            // (위에서 캐시에는 이미 넣었다 — 그 주로 돌아오면 곧바로 보인다). 주 이동 스냅백 방지.
+            guard weekKey == leagueWeekKey else { return }
+            if answered != leagueWeekKey { leagueWeekKey = answered }
             if leaderboard != sorted { leaderboard = sorted }
         } catch {
             // 취소는 실패 문구를 남기지 않고 조용히 빠져나간다.
             if case .cancelled = classifyAuthError(error) { return }
             guard generation == sessionGeneration else { return }
+            // 기다리는 사이 주를 옮겼으면 이 실패는 낡은 주의 것이다(새 조회가 스스로 표시를 세운다).
+            guard weekKey == leagueWeekKey else { return }
+            if !leagueFailed { leagueFailed = true }
             if syncMessage != "리그 불러오기 실패" { syncMessage = "리그 불러오기 실패" }
         }
     }

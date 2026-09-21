@@ -544,7 +544,9 @@ func 네_화면과_어제_1등이_모두_행의_center_를_그대로_넘긴다()
     // 주석을 걷어낸 뒤 **공백을 한 칸으로 접어** 비교한다: 주석 자리에 남는 빈 줄과 들여쓰기가
     // 여러 줄 인자 목록의 모양을 바꾸기 때문이다(그걸 그대로 매칭하면 주석을 지워야만 초록이 된다).
     let menu = v0313Normalized(try v0313Source("CheckMenuView.swift"))
-    #expect(menu.contains("LeaderboardRow(entry: entry, center: entry.center, isMyTeam: entry.id == myTeamID)"))
+    // v0.3.37(지난 주 보기)에 인자가 하나 늘어 여러 줄로 갈라졌다 — 확인하는 것은 여전히 `center: entry.center` 를
+    // 그대로 넘기는가 하나뿐이라, TokenBoardRowView 와 같은 모양(여는 괄호 다음 줄부터)으로 맞춘다.
+    #expect(menu.contains("LeaderboardRow( entry: entry, center: entry.center, isMyTeam: entry.id == myTeamID,"))
     #expect(menu.contains("TokenBoardRowView( entry: entry, center: entry.center, isMe: isMe,"))
     #expect(menu.contains("ultraUnlimited: ultraUnlimited, center: entry.center,"))
 

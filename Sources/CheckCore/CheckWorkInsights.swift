@@ -658,3 +658,110 @@ package enum TokenBoardMonthNavigator {
         return parts[0] == currentYear ? "\(parts[1])월" : "\(parts[0])년 \(parts[1])월"
     }
 }
+
+/// 팀 리그 **주 이동**용 키 계산(KST 월요일 'YYYY-MM-DD'). 토큰 순위판 `TokenBoardMonthNavigator` 의 거울이라
+/// 이름·모양(step/canStepForward/displayTitle)을 그대로 맞췄다 — 맥과 폰이 두 판을 같은 손놀림으로 쓴다.
+///
+/// ★ **들고 다니는 상태는 오프셋(Int)이 아니라 주 키(절대 날짜)다.** 오프셋은 '지금'에 매달린 값이라, 지난주를
+///   열어 둔 채 월요일 0시를 넘기면 같은 `1` 이 **다른 주**를 가리켜 제목이 소리 없이 한 칸 밀린다. 토큰
+///   순위판이 'YYYY-MM' 절대 키를 들고 있는 것과 정확히 같은 이유다. 서버 인자는 오프셋이므로
+///   `offset(forKey:now:)` 가 요청 직전에 환산한다 — 환산이 한 자리에 있어야 '접힘'을 한 군데서만 다룬다.
+///
+/// ★ 부호 규약이 둘이다. 헷갈리지 마라.
+///   · **서버 오프셋**: 양수가 과거(6 = 6주 전). team_weekly_leaderboard(p_week_offset) 의 규약 그대로다.
+///   · **step 의 delta**: 화살표 방향이다. `-1` = ◂(과거로), `+1` = ▸(현재 쪽으로). 토큰 순위판의 ‹ › 와
+///     같은 손놀림을 쓰기 위해서이고, 그래서 안에서 `offset - delta` 로 뒤집는다.
+package enum TeamLeagueWeekNavigator {
+    /// 과거로 갈 수 있는 상한(주). **서버가 접는 값과 같아야 한다** — 서버는 0~6 으로 클램프하므로, 클라가 7을
+    /// 보내면 서버는 6주 전을 주는데 화면 제목만 7주 전이 되어 **제목이 거짓말을 한다**. 같은 값으로 막아 그 창을 없앤다.
+    package static let maxWeeksBack = 6
+
+    /// 이번 주 키(KST 월요일). `RetroWeekKey.current` 와 **같은 형식·같은 경계**다(둘 다 koreanWeekStart).
+    package static func currentKey(_ now: Date = Date()) -> String {
+        key(for: TeamWeeklyGoal.koreanWeekStart(for: now))
+    }
+
+    /// 주 시작 Date → 'YYYY-MM-DD' 키.
+    package static func key(for weekStart: Date) -> String {
+        let c = TeamWeeklyGoal.kstCalendar.dateComponents([.year, .month, .day], from: weekStart)
+        return String(format: "%04d-%02d-%02d", c.year ?? 1970, c.month ?? 1, c.day ?? 1)
+    }
+
+    /// 서버 오프셋(0=이번 주, 양수 N=N주 전) → 주 키. 0~maxWeeksBack 으로 접는다(거부하지 않는다 — 서버와 같은 규약).
+    package static func key(offset: Int, now: Date = Date()) -> String {
+        let clamped = clamp(offset)
+        let thisWeek = TeamWeeklyGoal.koreanWeekStart(for: now)
+        guard let moved = TeamWeeklyGoal.kstCalendar.date(byAdding: .weekOfYear, value: -clamped, to: thisWeek) else {
+            return key(for: thisWeek)
+        }
+        return key(for: moved)
+    }
+
+    /// 주 키 → 서버 오프셋. 못 읽는 키·미래 주는 0(이번 주), 상한 너머는 maxWeeksBack 으로 접는다.
+    package static func offset(forKey weekKey: String, now: Date = Date()) -> Int {
+        guard let start = date(forKey: weekKey) else { return 0 }
+        let calendar = TeamWeeklyGoal.kstCalendar
+        let thisWeek = TeamWeeklyGoal.koreanWeekStart(for: now)
+        let weeks = calendar.dateComponents([.weekOfYear], from: start, to: thisWeek).weekOfYear ?? 0
+        return clamp(weeks)
+    }
+
+    /// 0~maxWeeksBack 클램프. 서버와 같은 규약이라 **거부가 아니라 접기**다.
+    package static func clamp(_ offset: Int) -> Int {
+        min(max(offset, 0), maxWeeksBack)
+    }
+
+    /// 주 키를 delta 만큼 옮긴다. `-1` = ◂(과거로 한 주), `+1` = ▸(현재 쪽으로 한 주). 상·하한에서는 값이 그대로다
+    /// (호출부는 '값이 안 바뀌면 요청도 없다'는 토큰 순위판 규약을 그대로 쓴다).
+    package static func step(_ weekKey: String, by delta: Int, now: Date = Date()) -> String {
+        key(offset: clamp(offset(forKey: weekKey, now: now) - delta), now: now)
+    }
+
+    /// ▸ 를 누를 수 있는가 — 이번 주면 불가(미래는 볼 수 없다).
+    package static func canStepForward(from weekKey: String, now: Date = Date()) -> Bool {
+        offset(forKey: weekKey, now: now) > 0
+    }
+
+    /// ◂ 를 누를 수 있는가 — 6주 전이면 불가(서버가 더 과거를 주지 않는다).
+    package static func canStepBack(from weekKey: String, now: Date = Date()) -> Bool {
+        offset(forKey: weekKey, now: now) < maxWeeksBack
+    }
+
+    /// 보고 있는 주가 이번 주인가. `!canStepForward` 와 같은 판정을 이름으로 드러낸 것뿐이다 —
+    /// 캡션/빈 목록 문구가 이 한 판정을 공유해야 "6주 전 표에 '근무중'"이 생기지 않는다.
+    package static func isCurrentWeek(_ weekKey: String, now: Date = Date()) -> Bool {
+        !canStepForward(from: weekKey, now: now)
+    }
+
+    /// 제목용 주 이름. 이번 주는 **"이번 주"**(기존 제목 "팀별 이번 주" 를 한 글자도 안 바꾸기 위해서다),
+    /// 과거 주는 그 주 월요일 날짜로 **"9월 15일 주"**, 해가 다르면 **"2025년 12월 29일 주"**.
+    ///
+    /// 문구 근거 셋:
+    ///  ① 주를 가리키는 이름으로 서버가 주는 것은 **월요일 날짜 하나**(week_start)뿐이다. 그걸 그대로 읽는 이름이라
+    ///     화면과 서버 응답이 어긋날 자리가 없다.
+    ///  ② "지난주 · 2주 전"처럼 상대 표현으로 가면 6주까지 갔을 때 "6주 전"이 되는데, 사용자가 달력과 맞춰 보려면
+    ///     결국 날짜를 계산해야 한다. 6주를 되돌아보는 화면에서 상대 표현은 길이 없는 이름이다.
+    ///  ③ 연도 규칙은 토큰 순위판 `TokenBoardMonthNavigator.displayTitle` 과 **같다**(올해면 생략, 아니면 붙인다).
+    ///     같은 자리에 같은 모양으로 들어가는 제목이라 두 판이 갈릴 이유가 없다.
+    package static func displayTitle(_ weekKey: String, now: Date = Date()) -> String {
+        guard !isCurrentWeek(weekKey, now: now), let start = date(forKey: weekKey) else { return "이번 주" }
+        let calendar = TeamWeeklyGoal.kstCalendar
+        let c = calendar.dateComponents([.year, .month, .day], from: start)
+        let month = c.month ?? 1
+        let day = c.day ?? 1
+        let currentYear = calendar.component(.year, from: now)
+        guard let year = c.year, year != currentYear else { return "\(month)월 \(day)일 주" }
+        return "\(year)년 \(month)월 \(day)일 주"
+    }
+
+    /// 'YYYY-MM-DD' → KST 그 날 0시. 형식이 아니면 nil(호출부가 이번 주로 접는다).
+    package static func date(forKey weekKey: String) -> Date? {
+        let parts = weekKey.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        var comps = DateComponents()
+        comps.year = parts[0]
+        comps.month = parts[1]
+        comps.day = parts[2]
+        return TeamWeeklyGoal.kstCalendar.date(from: comps)
+    }
+}

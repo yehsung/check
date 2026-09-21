@@ -33,7 +33,7 @@ struct RankingsRedesignTests {
         #expect(RankingsText.leagueValue(busy) == "25시간 07분")
         #expect(RankingsText.leaguePercentText(busy) == "63%")
         #expect(RankingsText.leagueSubtitle(busy) == "5명 · 3명 근무 중 · 목표 40시간")
-        #expect(RankingsText.leagueHeaderTrailing == "1인당 평균")
+        #expect(RankingsText.leagueAverageHint == "1인당 평균")
 
         let idle = Self.team(total: 3 * 3600, members: 3, goalHours: 45)
         #expect(RankingsText.leagueSubtitle(idle) == "3명 · 근무 중 없음 · 목표 45시간")
@@ -42,7 +42,7 @@ struct RankingsRedesignTests {
         #expect(RankingsText.leagueValue(empty) == "—")
         #expect(RankingsText.leaguePercentText(empty) == "—")
         #expect(RankingsText.leagueSubtitle(empty) == "3명 · 이번 주 기록 없음 · 목표 40시간")
-        for subtitle in [busy, idle, empty].map(RankingsText.leagueSubtitle) {
+        for subtitle in [busy, idle, empty].map({ RankingsText.leagueSubtitle($0) }) {
             #expect(!subtitle.hasSuffix("·") && !subtitle.hasSuffix("· ") && !subtitle.hasPrefix("·"))
             #expect(!subtitle.contains("근무중"), "붙여 쓴 '근무중'이 남았다")
         }

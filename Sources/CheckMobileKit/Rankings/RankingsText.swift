@@ -35,7 +35,16 @@ package enum RankingsText {
 
     // MARK: 팀 리그 (맥 LeaderboardPanel · LeaderboardRow)
 
-    package static let leagueTitle = "팀별 이번 주"
+    /// 섹션 머리 제목. 이번 주는 **"팀별 이번 주"** 로 예전과 한 글자도 다르지 않다(`displayTitle` 이 "이번 주"를 낸다).
+    /// 과거 주는 "팀별 9월 14일 주", 해가 다르면 "팀별 2025년 12월 29일 주" — 맥 `LeaderboardPanel` 과 같은 조립이다.
+    package static func leagueTitle(week weekKey: String, now: Date) -> String {
+        "팀별 \(TeamLeagueWeekNavigator.displayTitle(weekKey, now: now))"
+    }
+
+    /// 주 이동 알약이 보이스오버에 읽어 주는 칸 이름("이번 주" · "9월 14일 주").
+    package static func leagueWeekName(week weekKey: String, now: Date) -> String {
+        TeamLeagueWeekNavigator.displayTitle(weekKey, now: now)
+    }
     package static let leagueCaption = "1인당 평균 근무시간 순이에요"
     /// 맥 `LeaderboardEmptyMessage.filteredOut`.
     package static let leagueFilteredOut = "아직 이번 주 근무한 팀이 없어요"
@@ -49,12 +58,27 @@ package enum RankingsText {
     }
 
     /// "각자 목표 40시간 · 총 51시간 12분 · 4명 · 2명 근무중" — 맥 `LeaderboardRow.caption` 과 같은 문장.
-    package static func leagueCaption(_ entry: TeamLeaderboardEntry) -> String {
-        "각자 목표 \(entry.weeklyGoalHours)시간 · 총 \(MenuBarStatusFormatter.hoursMinutes(entry.totalSeconds)) · \(entry.memberCount)명 · \(entry.workingCount)명 근무중"
+    /// 과거 주는 마지막 조각만 참여 인원으로 갈린다("… · 5명 중 4명 참여") — **'근무중' 조각이 사라진다**.
+    /// workingCount 는 '지금 근무 중'이라 과거 주엔 언제나 0 이고, 값이 0 인지 따지지 않고 **주 판정으로** 끊는다.
+    package static func leagueCaption(_ entry: TeamLeaderboardEntry, now: Date = Date()) -> String {
+        let total = MenuBarStatusFormatter.hoursMinutes(entry.totalSeconds)
+        // 과거 판정은 **행이 스스로** 한다(맥 LeaderboardRow.caption 과 같은 자리·같은 규약).
+        guard entry.isPastWeek(now: now) else {
+            return "각자 목표 \(entry.weeklyGoalHours)시간 · 총 \(total) · \(entry.memberCount)명 · \(entry.workingCount)명 근무중"
+        }
+        return "각자 목표 \(entry.weeklyGoalHours)시간 · 총 \(total) · \(leagueParticipation(entry))"
     }
 
-    /// 섹션 머리 오른쪽 보조 글자(시안 B 05 — 행의 큰 숫자가 무엇의 평균인지).
-    package static let leagueHeaderTrailing = "1인당 평균"
+    /// 과거 주 조각: "5명 중 4명 참여" · participantCount 가 없으면 "5명 중 참여 인원 모름"(맥 CheckComponents.swift:404-405 와 글자 동일).
+    /// 옛 서버에서 workingCount 로 대신하지 않는다 — 0 을 적느니 모른다고 적는다.
+    package static func leagueParticipation(_ entry: TeamLeaderboardEntry) -> String {
+        entry.participantCount.map { "\(entry.memberCount)명 중 \($0)명 참여" }
+            ?? "\(entry.memberCount)명 중 참여 인원 모름"
+    }
+
+    /// 목록 위 메타 줄 오른쪽 보조 글자(시안 B 05 — 행의 큰 숫자가 무엇의 평균인지). **머리 오른쪽은 주 이동 알약이 쓴다** —
+    /// 제목 + 이 힌트 + 알약을 한 줄에 두면 SE(가용 335pt)에서 연도형 제목·큰 글자가 제목을 두 줄로 꺾는다.
+    package static let leagueAverageHint = "1인당 평균"
 
     /// 행 오른쪽 끝 큰 숫자 "25시간 07분"(머리가 '1인당 평균'이라 "평균" 을 떼었다). 이번 주 기록이 없는 팀(내 팀만 남는다)은 "—".
     package static func leagueValue(_ entry: TeamLeaderboardEntry) -> String {
@@ -83,8 +107,14 @@ package enum RankingsText {
     }
 
     /// 부제 한 줄 "5명 · 3명 근무 중 · 목표 40시간"(화면은 근무 중 앞에 초록 점을 끼운다). 구분점은 늘 두 조각 **사이**에만.
-    package static func leagueSubtitle(_ entry: TeamLeaderboardEntry) -> String {
-        [leagueMembers(entry), leagueWorking(entry), leagueGoal(entry)].joined(separator: " · ")
+    ///
+    /// 과거 주는 '근무 중' 조각을 **아예 뺀다**("5명 중 4명 참여 · 목표 40시간") — working_count 는 '지금 근무 중'이라
+    /// 과거 주엔 늘 0 이고, 두면 기록이 멀쩡한 팀에도 "근무 중 없음"이 붙는다. 값이 0 인지 따지지 않고 **주 판정으로** 끊는다.
+    package static func leagueSubtitle(_ entry: TeamLeaderboardEntry, now: Date = Date()) -> String {
+        guard entry.isPastWeek(now: now) else {
+            return [leagueMembers(entry), leagueWorking(entry), leagueGoal(entry)].joined(separator: " · ")
+        }
+        return [leagueParticipation(entry), leagueGoal(entry)].joined(separator: " · ")
     }
 
     /// 막대 색 뜻: 달성 = 초록 · '우리 팀' = 게이지 그라디언트(이 판에서 그라디언트는 우리 팀만) · 나머지 = 진행 파랑.
@@ -104,12 +134,56 @@ package enum RankingsText {
     }
 
     /// 빈 목록 문구(맥 `LeaderboardEmptyMessage.text` 와 같은 갈림 + 폰의 진행중·실패 구분).
-    package static func leagueEmpty(hasLoaded: Bool, isLoading: Bool, hasFailed: Bool, unfilteredCount: Int) -> String {
-        if unfilteredCount > 0 { return leagueFilteredOut }
-        if hasFailed { return leagueFailed }
-        if !hasLoaded || isLoading { return loading }
-        return leagueFilteredOut
+    ///
+    /// 과거 주 갈림은 맥 `LeaderboardEmptyMessage.text(isPastWeek:…)` 와 같은 순서다. **과거 주 빈 문장은 그 주 키로
+    /// `hasLoaded == true` 일 때만** 나온다 — 취소·로드 전은 "불러오는 중…"이다(그 문장은 사실 주장이라 통신 실패가
+    /// 과거 사실로 둔갑하면 안 된다). 이번 주 갈림은 한 글자도 안 바뀐다.
+    package static func leagueEmpty(hasLoaded: Bool, isLoading: Bool, hasFailed: Bool, unfilteredCount: Int, isPastWeek: Bool = false) -> String {
+        guard isPastWeek else {
+            if unfilteredCount > 0 { return leagueFilteredOut }
+            if hasFailed { return leagueFailed }
+            if !hasLoaded || isLoading { return loading }
+            return leagueFilteredOut
+        }
+        if isLoading { return loading }
+        if hasFailed { return leaguePastFailed }
+        if !hasLoaded { return loading }
+        return leaguePastFilteredOut
     }
+
+    // MARK: 팀 리그 — 지난 6주 보기 (v0.3.37 · 맥 LeaderboardEmptyMessage · LeagueWeekNote 와 글자 동일)
+
+    /// 과거 주 빈 목록(맥 `LeaderboardEmptyMessage.pastFilteredOut`). "아직"도 "이번 주"도 과거 주엔 틀린 말이다.
+    package static let leaguePastFilteredOut = "그 주엔 근무한 팀이 없었어요"
+    /// 과거 주 실패(맥 `LeaderboardEmptyMessage.loadFailed`). **이번 주 문구(`leagueFailed`)는 건드리지 않는다.**
+    /// 폰의 `tokenFailed`·`miniGameFailed` 와도 같은 글자라, 이 화면에서 '리그를…' 쪽이 오히려 예외다(후속 통일 후보).
+    package static let leaguePastFailed = "순위를 불러오지 못했어요"
+
+    package static func leagueFailedText(isPastWeek: Bool) -> String { isPastWeek ? leaguePastFailed : leagueFailed }
+
+    /// 과거 주 보조 줄(맥 `LeagueWeekNote.pastWeek`). 인원은 1인당 평균의 **분모**라 뜻이 바뀌는 유일한 칸이다.
+    package static let leagueWeekBasis = "인원은 그 주 기준이에요"
+    /// 내 팀이 그 주 표에 아예 없을 때(맥 `LeagueWeekNote.myTeamMissing`).
+    package static let leagueMyTeamMissing = "그 주엔 아직 우리 팀이 없었어요"
+
+    /// 과거 주 보조 줄. **한 줄만 그린다**(맥 `LeagueWeekNote.text` 와 같은 배타 선택) — 내 팀이 그 주 표에 아예 없으면
+    /// 그 답이 **먼저**다("왜 우리 팀이 안 보이지?"). 이번 주는 nil(줄 내용이 비고 자리만 남는다).
+    ///
+    /// **목표·팀 이름·센터가 현재값이라는 사실은 화면에 한 글자도 쓰지 않는다** — 사용자가 감지할 수 없는 차이고,
+    /// 셋 중 하나만 고백하면 나머지 둘이 과거값인 척하게 되어 오히려 덜 정확하다(맥과 같은 결정).
+    package static func leagueWeekNote(isPastWeek: Bool, myTeamMissing: Bool) -> String? {
+        guard isPastWeek else { return nil }
+        return myTeamMissing ? leagueMyTeamMissing : leagueWeekBasis
+    }
+
+    /// 주 이동 알약 라벨(맥 `IconButton` help 와 같은 글자).
+    package static let previousWeek = "이전 주"
+    package static let nextWeek = "다음 주"
+    /// 비활성 화살표가 보이스오버에 읽어 주는 **막힌 사유**. 6주 상한은 눈으로 추론할 수 없는 제품 규칙이라 말로 해야 한다.
+    package static let noEarlierWeek = "6주 전까지만 볼 수 있어요"
+    package static let noLaterWeek = "이번 주가 가장 최근이에요"
+    /// 토큰 판 비활성 ▸ 의 사유(공용 부품이라 같이 붙는다 — 달은 과거 하한이 없어 ◂ 쪽 사유가 없다).
+    package static let noLaterMonth = "이번 달이 가장 최근이에요"
 
     // MARK: AI 토큰 (맥 TokenBoardPanel · TokenBoardRowView · TokenBoardEmptyMessage)
 
@@ -214,12 +288,13 @@ package enum RankingsText {
         return parts.joined(separator: ", ")
     }
 
-    package static func leagueRowAccessibility(rank: Int, entry: TeamLeaderboardEntry, isMyTeam: Bool) -> String {
+    /// 행 보이스오버 한 줄. **주 이름은 넣지 않는다** — 6행이 같은 말을 여섯 번 한다(그 말은 보조 줄이 한 번만 한다).
+    package static func leagueRowAccessibility(rank: Int, entry: TeamLeaderboardEntry, isMyTeam: Bool, now: Date = Date()) -> String {
         var parts = ["\(rank)위", entry.name]
         if isMyTeam { parts.append(myTeamChip) }
         parts.append(leagueAverage(entry))
         parts.append("목표 대비 \(leaguePercent(entry))%")
-        parts.append(leagueCaption(entry))
+        parts.append(leagueCaption(entry, now: now))
         return parts.joined(separator: ", ")
     }
 }

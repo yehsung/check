@@ -552,12 +552,9 @@ extension WorkTimerStore {
                 // 스탬프는 내 행을 못 찾았어도 찍는다 — 방금 이번 달 보드를 받아 왔다는 사실은 같고,
                 // 그래야 팝오버 경로가 같은 RPC 를 한 번 더 쏘지 않는다.
                 lastMyTokenRowFetchAt = Date()
-                if let mine = entries.first(where: { $0.userID == myID }),
-                   let value = TokenRowServerValue(entry: mine, month: month, fetchedAt: lastMyTokenRowFetchAt),
-                   myTokenRow != value {
-                    myTokenRow = value
-                    persistMyTokenRow(value)
-                }
+                applyMyTokenRowOutcome(TokenRowDisplayRule.outcomeForMyRow(
+                    entries: entries, userID: myID, month: month, fetchedAt: lastMyTokenRowFetchAt
+                ))
             }
         } catch {
             // 취소(팝오버 빨리 닫기 등)는 실패가 아니다 — 표시를 흔들지 않고 조용히 빠져나간다.
@@ -591,7 +588,9 @@ extension WorkTimerStore {
         guard !(isTokenBoardVisible && tokenBoardMonth == TokenUsageMonthKey.current()) else { return }
         guard force || now.timeIntervalSince(lastMyTokenRowFetchAt) >= 300 else { return }
         // ★ tokenBoardMonth 를 쓰지 마라 — 그쪽은 ‹ › 로 움직인다. 팝오버 행은 언제나 이번 달이다.
-        let month = TokenUsageMonthKey.current()
+        // 월은 이 호출의 시계(`now`)로 뽑는다 — 스탬프도 값의 fetchedAt 도 같은 순간을 쓴다.
+        // 그래야 '언제의 달로 나갔는가' 와 '도착 시점의 이번 달' 이 어긋난 모양을 테스트가 만들 수 있다(아래 재확인이 그걸 버린다).
+        let month = TokenUsageMonthKey.current(now)
         let generation = sessionGeneration
         // 먼저 찍어 재진입·난사를 막는다(업로드 스탬프와 같은 관용구).
         lastMyTokenRowFetchAt = now
@@ -600,16 +599,31 @@ extension WorkTimerStore {
                 try await service.fetchTokenBoard(accessToken: activeSession.accessToken, month: month)
             }
             guard generation == sessionGeneration, month == TokenUsageMonthKey.current() else { return }
-            guard let mine = rows.toTokenBoardEntries().first(where: { $0.userID == userID }),
-                  let value = TokenRowServerValue(entry: mine, month: month, fetchedAt: now)
-            else { return }
-            if myTokenRow != value {
-                myTokenRow = value
-                persistMyTokenRow(value)
-            }
+            applyMyTokenRowOutcome(TokenRowDisplayRule.outcomeForMyRow(
+                entries: rows.toTokenBoardEntries(), userID: userID, month: month, fetchedAt: now
+            ))
         } catch {
             // 실패는 조용히. **myTokenRow 를 비우지 않는다** — 빈 값으로 밀면 공유 Codex 계정 사용자의 팝오버가
             // 부푼 로컬값으로 되돌아간다(순위판이 실패를 다루는 규약과 같다). 사용자에게 실패 문구는 띄우지 않는다.
+        }
+    }
+
+    /// 규칙이 내린 판정을 상태·디스크에 집행한다. **무엇을 할지는 여기서 정하지 않는다**(TokenRowDisplayRule.outcomeForMyRow) —
+    /// '행 없음 vs 조회 실패'가 스토어의 do/catch 사이에 흩어져 있으면 네트워크를 세우지 않고는 한 글자도 확인할 수 없다.
+    /// `catch` 는 이 함수를 **부르지 않는다**: 그게 곧 "실패는 들고 있던 값을 지킨다"는 계약이다.
+    func applyMyTokenRowOutcome(_ outcome: MyTokenRowOutcome) {
+        switch outcome {
+        case .adopt(let value):
+            guard myTokenRow != value else { return }
+            myTokenRow = value
+            persistMyTokenRow(value)
+        case .clear:
+            // 서버가 응답했는데 내 행이 없다 = 그 숫자는 서버에 더 이상 없다(수집 끔 → purge).
+            // 안 비우면 팝오버가 서버에 없는 숫자를 그리고, 같은 화면의 잔디는 비어 있어 한 화면이 두 사실을 말한다.
+            if myTokenRow != nil { myTokenRow = nil }
+            defaults.removeObject(forKey: WorkTimerStore.myTokenRowKey)
+        case .keep:
+            break
         }
     }
 

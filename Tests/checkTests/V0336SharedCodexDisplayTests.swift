@@ -402,47 +402,79 @@ private func scdRenderPNG(_ view: some View) throws -> Data {
 
 private enum ScdRenderError: Error { case failed }
 
+/// 로컬 산식만으로 정확히 `total` 을 그리는 '거울' 스토어. Claude 한 항에 전부 몰면
+/// `displayTotal(account: nil)` = claudeTotal + 0 + 0 = total 이라, 서버 행이 그려야 할 숫자와 **같은 글자**가 나온다.
+@MainActor
+private func scdMirrorStore(total: Int) throws -> TokenUsageStore {
+    var usage = TokenUsageMonthly(month: TokenUsageMonthKey.current())
+    usage.claudeInput = total
+    return try scdTokenStore(usage)
+}
+
 /// 값이 **픽셀까지** 서버 행으로 바뀌는가. 규칙만 고치고 뷰 인자를 안 넘기면 단위 테스트는 전부 초록인 채
 /// 화면만 옛 숫자를 그린다(이 저장소의 '클라 게이트는 짝으로 있다') — 그 사고를 그림으로 잡는다.
+///
+/// ── **지운 단언과 그 이유**(2026-09-22) ──────────────────────────────────────────────
+/// 예전 주 단언은 `local != viaServer`("서버 행을 넘겼는데 그림이 그대로다")였는데, **수리를 끈 사본에서도
+/// 통과했다**(18,789B vs 18,786B). 못 잡는 단언은 없느니만 못해서 지웠다. 무엇이 대신 그 회귀를 잡는가는
+/// 아래 ①②③ 이다 — 부등호가 아니라 **등호**로 잡는다.
+///
+/// ── **ImageRenderer 출력의 실제 불안정 폭**(같은 날, 이 맥에서 직접 측정) ─────────────
+///  · 프로세스의 첫 렌더들이 뒤따르는 렌더와 다르다. 같은 뷰 12회 연속 = PNG 18,789 · 18,789 · 18,786 …
+///    raw RGBA 332,880B 중 **2,719B(0.8%)** 가 다르다.
+///  · 서로 다른 내용을 섞으면 정착이 더 늦다(빈 행 3회 워밍업 뒤에도 4~6번째 렌더에서 18,561 → 18,485 로 한 번 더 움직였다).
+///  · **여섯 뷰를 전부 한 번 그려 본 뒤로는 완전히 결정적이다**: 같은 6장을 10회전 반복해 바이트가 한 번도 안 흔들렸다.
+///  · 값이 실제로 바뀌었을 때의 차이는 4,352B(1.3%)다.
+/// 노이즈 2,719 와 신호 4,352 는 허용오차로 가르기엔 너무 가깝다. 그래서 **버리는 1회전(dry pass)** 을 먼저 돌리고
+/// 그 뒤의 그림만 정확 비교한다(허용오차 없음).
 @MainActor
 @Test
-func v0336ServerRowActuallyChangesThePixels() throws {
+func v0336ServerRowIsTheNumberTheRowActuallyDraws() throws {
     let entry = try #require(scdDecodeBoard(scdSharedBoardJSON).toTokenBoardEntries().first)
-    let server = try #require(TokenRowServerValue(entry: entry, month: scdMonth, fetchedAt: scdNow))
+    let month = TokenUsageMonthKey.current()
+    let server = try #require(TokenRowServerValue(entry: entry, month: month, fetchedAt: scdNow))
     // 스냅샷의 달을 '지금'에 맞춘다 — 행은 currentMonth 로 판정한다.
     var usage = scdSharedLocal().0
-    usage.month = TokenUsageMonthKey.current()
-    let store = try scdTokenStore(usage)
+    usage.month = month
+    let bloated = try scdTokenStore(usage)                      // 수리 전 팝오버가 그리던 로컬 산식
+    let mirror = try scdMirrorStore(total: entry.total)         // 서버 total 을 로컬만으로 그린 기준 그림
+    let emptyStore = try scdTokenStore(TokenUsageMonthly(month: month))
+    let emptyMirror = try scdMirrorStore(total: entry.total)
 
-    // 같은 내용은 같은 그림이다(아래 부등호가 렌더 흔들림이 아님을 먼저 못 박는다).
-    let local = try scdRenderPNG(CheckTokenUsageRow(store: store))
-    #expect(local == (try scdRenderPNG(CheckTokenUsageRow(store: store))), "같은 내용인데 그림이 흔들린다")
+    @MainActor
+    func renderAll() throws -> (withServer: Data, mirror: Data, local: Data,
+                                emptyLocal: Data, emptyWithServer: Data, emptyMirror: Data) {
+        (
+            try scdRenderPNG(CheckTokenUsageRow(store: bloated, serverRow: server, userID: scdSharedUserID)),
+            try scdRenderPNG(CheckTokenUsageRow(store: mirror)),
+            try scdRenderPNG(CheckTokenUsageRow(store: bloated)),
+            try scdRenderPNG(CheckTokenUsageRow(store: emptyStore, onOpenBoard: {})),
+            try scdRenderPNG(CheckTokenUsageRow(store: emptyStore, serverRow: server,
+                                                userID: scdSharedUserID, onOpenBoard: {})),
+            try scdRenderPNG(CheckTokenUsageRow(store: emptyMirror, onOpenBoard: {}))
+        )
+    }
+    _ = try renderAll()                                          // 버리는 1회전(위 측정의 정착 지점)
+    let shot = try renderAll()
 
-    let viaServer = try scdRenderPNG(CheckTokenUsageRow(
-        store: store,
-        serverRow: TokenRowServerValue(entry: entry, month: TokenUsageMonthKey.current(), fetchedAt: scdNow),
-        userID: scdSharedUserID
-    ))
-    #expect(local != viaServer, "서버 행을 넘겼는데 그림이 그대로다 — 뷰가 그 값을 안 읽는다")
+    // ① 두 기준선이 **실제로 다르다**. 이 줄이 없으면 ② 의 등호가 동어반복인지 알 수 없다
+    //    (메모리 '비교 기준선이 달라야 한다').
+    #expect(shot.local != shot.mirror, "부푼 로컬과 서버 total 이 같은 그림이면 이 테스트는 아무것도 못 잡는다")
+    // ② 수리: 서버 행을 넘긴 그림이 '서버 total 을 그린 그림'과 **바이트 동일**이다.
+    //    뷰가 serverRow 를 안 읽거나 규칙의 서버 분기가 죽으면 이 등호가 곧바로 깨진다.
+    #expect(shot.withServer == shot.mirror, "뷰가 서버 행의 숫자를 안 그린다 — 화면은 여전히 분배 전 값이다")
+    // ③ 렌더 게이트도 값과 **같은 판정**에서 나온다: 로컬 0 + 서버 행이면 행이 사라지지 않고(순위판 진입 행이 아니고),
+    //    그 그림은 '로컬만으로 같은 숫자를 그린 행'과 바이트 동일이다.
+    #expect(shot.emptyWithServer != shot.emptyLocal, "로컬 0 + 서버 행 있음에서 숫자 행이 안 떴다")
+    #expect(shot.emptyWithServer == shot.emptyMirror, "로컬 0 + 서버 행이 그린 숫자가 서버 total 이 아니다")
 
-    // 남의 행이면 규칙이 로컬 경로를 고른다(계정 전환 직후 한 프레임의 오염 방지).
-    // ※ 여기서 그림 **일치**로 재지 않는다: 다른 내용을 한 번 그린 뒤에는 같은 내용도 바이트가 흔들린다(실측) —
-    //   `.checkTooltip` 이 그리기 경로에 상태를 남기는 것으로 보인다. 일치 단언은 그래서 규칙 수준에서 한다.
+    // 남의 행이면 규칙이 로컬 경로를 고른다(계정 전환 직후 한 프레임의 오염 방지). 여기만 픽셀이 아니라 규칙으로 잰다 —
+    // 두 그림이 '같아야 한다'가 아니라 '출처가 달라야 한다'는 주장이라 그림으로는 표현되지 않는다(총합이 같을 수도 있다).
     #expect(TokenRowDisplayRule.resolve(
-        local: usage, account: nil,
-        server: TokenRowServerValue(entry: entry, month: TokenUsageMonthKey.current(), fetchedAt: scdNow),
-        userID: "00000000-0000-0000-0000-000000000000", currentMonth: TokenUsageMonthKey.current()
+        local: usage, account: nil, server: server,
+        userID: "00000000-0000-0000-0000-000000000000", currentMonth: month
     )?.isFromServer == false)
 
-    // 로컬이 0 이어도 서버 행이 있으면 행이 **사라지지 않는다**(렌더 게이트가 값과 같은 판정에서 나온다).
-    let emptyStore = try scdTokenStore(TokenUsageMonthly(month: TokenUsageMonthKey.current()))
-    let emptyLocal = try scdRenderPNG(CheckTokenUsageRow(store: emptyStore, onOpenBoard: {}))
-    let emptyWithServer = try scdRenderPNG(CheckTokenUsageRow(
-        store: emptyStore,
-        serverRow: TokenRowServerValue(entry: entry, month: TokenUsageMonthKey.current(), fetchedAt: scdNow),
-        userID: scdSharedUserID,
-        onOpenBoard: {}
-    ))
-    #expect(emptyWithServer != emptyLocal, "로컬 0 + 서버 행 있음에서 숫자 행이 안 떴다")
-    _ = server
+    // ※ 툴팁은 이 그림에 안 나온다(거울 스토어의 툴팁은 "Claude 2,844,663,420" 으로 서버 행과 다른데 바이트가 같다).
+    //   툴팁 일치는 위 ⓐ 테스트가 규칙 수준에서 글자 그대로 못 박는다.
 }

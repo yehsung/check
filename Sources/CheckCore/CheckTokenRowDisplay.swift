@@ -88,6 +88,21 @@ package struct TokenRowDisplay: Equatable, Sendable {
     }
 }
 
+/// 보드 응답 한 번이 스토어의 `myTokenRow` 에 시키는 일. 세 갈래뿐이고, 그 판정은
+/// `TokenRowDisplayRule.outcomeForMyRow` 만이 한다.
+///
+/// **`.keep` 이 있는 이유**: 네트워크·서버 실패로 응답을 못 받은 것과, 응답은 받았는데 내 행이 없는 것은
+/// 정반대의 사실이다. 전자를 비움으로 읽으면 비행기 모드에서 팝오버 숫자가 로컬값으로 튀고, 후자를 유지로 읽으면
+/// 서버가 지운 숫자가 화면에 남는다. 스토어의 `catch` 는 이 열거값을 **아예 만들지 않는다**(= 유지).
+package enum MyTokenRowOutcome: Equatable, Sendable {
+    /// 서버가 내 행을 줬다 — 이 값으로 갈아끼우고 디스크에도 남긴다.
+    case adopt(TokenRowServerValue)
+    /// 서버는 응답했는데 **내 행이 없다** — 값·영속본을 비우고 로컬 산식으로 되돌아간다.
+    case clear
+    /// 지금은 판단하지 않는다 — 들고 있던 값을 그대로 둔다.
+    case keep
+}
+
 /// 팝오버 토큰 행이 **무엇을 그릴지** 정하는 단 하나의 규칙.
 package enum TokenRowDisplayRule {
     /// 값·툴팁·렌더 게이트가 전부 여기 하나에서 나온다. nil = 그릴 것이 없다(뷰는 순위판 진입 행 또는 EmptyView).
@@ -152,6 +167,30 @@ package enum TokenRowDisplayRule {
               let whole = account?.monthTotal(currentMonth), whole > 0
         else { return 1.0 }
         return min(1.0, max(0.0, Double(share) / Double(whole)))
+    }
+
+    /// 보드 응답 **한 번**이 들고 있던 내 행에 무슨 일을 해야 하는가. 스토어는 이 판정을 그대로 집행만 한다
+    /// (`WorkTimerStoreSync.applyMyTokenRowOutcome`) — '행 없음'과 '조회 실패'를 가르는 규칙이 스토어의 do/catch
+    /// 사이에 흩어져 있으면 테스트가 네트워크를 세우지 않고는 한 글자도 확인할 수 없다.
+    ///
+    /// **왜 `.clear` 가 필요한가**(2026-09-22): 토큰 수집을 끈 사람의 행은 서버가 purge 한다. 그때 보드 응답은
+    /// 정상인데 내 행만 없고, 지금 코드는 조용한 no-op 이라 팝오버가 **서버에 더 이상 없는 숫자**를 계속 그렸다
+    /// (같은 화면의 잔디는 비어 있어 한 화면이 두 사실을 말한다). 해당자는 2026-09 기준 1명이다.
+    ///
+    /// 낡음 시한(오프라인 N시간 경과 같은 것)은 **넣지 않는다**(2026-09-22 사용자 결정) — 여기 분기는 셋뿐이다.
+    package static func outcomeForMyRow(
+        entries: [TokenBoardEntry],
+        userID: String,
+        month: String,
+        fetchedAt: Date
+    ) -> MyTokenRowOutcome {
+        // 서버가 응답했는데 내 행이 없다 = 그 숫자는 서버에 더 이상 없다. 비우고 로컬 산식으로 되돌아간다.
+        guard let mine = entries.first(where: { $0.userID == userID }) else { return .clear }
+        // 내 행은 왔는데 값을 만들 수 없다 = 구버전 RPC(`codex_effective` 없음)로 떨어진 서버다.
+        // 이건 '행이 사라졌다'가 아니라 '이 서버가 답을 못 한다'이므로 **들고 있던 값을 지키는 쪽**이다 —
+        // 비우면 공유 Codex 계정 사용자의 팝오버가 곧바로 분배 전 로컬값으로 돌아간다(이 릴리스가 고친 그 화면).
+        guard let value = TokenRowServerValue(entry: mine, month: month, fetchedAt: fetchedAt) else { return .keep }
+        return .adopt(value)
     }
 
     /// 계정 버킷 하나를 비율로 줄인다. 서버의 `round(... * share_ratio)`(20260917160000:723) 과 같은 반올림.

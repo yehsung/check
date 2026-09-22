@@ -163,10 +163,28 @@ package enum TokenRowDisplayRule {
         account: CodexAccountUsage?,
         currentMonth: String
     ) -> Double {
-        guard let server, server.month == currentMonth, let share = server.codexAccountShare,
-              let whole = account?.monthTotal(currentMonth), whole > 0
-        else { return 1.0 }
-        return min(1.0, max(0.0, Double(share) / Double(whole)))
+        guard let server, server.month == currentMonth else { return 1.0 }
+        return accountShareRatio(share: server.codexAccountShare, bucketSum: account?.monthTotal(currentMonth) ?? 0)
+    }
+
+    /// 같은 나눗셈의 **관측 분모 판**(v0.3.36 — 폰). 위 맥 판이 이 함수로 위임하므로 클램프·가드가 한 곳에만 있다.
+    /// 라벨이 달라(`share:bucketSum:` vs `server:account:currentMonth:`) 호출 모호성은 없다.
+    ///
+    /// 폰이 이 판을 쓰는 이유: 폰에는 로컬 스캐너가 없어 맥의 분모(이 맥의 계정 월합)를 만들 수 없고, 관측 가능한 분모가
+    /// 서버 일별 계정 버킷의 그 달 합(`TokenDailyMerge.accountBucketSum`)뿐이다. 분자는 맥과 같은 값
+    /// (보드 14번 칸 `codex_account_month` = 이미 나눈 내 몫).
+    ///
+    /// · `share == nil` → 1.0(옛 표가 이긴 행·미로그인 기기). **`share == 0` 은 nil 과 다르다** — fork_safe 로컬이 0 인
+    ///   그룹원의 진짜 몫 0 이므로 비율 0 으로 간다(순위판 숫자와 같은 결론). nil 로 접어 1.0 으로 올리면 그 사람 잔디에
+    ///   계정 전체가 그려진다.
+    /// · `bucketSum <= 0` → 1.0(0 나눗셈 가드. 분모가 0 이면 곱할 버킷도 없어 산술적으로 무변화다).
+    /// · **상한 1.0 클램프**: 분자는 그룹에서 가장 최신인 남의 스냅샷에서 나오고 분모는 내가 관측한 버킷이라, 늦게 읽은
+    ///   쪽이 크면 몫이 분모를 넘는다(2026-09-22 실측 '수 빈' 1.74). 클램프가 "관측한 적 없는 사용량을 잔디에 그리지
+    ///   않는다"를 지키고, 덤으로 분모가 모자란 모든 실패가 비율 ≥ 1 → 클램프 → 오늘 동작으로 **안전 착지**한다
+    ///   (잘못 줄이는 쪽으로는 넘어지지 않는다).
+    package static func accountShareRatio(share: Int?, bucketSum: Int) -> Double {
+        guard let share, bucketSum > 0 else { return 1.0 }
+        return min(1.0, max(0.0, Double(share) / Double(bucketSum)))
     }
 
     /// 보드 응답 **한 번**이 들고 있던 내 행에 무슨 일을 해야 하는가. 스토어는 이 판정을 그대로 집행만 한다

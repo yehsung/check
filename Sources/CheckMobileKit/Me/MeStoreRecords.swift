@@ -58,6 +58,14 @@ extension MeStore {
                 guard generation == context.generation, isCurrent("records", serial) else { return }
             }
 
+            // 공유 Codex 계정 비율(v0.3.36). 폰 잔디의 Codex 칸은 서버 **계정 버킷**에서 나오는데 그 버킷은
+            // **그룹 전체의 하루 사용량**이라, 비율을 안 곱하면 공유 계정 사용자에게 '계정의 잔디'가 그려진다.
+            // 저장본 복구를 먼저 한다 — 첫 프레임에 부푼 잔디가 떴다가 내려앉지 않게(맥 myTokenRow 영속과 같은 이유).
+            if tokenShareRatio == nil { tokenShareRatio = storedTokenShareRatio() }
+            await refreshTokenShareRatio(tokenRows: tokenRows, collects: collects, now: now,
+                                         generation: generation, serial: serial)
+            guard generation == context.generation, isCurrent("records", serial) else { return }
+
             // 진행 중인 내 세션(맥에서 근무 중)의 시작 시각. **신호가 신선할 때만** 얹는다 — 끊긴 세션(맥 뚜껑을 닫음)을 now 까지
             // 세면 부풀린다(세는 쪽보다 덜 세는 쪽이 안전하다). 팀이 없으면 진행 중 세션도 없다.
             var ongoingStart: Date?
@@ -72,8 +80,10 @@ extension MeStore {
             }
 
             let previousTokenGrid = tokenGrid
+            // 비율은 **메인 액터에서 값으로 캡처**해 넘긴다 — detached 안에서 스토어를 읽지 않는다(맥과 같은 계약).
             let input = MeRecordsInput(rows: rows, tokenRows: tokenRows, collects: collects, now: now, goalSeconds: goalSeconds,
-                                       ongoingStart: ongoingStart, previousTokenGrid: previousTokenGrid)
+                                       ongoingStart: ongoingStart, previousTokenGrid: previousTokenGrid,
+                                       accountShareRatio: tokenShareRatio ?? 1.0)
             // 세션이 많은 계정(수천 행)에서 메인 액터를 막지 않게 계산은 밖에서(맥 performLoadInsights 와 같은 이유).
             let output = await Task.detached(priority: .userInitiated) { MeRecordsOutput(input) }.value
             guard generation == context.generation, isCurrent("records", serial) else { return }
@@ -91,6 +101,80 @@ extension MeStore {
             if AuthErrorRules.classify(error) == .cancelled { return }
             recordsState.hasFailed = true
         }
+    }
+
+    /// 보드에서 공유 Codex 계정 비율을 한 번 읽어 `tokenShareRatio` 를 갱신한다(v0.3.36).
+    ///
+    /// **아무것도 비우지 않는다**: 어떤 갈래에서도 `tokenGrid` 를 비우거나 `recordsState.hasFailed` 를 세우지 않는다.
+    /// 잔디는 두 격자(근무·토큰)가 phase 하나와 [다시 시도] 하나를 공유해서, 여기서 실패를 세우면 근무 잔디까지
+    /// 사라지고 '수집을 끈 사람'과 구분되지 않는다.
+    ///
+    /// 게이트(하나라도 걸리면 **왕복 0건**):
+    ///  1. 수집 꺼짐 → 잔디가 `.empty` 라 비율이 쓰일 자리가 없다. (맥은 수집 거부자에게도 이 RPC 를 막지 않는데,
+    ///     그건 맥 팝오버가 이 보드의 **소비자**라서다 — 폰은 잔디 말고 이 값을 쓰는 곳이 없다. 이유가 다르다.)
+    ///  2. 일별 조회 실패 → 그 경로의 잔디는 `previousTokenGrid` overlay 라 새 비율이 들어갈 자리가 없다.
+    ///  3. **이번 달** 계정 버킷 합이 0 → 분모가 0 이면 비율이 어차피 1.0 이다. Codex 계정이 없는 사람은 이 무거운
+    ///     보드 RPC 를 **한 번도 안 쏜다**.
+    ///  4. 300초 스로틀 → 캐시 값을 그대로 쓴다(맥 `loadMyTokenRowIfDue` 와 같은 간격).
+    func refreshTokenShareRatio(
+        tokenRows: [TokenUsageDailyRow]?, collects: Bool, now: Date, generation: Int, serial: Int
+    ) async {
+        guard collects, let tokenRows else { return }
+        // 달은 이 호출의 시계로 뽑는다 — 분자(보드 p_month)와 분모(버킷 접두어)가 같은 순간의 같은 키여야 한다.
+        let month = TokenUsageMonthKey.current(now)
+        let bucketSum = TokenDailyMerge.accountBucketSum(tokenRows, month: month)
+        guard bucketSum > 0 else { return }
+        if let last = lastTokenBoardFetchAt, now.timeIntervalSince(last) < 300 { return }
+        // 먼저 찍어 재진입·난사를 막는다(맥 업로드 스탬프와 같은 관용구).
+        lastTokenBoardFetchAt = now
+        let service = context.service
+        let result = await attempt { session in
+            try await service.fetchTokenBoard(accessToken: session.accessToken, month: month)
+        }
+        guard generation == context.generation, isCurrent("records", serial) else { return }
+        let rows: [TokenBoardRow]
+        switch result {
+        case .success(let value):
+            rows = value
+        case .failure(let error):
+            // 취소는 실패가 아니다 — [당겨서 새로고침] 중에 탭을 떠나는 흔한 동작이 300초 동안 잠기지 않게 도장을 지운다.
+            // (`try?` 로 접으면 이 둘을 영원히 못 가른다 — `attempt` 가 `Result` 를 주는 이유.)
+            if AuthErrorRules.classify(error) == .cancelled { lastTokenBoardFetchAt = nil }
+            // 네트워크·5xx: 조용히 캐시를 지킨다(맥 catch 규약 — "실패는 조용히, 들고 있던 값을 비우지 않는다").
+            return
+        }
+        // 응답이 오는 사이 월말 자정을 넘겼으면 다른 달의 비율이다. 세대·순번 가드가 못 잡는 경로다(맥과 같은 재확인).
+        guard month == TokenUsageMonthKey.current(context.clock.now()) else {
+            lastTokenBoardFetchAt = nil
+            return
+        }
+        guard let userID = context.session.userID,
+              let mine = rows.toTokenBoardEntries().first(where: { $0.userID == userID })
+        else { return }   // 내 행 없음 → 캐시 유지(월·일별은 같은 업로드 주기라 드문 어긋남이다).
+        // ★ 이 가드를 통과해야만 `codexAccountShare` 를 쓴다. 옛 RPC(codex_effective 없음)면 엔트리의 값이
+        //   폐기된 `max(로컬, 계정)` 증폭기라, 그걸로 비율을 만들면 잔디를 되부풀린다 → 캐시 유지.
+        guard let server = TokenRowServerValue(entry: mine, month: month, fetchedAt: now) else { return }
+        // share == nil(미로그인 기기·옛 표가 이긴 행)이면 캐시 유지 — 1.0 으로 덮으면 잔디만 계정 전체로 부푼다.
+        // share == 0 은 nil 과 **다르다**(진짜 몫 0) → 비율 0 으로 간다.
+        guard server.codexAccountShare != nil else { return }
+        let ratio = TokenRowDisplayRule.accountShareRatio(share: server.codexAccountShare, bucketSum: bucketSum)
+        tokenShareRatio = ratio
+        persistTokenShareRatio(ratio)
+    }
+
+    /// 계정별 키(같은 폰에서 계정을 바꿔도 앞 사람의 비율을 물려받지 않게 — `feedbackReplySeenKey` 와 같은 관용구).
+    var tokenShareRatioKey: String? {
+        context.session.userID.map { "aing.me.codexShareRatio.\($0)" }
+    }
+
+    func storedTokenShareRatio() -> Double? {
+        guard let key = tokenShareRatioKey else { return nil }
+        return context.storage.defaults.object(forKey: key) as? Double
+    }
+
+    func persistTokenShareRatio(_ ratio: Double) {
+        guard let key = tokenShareRatioKey else { return }
+        context.storage.defaults.set(ratio, forKey: key)
     }
 
     /// 화면에 그릴 회고 — 목표선은 **지금** 팀 목표를 따른다(맥 `reconcileInsightsGoal`: 목표가 계산 뒤에 확정·변경돼도 회고가 옛 목표에 굳지 않게).
@@ -131,6 +215,8 @@ struct MeRecordsInput: @unchecked Sendable {
     let goalSeconds: Int
     let ongoingStart: Date?
     let previousTokenGrid: TokenDailyGrid
+    /// 서버 **계정 버킷**에만 곱하는 공유 Codex 계정 비율(v0.3.36). 1.0 이면 항등 = 이 수리 전과 한 칸도 다르지 않다.
+    let accountShareRatio: Double
 }
 
 struct MeRecordsOutput: @unchecked Sendable {
@@ -143,7 +229,8 @@ struct MeRecordsOutput: @unchecked Sendable {
             tokenGrid = .empty
         } else if let tokenRows = input.tokenRows {
             // 폰에는 로컬 스캐너가 없다 — 서버 일별 합만(맥 TokenDailyMerge 의 local 몫은 빈 맵).
-            tokenGrid = TokenDailyGrid.build(daily: TokenDailyMerge.merged(server: TokenDailyMerge.serverTotals(tokenRows), local: [:]), now: input.now)
+            // 공유 Codex 계정 비율은 **계정 버킷에만** 곱한다(맥 WorkTimerStoreInsights 와 같은 자리·같은 규칙).
+            tokenGrid = TokenDailyGrid.build(daily: TokenDailyMerge.merged(server: TokenDailyMerge.serverTotals(tokenRows, accountShareRatio: input.accountShareRatio), local: [:]), now: input.now)
         } else {
             // 서버 조회 실패: 직전 잔디를 물려준다(주가 바뀌었으면 loadRecords 가 이미 비웠다).
             tokenGrid = TokenDailyGrid.build(daily: [:], now: input.now).overlaying(input.previousTokenGrid)

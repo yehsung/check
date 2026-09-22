@@ -55,6 +55,19 @@ package final class MeStore {
     package internal(set) var recordsState = MeLoadState()
     @ObservationIgnored package internal(set) var recordsWeekKey: String?
 
+    // MARK: 기록 — 공유 Codex 계정 비율(v0.3.36)
+    /// 서버 일별 **계정 버킷**을 내 몫으로 줄이는 비율. nil = 아직 한 번도 못 쟀다(= 1.0, 이 수리 전 동작).
+    ///
+    /// 왜 폰에 이 값이 필요한가: 폰 잔디의 Codex 칸은 서버 계정 버킷에서 나오는데, 그 버킷은 **그룹 전체의 하루
+    /// 사용량**이다. 비율을 안 곱하면 공유 그룹 11명의 잔디가 '계정의 잔디'가 된다(2026-09-22 실측 오차 1.05~19.15배).
+    /// 맥은 `WorkTimerStoreInsights` 가 같은 비율을 이미 곱하고 있었고, 폰에만 빠져 있었다.
+    ///
+    /// 실패·취소·옛 RPC 에서는 **이 값을 지키는 것**이 답이다(맥 `MyTokenRowOutcome.keep` 과 같은 규약) —
+    /// 1.0 으로 되돌리면 정확히 그리던 공유 사용자의 잔디가 실패 한 번에 최대 19배로 되부푼다.
+    @ObservationIgnored package internal(set) var tokenShareRatio: Double?
+    /// 마지막 보드 조회 시각(300초 스로틀 — 맥 `loadMyTokenRowIfDue` 와 같은 성격). 영속하지 않는다.
+    @ObservationIgnored package internal(set) var lastTokenBoardFetchAt: Date?
+
     // MARK: 캐릭터 · 상점
     package internal(set) var shopCharacters: [ShopCharacterRow] = []
     package internal(set) var ownedCharacterIDs: Set<String> = [MeCharacterCards.aingID]
@@ -161,6 +174,10 @@ package final class MeStore {
         showsTokenGrid = true
         recordsState = MeLoadState()
         recordsWeekKey = nil
+        // 계정에 묶인 값이다 — 안 비우면 계정을 바꾼 뒤 **앞 사람의 비율로 내 잔디가 깎인다**(부풀리는 것과 달리
+        // 아무 경고 없이 어두워져 더 안 보인다). defaults 키는 계정별이라 저장본은 그대로 둬도 안전하다.
+        tokenShareRatio = nil
+        lastTokenBoardFetchAt = nil
         shopCharacters = []
         ownedCharacterIDs = [MeCharacterCards.aingID]
         shopState = MeLoadState()

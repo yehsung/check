@@ -482,3 +482,188 @@ func v0336ServerRowIsTheNumberTheRowActuallyDraws() throws {
     // ※ 툴팁은 이 그림에 안 나온다(거울 스토어의 툴팁은 "Claude 2,844,663,420" 으로 서버 행과 다른데 바이트가 같다).
     //   툴팁 일치는 위 ⓐ 테스트가 규칙 수준에서 글자 그대로 못 박는다.
 }
+
+// MARK: - ⓗ 폰 [나] 탭 잔디: 관측 분모로 만드는 공유 비율 (v0.3.36)
+//
+// 결함: 폰은 `TokenDailyMerge.serverTotals` 를 **비율 인자 없이** 불러(`MeStoreRecords`) 계정 버킷
+// (= 공유 그룹 전체의 하루 사용량)을 그대로 '내 잔디'로 그렸다. 맥은 같은 함수를 `WorkTimerStoreInsights` 에서
+// 비율과 함께 부른다 — **폰에만 빠져 있었다**. 2026-09-22 조사 기준 공유 그룹 11명의 오차는 1.05~19.15배
+// (맥주밤거리엠버서더 19.15 · 아 4.80 · 김공룡 3.61 · ㅂ보예성 3.40 · 수 빈 2.72 …).
+//
+// 폰은 맥과 **분모가 다르다**: 폰에는 로컬 스캐너가 없어 `CodexAccountUsage` 자체가 만들어지지 않는다.
+// 그래서 분모를 서버 일별 계정 버킷의 그 달 합(`TokenDailyMerge.accountBucketSum`)으로 만들고,
+// 분자는 맥과 같은 값(보드 14번 칸 `codex_account_month` = 이미 나눈 내 몫)을 쓴다.
+
+private func scdPhoneRow(
+    _ day: String, _ device: String, claude: Int = 0, codex: Int = 0, account: Int? = nil
+) -> TokenUsageDailyRow {
+    TokenUsageDailyRow(day: day, deviceId: device, claudeTotal: claude, codexTotal: codex,
+                       codexAccount: account, codexUtcTotal: codex)
+}
+
+@Test
+func v0336PhoneAccountBucketSumIsMaxPerDayWithinOneMonth() {
+    let rows = [
+        // 같은 날 기기 두 대. 둘 다 같은 계정을 읽지만 스냅샷 시각이 달라 값이 어긋난다 → **max**(더하면 기기 수만큼 뻥튀기).
+        scdPhoneRow("2026-09-10", "MAC-A", claude: 5_000, codex: 100, account: 1_000),
+        scdPhoneRow("2026-09-10", "MAC-B", claude: 7_000, codex: 200, account: 600),
+        scdPhoneRow("2026-09-11", "MAC-A", codex: 300, account: 400),
+        scdPhoneRow("2026-09-12", "MAC-A", codex: 700, account: nil),   // 버킷 미보고 — 안 센다("0" 과 다르다)
+        scdPhoneRow("2026-08-31", "MAC-A", codex: 50, account: 9_999),  // 다른 달 — 빠진다
+    ]
+    #expect(TokenDailyMerge.accountBucketSum(rows, month: "2026-09") == 1_400, "기기 간 sum(2,000) 으로 셌다")
+    #expect(TokenDailyMerge.accountBucketSum(rows, month: "2026-08") == 9_999)
+    #expect(TokenDailyMerge.accountBucketSum(rows, month: "2026-07") == 0)
+    #expect(TokenDailyMerge.accountBucketSum([], month: "2026-09") == 0)
+    // 계정 버킷이 하나도 없으면 0 — Codex 계정이 없는 사람은 여기서 게이트에 걸려 보드 RPC 를 한 번도 안 쏜다.
+    #expect(TokenDailyMerge.accountBucketSum([scdPhoneRow("2026-09-10", "MAC-A", codex: 700)], month: "2026-09") == 0)
+    // 접두어에 '-' 를 붙이는 이유: '2026-0' 이 '2026-09-10' 에 걸리면 안 된다.
+    #expect(TokenDailyMerge.accountBucketSum(rows, month: "2026-0") == 0)
+    // Claude 는 분모에 끼지 않는다(비율은 계정 버킷에만 곱한다).
+    #expect(TokenDailyMerge.accountBucketSum(
+        [scdPhoneRow("2026-09-10", "MAC-A", claude: 999_999, account: 10)], month: "2026-09") == 10)
+}
+
+@Test
+func v0336PhoneBucketSumAndServerTotalsShareTheSameFold() {
+    // 계정 날의 로컬을 0 으로 둬 계정 버킷만 잔디에 남게 한다(마지막 버킷 날도 max(줄인 버킷, 0) = 줄인 버킷).
+    let days = ["2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05"]
+    var rows: [TokenUsageDailyRow] = []
+    for (index, day) in days.enumerated() {
+        let bucket = 1_000 + index * 337
+        rows.append(scdPhoneRow(day, "MAC-A", account: bucket))
+        rows.append(scdPhoneRow(day, "MAC-B", account: bucket - 11))   // 뒤처진 기기 — max 가 이긴다
+    }
+    rows.append(scdPhoneRow("2026-09-06", "MAC-A", claude: 12_345, codex: 6_789))   // 계정 없는 꼬리
+    let bucketSum = TokenDailyMerge.accountBucketSum(rows, month: "2026-09")
+    #expect(bucketSum == days.indices.reduce(0) { $0 + 1_000 + $1 * 337 })
+
+    let ratio = 0.375
+    let full = TokenDailyMerge.serverTotals(rows)
+    let scaled = TokenDailyMerge.serverTotals(rows, accountShareRatio: ratio)
+    let drop = days.reduce(0) { $0 + (full[$1] ?? 0) - (scaled[$1] ?? 0) }
+    // 줄어든 총량 == 분모 × (1 − 비율). 분모를 **다른 루프**로 만들면(예: 기기 간 sum) 여기서 곧바로 어긋난다.
+    #expect(abs(Double(drop) - Double(bucketSum) * (1 - ratio)) <= Double(days.count) / 2,
+            "분모와 잔디가 같은 fold 를 안 쓴다: drop \(drop), 분모 \(bucketSum)")
+    // 계정이 없는 꼬리 날은 한 토큰도 안 줄었다(로컬은 이미 내 것이다).
+    #expect(full["2026-09-06"] == scaled["2026-09-06"])
+}
+
+@Test
+func v0336PhoneShareRatioFromObservedBucketSum() {
+    // share == nil → 1.0(옛 표가 이긴 행·미로그인 기기). **share == 0 은 nil 과 다르다** — 진짜 몫 0.
+    #expect(TokenRowDisplayRule.accountShareRatio(share: nil, bucketSum: 1_000) == 1.0)
+    #expect(TokenRowDisplayRule.accountShareRatio(share: 0, bucketSum: 1_000) == 0.0)
+    // 0 나눗셈 가드(분모가 0 이면 곱할 버킷도 없어 산술적으로 무변화다).
+    #expect(TokenRowDisplayRule.accountShareRatio(share: 250, bucketSum: 0) == 1.0)
+    #expect(TokenRowDisplayRule.accountShareRatio(share: 250, bucketSum: -5) == 1.0)
+    // 상한 클램프: 분자는 그룹에서 가장 최신인 남의 스냅샷, 분모는 내가 관측한 버킷이라 넘을 수 있다('수 빈' 1.74).
+    #expect(TokenRowDisplayRule.accountShareRatio(share: 1_500, bucketSum: 1_000) == 1.0)
+    #expect(TokenRowDisplayRule.accountShareRatio(share: -20, bucketSum: 1_000) == 0.0)
+    #expect(TokenRowDisplayRule.accountShareRatio(share: 250, bucketSum: 1_000) == 0.25)
+    #expect(abs(TokenRowDisplayRule.accountShareRatio(share: 1_191_490_526, bucketSum: 4_228_824_798)
+                - 1_191_490_526.0 / 4_228_824_798.0) < 1e-12)
+}
+
+/// 위임 **전** 맥 판의 본체를 글자 그대로 옮긴 기준선. 같은 함수로 좌우를 재면 동어반복이라
+/// (메모리 '비교 기준선이 달라야 한다') 기준선을 여기 따로 적는다.
+private func scdLegacyMacRatio(
+    server: TokenRowServerValue?, account: CodexAccountUsage?, currentMonth: String
+) -> Double {
+    guard let server, server.month == currentMonth, let share = server.codexAccountShare,
+          let whole = account?.monthTotal(currentMonth), whole > 0
+    else { return 1.0 }
+    return min(1.0, max(0.0, Double(share) / Double(whole)))
+}
+
+@Test
+func v0336PhoneMacRatioKeepsItsAnswersAfterDelegating() throws {
+    let base = try #require(scdDecodeBoard(scdSharedBoardJSON).toTokenBoardEntries().first)
+    func server(share: String) throws -> TokenRowServerValue {
+        let json = scdSharedBoardJSON.replacingOccurrences(
+            of: "\"codex_account_month\":1191490526", with: "\"codex_account_month\":\(share)")
+        let entry = try #require(scdDecodeBoard(json).toTokenBoardEntries().first)
+        return try #require(TokenRowServerValue(entry: entry, month: scdMonth, fetchedAt: scdNow))
+    }
+    let normal = try #require(TokenRowServerValue(entry: base, month: scdMonth, fetchedAt: scdNow))
+    let overflowing = try server(share: "9999999999")   // 몫 > 이 맥의 계정 월합(클램프)
+    let legacyWon = try server(share: "null")           // 몫 nil
+    let zeroShare = try server(share: "0")              // 몫 0
+    let account = scdSharedLocal().1
+    let emptyAccount = CodexAccountUsage(fetchedAt: scdNow, lifetimeTokens: nil, buckets: [:])
+
+    let cases: [(String, TokenRowServerValue?, CodexAccountUsage?, String)] = [
+        ("일반", normal, account, scdMonth),
+        ("클램프", overflowing, account, scdMonth),
+        ("몫 nil", legacyWon, account, scdMonth),
+        ("몫 0", zeroShare, account, scdMonth),
+        ("달 불일치", normal, account, "2026-08"),
+        ("account nil", normal, nil, scdMonth),
+        ("whole 0", normal, emptyAccount, scdMonth),
+        ("server nil", nil, account, scdMonth),
+    ]
+    for (label, s, a, month) in cases {
+        #expect(TokenRowDisplayRule.accountShareRatio(server: s, account: a, currentMonth: month)
+                == scdLegacyMacRatio(server: s, account: a, currentMonth: month), "위임이 '\(label)' 의 답을 바꿨다")
+    }
+    // 맥 호출부의 분모는 여전히 **이 맥의 계정 월합**이다(폰의 관측 분모와 다르다 — 두 판이 섞이지 않았는가).
+    #expect(TokenRowDisplayRule.accountShareRatio(server: normal, account: account, currentMonth: scdMonth)
+            == TokenRowDisplayRule.accountShareRatio(share: 1_191_490_526, bucketSum: 4_228_824_798))
+}
+
+@Test
+func v0336PhoneSoloUserGrassIsUnchangedToTheCell() {
+    // 비공유: 버킷을 올린 스냅샷이 하나뿐이고, 보드가 준 내 몫이 그 버킷 합과 **같다**(서버 SQL 의 구조적 결과 —
+    // group_key 가 null 인 사람은 `r.codex_account` 가 그대로 몫이 된다).
+    let rows = [
+        scdPhoneRow("2026-09-01", "MAC-A", claude: 3_000, codex: 120, account: 4_018_958_385),
+        scdPhoneRow("2026-09-21", "MAC-A", claude: 900, codex: 150_000_000, account: 209_866_413),
+        scdPhoneRow("2026-09-22", "MAC-A", claude: 10, codex: 77_000),   // 꼬리
+    ]
+    let bucketSum = TokenDailyMerge.accountBucketSum(rows, month: "2026-09")
+    #expect(bucketSum == 4_228_824_798)
+    let ratio = TokenRowDisplayRule.accountShareRatio(share: bucketSum, bucketSum: bucketSum)
+    #expect(ratio == 1.0, "비공유 비율이 1.0 이 아니면 그 사람 잔디가 이유 없이 어두워진다")
+    // 항등 — 수리 전후 잔디가 한 칸도 다르지 않다(fold 를 쪼갠 뒤에도).
+    #expect(TokenDailyMerge.serverTotals(rows, accountShareRatio: ratio) == TokenDailyMerge.serverTotals(rows))
+    #expect(TokenDailyMerge.serverTotals(rows) == TokenDailyMerge.serverTotals(rows, accountShareRatio: 1.0))
+    let now = Date(timeIntervalSince1970: 1_790_000_000)
+    #expect(TokenDailyGrid.build(daily: TokenDailyMerge.serverTotals(rows, accountShareRatio: ratio), now: now)
+            == TokenDailyGrid.build(daily: TokenDailyMerge.serverTotals(rows), now: now))
+}
+
+@Test
+func v0336PhoneSharedUserMonthGrassSumsToMyShare() {
+    // 마지막 버킷 날의 로컬이 '줄인 버킷' 보다 작은 모양(그래야 그 달 Codex 합이 정확히 내 몫이 된다).
+    let rows = [
+        scdPhoneRow("2026-09-01", "MAC-A", account: 4_018_958_385),
+        scdPhoneRow("2026-09-21", "MAC-A", codex: 10_000_000, account: 209_866_413),
+    ]
+    let share = 1_191_490_526
+    let bucketSum = TokenDailyMerge.accountBucketSum(rows, month: "2026-09")
+    let ratio = TokenRowDisplayRule.accountShareRatio(share: share, bucketSum: bucketSum)
+    #expect(ratio > 0 && ratio < 1)
+    let totals = TokenDailyMerge.serverTotals(rows, accountShareRatio: ratio)
+    let monthSum = totals.reduce(0) { $0 + ($1.key.hasPrefix("2026-09-") ? $1.value : 0) }
+    // Σround 의 반올림만큼만 어긋난다(날짜 수 / 2).
+    #expect(abs(monthSum - share) <= 1, "그 달 잔디 합 \(monthSum) 이 내 몫 \(share) 과 다르다")
+    // 수리 전(비율 없음)이었다면 계정 전체(= 그룹 전체)를 그렸다 — 두 기준선이 실제로 다르다.
+    let before = TokenDailyMerge.serverTotals(rows).reduce(0) { $0 + ($1.key.hasPrefix("2026-09-") ? $1.value : 0) }
+    #expect(before == bucketSum)
+    #expect(before > monthSum * 3, "기준선이 안 다르면 이 테스트는 아무것도 못 잡는다")
+}
+
+@Test
+func v0336PhoneLastBucketDayComesFromPreScaleKeys() {
+    // 마지막 버킷 날의 버킷이 아주 작으면(줄이면 0 으로 반올림) '축소 **후** 키'로 lastDay 를 뽑는 구현은
+    // 날짜가 하루 앞으로 밀린다 → 그 앞 칸이 통째로 '마지막 날 = max(버킷, 로컬)' 로 갈아타 잔디 모양이 바뀐다.
+    let rows = [
+        scdPhoneRow("2026-09-10", "MAC-A", codex: 900, account: 1_000),
+        scdPhoneRow("2026-09-11", "MAC-A", codex: 700, account: 1),
+    ]
+    let totals = TokenDailyMerge.serverTotals(rows, accountShareRatio: 0.27)
+    #expect(TokenRowDisplayRule.scaledAccountBucket(1, ratio: 0.27) == 0, "전제: 마지막 버킷이 0 으로 반올림된다")
+    // 09-10 은 여전히 '반영된 날' = 줄인 버킷 270(로컬 900 을 쓰지 않는다). lastDay 가 밀리면 900 이 된다.
+    #expect(totals["2026-09-10"] == 270, "마지막 버킷 날짜가 축소 뒤 키에서 나왔다")
+    #expect(totals["2026-09-11"] == 700)   // 마지막 버킷 날 = max(0, 로컬 700)
+}

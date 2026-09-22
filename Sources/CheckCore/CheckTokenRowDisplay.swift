@@ -163,10 +163,59 @@ package enum TokenRowDisplayRule {
         account: CodexAccountUsage?,
         currentMonth: String
     ) -> Double {
-        guard let server, server.month == currentMonth, let share = server.codexAccountShare,
-              let whole = account?.monthTotal(currentMonth), whole > 0
-        else { return 1.0 }
-        return min(1.0, max(0.0, Double(share) / Double(whole)))
+        guard let server, server.month == currentMonth else { return 1.0 }
+        return accountShareRatio(share: server.codexAccountShare, bucketSum: account?.monthTotal(currentMonth) ?? 0)
+    }
+
+    /// 같은 나눗셈의 **관측 분모 판**(v0.3.36 — 폰). 위 맥 판이 이 함수로 위임하므로 클램프·가드가 한 곳에만 있다.
+    /// 라벨이 달라(`share:bucketSum:` vs `server:account:currentMonth:`) 호출 모호성은 없다.
+    ///
+    /// 폰이 이 판을 쓰는 이유: 폰에는 로컬 스캐너가 없어 맥의 분모(이 맥의 계정 월합)를 만들 수 없고, 관측 가능한 분모가
+    /// 서버 일별 계정 버킷의 그 달 합(`TokenDailyMerge.accountBucketSum`)뿐이다. 분자는 맥과 같은 값
+    /// (보드 14번 칸 `codex_account_month` = 이미 나눈 내 몫).
+    ///
+    /// · `share == nil` → 1.0(옛 표가 이긴 행·미로그인 기기). **`share == 0` 은 nil 과 다르다** — fork_safe 로컬이 0 인
+    ///   그룹원의 진짜 몫 0 이므로 비율 0 으로 간다(순위판 숫자와 같은 결론). nil 로 접어 1.0 으로 올리면 그 사람 잔디에
+    ///   계정 전체가 그려진다.
+    /// · `bucketSum <= 0` → 1.0(0 나눗셈 가드. 분모가 0 이면 곱할 버킷도 없어 산술적으로 무변화다).
+    /// · **상한 1.0 클램프**: 분자는 그룹에서 가장 최신인 남의 스냅샷에서 나오고 분모는 내가 관측한 버킷이라, 늦게 읽은
+    ///   쪽이 크면 몫이 분모를 넘는다(2026-09-22 실측 '수 빈' 1.74). 클램프가 "관측한 적 없는 사용량을 잔디에 그리지
+    ///   않는다"를 지키고, 덤으로 분모가 모자란 모든 실패가 비율 ≥ 1 → 클램프 → 오늘 동작으로 **안전 착지**한다
+    ///   (잘못 줄이는 쪽으로는 넘어지지 않는다).
+    package static func accountShareRatio(share: Int?, bucketSum: Int) -> Double {
+        guard let share, bucketSum > 0 else { return 1.0 }
+        return min(1.0, max(0.0, Double(share) / Double(bucketSum)))
+    }
+
+    /// 폰이 새 달의 비율을 **아직 재지 않는** 유예 일수(KST 월초). `shareRatioMonthIsYoung` 만 읽는다.
+    ///
+    /// 3일인 이유: 서버의 그룹 지문도 **끝난 날**만 보고(`bnd.hi = today − 2`) 2일 이상 일치를 요구한다 —
+    /// 그 창이 열리기 전에는 그룹 판정 자체가 지난 달 지문에 기대고 있다. 더 늘리면 이 달에 처음 공유를 시작한
+    /// 사람이 부푼 잔디를 보는 기간이 그만큼 길어져, 두 손해가 만나는 자리로 골랐다.
+    package static let shareRatioGraceDays = 3
+
+    /// 지금이 **새 달의 지분비가 아직 표본이 아닌** 구간인가(KST 월초 `shareRatioGraceDays` 일). `now` 는 스토어 시계.
+    ///
+    /// 왜 필요한가 — **지분비는 월중에 0 부터 다시 쌓인다**(서버 SQL): 분자 `codex_account_month` 는
+    /// `round(그룹 계정 월합 × share_ratio)` 이고, 그 `share_ratio` 는 `codex_account_group()` 이 **그 달치 로컬만**
+    /// (`where d.month = p_month`, `local_safe = Σ(codex_input+codex_output) filter build ≥ 52`) 모아 나눈 값이다
+    /// (20260911230000:114-123·166-167). 반면 분모(일별 계정 버킷)는 그룹 **전체**의 사용이라 월초에도 곧바로 찬다.
+    /// 그래서 달의 첫 며칠에는 두 극단이 확실히 난다:
+    ///  · 그 달 Codex 를 아직 안 쓴 멤버 → share_ratio 0 → 비율 0 → 13주 잔디 **전체**(지난 달의 정확하던 칸까지)가
+    ///    로컬 꼬리만 남고 0 으로 내려앉는다(그 0 이 defaults 에 영속된다).
+    ///  · 그 달 맨 먼저 쓴 멤버 → share_ratio ≈ 1 → 몫 > 분모 → 클램프 1.0 → 잔디가 '계정 전체'(최대 19.15배)로 되부푼다.
+    /// 비율 하나를 13주 창에 거는 근사(`TokenDailyMerge.serverTotals` 머리 주석)는 그 하나가 **달을 대표**할 때만
+    /// 성립하는데, 월초 며칠의 지분비는 표본이 아니라 잡음이다. 이 구간에는 재지 않고(왕복도 안 쏜다) **직전에 잰 값**을
+    /// 그대로 쓴다 — 공유 *관계*는 상시적이라 직전 달 비율이 새 달 첫 며칠의 잡음보다 언제나 참에 가깝다.
+    /// 한 번도 못 쟀으면 1.0 = 이 수리 전 동작이다.
+    ///
+    /// 달을 못 읽으면 `false`(= 잰다) — 유예는 정확도를 위한 보정이지 안전 장치가 아니라, 모를 때는 종전 경로로 둔다.
+    ///
+    /// ⚠️ 이 유예는 **폰 전용**이다. 맥(`accountShareRatio(server:account:currentMonth:)`)도 같은 분자를 쓰니 같은
+    /// 월초 잡음을 타지만, 맥 호출부는 이 릴리스에서 한 글자도 건드리지 않는다(다른 세션이 그 파일을 쓴다).
+    package static func shareRatioMonthIsYoung(_ now: Date) -> Bool {
+        guard let day = TeamWeeklyGoal.kstCalendar.dateComponents([.day], from: now).day else { return false }
+        return day <= shareRatioGraceDays
     }
 
     /// 보드 응답 **한 번**이 들고 있던 내 행에 무슨 일을 해야 하는가. 스토어는 이 판정을 그대로 집행만 한다

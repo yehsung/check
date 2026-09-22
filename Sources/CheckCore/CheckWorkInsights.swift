@@ -461,17 +461,21 @@ package enum TokenDailyMerge {
     /// 공유 사용자의 '내 잔디'는 사실 **'계정의 잔디'** 였다 — 팝오버만 고치면 같은 화면에서 또 어긋난다.
     /// 곱하는 자리는 계정 버킷 하나뿐이고 **로컬 몫에는 곱하지 않는다**: 로컬은 이미 내 것이고, 서버도 꼬리에는
     /// share_ratio 가 아니라 과다계상 축소율 `tail_factor` 만 건다(20260912143000:490-500).
+    ///
+    /// **비율 하나를 조회 범위 전체(잔디 13주 ≈ 3~4개 달)에 건다 — 의도한 근사다.** 비율은 '이번 달' 보드 행
+    /// 하나에서 나오고, 지난 달치를 맞추려면 달마다 무거운 보드 RPC 를 더 쏴야 한다(무료 플랜) — 맥
+    /// `WorkTimerStoreInsights` 와 **같은 근사, 같은 이유**다. 여기를 '이번 달 버킷만 줄이게' 고치면 공유 사용자
+    /// 잔디의 앞 2~3개 달이 계정 전체로 되돌아간다(`v0336PhoneRatioReachesEveryMonthInTheWindow` 가 그 변형을 잡는다).
+    ///
+    /// 근사의 **정확한 한계**(v0.3.36 리뷰 2 — 예전 주석의 "공유 관계는 상시적이라 지난 달에도 대체로 같다"는
+    /// 절반만 맞다): 상시적인 것은 공유 *관계*이고, 이 비율이 재는 것은 *월중 누적 지분비*다. 서버의 `share_ratio` 는
+    /// `codex_account_group()` 이 **그 달치 로컬만** 모아 나눈 값이라(`where d.month = p_month`) KST 달이 바뀌면
+    /// 분자·분모가 0 부터 다시 쌓인다. 그래서 달의 첫 며칠 값은 표본이 아니라 잡음이고(안 쓴 멤버 0 · 맨 먼저 쓴 멤버 ≈1),
+    /// 그것을 창 전체에 걸면 지난 달의 정확하던 칸까지 매달 초 통째로 뒤집힌다.
+    /// 그 구간을 건너뛰는 책임은 **재는 쪽**에 있다 — 폰은 `TokenRowDisplayRule.shareRatioMonthIsYoung` 로 월초
+    /// 며칠간 다시 재지 않고 직전에 잰 비율을 그대로 건다. 이 함수는 받은 비율을 창 전체에 곱할 뿐이다.
     package static func serverTotals(_ rows: [TokenUsageDailyRow], accountShareRatio: Double = 1.0) -> [String: Int] {
-        var claude: [String: Int] = [:]
-        var codexLocal: [String: Int] = [:]
-        var codexAccount: [String: Int] = [:]
-        for row in rows {
-            claude[row.day, default: 0] += max(0, row.claudeTotal)
-            codexLocal[row.day, default: 0] += max(0, row.codexUtcTotal ?? row.codexTotal)
-            if let account = row.codexAccount {
-                codexAccount[row.day] = max(codexAccount[row.day] ?? 0, account)
-            }
-        }
+        let (claude, codexLocal, codexAccount) = fold(rows)
         // 마지막 버킷 날짜는 **축소 전** 키 집합으로 정한다 — 버킷의 '존재 여부'만 쓰는 값이라 비율이 0.27 이어도
         // 날짜가 달라지면 안 된다(날짜가 밀리면 그 앞의 칸이 통째로 로컬로 갈아타 잔디 모양이 바뀐다).
         let lastDay = codexAccount.keys.max()
@@ -482,6 +486,44 @@ package enum TokenDailyMerge {
                 + CodexEffectiveRule.day(day, local: codexLocal[day] ?? 0, accountBucket: bucket, accountLastDay: lastDay)
         }
         return result
+    }
+
+    /// 서버 일별 행을 세 맵으로 접는 **단 하나의 자리**. claude/codexLocal 은 기기 sum(각 맥의 자기 로그), codexAccount 는
+    /// 날짜별 기기 간 max(모든 맥이 같은 계정값을 올리므로 더하면 기기 수만큼 뻥튀기 — 서버 device_totals 의
+    /// `max(d.codex_account_month)` 와 같은 성질). null 인 기기는 max 에서 빠진다.
+    ///
+    /// 왜 따로 뺐나: 아래 `accountBucketSum` 이 **같은 fold** 를 쓰게 하기 위해서다. 폰의 공유 비율은 '내 몫 ÷ 이 fold 가
+    /// 만든 계정 버킷의 그 달 합' 이므로, 분모를 다른 루프로 만들면 두 규칙이 갈릴 자리가 생기고(기기 간 max 를 sum 으로
+    /// 잘못 적는 순간 비율이 기기 수만큼 작아진다) 잔디가 조용히 어두워진다.
+    private static func fold(_ rows: [TokenUsageDailyRow])
+        -> (claude: [String: Int], codexLocal: [String: Int], codexAccount: [String: Int]) {
+        var claude: [String: Int] = [:]
+        var codexLocal: [String: Int] = [:]
+        var codexAccount: [String: Int] = [:]
+        for row in rows {
+            claude[row.day, default: 0] += max(0, row.claudeTotal)
+            codexLocal[row.day, default: 0] += max(0, row.codexUtcTotal ?? row.codexTotal)
+            if let account = row.codexAccount {
+                codexAccount[row.day] = max(codexAccount[row.day] ?? 0, account)
+            }
+        }
+        return (claude, codexLocal, codexAccount)
+    }
+
+    /// 'YYYY-MM' 달의 **계정 버킷 합**(날짜별 기기 간 max 를 그 달에 대해 더한 값). 폰의 공유 비율 분모다.
+    ///
+    /// 왜 폰에만 필요한가: 맥의 분모는 `TokenRowDisplayRule.accountShareRatio(server:account:currentMonth:)` 가 쓰는
+    /// **이 맥의 로컬 계정 스냅샷**(`CodexAccountUsage.monthTotal`)인데, **폰에는 로컬 스캐너가 없다** — `CodexAccountUsage`
+    /// 자체가 만들어지지 않는다. 폰이 계정 사용량을 관측하는 유일한 통로가 서버 일별 버킷이라 그것으로 분모를 만든다.
+    /// (서버가 주는 `share_ratio` 를 그대로 쓰면 안 된다 — 그쪽 분모는 그룹 max 스냅샷이라 내 버킷에 곱하면 어긋난다.
+    ///  2026-09-22 실측으로 11명 중 3명이 갈렸다: 맥주 0.0522 vs 0.0508 · 수 빈 0.3341 vs 0.2708 · 킹재영 0.5960 vs 0.4357.)
+    ///
+    /// 달 가르기는 **날짜 키 문자열 접두어**(`day.hasPrefix(month + "-")`)다. 분자(`codex_account_month`)도
+    /// `CodexAccountUsage.monthTotal` 의 같은 접두어 합이고 서버 재료도 `like p_month || '-%'` 다 — 셋이 한 규칙이라
+    /// `Date` 로 재계산하면 그 순간 서버와 갈린다(계정 버킷 키는 UTC 일자인데 월 키는 KST 다).
+    package static func accountBucketSum(_ rows: [TokenUsageDailyRow], month: String) -> Int {
+        let prefix = month + "-"
+        return fold(rows).codexAccount.reduce(0) { $0 + ($1.key.hasPrefix(prefix) ? $1.value : 0) }
     }
 
     /// 이 맥의 로컬 일별 유효 토큰: claudeDaily + Codex 유효값(**UTC 축 맵** `codexDailyOnAccountAxis` 와 계정 버킷을 `CodexEffectiveRule.day` 로).

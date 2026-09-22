@@ -2219,6 +2219,20 @@ final class WorkTimerStore {
         }
     }
 
+    /// 푸터 [새로고침] 버튼의 액션. **팀 상태만 받던 `refreshTeamStatus()` 와 갈린 이유가 있다.**
+    ///
+    /// 찌르기 끊김 안내줄은 "새로고침을 눌러 보세요"라고 이 버튼을 가리키는데(`PokeConnectionNotice.panelText`),
+    /// 팀 상태 조회는 실시간 링을 건드리지 않는다 — 소켓이 죽은 사람이 몇 번을 눌러도 상태가 안 바뀌고,
+    /// 앱을 껐다 켜는 것만이 길이었다(0.3.36 제보: "새로고침 아무리 눌러도 아무일도 안일어나요").
+    /// 그래서 이 문은 **링에도 사람의 요청을 넣는다**: 백오프를 지금으로 당기고, 잠자기 마커가 고착된
+    /// 맥이면 그 자리에서 다시 붙는다. 붙어 있는 링은 건드리지 않는다(링의 `.userRequestedRetry` 가 가른다).
+    ///
+    /// 주기 폴링은 이 문을 쓰지 않는다 — 30초마다 사람의 요청을 위조하면 백오프가 의미를 잃는다.
+    func refreshFromFooterButton() {
+        realtimeApply(.userRequestedRetry)
+        refreshTeamStatus()
+    }
+
     /// (레거시 호환) 초대코드 흐름 전의 가입 뷰가 호출하던 팀 목록 로드. 팀 목록 공개를 폐기했으므로 no-op 이다.
     /// 새 가입 흐름은 previewTeamCode()/createTeam 으로 대체됐다.
     func loadTeamDirectory() {}

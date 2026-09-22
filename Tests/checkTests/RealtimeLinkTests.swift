@@ -1137,3 +1137,72 @@ private func strippingComments(_ source: String) -> String {
     }
     return result
 }
+
+// MARK: - v0.3.37 — 푸터 [새로고침]이 실시간 링을 깨운다
+
+/// 0.3.36 제보(build 88): 찌르기 끊김 안내줄은 "새로고침을 눌러 보세요"라고 푸터 버튼을 가리키는데,
+/// 그 버튼은 `refreshTeamStatus()`(팀 상태 조회)만 불러 **실시간 링을 한 번도 건드리지 않았다**.
+/// 소켓이 죽은 사람은 몇 번을 눌러도 아무 일이 없었고("새로고침 아무리 눌러도 아무일도 안일어나요")
+/// 앱을 껐다 켜는 것만이 길이었다.
+@Suite("v0.3.37 푸터 새로고침 ↔ 실시간 링")
+struct V0337FooterRefreshWakesTheLink {
+
+    /// `.failed` 에 빠진 링은 사람이 누르면 **지금** 재시도한다. cap 30초를 기다리지 않는다.
+    @Test func 실패한_링은_사람의_요청에_지금_재시도한다() {
+        var link = subscribedLink()
+        apply(&link, .transport(.closed(code: nil)), t0)
+        let failedAt = t0.addingTimeInterval(RealtimeLinkConstants.failedAfterSeconds + 1)
+        apply(&link, .tick, failedAt)
+        #expect(link.isFailed)
+
+        let pressedAt = failedAt.addingTimeInterval(5)
+        let effects = apply(&link, .userRequestedRetry, pressedAt)
+
+        #expect(effects == [.scheduleRetry(at: pressedAt)])
+        #expect(link.retryAt == pressedAt)
+        // **경고는 버튼으로 걷히지 않는다.** 걷는 것은 조인 성공 하나다 — 눌렀다고 빨간 글씨가 사라지면
+        // 진짜 장애가 클릭 한 번에 숨는다.
+        #expect(link.isFailed)
+        #expect(PokeConnectionNotice.shouldWarn(state: link.state, now: pressedAt))
+    }
+
+    /// 뚜껑 마커가 고착된 맥(`willSleep` 뒤 `didWake` 가 영영 안 온)의 **유일한 탈출구**다.
+    @Test func 잠자기에_묶인_링은_사람의_요청에_다시_붙는다() {
+        var link = subscribedLink()
+        apply(&link, .willSleep, t0)
+        #expect(link.state == .idle(.suspended))
+
+        let pressedAt = t0.addingTimeInterval(3600)
+        let effects = apply(&link, .userRequestedRetry, pressedAt)
+
+        #expect(effects.contains(.connect(accessToken: "tok-a")))
+        #expect(link.state == .connecting(attempt: 1, since: pressedAt))
+    }
+
+    /// 멀쩡한 구독은 **건드리지 않는다.** 연타가 조인 폭풍이 되면 따라잡기가 헛돌고 무료 플랜 요청만 탄다.
+    @Test func 붙어있는_링은_연타에도_끊기지_않는다() {
+        var link = subscribedLink()
+        let before = link.state
+
+        for step in 1...5 {
+            let effects = apply(&link, .userRequestedRetry, t0.addingTimeInterval(Double(step)))
+            #expect(effects.isEmpty)
+        }
+        #expect(link.state == before)
+    }
+
+    /// 배선 계약: 푸터 버튼은 `refreshTeamStatus()` 가 아니라 링까지 깨우는 문을 부른다.
+    /// 이 단언이 없으면 누군가 되돌려도 아무 테스트가 빨개지지 않는다(제보 그대로의 상태로).
+    @Test func 푸터_버튼은_링까지_깨우는_문을_부른다() throws {
+        let menu = strippingComments(try String(contentsOf: sourceURL("CheckMenuView.swift"), encoding: .utf8))
+        let footer = try #require(menu.range(of: "IconButton(icon: \"arrow.clockwise\", help: \"새로고침\")"))
+        let action = String(menu[footer.upperBound...].prefix(160))
+        #expect(action.contains("store.refreshFromFooterButton()"))
+        #expect(!action.contains("store.refreshTeamStatus()"))
+
+        let store = strippingComments(try String(contentsOf: sourceURL("WorkTimerStore.swift"), encoding: .utf8))
+        let door = try #require(store.range(of: "func refreshFromFooterButton()"))
+        let body = String(store[door.upperBound...].prefix(160))
+        #expect(body.contains("realtimeApply(.userRequestedRetry)"))
+    }
+}

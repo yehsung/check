@@ -472,6 +472,7 @@ extension WorkTimerStore {
         case .tick: return "tick"
         case .tokenRefreshed: return "tokenRefreshed"
         case .tokenRefreshFailed(let fatal): return fatal ? "tokenRefreshFailed(fatal)" : "tokenRefreshFailed"
+        case .userRequestedRetry: return "userRequestedRetry"
         case .transport(let t):
             switch t {
             case .opened: return "opened"

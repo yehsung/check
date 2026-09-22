@@ -152,6 +152,10 @@ package enum RealtimeEvent: Equatable, Sendable {
     case tokenRefreshed(accessToken: String)
     /// fatal = 이 세션은 끝났다(refresh token 이 무효). false = 일시 실패(네트워크).
     case tokenRefreshFailed(fatal: Bool)
+    /// **사람이 [새로고침]을 눌렀다.** 백오프를 지금으로 당기고, 잠자기 마커가 남아 있으면 그 자리에서 다시 붙는다.
+    /// 찌르기 끊김 안내줄이 정확히 이 버튼을 가리키므로(`PokeConnectionNotice.panelText`), 이 사건이 없으면
+    /// 안내가 못 고치는 버튼을 가리킨다 — 0.3.36 제보("새로고침 아무리 눌러도 아무일도 안일어나요")의 정체다.
+    case userRequestedRetry
     // ★ `workEnded`(근무가 끝나면 소켓을 내린다)는 v0.3.30 에 `IdleReason.notWorking` 과 함께 지웠다 — 소켓 기준이
     //   로그인으로 돌아갔다(위 IdleReason 주석). 근무 종료는 이제 링의 사건이 아니다.
 }
@@ -334,6 +338,32 @@ package struct RealtimeLink: Equatable, Sendable {
 
         case .transport(let transportEvent):
             return applyTransport(transportEvent, now: now, jitter: jitter)
+
+        case .userRequestedRetry:
+            // `.didWake` 의 당김과 같은 동작이되, **깨움이 아니라 사람의 요청**이라 진단에서 갈린다.
+            // 붙어 있거나(.subscribed) 붙는 중(.connecting)이면 아무것도 하지 않는다 — 멀쩡한 구독을
+            // 끊고 다시 조인하면 따라잡기가 헛돌고, 연타가 곧 조인 폭풍이 된다.
+            switch state {
+            case .idle(.suspended):
+                // `willSleep` 뒤 `didWake` 가 영영 안 온 맥(뚜껑 마커 고착)의 유일한 탈출구다.
+                guard accessToken != nil else {
+                    state = .idle(.signedOut)
+                    return [.disconnect, .cancelRetry]
+                }
+                return beginConnecting(attempt: 1, now: now, resetFailure: true)
+            case .reconnecting(var b):
+                b.retryAt = now
+                state = .reconnecting(b)
+                return [.scheduleRetry(at: now)]
+            case .failed(var b, let reason):
+                // 실패 시계(`failingSince`)는 **유지한다.** 눌렀다고 경고가 사라지면 진짜 장애가
+                // 버튼 한 번에 숨는다 — 경고를 걷는 것은 조인 성공(`.joined`) 하나다.
+                b.retryAt = now
+                state = .failed(b, reason)
+                return [.scheduleRetry(at: now)]
+            case .idle(.signedOut), .idle(.disabled), .connecting, .subscribed:
+                return []
+            }
 
         case .backoffElapsed:
             switch state {

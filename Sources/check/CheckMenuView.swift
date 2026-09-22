@@ -4658,7 +4658,8 @@ private struct FooterBar: View {
                 store.toggleOverlayEnabled()
             }
             IconButton(icon: "arrow.clockwise", help: "새로고침") {
-                store.refreshTeamStatus()
+                // `refreshTeamStatus()` 가 아니다 — 찌르기 끊김 안내가 가리키는 버튼이므로 실시간 링도 깨운다.
+                store.refreshFromFooterButton()
             }
             IconButton(icon: "rectangle.portrait.and.arrow.right", help: "로그아웃") {
                 store.signOut()

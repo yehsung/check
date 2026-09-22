@@ -654,6 +654,28 @@ func v0336PhoneSharedUserMonthGrassSumsToMyShare() {
 }
 
 @Test
+func v0336PhoneRatioReachesEveryMonthInTheWindow() {
+    // 잔디 창은 13주(`MeText.insightsWindowStart`)이고 일별 조회도 `day gte since` 라 계정 버킷이 **3~4개 달**에 걸친다.
+    // 비율은 '이번 달' 보드 행 하나에서 나오지만 **창 전체**에 건다(의도한 근사 — serverTotals 머리 주석).
+    // 이 단언이 없으면 '마지막 버킷 날과 같은 달만 줄인다' 로 바꿔도 전부 초록이고, 공유 사용자 잔디의 앞 2~3개 달이
+    // 계정 전체(최대 19.15배)로 조용히 되돌아간다.
+    let rows = [
+        scdPhoneRow("2026-07-20", "MAC-A", account: 1_000),
+        scdPhoneRow("2026-08-20", "MAC-A", account: 1_000),
+        scdPhoneRow("2026-09-10", "MAC-A", account: 1_000),
+        scdPhoneRow("2026-09-11", "MAC-A", account: 1_000),   // 마지막 버킷 날(로컬 0 이라 max 가 줄인 버킷을 고른다)
+    ]
+    let totals = TokenDailyMerge.serverTotals(rows, accountShareRatio: 0.25)
+    #expect(totals["2026-07-20"] == 250, "지난지난 달 버킷이 안 줄었다 — 비율이 이번 달에만 걸린다")
+    #expect(totals["2026-08-20"] == 250, "지난 달 버킷이 안 줄었다 — 비율이 이번 달에만 걸린다")
+    #expect(totals["2026-09-10"] == 250)
+    #expect(totals["2026-09-11"] == 250)
+    // 기준선이 실제로 다르다(비율 없이는 네 칸 모두 계정 전체다).
+    let before = TokenDailyMerge.serverTotals(rows)
+    #expect(before["2026-07-20"] == 1_000 && before["2026-08-20"] == 1_000)
+}
+
+@Test
 func v0336PhoneLastBucketDayComesFromPreScaleKeys() {
     // 마지막 버킷 날의 버킷이 아주 작으면(줄이면 0 으로 반올림) '축소 **후** 키'로 lastDay 를 뽑는 구현은
     // 날짜가 하루 앞으로 밀린다 → 그 앞 칸이 통째로 '마지막 날 = max(버킷, 로컬)' 로 갈아타 잔디 모양이 바뀐다.

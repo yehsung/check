@@ -461,6 +461,12 @@ package enum TokenDailyMerge {
     /// 공유 사용자의 '내 잔디'는 사실 **'계정의 잔디'** 였다 — 팝오버만 고치면 같은 화면에서 또 어긋난다.
     /// 곱하는 자리는 계정 버킷 하나뿐이고 **로컬 몫에는 곱하지 않는다**: 로컬은 이미 내 것이고, 서버도 꼬리에는
     /// share_ratio 가 아니라 과다계상 축소율 `tail_factor` 만 건다(20260912143000:490-500).
+    ///
+    /// **비율 하나를 조회 범위 전체(잔디 13주 ≈ 3~4개 달)에 건다 — 의도한 근사다.** 비율은 '이번 달' 보드 행
+    /// 하나에서 나오고(사람의 공유 몫은 달마다 달라진다), 지난 달치를 맞추려면 달마다 무거운 보드 RPC 를 더 쏴야 한다.
+    /// 공유 관계는 상시적이라 지난 달에도 대체로 같다고 보고 안 쏜다 — 맥 `WorkTimerStoreInsights` 와 **같은 근사,
+    /// 같은 이유**다. 여기를 '이번 달 버킷만 줄이게' 고치면 공유 사용자 잔디의 앞 2~3개 달이 계정 전체로 되돌아간다
+    /// (`v0336PhoneRatioReachesEveryMonthInTheWindow` 가 그 변형을 잡는다).
     package static func serverTotals(_ rows: [TokenUsageDailyRow], accountShareRatio: Double = 1.0) -> [String: Int] {
         let (claude, codexLocal, codexAccount) = fold(rows)
         // 마지막 버킷 날짜는 **축소 전** 키 집합으로 정한다 — 버킷의 '존재 여부'만 쓰는 값이라 비율이 0.27 이어도

@@ -65,8 +65,13 @@ package final class MeStore {
     /// 실패·취소·옛 RPC 에서는 **이 값을 지키는 것**이 답이다(맥 `MyTokenRowOutcome.keep` 과 같은 규약) —
     /// 1.0 으로 되돌리면 정확히 그리던 공유 사용자의 잔디가 실패 한 번에 최대 19배로 되부푼다.
     @ObservationIgnored package internal(set) var tokenShareRatio: Double?
-    /// 마지막 보드 조회 시각(300초 스로틀 — 맥 `loadMyTokenRowIfDue` 와 같은 성격). 영속하지 않는다.
+    /// 마지막으로 **끝난** 보드 조회 시각(300초 스로틀 — 맥 `loadMyTokenRowIfDue` 와 같은 성격). 영속하지 않는다.
+    /// 보내기 **전**이 아니라 끝난 뒤에 찍는다: 겹친 새로고침에서 응답이 버려졌는데 도장만 남으면 그 사이 공유
+    /// 사용자의 잔디가 300초 넘게 '계정 전체'(최대 19배)로 굳는다.
     @ObservationIgnored package internal(set) var lastTokenBoardFetchAt: Date?
+    /// 보드 왕복이 떠 있는가. 난사(겹친 [당겨서 새로고침])를 막는 자리는 **도장이 아니라 이 플래그**다 —
+    /// 도장은 '다음 시도까지의 간격'이고 이것은 '지금 떠 있는 요청'이라, 하나로 겸하면 둘 중 하나가 늘 틀린다.
+    @ObservationIgnored package internal(set) var isFetchingTokenBoard = false
 
     // MARK: 캐릭터 · 상점
     package internal(set) var shopCharacters: [ShopCharacterRow] = []

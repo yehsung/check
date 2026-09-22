@@ -62,8 +62,7 @@ extension MeStore {
             // **그룹 전체의 하루 사용량**이라, 비율을 안 곱하면 공유 계정 사용자에게 '계정의 잔디'가 그려진다.
             // 저장본 복구를 먼저 한다 — 첫 프레임에 부푼 잔디가 떴다가 내려앉지 않게(맥 myTokenRow 영속과 같은 이유).
             if tokenShareRatio == nil { tokenShareRatio = storedTokenShareRatio() }
-            await refreshTokenShareRatio(tokenRows: tokenRows, collects: collects, now: now,
-                                         generation: generation, serial: serial)
+            await refreshTokenShareRatio(tokenRows: tokenRows, collects: collects, now: now, generation: generation)
             guard generation == context.generation, isCurrent("records", serial) else { return }
 
             // 진행 중인 내 세션(맥에서 근무 중)의 시작 시각. **신호가 신선할 때만** 얹는다 — 끊긴 세션(맥 뚜껑을 닫음)을 now 까지
@@ -116,8 +115,14 @@ extension MeStore {
     ///  3. **이번 달** 계정 버킷 합이 0 → 분모가 0 이면 비율이 어차피 1.0 이다. Codex 계정이 없는 사람은 이 무거운
     ///     보드 RPC 를 **한 번도 안 쏜다**.
     ///  4. 300초 스로틀 → 캐시 값을 그대로 쓴다(맥 `loadMyTokenRowIfDue` 와 같은 간격).
+    ///  5. 이미 떠 있는 왕복(`isFetchingTokenBoard`) → 겹친 [당겨서 새로고침]이 같은 RPC 를 두 번 쏘지 않게.
+    ///
+    /// 비율은 **이 로드의 산출물이 아니라 계정 단위 캐시**다. 그래서 응답을 받는 자리에 `isCurrent(_:_:)` 순번 가드를
+    /// **두지 않는다**: 겹친 로드에서 늦게 온 응답을 순번으로 버리면 그 값은 어디에도 안 남는데 도장만 남아, 공유
+    /// 사용자의 잔디가 300초 넘게 '계정 전체'(최대 19.15배)로 굳는다(v0.3.36 리뷰 1 — 새 설치 첫 로드가 정확히 이 모양).
+    /// 세대(로그아웃·계정 교체) · 달 재확인 · userID 일치는 그대로 지킨다 — 그 셋이 '남의/다른 달 값' 을 막는 가드다.
     func refreshTokenShareRatio(
-        tokenRows: [TokenUsageDailyRow]?, collects: Bool, now: Date, generation: Int, serial: Int
+        tokenRows: [TokenUsageDailyRow]?, collects: Bool, now: Date, generation: Int
     ) async {
         guard collects, let tokenRows else { return }
         // 달은 이 호출의 시계로 뽑는다 — 분자(보드 p_month)와 분모(버킷 접두어)가 같은 순간의 같은 키여야 한다.
@@ -125,29 +130,31 @@ extension MeStore {
         let bucketSum = TokenDailyMerge.accountBucketSum(tokenRows, month: month)
         guard bucketSum > 0 else { return }
         if let last = lastTokenBoardFetchAt, now.timeIntervalSince(last) < 300 { return }
-        // 먼저 찍어 재진입·난사를 막는다(맥 업로드 스탬프와 같은 관용구).
-        lastTokenBoardFetchAt = now
+        guard !isFetchingTokenBoard else { return }
+        isFetchingTokenBoard = true
+        defer { isFetchingTokenBoard = false }
         let service = context.service
         let result = await attempt { session in
             try await service.fetchTokenBoard(accessToken: session.accessToken, month: month)
         }
-        guard generation == context.generation, isCurrent("records", serial) else { return }
+        guard generation == context.generation else { return }
         let rows: [TokenBoardRow]
         switch result {
         case .success(let value):
             rows = value
         case .failure(let error):
-            // 취소는 실패가 아니다 — [당겨서 새로고침] 중에 탭을 떠나는 흔한 동작이 300초 동안 잠기지 않게 도장을 지운다.
+            // 취소는 실패가 아니다 — [당겨서 새로고침] 중에 탭을 떠나는 흔한 동작이 300초 동안 잠기지 않게 **도장을 안 찍는다**.
             // (`try?` 로 접으면 이 둘을 영원히 못 가른다 — `attempt` 가 `Result` 를 주는 이유.)
-            if AuthErrorRules.classify(error) == .cancelled { lastTokenBoardFetchAt = nil }
+            if AuthErrorRules.classify(error) == .cancelled { return }
             // 네트워크·5xx: 조용히 캐시를 지킨다(맥 catch 규약 — "실패는 조용히, 들고 있던 값을 비우지 않는다").
+            // 끝난 시도이므로 도장을 찍는다 → 300초 뒤 재시도.
+            lastTokenBoardFetchAt = context.clock.now()
             return
         }
-        // 응답이 오는 사이 월말 자정을 넘겼으면 다른 달의 비율이다. 세대·순번 가드가 못 잡는 경로다(맥과 같은 재확인).
-        guard month == TokenUsageMonthKey.current(context.clock.now()) else {
-            lastTokenBoardFetchAt = nil
-            return
-        }
+        // 응답이 오는 사이 월말 자정을 넘겼으면 다른 달의 비율이다. 세대 가드가 못 잡는 경로다(맥과 같은 재확인).
+        // 쓸 수 없는 왕복이라 **도장도 안 찍는다** — 새 달의 비율을 곧바로 다시 읽는다.
+        guard month == TokenUsageMonthKey.current(context.clock.now()) else { return }
+        lastTokenBoardFetchAt = context.clock.now()
         guard let userID = context.session.userID,
               let mine = rows.toTokenBoardEntries().first(where: { $0.userID == userID })
         else { return }   // 내 행 없음 → 캐시 유지(월·일별은 같은 업로드 주기라 드문 어긋남이다).

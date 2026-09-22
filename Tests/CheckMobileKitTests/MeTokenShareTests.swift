@@ -211,6 +211,33 @@ struct MeTokenShareTests {
         #expect(harness.me.lastTokenBoardFetchAt == nil, "취소가 300초 동안 재시도를 잠갔다")
     }
 
+    @Test("겹친 새로고침: 늦게 온 응답을 순번으로 버리지 않는다 — 잔디가 300초 동안 '계정 전체'로 굳지 않게")
+    func overlappingRefreshStillLandsTheRatio() async throws {
+        var hold: BaseHold?
+        let harness = await RankMeHarness(label: "share-overlap", beforeStart: { host in
+            hold = BaseHold.install(host: host) { $0.rpcName == "token_usage_board" }
+        }, responder: Self.responder(daily: Self.sharedDaily, board: Self.board(share: "250")))
+        defer { harness.tearDown() }
+        let held = try #require(hold)
+
+        // 첫 로드의 보드 왕복을 붙잡아 둔 채 [당겨서 새로고침](MeTab `.refreshable`)이 두 번째 loadRecords 를 띄운다 —
+        // 화면 세 곳(나 탭·잔디 상세·[다시 시도])이 전부 isLoading 검사 없이 이걸 할 수 있다.
+        let first = Task { @MainActor in await harness.me.loadRecords() }
+        #expect(await held.waitHeld(), "보드 요청이 뜨지 않았다")
+        await harness.me.loadRecords()
+        #expect(boardCount(harness) == 0, "겹친 로드가 같은 무거운 RPC 를 한 번 더 쐈다")
+        _ = await held.releaseAndWaitDelivered()
+        await first.value
+
+        // 첫 로드는 순번을 잃어 **화면을 못 그리지만**, 비율은 이 로드의 산출물이 아니라 계정 단위 캐시다.
+        #expect(harness.me.tokenShareRatio == 0.25, "버려진 갈래가 비율을 삼켰다 — 스로틀에 막혀 되읽지도 못한다")
+        #expect(harness.storage.defaults.object(forKey: "aing.me.codexShareRatio.\(Self.me)") as? Double == 0.25)
+        // 다음 격자 계산이 그 값을 쓴다(스로틀이 재시도를 막아도).
+        await harness.me.loadRecords()
+        #expect(boardCount(harness) == 1, "끝난 시도에 도장이 안 찍혀 스로틀이 풀렸다")
+        #expect(harness.me.tokenGrid.totalTokens == 250, "잔디가 1,000(그룹 전체)으로 굳었다")
+    }
+
     @Test("달 재확인: 응답이 오는 사이 달이 바뀌면 그 응답을 버리고 캐시를 지킨다")
     func monthRolloverDiscardsTheResponse() async throws {
         var hold: BaseHold?
@@ -263,6 +290,20 @@ struct MeTokenShareTests {
         await relaunched.loadRecords()
         #expect(relaunched.tokenShareRatio == 0.25)
         #expect(relaunched.tokenGrid.totalTokens == 250, "저장본이 첫 계산에 안 걸려 잔디가 1,000 으로 떴다")
+    }
+
+    @Test("영속: 보드가 실패하는 재실행에서 저장본이 **첫 계산**에 걸린다 — 부푼 잔디가 떴다가 내려앉지 않게")
+    func storedRatioLandsOnTheFirstGridWhenTheBoardFails() async throws {
+        // 위 `ratioSurvivesARelaunch` 는 보드가 **성공**하는 하네스라 저장본 없이도 초록이다(네트워크가 다시 0.25 를 만든다).
+        // 저장본 줄의 존재 이유는 '재실행 + 보드 실패·지연' 이고, 그 갈래는 여기서만 재진다.
+        let harness = await RankMeHarness(label: "share-stored-on-failure",
+                                          responder: Self.responder(daily: Self.sharedDaily, board: nil, boardStatus: 503))
+        defer { harness.tearDown() }
+        harness.storage.defaults.set(0.25, forKey: "aing.me.codexShareRatio.\(Self.me)")
+        await harness.me.loadRecords()
+        #expect(harness.me.tokenShareRatio == 0.25, "저장본을 못 읽었다")
+        #expect(harness.me.tokenGrid.totalTokens == 250, "저장본이 첫 계산에 안 걸려 잔디가 1,000 으로 떴다")
+        #expect(!harness.me.recordsState.hasFailed)
     }
 
     @Test("reset(): 비율·도장이 비워진다 — 계정을 바꾼 뒤 앞 사람 비율로 내 잔디가 깎이지 않게")

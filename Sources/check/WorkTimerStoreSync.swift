@@ -123,11 +123,16 @@ extension WorkTimerStore {
         var lastInputAt: Date?
         if heartbeat {
             if adoptedRemoteSession {
-                deviceIDToSend = deviceID
+                deviceIDToSend = hasDeviceIdentity ? deviceID : nil
                 lastInputAt = observedInput
             } else if let current = currentSessionID {
                 sessionID = current
-                deviceIDToSend = deviceID
+                // 신원 없는 실행은 기기 주장을 **싣지 않는다**(nil). 서버 RPC 는 p_device_id 가 null 이면
+                // 기기 행을 건드리지 않으므로(20260831120000_work_tick_rpc.sql:131·155) 하트비트 ① 은 그대로
+                // 나가고 기기 행 ② 만 빠진다 = 상대 맥이 나를 '판정 불가'로 보고 7분 백스톱으로 되돌아가는,
+                // 이 표가 없던 v0.2.14 와 같은 수준이다. 유령 ID 를 싣는 쪽은 그보다 나쁘다 — 실행마다 다른
+                // 기기가 같은 세션을 주장해, 진짜 소유 맥이 자기 세션을 남의 것으로 보고 물러난다.
+                deviceIDToSend = hasDeviceIdentity ? deviceID : nil
                 openedSession = ownsCurrentSessionStrongly
                 lastInputAt = observedInput
             } else {
@@ -675,6 +680,13 @@ extension WorkTimerStore {
         usage: TokenUsageMonthly?, account: CodexAccountUsage? = nil, accountStatus: CodexAccountProbeStatus? = nil, now: Date
     ) async {
         guard session != nil else { return }
+        // **기기 신원이 없으면 이번 실행은 통째로 거른다**(2026-09-22 사고). resolveDeviceID 가 저장을 확인하지
+        // 못한 실행에서 그대로 올리면 실행마다 새 UUID 로 기기 행이 하나씩 생기고, token_usage_board 는
+        // `group by d.user_id` 로 기기 행을 **합산**하므로(20260726010000_token_usage_device.sql:88-91)
+        // 그 사람의 순위 숫자가 실제의 두 배가 된다(실측 128.9억 → 258억). 옛 표(token_usage_monthly)까지
+        // 함께 거르는 이유: 그 표는 이 함수가 새 원장과 같은 결정으로 쓰고, 한 주기 건너뛰어도 다음 주기가
+        // 같은 값을 그대로 올린다 — 유령 행을 만드는 것보다 한 번 늦는 쪽이 싸다.
+        guard hasDeviceIdentity else { return }
         // 수집 끔이면 아예 보내지 않는다. 서버 트리거가 어차피 조용히 버리므로 결과는 같지만,
         // 그 사람 맥이 30초마다 헛왕복을 도는 것을 없앤다(설정이 서버에서 도착하기 전 기본값은 수집이라,
         // 로그인 직후 한두 번은 나갈 수 있다 — 그건 서버가 막는다).
@@ -922,6 +934,9 @@ extension WorkTimerStore {
         // 수집 거부자의 스캔 사실도 서버에 남기지 않는다(위 배경 스캔이 이미 막지만, 이 함수만 따로 불려도
         // 프라이버시 규약이 깨지지 않게 여기서도 건다 — 게이트는 짝으로 있어야 한다).
         guard tokenUsageCollect else { return }
+        // 기기 신원 없는 실행은 여기서도 침묵한다. 이 하트비트는 사용량 행과 **같은 기기 키**로 들어가므로
+        // (아래 주석) 유령 ID 로 보내면 "스캔은 도는데 값이 없는 기기"가 그 사람 화면에 하나씩 쌓인다.
+        guard hasDeviceIdentity else { return }
         // 이번 실행에서 스캔이 한 번도 안 끝났으면 보고할 사실이 없다(nil = 스캐너가 아직 안 돌았다).
         guard let scannedAt = tokenUsage.lastScanAt else { return }
         guard scannedAt != lastTokenScanHeartbeatAt else { return }
@@ -1107,6 +1122,9 @@ extension WorkTimerStore {
         // 상태 upsert 와 **별도 do/catch** 인 이유: 이 표가 없는 서버(마이그레이션 미적용)에서 404 가 나도
         // 하트비트 자체는 이미 나갔어야 하고, 실패가 위 경로의 재시도/문구에 아무 영향도 주면 안 되기 때문이다.
         guard generation == sessionGeneration else { return }
+        // 신원 없는 실행은 주장을 남기지 않는다(work_tick 쪽 nil 과 같은 규약 — 그 주석에 근거가 있다).
+        // 아래 catch 가 말하는 "못 남기면 백스톱으로 되돌아갈 뿐"과 정확히 같은 결말이다.
+        guard hasDeviceIdentity else { return }
         // 강/약을 **함께** 싣는다. 이 값이 없으면 상대 맥은 내 주장이 사실인지 추측인지 알 길이 없어 반납을
         // 사전식 device_id 로 정할 수밖에 없고, 그건 랜덤 UUID 라 절반의 배치에서 진짜 소유자를 밀어낸다.
         // 매 하트비트마다 **지금의** 강도를 덮어써, 옛 세션의 strong 이 다음 세션의 약한 주장에 눌러앉지 않게 한다.
@@ -1133,6 +1151,9 @@ extension WorkTimerStore {
     /// 이 값이 없으면 away 자격이 서지 않아 그 사용자가 면제될 뿐이고, 그건 안전한 쪽이다.
     private func reportDeviceInputIfPossible(teamID: String, lastInputAt: Date?) async {
         guard awayServerSupported, let lastInputAt else { return }
+        // 신원 없는 실행은 입력 보고도 거른다 — 실행마다 새 기기 행이 생겨 away 판정 재료가 유령들에게
+        // 흩어진다. 이 함수의 실패가 이미 안전한 쪽(그 사람이 면제될 뿐)이라고 적어 둔 그 결말과 같다.
+        guard hasDeviceIdentity else { return }
         let generation = sessionGeneration
         do {
             try await withSessionRetry { activeSession in

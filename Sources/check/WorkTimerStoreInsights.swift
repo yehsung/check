@@ -27,12 +27,35 @@ extension WorkTimerStore {
 
     /// 이 맥의 기기 식별자를 읽고, 없으면 한 번 만들어 저장한다(결함1 — 맥별 토큰 원장 분리 키).
     /// init 에서만 부르며, 이후 재실행에도 같은 값이 유지돼 같은 기기의 행이 계속 갱신된다.
-    static func resolveDeviceID(defaults: UserDefaults) -> String {
+    ///
+    /// **새로 만든 ID 는 저장이 확인됐을 때만 돌려준다. 확인 못 하면 nil = 신원 없음이다.**
+    /// 2026-09-22 사고: CFPrefs 가 죽은 맥에서 읽기가 nil 을 주자 이 함수가 새 UUID 를 만들었고,
+    /// `defaults.set` 도 조용히 실패해(앱 로그 `Couldn't write values for keys ("check.deviceID") …
+    /// Path not accessible`) 실행마다 새 ID 가 났다. 그 유령 ID 로 토큰 사용량이 올라가
+    /// `token_usage_board` 의 기기 합산(group by user_id)이 128.9억을 258억으로 두 배 부풀렸다.
+    /// 유령 기기 행 하나가 순위표를 두 배로 만드는 데 비해, 그 실행에서 집계를 한 번 거르는 비용은 싸다.
+    ///
+    /// 확인은 두 단계다. 되읽기만으로는 부족하다 — CFPrefs 는 디스크 쓰기가 실패해도 방금 `set` 한 값을
+    /// 메모리 캐시에서 그대로 돌려줄 수 있어, 그 경우 되읽기는 "성공"으로 보인다. 그래서 디스크까지
+    /// 내려갔는지를 `synchronize()` 로 먼저 묻고(쓰기 실패 시 false), 그 다음 되읽어 값까지 대조한다.
+    /// 둘 다 통과해야 '다음 실행에도 살아 있는 신원'이다. (되읽기 쪽이 테스트가 못 박는 계약이고,
+    /// synchronize 는 사고 당시의 정확한 반환값을 재현하지 못했으므로 보조 신호로만 둔다.)
+    /// 한쪽만 통과한 실행은 신원 없이 지나가고, 값이 실제로는 디스크에 닿았다면 다음 실행이 그것을 읽어
+    /// 스스로 낫는다 — 영구 손실이 아니라 그 실행 한 번의 집계 유예다.
+    ///
+    /// **저장소를 이중화하지 않는다**(Application Support 사본 등). 이 사고는 "저장소가 하나뿐이라
+    /// 잃었다"가 아니라 "쓰기 실패를 성공으로 읽었다"이고, 이중화는 "두 값이 다를 때 무엇을 믿는가"라는
+    /// 새 분기를 만든다.
+    static func resolveDeviceID(defaults: UserDefaults) -> String? {
         if let stored = defaults.string(forKey: deviceIDKey), !stored.isEmpty {
             return stored
         }
         let generated = UUID().uuidString
         defaults.set(generated, forKey: deviceIDKey)
+        guard defaults.synchronize(), defaults.string(forKey: deviceIDKey) == generated else {
+            // 저장이 확인되지 않았다 = 이 UUID 는 이번 실행에서만 존재하는 유령이다. 쓰지 않는다.
+            return nil
+        }
         return generated
     }
 

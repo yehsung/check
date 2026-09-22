@@ -34,7 +34,9 @@ func persistedSessionRoundTripsThroughVaultNotDefaults() {
     #expect(vault.read(WorkTimerStore.refreshTokenKey) == "vault-refresh")
     #expect(defaults.string(forKey: WorkTimerStore.accessTokenKey) == nil)
     #expect(defaults.string(forKey: WorkTimerStore.refreshTokenKey) == nil)
-    // 비밀 아닌 값(userID)은 여전히 defaults 다 — 금고로 옮길 이유가 없고, 소유권 판정 등이 계속 읽는다.
+    // userID 는 **양쪽 다** 있다. defaults 사본은 비밀이 아니라 유출 지점이 아니고 소유권 판정 등이 계속
+    // 읽는다(그래서 남는다). 금고 사본은 2026-09-22 사고의 수리다 — defaults 읽기가 죽으면 토큰이 멀쩡해도
+    // userID 가 nil 이 되어 세션이 통째로 사라졌다(V0336DeviceIdentityVaultTests).
     #expect(defaults.string(forKey: WorkTimerStore.userIDKey) == "00000000-0000-0000-0000-000000000002")
 
     // 재시작 상당: 같은 defaults + 같은 금고로 새 스토어를 세우면 그 세션이 그대로 살아난다.
@@ -67,7 +69,7 @@ func legacyDefaultsTokensMigrateIntoVaultOnFirstRestore() {
     // defaults 평문 잔존은 0 이다(이 삭제가 이 수정의 목적 그 자체다).
     #expect(defaults.string(forKey: WorkTimerStore.accessTokenKey) == nil)
     #expect(defaults.string(forKey: WorkTimerStore.refreshTokenKey) == nil)
-    // 비밀 아닌 userID 는 이행 대상이 아니다.
+    // 비밀 아닌 userID 는 **삭제** 대상이 아니다(금고로 옮겨 적기만 한다 — V0336DeviceIdentityVaultTests).
     #expect(defaults.string(forKey: WorkTimerStore.userIDKey) != nil)
 
     // 두 번째 재시작(이행이 이미 끝난 맥): 같은 세션이 금고에서 그대로 복원된다(이행 멱등).

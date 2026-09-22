@@ -29,6 +29,17 @@ struct MeTokenShareTests {
      {"day":"2026-09-11","device_id":"mac-1","claude_total":0,"codex_total":40,"codex_utc_total":40,"codex_account":200}]
     """#
 
+    /// 2026-10-02 14:05 KST — 새 달 둘째 날(월초 유예 구간). 기준 시계 2026-09-17 에서 15일.
+    nonisolated static let newMonth = RankMeFixture.now.addingTimeInterval(86_400 * 15)
+    /// 2026-10-04 14:05 KST — 유예가 끝난 첫 날(유예 3일).
+    nonisolated static let afterGrace = RankMeFixture.now.addingTimeInterval(86_400 * 17)
+
+    /// `sharedDaily` 의 10월 판 — 10-01 = 800 · 10-02 = 200(합 1,000), 10-02 의 로컬 꼬리 40.
+    nonisolated static let newMonthDaily = #"""
+    [{"day":"2026-10-01","device_id":"mac-1","claude_total":0,"codex_total":0,"codex_utc_total":0,"codex_account":800},
+     {"day":"2026-10-02","device_id":"mac-1","claude_total":0,"codex_total":40,"codex_utc_total":40,"codex_account":200}]
+    """#
+
     /// 계정 버킷이 하나도 없는 일별(맥이 Codex 에 로그인한 적 없음).
     nonisolated static let noAccountDaily = #"""
     [{"day":"2026-09-10","device_id":"mac-1","claude_total":30000,"codex_total":500,"codex_utc_total":500,"codex_account":null}]
@@ -317,5 +328,67 @@ struct MeTokenShareTests {
         harness.me.reset()
         #expect(harness.me.tokenShareRatio == nil)
         #expect(harness.me.lastTokenBoardFetchAt == nil)
+    }
+
+    // MARK: - ⓔ 클램프된 1.0 은 '비공유'가 아니다 (v0.3.36 리뷰 1)
+
+    @Test("몫 > 분모: 클램프 1.0 을 채택하지 않는다 — 캐시가 있으면 지킨다(안 그러면 최대 19.15배로 되부푼다)")
+    func clampedRatioNeverOverwritesTheCache() async throws {
+        // 분자는 그룹에서 **가장 최신인 남의 스냅샷**(`group_account_month = max(m.account_month)`)에서 나오고 분모는
+        // 내 기기만 관측한 버킷 합이라 몫 > 분모가 실제로 난다(2026-09-22 실측 '수 빈' 1.74). 그때 클램프가 주는 1.0 은
+        // '비공유'가 아니라 '분모가 모자라다'는 뜻이다 — 채택하면 정확하던 0.25 가 계정 전체로 되돌아간다.
+        let harness = await RankMeHarness(label: "share-clamp-cached",
+                                          responder: Self.responder(daily: Self.sharedDaily, board: Self.board(share: "5000")))
+        defer { harness.tearDown() }
+        harness.me.tokenShareRatio = 0.25
+        await harness.me.loadRecords()
+        #expect(boardCount(harness) == 1)
+        #expect(harness.me.tokenShareRatio == 0.25, "클램프된 1.0 이 정확하던 비율을 덮었다")
+        #expect(harness.me.tokenGrid.totalTokens == 250, "잔디가 1,000(계정 전체)으로 되부풀었다")
+        // 저장본도 안 덮는다 — 덮으면 다음 실행의 첫 프레임이 부푼 잔디로 뜬다.
+        #expect(harness.storage.defaults.object(forKey: "aing.me.codexShareRatio.\(Self.me)") == nil)
+        #expect(harness.me.lastTokenBoardFetchAt != nil, "끝난 시도인데 도장이 안 찍혀 스로틀이 풀렸다")
+    }
+
+    @Test("몫 > 분모 · 캐시 없음: 1.0 으로 안전 착지한다(= 이 수리 전 동작 — 잘못 줄이는 쪽으로는 안 넘어진다)")
+    func clampedRatioLandsOnOneWithoutACache() async throws {
+        let harness = await RankMeHarness(label: "share-clamp-fresh",
+                                          responder: Self.responder(daily: Self.sharedDaily, board: Self.board(share: "5000")))
+        defer { harness.tearDown() }
+        await harness.me.loadRecords()
+        #expect(harness.me.tokenShareRatio == 1.0, "관측한 적 없는 사용량만큼 잔디를 줄이거나 늘렸다")
+        #expect(harness.me.tokenGrid.totalTokens == 1_000)
+    }
+
+    // MARK: - ⓕ 월초 유예: 새 달의 지분비는 0 부터 다시 쌓인다 (v0.3.36 리뷰 2)
+
+    @Test("월초 유예: KST 10-02 에는 보드를 안 쏘고 직전에 잰 비율을 그대로 건다")
+    func monthStartGraceKeepsThePreviouslyMeasuredRatio() async throws {
+        // 서버 `share_ratio` 의 분자·분모는 **그 달치 로컬**뿐이라(`where d.month = p_month`) 매달 1일에 0 부터 다시
+        // 쌓인다. 그 달 Codex 를 아직 안 쓴 멤버는 share 0 → 비율 0 → 13주 잔디 **전체**(지난 달의 정확하던 칸까지)가
+        // 로컬 꼬리만 남고 내려앉고, 그 0 이 defaults 에 영속된다. 반대편(그 달 맨 먼저 쓴 멤버)은 ≈1 로 되부푼다.
+        let harness = await RankMeHarness(label: "share-grace", clockStart: Self.newMonth,
+                                          responder: Self.responder(daily: Self.newMonthDaily, board: Self.board(share: "0")))
+        defer { harness.tearDown() }
+        harness.me.tokenShareRatio = 0.25
+        await harness.me.loadRecords()
+        #expect(boardCount(harness) == 0, "월초 잡음을 재려고 무거운 RPC 를 쐈다")
+        #expect(harness.me.tokenShareRatio == 0.25, "새 달 둘째 날의 지분비가 정확하던 비율을 덮었다")
+        #expect(harness.me.tokenGrid.totalTokens == 250, "잔디가 40(비율 0)이나 1,000(계정 전체)으로 뒤집혔다")
+        #expect(harness.me.lastTokenBoardFetchAt == nil, "쏘지도 않은 왕복이 도장을 남겼다")
+    }
+
+    @Test("월초 유예가 끝나면(KST 10-04) 다시 잰다 — 새로 공유가 시작된 사람이 한 달을 기다리지 않게")
+    func ratioIsMeasuredAgainAfterTheGrace() async throws {
+        let harness = await RankMeHarness(label: "share-after-grace", clockStart: Self.afterGrace,
+                                          responder: Self.responder(daily: Self.newMonthDaily, board: Self.board(share: "250")))
+        defer { harness.tearDown() }
+        await harness.me.loadRecords()
+        #expect(boardCount(harness) == 1, "유예가 끝났는데 안 쟀다 — 이 달에 공유가 시작된 사람은 한 달 내내 계정 전체를 본다")
+        #expect(harness.me.tokenShareRatio == 0.25)
+        #expect(harness.me.tokenGrid.totalTokens == 250)
+        // 분자·분모가 **같은 달**이어야 한다(보드는 새 달로 나간다).
+        let sent = try #require(harness.requests(rpc: "token_usage_board").first)
+        #expect(sent.jsonBody["p_month"] as? String == "2026-10")
     }
 }

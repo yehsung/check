@@ -114,8 +114,11 @@ extension MeStore {
     ///  2. 일별 조회 실패 → 그 경로의 잔디는 `previousTokenGrid` overlay 라 새 비율이 들어갈 자리가 없다.
     ///  3. **이번 달** 계정 버킷 합이 0 → 분모가 0 이면 비율이 어차피 1.0 이다. Codex 계정이 없는 사람은 이 무거운
     ///     보드 RPC 를 **한 번도 안 쏜다**.
-    ///  4. 300초 스로틀 → 캐시 값을 그대로 쓴다(맥 `loadMyTokenRowIfDue` 와 같은 간격).
-    ///  5. 이미 떠 있는 왕복(`isFetchingTokenBoard`) → 겹친 [당겨서 새로고침]이 같은 RPC 를 두 번 쏘지 않게.
+    ///  4. **월초 유예**(KST 1~3일) → 새 달의 지분비는 서버에서 0 부터 다시 쌓여 첫 며칠은 표본이 아니라 잡음이다
+    ///     (`TokenRowDisplayRule.shareRatioMonthIsYoung`). 그 잡음을 채택하면 13주 창이 통째로 0 이나 '계정 전체'로
+    ///     뒤집힌다 — 안 재고 직전에 잰 값을 그대로 쓴다.
+    ///  5. 300초 스로틀 → 캐시 값을 그대로 쓴다(맥 `loadMyTokenRowIfDue` 와 같은 간격).
+    ///  6. 이미 떠 있는 왕복(`isFetchingTokenBoard`) → 겹친 [당겨서 새로고침]이 같은 RPC 를 두 번 쏘지 않게.
     ///
     /// 비율은 **이 로드의 산출물이 아니라 계정 단위 캐시**다. 그래서 응답을 받는 자리에 `isCurrent(_:_:)` 순번 가드를
     /// **두지 않는다**: 겹친 로드에서 늦게 온 응답을 순번으로 버리면 그 값은 어디에도 안 남는데 도장만 남아, 공유
@@ -129,6 +132,11 @@ extension MeStore {
         let month = TokenUsageMonthKey.current(now)
         let bucketSum = TokenDailyMerge.accountBucketSum(tokenRows, month: month)
         guard bucketSum > 0 else { return }
+        // 월초 유예. 새 달의 지분비는 **0 부터 다시 쌓이므로**(서버 `share_ratio` 의 분자·분모가 그 달치 로컬뿐이다)
+        // 첫 며칠 값은 잡음이다 — 그 달 Codex 를 아직 안 쓴 멤버는 0(13주 잔디 전체가 내려앉고 그 0 이 영속된다),
+        // 맨 먼저 쓴 멤버는 ≈1(잔디가 계정 전체로 되부푼다). 이 구간에는 **왕복 자체를 안 쏘고** 직전에 잰 비율을
+        // 그대로 쓴다(근거·일수는 `TokenRowDisplayRule.shareRatioMonthIsYoung`). 캐시가 없으면 1.0 = 종전 동작.
+        guard !TokenRowDisplayRule.shareRatioMonthIsYoung(now) else { return }
         if let last = lastTokenBoardFetchAt, now.timeIntervalSince(last) < 300 { return }
         guard !isFetchingTokenBoard else { return }
         isFetchingTokenBoard = true
@@ -163,8 +171,14 @@ extension MeStore {
         guard let server = TokenRowServerValue(entry: mine, month: month, fetchedAt: now) else { return }
         // share == nil(미로그인 기기·옛 표가 이긴 행)이면 캐시 유지 — 1.0 으로 덮으면 잔디만 계정 전체로 부푼다.
         // share == 0 은 nil 과 **다르다**(진짜 몫 0) → 비율 0 으로 간다.
-        guard server.codexAccountShare != nil else { return }
-        let ratio = TokenRowDisplayRule.accountShareRatio(share: server.codexAccountShare, bucketSum: bucketSum)
+        guard let share = server.codexAccountShare else { return }
+        // 몫이 분모를 넘었다 = '내 몫이 100%' 가 아니라 **분자와 분모가 다른 스냅샷**이라는 뜻이다: 분자는 그룹에서
+        // 가장 최신인 남의 스냅샷에서 나오고(`group_account_month = max(m.account_month)`) 분모는 **내 기기만**
+        // 관측한 버킷 합이다(2026-09-22 실측 '수 빈' 1.74). 이때 클램프가 돌려주는 1.0 을 '비공유'로 읽고 채택하면
+        // 정확하던 캐시(예: 0.25)를 덮어 잔디가 최대 19.15배로 되부푼다 — 클램프의 '안전 착지'는 **캐시가 없는 첫
+        // 로드**에서만 안전하다. 캐시가 있으면 `.keep` 이 규약이다(맥 `MyTokenRowOutcome.keep` · MeStore 주석).
+        guard share <= bucketSum || tokenShareRatio == nil else { return }
+        let ratio = TokenRowDisplayRule.accountShareRatio(share: share, bucketSum: bucketSum)
         tokenShareRatio = ratio
         persistTokenShareRatio(ratio)
     }

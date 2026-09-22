@@ -689,3 +689,29 @@ func v0336PhoneLastBucketDayComesFromPreScaleKeys() {
     #expect(totals["2026-09-10"] == 270, "마지막 버킷 날짜가 축소 뒤 키에서 나왔다")
     #expect(totals["2026-09-11"] == 700)   // 마지막 버킷 날 = max(0, 로컬 700)
 }
+
+/// KST 시각 하나(ISO 문자열). 유예 판정은 **KST 달력의 일자**라 UTC 로 재면 매달 첫날 9시간이 어긋난다.
+private func scdKST(_ iso: String) -> Date {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime]
+    return formatter.date(from: iso) ?? Date(timeIntervalSince1970: 0)
+}
+
+@Test
+func v0336PhoneMonthStartGraceSkipsTheNoisyRatio() {
+    // 왜: 서버 `share_ratio` 의 분자·분모는 **그 달치 로컬**뿐이라(`where d.month = p_month`) KST 달이 바뀌면 0 부터
+    // 다시 쌓인다. 그 며칠의 값을 채택하면 13주 창 전체가 0(안 쓴 멤버)이나 '계정 전체'(맨 먼저 쓴 멤버)로 뒤집힌다.
+    #expect(TokenRowDisplayRule.shareRatioGraceDays == 3)
+    for day in 1...TokenRowDisplayRule.shareRatioGraceDays {
+        #expect(TokenRowDisplayRule.shareRatioMonthIsYoung(scdKST(String(format: "2026-10-%02dT23:59:00+09:00", day))),
+                "\(day)일이 유예 밖으로 샜다 — 그 날 잰 비율이 지난 달 잔디를 덮는다")
+    }
+    // 유예가 끝나면 **잰다**(안 그러면 새로 공유가 시작된 사람이 한 달 내내 부푼 잔디를 본다).
+    #expect(!TokenRowDisplayRule.shareRatioMonthIsYoung(scdKST("2026-10-04T00:00:00+09:00")))
+    #expect(!TokenRowDisplayRule.shareRatioMonthIsYoung(scdKST("2026-10-17T14:05:00+09:00")))
+    #expect(!TokenRowDisplayRule.shareRatioMonthIsYoung(scdKST("2026-10-31T23:59:00+09:00")))
+    // 축: KST 10-01 00:30 은 UTC 로 아직 09-30 이다. UTC 달력으로 재면 여기서 '30일'이 나와 유예가 안 걸린다.
+    #expect(TokenRowDisplayRule.shareRatioMonthIsYoung(scdKST("2026-10-01T00:30:00+09:00")))
+    // 반대쪽: KST 10-04 00:30 은 UTC 로 10-03 이라, UTC 로 재면 있지도 않은 유예가 하루 더 걸린다.
+    #expect(!TokenRowDisplayRule.shareRatioMonthIsYoung(scdKST("2026-10-04T00:30:00+09:00")))
+}

@@ -105,6 +105,18 @@ targets:
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
         # 앱 아이콘: App/Assets.xcassets/AppIcon(맥 packaging/appicon/icon-1024.png 에서 여백·투명 모서리를 걷어 낸 1024 한 장)
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # ★ 2026-09-22(빌드 10): 이 타깃만 스크립트 샌드박스를 끈다. 아래 postBuildScripts 의
+        # '데모 픽스처 빼기' 와 샌드박스는 **구조적으로 양립하지 않는다** — 샌드박스는 선언된 출력에
+        # 쓰기만 주고 읽기를 주지 않는데, `rm -rf` 는 지울 트리를 opendir 해야 한다. 그래서 Fixtures
+        # 안 7개 절 전부가 `deny(1) file-read-data` 로 막혀 "Directory not empty" 로 아카이브가
+        # 실패했다(빌드 9 는 같은 project.yml 로 통과했다 — 3일 사이 환경이 조여진 것으로 보인다).
+        # 우회 둘 다 막혔다: 같은 경로를 inputFiles 에도 선언하면 빌드 순환(error: Cycle inside
+        # AingCheck)이 되고, 출력 선언만으로는 읽기가 없어 재귀 삭제가 불가능하다.
+        # ⚠ 이 줄은 **이 블록에 있어야 한다** — 타깃에 settings 키를 또 만들면 YAML 중복 키라 뒤 블록이
+        # 앞을 덮어 조용히 사라진다(실측: 위쪽에 넣었더니 pbxproj 에 한 줄도 안 나갔다).
+        # 픽스처가 정말 빠졌는지는 빌드 설정이 아니라 ios/scripts/check-release-app.sh 가 아카이브
+        # 산출물을 열어 확인한다(릴리스 계약). 위젯 타깃은 샌드박스를 그대로 유지한다.
+        ENABLE_USER_SCRIPT_SANDBOXING: "NO"
     postCompileScripts:
       # CheckConfig.plist 생성(맥 scripts/build-local.sh 와 같은 방식 — 키가 없으면 만들지 않는다). 키 값은 로그에 찍지 않는다.
       - name: CheckConfig.plist

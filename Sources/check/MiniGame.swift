@@ -98,6 +98,12 @@ struct MiniGameOverlayCard: View {
                 .font(titleIsScore ? .system(size: 30, weight: .heavy, design: .rounded) : .headline)
                 .monospacedDigit()
                 .foregroundStyle(CheckTheme.primaryText)
+                // 점수 제목만 한 줄로 가둔다(v0.3.38). 카드 내용 폭은 240 − 18×2 = 204pt 인데
+                // 30pt heavy rounded 로 "100000000점"은 ≈216pt 라 **두 줄로 접히고 카드가 통째로 길어진다**.
+                // 테트리스 상한이 1억이라 실제로 닿는 자리다. 시작 카드(게임 이름)는 짧은 한 줄이고
+                // 여러 줄이 필요할 수도 있어 건드리지 않는다 — 그래서 `titleIsScore` 일 때만이다.
+                .lineLimit(titleIsScore ? 1 : nil)
+                .minimumScaleFactor(titleIsScore ? 0.55 : 1)
             Text(subtitle)
                 .font(subtitleIsHighlighted ? .caption.bold() : .caption2)
                 .monospacedDigit()

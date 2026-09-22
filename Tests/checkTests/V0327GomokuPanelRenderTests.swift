@@ -1338,7 +1338,12 @@ func gomokuPanelKeepsClocksInLeavesAndUsesNoYellowBoxControls() throws {
     #expect(menu.contains("case .gomokuInvite: return Self.gomokuInviteBannerHeight"), "배너 높이가 목록 행수 예산에 안 들어간다")
 
     let miniGame = gpStripped(try gpSource("MiniGamePanel.swift"))
-    #expect(miniGame.contains("MiniGameGomokuEntryButton { store.gomoku.openWindow(focusMatchID: nil) }"),
+    // v0.3.38: 머리글이 `MiniGameGameHeader`(internal 뷰)로 떨어져 나가면서 이 배선이 **두 조각**이 됐다
+    // — 렌더 테스트가 머리글의 자연 폭을 단독으로 재야 했기 때문이다(V0338TetrisMacTests).
+    // 두 조각을 다 본다: 한쪽만 보면 버튼은 있는데 아무 데도 안 이어진 상태가 조용히 통과한다.
+    #expect(miniGame.contains("MiniGameGomokuEntryButton { onGomoku() }"),
+            "미니게임 머리글에 오목 입구 버튼이 없다")
+    #expect(miniGame.contains("onGomoku: { store.gomoku.openWindow(focusMatchID: nil) }"),
             "미니게임 헤더 입구가 오목 창을 안 연다")
 }
 

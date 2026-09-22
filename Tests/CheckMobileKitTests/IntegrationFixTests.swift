@@ -99,7 +99,9 @@ import Testing
         harness.server.setDefault("minigame_board") { _ in .networkFailure() }
         await harness.signIn()
         harness.games.hubDidAppear()
-        for kind in MiniGameKind.allCases {
+        // 허브 요약 조회는 **폰에 보이는 게임**만 돈다(`MiniGameKind.phoneCases`) — 안 보이는 게임의 보드는 아예 안 불러오므로
+        // `allCases` 로 돌면 테트리스에서 영영 기다린다.
+        for kind in MiniGameKind.phoneCases {
             #expect(await baseWaitUntil { harness.hub.boards[kind]?.failed == true && harness.hub.boards[kind]?.loading == false })
             let board = harness.hub.boards[kind] ?? GamesMiniGameBoard()
             #expect(!board.knowsPlayerCount)

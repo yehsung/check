@@ -169,6 +169,11 @@ struct GamesMiniGameScreen: View {
             GamesTimingBarCanvas(game: controller.timing, bestScore: hub.best(for: kind), reduceMotion: reduceMotion)
         case .flappy:
             GamesFlappyCanvas(game: controller.flappy, bestScore: hub.best(for: kind), reduceMotion: reduceMotion)
+        // 폰에는 테트리스가 보이지 않는다(`MiniGameKind.phoneCases` — 타일·순위 칩·딥링크 어디에도 없어 이 화면이 열리지 않는다).
+        // **모바일 세션이 여기를 채운다.** 빈 판을 그리는 이유: 새 캔버스를 미리 만들어 두면 폰 조작이 정해지기 전에
+        // 굳은 그림이 남고, 그걸 고치는 쪽이 새로 그리는 쪽보다 비싸다.
+        case .tetris:
+            Color.clear
         }
     }
 
@@ -180,6 +185,9 @@ struct GamesMiniGameScreen: View {
         case .flappy:
             if controller.flappy.phase == .result { return "\(controller.flappy.score)점" }
             return controller.isPlaying ? "\(controller.flappy.score)점" : GamesMiniGameText.startAction
+        // 모바일 세션이 여기를 채운다(폰 미도달 — 위 canvasContent 주석).
+        case .tetris:
+            return GamesMiniGameText.startAction
         }
     }
 

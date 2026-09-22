@@ -534,7 +534,7 @@ struct RankingsGameMenu: View {
     var body: some View {
         Menu {
             Picker("게임 종류", selection: Binding(get: { selected }, set: { select($0) })) {
-                ForEach(MiniGameKind.allCases) { kind in
+                ForEach(MiniGameKind.phoneCases) { kind in
                     Text(kind.title).tag(kind)
                 }
             }

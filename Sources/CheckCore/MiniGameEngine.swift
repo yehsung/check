@@ -8,6 +8,9 @@ import SwiftUI
 package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable {
     case timingBar = "timing_bar"
     case flappy = "flappy"
+    /// v0.3.38. **맨 뒤에 더한다** — `allCases` 순서가 곧 맥 헤더 칩·폰 타일의 화면 순서라, 사이에 끼우면
+    /// 기존 두 게임의 자리가 말없이 밀린다(사용자가 근육으로 외운 자리다).
+    case tetris = "tetris"
 
     package var id: String { rawValue }
 
@@ -16,22 +19,36 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         switch self {
         case .timingBar: "타이밍 바"
         case .flappy: "플래피 아잉"
+        case .tetris: "테트리스"
         }
     }
 
-    /// 종류 칩·시작 카드에 붙는 SF Symbol(둘 다 macOS 14 에 있다).
+    /// 종류 칩·시작 카드에 붙는 SF Symbol(셋 다 macOS 14 에 있다).
+    ///
+    /// 테트리스가 `square.grid.2x2.fill` 인 이유: ① 실재를 확인했다 — CoreGlyphs 의 `name_availability.plist` 에서
+    /// 도입 연도 2019(macOS 10.15)다. 없는 이름을 쓰면 런타임에 **조용히 빈 칸**이 된다(경고도 없다).
+    /// ② 오목 입구가 `circle.grid.3x3.fill` 을 쓰므로(MiniGamePanel) 격자 계열끼리 겹치지 않게 **네모 2×2** 로 갈랐다 —
+    /// 3×3 격자는 같은 실루엣이라 칩 크기(12~16pt)에서 구별되지 않는다.
     package var icon: String {
         switch self {
         case .timingBar: "metronome.fill"
         case .flappy: "bird.fill"
+        case .tetris: "square.grid.2x2.fill"
         }
     }
 
     /// 한 판에서 나올 수 있는 최대 점수(클라·서버 동일 — 서버 check 제약 상한). 초과는 업로드하지 않는다.
+    ///
+    /// ⚠️ 테트리스 값은 **`TetrisGame.maxScore` 와 글자 하나까지 같아야 한다.** 업로드 게이트가
+    /// `guard score <= kind.maxScore else { return }` 라 초과분을 **클램프가 아니라 조용히 버린다**
+    /// (WorkTimerStoreMiniGame.recordMiniGameScore · GamesMiniGameHub.recordScore). 엔진이 1억에서 자르는데
+    /// 여기가 99,999,999 면 만점 판이 화면에도 순위표에도 안 남고 사라진다. 서버 상한도 같은 1억이다
+    /// (`minigame_score_cap('tetris')` · `minigame_daily_scores_best_score_range`). 소스 계약 테스트가 셋을 묶는다.
     package var maxScore: Int {
         switch self {
         case .timingBar: 1000
         case .flappy: 999
+        case .tetris: 100_000_000
         }
     }
 
@@ -40,11 +57,40 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         switch self {
         case .timingBar: "움직이는 마커가 밝은 구간에 들어올 때 멈춰 · 10라운드"
         case .flappy: "눌러서 점프 · 기둥 사이를 지나갈수록 +1"
+        case .tetris: "줄을 채워 지워 · 쌓여서 꼭대기에 닿으면 끝"
         }
     }
 
-    /// 조작 안내(시작 카드 맨 아래). 두 게임 다 클릭과 스페이스를 같이 받는다.
+    /// 조작 안내(하단 스트립·시작 카드 맨 아래). **게임별이다**(v0.3.38) — 테트리스만 조작이 다르다.
+    ///
+    /// 앞 두 게임의 문구는 아래 `Self.controlHint` 한 곳에서 오므로 이 갈래를 고쳐도 두 게임은 움직이지 않는다.
+    package var controlHint: String {
+        switch self {
+        case .timingBar, .flappy: Self.controlHint
+        // 하단 스트립은 32pt 한 줄에 최고·순위와 자리를 나눠 갖는다(`.minimumScaleFactor(0.8)`) — 길면 줄어든다.
+        // Z(반시계)·X(시계)·ESC(정지)는 여기 안 적는다: 화면이 받는 키 전부가 아니라 **처음 한 판에 필요한 것**만이다.
+        case .tetris: "← → 이동 · ↑ 회전 · ↓ 소프트드롭 · 스페이스 하드드롭 · C 홀드"
+        }
+    }
+
+    /// 타이밍 바·플래피가 공유하는 조작 안내 — 둘 다 클릭과 스페이스를 같이 받는다.
+    ///
+    /// ⚠️ 이 **정적** 멤버는 그 두 게임의 잎 뷰(MiniGameTimingBar · MiniGameFlappy)가 시작/다시 카드 문구를 짓는
+    /// 자리 전용이다. 다른 곳에서 `MiniGameKind.controlHint` 를 쓰면 테트리스에도 "클릭 또는 스페이스"가 나가고
+    /// 그게 **경고 없이 잘못된 안내**가 된다 — 그래서 위 인스턴스 프로퍼티(`kind.controlHint`)를 써라.
+    /// 소스 계약 테스트(V0338)가 이 두 파일 밖의 정적 호출을 빨갛게 만든다.
     package static let controlHint = "클릭 또는 스페이스"
+
+    /// 맥에서 고를 수 있는 게임 — 전부다. 맥 창은 셋을 다 그린다.
+    package static let macCases: [MiniGameKind] = allCases
+
+    /// 폰에서 **보이는** 게임. 테트리스는 폰 화면·조작(끌기·탭 회전·홀드 버튼)이 아직 없어 목록에서 뺀다 —
+    /// 모바일 세션이 그 화면을 만들 때 여기에 `.tetris` 를 더하면 타일·순위 칩·요약 조회가 한꺼번에 따라온다.
+    ///
+    /// `allCases` 를 없애지 않는 이유: 저장된 rawValue 복원(`WorkTimerStore.miniGameKind`)과 서버 응답 매핑은
+    /// **전부**를 알아야 한다. 폰에서 보이지 않는 것과 폰이 값을 모르는 것은 다르다 — 모르면 옛 저장값이 기본값으로
+    /// 조용히 접히고, 그건 사용자가 고른 것을 잃는 일이다.
+    package static let phoneCases: [MiniGameKind] = [.timingBar, .flappy]
 }
 
 /// 게임 논리 좌표계. 게임 규칙은 언제나 이 크기 안에서 계산하고, 뷰는 실제 캔버스 크기에 **비율 유지**로 맞춘다.
@@ -226,11 +272,46 @@ package struct MiniGameHost {
 /// 스페이스 키(로컬 keyDown 모니터)를 이 한 값으로 접어 `MiniGameInput` 카운터로 전달한다 — 게임은 "카운터가 늘었다"만 본다.
 package struct MiniGameInput: Equatable, Sendable {
     /// 클릭·스페이스가 올 때마다 1 증가. 게임은 onChange 로 감지해 점프/정지/시작을 처리한다.
+    /// 테트리스에서는 이 카운터가 **하드드롭**(과 시작·다시)이다 — 셋 다 "한 번의 결정"이라 같은 자리에 접힌다.
     package var actionCount: Int = 0
 
+    // ── 테트리스(v0.3.38)만 읽는 칸들 ───────────────────────────────────────────────
+    // **더하는 방향으로만** 넓혔다: 기존 두 게임의 잎 뷰는 `actionCount` 만 보므로 한 줄도 안 바뀐다.
+    // 왜 카운터와 눌림이 갈리는가 — 이동·소프트드롭은 **누르고 있는 동안** 반복해야 하고(DAS·ARR 은 엔진이 만든다),
+    // 회전·홀드는 **누른 횟수**다. 눌림을 카운터로 접으면 OS 키 반복(`isARepeat`)에 반복 속도를 맡기게 되고,
+    // 그러면 시스템 키보드 설정이 순위를 가른다(`TetrisGame` 머리 주석).
+
+    /// ← 를 누르고 있는가. 뗄 때 false 로 되돌리는 것은 화면의 몫이다(`releaseAllKeys()` 짝).
+    package var moveLeftHeld: Bool = false
+    /// → 를 누르고 있는가.
+    package var moveRightHeld: Bool = false
+    /// ↓ 를 누르고 있는가(소프트드롭 = 가속된 중력이지 확정이 아니다).
+    package var softDropHeld: Bool = false
+    /// 시계 방향 회전(↑ · X)이 올 때마다 1 증가.
+    package var rotateClockwiseCount: Int = 0
+    /// 반시계 방향 회전(Z)이 올 때마다 1 증가.
+    package var rotateCounterClockwiseCount: Int = 0
+    /// 홀드(C)가 올 때마다 1 증가. 조각당 1회 제한은 **엔진**이 건다(화면이 세지 않는다).
+    package var holdCount: Int = 0
+
     /// B3: 모듈 밖(맥 타깃)에서 쓰는 memberwise init — 합성 init 은 internal 이라 명시했다(모양 동일).
-    package init(actionCount: Int = 0) {
+    /// 새 인자는 전부 기본값이라 `MiniGameInput()` · `MiniGameInput(actionCount:)` 호출이 그대로 산다.
+    package init(
+        actionCount: Int = 0,
+        moveLeftHeld: Bool = false,
+        moveRightHeld: Bool = false,
+        softDropHeld: Bool = false,
+        rotateClockwiseCount: Int = 0,
+        rotateCounterClockwiseCount: Int = 0,
+        holdCount: Int = 0
+    ) {
         self.actionCount = actionCount
+        self.moveLeftHeld = moveLeftHeld
+        self.moveRightHeld = moveRightHeld
+        self.softDropHeld = softDropHeld
+        self.rotateClockwiseCount = rotateClockwiseCount
+        self.rotateCounterClockwiseCount = rotateCounterClockwiseCount
+        self.holdCount = holdCount
     }
 }
 
@@ -401,6 +482,40 @@ package struct MiniGameStage: Equatable, Sendable {
     package static func forTimingRound(_ round: Int) -> MiniGameStage {
         let index = max(0, min(all.count - 1, (max(1, round) - 1) / 2))
         return all[index]
+    }
+
+    /// 테트리스의 무대 경계 — **지운 줄 수**다(고정한 조각 수가 아니다). 0·15·40·90·180.
+    ///
+    /// 왜 난이도 축과 단위가 다른가: 테트리스의 난이도 시계는 `advance = 고정한 조각 + 지운 줄` 인데
+    /// (`TetrisGame.level(forAdvance:)`), 무대를 그 축에 걸면 **아무것도 안 지워도 배경이 바뀐다** — 무대가
+    /// "네가 얼마나 해냈나"를 말하지 않고 "얼마나 오래 버텼나"를 말하게 된다. 지운 줄이 읽기 쉬운 단위이기도 하다.
+    ///
+    /// 플래피는 경계가 난이도 전환점(움직이는 기둥 15)과 **겹치지 않게** 골랐지만(위 `flappyThresholds`),
+    /// 여기서는 그 걱정이 구조적으로 사라졌다: 레벨이 도는 축(advance)과 무대가 도는 축(lines)이 애초에 다르므로
+    /// 같은 사람이 같은 자리에서 둘을 동시에 넘길 일이 **정해져 있지 않다**(조각을 몇 개 썼느냐에 따라 달라진다).
+    /// 그래서 색이 "이제부터 어려워진다"는 예고가 되지 못한다.
+    /// 테트리스의 무대 경계 — **`advance`(고정한 조각 수 + 지운 줄 수) 기준이다.** 지운 줄이 아니다.
+    ///
+    /// 왜 줄이 아니라 advance 인가(2026-09-23 결정): 난이도가 advance 로 오르는데 무대만 줄로 두면,
+    /// **줄을 거의 못 지우는 판은 배경이 한 번도 안 바뀐다.** 중앙값 플레이어에게는 두 축이 같은 단계 수를
+    /// 준다(초보 26줄/advance 104 → 둘 다 2단계, 숙련 207줄/advance 738 → 둘 다 5단계)는 것을 역산으로
+    /// 확인했으므로, 바꿔서 잃는 것은 없고 **짧은 판·늘어뜨리는 판에서만** 이득이다. 경계 숫자는 화면에
+    /// 나오지 않으므로 "몇 줄"이라는 읽기 쉬운 단위를 잃는 비용도 우리가 코드를 읽을 때뿐이다.
+    ///
+    /// 왜 이 네 숫자인가: **레벨 경계와 겹치면 안 된다**(배경이 곧 난이도 예고가 되면, 색으로 미리 알려 주지
+    /// 않기로 한 규칙과 어긋난다 — 플래피가 15점 기둥과 경계를 어긋나게 둔 것과 같은 이유).
+    /// 레벨 경계는 advance 280 까지 20 의 배수, 그 뒤로는 280 + 50k 다. 네 값 전부 그 **사이**에 있다:
+    ///   30 → 20~40 사이 · 110 → 100~120 사이 · 290 → 280~330 사이 · 650 → 630~680 사이.
+    /// 첫 전환이 30(조각 30개 ≈ 초보 1.4분)이라 **줄을 하나도 못 지워도** 무대가 한 번은 바뀐다.
+    package static let tetrisThresholds = [0, 30, 110, 290, 650]
+
+    /// 그 advance 의 무대. 음수·시작 전(0)은 새벽.
+    /// - Parameter advance: 고정한 조각 수 + 지운 줄 수(`TetrisGame.advance`). **줄 수를 넘기지 마라.**
+    package static func forTetrisAdvance(_ advance: Int) -> MiniGameStage {
+        let value = max(0, advance)
+        var index = 0
+        for (i, threshold) in tetrisThresholds.enumerated() where value >= threshold { index = i }
+        return all[min(index, all.count - 1)]
     }
 }
 

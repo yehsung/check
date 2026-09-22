@@ -477,8 +477,12 @@ func pauseStateMachineOnlyPausesWhilePlayingAndCountsBackFromThree() {
 func pauseFreezesTheBoardAndUnlocksTheKindChips() throws {
     let source = mgwStrippingComments(try String(contentsOf: mgwSourceURL("MiniGamePanel.swift"), encoding: .utf8))
     #expect(source.contains("isPaused: pauseState.isFrozen"), "정지 상태가 게임에 안 넘어간다 — 판이 뒤에서 계속 돈다")
-    #expect(source.contains("isEnabled: !isPlaying || pauseState.isFrozen || kind == store.miniGameKind"),
+    // v0.3.38: 머리글이 `MiniGameGameHeader`(internal 뷰)로 떨어져 나가면서 같은 식이 그 뷰의 이름으로 바뀌었다
+    // — 렌더 테스트가 머리글의 **자연 폭**을 단독으로 재야 했기 때문이다(창 안에서 그리면 넘쳐도 눌려 담겨 안 보인다).
+    // 뜻은 한 글자도 안 바뀌었다: 진행 중이 아니거나 · 정지 중이거나 · 지금 고른 칩이면 누를 수 있다.
+    #expect(source.contains("isEnabled: !isPlaying || isFrozen || kind == selected"),
             "정지 중에도 종류 칩이 잠겨 있다 — '포기하고 다른 게임' 이 안 된다")
+    #expect(source.contains("MiniGameGameHeader("), "화면이 머리글 뷰를 안 쓴다 — 위 식이 죽은 코드일 수 있다")
     // 스크림은 캔버스를 통째로 가린다(정지해 놓고 다음 기둥을 외우는 것이 이득이 되면 안 된다).
     // 두 층이다: 불투명 바닥(CheckTheme.panel) + 색조(panelElevated 0.93). 바닥을 빼면 밑그림이 7% 비쳐
     // 시작 카드의 흰 글자가 그대로 읽힌다(2026-09-10 스냅샷 실측).

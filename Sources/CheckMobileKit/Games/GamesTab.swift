@@ -40,7 +40,7 @@ struct GamesTab: View {
                 }
             }
             .refreshable {
-                for kind in MiniGameKind.allCases { await store.miniGames.loadBoard(kind, withWinner: false) }
+                for kind in MiniGameKind.phoneCases { await store.miniGames.loadBoard(kind, withWinner: false) }
                 await store.context.gomoku.loadInbox()
             }
             .navigationDestination(for: GamesDestination.self) { destination in
@@ -68,11 +68,11 @@ struct GamesTab: View {
         // 큰 글자(접근성 크기): 한 열 — 반 폭 타일에서는 "오늘 최고 874점 · 3위"가 낱글자로 꺾인다.
         if typeSize.isAccessibilitySize {
             VStack(spacing: 12) {
-                ForEach(MiniGameKind.allCases) { miniGameTile($0) }
+                ForEach(MiniGameKind.phoneCases) { miniGameTile($0) }
             }
         } else {
             HStack(alignment: .top, spacing: 12) {
-                ForEach(MiniGameKind.allCases) { miniGameTile($0) }
+                ForEach(MiniGameKind.phoneCases) { miniGameTile($0) }
             }
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -191,8 +191,8 @@ struct GamesTab: View {
         let router = store.context.router
         SectionHeader(GamesText.todayRankTitle, trailing: .action(GamesText.seeAllRankings) { router.open(.rankings(.minigame)) }, padded: true)
         InsetGroup {
-            ForEach(Array(MiniGameKind.allCases.enumerated()), id: \.element) { index, kind in
-                rankRow(kind, isLast: index == MiniGameKind.allCases.count - 1)
+            ForEach(Array(MiniGameKind.phoneCases.enumerated()), id: \.element) { index, kind in
+                rankRow(kind, isLast: index == MiniGameKind.phoneCases.count - 1)
             }
         }
     }
@@ -276,6 +276,10 @@ private struct GamesTileArt: View {
             switch kind {
             case .timingBar: timing(geo.size)
             case .flappy: flappy(geo.size)
+            // 테트리스 타일은 폰에 안 깔린다(`MiniGameKind.phoneCases`) — 이 갈래는 컴파일을 위해서만 있다.
+            // **모바일 세션이 여기를 채운다**(시안 `.b-art-tetris`). 무대 색만 두면 "빈 타일"이 그럴듯해 보여
+            // 배선이 빠진 것을 못 알아채므로, 아무것도 그리지 않는다.
+            case .tetris: Color.clear
             }
         }
         .accessibilityHidden(true)
@@ -364,6 +368,10 @@ private struct GamesGameIconSquare: View {
                     .foregroundStyle(Color.white)
             case .flappy:
                 FlappyAingArt(size: 24)
+            // 모바일 세션이 여기를 채운다(폰 미도달 — 위 타일 그림 주석). 바탕 그라디언트도 아직 플래피 쪽으로
+            // 떨어지는데, 그 삼항도 같이 고칠 자리다.
+            case .tetris:
+                Color.clear
             }
         }
         .frame(width: 30, height: 30)

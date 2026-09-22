@@ -259,7 +259,12 @@ extension WorkTimerStore {
                 //    기다리면 통과하는지"를 알려 주는 순간 그건 위조 보조 도구다. status 이름이면 진단에 충분하다.
                 Self.miniGameLogger.notice(
                     "submit refused status=\(response.status, privacy: .public) game=\(kind.rawValue, privacy: .public)")
-                miniGameSubmitNotice = "점수를 못 올렸어요"
+                // 토큰 만료만 이유를 밝힌다. 사람이 고칠 수 있는 유일한 거절이고("판을 너무 오래 끌었다"),
+                // 위조 보조가 되지 않는다 — 위조에 쓸모 있는 것은 `too_fast` 의 `need_seconds` 쪽이고 그건
+                // 화면에도 로그에도 안 쓴다(바로 위 주석). 나머지는 이유를 밝히지 않는다.
+                miniGameSubmitNotice = response.status == "token_expired"
+                    ? "판이 너무 오래 걸려 기록하지 못했어요"
+                    : "점수를 못 올렸어요"
             }
             // 성공이든 거절이든 다음 판을 위해 새 토큰을 미리 받아 둔다(방금 쓴 토큰은 죽었다).
             prefetchMiniGameRoundToken(kind: kind)

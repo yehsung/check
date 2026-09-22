@@ -27,6 +27,25 @@ import Testing
                 for i in 0..<n { sum += max(115, 150 - 2 * Double(i)) / min(230, 130 + 3 * Double(i)) }
             }
             return ((sum * margin) * 10_000).rounded() / 10_000
+        case .tetris:
+            // 서버 20260923140000_minigame_tetris.sql §E 의 tetris 갈래를 그대로 옮긴 것.
+            //   A = advance(조각 고정 +1 · 줄 소거 +1). level(A) = 1 + A/20 (A<280) · 15 + (A−280)/50 (A≥280) — **정수 나눗셈**.
+            //   한 advance 가 낼 수 있는 점수의 상계 5000×min(level,30) 을 쌓아 점수를 넘는 최소 A 를 찾는다.
+            //   시간 = 0.1·A(ARE) + 0.025·max(0, (4A−200)/14)(줄소거 정지) — 판 용량 200칸이 강제하는 '조각 최대·소거 최소' 분해다.
+            // ⚠️ `sum` 을 쓰지 않는 유일한 갈래다(위 둘은 누적합, 여기는 닫힌 식) — 윗줄 `var sum` 을 지우지 마라.
+            let n = max(score, 0)
+            if n <= 0 { return 0 }
+            var advance = 0
+            var cap = 0.0
+            while true {
+                advance += 1
+                let level = min(30, advance < 280 ? 1 + advance / 20 : 15 + (advance - 280) / 50)
+                cap += 5000 * Double(level)
+                // 루프 상한 4000 은 int 최대 입력에 대한 안전 탈출이다(1억은 A = 1,076 에서 넘는다).
+                if cap >= Double(n) || advance >= 4000 { break }
+            }
+            let seconds = 0.1 * Double(advance) + 0.025 * max(0, (4 * Double(advance) - 200) / 14.0)
+            return ((seconds * margin) * 10_000).rounded() / 10_000
         }
     }
 
@@ -36,6 +55,35 @@ import Testing
         #expect(abs(Self.serverMinSeconds(.timingBar, score: 500) - 3.8125 * 0.95) < 0.0001)
         #expect(abs(Self.serverMinSeconds(.flappy, score: 29) - 22.046 * 0.95) < 0.01)
         #expect(Self.serverMinSeconds(.flappy, score: 0) == 0)
+    }
+
+    /// 테트리스 하한 옮김 검산 — **로컬 Postgres 에서 실제 함수가 낸 값**과 글자 그대로 비교한다
+    /// (2026-09-23, 20260923140000_minigame_tetris.sql §G(6) 의 검산표와 같은 값).
+    ///
+    /// 왜 시뮬레이션이 아니라 표인가: 폰에는 아직 테트리스 엔진이 없다(`MiniGameKind.phoneCases` 밖). 엔진이 붙기 전까지
+    /// 이 사본이 서버와 어긋났는지 알 길은 이 표뿐이고, 표가 없으면 새 게임만 **조용히 검증 밖으로 빠진다**.
+    /// 모바일 세션이 엔진을 물리면 위 두 게임처럼 "정직한 플레이가 하한을 넘는다"를 시뮬로 재는 테스트를 더해라.
+    @Test("서버 식 옮김 검산(테트리스): 실서버 함수가 낸 아홉 점과 정확히 같다 · 0점 0초 · 단조 증가")
+    func tetrisServerFormulaPort() {
+        #expect(Self.serverMinSeconds(.tetris, score: 0) == 0)
+        #expect(Self.serverMinSeconds(.tetris, score: -5) == 0)
+        let table: [(score: Int, seconds: Double)] = [
+            (10_000, 0.1900), (50_000, 0.9500), (100_000, 1.9000), (300_000, 3.8000),
+            (800_000, 6.7857), (1_600_000, 10.1446), (5_000_000, 19.0000), (99_999_999, 109.1821),
+            // 루프 상한 4000 에서 탈출하는 자리(int 최대 입력) — 여기가 안 맞으면 탈출 조건이 틀린 것이다.
+            (2_147_483_647, 406.8036),
+        ]
+        for row in table {
+            #expect(Self.serverMinSeconds(.tetris, score: row.score) == row.seconds,
+                    "tetris \(row.score)점: \(Self.serverMinSeconds(.tetris, score: row.score)) ≠ \(row.seconds)")
+        }
+        // 점수가 오르면 하한도 오르기만 한다 — 어딘가에서 내려가면 "더 높은 점수를 더 빨리" 낼 수 있다는 뜻이다.
+        var previous = 0.0
+        for score in stride(from: 0, through: 2_000_000, by: 5_000) {
+            let now = Self.serverMinSeconds(.tetris, score: score)
+            #expect(now >= previous, "tetris 하한이 \(score)점에서 내려갔다(\(previous) → \(now))")
+            previous = now
+        }
     }
 
     /// 화면 주사율 → 엔진이 실제로 받는 프레임 간격(코어 `MiniGameFrameRate` — 뷰가 TimelineView 에 넘기는 값).

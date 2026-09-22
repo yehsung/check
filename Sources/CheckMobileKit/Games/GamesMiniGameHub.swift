@@ -144,13 +144,14 @@ package final class GamesMiniGameHub {
 
     // MARK: 첫 화면 카드
 
-    /// 첫 화면이 보였다: 두 게임의 오늘 순위(카드의 "오늘 최고·순위")를 읽는다. 60초 스로틀.
+    /// 첫 화면이 보였다: **폰에 보이는 게임**(`MiniGameKind.phoneCases`)의 오늘 순위(카드의 "오늘 최고·순위")를 읽는다.
+    /// 60초 스로틀. 안 보이는 게임까지 돌면 폰이 쓰지 않는 순위표를 60초마다 한 번씩 더 받아 온다.
     package func refreshSummariesIfStale() {
         guard context.session.isSignedIn else { return }
         let now = context.clock.now()
         guard now.timeIntervalSince(lastSummaryAt) >= Self.summaryThrottleSeconds else { return }
         lastSummaryAt = now
-        for kind in MiniGameKind.allCases {
+        for kind in MiniGameKind.phoneCases {
             loadLocalBest(kind)
             Task { [weak self] in await self?.loadBoard(kind, withWinner: false) }
         }

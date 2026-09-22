@@ -126,7 +126,7 @@ enum MiniGameWindowLayout {
     }
 }
 
-/// 스페이스(점프·시작)와 ESC(일시정지)를 게임 입력으로 가로채는 로컬 keyDown 모니터.
+/// 스페이스(점프·시작)·ESC(일시정지)·**테트리스 조작키**를 게임 입력으로 가로채는 로컬 키 모니터.
 ///
 /// 없으면 스페이스가 다른 것을 누른다(팝오버가 열려 있으면 근무 시작/종료 알약이 첫 포커스를 받는다).
 /// 모니터가 먼저 받아 nil 을 돌려주면 그 이벤트는 SwiftUI 에 닿지 않는다. **전역 모니터가 아니다** —
@@ -135,12 +135,72 @@ enum MiniGameWindowLayout {
 /// v0.2.48 에 ESC 를 **같은 모니터**에 얹었다. 두 벌을 걸면 설치·제거 규약이 두 곳이 되어 아래 두 실사용 버그가
 /// 한쪽에서만 고쳐진 채 남는다. 다만 스페이스와 달리 ESC 는 **처리했을 때만 삼킨다**(onEscape 의 반환값) —
 /// 시작 전·결과 화면처럼 정지할 판이 없을 때까지 ESC 를 먹으면 다른 화면의 취소 키를 훔친다.
+///
+/// v0.3.38 에 방향·회전·홀드가 **같은 모니터**에 얹혔고, `.keyUp` 도 받기 시작했다(뗌이 있어야 눌림이 안 굳는다).
+/// 스페이스와 **게이트가 반대 방향**인 것이 이 확장의 핵심이다 — 아래 `strokeBelongsToGame` 주석.
 enum MiniGameSpaceKey {
     nonisolated(unsafe) private static var token: Any?
     /// 스페이스 keyCode.
     static let spaceKeyCode: UInt16 = 49
     /// ESC keyCode(일시정지 토글).
     static let escapeKeyCode: UInt16 = 53
+
+    /// 판이 도는 동안만 쓰는 조작 키. **물리 키 자리(ANSI keyCode)로만 들어온다** — 글자로 받으면
+    /// 한글 입력 상태에서 Z·X·C 가 'ㅋ'·'ㅌ'·'ㅊ' 로 와서 통째로 빗나간다. 이 저장소는 그 사실 위에
+    /// `EnglishInputSource`(영문 전용 필드가 포커스를 얻으면 입력기를 ABC 로 바꾼다)를 이미 두고 있다 —
+    /// 게임 창에서는 입력기를 건드릴 수 없으니(사용자가 치던 글을 뺏는다) 자리로 받는 쪽이 유일한 길이다.
+    enum GameKey: Equatable, Sendable, CaseIterable {
+        /// 누름/뗌 짝으로 오는 키(DAS·ARR 은 게임 시계가 만든다).
+        case moveLeft, moveRight, softDrop
+        /// 누름만 뜻이 있는 키(뗌은 멱등하게 무시된다).
+        case rotateCW, rotateCCW, hold
+
+        var isLevel: Bool {
+            switch self {
+            case .moveLeft, .moveRight, .softDrop: return true
+            case .rotateCW, .rotateCCW, .hold: return false
+            }
+        }
+    }
+
+    /// 한 번의 키 사건. `isDown == false` 는 **뗌**이고, 게이트와 무관하게 언제나 화면에 전달된다.
+    struct Stroke: Equatable, Sendable {
+        let key: GameKey
+        let isDown: Bool
+
+        /// ANSI keyCode(Carbon `Events.h`) → 조작 키. `charactersIgnoringModifiers` 를 쓰지 마라(위 주석).
+        /// ← 123 · → 124 · ↓ 125 · ↑ 126 · Z 6 · X 7 · C 8.
+        static func key(forKeyCode code: UInt16) -> GameKey? {
+            switch code {
+            case 123: return .moveLeft
+            case 124: return .moveRight
+            case 125: return .softDrop
+            case 126, 7: return .rotateCW      // ↑ · X
+            case 6: return .rotateCCW          // Z
+            case 8: return .hold               // C
+            default: return nil
+            }
+        }
+    }
+
+    /// 방향·회전·홀드를 **게임이 받는가**. 스페이스(`yieldsToOtherWindow`)와 정확히 반대 방향의 게이트다.
+    ///
+    /// 스페이스는 "양보할 근거가 분명할 때만" 양보한다 — 창을 막 연 순간을 살리기 위해서다(v0.3.30).
+    /// 방향키는 그 관대함을 쓸 수 없다: `yieldsToOtherWindow` 가 아는 독립 창은 오목·설정 둘뿐이고
+    /// 팝오버·할 일 보드는 identifier 가 없어 "모르는 창"으로 떨어진다. 그 창들에서 누른 ←/→/↑/↓ 를
+    /// 삼키면 리스트 선택과 커서가 통째로 죽는다 — 2026-09-17 오목 채팅 사고(스페이스를 삼켜 띄어쓰기가
+    /// 안 됐다)의 화살표판이다.
+    ///
+    /// 엄격하게 해도 플레이 손실이 0 인 이유: 판이 도는 동안 게임 창은 **언제나 키 창**이다(포커스를 잃는
+    /// 순간 `windowDidResignKey` 가 판을 끝낸다 — CheckMiniGameWindow.swift). 그래서 "키가 향한 창이
+    /// 게임 창인가"를 요구해도 정상 플레이에서는 한 번도 안 걸린다.
+    /// `isKeyWindow` 로 묻지 않는다(창을 막 연 순간이 죽는 그 금지는 여기서도 유효하다) — 키가 실제로
+    /// 향한 창이 게임 창과 **같은 객체인지**로만 잰다.
+    @MainActor
+    static func strokeBelongsToGame(_ eventWindow: NSWindow?, gameWindow: NSWindow?) -> Bool {
+        guard let eventWindow, let gameWindow, eventWindow === gameWindow else { return false }
+        return gameWindow.isVisible
+    }
 
     /// 모니터가 걸려 있는가(헤드리스 검증 지점).
     static var isInstalled: Bool { token != nil }
@@ -154,28 +214,59 @@ enum MiniGameSpaceKey {
     ///
     /// - Parameter onEscape: ESC 처리기. **참을 돌려준 경우에만** 이벤트를 삼킨다(기본값은 "안 씀").
     /// - Parameter gameWindow: 게임 창. 다른 창으로 향한 키를 양보할지 가를 때 "게임 창이 아닌가"를 이것으로 잰다.
+    /// - Parameter wantsStrokes: 지금 방향·회전·홀드를 받는가(테트리스이고 판이 도는 중이며 얼어 있지 않을 때).
+    /// - Parameter onStroke: 조작 키 한 번. **뗌은 게이트와 무관하게 언제나 온다** — 아래 ★★ 참고.
     static func install(shouldConsume: @escaping @MainActor () -> Bool,
                         action: @escaping @MainActor () -> Void,
                         onEscape: @escaping @MainActor () -> Bool = { false },
-                        gameWindow: @escaping @MainActor () -> NSWindow? = { nil }) {
+                        gameWindow: @escaping @MainActor () -> NSWindow? = { nil },
+                        wantsStrokes: @escaping @MainActor () -> Bool = { false },
+                        onStroke: @escaping @MainActor (Stroke) -> Void = { _ in }) {
         remove()
         armed = action
         armedEscape = onEscape
-        token = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let isEscape = event.keyCode == escapeKeyCode
-            guard event.keyCode == spaceKeyCode || isEscape,
-                  event.modifierFlags.intersection([.command, .control, .option]).isEmpty
-            else { return event }
-            // ★ 키 창 여부로 거르지 않는다. 로컬 모니터는 **우리 앱이 활성일 때만** 이벤트를 받으므로,
-            //   여기 도달했다는 것 자체가 "우리 앱이 앞에 있다"는 뜻이다. 그 위에 `isKeyWindow` 를 더 요구했더니
-            //   게임 창을 처음 연 직후 — 메뉴바 팝오버가 닫히며 키가 넘어가는 그 짧은 순간 — 스페이스가 통째로
-            //   빠졌다("업데이트하고 처음 열어 플레이할 때 스페이스가 안 됐다", 2026-09-09 제보).
-            //   창이 실제로 떠 있는지는 아래 shouldConsume(컨트롤러의 창 가시성 + 이 화면의 생존)이 판정한다.
-            // 키 반복(누르고 있기)은 삼키기만 한다 — 점프 연타가 되면 게임이 아니다.
-            let isRepeat = event.isARepeat
+        armedStroke = onStroke
+        // `.keyUp` 이 있어야 눌림이 안 굳는다. 스페이스·ESC 는 여전히 keyDown 만 본다(아래 `!isUp` 가드).
+        token = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { event in
+            let isUp = event.type == .keyUp
+            let keyCode = event.keyCode
+            let isEscape = keyCode == escapeKeyCode
+            let hasModifier = !event.modifierFlags.intersection([.command, .control, .option]).isEmpty
+            let stroke = Stroke.key(forKeyCode: keyCode)
+            // 키 반복(누르고 있기)은 삼키기만 한다 — 점프 연타가 되면 게임이 아니고, 테트리스에서는
+            // OS 키 반복에 ARR 을 맡기는 순간 시스템 키보드 설정이 순위를 가른다(반복은 게임 시계가 만든다).
+            // `isARepeat` 은 keyDown 에서만 뜻이 있다.
+            let isRepeat = isUp ? false : event.isARepeat
             // 창은 번호로 넘긴다 — NSEvent 를 메인 액터 클로저로 보내면 Swift 6 가 데이터 경쟁으로 막는다.
             let windowNumber = event.windowNumber
             let consumed = MainActor.assumeIsolated { () -> Bool in
+                // ── 방향·회전·홀드(테트리스) ────────────────────────────────────────────────────
+                // 스페이스 가지보다 **앞**이지만, 이 가지 안에는 `shouldConsume` 도 양보 판정도 넣지 않는다 —
+                // 게이트가 서로 반대 방향이라 섞으면 둘 중 하나가 무너진다(소스 계약이 순서를 못 박는다).
+                if let key = stroke {
+                    let belongs = strokeBelongsToGame(NSApp.window(withWindowNumber: windowNumber),
+                                                      gameWindow: gameWindow())
+                    // ★★ 뗌은 **게이트보다 먼저, 무조건** 화면에 알린다. 게이트 뒤에 두면
+                    //    "←를 누른 채 ESC → ←를 뗌(무시됨) → 재개" 에서 키가 눌린 채로 굳는다.
+                    //    수식키 가드도 뗌에는 안 건다 — ←를 잡은 채 ⌘ 를 누르면 그 keyUp 이 수식키를 달고 온다.
+                    //    화면의 해제는 멱등이라 남의 창에서 온 뗌을 받아도 안전하다.
+                    if isUp {
+                        onStroke(Stroke(key: key, isDown: false))
+                        return belongs && wantsStrokes()
+                    }
+                    guard belongs, wantsStrokes() else { return false }
+                    guard !hasModifier else { return false }
+                    guard !isRepeat else { return true }
+                    onStroke(Stroke(key: key, isDown: true))
+                    return true
+                }
+                // ── 스페이스 · ESC (v0.3.30 의 관대한 게이트 그대로) ────────────────────────────
+                guard !isUp, keyCode == spaceKeyCode || isEscape, !hasModifier else { return false }
+                // ★ 키 창 여부로 거르지 않는다. 로컬 모니터는 **우리 앱이 활성일 때만** 이벤트를 받으므로,
+                //   여기 도달했다는 것 자체가 "우리 앱이 앞에 있다"는 뜻이다. 그 위에 `isKeyWindow` 를 더 요구했더니
+                //   게임 창을 처음 연 직후 — 메뉴바 팝오버가 닫히며 키가 넘어가는 그 짧은 순간 — 스페이스가 통째로
+                //   빠졌다("업데이트하고 처음 열어 플레이할 때 스페이스가 안 됐다", 2026-09-09 제보).
+                //   창이 실제로 떠 있는지는 아래 shouldConsume(컨트롤러의 창 가시성 + 이 화면의 생존)이 판정한다.
                 // 다른 창에서 글을 쓰는 중이거나 다른 독립 창으로 간 키는 그 창 몫이다(v0.3.30 — `yieldsToOtherWindow`).
                 let target = NSApp.window(withWindowNumber: windowNumber)
                 guard !yieldsToOtherWindow(target, gameWindow: gameWindow()) else { return false }
@@ -195,6 +286,7 @@ enum MiniGameSpaceKey {
         token = nil
         armed = nil
         armedEscape = nil
+        armedStroke = nil
     }
 
     /// 이 키를 **다른 창에 양보하는가**(v0.3.30). 순수 판정이라 실제 창으로 잰다.
@@ -226,6 +318,8 @@ enum MiniGameSpaceKey {
     nonisolated(unsafe) private static var armed: (@MainActor () -> Void)?
     /// 같은 모니터가 쥔 ESC 처리기(반환값 = 삼켰는가).
     nonisolated(unsafe) private static var armedEscape: (@MainActor () -> Bool)?
+    /// 같은 모니터가 쥔 조작 키 처리기(v0.3.38).
+    nonisolated(unsafe) private static var armedStroke: (@MainActor (Stroke) -> Void)?
 
     #if DEBUG
     @MainActor
@@ -235,7 +329,56 @@ enum MiniGameSpaceKey {
     @MainActor
     @discardableResult
     static func fireEscapeForTesting() -> Bool { armedEscape?() ?? false }
+
+    /// 조작 키 발화. 합성 NSEvent 로는 창·팝오버가 열리지 않으므로, 모니터가 **어느 화면의 클로저를 쥐고
+    /// 있는가**를 이 지점으로 확인한다(`fireForTesting` 과 같은 규약).
+    @MainActor
+    static func fireStrokeForTesting(_ stroke: Stroke) { armedStroke?(stroke) }
     #endif
+}
+
+// MARK: - 조작 키 → 입력 (순수)
+
+/// 조작 키 한 번을 `MiniGameInput` 에 반영하는 **순수 규칙**. 화면(@State)에서 떼어 둔 이유는 하나다 —
+/// "눌린 채 판이 끝나는" 출구가 여섯이라 각 출구를 테스트가 따로 재야 하는데, SwiftUI 뷰 안의 @State 는
+/// 헤드리스에서 못 두드린다.
+///
+/// 규칙 넷(스펙 §4):
+///  ① 뗌은 게이트와 무관하게 언제나 반영한다(모니터가 이미 그렇게 부른다).
+///  ② 누름은 얼어 있으면 안 센다(정지 중 스크림 뒤에서 판이 움직이면 정지가 아니다).
+///  ③ 정지에 들어가면 눌림을 비운다 — 재개 뒤 계속 누르고 있어도 안 움직인다(3초 카운트다운의 취지와 맞다).
+///  ④ ⌘ 를 누르는 순간 사라지는 keyUp 은 여기서 못 막는다 — 잎 뷰의 8초 그물(`TetrisKeyWatchdog`)이 맡는다.
+enum MiniGameKeyLatch {
+    /// 한 번의 사건을 반영한다.
+    static func apply(_ stroke: MiniGameSpaceKey.Stroke, to input: inout MiniGameInput, isFrozen: Bool) {
+        guard stroke.isDown else { return release(stroke.key, from: &input) }
+        guard !isFrozen else { return }
+        switch stroke.key {
+        case .moveLeft: input.moveLeftHeld = true
+        case .moveRight: input.moveRightHeld = true
+        case .softDrop: input.softDropHeld = true
+        case .rotateCW: input.rotateClockwiseCount &+= 1
+        case .rotateCCW: input.rotateCounterClockwiseCount &+= 1
+        case .hold: input.holdCount &+= 1
+        }
+    }
+
+    /// 뗌. **엣지 키(회전·홀드)의 뗌은 아무 일도 하지 않는다**(멱등) — 게이트 밖에서 온 뗌도 안전해야 한다.
+    static func release(_ key: MiniGameSpaceKey.GameKey, from input: inout MiniGameInput) {
+        switch key {
+        case .moveLeft: input.moveLeftHeld = false
+        case .moveRight: input.moveRightHeld = false
+        case .softDrop: input.softDropHeld = false
+        case .rotateCW, .rotateCCW, .hold: break
+        }
+    }
+
+    /// 눌린 채 판이 끝나는 **모든 출구**가 부르는 한 줄. 카운터는 건드리지 않는다(이미 지나간 사건이다).
+    static func releaseAll(_ input: inout MiniGameInput) {
+        input.moveLeftHeld = false
+        input.moveRightHeld = false
+        input.softDropHeld = false
+    }
 }
 
 /// 미니게임 창의 콘텐츠. store 를 통째로 받지만 초 단위 시계(displayNow)는 읽지 않는다 — 60Hz 는 게임 잎 뷰의 TimelineView 안이다.
@@ -253,6 +396,17 @@ struct CheckMiniGameWindowView: View {
 
         /// 카운트다운 시작값. 3-2-1 이 있어야 정지 직전 화면을 보고 손을 맞춰 두는 이득이 사라진다.
         static let countdownStart = 3
+
+        /// **정지 상한(초).** 넘으면 판을 그 점수로 확정하고 끝낸다(무효가 아니다).
+        ///
+        /// 왜 필요한가: 서버는 정지를 **모른다** — 라운드 토큰의 만료를 `clock_timestamp() - started_at` 실시간으로만
+        /// 재고(20260914010000:296-297), 유효기간은 30분이다. 클라가 판 시작 때 토큰을 최대 12분 묵은 것까지
+        /// 재사용하고(WorkTimerStoreMiniGame) 테트리스 한 판이 최장 9분쯤이므로, 남는 여유가 **9분 안팎**이다.
+        /// 그 이상 멈춰 두면 돌아와 끝내도 제출이 `token_expired` 로 거절된다 — **멈춰 뒀다는 이유로 기록을 잃는다.**
+        /// 5분에서 잘라 그 시점 점수를 확정하면, 잃는 것은 "이어서 더 할 기회"뿐이고 번 점수는 남는다.
+        /// 이것은 설정 스위치가 아니라 게임 상수다(2026-09-15 '자동 종료는 사용자 스위치로 주지 않는다').
+        /// 두 기존 게임에는 걸지 않는다 — 한 판이 짧아 이 여유를 쓸 일이 없다.
+        static let pauseLimitSeconds = 5 * 60
 
         /// 판이 얼어 있는가(= `MiniGameHost.isPaused`). 카운트다운 중에도 참이다.
         var isFrozen: Bool { self != .none }
@@ -298,6 +452,8 @@ struct CheckMiniGameWindowView: View {
     /// 재개 카운트다운 Task. 창이 닫히거나 interruptToken 이 오르면 반드시 cancel 한다 — 안 그러면 죽은 화면의
     /// @State 를 1초마다 두드리는 Task 가 남는다.
     @State private var resumeTask: Task<Void, Never>?
+    /// 정지 감시(v0.3.38). 너무 오래 멈춰 있으면 그 점수로 확정하고 판을 끝낸다 — 아래 `pauseLimitSeconds` 참조.
+    @State private var pauseWatchdog: Task<Void, Never>?
 
     /// - Parameter initialPause: **스냅샷·프리뷰 전용** 초기 정지 상태. 앱은 언제나 `.none` 으로 연다.
     ///   `.none` 이 아니면 `isPlaying` 도 참으로 시작한다 — 정지는 진행 중일 때만 가능한 상태이기 때문이다.
@@ -353,13 +509,19 @@ struct CheckMiniGameWindowView: View {
         .onDisappear {
             MiniGameSpaceKey.remove()
             cancelResume()
+            // 출구 ⑧ 뷰 사라짐. ⚠️ AppKit 창은 orderOut 뒤에도 뷰가 살아 있어 이 콜백이 **안 올 수 있다**
+            // (install 의 ★ 주석 — 2026-09-09 실측). 그래서 이것만 믿지 않고 아래 출구들에도 같이 건다.
+            MiniGameKeyLatch.releaseAll(&input)
         }
         .onChange(of: store.miniGameInterruptToken) { _, _ in
-            // 판이 끝났다(창 닫힘·포커스 이동·종류 전환·[그만두기]). 눌린 채 끝났어도 래치를 풀어 다음 판의 첫 클릭이 먹히게 한다.
+            // 판이 끝났다(창 닫힘·포커스 이동·종류 전환·[그만두기]·패널 닫기). 눌린 채 끝났어도 래치를 풀어
+            // 다음 판의 첫 클릭이 먹히게 한다. 출구 ②~⑥의 **공통 수신처**다 — 토큰을 올리는 다섯 자리가
+            // 전부 여기로 모인다(WorkTimerStoreMiniGame · CheckMiniGameWindow).
             pressLatched = false
             isPlaying = false
             cancelResume()
             pauseState = .none
+            MiniGameKeyLatch.releaseAll(&input)
         }
     }
 
@@ -379,37 +541,16 @@ struct CheckMiniGameWindowView: View {
         }
     }
 
-    /// 헤더(32pt): 종류 칩 둘 | Spacer | [일시정지](진행 중일 때만).
+    /// 헤더(32pt): 종류 칩 셋 | Spacer | [일시정지](진행 중일 때만).
     private var gameHeader: some View {
-        HStack(spacing: 6) {
-            ForEach(MiniGameKind.allCases) { kind in
-                MiniGameKindChip(
-                    title: kind.title,
-                    icon: kind.icon,
-                    isSelected: kind == store.miniGameKind,
-                    // 정지 중에는 다른 게임 칩을 **푼다** — 사용자가 원한 것이 정확히 "포기하고 다른 게임 하기"다
-                    // (2026-09-10). 다른 칩을 누르면 selectMiniGame 이 토큰을 올려 판을 무효화하고 넘어간다.
-                    isEnabled: !isPlaying || pauseState.isFrozen || kind == store.miniGameKind
-                ) {
-                    store.selectMiniGame(kind)
-                }
-            }
-            Spacer(minLength: 4)
-            if isPlaying, !pauseState.isFrozen {
-                MiniGameChromeButton(title: Self.pauseTitle, icon: "pause.fill", tint: CheckTheme.pending) {
-                    togglePause()
-                }
-            } else {
-                // 1:1 오목 입구(v0.3.27). 오목은 이 창과 **별도의 넓은 창**이다(사용자 결정) — 여기는 문만 둔다.
-                // [일시정지] 와 **같은 자리를 번갈아 쓴다**: 헤더는 344pt 인데 칩 둘 + 일시정지 + 입구를 한 줄에 세우면
-                // 넘친다. 판이 도는 중에는 어차피 누를 수 없는 문이다(누르는 순간 이 창이 키를 잃어 판이 끝난다) —
-                // 정지 중에는 다시 보인다("포기하고 다른 게임" 과 같은 결).
-                // 팝오버를 닫지 않는다 — 이 창에서 오는 길이면 팝오버는 이미 닫혀 있다(토글이라 부르면 오히려 열린다).
-                MiniGameGomokuEntryButton {
-                    store.gomoku.openWindow(focusMatchID: nil)
-                }
-            }
-        }
+        MiniGameGameHeader(
+            selected: store.miniGameKind,
+            isPlaying: isPlaying,
+            isFrozen: pauseState.isFrozen,
+            onSelect: { store.selectMiniGame($0) },
+            onPause: { togglePause() },
+            onGomoku: { store.gomoku.openWindow(focusMatchID: nil) }
+        )
     }
 
     /// 하단 스트립(32pt): 최고 기록 | 오늘 내 순위 | 조작 안내.
@@ -426,6 +567,10 @@ struct CheckMiniGameWindowView: View {
             .font(.caption2.weight(.semibold))
             .foregroundStyle(CheckTheme.primaryText)
             .lineLimit(1)
+            // 344pt 한 줄에 "최고 99999999점"(≈96) + "오늘 N위"(≈45) + 조작 안내(테트리스 ≈200)가 같이 선다.
+            // 셋 다 `minimumScaleFactor` 가 있어야 어느 하나가 통째로 잘리지 않는다 — 안내만 줄어들면
+            // 조작법이 먼저 사라진다(그건 첫 판에 가장 필요한 글자다).
+            .minimumScaleFactor(0.85)
             Spacer(minLength: 4)
             Text(myRank.map { "오늘 \($0)위" } ?? Self.noRankToday)
                 .font(.caption2.weight(.semibold))
@@ -438,7 +583,7 @@ struct CheckMiniGameWindowView: View {
             //   `MiniGameLayout` 전부를 다시 재야 한다. 셋 중 조작 안내가 제일 덜 급하고,
             //   안내가 뜨는 순간은 이미 판이 끝난 뒤라 조작법을 볼 이유도 없다.
             //   조용히 삼키지 않는 이유: 삼키면 "잘 놀았는데 순위표에 없다"가 되고 재현도 신고도 안 된다.
-            Text(store.miniGameSubmitNotice ?? MiniGameKind.controlHint)
+            Text(store.miniGameSubmitNotice ?? store.miniGameKind.controlHint)
                 .font(.caption2)
                 .foregroundStyle(store.miniGameSubmitNotice == nil ? CheckTheme.secondaryText : CheckTheme.danger)
                 .lineLimit(1)
@@ -474,7 +619,11 @@ struct CheckMiniGameWindowView: View {
                 // 스크림이 남아 아무것도 못 누르는 창이 된다.
                 if !playing {
                     cancelResume()
+                    cancelPauseWatchdog()
                     pauseState = .none
+                    // 출구 ① 탑아웃(자연 종료). 토큰이 **안 오르는** 자리라 공통 수신처가 못 잡는다 —
+                    // 결과 카드를 보는 동안 ← 를 놓았는데 그 뗌이 반영되지 않으면 다음 판이 왼쪽으로 출발한다.
+                    MiniGameKeyLatch.releaseAll(&input)
                 }
             }
         )
@@ -489,6 +638,8 @@ struct CheckMiniGameWindowView: View {
                 TimingBarGameView(host: host, input: input)
             case .flappy:
                 FlappyGameView(host: host, input: input)
+            case .tetris:
+                TetrisGameView(host: host, input: input)
             }
             if pauseState.isFrozen {
                 pauseOverlay
@@ -514,7 +665,9 @@ struct CheckMiniGameWindowView: View {
                 }
                 .onEnded { _ in pressLatched = false }
         )
-        .accessibilityLabel("\(store.miniGameKind.title) 캔버스 — 클릭 또는 스페이스로 조작")
+        // 조작 안내는 **게임별**이다 — 하드코딩하면 테트리스에서 VoiceOver 가 틀린 조작을 읽는다
+        // (`MiniGameKind.controlHint` 정적 멤버는 두 잎 뷰 전용이고, 그 밖에서 쓰면 소스 계약이 빨개진다).
+        .accessibilityLabel("\(store.miniGameKind.title) 캔버스 — \(store.miniGameKind.controlHint)로 조작")
     }
 
     /// 정지 화면: 캔버스를 **완전히 가리는** 스크림 + 카드(또는 카운트다운 숫자).
@@ -559,10 +712,17 @@ struct CheckMiniGameWindowView: View {
         switch store.miniGameKind {
         case .timingBar: return "지금 그만두면 이번 판 점수는 기록되지 않아요"
         case .flappy: return "지금 그만두면 지금까지 지나온 기둥 수가 점수로 기록돼요"
+        // 테트리스는 플래피와 같은 의미론이다 — `interrupt()` 가 **그 점수로 결과를 확정**한다(무효가 아니다).
+        // 그래서 "기록되지 않아요"라고 쓰면 거짓말이 된다. 숫자를 못 적는 이유는 위 주석과 같다(진행 중 점수가
+        // 잎 뷰의 @State 안이고 `MiniGameHost` 에 내보내는 문이 없다).
+        case .tetris: return "지금 그만두면 지금까지 쌓은 점수가 기록돼요"
         }
     }
 
     private func installSpaceKey() {
+        // 출구 ⑨ 모니터 재설치. 갈아 끼우는 사이에 도착한 뗌은 **아무도 못 받는다** —
+        // 옛 모니터는 이미 떨어져 나갔고 새 모니터는 아직 안 걸렸다. 그 창을 여기서 닫는다.
+        MiniGameKeyLatch.releaseAll(&input)
         MiniGameSpaceKey.install(
             // 이 화면이 살아 있고 **게임 창이 실제로 화면에 떠 있을 때만** 스페이스를 삼킨다.
             // (키 창 판정은 모니터에서 뺐다 — 창을 막 연 순간 키가 아직 안 넘어와 스페이스가 죽었다.)
@@ -573,8 +733,25 @@ struct CheckMiniGameWindowView: View {
                 input.actionCount += 1
             },
             onEscape: { togglePause() },
-            gameWindow: { CheckMiniGameWindowController.shared.currentWindow }
+            gameWindow: { CheckMiniGameWindowController.shared.currentWindow },
+            // 방향·회전·홀드는 **테트리스가 도는 동안에만** 받는다. 다른 게임에서 받으면 쓰지도 않을 키를
+            // 삼켜 다른 창의 커서를 훔친다(얻는 것이 0 인 위험이다).
+            wantsStrokes: { store.miniGameKind == .tetris && isPlaying && !pauseState.isFrozen },
+            onStroke: { handleStroke($0) }
         )
+    }
+
+    /// 모니터가 준 조작 키 한 번. 규칙은 `MiniGameKeyLatch`(순수)에 있고 여기는 배선뿐이다.
+    ///
+    /// **바뀐 게 없으면 `input` 에 손대지 않는다.** `&input` 로 넘기는 것만으로 `@State` 의 setter 가 불려
+    /// 이 창이 통째로 다시 그려진다(같은 값 대입도 관찰자를 깨우는 그 성질 — `MiniGameFrameRateMonitor.update`
+    /// 에 같은 근거가 있다). 뗌은 **게이트 밖에서도** 오므로(다른 창에서 화살표를 뗄 때) 그대로 두면
+    /// 남의 창 키 조작이 이 창의 렌더를 부른다. 그래서 사본에 적용해 보고 달라졌을 때만 대입한다.
+    private func handleStroke(_ stroke: MiniGameSpaceKey.Stroke) {
+        var next = input
+        MiniGameKeyLatch.apply(stroke, to: &next, isFrozen: pauseState.isFrozen)
+        guard next != input else { return }
+        input = next
     }
 
     // MARK: 일시정지 전이
@@ -586,17 +763,26 @@ struct CheckMiniGameWindowView: View {
         let next = pauseState.toggled(isPlaying: isPlaying)
         guard next != pauseState else { return false }
         cancelResume()
+        // 출구 ⑦ 일시정지 — **토큰을 안 올리는 자리라 공통 수신처가 못 잡는다**(직접 확인: 이 함수 전문에
+        // `store.miniGameInterruptToken` 이 한 번도 없다). 여기를 빠뜨리면 "← 를 누른 채 ESC → 손을 뗌 →
+        // 재개" 에서 엔진이 아직 ← 를 눌린 것으로 알고 판이 왼쪽으로 붙는다. 재개 뒤 계속 누르고 있어도
+        // 안 움직이는 것은 의도다(3초 카운트다운으로 리듬 이득을 없애는 그 결정과 같은 결).
+        MiniGameKeyLatch.releaseAll(&input)
         if case .resuming = next {
             beginResume()
         } else {
             pauseState = next
         }
+        // 정지 감시는 **카드가 떠 있는 동안만** 돈다. 카운트다운(`resuming`)은 3초짜리라 상한과 무관하고,
+        // 재개 취소로 다시 `.paused` 가 되면 여기서 새로 걸린다(멱등 — 시계가 처음부터 다시 간다).
+        if case .paused = pauseState { armPauseWatchdog() } else { cancelPauseWatchdog() }
         return true
     }
 
     /// 재개: 스크림은 그대로 두고 숫자만 3 → 2 → 1 로 내린다.
     private func beginResume() {
         cancelResume()
+        cancelPauseWatchdog()
         pauseState = .resuming(PauseState.countdownStart)
         resumeTask = Task { @MainActor in
             while true {
@@ -614,12 +800,35 @@ struct CheckMiniGameWindowView: View {
         resumeTask = nil
     }
 
+    /// 정지 감시를 건다(멱등 — 이미 걸려 있으면 갈아 끼운다). 테트리스에서만 건다.
+    private func armPauseWatchdog() {
+        cancelPauseWatchdog()
+        guard store.miniGameKind == .tetris else { return }
+        pauseWatchdog = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(PauseState.pauseLimitSeconds))
+            guard !Task.isCancelled else { return }
+            // 그 사이 이어하기·그만두기·판 종료가 있었으면 아무것도 하지 않는다.
+            guard case .paused = pauseState, isPlaying else { return }
+            quitRound()
+        }
+    }
+
+    private func cancelPauseWatchdog() {
+        pauseWatchdog?.cancel()
+        pauseWatchdog = nil
+    }
+
     /// [그만두기]. 스토어의 `abortMiniGameRound()` 가 토큰을 올려 잎 뷰의 판을 끝낸다(플래피는 그 점수로 확정,
     /// 타이밍 바는 무효). 종류 칩 잠금도 함께 풀린다.
     private func quitRound() {
         cancelResume()
+        cancelPauseWatchdog()
         pauseState = .none
         isPlaying = false
+        // 출구 ⑥ [그만두기]. 아래 `abortMiniGameRound()` 가 토큰을 올려 공통 수신처도 지나가지만,
+        // **여기서도 푼다** — 토큰을 올리는 쪽이 스토어라 그 구현이 바뀌면(예: 이미 끝난 판이면 안 올림)
+        // 이 출구만 조용히 뚫린다. 해제는 멱등이라 두 번 불러도 값이 같다.
+        MiniGameKeyLatch.releaseAll(&input)
         store.abortMiniGameRound()
     }
 
@@ -831,11 +1040,62 @@ private enum MiniGameMedal {
 
 // MARK: - 크롬 조각
 
-/// 게임 종류 칩(아이콘 + 이름). 선택 = accent 채움, 비선택 = 흐린 캡슐.
+/// 게임 열 머리글(32pt). **렌더 테스트가 단독으로 자연 폭을 잰다**(internal) — 헤더가 344pt 를 넘는지는
+/// 창 안에서 그려서는 알 수 없다(넘치면 SwiftUI 가 조용히 눌러 담는다). 그래서 뷰를 떼어 `.fixedSize()` 로 잰다.
+struct MiniGameGameHeader: View {
+    let selected: MiniGameKind
+    let isPlaying: Bool
+    let isFrozen: Bool
+    let onSelect: (MiniGameKind) -> Void
+    let onPause: () -> Void
+    let onGomoku: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(MiniGameKind.macCases) { kind in
+                MiniGameKindChip(
+                    title: kind.title,
+                    icon: kind.icon,
+                    isSelected: kind == selected,
+                    // 게임이 셋이 되면서 "칩 셋 + [일시정지]" 가 344pt 예산을 다툰다(사용자 확정 2026-09-23:
+                    // "고른 칩만 이름, 나머지는 아이콘 전용"). 고른 칩만 이름을 다는 이유는 폭만이 아니다 —
+                    // 지금 무엇을 하고 있는지는 **한 번만** 말하면 되고, 나머지는 "다른 게임으로 가는 문"이다.
+                    showsTitle: kind == selected,
+                    // 정지 중에는 다른 게임 칩을 **푼다** — 사용자가 원한 것이 정확히 "포기하고 다른 게임 하기"다
+                    // (2026-09-10). 다른 칩을 누르면 selectMiniGame 이 토큰을 올려 판을 무효화하고 넘어간다.
+                    isEnabled: !isPlaying || isFrozen || kind == selected
+                ) {
+                    onSelect(kind)
+                }
+            }
+            Spacer(minLength: 4)
+            if isPlaying, !isFrozen {
+                MiniGameChromeButton(title: CheckMiniGameWindowView.pauseTitle, icon: "pause.fill", tint: CheckTheme.pending) {
+                    onPause()
+                }
+            } else {
+                // 1:1 오목 입구(v0.3.27). 오목은 이 창과 **별도의 넓은 창**이다(사용자 결정) — 여기는 문만 둔다.
+                // [일시정지] 와 **같은 자리를 번갈아 쓴다**: 헤더는 344pt 인데 칩 셋 + 일시정지 + 입구를 한 줄에 세우면
+                // 넘친다. 판이 도는 중에는 어차피 누를 수 없는 문이다(누르는 순간 이 창이 키를 잃어 판이 끝난다) —
+                // 정지 중에는 다시 보인다("포기하고 다른 게임" 과 같은 결).
+                // 팝오버를 닫지 않는다 — 이 창에서 오는 길이면 팝오버는 이미 닫혀 있다(토글이라 부르면 오히려 열린다).
+                MiniGameGomokuEntryButton { onGomoku() }
+            }
+        }
+    }
+}
+
+/// 게임 종류 칩. 선택 = accent 채움 + **이름**, 비선택 = 흐린 캡슐 + **아이콘만**.
+///
+/// 아이콘 전용 칩에도 `.accessibilityLabel(title)` 이 붙는다 — 아이콘은 VoiceOver 에게 아무 말도 하지 않고,
+/// SF Symbol 의 기본 설명("square grid 2x2")은 게임 이름이 아니다. 말풍선(`.checkTooltip`)은 눈으로 보는
+/// 사람 몫이고 이 라벨은 듣는 사람 몫이라 **둘 다** 있어야 한다.
 private struct MiniGameKindChip: View {
     let title: String
     let icon: String
     let isSelected: Bool
+    /// 이름을 함께 그릴지. 거짓이면 아이콘만(폭이 97 → 33 으로 준다).
+    var showsTitle: Bool = true
     var isEnabled: Bool = true
     let action: () -> Void
 
@@ -843,10 +1103,17 @@ private struct MiniGameKindChip: View {
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: icon)
+            Group {
+                if showsTitle {
+                    Label(title, systemImage: icon)
+                } else {
+                    Image(systemName: icon)
+                }
+            }
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(isSelected ? CheckTheme.accent : CheckTheme.secondaryText)
-                .padding(.horizontal, 10)
+                // 아이콘 전용 칩은 좌우 여백을 줄인다 — 10 그대로면 아이콘 하나가 가운데 뜬 넓은 알약이 된다.
+                .padding(.horizontal, showsTitle ? 10 : 8)
                 .frame(height: 26)
                 .background(
                     Capsule().fill(isSelected ? CheckTheme.accent.opacity(0.20) : Color.white.opacity(hovering ? 0.10 : 0.04))
@@ -860,6 +1127,7 @@ private struct MiniGameKindChip: View {
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.45)
         .onHover { hovering = $0 }
+        .accessibilityLabel(title)
         .checkTooltip(title)
     }
 }
@@ -985,7 +1253,8 @@ private struct MiniGameChampionCard: View {
     let awardedChip: String
 
     var body: some View {
-        // ★ 열 규격은 `MiniGameRankRow` 와 **같은 숫자**다(배지/왕관 22 · 간격 7 · 앞 5 · 뒤 9 · 점수 칸 46).
+        // ★ 열 규격은 `MiniGameRankRow` 와 **같은 숫자**다(배지/왕관 22 · 간격 7 · 앞 5 · 뒤 9 ·
+        //   점수 칸은 `MiniGameRankRow.scoreWidth` — v0.3.38 에 46 → 66, 근거는 그 상수 주석).
         //   갈리면 어제 1등의 이름과 점수가 아래 순위 행들과 어긋나 목록이 두 개로 읽힌다
         //   (2026-09-10 실측: 이름 7pt · 점수 56.5pt 어긋남).
         HStack(spacing: MiniGameRankRow.columnSpacing) {
@@ -1050,8 +1319,14 @@ struct MiniGameRankRow: View {
     static let leadingPadding: CGFloat = 5
     static let trailingPadding: CGFloat = 9
     /// 점수 칸은 **고정폭**이다 — 자릿수가 달라도 오른쪽 끝이 한 줄로 서야 순위표로 읽힌다.
-    /// 타이밍 바 상한이 1000 이라 "1000점"이 들어갈 폭이고, 그래도 모자라면 줄여서 그린다.
-    static let scoreWidth: CGFloat = 46
+    ///
+    /// v0.3.38 에 46 → **66** 으로 넓혔다. 46 은 "타이밍 바 상한 1000 이라 '1000점'이 들어갈 폭"이었는데,
+    /// 테트리스 상한이 1억이라 "12345678점"(9자리+점)이 들어와야 한다. `.minimumScaleFactor(0.8)` 덕에
+    /// 잘리지는 않았지만 **행마다 글자 크기가 달라져** 순위표가 한 줄로 안 선다(6자리부터 눈에 띈다).
+    /// 66 의 대가는 이름 칸이다: 행 고정분 = 5+22+7+22+7+4+66+9 = 142 → 이름 172pt(314 − 142).
+    /// 이름은 이미 `lineLimit(1) + minimumScaleFactor(0.75)` 라 긴 별명도 줄어들 뿐 잘리지 않는다.
+    /// **어제 챔피언 카드가 같은 상수를 읽는다** — 두 벌로 적으면 두 카드의 점수가 어긋난다.
+    static let scoreWidth: CGFloat = 66
 
     let rank: Int
     let entry: MiniGameBoardEntry

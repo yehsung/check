@@ -116,6 +116,9 @@ package enum GamesMiniGameText {
         switch kind {
         case .timingBar: return "마커가 밝은 구간에 오면 탭 · 10라운드"
         case .flappy: return "탭해서 점프 · 기둥 사이를 지나갈수록 +1"
+        // 폰에는 아직 테트리스가 **보이지 않는다**(`MiniGameKind.phoneCases`) — 이 줄은 컴파일을 위해서만 있다.
+        // 모바일 세션이 여기를 채운다: 끌기·탭 회전·홀드 버튼이 정해지면 그 조작 동사로 쓴다.
+        case .tetris: return kind.howToPlay
         }
     }
 

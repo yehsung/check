@@ -46,6 +46,11 @@ package final class GamesPlayController {
         switch kind {
         case .timingBar: return timing.isPlaying
         case .flappy: return flappy.isPlaying
+        // 폰에는 테트리스가 보이지 않는다(`MiniGameKind.phoneCases`) — 이 갈래로는 아무도 못 들어온다.
+        // **모바일 세션이 여기를 채운다**(TetrisGame 을 이 타입에 물리고, 아래 다섯 갈래를 한꺼번에).
+        // "진행 중이 아니다"로 두는 이유: 프레임 루프가 아예 안 돌고 `abandon()` 도 조용히 false 를 준다 —
+        // 배선이 빠진 채 화면만 붙어도 **점수가 제출되지 않는다**(순위표를 더럽히지 않는 쪽으로 넘어진다).
+        case .tetris: return false
         }
     }
 
@@ -54,6 +59,8 @@ package final class GamesPlayController {
         switch kind {
         case .timingBar: return timing.total
         case .flappy: return flappy.score
+        // 모바일 세션이 여기를 채운다(폰 미도달 — 위 isPlaying 주석).
+        case .tetris: return 0
         }
     }
 
@@ -72,6 +79,9 @@ package final class GamesPlayController {
             let beforePhase = flappy.phase
             flappy.flap()
             if flappy.flapCount != before || flappy.phase != beforePhase { tapSerial &+= 1 }
+        // 모바일 세션이 여기를 채운다(폰 미도달 — 위 isPlaying 주석). 탭을 삼킨다: 햅틱도 시작 알림도 없다.
+        case .tetris:
+            break
         }
         if isPlaying, !wasPlaying {
             reportedFinish = false
@@ -105,6 +115,9 @@ package final class GamesPlayController {
                 reportedFinish = true
                 onFinished?(flappy.score)
             }
+        // 모바일 세션이 여기를 채운다(폰 미도달 — 위 isPlaying 주석). isPlaying 이 false 라 여기까지 오지도 않는다.
+        case .tetris:
+            break
         }
     }
 
@@ -123,6 +136,9 @@ package final class GamesPlayController {
             // 플래피 규칙에는 '무효'가 없다(interrupt 는 그 점수로 결과를 확정한다) — 새 판(시작 전)으로 갈아 끼운다.
             seedSource &+= 0x9E37_79B9
             flappy = FlappyGame(seed: seedSource)
+        // 모바일 세션이 여기를 채운다(폰 미도달 — 위 isPlaying 주석). isPlaying 이 false 라 가드에서 이미 돌아간다.
+        case .tetris:
+            break
         }
         return true
     }

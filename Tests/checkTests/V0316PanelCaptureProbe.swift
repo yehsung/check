@@ -69,9 +69,9 @@ struct V0316PanelCaptureProbe {
             let engine = ReactionEngine()
             engine.renderActive = true
 
-            let suite = "v0316-capture-\(id)-\(UUID().uuidString)"
-            let defaults = try #require(UserDefaults(suiteName: suite))
-            defer { defaults.removePersistentDomain(forName: suite) }
+            // 한 테스트가 캐릭터마다 스위트를 하나씩 만든다 — `id` 가 label 이라 서로 안 겹친다.
+            // 이름은 UUID 가 아니라 테스트 신원 + id 에서, 자리는 $TMPDIR(`CheckTestScratch` 머리 주석).
+            let defaults = CheckTestScratch.defaults(id)
             defaults.set(id, forKey: CharacterSelection.defaultsKey)
 
             // 실제 패널 크기 그대로(140×170pt).

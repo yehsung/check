@@ -319,7 +319,8 @@ func 업로드_캐시버스터는_같은_초_안의_두_번째_업로드와_갈�
 // MARK: - 맥 스토어 배선
 
 @MainActor
-private func v0336Store(host: String, signedIn: Bool = true) -> WorkTimerStore {
+private func v0336Store(host: String, signedIn: Bool = true,
+                        function: String = #function, line: Int = #line) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
@@ -328,7 +329,9 @@ private func v0336Store(host: String, signedIn: Bool = true) -> WorkTimerStore {
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: UserDefaults(suiteName: "v0336-store-\(UUID().uuidString)")!
+        // 이름은 UUID 가 아니라 **테스트 신원**에서, 자리는 $TMPDIR(`CheckTestScratch` 머리 주석).
+        // 옛 본문은 정리 코드가 아예 없어 실행마다 ~/Library/Preferences 에 plist 를 하나씩 남겼다.
+        defaults: CheckTestScratch.defaults("store-L\(line)", function: function)
     )
     if signedIn {
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
@@ -630,11 +633,17 @@ enum V0336RowState: CaseIterable {
 
 /// 렌더 전용 스토어. **로그인 상태로 만든다** — 로그아웃 상태로 그리면 이 행은 버튼이 잠긴 다른 그림이고,
 /// 그러면 사용자가 실제로 보는 가장 높은 상태를 한 번도 안 재게 된다.
+///
+/// `function`·`line` 은 **호출 지점**에서 평가되는 기본 인자라 호출자를 안 고치고 자기 신원을 준다.
+/// 받아서 이어 넘겨야 한다 — 안 그러면 이름이 `v0336RenderStore` 로 굳어 전부 한 스위트다.
+/// 한 테스트가 네 상태를 나란히 그리므로 `state` 도 함께 이름에 넣는다.
 @MainActor
-private func v0336RenderStore(state: V0336RowState) -> WorkTimerStore {
+private func v0336RenderStore(state: V0336RowState,
+                              function: String = #function,
+                              line: Int = #line) -> WorkTimerStore {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon"],
-        defaults: UserDefaults(suiteName: "v0336-render-\(UUID().uuidString)")!
+        defaults: CheckTestScratch.defaults("render-\(state.fileName)-L\(line)", function: function)
     )
     store.session = SupabaseSession(accessToken: "t", refreshToken: nil, userID: "me")
     switch state {
@@ -658,8 +667,9 @@ private func v0336RenderStore(state: V0336RowState) -> WorkTimerStore {
 @MainActor private var v0336CardContentWidth: CGFloat { CheckSettingsView.preferredWidth - 14 * 2 - 12 * 2 }
 
 @MainActor
-private func v0336RowBitmap(state: V0336RowState, width: CGFloat? = nil) throws -> NSBitmapImageRep {
-    let row = AvatarRemovalSettingsRow(store: v0336RenderStore(state: state))
+private func v0336RowBitmap(state: V0336RowState, width: CGFloat? = nil,
+                            function: String = #function) throws -> NSBitmapImageRep {
+    let row = AvatarRemovalSettingsRow(store: v0336RenderStore(state: state, function: function))
     // ★ `frame` 은 **행에** 건다. 패딩 바깥에 걸면 행에 남는 폭이 패딩만큼(16pt) 줄어 줄바꿈이 달라진다 —
     //   앞선 판이 확인 단계의 자람을 통째로 놓친 원인이 정확히 이 한 줄이었다.
     let content = row.frame(width: width ?? v0336CardContentWidth).padding(8).background(CheckTheme.panel)
@@ -675,14 +685,18 @@ private func v0336RowBitmap(state: V0336RowState, width: CGFloat? = nil) throws 
 
 /// 설정 화면 **전체**를 창 폭 하한에서 그린다(V0316 과 같은 규약 — 단축키 안내 한 줄까지 켠 가장 높은 상태).
 @MainActor
-private func v0336SettingsBitmap(admin: Bool, state: V0336RowState) throws -> NSBitmapImageRep {
-    let store = v0336RenderStore(state: state)
+private func v0336SettingsBitmap(admin: Bool, state: V0336RowState,
+                                 function: String = #function) throws -> NSBitmapImageRep {
+    let store = v0336RenderStore(state: state, function: function)
     store.myCenterLoaded = true
     store.myCenter = CenterLabel.seoul
     store.ultraUnlimited = admin
     store.workShortcutStatus = .conflict
-    let suiteName = "v0336-settings-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
+    // 한 테스트가 admin·state 를 바꿔 이 그림을 셋까지 그린다 — 둘 다 이름에 넣어 갈라 둔다.
+    let tag = "settings-\(admin)-\(state.fileName)"
+    let suiteName = CheckTestScratch.suitePath(tag, function: function)
+    let defaults = CheckTestScratch.defaults(tag, function: function)
+    // `removeSuite(named:)` 는 검색 목록에서 빼기만 한다 — 정리로 세지 마라. 진짜 정리는 만들 때 했다.
     defer {
         defaults.removePersistentDomain(forName: suiteName)
         UserDefaults.standard.removeSuite(named: suiteName)

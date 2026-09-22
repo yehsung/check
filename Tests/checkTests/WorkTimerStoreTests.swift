@@ -3192,7 +3192,7 @@ private func inertTokenStore() -> TokenUsageStore {
 }
 
 private func isolatedDefaults() -> UserDefaults {
-    let suiteName = "check-tests-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return defaults

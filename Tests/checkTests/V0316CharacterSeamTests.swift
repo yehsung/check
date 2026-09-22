@@ -112,9 +112,9 @@ struct V0316CharacterSeamTests {
     @MainActor
     @Test("선택은 번들 캐릭터를 받아들이고 모르는 값은 아잉으로 접는다")
     func selectionAcceptsBundledAndFoldsUnknown() throws {
-        let suite = "v0316-seam-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        // 이름은 UUID 가 아니라 테스트 신원에서, 자리는 $TMPDIR(`CheckTestScratch` 머리 주석).
+        // 정리는 만들 때 앞에서 끝난다 — 끝나고 지우는 것으로는 cfprefsd 를 못 이긴다.
+        let defaults = CheckTestScratch.defaults()
         let selection = CharacterSelection(defaults: defaults, catalog: .load(bundle: CheckResources.bundle))
         #expect(selection.selectedID == CharacterCatalog.builtInAingID)
         #expect(selection.select("shiba"))

@@ -287,7 +287,7 @@ private func launchStubStore(host: String, defaults: UserDefaults) -> WorkTimerS
 }
 
 private func launchIsolatedDefaults() -> UserDefaults {
-    let suiteName = "check-launch-tests-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return defaults

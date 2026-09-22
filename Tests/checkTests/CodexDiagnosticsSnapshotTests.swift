@@ -25,10 +25,12 @@ import Testing
 // MARK: - 픽스처 헬퍼
 
 /// 스위트 전용 격리 UserDefaults(도장 키가 실제 사용자 설정을 건드리지 않게).
-private func isolatedDefaults() -> UserDefaults {
-    let name = "codex-diag-snapshot-\(UUID().uuidString)"
-    UserDefaults().removePersistentDomain(forName: name)
-    return UserDefaults(suiteName: name)!
+///
+/// 옛 코드는 `UserDefaults()`(= standard **객체**)에 대고 아직 만들지도 않은 스위트 이름을 지웠다 —
+/// 대상도 순서도 어긋나 아무것도 안 지워졌고, 이름이 UUID 라 실행마다 plist 가 하나씩 영구히 남았다.
+/// 이제 자리와 이름을 `CheckTestScratch` 에 맡긴다(그 파일 주석에 2026-09-22 사고 기록).
+private func isolatedDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 프로덕션과 **같은 설정**의 인코더(SupabaseWorkService.init 이 세우는 것과 동일: convertToSnakeCase).
@@ -126,7 +128,7 @@ private let nonDiagColumns: Set<String> = [
 ]
 
 @MainActor
-private func makeStore(host: String, build: Int?) -> WorkTimerStore {
+private func makeStore(host: String, build: Int?, function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
@@ -135,7 +137,7 @@ private func makeStore(host: String, build: Int?) -> WorkTimerStore {
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: isolatedDefaults()
+        defaults: isolatedDefaults(host, function: function)
     )
     store.session = SupabaseSession(
         accessToken: "access-token", refreshToken: nil,

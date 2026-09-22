@@ -164,11 +164,10 @@ private func v0316WriteCharacter(root: URL, folder: String, manifest: Data?) -> 
     return dir
 }
 
-private func v0316TempRoot() -> URL {
-    let root = FileManager.default.temporaryDirectory
-        .appendingPathComponent("v0316-characters-\(UUID().uuidString)", isDirectory: true)
-    try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    return root
+/// 테스트별 임시 루트. 이름을 UUID 가 아니라 **테스트 신원**에서 뽑는다 — UUID 면 실행마다 $TMPDIR 에
+/// 새 폴더가 쌓인다(`CheckTestScratch` 머리 주석). 한 테스트가 루트를 둘 이상 쓰면 `label` 로 갈라라.
+private func v0316TempRoot(_ label: String = "", function: String = #function) -> URL {
+    CheckTestScratch.directory(label, function: function)
 }
 
 @Suite struct V0316CharacterCoreTests {
@@ -403,9 +402,8 @@ private func v0316TempRoot() -> URL {
 
     @MainActor
     @Test func 선택_기본은_아잉이고_모르는_저장값은_아잉으로_접힌다() {
-        let suiteName = "check-v0316-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        // 이름은 UUID 가 아니라 테스트 신원에서, 자리는 $TMPDIR(`CheckTestScratch` 머리 주석).
+        let defaults = CheckTestScratch.defaults()
         let catalog = CharacterCatalog(manifests: [v0316SpriteManifest(id: "fox")])
         let selection = CharacterSelection(defaults: defaults, catalog: catalog)
 
@@ -420,9 +418,8 @@ private func v0316TempRoot() -> URL {
 
     @MainActor
     @Test func 선택_카탈로그에_있는_것만_저장한다() {
-        let suiteName = "check-v0316-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        // 이름은 UUID 가 아니라 테스트 신원에서, 자리는 $TMPDIR(`CheckTestScratch` 머리 주석).
+        let defaults = CheckTestScratch.defaults()
         let catalog = CharacterCatalog(manifests: [v0316SpriteManifest(id: "fox")])
         let selection = CharacterSelection(defaults: defaults, catalog: catalog)
 

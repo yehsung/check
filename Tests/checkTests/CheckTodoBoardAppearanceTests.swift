@@ -25,7 +25,7 @@ import Testing
 
     /// 실제 사용자 설정(.standard)을 절대 건드리지 않는 일회용 저장소. 실패로 빠져나가도 반드시 지운다.
     private func withTestDefaults(_ body: @MainActor (UserDefaults) throws -> Void) rethrows {
-        let suiteName = "check-todo-board-appearance-tests-\(UUID().uuidString)"
+        let suiteName = CheckTestScratch.uniqueSuitePath()
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         defer {

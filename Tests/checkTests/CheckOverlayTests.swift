@@ -527,9 +527,8 @@ func reactionEngineCommuteEndDuringCommuteStartStaysRejected() {
 
 @Test
 func milestoneTrackerFiresOncePerKoreanDay() {
-    let suiteName = "check-milestone-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
+    // 이름은 UUID 가 아니라 테스트 신원에서, 자리는 $TMPDIR(`CheckTestScratch` 머리 주석).
+    let defaults = CheckTestScratch.defaults("milestone")
     var tracker = MilestoneTracker(defaults: defaults)
 
     let day1 = kstDate(year: 2026, month: 7, day: 11, hour: 10)
@@ -2270,11 +2269,20 @@ private func writeBubbleComposite(background: NSImage, bubbleText: String, to ur
 
 // MARK: - Helpers
 
-private func isolatedOverlayDefaults() -> UserDefaults {
-    let suiteName = "check-overlay-tests-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
-    return defaults
+/// 격리 defaults. 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다 —
+/// 이유는 `CheckTestScratch` 머리 주석에 있다(2026-09-22 사고).
+///
+/// **왜 `#line` 까지 쓰는가** — 이 파일은 한 테스트가 스위트를 둘·셋씩 쓴다(스토어 하나, 오버레이
+/// 컨트롤러 하나, 때로 업데이트 스토어 하나). `#function` 만으로 이름을 지으면 그것들이 한 스위트를
+/// 나눠 쓰고, `CheckTestScratch.defaults` 가 만들 때마다 도메인을 지우므로 **나중에 만든 쪽이 앞 쪽의
+/// 값을 날린다**(V0239UltraLapTests:28-32 가 적어 둔 그 함정 — 드래그 오프셋 왕복처럼 값을 실제로
+/// 주고받는 테스트가 여기 있다). `#line` 은 `#function` 처럼 **호출 지점에서** 평가되는 컴파일러
+/// 기본 인자라 호출자를 한 글자도 안 고치고 자리마다 다른 이름을 준다. 이름 수는 소스의 호출 지점
+/// 수로 유계다. 같은 줄에서 여러 번 부르는 자리는 `label` 로 갈라라.
+private func isolatedOverlayDefaults(_ label: String = "",
+                                     function: String = #function,
+                                     line: Int = #line) -> UserDefaults {
+    CheckTestScratch.defaults(label.isEmpty ? "L\(line)" : "\(label)-L\(line)", function: function)
 }
 
 /// 지정한 KST 시각의 Date 를 만든다(시간창/1일1회 판정 테스트용).

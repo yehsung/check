@@ -399,7 +399,9 @@ func loaderFallsBackToUSDZWhenPrebakeIsMissingOrUnreadable() throws {
     #expect(v0238Fingerprint(missing.scene).geometryCount >= 1)
 
     // ② 프리베이크가 있지만 못 읽는 경우(구버전 SceneKit 의 아카이브 거부·손상 다운로드) → usdz. 캐릭터가 사라지면 안 된다.
-    let corrupt = FileManager.default.temporaryDirectory.appendingPathComponent("v0238-corrupt-\(UUID().uuidString).scn")
+    // 이름을 UUID 가 아니라 테스트 신원에서 뽑는다 — UUID 면 실행마다 $TMPDIR 에 파일이 쌓인다
+    // (`CheckTestScratch` 머리 주석). 폴더는 만들 때 비워지므로 남은 것이 다음 실행을 물들이지 않는다.
+    let corrupt = CheckTestScratch.directory("corrupt").appendingPathComponent("v0238-corrupt.scn")
     try Data((0..<4_096).map { _ in UInt8.random(in: 0...255) }).write(to: corrupt)
     defer { try? FileManager.default.removeItem(at: corrupt) }
     let unreadable = try #require(CheckCharacter3DScene.loadModelScene(
@@ -525,8 +527,8 @@ func prebakedLoadSpawnsNoUSDThreadPoolInAFreshProcess() throws {
     let afterUSDZ = threadCount()
     print("geos=\\(geos) base=\\(base) scn_delta=\\(afterSCN - base) usdz_delta=\\(afterUSDZ - afterSCN)")
     """
-    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("v0238-thread-probe-\(UUID().uuidString)")
-    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    // 이름은 UUID 가 아니라 테스트 신원에서(`CheckTestScratch` 머리 주석) — 폴더는 만들 때 비워진다.
+    let dir = CheckTestScratch.directory("thread-probe")
     defer { try? FileManager.default.removeItem(at: dir) }
     let script = dir.appendingPathComponent("probe.swift")
     try probe.write(to: script, atomically: true, encoding: .utf8)

@@ -30,16 +30,13 @@ import Testing
     private static let frozenNow = Date(timeIntervalSince1970: 1_770_000_000)
 
     /// 테스트마다 새 suite 를 쓴다 — .standard 를 공유하면 병렬 테스트가 서로의 저장 세션/설정을 덮어쓴다.
-    private func makeDefaults() -> UserDefaults {
-        let suiteName = "check-message-store-tests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
-        return defaults
+    private func makeDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+        CheckTestScratch.defaults(label, function: function)
     }
 
     /// 근무중·로그인 상태의 스토어(기존 콕찌르기 테스트와 같은 관용구 — start() 는 동기화 큐까지 돌려
     /// 이 테스트가 세려는 요청에 잡음을 섞는다). 시계는 **얼린 채로** 꽂는다.
-    private func makeStore(host: String) -> WorkTimerStore {
+    private func makeStore(host: String, function: String = #function) -> WorkTimerStore {
         let service = SupabaseWorkService(
             projectURL: URL(string: "http://\(host)")!,
             anonKey: "anon-test-key",
@@ -48,7 +45,7 @@ import Testing
         let store = WorkTimerStore(
             service: service,
             environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-            defaults: makeDefaults()
+            defaults: makeDefaults(host, function: function)
         )
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
         store.startedAt = Self.frozenNow

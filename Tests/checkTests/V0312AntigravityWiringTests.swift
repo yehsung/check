@@ -30,16 +30,14 @@ private let agNow = Date(timeIntervalSince1970: 1_789_000_000)
 private var agMonth: String { TokenUsageIncrementalScanner.kstMonthString(agNow) }
 private var agDay: String { TokenUsageIncrementalScanner.dayBounds(now: agNow).date }
 
-private func agTempDir(_ tag: String) -> URL {
-    FileManager.default.temporaryDirectory
-        .appendingPathComponent("check-v0312-\(tag)-\(UUID().uuidString)", isDirectory: true)
+/// 테스트별 임시 폴더. `tag` 가 한 테스트 안의 자리를 가른다 — 이름이 UUID 면 실행마다 $TMPDIR 에 폴더가 쌓인다.
+private func agTempDir(_ tag: String, function: String = #function) -> URL {
+    CheckTestScratch.directory(tag, function: function)
 }
 
-private func agDefaults() -> UserDefaults {
-    let name = "check-v0312-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: name)!
-    defaults.removePersistentDomain(forName: name)
-    return defaults
+/// 격리 defaults. 한 테스트가 스토어를 둘 이상 만들면 `label` 로 갈라라(안 갈면 뒤에 만든 쪽이 앞선 쪽을 비운다).
+private func agDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 세 종류가 다 찬 월 집계. 값은 자릿수가 서로 달라(클로드 10자리·Codex 9자리·안티 5자리) 합이 우연히 맞는 일이 없다.
@@ -681,7 +679,7 @@ func v0312AntigravityOnlyUserPassesBothTheRowGateAndTheUploadGate() async throws
     #expect(usage.antigravityTotal == 42_676)
 
     // ⓐ 행 게이트: 그림이 그려진다(EmptyView 면 픽셀 높이가 0 이다).
-    let defaults = agDefaults()
+    let defaults = agDefaults("row-gate")
     defaults.set(try JSONEncoder().encode(usage), forKey: TokenUsageStore.snapshotKey)
     let store = TokenUsageStore(
         defaults: defaults,
@@ -706,7 +704,7 @@ func v0312AntigravityOnlyUserPassesBothTheRowGateAndTheUploadGate() async throws
     let work = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: agDefaults(),
+        defaults: agDefaults("upload-gate"),
         workspaceNotifications: nil,
         tokenUsage: store
     )
@@ -766,13 +764,14 @@ private func v0312RenderPNG(_ view: some View, width: CGFloat = 292) throws -> D
 private enum V0312RenderError: Error { case failed }
 
 @MainActor
-private func v0312Store(_ usage: TokenUsageMonthly) throws -> TokenUsageStore {
-    let defaults = agDefaults()
+private func v0312Store(_ usage: TokenUsageMonthly, label: String = "",
+                        function: String = #function) throws -> TokenUsageStore {
+    let defaults = agDefaults("snap-" + label, function: function)
     defaults.set(try JSONEncoder().encode(usage), forKey: TokenUsageStore.snapshotKey)
     return TokenUsageStore(
         defaults: defaults,
-        homeDirectory: agTempDir("snap-home"),
-        cacheURL: agTempDir("snap-cache").appendingPathComponent("c.json"),
+        homeDirectory: agTempDir("snap-home-" + label, function: function),
+        cacheURL: agTempDir("snap-cache-" + label, function: function).appendingPathComponent("c.json"),
         clock: { agNow },
         notificationCenter: NotificationCenter()
     )
@@ -783,7 +782,7 @@ private func v0312Store(_ usage: TokenUsageMonthly) throws -> TokenUsageStore {
 func v0312RendersTokenBoxAndBoardRowSnapshots() throws {
     // ① 세 종류가 다 있는 내 박스. 굵은 총합 = 클로드 + Codex + 안티그래비티.
     let three = agUsage()
-    let threeStore = try v0312Store(three)
+    let threeStore = try v0312Store(three, label: "three")
     let threePNG = try v0312RenderPNG(CheckTokenUsageRow(store: threeStore))
     #expect(threePNG.count > 0)
     _ = V0312Snapshots.save(threePNG, "antigravity-mybox-three.png")
@@ -793,7 +792,7 @@ func v0312RendersTokenBoxAndBoardRowSnapshots() throws {
         claudeInput: 0, claudeOutput: 0, claudeCacheRead: 0, claudeCacheCreation: 0,
         codexInput: 0, codexOutput: 0, codexCacheRead: 0
     )
-    let onlyStore = try v0312Store(onlyAG)
+    let onlyStore = try v0312Store(onlyAG, label: "only")
     let onlyPNG = try v0312RenderPNG(CheckTokenUsageRow(store: onlyStore))
     #expect(onlyPNG != threePNG)
     _ = V0312Snapshots.save(onlyPNG, "antigravity-mybox-only.png")

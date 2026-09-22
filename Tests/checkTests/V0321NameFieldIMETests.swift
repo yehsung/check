@@ -37,29 +37,29 @@ private final class NFKeyWindow: NSWindow {
 
 private let nfUserID = "00000000-0000-0000-0000-000000000002"
 
+/// 격리 defaults. 이름을 테스트 신원에서 뽑아 `CheckTestScratch.root`($TMPDIR)에 둔다 —
+/// UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를 하나씩 영구히 남긴다(그 파일 주석의 2026-09-22 사고).
 @MainActor
-private func nfDefaults() -> UserDefaults {
-    let suite = "v0321-name-ime-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
-    return defaults
+private func nfDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 실홈을 안 읽는 토큰 스토어 — 팝오버의 `.task` 갱신 루프가 테스트 중 실제 홈을 훑지 않게.
 @MainActor
-private func nfInertTokenStore() -> TokenUsageStore {
-    let tmp = FileManager.default.temporaryDirectory
-    let id = UUID().uuidString
+private func nfInertTokenStore(_ label: String = "", function: String = #function) -> TokenUsageStore {
+    // 스토어의 defaults 와 **다른** 스위트다 — 같은 이름이면 나중에 만든 쪽이 앞선 쪽을 비운다.
+    let scratch = CheckTestScratch.directory(label + "-token", function: function)
     return TokenUsageStore(
-        defaults: nfDefaults(),
-        homeDirectory: tmp.appendingPathComponent("check-v0321-token-home-\(id)", isDirectory: true),
-        cacheURL: tmp.appendingPathComponent("check-v0321-token-cache-\(id).json", isDirectory: false)
+        defaults: nfDefaults(label + "-token", function: function),
+        homeDirectory: scratch.appendingPathComponent("home", isDirectory: true),
+        cacheURL: scratch.appendingPathComponent("cache.json", isDirectory: false)
     )
 }
 
 /// 가입(팀 만들기 모드) 스토어. 네트워크는 `URLProtocolStub` — 가입·팀 생성이 실제로 끝까지 돈다.
 @MainActor
-private func nfSignUpStore(host: String, displayName: String, teamName: String) -> WorkTimerStore {
+private func nfSignUpStore(host: String, displayName: String, teamName: String,
+                           function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
@@ -68,8 +68,8 @@ private func nfSignUpStore(host: String, displayName: String, teamName: String) 
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: nfDefaults(),
-        tokenUsage: nfInertTokenStore()
+        defaults: nfDefaults(host, function: function),
+        tokenUsage: nfInertTokenStore(host, function: function)
     )
     store.isMenuPresented = true
     store.email = "founder@example.com"

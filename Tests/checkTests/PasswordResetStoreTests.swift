@@ -240,17 +240,15 @@ private func awaitRequestSent(path: String, host: String) async {
     }
 }
 
-private func isolatedDefaults() -> UserDefaults {
-    let suiteName = "check-password-reset-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
-    return defaults
+/// 테스트마다 새 스위트(이름·자리 모두 `CheckTestScratch` 규약 — $TMPDIR, 테스트 신원에서 뽑은 이름).
+private func isolatedDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// **비로그인** 상태의 스텁 스토어. 세션을 미리 꽂지 않는 것이 핵심이다 — 재설정이 끝나도 여전히
 /// 로그아웃이어야 한다는 것이 이 파일의 핵심 계약이라, 시작점이 반드시 로그아웃이어야 그 차이가 보인다.
 @MainActor
-private func makeResetStore(host: String) -> WorkTimerStore {
+private func makeResetStore(host: String, function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
@@ -259,7 +257,7 @@ private func makeResetStore(host: String) -> WorkTimerStore {
     return WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: isolatedDefaults()
+        defaults: isolatedDefaults(host, function: function)
     )
 }
 

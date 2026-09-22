@@ -465,12 +465,17 @@ struct UltraPokeButtonTests {
 /// allWorking = 전원 근무중(= 모든 행이 활성 분기)으로 만든다. 기본값(false)은 근무중/자리비움을 섞어
 /// 실제 화면에 가깝게 두고, 충전 버튼 존재 검증만 이 스위치를 켠다 — 그 테스트는 행 구성이 두 그림에서
 /// 완전히 같아야 뜻을 갖기 때문이다(섞인 목록으로도 되지만, 전원 활성이면 차이가 행 수만큼 커진다).
+///
+/// 한 테스트가 이 스토어를 **넷까지** 나란히 세우고 서로 견준다(three/twin/zero/unknown). 그래서 이름에
+/// `#line` 을 섞는다 — `#function` 만으로 지으면 넷이 한 스위트를 나눠 쓰고, 뒤에 만든 쪽이 앞 쪽의
+/// 값을 지운다. `#line` 도 `#function` 처럼 **호출 지점**에서 평가돼 호출자를 안 고쳐도 자리마다 갈린다.
 @MainActor
-private func pokeStore(now: Date, ultraBalance: Int?, memberCount: Int = 5, allWorking: Bool = false) -> WorkTimerStore {
+private func pokeStore(now: Date, ultraBalance: Int?, memberCount: Int = 5, allWorking: Bool = false,
+                       function: String = #function, line: Int = #line) -> WorkTimerStore {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedUltraDefaults(),
-        tokenUsage: inertUltraTokenStore()
+        defaults: isolatedUltraDefaults("poke-L\(line)", function: function),
+        tokenUsage: inertUltraTokenStore("poke-L\(line)", function: function)
     )
     // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다.
     store.isMenuPresented = true
@@ -538,21 +543,22 @@ private enum UltraRenderError: Error {
     case failed
 }
 
-private func isolatedUltraDefaults() -> UserDefaults {
-    let suiteName = "check-ultra-button-tests-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
-    return defaults
+/// 격리 defaults. 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다 —
+/// 이유는 `CheckTestScratch` 머리 주석에 있다. 한 테스트가 스위트를 둘 이상 쓰면 `label` 로 갈라라.
+private func isolatedUltraDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 렌더 테스트용 격리 토큰 스토어(빈 임시 홈 + 격리 defaults).
+/// `function` 은 부른 쪽에서 받아 이어 넘긴다 — 여기서 `#function` 을 다시 쓰면 이름이
+/// `inertUltraTokenStore` 로 굳어 모든 테스트가 한 스위트·한 홈을 나눠 쓴다.
 @MainActor
-private func inertUltraTokenStore() -> TokenUsageStore {
-    let tmp = FileManager.default.temporaryDirectory
-    let id = UUID().uuidString
+private func inertUltraTokenStore(_ label: String = "", function: String = #function) -> TokenUsageStore {
+    let tag = label.isEmpty ? "token" : "token-" + label
+    let home = CheckTestScratch.directory(tag, function: function)
     return TokenUsageStore(
-        defaults: isolatedUltraDefaults(),
-        homeDirectory: tmp.appendingPathComponent("check-ultra-token-home-\(id)", isDirectory: true),
-        cacheURL: tmp.appendingPathComponent("check-ultra-token-cache-\(id).json", isDirectory: false)
+        defaults: isolatedUltraDefaults(tag, function: function),
+        homeDirectory: home.appendingPathComponent("home", isDirectory: true),
+        cacheURL: home.appendingPathComponent("cache.json", isDirectory: false)
     )
 }

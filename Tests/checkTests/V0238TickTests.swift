@@ -188,8 +188,10 @@ private final class TickClock: @unchecked Sendable {
 }
 
 private func fixedDefaults(_ suiteName: String) -> UserDefaults {
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
+    // 이름은 이미 유계지만 그대로 쓰면 plist 가 ~/Library/Preferences 에 떨어진다 — 절대 경로로 옮긴다.
+    let path = CheckTestScratch.suitePath(named: suiteName)
+    let defaults = UserDefaults(suiteName: path)!
+    defaults.removePersistentDomain(forName: path)
     return defaults
 }
 

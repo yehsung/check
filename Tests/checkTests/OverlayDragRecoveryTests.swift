@@ -57,12 +57,11 @@ private func screenCenter(of view: SCNView) -> NSPoint {
     return view.window!.convertPoint(toScreen: view.convert(local, to: nil))
 }
 
+/// 격리 defaults. 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다 —
+/// 이유는 `CheckTestScratch` 머리 주석에 있다. 한 테스트가 스위트를 둘 이상 쓰면 `label` 로 갈라라.
 @MainActor
-private func isolatedDragDefaults() -> UserDefaults {
-    let name = "check-drag-recovery-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: name)!
-    defaults.removePersistentDomain(forName: name)
-    return defaults
+private func isolatedDragDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 실제 패널 + 실제 SCNView 를 얹은 컨트롤러 픽스처. 몸체 판정(A1)이 **진짜 지오메트리**로 도는 상태여야
@@ -73,17 +72,22 @@ private final class DragRig {
     let store: WorkTimerStore
     let controller: CheckOverlayController
 
-    init(ultraDeadlineSeconds: Double = 600, sleeps: (@Sendable (Double) async -> Void)? = nil) {
+    /// `function` 은 이 장비를 세운 **테스트**에서 받는다. 기본 인자는 호출 지점에서 평가되므로 테스트가
+    /// `DragRig()` 라고만 써도 자기 이름이 들어온다. 여기서 `#function` 을 다시 쓰면 이름이
+    /// `init(ultraDeadlineSeconds:sleeps:)` 로 굳어 모든 테스트가 한 스위트를 나눠 쓴다.
+    init(ultraDeadlineSeconds: Double = 600,
+         sleeps: (@Sendable (Double) async -> Void)? = nil,
+         function: String = #function) {
         store = WorkTimerStore(
             environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-            defaults: isolatedDragDefaults(),
+            defaults: isolatedDragDefaults("store", function: function),
             workspaceNotifications: nil
         )
         controller = CheckOverlayController(
             store: store,
             notificationCenter: NotificationCenter(),
             engine: engine,
-            defaults: isolatedDragDefaults(),
+            defaults: isolatedDragDefaults("overlay", function: function),
             workspaceNotifications: nil,
             ultraDurationSeconds: 600,
             ultraDeadlineSeconds: ultraDeadlineSeconds

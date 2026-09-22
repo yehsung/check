@@ -19,11 +19,10 @@ import UniformTypeIdentifiers
 // 여기서는 **결과 계약**(크기·확대 금지·회전·알파·실패)을 잡고, 피크는 테스트로 직접 재는 대신 "옛 경로가 돌아오면 빨개지는"
 // 소스 계약으로 지킨다 — 피크는 프로세스 전체 최대치라 한 스위트 안에서 재면 이웃 테스트의 메모리가 섞인다.
 
-private func v0336TempDirectory() throws -> URL {
-    let url = FileManager.default.temporaryDirectory
-        .appendingPathComponent("v0336-downscale-\(UUID().uuidString)", isDirectory: true)
-    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-    return url
+/// 테스트별 임시 폴더. 이름을 UUID 가 아니라 **테스트 신원**에서 뽑는다 — UUID 면 실행마다 $TMPDIR 에
+/// 새 폴더가 쌓인다(`CheckTestScratch` 머리 주석). 한 테스트가 폴더를 둘 이상 쓰면 `label` 로 갈라라.
+private func v0336TempDirectory(_ label: String = "", function: String = #function) throws -> URL {
+    CheckTestScratch.directory(label, function: function)
 }
 
 /// 테스트용 이미지 한 장을 파일로 굽는다. `orientation` 을 주면 EXIF 방향을 함께 쓴다(세로 사진 재현).

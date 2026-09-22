@@ -377,10 +377,12 @@ func v0336BoardSQLExportsMyShareNotTheWholeAccount() throws {
 import SwiftUI
 
 @MainActor
-private func scdTokenStore(_ usage: TokenUsageMonthly) throws -> TokenUsageStore {
-    let defaults = UserDefaults(suiteName: "check.tests.v0336.\(UUID().uuidString)")!
+private func scdTokenStore(_ usage: TokenUsageMonthly, label: String = "",
+                           function: String = #function) throws -> TokenUsageStore {
+    // 역DNS 이름(check.tests.v0336.…)은 ~/Library/Preferences 직행이었다 — 이름도 자리도 CheckTestScratch 에 맡긴다.
+    let defaults = CheckTestScratch.defaults(label, function: function)
     defaults.set(try JSONEncoder().encode(usage), forKey: TokenUsageStore.snapshotKey)
-    let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("v0336-\(UUID().uuidString)", isDirectory: true)
+    let tmp = CheckTestScratch.directory(label, function: function)
     return TokenUsageStore(
         defaults: defaults,
         homeDirectory: tmp.appendingPathComponent("home", isDirectory: true),
@@ -405,10 +407,11 @@ private enum ScdRenderError: Error { case failed }
 /// 로컬 산식만으로 정확히 `total` 을 그리는 '거울' 스토어. Claude 한 항에 전부 몰면
 /// `displayTotal(account: nil)` = claudeTotal + 0 + 0 = total 이라, 서버 행이 그려야 할 숫자와 **같은 글자**가 나온다.
 @MainActor
-private func scdMirrorStore(total: Int) throws -> TokenUsageStore {
+private func scdMirrorStore(total: Int, label: String = "",
+                            function: String = #function) throws -> TokenUsageStore {
     var usage = TokenUsageMonthly(month: TokenUsageMonthKey.current())
     usage.claudeInput = total
-    return try scdTokenStore(usage)
+    return try scdTokenStore(usage, label: "mirror-" + label, function: function)
 }
 
 /// 값이 **픽셀까지** 서버 행으로 바뀌는가. 규칙만 고치고 뷰 인자를 안 넘기면 단위 테스트는 전부 초록인 채
@@ -436,10 +439,11 @@ func v0336ServerRowIsTheNumberTheRowActuallyDraws() throws {
     // 스냅샷의 달을 '지금'에 맞춘다 — 행은 currentMonth 로 판정한다.
     var usage = scdSharedLocal().0
     usage.month = month
-    let bloated = try scdTokenStore(usage)                      // 수리 전 팝오버가 그리던 로컬 산식
-    let mirror = try scdMirrorStore(total: entry.total)         // 서버 total 을 로컬만으로 그린 기준 그림
-    let emptyStore = try scdTokenStore(TokenUsageMonthly(month: month))
-    let emptyMirror = try scdMirrorStore(total: entry.total)
+    // 네 스토어가 **서로 다른** 스위트를 써야 한다 — 이름이 같으면 뒤에 만든 쪽이 앞선 쪽의 스냅샷을 비운다.
+    let bloated = try scdTokenStore(usage, label: "bloated")    // 수리 전 팝오버가 그리던 로컬 산식
+    let mirror = try scdMirrorStore(total: entry.total, label: "a")  // 서버 total 을 로컬만으로 그린 기준 그림
+    let emptyStore = try scdTokenStore(TokenUsageMonthly(month: month), label: "empty")
+    let emptyMirror = try scdMirrorStore(total: entry.total, label: "b")
 
     @MainActor
     func renderAll() throws -> (withServer: Data, mirror: Data, local: Data,

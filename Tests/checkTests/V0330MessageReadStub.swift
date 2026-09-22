@@ -268,13 +268,14 @@ enum MessageReadTestRetention {
 
 /// 격리 토큰 스토어 — 기본값 `.shared` 는 실제 홈을 훑는다(V0251MessagePeerTests 의 mpTokenStore 주석).
 @MainActor
-func messageReadTokenStore() -> TokenUsageStore {
-    let tmp = FileManager.default.temporaryDirectory
-    let tag = UUID().uuidString
+func messageReadTokenStore(_ label: String = "", function: String = #function) -> TokenUsageStore {
+    // 홈·캐시는 `CheckTestScratch.root`($TMPDIR/check-tests/run-<pid>) 안에 둔다 — 종전 UUID 이름은
+    // 삭제 코드가 없어 실행마다 $TMPDIR 에 폴더 두 개씩 영구히 쌓였다.
+    let scratch = CheckTestScratch.directory("msgread-token-" + label, function: function)
     return TokenUsageStore(
         defaults: GomokuTestDefaults.make("v0330-msg-token"),
-        homeDirectory: tmp.appendingPathComponent("v0330-token-home-\(tag)", isDirectory: true),
-        cacheURL: tmp.appendingPathComponent("v0330-token-cache-\(tag).json", isDirectory: false),
+        homeDirectory: scratch.appendingPathComponent("home", isDirectory: true),
+        cacheURL: scratch.appendingPathComponent("cache.json", isDirectory: false),
         clock: { MessageReadFixture.now },
         notificationCenter: NotificationCenter()
     )
@@ -286,7 +287,8 @@ func messageReadTokenStore() -> TokenUsageStore {
 func makeMessageReadStore(
     _ label: String,
     transport: RealtimeTransport? = nil,
-    handler: @escaping MessageReadStubProtocol.Handler = { _, _ in nil }
+    handler: @escaping MessageReadStubProtocol.Handler = { _, _ in nil },
+    function: String = #function
 ) -> (store: WorkTimerStore, host: String) {
     let host = "v0330-msg-\(label)-\(UUID().uuidString.prefix(8))".lowercased()
     MessageReadStubProtocol.register(host: host, handler: handler)
@@ -300,7 +302,7 @@ func makeMessageReadStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
         defaults: GomokuTestDefaults.make("v0330-msg"),
         workspaceNotifications: nil,
-        tokenUsage: messageReadTokenStore(),
+        tokenUsage: messageReadTokenStore(label, function: function),
         realtimeTransport: transport
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: MessageReadFixture.me)

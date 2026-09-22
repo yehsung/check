@@ -412,22 +412,24 @@ private final class FetchRecorder: @unchecked Sendable {
 
 /// 성공 태그를 돌려주는 격리 스토어(신선하지 않은 상태 — 최초 checkIfStale 이 1회 조회).
 @MainActor
+/// `function` 을 받아서 그대로 내려보낸다 — 여기서 기본 인자를 다시 쓰면 `#function` 이
+/// `makeUpdateStore` 로 굳어 이 파일의 모든 테스트가 한 스위트를 나눠 쓴다(CheckTestScratch 주석).
 private func makeUpdateStore(
     current: String,
     tag: String,
-    now: Date = Date(timeIntervalSince1970: 1_000_000)
+    now: Date = Date(timeIntervalSince1970: 1_000_000),
+    function: String = #function
 ) -> UpdateCheckStore {
     UpdateCheckStore(
         currentVersion: current,
         fetcher: FetchRecorder(.success(tagJSON(tag))).fetch,
         clock: { now },
-        defaults: isolatedUpdateDefaults()
+        defaults: isolatedUpdateDefaults(function: function)
     )
 }
 
-private func isolatedUpdateDefaults() -> UserDefaults {
-    let suite = "check-update-tests-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
-    return defaults
+/// 격리 defaults. 이름을 UUID 가 아니라 테스트 신원에서 뽑고 자리도 $TMPDIR 로 옮긴다 —
+/// 이유는 `CheckTestScratch` 머리 주석에 있다. 한 테스트가 둘 이상 쓰면 `label` 로 갈라라.
+private func isolatedUpdateDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }

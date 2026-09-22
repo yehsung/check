@@ -8,17 +8,23 @@ import Testing
 @MainActor
 @Suite("나 탭 화면 모드(w9)")
 struct MeAppearanceTests {
-    /// 테스트마다 따로 쓰는 suite(병렬 테스트끼리 섞이지 않게). 끝나면 지운다.
+    /// 테스트마다 따로 쓰는 suite(병렬 테스트끼리 섞이지 않게).
+    ///
+    /// **이름이 UUID 였다** — 그러면 실행마다 새 도메인이라 `~/Library/Preferences` 에 plist 가 영구히
+    /// 쌓인다(2026-09-22 사고: check-* 45만 개가 cfprefsd 를 죽였다). `deinit` 의 정리는 도움이 안 된다:
+    /// `removePersistentDomain` 은 디스크의 plist 를 안 지우고, 지워도 cfprefsd 가 제 메모리 사본을
+    /// 나중에 다시 flush 한다(실측). 고칠 것은 정리 시점이 아니라 **이름의 개수**라, 이름을 테스트
+    /// 신원에서 뽑는다(`MobileTestScratch` 머리 주석).
+    ///
+    /// `#function`·`#line` 은 **호출 지점**에서 평가되므로 테스트가 `ScratchDefaults()` 라고만 써도
+    /// 자기 이름이 들어온다. 정리는 `deinit` 이 아니라 **만들 때** 한다.
     final class ScratchDefaults {
-        let name = "com.yehsung.aingcheck.scratch.appearance-\(UUID().uuidString.lowercased().prefix(12))"
+        let name: String
         let defaults: UserDefaults
 
-        init() {
-            defaults = UserDefaults(suiteName: name)!
-        }
-
-        deinit {
-            UserDefaults.standard.removePersistentDomain(forName: name)
+        init(function: String = #function, line: Int = #line) {
+            name = MobileTestScratch.suiteName("appearance-L\(line)", function: function)
+            defaults = MobileTestScratch.defaults("appearance-L\(line)", function: function)
         }
     }
 

@@ -76,9 +76,9 @@ private final class V0240SteppingClock {
 
 // MARK: - 픽스처 (임시 홈)
 
-private func v0240TempDir(_ tag: String) -> URL {
-    FileManager.default.temporaryDirectory
-        .appendingPathComponent("check-v0240-\(tag)-\(UUID().uuidString)", isDirectory: true)
+/// 테스트별 임시 폴더. `tag` 가 한 테스트 안의 자리를 가른다 — 이름이 UUID 면 실행마다 $TMPDIR 에 폴더가 쌓인다.
+private func v0240TempDir(_ tag: String, function: String = #function) -> URL {
+    CheckTestScratch.directory(tag, function: function)
 }
 
 private func v0240Write(_ contents: String, to url: URL, modified: Date) {
@@ -134,11 +134,10 @@ private func v0240WriteQuietFixture(into home: URL, at date: Date) {
                modified: date)
 }
 
-private func v0240Defaults() -> UserDefaults {
-    let name = "check-v0240-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: name)!
-    defaults.removePersistentDomain(forName: name)
-    return defaults
+/// 격리 defaults. 이름을 테스트 신원(+label)에서 뽑아 `CheckTestScratch.root`($TMPDIR)에 둔다 —
+/// UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를 하나씩 영구히 남긴다(그 파일 주석의 2026-09-22 사고).
+private func v0240Defaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 // MARK: - 조립
@@ -148,15 +147,18 @@ private let v0240UserID = "00000000-0000-0000-0000-000000000003"
 
 /// 격리 토큰 스토어. 홈·캐시·defaults·알림센터를 전부 임시로 준다(실홈 스캔 금지 + 러너 .standard 오염 금지).
 @MainActor
-private func v0240TokenStore(home: URL, clock: @escaping () -> Date, snapshot: TokenUsageMonthly? = nil) -> TokenUsageStore {
-    let defaults = v0240Defaults()
+private func v0240TokenStore(home: URL, clock: @escaping () -> Date, snapshot: TokenUsageMonthly? = nil,
+                             function: String = #function) -> TokenUsageStore {
+    // 홈 폴더 이름이 호출 자리를 가른다(v0240TempDir 의 tag) — 한 테스트가 토큰 스토어를 둘 만들어도 스위트가 안 겹친다.
+    let defaults = v0240Defaults(home.lastPathComponent, function: function)
     if let snapshot, let data = try? JSONEncoder().encode(snapshot) {
         defaults.set(data, forKey: TokenUsageStore.snapshotKey)
     }
     return TokenUsageStore(
         defaults: defaults,
         homeDirectory: home,
-        cacheURL: v0240TempDir("cache").appendingPathComponent("cache.json", isDirectory: false),
+        cacheURL: v0240TempDir("cache-" + home.lastPathComponent, function: function)
+            .appendingPathComponent("cache.json", isDirectory: false),
         clock: clock,
         notificationCenter: NotificationCenter()
     )
@@ -164,7 +166,8 @@ private func v0240TokenStore(home: URL, clock: @escaping () -> Date, snapshot: T
 
 /// 스텁 네트워크에 물린 로그인·소속 확정 상태의 스토어. **팝오버는 닫혀 있다** — 이 파일이 재는 상태가 그것이다.
 @MainActor
-private func v0240Store(host: String, tokenUsage: TokenUsageStore) -> WorkTimerStore {
+private func v0240Store(host: String, tokenUsage: TokenUsageStore,
+                        function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
@@ -173,7 +176,7 @@ private func v0240Store(host: String, tokenUsage: TokenUsageStore) -> WorkTimerS
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: v0240Defaults(),
+        defaults: v0240Defaults(host, function: function),
         workspaceNotifications: nil,
         tokenUsage: tokenUsage
     )

@@ -12,7 +12,7 @@ import Testing
 //       사용자 문구 + 10분 되돌리기 배너. 흡수 세션 강하는 기존 그대로 침묵한다.
 
 private func isolatedSuite() -> (suiteName: String, defaults: UserDefaults) {
-    let suiteName = "check-v0236-sync-tests-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()   // 옛 "check-v0236-sync-tests-\(UUID())"
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return (suiteName, defaults)

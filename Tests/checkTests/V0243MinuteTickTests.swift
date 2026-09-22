@@ -22,9 +22,13 @@ private let minuteStubUserID = "00000000-0000-0000-0000-000000000042"
 private let t0 = TeamWeeklyGoal.koreanDayStart(for: Date(timeIntervalSince1970: 1_800_000_000))
     .addingTimeInterval(12 * 3600)
 
+/// 격리 defaults. 고정 이름이라 개수는 이미 유계지만, 그 이름 그대로는 ~/Library/Preferences 에
+/// 항목을 만든다 — `CheckTestScratch.suitePath(named:)` 로 같은 이름을 $TMPDIR 절대 경로로 옮긴다
+/// (CheckTestScratch 주석의 2026-09-22 사고). 이름이 유지되므로 테스트별 분리는 그대로다.
 private func fixedDefaults(_ suiteName: String) -> UserDefaults {
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
+    let path = CheckTestScratch.suitePath(named: suiteName)
+    let defaults = UserDefaults(suiteName: path)!
+    defaults.removePersistentDomain(forName: path)
     return defaults
 }
 

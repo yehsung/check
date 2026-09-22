@@ -15,7 +15,7 @@ import Testing
 //       오프라인 중 앱 종료/크래시가 미반영 근무를 영구 소실시키지 않게.
 
 private func isolatedSuite() -> (suiteName: String, defaults: UserDefaults) {
-    let suiteName = "check-v0236-tests-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()   // 옛 "check-v0236-tests-\(UUID())"
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return (suiteName, defaults)

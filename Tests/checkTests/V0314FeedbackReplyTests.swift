@@ -37,16 +37,16 @@ private let rpLatestPath = "/rest/v1/rpc/feedback_reply_latest"
 /// 그래서 테스트 실행 시각과 한참 떨어진 값을 고른다(우연히 `Date()` 와 같아 초록이 되는 일이 없게).
 private let rpServerAt = "2026-09-12T03:04:05.123456+00:00"
 
+/// 격리 defaults. 이름을 테스트 신원(+호스트)에서 뽑아 `CheckTestScratch.root`($TMPDIR)에 둔다 —
+/// UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를 하나씩 영구히 남긴다(그 파일 주석의 2026-09-22 사고).
 @MainActor
-private func rpDefaults() -> UserDefaults {
-    let suite = "v0314-reply-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
-    return defaults
+private func rpDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 @MainActor
-private func rpStore(host: String, signedIn: Bool = true, admin: Bool = true) -> WorkTimerStore {
+private func rpStore(host: String, signedIn: Bool = true, admin: Bool = true,
+                     function: String = #function) -> WorkTimerStore {
     FeedbackURLProtocol.reset(host: host)
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
@@ -56,7 +56,7 @@ private func rpStore(host: String, signedIn: Bool = true, admin: Bool = true) ->
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: rpDefaults()
+        defaults: rpDefaults(host, function: function)
     )
     if signedIn {
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: rpUserID)
@@ -104,8 +104,9 @@ private func rpReport(
 
 /// 펼쳐 둔 행 하나짜리 받은함. 답장 보내기의 전제(초안은 **펼친 행의 것**)를 화면과 같은 순서로 만든다.
 @MainActor
-private func rpExpandedStore(host: String, saved: String? = nil, draft: String) -> WorkTimerStore {
-    let store = rpStore(host: host)
+private func rpExpandedStore(host: String, saved: String? = nil, draft: String,
+                             function: String = #function) -> WorkTimerStore {
+    let store = rpStore(host: host, function: function)
     store.feedbackList = [rpReport(id: "r1", reply: saved)]
     store.feedbackLoaded = true
     store.toggleFeedbackExpansion("r1")

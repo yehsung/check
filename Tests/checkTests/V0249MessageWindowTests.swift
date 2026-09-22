@@ -31,18 +31,18 @@ private let mwSendPath = "/rest/v1/rpc/send_message"
 
 // MARK: - 헬퍼
 
+/// 격리 defaults. 이름을 테스트 신원(+호스트)에서 뽑아 `CheckTestScratch.root`($TMPDIR)에 둔다 —
+/// UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를 하나씩 영구히 남긴다(그 파일 주석의 2026-09-22 사고).
 @MainActor
-private func mwDefaults() -> UserDefaults {
-    let suite = "v0249-message-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
-    return defaults
+private func mwDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 스텁 네트워크에 물린 스토어. 시계는 **얼려서** 꽂는다 — 읽음 도장·정렬 단언이 벽시계에 흔들리면
 /// 부하 큰 병렬 실행에서 무음으로 뒤집힌다(이 저장소의 실측 회귀).
 @MainActor
-private func mwStore(host: String, signedIn: Bool = true, working: Bool = true) -> WorkTimerStore {
+private func mwStore(host: String, signedIn: Bool = true, working: Bool = true,
+                     function: String = #function) -> WorkTimerStore {
     FeedbackURLProtocol.reset(host: host)
     // v0.3.30: 스토어는 이력을 `message_history_with_reads` 로 먼저 묻는다. 이 스위트는 **옛 `message_history` 경로**를
     // 재는 것이라 새 함수가 없는 서버(실서버와 같은 404 PGRST202)를 기본으로 깐다 — 스텁의 미등록 기본값(200 `[]`)이면
@@ -60,7 +60,7 @@ private func mwStore(host: String, signedIn: Bool = true, working: Bool = true) 
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: mwDefaults()
+        defaults: mwDefaults(host, function: function)
     )
     if signedIn {
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: mwUserID)
@@ -835,8 +835,9 @@ private func mwDiffBounds(
 /// 대화가 채워진 스토어(합성 문자열만 쓴다). **한 사람과의 대화 하나**만 화면에 뜬다 —
 /// 다른 사람들의 이력도 함께 넣어 두는 이유는 "그 사람 것만 골라 그린다"를 재기 위해서다.
 @MainActor
-private func mwThreadStore(host: String, extra: [MessageHistoryEntry] = [], peer: String = "u1") -> WorkTimerStore {
-    let store = mwMenuStore(mwStore(host: host))
+private func mwThreadStore(host: String, extra: [MessageHistoryEntry] = [], peer: String = "u1",
+                           function: String = #function) -> WorkTimerStore {
+    let store = mwMenuStore(mwStore(host: host, function: function))
     var entries = [
         mwEntry(id: "a1", peer: "u1", name: "영식", body: "자료 확인했어요", minutesAgo: 240),
         mwEntry(id: "a2", peer: "u1", name: "영식", body: "네 곧 올릴게요", minutesAgo: 236, isMine: true),

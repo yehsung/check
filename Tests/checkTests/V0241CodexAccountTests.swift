@@ -39,9 +39,9 @@ private func c41ISO(_ date: Date) -> String {
     return f.string(from: date)
 }
 
-private func c41TempHome(_ tag: String) -> URL {
-    FileManager.default.temporaryDirectory
-        .appendingPathComponent("check-v0241-\(tag)-\(UUID().uuidString)", isDirectory: true)
+/// 테스트별 임시 홈. `tag` 가 한 테스트 안의 자리를 가른다 — 이름이 UUID 면 실행마다 $TMPDIR 에 폴더가 쌓인다.
+private func c41TempHome(_ tag: String, function: String = #function) -> URL {
+    CheckTestScratch.directory(tag, function: function)
 }
 
 private func c41Sessions(_ home: URL, _ path: String) -> URL {
@@ -1019,11 +1019,9 @@ func probeStatusRawValuesMatchServerColumnContract() {
 
 // MARK: - (C) 계정 스토어
 
-private func c41Defaults() -> UserDefaults {
-    let name = "check-v0241-\(UUID().uuidString)"
-    let d = UserDefaults(suiteName: name)!
-    d.removePersistentDomain(forName: name)
-    return d
+/// 격리 defaults. 한 테스트가 스토어를 둘 이상 만들면 `label` 로 갈라라(안 갈면 뒤에 만든 쪽이 앞선 쪽을 비운다).
+private func c41Defaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 러너 호출을 세고 정해진 결과를 돌려주는 가짜 프로브(프로세스 0).
@@ -1111,7 +1109,7 @@ func accountStoreChecksAuthUnderResolvedCodexHome() async {
     let runner = C41Runner(.success(c41Usage()))
     let resolverCalls = C41Runner(.success(c41Usage()))
     let store = CodexAccountUsageStore(
-        defaults: c41Defaults(), homeDirectory: home,
+        defaults: c41Defaults("store"), homeDirectory: home,
         codexHome: { _ = await resolverCalls.run(home, c41FetchedAt); return custom },
         runner: runner.run)
     await store.refreshIfDue(now: c41FetchedAt)
@@ -1124,7 +1122,7 @@ func accountStoreChecksAuthUnderResolvedCodexHome() async {
     defer { try? FileManager.default.removeItem(at: other) }
     c41LogIn(other)
     let strict = CodexAccountUsageStore(
-        defaults: c41Defaults(), homeDirectory: other,
+        defaults: c41Defaults("strict"), homeDirectory: other,
         codexHome: { other.appendingPathComponent("empty-codex", isDirectory: true) },
         runner: runner.run)
     await strict.refreshIfDue(now: c41FetchedAt)
@@ -1132,7 +1130,7 @@ func accountStoreChecksAuthUnderResolvedCodexHome() async {
     #expect(strict.lastStatus == .notLoggedIn)
     // 홈 확정을 기다리는 동안에도 재진입은 막힌다(inFlight 가 await 앞에 선다).
     let slow = CodexAccountUsageStore(
-        defaults: c41Defaults(), homeDirectory: home,
+        defaults: c41Defaults("slow"), homeDirectory: home,
         codexHome: { try? await Task.sleep(for: .milliseconds(120)); return custom },
         runner: runner.run)
     async let first: Void = slow.refreshIfDue(now: c41FetchedAt)
@@ -1215,24 +1213,29 @@ private let c41UserID = "00000000-0000-0000-0000-000000000003"
 private let c41DevicePath = "/rest/v1/token_usage_device_monthly"
 
 @MainActor
-private func c41TokenStore(home: URL, now: Date, snapshot: TokenUsageMonthly?) -> TokenUsageStore {
-    let defaults = c41Defaults()
+private func c41TokenStore(home: URL, now: Date, snapshot: TokenUsageMonthly?,
+                           function: String = #function) -> TokenUsageStore {
+    // 홈 폴더 이름이 호출 자리를 가른다 — 한 테스트가 토큰 스토어를 둘 만들어도 스위트가 안 겹친다.
+    let defaults = c41Defaults(home.lastPathComponent + "-token", function: function)
     if let snapshot, let data = try? JSONEncoder().encode(snapshot) {
         defaults.set(data, forKey: TokenUsageStore.snapshotKey)
     }
     return TokenUsageStore(
         defaults: defaults, homeDirectory: home,
-        cacheURL: c41TempHome("cache").appendingPathComponent("cache.json", isDirectory: false),
+        cacheURL: c41TempHome("cache-" + home.lastPathComponent, function: function)
+            .appendingPathComponent("cache.json", isDirectory: false),
         clock: { now }, notificationCenter: NotificationCenter(), codexHomeResolver: { nil }
     )
 }
 
 @MainActor
-private func c41Store(host: String, tokenUsage: TokenUsageStore, codexAccount: CodexAccountUsageStore? = nil) -> WorkTimerStore {
+private func c41Store(host: String, tokenUsage: TokenUsageStore, codexAccount: CodexAccountUsageStore? = nil,
+                      function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!, anonKey: "anon-test-key", session: URLSession(configuration: .stubbed))
     let store = WorkTimerStore(
-        service: service, environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"], defaults: c41Defaults(),
+        service: service, environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: c41Defaults(host, function: function),
         workspaceNotifications: nil, tokenUsage: tokenUsage, codexAccount: codexAccount)
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: c41UserID)
     store.currentTeamID = URLProtocolStub.stubTeamID
@@ -1479,13 +1482,15 @@ private final class C41HeldDelivery: @unchecked Sendable {
 
 /// c41Store 와 같되 프라이버시 GET 을 C41HeldPrivacyGET 이 붙든다. 플래그는 **로그인 직후 모양**(아무 설정도 안 옴)으로 둔다.
 @MainActor
-private func c41HeldPrivacyStore(host: String, tokenUsage: TokenUsageStore, codexAccount: CodexAccountUsageStore) -> WorkTimerStore {
+private func c41HeldPrivacyStore(host: String, tokenUsage: TokenUsageStore, codexAccount: CodexAccountUsageStore,
+                                 function: String = #function) -> WorkTimerStore {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [C41HeldPrivacyGET.self, URLProtocolStub.self]
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!, anonKey: "anon-test-key", session: URLSession(configuration: configuration))
     let store = WorkTimerStore(
-        service: service, environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"], defaults: c41Defaults(),
+        service: service, environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: c41Defaults(host, function: function),
         workspaceNotifications: nil, tokenUsage: tokenUsage, codexAccount: codexAccount)
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: c41UserID)
     store.currentTeamID = URLProtocolStub.stubTeamID
@@ -1509,7 +1514,7 @@ func uploadWrapperIgnoresOptimisticPublicFlagUntilCollectSettingActuallyArrives(
     defer { try? FileManager.default.removeItem(at: home) }
     c41LogIn(home)
     let runner = C41Runner(.success(c41Usage(month: 9, fetchedAt: c41SepNow)))
-    let account = CodexAccountUsageStore(defaults: c41Defaults(), homeDirectory: home, runner: runner.run)
+    let account = CodexAccountUsageStore(defaults: c41Defaults("account"), homeDirectory: home, runner: runner.run)
     let store = c41HeldPrivacyStore(host: host, tokenUsage: c41TokenStore(home: home, now: c41SepNow, snapshot: c41LocalUsage(total: 3_000)), codexAccount: account)
     defer { c41CancelTasks(store) }
     store.tokenUsagePublic = false   // 직전 실행에서 비공개였던 사람이
@@ -1538,7 +1543,7 @@ func uploadWrapperIgnoresOptimisticPublicFlagUntilCollectSettingActuallyArrives(
     // 사용자가 GET 전에 **비공개**를 골랐으면 늦게 온 서버값(공개 true)이 그 선택을 덮지 않는다 — 대신 수집 설정은 받아
     // 게이트가 열린다(옛 규약처럼 로더를 통째로 건너뛰면 그 세션 내내 프로브가 잠긴다).
     let host2 = host + "-private"
-    let account2 = CodexAccountUsageStore(defaults: c41Defaults(), homeDirectory: home, runner: runner.run)
+    let account2 = CodexAccountUsageStore(defaults: c41Defaults("account2"), homeDirectory: home, runner: runner.run)
     let store2 = c41HeldPrivacyStore(host: host2, tokenUsage: c41TokenStore(home: home, now: c41SepNow, snapshot: c41LocalUsage(total: 3_000)), codexAccount: account2)
     defer { c41CancelTasks(store2) }
     store2.setTokenUsagePublic(false)

@@ -9,17 +9,16 @@ import Testing
 
 private let mgUserID = "00000000-0000-0000-0000-000000000002"
 
+/// 격리 defaults. 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다 —
+/// 이유는 `CheckTestScratch` 머리 주석에 있다. 한 테스트가 스위트를 둘 이상 쓰면 `label` 로 갈라라.
 @MainActor
-private func mgDefaults() -> UserDefaults {
-    let suite = "v0246-mg-hub-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
-    return defaults
+private func mgDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 스텁 네트워크에 물린 로그인 스토어(세션/팀 직접 확정 — 기존 스위트 규약). 팝오버는 열린 상태로 둔다.
 @MainActor
-private func mgStore(host: String, defaults: UserDefaults? = nil) -> WorkTimerStore {
+private func mgStore(host: String, defaults: UserDefaults? = nil, function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
@@ -28,7 +27,8 @@ private func mgStore(host: String, defaults: UserDefaults? = nil) -> WorkTimerSt
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: defaults ?? mgDefaults()
+        // host 가 label — 한 테스트가 스토어를 둘 이상 만들어도 호스트가 이미 갈라져 있다.
+        defaults: defaults ?? mgDefaults(host, function: function)
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: mgUserID)
     store.currentTeamID = URLProtocolStub.stubTeamID

@@ -26,8 +26,10 @@ private func tgUTC(_ iso: String) -> Date {
     return f.date(from: iso)!
 }
 
-private func tgDefaults() -> UserDefaults {
-    UserDefaults(suiteName: "check-v0241-grass-\(UUID().uuidString)")!
+/// 격리 defaults. 이 파일에는 removePersistentDomain 이 한 번도 없었다 — 이름이 UUID 라 실행마다
+/// ~/Library/Preferences 에 plist 가 하나씩 영구히 쌓였다(CheckTestScratch 주석의 2026-09-22 사고).
+private func tgDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 private let tgUserID = "00000000-0000-0000-0000-000000000009"
@@ -61,13 +63,14 @@ private func tgRow(_ day: String, _ device: String, claude: Int, codex: Int, acc
 /// 이 맥의 로컬 일별 맵을 담은 격리 토큰 스토어. 홈은 빈 임시 디렉터리다 — 기본 생성자를 쓰면 **테스트 러너가
 /// 진짜 홈의 Claude/Codex 로그를 읽어** 잔디 값이 이 맥의 실제 사용량이 되고, 단언이 그날그날 달라진다(실측 11억).
 @MainActor
-private func tgTokenStore(snapshot: TokenUsageMonthly?) -> TokenUsageStore {
-    let defaults = tgDefaults()
+private func tgTokenStore(snapshot: TokenUsageMonthly?, label: String = "",
+                          function: String = #function) -> TokenUsageStore {
+    // 스토어의 defaults 와 **다른** 스위트다 — 같은 이름이면 나중에 만든 쪽이 앞선 쪽을 비운다.
+    let defaults = tgDefaults(label + "-token", function: function)
     if let snapshot, let data = try? JSONEncoder().encode(snapshot) {
         defaults.set(data, forKey: TokenUsageStore.snapshotKey)
     }
-    let home = FileManager.default.temporaryDirectory
-        .appendingPathComponent("check-v0241-grass-home-\(UUID().uuidString)", isDirectory: true)
+    let home = CheckTestScratch.directory(label + "-token", function: function)
     return TokenUsageStore(
         defaults: defaults, homeDirectory: home,
         cacheURL: home.appendingPathComponent("cache.json", isDirectory: false),
@@ -75,12 +78,15 @@ private func tgTokenStore(snapshot: TokenUsageMonthly?) -> TokenUsageStore {
 }
 
 @MainActor
-private func tgStore(host: String, localSnapshot: TokenUsageMonthly? = nil) -> WorkTimerStore {
+private func tgStore(host: String, localSnapshot: TokenUsageMonthly? = nil, label: String = "",
+                     function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!, anonKey: "anon-test-key", session: URLSession(configuration: .stubbed))
     let store = WorkTimerStore(
-        service: service, environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"], defaults: tgDefaults(),
-        workspaceNotifications: nil, tokenUsage: tgTokenStore(snapshot: localSnapshot))
+        service: service, environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+        defaults: tgDefaults(host + label, function: function),
+        workspaceNotifications: nil,
+        tokenUsage: tgTokenStore(snapshot: localSnapshot, label: host + label, function: function))
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: tgUserID)
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.membershipConfirmed = true
@@ -655,7 +661,7 @@ func insightsLoadDrawsBothGrassesWithNoServerTokenRowsAndSkipsTheFetchWhenOptedO
     #expect(store.tokenDailyGrid.weeks == WorkDailyGrid.defaultWeeks)
 
     // (2) 수집 거부면 조회 자체를 건너뛰고 잔디는 empty 다(패널도 섹션을 숨긴다 — 서버에 행이 없고 앞으로도 안 쌓인다).
-    let optedOut = tgStore(host: host)
+    let optedOut = tgStore(host: host, label: "-opted-out")
     defer { tgCancelTasks(optedOut) }
     optedOut.tokenUsageCollect = false
     await optedOut.performLoadInsights()

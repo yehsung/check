@@ -252,7 +252,7 @@ func 가입은_소속_센터를_고르기_전까지_막힌다() {
 
     // 키가 없으면 센터를 골라도 막힌다(종전 canSync 게이트가 살아 있어야 한다).
     let keyless = WorkTimerStore(
-        environment: [:], defaults: UserDefaults(suiteName: "v0313-keyless-\(UUID().uuidString)")!)
+        environment: [:], defaults: CheckTestScratch.defaults("keyless"))
     keyless.signupCenter = CenterLabel.seoul
     #expect(!keyless.canSubmitSignUp)
 }
@@ -417,6 +417,9 @@ func 센터_로드는_실패와_미지정을_가르고_실패하면_다시_묻�
     // ★ 로그인 후 설정 로드는 **한 번만** 돈다(tokenUsageCollectLoaded 래치). 거기서 blip 으로 실패했는데
     //   플래그가 서 버리면 그 세션 내내 설정 창이 '불러오는 중'에 멈춰 **자기 센터를 못 고친다.**
     //   그래서 실패는 플래그를 안 세우고, 설정 창이 뜰 때 다시 묻는다.
+    // 중첩 함수 안의 #function 은 그 중첩 이름(`store(host:)`)으로 굳어 다른 파일의 같은 이름과 부딪힐 수 있다 —
+    // 테스트 이름을 여기서 잡아 스크래치에 넘긴다.
+    let scratch = #function
     func store(host: String) -> WorkTimerStore {
         let service = SupabaseWorkService(
             projectURL: URL(string: "http://\(host)")!,
@@ -426,7 +429,7 @@ func 센터_로드는_실패와_미지정을_가르고_실패하면_다시_묻�
         let store = WorkTimerStore(
             service: service,
             environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-            defaults: UserDefaults(suiteName: "v0313-load-\(UUID().uuidString)")!
+            defaults: CheckTestScratch.defaults(host, function: scratch)
         )
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
@@ -687,10 +690,10 @@ private var v0313Screens: [(name: String, width: CGFloat, height: CGFloat,
 }
 
 @MainActor
-private func v0313Store() -> WorkTimerStore {
+private func v0313Store(_ label: String = "", function: String = #function) -> WorkTimerStore {
     WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon"],
-        defaults: UserDefaults(suiteName: "v0313-\(UUID().uuidString)")!
+        defaults: CheckTestScratch.defaults(label, function: function)
     )
 }
 

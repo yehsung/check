@@ -381,30 +381,31 @@ private func mgSaveSnapshot(_ bitmap: NSBitmapImageRep, name: String) {
     MiniGameSnapshots.save(bitmap, name: "\(name).png", sub: "window")
 }
 
-private func mgIsolatedDefaults() -> UserDefaults {
-    let suiteName = "v0246-mg-render-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
-    return defaults
+/// 격리 defaults. 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다 —
+/// 이유는 `CheckTestScratch` 머리 주석에 있다. 한 테스트가 스위트를 둘 이상 쓰면 `label` 로 갈라라.
+private func mgIsolatedDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
+/// `function` 은 부른 쪽에서 받아 이어 넘긴다 — 여기서 `#function` 을 다시 쓰면 이름이 이 헬퍼로 굳는다.
 @MainActor
-private func mgInertTokenStore() -> TokenUsageStore {
-    let tmp = FileManager.default.temporaryDirectory
-    let id = UUID().uuidString
+private func mgInertTokenStore(_ label: String = "", function: String = #function) -> TokenUsageStore {
+    let tag = label.isEmpty ? "token" : "token-" + label
+    let home = CheckTestScratch.directory(tag, function: function)
     return TokenUsageStore(
-        defaults: mgIsolatedDefaults(),
-        homeDirectory: tmp.appendingPathComponent("check-mg-token-home-\(id)", isDirectory: true),
-        cacheURL: tmp.appendingPathComponent("check-mg-token-cache-\(id).json", isDirectory: false)
+        defaults: mgIsolatedDefaults(tag, function: function),
+        homeDirectory: home.appendingPathComponent("home", isDirectory: true),
+        cacheURL: home.appendingPathComponent("cache.json", isDirectory: false)
     )
 }
 
 @MainActor
-private func mgTeamStore(members: [TeamMemberStatus], now: Date, tokenUsage: TokenUsageStore? = nil) -> WorkTimerStore {
+private func mgTeamStore(members: [TeamMemberStatus], now: Date, tokenUsage: TokenUsageStore? = nil,
+                         function: String = #function, line: Int = #line) -> WorkTimerStore {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: mgIsolatedDefaults(),
-        tokenUsage: tokenUsage ?? mgInertTokenStore()
+        defaults: mgIsolatedDefaults("team-L\(line)", function: function),
+        tokenUsage: tokenUsage ?? mgInertTokenStore("team-L\(line)", function: function)
     )
     store.isMenuPresented = true
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: mgMe)

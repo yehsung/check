@@ -45,23 +45,22 @@ private func frbDate(_ text: String) -> Date {
     return date
 }
 
+/// 격리 defaults. 이름을 테스트 신원(+호스트)에서 뽑아 `CheckTestScratch.root`($TMPDIR)에 둔다 —
+/// UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를 하나씩 영구히 남긴다(그 파일 주석의 2026-09-22 사고).
 @MainActor
-private func frbDefaults() -> UserDefaults {
-    let suite = "v0314-reply-banner-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
-    return defaults
+private func frbDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 토큰 스캔이 실홈을 훑지 않게 격리한 토큰 스토어(렌더 테스트의 inertTokenStore 와 같은 규약).
 @MainActor
-private func frbInertTokenStore(defaults: UserDefaults) -> TokenUsageStore {
-    let tmp = FileManager.default.temporaryDirectory
-    let id = UUID().uuidString
+private func frbInertTokenStore(defaults: UserDefaults, label: String = "",
+                                function: String = #function) -> TokenUsageStore {
+    let scratch = CheckTestScratch.directory(label + "-banner", function: function)
     return TokenUsageStore(
         defaults: defaults,
-        homeDirectory: tmp.appendingPathComponent("v0314-banner-home-\(id)", isDirectory: true),
-        cacheURL: tmp.appendingPathComponent("v0314-banner-cache-\(id).json", isDirectory: false)
+        homeDirectory: scratch.appendingPathComponent("home", isDirectory: true),
+        cacheURL: scratch.appendingPathComponent("cache.json", isDirectory: false)
     )
 }
 
@@ -71,7 +70,8 @@ private func frbStore(
     host: String,
     defaults: UserDefaults? = nil,
     userID: String = frbUserID,
-    now: Date = Date()
+    now: Date = Date(),
+    function: String = #function
 ) -> WorkTimerStore {
     FeedbackURLProtocol.reset(host: host)
     let service = SupabaseWorkService(
@@ -82,8 +82,10 @@ private func frbStore(
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: defaults ?? frbDefaults(),
-        tokenUsage: frbInertTokenStore(defaults: defaults ?? frbDefaults())
+        // `defaults` 를 안 주면 스토어와 토큰 스토어는 **서로 다른** 스위트를 쓴다(종전 UUID 두 개와 같은 뜻).
+        defaults: defaults ?? frbDefaults(host, function: function),
+        tokenUsage: frbInertTokenStore(defaults: defaults ?? frbDefaults(host + "-token", function: function),
+                                       label: host, function: function)
     )
     // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되게 선세팅한다(티커 미발사).
     store.isMenuPresented = true
@@ -390,7 +392,9 @@ func theReplyBannerLosesToTheRetroBannerAndBeatsTheUpdateBanner() throws {
     // 배너는 **동시에 하나만** 그린다(창 위 모서리가 고정이라 겹쳐 쌓이면 푸터가 화면 밖으로 나간다).
     // 그래서 우선순위는 높이로 실측한다 — 같은 높이면 같은 배너 하나가 그려진 것이다.
     let now = Date()
-    func store(host: String) -> WorkTimerStore { frbStore(host: host, now: now) }
+    // 중첩 함수 안의 #function 은 `store(host:)` 로 굳는다 — 테스트 이름을 잡아 넘겨야 다른 파일의 같은 이름과 안 부딪힌다.
+    let scratch = #function
+    func store(host: String) -> WorkTimerStore { frbStore(host: host, now: now, function: scratch) }
 
     let plain = try #require(frbRenderedHeight(CheckMenuView(store: store(host: "v0314-h-plain"))))
 

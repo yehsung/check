@@ -789,11 +789,12 @@ private func makeLiveStore(anonKey: String, defaults: UserDefaults) -> WorkTimer
     )
 }
 
-private func liveIsolatedDefaults() -> UserDefaults {
-    let suiteName = "check-live-e2e-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
-    return defaults
+/// 격리 defaults. 이름을 테스트 신원(+label)에서 뽑아 `CheckTestScratch.root`($TMPDIR)에 둔다 —
+/// UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를 하나씩 영구히 남긴다(그 파일 주석의 2026-09-22 사고).
+/// 한 테스트가 스토어를 둘 이상(A·B·C) 만들면 `label` 로 반드시 갈라라 — 이 파일의 왕복 단언이 **서로 다른 기기**를
+/// 전제한다. 이름이 같으면 뒤에 만든 쪽이 앞선 쪽의 세션까지 비워 두 스토어가 한 기기가 된다.
+private func liveIsolatedDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 @MainActor
@@ -940,7 +941,8 @@ private func signUpJoiningByCode(
 
 /// owner 계정과 E2E 팀이 반드시 존재하도록 보장하고 (userID, 팀코드) 를 돌려준다(순서 흔들림 대비 자가치유).
 @MainActor
-private func ensureOwnerAndTeam(anonKey: String, admin: E2EAdmin) async throws -> (userID: String, code: String) {
+private func ensureOwnerAndTeam(anonKey: String, admin: E2EAdmin,
+                                function: String = #function) async throws -> (userID: String, code: String) {
     if let userID = LiveE2EState.ownerUserID,
        let code = LiveE2EState.e2eTeamCode,
        (try? await admin.profileCount(userID: userID)) == 1,
@@ -948,7 +950,7 @@ private func ensureOwnerAndTeam(anonKey: String, admin: E2EAdmin) async throws -
         return (userID, code)
     }
 
-    let store = makeLiveStore(anonKey: anonKey, defaults: liveIsolatedDefaults())
+    let store = makeLiveStore(anonKey: anonKey, defaults: liveIsolatedDefaults("owner-bootstrap", function: function))
     defer {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
@@ -1566,7 +1568,7 @@ struct LiveE2ETests {
         let month = TokenUsageMonthKey.current()
 
         // A(owner) 로그인.
-        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeA"))
         defer { storeA.tickerTask?.cancel(); storeA.refreshTask?.cancel() }
         storeA.email = Emails.owner
         storeA.password = Emails.password
@@ -1575,7 +1577,7 @@ struct LiveE2ETests {
         #expect(sessionA.userID == owner.userID)
 
         // B(joiner) 가 같은 팀 member 로 존재하도록 보장(있으면 로그인, 없으면 코드로 합류 — 자가치유).
-        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeB"))
         defer { storeB.tickerTask?.cancel(); storeB.refreshTask?.cancel() }
         if try await ctx.admin.findUserID(email: Emails.joiner) != nil {
             storeB.email = Emails.joiner
@@ -1589,7 +1591,7 @@ struct LiveE2ETests {
         #expect(storeB.currentTeamID == teamID)
 
         // C(nickname) 를 자기 소유의 다른 E2E 팀에 둔다(있으면 로그인, 없으면 새 팀 생성 — 자가치유). 타팀 조회 검증용.
-        let storeC = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeC = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeC"))
         defer { storeC.tickerTask?.cancel(); storeC.refreshTask?.cancel() }
         if try await ctx.admin.findUserID(email: Emails.nickname) != nil {
             storeC.email = Emails.nickname
@@ -1658,7 +1660,7 @@ struct LiveE2ETests {
         let teamID = try #require(LiveE2EState.e2eTeamID)
 
         // A(owner) 로그인.
-        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeA"))
         defer { storeA.tickerTask?.cancel(); storeA.refreshTask?.cancel() }
         storeA.email = Emails.owner
         storeA.password = Emails.password
@@ -1667,7 +1669,7 @@ struct LiveE2ETests {
         #expect(sessionA.userID == owner.userID)
 
         // B(joiner) 가 같은 팀 member 로 존재하도록 보장(있으면 로그인, 없으면 코드로 합류 — 자가치유).
-        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeB"))
         defer { storeB.tickerTask?.cancel(); storeB.refreshTask?.cancel() }
         if try await ctx.admin.findUserID(email: Emails.joiner) != nil {
             storeB.email = Emails.joiner
@@ -1758,7 +1760,7 @@ struct LiveE2ETests {
         let month = TokenUsageMonthKey.current()
 
         // A(owner) 로그인.
-        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeA"))
         defer { storeA.tickerTask?.cancel(); storeA.refreshTask?.cancel() }
         storeA.email = Emails.owner
         storeA.password = Emails.password
@@ -1767,7 +1769,7 @@ struct LiveE2ETests {
         #expect(sessionA.userID == owner.userID)
 
         // B(joiner) 가 같은 팀 member 로 존재하도록 보장.
-        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeB"))
         defer { storeB.tickerTask?.cancel(); storeB.refreshTask?.cancel() }
         if try await ctx.admin.findUserID(email: Emails.joiner) != nil {
             storeB.email = Emails.joiner
@@ -1817,7 +1819,7 @@ struct LiveE2ETests {
         let today = TokenUsageDayKey.current()
 
         // A(owner) 로그인.
-        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeA"))
         defer { storeA.tickerTask?.cancel(); storeA.refreshTask?.cancel() }
         storeA.email = Emails.owner
         storeA.password = Emails.password
@@ -2029,7 +2031,7 @@ struct LiveE2ETests {
         let teamID = try #require(LiveE2EState.e2eTeamID)
 
         // A(owner) 로그인.
-        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeA"))
         defer { storeA.tickerTask?.cancel(); storeA.refreshTask?.cancel() }
         storeA.email = Emails.owner
         storeA.password = Emails.password
@@ -2038,7 +2040,7 @@ struct LiveE2ETests {
         #expect(sessionA.userID == owner.userID)
 
         // B(joiner) 가 같은 팀 member 로 존재하도록 보장(있으면 로그인, 없으면 코드로 합류 — 자가치유).
-        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeB"))
         defer { storeB.tickerTask?.cancel(); storeB.refreshTask?.cancel() }
         if try await ctx.admin.findUserID(email: Emails.joiner) != nil {
             storeB.email = Emails.joiner
@@ -2053,7 +2055,7 @@ struct LiveE2ETests {
 
         // C(nickname) — **두 번째 울트라를 다른 대상에게** 보내기 위한 계정. s09e 가 쓰는 계정을 그대로
         // 재사용한다(있으면 로그인, 없으면 자기 팀 만들며 가입 — 자가치유). 팀이 달라도 울트라는 나간다.
-        let storeC = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeC = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeC"))
         defer { storeC.tickerTask?.cancel(); storeC.refreshTask?.cancel() }
         if try await ctx.admin.findUserID(email: Emails.nickname) != nil {
             storeC.email = Emails.nickname
@@ -2215,7 +2217,7 @@ struct LiveE2ETests {
             }
         }
 
-        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeA = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeA"))
         defer { storeA.tickerTask?.cancel(); storeA.refreshTask?.cancel() }
         storeA.email = Emails.owner
         storeA.password = Emails.password
@@ -2261,7 +2263,7 @@ struct LiveE2ETests {
         //     owner 이름을 결정적 값으로 admin 이 세팅하고(RPC 를 안 거치므로 쿨타임을 안 태운다),
         //     joiner 는 쿨타임이 만료된 상태에서 '대소문자·공백만 다른' 같은 이름을 시도한다.
         try await ctx.admin.setDisplayName(userID: owner.userID, to: E2ENames.first)
-        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults())
+        let storeB = makeLiveStore(anonKey: ctx.anonKey, defaults: liveIsolatedDefaults("storeB"))
         defer { storeB.tickerTask?.cancel(); storeB.refreshTask?.cancel() }
         if try await ctx.admin.findUserID(email: Emails.joiner) != nil {
             storeB.email = Emails.joiner
@@ -2521,7 +2523,10 @@ func 라이브E2E_가입헬퍼는_클라게이트에_막히면_던진다() async
         anonKey: "anon-test-key",
         session: URLSession(configuration: .stubbed)
     )
-    let defaults = UserDefaults(suiteName: host)!
+    // 스위트 이름을 호스트(=UUID)로 쓰면 실행마다 ~/Library/Preferences 에 plist 가 하나씩 쌓였다.
+    // 끝나고 removePersistentDomain 을 불러도 cfprefsd 가 빈 파일을 다시 쓴다(CheckTestScratch 주석의 실측) —
+    // 그래서 이름을 테스트 신원에서 뽑고 자리를 $TMPDIR 로 옮긴다.
+    let defaults = CheckTestScratch.defaults()
     let store = WorkTimerStore(
         service: service,
         environment: [SupabaseConfig.anonKeyEnvironmentName: "anon-test-key"],
@@ -2530,8 +2535,6 @@ func 라이브E2E_가입헬퍼는_클라게이트에_막히면_던진다() async
     defer {
         store.tickerTask?.cancel()
         store.refreshTask?.cancel()
-        // 호스트마다 UUID 라 안 지우면 실행할 때마다 plist 가 하나씩 쌓인다.
-        defaults.removePersistentDomain(forName: host)
     }
     store.email = "gate@example.com"
     store.password = Emails.password

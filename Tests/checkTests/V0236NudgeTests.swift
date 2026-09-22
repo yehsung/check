@@ -47,7 +47,8 @@ private final class V0236Scratch {
     let defaults: UserDefaults
 
     init(_ test: String) {
-        suiteName = "check-v0236-nudge.\(test.replacingOccurrences(of: "()", with: ""))"
+        suiteName = CheckTestScratch.suitePath(
+            named: "check-v0236-nudge.\(test.replacingOccurrences(of: "()", with: ""))")
         defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
     }

@@ -37,7 +37,10 @@ private final class V0323Scratch {
     let defaults: UserDefaults
 
     init(_ test: String) {
-        suiteName = "check-v0323-shortcut.\(test.replacingOccurrences(of: "()", with: ""))"
+        // 이름은 고정(테스트 신원)이라 개수가 유계지만, 그 이름 그대로면 ~/Library/Preferences 에
+        // 항목이 생긴다 — 같은 이름을 $TMPDIR 절대 경로로 옮긴다(CheckTestScratch 주석의 2026-09-22 사고).
+        suiteName = CheckTestScratch.suitePath(
+            named: "check-v0323-shortcut.\(test.replacingOccurrences(of: "()", with: ""))")
         defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
     }

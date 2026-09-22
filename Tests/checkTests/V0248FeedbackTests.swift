@@ -115,17 +115,17 @@ final class FeedbackURLProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
+/// 격리 defaults. 이름을 테스트 신원(+호스트)에서 뽑아 `CheckTestScratch.root`($TMPDIR)에 둔다 —
+/// UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를 하나씩 영구히 남긴다(그 파일 주석의 2026-09-22 사고).
 @MainActor
-private func fbDefaults() -> UserDefaults {
-    let suite = "v0248-feedback-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
-    return defaults
+private func fbDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 스텁 네트워크에 물린 스토어. `signedIn: false` 면 세션 없는 스토어(no-op 검증용).
 @MainActor
-private func fbStore(host: String, signedIn: Bool = true, admin: Bool = false) -> WorkTimerStore {
+private func fbStore(host: String, signedIn: Bool = true, admin: Bool = false,
+                     function: String = #function) -> WorkTimerStore {
     FeedbackURLProtocol.reset(host: host)
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
@@ -135,7 +135,7 @@ private func fbStore(host: String, signedIn: Bool = true, admin: Bool = false) -
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: fbDefaults()
+        defaults: fbDefaults(host, function: function)
     )
     if signedIn {
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: fbUserID)
@@ -1107,8 +1107,8 @@ private func fbDiffBounds(
 }
 
 @MainActor
-private func fbInboxStore(host: String, rows: Int) -> WorkTimerStore {
-    let store = fbStore(host: host, admin: true)
+private func fbInboxStore(host: String, rows: Int, function: String = #function) -> WorkTimerStore {
+    let store = fbStore(host: host, admin: true, function: function)
     let base = fbRenderNow
     let statuses: [FeedbackStatus] = [.open, .open, .inProgress, .done, .held]
     var built: [FeedbackReport] = []

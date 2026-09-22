@@ -154,7 +154,7 @@ private func v0236Service(host: String) -> SupabaseWorkService {
 
 @MainActor
 private func v0236Store(host: String) -> WorkTimerStore {
-    let suiteName = "check-v0236-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()   // 옛 "check-v0236-\(UUID())" — Preferences 로 샜다
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return WorkTimerStore(

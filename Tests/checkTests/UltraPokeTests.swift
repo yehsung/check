@@ -24,16 +24,15 @@ import Testing
     // MARK: - 헬퍼
 
     /// 테스트마다 새 suite 를 쓴다 — .standard 를 공유하면 병렬 테스트가 서로의 저장 세션/설정을 덮어쓴다.
-    private func makeDefaults() -> UserDefaults {
-        let suiteName = "check-ultra-store-tests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
-        return defaults
+    /// 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다(이유는 `CheckTestScratch` 머리 주석).
+    /// 접두사 `ultra-store` 는 이 파일의 세 @Suite 가 같은 이름의 헬퍼를 각자 갖고 있어 붙인다.
+    private func makeDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+        CheckTestScratch.defaults("ultra-store" + (label.isEmpty ? "" : "-" + label), function: function)
     }
 
     /// 근무중·로그인 상태의 스토어. startedAt 을 직접 세우는 이유는 start() 가 동기화 큐까지 돌려
     /// 이 테스트가 세려는 요청에 잡음을 섞기 때문이다(기존 콕찌르기 테스트와 같은 관용구).
-    private func makeStore(host: String, session: URLSession) -> WorkTimerStore {
+    private func makeStore(host: String, session: URLSession, function: String = #function) -> WorkTimerStore {
         let service = SupabaseWorkService(
             projectURL: URL(string: "http://\(host)")!,
             anonKey: "anon-test-key",
@@ -42,7 +41,9 @@ import Testing
         let store = WorkTimerStore(
             service: service,
             environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-            defaults: makeDefaults()
+            // host 를 label 로 쓴다 — 한 테스트가 스토어를 둘 이상 만들면 호스트가 이미 갈라져 있다.
+            // `function` 은 호출한 테스트에서 받아 이어 넘긴다(안 그러면 이름이 `makeStore` 로 굳는다).
+            defaults: makeDefaults(host, function: function)
         )
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
         store.startedAt = Date()
@@ -69,8 +70,8 @@ import Testing
     /// 순차 응답 스텁을 문 스토어. **거절 → 허용**처럼 호출 순서에 따라 답이 달라지는 시나리오는
     /// 단일 응답 스텁(TokenBoardURLProtocol)으로는 못 만든다 — 그 스텁은 호스트당 응답 하나뿐이라
     /// 두 번째 응답을 세팅하는 사이에 첫 요청이 아직 안 돌아왔으면 무엇을 받았는지가 경합으로 갈린다.
-    private func makeSequenceStore(host: String) -> WorkTimerStore {
-        makeStore(host: host, session: UltraSequenceURLProtocol.session())
+    private func makeSequenceStore(host: String, function: String = #function) -> WorkTimerStore {
+        makeStore(host: host, session: UltraSequenceURLProtocol.session(), function: function)
     }
 
     /// 이 호스트로 실제로 나간 ultra RPC 본문들(순서대로). 건수와 **대상**을 함께 볼 수 있어야
@@ -481,15 +482,14 @@ import Testing
 @MainActor
 @Suite struct UltraPokeViewFireTests {
 
-    private func makeDefaults() -> UserDefaults {
-        let suiteName = "check-ultra-view-tests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
-        return defaults
+    /// 격리 defaults — 이름은 테스트 신원에서, 자리는 $TMPDIR(`CheckTestScratch` 머리 주석).
+    private func makeDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+        CheckTestScratch.defaults("ultra-view" + (label.isEmpty ? "" : "-" + label), function: function)
     }
 
     /// 콕찌르기 패널이 열린 채 **오늘 몫이 소진된** 스토어. 화면은 "다 썼어요"라고 말하는 상태다.
-    private func spentPanelStore(host: String, now: Date) -> WorkTimerStore {
+    /// 한 테스트가 이 스토어를 둘 이상 만든다(ultra-subpanel-home / -open) — host 가 label 이라 안 겹친다.
+    private func spentPanelStore(host: String, now: Date, function: String = #function) -> WorkTimerStore {
         let service = SupabaseWorkService(
             projectURL: URL(string: "http://\(host)")!,
             anonKey: "anon-test-key",
@@ -498,7 +498,7 @@ import Testing
         let store = WorkTimerStore(
             service: service,
             environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-            defaults: makeDefaults()
+            defaults: makeDefaults(host, function: function)
         )
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
         store.startedAt = now
@@ -957,11 +957,9 @@ final class UltraSequenceURLProtocol: URLProtocol {
         """
     }
 
-    private func makeDefaults() -> UserDefaults {
-        let suiteName = "check-ultra-unlimited-tests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
-        return defaults
+    /// 격리 defaults — 이름은 테스트 신원에서, 자리는 $TMPDIR(`CheckTestScratch` 머리 주석).
+    private func makeDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+        CheckTestScratch.defaults("ultra-unlimited" + (label.isEmpty ? "" : "-" + label), function: function)
     }
 
     private func makeService(host: String) -> SupabaseWorkService {
@@ -972,11 +970,11 @@ final class UltraSequenceURLProtocol: URLProtocol {
         )
     }
 
-    private func makeStore(host: String) -> WorkTimerStore {
+    private func makeStore(host: String, function: String = #function) -> WorkTimerStore {
         let store = WorkTimerStore(
             service: makeService(host: host),
             environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-            defaults: makeDefaults()
+            defaults: makeDefaults(host, function: function)
         )
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
         return store

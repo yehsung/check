@@ -42,16 +42,16 @@ private func ts14(_ date: Date) -> Int {
     return ((((y * 100 + mo) * 100 + d) * 100 + h) * 100 + mi) * 100 + s
 }
 
-/// 고유한 임시 홈 디렉터리 URL(아직 만들지 않음 — 파일 쓸 때 상위 폴더가 생성된다).
-private func makeTempHome() -> URL {
-    FileManager.default.temporaryDirectory
-        .appendingPathComponent("check-token-\(UUID().uuidString)", isDirectory: true)
+/// 테스트별 임시 홈 디렉터리(빈 폴더로 새로 만들어 준다 — 로그가 없으니 스캔은 0 으로 끝난다).
+/// 이름을 UUID 가 아니라 테스트 신원에서 뽑는다: UUID 면 실행마다 $TMPDIR 에 새 폴더가 쌓인다(CheckTestScratch 주석).
+/// 한 테스트가 홈을 둘 이상 쓰면 `label` 로 갈라라.
+private func makeTempHome(_ label: String = "", function: String = #function) -> URL {
+    CheckTestScratch.directory("home" + (label.isEmpty ? "" : "-" + label), function: function)
 }
 
-/// 고유한 임시 캐시 파일 URL(스토어 테스트가 실제 Application Support 를 건드리지 않게 주입).
-private func makeTempCacheURL() -> URL {
-    FileManager.default.temporaryDirectory
-        .appendingPathComponent("check-token-cache-\(UUID().uuidString)", isDirectory: true)
+/// 테스트별 임시 캐시 파일 URL(스토어 테스트가 실제 Application Support 를 건드리지 않게 주입).
+private func makeTempCacheURL(_ label: String = "", function: String = #function) -> URL {
+    CheckTestScratch.directory("cache" + (label.isEmpty ? "" : "-" + label), function: function)
         .appendingPathComponent("cache.json", isDirectory: false)
 }
 
@@ -188,7 +188,7 @@ func claudeReverseStraddleCountsKeyByMaxObservedTimestamp() {
 
     // 두 입력 순서 모두 같은 결과여야 한다(max(output)·max(ts) 라 결정적).
     for (order, lines) in [("big-first", "\(big)\n\(small)\n"), ("small-first", "\(small)\n\(big)\n")] {
-        let home = makeTempHome()
+        let home = makeTempHome(order)
         writeFile(lines, to: claudeURL(home, project: "p", file: "s.jsonl"))
         let usage = TokenUsageScanner.scan(homeDirectory: home, now: fixedNow)
         // 관측 최대 ts(이번달)로 월 판정 → 키 유지. 값은 max-output 레코드(output=100/input=7).
@@ -1096,9 +1096,7 @@ func refreshIfStaleSkipsWithinMinIntervalThenScansAfter() async {
     // clock 을 고정/전진시키며 scanCount 로 실제 스캔 여부를 관찰한다.
     let home = makeTempHome()               // 로그 부재 — 스캔은 즉시(0) 끝난다
     let cacheURL = makeTempCacheURL()
-    let suiteName = "check-token-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
+    let defaults = CheckTestScratch.defaults()
     let clockBox = ClockBox(fixedNow)
 
     let store = TokenUsageStore(
@@ -1122,7 +1120,6 @@ func refreshIfStaleSkipsWithinMinIntervalThenScansAfter() async {
     await store.refreshIfStale()
     #expect(store.scanCount == 2)
 
-    defaults.removePersistentDomain(forName: suiteName)
     try? FileManager.default.removeItem(at: home)
     try? FileManager.default.removeItem(at: cacheURL.deletingLastPathComponent())
 }
@@ -1130,9 +1127,7 @@ func refreshIfStaleSkipsWithinMinIntervalThenScansAfter() async {
 @MainActor
 @Test
 func storeRestoresPersistedUsageWhenMonthMatches() {
-    let suiteName = "check-token-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
+    let defaults = CheckTestScratch.defaults()
     // 귀속 월이 현재 KST 월(fixedNow → "2026-07")과 일치하는 스냅샷.
     let seeded = TokenUsageMonthly(
         month: "2026-07",
@@ -1151,7 +1146,6 @@ func storeRestoresPersistedUsageWhenMonthMatches() {
     #expect(store.currentMonthUsage == seeded)
     #expect(store.isScanning == false)
     #expect(store.scanCount == 0)
-    defaults.removePersistentDomain(forName: suiteName)
 }
 
 @MainActor
@@ -1160,9 +1154,7 @@ func storeIgnoresPersistedUsageFromDifferentMonthAndRescans() async {
     // 월 전환 모사: 지난달(2026-06) 스냅샷이 영속돼 있어도 현재 월(fixedNow → 2026-07)과 다르므로 표시하지 않고 재스캔한다.
     let home = makeTempHome()   // 로그 부재 → 재스캔은 현재 월 0 집계
     let cacheURL = makeTempCacheURL()
-    let suiteName = "check-token-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
+    let defaults = CheckTestScratch.defaults()
     let stale = TokenUsageMonthly(month: "2026-06", claudeInput: 999_999, claudeOutput: 888_888)
     defaults.set(try! JSONEncoder().encode(stale), forKey: TokenUsageStore.snapshotKey)
 
@@ -1175,7 +1167,6 @@ func storeIgnoresPersistedUsageFromDifferentMonthAndRescans() async {
     #expect(store.currentMonthUsage?.total == 0)
     #expect(store.scanCount == 1)   // 월 불일치 → 재스캔이 돌았다
 
-    defaults.removePersistentDomain(forName: suiteName)
     try? FileManager.default.removeItem(at: home)
     try? FileManager.default.removeItem(at: cacheURL.deletingLastPathComponent())
 }
@@ -1191,9 +1182,7 @@ func storeBootstrapsScanAndPersistsNonZeroResult() async {
     ) + "\n"
     writeFile(line, to: claudeURL(home, project: "p", file: "s.jsonl"))
     let cacheURL = makeTempCacheURL()
-    let suiteName = "check-token-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
+    let defaults = CheckTestScratch.defaults()
 
     // 영속 스냅샷이 없어 init 복원은 없다. 첫 스캔을 뷰 트리거(refreshIfStale)로 돌린다(백그라운드 완료까지 await).
     let store = TokenUsageStore(defaults: defaults, homeDirectory: home, cacheURL: cacheURL, clock: { fixedNow })
@@ -1205,7 +1194,6 @@ func storeBootstrapsScanAndPersistsNonZeroResult() async {
     #expect(store.isScanning == false)
     // 값이 있으므로 영속된다(재시작 후 즉시 표시).
     #expect(defaults.data(forKey: TokenUsageStore.snapshotKey) != nil)
-    defaults.removePersistentDomain(forName: suiteName)
     try? FileManager.default.removeItem(at: home)
     try? FileManager.default.removeItem(at: cacheURL.deletingLastPathComponent())
 }
@@ -1217,9 +1205,7 @@ func storeDoesNotPersistZeroResultSoNextLaunchRescans() async {
     // 영속은 하지 않아, 재실행(새 스토어)은 nil→다시 부트스트랩한다.
     let home = makeTempHome()
     let cacheURL = makeTempCacheURL()
-    let suiteName = "check-token-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
+    let defaults = CheckTestScratch.defaults()
 
     let store = TokenUsageStore(defaults: defaults, homeDirectory: home, cacheURL: cacheURL, clock: { fixedNow })
 
@@ -1230,10 +1216,9 @@ func storeDoesNotPersistZeroResultSoNextLaunchRescans() async {
     #expect(defaults.data(forKey: TokenUsageStore.snapshotKey) == nil)  // 영속 안 함 → 재실행 시 첫 스캔에서 다시 채운다
 
     // 같은 defaults 로 새 스토어를 만들면(재실행 모사) 영속본이 없고 init 이 스캔하지 않아 currentMonthUsage 는 nil 로 시작한다.
-    let relaunched = TokenUsageStore(defaults: defaults, homeDirectory: home, cacheURL: makeTempCacheURL(), clock: { fixedNow })
+    let relaunched = TokenUsageStore(defaults: defaults, homeDirectory: home, cacheURL: makeTempCacheURL("relaunch"), clock: { fixedNow })
     #expect(relaunched.currentMonthUsage == nil)
 
-    defaults.removePersistentDomain(forName: suiteName)
     try? FileManager.default.removeItem(at: home)
     try? FileManager.default.removeItem(at: cacheURL.deletingLastPathComponent())
 }

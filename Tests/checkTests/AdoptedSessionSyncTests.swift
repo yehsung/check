@@ -274,7 +274,7 @@ private func makeAdoptedSyncStubStore(
         anonKey: "anon-test-key",
         session: URLSession(configuration: .stubbed)
     )
-    let suiteName = "check-tests-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     let store = WorkTimerStore(

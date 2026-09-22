@@ -359,39 +359,43 @@ private struct CPSuite {
     let defaults: UserDefaults
 }
 
-private func cpSuite() -> CPSuite {
-    let name = "v0316-panel-\(UUID().uuidString)"
-    return CPSuite(name: name, defaults: UserDefaults(suiteName: name)!)
+/// 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다(`CheckTestScratch` 머리 주석).
+/// `function` 은 부른 쪽에서 받아 이어 넘긴다.
+private func cpSuite(_ label: String = "", function: String = #function) -> CPSuite {
+    let name = CheckTestScratch.suitePath("panel-" + label, function: function)
+    return CPSuite(name: name, defaults: CheckTestScratch.defaults("panel-" + label, function: function))
 }
 
+/// `removeSuite(named:)` 는 검색 목록에서 빼기만 할 뿐 파일도 값도 안 지운다 — 정리로 세지 마라.
+/// 진짜 정리는 `cpSuite` 가 **만들 때** 한다(끝나고 지우는 것으로는 cfprefsd 를 못 이긴다).
 private func cpDrop(_ suite: CPSuite) {
     suite.defaults.removePersistentDomain(forName: suite.name)
     UserDefaults.standard.removeSuite(named: suite.name)
 }
 
-private func cpIsolatedDefaults() -> UserDefaults {
-    let name = "v0316-panel-render-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: name)!
-    defaults.removePersistentDomain(forName: name)
-    return defaults
+/// `#line` 을 섞는 이유: 한 테스트가 스토어를 둘·셋씩 세워 서로 견준다(plain/admin, a/b/c).
+/// `#function` 만으로 지으면 그것들이 한 스위트를 나눠 쓰고 뒤에 만든 쪽이 앞 쪽 값을 지운다.
+private func cpIsolatedDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults("render-" + label, function: function)
 }
 
 @MainActor
-private func cpInertTokenStore() -> TokenUsageStore {
-    let tmp = FileManager.default.temporaryDirectory
-    let id = UUID().uuidString
+private func cpInertTokenStore(_ label: String = "", function: String = #function) -> TokenUsageStore {
+    let home = CheckTestScratch.directory("cp-token-" + label, function: function)
     return TokenUsageStore(
-        defaults: cpIsolatedDefaults(),
-        homeDirectory: tmp.appendingPathComponent("cp-token-home-\(id)", isDirectory: true),
-        cacheURL: tmp.appendingPathComponent("cp-token-cache-\(id).json", isDirectory: false)
+        defaults: cpIsolatedDefaults("token-" + label, function: function),
+        homeDirectory: home.appendingPathComponent("home", isDirectory: true),
+        cacheURL: home.appendingPathComponent("cache.json", isDirectory: false)
     )
 }
 
 /// 토큰 소모량 행이 **실제로 그려지는** 스토어. 게이트가 빠지면 그 행이 패널과 함께 서서 창이 높아진다 —
 /// 그 회귀를 재려면 행이 0pt 가 아니어야 한다.
 @MainActor
-private func cpSeededTokenStore() -> TokenUsageStore {
-    let defaults = cpIsolatedDefaults()
+private func cpSeededTokenStore(_ label: String = "", function: String = #function,
+                                line: Int = #line) -> TokenUsageStore {
+    let tag = "seeded-\(label)-L\(line)"
+    let defaults = cpIsolatedDefaults(tag, function: function)
     let usage = TokenUsageMonthly(
         month: TokenUsageMonthKey.current(),
         claudeInput: 8_460_869, claudeOutput: 35_849_782,
@@ -401,22 +405,22 @@ private func cpSeededTokenStore() -> TokenUsageStore {
     if let data = try? JSONEncoder().encode(usage) {
         defaults.set(data, forKey: TokenUsageStore.snapshotKey)
     }
-    let tmp = FileManager.default.temporaryDirectory
-    let id = UUID().uuidString
+    let home = CheckTestScratch.directory("cp-token-" + tag, function: function)
     return TokenUsageStore(
         defaults: defaults,
-        homeDirectory: tmp.appendingPathComponent("cp-token-home-\(id)", isDirectory: true),
-        cacheURL: tmp.appendingPathComponent("cp-token-cache-\(id).json", isDirectory: false)
+        homeDirectory: home.appendingPathComponent("home", isDirectory: true),
+        cacheURL: home.appendingPathComponent("cache.json", isDirectory: false)
     )
 }
 
 @MainActor
-private func cpTeamStore(members: Int, tokenUsage: TokenUsageStore? = nil) -> WorkTimerStore {
+private func cpTeamStore(members: Int, tokenUsage: TokenUsageStore? = nil,
+                         function: String = #function, line: Int = #line) -> WorkTimerStore {
     let now = Date()
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: cpIsolatedDefaults(),
-        tokenUsage: tokenUsage ?? cpInertTokenStore()
+        defaults: cpIsolatedDefaults("team-L\(line)", function: function),
+        tokenUsage: tokenUsage ?? cpInertTokenStore("team-L\(line)", function: function)
     )
     // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다.
     store.isMenuPresented = true

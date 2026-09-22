@@ -19,7 +19,8 @@ private final class V0238Scratch {
     let defaults: UserDefaults
 
     init(_ test: String) {
-        suiteName = "check-v0238-overlay.\(test.replacingOccurrences(of: "()", with: ""))"
+        suiteName = CheckTestScratch.suitePath(
+            named: "check-v0238-overlay.\(test.replacingOccurrences(of: "()", with: ""))")
         defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
     }

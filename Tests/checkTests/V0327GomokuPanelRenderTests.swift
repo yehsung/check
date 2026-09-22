@@ -1445,10 +1445,12 @@ private func gpTeamStore(now: Date) -> WorkTimerStore {
     return store
 }
 
-/// 고정 이름 스위트(UUID 스위트는 실행마다 plist 를 영구히 쌓는다).
+/// 고정 이름 스위트. 개수는 유계지만 그 이름 그대로는 ~/Library/Preferences 에 항목을 만들므로
+/// 같은 이름을 $TMPDIR 절대 경로로 옮긴다(CheckTestScratch 주석의 2026-09-22 사고).
 private func gpDefaults(_ suiteName: String) -> UserDefaults {
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
+    let path = CheckTestScratch.suitePath(named: suiteName)
+    let defaults = UserDefaults(suiteName: path)!
+    defaults.removePersistentDomain(forName: path)
     return defaults
 }
 

@@ -37,9 +37,15 @@ struct V0316LiveSwapTests {
         return root.childNode(withName: SpriteCharacterNode.nodeName, recursively: true) != nil
     }
 
-    private func defaults(_ id: String) -> (UserDefaults, String) {
-        let suite = "v0316-liveswap-\(UUID().uuidString)"
-        let store = UserDefaults(suiteName: suite)!
+    /// 고른 캐릭터가 저장돼 있는 격리 defaults. 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도
+    /// $TMPDIR 이다(이유는 `CheckTestScratch` 머리 주석). `function` 은 호출한 테스트에서 받아 이어 넘긴다 —
+    /// 여기서 `#function` 을 다시 쓰면 이름이 `defaults(_:)` 로 굳어 세 테스트가 한 스위트를 나눠 쓴다.
+    ///
+    /// 두 번째 반환값(스위트 이름)은 호출자의 `defer` 가 쓰던 것이라 모양을 유지한다. 그 `defer` 는 이제
+    /// 없어도 되지만(정리는 만들 때 앞에서 한다) 남겨 둬도 해롭지 않다.
+    private func defaults(_ id: String, function: String = #function) -> (UserDefaults, String) {
+        let suite = CheckTestScratch.suitePath(id, function: function)
+        let store = CheckTestScratch.defaults(id, function: function)
         store.set(id, forKey: CharacterSelection.defaultsKey)
         return (store, suite)
     }

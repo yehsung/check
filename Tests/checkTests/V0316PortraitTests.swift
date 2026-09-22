@@ -293,11 +293,13 @@ struct V0316PortraitTests {
     // MARK: - 도구
 
     /// 이 프로세스의 `UserDefaults.standard` 를 건드리지 않는 빈 도메인.
-    static func emptyDefaults() throws -> UserDefaults {
-        let name = "v0316.portrait.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        return defaults
+    ///
+    /// 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다(`CheckTestScratch` 머리 주석).
+    /// `function` 기본 인자는 **호출 지점**에서 평가되므로 `Self.emptyDefaults()` 라고만 써도
+    /// 부른 테스트의 이름이 들어온다. 이 파일은 `@Test(arguments:)` 가 있으니, 파라미터화 테스트에서
+    /// 부를 때는 인자값을 `label` 에 넣어라 — 같은 #function 으로 **동시에** 돌기 때문이다.
+    static func emptyDefaults(_ label: String = "", function: String = #function) throws -> UserDefaults {
+        CheckTestScratch.defaults(label, function: function)
     }
 
     /// 크기·rep 구성과 무관하게 그림 내용만 비교하기 위해 고정 64² ARGB 로 다시 그린다.

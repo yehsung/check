@@ -68,8 +68,8 @@ func myNameIsStillDrawnInTheTeamList() throws {
     // v0.2.32 에 소스에서 지웠다. 남은 계약으로 판정을 바꾼다 — **이름은 계속 보인다.**
     // 이름만 바꾼 두 렌더가 달라야 이름이 화면에 실재한다는 뜻이고, 아래 높이 비교도 그제야 의미가 생긴다.
     let now = Date(timeIntervalSince1970: 1_700_000_000)
-    let mine = try renderPNG(CheckMenuView(store: editorStore(now: now, myName: "영식")))
-    let renamed = try renderPNG(CheckMenuView(store: editorStore(now: now, myName: "다른이름")))
+    let mine = try renderPNG(CheckMenuView(store: editorStore(now: now, myName: "영식", label: "mine")))
+    let renamed = try renderPNG(CheckMenuView(store: editorStore(now: now, myName: "다른이름", label: "renamed")))
     #expect(mine != renamed)
 }
 
@@ -81,9 +81,9 @@ func myRowStillLooksDifferentFromEveryoneElses() throws {
     // 그런데도 이 렌더 비교는 초록이었다: 그림을 가르는 건 배지가 아니라 isMe 강조(내 행 표시)였기 때문이다.
     // 이름을 그 사실에 맞춘다 — 없는 것을 지키는 척하던 테스트는 다음 번엔 아무도 못 믿는다.
     let now = Date(timeIntervalSince1970: 1_700_000_000)
-    let mine = try renderPNG(CheckMenuView(store: editorStore(now: now)))
+    let mine = try renderPNG(CheckMenuView(store: editorStore(now: now, label: "mine")))
 
-    let strangerStore = editorStore(now: now)
+    let strangerStore = editorStore(now: now, label: "stranger")
     strangerStore.session = SupabaseSession(
         accessToken: "access-token", refreshToken: nil,
         userID: "00000000-0000-0000-0000-0000000000ff"
@@ -106,11 +106,12 @@ func longNamesDoNotMoveThePopoverHeight() throws {
     // 같은 예산을 지금 실제로 흔들 수 있는 값으로 다시 잰다 — **상한 길이 별명**이다.
     // 이름이 길어져 두 줄이 되거나 minimumScaleFactor 대신 줄바꿈이 나면 행이 부풀고 창이 자란다.
     let now = Date(timeIntervalSince1970: 1_700_000_000)
-    let short = try #require(renderedPixelHeight(CheckMenuView(store: editorStore(now: now, myName: "나"))))
+    let short = try #require(renderedPixelHeight(CheckMenuView(store: editorStore(now: now, myName: "나", label: "short"))))
     let longest = try #require(
         renderedPixelHeight(
             CheckMenuView(
-                store: editorStore(now: now, myName: String(repeating: "밝", count: WorkTimerStore.displayNameMaxLength))
+                store: editorStore(now: now, myName: String(repeating: "밝", count: WorkTimerStore.displayNameMaxLength),
+                                   label: "longest")
             )
         )
     )
@@ -147,10 +148,10 @@ func displayNameNoticeErrorFlagChangesRenderingInTheSettingsWindow() throws {
     // 렌더와 픽셀이 다르게 나온다(격리 실행 시 재현: 아래 두 단언이 늘 같은 해시 쌍으로 갈렸다).
     // 전체 스위트에서는 앞선 다른 렌더 테스트가 우연히 예열해 줘서 통과하기도 했는데, 그
     // "우연히 통과"가 이 테스트를 실행 순서에 의존하게 만든다. 여기서 명시적으로 예열한다.
-    _ = try renderPNG(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: false), width: settingsWidth)
+    _ = try renderPNG(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: false, label: "warmup"), width: settingsWidth)
 
-    let errorPNG = try renderPNG(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: true), width: settingsWidth)
-    let plainPNG = try renderPNG(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: false), width: settingsWidth)
+    let errorPNG = try renderPNG(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: true, label: "error"), width: settingsWidth)
+    let plainPNG = try renderPNG(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: false, label: "plain"), width: settingsWidth)
     // 비교는 **해시로** 한다(pngDigest 주석 참고 — 바이트 직접 비교는 실패할 때 스위트를 멎게 한다).
     // 판정은 그대로다: 바이트가 같아야 해시가 같으므로 이 단언이 무는 것은 예전과 정확히 같다.
     #expect(pngDigest(errorPNG) != pngDigest(plainPNG))
@@ -158,7 +159,7 @@ func displayNameNoticeErrorFlagChangesRenderingInTheSettingsWindow() throws {
     // 같은 플래그로 두 번 그리면 **같은 그림**이어야 한다. 이 줄이 없으면 위 != 는 색 분기가 아니라
     // 픽스처의 잡음(스토어마다 새로 만드는 격리 defaults·토큰 홈 등)으로도 초록이 될 수 있다 —
     // 그러면 색 분기를 통째로 걷어내도 이 테스트는 계속 통과한다.
-    let plainAgain = try renderPNG(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: false), width: settingsWidth)
+    let plainAgain = try renderPNG(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: false, label: "plain-again"), width: settingsWidth)
     #expect(
         pngDigest(plainPNG) == pngDigest(plainAgain),
         "같은 상태를 두 번 그렸는데 그림이 다르다 — 픽스처가 결정적이지 않다"
@@ -180,17 +181,18 @@ func dumpDisplayNameSnapshots() throws {
 
     // 안내 한 줄이 가지는 세 얼굴(도움말·쿨타임·실패). 셋을 나란히 눈으로 봐야 "쿨타임이 실패처럼
     // 보이지 않는가"를 사람이 판정할 수 있다 — 렌더 비교는 '다르다'까지만 말해 준다.
-    try dump(settingsView(notice: nil, isError: false), "display-name-settings-default.png")
+    try dump(settingsView(notice: nil, isError: false, label: "dump-default"), "display-name-settings-default.png")
     try dump(
         // 미래 시각이어야 한다 — 뷰가 onAppear 에서 refreshDisplayNameLock() 으로 잠금을 재평가하므로,
         // 과거 날짜를 주면 잠금이 그 자리에서 풀려 쿨타임 대신 기본 도움말이 찍힌다.
-        settingsView(notice: nil, isError: false, availableAt: Date(timeIntervalSince1970: 4_102_444_800)),
+        settingsView(notice: nil, isError: false, availableAt: Date(timeIntervalSince1970: 4_102_444_800),
+                     label: "dump-cooldown"),
         "display-name-settings-cooldown.png"
     )
-    try dump(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: true), "display-name-settings-error.png")
+    try dump(settingsView(notice: "이미 쓰고 있는 별명이에요", isError: true, label: "dump-error"), "display-name-settings-error.png")
 
     let now = Date(timeIntervalSince1970: 1_700_000_000)
-    try renderPNG(CheckMenuView(store: editorStore(now: now)))
+    try renderPNG(CheckMenuView(store: editorStore(now: now, label: "dump-menu")))
         .write(to: base.appendingPathComponent("display-name-team-list.png"))
 }
 
@@ -208,11 +210,12 @@ private var settingsWidth: CGFloat { CheckSettingsView.preferredWidth }
 /// launchAtLoginSeed 를 **반드시** 준다 — 안 주면 렌더가 실제 로그인 항목(SMAppService)을 읽어
 /// 테스트가 이 맥의 시스템 상태에 의존하게 된다.
 @MainActor
-private func settingsView(notice: String?, isError: Bool, availableAt: Date? = nil) -> CheckSettingsView {
+private func settingsView(notice: String?, isError: Bool, availableAt: Date? = nil,
+                          label: String = "", function: String = #function) -> CheckSettingsView {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults(),
-        tokenUsage: inertTokenStore()
+        defaults: isolatedRenderDefaults(label, function: function),
+        tokenUsage: inertTokenStore(label, function: function)
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: myUserID)
     store.displayName = "영식"
@@ -229,8 +232,10 @@ private func settingsView(notice: String?, isError: Bool, availableAt: Date? = n
 /// 기존 렌더 픽스처(steadyMembers)는 id 가 "aaaaaaaa-…" 라 어떤 멤버도 내가 아니고,
 /// 그대로 쓰면 isMe 분기가 한 번도 열리지 않아 이 파일의 비교가 전부 공회전한다.
 @MainActor
-private func editorStore(now: Date, memberCount: Int = 3, myName: String = "나") -> WorkTimerStore {
-    let store = makeTeamStoreLocal(members: steadyMembersIncludingMe(count: memberCount, myName: myName), now: now)
+private func editorStore(now: Date, memberCount: Int = 3, myName: String = "나",
+                         label: String = "", function: String = #function) -> WorkTimerStore {
+    let store = makeTeamStoreLocal(members: steadyMembersIncludingMe(count: memberCount, myName: myName), now: now,
+                                   label: label, function: function)
     store.displayNameDraft = myName
     return store
 }
@@ -266,11 +271,12 @@ private func steadyMembersLocal(count: Int) -> [TeamMemberStatus] {
 }
 
 @MainActor
-private func makeTeamStoreLocal(members: [TeamMemberStatus], now: Date) -> WorkTimerStore {
+private func makeTeamStoreLocal(members: [TeamMemberStatus], now: Date,
+                                label: String = "", function: String = #function) -> WorkTimerStore {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults(),
-        tokenUsage: inertTokenStore()
+        defaults: isolatedRenderDefaults(label, function: function),
+        tokenUsage: inertTokenStore(label, function: function)
     )
     // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다
     // (고정 displayNow 보존 · 티커 미발사).
@@ -339,22 +345,22 @@ private func checkMenuViewSourceURLForDisplayNameTests() -> URL {
         .appendingPathComponent("Sources/check/CheckMenuView.swift")
 }
 
-private func isolatedRenderDefaults() -> UserDefaults {
-    let suiteName = "check-display-name-ui-tests-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
-    return defaults
+/// 격리 defaults. 이름을 테스트 신원(+label)에서 뽑아 `CheckTestScratch.root`($TMPDIR)에 둔다 —
+/// UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를 하나씩 영구히 남긴다(그 파일 주석의 2026-09-22 사고).
+/// 한 테스트가 스토어를 둘 이상 그리면 `label` 로 갈라라(안 갈면 뒤에 만든 쪽이 앞선 쪽을 비운다).
+private func isolatedRenderDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 렌더 테스트용 격리 토큰 스토어(빈 임시 홈 + 격리 defaults). CheckMenuView 의 .task 갱신 루프가
 /// ImageRenderer 렌더 중에 돌더라도 실홈 스캔이나 테스트 러너 .standard 오염이 일어나지 않는다.
 @MainActor
-private func inertTokenStore() -> TokenUsageStore {
-    let tmp = FileManager.default.temporaryDirectory
-    let id = UUID().uuidString
+private func inertTokenStore(_ label: String = "", function: String = #function) -> TokenUsageStore {
+    // 스토어의 defaults 와 **다른** 스위트다 — 같은 이름이면 나중에 만든 쪽이 앞선 쪽을 비운다.
+    let scratch = CheckTestScratch.directory(label + "-token", function: function)
     return TokenUsageStore(
-        defaults: isolatedRenderDefaults(),
-        homeDirectory: tmp.appendingPathComponent("check-display-name-token-home-\(id)", isDirectory: true),
-        cacheURL: tmp.appendingPathComponent("check-display-name-token-cache-\(id).json", isDirectory: false)
+        defaults: isolatedRenderDefaults(label + "-token", function: function),
+        homeDirectory: scratch.appendingPathComponent("home", isDirectory: true),
+        cacheURL: scratch.appendingPathComponent("cache.json", isDirectory: false)
     )
 }

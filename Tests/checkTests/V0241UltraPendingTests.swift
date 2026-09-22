@@ -263,20 +263,20 @@ final class V0241PendingURLProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
+/// `function` 은 호출한 테스트에서 받아 그대로 내려보낸다 — 여기서 `#function` 을 다시 쓰면 이름이
+/// `v0241Store` 로 굳어 이 파일의 모든 테스트가 한 스위트를 나눠 쓴다(`CheckTestScratch` 주석).
+/// host 를 label 로 두어 한 테스트가 스토어를 둘 이상 만들어도 안 겹친다.
 @MainActor
-private func v0241Store(host: String) -> WorkTimerStore {
+private func v0241Store(host: String, function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
         session: V0241PendingURLProtocol.session()
     )
-    let suiteName = "check-v0241-ultra-pending-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: defaults
+        defaults: CheckTestScratch.defaults(host, function: function)
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
     store.startedAt = Date()

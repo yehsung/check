@@ -64,16 +64,14 @@ private let frOtherID = "00000000-0000-0000-0000-000000000003"
 /// 스텁 네트워크에 물린 관리자 스토어 + 펼쳐 둔 제보 한 건.
 /// `FeedbackURLProtocol`(V0248 의 것)에 호스트별로 응답을 심고 **나간 본문**을 되받는다.
 @MainActor
-private func frStore(host: String) -> WorkTimerStore {
+private func frStore(host: String, function: String = #function) -> WorkTimerStore {
     FeedbackURLProtocol.reset(host: host)
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
         session: FeedbackURLProtocol.session()
     )
-    let suite = "v0314-ime-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
+    let defaults = CheckTestScratch.defaults(host, function: function)
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],

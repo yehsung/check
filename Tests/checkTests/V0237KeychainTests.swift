@@ -259,7 +259,7 @@ private func v0237Store(defaults: UserDefaults, vault: TokenVault) -> WorkTimerS
 }
 
 private func v0237IsolatedDefaults() -> UserDefaults {
-    let suiteName = "check-v0237-keychain-tests-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()   // 옛 "check-v0237-keychain-tests-\(UUID())"
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return defaults

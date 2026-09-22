@@ -656,7 +656,10 @@ final class TodoSyncV0330URLProtocol: URLProtocol {
 
 @MainActor
 private func transportStore(host: String, userID: String = userA) -> WorkTimerStore {
-    let suite = "check-v0330-todo-\(UUID().uuidString)"
+    // 호출마다 다른 스위트. 이름은 **호출 지점 + 이번 실행의 일련번호**라 한 실행 안에서는 UUID 처럼
+    // 갈리고 다음 실행은 같은 이름을 덮어쓴다 — UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를
+    // 하나씩 영구히 남긴다(CheckTestScratch 주석의 2026-09-22 사고).
+    let suite = CheckTestScratch.uniqueSuitePath("todo")
     let defaults = UserDefaults(suiteName: suite)!
     defaults.removePersistentDomain(forName: suite)
     let service = SupabaseWorkService(
@@ -971,7 +974,7 @@ func todoSyncLiveWiringStartsAndListensForWake() async throws {
     let store = transportStore(host: host)
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("check-v0330-live-\(UUID().uuidString)")
     let fileFor: (String?) -> URL = { directory.appendingPathComponent("todos.\($0 ?? "local").json") }
-    let suite = "check-v0330-live-\(UUID().uuidString)"
+    let suite = CheckTestScratch.uniqueSuitePath("live")   // $TMPDIR 절대 경로 — Preferences 로 안 샌다
     let defaults = try #require(UserDefaults(suiteName: suite))
     defaults.removePersistentDomain(forName: suite)
     let list = TodoListStore(fileURL: fileFor(userA), clock: fixedClock(base))

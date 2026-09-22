@@ -5,12 +5,12 @@ import Testing
 
 // MARK: - 살아 있는 눈(깜빡임) · 첫 출근 인사
 
+/// 격리 defaults. 이름을 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 로 옮긴다 — 왜 그래야 하는지는
+/// `CheckTestScratch` 의 머리 주석에 있다(2026-09-22 사고: ~/Library/Preferences 의 check-* 45만 개).
+/// 한 테스트가 스위트를 둘 이상 쓰면 `label` 로 갈라라 — 안 갈라면 같은 스위트가 되어 단언이 조용히 무의미해진다.
 @MainActor
-private func isolatedDefaults() -> UserDefaults {
-    let name = "check-blink-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: name)!
-    defaults.removePersistentDomain(forName: name)
-    return defaults
+private func isolatedDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 @MainActor
@@ -239,7 +239,7 @@ func firstArrivalDoesNotStealTheNudgeExplanation() {
     ]
     let controller = CheckOverlayController(
         store: store, notificationCenter: NotificationCenter(), engine: engine,
-        defaults: isolatedDefaults(), workspaceNotifications: nil
+        defaults: isolatedDefaults("overlay"), workspaceNotifications: nil
     )
 
     // 넛지가 오버라이드를 먼저 세운 상태로 표시 전이가 오면, 1등 문구가 덮어쓰지 않는다.

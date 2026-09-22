@@ -220,22 +220,33 @@ private struct V0316Suite {
 }
 
 /// 임시 도메인. **표준 도메인을 절대 건드리지 않는다** — 병렬 스위트가 아잉 픽셀을 재고 있다.
-private func v0316Suite() -> V0316Suite {
-    let name = "v0316-picker-\(UUID().uuidString)"
-    return V0316Suite(name: name, defaults: UserDefaults(suiteName: name)!)
+///
+/// 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다(`CheckTestScratch` 머리 주석).
+/// `#line` 을 섞는 이유: 한 테스트가 도메인을 둘 쓴다(empty/worn) — `#function` 만이면 둘이 한 도메인이
+/// 되어 "빈 도메인 vs 착용된 도메인"이라는 이 테스트의 전제가 조용히 무너진다.
+private func v0316Suite(_ label: String = "", function: String = #function, line: Int = #line) -> V0316Suite {
+    let tag = label.isEmpty ? "picker-L\(line)" : "picker-\(label)-L\(line)"
+    return V0316Suite(name: CheckTestScratch.suitePath(tag, function: function),
+                      defaults: CheckTestScratch.defaults(tag, function: function))
 }
 
-/// 쓴 것을 되돌린다. `removePersistentDomain` 은 디스크의 plist 까지 지운다.
+/// 쓴 것을 되돌린다.
+///
+/// **주의 — 2026-09-22 반증**: `removePersistentDomain` 은 디스크의 plist 를 **안 지운다**.
+/// cfprefsd 가 제 메모리 사본을 나중에 다시 flush 한다(GomokuTestDefaults 는 rpd + 파일 삭제를 둘 다
+/// 부르는데도 $TMPDIR 에 1,111개가 값을 품은 채 남아 있었다). `removeSuite(named:)` 는 더해서 검색
+/// 목록에서 빼기만 한다. 그래서 진짜 정리는 `v0316Suite` 가 **만들 때** 하고, 여기 남은 두 줄은
+/// 같은 프로세스 안에서 뒤에 오는 읽기를 막아 주는 보험일 뿐이다 — 이것에 기대 '정리됐다'고 보지 마라.
 private func v0316Drop(_ suite: V0316Suite) {
     suite.defaults.removePersistentDomain(forName: suite.name)
     UserDefaults.standard.removeSuite(named: suite.name)
 }
 
 @MainActor
-private func v0316Store(admin: Bool) -> WorkTimerStore {
+private func v0316Store(admin: Bool, function: String = #function, line: Int = #line) -> WorkTimerStore {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon"],
-        defaults: UserDefaults(suiteName: "v0316-store-\(UUID().uuidString)")!
+        defaults: CheckTestScratch.defaults("store-L\(line)", function: function)
     )
     // 센터 행을 **시드한다**: 안 주면 서버 GET 도착 시점에 따라 '불러오는 중…' → '미지정' 으로 바뀌어
     // 이 비교가 선택기와 무관한 줄에서 흔들린다(CheckMenuRenderTests 가 같은 이유로 같은 조치를 한다).
@@ -263,13 +274,14 @@ private func v0316Bitmap(_ view: some View, width: CGFloat, scale: CGFloat = 2) 
 }
 
 @MainActor
-private func v0316SettingsBitmap(admin: Bool) throws -> NSBitmapImageRep {
-    let suite = v0316Suite()
+private func v0316SettingsBitmap(admin: Bool, function: String = #function) throws -> NSBitmapImageRep {
+    // 한 테스트가 이 그림을 admin false/true 로 두 번 그린다 — admin 을 label 에 넣어 갈라 둔다.
+    let suite = v0316Suite("settings-\(admin)", function: function)
     defer { v0316Drop(suite) }
     // launchAtLoginSeed 를 반드시 준다 — 안 주면 렌더가 실제 로그인 항목(SMAppService)을 읽어
     // 테스트가 이 맥의 시스템 상태에 의존한다.
     return try v0316Bitmap(
-        CheckSettingsView(store: v0316Store(admin: admin),
+        CheckSettingsView(store: v0316Store(admin: admin, function: function),
                           launchAtLoginSeed: false,
                           characterDefaults: suite.defaults),
         width: CheckSettingsView.preferredWidth

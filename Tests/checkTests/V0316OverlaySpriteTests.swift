@@ -141,11 +141,13 @@ private func centerPanel(_ controller: CheckOverlayController) {
 }
 
 /// 격리된 UserDefaults 위에 세운 오버레이 컨트롤러(전역 도메인·노티 오염 금지 — 기존 스위트와 같은 규약).
+///
+/// 스위트 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다(`CheckTestScratch` 머리 주석).
+/// `function` 은 호출한 테스트에서 받아 이어 넘긴다 — 여기서 `#function` 을 다시 쓰면 이름이
+/// `isolatedOverlayController` 로 굳어 이 파일의 모든 테스트가 한 스위트를 나눠 쓴다.
 @MainActor
-private func isolatedOverlayController() -> CheckOverlayController {
-    let suiteName = "check-v0316b-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
+private func isolatedOverlayController(_ label: String = "", function: String = #function) -> CheckOverlayController {
+    let defaults = CheckTestScratch.defaults(label, function: function)
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
         defaults: defaults,

@@ -280,9 +280,10 @@ private func v0312State(_ states: [String: AntigravityFileProgress], _ name: Str
     states.first { ($0.key as NSString).lastPathComponent == name }?.value
 }
 
-private func v0312TempConversations() -> URL {
-    let dir = FileManager.default.temporaryDirectory
-        .appendingPathComponent("v0312-agy-\(UUID().uuidString)", isDirectory: true)
+/// 테스트별 대화 폴더. 이름이 UUID 였을 때는 defer 가 안 걸린 경로 때문에 $TMPDIR 에 1,275개가 쌓여 있었다
+/// (2026-09-22 실측) — 이제 `CheckTestScratch` 가 만들면서 지난 판을 치운다.
+private func v0312TempConversations(_ label: String = "", function: String = #function) -> URL {
+    let dir = CheckTestScratch.directory(label, function: function)
         .appendingPathComponent(AntigravityUsageScanner.conversationsSubpath, isDirectory: true)
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     return dir
@@ -356,13 +357,13 @@ private var v0312RealConversations: URL {
 /// nil 은 **"이 기기엔 잴 것이 없다"** 하나만 뜻한다(디렉터리가 없거나 `.db` 가 하나도 없다 — CI). 그 외에는
 /// 사본이 비지 않았음을 여기서 단언한다: 사본이 비면 호출자의 루프가 한 바퀴도 안 돌아 **아무것도 안 재고 초록**이 되고,
 /// 그게 이번에 잡힌 결함이다(복사가 조용히 실패해도 세 테스트가 전부 통과했다).
-private func v0312MirrorRealConversations() -> (dir: URL, realBefore: [String], dbNames: [String])? {
+private func v0312MirrorRealConversations(function: String = #function) -> (dir: URL, realBefore: [String], dbNames: [String])? {
     let fm = FileManager.default
     guard fm.fileExists(atPath: v0312RealConversations.path) else { return nil }
     let dbNames = v0312DirectoryListing(v0312RealConversations).filter { $0.hasSuffix(".db") }
     guard !dbNames.isEmpty else { return nil }
     let before = v0312DirectoryFingerprint(v0312RealConversations)
-    let mirror = v0312TempConversations()
+    let mirror = v0312TempConversations("mirror", function: function)
     for name in dbNames {
         try? fm.copyItem(
             at: v0312RealConversations.appendingPathComponent(name),
@@ -804,8 +805,9 @@ func v0312ImmutableReadDiscardsWhatChangedUnderIt() {
 /// `?` 뒤가 쿼리로 잘리거나 `#` 뒤가 통째로 날아가 그 사람만 집계가 0 이 된다.
 @Test("2단 경로 이스케이프 — 한글·공백·물음표·샵이 든 경로에서도 읽는다")
 func v0312ImmutableFallbackSurvivesAwkwardPaths() throws {
-    let base = FileManager.default.temporaryDirectory
-        .appendingPathComponent("v0312 예성 #1 ?q-\(UUID().uuidString)", isDirectory: true)
+    // 이름의 공백·한글·`?`·`#` 이 이 테스트의 주인공이라 그대로 둔다 — 자리만 스크래치 뿌리로 옮긴다.
+    let base = CheckTestScratch.directory("awkward")
+        .appendingPathComponent("v0312 예성 #1 ?q", isDirectory: true)
     let dir = base.appendingPathComponent(AntigravityUsageScanner.conversationsSubpath, isDirectory: true)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: base) }
@@ -1068,8 +1070,7 @@ func v0312RealFixturesReadTheSameWithoutSidecars() throws {
     defer {
         v0312ExpectRealConversationsUntouched(mirror.realBefore, "v0312RealFixturesReadTheSameWithoutSidecars")
     }
-    let scratch = FileManager.default.temporaryDirectory
-        .appendingPathComponent("v0312-nosidecar-\(UUID().uuidString)", isDirectory: true)
+    let scratch = CheckTestScratch.directory("nosidecar")
     try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: scratch) }
 

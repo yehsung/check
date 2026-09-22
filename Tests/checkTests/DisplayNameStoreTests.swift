@@ -16,14 +16,13 @@ import Testing
 
     // MARK: - 헬퍼
 
-    private func makeDefaults() -> UserDefaults {
-        let suiteName = "check-display-name-store-tests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
-        return defaults
+    /// 테스트마다 새 스위트. 이름은 `CheckTestScratch` 가 테스트 신원에서 뽑고 plist 도 $TMPDIR 에 둔다
+    /// (UUID 이름은 실행마다 ~/Library/Preferences 에 파일을 하나씩 영구히 남긴다).
+    private func makeDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+        CheckTestScratch.defaults(label, function: function)
     }
 
-    private func makeStore(host: String, session: URLSession) -> WorkTimerStore {
+    private func makeStore(host: String, session: URLSession, function: String = #function) -> WorkTimerStore {
         let service = SupabaseWorkService(
             projectURL: URL(string: "http://\(host)")!,
             anonKey: "anon-test-key",
@@ -32,7 +31,7 @@ import Testing
         let store = WorkTimerStore(
             service: service,
             environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-            defaults: makeDefaults()
+            defaults: makeDefaults(host, function: function)
         )
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
         // 팀 재조회가 실제로 나가도록 소속을 세운다(성공 경로가 refreshTeamStatus 를 타는지 보려면 필요하다).

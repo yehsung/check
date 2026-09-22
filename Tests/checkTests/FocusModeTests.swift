@@ -18,7 +18,7 @@ import Testing
 
 @MainActor
 private func makeFocusStore(host: String) -> WorkTimerStore {
-    let suiteName = "check-focus-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     let store = WorkTimerStore(

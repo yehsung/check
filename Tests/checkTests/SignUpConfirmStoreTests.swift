@@ -272,15 +272,13 @@ private func awaitSignUpRequestSent(path: String, host: String) async {
     }
 }
 
-private func isolatedDefaults() -> UserDefaults {
-    let suiteName = "check-signup-otp-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
-    return defaults
+/// 테스트마다 새 스위트(이름·자리 모두 `CheckTestScratch` 규약 — $TMPDIR, 테스트 신원에서 뽑은 이름).
+private func isolatedDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 @MainActor
-private func makeSignUpStore(host: String) -> WorkTimerStore {
+private func makeSignUpStore(host: String, function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
@@ -289,7 +287,7 @@ private func makeSignUpStore(host: String) -> WorkTimerStore {
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: isolatedDefaults()
+        defaults: isolatedDefaults(host, function: function)
     )
     _ = freezeSignUpCooldownClock(store)
     return store

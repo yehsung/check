@@ -1008,8 +1008,10 @@ private func awaySyncRequestCount(host: String) -> Int {
 
 // MARK: - 헬퍼
 
+/// `function` 을 받아 그대로 내려보낸다 — 헬퍼 본문에서 기본 인자를 다시 쓰면 `#function` 이
+/// `makePokeGateStore` 로 굳어 이 파일의 모든 테스트가 한 스위트를 나눠 쓴다.
 @MainActor
-private func makePokeGateStore(host: String) -> WorkTimerStore {
+private func makePokeGateStore(host: String, function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
@@ -1018,7 +1020,7 @@ private func makePokeGateStore(host: String) -> WorkTimerStore {
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: pokeGateDefaults()
+        defaults: pokeGateDefaults(host, function: function)
     )
     // 세션을 직접 주입해 로그인 흐름을 건너뛴다(팀 확정도 함께 — 찌르기 경로는 팀을 안 타지만 상태를 실제와 맞춘다).
     store.session = SupabaseSession(
@@ -1031,11 +1033,10 @@ private func makePokeGateStore(host: String) -> WorkTimerStore {
 }
 
 /// 테스트마다 새 suite 를 쓴다 — .standard 를 공유하면 병렬 테스트가 서로의 저장 세션/설정을 덮어쓴다.
-private func pokeGateDefaults() -> UserDefaults {
-    let suiteName = "check-poke-gate-tests-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
-    return defaults
+/// 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다(이유는 `CheckTestScratch` 머리 주석).
+/// 한 테스트가 스위트를 둘 이상 쓰면 `label` 로 갈라라.
+private func pokeGateDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 요청 기록은 프로세스 전역 버퍼라 테스트마다 고유 호스트로 격리하고, 여기서 경로로 한 번 더 좁힌다.

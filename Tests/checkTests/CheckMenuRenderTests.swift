@@ -868,12 +868,14 @@ func downscaledPixelSizeKeepsSmallImagesUnchanged() {
 
 // MARK: - Helpers
 
+/// `function`·`line` 은 **호출 지점**에서 평가되는 기본 인자라 호출자를 안 고치고 자기 신원을 넘겨준다.
+/// 받아서 그대로 이어 넘겨야 한다 — 안 그러면 이름이 `makeSignedInStore` 로 굳어 모든 테스트가 한 스위트다.
 @MainActor
-private func makeSignedInStore() -> WorkTimerStore {
+private func makeSignedInStore(function: String = #function, line: Int = #line) -> WorkTimerStore {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults(),
-        tokenUsage: inertTokenStore()
+        defaults: isolatedRenderDefaults("signedin", function: function, line: line),
+        tokenUsage: inertTokenStore("signedin", function: function, line: line)
     )
     // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(고정 displayNow 보존·티커 미발사).
     store.isMenuPresented = true
@@ -898,12 +900,14 @@ private func makeSignedInStore() -> WorkTimerStore {
 private func makeTeamStore(
     members: [TeamMemberStatus],
     now: Date = Date(),
-    tokenUsage: TokenUsageStore? = nil
+    tokenUsage: TokenUsageStore? = nil,
+    function: String = #function,
+    line: Int = #line
 ) -> WorkTimerStore {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults(),
-        tokenUsage: tokenUsage ?? inertTokenStore()
+        defaults: isolatedRenderDefaults("team", function: function, line: line),
+        tokenUsage: tokenUsage ?? inertTokenStore("team", function: function, line: line)
     )
     // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(고정 displayNow 보존·티커 미발사).
     store.isMenuPresented = true
@@ -1236,11 +1240,13 @@ private func steadyMembers(count: Int) -> [TeamMemberStatus] {
 }
 
 @MainActor
-private func makeLoginStore(syncMessage: String) -> WorkTimerStore {
+private func makeLoginStore(syncMessage: String,
+                            function: String = #function,
+                            line: Int = #line) -> WorkTimerStore {
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedRenderDefaults(),
-        tokenUsage: inertTokenStore()
+        defaults: isolatedRenderDefaults("login", function: function, line: line),
+        tokenUsage: inertTokenStore("login", function: function, line: line)
     )
     // 렌더 결정성: onAppear 의 setMenuPresented(true) 가 != 가드로 no-op 되도록 선세팅한다(티커 미발사).
     store.isMenuPresented = true
@@ -1277,33 +1283,55 @@ private func renderedPixelSize(_ view: CheckMenuView) -> (width: Int, height: In
     return (bitmap.pixelsWide, bitmap.pixelsHigh)
 }
 
-private func isolatedRenderDefaults() -> UserDefaults {
-    let suiteName = "check-render-tests-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
-    return defaults
+/// 스크래치 이름의 꼬리표. `#line` 을 쓰는 이유는 아래 `isolatedRenderDefaults` 주석에 있다.
+private func renderScratchLabel(_ label: String, _ line: Int) -> String {
+    label.isEmpty ? "L\(line)" : "\(label)-L\(line)"
+}
+
+/// 격리 defaults. 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다 —
+/// 이유는 `CheckTestScratch` 머리 주석에 있다(2026-09-22 사고).
+///
+/// **왜 `#line` 까지 쓰는가** — 이 파일은 한 테스트가 스토어를 **다섯·여섯 개씩** 만든다(예: 창 높이
+/// 비교는 팀 크기별로 여러 스토어를 나란히 세우고 서로의 높이를 견준다). `#function` 만으로 이름을
+/// 지으면 그 스토어들이 한 스위트를 나눠 쓰고, `CheckTestScratch.defaults` 가 만들 때마다 도메인을
+/// 지우므로 **뒤에 만든 스토어가 앞 스토어의 값을 날린다**(V0239UltraLapTests:28-32 가 적어 둔 그 함정).
+/// `#line` 은 `#function` 과 같이 **호출 지점에서** 평가되는 컴파일러 기본 인자라 호출자를 한 글자도
+/// 안 고치고 자리마다 다른 이름을 준다. 이름 수는 여전히 소스의 호출 지점 수로 유계다.
+/// 한 줄에서 루프로 여러 번 부르는 자리(같은 줄 = 같은 이름)는 `label` 로 갈라라.
+private func isolatedRenderDefaults(_ label: String = "",
+                                    function: String = #function,
+                                    line: Int = #line) -> UserDefaults {
+    CheckTestScratch.defaults(renderScratchLabel(label, line), function: function)
 }
 
 /// 렌더 테스트용 격리 토큰 스토어. 실홈 대신 빈 임시 홈 + 격리 defaults 를 준다 — CheckMenuView 의 .task 갱신 루프가
 /// ImageRenderer 렌더 중에 돌더라도(ImageRenderer 는 .task 를 실행한다) 실홈 스캔이나 테스트 러너 .standard 오염이
 /// 일어나지 않는다. 빈 홈이라 집계는 0 → 팝오버에서는 숫자 없는 순위판 진입 행(boardEntryRow)이,
 /// 콜백 없이 단독으로 쓰면 EmptyView 가 결정적으로 그려진다.
+///
+/// `function`·`line` 은 부른 쪽에서 받아 **이어 넘긴다**. 여기서 기본 인자를 다시 쓰면 이름이
+/// 이 헬퍼의 자리로 굳어 파일 안 모든 토큰 스토어가 한 스위트·한 홈을 나눠 쓴다.
 @MainActor
-private func inertTokenStore() -> TokenUsageStore {
-    let tmp = FileManager.default.temporaryDirectory
-    let id = UUID().uuidString
+private func inertTokenStore(_ label: String = "",
+                             function: String = #function,
+                             line: Int = #line) -> TokenUsageStore {
+    let tag = renderScratchLabel(label, line)
+    let home = CheckTestScratch.directory("token-\(tag)", function: function)
     return TokenUsageStore(
-        defaults: isolatedRenderDefaults(),
-        homeDirectory: tmp.appendingPathComponent("check-render-token-home-\(id)", isDirectory: true),
-        cacheURL: tmp.appendingPathComponent("check-render-token-cache-\(id).json", isDirectory: false)
+        defaults: CheckTestScratch.defaults("token-\(tag)", function: function),
+        homeDirectory: home.appendingPathComponent("home", isDirectory: true),
+        cacheURL: home.appendingPathComponent("cache.json", isDirectory: false)
     )
 }
 
 /// 토큰 소모량 행이 실제로 그려지는 상태의 토큰 스토어. 스캔 없이 영속 스냅샷 복원 경로(init)로
 /// currentMonthUsage 를 채운다 — month 가 현재 KST 월이어야 복원되므로 TokenUsageMonthKey.current() 를 쓴다.
 @MainActor
-private func seededTokenStore() -> TokenUsageStore {
-    let defaults = isolatedRenderDefaults()
+private func seededTokenStore(_ label: String = "",
+                              function: String = #function,
+                              line: Int = #line) -> TokenUsageStore {
+    let tag = renderScratchLabel(label, line)
+    let defaults = CheckTestScratch.defaults("seeded-\(tag)", function: function)
     let usage = TokenUsageMonthly(
         month: TokenUsageMonthKey.current(),
         claudeInput: 8_460_869, claudeOutput: 35_849_782,
@@ -1313,12 +1341,11 @@ private func seededTokenStore() -> TokenUsageStore {
     if let data = try? JSONEncoder().encode(usage) {
         defaults.set(data, forKey: TokenUsageStore.snapshotKey)
     }
-    let tmp = FileManager.default.temporaryDirectory
-    let id = UUID().uuidString
+    let home = CheckTestScratch.directory("seeded-\(tag)", function: function)
     return TokenUsageStore(
         defaults: defaults,
-        homeDirectory: tmp.appendingPathComponent("check-render-token-home-\(id)", isDirectory: true),
-        cacheURL: tmp.appendingPathComponent("check-render-token-cache-\(id).json", isDirectory: false)
+        homeDirectory: home.appendingPathComponent("home", isDirectory: true),
+        cacheURL: home.appendingPathComponent("cache.json", isDirectory: false)
     )
 }
 

@@ -38,9 +38,9 @@ private func v0238TS14(_ date: Date) -> Int {
     return ((((c.year! * 100 + c.month!) * 100 + c.day!) * 100 + c.hour!) * 100 + c.minute!) * 100 + c.second!
 }
 
-private func v0238TempDir(_ tag: String) -> URL {
-    FileManager.default.temporaryDirectory
-        .appendingPathComponent("check-v0238-\(tag)-\(UUID().uuidString)", isDirectory: true)
+/// 테스트별 임시 폴더. `tag` 가 한 테스트 안의 자리를 가른다 — 이름이 UUID 면 실행마다 $TMPDIR 에 폴더가 쌓인다.
+private func v0238TempDir(_ tag: String, function: String = #function) -> URL {
+    CheckTestScratch.directory(tag, function: function)
 }
 
 /// 격리 캐시 베이스 URL(스토어가 여기서 .state.json / .entries.json 을 파생한다).
@@ -88,8 +88,13 @@ private func v0238CodexLine(input: Int, output: Int, at date: Date) -> String {
 }
 
 private func v0238Defaults(_ name: String) -> UserDefaults {
-    let d = UserDefaults(suiteName: name)!
-    d.removePersistentDomain(forName: name)
+    // **이름을 여기서 접는다.** 받은 String 을 그대로 열면 호출자가 평범한 이름을 주는 순간 plist 가
+    // ~/Library/Preferences 로 떨어지는데, 소스 게이트는 String 파라미터에서 추적을 멈추므로 그 되돌림이
+    // 무음이다(같은 수리가 `NudgeAutoStartContractTests.makeSuppressionStore` 에도 있다 — 그쪽 주석에 실측).
+    // 이미 스크래치 절대 경로면 그대로 둔다 — 호출자가 `suite` 로 직접 여는 스위트(정리·리그)와 갈리면 안 된다.
+    let path = name.hasPrefix(CheckTestScratch.root.path + "/") ? name : CheckTestScratch.suitePath(named: name)
+    let d = UserDefaults(suiteName: path)!
+    d.removePersistentDomain(forName: path)
     return d
 }
 
@@ -1159,7 +1164,7 @@ func cacheLoadDiscardsLegacyAndMismatchedGenerations() throws {
 func storeRescansWhenOnDiskCacheIsFromOlderGeneration() async throws {
     let home = v0238TempDir("gen-home")
     let dir = v0238TempDir("gen-cache")
-    let suite = "check-v0238-token-generation"
+    let suite = CheckTestScratch.suitePath(named: "check-v0238-token-generation")
     let defaults = v0238Defaults(suite)
     defer {
         defaults.removePersistentDomain(forName: suite)
@@ -1213,8 +1218,8 @@ private struct V0238ThrottleRig {
     var lines = 0
 
     init(suite: String, defaults: UserDefaults) {
-        home = v0238TempDir("throttle-home")
-        dir = v0238TempDir("throttle-cache")
+        home = v0238TempDir("throttle-home-" + suite)
+        dir = v0238TempDir("throttle-cache-" + suite)
         base = v0238CacheURL(in: dir)
         url = v0238ClaudeURL(home, "p", "s.jsonl")
         clock = V0238Clock(v0238Now)
@@ -1252,7 +1257,7 @@ func cacheSaveIsThrottledToFiveMinutesByInjectedClock() async {
     #expect(TokenUsageStore.refreshPeriod == 120)
     #expect(TokenUsageStore.refreshTolerance == 20)
     #expect(TokenUsageStore.saveInterval == 300)
-    let suite = "check-v0238-token-throttle"
+    let suite = CheckTestScratch.suitePath(named: "check-v0238-token-throttle")
     let defaults = v0238Defaults(suite)
     var rig = V0238ThrottleRig(suite: suite, defaults: defaults)
     defer { defaults.removePersistentDomain(forName: suite); rig.tearDown() }
@@ -1290,7 +1295,7 @@ func cacheSaveIsThrottledToFiveMinutesByInjectedClock() async {
 @MainActor
 @Test
 func refreshLoopCancellationPersistsDirtyCacheOnce() async {
-    let suite = "check-v0238-token-loop-cancel"
+    let suite = CheckTestScratch.suitePath(named: "check-v0238-token-loop-cancel")
     let defaults = v0238Defaults(suite)
     var rig = V0238ThrottleRig(suite: suite, defaults: defaults)
     defer { defaults.removePersistentDomain(forName: suite); rig.tearDown() }
@@ -1337,7 +1342,7 @@ func refreshLoopCancellationPersistsDirtyCacheOnce() async {
 @MainActor
 @Test
 func terminationNotificationPersistsDirtyCacheSynchronously() async {
-    let suite = "check-v0238-token-terminate"
+    let suite = CheckTestScratch.suitePath(named: "check-v0238-token-terminate")
     let defaults = v0238Defaults(suite)
     var rig = V0238ThrottleRig(suite: suite, defaults: defaults)
     defer { defaults.removePersistentDomain(forName: suite); rig.tearDown() }

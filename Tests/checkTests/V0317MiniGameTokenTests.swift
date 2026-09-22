@@ -15,16 +15,16 @@ import Testing
 
 private let tkUserID = "00000000-0000-0000-0000-000000000002"
 
+/// 격리 defaults. 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다 —
+/// 이유는 `CheckTestScratch` 머리 주석에 있다. 한 테스트가 스위트를 둘 이상 쓰면 `label` 로 갈라라.
 @MainActor
-private func tkDefaults() -> UserDefaults {
-    let suite = "v0317-mg-token-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
-    return defaults
+private func tkDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
+/// `function` 은 호출한 테스트에서 받아 이어 넘긴다(안 넘기면 이름이 `tkStore` 로 굳어 전부 한 스위트다).
 @MainActor
-private func tkStore(host: String) -> WorkTimerStore {
+private func tkStore(host: String, function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
@@ -33,7 +33,7 @@ private func tkStore(host: String) -> WorkTimerStore {
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: tkDefaults()
+        defaults: tkDefaults(host, function: function)
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: tkUserID)
     store.currentTeamID = URLProtocolStub.stubTeamID

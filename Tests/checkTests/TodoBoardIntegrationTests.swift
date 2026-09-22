@@ -18,7 +18,7 @@ import Testing
 
 @MainActor
 private func makeOverlay() -> (WorkTimerStore, CheckOverlayController) {
-    let suite = "check-todo-int-\(UUID().uuidString)"
+    let suite = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suite)!
     defaults.removePersistentDomain(forName: suite)
     let store = WorkTimerStore(
@@ -155,7 +155,7 @@ func characterTapFallsBackToHitWhenTodoDisabled() {
 @MainActor
 @Test
 func todoEnabledDefaultsOnAndPersists() {
-    let suite = "check-todo-pref-\(UUID().uuidString)"
+    let suite = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suite)!
     defaults.removePersistentDomain(forName: suite)
     func make() -> WorkTimerStore {
@@ -573,7 +573,7 @@ private func firstBlurView(in view: NSView?) -> NSVisualEffectView? {
 
 /// 투명도가 사는 임시 저장소. 실제 사용자 설정(.standard)을 건드리지 않는다.
 private func makeAppearanceDefaults() -> UserDefaults {
-    let suite = "check-todo-appearance-\(UUID().uuidString)"
+    let suite = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suite)!
     defaults.removePersistentDomain(forName: suite)
     return defaults

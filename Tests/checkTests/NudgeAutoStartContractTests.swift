@@ -158,7 +158,18 @@ func aliveTickStampsEveryTick() {
 
 @MainActor
 private func makeSuppressionStore(suiteName: String) -> WorkTimerStore {
-    let defaults = UserDefaults(suiteName: suiteName)!
+    // **이름을 여기서 접는다.** 받은 String 을 그대로 스위트로 열면 호출자가 무엇을 주든 그대로 도메인이 된다 —
+    // 평범한 이름이면 plist 가 ~/Library/Preferences 로 떨어진다(2026-09-22 사고의 그 모양). 게이트는 그걸 못 본다:
+    // `PreferencesLeakGateTests` 의 소스 스캐너는 `UserDefaults(suiteName:` 자리만 보는데, 여기 인자는 String
+    // 파라미터라 거기서 추적이 끝나고, 호출자 쪽 `makeSuppressionStore(suiteName: "check-…")` 는 애초에
+    // 그 문(門)이 아니라서 안 걸린다. 실측(2026-09-22): 호출자 하나를 옛 관용구로 되돌리자 게이트도 테스트도
+    // 초록인 채 `check-suppression-<UUID>.plist` 가 하나 늘었다. 접고 나면 그 되돌림이 무해해진다.
+    //
+    // 이미 스크래치 절대 경로면 **그대로 둔다**. 호출자들은 같은 이름으로 스위트를 직접 열어 값을 심어 두고
+    // (`suppressionRearmsAfterAppWasDeadForTheGap`) 스토어가 그걸 읽는지 본다 — 한 번 더 접으면 두 스위트가
+    // 갈려 그 단언이 조용히 무의미해진다.
+    let path = suiteName.hasPrefix(CheckTestScratch.root.path + "/") ? suiteName : CheckTestScratch.suitePath(named: suiteName)
+    let defaults = UserDefaults(suiteName: path)!
     return WorkTimerStore(
         service: SupabaseWorkService(
             projectURL: URL(string: "http://suppression-tests")!,
@@ -173,7 +184,7 @@ private func makeSuppressionStore(suiteName: String) -> WorkTimerStore {
 @MainActor
 @Test
 func manualStopSuppressesAndManualStartClears() {
-    let suiteName = "check-suppression-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     UserDefaults(suiteName: suiteName)!.removePersistentDomain(forName: suiteName)
     let store = makeSuppressionStore(suiteName: suiteName)
     defer {
@@ -202,7 +213,7 @@ func manualStopSuppressesAndManualStartClears() {
 @MainActor
 @Test
 func suppressionSurvivesRelaunchWhileAppStaysAlive() {
-    let suiteName = "check-suppression-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     UserDefaults(suiteName: suiteName)!.removePersistentDomain(forName: suiteName)
     let store = makeSuppressionStore(suiteName: suiteName)
     defer {
@@ -227,7 +238,7 @@ func suppressionSurvivesRelaunchWhileAppStaysAlive() {
 @MainActor
 @Test
 func suppressionRearmsAfterAppWasDeadForTheGap() {
-    let suiteName = "check-suppression-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     // 어제 저녁 종료 → 밤새 꺼짐 → 아침 재실행: 마지막 생존 스탬프가 1시간+ 과거면 그 공백이 곧 부재다.
@@ -250,7 +261,7 @@ func suppressionRearmsAfterAppWasDeadForTheGap() {
 @MainActor
 @Test
 func aliveStampPersistsOnlyWhileSuppressed() {
-    let suiteName = "check-suppression-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     let store = makeSuppressionStore(suiteName: suiteName)

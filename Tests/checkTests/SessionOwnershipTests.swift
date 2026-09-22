@@ -30,7 +30,7 @@ private func makeOwnershipStubStore(
         anonKey: "anon-test-key",
         session: URLSession(configuration: .stubbed)
     )
-    let suiteName = "check-ownership-tests-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     let store = WorkTimerStore(
@@ -1224,7 +1224,7 @@ func restartDoesNotLaunderAWeakClaimIntoAStrongOne() async {
     // 고치려던 사고가 그대로 되살아난다. 강도는 반드시 **영속된 값 그대로** 물려받아야 한다.
     let host = "restart-keeps-weak"
     let userID = "00000000-0000-0000-0000-000000000002"
-    let suiteName = "check-ownership-tests-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
 

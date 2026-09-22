@@ -134,12 +134,11 @@ private final class MPStub: URLProtocol {
 
 // MARK: - 헬퍼
 
+/// 격리 defaults. 이름을 테스트 신원(+호스트)에서 뽑아 `CheckTestScratch.root`($TMPDIR)에 둔다 —
+/// UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를 하나씩 영구히 남긴다(그 파일 주석의 2026-09-22 사고).
 @MainActor
-private func mpDefaults() -> UserDefaults {
-    let suite = "v0251-message-peer-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
-    return defaults
+private func mpDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 격리 토큰 스토어. 홈·캐시·defaults·알림센터를 전부 임시로 준다(V0240TokenScanTests 의 v0240TokenStore 와 같은 패턴).
@@ -150,13 +149,13 @@ private func mpDefaults() -> UserDefaults {
 /// v0.3.12 부터는 그 순회가 sqlite 로 대화 db 를 열어 **사용자 폴더에 `-shm` 까지 남겼다**(실측 2026-09-11).
 /// 스토어 쪽에도 안전망을 걸었지만(`TokenUsageStore.realHomeScanIsBlocked`) 그건 그물이고, 배선은 여기서 바로잡는다.
 @MainActor
-private func mpTokenStore() -> TokenUsageStore {
-    let tmp = FileManager.default.temporaryDirectory
-    let tag = UUID().uuidString
+private func mpTokenStore(_ label: String = "", function: String = #function) -> TokenUsageStore {
+    // 스토어의 defaults 와 **다른** 스위트여야 한다 — 같은 이름이면 나중에 만든 쪽이 앞선 쪽을 비운다.
+    let scratch = CheckTestScratch.directory(label + "-token", function: function)
     return TokenUsageStore(
-        defaults: mpDefaults(),
-        homeDirectory: tmp.appendingPathComponent("v0251-token-home-\(tag)", isDirectory: true),
-        cacheURL: tmp.appendingPathComponent("v0251-token-cache-\(tag).json", isDirectory: false),
+        defaults: CheckTestScratch.defaults(label + "-token", function: function),
+        homeDirectory: scratch.appendingPathComponent("home", isDirectory: true),
+        cacheURL: scratch.appendingPathComponent("cache.json", isDirectory: false),
         clock: { mpNow },
         notificationCenter: NotificationCenter()
     )
@@ -165,7 +164,7 @@ private func mpTokenStore() -> TokenUsageStore {
 /// 스텁 네트워크에 물린 근무중·로그인 스토어. 시계는 **얼려서** 꽂는다 —
 /// 읽음 도장이 벽시계에 흔들리면 부하 큰 병렬 실행에서 무음으로 뒤집힌다(이 저장소의 실측 회귀).
 @MainActor
-private func mpStore(host: String) -> WorkTimerStore {
+private func mpStore(host: String, function: String = #function) -> WorkTimerStore {
     MPStub.reset(host: host)
     // v0.3.30: 스토어는 이력을 `message_history_with_reads` 로 먼저 묻는다. 이 스위트는 옛 `message_history` 경로의 응답
     // 얼굴을 재므로 새 함수가 없는 서버(404 PGRST202)를 기본으로 깐다(스텁 미등록 기본값 200 `[]` 이면 옛 경로를 안 부른다).
@@ -182,9 +181,9 @@ private func mpStore(host: String) -> WorkTimerStore {
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: mpDefaults(),
+        defaults: mpDefaults(host, function: function),
         // ★ 토큰 스토어를 **반드시** 주입한다(위 mpTokenStore 주석) — 기본값은 실제 홈을 훑는다.
-        tokenUsage: mpTokenStore()
+        tokenUsage: mpTokenStore(host, function: function)
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: mpUserID)
     store.clock = { mpNow }

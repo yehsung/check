@@ -14,17 +14,18 @@ import Testing
 
 // MARK: - 헬퍼
 
+/// 격리 defaults. 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다 —
+/// 이유는 `CheckTestScratch` 머리 주석에 있다. 한 테스트가 스위트를 둘 이상 쓰면 `label` 로 갈라라.
 @MainActor
-private func mgwDefaults() -> UserDefaults {
-    let suiteName = "v0246-mg-window-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
-    return defaults
+private func mgwDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
+/// `function` 은 호출한 테스트에서 받아 이어 넘긴다(안 넘기면 이름이 `mgwStore` 로 굳는다).
 @MainActor
-private func mgwStore() -> WorkTimerStore {
-    WorkTimerStore(environment: ["CHECK_SUPABASE_ANON_KEY": "anon"], defaults: mgwDefaults())
+private func mgwStore(_ label: String = "", function: String = #function) -> WorkTimerStore {
+    WorkTimerStore(environment: ["CHECK_SUPABASE_ANON_KEY": "anon"],
+                   defaults: mgwDefaults(label, function: function))
 }
 
 /// 배선까지 끝낸 컨트롤러(공유 인스턴스가 아니다 — 전역을 오염시키지 않고 창 하나를 잰다).

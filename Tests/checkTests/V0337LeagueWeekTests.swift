@@ -20,27 +20,28 @@ import Testing
 
 // MARK: - 도구
 
-private func v0337Defaults() -> UserDefaults {
-    let suiteName = "check-v0337-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
-    return defaults
+/// 격리 defaults. 이름을 테스트 신원에서 뽑아 `CheckTestScratch.root`($TMPDIR)에 둔다 —
+/// UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를 하나씩 영구히 남긴다(그 파일 주석의 2026-09-22 사고).
+/// 한 테스트가 스토어를 둘 이상 만들면 `label` 로 갈라라(안 갈면 뒤에 만든 쪽이 앞선 쪽을 비운다).
+private func v0337Defaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 @MainActor
-private func v0337TokenStore() -> TokenUsageStore {
-    let tmp = FileManager.default.temporaryDirectory
-    let id = UUID().uuidString
+private func v0337TokenStore(_ label: String = "", function: String = #function) -> TokenUsageStore {
+    // 스토어의 defaults 와 **다른** 스위트다 — 같은 이름이면 나중에 만든 쪽이 앞선 쪽을 비운다.
+    let scratch = CheckTestScratch.directory(label + "-token", function: function)
     return TokenUsageStore(
-        defaults: v0337Defaults(),
-        homeDirectory: tmp.appendingPathComponent("v0337-token-home-\(id)", isDirectory: true),
-        cacheURL: tmp.appendingPathComponent("v0337-token-cache-\(id).json", isDirectory: false)
+        defaults: v0337Defaults(label + "-token", function: function),
+        homeDirectory: scratch.appendingPathComponent("home", isDirectory: true),
+        cacheURL: scratch.appendingPathComponent("cache.json", isDirectory: false)
     )
 }
 
 /// 네트워크가 붙은 스토어(스텁 호스트). host 로 서버 성질(새 서버·옛 서버)을 고른다.
 @MainActor
-private func v0337NetworkStore(host: String) -> WorkTimerStore {
+private func v0337NetworkStore(host: String, label: String = "",
+                               function: String = #function) -> WorkTimerStore {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
@@ -49,8 +50,8 @@ private func v0337NetworkStore(host: String) -> WorkTimerStore {
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: v0337Defaults(),
-        tokenUsage: v0337TokenStore()
+        defaults: v0337Defaults(label, function: function),
+        tokenUsage: v0337TokenStore(label, function: function)
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
     store.currentTeamID = URLProtocolStub.stubTeamID
@@ -63,7 +64,8 @@ private func v0337NetworkStore(host: String) -> WorkTimerStore {
 ///   `loadLeaderboard()` 로 Task 를 발사하는데, 스텁이 없으면 그 Task 가 **운영 서버로 실제 요청을 보낸다**
 ///   (그리고 실패 문구가 화면에 남아 픽셀 비교가 흔들린다).
 @MainActor
-private func v0337RenderStore(now: Date, host: String? = nil) -> WorkTimerStore {
+private func v0337RenderStore(now: Date, host: String? = nil, label: String = "",
+                              function: String = #function) -> WorkTimerStore {
     let service = host.map {
         SupabaseWorkService(
             projectURL: URL(string: "http://\($0)")!,
@@ -74,8 +76,8 @@ private func v0337RenderStore(now: Date, host: String? = nil) -> WorkTimerStore 
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: v0337Defaults(),
-        tokenUsage: v0337TokenStore()
+        defaults: v0337Defaults(label, function: function),
+        tokenUsage: v0337TokenStore(label, function: function)
     )
     store.isMenuPresented = true
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
@@ -353,7 +355,7 @@ func v0337_옛_서버는_한_번_물러서고_주_이동을_접는다() async {
 
     // 대조군 — 같은 요청이 **새 서버**에서는 접히지 않는다(기준선이 같은 입력이면 위 단언은 영원히 초록이다).
     let freshHost = "v0337-fresh-\(UUID().uuidString)"
-    let fresh = v0337NetworkStore(host: freshHost)
+    let fresh = v0337NetworkStore(host: freshHost, label: "fresh")
     defer { fresh.tickerTask?.cancel(); fresh.refreshTask?.cancel() }
     fresh.leagueWeekKey = TeamLeagueWeekNavigator.key(offset: 3)
     await fresh.performLoadLeaderboard()
@@ -480,7 +482,7 @@ func v0337_서버가_다른_주로_답해도_불러오는_중이_남지_않는�
     #expect(store.leaderboard.count == 1)
 
     // 대조군 — 서버가 **물은 주 그대로** 답하면 키가 안 움직인다(기준선이 같은 입력이면 위 단언은 아무것도 안 지킨다).
-    let straight = v0337NetworkStore(host: "v0337-straight-\(UUID().uuidString)")
+    let straight = v0337NetworkStore(host: "v0337-straight-\(UUID().uuidString)", label: "straight")
     defer { straight.tickerTask?.cancel(); straight.refreshTask?.cancel() }
     straight.leagueWeekKey = TeamLeagueWeekNavigator.key(offset: 2)
     await straight.performLoadLeaderboard()
@@ -553,7 +555,7 @@ func v0337_과거_주_조회가_취소로_끝나면_빈_표를_사실로_말하�
     ) == LeaderboardEmptyMessage.loadFailed)
 
     // 대조군 — **보여 줄 표가 있는** 채로 취소되면 화면을 흔들지 않는다(취소는 여전히 실패 문구가 아니다).
-    let held = v0337NetworkStore(host: "delayed-v0337-cancel-held-\(UUID().uuidString)")
+    let held = v0337NetworkStore(host: "delayed-v0337-cancel-held-\(UUID().uuidString)", label: "held")
     defer { held.tickerTask?.cancel(); held.refreshTask?.cancel() }
     held.leagueWeekKey = TeamLeagueWeekNavigator.key(offset: 2)
     held.leaderboard = [TeamLeaderboardEntry(id: "x", name: "이미 있는 팀", weeklyGoalHours: 40, totalSeconds: 100, workingCount: 0, memberCount: 1)]
@@ -727,7 +729,7 @@ func v0337_이번_주_화면은_주를_오갔다_돌아와도_픽셀이_같다()
     #expect(try v0337Ink(basePNG) > 1000, "기준선이 비어 있다 — ImageRenderer 가 화면을 못 그렸다")
     v0337Save(basePNG, name: "v0337-week-current.png")
 
-    let roundTrip = v0337RenderStore(now: v0337Now, host: "v0337-render-trip-\(UUID().uuidString)")
+    let roundTrip = v0337RenderStore(now: v0337Now, host: "v0337-render-trip-\(UUID().uuidString)", label: "roundTrip")
     defer { roundTrip.tickerTask?.cancel(); roundTrip.refreshTask?.cancel() }
     for _ in 1...6 {
         roundTrip.stepLeagueWeek(by: -1)
@@ -753,7 +755,7 @@ func v0337_과거_주_화면은_이번_주와_다르고_창_높이_예산_안에
     current.leaderboard = v0337ThisWeekRows
     let currentPNG = try v0337RenderPNG(CheckMenuView(store: current))
 
-    let past = v0337RenderStore(now: v0337Now)
+    let past = v0337RenderStore(now: v0337Now, label: "past")
     past.leaderboard = v0337PastWeekRows
     past.leagueWeekKey = TeamLeagueWeekNavigator.key(offset: 6, now: v0337Now)
     let pastPNG = try v0337RenderPNG(CheckMenuView(store: past))
@@ -764,7 +766,7 @@ func v0337_과거_주_화면은_이번_주와_다르고_창_높이_예산_안에
 
     // 최악 — 목록이 스크롤 상한을 넘길 만큼 많은 과거 주. 머리글 한 줄이 목록 행수 예산에서 빠지지 않으면
     // 여기서 창이 700pt 를 넘는다(그 한 줄이 공짜가 아니라는 증거다).
-    let crowded = v0337RenderStore(now: v0337Now)
+    let crowded = v0337RenderStore(now: v0337Now, label: "crowded")
     crowded.leagueWeekKey = TeamLeagueWeekNavigator.key(offset: 3, now: v0337Now)
     crowded.leaderboard = (0..<10).map { index in
         TeamLeaderboardEntry(
@@ -819,7 +821,7 @@ func v0337_옛_서버에서는_주_이동_화살표가_아예_안_그려진다()
     let foldedPNG = try v0337RenderPNG(CheckMenuView(store: folded))
     v0337Save(foldedPNG, name: "v0337-week-old-server.png")
 
-    let normal = v0337RenderStore(now: v0337Now)
+    let normal = v0337RenderStore(now: v0337Now, label: "normal")
     normal.leaderboard = v0337ThisWeekRows
     let normalPNG = try v0337RenderPNG(CheckMenuView(store: normal))
 
@@ -857,7 +859,7 @@ func v0337_보통의_지난주_화면이_렌더_픽스처에_있다() throws {
     #expect(bitmap.pixelsWide == Int(CheckMenuView.mainWindowWidth * 2))
 
     // 대조군 — 같은 표를 **이번 주로** 보면 화면이 달라야 한다(제목·머리글 한 줄·캡션이 전부 갈린다).
-    let asThisWeek = v0337RenderStore(now: v0337Now)
+    let asThisWeek = v0337RenderStore(now: v0337Now, label: "asThisWeek")
     asThisWeek.leaderboard = v0337ThisWeekRows
     #expect(v0337Digest(try v0337RenderPNG(CheckMenuView(store: asThisWeek))) != v0337Digest(png))
 }

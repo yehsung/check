@@ -45,9 +45,10 @@ func environmentAnonKeyOverridesBundledConfig() throws {
     #expect(key == "environment-test-key")
 }
 
-private func makeConfigBundle(anonKey: String) throws -> Bundle {
-    let rootURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
+private func makeConfigBundle(anonKey: String, function: String = #function) throws -> Bundle {
+    // 이름이 UUID 면 지우는 코드가 없어 $TMPDIR 에 .bundle 이 실행마다 쌓인다 — 테스트 신원에서 뽑아 스크래치 뿌리에 둔다.
+    let rootURL = CheckTestScratch.directory(function: function)
+        .appendingPathComponent("config")
         .appendingPathExtension("bundle")
     let resourcesURL = rootURL
         .appendingPathComponent("Contents")

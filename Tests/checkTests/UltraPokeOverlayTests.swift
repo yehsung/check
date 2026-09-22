@@ -23,11 +23,10 @@ import Testing
 
 // MARK: - 헬퍼
 
-private func isolatedUltraDefaults() -> UserDefaults {
-    let suiteName = "check-ultra-overlay-tests-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suiteName)!
-    defaults.removePersistentDomain(forName: suiteName)
-    return defaults
+/// 격리 defaults. 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다 —
+/// 이유는 `CheckTestScratch` 머리 주석에 있다. 한 테스트가 스위트를 둘 이상 쓰면 `label` 로 갈라라.
+private func isolatedUltraDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 /// 격발 타이밍(초)은 **주입**한다. 기본값은 프로덕션 상수 그대로이고, 만료가 주제가 아닌 테스트만
@@ -42,18 +41,22 @@ private func makeUltraController(
     notificationCenter: NotificationCenter = NotificationCenter(),
     ultraDurationSeconds: Double = CheckOverlayController.ultraSeconds,
     ultraDeadlineSeconds: Double
-        = CheckOverlayController.ultraSeconds + CheckOverlayController.ultraWatchdogGrace
+        = CheckOverlayController.ultraSeconds + CheckOverlayController.ultraWatchdogGrace,
+    function: String = #function
 ) -> (WorkTimerStore, CheckOverlayController) {
+    // 스토어와 컨트롤러는 **서로 다른** 스위트여야 한다(프로덕션에서도 둘은 남남이다) — label 로 가른다.
+    // `function` 은 호출한 테스트에서 받아 그대로 내려보낸다. 여기서 `#function` 을 다시 쓰면
+    // 이름이 `makeUltraController` 로 굳어 이 파일의 모든 테스트가 한 스위트를 나눠 쓴다.
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-        defaults: isolatedUltraDefaults(),
+        defaults: isolatedUltraDefaults("store", function: function),
         workspaceNotifications: nil
     )
     let controller = CheckOverlayController(
         store: store,
         notificationCenter: notificationCenter,
         engine: engine,
-        defaults: isolatedUltraDefaults(),
+        defaults: isolatedUltraDefaults("overlay", function: function),
         workspaceNotifications: nil,
         ultraDurationSeconds: ultraDurationSeconds,
         ultraDeadlineSeconds: ultraDeadlineSeconds

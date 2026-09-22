@@ -537,17 +537,17 @@ struct V0317ShopTests {
         }
     }
 
-    static func isolatedDefaults() -> UserDefaults {
-        let name = "v0317-shop-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: name)!
-        defaults.removePersistentDomain(forName: name)
-        return defaults
+    /// 격리 defaults. 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다 —
+    /// 이유는 `CheckTestScratch` 머리 주석에 있다. 한 테스트가 스위트를 둘 이상 쓰면 `label` 로 갈라라.
+    static func isolatedDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+        CheckTestScratch.defaults("shop-" + label, function: function)
     }
 
     /// 상점 상태가 채워진 스토어(실제 서버 가격).
     @MainActor
-    static func shopStore(ruby: Int?, ownedIDs: Set<String> = []) -> WorkTimerStore {
-        let store = plainStore()
+    static func shopStore(ruby: Int?, ownedIDs: Set<String> = [],
+                          function: String = #function, line: Int = #line) -> WorkTimerStore {
+        let store = plainStore(function: function, line: line)
         store.applyShopState(ShopStateResponse(rubyBalance: ruby, ultraBalance: 7, ultraPrice: 3,
                                                ultraBuyMax: 20, characters: rows(ownedIDs: ownedIDs)))
         store.rubyBalance = ruby
@@ -556,30 +556,32 @@ struct V0317ShopTests {
     }
 
     @MainActor
-    static func plainStore() -> WorkTimerStore {
+    /// `function`·`line` 은 **호출 지점**에서 평가되는 기본 인자라 호출자를 안 고치고 자기 신원을 준다.
+    /// 받아서 이어 넘겨야 한다 — 여기서 다시 쓰면 이름이 `plainStore` 로 굳어 모든 테스트가 한 스위트다.
+    static func plainStore(function: String = #function, line: Int = #line) -> WorkTimerStore {
         WorkTimerStore(environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
-                       defaults: isolatedDefaults())
+                       defaults: isolatedDefaults("plain-L\(line)", function: function))
     }
 
     @MainActor
-    static func stubStore(host: String) -> WorkTimerStore {
+    static func stubStore(host: String, function: String = #function) -> WorkTimerStore {
         let service = SupabaseWorkService(projectURL: URL(string: "http://\(host)")!,
                                           anonKey: "anon-test-key",
                                           session: TokenBoardURLProtocol.session())
         let store = WorkTimerStore(service: service,
                                    environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-                                   defaults: isolatedDefaults())
+                                   defaults: isolatedDefaults("stub-" + host, function: function))
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
         store.currentTeamID = "00000000-0000-0000-0000-0000000000aa"
         store.membershipConfirmed = true
         // 착용 캐릭터도 격리한다 — 전역을 건드리면 병렬 스위트가 빨개진다(위 주석).
-        store.characterDefaults = isolatedDefaults()
+        store.characterDefaults = isolatedDefaults("stub-character-" + host, function: function)
         return store
     }
 
     @MainActor
-    static func teamStore(members: Int) -> WorkTimerStore {
-        let store = plainStore()
+    static func teamStore(members: Int, function: String = #function, line: Int = #line) -> WorkTimerStore {
+        let store = plainStore(function: function, line: line)
         store.isMenuPresented = true
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil,
                                         userID: "00000000-0000-0000-0000-000000000002")

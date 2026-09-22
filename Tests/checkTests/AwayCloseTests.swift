@@ -27,7 +27,7 @@ private let afkUserID = "00000000-0000-0000-0000-000000000002"
 private let afkSessionID = "50000000-0000-0000-0000-0000000000a1"
 
 private func afkDefaults() -> UserDefaults {
-    let suiteName = "check-afk-tests-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return defaults

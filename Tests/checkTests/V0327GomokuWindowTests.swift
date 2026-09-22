@@ -16,10 +16,11 @@ import Testing
 
 // MARK: - 헬퍼
 
-/// 고정 이름 스위트(UUID 스위트는 실행마다 ~/Library/Preferences 에 plist 를 영구히 쌓는다).
+/// 고정 이름 스위트. 개수는 유계지만 그 이름 그대로는 ~/Library/Preferences 에 항목을 만들므로
+/// 같은 이름을 $TMPDIR 절대 경로로 옮긴다(CheckTestScratch 주석의 2026-09-22 사고).
 @MainActor
 private func gwDefaults() -> UserDefaults {
-    let suiteName = "check-v0327-gomoku-window-tests"
+    let suiteName = CheckTestScratch.suitePath(named: "check-v0327-gomoku-window-tests")
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return defaults

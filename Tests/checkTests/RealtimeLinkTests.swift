@@ -359,7 +359,7 @@ func 전송자가_없으면_링은_한발짝도_움직이지_않는다() {
 /// 같아져서, 기본값이 켜짐인 순간 사용자가 끈 사실이 조용히 사라진다.
 @Test
 func 킬스위치_기본값은_켜짐이고_끈_의사는_보존된다() {
-    let empty = UserDefaults(suiteName: "realtime-flag-\(UUID().uuidString)")!
+    let empty = CheckTestScratch.defaults()
     // 키가 없으면 켜짐.
     #expect(RealtimeFeature.isEnabled(defaults: empty, environment: [:]))
     // 명시적으로 켬.
@@ -994,7 +994,7 @@ func 설정창_콘텐츠가_창_높이_안에_들어온다() throws {
     // 답할 질문이 아니다 — 항목은 늘기도 줄기도 하는 것이고, 여기서 지키는 것은 창과의 관계다).
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon"],
-        defaults: UserDefaults(suiteName: "settings-height-\(UUID().uuidString)")!
+        defaults: CheckTestScratch.defaults()
     )
     let renderer = ImageRenderer(
         content: CheckSettingsView(store: store, launchAtLoginSeed: false)
@@ -1043,7 +1043,7 @@ private func fakeJWT(exp: Date) -> String {
 }
 
 @MainActor
-private func makeRealtimeStore(host: String) -> (WorkTimerStore, FakeRealtimeTransport) {
+private func makeRealtimeStore(host: String, function: String = #function) -> (WorkTimerStore, FakeRealtimeTransport) {
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",
@@ -1053,7 +1053,7 @@ private func makeRealtimeStore(host: String) -> (WorkTimerStore, FakeRealtimeTra
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: UserDefaults(suiteName: "realtime-\(host)-\(UUID().uuidString)")!,
+        defaults: CheckTestScratch.defaults(host, function: function),
         workspaceNotifications: nil,
         realtimeTransport: transport
     )

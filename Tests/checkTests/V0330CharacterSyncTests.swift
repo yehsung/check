@@ -214,8 +214,11 @@ private func csTwoCharacters() throws -> (String, String) {
     return (ids[0], ids[1])
 }
 
+/// 호출마다 다른 격리 defaults. 이름은 **호출 지점 + 이번 실행의 일련번호**라 한 실행 안에서는 UUID 처럼
+/// 갈리고 다음 실행은 같은 이름들을 덮어쓴다 — UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를
+/// 하나씩 영구히 남긴다(CheckTestScratch 주석의 2026-09-22 사고).
 private func csDefaults() -> UserDefaults {
-    let suiteName = "check-v0330-character-sync-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath("character-sync")
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return defaults

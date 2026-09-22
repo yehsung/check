@@ -15,7 +15,7 @@ import Testing
 // MARK: - 픽스처
 
 private func isolatedDefaults() -> UserDefaults {
-    let suiteName = "check-adopted-tests-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     return defaults

@@ -151,16 +151,16 @@ final class ReportAdminURLProtocol: URLProtocol {
 
 // MARK: - 픽스처
 
+/// 격리 defaults. 이름을 테스트 신원(+호스트)에서 뽑아 `CheckTestScratch.root`($TMPDIR)에 둔다 —
+/// UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를 하나씩 영구히 남긴다(그 파일 주석의 2026-09-22 사고).
 @MainActor
-private func raDefaults() -> UserDefaults {
-    let suite = "v0334-report-admin-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
-    return defaults
+private func raDefaults(_ label: String = "", function: String = #function) -> UserDefaults {
+    CheckTestScratch.defaults(label, function: function)
 }
 
 @MainActor
-private func raStore(host: String, admin: Bool = true, signedIn: Bool = true) -> WorkTimerStore {
+private func raStore(host: String, admin: Bool = true, signedIn: Bool = true,
+                     function: String = #function) -> WorkTimerStore {
     ReportAdminURLProtocol.reset(host: host)
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
@@ -170,7 +170,7 @@ private func raStore(host: String, admin: Bool = true, signedIn: Bool = true) ->
     let store = WorkTimerStore(
         service: service,
         environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
-        defaults: raDefaults()
+        defaults: raDefaults(host, function: function)
     )
     if signedIn {
         store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: raUserID)
@@ -931,8 +931,8 @@ func 신고_행은_원문을_인용_판으로_그리고_사람_신고는_판이_
 
 /// 받은 제보 탭의 [신고] 칸이 열린 **메인 화면** 스토어.
 @MainActor
-private func raMenuStore(host: String, rows: Int) -> WorkTimerStore {
-    let store = raStore(host: host)
+private func raMenuStore(host: String, rows: Int, function: String = #function) -> WorkTimerStore {
+    let store = raStore(host: host, function: function)
     store.isMenuPresented = true
     store.displayNow = raRenderNow
     store.currentTeamID = URLProtocolStub.stubTeamID

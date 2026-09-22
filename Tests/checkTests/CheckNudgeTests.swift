@@ -200,12 +200,18 @@ func nudgeLockedSessionNeverAccumulatesButResumesAfterUnlock() {
 /// 그래서 테스트 실행 1회마다 파일이 13개씩 영구히 쌓였고, 발견 시점에 사용자 맥에 710개가 있었다.
 /// 이름을 테스트별로 고정하면 파일 집합이 그 13개로 **묶인다** — 재실행이 같은 파일을 덮어쓸 뿐이다.
 /// 테스트마다 이름이 다르므로 병렬 실행에서도 서로 섞이지 않는다.
+///
+/// **2026-09-22: 이름을 `CheckTestScratch` 로 넘겼다.** 고정 이름이라 개수는 이미 유계였지만 그래도
+/// `~/Library/Preferences` 에 13개를 만들었다 — 62만 개 사고 뒤로는 그 폴더에 새 항목을 하나도 안 만드는
+/// 것이 규칙이다. `suitePath` 가 주는 이름은 `$TMPDIR` 절대 경로라 CFPreferences 가 거기에 plist 를 쓴다.
+/// 아래 `deinit` 의 정리는 남겨 두지만 **그것에 기대지 않는다**(cfprefsd 가 테스트 종료 뒤 자기 메모리
+/// 사본을 다시 flush 해 지운 파일을 되살린다 — 1,110개 실측). 진짜 장치는 이름의 자리와 유계성이다.
 private final class ScratchDefaults {
     let suiteName: String
     let defaults: UserDefaults
 
     init(_ test: String = #function) {
-        suiteName = "check-login-test.\(test.replacingOccurrences(of: "()", with: ""))"
+        suiteName = CheckTestScratch.suitePath("login", function: test)
         defaults = UserDefaults(suiteName: suiteName)!
         // 지난 실행이 남긴 값이 이 테스트로 새어 들어오지 않게 시작 시점에 비운다(끝에서도 한 번 더).
         defaults.removePersistentDomain(forName: suiteName)

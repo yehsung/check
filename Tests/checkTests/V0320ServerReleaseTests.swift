@@ -613,11 +613,26 @@ private func srTagJSON(_ tag: String, body: String? = nil) -> Data {
     return (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
 }
 
-/// 격리 defaults(테스트마다 고유 스위트). 끝나면 도메인을 지운다 — 남기면 테스트 실행마다 스위트 파일이 쌓인다.
-private func srIsolatedDefaults() -> (defaults: UserDefaults, cleanUp: () -> Void) {
-    let suite = "v0320-server-release-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
+/// 격리 defaults(테스트·자리마다 다른 스위트).
+///
+/// **2026-09-22 정정** — 예전 본문은 "끝나면 도메인을 지운다 — 남기면 실행마다 스위트 파일이 쌓인다"고
+/// 적어 두고 UUID 이름을 썼다. 끝나고 지우는 것으로는 **안 된다**: `removePersistentDomain` 은 디스크의
+/// plist 를 안 지우고, 파일을 직접 지워도 cfprefsd 가 제 메모리 사본을 나중에 다시 flush 한다
+/// (GomokuTestDefaults 는 rpd + 파일 삭제를 둘 다 부르는데도 $TMPDIR 에 1,111개가 **값을 품은 채** 남아
+/// 있었다). 파일 수는 정리 방식이 아니라 **만든 이름의 개수**에 비례하고, UUID 는 실행마다 새 이름이다.
+/// 그래서 이름을 테스트 신원에서 뽑고 자리를 $TMPDIR 로 옮겼다 — 자세한 것은 `CheckTestScratch` 머리 주석.
+///
+/// `#line` 을 섞는 이유: 한 테스트가 defaults 를 둘씩 쓴다(legacy/현행, sameBuild, otherDefaults …).
+/// `#function` 만으로 지으면 둘이 한 스위트가 되어 "서로 다른 기기/다른 저장소"라는 전제가 무너진다.
+///
+/// `cleanUp` 은 호출자의 `defer` 모양을 지키려고 남긴다. 진짜 정리는 만들 때 앞에서 끝났으므로
+/// 이건 같은 프로세스 안의 뒤 읽기를 막는 보험일 뿐이다.
+private func srIsolatedDefaults(_ label: String = "",
+                                function: String = #function,
+                                line: Int = #line) -> (defaults: UserDefaults, cleanUp: () -> Void) {
+    let tag = label.isEmpty ? "L\(line)" : "\(label)-L\(line)"
+    let suite = CheckTestScratch.suitePath(tag, function: function)
+    let defaults = CheckTestScratch.defaults(tag, function: function)
     return (defaults, { defaults.removePersistentDomain(forName: suite) })
 }
 
@@ -680,9 +695,13 @@ private func srWatched(
     interval: TimeInterval = 3_600,
     initialDelay: TimeInterval = 3_600,
     wakeSettle: TimeInterval = 10,
-    notifications: NotificationCenter? = nil
+    notifications: NotificationCenter? = nil,
+    function: String = #function,
+    line: Int = #line
 ) -> (store: UpdateCheckStore, server: SRServerStub, cleanUp: () -> Void) {
-    let (defaults, cleanUp) = srIsolatedDefaults()
+    // `function`·`line` 을 받아 그대로 내려보낸다 — 여기서 기본 인자를 다시 쓰면 이름이 `srWatched` 로
+    // 굳어 이 헬퍼를 쓰는 모든 테스트가 한 스위트를 나눠 쓴다.
+    let (defaults, cleanUp) = srIsolatedDefaults("watched", function: function, line: line)
     let store = srStore(
         defaults: defaults,
         interval: interval,

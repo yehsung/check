@@ -428,7 +428,10 @@ func todoContractRefusedResponsesKeepState() async throws {
 
 @MainActor
 private func todoContractStore(host: String, userID: String) -> WorkTimerStore {
-    let suite = "check-v0330-todo-contract-\(UUID().uuidString)"
+    // 호출마다 다른 스위트. 이름은 **호출 지점 + 이번 실행의 일련번호**라 한 실행 안에서는 UUID 처럼
+    // 갈리고 다음 실행은 같은 이름을 덮어쓴다 — UUID 이름은 실행마다 ~/Library/Preferences 에 plist 를
+    // 하나씩 영구히 남긴다(CheckTestScratch 주석의 2026-09-22 사고).
+    let suite = CheckTestScratch.uniqueSuitePath("todo-contract")
     let defaults = UserDefaults(suiteName: suite)!
     defaults.removePersistentDomain(forName: suite)
     let service = SupabaseWorkService(

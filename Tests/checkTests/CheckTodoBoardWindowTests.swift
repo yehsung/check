@@ -67,7 +67,7 @@ private func todoBoardPump(_ seconds: Double = 0.35) {
 /// `opacity` 를 주면 "앱을 껐다 켰더니 저장돼 있던 값"을 재현한다.
 @MainActor
 private func makeTodoBoardAppearanceStore(opacity: Double? = nil) -> TodoBoardAppearanceStore {
-    let suiteName = "check-todo-board-window-tests-\(UUID().uuidString)"
+    let suiteName = CheckTestScratch.uniqueSuitePath()
     let defaults = UserDefaults(suiteName: suiteName)!
     defaults.removePersistentDomain(forName: suiteName)
     if let opacity { defaults.set(opacity, forKey: TodoBoardAppearanceStore.defaultsKey) }

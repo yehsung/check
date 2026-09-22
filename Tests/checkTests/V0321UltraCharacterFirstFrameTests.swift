@@ -15,11 +15,13 @@ import Testing
 // MARK: - 도구
 
 /// 격리된 스토어·노티 위의 근무 중 컨트롤러.
+///
+/// 스위트 이름은 UUID 가 아니라 **테스트 신원**에서 뽑고 자리도 $TMPDIR 이다(`CheckTestScratch` 머리 주석).
+/// `function` 은 호출한 테스트에서 받아 이어 넘긴다 — 여기서 `#function` 을 다시 쓰면 이름이
+/// `v0321Controller` 로 굳어 이 파일의 모든 테스트가 한 스위트를 나눠 쓴다.
 @MainActor
-private func v0321Controller() -> CheckOverlayController {
-    let suite = "check-v0321-\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defaults.removePersistentDomain(forName: suite)
+private func v0321Controller(_ label: String = "", function: String = #function) -> CheckOverlayController {
+    let defaults = CheckTestScratch.defaults(label, function: function)
     let store = WorkTimerStore(
         environment: ["CHECK_SUPABASE_ANON_KEY": "local-test-key"],
         defaults: defaults,
@@ -37,9 +39,10 @@ private func v0321Controller() -> CheckOverlayController {
 /// 근무 중 캐릭터가 **이미 서 있는** 사용자(흔한 경우). 엔진을 실제 SCNView 의 씬에 붙여야 교체가 씬을 잡는다.
 @MainActor
 private func v0321MountedController(
-    receiverCharacter: CharacterManifest = CharacterCatalog.builtInAing
+    receiverCharacter: CharacterManifest = CharacterCatalog.builtInAing,
+    function: String = #function
 ) throws -> CheckOverlayController {
-    let controller = v0321Controller()
+    let controller = v0321Controller(function: function)
     let scene = try #require(CheckCharacter3DScene.makeScene(
         animated: false,
         character: receiverCharacter,

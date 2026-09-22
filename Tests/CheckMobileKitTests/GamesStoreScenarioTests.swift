@@ -282,7 +282,7 @@ import Testing
         await harness.signIn()
         #expect(!harness.games.wantsIdleTimerDisabled, "판도 대국도 없는데 화면을 붙잡고 있다")
 
-        // 화면만 열어서는 안 켠다 — 아직 판이 안 돌았다(ready).
+        // 플래피로 잰다(타이밍 바는 스스로 안 끝나 일부러 제외했다 — 아래 테스트가 그걸 지킨다).\n        // 화면만 열어서는 안 켠다 — 아직 판이 안 돌았다(ready).
         harness.games.miniGames.openScreen(.flappy)
         #expect(harness.games.miniGames.controller?.isPlaying == false)
         #expect(!harness.games.wantsIdleTimerDisabled, "판이 시작되기 전인데 화면을 붙잡았다")
@@ -300,6 +300,19 @@ import Testing
         #expect(harness.games.miniGames.controller?.isPlaying != true, "background 가 판을 폐기하지 않았다")
         #expect(!harness.games.wantsIdleTimerDisabled, "폐기된 판으로 화면을 붙잡고 있다")
 
+        #expect(harness.violations.isEmpty, "\(harness.violations)")
+        await harness.tearDown()
+    }
+
+    @Test("타이밍 바는 화면 꺼짐 방지에서 뺀다 — 그 판은 스스로 끝나지 않아 자동잠금이 유일한 상한이다")
+    func timingBarIsExcludedFromIdleTimerHold() async throws {
+        let harness = GamesHarness(label: "games-idle-timing")
+        await harness.signIn()
+        harness.games.miniGames.openScreen(.timingBar)
+        harness.games.miniGames.controller?.tap()
+        #expect(harness.games.miniGames.controller?.isPlaying == true, "타이밍 바 판이 안 시작됐다")
+        #expect(!harness.games.wantsIdleTimerDisabled,
+                "타이밍 바가 화면을 붙잡았다 — 탭을 안 하면 판이 안 끝나므로 켜 둔 채 자리를 뜨면 화면이 영원히 켜진다")
         #expect(harness.violations.isEmpty, "\(harness.violations)")
         await harness.tearDown()
     }

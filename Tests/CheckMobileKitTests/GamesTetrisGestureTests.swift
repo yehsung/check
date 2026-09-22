@@ -16,65 +16,99 @@ struct GamesTetrisGestureTests {
     @Test("한 칸 문턱: 셀 폭을 넘어야 한 칸 · 넘은 배수만큼 한꺼번에 나온다")
     func stepsFollowTheFinger() {
         var t = tracker()
-        let below = t.drag(translation: CGSize(width: 19, height: 0))
+        let below = t.drag(startLocation: .zero, translation: CGSize(width: 19, height: 0))
         #expect(below.isEmpty, "셀 폭 미만인데 칸이 움직였다")
-        let one = t.drag(translation: CGSize(width: 20, height: 0))
+        let one = t.drag(startLocation: .zero, translation: CGSize(width: 20, height: 0))
         #expect(one == [.moveRight])
         // 누적값이라 40 은 '한 칸 더'다(두 칸이 아니다) — 이미 먹인 20 을 빼고 본다.
-        let more = t.drag(translation: CGSize(width: 40, height: 0))
+        let more = t.drag(startLocation: .zero, translation: CGSize(width: 40, height: 0))
         #expect(more == [.moveRight])
         // 빠르게 그어 한 번에 세 칸을 넘겼다 — 손가락을 잃지 않는다.
-        let burst = t.drag(translation: CGSize(width: 100, height: 0))
+        let burst = t.drag(startLocation: .zero, translation: CGSize(width: 100, height: 0))
         #expect(burst == [.moveRight, .moveRight, .moveRight])
     }
 
     @Test("방향이 바뀌면 반대 걸음이 나온다(손가락 위치가 곧 조각 위치)")
     func reversingGivesBackTheSteps() {
         var t = tracker()
-        let out = t.drag(translation: CGSize(width: 60, height: 0))
+        let out = t.drag(startLocation: .zero, translation: CGSize(width: 60, height: 0))
         #expect(out.count == 3)
-        let back = t.drag(translation: CGSize(width: 20, height: 0))
+        let back = t.drag(startLocation: .zero, translation: CGSize(width: 20, height: 0))
         #expect(back == [.moveLeft, .moveLeft])
-        let past = t.drag(translation: CGSize(width: -20, height: 0))
+        let past = t.drag(startLocation: .zero, translation: CGSize(width: -20, height: 0))
         #expect(past == [.moveLeft, .moveLeft])
     }
 
-    @Test("소프트드롭은 아래로만 — 위로 끄는 것은 아무 일도 아니다")
+    @Test("소프트드롭은 아래로만 · 위로 끌어도 축이 안 잠겨 좌우가 살아 있다")
     func softDropIsDownwardOnly() {
         var t = tracker()
-        let down = t.drag(translation: CGSize(width: 0, height: 40))
+        let down = t.drag(startLocation: .zero, translation: CGSize(width: 0, height: 40))
         #expect(down == [.softDrop, .softDrop])
+
         var up = tracker()
-        let upward = up.drag(translation: CGSize(width: 0, height: -60))
+        let upward = up.drag(startLocation: .zero, translation: CGSize(width: 0, height: -60))
         #expect(upward.isEmpty, "위로 끌었는데 걸음이 나왔다")
+        #expect(up.axis == nil, "위로 끈 것이 세로 축을 잠갔다 — 그 끌기 내내 좌우가 죽는다")
+        // 살짝 올렸다 옆으로 가는 흔한 동작이 먹통이면 안 된다.
+        let sideways = up.drag(startLocation: .zero, translation: CGSize(width: 40, height: -60))
+        #expect(sideways == [.moveRight, .moveRight], "위로 끈 뒤 옆으로 갔는데 이동이 안 났다")
+    }
+
+    @Test("세로는 래칫: 아래위로 문질러도 소프트드롭이 되풀이되지 않는다(칸당 1점 = 점수 위조)")
+    func softDropDoesNotRefund() {
+        var t = tracker()
+        let first = t.drag(startLocation: .zero, translation: CGSize(width: 0, height: 40))
+        #expect(first.count == 2)
+        // 손가락을 위로 되돌렸다 — 환불되면 안 된다(조각은 안 올라간다).
+        let back = t.drag(startLocation: .zero, translation: CGSize(width: 0, height: 0))
+        #expect(back.isEmpty)
+        // 같은 구간을 다시 내려간다 — 이미 먹은 자리라 새 걸음이 없어야 한다.
+        let again = t.drag(startLocation: .zero, translation: CGSize(width: 0, height: 40))
+        #expect(again.isEmpty, "같은 구간을 문질러 소프트드롭을 또 냈다 — 점수가 위조된다")
+        // 더 내려가면 그때만 난다.
+        let deeper = t.drag(startLocation: .zero, translation: CGSize(width: 0, height: 60))
+        #expect(deeper == [.softDrop])
+    }
+
+    @Test("취소된 끌기: end() 를 못 받아도 다음 접촉이 없는 이동을 만들지 않는다")
+    func cancelledDragDoesNotFabricateInput() {
+        var t = tracker()
+        let out = t.drag(startLocation: CGPoint(x: 100, y: 200), translation: CGSize(width: 60, height: 0))
+        #expect(out.count == 3)
+        // end() 가 안 왔다(시스템 제스처로 취소). 손가락을 새로 댔다 — translation 은 다시 0 부터다.
+        let fresh = t.drag(startLocation: CGPoint(x: 40, y: 300), translation: CGSize(width: 0, height: 0))
+        #expect(fresh.isEmpty, "손도 안 댄 이동이 만들어졌다 — 입력 상실보다 나쁜 입력 날조다")
+        #expect(t.axis == nil, "취소된 끌기의 축 잠금이 다음 접촉으로 샜다")
+        let moved = t.drag(startLocation: CGPoint(x: 40, y: 300), translation: CGSize(width: 20, height: 0))
+        #expect(moved == [.moveRight])
     }
 
     @Test("축 잠금: 비스듬한 가로 끌기가 소프트드롭을 만들지 않는다(조준보다 낮은 자리 + 접지 예산 낭비)")
     func axisLockKeepsDiagonalsFromDropping() {
         var t = tracker()
         // 가로로 먼저 한 칸을 만들고, 그 뒤 세로로 세 칸을 더 갔다 — 세로는 무시돼야 한다.
-        let first = t.drag(translation: CGSize(width: 22, height: 4))
+        let first = t.drag(startLocation: .zero, translation: CGSize(width: 22, height: 4))
         #expect(first == [.moveRight])
         #expect(t.axis == .horizontal)
-        let later = t.drag(translation: CGSize(width: 24, height: 80))
+        let later = t.drag(startLocation: .zero, translation: CGSize(width: 24, height: 80))
         #expect(!later.contains(.softDrop), "잠긴 가로 축인데 소프트드롭이 샜다")
 
         // 반대도 같다: 세로가 먼저 잠기면 가로 이동이 안 샌다.
         var v = tracker()
-        let firstDown = v.drag(translation: CGSize(width: 4, height: 22))
+        let firstDown = v.drag(startLocation: .zero, translation: CGSize(width: 4, height: 22))
         #expect(firstDown == [.softDrop])
         #expect(v.axis == .vertical)
-        let sideways = v.drag(translation: CGSize(width: 90, height: 24))
+        let sideways = v.drag(startLocation: .zero, translation: CGSize(width: 90, height: 24))
         #expect(!sideways.contains(.moveRight) && !sideways.contains(.moveLeft), "잠긴 세로 축인데 좌우 이동이 샜다")
     }
 
     @Test("둘 다 한 번에 문턱을 넘으면 더 많이 간 축이 이긴다")
     func theLongerAxisWinsTheLock() {
         var wide = tracker()
-        _ = wide.drag(translation: CGSize(width: 50, height: 25))
+        _ = wide.drag(startLocation: .zero, translation: CGSize(width: 50, height: 25))
         #expect(wide.axis == .horizontal)
         var tall = tracker()
-        _ = tall.drag(translation: CGSize(width: 25, height: 50))
+        _ = tall.drag(startLocation: .zero, translation: CGSize(width: 25, height: 50))
         #expect(tall.axis == .vertical)
     }
 
@@ -96,28 +130,28 @@ struct GamesTetrisGestureTests {
     @Test("걸음을 낸 끌기는 탭이 아니다 · 끝나면 잠금과 소비량이 풀린다")
     func draggingIsNeverATapAndStateResets() {
         var t = tracker()
-        let steps = t.drag(translation: CGSize(width: 40, height: 0))
+        let steps = t.drag(startLocation: .zero, translation: CGSize(width: 40, height: 0))
         #expect(steps.count == 2)
         // 손가락이 제자리로 돌아와 뗐다 — 이동 0 · 빠름이어도 회전이 아니다(축이 잠겼던 것이 증거).
         let tapped = t.end(translation: .zero, elapsed: 0.1)
         #expect(!tapped, "칸을 두 번 움직인 끌기를 회전으로 읽었다")
         #expect(t.axis == nil)
         // 다음 끌기는 처음부터다 — 앞 끌기의 소비량이 남아 첫 칸을 삼키면 안 된다.
-        let fresh = t.drag(translation: CGSize(width: 20, height: 0))
+        let fresh = t.drag(startLocation: .zero, translation: CGSize(width: 20, height: 0))
         #expect(fresh == [.moveRight])
     }
 
     @Test("셀 폭이 바뀌어도 진행 중인 끌기의 잠금은 유지된다(화면 회전)")
     func cellWidthCanBeSwappedMidDrag() {
         var t = tracker()
-        _ = t.drag(translation: CGSize(width: 22, height: 0))
+        _ = t.drag(startLocation: .zero, translation: CGSize(width: 22, height: 0))
         t.updateCellWidth(40)
         #expect(t.axis == .horizontal)
         #expect(t.thresholds.cellWidth == 40)
         // 새 문턱으로 잰다: 22 에서 42 로 갔지만 아직 40 을 못 넘었다.
-        let short = t.drag(translation: CGSize(width: 42, height: 0))
+        let short = t.drag(startLocation: .zero, translation: CGSize(width: 42, height: 0))
         #expect(short.isEmpty)
-        let long = t.drag(translation: CGSize(width: 62, height: 0))
+        let long = t.drag(startLocation: .zero, translation: CGSize(width: 62, height: 0))
         #expect(long == [.moveRight])
     }
 

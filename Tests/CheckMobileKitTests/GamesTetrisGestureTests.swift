@@ -49,7 +49,7 @@ struct GamesTetrisGestureTests {
         #expect(upward.isEmpty, "위로 끌었는데 걸음이 나왔다")
     }
 
-    @Test("축 잠금: 비스듬한 가로 끌기가 소프트드롭을 만들지 않는다(오인식 = 조각 손실)")
+    @Test("축 잠금: 비스듬한 가로 끌기가 소프트드롭을 만들지 않는다(조준보다 낮은 자리 + 접지 예산 낭비)")
     func axisLockKeepsDiagonalsFromDropping() {
         var t = tracker()
         // 가로로 먼저 한 칸을 만들고, 그 뒤 세로로 세 칸을 더 갔다 — 세로는 무시돼야 한다.

@@ -181,11 +181,16 @@ package final class GamesStore {
     /// 다른 탭에서 화면을 켜 둘 까닭이 없다(1:1 은 서버 시계가 흐르므로 그대로다).
     package var wantsIdleTimerDisabled: Bool {
         guard isAppActive, context.session.isSignedIn else { return false }
-        // 미니게임: 끝나지 않은 판이 있으면 켠다. **지금까지 미니게임은 아예 보호받지 않았다** — 플래피·타이밍바는
-        // 한 판이 30초 남짓이고 연속 입력이라 자동잠금(최소 30초)에 닿을 일이 없어 드러나지 않았을 뿐이다.
-        // 폰은 background 가 곧 **판 폐기·무제출**(`GamesMiniGameHub.appDidEnterBackground`)이라 자동잠금이 곧 판 폐기다.
-        // 조각을 세워 두고 생각하는 무입력 구간이 있는 게임이 들어오면 그 구멍이 바로 열린다.
-        if let controller = miniGames.controller, controller.isPlaying { return true }
+        // 미니게임: 끝나지 않은 판이 있으면 켠다. **지금까지 미니게임은 아예 보호받지 않았다** — 플래피는 한 판이
+        // 30초 남짓이라 자동잠금(최소 30초)에 닿을 일이 없어 드러나지 않았을 뿐이다. 폰은 background 가 곧
+        // **판 폐기·무제출**(`GamesMiniGameHub.appDidEnterBackground`)이라 자동잠금이 곧 판 폐기이고, 조각을 세워 두고
+        // 생각하는 무입력 구간이 있는 게임(테트리스)이 들어오면 그 구멍이 바로 열린다.
+        //
+        // ★ **타이밍 바만 뺀다.** 그 판은 **스스로 끝나지 않는다** — `phase` 가 탭을 받을 때까지 `.running` 에 머문다
+        // (`TimingBarGame.isPlaying`). 그래서 판을 켜 둔 채 자리를 뜨면 화면이 **영원히** 켜져 있다. 자동잠금이 그
+        // 유일한 상한이었고, 여기에 타이밍 바를 넣으면 그 상한이 사라진다. 플래피(새가 떨어져 끝난다)와 테트리스
+        // (쌓여서 탑아웃한다)는 방치해도 엔진이 판을 끝내므로 안전하다. 새 게임을 더할 때 이 성질을 확인할 것.
+        if let controller = miniGames.controller, controller.isPlaying, controller.kind != .timingBar { return true }
         guard let match = context.gomoku.match else { return false }
         if context.gomoku.isAIMatch { return !match.isFinished && isGomokuScreenVisible }
         return !match.isFinished

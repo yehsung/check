@@ -276,6 +276,34 @@ import Testing
         await harness.tearDown()
     }
 
+    @Test("미니게임 판이 도는 동안 화면 꺼짐 방지 · 판이 끝나거나 background 면 푼다(오목이 없어도)")
+    func miniGameRoundHoldsIdleTimer() async throws {
+        let harness = GamesHarness(label: "games-idle-mini")
+        await harness.signIn()
+        #expect(!harness.games.wantsIdleTimerDisabled, "판도 대국도 없는데 화면을 붙잡고 있다")
+
+        // 화면만 열어서는 안 켠다 — 아직 판이 안 돌았다(ready).
+        harness.games.miniGames.openScreen(.flappy)
+        #expect(harness.games.miniGames.controller?.isPlaying == false)
+        #expect(!harness.games.wantsIdleTimerDisabled, "판이 시작되기 전인데 화면을 붙잡았다")
+
+        // 탭 한 번 = 판 시작. 오목은 하나도 없다 — 미니게임 가지만으로 켜져야 한다.
+        harness.games.miniGames.controller?.tap()
+        #expect(harness.games.miniGames.controller?.isPlaying == true)
+        #expect(harness.gomoku.match == nil, "이 단언이 오목 가지로 통과하면 안 된다")
+        #expect(harness.games.wantsIdleTimerDisabled, "미니게임 판이 도는데 자동잠금을 안 막는다 — 폰은 background 가 곧 판 폐기다")
+
+        // background: 판을 폐기하므로 붙잡을 이유가 사라진다(두 경로 모두 false 여야 한다).
+        harness.model.sceneDidEnterBackground()
+        #expect(!harness.games.wantsIdleTimerDisabled, "background 에서 화면 꺼짐 방지를 쥐고 있다")
+        harness.model.sceneDidBecomeActive()
+        #expect(harness.games.miniGames.controller?.isPlaying != true, "background 가 판을 폐기하지 않았다")
+        #expect(!harness.games.wantsIdleTimerDisabled, "폐기된 판으로 화면을 붙잡고 있다")
+
+        #expect(harness.violations.isEmpty, "\(harness.violations)")
+        await harness.tearDown()
+    }
+
     @Test("판이 막 시작되면(오목 화면 밖) 게임 탭 오목 대국으로 연다 · 대국 중에만 화면 꺼짐 방지 · 끝나면·background 면 푼다")
     func matchStartOpensScreenAndHoldsIdleTimer() async throws {
         let harness = GamesHarness(label: "games-match")

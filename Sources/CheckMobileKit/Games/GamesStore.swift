@@ -180,7 +180,13 @@ package final class GamesStore {
     /// AI 판만 예외: 오목 화면이 보일 때만 켠다. 화면을 떠나면 사람 시계가 멈추고 AI 도 생각하지 않는다 — 기다릴 것이 없는데
     /// 다른 탭에서 화면을 켜 둘 까닭이 없다(1:1 은 서버 시계가 흐르므로 그대로다).
     package var wantsIdleTimerDisabled: Bool {
-        guard isAppActive, context.session.isSignedIn, let match = context.gomoku.match else { return false }
+        guard isAppActive, context.session.isSignedIn else { return false }
+        // 미니게임: 끝나지 않은 판이 있으면 켠다. **지금까지 미니게임은 아예 보호받지 않았다** — 플래피·타이밍바는
+        // 한 판이 30초 남짓이고 연속 입력이라 자동잠금(최소 30초)에 닿을 일이 없어 드러나지 않았을 뿐이다.
+        // 폰은 background 가 곧 **판 폐기·무제출**(`GamesMiniGameHub.appDidEnterBackground`)이라 자동잠금이 곧 판 폐기다.
+        // 조각을 세워 두고 생각하는 무입력 구간이 있는 게임이 들어오면 그 구멍이 바로 열린다.
+        if let controller = miniGames.controller, controller.isPlaying { return true }
+        guard let match = context.gomoku.match else { return false }
         if context.gomoku.isAIMatch { return !match.isFinished && isGomokuScreenVisible }
         return !match.isFinished
     }

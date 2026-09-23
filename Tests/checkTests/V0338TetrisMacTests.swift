@@ -728,6 +728,20 @@ func pauseWatchdogArmsOnlyWhileTheCardIsUpAndConfirmsTheScore() throws {
     // 상한에서 부르는 것은 quitRound — 이 저장소에서 '중단해도 점수 유효'를 실행하는 바로 그 경로다.
     let watchdog = try tmRegion(after: "private func armPauseWatchdog()", in: panel)
     #expect(watchdog.contains("quitRound()"), "상한에서 판을 무효로 끝낸다 — 점수가 사라진다")
+    // ★ 상한은 **회당이 아니라 판 누적**이다. 회당이면 "4분 59초 → 재개 → 다시 정지" 를 반복해
+    //   벽시계를 무한히 늘릴 수 있고, 그러면 상한이 막으려던 바로 그 손실이 그대로 일어난다.
+    #expect(watchdog.contains("while pausedSecondsUsed < PauseState.pauseLimitSeconds"),
+            "감시가 한 번 자고 끝난다 — 정지를 풀었다 걸면 시계가 처음부터 간다")
+    #expect(watchdog.contains("pausedSecondsUsed += 1"), "누적을 안 센다")
+    #expect(!watchdog.contains("sleep(for: .seconds(PauseState.pauseLimitSeconds))"),
+            "상한만큼 한 번에 자면 누적이 성립하지 않는다")
+    // 0 으로 되돌리는 자리는 **판 시작 한 곳뿐**이어야 한다(재개에서 되돌리면 회당으로 돌아간다).
+    // 선언(`@State … = 0`) + 판 시작 리셋, 딱 둘이어야 한다. 셋째가 생기면 회당으로 돌아간다.
+    #expect(panel.contains("@State private var pausedSecondsUsed = 0"), "선언 모양이 바뀌었다 — 아래 개수 단언의 전제")
+    #expect(panel.components(separatedBy: "pausedSecondsUsed = 0").count - 1 == 2,
+            "정지 예산을 판 시작 말고 다른 곳에서도 되돌린다(재개에서 되돌리면 회당 상한이 된다)")
+    let begin = try tmRegion(after: "if playing {", in: panel, includingAnchorBrace: true)
+    #expect(begin.contains("pausedSecondsUsed = 0"), "새 판에 정지 예산을 안 준다")
     #expect(watchdog.contains("store.miniGameKind == .tetris"), "두 기존 게임에도 상한이 걸린다")
     #expect(watchdog.contains("guard case .paused = pauseState, isPlaying else { return }"),
             "이어하기·그만두기·판 종료 뒤에도 발화한다")

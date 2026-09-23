@@ -452,6 +452,10 @@ struct CheckMiniGameWindowView: View {
     /// 재개 카운트다운 Task. 창이 닫히거나 interruptToken 이 오르면 반드시 cancel 한다 — 안 그러면 죽은 화면의
     /// @State 를 1초마다 두드리는 Task 가 남는다.
     @State private var resumeTask: Task<Void, Never>?
+    /// 이 판에서 **누적으로** 멈춰 있던 초. 정지를 풀어도 0 으로 안 돌아간다 — 상한이 회당이면
+    /// "4분 59초 멈춤 → 재개 → 다시 멈춤"을 반복해 벽시계를 무한히 늘릴 수 있고, 그러면 상한이
+    /// 막으려던 바로 그 일(토큰이 늙어 판을 통째로 잃는 것)이 그대로 일어난다. 새 판에서만 0 이 된다.
+    @State private var pausedSecondsUsed = 0
     /// 정지 감시(v0.3.38). 너무 오래 멈춰 있으면 그 점수로 확정하고 판을 끝낸다 — 아래 `pauseLimitSeconds` 참조.
     @State private var pauseWatchdog: Task<Void, Never>?
 
@@ -614,7 +618,11 @@ struct CheckMiniGameWindowView: View {
                 //   두 게임이 전부 이 한 호스트를 지나므로 배선 지점이 하나다 — 게임마다 따로 붙이면
                 //   한쪽을 빠뜨렸을 때 그 게임 점수만 통째로 안 올라간다(겉으론 안 보인다).
                 //   `beginMiniGameRound` 는 Task 로 띄우고 기다리지 않는다(60Hz 판을 막지 않는다).
-                if playing { store.beginMiniGameRound(kind: kind) }
+                if playing {
+                    store.beginMiniGameRound(kind: kind)
+                    // 정지 예산은 **판마다** 새로 준다(위 `pausedSecondsUsed` 주석).
+                    pausedSecondsUsed = 0
+                }
                 // 판이 스스로 끝났으면(게임오버·10라운드 완주) 정지 상태도 같이 푼다 — 안 그러면 결과 화면 위에
                 // 스크림이 남아 아무것도 못 누르는 창이 된다.
                 if !playing {
@@ -804,11 +812,16 @@ struct CheckMiniGameWindowView: View {
     private func armPauseWatchdog() {
         cancelPauseWatchdog()
         guard store.miniGameKind == .tetris else { return }
+        // 1초씩 센다. **남은 시간이 아니라 쓴 시간을 누적**하므로, 정지를 풀었다 다시 걸어도
+        // 시계가 처음부터 가지 않는다(`pausedSecondsUsed` 가 판 단위로 산다).
         pauseWatchdog = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(PauseState.pauseLimitSeconds))
-            guard !Task.isCancelled else { return }
-            // 그 사이 이어하기·그만두기·판 종료가 있었으면 아무것도 하지 않는다.
-            guard case .paused = pauseState, isPlaying else { return }
+            while pausedSecondsUsed < PauseState.pauseLimitSeconds {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                // 그 사이 이어하기·그만두기·판 종료가 있었으면 아무것도 하지 않는다(누적은 남긴다).
+                guard case .paused = pauseState, isPlaying else { return }
+                pausedSecondsUsed += 1
+            }
             quitRound()
         }
     }

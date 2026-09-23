@@ -30,6 +30,9 @@ enum CheckCoreSourceLayout {
         "MiniGame.swift": ["Sources/check/MiniGame.swift", "Sources/CheckCore/MiniGameEngine.swift"],
         "MiniGameTimingBar.swift": ["Sources/check/MiniGameTimingBar.swift", "Sources/CheckCore/TimingBarGame.swift"],
         "MiniGameFlappy.swift": ["Sources/check/MiniGameFlappy.swift", "Sources/CheckCore/FlappyGame.swift"],
+        // v0.3.38 폰 단계: 배치(TetrisLayout)·조각 색(TetrisPalette)을 코어로 뗐다 — 폰 캔버스가 **같은 표**를 쓴다.
+        // 맥에 남은 것은 잎 뷰(TetrisGameView)와 굳은 키 그물(TetrisKeyWatchdog)뿐이다.
+        "MiniGameTetris.swift": ["Sources/check/MiniGameTetris.swift", "Sources/CheckCore/TetrisLayout.swift"],
         "CheckTokenUsage.swift": ["Sources/CheckCore/CheckTokenUsage.swift", "Sources/check/CheckTokenUsageRow.swift"],
         "CheckOverlayWindow.swift": ["Sources/check/CheckOverlayWindow.swift", "Sources/CheckCore/CheckPanelVisibility.swift"],
         "CheckOverlayReactions.swift": ["Sources/check/CheckOverlayReactions.swift", "Sources/CheckCore/MilestoneTracker.swift"],

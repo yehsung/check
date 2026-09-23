@@ -34,6 +34,11 @@ public enum AingRoute: Hashable, Sendable {
         case league, tokens, minigame
     }
 
+    /// 딥링크가 여는 미니게임. **테트리스는 아직 없다**(v0.3.38 — 폰 노출 플립 전).
+    ///
+    /// ⚠️ 플립할 때는 **두 곳을 같이** 넓혀야 한다: 여기와 `MiniGameKind.phoneCases`.
+    /// 한쪽만 넓히면 `GamesStore.routeStep` 이 `game == .timing ? .timingBar : .flappy` 로 접어
+    /// **테트리스 딥링크가 조용히 플래피로 오배달**된다(값이 없으니 경고도 안 난다).
     public enum MiniGame: String, CaseIterable, Sendable {
         case timing, flappy
     }

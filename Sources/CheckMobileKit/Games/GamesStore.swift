@@ -76,6 +76,8 @@ package final class GamesStore {
     package func appDidBecomeActive() {
         isAppActive = true
         syncAIThinker()
+        // background 로 가며 끝낸 판의 제출이 네트워크로 실패했으면 **같은 토큰으로** 한 번 더(세 게임 모두).
+        miniGames.retryPendingSubmitIfAny()
         let gomoku = context.gomoku
         // 받은 신청(탭 배지·첫 화면 카드)의 신선도. 60초 스로틀은 코어가 한다.
         gomoku.refreshInboxIfStale()

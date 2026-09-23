@@ -175,3 +175,65 @@ enum GamesGomokuJSON {
         return #"{"status":"ok","match":{"id":"\#(matchID)","status":"\#(status)","stake":5,"black":"\#(GamesHarness.userID)","white":"p-1","move_count":\#(moves.count),"turn":\#(turnValue),"deadline_ms":\#(deadline),"result":\#(result),"end_reason":\#(reason)},"moves":[\#(moveRows.joined(separator: ","))],"my_color":"black","opponent":\#(user("p-1", "구름빵", inMatch: !finished)),"ruby_balance":30,"server_now_ms":\#(nowMs),"chat":[],"chat_seq":0,"my_muted":false,"opponent_muted":false,"chat_capable":true,"chat_max_len":100,"my_auto_streak":0,"opponent_auto_streak":0}"#
     }
 }
+
+// MARK: - 라운드 토큰 스텁(호출마다 다른 토큰)
+
+/// `minigame_start_round` 를 **호출마다 다른 토큰**으로 답하게 걸고, 발급된 순서를 담은 상자를 돌려준다.
+///
+/// ⚠️ 매번 **같은 토큰 문자열**을 주는 스텁으로는 "새 요청이 앞 토큰을 갈아 끼웠다"를 **구조적으로 못 잡는다** —
+/// 기준선이 같은 입력이라 갈아 끼워져도 바뀐 것이 없다(저장소 메모 '비교 기준선이 달라야 한다'). 서버는
+/// (사용자, 게임)당 미사용 행을 하나만 두고 새 요청마다 갈아 끼우므로(`minigame_rounds_one_open`),
+/// 토큰이 하나 더 나갔는지가 곧 **인편이 들고 있던 토큰이 죽었는지**다. 그 사실을 보려면 토큰이 달라야 한다.
+///
+/// - Returns: 지금까지 발급한 토큰(발급 순서). `prefix` 뒤에 1 부터 번호가 붙는다.
+@MainActor
+@discardableResult
+func gamesServeRoundTokens(_ harness: GamesHarness, prefix: String) -> BaseLockedBox<[String]> {
+    let issued = BaseLockedBox<[String]>([])
+    harness.server.setDefault("minigame_start_round") { _ in
+        var token = ""
+        issued.mutate { list in
+            token = "\(prefix)-\(list.count + 1)"
+            list.append(token)
+        }
+        return .json(gamesRoundTokenJSON(token))
+    }
+    return issued
+}
+
+/// 서버가 주는 라운드 토큰 응답 한 벌(발급 시각은 하네스 시계와 무관한 고정값 — 나이 판정은 클라가 자기 시계로 한다).
+nonisolated func gamesRoundTokenJSON(_ token: String) -> String {
+    #"{"status":"ok","token":"\#(token)","expires_at":"2026-09-23T05:35:00Z","server_now":"2026-09-23T05:05:00Z"}"#
+}
+
+// MARK: - 대기 예산
+
+/// 한 테스트 몫의 **대기 예산**. `baseWaitUntil` 의 기본 상한(12,000차례)은 초록일 때 보이지 않지만, 대기 하나가
+/// 어긋나는 순간 그 한 건이 통째로 84~168초가 된다 — 46건짜리 좁은 필터가 20분짜리가 됐다(실측).
+///
+/// 두 가지를 바꾼다:
+/// ① **상한을 낮춘다.** 이 파일들의 대기는 스텁 왕복 한두 번이고 한가할 때 0.03초다. 2,000차례는 포화된 전체
+///    스위트(차례당 7~14ms 로 재 둔 구간)에서도 14~28초라, 실제로 걸리는 시간의 100배 넘는 여유다.
+/// ② **한 번 어긋나면 그 테스트의 남은 대기는 짧게 끊는다.** 이미 빨간 테스트에서 뒤의 대기를 더 기다려 봐야
+///    얻는 것이 없다(실패 목록은 이미 정해졌다). 0 이 아니라 짧게 두는 이유는 **왜** 어긋났는지가 대기마다
+///    달라야 하기 때문이다 — 0 으로 두면 뒤의 대기가 조건을 한 번도 안 보고 실패로 찍힌다.
+///
+/// 상태는 **인스턴스에** 있다. Swift Testing 은 테스트마다 스위트 인스턴스를 새로 만들므로 이 예산은 테스트
+/// 하나 안에서만 공유된다 — 병렬로 도는 옆 테스트의 대기를 끊지 않는다.
+final class GamesWaitBudget: @unchecked Sendable {
+    /// 실패할 때만 드는 값이다(초록 경로는 조건이 서는 즉시 돌아온다).
+    static let turns = 2_000
+    /// 이미 어긋난 뒤의 상한.
+    static let turnsAfterBreak = 50
+
+    private var broken = false
+
+    @MainActor
+    @discardableResult
+    func wait(sourceLocation: SourceLocation = #_sourceLocation, _ condition: @MainActor () -> Bool) async -> Bool {
+        let ok = await baseWaitUntil(turns: broken ? Self.turnsAfterBreak : Self.turns,
+                                     sourceLocation: sourceLocation, condition)
+        if !ok { broken = true }
+        return ok
+    }
+}

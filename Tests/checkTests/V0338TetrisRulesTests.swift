@@ -839,3 +839,186 @@ func theGhostIsWhereAHardDropWouldLand() {
     }
     #expect(g.lastClear?.lines == 4)
 }
+
+// MARK: - (9) 폰 걸음 — 손가락 한 칸(v0.3.38 폰 단계)
+
+// 폰은 키가 없다. 손가락이 셀 한 칸만큼 움직일 때마다 **걸음 하나**를 엔진에 넣는다:
+//   · 가로 한 칸 = `setLeftHeld(true)` + `setLeftHeld(false)` 를 **같은 호출 안에서 연달아**(엔진 무수정).
+//   · 세로 한 칸 = `softDropOneCell()`(v0.3.38 에 더한 유일한 엔진 API).
+// 아래 여섯 테스트가 그 두 걸음의 계약이다. 깨지면 폰 조작이 통째로 죽는데, 키보드 경로만 재는 기존 규칙
+// 테스트는 전부 초록이다 — 그래서 따로 못 박는다.
+
+/// 빈 판 · 레벨 1 · 스폰 자리의 O. 폰 걸음 측정의 공통 기준판이다(양옆 4칸 · 아래 20칸 넘게 비어 있다).
+private func phoneStepFixture(advance: Int = 0) -> TetrisGame {
+    game(board: TetrisGame.emptyBoard(), piece: .o,
+         column: TetrisGame.spawnColumn, row: TetrisGame.spawnRow, advance: advance)
+}
+
+@Test("소프트드롭 한 칸 — 정확히 한 칸 · 1점 · 판 시계는 안 흐른다(레벨 배수도 없다)")
+func softDropOneCellMovesExactlyOneCellForOnePoint() throws {
+    var g = phoneStepFixture()
+    let before = try #require(g.active)
+    let moved = g.softDropOneCell()
+    #expect(moved, "한 칸도 못 내려갔다")
+    let after = try #require(g.active)
+    #expect(after.row == before.row + 1, "\(before.row) → \(after.row) 로 갔다(한 칸이 아니다)")
+    #expect(after.column == before.column && after.rotation == before.rotation, "옆으로 새거나 돌았다")
+    #expect(g.score == 1, "한 칸에 \(g.score)점을 줬다 — 칸당 1점이다")
+    #expect(g.elapsed == 0, "손가락 한 칸이 판 시계를 흘렸다 — 시간은 step(dt:) 만 흘린다")
+
+    // 세 칸이면 세 칸 · 3점. 레벨이 높아도 칸당 1점이다(하드드롭 2점/칸과 달리 배수가 없다).
+    var high = phoneStepFixture(advance: 930)
+    #expect(high.level == 28, "전제(레벨 28)가 깨졌다")
+    let start = try #require(high.active).row
+    for _ in 0..<3 { high.softDropOneCell() }
+    #expect(high.active?.row == start + 3, "세 번 불렀는데 세 칸이 아니다")
+    #expect(high.score == 3, "레벨 28에서 \(high.score)점 — 칸당 1점이 아니다")
+}
+
+@Test("소프트드롭 한 칸 — 못 내려가면 **아무것도 안 한다**(굳히지 않는다. 굳히는 것은 락딜레이의 일이다)")
+func softDropOneCellDoesNothingWhenItCannotMove() {
+    // 접지한 조각: 손가락을 아래로 더 끌어도 판이 하나도 안 바뀌어야 한다. `==` 는 내부 시계까지 전부 본다.
+    var grounded = game(board: TetrisGame.boardFixture(bottomRows: flatFloor), piece: .t, column: 3, row: 36)
+    #expect(grounded.isGrounded, "픽스처가 접지 상태가 아니다 — 이 테스트의 전제가 깨졌다")
+    let groundedBefore = grounded
+    let moved = grounded.softDropOneCell()
+    #expect(!moved)
+    #expect(grounded == groundedBefore, "못 내려가는 자리에서 뭔가 바뀌었다(점수·시계·접지 회계 중 하나)")
+    #expect(grounded.active != nil, "못 내려간 조각을 굳혔다 — 굳히는 것은 락딜레이의 일이다")
+
+    // running 이 아니면(시작 전·텀·결과) 아무 일도 없다.
+    var ready = TetrisGame(seed: 3)
+    let readyBefore = ready
+    // ⚠️ `#expect` 는 값을 불변으로 캡처한다 — mutating 호출은 **지역 변수에 먼저 받는다**(이 저장소의 함정 3번).
+    let readyMoved = ready.softDropOneCell()
+    #expect(!readyMoved, "시작도 안 한 판이 내려갔다")
+    #expect(ready == readyBefore)
+
+    // ★ 기준선이 다르다: 한 칸 위였다면 같은 호출이 실제로 내려간다(위 '무변화'가 공허하지 않다).
+    var free = game(board: TetrisGame.boardFixture(bottomRows: flatFloor), piece: .t, column: 3, row: 35)
+    let freeMoved = free.softDropOneCell()
+    #expect(freeMoved, "한 칸 위에서도 안 내려간다 — 이 비교의 기준선이 헛돈다")
+}
+
+@Test("소프트드롭 한 칸 — 낙하 시계를 되감는다(손가락 한 칸 뒤에 중력 한 칸이 공짜로 따라오지 않는다)")
+func softDropOneCellRewindsTheFallClock() {
+    let dt = TetrisGame.maxStep                          // 0.05 — step(dt:) 첫 줄이 여기서 자른다
+    let gravity = TetrisGame.gravitySeconds(forLevel: 1) // ≈ 0.3552초/칸
+    #expect(gravity > 7 * dt && gravity < 8 * dt, "L1 중력 \(gravity)초 — 이 검산의 전제(7~8프레임)가 깨졌다")
+
+    // ① 기준선: 손을 안 대면 여덟 번째 프레임에 중력이 한 칸을 준다.
+    var plain = phoneStepFixture()
+    for _ in 0..<7 { plain.step(dt: dt) }
+    #expect(plain.active?.row == TetrisGame.spawnRow, "일곱 프레임 만에 떨어졌다 — 전제가 깨졌다")
+    plain.step(dt: dt)
+    #expect(plain.active?.row == TetrisGame.spawnRow + 1, "여덟 번째 프레임에 중력이 안 왔다")
+
+    // ② 같은 자리에서 손가락으로 한 칸 내리면, 바로 다음 프레임에 중력 한 칸이 **따라오지 않는다**.
+    var dropped = phoneStepFixture()
+    for _ in 0..<7 { dropped.step(dt: dt) }
+    let droppedMoved = dropped.softDropOneCell()
+    #expect(droppedMoved, "손가락 한 칸이 안 먹었다")
+    #expect(dropped.active?.row == TetrisGame.spawnRow + 1)
+    dropped.step(dt: dt)
+    #expect(dropped.active?.row == TetrisGame.spawnRow + 1,
+            "되감기를 안 해서 손가락 한 칸 뒤에 중력 한 칸이 공짜로 붙었다(내린 만큼의 두 배가 간다)")
+
+    // ③ 그렇다고 중력을 멈추지도 않는다: 되감긴 만큼(중력 한 칸)이 지나면 다음 칸이 온다.
+    for _ in 0..<6 { dropped.step(dt: dt) }   // 되감긴 뒤 합계 0.35 < 0.3552
+    #expect(dropped.active?.row == TetrisGame.spawnRow + 1, "되감기가 중력을 통째로 멈췄다")
+    dropped.step(dt: dt)                      // 0.40 > 0.3552
+    #expect(dropped.active?.row == TetrisGame.spawnRow + 2, "되감긴 시계가 만기돼도 안 떨어진다")
+    #expect(dropped.score == 1, "중력 칸에 점수가 붙었다(소프트드롭 한 칸 1점만이어야 한다)")
+}
+
+@Test("소프트드롭 한 칸 — 접지 리셋 예산을 **안 쓴다**(중력이 그렇듯이)")
+func softDropOneCellNeverSpendsTheLockResetBudget() {
+    // L28: 리셋 한도 2 · 재충전 없음. 예산을 다 쓰면 **바닥에 닿는 순간 곧바로** 굳는다(락딜레이 0.205초를 못 쓴다).
+    // 그래서 "닿은 직후 한 프레임 뒤에도 조각이 살아 있는가"가 곧 "예산이 남았는가"다.
+    func fixture() -> TetrisGame {
+        game(board: TetrisGame.boardFixture(bottomRows: level28Stack), piece: .o, advance: 930)
+    }
+    #expect(TetrisGame.lockResetLimit(forLevel: fixture().level) == 2, "리셋 한도 전제가 깨졌다")
+    #expect(!TetrisGame.lockResetRefreshes(forLevel: fixture().level), "재충전이 켜져 있으면 이 측정이 헛돈다")
+
+    // ① 손가락으로만 내려 접지시킨다 — 예산을 한 번도 안 썼으므로 락딜레이를 그대로 받는다.
+    var soft = fixture()
+    var cells = 0
+    while soft.softDropOneCell() { cells += 1 }
+    #expect(cells >= 3, "\(cells)칸밖에 안 내려갔다 — 픽스처가 이미 바닥 근처다")
+    #expect(soft.isGrounded)
+    soft.step(dt: 1.0 / 120.0)
+    #expect(soft.active != nil, "소프트드롭 \(cells)칸이 리셋 예산을 썼다 — 닿자마자 굳었다")
+
+    // ② ★ 기준선이 다르다: 가로 이동 두 번은 예산을 **정말** 쓴다. 같은 자리에서 닿는 순간 굳는다.
+    var shifted = fixture()
+    shifted.setLeftHeld(true); shifted.setLeftHeld(false)
+    shifted.setRightHeld(true); shifted.setRightHeld(false)
+    while shifted.softDropOneCell() {}
+    #expect(shifted.isGrounded)
+    shifted.step(dt: 1.0 / 120.0)
+    #expect(shifted.active == nil, "예산 2를 다 썼는데 안 굳었다 — 이 비교의 기준선이 헛돈다")
+}
+
+@Test("폰 가로 한 칸 — 누름+뗌을 **연달아** 부르면 정확히 한 칸이고 자동 반복이 남지 않는다")
+func aPressReleasePairMovesExactlyOneCellAndArmsNoRepeat() throws {
+    // ⚠️ 이 쌍은 **엔진 내부 구현에 기대는 배선**이다(누름이 즉시 한 칸을 주고, 뗌은 이동을 안 주며, 쌍 사이에
+    //    시간이 안 흐르므로 DAS 0.167초가 만기될 수 없다). 그래서 여기서 못 박는다 — 깨지면 폰 가로 이동이
+    //    통째로 죽는데 키보드 경로만 재는 규칙 테스트는 전부 초록이다.
+    let start = try #require(phoneStepFixture().active).column
+
+    // ① 한 쌍 = 정확히 한 칸(양쪽 다). 판 시계는 안 흐른다.
+    var left = phoneStepFixture()
+    left.setLeftHeld(true); left.setLeftHeld(false)
+    #expect(left.active?.column == start - 1, "왼쪽 한 쌍이 \(left.active?.column ?? -99) 로 갔다(기대 \(start - 1))")
+    #expect(left.elapsed == 0, "쌍 사이에 시간이 흘렀다 — step(dt:) 을 끼우면 DAS 가 만기된다")
+
+    var right = phoneStepFixture()
+    right.setRightHeld(true); right.setRightHeld(false)
+    #expect(right.active?.column == start + 1, "오른쪽 한 쌍이 \(right.active?.column ?? -99) 로 갔다")
+
+    // ② 세 쌍 = 정확히 세 칸(쌓이지도, 한 칸으로 접히지도 않는다).
+    var three = phoneStepFixture()
+    for _ in 0..<3 { three.setLeftHeld(true); three.setLeftHeld(false) }
+    #expect(three.active?.column == start - 3, "세 쌍이 \(three.active?.column ?? -99) 로 갔다(기대 \(start - 3))")
+
+    // ③ 쌍이 끝나면 자동 반복이 **안 남는다**: DAS 두 배를 흘려도 더 안 간다.
+    var idle = phoneStepFixture()
+    idle.setLeftHeld(true); idle.setLeftHeld(false)
+    let afterPair = try #require(idle.active).column
+    let window = TetrisGame.dasSeconds * 2
+    var elapsed = 0.0
+    while elapsed < window {
+        idle.step(dt: TetrisGame.maxStep)
+        elapsed += TetrisGame.maxStep
+    }
+    #expect(idle.active?.column == afterPair,
+            "쌍이 끝났는데 DAS 가 살아남아 \(idle.active?.column ?? -99) 까지 흘렀다")
+
+    // ★ 기준선이 다르다: **떼지 않으면** 같은 시간에 DAS/ARR 가 여러 칸을 준다.
+    var held = phoneStepFixture()
+    held.setLeftHeld(true)
+    elapsed = 0
+    while elapsed < window {
+        held.step(dt: TetrisGame.maxStep)
+        elapsed += TetrisGame.maxStep
+    }
+    #expect((held.active?.column ?? 99) < afterPair,
+            "누른 채 둬도 한 칸뿐이다(\(held.active?.column ?? 99)) — 이 비교의 기준선이 헛돈다")
+}
+
+@Test("폰 두 걸음을 섞어도 판은 결정적이다 — 가로 쌍과 소프트드롭이 서로의 시계를 안 건드린다")
+func phoneStepsDoNotDisturbEachOther() throws {
+    // 손가락은 대각선으로 움직인다 — 한 프레임에 가로 쌍과 세로 걸음이 같이 온다. 그때도 결과가 한 칸씩이어야 한다.
+    var g = phoneStepFixture()
+    let start = try #require(g.active)
+    g.setLeftHeld(true); g.setLeftHeld(false)
+    g.softDropOneCell()
+    g.setRightHeld(true); g.setRightHeld(false)
+    g.softDropOneCell()
+    let after = try #require(g.active)
+    #expect(after.column == start.column, "가로 쌍 둘(왼·오)이 제자리로 안 돌아왔다")
+    #expect(after.row == start.row + 2, "세로 두 걸음이 \(after.row - start.row)칸이 됐다")
+    #expect(g.score == 2, "점수 \(g.score) — 소프트드롭 두 칸이면 2점이다")
+    #expect(g.elapsed == 0, "걸음이 판 시계를 흘렸다")
+}

@@ -320,7 +320,7 @@ func stuckKeyWatchdogReleasesAfterEightSeconds() {
 
 @Test("잎 뷰가 그물을 실제로 쓴다 — 벽시계가 아니라 판 시계로")
 func theLeafViewRoutesHeldKeysThroughTheWatchdog() throws {
-    let view = tmStripped(try tmSource("MiniGameTetris.swift"))
+    let view = tmStripped(try CheckCoreSourceLayout.joinedSplitSource("MiniGameTetris.swift"))
     let sync = try tmRegion(after: "private func syncHeldKeys()", in: view)
     #expect(sync.contains("let now = game.elapsed"), "벽시계로 재면 정지 중에도 그물이 돈다")
     for key in ["setLeftHeld", "setRightHeld", "setSoftDropHeld"] {
@@ -341,7 +341,7 @@ func theLeafViewRoutesHeldKeysThroughTheWatchdog() throws {
 
 @Test("잎 뷰는 GraphicsContext 필터를 쓰지 않는다 — 통합 GPU 에서 프레임이 깨진다")
 func theLeafViewNeverBlursTheCanvas() throws {
-    let view = tmStripped(try tmSource("MiniGameTetris.swift"))
+    let view = tmStripped(try CheckCoreSourceLayout.joinedSplitSource("MiniGameTetris.swift"))
     for forbidden in ["addFilter", "drawLayer", ".blur("] {
         #expect(!view.contains(forbidden), "캔버스에 `\(forbidden)` 를 쓴다 — 부드러운 빛은 radialGradient 로")
     }
@@ -639,7 +639,7 @@ func tetrisSnapshots() throws {
 @Test("시작시킨 그 누름은 하드드롭까지 하지 않는다 — 그리고 탑아웃 직후엔 아무 일도 없다")
 func oneActionKeyDoesExactlyOneThing() throws {
     // 화면이 액션을 **한 번만** 흘린다(두 번 부르면 시작하자마자 조각이 바닥에 박힌다).
-    let view = tmStripped(try tmSource("MiniGameTetris.swift"))
+    let view = tmStripped(try CheckCoreSourceLayout.joinedSplitSource("MiniGameTetris.swift"))
     let act = try tmRegion(after: "private func act()", in: view)
     #expect(act.components(separatedBy: "game.action()").count - 1 == 1, "act() 가 액션을 한 번만 흘리지 않는다")
     #expect(act.contains("if !wasPlaying, game.isPlaying"), "새 판 첫 프레임이 정지 구간을 물려받는다")
@@ -675,7 +675,7 @@ func clickingTheCanvasHardDrops() throws {
     #expect(gesture.contains("input.actionCount += 1"), "캔버스 클릭이 액션으로 안 간다")
     #expect(gesture.contains("guard !pauseState.isFrozen else { return }"), "정지 중 클릭이 판을 움직인다")
     // 잎 뷰가 그 카운터를 본다.
-    let view = tmStripped(try tmSource("MiniGameTetris.swift"))
+    let view = tmStripped(try CheckCoreSourceLayout.joinedSplitSource("MiniGameTetris.swift"))
     #expect(view.contains(".onChange(of: input.actionCount)"), "잎 뷰가 액션 카운터를 안 본다")
     // 회전·홀드는 **차분**으로 센다(한 프레임에 두 번 누른 것을 한 번으로 접으면 빠른 손이 손해를 본다).
     for (counter, call) in [("rotateClockwiseCount", "game.rotate(clockwise: true)"),

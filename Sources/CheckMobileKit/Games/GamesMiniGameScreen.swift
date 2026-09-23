@@ -5,9 +5,14 @@ import SwiftUI
 /// 미니게임 화면(SPEC-ios §3.5): 머리 줄(최고 · 오늘 순위 · 안내) · 캔버스(논리 292×302 를 폭에 **등비 확대**) · 오늘 순위.
 ///
 /// - 캔버스 어디든 **누르는 순간** = 행동(맥의 마우스 다운 래치와 같다 — 손을 뗄 때 발화하면 점프 게임엔 그 지연이 곧 낙차다).
+///   ⚠️ **테트리스는 진행 중일 때만 다르다**: 한 번의 끌기가 여러 칸을 만들고 행동도 셋(좌·우·소프트드롭)이라
+///   래치로는 표현이 안 된다 — 그때만 `GamesPlayController` 의 제스처 트래커로 넘긴다. 시작 화면에서는
+///   테트리스도 래치가 판을 켠다(트래커로만 받으면 0.25초를 넘겨 천천히 뗀 사람에게 시작이 안 되고, 그건 '고장'으로 읽힌다).
 /// - 프레임 상한은 화면 최대 주사율(`UIScreen.maximumFramesPerSecond`)을 코어 `MiniGameFrameRate` 에 넣은 값이다.
-/// - 햅틱: 판에 먹힌 탭마다 가볍게, 게임오버·완주에 한 번.
-/// - 앱이 background 로 가면 판은 끝(제출하지 않음) — 스토어가 한다. 화면을 떠나도 같다.
+/// - 햅틱 네 채널: 판에 먹힌 탭(가볍게) · 하드드롭(단단하게) · 줄소거(묵직하게) · 게임오버·완주(한 번).
+///   **이동 걸음·소프트드롭 걸음에는 없다** — L1 소프트드롭이 초당 56회, L5 는 213회라 탭틱 엔진이 낼 수 있는 속도가 아니다.
+/// - 앱이 background 로 가거나 화면을 떠나면 판은 끝 — 스토어·허브가 한다(`GamesMiniGameHub.appDidEnterBackground`·
+///   `closeScreen`). 기존 두 게임은 제출하지 않고, **테트리스는 여기까지의 점수로 확정 제출한다.**
 struct GamesMiniGameScreen: View {
     let store: GamesStore
     let kind: MiniGameKind
@@ -17,6 +22,19 @@ struct GamesMiniGameScreen: View {
     @State private var refreshHz = MiniGameFrameRate.baselineFPS
     /// 데모 스크린샷: 판 도중 장면을 멈춰 둔다(DEBUG · 데모에서만 참이 된다).
     @State private var framesFrozen = false
+    /// **다 쓴 접촉**의 시작점 — 이 손가락으로는 더 아무 일도 하지 않는다. 들어오는 길이 둘이다:
+    /// ① 시작 래치가 판을 켠 그 끌기(안 삼키면 **한 번의 탭이 시작과 회전을 둘 다** 한다 — `action()` 이
+    ///    ready → running 으로 바꾼 직후라 이어지는 탭 판정이 그대로 통과한다. 그리고 그 손가락이 한 칸 폭 이상
+    ///    흔들리면 새 판 첫 조각이 **곧장 옆으로 간다** — `onEnded` 만 삼키면 그 이동은 안 막힌다).
+    /// ② 그 접촉으로 끌던 도중에 판이 끝난 경우(상한·탑아웃). 표시를 안 하면 같은 손가락의 다음 `onChanged` 가
+    ///    시작 래치를 때려 **새 판이 저절로 켜진다.**
+    ///
+    /// 불리언이 아니라 **시작점**인 이유: `onEnded` 는 늘 오지 않는다(시스템 제스처·전화 수신으로 취소되면 안 온다).
+    /// 참인 채로 남으면 그다음 **멀쩡한 탭**의 회전이 대신 삼켜진다. 시작점이면 새 접촉은 값이 달라 안 걸린다.
+    @State private var swallowsTetrisDragEnd: CGPoint?
+    /// 지금 트래커로 넘기고 있는(= 진행 중인 판을 조작하는) 접촉의 시작점. 판이 이 손가락 아래에서 끝났는지를
+    /// 이 값으로 알아본다 — `isPlaying` 이 거짓인데 이 시작점이면 **방금 끝난 그 접촉**이다.
+    @State private var tetrisPlayContact: CGPoint?
 
     private var hub: GamesMiniGameHub { store.miniGames }
 
@@ -28,8 +46,12 @@ struct GamesMiniGameScreen: View {
             let height = width * MiniGameCanvas.logicalHeight / MiniGameCanvas.logicalWidth
             VStack(spacing: MobileTheme.rowSpacing) {
                 header
-                canvas
+                canvas(width: width)
                     .frame(width: width, height: height)
+                // 테트리스만 버튼 줄이 붙는다 — 끌기로 표현할 수 없는 셋(홀드 · 반시계 회전 · 즉시 내리기)이다.
+                if kind == .tetris, let controller = hub.controller, controller.kind == kind {
+                    tetrisControls(controller, width: width)
+                }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         if !hub.isPublic {
@@ -123,7 +145,7 @@ struct GamesMiniGameScreen: View {
     // MARK: 캔버스
 
     @ViewBuilder
-    private var canvas: some View {
+    private func canvas(width: CGFloat) -> some View {
         if let controller = hub.controller, controller.kind == kind {
             TimelineView(.animation(minimumInterval: MiniGameFrameRate.minimumInterval(forRefreshRate: refreshHz),
                                     paused: !controller.isPlaying || framesFrozen)) { context in
@@ -137,29 +159,71 @@ struct GamesMiniGameScreen: View {
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(MobileTheme.separator, lineWidth: 1))
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        guard !pressLatched else { return }
-                        pressLatched = true
-                        guard !framesFrozen else { return }
-                        controller.tap()
-                    }
-                    .onEnded { _ in pressLatched = false }
-            )
+            // ⚠️ `.gesture` 는 **이 자리 하나**다. `if kind == .tetris` 로 모디파이어 자체를 갈라 붙이면 뷰 정체성이
+            // 갈려 SwiftUI 가 제스처를 다시 만든다 — 갈래는 클로저 **안**에 둔다.
+            .gesture(canvasDrag(controller))
             .sensoryFeedback(.impact(weight: .light), trigger: controller.tapSerial)
+            .sensoryFeedback(.impact(flexibility: .rigid), trigger: controller.hardDropSerial)
+            .sensoryFeedback(.impact(weight: .heavy), trigger: controller.lineClearSerial)
             .sensoryFeedback(.error, trigger: controller.gameOverSerial)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(GamesMiniGameText.canvasAccessibility(kind))
             .accessibilityValue(accessibilityValue(controller))
-            .accessibilityAddTraits(.allowsDirectInteraction)
+            // 테트리스에는 **직접 조작 트레잇을 걸지 않는다**: 셀이 15~18pt 인 판에서 눈 없이 겨냥하라는 뜻이라
+            // 실질 조작이 불가능하다. 두 게임(판 어디든 탭)에는 그대로 둔다.
+            .accessibilityAddTraits(kind == .tetris ? [] : [.allowsDirectInteraction])
+            // 기본 액션: 진행 중이면 시계 회전, 시작 전·결과면 새 판(구동기가 가른다).
             .accessibilityAction { controller.tap() }
+            .accessibilityActions { tetrisAccessibilityActions(controller) }
             // 캔버스 안 글자는 판 배율을 따른다 — 시스템 글자 크기에 끌려가면 판을 넘친다.
             .dynamicTypeSize(...DynamicTypeSize.large)
+            // 한 칸 문턱은 **화면 셀 폭**이다(논리 13 × 배율). 폭이 정해지는 첫 프레임에 바로 건넨다.
+            .onChange(of: width, initial: true) { _, resolved in
+                controller.updateCellWidth(TetrisLayout.cell * resolved / TetrisLayout.logicalSize.width)
+            }
         } else {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(CheckTheme.panel)
         }
+    }
+
+    /// 캔버스 위 한 번의 접촉. 갈래는 **'진행 중인가'** 이지 `kind` 가 아니다 — 시작 화면에서는 테트리스도 래치가 판을 켠다.
+    private func canvasDrag(_ controller: GamesPlayController) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard !framesFrozen else { return }
+                // ① 다 쓴 접촉은 **여기서 끝난다** — 판을 켠 손가락의 이동도, 판이 끝난 손가락의 시작 래치도 막는다.
+                if kind == .tetris, swallowsTetrisDragEnd == value.startLocation { return }
+                // ② 이 접촉이 끌던 판이 방금 끝났다(상한·탑아웃). 같은 손가락이 새 판을 켜면 안 된다 —
+                //    켜지면 트래커에 남은 앞 끌기의 축 잠금·소비량으로 첫 조각이 곧장 튄다.
+                if kind == .tetris, !controller.isPlaying, tetrisPlayContact == value.startLocation {
+                    tetrisPlayContact = nil
+                    swallowsTetrisDragEnd = value.startLocation
+                    return
+                }
+                if kind == .tetris, controller.isPlaying {
+                    tetrisPlayContact = value.startLocation
+                    controller.canvasDragChanged(startLocation: value.startLocation,
+                                                 translation: value.translation, at: value.time)
+                    return
+                }
+                guard !pressLatched else { return }
+                pressLatched = true
+                let wasPlaying = controller.isPlaying
+                controller.tap()
+                if kind == .tetris, !wasPlaying, controller.isPlaying { swallowsTetrisDragEnd = value.startLocation }
+            }
+            .onEnded { value in
+                pressLatched = false
+                guard !framesFrozen, kind == .tetris else { return }
+                if tetrisPlayContact == value.startLocation { tetrisPlayContact = nil }
+                guard swallowsTetrisDragEnd != value.startLocation else {
+                    swallowsTetrisDragEnd = nil
+                    return
+                }
+                guard controller.isPlaying else { return }
+                controller.canvasDragEnded(translation: value.translation, at: value.time)
+            }
     }
 
     @ViewBuilder
@@ -169,11 +233,8 @@ struct GamesMiniGameScreen: View {
             GamesTimingBarCanvas(game: controller.timing, bestScore: hub.best(for: kind), reduceMotion: reduceMotion)
         case .flappy:
             GamesFlappyCanvas(game: controller.flappy, bestScore: hub.best(for: kind), reduceMotion: reduceMotion)
-        // 폰에는 테트리스가 보이지 않는다(`MiniGameKind.phoneCases` — 타일·순위 칩·딥링크 어디에도 없어 이 화면이 열리지 않는다).
-        // **모바일 세션이 여기를 채운다.** 빈 판을 그리는 이유: 새 캔버스를 미리 만들어 두면 폰 조작이 정해지기 전에
-        // 굳은 그림이 남고, 그걸 고치는 쪽이 새로 그리는 쪽보다 비싸다.
         case .tetris:
-            Color.clear
+            GamesTetrisCanvas(game: controller.tetris, bestScore: hub.best(for: kind), reduceMotion: reduceMotion)
         }
     }
 
@@ -185,10 +246,64 @@ struct GamesMiniGameScreen: View {
         case .flappy:
             if controller.flappy.phase == .result { return "\(controller.flappy.score)점" }
             return controller.isPlaying ? "\(controller.flappy.score)점" : GamesMiniGameText.startAction
-        // 모바일 세션이 여기를 채운다(폰 미도달 — 위 canvasContent 주석).
         case .tetris:
-            return GamesMiniGameText.startAction
+            // **느린 값만**이다(점수·레벨·줄). 조각·열·행을 넣으면 보이스오버가 자기 말을 끝없이 끊는다 —
+            // 조각 자리는 L1 0.355초/칸 · L15 0.00082초/칸으로 바뀐다. 그 값들은 이동 액션 뒤 알림으로 말한다.
+            let game = controller.tetris
+            if game.phase == .ready { return GamesMiniGameText.startAction }
+            return GamesMiniGameText.tetrisValue(score: game.score, level: game.scoreLevel, lines: game.lines)
         }
+    }
+
+    // MARK: 테트리스 — 보이스오버 이동 액션
+
+    /// 버튼이 없는 조작만 액션으로 낸다. 홀드·반시계·즉시 내리기는 **이미 진짜 버튼**이라 중복시키지 않는다.
+    @ViewBuilder
+    private func tetrisAccessibilityActions(_ controller: GamesPlayController) -> some View {
+        if kind == .tetris, controller.isPlaying {
+            Button(GamesMiniGameText.tetrisMoveLeft) { announceColumn(controller) { $0.moveLeftOneCell() } }
+            Button(GamesMiniGameText.tetrisMoveRight) { announceColumn(controller) { $0.moveRightOneCell() } }
+            Button(GamesMiniGameText.tetrisSoftDrop) { announceDrop(controller) }
+        }
+    }
+
+    private func announceColumn(_ controller: GamesPlayController, _ move: (GamesPlayController) -> Void) {
+        move(controller)
+        guard let column = controller.tetris.active?.cells.map({ $0.column }).min() else { return }
+        AccessibilityNotification.Announcement(GamesMiniGameText.tetrisColumnAnnouncement(column + 1)).post()
+    }
+
+    private func announceDrop(_ controller: GamesPlayController) {
+        let before = controller.tetris.active?.row
+        controller.softDropOneCell()
+        let moved = controller.tetris.active?.row != before
+        AccessibilityNotification.Announcement(GamesMiniGameText.tetrisDropAnnouncement(moved: moved)).post()
+    }
+
+    // MARK: 테트리스 — 버튼 줄
+
+    /// 캔버스와 같은 폭 W. [홀드][반시계][즉시 내리기] — 간격 8·16 을 뺀 쓸 폭을 26 : 30 : 44 로 나눈다.
+    ///
+    /// **확인 대화상자를 넣지 마라**(즉시 내리기에도): L15 부터 20G 라 조각이 스폰과 같은 틱에 접지하고
+    /// 락딜레이가 0.50 → 0.16초다 — 확인창 한 번이 그 예산 전부다.
+    private func tetrisControls(_ controller: GamesPlayController, width: CGFloat) -> some View {
+        let usable = max(0, width - MobileTheme.space2 - MobileTheme.space4)
+        return HStack(spacing: 0) {
+            TetrisControlButton(title: GamesMiniGameText.tetrisHold, icon: "square.on.square",
+                                width: usable * 0.26, isSpent: controller.tetris.holdUsed,
+                                firesOnTouchDown: true) { controller.hold() }
+            // 죽은 간격이다 — Spacer 는 히트 영역이 없다(버튼 쪽으로 넓히지 마라).
+            Spacer(minLength: 0).frame(width: MobileTheme.space2)
+            TetrisControlButton(title: GamesMiniGameText.tetrisRotateCounterClockwise, icon: "rotate.left",
+                                width: usable * 0.30, firesOnTouchDown: true) { controller.rotate(clockwise: false) }
+            Spacer(minLength: 0).frame(width: MobileTheme.space4)
+            TetrisControlButton(title: GamesMiniGameText.tetrisHardDrop, icon: "arrow.down.to.line",
+                                width: usable * 0.44, firesOnTouchDown: false) { controller.hardDrop() }
+        }
+        .frame(width: width)
+        // 캔버스의 `...large` 상한은 캔버스에만 걸려 있다 — 버튼 줄은 시스템 글자를 그대로 따라가서
+        // 접근성 크기에서 화면 밖으로 밀렸다. 여기서 따로 막는다.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
     // MARK: 오늘 순위
@@ -309,6 +424,112 @@ private struct GamesRankRow: View {
             .monospacedDigit()
             .foregroundStyle(MobileTheme.label)
             .fixedSize()
+    }
+}
+
+// MARK: - 테트리스 버튼
+
+/// 조작 버튼 한 개 — 아이콘 위(17 semibold) + 글자 아래(caption2) · 높이 48 · **틴트**.
+///
+/// · **채운 버튼은 하나도 없다**(이 저장소 규약: 화면당 채운 버튼은 하나). 눌림은 **색만** 바꾼다 —
+///   스케일 애니메이션을 쓰지 않으므로 reduceMotion 분기 자체가 필요 없다.
+/// · 발화 시점이 둘이다. 홀드·반시계는 **터치-다운 래치**(20G 구간에서는 손가락 뗌을 기다릴 여유가 없다),
+///   즉시 내리기만 **터치-업 인사이드**(표준 `Button` — 손을 끌어 빼면 취소된다. 잘못 누르면 그 판이 끝난다).
+/// · 아이콘 셋(`square.on.square` · `rotate.left` · `arrow.down.to.line`)은 전부 iOS 13 부터 있는 이름이다.
+///   **없는 심벌 이름은 경고 없이 빈 칸이 된다** — 이름을 바꾸려면 실재부터 확인해라.
+private struct TetrisControlButton: View {
+    let title: String
+    let icon: String
+    let width: CGFloat
+    var isSpent = false
+    let firesOnTouchDown: Bool
+    let action: () -> Void
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// 지금 누르고 있는 접촉의 **시작점**(없으면 nil). 불리언 래치가 아니다.
+    ///
+    /// ⚠️ `onEnded` 는 늘 오지 않는다 — 시스템 제스처(홈 인디케이터 끌어 올리기·제어 센터)나 전화 수신으로
+    /// 취소되면 안 온다. 불리언이면 그 한 번으로 `isPressed` 가 참인 채 굳고, 다음 누름이 `guard !isPressed`
+    /// 에 걸려 **그 버튼이 화면을 떠날 때까지 죽는다**(홀드·반시계가 통째로 먹통이 된다).
+    /// 시작점이면 새 접촉은 값이 달라 항상 통과한다 — `GamesTetrisGesture` 가 새 접촉을 알아보는 것과 같은 결이다.
+    /// 남는 것은 **틴트가 눌린 채 보이는 것뿐**이고(다음 누름이 갈아 끼운다), 그건 버튼이 죽는 것과 비교가 안 된다.
+    @State private var pressedContact: CGPoint?
+
+    var body: some View {
+        if firesOnTouchDown {
+            label
+                .modifier(TetrisControlChrome(width: width, isSpent: isSpent, isPressed: pressedContact != nil))
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            // 같은 접촉의 두 번째 `onChanged` 는 손가락이 움직인 것뿐이다(발화는 접촉당 한 번).
+                            guard pressedContact != value.startLocation else { return }
+                            pressedContact = value.startLocation
+                            action()
+                        }
+                        .onEnded { _ in pressedContact = nil }
+                )
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(title)
+                .accessibilityValue(isSpent ? GamesMiniGameText.tetrisHoldSpent : "")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { action() }
+        } else {
+            Button(action: action) { label }
+                .buttonStyle(TetrisControlButtonStyle(width: width))
+                .accessibilityLabel(title)
+        }
+    }
+
+    private var label: some View {
+        VStack(spacing: 2) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .accessibilityHidden(true)
+            // 접근성 글자 크기에서는 글자를 떨어뜨리고 아이콘만 남긴다(보이스오버 라벨은 그대로다).
+            if !typeSize.isAccessibilitySize {
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+    }
+}
+
+/// 버튼 판(캡슐 · 48 · 틴트). 눌림·소진을 **색으로만** 말한다.
+private struct TetrisControlChrome: ViewModifier {
+    /// 48 — `MobileTheme` 의 행 높이 표가 **미니게임 행**으로 이미 정해 둔 값이다(토큰이 아니라 그 표의 주석에 있다:
+    /// "한 줄 44 · 두 줄 56 · 미니게임 48 · 팀 리그 64"). 순위 행(`minHeight: 48`)과 같은 수다.
+    static let height: CGFloat = 48
+
+    let width: CGFloat
+    var isSpent = false
+    let isPressed: Bool
+
+    func body(content: Content) -> some View {
+        content
+            // 소진(홀드를 이미 씀)이면 틴트 채움을 없애고 글자·기호를 한 단계 내린다.
+            // **`.disabled()` 를 쓰지 않는다**: 이 값은 조각마다 꺼졌다 켜져 판 후반 1.3조각/초로 깜빡이고,
+            // 보이스오버가 비활성 요소를 건너뛰어 버튼이 목록에서 사라졌다 나타났다 한다.
+            .foregroundStyle(isSpent ? MobileTheme.label2 : MobileTheme.accent)
+            .frame(width: width, height: Self.height)
+            .background(Capsule().fill(isSpent ? Color.clear : MobileTheme.accentTint))
+            .overlay {
+                if isSpent { Capsule().strokeBorder(MobileTheme.separator, lineWidth: 1) }
+            }
+            .opacity(isPressed ? 0.75 : 1)
+            .contentShape(Capsule())
+    }
+}
+
+/// 터치-업 인사이드 버튼(즉시 내리기)의 모양. 눌림은 `ButtonStyle` 이 알려 준다.
+private struct TetrisControlButtonStyle: ButtonStyle {
+    let width: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .modifier(TetrisControlChrome(width: width, isPressed: configuration.isPressed))
     }
 }
 #endif

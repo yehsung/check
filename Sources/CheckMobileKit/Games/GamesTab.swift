@@ -71,12 +71,18 @@ struct GamesTab: View {
                 ForEach(MiniGameKind.phoneCases) { miniGameTile($0) }
             }
         } else {
-            HStack(alignment: .top, spacing: 12) {
+            // 2열 격자다(예전엔 HStack 하나). 게임이 셋이 되면 한 줄에 안 들어간다 —
+            // 격자는 셋째 타일을 다음 줄 왼쪽에 세우고, 줄 안 두 타일의 높이도 맞춰 준다.
+            LazyVGrid(columns: Self.tileColumns, spacing: 12) {
                 ForEach(MiniGameKind.phoneCases) { miniGameTile($0) }
             }
-            .fixedSize(horizontal: false, vertical: true)
         }
     }
+
+    private static let tileColumns = [
+        GridItem(.flexible(), spacing: 12, alignment: .top),
+        GridItem(.flexible(), spacing: 12, alignment: .top)
+    ]
 
     private func miniGameTile(_ kind: MiniGameKind) -> some View {
         let hub = store.miniGames
@@ -276,10 +282,7 @@ private struct GamesTileArt: View {
             switch kind {
             case .timingBar: timing(geo.size)
             case .flappy: flappy(geo.size)
-            // 테트리스 타일은 폰에 안 깔린다(`MiniGameKind.phoneCases`) — 이 갈래는 컴파일을 위해서만 있다.
-            // **모바일 세션이 여기를 채운다**(시안 `.b-art-tetris`). 무대 색만 두면 "빈 타일"이 그럴듯해 보여
-            // 배선이 빠진 것을 못 알아채므로, 아무것도 그리지 않는다.
-            case .tetris: Color.clear
+            case .tetris: tetris(geo.size)
             }
         }
         .accessibilityHidden(true)
@@ -350,6 +353,49 @@ private struct GamesTileArt: View {
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
+
+    /// 테트리스 타일: 무대 밤 톤 하늘 + 가운데 우물 + 쌓인 조각 + 떨어지는 I.
+    ///
+    /// 조각 색은 **판과 같은 표**(`TetrisPalette`)에서 온다 — 타일만 다른 색이면 열고 나서 다른 게임처럼 보인다.
+    /// 우물도 같은 잉크·불투명도라 타일이 판의 축소판이 된다.
+    private func tetris(_ size: CGSize) -> some View {
+        let cell: CGFloat = 14
+        let wellWidth = cell * 6
+        let wellHeight = cell * 7
+        let originX = (size.width - wellWidth) / 2
+        let originY: CGFloat = 7
+        return ZStack(alignment: .topLeading) {
+            LinearGradient(stops: [.init(color: gamesHex(0x151A3A), location: 0), .init(color: gamesHex(0x24204E), location: 0.55),
+                                   .init(color: gamesHex(0x3A2A5E), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+            ForEach(Array(Self.stars.prefix(5).enumerated()), id: \.offset) { _, star in
+                Circle()
+                    .fill(Color.white.opacity(0.7))
+                    .frame(width: 2, height: 2)
+                    .offset(x: size.width * star.x, y: star.y)
+            }
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(TetrisPalette.wellColor.opacity(TetrisPalette.wellOpacity))
+                .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
+                .frame(width: wellWidth, height: wellHeight)
+                .offset(x: originX, y: originY)
+            ForEach(Array(Self.tetrisCells.enumerated()), id: \.offset) { _, block in
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(TetrisPalette.color(block.piece))
+                    .frame(width: cell - 1, height: cell - 1)
+                    .offset(x: originX + CGFloat(block.x) * cell + 0.5, y: originY + CGFloat(block.y) * cell + 0.5)
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+    }
+
+    /// 타일 한 장의 판(6×7 칸): 아래 두 줄은 쌓인 조각, 위 한 줄은 **떨어지는 중인 I** — 정지 그림 한 장으로
+    /// "움직이는 게임"이라고 말하는 자리다(플래피 타일의 아잉과 같은 역할).
+    private static let tetrisCells: [(x: Int, y: Int, piece: TetrisGame.Piece)] = [
+        (1, 1, .i), (2, 1, .i), (3, 1, .i), (4, 1, .i),
+        (0, 5, .l), (1, 5, .l), (2, 5, .o), (3, 5, .o), (5, 5, .t),
+        (0, 6, .l), (1, 6, .z), (2, 6, .o), (3, 6, .o), (4, 6, .s), (5, 6, .t)
+    ]
 }
 
 /// "오늘 내 순위" 행 앞 30pt 둥근 네모(시안 `.b-iconsq`) — 타일과 같은 무대 색 · 흰 기호(플래피는 아잉 옆모습).
@@ -359,8 +405,7 @@ private struct GamesGameIconSquare: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(LinearGradient(colors: kind == .timingBar ? [gamesHex(0x4B3274), gamesHex(0x8A4F74)] : [gamesHex(0x1F4A63), gamesHex(0x3C8A6C)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(LinearGradient(colors: Self.backdrop(kind), startPoint: .topLeading, endPoint: .bottomTrailing))
             switch kind {
             case .timingBar:
                 Image(systemName: "timer")
@@ -368,14 +413,31 @@ private struct GamesGameIconSquare: View {
                     .foregroundStyle(Color.white)
             case .flappy:
                 FlappyAingArt(size: 24)
-            // 모바일 세션이 여기를 채운다(폰 미도달 — 위 타일 그림 주석). 바탕 그라디언트도 아직 플래피 쪽으로
-            // 떨어지는데, 그 삼항도 같이 고칠 자리다.
             case .tetris:
-                Color.clear
+                // 타일 그림과 같은 두 색(I 하늘 · O 노랑)으로 작은 조각 하나. 기호(`square.grid.2x2.fill`)를 쓰면
+                // 30pt 에서 오목 입구(3×3 격자)와 실루엣이 겹친다.
+                HStack(spacing: 1.5) {
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(TetrisPalette.color(.i))
+                        .frame(width: 5, height: 14)
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(TetrisPalette.color(.o))
+                        .frame(width: 10, height: 10)
+                        .offset(y: 2)
+                }
             }
         }
         .frame(width: 30, height: 30)
         .accessibilityHidden(true)
+    }
+
+    /// 아이콘 바탕 — 게임마다 자기 타일의 무대 색이다. 예전에는 삼항 하나라 테트리스가 플래피 색으로 떨어졌다.
+    private static func backdrop(_ kind: MiniGameKind) -> [Color] {
+        switch kind {
+        case .timingBar: return [gamesHex(0x4B3274), gamesHex(0x8A4F74)]
+        case .flappy: return [gamesHex(0x1F4A63), gamesHex(0x3C8A6C)]
+        case .tetris: return [gamesHex(0x24204E), gamesHex(0x3A2A5E)]
+        }
     }
 }
 

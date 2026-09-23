@@ -298,10 +298,27 @@ func tetrisEngineIsReachableFromTheSourceSweep() throws {
     let swept = try v0338SweptSources()
     #expect(swept["TetrisGame.swift"] != nil,
             "Sources/check 훑기에 TetrisGame.swift 가 안 들어온다 — 코어 합치기가 끊겼다")
-    // 쪼갠 파일 표에는 **아직** 없다(맥 잎 뷰가 없어서다). 화면 단계가 Sources/check/MiniGameTetris.swift 를 만들면
-    // CheckCoreSourceLayout.splitParts 에 짝을 더해야 한다 — 안 그러면 두 조각을 반쪽만 읽게 된다.
-    #expect(CheckCoreSourceLayout.splitParts["MiniGameTetris.swift"] == nil,
-            "맥 잎 뷰가 생겼다면 이 단언을 지우고 splitParts 에 짝을 더해라")
+}
+
+@Test("맥 잎 뷰 ↔ 코어 배치는 쪼갠 파일 **한 쌍**으로 등록돼 있다(반쪽 읽기 금지)")
+func theTetrisViewAndItsLayoutAreRegisteredAsOneSplitFile() throws {
+    // v0.3.38 폰 단계에서 TetrisLayout·TetrisPalette 가 코어로 갔다. 짝을 등록하지 않으면 이름 하나로 읽는 자리가
+    // **맥 조각만** 집어 "이 파일에 X 가 없다"류 부정 단언이 코어 조각의 위반을 조용히 통과시킨다.
+    // (이전 단계에서는 여기가 `splitParts[…] == nil` 이었고, 잎 뷰가 생기는 순간 빨개지는 트립와이어였다.)
+    let joined = v0338Stripped(try CheckCoreSourceLayout.joinedSplitSource("MiniGameTetris.swift"))
+    // 맥 조각 — 잎 뷰와 굳은 키 그물은 화면 코드라 코어로 가지 않았다.
+    #expect(joined.contains("struct TetrisGameView"), "맥 조각(잎 뷰)을 못 읽었다")
+    #expect(joined.contains("enum TetrisKeyWatchdog"), "맥 조각(굳은 키 그물)을 못 읽었다")
+    // 코어 조각 — 등록이 끊기면 joinedSplitSource 가 맥 파일 하나로 되돌아가 이 둘이 사라진다.
+    #expect(joined.contains("package enum TetrisLayout"),
+            "코어 조각을 못 읽었다 — CheckCoreSourceLayout.splitParts 등록이 끊겼다")
+    #expect(joined.contains("package enum TetrisPalette"),
+            "코어 조각을 못 읽었다 — CheckCoreSourceLayout.splitParts 등록이 끊겼다")
+    // 배치 표는 **한 벌**이다. 맥 쪽에 다시 생기면 이어 읽은 소스에 두 번 나온다(두 벌이 되면 언젠가 갈린다).
+    #expect(joined.components(separatedBy: "enum TetrisLayout {").count == 2,
+            "배치 표가 두 벌이다 — 맥 파일에 다시 생겼다")
+    #expect(joined.components(separatedBy: "enum TetrisPalette {").count == 2,
+            "조각 색 표가 두 벌이다 — 맥 파일에 다시 생겼다")
 }
 
 @Test("테트리스 엔진은 벽시계·프레임 리터럴을 쓰지 않는다 — 훑기가 실제로 그 파일을 본다는 증거")
@@ -331,4 +348,40 @@ func macPanelWiresTheThirdChipAndLeavesTheCanvasEmpty() throws {
     // 빨개져 "여기도 바꿔라"고 말했다 — 그 트립와이어가 제 일을 했다). 이제는 **붙어 있음**을 못 박는다.
     #expect(panel.contains("TetrisGameView(host: host, input: input)"),
             "테트리스 캔버스가 다시 빈 자리로 돌아갔다")
+}
+
+// MARK: - 라운드 토큰 재사용 나이는 게임별이다
+
+// `WorkTimerStore` 는 MainActor 라 그 상수를 읽으려면 이 테스트도 MainActor 여야 한다.
+@MainActor
+@Test("토큰 재사용 나이 — 테트리스만 12분(판이 길다). 기존 두 게임의 20분은 안 움직인다")
+func theRoundTokenReuseAgeIsPerGame() throws {
+    #expect(MiniGameKind.tetris.roundTokenReuseSeconds == 12 * 60)
+    #expect(MiniGameKind.timingBar.roundTokenReuseSeconds == 20 * 60, "기존 게임의 값이 움직였다")
+    #expect(MiniGameKind.flappy.roundTokenReuseSeconds == 20 * 60, "기존 게임의 값이 움직였다")
+
+    // 검산: 여유 = 서버 TTL(30분) − 재사용 나이 − 최장 판. 테트리스 시뮬 최장 판은 8.7분이다.
+    let ttl: TimeInterval = 30 * 60
+    let longestTetrisRound: TimeInterval = 8.7 * 60
+    #expect(ttl - MiniGameKind.tetris.roundTokenReuseSeconds - longestTetrisRound > 8 * 60,
+            "테트리스 여유가 8분 미만이다 — 늘어진 판이 통째로 token_expired 로 거절된다(클램프가 아니라 거절이다)")
+    // ★ 기준선이 다르다: 20분 그대로였다면 여유가 1.3분뿐이라, 값을 가를 이유가 실제로 있었다.
+    #expect(ttl - 20 * 60 - longestTetrisRound < 2 * 60,
+            "20분이어도 여유가 넉넉하다 — 게임별로 가른 근거가 사라졌다")
+
+    // 기존 두 상수는 **지우지 않았다**(옛 테스트가 그 이름을 읽는다). 값은 두 게임의 나이를 가리킨다.
+    #expect(WorkTimerStore.miniGameTokenRefreshSeconds == MiniGameKind.flappy.roundTokenReuseSeconds)
+
+    // 호출부 둘이 **게임별 표**를 읽는가. 하나라도 옛 상수를 읽으면 테트리스가 20분 토큰으로 판을 돈다.
+    let mac = v0338Stripped(try #require(try v0338SweptSources()["WorkTimerStoreMiniGame.swift"]))
+    #expect(mac.contains("Date().timeIntervalSince(issued) < kind.roundTokenReuseSeconds"),
+            "맥 게이트가 게임별 나이를 안 읽는다")
+    #expect(!mac.contains("timeIntervalSince(issued) < Self.miniGameTokenRefreshSeconds"),
+            "맥 게이트에 옛 상수가 남아 있다")
+    // 폰 게이트는 CheckMobileKit 이라 이 타깃이 링크하지 않는다 — 소스로 본다.
+    let hub = try v0338MobileSource("Sources/CheckMobileKit/Games/GamesMiniGameHub.swift")
+    #expect(hub.contains("timeIntervalSince(issued) < kind.roundTokenReuseSeconds"),
+            "폰 게이트가 게임별 나이를 안 읽는다")
+    #expect(!hub.contains("timeIntervalSince(issued) < Self.tokenRefreshSeconds"),
+            "폰 게이트에 옛 상수가 남아 있다")
 }

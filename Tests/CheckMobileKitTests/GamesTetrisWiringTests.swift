@@ -590,6 +590,93 @@ import Testing
         await harness.tearDown()
     }
 
+    // ── 인편을 푸는 방아쇠 **둘을 하나씩 떼어** 잰다 ────────────────────────────────────────────
+    //
+    // 왜 위 테스트만으로는 부족한가(2026-09-23 뮤테이션 실증): `beginningARoundPushesTheStalePendingOut` 은
+    // `openScreen(.tetris)` 와 `second.tap()` 을 **연달아** 하므로 두 방아쇠가 한꺼번에 돈다. 그래서 하나만
+    // 지우면 남은 쪽이 대신 밀어내 **초록으로 통과한다** — `openScreen` 쪽을 지워도 초록, `beginRound` 쪽을
+    // 지워도 초록, **둘 다** 지워야 비로소 빨개졌다. "둘 다 지워야 빨개진다"는 각각이 무방비라는 뜻이고,
+    // 나중에 한쪽을 '중복이네' 하고 지우는 사람에게 이 스위트는 아무 말도 안 해 준다.
+    //
+    // 떼어 재는 방법은 허브의 두 사실에 기댄다:
+    //  · `openScreen` 은 **이미 열려 있으면 조기 반환**한다(`activeKind == kind, controller != nil`) —
+    //    그래서 화면을 연 채로 판을 끝내면 그쪽 방아쇠는 두 번 다시 안 돈다.
+    //  · `appDidEnterBackground` 는 판만 끝내고 **화면은 닫지 않는다**(`closeScreen` 과 다르다).
+    // 두 사실 중 하나라도 바뀌면 아래 둘은 '떼어 재는' 힘을 잃는다 — 그때는 이 주석부터 고쳐라.
+
+    @Test("인편 방아쇠 ①: 화면을 여는 것만으로 밀려난다 — 탭이 없어도(beginRound 가 못 도와준다)")
+    func openingTheScreenAlonePushesTheStalePendingOut() async throws {
+        let harness = GamesHarness(label: "tetris-flush-open")
+        configure(harness)
+        let tokens = gamesServeRoundTokens(harness, prefix: "tok-fo")
+        let online = BaseLockedBox(false)
+        harness.server.setDefault("minigame_submit_score") { _ in
+            online.get() ? .json(#"{"status":"ok","best_score":9,"plays":1,"improved":true}"#) : .networkFailure()
+        }
+        await harness.signIn()
+        harness.hub.openScreen(.tetris)
+        #expect(await waits.wait { harness.hub.roundToken == "tok-fo-1" })
+        let first = try #require(harness.hub.controller)
+        first.tap()
+        first.softDropOneCell()
+        // 뒤로가기 — 화면이 닫히므로(`activeKind = nil`) 다음 `openScreen` 은 조기 반환하지 않는다.
+        harness.hub.closeScreen(.tetris)
+        #expect(await waits.wait { harness.hub.pendingSubmit?.token == "tok-fo-1" })
+        await harness.barrier()
+        #expect(tokens.get() == ["tok-fo-1"], "인편이 살아 있는데 새 토큰이 나갔다")
+
+        // 연결이 돌아왔고, 사람이 화면만 다시 열었다. **탭하지 않는다** — 그래서 `beginRound` 는 아예 안 돈다.
+        // 여기서 인편이 안 풀리면 `openScreen` 의 방아쇠가 없는 것이다.
+        online.mutate { $0 = true }
+        harness.hub.openScreen(.tetris)
+        #expect(await waits.wait { harness.hub.pendingSubmit == nil },
+                "화면을 열었는데 앞 인편을 안 밀어냈다 — 탭 전까지 이 화면은 토큰이 없다")
+        #expect(await waits.wait { harness.hub.roundToken == "tok-fo-2" },
+                "인편이 비워졌는데 새 토큰을 안 받았다: \(tokens.get())")
+        let sent = harness.server.requests("minigame_submit_score").map(\.bodyText)
+        #expect(sent.contains { $0.contains(#""p_token":"tok-fo-1""#) }, "앞 판이 어떤 토큰으로도 안 나갔다")
+        #expect(harness.violations.isEmpty, "\(harness.violations)")
+        await harness.tearDown()
+    }
+
+    @Test("인편 방아쇠 ②: 판을 시작하는 것만으로 밀려난다 — 화면은 연 채라 openScreen 이 못 도와준다")
+    func beginningARoundAlonePushesTheStalePendingOut() async throws {
+        let harness = GamesHarness(label: "tetris-flush-begin")
+        configure(harness)
+        let tokens = gamesServeRoundTokens(harness, prefix: "tok-fb")
+        let online = BaseLockedBox(false)
+        harness.server.setDefault("minigame_submit_score") { _ in
+            online.get() ? .json(#"{"status":"ok","best_score":9,"plays":1,"improved":true}"#) : .networkFailure()
+        }
+        await harness.signIn()
+        harness.hub.openScreen(.tetris)
+        #expect(await waits.wait { harness.hub.roundToken == "tok-fb-1" })
+        let controller = try #require(harness.hub.controller)
+        controller.tap()
+        controller.softDropOneCell()
+        // 앱이 background 로 간다 — 판은 확정되지만 **화면은 그대로 열려 있다**(activeKind·controller 유지).
+        harness.hub.appDidEnterBackground()
+        #expect(await waits.wait { harness.hub.pendingSubmit?.token == "tok-fb-1" })
+        await harness.barrier()
+        #expect(tokens.get() == ["tok-fb-1"], "인편이 살아 있는데 새 토큰이 나갔다")
+        #expect(harness.hub.activeKind == .tetris, "background 가 화면을 닫았다 — 이 테스트의 전제가 깨졌다")
+
+        // 돌아와서 **같은 화면에서** 다음 판을 시작한다. `openScreen` 은 이미 열려 있어 조기 반환하므로
+        // 그쪽 방아쇠는 돌 수가 없다. 여기서 인편이 안 풀리면 `beginRound` 의 방아쇠가 없는 것이다.
+        online.mutate { $0 = true }
+        harness.hub.openScreen(.tetris)          // 조기 반환 — 같은 구동기가 그대로 남는다.
+        #expect(harness.hub.controller === controller, "openScreen 이 조기 반환하지 않았다 — 전제가 깨졌다")
+        controller.tap()                          // .result → 새 판 → onStarted → beginRound
+        #expect(await waits.wait { harness.hub.pendingSubmit == nil },
+                "판이 시작됐는데 앞 인편을 안 밀어냈다 — 이 판은 끝까지 토큰이 없다")
+        #expect(await waits.wait { harness.hub.roundToken == "tok-fb-2" },
+                "인편이 비워졌는데 새 토큰을 안 받았다: \(tokens.get())")
+        let sent = harness.server.requests("minigame_submit_score").map(\.bodyText)
+        #expect(sent.contains { $0.contains(#""p_token":"tok-fb-1""#) }, "앞 판이 어떤 토큰으로도 안 나갔다")
+        #expect(harness.violations.isEmpty, "\(harness.violations)")
+        await harness.tearDown()
+    }
+
     @Test("토큰이 죽은 거절은 '다시 해 주세요'로 말하지 않는다 — 그 판은 어떤 재시도로도 안 올라간다")
     func aDeadTokenDoesNotPromiseRecovery() async throws {
         let harness = GamesHarness(label: "tetris-dead")

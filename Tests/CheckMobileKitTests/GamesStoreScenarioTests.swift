@@ -43,7 +43,12 @@ import Testing
         #expect(await baseWaitUntil { harness.hub.boards[.flappy]?.loaded == true })
         #expect(harness.hub.myRank(.flappy) == 2)
         #expect(harness.hub.best(for: .flappy) == 40, "순위표의 내 행이 로컬 최고를 올린다")
-        #expect(harness.server.requests("minigame_yesterday_winner").count == 1)
+        // ⚠️ `loaded` 는 어제 1등 왕복보다 **먼저** 선다(`loadBoard` 가 순위를 넣고 `loaded = true` 를 세운 **뒤에**
+        //    어제 1등을 await 한다). 그래서 위 대기가 깨는 순간 이 요청은 아직 안 나갔을 수 있다 —
+        //    바로 `== 1` 을 재면 포화에서 드물게 빨개진다(실측 1회). 나간 것을 기다린 뒤에 **개수**를 잰다.
+        #expect(await baseWaitUntil { harness.server.requests("minigame_yesterday_winner").count >= 1 },
+                "어제 1등 조회가 안 나갔다")
+        #expect(harness.server.requests("minigame_yesterday_winner").count == 1, "어제 1등을 두 번 읽었다")
 
         let controller = try #require(harness.hub.controller)
         playFlappyToResult(controller, from: harness.clock.now)
@@ -117,7 +122,7 @@ import Testing
 
         harness.model.sceneDidEnterBackground()
         #expect(!controller.isPlaying)
-        #expect(harness.hub.submitNotice == GamesMiniGameText.endedInBackground)
+        #expect(harness.hub.submitNotice == GamesMiniGameText.endedInBackground(.flappy))
         gamesDrive(controller, from: harness.clock.now.addingTimeInterval(2), frames: 300)
         await harness.barrier()
         #expect(harness.server.requests("minigame_submit_score").isEmpty, "background 로 끝난 판을 제출했다")

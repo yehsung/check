@@ -101,8 +101,21 @@ package enum GamesMiniGameText {
     package static let submitFailedConnection = "점수를 못 올렸어요 — 연결을 확인하고 다시 해 주세요"
     /// 서버 거절 — 맥 `performSubmitMiniGameScore` 와 같은 문장. status 이름·need_seconds 는 화면에 싣지 않는다.
     package static let submitRefused = "점수를 못 올렸어요"
-    /// 앱이 background 로 가서 판을 끝냈다(폰 전용 — 제출하지 않는다, SPEC-ios §3.5).
-    package static let endedInBackground = "앱을 나가서 이번 판은 기록하지 않았어요"
+    /// 토큰이 죽어 **그 판은 영영 못 올리는** 거절(`no_token`·`token_expired`).
+    ///
+    /// `submitFailedConnection` 과 **일부러 문장을 가른다**: "다시 해 주세요"는 복구된다는 뜻인데 토큰이 죽었으면
+    /// 이번 판은 어떤 재시도로도 안 올라간다. 그걸 "다시 해 주세요"로 그리면 사용자는 없는 복구를 기다린다.
+    package static let submitTokenDead = "이번 판은 순위에 못 올렸어요 — 다음 판부터 다시 올라가요"
+
+    /// 앱이 background 로 가서 판을 끝냈다(폰 전용 — SPEC-ios §3.5). **게임마다 말이 다르다**:
+    /// 기존 두 게임은 점수를 버리고, 테트리스는 여기까지의 점수를 **확정해 올린다**(`GamesPlayController.endRound()`).
+    /// 테트리스에 "기록하지 않았어요"를 쓰면 그건 **거짓말**이다 — 점수는 이미 나갔다.
+    package static func endedInBackground(_ kind: MiniGameKind) -> String {
+        switch kind {
+        case .timingBar, .flappy: return "앱을 나가서 이번 판은 기록하지 않았어요"
+        case .tetris: return "앱을 나가서 이번 판을 여기까지 기록했어요"
+        }
+    }
     /// 공개를 끈 사람(맥 설정 문구 "끄면 내 최고기록이 순위표에 안 보이고 올라가지도 않아요." 와 같은 뜻).
     package static let privateNotice = "미니게임 순위 공개가 꺼져 있어 점수가 올라가지 않아요"
 
@@ -116,9 +129,12 @@ package enum GamesMiniGameText {
         switch kind {
         case .timingBar: return "마커가 밝은 구간에 오면 탭 · 10라운드"
         case .flappy: return "탭해서 점프 · 기둥 사이를 지나갈수록 +1"
-        // 폰에는 아직 테트리스가 **보이지 않는다**(`MiniGameKind.phoneCases`) — 이 줄은 컴파일을 위해서만 있다.
-        // 모바일 세션이 여기를 채운다: 끌기·탭 회전·홀드 버튼이 정해지면 그 조작 동사로 쓴다.
-        case .tetris: return kind.howToPlay
+        // 테트리스만 두 줄이다. 규칙 줄은 **코어 한 벌**(`kind.howToPlay`)을 그대로 쓰고, 조작 줄만 폰 것이다.
+        //
+        // ⚠️ 조작 줄에 **"탭해서 회전"이 반드시 들어가야 한다.** 폰에서 시계 회전은 캔버스 탭이고(버튼은
+        // 반시계다) 그 사실을 말하는 자리가 시작 카드뿐이라, 빼면 아무도 시계 회전을 못 찾는다.
+        // 홀드·즉시 내리기는 글자가 붙은 진짜 버튼이라 여기서는 어디에 있는지만 가리킨다.
+        case .tetris: return kind.howToPlay + "\n끌어서 이동 · 탭해서 회전 · 버튼으로 홀드·즉시 내리기"
         }
     }
 
@@ -142,9 +158,40 @@ package enum GamesMiniGameText {
     /// 순위 행 점수(자리수 구분 없음).
     package static func score(_ value: Int) -> String { String(value) + "점" }
 
-    /// 캔버스 보이스오버.
+    /// 캔버스 보이스오버. 테트리스만 조작이 다르다(탭 = 시계 회전 · 이동은 액션 · 나머지는 진짜 버튼).
     package static func canvasAccessibility(_ kind: MiniGameKind) -> String {
-        "\(kind.title) 게임 화면 — 탭해서 조작"
+        switch kind {
+        case .timingBar, .flappy: return "\(kind.title) 게임 화면 — 탭해서 조작"
+        case .tetris: return "\(kind.title) 게임 화면 — 탭해서 회전 · 이동은 액션으로"
+        }
+    }
+
+    // MARK: 테트리스 조작(폰에서 처음 쓰는 줄)
+
+    /// 버튼 줄 — 아이콘 아래 한 줄. 회전은 **방향을 나눈다**: 캔버스 탭이 시계, 버튼이 반시계다.
+    /// 버튼까지 시계면 캔버스 탭과 완전히 겹쳐 자리 하나를 버리고 반시계가 폰에서 사라진다(설계 G).
+    package static let tetrisHold = "홀드"
+    /// 홀드 소진(조각당 1회) — 보이스오버 값. 버튼을 비활성으로 만들지 않으므로 목록에서 사라지지 않고 이 값만 붙는다.
+    package static let tetrisHoldSpent = "이미 썼어요"
+    package static let tetrisRotateCounterClockwise = "반시계"
+    package static let tetrisHardDrop = "즉시 내리기"
+
+    /// 보이스오버 이동 액션. **버튼이 없는 조작만** 여기 둔다 — 홀드·반시계·즉시 내리기는 이미 진짜 버튼이라
+    /// 액션으로 또 내면 같은 동작이 목록에 두 번 선다.
+    package static let tetrisMoveLeft = "왼쪽 한 칸"
+    package static let tetrisMoveRight = "오른쪽 한 칸"
+    package static let tetrisSoftDrop = "한 칸 내리기"
+
+    /// 이동 액션 뒤 알림. 조각 자리는 **너무 빨리 바뀌어** `accessibilityValue` 에 둘 수 없다
+    /// (L1 0.355초/칸 · L15 0.00082초/칸 — 값에 넣으면 보이스오버가 자기 말을 끝없이 끊는다).
+    package static func tetrisColumnAnnouncement(_ column: Int) -> String { "\(column)열" }
+    package static func tetrisDropAnnouncement(moved: Bool) -> String {
+        moved ? "한 칸 내려갔어요" : "더 못 내려가요"
+    }
+
+    /// 캔버스 `accessibilityValue`(테트리스) — **느린 값만**이다. 조각·열·행을 넣으면 위 알림과 같은 이유로 무너진다.
+    package static func tetrisValue(score: Int, level: Int, lines: Int) -> String {
+        "\(score)점, 레벨 \(level), \(lines)줄"
     }
 }
 

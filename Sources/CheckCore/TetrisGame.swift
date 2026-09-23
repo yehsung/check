@@ -675,6 +675,37 @@ package struct TetrisGame: Equatable, Sendable {
         fallCountdown = min(fallCountdown, fallInterval)
     }
 
+    /// 소프트드롭 **한 칸**(v0.3.38 폰). 손가락을 한 칸만큼 아래로 끌었을 때 그 걸음 하나를 여기서 준다.
+    ///
+    /// ── 왜 눌림(`setSoftDropHeld`)으로 못 하는가 ──────────────────────────────────────────
+    /// 폰 제스처는 "여기서 저기까지 끌었다"라는 **거리**를 주지, 키처럼 눌린 시간을 주지 않는다. 눌림으로 흉내 내는 길
+    /// 셋을 전부 기각했다: ① 끌기 동안 held 를 유지하면 L1 에서 20행이 0.355초라 사실상 하드드롭이다.
+    /// ② 프레임 예산만큼 눌렀다 떼면 L5 이상에서 한 프레임이 3.6~23칸이라 과주행한다. ③ 합성 dt 로 `step` 을 부르면
+    /// ARE·줄소거의 강제 정지가 **벽시계 없이** 깎여 서버 시간하한을 위조하는 경로가 열린다.
+    ///
+    /// ── 계약 ─────────────────────────────────────────────────────────────────────────────
+    /// · 한 칸만 내려간다. 못 내려가면 **아무것도 안 한다** — 굳히지 않는다(굳히는 것은 락딜레이의 일이다).
+    /// · 칸당 1점. `fallOneCell` 은 `if softDropHeld` 일 때만 점수를 주므로 여기서 직접 줘야 한다.
+    ///   안 주면 폰만 소프트드롭 점수를 못 받는데 순위표는 맥과 **한 표**다.
+    /// · **접지 리셋 예산을 쓰지 않는다**(`registerPlacementAction()` 을 안 부른다). 중력은 접지 리셋을 안 주고,
+    ///   `fallOneCell` 이 그 함수를 안 부르는 것이 그 증거다. 부르면 폰에서만 리셋 예산이 칸마다 늘어나
+    ///   '리셋 바닥 2' 의 종료 보장이 무너진다.
+    /// · 끝에 `fallCountdown` 을 되감는다 — 안 그러면 손가락으로 내린 칸 바로 뒤에 중력 한 칸이 **공짜로** 따라온다.
+    @discardableResult
+    package mutating func softDropOneCell() -> Bool {
+        guard case .running = phase, let current = active else { return false }
+        var candidate = current
+        candidate.row += 1
+        guard fits(candidate) else { return false }
+        active = candidate
+        // 중력과 같은 뜻의 한 칸이다 — 회전 표시를 지운다(`fallOneCell` 과 같은 이유: 더 내려간 조각은 T-스핀이 아니다).
+        lastActionWasRotation = false
+        addScore(1)
+        noteNewLowestRow()
+        fallCountdown = fallInterval
+        return true
+    }
+
     /// 회전. 성공하면 접지 리셋을 한 번 쓴다(예산이 바닥나면 그 자리에서 굳는다 — `registerPlacementAction`).
     package mutating func rotate(clockwise: Bool) {
         guard case .running = phase, let current = active else { return }

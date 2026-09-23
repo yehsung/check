@@ -52,6 +52,21 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
         }
     }
 
+    /// 들고 있는 라운드 토큰을 **다시 써도 되는 나이**(초). 이 나이를 넘기면 새로 받는다.
+    ///
+    /// ⚠️ 게임별로 다른 이유(검산): 서버 토큰 TTL 은 30분이고, 제출은 `판 시작 = 토큰 발급` 이 아니라
+    /// **토큰 발급 → (재사용 나이) → 판 → 제출** 순서로 늦어진다. 그래서 여유 = TTL − 재사용 나이 − 최장 판 이다.
+    ///   · 타이밍 바·플래피: 한 판이 길어야 몇 분이라 20분이어도 여유가 넉넉하다(기존 값 그대로 — 안 움직인다).
+    ///   · 테트리스: 시뮬 최장 판이 **8.7분**이다. 20분이면 여유가 30 − 20 − 8.7 = 1.3분뿐이라, 조금만 늘어져도
+    ///     다 끝난 판이 통째로 `token_expired` 로 거절된다(클램프가 아니라 **거절**이다 — 그 판은 영영 못 올린다).
+    ///     12분이면 여유가 30 − 12 − 8.7 = 9.3분이다.
+    package var roundTokenReuseSeconds: TimeInterval {
+        switch self {
+        case .timingBar, .flappy: 20 * 60
+        case .tetris: 12 * 60
+        }
+    }
+
     /// 한 줄 규칙 설명(시작 오버레이).
     package var howToPlay: String {
         switch self {
@@ -84,8 +99,16 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
     /// 맥에서 고를 수 있는 게임 — 전부다. 맥 창은 셋을 다 그린다.
     package static let macCases: [MiniGameKind] = allCases
 
-    /// 폰에서 **보이는** 게임. 테트리스는 폰 화면·조작(끌기·탭 회전·홀드 버튼)이 아직 없어 목록에서 뺀다 —
-    /// 모바일 세션이 그 화면을 만들 때 여기에 `.tetris` 를 더하면 타일·순위 칩·요약 조회가 한꺼번에 따라온다.
+    /// 폰에서 **보이는** 게임. 테트리스는 아직 목록에서 뺀다.
+    ///
+    /// ⚠️ **플립은 한 줄이 아니다.** 여기에 `.tetris` 를 더하기 전에 두 가지가 같이 서야 한다:
+    ///   ① **서버 마이그레이션이 실서버에 올라가 있어야 한다.** 안 그러면 `minigame_start_round('tetris')` 가
+    ///      `invalid` 를 줘서 전원이 판을 돌리는데 **기록이 하나도 안 남는다.**
+    ///   ② **딥링크(`AingRoute.MiniGame`)를 같이 넓혀야 한다.** 지금은 `{timing, flappy}` 뿐이고 `GamesStore.routeStep`
+    ///      이 `game == .timing ? .timingBar : .flappy` 로 접는다 — 한쪽만 넓히면 테트리스 딥링크가
+    ///      **조용히 플래피로 오배달**된다.
+    ///
+    /// (폰 화면·조작 — 끌기 이동 · 탭 회전 · 홀드/즉시 내리기 버튼 — 이 붙어야 하는 것은 그다음 전제다.)
     ///
     /// `allCases` 를 없애지 않는 이유: 저장된 rawValue 복원(`WorkTimerStore.miniGameKind`)과 서버 응답 매핑은
     /// **전부**를 알아야 한다. 폰에서 보이지 않는 것과 폰이 값을 모르는 것은 다르다 — 모르면 옛 저장값이 기본값으로

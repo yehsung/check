@@ -18,7 +18,10 @@ extension WorkTimerStore {
 
     /// 토큰을 새로 받는 기준(초). 서버 TTL 30분보다 넉넉히 짧게 잡아, 만료된 토큰으로 제출해
     /// 판을 통째로 버리는 일이 없게 한다.
-    static let miniGameTokenRefreshSeconds: TimeInterval = 20 * 60
+    ///
+    /// ⚠️ v0.3.38 부터 **게임별**이다 — 판정은 `MiniGameKind.roundTokenReuseSeconds` 한 곳에서 나온다(테트리스는 12분).
+    /// 이 상수는 기존 두 게임의 값(20분)을 가리키는 별명으로 남긴다: 여기를 고쳐도 테트리스는 안 움직인다.
+    static let miniGameTokenRefreshSeconds: TimeInterval = MiniGameKind.flappy.roundTokenReuseSeconds
 
     /// 로컬 최고기록 키. **계정별**이다 — 같은 맥을 다른 계정이 쓰면 남의 최고를 물려받지 않게(로그아웃 리셋 대상이 아닌 이유).
     static func miniGameBestKey(userID: String?, kind: MiniGameKind) -> String {
@@ -141,7 +144,8 @@ extension WorkTimerStore {
     func hasUsableMiniGameToken(for kind: MiniGameKind) -> Bool {
         guard miniGameRoundToken != nil, miniGameRoundTokenKind == kind,
               let issued = miniGameRoundTokenAt else { return false }
-        return Date().timeIntervalSince(issued) < Self.miniGameTokenRefreshSeconds
+        // 나이 기준은 **게임별**이다(테트리스 판은 길어서 12분 — MiniGameKind.roundTokenReuseSeconds 의 검산).
+        return Date().timeIntervalSince(issued) < kind.roundTokenReuseSeconds
     }
 
     /// 토큰을 **미리** 받아 둔다. 게임 창을 열 때·게임을 바꿀 때·제출이 끝난 뒤에 부른다.

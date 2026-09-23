@@ -116,10 +116,9 @@ import Testing
 
     @Test("판 버리기(앱이 background): 진행 중이면 시작 전으로 돌아가고 끝났다고 알리지 않는다 · 진행 중이 아니면 아무것도 안 한다")
     func abandonEndsWithoutReporting() {
-        // 폰이 **실제로 여는** 게임만 돈다(`MiniGameKind.phoneCases`). 테트리스는 아직 폰 엔진이 없어
-        // 구동기가 "진행 중이 아니다"만 돌려주므로, 여기 넣으면 `#expect(controller.isPlaying)` 에서 죽는다.
-        // 모바일 세션이 `phoneCases` 에 `.tetris` 를 더하는 순간 아래 switch 의 `.tetris` 갈래가 빨개져
-        // 이 테스트를 채우게 만든다 — 목록에서 뺀 채로는 새 게임이 조용히 검증 밖으로 빠지지 않는다.
+        // 폰이 **실제로 여는** 게임만 돈다(`MiniGameKind.phoneCases`) — 목록에서 빠진 게임이 조용히 검증
+        // 밖으로 나가지 않게, 새 게임이 목록에 들어오면 아래 switch 가 그 자리에서 컴파일 에러를 낸다.
+        // (2026-09-23 노출 플립으로 테트리스가 들어왔고, 그때 이 트립와이어가 실제로 발화해 갈래를 채웠다.)
         for kind in MiniGameKind.phoneCases {
             let controller = GamesPlayController(kind: kind, seed: 99)
             var finished: [Int] = []
@@ -134,8 +133,9 @@ import Testing
             switch kind {
             case .timingBar: #expect(controller.timing.phase == .ready)
             case .flappy: #expect(controller.flappy.phase == .ready)
-            case .tetris:
-                Issue.record("테트리스가 phoneCases 에 들어왔다 — GamesPlayController 의 테트리스 갈래와 이 단언을 채워라")
+            // 테트리스에는 '무효'가 없다(`interrupt()` 는 **확정**이다) — 버리려면 새 판으로 갈아 끼운다.
+            // 그래서 플래피와 같은 모양이고, 여기서 `.ready` 를 보는 것이 곧 "갈아 끼웠다"의 증거다.
+            case .tetris: #expect(controller.tetris.phase == .ready)
             }
             gamesDrive(controller, from: start.addingTimeInterval(1), frames: 120)
             #expect(finished.isEmpty, "\(kind): 버린 판을 끝났다고 알렸다 → 제출된다")

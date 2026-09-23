@@ -176,13 +176,16 @@ func staticControlHintStaysInsideTheTwoLeafViews() throws {
 
 // MARK: - 플랫폼별 가용 목록
 
-@Test("macCases 는 전부 · phoneCases 는 테트리스를 뺀 둘 — allCases 는 저장·복원용으로 남는다")
+@Test("macCases 는 전부 · phoneCases 는 둘과 별개로 산다 — allCases 는 저장·복원용으로 남는다")
 func platformCaseListsAreSplit() {
     #expect(MiniGameKind.macCases == MiniGameKind.allCases)
-    #expect(MiniGameKind.phoneCases == [.timingBar, .flappy])
-    #expect(!MiniGameKind.phoneCases.contains(.tetris),
-            "폰에는 테트리스 조작(끌기·탭 회전·홀드 버튼)이 아직 없다 — 목록에 있으면 아무 일도 안 일어나는 화면이 열린다")
+    // 2026-09-23 노출 플립으로 폰도 셋이 됐다(서버 마이그레이션 확인 뒤). **지금 둘이 같다고 해서 합치지 마라** —
+    // 이 목록이 갈려 있는 것 자체가 장치다: 넷째 게임은 맥에 먼저 들어오고 폰 조작이 붙을 때까지 여기서 막힌다.
+    #expect(MiniGameKind.phoneCases == [.timingBar, .flappy, .tetris])
     #expect(Set(MiniGameKind.phoneCases).isSubset(of: Set(MiniGameKind.allCases)))
+    // 딥링크(`AingRoute.MiniGame`)를 같이 넓혔는지는 **여기서 못 잰다** — `checkTests` 는 `check`·`CheckCore` 만
+    // 의존하고 `AingRoute` 는 `CheckMobileShared` 에 있다(Package.swift). 그 짝은 폰 타깃이 잰다:
+    // `GamesTetrisWiringTests.theFlipIsOpen` 이 딥링크 문자열부터 화면 목적지까지 실제로 통과시켜 본다.
 }
 
 @Test("폰 화면은 allCases 를 돌지 않는다 — 타일 · 순위 칩 · 허브 요약 전부 phoneCases 다")

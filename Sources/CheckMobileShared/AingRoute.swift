@@ -34,13 +34,17 @@ public enum AingRoute: Hashable, Sendable {
         case league, tokens, minigame
     }
 
-    /// 딥링크가 여는 미니게임. **테트리스는 아직 없다**(v0.3.38 — 폰 노출 플립 전).
+    /// 딥링크가 여는 미니게임(`aingcheck://games/<rawValue>`).
     ///
-    /// ⚠️ 플립할 때는 **두 곳을 같이** 넓혀야 한다: 여기와 `MiniGameKind.phoneCases`.
-    /// 한쪽만 넓히면 `GamesStore.routeStep` 이 `game == .timing ? .timingBar : .flappy` 로 접어
-    /// **테트리스 딥링크가 조용히 플래피로 오배달**된다(값이 없으니 경고도 안 난다).
+    /// ⚠️ **이 열거와 `MiniGameKind.phoneCases` 는 언제나 같이 넓힌다.** 한쪽만 넓히면 `GamesStore.routeStep` 이
+    /// 모르는 값을 **조용히 다른 게임으로 오배달**한다 — 값이 없으니 컴파일 경고도 안 난다.
+    /// 예전에 그 접는 식이 `game == .timing ? .timingBar : .flappy` 였고, `tetris` 를 여기만 더했다면
+    /// 테트리스 딥링크가 전부 플래피를 열었을 것이다. 지금은 `routeStep` 이 **빠짐없는 switch** 라
+    /// 여기에 값을 더하면 거기가 컴파일 에러로 막는다 — 그 구조를 되돌리지 마라.
     public enum MiniGame: String, CaseIterable, Sendable {
         case timing, flappy
+        /// v0.3.38(2026-09-23 폰 노출과 같은 커밋).
+        case tetris
     }
 
     public static let scheme = "aingcheck"

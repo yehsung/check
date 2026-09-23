@@ -218,20 +218,26 @@ import Testing
         await harness.tearDown()
     }
 
-    @Test("첫 화면 카드: 두 게임 오늘 순위를 읽고 60초 안에는 다시 안 읽는다 · 로그아웃하면 전부 비운다")
+    @Test("첫 화면 카드: 폰에 보이는 게임 전부의 오늘 순위를 읽고 60초 안에는 다시 안 읽는다 · 로그아웃하면 전부 비운다")
     func hubSummariesThrottleAndReset() async {
+        // 조회 건수를 **숫자로 박지 않는다** — `MiniGameKind.phoneCases` 에서 끌어온다. 예전엔 2·4 를 박아 뒀는데,
+        // 게임이 셋이 된 2026-09-23 노출 플립에서 그대로 빨개졌다. 박아 두면 새 게임마다 이 테스트가 '틀린 게
+        // 아니라 낡아서' 빨개지고, 그때 사람이 숫자만 올리며 **무엇을 재던 테스트인지 잊는다.**
+        let games = MiniGameKind.phoneCases.count
         let harness = GamesHarness(label: "games-hub")
         configureMiniGame(harness)
         await harness.signIn()
         harness.games.hubDidAppear()
-        #expect(await baseWaitUntil { harness.hub.boards[.timingBar]?.loaded == true && harness.hub.boards[.flappy]?.loaded == true })
+        #expect(await baseWaitUntil {
+            MiniGameKind.phoneCases.allSatisfy { harness.hub.boards[$0]?.loaded == true }
+        }, "폰에 보이는 게임 중 오늘 순위를 안 읽은 것이 있다")
         #expect(harness.hub.myRank(.timingBar) == 2 && harness.hub.myTodayBest(.flappy) == 40)
         harness.games.hubDidAppear()
         await harness.barrier()
-        #expect(harness.server.requests("minigame_board").count == 2)
+        #expect(harness.server.requests("minigame_board").count == games, "60초 안인데 다시 읽었다")
         harness.clock.advance(61)
         harness.games.hubDidAppear()
-        #expect(await baseWaitUntil { harness.server.requests("minigame_board").count == 4 })
+        #expect(await baseWaitUntil { harness.server.requests("minigame_board").count == games * 2 })
 
         await harness.model.session.signOut()
         #expect(harness.hub.boards.isEmpty)
@@ -419,7 +425,11 @@ import Testing
                 #expect(await baseWaitUntil { model.games.miniGames.boards[.flappy]?.yesterdayWinner != nil })
             case "games":
                 model.games.hubDidAppear()
-                #expect(await baseWaitUntil { model.games.miniGames.myRank(.timingBar) != nil && model.games.miniGames.myRank(.flappy) != nil })
+                // 게임 목록에서 끌어온다 — 게임이 늘 때마다 여기에 이름을 하나씩 더하는 대신,
+                // 픽스처가 빠진 게임이 **그 자리에서** 드러나게 한다(아래 `missing` 검사와 짝이다).
+                #expect(await baseWaitUntil {
+                    MiniGameKind.phoneCases.allSatisfy { model.games.miniGames.myRank($0) != nil }
+                }, "데모 첫 화면에서 순위가 안 뜬 게임이 있다 — 픽스처가 빠졌다")
                 #expect(await baseWaitUntil { model.games.badgeCount >= 1 }, "데모 첫 화면에 받은 신청이 없다")
             default:
                 model.games.gomokuScreenDidAppear()

@@ -881,19 +881,36 @@ import Testing
         #expect(store.contains("miniGames.appDidEnterBackground()"))
     }
 
-    @Test("노출 플립은 아직이다 — phoneCases 와 딥링크를 **둘 다** 안 건드렸다")
-    func theFlipIsStillClosed() throws {
-        // 서버 마이그레이션이 실서버에 올라가기 전에 노출하면 `minigame_start_round('tetris')` 가 invalid 를 줘서
-        // 전원이 판을 돌리는데 기록이 하나도 안 남는다.
-        #expect(MiniGameKind.phoneCases == [.timingBar, .flappy])
-        // 한쪽만 넓히면 `routeStep` 이 `.timing 이 아니면 플래피`로 접어 테트리스 딥링크가 조용히 오배달된다.
-        #expect(AingRoute.MiniGame.allCases.map(\.rawValue) == ["timing", "flappy"])
+    @Test("노출 플립이 열렸다 — phoneCases 와 딥링크를 **둘 다** 넓혔고, 딥링크가 실제로 테트리스로 간다")
+    func theFlipIsOpen() throws {
+        // 2026-09-23. 서버 마이그레이션이 실서버에 올라가고 실호출로 확인된 뒤에 열었다
+        // (`minigame_start_round('tetris')` → ok). 그 전에 열었으면 전원이 판을 돌리는데 기록이 하나도 안 남는다.
+        #expect(MiniGameKind.phoneCases == [.timingBar, .flappy, .tetris])
+        #expect(AingRoute.MiniGame.allCases.map(\.rawValue) == ["timing", "flappy", "tetris"])
+
+        // ★ 여기가 이 테스트의 핵심이다. 위 둘은 '값이 있다'만 말하고, 오배달은 **값이 있는데 잘못 접힐 때** 난다.
+        //   그래서 딥링크 문자열부터 화면 목적지까지 **실제로 통과시켜** 본다 — 한쪽만 넓혔거나 접는 식이
+        //   되살아나면 여기서 플래피가 나온다(그게 예전 결함의 정확한 모양이었다).
+        let route = try #require(AingRoute(path: "games/tetris"), "테트리스 딥링크가 파싱되지 않는다")
+        #expect(route == .miniGame(.tetris))
+        #expect(AingRoute(url: route.url) == route, "URL 왕복이 안 맞는다")
+        let harness = GamesHarness(label: "tetris-flip")
+        let step = harness.games.routeStep(for: route)
+        #expect(step == .push(.miniGame(.tetris)),
+                "테트리스 딥링크가 \(String(describing: step)) 로 갔다 — 오배달이다")
+        // 대조: 기존 두 게임이 그대로인지(내가 접는 식을 고치면서 저쪽을 흔들지 않았는지).
+        #expect(harness.games.routeStep(for: .miniGame(.timing)) == .push(.miniGame(.timingBar)))
+        #expect(harness.games.routeStep(for: .miniGame(.flappy)) == .push(.miniGame(.flappy)))
+
+        // 접는 식이 **되살아나지 않았는지**. switch 라야 다음 게임에서 컴파일 에러로 막힌다.
         let store = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesStore.swift")
-        #expect(store.contains("game == .timing ? .timingBar : .flappy"), "대조: 접는 자리가 사라졌다(이 검사가 헛돈다)")
-        // 타일은 **그려 뒀다** — 플립 한 줄이면 켜지는 상태다(빈 타일이 남아 있으면 안 된다).
+        #expect(!store.contains("game == .timing ? .timingBar : .flappy"),
+                "접는 식이 되살아났다 — 넷째 게임이 조용히 플래피로 오배달된다")
+        #expect(store.contains("case .tetris: kind = .tetris"), "빠짐없는 switch 가 아니다")
+
         let tab = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesTab.swift")
         #expect(tab.contains("case .tetris: tetris(geo.size)"), "테트리스 타일 그림이 비어 있다")
-        #expect(tab.contains("LazyVGrid(columns: Self.tileColumns"), "타일이 아직 한 줄짜리 HStack 이다 — 셋이 되면 넘친다")
+        #expect(tab.contains("LazyVGrid(columns: Self.tileColumns"), "타일이 아직 한 줄짜리 HStack 이다 — 셋이 넘친다")
         #expect(tab.contains("MiniGameKind.phoneCases"), "타일이 폰 목록을 안 돈다")
     }
 }

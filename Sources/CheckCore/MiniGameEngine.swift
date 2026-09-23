@@ -104,16 +104,20 @@ package enum MiniGameKind: String, CaseIterable, Identifiable, Codable, Sendable
     /// ⚠️ **플립은 한 줄이 아니다.** 여기에 `.tetris` 를 더하기 전에 두 가지가 같이 서야 한다:
     ///   ① **서버 마이그레이션이 실서버에 올라가 있어야 한다.** 안 그러면 `minigame_start_round('tetris')` 가
     ///      `invalid` 를 줘서 전원이 판을 돌리는데 **기록이 하나도 안 남는다.**
-    ///   ② **딥링크(`AingRoute.MiniGame`)를 같이 넓혀야 한다.** 지금은 `{timing, flappy}` 뿐이고 `GamesStore.routeStep`
-    ///      이 `game == .timing ? .timingBar : .flappy` 로 접는다 — 한쪽만 넓히면 테트리스 딥링크가
-    ///      **조용히 플래피로 오배달**된다.
+    ///   ② **딥링크(`AingRoute.MiniGame`)를 같이 넓혀야 한다.** 한쪽만 넓히면 `GamesStore.routeStep` 이
+    ///      테트리스 딥링크를 **조용히 플래피로 오배달**한다.
+    ///   ③ 폰 화면·조작(끌기 이동 · 탭 회전 · 홀드/반시계/즉시 내리기 버튼)이 붙어 있어야 한다.
     ///
-    /// (폰 화면·조작 — 끌기 이동 · 탭 회전 · 홀드/즉시 내리기 버튼 — 이 붙어야 하는 것은 그다음 전제다.)
+    /// **셋 다 끝나서 2026-09-23 에 열었다.** ①은 사용자가 직접 `db push` 한 뒤 실서버 실호출로 확인했다
+    /// (`minigame_start_round('tetris')` → ok · `minigame_min_seconds('tetris', 10000)` → 0.19 —
+    /// **0 이 아닌 것**이 핵심 확인이었다. 0 이면 `else return 0` 가지로 떨어져 테트리스만 시간 하한이
+    /// 통째로 없는 채 열렸다는 뜻이다). ②·③은 이 커밋이 같이 냈다.
     ///
     /// `allCases` 를 없애지 않는 이유: 저장된 rawValue 복원(`WorkTimerStore.miniGameKind`)과 서버 응답 매핑은
     /// **전부**를 알아야 한다. 폰에서 보이지 않는 것과 폰이 값을 모르는 것은 다르다 — 모르면 옛 저장값이 기본값으로
     /// 조용히 접히고, 그건 사용자가 고른 것을 잃는 일이다.
-    package static let phoneCases: [MiniGameKind] = [.timingBar, .flappy]
+    /// (지금은 셋이 같지만 넷째 게임이 생기면 다시 갈린다 — 그때 이 자리가 다시 게이트가 된다.)
+    package static let phoneCases: [MiniGameKind] = [.timingBar, .flappy, .tetris]
 }
 
 /// 게임 논리 좌표계. 게임 규칙은 언제나 이 크기 안에서 계산하고, 뷰는 실제 캔버스 크기에 **비율 유지**로 맞춘다.

@@ -239,7 +239,17 @@ package final class GamesStore {
         case .games:
             return .popToRoot
         case .miniGame(let game):
-            return .push(.miniGame(game == .timing ? .timingBar : .flappy))
+            // ⚠️ **빠짐없는 switch 여야 한다.** 예전에는 `game == .timing ? .timingBar : .flappy` 였는데,
+            // 그러면 `AingRoute.MiniGame` 에 값이 하나 늘 때 **경고 없이 플래피로 오배달**된다(기본값 가지가
+            // 모르는 값을 삼킨다). switch 로 두면 그 순간 여기가 컴파일 에러로 막는다 —
+            // 저장소 메모 '열거값 확장엔 능력 협상'과 같은 자리다. `default:` 를 넣지 마라.
+            let kind: MiniGameKind
+            switch game {
+            case .timing: kind = .timingBar
+            case .flappy: kind = .flappy
+            case .tetris: kind = .tetris
+            }
+            return .push(.miniGame(kind))
         case .gomokuLobby, .gomokuMatch(matchID: nil):
             openGomoku(focusID: nil)
             return .push(.gomoku)

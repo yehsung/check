@@ -134,10 +134,21 @@ func bothGamesReachTheSingleTokenWiring() throws {
 
     // ⚠️ `#expect(code.contains(...))` 를 그대로 쓰면 실패할 때 **소스 전문**이 진단에 찍혀 읽을 수가 없다.
     //    Bool 로 먼저 접어 두면 실패 메시지가 내가 쓴 한 줄만 남는다.
-    let panelWiresStart = tkStripped(try #require(sources["MiniGamePanel.swift"]))
-        .contains("if playing { store.beginMiniGameRound(kind: kind) }")
-    #expect(panelWiresStart,
+    // ★ **한 줄짜리 모양에 묶지 않는다.** 예전에는 `if playing { store.beginMiniGameRound(kind: kind) }` 를
+    //   통째로 찾았는데, 그 블록에 줄이 하나 더 붙자(v0.3.38 정지 예산 초기화) 동작은 멀쩡한데 테스트만
+    //   빨개졌다. 재는 것은 "모양"이 아니라 **부르는 자리**다 — `onPlayingChanged` 안에서, `if playing` 가지와
+    //   `if !playing` 가지 **사이**에 호출이 있어야 한다(끝나는 가지에서 부르면 경과가 0 이라 전부 거절된다).
+    let panel = tkStripped(try #require(sources["MiniGamePanel.swift"]))
+    let changed = try #require(panel.range(of: "onPlayingChanged"))
+    let startsBranch = try #require(panel.range(of: "if playing {", range: changed.upperBound..<panel.endIndex))
+    let endsBranch = try #require(panel.range(of: "if !playing {", range: changed.upperBound..<panel.endIndex))
+    let call = try #require(panel.range(of: "store.beginMiniGameRound(kind: kind)",
+                                        range: changed.upperBound..<panel.endIndex))
+    #expect(startsBranch.upperBound < call.lowerBound && call.upperBound < endsBranch.lowerBound,
             "허브가 판 시작에서 토큰을 안 받는다 — 끝날 때 받으면 경과가 0 이라 서버가 전부 거절한다")
+    // 호출은 **한 번뿐**이어야 한다(두 가지에서 다 부르면 위 순서 단언이 통과하면서 끝에서도 받는다).
+    #expect(panel.components(separatedBy: "store.beginMiniGameRound(kind: kind)").count - 1 == 1,
+            "판 시작 토큰 요청이 여러 곳에 있다")
 
     for (game, source) in [
         ("MiniGameTimingBar", try CheckCoreSourceLayout.joinedSplitSource("MiniGameTimingBar.swift")),

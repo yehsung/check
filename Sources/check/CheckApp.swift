@@ -267,6 +267,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CheckSettingsWindowController.shared.show()
     }
 
+    /// 앱이 다시 활성화됐다(다른 앱에 있다가 돌아옴 · 게임 창을 클릭). 미니게임 제출 인편이 있으면 **같은 토큰으로**
+    /// 한 번 더 보낸다(v0.3.39) — 폰이 "앱이 다시 active 가 될 때 `retryPendingSubmitIfAny()`" 하는 자리와 같다.
+    /// 인편이 없으면 no-op 이라 활성화마다 비용이 없고, 같은 토큰이라 두 번 올라가지도 않는다(서버가 `token_used`).
+    func applicationDidBecomeActive(_ notification: Notification) {
+        store.retryMiniGamePendingSubmitIfAny()
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // 로그인 안 됨/키 없음/근무중 아님 → 지연할 이유가 없으므로 즉시 종료.
         // 흡수 세션(다른 맥이 연 세션)도 즉시 종료다: finishWorkBeforeQuit 이 같은 표식을 보고 즉시 반환하므로

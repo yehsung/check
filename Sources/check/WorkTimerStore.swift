@@ -605,8 +605,29 @@ final class WorkTimerStore {
     ///   **마지막에 발급된 토큰 하나만 살아 있다** — 옛 응답으로 덮으면 죽은 토큰을 들고 제출한다.
     ///   `sessionGeneration` 과 같은 관용구다(저쪽은 계정 전환, 이쪽은 판 전환).
     @ObservationIgnored var miniGameRoundGeneration = 0
+    /// 지금 왕복 중인 토큰 요청의 게임(없으면 nil). 선발급이 도는 중에 판이 시작되면 **또 요청하지 않는다** —
+    /// 또 보내면 서버가 started_at 을 새로 찍어 앞 요청이 벌어 둔 여유를 버리고, 앞 요청의 응답은 세대 가드에 버려진다.
+    ///
+    /// ★ 이게 없던 것이 2026-09-27 진단의 **뿌리 원인**이다. 창 열기·판 시작·제출 뒤 셋이 서로의 진행 중 요청을
+    ///   무효화해서, 짧은 판(플래피 즉사)을 연달아 하면 토큰이 영영 도착하지 않았다. 폰 `roundTokenInFlightKind` 와 같다.
+    @ObservationIgnored var miniGameRoundTokenInFlightKind: MiniGameKind?
+    /// **제출 인편**(v0.3.39) — 아직 서버가 받았다고 확인해 주지 않은 끝난 판들. 폰 `pendingSubmit` 의 맥판인데
+    /// 칸이 하나가 아니라 **대기열**이고(까닭은 `WorkTimerStoreMiniGame` 머리 주석), `defaults` 에 계정별로 영속한다
+    /// (맥 사용자는 앱을 자주 끄고 켠다 — 종료가 점수를 삼키면 안 된다). 관찰 대상이 아니다: 화면은 이 값을 안 그린다.
+    /// 읽고 쓰는 문은 `WorkTimerStoreMiniGame` 의 인편 절 하나다 — 다른 곳에서 직접 만지지 마라(영속과 어긋난다).
+    @ObservationIgnored var miniGamePendingSubmits: [MiniGamePendingSubmit] = []
+    /// 메모리의 인편이 **어느 계정 것인가**(nil = 아직 안 읽었거나 로그아웃). 계정이 바뀌면 그 계정의 키에서 다시 읽는다.
+    @ObservationIgnored var miniGamePendingSubmitsOwner: String?
+    /// 지금 제출 왕복이 떠 있는 게임들(인편 재시도가 같은 토큰을 두 번 동시에 보내지 않게 — 폰 `isSubmitting`).
+    @ObservationIgnored var miniGameSubmittingKinds: Set<MiniGameKind> = []
+    /// 실패 뒤 백오프 재시도 타이머(한 개 — 가장 먼저 돌아오는 인편에 맞춘다).
+    @ObservationIgnored var miniGamePendingRetryTask: Task<Void, Never>?
+    /// 백오프 간격(초). n번째 실패 뒤 n번째 값을 기다리고, 끝을 넘기면 마지막 값을 반복한다(TTL 안에서만).
+    /// 테스트가 줄여 잡는다 — 값 자체는 서버가 준 숫자로 계산하지 않는다(그걸 쓰는 순간 위조 보조 도구다).
+    @ObservationIgnored var miniGamePendingRetryDelays: [TimeInterval] = [2, 8, 30]
     /// 점수를 못 올렸을 때 사용자에게 보이는 한 줄. **조용히 버리지 않는다** — 삼키면
     /// "잘 놀았는데 순위표에 없다"가 되고 그건 재현도 신고도 안 된다(이 저장소의 규약).
+    /// 인편이 살아 있는 동안은 "못 올렸어요"가 아니라 **아직 올리는 중**이라는 문장이다(`MiniGameSubmitCopy.pending`).
     var miniGameSubmitNotice: String?
 
     // ── 소속 센터 (v0.3.13) ──
@@ -1868,6 +1889,10 @@ final class WorkTimerStore {
         } else {
             realtimeApply(.didWake, at: date)
         }
+        // 미니게임 제출 인편(v0.3.39). 잠들기 전에 서버가 받았다고 확인해 주지 않은 점수가 있으면 **같은 토큰으로** 다시 민다.
+        // 게이트 **뒤**에 있어도 게이트보다 먼저 서버를 두드리지 않는다 — 제출 본체가 `awaitWakeGate()` 를 기다린다.
+        // 아래 조기 리턴 가지들(sleepBeganAt nil / 유예 이내 / 흡수 세션)보다 앞이어야 하는 이유는 위 재연결과 같다.
+        retryMiniGamePendingSubmitIfAny()
         // 집중 모드 1단 만료(v0.2.51). 아래 조기 리턴 가지들 **앞**이어야 한다 — 켜 두고 퇴근한 뒤 덮개를 닫은 맥
         // (가장 흔한 만료 시점: 다음 날 아침)은 비근무라 첫 가드에서 곧바로 빠진다. 시각은 인자 date 가 아니라 clock() 이다
         // (켤 때 until 을 적은 시계와 같은 시계로 비교해야 한다). 네트워크가 아직 안 붙었으면 PATCH 가 실패하고 60초 뒤
@@ -3619,6 +3644,16 @@ extension WorkTimerStore {
         miniGameRoundTokenKind = nil
         miniGameRoundTokenAt = nil
         miniGameRoundGeneration += 1
+        // 세대를 올렸으니 떠 있던 요청의 응답은 버려지고 그 defer 는 깃발을 못 내린다 — 여기서 내린다(안 내리면 그 게임의
+        // 다음 요청이 "왕복 중"에 영영 막힌다).
+        miniGameRoundTokenInFlightKind = nil
+        // 인편은 **메모리에서만** 비운다. 영속본은 그 계정의 키에 그대로 남는다 — 같은 사람이 30분 안에 돌아오면
+        // 이어서 올린다(남의 계정으로는 키가 달라 안 나간다). 백오프 타이머도 거둔다(다음 사람의 세션으로 밀면 안 된다).
+        miniGamePendingSubmits = []
+        miniGamePendingSubmitsOwner = nil
+        miniGameSubmittingKinds = []
+        miniGamePendingRetryTask?.cancel()
+        miniGamePendingRetryTask = nil
         miniGameSubmitNotice = nil
         // 제보도 계정에 묶인다(v0.2.48). 남기면 다음 사람이 **앞 사람이 쓴 글**을 그대로 본다 —
         // 이 화면이 나르는 것은 순위 숫자가 아니라 사용자가 쓴 문장이라, 누수의 값이 다른 표면과 다르다.

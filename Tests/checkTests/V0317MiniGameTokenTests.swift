@@ -300,8 +300,12 @@ final class RoundRaceURLProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
+/// ⚠️ v0.3.39 에 두 번째 요청을 내는 **자리가 바뀌었다.** 예전에는 "판 A 끝 → 판 B 시작(같은 게임)"이 두 번째 요청을 냈는데,
+///    그 자리엔 이제 왕복 중 가드가 있어 같은 게임의 두 번째 `beginMiniGameRound` 는 요청을 **안 낸다**(그게 2026-09-27 진단의
+///    뿌리 원인 수리다 — `V0339MiniGameScoreLossTests`). 두 번째 요청이 정당하게 나가는 자리는 **게임 전환**이다 —
+///    `selectMiniGame` 은 세대를 올리고 새 게임의 토큰을 청한다. 재는 것은 그대로다: 늦게 온 옛 세대의 응답은 채택되지 않는다.
 @MainActor
-@Test("늦게 도착한 옛 판의 토큰이 지금 판의 토큰을 덮지 않는다")
+@Test("늦게 도착한 옛 게임의 토큰이 지금 게임의 토큰을 덮지 않는다")
 func aLateTokenFromAFinishedRoundNeverOverwritesTheCurrentOne() async {
     RoundRaceURLProtocol.reset(host: "v0317-round-race")
     let service = SupabaseWorkService(
@@ -315,8 +319,9 @@ func aLateTokenFromAFinishedRoundNeverOverwritesTheCurrentOne() async {
         defaults: tkDefaults()
     )
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: tkUserID)
+    store.miniGameKind = .flappy
 
-    // 판 A 시작 → 느린 요청이 날아간다.
+    // 플래피 판 시작 → 느린 요청 A 가 날아간다.
     store.beginMiniGameRound(kind: .flappy)
     // ⚠️ 고정 시간을 기다리면 부하에서 **도착 순서가 뒤집힌다**(스텁은 도착 순서로 지연을 정한다).
     //    프로토콜이 요청 A 를 실제로 받은 것을 확인하고 나서 B 를 낸다 — 그래야 "A 가 느리다"가 성립한다.
@@ -324,8 +329,8 @@ func aLateTokenFromAFinishedRoundNeverOverwritesTheCurrentOne() async {
         .filter({ $0.contains("minigame_start_round") }).isEmpty {
         try? await Task.sleep(for: .milliseconds(10))
     }
-    // 판 A 가 끝나고(플래피 즉사) 판 B 시작 → 빠른 요청. 서버에서는 이 순간 토큰 A 가 죽는다.
-    store.beginMiniGameRound(kind: .flappy)
+    // 응답 A 가 오기 전에 타이밍 바로 바꾼다 → 빠른 요청 B. 세대가 올라 A 는 이제 옛 세대다.
+    store.selectMiniGame(.timingBar)
 
     // 두 응답이 모두 도착할 때까지(느린 쪽 0.30s). 부하를 감안해 넉넉히 기다린다.
     for _ in 0..<300 where RoundRaceURLProtocol.paths(host: "v0317-round-race")
@@ -335,7 +340,8 @@ func aLateTokenFromAFinishedRoundNeverOverwritesTheCurrentOne() async {
     try? await Task.sleep(for: .milliseconds(600))
 
     #expect(store.miniGameRoundToken == "tok-B",
-            Comment(rawValue: "늦게 온 죽은 토큰이 지금 판의 것을 덮었다 — 들고 있는 값 \(store.miniGameRoundToken ?? "nil")"))
+            Comment(rawValue: "늦게 온 옛 게임의 토큰이 지금 게임의 것을 덮었다 — 들고 있는 값 \(store.miniGameRoundToken ?? "nil")"))
+    #expect(store.miniGameRoundTokenKind == .timingBar, "토큰의 게임 꼬리표가 옛 게임이다")
 }
 
 
@@ -387,15 +393,51 @@ func aPrefetchedTokenSurvivesAnInstantRound() async {
     #expect(store.miniGameSubmitNotice == nil, "올라갔는데 실패 문구가 떴다")
 }
 
-/// 선발급이 **실제로 그 세 지점에서** 일어나는지. 행동 테스트는 한 경로만 보므로 소스로 못 박는다.
-@Test("창 열기·게임 전환·제출 뒤에 토큰을 미리 받는다")
+/// 선발급이 **실제로 그 조용한 순간들에서** 일어나는지. 행동 테스트는 한 경로만 보므로 소스로 못 박는다.
+///
+/// ★ **부르는 자리를 재지, 출현 횟수를 세지 않는다.** 예전 판은 `prefetchMiniGameRoundToken(kind:` 가 파일에 ≥5회 나오는지를
+///   셌는데, 그건 "조용한 순간마다 미리 받는다"는 계약이 아니라 **호출 개수**다 — v0.3.39 에 `too_fast` 뒤 선발급이 빠지자
+///   (그 요청은 아직 살아 있는 토큰을 서버에서 죽인다) 동작은 더 맞아졌는데 테스트만 빨개질 자리였고, 개수를 맞추려고
+///   호출을 남기면 그게 곧 결함이다. 그래서 **함수 본문별로** 확인한다: 창 열기 · 게임 전환 · 제출 뒤(성공/거절/네트워크 실패의
+///   꼬리). 그리고 판이 끝났는데 토큰이 없던 자리는 이제 선발급이 아니라 인편을 미는 길(`retryMiniGamePendingSubmitIfAny`)로
+///   토큰을 받는다 — 그 자리도 함께 못 박는다(빠지면 토큰을 기다리는 점수가 영영 안 나간다).
+@Test("창 열기·게임 전환·제출 뒤에 토큰을 미리 받고, 토큰 없이 끝난 판은 인편이 토큰을 받는다")
 func prefetchHappensAtTheThreeQuietMoments() throws {
     let code = tkStripped(try #require(tkAllSources()["WorkTimerStoreMiniGame.swift"]))
-    let count = code.components(separatedBy: "prefetchMiniGameRoundToken(kind:").count - 1
-    // 정의 1 + 호출 5(창 열기 · 게임 전환 · 제출 성공/거절 뒤 · 토큰 없음 · 네트워크 실패)
-    #expect(count >= 5, Comment(rawValue: "선발급 지점이 \(count)곳뿐이다 — 짧은 판이 다시 점수를 버린다"))
+    for (function, call) in [
+        ("openMiniGameWindow", "prefetchMiniGameRoundToken(kind: miniGameKind)"),
+        ("selectMiniGame", "prefetchMiniGameRoundToken(kind: kind)"),
+        ("performSubmitMiniGameScore", "prefetchMiniGameRoundToken(kind: kind)"),
+        ("recordMiniGameScore", "retryMiniGamePendingSubmitIfAny()"),
+    ] {
+        let body = try #require(tkFunctionBody(code, name: function), Comment(rawValue: "\(function) 본문을 못 찾았다"))
+        #expect(body.contains(call), Comment(rawValue: "\(function) 이 \(call) 를 부르지 않는다 — 짧은 판이 다시 점수를 버린다"))
+    }
+    // 제출 뒤 선발급은 성공·거절·네트워크 실패 **어느 꼬리에서도** 나가야 한다(do 와 catch 양쪽) — 한쪽만 있으면 그 갈래 뒤의
+    // 짧은 판은 판 시작에 받아야 하고, 그러면 즉사 판을 놓친다.
+    let submit = try #require(tkFunctionBody(code, name: "performSubmitMiniGameScore"))
+    #expect(submit.components(separatedBy: "prefetchMiniGameRoundToken(kind: kind)").count - 1 >= 2,
+            "제출의 do/catch 두 꼬리 가운데 한쪽이 선발급을 안 한다")
     let opensWindow = code.contains("prefetchMiniGameRoundToken(kind: miniGameKind) CheckMiniGameWindowController.shared.show()")
-    #expect(opensWindow, "창을 열 때 미리 받지 않는다")
+    #expect(opensWindow, "창을 열 때 미리 받지 않는다(창을 띄우기 직전이어야 한다)")
+}
+
+/// `func <name>(` 뒤 첫 중괄호부터 짝이 맞는 닫힘까지. `tkStripped` 를 거친(공백이 접힌) 소스에 쓴다.
+private func tkFunctionBody(_ source: String, name: String) -> String? {
+    guard let declaration = source.range(of: "func \(name)("),
+          let open = source.range(of: "{", range: declaration.upperBound..<source.endIndex) else { return nil }
+    var depth = 0
+    var index = open.lowerBound
+    while index < source.endIndex {
+        let character = source[index]
+        if character == "{" { depth += 1 }
+        if character == "}" {
+            depth -= 1
+            if depth == 0 { return String(source[open.upperBound..<index]) }
+        }
+        index = source.index(after: index)
+    }
+    return nil
 }
 
 

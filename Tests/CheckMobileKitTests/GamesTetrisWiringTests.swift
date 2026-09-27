@@ -699,6 +699,89 @@ import Testing
         await harness.tearDown()
     }
 
+    @Test("`too_fast` 는 거절이 아니다 — 인편을 남기고 **같은 토큰으로** 되보내 그 점수를 올린다")
+    func tooFastIsRetriedWithTheSameTokenInsteadOfBeingDiscarded() async throws {
+        // 서버는 `too_fast` 를 **`used_at` 을 찍기 전에** 돌려준다(20260914010000:305-312 반환 · :314 소모).
+        // 그래서 토큰은 미사용으로 살아 있고 `clock_timestamp() - started_at` 은 단조증가한다 — 조금 뒤
+        // 같은 토큰으로 보내면 같은 점수가 통과한다. terminal 로 두면 **올라갈 점수를 버린다.**
+        // 정직한 판이 여기 닿는 경로: 타이밍바의 여유가 0.1906초뿐이고(하한 3.6219 vs 실제 최소 3.8125),
+        // `beginRound` 는 쓸 만한 토큰이 없으면 판을 세우지 않으므로 토큰이 플레이 중에 생길 수 있다.
+        let harness = GamesHarness(label: "tetris-too-fast")
+        configure(harness)
+        harness.hub.sleep = { _ in }   // 눈먼 지연을 즉시 통과시킨다(지연 **값**은 이 테스트의 관심이 아니다).
+        harness.server.enqueue("minigame_submit_score") { _ in
+            .json(#"{"status":"too_fast","need_seconds":3.6219,"elapsed_seconds":3.5}"#)
+        }
+        harness.server.enqueue("minigame_submit_score") { _ in
+            .json(#"{"status":"ok","best_score":77,"plays":2,"improved":true}"#)
+        }
+        _ = gamesServeRoundTokens(harness, prefix: "tok-fast")
+        await harness.signIn()
+        harness.hub.openScreen(.tetris)
+        #expect(await waits.wait { harness.hub.roundToken == "tok-fast-1" })
+        let controller = try #require(harness.hub.controller)
+        controller.tap()
+        controller.softDropOneCell()
+        harness.hub.closeScreen(.tetris)
+
+        // 두 번 나간다 — 그리고 **두 번 다 같은 토큰**이어야 한다(새 토큰을 받으면 서버가 행을 갈아 끼워
+        // 되보낼 토큰이 죽는다 · `minigame_rounds_one_open`).
+        #expect(await waits.wait { harness.server.requests("minigame_submit_score").count == 2 })
+        await harness.barrier()
+        let bodies = harness.server.requests("minigame_submit_score").map(\.bodyText)
+        #expect(bodies.allSatisfy { $0.contains("tok-fast-1") },
+                "되보낼 때 토큰이 바뀌었다 — 그 판은 no_token 으로 죽는다: \(bodies)")
+        #expect(harness.hub.pendingSubmit == nil, "통과한 뒤에도 인편이 남았다")
+        #expect(harness.hub.localBest[.tetris] == 77, "되보낸 제출의 최고 점수가 반영되지 않았다")
+        // 기다리는 동안의 문구는 "못 올렸어요"가 아니다 — 곧 올라갈 점수를 못 올렸다고 말하면 거짓말이다.
+        #expect(harness.hub.submitNotice != GamesMiniGameText.submitRefused)
+        #expect(harness.violations.isEmpty)
+        await harness.tearDown()
+    }
+
+    @Test("되보낼 status 와 영영 못 올릴 status 는 **겹칠 수 없다** — 겹치면 앞선 갈래가 뒤를 조용히 삼킨다")
+    func retryableAndTerminalStatusesMustStayDisjoint() {
+        // `performSubmit` 은 재시도 갈래를 **거절 갈래보다 먼저** 본다. 그래서 어떤 status 가 두 집합에 다 들어
+        // 있으면 terminal 쪽 등재는 **한 줄도 실행되지 않는 죽은 글자**가 되고, 다음 사람은 그것을 읽고
+        // "이건 terminal 이다"라고 믿는다(실측: `too_fast` 를 terminal 집합에 되돌려 놓아도 동작이 안 바뀌었다).
+        // 두 목록이 서로를 부정하지 못하게 여기서 못을 박는다.
+        let overlap = GamesMiniGameHub.retryableSubmitStatuses
+            .intersection(GamesMiniGameHub.terminalSubmitStatuses)
+        #expect(overlap.isEmpty, "두 집합이 겹친다 — 재시도 갈래가 먼저라 terminal 등재가 죽는다: \(overlap.sorted())")
+        // 같은 이유로 '토큰이 죽은' 집합과도 겹칠 수 없다(그쪽은 문구를 가르는 집합이고 terminal 의 부분집합이다).
+        #expect(GamesMiniGameHub.retryableSubmitStatuses
+            .intersection(GamesMiniGameHub.deadTokenStatuses).isEmpty)
+    }
+
+    @Test("`too_fast` 되보내기는 **횟수가 묶여 있다** — 다 쓰면 포기하고 인편을 놓아 준다")
+    func tooFastRetriesAreBoundedSoItNeverBecomesAWaitingMachine() async throws {
+        // 무한 백오프면 "하한이 지나갈 때까지 기다려 주는 기계"가 되어 즉시 위조한 점수도 결국 올라간다.
+        // 그리고 인편을 영영 들고 있으면 `prefetchRoundToken` 의 가드에 막혀 **그 게임의 새 토큰도 못 받는다** —
+        // 게임은 되는데 점수가 계속 안 올라가는 상태로 굳는다. 그래서 다 쓰면 놓아 주고 사실대로 말한다.
+        let harness = GamesHarness(label: "tetris-too-fast-bound")
+        configure(harness, submit: #"{"status":"too_fast","need_seconds":3.6219,"elapsed_seconds":0.1}"#)
+        harness.hub.sleep = { _ in }
+        _ = gamesServeRoundTokens(harness, prefix: "tok-bound")
+        await harness.signIn()
+        harness.hub.openScreen(.tetris)
+        #expect(await waits.wait { harness.hub.roundToken == "tok-bound-1" })
+        let controller = try #require(harness.hub.controller)
+        controller.tap()
+        controller.softDropOneCell()
+        harness.hub.closeScreen(.tetris)
+
+        // 첫 제출 + 지연표만큼의 되보내기 = 그 이상은 나가지 않는다.
+        let expected = 1 + GamesMiniGameHub.tooFastRetryDelaysSeconds.count
+        #expect(await waits.wait { harness.server.requests("minigame_submit_score").count == expected })
+        await harness.barrier()
+        #expect(harness.server.requests("minigame_submit_score").count == expected,
+                "묶은 횟수를 넘겨 계속 되보냈다(\(harness.server.requests("minigame_submit_score").count) / \(expected))")
+        #expect(harness.hub.pendingSubmit == nil, "포기했는데 인편이 남았다 — 프리페치가 계속 막힌다")
+        #expect(harness.hub.submitNotice == GamesMiniGameText.submitRefused, "포기할 때는 사실대로 말한다")
+        #expect(harness.violations.isEmpty)
+        await harness.tearDown()
+    }
+
     @Test("호출자 쪽 거절(`unauthorized`·`no_profile`)도 인편을 지운다 — 안 지우면 앱을 켤 때마다 영원히 다시 보낸다")
     func callerSideRefusalsClearThePendingSubmit() async throws {
         // 이 둘은 **토큰이 아니라 호출자 쪽 거절**이라 서버가 uid·프로필 검사에서 곧장 돌아오고 30분 TTL 판정까지

@@ -75,11 +75,42 @@ package final class GamesMiniGameHub {
     /// 같은 토큰을 다시 보낸다(그 사이 프리페치는 A1 가드에 막혀 그 게임의 새 토큰도 못 받는다).
     /// 다만 `deadTokenStatuses` 에는 넣지 않는다 — 문구는 "점수를 못 올렸어요"(`submitRefused`)로 남긴다.
     nonisolated static let terminalSubmitStatuses: Set<String> =
-        ["too_fast", "invalid", "no_token", "token_expired", "unauthorized", "no_profile"]
+        ["invalid", "no_token", "token_expired", "unauthorized", "no_profile"]
+
+    /// 서버가 **"아직 이르다"**로 되돌린 status — 토큰이 살아 있어 같은 토큰으로 다시 보내면 통과한다.
+    ///
+    /// ★ `too_fast` 는 거절이 아니다. `minigame_submit_score` 는 이 응답을 **`used_at` 을 찍기 전에** 돌려주고
+    ///   (20260914010000:305-312 가 반환, :314 가 소모) 판정에 쓰는 `clock_timestamp() - started_at` 은
+    ///   단조증가한다 — 즉 조금 뒤 같은 토큰으로 보내면 같은 점수가 통과한다. terminal 에 두면 올라갈 점수를 버렸다.
+    ///
+    /// **정직한 판이 왜 여기 닿는가** — 하한과 실제 소요의 여유가 타이밍바에서 **0.1906초**뿐이다
+    /// (반주기 합 7.625 → 실제 최소 3.8125초 vs 하한 3.8125 × `minigame_time_margin()` 0.95 = 3.6219초).
+    /// `beginRound` 는 쓸 만한 토큰이 없으면 **판을 세우지 않고** 토큰을 받으므로(그 자리 주석 "이번 판이 토큰 없이
+    /// 시작될 수는 있다"), 토큰이 플레이 중에 생기면 `started_at` 이 그만큼 뒤로 찍혀 10라운드를 다 돈 판도
+    /// 하한 밑으로 나온다. 플래피는 0점 하한이 0 이라(그 함수의 `if v_n > 0`) 즉사로는 닿지 않고,
+    /// 테트리스는 하한이 실제 소요의 2~4%라 사실상 닿지 않는다.
+    nonisolated static let retryableSubmitStatuses: Set<String> = ["too_fast"]
+
+    /// `too_fast` 재시도 지연(초). **눈먼 값이고 횟수가 묶여 있다.**
+    ///
+    /// ⚠️ 서버가 같이 주는 `need_seconds`·`elapsed_seconds` 로 지연을 **계산하지 않는다** — 그 함수 주석이
+    /// "클라가 이 숫자로 재시도 타이밍을 계산하면 그게 곧 위조 보조 도구가 된다"로 못 박았다(20260914010000:306-307).
+    ///
+    /// ⚠️ 무한 백오프로 두지 않는다. 그러면 "하한이 지나갈 때까지 기다려 주는 기계"가 되어 즉시 위조한 점수도
+    /// 결국 올려 준다. 정직한 판에 필요한 것은 0.2초뿐이므로 두 번으로 남는다 — 그 뒤엔 사실대로 "못 올렸어요".
+    nonisolated static let tooFastRetryDelaysSeconds: [TimeInterval] = [1.5, 4]
     /// 토큰이 죽어 **그 판은 영영 못 올리는** 거절. 문구가 "다시 해 주세요"(복구된다는 뜻)와 갈린다.
     nonisolated static let deadTokenStatuses: Set<String> = ["no_token", "token_expired"]
 
     nonisolated static let logger = Logger(subsystem: "aingcheck", category: "minigame")
+
+    /// 기다리기(테스트는 즉시 돌아오는 것으로 바꾼다 — `MessagesStore.sleep` 과 같은 장치).
+    @ObservationIgnored package var sleep: @Sendable (TimeInterval) async -> Void = { seconds in
+        try? await Task.sleep(for: .seconds(seconds))
+    }
+
+    /// `too_fast` 를 이 토큰으로 몇 번 되보냈나. 토큰과 짝지어 둔다 — 새 판이 인편을 갈아 끼우면 같이 리셋된다.
+    @ObservationIgnored private var tooFastRetries: (token: String, count: Int)?
 
     @ObservationIgnored package let context: MobileContext
 
@@ -423,6 +454,14 @@ package final class GamesMiniGameHub {
                 if !exitNoticeIsSticky { submitNotice = nil }
                 // 순위 재조회는 **화면을 떠난 뒤에도** 한다(activeKind 로 막으면 뒤로가기로 끝낸 판이 반영되지 않는다).
                 await loadBoard(kind, withWinner: false)
+            } else if Self.retryableSubmitStatuses.contains(response.status) {
+                // 아직 하한을 못 넘겼다 — 토큰이 살아 있으니 **인편을 남기고** 눈먼 지연 뒤 같은 토큰으로 다시 보낸다.
+                // ★ 여기서 `prefetchRoundToken` 으로 내려가지 않는다. 새 토큰 요청은 서버가 (사용자, 게임) 행을
+                //   갈아 끼워 **지금 되보낼 토큰을 죽인다**(`minigame_rounds_one_open`). 인편이 살아 있으면 그쪽
+                //   가드가 한 번 더 막지만, 이 갈래의 생명줄이라 여기서도 명시적으로 비켜 간다.
+                Self.logger.notice("submit too early — will retry status=\(response.status, privacy: .public) game=\(kind.rawValue, privacy: .public)")
+                scheduleTooFastRetry(kind: kind, score: score, token: token)
+                return
             } else {
                 Self.logger.notice("submit refused status=\(response.status, privacy: .public) game=\(kind.rawValue, privacy: .public)")
                 // 토큰이 죽은 거절은 **그 판이 영영 못 올라간다** — "다시 해 주세요"(복구된다는 뜻)와 문장을 가른다.
@@ -444,10 +483,43 @@ package final class GamesMiniGameHub {
         }
     }
 
+    /// `too_fast` 를 받은 판을 눈먼 지연 뒤 **같은 토큰으로** 다시 보낸다. 횟수를 다 쓰면 그때 비로소 포기한다.
+    ///
+    /// 화면 문구를 여기서 세운다: 기다리는 동안은 `submitRetrying`("올리는 중"), 포기할 때만 `submitRefused`.
+    /// 기다리는 동안 "못 올렸어요"를 띄우면 곧 올라갈 점수를 못 올렸다고 말하는 거짓말이 된다.
+    private func scheduleTooFastRetry(kind: MiniGameKind, score: Int, token: String) {
+        let attempt = tooFastRetries?.token == token ? (tooFastRetries?.count ?? 0) : 0
+        exitNoticeIsSticky = false
+        guard attempt < Self.tooFastRetryDelaysSeconds.count else {
+            // 묶은 횟수를 다 썼다 — 여기서부터는 사실대로 말하고 인편을 놓아 준다(안 놓으면 프리페치가 계속 막힌다).
+            Self.logger.notice("submit too early — giving up game=\(kind.rawValue, privacy: .public)")
+            submitNotice = GamesMiniGameText.submitRefused
+            clearPendingSubmit(token: token)
+            prefetchRoundToken(kind: kind)
+            return
+        }
+        tooFastRetries = (token: token, count: attempt + 1)
+        submitNotice = GamesMiniGameText.submitRetrying
+        let delay = Self.tooFastRetryDelaysSeconds[attempt]
+        let sessionGeneration = context.generation
+        let generation = resetGeneration
+        let wait = sleep
+        Task { [weak self] in
+            await wait(delay)
+            guard let self else { return }
+            guard sessionGeneration == self.context.generation, generation == self.resetGeneration else { return }
+            // 그 사이 새 판이 인편을 갈아 끼웠거나(그 판의 주인은 새 판이다) 다른 길로 비워졌으면 여기서 멈춘다.
+            guard self.pendingSubmit?.token == token else { return }
+            await self.performSubmit(kind: kind, score: score, token: token)
+        }
+    }
+
     /// 이 토큰의 인편만 지운다(그 사이 새 판이 인편을 갈아 끼웠으면 건드리지 않는다).
     private func clearPendingSubmit(token: String) {
         guard pendingSubmit?.token == token else { return }
         pendingSubmit = nil
+        // 재시도 횟수는 인편과 한 벌이다 — 남겨 두면 다음 판이 이 토큰의 횟수를 물려받을 수 있다.
+        if tooFastRetries?.token == token { tooFastRetries = nil }
     }
 
     // MARK: 조회

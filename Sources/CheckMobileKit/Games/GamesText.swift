@@ -101,6 +101,13 @@ package enum GamesMiniGameText {
     package static let submitFailedConnection = "점수를 못 올렸어요 — 연결을 확인하고 다시 해 주세요"
     /// 서버 거절 — 맥 `performSubmitMiniGameScore` 와 같은 문장. status 이름·need_seconds 는 화면에 싣지 않는다.
     package static let submitRefused = "점수를 못 올렸어요"
+    /// 아직 하한을 못 넘겼다(`too_fast`) — **토큰은 살아 있고 곧 다시 보낸다.**
+    ///
+    /// `submitRefused`("못 올렸어요")와 **일부러 가른다**: 이 응답은 거절이 아니라 아직 이르다는 뜻이고,
+    /// 서버가 `used_at` 을 찍기 전에 돌려주므로 그 토큰으로 조금 뒤 다시 보내면 통과한다
+    /// (`GamesMiniGameHub.retryableSubmitStatuses`). 이 자리에 "못 올렸어요"를 쓰면 **올라갈 점수를 못 올렸다고**
+    /// 말하는 거짓말이 된다. status 이름·`need_seconds`·`elapsed_seconds` 는 여기에도 싣지 않는다(위조 보조).
+    package static let submitRetrying = "점수를 올리는 중이에요 — 잠깐만요"
     /// 토큰이 죽어 **그 판은 영영 못 올리는** 거절(`no_token`·`token_expired`).
     ///
     /// `submitFailedConnection` 과 **일부러 문장을 가른다**: "다시 해 주세요"는 복구된다는 뜻인데 토큰이 죽었으면

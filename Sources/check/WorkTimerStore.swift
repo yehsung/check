@@ -825,6 +825,38 @@ final class WorkTimerStore {
     /// 미해결 신고 건수(운영자만 0 이 아니다 — 서버 `report_open_count()` 가 정한다). 레일 [제보] 배지·받은 제보 탭 배지·
     /// **메뉴바 점**이 읽는다. 관리자 깃발이 내려가면 `ultraUnlimited` 관찰자가 제보 건수와 함께 0 으로 내린다.
     var reportOpenCount: Int = 0
+
+    // MARK: - 서버 공지 (v0.3.40 · app_current_notice)
+
+    /// 지금 보여 줄 공지(닫았거나 없으면 nil). **화면은 이 값만 읽는다.**
+    /// 채우는 쪽은 UpdateCheckStore 의 서버 감시(릴리스 조회와 같은 주기 — 켠 뒤 ~5초 · 300초마다 · 깰 때 · 팝오버 열 때)가
+    /// `applyAppNotice` 로 넘기는 결과이고, 닫음 표식은 `dismissAppNotice` 가 defaults 에 **기기별 · 계정 무관**으로 남긴다 —
+    /// 공지는 사람에게 주는 것이 아니라 이 기기에서 본 것이다(로그아웃·계정 전환에도 닫힘이 유지된다).
+    /// 영속하지 않는다: 재실행 5초 뒤 첫 조회가 다시 채운다.
+    private(set) var appNotice: AppNotice?
+
+    /// 공지 닫음 표식 키(기기별 · 계정 무관). 공지 id 를 그대로 잇는다 — 서버 CHECK 가 id 를 `[a-z0-9][a-z0-9._-]{0,63}` 로
+    /// 좁혀 두어 키에 안전하다. 사용자 id 를 섞지 않는 것이 **의도**다.
+    nonisolated static func noticeDismissedKey(_ id: String) -> String { "check.notice.dismissed." + id }
+
+    /// 서버 조회 결과를 반영한다(UpdateCheckStore.onNoticeFetched 가 부른다). nil 은 "지금 보여 줄 공지가 없다"(서버가 내렸다·기간이
+    /// 끝났다·옛 서버)라 카드를 내린다. 닫은 id 는 여기서 걸러진다 — 같은 공지가 5분마다 다시 와도 카드는 돌아오지 않고,
+    /// **새 id 가 오면 다시 뜬다.** 값이 같으면 대입하지 않는다(@Observable 은 같은 값 대입에도 화면을 다시 그린다).
+    func applyAppNotice(_ notice: AppNotice?) {
+        let visible: AppNotice? = {
+            guard let notice, !defaults.bool(forKey: Self.noticeDismissedKey(notice.id)) else { return nil }
+            return notice
+        }()
+        if appNotice != visible { appNotice = visible }
+    }
+
+    /// 이 공지를 닫는다 — **기기별 · 계정 무관**으로 영속한다(id 기준). 다음 조회가 같은 id 를 들고 와도 applyAppNotice 가 거른다.
+    /// 보이는 공지가 없으면 아무것도 안 한다(키를 남기지 않는다).
+    func dismissAppNotice() {
+        guard let appNotice else { return }
+        defaults.set(true, forKey: Self.noticeDismissedKey(appNotice.id))
+        self.appNotice = nil
+    }
     /// 목록 조회 순번. **늦게 도착한 옛 응답이 새 응답을 덮지 않게** 한다(패널을 연 조회와 처리 성공 뒤 재조회가 겹치는 경우).
     /// 화면이 읽지 않으므로 관찰 대상이 아니다.
     @ObservationIgnored var reportAdminLoadSerial = 0

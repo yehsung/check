@@ -87,7 +87,13 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     /// 카드 안쪽 폭(328)에서 두 줄로 접혀 46 → 59pt, 즉 **+13pt**(`AvatarRemovalSettingsRow.maxExtraHeight`).
     /// 확인 단계는 전체 렌더에 절대 안 나타나므로(누른 뒤에만 존재한다) 가장 높은 상태는 753 + 13 = **766pt** 다.
     /// 같은 5pt 여유로 **771**. V0336AvatarRemovalTests 가 네 상태를 실제 폭으로 그려 이 값을 되묻는다.
-    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 771)
+    ///
+    /// v0.3.40: '일반'에 [아이폰 앱] 설치 QR 행이 붙어 전체 렌더가 **866pt**(+113 — 구분선 1 + 간격 12×2 + QR 판 88, 실측
+    /// 2026-09-28 폭 380)가 됐다. QR 판(72 + 여백 8×2)이 글 열보다 높아 행 높이가 폭에 안 흔들리고, 누르면 자라는 상태도
+    /// 없다. 가장 높은 상태는 여전히 되돌리기 확인까지 연 866 + 13 = **879**, 같은 5pt 여유로 **884**. V0340 이 이 여유
+    /// (정확히 5)를 되묻는다 — 상수를 넉넉히 올려 두면 계약 숫자가 흐려진다.
+    /// 화면 맞춤 참고: 13" MacBook Air(956pt, 메뉴바 빼면 931)에 타이틀바 28 을 더해 912 — 아직 든다. 다음 행부터는 안 든다.
+    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 884)
     /// 최소 크기. 폭은 뷰가 선언한 하한(`minWidth: Self.preferredWidth`)을 그대로 따른다 — 여기에 뷰가
     /// 모르는 숫자를 새로 적으면 그 순간 두 하한이 갈리고, 갈리는 쪽이 위 높이 계약을 깬다(바로 위 실측표).
     static let minContentSize = NSSize(width: CheckSettingsView.preferredWidth, height: 260)
@@ -252,8 +258,8 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         armStuckWindowWatchdog()
     }
 
-    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **855pt** 까지 자란다(`CheckSettingsView.adminContentHeight`,
-    /// v0.3.36 — 단축키 안내 한 줄 + 사진 되돌리기 확인이 함께 열린 가장 높은 상태). 기본 창은 771pt 라 그대로 열면 맨 아래 행이 잘린다.
+    /// 관리자에게만 보이는 캐릭터 선택 행이 붙으면 콘텐츠가 **968pt** 까지 자란다(`CheckSettingsView.adminContentHeight`,
+    /// v0.3.40 — 단축키 안내 한 줄 + 사진 되돌리기 확인이 함께 열린 가장 높은 상태, 설치 QR 행 포함). 기본 창은 884pt 라 그대로 열면 맨 아래 행이 잘린다.
     ///
     /// **왜 창을 만들 때가 아니라 열 때인가**: `ultraUnlimited` 는 서버가 정하고 세션 동기화로 **늦게 도착한다**.
     /// 창 생성 시점에 읽으면 첫 실행에서는 아직 false 라 기본 높이로 굳는다.

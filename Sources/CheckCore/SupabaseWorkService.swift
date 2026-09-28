@@ -1043,6 +1043,32 @@ package actor SupabaseWorkService {
         return try decoder.decode(AppLatestRelease.self, from: data)
     }
 
+    /// 서버가 지금 보여 줄 공지(v0.3.40). `app_current_notice()` RPC 를 **anon Bearer**(accessToken 없이)로 호출한다 —
+    /// fetchLatestRelease 와 같은 문이다(로그인 전·로그아웃 상태에서도 공지는 봐야 한다).
+    ///
+    /// 반환 nil 은 셋을 뭉친다: 공지가 없다(`{}`) · 함수가 없는 옛 서버(404 PGRST202) · 일시 장애(5xx·429). **셋을 가르지 않는
+    /// 이유**: 어느 쪽이든 화면이 할 일은 "카드를 안 그린다" 하나뿐이고, 공지는 실패를 사용자에게 알릴 만한 것이 아니다(업데이트
+    /// 감지와 같은 규약). fetchLatestRelease 처럼 throw 로 올리면 호출부마다 `try?` 가 반복되고 언젠가 한 곳이 오류를 화면에
+    /// 흘린다. 모양이 깨진 응답(`null` · 빈 본문 · id 없는 객체 · JSON 아님)도 nil — 반쪽짜리 카드를 그리지 않는다.
+    /// 던지는 것은 요청이 서버에 닿지 못한 경우(전송 오류)뿐이고, 호출부(UpdateCheckStore.checkServerNow)가 그것도 삼킨다.
+    package func appCurrentNotice() async throws -> AppNotice? {
+        let data: Data
+        do {
+            data = try await send(
+                path: "/rest/v1/rpc/app_current_notice",
+                method: "POST",
+                body: EmptyBody(),
+                accessToken: nil,
+                prefer: nil
+            )
+        } catch is SupabaseWorkServiceError {
+            // 비2xx 전부(옛 서버 404 · 장애 5xx · 429 · anon 키 없음). 조용히 "공지 없음".
+            return nil
+        }
+        // `{}`(공지 없음)는 id 가 없어 디코드가 실패한다 — 그게 곧 nil 이다. `null`·빈 본문도 같은 길로 nil.
+        return try? decoder.decode(AppNotice.self, from: data)
+    }
+
     /// 내 토큰 사용량 공개 여부 갱신. profiles 자기 행을 PATCH 한다(RLS 로 본인 행만 허용). 반환 없음(return=minimal).
     package func updateTokenUsagePublic(accessToken: String, userID: String, isPublic: Bool) async throws {
         try await sendNoBody(

@@ -479,6 +479,45 @@ struct AvatarRemovalSettingsRow: View {
     }
 }
 
+// MARK: - 아이폰 앱 설치 QR 행 (v0.3.40)
+
+/// `[아이폰 앱 / QR 을 찍거나 앱스토어에서 아잉체크 를 검색하세요 · iOS 18 이상]  [QR]`. 소속 센터 행과 같은 골격(제목 +
+/// 설명 왼쪽, 값 오른쪽)에서 값 자리에 QR 판이 선다. 스토어를 받지 않는다 — 읽는 것이 상수 둘(주소·문구)뿐이라 어떤 상태에도
+/// 같은 그림이고, 그래서 창 높이 계약에 **고정 88pt** 로 들어간다(QR 판 = 72 + 여백 8×2, `AvatarRemovalSettingsRow` 처럼
+/// 누르면 자라는 상태가 없다).
+///
+/// 문구는 `CheckIOSAppText` 한 벌에서만 온다 — 검색어(`storeSearchName`)를 바꿀 일이 생기면 그 한 줄이 이 행과 팝오버
+/// 카드 캡션을 함께 바꾼다. 최소 iOS(`CheckAppLinks.iosMinimumVersionText`)를 같이 적는 이유는 구형 아이폰이 QR 을 찍고
+/// **나서** "호환되지 않음"을 만나지 않게 하기 위해서다.
+struct IOSAppInstallSettingsRow: View {
+    /// QR 한 변(pt). 팝오버 카드와 같은 값 — 근거는 `AppNoticeCard.qrSide` 주석(가장 촘촘한 맥 화면에서 14.4mm).
+    static let qrSide: CGFloat = AppNoticeCard.qrSide
+    /// 주소가 고정이라 그림도 고정이다 — 창을 여닫을 때마다 다시 굽지 않는다.
+    private static let qrImage: CGImage? = CheckQRCode.image(for: CheckAppLinks.iosAppStore.absoluteString)
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(CheckIOSAppText.settingsTitle)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                Text(CheckIOSAppText.settingsDetail)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    // 창을 좁혀도 말줄임 대신 줄바꿈한다(이 창의 설명 줄 규약).
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            // 생성이 실패하면(고정 주소라 사실상 없다) 빈 상자 대신 자리를 비운다 — 설명의 검색어가 남은 길이다.
+            if let image = Self.qrImage {
+                CheckQRCodeView(image: image, side: Self.qrSide)
+                    .accessibilityLabel("아이폰 앱 설치 QR 코드")
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
 // MARK: - 근무 시작·종료 단축키 기록 행 (v0.3.23)
 
 /// 기록 행 아래 **상태 한 줄**. 순수 값이라 테스트가 상태마다 문구를 글자 그대로 되묻는다.
@@ -997,10 +1036,14 @@ struct CheckSettingsView: View {
     /// (둘 다 +55, 실측 2026-09-21 폭 380)가 됐다. **여기서 끝이 아니다**: 그 행은 [기본 캐릭터로 되돌리기]를
     /// 누르면 확인 안내가 두 줄로 접혀 **+13pt** 자란다(`AvatarRemovalSettingsRow.maxExtraHeight`, 실측 카드 안쪽 폭 328 —
     /// 46 → 59). 확인 단계와 결과 문구는 전체 렌더로는 절대 안 그려지므로(누른 뒤에만 존재한다) 그 13pt 를
-    /// 더한 값이 진짜 최악값이다: 842 + 13 = **855**. 창 계약은 771 이다.
+    /// 더한 값이 진짜 최악값이다: 842 + 13 = **855**. 창 계약은 771 이었다.
     ///
     /// 더하지 않으면 정확히 이 사고가 난다 — 관리자가 [되돌리기]를 누르는 **그 순간** 맨 아래 캐릭터 칩 줄이 13pt 잘린다.
-    static let adminContentHeight: CGFloat = 855
+    ///
+    /// v0.3.40: '일반'에 [아이폰 앱] 설치 QR 행(`IOSAppInstallSettingsRow`)이 붙어 전체 렌더가 일반 866 / 관리자 955
+    /// (둘 다 **+113** = 구분선 1 + 간격 12×2 + QR 판 88, 실측 2026-09-28 폭 380). 이 행은 누르면 자라는 상태가 없다 —
+    /// 최악값은 여전히 되돌리기 확인의 +13 이라 955 + 13 = **968**. 창 계약은 884 다. V0340 이 같은 등식을 되묻는다.
+    static let adminContentHeight: CGFloat = 968
 
     var body: some View {
         Group {
@@ -1078,6 +1121,11 @@ struct CheckSettingsView: View {
                     detail: "켜면 캐릭터 클릭이 할 일 보드를 열고, 끄면 캐릭터가 콕 반응만 해요.",
                     isOn: todoBinding
                 )
+                PanelDivider()
+                // 아이폰 앱 설치 QR(v0.3.40). **상시 노출**이다 — 팝오버 공지를 닫았어도, 공지가 없어도 여기엔 늘 있다
+                // (사용자 결정: "이후엔 설정에서 계속 설치 링크 QR코드로 찍을 수 있게"). 주소는 공지의 linkURL 이 아니라
+                // `CheckAppLinks.iosAppStore` 다 — 공지는 사라질 수 있고 이 행은 남아야 한다.
+                IOSAppInstallSettingsRow()
             }
             section("내 정보") {
                 DisplayNameSettingsRow(store: store)

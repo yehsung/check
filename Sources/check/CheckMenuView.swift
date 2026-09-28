@@ -68,6 +68,11 @@ struct CheckMenuView: View {
         case feedbackReply
         /// 새 버전 안내(상시라 가장 덜 급하다).
         case update
+        /// 서버 공지 카드(v0.3.40 — 아이폰 앱 출시 안내 등). **가장 마지막**이다: 닫을 때까지 남는 안내라 밀려도 잃는 것이
+        /// 없고, 새 버전 안내는 앱 안에서 업데이트로 가는 유일한 경로라 그보다 먼저여야 한다. 그래서 **업데이트 배너와 절대
+        /// 같이 뜨지 않는다** — 둘 다 후보면 업데이트가 이기고 공지는 다음 팝오버로 미뤄진다(V0340 이 이 규칙을 잰다).
+        /// 카드가 QR 판(88pt)을 품어 배너 중 가장 높다 — 둘을 겹쳐 얹으면 창이 700pt 상한을 넘는다(0.3.23 의 사고).
+        case appNotice
     }
 
     /// 배너 1개가 차지하는 대략 높이(pt, 바깥 VStack spacing 10 포함). 목록 행수 예산 계산 전용 상수로,
@@ -86,6 +91,12 @@ struct CheckMenuView: View {
     static let tokenUsageRowHeight: CGFloat = 53
     /// 헤더 주간 목표 편집 인라인 행 높이(pt). 배너는 아니지만 헤더를 그만큼 부풀리므로 같은 예산에 넣는다.
     static let goalEditorHeight: CGFloat = 92
+    /// 공지 카드(v0.3.40) 높이(pt, spacing 10 포함) — QR 이 있는 쪽. QR 판(72 + 여백 8×2 = 88)이 글 열(본문 3줄 + 캡션)보다
+    /// 높아 본문 길이와 무관하게 한 값이다(ImageRenderer 실측, 본문 폭 316). V0340 이 카드를 얹기 전후 팝오버 높이 차와 대조한다.
+    static let appNoticeCardHeight: CGFloat = 144
+    /// QR 이 없는 공지 카드(`linkURL` nil · 생성 실패) 높이(pt, spacing 포함). 글 열이 높이를 정하므로 **본문 3줄 최악값**이다 —
+    /// 짧은 본문은 이보다 낮고, 과대 추정은 안전측(목록 행이 하나 덜 보일 뿐 창은 안 넘친다).
+    static let appNoticeCardHeightWithoutQR: CGFloat = 94
 
     /// 로그인 + 소속 팀 확정 상태(헤더 카드/팀 카드가 그려지는 메인 화면). 배너 후보 판정에 쓴다.
     private var isMainScreen: Bool {
@@ -153,6 +164,9 @@ struct CheckMenuView: View {
         // 판정은 스토어가 끝내 둔 것을 읽기만 한다 — 위 경고 그대로, 여기서 시각을 비교하지 않는다.
         if store.isSignedIn, store.showsFeedbackReplyBanner { return .feedbackReply }
         if showsUpdateBanner { return .update }
+        // 공지는 **업데이트 다음**이다(TopBanner.appNotice 주석). 로그인한 사람에게만 — 공지는 이미 쓰는 사람에게 하는
+        // 말이고(아이폰 앱도 있어요), 닫기의 기기별 기록도 그 사람 몫이다. 판정은 스토어가 끝내 둔 값(닫았으면 nil)을 읽기만 한다.
+        if store.isSignedIn, store.appNotice != nil { return .appNotice }
         return nil
     }
 
@@ -168,6 +182,12 @@ struct CheckMenuView: View {
             let notes = updateBannerNotes
             guard !notes.isEmpty else { return Self.updateBannerHeight }
             return Self.updateBannerHeight + Self.updateNoteBlockPadding + CGFloat(notes.count) * Self.updateNoteLineHeight
+        case .appNotice:
+            // QR 이 실제로 그려질 때만 QR 쪽 예산이다 — 주소가 nil 이거나 생성이 실패하면 카드가 자리를 비우고 낮아진다.
+            guard let notice = store.appNotice, AppNoticeCard.qrImage(for: notice) != nil else {
+                return Self.appNoticeCardHeightWithoutQR
+            }
+            return Self.appNoticeCardHeight
         case nil: return 0
         }
     }
@@ -310,6 +330,11 @@ struct CheckMenuView: View {
             // 더 급한 배너가 있으면 이번 팝오버에서는 양보한다(topBanner — 배너는 한 번에 하나만).
             if topBanner == .update {
                 UpdateBanner(versionText: updateBannerVersionText, notes: updateBannerNotes)
+            }
+            // 같은 슬롯의 서버 공지 카드(v0.3.40). 업데이트 배너와 **같은 자리, 같은 "한 번에 하나" 예산**이라 둘이 함께 서는 일은
+            // 구조적으로 없다(topBanner 가 하나만 고른다). 닫기는 스토어 한 줄 — 닫히면 이 if 가 거짓이 되어 자리가 즉시 접힌다.
+            if topBanner == .appNotice, let notice = store.appNotice {
+                AppNoticeCard(notice: notice, onDismiss: { store.dismissAppNotice() })
             }
             // 받은 오목 대결 신청은 **여기(최상단)가 아니다** — v0.3.30 부터 헤더 카드 바로 아래다(`gomokuInviteBanner`).
             // 무소속 화면에는 헤더 카드가 없어 그 화면 맨 위에 선다. 배너가 하나뿐이라는 예산(topBanner)은 그대로다.

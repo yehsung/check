@@ -2552,6 +2552,65 @@ package struct AppLatestRelease: Decodable, Equatable, Sendable {
     package let publishedAt: String?
 }
 
+/// `app_current_notice()` RPC 응답(v0.3.40) — 서버가 내려 주는 **닫을 수 있는 공지 한 장**. 릴리스 없이 떠 있는 앱 전부에
+/// 소식을 보내는 통로다(첫 쓰임: 아이폰 앱 앱스토어 출시 안내). 응답은
+/// `{"v":1,"id":…,"title":…,"body":…,"link_url":…|null,"link_label":…|null}` 이고, 지금 보여 줄 공지가 없으면 `{}` 다.
+///
+/// **id·title·body 가 필수인 이유**(AppLatestRelease 가 전부 옵셔널인 것과 반대다): 저건 "빈 표"가 정상 응답이라 필드가
+/// 비어도 디코드가 살아야 했다. 여기서는 "없음"이 `{}` 로 따로 오고(서비스가 nil 로 접는다), 공지는 id(닫음 표식 키)·제목·
+/// 본문이 없으면 화면에 그릴 수도 닫을 수도 없다 — 그런 응답은 조용히 nil 이지 반쪽짜리 카드가 아니다.
+/// 링크는 옵셔널이다: nil 이면 QR 을 안 그린다. `v` 는 모양 계약 번호인데 클라는 읽지 않는다(모르는 키는 무시된다).
+///
+/// 디코드가 **앞뒤 공백을 걷는다**: 운영자가 SQL 편집기에 붙여 넣은 본문은 끝에 개행이 따라오기 쉽고, 그걸 카드가
+/// 빈 줄로 그린다. 걷은 뒤 id·title·body 가 비면 디코드 실패(→ 서비스가 nil) — 서버 CHECK 와 같은 선이다.
+package struct AppNotice: Decodable, Equatable, Sendable {
+    package let id: String
+    package let title: String
+    package let body: String
+    /// QR 로 그릴 주소(nil 이면 QR 없음). 서버 CHECK 가 https 만 받는다.
+    package let linkURL: String?
+    /// 그 링크의 버튼 문구(링크 없이는 오지 않는다 — 서버 CHECK).
+    package let linkLabel: String?
+
+    /// 서비스 decoder 는 convertFromSnakeCase 라 `link_url` 이 `linkUrl` 로 **바뀐 뒤** 키를 맞춘다 — 그래서 원문 키(link_url)가
+    /// 아니라 변환된 키를 적는다. `linkURL` 이라는 Swift 관례 이름을 쓰려면 이 한 줄이 필요하다(linkLabel 은 변환 결과와 같다).
+    package enum CodingKeys: String, CodingKey {
+        case id, title, body
+        case linkURL = "linkUrl"
+        case linkLabel
+    }
+
+    package init(id: String, title: String, body: String, linkURL: String? = nil, linkLabel: String? = nil) {
+        self.id = id
+        self.title = title
+        self.body = body
+        self.linkURL = linkURL
+        self.linkLabel = linkLabel
+    }
+
+    package init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try c.decode(String.self, forKey: .id).trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = try c.decode(String.self, forKey: .title).trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = try c.decode(String.self, forKey: .body).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !id.isEmpty, !title.isEmpty, !body.isEmpty else {
+            throw DecodingError.dataCorruptedError(forKey: .id, in: c, debugDescription: "공지의 id·title·body 는 비면 안 된다")
+        }
+        self.id = id
+        self.title = title
+        self.body = body
+        // 빈 문자열 링크는 nil 과 같다 — "" 를 QR 로 그리면 빈 사각형이 뜬다.
+        self.linkURL = try c.decodeIfPresent(String.self, forKey: .linkURL)?
+            .trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+        self.linkLabel = try c.decodeIfPresent(String.self, forKey: .linkLabel)?
+            .trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+    }
+}
+
+private extension String {
+    var nonEmpty: String? { isEmpty ? nil : self }
+}
+
 // MARK: - 별명(표시명) 변경 (계약 타입)
 
 /// set_display_name RPC 요청. { p_name: 사용자가 입력한 원문 } — 정규화의 최종 권한은 서버다.

@@ -138,6 +138,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let releaseService = store.service
         updateCheck.serverFetcher = { try await releaseService.fetchLatestRelease() }
         updateCheck.onNewVersionAvailable = { [weak self] _ in _ = self?.overlayController?.showUpdateBubbleIfNeeded() }
+        // 서버 공지(v0.3.40). 릴리스 조회와 **같은 주기·같은 Task** 에 얹는다 — 새 타이머가 아니다(무료 플랜 · 사용자 46명).
+        // 조회기는 ①과 같은 서비스, 결과는 스토어가 받아 닫음 표식(기기별)을 판정한다. 이 두 줄이 없으면 공지 경로는 no-op 이라
+        // 컴파일도 테스트도 조용히 초록이다 — 그래서 소스 계약 테스트(V0340)가 이 배선을 되묻는다.
+        updateCheck.noticeFetcher = { try await releaseService.appCurrentNotice() }
+        updateCheck.onNoticeFetched = { [weak self] notice in self?.store.applyAppNotice(notice) }
         updateCheck.startServerWatch()
         // 로그인 시 자동 실행은 **전원의 기본값**이다. 매 실행마다 판단해서 등록이 사라져 있으면(brew 로
         // .app 번들이 교체되면 실제로 사라진다) 되살린다. 사용자가 끈 것은 두 갈래 모두 존중한다 —

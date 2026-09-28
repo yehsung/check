@@ -789,8 +789,10 @@ package enum MobileSessionText {
     package static let updateBody = "이 버전은 더 이상 서버와 맞지 않아요. App Store 에서 최신 버전으로 업데이트해 주세요."
     package static let updateButton = "App Store 열기"
 
-    /// 이 앱의 App Store 번호(`com.yehsung.aingcheck` · 2026-09-28 실측).
-    package static let appStoreID = "6812768622"
+    /// 이 앱의 App Store 번호. **글자로 다시 적지 않는다** — 출처는 `CheckCore` 의 `CheckAppLinks` 한 곳이고
+    /// 여기는 그 별명이다(맥 공지 카드·설정 QR 도 같은 곳을 쓴다). 두 곳에 적히면 스토어 주소 규칙이 바뀌는 날
+    /// 한쪽만 고쳐진다 — `V0340AppNoticeTests.theAppStoreAddressAndIDLiveInCheckAppLinksOnly` 가 그걸 잡는다.
+    package static let appStoreID = CheckAppLinks.iosAppStoreID
 
     /// 업데이트 화면의 목적지.
     ///
@@ -805,5 +807,6 @@ package enum MobileSessionText {
     ///
     /// ★ **지역 코드를 넣지 않는다.** 애플이 보는 사람 지역 스토어로 보낸다(실측: 이 맥에서 `/us/` 로 리다이렉트).
     ///   판매 지역이 175개라 `/kr/` 로 박으면 해외 사용자가 엉뚱한 지역 페이지를 본다.
-    package static let appStoreURL = URL(string: "https://apps.apple.com/app/id\(appStoreID)")!
+    /// 주소도 `CheckAppLinks` 에서 온다(위 별명과 같은 이유). 위의 세 ★ 판단은 그 파일의 주석과 한 벌이다.
+    package static let appStoreURL = CheckAppLinks.iosAppStore
 }

@@ -111,6 +111,15 @@ final class UpdateCheckStore {
     /// latestVersion 이 **새 값으로 바뀌었고 그 값이 업데이트일 때** 1회 부른다(두 경로 공통). 같은 값을 다시 확인하면 안 부른다.
     /// 앱은 여기서 캐릭터 말풍선을 즉시 시도한다 — 예전엔 40~80분 졸기 tick 에 편승해서만 떴다.
     @ObservationIgnored var onNewVersionAvailable: (@MainActor (String) -> Void)?
+    /// 서버 공지 조회기(v0.3.40). **nil 이면 공지 경로는 no-op**(테스트·프리뷰의 기본값). 릴리스 조회와 **같은 Task 에서
+    /// 뒤이어** 부른다 — 새 타이머를 만들지 않는다(무료 플랜 · 사용자 46명 · 이미 5분마다 한 번 여는 연결에 요청 하나를
+    /// 더 얹는 것이 전부다). 실행 5초 뒤 · 300초마다 · 깨어남 · 팝오버 열기(60초 스로틀)를 그대로 물려받는다.
+    /// 앱은 AppDelegate 가 스토어의 서비스(`appCurrentNotice`)를 물린다(serverFetcher 와 같은 이유로 서비스를 새로 만들지 않는다).
+    @ObservationIgnored var noticeFetcher: (@MainActor () async throws -> AppNotice?)?
+    /// 공지 조회가 **끝났을 때** 부른다 — "지금 보여 줄 공지가 없다"(nil)도 결과라 부른다. 조회기가 **던지면 부르지 않는다**:
+    /// 장애 한 번에 떠 있던 카드를 내리지 않고, 다음 주기가 다시 판정한다. 닫음 표식 판정은 받는 쪽(WorkTimerStore.applyAppNotice)이
+    /// 한다 — 이 스토어는 공지를 기억하지 않는다(재실행 5초 뒤 첫 조회가 다시 채우므로 영속할 이유가 없다).
+    @ObservationIgnored var onNoticeFetched: (@MainActor (AppNotice?) -> Void)?
     /// 진행 중 서버 조회 핸들(재진입 가드).
     @ObservationIgnored private var serverCheckTask: Task<Void, Never>?
     /// 마지막 서버 조회 **시도** 시각. 영속하지 않는다 — 재실행 직후 조회를 막을 이유가 없고, 이 스로틀은 팝오버 도배 방지용일 뿐이다.
@@ -266,23 +275,37 @@ final class UpdateCheckStore {
         record(version: "v" + Self.strippingTagPrefix(version), notes: Self.serverNotes(r.notes ?? []), build: build)
     }
 
-    /// 서버 최신 릴리스를 1회 조회해 반영한다. serverFetcher 가 nil 이면 no-op.
+    /// 서버 최신 릴리스(와 공지)를 1회 조회해 반영한다. serverFetcher·noticeFetcher 가 **둘 다** nil 이면 no-op.
     ///
     /// - Parameter minimumInterval: 0 보다 크면 마지막 **시도** 뒤 이 시간이 안 지났을 때 조용히 돌아간다(팝오버 경로 60초).
     ///   감시 루프·깨어남은 0 으로 부른다.
     /// 재진입 가드: 조회가 떠 있으면 새로 치지 않고 그 결과를 기다린다(루프와 팝오버가 같은 순간 겹쳐도 요청 1회).
     /// 스탬프는 시도 시점에 찍고(성공/실패 무관), 실패는 조용히 삼킨다(기록 미변경 — 다음 무스로틀 시도가 곧 다시 친다).
+    /// 공지(v0.3.40)는 **같은 Task 안에서 릴리스 뒤에** 부른다 — 스로틀·재진입 가드·주기를 한 벌로 나눠 쓰고, 한쪽의 실패가
+    /// 다른 쪽을 막지 않는다(각자 삼킨다).
     func checkServerNow(minimumInterval: TimeInterval = 0) async {
-        guard let serverFetcher else { return }
+        guard serverFetcher != nil || noticeFetcher != nil else { return }
         if let serverCheckTask { await serverCheckTask.value; return }
         if minimumInterval > 0, let last = lastServerCheckAt,
            clock().timeIntervalSince(last) < minimumInterval {
             return
         }
         lastServerCheckAt = clock()
+        let serverFetcher = serverFetcher
+        let noticeFetcher = noticeFetcher
         let task = Task { @MainActor [weak self] in
-            guard let release = try? await serverFetcher() else { return }
-            self?.applyServerRelease(release)
+            if let serverFetcher, let release = try? await serverFetcher() {
+                self?.applyServerRelease(release)
+            }
+            guard let noticeFetcher else { return }
+            // `try?` 를 쓰지 않는다 — 옵셔널을 돌려주는 식에 `try?` 를 걸면 "던졌다"와 "공지 없음(nil)"이 한 값으로 접혀,
+            // 장애 한 번이 떠 있던 카드를 내리게 된다. 던진 것만 삼키고, nil 은 결과로 넘긴다.
+            do {
+                let notice = try await noticeFetcher()
+                self?.onNoticeFetched?(notice)
+            } catch {
+                // 조용히(사용자 방해 금지) — 다음 주기가 다시 판정한다.
+            }
         }
         serverCheckTask = task
         await task.value

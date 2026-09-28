@@ -159,7 +159,7 @@ struct MobileLoginView: View {
     }
 }
 
-/// 업데이트 필요 화면(SPEC-ios §2): 이 빌드 < 서버 최소 빌드 → TestFlight 열기. 로그인과 같은 가운데 정렬(시무룩한 아잉 — 막힌 상태).
+/// 업데이트 필요 화면(SPEC-ios §2): 이 빌드 < 서버 최소 빌드 → App Store 열기. 로그인과 같은 가운데 정렬(시무룩한 아잉 — 막힌 상태).
 struct MobileUpdateRequiredView: View {
     let minBuild: Int
     let currentBuild: Int
@@ -183,7 +183,7 @@ struct MobileUpdateRequiredView: View {
                 }
                 .padding(.top, MobileTheme.space6)
                 AingButton(MobileSessionText.updateButton, kind: .filled, size: .lg, fillsWidth: true) {
-                    openURL(MobileSessionText.testFlightURL)
+                    openURL(MobileSessionText.appStoreURL)
                 }
                 .padding(.top, MobileTheme.space4)
             }

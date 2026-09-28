@@ -786,8 +786,24 @@ package enum MobileSessionText {
     package static let signUpAction = "가입하기"
     package static let forgotPassword = "비밀번호를 잊었어요"
     package static let updateTitle = "새 버전이 필요해요"
-    package static let updateBody = "이 버전은 더 이상 서버와 맞지 않아요. TestFlight 에서 최신 버전으로 업데이트해 주세요."
-    package static let updateButton = "TestFlight 열기"
-    /// TestFlight 앱 열기(설치돼 있지 않으면 시스템이 아무것도 하지 않는다).
-    package static let testFlightURL = URL(string: "itms-beta://")!
+    package static let updateBody = "이 버전은 더 이상 서버와 맞지 않아요. App Store 에서 최신 버전으로 업데이트해 주세요."
+    package static let updateButton = "App Store 열기"
+
+    /// 이 앱의 App Store 번호(`com.yehsung.aingcheck` · 2026-09-28 실측).
+    package static let appStoreID = "6812768622"
+
+    /// 업데이트 화면의 목적지.
+    ///
+    /// ★ **예전엔 `itms-beta://`(TestFlight) 였고, 그것이 막다른 길이었다.** TestFlight 만 있던 시절엔 맞았지만
+    ///   1.0 이 App Store 에 공개된 뒤로는 **스토어로 받은 사람이 다수**이고 그들에겐 TestFlight 가 없다 —
+    ///   그 스킴은 처리할 앱이 없으면 시스템이 **아무것도 하지 않아서**, 서버 최소 빌드를 올리는 순간
+    ///   버튼을 눌러도 화면이 그대로인 자리에 갇힌다(`docs/appstore.md` 결함 6).
+    ///
+    /// ★ **`itms-apps://` 가 아니라 `https://` 다.** 둘 다 App Store 앱을 열지만, 이 버튼의 결함이 애초에
+    ///   "아무 일도 안 일어난다"였다. https 는 유니버설 링크라 App Store 앱이 열리고, 기기 제한 등으로 못 열려도
+    ///   최소한 Safari 가 그 페이지를 보여 준다 — **무반응으로 되돌아갈 갈래가 없다.**
+    ///
+    /// ★ **지역 코드를 넣지 않는다.** 애플이 보는 사람 지역 스토어로 보낸다(실측: 이 맥에서 `/us/` 로 리다이렉트).
+    ///   판매 지역이 175개라 `/kr/` 로 박으면 해외 사용자가 엉뚱한 지역 페이지를 본다.
+    package static let appStoreURL = URL(string: "https://apps.apple.com/app/id\(appStoreID)")!
 }

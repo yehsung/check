@@ -457,6 +457,36 @@ import Testing
         #expect(h.count(rpc: "register_device") == 2)
     }
 
+    @Test("업데이트 필요 화면은 **App Store** 로 보낸다 — TestFlight 로 보내면 스토어 사용자가 갇힌다")
+    func theUpdateRequiredScreenSendsPeopleToTheStoreNotTestFlight() throws {
+        // 1.0 이 App Store 에 공개된 뒤로 이 화면을 보는 사람의 다수는 **스토어로 받은 사람**이고
+        // 그들에겐 TestFlight 가 없다. `itms-beta://` 는 처리할 앱이 없으면 시스템이 아무것도 하지 않아서,
+        // 서버 최소 빌드를 올리는 순간(= 구버전을 끊는 순간) 버튼이 무반응인 자리에 갇힌다.
+        let url = MobileSessionText.appStoreURL
+
+        // ① TestFlight 로 돌아가지 않는다. 스킴 이름으로 못을 박는다(주소가 통째로 바뀌어도 이건 남는다).
+        #expect(url.scheme != "itms-beta", "TestFlight 로 되돌아갔다 — 스토어 사용자에겐 무반응이다")
+        #expect(!url.absoluteString.lowercased().contains("testflight"))
+
+        // ② https 여야 한다. `itms-apps://` 도 스토어를 열지만, 못 열리면 다시 **무반응**으로 돌아간다 —
+        //    이 버튼의 결함이 애초에 그것이었다. https 는 최소한 Safari 가 페이지를 보여 준다.
+        #expect(url.scheme == "https", "무반응으로 되돌아갈 갈래를 다시 만들었다: \(url)")
+        #expect(url.host == "apps.apple.com")
+
+        // ③ 앱 번호가 들어 있어야 한다. 번호 없는 스토어 주소는 홈으로 떨어져 사용자가 손으로 찾아야 한다.
+        #expect(url.path.contains("id\(MobileSessionText.appStoreID)"), "앱 번호가 빠졌다: \(url.path)")
+
+        // ④ 지역 코드를 박지 않는다 — 판매 지역이 175개다. `/kr/` 로 박으면 해외 사용자가 엉뚱한 페이지를 본다.
+        //    애플이 보는 사람 지역으로 보내 준다.
+        let segments = url.path.split(separator: "/").map(String.init)
+        #expect(!segments.contains { $0.count == 2 && $0.allSatisfy(\.isLowercase) },
+                "주소에 지역 코드가 박혔다: \(url.path)")
+
+        // ⑤ 문구도 같이 옮겨야 한다 — 버튼만 고치고 본문에 TestFlight 를 남기면 사용자는 둘 중 뭘 믿을지 모른다.
+        #expect(!MobileSessionText.updateBody.contains("TestFlight"))
+        #expect(!MobileSessionText.updateButton.contains("TestFlight"))
+    }
+
     @Test("치명 오류 분류는 맥과 같은 코어 규칙이다(취소·URLError·5xx·429 는 로그아웃 아님)")
     func authErrorRulesMatchMac() {
         #expect(AuthErrorRules.classify(CancellationError()) == .cancelled)

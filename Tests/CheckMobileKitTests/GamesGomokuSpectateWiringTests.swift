@@ -140,6 +140,38 @@ import Testing
 
     // MARK: - 3. 순수 매퍼 (맥에서 돈다)
 
+    @Test("[관전] 칩 잠금은 **관전 전용 깃발**을 본다 — 순위 깃발로 잠그면 관전이 없는데 칩이 열린다")
+    func theWatchChipLocksOnTheWatchFlagNotTheRankingFlag() throws {
+        // 없으면: `rankingUnavailable` 로 관전 입구를 잠그던 자리가 **우연히만** 맞았다. 그 깃발은 "순위표가 없다"와
+        // "관전이 없다"를 겸업했다(옛 `noteWatchFailure` 가 관전 404 에 그것을 세웠다). 코어가 겸업을 풀어
+        // "순위를 한 번이라도 받았으면 순위 깃발은 세우지 않는다"로 좁힌 뒤에는, **행을 들고 있는 사용자에게
+        // 관전 입구가 영영 열린다** — 칩이 활성인 채 눌러도 조용히 접히고, 같은 카드를 계속 눌러 404 를 무한히 낸다
+        // (맥에서 5번 눌러 5요청 실측 · `0ba552d`). 옛 깃발로 되돌리면 이 단언이 빨개진다.
+        //
+        // 뷰는 `#if os(iOS)` 안이라 세울 수 없다(CheckMobileKit 의 절반이 그 안이다) — 그래서 **부르는 자리를 글자로** 잰다.
+        let code = try Self.watchEntryCode()
+        #expect(code.contains("gomoku.watchUnavailable"),
+                "관전 입구가 관전 전용 깃발을 안 본다 — 관전이 없는데 칩이 열린다")
+        #expect(!code.contains("rankingUnavailable"),
+                "관전 입구가 순위 깃발을 다시 본다 — 순위와 관전은 같이 없어지지 않는다(겸업 복귀)")
+    }
+
+    /// `GamesComponents.swift` 의 관전 입구(`watchEntry`) 본문 — 주석을 걷어낸다(안 걷으면 설명을 지워야 초록이 된다).
+    static func watchEntryCode() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/CheckMobileKit/Games/GamesComponents.swift")
+        let raw = try String(contentsOf: url, encoding: .utf8)
+        let stripped = raw.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> String in
+                guard let hit = line.range(of: "//") else { return String(line) }
+                return String(line[line.startIndex..<hit.lowerBound])
+            }
+            .joined(separator: "\n")
+        guard let hit = stripped.range(of: "private var watchEntry") else { return "" }
+        return String(stripped[hit.upperBound...].prefix(1400))
+    }
+
     @Test("순수 매퍼: 행 순서는 입력 그대로다 — 정렬은 서버가 한다(재정렬 금지)")
     func rankingBoardKeepsServerOrder() throws {
         // 없으면: 누가 `rankingBoard` 나 `applyRanking` 에 `.sorted` 한 줄을 넣어도(둘 다 "친절"로 보인다) 같은 목록이

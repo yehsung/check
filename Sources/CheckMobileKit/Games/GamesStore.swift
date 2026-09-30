@@ -21,8 +21,9 @@ package enum GamesRouteStep: Equatable, Sendable {
 /// 2. **1:1 오목** — 코어 `GomokuStore`(context.gomoku, host = 폰 세션). 이 스토어는 **창 수명**을 폰 수명에 옮긴다:
 ///    맥의 창 표시·숨김(`windowDidShow/Hide`)은 폰에서 "오목 화면이 보이고 앱이 active 인가"다.
 ///    - 오목 화면이 나타남 → `openWindow`(로비·인박스·진행 판) + active 면 `windowDidShow`(폴링 시작).
-///    - 화면이 사라짐 → `windowDidHide`(폴링을 멈추고, 결과 화면이었으면 그 판에서 나간다 — **대국은 서버에서 계속 흐른다**).
-///    - 앱이 background → **가림**(`windowOcclusionDidChange(visible: false)`) — 폴링만 멈추고 판에서 나가지 않는다.
+///    - 화면이 사라짐 → `windowDidHide`(폴링을 멈추고, 결과 화면이었으면 그 판에서 나간다 — **대국은 서버에서 계속 흐른다**)
+///      **+ 관전 중이었으면 관전을 끝낸다**(폰에서만 — `gomokuScreenDidDisappear` 주석).
+///    - 앱이 background → **가림**(`windowOcclusionDidChange(visible: false)`) — 폴링만 멈추고 판에서 나가지 않는다(관전도 남는다).
 ///    - 앱이 active 로 돌아옴(화면이 보이는 채) → 가림 해제(또는 `windowDidShow`) + 따라잡기(인박스 + 진행 판의 놓친 수).
 ///    - 판이 막 시작됨(`presentWindow`) → 앱이 active 면 오목 화면을 연다(신청자가 수락된 순간을 모르면 흑 30초를 흘린다).
 /// 3. **AI 대국**(1.0.1) — 규칙·판·서버 차단은 코어(`GomokuStoreAI`, 맥과 한 벌). 이 스토어는 폰 선택기(`aiThinker`)를 코어에 끼우고
@@ -100,6 +101,8 @@ package final class GamesStore {
         // 오목은 **가림**으로 멈춘다(`windowOcclusionDidChange(visible: false)`) — 폴링만 멈추고 창은 닫지 않는다.
         // `windowDidHide` 를 부르면 결과 화면인 채로 잠깐 앱을 나갔을 뿐인데 그 판에서 '나간' 것이 되어(gomoku_leave)
         // 두 사람이 다 나간 판의 인사 채팅이 서버에서 지워진다.
+        // **관전도 여기서 끊지 않는다**: 알림 하나 읽고 오는 것은 "그만 볼게"가 아니다 — 끊는 자리는 화면을 떠나는 길
+        // (`gomokuScreenDidDisappear`)뿐이고, 그 대조를 `GamesGomokuWatchExitTests` 가 나란히 잰다.
         if isGomokuScreenVisible, context.gomoku.isWindowVisible {
             context.gomoku.windowOcclusionDidChange(visible: false)
         }
@@ -164,9 +167,24 @@ package final class GamesStore {
     }
 
     /// 오목 화면이 사라졌다(뒤로 · 다른 탭으로 · 로그아웃). 폴링만 멈춘다. 결과 화면인 채로 떠나면 코어가 그 판에서 나간다.
+    ///
+    /// **관전은 여기서 끝낸다**(0.3.41 수리). 왜 틀렸었나: 코어 `windowDidHide` 는 **진행 중인** 관전을 일부러 남긴다
+    /// (`GomokuStoreWatch` C14) — 맥에서 그 통지는 '창 최소화'라 지우면 최소화만 해도 로비로 떨어지기 때문이다.
+    /// 그런데 폰에서 같은 통지는 "사용자가 화면을 떠났다"다. 관전 화면은 대국·결과 화면과 달리 탭 막대를 숨기지 않아
+    /// 탭 이동·뒤로가 그대로 되고, 그렇게 떠난 뒤 게임 탭에서 오목을 다시 누르면 로비가 아니라 **남의 대국이 다시 열렸다**
+    /// (예고도 없다 — 카드 문구의 `hasActiveGomokuMatch` 는 관전 중 false 다). 관전은 구경이니 탭을 옮기는 것이 곧
+    /// "그만 볼게"다. 그래서 **폰 배선에서만** 끊는다(코어는 맥과 한 벌이라 그쪽을 고치면 맥의 최소화가 깨진다).
+    ///
+    /// `leaveWatch()` 가 **아니다**: 그쪽은 로비·받은함·순위를 다시 읽는 네트워크 호출이라 화면을 떠나는 길에서 조회 셋이 나간다.
+    /// `stopWatching()` 은 세대만 올리고 장부를 비운다(요청 0건).
+    ///
+    /// 머리 문장의 함정과 어긋나지 않는다: **내 판**은 여기서 손대지 않는다 — 결과 화면인 채로 떠나면 코어가 그 판에서
+    /// 나가고(`gomoku_leave`), **진행 중인 내 판은 남는다**(끊으면 떠나 있는 사이 대국이 죽는다). 관전만 결과·진행 구분 없이 끝난다.
     package func gomokuScreenDidDisappear() {
         guard isGomokuScreenVisible else { return }
         isGomokuScreenVisible = false
+        // 관전을 먼저 내린다(요청 없음). 뒤의 `windowDidHide` 는 **끝난** 관전만 내리므로 진행 중인 남의 판이 그대로 남았다.
+        context.gomoku.stopWatching()
         context.gomoku.windowDidHide()
         syncAIThinker()
     }

@@ -6,7 +6,8 @@ import SwiftUI
 /// 로비 **대신** 이 화면이 선다(새 라우트가 아니다 — 자식 라우트를 push 하면 `GamesGomokuScreen.onDisappear` →
 /// `windowDidHide()` 로 스토어 폴링이 죽어 값이 갱신되지 않는다).
 ///
-/// 위에서부터: 받은 신청(있을 때만) · 안내 한 줄 · 흑 카드 · 판 · 백 카드 · 상태 상자 · 판돈·수·경과, 아래 막대에 [나가기].
+/// 위에서부터: 받은 신청 · 보낸 신청(각각 있을 때만) · 안내 한 줄 · 흑 카드 · 판 · 백 카드 · 상태 상자 · 판돈·수·경과,
+/// 아래 막대에 [나가기]. 신청 두 절의 순서는 로비와 같다(`GamesGomokuLobby.body`).
 /// 대국 화면(`GamesGomokuMatch`)과 같은 문법이지만 **입력이 하나도 없다**:
 /// - 판은 순수 그림(`GamesGomokuBoardCanvas`)이다 — 탭 제스처·미리보기 돌·금수 표시가 없다.
 ///   `GamesGomokuPlayBoard` 는 `match.myColor`·탭에 묶여 있어 쓰지 않는다.
@@ -34,6 +35,7 @@ struct GamesGomokuWatch: View {
         ScrollView {
             VStack(alignment: .leading, spacing: MobileTheme.space2) {
                 invites
+                outgoing
                 if let notice = gomoku.notice {
                     InlineNotice(text: notice, kind: .warning)
                 }
@@ -59,15 +61,14 @@ struct GamesGomokuWatch: View {
         }
     }
 
-    // MARK: 받은 신청 (관전 중에도 닿아야 한다)
+    // MARK: 받은 신청 · 보낸 신청 (관전 중에도 닿아야 한다)
 
     /// 관전 화면이 로비를 통째로 덮으므로, 여기 없으면 받은 신청의 60초를 거둘 길이 없다. 로비의 `.rows` 갈래와 **같은 부품**이다
     /// (`GamesGomokuInviteCard` — 수락·거절 문이 두 벌이 되지 않는다). 받은 신청이 없으면 아무것도 그리지 않는다:
     /// "없어요"는 할 일이 없는 줄이고, 관전 화면에서는 판이 밀려날 뿐이다.
     ///
     /// 개수 상한은 두지 않는다(맥 오른쪽 열은 세로 예산이 못 박혀 2장까지였다) — 폰은 스크롤이라 전부 그려도 거둘 길이 남는다.
-    /// 보낸 신청 [취소]는 여기 없다 — 그 행(`GamesGomokuOutgoingRow`)은 로비 파일 안에 private 이고, 취소 문을 한 벌 더
-    /// 만드는 것보다 늘 보이는 [나가기]로 로비에 돌아가는 길이 낫다.
+    /// 보낸 신청은 바로 아래 `outgoing` 이 같은 규약으로 그린다.
     @ViewBuilder
     private var invites: some View {
         let pending = gomoku.pendingIncomingInvites
@@ -85,6 +86,27 @@ struct GamesGomokuWatch: View {
         }
     }
 
+    /// 보낸 신청 한 줄 + [취소] — 로비의 같은 절(`GamesGomokuLobby.outgoing`)과 **같은 꼴**이다.
+    ///
+    /// 0.3.41 은 이 자리를 비워 두고 "그 행은 로비 파일 안에 private 이라 [나가기]로 돌아가는 길이 낫다"고 적었는데,
+    /// 둘 다 더는 사실이 아니다: 그 행은 로비·관전이 같이 쓰도록 모듈에 공개됐고(`GamesGomokuOutgoingRow` 머리말),
+    /// [나가기]는 **보던 판을 잃는** 길이라 "거둘 길"이 못 된다. 그래서 관전이 로비 자리에 서는 동안 루비를 걸어 둔
+    /// 내 신청이 화면에서 통째로 사라져 TTL 60초를 거둘 길이 없었다(맥은 세로 예산 322pt 안에서까지 이 자리를 지켰다 —
+    /// `GomokuPanel.swift` 의 2026-09-30 반증). 취소 문은 여기서 새로 만들지 않고 **그 부품을 그대로 부른다**.
+    ///
+    /// 보낸 신청이 없으면 **아무것도 그리지 않는다**(받은 신청과 같은 규약 — "없어요"는 할 일이 없는 줄이라 판만 밀어낸다).
+    /// 그 행의 구분선은 `.none` 으로 못 박혀 있어 **한 줄만 든 `InsetGroup`** 안에 넣는다(로비와 같다).
+    /// `GomokuStore.cancelChallenge()` 에는 단계 가드가 없어 관전 중에도 그대로 듣는다.
+    @ViewBuilder
+    private var outgoing: some View {
+        if let invite = gomoku.outgoing {
+            SectionHeader(GomokuPhoneText.outgoingTitle, padded: true)
+            InsetGroup {
+                GamesGomokuOutgoingRow(store: store, invite: invite)
+            }
+        }
+    }
+
     // MARK: 두 사람 · 판
 
     /// 흑 카드 · 판 · 백 카드. **색을 모르는 동안에는 자리만 지킨다**(아래 `playerRow`).
@@ -96,9 +118,24 @@ struct GamesGomokuWatch: View {
             playerRow(.white, index: 1)
         } else {
             // 씨앗도 응답도 없다(로비 30초 사이 목록에서 빠진 판을 눌렀다) — 두 사람을 하나도 모르니 빈 카드 두 장 대신
-            // 한 줄 로딩이다(빈 카드는 "사람이 없는 판"으로 읽힌다).
+            // 한 줄이다(빈 카드는 "사람이 없는 판"으로 읽힌다).
             InsetGroup {
-                GroupRow(divider: .none) { LoadingRow(GomokuPhoneText.watchLoading) }
+                GroupRow(divider: .none) {
+                    // **끝난 판에는 로딩을 말하지 않는다.** 0.3.41 은 여기도 `LoadingRow` 여서, 아래 상태 상자가
+                    // "대국이 끝났어요"를 말하는 동안 한 화면이 "아직 안 불러왔다"와 "이미 끝났다"를 동시에 주장했다.
+                    // 끝난 판은 스토어가 폴링을 멈춰(`isFinished`) 더 올 것이 없으니 진행형·회전자는 거짓말이다.
+                    if watch.isFinished {
+                        Text(GomokuPhoneText.watchPlayersUnknown)
+                            .font(.subheadline)
+                            .foregroundStyle(MobileTheme.label2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 8)
+                            .accessibilityElement(children: .combine)
+                    } else {
+                        LoadingRow(GomokuPhoneText.watchLoading)
+                    }
+                }
             }
             board(side: side)
         }
@@ -112,11 +149,16 @@ struct GamesGomokuWatch: View {
         let subtitle: String?
         if known {
             user = color == .black ? watch.black : watch.white
-            subtitle = user.map { GomokuPhoneText.playerSubtitle(color: color, isWorking: $0.isWorking) }
+            // 부제는 **돌 색만**이다. 0.3.41 은 `playerSubtitle(color:isWorking:)` 으로 "흑 · 근무 중"을 세웠는데
+            // 관전 응답에는 `is_working` 키가 없어 근무 안 하는 사람도 전원 "근무 중"이 됐다
+            // (근거는 `GomokuPhoneText.watchPlayerSubtitle` 머리말).
+            subtitle = user.map { _ in GomokuPhoneText.watchPlayerSubtitle(color: color) }
         } else {
             // 이 자리와 색의 관계를 아직 모른다 — `faces` 의 얼굴만 빌려 그리고 "불러오고 있어요"를 첫 자리에 한 번 둔다.
             user = watch.faces.indices.contains(index) ? watch.faces[index] : nil
-            subtitle = index == 0 ? GomokuPhoneText.watchLoading : nil
+            // 끝난 판이면 그 줄도 두지 않는다(위 `players` 의 else 갈래와 같은 이유 — 더 올 것이 없다).
+            // 결과는 상태 상자가 말하고, 색을 모르는 카드는 배지 없이 얼굴만 남는다.
+            subtitle = (index == 0 && !watch.isFinished) ? GomokuPhoneText.watchLoading : nil
         }
         return GamesGomokuWatchPlayerRow(
             store: store,
@@ -151,14 +193,54 @@ struct GamesGomokuWatch: View {
         .accessibilityLabel(GomokuPhoneText.watchBoardAccessibility(watch))
     }
 
-    /// 판 한 변 — 대국 화면 `boardSide(in:)` 과 **같은 식**이다(그 함수는 그 파일 안에 private 이다): 기본 글자에서는 화면 폭 최대지만,
-    /// 글자가 커지면 카드 두 장이 훨씬 높아져 판과 상태 상자가 한 화면에 들어가지 못한다. 관전에서 가장 중요한 상태(누구 차례 ·
-    /// 남은 초 · 끝났는가)가 판보다 먼저다.
+    /// 판 한 변 — **가용 높이 예산**으로 정한다. 관전에서 가장 중요한 상태(누구 차례 · 남은 초 · 끝났는가)가 판보다 먼저다.
+    ///
+    /// 0.3.41 은 대국 화면 `boardSide(in:)` 을 그대로 복사해 **글자 크기만** 봤다(`typeSize >= .xLarge` 일 때만 줄였다).
+    /// 그런데 관전 화면은 대국보다 아래가 무겁다: 상태 상자 · 판돈/N수 줄 · 캡션이 더 있고, `safeAreaInset` 의 [나가기]
+    /// 막대(64.5pt)와 탭 막대가 늘 깔린다. 그래서 iPhone SE(375×667)에서는 **기본 글자로도** 백 카드가 잘리고
+    /// 상태 상자가 통째로 화면 밖이었다(위 주석이 "상태가 판보다 먼저"라고 적어 놓고 그 보호가 큰 글자에만 걸려 있었다).
+    /// iPhone 15 도 받은 신청이 한 장 서면 같은 일이 났다 — 그 카드는 60초짜리라 판보다 먼저 자리를 받아야 한다.
+    ///
+    /// 두 상한 중 **작은 쪽**을 쓴다:
+    /// ① 높이 예산 — `보이는 높이 − [나가기] 막대 − (상태 상자까지의 다른 블록 합)`. 상수 출처는 `GomokuPhoneWatchBudget`.
+    /// ② 큰 글자 비율(옛 식) — 글자가 커지면 ① 의 상수가 실제보다 작아져 예산이 과하게 낙관적이 되므로 그대로 남긴다.
     private func boardSide(in visible: CGSize) -> CGFloat {
-        let full = max(240, visible.width - 24)
-        guard visible.height > 0, typeSize >= .xLarge else { return full }
-        let fraction: CGFloat = typeSize.isAccessibilitySize ? 0.40 : 0.52
-        return max(240, min(full, (visible.height * fraction).rounded()))
+        let full = max(GomokuPhoneWatchBudget.boardFloor, visible.width - 24)
+        guard visible.height > 0 else { return full }
+        var side = min(full, visible.height - GomokuPhoneWatchBudget.leaveBar - blocksAboveStatusBox)
+        if typeSize >= .xLarge {
+            let fraction: CGFloat = typeSize.isAccessibilitySize ? 0.40 : 0.52
+            side = min(side, visible.height * fraction)
+        }
+        // 바닥값 아래로는 줄이지 않는다 — 돌이 안 읽히는 판은 관전이 아니다. 예산이 그보다 좁은 자리
+        // (SE + 신청 두 절이 다 선 경우)에서는 상태 상자가 한 번 스크롤 아래로 내려간다.
+        return max(GomokuPhoneWatchBudget.boardFloor, side.rounded(.down))
+    }
+
+    /// 판 위·아래에서 **상태 상자까지** 자리를 먹는 블록들의 합(`VStack` 간격 · 위 패딩 포함).
+    /// 판돈/N수 줄과 캡션은 세지 않는다 — 상태 상자 아래고, 스크롤로 닿으면 되는 것들이다.
+    ///
+    /// 두 사람을 하나도 모르는 판은 카드 두 장 대신 한 줄이라(`players` 의 else 갈래) 실제보다 조금 크게 잡힌다 —
+    /// 판을 더 작게 잡는 쪽이므로 그대로 둔다(예산은 넉넉히 틀리는 편이 안전하다).
+    private var blocksAboveStatusBox: CGFloat {
+        var blocks: [CGFloat] = []
+        let pending = gomoku.pendingIncomingInvites
+        if !pending.isEmpty {
+            blocks.append(GomokuPhoneWatchBudget.sectionHeader)
+            blocks.append(GomokuPhoneWatchBudget.inviteCard * CGFloat(pending.count))
+        }
+        if gomoku.outgoing != nil {
+            blocks.append(GomokuPhoneWatchBudget.sectionHeader)
+            blocks.append(GomokuPhoneWatchBudget.outgoingRow)
+        }
+        if gomoku.notice != nil {
+            blocks.append(GomokuPhoneWatchBudget.notice)
+        }
+        blocks.append(GomokuPhoneWatchBudget.playerCard)  // 흑(판 위)
+        blocks.append(GomokuPhoneWatchBudget.playerCard)  // 백(판 아래)
+        blocks.append(GomokuPhoneWatchBudget.statusBox)
+        // 판도 `VStack` 자식 하나다 — 자식은 `blocks.count + 1` 개, 그 사이 간격은 `blocks.count` 개.
+        return MobileTheme.space2 + blocks.reduce(0, +) + MobileTheme.space2 * CGFloat(blocks.count)
     }
 
     // MARK: 판돈 · 수 · 경과
@@ -179,10 +261,15 @@ struct GamesGomokuWatch: View {
         }
     }
 
+    /// 판돈 **액수만** — 접미사를 붙이지 않는다.
+    ///
+    /// 0.3.41 은 여기에 `stakeGainSuffix` 를 붙여 "판돈 10 · 이기면 +10" 이라고 썼는데, **관전자는 이 판에서
+    /// 한 푼도 얻지 못한다**(보이스오버도 같은 말을 읽었다). 그 접미사를 붙이는 자리는 내비 부제·신청 카드·대국 화면 —
+    /// 전부 **내 판**이고, 로비의 같은 '남의 판' 줄(`GamesLiveMatchRow`)도 접미사를 안 붙인다.
     @ViewBuilder
     private var stakeLine: some View {
         if let stake = watch.stake {
-            GamesStakeLine(stake: stake, suffix: GomokuPhoneText.stakeGainSuffix(stake))
+            GamesStakeLine(stake: stake)
                 .font(MobileTheme.rowSubtitle)
                 .foregroundStyle(MobileTheme.label2)
         } else {
@@ -232,6 +319,50 @@ struct GamesGomokuWatch: View {
     }
 }
 
+// MARK: - 세로 예산
+
+/// 관전 첫 화면의 세로 예산(pt · **기본 글자 크기**). `boardSide(in:)` 이 판을 줄일 때 쓴다.
+///
+/// 상수마다 **어디서 나온 숫자인지**를 적는다 — 다음 사람이 손으로 검산할 수 있어야 한다(관전 화면은 폰 전용이라
+/// 맥 `swift test` 가 그릴 수 없다). 글자가 커지면 이 값들은 전부 작아지므로 예산만으로 판을 정하지 않는다
+/// (`boardSide(in:)` 의 비율 상한 ②).
+///
+/// 검산(기본 글자 · 상태 상자 바닥까지):
+/// - iPhone SE 375×667 → 보이는 높이 ≈ 667 − 64(상태막대+내비) − 49(탭 막대) = 554, 가용 = 554 − 64.5 = 489.5.
+///   신청이 없을 때 다른 블록 합 = 8 + (60+60+60) + 8×3 = 212 → 판 277(옛 식은 351 이라 상태 상자가 통째로 밖).
+/// - iPhone 15 393×852 → 보이는 높이 ≈ 739, 가용 ≈ 674.5. 신청 없으면 판은 폭 상한 369 그대로,
+///   받은 신청이 한 장 서면 블록 합이 212 + (54+128) + 8×2 = 410 → 판 264 로 줄어 상태 상자가 남는다.
+private enum GomokuPhoneWatchBudget {
+    /// [나가기] 막대(`GamesGomokuWatch.leaveBar`): 실선 0.5 + `.md` 버튼 누름 영역 44 + 위아래 10 = 64.5.
+    static let leaveBar = MobileTheme.hairline + AingButtonMetrics.targetHeight(for: .md) + 20
+
+    /// 플레이어 카드 한 장(`GamesGomokuWatchPlayerRow`): 초상 44 + 위아래 8 = 60.
+    /// 이름·부제 두 줄(callout 21 + 1 + footnote 18 = 40)은 초상보다 낮아 높이를 정하지 않는다.
+    static let playerCard: CGFloat = 44 + 8 * 2
+
+    /// 상태 상자(`GamesGomokuWatchStatusBox.box`): subheadline **두 줄**(20×2) + 위아래 10 = 60.
+    /// 한 줄로 끝나는 문구("관전 중 · 흑 차례")가 많지만, 375pt 에서 "관전 중 · 시간이 지나 곧 자동으로 놓여요"는 두 줄이다.
+    static let statusBox: CGFloat = 20 * 2 + 10 * 2
+
+    /// 안내 한 줄(`InlineNotice`): footnote 18 + 위아래 10 = 38.
+    static let notice: CGFloat = 18 + 10 * 2
+
+    /// `SectionHeader(padded: true)`: 위 22 + title3 24 + 아래 8 = 54.
+    static let sectionHeader: CGFloat = 22 + 24 + 8
+
+    /// 받은 신청 카드 한 장(`GamesGomokuInviteCard`): 위 14 + 초상 44 + 아래 10 + 버튼 누름 영역 44 + 아래 16 = 128.
+    static let inviteCard: CGFloat = 14 + 44 + 10 + AingButtonMetrics.targetHeight(for: .md) + MobileTheme.cardPadding
+
+    /// 보낸 신청 행(`GamesGomokuOutgoingRow`): [취소] 누름 영역 44(초상 36·글 40 보다 높다) + `GroupRow` 위아래 10 = 64.
+    /// 그 행의 `minHeight: 56` 보다 크므로 이 값이 이긴다.
+    static let outgoingRow = AingButtonMetrics.targetHeight(for: .sm) + 10 * 2
+
+    /// 판을 이보다 작게는 줄이지 않는다. 한 칸은 `side × 0.88 ÷ 14`(`GomokuPhoneBoardGeometry.cell`)라
+    /// 210pt 에서 13.2pt — 돌이 겨우 읽히는 선이다. 대국 화면의 바닥값 240 보다 낮게 둘 수 있는 이유는
+    /// **관전 판에 탭이 없어서**다(240 은 누르는 칸 16pt 를 지키려는 값이다).
+    static let boardFloor: CGFloat = 210
+}
+
 // MARK: - 플레이어 카드
 
 /// 관전 플레이어 한 장 — 대국 카드(`GamesGomokuPlayerCard`)와 같은 모양이지만 **마감을 직접 받는다**.
@@ -254,12 +385,24 @@ private struct GamesGomokuWatchPlayerRow: View {
         return .stone(isBlack: color == .black)
     }
 
+    /// 이름 자리. 사람을 모르거나(씨앗 없는 판) **이름이 빈 문자열**이면 "—" 다(위 `PersonName` 자리의 주석).
+    private var displayName: String {
+        let name = user?.displayName ?? ""
+        return name.isEmpty ? "—" : name
+    }
+
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous)
         HStack(spacing: MobileTheme.space3) {
-            CharacterPortrait(id: user?.characterID, mood: user?.mood ?? .plain, size: 44, badge: badge)
+            // 표정은 **늘 `.plain`**(상태 없음 — 링도 발광도 없다). 0.3.41 은 `user?.mood` 를 읽었는데 그 값은
+            // `isWorking ? .working : .off`(`GamesComponents.swift`)라, 관전 응답에 `is_working` 키가 없는 탓에
+            // 전원 근무 표정(웃음 + 초록 링 + 발광)이 됐다. 근무 상태를 모르는 자리에서 링은 상태 점과 같은 단정이다.
+            CharacterPortrait(id: user?.characterID, mood: .plain, size: 44, badge: badge)
             VStack(alignment: .leading, spacing: 1) {
-                PersonName(user?.displayName ?? "—", center: CenterLabel.serverValue(forDisplay: user?.center))
+                // `??` 로는 이름을 못 접는다: 코어 경계 `peerUser` 가 이름을 모를 때 nil 이 아니라 **빈 문자열**을
+                // 넣으므로(`displayName ?? ""`), 서버가 이름을 안 실은 판은 "—" 대신 이름 줄이 통째로 비었다.
+                // 끝난 판 한 줄에서 고친 것과 **같은 함정**이다(`GomokuPhoneWatchStatus.displayName`).
+                PersonName(displayName, center: CenterLabel.serverValue(forDisplay: user?.center))
                 if let subtitle {
                     Text(subtitle)
                         .font(MobileTheme.rowSubtitle)

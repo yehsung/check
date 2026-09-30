@@ -17,7 +17,9 @@ import Testing
 // 순위 행 뷰는 `#if os(iOS)` 안이라 **맥 스위트가 컴파일조차 못 한다**(저장소 메모 '폰 뷰는 맥 스위트가 못 본다').
 // 뷰를 세워 픽셀·문자열을 재는 길은 없다. 그래서 둘로 나눠 잰다:
 //   1. **문구 계약**(값) — `GomokuPhoneText` 는 `#if` 밖이라 맥에서 값으로 부를 수 있다. 전적 문장이 세 숫자를 다 싣는지.
-//   2. **소스 계약**(글자) — 행 뷰 소스를 읽어 승점과 전적이 **한 칸에 같이** 실리는 것을 잰다.
+//   2. **소스 계약**(글자) — 행 뷰 소스를 읽어 승점과 전적이 **한 칸에 같이** 실리는 것을 잰다. 그리고 큰 글자에서 그 칸이
+//      **잘리지 않는 꼴**인지도 잰다 — 같은 칸이어도 가로 폭을 고정하면 카드가 오른쪽을 자른다(0.3.41 초판이 그 꼴로 초록이었다 ·
+//      `accessibilityBranchDoesNotPinWidth`).
 //
 // ── 소스 계약의 관용구 ──
 // 주석은 반드시 걷어낸다(`stripComments` · `IntegrationContractTests.code(_:)` 와 같은 하우스 규칙). 안 걷으면 이 파일 머리말처럼
@@ -105,6 +107,50 @@ import Testing
                     "★ \(name) 가지에서 전적이 승점과 같은 칸에 없다 — 통 안: \(box.body.trimmingCharacters(in: .whitespacesAndNewlines))")
             #expect(box.head.contains("Stack"), "\(name) 가지에서 승점·전적을 담은 통이 스택이 아니다 — 통 머리: \(box.head)")
         }
+    }
+
+    @Test("큰 글자 가지는 승점·전적의 **가로 폭을 고정하지 않는다** — 고정하면 카드가 전적을 잘라 '승점만' 이 된다")
+    func accessibilityBranchDoesNotPinWidth() throws {
+        // ★ 왜 이 못이 따로 필요한가: 바로 위 테스트는 **두 조각이 같은 스택에 있는지**만 잰다. 그래서 큰 글자 가지가
+        // `HStack(spacing: 8)` 에 두 조각을 몰고 조각마다 가로를 고정했던 0.3.41 초판도 **초록이었다** — 화면에서는 전적이
+        // 카드 밖으로 밀려 `InsetGroup` 의 `clipShape`(`Components/InsetGroup.swift`)에 잘려 있었다. 가로 고정 둘이 한 스택에
+        // 있으면 스택이 제안 폭을 무시하고 이상 폭을 그대로 보고하기 때문이다. 눈에 보이는 결과는 사용자가 금지한 '승점만'
+        // 이었는데 테스트는 통과했다 — 그 구멍을 막는다.
+        //
+        // 근거(320pt 기기 · 카드 안쪽 폭 256 = 320 − sideMargin 16×2 − cardPadding 16×2 · CoreText 실측):
+        // `승점 + 8 + "18승 5패 0무"` 가 Large 107.8 · AX2 204.8 · AX3 246.8 · **AX4 283.3** · **AX5 325.0** 이고
+        // 짧은 `"6승 2패 1무"` 도 AX4 259.8 · AX5 297.9 — **AX4 부터는 어떤 전적이든 가로 한 줄에 안 들어간다.**
+        let code = try Self.code(Self.rankingPath)
+        let row = try #require(Self.block(after: "private struct GamesGomokuRankRow: View", in: code),
+                               "순위 행 타입 `GamesGomokuRankRow` 본문을 못 찾았다")
+        let body = try #require(Self.block(after: "var body: some View", in: row.body), "행 뷰 `body` 를 못 찾았다")
+        let big = try #require(Self.block(after: "if typeSize.isAccessibilitySize", in: body.body),
+                               "큰 글자 가지(`isAccessibilitySize`)를 못 찾았다")
+
+        // 1. 큰 글자에서 두 숫자를 담은 통은 **가로 스택이 아니다** — 세로로 쌓아 각 줄이 256 을 온전히 쓴다.
+        let box = try #require(Self.innermostBlock(around: "pointsText", in: big.body),
+                               "큰 글자 가지에서 승점을 감싸는 통을 못 찾았다")
+        #expect(!box.head.contains("HStack"),
+                "★ 큰 글자에서 승점·전적을 가로로 몰았다 — AX4 부터 카드가 뒤에 선 전적을 자른다. 통 머리: \(box.head)")
+        // 2. 그 가지 어디에도 **가로 고정**이 없다. `.fixedSize(horizontal: false, vertical: true)` 는 세로만 푸는 것이라
+        //    괜찮고(폰 공용 관용구 — `PersonName.stacked`), 막는 것은 빈 괄호 꼴과 `horizontal: true` 뿐이다.
+        #expect(!big.body.contains(".fixedSize()"), "★ 큰 글자 가지에 가로 고정(`.fixedSize()`)이 돌아왔다 — 전적이 다시 잘린다")
+        #expect(!big.body.contains("horizontal: true"), "★ 큰 글자 가지에 가로 고정(`horizontal: true`)이 돌아왔다")
+        // 3. 조각 **안**에도 가로 고정을 두면 안 된다: 두 가지가 같은 조각을 쓰므로 조각 안의 고정은 바깥에서 풀 길이 없다
+        //    (초판이 정확히 이 꼴이었다). 고정이 필요한 가지는 **쓰는 자리**에서 건다.
+        for (name, piece) in [("승점", "private var pointsText"), ("전적", "private var recordText")] {
+            let fragment = try #require(Self.block(after: piece, in: row.body), "`\(piece)` 조각이 없다")
+            #expect(!fragment.body.contains(".fixedSize()"),
+                    "★ \(name) 조각이 스스로 가로를 고정한다 — 큰 글자 가지가 이 줄을 접을 길이 없어진다")
+            #expect(!fragment.body.contains("horizontal: true"),
+                    "★ \(name) 조각이 스스로 가로를 고정한다(`horizontal: true`) — 위와 같은 잘림이 돌아온다")
+        }
+        // 대조(기준선이 달라야 한다 — 저장소 메모): **보통 글자** 가지는 오른쪽 숫자 칸을 그대로 가로 고정해, 폭이 모자랄 때
+        // 숫자가 아니라 이름이 먼저 줄어들게 한다. 둘 다 풀어 버리면 좁은 폭에서 숫자가 먼저 꺾이므로 여기서 빨개진다.
+        let plain = try #require(Self.block(after: "else", in: String(body.body[big.end...])),
+                                 "보통 글자 가지(`else`)를 못 찾았다")
+        #expect(plain.body.contains(".fixedSize()"),
+                "보통 글자 가지에서 오른쪽 숫자 칸의 가로 고정이 사라졌다 — 좁은 폭에서 이름 대신 숫자가 꺾인다")
     }
 
     @Test("목록 밖 내 순위 줄은 승점·전적을 다 실은 조립 문장 하나를 쓴다(승점만 있는 문장으로 못 바꾼다)")

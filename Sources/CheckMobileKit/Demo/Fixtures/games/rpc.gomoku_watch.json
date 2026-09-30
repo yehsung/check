@@ -1,0 +1,185 @@
+{
+  "__note": [
+    "관전 데모 픽스처(진행 중) — 장면 없음(모든 데모 장면에 걸린다). 닿는 길: -AingCheckDemoRoute games/gomoku/lobby → '지금 대결 중' 카드의 [관전].",
+    "판 id·두 사람·started_ms 는 rpc.gomoku_lobby.json 의 matches[0] 과 같다 — 다르면 [관전] 을 눌러도 이 파일에 닿지 못하고 3회 실패 뒤 로비로 튕긴다(그 상태가 0.3.41 의 기준선이었다: 관전 화면에 검증 수단이 0이었다).",
+    "board 가 판의 권위다(225자 · index = y*15+x). moves 와 한 수도 어긋나지 않게 두어라 — 어긋나면 코어가 needsFull 로 처음부터 다시 받으려 해 데모가 제자리를 돈다(GomokuStoreWatch.spectateState).",
+    "black_user·white_user 에 is_working 이 없는 것은 빠뜨린 것이 아니라 서버 계약이다(20260930120000_gomoku_ranking_watch.sql — user_id·display_name·avatar_url·character·center 다섯 칸).",
+    "시각은 고정 시계(MobileClock.demoInstant = 1789621500000)에서 읽는 값이다: 백 차례 22초 남음 · 경과 1분 35초."
+  ],
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "match": {
+    "id": "d0000000-0000-4000-8000-00000000a0c1",
+    "status": "active",
+    "stake": 10,
+    "black": "d0000000-0000-4000-8000-0000000000b6",
+    "white": "d0000000-0000-4000-8000-0000000000b3",
+    "challenger": "d0000000-0000-4000-8000-0000000000b3",
+    "opponent": "d0000000-0000-4000-8000-0000000000b6",
+    "move_count": 17,
+    "turn": "white",
+    "deadline_ms": 1789621522000,
+    "turn_started_ms": 1789621492000,
+    "started_ms": 1789621405000,
+    "result": null,
+    "end_reason": null,
+    "winner": null,
+    "finished_ms": null,
+    "board": "................................................................b.b.............bw..............w.b............wb.www.........w.b............b..b...............b...............w................................................"
+  },
+  "moves": [
+    {
+      "seq": 1,
+      "color": "black",
+      "kind": "stone",
+      "x": 7,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 2,
+      "color": "white",
+      "kind": "stone",
+      "x": 6,
+      "y": 8,
+      "auto": false
+    },
+    {
+      "seq": 3,
+      "color": "black",
+      "kind": "stone",
+      "x": 8,
+      "y": 8,
+      "auto": false
+    },
+    {
+      "seq": 4,
+      "color": "white",
+      "kind": "stone",
+      "x": 6,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 5,
+      "color": "black",
+      "kind": "stone",
+      "x": 9,
+      "y": 9,
+      "auto": false
+    },
+    {
+      "seq": 6,
+      "color": "white",
+      "kind": "stone",
+      "x": 6,
+      "y": 6,
+      "auto": false
+    },
+    {
+      "seq": 7,
+      "color": "black",
+      "kind": "stone",
+      "x": 10,
+      "y": 10,
+      "auto": false
+    },
+    {
+      "seq": 8,
+      "color": "white",
+      "kind": "stone",
+      "x": 11,
+      "y": 11,
+      "auto": false
+    },
+    {
+      "seq": 9,
+      "color": "black",
+      "kind": "stone",
+      "x": 6,
+      "y": 9,
+      "auto": false
+    },
+    {
+      "seq": 10,
+      "color": "white",
+      "kind": "stone",
+      "x": 6,
+      "y": 5,
+      "auto": false
+    },
+    {
+      "seq": 11,
+      "color": "black",
+      "kind": "stone",
+      "x": 6,
+      "y": 4,
+      "auto": false
+    },
+    {
+      "seq": 12,
+      "color": "white",
+      "kind": "stone",
+      "x": 9,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 13,
+      "color": "black",
+      "kind": "stone",
+      "x": 8,
+      "y": 6,
+      "auto": false
+    },
+    {
+      "seq": 14,
+      "color": "white",
+      "kind": "stone",
+      "x": 10,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 15,
+      "color": "black",
+      "kind": "stone",
+      "x": 5,
+      "y": 5,
+      "auto": true
+    },
+    {
+      "seq": 16,
+      "color": "white",
+      "kind": "stone",
+      "x": 11,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 17,
+      "color": "black",
+      "kind": "stone",
+      "x": 4,
+      "y": 4,
+      "auto": true
+    }
+  ],
+  "black_user": {
+    "user_id": "d0000000-0000-4000-8000-0000000000b6",
+    "display_name": "달토끼",
+    "avatar_url": null,
+    "character": "fox",
+    "center": "seoul"
+  },
+  "white_user": {
+    "user_id": "d0000000-0000-4000-8000-0000000000b3",
+    "display_name": "민트별",
+    "avatar_url": null,
+    "character": null,
+    "center": "seoul"
+  },
+  "black_auto_streak": 2,
+  "white_auto_streak": 0,
+  "auto_abandon_streak": 3
+}

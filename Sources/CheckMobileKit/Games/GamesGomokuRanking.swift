@@ -12,7 +12,8 @@ import SwiftUI
 /// "순위 조회 실패는 **안내줄(notice)로 새지 않는다** — 대국 상태줄을 가리고, 기존 계약 테스트 다수가 notice == nil 을 단언한다").
 /// 실패는 이 절 안에서만 말한다.
 ///
-/// 네 상태 + 하나: 준비 중("곧 열려요") · 목록 · 빈 목록("아직 전적이 없어요") · 실패 · 불러오는 중(아무것도 안 그린다).
+/// 네 상태 + 하나, **이 순서로** 본다: 목록(행을 들고 있으면 늘 이것) · 준비 중("순위는 곧 열려요") ·
+/// 빈 목록("아직 전적이 없어요") · 실패 · 불러오는 중(아무것도 안 그린다). 순서의 근거는 `content` 머리말에 있다.
 struct GamesGomokuRankingSection: View {
     let store: GamesStore
     /// [전체 보기]로 제자리 확장. 주인은 오목 화면(D)이다 — 절이 스스로 들고 있으면 로비를 다시 그릴 때 접힘이 되돌아간다.
@@ -29,6 +30,13 @@ struct GamesGomokuRankingSection: View {
 
     // MARK: 상태 분기
 
+    /// 들고 있는 순위표 — 행이 **하나라도** 있으면 그것, 없으면 nil. `placeholder` 의 `hasRows` 와 같은 한 판정이다
+    /// (두 곳에서 따로 세면 갈릴 수 있고, 아래 `content` 의 첫 갈래가 "행이 없으면 `placeholder != .rows`"에 기대고 있다).
+    private var heldBoard: GomokuRankingBoard? {
+        guard let ranking = gomoku.ranking, !ranking.entries.isEmpty else { return nil }
+        return ranking
+    }
+
     /// 빈·로딩·실패는 공용 규칙 한 곳에서(`MobileLoadKnowledge`). `hasRows` 는 `ranking?.entries`, `hasLoaded` 는
     /// `hasLoadedRanking`, `lastFailed` 는 `rankingLoadFailed`.
     ///
@@ -36,7 +44,7 @@ struct GamesGomokuRankingSection: View {
     /// (`Components/MobileComponentRules.swift`: "절이 이미 줄을 들고 있으면 실패를 조용히 둔다 — 지난 값을 지우지 않는다").
     private var placeholder: MobileLoadKnowledge.Placeholder {
         MobileLoadKnowledge.placeholder(
-            hasRows: !(gomoku.ranking?.entries.isEmpty ?? true),
+            hasRows: heldBoard != nil,
             hasLoaded: gomoku.hasLoadedRanking,
             lastFailed: gomoku.rankingLoadFailed
         )
@@ -44,11 +52,21 @@ struct GamesGomokuRankingSection: View {
 
     @ViewBuilder
     private var content: some View {
-        // ⚠️ 준비 중(서버에 함수가 아직 없다)을 **분기보다 먼저** 본다. 코어가 그 창을 "받은 것"으로 세기 때문에
-        // (`GomokuStoreRanking.swift:39-44` — `rankingUnavailable = true` · `rankingLoadFailed = false` · `hasLoadedRanking = true`)
-        // `placeholder` 는 `.failed` 가 아니라 **`.empty`** 로 떨어진다. 순서를 뒤집으면 "곧 열려요" 대신 "아직 전적이 없어요"가 뜬다
-        // (맥 `GomokuRankColumn.content` 도 이 확인이 먼저다).
-        if gomoku.rankingUnavailable {
+        // ★ **행 갈래가 맨 앞이다.** 전에는 `rankingUnavailable` 을 먼저 봤는데, 그 깃발을 세우는 자리가 둘이라 틀렸었다:
+        // 순위 조회는 **성공**해 행을 들고 있는데 `gomoku_watch` 만 PGRST202 인 창에서도 코어가 이 깃발을 세운다
+        // (`GomokuStoreWatch.swift:232` — 같은 마이그레이션이니 순위도 없을 것이라 보고 함께 접는다). 그러면 화면이
+        // **받아서 들고 있던 순위 행을 통째로 버리고** "순위는 곧 열려요"를 말했다 — 머리엔 "10월 1일부터"(받은 적 있다는 증거)를
+        // 남긴 채로. 폰 공용 규칙 위반이다(`Components/MobileComponentRules.swift`: "절이 이미 줄을 들고 있으면 실패를
+        // 조용히 둔다 — 지난 값을 지우지 않는다"). 그 경로의 `noteWatchFailure` 는 `rankingLoadFailed` 도 `ranking` 도
+        // 건드리지 않으므로 들고 있던 행이 온전하다 — 그대로 그리는 것이 맞다.
+        if let board = heldBoard {
+            rows(board)
+        } else if gomoku.rankingUnavailable {
+            // ⚠️ 준비 중(서버에 함수가 아직 없다)은 **`placeholder` 분기보다 먼저** 본다. 코어가 그 창을 "받은 것"으로 세기 때문에
+            // (`GomokuStoreRanking.swift:39-44` — `rankingUnavailable = true` · `rankingLoadFailed = false` · `hasLoadedRanking = true`)
+            // `placeholder` 는 `.failed` 가 아니라 **`.empty`** 로 떨어진다. 이 확인을 `.empty` 뒤로 미루면 "곧 열려요" 대신
+            // "아직 전적이 없어요"가 뜬다(맥 `GomokuRankColumn.content` 도 이 확인이 `.empty` 보다 먼저다).
+            // 차가운 창(한 번도 못 받았다)은 `ranking == nil` 이라 위 갈래를 안 타고 반드시 여기로 떨어진다.
             header
             InsetGroup {
                 messageRow(GomokuPhoneText.rankingUnavailable, hint: nil)
@@ -56,10 +74,8 @@ struct GamesGomokuRankingSection: View {
         } else {
             switch placeholder {
             case .rows:
-                // `hasRows` 가 참이면 목록이 있다.
-                if let ranking = gomoku.ranking {
-                    rows(ranking)
-                }
+                // 닿지 않는다 — `heldBoard == nil` 이면 `placeholder` 는 `hasRows: false` 로 계산돼 `.rows` 가 될 수 없다.
+                EmptyView()
             case .empty:
                 header
                 InsetGroup {
@@ -69,8 +85,18 @@ struct GamesGomokuRankingSection: View {
                 header
                 InsetGroup {
                     GroupRow(divider: .none) {
-                        LoadFailureRow(GomokuPhoneText.rankingLoadFailed) {
-                            Task { await gomoku.loadRanking() }
+                        // 세로 한 칸: 실패 한 줄 + [다시 시도] 위에, **왜 다시 시도가 안 먹을 수도 있는지** 한 줄.
+                        // 구버전 앱이면 서버가 `unsupported_client` 로 거절하고 `applyRanking` 이 같은 이 깃발로 접는다
+                        // (`GomokuStoreRanking.swift:57`) — 스토어가 status 를 넘겨 주지 않아 **뷰는 두 원인을 가릴 수 없다.**
+                        // 전에는 버튼만 두어 눌러도 같은 거절이 오는 경로에서 원인을 숨겼다. 단정하지 않고 나머지 원인을 같이 말한다.
+                        VStack(alignment: .leading, spacing: MobileTheme.space2) {
+                            LoadFailureRow(GomokuPhoneText.rankingLoadFailed) {
+                                Task { await gomoku.loadRanking() }
+                            }
+                            Text(GomokuPhoneText.rankingLoadFailedHint)
+                                .font(MobileTheme.rowSubtitle)
+                                .foregroundStyle(MobileTheme.label2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
@@ -226,16 +252,35 @@ private struct GamesGomokuRankRow: View {
                     // 큰 글자: 숫자를 이름 아래로(가로로 몰면 이름이 한 글자씩 꺾이고 숫자가 잘린다 — 공용 행의 실측 근거와 같다).
                     VStack(alignment: .leading, spacing: 4) {
                         nameLine
-                        HStack(spacing: 8) { pointsText; recordText }
+                        // ★ 승점·전적은 큰 글자에서 **세로로 쌓고 접히게** 둔다. 전에는 이 자리가
+                        // `HStack(spacing: 8) { pointsText; recordText }` 였고 두 조각이 각자 `.fixedSize()` 였다 —
+                        // 가로 고정 둘이 한 HStack 에 있으면 스택이 제안 폭을 무시하고 이상 폭을 그대로 보고하고,
+                        // `InsetGroup` 의 `clipShape`(`Components/InsetGroup.swift`)가 넘친 오른쪽을 **자른다**.
+                        // 잘리는 쪽은 뒤에 선 **전적**이라, 사용자가 금지한 '승점만' 화면이 큰 글자에서만 되살아났다.
+                        // 320pt 기기 · 카드 안쪽 폭 256(= 320 − sideMargin 16×2 − cardPadding 16×2) 기준 CoreText 실측:
+                        // `승점 + 8 + "18승 5패 0무"` 가 Large 107.8 · AX2 204.8 · AX3 246.8 · **AX4 283.3** · **AX5 325.0** 이고
+                        // 짧은 `"6승 2패 1무"` 쪽도 AX4 259.8 · AX5 297.9 다 — **AX4 부터 두 꼴 다 넘친다.**
+                        // 세로로 쌓으면 각 줄이 256 을 온전히 쓰고, 그래도 남지 않는 AX5 의 전적은 아래 `fixedSize` 로
+                        // **두 줄로 접힌다**(잘리지 않는다). 공용 관용구와 같은 손짓이다 — `PersonName.stacked` 도,
+                        // 이 파일의 캡션·한 줄 문구도 큰 글자에서 이 꼴을 쓴다.
+                        VStack(alignment: .leading, spacing: 2) {
+                            pointsText
+                            recordText
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                 } else {
                     HStack(alignment: .center, spacing: 8) {
                         nameLine
                         Spacer(minLength: 4)
+                        // 보통 글자에서는 오른쪽 숫자 칸을 **통째로** 가로 고정한다(조각마다 걸던 `.fixedSize()` 를 이 자리로
+                        // 올렸다 — 조각 안에 두면 큰 글자 가지에서 바깥이 풀 수 없다). 폭이 모자랄 때 숫자가 아니라
+                        // 이름이 먼저 줄어드는 것은 전과 같다(`PersonName` 이 `ViewThatFits` 로 스스로 접는다).
                         VStack(alignment: .trailing, spacing: 1) {
                             pointsText
                             recordText
                         }
+                        .fixedSize()
                     }
                 }
             }
@@ -270,20 +315,22 @@ private struct GamesGomokuRankRow: View {
 
     /// 승점은 **부호를 보이게**("+4" · "−2" · "0"). 색으로 말하지 않는다 — 폰 토큰 규약에서 초록·앰버는 근무 중·연결 끊김의 뜻이라
     /// 승점에 쓰면 그 자리에서 뜻이 갈린다(맥은 초록·앰버를 쓴다 — 폰에서는 부호가 그 일을 한다).
+    ///
+    /// ★ **가로 고정(`.fixedSize()`)은 이 조각이 들지 않는다 — 쓰는 자리에서 건다.** 조각 안에 두면 바깥에서 풀 수 없어
+    /// 큰 글자 가지가 이 줄을 접을 길이 없어지고, 카드가 오른쪽을 잘라 전적이 사라졌다(위 `body` 의 실측 주석).
     private var pointsText: some View {
         Text(GomokuPhoneText.signedPoints(entry.points))
             .font(MobileTheme.number(.callout, weight: .bold))
             .monospacedDigit()
             .foregroundStyle(MobileTheme.label)
-            .fixedSize()
     }
 
+    /// 가로 고정을 들지 않는 이유는 `pointsText` 와 같다 — 큰 글자에서 **접혀야** 하는 쪽이 바로 이 줄이다.
     private var recordText: some View {
         Text(GomokuPhoneText.record(wins: entry.wins, losses: entry.losses, draws: entry.draws))
             .font(MobileTheme.rowSubtitle)
             .monospacedDigit()
             .foregroundStyle(MobileTheme.label2)
-            .fixedSize()
     }
 }
 #endif

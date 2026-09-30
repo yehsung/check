@@ -1,0 +1,121 @@
+{
+  "__note": [
+    "관전 데모 픽스처(끝난 판) — 장면 `_games`(라우트 `games`)에서만 쓴다. 닿는 길: -AingCheckDemoRoute games → [오목] 카드 → '지금 대결 중' 카드의 [관전].",
+    "장면 폴더를 새로 만들지 않았다: IntegrationContractTests.demoFixtureScenesMatchRoutes 가 장면 폴더마다 실제 데모 라우트를 요구하고 그 라우트 목록은 테스트 코드에 박혀 있다 — 이미 있는 장면에 얹는 편이 새 라우트를 내는 것보다 싸다.",
+    "진행 중인 판과 같은 id 를 쓴다. 로비가 아직 진행 중으로 들고 있는 판이 관전 첫 응답에서 finished 로 오는 것은 실제 경로다(로비는 30초 주기 · 서버는 끝난 지 3분까지 ok 를 준다).",
+    "board 와 moves 는 한 수도 어긋나지 않는다(index = y*15+x). 마지막 수 (5,5) 가 대각 5목을 완성해 승리선이 그려진다 — 승리선은 end_reason 이 five 일 때만 긋는다.",
+    "seq 8 이 auto 다: 백이 자리를 비운 사이 서버가 대신 놓아 5목을 막지 못한 판이다(판 위 회색 점 1개 + 캡션)."
+  ],
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "match": {
+    "id": "d0000000-0000-4000-8000-00000000a0c1",
+    "status": "finished",
+    "stake": 10,
+    "black": "d0000000-0000-4000-8000-0000000000b6",
+    "white": "d0000000-0000-4000-8000-0000000000b3",
+    "challenger": "d0000000-0000-4000-8000-0000000000b3",
+    "opponent": "d0000000-0000-4000-8000-0000000000b6",
+    "move_count": 9,
+    "turn": null,
+    "deadline_ms": null,
+    "turn_started_ms": 1789621450000,
+    "started_ms": 1789621405000,
+    "result": "black_win",
+    "end_reason": "five",
+    "winner": "d0000000-0000-4000-8000-0000000000b6",
+    "finished_ms": 1789621455000,
+    "board": "................................................................................b...............b..w...........wbw..............b...............b...............w................................................................"
+  },
+  "moves": [
+    {
+      "seq": 1,
+      "color": "black",
+      "kind": "stone",
+      "x": 7,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 2,
+      "color": "white",
+      "kind": "stone",
+      "x": 8,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 3,
+      "color": "black",
+      "kind": "stone",
+      "x": 8,
+      "y": 8,
+      "auto": false
+    },
+    {
+      "seq": 4,
+      "color": "white",
+      "kind": "stone",
+      "x": 6,
+      "y": 7,
+      "auto": false
+    },
+    {
+      "seq": 5,
+      "color": "black",
+      "kind": "stone",
+      "x": 9,
+      "y": 9,
+      "auto": false
+    },
+    {
+      "seq": 6,
+      "color": "white",
+      "kind": "stone",
+      "x": 10,
+      "y": 10,
+      "auto": false
+    },
+    {
+      "seq": 7,
+      "color": "black",
+      "kind": "stone",
+      "x": 6,
+      "y": 6,
+      "auto": false
+    },
+    {
+      "seq": 8,
+      "color": "white",
+      "kind": "stone",
+      "x": 9,
+      "y": 6,
+      "auto": true
+    },
+    {
+      "seq": 9,
+      "color": "black",
+      "kind": "stone",
+      "x": 5,
+      "y": 5,
+      "auto": false
+    }
+  ],
+  "black_user": {
+    "user_id": "d0000000-0000-4000-8000-0000000000b6",
+    "display_name": "달토끼",
+    "avatar_url": null,
+    "character": "fox",
+    "center": "seoul"
+  },
+  "white_user": {
+    "user_id": "d0000000-0000-4000-8000-0000000000b3",
+    "display_name": "민트별",
+    "avatar_url": null,
+    "character": null,
+    "center": "seoul"
+  },
+  "black_auto_streak": 0,
+  "white_auto_streak": 1,
+  "auto_abandon_streak": 3
+}

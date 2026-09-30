@@ -15,6 +15,11 @@ struct GamesGomokuScreen: View {
     /// 로비 [AI와 두기] → 돌 색 시트.
     @State private var showsAIPicker = false
     @State private var demoPreview: GomokuPoint?
+    /// 순위표 절의 [전체 보기](0.3.41) — **주인은 이 화면이다**(`GamesGomokuRanking.swift` 머리 주석의 계약).
+    /// 처음엔 `GamesGomokuLobby` 의 `@State` 로 두었는데, 관전이 로비 **대신** 서는 순간(아래 `content` 의 `.lobby` 갈래)
+    /// `if/else` 갈래가 바뀌어 로비 뷰가 해제되고 깃발이 날아갔다 — 대국 → 결과 → 로비도 같다.
+    /// 펼쳐 둔 순위표가 관전 한 번에 다시 접혔다. 화면 루트는 세 단계를 통째로 살아 있으므로 여기가 제자리다.
+    @State private var rankingExpanded = false
 
     private var gomoku: GomokuStore { store.context.gomoku }
 
@@ -79,7 +84,8 @@ struct GamesGomokuScreen: View {
     }
 
     private var lobby: some View {
-        GamesGomokuLobby(store: store, onChallenge: { stakeTarget = $0 }, onPlayAI: { showsAIPicker = true })
+        GamesGomokuLobby(store: store, onChallenge: { stakeTarget = $0 }, onPlayAI: { showsAIPicker = true },
+                         rankingExpanded: $rankingExpanded)
     }
 
     private func applyDemoSeed() {
@@ -143,8 +149,10 @@ struct GamesGomokuLobby: View {
     /// [AI와 두기] — 화면 루트가 돌 색 시트를 띄운다(판돈 시트와 같은 관례: 시트는 루트만 띄운다).
     var onPlayAI: () -> Void = {}
 
-    /// 순위표 절의 [전체 보기](0.3.41) — **제자리 확장**이라 로비가 이 깃발을 든다(새 화면으로 밀면 폴링이 죽는다 — 화면 루트 주석).
-    @State private var rankingExpanded = false
+    /// 순위표 절의 [전체 보기](0.3.41) — **제자리 확장**이다(새 화면으로 밀면 폴링이 죽는다 — 화면 루트 주석).
+    /// 깃발은 로비가 **들지 않는다**: 여기 `@State` 로 두었더니 관전이 로비 대신 서는 순간 이 뷰가 해제돼 펼침이 되돌아갔다.
+    /// 주인은 `GamesGomokuScreen` 이다 — `@State` 로 되돌리지 마라.
+    @Binding var rankingExpanded: Bool
 
     private var gomoku: GomokuStore { store.context.gomoku }
 
@@ -487,7 +495,14 @@ struct GamesGomokuInviteCard: View {
 }
 
 /// 보낸 신청 한 줄: 아바타 · "구름빵님에게 신청했어요" · 판돈 · 남은 초 · [취소] 회색 알약.
-private struct GamesGomokuOutgoingRow: View {
+///
+/// **로비와 관전 화면이 같이 쓴다 — `private` 으로 되돌리지 마라.** 관전이 로비 자리에 서면(화면 루트 `.lobby` 갈래)
+/// 이 줄이 화면에서 통째로 사라져, 루비를 걸어 둔 내 신청을 TTL 60초 동안 거둘 길이 없었다. 맥은 세로 예산 322pt
+/// 안에서까지 이 자리를 지켰는데(`GomokuPanel.swift` 의 2026-09-30 반증) 폰은 스크롤이라 예산 제약도 없이 뺐었다.
+/// 취소 문을 두 벌 만들지 않으려고 부품을 공개한다 — **서명을 그대로 두고 불러라**.
+/// 로비 문맥에 기대는 것은 없다(`store`·`invite` 뿐이고 `GomokuStore.cancelChallenge()` 에 단계 가드가 없다).
+/// 구분선은 `.none` 이다 — 한 줄만 든 `InsetGroup` 안에 넣는 것을 전제로 한다(두 화면 다 그렇게 쓴다).
+struct GamesGomokuOutgoingRow: View {
     let store: GamesStore
     let invite: GomokuInvite
 

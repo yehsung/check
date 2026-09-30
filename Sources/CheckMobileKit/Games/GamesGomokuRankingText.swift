@@ -18,8 +18,14 @@ extension GomokuPhoneText {
     /// 전적 기준시각(컷)이 있으면 머리 오른쪽 캡션 — "10월 1일부터". 컷은 서버 순간 그대로의 **달력 값**이고 카운트다운이 아니다
     /// (코어 `GomokuStoreRanking.rankingBoard(from:)` — 기기 시계 보정 없음).
     package static func rankSince(_ date: Date) -> String {
-        // ko_KR 의 FormatStyle 은 "10. 1." 을 낸다(맥 실측) — 달력 성분으로 직접 조립한다(기기 시간대 · 그레고리력).
-        let parts = Calendar(identifier: .gregorian).dateComponents([.month, .day], from: date)
+        // ko_KR 의 FormatStyle 은 "10. 1." 을 낸다(맥 실측) — 달력 성분으로 직접 조립한다(그레고리력).
+        //
+        // 시간대는 **KST 로 못 박는다.** 전에는 `Calendar(identifier: .gregorian)` 을 그냥 써서 **기기 시간대**로 조립했는데,
+        // 컷은 서버가 정한 KST 자정(전적 초기화 2026-10-01 00:00 KST)이라 비KST 기기에서는 하루 밀려 "9월 30일부터"가 됐다.
+        // 전원 한국이라 눈에 안 띈 것일 뿐이고, 여행·기기 설정 하나로 틀린 달력 값을 보게 된다.
+        // 공용 KST 달력을 쓴다(`TeamWeeklyGoal.kstCalendar` — 폰의 다른 절도 이걸 쓴다. `firstWeekday` 는 주 경계용이라
+        // 달·일 성분에는 영향이 없다).
+        let parts = TeamWeeklyGoal.kstCalendar.dateComponents([.month, .day], from: date)
         return "\(parts.month ?? 0)월 \(parts.day ?? 0)일부터"
     }
     /// 컷이 없다(응답 `record_since_ms` 가 null = `-infinity`) — 기간이 통째다. 폰
@@ -65,6 +71,13 @@ extension GomokuPhoneText {
     package static let rankingUnavailable = "순위는 곧 열려요"
     /// 폰: 맥은 연결 안내 한 문장이지만 폰은 절마다 "무엇을 못 불러왔나" + 공용 [다시 시도]로 말한다(`MobileLoadText` 규칙).
     package static let rankingLoadFailed = "순위를 불러오지 못했어요"
+    /// 실패 줄 **아래** 한 줄. 폰
+    ///
+    /// 이 깃발(`rankingLoadFailed`)에는 원인이 둘 들어온다: 연결·5xx 같은 **다시 시도가 먹는** 실패와, 구버전 앱이라 서버가
+    /// `unsupported_client` 로 거절해 **영영 같은 답이 오는** 경우(`GomokuStoreRanking.swift:57` 이 둘을 같은 깃발로 접고,
+    /// 스토어가 status 를 넘겨 주지 않아 **뷰는 둘을 가릴 수 없다**). 그래서 원인을 단정하지 않고, 버튼이 안 먹을 때 남는
+    /// 나머지 한 길을 같이 말한다 — 전에는 [다시 시도] 버튼만 있어 눌러도 같은 거절이 오는 경로에서 원인이 숨었다.
+    package static let rankingLoadFailedHint = "계속 안 되면 앱을 업데이트해 주세요"
 
     // MARK: 접었다 펴기
 

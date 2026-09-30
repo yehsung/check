@@ -165,6 +165,12 @@ enum GomokuText {
     /// 대국 화면 판돈 줄. 이기면 **판돈만큼 더**(순수익) — 결과 카드의 루비 변화(+판돈)와 같은 숫자를 말한다.
     static func stakeLine(_ stake: Int) -> String { "\(stake) · 이기면 +\(stake)" }
 
+    /// 관전 화면 판돈 줄 — 걸린 루비만 말한다. "이기면 +N" 을 붙이면 주어가 없다: 관전자는 이겨도 한 푼도 얻지 못한다.
+    static func watchStakeLine(_ stake: Int) -> String { "\(stake)" }
+
+    /// 판돈을 아직 모른다(관전 첫 응답 전).
+    static let stakeUnknown = "—"
+
     /// 보이스오버: 판 전체를 한 요소로 읽는다(돌 수 · 마지막 수 · 누구 차례 · 금수 자리 수).
     static func boardAccessibility(_ match: GomokuMatchState, forbiddenCount: Int) -> String {
         var black = 0
@@ -2412,10 +2418,13 @@ private struct GomokuLiveMatchColumn: View {
     private var cards: some View {
         VStack(spacing: 8) {
             ForEach(store.liveMatches) { live in
-                // [관전](0.3.41): 내 판이면 칩 대신 "내 판" 캡션. 서버에 관전이 아직 없으면(`rankingUnavailable` — 같은 마이그레이션) 칩을 잠근다.
+                // [관전](0.3.41): 내 판이면 칩 대신 "내 판" 캡션. 서버에 관전이 아직 없으면 칩을 잠근다.
+                // ★ 게이트는 `watchUnavailable` 이다 — `rankingUnavailable` 이 아니다. 예전엔 깃발 하나가 둘을 겸업했는데,
+                //   관전 404 가 멀쩡한 순위표를 접는 것을 막으려고 그 깃발을 좁히자 이 게이트가 신호를 잃어 **죽은 버튼이
+                //   활성으로 광고되고 누를 때마다 404 를 반복했다**(2026-10-01 실측). 순위 열과 관전 입구는 서로 다른 사실을 본다.
                 GomokuLiveMatchCard(
                     live: live, isLive: store.isWindowVisible,
-                    isMine: store.isMine(live), canWatch: !store.rankingUnavailable,
+                    isMine: store.isMine(live), canWatch: !store.watchUnavailable,
                     onWatch: { store.startWatching(matchID: live.id) }
                 )
             }
@@ -2548,38 +2557,51 @@ private struct GomokuRankColumn: View {
         }
     }
 
+    /// 갈래 **순서가 곧 우선순위**다.
+    /// ★ 행을 들고 있으면 **행이 이긴다** — `rankingUnavailable` 은 관전 조회의 404 하나로도 섰고(GomokuStoreWatch 의 C17 경로),
+    ///   그 깃발이 맨 앞에 있어서 멀쩡한 5행이 "곧 열려요"로 통째로 덮였다(2026-10-01). 스토어도 같은 곳을 `ranking == nil` 로
+    ///   막았지만 화면이 한 벌 더 막는다 — 깃발을 세우는 곳은 하나가 아니다(클라 게이트는 짝으로 온다).
+    /// ★ 그렇다고 `rankingUnavailable` 을 0행 갈래 **아래로** 내리지 마라: 서버에 함수가 없는 차가운 창은
+    ///   `hasLoadedRanking = true`·`ranking = nil`·`rankingLoadFailed = false` 라서, 아래로 내리면 "곧 열려요" 대신
+    ///   "아직 전적이 없어요"가 떠 사용자는 제 전적이 사라진 줄 안다.
     @ViewBuilder
     private var content: some View {
-        if store.rankingUnavailable {
-            centered(GomokuText.rankingUnavailable, icon: "clock")
-        } else if let ranking = store.ranking {
-            // ★ 실패 띠는 **0행 갈래에도** 선다. 전에는 "비어 있지 않은" 갈래 안에만 있어서, 빈 순위표를 한 번 받은 뒤
-            //   조회가 실패하면 화면에 실패 띠도 [다시 불러오기]도 없었다 — "아직 전적이 없어요"만 남아 사용자는 서버가
-            //   멀쩡한 줄 안다(2026-10-01 모바일 세션 제보). 전적을 컷으로 초기화한 직후에는 **실제로 0행**이라
-            //   가장 닿기 쉬운 자리다.
-            VStack(alignment: .leading, spacing: GomokuWindowLayout.rankHeaderSpacing) {
-                // 전에 받은 목록은 그대로 두고, 지금 목록이 낡았을 수 있다는 것만 알린다(상대 목록과 같은 결).
-                if store.rankingLoadFailed { failureStrip }
-                if ranking.entries.isEmpty {
-                    centered(GomokuText.noRanking, icon: "flag.checkered")
-                } else {
-                    if clipsOverflowInsteadOfScroll {
-                        rows(ranking.entries)
-                            .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
-                            .clipped()
-                    } else {
-                        ScrollView {
-                            rows(ranking.entries)
-                        }
-                        .scrollIndicators(.automatic)
+        if let ranking = store.ranking, !ranking.entries.isEmpty {
+            withFailureStrip {
+                if clipsOverflowInsteadOfScroll {
+                    rows(ranking.entries)
                         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
+                        .clipped()
+                } else {
+                    ScrollView {
+                        rows(ranking.entries)
                     }
+                    .scrollIndicators(.automatic)
+                    .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
                 }
+            }
+        } else if store.rankingUnavailable {
+            centered(GomokuText.rankingUnavailable, icon: "clock")
+        } else if store.hasLoadedRanking {
+            // 받았는데 0행 — 전적을 컷으로 초기화한 직후가 그렇다.
+            withFailureStrip {
+                centered(GomokuText.noRanking, icon: "flag.checkered")
             }
         } else if store.rankingLoadFailed {
             failurePanel
         } else {
             centered(GomokuText.rankingLoading, icon: nil)
+        }
+    }
+
+    /// 실패 띠(조건부) + 본문. 전에 받은 목록은 그대로 두고, 지금 목록이 낡았을 수 있다는 것만 알린다(상대 목록과 같은 결).
+    /// ★ 띠는 **0행 갈래에도** 선다. 전에는 "비어 있지 않은" 갈래 안에만 있어서, 빈 순위표를 한 번 받은 뒤 조회가 실패하면
+    ///   화면에 실패 띠도 [다시 불러오기]도 없었다 — "아직 전적이 없어요"만 남아 사용자는 서버가 멀쩡한 줄 안다
+    ///   (2026-10-01 모바일 세션 제보). 전적을 컷으로 초기화한 직후에는 **실제로 0행**이라 가장 닿기 쉬운 자리다.
+    private func withFailureStrip(@ViewBuilder _ body: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: GomokuWindowLayout.rankHeaderSpacing) {
+            if store.rankingLoadFailed { failureStrip }
+            body()
         }
     }
 
@@ -2760,7 +2782,8 @@ private struct GomokuSpectateSide: View {
 
             // 판돈 칩 | 상태 상자 — 한 줄. 경고 줄(자동 착수 한 번 남음)이 붙으면 이 줄만 아래로 자란다(대국 화면과 같다).
             HStack(alignment: .top, spacing: GomokuWindowLayout.matchSideSpacing) {
-                GomokuStakeChip(stake: watch.stake)
+                // 관전 칩은 접미사를 뗀다 — "이기면 +5" 는 대국자의 문장이다(관전자는 이겨도 얻는 것이 없다).
+                GomokuStakeChip(stake: watch.stake, showsReward: false)
                     .frame(width: GomokuWindowLayout.stakeChipWidth)
                 GomokuWatchStatusBox(watch: watch, lossStreak: store.autoAbandonStreak, isLive: store.isWindowVisible)
             }
@@ -3034,16 +3057,25 @@ struct GomokuWatchClock: View {
     }
 }
 
-/// 판돈 칩(대국·관전 공용, 0.3.41). 이기면 **판돈만큼 더**(순수익) — 결과 카드의 +판돈과 같은 눈금. 판돈을 모르면(관전 첫 응답 전) "—".
-private struct GomokuStakeChip: View {
+/// 판돈 칩(대국·관전 공용, 0.3.41). 판돈을 모르면(관전 첫 응답 전) "—".
+/// `showsReward` 가 참일 때만 "이기면 +판돈"(순수익 — 결과 카드의 +판돈과 같은 눈금)을 붙인다. 기본이 참이라 대국 호출부는 그대로다.
+struct GomokuStakeChip: View {
     let stake: Int?
+    /// 접미사를 붙이는가. **관전만 false** — 관전자는 이겨도 한 푼도 얻지 못해 그 문장에 주어가 없다.
+    var showsReward: Bool = true
+
+    /// 칩이 그릴 글자(순수). 뷰에서 떼어 두어야 테스트가 값으로 되묻는다 — 픽셀로만 재면 감지기가 약하다.
+    static func text(stake: Int?, showsReward: Bool) -> String {
+        guard let stake else { return GomokuText.stakeUnknown }
+        return showsReward ? GomokuText.stakeLine(stake) : GomokuText.watchStakeLine(stake)
+    }
 
     var body: some View {
         HStack(spacing: 6) {
             Text(GomokuText.stakeTitle)
                 .foregroundStyle(CheckTheme.secondaryText)
             RubyIcon(size: 16)
-            Text(stake.map(GomokuText.stakeLine) ?? "—")
+            Text(Self.text(stake: stake, showsReward: showsReward))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)

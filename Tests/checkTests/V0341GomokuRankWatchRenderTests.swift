@@ -169,6 +169,15 @@ private var rwRankColumn: CGRect {
            y: rwBodyTop, width: GomokuWindowLayout.lobbyRankWidth, height: GomokuWindowLayout.bodyHeight)
 }
 
+/// 순위 열의 **목록 칸**(카드 안쪽 · 머리글 아래) — 행도 0행 문구도 여기 그려진다.
+private var rwRankListRect: CGRect {
+    CGRect(x: rwRankColumn.minX + GomokuWindowLayout.cardPadding,
+           y: rwRankColumn.minY + GomokuWindowLayout.cardPadding
+              + GomokuWindowLayout.rankHeaderHeight + GomokuWindowLayout.rankHeaderSpacing,
+           width: rwRankColumn.width - GomokuWindowLayout.cardPadding * 2,
+           height: GomokuWindowLayout.rankListHeight)
+}
+
 /// 로비 오른쪽 열(400) — 순위 열이 생겨도 한 픽셀도 안 움직여야 한다.
 private var rwLobbySideColumn: CGRect {
     CGRect(x: GomokuWindowLayout.contentPadding + GomokuWindowLayout.lobbyListWidth + GomokuWindowLayout.columnSpacing,
@@ -436,6 +445,119 @@ func emptyRankingStillShowsTheFailureStripWhenTheReloadFailed() throws {
     #expect(rwMaxChannelDifference(quiet, failed, rect: rwLobbySideColumn) <= 2, "순위 조회 실패가 오른쪽 열을 바꿨다")
 }
 
+// MARK: - 순위 열: 0행은 자기 문구를 그린다
+
+/// 없으면: 선두 갈래의 `!ranking.entries.isEmpty` 를 떼어 **0행 순위표가 백지로 그려져도 초록이다.** 다른 단언들은
+/// "0행이 다른 상태와 **다르게** 보인다"만 재는데 백지도 '불러오는 중'·'곧 열려요'·21행과는 다르다 — 그 그물을 통째로
+/// 지나간다. 그래서 여기서는 0행 열 **자기 안에** 문구·깃발 아이콘의 잉크가 있는지 본다.
+/// 배경색은 그 장에서 직접 재므로(아래 `rwInkOverBackground`) 테마 색을 바꿔도 이 자는 안 흔들린다.
+@MainActor
+@Test
+func emptyRankingColumnDrawsItsOwnMessageInkNotABlankCard() throws {
+    let empty = rwLobbyStore()
+    empty.ranking = rwBoard(0)
+    empty.hasLoadedRanking = true
+    let bitmap = try rwBitmap(rwPanel(empty))
+    rwSave(bitmap, name: "lobby-rank-empty-ink")
+    #expect(rwYellowPixels(bitmap) == 0)
+
+    // 문구·아이콘은 목록 칸 **가운데**에 서므로(centered) 아랫띠는 순수 배경이다 — 그 띠를 배경 표본으로 쓴다.
+    let list = rwRankListRect
+    let backgroundStrip = CGRect(x: list.minX, y: list.maxY - 16, width: list.width, height: 12)
+    #expect(rwInkOverBackground(bitmap, rect: backgroundStrip, background: backgroundStrip) == 0,
+            "감지기 기준선: 배경 표본 안에서 이미 잉크가 잡힌다 — 이 자가 배경까지 잉크로 센다")
+    let ink = rwInkOverBackground(bitmap, rect: list, background: backgroundStrip)
+    #expect(ink > 300, "0행 순위 열이 백지다 — '아직 전적이 없어요' 문구도 깃발 아이콘도 없다(잉크 \(ink)px)")
+
+    // 그 잉크가 목록 칸 **가운데 80pt** 에 모여 있다 — 머리글이나 카드 테두리를 세고 있는 게 아니라는 확인.
+    let middle = CGRect(x: list.minX, y: list.midY - 40, width: list.width, height: 80)
+    #expect(rwInkOverBackground(bitmap, rect: middle, background: backgroundStrip) > ink / 2,
+            "0행 문구가 목록 칸 가운데에 없다 — 감지기가 다른 것을 센다")
+
+    // 기준선이 달라야 이 테스트가 산다: 행이 있는 장에서는 같은 아랫띠가 **순수 배경이 아니다**(행이 거기까지 온다).
+    let full = rwLobbyStore()
+    full.ranking = rwBoard(21, since: rwSinceDate)
+    full.hasLoadedRanking = true
+    let fullBitmap = try rwBitmap(rwPanel(full))
+    #expect(rwInkOverBackground(fullBitmap, rect: backgroundStrip, background: backgroundStrip) > 0,
+            "21행인데 목록 칸 아랫띠가 고른 배경이다 — 배경 표본이 목록 칸 밖을 겨냥했다")
+}
+
+// MARK: - 순위 열: 깃발보다 행이 먼저다
+
+/// 없으면: **관전 조회 404 하나로 서는 `rankingUnavailable` 이 멀쩡한 5행을 통째로 덮어도 초록이다**(깃발 갈래가 맨 앞이던
+/// 0.3.41 그대로 — 스토어 가드가 뚫리는 날 화면에는 두 번째 그물이 없다). 반대 방향의 회귀도 함께 잡는다: 그 갈래를
+/// 0행 갈래 **아래로** 내리면 서버에 함수가 없는 차가운 창(`ranking == nil`·`hasLoadedRanking == true`)에서
+/// "곧 열려요" 대신 "아직 전적이 없어요"가 떠 사용자는 제 전적이 사라진 줄 안다.
+@MainActor
+@Test
+func rankRowsWinOverTheUnavailableFlagWhileTheColdWindowStillSaysSoon() throws {
+    let rows = rwLobbyStore()
+    rows.ranking = rwBoard(5)
+    rows.hasLoadedRanking = true
+    let rowsWithFlag = rwLobbyStore()                   // 순위는 받았고, 관전 404 가 깃발만 세웠다
+    rowsWithFlag.ranking = rwBoard(5)
+    rowsWithFlag.hasLoadedRanking = true
+    rowsWithFlag.rankingUnavailable = true
+    let cold = rwLobbyStore()                           // 차가운 창 — 서버에 함수가 아직 없다
+    cold.hasLoadedRanking = true
+    cold.rankingUnavailable = true
+    let empty = rwLobbyStore()                          // 받았는데 0행
+    empty.ranking = rwBoard(0)
+    empty.hasLoadedRanking = true
+
+    let rowsBitmap = try rwBitmap(rwPanel(rows))
+    let flagBitmap = try rwBitmap(rwPanel(rowsWithFlag))
+    let coldBitmap = try rwBitmap(rwPanel(cold))
+    let emptyBitmap = try rwBitmap(rwPanel(empty))
+    rwSave(flagBitmap, name: "lobby-rank-rows-with-unavailable")
+    #expect(rwYellowPixels(flagBitmap) == 0)
+
+    // ① 행 5개 + 깃발 = 그대로 행 5개. 깃발은 순위 열의 한 픽셀도 바꾸지 않는다.
+    let height = Int(GomokuWindowLayout.rankRowHeight)
+    let flagRows = rwBoxTops(flagBitmap, rect: rwRankColumn, height: height, minimum: 500)
+    #expect(flagRows.count == 5, "행 5개를 들고 있는데 관전 404 깃발이 순위 열을 접었다(보이는 행 \(flagRows.count)장)")
+    #expect(rwMaxChannelDifference(rowsBitmap, flagBitmap, rect: rwRankColumn) <= 2, "깃발이 순위 열을 바꿨다")
+
+    // ② 회귀 그물: 차가운 창은 행이 없고, 0행 순위표와 **다르게** 보인다("곧 열려요" ≠ "아직 전적이 없어요").
+    #expect(rwBoxTops(coldBitmap, rect: rwRankColumn, height: height, minimum: 500).isEmpty, "차가운 창에 순위 행이 있다")
+    #expect(rwMaxChannelDifference(coldBitmap, emptyBitmap, rect: rwRankColumn) > 60,
+            "차가운 창이 0행 순위표와 똑같이 보인다 — '곧 열려요' 대신 '아직 전적이 없어요'가 떴다")
+    #expect(rwMaxChannelDifference(coldBitmap, flagBitmap, rect: rwRankColumn) > 60, "차가운 창과 행 5개가 똑같이 보인다")
+}
+
+// MARK: - 판돈 칩: 관전자에게는 보상을 말하지 않는다
+
+/// 없으면: **관전 화면이 관전자에게 "이기면 +5" 라고 말해도 초록이다** — 관전자는 이겨도 한 푼도 얻지 못해 그 문장에 주어가 없다.
+/// 픽셀로만 재면 접미사 몇 글자는 감지기에 안 잡혀서, 칩의 글자 결정을 순수 함수로 떼어 **값으로** 되묻는다.
+@MainActor
+@Test
+func stakeChipDropsTheRewardSuffixOnlyForSpectators() throws {
+    #expect(GomokuStakeChip.text(stake: 5, showsReward: true) == "5 · 이기면 +5")
+    #expect(GomokuStakeChip.text(stake: 5, showsReward: true).contains("이기면"), "대국 칩에서 순수익 접미사가 사라졌다")
+    #expect(GomokuStakeChip.text(stake: 5, showsReward: false) == "5")
+    #expect(!GomokuStakeChip.text(stake: 5, showsReward: false).contains("이기면"),
+            "관전 칩이 관전자에게 '이기면 +N' 이라고 말한다")
+    // 판돈을 모르는 첫 응답 전에는 두 화면이 같은 "—" 다.
+    #expect(GomokuStakeChip.text(stake: nil, showsReward: true) == "—")
+    #expect(GomokuStakeChip.text(stake: nil, showsReward: false) == "—")
+
+    // 기본값을 **값으로** 되묻는다. 없으면: `var showsReward: Bool = true` 를 `= false` 로 뒤집어 **대국 화면**의
+    // "이기면 +5" 가 통째로 사라져도 초록이다 — 위 단언들은 인자를 명시로 넘기고, 아래 소스 계약은 "대국 호출처가
+    // 기본값을 쓴다"만 보므로 기본값 자체가 무엇인지는 아무도 안 묻는다(2026-10-01 뮤테이션 ⑥).
+    #expect(GomokuStakeChip(stake: 5).showsReward, "칩의 기본값이 false 다 — 대국 화면에서 '이기면 +N' 이 사라진다")
+    #expect(GomokuStakeChip.text(stake: 5, showsReward: GomokuStakeChip(stake: 5).showsReward) == "5 · 이기면 +5",
+            "기본값으로 그린 칩 글자가 대국 문장이 아니다")
+    // 기준선이 달라야 이 테스트가 산다: 명시로 넘긴 false 는 기본값을 덮는다(관전 호출처가 쓰는 길).
+    #expect(GomokuStakeChip(stake: 5, showsReward: false).showsReward == false, "관전 호출처가 넘긴 false 가 무시된다")
+
+    // 소스 계약: **관전 호출처만** false 를 넘긴다(대국 호출처는 기본값 그대로 = 대국 화면은 한 글자도 안 바뀐다).
+    let panel = rwStripped(try rwSource("GomokuPanel.swift"))
+    #expect(panel.contains("GomokuStakeChip(stake: watch.stake, showsReward: false)"), "관전 호출처가 접미사를 떼지 않는다")
+    #expect(panel.contains("GomokuStakeChip(stake: match.stake)"), "대국 호출처가 기본값을 안 쓴다")
+    #expect(!panel.contains("GomokuStakeChip(stake: match.stake, showsReward"), "대국 호출처가 접미사를 명시로 넘긴다")
+}
+
 // MARK: - 순위 행: 승·패·무 줄
 
 /// 없으면: 행 꼬리에서 **전적 줄(N승 N패 N무)이 통째로 사라져도 초록이다.** 다른 행 단언은 userID·characterHint·금지어와
@@ -501,15 +623,17 @@ func liveMatchCardsCarryAWatchChipAndStayFiftyThreeTall() throws {
     // 칩(테두리 accent + 글자 accent)이 각 카드 첫째 줄 오른쪽에 실제 픽셀을 만든다.
     let locked = rwLobbyStore()
     locked.liveMatches = rwLiveMatches(3)
-    locked.rankingUnavailable = true
-    locked.hasLoadedRanking = true
+    // ★ 칩을 잠그는 깃발은 `watchUnavailable` 이다 — 순위 깃발(`rankingUnavailable`)로 세우면 이 장이 **안 잠겨** 아래
+    //   `< ink` 가 카드 3장 전부에서 빨개진다(2026-10-01 실측). 두 깃발은 서로 다른 사실을 보고, 이 시험의 뜻은
+    //   "관전 깃발만 세운 창에서 칩이 잠기는가"다 — 옛 깃발을 여기 두면 시험이 자기 뜻을 잃는다.
+    locked.watchUnavailable = true
     let lockedBitmap = try rwBitmap(rwPanel(locked))
     for top in cardTops {
         let chipBand = CGRect(x: rwLobbySideColumn.minX + rwLobbySideColumn.width / 2, y: CGFloat(top) + 4,
                               width: rwLobbySideColumn.width / 2, height: 24)
         let ink = rwAccentInk(bitmap, rect: chipBand)
         #expect(ink > 40, "카드(윗변 \(top)) 첫째 줄 오른쪽에 [관전] 칩이 없다(accent \(ink)px)")
-        // 서버에 관전이 아직 없으면(rankingUnavailable) 칩이 흐려진다 — 눌러도 아무 일도 안 생기는 칩을 또렷하게 두지 않는다.
+        // 서버에 관전이 아직 없으면(watchUnavailable) 칩이 흐려진다 — 눌러도 아무 일도 안 생기는 칩을 또렷하게 두지 않는다.
         #expect(rwAccentInk(lockedBitmap, rect: chipBand) < ink, "관전이 닫힌 창인데 [관전] 칩이 또렷하다")
     }
     // 칩이 아랫줄(판돈·경과)을 밀지 않는다 — 칩 유무와 무관하게 카드 아랫줄이 같다(잠긴 칩은 흐려질 뿐 자리가 같다).
@@ -736,7 +860,7 @@ func spectatorViewsKeepInputsChatAndClocksOut() throws {
     #expect(timeline.lowerBound < decision.lowerBound, "상태 상자가 TimelineView 밖에서 문구를 고른다")
     #expect(!statusBox.contains("Date()"), "상태 상자가 Date() 를 읽는다")
     // 관전 링은 마감을 직접 받아 context.date 로 센다(스토어 remainingSeconds 는 내 판만 안다).
-    let watchClock = try #require(rwRegion(block, from: "struct GomokuWatchClock: View {", to: "private struct GomokuStakeChip: View {"))
+    let watchClock = try #require(rwRegion(block, from: "struct GomokuWatchClock: View {", to: "struct GomokuStakeChip: View {"))
     #expect(watchClock.contains("deadline.timeIntervalSince(context.date)"))
     #expect(watchClock.contains("GomokuClockRing(remaining:"))
 
@@ -765,7 +889,10 @@ func spectatorViewsKeepInputsChatAndClocksOut() throws {
     let liveColumn = try #require(rwRegion(panel, from: "private struct GomokuLiveMatchColumn: View {", to: "private struct GomokuLiveMatchCard: View {"))
     #expect(liveColumn.contains("onWatch: { store.startWatching(matchID: live.id) }"), "[관전] 이 스토어를 안 부른다")
     #expect(liveColumn.contains("isMine: store.isMine(live)"), "내 판 카드에도 [관전] 이 선다")
-    #expect(liveColumn.contains("canWatch: !store.rankingUnavailable"), "관전이 닫힌 창에서 칩이 잠기지 않는다")
+    // ★ 게이트는 **관전** 깃발이다. 순위 깃발로 되돌리면(예전의 겸업) 순위를 손에 든 사용자에게는 깃발이 안 서서
+    //   죽은 [관전] 버튼이 활성으로 광고되고 누를 때마다 404 왕복이 반복된다 — 깃발 하나를 좁히는 순간 다른 소비자가 조용히 죽는다.
+    #expect(liveColumn.contains("canWatch: !store.watchUnavailable"),
+            "[관전] 칩 게이트가 관전 깃발을 안 본다 — 순위 깃발(rankingUnavailable)이면 행을 든 창에서 죽은 버튼이 활성으로 선다")
     let liveCard = try #require(rwRegion(panel, from: "private struct GomokuLiveMatchCard: View {", to: "struct GomokuElapsedText: View {"))
     #expect(liveCard.contains("height: GomokuWindowLayout.liveWatchChipHeight"), "[관전] 칩이 레이아웃 상수(18)를 안 쓴다 — 카드가 55 로 자란다")
     #expect(liveCard.contains("GomokuText.myMatch"))
@@ -917,6 +1044,41 @@ private func rwDangerInk(_ bitmap: NSBitmapImageRep, rect: CGRect) -> Int {
 /// pending(255,184,84) 계열 핵심 픽셀 수 — 주황. danger 는 g 가 작아서, working 은 r 이 작아서 안 잡힌다.
 private func rwOrangeInk(_ bitmap: NSBitmapImageRep, rect: CGRect) -> Int {
     rwCount(bitmap, rect: rect) { r, g, b in r > 200 && g > 140 && g < 215 && b < 120 && g > b + 60 }
+}
+
+/// `background` 사각형의 평균 색을 **그 장에서 직접** 재고, `rect` 안에서 그 색과 채널 차 `tolerance` 를 넘는 픽셀을 센다.
+/// 절대 문턱값(테마 색)에 안 묶이는 "백지를 잡는 자" — 색을 바꿔도 잉크가 있으면 잡히고, 잉크가 없으면 0 이다.
+/// 배경 표본은 같은 칸의 빈 자리를 쓴다(다른 카드의 배경과 섞지 않는다 — 카드마다 면 색이 다르다).
+private func rwInkOverBackground(_ bitmap: NSBitmapImageRep, rect: CGRect, background: CGRect, tolerance: Int = 20) -> Int {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return 0 }
+    let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+    func box(_ value: CGRect) -> (x0: Int, x1: Int, y0: Int, y1: Int)? {
+        let x0 = max(0, Int(value.minX * 2)), x1 = min(bitmap.pixelsWide - 1, Int(value.maxX * 2))
+        let y0 = max(0, Int(value.minY * 2)), y1 = min(bitmap.pixelsHigh - 1, Int(value.maxY * 2))
+        return x0 <= x1 && y0 <= y1 ? (x0, x1, y0, y1) : nil
+    }
+    guard let base = box(background), let target = box(rect) else { return 0 }
+    var sums = [0, 0, 0]
+    var samples = 0
+    for y in base.y0...base.y1 {
+        for x in base.x0...base.x1 {
+            let o = y * bpr + x * spp
+            for channel in 0..<3 { sums[channel] += Int(data[o + channel]) }
+            samples += 1
+        }
+    }
+    guard samples > 0 else { return 0 }
+    let mean = sums.map { $0 / samples }
+    var count = 0
+    for y in target.y0...target.y1 {
+        for x in target.x0...target.x1 {
+            let o = y * bpr + x * spp
+            var differs = false
+            for channel in 0..<3 where abs(Int(data[o + channel]) - mean[channel]) > tolerance { differs = true }
+            if differs { count += 1 }
+        }
+    }
+    return count
 }
 
 /// 밝은(흰 계열 글자) 픽셀 수.

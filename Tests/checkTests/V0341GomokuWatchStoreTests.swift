@@ -176,6 +176,19 @@ private func myStatePayload(id: String = myActiveID, finished: Bool = false) -> 
     ]
 }
 
+/// 순위 **두 줄**짜리 gomoku_ranking ok 묶음. `baseReply` 의 순위는 0행이라 "행을 손에 들었다"를 말할 수 없다.
+private func rankedRankingPayload() -> [String: Any] {
+    func row(_ id: String, _ name: String, rank: Int, wins: Int, losses: Int) -> [String: Any] {
+        ["rank": rank, "user_id": id, "display_name": name, "avatar_url": NSNull(), "character": "aing",
+         "center": "seoul", "wins": wins, "losses": losses, "draws": 0, "points": wins - losses]
+    }
+    return [
+        "status": "ok", "server_now_ms": nowMs(), "record_since_ms": NSNull(),
+        "me": ["rank": 2, "wins": 2, "losses": 1, "draws": 0, "points": 1],
+        "rows": [row(rival, "라이벌", rank: 1, wins: 5, losses: 1), row(me, "나", rank: 2, wins: 2, losses: 1)]
+    ]
+}
+
 private func reply(_ object: [String: Any], delay: TimeInterval = 0) -> GomokuStubProtocol.Reply {
     GomokuStubProtocol.Reply(body: jsonText(object), delay: delay)
 }
@@ -608,6 +621,166 @@ func 서버_미배포_404_는_관전을_내리고_준비_중_안내를_남기며
     gomoku.setNotice(GomokuNoticeText.inviteTimedOut)
     gomoku.startWatching(matchID: otherID)
     #expect(gomoku.notice == GomokuNoticeText.inviteTimedOut, "관전 진입이 신청 안내를 지웠다(C12)")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 순위를_이미_받았으면_관전_404_가_순위표를_버리지_않는다() async throws {
+    // 없으면: 관전 404 한 번으로 **멀쩡한 순위표가 "곧 열려요"로 접힌다**("같은 마이그레이션이라 순위표도 없다"는 추론은
+    // 순위가 한 번도 성공하지 않았을 때만 맞다). 60초 폴링이 도는 운영에서는 applyRanking 이 회복시키지만,
+    // 폰 데모처럼 시계가 고정된 화면에서는 영구히 접힌 채 남는다.
+    let (_, gomoku, host) = makeWatchStore("ranking-kept") { rpc, _, _ in
+        switch rpc {
+        case "gomoku_watch": return pgrst202
+        case "gomoku_ranking": return reply(rankedRankingPayload())
+        default: return baseReply(rpc)
+        }
+    }
+    gomoku.isWindowVisible = true
+    gomoku.applyLobby(decode(GomokuLobbyResponse.self, lobbyPayload()))
+    await gomoku.loadRanking()
+    let loaded = try #require(gomoku.ranking)
+    #expect(loaded.entries.count == 2, "픽스처: 순위 두 줄을 손에 들었다 = 서버에 gomoku_ranking 이 있다는 증거")
+    #expect(gomoku.rankingUnavailable == false && gomoku.hasLoadedRanking)
+
+    gomoku.startWatching(matchID: watchedID)
+    await watchWait { gomoku.spectating == nil }
+    // 관전은 두 갈래 다 내려가고 안내도 남는다 — 바뀌는 것은 순위 깃발뿐이다.
+    #expect(gomoku.spectating == nil, "미배포 관전에서 빈 판이 남았다")
+    #expect(gomoku.notice == GomokuNoticeText.watchUnavailable)
+    #expect(count(host, "gomoku_watch") == 1)
+    // ★ 관전 깃발은 **조건 없이** 선다 — 이 한 줄이 없으면 [관전] 칩 게이트가 볼 신호가 없어 죽은 버튼이 활성으로 광고된다.
+    //   순위 깃발을 "행이 없을 때만"으로 좁힌 그 수리가 정확히 이 신호를 지웠다(2026-10-01).
+    #expect(gomoku.watchUnavailable, "행을 들고 있으면 관전 404 가 관전 입구를 안 잠근다 — 칩 게이트가 신호를 잃었다")
+    #expect(gomoku.rankingUnavailable == false, "행을 들고 있는데 관전 404 가 순위표를 '곧 열려요'로 접었다")
+    #expect(gomoku.ranking == loaded, "관전 404 가 받아 둔 순위 행을 버렸다")
+    #expect(gomoku.hasLoadedRanking)
+
+    // 기준선이 달라야 이 테스트가 산다: 순위를 한 번도 못 받은 창(ranking nil)에서는 **같은 404 가 깃발을 세운다**
+    // (안 세우면 순위 열이 "불러오는 중"으로 영영 서 있다). 문 앞 가드(`watchUnavailable`)는 60초 순위 폴이 푸는 것이라
+    // 여기서는 손으로 풀어 같은 404 를 한 번 더 받는다 — 그 가드 자체는 아래 `관전_404_뒤...` 가 본다.
+    gomoku.ranking = nil
+    gomoku.hasLoadedRanking = false
+    gomoku.watchUnavailable = false
+    gomoku.startWatching(matchID: otherID)
+    await watchWait { gomoku.spectating == nil }
+    #expect(count(host, "gomoku_watch") == 2)
+    #expect(gomoku.rankingUnavailable, "차가운 창에서는 관전 404 가 순위표를 접어야 한다")
+    #expect(gomoku.hasLoadedRanking, "차가운 창에서 '받은 것'으로 세지 않으면 화면이 로딩 문구를 영영 든다")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 관전_404_뒤에는_같은_판을_다시_눌러도_요청이_안_나간다() async {
+    // 없으면: **죽은 버튼이 404 를 무한히 반복한다.** 404 뒤 `stopWatching()` 이 `spectating` 을 비우므로 재진입 가드가
+    // 다시 통과하고, 화면의 칩만 잠그면 스토어를 직접 부르는 길(딥링크·다른 호출부)은 그대로 열려 있다.
+    // 반증 에이전트가 5회 연타로 404 왕복을 실측한 그 자리다(2026-10-01).
+    let (_, gomoku, host) = makeWatchStore("door-guard") { rpc, _, _ in
+        rpc == "gomoku_watch" ? pgrst202 : baseReply(rpc)
+    }
+    gomoku.isWindowVisible = true
+    gomoku.applyLobby(decode(GomokuLobbyResponse.self, lobbyPayload()))
+
+    gomoku.startWatching(matchID: watchedID)
+    await watchWait { gomoku.spectating == nil }
+    #expect(count(host, "gomoku_watch") == 1)
+    #expect(gomoku.watchUnavailable, "404 가 관전 입구를 잠그는 신호를 안 세웠다")
+
+    // 같은 판을 5번 더 누른다 — **문 앞**에서 막히므로 요청은 그대로 1건이고 빈 판도 서지 않는다.
+    for _ in 0..<5 {
+        gomoku.startWatching(matchID: watchedID)
+        await settle(gomoku)
+    }
+    try? await Task.sleep(for: .milliseconds(200))
+    #expect(count(host, "gomoku_watch") == 1, "잠긴 관전을 5번 더 눌렀더니 요청이 \(count(host, "gomoku_watch"))건 나갔다")
+    #expect(gomoku.spectating == nil, "잠긴 채로 빈 판이 섰다")
+    #expect(gomoku.notice == GomokuNoticeText.watchUnavailable, "막으면서 아무 말도 안 한다 — 눌러도 반응 없는 칩이 된다")
+    #expect(count(host, "gomoku_state") == 0)
+
+    // 기준선이 달라야 이 테스트가 산다: 잠금이 풀리면(60초 순위 폴이 하는 일) **같은 손짓이** 요청을 낸다.
+    gomoku.watchUnavailable = false
+    gomoku.startWatching(matchID: watchedID)
+    await watchWait { count(host, "gomoku_watch") == 2 }
+    #expect(count(host, "gomoku_watch") == 2, "잠금을 풀었는데도 [관전] 이 요청을 못 낸다 — 가드가 문을 아예 닫아 버렸다")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 관전_잠금은_60초_순위_폴이_한_번_풀어_준다() async {
+    // 없으면: **서버가 올라와도 로그아웃까지 관전이 잠긴 채 남는다.** 잠금을 내리는 곳은 성공한 관전(`applyWatch`)인데
+    // 문 앞 가드가 그 관전을 시작조차 못 하게 막아 자기가 자기를 열 수 없다 — 60초 순위 폴이 유일한 열쇠다.
+    let (_, gomoku, host) = makeWatchStore("unlock") { rpc, _, _ in
+        switch rpc {
+        case "gomoku_watch": return pgrst202
+        case "gomoku_ranking": return reply(rankedRankingPayload())
+        default: return baseReply(rpc)
+        }
+    }
+    let clock = Clock()
+    let t0 = clock.now
+    gomoku.clock = { clock.now }
+    gomoku.isWindowVisible = true
+    gomoku.applyLobby(decode(GomokuLobbyResponse.self, lobbyPayload()))
+    // 60초 창의 기준점을 t0 으로 잡는다 — 기본값(`distantPast`)이면 첫 폴이 무조건 풀어 버려 ①이 아무것도 증명하지 못한다.
+    await gomoku.loadRanking()
+    #expect(count(host, "gomoku_ranking") == 1)
+
+    gomoku.startWatching(matchID: watchedID)
+    await watchWait { gomoku.spectating == nil }
+    #expect(gomoku.watchUnavailable && count(host, "gomoku_watch") == 1)
+
+    // ① 60초가 안 지난 폴은 잠금을 안 푼다(감지기 기준선 — 여기서 풀리면 ②가 영원히 초록이다).
+    clock.now = t0.addingTimeInterval(30)
+    await gomoku.pollSpectatorFeatures(at: clock.now)
+    #expect(gomoku.watchUnavailable, "30초 폴이 관전 잠금을 풀었다")
+    #expect(count(host, "gomoku_ranking") == 1, "30초 폴이 순위를 다시 읽었다 — 주기 상수를 안 본다")
+
+    // ② 60초가 지난 폴이 잠금을 푼다.
+    clock.now = t0.addingTimeInterval(61)
+    await gomoku.pollSpectatorFeatures(at: clock.now)
+    #expect(count(host, "gomoku_ranking") == 2, "60초 폴이 순위를 안 읽었다 — 이 갈래를 아예 안 지났다")
+    #expect(gomoku.watchUnavailable == false, "60초가 지나도 관전 잠금이 그대로다 — 서버가 올라와도 로그아웃까지 잠긴다")
+
+    // ③ 풀린 문으로 [관전] 이 실제로 요청을 낸다 — 깃발만 내리고 문이 안 열리면 뜻이 없다.
+    gomoku.startWatching(matchID: watchedID)
+    await watchWait { count(host, "gomoku_watch") == 2 }
+    #expect(count(host, "gomoku_watch") == 2, "잠금이 풀렸는데 [관전] 이 요청을 못 낸다")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 순위가_0행이어도_관전_404_는_순위_깃발을_안_세운다() async throws {
+    // 없으면: `if ranking == nil` 가드를 `ranking?.entries.isEmpty != false` 로 넓혀 **0행 순위표까지 "곧 열려요"로
+    // 접어도 초록이다.** 0행 응답도 서버에 `gomoku_ranking` 이 있다는 증거이고(전적을 컷으로 초기화한 직후가 실제로 0행이다),
+    // 접으면 사용자는 제 전적이 사라진 줄 안다.
+    let (_, gomoku, host) = makeWatchStore("zero-row") { rpc, _, _ in
+        rpc == "gomoku_watch" ? pgrst202 : baseReply(rpc)        // baseReply 의 순위는 0행 ok 다
+    }
+    gomoku.isWindowVisible = true
+    gomoku.applyLobby(decode(GomokuLobbyResponse.self, lobbyPayload()))
+    await gomoku.loadRanking()
+    let board = try #require(gomoku.ranking, "0행 응답도 표를 세운다 — nil 이면 이 테스트가 '한 번도 못 받은 창'과 안 갈린다")
+    #expect(board.entries.isEmpty, "픽스처: 비었지만 nil 은 아닌 표")
+    #expect(gomoku.rankingUnavailable == false && gomoku.hasLoadedRanking)
+
+    gomoku.startWatching(matchID: watchedID)
+    await watchWait { gomoku.spectating == nil }
+    #expect(gomoku.watchUnavailable, "0행 창에서도 관전 404 는 관전 입구를 잠근다")
+    #expect(gomoku.notice == GomokuNoticeText.watchUnavailable)
+    #expect(gomoku.rankingUnavailable == false,
+            "0행 순위표를 들고 있는데 관전 404 가 '곧 열려요'로 접었다 — 0행도 서버에 gomoku_ranking 이 있다는 증거다")
+    #expect(gomoku.ranking == board, "관전 404 가 0행 표를 버렸다")
+    #expect(count(host, "gomoku_watch") == 1)
+
+    // 기준선이 달라야 이 테스트가 산다: **표가 아예 없는**(nil) 차가운 창에서는 같은 404 가 깃발을 세운다.
+    // 문 앞 가드는 60초 폴이 푸는 것이라 여기서는 손으로 풀어 같은 404 를 한 번 더 받는다(가드 자체는 위 테스트가 본다).
+    gomoku.ranking = nil
+    gomoku.hasLoadedRanking = false
+    gomoku.watchUnavailable = false
+    gomoku.startWatching(matchID: otherID)
+    await watchWait { gomoku.rankingUnavailable }
+    #expect(count(host, "gomoku_watch") == 2)
+    #expect(gomoku.rankingUnavailable, "표가 없는 차가운 창에서는 관전 404 가 순위표를 접어야 한다")
 }
 
 @MainActor

@@ -653,6 +653,17 @@ package final class GomokuStore {
     package var hasLoadedRanking = false
     /// 서버에 순위 함수가 아직 없다(PGRST202 — 서버보다 앱이 먼저 나간 창). 화면은 "순위는 곧 열려요"로 접고 [관전] 칩을 잠근다.
     package var rankingUnavailable = false
+
+    /// 서버에 `gomoku_watch` 가 없다(앱이 db push 보다 먼저 나간 창 · 폰 데모). **관전 입구를 잠그는 신호는 이것뿐이다.**
+    ///
+    /// ★ `rankingUnavailable` 과 **따로** 둔다. 예전에는 깃발 하나가 "순위표가 없다"와 "관전이 없다"를 겸업했는데,
+    ///   관전 404 가 멀쩡한 순위표를 접는 것을 막으려고 그 깃발을 "순위를 한 번도 못 받았을 때만" 으로 좁히자
+    ///   **[관전] 칩 게이트가 신호를 잃었다** — 행을 들고 있는 사용자에게 죽은 버튼이 활성으로 광고되고, 누를 때마다
+    ///   404 왕복이 무한 반복됐다(2026-10-01 반증 에이전트가 프로브로 5회 실측). 한 깃발이 두 소비자를 겸업하면
+    ///   한쪽을 좁히는 순간 다른 쪽이 조용히 죽는다.
+    /// 세우는 곳은 `noteWatchFailure` 의 databaseSchemaMissing 갈래 **하나**이고 조건이 없다. 내리는 곳은
+    /// 관전이 실제로 성공한 순간(`applyWatch` 의 ok)과 `reset` 이다 — 서버가 올라오면 다음 성공이 저절로 연다.
+    package var watchUnavailable = false
     /// 관전·순위 장부(요청 시각·in-flight·세대). 관찰 대상이 아니다.
     @ObservationIgnored package let watchRuntime = GomokuWatchRuntime()
 
@@ -1786,6 +1797,7 @@ package final class GomokuStore {
         if rankingLoadFailed { rankingLoadFailed = false }
         if hasLoadedRanking { hasLoadedRanking = false }
         if rankingUnavailable { rankingUnavailable = false }
+        if watchUnavailable { watchUnavailable = false }
         watchRuntime.clear()
         if autoAbandonStreak != GomokuStore.autoPlaceLossStreak {
             autoAbandonStreak = GomokuStore.autoPlaceLossStreak

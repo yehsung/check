@@ -69,6 +69,13 @@ extension GomokuStore {
         if let current = match, !current.isFinished { return }
         guard phase == .lobby else { return }
         if spectating?.id == id { return }
+        // ★ **문 앞에서 막는다.** 404 뒤 `stopWatching()` 이 `spectating` 을 비우므로 위 재진입 가드가 다시 통과한다 —
+        //   화면의 칩만 잠그면 스토어를 직접 부르는 길(딥링크·다른 호출부)이 404 를 무한히 낸다. 잠금은 폴링 주기가
+        //   한 번씩 풀어 주므로(`pollSpectatorFeatures`) 서버가 올라오면 저절로 열린다.
+        guard !watchUnavailable else {
+            setNotice(GomokuNoticeText.watchUnavailable)
+            return
+        }
         let seed: GomokuSpectateState
         if let live = liveMatches.first(where: { $0.id == id }) {
             seed = GomokuSpectateState(id: id, faces: [live.a, live.b], stake: live.stake.rawValue)
@@ -171,6 +178,8 @@ extension GomokuStore {
             }
             guard row.id?.lowercased() == current.id else { return }
             noteServerNow(response.serverNowMs)
+            // 관전이 실제로 왔다 — 서버에 함수가 있다. 잠겼던 칩을 여기서 연다(세우는 곳과 내리는 곳을 한 갈래씩만 둔다).
+            if watchUnavailable { watchUnavailable = false }
             let status = row.status ?? ""
             guard status == "active" || status == "finished" else {
                 // 서버 계약상 여기로 못 온다(pending·declined 은 not_found 다). 와도 판이 아니다 — not_found 와 같은 길.
@@ -225,12 +234,21 @@ extension GomokuStore {
     /// 예외 실패 경로(C17). status 가 아니라 throw 로 온 실패(PGRST202·5xx·오프라인)와 모르는 응답 모양을 여기서 접는다.
     private func noteWatchFailure(_ error: (any Error)?) {
         if let known = error as? SupabaseWorkServiceError, known == .databaseSchemaMissing {
-            // 서버에 gomoku_watch 가 아직 없다(앱이 db push 보다 먼저 나간 창). 같은 마이그레이션의 순위표도 없으니 화면 상태를 함께 접는다 —
-            // 순위 열이 "불러오는 중"으로 서 있지 않게. 순위 폴링 자체는 60초 주기로 계속 두어 서버가 올라오면 저절로 회복한다.
+            // 서버에 gomoku_watch 가 아직 없다(앱이 db push 보다 먼저 나간 창).
             stopWatching()
             setNotice(GomokuNoticeText.watchUnavailable)
-            if !rankingUnavailable { rankingUnavailable = true }
-            if !hasLoadedRanking { hasLoadedRanking = true }
+            // ★ 관전 입구를 잠그는 신호는 **조건 없이** 세운다. 아래 순위 깃발과 달리 이건 `gomoku_watch` 가 없다는 직접
+            //   증거이고, 순위를 들고 있든 없든 관전은 못 한다. 이 한 줄이 없으면 [관전] 칩이 활성인 채로 남아 누를 때마다
+            //   404 를 반복한다(칩 게이트는 `GomokuPanel` 의 `canWatch` 하나뿐이다 — 게이트와 신호는 짝으로 움직인다).
+            if !watchUnavailable { watchUnavailable = true }
+            // 순위표까지 함께 접는 것은 **순위를 한 번도 못 받았을 때만**이다. "같은 마이그레이션이라 순위표도 없다"는 추론은
+            // 순위 조회가 성공한 적 없을 때만 맞다 — 순위를 이미 들고 있으면 서버에 gomoku_ranking 이 있다는 증거를 손에 든 것이라,
+            // 관전 404 하나로 멀쩡한 순위표를 "곧 열려요"로 덮으면 안 된다(운영에서는 60초 폴링의 applyRanking 이 되돌리지만,
+            // 폰 데모처럼 시계가 고정된 화면에서는 영구히 접힌 채 남는다). 관전을 내리고 안내를 남기는 것은 두 경우 다 한다.
+            if ranking == nil {
+                if !rankingUnavailable { rankingUnavailable = true }
+                if !hasLoadedRanking { hasLoadedRanking = true }
+            }
             return
         }
         Self.logger.notice("watch request failed")
@@ -254,6 +272,11 @@ extension GomokuStore {
             return
         }
         if now.timeIntervalSince(watchRuntime.lastRankingRequestAt) >= Self.rankingPollSeconds {
+            // ★ 관전 잠금을 이 주기에 **한 번 풀어 준다.** `watchUnavailable` 은 `startWatching` 을 문 앞에서 막으므로
+            //   자기가 자기를 열 수 없다(내리는 곳이 성공한 관전인데, 잠겨 있으면 관전이 시작되지 않는다) — 안 풀면
+            //   서버가 올라와도 로그아웃까지 잠긴 채 남는다. 풀어 두면 최악이 "60초에 404 한 번"이고, 그 사이 서버가
+            //   올라오면 첫 성공이 잠금을 내린다(`applyWatch`). `rankingUnavailable` 이 폴링으로 회복하는 것과 같은 결이다.
+            if watchUnavailable { watchUnavailable = false }
             await loadRanking()
         }
     }

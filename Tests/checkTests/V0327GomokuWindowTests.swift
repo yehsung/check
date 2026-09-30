@@ -603,6 +603,12 @@ func appWiresTheGomokuWindowAndItsDoorsAtLaunch() throws {
             && gomokuWiring.contains("NSApp.requestUserAttention(.criticalRequest)")
             && gomokuWiring.contains("!NSApp.isActive"),
             "판이 시작돼도 앱이 뒤에 있으면 주의를 끌지 않는다")
+    // 순위표·관전의 **주 스위치**(0.3.41). 스토어는 폰과 공용이라 기본이 꺼짐이고, 이 한 줄만 켠다.
+    // ★ 이 단언이 없던 동안 그 줄을 지워도 `--filter Gomoku` 273건이 **전부 초록**이었다(2026-10-01 뮤테이션, 모바일 세션 제보).
+    //   지워지면 순위 열은 영영 "불러오고 있어요" 이고, `canWatch: !rankingUnavailable` 이라 [관전] 칩은 활성인 채 눌러도 무반응이다 —
+    //   화면이 멀쩡해 보이므로 눈으로도 늦게 잡힌다.
+    #expect(gomokuWiring.contains("gomoku.spectatorFeaturesEnabled = true"),
+            "순위·관전 주 스위치가 안 켜진다 — 순위 열은 영영 로딩이고 [관전] 은 아무 요청도 안 낸다")
     // 말풍선 큐는 오버레이 컨트롤러에 산다 — 그걸 만든 **뒤에** 이어야 첫 신청이 받을 곳이 있다.
     let overlay = try #require(app.range(of: "overlayController = CheckOverlayController("))
     let wire = try #require(app.range(of: "wireGomoku()"))

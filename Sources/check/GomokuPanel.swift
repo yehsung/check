@@ -2553,12 +2553,16 @@ private struct GomokuRankColumn: View {
         if store.rankingUnavailable {
             centered(GomokuText.rankingUnavailable, icon: "clock")
         } else if let ranking = store.ranking {
-            if ranking.entries.isEmpty {
-                centered(GomokuText.noRanking, icon: "flag.checkered")
-            } else {
-                VStack(alignment: .leading, spacing: GomokuWindowLayout.rankHeaderSpacing) {
-                    // 전에 받은 목록은 그대로 두고, 지금 목록이 낡았을 수 있다는 것만 알린다(상대 목록과 같은 결).
-                    if store.rankingLoadFailed { failureStrip }
+            // ★ 실패 띠는 **0행 갈래에도** 선다. 전에는 "비어 있지 않은" 갈래 안에만 있어서, 빈 순위표를 한 번 받은 뒤
+            //   조회가 실패하면 화면에 실패 띠도 [다시 불러오기]도 없었다 — "아직 전적이 없어요"만 남아 사용자는 서버가
+            //   멀쩡한 줄 안다(2026-10-01 모바일 세션 제보). 전적을 컷으로 초기화한 직후에는 **실제로 0행**이라
+            //   가장 닿기 쉬운 자리다.
+            VStack(alignment: .leading, spacing: GomokuWindowLayout.rankHeaderSpacing) {
+                // 전에 받은 목록은 그대로 두고, 지금 목록이 낡았을 수 있다는 것만 알린다(상대 목록과 같은 결).
+                if store.rankingLoadFailed { failureStrip }
+                if ranking.entries.isEmpty {
+                    centered(GomokuText.noRanking, icon: "flag.checkered")
+                } else {
                     if clipsOverflowInsteadOfScroll {
                         rows(ranking.entries)
                             .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)

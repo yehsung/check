@@ -410,6 +410,78 @@ func myRankRowAndHeaderCapsuleFollowTheSessionUserAndOneSource() throws {
     }
 }
 
+// MARK: - 순위 열: 0행 + 조회 실패
+
+/// 없으면: **빈 순위표를 받은 뒤 조회가 실패하면 화면에 실패 띠도 [다시 불러오기]도 없다.** "아직 전적이 없어요"만 남아
+/// 사용자는 서버가 멀쩡한 줄 안다(2026-10-01 모바일 세션 제보 — 실패 띠가 "비어 있지 않은" 갈래 안에만 있었다).
+/// 전적을 컷으로 초기화한 직후에는 **실제로 0행**이라 가장 닿기 쉬운 자리다.
+@MainActor
+@Test
+func emptyRankingStillShowsTheFailureStripWhenTheReloadFailed() throws {
+    let store = rwLobbyStore()
+    store.hasLoadedRanking = true
+    store.ranking = GomokuRankingBoard(entries: [], me: nil, recordSince: nil)
+    let quiet = try rwBitmap(rwPanel(store))
+    store.rankingLoadFailed = true
+    let failed = try rwBitmap(rwPanel(store))
+    rwSave(failed, name: "lobby-rank-empty-failed")
+    #expect(rwYellowPixels(failed) == 0)
+
+    // 실패 띠는 pending(주황) 이다 — 빈 순위표의 "아직 전적이 없어요"·깃발 아이콘에는 주황이 없다.
+    #expect(rwOrangeInk(quiet, rect: rwRankColumn) == 0, "실패가 아닌데 순위 열에 주황이 있다 — 감지기가 다른 것을 센다")
+    #expect(rwOrangeInk(failed, rect: rwRankColumn) > 40,
+            "0행 + 조회 실패인데 실패 띠가 없다 — 사용자는 서버가 멀쩡한 줄 안다")
+    #expect(rwMaxChannelDifference(quiet, failed, rect: rwRankColumn) > 60, "실패가 순위 열을 한 픽셀도 안 바꿨다")
+    // 오른쪽 400 열(상대 목록·받은 신청)은 순위 열의 실패와 무관하다.
+    #expect(rwMaxChannelDifference(quiet, failed, rect: rwLobbySideColumn) <= 2, "순위 조회 실패가 오른쪽 열을 바꿨다")
+}
+
+// MARK: - 순위 행: 승·패·무 줄
+
+/// 없으면: 행 꼬리에서 **전적 줄(N승 N패 N무)이 통째로 사라져도 초록이다.** 다른 행 단언은 userID·characterHint·금지어와
+/// 행 상자 개수·간격만 보고 꼬리(`rankTrailingWidth`)를 겨냥한 사각형이 없었다(2026-10-01 모바일 세션이 뮤테이션으로 제보).
+/// 사용자가 "승점으로 나누면서도 몇승 몇패인지 뜨게" 라고 명시한 그 줄이라 감지기가 없으면 요구가 조용히 사라진다.
+///
+/// 어떻게 잡는가: **승점이 같고 무만 다른** 두 판을 그려 그 행의 꼬리를 맞대어 본다. 승점 줄은 둘이 글자까지 같으므로
+/// (둘 다 −1) 꼬리가 같아지는 경우는 전적 줄이 없을 때뿐이다. 기준선과 비교군의 입력이 **다르다** — 같은 입력을 두 번
+/// 그리는 비교는 영원히 초록이라 아무것도 증명하지 않는다.
+/// (승점 줄 자체는 이 방식으로 따로 못 가른다 — 승점은 승−패라 전적을 안 바꾸고 승점만 바꿀 수 없다. 머리글 캡슐의
+///  승점은 `myRankRowAndHeaderCapsuleFollowTheSessionUserAndOneSource` 가 본다.)
+@MainActor
+@Test
+func rankRowShowsWinsLossesDrawsNotJustPoints() throws {
+    let store = rwLobbyStore()
+    func board(secondRowDraws draws: Int) -> GomokuRankingBoard {
+        GomokuRankingBoard(entries: [
+            rwEntry(1, "가", 1, wins: 3, losses: 0, draws: 0),
+            rwEntry(2, "나", 2, wins: 1, losses: 2, draws: draws),   // 승점 −1 고정 · 무만 바뀐다
+        ], me: nil, recordSince: nil)
+    }
+    func render(_ value: GomokuRankingBoard) throws -> NSBitmapImageRep {
+        store.ranking = value
+        store.hasLoadedRanking = true
+        return try rwBitmap(rwPanel(store))
+    }
+    let withDraw = try render(board(secondRowDraws: 1))
+    let withoutDraw = try render(board(secondRowDraws: 0))
+    rwSave(withDraw, name: "lobby-rank-record-line")
+    #expect(rwYellowPixels(withDraw) == 0)
+
+    let tops = rwBoxTops(withDraw, rect: rwRankColumn, height: Int(GomokuWindowLayout.rankRowHeight), minimum: 500)
+    #expect(tops.count == 2, "두 행이 안 세어진다(윗변 \(tops))")
+    guard tops.count == 2 else { return }
+    // 꼬리 = 카드 안쪽 오른쪽 끝에서 rankTrailingWidth + 여백. 순위 배지·아바타·이름은 앞쪽이라 안 들어온다.
+    func trailing(row index: Int) -> CGRect {
+        let width = GomokuWindowLayout.rankTrailingWidth + 12
+        return CGRect(x: rwRankColumn.maxX - GomokuWindowLayout.cardPadding - width, y: CGFloat(tops[index]),
+                      width: width, height: GomokuWindowLayout.rankRowHeight)
+    }
+    #expect(rwMaxChannelDifference(withDraw, withoutDraw, rect: trailing(row: 1)) > 20,
+            "무가 1 → 0 인데 둘째 행 꼬리가 같다 — 승·패·무 줄이 없다(승점만 그린다)")
+    #expect(rwMaxChannelDifference(withDraw, withoutDraw, rect: trailing(row: 0)) <= 2,
+            "무를 안 바꾼 첫째 행 꼬리가 달라졌다 — 감지기가 행을 잘못 겨냥했거나 레이아웃이 흔들린다")
+}
+
 // MARK: - 로비: 대결 카드의 [관전] 칩
 
 /// 없으면: [관전] 칩이 카드를 55 로 키워 카드를 세는 두 렌더 시험이 0장으로 세어도(C18), 칩이 아예 없어도, 서버에 관전이 없는 창에서

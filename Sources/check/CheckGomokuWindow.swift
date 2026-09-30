@@ -31,14 +31,16 @@ import CheckCore
 ///     v0.3.28~29 의 세 번째 채팅 열(220)을 없애고 **카드들과 [기권] 사이 빈 공간**에 채팅을 넣었다(사용자 요구:
 ///     "채팅창을 오른쪽으로 따로 빼지 말고 그 사이 빈 공간에"). 보낸 말은 그 사람 카드 옆 말풍선으로도 뜬다.
 ///   · 결과는 [판 | 오른쪽 열(결과 카드 · 채팅 카드)]. 채팅은 결과 화면에도 남는다(끝난 뒤 인사).
-///   · 로비는 [상대 목록 | 오른쪽(위 지금 대결 중 · 아래 받은/보낸 신청)] — 판돈은 [도전]을 누를 때
-///     가운데 작은 창(`GomokuStakePrompt`)에서 고른다.
+///   · 로비는 [상대 목록 | 순위 | 오른쪽(위 지금 대결 중 · 아래 받은/보낸 신청)] — 판돈은 [도전]을 누를 때
+///     가운데 작은 창(`GomokuStakePrompt`)에서 고른다. 0.3.31 에 왼쪽 780 블록을 [상대 420 | 20 | 순위 340] 으로 갈랐다 —
+///     오른쪽 400 열은 한 픽셀도 안 움직였다(창을 넓히지 않는다: 13" 맥에 안 들어간다).
+///   · 관전은 대국과 같은 [판 | 오른쪽 열] 두 열이다(`phase` 는 `.lobby` 그대로, `spectating` 이 있으면 로비 자리에 선다).
 ///
 /// 산식:
 ///   · 안쪽 = 1240−40 × 700−40 = 1200 × 660
 ///   · 본문 높이 = 660 − 머리글 40 − 간격 12 = 608
-///   · 대국·결과: 판 608×608(정사각) | 오른쪽 열 572 → 608 + 20 + 572 = 1200
-///   · 로비: 상대 목록 780 | 오른쪽 열 400 → 780 + 20 + 400 = 1200
+///   · 대국·결과·관전: 판 608×608(정사각) | 오른쪽 열 572 → 608 + 20 + 572 = 1200
+///   · 로비: [상대 목록 420 | 20 | 순위 340] = 왼쪽 블록 780 | 오른쪽 열 400 → 780 + 20 + 400 = 1200
 enum GomokuWindowLayout {
     /// 창 콘텐츠 크기(고정). 컨트롤러의 min/max 도 이 값 하나를 쓴다.
     static let contentSize = CGSize(width: 1240, height: 700)
@@ -88,6 +90,45 @@ enum GomokuWindowLayout {
     /// 판돈 고르기 창(가운데 작은 창)의 폭. 판돈 버튼 셋이 한 줄에 여유 있게 서는 값이고,
     /// 렌더 검증이 그 셋의 자리를 이 값에서 계산한다 — 그래서 뷰가 아니라 여기 산다.
     static let stakePromptWidth: CGFloat = 340
+
+    // MARK: 로비 왼쪽 블록의 3열 분할 (0.3.31) — [상대 목록 | 순위]
+
+    /// 오목 창 카드 크롬(`gomokuCard`)의 기본 안쪽 여백. 순위 열의 행수 산식이 이 값을 두 번 뺀다 — 뷰와 산식이 같은 숫자를 봐야 한다.
+    static let cardPadding: CGFloat = 16
+    /// 상대 목록 폭. 검산(C18): 카드 여백 16×2 · 행 가로 여백 12×2 · HStack 간격 12×3 · 아바타 34 · Spacer 8 · [도전] ≈70 을 빼면
+    /// 이름 칸이 **약 216pt** 다(계획서의 264 는 틀린 산수였다) — 테스트의 12자 별명(≈170pt)이 들어간다. 잃는 것은 비어 있던 Spacer 뿐이다.
+    static let lobbyUsersWidth: CGFloat = 420
+    /// 순위 열 폭 = 왼쪽 블록 780 에서 상대 목록과 간격을 뺀 나머지(= 340). 항등식 420 + 20 + 340 = 780 은 창 테스트가 되묻는다.
+    static var lobbyRankWidth: CGFloat { lobbyListWidth - columnSpacing - lobbyUsersWidth }
+    /// 순위 열 제목 줄("오목 순위" + 캡션) 높이. 프레임으로 못 박아 캡션이 길어져도 행수 산식이 안 흔들린다.
+    static let rankHeaderHeight: CGFloat = 20
+    /// 제목 줄과 목록 사이 간격.
+    static let rankHeaderSpacing: CGFloat = 8
+    /// 순위 행 높이. 오른쪽 두 줄(승점 caption 13 + 전적 caption2 11)이 34 안에 든다.
+    static let rankRowHeight: CGFloat = 34
+    static let rankRowSpacing: CGFloat = 5
+    /// 행 오른쪽 고정 칸(위 승점 · 아래 승·패·무). 사용자 결정 U2: 승점과 전적을 **같이** 띄운다.
+    static let rankTrailingWidth: CGFloat = 96
+    /// 순위 목록에 남는 높이 = 본문 608 − 카드 여백 32 − 제목 20 − 간격 8 = 548.
+    static var rankListHeight: CGFloat { bodyHeight - cardPadding * 2 - rankHeaderHeight - rankHeaderSpacing }
+    /// 스크롤 없이 보이는 행수(= 14: 14×34 + 13×5 = 541 ≤ 548). 15번째부터 ScrollView(스냅샷은 클립 갈래).
+    static var rankVisibleRows: Int { Int((rankListHeight + rankRowSpacing) / (rankRowHeight + rankRowSpacing)) }
+    /// "지금 대결 중" 카드 첫째 줄의 [관전] 칩 높이. **18 이어야 카드가 53 을 유지한다** — HStack 높이는 자식 최대라
+    /// 20 이면 첫째 줄이 얼굴 18 을 넘겨 카드가 55 로 자라고, 카드를 53 으로 세는 렌더 시험 둘이 카드를 0장으로 센다(C18).
+    static let liveWatchChipHeight: CGFloat = 18
+
+    // MARK: 관전 오른쪽 열의 세로 예산 (0.3.31)
+
+    /// 판돈 칩 | 상태 상자 줄의 최소 높이(대국 화면의 44 와 같다 — 경고 줄이 붙으면 이 줄만 아래로 자란다).
+    static let spectateStatusMinHeight: CGFloat = 44
+    /// [나가기] 높이(대국 화면 [기권] 과 같은 34).
+    static let spectateLeaveHeight: CGFloat = 34
+    /// 두 카드·상태 줄·[나가기]·간격 넷을 뺀 나머지(= 322) — 받은 신청 카드 · 보낸 신청 줄 · 안내줄(C12)이 먼저 서고
+    /// 관전 안내 카드가 그 뒤의 나머지를 쓴다(`minHeight: 0`). 받은 신청 2장 + 보낸 줄(310) + 안내줄(최대 44) 은 이 예산을 넘겨
+    /// [취소]가 잘리므로, 관전 쪽 받은 신청 카드는 **1장 + "외 N건"** 으로 상한을 둔다(206 + 44 + 8 = 258 ≤ 322).
+    static var spectateInfoHeight: CGFloat {
+        bodyHeight - playerCardHeight * 2 - spectateStatusMinHeight - spectateLeaveHeight - matchSideSpacing * 4
+    }
 }
 
 /// 오목 창의 수명·표시·복구를 쥐는 단 하나의 지점. **공개 진입점은 `show()` 하나다** —

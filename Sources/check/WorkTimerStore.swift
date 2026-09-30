@@ -2334,7 +2334,10 @@ final class WorkTimerStore {
     ///                          팝오버만 닫았다 여는 것이 가장 흔한 동선인데, 그 길은 토글을 지나지 않는다.)
     ///   ④ 주 롤오버          — `revertLeagueWeekIfRolledOver()`(30초 주기 갱신·주 이동 진입에서)
     private func syncLeagueWeekToCurrent() {
-        let current = TeamLeagueWeekNavigator.currentKey()
+        // '이번 주' 는 **스토어의 시계**로 잰다(M1 시계 분리 — 표시 전용 displayNow 도, 맨 Date() 도 아니다). 여기가 Date() 면
+        // 시계를 주입한 테스트에서 이 함수들만 실제 오늘을 보고 앵커를 되돌려, 고정 시계로 쓴 테스트가 **쓰인 주에만** 초록이다
+        // (2026-09-30 실측: V0337 왕복 렌더가 09-28 월요일부터 빨강). 프로덕션 clock 은 Date() 라 동작은 같다.
+        let current = TeamLeagueWeekNavigator.currentKey(clock())
         // 기준선은 언제나 되맞춘다 — 되돌릴 것이 없어도(이미 이번 주) 앵커가 낡아 있으면 다음 틱이 헛되돌린다.
         if leagueWeekAnchor != current { leagueWeekAnchor = current }
         guard leagueWeekKey != current else { return }
@@ -2354,7 +2357,7 @@ final class WorkTimerStore {
     /// 앵커가 어긋났다는 것은 **기준선(이번 주) 자체가 옮겨 갔다**는 뜻이고, 그때는 보던 주가 무엇이든
     /// 새 이번 주로 되돌린다 — 캐시에 남은 옛 '이번 주' 표가 다음 ▸ 에서 과거 주인 척 되살아나기 때문이다.
     func revertLeagueWeekIfRolledOver() {
-        guard leagueWeekAnchor != TeamLeagueWeekNavigator.currentKey() else { return }
+        guard leagueWeekAnchor != TeamLeagueWeekNavigator.currentKey(clock()) else { return }
         syncLeagueWeekToCurrent()
     }
 
@@ -2367,7 +2370,7 @@ final class WorkTimerStore {
         // 주가 넘어간 직후의 한 번(주기 갱신보다 화살표가 빠를 수 있다) — 옮기기 전에 기준선부터 새 이번 주로 맞춘다.
         // 안 그러면 ◂ 한 번이 '옛 이번 주 − 1' 로 가고, 곧이어 오는 틱이 그 화면을 다시 끌어당긴다.
         revertLeagueWeekIfRolledOver()
-        let next = TeamLeagueWeekNavigator.step(leagueWeekKey, by: delta)
+        let next = TeamLeagueWeekNavigator.step(leagueWeekKey, by: delta, now: clock())
         guard next != leagueWeekKey else { return }
         leagueWeekKey = next
         if leagueFailed { leagueFailed = false }
@@ -3504,9 +3507,9 @@ extension WorkTimerStore {
         leaderboard = []
         isLeaderboardVisible = false
         // 보던 주·주별 캐시도 계정의 것이다 — 남기면 다음 사람 화면이 앞 사람이 보던 6주 전 표부터 시작한다.
-        leagueWeekKey = TeamLeagueWeekNavigator.currentKey()
+        leagueWeekKey = TeamLeagueWeekNavigator.currentKey(clock())
         // 기준선도 함께 되맞춘다 — 낡은 앵커를 물려주면 다음 계정의 첫 틱이 이유 없이 표를 한 번 버린다.
-        leagueWeekAnchor = TeamLeagueWeekNavigator.currentKey()
+        leagueWeekAnchor = TeamLeagueWeekNavigator.currentKey(clock())
         leagueWeekCache.removeAll()
         leagueLoading = false
         leagueFailed = false

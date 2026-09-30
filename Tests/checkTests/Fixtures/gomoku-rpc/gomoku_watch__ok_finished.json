@@ -1,0 +1,41 @@
+{
+  "match": {
+    "id": "0a7c0000-0000-4000-8000-00000000a7c1",
+    "turn": null,
+    "black": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "board": "................................................................................................................b..............wb................................................................................................",
+    "stake": 5,
+    "white": "3e240c02-8972-478e-a674-014f498a641b",
+    "result": "black_win",
+    "status": "finished",
+    "winner": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "opponent": "3e240c02-8972-478e-a674-014f498a641b",
+    "challenger": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "end_reason": "five",
+    "move_count": 3,
+    "started_ms": 1790770282383,
+    "deadline_ms": null,
+    "finished_ms": 1790770352575,
+    "turn_started_ms": 1790770352506
+  },
+  "moves": [],
+  "status": "ok",
+  "black_user": {
+    "center": "seoul",
+    "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "character": "aing",
+    "avatar_url": null,
+    "display_name": "abto.app"
+  },
+  "white_user": {
+    "center": "busan",
+    "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+    "character": "jellyfish",
+    "avatar_url": "https://example.invalid/avatar-b.png",
+    "display_name": "코덱스토큰도둑예은"
+  },
+  "server_now_ms": 1790770352577,
+  "black_auto_streak": 0,
+  "white_auto_streak": 0,
+  "auto_abandon_streak": 3
+}

@@ -3536,6 +3536,20 @@ package struct GomokuChatMuteRequest: Encodable {
     package let pMuted: Bool
 }
 
+/// gomoku_ranking 본문(0.3.31). { p_protocol }. 로비·받은함과 같은 한 키 — 빈 `{}` 가 아니다(PostgREST 함수 선택 규칙).
+package struct GomokuRankingRequest: Encodable {
+    package var pProtocol = GomokuWire.protocolVersion
+}
+
+/// gomoku_watch 본문(0.3.31). { p_protocol, p_match_id, p_since_seq }.
+/// `p_since_seq` 는 서버 default(0)가 있지만 **언제나 싣는다**(gomoku_state 와 같은 이유 — 키 집합이 함수를 고른다).
+/// 채팅 번호는 없다: 관전은 판만 본다(대국자 채팅은 서버가 아예 싣지 않는다).
+package struct GomokuWatchRequest: Encodable {
+    package var pProtocol = GomokuWire.protocolVersion
+    package let pMatchId: String
+    package let pSinceSeq: Int
+}
+
 /// 채팅 한 줄의 종류. 서버 `gomoku_chat.kind` 의 두 값 그대로다.
 package nonisolated enum GomokuChatKind: String, Equatable, Sendable {
     case text
@@ -3615,6 +3629,14 @@ package struct GomokuMatchRow: Decodable, Equatable, Sendable {
     package var winner: String?
     package var inviteExpiresMs: Double?
     package var board: String?
+    /// 0.3.31 — 관전(gomoku_watch)이 싣는 시각 셋. gomoku_state 응답에도 같은 키가 있어 무해하고, 안 싣는 옛 서버면 nil.
+    /// **맨 끝에 Optional 로만 더한다** — 비옵셔널 하나면 db push 전 창에서 오목 창이 디코드째 죽는다(머리말 ①).
+    /// 차례가 시작된 서버 시각. 마감은 `deadlineMs` 가 따로 온다(active 가 아니면 null).
+    package var turnStartedMs: Double?
+    /// 대국이 시작된 서버 시각(accepted_at). 로비 카드의 `startedMs` 와 같은 값이다.
+    package var startedMs: Double?
+    /// 끝난 서버 시각. finished 가 아니면 null.
+    package var finishedMs: Double?
 }
 
 /// 수 기록 한 줄. 패스는 x·y 가 null 이다(kind 'pass' 가 함께 오면 그것도 본다).
@@ -3794,6 +3816,69 @@ package struct GomokuLeaveResponse: Decodable, Equatable, Sendable {
     /// not_finished — 그때 판의 status(로그용. 화면 문구는 이 값을 쓰지 않는다).
     package var matchStatus: String?
     package var serverNowMs: Double?
+}
+
+// MARK: 순위표 · 관전 (0.3.31)
+
+/// gomoku_ranking 의 한 줄. 순위는 **서버가 매긴 값**(rank() — 동률은 같은 숫자)이고 배열 순서도 서버 것이다(재정렬 금지).
+/// 전적 넷을 다 싣는다: 화면은 승점과 승·패·무를 **같이** 그린다(승점만 보이면 "왜 저 사람이 위인지"를 못 읽는다).
+package struct GomokuRankRow: Decodable, Equatable, Sendable {
+    package var rank: Int?
+    package var userId: String?
+    package var displayName: String?
+    package var avatarUrl: String?
+    package var character: String?
+    /// 서버 어휘('seoul'|'busan'|null). 화면 글자로 바꾸는 자리는 `GomokuStore.user(from:)` 경계 하나다(CenterLabel 규약).
+    package var center: String?
+    package var wins: Int?
+    package var losses: Int?
+    package var draws: Int?
+    /// 승점 = 승 − 패(무 0). 서버가 계산해 싣는다 — 앱이 다시 빼면 서버 규칙이 바뀌는 날 둘이 갈린다.
+    package var points: Int?
+}
+
+/// gomoku_ranking 의 `me`. `rank` 는 **0판이면 null**(순위 밖) — 전적은 그래도 온다(0,0,0).
+package struct GomokuRankingMe: Decodable, Equatable, Sendable {
+    package var rank: Int?
+    package var wins: Int?
+    package var losses: Int?
+    package var draws: Int?
+    package var points: Int?
+}
+
+/// gomoku_ranking 응답: { status('ok'|'unauthorized'|'unsupported_client'), server_now_ms, record_since_ms, me{…}, rows[…] }.
+/// `record_since_ms` 는 전적 기준 시각(컷). **컷이 없으면(-infinity) null** 이고 그때 화면은 "언제부터" 캡션을 안 단다.
+/// rows 는 최대 100, 0판인 사람은 없다.
+package struct GomokuRankingResponse: Decodable, Equatable, Sendable {
+    package let status: GomokuRPCStatus
+    package var serverNowMs: Double?
+    package var recordSinceMs: Double?
+    package var me: GomokuRankingMe?
+    package var rows: [GomokuRankRow]?
+}
+
+/// gomoku_watch 응답: { status('ok'|'unauthorized'|'unsupported_client'|'not_found'), server_now_ms, match{…}, moves[…],
+/// black_user{…}, white_user{…}, black_auto_streak, white_auto_streak, auto_abandon_streak }.
+///
+/// **ok 는 진행 중인 판(active)과 끝난 지 3분 안의 판뿐이다.** 그 밖(오래 끝난 판·pending·없는 id·숨김 격리 실패)은
+/// 있다/없다를 구별시키지 않는 `not_found` 하나다 — 관전은 아카이브가 아니다. 끝난 응답을 한 번 받으면 폴링을 멈추고
+/// 받은 결과를 들고 있으므로 꼬리 3분이 지나도 화면은 깨지지 않는다.
+///
+/// **채팅 키를 두지 않는다**(chat·chat_seq·my_muted·opponent_muted·my_color·opponent·ruby_balance 전부 없음).
+/// 서버가 안 싣는 것이 1차 방어이고, 앱이 안 읽는 것이 2차다 — 안 읽는 것이 가장 안전한 읽기다.
+/// 이 응답은 `applyState` 경로로 절대 넣지 않는다(my_color 부재로 .ignored 거나 대국 화면이 선다) — 관전 전용 적용 경로만.
+package struct GomokuWatchResponse: Decodable, Equatable, Sendable {
+    package let status: GomokuRPCStatus
+    package var serverNowMs: Double?
+    package var match: GomokuMatchRow?
+    /// p_since_seq 이후만, seq 오름차순. 판 문자열은 `match.board` 가 권위이고 이 배열은 마지막 수·자동 착수 점 표시용이다.
+    package var moves: [GomokuMoveRow]?
+    /// 흑·백은 **여기서만 확정한다** — 로비 카드의 a/b 는 uuid 순서라 색을 말하지 않는다.
+    package var blackUser: GomokuUserRow?
+    package var whiteUser: GomokuUserRow?
+    package var blackAutoStreak: Int?
+    package var whiteAutoStreak: Int?
+    package var autoAbandonStreak: Int?
 }
 
 /// 대국 채팅 본문의 정규화·길이 판정. **MessageBody 의 정규화·눈금을 그대로 빌린다** — 상한(100)만 다르다.

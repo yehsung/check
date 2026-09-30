@@ -294,6 +294,24 @@ func 실서버_오목_응답_전부가_앱_응답_모델로_디코드되고_stat
                 let action = try decoder.decode(GomokuActionResponse.self, from: data)
                 #expect(action.state == response.state, "\(name) state 키 안과 최상위가 같은 묶음이다")
             }
+        case "ranking":
+            // 0.3.41 — 순위표. ok 면 rows·me·server_now_ms 가 다 있다(0행이어도 rows 는 [] 이지 null 이 아니다).
+            let response = try decoder.decode(GomokuRankingResponse.self, from: data)
+            status = response.status
+            if raw == "ok" {
+                #expect(response.rows != nil && response.me != nil && response.serverNowMs != nil, "\(name)")
+            }
+        case "watch":
+            // 0.3.41 — 관전. ok 면 판·수순·두 사람이 다 있고, **채팅·시점 의존 키는 아예 없다**(모델에 두지 않는 것이 가장 안전한 읽기).
+            let response = try decoder.decode(GomokuWatchResponse.self, from: data)
+            status = response.status
+            if raw == "ok" {
+                #expect(response.match != nil && response.moves != nil && response.blackUser != nil && response.whiteUser != nil, "\(name)")
+            }
+            for key in ["chat", "chat_seq", "my_muted", "opponent_muted", "chat_capable", "chat_max_len", "chat_quick_codes",
+                        "my_color", "ruby_balance", "state", "my_auto_streak", "opponent_auto_streak"] {
+                #expect(object[key] == nil, "\(name): 관전 응답에 \(key) 가 실려 왔다 — 관전자에게 대국자 채팅·시점이 샌다")
+            }
         default:
             let response = try decoder.decode(GomokuActionResponse.self, from: data)
             status = response.status

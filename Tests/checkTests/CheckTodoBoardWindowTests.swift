@@ -1161,7 +1161,16 @@ func todoBoardRebuildsPanelWhenItNeverReachesTheScreen() async throws {
     #expect(rebuilt, "감시자가 못 뜬 창을 못 알아챘다")
     #expect(controller.panel !== stuck, "같은 창을 다시 주문했다 — 실측상 그걸로는 살아나지 않는다")
     #expect(controller.isBoardOpen, "되살리는 동안 표시 의도가 뒤집혔다")
-    #expect(CheckTodoBoardController.isOnScreen(controller.panel) == true, "새 창도 화면에 못 올라갔다")
+    // 새 창이 CGWindowList 에 오르는 것은 윈도우 서버 몫이라 `orderFrontRegardless` 와 동기가 아니다. 기계가 바쁘면
+    // 되살린 직후의 한 번 질의가 아직 안 올라간 창을 본다(2026-09-30 실측: 이 테스트 단독은 통과, 전체 스위트 안에서만
+    // 이 줄이 빨강 — 되살리기 자체(횟수·새 인스턴스·의도)는 그때도 전부 맞았다). 위 감시자 대기와 같은 꼴로 최대 1초
+    // 기다려 준다 — 끝내 안 오르면 그때가 진짜 결함이다.
+    var onScreen = CheckTodoBoardController.isOnScreen(controller.panel) == true
+    for _ in 0..<100 where !onScreen {
+        try? await Task.sleep(for: .milliseconds(10))
+        onScreen = CheckTodoBoardController.isOnScreen(controller.panel) == true
+    }
+    #expect(onScreen, "새 창도 화면에 못 올라갔다")
     // 잃은 것이 없어야 한다 — 입력 상태는 창 밖(ui)에 살고, 투명도는 새 블러 뷰가 저장값을 다시 읽는다.
     #expect(controller.draft == "적다 만 문장", "창을 새로 만들며 적던 글이 날아갔다")
     #expect(

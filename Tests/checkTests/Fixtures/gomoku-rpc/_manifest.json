@@ -14,7 +14,9 @@
     "m_old": "f7bc957b-b79c-4d8c-a344-47a39461bbf3",
     "m_chat": "8d07766a-8034-4d93-8d84-b5b34f130882",
     "m_chat_black": "3e240c02-8972-478e-a674-014f498a641b",
-    "m_chat_white": "267a3495-643c-40cc-b1a7-14967166eae1"
+    "m_chat_white": "267a3495-643c-40cc-b1a7-14967166eae1",
+    "m_watch": "0a7c0000-0000-4000-8000-00000000a7c1",
+    "m_fin_old": "0f000000-0000-4000-8000-000000000001"
   },
   "flow_m1": [
     {
@@ -888,6 +890,110 @@
       "setup": null,
       "end": "commit",
       "note": "B 까지 나갔다 — both_left true, chat_deleted 4. chat_seq 는 줄이지 않는다."
+    },
+    "gomoku_ranking__ok": {
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "caller_label": "A",
+      "rpc": "public.gomoku_ranking(1)",
+      "setup": null,
+      "end": "rollback",
+      "note": "A 시점 · 5행 · 설계한 전적(A +3 · E 0 · B=D −1 동률 · C −1) → rank 1,2,3,3,5 · record_since_ms null(컷 -infinity)."
+    },
+    "gomoku_ranking__ok_me_unranked": {
+      "caller": "6a6a6a6a-0000-4000-8000-00000000000f",
+      "caller_label": "F",
+      "rpc": "public.gomoku_ranking(1)",
+      "setup": null,
+      "end": "rollback",
+      "note": "F(0판) 시점 · rows 는 남 5명 그대로 · me = {rank null, 0, 0, 0, 0} — 0판은 순위 밖."
+    },
+    "gomoku_ranking__ok_empty": {
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "caller_label": "A",
+      "rpc": "public.gomoku_ranking(1)",
+      "setup": "delete from public.gomoku_matches where status = 'finished';",
+      "end": "rollback",
+      "note": "끝난 판이 하나도 없는 순간(초기화 직후 모양) · rows [] · me.rank null. 트랜잭션 안에서 지우고 rollback."
+    },
+    "gomoku_ranking__unauthorized": {
+      "caller": null,
+      "caller_label": null,
+      "rpc": "public.gomoku_ranking(1)",
+      "setup": null,
+      "end": "rollback",
+      "note": "클레임 없는 authenticated 호출(auth.uid() null) — 키가 status 하나뿐이다."
+    },
+    "gomoku_ranking__unsupported_client": {
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "caller_label": "A",
+      "rpc": "public.gomoku_ranking(0)",
+      "setup": null,
+      "end": "rollback",
+      "note": "p_protocol 0 < gomoku_protocol() 1."
+    },
+    "gomoku_watch__ok_since0": {
+      "caller": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "caller_label": "C",
+      "rpc": "public.gomoku_watch(1, '0a7c0000-0000-4000-8000-00000000a7c1', 0)",
+      "setup": null,
+      "end": "rollback",
+      "note": "제3자 C · 2수 전부 · 흑 차례 · deadline_ms = turn_started_at + 30s. 최상위 키 9개, 채팅 키 없음."
+    },
+    "gomoku_watch__ok_since2": {
+      "caller": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "caller_label": "C",
+      "rpc": "public.gomoku_watch(1, '0a7c0000-0000-4000-8000-00000000a7c1', 2)",
+      "setup": null,
+      "end": "rollback",
+      "note": "같은 판을 p_since_seq 2 로 — moves 는 seq 3 하나 · move_count 3 · 백 차례. 스토어의 증분 요청 모양."
+    },
+    "gomoku_watch__ok_as_player": {
+      "caller": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "caller_label": "A",
+      "rpc": "public.gomoku_watch(1, '0a7c0000-0000-4000-8000-00000000a7c1', 0)",
+      "setup": null,
+      "end": "rollback",
+      "note": "참가자 A(흑)가 불러도 같은 모양 — my_color·chat·ruby_balance 없음."
+    },
+    "gomoku_watch__ok_overdue": {
+      "caller": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "caller_label": "C",
+      "rpc": "public.gomoku_watch(1, '0a7c0000-0000-4000-8000-00000000a7c1', 0)",
+      "setup": "update public.gomoku_matches set turn_started_at = clock_timestamp() - interval '90 seconds' where id = '0a7c0000-0000-4000-8000-00000000a7c1';",
+      "end": "rollback",
+      "note": "마감이 60초 지난 판 — deadline_ms < server_now_ms 인데 status 는 active 그대로(관전은 따라잡지 않는다)."
+    },
+    "gomoku_watch__ok_finished": {
+      "caller": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "caller_label": "C",
+      "rpc": "public.gomoku_watch(1, '0a7c0000-0000-4000-8000-00000000a7c1', 3)",
+      "setup": "update public.gomoku_matches set status = 'finished', result = 'black_win', end_reason = 'five', winner = '267a3495-643c-40cc-b1a7-14967166eae1', finished_at = clock_timestamp(), turn = null where id = '0a7c0000-0000-4000-8000-00000000a7c1';",
+      "end": "rollback",
+      "note": "관전 중 판이 끝났다(3분 꼬리 안) · since 3 이라 moves [] · deadline_ms null · finished_ms · winner A."
+    },
+    "gomoku_watch__not_found": {
+      "caller": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "caller_label": "C",
+      "rpc": "public.gomoku_watch(1, '0f000000-0000-4000-8000-000000000001', 0)",
+      "setup": null,
+      "end": "rollback",
+      "note": "어제 끝난 판 — 3분 꼬리 밖이라 not_found. 키는 status 하나뿐(없는 id·pending·숨김 격리와 같은 답)."
+    },
+    "gomoku_watch__unauthorized": {
+      "caller": null,
+      "caller_label": null,
+      "rpc": "public.gomoku_watch(1, '0a7c0000-0000-4000-8000-00000000a7c1', 0)",
+      "setup": null,
+      "end": "rollback",
+      "note": "클레임 없는 authenticated 호출 — 키가 status 하나뿐이다."
+    },
+    "gomoku_watch__unsupported_client": {
+      "caller": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "caller_label": "C",
+      "rpc": "public.gomoku_watch(0, '0a7c0000-0000-4000-8000-00000000a7c1', 0)",
+      "setup": null,
+      "end": "rollback",
+      "note": "p_protocol 0 — server_now_ms 가 함께 온다(다른 오목 RPC 와 같은 게이트)."
     }
   }
 }

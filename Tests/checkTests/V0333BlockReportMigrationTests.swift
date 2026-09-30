@@ -283,18 +283,38 @@ func 찌르기_차단_게이트는_블랙아웃보다_앞이다() throws {
     }
 }
 
+/// 이 파일 뒤에서 아홉 함수를 다시 정의해도 되는 **유일한** 자리 — 20260930120000(오목 순위·관전)이 로비의 전적 집계 6줄을
+/// 정본 술어 호출 1줄로 바꾼다. 그 파일은 본문을 손으로 옮기지 않고 정본에 치환 하나를 적용해 생성했고, 그 사실은 V0341GomokuRankingMigrationTests
+/// 가 바이트로 되묻는다. 여기서는 허용하되 **게이트가 살아 있는지**를 같은 도우미로 한 번 더 본다(허용만 하면 다음 덮어쓰기를 아무도 못 본다).
+private let laterRedefinitionsAllowed: [String: [String]] = [
+    "20260930120000_gomoku_ranking_watch.sql:gomoku_lobby": ["blocked_between", "public.same_visibility(", "public.gomoku__record(uid)"],
+]
+
 @Test
 func 이_파일이_고친_아홉_함수의_최종_정의다() throws {
     // 뒤 번호 파일이 다시 정의하면 차단 게이트가 조용히 사라진다(20260917140000 이 그렇게 검사를 지운 전례).
     var laterRedefinitions: [String] = []
+    var allowedSeen: Set<String> = []
     for file in try migrationFiles() where file.lastPathComponent > blockMigrationName {
         let sql = try String(contentsOf: file, encoding: .utf8)
-        for function in gatedFunctions where functionBody(of: function, in: sql) != nil {
-            laterRedefinitions.append("\(file.lastPathComponent):\(function)")
+        for function in gatedFunctions {
+            guard let body = functionBody(of: function, in: sql) else { continue }
+            let key = "\(file.lastPathComponent):\(function)"
+            guard let required = laterRedefinitionsAllowed[key] else {
+                laterRedefinitions.append(key)
+                continue
+            }
+            allowedSeen.insert(key)
+            let lines = codeLines(body)
+            for token in required {
+                #expect(lines.contains { $0.contains(token.lowercased()) }, "\(key): 허용된 재정의인데 '\(token)' 이 본문에 없다 — 게이트가 사라졌다")
+            }
         }
     }
     #expect(laterRedefinitions.isEmpty,
             "이 파일 뒤에서 다시 정의된 함수가 있다: \(laterRedefinitions). 그 파일에도 차단 게이트를 넣고 이 테스트를 옮겨라.")
+    // 허용 목록의 항목이 실제로 없으면 목록이 낡은 것이다(파일 이름을 바꾸고 목록을 안 고치면 검사가 공허하게 초록이 된다).
+    #expect(allowedSeen == Set(laterRedefinitionsAllowed.keys), "허용 목록에 있는데 파일에 없는 재정의: \(Set(laterRedefinitionsAllowed.keys).subtracting(allowedSeen))")
 }
 
 // MARK: - ② 차단 판정은 한 함수만 지난다

@@ -520,6 +520,26 @@ func gomokuWindowLayoutIsAFixedConstantTable() {
     // 위 칸(지금 대결 중)의 최소 높이가 지켜진다 — 320 + 12 + 220 = 552 ≤ 608.
     #expect(GomokuWindowLayout.lobbyInvitesMaxHeight + GomokuWindowLayout.lobbySideSpacing
             + GomokuWindowLayout.lobbyLiveMinHeight <= GomokuWindowLayout.bodyHeight)
+    // 로비 왼쪽 780 블록의 3열 분할(0.3.31): 상대 420 + 20 + 순위 340 = 780 — 오른쪽 400 열과 창 크기는 한 항도 안 바뀐다.
+    // 항등식이 없으면 누가 420 을 460 으로 바꿀 때 순위 열이 조용히 300 이 되어 아래 14행 산식이 깨진다.
+    #expect(GomokuWindowLayout.lobbyUsersWidth == 420)
+    #expect(GomokuWindowLayout.lobbyRankWidth == 340)
+    #expect(GomokuWindowLayout.lobbyUsersWidth + GomokuWindowLayout.columnSpacing + GomokuWindowLayout.lobbyRankWidth
+            == GomokuWindowLayout.lobbyListWidth)
+    // 순위 열: 14행이 스크롤 없이 선다 — 14×34 + 13×5 = 541 ≤ 548(= 608 − 카드 여백 32 − 제목 20 − 간격 8).
+    #expect(GomokuWindowLayout.rankListHeight == 548)
+    #expect(GomokuWindowLayout.rankVisibleRows == 14)
+    let rankRows = CGFloat(GomokuWindowLayout.rankVisibleRows)
+    let rankStack: CGFloat = rankRows * GomokuWindowLayout.rankRowHeight + (rankRows - 1) * GomokuWindowLayout.rankRowSpacing
+    #expect(rankStack <= GomokuWindowLayout.rankListHeight)
+    // [관전] 칩은 얼굴 높이(18)다 — 20 이면 대결 카드가 53 → 55 로 자라 카드를 세는 렌더 시험 둘이 빨개진다(C18).
+    #expect(GomokuWindowLayout.liveWatchChipHeight == 18)
+    // 관전 오른쪽 열 항등식: 카드 84×2 + 상태 줄 44 + 남는 자리 322 + [나가기] 34 + 간격 10×4 = 608.
+    let spectateCards: CGFloat = GomokuWindowLayout.playerCardHeight * 2
+    let spectateRows: CGFloat = GomokuWindowLayout.spectateStatusMinHeight + GomokuWindowLayout.spectateLeaveHeight
+    let spectateGaps: CGFloat = GomokuWindowLayout.matchSideSpacing * 4
+    #expect(spectateCards + spectateRows + spectateGaps + GomokuWindowLayout.spectateInfoHeight == GomokuWindowLayout.bodyHeight)
+    #expect(GomokuWindowLayout.spectateInfoHeight == 322)
     // 창 상수와 레이아웃 상수는 한 곳에서 온다.
     #expect(CheckGomokuWindowController.fixedContentSize.width == GomokuWindowLayout.contentSize.width)
     #expect(CheckGomokuWindowController.fixedContentSize.height == GomokuWindowLayout.contentSize.height)

@@ -82,6 +82,9 @@ private func v0337RenderStore(now: Date, host: String? = nil, label: String = ""
     store.isMenuPresented = true
     store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "00000000-0000-0000-0000-000000000002")
     store.displayNow = now
+    // 스토어의 시계도 픽스처로 — 주 이동·롤오버 되돌림·요청 오프셋은 displayNow 가 아니라 clock() 을 읽는다. 이 줄이 없으면
+    // 아래 leagueWeekKey(픽스처 주)와 스토어가 보는 '이번 주'(실제 오늘)가 갈려 왕복 렌더가 이 파일이 쓰인 주에만 초록이었다.
+    store.clock = { now }
     store.currentTeamID = URLProtocolStub.stubTeamID
     store.teamName = "아잉팀"
     store.isLeaderboardVisible = true
@@ -135,7 +138,9 @@ private func v0337Save(_ png: Data, name: String) {
 }
 
 /// 픽스처 주(KST 월요일 기준 고정 시각). 2026-09-21 은 월요일이라 그 주의 키가 곧 2026-09-21 이다.
-private let v0337Now = Date(timeIntervalSince1970: 1_790_038_800)   // 2026-09-22(화) 10:00 KST — 그 주 월요일은 2026-09-21
+// 2026-09-22(화) 10:00 KST — 그 주 월요일은 2026-09-21. 스텁과 **같은 상수**를 쓴다: 렌더 왕복은 스토어 시계(clock)와 스텁의
+// week_start 가 한 달력이어야 하고, 그 호스트는 `URLProtocolStub.leagueFixedClockHostToken` 으로 고른다(v0337RenderStore 참고).
+private let v0337Now = URLProtocolStub.leagueWeekFixtureNow
 
 // MARK: - ① 네비게이터 순수 계약
 
@@ -722,14 +727,14 @@ func v0337_이번_주_화면은_주를_오갔다_돌아와도_픽셀이_같다()
     //  · 기준선 — 갓 열어 한 번 조회한 스토어.
     //  · 비교군 — 6주 전까지 ◂ 로 내려갔다가 ▸ 로 되짚어 올라온 스토어.
     // (같은 입력을 두 번 그리는 비교는 영원히 초록이라 아무것도 증명하지 않는다 — 여기선 중간 상태가 다르다.)
-    let baseline = v0337RenderStore(now: v0337Now, host: "v0337-render-base-\(UUID().uuidString)")
+    let baseline = v0337RenderStore(now: v0337Now, host: "\(URLProtocolStub.leagueFixedClockHostToken)-base-\(UUID().uuidString)")
     defer { baseline.tickerTask?.cancel(); baseline.refreshTask?.cancel() }
     await baseline.performLoadLeaderboard()
     let basePNG = try v0337RenderPNG(CheckMenuView(store: baseline))
     #expect(try v0337Ink(basePNG) > 1000, "기준선이 비어 있다 — ImageRenderer 가 화면을 못 그렸다")
     v0337Save(basePNG, name: "v0337-week-current.png")
 
-    let roundTrip = v0337RenderStore(now: v0337Now, host: "v0337-render-trip-\(UUID().uuidString)", label: "roundTrip")
+    let roundTrip = v0337RenderStore(now: v0337Now, host: "\(URLProtocolStub.leagueFixedClockHostToken)-trip-\(UUID().uuidString)", label: "roundTrip")
     defer { roundTrip.tickerTask?.cancel(); roundTrip.refreshTask?.cancel() }
     for _ in 1...6 {
         roundTrip.stepLeagueWeek(by: -1)
@@ -741,7 +746,7 @@ func v0337_이번_주_화면은_주를_오갔다_돌아와도_픽셀이_같다()
         roundTrip.stepLeagueWeek(by: 1)
         await roundTrip.performLoadLeaderboard()
     }
-    #expect(roundTrip.leagueWeekKey == TeamLeagueWeekNavigator.currentKey())
+    #expect(roundTrip.leagueWeekKey == TeamLeagueWeekNavigator.currentKey(v0337Now))
     #expect(roundTrip.leaderboard == baseline.leaderboard)
 
     let roundPNG = try v0337RenderPNG(CheckMenuView(store: roundTrip))

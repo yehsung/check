@@ -1085,8 +1085,11 @@ func expandingTheTuningRowPushesTheBoardContentDownInsteadOfCoveringIt() throws 
 @Test
 func expandedTuningRowActuallyDrawsAControlRatherThanEmptySpace() throws {
     // '높이만 차지하는 빈 행'과 진짜 슬라이더를 구분한다. 헤더와 구분선 사이 밴드에 잉크가 있어야 한다.
-    // ImageRenderer 는 슬라이더(AppKit 백킹)를 노란 막대로 그린다 — 렌더 아티팩트지만, 보드 팔레트에는
-    // 노란색이 한 톨도 없으므로 '여기 AppKit 컨트롤이 있다'는 증거로는 오히려 정확하다.
+    // 처음엔 노란 막대를 셌다 — ImageRenderer 가 슬라이더(AppKit 백킹)를 노란 자리표시로 그렸고, 보드 팔레트에는
+    // 노란색이 한 톨도 없어 증거로 정확했다. **macOS 27 부터는 아니다**(2026-09-30 실측): 같은 렌더에서 입력 상자는
+    // 여전히 노란 막대인데 슬라이더는 파란 트랙 + 흰 손잡이 + "55%" 로 **실제로 그려진다**. 노랑만 찾으면 컨트롤이
+    // 멀쩡한데 0 이 나와 빨강이다. 그래서 색이 아니라 '접힘 렌더와 다른 픽셀이 행을 가로질러 얼마나 이어지는가' 를
+    // 잰다 — 옛 노란 막대도 새 트랙도 접힘 밴드(빈 배경)와 다르고, 빈 행이면 폭 0, 오른쪽 퍼센트 글자만 있으면 수십 px 다.
     let expanded = try renderPixels(
         board(items: [], oldItems: [], expandsOpacityRow: true)
             .frame(width: TodoBoardAnchor.boardSize.width, height: TodoBoardAnchor.boardSize.height)
@@ -1100,7 +1103,7 @@ func expandedTuningRowActuallyDrawsAControlRatherThanEmptySpace() throws {
     // 밴드는 헤더 아래(38pt)부터 접힘 상태의 입력 상자 위(50pt)까지 — 접힘에서는 구분선 말고 아무것도 없고,
     // 펼침에서는 조절 행이 통째로 여기 들어온다.
     let band = (38 * expanded.scale)..<(50 * expanded.scale)
-    #expect(yellowWidth(in: expanded, rows: band) >= 180 * expanded.scale)
+    #expect(differingWidth(expanded, collapsed, rows: band) >= 180 * expanded.scale)
     #expect(yellowWidth(in: collapsed, rows: band) == 0)
 }
 
@@ -1753,6 +1756,24 @@ private func measuredHaloContrast(backdrop: Color, opacity: Double) throws -> Ha
 
 /// 주어진 가로 띠에서 노란 픽셀이 차지하는 최대 가로 폭(px). ImageRenderer 가 AppKit 백킹 컨트롤을
 /// 그리지 못해 남기는 노란 막대를 센다 — 보드 팔레트에는 노란색이 없으므로 오검출이 없다.
+/// 두 렌더가 같은 행 범위에서 **서로 다른** 픽셀의 가장 넓은 가로 폭(px). 컨트롤의 있다/없다를 색이 아니라 차이로
+/// 재므로 ImageRenderer 가 컨트롤을 노란 자리표시로 그리든(macOS 26) 실제로 그리든(macOS 27) 같은 답이 나온다.
+/// 임계 8 은 `isPainted` 와 같은 근거(sRGB 반올림 잡음 위).
+private func differingWidth(_ a: RenderedPixels, _ b: RenderedPixels, rows: Range<Int>) -> Int {
+    var widest = 0
+    for y in rows.clamped(to: 0..<min(a.height, b.height)) {
+        var minX = a.width, maxX = -1
+        for x in 0..<min(a.width, b.width) {
+            let p = a.rgb(x: x, y: y), q = b.rgb(x: x, y: y)
+            if abs(p.r - q.r) > 8 || abs(p.g - q.g) > 8 || abs(p.b - q.b) > 8 {
+                minX = min(minX, x); maxX = max(maxX, x)
+            }
+        }
+        if maxX >= 0 { widest = max(widest, maxX - minX + 1) }
+    }
+    return widest
+}
+
 private func yellowWidth(in pixels: RenderedPixels, rows: Range<Int>) -> Int {
     var widest = 0
     for y in rows.clamped(to: 0..<pixels.height) {

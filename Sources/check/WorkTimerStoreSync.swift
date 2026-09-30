@@ -425,7 +425,7 @@ extension WorkTimerStore {
         revertLeagueWeekIfRolledOver()
         // ② 과거 주는 **종료된 세션만** 세므로(서버 계약) 30초마다 다시 물어도 같은 표가 온다 —
         //    주기 갱신은 이번 주에만 돈다. 과거 주 표는 ◂ ▸ 를 누른 그 순간 한 번 받아 캐시로 산다.
-        guard TeamLeagueWeekNavigator.isCurrentWeek(leagueWeekKey) else { return }
+        guard TeamLeagueWeekNavigator.isCurrentWeek(leagueWeekKey, now: clock()) else { return }
         await performLoadLeaderboard()
     }
 
@@ -438,7 +438,7 @@ extension WorkTimerStore {
         // 보고 있는 주(◂ ▸ 로 이동, 기본은 이번 주)를 조회한다 — 이번 주로 하드코딩하면 지난 주 보기가 무력화된다.
         // 주 키 → 서버 오프셋 환산은 여기 한 번뿐이다(접힘을 한 자리에서만 다룬다).
         let weekKey = leagueWeekKey
-        let weekOffset = TeamLeagueWeekNavigator.offset(forKey: weekKey)
+        let weekOffset = TeamLeagueWeekNavigator.offset(forKey: weekKey, now: clock())   // 스토어 시계(syncLeagueWeekToCurrent 참고)
         // 진행중 표시는 **보여 줄 표가 없을 때만** 세운다. 이 값은 화면이 실제로 읽는 관찰 대상이라, 이미 그려진
         // 표를 새로 고치는 30초 주기 갱신에서 올렸다 내리면 **한 주기마다 뷰가 두 번 공짜로 무효화된다**
         // (화면 글자는 한 자도 안 바뀐다 — "불러오는 중…"은 빈 목록 자리에만 쓰이므로). 주를 옮기는 쪽은
@@ -460,7 +460,7 @@ extension WorkTimerStore {
             // 이 갈래가 없으면 화면에 "9월 15일 주"라고 적힌 이번 주 표가 뜬다(가장 나쁜 실패 모양).
             guard page.supportsWeekOffset else {
                 if leagueWeekOffsetSupported { leagueWeekOffsetSupported = false }
-                let current = TeamLeagueWeekNavigator.currentKey()
+                let current = TeamLeagueWeekNavigator.currentKey(clock())
                 if leagueWeekAnchor != current { leagueWeekAnchor = current }
                 if leagueWeekKey != current {
                     leagueWeekKey = current
@@ -487,7 +487,7 @@ extension WorkTimerStore {
                 //   여기서 직접 내리지 않으면 "불러오는 중…"이 영원히 남는다. 옛 서버 갈래(아래)는 이미 그렇게
                 //   고쳐져 있었는데 이 쌍둥이 갈래만 빠져 있었다(주 경계를 넘기며 조회하면 실제로 밟는다).
                 //   기준선도 함께 옮긴다: 서버가 답한 주가 곧 서버의 '이번 주'라, 그대로 두면 다음 틱이 한 번 더 버린다.
-                if answered == TeamLeagueWeekNavigator.currentKey() { leagueWeekAnchor = answered }
+                if answered == TeamLeagueWeekNavigator.currentKey(clock()) { leagueWeekAnchor = answered }
                 if leagueLoading { leagueLoading = false }
             }
             if leaderboard != sorted { leaderboard = sorted }

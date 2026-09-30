@@ -1,0 +1,74 @@
+{
+  "me": {
+    "rank": null,
+    "wins": 0,
+    "draws": 0,
+    "losses": 0,
+    "points": 0
+  },
+  "rows": [
+    {
+      "rank": 1,
+      "wins": 3,
+      "draws": 1,
+      "center": "seoul",
+      "losses": 0,
+      "points": 3,
+      "user_id": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "character": "aing",
+      "avatar_url": null,
+      "display_name": "abto.app"
+    },
+    {
+      "rank": 2,
+      "wins": 1,
+      "draws": 1,
+      "center": null,
+      "losses": 1,
+      "points": 0,
+      "user_id": "785b5732-75fe-4a71-931a-2e3f06e63505",
+      "character": null,
+      "avatar_url": null,
+      "display_name": "씨앗다섯"
+    },
+    {
+      "rank": 3,
+      "wins": 1,
+      "draws": 1,
+      "center": "busan",
+      "losses": 2,
+      "points": -1,
+      "user_id": "3e240c02-8972-478e-a674-014f498a641b",
+      "character": "jellyfish",
+      "avatar_url": "https://example.invalid/avatar-b.png",
+      "display_name": "코덱스토큰도둑예은"
+    },
+    {
+      "rank": 3,
+      "wins": 1,
+      "draws": 1,
+      "center": "busan",
+      "losses": 2,
+      "points": -1,
+      "user_id": "f46dc1d0-4dff-416e-81f0-91d4fb413def",
+      "character": null,
+      "avatar_url": null,
+      "display_name": "거부목록사용자"
+    },
+    {
+      "rank": 5,
+      "wins": 1,
+      "draws": 0,
+      "center": "seoul",
+      "losses": 2,
+      "points": -1,
+      "user_id": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "character": "fox",
+      "avatar_url": null,
+      "display_name": "코덱스토큰도둑지유"
+    }
+  ],
+  "status": "ok",
+  "server_now_ms": 1790770352422,
+  "record_since_ms": null
+}

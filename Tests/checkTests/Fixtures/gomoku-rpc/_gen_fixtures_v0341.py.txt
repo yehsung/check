@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""오목 **순위표·관전** RPC 응답 픽스처 생성기 (0.3.41 · 20260930120000_gomoku_ranking_watch.sql) — 로컬 하네스 v2 전용.
+
+`_gen_fixtures.py.txt`(0.3.28) 를 **다시 돌리지 않는다** — 그 90개는 그대로 두고, 새 서버(체인 전체 + 20260930120000) 위에서
+`gomoku_ranking` · `gomoku_watch` 응답만 떠서 옆에 놓고 `_manifest.json` 에 합친다(users 에 m_watch·m_fin_old 를 더한다).
+같은 관용구다: 단계마다 psql 세션 하나 — migrator → set role postgres → begin → (준비 SQL) → harness.login(호출자) → RPC →
+commit|rollback. 출력은 jsonb 그대로(키 순서 보존).
+
+돌리는 법(2026-09-30 실측):
+  HARNESS_PORT=55437 KEEP_CLUSTER=1 <replay-harness-v2>/verify_new.sh supabase/migrations/20260930120000_gomoku_ranking_watch.sql
+  python3 Tests/checkTests/Fixtures/gomoku-rpc/_gen_fixtures_v0341.py.txt
+  ★ 공유 하네스(tools/replay-harness-v2)의 fixture.sql 에는 숨김 프로필이 없어 20260921213000 (5⑬) 에서 체인이 죽는다 —
+    W1 이 숨김 프로필 한 줄을 더한 사본으로 돌렸다. 그 사본으로 돌려라(pgdata 를 공유하니 포트만 바꿔서는 안 된다, 통째로 복사).
+
+설계한 전적(제로섬 — 승점 합 0, rank() 모양 1,2,3,3,5 가 되게 동률 축 셋을 전부 지나도록):
+  A 이김: B·C·D(five·resign·five) · B 이김: C · C 이김: D(abandoned) · D 이김: E · E 이김: B(resign) · 무승부: A-E · B-D
+  → A 3승0패1무 +3 (1위) · E 1승1패1무 0 (2위) · B/D 1승2패1무 −1 **완전 동률**(3위·3위, user_id 오름차순 B<D) · C 1승2패0무 −1 (5위)
+     C 가 B·D 뒤인 것이 `draws desc`("같은 승점·같은 승수면 더 많이 둔 쪽이 위")다.
+  F(여섯째) 는 0판 → rows 밖 · me.rank null. 관전 판은 A(흑)-B(백) 판돈 5, 제3자 C 가 본다.
+"""
+import json
+import os
+import subprocess
+import sys
+from collections import OrderedDict
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = HERE
+PSQL = "/opt/homebrew/opt/postgresql@15/bin/psql"
+PORT = os.environ.get("HARNESS_PORT", "55437")
+HELPERS = os.environ.get(
+    "HARNESS_HELPERS",
+    os.path.expanduser("~/.claude/projects/-Users-yesung-check/tools/replay-harness-v2/harness_helpers.sql"))
+
+A = "267a3495-643c-40cc-b1a7-14967166eae1"  # abto.app
+B = "3e240c02-8972-478e-a674-014f498a641b"  # 코덱스토큰도둑예은
+C = "544e3837-f01c-4560-b82f-4d44c269f044"  # 코덱스토큰도둑지유
+D = "f46dc1d0-4dff-416e-81f0-91d4fb413def"  # 거부목록사용자
+E = "785b5732-75fe-4a71-931a-2e3f06e63505"  # 씨앗다섯
+F = "6a6a6a6a-0000-4000-8000-00000000000f"  # 여섯째 — 0판(순위 밖)
+LABEL = {A: "A", B: "B", C: "C", D: "D", E: "E", F: "F"}
+
+M_WATCH = "0a7c0000-0000-4000-8000-00000000a7c1"                      # active A(흑)-B(백)
+FIN = ["0f000000-0000-4000-8000-00000000000%d" % i for i in range(1, 10)]  # finished 9판(어제)
+
+env = {k: v for k, v in os.environ.items() if not k.startswith("PG")}
+env.update(PGHOST="127.0.0.1", PGPORT=PORT, PGDATABASE="postgres", PGCONNECT_TIMEOUT="5",
+           PGSSLMODE="disable", PGCLIENTENCODING="UTF8", LC_ALL="C", LANG="C")
+
+new_manifest = OrderedDict()
+
+
+def psql(sql, user="migrator"):
+    p = subprocess.run([PSQL, "-X", "-q", "-At", "-v", "ON_ERROR_STOP=1", "-U", user, "-d", "postgres"],
+                       input=sql, capture_output=True, text=True, env=env)
+    if p.returncode != 0:
+        sys.stderr.write(sql + "\n--- stderr ---\n" + p.stderr)
+        raise SystemExit(f"psql failed rc={p.returncode}")
+    return p.stdout
+
+
+def call(caller, rpc_sql, setup="", end="rollback", name=None, note="", role="authenticated"):
+    login = f"select harness.login({'null::uuid' if caller is None else repr(caller)}, '{role}') \\g /dev/null\n"
+    sql = "set role postgres;\nbegin;\n" + setup + "\n" + login
+    sql += f"select '@@' || ({rpc_sql})::text;\n{end};\n"
+    out = psql(sql)
+    lines = [l for l in out.splitlines() if l.startswith("@@")]
+    assert len(lines) == 1, out
+    obj = json.loads(lines[0][2:], object_pairs_hook=OrderedDict)
+    if name:
+        with open(os.path.join(OUT, name + ".json"), "w", encoding="utf-8") as fh:
+            json.dump(obj, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+        new_manifest[name] = OrderedDict(caller=caller, caller_label=LABEL.get(caller), rpc=rpc_sql,
+                                         setup=setup.strip() or None, end=end, note=note or None)
+        print(f"{name:40s} status={obj.get('status')}")
+    return obj
+
+
+def admin(sql):
+    psql("set role postgres;\nbegin;\n" + sql + "\ncommit;\n")
+
+
+def finished(mid, ch, op, black, white, result, why, mc):
+    winner = {"black_win": black, "white_win": white}.get(result, "null")
+    winner = "null" if winner == "null" else f"'{winner}'"
+    return (f"('{mid}', '{ch}', '{op}', 3, 'finished', '{black}', '{white}', repeat('.', 225), {mc}, null, null, "
+            f"clock_timestamp() - interval '1 day 1 minute', clock_timestamp() - interval '1 day', "
+            f"clock_timestamp() - interval '1 day', '{result}', '{why}', {winner})")
+
+
+def main():
+    # 도우미(harness.login) — verify_new.sh 는 테스트 파일이 없으면 안 만든다.
+    subprocess.run([PSQL, "-X", "-q", "-v", "ON_ERROR_STOP=1", "-U", "supabase_admin", "-d", "postgres", "-f", HELPERS],
+                   check=True, env=env, capture_output=True, text=True)
+    for fn in os.listdir(OUT):
+        if fn.startswith(("gomoku_ranking__", "gomoku_watch__")) and fn.endswith(".json"):
+            os.remove(os.path.join(OUT, fn))
+
+    # ── 준비: F(0판) · 프로필 꾸밈 · 판 전부 걷기 ─────────────────────────────────────────────
+    admin(f"""
+insert into auth.users (id, email, raw_user_meta_data, created_at) values
+  ('{F}', 'sixth@example.invalid', '{{"display_name":"여섯째"}}', '2026-01-06T00:00:00Z')
+on conflict (id) do nothing;
+insert into public.profiles (id, email, display_name) values ('{F}', 'sixth@example.invalid', '여섯째')
+on conflict (id) do nothing;
+update public.profiles set character = 'aing',      avatar_url = null, center = 'seoul' where id = '{A}';
+update public.profiles set character = 'jellyfish', avatar_url = 'https://example.invalid/avatar-b.png', center = 'busan' where id = '{B}';
+update public.profiles set character = 'fox',       avatar_url = null, center = 'seoul' where id = '{C}';
+update public.profiles set character = null,        avatar_url = null, center = 'busan' where id = '{D}';
+update public.profiles set character = null,        avatar_url = null, center = null    where id in ('{E}', '{F}');
+update public.profiles set is_hidden = false where id in ('{A}','{B}','{C}','{D}','{E}','{F}');
+delete from public.gomoku_chat;
+delete from public.gomoku_moves;
+delete from public.gomoku_matches;
+""")
+    # 끝난 판 9 — turn 은 finished CHECK 대로 null. 어제 끝나 관전의 3분 꼬리 밖이다(gomoku_watch__not_found 의 재료).
+    rows = [
+        finished(FIN[0], A, B, A, B, "black_win", "five", 9),         # A 승 B
+        finished(FIN[1], C, A, C, A, "white_win", "resign", 12),      # A 승 C(백으로)
+        finished(FIN[2], A, D, A, D, "black_win", "five", 11),        # A 승 D
+        finished(FIN[3], B, C, B, C, "black_win", "five", 9),         # B 승 C
+        finished(FIN[4], D, C, D, C, "white_win", "abandoned", 7),    # C 승 D(자리 비움)
+        finished(FIN[5], D, E, D, E, "black_win", "five", 13),        # D 승 E
+        finished(FIN[6], B, E, B, E, "white_win", "resign", 6),       # E 승 B
+        finished(FIN[7], A, E, A, E, "draw", "board_full", 225),      # A-E 무
+        finished(FIN[8], D, B, D, B, "draw", "board_full", 225),      # B-D 무
+    ]
+    admin(f"""
+insert into public.gomoku_matches (id, challenger, opponent, stake, status, black, white, board, move_count, turn,
+                                   turn_started_at, invite_expires_at, accepted_at, finished_at, result, end_reason, winner)
+values {",".join(rows)};
+""")
+    # 진행 중인 판 A(흑)-B(백) 판돈 5, 2수(흑 7,7 · 백 7,8), 흑 차례. 판 문자열은 y*15+x (1-based 113·128).
+    admin(f"""
+insert into public.gomoku_matches (id, challenger, opponent, stake, status, black, white, board, move_count, turn,
+                                   turn_started_at, invite_expires_at, accepted_at)
+values ('{M_WATCH}', '{A}', '{B}', 5, 'active', '{A}', '{B}',
+        overlay(overlay(repeat('.', 225) placing 'b' from 113 for 1) placing 'w' from 128 for 1), 2, 'black',
+        clock_timestamp(), clock_timestamp() - interval '1 minute', clock_timestamp() - interval '70 seconds');
+insert into public.gomoku_moves (match_id, seq, color, kind, x, y, auto) values
+  ('{M_WATCH}', 1, 'black', 'stone', 7, 7, false),
+  ('{M_WATCH}', 2, 'white', 'stone', 7, 8, false);
+""")
+
+    # ── 순위표 ──────────────────────────────────────────────────────────────────────────────
+    ok = call(A, "public.gomoku_ranking(1)", name="gomoku_ranking__ok",
+              note="A 시점 · 5행 · 설계한 전적(A +3 · E 0 · B=D −1 동률 · C −1) → rank 1,2,3,3,5 · record_since_ms null(컷 -infinity).")
+    order = [r["user_id"] for r in ok["rows"]]
+    ranks = [r["rank"] for r in ok["rows"]]
+    assert order == [A, E, B, D, C], order
+    assert ranks == [1, 2, 3, 3, 5], ranks
+    # jsonb 는 키를 길이순으로 다시 놓는다 — 순서 없는 비교여야 한다(2026-09-30 첫 실행에서 OrderedDict 비교로 헛죽었다).
+    assert dict(ok["me"]) == dict(rank=1, wins=3, losses=0, draws=1, points=3), ok["me"]
+    call(F, "public.gomoku_ranking(1)", name="gomoku_ranking__ok_me_unranked",
+         note="F(0판) 시점 · rows 는 남 5명 그대로 · me = {rank null, 0, 0, 0, 0} — 0판은 순위 밖.")
+    call(A, "public.gomoku_ranking(1)", name="gomoku_ranking__ok_empty",
+         setup="delete from public.gomoku_matches where status = 'finished';",
+         note="끝난 판이 하나도 없는 순간(초기화 직후 모양) · rows [] · me.rank null. 트랜잭션 안에서 지우고 rollback.")
+    call(None, "public.gomoku_ranking(1)", name="gomoku_ranking__unauthorized",
+         note="클레임 없는 authenticated 호출(auth.uid() null) — 키가 status 하나뿐이다.")
+    call(A, "public.gomoku_ranking(0)", name="gomoku_ranking__unsupported_client", note="p_protocol 0 < gomoku_protocol() 1.")
+
+    # ── 관전 ────────────────────────────────────────────────────────────────────────────────
+    w0 = call(C, f"public.gomoku_watch(1, '{M_WATCH}', 0)", name="gomoku_watch__ok_since0",
+              note="제3자 C · 2수 전부 · 흑 차례 · deadline_ms = turn_started_at + 30s. 최상위 키 9개, 채팅 키 없음.")
+    assert sorted(w0.keys()) == ["auto_abandon_streak", "black_auto_streak", "black_user", "match", "moves",
+                                 "server_now_ms", "status", "white_auto_streak", "white_user"], sorted(w0.keys())
+    # 세 번째 수(흑 8,8) — 판 문자열 1-based 129, 이제 백 차례.
+    admin(f"""
+update public.gomoku_matches
+   set board = overlay(board placing 'b' from 129 for 1), move_count = 3, turn = 'white', turn_started_at = clock_timestamp()
+ where id = '{M_WATCH}';
+insert into public.gomoku_moves (match_id, seq, color, kind, x, y, auto) values ('{M_WATCH}', 3, 'black', 'stone', 8, 8, false);
+""")
+    call(C, f"public.gomoku_watch(1, '{M_WATCH}', 2)", name="gomoku_watch__ok_since2",
+         note="같은 판을 p_since_seq 2 로 — moves 는 seq 3 하나 · move_count 3 · 백 차례. 스토어의 증분 요청 모양.")
+    call(A, f"public.gomoku_watch(1, '{M_WATCH}', 0)", name="gomoku_watch__ok_as_player",
+         note="참가자 A(흑)가 불러도 같은 모양 — my_color·chat·ruby_balance 없음.")
+    call(C, f"public.gomoku_watch(1, '{M_WATCH}', 0)", name="gomoku_watch__ok_overdue",
+         setup=f"update public.gomoku_matches set turn_started_at = clock_timestamp() - interval '90 seconds' where id = '{M_WATCH}';",
+         note="마감이 60초 지난 판 — deadline_ms < server_now_ms 인데 status 는 active 그대로(관전은 따라잡지 않는다).")
+    call(C, f"public.gomoku_watch(1, '{M_WATCH}', 3)", name="gomoku_watch__ok_finished",
+         setup=(f"update public.gomoku_matches set status = 'finished', result = 'black_win', end_reason = 'five', "
+                f"winner = '{A}', finished_at = clock_timestamp(), turn = null where id = '{M_WATCH}';"),
+         note="관전 중 판이 끝났다(3분 꼬리 안) · since 3 이라 moves [] · deadline_ms null · finished_ms · winner A.")
+    call(C, f"public.gomoku_watch(1, '{FIN[0]}', 0)", name="gomoku_watch__not_found",
+         note="어제 끝난 판 — 3분 꼬리 밖이라 not_found. 키는 status 하나뿐(없는 id·pending·숨김 격리와 같은 답).")
+    call(None, f"public.gomoku_watch(1, '{M_WATCH}', 0)", name="gomoku_watch__unauthorized",
+         note="클레임 없는 authenticated 호출 — 키가 status 하나뿐이다.")
+    call(C, f"public.gomoku_watch(0, '{M_WATCH}', 0)", name="gomoku_watch__unsupported_client",
+         note="p_protocol 0 — server_now_ms 가 함께 온다(다른 오목 RPC 와 같은 게이트).")
+
+    # ── manifest 합치기(기존 항목은 그대로) ──────────────────────────────────────────────────
+    path = os.path.join(OUT, "_manifest.json")
+    with open(path, encoding="utf-8") as fh:
+        manifest = json.load(fh, object_pairs_hook=OrderedDict)
+    manifest["users"]["F"] = F
+    manifest["users"]["m_watch"] = M_WATCH
+    manifest["users"]["m_fin_old"] = FIN[0]
+    for k in [k for k in manifest["fixtures"] if k.startswith(("gomoku_ranking__", "gomoku_watch__"))]:
+        del manifest["fixtures"][k]
+    manifest["fixtures"].update(new_manifest)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(manifest, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+    print("wrote", len(new_manifest), "fixtures; manifest fixtures =", len(manifest["fixtures"]))
+
+
+if __name__ == "__main__":
+    main()

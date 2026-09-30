@@ -490,11 +490,13 @@ func lobbyRightColumnScrollsLiveMatchesInsteadOfTruncating() throws {
     #expect(column.contains("minHeight: 0"), "minHeight 0 이 없다 — 카드가 608pt 본문을 뚫는다")
 }
 
-/// 로비가 **두 열**이다(v0.3.29): 상대 목록 780 · 오른쪽 400, 가운데 판돈 카드는 없다.
+/// 로비의 판돈 카드는 없다(v0.3.29) — 상대 목록 · (0.3.31 부터 순위) · 오른쪽 400.
 ///
-/// 두 가지를 픽셀로 잰다. ① 상대 행의 [도전] 버튼이 780pt 목록의 오른쪽 끝(실측 771.5pt)까지 간다 —
-/// 옛 540pt 열이었다면 x 530 언저리에서 멈춘다. ② 오른쪽 열 **맨 위**가 "지금 대결 중"이다 —
-/// 대결 건수를 바꾸면 그 자리 픽셀이 바뀐다(옛 화면에서 그 자리는 판돈 카드라 꿈쩍도 안 했다).
+/// 두 가지를 픽셀로 잰다. ① 상대 행의 [도전] 버튼이 **상대 목록 열(420)** 의 오른쪽 끝까지 간다(실측 412pt = 20 + 420 − 카드 여백 16 −
+/// 행 여백 12) — 옛 540pt 열이었다면 x 530 언저리, v0.3.29~30 의 780 열이었다면 771.5 에서 멈춘다. 0.3.31 에 왼쪽 780 블록이
+/// [상대 420 | 순위 340] 으로 갈려 재기준했다(C23). **상대 열에서만** 잰다: 순위 행의 이니셜 아바타 팔레트가 푸른 픽셀로 잡혀
+/// 상자를 순위 열까지 부풀린다. ② 오른쪽 열 **맨 위**가 "지금 대결 중"이다 — 대결 건수를 바꾸면 그 자리 픽셀이 바뀐다
+/// (옛 화면에서 그 자리는 판돈 카드라 꿈쩍도 안 했다).
 @MainActor
 @Test
 func lobbyIsTwoColumnsAndTheStakeCardIsGone() throws {
@@ -504,12 +506,12 @@ func lobbyIsTwoColumnsAndTheStakeCardIsGone() throws {
     gpSave(bitmap, name: "lobby-two-columns")
     #expect(gpYellowPixels(bitmap) == 0, "두 열 로비에 노란 상자가 있다")
 
-    // ① [도전] 버튼(채운 accent)이 목록 오른쪽 끝까지 간다.
-    let challenge = gpAccentBounds(bitmap, rect: gpLobbyListColumn)
+    // ① [도전] 버튼(채운 accent)이 상대 목록 열 오른쪽 끝까지 간다.
+    let challenge = gpAccentBounds(bitmap, rect: gpLobbyUsersColumn)
     #expect(challenge.count > 1000, "상대 목록에 [도전] 버튼이 안 보인다")
-    #expect(challenge.box.maxX > 700,
-            "[도전] 버튼이 x \(challenge.box.maxX)pt 에서 끝난다 — 상대 목록이 아직 540pt 열이다")
-    #expect(challenge.box.maxX < gpLobbyListColumn.maxX, "[도전] 버튼이 목록 열 밖으로 넘친다")
+    #expect(challenge.box.maxX > GomokuWindowLayout.lobbyUsersWidth - 60,
+            "[도전] 버튼이 x \(challenge.box.maxX)pt 에서 끝난다 — 상대 목록이 \(Int(GomokuWindowLayout.lobbyUsersWidth))pt 폭을 안 쓴다")
+    #expect(challenge.box.maxX < gpLobbyUsersColumn.maxX, "[도전] 버튼이 상대 목록 열 밖으로 넘친다")
 
     // ② 오른쪽 열 맨 위가 '지금 대결 중'이다(그 자리가 대결 건수에 반응한다).
     let noneBitmap = try gpBitmap(gpPanel(gpLobbyStore(outgoing: false)))
@@ -701,11 +703,18 @@ func lobbyInvitesBoxCollapsesAndTheLiveBoxTakesTheRest() throws {
 /// 카드 사이 간격은 8pt(159 → 167). 72 는 열을 감싼 카드의 윗변이다.
 private let gpLiveCardHeight = 53
 
-/// 로비 왼쪽(상대 목록) 열.
+/// 로비 왼쪽 **블록**(780 — 0.3.31 부터 [상대 목록 420 | 순위 340] 두 열이다). 두 열을 함께 잴 때만 쓴다.
 @MainActor
 private var gpLobbyListColumn: CGRect {
     CGRect(x: GomokuWindowLayout.contentPadding, y: gpBoardOrigin.y,
            width: GomokuWindowLayout.lobbyListWidth, height: GomokuWindowLayout.bodyHeight)
+}
+
+/// 로비 왼쪽 **상대 목록** 열(420). [도전] 같은 상대 행의 픽셀은 여기서만 잰다 — 순위 열의 픽셀이 섞이면 다른 것을 재게 된다(C23).
+@MainActor
+private var gpLobbyUsersColumn: CGRect {
+    CGRect(x: GomokuWindowLayout.contentPadding, y: gpBoardOrigin.y,
+           width: GomokuWindowLayout.lobbyUsersWidth, height: GomokuWindowLayout.bodyHeight)
 }
 
 /// 로비 **오른쪽** 열(v0.3.29 — 위 칸 지금 대결 중 · 아래 칸 받은/보낸 신청). 두 열이라 이 열이 끝이다.
@@ -1267,6 +1276,32 @@ func gomokuTextIsPlainUserLanguage() throws {
         GomokuNoticeText.abandoned(outcome: .won), GomokuNoticeText.abandoned(outcome: .lost)
     ]
     shown += [GomokuNoticeText.autoStreakWarning(GomokuStore.autoPlaceLossStreak - 1)].compactMap { $0 }
+    // 0.3.31 순위표 · 관전 문구도 같은 잣대를 지난다.
+    shown += [
+        GomokuText.rankTitle, GomokuText.rankCaption, GomokuText.rankSince(Date(timeIntervalSince1970: 1_791_255_600)),
+        GomokuText.points(4), GomokuText.points(-2), GomokuText.points(0), GomokuText.myRank(rank: 12, points: 4),
+        GomokuText.noRanking, GomokuText.rankingLoading, GomokuText.rankingUnavailable, GomokuText.rankingLoadFailed,
+        GomokuText.reloadRanking, GomokuText.rankHelp, GomokuText.record(wins: 12, losses: 3, draws: 1),
+        GomokuText.watch, GomokuText.watchHelp, GomokuText.watching, GomokuText.myMatch, GomokuText.watchLoading,
+        GomokuText.watchTurn(.black), GomokuText.watchTurn(.white), GomokuText.watchAutoPending,
+        GomokuText.watchStreakWarning(name: "민수"), GomokuText.watchEndedTitle,
+        GomokuText.watchEnded(winnerName: "민수", reason: .five), GomokuText.watchEnded(winnerName: nil, reason: .boardFull),
+        GomokuText.watchNoChat, GomokuText.watchMoves(12), GomokuText.leaveWatch, GomokuText.leaveWatchHelp,
+        GomokuNoticeText.watchGone, GomokuNoticeText.watchUnavailable
+    ]
+    shown += [GomokuEndReason.five, .timeout, .resign, .boardFull, .abandoned].map { GomokuText.watchReason($0) }
+    // 승점 꼴 — 음수 기호는 루비 변화와 같은 '−'(U+2212), 0 은 부호 없이.
+    #expect(GomokuText.signedPoints(9) == "+9" && GomokuText.signedPoints(-3) == "−3" && GomokuText.signedPoints(0) == "0")
+    #expect(GomokuText.myRank(rank: 12, points: 4) == "12위 · 승점 +4")
+    #expect(GomokuText.record(wins: 12, losses: 3, draws: 1) == "12승 3패 1무")
+    // 컷 캡션은 달력 값이다(2026-10-06 12:00 KST = 03:00 UTC — 어느 시간대에서 돌려도 10월 6일).
+    #expect(GomokuText.rankSince(Date(timeIntervalSince1970: 1_791_255_600)) == "10월 6일부터")
+    // 마감이 지난 관전 문구는 **절대 패배를 말하지 않는다**(C19) — 따라잡기는 대국자 조회·매분 정리 몫이다.
+    #expect(!GomokuText.watchAutoPending.contains("졌") && !GomokuText.watchAutoPending.contains("패"))
+    #expect(GomokuText.watchEnded(winnerName: nil, reason: .boardFull).hasPrefix("무승부"))
+    // 규칙 보기가 동률 서열(같은 승점 → 승 → 무)을 한 줄로 말한다 — 캡션 '승점 = 승 − 패' 만으로는 (1승 1패 1무) 가 (1승 1패 0무) 앞에 서는
+    // 이유를 설명하지 못한다(서버 실측).
+    #expect(GomokuRuleExample.ruleLines.contains { $0.contains("승점") && $0.contains("더 많이 둔") })
     // 경고는 **한 번 남았을 때만** 뜬다(첫 번째부터 겁을 주면 매 판 뜨고, 그러면 아무도 안 읽는다).
     #expect(GomokuNoticeText.autoStreakWarning(GomokuStore.autoPlaceLossStreak - 1) != nil)
     #expect(GomokuNoticeText.autoStreakWarning(0) == nil)

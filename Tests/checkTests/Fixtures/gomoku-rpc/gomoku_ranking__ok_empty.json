@@ -1,0 +1,13 @@
+{
+  "me": {
+    "rank": null,
+    "wins": 0,
+    "draws": 0,
+    "losses": 0,
+    "points": 0
+  },
+  "rows": [],
+  "status": "ok",
+  "server_now_ms": 1790770352440,
+  "record_since_ms": null
+}

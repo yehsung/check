@@ -104,6 +104,123 @@ package nonisolated struct GomokuLiveMatch: Identifiable, Equatable, Sendable {
 
 package nonisolated enum GomokuPhase: Equatable, Sendable { case lobby, playing, result }
 
+// MARK: - 관전 · 순위 화면 값 (0.3.31) — 저장 프로퍼티가 이 타입을 들고, 로직은 GomokuStoreWatch/Ranking.swift 확장이 쓴다
+
+/// 관전 중인 남의 판 하나. `phase` 는 `.lobby` 그대로이고 **이 값이 nil 이 아닌 것**이 관전 중이다(`match == nil && phase == .lobby`).
+///
+/// **흑·백을 추측하지 않는다.** 로비 카드의 a/b 는 uuid 순서라 색을 모른다 — 첫 ok 응답 전에는 `faces` 두 얼굴만
+/// (색 배지 없이) 그리고, `black`/`white` 는 서버 `black_user`/`white_user` 로만 확정한다. 씨앗을 못 찾은 경우
+/// (목록에서 이미 빠진 판을 클릭)도 `faces` 가 비어 있을 뿐 같은 로딩 상태다.
+///
+/// 판 문자열은 서버 `board` 가 권위이고 `moves` 는 마지막 수·자동 착수 점 갱신용이다(`appliedSeq` 가 증분 기준).
+/// 끝난 응답을 한 번 받으면 `isFinished` 가 서고 폴링은 멈추지만 이 값은 [나가기] 전까지 남아 결과를 보여 준다.
+/// **기본값이 있는 채로 둔다** — 씨앗은 `GomokuSpectateState(id:faces:stake:)` 로 세우고 나머지는 응답이 채운다.
+package nonisolated struct GomokuSpectateState: Identifiable, Equatable, Sendable {
+    package let id: String                 // match id 소문자
+    /// 로비 카드에서 빌린 두 얼굴(a·b 순서, 색 모름). 씨앗을 못 찾았으면 비어 있다.
+    package var faces: [GomokuUser] = []
+    /// 판돈. 씨앗이 없으면 nil 이고 응답의 `match.stake` 가 채운다.
+    package var stake: Int? = nil
+    /// 서버가 말한 흑·백. **첫 ok 응답 전에는 nil** — 이 둘이 서기 전에는 색 배지를 그리지 않는다.
+    package var black: GomokuUser? = nil
+    package var white: GomokuUser? = nil
+    package var board: GomokuBoard = GomokuBoard()
+    package var lastMove: GomokuPoint? = nil
+    package var moveCount: Int = 0
+    /// 내가 반영한 마지막 수 번호. 다음 요청의 `p_since_seq` 다(구멍이 나면 확장이 0 으로 되돌린다).
+    package var appliedSeq: Int = 0
+    package var turn: GomokuColor? = nil   // 끝나면 nil
+    /// 차례 마감(기기 시계로 보정). 끝나면 nil. 마감이 지나도 **"졌다"가 아니다** — 따라잡기는 대국자 조회·매분 cron 몫이다.
+    package var deadline: Date? = nil
+    package var startedAt: Date? = nil
+    /// 시간이 지나 서버가 대신 놓은 자리들(회색 점).
+    package var autoPoints: Set<GomokuPoint> = []
+    package var lastMoveWasAuto: Bool = false
+    package var isFinished: Bool = false
+    /// 이긴 색. 끝났는데 nil 이면 무승부다.
+    package var winner: GomokuColor? = nil
+    package var endReason: GomokuEndReason? = nil
+    package var blackAutoStreak: Int = 0
+    package var whiteAutoStreak: Int = 0
+
+    /// 서버 응답을 한 번이라도 반영했는가(= 흑·백이 확정됐는가). 그 전에는 로딩 화면이다.
+    package var hasServerState: Bool { black != nil && white != nil }
+}
+
+/// 순위표 한 줄(화면 값). `id` 는 user id. `user` 는 `GomokuStore.user(from:)` 로 만든다 — CenterLabel 변환점을 늘리지 않는다.
+package nonisolated struct GomokuRankEntry: Identifiable, Equatable, Sendable {
+    package let id: String
+    /// 서버가 매긴 순위(동률은 같은 숫자, 다음은 건너뛴다 — rank()).
+    package let rank: Int
+    package let user: GomokuUser
+    package let wins: Int
+    package let losses: Int
+    package let draws: Int
+    /// 승점 = 승 − 패. 서버 값 그대로.
+    package let points: Int
+}
+
+/// 내 순위 한 줄. `rank` 는 0판이면 nil(순위 밖) — 전적은 그래도 있다.
+package nonisolated struct GomokuMyRank: Equatable, Sendable {
+    package let rank: Int?
+    package let wins: Int
+    package let losses: Int
+    package let draws: Int
+    package let points: Int
+}
+
+/// 순위표 전체. **`entries` 는 서버 순서 그대로**(liveMatches 규약 — 재정렬 금지: 재정렬하면 서버·앱 두 규칙이 갈린다).
+/// `recordSince` 는 전적 기준 시각(컷). 컷이 없으면 nil 이고 화면은 "M월 d일부터" 캡션을 안 단다.
+package nonisolated struct GomokuRankingBoard: Equatable, Sendable {
+    package let entries: [GomokuRankEntry]
+    package let me: GomokuMyRank?
+    package let recordSince: Date?
+}
+
+/// 관전·순위 갈래의 관찰 대상이 아닌 장부(`GomokuAIRuntime` 과 같은 이유로 스토어 본문에 한 줄로 붙는다 — 저장 프로퍼티는 확장에 못 둔다).
+///
+/// `watchGeneration` 은 **관전 세대**다: `startWatching`(판 전환)·`stopWatching`·`reset`·내 판이 열려 관전이 내려갈 때 오른다.
+/// 세대가 다른 응답은 버린다 — `resetGeneration` 만 보면 창을 닫은 뒤 늦게 온 응답이 관전을 되살리고,
+/// A 판을 나가 B 판을 보는 사이 A 의 늦은 응답이 B 판을 한 틱 덮는다(chatGeneration 과 같은 결의 방어).
+@MainActor
+package final class GomokuWatchRuntime {
+    package var lastWatchRequestAt: Date = .distantPast
+    package var watchInFlight = false
+    /// 조회 중에 또 조회할 이유가 생겼다 — 끝나면 한 번 더 돈다(stateAgain 과 같은 합치기).
+    package var watchAgain = false
+    /// 다음 조회 한 번을 `p_since_seq = 0` 으로 띄운다(수 번호에 구멍이 났다). 내리는 것은 그 전체를 실어 온 응답이다.
+    package var watchWantsFull = false
+    /// 관전 세대(위 머리말). 올리는 문은 `bumpWatchGeneration()` 하나다.
+    package private(set) var watchGeneration = 0
+    /// 연속 실패 횟수(throw 경로 — 5xx·오프라인). 문턱을 넘으면 확장이 관전을 내리고 안내 한 줄을 남긴다 —
+    /// 빈 판 "관전 중" 화면이 2초 폴링을 영영 도는 상태를 만들지 않기 위한 장부다.
+    package var watchFailureStreak = 0
+    package var lastRankingRequestAt: Date = .distantPast
+    package var rankingInFlight = false
+
+    package init() {}
+
+    @discardableResult
+    package func bumpWatchGeneration() -> Int {
+        watchGeneration &+= 1
+        return watchGeneration
+    }
+
+    /// 전부 초기값으로 + 세대 한 번 올림(로그아웃·계정 전환 — 앞 계정의 늦은 응답을 버린다).
+    /// 이름이 `reset` 이 아닌 이유: 소스 계약 테스트가 이 파일에서 `func reset()` 의 **첫 등장**을 스토어 것으로 잡는다
+    /// (V0327:760 · V0332:587) — 같은 이름을 앞에 두면 그 테스트가 이 몸통을 읽고 빨개진다(실측).
+    package func clear() {
+        lastWatchRequestAt = .distantPast
+        watchInFlight = false
+        watchAgain = false
+        watchWantsFull = false
+        watchFailureStreak = 0
+        lastRankingRequestAt = .distantPast
+        rankingInFlight = false
+        bumpWatchGeneration()
+    }
+}
+
 /// 창이 안 보이는 사람에게 "지금 둘 차례"를 알리는 한 건(캐릭터 말풍선으로 간다 — CheckApp 배선).
 /// 같은 (판 id, move_count) 에는 한 번만 만든다.
 package nonisolated struct GomokuAttention: Equatable, Sendable {
@@ -258,6 +375,12 @@ package nonisolated enum GomokuNoticeText {
     package static let autoPlaced = "시간이 지나 자동으로 놓였어요"
     /// 판 위 회색 점 하나의 설명(툴팁·보이스오버).
     package static let autoPlacedStone = "시간이 지나 자동으로 놓인 수"
+
+    // 관전(0.3.31). 관전은 진행 중인 판이 본질이라 오래 끝난 판·없는 판·숨김 격리는 서버가 전부 not_found 하나로 답한다.
+    /// gomoku_watch 가 not_found — 판이 끝난 지 오래됐거나 볼 수 없는 판이다. 관전을 내리고 로비로 돌아온다.
+    package static let watchGone = "지금은 볼 수 없는 판이에요"
+    /// 서버에 아직 관전·순위가 없다(PGRST202 — 배포 중간 창). 상태가 아니라 throw 로 오는 실패라 문구가 따로 있다.
+    package static let watchUnavailable = "관전은 곧 열려요"
 
     /// 자동 착수 연속 경고. **한 번 남았을 때만** 말한다 — 첫 번째부터 겁을 주면 매 판 뜨고, 그러면 아무도 안 읽는다.
     /// 판을 잃는 횟수에서 파생시킨다: 리터럴을 따로 쓰면 값을 바꾼 날 문구만 옛 숫자로 남는다.
@@ -438,6 +561,10 @@ package final class GomokuStore {
     package nonisolated static let inviteExpiryToleranceSeconds: TimeInterval = 1
     /// 같은 차례(기록 수·차례가 같음)를 다시 읽었을 때 마감이 이만큼 안쪽으로만 다르면 기존 값을 쓴다(초).
     package nonisolated static let deadlineToleranceSeconds: TimeInterval = 0.5
+    /// 관전 중 판 재조회 주기(초, 0.3.31). 창이 보이고 안 가려졌을 때만 — 30회/분·관전자당, 한 수 30초 게임에서 돌이 최대 이만큼 늦게 보인다.
+    package nonisolated static let watchPollSeconds: TimeInterval = 2
+    /// 로비를 보고 있는 동안 순위표 재조회 주기(초, 0.3.31). 창 열 때 한 번 + 내 판이 끝난 순간 + 이 주기.
+    package nonisolated static let rankingPollSeconds: TimeInterval = 60
 
     package nonisolated static let logger = Logger(subsystem: "kingcheck", category: "gomoku")
 
@@ -468,6 +595,14 @@ package final class GomokuStore {
             if let line = Self.matchTransitionLine(from: oldValue, to: match) { Self.logger.notice("\(line, privacy: .public)") }
             // AI 판은 `match` 가 그 판 id 를 들고 있는 동안만 산다 — 1:1 판이 열리거나 판이 내려가면 버린다(GomokuStoreAI.swift).
             if let game = aiGame, match?.id != game.id { discardAIGame() }
+            // 내 판이 섰으면(수락·신호·인박스·AI 시작 어느 경로든, **끝난 판 포함**) 관전은 내려간다(0.3.31).
+            // 끝난 판을 빼지 않는 이유: 받은함 `last_finished` 갈래가 관전 중(match == nil && phase == .lobby)에 끝난 내 판을
+            // 세워 `.result` 로 보내는데, 그때 관전이 살아 있으면 [로비로] 뒤 관전 화면이 다시 튀어나온다.
+            // 세대를 올려 나가 있던 관전 응답도 함께 버린다(GomokuWatchRuntime 머리말).
+            if match != nil, spectating != nil {
+                spectating = nil
+                watchRuntime.bumpWatchGeneration()
+            }
         }
     }
     /// 지금 AI 대국(로컬 판, docs/plan/gomoku-ai.md). 서버 판과 섞이지 않는다 — 확장 파일 머리 주석.
@@ -499,6 +634,35 @@ package final class GomokuStore {
     /// 스토어 정렬과 뷰 정렬이 갈리고, 그때 같은 목록이 화면마다 다른 순서로 보인다(users 가 겪은 그것).
     /// 옛 서버(키 없음)면 빈 배열이고 화면은 "지금 대결 중인 사람이 없어요"로 접힌다.
     package var liveMatches: [GomokuLiveMatch] = []
+
+    // MARK: 관전 · 순위 (0.3.31) — 저장 프로퍼티만 여기, 로직은 GomokuStoreWatch.swift · GomokuStoreRanking.swift
+
+    /// **순위 적재·관전 폴링의 주 스위치. 기본 false.** 이 스토어는 폰(`MobileAppModel`)도 그대로 쓰는 공용 타입이라,
+    /// 창 표시·pollTick 에 순위·관전 조회를 무조건 얹으면 그리지도 않는 폰이 `gomoku_ranking` 을 1분마다 당긴다(무료 플랜 예산).
+    /// 켜는 곳은 **맥 배선(`CheckApp.wireGomoku`)뿐**이고, 꺼져 있으면 두 조회는 한 번도 나가지 않는다 —
+    /// 확장의 `loadRanking`·`startWatching`·`refreshWatch` 와 `pollTick`·`windowDidShow` 의 두 분기가 전부 이 값을 먼저 본다.
+    /// 폰은 나중에 순위·관전 화면을 만들 때 자기 배선에서 켠다.
+    package var spectatorFeaturesEnabled = false
+    /// 지금 관전 중인 판. nil 이 아니면 로비 자리에 관전 화면이 선다(`phase` 는 `.lobby` 그대로).
+    package var spectating: GomokuSpectateState?
+    /// 마지막으로 받은 순위표. 실패해도 들고 있던 값은 지우지 않는다(`lobbyLoadFailed` 규약).
+    package var ranking: GomokuRankingBoard?
+    /// 마지막 순위 조회가 실패했다(5xx·오프라인). **안내줄(notice)로 새지 않는다** — 대국 상태줄을 가린다.
+    package var rankingLoadFailed = false
+    /// 이번 로그인에서 순위를 한 번이라도 받았다(실패로 접힌 `rankingUnavailable` 도 "받은 것"으로 센다).
+    package var hasLoadedRanking = false
+    /// 서버에 순위 함수가 아직 없다(PGRST202 — 서버보다 앱이 먼저 나간 창). 화면은 "순위는 곧 열려요"로 접고 [관전] 칩을 잠근다.
+    package var rankingUnavailable = false
+    /// 관전·순위 장부(요청 시각·in-flight·세대). 관찰 대상이 아니다.
+    @ObservationIgnored package let watchRuntime = GomokuWatchRuntime()
+
+    /// 관전 중인가(로비 자리에 관전 화면이 서 있다).
+    package var isSpectating: Bool { spectating != nil }
+    /// 순위·관전 조회가 **지금** 나가도 되는가 — 주 스위치 + 창이 보이고 안 가려짐 + 세션. 확장의 두 폴링 분기가 이 한 술어를 쓴다
+    /// (창 규칙 ③ 을 각자 다시 적으면 한쪽이 언젠가 빠진다).
+    package var canPollSpectatorFeatures: Bool {
+        spectatorFeaturesEnabled && isWindowVisible && !isWindowOccluded && host?.session != nil
+    }
 
     // MARK: 자동 착수 (v0.3.28) — 시간 초과는 패배가 아니라 **무작위 대리 착수**다
 
@@ -714,6 +878,8 @@ package final class GomokuStore {
         if now.timeIntervalSince(lastInboxRequestAt) >= Self.reloadDedupeSeconds {
             Task { [weak self] in await self?.loadInbox() }
         }
+        // 관전·순위(0.3.31): 관전 중이면 즉시 한 번(C14 — 숨겨진 동안 멈춘 폴링의 따라잡기), 로비면 순위를 같은 1초 규칙으로.
+        spectatorWindowDidShow(at: now)
     }
 
     /// 창이 가려졌다·닫혔다. 폴링만 멈춘다 — **대국은 계속된다**(시간은 서버에서 흐른다).
@@ -725,6 +891,10 @@ package final class GomokuStore {
         // 결과 화면인 채로 창을 닫았다 = 그 판에서 나간 것이다. **진행 중이면 부르지 않는다**(창을 닫아도 대국은
         // 계속된다). 가려짐은 나간 게 아니므로 `windowOcclusionDidChange` 는 이 문을 지나지 않는다.
         if let current = match, current.isFinished { leaveMatch(current.id) }
+        // 끝난 판을 관전한 채 닫았다 = 그 판에서 나간 것이다(바로 위 내 판 결과와 같은 결). **진행 중인 관전은 남긴다**(C14 — 최소화에서도 오는
+        // 통지라 지우면 최소화만 해도 로비로 떨어진다). 끝난 판은 재조회가 없어(isFinished) 그대로 두면 한 시간 뒤 창을 열어도 로비 대신
+        // 낡은 남의 판이 서고 [나가기]를 눌러야만 로비였다(2026-09-30 반증). `stopWatching` 은 요청을 쏘지 않는 쪽이다.
+        if spectating?.isFinished == true { stopWatching() }
     }
 
     /// 창의 가림 상태가 바뀌었다(다른 창 뒤·다른 Space·잠금 화면). **폴링만** 멈추고 되살린다.
@@ -878,6 +1048,9 @@ package final class GomokuStore {
             // 로컬은 진행 중인데 서버엔 진행 중 대국이 없다 = 그 사이 끝났다. 결과를 받아 온다.
             await refreshMatch(id: current.id)
         } else if match == nil, phase == .lobby,
+                  // 관전 중(C20)에는 세우지 않는다 — 세우면 결과 카드가 관전 위로 튀어나오고, 이 id 를 본 것으로 적어 두면 관전을 나간 뒤엔
+                  // 영영 안 보인다. 적지 않고 지나가면 [나가기]의 받은함 조회가 그때 세운다.
+                  spectating == nil,
                   let finished = response.lastFinished?.matchId?.lowercased(), !finished.isEmpty,
                   !dismissedMatchIDs.contains(finished), !shownResultIDs.contains(finished) {
             // 앱을 다시 켜는 사이 끝난 판(최근 10분)의 결과를 한 번 세운다. 창이 안 보이면 다음에 열 때 보인다.
@@ -1151,6 +1324,8 @@ package final class GomokuStore {
         if justFinished {
             // 전적은 로비 응답에만 있다. 판이 끝난 순간 한 번 다시 읽어 결과 화면 뒤 로비가 옛 전적을 보이지 않게 한다.
             Task { [weak self] in await self?.refreshLobby() }
+            // 순위도 같은 순간 바뀐다(0.3.31) — 로비 전적만 새로 오고 순위가 옛것이면 머리글이 자기모순 문장을 만든다(C16).
+            noteOwnMatchFinishedForRanking()
         }
         return .applied
     }
@@ -1548,6 +1723,9 @@ package final class GomokuStore {
         if phase == .lobby, now.timeIntervalSince(lastLobbyRequestAt) >= Self.lobbyPollSeconds {
             await refreshLobby()
         }
+        // 관전·순위(0.3.31): 관전 중이면 2초마다 판, 로비면 60초마다 순위. 주 스위치·가림·세션·화면은 확장이 본다(GomokuStoreWatch.swift).
+        guard isWindowVisible else { return }
+        await pollSpectatorFeatures(at: now)
     }
 
     // MARK: - 초 단위 값 (잎 뷰 전용)
@@ -1602,6 +1780,13 @@ package final class GomokuStore {
         if inboxLoadFailed { inboxLoadFailed = false }
         if hasLoadedInbox { hasLoadedInbox = false }
         if !liveMatches.isEmpty { liveMatches = [] }
+        // 관전·순위(0.3.31)도 계정에 묶인다 — 남기면 다음 사람이 앞 사람의 순위표·남의 판을 본다. 주 스위치는 배선 값이라 안 건드린다.
+        if spectating != nil { spectating = nil }
+        if ranking != nil { ranking = nil }
+        if rankingLoadFailed { rankingLoadFailed = false }
+        if hasLoadedRanking { hasLoadedRanking = false }
+        if rankingUnavailable { rankingUnavailable = false }
+        watchRuntime.clear()
         if autoAbandonStreak != GomokuStore.autoPlaceLossStreak {
             autoAbandonStreak = GomokuStore.autoPlaceLossStreak
         }
@@ -1834,7 +2019,8 @@ package final class GomokuStore {
 
     /// 공용 호출 관용구: 세션 가드 → 두 세대 캡처 → withSessionRetry → 두 세대 대조.
     /// nil = 버린 결과(세션 없음·세대가 밀림·취소). 호출부는 nil 이면 **아무것도 바꾸지 않는다.**
-    private func perform<T: Sendable>(
+    /// `package` 인 이유(0.3.31): 관전·순위 확장(GomokuStoreWatch/Ranking.swift)이 같은 관용구로 부른다 — 확장이 따로 만들면 세대 대조가 두 벌이 된다.
+    package func perform<T: Sendable>(
         _ operation: @escaping @Sendable (SupabaseWorkService, String) async throws -> T
     ) async -> Result<T, any Error>? {
         guard let host, host.session != nil else { return nil }
@@ -1883,7 +2069,8 @@ package final class GomokuStore {
         }
     }
 
-    private func setNotice(_ text: String?) {
+    /// 안내줄 한 문. `package` 인 이유(0.3.31): 관전 확장이 not_found·준비 중 안내를 여기로 흘린다(순위 실패는 절대 부르지 않는다).
+    package func setNotice(_ text: String?) {
         if notice != text { notice = text }
     }
 
@@ -1992,7 +2179,8 @@ package final class GomokuStore {
 
     /// 로비 "지금 대결 중" 한 줄 → 화면 값. 하나라도 모르면 **그 카드를 만들지 않는다** —
     /// 이름도 판돈도 모르는 카드는 사용자에게 아무것도 알려 주지 않는다.
-    private func liveMatch(from row: GomokuLobbyMatchRow) -> GomokuLiveMatch? {
+    /// `package` 인 이유(0.3.31): 관전 확장·테스트가 로비 카드 한 줄을 씨앗으로 세울 때 같은 변환을 쓴다.
+    package func liveMatch(from row: GomokuLobbyMatchRow) -> GomokuLiveMatch? {
         guard let id = row.matchId?.lowercased(), !id.isEmpty,
               let a = peerUser(row.a, working: true, capable: true, inMatch: true),
               let b = peerUser(row.b, working: true, capable: true, inMatch: true),
@@ -2004,7 +2192,8 @@ package final class GomokuStore {
     }
 
     /// 사람 행 → GomokuUser. 행에 없는 칸(근무·가능·대국 중)은 로비 목록에서 빌리고, 거기에도 없으면 문맥 기본값이다.
-    private func peerUser(_ row: GomokuUserRow?, working: Bool, capable: Bool, inMatch: Bool) -> GomokuUser? {
+    /// `package` 인 이유(0.3.31): 관전 응답의 `black_user`/`white_user` 도 이 경계를 지난다 — CenterLabel 변환점은 이 둘(`peerUser` · `user(from:)`)뿐이다.
+    package func peerUser(_ row: GomokuUserRow?, working: Bool, capable: Bool, inMatch: Bool) -> GomokuUser? {
         guard let row, let id = row.userId?.lowercased(), !id.isEmpty else { return nil }
         let known = users.first { $0.id == id }
         return GomokuUser(

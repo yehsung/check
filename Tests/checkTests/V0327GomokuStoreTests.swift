@@ -369,6 +369,8 @@ func 오목_RPC_열은_p_protocol_2_와_p_snake_키를_싣는다() async throws 
     _ = try await service.gomokuState(accessToken: "t", matchID: matchID, sinceSeq: 3, sinceChatSeq: 1)
     _ = try await service.gomokuChatSend(accessToken: "t", matchID: matchID, kind: .text, body: "안녕")
     _ = try await service.gomokuChatMute(accessToken: "t", matchID: matchID, muted: true)
+    _ = try await service.gomokuRanking(accessToken: "t")
+    _ = try await service.gomokuWatch(accessToken: "t", matchID: matchID, sinceSeq: 7)
 
     let expected: [String: Set<String>] = [
         "gomoku_lobby": ["p_protocol"],
@@ -380,7 +382,10 @@ func 오목_RPC_열은_p_protocol_2_와_p_snake_키를_싣는다() async throws 
         "gomoku_resign": ["p_protocol", "p_match_id"],
         "gomoku_state": ["p_protocol", "p_match_id", "p_since_seq", "p_since_chat_seq"],
         "gomoku_chat_send": ["p_protocol", "p_match_id", "p_kind", "p_body"],
-        "gomoku_chat_mute": ["p_protocol", "p_match_id", "p_muted"]
+        "gomoku_chat_mute": ["p_protocol", "p_match_id", "p_muted"],
+        // 0.3.41 — 순위·관전. `{}` 로 부르면 PostgREST 가 키 집합으로 함수를 못 고른다(PGRST202) — 스텁은 뭐든 200 이라 이 표 없이는 초록이다.
+        "gomoku_ranking": ["p_protocol"],
+        "gomoku_watch": ["p_protocol", "p_match_id", "p_since_seq"]
     ]
     let calls = GomokuStubProtocol.calls(host: host)
     #expect(Set(calls.map(\.rpc)) == Set(expected.keys))
@@ -398,6 +403,8 @@ func 오목_RPC_열은_p_protocol_2_와_p_snake_키를_싣는다() async throws 
     #expect(challenge["p_opponent"] as? String == rival && challenge["p_stake"] as? Int == 10)
     let respond = try #require(calls.first { $0.rpc == "gomoku_respond" }).json
     #expect(respond["p_accept"] as? Bool == true)
+    let watch = try #require(calls.first { $0.rpc == "gomoku_watch" }).json
+    #expect(watch["p_since_seq"] as? Int == 7 && watch["p_match_id"] as? String == matchID, "관전 요청 인자")
 }
 
 // MARK: - 2. 신청 · 수락

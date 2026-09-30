@@ -10,9 +10,13 @@ import CheckCore
 // 화면은 전부 **두 열**이다(v0.3.30). 대국은 [판 | 오른쪽 열]이고 오른쪽 열이 위에서부터 상대 카드 · 내 카드 ·
 // 판돈과 상태줄 · **채팅 카드** · [기권]이다 — 옛 세 번째 채팅 열을 카드와 [기권] 사이 빈 공간으로 옮겼고,
 // 보낸 말은 그 사람 카드 안 말풍선으로도 5초 뜬다. 결과는 [판 | 결과 카드 · 채팅 카드](끝난 뒤 인사 유예 120초).
-// 로비는 [상대 목록 | 오른쪽]이다 — 오른쪽 위가 "지금 대결 중"(남는 높이 전부 · 넘치면 그 칸 안에서 스크롤),
-// 아래가 "받은 신청"과 그 맨 아래 "보낸 신청 한 줄 + [취소]". **판돈 카드는 없다** — 판돈은 [도전]을 누를 때
-// 화면 가운데 작은 창(`GomokuStakePrompt`)에서 고르고, 고르기 전에는 [취소]만, 고른 뒤에는 [도전하기]가 선다.
+// 로비는 [상대 목록 | 순위 | 오른쪽]이다(0.3.31 — 왼쪽 780 블록을 [상대 420 | 순위 340] 으로 갈랐다). 오른쪽 위가
+// "지금 대결 중"(남는 높이 전부 · 넘치면 그 칸 안에서 스크롤), 아래가 "받은 신청"과 그 맨 아래 "보낸 신청 한 줄 + [취소]".
+// **판돈 카드는 없다** — 판돈은 [도전]을 누를 때 화면 가운데 작은 창(`GomokuStakePrompt`)에서 고르고, 고르기 전에는
+// [취소]만, 고른 뒤에는 [도전하기]가 선다.
+// 관전(0.3.31)은 `store.spectating` 이 있으면 **로비 자리**에 서는 [판 | 오른쪽 열]이다(`phase` 는 `.lobby` 그대로). 판은
+// 입력이 없고(탭·호버·미리보기 돌·금수 X 없음), 오른쪽 열은 흑·백 카드 · 판돈과 상태 상자 · **받은 신청 카드와 보낸 신청
+// [취소]와 안내줄(C12 — 관전 중에도 신청을 거둘 수 있어야 한다)** · 관전 안내 카드 · [나가기]다. 채팅 카드는 없다.
 //
 // 이 파일이 지키는 약속:
 //   · **Picker/Menu/TextField 를 쓰지 않는다.** ImageRenderer 가 노란 상자(255,204,0)로 그려 렌더 검증이 그 자리에서
@@ -123,8 +127,11 @@ enum GomokuText {
 
     static func record(_ record: GomokuRecord?) -> String {
         guard let record else { return "전적 —" }
-        return "\(record.wins)승 \(record.losses)패 \(record.draws)무"
+        return Self.record(wins: record.wins, losses: record.losses, draws: record.draws)
     }
+
+    /// 전적 한 줄의 정본 꼴 — 머리글 캡슐·순위 행이 같은 글자를 쓴다(순위 응답의 `me`·행은 `GomokuRecord` 가 아니라 숫자 셋이다).
+    static func record(wins: Int, losses: Int, draws: Int) -> String { "\(wins)승 \(losses)패 \(draws)무" }
 
     /// [도전] 툴팁. 판돈은 **이 버튼을 누른 뒤에** 고르므로 여기서 숫자를 말하지 않는다(v0.3.29).
     static let challengeHelp = "판돈을 고르고 신청해요"
@@ -295,6 +302,97 @@ enum GomokuText {
         case (.timeout?, _): return "시간이 다 됐어요"
         case (nil, _): return ""
         }
+    }
+
+    // MARK: 순위표 (0.3.31)
+
+    static let rankTitle = "오목 순위"
+    /// 정렬 기준을 한 줄로. 같은 승점·승수면 더 많이 둔 쪽이 위(무승부 desc)라는 서열까지는 규칙 보기가 말한다.
+    static let rankCaption = "승점 = 승 − 패"
+    /// 전적 기준 시각(컷)이 있으면 캡션 뒤에 붙는 달력 캡션 — "10월 6일부터". 서버 순간 그대로(기기 시계 보정 없음, 카운트다운이 아니다).
+    static func rankSince(_ date: Date) -> String {
+        // ko_KR 의 FormatStyle 은 "10. 6." 을 낸다(실측) — 달력 성분으로 직접 조립한다(기기 시간대 · 그레고리력).
+        let parts = Calendar(identifier: .gregorian).dateComponents([.month, .day], from: date)
+        return "\(parts.month ?? 0)월 \(parts.day ?? 0)일부터"
+    }
+    /// 승점의 부호 있는 짧은 꼴("+9" · "−3" · "0"). 음수 기호는 루비 변화와 같은 '−'(U+2212) 다.
+    static func signedPoints(_ points: Int) -> String {
+        if points > 0 { return "+\(points)" }
+        if points < 0 { return "−\(-points)" }
+        return "0"
+    }
+    static func points(_ points: Int) -> String { "승점 \(signedPoints(points))" }
+    /// 머리글 캡슐의 내 순위 꼬리 — "12위 · 승점 +4".
+    static func myRank(rank: Int, points: Int) -> String { "\(rank)위 · \(Self.points(points))" }
+    /// 판을 둔 사람이 아무도 없다(초기화 직후 화면 전체가 이 문장이다 — 의도된 신호).
+    static let noRanking = "아직 전적이 없어요"
+    static let rankingLoading = "순위를 불러오고 있어요"
+    /// 서버에 순위가 아직 없다(앱이 먼저 나간 창). 실패가 아니라 '곧' 이다.
+    static let rankingUnavailable = "순위는 곧 열려요"
+    static let rankingLoadFailed = GomokuNoticeText.checkConnection
+    static let reloadRanking = "다시 불러오기"
+    static let rankHelp = "내 오목 전적과 순위"
+
+    // MARK: 관전 (0.3.31)
+
+    static let watch = "관전"
+    static let watchHelp = "이 판을 지켜봐요"
+    static let watching = "관전 중"
+    /// 내 판 카드(로비에 잠깐 보이는 틈) — [관전] 칩 대신 서는 캡션.
+    static let myMatch = "내 판"
+    /// 첫 응답 전(두 얼굴만, 색 없음 — C15).
+    static let watchLoading = "판을 불러오고 있어요"
+    static func watchTurn(_ color: GomokuColor) -> String { "\(watching) · \(color == .black ? "흑" : "백") 차례" }
+    /// 마감이 지났다. **"졌다"고 말하지 않는다**(C19) — 따라잡기는 대국자 조회·매분 정리 몫이고 관전자는 아무것도 쓰지 못한다.
+    static let watchAutoPending = "\(watching) · 시간이 지나 곧 자동으로 놓여요"
+    /// 자동 착수 연속이 한 번 남은 사람. 대국자 본인이 보는 `GomokuNoticeText.autoStreakWarning` 과 같은 사실을 이름으로 말한다.
+    static func watchStreakWarning(name: String) -> String { "\(name)님이 한 번 더 놓치면 져요" }
+    static let watchEndedTitle = "대국이 끝났어요"
+    /// 끝난 판 한 줄. 이긴 사람이 없으면 무승부다.
+    static func watchEnded(winnerName: String?, reason: GomokuEndReason?) -> String {
+        guard let winnerName else { return "무승부 · \(watchReason(reason))" }
+        return "\(watchEndedTitle) · \(winnerName) 승 (\(watchReason(reason)))"
+    }
+    /// 끝난 이유의 짧은 이름(관전자는 승패 당사자가 아니라 "상대가"·"내가" 없이 사실만).
+    static func watchReason(_ reason: GomokuEndReason?) -> String {
+        switch reason {
+        case .five?: return "오목"
+        case .resign?: return "기권"
+        case .abandoned?: return "자리 비움"
+        case .timeout?: return "시간이 다 됐어요"
+        case .boardFull?: return "판이 가득 찼어요"
+        case nil: return "끝"
+        }
+    }
+    static let watchNoChat = "대국자 채팅은 보이지 않아요"
+    static func watchMoves(_ count: Int) -> String { "\(count)수" }
+    static let leaveWatch = "나가기"
+    static let leaveWatchHelp = "로비로 돌아가요"
+
+    /// 보이스오버: 관전 판 전체를 한 요소로(돌 수 · 마지막 수 · 누구 차례). 금수 자리는 세지 않는다(관전은 입력이 없다).
+    static func watchBoardAccessibility(_ watch: GomokuSpectateState) -> String {
+        var black = 0
+        var white = 0
+        for y in 0..<GomokuBoard.size {
+            for x in 0..<GomokuBoard.size {
+                guard let point = GomokuPoint(x: x, y: y) else { continue }
+                switch watch.board[point] {
+                case .black?: black += 1
+                case .white?: white += 1
+                case nil: break
+                }
+            }
+        }
+        var parts = ["오목판", "흑 \(black)개", "백 \(white)개"]
+        parts.append(watch.lastMove.map { "마지막 수 \($0.notation)" } ?? "아직 둔 돌이 없어요")
+        if watch.isFinished {
+            parts.append(watchEndedTitle)
+        } else if let turn = watch.turn {
+            parts.append(watchTurn(turn))
+        } else {
+            parts.append(watchLoading)
+        }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -643,22 +741,51 @@ struct GomokuPanel: View {
         case .result:
             if let match = store.match { result(match) } else { lobby }
         case .lobby:
-            lobby
+            // 관전(0.3.31)은 로비 자리에 선다 — `phase` 는 `.lobby` 그대로이고 `spectating` 하나가 화면을 가른다.
+            if let watch = store.spectating { spectate(watch) } else { lobby }
         }
     }
 
     // MARK: 로비
 
-    /// 로비는 **두 열**이다(v0.3.29): 왼쪽 상대 목록 780, 오른쪽 400.
+    /// 로비는 **세 열**이다(0.3.31): 왼쪽 상대 목록 420 · 순위 340(합 780 — 옛 상대 목록 자리) · 오른쪽 400.
     private var lobby: some View {
         HStack(alignment: .top, spacing: GomokuWindowLayout.columnSpacing) {
             GomokuOpponentList(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
                                onChallenge: { stakeTarget = $0 })
-                .frame(width: GomokuWindowLayout.lobbyListWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
+                .frame(width: GomokuWindowLayout.lobbyUsersWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
+            GomokuRankColumn(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll)
+                .frame(width: GomokuWindowLayout.lobbyRankWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
+                // 아래 오른쪽 열과 같은 보험 — 행이 예산을 넘겨도 창 아래 여백을 칠하지 않는다.
+                .clipped()
             GomokuLobbySide(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll)
                 .frame(width: GomokuWindowLayout.lobbySideWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
                 // 상대 목록과 같은 보험 — 칸이 예산을 넘겨도 제 틀 밖(창 아래 여백)을 칠하지 않는다.
                 // 접는 일은 안쪽 두 칸이 하고, 이건 그게 틀렸을 때의 안전망이다.
+                .clipped()
+        }
+    }
+
+    // MARK: 관전 (0.3.31)
+
+    /// 관전은 대국과 같은 **두 열**이다: [판 608 | 오른쪽 열 572]. 판은 `GomokuBoardView` 그대로다 — 입력이 없다
+    /// (탭·호버·미리보기 돌·금수 X 가 하나도 없다: 관전자는 아무것도 쓰지 못한다). 마감 시각은 여기서 읽지 않는다 — 링과
+    /// 상태 상자의 시각 판정은 오른쪽 열의 잎 뷰(`GomokuWatchClock` · `GomokuWatchStatusBox`)가 한다(창 루트 시계 금지).
+    private func spectate(_ watch: GomokuSpectateState) -> some View {
+        HStack(alignment: .top, spacing: GomokuWindowLayout.columnSpacing) {
+            GomokuBoardView(
+                board: watch.board,
+                geometry: GomokuBoardGeometry(side: GomokuWindowLayout.boardSide),
+                lastMove: watch.lastMove,
+                autoPoints: watch.autoPoints
+            )
+            .frame(width: GomokuWindowLayout.boardSide, height: GomokuWindowLayout.boardSide)
+            // 보이스오버: 대국 판과 같은 한 요소(돌 수 · 마지막 수 · 누구 차례).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(GomokuText.watchBoardAccessibility(watch))
+            GomokuSpectateSide(store: store, watch: watch)
+                .frame(width: GomokuWindowLayout.sideColumnWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
+                // 안쪽 칸이 예산을 넘겨도 창 아래 여백을 칠하지 않는 보험(대국 오른쪽 열과 같다).
                 .clipped()
         }
     }
@@ -741,18 +868,19 @@ private struct GomokuHeader: View {
             Spacer(minLength: 12)
             HStack(spacing: 5) {
                 Image(systemName: "flag.checkered")
-                Text(GomokuText.record(store.record)).monospacedDigit()
+                Text(recordLine).monospacedDigit()
             }
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 10)
             .frame(height: 30)
             .background(Capsule().fill(Color.white.opacity(0.06)))
             .overlay(Capsule().stroke(CheckTheme.border, lineWidth: 1))
-            .checkTooltip("내 오목 전적")
+            .checkTooltip(GomokuText.rankHelp)
             RubyBalanceChip(balance: store.rubyBalance, large: true)
                 .checkTooltip("내 루비")
             // 로비에서만 선다 — 대국·결과 화면의 머리글은 1:1 그대로다(판 중에 새 판을 열 길을 두지 않는다).
-            if store.phase == .lobby {
+            // 관전 중에도 숨긴다(0.3.31) — AI 판이 서면 관전이 내려가는데, 보고 있던 판을 버튼 하나로 잃게 두지 않는다.
+            if store.phase == .lobby, store.spectating == nil {
                 GomokuActionButton(title: GomokuText.aiButton, icon: "cpu", style: .outline, height: 30,
                                    isEnabled: store.canStartAIMatch, action: onAIMatch)
                     .checkTooltip(GomokuText.aiButtonHelp)
@@ -762,6 +890,16 @@ private struct GomokuHeader: View {
             }
             .checkTooltip("렌주 규칙과 금수 예시를 봐요")
         }
+    }
+
+    /// 전적 캡슐 글자 — **한 출처**(C16). 순위 응답의 `me` 가 로비 전적과 같을 때만(`myRankConsistentWithRecord`) 전적·순위·승점을
+    /// 전부 그 값으로 그린다. 순위가 아직·실패·어긋나면 종전대로 로비 전적만 — 두 출처를 섞으면 "8승 3패 · 승점 +4" 같은
+    /// 자기모순 문장이 뜬다. 0판(순위 밖)이면 전적만.
+    private var recordLine: String {
+        guard let mine = store.myRankConsistentWithRecord else { return GomokuText.record(store.record) }
+        let record = GomokuText.record(wins: mine.wins, losses: mine.losses, draws: mine.draws)
+        guard let rank = mine.rank else { return record }
+        return "\(record) · \(GomokuText.myRank(rank: rank, points: mine.points))"
     }
 }
 
@@ -1382,22 +1520,8 @@ private struct GomokuMatchSide: View {
         }
     }
 
-    private var stakeChip: some View {
-        HStack(spacing: 6) {
-            Text(GomokuText.stakeTitle)
-                .foregroundStyle(CheckTheme.secondaryText)
-            RubyIcon(size: 16)
-            Text(GomokuText.stakeLine(match.stake))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .font(.callout.weight(.semibold))
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
-    }
+    /// 판돈 칩 — 관전 화면과 **같은 뷰**(`GomokuStakeChip`)다(0.3.31). 모양을 두 벌 두면 한쪽이 언젠가 갈린다.
+    private var stakeChip: some View { GomokuStakeChip(stake: match.stake) }
 
     /// AI 판의 판돈 칩 자리 — 걸린 루비가 없다는 것을 같은 모양의 칩으로 말한다.
     private var aiChip: some View {
@@ -1506,6 +1630,9 @@ private struct GomokuPlayerCard: View {
     /// AI 상대 카드(docs/plan/gomoku-ai.md §5) — 캐릭터 대신 `cpu` 기호, 차례 링 대신 "생각 중". **맨 끝 · 기본값** 이라
     /// 1:1 호출부는 그대로다.
     var isAI: Bool = false
+    /// 관전 카드(0.3.31)의 차례 마감. 있으면 링이 스토어의 내 판 마감(`remainingSeconds`) 대신 **이 시각**을 센다 —
+    /// 관전 중 `store.match` 는 nil 이라 스토어 링은 0초에 빨갛게 선다. 대국 호출부는 nil(기본값)이라 그대로다.
+    var deadline: Date? = nil
 
     static let portraitSize: CGFloat = 60
     static let nameColumnWidth: CGFloat = 132
@@ -1559,6 +1686,8 @@ private struct GomokuPlayerCard: View {
                     // AI 차례에는 시계가 없다(마감이 없어 링이 0초로 빨갛게 선다) — "생각 중" 표시가 그 자리에 선다.
                     if isAI {
                         GomokuAIThinkingMark()
+                    } else if let deadline {
+                        GomokuWatchClock(deadline: deadline, isLive: store.isWindowVisible)
                     } else {
                         GomokuTurnClock(store: store)
                     }
@@ -1698,23 +1827,37 @@ struct GomokuTurnClock: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 0.2, paused: !store.isWindowVisible)) { context in
             let remaining = store.remainingSeconds(now: context.date) ?? 0
-            let fraction = min(1, max(0, remaining / GomokuText.turnSeconds))
-            let tint = remaining <= 5 ? CheckTheme.danger : (remaining <= 10 ? CheckTheme.pending : CheckTheme.working)
-            ZStack {
-                Circle().stroke(Color.white.opacity(0.10), lineWidth: 5)
-                Circle()
-                    .trim(from: 0, to: fraction)
-                    .stroke(tint, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                Text(GomokuText.remaining(remaining))
-                    .font(.caption.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundStyle(tint)
-            }
-            .padding(3)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(GomokuText.clockAccessibility(remaining))
+            GomokuClockRing(remaining: remaining)
         }
+    }
+}
+
+/// 링 그림 한 장(남은 초 → 호 + 숫자 + 보이스오버). 대국 링(`GomokuTurnClock`)과 관전 링(`GomokuWatchClock`)이 **같은 그림**을
+/// 쓴다(0.3.31) — 초를 읽는 일은 두 잎 뷰가 하고, 이 뷰는 받은 숫자만 그린다(시계를 읽지 않는다).
+struct GomokuClockRing: View {
+    let remaining: Double
+    /// 0초에 쓸 색. 대국 링은 nil(≤5초 빨강 그대로 — 내 시간이 다 됐다는 신호가 맞다). 관전 링은 `CheckTheme.pending` — 마감이 지난 남의 판은
+    /// 자동 착수 **대기**지 패배가 아닌데, 빨간 0초는 색만으로 "졌다"로 읽혔다(2026-09-30 반증: 상태 상자는 주황 "곧 자동으로 놓여요"였다).
+    var overdueTint: Color? = nil
+
+    var body: some View {
+        let fraction = min(1, max(0, remaining / GomokuText.turnSeconds))
+        let tint = (remaining <= 0 ? overdueTint : nil)
+            ?? (remaining <= 5 ? CheckTheme.danger : (remaining <= 10 ? CheckTheme.pending : CheckTheme.working))
+        ZStack {
+            Circle().stroke(Color.white.opacity(0.10), lineWidth: 5)
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(tint, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Text(GomokuText.remaining(remaining))
+                .font(.caption.weight(.bold))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+        }
+        .padding(3)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(GomokuText.clockAccessibility(remaining))
     }
 }
 
@@ -2269,7 +2412,12 @@ private struct GomokuLiveMatchColumn: View {
     private var cards: some View {
         VStack(spacing: 8) {
             ForEach(store.liveMatches) { live in
-                GomokuLiveMatchCard(live: live, isLive: store.isWindowVisible)
+                // [관전](0.3.31): 내 판이면 칩 대신 "내 판" 캡션. 서버에 관전이 아직 없으면(`rankingUnavailable` — 같은 마이그레이션) 칩을 잠근다.
+                GomokuLiveMatchCard(
+                    live: live, isLive: store.isWindowVisible,
+                    isMine: store.isMine(live), canWatch: !store.rankingUnavailable,
+                    onWatch: { store.startWatching(matchID: live.id) }
+                )
             }
         }
     }
@@ -2278,6 +2426,12 @@ private struct GomokuLiveMatchColumn: View {
 private struct GomokuLiveMatchCard: View {
     let live: GomokuLiveMatch
     let isLive: Bool
+    /// 내 판인가 — [관전] 대신 "내 판" 캡션(로비에 잠깐 보이는 틈만 해당). **맨 끝 · 기본값** 이라 기존 호출부는 그대로다.
+    var isMine: Bool = false
+    /// [관전] 칩을 누를 수 있는가(서버에 관전이 열렸는가). 잠기면 흐리게 서 있다.
+    var canWatch: Bool = true
+    /// [관전] 칩. nil 이면 칩이 없다(관전을 모르는 호출부).
+    var onWatch: (() -> Void)? = nil
 
     /// 이름 앞 얼굴. 센터 배지가 설 자리를 만드는 것이 이 아바타의 목적이다 — 이름만 있는 카드에는
     /// 배지를 얹을 모서리가 없다(배지 자리는 언제나 얼굴 모서리다 — CheckAvatarView).
@@ -2298,12 +2452,26 @@ private struct GomokuLiveMatchCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // 첫째 줄 높이는 얼굴 18 이다 — [관전] 칩도 **18**(`liveWatchChipHeight`)이라 카드가 53 을 유지한다(C18: 20 이면 55 로 자란다).
             HStack(spacing: 4) {
                 face(live.a)
                 Text("vs")
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
                 face(live.b)
+                Spacer(minLength: 4)
+                if isMine {
+                    Text(GomokuText.myMatch)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(CheckTheme.accent)
+                        .padding(.horizontal, 6)
+                        .frame(height: GomokuWindowLayout.liveWatchChipHeight)
+                        .background(Capsule().fill(CheckTheme.accent.opacity(0.18)))
+                } else if let onWatch {
+                    GomokuActionButton(title: GomokuText.watch, icon: "eye", style: .outline,
+                                       height: GomokuWindowLayout.liveWatchChipHeight, isEnabled: canWatch, action: onWatch)
+                        .checkTooltip(canWatch ? GomokuText.watchHelp : GomokuNoticeText.watchUnavailable)
+                }
             }
             HStack(spacing: 5) {
                 RubyIcon(size: 11)
@@ -2334,6 +2502,553 @@ struct GomokuElapsedText: View {
                 .monospacedDigit()
                 .foregroundStyle(CheckTheme.secondaryText)
         }
+    }
+}
+
+// MARK: - 로비 가운데 열: 순위표 (0.3.31)
+
+/// 로비 가운데 열(340pt) — 승점(승 − 패) 순위표. **행 순서는 스토어(= 서버) 그대로**다, 여기서 다시 정렬하지 않는다
+/// (재정렬하면 서버·앱 두 규칙이 갈려 같은 목록이 화면마다 다른 순서가 된다 — `GomokuLiveMatchColumn` 과 같은 규약).
+///
+/// 네 상태: 준비 중(서버에 아직 없다 — "곧 열려요") · 불러오는 중 · 실패([다시 불러오기]) · 목록(비면 "아직 전적이 없어요").
+/// 목록은 `rankVisibleRows`(14)행까지 스크롤 없이 서고 그 뒤는 ScrollView 다 — 스냅샷은 클립 갈래(ImageRenderer 는 ScrollView 안을
+/// 못 그린다), 두 갈래가 같은 끝(위)을 그린다. **`minHeight: 0` 을 빠뜨리지 마라** — 없으면 행들의 자연 높이가 카드를 608pt 본문 밖으로
+/// 밀어낸다(상대 목록·채팅 로그가 겪은 그것). 실패는 안내줄이 아니라 이 열 안에서만 말한다(순위 실패는 notice 로 새지 않는다).
+private struct GomokuRankColumn: View {
+    let store: GomokuStore
+    /// 스냅샷 전용(부모의 `clipsOverflowInsteadOfScroll`): 행을 ScrollView 대신 클립으로 그린다. 앱은 false.
+    let clipsOverflowInsteadOfScroll: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: GomokuWindowLayout.rankHeaderSpacing) {
+            header
+                .frame(height: GomokuWindowLayout.rankHeaderHeight)
+            content
+        }
+        // 크롬 전에 열 폭·높이로 편다(대결 칸이 겪은 '좁은 막대' — 빈 상태 갈래에서 카드가 글자 폭만 감싼다).
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .gomokuCard()
+    }
+
+    /// 캡션: 정렬 기준 + (컷이 있으면) "M월 d일부터". 컷은 서버 순간 그대로의 달력 값이다.
+    private var caption: String {
+        guard let since = store.ranking?.recordSince else { return GomokuText.rankCaption }
+        return "\(GomokuText.rankCaption) · \(GomokuText.rankSince(since))"
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(GomokuText.rankTitle).font(.headline)
+            Spacer(minLength: 4)
+            Text(caption)
+                .font(.caption2)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if store.rankingUnavailable {
+            centered(GomokuText.rankingUnavailable, icon: "clock")
+        } else if let ranking = store.ranking {
+            if ranking.entries.isEmpty {
+                centered(GomokuText.noRanking, icon: "flag.checkered")
+            } else {
+                VStack(alignment: .leading, spacing: GomokuWindowLayout.rankHeaderSpacing) {
+                    // 전에 받은 목록은 그대로 두고, 지금 목록이 낡았을 수 있다는 것만 알린다(상대 목록과 같은 결).
+                    if store.rankingLoadFailed { failureStrip }
+                    if clipsOverflowInsteadOfScroll {
+                        rows(ranking.entries)
+                            .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
+                            .clipped()
+                    } else {
+                        ScrollView {
+                            rows(ranking.entries)
+                        }
+                        .scrollIndicators(.automatic)
+                        .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
+                    }
+                }
+            }
+        } else if store.rankingLoadFailed {
+            failurePanel
+        } else {
+            centered(GomokuText.rankingLoading, icon: nil)
+        }
+    }
+
+    /// **서버 순서 그대로.** 내 행은 `store.myUserID` 로 고른다(순위 응답의 `me` 와 무관하게 행 자체가 나인가).
+    private func rows(_ entries: [GomokuRankEntry]) -> some View {
+        let mine = store.myUserID
+        return VStack(spacing: GomokuWindowLayout.rankRowSpacing) {
+            ForEach(entries) { entry in
+                GomokuRankRowView(entry: entry, isMe: entry.id == mine)
+                    .frame(height: GomokuWindowLayout.rankRowHeight)
+            }
+        }
+    }
+
+    private func centered(_ text: String, icon: String?) -> some View {
+        VStack(spacing: 8) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(CheckTheme.secondaryText.opacity(0.7))
+            }
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// 순위를 한 번도 못 받았다 — 연결 안내와 [다시 불러오기].
+    private var failurePanel: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(CheckTheme.pending)
+            Text(GomokuText.rankingLoadFailed)
+                .font(.callout)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            reloadButton(height: 32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var failureStrip: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "wifi.exclamationmark")
+                .foregroundStyle(CheckTheme.pending)
+            Text(GomokuText.rankingLoadFailed)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 6)
+            reloadButton(height: 26)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(CheckTheme.pending.opacity(0.12)))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.pending.opacity(0.35), lineWidth: 1))
+    }
+
+    private func reloadButton(height: CGFloat) -> some View {
+        GomokuActionButton(title: GomokuText.reloadRanking, icon: "arrow.clockwise", style: .outline, height: height) {
+            Task { await store.loadRanking() }
+        }
+        .checkTooltip("순위를 다시 불러와요")
+    }
+}
+
+/// 순위 한 줄: 순위 배지 22 · 아바타 22 · 이름(남는 폭 ≈ 133) · 오른쪽 96(위 승점 · 아래 승·패·무 — **둘 다** 그린다, U2).
+/// 내 행은 accent 채움 + 왼쪽 막대('나' 칩 없이 — 20pt 를 이름에 준다).
+///
+/// 아바타를 `isCapable` 로 흐리게 하지 않는다 — 순위 행의 `user` 는 `GomokuStore.user(from:)` 경계에서 근무·가능·대국 중이
+/// 전부 false 라, 그 값으로 흐리면 전원이 흐려진다. `center` 는 이미 화면 글자다("서울").
+private struct GomokuRankRowView: View {
+    let entry: GomokuRankEntry
+    let isMe: Bool
+
+    static let badgeSize: CGFloat = 22
+    static let avatarSize: CGFloat = 22
+
+    /// 1~3위 메달색. **노란 상자 판정(R≥240·G≥195·B≤40)에 걸리지 않는 값**이어야 렌더 검증이 이 자리를 눈이 멀었다고 보지 않는다 —
+    /// 금색의 G 를 195 아래, B 를 40 위에 둔다.
+    private var badgeTint: Color {
+        switch entry.rank {
+        case 1: return Color(red: 0.96, green: 0.74, blue: 0.34)
+        case 2: return Color(red: 0.78, green: 0.80, blue: 0.86)
+        case 3: return Color(red: 0.82, green: 0.56, blue: 0.38)
+        default: return CheckTheme.secondaryText
+        }
+    }
+
+    private var pointsTint: Color {
+        if entry.points > 0 { return CheckTheme.working }
+        if entry.points < 0 { return CheckTheme.pending }
+        return CheckTheme.secondaryText
+    }
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Text("\(entry.rank)")
+                .font(.caption2.weight(.bold))
+                .monospacedDigit()
+                .foregroundStyle(entry.rank <= 3 ? Color.black.opacity(0.78) : badgeTint)
+                .frame(width: Self.badgeSize, height: Self.badgeSize)
+                .background(Circle().fill(entry.rank <= 3 ? badgeTint : Color.white.opacity(0.06)))
+            CheckAvatarView(name: entry.user.displayName, userID: entry.user.id, avatarURL: entry.user.avatarURL.flatMap(URL.init(string:)),
+                            size: Self.avatarSize, center: entry.user.center, characterHint: entry.user.characterID)
+            Text(entry.user.displayName)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 7)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(GomokuText.signedPoints(entry.points))
+                    .font(.caption.weight(.bold))
+                    .monospacedDigit()
+                    .foregroundStyle(pointsTint)
+                Text(GomokuText.record(wins: entry.wins, losses: entry.losses, draws: entry.draws))
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(width: GomokuWindowLayout.rankTrailingWidth, alignment: .trailing)
+        }
+        .padding(.leading, 5)
+        .padding(.trailing, 9)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isMe ? CheckTheme.accent.opacity(0.18) : Color.white.opacity(0.04))
+        )
+        // 테두리는 내 행도 중성(흰 14%)이다 — 렌더 검증이 상자를 세는 획이라 색을 바꾸면 내 행만 안 세어진다. 나는 채움과 왼쪽 막대로 말한다.
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+        .overlay(alignment: .leading) {
+            if isMe {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(CheckTheme.accent)
+                    .frame(width: 3)
+                    .padding(.vertical, 7)
+            }
+        }
+        // 보이스오버: 한 줄이 한 문장("3 민수 +4 6승 2패 1무").
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - 관전 (0.3.31)
+
+/// 관전 오른쪽 열(572pt). 위에서부터 흑 카드 84 · 백 카드 84 · [판돈 칩 176 | 상태 상자] 44 · **남는 자리 322**(받은 신청 카드 ·
+/// 보낸 신청 [취소] · 안내줄이 먼저, 관전 안내 카드가 나머지) · [나가기] 34. 항등식은 `GomokuWindowLayout.spectateInfoHeight`.
+///
+/// **첫 응답 전에는 색을 모른다(C15).** 로비 카드의 a/b 는 uuid 순서라 흑/백이 아니다 — `hasServerState` 전에는 얼굴 카드만
+/// (돌 색 배지·차례 링 없이) 그리고, 색은 서버 `black`/`white` 로만 확정한다. 씨앗이 없는 판(목록에서 이미 빠진 판을 눌렀다)은 빈 얼굴 카드다.
+/// **받은 신청·보낸 신청·안내줄은 관전 중에도 산다(C12).** 이 열이 로비 오른쪽 열을 덮으므로, 여기 없으면 60초 동안 신청을 거둘 길이 없다.
+/// 수락하면 `applyState` → `match` 대입 → 관전이 내려가고 대국으로 간다.
+/// 채팅 카드는 없다 — 관전은 판만이다(서버 응답에 채팅 키 자체가 없다).
+private struct GomokuSpectateSide: View {
+    let store: GomokuStore
+    let watch: GomokuSpectateState
+
+    /// 관전 쪽 받은 신청 카드 상한 — **보낸 신청 줄이 있으면 1, 없으면 로비와 같은 2**. 세로 예산(`spectateInfoHeight` 322)이 로비보다 좁아서
+    /// 2장 + 보낸 줄 + 안내줄(≈370)이면 [취소]가 잘려 보낸 신청을 못 거둔다(C12 가 막으려던 바로 그것); 보낸 줄이 없으면 2장 + 안내줄(≈310)이 든다.
+    /// 상수 1 로 두었더니 보낸 신청이 없을 때도 둘째 신청의 60초가 "외 1건" 뒤에서 거둘 길 없이 흘렀다(2026-09-30 반증, 스냅숏 spectate-crowded).
+    /// 나머지는 "외 N건" — 전부 보려면 [나가기] 한 번이다.
+    private var maxIncomingCards: Int { store.outgoing == nil ? 2 : 1 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: GomokuWindowLayout.matchSideSpacing) {
+            playerSlot(.black, index: 0)
+                .frame(height: GomokuWindowLayout.playerCardHeight)
+            playerSlot(.white, index: 1)
+                .frame(height: GomokuWindowLayout.playerCardHeight)
+
+            // 판돈 칩 | 상태 상자 — 한 줄. 경고 줄(자동 착수 한 번 남음)이 붙으면 이 줄만 아래로 자란다(대국 화면과 같다).
+            HStack(alignment: .top, spacing: GomokuWindowLayout.matchSideSpacing) {
+                GomokuStakeChip(stake: watch.stake)
+                    .frame(width: GomokuWindowLayout.stakeChipWidth)
+                GomokuWatchStatusBox(watch: watch, lossStreak: store.autoAbandonStreak, isLive: store.isWindowVisible)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+
+            // 남는 높이. 신청·안내가 **먼저**(내용만큼), 관전 안내 카드가 나머지(minHeight 0) — 순서가 뒤집히면 [취소]가 잘린다.
+            VStack(alignment: .leading, spacing: GomokuWindowLayout.matchSideSpacing) {
+                if let notice = store.notice {
+                    GomokuNoticeLine(text: notice)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if !store.visibleIncoming.isEmpty || store.outgoing != nil {
+                    invites
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                GomokuWatchInfoCard(watch: watch, isLive: store.isWindowVisible)
+                    .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                    // 자기 프레임 안에서만 그린다 — 신청 카드 두 장 + 안내줄이면 이 카드의 자리가 0 인데, 프레임은 0 이어도 본문은 제 크기로
+                    // 그려져 위로 넘쳐 "외 N건" 줄을 덮었다(2026-09-30 스냅숏 spectate-crowded-free). 자리가 모자라면 윗부분만 보이고 없으면 안 보인다.
+                    .clipped()
+            }
+            .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
+            .clipped()
+
+            // [나가기]는 `leaveWatch`(관전 해제 + 로비·받은함·순위 재조회)다. `stopWatching` 을 물리면 돌아온 로비가 낡은 목록이고,
+            // 관전 중 막아 둔 받은함의 끝난 내 판 결과도 영영 안 선다.
+            GomokuActionButton(title: GomokuText.leaveWatch, icon: "arrow.uturn.backward", style: .outline,
+                               height: GomokuWindowLayout.spectateLeaveHeight, fullWidth: true) {
+                store.leaveWatch()
+            }
+            .focusable(false)
+            .checkTooltip(GomokuText.leaveWatchHelp)
+        }
+    }
+
+    /// 카드 한 자리. 서버가 색을 말한 뒤에는 대국 화면과 같은 카드(차례 링은 관전 마감을 센다), 그 전에는 얼굴만.
+    @ViewBuilder
+    private func playerSlot(_ color: GomokuColor, index: Int) -> some View {
+        if watch.hasServerState, let user = color == .black ? watch.black : watch.white {
+            GomokuPlayerCard(store: store, face: .of(user), color: color,
+                             isTurn: !watch.isFinished && watch.turn == color, isMe: false,
+                             bubble: nil, bubbleNow: nil, deadline: watch.deadline)
+        } else {
+            let face = watch.faces.indices.contains(index) ? GomokuPlayerFace.of(watch.faces[index]) : nil
+            GomokuSpectateFaceCard(face: face, caption: index == 0 ? GomokuText.watchLoading : nil)
+        }
+    }
+
+    /// 로비 오른쪽 열의 받은·보낸 신청 칸과 **같은 부품**(`GomokuInviteCard` · `GomokuOutgoingLine`)이다 — 수락·거절·취소 문이 두 벌이 되지 않는다.
+    private var invites: some View {
+        let incoming = store.visibleIncoming
+        return VStack(alignment: .leading, spacing: 8) {
+            if !incoming.isEmpty {
+                Text(GomokuText.incomingTitle).font(.subheadline.weight(.bold))
+                ForEach(incoming.prefix(maxIncomingCards)) { invite in
+                    GomokuInviteCard(store: store, invite: invite)
+                }
+                if incoming.count > maxIncomingCards {
+                    Text(GomokuText.more(incoming.count - maxIncomingCards))
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                }
+            }
+            if let outgoing = store.outgoing {
+                if !incoming.isEmpty { Divider().overlay(CheckTheme.border) }
+                GomokuOutgoingLine(store: store, invite: outgoing)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .gomokuCard(padding: 12)
+    }
+}
+
+/// 첫 응답 전의 얼굴 카드(C15) — 돌 색 배지도 차례 링도 없다(흑·백은 서버만 안다). 얼굴이 없으면(씨앗 없음) 빈 초상 자리.
+/// 높이는 부모가 못 박는다(`playerCardHeight`) — 응답이 오면 같은 자리에 `GomokuPlayerCard` 가 선다.
+private struct GomokuSpectateFaceCard: View {
+    let face: GomokuPlayerFace?
+    /// 초상 옆 둘째 줄(첫 카드에만 "판을 불러오고 있어요").
+    let caption: String?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Group {
+                if let face {
+                    CharacterPortrait(characterID: face.characterID)
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: GomokuPlayerCard.portraitSize, height: GomokuPlayerCard.portraitSize)
+            .overlay(alignment: .bottomTrailing) {
+                if let center = face?.center { CenterCornerBadge(label: center, avatarSize: GomokuPlayerCard.portraitSize) }
+            }
+            .padding(4)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.06)))
+            VStack(alignment: .leading, spacing: 6) {
+                Text(face?.name ?? "—")
+                    .font(.callout.weight(.bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if let caption {
+                    Text(caption)
+                        .font(.caption)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(1)
+                }
+            }
+            .frame(width: GomokuPlayerCard.nameColumnWidth, alignment: .leading)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(CheckTheme.panel.opacity(0.9)))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+    }
+}
+
+/// 관전 상태 상자의 문구 판정(순수 — 결정적 검증 지점). 시각은 **잎 뷰가 TimelineView 의 `context.date` 로 넘긴다**(C19) —
+/// 창 루트나 이 열의 본문이 `Date()` 를 읽으면 5Hz 로 창 전체가 다시 그려지고, 스토어 값에 기대면 마감이 지나도 문구가 영영 안 바뀐다
+/// (관전자의 2초 폴은 같은 상태를 받아 "값이 바뀔 때만 대입"에 걸린다).
+///
+/// **마감이 지나도 "졌다"가 아니다.** 따라잡기(자동 착수)는 대국자 조회·매분 정리가 하고 관전자는 아무것도 쓰지 못한다 — 화면은
+/// "곧 자동으로 놓여요"만 말하고 결과는 서버가 finished 를 준 뒤에만 말한다.
+enum GomokuWatchStatusRule {
+    enum Kind: Equatable {
+        /// 첫 응답 전(색·차례를 모른다).
+        case loading
+        case turn(GomokuColor)
+        /// 마감이 지났는데 아직 active — 자동 착수 대기.
+        case overdue
+        case ended
+    }
+
+    static func kind(for watch: GomokuSpectateState, now: Date) -> Kind {
+        if watch.isFinished { return .ended }
+        guard watch.hasServerState, let turn = watch.turn else { return .loading }
+        if let deadline = watch.deadline, deadline <= now { return .overdue }
+        return .turn(turn)
+    }
+
+    static func text(for watch: GomokuSpectateState, now: Date) -> String {
+        switch kind(for: watch, now: now) {
+        case .loading: return GomokuText.watchLoading
+        case .turn(let color): return GomokuText.watchTurn(color)
+        case .overdue: return GomokuText.watchAutoPending
+        case .ended: return GomokuText.watchEnded(winnerName: winnerName(of: watch), reason: watch.endReason)
+        }
+    }
+
+    /// 이긴 사람의 이름. 이긴 색은 있는데 사람 행이 없으면(프로필 삭제 등) 색 이름으로 — 무승부로 읽히면 안 된다.
+    static func winnerName(of watch: GomokuSpectateState) -> String? {
+        switch watch.winner {
+        case .black?: return watch.black?.displayName ?? "흑"
+        case .white?: return watch.white?.displayName ?? "백"
+        case nil: return nil
+        }
+    }
+
+    /// 자동 착수 연속이 **한 번 남은** 사람의 경고(끝난 판·첫 응답 전에는 없다). 둘 다면 흑부터 — 한 줄만 둔다.
+    static func streakWarning(for watch: GomokuSpectateState, lossStreak: Int) -> String? {
+        guard !watch.isFinished, watch.hasServerState else { return nil }
+        if watch.blackAutoStreak == lossStreak - 1, let name = watch.black?.displayName {
+            return GomokuText.watchStreakWarning(name: name)
+        }
+        if watch.whiteAutoStreak == lossStreak - 1, let name = watch.white?.displayName {
+            return GomokuText.watchStreakWarning(name: name)
+        }
+        return nil
+    }
+}
+
+/// 관전 상태 상자 — **잎 뷰**(TimelineView 1초). 문구·색을 `context.date` 로 고른다(`GomokuWatchStatusRule`). 마감이 있는 진행 중 판에서만
+/// 초를 센다 — 끝난 판·첫 응답 전에는 시각이 문구를 바꾸지 않으므로 멈춘다. 창이 안 보이면 멈춘다(`isLive`).
+private struct GomokuWatchStatusBox: View {
+    let watch: GomokuSpectateState
+    /// 자동 착수 패배 임계(스토어 `autoAbandonStreak`) — 경고는 임계 − 1 에서만 뜬다.
+    let lossStreak: Int
+    let isLive: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1, paused: !isLive || watch.isFinished || watch.deadline == nil)) { context in
+            let kind = GomokuWatchStatusRule.kind(for: watch, now: context.date)
+            let tint = Self.tint(kind)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(GomokuWatchStatusRule.text(for: watch, now: context.date))
+                    .font(.headline)
+                    .foregroundStyle(tint)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let warning = GomokuWatchStatusRule.streakWarning(for: watch, lossStreak: lossStreak) {
+                    Text(warning)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(CheckTheme.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: GomokuWindowLayout.spectateStatusMinHeight, alignment: .leading)
+            // 보이스오버: 상태 상자는 한 문장으로 읽힌다(대국 상태줄과 같다).
+            .accessibilityElement(children: .combine)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tint.opacity(0.10)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(tint.opacity(0.35), lineWidth: 1))
+        }
+    }
+
+    /// 진행 중은 초록(대국의 "내 차례"와 같은 결), 마감 지남은 주황(대기), 끝은 청회색, 모름은 회색.
+    private static func tint(_ kind: GomokuWatchStatusRule.Kind) -> Color {
+        switch kind {
+        case .loading: return CheckTheme.secondaryText
+        case .turn: return CheckTheme.working
+        case .overdue: return CheckTheme.pending
+        case .ended: return CheckTheme.offWork
+        }
+    }
+}
+
+/// 관전 안내 카드(남는 자리). "관전 중" · 수 · 경과 · 대국자 채팅은 보이지 않는다는 말 · 자동 착수 개수. 관전자 수는 없다(U4).
+/// 경과는 잎(`GomokuElapsedText`)이 센다. 끝난 판은 경과를 멈춘 채 숨긴다(끝난 뒤 흐르는 시간은 아무 뜻도 없다).
+private struct GomokuWatchInfoCard: View {
+    let watch: GomokuSpectateState
+    let isLive: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "eye")
+                    .foregroundStyle(CheckTheme.accent)
+                Text(GomokuText.watching)
+                    .font(.subheadline.weight(.bold))
+                Spacer(minLength: 4)
+                Text(GomokuText.watchMoves(watch.moveCount))
+                    .font(.caption.weight(.bold))
+                    .monospacedDigit()
+                    .foregroundStyle(CheckTheme.secondaryText)
+                if let startedAt = watch.startedAt, !watch.isFinished {
+                    GomokuElapsedText(startedAt: startedAt, isLive: isLive)
+                }
+            }
+            Text(GomokuText.watchNoChat)
+                .font(.caption)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            // 판 위 회색 점이 말하는 것을 **글자로도**(툴팁은 픽셀을 안 만들고, 관전 판에는 호버 자리도 없다).
+            if !watch.autoPoints.isEmpty {
+                Text(GomokuText.autoPlacedCount(watch.autoPoints.count))
+                    .font(.caption)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .gomokuCard(padding: 12)
+    }
+}
+
+/// 관전 카드의 차례 링 — **잎 뷰**. 마감 시각을 직접 받아 `context.date` 로 센다(스토어의 `remainingSeconds` 는 내 판만 안다 —
+/// 관전 중 `match` 는 nil 이라 그 링은 0초에 빨갛게 선다). 그림은 대국 링과 같은 `GomokuClockRing`.
+/// 마감이 지나면 0초에 멈춰 선다 — 패배가 아니다(상태 상자가 "곧 자동으로 놓여요"라고 말한다). 그래서 0초 색도 상태 상자와 같은 pending 이다 —
+/// 대국 링의 ≤5초 빨강을 그대로 물려받으면 색만으로 패배로 읽힌다.
+struct GomokuWatchClock: View {
+    let deadline: Date
+    let isLive: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.2, paused: !isLive)) { context in
+            GomokuClockRing(remaining: max(0, deadline.timeIntervalSince(context.date)), overdueTint: CheckTheme.pending)
+        }
+    }
+}
+
+/// 판돈 칩(대국·관전 공용, 0.3.31). 이기면 **판돈만큼 더**(순수익) — 결과 카드의 +판돈과 같은 눈금. 판돈을 모르면(관전 첫 응답 전) "—".
+private struct GomokuStakeChip: View {
+    let stake: Int?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(GomokuText.stakeTitle)
+                .foregroundStyle(CheckTheme.secondaryText)
+            RubyIcon(size: 16)
+            Text(stake.map(GomokuText.stakeLine) ?? "—")
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .font(.callout.weight(.semibold))
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
     }
 }
 
@@ -2410,7 +3125,10 @@ struct GomokuRuleExample: Identifiable, Equatable {
         "5목이 되는 수는 금수 모양이 함께 생겨도 흑의 승리예요. 4-3은 금수가 아니에요.",
         "한 수에 30초. 30초를 넘기면 무작위로 놓입니다 · 3번 연속이면 집니다.",
         "흑이 둘 곳이 없으면 차례가 백으로 넘어가고, 판이 가득 차면 무승부예요.",
-        "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고, 무승부면 건 판돈을 돌려받아요."
+        "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고, 무승부면 건 판돈을 돌려받아요.",
+        // 순위(0.3.31). 캡션 '승점 = 승 − 패' 만으로는 (1승 1패 1무) 가 (1승 1패 0무) 앞에 서는 이유를 못 읽는다 — 서버 정렬의
+        // 뒤 두 축(승 desc → 무 desc)을 사용자 말로. **맨 끝에 둔다**: 앞 줄들은 테스트가 번호로 집는다.
+        "순위는 승점(승 − 패)순이에요. 같은 승점이면 더 많이 이긴 쪽, 그다음엔 더 많이 둔 쪽이 위예요."
     ]
 }
 
@@ -2984,8 +3702,8 @@ private struct GomokuActionButton: View {
 }
 
 private extension View {
-    /// 오목 창 카드 크롬.
-    func gomokuCard(padding: CGFloat = 16) -> some View {
+    /// 오목 창 카드 크롬. 기본 여백은 `GomokuWindowLayout.cardPadding` — 순위 열의 행수 산식이 같은 값을 뺀다.
+    func gomokuCard(padding: CGFloat = GomokuWindowLayout.cardPadding) -> some View {
         self
             .padding(padding)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(CheckTheme.panel.opacity(0.85)))

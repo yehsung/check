@@ -451,6 +451,12 @@ final class URLProtocolStub: URLProtocol {
     /// 주간 누적 픽스처의 고정 기준시각(2026-07-14 12:33 KST — 화요일 낮). 주 경계(월요일 00시)에 걸려
     /// 클리핑이 0이 되는 시각 의존을 없애려고, 이 값을 쓰는 테스트는 같은 값을 서비스에 now 로 주입한다.
     static let weeklyFixtureNow = Date(timeIntervalSince1970: 1_784_000_000)
+    /// v0.3.37 리그 주 왕복 픽스처의 시계(2026-09-22 화 10:00 KST — 그 주 월요일은 09-21). host 에 `leagueFixedClockHostToken` 이
+    /// 들어간 리그 요청은 week_start 를 벽시계가 아니라 이 시각으로 센다. 스토어도 같은 값을 `clock` 으로 주입받아, 요청한 오프셋과
+    /// 서버가 답한 주가 **같은 달력**에서 만난다. 벽시계면 '서버가 답한 주 우선' 규칙이 픽스처 주를 실제 주로 되튕겨 왕복 테스트가
+    /// 쓰인 주에만 초록이었다(2026-09-30 실측: 09-28 월요일부터 빨강).
+    static let leagueWeekFixtureNow = Date(timeIntervalSince1970: 1_790_038_800)
+    static let leagueFixedClockHostToken = "league-fixed-clock"
     /// 팀 픽스처(team-hours-test 와 같은 행)지만 근무 멤버의 생존신호(last_seen_at)가 벽시계가 아니라 **weeklyFixtureNow** 인 호스트.
     /// 이 호스트를 쓰는 테스트는 스토어 시계도 같은 값으로 고정한다(refreshTeamStatusRestoresRemoteOwnSessionStart).
     ///
@@ -532,11 +538,13 @@ final class URLProtocolStub: URLProtocol {
     private static func teamLeaderboardData(for request: URLRequest, body: String) -> Data {
         let host = request.url?.host ?? ""
         let offset = weekOffsetFixture(in: body)
+        // 고정 시각 호스트만 벽시계 대신 leagueWeekFixtureNow 로 주를 센다(위 team-hours-test 의 weeklyFixtureNow 와 같은 관용구).
+        let now = host.contains(leagueFixedClockHostToken) ? leagueWeekFixtureNow : Date()
         // host 에 "league-week-slips" 가 들어가면 **물은 주와 다른 주**로 답한다 — 조회가 날아가 있는 사이 월요일
         // 0시를 넘겨 서버가 센 '이번 주'가 클라가 센 주와 어긋난 모양이다. 클라는 서버가 답한 주를 따라야 하고,
         // 그때 진행중 표시가 남지 않아야 한다(주 키를 바꾸면 defer 의 가드가 더는 맞지 않는다).
         if host.contains("league-week-slips") {
-            let answered = TeamLeagueWeekNavigator.key(offset: offset + 1)
+            let answered = TeamLeagueWeekNavigator.key(offset: offset + 1, now: now)
             return Data(
                 """
                 [
@@ -557,7 +565,7 @@ final class URLProtocolStub: URLProtocol {
                     """.utf8
                 )
             }
-            let thisWeek = TeamLeagueWeekNavigator.currentKey()
+            let thisWeek = TeamLeagueWeekNavigator.currentKey(now)
             return Data(
                 """
                 [
@@ -568,7 +576,7 @@ final class URLProtocolStub: URLProtocol {
                 """.utf8
             )
         }
-        let weekStart = TeamLeagueWeekNavigator.key(offset: offset)
+        let weekStart = TeamLeagueWeekNavigator.key(offset: offset, now: now)
         // 과거 주: working_count 는 서버가 0 으로 내린다(계약). 총합도 주마다 달라야 '주를 바꿨다'가 실제로 보인다.
         let total = 36000 + offset * 1000
         return Data(

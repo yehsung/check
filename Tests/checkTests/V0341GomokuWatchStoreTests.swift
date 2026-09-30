@@ -551,11 +551,46 @@ func 창이_안_보이면_관전_요청이_없고_상태는_남으며_다시_보
     #expect(count(host, "gomoku_state") == 0)
 }
 
+/// 창을 **정말 닫으면** 진행 중인 관전도 내려간다 — 최소화는 아니다.
+///
+/// 없으면: `windowDidHide` 가 최소화와 닫기 둘 다에서 오므로 어느 한쪽이 늘 틀린다. 진행 중 관전을 거기서 내리면
+/// **최소화만 해도** 남의 판이 로비로 떨어지고, 남기면 **닫고 다시 열었을 때** 로비가 아니라 남의 진행 중인 판이 선다.
+/// 두 문을 갈라 둔 것이 이 테스트가 지키는 계약이다(2026-10-01 — 모바일 세션이 폰에서 같은 증상을 잡아 넘겨 줬고,
+/// 폰에서는 탭을 옮기는 것이 '닫기'라 바로 보였다). 요청은 어느 쪽도 쏘지 않는다.
+@MainActor
+@Test
+func 진행_중인_관전은_창을_치우면_남고_닫으면_내려간다() async throws {
+    let (_, gomoku, host) = makeWatchStore("close-vs-hide") { rpc, _, _ in
+        rpc == "gomoku_watch" ? reply(watchPayload()) : baseReply(rpc)
+    }
+    gomoku.applyLobby(decode(GomokuLobbyResponse.self, lobbyPayload()))
+    gomoku.startWatching(matchID: watchedID)
+    gomoku.windowDidShow()
+    await watchWait { gomoku.spectating?.hasServerState == true }
+    let requests = count(host, "gomoku_watch")
+
+    // 최소화: 남는다.
+    gomoku.windowDidHide()
+    #expect(gomoku.spectating != nil, "최소화가 진행 중인 관전을 내렸다 — 되살리면 로비로 떨어진다")
+
+    // 닫기: 내려간다. 조용히(요청 없이).
+    gomoku.windowDidClose()
+    #expect(gomoku.spectating == nil, "창을 닫았는데 진행 중인 관전이 남았다 — 다음에 열면 로비가 아니라 남의 판이 선다")
+    #expect(gomoku.phase == .lobby)
+    #expect(count(host, "gomoku_watch") == requests, "창 닫기가 관전 요청을 냈다")
+
+    // 관전이 없으면 닫기는 아무 일도 안 한다(멱등 · 로그아웃 경로가 두 번 불러도 안전하다).
+    gomoku.windowDidClose()
+    #expect(gomoku.spectating == nil && count(host, "gomoku_watch") == requests)
+}
+
 @MainActor
 @Test(.gomokuDefaultsCleanup)
-func 끝난_판을_관전한_채_창을_닫으면_관전이_내려가고_진행_중이면_남는다() async throws {
-    // 없으면: 끝난 판(isFinished — 재조회가 없다)을 본 채 빨간 점으로 닫으면 그 화면이 무기한 남아, 한 시간 뒤 창을 열어도 로비가 아니라 남의 끝난 판이 서고
-    //        [나가기]를 눌러야만 로비다(2026-09-30 반증). 내 판 결과는 같은 자리(windowDidHide → leaveMatch)에서 닫기 = 나가기인데 관전만 비대칭이었다.
+func 끝난_판을_관전한_채_창을_치우면_관전이_내려가고_진행_중이면_남는다() async throws {
+    // 없으면: 끝난 판(isFinished — 재조회가 없다)을 본 채 창을 치우면 그 화면이 무기한 남아, 한 시간 뒤 창을 열어도 로비가 아니라 남의 끝난 판이 서고
+    //        [나가기]를 눌러야만 로비다(2026-09-30 반증). 내 판 결과는 같은 자리(windowDidHide → leaveMatch)에 있다.
+    // ★ 이 문(windowDidHide)을 부르는 것은 **최소화·가려짐·프로그램 숨기기**다. 빨간 점 닫기는 `windowDidClose` 이고
+    //   그건 **진행 중 관전까지** 내린다 — 짝은 아래 `진행_중인_관전은_창을_치우면_남고_닫으면_내려간다`.
     let (_, gomoku, host) = makeWatchStore("hide-finished") { rpc, _, index in
         guard rpc == "gomoku_watch" else { return baseReply(rpc) }
         return index == 0 ? reply(watchPayload()) : reply(watchPayload(status: "finished", moves: fourMoves, result: "black_win", endReason: "five"))
@@ -568,23 +603,23 @@ func 끝난_판을_관전한_채_창을_닫으면_관전이_내려가고_진행_
     gomoku.windowDidShow()
     await watchWait { gomoku.spectating?.hasServerState == true }
 
-    // 진행 중: 닫아도 남는다(C14).
+    // 진행 중: 치워도 남는다(C14 — 최소화는 '그만 본다'가 아니다).
     gomoku.windowDidHide()
-    #expect(gomoku.spectating != nil && gomoku.spectating?.isFinished == false, "진행 중인 관전이 창 닫기에 지워졌다(C14)")
+    #expect(gomoku.spectating != nil && gomoku.spectating?.isFinished == false, "진행 중인 관전이 최소화에 지워졌다(C14) — 최소화만 해도 남의 판이 로비로 떨어진다")
     clock.now = t0.addingTimeInterval(5)
     gomoku.windowDidShow()
     await watchWait { gomoku.spectating?.isFinished == true }
     let requests = count(host, "gomoku_watch")
     #expect(requests == 2)
 
-    // 끝남: 닫으면 내려간다 — 요청 없이(조용한 stopWatching).
+    // 끝남: 치우면 내려간다 — 요청 없이(조용한 stopWatching).
     gomoku.windowDidHide()
-    #expect(gomoku.spectating == nil, "끝난 판을 관전한 채 창을 닫았는데 관전이 남았다 — 다음에 창을 열면 낡은 남의 판이 선다")
+    #expect(gomoku.spectating == nil, "끝난 판을 관전한 채 창을 치웠는데 관전이 남았다 — 다음에 창을 열면 낡은 남의 판이 선다")
     clock.now = t0.addingTimeInterval(3_700)
     gomoku.windowDidShow()
     try? await Task.sleep(for: .milliseconds(150))
     #expect(gomoku.spectating == nil && gomoku.phase == .lobby, "한 시간 뒤 연 창이 로비가 아니다")
-    #expect(count(host, "gomoku_watch") == requests, "창 닫기가 관전 요청을 냈다")
+    #expect(count(host, "gomoku_watch") == requests, "창을 치우는 것이 관전 요청을 냈다")
     #expect(count(host, "gomoku_state") == 0)
 }
 

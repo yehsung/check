@@ -908,6 +908,20 @@ package final class GomokuStore {
         if spectating?.isFinished == true { stopWatching() }
     }
 
+    /// 창을 **정말 닫았다**(빨간 점 · 로그아웃의 프로그램 닫기). 최소화·가려짐은 이 문을 지나지 않는다.
+    ///
+    /// ★ **`windowDidHide` 와 갈라 두는 이유**: 그 통지는 `windowDidMiniaturize` 도 부른다(`CheckGomokuWindow` 배선).
+    ///   그래서 거기서 진행 중인 관전을 내리면 **최소화만 해도 남의 판이 로비로 떨어진다**. 반대로 닫기에서 남기면
+    ///   창을 닫고 다시 열었을 때 로비가 아니라 **남의 진행 중인 판이 서 있다** — 닫기는 "그만 본다"는 뜻이다.
+    ///   한 함수가 두 뜻을 가지고 있어서 둘 중 하나는 늘 틀렸다(2026-10-01 모바일 세션이 폰에서 같은 증상을 잡아
+    ///   넘겨 줬고, 맥은 두 통지가 합쳐져 있어 안 보였을 뿐이다 — 폰은 탭을 옮기는 것이 '닫기'다).
+    /// 관전만 내린다. 요청은 쏘지 않는다(`stopWatching` 은 조용한 쪽이다).
+    /// ※ 내 판의 `leaveMatch`(결과 화면인 채로 닫기)는 예전부터 `windowDidHide` 에 있다 — 최소화에서도 도는
+    ///   같은 비대칭이지만 이번 범위가 아니라 옮기지 않았다.
+    package func windowDidClose() {
+        if spectating != nil { stopWatching() }
+    }
+
     /// 창의 가림 상태가 바뀌었다(다른 창 뒤·다른 Space·잠금 화면). **폴링만** 멈추고 되살린다.
     /// `isWindowVisible` 은 건드리지 않는다 — 가림 통지가 틀려도 보이는 창의 시계가 멈추면 안 된다.
     /// 실시간 신호(handleSignal)는 이 값과 무관하게 계속 받는다.

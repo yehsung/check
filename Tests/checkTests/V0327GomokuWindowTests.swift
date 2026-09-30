@@ -633,6 +633,31 @@ func theGomokuWindowNeverEndsTheMatchOnItsOwn() throws {
             "가림 통지가 '안 보임'으로 번졌다")
 }
 
+/// 닫기와 '안 보임'은 **다른 문**이다 — 합치면 최소화가 관전을 죽이고, 가르지 않으면 닫기가 관전을 남긴다.
+///
+/// 없으면: `notifyClosed()` 를 `notifyVisibility` 안으로 접어 넣어도(또는 `windowDidMiniaturize` 에 더해도) 초록이다.
+/// 그러면 최소화만 해도 남의 판이 로비로 떨어지고, 반대로 `windowWillClose`·`close()` 에서 빼면 창을 닫고 다시 열었을 때
+/// 로비가 아니라 남의 진행 중인 판이 선다. 스토어 쪽 짝은 `진행_중인_관전은_창을_치우면_남고_닫으면_내려간다` 다.
+@Test
+func closingIsItsOwnDoorNotJustInvisibility() throws {
+    let source = gwStripped(try gwSource("CheckGomokuWindow.swift"))
+    let willClose = try #require(gwFunctionBody(source, name: "windowWillClose"))
+    let programmatic = try #require(gwFunctionBody(source, name: "close"))
+    let visibility = try #require(gwFunctionBody(source, name: "notifyVisibility"))
+    let miniaturize = try #require(gwFunctionBody(source, name: "windowDidMiniaturize"))
+    let closed = try #require(gwFunctionBody(source, name: "notifyClosed"))
+
+    #expect(willClose.contains("notifyClosed()"), "빨간 점 닫기가 스토어에 '닫혔다'를 안 알린다 — 관전이 남는다")
+    #expect(programmatic.contains("notifyClosed()"), "프로그램 닫기(로그아웃)가 '닫혔다'를 안 알린다 — orderOut 은 windowWillClose 를 안 보낸다")
+    #expect(closed.contains("store.windowDidClose()"), "notifyClosed 가 스토어 문을 안 부른다")
+    #expect(!visibility.contains("notifyClosed") && !visibility.contains("windowDidClose"),
+            "'안 보임' 통지에 닫기가 섞였다 — windowDidMiniaturize 도 이 문을 지나므로 최소화가 관전을 죽인다")
+    #expect(!miniaturize.contains("notifyClosed") && !miniaturize.contains("windowDidClose"),
+            "최소화가 닫기로 취급된다 — 되살리면 로비로 떨어진다")
+    // 최소화는 '안 보임'만 알린다(폴링만 멈춘다는 기존 규약).
+    #expect(miniaturize.contains("notifyVisibility(false)"))
+}
+
 /// 저장소 안 모든 창의 자동저장 이름이 서로 다르다(겹치면 `setFrameAutosaveName` 이 false 를 돌려주고 자리 저장이 조용히 죽는다).
 @Test
 func everyWindowAutosaveNameIsUnique() throws {

@@ -292,17 +292,29 @@ final class CheckGomokuWindowController: NSObject, NSWindowDelegate {
         windowStorage?.orderOut(nil)
         isOpen = false
         notifyVisibility(false)
+        // 프로그램 닫기(로그아웃·계정 전환)도 닫기다 — `orderOut` 은 `windowWillClose` 를 안 보낸다.
+        notifyClosed()
         dismissSafetySheet()
     }
 
-    /// 사용자가 빨간 점을 눌렀다. 의도를 맞추고 '안 보임'만 알린다 — 기권이 아니다.
+    /// 사용자가 빨간 점을 눌렀다. 의도를 맞추고 '안 보임'과 **'닫혔다'**를 알린다 — 기권이 아니다.
     func windowWillClose(_ notification: Notification) {
         guard (notification.object as AnyObject?) === windowStorage else { return }
         stuckWindowWatchdog?.cancel()
         stuckWindowWatchdog = nil
         isOpen = false
         notifyVisibility(false)
+        notifyClosed()
         dismissSafetySheet()
+    }
+
+    /// 스토어에 **닫혔다**고 알린다 — `notifyVisibility(false)` 와 갈라 둔다.
+    ///
+    /// ★ **이 문을 `notifyVisibility` 안에 넣지 마라.** '안 보임'은 `windowDidMiniaturize` 도 부르므로, 합치면
+    ///   최소화만 해도 관전이 내려가 남의 판을 보다 최소화했다 되살리면 로비로 떨어진다. 닫기는 "그만 본다",
+    ///   최소화는 "잠깐 치운다" — 두 뜻을 한 통지로 합쳐 둔 것이 관전이 닫기 뒤에도 남아 있던 원인이다.
+    private func notifyClosed() {
+        wiring?.store.windowDidClose()
     }
 
     /// 창을 닫으면(코드 · 빨간 점) 이 창에서 연 신고·차단 시트를 걷는다(위 `safety` 주석). 최소화는 닫기가 아니다 — 쓰던 글을 둔다.

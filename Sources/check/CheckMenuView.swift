@@ -980,7 +980,19 @@ struct MenuBarStatusLabel: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            if let mascot = CheckMascotAssets.menuBarImage(for: snapshot) {
+            // ★ **동기화 대기에는 캐릭터를 양보한다.** `symbolName(for:)` 은 `pendingSync` 를 제일 먼저 보고
+            //   느낌표 구름(exclamationmark.icloud.fill)을 돌려주는데, 마스코트가 먼저 이기면 그 심볼이 **죽은 코드**가
+            //   되어 "근무 조작이 서버에 못 올라갔다"를 아이콘이 한 번도 말하지 못한다(`CheckMascotAssets` 의 표정
+            //   판정은 `isWorking` 하나만 본다 — 대기와 무관하다). 글자는 시계를 버리고 "대기" 가 되지만, 글자를
+            //   안 보는 사람에게는 그것뿐이라 기록이 유실될 수 있는 상태가 조용히 지나간다.
+            //   팝오버 캐릭터는 이미 `tint`(CheckTheme.pending)로 이 상태를 말한다 — 눈이 멀어 있던 것은 메뉴바뿐이다.
+            //
+            //   ⚠️ 이 한 줄이 없던 동안 `menuBarLabelStaysInsideItsWidthBudgetAndPendingSyncLooksDifferent` (c) 는
+            //   **환경 사고로 초록**이었다: 테스트에서 `check_check.bundle` 을 못 찾아 초상이 nil 이라 심볼 경로를
+            //   탔던 것이다. Xcode 27 의 `.build/out` 배치가 번들을 `checkTests.xctest/Contents/Resources` 안에
+            //   넣자 초상이 실제로 로드돼 아이콘 띠가 바이트로 같아지며 빨개졌다(2026-09-30). 제품은 처음부터
+            //   그 단언의 뜻을 위반한 채였고, 테스트가 거짓으로 초록이어서 8주 넘게 아무도 못 봤다.
+            if !snapshot.pendingSync, let mascot = CheckMascotAssets.menuBarImage(for: snapshot) {
                 // 이미 18×18pt로 크기를 지정한 이미지라 .resizable()/.frame() 불필요.
                 // MenuBarExtra 라벨이 intrinsic size를 써도 바 높이 안에 온전히 들어간다.
                 // `.id` 가 두 가지를 함께 한다 — body 에서 revision 을 **읽어** 관찰을 등록하고,

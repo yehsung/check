@@ -465,7 +465,9 @@ import Testing
         let avatar = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/MobileComponents.swift")
         #expect(person.contains("@Environment(\\.appUserCharacters) private var characters"))
         #expect(avatar.contains("@Environment(\\.appUserCharacters) private var characters"))
-        #expect(person.contains("AppUserAvatarFace(avatar: characters.avatar(for: userID, photoURL: url)"))
+        // 0.3.41: `PersonAvatar` 는 힌트도 함께 넘긴다(표가 비었을 때 순위·오목 행이 실은 착용값 — 맥과 같은 코어 판정).
+        // `AvatarView` 는 힌트를 들고 오는 호출부가 없어 두 인자 그대로다.
+        #expect(person.contains("AppUserAvatarFace(avatar: characters.avatar(for: userID, photoURL: url, characterHint: characterHint)"))
         #expect(avatar.contains("AppUserAvatarFace(avatar: characters.avatar(for: userID, photoURL: url)"))
         #expect(person.contains("still(avatar.afterPhotoFailure)"), "사진 실패가 캐릭터로 떨어지지 않는다")
         #expect(person.contains("expression: .neutral"), "남의 캐릭터 얼굴은 neutral 초상")

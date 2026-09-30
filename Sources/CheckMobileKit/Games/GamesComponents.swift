@@ -149,28 +149,48 @@ struct GamesWoodThumbnail: View {
     }
 }
 
+/// 관전 입구 두 문구(0.3.41) — **[관전] 칩이 쓰는 것만** 여기 둔다. 관전 화면 안의 문구는 관전 화면이 자기 텍스트 파일에서 더한다
+/// (공용 `GamesText.swift` 를 여럿이 같이 고치면 충돌한다). 낱말은 맥과 같다(`GomokuText.watch` · `watchHelp` · `myMatch`).
+extension GomokuPhoneText {
+    /// 로비 "지금 대결 중" 행의 [관전] 알약.
+    package static let watchChip = "관전"
+    package static let watchChipHint = "이 판을 지켜봐요"
+    /// 내 판이면 칩 대신 서는 캡션(누를 수 없다 — 내 판은 관전에 못 들어간다).
+    package static let myMatchCaption = "내 판"
+}
+
 /// "지금 대결 중" 한 줄(게임 탭 · 오목 로비 같은 모양): 두 얼굴 vs · 이름 둘 · 판돈 [보석]10 · 1분 35초째.
+///
+/// 오른쪽 [관전] 칩(0.3.41)은 `showsWatch` 를 켠 호출부에만 붙는다 — 관전 화면은 **오목 로비 자리에만** 서므로, 게임 허브에서 누르면
+/// 아무 일도 안 일어난 것처럼 보인다(관전 상태만 조용히 서고 화면은 그대로). 그래서 입구는 오목 로비 하나다
+/// (맥도 같은 관례다 — `GomokuLiveMatchCard.onWatch` "nil 이면 칩이 없다").
 struct GamesLiveMatchRow: View {
     let store: GamesStore
     let live: GomokuLiveMatch
     var isLast = true
+    /// 관전 입구를 붙이는가. 기본 false — 오목 로비만 켠다(위 머리말).
+    var showsWatch = false
 
     @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var gomoku: GomokuStore { store.context.gomoku }
 
     var body: some View {
         GroupRow(divider: isLast ? .none : .inset(MobileTheme.cardPadding)) {
             if typeSize.isAccessibilitySize {
+                // 큰 글자: 칩을 아래 줄로 — 상대 고르기 행([도전])이 겪은 그것(한 줄에 두면 이름이 낱글자로 꺾인다).
                 VStack(alignment: .leading, spacing: 6) {
                     faces
                     texts
+                    watchEntry
                 }
             } else {
                 faces
                 texts
                 Spacer(minLength: 0)
+                watchEntry
             }
         }
-        .accessibilityElement(children: .combine)
     }
 
     private var faces: some View {
@@ -198,6 +218,36 @@ struct GamesLiveMatchRow: View {
                 }
                 .font(MobileTheme.rowSubtitle)
                 .foregroundStyle(MobileTheme.label2)
+            }
+        }
+        // 합치기는 **이 글 묶음에만** 둔다(전에는 행 전체였다). 칩이 붙는 행에서 행 전체를 합치면 [관전]이 한 덩이에 삼켜져
+        // 보이스오버가 누를 수 없다 — 상대 고르기 행(`GamesGomokuOpponentRow.info` + 제 몫의 `challengeButton`)과 같은 관례다.
+        // 얼굴은 이미 `accessibilityHidden` 이라 **읽히는 말은 전과 같다**(이름 줄 + 판돈·경과 줄).
+        .accessibilityElement(children: .combine)
+    }
+
+    /// 관전 입구: [관전] 틴트 알약(상대 고르기 행의 [도전]과 같은 모양·크기) — 내 판이면 누를 수 없는 회색 캡션이다.
+    @ViewBuilder
+    private var watchEntry: some View {
+        // 주 스위치가 꺼진 배선에서는 칩 자체를 두지 않는다 — `startWatching` 이 `spectatorFeaturesEnabled` 를 먼저 보고 조용히
+        // 돌아서므로(`GomokuStoreWatch.swift:68`) 눌러도 아무 일도 없는 버튼이 된다.
+        if showsWatch, gomoku.spectatorFeaturesEnabled {
+            if gomoku.isMine(live) {
+                // 내 판은 관전에 들어갈 수 없다(스토어가 막는다 — `GomokuStoreWatch.swift:69`). 수락 직후·30초 로비 주기 사이에
+                // 로비 목록에 내 판이 잠깐 보이는 틈이 있어, 이 자리를 비워 두면 "왜 내 판만 칩이 없나"로 읽힌다.
+                Text(GomokuPhoneText.myMatchCaption)
+                    .font(MobileTheme.rowSubtitle)
+                    .foregroundStyle(MobileTheme.label2)
+                    .fixedSize()
+            } else {
+                AingButton(GomokuPhoneText.watchChip, kind: .tinted, size: .sm) {
+                    gomoku.startWatching(matchID: live.id)
+                }
+                // 서버에 순위·관전이 아직 없으면(PGRST202 — 앱이 먼저 나간 창) 잠근다. 맥과 같은 게이트다
+                // (`GomokuStore.swift:654` "화면은 '순위는 곧 열려요'로 접고 [관전] 칩을 잠근다").
+                .disabled(gomoku.rankingUnavailable)
+                .fixedSize()
+                .accessibilityHint(gomoku.rankingUnavailable ? GomokuNoticeText.watchUnavailable : GomokuPhoneText.watchChipHint)
             }
         }
     }

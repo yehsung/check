@@ -169,6 +169,31 @@ package struct AppUserCharacterDirectory: Equatable, Sendable {
         return .initials
     }
 
+    /// 위 판정 그대로에, **표가 이 사람을 모를 때만** 호출부가 이미 받은 착용값(`characterHint` — 오목 로비·신청·순위 행의
+    /// `GomokuUser.characterID`)을 쓴다. 맥·폰이 **한 규칙**이다(0.3.41 에 맥에서 코어로 올렸다) — 같은 응답을 받은 두 화면이
+    /// 같은 사람을 다르게 그리지 않게.
+    ///
+    /// 왜 이 자리가 필요한가: 표는 로그인 직후 한 번 + 스로틀 조회다(맥 `WorkTimerStoreAvatars.swift` · 폰
+    /// `AppUserCharacterStore.swift`). 조회가 실패했거나 아직 안 온 세션에서는 표가 비어 **행마다 자기 착용값을 들고 있는데도**
+    /// 전원이 이니셜이 된다. 행이 실은 값을 버릴 이유가 없다.
+    ///
+    /// 규칙 셋(전부 플랫폼 중립 — `knownIDs` 는 그 빌드가 초상을 그릴 수 있는 id 라 플랫폼마다 생성 시점에 정해진다):
+    ///   · 힌트는 **이 빌드가 초상을 그릴 수 있는 id 일 때만** 쓴다(`knownIDs`). 모르는 id 는 빈 그림이 아니라 이니셜이다.
+    ///   · **nil 은 아잉으로 접지 않는다** — 행의 nil 은 '안 골랐다(아잉)'와 '그 응답이 칸을 안 실었다(신청 행 · 옛 서버)'를
+    ///     가르지 못한다. 모르는 것을 아잉으로 단정하면 틀린 사실을 그린다(표에 **있는** 사람의 null 은 이미 아잉으로 접혀
+    ///     들어와 있고, 그건 서버가 말해 준 사실이다).
+    ///   · **표가 아는 사람은 표가 이긴다** — 창마다 같은 사람을 다른 캐릭터로 그리지 않게. 표는 통째로 갈아 끼우는 정본이고
+    ///     행의 힌트는 그 응답이 떠난 시점의 값이다.
+    package func avatar(for userID: String?, photoURL: URL?, characterHint: String?) -> AppUserAvatar {
+        let resolved = avatar(for: userID, photoURL: photoURL)
+        guard characterID(for: userID) == nil,
+              let hint = CharacterSyncDecision.normalized(characterHint),
+              knownIDs.contains(hint)
+        else { return resolved }
+        if case .photo(let url, _) = resolved { return .photo(url, fallbackCharacterID: hint) }
+        return .character(hint)
+    }
+
     /// 서버 표로 **통째로** 갈아 끼운다. user id 가 빈 행은 버리고, 같은 id 가 두 번 오면 뒤의 것이 이긴다.
     ///
     /// ⚠️ 경합: 내가 캐릭터를 바꾼 직후(`setEquipped`) 그 전에 떠난 조회가 늦게 돌아오면 옛 값으로 덮인다. 호출부는 표를

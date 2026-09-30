@@ -63,7 +63,18 @@ struct GamesGomokuScreen: View {
                 lobby
             }
         case .lobby:
-            lobby
+            // 관전(0.3.41)은 **로비 자리**에 선다 — 새 라우트가 아니다. 자식 라우트를 push 하면 이 화면의 `onDisappear` →
+            // `store.gomokuScreenDidDisappear()` → `windowDidHide()` 로 관전 폴링이 죽어(스토어 `shouldPollWatch` 가 창을 본다)
+            // 판이 갱신되지 않는다.
+            //
+            // 위 `.playing`·`.result` 의 `lobby` 대체 갈래에는 **두지 않는다**: 스토어가 내 판이 진행 중이면 관전에 들어가지 않고
+            // (`GomokuStoreWatch.swift:69` `if let current = match, !current.isFinished { return }` · 같은 파일 `guard phase == .lobby`),
+            // 내 판이 서면 관전을 내린다(`GomokuStore.swift:598`). 그 두 갈래에 또 두면 있을 수 없는 상태를 그리는 코드만 두 벌이 된다.
+            if let watch = gomoku.spectating {
+                GamesGomokuWatch(store: store, watch: watch)
+            } else {
+                lobby
+            }
         }
     }
 
@@ -132,6 +143,9 @@ struct GamesGomokuLobby: View {
     /// [AI와 두기] — 화면 루트가 돌 색 시트를 띄운다(판돈 시트와 같은 관례: 시트는 루트만 띄운다).
     var onPlayAI: () -> Void = {}
 
+    /// 순위표 절의 [전체 보기](0.3.41) — **제자리 확장**이라 로비가 이 깃발을 든다(새 화면으로 밀면 폴링이 죽는다 — 화면 루트 주석).
+    @State private var rankingExpanded = false
+
     private var gomoku: GomokuStore { store.context.gomoku }
 
     var body: some View {
@@ -157,6 +171,9 @@ struct GamesGomokuLobby: View {
                     .padding(.top, MobileTheme.rowSpacing)
                 opponents
                 liveMatches
+                // 순위표(0.3.41)는 **맨 아래**다. 로비엔 이미 절이 다섯이고, 순위는 100행까지 오므로 위에 두면 관전 입구인
+                // "지금 대결 중"이 스크롤 밖으로 묻힌다. 기본은 접힘(상위 몇 행 + 내 순위)이고 [전체 보기]가 제자리에서 펼친다.
+                GamesGomokuRankingSection(store: store, isExpanded: $rankingExpanded)
             }
             .padding(.horizontal, MobileTheme.sideMargin)
             .padding(.top, MobileTheme.space2)
@@ -316,7 +333,8 @@ struct GamesGomokuLobby: View {
             SectionHeader(GomokuPhoneText.liveTitle, trailing: .text(GomokuPhoneText.liveCount(lives.count)), padded: true)
             InsetGroup {
                 ForEach(Array(lives.enumerated()), id: \.element.id) { index, live in
-                    GamesLiveMatchRow(store: store, live: live, isLast: index == lives.count - 1)
+                    // 관전 입구는 **이 목록뿐**이다(0.3.41) — 관전 화면이 로비 자리에 서므로 허브(게임 탭)에서 누르면 화면이 안 바뀐다.
+                    GamesLiveMatchRow(store: store, live: live, isLast: index == lives.count - 1, showsWatch: true)
                 }
             }
         case .empty:

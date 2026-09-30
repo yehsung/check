@@ -64,23 +64,9 @@ private struct AppUserAvatarCharactersScope<Content: View>: View {
     }
 }
 
-extension AppUserCharacterDirectory {
-    /// 맥의 판정 한 곳: 표의 규칙(`avatar(for:photoURL:)`) 그대로에, **표가 이 사람을 모를 때만** 호출부가 이미 받은 착용값
-    /// (`characterHint` — 오목 로비·신청 행의 `GomokuUser.characterID`)을 쓴다.
-    ///
-    /// 힌트는 **이 빌드가 초상을 그릴 수 있는 id 일 때만** 쓴다. nil 은 아잉으로 접지 않는다 — 오목 행의 nil 은 '안 골랐다(아잉)'와
-    /// '그 응답이 칸을 안 실었다(신청 행 · 옛 서버)'를 가르지 못한다. 모르는 것을 아잉으로 단정하면 틀린 사실을 그린다.
-    /// 표가 아는 사람은 표가 이긴다(팝오버·오목 창이 같은 사람을 다른 캐릭터로 그리지 않게).
-    func avatar(for userID: String?, photoURL: URL?, characterHint: String?) -> AppUserAvatar {
-        let resolved = avatar(for: userID, photoURL: photoURL)
-        guard characterID(for: userID) == nil,
-              let hint = CharacterSyncDecision.normalized(characterHint),
-              knownIDs.contains(hint)
-        else { return resolved }
-        if case .photo(let url, _) = resolved { return .photo(url, fallbackCharacterID: hint) }
-        return .character(hint)
-    }
-}
+// 힌트 규칙(`avatar(for:photoURL:characterHint:)`)은 **코어에 있다**(`CheckCore/AppUserCharacters.swift`) — 0.3.41 에
+// 여기서 올렸다. 폰 순위표가 같은 규칙을 써야 해서다(행이 실은 착용값을 표가 비었을 때 쓴다). 여기 같은 서명을 다시 두면
+// 두 모듈에 겹쳐 맥 빌드가 모호해진다.
 
 // MARK: - Avatar view
 

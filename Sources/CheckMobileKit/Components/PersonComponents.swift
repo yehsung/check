@@ -128,6 +128,9 @@ package struct StatusDot: View {
 ///   같은 색이 되게 이름을 넘긴다.
 /// - `status`: nil·`.off` 는 점 없음(시안 B — 근무 안 함은 점을 그리지 않는다). `.working` 초록 · `.pending` 앰버.
 /// - `ringColor`: 점 둘레 틈 색 = 아바타가 놓인 면(카드 위 `surface`, 내 행 틴트 위라도 카드 색이면 된다).
+/// - `characterHint`: 호출부가 **이미 받은** 착용값(서버 원문 — 오목 로비·신청·순위 행의 `GomokuUser.characterID`).
+///   표가 이 사람을 모를 때만 쓴다(`AppUserCharacterDirectory.avatar(for:photoURL:characterHint:)` — 맥과 한 규칙).
+///   기본값 nil 이라 힌트를 들고 있지 않은 호출부는 지금과 똑같다.
 /// - 크기는 `AvatarView` 와 같은 규칙으로 글자를 따라 커진다(`MobileAvatarScale`).
 package struct PersonAvatar: View {
     private let name: String
@@ -135,6 +138,7 @@ package struct PersonAvatar: View {
     private let status: PresenceStatus?
     private let url: URL?
     private let userID: String?
+    private let characterHint: String?
     private let baseSize: CGFloat
     private let ringColor: Color
     private let scalesWithText: Bool
@@ -149,13 +153,15 @@ package struct PersonAvatar: View {
         userID: String?,
         size: CGFloat = 32,
         ringColor: Color = MobileTheme.surface,
-        scalesWithText: Bool = true
+        scalesWithText: Bool = true,
+        characterHint: String? = nil
     ) {
         self.name = name
         self.colorSeed = colorSeed ?? name
         self.status = status
         self.url = url
         self.userID = userID
+        self.characterHint = characterHint
         self.baseSize = size
         self.ringColor = ringColor
         self.scalesWithText = scalesWithText
@@ -168,7 +174,7 @@ package struct PersonAvatar: View {
     package var body: some View {
         let size = self.size
         ZStack(alignment: .bottomTrailing) {
-            AppUserAvatarFace(avatar: characters.avatar(for: userID, photoURL: url), name: name, colorSeed: colorSeed, size: size)
+            AppUserAvatarFace(avatar: characters.avatar(for: userID, photoURL: url, characterHint: characterHint), name: name, colorSeed: colorSeed, size: size)
                 .frame(width: size, height: size)
                 .clipShape(Circle())
             if let status, status != .off {

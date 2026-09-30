@@ -1,0 +1,110 @@
+{
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "record_since_ms": 1788188400000,
+  "me": {
+    "rank": 2,
+    "wins": 12,
+    "losses": 7,
+    "draws": 1,
+    "points": 5
+  },
+  "rows": [
+    {
+      "rank": 1,
+      "user_id": "d0000000-0000-4000-8000-0000000000b6",
+      "display_name": "달토끼",
+      "avatar_url": null,
+      "character": "fox",
+      "center": "seoul",
+      "wins": 18,
+      "losses": 5,
+      "draws": 0,
+      "points": 13
+    },
+    {
+      "rank": 2,
+      "user_id": "d0000000-0000-4000-8000-000000000001",
+      "display_name": "새벽",
+      "avatar_url": null,
+      "character": "fox",
+      "center": "seoul",
+      "wins": 12,
+      "losses": 7,
+      "draws": 1,
+      "points": 5
+    },
+    {
+      "rank": 3,
+      "user_id": "d0000000-0000-4000-8000-0000000000b1",
+      "display_name": "구름빵",
+      "avatar_url": null,
+      "character": "jellyfish",
+      "center": "seoul",
+      "wins": 9,
+      "losses": 4,
+      "draws": 2,
+      "points": 5
+    },
+    {
+      "rank": 4,
+      "user_id": "d0000000-0000-4000-8000-0000000000b3",
+      "display_name": "민트별",
+      "avatar_url": null,
+      "character": null,
+      "center": "seoul",
+      "wins": 6,
+      "losses": 6,
+      "draws": 1,
+      "points": 0
+    },
+    {
+      "rank": 4,
+      "user_id": "d0000000-0000-4000-8000-0000000000b4",
+      "display_name": "호두과자",
+      "avatar_url": null,
+      "character": "shiba",
+      "center": null,
+      "wins": 6,
+      "losses": 6,
+      "draws": 1,
+      "points": 0
+    },
+    {
+      "rank": 6,
+      "user_id": "d0000000-0000-4000-8000-0000000000b7",
+      "display_name": "솜사탕",
+      "avatar_url": null,
+      "character": "ghost",
+      "center": "busan",
+      "wins": 3,
+      "losses": 5,
+      "draws": 0,
+      "points": -2
+    },
+    {
+      "rank": 7,
+      "user_id": "d0000000-0000-4000-8000-0000000000b5",
+      "display_name": "보리차",
+      "avatar_url": null,
+      "character": "squirrel",
+      "center": "busan",
+      "wins": 0,
+      "losses": 3,
+      "draws": 1,
+      "points": -3
+    },
+    {
+      "rank": 8,
+      "user_id": "d0000000-0000-4000-8000-0000000000b2",
+      "display_name": "초코칩",
+      "avatar_url": null,
+      "character": "ghost",
+      "center": "busan",
+      "wins": 1,
+      "losses": 6,
+      "draws": 0,
+      "points": -5
+    }
+  ]
+}

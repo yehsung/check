@@ -77,6 +77,16 @@ public final class MobileAppModel {
         let gomoku = GomokuStore(host: host)
         let clock = env.clock
         gomoku.clock = { clock.now() }
+        // 순위표·관전(0.3.41)의 **주 스위치**. 기본이 꺼짐(`GomokuStore.spectatorFeaturesEnabled`)이라 이 한 줄이 없으면
+        // `gomoku_ranking`·`gomoku_watch` 가 **한 번도 안 나간다** — `loadRanking`·`startWatching`·`refreshWatch` 와
+        // `pollTick`·`windowDidShow` 의 두 분기가 전부 이 값을 먼저 본다(`canPollSpectatorFeatures`).
+        // 빠지면 순위 절은 영영 로딩 문구이고 [관전] 은 눌러도 관전 상태조차 서지 않는다. **화면이 죽는데 빨간 테스트가 없다**
+        // (뷰 파일은 `#if os(iOS)` 안이라 맥 스위트가 못 본다) — 그래서 못을 따로 박아 두었다:
+        // `Tests/CheckMobileKitTests/GamesGomokuSpectateWiringTests.swift`.
+        // **"기본값이니 지워도 되겠지"로 지우지 마라.** 꺼짐은 0.3.41 맥 작업이 남긴 의도된 보호다 — 그리지도 않는 폰이
+        // 순위를 1분마다 당기지 않게 맥 배선(`CheckApp.wireGomoku` · CheckApp.swift:248)만 켰다. 폰이 그 화면을 갖는
+        // 지금은 폰도 자기 배선에서 켠다(같은 스토어를 쓰는 두 앱의 유일한 차이라 배선에만 있다).
+        gomoku.spectatorFeaturesEnabled = true
         realtime.gomoku = gomoku
         let links = MobileStoreLinks()
         let appearance = MobileAppearanceStore(defaults: env.appearanceDefaults ?? env.storage.defaults)

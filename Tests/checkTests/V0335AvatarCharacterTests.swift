@@ -402,7 +402,7 @@ private func avFetches(_ host: String) -> Int {
 
     @Test func 모든_사람_아바타_호출부가_사용자_id를_넘긴다_nil은_팀_리그_줄뿐() throws {
         let avatars = try Self.calls(of: "CheckAvatarView")
-        // 19 호출부 + EditableAvatarView 안의 1(0.3.31 에 오목 순위 행이 하나 늘었다). 줄면 호출부가 사라졌거나 검사가 헛돈다.
+        // 19 호출부 + EditableAvatarView 안의 1(0.3.41 에 오목 순위 행이 하나 늘었다). 줄면 호출부가 사라졌거나 검사가 헛돈다.
         #expect(avatars.count == 20, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
         for call in avatars {
             #expect(call.text.contains("userID:"), "\(call.file): \(call.text) — 사용자 id 없이 그리면 그 자리만 이니셜로 남는다")
@@ -431,7 +431,7 @@ private func avFetches(_ host: String) -> Int {
         }
         // 순위판(토큰)과 콕 찌르기 목록 — 같은 모양 둘.
         #expect(avatars.filter { $0.file == "CheckMenuView.swift" && $0.text.contains("userID: entry.userID") }.count == 2)
-        // 오목 여섯 자리: 로비 · 보낸 신청 · 받은 신청 · 결과 머리 · 대결 카드 · 순위 행(0.3.31). 행이 이미 받은 착용값도 함께 넘긴다.
+        // 오목 여섯 자리: 로비 · 보낸 신청 · 받은 신청 · 결과 머리 · 대결 카드 · 순위 행(0.3.41). 행이 이미 받은 착용값도 함께 넘긴다.
         let gomoku = avatars.filter { $0.file == "GomokuPanel.swift" }
         #expect(gomoku.count == 6)
         for call in gomoku {

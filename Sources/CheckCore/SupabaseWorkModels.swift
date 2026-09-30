@@ -3536,12 +3536,12 @@ package struct GomokuChatMuteRequest: Encodable {
     package let pMuted: Bool
 }
 
-/// gomoku_ranking 본문(0.3.31). { p_protocol }. 로비·받은함과 같은 한 키 — 빈 `{}` 가 아니다(PostgREST 함수 선택 규칙).
+/// gomoku_ranking 본문(0.3.41). { p_protocol }. 로비·받은함과 같은 한 키 — 빈 `{}` 가 아니다(PostgREST 함수 선택 규칙).
 package struct GomokuRankingRequest: Encodable {
     package var pProtocol = GomokuWire.protocolVersion
 }
 
-/// gomoku_watch 본문(0.3.31). { p_protocol, p_match_id, p_since_seq }.
+/// gomoku_watch 본문(0.3.41). { p_protocol, p_match_id, p_since_seq }.
 /// `p_since_seq` 는 서버 default(0)가 있지만 **언제나 싣는다**(gomoku_state 와 같은 이유 — 키 집합이 함수를 고른다).
 /// 채팅 번호는 없다: 관전은 판만 본다(대국자 채팅은 서버가 아예 싣지 않는다).
 package struct GomokuWatchRequest: Encodable {
@@ -3629,7 +3629,7 @@ package struct GomokuMatchRow: Decodable, Equatable, Sendable {
     package var winner: String?
     package var inviteExpiresMs: Double?
     package var board: String?
-    /// 0.3.31 — 관전(gomoku_watch)이 싣는 시각 셋. gomoku_state 응답에도 같은 키가 있어 무해하고, 안 싣는 옛 서버면 nil.
+    /// 0.3.41 — 관전(gomoku_watch)이 싣는 시각 셋. gomoku_state 응답에도 같은 키가 있어 무해하고, 안 싣는 옛 서버면 nil.
     /// **맨 끝에 Optional 로만 더한다** — 비옵셔널 하나면 db push 전 창에서 오목 창이 디코드째 죽는다(머리말 ①).
     /// 차례가 시작된 서버 시각. 마감은 `deadlineMs` 가 따로 온다(active 가 아니면 null).
     package var turnStartedMs: Double?
@@ -3818,7 +3818,7 @@ package struct GomokuLeaveResponse: Decodable, Equatable, Sendable {
     package var serverNowMs: Double?
 }
 
-// MARK: 순위표 · 관전 (0.3.31)
+// MARK: 순위표 · 관전 (0.3.41)
 
 /// gomoku_ranking 의 한 줄. 순위는 **서버가 매긴 값**(rank() — 동률은 같은 숫자)이고 배열 순서도 서버 것이다(재정렬 금지).
 /// 전적 넷을 다 싣는다: 화면은 승점과 승·패·무를 **같이** 그린다(승점만 보이면 "왜 저 사람이 위인지"를 못 읽는다).

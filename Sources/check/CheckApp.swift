@@ -243,7 +243,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///   ④ 로그아웃·계정 전환 → 창 닫기 + 말풍선 큐 비우기. 깃발만 비우면 내용이 빈 창이 화면에 남는다.
     private func wireGomoku() {
         let gomoku = store.gomoku
-        // 순위표·관전(0.3.31)은 **맥만** 켠다. 스토어는 폰과 공용이라 기본이 꺼짐이고, 이 한 줄이 없으면 순위 열은
+        // 순위표·관전(0.3.41)은 **맥만** 켠다. 스토어는 폰과 공용이라 기본이 꺼짐이고, 이 한 줄이 없으면 순위 열은
         // 영영 로딩이고 [관전] 은 아무 요청도 안 낸다 — 폰이 같은 조회를 헛되이 당기지 않게 하는 대가다.
         gomoku.spectatorFeaturesEnabled = true
         gomoku.presentWindow = { CheckGomokuWindowController.shared.show() }

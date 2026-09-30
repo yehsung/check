@@ -520,7 +520,7 @@ func gomokuWindowLayoutIsAFixedConstantTable() {
     // 위 칸(지금 대결 중)의 최소 높이가 지켜진다 — 320 + 12 + 220 = 552 ≤ 608.
     #expect(GomokuWindowLayout.lobbyInvitesMaxHeight + GomokuWindowLayout.lobbySideSpacing
             + GomokuWindowLayout.lobbyLiveMinHeight <= GomokuWindowLayout.bodyHeight)
-    // 로비 왼쪽 780 블록의 3열 분할(0.3.31): 상대 420 + 20 + 순위 340 = 780 — 오른쪽 400 열과 창 크기는 한 항도 안 바뀐다.
+    // 로비 왼쪽 780 블록의 3열 분할(0.3.41): 상대 420 + 20 + 순위 340 = 780 — 오른쪽 400 열과 창 크기는 한 항도 안 바뀐다.
     // 항등식이 없으면 누가 420 을 460 으로 바꿀 때 순위 열이 조용히 300 이 되어 아래 14행 산식이 깨진다.
     #expect(GomokuWindowLayout.lobbyUsersWidth == 420)
     #expect(GomokuWindowLayout.lobbyRankWidth == 340)

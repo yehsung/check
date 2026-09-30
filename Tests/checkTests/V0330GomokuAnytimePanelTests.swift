@@ -172,7 +172,7 @@ struct V0330GomokuAnytimePanelTests {
         let enabled = try lobby(m2gUser("민수", 11, working: false))
         let disabled = try lobby(m2gUser("민수", 11, working: false, inMatch: true))
         MiniGameSnapshots.save(enabled, name: "v0330-lobby-offwork-challenge.png", sub: "gomoku")
-        // 0.3.31: 왼쪽 780 블록이 [상대 420 | 순위 340] 으로 갈렸다 — [도전] 은 **상대 열**에서만 잰다(순위 열의 픽셀이 섞이면
+        // 0.3.41: 왼쪽 780 블록이 [상대 420 | 순위 340] 으로 갈렸다 — [도전] 은 **상대 열**에서만 잰다(순위 열의 픽셀이 섞이면
         // 이 시험은 [도전] 이 아니라 다른 것을 센다, C23).
         let list = CGRect(
             x: GomokuWindowLayout.contentPadding,

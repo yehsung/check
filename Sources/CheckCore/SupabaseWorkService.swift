@@ -1400,7 +1400,7 @@ extension SupabaseWorkService {
 
 // MARK: - 1:1 오목 (v0.3.27)
 
-/// 오목 RPC — 0.3.27 의 8개 + 채팅·나가기 3개(0.3.28) + 순위·관전 2개(0.3.31). 경로는 `/rest/v1/rpc/gomoku_*`,
+/// 오목 RPC — 0.3.27 의 8개 + 채팅·나가기 3개(0.3.28) + 순위·관전 2개(0.3.41). 경로는 `/rest/v1/rpc/gomoku_*`,
 /// 본문은 pSnake 구조체(인코더가 p_snake 로 바꾼다), 전부 `p_protocol` 을 싣는다.
 ///
 /// **판정은 전부 서버 몫이다.** 근무 여부·집중 모드·잔액·차례·시간 초과·금수는 서버가 한 트랜잭션 안에서 본다.
@@ -1505,13 +1505,13 @@ extension SupabaseWorkService {
         )
     }
 
-    /// 오목 승점 순위표(0.3.31). 읽기라 `retriesDeadlockOnce` 없음 — 실패하면 다음 계기(창 열기·60초 폴링)가 다시 읽는다.
+    /// 오목 승점 순위표(0.3.41). 읽기라 `retriesDeadlockOnce` 없음 — 실패하면 다음 계기(창 열기·60초 폴링)가 다시 읽는다.
     /// 서버에 아직 없으면(db push 전 창) PGRST202 → `.databaseSchemaMissing` 으로 throw 한다(status 가 아니다) — 스토어가 접는다.
     package func gomokuRanking(accessToken: String) async throws -> GomokuRankingResponse {
         try await gomokuRPC("gomoku_ranking", body: GomokuRankingRequest(), accessToken: accessToken)
     }
 
-    /// 남의 판 관전(0.3.31). 읽기 전용 — 잠금·따라잡기·채팅이 하나도 없다(서버 소스 단언이 그 낱말들을 막는다).
+    /// 남의 판 관전(0.3.41). 읽기 전용 — 잠금·따라잡기·채팅이 하나도 없다(서버 소스 단언이 그 낱말들을 막는다).
     /// `sinceSeq` 는 내가 이미 반영한 마지막 수 번호(0 이면 처음부터). **gomoku_state 를 대신 부르지 마라** —
     /// 참가자 게이트에 걸려 관전자는 not_found 만 받는다.
     package func gomokuWatch(accessToken: String, matchID: String, sinceSeq: Int) async throws -> GomokuWatchResponse {

@@ -10,11 +10,11 @@ import CheckCore
 // 화면은 전부 **두 열**이다(v0.3.30). 대국은 [판 | 오른쪽 열]이고 오른쪽 열이 위에서부터 상대 카드 · 내 카드 ·
 // 판돈과 상태줄 · **채팅 카드** · [기권]이다 — 옛 세 번째 채팅 열을 카드와 [기권] 사이 빈 공간으로 옮겼고,
 // 보낸 말은 그 사람 카드 안 말풍선으로도 5초 뜬다. 결과는 [판 | 결과 카드 · 채팅 카드](끝난 뒤 인사 유예 120초).
-// 로비는 [상대 목록 | 순위 | 오른쪽]이다(0.3.31 — 왼쪽 780 블록을 [상대 420 | 순위 340] 으로 갈랐다). 오른쪽 위가
+// 로비는 [상대 목록 | 순위 | 오른쪽]이다(0.3.41 — 왼쪽 780 블록을 [상대 420 | 순위 340] 으로 갈랐다). 오른쪽 위가
 // "지금 대결 중"(남는 높이 전부 · 넘치면 그 칸 안에서 스크롤), 아래가 "받은 신청"과 그 맨 아래 "보낸 신청 한 줄 + [취소]".
 // **판돈 카드는 없다** — 판돈은 [도전]을 누를 때 화면 가운데 작은 창(`GomokuStakePrompt`)에서 고르고, 고르기 전에는
 // [취소]만, 고른 뒤에는 [도전하기]가 선다.
-// 관전(0.3.31)은 `store.spectating` 이 있으면 **로비 자리**에 서는 [판 | 오른쪽 열]이다(`phase` 는 `.lobby` 그대로). 판은
+// 관전(0.3.41)은 `store.spectating` 이 있으면 **로비 자리**에 서는 [판 | 오른쪽 열]이다(`phase` 는 `.lobby` 그대로). 판은
 // 입력이 없고(탭·호버·미리보기 돌·금수 X 없음), 오른쪽 열은 흑·백 카드 · 판돈과 상태 상자 · **받은 신청 카드와 보낸 신청
 // [취소]와 안내줄(C12 — 관전 중에도 신청을 거둘 수 있어야 한다)** · 관전 안내 카드 · [나가기]다. 채팅 카드는 없다.
 //
@@ -304,7 +304,7 @@ enum GomokuText {
         }
     }
 
-    // MARK: 순위표 (0.3.31)
+    // MARK: 순위표 (0.3.41)
 
     static let rankTitle = "오목 순위"
     /// 정렬 기준을 한 줄로. 같은 승점·승수면 더 많이 둔 쪽이 위(무승부 desc)라는 서열까지는 규칙 보기가 말한다.
@@ -333,7 +333,7 @@ enum GomokuText {
     static let reloadRanking = "다시 불러오기"
     static let rankHelp = "내 오목 전적과 순위"
 
-    // MARK: 관전 (0.3.31)
+    // MARK: 관전 (0.3.41)
 
     static let watch = "관전"
     static let watchHelp = "이 판을 지켜봐요"
@@ -741,14 +741,14 @@ struct GomokuPanel: View {
         case .result:
             if let match = store.match { result(match) } else { lobby }
         case .lobby:
-            // 관전(0.3.31)은 로비 자리에 선다 — `phase` 는 `.lobby` 그대로이고 `spectating` 하나가 화면을 가른다.
+            // 관전(0.3.41)은 로비 자리에 선다 — `phase` 는 `.lobby` 그대로이고 `spectating` 하나가 화면을 가른다.
             if let watch = store.spectating { spectate(watch) } else { lobby }
         }
     }
 
     // MARK: 로비
 
-    /// 로비는 **세 열**이다(0.3.31): 왼쪽 상대 목록 420 · 순위 340(합 780 — 옛 상대 목록 자리) · 오른쪽 400.
+    /// 로비는 **세 열**이다(0.3.41): 왼쪽 상대 목록 420 · 순위 340(합 780 — 옛 상대 목록 자리) · 오른쪽 400.
     private var lobby: some View {
         HStack(alignment: .top, spacing: GomokuWindowLayout.columnSpacing) {
             GomokuOpponentList(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
@@ -766,7 +766,7 @@ struct GomokuPanel: View {
         }
     }
 
-    // MARK: 관전 (0.3.31)
+    // MARK: 관전 (0.3.41)
 
     /// 관전은 대국과 같은 **두 열**이다: [판 608 | 오른쪽 열 572]. 판은 `GomokuBoardView` 그대로다 — 입력이 없다
     /// (탭·호버·미리보기 돌·금수 X 가 하나도 없다: 관전자는 아무것도 쓰지 못한다). 마감 시각은 여기서 읽지 않는다 — 링과
@@ -879,7 +879,7 @@ private struct GomokuHeader: View {
             RubyBalanceChip(balance: store.rubyBalance, large: true)
                 .checkTooltip("내 루비")
             // 로비에서만 선다 — 대국·결과 화면의 머리글은 1:1 그대로다(판 중에 새 판을 열 길을 두지 않는다).
-            // 관전 중에도 숨긴다(0.3.31) — AI 판이 서면 관전이 내려가는데, 보고 있던 판을 버튼 하나로 잃게 두지 않는다.
+            // 관전 중에도 숨긴다(0.3.41) — AI 판이 서면 관전이 내려가는데, 보고 있던 판을 버튼 하나로 잃게 두지 않는다.
             if store.phase == .lobby, store.spectating == nil {
                 GomokuActionButton(title: GomokuText.aiButton, icon: "cpu", style: .outline, height: 30,
                                    isEnabled: store.canStartAIMatch, action: onAIMatch)
@@ -1520,7 +1520,7 @@ private struct GomokuMatchSide: View {
         }
     }
 
-    /// 판돈 칩 — 관전 화면과 **같은 뷰**(`GomokuStakeChip`)다(0.3.31). 모양을 두 벌 두면 한쪽이 언젠가 갈린다.
+    /// 판돈 칩 — 관전 화면과 **같은 뷰**(`GomokuStakeChip`)다(0.3.41). 모양을 두 벌 두면 한쪽이 언젠가 갈린다.
     private var stakeChip: some View { GomokuStakeChip(stake: match.stake) }
 
     /// AI 판의 판돈 칩 자리 — 걸린 루비가 없다는 것을 같은 모양의 칩으로 말한다.
@@ -1630,7 +1630,7 @@ private struct GomokuPlayerCard: View {
     /// AI 상대 카드(docs/plan/gomoku-ai.md §5) — 캐릭터 대신 `cpu` 기호, 차례 링 대신 "생각 중". **맨 끝 · 기본값** 이라
     /// 1:1 호출부는 그대로다.
     var isAI: Bool = false
-    /// 관전 카드(0.3.31)의 차례 마감. 있으면 링이 스토어의 내 판 마감(`remainingSeconds`) 대신 **이 시각**을 센다 —
+    /// 관전 카드(0.3.41)의 차례 마감. 있으면 링이 스토어의 내 판 마감(`remainingSeconds`) 대신 **이 시각**을 센다 —
     /// 관전 중 `store.match` 는 nil 이라 스토어 링은 0초에 빨갛게 선다. 대국 호출부는 nil(기본값)이라 그대로다.
     var deadline: Date? = nil
 
@@ -1833,7 +1833,7 @@ struct GomokuTurnClock: View {
 }
 
 /// 링 그림 한 장(남은 초 → 호 + 숫자 + 보이스오버). 대국 링(`GomokuTurnClock`)과 관전 링(`GomokuWatchClock`)이 **같은 그림**을
-/// 쓴다(0.3.31) — 초를 읽는 일은 두 잎 뷰가 하고, 이 뷰는 받은 숫자만 그린다(시계를 읽지 않는다).
+/// 쓴다(0.3.41) — 초를 읽는 일은 두 잎 뷰가 하고, 이 뷰는 받은 숫자만 그린다(시계를 읽지 않는다).
 struct GomokuClockRing: View {
     let remaining: Double
     /// 0초에 쓸 색. 대국 링은 nil(≤5초 빨강 그대로 — 내 시간이 다 됐다는 신호가 맞다). 관전 링은 `CheckTheme.pending` — 마감이 지난 남의 판은
@@ -2412,7 +2412,7 @@ private struct GomokuLiveMatchColumn: View {
     private var cards: some View {
         VStack(spacing: 8) {
             ForEach(store.liveMatches) { live in
-                // [관전](0.3.31): 내 판이면 칩 대신 "내 판" 캡션. 서버에 관전이 아직 없으면(`rankingUnavailable` — 같은 마이그레이션) 칩을 잠근다.
+                // [관전](0.3.41): 내 판이면 칩 대신 "내 판" 캡션. 서버에 관전이 아직 없으면(`rankingUnavailable` — 같은 마이그레이션) 칩을 잠근다.
                 GomokuLiveMatchCard(
                     live: live, isLive: store.isWindowVisible,
                     isMine: store.isMine(live), canWatch: !store.rankingUnavailable,
@@ -2505,7 +2505,7 @@ struct GomokuElapsedText: View {
     }
 }
 
-// MARK: - 로비 가운데 열: 순위표 (0.3.31)
+// MARK: - 로비 가운데 열: 순위표 (0.3.41)
 
 /// 로비 가운데 열(340pt) — 승점(승 − 패) 순위표. **행 순서는 스토어(= 서버) 그대로**다, 여기서 다시 정렬하지 않는다
 /// (재정렬하면 서버·앱 두 규칙이 갈려 같은 목록이 화면마다 다른 순서가 된다 — `GomokuLiveMatchColumn` 과 같은 규약).
@@ -2727,7 +2727,7 @@ private struct GomokuRankRowView: View {
     }
 }
 
-// MARK: - 관전 (0.3.31)
+// MARK: - 관전 (0.3.41)
 
 /// 관전 오른쪽 열(572pt). 위에서부터 흑 카드 84 · 백 카드 84 · [판돈 칩 176 | 상태 상자] 44 · **남는 자리 322**(받은 신청 카드 ·
 /// 보낸 신청 [취소] · 안내줄이 먼저, 관전 안내 카드가 나머지) · [나가기] 34. 항등식은 `GomokuWindowLayout.spectateInfoHeight`.
@@ -3030,7 +3030,7 @@ struct GomokuWatchClock: View {
     }
 }
 
-/// 판돈 칩(대국·관전 공용, 0.3.31). 이기면 **판돈만큼 더**(순수익) — 결과 카드의 +판돈과 같은 눈금. 판돈을 모르면(관전 첫 응답 전) "—".
+/// 판돈 칩(대국·관전 공용, 0.3.41). 이기면 **판돈만큼 더**(순수익) — 결과 카드의 +판돈과 같은 눈금. 판돈을 모르면(관전 첫 응답 전) "—".
 private struct GomokuStakeChip: View {
     let stake: Int?
 
@@ -3126,7 +3126,7 @@ struct GomokuRuleExample: Identifiable, Equatable {
         "한 수에 30초. 30초를 넘기면 무작위로 놓입니다 · 3번 연속이면 집니다.",
         "흑이 둘 곳이 없으면 차례가 백으로 넘어가고, 판이 가득 차면 무승부예요.",
         "수락하는 순간 두 사람 모두 판돈을 걸어요. 이기면 판돈만큼 더 받고, 무승부면 건 판돈을 돌려받아요.",
-        // 순위(0.3.31). 캡션 '승점 = 승 − 패' 만으로는 (1승 1패 1무) 가 (1승 1패 0무) 앞에 서는 이유를 못 읽는다 — 서버 정렬의
+        // 순위(0.3.41). 캡션 '승점 = 승 − 패' 만으로는 (1승 1패 1무) 가 (1승 1패 0무) 앞에 서는 이유를 못 읽는다 — 서버 정렬의
         // 뒤 두 축(승 desc → 무 desc)을 사용자 말로. **맨 끝에 둔다**: 앞 줄들은 테스트가 번호로 집는다.
         "순위는 승점(승 − 패)순이에요. 같은 승점이면 더 많이 이긴 쪽, 그다음엔 더 많이 둔 쪽이 위예요."
     ]

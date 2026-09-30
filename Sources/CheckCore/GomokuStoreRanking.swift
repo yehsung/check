@@ -1,6 +1,6 @@
 import Foundation
 
-// 오목 스토어의 **순위표** 갈래(0.3.31) — 승점(승 − 패) 순위와 그 안의 내 자리.
+// 오목 스토어의 **순위표** 갈래(0.3.41) — 승점(승 − 패) 순위와 그 안의 내 자리.
 //
 // ── 정렬은 서버가 한다 ──
 // 행 순서는 서버 `gomoku_ranking` 의 order by(points desc → wins desc → draws desc → user_id asc) 그대로 옮긴다. **여기서 다시 정렬하지 않는다** —

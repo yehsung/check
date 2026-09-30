@@ -490,10 +490,10 @@ func lobbyRightColumnScrollsLiveMatchesInsteadOfTruncating() throws {
     #expect(column.contains("minHeight: 0"), "minHeight 0 이 없다 — 카드가 608pt 본문을 뚫는다")
 }
 
-/// 로비의 판돈 카드는 없다(v0.3.29) — 상대 목록 · (0.3.31 부터 순위) · 오른쪽 400.
+/// 로비의 판돈 카드는 없다(v0.3.29) — 상대 목록 · (0.3.41 부터 순위) · 오른쪽 400.
 ///
 /// 두 가지를 픽셀로 잰다. ① 상대 행의 [도전] 버튼이 **상대 목록 열(420)** 의 오른쪽 끝까지 간다(실측 412pt = 20 + 420 − 카드 여백 16 −
-/// 행 여백 12) — 옛 540pt 열이었다면 x 530 언저리, v0.3.29~30 의 780 열이었다면 771.5 에서 멈춘다. 0.3.31 에 왼쪽 780 블록이
+/// 행 여백 12) — 옛 540pt 열이었다면 x 530 언저리, v0.3.29~30 의 780 열이었다면 771.5 에서 멈춘다. 0.3.41 에 왼쪽 780 블록이
 /// [상대 420 | 순위 340] 으로 갈려 재기준했다(C23). **상대 열에서만** 잰다: 순위 행의 이니셜 아바타 팔레트가 푸른 픽셀로 잡혀
 /// 상자를 순위 열까지 부풀린다. ② 오른쪽 열 **맨 위**가 "지금 대결 중"이다 — 대결 건수를 바꾸면 그 자리 픽셀이 바뀐다
 /// (옛 화면에서 그 자리는 판돈 카드라 꿈쩍도 안 했다).
@@ -703,7 +703,7 @@ func lobbyInvitesBoxCollapsesAndTheLiveBoxTakesTheRest() throws {
 /// 카드 사이 간격은 8pt(159 → 167). 72 는 열을 감싼 카드의 윗변이다.
 private let gpLiveCardHeight = 53
 
-/// 로비 왼쪽 **블록**(780 — 0.3.31 부터 [상대 목록 420 | 순위 340] 두 열이다). 두 열을 함께 잴 때만 쓴다.
+/// 로비 왼쪽 **블록**(780 — 0.3.41 부터 [상대 목록 420 | 순위 340] 두 열이다). 두 열을 함께 잴 때만 쓴다.
 @MainActor
 private var gpLobbyListColumn: CGRect {
     CGRect(x: GomokuWindowLayout.contentPadding, y: gpBoardOrigin.y,
@@ -1276,7 +1276,7 @@ func gomokuTextIsPlainUserLanguage() throws {
         GomokuNoticeText.abandoned(outcome: .won), GomokuNoticeText.abandoned(outcome: .lost)
     ]
     shown += [GomokuNoticeText.autoStreakWarning(GomokuStore.autoPlaceLossStreak - 1)].compactMap { $0 }
-    // 0.3.31 순위표 · 관전 문구도 같은 잣대를 지난다.
+    // 0.3.41 순위표 · 관전 문구도 같은 잣대를 지난다.
     shown += [
         GomokuText.rankTitle, GomokuText.rankCaption, GomokuText.rankSince(Date(timeIntervalSince1970: 1_791_255_600)),
         GomokuText.points(4), GomokuText.points(-2), GomokuText.points(0), GomokuText.myRank(rank: 12, points: 4),

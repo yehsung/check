@@ -40,14 +40,49 @@ package actor SupabaseWorkService {
     package nonisolated let workTickGate = WorkTickGate()
     #endif
 
+    /// 상점 RPC 의 `p_protocol` 서명을 이 서버가 모른다는 사실을 **증명한 시각**. nil = 모른다(또는 다시 물을 때가 됐다).
+    ///
+    /// **왜 기억하는가**: 서버가 아직 안 올라간 동안 `shop_state`·`buy_character` 가 매번 404 를 한 번 맞고
+    /// 되묻게 되면, 상점을 열 때마다 헛왕복이 두 배다(무료 플랜이다). 한 번 알아낸 사실은 잠시 쓴다.
+    ///
+    /// ★ **왜 Bool 이 아니라 시각인가**(2026-10-05 수리): 영구 깃발은 B15("되묻기가 있으면 서버·앱 배포 순서가
+    /// 무관해진다")를 **F0 이 고른 순서에서 바로 깨뜨린다**. 그 순서는 앱 먼저이고 `db push` 는 CLI 계정 교체
+    /// 대기다 — 그림이 실린 0.3.43 이 db push 전에 상점을 한 번 열면 깃발이 서고, 그 뒤 db push 가 끝나도
+    /// **그 실행 동안 영영** 옛 모양만 나가 로봇 카드를 못 본다(실측: 업그레이드 뒤 목록 `["fox"]`, 새 서비스
+    /// 인스턴스는 `["fox","robot"]`). `service` 는 `WorkTimerStore.swift:120` 의 `let` 이라 프로세스와 수명이
+    /// 같고 메뉴바 앱은 몇 주 산다(`takePokes` 가 캐시를 안 하는 바로 그 이유) — 복구 수단이 앱 재시작뿐이었다.
+    /// 게다가 깃발이 선 뒤 로봇 구매가 눌리면 옛 모양이 나가 새 서버가 `needs_update` 를 주고,
+    /// **이미 최신 앱인 사람**에게 "앱을 업데이트하면 살 수 있어요"라고 말한다(실측).
+    ///
+    /// 둘(목록·구매)이 한 깃발을 쓰는 이유: 같은 마이그레이션 한 장이 두 서명을 함께 바꾼다 — 따로 두면
+    /// "목록은 새 모양, 구매는 옛 모양"인 조합이 생기고 그건 서버에 없는 상태다.
+    ///
+    /// ⚠️ **"404 당 되묻기 한 번"은 순차 호출에 대한 말이다.** 목록과 구매가 *동시에* 첫 호출이면 액터 재진입으로
+    /// 둘이 각자 새 모양을 보내 각자 404 를 맞는다(실측 4건: S404 `{"p_protocol":1}` · B404
+    /// `{"p_protocol":1,"p_id":"fox"}` · S200 `{}` · B200 `{"p_id":"fox"}`). 헛왕복 한 번이고 그 뒤로는 둘 다
+    /// 옛 모양이라 그대로 뒀다 — 첫 질문을 직렬화하면 그 자리를 잘못 풀 때 상점이 영구 정지한다.
+    private var shopProtocolUnsupportedAt: Date?
+
+    /// 깃발을 믿는 기간. 이 시간이 지나면 **새 모양을 다시 한 번 물어본다**(위 ★ 근거).
+    ///
+    /// 5분인 근거: 상점을 한 번 열고 닫는 동안(목록 1 + 구매 n)에는 헛왕복이 0 이라 캐시의 절감은 그대로이고,
+    /// `db push` 가 끝나면 늦어도 5분 뒤에 로봇 카드가 보인다(앱 재시작을 요구하지 않는다).
+    package static let shopProtocolRecheckInterval: TimeInterval = 300
+
+    /// 지금 시각. 깃발 만료를 **시간으로** 재려면 테스트가 바늘을 돌릴 수 있어야 한다(5분을 실제로 기다릴 수 없다).
+    /// 프로덕션은 기본값(`Date()`)이고, 이 이음새가 없으면 만료 단언이 "상수를 읽는다"로 퇴화한다.
+    package nonisolated let clock: @Sendable () -> Date
+
     package init(
         projectURL: URL = SupabaseConfig.projectURL,
         anonKey: String? = SupabaseConfig.anonKey(),
-        session: URLSession = SupabaseWorkService.defaultSession
+        session: URLSession = SupabaseWorkService.defaultSession,
+        clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.projectURL = projectURL
         self.anonKey = anonKey
         self.session = session
+        self.clock = clock
         encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
         decoder = JSONDecoder()
@@ -871,34 +906,104 @@ package actor SupabaseWorkService {
 
     // MARK: - 상점 / 루비 (v0.3.17)
 
-    /// 상점 상태(루비·울트라 잔량 + 캐릭터 가격·보유)를 한 번에 받아 온다. `shop_state()` RPC.
+    /// 상점 상태(루비·울트라 잔량 + 캐릭터 가격·보유)를 한 번에 받아 온다. `shop_state(p_protocol)` RPC.
     ///
     /// **왜 한 방인가**: 가격표와 보유 목록과 잔량은 **같은 순간의 것**이어야 한다. 셋을 따로 부르면
     /// 그 사이에 구매가 끼어들어 "가진 돈은 새 값, 보유 목록은 옛 값"인 화면이 만들어진다.
-    package func fetchShopState(accessToken: String) async throws -> ShopStateResponse {
-        let data = try await send(
+    ///
+    /// ── `protocolVersion` (v0.3.43 로봇) ──
+    /// 서버는 `shop_state(p_protocol int default 0)` 이고, 0 이면 **robot 행을 목록에서 조용히 뺀다**(soft 게이트 —
+    /// 거절하면 옛 클라의 상점이 통째로 죽는다). 그래서 이 값이 0 이면 robot 카드가 아무에게도 안 보인다.
+    /// **숫자를 호출부가 지어내지 마라** — `ShopWire.protocolVersion(drawableCharacterIDs:)` 로만 만든다
+    /// (이유는 그 타입 주석: 그림 없는 빌드가 1 을 보내면 아잉 그림 카드를 팔게 된다).
+    /// 기본값이 `legacyProtocol` 인 이유도 같다: 안 넘긴 호출부는 **새 캐릭터를 못 보는 쪽**으로 틀린다.
+    package func fetchShopState(
+        accessToken: String,
+        protocolVersion: Int = ShopWire.legacyProtocol
+    ) async throws -> ShopStateResponse {
+        let data = try await sendShopRPC(
             path: "/rest/v1/rpc/shop_state",
-            method: "POST",
-            body: EmptyBody(),
-            accessToken: accessToken,
-            prefer: nil
-        )
+            protocolVersion: protocolVersion,
+            accessToken: accessToken
+        ) { ShopStateRequest(pProtocol: $0) }
         return try decoder.decode(ShopStateResponse.self, from: data)
     }
 
-    /// 캐릭터를 산다. `buy_character(p_id)` RPC.
+    /// 캐릭터를 산다. `buy_character(p_id, p_protocol)` RPC.
     ///
     /// **잔량 확인·차감·장부·소유 기입이 서버 한 트랜잭션 안에서 끝난다.** 클라는 가격도 잔량도
     /// 판정하지 않는다 — 아래 화면의 비활성화는 헛왕복을 줄이는 장치이지 게이트가 아니다.
-    package func buyCharacter(accessToken: String, id: String) async throws -> BuyCharacterResponse {
-        let data = try await send(
+    ///
+    /// ── `protocolVersion` (v0.3.43 로봇) ──
+    /// 목록(`shop_state`)과 **짝으로** 건다. 목록만 가리고 구매를 열어 두면 게이트가 장식이다 —
+    /// 서버는 robot 을 0 으로 사려는 호출을 `needs_update` 로 거절하고 루비를 깎지 않는다.
+    /// 값을 만드는 자리는 `ShopWire.protocolVersion(drawableCharacterIDs:)` 하나다(fetchShopState 와 같은 근거).
+    package func buyCharacter(
+        accessToken: String,
+        id: String,
+        protocolVersion: Int = ShopWire.legacyProtocol
+    ) async throws -> BuyCharacterResponse {
+        let data = try await sendShopRPC(
             path: "/rest/v1/rpc/buy_character",
-            method: "POST",
-            body: BuyCharacterRequest(pId: id),
-            accessToken: accessToken,
-            prefer: nil
-        )
+            protocolVersion: protocolVersion,
+            accessToken: accessToken
+        ) { BuyCharacterRequest(pId: id, pProtocol: $0) }
         return try decoder.decode(BuyCharacterResponse.self, from: data)
+    }
+
+    /// 상점 RPC 한 번. 새 모양(`p_protocol` 을 실은 본문)으로 부르고, 서버에 그 서명이 없으면
+    /// (PGRST202/404) **한 번만** 옛 모양으로 되묻는다. `makeBody(nil)` 이 옛 모양이다.
+    ///
+    /// ── 이 겹이 배포 순서를 지운다 ──
+    /// PostgREST 는 **본문의 키 집합으로 함수를 고른다.** 그래서 서버가 아직 안 올라간 동안 `{"p_protocol":1}` 을
+    /// 보내면 PGRST202 가 오고, 그대로 두면 **상점이 통째로 죽는다**(robot 만이 아니라 잔량·가격·보유 전부).
+    /// 되묻는 겹이 있으면 서버·앱 어느 쪽이 먼저 나가도 상점이 산다 — `takePokes` 와 같은 관용구다.
+    ///
+    /// **재호출이 안전한 근거**: 함수를 못 찾았으므로 서버에서 실행된 것이 하나도 없다(구매도 마찬가지다 —
+    /// 404 는 트랜잭션이 시작조차 안 했다는 뜻이다). 그리고 옛 서버에는 robot 이 명단에 없어
+    /// `buy_character('robot')` 이 `unknown_character` 로 끝난다 — 폴백이 "몰래 사 버리는" 길은 원리적으로 없다.
+    ///
+    /// 0(= `legacyProtocol`)은 처음부터 옛 모양으로 보낸다. 서버 기본값이 0 이라 뜻이 같은데, 키를 실으면
+    /// 아직 안 올라간 서버에서 **아무 이득 없이** 404 를 한 번 맞는다(그림 없는 폰이 지금 그 경로다).
+    private func sendShopRPC<Body: Encodable>(
+        path: String,
+        protocolVersion: Int,
+        accessToken: String,
+        makeBody: (Int?) -> Body
+    ) async throws -> Data {
+        func sendLegacy() async throws -> Data {
+            try await send(path: path, method: "POST", body: makeBody(nil),
+                           accessToken: accessToken, prefer: nil)
+        }
+        guard protocolVersion > ShopWire.legacyProtocol, !shopProtocolUnsupportedNow() else {
+            return try await sendLegacy()
+        }
+        do {
+            return try await send(path: path, method: "POST", body: makeBody(protocolVersion),
+                                  accessToken: accessToken, prefer: nil)
+        } catch let error as SupabaseWorkServiceError where BlockReportRules.isMissingFunction(error) {
+            // 되묻기는 404 **전부**에 한다 — 상점을 통째로 죽이지 않는 길이 그것뿐이다(B15).
+            let data = try await sendLegacy()
+            // ★ 깃발은 **여기서만** 선다. 세울 자격은 두 가지가 다 맞을 때만 생긴다(2026-10-05 수리):
+            //  ① 되묻기가 **성공했다** — 옛 서명은 있는데 새 서명이 없다는 뜻이다. 되묻기까지 실패했으면
+            //     `try` 가 위에서 던져 이 줄에 닿지 않는다: 아픈 서버(함수가 없는 게 아니라 서버가 아픈 경우)
+            //     한 번에 앱을 강등시키지 않는다. 복구 수단이 재시작뿐이던 자리다.
+            //  ② 404 가 **PGRST202** 였다 — 프록시·게이트웨이가 본문을 바꾼 404(HTML 404 로 실측)는
+            //     '함수 없음'의 증거가 아니다. 그걸로 깃발을 세우면 멀쩡한 새 서버에서 로봇이 사라진다.
+            if error == .databaseSchemaMissing { shopProtocolUnsupportedAt = clock() }
+            return data
+        }
+    }
+
+    /// 깃발이 지금도 유효한가. 만료되면 nil 로 지워 **새 모양을 다시 한 번 물어본다**
+    /// (영구 깃발이 B15 를 깨뜨린 자리 — `shopProtocolUnsupportedAt` 주석 ★).
+    private func shopProtocolUnsupportedNow() -> Bool {
+        guard let provenAt = shopProtocolUnsupportedAt else { return false }
+        guard clock().timeIntervalSince(provenAt) < Self.shopProtocolRecheckInterval else {
+            shopProtocolUnsupportedAt = nil
+            return false
+        }
+        return true
     }
 
     /// 상대에게 메시지. `send_message(p_to, p_body)` RPC 를 로그인 토큰으로 호출한다.

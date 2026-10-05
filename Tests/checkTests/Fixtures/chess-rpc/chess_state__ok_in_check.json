@@ -1,0 +1,91 @@
+{
+  "match": {
+    "id": "c0de0000-0000-4000-8000-000000000a0a",
+    "fen": "4k3/8/8/8/8/8/4r3/4K3 w - - 10 30",
+    "turn": "white",
+    "black": "bb000000-0000-4000-8000-0000000000b2",
+    "stake": 5,
+    "white": "aa000000-0000-4000-8000-0000000000a1",
+    "result": null,
+    "status": "active",
+    "winner": null,
+    "opponent": "bb000000-0000-4000-8000-0000000000b2",
+    "ply_count": 58,
+    "challenger": "aa000000-0000-4000-8000-0000000000a1",
+    "end_reason": null,
+    "started_ms": 1791179210141,
+    "deadline_ms": 1791182988941,
+    "finished_ms": null,
+    "increment_ms": 3000,
+    "black_ms_left": 237000,
+    "draw_offer_by": null,
+    "white_ms_left": 240000,
+    "black_grace_ms": 2000,
+    "white_grace_ms": 2000,
+    "turn_started_ms": 1791182748941,
+    "invite_expires_ms": 1791179210141
+  },
+  "moves": [],
+  "state": {
+    "match": {
+      "id": "c0de0000-0000-4000-8000-000000000a0a",
+      "fen": "4k3/8/8/8/8/8/4r3/4K3 w - - 10 30",
+      "turn": "white",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "stake": 5,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "result": null,
+      "status": "active",
+      "winner": null,
+      "opponent": "bb000000-0000-4000-8000-0000000000b2",
+      "ply_count": 58,
+      "challenger": "aa000000-0000-4000-8000-0000000000a1",
+      "end_reason": null,
+      "started_ms": 1791179210141,
+      "deadline_ms": 1791182988941,
+      "finished_ms": null,
+      "increment_ms": 3000,
+      "black_ms_left": 237000,
+      "draw_offer_by": null,
+      "white_ms_left": 240000,
+      "black_grace_ms": 2000,
+      "white_grace_ms": 2000,
+      "turn_started_ms": 1791182748941,
+      "invite_expires_ms": 1791179210141
+    },
+    "moves": [],
+    "in_check": true,
+    "my_color": "white",
+    "opponent": {
+      "center": null,
+      "user_id": "bb000000-0000-4000-8000-0000000000b2",
+      "character": "shiba",
+      "avatar_url": null,
+      "display_name": "체스지유"
+    },
+    "legal_moves": [
+      "e1d1",
+      "e1e2",
+      "e1f1"
+    ],
+    "ruby_balance": 145,
+    "server_now_ms": 1791182750162
+  },
+  "status": "ok",
+  "in_check": true,
+  "my_color": "white",
+  "opponent": {
+    "center": null,
+    "user_id": "bb000000-0000-4000-8000-0000000000b2",
+    "character": "shiba",
+    "avatar_url": null,
+    "display_name": "체스지유"
+  },
+  "legal_moves": [
+    "e1d1",
+    "e1e2",
+    "e1f1"
+  ],
+  "ruby_balance": 145,
+  "server_now_ms": 1791182750162
+}

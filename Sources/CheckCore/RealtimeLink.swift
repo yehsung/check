@@ -100,6 +100,15 @@ package enum RealtimeLinkConstants {
     /// **take_pokes 로 보내지 않는다** — 소비할 것이 없는 원자 소비 RPC 를 읽힐 때마다 한 번씩 더 쏘게 된다
     /// (옛 맥 ≤ build 81 이 바로 그렇게 한다 — 그래서 서버는 경계가 커질 때만 보낸다).
     package static let messageReadBroadcastEvent = "message_read"
+
+    /// 1:1 체스 신호의 브로드캐스트 이벤트 이름(v0.3.44). 서버 `chess__ring` 의
+    /// `realtime.send(…, 'chess', poke_topic(…), true)` 와 **문자 그대로 같다**.
+    ///
+    /// 오목 가지와 **같은 이유로** 따로 둔다: 이 이름이 없으면 체스 초인종이 '모르는 이름' 과 같은 갈래로
+    /// 떨어져 **수마다 `take_pokes` 가 한 번씩 더 나간다**. 체스는 블리츠라 한 판 40수면 왕복이 80회이고
+    /// (신청·수락·거절·취소·착수·기권·무승부·정산마다 **두 사람 모두**에게 온다) 소비할 행이 없어 화면은
+    /// 한 픽셀도 안 바뀐다 — 무료 플랜에서 요청만 태운다.
+    package static let chessBroadcastEvent = "chess"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -174,6 +183,9 @@ package enum RealtimeEffect: Equatable, Sendable {
     /// 오목 신호('gomoku')를 받았다 → 오목 상태 재조회 1회(직렬화는 GomokuStore.handleSignal 이 한다).
     /// **take_pokes 가 아니다** — 수마다 원자 소비 RPC 를 한 번씩 더 쏘면 무료 플랜 요청만 태운다.
     case gomokuSignal
+    /// 체스 신호('chess')를 받았다 → 체스 상태 재조회 1회(직렬화는 `ChessStore.handleSignal` 이 한다).
+    /// **take_pokes 가 아니다** — 오목과 같은 사정이고, 체스는 블리츠라 그 낭비가 더 크다.
+    case chessSignal
     /// 읽음 신호('message_read')를 받았다 → 메시지 활동 새로고침(요약 + 대화 패널이 보이면 이력) 1회.
     /// **take_pokes 가 아니다**(v0.3.30) — 읽음은 소비할 행을 만들지 않는다.
     case messageReadSignal
@@ -469,6 +481,10 @@ package struct RealtimeLink: Equatable, Sendable {
             // 오목 가지와 drain 기본값이 한 문장으로 붙어 있어야 하는 소스 계약(V0327GomokuRealtimeTests)을 지키기 위해서다.
             if event == RealtimeLinkConstants.messageReadBroadcastEvent { return [.messageReadSignal] }
             if event == RealtimeLinkConstants.gomokuBroadcastEvent { return [.gomokuSignal] }
+            // 체스(v0.3.44)도 같은 자리에 선다. 이 줄이 없으면 체스 초인종이 아래 기본값으로 떨어져
+            // **수마다 take_pokes 가 한 번씩 더** 나가고(블리츠 한 판 40수 = 왕복 80회) 소켓은 체스 상태를
+            // 한 번도 당기지 않는다.
+            if event == RealtimeLinkConstants.chessBroadcastEvent { return [.chessSignal] }
             return [.drain]
 
         case .heartbeatAck:

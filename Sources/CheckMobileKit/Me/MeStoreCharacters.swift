@@ -9,6 +9,15 @@ import Foundation
 /// - 잔량·보유는 **서버가 준 값**으로만 바꾼다(클라가 스스로 빼지 않는다). 잔량은 오목 호스트의 루비 미러에도 쓴다(게임 탭과 공유).
 /// - 착용값의 진실은 서버다(맥 0.3.30 부터 서버 기준) — 폰은 로컬 선택을 따로 들지 않는다.
 extension MeStore {
+    // MARK: 능력 번호
+
+    /// 상점 RPC 에 싣는 능력 번호(v0.3.43 로봇). 파생 자리는 여기 하나다 — 목록과 구매가 **같은 번호**로 가야 한다
+    /// (목록만 가리고 구매를 열어 두면 게이트가 장식이다 — B12). 재료와 "숫자를 박지 않는" 근거는
+    /// `MeStore.drawableCharacterIDs` 주석에 있다.
+    package var shopProtocolVersion: Int {
+        ShopWire.protocolVersion(drawableCharacterIDs: drawableCharacterIDs)
+    }
+
     // MARK: 읽기
 
     package func loadShop() async {
@@ -19,9 +28,11 @@ extension MeStore {
         shopState.hasFailed = false
         defer { if isCurrent("shop", serial) { shopState.isLoading = false } }
         let service = context.service
+        let protocolVersion = shopProtocolVersion
         do {
             let state = try await context.withMobileSessionRetry { session in
-                try await service.fetchShopState(accessToken: session.accessToken)
+                try await service.fetchShopState(accessToken: session.accessToken,
+                                                 protocolVersion: protocolVersion)
             }
             guard generation == context.generation, isCurrent("shop", serial) else { return }
             applyShopState(state)
@@ -151,12 +162,14 @@ extension MeStore {
         shopNotice = nil
         let generation = context.generation
         let service = context.service
+        let protocolVersion = shopProtocolVersion
         launch { [weak self] in
             guard let self else { return }
             defer { if generation == self.context.generation { self.purchasingID = nil } }
             do {
                 let response = try await self.context.withMobileSessionRetry { session in
-                    try await service.buyCharacter(accessToken: session.accessToken, id: id)
+                    try await service.buyCharacter(accessToken: session.accessToken, id: id,
+                                                   protocolVersion: protocolVersion)
                 }
                 await self.applyPurchaseResponse(response, id: id, generation: generation)
             } catch {

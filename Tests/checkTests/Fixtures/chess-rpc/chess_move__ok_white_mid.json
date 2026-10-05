@@ -1,0 +1,110 @@
+{
+  "san": "Bb5",
+  "match": {
+    "id": "9a7156f6-f055-4590-ba98-f537ead0a600",
+    "fen": "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+    "turn": "black",
+    "black": "bb000000-0000-4000-8000-0000000000b2",
+    "stake": 5,
+    "white": "aa000000-0000-4000-8000-0000000000a1",
+    "result": null,
+    "status": "active",
+    "winner": null,
+    "opponent": "bb000000-0000-4000-8000-0000000000b2",
+    "ply_count": 5,
+    "challenger": "aa000000-0000-4000-8000-0000000000a1",
+    "end_reason": null,
+    "started_ms": 1791182748871,
+    "deadline_ms": 1791183055103,
+    "finished_ms": null,
+    "increment_ms": 3000,
+    "black_ms_left": 305897,
+    "draw_offer_by": null,
+    "white_ms_left": 308770,
+    "black_grace_ms": 2000,
+    "white_grace_ms": 2000,
+    "turn_started_ms": 1791182749206,
+    "invite_expires_ms": 1791182808791
+  },
+  "moves": [
+    {
+      "to": 33,
+      "fen": "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+      "san": "Bb5",
+      "seq": 5,
+      "from": 5,
+      "color": "white",
+      "promo": null,
+      "ms_left": 308770,
+      "ms_spent": 22
+    }
+  ],
+  "state": {
+    "match": {
+      "id": "9a7156f6-f055-4590-ba98-f537ead0a600",
+      "fen": "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+      "turn": "black",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "stake": 5,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "result": null,
+      "status": "active",
+      "winner": null,
+      "opponent": "bb000000-0000-4000-8000-0000000000b2",
+      "ply_count": 5,
+      "challenger": "aa000000-0000-4000-8000-0000000000a1",
+      "end_reason": null,
+      "started_ms": 1791182748871,
+      "deadline_ms": 1791183055103,
+      "finished_ms": null,
+      "increment_ms": 3000,
+      "black_ms_left": 305897,
+      "draw_offer_by": null,
+      "white_ms_left": 308770,
+      "black_grace_ms": 2000,
+      "white_grace_ms": 2000,
+      "turn_started_ms": 1791182749206,
+      "invite_expires_ms": 1791182808791
+    },
+    "moves": [
+      {
+        "to": 33,
+        "fen": "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+        "san": "Bb5",
+        "seq": 5,
+        "from": 5,
+        "color": "white",
+        "promo": null,
+        "ms_left": 308770,
+        "ms_spent": 22
+      }
+    ],
+    "in_check": false,
+    "my_color": "white",
+    "opponent": {
+      "center": null,
+      "user_id": "bb000000-0000-4000-8000-0000000000b2",
+      "character": "shiba",
+      "avatar_url": null,
+      "display_name": "체스지유"
+    },
+    "legal_moves": null,
+    "ruby_balance": 95,
+    "server_now_ms": 1791182749211
+  },
+  "status": "ok",
+  "outcome": null,
+  "in_check": false,
+  "my_color": "white",
+  "opponent": {
+    "center": null,
+    "user_id": "bb000000-0000-4000-8000-0000000000b2",
+    "character": "shiba",
+    "avatar_url": null,
+    "display_name": "체스지유"
+  },
+  "repetition": 1,
+  "legal_moves": null,
+  "ruby_balance": 95,
+  "server_now_ms": 1791182749211
+}

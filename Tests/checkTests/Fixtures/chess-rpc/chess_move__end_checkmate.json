@@ -1,0 +1,110 @@
+{
+  "san": "Ra8#",
+  "match": {
+    "id": "c0de0000-0000-4000-8000-000000000a01",
+    "fen": "R5k1/5ppp/8/8/8/8/8/6K1 b - - 1 1",
+    "turn": "black",
+    "black": "bb000000-0000-4000-8000-0000000000b2",
+    "stake": 5,
+    "white": "aa000000-0000-4000-8000-0000000000a1",
+    "result": "white_win",
+    "status": "finished",
+    "winner": "aa000000-0000-4000-8000-0000000000a1",
+    "opponent": "bb000000-0000-4000-8000-0000000000b2",
+    "ply_count": 1,
+    "challenger": "aa000000-0000-4000-8000-0000000000a1",
+    "end_reason": "checkmate",
+    "started_ms": 1791179209553,
+    "deadline_ms": null,
+    "finished_ms": 1791182749574,
+    "increment_ms": 3000,
+    "black_ms_left": 300000,
+    "draw_offer_by": null,
+    "white_ms_left": 302884,
+    "black_grace_ms": 2000,
+    "white_grace_ms": 2000,
+    "turn_started_ms": 1791182749570,
+    "invite_expires_ms": 1791179209553
+  },
+  "moves": [
+    {
+      "to": 56,
+      "fen": "R5k1/5ppp/8/8/8/8/8/6K1 b - - 1 1",
+      "san": "Ra8#",
+      "seq": 1,
+      "from": 0,
+      "color": "white",
+      "promo": null,
+      "ms_left": 302884,
+      "ms_spent": 116
+    }
+  ],
+  "state": {
+    "match": {
+      "id": "c0de0000-0000-4000-8000-000000000a01",
+      "fen": "R5k1/5ppp/8/8/8/8/8/6K1 b - - 1 1",
+      "turn": "black",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "stake": 5,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "result": "white_win",
+      "status": "finished",
+      "winner": "aa000000-0000-4000-8000-0000000000a1",
+      "opponent": "bb000000-0000-4000-8000-0000000000b2",
+      "ply_count": 1,
+      "challenger": "aa000000-0000-4000-8000-0000000000a1",
+      "end_reason": "checkmate",
+      "started_ms": 1791179209553,
+      "deadline_ms": null,
+      "finished_ms": 1791182749574,
+      "increment_ms": 3000,
+      "black_ms_left": 300000,
+      "draw_offer_by": null,
+      "white_ms_left": 302884,
+      "black_grace_ms": 2000,
+      "white_grace_ms": 2000,
+      "turn_started_ms": 1791182749570,
+      "invite_expires_ms": 1791179209553
+    },
+    "moves": [
+      {
+        "to": 56,
+        "fen": "R5k1/5ppp/8/8/8/8/8/6K1 b - - 1 1",
+        "san": "Ra8#",
+        "seq": 1,
+        "from": 0,
+        "color": "white",
+        "promo": null,
+        "ms_left": 302884,
+        "ms_spent": 116
+      }
+    ],
+    "in_check": null,
+    "my_color": "white",
+    "opponent": {
+      "center": null,
+      "user_id": "bb000000-0000-4000-8000-0000000000b2",
+      "character": "shiba",
+      "avatar_url": null,
+      "display_name": "체스지유"
+    },
+    "legal_moves": null,
+    "ruby_balance": 115,
+    "server_now_ms": 1791182749575
+  },
+  "status": "ok",
+  "outcome": "checkmate:white",
+  "in_check": null,
+  "my_color": "white",
+  "opponent": {
+    "center": null,
+    "user_id": "bb000000-0000-4000-8000-0000000000b2",
+    "character": "shiba",
+    "avatar_url": null,
+    "display_name": "체스지유"
+  },
+  "repetition": 1,
+  "legal_moves": null,
+  "ruby_balance": 115,
+  "server_now_ms": 1791182749575
+}

@@ -50,7 +50,7 @@ struct V0317ShopTests {
         #expect(sparse.characters?.first?.owned == nil)
     }
 
-    @Test("캐릭터 구매 — 어휘 여섯 가지가 전부 디코드된다")
+    @Test("캐릭터 구매 — 어휘 일곱 가지가 전부 디코드된다")
     func buyCharacterDecodesEveryStatus() throws {
         let cases: [(String, String)] = [
             (#"{"status":"ok","character":"fox","price":30,"ruby_balance":12}"#, "ok"),
@@ -59,6 +59,9 @@ struct V0317ShopTests {
             (#"{"status":"insufficient","need":30,"have":12}"#, "insufficient"),
             (#"{"status":"unauthorized"}"#, "unauthorized"),
             (#"{"status":"no_profile"}"#, "no_profile"),
+            // v0.3.43: 이 앱이 아직 그 캐릭터를 못 산다(서버 `p_protocol` soft 게이트). **루비는 안 깎인다** —
+            // 문구는 `WorkTimerStore.needsUpdateNotice` 이고 그 배선은 V0343 스위트가 잰다.
+            (#"{"status":"needs_update","character":"robot"}"#, "needs_update"),
         ]
         for (json, status) in cases {
             let decoded = try Self.decoder().decode(BuyCharacterResponse.self, from: Data(json.utf8))
@@ -403,10 +406,19 @@ struct V0317ShopTests {
             let panel = CheckShopPanel(store: store, onBack: {})
             let bitmap = try #require(Self.bitmap(panel, width: CheckMenuView.contentColumnWidth),
                                       "렌더 실패")
-            // ImageRenderer 는 Menu·Picker·TextField 자리에 (255,204,0) 상자를 박는다. 하나라도 있으면
+            // ImageRenderer 는 `TextField`·분절 `Picker` 자리에 (255,204,0) 상자를 박는다. 하나라도 있으면
             // 이 패널은 스냅샷에서 **보이지 않는 것과 같다**.
-            #expect(Self.yellowPixels(bitmap) == 0,
-                    Comment(rawValue: "\(name): '못 그림' 노란 상자가 있다 — Menu/TextField 를 썼다"))
+            //
+            // ⚠️ 재는 것은 **상자**이지 '노란 픽셀'이 아니다(2026-10-05). 로봇의 호박색 눈이 이 술어에 걸려
+            //    상점 카드에서 노란 픽셀이 잡힌다 — 옛 단언(`== 0`)은 **캐릭터가 노란색을 쓰는 것을 금지**하는
+            //    단언이 돼 버렸다. 표식은 카드를 통째로 덮는 꽉 찬 사각형이라 한 행에 수백 px 이 **연달아**
+            //    놓이고(TextField 584 · 분절 Picker 140 실측), 캐릭터의 노란 점은 1~2px 에서 끊긴다.
+            // ⚠️ 그리고 **`Menu` 와 기본 `Picker` 는 이 그물에 안 걸린다**(실측: 노란 0px · 런 0 — 아무것도
+            //    안 그린다). 그 둘은 아래 `colorfulPixels` 단언이 "그 자리에 잉크가 있는가"로 잡는다.
+            let yellowRun = Self.longestYellowRun(bitmap)
+            #expect(yellowRun < 24,
+                    Comment(rawValue: "\(name): '못 그림' 노란 상자가 있다(가로 연속 \(yellowRun)px · "
+                            + "노란 픽셀 \(Self.yellowPixels(bitmap))개) — TextField/분절 Picker 를 썼다"))
             // 캐릭터 그림이 실제로 칠해졌는가(이 화면의 회색 팔레트에 없는 유채색 덩어리).
             // ★ 임계가 캐릭터 패널(2,000)보다 낮은 이유: 상점 카드의 그림은 80×56 으로 저쪽(80×72)보다
             //   작고, **살 수 없는 카드는 opacity 0.5** 라 어두운 바탕과 섞여 채도가 절반으로 떨어진다.
@@ -641,6 +653,27 @@ struct V0317ShopTests {
 
     static func yellowPixels(_ bitmap: NSBitmapImageRep) -> Int {
         count(bitmap) { r, g, b in r >= 240 && g >= 195 && b <= 40 }
+    }
+
+    /// 같은 노란색이 **한 행에 연달아** 놓인 최대 길이(px). '못 그림' 표식은 꽉 찬 사각형이라 이 값이 컨트롤
+    /// 폭만큼 나오고, 캐릭터 그림의 노란 점(로봇 눈)은 한두 픽셀에서 끊긴다 — 그 둘을 가르는 것이 전부다.
+    static func longestYellowRun(_ bitmap: NSBitmapImageRep) -> Int {
+        guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return 0 }
+        let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+        var best = 0
+        for y in 0..<bitmap.pixelsHigh {
+            var run = 0
+            for x in 0..<bitmap.pixelsWide {
+                let p = data + y * bpr + x * spp
+                if Int(p[0]) >= 240 && Int(p[1]) >= 195 && Int(p[2]) <= 40 {
+                    run += 1
+                    if run > best { best = run }
+                } else {
+                    run = 0
+                }
+            }
+        }
+        return best
     }
 
     /// 회색 팔레트에 없는 **유채색** 픽셀(캐릭터 그림·루비).

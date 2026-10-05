@@ -1,0 +1,66 @@
+{
+  "about": "체스 수 세기(perft) 기대값 — Swift 테스트와 SQL 마이그레이션이 **같이 읽는 한 벌**이다. 숫자를 한쪽에만 적으면 둘이 갈려도 아무도 모른다.",
+  "positions_source": "Chess Programming Wiki, Perft Results (공표값 — 세계의 여러 엔진이 서로 교차 검증한 수치다). 어긋나면 우리 구현이 틀린 것이다 — 이 숫자를 고치지 마라.",
+  "leaves_source": "이 저장소에서 만든 종국 잎 자리(FEN 은 손으로 짜고 ChessRules 로 확인했다 — 2026-10-05). 공표값이 아니라 **구현 둘을 맞세우는 자리**다.",
+  "leaves_why": "SQL 쪽 합계에서 array_length(빈 배열, 1) 은 0 이 아니라 NULL 이다. 그래서 '합법 수가 0 인 국면'이 섞이면 합계가 통째로 NULL 로 사라진다. 그 결함은 깊이를 올려야만 우연히 밟히는데(깊이 5 에서 46초), 아래 잎 자리로는 ms 에 밟힌다. counts 가 0 인 자리와 terminal_children 이 비지 않은 자리, 둘 다 있어야 한다.",
+  "counts_note": "counts[0] 이 깊이 1 이다. terminal_children 은 '그 수를 둔 뒤 상대가 둘 수 없는' 수들의 UCI 표기 — divide(깊이 2) 에서 노드 0 으로 나와야 하는 줄이고, 여기가 NULL 결함의 발화점이다.",
+  "sql_contract": "마이그레이션(supabase/migrations/20261005140000_chess_rules.sql)은 이 숫자를 베껴 적는다. 행 모양은 ('<라벨>', '<fen>', <깊이>, <노드>) — fen 다음에 정수 둘, 깊이가 먼저다. 그 행들은 식별자에 chess_perft 가 든 문장 안에 있어야 한다(대조 테스트가 그 문장만 읽는다). 깊이·노드를 손으로 바꾸면 ChessPerftFixtureSQLContract 가 빨개진다.",
+  "positions": [
+    {
+      "label": "① 초기 배치",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "counts": [20, 400, 8902, 197281, 4865609]
+    },
+    {
+      "label": "② Kiwipete(캐슬링·핀 덩어리)",
+      "fen": "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "counts": [48, 2039, 97862, 4085603]
+    },
+    {
+      "label": "③ 폰 끝내기(앙파상·수직 핀)",
+      "fen": "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+      "counts": [14, 191, 2812, 43238, 674624]
+    },
+    {
+      "label": "④ 승격·거짓 캐슬링 권리",
+      "fen": "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+      "counts": [6, 264, 9467, 422333]
+    },
+    {
+      "label": "⑤ 승격 직전",
+      "fen": "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+      "counts": [44, 1486, 62379, 2103487]
+    },
+    {
+      "label": "⑥ 대칭 중반",
+      "fen": "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+      "counts": [46, 2079, 89890, 3894594]
+    }
+  ],
+  "leaves": [
+    {
+      "label": "⑦ 외통 잎 — 백 Qg7·Kg6, 흑 Kg8",
+      "fen": "6k1/6Q1/6K1/8/8/8/8/8 b - - 0 1",
+      "counts": [0, 0, 0],
+      "outcome": "checkmate:white",
+      "terminal_children": [],
+      "note": "둘 차례인 흑이 체크 안에 갇혀 둘 수가 없다. g7 은 Kg6 이 받치고 f8·h8·f7·h7 은 퀸이 본다. 수 세기는 어느 깊이에서도 0 — 합계가 NULL 이 되는 구현은 여기서 바로 죽는다."
+    },
+    {
+      "label": "⑧ 스테일메이트 잎 — 백 Qf7·Kg6, 흑 Kh8",
+      "fen": "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1",
+      "counts": [0, 0, 0],
+      "outcome": "stalemate",
+      "terminal_children": [],
+      "note": "흑 왕은 체크가 아닌데 갈 곳이 없다(g8·h7·g7 전부 막혔다). ⑦ 과 숫자가 같고 사유가 다르다 — '체크면 0' 으로만 가른 구현은 ⑦ 만 맞히고 ⑧ 에서 갈린다."
+    },
+    {
+      "label": "⑨ 외통이 한 수 앞인 국면 — 백 Ra1, 흑 Kg8 밑줄",
+      "fen": "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1",
+      "counts": [17, 128, 2313],
+      "outcome": null,
+      "terminal_children": ["a1a8"],
+      "note": "Ra8 이 밑줄 외통이다(흑 왕은 f8·h8 이 룩 사정권, f7·g7·h7 은 자기 폰). 깊이 2 의 열일곱 줄 중 **한 줄만 0** 이라, 합계가 NULL 로 삼켜지면 128 이 아니라 아무 값도 안 나온다. ⑦⑧ 과 달리 '전체가 0' 이 아니어서, 0 을 특별 취급해 비껴가는 구현도 여기선 못 숨는다."
+    }
+  ]
+}

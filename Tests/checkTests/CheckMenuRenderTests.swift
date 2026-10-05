@@ -1084,12 +1084,12 @@ private func renderPNG(_ view: some View, width: CGFloat = 340) throws -> Data {
 // 달라지는 것은 그림의 총 폭과, 그 오른쪽에 새로 생긴 레일 영역(338…402pt)뿐이다.
 @MainActor
 private func renderNaturalBitmap(_ view: some View, scale: CGFloat = 2) throws -> NSBitmapImageRep {
-    let renderer = ImageRenderer(content: view.fixedSize())
-    renderer.scale = scale
-    guard let image = renderer.nsImage,
-          let tiffData = image.tiffRepresentation,
-          let bitmap = NSBitmapImageRep(data: tiffData)
-    else {
+    // ★ 굳을 때까지 굽는다(2026-10-05). ImageRenderer 는 **한 내용의 첫 두 장**을 세 번째부터와 다른
+    //   경로로 구워, 비교하는 두 장이 그 경계를 가로지르면 화면 전체가 채널당 ≤2 로 갈린다 —
+    //   대조군(같은 입력 → 같은 해시)이 빨개지고 부등식은 잡음만으로 초록이 된다. 허용오차를 키우는
+    //   대신 재는 그림을 굳은 상태로 만든다. 근거·재현은 CheckRenderSettle 머리 주석에 있다.
+    //   (줄 수를 원본과 맞춰 둔다 — 이 파일의 격리 스위트 이름이 호출 지점의 `#line` 에서 나온다.)
+    guard let bitmap = CheckRenderSettle.bitmap(view.fixedSize(), scale: scale) else {
         throw RenderError.failed
     }
     return bitmap
@@ -4058,11 +4058,11 @@ private func passwordResetStore(
 /// 뷰를 지정 폭 고정으로 렌더한 비트맵. 픽셀 단위 비교(잘림/자리 검증)용.
 @MainActor
 private func renderBitmap(_ view: some View, width: CGFloat = 340, scale: CGFloat = 2) throws -> NSBitmapImageRep {
-    let renderer = ImageRenderer(content: view.frame(width: width).fixedSize())
-    renderer.scale = scale
-    guard let image = renderer.nsImage,
-          let tiff = image.tiffRepresentation,
-          let bitmap = NSBitmapImageRep(data: tiff)
+    // 굳을 때까지 굽는다 — 근거는 renderNaturalBitmap 과 같다(CheckRenderSettle). 한 장만 구우면
+    // 같은 입력의 두 장이 식은 쪽/굳은 쪽으로 갈려 바이트 비교가 간헐적으로 거짓말한다.
+    // (여기도 줄 수를 원본과 맞춘다 — 아래 호출 지점들의 `#line` 이 격리 스위트 이름이다.)
+    //
+    guard let bitmap = CheckRenderSettle.bitmap(view.frame(width: width).fixedSize(), scale: scale)
     else { throw RenderError.failed }
     return bitmap
 }

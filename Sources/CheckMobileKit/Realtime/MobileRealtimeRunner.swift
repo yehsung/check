@@ -204,6 +204,11 @@ package final class MobileRealtimeRunner {
                 requestMessageRead()
             case .gomokuSignal:
                 gomoku?.handleSignal()
+            case .chessSignal:
+                // 폰에는 아직 체스 화면이 없다(DECISIONS A8 — 모바일 세션으로 넘겼다). **중요한 것은 이 가지가
+                // `.drain` 으로 떨어지지 않는 것**이다: 떨어지면 체스 초인종마다(블리츠 한 판 40수 = 왕복 80회)
+                // 폰이 소비할 것도 없는 `take_pokes` 를 한 번씩 더 부른다. 폰이 체스를 받으면 여기서 잇는다.
+                break
             case .pushAccessToken(let token):
                 transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

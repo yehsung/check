@@ -187,6 +187,8 @@ extension WorkTimerStore {
         // 조회는 소비가 아니라 두 맥 모두가 봐도 누구의 것을 훔치지 않는다(`.gomokuSignal` 가지와 같은 근거).
         if case .didWake = event, !realtime.transportAvailable {
             gomoku.systemDidWake()
+            // 체스도 같다(v0.3.44) — 뚜껑을 닫아 둔 사이에 온 신청은 TTL 60초이고 진행 중 판은 시간이 흐른다.
+            chess.systemDidWake()
         }
     }
 
@@ -225,6 +227,9 @@ extension WorkTimerStore {
                 // 오목 받은 신청·진행 중 대국도 조인 직후 한 번 따라잡는다(브로드캐스트엔 재생이 없다).
                 // 소비가 아니라 조회라 근무 게이트(realtimeMayConsumePokes)를 지나지 않는다.
                 gomoku.realtimeDidJoin()
+                // 체스도 같다(v0.3.44). 받은 신청은 TTL 60초이고 진행 중 판은 시간이 흐르므로, 조인 직후
+                // 한 번 따라잡지 않으면 소켓이 끊겼던 사이에 온 신청·수를 창을 열 때까지 모른다.
+                chess.realtimeDidJoin()
             case .drain:
                 // 근무중 게이트를 지난 뒤에만 소비한다. 여기서 requestDrain 을 무조건 부르면
                 // 집 맥이 회사 맥의 찌르기를 훔친다(위 realtimeMayConsumePokes 주석).
@@ -246,6 +251,9 @@ extension WorkTimerStore {
                 // 오목 신호는 take_pokes 로 가지 않는다. 대국·신청 상태는 서버 표가 권위이고 조회는
                 // 소비가 아니므로, 두 맥 모두가 받아도 누구의 것을 훔치지 않는다 — 그래서 게이트가 없다.
                 gomoku.handleSignal()
+            case .chessSignal:
+                // 체스 신호도 조회뿐이다(소비 아님) — 두 맥이 모두 받아도 누구의 것을 훔치지 않아 게이트가 없다.
+                chess.handleSignal()
             case .pushAccessToken(let token):
                 realtime.transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

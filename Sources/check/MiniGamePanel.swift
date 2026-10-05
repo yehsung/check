@@ -307,9 +307,16 @@ enum MiniGameSpaceKey {
     }
 
     /// 스페이스를 게임에 넘기지 않는 우리 독립 창들(창 식별자 = 각 컨트롤러의 자리 저장 키).
+    ///
+    /// ★ **독립 창을 새로 만들면 여기에 더해야 한다.** 이 목록이 아는 창이 "오목·설정 둘뿐"이던 동안,
+    ///   미니게임 창을 띄워 둔 채 오목 대국 채팅을 치면 스페이스가 통째로 삼켜져 띄어쓰기가 안 됐다
+    ///   (2026-09-17 실사용 제보). 체스 창(v0.3.44)의 입력도 같은 로컬 모니터를 지나므로 빠지면 같은 사고가
+    ///   그대로 재현된다 — 빼면 빨개지는 테스트가 `V0344ChessWindowTests` 에 있다.
     @MainActor
     static var standaloneWindowIDs: Set<String> {
-        [CheckGomokuWindowController.frameAutosaveName, CheckSettingsWindowController.frameAutosaveName]
+        [CheckGomokuWindowController.frameAutosaveName,
+         CheckChessWindowController.frameAutosaveName,
+         CheckSettingsWindowController.frameAutosaveName]
     }
 
     /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(창 가시성)를 통과했을 때 실행되는 바로 그 클로저다 —
@@ -553,7 +560,8 @@ struct CheckMiniGameWindowView: View {
             isFrozen: pauseState.isFrozen,
             onSelect: { store.selectMiniGame($0) },
             onPause: { togglePause() },
-            onGomoku: { store.gomoku.openWindow(focusMatchID: nil) }
+            onGomoku: { store.gomoku.openWindow(focusMatchID: nil) },
+            onChess: { store.chess.openWindow(focusMatchID: nil) }
         )
     }
 
@@ -1062,6 +1070,7 @@ struct MiniGameGameHeader: View {
     let onSelect: (MiniGameKind) -> Void
     let onPause: () -> Void
     let onGomoku: () -> Void
+    let onChess: () -> Void
 
     var body: some View {
         HStack(spacing: 6) {
@@ -1087,12 +1096,19 @@ struct MiniGameGameHeader: View {
                     onPause()
                 }
             } else {
-                // 1:1 오목 입구(v0.3.27). 오목은 이 창과 **별도의 넓은 창**이다(사용자 결정) — 여기는 문만 둔다.
-                // [일시정지] 와 **같은 자리를 번갈아 쓴다**: 헤더는 344pt 인데 칩 셋 + 일시정지 + 입구를 한 줄에 세우면
-                // 넘친다. 판이 도는 중에는 어차피 누를 수 없는 문이다(누르는 순간 이 창이 키를 잃어 판이 끝난다) —
-                // 정지 중에는 다시 보인다("포기하고 다른 게임" 과 같은 결).
+                // 1:1 대결 창 입구 **둘**(오목 v0.3.27 · 체스 v0.3.44). 둘 다 이 창과 **별도의 넓은 창**이다
+                // (사용자 결정) — 여기는 문만 둔다. [일시정지] 와 **같은 자리를 번갈아 쓴다**: 판이 도는 중에는
+                // 어차피 누를 수 없는 문이다(누르는 순간 이 창이 키를 잃어 판이 끝난다).
                 // 팝오버를 닫지 않는다 — 이 창에서 오는 길이면 팝오버는 이미 닫혀 있다(토글이라 부르면 오히려 열린다).
+                //
+                // ★ **입구 둘 다 이름을 단다 — 실측으로 들어간다.** 입구가 둘이 되며 344pt 예산을 다시 쟀고,
+                //   이름을 둘 다 단 머리글이 **330.5pt** 였다(2026-10-05 `theHeaderFitsInThreeHundredFortyFour`
+                //   의 출력). 남는 여유는 13.5pt 뿐이라 **문을 하나 더 달거나 이름을 늘리면 넘친다** —
+                //   그 경계를 그 시험이 숫자로 지킨다(아이콘 전용으로 접는 길은 `showsTitle: false` 로 열어 뒀다).
+                //   이름을 떼지 않은 이유: 이 버튼은 '다른 창을 여는 문' 이라 아이콘만으로는 어디로 가는지
+                //   읽히지 않고, 종류 칩과 달리 **고른 상태가 없어** "지금 있는 자리" 라는 단서도 없다.
                 MiniGameGomokuEntryButton { onGomoku() }
+                MiniGameChessEntryButton { onChess() }
             }
         }
     }
@@ -1175,16 +1191,63 @@ struct MiniGameGomokuEntryButton: View {
     static let icon = "circle.grid.3x3.fill"
     static let help = "렌주룰 1:1 오목 대결 창을 열어요"
 
+    /// 이름을 함께 그릴지. **헤더는 참**(위 ★ — 실측 330.5pt / 344pt). 예산이 더 빠듯해지는 날 접는 문이다.
+    var showsTitle: Bool = true
     let action: () -> Void
 
     @State private var hovering = false
 
     var body: some View {
+        MiniGameEntryCapsule(title: Self.title, icon: Self.icon, help: Self.help,
+                             showsTitle: showsTitle, hovering: hovering, action: action)
+            .onHover { hovering = $0 }
+    }
+}
+
+/// 헤더의 [1:1 체스] 입구(v0.3.44). 오목 입구와 **같은 초록 캡슐**이다 — 색의 뜻이 "이 창의 게임"(파랑 칩)이
+/// 아니라 "다른 창으로 가는 1:1 대결 문"이고, 두 입구는 그 뜻이 같다. 가르는 것은 **아이콘**이다.
+/// 렌더 테스트가 단독으로 폭을 잰다(internal 인 이유).
+struct MiniGameChessEntryButton: View {
+    static let title = "1:1 체스"
+    static let icon = ChessEntryIcon.symbol
+    static let help = "FIDE 규칙 1:1 체스 대결 창을 열어요"
+
+    var showsTitle: Bool = true
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        // 아이콘 이름은 이 맥에서 실제로 풀리는 것만 쓴다(없으면 아무것도 안 그려 자리만 빈다 — ChessEntryIcon).
+        MiniGameEntryCapsule(title: Self.title, icon: ChessEntryIcon.resolved, help: Self.help,
+                             showsTitle: showsTitle, hovering: hovering, action: action)
+            .onHover { hovering = $0 }
+    }
+}
+
+/// 두 입구가 **한 부품**을 쓴다(같은 사실은 한 부품 — 각자 만들면 수치가 갈린다: 오목에서 모서리 16 vs 14 ·
+/// 아이콘 32 vs 34 로 갈려 있던 사고가 그 자리다).
+private struct MiniGameEntryCapsule: View {
+    let title: String
+    let icon: String
+    let help: String
+    let showsTitle: Bool
+    let hovering: Bool
+    let action: () -> Void
+
+    var body: some View {
         Button(action: action) {
-            Label(Self.title, systemImage: Self.icon)
+            Group {
+                if showsTitle {
+                    Label(title, systemImage: icon)
+                } else {
+                    Image(systemName: icon)
+                }
+            }
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(CheckTheme.working)
-                .padding(.horizontal, 10)
+                // 아이콘 전용은 좌우 여백을 줄인다(종류 칩과 같은 수치 — 10 그대로면 넓은 알약이 된다).
+                .padding(.horizontal, showsTitle ? 10 : 8)
                 .frame(height: 26)
                 .background(Capsule().fill(CheckTheme.working.opacity(hovering ? 0.24 : 0.14)))
                 .overlay(Capsule().stroke(CheckTheme.working.opacity(0.45), lineWidth: 1))
@@ -1192,8 +1255,8 @@ struct MiniGameGomokuEntryButton: View {
                 .fixedSize()
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .checkTooltip(Self.help)
+        .accessibilityLabel(title)
+        .checkTooltip(help)
     }
 }
 

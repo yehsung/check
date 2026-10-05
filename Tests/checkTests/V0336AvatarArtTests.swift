@@ -28,12 +28,33 @@ import Testing
 
 @Suite("v0.3.36 아바타 상자 규칙(순수)")
 struct V0336PortraitBoxTests {
-    /// 여섯 캐릭터의 **조인 초상**(`portrait-neutral.png` 를 알파 상자로 조인 것 — 2026-09-21 실측, 아잉만 가로가 더 넓다).
+    /// 일곱 캐릭터의 **조인 초상**(`portrait-neutral.png` 를 알파 상자로 조인 것 — 2026-09-21 실측, 아잉만 가로가 더 넓다).
     /// 번들을 안 읽는 순수 표다. 실제 그림과 갈리지 않는지는 `V0336FaceScaleTests.상자_표가_실제_그림과_맞다` 가 본다.
+    ///
+    /// 로봇은 2026-10-05 에 구워 넣었다(`CGImageSource` + `alphaBounds(threshold: 8)` 로 실측 158×192).
+    /// 첫 굽기(140×192)는 아래 두 계약에서 빨갰고 **그림을 다시 세워** 고쳤다 — 단언은 한 줄도 안 낮췄다.
+    ///
+    /// **무엇이 틀렸었나**(2026-10-05 실측):
+    /// ① 초상 비 0.729 · 셀 비 0.650 → 차 0.0795(계약 0.005). 원인 둘 — 배포본 초상이 `--head-side 0.89` 로
+    ///    구워져 **발을 자르고 확대**했고(아틀라스는 `--head-side` 를 안 보므로 초상 두 장만 다른 세대였다),
+    ///    그 아래에 로봇 그림만 **알파 가장자리가 무르다**(α>1 상자와 α>8 상자가 셀에서 3×1 px 어긋남 — 기존 5종은 0×0).
+    ///    팩커는 α>1 로 자르고 이 계약은 α>8 로 재므로 그 띠가 초상·셀에서 다르게 먹혔다.
+    /// ② 26pt 커버리지 0.781(하한 0.85). 내역: 디스크 좌우 맨받침 0.104 + 실루엣 안 구멍 0.027 +
+    ///    **어두운 바이저·관절이 받침색과 구분이 안 됨 0.092**(불투명의 9.3%, 평균 RGB 79·75·72 ≈ 받침 73·75·88).
+    ///    기존 5종은 이 함정을 피한 게 아니라 **만난 적이 없다**(어두운 면이 0.1~2.3% 뿐).
+    ///
+    /// **어떻게 고쳤나**: 원본 5장(정면 2 + 걷기 3)에 **같은 변환**을 먹여 다시 구웠다 —
+    /// 크레스트를 낮은 융기로 눌러(세로 0.22) 전신 비를 올리고, 몸통·다리를 눌러(0.75 · 0.72) 2.2등신으로,
+    /// 아래 몸을 가로 1.14 배로 넓혀 원 좌우를 메우고, **작은** 어두운 조각(관절·슬릿·바이저 바깥)만 밝게 올렸다
+    /// (큰 바이저는 차콜 그대로 — 26pt 는 소스 29×29px 을 한 픽셀로 평균해서 작은 검정은 통째로 중간 회색이 된다).
+    /// 알파는 α≤8 을 0 으로 경화했고 굽기를 `--head-side 0 --alpha-threshold 8` 로 못 박았다.
+    /// 결과(실측): ① 비차 0.0026 · box 폭차 0.07pt · ② 커버리지 **0.8812**(6종은 0.910~0.995) ·
+    /// earWidth 21.48(띠 19.39~23.29 안 — 띠를 안 넓혔다). 재굽기 절차는 스크래치패드 `art/REBAKE-robot.md`.
     static let artSizes: [(id: String, size: CGSize)] = [
         ("fox", CGSize(width: 167, height: 192)),
         ("ghost", CGSize(width: 189, height: 192)),
         ("jellyfish", CGSize(width: 167, height: 192)),
+        ("robot", CGSize(width: 158, height: 192)),
         ("shiba", CGSize(width: 151, height: 192)),
         ("squirrel", CGSize(width: 140, height: 192)),
         ("aing", CGSize(width: 164, height: 154)),
@@ -216,6 +237,9 @@ struct V0336FaceScaleTests {
     /// - 새 규칙(높이 1.03 · 폭 상한 1.02): 다람쥐 19.4 · 여우 19.8 · 시바 20.8 · 유령 21.9 · 아잉 23.0 · 해파리 23.3 → **1.20배**
     /// - 옛 규칙(정사각 1.20 + scaledToFit · 아래로 0.15): 22.6 ~ 27.1 → **1.20배** (편차는 그대로, 전부 더 컸을 뿐)
     /// - 레퍼런스(조영서 캡처): 20.6 — 여섯이 만드는 띠(19.4~23.3) 안이다.
+    /// - 로봇(2026-10-05 추가 · 같은 날 그림을 다시 세워 재측정): **21.48** — 시바 20.78 과 유령 21.90 사이다.
+    ///   lo·hi 를 **둘 다 안 움직였으므로** 띠(19.39~23.29)와 비율(1.2014)이 로봇을 넣기 전과 같다.
+    ///   D1 계약을 로봇이 넓히지 않았다는 뜻이다(첫 굽기는 19.53 이었다 — 그때도 띠 안이었다).
     /// 즉 **3배로 갈리지 않고**, 편차도 옛 규칙과 같다. 두 규칙 다 캐릭터마다 **같은 기준**(조인 실루엣)으로 한 번에
     /// 키우기 때문이다 — 얼굴 크기 차이는 그림 자체의 차이(아잉은 머리만, 시바는 전신)이지 규칙이 만든 것이 아니다.
     /// 그래도 편차 상한은 **계약으로 남긴다**: 언젠가 캐릭터별 보정을 넣으면 여기서 먼저 빨개진다.
@@ -224,7 +248,7 @@ struct V0336FaceScaleTests {
         for id in AppUserAvatarArt.knownIDs.sorted() {
             widths.append((id, try #require(Self.earWidthPt(id), "\(id) 를 못 쟀다")))
         }
-        #expect(widths.count == 6, "\(widths.count) 종만 쟀다")
+        #expect(widths.count == 7, "\(widths.count) 종만 쟀다")
         let values = widths.map(\.1)
         let lo = try #require(values.min()), hi = try #require(values.max())
         #expect(hi / lo < 1.30, "얼굴 폭이 \(hi / lo) 배 갈렸다 — \(widths)")
@@ -348,6 +372,76 @@ struct V0336AvatarRenderTests {
             let coverage = try V0335AvatarCharacterRenderTests.coverage(rep, size: 26)
             #expect(coverage > 0.85, "\(id) 26pt 커버리지 \(coverage)")
         }
+    }
+
+    /// ★ **로봇을 그리면 잉크가 있다**(2026-10-05, 일곱 번째 캐릭터 — 자산만 넣어 들어온다).
+    ///
+    /// 위 단언들은 전부 `knownIDs` 를 돌기 때문에 **수만 6→7 로 고치면 초록이 된다.** 그런데 그렇게 해도
+    /// 로봇이 안 그려지는 상태가 남는다: 상자·크기 단언은 **조인 크기만** 보므로 초상·아틀라스가
+    /// 엉뚱한 그림이어도 통과한다(첫 굽기 때 로봇 조인 초상은 **다람쥐와 완전히 같은 140×192** 였다 —
+    /// 지금은 158×192 지만, 크기가 겹치는 쌍은 언제든 다시 생긴다). 그래서 여기서는 **결과(픽셀)를 잰다.**
+    ///
+    /// 기준선 규칙: 비교 상대가 실제로 달라야 뜻이 있다 — 다람쥐(첫 굽기에서 같은 상자였던 쌍) ·
+    /// 아잉(폴백이 이기면 나오는 것) · 이니셜(초상 디코드가 실패하면 호출부가 그리는 것) 셋 다와 달라야 한다.
+    @Test func 로봇을_그리면_잉크가_있고_남의_그림이_아니다() throws {
+        #expect(AppUserAvatarArt.knownIDs.contains("robot"),
+                "카탈로그가 Characters/robot 을 못 읽었다 — 폴더 이름과 manifest.id 가 같은지 보라")
+
+        let size: CGFloat = 64
+        let robot = try V0335AvatarCharacterRenderTests.bitmap(
+            AppUserAvatarFace(avatar: .character("robot"), name: "민수", size: size))
+
+        // ① 잉크가 있다 — 받침 원만 그린 것과 확연히 다른 픽셀이 원을 덮고, 세로로 원을 채운다.
+        //    여기 하한(0.60)은 **"그림이 있다"의 하한**이다. 빈 원은 0 에 가깝고, 이니셜 원도 0.3 을 못 넘는다.
+        //    종별 화질 하한(0.85)은 위 `작은_원에서도_캐릭터가_원을_채운다` 가 **로봇을 포함해** 따로 잰다 —
+        //    여기서 겹쳐 재면 같은 사실을 두 번 세고, 둘 중 하나를 고치려다 다른 하나를 놓친다.
+        let coverage = try V0335AvatarCharacterRenderTests.coverage(robot, size: size)
+        #expect(coverage > 0.60, "로봇 커버리지 \(coverage) — 원이 비었다(초상이 없거나 통째로 투명하다)")
+        let ink = try Self.ink(robot, plate: try Self.plateColor(size: size))
+        #expect(ink.height > 0.90 && ink.width > 0.60, "로봇 잉크 상자 \(ink)")
+
+        // ② 남의 그림이 아니다. 다람쥐는 첫 굽기에서 조인 크기가 로봇과 **똑같아**(140×192) 상자로는 못 가르던 쌍이다.
+        for other in ["squirrel", "aing"] {
+            let rep = try V0335AvatarCharacterRenderTests.bitmap(
+                AppUserAvatarFace(avatar: .character(other), name: "민수", size: size))
+            #expect(V0335AvatarCharacterRenderTests.meanDifference(robot, rep) > 20,
+                    "로봇이 \(other) 와 같은 픽셀로 그려졌다 — 폴백이 이겼거나 엉뚱한 파일을 넣었다")
+        }
+
+        // ③ 이니셜도 아니다(초상을 못 그리면 `AppUserAvatarStill` 이 이니셜 원으로 떨어진다).
+        let initials = try V0335AvatarCharacterRenderTests.bitmap(
+            AppUserAvatarFace(avatar: .initials, name: "민수", size: size))
+        #expect(V0335AvatarCharacterRenderTests.meanDifference(robot, initials) > 20, "로봇 자리에 이니셜이 섰다")
+
+        // ④ **아틀라스도 로봇 것이다.** 초상 PNG 와 atlas.png 는 다른 파일이라 ①~③ 이 전부 초록인 채로
+        //    카드·무대 그림만 틀릴 수 있다. 카드 그림(아틀라스 frontIdle 셀)을 꺼내 다람쥐와 맞댄다.
+        let card = try #require(CharacterCardArt.image(characterID: "robot"), "로봇 카드 그림이 없다 — atlas.png 를 못 열었다")
+        let squirrelCard = try #require(CharacterCardArt.image(characterID: "squirrel"))
+        #expect(card.width != squirrelCard.width || card.height != squirrelCard.height
+                || Self.cardMeanDifference(card, squirrelCard) > 20,
+                "로봇 카드가 다람쥐 카드와 같은 그림이다")
+        #expect(card.height > 400, "로봇 카드 높이 \(card.height) — 아틀라스 셀(내용 512)이 아니라 초상으로 접혔다")
+    }
+
+    /// 두 `CGImage` 의 평균 채널 차(0~255). 크기가 다르면 작은 쪽 크기로 맞춰 그려 비교한다 —
+    /// 카드 그림은 종마다 폭이 달라서(알파 조이기) 픽셀 대 픽셀로는 못 맞댄다.
+    static func cardMeanDifference(_ a: CGImage, _ b: CGImage) -> Double {
+        let w = min(a.width, b.width), h = min(a.height, b.height)
+        guard w > 0, h > 0 else { return 255 }
+        func pixels(_ image: CGImage) -> [UInt8] {
+            var buffer = [UInt8](repeating: 0, count: w * h * 4)
+            buffer.withUnsafeMutableBytes { raw in
+                guard let ctx = CGContext(data: raw.baseAddress, width: w, height: h, bitsPerComponent: 8,
+                                          bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+                ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            }
+            return buffer
+        }
+        let pa = pixels(a), pb = pixels(b)
+        var total = 0.0
+        for i in 0..<(w * h * 4) { total += abs(Double(pa[i]) - Double(pb[i])) }
+        return total / Double(w * h * 4)
     }
 }
 
@@ -491,7 +585,7 @@ struct V0336AvatarArtBakeProbe {
         let dir = try #require(v0336BakeDir)
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let ids = AppUserAvatarArt.knownIDs.sorted()
-        #expect(ids.count == 6, "캐릭터가 \(ids.count) 종이다")
+        #expect(ids.count == 7, "캐릭터가 \(ids.count) 종이다")
 
         for id in ids {
             // ① 원본 그림 한 장(알파 상자로 조인 것) — 파이썬이 이 알파로 폭·높이·잘린 비율을 잰다.

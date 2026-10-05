@@ -36,6 +36,8 @@ struct CheckMenuView: View {
     // 스냅샷 전용: 받은 오목 대결 신청 배너(v0.3.27)를 강제로 그린다. 앱에서는 store.gomoku.bannerInvite 로만 결정.
     // 맨 끝에 둔 이유: 기존 호출부의 인자 순서(memberwise init)를 한 글자도 바꾸지 않기 위해서다.
     var previewGomokuInvite: GomokuInvite? = nil
+    /// 스냅샷 전용: 받은 **체스** 신청 배너(v0.3.44)를 강제로 그린다. 앱에서는 store.chess.visibleIncoming 로만 결정.
+    var previewChessInvite: ChessInvite? = nil
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
@@ -61,6 +63,10 @@ struct CheckMenuView: View {
         /// v0.3.30: **그리는 자리만** 헤더 카드 아래로 옮겼다(`gomokuInviteBanner`). 순위·"한 번에 하나" 예산은 그대로다.
         /// 근무 여부를 보지 않는다 — 근무 밖에도 신청이 오고, 그때는 캐릭터 말풍선이 없어 이 배너와 메뉴바 점이 전부다.
         case gomokuInvite
+        /// 받은 **체스** 대결 신청(v0.3.44). 오목 신청과 **같은 급함**이다(TTL 60초 · 판돈 루비) — 오목 바로 뒤에
+        /// 둔다(둘이 동시에 올 수 있고, 그때는 먼저 선 오목이 이기고 체스는 다음 팝오버로 밀린다. 신청은 서버에
+        /// 남아 있어 밀려도 체스 창 로비에서 다시 보인다).
+        case chessInvite
         /// 지난주 회고 안내(주 1회).
         case retro
         /// 내 제보에 답장이 왔다는 안내(v0.3.14). 회고보다 덜 급한 이유는 회고가 '이번 주에 딱 하루'
@@ -87,6 +93,8 @@ struct CheckMenuView: View {
     /// 받은 오목 대결 신청 배너(v0.3.27). `GomokuInviteBanner` 는 12시간 배너와 같은 모양(두 줄 + 28pt 버튼 한 줄)이라
     /// 높이도 같다 — 렌더 테스트(V0327GomokuPanelRenderTests)가 배너를 얹기 전후 팝오버 높이 차와 대조한다.
     static let gomokuInviteBannerHeight: CGFloat = 92
+    /// 받은 체스 신청 배너(v0.3.44). `ChessInviteBanner` 는 오목 배너와 **같은 모양**이라 높이도 같다.
+    static let chessInviteBannerHeight: CGFloat = 92
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
     /// 헤더 주간 목표 편집 인라인 행 높이(pt). 배너는 아니지만 헤더를 그만큼 부풀리므로 같은 예산에 넣는다.
@@ -141,6 +149,48 @@ struct CheckMenuView: View {
         WindowTopAnchor.dismissMenuPopover()
     }
 
+    /// 팝오버에 띄울 받은 **체스** 신청(없으면 nil). 오목과 같은 규약: **스토어가 만료 판정을 끝낸 결과만** 읽는다
+    /// (`visibleIncoming` — 만료는 스토어 타이머가 `incoming` 에서 걷어낸다). 여기서 `expiresAt` 을 시각과
+    /// 비교하면 팝오버 전체가 매초 무효화된다(위 ⚠️).
+    private var chessBannerInvite: ChessInvite? {
+        previewChessInvite ?? store.chess.visibleIncoming
+    }
+
+    /// 배너 [수락]: 서버 수락 → 체스 창 → 팝오버 닫기(오목과 **같은 순서** — 창 먼저, 팝오버 나중).
+    private func acceptChessInvite(_ invite: ChessInvite) {
+        let chess = store.chess
+        Task { @MainActor in
+            await chess.respond(inviteID: invite.id, accept: true)
+            chess.openWindow(focusMatchID: invite.id)
+            WindowTopAnchor.dismissMenuPopover()
+        }
+    }
+
+    private func declineChessInvite(_ invite: ChessInvite) {
+        let chess = store.chess
+        Task { @MainActor in
+            await chess.respond(inviteID: invite.id, accept: false)
+        }
+    }
+
+    private func openChessInvite(_ invite: ChessInvite) {
+        store.chess.openWindow(focusMatchID: invite.id)
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    /// 받은 체스 신청 배너. 그릴지는 `topBanner` 하나가 정한다(배너는 한 번에 하나).
+    @ViewBuilder
+    private var chessInviteBanner: some View {
+        if topBanner == .chessInvite, let invite = chessBannerInvite {
+            ChessInviteBanner(
+                invite: invite,
+                onAccept: { acceptChessInvite(invite) },
+                onDecline: { declineChessInvite(invite) },
+                onOpen: { openChessInvite(invite) }
+            )
+        }
+    }
+
     /// 받은 오목 신청 배너(v0.3.30 — 헤더 카드 아래 · 무소속 화면 맨 위). 그릴지는 `topBanner` 하나가 정한다 —
     /// 배너는 **한 번에 하나**라는 창 높이 예산(`TopBanner` 주석)은 자리가 옮겨 가도 그대로다.
     /// 남은 초는 배너 안의 **잎**(`GomokuInviteBannerCountdown`)만 읽는다 — 이 프로퍼티가 시계를 읽으면 팝오버 전체가 매초 돈다.
@@ -159,6 +209,7 @@ struct CheckMenuView: View {
     private var topBanner: TopBanner? {
         if isMainScreen, showsLongSessionBanner { return .longSession }
         if store.isSignedIn, gomokuBannerInvite != nil { return .gomokuInvite }
+        if store.isSignedIn, chessBannerInvite != nil { return .chessInvite }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
         // 답장은 새 버전 안내보다 급하다(내가 쓴 글에 온 답이라 사람이 기다리고 있다).
         // 판정은 스토어가 끝내 둔 것을 읽기만 한다 — 위 경고 그대로, 여기서 시각을 비교하지 않는다.
@@ -174,6 +225,7 @@ struct CheckMenuView: View {
         switch topBanner {
         case .longSession: return Self.longSessionBannerHeight
         case .gomokuInvite: return Self.gomokuInviteBannerHeight
+        case .chessInvite: return Self.chessInviteBannerHeight
         case .retro: return Self.inlineBannerHeight
         // 회고와 같은 InlineActionBanner 한 줄이라 높이도 같다(배너는 동시에 하나뿐이므로 더하지 않는다).
         case .feedbackReply: return Self.inlineBannerHeight
@@ -385,6 +437,7 @@ struct CheckMenuView: View {
                 VStack(spacing: 10) {
                     // 무소속이어도 오목 신청은 온다(앱 사용자 전체가 상대다). 헤더 카드가 없는 화면이라 맨 위에 선다.
                     gomokuInviteBanner
+                    chessInviteBanner
                     TeamlessPanel(store: store)
                     FooterBar(store: store)
                 }
@@ -408,6 +461,9 @@ struct CheckMenuView: View {
                     // 그때는 캐릭터 말풍선이 없어서, 팝오버를 연 사람이 가장 먼저 읽는 줄(내 상태) 바로 밑이 알릴 자리다.
                     // 근무 중이어도 같은 배너다(캐릭터 말풍선과 겹쳐도 된다 — 신청은 60초짜리라 두 번 말하는 편이 낫다).
                     gomokuInviteBanner
+                    // 받은 체스 신청도 **같은 자리**에 선다(v0.3.44). 체스 폴링은 창이 보일 때만 돌고 창을 여는 길은
+                    // 미니게임 머리글 하나뿐이라, 팝오버를 연 사람에게는 이 배너가 신청을 보는 유일한 자리다.
+                    chessInviteBanner
                     // v0.2.47 — 자리 비움 [되돌리기] 배너는 없앴다. 최근 30분 안에 자동 마감된 내 세션은
                     // 사용자가 버튼을 누를 필요 없이 복귀가 감지되는 순간 스스로 재개된다
                     // (WorkTimerStore.canResumeRecentlyClosedSession → CheckOverlayController.nudgeAutoStart).
@@ -961,11 +1017,16 @@ struct MenuBarStatusLabel: View {
     /// 기본값 false 라 넷 다 꺼지면 **예전 그림과 바이트가 같다**.
     var hasOpenReports: Bool = false
 
+    /// 받은 **체스** 신청이 있다(v0.3.44). 오목과 같은 사정이고 체스는 더 급하다: 체스 창을 여는 길은 미니게임
+    /// 머리글 하나뿐이고 폴링은 창이 보일 때만 돌아서, 창을 안 연 사람에게 신청을 알리는 표면이 이 점과
+    /// 팝오버 배너·캐릭터 말풍선뿐이다. **맨 뒤에 선언**한다(멤버와이즈 인자 순서 — 기존 호출부 보호).
+    var hasChessInvite: Bool = false
+
     /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
     var dotReasons: MenuBarDotReasons {
         MenuBarDotReasons(
             unreadMessages: hasUnreadMessages, gomokuInvite: hasGomokuInvite, updateAvailable: updateAvailable,
-            openReports: hasOpenReports
+            openReports: hasOpenReports, chessInvite: hasChessInvite
         )
     }
 
@@ -1090,18 +1151,25 @@ struct MenuBarDotReasons: Equatable, Sendable {
     var updateAvailable: Bool = false
     /// 운영자에게 미해결 신고가 있다(v0.3.34 — `MenuBarStatusLabel.hasOpenReports`).
     var openReports: Bool = false
+    /// 받은 체스 신청이 있다(v0.3.44). `openReports` 와 같은 이유로 **맨 뒤에 선언**한다 — 가운데 끼우면
+    /// 기존 호출 `MenuBarDotReasons(unreadMessages:gomokuInvite:updateAvailable:openReports:)` 이 컴파일되지 않는다.
+    /// 말하는 순서는 선언 순서와 무관하다(아래 `accessibilityDescription` 이 정한다).
+    var chessInvite: Bool = false
 
     static let unreadMessagesText = "새 메시지"
     static let gomokuInviteText = "오목 신청"
+    static let chessInviteText = "체스 신청"
     static let openReportsText = "처리할 신고"
 
-    var isEmpty: Bool { !unreadMessages && !gomokuInvite && !updateAvailable && !openReports }
+    var isEmpty: Bool { !unreadMessages && !gomokuInvite && !chessInvite && !updateAvailable && !openReports }
 
     /// 켜진 사유들의 문구(순서 고정). 하나도 없으면 nil — 점이 없으니 설명할 것도 없다.
     var accessibilityDescription: String? {
         var parts: [String] = []
         if unreadMessages { parts.append(Self.unreadMessagesText) }
         if gomokuInvite { parts.append(Self.gomokuInviteText) }
+        // 체스 신청은 오목 신청과 같은 급함(TTL 60초 · 판돈)이라 바로 뒤다.
+        if chessInvite { parts.append(Self.chessInviteText) }
         // 신고는 업데이트보다 급하다(24시간 약속) — 사람이 기다리는 두 사유 다음, 앱 업데이트 앞.
         if openReports { parts.append(Self.openReportsText) }
         if updateAvailable { parts.append(MenuBarStatusLabel.updateDotAccessibilityDescription) }

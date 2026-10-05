@@ -38,7 +38,10 @@ struct CheckApp: App {
                 hasUnreadMessages: appDelegate.store.hasUnreadMessages,
                 hasGomokuInvite: !appDelegate.store.gomoku.pendingIncomingInvites.isEmpty,
                 // v0.3.34: 운영자에게 미해결 신고가 있으면 같은 점. 건수는 서버가 운영자에게만 준다(판정은 여기서 하지 않는다).
-                hasOpenReports: appDelegate.store.reportOpenCount > 0
+                hasOpenReports: appDelegate.store.reportOpenCount > 0,
+                // v0.3.44: 받은 **체스** 신청도 같은 점. 체스 창을 여는 길은 미니게임 머리글 하나뿐이고 체스 폴링은
+                // 창이 보일 때만 돌아서, 창을 안 연 사람에게 이 점은 신청을 아는 세 표면(점·팝오버 배너·말풍선) 중 하나다.
+                hasChessInvite: appDelegate.store.chess.visibleIncoming != nil
             )
         }
         .menuBarExtraStyle(.window)
@@ -95,6 +98,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 1:1 오목(v0.3.27) — 창 여는 문 · 받은 신청 말풍선 · 로그아웃 닫기. **오버레이 컨트롤러를 만든 뒤에** 잇는다
         // (신청 말풍선 큐가 그 컨트롤러에 산다 — 먼저 이으면 첫 신청이 받을 곳 없이 사라진다).
         wireGomoku()
+        // 1:1 체스(v0.3.44) — 창 여는 문 · 순위·관전 주 스위치 · 로그아웃 닫기 · **받은 신청·내 차례 말풍선**.
+        // 오목과 **같은 순서 제약**이 있다: 말풍선 큐가 오버레이 컨트롤러에 살아서, 먼저 이으면 첫 신청이 받을 곳 없이 사라진다.
+        wireChess()
         // 전역 단축키도 **오버레이 컨트롤러를 만든 뒤에** 잇는다 — 단축키로 시작한 근무도 알약으로 시작한 근무와 똑같이
         // 캐릭터가 나와야 하는데, 그 표시 전환이 위에서 배선된다.
         // ★ 진짜 Carbon 등록기는 **여기서만** 만든다. 테스트 프로세스가 실제 전역 키를 잡으면 스위트를 도는 동안
@@ -225,10 +231,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return GomokuPlayerFace.fallback }
             return GomokuPlayerFace.me(from: self.store)
         }, safety: store)
+        // 1:1 체스 창(v0.3.44)도 같은 자리에서 배선한다 — 오목 창과 형제다(키를 잃거나 닫혀도 대국을 끝내지 않는다).
+        CheckChessWindowController.shared.configure(store: store.chess, me: { [weak self] in
+            guard let self else { return ChessPlayerFace.fallback }
+            return ChessPlayerFace.me(from: self.store)
+        }, safety: store)
         // ★ **제보·메시지 창은 v0.2.50 에 사라졌다.** 둘 다 팝오버 하위 패널로 내려왔고(사용자 지시:
         //   "제보창도 팝오버 창 안에서만 뜨게", "그 창 안에서 그 사람과의 1대1 메시지 화면으로만"),
         //   패널은 배선할 창 수명이 없다 — 그리는 것은 `CheckMenuView` 이고 상태는 스토어 깃발 하나다.
-        //   여기에 `configure(store:)` 를 다시 더하지 마라. 남은 별도 창은 설정·미니게임·1:1 오목 셋이다.
+        //   여기에 `configure(store:)` 를 다시 더하지 마라. 남은 별도 창은 설정·미니게임·1:1 오목·1:1 체스 넷이다.
         // 실행 중인 앱에서 창이 **실제로** 떴는지 밖에서 재기 위한 문(인자가 없으면 아무 일도 안 한다).
         // 이 저장소에서 창 검증은 CGWindowList 실측 없이는 성립하지 않는다 — 근거는 그 타입 주석 참고.
         CheckSettingsWindowProbe.startIfRequested()
@@ -266,6 +277,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         GomokuAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
             CheckGomokuWindowController.shared.close()
             self?.overlayController?.clearGomokuInvites()
+        }.start()
+    }
+
+    /// 1:1 체스(v0.3.44)의 문들을 잇는다(실행당 1회). **전부 빠져도 컴파일·테스트는 조용히 초록이다** —
+    /// 스토어 쪽 문이 옵셔널이라 `?.` 가 삼킨다. 그래서 소스 계약 테스트(V0344ChessWindowTests)가 줄마다 되묻는다.
+    ///   ① `spectatorFeaturesEnabled` — 순위·관전의 **주 스위치**. 스토어는 폰과 공용이라 기본이 꺼짐이고
+    ///      이 한 줄이 없으면 순위 열은 영영 "불러오고 있어요" 이고 [관전] 은 아무 요청도 안 낸다.
+    ///   ② `presentWindow` — 스토어의 `openWindow(focusMatchID:)` 가 창을 띄우는 유일한 문. 없으면
+    ///      미니게임 입구가 상태만 불러오고 창은 안 뜬다.
+    ///   ③ `dismissWindow` — 로그아웃·계정 전환의 `reset()` 이 부르는 닫기 문(아래 감시자와 겹쳐도 멱등이다).
+    ///   ④ `requestAttention` — 판이 막 시작됐는데 앱이 뒤에 있을 때 주의를 끈다.
+    ///   ⑤ ★ `onInviteArrived`·`onAttention` — **창 밖에서 체스를 아는 유일한 길**이다. 스토어는 이 문 둘을
+    ///      부르는데(ChessStore.applyInvite · noteMatchProgress) 0.3.44 초안은 어디에도 물리지 않아, 받은 신청은
+    ///      TTL 60초 안에 아무 데도 전달되지 않고(서버는 '맥에서 근무 중' 이면 폰 푸시를 suppressed 로 적는다)
+    ///      진행 중 판에서 창을 닫으면 "내 차례" 가 한 번도 안 와 **판돈이 걸린 판을 조용히 시간패**했다
+    ///      (체스는 오목의 자동 착수 장치를 전부 버렸다 — DECISIONS B4).
+    ///   ⑥ `onOpenChess` — 그 말풍선을 눌렀을 때 그 대국의 창. 빠지면 말풍선에 화살표도 안 붙는다.
+    private func wireChess() {
+        let chess = store.chess
+        chess.spectatorFeaturesEnabled = true
+        chess.presentWindow = { CheckChessWindowController.shared.show() }
+        chess.dismissWindow = { CheckChessWindowController.shared.close() }
+        chess.requestAttention = {
+            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
+        }
+        chess.onInviteArrived = { [weak self] invite in
+            self?.overlayController?.enqueueChessInvite(invite)
+        }
+        chess.onAttention = { [weak self] attention in
+            self?.overlayController?.enqueueChessAttention(attention)
+        }
+        overlayController?.onOpenChess = { [weak self] matchID in
+            self?.store.chess.openWindow(focusMatchID: matchID)
+        }
+        ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
+            CheckChessWindowController.shared.close()
+            self?.overlayController?.clearChessInvites()
         }.start()
     }
 

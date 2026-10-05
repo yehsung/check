@@ -1,0 +1,80 @@
+{
+  "id": "robot",
+  "displayName": "로봇",
+  "kind": "sprite",
+  "atlas": {
+    "file": "atlas.png",
+    "width": 1696,
+    "height": 516,
+    "states": {
+      "frontIdle": {
+        "frames": [
+          {
+            "x": 0,
+            "y": 0,
+            "w": 424,
+            "h": 516
+          }
+        ],
+        "durationsMs": [
+          1000
+        ],
+        "loop": true
+      },
+      "sideIdle": {
+        "frames": [
+          {
+            "x": 848,
+            "y": 0,
+            "w": 424,
+            "h": 516
+          }
+        ],
+        "durationsMs": [
+          1000
+        ],
+        "loop": true
+      },
+      "sideWalk": {
+        "frames": [
+          {
+            "x": 424,
+            "y": 0,
+            "w": 424,
+            "h": 516
+          },
+          {
+            "x": 848,
+            "y": 0,
+            "w": 424,
+            "h": 516
+          },
+          {
+            "x": 1272,
+            "y": 0,
+            "w": 424,
+            "h": 516
+          },
+          {
+            "x": 848,
+            "y": 0,
+            "w": 424,
+            "h": 516
+          }
+        ],
+        "durationsMs": [
+          140,
+          140,
+          140,
+          140
+        ],
+        "loop": true
+      }
+    }
+  },
+  "portrait": {
+    "neutral": "portrait-neutral.png",
+    "negative": "portrait-negative.png"
+  },
+  "pixelArt": false
+}

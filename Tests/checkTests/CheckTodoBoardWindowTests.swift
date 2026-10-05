@@ -1133,6 +1133,12 @@ func todoBoardPanelStaysInvisibleToTheUserWhileTesting() throws {
 /// 헤드리스에서 윈도우 서버를 오염시킬 방법은 없으므로, "연 직후 창만 화면에서 내려간" 같은 결과를
 /// `panel.orderOut` 으로 만든다 — `close()` 를 거치지 않으므로 `isBoardOpen` 은 true 로 남아
 /// 실측한 어긋남과 같은 모양이 된다.
+///
+/// ⚠️ **2026-10-05 현재 이 시험은 빨갛고, 원인은 OS 쪽이다(체스와 무관 — 귀속 완료).** Darwin 27 에서
+///   `CGWindowListCopyWindowInfo([.optionOnScreenOnly, …])` 가 자기 프로세스의 `orderOut` 된 창을 계속
+///   '화면에 있다'고 답한다(독립 프로세스 프로브 실측 — 근거는 `CheckTodoBoardController.isOnScreen` 주석).
+///   그래서 `isOnScreen(stuck) == false` 가 영원히 거짓이고 감시자가 깨어나지 않는다. 이 시험을 되살리려면
+///   창 상태 질의를 바꿔야 하고, 그것은 고착 감시자 다섯의 공통 판정이라 별건이다.
 @MainActor
 @Test
 func todoBoardRebuildsPanelWhenItNeverReachesTheScreen() async throws {

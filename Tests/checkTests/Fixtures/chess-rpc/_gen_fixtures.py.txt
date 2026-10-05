@@ -1,0 +1,435 @@
+#!/usr/bin/env python3
+"""체스 RPC 응답 픽스처 생성기 (0.3.44) — 로컬 전용 하네스(127.0.0.1:58301).
+
+손으로 짓지 않는다. 체인 전체(109개) + 20261005140000_chess_rules + 20261005160000_chess_duel 을 올린
+로컬 Postgres 에 harness.login 으로 PostgREST 모양 authenticated 흉내를 내고, **RPC 를 실제로 불러**
+나온 jsonb 를 그대로 적는다(키 순서 보존).
+
+단계마다 psql 세션 하나: migrator → set role postgres → begin → (준비 SQL) → harness.login(호출자)
+→ RPC → commit|rollback. 호출자·인자·준비 SQL 은 fixtures/_manifest.json 에 남는다.
+
+합성 계정 여섯으로 **실제 한 판을 둔다**(e4 e5 Nf3 Nc6 Bb5 Nf6 → 기권). 종국 넷(외통 · 시간패 ·
+FIDE 6.9 무승부 · 3회 반복)과 무승부 합의·불충분 기물은 판을 표에 직접 심고(루비·푸시에 묶이지 않게)
+그 위에서 **실제 수**를 둬 끝낸다.
+"""
+import json
+import os
+import subprocess
+import sys
+from collections import OrderedDict
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = os.environ.get("CHESS_FIXTURE_OUT", os.path.join(HERE, "fixtures"))
+PSQL = "/opt/homebrew/opt/postgresql@15/bin/psql"
+PORT = os.environ.get("HARNESS_PORT", "58301")
+
+# 합성 계정 여섯(고정 uuid — 매니페스트가 이 표를 싣는다)
+A = "aa000000-0000-4000-8000-0000000000a1"  # 체스예은    build 96 · 루비 100 · fox
+B = "bb000000-0000-4000-8000-0000000000b2"  # 체스지유    build 96 · 루비 100 · shiba · 근무 중
+C = "cc000000-0000-4000-8000-0000000000c3"  # 체스관전자  build 96 · 루비 100 · 한 판도 안 둔다(순위 밖)
+D = "dd000000-0000-4000-8000-0000000000d4"  # 체스가난뱅이 build 96 · 루비 1(insufficient)
+E = "ee000000-0000-4000-8000-0000000000e5"  # 체스구버전  build 50(target_outdated)
+F = "ff000000-0000-4000-8000-0000000000f6"  # 체스집중중  build 96 · focus_mode
+HIDDEN = "785b5732-75fe-4a71-931a-2e3f06e63505"  # 씨앗다섯 — 하네스 픽스처의 숨김 계정
+TEAM = "fa11fa11-0000-4000-8000-000000000001"
+LABEL = {A: "A", B: "B", C: "C", D: "D", E: "E", F: "F", HIDDEN: "HIDDEN"}
+
+# 심은 판의 고정 id(매니페스트가 싣는다)
+M_MATE = "c0de0000-0000-4000-8000-000000000a01"
+M_THREE = "c0de0000-0000-4000-8000-000000000a02"
+M_INSUF = "c0de0000-0000-4000-8000-000000000a03"
+M_TIMEOUT = "c0de0000-0000-4000-8000-000000000a04"
+M_TIMEOUT69 = "c0de0000-0000-4000-8000-000000000a05"
+M_AGREE = "c0de0000-0000-4000-8000-000000000a06"
+M_WATCH = "c0de0000-0000-4000-8000-000000000a07"
+M_OLD = "c0de0000-0000-4000-8000-000000000a08"
+M_SKEW = "c0de0000-0000-4000-8000-000000000a09"
+M_CHECK = "c0de0000-0000-4000-8000-000000000a0a"
+M_PROMO = "c0de0000-0000-4000-8000-000000000a0b"
+
+env = {k: v for k, v in os.environ.items() if not k.startswith("PG")}
+env.update(PGHOST="127.0.0.1", PGPORT=PORT, PGDATABASE="postgres", PGCONNECT_TIMEOUT="5",
+           PGSSLMODE="disable", PGCLIENTENCODING="UTF8", LC_ALL="C", LANG="C")
+
+manifest = OrderedDict()
+flow = []
+ids = OrderedDict()
+seeds = OrderedDict()
+
+
+def psql(sql, user="migrator"):
+    p = subprocess.run([PSQL, "-X", "-q", "-At", "-v", "ON_ERROR_STOP=1", "-U", user, "-d", "postgres"],
+                       input=sql, capture_output=True, text=True, env=env)
+    if p.returncode != 0:
+        sys.stderr.write(sql + "\n--- stderr ---\n" + p.stderr)
+        raise SystemExit(f"psql failed rc={p.returncode}")
+    return p.stdout
+
+
+def admin(sql):
+    psql("set role postgres;\nbegin;\n" + sql + "\ncommit;\n")
+
+
+def scalar(sql):
+    return psql("set role postgres;\nselect '@@' || (" + sql + ")::text;\n").strip()[2:]
+
+
+def call(caller, rpc_sql, setup="", end="rollback", name=None, note="", role="authenticated", flagged=None):
+    login = "select harness.login({}, '{}') \\g /dev/null\n".format(
+        "null::uuid" if caller is None else "'%s'" % caller, role)
+    sql = "set role postgres;\nbegin;\n" + setup + "\n" + login
+    sql += "select '@@' || (%s)::text;\n%s;\n" % (rpc_sql, end)
+    out = psql(sql)
+    lines = [l for l in out.splitlines() if l.startswith("@@")]
+    assert len(lines) == 1, out
+    obj = json.loads(lines[0][2:], object_pairs_hook=OrderedDict)
+    if name:
+        with open(os.path.join(OUT, name + ".json"), "w", encoding="utf-8") as fh:
+            json.dump(obj, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+        manifest[name] = OrderedDict(caller=caller, caller_label=LABEL.get(caller), rpc=rpc_sql,
+                                     setup=setup.strip() or None, end=end, flagged=flagged,
+                                     note=note or None)
+        extra = ""
+        if "match" in obj:
+            extra = " ply=%s turn=%s" % (obj["match"].get("ply_count"), obj["match"].get("turn"))
+        print("%-46s status=%-18s%s" % (name, obj.get("status"), extra))
+    return obj
+
+
+# ── 판 심기(표에 직접 — RPC 로 만들면 루비·초인종·푸시에 묶인다) ─────────────────────────────
+def seed(mid, white, black, fen, ply, wms, bms, wg, bg, ago_ms, stake=5, status="active",
+         result=None, reason=None, winner=None, finished_ago="0 seconds"):
+    cols = dict(
+        id="'%s'" % mid, challenger="'%s'" % white, opponent="'%s'" % black, stake=str(stake),
+        status="'%s'" % status, white="'%s'" % white, black="'%s'" % black, fen="'%s'" % fen,
+        ply_count=str(ply), white_ms_left=str(wms), black_ms_left=str(bms),
+        white_grace_ms=str(wg), black_grace_ms=str(bg),
+        turn_started_at="clock_timestamp() - make_interval(secs => %s)" % (ago_ms / 1000.0),
+        created_at="clock_timestamp() - interval '1 hour'",
+        invite_expires_at="clock_timestamp() - interval '59 minutes'",
+        accepted_at="clock_timestamp() - interval '59 minutes'",
+        result="null" if result is None else "'%s'" % result,
+        end_reason="null" if reason is None else "'%s'" % reason,
+        winner="null" if winner is None else "'%s'" % winner,
+        finished_at="null" if status != "finished" else "clock_timestamp() - interval '%s'" % finished_ago)
+    admin("delete from public.chess_matches where id = '%s';\ninsert into public.chess_matches(%s) values (%s);"
+          % (mid, ", ".join(cols.keys()), ", ".join(cols.values())))
+    # ★ 심은 판의 **출발 국면**을 매니페스트에 남긴다 — 수가 하나뿐인 픽스처(외통·승격·불충분)에서
+    #   Swift 가 "직전 국면에 그 수를 적용한 결과" 를 혼자 계산할 수 있어야 한다.
+    seeds[mid] = OrderedDict(fen=fen, ply=ply, white=white, black=black, status=status,
+                             white_ms_left=wms, black_ms_left=bms, stake=stake)
+    return mid
+
+
+def main():
+    os.makedirs(OUT, exist_ok=True)
+    for f in os.listdir(OUT):
+        if f.endswith(".json"):
+            os.remove(os.path.join(OUT, f))
+
+    # ── 0. 합성 계정 여섯 ────────────────────────────────────────────────────────────────
+    people = [(A, "체스예은", 96, 100, "fox", False),
+              (B, "체스지유", 96, 100, "shiba", False),
+              (C, "체스관전자", 96, 100, None, False),
+              (D, "체스가난뱅이", 96, 1, "ghost", False),
+              (E, "체스구버전", 50, 100, "jellyfish", False),
+              (F, "체스집중중", 96, 100, "squirrel", True)]
+    rows_u = ",\n".join("('%s', 'chess-fx-%s@example.invalid', jsonb_build_object('display_name', '%s'))"
+                        % (uid, LABEL[uid].lower(), name) for uid, name, _, _, _, _ in people)
+    rows_p = ",\n".join("('%s', 'chess-fx-%s@example.invalid', '%s', %s, %s, %s, false, false)"
+                        % (uid, LABEL[uid].lower(), name, build, ruby,
+                           "null" if ch is None else "'%s'" % ch, )
+                        for uid, name, build, ruby, ch, _ in people)
+    admin("""
+delete from public.chess_moves where match_id in (select id from public.chess_matches);
+delete from public.chess_matches;
+delete from public.ruby_ledger where reason like 'prize:chess:%%' or reason like 'spend:chess:%%'
+                                  or reason like 'grant:chess:%%';
+insert into auth.users (id, email, raw_user_meta_data) values
+%s
+on conflict (id) do nothing;
+insert into public.profiles (id, email, display_name, app_build, ruby_balance, character, is_hidden, focus_mode) values
+%s
+on conflict (id) do update set display_name = excluded.display_name, app_build = excluded.app_build,
+  ruby_balance = excluded.ruby_balance, character = excluded.character, focus_mode = excluded.focus_mode;
+update public.profiles set focus_mode = true where id = '%s';
+insert into public.memberships (user_id, team_id, role)
+  select u.id, '%s', 'member' from (values %s) u(id)
+  on conflict do nothing;
+delete from public.work_sessions where user_id = '%s';
+insert into public.work_sessions (team_id, user_id, started_at) values ('%s', '%s', now() - interval '20 minutes');
+""" % (rows_u, rows_p, F, TEAM,
+       ", ".join("('%s'::uuid)" % p[0] for p in people), B, TEAM, B))
+    for uid, name, _, _, _, _ in people:
+        ids[LABEL[uid]] = uid
+    ids["HIDDEN"] = HIDDEN
+    assert scalar("public.chess_capable('%s')" % A) == "true"
+    assert scalar("public.chess_capable('%s')" % E) == "false", "E 는 target_outdated 여야 한다"
+    assert scalar("public.poke_blackout_active()") == "false", "블랙아웃이면 신청 픽스처가 다 blackout 이다"
+    assert scalar("public.is_hidden_user('%s')" % HIDDEN) == "true"
+
+    # ── 1. 빈 로비 · unsupported_client · unauthorized ─────────────────────────────────────
+    call(A, "public.chess_lobby(1)", name="chess_lobby__ok_empty",
+         note="대기 신청·진행 중 판 없음 — me 셋 다 null · matches []")
+    for rpc, args, label in [("chess_lobby", "0", "lobby"), ("chess_challenge", "0, '%s', 5" % B, "challenge"),
+                             ("chess_respond", "0, '%s', true" % M_WATCH, "respond"),
+                             ("chess_cancel", "0, '%s'" % M_WATCH, "cancel"),
+                             ("chess_move", "0, '%s', 0, 'e2e4'" % M_WATCH, "move"),
+                             ("chess_state", "0, '%s', 0" % M_WATCH, "state"),
+                             ("chess_resign", "0, '%s'" % M_WATCH, "resign"),
+                             ("chess_offer_draw", "0, '%s'" % M_WATCH, "offer_draw"),
+                             ("chess_respond_draw", "0, '%s', true" % M_WATCH, "respond_draw"),
+                             ("chess_ranking", "0", "ranking"),
+                             ("chess_watch", "0, '%s', 0" % M_WATCH, "watch")]:
+        call(A, "public.%s(%s)" % (rpc, args), name="%s__unsupported_client" % rpc,
+             note="p_protocol=0 < chess_protocol()=1 (B10)")
+    call(None, "public.chess_lobby(1)", name="chess_lobby__unauthorized", note="auth.uid() null")
+    call(None, "public.chess_ranking(1)", name="chess_ranking__unauthorized", note="auth.uid() null")
+    call(None, "public.chess_watch(1, '%s', 0)" % M_WATCH, name="chess_watch__unauthorized",
+         note="auth.uid() null — 판이 있는지 보기 전에 돌아간다")
+
+    # ── 2. 신청 게이트(전부 롤백 — 판을 남기지 않는다) ──────────────────────────────────────
+    call(D, "public.chess_challenge(1, '%s', 3)" % A, name="chess_challenge__insufficient",
+         note="D 루비 1 · 판돈 3")
+    call(A, "public.chess_challenge(1, '%s', 7)" % B, name="chess_challenge__invalid",
+         note="판돈 7 은 chess_stakes() 밖")
+    call(A, "public.chess_challenge(1, '%s', 5)" % HIDDEN, name="chess_challenge__invalid_hidden",
+         note="숨김 다른 쪽은 **없는 상대와 같은 응답**이다")
+    call(A, "public.chess_challenge(1, '%s', 5)" % F, name="chess_challenge__target_focused")
+    call(A, "public.chess_challenge(1, '%s', 5)" % E, name="chess_challenge__target_outdated",
+         note="E build 50 < chess_min_build() 96")
+
+    # ── 3. 신청·취소·거절·만료 ─────────────────────────────────────────────────────────────
+    r = call(C, "public.chess_challenge(1, '%s', 3)" % D, end="commit", name="chess_challenge__ok",
+             note="C→D 판돈 3 — 루비는 움직이지 않는다")
+    inv_cd = r["match_id"]
+    ids["inv_cd"] = inv_cd
+    call(C, "public.chess_challenge(1, '%s', 5)" % B, name="chess_challenge__already_pending",
+         note="C 는 이미 D 에게 보낸 대기 신청이 있다(부분 유니크)")
+    call(C, "public.chess_cancel(1, '%s')" % inv_cd, end="commit", name="chess_cancel__ok")
+    call(C, "public.chess_cancel(1, '%s')" % inv_cd, name="chess_cancel__not_pending", note="멱등")
+    call(D, "public.chess_cancel(1, '%s')" % inv_cd, name="chess_cancel__not_found",
+         note="받은 사람도 **없는 판과 같은 응답**이다")
+
+    r = call(C, "public.chess_challenge(1, '%s', 3)" % D, end="commit")
+    inv_decline = r["match_id"]
+    ids["inv_decline"] = inv_decline
+    call(D, "public.chess_respond(1, '%s', false)" % inv_decline, end="commit",
+         name="chess_respond__decline_ok", note="거절 — 루비는 움직이지 않는다")
+
+    r = call(C, "public.chess_challenge(1, '%s', 3)" % D, end="commit")
+    inv_expired = r["match_id"]
+    ids["inv_expired"] = inv_expired
+    call(D, "public.chess_respond(1, '%s', true)" % inv_expired, end="commit",
+         setup="update public.chess_matches set invite_expires_at = clock_timestamp() - interval '1 second' "
+               "where id = '%s';" % inv_expired,
+         name="chess_respond__expired", note="TTL 60초가 지난 신청 — 루비가 빠지지 않는다")
+
+    # ── 4. 대기 신청이 있는 로비 ───────────────────────────────────────────────────────────
+    r = call(A, "public.chess_challenge(1, '%s', 5)" % B, end="commit")
+    inv_ab = r["match_id"]
+    ids["inv_ab"] = inv_ab
+    call(A, "public.chess_lobby(1)", name="chess_lobby__ok_pending_out",
+         note="A 가 보낸 신청 — me.outgoing_match_id")
+    call(B, "public.chess_lobby(1)", name="chess_lobby__ok_pending_in",
+         note="B 가 받은 신청 — me.incoming_match_id(받은 신청 목록 RPC 가 따로 없다)")
+    call(C, "public.chess_watch(1, '%s', 0)" % inv_ab, name="chess_watch__not_found_pending",
+         note="대기 신청은 관전 대상이 아니다 — 제3자가 누가 누구에게 신청했는지 보면 안 된다")
+
+    # ── 5. 수락 → 실제 한 판 ───────────────────────────────────────────────────────────────
+    r = call(B, "public.chess_respond(1, '%s', true)" % inv_ab, end="commit",
+             setup="select setseed(0.4242) \\g /dev/null",
+             name="chess_respond__accept_ok", note="수락 순간 양쪽 −5 · 흑백 추첨 · 시계 5분·유예 2초")
+    m1 = r["match"]["id"]
+    white, black = r["match"]["white"], r["match"]["black"]
+    ids["m1"] = m1
+    ids["m1_white"] = white
+    ids["m1_black"] = black
+    print("   m1=%s white=%s black=%s" % (m1, LABEL[white], LABEL[black]))
+    call(B, "public.chess_respond(1, '%s', true)" % m1, name="chess_respond__not_pending",
+         note="같은 판을 또 수락 — 차감 멱등(status=pending 가드 UPDATE)")
+    call(C, "public.chess_respond(1, '%s', true)" % m1, name="chess_respond__not_found",
+         note="제3자는 없는 판과 같은 응답")
+
+    call(white, "public.chess_state(1, '%s', 0)" % m1, name="chess_state__ok_initial_my_turn",
+         note="초기 국면 · 내 차례 — legal_moves 20개")
+    call(black, "public.chess_state(1, '%s', 0)" % m1, name="chess_state__ok_initial_their_turn",
+         note="초기 국면 · 상대 차례 — legal_moves 는 null(§10 이 못 박는다)")
+    call(C, "public.chess_state(1, '%s', 0)" % m1, name="chess_state__not_found",
+         note="참가자가 아니면 없는 판과 같은 응답(관전은 chess_watch 가 준다)")
+    call(A, "public.chess_lobby(1)", name="chess_lobby__ok_in_match",
+         note="진행 중 판 있음 — me.active_match_id + matches[1]")
+    call(C, "public.chess_lobby(1)", name="chess_lobby__ok_watch_entry",
+         note="제3자 로비 — matches[] 가 관전 입구다(fen·ply_count 는 없다)")
+
+    call(A, "public.chess_challenge(1, '%s', 5)" % C, name="chess_challenge__busy",
+         note="A 가 대국 중")
+    call(C, "public.chess_challenge(1, '%s', 5)" % A, name="chess_challenge__target_busy")
+
+    # 실제 수: e4 e5 Nf3 Nc6 Bb5 Nf6
+    line = [("e2e4", "e4"), ("e7e5", "e5"), ("g1f3", "Nf3"), ("b8c6", "Nc6"), ("f1b5", "Bb5"), ("g8f6", "Nf6")]
+    for index, (uci, san) in enumerate(line):
+        mover = white if index % 2 == 0 else black
+        fname = None
+        note = ""
+        if index == 0:
+            fname, note = "chess_move__ok_white_first", "첫 수 — from 12(e2) · to 28(e4)"
+        elif index == 1:
+            fname, note = "chess_move__ok_black_reply", "흑의 답 수"
+        elif index == 4:
+            fname, note = "chess_move__ok_white_mid", "Bb5 — 폰이 아닌 말의 SAN"
+        if index == 1:
+            # 같은 판에서 네 거절 갈래를 먼저 뜬다(전부 롤백 — 판을 건드리지 않는다)
+            call(white, "public.chess_move(1, '%s', 1, 'e7e5')" % m1, name="chess_move__not_your_turn",
+                 note="백이 흑 차례에 보냈다 — stale 보다 뒤 갈래(p_expected_ply 는 맞다)")
+            call(black, "public.chess_move(1, '%s', 0, 'e7e5')" % m1, name="chess_move__stale",
+                 note="p_expected_ply 0 ≠ ply_count 1 — **not_your_turn 보다 먼저**다")
+            call(black, "public.chess_move(1, '%s', 1, 'e7e4')" % m1, name="chess_move__illegal",
+                 note="폰 세 칸 — 판을 건드리지 않는다(ply·시계·turn_started_at 그대로)")
+        flow.append(OrderedDict(seq=index + 1, uci=uci, san=san, mover_label=LABEL[mover],
+                                color="white" if index % 2 == 0 else "black", file=fname))
+        r = call(mover, "public.chess_move(1, '%s', %d, '%s')" % (m1, index, uci), end="commit",
+                 name=fname, note=note)
+        assert r["status"] == "ok" and r["san"] == san, (uci, r.get("status"), r.get("san"))
+
+    r = call(white, "public.chess_state(1, '%s', 0)" % m1, name="chess_state__ok_mid_since0",
+             note="6수 뒤 · 백 차례 — moves 6개")
+    mid_fen = r["match"]["fen"]
+    ids["mid_fen"] = mid_fen
+    call(black, "public.chess_state(1, '%s', 4)" % m1, name="chess_state__ok_mid_since4",
+         note="since 는 **배타** — seq 5·6 만 온다")
+
+    # 무승부 제안 세 갈래(m1 에서)
+    call(black, "public.chess_respond_draw(1, '%s', true)" % m1, name="chess_respond_draw__no_offer",
+         note="상대의 제안이 없다")
+    call(white, "public.chess_offer_draw(1, '%s')" % m1, end="commit", name="chess_offer_draw__ok")
+    call(white, "public.chess_offer_draw(1, '%s')" % m1, name="chess_offer_draw__ok_idempotent",
+         note="제안자가 두 번 눌러도 같다")
+    call(black, "public.chess_offer_draw(1, '%s')" % m1, name="chess_offer_draw__offer_pending",
+         note="상대가 이미 제안했다 — 덮지 않는다")
+    call(black, "public.chess_respond_draw(1, '%s', false)" % m1, end="commit",
+         name="chess_respond_draw__decline_ok", note="제안만 지운다(draw_offer_by null)")
+
+    # 관전 — m1 은 진행 중
+    call(C, "public.chess_watch(1, '%s', 0)" % m1, name="chess_watch__ok_active",
+         note="진행 중 — white_user/black_user · my_color·legal_moves·ruby_balance 없음")
+    call(C, "public.chess_watch(1, '%s', 4)" % m1, name="chess_watch__ok_since4",
+         note="관전도 since 가 배타다")
+    call(white, "public.chess_watch(1, '%s', 0)" % m1, name="chess_watch__ok_as_player",
+         note="대국자도 관전 RPC 를 부를 수 있다(쓰기가 없어 깃발이 떨어지지 않는다)")
+    call(HIDDEN, "public.chess_watch(1, '%s', 0)" % m1, name="chess_watch__not_found_hidden",
+         note="숨김 계정은 일반 사용자 판을 관전할 수 없다(same_visibility 두 조건)")
+
+    # m1 종료 — 기권
+    call(black, "public.chess_resign(1, '%s')" % m1, end="commit", name="chess_resign__ok",
+         note="흑 기권 → white_win/resign · 승자 +2×판돈")
+    call(black, "public.chess_resign(1, '%s')" % m1, name="chess_resign__not_active", note="멱등")
+    call(white, "public.chess_watch(1, '%s', 0)" % m1, name="chess_watch__ok_tail",
+         note="끝난 판은 chess_watch_tail_seconds()=180초 꼬리만 보인다")
+    call(white, "public.chess_move(1, '%s', 6, 'd2d4')" % m1, name="chess_move__not_active")
+
+    # ── 6. 종국 넷 + 불충분 기물 + 합의 ────────────────────────────────────────────────────
+    # 외통: §11 ② 와 같은 국면(백 Ra8#)
+    seed(M_MATE, A, B, "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 0, 300000, 300000, 2000, 2000, 100)
+    call(A, "public.chess_move(1, '%s', 0, 'a1a8')" % M_MATE, end="commit",
+         name="chess_move__end_checkmate", note="Ra8# → checkmate:white · 백 +2×판돈")
+
+    # 3회 반복: Nf3 Nf6 Ng1 Ng8 Nf3 Nf6 Ng1 Ng8 — 마지막 수에서 시작 국면이 3회가 된다
+    seed(M_THREE, A, B, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0,
+         300000, 300000, 2000, 2000, 100)
+    rep = ["g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1", "f6g8"]
+    ids["threefold_line"] = rep
+    ids["threefold_start_fen"] = scalar("public.chess_start_fen()")
+    for index, uci in enumerate(rep):
+        mover = A if index % 2 == 0 else B
+        last = index == len(rep) - 1
+        r = call(mover, "public.chess_move(1, '%s', %d, '%s')" % (M_THREE, index, uci), end="commit",
+                 name="chess_move__end_threefold" if last else None,
+                 note="8수째에 시작 국면이 **3회**가 된다(chess__rep_count: 수 기록 + 시작 국면 1)" if last else "")
+        assert r["status"] == "ok", (uci, r)
+        if last:
+            assert r["repetition"] == 3 and r["outcome"] == "threefold_repetition", r
+
+    # 불충분 기물: Bxb5 뒤 작은 말이 판 전체에 하나(왕+비숍 vs 왕)
+    seed(M_INSUF, A, B, "4k3/8/8/1b6/8/8/8/4KB2 w - - 0 40", 78, 300000, 300000, 2000, 2000, 100)
+    call(A, "public.chess_move(1, '%s', 78, 'f1b5')" % M_INSUF, end="commit",
+         name="chess_move__end_insufficient", note="Bxb5 → 왕+비숍 vs 왕 = 사국(판 전체를 본다)")
+
+    # 시간패: 백이 e4 를 **실제로** 두고(그래서 수 기록의 시계가 산수로 맞는다) 흑의 시계를 9초 전으로 되돌린다
+    #  → 다음 조회가 깃발을 신고한다. 수 기록을 손으로 넣으면 피셔 산수(남은 − 쓴 + 가산)가 거짓이 된다.
+    seed(M_TIMEOUT, A, B, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0,
+         300000, 300000, 2000, 2000, 1200)
+    r = call(A, "public.chess_move(1, '%s', 0, 'e2e4')" % M_TIMEOUT, end="commit")
+    assert r["status"] == "ok", r
+    admin("update public.chess_matches set black_ms_left = 1000, black_grace_ms = 2000, "
+          "turn_started_at = clock_timestamp() - interval '9 seconds' where id = '%s';" % M_TIMEOUT)
+    call(B, "public.chess_state(1, '%s', 0)" % M_TIMEOUT, end="commit",
+         name="chess_state__end_timeout", flagged="black",
+         note="흑이 남은 1,000ms + 유예 2,000ms 를 9초째에 넘겼다 → white_win/timeout. "
+              "조회가 깃발을 신고한다(상대가 창을 닫아도 판이 끝난다) — 지는 쪽 시점")
+
+    # FIDE 6.9: 깃발이 떨어졌지만 시간이 남은 쪽에 메이트할 기물이 없다 → 무승부
+    seed(M_TIMEOUT69, A, B, "4k3/8/8/8/8/8/8/3QK3 w - - 0 60", 118, 1000, 274000, 2000, 2000, 9000)
+    call(A, "public.chess_state(1, '%s', 0)" % M_TIMEOUT69, end="commit",
+         name="chess_state__end_timeout_insufficient", flagged="white",
+         note="백의 깃발이 떨어졌는데 **흑은 맨 왕**이다 → FIDE 6.9 로 draw/timeout_insufficient. "
+              "백이 퀸을 들고 있어 사국(chess__insufficient)은 거짓이다 — 한쪽만 보는 술어라야 무승부가 선다")
+
+    # 무승부 합의
+    seed(M_AGREE, A, B, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0,
+         300000, 300000, 2000, 2000, 100)
+    admin("update public.chess_matches set draw_offer_by = '%s' where id = '%s';" % (A, M_AGREE))
+    call(B, "public.chess_respond_draw(1, '%s', true)" % M_AGREE, end="commit",
+         name="chess_respond_draw__accept_ok", note="draw/agreement — 각자 환불")
+
+    # 시계 역주행(차례 시작이 미래) → retry{clock_skew}
+    seed(M_SKEW, A, B, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0,
+         300000, 300000, 2000, 2000, -5000)
+    call(A, "public.chess_move(1, '%s', 0, 'e2e4')" % M_SKEW, name="chess_move__retry_clock_skew",
+         note="도착 시각이 차례 시작보다 앞 — 시간패가 아니고 수도 받지 않는다")
+    admin("delete from public.chess_matches where id = '%s';" % M_SKEW)
+
+    # 관전 꼬리 밖(오래 전에 끝난 판)
+    seed(M_OLD, A, D, "R5k1/5ppp/8/8/8/8/8/6K1 b - - 1 31", 61, 120000, 90000, 2000, 2000, 0,
+         status="finished", result="white_win", reason="checkmate", winner=A, finished_ago="2 days")
+    call(C, "public.chess_watch(1, '%s', 0)" % M_OLD, name="chess_watch__not_found_old",
+         note="끝난 지 180초를 넘긴 판 — 꼬리 밖")
+    call(C, "public.chess_watch(1, '%s', 0)" % "00000000-0000-4000-8000-000000000000",
+         name="chess_watch__not_found", note="없는 판")
+
+    # 관전용으로 하나는 진행 중으로 남긴다
+    seed(M_WATCH, A, B, mid_fen, 6, 281234, 274567, 2000, 2000, 1500)
+    call(C, "public.chess_watch(1, '%s', 0)" % M_WATCH, name="chess_watch__ok_seeded",
+         note="심은 진행 중 판 — 시계 숫자가 초기값과 다르다(기준선이 갈린다)")
+
+    # ★ 체크·승격 — **기준선을 갈라 주는** 자리다. 이 둘이 없으면 in_check 는 모든 픽스처에서 false/null 이고
+    #   promo 는 모든 수에서 null 이라, "서버가 준 값과 Swift 가 계산한 값이 같다" 가 영원히 초록이 된다.
+    seed(M_CHECK, A, B, "4k3/8/8/8/8/8/4r3/4K3 w - - 10 30", 58, 240000, 237000, 2000, 2000, 1200)
+    call(A, "public.chess_state(1, '%s', 0)" % M_CHECK, name="chess_state__ok_in_check",
+         note="흑 룩 e2 가 백 킹 e1 을 체크 — in_check true · legal_moves 는 킹 수 + Kxe2")
+    call(C, "public.chess_watch(1, '%s', 0)" % M_CHECK, name="chess_watch__ok_in_check",
+         note="관전도 in_check 를 싣는다(차례인 쪽 기준 — 보는 사람 기준이 아니다)")
+    seed(M_PROMO, A, B, "4k3/P7/8/8/8/8/8/4K3 w - - 0 50", 98, 210000, 205000, 2000, 2000, 900)
+    call(A, "public.chess_move(1, '%s', 98, 'a7a8q')" % M_PROMO, end="commit",
+         name="chess_move__ok_promotion",
+         note="a8=Q+ — promo 가 null 이 아닌 유일한 수 기록(from 48(a7) · to 56(a8))")
+    admin("delete from public.chess_moves where match_id in ('%s', '%s');"
+          "delete from public.chess_matches where id in ('%s', '%s');" % (M_CHECK, M_PROMO, M_CHECK, M_PROMO))
+
+    # ── 7. 순위표 ──────────────────────────────────────────────────────────────────────────
+    call(A, "public.chess_ranking(1)", name="chess_ranking__ok_me_ranked", note="A 는 순위 안")
+    call(C, "public.chess_ranking(1)", name="chess_ranking__ok_me_unranked",
+         note="C 는 0판 — rows 는 있고 me.rank 는 null(0판 제외)")
+    call(HIDDEN, "public.chess_ranking(1)", name="chess_ranking__ok_hidden_empty",
+         note="숨김 계정에게는 일반 사용자 행이 안 보인다 — rows []")
+
+    with open(os.path.join(OUT, "_manifest.json"), "w", encoding="utf-8") as fh:
+        json.dump(OrderedDict(users=ids, seeds=seeds, flow_m1=flow, fixtures=manifest),
+                  fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+    print("\n%d fixtures -> %s" % (len(manifest), OUT))
+
+
+if __name__ == "__main__":
+    main()

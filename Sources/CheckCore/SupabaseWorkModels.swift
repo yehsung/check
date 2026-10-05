@@ -1588,9 +1588,31 @@ package struct ShopCharacterRow: Decodable, Equatable, Identifiable {
     }
 }
 
-/// buy_character RPC 본문. { p_id: 캐릭터 ID }. 여기는 nil 이 없다 — "아무것도 안 사기"는 호출을 안 하는 것이다.
+/// shop_state RPC 본문. `pProtocol` 이 nil 이면 **키를 아예 싣지 않는다**(= 옛 모양 `{}`).
+///
+/// Swift 가 만들어 주는 인코더가 Optional 을 `encodeIfPresent` 로 내보내 키를 생략하는 성질을 **일부러** 쓴다.
+/// (`SetCharacterRequest` 는 반대로 null 을 실어야 해서 `encode(to:)` 를 직접 썼다 — 그쪽 서버 인자에는 기본값이 없다.)
+/// 여기는 `p_protocol int default 0` 이라 키 없는 `{}` 가 0 과 같은 뜻이고, 그게 **아직 안 올라간 서버에서도 사는**
+/// 유일한 모양이다. 한 타입이 두 모양을 다 내므로 "옛 모양"을 적는 자리가 둘로 갈리지 않는다.
+package struct ShopStateRequest: Encodable {
+    package var pProtocol: Int?
+
+    package init(pProtocol: Int?) {
+        self.pProtocol = pProtocol
+    }
+}
+
+/// buy_character RPC 본문. { p_id: 캐릭터 ID, p_protocol?: 능력 번호 }.
+/// `pId` 에는 nil 이 없다 — "아무것도 안 사기"는 호출을 안 하는 것이다.
+/// `pProtocol` 이 nil 이면 키를 안 싣는다(= 옛 모양 `{"p_id":…}`) — 근거는 `ShopStateRequest` 주석과 같다.
 package struct BuyCharacterRequest: Encodable {
     package let pId: String
+    package var pProtocol: Int?
+
+    package init(pId: String, pProtocol: Int? = nil) {
+        self.pId = pId
+        self.pProtocol = pProtocol
+    }
 }
 
 /// buy_character RPC 응답:

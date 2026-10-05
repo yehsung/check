@@ -499,11 +499,9 @@ private func pokeStore(now: Date, ultraBalance: Int?, memberCount: Int = 5, allW
 
 @MainActor
 private func renderPNG(_ view: some View, width: CGFloat = 340) throws -> Data {
-    let renderer = ImageRenderer(content: view.frame(width: width).fixedSize())
-    renderer.scale = 2
-    guard let image = renderer.nsImage,
-          let tiffData = image.tiffRepresentation,
-          let bitmap = NSBitmapImageRep(data: tiffData),
+    // 굳을 때까지 굽는다 — ImageRenderer 는 한 내용의 첫 두 장을 세 번째부터와 다른 경로로 굽는다
+    // (CheckRenderSettle 머리 주석). 안 거치면 같은 입력의 두 장이 화면 전체에서 채널당 ≤2 로 갈린다.
+    guard let bitmap = CheckRenderSettle.bitmap(view.frame(width: width).fixedSize(), scale: 2),
           let pngData = bitmap.representation(using: .png, properties: [:])
     else {
         throw UltraRenderError.failed

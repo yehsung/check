@@ -145,9 +145,13 @@ private let t41WatchHeader =
 // MARK: - ① 체인에서의 자리 · 파일 규율
 
 @Test
-func 순위_관전_마이그레이션은_체인의_마지막이고_금지_문장이_없다() throws {
+func 순위_관전_마이그레이션은_정본_뒤에_오고_금지_문장이_없다() throws {
     // 없으면: 앞 번호로 끼워 넣은 파일이 운영에서 순서가 뒤집혀 §1 전제가 죽거나, drop function 한 줄이 로비(gomoku__record 에 의존)를 끊거나,
     // 최상위 commit 이 운영 CLI 의 래퍼 트랜잭션을 깨 반쪽만 적용된 채 남아도 초록이다.
+    //
+    // ★ 여기 있던 `index == names.count - 1`("내가 체인의 마지막이다")은 **지웠다** — 그건 뜻이 아니라 대리 지표였다.
+    //   지키려던 뜻("로비를 또 덮으면 컷이 사라진다")은 아래 ①-b 가 직접 잰다. 파일이 뒤에 생기는 것 자체는 결함이 아니고
+    //   (2026-10-05 체스 세 파일), 반대로 뒤에 아무 파일이 없어도 **같은 파일 안에서** 로비를 두 번째로 덮으면 옛 대리는 눈이 멀었다.
     let names = try FileManager.default
         .contentsOfDirectory(at: try t41MigrationsDirectory(), includingPropertiesForKeys: nil)
         .filter { $0.pathExtension == "sql" }
@@ -158,7 +162,6 @@ func 순위_관전_마이그레이션은_체인의_마지막이고_금지_문장
     let previous = try #require(names.firstIndex(of: t41PreviousTail))
     let blocks = try #require(names.firstIndex(of: t41BlocksMigration))
     #expect(previous < index && blocks < index, "정본(blocks)·직전 꼬리(app_notice)보다 뒤여야 한다")
-    #expect(index == names.count - 1, "이 파일 뒤에 다른 파일이 있다: \(names[(index + 1)...]) — 로비를 또 덮으면 컷이 사라진다(머리말 ⚠)")
 
     let (raw, sql) = try t41SQL()
     let lower = sql.lowercased()
@@ -188,6 +191,160 @@ func 순위_관전_마이그레이션은_체인의_마지막이고_금지_문장
         try #require(sql.range(of: $0)?.lowerBound, "\($0) 없음")
     }
     #expect(zip(positions, positions.dropFirst()).allSatisfy { $0 < $1 }, "함수 정의 순서가 컷 → 술어 → 로비 → 순위 → 관전이 아니다")
+}
+
+// MARK: - ①-b 내가 만든 함수의 **마지막 정의**가 내 것이다(옛 "내가 체인의 마지막이다" 의 뜻)
+
+/// 걷어낸 SQL 에서 `create [or replace] function public.<이름>(` 로 **정의되는** 이름 전부(등장 순서 · 중복 제거).
+/// 이름을 손으로 적지 않고 파일에서 뽑는다 — 손으로 적으면 이 파일에 함수를 더한 사람이 목록을 안 고치고 지나간다.
+/// 같은 줄에 `create` 가 있는 것만 센다: `comment on function` · `revoke all on function` 은 정의가 아니고,
+/// `execute 'create or replace function public.x(…)'`(동적 정의)는 같은 줄에 create 가 있어 같이 잡힌다.
+private func t41DefinedPublicFunctions(in sql: String) -> [String] {
+    var names: [String] = []
+    var seen = Set<String>()
+    var searchStart = sql.startIndex
+    while let found = sql.range(of: "function public.", options: .caseInsensitive, range: searchStart..<sql.endIndex) {
+        searchStart = found.upperBound
+        let lineStart = sql[sql.startIndex..<found.lowerBound].lastIndex(of: "\n").map { sql.index(after: $0) } ?? sql.startIndex
+        guard sql[lineStart..<found.lowerBound].lowercased().contains("create") else { continue }
+        let rest = sql[found.upperBound...]
+        guard let paren = rest.firstIndex(of: "(") else { continue }
+        let name = String(rest[rest.startIndex..<paren]).trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, !name.contains(where: { $0.isWhitespace }), seen.insert(name).inserted else { continue }
+        names.append(name)
+    }
+    return names
+}
+
+/// 그 이름의 **마지막** 정의 본문(달러 인용 사이, 태그는 `as $태그$` 를 읽어 그 태그로 닫는다). 정의가 없으면 nil.
+/// 이름으로 찾는다 — 뒤 파일이 쓸 헤더 글자(대소문자 · 인자 DEFAULT 표기)를 우리가 미리 알 수 없다.
+private func t41BodyOfFunction(_ name: String, in sql: String) -> String? {
+    var searchStart = sql.startIndex
+    var last: Range<String.Index>?
+    while let found = sql.range(of: "function public.\(name)(", options: .caseInsensitive, range: searchStart..<sql.endIndex) {
+        let lineStart = sql[sql.startIndex..<found.lowerBound].lastIndex(of: "\n").map { sql.index(after: $0) } ?? sql.startIndex
+        if sql[lineStart..<found.lowerBound].lowercased().contains("create") { last = found }
+        searchStart = found.upperBound
+    }
+    guard let header = last else { return nil }
+    let rest = sql[header.upperBound...]
+    guard let asRange = rest.range(of: "as $", options: .caseInsensitive) else { return nil }
+    let tagStart = rest.index(asRange.upperBound, offsetBy: -1)
+    guard let tagEnd = rest[rest.index(after: tagStart)...].firstIndex(of: "$") else { return nil }
+    let tag = String(rest[tagStart...tagEnd])
+    let bodyStart = rest.index(after: tagEnd)
+    guard let close = rest.range(of: tag, range: bodyStart..<rest.endIndex) else { return nil }
+    return String(rest[bodyStart..<close.lowerBound])
+}
+
+/// 이 파일이 만드는 함수가 **각자 세운 계약**. 뒤 파일이 그 함수를 다시 만들어도 되지만, 그때 이 토큰들을 재서
+/// "컷(과 관전의 읽기 전용)이 살아 있다"를 증명해야 한다 — 허용 목록에 이름만 적는 것은 측정이 아니다.
+/// 비교는 **공백 접은 소문자 본문**으로(`insert ` 처럼 뒤 공백까지가 토큰인 것들이 있다).
+/// 키 집합이 이 파일이 실제로 만드는 이름 집합과 **정확히** 같아야 한다 — 함수를 더하면 계약도 적어야 한다.
+private let t41SurvivalContract: [String: (required: [String], forbidden: [String])] = [
+    // 컷 자신: 첫 배포값은 -infinity 상수다. 뒤 파일이 '지금'으로 다시 만들면 전원의 전적이 0 이 된 채 나간다.
+    "gomoku_record_epoch": (["'-infinity'::timestamptz"], []),
+    // 컷의 **유일한** 소비자: 컷 호출과 finished_at 비교가 둘 다 있어야 한다(한쪽만 남으면 컷이 무음으로 꺼진다).
+    "gomoku__record": (["public.gomoku_record_epoch()", "g.finished_at >="], []),
+    // 로비 me: 정본 술어 한 줄로 집계한다. 옛 본문(20260918180000:790-795)의 인라인 집계가 돌아오면 그 순간 컷이 사라진다
+    // — 정본의 그 6줄에는 finished_at 비교가 **아예 없다**(실측). 컷을 로비에 인라인하는 것도 금지(②와 같은 뜻).
+    "gomoku_lobby": (["public.gomoku__record(uid)"], ["count(*) filter (where g.winner = uid)", "finished_at >="]),
+    // 순위표: 같은 술어를 lateral 로 부른다(로비 me 와 어긋나지 않게) · 컷은 캡션용으로만 읽고 인라인하지 않는다.
+    "gomoku_ranking": (["public.gomoku__record(p.id)"], ["finished_at >="]),
+    // 관전: 읽기 전용(④ C2 의 쓰기 넷). 뒤 파일이 '편의상' 한 줄을 끼우는 그 사고가 여기서 걸린다.
+    "gomoku_watch": ([], ["insert ", "update ", "delete ", "gomoku__catchup"]),
+]
+
+/// 뒤 파일이 **오목 RPC 를 일부러 다시 만드는** 자리. `why` 는 사람이 읽는 근거고, required/forbidden 은 **그 근거가
+/// 실제로 성립하는지**를 재는 자다 — "그 둘은 봐준다"로 끝내면 다음 덮어쓰기를 아무도 못 본다.
+///
+/// 2026-10-05 체스(20261005160000) 가 `gomoku_challenge`·`gomoku_respond` 를 다시 만든다: 지배 문서 B8("한 사람은 한 판만,
+/// 반대도")을 지키려고 busy 게이트 네 `exists` 를 `public.chess__busy(...)` 로 바꿨다. 수리 전 실측 — 체스 active 인 a 가
+/// 오목 신청을 받아 두 판을 동시에 들고, 체스의 누적 피셔 시계가 오목 두는 동안 흘러 timeout 패로 판돈 2배를 상대에게 줬다.
+///
+/// **이 덮어쓰기가 컷을 못 지우는 이유는 측정된다**: 두 함수는 전적을 **보고하지 않는다**(정본에도 집계가 0회 — 실측).
+/// 그래서 forbidden 에 술어·컷·인라인 집계를 넣는다 — 뒷날 누가 이 둘에 전적을 싣는 순간 "예외가 안전한 이유"가 무너지고
+/// 여기서 먼저 빨개진다. required 는 거꾸로 **근거가 아직 거기 있는지**(체스 busy 게이트 · 차단 · 숨김 격리)를 잰다.
+private let t41IntendedGomokuRewrites: [String: (why: String, required: [String], forbidden: [String])] = [
+    "20261005160000_chess_duel.sql:gomoku_challenge": (
+        "B8 반대 방향 — busy 게이트가 체스를 본다(chess_duel §7A.1)",
+        ["public.chess__busy(", "public.blocked_between(", "public.same_visibility("],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner"]
+    ),
+    "20261005160000_chess_duel.sql:gomoku_respond": (
+        "B8 반대 방향 — busy 게이트가 체스를 본다(chess_duel §7A.1)",
+        ["public.chess__busy(", "public.blocked_between(", "public.same_visibility("],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner"]
+    ),
+]
+
+@Test
+func 뒤_파일은_이_파일이_만든_함수를_다시_만들지_않고_의도된_오목_덮어쓰기는_컷을_안_건드린다() throws {
+    // 없으면: 뒤 번호 파일이 gomoku_lobby 를 **옛 본문**(인라인 집계 6줄)으로 다시 만들어 전적 컷이 조용히 사라져도 초록이다.
+    // 운영에서 보이는 모습은 "컷을 KST 로 재정의했는데 로비 전적만 안 바뀜" — 순위표와 로비 me 가 영구히 어긋난다.
+    let directory = try t41MigrationsDirectory()
+    let names = try FileManager.default
+        .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        .filter { $0.pathExtension == "sql" }
+        .map(\.lastPathComponent)
+        .sorted()
+    let index = try #require(names.firstIndex(of: t41Migration), "\(t41Migration) 이 체인에 없다")
+    let later = Array(names[(index + 1)...])
+
+    let (_, mySQL) = try t41SQL()
+    let mine = t41DefinedPublicFunctions(in: mySQL)
+    // 계약표가 이 파일을 따라온다 — 함수를 더하고 계약을 안 적으면 그 함수는 아무도 안 지킨다(검사가 공허해지는 자리).
+    #expect(Set(mine) == Set(t41SurvivalContract.keys),
+            "이 파일이 만드는 함수 \(mine) 와 생존 계약표 \(t41SurvivalContract.keys.sorted()) 가 다르다 — 더한 함수의 계약을 적어라")
+    // 계약이 **지금 이 파일에서** 성립한다(기준선이 틀리면 뒤 파일 판정도 틀린다 — 기준선이 같은 입력이면 그 검사는 영원히 초록).
+    for (name, contract) in t41SurvivalContract {
+        let body = t41Squash(try #require(t41BodyOfFunction(name, in: mySQL), "\(name) 본문을 못 떴다")).lowercased()
+        for token in contract.required { #expect(body.contains(token), "\(name): 이 파일 본문에 '\(token)' 이 없다 — 계약표가 낡았다") }
+        for token in contract.forbidden { #expect(!body.contains(token), "\(name): 이 파일 본문에 '\(token)' 이 있다 — 계약표가 낡았다") }
+    }
+
+    var seenRewrites: Set<String> = []
+    for file in later {
+        let sql = t41Strip(try String(contentsOf: directory.appendingPathComponent(file), encoding: .utf8))
+        for name in t41DefinedPublicFunctions(in: sql) {
+            let key = "\(file):\(name)"
+            // ㉠ 내가 만든 함수를 뒤에서 다시 만드는 자리 — 계약을 재서 통과시킨다(덮어써도 컷이 살아 있으면 괜찮다).
+            if let contract = t41SurvivalContract[name] {
+                guard let raw = t41BodyOfFunction(name, in: sql) else {
+                    Issue.record("\(key): 다시 만드는데 본문을 못 떴다 — 손으로 봐라"); continue
+                }
+                let body = t41Squash(raw).lowercased()
+                for token in contract.required {
+                    #expect(body.contains(token), "\(key): 이 파일이 \(name) 을 다시 만드는데 '\(token)' 이 없다 — 전적 컷이 사라졌다")
+                }
+                for token in contract.forbidden {
+                    #expect(!body.contains(token), "\(key): 다시 만든 \(name) 본문에 '\(token)' 이 있다 — 옛 본문을 베꼈다(컷이 사라진다)")
+                }
+                continue
+            }
+            // ㉡ 그 밖의 오목 RPC 를 다시 만드는 자리 — 이름으로 등록하고, 등록한 근거를 측정한다.
+            guard name.hasPrefix("gomoku") else { continue }
+            guard let rewrite = t41IntendedGomokuRewrites[key] else {
+                Issue.record("\(key): 뒤 파일이 오목 RPC 를 다시 만든다 — t41IntendedGomokuRewrites 에 근거와 측정 토큰을 적어라")
+                continue
+            }
+            seenRewrites.insert(key)
+            guard let raw = t41BodyOfFunction(name, in: sql) else {
+                Issue.record("\(key): 등록된 덮어쓰기인데 본문을 못 떴다 — 측정이 공허하다"); continue
+            }
+            let body = t41Squash(raw).lowercased()
+            for token in rewrite.required {
+                #expect(body.contains(token), "\(key)(\(rewrite.why)): '\(token)' 이 없다 — 등록한 근거가 본문에 없다")
+            }
+            for token in rewrite.forbidden {
+                #expect(!body.contains(token),
+                        "\(key)(\(rewrite.why)): '\(token)' 이 생겼다 — 전적을 보고하지 않는다는 전제가 깨졌다. 이 덮어쓰기는 이제 컷을 지울 수 있다")
+            }
+        }
+    }
+    // 등록해 둔 덮어쓰기가 실제로 없으면 목록이 낡은 것이다(파일 이름을 바꾸고 목록을 안 고치면 측정이 공허하게 초록이 된다).
+    #expect(seenRewrites == Set(t41IntendedGomokuRewrites.keys),
+            "등록했는데 파일에 없는 덮어쓰기: \(Set(t41IntendedGomokuRewrites.keys).subtracting(seenRewrites)) — 목록을 고쳐라")
 }
 
 // MARK: - ② 전적 컷(U5) · 정본 술어

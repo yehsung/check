@@ -104,8 +104,8 @@ package enum CharacterArtChoice: Equatable, Sendable {
 
 /// 앱 번들 그림 이름(`Resources/Art`).
 package enum MobileArtNames {
-    /// 무대용 고해상(420px) 근무 중 표정이 있는 캐릭터(스프라이트 5종 — 아잉 원본은 192px 뿐이다).
-    package static let stageIDs: Set<String> = ["fox", "ghost", "jellyfish", "shiba", "squirrel"]
+    /// 무대용 고해상(420px) 근무 중 표정이 있는 캐릭터(스프라이트 6종 — 아잉 원본은 192px 뿐이다).
+    package static let stageIDs: Set<String> = ["fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"]
     package static func stage(id: String) -> String { "stage-\(id)-neutral" }
     /// 플래피 아잉 옆모습(192px).
     package static let flappyAing = "aing-side"

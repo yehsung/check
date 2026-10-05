@@ -99,7 +99,9 @@ private func avFetches(_ host: String) -> Int {
         // 맥이 '안다'고 하는 캐릭터 = 번들에 neutral 초상이 **실제로 있는** id — 빈 원이 서지 않는다.
         #expect(Set(AppUserAvatarArt.knownIDs) == Set(CheckMascotAssets.catalog.allIDs), "번들 카탈로그에 초상 없는 캐릭터가 섞였다")
         #expect(directory.knownIDs == Set(AppUserAvatarArt.knownIDs))
-        #expect(AppUserAvatarArt.knownIDs.count == 6 && AppUserAvatarArt.knownIDs.contains("aing"))
+        #expect(AppUserAvatarArt.knownIDs.count == 7 && AppUserAvatarArt.knownIDs.contains("aing"))
+        // 로봇(2026-10-05)은 **폴더만 넣어** 들어온 일곱 번째다 — 카탈로그가 번들 폴더를 실제로 훑는다는 증거다.
+        #expect(AppUserAvatarArt.knownIDs.contains("robot"), "로봇이 아는 캐릭터에 없다 — Characters/robot 이 번들에 안 실렸다")
         for id in AppUserAvatarArt.knownIDs {
             #expect(AppUserAvatarArt.portrait(characterID: id) != nil, "\(id) neutral 초상을 못 그린다")
         }
@@ -402,8 +404,10 @@ private func avFetches(_ host: String) -> Int {
 
     @Test func 모든_사람_아바타_호출부가_사용자_id를_넘긴다_nil은_팀_리그_줄뿐() throws {
         let avatars = try Self.calls(of: "CheckAvatarView")
-        // 19 호출부 + EditableAvatarView 안의 1(0.3.41 에 오목 순위 행이 하나 늘었다). 줄면 호출부가 사라졌거나 검사가 헛돈다.
-        #expect(avatars.count == 20, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
+        // 19 호출부 + EditableAvatarView 안의 1(0.3.41 에 오목 순위 행이 하나 늘었다).
+        // 0.3.44: 체스 창이 다섯 자리를 더했다(로비 상대 줄 · 받은/보낸 신청 · 순위 행 · 지금 대결 중). 줄면 호출부가
+        // 사라졌거나 검사가 헛돈다 — **새 창을 더하면 이 숫자도 같이 올린다**(안 올리면 '지우는 것'이 초록으로 가는 길이 된다).
+        #expect(avatars.count == 25, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
         for call in avatars {
             #expect(call.text.contains("userID:"), "\(call.file): \(call.text) — 사용자 id 없이 그리면 그 자리만 이니셜로 남는다")
         }
@@ -488,11 +492,15 @@ private func avFetches(_ host: String) -> Int {
             let n = V0325TooltipTests.count(".appUserAvatarCharacters(from:", in: code)
             return n > 0 ? "\(name):\(n)" : nil
         }.sorted()
-        #expect(roots == ["CheckMenuView.swift:1", "CheckSettingsView.swift:1", "GomokuPanel.swift:1", "MiniGamePanel.swift:1"], "\(roots)")
+        #expect(roots == ["CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
+                          "GomokuPanel.swift:1", "MiniGamePanel.swift:1"], "\(roots)")
         #expect(sources["CheckMenuView.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)
         #expect(sources["CheckSettingsView.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)
         #expect(sources["MiniGamePanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)
         #expect(sources["GomokuPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
+        // 체스 창도 같은 짝이다(v0.3.44) — 빠지면 체스 로비·순위·신청의 남의 얼굴이 전부 이니셜로 떨어진다.
+        #expect(sources["ChessPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
+        #expect(sources["CheckChessWindow.swift"]?.contains("ChessPanel(store: chess, me: me, safety: safety)") == true)
         // 앱은 오목 창에 앱 스토어를 `safety` 로 넘긴다 — 그게 빠지면 오목 창의 표가 비어 전원 행 힌트·이니셜뿐이다.
         #expect(sources["CheckApp.swift"]?.contains("}, safety: store)") == true)
         #expect(sources["CheckGomokuWindow.swift"]?.contains("GomokuPanel(store: gomoku, me: me, safety: safety)") == true)

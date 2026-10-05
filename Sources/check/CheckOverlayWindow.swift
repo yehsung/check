@@ -225,6 +225,17 @@ final class CheckOverlayController {
     private var gomokuAttentionTask: Task<Void, Never>?
     /// 지금 떠 있는 차례 말풍선(문구 · 대국 id). 누르면 그 대국의 창을 연다(신청 말풍선과 같은 클릭 자리).
     private(set) var shownGomokuAttention: (text: String, matchID: String)?
+    /// 1:1 체스(v0.3.44)의 같은 네 칸. **오목과 형제**이고 규약이 글자 그대로 같다 — 다른 것은 문구와 여는 창뿐이다.
+    /// 체스는 오목의 자동 착수 장치를 전부 버렸으므로(DECISIONS B4 — 시간 소진 = 패배) 이 말풍선이 없으면
+    /// 창을 닫은 사람은 판돈이 걸린 판을 조용히 시간패한다.
+    private(set) var chessInviteQueue: [ChessInvite] = []
+    private var chessDrainTask: Task<Void, Never>?
+    private(set) var shownChessInvite: (text: String, matchID: String)?
+    /// 체스 말풍선을 눌렀을 때 열 곳(인자 = 대국 id). nil 이면 클릭 자리를 만들지 않는다(배선은 CheckApp).
+    var onOpenChess: ((String) -> Void)?
+    private(set) var pendingChessAttention: ChessAttention?
+    private var chessAttentionTask: Task<Void, Never>?
+    private(set) var shownChessAttention: (text: String, matchID: String)?
 
     // MARK: - 할 일 보드 훅
     //
@@ -806,6 +817,8 @@ final class CheckOverlayController {
         if let rect = messageArrivalBubbleScreenRect(), rect.contains(screenPoint) { return true }
         // 오목 대결 신청 말풍선(v0.3.27)도 같은 이유로 몸체로 쳐 준다(열 곳이 배선돼 있고 그 말풍선이 떠 있을 때만).
         if let rect = gomokuInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
+        // 체스 말풍선(v0.3.44)도 같은 이유로 몸체로 쳐 준다.
+        if let rect = chessInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         return engine.hasAttachedView
             ? isBodyAtScreenPointFresh(screenPoint)
             : panel.frame.contains(screenPoint)
@@ -933,6 +946,10 @@ final class CheckOverlayController {
         // 오목 대결 신청 말풍선(v0.3.27)도 같은 규약이다 — 누르면 **그 대국**의 대결 창. 아파하기·보드보다 먼저 본다.
         if let rect = gomokuInviteBubbleScreenRect(), rect.contains(location), let matchID = gomokuBubbleMatchID() {
             onOpenGomoku?(matchID)
+            return
+        }
+        if let rect = chessInviteBubbleScreenRect(), rect.contains(location), let matchID = chessBubbleMatchID() {
+            onOpenChess?(matchID)
             return
         }
         if let rect = messageArrivalBubbleScreenRect(), rect.contains(location) {
@@ -1363,6 +1380,150 @@ final class CheckOverlayController {
                 await tick(Self.messageBubbleTickSeconds)
             }
             self?.gomokuAttentionTask = nil
+        }
+    }
+
+    // MARK: - 1:1 체스 말풍선 (v0.3.44 — 오목 네 묶음의 형제)
+    //
+    // ★ **이 네 묶음이 없으면 체스 창 밖에서 체스를 아는 길이 0 이다.** 체스 폴링은 `isWindowVisible` 을
+    //   요구하고(규약 ③) 창을 여는 길은 미니게임 머리글 하나뿐이다. 받은 신청의 TTL 은 60초이고, 서버는
+    //   `chess_invite` 푸시를 '맥에서 근무 중'(열린 세션 + 2분 내 입력)이면 **suppressed** 로 적는다 —
+    //   즉 근무 중 맥을 쓰는 사람에게 온 신청은 폰 푸시가 눌리고 맥은 아무것도 안 보여 아무 데도 전달되지
+    //   않은 채 만료되고, 신청자는 "상대가 응답하지 않았어요" 를 본다.
+
+    /// 체스 신청 말풍선 문구(순수). 오목 문구와 **같은 접기 규칙**이고 게임 이름만 다르다.
+    nonisolated static func chessInviteBubbleText(name: String, stake: Int) -> String {
+        let shortName = OverlayMessageBubble.clippedName(name)
+        let full = "\(shortName)님이 체스 대결을 신청했어요 · \(stake)💎"
+        if OverlayMessageBubble.fitsCapsule(full) { return full }
+        let short = "\(shortName)님의 체스 신청 · \(stake)💎"
+        if OverlayMessageBubble.fitsCapsule(short) { return short }
+        return "체스 대결 신청 · \(stake)💎"
+    }
+
+    /// 새 받은 신청을 큐에 넣고 펌프를 돌린다(같은 대국 id 는 한 번만). `ChessStore.onInviteArrived` 가 부른다.
+    func enqueueChessInvite(_ invite: ChessInvite) {
+        guard !chessInviteQueue.contains(where: { $0.id == invite.id }) else { return }
+        chessInviteQueue.append(invite)
+        drainChessInvitesIfNeeded()
+    }
+
+    /// 큐를 비운다(로그아웃·계정 전환).
+    func clearChessInvites() {
+        chessInviteQueue.removeAll()
+        shownChessInvite = nil
+        pendingChessAttention = nil
+        shownChessAttention = nil
+    }
+
+    /// 큐 맨 앞 신청 1건을 말풍선으로 띄우고 큐에서 뺀다(띄웠으면 true). **못 띄우면 큐를 건드리지 않는다.**
+    /// 체스는 받은 신청이 **한 건뿐**이라(서버가 하나만 말해 준다) 살아 있음 판정도 그 한 칸을 본다.
+    @discardableResult
+    func showNextChessInviteBubble(now: Date = Date()) -> Bool {
+        let alive = store.chess.visibleIncoming?.id
+        chessInviteQueue.removeAll { $0.expiresAt <= now || $0.id != alive }
+        guard let invite = chessInviteQueue.first else { return false }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = Self.chessInviteBubbleText(name: invite.peer.displayName, stake: invite.stake)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownChessInvite = (text, invite.id)
+        chessInviteQueue.removeFirst()
+        return true
+    }
+
+    func drainChessInvitesIfNeeded() {
+        guard chessDrainTask == nil, !chessInviteQueue.isEmpty else { return }
+        let tick = messageBubbleSleep
+        chessDrainTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, !self.chessInviteQueue.isEmpty else { break }
+                self.showNextChessInviteBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.chessDrainTask = nil
+        }
+    }
+
+    /// 헤드리스 검증 지점: 체스 신청 펌프가 돌고 있는가.
+    var isDrainingChessInvites: Bool { chessDrainTask != nil }
+
+    /// 지금 **누를 수 있는** 체스 말풍선(신청·차례)의 화면 사각형(아니면 nil).
+    func chessInviteBubbleScreenRect() -> NSRect? {
+        guard chessBubbleMatchID() != nil else { return nil }
+        return OverlayMessageBubble.screenRect(inPanelFrame: panel.frame)
+    }
+
+    /// 지금 떠 있는 체스 말풍선이 열 대국 id. 문구와 id 를 **함께** 본다.
+    func chessBubbleMatchID() -> String? {
+        guard onOpenChess != nil, !isUltraActive, let text = engine.greetingText else { return nil }
+        if let shown = shownChessAttention, shown.text == text { return shown.matchID }
+        if let shown = shownChessInvite, shown.text == text { return shown.matchID }
+        return nil
+    }
+
+    /// 체스 차례 말풍선 문구(순수).
+    nonisolated static func chessAttentionBubbleText(_ attention: ChessAttention) -> String {
+        switch attention.kind {
+        case .matchStarted:
+            return "체스 대국이 시작됐어요 · 내 차례예요"
+        case .myTurn:
+            let name = OverlayMessageBubble.clippedName(attention.opponentName)
+            if !name.isEmpty {
+                let full = "\(name)님이 뒀어요 · 체스 내 차례예요"
+                if OverlayMessageBubble.fitsCapsule(full) { return full }
+            }
+            return "상대가 뒀어요 · 체스 내 차례예요"
+        }
+    }
+
+    /// 차례 알림을 넣고 펌프를 돌린다. `ChessStore.onAttention` 이 부른다.
+    func enqueueChessAttention(_ attention: ChessAttention) {
+        pendingChessAttention = attention
+        drainChessAttentionIfNeeded()
+    }
+
+    @discardableResult
+    func showPendingChessAttentionBubble() -> Bool {
+        guard let attention = pendingChessAttention else { return false }
+        guard Self.chessAttentionIsCurrent(attention, in: store.chess) else {
+            pendingChessAttention = nil
+            return false
+        }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = Self.chessAttentionBubbleText(attention)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownChessAttention = (text, attention.matchID)
+        pendingChessAttention = nil
+        return true
+    }
+
+    /// 차례 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다). 창이 떠 있으면 거짓이다(화면이 이미 말한다).
+    static func chessAttentionIsCurrent(_ attention: ChessAttention, in chess: ChessStore) -> Bool {
+        guard !chess.isWindowVisible, let match = chess.match else { return false }
+        return match.id == attention.matchID && !match.isFinished && match.turn == match.myColor
+            && match.plyCount == attention.plyCount
+    }
+
+    func drainChessAttentionIfNeeded() {
+        guard chessAttentionTask == nil, pendingChessAttention != nil else { return }
+        let tick = messageBubbleSleep
+        chessAttentionTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, self.pendingChessAttention != nil else { break }
+                self.showPendingChessAttentionBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.chessAttentionTask = nil
         }
     }
 

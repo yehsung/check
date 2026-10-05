@@ -506,6 +506,24 @@ extension WorkTimerStore {
     /// 절대 가질 수 없는 이름**이어야 한다(서버 CHECK 의 허용 목록은 전부 소문자 낱말이다).
     static let ultraPurchaseID = "#ultra"
 
+    /// 번들을 한 번 훑어 얻은 "그림이 실제로 실린 캐릭터" 목록. 프로세스당 한 번만 파일을 묻는다
+    /// (스토어는 테스트에서 수십 개 만들어진다).
+    nonisolated static let bundledDrawableCharacterIDs: [String] = CheckMascotAssets.drawableCharacterIDs()
+
+    /// 이 빌드가 상점 RPC 에 싣는 능력 번호(v0.3.43 로봇).
+    ///
+    /// ★ **숫자를 여기 적지 않는다.** 그림이 답을 안다 — `Characters/robot/` 의 초상·아틀라스가 실리면 1, 아니면 0.
+    ///   상수로 1 을 박으면 그림을 굽기 전 빌드가 서버에 "robot 그릴 수 있다"고 말하고, 서버는 카드를 내려 보낸다
+    ///   (그 카드는 맥에서 회색 SF 기호 + 이름 "로봇" 으로 뜨고, 사면 루비만 빠진다 — mapC §7 ② 실측).
+    ///   파생 자리가 하나여야 목록과 구매가 **같은 번호**로 간다(짝으로 걸지 않으면 게이트가 장식이다).
+    ///
+    /// **카탈로그(`allIDs`)가 아니라 `drawableCharacterIDs` 인 이유**: 카탈로그는 `manifest.json` 한 장만 요구한다 —
+    /// 매니페스트만 넣고 아틀라스·초상을 안 넣은 번들에서 이 값이 1 이 되는 것을 실측했다(그 빌드는 회색 카드를
+    /// 팔았다). "그림이 실제로 실렸는가"는 측정되는 사실이어야 한다(`CheckMascotAssets.drawableCharacterIDs`).
+    var shopProtocolVersion: Int {
+        ShopWire.protocolVersion(drawableCharacterIDs: drawableCharacterIDs)
+    }
+
     /// 상점 상태(잔량·가격·보유)를 한 번 읽는다. 진입(`toggleShopPanel`)과 구매 직후가 호출부다.
     ///
     /// **로컬 캐시를 믿지 않는 이유**: 가격도 보유도 다른 기기에서 바뀐다(다른 맥에서 사고 왔을 수 있다).
@@ -514,12 +532,15 @@ extension WorkTimerStore {
         guard !shopLoading else { return }
         shopLoading = true
         let generation = sessionGeneration
+        // 번들 카탈로그 조회는 메인 액터에 있다 — Task 안에서 다시 묻지 않고 여기서 한 번 집는다.
+        let protocolVersion = shopProtocolVersion
         Task { [weak self] in
             guard let self else { return }
             defer { self.shopLoading = false }
             do {
                 let state = try await withSessionRetry { activeSession in
-                    try await self.service.fetchShopState(accessToken: activeSession.accessToken)
+                    try await self.service.fetchShopState(accessToken: activeSession.accessToken,
+                                                         protocolVersion: protocolVersion)
                 }
                 guard generation == self.sessionGeneration else { return }
                 self.applyShopState(state)
@@ -573,6 +594,12 @@ extension WorkTimerStore {
     /// 아무것도 안 골랐을 때 하단 바가 말하는 것.
     nonisolated static let pickSomethingNotice = "살 것을 골라 주세요"
 
+    /// 서버 `needs_update` 전용 문구(v0.3.43). **이 어휘만 이 문장을 쓴다** — 뭉개서 "구매 실패" 로 말하면
+    /// 사용자는 자기가 할 수 있는 일(업데이트)을 모르고 같은 카드를 계속 누른다.
+    /// 도달 경로는 좁다(목록 게이트가 카드를 숨긴다) — 열리는 때는 서버가 먼저 올라간 뒤 그림이 아직 없는 빌드,
+    /// 또는 그림이 있는 빌드가 404 폴백으로 옛 모양에 눌러앉은 동안 robot 을 누른 경우다.
+    nonisolated static let needsUpdateNotice = "앱을 업데이트하면 살 수 있어요"
+
     /// 지금 고른 것의 값(루비). 모르면 nil — 숫자를 지어내지 않는다.
     var shopSelectionPrice: Int? {
         switch shopSelection {
@@ -618,12 +645,14 @@ extension WorkTimerStore {
         purchasingID = id
         shopNotice = nil
         let generation = sessionGeneration
+        let protocolVersion = shopProtocolVersion
         Task { [weak self] in
             guard let self else { return }
             defer { self.purchasingID = nil }
             do {
                 let response = try await withSessionRetry { activeSession in
-                    try await self.service.buyCharacter(accessToken: activeSession.accessToken, id: id)
+                    try await self.service.buyCharacter(accessToken: activeSession.accessToken, id: id,
+                                                       protocolVersion: protocolVersion)
                 }
                 guard generation == self.sessionGeneration else { return }
                 if let ruby = response.rubyBalance { self.rubyBalance = ruby }
@@ -638,6 +667,10 @@ extension WorkTimerStore {
                     self.loadShopState()
                 case "insufficient":
                     self.shopNotice = Self.shortfallNotice(need: response.need, have: response.have)
+                case "needs_update":
+                    // 서버는 "이 앱은 그 캐릭터를 아직 못 산다"고 거절했고 **루비는 안 깎였다**.
+                    // `default:` 의 "구매 실패" 로 떨어지면 사용자는 돈이 빠졌는지, 다시 눌러야 하는지 알 수 없다.
+                    self.shopNotice = Self.needsUpdateNotice
                 default:
                     self.shopNotice = "구매 실패"
                 }

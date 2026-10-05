@@ -274,15 +274,19 @@ func 오목_라우팅_배선은_소스에_그대로_있다() throws {
     #expect(realtime.contains("case .gomokuSignal: gomoku.handleSignal()"))
     #expect(realtime.contains("case .catchUp: startCatchUp() gomoku.realtimeDidJoin()"))
     // v0.3.30: 깨어남의 오목 조회는 근무 게이트를 지나지 않는다(서버가 신청의 근무 조건을 지웠다).
+    // v0.3.44: 체스가 같은 중괄호 안에 섰다(둘 다 조회뿐이라 같은 게이트를 지난다).
     #expect(realtime.contains(
-        "if case .didWake = event, !realtime.transportAvailable { gomoku.systemDidWake() }"))
+        "if case .didWake = event, !realtime.transportAvailable { gomoku.systemDidWake() chess.systemDidWake() }"))
     // `.drain` 가지는 근무 게이트 뒤에 그대로다(오목이 그 게이트를 풀지 않았다). 막힌 맥은 v0.3.30 부터 take_pokes 대신
     // 빚을 적고 메시지 활동을 새로 읽는다 — 그 가지 안에 requestDrain 이 없어야 한다.
     #expect(realtime.contains(
         "case .drain: guard realtimeMayConsumePokes else { realtime.catchUpDeferred = true requestMessageActivityRefresh() continue } requestDrain()"))
 
     let link = gomokuCollapsed(V0317ShopTests.stripped(try V0317ShopTests.source("RealtimeLink.swift")))
-    #expect(link.contains("if event == RealtimeLinkConstants.gomokuBroadcastEvent { return [.gomokuSignal] } return [.drain]"))
+    // v0.3.44: 체스 가지가 오목 **바로 뒤**에 섰고 기본값(drain)은 그 뒤에 그대로다.
+    #expect(link.contains("if event == RealtimeLinkConstants.gomokuBroadcastEvent { return [.gomokuSignal] } "
+                          + "if event == RealtimeLinkConstants.chessBroadcastEvent { return [.chessSignal] } "
+                          + "return [.drain]"))
     // 채널은 여전히 하나다.
     #expect(link.contains("static func pokeChannel(userID: String) -> String { \"poke:\\(userID)\" }"))
 }

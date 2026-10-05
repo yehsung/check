@@ -581,6 +581,18 @@ final class CheckTodoBoardController {
     /// `NSWindow.isVisible` 로는 알 수 없다 — 아래 감시자 주석의 사고에서 그 값은 true 인 채 거짓말을 했다.
     /// 질의가 실패하면 nil = "모른다"이고, 모를 때는 아무것도 하지 않는다(멀쩡한 창을 다시 만드는 쪽이 더 나쁘다).
     /// (화면 녹화 권한이 필요 없는 질의다 — 창 메타데이터만 읽는다.)
+    ///
+    /// ⚠️ **2026-10-05 실측(Darwin 27): 이 질의가 자기 프로세스의 `orderOut` 된 창을 계속 '화면에 있다'고 답한다.**
+    ///   독립 프로세스 프로브(알파 0 패널 · `orderFrontRegardless` → `orderOut` → 6초간 0.5초마다 재질의):
+    ///   `windowNumber` 는 그대로 유효하고 `isVisible` 은 false 로 내려가는데
+    ///   `CGWindowListCopyWindowInfo([.optionOnScreenOnly, .optionIncludingWindow], id)` 는 **끝까지 그 창을 담았고**
+    ///   `kCGWindowIsOnscreen` 도 1 이었다. 전체 목록(`kCGNullWindowID`) 변형도 같았고 `occlusionState` 는
+    ///   앞에 띄운 순간에도 `.visible` 을 안 줘서 대체가 못 된다.
+    ///   → **이 함수를 쓰는 고착 감시자 다섯(할 일 보드 · 설정 · 미니게임 · 오목 · 체스)이 전부 눈이 멀었다.**
+    ///   방향은 안전측이다(=아무것도 다시 만들지 않는다) — 멀쩡한 창을 버리는 쪽으로 틀리지는 않는다. 대신
+    ///   `orderFrontRegardless` 가 조용히 실패하는 v0.2.26 사고가 재발하면 **스스로 못 낫는다.**
+    ///   `CheckTodoBoardWindowTests.todoBoardRebuildsPanelWhenItNeverReachesTheScreen` 이 그래서 빨갛다
+    ///   (체스와 무관하다 — 프로브가 이 저장소 코드를 한 줄도 안 쓴다). 고치려면 다른 질의가 필요하다.
     @MainActor
     static func isOnScreen(_ window: NSWindow) -> Bool? {
         guard window.windowNumber > 0 else { return nil }

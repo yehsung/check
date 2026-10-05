@@ -80,6 +80,18 @@ package final class MeStore {
     package internal(set) var shopSelection: String?
     package internal(set) var shopNotice: String?
     package internal(set) var purchasingID: String?
+    /// 상점 RPC(`shop_state`·`buy_character`)에 싣는 능력 번호의 **재료**: 이 번들에 초상이 있는 캐릭터 id.
+    ///
+    /// ★ **숫자를 적는 자리가 아니다**(B16). `fetchShopState`·`buyCharacter` 는 맥과 폰이 공유하므로(CheckCore)
+    ///   폰이 1 을 보내면 서버는 "너는 robot 을 그릴 수 있다"로 읽고 카드를 내려 준다. 폰은 모르는 id 를
+    ///   아잉으로 접으니 그 카드는 **아잉 그림**으로 떠 "아잉을 또 파네"가 되고, 사면 100 루비가 빠진 채
+    ///   착용해도 변화가 없다(mapC §7 ③④ 실측). 그래서 `AingCharacterArt.knownIDs`(번들 초상이 있는 id)가 답이다 —
+    ///   초상이 폰 번들에 들어오고 그 목록이 갱신되는 날 이 값이 저절로 1 이 된다.
+    ///
+    /// **왜 `var` 인가**(테스트 이음새): 번들은 지금 한 값만 가진다(robot 없음). 그 상태로는 1 쪽 분기가 한 줄도
+    /// 돌지 않아 호출부가 무엇을 넘기든 스위트가 모른다 — 가짜 명단을 꽂아 `loadShop`·`confirmPurchase` 의
+    /// 진짜 경로를 양쪽 분기로 돌린다. 프로덕션에서 이 값을 쓰는 곳은 없다.
+    @ObservationIgnored package var drawableCharacterIDs: [String] = AingCharacterArt.knownIDs
     /// 서버 착용값(`profiles.character`, 원문). nil = 기본(아잉) 또는 아직 모름(`equippedLoaded` 로 가른다).
     package internal(set) var equippedServerID: String?
     package internal(set) var equippedLoaded = false

@@ -128,6 +128,33 @@ enum CheckMascotAssets {
         return catalog.portraitURL(for: characterID, mood: mood)
     }
 
+    /// 이 빌드가 **그림을 실제로 들고 있는** 캐릭터 id. 상점 능력 번호(`p_protocol`)의 재료다.
+    ///
+    /// ★ **카탈로그 목록(`allIDs`)은 "그림이 실렸다"의 증거가 아니다.** `CharacterCatalog.load` 는
+    ///   `manifest.json` 한 장만 요구하므로, 매니페스트만 든 폴더도 목록에 든다 — 그 빌드로 서버에 robot 카드를
+    ///   달라고 말하면 카드는 회색 `person.crop.circle` + 이름 "로봇" 으로 뜨고 **살 수 있다**(실측).
+    ///   C1 의 "돈만 내고 아무 일도 안 생긴다"가 한 칸 좁아진 채 돌아오는 자리라, 여기서는 **파일 실재**를 묻는다.
+    ///
+    /// 묻는 파일 세 가지와 근거:
+    /// - 초상 neutral·negative — 상점 카드와 아바타 자리가 둘 다 쓴다(한 장만 있으면 표정 하나가 빈다).
+    /// - 매니페스트가 선언한 아틀라스 — 없으면 입어도 자기 화면엔 아잉이 선다(돈만 내고 변화 없음).
+    ///   아잉처럼 아틀라스를 **선언하지 않는** 3D 캐릭터는 묻지 않는다(선언이 없으면 요구도 없다).
+    static func drawableCharacterIDs(
+        catalog: CharacterCatalog = CheckMascotAssets.catalog,
+        fileManager: FileManager = .default
+    ) -> [String] {
+        catalog.allIDs.filter { id in
+            var required: [URL?] = id == CharacterCatalog.builtInAingID
+                ? [url(for: .neutral), url(for: .negative)]
+                : [catalog.portraitURL(for: id, mood: .neutral), catalog.portraitURL(for: id, mood: .negative)]
+            if catalog.manifest(id: id)?.atlas != nil { required.append(catalog.atlasURL(for: id)) }
+            return required.allSatisfy { candidate in
+                guard let candidate else { return false }
+                return fileManager.fileExists(atPath: candidate.path)
+            }
+        }
+    }
+
     // MARK: - 이미지
 
     /// ⚠️ **프로덕션 호출부가 없다**(2026-09-21 실측 — `Sources/` 전체에서 이 오버로드를 부르는 곳이 0개다).

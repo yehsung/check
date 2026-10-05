@@ -702,10 +702,18 @@ struct V0325TooltipTests {
             return n > 0 ? "\(name):\(n)" : nil
         }.sorted()
         // v0.3.27: 1:1 오목 창(GomokuPanel) 루트가 다섯 번째 자리로 붙었다(테스트 이름은 식별자라 그대로 둔다).
+        // v0.3.44: 1:1 체스 창(ChessPanel) 루트가 여섯 번째다. **새 창을 더하면 이 숫자도 같이 올려야 한다** —
+        // 안 올리면 그 창이 레이어를 제대로 걸었는데도 빨개지고, "지우는 것" 이 초록으로 가는 가장 짧은 길이 된다
+        // (2026-10-05 실측: ChessPanel 의 두 줄을 지우면 이 시험과 V0335 가 초록이 됐고 체스 자신의 40건은
+        //  한 건도 안 빨개졌다 — 그래서 체스 쪽 그물을 V0344ChessWindowTests 에 함께 걸었다).
         #expect(layerSites == [
-            "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1", "GomokuPanel.swift:1",
-            "MiniGamePanel.swift:1",
+            "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
+            "ChessPanel.swift:1", "GomokuPanel.swift:1", "MiniGamePanel.swift:1",
         ], "레이어 자리: \(layerSites)")
+        // 체스 창도 오목과 **같은 자리**다: 창 고정 프레임·배경·전경색 뒤(판·목록 클리핑 바깥).
+        let chess = try #require(Self.between(sources["ChessPanel.swift"] ?? "",
+                                              "struct ChessPanel: View {", "private var content: some View {"))
+        #expect(chess.contains("height: ChessWindowLayout.contentSize.height, alignment: .topLeading) .background(CheckTheme.background) .foregroundStyle(CheckTheme.primaryText) .checkTooltipLayer()"))
         // 오목 창: 창 고정 프레임·배경·전경색 뒤(판·목록 클리핑 바깥).
         let gomoku = try #require(Self.between(sources["GomokuPanel.swift"] ?? "",
                                                "struct GomokuPanel: View {", "private var content: some View {"))

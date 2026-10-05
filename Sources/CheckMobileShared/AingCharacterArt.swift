@@ -16,7 +16,7 @@ public enum AingCharacterArt {
     public static let defaultID = "aing"
 
     /// 이 번들에 초상이 있는 캐릭터(아잉 먼저, 나머지 이름순 — 코어 `CharacterCatalog` 순서 규칙과 같다).
-    public static let knownIDs: [String] = ["aing", "fox", "ghost", "jellyfish", "shiba", "squirrel"]
+    public static let knownIDs: [String] = ["aing", "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"]
 
     public enum Expression: String, CaseIterable, Sendable {
         /// 웃는 얼굴(근무 중 · 연결 끊김 · 상태 없음).

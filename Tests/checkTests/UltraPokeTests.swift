@@ -1315,11 +1315,9 @@ final class UltraSequenceURLProtocol: URLProtocol {
 
 @MainActor
 private func ultraUnlimitedRenderPNG(_ view: some View, width: CGFloat = 340) throws -> Data {
-    let renderer = ImageRenderer(content: view.frame(width: width).fixedSize())
-    renderer.scale = 2
-    guard let image = renderer.nsImage,
-          let tiff = image.tiffRepresentation,
-          let bitmap = NSBitmapImageRep(data: tiff),
+    // 굳을 때까지 굽는다 — ImageRenderer 는 한 내용의 첫 두 장을 세 번째부터와 다른 경로로 굽는다
+    // (CheckRenderSettle 머리 주석). 안 거치면 `plain == plainTwin` 대조군이 간헐적으로 빨개진다.
+    guard let bitmap = CheckRenderSettle.bitmap(view.frame(width: width).fixedSize(), scale: 2),
           let png = bitmap.representation(using: .png, properties: [:])
     else { throw UltraUnlimitedRenderError.failed }
     return png

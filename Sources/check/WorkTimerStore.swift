@@ -303,6 +303,9 @@ final class WorkTimerStore {
             // 오목 받은 신청을 60초 스로틀로 한 번 본다(v0.3.27) — 창이 안 보일 때의 확인 시점 중 하나다.
             // v0.3.30 부터 근무 밖에서도 신청이 오므로 팝오버 배너·메뉴바 점의 신선도가 이 한 줄에 기댄다.
             gomoku.refreshInboxIfStale()
+            // 체스 받은 신청도 같은 자리에서 본다(v0.3.44). 체스 폴링은 **창이 보일 때만** 돌고 창을 여는 길은
+            // 미니게임 머리글 하나뿐이라, 창을 안 연 사람에게는 이 한 줄과 소켓 신호가 신청을 아는 전부다.
+            chess.refreshLobbyIfStale()
             // 메시지 요약 + 이력을 60초 스로틀로 한 번 받는다(v0.3.30) — 대화 패널이 안 보여도 받는다: 안 읽음 점과
             // 메뉴바 점이 이력·요약 중 최신 쪽을 기준으로 계산되기 때문이다(unreadMessagePeerIDs).
             refreshMessageActivityOnMenuOpen()
@@ -1020,6 +1023,10 @@ final class WorkTimerStore {
     /// 계기(팝오버 열림·근무 시작·로그아웃·계정 전환)만 넘긴다. 오목 스토어는 이 스토어를 약참조로 빌린다.
     let gomoku: GomokuStore
 
+    /// 1:1 체스 대결 스토어(v0.3.44). 오목과 **같은 호스트 프로토콜**을 요구한다(`ChessStoreHost = GomokuStoreHost`) —
+    /// 같은 소유자가 두 게임의 호스트이므로 멤버를 베껴 적은 두 번째 프로토콜을 두면 한쪽이 언젠가 빠진다.
+    let chess: ChessStore
+
     /// 미션 보상 연출 싱크. onReactionTrigger 와 **따로 둔 이유**: 그쪽은 `shouldBeVisible` 게이트를 지나므로
     /// 캐릭터를 숨긴 사용자에게는 아무것도 안 뜬다. 보상은 서버가 재화를 이미 올렸고 되돌릴 수 없으므로
     /// 그 게이트를 우회해 peek 으로라도 알려야 한다(배선은 agent-overlay/W2 몫이다).
@@ -1248,6 +1255,18 @@ final class WorkTimerStore {
     /// 기본값이 실제 질의면 창 앵커 테스트가 남긴 `current` 가 병렬로 도는 메시지 스위트의 판정에 새어 든다.
     @ObservationIgnored var menuPopoverOnScreenProbe: @MainActor () -> Bool? = { nil }
 
+    /// 상점 RPC(`shop_state`·`buy_character`)에 싣는 능력 번호의 **재료**: 이 빌드가 그림을 들고 있는 캐릭터 id.
+    /// 기본값은 번들을 한 번 훑은 사실(`CheckMascotAssets.drawableCharacterIDs()` — 초상 둘 + 아틀라스 실재).
+    ///
+    /// ★ **숫자를 적는 자리가 아니다.** 1 을 박으면 그림을 굽기 전 빌드가 서버에 "robot 그릴 수 있다"고 말하고,
+    ///   서버는 카드를 내려 보낸다(맥은 회색 SF 기호 + 이름, 폰은 아잉 그림 — mapC §7 ②③ 실측). B16 이 그 자리다.
+    ///
+    /// **왜 `var` 인가**(테스트 이음새): 번들은 지금 한 값만 가진다(robot 없음). 그 상태로는 "1 을 보낸다" 분기가
+    /// 한 줄도 돌지 않아 **배선을 통째로 지워도 스위트가 초록이다**(실측 — V0343+V0317+MeShopProtocol 37건 전부).
+    /// 번들을 기준선으로 삼은 단언이 `[[comparison-baseline-must-differ]]` 그대로 퇴화한 자리라, 가짜 명단을 꽂아
+    /// **스토어의 진짜 호출 경로를 양쪽 분기로** 돌린다. 프로덕션에서 이 값을 쓰는 곳은 없다.
+    @ObservationIgnored var drawableCharacterIDs: [String] = WorkTimerStore.bundledDrawableCharacterIDs
+
     // ── 차단 · 신고 (v0.3.34 — 맥, 2026-09-20) ──
     //
     // 로직은 `WorkTimerStoreBlocks.swift`, 문구·규칙은 코어 `BlockReportRules`(폰과 한 벌)에 있다(저장 프로퍼티만 언어 제약으로 여기 산다).
@@ -1272,6 +1291,9 @@ final class WorkTimerStore {
     var blockHiddenPeerIDs: Set<String> = [] {
         didSet {
             if gomoku.hiddenPeerIDs != blockHiddenPeerIDs { gomoku.hiddenPeerIDs = blockHiddenPeerIDs }
+            // 차단은 메시지·찌르기·오목·체스를 **함께** 막는 관계다. 한쪽만 비추면 차단한 사람이
+            // 체스 로비·받은 신청에 그대로 남아 "차단했는데 신청이 온다" 가 된다.
+            if chess.hiddenPeerIDs != blockHiddenPeerIDs { chess.hiddenPeerIDs = blockHiddenPeerIDs }
         }
     }
     /// 차단 왕복이 떠 있는 상대(한 번에 하나 — 확인 시트를 지난 동작이다).
@@ -1584,6 +1606,8 @@ final class WorkTimerStore {
         // 오목 스토어는 먼저 host 없이 만들고, 이 초기화가 끝나는 자리에서 자신을 넘긴다(attach) —
         // 저장 프로퍼티를 다 채우기 전에는 self 를 넘길 수 없다.
         self.gomoku = GomokuStore()
+        // 체스도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
+        self.chess = ChessStore()
         self.service = service
         self.defaults = defaults
         let resolvedVault = tokenVault ?? Self.defaultTokenVault(defaults: defaults)
@@ -1637,6 +1661,7 @@ final class WorkTimerStore {
         observeSleepWake(workspaceNotifications)
         refreshMenuBarTitle()
         gomoku.attach(host: self)
+        chess.attach(host: self)
     }
 
     /// 잠자기/깨어남 노티를 구독한다. 클로저는 [weak self]로 스토어 수명을 넘겨 자동 무력화되므로
@@ -3627,6 +3652,8 @@ extension WorkTimerStore {
         // 1:1 오목도 계정에 묶인 상태다(v0.3.27). 창을 닫고 판·신청·루비 미러·폴링을 전부 내린다 —
         // 남기면 다음 사람이 앞 사람의 대국 창과 받은 신청 배너를 그대로 본다.
         gomoku.reset()
+        // 체스도 같은 이유로 내린다(v0.3.44). 빠뜨리면 다음 사람이 앞 계정의 체스 판을 본다.
+        chess.reset()
         // 별명 편집/쿨타임도 계정에 묶인 상태다. 남기면 새 계정 화면에 앞 사람의 '언제부터 가능' 안내가 뜬다.
         isEditingDisplayName = false
         displayNameDraft = ""
@@ -3752,8 +3779,9 @@ extension WorkTimerStore {
         workStateOwnerUserID = userID
         guard let previousOwner, previousOwner != userID else { return }
         // 계정이 바뀌었다 — 진행 중 근무와 그에 딸린 로컬 상태를 모두 끊는다.
-        // 오목 상태도 앞 계정의 것이다(v0.3.27). 로그아웃 경로가 이미 비웠더라도 한 번 더 — 멱등이다.
+        // 오목·체스 상태도 앞 계정의 것이다. 로그아웃 경로가 이미 비웠더라도 한 번 더 — 멱등이다.
         gomoku.reset()
+        chess.reset()
         startedAt = nil
         accumulatedSeconds = 0
         accumulatedDayStart = TeamWeeklyGoal.koreanDayStart(for: Date())

@@ -420,24 +420,50 @@ func theGhostIsFaintButVisible() {
 // MARK: - 헤더 실측 폭
 
 @MainActor
-@Test("헤더 실측: 칩 셋 + [일시정지]가 344pt 안에 든다(고른 칩만 이름)")
+@Test("헤더 실측: 칩 셋 + [일시정지] / 입구 둘이 344pt 안에 든다(고른 칩만 이름 · 입구는 아이콘 전용)")
 func theHeaderFitsInThreeHundredFortyFour() throws {
     let budget = MiniGameWindowLayout.canvasSize.width
     for (label, playing, frozen) in [("판이 도는 중(일시정지 버튼)", true, false),
-                                     ("정지·시작 전(오목 입구)", false, false),
-                                     ("정지 카드(칩 잠금 해제 + 오목 입구)", true, true)] {
+                                     ("정지·시작 전(오목·체스 입구 둘)", false, false),
+                                     ("정지 카드(칩 잠금 해제 + 입구 둘)", true, true)] {
         let header = MiniGameGameHeader(selected: .flappy, isPlaying: playing, isFrozen: frozen,
-                                        onSelect: { _ in }, onPause: {}, onGomoku: {})
+                                        onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {})
         let width = try tmNaturalWidth(header)
         print("[헤더] \(label): \(String(format: "%.1f", width))pt / \(budget)pt")
         #expect(width <= budget, "\(label) 에서 헤더가 \(width)pt 라 344 를 넘는다")
     }
     // 아이콘 전용이 실제로 폭을 아낀다(이름 셋을 다 달면 넘치는지도 같이 본다).
     let iconOnly = try tmNaturalWidth(MiniGameGameHeader(selected: .flappy, isPlaying: true, isFrozen: false,
-                                                         onSelect: { _ in }, onPause: {}, onGomoku: {}))
+                                                         onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {}))
     let allTitles = try tmNaturalWidth(tmAllTitlesHeader())
     print("[헤더] 이름 셋 전부: \(String(format: "%.1f", allTitles))pt (아이콘 전용 \(String(format: "%.1f", iconOnly))pt)")
     #expect(allTitles > iconOnly + 40, "이름을 다 달아도 폭이 안 늘었다 — showsTitle 이 그림을 안 바꾼다")
+
+    // ★ v0.3.44 — 입구가 **둘**이 되며 예산이 빠듯해졌다. 두 사실을 숫자로 못 박는다:
+    //   ① 지금 배치(이름 둘)가 실제로 들어간다 — 위 세 갈래가 이미 잰다(정지·시작 전 = 입구 둘).
+    //   ② **문을 하나만 더 달면 넘친다.** 이 단언이 없으면 "들어간다"는 넉넉한 헤더에서도 참이라
+    //      예산이 언제 깨지는지 아무도 모른다(기준선이 갈려야 한다).
+    let titledEntries = try tmNaturalWidth(tmEntriesRow(showsTitle: true))
+    let iconEntries = try tmNaturalWidth(tmEntriesRow(showsTitle: false))
+    let entriesHeader = try tmNaturalWidth(
+        MiniGameGameHeader(selected: .flappy, isPlaying: false, isFrozen: false,
+                           onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {}))
+    let oneEntry = (titledEntries - 6) / 2
+    print("[입구] 이름 둘 \(String(format: "%.1f", titledEntries))pt · 아이콘 둘 \(String(format: "%.1f", iconEntries))pt"
+          + " · 입구 둘 머리글 \(String(format: "%.1f", entriesHeader))pt (여유 \(String(format: "%.1f", budget - entriesHeader))pt)")
+    #expect(iconEntries < titledEntries - 60, "아이콘 전용 입구가 이름 달린 입구와 폭이 비슷하다 — showsTitle 이 그림을 안 바꾼다")
+    #expect(entriesHeader <= budget, "입구 둘에 이름을 달면 \(entriesHeader)pt 라 344 를 넘는다")
+    #expect(entriesHeader + 6 + oneEntry > budget,
+            "문을 하나 더 달아도 \(entriesHeader + 6 + oneEntry)pt 라 들어간다 — 이 예산 시험이 아무 경계도 안 지킨다")
+}
+
+/// 헤더 오른쪽의 입구 둘만 떼어 잰다(칩·Spacer 를 뺀 순수 입구 폭).
+@MainActor
+private func tmEntriesRow(showsTitle: Bool) -> some View {
+    HStack(spacing: 6) {
+        MiniGameGomokuEntryButton(showsTitle: showsTitle) {}
+        MiniGameChessEntryButton(showsTitle: showsTitle) {}
+    }
 }
 
 @Test("아이콘 전용 칩도 VoiceOver 는 이름을 읽는다 — 말풍선은 눈, 라벨은 귀 몫이다")

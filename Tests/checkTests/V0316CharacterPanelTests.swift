@@ -14,7 +14,8 @@ import Testing
 //      실제로 재지는 않는다** — 여기서 픽셀로 잰다.)
 //  ② 헤더가 **1pt 도 안 높아졌다**. 마스코트를 버튼으로 감싸며 패딩이 한 겹 붙으면 아무 테스트도 안
 //     빨개진 채 창 높이 예산이 갉아먹힌다.
-//  ③ 카드가 **픽셀로 실제로 그려진다**(Menu/Picker 의 노란 상자가 아니다).
+//  ③ 카드가 **픽셀로 실제로 그려진다** — 노란 상자(TextField·분절 Picker)도, 투명한 빈 자리
+//     (Menu·기본 Picker)도 아니다. 뒤쪽 둘은 노란 픽셀이 0이라 유채색·강조색 단언이 잡는다(③ 머리 주석).
 //  ④ 누르면 **저장된다**. 저장 호출이 빠져도 로컬 카드는 옮겨 갈 수 있어 눈으로는 멀쩡하다.
 //  ⑤ 관리자 게이트가 **없다** — 일반 사용자도 연다(중간 상태, 사용자 확인).
 //  ⑥ 다른 패널과 상호 배타 — 양방향.
@@ -72,7 +73,7 @@ func 마스코트를_버튼으로_바꿔도_헤더가_안_높아진다() throws 
     #expect(full <= 700.0, "홈 화면이 \(full)pt 다")
 }
 
-// MARK: - ③ 카드가 픽셀로 그려진다 (Menu/Picker 의 노란 상자가 아니다)
+// MARK: - ③ 카드가 픽셀로 그려진다 (노란 상자도, 투명한 빈 자리도 아니다)
 
 @MainActor
 @Test
@@ -81,16 +82,38 @@ func 카드가_노란_상자가_아니라_초상화와_이름으로_그려진다
     defer { cpDrop(suite) }
     let bitmap = try cpPanelBitmap(defaults: suite.defaults)
 
-    // ImageRenderer 는 Menu·Picker·TextField 를 못 그리고 자리에 (255,204,0) 상자를 박는다.
-    // 그 상자가 하나라도 있으면 이 패널은 스냅샷에서 **보이지 않는 것과 같다**.
-    #expect(cpYellowPixelCount(bitmap) == 0,
-            "카드 자리에 '못 그림' 노란 상자가 있다 — Button + Image 로만 만들어야 한다")
+    // ImageRenderer 의 "못 그림" 표식 — (255,204,0) 상자. 그 자리는 픽셀 커버리지가 0이라, 상자가 하나라도
+    // 있으면 이 패널은 스냅샷에서 **보이지 않는 것과 같다**.
+    //
+    // ⚠️ **"Menu·Picker·TextField 를 못 그려 노란 상자를 박는다"는 전제는 절반만 참이다**(2026-10-05 실측,
+    //    Darwin 27.0 / Xcode 27 에서 이 카드 자리에 위젯을 하나씩 넣어 쟀다):
+    //      · `TextField`            → 노란 27,200px · 가로 런 **584**
+    //      · `Picker(.segmented)`   → 노란  3,680px · 가로 런 **140**
+    //      · `Menu`                 → 노란 **0** · 런 **0** (아무것도 안 그린다 — 자리가 완전 투명하다)
+    //      · `Picker`(기본=메뉴 스타일) → 노란 **0** · 런 **0**
+    //    즉 노란 상자는 **TextField·분절 Picker 에만** 생긴다. 그러니 "카드 한 칸(92pt = @2x 184px)을
+    //    통째로 덮는 꽉 찬 사각형"도 그 둘에만 해당하고, 분절 Picker 는 제 고유 폭(140px)에만 칠한다.
+    //
+    // ⚠️ 그리고 재는 것은 **상자**이지 '노란 픽셀'이 아니다. 로봇의 호박색 눈이 (255,204,0) 범위에 걸려
+    //    전체 패널에서 **1픽셀**이 잡혔고, 옛 단언(`== 0`)은 그 1픽셀로 빨개졌다 — 캐릭터 색을 금지하는
+    //    단언이 돼 버린 것이다. 그래서 가로 연속 길이로 가른다: 실측된 **제일 짧은** 상자 런(분절 Picker
+    //    140px)보다 5.8배 낮고 캐릭터 색(1px)보다 24배 높은 24px 에 선을 긋는다.
+    //
+    // ★ 그러므로 **이 단언은 Menu·기본 Picker 를 못 잡는다**(둘 다 런 0 = 통과). 그 몫은 아래 두 단언이
+    //   진다 — 카드 자리를 Menu·Picker 로 치환한 변형에서 이 노란 단언은 안 물렸고 `cpColorfulPixelCount
+    //   > 2_000`·`cpAccentPixelCount > 150` 이 빨개져 잡았다(같은 실측). 노란 단언만 믿지 마라.
+    let yellowRun = cpLongestYellowRun(bitmap)
+    #expect(yellowRun < 24,
+            Comment(rawValue: "카드 자리에 '못 그림' 노란 상자가 있다(가로 연속 \(yellowRun)px · "
+                    + "노란 픽셀 \(cpYellowPixelCount(bitmap))개) — Button + Image 로만 만들어야 한다"))
 
     // 초상화가 실제로 칠해졌는지. 캐릭터 그림은 이 화면의 회색 팔레트에 없는 **유채색 덩어리**다.
+    // ★ 이 줄이 위 노란 단언의 사각지대(Menu·기본 Picker = 투명한 빈 자리)를 실제로 받는 그물이다.
     #expect(cpColorfulPixelCount(bitmap) > 2_000,
             "초상화가 안 보인다(유채색 픽셀 \(cpColorfulPixelCount(bitmap))개) — 카드가 빈 상자다")
 
     // 고른 카드의 파란 테두리·체크 배지. 없으면 "무엇을 고르고 있는지 안 보이는 선택기"다.
+    // ★ 이 줄도 노란 단언의 사각지대를 받는 짝이다(Menu·기본 Picker 치환에서 함께 빨개졌다 — 위 ★ 참조).
     #expect(cpAccentPixelCount(bitmap) > 150,
             "선택됨 표시가 안 보인다(강조색 픽셀 \(cpAccentPixelCount(bitmap))개)")
 
@@ -321,8 +344,25 @@ func 캐릭터_패널_높이_예산이_실측과_맞다() throws {
     let withChrome = try #require(cpPopoverHeight(
         CheckMenuView(store: chromed, previewGoalEditing: true, characterDefaults: suite.defaults)
     ))
-    #expect(withChrome - popover == CheckMenuView.inlineBannerHeight + CheckMenuView.goalEditorHeight,
-            "크롬이 \(withChrome - popover)pt 늘었는데 예산은 \(CheckMenuView.inlineBannerHeight + CheckMenuView.goalEditorHeight)pt 로 센다")
+    // ⚠️ "얹은 크롬만큼 그대로 자란다"는 **격자에 여유가 있을 때만** 참이다(2026-10-05, 캐릭터가 7종이 되며 드러났다).
+    //    6종일 땐 격자가 2행(200pt)이라 146pt 를 얹어도 상한에 안 닿아 팝오버가 146pt 그대로 자랐다.
+    //    7종은 3행(304pt)이라 146pt 를 얹으면 상한을 넘어, **예산이 격자를 깎아** 팝오버가 96pt 만 자란다.
+    //    그게 이 예산 장치가 하라고 만든 일이다 — 그러니 재야 하는 것은 "델타가 얼마냐"가 아니라
+    //    **"실제 팝오버가 예산 모형이 말하는 높이와 같으냐"** 다. 아래는 그 모형이고, 깎임까지 포함한다.
+    func predictedPopover(extraChrome: CGFloat) -> CGFloat {
+        min(CharacterPanelGridBudget.naturalHeight(rowCount: rows),
+            CharacterPanelGridBudget.capHeight(extraChromeHeight: extraChrome))
+            + CharacterPanelGridBudget.chromeOutsideGrid
+            + CharacterPanelGridBudget.popoverChromeOutsidePanel
+            + extraChrome
+    }
+    let extraChrome = CheckMenuView.inlineBannerHeight + CheckMenuView.goalEditorHeight
+    #expect(popover == predictedPopover(extraChrome: 0),
+            "크롬 없는 팝오버가 \(popover)pt 인데 예산 모형은 \(predictedPopover(extraChrome: 0))pt 다")
+    #expect(withChrome == predictedPopover(extraChrome: extraChrome),
+            "크롬 \(extraChrome)pt 를 얹은 팝오버가 \(withChrome)pt 인데 예산 모형은 \(predictedPopover(extraChrome: extraChrome))pt 다")
+    // 창 상한을 넘지 않는다 — 깎임이 실제로 일하고 있다는 결과 쪽 확인.
+    #expect(withChrome <= 700, "크롬을 얹은 팝오버가 \(withChrome)pt 로 상한을 넘었다")
 
     // (다) 그래서 어떤 조합에서도 창은 상한 안에 선다 — 격자가 예산을 다 쓴 최악까지 계산으로 확인한다.
     for extra in [CGFloat(0), 54, 92, 146, 239] {
@@ -523,6 +563,28 @@ private func cpPanelBitmap(defaults: UserDefaults) throws -> NSBitmapImageRep {
 /// ImageRenderer 의 "못 그림" 표식(샛노란 상자, 실측 255/204/0) 픽셀 수.
 private func cpYellowPixelCount(_ bitmap: NSBitmapImageRep) -> Int {
     cpCount(bitmap) { r, g, b in r >= 240 && g >= 195 && b <= 40 }
+}
+
+/// 같은 노란색이 **한 행에 연달아** 놓인 최대 길이(px). '못 그림' 표식은 꽉 찬 사각형이라 이 값이 카드 폭만큼
+/// 나오고, 캐릭터 그림의 노란 점(로봇 눈)은 한두 픽셀에서 끊긴다 — 그 둘을 가르는 것이 이 함수의 전부다.
+private func cpLongestYellowRun(_ bitmap: NSBitmapImageRep) -> Int {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return 0 }
+    let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+    var best = 0
+    for y in 0..<bitmap.pixelsHigh {
+        var run = 0
+        for x in 0..<bitmap.pixelsWide {
+            let p = data + y * bpr + x * spp
+            let (r, g, b) = (Int(p[0]), Int(p[1]), Int(p[2]))
+            if r >= 240 && g >= 195 && b <= 40 {
+                run += 1
+                if run > best { best = run }
+            } else {
+                run = 0
+            }
+        }
+    }
+    return best
 }
 
 /// 이 화면의 회색 팔레트에 없는 **유채색** 픽셀 수(= 캐릭터 그림).

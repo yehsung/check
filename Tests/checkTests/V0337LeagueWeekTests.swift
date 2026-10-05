@@ -100,11 +100,9 @@ private func v0337RenderStore(now: Date, host: String? = nil, label: String = ""
 /// 340 안에 가운데 정렬로 넘쳐 그림의 x=0 이 콘텐츠 x=-37pt 가 되고, 픽셀을 읽는 단언이 통째로 헛것을 본다.
 @MainActor
 private func v0337RenderPNG<Content: View>(_ content: Content, scale: CGFloat = 2) throws -> Data {
-    let renderer = ImageRenderer(content: content.fixedSize())
-    renderer.scale = scale
-    let image = try #require(renderer.nsImage)
-    let tiff = try #require(image.tiffRepresentation)
-    let bitmap = try #require(NSBitmapImageRep(data: tiff))
+    // 굳을 때까지 굽는다 — ImageRenderer 는 한 내용의 첫 두 장을 세 번째부터와 다른 경로로 굽는다
+    // (CheckRenderSettle 머리 주석). 안 거치면 같은 입력의 두 장이 화면 전체에서 채널당 ≤2 로 갈린다.
+    let bitmap = try #require(CheckRenderSettle.bitmap(content.fixedSize(), scale: scale))
     return try #require(bitmap.representation(using: .png, properties: [:]))
 }
 

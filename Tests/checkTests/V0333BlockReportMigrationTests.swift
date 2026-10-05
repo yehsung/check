@@ -288,6 +288,14 @@ func 찌르기_차단_게이트는_블랙아웃보다_앞이다() throws {
 /// 가 바이트로 되묻는다. 여기서는 허용하되 **게이트가 살아 있는지**를 같은 도우미로 한 번 더 본다(허용만 하면 다음 덮어쓰기를 아무도 못 본다).
 private let laterRedefinitionsAllowed: [String: [String]] = [
     "20260930120000_gomoku_ranking_watch.sql:gomoku_lobby": ["blocked_between", "public.same_visibility(", "public.gomoku__record(uid)"],
+    // 2026-10-05 체스가 둘을 다시 만든다 — B8("한 사람은 한 판만")의 **반대 방향**이다. 오목의 busy·target_busy 네 `exists` 가
+    // `gomoku_matches` 만 봐서, 체스 대국 중인 사람이 오목을 수락할 수 있었다(실측: chess_duel.sql:2400-2403). 체스는 누적
+    // 피셔 시계에 자동 착수가 없으므로 오목을 두는 몇 분 동안 체스 시계가 흘러 **시간패로 판돈을 잃는다.**
+    // 그래서 그 네 자리를 `public.chess__busy(...)` 로 바꿨다.
+    // 등록은 **허용이 아니라 측정**이다: `chess__busy` 는 덮어쓴 **이유**이고(누가 뒷날 또 덮으면서 그걸 빼면 여기서 빨개진다),
+    // 나머지 둘은 이 파일이 지키는 차단·숨김 게이트가 그 과정에서 조용히 사라지지 않았는지를 본다.
+    "20261005160000_chess_duel.sql:gomoku_challenge": ["blocked_between", "public.same_visibility(", "public.chess__busy("],
+    "20261005160000_chess_duel.sql:gomoku_respond": ["blocked_between", "public.same_visibility(", "public.chess__busy("],
 ]
 
 @Test

@@ -20,7 +20,10 @@ struct V0316RosterContractTests {
     ///
     /// 화풍 교체(2026-09-13 오후, 사용자): 픽셀아트 5종(시바·판다·토끼·슬라임·드래곤)을 버리고
     /// **글로시 3D 토이 렌더** 5종으로 갈았다. 시바만 이름이 남았고 에셋은 새로 구웠다.
-    static let bundledSprites = ["shiba", "squirrel", "ghost", "jellyfish", "fox"]
+    ///
+    /// `robot`(2026-10-05): 같은 화풍으로 구운 6번째 스프라이트. 서버 CHECK(`profiles_character_valid`)에
+    /// `'robot'` 을 넣는 마이그레이션과 **짝으로** 나가야 한다(머리 주석 ⚠️).
+    static let bundledSprites = ["shiba", "squirrel", "ghost", "jellyfish", "fox", "robot"]
 
     /// 이제는 번들에 없어야 하는 이름. 임시 픽스처 + 픽셀아트 라운드에서 빠진 4종.
     /// (`fox` 는 한때 임시 픽스처였지만 지금은 **정식 캐릭터**다 — 여기 넣지 마라.)

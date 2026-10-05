@@ -1,0 +1,50 @@
+{
+  "me": {
+    "rank": 1,
+    "wins": 4,
+    "draws": 4,
+    "losses": 0,
+    "points": 4
+  },
+  "rows": [
+    {
+      "rank": 1,
+      "wins": 4,
+      "draws": 4,
+      "center": null,
+      "losses": 0,
+      "points": 4,
+      "user_id": "aa000000-0000-4000-8000-0000000000a1",
+      "character": "fox",
+      "avatar_url": null,
+      "display_name": "체스예은"
+    },
+    {
+      "rank": 2,
+      "wins": 0,
+      "draws": 0,
+      "center": null,
+      "losses": 1,
+      "points": -1,
+      "user_id": "dd000000-0000-4000-8000-0000000000d4",
+      "character": "ghost",
+      "avatar_url": null,
+      "display_name": "체스가난뱅이"
+    },
+    {
+      "rank": 3,
+      "wins": 0,
+      "draws": 4,
+      "center": null,
+      "losses": 3,
+      "points": -3,
+      "user_id": "bb000000-0000-4000-8000-0000000000b2",
+      "character": "shiba",
+      "avatar_url": null,
+      "display_name": "체스지유"
+    }
+  ],
+  "status": "ok",
+  "server_now_ms": 1791182750254,
+  "record_since_ms": null
+}

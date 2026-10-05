@@ -1,0 +1,887 @@
+{
+  "users": {
+    "A": "aa000000-0000-4000-8000-0000000000a1",
+    "B": "bb000000-0000-4000-8000-0000000000b2",
+    "C": "cc000000-0000-4000-8000-0000000000c3",
+    "D": "dd000000-0000-4000-8000-0000000000d4",
+    "E": "ee000000-0000-4000-8000-0000000000e5",
+    "F": "ff000000-0000-4000-8000-0000000000f6",
+    "HIDDEN": "785b5732-75fe-4a71-931a-2e3f06e63505",
+    "inv_cd": "f56fa6e7-5903-4dbc-95e0-847ade541c33",
+    "inv_decline": "8f98b1cd-c39d-4eb5-a3a9-b9ab6b2b6983",
+    "inv_expired": "f2e1fc29-d99e-4cde-adcc-f7f1370ae1c0",
+    "inv_ab": "9a7156f6-f055-4590-ba98-f537ead0a600",
+    "m1": "9a7156f6-f055-4590-ba98-f537ead0a600",
+    "m1_white": "aa000000-0000-4000-8000-0000000000a1",
+    "m1_black": "bb000000-0000-4000-8000-0000000000b2",
+    "mid_fen": "r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+    "threefold_line": [
+      "g1f3",
+      "g8f6",
+      "f3g1",
+      "f6g8",
+      "g1f3",
+      "g8f6",
+      "f3g1",
+      "f6g8"
+    ],
+    "threefold_start_fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+  },
+  "seeds": {
+    "c0de0000-0000-4000-8000-000000000a01": {
+      "fen": "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1",
+      "ply": 0,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "status": "active",
+      "white_ms_left": 300000,
+      "black_ms_left": 300000,
+      "stake": 5
+    },
+    "c0de0000-0000-4000-8000-000000000a02": {
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "ply": 0,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "status": "active",
+      "white_ms_left": 300000,
+      "black_ms_left": 300000,
+      "stake": 5
+    },
+    "c0de0000-0000-4000-8000-000000000a03": {
+      "fen": "4k3/8/8/1b6/8/8/8/4KB2 w - - 0 40",
+      "ply": 78,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "status": "active",
+      "white_ms_left": 300000,
+      "black_ms_left": 300000,
+      "stake": 5
+    },
+    "c0de0000-0000-4000-8000-000000000a04": {
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "ply": 0,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "status": "active",
+      "white_ms_left": 300000,
+      "black_ms_left": 300000,
+      "stake": 5
+    },
+    "c0de0000-0000-4000-8000-000000000a05": {
+      "fen": "4k3/8/8/8/8/8/8/3QK3 w - - 0 60",
+      "ply": 118,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "status": "active",
+      "white_ms_left": 1000,
+      "black_ms_left": 274000,
+      "stake": 5
+    },
+    "c0de0000-0000-4000-8000-000000000a06": {
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "ply": 0,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "status": "active",
+      "white_ms_left": 300000,
+      "black_ms_left": 300000,
+      "stake": 5
+    },
+    "c0de0000-0000-4000-8000-000000000a09": {
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "ply": 0,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "status": "active",
+      "white_ms_left": 300000,
+      "black_ms_left": 300000,
+      "stake": 5
+    },
+    "c0de0000-0000-4000-8000-000000000a08": {
+      "fen": "R5k1/5ppp/8/8/8/8/8/6K1 b - - 1 31",
+      "ply": 61,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "black": "dd000000-0000-4000-8000-0000000000d4",
+      "status": "finished",
+      "white_ms_left": 120000,
+      "black_ms_left": 90000,
+      "stake": 5
+    },
+    "c0de0000-0000-4000-8000-000000000a07": {
+      "fen": "r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+      "ply": 6,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "status": "active",
+      "white_ms_left": 281234,
+      "black_ms_left": 274567,
+      "stake": 5
+    },
+    "c0de0000-0000-4000-8000-000000000a0a": {
+      "fen": "4k3/8/8/8/8/8/4r3/4K3 w - - 10 30",
+      "ply": 58,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "status": "active",
+      "white_ms_left": 240000,
+      "black_ms_left": 237000,
+      "stake": 5
+    },
+    "c0de0000-0000-4000-8000-000000000a0b": {
+      "fen": "4k3/P7/8/8/8/8/8/4K3 w - - 0 50",
+      "ply": 98,
+      "white": "aa000000-0000-4000-8000-0000000000a1",
+      "black": "bb000000-0000-4000-8000-0000000000b2",
+      "status": "active",
+      "white_ms_left": 210000,
+      "black_ms_left": 205000,
+      "stake": 5
+    }
+  },
+  "flow_m1": [
+    {
+      "seq": 1,
+      "uci": "e2e4",
+      "san": "e4",
+      "mover_label": "A",
+      "color": "white",
+      "file": "chess_move__ok_white_first"
+    },
+    {
+      "seq": 2,
+      "uci": "e7e5",
+      "san": "e5",
+      "mover_label": "B",
+      "color": "black",
+      "file": "chess_move__ok_black_reply"
+    },
+    {
+      "seq": 3,
+      "uci": "g1f3",
+      "san": "Nf3",
+      "mover_label": "A",
+      "color": "white",
+      "file": null
+    },
+    {
+      "seq": 4,
+      "uci": "b8c6",
+      "san": "Nc6",
+      "mover_label": "B",
+      "color": "black",
+      "file": null
+    },
+    {
+      "seq": 5,
+      "uci": "f1b5",
+      "san": "Bb5",
+      "mover_label": "A",
+      "color": "white",
+      "file": "chess_move__ok_white_mid"
+    },
+    {
+      "seq": 6,
+      "uci": "g8f6",
+      "san": "Nf6",
+      "mover_label": "B",
+      "color": "black",
+      "file": null
+    }
+  ],
+  "fixtures": {
+    "chess_lobby__ok_empty": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_lobby(1)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "대기 신청·진행 중 판 없음 — me 셋 다 null · matches []"
+    },
+    "chess_lobby__unsupported_client": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_lobby(0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "p_protocol=0 < chess_protocol()=1 (B10)"
+    },
+    "chess_challenge__unsupported_client": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_challenge(0, 'bb000000-0000-4000-8000-0000000000b2', 5)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "p_protocol=0 < chess_protocol()=1 (B10)"
+    },
+    "chess_respond__unsupported_client": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_respond(0, 'c0de0000-0000-4000-8000-000000000a07', true)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "p_protocol=0 < chess_protocol()=1 (B10)"
+    },
+    "chess_cancel__unsupported_client": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_cancel(0, 'c0de0000-0000-4000-8000-000000000a07')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "p_protocol=0 < chess_protocol()=1 (B10)"
+    },
+    "chess_move__unsupported_client": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_move(0, 'c0de0000-0000-4000-8000-000000000a07', 0, 'e2e4')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "p_protocol=0 < chess_protocol()=1 (B10)"
+    },
+    "chess_state__unsupported_client": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_state(0, 'c0de0000-0000-4000-8000-000000000a07', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "p_protocol=0 < chess_protocol()=1 (B10)"
+    },
+    "chess_resign__unsupported_client": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_resign(0, 'c0de0000-0000-4000-8000-000000000a07')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "p_protocol=0 < chess_protocol()=1 (B10)"
+    },
+    "chess_offer_draw__unsupported_client": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_offer_draw(0, 'c0de0000-0000-4000-8000-000000000a07')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "p_protocol=0 < chess_protocol()=1 (B10)"
+    },
+    "chess_respond_draw__unsupported_client": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_respond_draw(0, 'c0de0000-0000-4000-8000-000000000a07', true)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "p_protocol=0 < chess_protocol()=1 (B10)"
+    },
+    "chess_ranking__unsupported_client": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_ranking(0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "p_protocol=0 < chess_protocol()=1 (B10)"
+    },
+    "chess_watch__unsupported_client": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_watch(0, 'c0de0000-0000-4000-8000-000000000a07', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "p_protocol=0 < chess_protocol()=1 (B10)"
+    },
+    "chess_lobby__unauthorized": {
+      "caller": null,
+      "caller_label": null,
+      "rpc": "public.chess_lobby(1)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "auth.uid() null"
+    },
+    "chess_ranking__unauthorized": {
+      "caller": null,
+      "caller_label": null,
+      "rpc": "public.chess_ranking(1)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "auth.uid() null"
+    },
+    "chess_watch__unauthorized": {
+      "caller": null,
+      "caller_label": null,
+      "rpc": "public.chess_watch(1, 'c0de0000-0000-4000-8000-000000000a07', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "auth.uid() null — 판이 있는지 보기 전에 돌아간다"
+    },
+    "chess_challenge__insufficient": {
+      "caller": "dd000000-0000-4000-8000-0000000000d4",
+      "caller_label": "D",
+      "rpc": "public.chess_challenge(1, 'aa000000-0000-4000-8000-0000000000a1', 3)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "D 루비 1 · 판돈 3"
+    },
+    "chess_challenge__invalid": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_challenge(1, 'bb000000-0000-4000-8000-0000000000b2', 7)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "판돈 7 은 chess_stakes() 밖"
+    },
+    "chess_challenge__invalid_hidden": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_challenge(1, '785b5732-75fe-4a71-931a-2e3f06e63505', 5)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "숨김 다른 쪽은 **없는 상대와 같은 응답**이다"
+    },
+    "chess_challenge__target_focused": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_challenge(1, 'ff000000-0000-4000-8000-0000000000f6', 5)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": null
+    },
+    "chess_challenge__target_outdated": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_challenge(1, 'ee000000-0000-4000-8000-0000000000e5', 5)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "E build 50 < chess_min_build() 96"
+    },
+    "chess_challenge__ok": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_challenge(1, 'dd000000-0000-4000-8000-0000000000d4', 3)",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": "C→D 판돈 3 — 루비는 움직이지 않는다"
+    },
+    "chess_challenge__already_pending": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_challenge(1, 'bb000000-0000-4000-8000-0000000000b2', 5)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "C 는 이미 D 에게 보낸 대기 신청이 있다(부분 유니크)"
+    },
+    "chess_cancel__ok": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_cancel(1, 'f56fa6e7-5903-4dbc-95e0-847ade541c33')",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": null
+    },
+    "chess_cancel__not_pending": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_cancel(1, 'f56fa6e7-5903-4dbc-95e0-847ade541c33')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "멱등"
+    },
+    "chess_cancel__not_found": {
+      "caller": "dd000000-0000-4000-8000-0000000000d4",
+      "caller_label": "D",
+      "rpc": "public.chess_cancel(1, 'f56fa6e7-5903-4dbc-95e0-847ade541c33')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "받은 사람도 **없는 판과 같은 응답**이다"
+    },
+    "chess_respond__decline_ok": {
+      "caller": "dd000000-0000-4000-8000-0000000000d4",
+      "caller_label": "D",
+      "rpc": "public.chess_respond(1, '8f98b1cd-c39d-4eb5-a3a9-b9ab6b2b6983', false)",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": "거절 — 루비는 움직이지 않는다"
+    },
+    "chess_respond__expired": {
+      "caller": "dd000000-0000-4000-8000-0000000000d4",
+      "caller_label": "D",
+      "rpc": "public.chess_respond(1, 'f2e1fc29-d99e-4cde-adcc-f7f1370ae1c0', true)",
+      "setup": "update public.chess_matches set invite_expires_at = clock_timestamp() - interval '1 second' where id = 'f2e1fc29-d99e-4cde-adcc-f7f1370ae1c0';",
+      "end": "commit",
+      "flagged": null,
+      "note": "TTL 60초가 지난 신청 — 루비가 빠지지 않는다"
+    },
+    "chess_lobby__ok_pending_out": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_lobby(1)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "A 가 보낸 신청 — me.outgoing_match_id"
+    },
+    "chess_lobby__ok_pending_in": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_lobby(1)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "B 가 받은 신청 — me.incoming_match_id(받은 신청 목록 RPC 가 따로 없다)"
+    },
+    "chess_watch__not_found_pending": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_watch(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "대기 신청은 관전 대상이 아니다 — 제3자가 누가 누구에게 신청했는지 보면 안 된다"
+    },
+    "chess_respond__accept_ok": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_respond(1, '9a7156f6-f055-4590-ba98-f537ead0a600', true)",
+      "setup": "select setseed(0.4242) \\g /dev/null",
+      "end": "commit",
+      "flagged": null,
+      "note": "수락 순간 양쪽 −5 · 흑백 추첨 · 시계 5분·유예 2초"
+    },
+    "chess_respond__not_pending": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_respond(1, '9a7156f6-f055-4590-ba98-f537ead0a600', true)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "같은 판을 또 수락 — 차감 멱등(status=pending 가드 UPDATE)"
+    },
+    "chess_respond__not_found": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_respond(1, '9a7156f6-f055-4590-ba98-f537ead0a600', true)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "제3자는 없는 판과 같은 응답"
+    },
+    "chess_state__ok_initial_my_turn": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_state(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "초기 국면 · 내 차례 — legal_moves 20개"
+    },
+    "chess_state__ok_initial_their_turn": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_state(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "초기 국면 · 상대 차례 — legal_moves 는 null(§10 이 못 박는다)"
+    },
+    "chess_state__not_found": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_state(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "참가자가 아니면 없는 판과 같은 응답(관전은 chess_watch 가 준다)"
+    },
+    "chess_lobby__ok_in_match": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_lobby(1)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "진행 중 판 있음 — me.active_match_id + matches[1]"
+    },
+    "chess_lobby__ok_watch_entry": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_lobby(1)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "제3자 로비 — matches[] 가 관전 입구다(fen·ply_count 는 없다)"
+    },
+    "chess_challenge__busy": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_challenge(1, 'cc000000-0000-4000-8000-0000000000c3', 5)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "A 가 대국 중"
+    },
+    "chess_challenge__target_busy": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_challenge(1, 'aa000000-0000-4000-8000-0000000000a1', 5)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": null
+    },
+    "chess_move__ok_white_first": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_move(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 0, 'e2e4')",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": "첫 수 — from 12(e2) · to 28(e4)"
+    },
+    "chess_move__not_your_turn": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_move(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 1, 'e7e5')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "백이 흑 차례에 보냈다 — stale 보다 뒤 갈래(p_expected_ply 는 맞다)"
+    },
+    "chess_move__stale": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_move(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 0, 'e7e5')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "p_expected_ply 0 ≠ ply_count 1 — **not_your_turn 보다 먼저**다"
+    },
+    "chess_move__illegal": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_move(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 1, 'e7e4')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "폰 세 칸 — 판을 건드리지 않는다(ply·시계·turn_started_at 그대로)"
+    },
+    "chess_move__ok_black_reply": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_move(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 1, 'e7e5')",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": "흑의 답 수"
+    },
+    "chess_move__ok_white_mid": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_move(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 4, 'f1b5')",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": "Bb5 — 폰이 아닌 말의 SAN"
+    },
+    "chess_state__ok_mid_since0": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_state(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "6수 뒤 · 백 차례 — moves 6개"
+    },
+    "chess_state__ok_mid_since4": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_state(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 4)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "since 는 **배타** — seq 5·6 만 온다"
+    },
+    "chess_respond_draw__no_offer": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_respond_draw(1, '9a7156f6-f055-4590-ba98-f537ead0a600', true)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "상대의 제안이 없다"
+    },
+    "chess_offer_draw__ok": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_offer_draw(1, '9a7156f6-f055-4590-ba98-f537ead0a600')",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": null
+    },
+    "chess_offer_draw__ok_idempotent": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_offer_draw(1, '9a7156f6-f055-4590-ba98-f537ead0a600')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "제안자가 두 번 눌러도 같다"
+    },
+    "chess_offer_draw__offer_pending": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_offer_draw(1, '9a7156f6-f055-4590-ba98-f537ead0a600')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "상대가 이미 제안했다 — 덮지 않는다"
+    },
+    "chess_respond_draw__decline_ok": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_respond_draw(1, '9a7156f6-f055-4590-ba98-f537ead0a600', false)",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": "제안만 지운다(draw_offer_by null)"
+    },
+    "chess_watch__ok_active": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_watch(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "진행 중 — white_user/black_user · my_color·legal_moves·ruby_balance 없음"
+    },
+    "chess_watch__ok_since4": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_watch(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 4)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "관전도 since 가 배타다"
+    },
+    "chess_watch__ok_as_player": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_watch(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "대국자도 관전 RPC 를 부를 수 있다(쓰기가 없어 깃발이 떨어지지 않는다)"
+    },
+    "chess_watch__not_found_hidden": {
+      "caller": "785b5732-75fe-4a71-931a-2e3f06e63505",
+      "caller_label": "HIDDEN",
+      "rpc": "public.chess_watch(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "숨김 계정은 일반 사용자 판을 관전할 수 없다(same_visibility 두 조건)"
+    },
+    "chess_resign__ok": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_resign(1, '9a7156f6-f055-4590-ba98-f537ead0a600')",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": "흑 기권 → white_win/resign · 승자 +2×판돈"
+    },
+    "chess_resign__not_active": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_resign(1, '9a7156f6-f055-4590-ba98-f537ead0a600')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "멱등"
+    },
+    "chess_watch__ok_tail": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_watch(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "끝난 판은 chess_watch_tail_seconds()=180초 꼬리만 보인다"
+    },
+    "chess_move__not_active": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_move(1, '9a7156f6-f055-4590-ba98-f537ead0a600', 6, 'd2d4')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": null
+    },
+    "chess_move__end_checkmate": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_move(1, 'c0de0000-0000-4000-8000-000000000a01', 0, 'a1a8')",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": "Ra8# → checkmate:white · 백 +2×판돈"
+    },
+    "chess_move__end_threefold": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_move(1, 'c0de0000-0000-4000-8000-000000000a02', 7, 'f6g8')",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": "8수째에 시작 국면이 **3회**가 된다(chess__rep_count: 수 기록 + 시작 국면 1)"
+    },
+    "chess_move__end_insufficient": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_move(1, 'c0de0000-0000-4000-8000-000000000a03', 78, 'f1b5')",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": "Bxb5 → 왕+비숍 vs 왕 = 사국(판 전체를 본다)"
+    },
+    "chess_state__end_timeout": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_state(1, 'c0de0000-0000-4000-8000-000000000a04', 0)",
+      "setup": null,
+      "end": "commit",
+      "flagged": "black",
+      "note": "흑이 남은 1,000ms + 유예 2,000ms 를 9초째에 넘겼다 → white_win/timeout. 조회가 깃발을 신고한다(상대가 창을 닫아도 판이 끝난다) — 지는 쪽 시점"
+    },
+    "chess_state__end_timeout_insufficient": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_state(1, 'c0de0000-0000-4000-8000-000000000a05', 0)",
+      "setup": null,
+      "end": "commit",
+      "flagged": "white",
+      "note": "백의 깃발이 떨어졌는데 **흑은 맨 왕**이다 → FIDE 6.9 로 draw/timeout_insufficient. 백이 퀸을 들고 있어 사국(chess__insufficient)은 거짓이다 — 한쪽만 보는 술어라야 무승부가 선다"
+    },
+    "chess_respond_draw__accept_ok": {
+      "caller": "bb000000-0000-4000-8000-0000000000b2",
+      "caller_label": "B",
+      "rpc": "public.chess_respond_draw(1, 'c0de0000-0000-4000-8000-000000000a06', true)",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": "draw/agreement — 각자 환불"
+    },
+    "chess_move__retry_clock_skew": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_move(1, 'c0de0000-0000-4000-8000-000000000a09', 0, 'e2e4')",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "도착 시각이 차례 시작보다 앞 — 시간패가 아니고 수도 받지 않는다"
+    },
+    "chess_watch__not_found_old": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_watch(1, 'c0de0000-0000-4000-8000-000000000a08', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "끝난 지 180초를 넘긴 판 — 꼬리 밖"
+    },
+    "chess_watch__not_found": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_watch(1, '00000000-0000-4000-8000-000000000000', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "없는 판"
+    },
+    "chess_watch__ok_seeded": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_watch(1, 'c0de0000-0000-4000-8000-000000000a07', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "심은 진행 중 판 — 시계 숫자가 초기값과 다르다(기준선이 갈린다)"
+    },
+    "chess_state__ok_in_check": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_state(1, 'c0de0000-0000-4000-8000-000000000a0a', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "흑 룩 e2 가 백 킹 e1 을 체크 — in_check true · legal_moves 는 킹 수 + Kxe2"
+    },
+    "chess_watch__ok_in_check": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_watch(1, 'c0de0000-0000-4000-8000-000000000a0a', 0)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "관전도 in_check 를 싣는다(차례인 쪽 기준 — 보는 사람 기준이 아니다)"
+    },
+    "chess_move__ok_promotion": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_move(1, 'c0de0000-0000-4000-8000-000000000a0b', 98, 'a7a8q')",
+      "setup": null,
+      "end": "commit",
+      "flagged": null,
+      "note": "a8=Q+ — promo 가 null 이 아닌 유일한 수 기록(from 48(a7) · to 56(a8))"
+    },
+    "chess_ranking__ok_me_ranked": {
+      "caller": "aa000000-0000-4000-8000-0000000000a1",
+      "caller_label": "A",
+      "rpc": "public.chess_ranking(1)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "A 는 순위 안"
+    },
+    "chess_ranking__ok_me_unranked": {
+      "caller": "cc000000-0000-4000-8000-0000000000c3",
+      "caller_label": "C",
+      "rpc": "public.chess_ranking(1)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "C 는 0판 — rows 는 있고 me.rank 는 null(0판 제외)"
+    },
+    "chess_ranking__ok_hidden_empty": {
+      "caller": "785b5732-75fe-4a71-931a-2e3f06e63505",
+      "caller_label": "HIDDEN",
+      "rpc": "public.chess_ranking(1)",
+      "setup": null,
+      "end": "rollback",
+      "flagged": null,
+      "note": "숨김 계정에게는 일반 사용자 행이 안 보인다 — rows []"
+    }
+  }
+}

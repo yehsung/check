@@ -26,7 +26,7 @@ let package = Package(
         // D1: 폰 앱·위젯 공용(App Group 경로 · 키체인 설정 · 위젯 스냅샷 모델 · 할 일 파일 위치 · 기기 식별자). 플랫폼 무관.
         .target(
             name: "CheckMobileShared",
-            // w15 기반: 캐릭터 초상 12장(맥 원본 사본 192px — `AingCharacterArt`). 위젯 확장도 그리므로 앱 모듈이 아니라 여기다
+            // w15 기반: 캐릭터 초상 14장(7 캐릭터 × 표정 2 · 맥 원본 사본 192px — `AingCharacterArt`). 위젯 확장도 그리므로 앱 모듈이 아니라 여기다
             // (위젯은 CheckMobileKit 을 링크하지 않는다). `.copy` 라 폴더(Portraits/)가 번들에 그대로 남는다.
             resources: [.copy("Resources/Portraits")]
         ),

@@ -13,9 +13,16 @@ import Testing
 
     // MARK: 에셋
 
-    @Test("초상 12장: 6 캐릭터 × 표정 2 가 공용 번들(위젯도 읽는다)에 있고, 맥 원본과 바이트까지 같고, 알파가 있다")
+    @Test("초상 14장: 7 캐릭터 × 표정 2 가 공용 번들(위젯도 읽는다)에 있고, 맥 원본과 픽셀까지 같고, 알파가 있다")
     func portraitsAreBundledCopiesOfMacArt() throws {
-        #expect(AingCharacterArt.knownIDs.count == 6)
+        // 0.3.43(2026-10-05)에 로봇이 들어와 6 → **7 캐릭터 · 14장**이 됐다(맥 `AppUserAvatarArt.knownIDs` 도 7).
+        // 개수를 **두 자리**에서 잰다: 명단 길이(7)와 **맥 원본과 실제로 대조한 장수**(14). 명단만 재면 번들 사본이
+        // 안 들어온 날에도 초록이고, 장수만 재면 명단이 줄어도 초록이다 — 폰 자산이 맥과 갈리면 같은 캐릭터가 두 앱에서
+        // 다르게 보인다(위젯까지 이 번들을 읽는다).
+        #expect(AingCharacterArt.knownIDs.count == 7, "폰 초상 명단이 7 캐릭터가 아니다: \(AingCharacterArt.knownIDs)")
+        #expect(AingCharacterArt.knownIDs.contains("robot"), "로봇(0.3.43)이 폰 초상 명단에 없다 — 맥에만 있는 캐릭터는 폰에서 이니셜로 선다")
+        #expect(AingCharacterArt.Expression.allCases.count == 2, "표정이 둘(neutral·negative)이 아니다")
+        var comparedWithMac = 0
         for id in AingCharacterArt.knownIDs {
             for expression in AingCharacterArt.Expression.allCases {
                 let url = try #require(AingCharacterArt.portraitURL(id: id, expression: expression), "\(id)-\(expression) 초상이 번들에 없다")
@@ -25,10 +32,13 @@ import Testing
                 let mac = id == "aing"
                     ? Self.root.appendingPathComponent("Sources/check/Resources/aing-\(expression.rawValue).png")
                     : Self.root.appendingPathComponent("Sources/check/Characters/\(id)/portrait-\(expression.rawValue).png")
-                // 무손실 재압축(PNG optimize)이라 파일 바이트가 아니라 **픽셀**을 대조한다.
+                // 무손실 재압축(PNG optimize)이라 파일 바이트가 아니라 **픽셀**을 대조한다 — 실측(2026-10-06): 로봇 2장만
+                // 바이트까지 같고 나머지 12장은 사본이 재압축돼 바이트가 다르다. 그래서 기준은 픽셀이다(이름도 그렇게 말한다).
                 #expect(try Self.pixels(url) == Self.pixels(mac), "\(id)-\(expression) 이 맥 원본 그림과 다르다")
+                comparedWithMac += 1
             }
         }
+        #expect(comparedWithMac == 14, "맥 원본과 대조한 초상이 14장이 아니다: \(comparedWithMac)장")
     }
 
     @Test("초상 id 목록은 앱 캐릭터 카드(MeCharacterCards)와 같고, 착용값 접기도 같다")

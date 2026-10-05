@@ -4,11 +4,11 @@ import CoreGraphics
 import ImageIO
 #endif
 
-/// 캐릭터 초상 그림(6 캐릭터 × 표정 2) — **앱과 위젯 확장이 함께 읽는 번들 리소스**(App Group 이 아니다).
+/// 캐릭터 초상 그림(7 캐릭터 × 표정 2 = 14장) — **앱과 위젯 확장이 함께 읽는 번들 리소스**(App Group 이 아니다).
 ///
 /// 원본은 맥 에셋 그대로다: 스프라이트는 `Sources/check/Characters/<id>/portrait-{neutral,negative}.png`, 아잉은
 /// `Sources/check/Resources/aing-{neutral,negative}.png`(모두 192px — 맥 원본 해상도). 이 패키지 리소스(`Resources/Portraits`)는
-/// 그 사본이고, `BaseComponentTests` 가 바이트 단위로 원본과 같은지 잰다(맥 그림이 바뀌면 빨강).
+/// 그 사본이고, `BaseComponentTests` 가 **픽셀 단위로** 원본과 같은지 잰다(맥 그림이 바뀌면 빨강 — 사본은 재압축돼 바이트가 다르다).
 ///
 /// 표정은 근무 상태다(맥 헤더 문법): 근무 중·연결 끊김 = neutral(웃음), 근무 안 함 = negative(시무룩).
 public enum AingCharacterArt {
@@ -38,7 +38,7 @@ public enum AingCharacterArt {
         "\(resolvedID(id))-\(expression.rawValue)"
     }
 
-    /// 초상 파일 위치(번들 안). 없으면 nil — 이 빌드의 리소스가 빠졌다는 뜻이다(테스트가 12장 모두 있는지 잰다).
+    /// 초상 파일 위치(번들 안). 없으면 nil — 이 빌드의 리소스가 빠졌다는 뜻이다(테스트가 14장 모두 있는지 잰다).
     public static func portraitURL(id: String, expression: Expression, bundle: Bundle? = nil) -> URL? {
         (bundle ?? .module).url(forResource: portraitName(id: id, expression: expression), withExtension: "png", subdirectory: "Portraits")
     }

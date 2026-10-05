@@ -383,13 +383,28 @@ private func scdTokenStore(_ usage: TokenUsageMonthly, label: String = "",
     let defaults = CheckTestScratch.defaults(label, function: function)
     defaults.set(try JSONEncoder().encode(usage), forKey: TokenUsageStore.snapshotKey)
     let tmp = CheckTestScratch.directory(label, function: function)
-    return TokenUsageStore(
+    let store = TokenUsageStore(
         defaults: defaults,
         homeDirectory: tmp.appendingPathComponent("home", isDirectory: true),
         cacheURL: tmp.appendingPathComponent("cache.json", isDirectory: false),
-        clock: { scdNow },
+        // ⚠️ 여기에 얼린 시계(scdNow = 2026-09-21 KST)를 주면 **달이 바뀌는 날 터진다**(무장 2026-10-01 00:00 KST,
+        // 2026-10-06 실측). `TokenUsageStore.init` 은 `restored.month == kstMonthString(clock())` 일 때만 스냅샷을
+        // 복원하는데, 이 행을 그리는 뷰(`CheckTokenUsageRow`)는 달을 **실벽시계**(`TokenUsageMonthKey.current()`)로
+        // 판정한다. 둘을 섞으면 스냅샷이 버려져 currentMonthUsage=nil → resolve=nil → EmptyView → 높이 0 →
+        // `ImageRenderer.nsImage=nil` 이고, 증상은 아무것도 안 알려 주는 `ScdRenderError.failed` 였다 —
+        // 렌더가 흔들린 게 아니라 **그릴 것이 없었다**(CheckRenderSettle 이 고친 '첫 두 장 digest' 병과 다른 병이다).
+        // 그래서 이 스토어의 '지금'은 뷰와 **같은 시계**를 쓴다. 저장소의 다른 씨앗 스토어 둘도 같은 모양이다
+        // (`CheckMenuRenderTests.seededTokenStore` · `V0316CharacterPanelTests.cpSeededTokenStore` 는 기본 시계다).
+        // init 은 스캔을 킥하지 않으므로(그 머리 주석) 실시계가 들어와도 렌더는 결정적이다 — 시계가 닿는 자리는
+        // 아래 복원 가드와 lastSaveAt 뿐이고, 그려지는 값은 전부 위 골든 벡터에서 온다.
+        clock: { Date() },
         notificationCenter: NotificationCenter()
     )
+    // 복원이 실제로 됐는지 **여기서** 못 박는다. 아래 렌더 단언들은 '그릴 것이 있다'를 전제로만 뜻이 있고,
+    // 전제가 깨지면 렌더가 던져 원인이 안 보인다(위 사고가 그랬다 — 빨강 한 줄이 `Caught error: .failed` 였다).
+    #expect(store.currentMonthUsage?.month == usage.month,
+            "스냅샷(\(usage.month))이 복원되지 않았다 — 스토어 시계와 뷰의 TokenUsageMonthKey.current() 가 다른 달이다")
+    return store
 }
 
 @MainActor

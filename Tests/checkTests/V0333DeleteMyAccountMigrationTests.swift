@@ -22,6 +22,11 @@ import Testing
 // `where user_id <> v_uid` 같은 본인 **제외** 조건도 통과시켰다(뮤턴트 실증). 문장 전문이 셋과 같아야 초록이다.
 //
 // 하우스 규칙: `--` 줄 주석을 걷어내고 본다(안 걷어내면 설명을 지워야만 초록이 되는 테스트가 된다).
+//
+// 2026-10-05(0.3.43): `20261005160000_chess_duel.sql` §7A.3 이 이 함수를 **의도적으로** 다시 만든다 — 진행 중 체스 판을
+// `chess__settle(…, 'abandoned')` 로 닫는 절을 더한다. 아래 §① 의 `deleteAccountLaterRedefinitionsAllowed` 가 그 덮어쓰기를
+// 허용하면서 **근거(체스 정산)와 이 파일이 지키던 것(오목 기권 정산 · 판돈 잠금 · 신원 게이트)이 그 본문에 남아 있는지**
+// 를 잰다. 나머지 절(②~⑤)은 여전히 정본 20260918120000 의 본문을 읽는다.
 
 // MARK: - 마이그레이션 찾기
 
@@ -137,9 +142,47 @@ func 계정삭제_함수는_definer_이고_search_path_가_고정이다() throws
     #expect(!header.contains("security invoker"), "invoker 로 바뀌었다: \(header)")
 }
 
+/// 뒤 번호 파일이 `delete_my_account` 를 **일부러** 다시 만드는 자리 — 같은 저장소의 선례 두 곳과 같은 모양이다
+/// (`V0333BlockReportMigrationTests.laterRedefinitionsAllowed` · `V0341GomokuRankingMigrationTests.t41IntendedGomokuRewrites`).
+/// `why` 는 사람이 읽는 근거고, `required` 는 **그 근거가 본문에 실제로 남아 있는지 재는 자**다 — "그 파일은 봐준다"로
+/// 끝내면 다음 덮어쓰기를 아무도 못 본다. 그래서 두 갈래를 **둘 다** 센다: 덮어쓴 ㉠ **이유**(체스 판을 닫는다)와
+/// ㉡ 이 파일이 원래 **지키던 것**(오목 판 기권 정산 · 판돈 지갑 잠금 · 신원 게이트 · 지우는 범위).
+///
+/// 2026-10-05 체스(20261005160000 §7A.3)가 왜 덮어썼는가: `chess_matches.white/black` 도 auth.users 에 on delete cascade 라,
+/// 진행 중 체스 판을 `chess__settle(…, 'abandoned')` 로 **먼저** 닫지 않으면 계정 삭제가 판 행을 날리고 수락 순간 양쪽에서
+/// 빠진 판돈(`spend:chess:stake:<판>`)을 돌려줄 길이 원리적으로 없어진다 — 적대 검증이 P0 으로 잡은 자리다(수리 전 실측:
+/// 판돈 5로 둘 다 100→95 → delete_my_account() 예외 없이 성공 → 판 0행 · 남은 사람 95 그대로 · prize/refund 장부 0행 =
+/// **루비 10 소각**). 운영 e2e 12번이 실서버에서 남은 사람 +10 환급을 확인했다. 사유는 기권이 아니라 'abandoned' 다
+/// (떠난 사람이 둘 수 없게 된 판 — `chess_matches.end_reason` 주석이 그 글자를 이 자리에 못 박아 뒀다).
+private let deleteAccountLaterRedefinitionsAllowed:
+    [String: (why: String, required: [String], settlesBeforeAuthDelete: [String])] = [
+        "20261005160000_chess_duel.sql:delete_my_account": (
+            "체스 판을 닫는다 — 진행 중 판을 abandoned 로 정산해야 상대 판돈이 소각되지 않는다(chess_duel §7A.3)",
+            [
+                // ㉠ 덮어쓴 이유. 이 셋 중 하나라도 빠지면 '이유 없는 덮어쓰기'이고 소각 P0 이 그대로 돌아온다.
+                "from public.chess_matches g where g.status = 'active' and v_uid in (g.white, g.black)",
+                "perform public.chess__settle(v_cmatch.id, case when v_cmatch.white = v_uid then 'black_win' else 'white_win' end, 'abandoned');",
+                "if exists (select 1 from public.chess_matches g where g.status = 'active' and v_uid in (g.white, g.black)) then raise exception",
+                // ㉡ 원래 이 파일(20260918120000)이 지키던 것 — 베껴 쓰다 한 절을 빠뜨리는 그 사고가 여기서 걸린다.
+                "perform public.gomoku__settle(v_match.id, case when v_match.black = v_uid then 'white_win' else 'black_win' end, 'resign');",
+                "if exists (select 1 from public.gomoku_matches g where g.status = 'active' and v_uid in (g.black, g.white)) then raise exception",
+                "perform pg_advisory_xact_lock(hashtext('ultra_wallet:' || v_key::text));",
+                "order by k.uid",
+                "v_uid uuid := auth.uid();",
+                "raise exception 'authentication required' using errcode = '28000';",
+                "delete from auth.users where id = v_uid;",
+                "delete from public.teams t where t.id = any(v_teams) and not exists (select 1 from public.memberships m where m.team_id = t.id);",
+            ],
+            // 토큰이 **있다**는 것만으로는 순서가 안 잡힌다 — 정산은 auth.users 삭제보다 앞이어야 한다.
+            ["perform public.gomoku__settle(", "perform public.chess__settle("]
+        ),
+    ]
+
 @Test
-func 계정삭제_함수의_최종_정의는_이_파일_하나뿐이다() throws {
-    // 다른 파일이 create or replace 로 다시 정의하면 검사가 조용히 사라지는 전례(20260917140000 머리말)를 막는다.
+func 계정삭제_함수의_최종_정의는_이_파일이거나_근거를_재는_덮어쓰기뿐이다() throws {
+    // 없으면: 뒤 번호 파일이 create or replace 로 본문을 베껴 쓰면서 정산 한 절을 빠뜨려도 초록이다(20260917140000 머리말의
+    // 전례 — 다시 정의가 검사를 조용히 지웠다). 운영에서 보이는 모습은 "삭제는 성공했는데 남은 사람 루비가 안 돌아옴"이고,
+    // 원장이 없으니 사후 복원도 못 한다. 그래서 덮어쓰기를 **금지**하는 게 아니라 **근거를 재서** 통과시킨다.
     let directory = try deleteAccountMigrationsDirectory()
     let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
         .filter { $0.pathExtension == "sql" }
@@ -153,8 +196,40 @@ func 계정삭제_함수의_최종_정의는_이_파일_하나뿐이다() throws
             defining.append(file.lastPathComponent)
         }
     }
-    #expect(defining == [deleteAccountMigrationName],
-            "delete_my_account 를 정의하는 파일이 바뀌었다: \(defining). 다시 정의한 파일이 있으면 이 테스트의 단언을 그 파일에도 걸어라.")
+    // 정본은 여전히 이 파일이고(체인 순서상 첫 정의), 이 파일의 §① ~ ⑤ 단언이 그 본문을 잰다.
+    #expect(defining.first == deleteAccountMigrationName,
+            "delete_my_account 를 처음 정의하는 파일이 \(String(describing: defining.first)) 다 — 이 파일의 단언이 정본이 아닌 것을 재고 있다: \(defining)")
+
+    var allowedSeen: Set<String> = []
+    for name in defining.dropFirst() {
+        let key = "\(name):\(deleteAccountFunction)"
+        guard let rewrite = deleteAccountLaterRedefinitionsAllowed[key] else {
+            Issue.record("\(key): 뒤 파일이 delete_my_account 를 다시 정의한다 — deleteAccountLaterRedefinitionsAllowed 에 근거(why)와 측정 토큰을 적어라. 전체 정의 목록: \(defining)")
+            continue
+        }
+        allowedSeen.insert(key)
+        let sql = stripLineComments(try String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8))
+        guard let body = try? deleteAccountFunctionBody(sql) else {
+            Issue.record("\(key): 등록된 덮어쓰기인데 함수 본문($fn$)을 못 떴다 — 측정이 공허하다")
+            continue
+        }
+        let flat = squashWhitespace(body).lowercased()
+        for token in rewrite.required {
+            #expect(flat.contains(token),
+                    "\(key)(\(rewrite.why)): '\(token)' 이 덮어쓴 본문에 없다 — 등록한 근거가 사라졌거나 정본이 지키던 절을 빠뜨렸다")
+        }
+        // 순서: 정산 → auth.users 삭제. 뒤면 판 행이 cascade 로 이미 사라져 정산할 것이 없다(= 판돈 소각).
+        if let authDelete = flat.range(of: "delete from auth.users where id = v_uid") {
+            for settle in rewrite.settlesBeforeAuthDelete {
+                guard let call = flat.range(of: settle) else { continue } // 없으면 위 required 가 이미 빨갛다
+                #expect(call.upperBound <= authDelete.lowerBound,
+                        "\(key): '\(settle)' 가 auth.users 삭제보다 뒤다 — 판 행이 cascade 로 사라진 뒤에는 돌려줄 길이 없다")
+            }
+        }
+    }
+    // 등록해 둔 덮어쓰기가 파일에 없으면 목록이 낡은 것이다(파일 이름이 바뀌거나 그 파일이 사라지면 측정이 공허하게 초록이 된다).
+    #expect(allowedSeen == Set(deleteAccountLaterRedefinitionsAllowed.keys),
+            "등록했는데 파일에 없는 덮어쓰기: \(Set(deleteAccountLaterRedefinitionsAllowed.keys).subtracting(allowedSeen)) — 목록을 고쳐라")
 }
 
 // MARK: - ② 신원 게이트 · 실행권

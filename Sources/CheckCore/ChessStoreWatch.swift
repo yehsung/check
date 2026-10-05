@@ -174,6 +174,7 @@ extension ChessStore {
     package func stopWatching() {
         resetWatchRuntime()
         if spectating != nil { spectating = nil }
+        clearFlight()
     }
 
     /// 세대 올림 + 장부 초기값. 진입·나가기 둘 다 여기를 지난다 — 앞 판의 in-flight 깃발이 남으면
@@ -277,6 +278,13 @@ extension ChessStore {
             }
             if requestedSince == 0 { runtime.watchWantsFull = false }
             if spectating != mapped.state { spectating = mapped.state }
+            // 관전도 같은 문으로 미끄러진다(세 깔때기 중 하나 — `beginFlight` 머리말).
+            // 진입 직후의 첫 응답은 씨앗의 `position` 이 nil 이라 거절 ④에서 떨어진다 — 로비 카드에는 판
+            // 내용이 없으므로(`ChessLiveMatch`) 들어간 순간 밀린 수 전부를 한 장으로 미끄러뜨릴 재료가 없다.
+            beginFlight(matchID: mapped.state.id, previousMatchID: current.id,
+                        previousPly: current.plyCount, previousPosition: current.position,
+                        nextPly: mapped.state.plyCount, nextPosition: mapped.state.position,
+                        move: mapped.state.lastMove)
         case .notFound:
             // 끝난 지 오래된 판·없는 판·숨김 격리 — 서버는 있다/없다를 가르지 않는다.
             stopWatching()

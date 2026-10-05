@@ -380,7 +380,14 @@ extension ChessStore {
         if !(isWindowVisible && !isWindowOccluded), game.turnStartedAt != nil { game.pause(now: clock()) }
         if aiGame != game { aiGame = game }
         let next = game.matchState()
+        // 이전 판은 **대입 전에** 잡는다. 사람 수(`moveInAIMatch`)와 로봇 수(`applyAIMove`)가 둘 다 이 문을
+        // 지나므로 여기 한 자리만 붙여도 두 길이 다 미끄러진다. 시작·기권·시계 멈춤·이어가기도 같은 문을
+        // 지나지만 그때는 수 번호가 그대로(또는 판 id 가 새것)라 `beginFlight` 의 거절 ②③에서 떨어진다.
+        let previous = match
         if match != next { match = next }
+        beginFlight(matchID: next.id, previousMatchID: previous?.id, previousPly: previous?.plyCount,
+                    previousPosition: previous?.position, nextPly: next.plyCount,
+                    nextPosition: next.position, move: next.lastMove)
         let nextPhase: ChessPhase = game.isFinished ? .result : .playing
         if phase != nextPhase { phase = nextPhase }
         scheduleAIClock()

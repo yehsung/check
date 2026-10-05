@@ -648,6 +648,24 @@ package final class ChessStore {
     /// 승격 고르기 단계(⑧).
     package internal(set) var promotion: ChessPromotionPrompt?
 
+    // MARK: 애니메이션 — 그림 전용 (v0.3.44)
+
+    /// 지금 판 위에서 **움직이는 중인 수**(없으면 nil). **그림만 읽는다** — 입력·합법성·시계·판정은 이 값을
+    /// 한 번도 보지 않으므로, 이 값이 서 있든 nil 이든 `match`·`legalMoves`·`isMyTurn`·시계는 **바이트까지 같다**.
+    ///
+    /// ★ 여기에 **입력 잠금을 걸지 마라.** 말이 날고 있는 동안에도 `match.position` 과 `legalMoves` 는 이미
+    ///   새 것이다(판은 벌써 다음 수의 판이다). 0.2초를 막으면 5분 블리츠에서 빠르게 두는 사람의 수가 씹힌다.
+    package private(set) var flight: ChessMoveFlight?
+    /// 애니메이션 꼬리표. **늦게 깬 옛 Task 가 새 애니메이션을 지우지 못하게** 하는 유일한 장치다.
+    ///
+    /// ★ `beginFlight` 는 앞 Task 를 취소하는데 `try? await Task.sleep` 은 취소를 **삼키고 다음 줄로 내려간다**
+    ///   (던지지 않는다). 그래서 취소된 Task 도 몸통을 한 번 실행하고, 이 비교가 없으면 그 한 번이 방금 세운
+    ///   애니메이션을 지운다 — 빠르게 두는 판에서 두 수째부터 애니메이션이 한 프레임만 보이고 사라진다.
+    ///   `Task.isCancelled` 를 **같이 보지 않는 것도 일부러다**: 두 벌을 두면 꼬리표 비교가 아무것도 막지 않는
+    ///   죽은 가드가 되어, 지워도 전부 초록이 된다.
+    @ObservationIgnored private var flightGeneration = 0
+    @ObservationIgnored private var flightTask: Task<Void, Never>?
+
     package var notice: String?
     package var isBusy = false
     package var isWindowVisible = false
@@ -806,6 +824,8 @@ package final class ChessStore {
     package func windowDidHide() {
         if isWindowVisible { isWindowVisible = false }
         isWindowOccluded = false
+        // ★ 안 거두면 0.3초 안에 창을 다시 연 사람에게 **끝나던 수의 토막이 다시 미끄러진다**.
+        clearFlight()
         stopPolling()
         pauseAIClock()
         // 끝난 판을 관전한 채 닫았다 = 그 판에서 나간 것이다. **진행 중인 관전은 남긴다**(최소화에서도 오는 통지다).
@@ -817,6 +837,7 @@ package final class ChessStore {
     /// 관전만 내린다(요청은 쏘지 않는다). 체스에는 `chess_leave` 가 없어 내 판에 대고 부를 것이 없다.
     package func windowDidClose() {
         if spectating != nil { stopWatching() }
+        clearFlight()
     }
 
     /// 창의 가림 상태가 바뀌었다. **폴링·AI 시계만** 멈추고 되살린다 — `isWindowVisible` 은 건드리지 않는다
@@ -827,6 +848,11 @@ package final class ChessStore {
             resumeAIClockIfVisible()
             startPolling()
         } else {
+            // ★ 거두는 자리 일곱 번째다. 가려진 창은 그려지지 않으므로 날던 수는 **보여 줄 사람이 없다** —
+            //   그대로 두면 꼬리(최대 0.355초)만큼 60~78Hz 그리기를 가림 뒤에서 계속 요구한다.
+            //   `pauseAIClock()` **앞**이어야 한다(`windowDidHide` 와 같은 순서 — 뒤에 두면 그 안에서
+            //   `commitAIGame` 이 돌며 방금 거둔 것을 다시 세운다).
+            clearFlight()
             pauseAIClock()
             stopPolling()
         }
@@ -1105,6 +1131,12 @@ package final class ChessStore {
         if incoming?.id == id { incoming = nil }
         if outgoing?.id == id { outgoing = nil }
         if match != next { match = next }
+        // 한 수 미끄러진다(1:1 깔때기 — 내 수·상대 수·폴링·실시간이 전부 이 한 자리로 모인다).
+        // 이전 판은 `base` 가 아니라 **`previous`** 로 잰다: `base` 는 id 가 같을 때만 서는 값이라
+        // "판이 바뀌었다" 를 가릴 수 없고, 그러면 화면 전환이 애니메이션으로 둔갑한다.
+        beginFlight(matchID: id, previousMatchID: previous?.id, previousPly: previous?.plyCount,
+                    previousPosition: previous?.position, nextPly: serverPly,
+                    nextPosition: position, move: next.lastMove)
         let nextPhase: ChessPhase = isFinished ? .result : .playing
         if phase != nextPhase { phase = nextPhase }
         activeMatchID = isFinished ? nil : id
@@ -1121,6 +1153,67 @@ package final class ChessStore {
             noteOwnMatchFinishedForRanking()
         }
         return .applied
+    }
+
+    // MARK: - 애니메이션 (그림 전용)
+
+    /// 판이 **한 수** 나아갔다 — 그 한 수를 미끄러뜨린다.
+    ///
+    /// 판을 갈아 치우는 깔때기가 셋이고(1:1 `applyState` · 로봇 `commitAIGame` · 관전 `applyWatch`) **셋 다**
+    /// 이 문을 지난다. 하나라도 빠지면 그 길로 온 수만 여전히 순간이동하는데, 사용자에게는 "어떤 때는 되고
+    /// 어떤 때는 안 된다" 로 보여 재현 조건을 찾는 데만 한참 걸린다.
+    ///
+    /// 거절 다섯 — **전부 필요하다**:
+    ///  ① 창이 안 보이거나 가려졌다. 안 그러면 보이지도 않는 창 때문에 뷰의 `TimelineView` 가 60fps 로 깨어
+    ///     배터리를 먹는다(`paused: flight == nil` 이 배터리 계약이고, 그 계약은 여기서 지켜진다).
+    ///  ② 판이 다르다. 판이 바뀐 것은 애니메이션이 아니라 **화면 전환**이다.
+    ///  ③ 수 번호가 정확히 1 늘지 않았다. 첫 적재(이전 국면 없음)·잠에서 깬 따라잡기(두 수가 한꺼번에)·
+    ///     수가 그대로인 폴링 응답이 전부 여기서 떨어진다. 두 수를 한 장으로 미끄러뜨릴 길은 없고, 폴링마다
+    ///     다시 세우면 1.5초 주기로 같은 수가 영원히 미끄러진다.
+    ///  ④ 수나 전·후 국면이 없다(서버 FEN 이 파서를 통과하지 못했다 — 판 자체를 못 그리는 상태다).
+    ///  ⑤ 파생이 nil 이다(수와 국면이 안 맞는다 · 제자리 수). 그러면 판은 지금처럼 **바로** 바뀐다(안전한 폴백).
+    func beginFlight(matchID: String, previousMatchID: String?, previousPly: Int?,
+                     previousPosition: ChessPosition?, nextPly: Int,
+                     nextPosition: ChessPosition?, move: ChessMove?) {
+        guard isWindowVisible, !isWindowOccluded else { return }
+        guard let previousMatchID, previousMatchID == matchID else { return }
+        guard let previousPly, nextPly == previousPly + 1 else { return }
+        guard let move, let before = previousPosition, let after = nextPosition else { return }
+        // ★ 꼬리표는 **파생이 성공한 뒤에** 올린다. 먼저 올리면 파생이 nil 인 수 하나가 돌고 있는 애니메이션의
+        //   Task 를 꼬리표만으로 무력화해(그 Task 는 옛 세대가 된다) 그 애니메이션이 영영 거둬지지 않는다 —
+        //   그러면 `TimelineView` 가 60fps 로 계속 돈다.
+        let generation = flightGeneration &+ 1
+        guard let made = ChessMoveFlight.make(move: move, before: before, after: after,
+                                              matchID: matchID, ply: nextPly,
+                                              generation: generation, startedAt: clock())
+        else { return }
+        flightGeneration = generation
+        flight = made
+        flightTask?.cancel()
+        flightTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(made.duration))
+            // 꼬리표가 밀렸으면 그사이 다음 수가 왔다 — 그 애니메이션은 **내 것이 아니다**.
+            guard let self, self.flightGeneration == generation else { return }
+            self.flightTask = nil
+            self.flight = nil
+        }
+    }
+
+    /// 애니메이션을 거둔다(Task 도 끊는다). 거두는 자리 여섯이 이 문을 지난다:
+    /// `reset()` · `clearMatch()` · `backToLobby()` · 관전 종료(`stopWatching()`) ·
+    /// `windowDidClose()` · `windowDidHide()`.
+    ///
+    /// Task 가 `duration`(길어도 0.355초) 뒤에 스스로 거두므로 이 문이 끊는 것은 **그 짧은 꼬리**다. 그래도
+    /// 자리마다 이유가 있다:
+    ///  · `windowDidHide` — 안 거두면 0.3초 안에 창을 다시 연 사람에게 **끝나던 수의 토막이 다시 미끄러진다**
+    ///    (값이 남아 있고 `TimelineView` 가 그 순간부터 다시 틱을 받는다).
+    ///  · `reset()` — 로그아웃·계정 전환. 다음 사람 화면에서 앞 사람 판의 말이 날아가면 안 된다.
+    ///  · 나머지 — 화면이 이미 다른 것을 보여 주는데(로비 접기 · 판 내림 · 관전 종료) 값이 남아 있으면
+    ///    뷰가 그만큼 더 60fps 로 깨어 있다.
+    func clearFlight() {
+        flightTask?.cancel()
+        flightTask = nil
+        if flight != nil { flight = nil }
     }
 
     // MARK: - 입력 2단 (⑧)
@@ -1452,6 +1545,7 @@ package final class ChessStore {
             match = nil
         }
         if phase != .lobby { phase = .lobby }
+        clearFlight()
         setNotice(nil)
         guard host?.session != nil else { return }
         Task { [weak self] in
@@ -1616,6 +1710,7 @@ package final class ChessStore {
         resetGeneration &+= 1
         stopPolling()
         discardAIGame()
+        clearFlight()
         expiryTask?.cancel()
         expiryTask = nil
         // 신호 재조회도 끊는다 — 앞 계정의 따라잡기가 다음 사람의 화면에 신청·판을 세우면 안 된다.
@@ -1813,6 +1908,7 @@ package final class ChessStore {
         if phase != .lobby { phase = .lobby }
         if selection != nil { selection = nil }
         if promotion != nil { promotion = nil }
+        clearFlight()
     }
 
     /// 판 진행을 사람에게 알린다(진행 중 판을 옮긴 직후).

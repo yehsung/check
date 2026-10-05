@@ -331,6 +331,41 @@ struct ChessBoardGeometry: Equatable {
         let rank = orientation == .white ? Self.ranks - 1 - row : row
         return ChessSquare(file: file, rank: rank)
     }
+
+    // MARK: 보간 — 움직이는 말 자리 (v0.3.44)
+
+    /// 두 칸 사이를 `t`(0…1)만큼 간 **칸 크기 사각형**. `t == 0` 이면 `rect(of: from)` 과, `t == 1` 이면
+    /// `rect(of: to)` 와 **바이트까지 같다**(두 끝에서 보간이 멈춘 판과 어긋나면 도착 순간 말이 한 번 튄다).
+    ///
+    /// 화면 사각형끼리 섞으므로 뒤집기는 이미 `rect(of:)` 안에서 끝났다 — 여기에 `orientation` 이 또
+    /// 나오면 흑 판에서 두 번 뒤집혀 말이 반대로 간다.
+    func rect(from: ChessSquare, to: ChessSquare, t: Double) -> CGRect {
+        let start = rect(of: from), end = rect(of: to)
+        let k = CGFloat(min(1, max(0, t.isNaN ? 0 : t)))
+        return CGRect(x: start.minX + (end.minX - start.minX) * k,
+                      y: start.minY + (end.minY - start.minY) * k,
+                      width: start.width, height: start.height)
+    }
+
+    /// 칸 단위 오프셋 → 화면 오프셋.
+    ///
+    /// ★ **방향을 반영한다.** 잡힌 말이 밀리는 방향은 판 좌표(file/rank)로 들어오는데(모델에는 화면이 없다)
+    ///   흑으로 두는 사람의 판은 뒤집혀 있어 같은 판 좌표가 화면에서 **반대쪽**이다. 여기서 부호를 안 뒤집으면
+    ///   흑으로 두는 사람만 잡힌 말이 잡은 말 쪽으로 되밀려 들어온다.
+    ///   rank 는 한 번 더 뒤집힌다 — 화면 y 는 아래로 자라고 rank 는 위로 자란다(`row(of:)` 와 같은 뒤집기다).
+    func offset(fileDelta: Double, rankDelta: Double) -> CGSize {
+        let flip: CGFloat = orientation == .white ? 1 : -1
+        return CGSize(width: flip * CGFloat(fileDelta) * cell,
+                      height: -flip * CGFloat(rankDelta) * cell)
+    }
+
+    /// 가운데를 고정하고 비율만 바꾼 사각형(잡힌 말이 줄어드는 자리). 음수 비율은 0 으로 떨어뜨린다 —
+    /// 뒤집힌 사각형을 `ChessPieceArt` 에 넘기면 말이 거울로 그려진다.
+    func scaled(_ rect: CGRect, by scale: Double) -> CGRect {
+        let k = CGFloat(max(0, scale.isNaN ? 0 : scale))
+        let width = rect.width * k, height = rect.height * k
+        return CGRect(x: rect.midX - width / 2, y: rect.midY - height / 2, width: width, height: height)
+    }
 }
 
 // MARK: - 말 그림(벡터)
@@ -455,6 +490,10 @@ struct ChessBoardView: View {
     /// 마우스가 올라간 칸(옅은 덮개 — 입력이 있는 판에서만 온다).
     var hovered: ChessSquare? = nil
     var showsCoordinates: Bool = true
+    /// 지금 미끄러지는 중인 **한 장**(v0.3.44). 기본 nil = 멈춘 국면 = **이 값이 생기기 전과 같은 그림**이다
+    /// (초기 배치 32칸 단언이 한 글자도 안 바뀐다). 시각·이징·칸 셈은 전부 `ChessMoveFlight` 가 끝내 놓는다 —
+    /// 여기서 하는 일은 받은 숫자를 사각형으로 바꿔 그리는 것뿐이다.
+    var flight: ChessFlightFrame? = nil
 
     // 칸 — 둘 다 중간 톤(최대 ≤ 204 · 최소 ≥ 71)이다.
     static let lightSquare = Color(red: 0.80, green: 0.72, blue: 0.60)
@@ -551,16 +590,52 @@ struct ChessBoardView: View {
             }
         }
 
-        // ⑤ 말 — 맨 위에 그린다(덮개가 말을 가리면 무엇이 서 있는지 모른다).
+        // ⑤ 멈춘 말 — 맨 위에 그린다(덮개가 말을 가리면 무엇이 서 있는지 모른다).
         guard let position else { return }
         for index in 0..<64 {
             guard let square = ChessSquare(index: index), let piece = position[square] else { continue }
-            let path = ChessPieceArt.path(for: piece.kind, in: g.rect(of: square))
-            context.fill(path, with: .color(piece.color == .white ? Self.whitePiece : Self.blackPiece))
-            context.stroke(path,
-                           with: .color(piece.color == .white ? Self.whitePieceEdge : Self.blackPieceEdge),
-                           lineWidth: max(0.8, g.cell * 0.035))
+            // 날고 있는 말의 **도착** 칸은 뺀다. `position` 은 이미 수를 둔 뒤의 배치라, 안 빼면 같은 말이
+            // 도착 칸과 궤적 위에 **둘로** 보인다(캐슬링이면 셋·넷).
+            if flight?.hidden.contains(square) == true { continue }
+            draw(piece, in: g.rect(of: square), cell: g.cell, into: &context)
         }
+
+        // ⑤b 판에서 빠지는 말 — 멈춘 말 **위**, 날고 있는 말 **아래**.
+        //
+        // 잡힌 말은 `position` 에 이미 없어서 ⑤가 한 번도 그리지 않는다. 그 말이 밀려나는 0.22초가
+        // 사용자가 "말이 갑자기 사라진다" 라고 말한 그 자리다 — 여기가 비면 고치려던 증상으로 되돌아간다.
+        if let leaving = flight?.leaving {
+            let shift = g.offset(fileDelta: leaving.fileOffset, rankDelta: leaving.rankOffset)
+            let box = g.scaled(g.rect(of: leaving.square).offsetBy(dx: shift.width, dy: shift.height),
+                               by: leaving.scale)
+            // `GraphicsContext` 는 **값**이라 사본에 불투명도를 걸어야 한다(원본에 걸면 ⑤c 까지 흐려진다).
+            var sub = context
+            sub.opacity = leaving.opacity
+            draw(leaving.piece, in: box, cell: g.cell, into: &sub)
+        }
+
+        // ⑤c 날고 있는 말 — **맨 위**, 배열 순서대로(뒤가 위에 온다 → 캐슬링에서 왕이 룩 위다).
+        // 지나가는 칸의 말을 덮으므로 나이트가 말을 **뛰어넘는 것**이 보인다.
+        for moving in flight?.moving ?? [] {
+            draw(moving.piece, in: g.rect(from: moving.from, to: moving.to, t: moving.t),
+                 cell: g.cell, into: &context)
+        }
+    }
+
+    /// 사각형 하나에 말 하나.
+    ///
+    /// ★ 색은 **극단 그대로**다(`whitePiece` 0.96 · `blackPiece` 0.10). 렌더 테스트는 "칸 가운데에 아주 밝거나
+    ///   아주 어두운 픽셀이 있는가" 로 말을 세는데, 날고 있는 말을 중간 톤으로 흐리면 그 감지기에 안 걸려
+    ///   "말이 두 칸 사이에 있다" 를 재는 단언이 통째로 쓸모없어진다. 날고 있어도 말은 말이다.
+    /// ★ `.shadow` 를 쓰지 않는다 — ImageRenderer 가 그림자가 있으면 첫 두 장을 다르게 구워
+    ///   바이트 동치 단언이 순서에 따라 빨개진다(`CheckRenderSettle` 머리말).
+    private func draw(_ piece: ChessPiece, in box: CGRect, cell: CGFloat,
+                      into context: inout GraphicsContext) {
+        let path = ChessPieceArt.path(for: piece.kind, in: box)
+        context.fill(path, with: .color(piece.color == .white ? Self.whitePiece : Self.blackPiece))
+        context.stroke(path,
+                       with: .color(piece.color == .white ? Self.whitePieceEdge : Self.blackPieceEdge),
+                       lineWidth: max(0.8, cell * 0.035))
     }
 }
 
@@ -588,17 +663,35 @@ struct ChessPlayBoard: View {
 
     private var canTap: Bool { match.isMyTurn && !store.isBusy }
 
+    /// 지금 **이 판에서** 미끄러지는 수. 값이 `matchID` 를 들고 있으므로 다른 판(로봇 판·방금 끝난 판)의
+    /// 애니메이션이 이 화면으로 새지 않는다 — 스토어 하나가 세 화면을 먹이기 때문에 이 거르기가 필요하다.
+    private var flight: ChessMoveFlight? {
+        guard let flight = store.flight, flight.matchID == match.id else { return nil }
+        return flight
+    }
+
     var body: some View {
         let g = geometry
-        ChessBoardView(
-            position: match.position,
-            geometry: g,
-            lastMove: match.lastMove,
-            selected: store.selection?.from,
-            targets: store.selection?.targets ?? [],
-            checkSquare: checkSquare,
-            hovered: canTap ? hovered : nil
-        )
+        // 프레임 상한은 **화면 주사율에서 온다** — 1/60 을 박아 두면 75Hz·144Hz 처럼 60 으로 나눠떨어지지
+        // 않는 화면에서 네 프레임에 한 장이 두 배로 늘어진다(근거·표는 `MiniGameFrameRate`).
+        // `paused: flight == nil` 이 **배터리 계약**이다: 미끄러지는 수가 없으면 이 뷰는 한 틱도 안 받는다.
+        // 스토어가 그 계약의 다른 쪽 끝을 쥔다 — 창이 안 보이면 값을 아예 안 만들고, 길이가 지나면 거둔다.
+        //
+        // 입력(호버·탭·접근성·onChange)은 **TimelineView 밖**에 그대로 둔다. 안으로 넣으면 틱마다 제스처가
+        // 새로 달려 `SpatialTapGesture` 가 눌림을 떨구고, 호버 상태가 들어가 틱마다 판이 통째로 다시 만들어진다.
+        TimelineView(.animation(minimumInterval: MiniGameFrameRate.minimumInterval(
+            forRefreshRate: MiniGameFrameRateMonitor.shared.refreshHz), paused: flight == nil)) { context in
+            ChessBoardView(
+                position: match.position,
+                geometry: g,
+                lastMove: match.lastMove,
+                selected: store.selection?.from,
+                targets: store.selection?.targets ?? [],
+                checkSquare: checkSquare,
+                hovered: canTap ? hovered : nil,
+                flight: flight?.frame(now: context.date)
+            )
+        }
         .contentShape(Rectangle())
         .onContinuousHover { phase in
             guard canTap else { if hovered != nil { hovered = nil }; return }
@@ -730,14 +823,21 @@ struct ChessPanel: View {
     /// 관전은 대국과 같은 **두 열**이다. 판은 입력이 없다(탭·호버·선택·도착 점이 하나도 없다 — 관전자는
     /// 아무것도 쓰지 못한다). 판 방향은 **흑이 아래가 아니다** — 관전자에게는 백이 아래가 관례다.
     private func spectate(_ watch: ChessSpectateState) -> some View {
-        HStack(alignment: .top, spacing: ChessWindowLayout.columnSpacing) {
-            ChessBoardView(
-                position: watch.position,
-                geometry: ChessBoardGeometry(side: ChessWindowLayout.boardSide, orientation: .white),
-                lastMove: watch.lastMove,
-                checkSquare: watch.isInCheck && !watch.isFinished
-                    ? watch.turn.flatMap { watch.position?.kingSquare(of: $0) } : nil
-            )
+        // 보고 있는 그 판의 수만 미끄러진다. 거르는 열쇠는 `ChessSpectateState.id`(= 소문자 match id)다 —
+        // 스토어의 `beginFlight` 도 같은 값을 `matchID` 로 담는다.
+        let flight = store.flight.flatMap { $0.matchID == watch.id ? $0 : nil }
+        return HStack(alignment: .top, spacing: ChessWindowLayout.columnSpacing) {
+            TimelineView(.animation(minimumInterval: MiniGameFrameRate.minimumInterval(
+                forRefreshRate: MiniGameFrameRateMonitor.shared.refreshHz), paused: flight == nil)) { context in
+                ChessBoardView(
+                    position: watch.position,
+                    geometry: ChessBoardGeometry(side: ChessWindowLayout.boardSide, orientation: .white),
+                    lastMove: watch.lastMove,
+                    checkSquare: watch.isInCheck && !watch.isFinished
+                        ? watch.turn.flatMap { watch.position?.kingSquare(of: $0) } : nil,
+                    flight: flight?.frame(now: context.date)
+                )
+            }
             .frame(width: ChessWindowLayout.boardSide, height: ChessWindowLayout.boardSide)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(ChessText.boardAccessibility(ply: watch.plyCount, turn: watch.turn,
@@ -769,12 +869,20 @@ struct ChessPanel: View {
     // MARK: 결과
 
     private func result(_ match: ChessMatchState) -> some View {
-        HStack(alignment: .top, spacing: ChessWindowLayout.columnSpacing) {
-            ChessBoardView(
-                position: match.position,
-                geometry: ChessBoardGeometry(side: ChessWindowLayout.boardSide, orientation: match.myColor),
-                lastMove: match.lastMove
-            )
+        // 결과 화면도 미끄러진다. 외통·시간패를 만든 **마지막 그 수**가 안 보이면 왜 끝났는지 모른 채
+        // 판이 바뀐 것만 보인다(판이 끝나는 응답 한 번에 phase 가 `.result` 로 넘어가므로 그 수를 그릴
+        // 화면은 여기뿐이다).
+        let flight = store.flight.flatMap { $0.matchID == match.id ? $0 : nil }
+        return HStack(alignment: .top, spacing: ChessWindowLayout.columnSpacing) {
+            TimelineView(.animation(minimumInterval: MiniGameFrameRate.minimumInterval(
+                forRefreshRate: MiniGameFrameRateMonitor.shared.refreshHz), paused: flight == nil)) { context in
+                ChessBoardView(
+                    position: match.position,
+                    geometry: ChessBoardGeometry(side: ChessWindowLayout.boardSide, orientation: match.myColor),
+                    lastMove: match.lastMove,
+                    flight: flight?.frame(now: context.date)
+                )
+            }
             .frame(width: ChessWindowLayout.boardSide, height: ChessWindowLayout.boardSide)
             VStack(alignment: .leading, spacing: ChessWindowLayout.matchSideSpacing) {
                 ChessResultCard(store: store, match: match)

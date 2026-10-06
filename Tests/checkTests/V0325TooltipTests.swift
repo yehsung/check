@@ -706,10 +706,16 @@ struct V0325TooltipTests {
         // 안 올리면 그 창이 레이어를 제대로 걸었는데도 빨개지고, "지우는 것" 이 초록으로 가는 가장 짧은 길이 된다
         // (2026-10-05 실측: ChessPanel 의 두 줄을 지우면 이 시험과 V0335 가 초록이 됐고 체스 자신의 40건은
         //  한 건도 안 빨개졌다 — 그래서 체스 쪽 그물을 V0344ChessWindowTests 에 함께 걸었다).
+        // v0.3.45: AI 리밋 창(CheckAILimitsView) 루트가 일곱 번째다 — 같은 이유로 숫자를 함께 올린다.
         #expect(layerSites == [
+            "CheckAILimitsWindow.swift:1",
             "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
             "ChessPanel.swift:1", "GomokuPanel.swift:1", "MiniGamePanel.swift:1",
         ], "레이어 자리: \(layerSites)")
+        // AI 리밋 창: 창 배경 뒤(카드 목록의 ScrollView 클리핑 **바깥**). 안쪽에 걸면 말풍선이 목록에 잘린다.
+        let limits = try #require(Self.between(sources["CheckAILimitsWindow.swift"] ?? "",
+                                              "struct CheckAILimitsView: View {", "private var header: some View {"))
+        #expect(limits.contains(".background(CheckTheme.background) .checkTooltipLayer()"))
         // 체스 창도 오목과 **같은 자리**다: 창 고정 프레임·배경·전경색 뒤(판·목록 클리핑 바깥).
         let chess = try #require(Self.between(sources["ChessPanel.swift"] ?? "",
                                               "struct ChessPanel: View {", "private var content: some View {"))

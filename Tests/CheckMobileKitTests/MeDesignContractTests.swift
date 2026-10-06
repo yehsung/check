@@ -20,14 +20,18 @@ struct MeDesignContractTests {
         let stage = try #require(home.range(of: "MeStageCard(store: store)"))
         let lastWeek = try #require(home.range(of: "MeRecordsCard(store: store)"))
         let grass = try #require(home.range(of: "MeGrassCard(store: store)"))
+        // v0.3.45: 잔디 **뒤**에 「AI 리밋」 카드가 선다(잔디까지가 지난 기록 · 리밋은 지금 남은 한도 — 시제가 바뀐다).
+        let aiLimits = try #require(home.range(of: "MeAILimitsCard(store: store)"))
         let menu = try #require(home.range(of: "MeMenuGroup(store: store)"))
-        #expect(stage.lowerBound < lastWeek.lowerBound && lastWeek.lowerBound < grass.lowerBound && grass.lowerBound < menu.lowerBound,
-                "첫 화면 순서: 무대 → 「지난주」(회고+리듬) → 「최근 12주」(잔디) → 메뉴")
+        #expect(stage.lowerBound < lastWeek.lowerBound && lastWeek.lowerBound < grass.lowerBound
+                && grass.lowerBound < aiLimits.lowerBound && aiLimits.lowerBound < menu.lowerBound,
+                "첫 화면 순서: 무대 → 「지난주」(회고+리듬) → 「최근 12주」(잔디) → 「AI 리밋」 → 메뉴")
         #expect(!home.contains("MeRhythmCard(store: store)"), "리듬이 루트에서 다시 별개 카드다")
         // 앵커 이름을 바꾸면 저장소 밖 데모 스크린샷 명령(-AingCheckDemoMeAnchor)이 깨진다.
         let anchors = try #require(home.range(of: "enum MeAnchor"))
-        let anchorBlock = home[anchors.lowerBound...].prefix(200)
-        for name in ["header", "records", "tokenGrass", "characters", "menu", "rhythm"] {
+        // 주석을 걷어낸 소스라 블록 길이는 선언 줄 + case 줄들만 센다(v0.3.45 에 일곱 번째가 늘어 200 → 260).
+        let anchorBlock = home[anchors.lowerBound...].prefix(260)
+        for name in ["header", "records", "tokenGrass", "characters", "menu", "rhythm", "aiLimits"] {
             #expect(anchorBlock.contains(name), "MeAnchor.\(name) 이 사라졌다")
         }
     }

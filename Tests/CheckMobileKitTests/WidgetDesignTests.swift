@@ -183,7 +183,10 @@ import Testing
     func renderingModeContract() throws {
         let views = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingWidgets.swift")
         let parts = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingWidgetParts.swift")
-        let both = views + parts
+        // v0.3.45 「AI 리밋」 위젯은 별 파일이다 — **금지 목록(링 게이지 · 경고 기호)은 이 파일에도 걸어야** 한다.
+        // 안 걸면 새 위젯이 계약 밖에서 자란다(같은 모드 함정을 다시 만든다).
+        let limits = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift")
+        let both = views + parts + limits
         #expect(both.contains("widgetRenderingMode"), "렌더링 모드 분기가 없다")
         #expect(parts.contains("widgetAccentedRenderingMode("), "초상이 틴트·투명에서 원색으로 남는다")
         #expect(parts.components(separatedBy: ".widgetAccentable()").count >= 4, "막대 채움 · 점 · 체크에 widgetAccentable 이 없다")
@@ -200,5 +203,39 @@ import Testing
         for hint in ["signedOutWorkingHint", "signedOutTodoHint"] {
             #expect(views.contains("AingWidgetText.\(hint)"), "로그아웃 칸이 위젯 종류를 말하지 않는다(\(hint))")
         }
+        // 「AI 리밋」 위젯(v0.3.45)도 같은 계약을 진다: 모드 분기 · 막대만 · 틴트에서 로고 실루엣(색으로만 가르지 않는다) ·
+        // 바탕 · 큰 글자 상한 · 조각 빼기 한 갈래 · 두 빈 상태를 섞지 않는다.
+        #expect(limits.contains("widgetRenderingMode"), "리밋 위젯에 렌더링 모드 분기가 없다")
+        #expect(limits.contains("AingWidgetBar("), "리밋을 막대로 그리지 않는다")
+        #expect(limits.contains("AIProviderMark(") && limits.contains("AIProviderTile("),
+                "틴트 모드에서 로고 실루엣으로 갈라지지 않는다 — 색을 버리는 모드에서 세 줄이 똑같아진다")
+        #expect(limits.contains("containerBackground(for: .widget)") && limits.contains("AingWidgetColors.background"))
+        #expect(limits.contains("dynamicTypeSize(...DynamicTypeSize.xxLarge)"), "리밋 위젯이 큰 글자 상한을 안 건다")
+        #expect(limits.components(separatedBy: "ViewThatFits(in: .horizontal)").count == 2,
+                "리밋 줄에 말줄임 대신 조각을 빼는 갈래가 하나 있어야 한다")
+        // 창 라벨은 **값과 한 묶음**(`primaryWindow`)으로만 꺼낸다 — 뷰가 `fiveHour ?? weekly` 로 값만 집으면
+        // 라벨 없는 자리가 생기고, 그 자리에서 주간 8% 가 5시간 27% 옆에 나란히 서서 같은 창으로 읽힌다.
+        //
+        // ★ **구간을 잘라서 잰다.** "파일 어디든 한 번 나오면 된다"로 재면 커버리지 구멍이다 — M·L 줄에서
+        //   라벨을 통째로 지워도 S 쪽 한 줄이 남아 초록이었다(뮤테이션 M7 실측). 숫자가 서는 자리는 둘이고,
+        //   둘 다 라벨을 가져야 한다.
+        #expect(limits.contains("primaryWindow"), "뷰가 라벨과 값을 한 묶음으로 꺼내지 않는다")
+        #expect(!limits.contains("row.fiveHour ?? row.weekly"), "뷰가 라벨을 버리고 값만 고른다")
+        for (name, start, end) in [
+            // 구간 표지는 **코드**여야 한다 — 주석은 `code(_:)` 가 걷어낸다(MARK 로 잡으려다 빨갰다).
+            ("S(큰 숫자)", "private func small(", "private func wide("),
+            ("M·L 줄 머리", "private func titleLine(", "private func weeklyLine("),
+        ] {
+            let from = try #require(limits.range(of: start), "대조: \(name) 구간을 못 찾았다")
+            let to = try #require(limits.range(of: end), "대조: \(name) 구간의 끝을 못 찾았다")
+            #expect(limits[from.lowerBound..<to.lowerBound].contains("primary.label"),
+                    "\(name) 에서 창 라벨이 사라졌다 — 주간 8% 가 5시간 27% 옆에서 같은 창으로 읽힌다")
+        }
+        for state in ["limitsNoProviders", "limitsNoData"] {
+            #expect(limits.contains("AingWidgetText.\(state)"), "빈 상태 둘을 가리지 않는다(\(state))")
+        }
+        // 토큰 축을 리밋 막대에 섞지 않는다 — 토큰에는 분모가 없다(잔디 농도 눈금은 한도가 아니다).
+        let tokenBar = limits.range(of: "limitsTokenTitle").map { limits[$0.lowerBound...].prefix(600) } ?? ""
+        #expect(!tokenBar.contains("AingWidgetBar("), "토큰 수를 리밋처럼 막대로 그렸다(분모가 없는 값이다)")
     }
 }

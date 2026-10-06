@@ -12,7 +12,9 @@ package enum AingWidgetKind {
     package static let workingNow = "AingWorkingNow"
     package static let myToday = "AingMyToday"
     package static let todos = "AingTodos"
-    package static let all = [workingNow, myToday, todos]
+    /// v0.3.45 — AI 구독 리밋(전용 위젯 1종 · small/medium/large).
+    package static let aiLimits = "AingAILimits"
+    package static let all = [workingNow, myToday, todos, aiLimits]
 }
 
 package enum AingWidgetText {
@@ -76,6 +78,26 @@ package enum AingWidgetText {
     package static let myTodayGalleryDescription = "내 캐릭터와 오늘 누적, 이번 주 목표를 보여 줘요."
     package static let todoGalleryName = "오늘 할 일"
     package static let todoGalleryDescription = "체크하면 앱을 열지 않아도 완료로 표시돼요."
+    package static let limitsGalleryName = "AI 리밋"
+    package static let limitsGalleryDescription = "클로드·코덱스·안티그래비티의 5시간·주간 사용률을 보여 줘요."
+
+    // MARK: AI 리밋(v0.3.45 — 토큰 축과 다른 새 축)
+
+    package static let limitsTitle = "AI 리밋"
+    /// 아직 한 번도 못 받았다 — 앱을 열면 폰이 서버에서 받아 싣는다.
+    package static let limitsNoData = noData
+    /// 받았는데 연동한 도구가 없다. **"앱을 열면"이 아니다** — 앱을 열어도 채워지지 않는다(맥이 자격증명을 읽는다).
+    package static let limitsNoProviders = "맥 앱에서 AI 도구에 로그인하면 보여요"
+    package static let limitsSignedOutHint = "로그인하면 AI 사용률이 떠요"
+    /// 5시간 창 라벨(좁은 칸).
+    package static let limitsFiveHour = "5시간"
+    package static let limitsWeekly = "주간"
+    package static let limitsTokenTitle = "AI 토큰"
+    package static let limitsTokenToday = "오늘"
+    package static let limitsTokenRecent = "12주"
+
+    /// "3시간 뒤 초기화" — 절대 시각을 칸 시각으로 **투영한** 글자(남은 초를 스냅샷에 싣지 않는 까닭).
+    package static func limitsResetIn(_ remaining: String) -> String { "\(remaining) 뒤 초기화" }
 }
 
 // MARK: - 서식
@@ -144,6 +166,13 @@ package enum AingWidgetLayout {
     package static let todoRowHeightLarge: Double = 46
     /// 줄 사이 구분선이 시작하는 곳(체크 원 22 + 틈 10 — 글자 시작점).
     package static let todoSeparatorInset: Double = 32
+
+    /// AI 리밋 칸 수: S 는 가장 임박한 하나 · M 은 셋 · L 은 셋 + 토큰 줄(제공자가 셋뿐이라 상한이 곧 전부다).
+    package static let limitRowsSmall = 1
+    package static let limitRowsMedium = 3
+    package static let limitRowsLarge = 3
+    /// 로고 타일 크기(M·L 줄 머리). 24pt 는 할 일 체크 원(22)과 사람 얼굴(24)과 같은 눈금이다.
+    package static let limitTileSize: Double = 24
 }
 
 // MARK: - 캐릭터 기분 · 이니셜 원(위젯은 앱 부품을 링크하지 않는다 — 같은 규칙을 여기 둔다)
@@ -385,6 +414,151 @@ package struct AingWidgetTodos: Equatable, Sendable {
     }
 }
 
+// MARK: - AI 리밋(시각 투영)
+
+/// 리밋 줄 하나(제공자 하나). 값·캡션·표시여부는 **전부 코어 규칙**(`AILimitFreshnessRule`)이 만든다 —
+/// 위젯이 퍼센트를 다시 반올림하거나 나이를 다시 세면 맥·폰·위젯이 같은 숫자를 다르게 말한다.
+package struct AingWidgetLimitRow: Equatable, Sendable, Identifiable {
+    package let provider: AILimitProvider
+    package var id: String { provider.rawValue }
+    /// 5시간 창(크게). 그 창이 없으면 nil — 지어내 0% 로 그리지 않는다.
+    package let fiveHour: AILimitDisplay?
+    package let weekly: AILimitDisplay?
+
+    package init(provider: AILimitProvider, fiveHour: AILimitDisplay?, weekly: AILimitDisplay?) {
+        self.provider = provider
+        self.fiveHour = fiveHour
+        self.weekly = weekly
+    }
+
+    /// 급한 순서를 정하는 하한(5시간 창). 판정 불가·창 없음은 **−1** — 모르는 줄이 "0% 라 여유롭다"로 밀려 내려가지도,
+    /// 가장 급한 자리를 훔치지도 않게 한다.
+    package var urgency: Double { fiveHour?.percent ?? -1 }
+
+    /// 줄이 세울 **대표 창과 그 라벨**. 5시간이 있으면 그것, 없으면 주간(요금제에 따라 5시간 창이 아예 없다 — 실측).
+    ///
+    /// ★ 라벨을 값과 **한 묶음으로** 내보내는 까닭(실제 렌더에서 잡은 결함): 둘을 따로 두면 라벨을 안 그리는
+    /// 자리가 생기고, 그 자리에서 주간 8% 가 5시간 27% 바로 옆에 나란히 서서 **같은 창으로 읽힌다**.
+    /// 세 제공자의 창 구성이 서로 다르므로(안티그래비티는 5시간 창이 없다) 이 혼동은 드문 경우가 아니다.
+    /// 뷰가 아니라 여기 있는 까닭은 뷰가 iOS 전용이라 맥 스위트가 그 분기를 한 줄도 못 재기 때문이다.
+    package var primaryWindow: (display: AILimitDisplay, label: String)? {
+        if let fiveHour { return (fiveHour, AingWidgetText.limitsFiveHour) }
+        if let weekly { return (weekly, AingWidgetText.limitsWeekly) }
+        return nil
+    }
+
+    /// 대표 창 아래에 **따로** 그릴 주간 줄(L). 주간이 이미 대표로 섰으면 nil — 같은 값을 두 번 그리지 않는다.
+    package var secondaryWeekly: AILimitDisplay? {
+        fiveHour != nil ? weekly : nil
+    }
+
+    /// 색 대신 쓰는 식별자(틴트 모드는 색을 버린다).
+    package var name: String { provider.displayName }
+    package var compactName: String { provider.compactName }
+}
+
+/// 리밋 위젯이 그릴 것.
+package enum AingWidgetLimitsState: Equatable, Sendable {
+    /// 스냅샷에 리밋 칸이 아직 없다(옛 스냅샷 · 앱을 한 번도 안 열었다) → "앱을 열면 채워져요".
+    case noData
+    /// 받았는데 연동한 도구가 하나도 없다 → "맥 앱에서 AI 도구에 로그인하면 보여요".
+    /// **noData 와 뜻이 다르다** — 앱을 열어도 채워지지 않는다. 두 안내를 섞으면 맥을 쓰지 않는 사용자가
+    /// 앱을 몇 번이고 열게 된다.
+    case noProviders
+    case limits(AingWidgetLimits)
+
+    package init(snapshot: WidgetSnapshot, at date: Date) {
+        guard let panel = snapshot.aiLimits else {
+            self = .noData
+            return
+        }
+        let limits = AingWidgetLimits(panel: panel, at: date)
+        self = limits.rows.isEmpty ? .noProviders : .limits(limits)
+    }
+}
+
+/// 제공자 줄들 + 기존 토큰 사용량(다른 축 — 한 바에 섞지 않는다).
+package struct AingWidgetLimits: Equatable, Sendable {
+    /// 제공자 **고정 순서**(Claude → Codex → 안티그래비티). 연동 유무로 재배열하면 "어제는 Codex 가 위였는데"가 된다.
+    package let rows: [AingWidgetLimitRow]
+    /// 오늘 쓴 AI 토큰. nil = 모른다 → L 의 토큰 줄을 **그리지 않는다**(0 은 "안 썼다"는 거짓이다).
+    package let todayTokens: Int?
+    package let recentTokens: Int?
+
+    package init(panel: WidgetSnapshot.AILimitPanel, at date: Date) {
+        rows = panel.providers
+            // ★ 모르는 제공자는 **버린다**. 서버가 네 번째를 더하는 날 구버전 위젯이 조용히 'claude' 로 접으면
+            //   남의 사용률이 내 Claude 줄에 그려진다(열거값 확장 함정).
+            .compactMap { row -> AingWidgetLimitRow? in
+                guard let provider = AILimitProvider(rawValue: row.provider) else { return nil }
+                var windows: [AILimitWindowSnapshot] = []
+                if let percent = row.fiveHourPercent {
+                    windows.append(AILimitWindowSnapshot(
+                        window: .fiveHour, usedPercent: percent, resetsAt: row.fiveHourResetsAt,
+                        observedAt: row.observedAt, source: .server
+                    ))
+                }
+                if let percent = row.weeklyPercent {
+                    windows.append(AILimitWindowSnapshot(
+                        window: .weekly, usedPercent: percent, resetsAt: row.weeklyResetsAt,
+                        observedAt: row.observedAt, source: .server
+                    ))
+                }
+                guard !windows.isEmpty else { return nil }
+                let snapshot = AILimitProviderSnapshot(provider: provider, windows: windows)
+                func display(_ window: AILimitWindow) -> AILimitDisplay? {
+                    guard snapshot.window(window) != nil else { return nil }
+                    let value = AILimitFreshnessRule.display(provider: snapshot, window: window, now: date)
+                    return value.isVisible ? value : nil
+                }
+                return AingWidgetLimitRow(provider: provider, fiveHour: display(.fiveHour), weekly: display(.weekly))
+            }
+            .sorted { $0.provider.sortOrder < $1.provider.sortOrder }
+        todayTokens = panel.todayTokens
+        recentTokens = panel.recentTokens
+    }
+
+    /// S 가 세울 하나: 5시간 사용률이 가장 높은 줄(= 먼저 닿는 벽). 동률이면 **고정 순서**가 가른다 —
+    /// 칸마다 다른 줄이 서면 사용자가 위젯을 믿지 못한다.
+    package var mostUrgent: AingWidgetLimitRow? {
+        rows.max { lhs, rhs in
+            if lhs.urgency != rhs.urgency { return lhs.urgency < rhs.urgency }
+            return lhs.provider.sortOrder > rhs.provider.sortOrder
+        }
+    }
+
+    /// M·L 이 그릴 줄들(상한까지).
+    package func shown(limit: Int) -> [AingWidgetLimitRow] {
+        Array(rows.prefix(max(0, limit)))
+    }
+
+    /// 토큰 줄을 그릴 수 있나(모르면 줄을 만들지 않는다).
+    package var hasTokens: Bool { todayTokens != nil }
+}
+
+package enum AingWidgetLimitFormat {
+    /// "3시간 뒤 초기화" — **절대 시각**을 칸 시각으로 투영한다. 이미 지났거나 모르면 nil
+    /// (그때는 값 쪽 캡션이 "초기화됨"을 말한다 — 두 자리가 같은 말을 되풀이하지 않게).
+    package static func resetIn(_ resetsAt: Date?, now: Date) -> String? {
+        guard let resetsAt else { return nil }
+        let remaining = resetsAt.timeIntervalSince(now)
+        guard remaining > 0 else { return nil }
+        return AingWidgetText.limitsResetIn(remainingText(remaining))
+    }
+
+    /// 남은 시간 글자: 60초 미만 "1분" · 1시간 미만 "N분" · 1일 미만 "N시간" · 그 위 "N일"(전부 내림, 0 은 없다).
+    package static func remainingText(_ seconds: TimeInterval) -> String {
+        if seconds < 3_600 { return "\(max(1, Int(seconds / 60)))분" }
+        if seconds < 86_400 { return "\(Int(seconds / 3_600))시간" }
+        return "\(Int(seconds / 86_400))일"
+    }
+
+    /// 토큰 수 축약("196.6억") — 좁은 위젯 칸 전용. 앱 카드와 **같은 함수**를 거친다.
+    package static func tokens(_ value: Int) -> String {
+        TokenNumberFormatter.compactKorean(value)
+    }
+}
+
 // MARK: - 타임라인 계획
 
 /// 15분 타임라인(SPEC-ios §4). 칸은 1분 간격 16개 — "N분 전"과 세는 시간·링이 분마다 맞는다.
@@ -426,7 +600,22 @@ package enum AingWidgetSamples {
                 .init(id: "8D3F2D8E-1B4E-4B7A-9E0B-3E8E2A6D2C14", title: "점심 전에 PR 올리기", isCompleted: true, carryOverDays: 0),
                 .init(id: "9E4F2D8E-1B4E-4B7A-9E0B-3E8E2A6D2C15", title: "온보딩 문서 링크 모으기", isCompleted: false, carryOverDays: 9),
             ],
-            characterID: "fox"
+            characterID: "fox",
+            // AI 리밋 예시: 세 제공자가 **서로 다른 모양**이다 — Claude 는 두 창 다, Codex 는 5시간이 0%(그 경우
+            // 리셋 시각은 서버가 투영해 주는 가짜라 맥이 nil 로 접어 올린다 — 실측 §2), 안티그래비티는 주간만.
+            // 한 모양만 넣으면 갤러리 미리보기가 '다 있는 사람'의 화면만 보여 준다.
+            aiLimits: WidgetSnapshot.AILimitPanel(
+                providers: [
+                    .init(provider: "claude", fiveHourPercent: 27, fiveHourResetsAt: now.addingTimeInterval(9_300),
+                          weeklyPercent: 60, weeklyResetsAt: now.addingTimeInterval(450_000), observedAt: now.addingTimeInterval(-120)),
+                    .init(provider: "codex", fiveHourPercent: 0, fiveHourResetsAt: nil,
+                          weeklyPercent: 56, weeklyResetsAt: now.addingTimeInterval(352_000), observedAt: now.addingTimeInterval(-300)),
+                    .init(provider: "antigravity", weeklyPercent: 8, weeklyResetsAt: now.addingTimeInterval(540_000),
+                          observedAt: now.addingTimeInterval(-600)),
+                ],
+                todayTokens: 12_345_678,
+                recentTokens: 19_658_964_272
+            )
         )
     }
 }

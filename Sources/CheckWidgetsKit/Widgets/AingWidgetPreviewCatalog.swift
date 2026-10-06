@@ -41,6 +41,24 @@ public enum AingWidgetPreviewCatalog {
         ]
         var noTeam = empty
         noTeam.me = WidgetSnapshot.Me(working: false, sessionStartedAt: nil, todaySeconds: 0, weekSeconds: 0, goalHours: 0)
+        // AI 리밋: 연동 없음(받았는데 빈 목록) · 아직 못 받음(칸 자체가 없다 — 옛 스냅샷) · 리셋이 지난 낡은 값.
+        var noProviders = sample
+        noProviders.aiLimits = WidgetSnapshot.AILimitPanel(providers: [])
+        var noLimits = sample
+        noLimits.aiLimits = nil
+        var staleLimits = sample
+        staleLimits.aiLimits = WidgetSnapshot.AILimitPanel(
+            providers: [
+                // 두 시간 전 관측(맥이 자고 있었다) — 숫자가 하한이 되어 "72% 이상"으로 바뀌는지.
+                // 리셋은 그 관측에서 5시간 안이어야 한다(더 멀면 규칙이 '그 창의 리셋이 아니다'로 보고 `—` 를 준다).
+                .init(provider: "claude", fiveHourPercent: 72, fiveHourResetsAt: now.addingTimeInterval(3_600),
+                      weeklyPercent: 88, weeklyResetsAt: now.addingTimeInterval(86_400), observedAt: now.addingTimeInterval(-7_200)),
+                .init(provider: "codex", fiveHourPercent: 94, fiveHourResetsAt: now.addingTimeInterval(1_500),
+                      weeklyPercent: 31, weeklyResetsAt: now.addingTimeInterval(200_000), observedAt: now.addingTimeInterval(-90)),
+            ],
+            todayTokens: 0,
+            recentTokens: 254_000
+        )
         let entry = AingWidgetEntry(date: now, snapshot: sample)
         let emptyEntry = AingWidgetEntry(date: now, snapshot: empty)
         let manyEntry = AingWidgetEntry(date: now, snapshot: many)
@@ -59,6 +77,14 @@ public enum AingWidgetPreviewCatalog {
             item("todos-large", largeSize, AingTodoContent(entry: entry, family: .systemLarge)),
             item("todos-medium-empty", mediumSize, AingTodoContent(entry: emptyEntry, family: .systemMedium)),
             item("todos-large-empty", largeSize, AingTodoContent(entry: emptyEntry, family: .systemLarge)),
+            item("limits-small", smallSize, AingAILimitsContent(entry: entry, family: .systemSmall)),
+            item("limits-medium", mediumSize, AingAILimitsContent(entry: entry, family: .systemMedium)),
+            item("limits-large", largeSize, AingAILimitsContent(entry: entry, family: .systemLarge)),
+            item("limits-small-stale", smallSize, AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: staleLimits), family: .systemSmall)),
+            item("limits-large-stale", largeSize, AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: staleLimits), family: .systemLarge)),
+            item("limits-medium-none", mediumSize, AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: noProviders), family: .systemMedium)),
+            item("limits-medium-nodata", mediumSize, AingAILimitsContent(entry: AingWidgetEntry(date: now, snapshot: noLimits), family: .systemMedium)),
+            item("limits-medium-signedout", mediumSize, AingAILimitsContent(entry: signedOut, family: .systemMedium)),
             item("signed-out-small", smallSize, AingWorkingNowContent(entry: signedOut, family: .systemSmall)),
             item("signed-out-medium", mediumSize, AingTodoContent(entry: signedOut, family: .systemMedium)),
             item("signed-out-large", largeSize, AingTodoContent(entry: signedOut, family: .systemLarge)),

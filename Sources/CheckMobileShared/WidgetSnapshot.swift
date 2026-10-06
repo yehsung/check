@@ -25,6 +25,12 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// **읽을 때는 `resolvedCharacterID`** — 모르는 id·nil 은 아잉으로 선다. `me` 와 따로 둔다: 지금 탭이 `me` 를 통째로 갈아 끼워도
     /// 착용값이 지워지지 않게(착용값은 나 탭이 알아 오고, 쓰는 주체는 여전히 지금 탭 하나다).
     public var characterID: String?
+    /// AI 구독 리밋(v0.3.45 — 새 축). nil = 아직 못 받았다(옛 스냅샷 포함) → 리밋 위젯은 "앱을 열면 채워져요".
+    ///
+    /// ★ **`Me` 안이 아니라 최상위에 있는 이유**: `NowStore` 는 `snapshot.me == NowStore.widgetNoTeamMe`(모든 칸이 0 인 `Me`)로
+    /// '소속 없음'을 판정한다. `Me` 에 칸이 하나 늘면 그 센티넬 비교가 리밋 값에 흔들려, 소속 없는 사용자에게
+    /// "맥 앱에서 팀에 참여하면 보여요"가 새거나 반대로 안 나온다. 리밋은 팀과 아무 상관이 없으므로 **다른 칸**이다.
+    public var aiLimits: AILimitPanel?
 
     public init(
         version: Int = WidgetSnapshot.currentVersion,
@@ -32,7 +38,8 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         me: Me? = nil,
         working: [WorkingPerson] = [],
         todosPreview: [TodoPreview] = [],
-        characterID: String? = nil
+        characterID: String? = nil,
+        aiLimits: AILimitPanel? = nil
     ) {
         self.version = version
         self.generatedAt = generatedAt
@@ -40,6 +47,7 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         self.working = working
         self.todosPreview = todosPreview
         self.characterID = characterID
+        self.aiLimits = aiLimits
     }
 
     /// 위젯이 세울 캐릭터 id — 이 빌드에 초상이 없는 id·nil 은 아잉(맥 `CharacterSyncDecision` 과 같은 접기).
@@ -163,6 +171,81 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         }
     }
 
+    // MARK: - AI 리밋(v0.3.45 — 토큰 축과 다른 새 축)
+
+    /// 리밋 칸 하나(제공자 하나). **맥이 읽어 서버에 올린 숫자**를 폰이 받아 그대로 싣는다.
+    ///
+    /// ★ 담는 것은 **절대 시각**뿐이다(`resetsAt`) — "남은 초"처럼 매초 바뀌는 수를 싣으면 `WidgetSnapshotWriter` 의
+    /// 중복 제거(같은 값이면 파일·새로고침을 건드리지 않는다)가 무력화돼 60초마다 파일을 다시 쓰고 위젯 예산을 태운다.
+    /// 남은 시간은 위젯이 칸 시각으로 **투영**한다.
+    ///
+    /// ★ `provider` 가 **문자열**인 이유: 이 모듈(CheckMobileShared)은 `CheckCore` 를 링크하지 않는다(Package.swift —
+    /// 의존 0건). 열거값은 읽는 쪽(CheckWidgetsKit)이 접고, **모르는 값은 버린다**(지어내 'claude' 로 접으면 남의
+    /// 사용률이 내 Claude 줄에 그려진다 — 열거값 확장 함정).
+    public struct AILimitRow: Codable, Equatable, Sendable, Identifiable {
+        public var id: String { provider }
+        /// 서버 컬럼 값("claude" · "codex" · "antigravity").
+        public var provider: String
+        /// 5시간 창에서 **쓴** 비율 0…100. nil = 그 창이 없다(플랜·크레딧에 따라 실제로 없다 — 0 으로 지어내지 않는다).
+        public var fiveHourPercent: Double?
+        public var fiveHourResetsAt: Date?
+        public var weeklyPercent: Double?
+        public var weeklyResetsAt: Date?
+        /// 맥이 제공자에게서 값을 받은 시각. 위젯의 신선도·하한 판정이 이 값으로 선다.
+        public var observedAt: Date
+
+        public init(
+            provider: String,
+            fiveHourPercent: Double? = nil,
+            fiveHourResetsAt: Date? = nil,
+            weeklyPercent: Double? = nil,
+            weeklyResetsAt: Date? = nil,
+            observedAt: Date
+        ) {
+            self.provider = provider
+            self.fiveHourPercent = fiveHourPercent
+            self.fiveHourResetsAt = fiveHourResetsAt
+            self.weeklyPercent = weeklyPercent
+            self.weeklyResetsAt = weeklyResetsAt
+            self.observedAt = observedAt
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            provider = try c.decode(String.self, forKey: .provider)
+            observedAt = try c.decode(Date.self, forKey: .observedAt)
+            fiveHourPercent = try? c.decodeIfPresent(Double.self, forKey: .fiveHourPercent)
+            fiveHourResetsAt = try? c.decodeIfPresent(Date.self, forKey: .fiveHourResetsAt)
+            weeklyPercent = try? c.decodeIfPresent(Double.self, forKey: .weeklyPercent)
+            weeklyResetsAt = try? c.decodeIfPresent(Date.self, forKey: .weeklyResetsAt)
+        }
+    }
+
+    /// 리밋 칸 + **기존 토큰 사용량**(2026-10-07 사용자 결정: 폰·위젯은 둘을 함께 보여 준다).
+    /// 토큰 수는 리밋과 **다른 축**이다(우리가 센 누적 개수 vs 제공자가 센 창 사용률) — 한 칸에 섞지 않고 나란히 둔다.
+    public struct AILimitPanel: Codable, Equatable, Sendable {
+        /// 보일 제공자들(미연동은 폰이 이미 걸렀다). 비어 있으면 위젯은 "앱을 열면 채워져요".
+        public var providers: [AILimitRow]
+        /// 오늘(KST) 쓴 AI 토큰. nil = 모른다(수집을 껐거나 아직 못 받았다) → 위젯이 그 줄을 **그리지 않는다**(0 은 거짓이다).
+        public var todayTokens: Int?
+        /// 최근 12주 합(나 탭 잔디와 같은 창).
+        public var recentTokens: Int?
+
+        public init(providers: [AILimitRow], todayTokens: Int? = nil, recentTokens: Int? = nil) {
+            self.providers = providers
+            self.todayTokens = todayTokens
+            self.recentTokens = recentTokens
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            // 칸 하나가 깨져도 나머지 제공자를 살린다(위젯이 통째로 비는 것보다 낫다 — `working` 과 같은 규약).
+            providers = (try? c.decodeIfPresent(LossyArray<AILimitRow>.self, forKey: .providers))?.elements ?? []
+            todayTokens = (try? c.decodeIfPresent(Int.self, forKey: .todayTokens)).flatMap { $0 }.map { max(0, $0) }
+            recentTokens = (try? c.decodeIfPresent(Int.self, forKey: .recentTokens)).flatMap { $0 }.map { max(0, $0) }
+        }
+    }
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = try c.decode(Int.self, forKey: .version)
@@ -172,6 +255,9 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         working = (try? c.decodeIfPresent(LossyArray<WorkingPerson>.self, forKey: .working))?.elements ?? []
         todosPreview = (try? c.decodeIfPresent(LossyArray<TodoPreview>.self, forKey: .todosPreview))?.elements ?? []
         characterID = try? c.decodeIfPresent(String.self, forKey: .characterID)
+        // ★ 이 줄을 빼먹으면 **컴파일은 통과하고** 파일에 값이 있어도 영원히 nil 이다(멤버와이즈 왕복 테스트만으론
+        //   초록인 채 위젯에 아무것도 안 뜬다). 생 JSON 호환 테스트가 이 줄을 지킨다(`WidgetAILimitsTests`).
+        aiLimits = try? c.decodeIfPresent(AILimitPanel.self, forKey: .aiLimits)
     }
 }
 

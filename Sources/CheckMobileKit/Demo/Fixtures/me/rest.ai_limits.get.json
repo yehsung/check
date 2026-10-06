@@ -1,0 +1,38 @@
+[
+  {
+    "provider": "claude",
+    "five_hour_percent": 27,
+    "five_hour_resets_at": "2026-09-17T07:40:00.434051+00:00",
+    "weekly_percent": 60,
+    "weekly_resets_at": "2026-09-22T10:05:00+00:00",
+    "plan_label": "max",
+    "observed_at": "2026-09-17T05:03:00.128+00:00"
+  },
+  {
+    "provider": "codex",
+    "five_hour_percent": 0,
+    "five_hour_resets_at": null,
+    "weekly_percent": 56,
+    "weekly_resets_at": "2026-09-21T06:51:40+00:00",
+    "plan_label": "plus",
+    "observed_at": "2026-09-17T05:00:00+00:00"
+  },
+  {
+    "provider": "antigravity",
+    "five_hour_percent": null,
+    "five_hour_resets_at": null,
+    "weekly_percent": 8,
+    "weekly_resets_at": "2026-09-23T11:05:00+00:00",
+    "plan_label": null,
+    "observed_at": "2026-09-17T04:55:00+00:00"
+  },
+  {
+    "provider": "future-provider",
+    "five_hour_percent": 99,
+    "five_hour_resets_at": "2026-09-17T07:40:00+00:00",
+    "weekly_percent": 99,
+    "weekly_resets_at": "2026-09-22T10:05:00+00:00",
+    "plan_label": null,
+    "observed_at": "2026-09-17T05:04:00+00:00"
+  }
+]

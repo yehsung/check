@@ -64,6 +64,11 @@ struct MeHomeView: View {
                         .id(MeAnchor.records)
                     MeGrassCard(store: store)
                         .id(MeAnchor.tokenGrass)
+                    // 「AI 리밋」은 범위가 아니라 **축**으로 갈린 카드다(5시간 + 주간이 한 카드 안에 있다 — 범위 단조성에
+                    // 들어맞지 않는다). 잔디 **뒤**에 두는 까닭: 잔디까지가 '지난 기록'이고 리밋은 '지금 남은 한도'라
+                    // 시제가 바뀐다. 메뉴 그룹은 그대로 마지막이다.
+                    MeAILimitsCard(store: store)
+                        .id(MeAnchor.aiLimits)
                     MeMenuGroup(store: store)
                         .id(MeAnchor.menu)
                 }
@@ -94,6 +99,9 @@ struct MeHomeView: View {
 /// 루트 스크롤 앵커(데모 스크린샷이 아래 절을 찍을 때 쓴다).
 enum MeAnchor: String {
     case header, records, tokenGrass, characters, menu, rhythm
+    /// v0.3.45 「AI 리밋」 카드. 이름은 데모 스크린샷 명령(`-AingCheckDemoMeAnchor aiLimits`)의 인자다 — 바꾸면
+    /// 저장소 밖 스크린샷 스크립트가 깨진다(`MeDesignContractTests` 가 이름 목록을 되묻는다).
+    case aiLimits
 }
 
 // MARK: - 무대(A 09 구성)

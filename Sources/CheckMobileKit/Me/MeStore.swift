@@ -36,6 +36,10 @@ package typealias MeLoadState = RankingsLoadState
 package final class MeStore {
     @ObservationIgnored package let context: MobileContext
 
+    /// AI 구독 리밋(v0.3.45 — **토큰 축과 다른 새 축**). 자기 상태·자기 가드를 가진 작은 스토어다
+    /// (`MeAILimitsStore.swift` 머리말: 한 `recordsState` 를 공유하면 "토큰 조회가 실패하면 리밋도 사라진다"가 된다).
+    @ObservationIgnored package let aiLimits: AILimitsStore
+
     package private(set) var isTabVisible = false
 
     // MARK: 머리
@@ -165,11 +169,16 @@ package final class MeStore {
 
     package init(context: MobileContext) {
         self.context = context
+        aiLimits = AILimitsStore(context: context)
     }
 
     // MARK: - 자리 API
 
     package func appDidBecomeActive() {
+        // AI 리밋은 **탭이 보이지 않아도** 받는다 — 이 값의 소비자에 위젯이 있어서, 나 탭을 한 번도 열지 않는
+        // 사용자의 리밋 위젯이 영원히 비는 것을 막는다(GET 하나다). 로그인 직후에도 여기로 들어온다
+        // (`MobileAppModel.sessionDidSignIn` → scene 이 active 면 `activateStores()`).
+        aiLimits.refreshIfStale()
         guard isTabVisible else { return }
         refreshRootIfStale()
     }
@@ -180,6 +189,7 @@ package final class MeStore {
         for task in inflight { task.cancel() }
         inflight.removeAll()
         for key in serials.keys { serials[key, default: 0] &+= 1 }
+        aiLimits.reset()
         displayName = nil
         avatarURL = nil
         centerServerValue = nil
@@ -286,6 +296,7 @@ package final class MeStore {
         if !equippedLoaded || isStale(shopState) { launch { [weak self] in await self?.loadEquippedCharacter() } }
         if isStale(recordsState) { launch { [weak self] in await self?.loadRecords() } }
         launch { [weak self] in await self?.loadFeedbackReplyLatest() }
+        aiLimits.refreshIfStale()
     }
 
     /// **로그인 직후 한 번** 착용 캐릭터만 미리 받는다(`profiles.character` GET 하나 — 상점·기록은 건드리지 않는다).
@@ -305,7 +316,8 @@ package final class MeStore {
         async let equipped: Void = loadEquippedCharacter()
         async let records: Void = loadRecords()
         async let reply: Void = loadFeedbackReplyLatest()
-        _ = await (header, shop, equipped, records, reply)
+        async let limits: Void = aiLimits.load()
+        _ = await (header, shop, equipped, records, reply, limits)
     }
 
     // MARK: - 머리

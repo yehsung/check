@@ -179,10 +179,14 @@ package enum MobileForbiddenCalls {
         "take_pokes", "work_tick", "close_abandoned_work_sessions", "ultra_wallet_sync", "buy_ultra",
         "poke_user", "ultra_poke_user", "away_sync",
     ]
-    /// 읽기(GET) 말고는 금지인 표(근무·기기 상태·토큰 원장).
+    /// 읽기(GET) 말고는 금지인 표(근무·기기 상태·토큰 원장·AI 리밋 원장).
+    ///
+    /// `ai_limits`(v0.3.45): 올리는 쪽은 **맥 하나**다. 폰이 쓰면 자기 기기 id 로 행을 만들어 맥의 값과 다투고,
+    /// 폰은 자격증명을 읽지 않으므로 그 행에 담을 진짜 값도 없다(지어낸 숫자가 위젯·카드에 남는다).
     package static let readOnlyTables: Set<String> = [
         "work_sessions", "work_statuses", "work_status_devices",
         "token_usage_device_monthly", "token_usage_device_daily", "token_usage_monthly",
+        "ai_limits",
     ]
     /// profiles PATCH 본문에 실리면 금지인 칸(맥 빌드·집중 모드).
     package static let forbiddenProfileColumns: [String] = ["app_build", "app_version", "focus_mode"]

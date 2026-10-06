@@ -42,6 +42,11 @@ struct MeStoreTests {
         if request.path == "/rest/v1/token_usage_device_daily", request.method == "GET" {
             return .json(#"[{"day":"2026-09-16","device_id":"mac-1","claude_total":30000000,"codex_total":0,"codex_utc_total":0,"codex_account":null}]"#)
         }
+        // AI 리밋(v0.3.45 — 새 축). 루트 신선도 단언이 이 조회까지 덮는다: 성공해야 두 번째 `tabDidAppear` 가
+        // 다시 묻지 않는다(404 면 `hasFailed` 라 늘 낡은 것으로 보고 다시 묻는다 — 그 모양도 올바른 동작이다).
+        if request.path == "/rest/v1/ai_limits", request.method == "GET" {
+            return .json(#"[{"provider":"claude","five_hour_percent":27,"five_hour_resets_at":"2026-09-17T07:40:00.434051+00:00","weekly_percent":60,"weekly_resets_at":"2026-09-22T10:05:00+00:00","plan_label":"max","observed_at":"2026-09-17T05:03:00+00:00"}]"#)
+        }
         switch request.rpcName {
         case "shop_state": return .json(shopState)
         case "feedback_reply_latest": return .json(#""2026-09-16T08:00:00+00:00""#)

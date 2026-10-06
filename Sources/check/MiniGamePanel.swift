@@ -316,7 +316,10 @@ enum MiniGameSpaceKey {
     static var standaloneWindowIDs: Set<String> {
         [CheckGomokuWindowController.frameAutosaveName,
          CheckChessWindowController.frameAutosaveName,
-         CheckSettingsWindowController.frameAutosaveName]
+         CheckSettingsWindowController.frameAutosaveName,
+         // AI 리밋 창(v0.3.45). 입력칸은 없지만 **스페이스로 목록을 스크롤하는 사람이 있고**, 빠지면 미니게임
+         // 창을 띄워 둔 채 이 창에서 누른 스페이스가 게임 점프로 삼켜진다(2026-09-17 제보의 재현).
+         CheckAILimitsWindowController.frameAutosaveName]
     }
 
     /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(창 가시성)를 통과했을 때 실행되는 바로 그 클로저다 —

@@ -95,6 +95,9 @@ extension MeStore {
             recordsState.hasLoaded = true
             recordsState.hasFailed = false
             recordsState.loadedAt = context.clock.now()
+            // 위젯의 토큰 줄(리밋 위젯 L)은 이 잔디에서 나온다 — 리밋보다 늦게 도착한 토큰 값이 다음 리밋
+            // 조회(60초 뒤)까지 위젯에 안 실리지 않게 여기서 한 번 민다. 같은 값이면 쓰기 창구가 아무것도 안 한다.
+            aiLimits.pushToWidget()
         } catch {
             guard generation == context.generation, isCurrent("records", serial) else { return }
             if AuthErrorRules.classify(error) == .cancelled { return }

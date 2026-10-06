@@ -135,6 +135,13 @@ final class WorkTimerStore {
     /// 주입을 잊은 테스트가 실제 `codex app-server` 를 띄우는 일이 구조적으로 없다(realtimeTransport 의 fail-closed 와 같은 결).
     /// 업로드 래퍼(uploadTokenUsageIfNeeded(now:))가 스캔 뒤 refreshIfDue 를 부르고, 스냅샷은 업로드 본문과 내 행 툴팁에 실린다.
     let codexAccount: CodexAccountUsageStore
+    /// AI **구독 리밋** 스토어(v0.3.45 — 5시간·주간 창). 프로덕션은 CheckApp 이 `.live()` 를 넘기고,
+    /// **기본값은 무해 인스턴스**(`inert()`)다 — 주입을 잊은 테스트가 실제 키체인·`agy`·네트워크를 건드리는 일이
+    /// 구조적으로 없다(codexAccount 와 같은 fail-closed).
+    ///
+    /// ★ 위 `tokenUsage`/`codexAccount` 와는 **완전히 별개의 축**이다(퍼센트 vs 토큰 개수 · 본인만 보기 vs 순위판).
+    ///   섞이지 않는 근거는 `AILimits.swift` 머리말에 있다.
+    let aiLimits: AILimitStore
     var session: SupabaseSession?
     var sessionGeneration = 0
     /// 진행 중 세션의 ID. **불변식: 항상 정규화된(소문자) 형태다** — 대입하는 모든 경로가
@@ -327,6 +334,10 @@ final class WorkTimerStore {
                 guard let self else { return }
                 await uploadTokenUsageIfNeeded()
                 await loadMyTokenRowIfDue()
+                // 팝오버를 연 순간 리밋도 한 번 당긴다(v0.3.45). **force 지만 스토어의 5분 하한은 지킨다** —
+                // Claude 의 사용량 엔드포인트가 5분에 5회로 막기 때문에, 하한이 없으면 팝오버 여닫기만으로
+                // 사용자 계정이 5분간 429 에 잠긴다(실측 2026-10-07).
+                await refreshAILimitsIfNeeded(force: true)
             }
         } else {
             // 회고 배너는 '이번 팝오버의 안내'다 — 창이 닫히면 내린다. 표시 시점에 이번 주 몫을 이미 소비했으므로
@@ -558,6 +569,9 @@ final class WorkTimerStore {
     @ObservationIgnored var tokenDailyRetryPending = false
     /// 마지막 업로드 시도 시각. 60초 스로틀 기준(난사 방지). 관찰 대상 아님.
     @ObservationIgnored var lastTokenUploadAt: Date = .distantPast
+    /// 마지막으로 **서버에 올라간** AI 리밋 행들의 지문(v0.3.45 · `AILimitUploadLedger.fingerprint`).
+    /// 같으면 보내지 않는다. 실패 시 갱신하지 않아 다음 주기가 재시도한다. 관찰 대상 아님.
+    @ObservationIgnored var lastUploadedAILimits: String?
     /// 마지막 **배경** 토큰 스캔 시각(팝오버가 닫힌 근무 중에 도는 저빈도 경로, refreshTokenUsageInBackgroundIfDue).
     /// 업로드 스로틀과 따로 두는 이유: 저쪽이 재는 것은 '서버 왕복'이고 이쪽이 재는 것은 **전량 파일 순회**다 —
     /// 비싼 쪽이 이 스탬프고, 60/600초 주기의 유일한 근거다. 앱 재시작마다 초기화돼도 무해하다
@@ -1596,6 +1610,10 @@ final class WorkTimerStore {
         // ★ 기본값이 **nil** 이다(라이브 프로브가 아니라). nil 은 아래에서 무해 인스턴스로 풀린다 — 주입을 잊은 테스트가
         //   실제 `codex` 프로세스를 띄우지 않는다. 프로덕션 조립은 CheckApp 한 곳뿐이고 소스 계약 테스트가 되묻는다.
         codexAccount: CodexAccountUsageStore? = nil,
+        // ★ 기본값이 **nil** 이다(라이브 리더가 아니라). nil 은 아래에서 무해 인스턴스로 풀린다 — 주입을 잊은
+        //   테스트가 실제 키체인(`security`)·`agy`·제공자 네트워크를 건드리지 않는다. 프로덕션 조립은
+        //   CheckApp 한 곳뿐이고 소스 계약 테스트가 되묻는다.
+        aiLimits: AILimitStore? = nil,
         // ★ 기본값이 **nil** 이다(라이브 전송자가 아니라). 이 저장소는 기본값이 라이브라서 스텁 주입을
         //   잊은 테스트가 실네트워크로 새어 나간 188초짜리 플레이키를 겪었다 — 그 종을 구조적으로 봉한다.
         //   여기서는 주입을 잊으면 소켓이 **아예 안 열린다**(fail-closed). 프로덕션 조립은 CheckApp 한 곳뿐이고,
@@ -1614,6 +1632,7 @@ final class WorkTimerStore {
         self.tokenVault = resolvedVault
         self.tokenUsage = tokenUsage
         self.codexAccount = codexAccount ?? CodexAccountUsageStore.inert()
+        self.aiLimits = aiLimits ?? AILimitStore.inert()
         milestoneTracker = MilestoneTracker(defaults: defaults)
         hasAnonKey = SupabaseConfig.anonKey(environment: environment) != nil
         email = defaults.string(forKey: Self.emailKey) ?? ""
@@ -2998,6 +3017,13 @@ final class WorkTimerStore {
                     await self?.uploadTokenUsageIfNeeded()
                 } else {
                     await self?.refreshTokenUsageInBackgroundIfDue()
+                }
+                // AI 구독 리밋(v0.3.45). 팝오버가 열려 있거나 **근무 중**일 때만 돈다 — 주기(10분)는 스토어가 쥔다.
+                // 근무 밖에 팝오버도 닫혀 있으면 그 숫자를 보는 사람이 없으므로 프로세스(`security`·`agy`)를 띄우지 않는다.
+                // 토큰 축과 **다른 게이트**인 이유: 저쪽은 '남에게 보이는 순위판'이라 수집 설정을 기다리지만(그 주석 참고),
+                // 리밋은 본인만 보기(RLS)이고 순위판 RPC 가 그 표를 읽지 않는다(WorkTimerStoreAILimits.swift 머리말).
+                if self?.isMenuPresented == true || self?.snapshot.isWorking == true {
+                    await self?.refreshAILimitsIfNeeded()
                 }
                 // 깨움 게이트가 미뤄 둔 리얼타임 `.didWake` 는 **본문이 끝난 여기**서 넣는다(M7) — 팀 상태 반영·되맞춤 뒤라야
                 // 잠자기 정정으로 방금 닫힌 세션에 대고 조인했다가 곧바로 끊는 헛왕복이 없고, 본문의 마지막 요청 뒤라야

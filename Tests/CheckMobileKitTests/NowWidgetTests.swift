@@ -116,7 +116,9 @@ import Testing
         #expect(dates.count == 16 && dates.first == Self.now && dates.last == Self.now.addingTimeInterval(900))
         #expect(zip(dates, dates.dropFirst()).allSatisfy { $1.timeIntervalSince($0) == 60 })
         #expect(AingWidgetTimelinePlan.nextReload(now: Self.now) == Self.now.addingTimeInterval(900))
-        #expect(Set(AingWidgetKind.all).count == 3)
+        // v0.3.45: 전용 「AI 리밋」 위젯이 늘어 3 → 4. kind 는 홈 화면에 둔 위젯의 신원이라 **고치면 사라진다** —
+        // 늘리는 것만 한다(이 숫자는 그 규칙을 지키는 자리다).
+        #expect(Set(AingWidgetKind.all).count == 4)
     }
 
     @Test("위젯 색 표는 앱 토큰(MobileThemePalette)을 위젯 바탕에 겹친 값과 같다")

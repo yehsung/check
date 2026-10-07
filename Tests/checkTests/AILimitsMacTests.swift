@@ -873,8 +873,11 @@ struct AILimitsMacStoreTests {
         #expect(reborn.bundle?.provider(.claude)?.window(.fiveHour)?.usedPercent == 42)
         #expect(reborn.bundle?.provider(.claude)?.window(.weekly)?.usedPercent == 71)
         #expect(reborn.isAvailable == true)
-        // 아직 한 번도 안 돌았으므로 바로 갱신해도 된다.
-        #expect(reborn.isDue(now: amNow) == true)
+        // ★ 간격은 **재시작을 넘어 산다.** 방금(amNow) 시도한 장부가 디스크에 남아 있으므로 바로는 안 된다 —
+        //   안 그러면 앱을 몇 번 켜는 것만으로 Claude 의 5분/5회 상한을 넘겨 사용자 계정이 잠긴다
+        //   (`AILimitStore` 머리말 ★). 주기(600초)가 지나면 다시 열린다.
+        #expect(reborn.isDue(now: amNow) == false)
+        #expect(reborn.isDue(now: amNow.addingTimeInterval(601)) == true)
     }
 
     /// **새로 읽은 값이 통째로 이긴다** — 리셋을 지난 창은 값이 내려가는 것이 정답이다.
@@ -1090,37 +1093,62 @@ struct AILimitsMacUploadTests {
         #expect(SupabaseWorkService.aiLimitsPath == "/rest/v1/ai_limits")
     }
 
-    /// 장부 지문은 `observedAt` 을 **안 본다**(보면 게이트가 영원히 참이다).
-    @Test
-    func uploadLedgerIgnoresObservedAt() {
-        let early = AILimitSnapshotBundle(providers: [snapshot(.claude, fiveHour: 27, weekly: 60, plan: "max")])
-        let later = AILimitSnapshotBundle(providers: [AILimitProviderSnapshot(
+    /// 칸 경계에 **맞춰 놓은** 관측 시각. 칸 안/밖을 결정적으로 고르기 위해서다 — amNow 가 칸 어디에
+    /// 떨어지는지에 기대면 상수를 바꾸는 날 이 테스트가 이유 없이 뜻을 잃는다.
+    private var bucketStart: Date {
+        Date(timeIntervalSince1970: Double(AILimitUploadLedger.observedBucket(amNow))
+            * AILimitUploadLedger.observedBucketSeconds)
+    }
+
+    private func claudeSnapshot(percent: Double, observedAt: Date, resetsAt: Date?) -> AILimitSnapshotBundle {
+        AILimitSnapshotBundle(providers: [AILimitProviderSnapshot(
             provider: .claude,
             windows: [
-                AILimitWindowSnapshot(window: .fiveHour, usedPercent: 27,
-                                      resetsAt: amNow.addingTimeInterval(3_600),
-                                      observedAt: amNow.addingTimeInterval(3_000), source: .local),
+                AILimitWindowSnapshot(window: .fiveHour, usedPercent: percent,
+                                      resetsAt: resetsAt, observedAt: observedAt, source: .local),
                 AILimitWindowSnapshot(window: .weekly, usedPercent: 60, resetsAt: nil,
-                                      observedAt: amNow.addingTimeInterval(3_000), source: .local)
+                                      observedAt: observedAt, source: .local)
             ],
             planLabel: "max"
         )])
-        #expect(AILimitUploadLedger.fingerprint(early) == AILimitUploadLedger.fingerprint(later),
-                "관측 시각만 달라도 재전송한다 — 변경 게이트가 없는 것과 같다")
-        // 기준선이 갈려야 위 단언이 뜻을 갖는다: 사용률이 바뀌면 지문도 바뀐다.
-        let moved = AILimitSnapshotBundle(providers: [snapshot(.claude, fiveHour: 28, weekly: 60, plan: "max")])
+    }
+
+    /// ★ 장부 지문은 **조건 둘**을 본다: 값이 바뀌었나 · 관측 시각이 한 칸 넘게 움직였나.
+    ///
+    /// 초안은 `observedAt` 을 통째로 뺐다("보면 게이트가 영원히 참이다"). 그 결과 서버 `observed_at` 이
+    /// "마지막으로 **값이 바뀐** 시각"이 됐고, 폰·위젯의 신선도 축은 그 칸 하나로 서 있어서 — 맥이 10분마다
+    /// 정상으로 읽는데 사용률이 몇 시간 그대로면 — 폰은 `60% 이상 · 4시간 전`, 같은 순간 맥 팝오버는
+    /// `60% · 방금` 이었다. 그래서 관측 시각을 **거친 칸**으로 지문에 넣는다(초 단위면 게이트가 없는 것과 같다).
+    @Test
+    func uploadLedgerResendsWhenTheObservationBucketMoves() {
+        let early = claudeSnapshot(percent: 27, observedAt: bucketStart, resetsAt: amNow.addingTimeInterval(3_600))
+        // ① 같은 칸 안에서 다시 봤다 → 보내지 않는다(게이트가 살아 있다 — 10분마다 같은 본문을 쏘지 않는다).
+        let sameBucket = claudeSnapshot(
+            percent: 27,
+            observedAt: bucketStart.addingTimeInterval(AILimitUploadLedger.observedBucketSeconds - 1),
+            resetsAt: amNow.addingTimeInterval(3_600)
+        )
+        #expect(AILimitUploadLedger.fingerprint(early) == AILimitUploadLedger.fingerprint(sameBucket),
+                "같은 칸 안의 재관측으로 재전송한다 — 변경 게이트가 없는 것과 같다")
+        // ② 칸이 넘어갔다 → **값이 같아도** 보낸다(폰의 나이 캡션이 다시 젊어져야 한다).
+        let nextBucket = claudeSnapshot(
+            percent: 27,
+            observedAt: bucketStart.addingTimeInterval(AILimitUploadLedger.observedBucketSeconds),
+            resetsAt: amNow.addingTimeInterval(3_600)
+        )
+        #expect(AILimitUploadLedger.fingerprint(early) != AILimitUploadLedger.fingerprint(nextBucket),
+                "관측이 한 칸 넘게 움직였는데 안 올린다 — 폰이 맥보다 낡아 보인다")
+        // 칸 크기는 신선도 경계보다 **넉넉히** 짧아야 한다: 10분 주기 × 칸 하나면 재전송 간격이
+        // 최대 (주기 + 칸)이고, 그게 "이상"이 붙는 경계(recentWithin)를 넘으면 맥이 켜져 있는데도 폰이 하한이 된다.
+        #expect(AILimitStore.refreshInterval + AILimitUploadLedger.observedBucketSeconds
+                < AILimitFreshnessRule.recentWithin,
+                "칸(\(AILimitUploadLedger.observedBucketSeconds)초)이 너무 크다 — 맥이 깨어 있는데 폰이 `이상`을 붙인다")
+        // 기준선이 갈려야 위 단언이 뜻을 갖는다: **같은 칸에서** 사용률만 바뀌어도 지문이 바뀐다
+        // (칸만 보는 지문으로 퇴화하면 여기서 빨개진다).
+        let moved = claudeSnapshot(percent: 28, observedAt: bucketStart, resetsAt: amNow.addingTimeInterval(3_600))
         #expect(AILimitUploadLedger.fingerprint(early) != AILimitUploadLedger.fingerprint(moved))
-        // 리셋 시각이 바뀌어도 올린다(창 경계가 움직인 것은 사용자에게 보이는 사실이다).
-        let rescheduled = AILimitSnapshotBundle(providers: [AILimitProviderSnapshot(
-            provider: .claude,
-            windows: [
-                AILimitWindowSnapshot(window: .fiveHour, usedPercent: 27,
-                                      resetsAt: amNow.addingTimeInterval(7_200),
-                                      observedAt: amNow, source: .local),
-                AILimitWindowSnapshot(window: .weekly, usedPercent: 60, resetsAt: nil, observedAt: amNow, source: .local)
-            ],
-            planLabel: "max"
-        )])
+        // 리셋 시각이 바뀌어도 올린다(창 경계가 움직인 것은 사용자에게 보이는 사실이다) — 역시 같은 칸에서.
+        let rescheduled = claudeSnapshot(percent: 27, observedAt: bucketStart, resetsAt: amNow.addingTimeInterval(7_200))
         #expect(AILimitUploadLedger.fingerprint(early) != AILimitUploadLedger.fingerprint(rescheduled))
     }
 
@@ -1208,8 +1236,11 @@ struct AILimitsMacWidthTests {
         let name = width("안티그래비티")
         let big = ("100% 이상" as NSString)
             .size(withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 22, weight: .bold)]).width
-        // 카드 한 줄: 타일 + 간격 10 + 글 열(이름/캡션 중 넓은 쪽) + Spacer 8 + 큰 숫자.
-        let needed = tile + 10 + max(caption, name) + 8 + big
+        // v0.3.45: 큰 숫자 **앞에 창 라벨**이 선다(대표 창이 카드마다 다를 수 있어서 — `AILimitCardModel` 머리말).
+        // 가장 넓은 라벨로 잰다.
+        let label = AILimitWindow.allCases.map { width($0.displayName) }.max() ?? 0
+        // 카드 한 줄: 타일 + 간격 10 + 글 열(이름/캡션 중 넓은 쪽) + Spacer 8 + [창 라벨 + 간격 10] + 큰 숫자.
+        let needed = tile + 10 + max(caption, name) + 8 + label + 10 + big
         #expect(needed <= AILimitWindowLayout.cardInnerWidth,
                 "카드 한 줄에 \(needed)pt 가 필요한데 안쪽 폭이 \(AILimitWindowLayout.cardInnerWidth)pt 다")
         let derivedWidth: CGFloat = AILimitWindowLayout.cardInnerWidth
@@ -1317,5 +1348,178 @@ struct AILimitsMacWindowTests {
         #expect(text.contains(":"))
         #expect(text.split(separator: ":").count == 2, "\(text) 에 초가 들어 있다")
         #expect(text.hasPrefix("오전") || text.hasPrefix("오후"), "\(text) 가 한국어 꼴이 아니다")
+    }
+}
+
+// MARK: - 창 본문: 시각이 흐르면 다른 값을 그린다 (v0.3.45 P0)
+
+/// 창 **본문**의 계약. 위 `AILimitsMacWindowTests` 가 창의 수명(지연 생성·멱등 열기·재생성)을 재는 반면
+/// 이 스위트는 **그려지는 값**을 잰다 — 그 둘을 한 스위트에 섞어 두었더니 창 테스트 여섯 건이
+/// `CheckAILimitsView` 를 **한 번도 만들지 않은 채** 초록이었고, 그 사이 본문의 시각이 얼어 있었다.
+@Suite("AILimitsMac — 창 본문: 주입 시계·대표 창·단계 색")
+@MainActor
+struct AILimitsMacWindowContentTests {
+    /// 검증자가 재현한 장면 그대로의 시각들(상대 간격이 전부다).
+    private let opened = amNow                                   // 09:00Z — 창을 연다
+    private let observed = amNow.addingTimeInterval(17_400)       // 13:50Z — 스토어가 88% 를 받는다
+    private let resetsAt = amNow.addingTimeInterval(18_000)       // 14:00Z — 그 5시간 창이 0 으로 돌아간다
+    private let viewed = amNow.addingTimeInterval(21_600)         // 15:00Z — 사용자가 **같은 창**을 본다
+
+    /// 시각을 밖에서 미는 상자(뷰가 시계를 **그릴 때마다** 읽는지 재려면 값이 아니라 상자가 필요하다).
+    private final class ClockBox: @unchecked Sendable {
+        var now: Date
+        init(_ now: Date) { self.now = now }
+    }
+
+    private func store(_ outcome: AILimitReadOutcome, at: Date,
+                       function: String = #function, line: Int = #line) -> AILimitStore {
+        let name = CheckTestScratch.uniqueSuitePath(function: function, line: line)
+        let defaults = UserDefaults(suiteName: name) ?? .standard
+        defaults.removePersistentDomain(forName: name)
+        let subject = AILimitStore(defaults: defaults, clock: { at }, runner: { _ in AILimitReadOutcome() })
+        subject.apply(outcome, now: at)
+        return subject
+    }
+
+    /// 5시간 88% + 주간 60% 를 `observed` 에 받은 Claude.
+    private var claudeAt88: AILimitReadOutcome {
+        AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
+            provider: .claude,
+            windows: [
+                AILimitWindowSnapshot(window: .fiveHour, usedPercent: 88, resetsAt: resetsAt,
+                                      observedAt: observed, source: .local),
+                AILimitWindowSnapshot(window: .weekly, usedPercent: 60,
+                                      resetsAt: observed.addingTimeInterval(86_400),
+                                      observedAt: observed, source: .local)
+            ],
+            planLabel: "max"
+        ))])
+    }
+
+    /// ★★ **P0**: 창은 한 번 만들어 캐시되고 닫아도 파괴되지 않는다. 그 창이 **지금** 시각으로 그리는가.
+    ///
+    /// 재현(검증자 실측): 09:00Z 에 창을 연다 → 13:50Z 에 스토어가 5시간 88% · 리셋 14:00Z 를 받는다 →
+    /// 15:00Z 에 같은 창을 본다. 초안은 `var now: Date = Date()` 가 **창을 만든 한 번**에 얼어서
+    /// `88% · 방금` 을 그렸다. 맞는 값은 `0% · 초기화됨 · 확인 못 함` 이다 — 리셋이 한 시간 전에 지났는데
+    /// 사용자는 "88% 썼다"를 보고 작업을 멈춘다.
+    @Test
+    func theWindowBodyReadsTheClockOnEveryDraw() throws {
+        let subject = store(claudeAt88, at: observed)
+        let clock = ClockBox(opened)
+        // 창을 만든 시각은 `opened` 다 — 그때 스토어는 아직 아무것도 모른다.
+        let view = CheckAILimitsView(store: subject, clock: { clock.now })
+        clock.now = opened
+        #expect(view.cards.isEmpty == false, "전제: 스토어에 Claude 카드가 있다")
+
+        // ① 방금 받은 값을 보는 순간: 등호로 88%.
+        clock.now = observed.addingTimeInterval(30)
+        let fresh = try #require(view.cards.first)
+        #expect(fresh.headValueText == "88%")
+        #expect(fresh.head?.floorOnly == false)
+        #expect(view.summaryCaption == "방금")
+
+        // ② 같은 뷰, 시각만 흘렀다(리셋 + 유예를 지났고 그 뒤로 30분 넘게 아무것도 못 봤다).
+        clock.now = viewed
+        let later = try #require(view.cards.first)
+        #expect(later.headValueText == "0%", "리셋이 지난 창을 \(later.headValueText) 로 그린다 — 창의 시각이 얼었다")
+        #expect(later.headCaption == "초기화됨 · 확인 못 함")
+        #expect(later.head?.percent == 0, "바가 옛 길이로 남았다")
+        // 머리글의 나이 캡션도 같이 늙는다(주간 창이 말한다 — 그쪽은 리셋을 주장하지 않는다).
+        #expect(view.summaryCaption == "1시간 전")
+    }
+
+    /// 시계는 **값이 아니라 클로저**이고 본문은 분마다 다시 그려진다(소스 계약).
+    ///
+    /// 위 테스트는 "흐르면 다른 값"을 재지만, 창이 **스스로** 다시 그리지 않으면 사용자는 그 다른 값을
+    /// 보지 못한다(스토어가 갱신될 때까지 body 가 재평가되지 않는다). 그 틱은 값으로 잴 수 없으므로 소스로 잰다.
+    @Test
+    func theWindowTicksEveryMinuteAndHoldsNoFrozenDate() throws {
+        let code = V0317ShopTests.stripped(try V0317ShopTests.source("CheckAILimitsWindow.swift"))
+        #expect(!code.contains("var now: Date = Date()"),
+                "기본 인자로 돌아갔다 — 그 한 번의 평가가 창 수명 내내 얼어붙는다(P0)")
+        #expect(code.contains("let clock: () -> Date"), "시각을 값으로 받는다 — 팝오버 한 줄과 모양이 갈린다")
+        #expect(code.contains("TimelineView(.periodic(from: clock(), by: Self.tickSeconds))"),
+                "분 틱이 없다 — 창이 떠 있는 동안 캡션·리셋이 멈춘다")
+        #expect(CheckAILimitsView.tickSeconds == 60)
+        #expect(CheckAILimitsView.tickSeconds < AILimitFreshnessRule.clockSkewTolerance,
+                "틱이 리셋 유예보다 길다 — 리셋이 한 틱 안에 드러나지 않는다")
+        #expect(code.contains("CheckAILimitsView(store: store, clock: { Date() })"),
+                "기본 배선이 시계를 클로저로 넣지 않는다")
+        // 창 파일에서 `Date()` 를 읽는 자리는 **그 기본 배선 한 곳**뿐이다(본문·카드는 전부 주입을 쓴다).
+        #expect(code.components(separatedBy: "Date()").count - 1 == 1,
+                "창 파일이 `Date()` 를 \(code.components(separatedBy: "Date()").count - 1) 곳에서 읽는다")
+    }
+
+    /// ★ 머리 숫자는 **보이는 창**을 따라간다 — `.fiveHour` 를 무조건 머리로 쓰지 않는다.
+    ///
+    /// 5시간 창이 없는 계정(요금제·그룹 구성에 따라 주간만 온다)에서 초안 카드는 큰 글자에 `—`,
+    /// 캡션에 `알 수 없음` 을 그리고 주간 42% 는 얇은 줄로만 남았다. 같은 데이터로 폰은 머리 줄을 안 그리고
+    /// 위젯은 주간을 대표로 올린다 — 세 화면이 같은 숫자를 다르게 말한 것이다.
+    @Test
+    func theHeadNumberFollowsTheVisibleWindow() throws {
+        let weeklyOnly = AILimitReadOutcome(results: [.antigravity: .success(AILimitProviderSnapshot(
+            provider: .antigravity,
+            windows: [AILimitWindowSnapshot(window: .weekly, usedPercent: 42,
+                                            resetsAt: amNow.addingTimeInterval(86_400),
+                                            observedAt: amNow, source: .local)]
+        ))])
+        let subject = store(weeklyOnly, at: amNow)
+        let card = try #require(AILimitCardModel.all(store: subject, now: amNow).first)
+        #expect(card.headValueText == "42%", "주간만 오는 계정의 머리 숫자가 \(card.headValueText) 다")
+        #expect(card.headValueText != AILimitFreshnessRule.unknownValueText)
+        #expect(card.headWindowLabel == AILimitWindow.weekly.displayName,
+                "대표 창이 주간인데 라벨이 \(card.headWindowLabel ?? "없음") 다 — 옆 카드의 5시간과 같은 창으로 읽힌다")
+        #expect(card.rest.isEmpty, "같은 값을 카드에 두 번 그린다")
+        #expect(card.headCaption != AILimitCardModel.unknownCaption)
+
+        // 기준선: 두 창이 다 있으면 머리는 **5시간**이고 주간은 아래 줄로 내려간다(선택 규칙이 고정이 아니다).
+        let both = store(claudeAt88, at: observed)
+        let full = try #require(AILimitCardModel.all(store: both, now: observed).first)
+        #expect(full.headValueText == "88%")
+        #expect(full.headWindowLabel == AILimitWindow.fiveHour.displayName)
+        #expect(full.rest.map(\.window) == [.weekly])
+        #expect(full.rest.first?.valueText == "60%")
+        #expect(full.planLabel == "max")
+    }
+
+    /// 창이 하나도 없는 카드(만료만 아는 제공자)는 숫자를 **지어내지 않는다** — `—` · `알 수 없음` + 안내 한 줄.
+    @Test
+    func aProviderWeCannotReadShowsNoNumber() throws {
+        let expired = AILimitReadOutcome(results: [.claude: .failure(AILimitReadError(.expired))])
+        let subject = store(expired, at: amNow)
+        let card = try #require(AILimitCardModel.all(store: subject, now: amNow).first)
+        #expect(card.windows.isEmpty && card.head == nil)
+        #expect(card.headValueText == AILimitFreshnessRule.unknownValueText, "0% 를 지어냈다")
+        #expect(card.headCaption == AILimitCardModel.unknownCaption)
+        #expect(card.headWindowLabel == nil)
+        #expect(card.notice == "클로드 코드를 한 번 실행해 주세요")
+    }
+
+    /// ★ 단계 색과 숫자가 **같은 눈금**을 쓴다(반올림한 정수).
+    ///
+    /// 초안은 클램프도 안 된 날것 double 로 90 을 갈랐다 — 89.5% 는 규칙이 `90%` 라고 **적는데** 색은 평온한
+    /// 강조색이었다. 한 자리에서 글자와 색이 다른 단계를 말한 셈이다.
+    @Test
+    func theTintUsesTheSameRoundedScaleAsTheNumber() {
+        #expect(AILimitFreshnessRule.wholePercent(89.5) == 90, "전제: 규칙은 89.5 를 90% 로 적는다")
+        #expect(AILimitBar.tint(for: 89.5) == CheckTheme.danger, "글자는 90% 인데 색은 경고 단계가 아니다")
+        #expect(AILimitFreshnessRule.wholePercent(69.5) == 70, "전제")
+        #expect(AILimitBar.tint(for: 69.5) == CheckTheme.pending)
+        // 아래쪽 경계도 함께 잰다(둘 중 하나만 재면 `>=` 를 `>` 로 바꿔도 초록이다).
+        #expect(AILimitBar.tint(for: 89.4) == CheckTheme.pending)
+        #expect(AILimitBar.tint(for: 69.4) == CheckTheme.accent)
+        // 전 구간: 글자의 수와 색의 단계가 **언제나** 같은 편이다.
+        for step in 0...400 {
+            let raw = Double(step) * 0.25
+            let whole = AILimitFreshnessRule.wholePercent(raw)
+            let expected = whole >= AILimitBar.dangerPercent
+                ? CheckTheme.danger
+                : (whole >= AILimitBar.warnPercent ? CheckTheme.pending : CheckTheme.accent)
+            #expect(AILimitBar.tint(for: raw) == expected, "\(raw) → 글자 \(whole)% 인데 색이 다른 단계다")
+        }
+        // 범위 밖·비유한값도 규칙을 거친다(바가 트랙을 뚫지 않는 것과 같은 자리).
+        #expect(AILimitBar.tint(for: 140) == CheckTheme.danger)
+        #expect(AILimitBar.tint(for: .nan) == CheckTheme.accent, "NaN 이 색 단계를 흔든다")
+        #expect(AILimitBar.tint(for: nil) == CheckTheme.secondaryText)
     }
 }

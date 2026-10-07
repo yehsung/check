@@ -280,7 +280,8 @@ Claude(`utilization`)·Codex(`used_percent`) 와 **부호가 반대다.** 한 �
 
 세 마크는 `viewBox="0 0 100 100"` 의 **단일 path, 단색 실루엣**이라 SwiftUI `Path` 로 그린다.
 출처는 CodexBar(by Peter Steinberger, **MIT License**, github.com/steipete/CodexBar) 의
-`ProviderIcon-{claude,codex,antigravity}.svg` 다 — 재배포 조건이 MIT 이므로 출처 표기를 지운다.
+`ProviderIcon-{claude,codex,antigravity}.svg` 다 — **MIT 는 재배포본에 저작권·라이선스 표기를 유지할 것을
+요구한다.** 그래서 출처 한 줄을 코드에 **남긴다**(`Sources/CheckCore/AIProviderLogo.swift` 머리말). 지우면 위반이다.
 
 이미지 파일로 가면 안 되는 **구조적 이유**: 이 저장소에는 맥·폰·위젯 세 타깃이 공유하는 리소스 경로가 **없다**
 (CheckCore 리소스 선언 0건, 맥은 CheckMobileShared 를 링크하지 않는다). 이미지로 하면 캐릭터 아트처럼

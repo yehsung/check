@@ -576,6 +576,44 @@ package enum AingWidgetTimelinePlan {
     }
 }
 
+/// 「AI 리밋」 위젯**만의** 타임라인. 다른 세 위젯의 계획(`AingWidgetTimelinePlan`)은 **건드리지 않는다.**
+///
+/// ## 왜 리밋만 다른가 (2026-10-07 실증한 P1)
+/// 리밋의 열화(30분 넘으면 하한 + "이상", 리셋 뒤 0%)는 **엔트리 시각이 흘러야만** 일어난다 — 규칙은 순수
+/// 함수고 `now` 는 칸이 준다. 그런데 지평이 15분이면 마지막 칸이 '스냅샷 나이 + 15분'에서 멈춘다. 위젯이
+/// 새로고침 예산을 다 쓴 날(시스템이 재적재를 안 줄 때) 그 마지막 칸이 **그대로 남아** 2시간이 지나도
+/// `.recent` 등급으로 `27%` 를 **등호로** 그린다. 헤더의 "N분 전"도 같이 얼어 낡음을 알릴 수단마저 멈춘다.
+///
+/// 다른 세 위젯은 이 함정을 안 밟는다: 그들이 그리는 것은 '우리 서버가 센 사실'(근무 중 인원 · 오늘 시간 ·
+/// 할 일)이라 늦게 반영되어도 **그 시각의 참**이다. 리밋은 **원격 자원의 현재값**을 등호로 단정하는 자리라
+/// 같은 지평을 물려받으면 안 된다.
+///
+/// 그래서 지평 **밖** 칸을 함께 깐다. 재적재가 한 번도 안 와도 규칙이 스스로 하한으로 떨어지고, 캡션이 늙고,
+/// 리셋을 지난 창은 0% 로 간다. 칸은 공짜다 — 새로고침 예산은 **타임라인 요청 수**에 걸리지 칸 수에 걸리지 않는다.
+package enum AingWidgetLimitsTimelinePlan {
+    /// 지평 안쪽(분 단위)과 재적재 요청 주기는 다른 위젯과 **같다** — "N분 전"이 분마다 맞아야 한다.
+    package static let refreshInterval = AingWidgetTimelinePlan.refreshInterval
+    package static let entryStep = AingWidgetTimelinePlan.entryStep
+
+    /// 지평 밖 칸(초). 고른 자리는 규칙의 **경계**들이다:
+    ///  · 1800 = `recentWithin` — 여기서 숫자가 하한이 되고 "이상"이 붙는다(가장 중요한 한 칸).
+    ///  · 3600 · 7200 · 14400 · 28800 — 캡션의 "N시간 전"이 계속 늙는다.
+    ///  · 86460 = `staleWithin` + 1분 — `.ancient` 로 넘어가 캡션 단위가 '일'로 바뀐다.
+    /// 더 멀리는 깔지 않는다: 하루를 넘겼으면 그 뒤로 더 늙어도 사용자가 읽는 뜻("아주 오래된 하한")이 같다.
+    package static let farEntryOffsets: [TimeInterval] = [1_800, 3_600, 7_200, 14_400, 28_800, 86_460]
+
+    /// 칸들: 지평 안쪽 1분 간격 + 지평 밖 꼬리.
+    package static func entryDates(now: Date) -> [Date] {
+        AingWidgetTimelinePlan.entryDates(now: now) + farEntryOffsets.map { now.addingTimeInterval($0) }
+    }
+
+    /// 재적재 요청 시각은 다른 위젯과 같다(지평 밖 칸은 **보험**이지 새 주기가 아니다 — 시스템이 예산을 주면
+    /// 15분 뒤에 새 스냅샷으로 다시 깔린다).
+    package static func nextReload(now: Date) -> Date {
+        AingWidgetTimelinePlan.nextReload(now: now)
+    }
+}
+
 // MARK: - 예시 데이터(갤러리 미리보기 · 자리 표시)
 
 /// 지어낸 예시(실사용자 이름 아님) — 시안 B 위젯 보드와 같은 장면.

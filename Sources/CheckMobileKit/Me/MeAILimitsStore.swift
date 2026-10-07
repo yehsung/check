@@ -65,6 +65,14 @@ package final class AILimitsStore {
     /// 루트가 낡았다고 보는 초(나 탭과 같은 값 — 같은 화면의 두 덩어리가 다른 신선도를 갖지 않게).
     package nonisolated static let staleSeconds: TimeInterval = MeStore.staleSeconds
 
+    /// 이보다 오래된 `observed_at` 행은 **유령**으로 보고 목록에서 숨긴다(3일).
+    ///
+    /// 값의 근거: 맥이 켜져 있으면 10분마다 올라오므로 산 제공자는 몇 분을 안 넘는다. 3일은 그 사이에 들어갈
+    /// 수 있는 가장 긴 정상 공백(주말 내내 맥을 끈 사람)보다 **짧지 않게**, 그러나 "쓰지 않게 된 도구"를
+    /// 영원히 들고 있지 않을 만큼은 **짧게** 잡은 값이다. 어느 쪽으로 틀려도 손해가 비대칭이 아니라서
+    /// (숨겨도 맥을 켜면 10분 안에 돌아오고, 남겨도 나이 캡션이 "3일 전"으로 말한다) 한 상수로 둔다.
+    package nonisolated static let ghostRowAge: TimeInterval = 3 * 86_400
+
     @ObservationIgnored private var serial = 0
     @ObservationIgnored private var inflight: Task<Void, Never>?
     /// 이 값을 받은 계정. 계정이 바뀌면 들고 있던 묶음을 버린다.
@@ -141,11 +149,24 @@ package final class AILimitsStore {
     /// 다를 수 있고, 섞으면 "어느 쪽 리셋 시각인지" 가 사라진다. 사용률 자체는 같은 계정이면 같은 장부다.
     ///
     /// 버리는 것: **모르는 제공자**(서버가 네 번째를 더하는 날 구버전 앱이 조용히 'claude' 로 접으면 남의
-    /// 사용률이 내 Claude 카드에 그려진다) · **창이 하나도 없는 행**(퍼센트가 둘 다 null — 올릴 말이 없던 행이다).
+    /// 사용률이 내 Claude 카드에 그려진다) · **창이 하나도 없는 행**(퍼센트가 둘 다 null — 올릴 말이 없던 행이다)
+    /// · **유령 행**(아래).
+    ///
+    /// ## 유령 행을 숨긴다 (2026-10-07 실증한 P2)
+    /// 맥에서 어떤 제공자를 로그아웃하면 그 제공자는 업로드에서 **빠질 뿐**이다. 서버에는 DELETE 권한도 정리
+    /// cron 도 없어서(마이그레이션 §5) 그 행이 영원히 남는다. 그러면 폰·위젯은 그 줄을 계속 그리고, 시간이
+    /// 지나면 리셋 시각을 지나 `0% · 초기화됨` 으로 **굳는다** — 쓰지도 않는 제공자가 "한도를 하나도 안 썼다"로
+    /// 영구 표시되는 것이다(가장 비싼 방향의 거짓: 사용자가 그 숫자를 보고 쓸 계획을 세운다).
+    /// 서버·권한을 건드리지 않고 **읽는 쪽**에서 끊는다: `observed_at` 이 `ghostRowAge` 보다 오래된 행은
+    /// 목록에서 숨긴다. 맥이 켜져 있으면 10분마다 갱신되므로 **살아 있는 제공자는 이 문턱에 절대 닿지 않는다**
+    /// (닿는다면 그 맥은 3일 넘게 꺼져 있었고, 그때 그 숫자는 어차피 아무 말도 못 한다).
     package static func bundle(from rows: [AILimitFetchedRow], now: Date) -> AILimitSnapshotBundle {
         var newest: [AILimitProvider: AILimitFetchedRow] = [:]
         for row in rows {
             guard let provider = AILimitProvider(rawValue: row.provider) else { continue }
+            // 유령 행 숨기기. **미래 시각은 여기서 버리지 않는다** — 기기 시계가 어긋난 경우이고, 그 판정은
+            // 코어 규칙이 이미 한다(유예를 넘는 미래 관측은 `unknown`). 여기서 재는 것은 '너무 오래됐나' 하나다.
+            if now.timeIntervalSince(row.observedAt) >= ghostRowAge { continue }
             if let held = newest[provider], held.observedAt >= row.observedAt { continue }
             newest[provider] = row
         }

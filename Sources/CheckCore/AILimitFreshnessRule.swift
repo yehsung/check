@@ -27,6 +27,9 @@ import Foundation
 //  ③ **리셋 뒤 '다음 경계'를 창 길이로 추정하지 않는다.** Claude 주간은 월요일 12:00 KST 고정이고
 //     Codex 주간은 계정별 롤링 앵커다(실측). 창 길이를 더해 다음 경계를 만들면 계정마다 몇 시간씩 틀린
 //     시각을 단정한다. 리셋 뒤 등급은 `now - resetsAt` **하나로만** 잰다.
+//  ④ **관측 시각이 유예를 넘겨 미래면 '모른다'로 떨어진다.** 맥 시계가 3시간 빠른 채로 올린 숫자를
+//     음수 경과 → 0 으로 접으면, 폰이 3시간 묵은 값을 "방금"이라고 **등호로** 단정한다. 반대쪽 모순
+//     (`resetsAt < observedAt`)은 이미 `unknown` 인데 이쪽만 봐주면 더 비싼 거짓을 통과시킨다.
 //
 // ## 규약
 //  · `Date()` 를 부르지 않는다. `now` 는 전부 인자다(테스트가 모든 경계를 실증할 수 있어야 한다).
@@ -34,6 +37,8 @@ import Foundation
 //    네 벌째를 만들면 화면마다 '방금'의 경계가 갈린다.
 //  · 값 · 캡션 · 표시여부가 **한 함수에서** 나온다. 스토어만 고치고 뷰는 그대로여서 테스트는 초록인데
 //    화면은 아무것도 안 바뀌는 사고를 구조로 막는다(이 저장소 관례: '클라 게이트는 짝으로 있다').
+//  · 그 안에서 **숫자와 글자는 다시 한 쌍(`AILimitValue`)에서만 나온다.** 둘을 다른 입력으로 따로 만들면
+//    바는 90% 길이인데 글자는 `0%` 인 구조체가 나온다(2026-10-07 실증 — `combine` 머리말).
 //  · 출처(`AILimitSource`)는 캡션에 **쓰지 않는다**. 모델엔 남기되 사람에게는 나이만 말한다.
 
 /// 숫자를 얼마나 믿을 수 있는가. **캡션 문구와 1:1 이다** — 등급이 늘면 문구도 반드시 늘어난다.
@@ -62,6 +67,24 @@ package enum AILimitFreshness: String, Equatable, Sendable {
     package var isResetClaim: Bool {
         self == .reset || self == .resetUnverified
     }
+}
+
+/// 숫자 · 글자 · "이상" 깃발을 **한 자리에서 같이** 만든 한 쌍. 이 셋을 따로 만들 길을 없애는 것이 이 타입의
+/// 전부다.
+///
+/// 왜 타입을 하나 더 두는가 — 2026-10-07 실증: `combine` 이 `percent 90` 과 `valueText "0%"` 를 **같은
+/// 구조체에** 담아 내보냈다. 바는 90% 길이인데 글자는 `0%` 였다. 원인은 둘을 **다른 입력**으로 따로 만든 것이다
+/// (숫자는 하한의 max 로, 글자는 *캡션을 정한 다른 기여자*의 리셋 여부로). 소비자 둘이 글자를 그리고
+/// 하나가 바를 그리니, 같은 화면이 두 가지 사실을 말했다.
+/// 그래서 입구를 하나로 줄인다 — `AILimitFreshnessRule.value(percent:floorOnly:isResetClaim:)` 를 거치지 않고
+/// 숫자나 글자를 만들 길이 없으면 그 모순은 **구조적으로** 다시 못 생긴다.
+package struct AILimitValue: Equatable, Sendable {
+    /// 바·링을 채울 0…100(비유한값은 0으로 접힌다 — `text` 와 같은 답을 내야 한다).
+    package let percent: Double
+    /// `27%` · `27% 이상` · `0%`. **`percent` 를 반올림한 수와 반드시 같은 수**를 담는다.
+    package let text: String
+    /// 글자에 "이상"이 붙었는가. 색·경고 판정이 이 깃발을 보므로 글자와 갈리면 `0%` 를 하한으로 칠한다.
+    package let floorOnly: Bool
 }
 
 /// 한 자리(카드의 한 줄 · 메뉴바 요약 · 위젯 칸)가 **그대로 그릴 것**. 값·캡션·표시여부가 전부 여기 있다.
@@ -149,17 +172,31 @@ package enum AILimitFreshnessRule {
     ///
     /// 순서대로:
     ///  1. 스냅샷이 없다 → `unknown`, 안 보임.
-    ///  2. 건전성: 리셋 시각이 관측 시각보다 **과거**다 → 모순이다(관측한 뒤에 리셋이 올 수는 있어도
+    ///  2. 건전성: 관측 시각이 **유예를 넘겨 미래**다 → 기기 시계가 어긋났다 → `unknown`.
+    ///  3. 건전성: 리셋 시각이 관측 시각보다 **과거**다 → 모순이다(관측한 뒤에 리셋이 올 수는 있어도
     ///     관측 전에 올 수는 없다 — 그러면 그 값은 이미 리셋 뒤 값이어야 한다) → `unknown`.
-    ///  3. 건전성: 리셋이 관측보다 **창 길이 + 허용오차**보다 멀다 → 그 창 종류의 리셋이 아니다 → `unknown`.
-    ///  4. 리셋 주장 여부(함정 ①②): `usedPercent > 0` 이고 리셋 시각을 알고 now ≥ 리셋 + 유예.
-    ///  5. 주장하면 floor = 0 · 나이 기준점 = 리셋 시각(함정 ③). 아니면 floor = clamp(사용률) · 기준점 = 관측 시각.
-    ///  6. 등급 → 캡션 → 숫자 문구.
+    ///  4. 건전성: 리셋이 관측보다 **창 길이 + 허용오차**보다 멀다 → 그 창 종류의 리셋이 아니다 → `unknown`.
+    ///  5. 리셋 주장 여부(함정 ①②): `usedPercent > 0` 이고 리셋 시각을 알고 now ≥ 리셋 + 유예.
+    ///  6. 주장하면 floor = 0 · 나이 기준점 = 리셋 시각(함정 ③). 아니면 floor = clamp(사용률) · 기준점 = 관측 시각.
+    ///  7. 등급 → 캡션 → **숫자와 글자를 한 쌍으로**(`value`).
     package static func display(_ snapshot: AILimitWindowSnapshot?, now: Date) -> AILimitDisplay {
         guard let snapshot else { return unknownDisplay(isVisible: false, provider: nil, window: nil, source: nil) }
 
+        // ② 관측 시각이 미래다. 유예(`clockSkewTolerance`) 안쪽은 기기 시계의 떨림이니 나이를 0 으로 접고
+        //    '방금'으로 말한다. 넘으면 **모른다** — 맥 시계가 3시간 빠른 날, 폰은 3시간 묵은 숫자를 "방금"이라고
+        //    **등호로** 단정하게 된다(하한도 아니고 등호다). 반대쪽 모순(`resetsAt < observedAt`)은 이미
+        //    `unknown` 으로 떨어뜨리는데 이쪽만 봐주면 더 비싼 거짓을 통과시키는 셈이다.
+        if snapshot.observedAt.timeIntervalSince(now) > clockSkewTolerance {
+            return unknownDisplay(
+                isVisible: true,
+                provider: nil,
+                window: snapshot.window,
+                source: snapshot.source
+            )
+        }
+
         if let resetsAt = snapshot.resetsAt {
-            // ② 리셋이 관측보다 과거 — 기기 시계가 뒤로 갔거나 두 값이 다른 요청에서 섞였다.
+            // ③ 리셋이 관측보다 과거 — 기기 시계가 뒤로 갔거나 두 값이 다른 요청에서 섞였다.
             if resetsAt < snapshot.observedAt {
                 return unknownDisplay(
                     isVisible: true,
@@ -168,7 +205,7 @@ package enum AILimitFreshnessRule {
                     source: snapshot.source
                 )
             }
-            // ③ 이 리셋은 이 창 종류의 것이 아니다(5시간 칸에 주간 경계가 들어왔다 등).
+            // ④ 이 리셋은 이 창 종류의 것이 아니다(5시간 칸에 주간 경계가 들어왔다 등).
             if resetsAt.timeIntervalSince(snapshot.observedAt) > snapshot.window.lengthSeconds + sameWindowTolerance {
                 return unknownDisplay(
                     isVisible: true,
@@ -179,7 +216,7 @@ package enum AILimitFreshnessRule {
             }
         }
 
-        // ④ 리셋 주장. 세 조건이 **모두** 참이어야 한다.
+        // ⑤ 리셋 주장. 세 조건이 **모두** 참이어야 한다.
         //    · usedPercent > 0  — 0% 행의 reset_at 은 미끄러지는 투영이다(함정 ①).
         //    · resetsAt != nil  — 모르는 경계는 지났다고 말할 수 없다.
         //    · now ≥ resetsAt + 유예 — 이르게 0% 를 말하지 않는다(함정 ②).
@@ -188,28 +225,31 @@ package enum AILimitFreshnessRule {
             return now >= resetsAt.addingTimeInterval(clockSkewTolerance)
         }()
 
-        let floor: Double
+        let rawFloor: Double
         let reference: Date
         if resetClaimed, let resetsAt = snapshot.resetsAt {
-            floor = 0
+            rawFloor = 0
             reference = resetsAt          // 함정 ③: 다음 경계를 추정하지 않는다. 나이는 이 시각으로만.
         } else {
-            floor = min(max(snapshot.usedPercent, 0), 100)
+            rawFloor = snapshot.usedPercent
             reference = snapshot.observedAt
         }
 
-        // 기기 시계가 뒤로 갔으면(관측 시각이 미래) 음수가 나온다 → 0 으로 본다.
+        // 기기 시계가 유예 안쪽에서 앞서 있으면(관측 시각이 조금 미래) 음수가 나온다 → 0 으로 본다.
+        // 유예를 넘는 미래는 위 ② 에서 이미 `unknown` 으로 떨어졌다.
         // `FeedbackText.ageText` 도 같은 클램프를 하므로 등급과 문구가 갈리지 않는다.
         let age = max(0, now.timeIntervalSince(reference))
         let freshness = grade(age: age, resetClaimed: resetClaimed)
         let caption = captionText(freshness: freshness, reference: reference, now: now)
+        // 숫자·글자·"이상" 깃발은 **한 쌍으로** 나온다(`AILimitValue` 머리말).
+        let value = value(percent: rawFloor, floorOnly: freshness.isFloorOnly, isResetClaim: freshness.isResetClaim)
 
         return AILimitDisplay(
             isVisible: true,
-            valueText: valueText(percent: floor, freshness: freshness),
+            valueText: value.text,
             captionText: caption,
-            percent: floor,
-            floorOnly: freshness.isFloorOnly,
+            percent: value.percent,
+            floorOnly: value.floorOnly,
             freshness: freshness,
             claimAge: age,
             provider: nil,
@@ -247,8 +287,23 @@ package enum AILimitFreshnessRule {
     ///  · **하한은 max.** 여러 창·여러 제공자 중 가장 많이 쓴 쪽이 먼저 막는 벽이다. 평균을 내면
     ///    한 제공자가 99% 인데 "50%" 라고 말한다 — 가장 비싼 거짓이다.
     ///  · **캡션은 claimAge 가 가장 큰 행 것.** 조합값의 신뢰도는 가장 낡은 기여자가 정한다.
-    ///  · **"이상"은 기여자 중 하나라도 하한이면 붙는다.** 그래야 숫자와 캡션이 같은 이야기를 한다.
+    ///    단 그 비교는 **숫자를 만든 집합(아래 `speaking`) 안에서만** 한다.
+    ///  · **"이상"은 그 집합의 기여자 중 하나라도 하한이면 붙는다.** 그래야 숫자와 캡션이 같은 이야기를 한다.
     ///  · `unknown` 기여자는 하한을 올리지도 내리지도 않는다('모른다'는 0 이 아니다). 전부 unknown 이면 unknown.
+    ///
+    /// ## 리셋을 주장하는 기여자는 **혼자일 때만** 숫자를 0 으로 만든다
+    /// 2026-10-07 실증한 결함: Claude 5시간 90%(5분 전 관측) + Codex 5시간 40%(2시간 전 관측, 리셋 90분 전
+    /// 지남) 을 합치면 `percent 90` · `valueText "0%"` 가 **같은 구조체에서** 나왔다. 리셋 주장은 `percent` 를
+    /// 0 으로 보태는 기여자일 뿐인데, 글자 쪽만 *캡션을 정한 그 행이 리셋인가*로 갈라졌기 때문이다.
+    /// 그래서 **숫자를 만드는 기여자 집합과 캡션을 정하는 기여자 집합을 같게** 두고, 그 집합에서 숫자·글자를
+    /// 한 쌍으로 뽑는다. 리셋 주장이 숫자를 0 으로 만드는 경우는 **리셋 주장만 남았을 때**뿐이다.
+    ///
+    /// ## `claimAge` 의 축이 섞이는 것도 여기서 끊는다
+    /// 리셋 주장의 `claimAge` 는 `now − resetsAt` 이고 나머지는 `now − observedAt` 이다. **서로 다른 축**이라
+    /// 한 `max` 로 견주면 "리셋 경계가 오래전이다"가 "관측이 오래됐다"를 이긴다 — 뜻이 다른 두 수를 크기로만
+    /// 비교한 것이다. 이제 비교는 같은 축 안에서만 일어난다(관측 나이끼리, 또는 전부 리셋이면 리셋 나이끼리).
+    /// 잃는 것: 리셋 행이 섞였을 때 그 행의 '확인 못 함'이 캡션에 못 나온다. 괜찮다 — 그 행은 하한에 0 만
+    /// 보태므로 **보이는 숫자를 덜 참으로 만들지 못하고**, 그 사실은 제공자 카드의 그 줄이 그대로 말한다.
     package static func combine(_ displays: [AILimitDisplay]) -> AILimitDisplay {
         let known = displays.filter { $0.freshness != .unknown }
         guard !known.isEmpty else {
@@ -263,28 +318,39 @@ package enum AILimitFreshnessRule {
             )
         }
 
-        let floor = known.compactMap(\.percent).max() ?? 0
-        // 가장 낡은 기여자(동률이면 등급이 더 나쁜 쪽)가 캡션을 정한다.
-        let worst = known.max { lhs, rhs in
+        // 숫자와 캡션을 **같은 집합**에서 뽑는다. 리셋 주장은 하한에 0 만 보태므로, 주장하지 않는 기여자가
+        // 하나라도 있으면 말하는 쪽은 그들이다. 전부 리셋 주장이면 그때만 그들이 말한다(= 0% · 초기화됨).
+        let claiming = known.filter { $0.freshness.isResetClaim }
+        let speaking = claiming.count == known.count ? claiming : known.filter { !$0.freshness.isResetClaim }
+
+        let floor = speaking.compactMap(\.percent).max() ?? 0
+        // 가장 낡은 기여자(동률이면 등급이 더 나쁜 쪽)가 캡션을 정한다. `speaking` 안에서는 claimAge 의 축이
+        // 하나라 크기 비교가 뜻을 갖는다(머리말).
+        let lead = speaking.max { lhs, rhs in
             let left = lhs.claimAge ?? 0
             let right = rhs.claimAge ?? 0
             if left != right { return left < right }
             return !lhs.floorOnly && rhs.floorOnly
         }
-        // `known` 이 비어 있지 않으므로 `worst` 는 항상 값이 있다. 그래도 강제 풀기를 쓰지 않는다 —
+        // `speaking` 이 비어 있지 않으므로 `lead` 는 항상 값이 있다. 그래도 강제 풀기를 쓰지 않는다 —
         // 이 규칙이 크래시로 앱을 죽이는 경로를 아예 만들지 않는다.
-        let caption = worst?.captionText ?? ""
-        let freshness = worst?.freshness ?? .unknown
-        let floorOnly = known.contains { $0.floorOnly } || freshness.isFloorOnly
+        let caption = lead?.captionText ?? ""
+        let freshness = lead?.freshness ?? .unknown
+        // 숫자·글자·"이상" 깃발을 한 쌍으로 — 따로 만들면 `percent 90` 과 `"0%"` 가 다시 같이 나온다.
+        let value = value(
+            percent: floor,
+            floorOnly: speaking.contains { $0.floorOnly } || freshness.isFloorOnly,
+            isResetClaim: freshness.isResetClaim
+        )
 
         return AILimitDisplay(
             isVisible: true,
-            valueText: valueText(percent: floor, floorOnly: floorOnly, isResetClaim: freshness.isResetClaim),
+            valueText: value.text,
             captionText: caption,
-            percent: floor,
-            floorOnly: floorOnly,
+            percent: value.percent,
+            floorOnly: value.floorOnly,
             freshness: freshness,
-            claimAge: worst?.claimAge,
+            claimAge: lead?.claimAge,
             provider: common(known.map(\.provider)),
             window: common(known.map(\.window)),
             source: common(known.map(\.source)),
@@ -315,17 +381,33 @@ package enum AILimitFreshnessRule {
         }
     }
 
-    /// 숫자 문구. `unknown` 은 `—`, 리셋 주장은 `0%`, 하한이면 `N% 이상`, 아니면 `N%`.
-    package static func valueText(percent: Double, freshness: AILimitFreshness) -> String {
-        if freshness == .unknown { return unknownValueText }
-        return valueText(percent: percent, floorOnly: freshness.isFloorOnly, isResetClaim: freshness.isResetClaim)
+    /// 숫자와 글자를 **같이** 만드는 단 하나의 입구. 둘을 따로 만들 길이 없어야 `percent 90` 과 `"0%"` 가
+    /// 같은 구조체에 담기는 일이 안 생긴다(`AILimitValue` 머리말 — 2026-10-07 실증한 결함).
+    ///
+    /// · 리셋을 주장하면 **숫자까지** 0 이다. 글자만 0 으로 덮으면 바가 옛 길이로 남는다.
+    ///   그리고 "0% 이상"은 아무 말도 아니므로 하한 깃발도 함께 내린다.
+    /// · 그 밖에는 `clampedPercent` 로 접은 값과 그것을 반올림한 글자다 — 둘이 같은 함수에서 나오므로
+    ///   NaN 이 들어오는 날에도 "바는 안 그려지는데 글자는 0%" 처럼 갈리지 않는다.
+    package static func value(percent: Double, floorOnly: Bool, isResetClaim: Bool) -> AILimitValue {
+        if isResetClaim { return AILimitValue(percent: 0, text: "0%", floorOnly: false) }
+        let clamped = clampedPercent(percent)
+        let whole = wholePercent(clamped)
+        return AILimitValue(
+            percent: clamped,
+            text: floorOnly ? "\(whole)% 이상" : "\(whole)%",
+            floorOnly: floorOnly
+        )
     }
 
-    package static func valueText(percent: Double, floorOnly: Bool, isResetClaim: Bool) -> String {
-        // 리셋을 주장하면 숫자는 0 이다 — 하한이든 아니든 "0% 이상"은 아무 말도 아니다.
-        if isResetClaim { return "0%" }
-        let whole = wholePercent(percent)
-        return floorOnly ? "\(whole)% 이상" : "\(whole)%"
+    /// 숫자 문구만 필요한 자리(진단·테스트). `unknown` 은 `—`, 그 밖은 `value(...)` 의 글자 그대로다.
+    /// **숫자 없이 글자만 만드는 경로를 새로 늘리지 마라** — 그게 P0 결함의 모양이었다.
+    package static func valueText(percent: Double, freshness: AILimitFreshness) -> String {
+        if freshness == .unknown { return unknownValueText }
+        return value(
+            percent: percent,
+            floorOnly: freshness.isFloorOnly,
+            isResetClaim: freshness.isResetClaim
+        ).text
     }
 
     /// 판정 불가의 숫자 자리. em dash 하나 — `0%` 도 `?` 도 아니다(`0%` 는 거짓, `?` 는 고장으로 읽힌다).
@@ -336,12 +418,19 @@ package enum AILimitFreshnessRule {
     ///  · 100 보다 작으면 절대 `100%` 로 적지 않는다(99.6% → `99%`). `100%` 는 "이미 막혔다"는 단정이다.
     /// 101 처럼 범위를 넘는 입력은 100 으로 접는다(제공자가 넘겨 주는 날 바가 화면을 뚫지 않게).
     package static func wholePercent(_ value: Double) -> Int {
-        guard value.isFinite else { return 0 }
-        let clamped = min(max(value, 0), 100)
+        let clamped = clampedPercent(value)
         var whole = Int(clamped.rounded())
         if clamped > 0, whole == 0 { whole = 1 }
         if clamped < 100, whole == 100 { whole = 99 }
         return whole
+    }
+
+    /// 0…100 클램프. **비유한값(NaN·∞)은 0 이다.**
+    /// `wholePercent` 와 `value(...)` 가 **같은 함수**를 거치게 두는 까닭: 한쪽만 NaN 을 접으면 바는
+    /// NaN 길이(= 그 프레임이 통째로 안 그려진다)인데 글자는 `0%` 가 된다.
+    package static func clampedPercent(_ value: Double) -> Double {
+        guard value.isFinite else { return 0 }
+        return min(max(value, 0), 100)
     }
 
     // MARK: 내부

@@ -12,8 +12,17 @@ import Observation
 // ## 왜 주기가 10분이고 강제 갱신에도 5분 하한이 있는가
 // Claude 의 사용량 엔드포인트는 **5분에 5회**가 상한이고 6번째부터 429 `retry-after: 300` 이다(실측 2026-10-07).
 // 팝오버는 여닫기가 잦아서, 열 때마다 치면 평범한 사용자가 몇 분 만에 자기 계정을 5분간 잠근다.
-// 그래서 `refreshInterval` 10분 · `forcedRefreshFloor` 5분 · 캐시 TTL 5분이다. 429 를 받으면
-// `retryAfter` 가 끝날 때까지 **완전히 침묵한다** — 30초마다 다시 노크하는 구현은 300초 금지창에서 틀린 동작이다.
+// 그래서 `refreshInterval` 10분 · `forcedRefreshFloor` 5분이다. 429 를 받으면 `retryAfter` 가 끝날 때까지
+// **완전히 침묵한다** — 30초마다 다시 노크하는 구현은 300초 금지창에서 틀린 동작이다.
+//
+// ★ **간격은 프로세스 수명보다 오래 살아야 한다.** 초안은 숫자와 실패 분류만 영속해서, 앱을 다시 켜면
+//   `lastAttemptAt == nil` → `isDue` 가 즉시 참이고 `silentUntil == nil` → **429 금지창 안에서도** 바로
+//   노크했다. 맥 앱은 업데이트·로그아웃·수동 재시작으로 몇 분 안에 여러 번 켜진다 — 5분에 5회를 그렇게 넘기면
+//   스토어가 막겠다고 선언한 바로 그 사고(사용자 본인 계정이 5분 잠김)를 스토어가 만든다.
+//   그래서 **시도 시각과 금지창도 함께 영속하고 복원한다.** 시도 스탬프는 러너를 부르기 **직전에** 디스크로
+//   내려간다 — 바퀴 도중에 앱이 죽어도 그 시도가 장부에 남아야 한다(실패도 간격을 지켜야 난사가 안 된다).
+//   복원값은 **지금보다 미래면 지금으로 접는다**: 시계가 뒤로 간 맥에서 미래 스탬프가 남으면 그 뒤로 영원히
+//   갱신하지 않는 '세션 영구고착' 꼴이 된다.
 //
 // ## 실패해도 직전 값을 버리지 않는다
 // 사용률은 한 창 안에서 올라가기만 하므로 마지막 값은 **안전한 하한**이다(`AILimitFreshnessRule` 머리말).
@@ -70,12 +79,14 @@ package final class AILimitStore {
 
     package nonisolated static let snapshotKey = "check.aiLimits.snapshot"
     package nonisolated static let failuresKey = "check.aiLimits.failures"
+    /// 마지막 **시도** 시각(epoch 초). 이게 없으면 재시작마다 간격이 0 으로 리셋돼 429 를 자초한다(머리말).
+    package nonisolated static let lastAttemptKey = "check.aiLimits.lastAttemptAt"
+    /// 429 금지창의 끝(epoch 초). 이게 없으면 재시작이 금지창을 뚫는다(머리말).
+    package nonisolated static let silentUntilKey = "check.aiLimits.silentUntil"
     /// 평상시 갱신 주기(초). 10분 — Claude 의 5분/5회 상한에 여유를 두고도 5시간 창의 변화를 놓치지 않는 값이다.
     package nonisolated static let refreshInterval: TimeInterval = 600
     /// 팝오버·창을 열었을 때의 하한(초). 5분 — 이 아래로 내려가면 여닫기만으로 429 를 맞는다.
     package nonisolated static let forcedRefreshFloor: TimeInterval = 300
-    /// 들고 있는 값을 '지금 값'으로 쓰는 수명(초). 이 안이면 창을 열어도 네트워크를 안 쓴다.
-    package nonisolated static let cacheTTL: TimeInterval = 300
     /// 429 의 `retry-after` 를 못 읽었을 때의 침묵 길이(초). 실측 헤더 값과 같은 300.
     package nonisolated static let defaultBackoff: TimeInterval = 300
 
@@ -114,6 +125,21 @@ package final class AILimitStore {
                 out[provider] = pair.value
             }
         }
+        // 간격·금지창은 프로세스 수명보다 오래 산다(머리말). 미래 스탬프는 지금으로 접어 영구고착을 막고,
+        // 금지창은 한 번의 기본 백오프보다 길게 믿지 않는다(디스크 값 하나가 리밋 축을 영원히 끌 수 있다).
+        let now = self.clock()
+        if let stamp = Self.restoredDate(defaults, key: Self.lastAttemptKey) {
+            lastAttemptAt = min(stamp, now)
+        }
+        if let until = Self.restoredDate(defaults, key: Self.silentUntilKey) {
+            silentUntil = min(until, now.addingTimeInterval(Self.defaultBackoff))
+        }
+    }
+
+    /// epoch 초로 적힌 시각을 읽는다. 값이 없거나 숫자가 아니면 nil(= 제한 없음).
+    private nonisolated static func restoredDate(_ defaults: UserDefaults, key: String) -> Date? {
+        guard let raw = defaults.object(forKey: key) as? Double, raw.isFinite else { return nil }
+        return Date(timeIntervalSince1970: raw)
     }
 
     /// 무해 인스턴스: 격리 defaults + 아무것도 안 읽는 러너. `WorkTimerStore` 의 기본값이라, 주입을 잊은
@@ -195,17 +221,17 @@ package final class AILimitStore {
         return force ? elapsed >= Self.forcedRefreshFloor : elapsed >= Self.refreshInterval
     }
 
-    /// 들고 있는 값이 아직 '지금 값'인가(캐시 TTL). 창을 열 때 네트워크를 쓸지 가르는 데 쓴다.
-    package func isFresh(now: Date) -> Bool {
-        guard let observed = bundle?.providers.compactMap(\.latestObservedAt).max() else { return false }
-        return now.timeIntervalSince(observed) < Self.cacheTTL
-    }
+    // 캐시 TTL(`isFresh`)은 **없다.** 초안에 있었는데 호출부가 저장소에 0 건이었다 — 걸려 있지도 않은 장치가
+    // 머리말에 "이 안이면 네트워크를 안 쓴다"로 적혀 있으면, 다음 사람이 그걸 믿고 5분 하한을 낮춘다.
+    // 창을 열 때 네트워크를 쓸지 가르는 것은 `isDue(now:force:)` 의 **5분 하한 하나**다(겹치는 장치를 두지 않는다).
 
     /// 간격이 찼을 때만 리더를 돈다. `force` 는 "사용자가 방금 팝오버·창을 열었다"일 때 쓴다(5분 하한 유지).
     package func refreshIfDue(now: Date, force: Bool = false) async {
         guard isDue(now: now, force: force) else { return }
         // 스탬프를 러너 **전에** 찍는다 — 실패도 간격을 지켜야 난사가 안 된다(CodexAccountUsageStore 와 같은 관용구).
+        // 디스크에도 **지금** 내려간다: 바퀴 도중에 앱이 죽어도 이 시도가 장부에 남아야 다음 실행이 간격을 지킨다.
         lastAttemptAt = now
+        persistSchedule()
         inFlight = true
         defer { inFlight = false }
         runnerCallCount += 1
@@ -251,6 +277,21 @@ package final class AILimitStore {
         }
         if let data = try? JSONEncoder().encode(raw) {
             defaults.set(data, forKey: Self.failuresKey)
+        }
+        persistSchedule()
+    }
+
+    /// 간격·금지창만 내려쓴다(숫자보다 자주, 러너 전에도 불린다).
+    private func persistSchedule() {
+        if let lastAttemptAt {
+            defaults.set(lastAttemptAt.timeIntervalSince1970, forKey: Self.lastAttemptKey)
+        } else {
+            defaults.removeObject(forKey: Self.lastAttemptKey)
+        }
+        if let silentUntil {
+            defaults.set(silentUntil.timeIntervalSince1970, forKey: Self.silentUntilKey)
+        } else {
+            defaults.removeObject(forKey: Self.silentUntilKey)
         }
     }
 }

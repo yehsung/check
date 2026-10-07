@@ -92,33 +92,113 @@ enum AILimitWindowLayout {
     }
 }
 
-// MARK: - 카드
+// MARK: - 카드가 그릴 것 (순수)
 
-/// 제공자 하나의 카드. 로고 타일 + 이름 + `오후 6:59 리셋` 캡션 + 우측 큰 % + 굵은 바,
-/// 그 아래 `주간 60%` + 얇은 바.
+/// 카드 한 장이 그릴 것. **값·캡션·"이상" 깃발은 전부 `AILimitFreshnessRule` 이 만들고**, 이 타입이 하는 일은
+/// 그 중 **어느 창을 머리 숫자로 세우나** 하나다.
 ///
-/// **숫자·캡션·표시여부를 계산하지 않는다** — 전부 `AILimitFreshnessRule` 에서 받은 `AILimitDisplay` 를 그린다.
-struct AILimitProviderCard: View {
+/// ## 왜 '대표 창 고르기'가 한 자리에 있어야 하는가 (2026-10-07 실증한 결함)
+/// 초안 카드는 `store.display(provider:window:.fiveHour)` 를 **무조건** 머리 숫자로 그렸다. 그런데 5시간 창이
+/// **아예 없는** 계정이 있다(주간만 오는 요금제 · 안티그래비티는 그룹 구성이 달라 5시간 칸이 비는 날이 있다 —
+/// 실측 §3). 그 계정에서 큰 글자는 `—`, 캡션은 `알 수 없음` 이 되고 **주간 60% 는 얇은 줄로만 남았다.**
+/// 규칙은 이미 `isVisible` 로 "이 자리를 만들지 마라"를 말하고 있었는데 뷰가 그 깃발을 무시한 것이다.
+/// 같은 데이터로 폰은 머리 줄을 안 그리고(`AILimitDisplayRow.visibleWindows`) 위젯은 주간을 대표로 올린다
+/// (`AingWidgetLimitRow.primaryWindow`) — 세 화면이 같은 숫자를 **다르게** 말했다.
+///
+/// 그래서 선택 규칙을 폰·위젯과 같게 둔다: **보이는 창을 5시간 → 주간 순서로 담고 첫 줄이 머리**다.
+/// 그리고 머리 줄에는 **창 라벨을 값과 함께** 적는다(`headWindowLabel`) — 대표 창이 카드마다 다를 수 있으므로,
+/// 라벨이 없으면 이 카드의 주간 8% 가 옆 카드의 5시간 27% 와 같은 창으로 읽힌다(위젯이 라벨을 값과 한 묶음으로
+/// 내보내는 것과 같은 근거).
+struct AILimitCardModel: Equatable, Identifiable {
     let provider: AILimitProvider
-    let fiveHour: AILimitDisplay
-    let weekly: AILimitDisplay
+    /// **보이는** 창들, 5시간 → 주간 순서. 없는 창은 줄을 만들지 않는다(0% 로 지어내지 않는다).
+    let windows: [AILimitDisplay]
     /// 만료·429·플랜 없음의 한 줄(없으면 nil). 네트워크 실패에는 **문구가 없다** — 숫자를 그대로 두고
     /// 나이 캡션만 낡게 하는 것이 그때의 정직한 표시다(`AILimitReadFailure.noticeText` 주석).
     let notice: String?
     /// 플랜 라벨("plus"/"max"). 없으면 안 그린다.
     let planLabel: String?
 
+    var id: AILimitProvider { provider }
+
+    /// 머리 줄이 말하는 것 = 대표 창. 보이는 창이 하나도 없으면 nil(그 카드는 안내 한 줄만 말한다).
+    var head: AILimitDisplay? { windows.first }
+    /// 머리 아래에 **따로** 그릴 줄들. 대표로 선 창은 빠진다 — 같은 값을 한 카드에 두 번 그리지 않는다.
+    var rest: [AILimitDisplay] { Array(windows.dropFirst()) }
+    /// 큰 숫자. 대표 창이 없으면 규칙의 '판정 불가' 글자(`—`)다 — `0%` 로 지어내지 않는다.
+    var headValueText: String { head?.valueText ?? AILimitFreshnessRule.unknownValueText }
+    /// 큰 숫자가 **어느 창인가**("5시간" · "주간"). 모르면 nil.
+    var headWindowLabel: String? { head?.window?.displayName }
+
+    /// 머리 줄의 캡션. 리셋 시각을 알면 `오후 6:59 리셋`, 모르면 규칙이 준 나이 문구다.
+    ///
+    /// 왜 둘을 겹치지 않는가: 이 한 줄에 "3시간 전 · 오후 6:59 리셋"을 다 적으면 글 열이 숫자를 밀고
+    /// (실측 84 + 63 = 147pt > 글 열 예산) 무엇보다 사용자가 두 시각을 헷갈린다. 리셋 시각이 있으면
+    /// 그게 더 쓸모 있는 사실이고, 신선도는 숫자의 "이상" 과 바의 투명도가 이미 말한다.
+    var headCaption: String {
+        guard let head else { return Self.unknownCaption }
+        if let resetsAt = head.resetsAt, !head.freshness.isResetClaim {
+            return "\(AILimitResetTimeText.text(resetsAt)) 리셋"
+        }
+        return head.captionText
+    }
+
+    /// '판정 불가' 캡션은 **규칙에서 가져온다**. 여기에 "알 수 없음"을 다시 적으면 문구가 두 벌이 되고,
+    /// 한쪽만 고쳐지는 날 화면과 규칙이 다른 말을 한다.
+    static let unknownCaption = AILimitFreshnessRule.captionText(
+        freshness: .unknown, reference: .distantPast, now: .distantPast
+    )
+
+    /// 목록에 세울 카드 전부(순수 — 테스트가 직접 부른다). 순서·숨김은 스토어가 이미 정했다.
+    @MainActor
+    static func all(store: AILimitStore, now: Date) -> [AILimitCardModel] {
+        store.listedProviders.map { make(store: store, provider: $0, now: now) }
+    }
+
+    /// 카드 한 장. 창은 **규칙에 물어** 만들고 `isVisible` 이 거짓인 창은 담지 않는다.
+    @MainActor
+    static func make(store: AILimitStore, provider: AILimitProvider, now: Date) -> AILimitCardModel {
+        let windows = AILimitWindow.allCases
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .map { store.display(provider: provider, window: $0, now: now) }
+            .filter(\.isVisible)
+        return AILimitCardModel(
+            provider: provider,
+            windows: windows,
+            notice: store.noticeText(provider: provider),
+            planLabel: store.bundle?.provider(provider)?.planLabel
+        )
+    }
+}
+
+// MARK: - 카드
+
+/// 제공자 하나의 카드. 로고 타일 + 이름 + `오후 6:59 리셋` 캡션 + 우측 [창 라벨 + 큰 %] + 굵은 바,
+/// 그 아래 남은 창(`주간 60%`) + 얇은 바.
+///
+/// **숫자·캡션·표시여부를 계산하지 않는다** — 전부 `AILimitCardModel`(= 규칙이 만든 `AILimitDisplay`)을 그린다.
+struct AILimitProviderCard: View {
+    let model: AILimitCardModel
+
+    private var provider: AILimitProvider { model.provider }
+    private var planLabel: String? { model.planLabel }
+
     var body: some View {
         VStack(alignment: .leading, spacing: AILimitWindowLayout.cardRowSpacing) {
             header
-            AILimitBar(
-                percent: fiveHour.percent,
-                floorOnly: fiveHour.floorOnly,
-                height: AILimitWindowLayout.fiveHourBarHeight,
-                tint: AILimitBar.tint(for: fiveHour.percent)
-            )
-            weeklyBlock
-            if let notice {
+            if let head = model.head {
+                AILimitBar(
+                    percent: head.percent,
+                    floorOnly: head.floorOnly,
+                    height: AILimitWindowLayout.fiveHourBarHeight,
+                    tint: AILimitBar.tint(for: head.percent)
+                )
+            }
+            // 남은 창(보통 주간 하나). 대표 창은 위에서 이미 말했으므로 여기 다시 나오지 않는다.
+            ForEach(model.rest, id: \.window) { display in
+                secondaryBlock(display)
+            }
+            if let notice = model.notice {
                 Text(notice)
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.pending)
@@ -159,14 +239,22 @@ struct AILimitProviderCard: View {
                             .lineLimit(1)
                     }
                 }
-                Text(captionText)
+                Text(model.headCaption)
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
             Spacer(minLength: 8)
-            Text(fiveHour.valueText)
+            // ★ 큰 숫자 **옆에 창 라벨**이 붙는다. 대표 창은 카드마다 다를 수 있어서(5시간 창이 없는 요금제가
+            //   있다) 라벨이 없으면 주간 8% 가 옆 카드의 5시간 27% 와 같은 창으로 읽힌다.
+            if let label = model.headWindowLabel {
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+            }
+            Text(model.headValueText)
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(CheckTheme.primaryText)
                 .monospacedDigit()
@@ -176,32 +264,22 @@ struct AILimitProviderCard: View {
         .frame(height: AILimitWindowLayout.headerRowHeight)
     }
 
-    private var weeklyBlock: some View {
+    /// 대표 창 아래의 얇은 줄(라벨 + 값 + 얇은 바). 라벨은 그 창의 이름이다 — `주간` 을 글자로 박지 않는다
+    /// (대표가 주간인 카드에서는 이 자리에 5시간이 설 수도 있다).
+    private func secondaryBlock(_ display: AILimitDisplay) -> some View {
         VStack(alignment: .leading, spacing: AILimitWindowLayout.weeklyLabelSpacing) {
-            Text("\(AILimitWindow.weekly.displayName) \(weekly.valueText)")
+            Text("\(display.window?.displayName ?? "") \(display.valueText)")
                 .font(.caption2)
                 .foregroundStyle(CheckTheme.secondaryText)
                 .lineLimit(1)
             AILimitBar(
-                percent: weekly.percent,
-                floorOnly: weekly.floorOnly,
+                percent: display.percent,
+                floorOnly: display.floorOnly,
                 height: AILimitWindowLayout.weeklyBarHeight,
-                tint: AILimitBar.tint(for: weekly.percent)
+                tint: AILimitBar.tint(for: display.percent)
             )
         }
         .padding(.top, AILimitWindowLayout.weeklyBlockSpacing - AILimitWindowLayout.cardRowSpacing)
-    }
-
-    /// 머리 줄의 캡션. 리셋 시각을 알면 `오후 6:59 리셋`, 모르면 규칙이 준 나이 문구다.
-    ///
-    /// 왜 둘을 겹치지 않는가: 이 한 줄에 "3시간 전 · 오후 6:59 리셋"을 다 적으면 글 열이 숫자를 밀고
-    /// (실측 84 + 63 = 147pt > 글 열 예산) 무엇보다 사용자가 두 시각을 헷갈린다. 리셋 시각이 있으면
-    /// 그게 더 쓸모 있는 사실이고, 신선도는 숫자의 "이상" 과 바의 투명도가 이미 말한다.
-    private var captionText: String {
-        if let resetsAt = fiveHour.resetsAt, !fiveHour.freshness.isResetClaim {
-            return "\(AILimitResetTimeText.text(resetsAt)) 리셋"
-        }
-        return fiveHour.captionText
     }
 }
 
@@ -222,12 +300,44 @@ enum AILimitResetTimeText {
 // MARK: - 창 본문
 
 /// 창에 담기는 뷰. 카드 목록 하나뿐이라 스토어를 통째로 읽는다.
+///
+/// ## ★ 시각은 **값이 아니라 클로저**다 (2026-10-07 실증한 P0)
+/// 초안은 `var now: Date = Date()` 였다. 기본 인자는 **딱 한 번** 평가되고, 그 한 번은 `configure` 의 기본
+/// content 클로저가 이 뷰를 만드는 순간이다. 창은 `windowStorage` 에 캐시돼 닫아도 파괴되지 않으므로
+/// (아래 컨트롤러) 그 `now` 는 **앱 수명 내내 창을 처음 만든 시각**으로 얼어붙었다.
+/// 재현: 09:00Z 에 창을 연다 → 13:50Z 에 스토어가 5시간 창 88% · 리셋 14:00Z 를 받는다 → 15:00Z 에 같은 창이
+/// `88% · 방금` 을 그린다(맞는 값은 `0% · 초기화됨 · 확인 못 함`). 리셋이 한 시간 전에 지났는데 사용자는
+/// "88% 썼다"를 보고 작업을 멈춘다 — `AILimitFreshnessRule` 머리말 ⓐ 가 적어 둔 바로 그 거짓이다.
+/// 그 사이 팝오버 한 줄은 `clock:` 으로 **클로저**를 받아 정상이었다 = 두 화면이 다른 말을 했다.
+///
+/// 그래서 ① 저장된 `Date` 를 없애고(규약: 이 자리에 `Date()` 기본 인자를 다시 두지 마라 —
+/// `AILimitFreshnessRule` 머리말이 "`Date()` 를 부르지 않는다"로 적은 그 규약이다) ② 창이 떠 있는 동안
+/// **분마다 다시 그린다**(`TimelineView`). 둘 다 필요하다: 클로저만 있으면 스토어가 갱신될 때까지 캡션이
+/// 안 늙고, 틱만 있으면 얼어붙은 값이 분마다 똑같이 다시 그려진다.
 struct CheckAILimitsView: View {
     let store: AILimitStore
-    /// 표시 기준 시각(주입 — 창의 분 틱이 넘긴다).
-    var now: Date = Date()
+    /// 표시 기준 시각을 **읽는 클로저**(값이 아니다 — 팝오버 한 줄 `CheckAILimitsRow.clock` 과 같은 모양).
+    let clock: () -> Date
+
+    /// 창이 떠 있는 동안 다시 그리는 주기(초). 나이 캡션의 가장 작은 단위가 '분'이라 분이면 충분하고
+    /// (`FeedbackText.ageText`), 리셋 유예(120초)보다 짧아 리셋도 한 틱 안에 드러난다.
+    static let tickSeconds: TimeInterval = 60
+
+    /// 지금 그릴 카드들. **시계를 읽는 자리가 여기다** — 테스트가 이 문으로 "시각이 흐르면 다른 값을 그린다"를 잰다.
+    var cards: [AILimitCardModel] { AILimitCardModel.all(store: store, now: clock()) }
+    /// 머리글 오른쪽의 나이 캡션(한 줄 요약의 캡션 — 숫자는 카드가 말한다).
+    var summaryCaption: String { store.summary(now: clock()).captionText }
 
     var body: some View {
+        // ★ 분 틱. `TimelineView` 는 창이 **보이는 동안** 이 서브트리를 주기적으로 다시 평가한다 —
+        //   값은 그 칸의 날짜가 아니라 **`clock()`** 에서 읽는다(틱은 "다시 그려라"만 말하고, "지금이 언제인가"는
+        //   주입된 시계 하나가 말한다. 둘을 섞으면 축이 둘이 되고 테스트가 잴 자리가 사라진다).
+        TimelineView(.periodic(from: clock(), by: Self.tickSeconds)) { _ in
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: AILimitWindowLayout.headerSpacing) {
             header
             if store.listedProviders.isEmpty {
@@ -236,14 +346,8 @@ struct CheckAILimitsView: View {
                 // 안내 줄이 붙어 카드가 자라도 잘리지 않게 목록은 스크롤에 담는다(레이아웃 주석 참고).
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: AILimitWindowLayout.cardSpacing) {
-                        ForEach(store.listedProviders, id: \.self) { provider in
-                            AILimitProviderCard(
-                                provider: provider,
-                                fiveHour: store.display(provider: provider, window: .fiveHour, now: now),
-                                weekly: store.display(provider: provider, window: .weekly, now: now),
-                                notice: store.noticeText(provider: provider),
-                                planLabel: store.bundle?.provider(provider)?.planLabel
-                            )
+                        ForEach(cards) { card in
+                            AILimitProviderCard(model: card)
                         }
                     }
                 }
@@ -266,7 +370,7 @@ struct CheckAILimitsView: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(CheckTheme.primaryText)
             Spacer(minLength: 6)
-            Text(store.summary(now: now).captionText)
+            Text(summaryCaption)
                 .font(.caption2)
                 .foregroundStyle(CheckTheme.secondaryText)
                 .lineLimit(1)
@@ -323,10 +427,16 @@ final class CheckAILimitsWindowController: NSObject, NSWindowDelegate {
         super.init()
     }
 
+    /// 창을 물린다(앱 시작 때 1회).
+    ///
+    /// ★ 기본 content 는 뷰에 **시계 클로저**를 넣는다. 값(`Date()`)을 넣으면 그 한 번의 평가가 창의 수명 내내
+    ///   얼어붙는다(`CheckAILimitsView` 머리말의 P0). 그리고 그 클로저는 `WorkTimerStore.displayNow` 가
+    ///   **아니라** 진짜 벽시계다 — `displayNow` 는 팝오버가 닫히면 미는 쪽이 멈춰서, 팝오버를 닫고 창만 보는
+    ///   사람에게 같은 얼어붙음이 다시 생긴다(그게 `leagueClockNow` 를 팝오버 행에 쓰는 것과 갈리는 지점이다).
     func configure(
         store: AILimitStore,
         content: @escaping @MainActor (AILimitStore) -> AnyView = { store in
-            AnyView(CheckAILimitsView(store: store))
+            AnyView(CheckAILimitsView(store: store, clock: { Date() }))
         }
     ) {
         wiring = Wiring(store: store, content: content)

@@ -32,13 +32,23 @@ struct AILimitBar: View {
     /// 채움 색. 제공자 브랜드색이 아니라 **사용량 단계 색**이다(아래 `tint(for:)`).
     let tint: Color
 
+    /// 색이 갈리는 경계. **글자와 같은 눈금**(반올림한 정수 퍼센트)으로 잰다.
+    static let warnPercent = 70
+    static let dangerPercent = 90
+
     /// 사용량 단계 색. 제공자를 색으로 구분하지 않는 것과 **반대 방향의 규약**이다 —
     /// 여기서 색이 말하는 것은 "누구의 리밋인가"가 아니라 "얼마나 찼는가"다.
     /// 경계(70/90)는 이 저장소의 주간 목표 게이지 관례(working/pending/danger)를 그대로 쓴다.
+    ///
+    /// ★ **글자가 쓰는 수로 가른다**(2026-10-07 실증): 초안은 클램프도 안 된 날것 double 로 90 을 갈랐다.
+    ///   89.5% 는 규칙이 `90%` 라고 **적는데**(`wholePercent` 가 반올림한다) 색은 평온한 강조색이었다 —
+    ///   같은 자리에서 글자와 색이 다른 단계를 말한 것이다. 규칙의 반올림을 거쳐야 둘이 영원히 같은 편이 된다
+    ///   (NaN·범위 밖도 그 함수가 접어 준다).
     static func tint(for percent: Double?) -> Color {
         guard let percent else { return CheckTheme.secondaryText }
-        if percent >= 90 { return CheckTheme.danger }
-        if percent >= 70 { return CheckTheme.pending }
+        let whole = AILimitFreshnessRule.wholePercent(percent)
+        if whole >= dangerPercent { return CheckTheme.danger }
+        if whole >= warnPercent { return CheckTheme.pending }
         return CheckTheme.accent
     }
 

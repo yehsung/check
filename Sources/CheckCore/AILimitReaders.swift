@@ -395,6 +395,10 @@ package enum AILimitResetTrust {
     /// 이 리셋 시각을 믿을 수 있는가.
     /// - `usedPercent` 가 0 이하면 믿지 않는다(위 실측).
     /// - 상대 초가 창 길이와 같으면(= 서버가 꽉 찬 창을 투영했다) 믿지 않는다.
+    ///
+    /// ★ **절대 시각만 주는 제공자도 둘째 조건을 쓸 수 있다.** `reset_time − observedAt` 가 곧 상대 초다.
+    ///   `resetAfterSeconds:` 에 `nil` 을 넘기면 실질 조건이 `usedPercent > 0` 하나로 줄어 가드가 절반만
+    ///   걸린다 — 0 < 사용률인데 경계가 투영인 날(안티그래비티, FACTS §3 '미확인')을 그대로 통과시킨다.
     package static func trusts(usedPercent: Double, resetAfterSeconds: Double?, windowSeconds: Double?) -> Bool {
         guard usedPercent > 0 else { return false }
         if let resetAfterSeconds, let windowSeconds, windowSeconds > 0,
@@ -866,8 +870,16 @@ package struct AILimitAntigravityReader: Sendable {
                     source: .local
                 )
                 // 아직 아무것도 안 쓴 창의 `reset_time` 은 `now + 창길이` 투영이다(Codex 와 같은 함정) → 접는다.
+                //
+                // ★ `nil, nil` 을 넘기면 실질 조건이 `usedPercent > 0` **하나뿐**이 된다 — 가드가 절반만 걸린다.
+                //   안티그래비티는 `reset_time` 을 절대 시각으로 주니 상대 초가 손에 없어 보이지만, `observedAt`
+                //   과 창 길이가 둘 다 여기 있으므로 투영의 지문(`|reset_time − observedAt − 창길이| < 1`)을
+                //   그대로 잴 수 있다. 0 < 사용률인데도 경계가 `관측시각 + 창길이` 에 정확히 앉아 있으면 그건
+                //   경계가 아니라 투영이다(FACTS §3 '미확인' — 소비 중일 때의 모습은 못 봤으니 같은 가드를 건다).
                 let trusted = AILimitResetTrust.trusts(
-                    usedPercent: snapshot.usedPercent, resetAfterSeconds: nil, windowSeconds: nil
+                    usedPercent: snapshot.usedPercent,
+                    resetAfterSeconds: resets.map { $0.timeIntervalSince(observedAt) },
+                    windowSeconds: window.lengthSeconds
                 )
                 candidates.append(trusted ? snapshot : AILimitWindowSnapshot(
                     window: window,

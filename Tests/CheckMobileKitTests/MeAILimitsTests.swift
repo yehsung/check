@@ -185,6 +185,84 @@ struct MeAILimitsTests {
         #expect(bundle.provider(.codex)?.isLinked == false)
     }
 
+    /// ★ 유령 행을 숨긴다(v0.3.45 P2). 맥에서 로그아웃한 제공자는 업로드에서 **빠질 뿐**이고 서버에는 DELETE
+    /// 권한도 정리 cron 도 없다 → 그 행이 영원히 남아, 시간이 지나면 리셋을 지나 `0% · 초기화됨` 으로 굳는다.
+    /// 쓰지도 않는 제공자가 "한도를 하나도 안 썼다"로 **영구 표시**되는 것이다.
+    /// 그래서 읽는 쪽에서 끊는다 — 문턱의 **양쪽**을 잰다(한쪽만 재면 `>=` 를 `>` 로 바꿔도, 문턱을 10배로
+    /// 늘려도 초록이다).
+    @Test("유령 행: observed_at 이 문턱보다 오래된 줄은 숨는다(양쪽 경계) · 살아 있는 줄은 남는다")
+    func ghostRowsAreHidden() throws {
+        let base = MobileClock.demoInstant
+        let cutoff = AILimitsStore.ghostRowAge
+        func row(_ provider: String, age: TimeInterval) -> AILimitFetchedRow {
+            AILimitFetchedRow(provider: provider, fiveHourPercent: 27,
+                              fiveHourResetsAt: base.addingTimeInterval(-age + 600),
+                              weeklyPercent: 60, weeklyResetsAt: nil, planLabel: nil,
+                              observedAt: base.addingTimeInterval(-age))
+        }
+        // 문턱 **직전**(1초 모자란다)은 남고, 문턱 **정확히**는 숨는다.
+        let justInside = AILimitsStore.bundle(from: [row("claude", age: cutoff - 1)], now: base)
+        #expect(justInside.visibleProviders.map(\.provider) == [.claude],
+                "아직 문턱에 닿지 않은 줄을 숨겼다 — 맥을 며칠 끈 사람의 하한까지 사라진다")
+        let exactly = AILimitsStore.bundle(from: [row("claude", age: cutoff)], now: base)
+        #expect(exactly.visibleProviders.isEmpty, "문턱에 닿은 유령 행이 남았다 — '0% · 초기화됨' 으로 굳는다")
+        let wayOld = AILimitsStore.bundle(from: [row("codex", age: cutoff * 10)], now: base)
+        #expect(wayOld.visibleProviders.isEmpty)
+
+        // 산 제공자와 유령이 섞여 있으면 **산 쪽만** 남는다(목록이 통째로 비지 않는다).
+        let mixed = AILimitsStore.bundle(
+            from: [row("claude", age: 300), row("antigravity", age: cutoff + 60)], now: base
+        )
+        #expect(mixed.visibleProviders.map(\.provider) == [.claude])
+
+        // ★ 문턱은 **맥의 갱신 주기보다 훨씬 커야** 한다 — 켜져 있는 맥의 제공자가 숨는 조합이 없어야 한다.
+        #expect(cutoff > 3_600 * 24, "문턱이 하루보다 짧다 — 주말에 맥을 끈 사람의 줄이 사라진다")
+        // 미래 관측(기기 시계가 어긋난 맥)은 여기서 **버리지 않는다** — 그 판정은 코어 규칙이 한다.
+        let future = AILimitsStore.bundle(from: [row("claude", age: -7_200)], now: base)
+        #expect(future.visibleProviders.map(\.provider) == [.claude])
+    }
+
+    /// ★ **대표 창 고르기는 한 규칙이다**(v0.3.45 P2): 보이는 창을 5시간 → 주간 순서로 세우고 **첫 줄이 대표**다.
+    ///
+    /// 맥 카드는 초안에서 `.fiveHour` 를 무조건 머리 숫자로 그려, 주간만 오는 계정에서 큰 글자가 `—` · 캡션이
+    /// `알 수 없음` 이었다(같은 데이터로 폰·위젯은 주간을 세웠다 — 세 화면이 다른 말을 했다). 맥 쪽 그물은
+    /// `AILimitsMacWindowContentTests` 에 있고(모듈이 달라 한 테스트로 묶을 수 없다), 여기서는 **폰과 위젯이
+    /// 서로 같은 창을 세우는지**를 같은 데이터로 되묻는다.
+    @Test("대표 창: 폰과 위젯이 같은 창을 세운다(주간만 오는 계정에서도) · 대표로 선 창을 두 번 그리지 않는다")
+    func representativeWindowIsOneRuleAcrossSurfaces() throws {
+        let base = MobileClock.demoInstant
+        func rows(fiveHour: Double?) -> [AILimitFetchedRow] {
+            [AILimitFetchedRow(provider: "antigravity", fiveHourPercent: fiveHour,
+                               fiveHourResetsAt: fiveHour == nil ? nil : base.addingTimeInterval(9_000),
+                               weeklyPercent: 42, weeklyResetsAt: base.addingTimeInterval(86_400),
+                               planLabel: nil, observedAt: base)]
+        }
+        func surfaces(fiveHour: Double?) throws -> (phone: AILimitDisplay, widget: (display: AILimitDisplay, label: String)) {
+            let snapshot = try #require(AILimitsStore.bundle(from: rows(fiveHour: fiveHour), now: base)
+                .provider(.antigravity))
+            func display(_ window: AILimitWindow) -> AILimitDisplay? {
+                guard snapshot.window(window) != nil else { return nil }
+                let value = AILimitFreshnessRule.display(provider: snapshot, window: window, now: base)
+                return value.isVisible ? value : nil
+            }
+            let phone = AILimitDisplayRow(provider: .antigravity, planLabel: nil,
+                                          fiveHour: display(.fiveHour), weekly: display(.weekly))
+            let widget = AingWidgetLimitRow(provider: .antigravity,
+                                            fiveHour: display(.fiveHour), weekly: display(.weekly))
+            return (try #require(phone.visibleWindows.first), try #require(widget.primaryWindow))
+        }
+        // ① 주간만 오는 계정: 둘 다 **주간**을 세우고 라벨도 주간이다(값만 집으면 옆 줄의 5시간과 같은 창으로 읽힌다).
+        let weeklyOnly = try surfaces(fiveHour: nil)
+        #expect(weeklyOnly.phone.window == .weekly)
+        #expect(weeklyOnly.widget.display == weeklyOnly.phone, "폰과 위젯이 다른 창을 대표로 세운다")
+        #expect(weeklyOnly.widget.label == AILimitWindow.weekly.displayName)
+        #expect(weeklyOnly.phone.valueText == "42%" && weeklyOnly.phone.valueText != AILimitFreshnessRule.unknownValueText)
+        // ② 기준선: 두 창이 다 있으면 둘 다 **5시간**을 세운다(선택 규칙이 '주간 고정'으로 굳지 않았다).
+        let both = try surfaces(fiveHour: 27)
+        #expect(both.phone.window == .fiveHour && both.widget.display == both.phone)
+        #expect(both.widget.label == AILimitWindow.fiveHour.displayName)
+    }
+
     @Test("토큰 축: 오늘 칸은 잔디의 마지막 날 · 수집을 끄면 둘 다 nil(0 으로 지어내지 않는다)")
     func tokenTotals() async throws {
         let harness = await RankMeHarness(label: "me-ailimits-tokens") { Self.responder($0) }
@@ -249,5 +327,29 @@ struct MeAILimitsTests {
             under: "Sources/CheckWidgetsKit"
         )
         #expect(widgetDirect.isEmpty, "위젯이 제공자를 직접 부른다: \(widgetDirect)")
+    }
+
+    /// ★ 공개 문서의 라이선스 문장이 **코드와 같은 말**을 한다(v0.3.45 P2).
+    ///
+    /// `docs/ai-limits.md` 는 `docs/_config.yml` 로 GitHub Pages 에 그대로 나간다. 초안에는 "재배포 조건이
+    /// MIT 이므로 출처 표기를 **지운다**"로 적혀 있었다 — MIT 는 반대로 저작권·라이선스 표기를 **유지**할 것을
+    /// 요구하므로 그 지시를 따르면 위반이다. 코드는 올바로 출처를 달아 뒀고(로고 파일 머리말) 공개 문서만
+    /// 반대를 말했다. 문서는 테스트가 없으면 아무도 되묻지 않으므로 여기서 묶는다.
+    @Test("공개 문서: MIT 는 출처 표기를 **유지**한다(문서와 코드가 같은 말을 한다)")
+    func publicDocKeepsTheAttributionRule() throws {
+        let doc = try String(
+            contentsOf: IntegrationContractTests.root.appendingPathComponent("docs/ai-limits.md"), encoding: .utf8
+        )
+        #expect(doc.contains("CodexBar") && doc.contains("MIT"), "전제: 문서가 로고 출처와 라이선스를 말한다")
+        #expect(!doc.contains("출처 표기를 지운다"),
+                "공개 문서가 MIT 표기를 지우라고 말한다 — 그대로 하면 라이선스 위반이다")
+        #expect(doc.contains("유지") && doc.contains("남긴다"), "표기를 남긴다는 말이 없다")
+        // 코드에는 출처 한 줄이 **실제로** 남아 있다(문서가 가리키는 그 자리 — 주석이라 `code(_:)` 로는 못 본다).
+        let logo = try String(
+            contentsOf: IntegrationContractTests.root
+                .appendingPathComponent("Sources/CheckCore/AIProviderLogo.swift"), encoding: .utf8
+        )
+        #expect(logo.contains("CodexBar") && logo.contains("MIT License"),
+                "로고 파일에서 출처 표기가 사라졌다 — 문서가 가리키는 근거가 없어졌다")
     }
 }

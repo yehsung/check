@@ -28,11 +28,41 @@ enum AingLimitsLinks {
     static let me = URL(string: "aingcheck://me")!
 }
 
+/// 리밋 위젯**만의** 타임라인 공급자. 읽는 것은 다른 세 위젯의 공급자(`AingWidgetProvider`)와 똑같고
+/// (App Group 스냅샷 하나 · 네트워크 없음) **칸만 다르다** — 지평 밖 칸을 함께 깐다.
+///
+/// 왜 공급자를 따로 두는가: 다른 세 위젯의 타임라인 정책을 건드리지 않기 위해서다. 그들이 그리는 것은
+/// '우리 서버가 센 사실'이라 늦게 반영돼도 그 시각의 참이고, 칸을 늘리면 얻는 것 없이 엔트리만 늘어난다.
+/// 리밋은 **원격 자원의 현재값**을 등호로 단정하는 자리라 재적재가 끊긴 날에도 스스로 열화해야 한다
+/// (근거 전부는 `AingWidgetLimitsTimelinePlan` 머리말).
+struct AingLimitsTimelineProvider: TimelineProvider {
+    func placeholder(in context: Context) -> AingWidgetEntry {
+        let now = Date()
+        return AingWidgetEntry(date: now, snapshot: AingWidgetSamples.snapshot(now: now))
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (AingWidgetEntry) -> Void) {
+        let now = Date()
+        // 갤러리 미리보기는 지어낸 예시(실사용자 데이터가 갤러리에 뜨지 않게, 로그아웃이어도 모양을 보이게).
+        let snapshot = context.isPreview ? AingWidgetSamples.snapshot(now: now) : WidgetSharedData.live().snapshot()
+        completion(AingWidgetEntry(date: now, snapshot: snapshot))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<AingWidgetEntry>) -> Void) {
+        let now = Date()
+        let snapshot = WidgetSharedData.live().snapshot()
+        let entries = AingWidgetLimitsTimelinePlan.entryDates(now: now).map {
+            AingWidgetEntry(date: $0, snapshot: snapshot)
+        }
+        completion(Timeline(entries: entries, policy: .after(AingWidgetLimitsTimelinePlan.nextReload(now: now))))
+    }
+}
+
 public struct AingAILimitsWidget: Widget {
     public init() {}
 
     public var body: some WidgetConfiguration {
-        StaticConfiguration(kind: AingWidgetKind.aiLimits, provider: AingWidgetProvider()) { entry in
+        StaticConfiguration(kind: AingWidgetKind.aiLimits, provider: AingLimitsTimelineProvider()) { entry in
             AingLimitsContainer(entry: entry) { family in
                 AingAILimitsContent(entry: entry, family: family)
             }

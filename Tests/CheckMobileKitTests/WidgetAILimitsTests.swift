@@ -285,6 +285,71 @@ struct WidgetAILimitsTests {
         #expect(limits.rows.count == 3 && limits.hasTokens)
     }
 
+    /// ★ 리밋 타임라인은 **지평 밖 칸**을 깐다(v0.3.45 P1).
+    ///
+    /// 열화(30분 넘으면 하한 + "이상", 리셋 뒤 0%)는 **엔트리 시각이 흘러야만** 일어난다. 15분 지평만 깔면
+    /// 재적재가 끊긴 날 마지막 칸이 그대로 남아 두 시간이 지나도 `27%` 를 **등호로** 그린다(헤더의 "N분 전"도
+    /// 같이 얼어 낡음을 알릴 수단마저 멈춘다). 그래서 마지막 칸 하나로 **규칙이 스스로 하한으로 떨어지는지**를 잰다.
+    @Test("타임라인: 리밋만 지평 밖 칸을 깐다 → 재적재가 없어도 마지막 칸에서 하한이 된다(다른 세 위젯은 그대로)")
+    func limitsTimelineDecaysPastTheHorizon() throws {
+        let near = AingWidgetTimelinePlan.entryDates(now: Self.now)
+        let dates = AingWidgetLimitsTimelinePlan.entryDates(now: Self.now)
+        // 지평 안쪽은 다른 위젯과 **똑같다**(분 단위 16칸) — 그 뒤에 꼬리가 붙는다.
+        #expect(Array(dates.prefix(near.count)) == near)
+        #expect(dates.count == near.count + AingWidgetLimitsTimelinePlan.farEntryOffsets.count)
+        #expect(dates.allSatisfy { $0 >= Self.now }, "과거 칸을 깔았다")
+        #expect(zip(dates, dates.dropFirst()).allSatisfy { $1 > $0 }, "칸이 시간순이 아니다")
+        // 꼬리는 신선도 경계를 **넘어간다**(여기서 숫자가 하한이 된다) · 마지막 칸은 하루를 넘는다.
+        let last = try #require(dates.last)
+        #expect(last.timeIntervalSince(Self.now) > AILimitFreshnessRule.recentWithin)
+        #expect(last.timeIntervalSince(Self.now) > AILimitFreshnessRule.staleWithin)
+        // 재적재 요청 시각은 다른 위젯과 같다(꼬리는 보험이지 새 주기가 아니다).
+        #expect(AingWidgetLimitsTimelinePlan.nextReload(now: Self.now) == AingWidgetTimelinePlan.nextReload(now: Self.now))
+
+        // ★ 같은 스냅샷을 **첫 칸**과 **마지막 칸**에서 그린다: 등호 → 하한으로 갈라져야 한다.
+        let snapshot = Self.snapshot(Self.panel())
+        func claude(at date: Date) throws -> AILimitDisplay {
+            guard case .limits(let limits) = AingWidgetLimitsState(snapshot: snapshot, at: date) else {
+                throw TestFailure.notLimits
+            }
+            return try #require(limits.rows.first { $0.provider == .claude }?.fiveHour)
+        }
+        func claudeWeekly(at date: Date) throws -> AILimitDisplay {
+            guard case .limits(let limits) = AingWidgetLimitsState(snapshot: snapshot, at: date) else {
+                throw TestFailure.notLimits
+            }
+            return try #require(limits.rows.first { $0.provider == .claude }?.weekly)
+        }
+        let first = try claude(at: try #require(dates.first))
+        #expect(first.valueText == "27%" && first.floorOnly == false, "전제: 첫 칸은 등호다")
+        let aged = try claude(at: try #require(near.last))
+        #expect(aged.floorOnly == false, "전제: 15분 지평 안에서는 아직 등호다 — 그래서 꼬리가 필요하다")
+        // 첫 꼬리 칸(+30분 = `recentWithin`)에서 숫자가 **하한**이 된다.
+        let decayed = try claude(at: Self.now.addingTimeInterval(AingWidgetLimitsTimelinePlan.farEntryOffsets[0]))
+        #expect(decayed.valueText == "27% 이상", "꼬리 칸에서도 등호다 — 지평이 짧아 열화가 멈췄다")
+        #expect(decayed.floorOnly, "하한 깃발이 안 섰다 — 바가 등호처럼 진하게 남는다")
+        #expect(decayed.freshness == .stale)
+        // 마지막 칸: 5시간 창은 리셋(+9,000초)을 한참 지났으므로 **0% · 확인 못 함**이 되고,
+        // 주간 창은 아직 리셋이 멀어 하루 넘은 **하한**으로 남는다(두 갈래가 다 꼬리에서만 드러난다).
+        let farFive = try claude(at: last)
+        #expect(farFive.valueText == "0%" && farFive.captionText == "초기화됨 · 확인 못 함",
+                "리셋이 하루 전에 지났는데 \(farFive.valueText) · \(farFive.captionText) 다")
+        let farWeekly = try claudeWeekly(at: last)
+        #expect(farWeekly.valueText == "60% 이상" && farWeekly.freshness == .ancient)
+        // 헤더의 나이 글자도 같이 늙는다(낡음을 알릴 수단이 멈추지 않는다).
+        #expect(AingWidgetFormat.ago(from: snapshot.generatedAt, now: last) != AingWidgetFormat.ago(from: snapshot.generatedAt, now: Self.now))
+
+        // ★ 다른 세 위젯의 정책은 **그대로**다(공급자가 둘로 갈렸다는 소스 계약 포함).
+        #expect(near.count == 16 && near.last == Self.now.addingTimeInterval(900))
+        let widgets = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingWidgets.swift")
+        #expect(widgets.contains("AingWidgetTimelinePlan.entryDates(now: now)"), "다른 세 위젯의 칸이 바뀌었다")
+        #expect(!widgets.contains("AingWidgetLimitsTimelinePlan"), "리밋 계획이 다른 세 위젯에 번졌다")
+        let limits = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift")
+        #expect(limits.contains("AingWidgetLimitsTimelinePlan.entryDates(now: now)"),
+                "리밋 위젯이 지평 밖 칸을 쓰지 않는다 — 계획만 만들고 안 물렸다")
+        #expect(limits.contains("provider: AingLimitsTimelineProvider()"), "리밋 위젯이 공용 공급자로 돌아갔다")
+    }
+
     @Test("위젯 종류: kind 는 넷이고 새 kind 는 갤러리 이름·설명을 가진다")
     func kindsAndGallery() {
         #expect(AingWidgetKind.all.count == 4 && Set(AingWidgetKind.all).count == 4)

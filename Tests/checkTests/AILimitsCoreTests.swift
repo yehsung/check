@@ -35,6 +35,81 @@ private func aiSnapshot(
     )
 }
 
+/// 리셋을 **주장하는** 기여자 하나. `resetAgo` 가 유예(120초)를 넘겨야 주장이 선다.
+/// 창이 5시간이면 `observedAgo - resetAgo` 가 창 길이 + 허용오차 안에 있어야 건전성 검사를 통과한다.
+private func aiResetClaimDisplay(
+    window: AILimitWindow = .fiveHour,
+    used: Double = 40,
+    observedAgo: TimeInterval = 2 * aiHour,
+    resetAgo: TimeInterval = 90 * 60
+) -> AILimitDisplay {
+    AILimitFreshnessRule.display(
+        aiSnapshot(window: window, used: used, observedAgo: observedAgo,
+                   resetsAt: aiNow.addingTimeInterval(-resetAgo)),
+        now: aiNow
+    )
+}
+
+/// 리셋을 주장하지 **않는** 기여자 하나(리셋 시각을 모른다 → 하한만 유지).
+private func aiPlainDisplay(
+    window: AILimitWindow = .fiveHour,
+    used: Double,
+    observedAgo: TimeInterval
+) -> AILimitDisplay {
+    AILimitFreshnessRule.display(aiSnapshot(window: window, used: used, observedAgo: observedAgo), now: aiNow)
+}
+
+/// ★ **숫자와 글자는 절대 모순되지 않는다** — 이 구조체가 지켜야 하는 일반 불변식.
+///
+/// 2026-10-07 검증: 옛 `combine` 이 `percent 90` 과 `valueText "0%"` 를 같은 구조체에 담아 내보냈다.
+/// 소비자 하나는 바를 90% 길이로 그리고 다른 둘은 글자를 `0%` 로 그린다 — 같은 화면이 두 사실을 말한다.
+/// 그래서 **값을 쓰는 모든 테스트가 이 함수를 통과**하게 두고, 모순이 생길 수 있는 경로를 전부 여기서 막는다.
+private func aiExpectValueMatchesPercent(_ display: AILimitDisplay, _ label: String) {
+    guard let percent = display.percent else {
+        // 숫자가 없으면 글자도 '모름'이어야 한다 — `0%` 는 "안 썼다"는 거짓이다.
+        #expect(display.valueText == AILimitFreshnessRule.unknownValueText,
+                "\(label): 숫자가 없는데 글자가 '\(display.valueText)' 다")
+        #expect(display.freshness == .unknown, "\(label): 숫자가 없는데 등급이 \(display.freshness) 다")
+        #expect(display.floorOnly == false, "\(label): 숫자가 없는데 하한 깃발이 서 있다")
+        return
+    }
+    let whole = AILimitFreshnessRule.wholePercent(percent)
+    #expect(display.valueText == (display.floorOnly ? "\(whole)% 이상" : "\(whole)%"),
+            "\(label): percent \(percent)(→ \(whole)%) 인데 글자가 '\(display.valueText)' 다 — 바와 숫자가 다른 사실을 말한다")
+    if display.freshness.isResetClaim {
+        // 리셋을 확신하면 숫자도 0 이어야 한다. "0% 이상"은 아무 말도 아니므로 하한 깃발도 내려간다.
+        #expect(percent == 0, "\(label): 리셋을 주장하면서 숫자가 \(percent) 다")
+        #expect(display.valueText == "0%", "\(label): 리셋 주장의 글자가 '\(display.valueText)' 다")
+        #expect(display.floorOnly == false, "\(label): 리셋 주장에 하한 깃발이 섰다")
+    }
+}
+
+/// `agy -p /usage` 봉투(실측 모양) — 한 그룹에 5시간·주간 버킷 하나씩.
+/// `reset_time` 을 **호출부가 정하는** 것이 이 픽스처의 전부다(투영 지문을 1초 단위로 재야 한다).
+private func aiAntigravityCLIJSON(
+    fiveHourRemaining: Double,
+    fiveHourReset: Date,
+    weeklyRemaining: Double,
+    weeklyReset: Date
+) -> String {
+    """
+    {"status":"SUCCESS","command":{"name":"usage","data":{"groups":[
+      {"name":"Gemini Models","buckets":[
+        {"id":"gemini-5h","window":"5h","remaining_fraction":\(fiveHourRemaining),
+         "reset_time":"\(aiISO8601(fiveHourReset))"},
+        {"id":"gemini-weekly","window":"weekly","remaining_fraction":\(weeklyRemaining),
+         "reset_time":"\(aiISO8601(weeklyReset))"}]}]}}}
+    """
+}
+
+/// 초 단위 ISO8601(실측 `reset_time` 과 같은 해상도).
+private func aiISO8601(_ date: Date) -> String {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime]
+    formatter.timeZone = TimeZone(secondsFromGMT: 0)
+    return formatter.string(from: date)
+}
+
 @Suite("AILimitsCore — 리밋 신선도·하한 규칙")
 struct AILimitsCoreTests {
 
@@ -546,4 +621,429 @@ struct AILimitsCoreTests {
         // 카드 순서는 자격증명 유무와 무관하게 고정이다.
         #expect(AILimitProvider.allCases.sorted { $0.sortOrder < $1.sortOrder } == [.claude, .codex, .antigravity])
     }
+
+    // MARK: ⑫ 조합 — 리셋 주장이 섞여도 자기모순을 내보내지 않는다 (P0)
+    //
+    // 2026-10-07 검증자 **둘이 독립적으로** 재현한 결함: `combine` 이 숫자는 하한의 max 로, 글자는 *캡션을
+    // 정한 다른 기여자*의 리셋 여부로 따로 만들어 `percent 90` 과 `valueText "0%"` 를 **같은 구조체에** 담았다.
+    // 소비자 둘이 글자를 그리고(맥 팝오버 한 줄 · 폰 '나' 탭 요약 칩) 하나가 바를 그린다 — 한 화면이 두 사실을
+    // 말한다. 아래 다섯 조합이 그 모양을 각각 다른 각도에서 막고, 마지막 하나가 **일반 불변식**으로 못 박는다.
+
+    /// ★ 재현된 바로 그 상태: Claude 5시간 90%(5분 전 관측) + Codex 5시간 40%(2시간 전 관측 · 리셋 90분 전 지남).
+    /// Codex 리더가 실패해도 `AILimitStore.apply` 가 옛 스냅샷을 남기므로 이건 **설계된 정상 상태**다.
+    /// 하한 90 이 살아 있으면 글자도 90 계열이어야 한다 — 남의 리셋이 내 90% 를 0% 로 보이게 하지 않는다.
+    @Test func combineKeepsTheLivingFloorWhenAnotherContributorReset() {
+        let claude = aiPlainDisplay(used: 90, observedAgo: 5 * 60)
+        let codex = aiResetClaimDisplay(used: 40, observedAgo: 2 * aiHour, resetAgo: 90 * 60)
+        // 전제부터 못 박는다 — 기여자가 이 모습이 아니면 아래 단언은 다른 것을 재고 있다.
+        #expect(claude.percent == 90 && claude.freshness == .recent)
+        #expect(codex.freshness == .resetUnverified && codex.percent == 0)
+        #expect(codex.claimAge! > claude.claimAge!, "전제: 리셋 기여자가 claimAge 로는 가장 '낡다'")
+
+        let combined = AILimitFreshnessRule.combine([claude, codex])
+        #expect(combined.percent == 90)
+        #expect(combined.valueText == "90%", "하한 90 이 살아 있는데 글자가 '\(combined.valueText)' 다")
+        #expect(combined.captionText == "5분 전")
+        #expect(combined.freshness.isResetClaim == false)
+        aiExpectValueMatchesPercent(combined, "리셋 기여자가 섞인 조합")
+    }
+
+    /// 리셋 주장**만** 남았을 때 — 그때만 숫자가 0 이다. 캡션은 그중 가장 낡은 쪽(여기선 15분 전 경계).
+    @Test func combineOfOnlyResetClaimsSaysZero() {
+        let fiveHour = aiResetClaimDisplay(used: 40, observedAgo: 3 * aiHour, resetAgo: 300)
+        let weekly = aiResetClaimDisplay(window: .weekly, used: 70, observedAgo: 4 * aiHour, resetAgo: 900)
+        #expect(fiveHour.freshness == .reset && weekly.freshness == .reset)
+
+        let combined = AILimitFreshnessRule.combine([fiveHour, weekly])
+        #expect(combined.freshness == .reset)
+        #expect(combined.percent == 0)
+        #expect(combined.valueText == "0%")
+        #expect(combined.captionText == "초기화됨")
+        #expect(combined.floorOnly == false)
+        aiExpectValueMatchesPercent(combined, "전부 리셋 주장")
+    }
+
+    /// 리셋 주장 기여자가 **claimAge 로 가장 커도** 캡션을 가져가지 않는다.
+    ///
+    /// 축이 다르기 때문이다: 리셋 주장의 나이는 `now − resetsAt`(경계가 언제였나)이고 나머지는
+    /// `now − observedAt`(언제 봤나)이다. 한 `max` 로 견주면 "경계가 오래전이다"가 "관측이 오래됐다"를 이긴다 —
+    /// 뜻이 다른 두 수를 크기로만 비교한 것이다.
+    @Test func combineCaptionComesFromTheSameAgeAxisAsTheNumber() {
+        let plain = aiPlainDisplay(used: 55, observedAgo: 40 * 60)
+        let claimed = aiResetClaimDisplay(window: .weekly, used: 80, observedAgo: 20 * aiHour, resetAgo: 10 * aiHour)
+        #expect(claimed.claimAge == 10 * aiHour, "리셋 주장의 나이는 관측(20시간)이 아니라 경계(10시간)로 잰다")
+        #expect(claimed.claimAge! > plain.claimAge!, "전제: 옛 비교에서는 이쪽이 캡션을 가져갔다")
+
+        let combined = AILimitFreshnessRule.combine([plain, claimed])
+        #expect(combined.valueText == "55% 이상")
+        #expect(combined.captionText == "40분 전")
+        #expect(combined.freshness == .stale)
+        aiExpectValueMatchesPercent(combined, "축이 다른 두 나이")
+    }
+
+    /// 0% 를 **하한으로** 들고 있는 행(함정 ①: Codex 0% 는 리셋을 주장하지 않는다)이 남의 리셋 주장 때문에
+    /// "초기화됨"으로 바뀌지 않는다. 옛 `combine` 은 캡션을 남의 행에서 가져와 **없던 사건을 단정**했다 —
+    /// 그 거짓 자신감은 숫자가 틀린 것보다 비싸다(머리말 함정 ①).
+    @Test func combineNeverBorrowsAResetEventForANonClaimingRow() {
+        let zeroStale = aiPlainDisplay(used: 0, observedAgo: 3 * aiHour)
+        let claimed = aiResetClaimDisplay(window: .weekly, used: 60, observedAgo: 2 * aiDay, resetAgo: aiDay)
+        #expect(zeroStale.freshness == .stale && zeroStale.valueText == "0% 이상")
+        #expect(claimed.freshness == .resetUnverified)
+
+        let combined = AILimitFreshnessRule.combine([zeroStale, claimed])
+        #expect(combined.captionText == "3시간 전")
+        #expect(combined.captionText != "초기화됨", "리셋을 주장하지 않는 행에 없던 사건을 붙였다")
+        #expect(combined.valueText == "0% 이상", "하한 0% 가 '확신한 0%' 로 바뀌었다")
+        #expect(combined.floorOnly)
+        aiExpectValueMatchesPercent(combined, "0% 하한 + 남의 리셋")
+    }
+
+    /// 셋이 섞인 경우: 숫자는 **살아 있는** 하한의 max, "이상"은 그중 하나라도 하한이면, 캡션은 그중 가장 낡은 쪽.
+    @Test func combineWithThreeContributorsPicksTheLivingWorst() {
+        let freshHigh = aiPlainDisplay(used: 90, observedAgo: 10)
+        let ancientLow = aiPlainDisplay(window: .weekly, used: 12, observedAgo: 3 * aiDay)
+        let claimed = aiResetClaimDisplay(window: .weekly, used: 99, observedAgo: 5 * aiDay, resetAgo: 4 * aiDay)
+        #expect(claimed.freshness == .resetUnverified && claimed.claimAge == 4 * aiDay)
+
+        let combined = AILimitFreshnessRule.combine([claimed, ancientLow, freshHigh])
+        #expect(combined.percent == 90)
+        #expect(combined.valueText == "90% 이상")
+        #expect(combined.captionText == "3일 전")
+        #expect(combined.freshness == .ancient)
+        aiExpectValueMatchesPercent(combined, "셋 섞임")
+    }
+
+    /// 숫자·글자·하한 깃발의 **입구 자체**를 잰다 — 도달 가능한 상태만 재면 이 결함이 다시 산다.
+    ///
+    /// 왜 입구를 따로 재는가(2026-10-07 뮤테이션 실증): 지금 `display`·`combine` 은 리셋 주장일 때 `percent` 를
+    /// 이미 0 으로 넘기므로, "글자만 0% 로 덮기" 변형이 **살아남는다**(관측상 같은 답). 그런데 P0 결함이 생긴
+    /// 경로가 바로 그것이었다 — 호출부 하나가 0 이 아닌 하한을 들고 들어온 것이다. 그래서 입구에서 못 박는다.
+    @Test func valuePairNeverLetsTheNumberAndTheTextDiverge() {
+        // 리셋을 주장하면 **숫자까지** 0 이다. 글자만 덮으면 바는 90% 길이로 남는다(그 결함의 모양).
+        let claimed = AILimitFreshnessRule.value(percent: 90, floorOnly: true, isResetClaim: true)
+        #expect(claimed.percent == 0, "리셋 주장에 숫자가 \(claimed.percent) 로 남았다 — 바가 그 길이로 그려진다")
+        #expect(claimed.text == "0%")
+        #expect(claimed.floorOnly == false, "'0% 이상'은 아무 말도 아니다")
+
+        // 하한·등호·클램프 세 갈래 모두 글자의 수가 `percent` 를 반올림한 수와 같다.
+        for percent in [0, 0.4, 27, 90, 99.6, 101, -5] as [Double] {
+            for floorOnly in [false, true] {
+                let value = AILimitFreshnessRule.value(percent: percent, floorOnly: floorOnly, isResetClaim: false)
+                let whole = AILimitFreshnessRule.wholePercent(value.percent)
+                #expect(value.text == (floorOnly ? "\(whole)% 이상" : "\(whole)%"),
+                        "percent \(percent) → 숫자 \(value.percent) · 글자 '\(value.text)' 가 어긋났다")
+                #expect(value.floorOnly == floorOnly)
+                #expect(value.percent >= 0 && value.percent <= 100)
+            }
+        }
+        // NaN 은 한 자리에서 접는다 — 한쪽만 접으면 바는 안 그려지는데 글자는 `0%` 다.
+        let nan = AILimitFreshnessRule.value(percent: .nan, floorOnly: false, isResetClaim: false)
+        #expect(nan.percent == 0 && nan.text == "0%")
+        #expect(AILimitFreshnessRule.clampedPercent(.nan) == 0)
+        #expect(AILimitFreshnessRule.clampedPercent(.infinity) == 0)
+        #expect(AILimitFreshnessRule.clampedPercent(42) == 42)
+    }
+
+    /// ★ **일반 불변식**: 낱개든 짝이든 셋이든, `percent` 와 `valueText` 가 어긋나는 조합이 하나도 없다.
+    /// 숫자와 글자를 다른 입력으로 따로 만드는 구현은 이 행렬의 어딘가에서 반드시 걸린다.
+    @Test func percentAndValueTextNeverContradictAcrossTheMatrix() {
+        var pool: [AILimitDisplay] = []
+        for used in [0, 0.4, 27, 90, 99.6, 101] as [Double] {
+            for ago in [0, 59, 61, 1_800, 1_801, aiDay + 1] as [TimeInterval] {
+                pool.append(aiPlainDisplay(used: used, observedAgo: ago))
+            }
+        }
+        // 유예 양쪽 · 확신/미확인 양쪽.
+        for resetAgo in [119, 120, 121, 1_800, 1_801, 3 * aiHour] as [TimeInterval] {
+            pool.append(aiResetClaimDisplay(used: 40, observedAgo: 4 * aiHour, resetAgo: resetAgo))
+        }
+        pool.append(AILimitFreshnessRule.display(nil, now: aiNow))                       // 스냅샷 없음
+        pool.append(AILimitFreshnessRule.display(                                        // 건전성 모순
+            aiSnapshot(used: 30, observedAgo: 60, resetsAt: aiNow.addingTimeInterval(-120)), now: aiNow))
+        // 기준선이 갈리는지 — 풀에 리셋 주장과 하한과 '모름'이 다 들어 있어야 이 테스트가 뜻을 갖는다.
+        #expect(pool.contains { $0.freshness.isResetClaim })
+        #expect(pool.contains { $0.floorOnly })
+        #expect(pool.contains { $0.freshness == .unknown })
+
+        for (index, display) in pool.enumerated() {
+            aiExpectValueMatchesPercent(display, "낱개 #\(index)")
+        }
+        for (left, lhs) in pool.enumerated() {
+            for (right, rhs) in pool.enumerated() {
+                aiExpectValueMatchesPercent(AILimitFreshnessRule.combine([lhs, rhs]), "짝 #\(left)·#\(right)")
+            }
+        }
+        for (index, extra) in pool.enumerated() {
+            let trio = [pool[0], pool[pool.count - 1], extra]
+            aiExpectValueMatchesPercent(AILimitFreshnessRule.combine(trio), "셋 #\(index)")
+        }
+    }
+
+    // MARK: ⑬ 상수와 경계의 **정확히 그 점** — 한쪽만 재면 뮤테이션이 산다
+
+    /// 상수를 **이름으로** 되묻는다. 숫자를 흘리면(120 → 121) 유예가 조용히 넓어지는데, 경계 테스트가
+    /// 상대값으로만 적혀 있으면 함께 밀려 전부 초록이다.
+    @Test func toleranceConstantsAreTheMeasuredOnes() {
+        #expect(AILimitFreshnessRule.clockSkewTolerance == 120)
+        #expect(AILimitFreshnessRule.sameWindowTolerance == 600)
+        #expect(AILimitFreshnessRule.freshWithin == 60)
+        #expect(AILimitFreshnessRule.recentWithin == 1_800)
+        #expect(AILimitFreshnessRule.staleWithin == 86_400)
+        // 창 종류 허용오차는 시계 유예보다 **느슨해야** 한다(머리말: 거짓 unknown 이 더 비싸다).
+        #expect(AILimitFreshnessRule.sameWindowTolerance > AILimitFreshnessRule.clockSkewTolerance)
+        // '방금'의 경계는 `FeedbackText.ageText` 와 **같은 숫자**(60)에서 갈린다. 포함 여부만 1초 다르다 —
+        // 등급은 `<= 60`, 문구는 `< 60` 이라 정확히 60초인 행은 `.fresh` 인데 캡션이 "1분 전"이다.
+        // 값이 갈리지는 않는다(`.fresh` 와 `.recent` 는 둘 다 등호로 말한다). 그 1초를 여기 적어 둬서,
+        // 숫자를 흘리는 뮤테이션(60 → 59/61)이 둘 중 어느 쪽에서든 걸리게 한다.
+        #expect(FeedbackText.ageText(aiNow.addingTimeInterval(-(AILimitFreshnessRule.freshWithin - 1)), now: aiNow) == "방금")
+        #expect(FeedbackText.ageText(aiNow.addingTimeInterval(-AILimitFreshnessRule.freshWithin), now: aiNow) == "1분 전")
+        #expect(AILimitFreshnessRule.grade(age: AILimitFreshnessRule.freshWithin, resetClaimed: false) == .fresh)
+        #expect(AILimitFreshnessRule.grade(age: AILimitFreshnessRule.freshWithin + 1, resetClaimed: false) == .recent)
+    }
+
+    /// 유예의 **정확히 그 점**(리셋 + 120초)에서 주장이 선다. `>=` → `>` 뮤테이션은 여기서만 죽는다
+    /// (−119/−121 만 재는 스위트에서는 살아남았다 — 2026-10-07 실증).
+    @Test func resetGraceClaimsExactlyAtTheTolerance() {
+        let snapshot = aiSnapshot(
+            used: 40, observedAgo: 2 * aiHour,
+            resetsAt: aiNow.addingTimeInterval(-AILimitFreshnessRule.clockSkewTolerance)
+        )
+        let atTolerance = AILimitFreshnessRule.display(snapshot, now: aiNow)
+        #expect(atTolerance.freshness == .reset, "정확히 유예만큼 지난 점에서 주장하지 않았다")
+        #expect(atTolerance.valueText == "0%")
+        // 1초 앞(= 유예 안쪽)에서는 아직 하한이다 — 양쪽에서 못 박는다.
+        let oneSecondEarlier = AILimitFreshnessRule.display(snapshot, now: aiNow.addingTimeInterval(-1))
+        #expect(oneSecondEarlier.freshness == .stale)
+        #expect(oneSecondEarlier.valueText == "40% 이상")
+    }
+
+    /// 창 종류 건전성의 **정확히 그 점**(창 길이 + 허용오차)은 멀쩡한 행이다. `>` → `>=` 뮤테이션은 여기서만 죽는다
+    /// (+300/+601 만 재는 스위트에서는 살아남았다 — 2026-10-07 실증).
+    @Test func sameWindowToleranceIncludesItsExactPoint() {
+        let observed = aiNow.addingTimeInterval(-60)
+        func display(beyond: TimeInterval) -> AILimitDisplay {
+            AILimitFreshnessRule.display(
+                AILimitWindowSnapshot(
+                    window: .fiveHour,
+                    usedPercent: 30,
+                    resetsAt: observed.addingTimeInterval(AILimitWindow.fiveHour.lengthSeconds + beyond),
+                    observedAt: observed,
+                    source: .local
+                ),
+                now: aiNow
+            )
+        }
+        #expect(display(beyond: AILimitFreshnessRule.sameWindowTolerance).freshness == .fresh,
+                "허용오차의 정확히 그 점을 '다른 창'으로 버렸다 — 거짓 unknown 은 정보를 통째로 버린다")
+        #expect(display(beyond: AILimitFreshnessRule.sameWindowTolerance + 1).freshness == .unknown)
+    }
+
+    // MARK: ⑭ 미래 관측 시각 — 유예를 넘으면 '모른다'
+
+    /// 맥 시계가 3시간 빠른 채로 올린 숫자를 음수 경과 → 0 으로 접으면, 폰이 3시간 묵은 값을 "방금"이라고
+    /// **등호로** 단정한다(하한도 아니다). 반대쪽 모순(`resetsAt < observedAt`)은 이미 `unknown` 인데
+    /// 이쪽만 봐주면 더 비싼 거짓을 통과시키는 셈이다.
+    @Test func futureObservationBeyondToleranceIsUnknown() {
+        func display(ahead: TimeInterval) -> AILimitDisplay {
+            AILimitFreshnessRule.display(
+                AILimitWindowSnapshot(
+                    window: .fiveHour,
+                    usedPercent: 27,
+                    resetsAt: aiNow.addingTimeInterval(ahead + 3 * aiHour),
+                    observedAt: aiNow.addingTimeInterval(ahead),
+                    source: .local
+                ),
+                now: aiNow
+            )
+        }
+        // 유예 안쪽(정확히 그 점까지)은 지금처럼 0 으로 접어 '방금'이다 — NTP 떨림으로 행을 버리지 않는다.
+        let atTolerance = display(ahead: AILimitFreshnessRule.clockSkewTolerance)
+        #expect(atTolerance.freshness == .fresh)
+        #expect(atTolerance.captionText == "방금")
+        #expect(atTolerance.valueText == "27%")
+
+        // 1초만 넘으면 '모른다'. 숫자를 지어내지 않고, 자리는 남긴다.
+        let justOver = display(ahead: AILimitFreshnessRule.clockSkewTolerance + 1)
+        #expect(justOver.freshness == .unknown, "유예를 넘는 미래 관측을 '방금'이라고 단정했다")
+        #expect(justOver.valueText == "—")
+        #expect(justOver.percent == nil)
+        #expect(justOver.isVisible)
+        #expect(justOver.captionText == "알 수 없음")
+
+        // 맥 시계가 3시간 빠른 실전 모양.
+        #expect(display(ahead: 3 * aiHour).freshness == .unknown)
+        aiExpectValueMatchesPercent(justOver, "미래 관측")
+    }
+
+    // MARK: ⑮ 안티그래비티 — 안 쓴 창이 아니어도 `reset_time` 이 투영일 수 있다
+    //
+    // 호출부가 `trusts(usedPercent:resetAfterSeconds:windowSeconds:)` 에 `nil, nil` 을 넘기면 실질 조건이
+    // `usedPercent > 0` **하나뿐**이라 가드가 절반만 걸린다. 안티그래비티는 절대 시각을 주지만
+    // `reset_time − observedAt` 가 곧 상대 초이므로 지문을 그대로 잴 수 있다(FACTS §3 '미확인').
+
+    /// 0 < 사용률인데 5시간 창의 `reset_time` 이 정확히 `관측시각 + 창길이` 다 → 경계가 아니라 투영이다.
+    /// 주간 창은 관측 + 3일이라 지문이 아니다 → **그쪽은 믿는다**(기준선이 갈려야 이 테스트가 뜻을 갖는다).
+    @Test func antigravityFoldsResetTimeThatTracksTheObservation() throws {
+        let json = aiAntigravityCLIJSON(
+            fiveHourRemaining: 0.5,
+            fiveHourReset: aiNow.addingTimeInterval(AILimitWindow.fiveHour.lengthSeconds),
+            weeklyRemaining: 0.5,
+            weeklyReset: aiNow.addingTimeInterval(3 * aiDay)
+        )
+        let snapshot = try AILimitAntigravityReader.parseCLI(Data(json.utf8), observedAt: aiNow).get()
+        #expect(snapshot.window(.fiveHour)?.usedPercent == 50, "전제: 남은 0.5 → 50% 썼다")
+        #expect(snapshot.window(.fiveHour)?.resetsAt == nil,
+                "0 < 사용률이라고 투영을 경계로 믿었다 — 화면의 리셋 시각이 분마다 바뀐다")
+        #expect(snapshot.window(.weekly)?.resetsAt != nil, "진짜 경계까지 버렸다")
+    }
+
+    /// 지문의 폭(1초)을 양쪽에서. 느슨하면 진짜 경계를 버리고, 없으면 투영을 통과시킨다.
+    @Test func antigravityProjectionFingerprintIsOneSecondWide() throws {
+        func fiveHourReset(beyondWindow: TimeInterval) throws -> Date? {
+            let json = aiAntigravityCLIJSON(
+                fiveHourRemaining: 0.5,
+                fiveHourReset: aiNow.addingTimeInterval(AILimitWindow.fiveHour.lengthSeconds + beyondWindow),
+                weeklyRemaining: 0.5,
+                weeklyReset: aiNow.addingTimeInterval(3 * aiDay)
+            )
+            return try AILimitAntigravityReader.parseCLI(Data(json.utf8), observedAt: aiNow).get().window(.fiveHour)?.resetsAt
+        }
+        #expect(try fiveHourReset(beyondWindow: 0) == nil)
+        #expect(try fiveHourReset(beyondWindow: 1) != nil)
+        #expect(try fiveHourReset(beyondWindow: -1) != nil)
+    }
+}
+
+// MARK: - 스토어: 간격과 429 금지창은 **프로세스 수명보다 오래 산다**
+//
+// 초안은 숫자와 실패 분류만 영속해서, 앱을 다시 켜면 `lastAttemptAt == nil` → `isDue` 즉시 참이고
+// `silentUntil == nil` → `retry-after` 가 남아 있어도 바로 노크했다. Claude 는 **5분에 5회**가 상한이라
+// (실측 2026-10-07) 5분 안에 앱이 여러 번 켜지면 사용자 본인 계정이 잠긴다 — 스토어가 막겠다고 선언한
+// 바로 그 사고를 스토어가 만든다.
+//
+// 이 스위트는 `Date` 를 주입한 순수 계산이다. 러너는 아무것도 읽지 않는 클로저라 프로세스도 네트워크도 없다
+// (★ 특히 **Claude 를 실제로 부르는 테스트를 만들면 안 된다** — 스위트가 5회를 넘기면 계정이 5분간 잠긴다).
+@Suite("AILimitsCore — 스토어: 간격·금지창 영속")
+@MainActor
+struct AILimitsCoreScheduleTests {
+    /// 격리 UserDefaults. ★ 이름은 **반드시** `CheckTestScratch` 의 절대 경로다 — 평범한 도메인 이름을 주면
+    /// `~/Library/Preferences` 에 plist 가 쌓인다(62만 개가 `cfprefsd` 를 죽인 그 사고와 같은 가족).
+    private func isolatedDefaults(_ function: String = #function, line: Int = #line) -> UserDefaults {
+        let name = CheckTestScratch.uniqueSuitePath(function: function, line: line)
+        let defaults = UserDefaults(suiteName: name) ?? .standard
+        defaults.removePersistentDomain(forName: name)
+        return defaults
+    }
+
+    private func store(_ defaults: UserDefaults, now: @escaping () -> Date) -> AILimitStore {
+        AILimitStore(defaults: defaults, clock: now, runner: { _ in AILimitReadOutcome() })
+    }
+
+    /// 재시작해도 **간격이 이어진다.** 없으면 앱을 다섯 번 켜는 것만으로 5분/5회 상한을 넘긴다.
+    @Test func attemptStampSurvivesRestart() async {
+        let defaults = isolatedDefaults()
+        let first = store(defaults, now: { aiNow })
+        await first.refreshIfDue(now: aiNow)
+        #expect(first.runnerCallCount == 1, "전제: 첫 바퀴는 돈다")
+
+        // 앱을 1분 뒤에 다시 켠다 — 같은 디스크.
+        let reborn = store(defaults, now: { aiNow.addingTimeInterval(60) })
+        #expect(reborn.lastAttemptAt == aiNow, "시도 시각이 복원되지 않았다")
+        #expect(reborn.isDue(now: aiNow.addingTimeInterval(60)) == false, "재시작이 10분 주기를 리셋했다")
+        #expect(reborn.isDue(now: aiNow.addingTimeInterval(60), force: true) == false, "재시작이 5분 하한을 뚫었다")
+        await reborn.refreshIfDue(now: aiNow.addingTimeInterval(60), force: true)
+        #expect(reborn.runnerCallCount == 0, "재시작 직후 노크했다 — 5분에 5회 상한을 이렇게 넘긴다")
+        // 기준선이 갈린다: 하한이 지나면 반드시 돈다(영원히 막히면 위 단언들이 공허하다).
+        #expect(reborn.isDue(now: aiNow.addingTimeInterval(300), force: true))
+    }
+
+    /// 러너를 부르기 **직전에** 디스크로 내려간다 — 바퀴 도중에 앱이 죽어도 그 시도가 장부에 남아야 한다.
+    /// (`apply` 끝에서만 쓰면 멈춘 러너·강제 종료가 스탬프를 통째로 삼킨다.)
+    @Test func attemptStampLandsBeforeTheRunner() async {
+        let defaults = isolatedDefaults()
+        // `UserDefaults` 는 스레드 안전하지만 `Sendable` 이 아니다 — 러너는 `@Sendable` 이라 상자로 넘긴다.
+        let box = AILimitDefaultsBox(defaults: defaults)
+        let subject = AILimitStore(defaults: defaults, clock: { aiNow }, runner: { _ in
+            // 러너 안에서 이미 디스크에 적혀 있어야 한다.
+            #expect(box.defaults.object(forKey: AILimitStore.lastAttemptKey) as? Double == aiNow.timeIntervalSince1970,
+                    "시도 스탬프가 러너 뒤에 적힌다 — 바퀴 도중에 죽으면 그 시도가 사라진다")
+            return AILimitReadOutcome()
+        })
+        await subject.refreshIfDue(now: aiNow)
+        #expect(subject.runnerCallCount == 1)
+    }
+
+    /// 429 금지창도 재시작을 넘어 산다. 없으면 `retry-after` 안에서 다시 노크해 금지창을 늘린다.
+    @Test func rateLimitBanSurvivesRestart() async {
+        let defaults = isolatedDefaults()
+        let first = AILimitStore(defaults: defaults, clock: { aiNow }, runner: { _ in
+            AILimitReadOutcome(results: [.claude: .failure(AILimitReadError(.rateLimited, retryAfter: 300))])
+        })
+        await first.refreshIfDue(now: aiNow)
+        #expect(first.silentUntil == aiNow.addingTimeInterval(300), "전제: 금지창이 섰다")
+
+        let reborn = store(defaults, now: { aiNow.addingTimeInterval(299) })
+        #expect(reborn.silentUntil == aiNow.addingTimeInterval(300), "금지창이 재시작에 사라졌다")
+        #expect(reborn.isDue(now: aiNow.addingTimeInterval(299), force: true) == false, "금지창 안에서 노크했다")
+        await reborn.refreshIfDue(now: aiNow.addingTimeInterval(299), force: true)
+        #expect(reborn.runnerCallCount == 0)
+        // 금지창이 끝나면 돈다.
+        #expect(reborn.isDue(now: aiNow.addingTimeInterval(301), force: true))
+    }
+
+    /// 성공하면 금지창이 사라지고 **디스크에서도** 사라진다(낡은 금지창이 다음 실행을 막지 않게).
+    @Test func successClearsTheBanOnDiskToo() async {
+        let defaults = isolatedDefaults()
+        let box = AILimitScheduleOutcomeBox(
+            outcome: AILimitReadOutcome(results: [.claude: .failure(AILimitReadError(.rateLimited, retryAfter: 300))])
+        )
+        let subject = AILimitStore(defaults: defaults, clock: { aiNow }, runner: { _ in box.outcome })
+        await subject.refreshIfDue(now: aiNow)
+        #expect(defaults.object(forKey: AILimitStore.silentUntilKey) != nil, "전제: 금지창이 적혔다")
+
+        box.outcome = AILimitReadOutcome(results: [.claude: .success(
+            AILimitProviderSnapshot(provider: .claude, windows: [
+                AILimitWindowSnapshot(window: .fiveHour, usedPercent: 27, resetsAt: nil,
+                                      observedAt: aiNow.addingTimeInterval(900), source: .local)
+            ])
+        )])
+        await subject.refreshIfDue(now: aiNow.addingTimeInterval(900))
+        #expect(subject.silentUntil == nil)
+        #expect(defaults.object(forKey: AILimitStore.silentUntilKey) == nil, "성공 뒤에도 금지창이 디스크에 남았다")
+    }
+
+    /// 디스크의 **미래** 스탬프는 지금으로 접는다 — 시계가 뒤로 간 맥에서 리밋 축이 영구고착되지 않게.
+    /// (이 저장소의 '세션 영구고착'과 같은 결의 결함이다: 디스크 값 하나가 기능을 영원히 끈다.)
+    @Test func futureStampsOnDiskDoNotWedgeTheStore() {
+        let defaults = isolatedDefaults()
+        let faraway = aiNow.addingTimeInterval(10 * aiDay).timeIntervalSince1970
+        defaults.set(faraway, forKey: AILimitStore.lastAttemptKey)
+        defaults.set(faraway, forKey: AILimitStore.silentUntilKey)
+
+        let subject = store(defaults, now: { aiNow })
+        #expect(subject.lastAttemptAt == aiNow, "미래 스탬프를 그대로 믿었다 — 10일 동안 한 번도 안 갱신한다")
+        #expect(subject.silentUntil == aiNow.addingTimeInterval(AILimitStore.defaultBackoff),
+                "금지창을 기본 백오프보다 길게 믿었다")
+        #expect(subject.isDue(now: aiNow) == false)                        // 접은 값만큼은 지킨다
+        #expect(subject.isDue(now: aiNow.addingTimeInterval(601)), "한 주기 뒤에도 막혀 있다")
+    }
+
+    /// 한 번도 안 돌았으면 간격은 **없다**(첫 실행이 즉시 읽는다). 디스크가 비어 있을 때의 기준선.
+    @Test func afreshInstallIsDueImmediately() {
+        let subject = store(isolatedDefaults(), now: { aiNow })
+        #expect(subject.lastAttemptAt == nil)
+        #expect(subject.silentUntil == nil)
+        #expect(subject.isDue(now: aiNow))
+    }
+}
+
+/// 러너가 돌려줄 결과를 바꿔 끼우는 상자(러너는 `@Sendable` 이라 값을 바깥에서 들고 있어야 한다).
+private final class AILimitScheduleOutcomeBox: @unchecked Sendable {
+    var outcome: AILimitReadOutcome
+    init(outcome: AILimitReadOutcome) { self.outcome = outcome }
+}
+
+/// `UserDefaults` 를 `@Sendable` 러너 안으로 들고 들어가는 상자(스레드 안전하지만 `Sendable` 이 아니다).
+private struct AILimitDefaultsBox: @unchecked Sendable {
+    let defaults: UserDefaults
 }

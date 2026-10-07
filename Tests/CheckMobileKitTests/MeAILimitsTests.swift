@@ -1,3 +1,4 @@
+import AppKit
 import CheckCore
 import CheckMobileShared
 import Foundation
@@ -222,59 +223,19 @@ struct MeAILimitsTests {
         #expect(future.visibleProviders.map(\.provider) == [.claude])
     }
 
-    /// ★ **대표 창 고르기는 한 규칙이다**(v0.3.45 P2): 보이는 창을 5시간 → 주간 순서로 세우고 **첫 줄이 대표**다.
+    /// ★ **창마다 자기 칸이다** — v0.3.46 승인 문법에는 '대표 창 고르기'가 **아예 없다**.
     ///
-    /// 맥 카드는 초안에서 `.fiveHour` 를 무조건 머리 숫자로 그려, 주간만 오는 계정에서 큰 글자가 `—` · 캡션이
-    /// `알 수 없음` 이었다(같은 데이터로 폰·위젯은 주간을 세웠다 — 세 화면이 다른 말을 했다). 맥 쪽 그물은
-    /// `AILimitsMacWindowContentTests` 에 있고(모듈이 달라 한 테스트로 묶을 수 없다), 여기서는 **폰과 위젯이
-    /// 서로 같은 창을 세우는지**를 같은 데이터로 되묻는다.
-    @Test("대표 창: 폰과 위젯이 같은 창을 세운다(주간만 오는 계정에서도) · 대표로 선 창을 두 번 그리지 않는다")
-    func representativeWindowIsOneRuleAcrossSurfaces() throws {
+    /// v0.3.45 는 줄마다 대표 창 하나를 크게 세웠다. 그래서 "어느 창을 머리로 세우나"라는 선택이 필요했고,
+    /// 그 선택이 틀리면 5시간 창이 없는 계정에서 폰은 숫자를 통째로 건너뛰고(초안) 맥은 `—` 를 그리고
+    /// 위젯은 주간을 올렸다 — 같은 데이터로 세 화면이 다른 말을 했다. 한 줄 안에 두 열을 **나란히** 세우는
+    /// 새 문법에서는 창마다 칸이 있고, 없는 창은 `없음` 으로 빈다. 고를 것이 없으면 틀릴 수도 없다.
+    ///
+    /// 여기서 재는 것: **폰과 위젯이 같은 데이터로 같은 두 칸을 만드는가**(맥 쪽 그물은 모듈이 달라
+    /// `AILimitsMacTests` 에 있다).
+    @Test("칸 구성: 폰과 위젯이 창마다 같은 칸을 만든다 · 없는 창은 둘 다 비고 `없음` 글자를 쓴다")
+    func everyWindowGetsItsOwnCellOnPhoneAndWidget() throws {
         let base = MobileClock.demoInstant
-        func rows(fiveHour: Double?) -> [AILimitFetchedRow] {
-            [AILimitFetchedRow(provider: "antigravity", fiveHourPercent: fiveHour,
-                               fiveHourResetsAt: fiveHour == nil ? nil : base.addingTimeInterval(9_000),
-                               weeklyPercent: 42, weeklyResetsAt: base.addingTimeInterval(86_400),
-                               planLabel: nil, observedAt: base)]
-        }
-        func surfaces(fiveHour: Double?) throws -> (phone: AILimitDisplay, widget: (display: AILimitDisplay, label: String)) {
-            let snapshot = try #require(AILimitsStore.bundle(from: rows(fiveHour: fiveHour), now: base)
-                .provider(.antigravity))
-            func display(_ window: AILimitWindow) -> AILimitDisplay? {
-                guard snapshot.window(window) != nil else { return nil }
-                let value = AILimitFreshnessRule.display(provider: snapshot, window: window, now: base)
-                return value.isVisible ? value : nil
-            }
-            let phone = AILimitDisplayRow(provider: .antigravity, planLabel: nil,
-                                          fiveHour: display(.fiveHour), weekly: display(.weekly))
-            let widget = AingWidgetLimitRow(provider: .antigravity,
-                                            fiveHour: display(.fiveHour), weekly: display(.weekly))
-            return (try #require(phone.visibleWindows.first), try #require(widget.primaryWindow))
-        }
-        // ① 주간만 오는 계정: 둘 다 **주간**을 세우고 라벨도 주간이다(값만 집으면 옆 줄의 5시간과 같은 창으로 읽힌다).
-        let weeklyOnly = try surfaces(fiveHour: nil)
-        #expect(weeklyOnly.phone.window == .weekly)
-        #expect(weeklyOnly.widget.display == weeklyOnly.phone, "폰과 위젯이 다른 창을 대표로 세운다")
-        #expect(weeklyOnly.widget.label == AILimitWindow.weekly.displayName)
-        #expect(weeklyOnly.phone.valueText == "42%" && weeklyOnly.phone.valueText != AILimitFreshnessRule.unknownValueText)
-        // ② 기준선: 두 창이 다 있으면 둘 다 **5시간**을 세운다(선택 규칙이 '주간 고정'으로 굳지 않았다).
-        let both = try surfaces(fiveHour: 27)
-        #expect(both.phone.window == .fiveHour && both.widget.display == both.phone)
-        #expect(both.widget.label == AILimitWindow.fiveHour.displayName)
-    }
-
-    /// ★ **폰 머리 줄도 대표 창을 세운다**(v0.3.45 P2 — 세 화면이 다른 말을 하던 자리).
-    ///
-    /// 폰 카드는 `row.fiveHour == nil` 이면 `headLine(nil)` 을 불러 **값과 캡션을 둘 다 건너뛰었다**.
-    /// 같은 데이터로 맥(`AILimitCardModel.head`)은 `42% · 주간`, 위젯(`primaryWindow`)도 `42% · 주간` 을
-    /// 세우는데 **폰만 머리 숫자가 없었다**(재검증자 실측: `mac 42%/주간 · widget 42%/주간 · phone 숫자 없음`).
-    ///
-    /// ★ 그 분기는 뷰 안(`#if os(iOS)`)에 있어서 맥 스위트가 한 줄도 재지 못했다. 그래서 고르기를 **뷰 밖**
-    /// (`AILimitDisplayRow.primaryWindow`)으로 끌어내고, 여기서 ① 규칙 자체와 ② 뷰가 그 규칙에 물렸는지를 함께 잰다.
-    @Test("폰 머리 줄: 대표 창을 세운다(주간만 오는 계정도) · 라벨이 값과 한 묶음 · 대표를 두 번 안 그린다")
-    func phoneHeadLineStandsUpTheRepresentativeWindow() throws {
-        let base = MobileClock.demoInstant
-        func row(fiveHour: Double?) throws -> AILimitDisplayRow {
+        func surfaces(fiveHour: Double?) throws -> (phone: AILimitDisplayRow, widget: AingWidgetLimitRow) {
             let rows = [AILimitFetchedRow(provider: "antigravity", fiveHourPercent: fiveHour,
                                           fiveHourResetsAt: fiveHour == nil ? nil : base.addingTimeInterval(9_000),
                                           weeklyPercent: 42, weeklyResetsAt: base.addingTimeInterval(86_400),
@@ -285,41 +246,220 @@ struct MeAILimitsTests {
                 let value = AILimitFreshnessRule.display(provider: snapshot, window: window, now: base)
                 return value.isVisible ? value : nil
             }
-            return AILimitDisplayRow(provider: .antigravity, planLabel: nil,
-                                     fiveHour: display(.fiveHour), weekly: display(.weekly))
+            return (AILimitDisplayRow(provider: .antigravity, planLabel: nil,
+                                      fiveHour: display(.fiveHour), weekly: display(.weekly)),
+                    AingWidgetLimitRow(provider: .antigravity,
+                                       fiveHour: display(.fiveHour), weekly: display(.weekly)))
         }
-
-        // ① 주간만 오는 계정: 머리에 **주간 42%** 가 선다(값도 라벨도 있다).
-        let weeklyOnly = try row(fiveHour: nil)
-        let primary = try #require(weeklyOnly.primaryWindow, "5시간 창이 없으면 머리 줄이 통째로 사라진다")
-        #expect(primary.display.window == .weekly)
-        #expect(primary.display.valueText == "42%")
-        #expect(primary.label == AILimitWindow.weekly.displayName,
-                "주간 값에 '\(primary.label)' 라벨이 붙었다 — 위 줄의 5시간과 같은 창으로 읽힌다")
-        #expect(weeklyOnly.secondaryWeekly == nil, "대표로 이미 선 주간을 아래에 한 번 더 그린다")
-        // 위젯이 같은 데이터로 **같은 창·같은 라벨**을 세운다(두 화면이 한 규칙이다).
-        let widget = try #require(AingWidgetLimitRow(provider: .antigravity, fiveHour: weeklyOnly.fiveHour,
-                                                     weekly: weeklyOnly.weekly).primaryWindow)
-        #expect(widget.display == primary.display && widget.label == primary.label)
-
-        // ② 기준선: 두 창이 다 있으면 머리는 **5시간**이고 주간은 아래 얇은 줄로 내려간다(고정이 아니다).
-        let both = try row(fiveHour: 27)
-        let bothPrimary = try #require(both.primaryWindow)
-        #expect(bothPrimary.display.window == .fiveHour && bothPrimary.display.valueText == "27%")
-        #expect(bothPrimary.label == AILimitWindow.fiveHour.displayName)
-        #expect(both.secondaryWeekly?.valueText == "42%", "두 창이 다 있으면 주간이 따로 한 줄 더 선다")
-
-        // ③ 창이 하나도 안 보이면 머리 줄을 만들지 않는다(0% 로 지어내지 않는다).
+        // ① 주간만 오는 계정(안티그래비티 실측): 5시간 칸은 **둘 다 비고**, 주간 칸은 둘 다 42% 다.
+        let weeklyOnly = try surfaces(fiveHour: nil)
+        #expect(weeklyOnly.phone.display(.fiveHour) == nil && weeklyOnly.widget.display(.fiveHour) == nil,
+                "없는 창을 지어냈다 — 그 칸은 `없음` 으로 비어야 한다")
+        let phoneWeekly = try #require(weeklyOnly.phone.display(.weekly))
+        #expect(phoneWeekly.valueText == "42%")
+        #expect(weeklyOnly.widget.display(.weekly) == phoneWeekly, "폰과 위젯이 같은 칸에 다른 값을 넣는다")
+        #expect(weeklyOnly.phone.hasAnyWindow && weeklyOnly.widget.hasAnyWindow)
+        // 비는 칸의 글자는 `—`(판정 불가)가 **아니다** — 두 사실을 같은 글자로 말하지 않는다.
+        #expect(AILimitColumnText.absentValueText != AILimitFreshnessRule.unknownValueText)
+        // ② 기준선: 두 창이 다 있으면 두 칸이 **다 찬다**(기준선이 같은 입력이면 이 테스트는 영원히 초록이다).
+        let both = try surfaces(fiveHour: 27)
+        #expect(both.phone.display(.fiveHour)?.valueText == "27%" && both.phone.display(.weekly)?.valueText == "42%")
+        #expect(both.widget.display(.fiveHour) == both.phone.display(.fiveHour))
+        #expect(both.widget.display(.weekly) == both.phone.display(.weekly))
+        // ③ 창이 하나도 안 보이면 두 칸을 `없음 · 없음` 으로 세우지 않는다(그 줄은 아예 서지 않는다).
         let none = AILimitDisplayRow(provider: .claude, planLabel: nil, fiveHour: nil, weekly: nil)
-        #expect(none.primaryWindow == nil && none.secondaryWeekly == nil)
+        #expect(!none.hasAnyWindow && none.display(.fiveHour) == nil && none.display(.weekly) == nil)
+        #expect(!AingWidgetLimitRow(provider: .claude, fiveHour: nil, weekly: nil).hasAnyWindow)
+        // ④ 창이 **둘뿐**이라는 전제: 셋이 되는 날 공유 팔레트의 열거값이 함께 늘어야 한다(안 늘면 새 창이
+        //    조용히 5시간 열 색으로 떨어진다).
+        #expect(AILimitWindow.allCases.count == AILimitColumnWindow.allCases.count,
+                "창이 늘었는데 열 팔레트는 둘뿐이다 — 새 창이 5시간 열 색을 입는다")
+        for window in AILimitWindow.allCases {
+            #expect(AILimitColumnPalette.column(windowRawValue: window.rawValue).rawValue == window.rawValue,
+                    "\(window.rawValue) 가 열로 옮겨지지 않는다(파랑·보라가 뒤집힐 자리다)")
+        }
+    }
 
-        // ★ 뷰가 그 규칙에 **물렸는가**(소스 계약 — 이 뷰는 `#if os(iOS)` 라 값으로는 잴 수 없다).
-        let card = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeAILimitsCard.swift")
-        #expect(card.contains("row.primaryWindow"), "카드가 대표 창 규칙을 쓰지 않는다")
-        #expect(card.contains("row.secondaryWeekly"), "주간 줄이 대표 여부를 보지 않는다 — 같은 값을 두 번 그린다")
-        #expect(!card.contains("row.fiveHour"), "카드가 5시간 창을 무조건 머리로 쓴다(주간만 오는 계정에서 숫자가 사라진다)")
-        #expect(!card.contains("headLine(nil)"), "값·캡션을 둘 다 건너뛰는 갈래가 남았다")
-        #expect(card.contains("primary.label"), "머리 줄에 창 라벨이 없다")
+    /// ★ **가로 예산이 가장 좁은 기기에서도 말줄임을 만들지 않는가** (v0.3.46).
+    ///
+    /// 숫자 칸은 `lineLimit(1)` 이라 넘쳐도 **높이가 변하지 않는다** = 렌더 높이로는 안 잡히고, 넘친 순간의
+    /// 증상은 말줄임이다. 그리고 이 자리에서 말줄임은 **숫자 자릿수 오독**이다("100% 이상" → "100% 이…").
+    /// 뷰는 `#if os(iOS)` 라 맥 스위트가 한 줄도 컴파일하지 않으므로 예산을 뷰 밖(`MeAILimitCardBudget`)에
+    /// 두고 **여기서 글자를 다시 재서** 되묻는다(글자수로 재면 안 된다 — 한글 13pt · 라틴 7pt · 숫자 7.3pt).
+    @Test("폰 가로 예산: 숫자·이름·열 머리가 칸에 들어간다 · 가장 좁은 기기(375pt)에서도 바가 남는다")
+    func columnGridFitsEvenTheNarrowestPhone() throws {
+        let budget = MeAILimitCardBudget.self
+        // ① 실측 상수가 **지금 이 맥에서도** 같은 값인가(글꼴이 바뀌면 여기서 빨개진다).
+        #expect(abs(measuredWidth("100% 이상", size: budget.valueFontSize, weight: .bold, monospacedDigits: true)
+                    - budget.worstValueWidth) < 1.5)
+        #expect(abs(measuredWidth("안티그래비티", size: budget.nameFontSize, weight: .semibold) - budget.worstNameWidth) < 1.5)
+        #expect(abs(measuredWidth("5시간", size: budget.headerFontSize, weight: .semibold) - budget.worstHeaderWidth) < 1.5)
+        // ② 가장 넓은 문구가 칸에 들어간다(`없음` · `—` · `0%` 는 그보다 좁다).
+        #expect(budget.valueFits(budget.worstValueWidth), "가장 넓은 숫자가 칸을 넘는다 — 자릿수가 잘린다")
+        for text in [AILimitColumnText.absentValueText, AILimitFreshnessRule.unknownValueText, "0%", "99% 이상"] {
+            let width = measuredWidth(text, size: budget.valueFontSize, weight: .bold, monospacedDigits: true)
+            #expect(budget.valueFits(width), "\(text) 가 숫자 칸(\(budget.valueWidth))을 넘는다: \(width)")
+        }
+        #expect(budget.worstNameWidth <= budget.nameTextWidth,
+                "가장 긴 제공자 이름이 108pt 칸의 글자 자리(\(budget.nameTextWidth))를 넘는다")
+        for window in AILimitWindow.allCases {
+            let width = measuredWidth(window.displayName, size: budget.headerFontSize, weight: .semibold)
+            #expect(width <= budget.valueWidth, "열 머리 '\(window.displayName)' 가 숫자 칸보다 넓다")
+        }
+        // ③ 기기 폭 → 바 폭. 기준 기기(393)와 **가장 좁은 기기(375)** 둘 다 바가 보일 만큼 남는다.
+        for screen in [budget.narrowestScreenWidth, budget.referenceScreenWidth, 440] as [CGFloat] {
+            let inner = budget.innerWidth(screenWidth: screen)
+            let bar = budget.barWidth(innerWidth: inner)
+            #expect(bar >= budget.minimumBarWidth, "\(screen)pt 기기에서 바가 \(bar)pt 다 — 8% 와 0% 가 안 갈린다")
+            // ★ 열 머리의 오른쪽 끝이 자기 열 숫자 칸의 오른쪽 끝과 맞는다 — **항등식**으로 잰다
+            //   (두 칸이 남는 폭을 똑같이 나눠 가지므로 측정 상수가 필요 없다).
+            #expect(abs(budget.cellWidth(innerWidth: inner) - (bar + budget.barValueGap + budget.valueWidth)) < 0.001)
+            #expect(abs(budget.nameColumnWidth + budget.nameGap + budget.columnGap
+                        + budget.cellWidth(innerWidth: inner) * 2 - inner) < 0.001,
+                    "한 줄의 가로 합이 카드 안쪽 폭과 다르다 — 어딘가 넘치거나 남는다")
+        }
+        // ④ 기준 기기의 숫자를 못 박는다(승인본의 108pt 칸이 줄어들면 여기서 빨개진다).
+        #expect(budget.innerWidth(screenWidth: budget.referenceScreenWidth) == 329)
+        #expect(budget.nameColumnWidth == 108 && budget.markSide == 26)
+    }
+
+    /// ★ **채움 폭 산식은 세 화면이 한 벌**이다. 0% 는 0pt(채움 없음), 0 보다 크면 **보이는 길이**를 갖는다.
+    ///
+    /// 왜 비례 최소값인가: 맥 팝오버의 바는 69pt 고 폰 카드의 바는 32pt 다(이름 칸을 두느라 좁다).
+    /// 최소 채움을 고정 pt 로 두면 좁은 바에서 1% 와 18% 가 같은 길이가 된다 — 바가 거짓말을 한다.
+    @Test("채움 폭: 0% 는 0pt · 1% 도 보인다 · 100% 는 꽉 · 판정 불가는 채움 없음(좁은 바와 넓은 바 둘 다)")
+    func barFillWidthIsOneFormula() {
+        for bar in [26.0, 32, 44, 69] {
+            #expect(AILimitBarFill.width(barWidth: bar, percent: 0) == 0, "0% 가 길이를 가졌다 — '안 썼다'가 아니라 '조금 썼다'로 보인다")
+            #expect(AILimitBarFill.width(barWidth: bar, percent: nil) == 0, "판정 불가를 0% 로 그렸다")
+            #expect(AILimitBarFill.width(barWidth: bar, percent: 1) >= 2, "1% 가 안 보인다")
+            #expect(AILimitBarFill.width(barWidth: bar, percent: 1) < AILimitBarFill.width(barWidth: bar, percent: 50))
+            #expect(AILimitBarFill.width(barWidth: bar, percent: 100) == bar)
+            #expect(AILimitBarFill.width(barWidth: bar, percent: 140) == bar, "100 을 넘는 값이 바를 넘겼다")
+            #expect(AILimitBarFill.width(barWidth: bar, percent: -5) == 0)
+            // 최소 채움은 **바 폭에 비례**한다(좁은 바에서 1% 와 18% 가 같은 길이가 되지 않게).
+            #expect(AILimitBarFill.minimumFill(barWidth: bar) < bar * 0.2)
+        }
+        #expect(AILimitBarFill.minimumFill(barWidth: 69) > AILimitBarFill.minimumFill(barWidth: 26))
+        #expect(AILimitBarFill.width(barWidth: 0, percent: 50) == 0, "폭 0 에서 음수·NaN 이 나오면 레이아웃이 깨진다")
+    }
+
+    /// ★ **사용량 단계는 글자가 쓰는 수로 가른다**(맥이 2026-10-07 에 밟은 결함).
+    ///
+    /// 초안은 클램프도 안 된 날것 double 로 90 을 갈랐다. 89.5% 는 규칙이 `90%` 라고 **적는데**
+    /// (`wholePercent` 가 반올림한다) 색은 평온했다 — 같은 자리에서 글자와 색이 다른 단계를 말한 것이다.
+    @Test("사용량 단계: 89.5% 는 글자가 `90%` 라 색도 위험이다 · 경계 양쪽 · 모르는 값엔 경고를 붙이지 않는다")
+    func usageStageAgreesWithTheGlyph() {
+        func stage(_ percent: Double?) -> AILimitUsageStage {
+            AILimitUsageStage.stage(wholePercent: percent.map(AILimitFreshnessRule.wholePercent))
+        }
+        #expect(stage(nil) == .calm, "모르는 값에 경고를 붙였다")
+        #expect(stage(0) == .calm && stage(69) == .calm)
+        #expect(stage(69.5) == .warn, "글자는 `70%` 인데 색은 평온하다")
+        #expect(stage(70) == .warn && stage(89) == .warn)
+        #expect(stage(89.5) == .danger, "글자는 `90%` 인데 색은 주의다 — 같은 자리가 두 말을 한다")
+        #expect(stage(90) == .danger && stage(100) == .danger)
+        #expect(stage(.nan) == .calm && stage(.infinity) == .calm, "NaN·무한은 0 으로 접힌다(코어 규칙) — 경고를 붙이지 않는다")
+        // 경계는 맥과 **같은 수**여야 한다(맥은 이 모듈을 링크하지 않는다 — 소스로 대조한다).
+        let mac = try? IntegrationContractTests.code("Sources/check/CheckAILimitsRow.swift")
+        if let mac {
+            #expect(mac.contains("warnPercent = \(AILimitUsageStage.warnPercent)")
+                    && mac.contains("dangerPercent = \(AILimitUsageStage.dangerPercent)"),
+                    "맥의 사용량 경계가 폰·위젯과 갈렸다")
+        }
+    }
+
+    /// ★ **두 열의 색 숫자는 한 표**다 — 폰·위젯은 같은 상수를 보고, 맥은 같은 16진수를 따로 적는다.
+    ///
+    /// 맥 앱 타깃은 `CheckMobileShared` 를 링크하지 않는다(Package.swift — 셋이 다 보는 모듈은 `CheckCore`
+    /// 뿐이다). 그래서 승인본 16진수가 갈리지 않는지는 **소스로** 되묻는다. 한쪽만 고치는 날 여기서 빨개진다.
+    @Test("열 팔레트: 승인본 16진수가 맥 코드에도 그대로 있다 · 대비와 위계가 지켜진다")
+    func columnPaletteIsOneTableAcrossSurfaces() throws {
+        // ① 승인본(어두운 쪽) 16진수가 맥 팔레트에도 **그대로** 있다(밑줄은 걷어내고 본다).
+        let mac = try IntegrationContractTests.code("Sources/check/CheckAILimitsRow.swift")
+            .replacingOccurrences(of: "_", with: "")
+        let approved: [(String, UInt32)] = [
+            ("5시간 바", AILimitColumnPalette.fiveHourBar.dark),
+            ("5시간 열 머리", AILimitColumnPalette.fiveHourHeader.dark),
+            ("주간 바", AILimitColumnPalette.weeklyBar.dark),
+            ("주간 열 머리", AILimitColumnPalette.weeklyHeader.dark),
+            ("빈 트랙", AILimitColumnPalette.emptyTrack.dark),
+            ("없는 칸 트랙", AILimitColumnPalette.absentTrack.dark),
+            ("구분선", AILimitColumnPalette.separator.dark),
+            ("없는 칸 글자", AILimitColumnPalette.absentText.dark),
+        ]
+        for (name, hex) in approved {
+            let needle = "0x" + String(format: "%06X", hex)
+            #expect(mac.contains(needle), "\(name) \(needle) 이 맥 팔레트에 없다 — 세 화면이 다른 색으로 그린다")
+        }
+        // ② `없음` 글자도 맥과 같은 글자다(두 벌로 적으면 한쪽만 고쳐지는 날 화면이 갈린다).
+        #expect(mac.contains("\"\(AILimitColumnText.absentValueText)\""), "맥의 `없음` 글자가 갈렸다")
+
+        // ③ 대비: 열 머리 글자는 라이트·다크 둘 다 **4.5:1 이상**, 바는 그래픽이라 3:1 이상.
+        func rgb(_ hex: UInt32) -> MobileThemePalette.RGB { MobileThemePalette.RGB(hex: hex) }
+        let backdrops = (light: rgb(0xFFFFFF), dark: rgb(0x2B2E3D))     // 폰 카드 바탕(`surface`)
+        for window in AILimitWindow.allCases {
+            let column = AILimitColumnPalette.column(windowRawValue: window.rawValue)
+            let header = AILimitColumnPalette.header(column), bar = AILimitColumnPalette.bar(column)
+            #expect(rgb(header.light).contrast(against: backdrops.light) >= 4.5,
+                    "\(window.rawValue) 라이트 열 머리 대비 \(rgb(header.light).contrast(against: backdrops.light))")
+            #expect(rgb(header.dark).contrast(against: backdrops.dark) >= 4.5,
+                    "\(window.rawValue) 다크 열 머리 대비 \(rgb(header.dark).contrast(against: backdrops.dark))")
+            #expect(rgb(bar.light).contrast(against: backdrops.light) >= 3)
+            #expect(rgb(bar.dark).contrast(against: backdrops.dark) >= 3)
+            // 머리 글자와 바는 **같은 계열에서 명도만 다르다**(머리와 바의 색을 따로 고르면 짝이 안 보인다).
+            #expect(header.light != bar.light && header.dark != bar.dark)
+        }
+        // ④ 두 열은 **서로 다른 색**이다(같으면 색 단서가 사라진다).
+        #expect(AILimitColumnPalette.fiveHourBar != AILimitColumnPalette.weeklyBar)
+        #expect(AILimitColumnPalette.fiveHourHeader != AILimitColumnPalette.weeklyHeader)
+        // ⑤ 위계 ⓐ: 두 트랙은 **서로 다르다** — 창이 없다는 사실의 단서가 `없음` 글자 하나로 줄지 않게.
+        #expect(AILimitColumnPalette.absentTrack != AILimitColumnPalette.emptyTrack,
+                "없는 칸과 빈 칸의 트랙이 같다 — 글자 하나만 남는다")
+        // ⓑ 트랙은 어느 바보다도 **조용하다**(트랙이 채움으로 읽히면 0% 가 '꽤 썼다'로 보인다).
+        for window in AILimitWindow.allCases {
+            let bar = AILimitColumnPalette.bar(AILimitColumnPalette.column(windowRawValue: window.rawValue))
+            for (track, name) in [(AILimitColumnPalette.emptyTrack, "빈 트랙"),
+                                  (AILimitColumnPalette.absentTrack, "없는 칸 트랙")] {
+                #expect(rgb(track.light).contrast(against: backdrops.light)
+                        < rgb(bar.light).contrast(against: backdrops.light), "\(name)(라이트)이 바만큼 눈에 띈다")
+                #expect(rgb(track.dark).contrast(against: backdrops.dark)
+                        < rgb(bar.dark).contrast(against: backdrops.dark), "\(name)(다크)이 바만큼 눈에 띈다")
+            }
+        }
+        // ⓒ 승인본이 전제한 바탕(위젯 바탕 = 어두운 한 벌)에서는 없는 칸 트랙이 빈 트랙보다 **바탕에 가깝다**
+        //    = 더 조용하다. 폰 카드 바탕(`surface`)은 그보다 한 단 밝아 같은 값이 '조금 어두운 홈'으로 보이는데,
+        //    그래도 **채움으로는 읽히지 않는다**(ⓑ) — 세 화면이 한 표를 쓰는 값이 더 중요하다.
+        let widgetBackdrops = (light: rgb(AingWidgetPalette.background.light), dark: rgb(AingWidgetPalette.background.dark))
+        #expect(rgb(AILimitColumnPalette.absentTrack.dark).contrast(against: widgetBackdrops.dark)
+                < rgb(AILimitColumnPalette.emptyTrack.dark).contrast(against: widgetBackdrops.dark))
+        #expect(rgb(AILimitColumnPalette.absentTrack.light).contrast(against: widgetBackdrops.light)
+                < rgb(AILimitColumnPalette.emptyTrack.light).contrast(against: widgetBackdrops.light))
+        for (ink, backdrop) in [(AILimitColumnPalette.absentText.light, backdrops.light),
+                                (AILimitColumnPalette.absentText.dark, backdrops.dark)] {
+            let ratio = rgb(ink).contrast(against: backdrop)
+            #expect(ratio >= 2, "`없음` 글자가 \(ratio):1 로 사라졌다")
+            #expect(ratio < 4.5, "`없음` 글자가 숫자만큼 커졌다 — 값이 아니라 '값이 없다는 사실'이다")
+        }
+    }
+
+    /// 글자 폭 실측(맥 글꼴로 — SF Pro 글리프 폭은 iOS 와 같은 글꼴에서 같다. 다른 것은 텍스트 스타일이
+    /// 어느 pt 로 풀리는지뿐이고, 그 pt 를 `MeAILimitCardBudget` 이 상수로 들고 있다).
+    nonisolated static func width(_ text: String, size: CGFloat, weight: NSFont.Weight, monospacedDigits: Bool) -> CGFloat {
+        var font = NSFont.systemFont(ofSize: size, weight: weight)
+        if monospacedDigits {
+            let descriptor = font.fontDescriptor.addingAttributes([
+                .featureSettings: [[NSFontDescriptor.FeatureKey.typeIdentifier: kNumberSpacingType,
+                                    NSFontDescriptor.FeatureKey.selectorIdentifier: kMonospacedNumbersSelector]],
+            ])
+            font = NSFont(descriptor: descriptor, size: size) ?? font
+        }
+        return (text as NSString).size(withAttributes: [.font: font]).width
+    }
+
+    private func measuredWidth(_ text: String, size: CGFloat, weight: NSFont.Weight,
+                               monospacedDigits: Bool = false) -> CGFloat {
+        Self.width(text, size: size, weight: weight, monospacedDigits: monospacedDigits)
     }
 
     @Test("토큰 축: 오늘 칸은 잔디의 마지막 날 · 수집을 끄면 둘 다 nil(0 으로 지어내지 않는다)")
@@ -353,18 +493,44 @@ struct MeAILimitsTests {
 
     // MARK: - 소스 계약(주석을 걷어내고 본다)
 
-    @Test("카드: 값은 코어 규칙에서만 온다 · 막대는 ProgressBar · 로고 타일 **옆에 이름 글자** · 출처 문구 없음 · 토큰은 다른 블록")
+    @Test("카드: 값은 코어 규칙에서만 온다 · 한 줄에 두 칸 · 열 머리는 맨 위 한 번 · 이름+요금제 · 출처 문구 없음")
     func cardContract() throws {
         let card = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeAILimitsCard.swift")
         #expect(card.contains("limits.displayRows"), "카드가 규칙이 만든 줄을 안 쓴다")
         #expect(card.contains("AIProviderTile(provider:"), "로고 타일이 없다")
         #expect(card.contains("row.provider.displayName"), "타일 옆 이름 글자가 없다 — 색으로만 제공자를 가른다")
-        #expect(card.contains("ProgressBar(") && !card.contains("trim(from:"), "링 게이지로 돌아갔다")
-        #expect(card.contains("thin: true"), "주간 얇은 줄이 없다(5시간만 그린다)")
-        #expect(card.components(separatedBy: "ViewThatFits(in: .horizontal)").count >= 2, "큰 글자에서 조각을 빼는 갈래가 없다")
+        #expect(card.contains("row.planLabel"), "요금제를 안 쓴다 — 폰 카드는 이름과 요금제를 **둘 다** 쓴다(승인된 문법)")
+        #expect(card.contains("MeAILimitBar(") && !card.contains("trim(from:"), "링 게이지로 돌아갔다")
+        // ★ 창을 직접 집지 않는다 — 칸은 `row.display(window)` 하나로만 꺼낸다(대표 창 고르기가 없다).
+        #expect(card.contains("row.display("), "카드가 창별 칸 규칙을 쓰지 않는다")
+        #expect(!card.contains("row.fiveHour") && !card.contains("row.weekly"),
+                "카드가 창을 직접 집는다 — 그 자리에서 '어느 창을 세우나' 선택이 되살아난다")
+        #expect(!card.contains("primaryWindow") && !card.contains("secondaryWeekly"),
+                "대표 창 고르기가 돌아왔다(새 문법에는 그 선택이 없다)")
+        // ★ 창이 **없는** 칸의 글자는 공유 규칙에서 온다(`—` 와 다른 말이어야 한다).
+        #expect(card.contains("AILimitColumnText.absentValueText"), "없는 칸의 글자를 공유 규칙에서 안 가져온다")
+        #expect(!card.contains("\"없음\""), "뷰가 `없음` 글자를 또 적었다 — 맥·위젯과 갈릴 자리다")
+        #expect(!card.contains("unknownValueText"), "뷰가 '판정 불가' 글자를 없는 칸에 쓴다(고장으로 읽힌다)")
+        // 열 색·구분선 숫자는 공유 팔레트 하나에서 온다(위젯과 같은 값).
+        #expect(card.contains("AILimitColumnPalette"), "열 색을 뷰가 따로 적었다")
+        #expect(card.contains("AILimitUsageStage"), "사용량 단계(70·90%)를 뷰가 따로 갈랐다")
+        // 가로 숫자는 전부 예산 타입에서 — 뷰에 박으면 맥 스위트가 한 줄도 재지 못한다.
+        #expect(card.contains("MeAILimitCardBudget.nameColumnWidth") && card.contains("MeAILimitCardBudget.valueWidth"))
         // 퍼센트·나이를 뷰가 다시 만들면 규칙이 둘이 된다.
         #expect(!card.contains("rounded()") && !card.contains("timeIntervalSince"), "뷰가 숫자·나이를 다시 계산한다")
         #expect(!card.contains("이상"), "뷰가 하한 접미사를 직접 붙인다(규칙의 valueText 를 써야 한다)")
+        // ★ **구간을 잘라서 잰다.** "파일 어디든 한 번 나오면 된다"로 재면 커버리지 구멍이다 — 격자에서 칸을
+        //   통째로 지워도 쌓은 모양 쪽이 남아 초록이었을 자리다(관례: 뮤테이션 M7).
+        let grid = try #require(card.range(of: "private var grid:"))
+        let nameColumn = try #require(card.range(of: "private var nameColumn:"))
+        let gridBody = card[grid.lowerBound..<nameColumn.lowerBound]
+        #expect(gridBody.contains("cell(.fiveHour)") && gridBody.contains("cell(.weekly)"),
+                "격자에 두 칸이 나란히 서지 않는다 — 세로로 쌓은 옛 문법이다")
+        let stacked = try #require(card.range(of: "private var stacked:"))
+        #expect(card[stacked.lowerBound...].contains("AILimitWindow.allCases"),
+                "AX 크기에서 창 하나가 빠진다(쌓은 모양에서도 정보는 다 있어야 한다)")
+        // 열 머리는 **카드에 한 번만** 선다(줄마다 반복하지 않는다 — 승인된 문법 ②).
+        #expect(card.components(separatedBy: "columnHeaderRow").count - 1 == 2, "열 머리 줄이 한 자리가 아니다")
         // 출처(폰 직접/서버 경유)는 사용자 문구가 아니다.
         for banned in ["서버에서", "맥에서 읽", "AILimitSource", ".server", ".local"] {
             #expect(!card.contains(banned), "카드가 값의 출처를 말한다(\(banned))")

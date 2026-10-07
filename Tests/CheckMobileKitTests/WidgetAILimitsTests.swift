@@ -201,51 +201,36 @@ struct WidgetAILimitsTests {
         #expect(limits.shown(limit: 1).map(\.provider) == [.claude])
     }
 
-    @Test("S 가 세우는 하나 = 5시간 사용률이 가장 높은 줄(모르는 줄은 끼어들지 않는다 · 동률은 고정 순서)")
-    func mostUrgentPicksHighest() throws {
-        func most(_ rows: [WidgetSnapshot.AILimitRow]) throws -> AILimitProvider? {
-            guard case .limits(let limits) = AingWidgetLimitsState(snapshot: Self.snapshot(.init(providers: rows)), at: Self.now) else {
-                throw TestFailure.notLimits
-            }
-            return limits.mostUrgent?.provider
-        }
-        #expect(try most([
-            .init(provider: "claude", fiveHourPercent: 27, observedAt: Self.now),
-            .init(provider: "codex", fiveHourPercent: 94, observedAt: Self.now),
-        ]) == .codex)
-        // 동률이면 고정 순서가 가른다(칸마다 다른 줄이 서면 위젯을 믿지 못한다).
-        #expect(try most([
-            .init(provider: "codex", fiveHourPercent: 40, observedAt: Self.now),
-            .init(provider: "claude", fiveHourPercent: 40, observedAt: Self.now),
-        ]) == .claude)
-        // 주간만 있는 줄(5시간 모름 urgency −1)은 0% 인 줄에도 밀린다 — '모른다'는 0 이 아니다.
-        #expect(try most([
-            .init(provider: "antigravity", weeklyPercent: 99, weeklyResetsAt: Self.now.addingTimeInterval(500_000), observedAt: Self.now),
-            .init(provider: "claude", fiveHourPercent: 0, observedAt: Self.now),
-        ]) == .claude)
-    }
-
-    @Test("대표 창은 라벨과 한 묶음이다 — 5시간이 없으면 주간이 서고 라벨도 '주간'으로 바뀐다(둘이 같은 창으로 읽히지 않게)")
-    func primaryWindowCarriesItsLabel() throws {
+    /// ★ **창마다 자기 칸이다** — v0.3.46 승인 문법에는 '대표 창 고르기'가 없다(폰·맥과 같은 문법).
+    ///
+    /// v0.3.45 는 줄마다 대표 창 하나를 세웠고, 라벨을 안 그리는 자리가 생기면 주간 8% 가 5시간 27% 옆에
+    /// 나란히 서서 **같은 창으로 읽혔다**. 두 열을 나란히 세우고 열 머리를 맨 위에 한 번만 적는 새 문법에서는
+    /// 칸의 **자리**가 창을 말한다 — 그래서 라벨을 값에 붙여 다닐 필요도, 대표를 고를 필요도 없다.
+    @Test("칸 구성: 창마다 자기 칸 · 5시간이 없는 제공자는 그 칸이 빈다(`없음`) · 빈 줄은 서지 않는다")
+    func everyWindowGetsItsOwnCell() throws {
         let panel = WidgetSnapshot.AILimitPanel(providers: [
             .init(provider: "claude", fiveHourPercent: 27, fiveHourResetsAt: Self.now.addingTimeInterval(9_000),
                   weeklyPercent: 60, weeklyResetsAt: Self.now.addingTimeInterval(450_000), observedAt: Self.now),
-            // 5시간 창이 아예 없는 요금제(안티그래비티 실측) — 주간이 대표로 선다.
+            // 5시간 창이 아예 없는 요금제(안티그래비티 실측) — 그 칸은 `없음` 으로 빈다.
             .init(provider: "antigravity", weeklyPercent: 8, weeklyResetsAt: Self.now.addingTimeInterval(500_000), observedAt: Self.now),
         ])
         guard case .limits(let limits) = AingWidgetLimitsState(snapshot: Self.snapshot(panel), at: Self.now) else {
             throw TestFailure.notLimits
         }
         let claude = try #require(limits.rows.first { $0.provider == .claude })
-        let claudePrimary = try #require(claude.primaryWindow)
-        #expect(claudePrimary.label == AingWidgetText.limitsFiveHour && claudePrimary.display.valueText == "27%")
-        #expect(claude.secondaryWeekly?.valueText == "60%", "두 창이 다 있으면 주간이 따로 한 줄 더 선다")
+        #expect(claude.display(.fiveHour)?.valueText == "27%" && claude.display(.weekly)?.valueText == "60%",
+                "두 칸이 다 차지 않는다")
+        #expect(claude.hasAnyWindow)
 
         let ag = try #require(limits.rows.first { $0.provider == .antigravity })
-        let agPrimary = try #require(ag.primaryWindow)
-        #expect(agPrimary.label == AingWidgetText.limitsWeekly, "주간 값에 '5시간' 라벨이 붙었다 — 27% 옆에서 같은 창으로 읽힌다")
-        #expect(agPrimary.display.valueText == "8%")
-        #expect(ag.secondaryWeekly == nil, "대표로 이미 선 주간을 아래에 한 번 더 그린다")
+        #expect(ag.display(.fiveHour) == nil, "없는 5시간 창을 지어냈다 — 그 칸은 `없음` 이어야 한다")
+        #expect(ag.display(.weekly)?.valueText == "8%")
+        #expect(ag.hasAnyWindow)
+        // 두 칸이 다 비는 줄은 **서지 않는다**(`없음 · 없음` 인 빈 줄을 만들지 않는다).
+        #expect(!AingWidgetLimitRow(provider: .codex, fiveHour: nil, weekly: nil).hasAnyWindow)
+        // 열 머리 글자는 코어 어휘와 **같은 글자**다(위젯만 다른 말을 쓰면 세 화면이 갈린다).
+        #expect(AingWidgetText.limitsFiveHour == AILimitWindow.fiveHour.displayName)
+        #expect(AingWidgetText.limitsWeekly == AILimitWindow.weekly.displayName)
         #expect(AingWidgetText.limitsFiveHour != AingWidgetText.limitsWeekly)
     }
 
@@ -350,12 +335,131 @@ struct WidgetAILimitsTests {
         #expect(limits.contains("provider: AingLimitsTimelineProvider()"), "리밋 위젯이 공용 공급자로 돌아갔다")
     }
 
-    @Test("위젯 종류: kind 는 넷이고 새 kind 는 갤러리 이름·설명을 가진다")
+    @Test("위젯 종류: kind 는 넷이고 새 kind 는 갤러리 이름·설명을 가진다 · 리밋 칸 수는 셋")
     func kindsAndGallery() {
         #expect(AingWidgetKind.all.count == 4 && Set(AingWidgetKind.all).count == 4)
         #expect(AingWidgetKind.all.contains(AingWidgetKind.aiLimits))
         #expect(!AingWidgetText.limitsGalleryName.isEmpty && !AingWidgetText.limitsGalleryDescription.isEmpty)
-        #expect(AingWidgetLayout.limitRowsMedium == 3 && AingWidgetLayout.limitRowsLarge == 3 && AingWidgetLayout.limitRowsSmall == 1)
+        #expect(AingWidgetLayout.limitRowsMedium == 3, "제공자가 셋인데 칸 수가 \(AingWidgetLayout.limitRowsMedium) 다")
+        #expect(AingWidgetLayout.limitRowsMedium >= AILimitProvider.allCases.count,
+                "제공자가 늘었는데 칸 수가 그대로다 — 마지막 제공자가 조용히 잘린다")
+    }
+
+    /// ★ **리밋 위젯은 미디움 하나뿐이다**(2026-10-06 사용자 지시: "스몰과 라지 버전 다 없애고. 미디움 버전만
+    /// 똑바로 만들어."). 패밀리를 줄이는 것만으로는 부족하다 — 죽은 분기를 남기면 다음 사람이 "라지도 있구나"로
+    /// 읽고 고친다. 그래서 **파일에 크기 분기가 한 줄도 없다**는 것까지 잰다.
+    @Test("패밀리: 미디움 하나만 지원 · 파일에 스몰·라지 분기가 한 줄도 없다 · 미리보기도 미디움만")
+    func onlyMediumSurvives() throws {
+        let limits = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift")
+        #expect(limits.contains("supportedFamilies([.systemMedium])"),
+                "리밋 위젯이 미디움 하나를 지원하지 않는다")
+        for dead in [".systemSmall", ".systemLarge", "isSmall", "isLarge", "limitRowsSmall", "limitRowsLarge"] {
+            #expect(!limits.contains(dead), "리밋 위젯에 죽은 크기 분기가 남았다(\(dead))")
+        }
+        #expect(!limits.contains("let family"), "크기를 들고 다닌다 — 분기가 없으면 들 필요도 없다")
+        // 모델 쪽 상수도 함께 사라졌다(이름이 남아 있으면 '있는 크기'처럼 읽힌다).
+        let model = try IntegrationContractTests.code("Sources/CheckWidgetsKit/AingWidgetModel.swift")
+        for dead in ["limitRowsSmall", "limitRowsLarge", "mostUrgent", "primaryWindow", "secondaryWeekly", "urgency"] {
+            #expect(!model.contains(dead), "리밋 모델에 스몰·대표창 시절의 API 가 남았다(\(dead))")
+        }
+        // 미리보기 카탈로그도 미디움만(지운 크기를 굽던 항목이 남으면 하네스가 없는 모양을 사람에게 보인다).
+        let catalog = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingWidgetPreviewCatalog.swift")
+        for dead in ["limits-small", "limits-large"] {
+            #expect(!catalog.contains(dead), "미리보기에 지운 크기가 남았다(\(dead))")
+        }
+        for alive in ["limits-medium", "limits-medium-narrow", "limits-medium-one", "limits-medium-none",
+                      "limits-medium-nodata", "limits-medium-signedout"] {
+            #expect(catalog.contains(alive), "미리보기에서 \(alive) 가 사라졌다 — 사람이 그 모양을 못 본다")
+        }
+        // 번들 주석도 같은 말을 한다(문서가 반대를 말하면 다음 사람이 그 말을 믿는다).
+        let bundle = try String(
+            contentsOf: IntegrationContractTests.root.appendingPathComponent("ios/Widgets/AingCheckWidgetsBundle.swift"),
+            encoding: .utf8
+        )
+        #expect(bundle.contains("medium 하나뿐"), "번들 주석이 아직 small·large 를 말한다")
+    }
+
+    /// ★ **미디움 칸(170pt)에 머리 · 세 줄 · 토큰 줄이 다 들어가는가** — 그리고 제공자가 하나·둘뿐인 사람의
+    /// 칸이 아래만 비지 않는가(라지를 지운 이유가 그것이었다).
+    ///
+    /// 뷰는 `#if os(iOS)` 라 맥 스위트가 한 줄도 컴파일하지 않는다. 그래서 배치를 순수 예산
+    /// (`AingWidgetLimitsMediumBudget`)으로 빼고 여기서 **숫자로** 잰다.
+    @Test("미디움 예산: 세 줄 + 토큰 줄이 170pt 에 들어간다 · 줄이 적으면 줄이 높아진다 · 좁은 기기도 넘치지 않는다")
+    func mediumBudgetFits() {
+        let sizes = [("기준 364×170", AingWidgetLimitsMediumBudget.referenceSize),
+                     ("좁은 329×155", AingWidgetLimitsMediumBudget.narrowSize)]
+        for (label, size) in sizes {
+            for count in 1...AingWidgetLayout.limitRowsMedium {
+                for hasTokens in [true, false] {
+                    let budget = AingWidgetLimitsMediumBudget.family(
+                        width: size.width, height: size.height, providerCount: count, hasTokens: hasTokens
+                    )
+                    // ① 세로: 쓰는 높이가 칸 안쪽을 **넘지 않는다**(넘기면 토큰 줄이 바깥으로 나간다).
+                    #expect(budget.usedHeight <= budget.innerHeight + 0.001,
+                            "\(label) · \(count)줄 · 토큰 \(hasTokens): \(budget.usedHeight)pt 가 \(budget.innerHeight)pt 를 넘는다")
+                    // ② 줄이 **마크를 담는다**(안 담으면 SwiftUI 가 조용히 압축한다 — 화면에 경고가 없다).
+                    #expect(budget.rowFitsMark, "\(label) · \(count)줄: 줄 높이 \(budget.rowHeight) < 마크 \(budget.markSide)")
+                    #expect(budget.markSide >= AingWidgetLimitsMediumBudget.minMarkSide)
+                    // ③ 이름이 설 자리가 남는다.
+                    #expect(budget.nameTextWidth >= 60, "\(label): 이름 자리가 \(budget.nameTextWidth)pt 뿐이다")
+                    // ④ 가로: 바가 보일 만큼 남고, 한 줄의 합이 안쪽 폭과 **정확히** 같다(항등식).
+                    #expect(budget.barWidth >= AingWidgetLimitsMediumBudget.minimumBarWidth,
+                            "\(label): 바가 \(budget.barWidth)pt 다 — 8% 와 0% 가 안 갈린다")
+                    let row = AingWidgetLimitsMediumBudget.nameColumnWidth + AingWidgetLimitsMediumBudget.nameGap
+                        + AingWidgetLimitsMediumBudget.columnGap + budget.cellWidth * 2
+                    #expect(abs(row - budget.innerWidth) < 0.001, "\(label): 한 줄의 가로 합이 안쪽 폭과 다르다")
+                    // ⑤ 바 두께는 상·하한 안에 있다.
+                    #expect(budget.barHeight >= AingWidgetLimitsMediumBudget.minBarHeight
+                            && budget.barHeight <= AingWidgetLimitsMediumBudget.maxBarHeight)
+                }
+            }
+            // ★ 줄이 **적을수록 높다** = 아래가 통째로 비지 않는다(라지의 결함).
+            func height(_ count: Int) -> Double {
+                AingWidgetLimitsMediumBudget.family(width: size.width, height: size.height,
+                                                    providerCount: count, hasTokens: true).rowHeight
+            }
+            #expect(height(1) > height(2) && height(2) > height(3), "\(label): 줄 수가 줄어도 줄 높이가 그대로다")
+            // 그리고 어느 줄 수에서나 **줄들이 칸을 채운다**(남는 높이가 한 줄 높이만큼 뜨지 않는다).
+            for count in 1...AingWidgetLayout.limitRowsMedium {
+                let budget = AingWidgetLimitsMediumBudget.family(width: size.width, height: size.height,
+                                                                 providerCount: count, hasTokens: true)
+                let used = Double(count) * budget.rowHeight
+                    + Double(count - 1) * AingWidgetLimitsMediumBudget.separatorHeight
+                #expect(abs(used - budget.rowsAreaHeight) < 0.001, "\(label) · \(count)줄: 줄들이 칸을 안 채운다")
+            }
+        }
+        // 제공자가 0 이면 줄 높이를 지어내지 않는다(그 갈래는 안내 한 줄이 선다).
+        let empty = AingWidgetLimitsMediumBudget.family(width: 364, height: 170, providerCount: 0, hasTokens: true)
+        #expect(empty.rowHeight == 0 && empty.rowFitsMark)
+    }
+
+    /// ★ **틴트·투명 모드에서는 열 색이 사라진다** — 그 모드에서 두 열을 가르는 것은 **열 머리 글자와 좌우
+    /// 자리**다(시안 셋 가운데 색 하나가 빠진다). 그래서 열 머리는 **어느 모드에서나 그려야** 하고,
+    /// 그 사실을 값으로 되묻는다(뷰는 iOS 전용이라 색 분기를 맥 스위트가 한 줄도 재지 못한다).
+    @Test("틴트: 두 열이 같은 잉크가 된다 · 그래서 열 머리 글자와 좌우 자리가 모드와 무관하게 남는다")
+    func tintModeKeepsTheOtherTwoCues() throws {
+        // ① 원색: 열마다 다른 잉크.
+        #expect(AingWidgetLimitInk.bar(window: .fiveHour, accented: false)
+                != AingWidgetLimitInk.bar(window: .weekly, accented: false), "원색에서 두 열이 같은 색이다")
+        #expect(AingWidgetLimitInk.bar(window: .fiveHour, accented: false) == .column(.fiveHour))
+        #expect(AingWidgetLimitInk.bar(window: .weekly, accented: false) == .column(.weekly))
+        // ② 틴트: 둘이 **같은 잉크**가 된다(색을 쓰려 해도 시스템이 버린다).
+        #expect(AingWidgetLimitInk.bar(window: .fiveHour, accented: true) == .accentedWhite)
+        #expect(AingWidgetLimitInk.bar(window: .weekly, accented: true)
+                == AingWidgetLimitInk.bar(window: .fiveHour, accented: true))
+
+        // ③ 그래서 뷰는 열 머리를 **모드와 무관하게** 그린다(소스 계약 — 구간을 잘라서 잰다).
+        let limits = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift")
+        let header = try #require(limits.range(of: "private var columnHeaderRow:"))
+        let headerEnd = try #require(limits.range(of: "private var rowSeparator:"))
+        let headerBody = limits[header.lowerBound..<headerEnd.lowerBound]
+        #expect(headerBody.contains("AingWidgetText.limitsFiveHour") && headerBody.contains("AingWidgetText.limitsWeekly"),
+                "열 머리 글자가 둘 다 없다 — 틴트에서 두 열을 가를 단서가 자리 하나로 줄어든다")
+        #expect(!headerBody.contains("accented") && !headerBody.contains("renderingMode =="),
+                "열 머리를 모드로 가린다 — 색이 사라진 모드에서 단서까지 사라진다")
+        // 그리고 제공자는 틴트에서 **실루엣**으로 갈린다(타일 안의 흰 마크가 사라지는 모드다).
+        #expect(limits.contains("AIProviderMark(") && limits.contains("AIProviderTile("),
+                "틴트 모드에서 제공자가 모양으로 갈리지 않는다")
     }
 
     @Test("번들에 새 위젯이 한 줄 올라갔다(ios/Widgets — 패키지만 고치면 홈 화면에 안 뜬다)")
@@ -495,22 +599,30 @@ struct WidgetAILimitsTests {
         #expect(fresh.fiveHour?.floorOnly == false, "기준선이 같은 입력이면 이 테스트는 영원히 초록이다")
 
         // 바가 그 깃발을 **받는다**. 뷰는 `#if os(iOS)` 라 맥 스위트가 한 픽셀도 그리지 못하므로 소스로 잰다.
+        //
+        // ★ 리밋 바는 이제 **전용 부품**이다(`AingWidgetLimitBar` · `MeAILimitBar`). 공용 막대에 열 색과
+        //   두 종류의 트랙을 더하면 리밋과 무관한 다른 자리의 렌더가 같이 흔들리기 때문이다. 그래서 공용
+        //   막대(`AingWidgetBar` · `ProgressBar`)의 하한 처리도 **그대로 살아 있는지** 함께 되묻는다.
         let bar = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingWidgetParts.swift")
-        #expect(bar.contains("var floorOnly: Bool = false"), "위젯 막대에 하한 입력이 없다")
+        #expect(bar.contains("var floorOnly: Bool = false"), "위젯 공용 막대에 하한 입력이 없다")
         #expect(bar.contains("AILimitFloorFill.opacity(floorOnly: floorOnly)"),
-                "위젯 막대가 하한을 불투명도로 말하지 않는다(색으로 말하면 틴트에서 사라진다)")
+                "위젯 공용 막대가 하한을 불투명도로 말하지 않는다(색으로 말하면 틴트에서 사라진다)")
         let widget = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift")
-        let widgetBars = widget.components(separatedBy: "AingWidgetBar(").count - 1
-        #expect(widgetBars == 3, "리밋 위젯의 막대가 \(widgetBars)개다 — 아래 대조가 헐거워졌다")
-        #expect(widget.components(separatedBy: "floorOnly:").count - 1 == widgetBars,
+        let widgetBars = widget.components(separatedBy: "AingWidgetLimitBar(").count - 1
+        #expect(widgetBars >= 1, "리밋 위젯이 막대를 안 그린다")
+        #expect(widget.components(separatedBy: "floorOnly: display?.floorOnly").count - 1 == widgetBars,
                 "리밋 막대 가운데 하한을 안 받는 것이 있다 — 그 칸의 바는 등호처럼 진하다")
+        #expect(widget.contains("AILimitFloorFill.opacity(floorOnly: floorOnly)"),
+                "리밋 막대가 하한을 불투명도로 말하지 않는다")
         let card = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeAILimitsCard.swift")
-        let phoneBars = card.components(separatedBy: "ProgressBar(").count - 1
-        #expect(phoneBars == 2, "폰 카드의 막대가 \(phoneBars)개다")
-        #expect(card.components(separatedBy: "floorOnly:").count - 1 == phoneBars, "폰 막대가 하한을 안 받는다")
+        let phoneBars = card.components(separatedBy: "MeAILimitBar(").count - 1
+        #expect(phoneBars >= 1, "폰 카드가 막대를 안 그린다")
+        #expect(card.components(separatedBy: "floorOnly: display?.floorOnly").count - 1 == phoneBars,
+                "폰 막대 가운데 하한을 안 받는 것이 있다")
+        #expect(card.contains("AILimitFloorFill.opacity(floorOnly: floorOnly)"), "폰 막대가 하한을 흐림으로 말하지 않는다")
         let progress = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/InsetGroup.swift")
         #expect(progress.contains("AILimitFloorFill.opacity(floorOnly: floorOnly)"),
-                "폰 ProgressBar 가 하한을 흐림으로 말하지 않는다")
+                "폰 공용 ProgressBar 가 하한을 흐림으로 말하지 않는다")
 
         // ★ 맥 바는 **같은 상수를 쓸 수 없다**: 맥 앱 타깃은 `CheckMobileShared` 를 링크하지 않고(Package.swift)
         //   셋이 공통으로 보는 모듈은 `CheckCore` 뿐이다. 그래서 숫자가 갈리지 않는지를 소스로 되묻는다 —

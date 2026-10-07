@@ -61,17 +61,22 @@ if [[ "$SDK_STAMPS" != "$SDK_VERSION " || "$MIN_STAMPS" != "$MIN_OS " ]]; then
 fi
 lipo -info "$BIN_DIR/check" >&2
 
-# SwiftPM 리소스 번들(캐릭터 이미지)을 앱 번들 Resources로 복사한다.
-# Bundle.module 접근자가 Bundle.main.resourceURL 후보를 탐색하므로
+# SwiftPM 리소스 번들을 앱 번들 Resources로 복사한다.
+# Bundle.module(과 CheckCore 의 자체 탐색기)이 Bundle.main.resourceURL 후보를 보므로
 # codesign 이전에 Contents/Resources/ 아래에 있어야 한다.
-RESOURCE_BUNDLE="$BUILD_PRODUCTS/check_check.bundle"
-if [[ -d "$RESOURCE_BUNDLE" ]]; then
-  cp -R "$RESOURCE_BUNDLE" "$RES_DIR/"
-else
-  # 경고로 넘기면 캐릭터 이미지 없는 앱이 공증까지 통과해 나간다 — 멈춘다.
-  echo "error: resource bundle not found at $RESOURCE_BUNDLE" >&2
-  exit 1
-fi
+#   · check_check.bundle     — 캐릭터 이미지(실행파일 타깃)
+#   · check_CheckCore.bundle — 제공자 마크 그림(v0.3.46 안티그래비티 실물 캡처). 맥·폰·위젯이 다 링크하는
+#     모듈은 CheckCore 하나뿐이라 거기 실었다. 폰·위젯은 Xcode 가 알아서 넣어 주지만 맥은 이 줄이 전부다.
+for BUNDLE_NAME in check_check.bundle check_CheckCore.bundle; do
+  RESOURCE_BUNDLE="$BUILD_PRODUCTS/$BUNDLE_NAME"
+  if [[ -d "$RESOURCE_BUNDLE" ]]; then
+    cp -R "$RESOURCE_BUNDLE" "$RES_DIR/"
+  else
+    # 경고로 넘기면 그림 없는 앱이 공증까지 통과해 나간다 — 멈춘다.
+    echo "error: resource bundle not found at $RESOURCE_BUNDLE" >&2
+    exit 1
+  fi
+done
 
 if [[ -n "${CHECK_SUPABASE_ANON_KEY:-}" ]]; then
   CONFIG_PLIST="$RES_DIR/CheckConfig.plist"
@@ -100,9 +105,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.3.45</string>
+  <string>0.3.46</string>
   <key>CFBundleVersion</key>
-  <string>98</string>
+  <string>99</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>

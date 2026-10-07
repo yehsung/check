@@ -12,7 +12,7 @@ package enum AingWidgetKind {
     package static let workingNow = "AingWorkingNow"
     package static let myToday = "AingMyToday"
     package static let todos = "AingTodos"
-    /// v0.3.45 — AI 구독 리밋(전용 위젯 1종 · small/medium/large).
+    /// v0.3.45 — AI 구독 리밋(전용 위젯 1종). v0.3.46 부터 **미디움 한 칸만** 지원한다.
     package static let aiLimits = "AingAILimits"
     package static let all = [workingNow, myToday, todos, aiLimits]
 }
@@ -167,12 +167,11 @@ package enum AingWidgetLayout {
     /// 줄 사이 구분선이 시작하는 곳(체크 원 22 + 틈 10 — 글자 시작점).
     package static let todoSeparatorInset: Double = 32
 
-    /// AI 리밋 칸 수: S 는 가장 임박한 하나 · M 은 셋 · L 은 셋 + 토큰 줄(제공자가 셋뿐이라 상한이 곧 전부다).
-    package static let limitRowsSmall = 1
+    /// AI 리밋 칸 수. **미디움 한 종류뿐이다**(v0.3.46 사용자 지시: "스몰과 라지 버전 다 없애고. 미디움 버전만
+    /// 똑바로 만들어."). 제공자가 셋뿐이라 상한이 곧 전부다 — 넷째 제공자가 생기면 이 수가 먼저 늘어야 한다.
     package static let limitRowsMedium = 3
-    package static let limitRowsLarge = 3
-    /// 로고 타일 크기(M·L 줄 머리). 24pt 는 할 일 체크 원(22)과 사람 얼굴(24)과 같은 눈금이다.
-    package static let limitTileSize: Double = 24
+    /// 로고 마크 크기(줄 머리 · 승인된 값 20pt — 왼쪽 92pt 칸에 [마크 20][이름]이 들어간다).
+    package static let limitTileSize: Double = 20
 }
 
 // MARK: - 캐릭터 기분 · 이니셜 원(위젯은 앱 부품을 링크하지 않는다 — 같은 규칙을 여기 둔다)
@@ -440,26 +439,25 @@ package struct AingWidgetLimitRow: Equatable, Sendable, Identifiable {
         self.observedAt = observedAt
     }
 
-    /// 급한 순서를 정하는 하한(5시간 창). 판정 불가·창 없음은 **−1** — 모르는 줄이 "0% 라 여유롭다"로 밀려 내려가지도,
-    /// 가장 급한 자리를 훔치지도 않게 한다.
-    package var urgency: Double { fiveHour?.percent ?? -1 }
-
-    /// 줄이 세울 **대표 창과 그 라벨**. 5시간이 있으면 그것, 없으면 주간(요금제에 따라 5시간 창이 아예 없다 — 실측).
+    /// 그 열이 그릴 값. **nil = 그 창이 이 계정에 아예 없다** → 칸을 `없음` 으로 비운다
+    /// (`AILimitColumnText.absentValueText`). 판정 불가(기기 시계 어긋남)는 값이 있는 쪽이고 글자가 `—` 다 —
+    /// **두 사실을 같은 글자로 말하지 않는다**(승인된 문법 ⑤).
     ///
-    /// ★ 라벨을 값과 **한 묶음으로** 내보내는 까닭(실제 렌더에서 잡은 결함): 둘을 따로 두면 라벨을 안 그리는
-    /// 자리가 생기고, 그 자리에서 주간 8% 가 5시간 27% 바로 옆에 나란히 서서 **같은 창으로 읽힌다**.
-    /// 세 제공자의 창 구성이 서로 다르므로(안티그래비티는 5시간 창이 없다) 이 혼동은 드문 경우가 아니다.
-    /// 뷰가 아니라 여기 있는 까닭은 뷰가 iOS 전용이라 맥 스위트가 그 분기를 한 줄도 못 재기 때문이다.
-    package var primaryWindow: (display: AILimitDisplay, label: String)? {
-        if let fiveHour { return (fiveHour, AingWidgetText.limitsFiveHour) }
-        if let weekly { return (weekly, AingWidgetText.limitsWeekly) }
-        return nil
+    /// ## 왜 '대표 창 고르기'가 사라졌나 (v0.3.46)
+    /// v0.3.45 는 줄마다 대표 창 하나를 크게 세웠고, 그래서 "어느 창을 머리로 세우나"라는 선택이 필요했다.
+    /// 그 선택이 틀리면 5시간 창이 **없는** 계정(안티그래비티 실측)에서 숫자가 사라지거나 주간 8% 가 옆 줄의
+    /// 5시간 27% 와 같은 창으로 읽혔다. 승인된 새 문법(한 줄 안에 두 열이 **나란히**)에는 그 선택이 **아예
+    /// 없다** — 창마다 자기 칸이 있고, 열 머리가 카드 맨 위에서 어느 칸이 어느 창인지 한 번 말한다.
+    /// 고를 것이 없으면 틀릴 수도 없다. 폰 `AILimitDisplayRow.display(_:)` 와 **같은 규칙**이다.
+    package func display(_ window: AILimitWindow) -> AILimitDisplay? {
+        let value = window == .fiveHour ? fiveHour : weekly
+        guard let value, value.isVisible else { return nil }
+        return value
     }
 
-    /// 대표 창 아래에 **따로** 그릴 주간 줄(L). 주간이 이미 대표로 섰으면 nil — 같은 값을 두 번 그리지 않는다.
-    package var secondaryWeekly: AILimitDisplay? {
-        fiveHour != nil ? weekly : nil
-    }
+    /// 그릴 숫자가 하나도 없는 줄(두 창이 다 없다). 만드는 쪽이 이미 걸러 내지만, 걸러짐이 느슨해지는 날
+    /// 두 칸이 `없음 · 없음` 인 빈 줄이 서지 않게 뷰도 이 깃발을 본다.
+    package var hasAnyWindow: Bool { fiveHour != nil || weekly != nil }
 
     /// 색 대신 쓰는 식별자(틴트 모드는 색을 버린다).
     package var name: String { provider.displayName }
@@ -551,16 +549,7 @@ package struct AingWidgetLimits: Equatable, Sendable {
         oldestObservedAt.map { AingWidgetFormat.ago(from: $0, now: now) }
     }
 
-    /// S 가 세울 하나: 5시간 사용률이 가장 높은 줄(= 먼저 닿는 벽). 동률이면 **고정 순서**가 가른다 —
-    /// 칸마다 다른 줄이 서면 사용자가 위젯을 믿지 못한다.
-    package var mostUrgent: AingWidgetLimitRow? {
-        rows.max { lhs, rhs in
-            if lhs.urgency != rhs.urgency { return lhs.urgency < rhs.urgency }
-            return lhs.provider.sortOrder > rhs.provider.sortOrder
-        }
-    }
-
-    /// M·L 이 그릴 줄들(상한까지).
+    /// 미디움이 그릴 줄들(상한까지).
     package func shown(limit: Int) -> [AingWidgetLimitRow] {
         Array(rows.prefix(max(0, limit)))
     }
@@ -589,6 +578,152 @@ package enum AingWidgetLimitFormat {
     /// 토큰 수 축약("196.6억") — 좁은 위젯 칸 전용. 앱 카드와 **같은 함수**를 거친다.
     package static func tokens(_ value: Int) -> String {
         TokenNumberFormatter.compactKorean(value)
+    }
+}
+
+// MARK: - 미디움 칸의 배치 예산 (순수 — 170pt 안에 들어가는지를 테스트가 값으로 잰다)
+
+/// 「AI 리밋」 위젯 **미디움**(364×170pt)의 가로·세로 예산.
+///
+/// ## 왜 미디움 하나뿐인가 (2026-10-06 사용자 지시)
+/// *"스몰과 라지 버전 다 없애고. 미디움 버전만 똑바로 만들어."* — 스몰은 한 제공자만 세워 "어느 제공자의 어느
+/// 창인지"를 먼저 말해야 했고(두 열 문법과 어긋난다), 라지는 같은 세 줄을 띄워 놓아 아래가 비었다.
+/// `.systemSmall`·`.systemLarge` 는 `supportedFamilies` 에서 **지웠다**(위젯은 아직 출시 전이라
+/// 이미 추가한 사용자가 없다 — iOS 1.0.3/build 13 에 없다).
+///
+/// ## 가로 (왼쪽부터)
+/// ```
+///  [이름 칸 92] 8 [5시간 바(남는 폭) 5 숫자 62] 10 [주간 바(남는 폭) 5 숫자 62]
+/// ```
+/// 두 바는 `maxWidth: .infinity` 로 **같은 몫**을 받으므로 두 칸의 폭이 언제나 같고, 그래서 열 머리 글자의
+/// 오른쪽 끝이 자기 열 숫자 칸의 오른쪽 끝과 **구조적으로** 맞는다(기기마다 칸 폭이 달라 — 402pt 기기는 364,
+/// 375pt 기기는 329 — 간격을 상수로 적을 수 없다).
+///
+/// ## 세로 — ★ 제공자가 **1~2개뿐인 사람도 아래가 비지 않게**
+/// 줄 높이를 상수로 두면 제공자 하나인 사람의 칸은 아래 60pt 가 통째로 빈다(라지가 그래서 못생겼다).
+/// 그래서 **줄 높이가 남는 자리를 나눠 갖는다**: 줄 수가 적으면 줄이 높아지고 바도 같이 두꺼워진다
+/// (내용이 칸 전체에 고르게 퍼진다 — 아래쪽만 비지 않는다).
+package struct AingWidgetLimitsMediumBudget: Equatable, Sendable {
+    /// WidgetKit 이 주는 기본 안쪽 여백(다른 세 위젯·미리보기 카탈로그와 같은 16pt).
+    package static let contentMargin: Double = 16
+    /// 402pt 기기의 미디움 칸(미리보기 카탈로그 `mediumSize`).
+    package static let referenceSize = (width: 364.0, height: 170.0)
+    /// 가장 좁은 기기(375pt)의 미디움 칸 — 가로 예산의 하한을 여기서 잰다.
+    package static let narrowSize = (width: 329.0, height: 155.0)
+
+    // 가로
+    package static let nameColumnWidth: Double = 92
+    /// 마크 한 변의 **상한**(승인된 값 20pt). 좁은 기기에서는 줄 높이가 이 값을 깎는다(`markSide`).
+    package static let maxMarkSide = AingWidgetLayout.limitTileSize
+    package static let markGap: Double = 6
+    package static let nameGap: Double = 8
+    package static let barValueGap: Double = 5
+    package static let columnGap: Double = 10
+    package static let valueWidth: Double = 62
+
+    // 세로
+    package static let headerHeight: Double = 18
+    package static let headerGap: Double = 6
+    /// 열 머리 줄(11pt 글자 한 줄).
+    package static let columnHeaderHeight: Double = 13
+    package static let separatorHeight: Double = 1
+    /// 토큰 줄 묶음(위 간격 + 구분선 + 간격 + 글자 한 줄).
+    package static let tokenBlockHeight: Double = 7 + 0.5 + 6 + 16
+    /// 줄이 아무리 높아져도 바는 이보다 두꺼워지지 않는다(두꺼운 캡슐은 막대가 아니라 알약으로 보인다).
+    package static let maxBarHeight: Double = 8
+    package static let minBarHeight: Double = 5
+    /// 바가 이보다 좁아지면 "조금 썼다"가 "안 썼다"로 보인다(= 이 설계의 하한).
+    package static let minimumBarWidth: Double = 20
+    /// 마크를 이보다 작게 줄이지 않는다(그 아래로 가면 세 제공자가 모양으로 안 갈린다).
+    package static let minMarkSide: Double = 14
+
+    package let innerWidth: Double
+    package let innerHeight: Double
+    package let providerCount: Int
+    package let hasTokens: Bool
+
+    /// 칸의 **안쪽**(WidgetKit 여백을 이미 뺀) 크기로 만든다 — 뷰는 `GeometryReader` 가 준 크기를 그대로 준다.
+    /// 기기마다 칸이 다르다(402pt → 364×170 · 375pt → 329×155). 기준 칸 숫자만 믿으면 좁은 기기에서
+    /// 세 줄 + 토큰 줄이 **칸을 넘긴다**(실측 계산: 375pt 기기의 안쪽 높이는 123pt 뿐이다).
+    package init(innerWidth: Double, innerHeight: Double, providerCount: Int, hasTokens: Bool) {
+        self.innerWidth = innerWidth
+        self.innerHeight = innerHeight
+        self.providerCount = max(0, providerCount)
+        self.hasTokens = hasTokens
+    }
+
+    /// 칸 크기(여백 포함)로 만드는 편의 — 테스트가 `364×170` 처럼 **칸 숫자**로 재게 한다.
+    package static func family(width: Double, height: Double, providerCount: Int, hasTokens: Bool) -> Self {
+        Self(innerWidth: width - contentMargin * 2, innerHeight: height - contentMargin * 2,
+             providerCount: providerCount, hasTokens: hasTokens)
+    }
+
+    /// 바를 뺀 가로 고정분.
+    package static var fixedWidth: Double {
+        nameColumnWidth + nameGap + barValueGap * 2 + valueWidth * 2 + columnGap
+    }
+
+    /// 바 하나의 폭 = 남는 것을 둘로 나눈다(**산식**이다 — 숫자 칸이나 간격을 고치면 바가 따라 줄어야 한다).
+    package var barWidth: Double { (innerWidth - Self.fixedWidth) / 2 }
+
+    /// 한 칸(바 + 간격 + 숫자)의 폭. 두 칸은 **언제나 같다**.
+    package var cellWidth: Double { barWidth + Self.barValueGap + Self.valueWidth }
+
+    /// 제공자 줄들이 쓸 수 있는 높이.
+    package var rowsAreaHeight: Double {
+        innerHeight - Self.headerHeight - Self.headerGap - Self.columnHeaderHeight
+            - (hasTokens ? Self.tokenBlockHeight : 0)
+    }
+
+    /// 줄 하나의 높이 — 남는 자리를 **나눠 갖는다**(줄이 적으면 높아진다 = 아래가 비지 않는다).
+    package var rowHeight: Double {
+        guard providerCount > 0 else { return 0 }
+        return (rowsAreaHeight - Double(providerCount - 1) * Self.separatorHeight) / Double(providerCount)
+    }
+
+    /// 마크 한 변 — 줄 높이에 **갇힌다**. 좁은 기기에서 세 줄이 각 18pt 로 줄어드는데 마크를 20pt 로 두면
+    /// 줄이 칸을 밀어내 토큰 줄이 바깥으로 나간다(또는 SwiftUI 가 조용히 압축한다).
+    package var markSide: Double {
+        guard providerCount > 0 else { return Self.maxMarkSide }
+        return min(Self.maxMarkSide, max(Self.minMarkSide, rowHeight - 3))
+    }
+
+    /// 이름 글자가 쓸 수 있는 폭.
+    package var nameTextWidth: Double { Self.nameColumnWidth - markSide - Self.markGap }
+
+    /// 바 두께 — 줄 높이에 비례하되 상·하한 안에서(줄이 높아지면 바도 조금 두꺼워져 빈 느낌이 줄어든다).
+    package var barHeight: Double {
+        min(Self.maxBarHeight, max(Self.minBarHeight, rowHeight * 0.18))
+    }
+
+    /// 쓰는 높이의 합 — 칸(innerHeight)을 넘지 않아야 한다. 테스트가 이 값을 잰다.
+    package var usedHeight: Double {
+        guard providerCount > 0 else { return Self.headerHeight }
+        return Self.headerHeight + Self.headerGap + Self.columnHeaderHeight
+            + Double(providerCount) * rowHeight + Double(providerCount - 1) * Self.separatorHeight
+            + (hasTokens ? Self.tokenBlockHeight : 0)
+    }
+
+    /// 줄 하나가 **마크를 담을 수 있나**(줄 높이가 마크보다 커야 한다 — 아니면 SwiftUI 가 조용히 압축한다).
+    package var rowFitsMark: Bool { providerCount == 0 || rowHeight >= markSide }
+}
+
+/// 틴트·투명 모드에서 **열 색이 사라진다**는 사실을 값으로 들고 있는 타입.
+///
+/// 시스템이 색을 통째로 버리는 모드(`widgetRenderingMode == .accented`)에서는 두 열의 바가 **같은 흰색**이
+/// 된다 — 색은 세 단서(열 머리 글자 · 색 · 좌우 자리) 가운데 하나이고, 그 모드에서 남는 둘이 짝을 말한다.
+/// ★ 그래서 열 머리 글자는 **어느 모드에서나 그려야 한다**(틴트에서 머리를 빼면 단서가 자리 하나로 줄어든다).
+///
+/// 왜 Bool 이 아니라 열거값인가: 뷰는 iOS 전용이라 맥 스위트가 색 분기를 한 줄도 재지 못한다. 분기의 **결과**를
+/// 순수한 값으로 내놓으면 "틴트에서 두 열이 같은 잉크가 된다"를 테스트가 직접 되묻을 수 있다.
+package enum AingWidgetLimitInk: Equatable, Sendable {
+    /// 원색: 열마다 다른 색(5시간 파랑 · 주간 보라).
+    case column(AILimitColumnWindow)
+    /// 틴트·투명: 색이 없다 — 흰색 하나로 그린다.
+    case accentedWhite
+
+    package static func bar(window: AILimitWindow, accented: Bool) -> AingWidgetLimitInk {
+        accented ? .accentedWhite : .column(AILimitColumnPalette.column(windowRawValue: window.rawValue))
     }
 }
 

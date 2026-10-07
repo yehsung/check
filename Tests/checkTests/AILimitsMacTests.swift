@@ -953,7 +953,7 @@ struct AILimitsMacStoreTests {
         #expect(landed, "inert() 가 $TMPDIR 에 plist 를 안 만들었다(\(landing)) — 위 단언이 공허해진다")
     }
 
-    /// 한 줄 요약은 **창 종류별 최악**을 둘로 합친다(제공자가 셋이어도 숫자는 둘이다).
+    /// 조합값은 **창 종류별 최악**을 둘로 합친다(제공자가 셋이어도 숫자는 둘이다 — 카드 제목 툴팁이 그걸 말한다).
     @Test
     func summaryCombinesWorstPerWindow() async {
         let subject = store(defaults: amDefaults(), outcome: { _ in
@@ -969,8 +969,9 @@ struct AILimitsMacStoreTests {
             ])
         })
         await subject.refreshIfDue(now: amNow)
-        #expect(CheckAILimitsRow.valueText(store: subject, now: amNow) == "88% · 60%",
-                "창별 최악이 아니라 평균·첫 제공자를 썼다")
+        let combined = CheckAILimitsCard.combinedWindows(store: subject, now: amNow)
+        #expect(combined.map(\.window) == [.fiveHour, .weekly])
+        #expect(combined.map(\.valueText) == ["88%", "60%"], "창별 최악이 아니라 평균·첫 제공자를 썼다")
         #expect(subject.summary(now: amNow).percent == 88)
     }
 }
@@ -1305,9 +1306,9 @@ struct AILimitsMacUploadTests {
     }
 }
 
-// MARK: - 팝오버 폭 (실측)
+// MARK: - 팝오버 카드 폭·높이 (실측)
 
-@Suite("AILimitsMac — 팝오버 한 줄 폭 예산")
+@Suite("AILimitsMac — 팝오버 카드 폭·높이 예산")
 @MainActor
 struct AILimitsMacWidthTests {
     /// caption / caption2 는 macOS 에서 **둘 다 10pt** 다. 글자수가 아니라 폭으로 재는 자리의 기준이다.
@@ -1325,82 +1326,99 @@ struct AILimitsMacWidthTests {
         #expect(NSFont.preferredFont(forTextStyle: .caption2).pointSize == 10)
     }
 
-    /// 상수가 **실측과 같다**(0.5pt 안). 글꼴·문구가 바뀌면 여기서 먼저 빨개진다.
+    /// 실측 상수가 **실제 글리프 폭과 같다**(0.5pt 안). 글꼴·문구가 바뀌면 여기서 먼저 빨개진다.
     @Test
     func measuredConstantsMatchTheRealGlyphWidths() {
-        #expect(abs(width("AI 리밋") - AILimitRowWidthBudget.labelWidth) < 0.5,
-                "\"AI 리밋\" 실측 \(width("AI 리밋"))")
-        #expect(abs(width("자세히 ›") - AILimitRowWidthBudget.detailWidth) < 0.5,
-                "\"자세히 ›\" 실측 \(width("자세히 ›"))")
-        let worst = width("100% 이상 · 100% 이상", bold: true, mono: true)
+        // 숫자 칸의 최악 문구 = "100% 이상"(bold monospacedDigit 10pt).
+        let worst = width("100% 이상", bold: true, mono: true)
         #expect(abs(worst - AILimitRowWidthBudget.worstValueWidth) < 0.5, "최악 문구 실측 \(worst)")
+        // ★ 기준선이 갈린다: 그 문구가 **다른 네 모양보다 넓다**. 같은 답이면 "최악"을 잘못 고른 것이고,
+        //   아래 `fits` 대조는 더 넓은 모양을 통과시킨다.
+        for narrower in ["100%", "99% 이상", "0%", AILimitFreshnessRule.unknownValueText,
+                         AILimitCardModel.absentValueText] {
+            #expect(width(narrower, bold: true, mono: true) < worst, "\"\(narrower)\" 가 최악보다 넓다")
+        }
     }
 
-    /// ★ **가장 넓은 문구가 말줄임 없이 들어간다.**
+    /// ★ **가장 넓은 숫자 문구가 고정 칸 안에 말줄임 없이 들어간다.**
     ///
-    /// 이 줄은 `lineLimit(1)` 이라 넘쳐도 높이가 안 변한다 = 렌더 높이 테스트로는 안 잡히고, 증상은
-    /// 숫자 자릿수 오독이다(v0.2.41 의 "Codex 254만" → "Codex 25…" 와 같은 자리).
+    /// 이 칸은 `lineLimit(1)` + 고정 폭이라 넘쳐도 높이가 안 변한다 = 렌더 높이 테스트로는 안 잡히고,
+    /// 증상은 숫자 자릿수 오독이다(v0.2.41 의 "Codex 254만" → "Codex 25…" 와 같은 자리).
     @Test
-    func theWidestPossibleSummaryFitsWithoutTruncation() {
-        #expect(AILimitRowWidthBudget.innerWidth == 268, "본문 열 산식이 바뀌었다")
-        let budget = AILimitRowWidthBudget.valueBudget
-        #expect(budget > 0)
-        #expect(AILimitRowWidthBudget.fits(valueWidth: AILimitRowWidthBudget.worstValueWidth),
-                "최악 문구 \(AILimitRowWidthBudget.worstValueWidth)pt 가 예산 \(budget)pt 를 넘는다")
-        // 규칙이 낼 수 있는 네 모양 전부를 실제로 재서 넣는다(상수 하나만 재면 다른 모양이 몰래 넘칠 수 있다).
-        // v0.3.45: 칸이 하나만 남으면 **창 라벨이 값과 함께** 선다(`주간 42%`) — 그 모양도 예산 안이어야 한다.
-        for text in ["27% · 60%", "0% · 0%", "— · —", "100% · 100%", "100% 이상 · 100% 이상", "99% 이상 · 99% 이상",
-                     "5시간 100% 이상", "주간 100% 이상", "주간 42%", "—"] {
+    func theWidestValueFitsItsFixedCellWithoutTruncation() {
+        #expect(AILimitRowWidthBudget.innerWidth == 292, "카드 안쪽 폭 산식이 바뀌었다")
+        #expect(AILimitRowWidthBudget.cardOuterWidth == CheckMenuView.contentColumnWidth,
+                "카드가 팝오버 본문 열과 다른 폭을 전제한다")
+        // 규칙이 낼 수 있는 모양 **전부** + 이 카드가 더한 `없음` 을 실제로 재서 넣는다
+        // (상수 하나만 재면 다른 모양이 몰래 넘칠 수 있다).
+        for text in ["100% 이상", "100%", "99% 이상", "27% 이상", "27%", "0%",
+                     AILimitFreshnessRule.unknownValueText, AILimitCardModel.absentValueText] {
             let measured = width(text, bold: true, mono: true)
             #expect(AILimitRowWidthBudget.fits(valueWidth: measured),
-                    "\"\(text)\" 가 \(measured)pt 로 예산 \(budget)pt 를 넘는다")
+                    "\"\(text)\" 가 \(measured)pt 로 칸 \(AILimitRowWidthBudget.valueWidth)pt 를 넘는다")
         }
-        // ★ 기준선이 갈린다: 예산이 무한이 아니라는 것을 보인다(이 단언이 없으면 `fits` 를 `true` 로 고정해도 초록이다).
-        #expect(!AILimitRowWidthBudget.fits(valueWidth: budget + 1))
+        // ★ 기준선이 갈린다: 칸이 무한이 아니다(이 단언이 없으면 `fits` 를 `true` 로 고정해도 초록이다).
+        #expect(!AILimitRowWidthBudget.fits(valueWidth: AILimitRowWidthBudget.valueWidth + 1))
         #expect(!AILimitRowWidthBudget.fits(valueWidth: AILimitRowWidthBudget.innerWidth))
+        // 그리고 칸에 **여유가 과하지 않다** — 최악 문구가 칸의 8할은 쓴다(아니면 바에게 줄 폭을 묶어 둔 것이다).
+        #expect(AILimitRowWidthBudget.worstValueWidth > AILimitRowWidthBudget.valueWidth * 0.8,
+                "숫자 칸 \(AILimitRowWidthBudget.valueWidth)pt 가 최악 문구 \(AILimitRowWidthBudget.worstValueWidth)pt 보다 너무 넓다")
     }
 
-    /// 팝오버 높이 예산은 **산식**이다(뷰가 내용 높이를 고정하므로 상수가 거짓이 될 수 없다).
+    /// ★ 한 줄의 가로 합이 **정확히** 카드 안쪽 폭이고, 열 머리가 자기 열 숫자 칸에 **자리로** 맞는다.
+    ///
+    /// 자리는 짝을 알려 주는 세 단서 가운데 하나다(열 머리 글자 · 색 · 좌우 자리). 머리 글자가 다른 열의
+    /// 숫자 위에 서면 그 단서가 **거짓말**이 되고, 틴트 모드처럼 색이 사라지는 표면에서는 남는 단서가 둘뿐이다.
     @Test
-    func popoverHeightBudgetIsDerivedFromTheView() {
-        // 산식을 CGFloat 로 **명시해서** 센다(Int 리터럴과 섞으면 `#expect` 전개가 두 타입을 따로 평가한다).
-        let derived: CGFloat = AILimitRowWidthBudget.contentHeight
-            + AILimitRowWidthBudget.rowInsetY * 2 + AILimitRowWidthBudget.stackSpacing
-        #expect(AILimitRowWidthBudget.budgetHeight == derived)
-        #expect(CheckMenuView.aiLimitRowHeight == AILimitRowWidthBudget.budgetHeight)
-        #expect(CheckMenuView.aiLimitRowHeight == 46)
+    func theRowAddsUpToTheCardInnerWidthAndHeadersSitOverTheirOwnColumn() {
+        let b = AILimitRowWidthBudget.self
+        // ① 한 줄: 마크 | 간격 | 바 | 간격 | 숫자 | 열 간격 | 바 | 간격 | 숫자 = 안쪽 폭.
+        let row = b.markSide + b.markGap
+            + b.barWidth + b.barValueGap + b.valueWidth
+            + b.columnGap
+            + b.barWidth + b.barValueGap + b.valueWidth
+        #expect(abs(row - b.innerWidth) < 0.01, "한 줄이 \(row)pt 로 안쪽 폭 \(b.innerWidth)pt 와 다르다")
+        // ② 바가 실제로 보일 만큼 남았다(이름 글자를 넣었을 때의 ~60pt 보다 넓다 — 그게 이름을 뺀 이유다).
+        #expect(b.barWidth == 69, "바 폭이 \(b.barWidth)pt 다")
+        #expect(b.barWidth > 60, "바가 \(b.barWidth)pt 로 줄었다 — 8% 와 0% 가 눈으로 안 갈린다")
+        // ③ 열 머리의 오른쪽 끝 = 그 열 숫자 칸의 오른쪽 끝.
+        //    머리 줄 = [제목 flexible][5시간 칸 52][headerCellGap][주간 칸 52]
+        //    제공자 줄 = [마크 20][8][바 69][6][숫자 52][10][바 69][6][숫자 52]
+        let headerFixed = b.valueWidth + b.headerCellGap + b.valueWidth
+        let titleRegion = b.innerWidth - headerFixed
+        let fiveHourValueStart = b.markSide + b.markGap + b.barWidth + b.barValueGap
+        #expect(abs(titleRegion - fiveHourValueStart) < 0.01,
+                "5시간 열 머리가 \(titleRegion)pt 에서 시작하는데 숫자 칸은 \(fiveHourValueStart)pt 다 — 머리가 다른 열을 가리킨다")
+        #expect(b.headerCellGap == b.barWidth + b.barValueGap + b.columnGap)
+        // ④ 제목("⏲ AI 리밋")이 그 자리에 든다 — 안 들면 말줄임이 나고, 카드가 무엇의 카드인지 사라진다.
+        #expect(width("AI 리밋") + 11 + 4 < titleRegion,
+                "제목이 \(titleRegion)pt 에 안 든다")
     }
 
-    /// 창 레이아웃: 제공자 수에 따라 높이가 자라고, 폭은 글 열 최악 + 큰 숫자가 들어가는 값이다.
+    /// 카드 높이는 **제공자 수의 산식**이다(뷰가 `.frame(height:)` 로 못 박으므로 거짓이 될 수 없다).
+    /// 0 · 1 · 2 · 3 을 다 센다 — 0 은 카드를 안 그리는 자리라 간격까지 0 이어야 한다.
     @Test
-    func windowLayoutFitsTheWidestCardRow() {
-        let tile = AILimitWindowLayout.tileSide
-        let caption = width("초기화됨 · 확인 못 함")
-        let name = width("안티그래비티")
-        let big = ("100% 이상" as NSString)
-            .size(withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 22, weight: .bold)]).width
-        // v0.3.45: 큰 숫자 **앞에 창 라벨**이 선다(대표 창이 카드마다 다를 수 있어서 — `AILimitCardModel` 머리말).
-        // 가장 넓은 라벨로 잰다.
-        let label = AILimitWindow.allCases.map { width($0.displayName) }.max() ?? 0
-        // 카드 한 줄: 타일 + 간격 10 + 글 열(이름/캡션 중 넓은 쪽) + Spacer 8 + [창 라벨 + 간격 10] + 큰 숫자.
-        let needed = tile + 10 + max(caption, name) + 8 + label + 10 + big
-        #expect(needed <= AILimitWindowLayout.cardInnerWidth,
-                "카드 한 줄에 \(needed)pt 가 필요한데 안쪽 폭이 \(AILimitWindowLayout.cardInnerWidth)pt 다")
-        // ★ v0.3.45: 머리 캡션은 **나이**를 말하고(`headCaption`) 리셋 시각은 넓은 창에서만 덧붙는다
-        //   (`headCaptionDetailed` + `ViewThatFits`). 예산은 나이 쪽으로 잡혔다는 사실을 숫자로 못 박는다 —
-        //   두 조각 캡션이 예산 안이면 그 갈래는 장식이고, 규칙이 둘이 된 셈이다.
-        let detailed = width("3시간 전 · 오후 6:59 리셋")
-        #expect(tile + 10 + detailed + 8 + label + 10 + big > AILimitWindowLayout.cardInnerWidth,
-                "두 조각 캡션(\(detailed)pt)이 기본 폭에 들어간다 — 조각을 빼는 갈래가 필요 없다는 뜻이다")
-        #expect(width("3시간 전") < max(caption, name), "나이 글자가 예산의 최악보다 넓다 — 예산을 다시 잡아야 한다")
-        let derivedWidth: CGFloat = AILimitWindowLayout.cardInnerWidth
-            + AILimitWindowLayout.cardPadding * 2 + AILimitWindowLayout.contentPadding * 2
-        #expect(AILimitWindowLayout.contentWidth == derivedWidth)
-        #expect(AILimitWindowLayout.contentWidth == CGFloat(348))
-        // 카드가 늘면 창도 커진다(세 장 > 한 장). 같은 답이면 산식이 상수로 굳은 것이다.
-        #expect(AILimitWindowLayout.contentHeight(cards: 3) > AILimitWindowLayout.contentHeight(cards: 1))
-        #expect(AILimitWindowLayout.defaultContentSize.height == AILimitWindowLayout.contentHeight(cards: 3))
-        #expect(AILimitWindowLayout.minContentSize.height == AILimitWindowLayout.contentHeight(cards: 1))
+    func cardHeightFollowsTheProviderCountZeroThroughThree() {
+        let b = AILimitRowWidthBudget.self
+        #expect(b.cardHeight(providers: 0) == 0, "제공자가 없는데 카드 높이를 잡았다")
+        #expect(b.budgetHeight(providers: 0) == 0, "안 그리는 카드가 VStack 간격을 먹는다")
+        for count in 1...3 {
+            let derived: CGFloat = b.rowInsetY * 2 + b.titleRowHeight + b.titleRowGap
+                + CGFloat(count) * b.providerRowHeight + CGFloat(count - 1) * b.separatorHeight
+            #expect(b.cardHeight(providers: count) == derived, "제공자 \(count)명")
+            #expect(b.budgetHeight(providers: count) == derived + b.stackSpacing)
+            #expect(CheckMenuView.aiLimitCardHeight(providers: count) == b.budgetHeight(providers: count))
+        }
+        // 실측 값으로도 못 박는다(산식만 재면 양쪽을 같이 고치는 변경이 조용히 지나간다).
+        #expect(b.cardHeight(providers: 1) == 65)
+        #expect(b.cardHeight(providers: 2) == 90)
+        #expect(b.cardHeight(providers: 3) == 115)
+        #expect(CheckMenuView.aiLimitCardHeight(providers: 3) == 125)
+        // 제공자가 늘면 카드도 **자란다**(같은 답이면 산식이 상수로 굳은 것이다).
+        #expect(b.cardHeight(providers: 3) > b.cardHeight(providers: 1))
+        // 그래도 팝오버 상한(700pt)에 비해 작다 — "세로로 길어지더라도 너무 길어지진 않게"(사용자 지시).
+        #expect(b.budgetHeight(providers: 3) < 160,
+                "제공자 셋 카드가 \(b.budgetHeight(providers: 3))pt 다 — 목록 행을 너무 많이 밀어낸다")
     }
 
     /// 진행바 채움: 0% 는 0pt, 0 보다 크면 **보이는 폭**을 갖는다(1% 가 0pt 면 "안 썼다"로 보인다).
@@ -1412,79 +1430,46 @@ struct AILimitsMacWidthTests {
         #expect(AILimitBar.fillWidth(total: 200, percent: 100, minimum: 6) == 200)
         #expect(AILimitBar.fillWidth(total: 200, percent: 140, minimum: 6) == 200, "바가 트랙을 뚫었다")
         #expect(AILimitBar.fillWidth(total: 0, percent: 50, minimum: 6) == 0)
-        // 단계 색: 제공자 색이 아니라 **사용량** 색이다.
-        #expect(AILimitBar.tint(for: nil) == CheckTheme.secondaryText)
-        #expect(AILimitBar.tint(for: 10) == CheckTheme.accent)
-        #expect(AILimitBar.tint(for: 70) == CheckTheme.pending)
-        #expect(AILimitBar.tint(for: 90) == CheckTheme.danger)
-    }
-}
-
-// MARK: - 창 계약
-
-@Suite("AILimitsMac — 창 계약")
-@MainActor
-struct AILimitsMacWindowTests {
-    /// 창 식별자가 **독립 창 목록**에 있다. 빠지면 미니게임 창을 띄워 둔 사람의 스페이스가 삼켜진다.
-    @Test
-    func theWindowIsRegisteredAsAStandaloneWindow() {
-        #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckAILimitsWindowController.frameAutosaveName))
+        // 실제 바 폭에서도 같다(69pt 트랙에서 1% 는 0.69pt → 바 높이 6pt 로 올라선다).
+        let real = AILimitBar.fillWidth(total: AILimitRowWidthBudget.barWidth, percent: 1,
+                                       minimum: AILimitRowWidthBudget.barHeight)
+        #expect(real == AILimitRowWidthBudget.barHeight, "실제 바에서 1% 가 \(real)pt 다")
+        #expect(AILimitBar.fillWidth(total: AILimitRowWidthBudget.barWidth, percent: 0,
+                                     minimum: AILimitRowWidthBudget.barHeight) == 0,
+                "0% 가 1% 와 같은 폭이다 — 두 숫자가 눈으로 안 갈린다")
     }
 
-    /// 창은 **지연 생성**이다 — 리밋을 한 번도 안 보는 실행에서는 창이 안 생긴다.
-    /// 그리고 배선 전에는 열리지 않는다(담을 게 없는 창을 만들지 않는다).
+    /// ★ 승인된 디자인의 16진수가 **그대로** 들어 있다(사람이 0…1 실수로 옮겨 적는 걸음에서 틀리지 않게).
     @Test
-    func theWindowIsLazyAndNeedsWiring() {
-        let controller = CheckAILimitsWindowController(stuckWindowCheckSeconds: 60)
-        #expect(controller.hasWindow == false)
-        controller.show()
-        #expect(controller.hasWindow == false, "배선 없이 창을 만들었다")
-        #expect(controller.isOpen == false)
-    }
-
-    /// 열기는 **멱등**이고 창은 하나다. 그리고 테스트 실행에서는 알파 0 이라 사용자 화면에 안 뜬다.
-    @Test
-    func openingTwiceKeepsOneInvisibleWindow() {
-        let controller = CheckAILimitsWindowController(stuckWindowCheckSeconds: 60)
-        controller.configure(store: AILimitStore.inert(), content: { _ in AnyView(Color.clear) })
-        defer { controller.close() }
-        controller.show()
-        controller.show()
-        #expect(controller.hasWindow)
-        #expect(controller.isOpen)
-        #expect(CheckPanelVisibility.isRunningTests, "전제: 테스트 판정이 참이어야 알파 0 이 걸린다")
-        // 자리를 저장한다(안 하면 사용자가 옮겨 둔 창이 가끔 중앙으로 돌아간다).
-        #expect(controller.frameAutosaveActive)
-        controller.close()
-        #expect(controller.isOpen == false)
-        #expect(controller.hasWindow, "닫으면서 창을 버렸다 — 다시 열 때 크기·스크롤이 초기화된다")
-    }
-
-    /// 창을 열면 `onOpen` 이 불린다(갱신을 당기는 자리 — 컨트롤러가 스토어 주기를 모르게 둔다).
-    @Test
-    func showCallsOnOpen() {
-        let controller = CheckAILimitsWindowController(stuckWindowCheckSeconds: 60)
-        controller.configure(store: AILimitStore.inert(), content: { _ in AnyView(Color.clear) })
-        defer { controller.close() }
-        var calls = 0
-        controller.onOpen = { calls += 1 }
-        controller.show()
-        #expect(calls == 1)
-    }
-
-    /// 재생성 상한이 있다(창 서버가 계속 거부하는 극단에서 무한 루프가 되지 않게).
-    @Test
-    func stuckWindowRebuildsAreCapped() {
-        let controller = CheckAILimitsWindowController(stuckWindowCheckSeconds: 60)
-        controller.configure(store: AILimitStore.inert(), content: { _ in AnyView(Color.clear) })
-        defer { controller.close() }
-        controller.show()
-        for _ in 0..<(CheckAILimitsWindowController.maxStuckWindowRebuilds + 3) {
-            controller.rebuildStuckWindow()
+    func thePaletteCarriesTheApprovedHexValues() throws {
+        func bytes(_ color: Color) throws -> (Int, Int, Int) {
+            let ns = try #require(NSColor(color).usingColorSpace(.sRGB))
+            return (Int((ns.redComponent * 255).rounded()),
+                    Int((ns.greenComponent * 255).rounded()),
+                    Int((ns.blueComponent * 255).rounded()))
         }
-        #expect(controller.stuckWindowRebuilds == CheckAILimitsWindowController.maxStuckWindowRebuilds)
-        // 재생성 뒤에도 자리 저장이 **다시 붙는다**(옛 창의 등록을 놓아줬다는 증거).
-        #expect(controller.frameAutosaveActive, "재생성 뒤 자리 저장이 죽었다 — 옛 창의 autosave 이름을 안 놓아줬다")
+        #expect(try bytes(AILimitMacPalette.fiveHourBar) == (0x5B, 0x8D, 0xEF))
+        #expect(try bytes(AILimitMacPalette.fiveHourHeader) == (0x7F, 0xA8, 0xF5))
+        #expect(try bytes(AILimitMacPalette.weeklyBar) == (0x8A, 0x76, 0xE0))
+        #expect(try bytes(AILimitMacPalette.weeklyHeader) == (0xA7, 0x96, 0xE8))
+        #expect(try bytes(AILimitMacPalette.emptyTrack) == (0x30, 0x34, 0x3B))
+        #expect(try bytes(AILimitMacPalette.separator) == (0x2C, 0x30, 0x37))
+        #expect(try bytes(AILimitMacPalette.absentText) == (0x59, 0x5E, 0x67))
+        #expect(try bytes(AILimitMacPalette.absentTrack) == (0x22, 0x26, 0x2C))
+        // 열마다 **다른** 색이고, 머리 글자는 바보다 밝다(작은 글자가 바와 같은 명도면 배경에 묻힌다).
+        #expect(AILimitMacPalette.barColor(.fiveHour) != AILimitMacPalette.barColor(.weekly),
+                "두 열의 바가 같은 색이다 — 색 단서가 없다")
+        #expect(AILimitMacPalette.headerColor(.fiveHour) != AILimitMacPalette.headerColor(.weekly))
+        for window in AILimitWindow.allCases {
+            let bar = try bytes(AILimitMacPalette.barColor(window))
+            let head = try bytes(AILimitMacPalette.headerColor(window))
+            #expect(head.0 + head.1 + head.2 > bar.0 + bar.1 + bar.2,
+                    "\(window) 열 머리가 바보다 어둡다")
+        }
+        // 없는 칸의 트랙은 빈 트랙보다 **어둡다** — 같은 밝기면 "0% 라 비었다"로 읽힌다.
+        let absent = try bytes(AILimitMacPalette.absentTrack)
+        let empty = try bytes(AILimitMacPalette.emptyTrack)
+        #expect(absent.0 + absent.1 + absent.2 < empty.0 + empty.1 + empty.2)
     }
 
     /// 리셋 시각 캡션은 `오후 6:59` 꼴이다(초 이하를 쓰지 않는다 — 요청 시각의 잔여 분수가 섞여 온다).
@@ -1501,25 +1486,19 @@ struct AILimitsMacWindowTests {
     }
 }
 
-// MARK: - 창 본문: 시각이 흐르면 다른 값을 그린다 (v0.3.45 P0)
+// MARK: - 카드 본문: 두 열이 나란히 · 시각이 흐르면 다른 값 (v0.3.46)
 
-/// 창 **본문**의 계약. 위 `AILimitsMacWindowTests` 가 창의 수명(지연 생성·멱등 열기·재생성)을 재는 반면
-/// 이 스위트는 **그려지는 값**을 잰다 — 그 둘을 한 스위트에 섞어 두었더니 창 테스트 여섯 건이
+/// 카드 **본문**의 계약. 위 `AILimitsMacWidthTests` 가 자리(폭·높이)를 재는 반면 이 스위트는
+/// **그려지는 값과 글자**를 잰다 — 그 둘을 한 스위트에 섞어 두었더니 v0.3.45 의 창 테스트 여섯 건이
 /// `CheckAILimitsView` 를 **한 번도 만들지 않은 채** 초록이었고, 그 사이 본문의 시각이 얼어 있었다.
-@Suite("AILimitsMac — 창 본문: 주입 시계·대표 창·단계 색")
+@Suite("AILimitsMac — 카드 본문: 두 열·주입 시계·없음 vs 판정 불가")
 @MainActor
-struct AILimitsMacWindowContentTests {
+struct AILimitsMacCardContentTests {
     /// 검증자가 재현한 장면 그대로의 시각들(상대 간격이 전부다).
-    private let opened = amNow                                   // 09:00Z — 창을 연다
+    private let opened = amNow                                   // 09:00Z — 팝오버를 연다
     private let observed = amNow.addingTimeInterval(17_400)       // 13:50Z — 스토어가 88% 를 받는다
     private let resetsAt = amNow.addingTimeInterval(18_000)       // 14:00Z — 그 5시간 창이 0 으로 돌아간다
-    private let viewed = amNow.addingTimeInterval(21_600)         // 15:00Z — 사용자가 **같은 창**을 본다
-
-    /// 시각을 밖에서 미는 상자(뷰가 시계를 **그릴 때마다** 읽는지 재려면 값이 아니라 상자가 필요하다).
-    private final class ClockBox: @unchecked Sendable {
-        var now: Date
-        init(_ now: Date) { self.now = now }
-    }
+    private let viewed = amNow.addingTimeInterval(21_600)         // 15:00Z — 사용자가 **같은 카드**를 본다
 
     private func store(_ outcome: AILimitReadOutcome, at: Date,
                        function: String = #function, line: Int = #line) -> AILimitStore {
@@ -1546,237 +1525,97 @@ struct AILimitsMacWindowContentTests {
         ))])
     }
 
-    /// ★★ **P0**: 창은 한 번 만들어 캐시되고 닫아도 파괴되지 않는다. 그 창이 **지금** 시각으로 그리는가.
+    /// ★★ **P0 의 그물**: 카드는 **그릴 때마다** 시계를 읽는다.
     ///
-    /// 재현(검증자 실측): 09:00Z 에 창을 연다 → 13:50Z 에 스토어가 5시간 88% · 리셋 14:00Z 를 받는다 →
-    /// 15:00Z 에 같은 창을 본다. 초안은 `var now: Date = Date()` 가 **창을 만든 한 번**에 얼어서
-    /// `88% · 방금` 을 그렸다. 맞는 값은 `0% · 초기화됨 · 확인 못 함` 이다 — 리셋이 한 시간 전에 지났는데
-    /// 사용자는 "88% 썼다"를 보고 작업을 멈춘다.
+    /// v0.3.45 의 별도 창은 `var now: Date = Date()` 를 들고 있었다. 기본 인자는 **딱 한 번** 평가되고
+    /// 창은 캐시돼 닫아도 파괴되지 않으므로 그 `now` 가 앱 수명 내내 얼어붙었다.
+    /// 재현: 09:00Z 에 연다 → 13:50Z 에 5시간 88% · 리셋 14:00Z 를 받는다 → 15:00Z 에 같은 자리를 본다.
+    /// 얼어붙은 쪽은 `88% · 방금` 을 그렸다. 맞는 값은 `0% · 초기화됨 · 확인 못 함` 이다 — 리셋이 한 시간
+    /// 전에 지났는데 사용자는 "88% 썼다"를 보고 작업을 멈춘다.
+    ///
+    /// 창이 사라져도 함정은 남는다(카드가 `Date` 를 저장하면 똑같다). 그래서 ① 값으로 되묻고
+    /// ② 소스로 "저장된 `Date` 가 없다"를 못 박는다.
     @Test
-    func theWindowBodyReadsTheClockOnEveryDraw() throws {
+    func theCardReadsTheClockOnEveryDraw() throws {
         let subject = store(claudeAt88, at: observed)
-        let clock = ClockBox(opened)
-        // 창을 만든 시각은 `opened` 다 — 그때 스토어는 아직 아무것도 모른다.
-        let view = CheckAILimitsView(store: subject, clock: { clock.now })
-        clock.now = opened
-        #expect(view.cards.isEmpty == false, "전제: 스토어에 Claude 카드가 있다")
+        #expect(AILimitCardModel.all(store: subject, now: opened).isEmpty == false, "전제: Claude 줄이 있다")
 
         // ① 방금 받은 값을 보는 순간: 등호로 88%.
-        clock.now = observed.addingTimeInterval(30)
-        let fresh = try #require(view.cards.first)
-        #expect(fresh.headValueText == "88%")
-        #expect(fresh.head?.floorOnly == false)
-        #expect(view.summaryCaption == "방금")
+        let fresh = try #require(AILimitCardModel.all(store: subject, now: observed.addingTimeInterval(30)).first)
+        #expect(fresh.display(.fiveHour)?.valueText == "88%")
+        #expect(fresh.display(.fiveHour)?.floorOnly == false)
 
-        // ② 같은 뷰, 시각만 흘렀다(리셋 + 유예를 지났고 그 뒤로 30분 넘게 아무것도 못 봤다).
-        clock.now = viewed
-        let later = try #require(view.cards.first)
-        #expect(later.headValueText == "0%", "리셋이 지난 창을 \(later.headValueText) 로 그린다 — 창의 시각이 얼었다")
-        #expect(later.headCaption == "초기화됨 · 확인 못 함")
-        #expect(later.head?.percent == 0, "바가 옛 길이로 남았다")
-        // 머리글의 나이 캡션도 같이 늙는다(주간 창이 말한다 — 그쪽은 리셋을 주장하지 않는다).
-        #expect(view.summaryCaption == "1시간 전")
-    }
+        // ② 같은 데이터, 시각만 흘렀다(리셋 + 유예를 지났고 그 뒤로 30분 넘게 아무것도 못 봤다).
+        let later = try #require(AILimitCardModel.all(store: subject, now: viewed).first)
+        let head = try #require(later.display(.fiveHour))
+        #expect(head.valueText == "0%", "리셋이 지난 창을 \(head.valueText) 로 그린다 — 카드의 시각이 얼었다")
+        #expect(head.captionText == "초기화됨 · 확인 못 함")
+        #expect(head.percent == 0, "바가 옛 길이로 남았다")
 
-    /// 시계는 **값이 아니라 클로저**이고 본문은 분마다 다시 그려진다(소스 계약).
-    ///
-    /// 위 테스트는 "흐르면 다른 값"을 재지만, 창이 **스스로** 다시 그리지 않으면 사용자는 그 다른 값을
-    /// 보지 못한다(스토어가 갱신될 때까지 body 가 재평가되지 않는다). 그 틱은 값으로 잴 수 없으므로 소스로 잰다.
-    @Test
-    func theWindowTicksEveryMinuteAndHoldsNoFrozenDate() throws {
-        let code = V0317ShopTests.stripped(try V0317ShopTests.source("CheckAILimitsWindow.swift"))
+        // ③ 소스 계약: 뷰가 시각을 **클로저로 받아 body 에서 읽고**, `Date()` 를 스스로 부르지 않는다.
+        let code = V0317ShopTests.stripped(try V0317ShopTests.source("CheckAILimitsRow.swift"))
+        #expect(code.contains("let clock: () -> Date"), "시각을 값으로 받는다")
         #expect(!code.contains("var now: Date = Date()"),
-                "기본 인자로 돌아갔다 — 그 한 번의 평가가 창 수명 내내 얼어붙는다(P0)")
-        #expect(code.contains("let clock: () -> Date"), "시각을 값으로 받는다 — 팝오버 한 줄과 모양이 갈린다")
-        #expect(code.contains("TimelineView(.periodic(from: clock(), by: Self.tickSeconds))"),
-                "분 틱이 없다 — 창이 떠 있는 동안 캡션·리셋이 멈춘다")
-        #expect(CheckAILimitsView.tickSeconds == 60)
-        #expect(CheckAILimitsView.tickSeconds < AILimitFreshnessRule.clockSkewTolerance,
-                "틱이 리셋 유예보다 길다 — 리셋이 한 틱 안에 드러나지 않는다")
-        #expect(code.contains("CheckAILimitsView(store: store, clock: { Date() })"),
-                "기본 배선이 시계를 클로저로 넣지 않는다")
-        // 창 파일에서 `Date()` 를 읽는 자리는 **그 기본 배선 한 곳**뿐이다(본문·카드는 전부 주입을 쓴다).
-        #expect(code.components(separatedBy: "Date()").count - 1 == 1,
-                "창 파일이 `Date()` 를 \(code.components(separatedBy: "Date()").count - 1) 곳에서 읽는다")
+                "기본 인자로 돌아갔다 — 그 한 번의 평가가 얼어붙는다(v0.3.45 P0)")
+        #expect(code.contains("let now = clock()"), "body 가 시계를 읽지 않는다")
+        #expect(code.contains("AILimitCardModel.all(store: store, now: now)"),
+                "뷰가 그 시각으로 줄을 만들지 않는다")
+        let dateCalls = code.components(separatedBy: "Date()").count - 1
+        #expect(dateCalls == 0, "카드 파일이 `Date()` 를 \(dateCalls) 곳에서 읽는다 — 시각은 주입만이다")
     }
 
-    /// ★ 머리 숫자는 **보이는 창**을 따라간다 — `.fiveHour` 를 무조건 머리로 쓰지 않는다.
+    /// ★ 창마다 **자기 칸**이 있다 — 대표 창을 고르지 않는다(v0.3.46 이 그 선택을 없앴다).
     ///
-    /// 5시간 창이 없는 계정(요금제·그룹 구성에 따라 주간만 온다)에서 초안 카드는 큰 글자에 `—`,
-    /// 캡션에 `알 수 없음` 을 그리고 주간 42% 는 얇은 줄로만 남았다. 같은 데이터로 폰은 머리 줄을 안 그리고
-    /// 위젯은 주간을 대표로 올린다 — 세 화면이 같은 숫자를 다르게 말한 것이다.
+    /// v0.3.45 는 머리 숫자 하나를 크게 쓰느라 "어느 창을 머리로 세우나"를 골라야 했고, 초안이 `.fiveHour` 를
+    /// 무조건 세워 5시간 창이 **없는** 계정에서 큰 글자가 `—` 가 되고 주간 42% 는 얇은 줄로만 남았다.
+    /// 두 열을 나란히 세우면 그 선택이 아예 없다.
     @Test
-    func theHeadNumberFollowsTheVisibleWindow() throws {
+    func everyWindowGetsItsOwnCell() throws {
         let weeklyOnly = AILimitReadOutcome(results: [.antigravity: .success(AILimitProviderSnapshot(
             provider: .antigravity,
             windows: [AILimitWindowSnapshot(window: .weekly, usedPercent: 42,
                                             resetsAt: amNow.addingTimeInterval(86_400),
                                             observedAt: amNow, source: .local)]
         ))])
-        let subject = store(weeklyOnly, at: amNow)
-        let card = try #require(AILimitCardModel.all(store: subject, now: amNow).first)
-        #expect(card.headValueText == "42%", "주간만 오는 계정의 머리 숫자가 \(card.headValueText) 다")
-        #expect(card.headValueText != AILimitFreshnessRule.unknownValueText)
-        #expect(card.headWindowLabel == AILimitWindow.weekly.displayName,
-                "대표 창이 주간인데 라벨이 \(card.headWindowLabel ?? "없음") 다 — 옆 카드의 5시간과 같은 창으로 읽힌다")
-        #expect(card.rest.isEmpty, "같은 값을 카드에 두 번 그린다")
-        #expect(card.headCaption != AILimitCardModel.unknownCaption)
+        let one = try #require(AILimitCardModel.all(store: store(weeklyOnly, at: amNow), now: amNow).first)
+        #expect(one.display(.weekly)?.valueText == "42%", "주간만 오는 계정의 주간 칸이 비었다")
+        #expect(one.isAbsent(.fiveHour), "없는 5시간 창에 값을 지어냈다")
+        #expect(one.saysNothingButNotice == false, "읽은 창이 있는데 줄이 안내로 바뀌었다")
 
-        // 기준선: 두 창이 다 있으면 머리는 **5시간**이고 주간은 아래 줄로 내려간다(선택 규칙이 고정이 아니다).
-        let both = store(claudeAt88, at: observed)
-        let full = try #require(AILimitCardModel.all(store: both, now: observed).first)
-        #expect(full.headValueText == "88%")
-        #expect(full.headWindowLabel == AILimitWindow.fiveHour.displayName)
-        #expect(full.rest.map(\.window) == [.weekly])
-        #expect(full.rest.first?.valueText == "60%")
-        #expect(full.planLabel == "max")
+        // 기준선: 두 창이 다 있으면 **두 칸이 다 찬다**(위 단언이 "언제나 비어 있다"를 재는 게 아니다).
+        let both = try #require(AILimitCardModel.all(store: store(claudeAt88, at: observed), now: observed).first)
+        #expect(both.display(.fiveHour)?.valueText == "88%")
+        #expect(both.display(.weekly)?.valueText == "60%")
+        #expect(!both.isAbsent(.fiveHour) && !both.isAbsent(.weekly))
+        #expect(both.planLabel == "max")
+        #expect(both.windows.map(\.window) == [.fiveHour, .weekly], "열 순서가 5시간 → 주간이 아니다")
     }
 
-    /// 창이 하나도 없는 카드(만료만 아는 제공자)는 숫자를 **지어내지 않는다** — `—` · `알 수 없음` + 안내 한 줄.
-    @Test
-    func aProviderWeCannotReadShowsNoNumber() throws {
-        let expired = AILimitReadOutcome(results: [.claude: .failure(AILimitReadError(.expired))])
-        let subject = store(expired, at: amNow)
-        let card = try #require(AILimitCardModel.all(store: subject, now: amNow).first)
-        #expect(card.windows.isEmpty && card.head == nil)
-        #expect(card.headValueText == AILimitFreshnessRule.unknownValueText, "0% 를 지어냈다")
-        #expect(card.headCaption == AILimitCardModel.unknownCaption)
-        #expect(card.headWindowLabel == nil)
-        #expect(card.notice == "클로드 코드를 한 번 실행해 주세요")
-    }
-
-    /// ★ 단계 색과 숫자가 **같은 눈금**을 쓴다(반올림한 정수).
+    /// ★ **`없음` 과 `—` 는 다른 말이다**(승인된 문법 ⑤).
     ///
-    /// 초안은 클램프도 안 된 날것 double 로 90 을 갈랐다 — 89.5% 는 규칙이 `90%` 라고 **적는데** 색은 평온한
-    /// 강조색이었다. 한 자리에서 글자와 색이 다른 단계를 말한 셈이다.
+    /// `—` 는 규칙이 "판정 불가(= 못 읽었다)"로 못 박은 글자다. 5시간 창이 **아예 없는** 계정에 그 글자를
+    /// 쓰면 "이 계정엔 그 창이 없다"를 읽기 실패로 말하는 셈이고, 사용자는 고장으로 읽는다.
+    /// 반대로 창은 있는데 판정이 불가한 경우(맥 시계가 세 시간 빠르다)는 `—` 가 **맞는 말**이다.
     @Test
-    func theTintUsesTheSameRoundedScaleAsTheNumber() {
-        #expect(AILimitFreshnessRule.wholePercent(89.5) == 90, "전제: 규칙은 89.5 를 90% 로 적는다")
-        #expect(AILimitBar.tint(for: 89.5) == CheckTheme.danger, "글자는 90% 인데 색은 경고 단계가 아니다")
-        #expect(AILimitFreshnessRule.wholePercent(69.5) == 70, "전제")
-        #expect(AILimitBar.tint(for: 69.5) == CheckTheme.pending)
-        // 아래쪽 경계도 함께 잰다(둘 중 하나만 재면 `>=` 를 `>` 로 바꿔도 초록이다).
-        #expect(AILimitBar.tint(for: 89.4) == CheckTheme.pending)
-        #expect(AILimitBar.tint(for: 69.4) == CheckTheme.accent)
-        // 전 구간: 글자의 수와 색의 단계가 **언제나** 같은 편이다.
-        for step in 0...400 {
-            let raw = Double(step) * 0.25
-            let whole = AILimitFreshnessRule.wholePercent(raw)
-            let expected = whole >= AILimitBar.dangerPercent
-                ? CheckTheme.danger
-                : (whole >= AILimitBar.warnPercent ? CheckTheme.pending : CheckTheme.accent)
-            #expect(AILimitBar.tint(for: raw) == expected, "\(raw) → 글자 \(whole)% 인데 색이 다른 단계다")
-        }
-        // 범위 밖·비유한값도 규칙을 거친다(바가 트랙을 뚫지 않는 것과 같은 자리).
-        #expect(AILimitBar.tint(for: 140) == CheckTheme.danger)
-        #expect(AILimitBar.tint(for: .nan) == CheckTheme.accent, "NaN 이 색 단계를 흔든다")
-        #expect(AILimitBar.tint(for: nil) == CheckTheme.secondaryText)
-    }
+    func anAbsentWindowIsNeverCalledUnreadable() throws {
+        #expect(AILimitCardModel.absentValueText == "없음")
+        #expect(AILimitCardModel.absentValueText != AILimitFreshnessRule.unknownValueText,
+                "두 사실을 같은 글자로 말한다")
 
-    /// ★ 머리 캡션이 **관측 나이**를 말한다(v0.3.45 P2).
-    ///
-    /// 초안은 리셋 주장이 아니면 **항상** `오후 3:05 리셋` 만 적어, 맥 카드는 이 숫자가 얼마나 묵었는지를
-    /// 아예 말하지 않았다 — 폰은 같은 자리에 `3시간 전` 을 적는다(같은 데이터, 다른 말). 숫자의 "이상"과
-    /// 바의 투명도는 "30분을 넘었다"까지만 알리고 3시간인지 3일인지는 말하지 못한다.
-    ///
-    /// 덤으로: 리셋이 **유예(120초) 안쪽에서 이미 지난** 동안 값은 아직 90% 가 맞는데 캡션은 `오후 2:04 리셋`
-    /// 이라고 **지난 시각을 미래처럼** 말했다(재검증자 실측 — 지금이 2:05).
-    @Test
-    func theHeadCaptionAlwaysSpeaksOfTheObservationAge() throws {
-        // ① 리셋 시각이 남아 있어도 **나이를 지우지 않는다**.
-        let aged = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
-            provider: .claude,
-            windows: [AILimitWindowSnapshot(window: .fiveHour, usedPercent: 27,
-                                            resetsAt: amNow.addingTimeInterval(3_600),
-                                            observedAt: amNow.addingTimeInterval(-10_800), source: .local)]
-        ))])
-        let card = try #require(AILimitCardModel.all(store: store(aged, at: amNow), now: amNow).first)
-        #expect(card.headValueText == "27% 이상", "전제: 그 숫자는 하한이다")
-        #expect(card.headCaption == "3시간 전", "맥 카드가 관측 나이를 말하지 않는다: \(card.headCaption)")
-        #expect(card.headCaption == card.head?.captionText, "캡션 문구를 규칙 밖에서 따로 만들었다")
-        // 리셋 시각은 버리지 않고 **덧붙는다**(넓은 창에서 둘 다 선다).
-        let resetText = try #require(card.headResetText, "리셋 시각을 통째로 버렸다")
-        #expect(resetText == "\(AILimitResetTimeText.text(amNow.addingTimeInterval(3_600))) 리셋")
-        #expect(card.headCaptionDetailed == "3시간 전 · \(resetText)")
-
-        // ② ★ **이미 지난** 리셋 시각을 미래처럼 적지 않는다(유예 안쪽 — 값은 아직 90% 가 맞다).
-        let justPassed = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
-            provider: .claude,
-            windows: [AILimitWindowSnapshot(window: .fiveHour, usedPercent: 90,
-                                            resetsAt: amNow.addingTimeInterval(-60),
-                                            observedAt: amNow.addingTimeInterval(-1_800), source: .local)]
-        ))])
-        let grace = try #require(AILimitCardModel.all(store: store(justPassed, at: amNow), now: amNow).first)
-        #expect(grace.headValueText == "90%", "전제: 유예 안쪽이라 값은 아직 90% 다")
-        #expect(grace.headResetText == nil, "지난 리셋 시각을 캡션에 적었다 — 미래로 읽힌다")
-        #expect(grace.headCaption == "30분 전" && grace.headCaptionDetailed == grace.headCaption)
-
-        // ③ 리셋을 **이미 주장한** 창은 규칙의 문구만 말한다(리셋 시각을 덧붙이면 같은 사실을 두 번 적는다).
-        let claimed = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
-            provider: .claude,
-            windows: [AILimitWindowSnapshot(window: .fiveHour, usedPercent: 88,
-                                            resetsAt: amNow.addingTimeInterval(-300),
-                                            observedAt: amNow.addingTimeInterval(-1_800), source: .local)]
-        ))])
-        let reset = try #require(AILimitCardModel.all(store: store(claimed, at: amNow), now: amNow).first)
-        #expect(reset.headValueText == "0%" && reset.headCaption == "초기화됨")
-        #expect(reset.headResetText == nil && reset.headCaptionDetailed == reset.headCaption)
-
-        // ④ 뷰가 두 갈래를 **실제로** 갖는다(좁은 창에서 리셋을 빼고 나이를 남긴다 — 말줄임 대신 조각 빼기).
-        let code = V0317ShopTests.stripped(try V0317ShopTests.source("CheckAILimitsWindow.swift"))
-        #expect(code.contains("headerRow(caption: model.headCaptionDetailed"), "두 조각 갈래가 없다")
-        #expect(code.contains("headerRow(caption: model.headCaption"), "나이만 적는 갈래가 없다")
-        #expect(code.components(separatedBy: "ViewThatFits(in: .horizontal)").count >= 2, "조각을 빼는 갈래가 없다")
-    }
-
-    /// ★ 팝오버 한 줄이 **안 보이는 창을 떨군다**(v0.3.45 P2).
-    ///
-    /// 초안은 두 칸을 무조건 세워, 5시간 창이 **없는** 계정에서 `— · 42%` 를 그렸다. `—` 는 규칙이
-    /// "판정 불가(= 못 읽었다)"로 못 박은 글자라, "이 계정엔 그 창이 없다"를 **읽기 실패**로 말한 셈이다
-    /// (창 카드·폰·위젯은 전부 `isVisible` 이 거짓인 창을 떨군다 — 이 한 줄만 안 따라왔다).
-    @Test
-    func thePopoverSummaryDropsWindowsThatDoNotExist() async {
-        // ① 모든 제공자에 5시간 창이 없다(주간만 오는 계정 하나만 연동) → `—` 가 아니라 `주간 42%`.
+        // ① 그 창이 없다 → `없음`(화면도 툴팁도).
         let weeklyOnly = AILimitReadOutcome(results: [.antigravity: .success(AILimitProviderSnapshot(
             provider: .antigravity,
             windows: [AILimitWindowSnapshot(window: .weekly, usedPercent: 42,
                                             resetsAt: amNow.addingTimeInterval(86_400),
                                             observedAt: amNow, source: .local)]
         ))])
-        let one = store(weeklyOnly, at: amNow)
-        let oneText = CheckAILimitsRow.valueText(store: one, now: amNow)
-        #expect(!oneText.contains(AILimitFreshnessRule.unknownValueText),
-                "없는 창을 '읽기 실패'로 말한다: \(oneText)")
-        #expect(oneText == "\(AILimitWindow.weekly.displayName) 42%",
-                "칸이 하나만 남았는데 창 라벨이 없다(5시간으로 읽힌다): \(oneText)")
-        #expect(CheckAILimitsRow.combinedWindows(store: one, now: amNow).map(\.window) == [.weekly])
-        // 툴팁도 **그 줄이 적은 창**만 읽는다(없는 창을 이름만 읽어 주면 "그 숫자는 어디 있나"가 된다).
-        let tooltip = CheckAILimitsRow.tooltip(
-            windows: CheckAILimitsRow.combinedWindows(store: one, now: amNow),
-            caption: one.summary(now: amNow).captionText
-        )
-        #expect(tooltip.contains(AILimitWindow.weekly.displayName))
-        #expect(!tooltip.contains(AILimitWindow.fiveHour.displayName), "없는 창을 툴팁이 읽어 준다: \(tooltip)")
+        let absent = try #require(AILimitCardModel.all(store: store(weeklyOnly, at: amNow), now: amNow).first)
+        #expect(absent.display(.fiveHour) == nil)
+        #expect(absent.tooltipText.contains("5시간 없음"), "툴팁: \(absent.tooltipText)")
+        #expect(!absent.tooltipText.contains(AILimitFreshnessRule.unknownValueText),
+                "없는 창을 '읽기 실패'로 말한다: \(absent.tooltipText)")
 
-        // ② 기준선: 두 창이 다 있으면 자리가 라벨이므로 숫자 둘만 적는다(라벨이 늘 붙으면 폭이 넘친다).
-        let both = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
-            provider: .claude,
-            windows: [
-                AILimitWindowSnapshot(window: .fiveHour, usedPercent: 27, resetsAt: nil, observedAt: amNow, source: .local),
-                AILimitWindowSnapshot(window: .weekly, usedPercent: 60, resetsAt: nil, observedAt: amNow, source: .local)
-            ]
-        ))])
-        #expect(CheckAILimitsRow.valueText(store: store(both, at: amNow), now: amNow) == "27% · 60%")
-
-        // ③ 창이 **아무것도** 안 읽힌 제공자(만료)는 그래도 행이 서고 `—` **하나**를 적는다 —
-        //    그때 '판정 불가'는 맞는 말이다(없는 칸을 가짜로 세워 `—` 를 두 번 적지는 않는다).
-        let expired = store(AILimitReadOutcome(results: [.claude: .failure(AILimitReadError(.expired))]), at: amNow)
-        #expect(expired.isAvailable, "전제: 만료만 아는 제공자도 행은 선다")
-        #expect(CheckAILimitsRow.combinedWindows(store: expired, now: amNow).isEmpty)
-        #expect(CheckAILimitsRow.valueText(store: expired, now: amNow) == AILimitFreshnessRule.unknownValueText)
-
-        // ④ 창은 **있는데** 판정이 불가한 경우(맥 시계가 세 시간 빠르다)는 두 칸이 그대로 `— · —` 다 —
-        //    그 두 글자는 "못 읽었다"가 맞는 말이고, 폭 예산도 그 모양을 센다.
+        // ② 창은 **있는데** 판정이 불가하다(관측 시각이 유예를 넘겨 미래) → 두 칸이 `—` 다.
         let skewed = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
             provider: .claude,
             windows: [
@@ -1786,13 +1625,412 @@ struct AILimitsMacWindowContentTests {
                                       observedAt: amNow.addingTimeInterval(10_800), source: .local)
             ]
         ))])
-        #expect(CheckAILimitsRow.valueText(store: store(skewed, at: amNow), now: amNow) == "— · —")
+        let unknown = try #require(AILimitCardModel.all(store: store(skewed, at: amNow), now: amNow).first)
+        #expect(unknown.display(.fiveHour)?.valueText == AILimitFreshnessRule.unknownValueText)
+        #expect(unknown.display(.weekly)?.valueText == AILimitFreshnessRule.unknownValueText)
+        #expect(!unknown.isAbsent(.fiveHour), "읽기 실패를 '창이 없다'로 접었다")
+        #expect(unknown.display(.fiveHour)?.percent == nil, "판정 불가인데 바를 채웠다")
 
-        // ⑤ 순수 조립 함수 자체의 경계(스토어 없이도 되묻는다).
-        #expect(CheckAILimitsRow.valueText(windows: []) == AILimitFreshnessRule.unknownValueText)
+        // ③ 카드 제목 툴팁(창 종류별 최악)도 같은 규약이다 — 없는 창을 `—` 로 말하지 않는다.
+        let weeklyStore = store(weeklyOnly, at: amNow)
+        let combined = CheckAILimitsCard.combinedWindows(store: weeklyStore, now: amNow)
+        #expect(combined.map(\.window) == [.weekly], "없는 창을 조합값이 세웠다")
+        let summary = CheckAILimitsCard.summaryTooltip(
+            windows: combined, caption: weeklyStore.summary(now: amNow).captionText
+        )
+        #expect(summary.hasPrefix("주간 42%"), "조합 툴팁에 창 라벨이 없다(5시간으로 읽힌다): \(summary)")
+        #expect(!summary.contains(AILimitFreshnessRule.unknownValueText), "조합 툴팁: \(summary)")
+        // ★ 기준선: 두 창이 다 있으면 둘을 라벨과 함께 적는다.
+        let bothStore = store(claudeAt88, at: observed)
+        let bothSummary = CheckAILimitsCard.summaryTooltip(
+            windows: CheckAILimitsCard.combinedWindows(store: bothStore, now: observed),
+            caption: bothStore.summary(now: observed).captionText
+        )
+        #expect(bothSummary == "5시간 88% · 주간 60%\n방금", "조합 툴팁: \(bothSummary)")
+    }
+
+    /// 읽은 창이 하나도 없는 제공자(만료만 아는)는 숫자를 **지어내지 않고** 할 일을 한 줄로 말한다.
+    ///
+    /// 그 줄을 `없음 없음` 으로 그리면 "이 계정엔 두 창이 없다"는 거짓이 된다 — 사실은 "지금 못 읽었다"다.
+    @Test
+    func aProviderWeCannotReadSaysWhatToDoInsteadOfInventingNumbers() throws {
+        let expired = AILimitReadOutcome(results: [.claude: .failure(AILimitReadError(.expired))])
+        let subject = store(expired, at: amNow)
+        #expect(subject.isAvailable, "전제: 만료만 아는 제공자도 카드에 선다")
+        let card = try #require(AILimitCardModel.all(store: subject, now: amNow).first)
+        #expect(card.windows.isEmpty)
+        #expect(card.notice == "클로드 코드를 한 번 실행해 주세요")
+        #expect(card.saysNothingButNotice, "두 칸을 '없음' 으로 비웠다 — 창이 없는 것과 못 읽은 것은 다르다")
+        // ★ '없음' 글자 자체로 재지 마라 — 규칙의 '판정 불가' 캡션이 **"알 수 없음"** 이라 그 안에 들어 있다
+        //   (2026-10-07 이 테스트가 처음 빨개진 자리). 재야 하는 것은 **창 라벨이 붙은 칸 문구**다.
+        for window in AILimitWindow.allCases {
+            #expect(!card.tooltipText.contains("\(window.displayName) \(AILimitCardModel.absentValueText)"),
+                    "툴팁이 못 읽은 \(window.displayName) 창을 '없음' 이라 말한다: \(card.tooltipText)")
+        }
+        #expect(card.tooltipText.contains(AILimitCardModel.unknownCaption))
+        #expect(card.tooltipText.contains("클로드 코드를 한 번 실행해 주세요"))
+        // ★ 기준선: 값이 있는 제공자는 안내 줄로 바뀌지 않는다.
+        let healthy = try #require(AILimitCardModel.all(store: store(claudeAt88, at: observed), now: observed).first)
+        #expect(healthy.saysNothingButNotice == false)
+        // 그리고 안내 문구는 안쪽 폭 안에 든다(말줄임이 나면 할 일이 안 읽힌다).
+        let room = AILimitRowWidthBudget.innerWidth - AILimitRowWidthBudget.markSide - AILimitRowWidthBudget.markGap
+        for notice in ["클로드 코드를 한 번 실행해 주세요", "코덱스를 한 번 실행해 주세요",
+                       "안티그래비티를 한 번 실행해 주세요", "구독 리밋 없음", "잠시 뒤 다시"] {
+            let measured = (notice as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 10)]).width
+            #expect(measured <= room, "\"\(notice)\" 가 \(measured)pt 로 \(room)pt 를 넘는다")
+        }
+    }
+
+    /// ★ 사용량 단계 색과 숫자가 **같은 눈금**을 쓴다(반올림한 정수).
+    ///
+    /// v0.3.45 초안은 클램프도 안 된 날것 double 로 90 을 갈랐다 — 89.5% 는 규칙이 `90%` 라고 **적는데**
+    /// 색은 평온했다. 한 자리에서 글자와 색이 다른 단계를 말한 셈이다.
+    ///
+    /// v0.3.46 에서 그 색은 **바가 아니라 숫자 글자**가 쥔다(바는 열을 가른다). 평온 단계가 강조색이 아니라
+    /// 본문색인 이유가 그것이다 — 파란 글자는 5시간 열 색과 겹쳐 읽힌다.
+    @Test
+    func theUsageTintUsesTheSameRoundedScaleAsTheNumber() {
+        #expect(AILimitFreshnessRule.wholePercent(89.5) == 90, "전제: 규칙은 89.5 를 90% 로 적는다")
+        #expect(AILimitUsageTint.color(for: 89.5) == CheckTheme.danger, "글자는 90% 인데 색은 경고 단계가 아니다")
+        #expect(AILimitFreshnessRule.wholePercent(69.5) == 70, "전제")
+        #expect(AILimitUsageTint.color(for: 69.5) == CheckTheme.pending)
+        // 아래쪽 경계도 함께 잰다(둘 중 하나만 재면 `>=` 를 `>` 로 바꿔도 초록이다).
+        #expect(AILimitUsageTint.color(for: 89.4) == CheckTheme.pending)
+        #expect(AILimitUsageTint.color(for: 69.4) == CheckTheme.primaryText)
+        // 전 구간: 글자의 수와 색의 단계가 **언제나** 같은 편이다.
+        for step in 0...400 {
+            let raw = Double(step) * 0.25
+            let whole = AILimitFreshnessRule.wholePercent(raw)
+            let expected = whole >= AILimitUsageTint.dangerPercent
+                ? CheckTheme.danger
+                : (whole >= AILimitUsageTint.warnPercent ? CheckTheme.pending : CheckTheme.primaryText)
+            #expect(AILimitUsageTint.color(for: raw) == expected, "\(raw) → 글자 \(whole)% 인데 색이 다른 단계다")
+        }
+        // 범위 밖·비유한값도 규칙을 거친다(바가 트랙을 뚫지 않는 것과 같은 자리).
+        #expect(AILimitUsageTint.color(for: 140) == CheckTheme.danger)
+        #expect(AILimitUsageTint.color(for: .nan) == CheckTheme.primaryText, "NaN 이 색 단계를 흔든다")
+        #expect(AILimitUsageTint.color(for: nil) == CheckTheme.secondaryText)
+        // ★ 평온 단계가 **열 색과 겹치지 않는다** — 겹치면 "파란 글자"가 두 뜻을 갖는다.
+        #expect(AILimitUsageTint.color(for: 10) != AILimitMacPalette.fiveHourBar)
+        #expect(AILimitUsageTint.color(for: 10) != AILimitMacPalette.weeklyBar)
+    }
+
+    /// ★ 툴팁이 **이름·요금제·관측 나이·리셋 시각**을 갚는다(v0.3.46 의 핵심 교환).
+    ///
+    /// 카드에 이름 글자가 없는 것은 바 폭을 사기 위한 교환이다. 그 값을 안 치르면 사용자는 어느 줄이
+    /// 누구인지(마크만으로), 그 숫자가 얼마나 묵었는지를 **아예** 알 수 없다. 숫자의 "이상"과 바의 투명도는
+    /// "30분을 넘었다"까지만 알리고 3시간인지 3일인지는 말하지 못한다(`AILimitFreshnessRule` 머리말 ⓑ).
+    ///
+    /// 덤으로: 리셋이 **유예(120초) 안쪽에서 이미 지난** 동안 값은 아직 90% 가 맞는데 캡션은 `오후 2:04 리셋`
+    /// 이라고 **지난 시각을 미래처럼** 말했다(2026-10-07 실측 — 지금이 2:05).
+    @Test
+    func theTooltipRepaysTheNameAndPlanAndAgeAndReset() throws {
+        // ① 나이 + 리셋 시각이 **둘 다** 선다.
+        let aged = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
+            provider: .claude,
+            windows: [AILimitWindowSnapshot(window: .fiveHour, usedPercent: 27,
+                                            resetsAt: amNow.addingTimeInterval(3_600),
+                                            observedAt: amNow.addingTimeInterval(-10_800), source: .local)],
+            planLabel: "max"
+        ))])
+        let card = try #require(AILimitCardModel.all(store: store(aged, at: amNow), now: amNow).first)
+        #expect(card.display(.fiveHour)?.valueText == "27% 이상", "전제: 그 숫자는 하한이다")
+        let reset = try #require(card.resetTexts[.fiveHour], "리셋 시각을 통째로 버렸다")
+        #expect(reset == "\(AILimitResetTimeText.text(amNow.addingTimeInterval(3_600))) 리셋")
+        let lines = card.tooltipText.split(separator: "\n").map(String.init)
+        #expect(lines.first == "Claude max", "툴팁 머리에 이름·요금제가 없다: \(lines)")
+        #expect(lines.contains("5시간 27% 이상 · 3시간 전 · \(reset)"), "툴팁: \(card.tooltipText)")
+        #expect(card.tooltipText.contains("3시간 전"), "관측 나이를 말하지 않는다")
+        // 캡션 문구를 규칙 밖에서 따로 만들지 않았다.
+        #expect(card.display(.fiveHour)?.captionText == "3시간 전")
+
+        // ② ★ **이미 지난** 리셋 시각을 미래처럼 적지 않는다(유예 안쪽 — 값은 아직 90% 가 맞다).
+        let justPassed = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
+            provider: .claude,
+            windows: [AILimitWindowSnapshot(window: .fiveHour, usedPercent: 90,
+                                            resetsAt: amNow.addingTimeInterval(-60),
+                                            observedAt: amNow.addingTimeInterval(-1_800), source: .local)]
+        ))])
+        let grace = try #require(AILimitCardModel.all(store: store(justPassed, at: amNow), now: amNow).first)
+        #expect(grace.display(.fiveHour)?.valueText == "90%", "전제: 유예 안쪽이라 값은 아직 90% 다")
+        #expect(grace.resetTexts[.fiveHour] == nil, "지난 리셋 시각을 적었다 — 미래로 읽힌다")
+        #expect(grace.tooltipText.contains("5시간 90% · 30분 전"))
+        #expect(!grace.tooltipText.contains("리셋"), "지난 리셋이 툴팁에 남았다: \(grace.tooltipText)")
+        // 요금제가 없으면 이름만 적는다(빈 칸·공백이 남지 않는다).
+        #expect(grace.tooltipText.split(separator: "\n").first == "Claude")
+
+        // ③ 리셋을 **이미 주장한** 창은 규칙의 문구만 말한다(같은 사실을 두 번 적지 않는다).
+        let claimed = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
+            provider: .claude,
+            windows: [AILimitWindowSnapshot(window: .fiveHour, usedPercent: 88,
+                                            resetsAt: amNow.addingTimeInterval(-300),
+                                            observedAt: amNow.addingTimeInterval(-1_800), source: .local)]
+        ))])
+        let after = try #require(AILimitCardModel.all(store: store(claimed, at: amNow), now: amNow).first)
+        #expect(after.display(.fiveHour)?.valueText == "0%" && after.display(.fiveHour)?.captionText == "초기화됨")
+        #expect(after.resetTexts[.fiveHour] == nil)
+        #expect(after.tooltipText.contains("5시간 0% · 초기화됨"))
+    }
+
+    /// ★ 뷰가 승인된 문법을 **실제로** 그린다(값으로는 안 보이는 자리라 소스로 잰다 — 이름 없음 · 열 머리
+    /// 한 번 · 구분선 전폭 · 고정 높이 · 고정 숫자 칸 · tabular-nums).
+    @Test
+    func theCardViewDrawsTheApprovedGrammar() throws {
+        let code = V0317ShopTests.stripped(try V0317ShopTests.source("CheckAILimitsRow.swift"))
+        // ① 줄에 **이름 글자가 없다**(마크만). 있으면 바가 각 60pt 로 줄어 8% 와 0% 가 안 갈린다.
+        #expect(code.contains("AIProviderTile(provider: model.provider, size: AILimitRowWidthBudget.markSide)"))
+        #expect(!code.contains("provider.displayName)") || !code.contains("Text(model.provider.displayName)"),
+                "줄에 제공자 이름을 글자로 그렸다 — 그 폭은 바의 것이다")
+        #expect(!code.contains("Text(provider.displayName)"), "줄에 제공자 이름을 글자로 그렸다")
+        // ② 열 머리는 **머리 줄에 한 번**이다(줄마다 반복하지 않는다).
+        #expect(code.components(separatedBy: "columnHeader(").count - 1 == 3,
+                "열 머리 호출이 둘(머리 줄) + 정의 하나가 아니다")
+        #expect(code.contains("AILimitMacPalette.headerColor(window)"), "열 머리를 그 열 색으로 물들이지 않는다")
+        // ③ 구분선은 좌우 패딩을 **안 받는다**(카드 안쪽 여백 바깥까지 긋는다). 줄은 받는다.
+        #expect(code.contains("Rectangle() .fill(AILimitMacPalette.separator) .frame(height: AILimitRowWidthBudget.separatorHeight)"))
+        #expect(code.contains("AILimitProviderRow(model: model) .padding(.horizontal, AILimitRowWidthBudget.rowInsetX)"))
+        // ④ 높이를 뷰가 못 박는다(예산이 조용히 거짓이 되지 않게).
+        #expect(code.contains(".frame(height: AILimitRowWidthBudget.cardHeight(providers: models.count))"))
+        #expect(code.contains(".frame(height: AILimitRowWidthBudget.providerRowHeight)"))
+        // ⑤ 숫자는 고정 칸 · 오른쪽 정렬 · tabular-nums.
+        #expect(code.contains(".frame(width: AILimitRowWidthBudget.valueWidth, alignment: .trailing)"))
+        #expect(code.components(separatedBy: ".monospacedDigit()").count - 1 >= 1, "tabular-nums 가 없다")
+        // ⑥ 바 색은 **열 색**이고 폭은 산식에서 온다.
+        #expect(code.contains("tint: AILimitMacPalette.barColor(window)"))
+        #expect(code.contains(".frame(width: AILimitRowWidthBudget.barWidth)"))
+        // ⑦ 하한은 **불투명도**로 말한다(폰·위젯과 같은 수 — 교차 모듈 계약 테스트가 그 숫자를 되묻는다).
+        #expect(code.contains("floorOnly ? 0.55 : 1"))
+        // ⑧ 자격증명이 없으면 아무것도 그리지 않는다(간격도 없다).
+        #expect(code.contains("if store.isAvailable") && code.contains("EmptyView()"))
+    }
+
+    /// ★ **별도 창이 사라졌다**(2026-10-07 사용자 지시: "메인 화면 자체에 다 뜨게끔").
+    ///
+    /// 없으면: 창 파일만 지우고 배선·등록이 남아도 컴파일은 통과한다(지금은 통과하지 않지만, 창을 되살리는
+    /// 변경이 이 자리들을 조용히 반쪽만 되살릴 수 있다). "자세히 ›" 한 줄이 남아 있으면 누를 데가 없는 버튼이다.
+    @Test
+    func theStandaloneLimitsWindowIsGone() throws {
+        let sources = try V0325TooltipTests.strippedSources()
+        #expect(sources["CheckAILimitsWindow.swift"] == nil, "창 파일이 아직 있다")
+        let haunted = sources.filter { $0.value.contains("CheckAILimitsWindowController") }.keys.sorted()
+        #expect(haunted.isEmpty, "사라진 창 컨트롤러를 아직 부르는 파일: \(haunted)")
+        #expect(sources["CheckAILimitsRow.swift"]?.contains("자세히 ›") == false,
+                "누를 데가 없는 '자세히 ›' 가 남았다")
+        // 독립 창 목록에서도 빠졌다(없는 창의 식별자가 남으면 "등록이 빠졌다"로 읽힌다).
+        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 3)
+        #expect(!MiniGameSpaceKey.standaloneWindowIDs.contains("check.aiLimitsWindow"))
+        // 팝오버가 갱신을 당기는 길은 **남아 있다**(창의 `onOpen` 이 하던 일 — 그게 사라지면 팝오버를 열어도
+        // 숫자가 안 갱신된다). 스토어의 5분 하한이 난사를 막는 것도 그대로다.
+        #expect(sources["WorkTimerStore.swift"]?.contains("refreshAILimitsIfNeeded(force: true)") == true,
+                "팝오버 열림이 리밋 갱신을 당기지 않는다")
     }
 }
 
+
+// MARK: - 카드 렌더 (픽셀 실측 — 소스 계약이 증명할 수 없는 것)
+
+/// ★ **바가 열 색으로 그려졌는가**를 실제 픽셀에서 되묻는다.
+///
+/// 소스 계약(`theCardViewDrawsTheApprovedGrammar`)은 "그 상수를 넘겼는가"까지만 잰다. `tint:` 에 맞는 색을
+/// 넣고도 바가 안 보이는 조합이 있다(폭 0 · 트랙이 채움을 덮음 · 프레임이 접힘) — 그걸 가르는 길은 굽는 것뿐이다.
+/// 그리고 이 자리는 **승인된 디자인이 눈으로 맞는지** 사람이 볼 수 있는 유일한 산출물이기도 하다
+/// (`CHECK_SNAPSHOT_DIR` 에 PNG 가 남는다).
+@Suite("AILimitsMac — 카드 렌더: 열 색·없는 칸·안내 줄")
+@MainActor
+struct AILimitsMacCardRenderTests {
+    /// 제공자 `n` 명짜리 스토어(1 = Claude · 2 = + Codex · 3 = + 안티그래비티).
+    private func store(providers: Int, function: String = #function, line: Int = #line) -> AILimitStore {
+        let name = CheckTestScratch.uniqueSuitePath(function: function, line: line + providers)
+        let defaults = UserDefaults(suiteName: name) ?? .standard
+        defaults.removePersistentDomain(forName: name)
+        let subject = AILimitStore(defaults: defaults, clock: { amNow }, runner: { _ in AILimitReadOutcome() })
+        var results: [AILimitProvider: Result<AILimitProviderSnapshot, AILimitReadError>] = [
+            .claude: .success(AILimitProviderSnapshot(provider: .claude, windows: [
+                AILimitWindowSnapshot(window: .fiveHour, usedPercent: 82,
+                                      resetsAt: amNow.addingTimeInterval(3_600), observedAt: amNow, source: .local),
+                AILimitWindowSnapshot(window: .weekly, usedPercent: 31,
+                                      resetsAt: amNow.addingTimeInterval(200_000), observedAt: amNow, source: .local)
+            ], planLabel: "max"))
+        ]
+        if providers >= 2 {
+            results[.codex] = .success(AILimitProviderSnapshot(provider: .codex, windows: [
+                AILimitWindowSnapshot(window: .weekly, usedPercent: 12,
+                                      resetsAt: amNow.addingTimeInterval(300_000), observedAt: amNow, source: .local)
+            ], planLabel: "plus"))
+        }
+        if providers >= 3 { results[.antigravity] = .failure(AILimitReadError(.expired)) }
+        subject.apply(AILimitReadOutcome(results: results), now: amNow)
+        return subject
+    }
+
+    /// Claude(5시간 82% · 주간 31%) · Codex(주간 12% 만 — 5시간 창이 **없다**) · 안티그래비티(만료 — 안내 줄).
+    /// 세 줄이 세 가지 모양을 한 그림에 담는다.
+    private func demoStore(function: String = #function, line: Int = #line) -> AILimitStore {
+        let name = CheckTestScratch.uniqueSuitePath(function: function, line: line)
+        let defaults = UserDefaults(suiteName: name) ?? .standard
+        defaults.removePersistentDomain(forName: name)
+        let subject = AILimitStore(defaults: defaults, clock: { amNow }, runner: { _ in AILimitReadOutcome() })
+        subject.apply(AILimitReadOutcome(results: [
+            .claude: .success(AILimitProviderSnapshot(provider: .claude, windows: [
+                AILimitWindowSnapshot(window: .fiveHour, usedPercent: 82,
+                                      resetsAt: amNow.addingTimeInterval(3_600), observedAt: amNow, source: .local),
+                AILimitWindowSnapshot(window: .weekly, usedPercent: 31,
+                                      resetsAt: amNow.addingTimeInterval(200_000), observedAt: amNow, source: .local)
+            ], planLabel: "max")),
+            .codex: .success(AILimitProviderSnapshot(provider: .codex, windows: [
+                AILimitWindowSnapshot(window: .weekly, usedPercent: 12,
+                                      resetsAt: amNow.addingTimeInterval(300_000), observedAt: amNow, source: .local)
+            ], planLabel: "plus")),
+            .antigravity: .failure(AILimitReadError(.expired))
+        ]), now: amNow)
+        return subject
+    }
+
+    /// 점 좌표 → 픽셀 좌표(scale 3). 위에서 아래로 세는 비트맵 좌표계다.
+    private func rgb(_ bitmap: NSBitmapImageRep, x: CGFloat, y: CGFloat) throws -> (Int, Int, Int) {
+        let scale: CGFloat = 3
+        let color = try #require(bitmap.colorAt(x: Int(x * scale), y: Int(y * scale)))
+        let srgb = try #require(color.usingColorSpace(.sRGB))
+        return (Int((srgb.redComponent * 255).rounded()),
+                Int((srgb.greenComponent * 255).rounded()),
+                Int((srgb.blueComponent * 255).rounded()))
+    }
+
+    /// 후보 색들의 **렌더된** 값. 정의값(sRGB 바이트)과 바로 견주면 안 된다 —
+    /// `ImageRenderer` 의 색 관리가 채널당 10여 단위를 들어 올려(2026-10-07 실측: 패널 (43,46,61) → (57,61,78))
+    /// 어두운 두 트랙이 서로의 정의값보다 **상대의 렌더값에 더 가까워진다**. 그래서 기준도 **같은 기계로 굽는다**:
+    /// 후보를 한 줄 띠로 구워 그 픽셀을 표로 쓴다. 이 저장소의 원칙 그대로 — 재는 자와 재는 물건을 같은 자로 잰다.
+    private static let candidates: [(String, Color)] = [
+        ("5시간바", AILimitMacPalette.fiveHourBar),
+        ("주간바", AILimitMacPalette.weeklyBar),
+        ("빈트랙", AILimitMacPalette.emptyTrack),
+        ("없는칸트랙", AILimitMacPalette.absentTrack),
+        ("구분선", AILimitMacPalette.separator),
+        ("카드배경", CheckTheme.panel),
+    ]
+
+    /// 후보 띠를 굽고 각 칸 복판을 읽어 표로 만든다.
+    private func renderedReference() throws -> [(String, (Int, Int, Int))] {
+        let side: CGFloat = 12
+        let strip = HStack(spacing: 0) {
+            ForEach(Array(Self.candidates.enumerated()), id: \.offset) { _, entry in
+                Rectangle().fill(entry.1).frame(width: side, height: side)
+            }
+        }
+        let bitmap = try #require(CheckRenderSettle.bitmap(strip, scale: 3), "기준 띠를 굽지 못했다")
+        var table: [(String, (Int, Int, Int))] = []
+        for (index, entry) in Self.candidates.enumerated() {
+            table.append((entry.0, try rgb(bitmap, x: side * CGFloat(index) + side / 2, y: side / 2)))
+        }
+        // 전제: 여섯 기준이 서로 **다르게** 구워졌다. 둘이 같으면 아래 '가장 가까운 색' 판정이 동전 던지기다.
+        for i in table.indices {
+            for j in table.indices where j > i {
+                #expect(table[i].1 != table[j].1, "\(table[i].0) 와 \(table[j].0) 가 같은 색으로 구워졌다")
+            }
+        }
+        return table
+    }
+
+    /// 후보 가운데 **가장 가까운** 색의 이름. 절대 일치로 재지 않는 이유: `ImageRenderer` 가 같은 내용에서도
+    /// 채널당 ≤2 를 흔들고(이 저장소 실측), 거기에 허용오차를 키우면 이번엔 두 후보가 같이 든다.
+    /// "어느 색에 가장 가까운가"는 그 떨림에 흔들리지 않으면서도 **열이 바뀌면 반드시 빨개진다.**
+    private func nearest(_ probe: (Int, Int, Int), in table: [(String, (Int, Int, Int))]) -> String {
+        var best = ("", Int.max)
+        for (name, c) in table {
+            let d = (probe.0 - c.0) * (probe.0 - c.0) + (probe.1 - c.1) * (probe.1 - c.1) + (probe.2 - c.2) * (probe.2 - c.2)
+            if d < best.1 { best = (name, d) }
+        }
+        return best.0
+    }
+
+    @Test
+    func theBarsCarryTheirColumnColourAndAbsentCellsStayEmpty() throws {
+        let b = AILimitRowWidthBudget.self
+        let reference = try renderedReference()
+        let card = CheckAILimitsCard(store: demoStore(), clock: { amNow })
+            .frame(width: b.cardOuterWidth)
+        let bitmap = try #require(CheckRenderSettle.bitmap(card, scale: 3), "카드를 굽지 못했다")
+        amSaveSnapshot(bitmap, name: "ai-limits-card-316.png")
+        func at(_ x: CGFloat, _ y: CGFloat) throws -> String { nearest(try rgb(bitmap, x: x, y: y), in: reference) }
+
+        // ① 크기 = 예산 산식. 뷰가 자연 높이로 자라면 팝오버 높이 예산이 조용히 거짓이 된다.
+        #expect(bitmap.pixelsWide == Int(b.cardOuterWidth * 3))
+        #expect(bitmap.pixelsHigh == Int(b.cardHeight(providers: 3) * 3),
+                "카드가 \(Double(bitmap.pixelsHigh) / 3)pt 다 — 예산은 \(b.cardHeight(providers: 3))pt")
+
+        // 자리 산식(점). x: 여백 12 | 마크 20 | 8 | 바 69 | 6 | 숫자 52 | 10 | 바 69 | 6 | 숫자 52
+        let fiveHourBarX = b.rowInsetX + b.markSide + b.markGap
+        let weeklyBarX = fiveHourBarX + b.barWidth + b.barValueGap + b.valueWidth + b.columnGap
+        // y: 여백 10 | 머리 14 | 7 | 줄 24 | 선 1 | 줄 24 | 선 1 | 줄 24
+        func rowCenterY(_ index: Int) -> CGFloat {
+            b.rowInsetY + b.titleRowHeight + b.titleRowGap
+                + CGFloat(index) * (b.providerRowHeight + b.separatorHeight) + b.providerRowHeight / 2
+        }
+
+        // ② Claude 줄: 5시간 채움은 **5시간 색**, 주간 채움은 **주간 색**. 둘이 섞이면 열 단서가 거짓이 된다.
+        let claudeY = rowCenterY(0)
+        #expect(try at(fiveHourBarX + 20, claudeY) == "5시간바", "5시간 채움이 5시간 색이 아니다")
+        #expect(try at(weeklyBarX + 8, claudeY) == "주간바", "주간 채움이 주간 색이 아니다")
+        // 채움 밖은 빈 트랙이다(82% → 69pt 중 56.6pt 까지만 찬다 · 31% → 21.4pt).
+        #expect(try at(fiveHourBarX + b.barWidth - 4, claudeY) == "빈트랙", "5시간 바가 82% 인데 끝까지 찼다")
+        #expect(try at(weeklyBarX + b.barWidth - 4, claudeY) == "빈트랙")
+
+        // ③ Codex 줄: 5시간 창이 **없다** → 더 어두운 트랙만(채움 없음). 주간 12% 는 앞쪽만 찬다.
+        let codexY = rowCenterY(1)
+        #expect(try at(fiveHourBarX + 20, codexY) == "없는칸트랙",
+                "없는 5시간 칸에 채움이나 보통 트랙을 그렸다 — '0% 라 비었다'로 읽힌다")
+        #expect(try at(weeklyBarX + 3, codexY) == "주간바", "주간 12% 가 안 보인다")
+        #expect(try at(weeklyBarX + b.barWidth - 4, codexY) == "빈트랙")
+
+        // ④ 안티그래비티 줄(만료): 바가 **하나도 없다** — 두 칸을 '없음' 으로 비우지 않고 안내 한 줄을 말한다.
+        let agY = rowCenterY(2)
+        #expect(try at(weeklyBarX + 20, agY) == "카드배경",
+                "못 읽은 제공자 줄에 트랙을 그렸다 — '창이 없다'로 읽힌다")
+        #expect(try at(weeklyBarX + b.barWidth - 4, agY) == "카드배경")
+
+        // ⑤ 제공자 사이 구분선이 **카드 안쪽 여백 바깥까지** 간다(좌우 끝 모두).
+        let separatorY = b.rowInsetY + b.titleRowHeight + b.titleRowGap + b.providerRowHeight + 0.5
+        for x in [CGFloat(2), b.rowInsetX / 2, b.cardOuterWidth - 3] {
+            #expect(try at(x, separatorY) == "구분선", "구분선이 x=\(x)pt 에서 끊겼다")
+        }
+        // ★ 기준선이 갈린다: 같은 x 의 **줄 안쪽**은 구분선 색이 아니다 — 같은 답이면 위 단언은
+        //   "카드 배경이 원래 그 색이다"를 잰 것이고 선을 통째로 지워도 초록이다.
+        #expect(try at(2, separatorY + 6) == "카드배경", "줄 안쪽도 구분선 색이다 — 위 단언이 아무것도 안 잰다")
+        // 두 번째 구분선도 있다(선 하나만 그리고 나머지를 빼먹는 변경을 잡는다).
+        let secondSeparatorY = separatorY + b.providerRowHeight + b.separatorHeight
+        #expect(try at(b.cardOuterWidth / 2, secondSeparatorY) == "구분선", "두 번째 구분선이 없다")
+    }
+
+    /// ★ 뷰가 **예산과 같은 높이**로 굽힌다 — 제공자 1·2·3 전부. 산식만 재면(위 폭 스위트) 뷰가 자연 높이로
+    /// 자라는 변경이 조용히 지나가고, 그 순간 팝오버 높이 상한(700pt) 계산이 통째로 거짓이 된다.
+    @Test
+    func theRenderedHeightMatchesTheBudgetForOneTwoAndThreeProviders() throws {
+        let b = AILimitRowWidthBudget.self
+        for count in 1...3 {
+            let subject = store(providers: count)
+            #expect(subject.listedProviders.count == count, "전제: 제공자 \(count)명")
+            let card = CheckAILimitsCard(store: subject, clock: { amNow }).frame(width: b.cardOuterWidth)
+            let bitmap = try #require(CheckRenderSettle.bitmap(card, scale: 3), "제공자 \(count)명 카드를 굽지 못했다")
+            #expect(bitmap.pixelsHigh == Int(b.cardHeight(providers: count) * 3),
+                    "제공자 \(count)명 카드가 \(Double(bitmap.pixelsHigh) / 3)pt — 예산은 \(b.cardHeight(providers: count))pt")
+            amSaveSnapshot(bitmap, name: "ai-limits-card-\(count).png")
+        }
+        // 제공자 0명은 **아무것도 안 그린다**(빈 카드를 0% 로 지어내지 않는다 · 간격도 안 먹는다).
+        let empty = AILimitStore.inert()
+        #expect(empty.isAvailable == false)
+        #expect(b.budgetHeight(providers: empty.listedProviders.count) == 0)
+    }
+}
+
+/// 사람이 볼 그림을 남긴다. 세션 전용 절대 경로를 소스에 박지 않는다 — 퍼블릭 저장소에 개인 머신 경로가 남는다.
+private func amSaveSnapshot(_ bitmap: NSBitmapImageRep, name: String) {
+    let dir = ProcessInfo.processInfo.environment["CHECK_SNAPSHOT_DIR"].map {
+        URL(fileURLWithPath: $0, isDirectory: true)
+    } ?? FileManager.default.temporaryDirectory.appendingPathComponent("check-ai-limits", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    guard let png = bitmap.representation(using: .png, properties: [:]) else { return }
+    try? png.write(to: dir.appendingPathComponent(name))
+}
 
 // MARK: - 문서 대조 헬퍼 (업로드 칸 ↔ 두 공개 문서)
 

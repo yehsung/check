@@ -52,28 +52,25 @@ package struct AILimitDisplayRow: Identifiable, Equatable, Sendable {
         [fiveHour, weekly].compactMap { $0 }.filter(\.isVisible)
     }
 
-    /// 줄이 세울 **대표 창과 그 라벨**. 보이는 창을 5시간 → 주간 순서로 담고 **첫 줄이 대표**다 —
-    /// 맥 카드(`AILimitCardModel.head`)·위젯(`AingWidgetLimitRow.primaryWindow`)과 **같은 규칙**이다.
+    /// 그 열이 그릴 값. **nil = 그 창이 이 계정에 아예 없다** → 칸을 `없음` 으로 비운다
+    /// (`AILimitColumnText.absentValueText`). 판정 불가(기기 시계 어긋남)는 nil 이 아니라 값이 있는 쪽이고,
+    /// 그때 글자는 코어 규칙의 `—` 다 — **두 사실을 같은 글자로 말하지 않는다**(카드 머리말).
     ///
-    /// ## 왜 폰에도 있어야 했나 (2026-10-07 실증한 P2)
-    /// 폰 카드는 `row.fiveHour == nil` 이면 머리 줄의 **값과 캡션을 둘 다 건너뛰었다**. 5시간 창이 아예 없는
-    /// 계정(주간만 오는 요금제 · 안티그래비티 실측)에서 맥은 `42% / 주간`, 위젯도 `42% / 주간` 을 세우는데
-    /// **폰만 머리 숫자가 없었다** — 같은 데이터로 세 화면이 다른 말을 했다. 그 분기는 뷰(`#if os(iOS)`) 안에
-    /// 있어서 맥 스위트가 한 줄도 재지 못했다. 그래서 선택 규칙을 **뷰 밖**(이 타입)으로 끌어낸다.
-    ///
-    /// ★ 라벨을 값과 **한 묶음으로** 내보내는 까닭: 대표 창이 줄마다 다를 수 있으므로(제공자별 창 구성이
-    /// 다르다) 라벨이 없으면 이 줄의 주간 42% 가 옆 줄의 5시간 27% 와 같은 창으로 읽힌다.
-    package var primaryWindow: (display: AILimitDisplay, label: String)? {
-        guard let display = visibleWindows.first, let window = display.window else { return nil }
-        return (display, window.displayName)
+    /// ## 왜 '대표 창 고르기'가 사라졌나 (v0.3.46)
+    /// v0.3.45 는 머리 숫자 하나를 크게 쓰고 나머지를 얇은 줄로 내렸다. 그래서 "어느 창을 머리로 세우나"라는
+    /// 선택이 필요했고, 그 선택이 틀리면(초안은 `.fiveHour` 를 무조건 세웠다) 5시간 창이 **없는** 계정에서
+    /// 숫자가 통째로 사라졌다 — 같은 데이터로 맥·위젯은 주간을 세워, 세 화면이 다른 말을 했다.
+    /// 승인된 새 문법(한 줄 안에 두 열이 **나란히**)에는 그 선택이 **아예 없다**: 창마다 자기 칸이 있고,
+    /// 없는 창은 `없음` 으로 비고, 있는 창은 자기 값을 말한다. 고를 것이 없으면 틀릴 수도 없다.
+    package func display(_ window: AILimitWindow) -> AILimitDisplay? {
+        let value = window == .fiveHour ? fiveHour : weekly
+        guard let value, value.isVisible else { return nil }
+        return value
     }
 
-    /// 대표 창 아래에 **따로** 그릴 주간 줄. 주간이 이미 대표로 섰으면 nil — 같은 값을 두 번 그리지 않는다
-    /// (위젯 `secondaryWeekly` 와 같은 규칙).
-    package var secondaryWeekly: AILimitDisplay? {
-        guard let weekly, weekly.isVisible else { return nil }
-        return primaryWindow?.display.window == .weekly ? nil : weekly
-    }
+    /// 그릴 숫자가 하나도 없는 줄(두 창이 다 없다). 스토어가 이미 걸러 내지만, 걸러짐이 느슨해지는 날
+    /// 두 칸이 `없음 · 없음` 인 빈 줄이 서지 않게 뷰도 이 깃발을 본다.
+    package var hasAnyWindow: Bool { !visibleWindows.isEmpty }
 }
 
 @MainActor

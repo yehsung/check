@@ -21,7 +21,14 @@ let package = Package(
         // B3: 맥·폰 공유 코어 — 서버 통신 · 모델 · 실시간 · 세션·키체인 · 오목 · 근무 통계 · 캐릭터 킷 · 토큰 모델 · 할 일 · 게임 규칙.
         // 화면(AppKit·맥 뷰)은 없다. 모듈 사이 접근은 package.
         .target(
-            name: "CheckCore"
+            name: "CheckCore",
+            // v0.3.46: 제공자 마크 중 **안티그래비티만** 그림이다(실물 캡처 256×256 — 무지개 그라데이션 아치는
+            // 코드로 재현하면 틀린다). 맥 앱·폰 앱·위젯 확장이 **셋 다 링크하는 모듈은 CheckCore 하나뿐**이라
+            // 한 벌로 셋을 먹이려면 여기여야 한다(CheckMobileShared 는 맥이 링크하지 않고, ios/App/Assets.xcassets
+            // 는 위젯 확장이 못 본다). `.copy` 라 폴더(ProviderMarks/)가 번들에 그대로 남는다 —
+            // `.process` 는 하위 폴더를 평탄화해 다음 제공자 그림과 이름이 부딪힌다.
+            // ⚠️ 맥 패키징은 이 번들을 **손으로 복사**해야 한다(scripts/build-local.sh 의 RESOURCE_BUNDLES).
+            resources: [.copy("Resources/ProviderMarks")]
         ),
         // D1: 폰 앱·위젯 공용(App Group 경로 · 키체인 설정 · 위젯 스냅샷 모델 · 할 일 파일 위치 · 기기 식별자). 플랫폼 무관.
         .target(

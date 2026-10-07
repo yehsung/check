@@ -27,6 +27,8 @@ enum AingWidgetColors {
     static let offWorkDot = color(AingWidgetPalette.offWorkDot)
     static let pending = color(AingWidgetPalette.pending)
     static let pendingDot = color(AingWidgetPalette.pendingDot)
+    /// AI 리밋 숫자가 90% 를 넘었을 때의 글자색(v0.3.46 — 바는 열 색을 쥐므로 사용량 단계는 글자가 말한다).
+    static let danger = color(AingWidgetPalette.danger)
     static let accent = color(AingWidgetPalette.accent)
     static let accentFill = color(AingWidgetPalette.accentFill)
     static let track = color(AingWidgetPalette.track)

@@ -97,10 +97,13 @@ struct CheckMenuView: View {
     static let chessInviteBannerHeight: CGFloat = 92
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
-    /// AI 리밋 한 줄 높이(pt, spacing 포함 — v0.3.45). 내용 높이를 뷰가 **고정**해 두므로 이 값은 산식이다:
-    /// 내용 20 + 상하 패딩 8×2 + VStack 간격 10 = 46(`AILimitRowWidthBudget.budgetHeight`).
-    /// 자격증명이 하나도 없으면 행이 `EmptyView` 라 이 예산도 0 이다(자동 감지 — 설정 토글 없음).
-    static let aiLimitRowHeight: CGFloat = AILimitRowWidthBudget.budgetHeight
+    /// AI 리밋 카드 높이(pt, spacing 포함 — v0.3.46). **제공자 수에 따라 자란다**: 별도 창을 접고 카드를
+    /// 팝오버 안으로 들여왔으므로(사용자 지시: "메인 화면 자체에 다 뜨게끔") 더는 한 줄 고정이 아니다.
+    /// 내용 높이를 뷰가 `.frame(height:)` 로 **고정**해 두므로 이 값은 산식이다(`AILimitRowWidthBudget`).
+    /// 자격증명이 하나도 없으면 카드가 `EmptyView` 라 이 예산도 0 이다(자동 감지 — 설정 토글 없음).
+    static func aiLimitCardHeight(providers: Int) -> CGFloat {
+        AILimitRowWidthBudget.budgetHeight(providers: providers)
+    }
     /// 헤더 주간 목표 편집 인라인 행 높이(pt). 배너는 아니지만 헤더를 그만큼 부풀리므로 같은 예산에 넣는다.
     static let goalEditorHeight: CGFloat = 92
     /// 공지 카드(v0.3.40) 높이(pt, spacing 10 포함) — QR 이 있는 쪽. QR 판(72 + 여백 8×2 = 88)이 글 열(본문 3줄 + 캡션)보다
@@ -289,11 +292,18 @@ struct CheckMenuView: View {
         !isSubPanelOpen
     }
 
-    /// AI 리밋 한 줄을 그리는가(v0.3.45). 하위 패널이 열려 있으면 감추고(그 자리는 패널이 쓴다),
+    /// AI 리밋 카드를 그리는가(v0.3.45). 하위 패널이 열려 있으면 감추고(그 자리는 패널이 쓴다),
     /// **자격증명이 하나도 없으면 애초에 그리지 않는다** — 설정 토글이 없는 이유가 이것이다(자동 감지).
-    /// 행 자체도 같은 판정을 하지만 예산이 그 판정을 모르면 창 높이가 어긋난다(짝 게이트).
+    /// 카드 자체도 같은 판정을 하지만 예산이 그 판정을 모르면 창 높이가 어긋난다(짝 게이트).
     private var showsAILimitRow: Bool {
         !isSubPanelOpen && store.aiLimits.isAvailable
+    }
+
+    /// 리밋 카드가 세울 제공자 수(v0.3.46). 카드 높이가 여기에 끌려가므로 **예산도 같은 수를 센다** —
+    /// 짝 게이트의 나머지 반쪽이다. 이 값은 10분에 한 번(리밋 갱신) 바뀌므로 매초 무효화 경로가 아니다
+    /// (`showsAILimitRow` 가 같은 스토어의 `isAvailable` 을 읽는 것과 같은 자리·같은 주기).
+    private var aiLimitProviderCount: Int {
+        store.aiLimits.listedProviders.count
     }
 
     /// 목록 위쪽에서 선택적으로 자리를 먹는 높이(배너 1개 + 토큰 소모량 행). 목록 패널은 이만큼 무스크롤
@@ -303,10 +313,11 @@ struct CheckMenuView: View {
         // 사용량 유무로 갈라 세지 않는다 — 예전 조건을 그대로 뒀다면 그 행이 예산에 안 잡혀 팀원이 많은
         // 계정에서 목록이 한 행 더 남고 창이 상한을 넘었다.
         let tokenRow = showsTokenUsageRow ? Self.tokenUsageRowHeight : 0
-        // AI 리밋 한 줄은 **자격증명이 있는 사람에게만** 그려진다. 그래서 예산도 그릴 때만 센다 —
+        // AI 리밋 카드는 **자격증명이 있는 사람에게만** 그려진다. 그래서 예산도 그릴 때만 센다 —
         // 항상 세면 리밋을 쓰지 않는 사람의 목록이 한 행 덜 보이고(없는 자리를 비워 두는 셈),
         // 안 세면 쓰는 사람의 창이 상한을 넘는다(토큰 행이 겪은 바로 그 회귀).
-        let aiLimitRow = showsAILimitRow ? Self.aiLimitRowHeight : 0
+        // v0.3.46: 카드가 제공자 수만큼 자라므로 **그 수를 세서** 예산에 넣는다(한 줄 고정이 아니다).
+        let aiLimitRow = showsAILimitRow ? Self.aiLimitCardHeight(providers: aiLimitProviderCount) : 0
         let goalEditor = (store.isEditingWeeklyGoal || previewGoalEditing) ? Self.goalEditorHeight : 0
         return topBannerHeight + tokenRow + aiLimitRow + goalEditor
     }
@@ -491,9 +502,11 @@ struct CheckMenuView: View {
                                            serverRow: store.myTokenRow, userID: store.session?.userID,
                                            onOpenBoard: { store.toggleTokenBoard() })
                     }
-                    // AI 구독 리밋 한 줄(v0.3.45). 토큰 행 **바로 아래**다 — 둘 다 "AI 를 얼마나 썼나"의 줄이고
-                    // 떨어뜨려 두면 사용자가 같은 숫자의 두 표현으로 읽는다. 누르면 별도 창이 열린다.
-                    // 자격증명이 없으면 행이 `EmptyView` 라 이 자리에 아무것도 안 생긴다(간격도 없다).
+                    // AI 구독 리밋 카드(v0.3.45 → v0.3.46 카드로 자람). 토큰 행 **바로 아래**다 — 둘 다
+                    // "AI 를 얼마나 썼나"의 줄이고 떨어뜨려 두면 사용자가 같은 숫자의 두 표현으로 읽는다.
+                    // v0.3.46: **별도 창이 없다.** 제공자마다 한 줄씩 여기서 다 그린다(사용자 지시:
+                    //   "메인 화면 자체에 다 뜨게끔. 세로로 길어지더라도. 다만 너무 길어지진 않게").
+                    // 자격증명이 없으면 카드가 `EmptyView` 라 이 자리에 아무것도 안 생긴다(간격도 없다).
                     if showsAILimitRow {
                         // ★ 시계를 **값이 아니라 클로저**로 넘긴다. 이 body 에서 시각을 읽으면 팝오버 전체
                         //   서브트리가 매초 무효화된다(잎 뷰 격리 불변식 — 실제 회귀 지점이고 V0238MenuTests 가
@@ -503,13 +516,7 @@ struct CheckMenuView: View {
                         //   "방금"으로 읽힌다 — 리밋에서 그건 가장 비싼 방향의 거짓이다(사용자가 그 숫자를 믿고
                         //   큰 작업을 걸어 벽을 맞는다. AILimitFreshnessRule 머리말 ⓑ). `leagueClockNow` 는
                         //   닫혀도 **마지막 실제 시각**이라 캡션이 언제나 맞다.
-                        CheckAILimitsRow(store: store.aiLimits, clock: { store.leagueClockNow }) {
-                            // ★ 팝오버는 **호출부가** 닫는다 — 활성화만으로 닫힌다는 통념은 v0.2.49 실측에서
-                            //   거짓이었다(WindowTopAnchor.dismissMenuPopover 주석). 창 컨트롤러에 넣으면
-                            //   ⌘ 경로·창 재생성 경로까지 팝오버를 닫으려 해 두 경로의 뜻이 갈린다.
-                            WindowTopAnchor.dismissMenuPopover()
-                            CheckAILimitsWindowController.shared.show()
-                        }
+                        CheckAILimitsCard(store: store.aiLimits, clock: { store.leagueClockNow })
                     }
                     if store.isMessagePanelVisible {
                         // 1:1 대화 패널(v0.2.50). **디스패치 맨 앞이다** — 가장 좁은 화면이라(한 사람짜리)

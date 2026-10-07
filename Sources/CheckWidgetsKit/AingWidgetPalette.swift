@@ -36,6 +36,9 @@ package enum AingWidgetPalette {
     package static let offWorkDot = Pair(light: 0xA7B1C0, dark: 0x94ADCC)
     package static let pending = Pair(light: 0x9A5B00, dark: 0xFFB854)
     package static let pendingDot = Pair(light: 0xFFA826, dark: 0xFFB854)
+    /// = `danger` 를 위젯 바탕에 겹친 값. AI 리밋 숫자가 90% 를 넘었을 때의 글자색(v0.3.46) —
+    /// 바는 **열 색**(5시간 파랑 · 주간 보라)을 쥐므로 사용량 단계는 숫자 글자가 말한다(`AILimitUsageStage`).
+    package static let danger = Pair(light: 0xC83238, dark: 0xFF7375)
     package static let accent = Pair(light: 0x1864CF, dark: 0x54ABFF)
     /// = `accentFill`(체크된 원 바탕 — 흰 체크).
     package static let accentFill = Pair(light: 0x1864CF, dark: 0x2A74DE)

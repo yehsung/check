@@ -32,6 +32,8 @@ import Testing
         same(AingWidgetPalette.offWorkDot, MobileThemePalette.offWorkDot, "offWorkDot")
         same(AingWidgetPalette.pendingDot, MobileThemePalette.pendingDot, "pendingDot")
         same(AingWidgetPalette.accentFill, MobileThemePalette.accentFill, "accentFill")
+        // v0.3.46 — AI 리밋 숫자가 90% 를 넘었을 때의 글자색(바는 열 색을 쥐므로 단계는 글자가 말한다).
+        same(AingWidgetPalette.danger, MobileThemePalette.danger, "danger")
         #expect(AingWidgetPalette.avatarInks.count == MobileThemePalette.avatarInks.count)
         for (index, pair) in zip(AingWidgetPalette.avatarInks, MobileThemePalette.avatarInks).enumerated() {
             same(pair.0, pair.1, "avatarInks[\(index)]")
@@ -47,6 +49,7 @@ import Testing
             ("primary", AingWidgetPalette.primaryText), ("secondary", AingWidgetPalette.secondaryText),
             ("tertiaryText", AingWidgetPalette.tertiaryText), ("working", AingWidgetPalette.working),
             ("pending", AingWidgetPalette.pending), ("offWork", AingWidgetPalette.offWork), ("accent", AingWidgetPalette.accent),
+            ("danger", AingWidgetPalette.danger),
         ]
         for (name, pair) in texts {
             for (fg, bg) in [(pair.light, AingWidgetPalette.background.light), (pair.dark, AingWidgetPalette.background.dark)] {
@@ -206,30 +209,39 @@ import Testing
         // 「AI 리밋」 위젯(v0.3.45)도 같은 계약을 진다: 모드 분기 · 막대만 · 틴트에서 로고 실루엣(색으로만 가르지 않는다) ·
         // 바탕 · 큰 글자 상한 · 조각 빼기 한 갈래 · 두 빈 상태를 섞지 않는다.
         #expect(limits.contains("widgetRenderingMode"), "리밋 위젯에 렌더링 모드 분기가 없다")
-        #expect(limits.contains("AingWidgetBar("), "리밋을 막대로 그리지 않는다")
+        #expect(limits.contains("AingWidgetLimitBar("), "리밋을 막대로 그리지 않는다")
         #expect(limits.contains("AIProviderMark(") && limits.contains("AIProviderTile("),
                 "틴트 모드에서 로고 실루엣으로 갈라지지 않는다 — 색을 버리는 모드에서 세 줄이 똑같아진다")
         #expect(limits.contains("containerBackground(for: .widget)") && limits.contains("AingWidgetColors.background"))
         #expect(limits.contains("dynamicTypeSize(...DynamicTypeSize.xxLarge)"), "리밋 위젯이 큰 글자 상한을 안 건다")
-        #expect(limits.components(separatedBy: "ViewThatFits(in: .horizontal)").count == 2,
-                "리밋 줄에 말줄임 대신 조각을 빼는 갈래가 하나 있어야 한다")
-        // 창 라벨은 **값과 한 묶음**(`primaryWindow`)으로만 꺼낸다 — 뷰가 `fiveHour ?? weekly` 로 값만 집으면
-        // 라벨 없는 자리가 생기고, 그 자리에서 주간 8% 가 5시간 27% 옆에 나란히 서서 같은 창으로 읽힌다.
+        // ★ 큰 글자에서 **잘리지 않는다**. 다른 위젯은 조각을 빼는 `ViewThatFits` 로 피하지만, 리밋은 고정폭
+        //   격자라(열 머리와 숫자 칸의 오른쪽 끝이 맞아야 한다) 조각을 뺄 수 없다 — 대신 **줄여서 넣는다**.
+        //   말줄임은 이 자리에서 숫자 자릿수 오독이므로 어느 쪽이든 금지다.
+        #expect(limits.components(separatedBy: "minimumScaleFactor(").count - 1 >= 3,
+                "이름·숫자·열 머리 가운데 큰 글자에서 잘릴 자리가 있다")
+        #expect(!limits.contains("truncationMode"), "말줄임으로 피한다 — 이 자리에서 말줄임은 자릿수 오독이다")
+        // 창은 **칸별로** 꺼낸다(`row.display(window)`). 뷰가 `fiveHour ?? weekly` 로 값만 집으면 '어느 창을
+        // 세우나' 선택이 되살아나고, 그 선택이 틀리면 주간 8% 가 5시간 27% 옆에서 같은 창으로 읽힌다.
         //
-        // ★ **구간을 잘라서 잰다.** "파일 어디든 한 번 나오면 된다"로 재면 커버리지 구멍이다 — M·L 줄에서
-        //   라벨을 통째로 지워도 S 쪽 한 줄이 남아 초록이었다(뮤테이션 M7 실측). 숫자가 서는 자리는 둘이고,
-        //   둘 다 라벨을 가져야 한다.
-        #expect(limits.contains("primaryWindow"), "뷰가 라벨과 값을 한 묶음으로 꺼내지 않는다")
-        #expect(!limits.contains("row.fiveHour ?? row.weekly"), "뷰가 라벨을 버리고 값만 고른다")
+        // ★ **구간을 잘라서 잰다.** "파일 어디든 한 번 나오면 된다"로 재면 커버리지 구멍이다(뮤테이션 M7 실측).
+        #expect(limits.contains("row.display(window)"), "뷰가 창별 칸 규칙을 쓰지 않는다")
+        #expect(!limits.contains("row.fiveHour") && !limits.contains("row.weekly"), "뷰가 창을 직접 집는다")
         for (name, start, end) in [
             // 구간 표지는 **코드**여야 한다 — 주석은 `code(_:)` 가 걷어낸다(MARK 로 잡으려다 빨갰다).
-            ("S(큰 숫자)", "private func small(", "private func wide("),
-            ("M·L 줄 머리", "private func titleLine(", "private func weeklyLine("),
+            ("줄(두 칸이 나란히)", "private func providerRow(", "private func nameColumn("),
+            ("칸(바 + 숫자)", "private func cell(", "private func tokenBlock("),
         ] {
             let from = try #require(limits.range(of: start), "대조: \(name) 구간을 못 찾았다")
             let to = try #require(limits.range(of: end), "대조: \(name) 구간의 끝을 못 찾았다")
-            #expect(limits[from.lowerBound..<to.lowerBound].contains("primary.label"),
-                    "\(name) 에서 창 라벨이 사라졌다 — 주간 8% 가 5시간 27% 옆에서 같은 창으로 읽힌다")
+            let body = limits[from.lowerBound..<to.lowerBound]
+            switch name {
+            case "줄(두 칸이 나란히)":
+                #expect(body.contains("cell(row, .fiveHour") && body.contains("cell(row, .weekly"),
+                        "한 줄에 두 칸이 나란히 서지 않는다 — 세로로 쌓은 옛 문법이다")
+            default:
+                #expect(body.contains("AILimitColumnText.absentValueText"),
+                        "없는 창의 칸이 `없음` 으로 비지 않는다 — `—`(판정 불가)로 그리면 고장으로 읽힌다")
+            }
         }
         for state in ["limitsNoProviders", "limitsNoData"] {
             #expect(limits.contains("AingWidgetText.\(state)"), "빈 상태 둘을 가리지 않는다(\(state))")

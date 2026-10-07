@@ -240,14 +240,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return ChessPlayerFace.fallback }
             return ChessPlayerFace.me(from: self.store)
         }, safety: store)
-        // AI 리밋 창(v0.3.45)도 같은 자리에서 배선한다. 창은 첫 `show()` 에 만들어지므로, 리밋을 한 번도 안
-        // 들여다보는 실행에서는 창이 아예 생기지 않는다. 열 때 갱신을 당기는 일은 컨트롤러가 스토어의 주기를
-        // 모르게 `onOpen` 으로 둔다(스토어의 5분 하한이 난사를 막는다 — Claude 는 5분에 5회로 막는다).
-        CheckAILimitsWindowController.shared.configure(store: store.aiLimits)
-        CheckAILimitsWindowController.shared.onOpen = { [weak self] in
-            guard let self else { return }
-            Task { @MainActor in await self.store.refreshAILimitsIfNeeded(force: true) }
-        }
+        // ★ **AI 리밋 창은 v0.3.46 에 사라졌다.** 카드가 팝오버 안으로 들어왔다(사용자 지시: "메인 화면
+        //   자체에 다 뜨게끔") — 그리는 것은 `CheckAILimitsCard` 이고 배선할 창 수명이 없다. 여기에
+        //   `CheckAILimitsWindowController` 를 다시 더하지 마라.
+        //   갱신을 당기는 자리는 **팝오버 열림**이다(`WorkTimerStore.isMenuPresented` 쪽의
+        //   `refreshAILimitsIfNeeded(force: true)`) — 창이 있던 동안에도 그 길이 이미 있었고, 스토어의 5분
+        //   하한이 난사를 막는다(Claude 는 5분에 5회로 막는다).
         // ★ **제보·메시지 창은 v0.2.50 에 사라졌다.** 둘 다 팝오버 하위 패널로 내려왔고(사용자 지시:
         //   "제보창도 팝오버 창 안에서만 뜨게", "그 창 안에서 그 사람과의 1대1 메시지 화면으로만"),
         //   패널은 배선할 창 수명이 없다 — 그리는 것은 `CheckMenuView` 이고 상태는 스토어 깃발 하나다.

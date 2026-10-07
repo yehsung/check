@@ -313,13 +313,13 @@ enum MiniGameSpaceKey {
     ///   (2026-09-17 실사용 제보). 체스 창(v0.3.44)의 입력도 같은 로컬 모니터를 지나므로 빠지면 같은 사고가
     ///   그대로 재현된다 — 빼면 빨개지는 테스트가 `V0344ChessWindowTests` 에 있다.
     @MainActor
+    /// v0.3.46: **AI 리밋 창이 빠져 셋이다.** 그 창은 사라졌다(카드가 팝오버 안으로 들어왔다 —
+    /// `CheckAILimitsRow.swift` 머리말). 없는 창의 식별자를 목록에 남겨 두면, 다음 사람이 그 이름으로
+    /// 컨트롤러를 찾다 못 찾고 "등록이 빠졌다"로 읽는다.
     static var standaloneWindowIDs: Set<String> {
         [CheckGomokuWindowController.frameAutosaveName,
          CheckChessWindowController.frameAutosaveName,
-         CheckSettingsWindowController.frameAutosaveName,
-         // AI 리밋 창(v0.3.45). 입력칸은 없지만 **스페이스로 목록을 스크롤하는 사람이 있고**, 빠지면 미니게임
-         // 창을 띄워 둔 채 이 창에서 누른 스페이스가 게임 점프로 삼켜진다(2026-09-17 제보의 재현).
-         CheckAILimitsWindowController.frameAutosaveName]
+         CheckSettingsWindowController.frameAutosaveName]
     }
 
     /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(창 가시성)를 통과했을 때 실행되는 바로 그 클로저다 —

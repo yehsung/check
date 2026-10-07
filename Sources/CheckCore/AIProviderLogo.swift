@@ -1,6 +1,12 @@
 import SwiftUI
 
-// MARK: - 제공자 로고 (실제 벡터) + 브랜드색 — 맥·폰·위젯이 한 소스를 쓴다
+#if canImport(AppKit)
+import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
+
+// MARK: - 제공자 로고 (벡터 둘 + 캡처 하나) + 브랜드색 — 맥·폰·위젯이 한 소스를 쓴다
 //
 // 로고 패스 출처: CodexBar (MIT License, github.com/steipete/CodexBar) —
 // `/Applications/CodexBar.app/Contents/Resources/ProviderIcon-{claude,codex,antigravity}.svg`
@@ -8,18 +14,29 @@ import SwiftUI
 // path 명령(M/L/H/V/C/Z)을 좌표 그대로 옮긴 것이다(H/V 는 절대 좌표로 풀었고, 상대 명령은 원본에 없다).
 // 상표는 **어느 서비스의 리밋인지 식별하는 용도**(지시적 사용)로만 쓴다 — 앱 아이콘·브랜딩에 쓰지 않는다.
 //
-// ## 왜 이미지 파일이 아니라 코드인가
-// 이 저장소에는 맥·폰·위젯이 **공유하는 이미지 리소스 경로가 아예 없다**:
-//   · `CheckCore` 는 리소스 선언이 0건이다(Package.swift).
+// ## 벡터 둘, 캡처 하나
+// Claude·Codex 는 흰 단색 실루엣이라 패스가 원본과 같다. **안티그래비티는 다르다** — 실물은 검은 바탕에
+// **무지개 그라데이션 아치**다(한때 초록 타일 + 흰 A 로 그렸는데, 그 초록은 CodexBar 메뉴의 악센트색이었지
+// 로고 색이 아니었다). 그라데이션을 코드로 재현하면 또 틀리므로 **실물 캡처 PNG 를 그대로 싣는다**
+// (`Resources/ProviderMarks/antigravity.png` · 256×256 · 원본보다 크게 늘리지 않는다).
+//
+// ## 그림을 어디에 두는가 — `CheckCore` 리소스 번들
+// 세 타깃이 **다 링크하는 모듈은 `CheckCore` 하나뿐**이다:
 //   · 맥 앱 타깃은 `CheckMobileShared` 를 링크하지 않는다 — 폰이 쓰는 그림 자리를 맥은 못 본다.
 //   · `ios/App/Assets.xcassets` 에 넣은 그림은 **위젯 확장 타깃이 못 본다**(별 번들이다).
-// 이미지로 가면 캐릭터 아트처럼 에셋을 타깃마다 복제하고 픽셀 동치 테스트를 한 벌 더 만들어야 한다.
-// 세 로고가 전부 **단일 패스**라서 코드로 그리면 세 타깃이 한 소스를 쓰고, 어떤 크기에서도 선명하며,
-// 위젯 틴트 모드(색을 통째로 버리는 단색 렌더링)에서도 실루엣으로 구분된다. 결과물은 진짜 로고 그대로다.
+// 그래서 캐릭터 아트처럼 타깃마다 복제하는 대신 `CheckCore` 에 리소스를 처음으로 선언했다
+// (Package.swift `.copy("Resources/ProviderMarks")` → `check_CheckCore.bundle`). 한 벌이 셋을 먹인다.
+//
+// ⚠️ **맥 패키징은 이 번들을 손으로 복사해야 한다**(`scripts/build-local.sh` 의 `RESOURCE_BUNDLES`).
+// 빠뜨리면 그림이 없는 앱이 공증까지 통과한다. 그래서 (1) 빠졌을 때 **죽지 않고** 벡터 아치로 접고
+// (`AIProviderArtwork.antigravityImage` 가 `nil` 이면 `AIProviderTile` 이 벡터로 그린다 — `Bundle.module`
+// 의 `fatalError` 를 쓰지 않는 까닭이다), (2) 스크립트가 그 번들을 복사하는지 계약 테스트가 글자로 잰다.
 //
 // ## 색으로만 구분하지 않는다
 // 위젯 틴트 모드는 브랜드색을 버린다. 그래서 타일 옆에는 **항상 이름 글자**(`AILimitProvider.compactName`)가
 // 있어야 한다 — 색은 보조 신호다. 이 규약은 뷰 쪽에서 지켜야 하는 것이라 여기 적어 둔다.
+// 틴트 모드가 그리는 것은 타일이 아니라 `AIProviderMark` **벡터 실루엣**이다 — 안티그래비티가 캡처로
+// 바뀐 뒤에도 셋은 모양으로 갈린다(캡처의 아치와 벡터의 아치가 같은 모양이다).
 
 /// 제공자 로고를 그리는 `Shape`. 원본 좌표계(100×100)를 `rect` 에 **비율 유지 + 중앙 정렬**로 맞춘다.
 ///
@@ -41,6 +58,22 @@ package struct AIProviderMark: Shape {
 package enum AIProviderLogoPath {
     /// 원본 SVG 좌표계의 한 변. 세 파일 모두 `viewBox="0 0 100 100"` 이다.
     package static let designSize: CGFloat = 100
+
+    /// **타일 한 변 대비 마크(100×100 설계 상자)의 한 변**. `AIProviderTile` 의 여백은 이 값에서 나온다.
+    ///
+    /// 전에는 제공자와 무관하게 `padding(size * 0.2)`(= 0.6) 한 값이었다. 사용자 판정: *"가운데 문양이 원래 더 커."*
+    /// 실물 타일을 재어 **Claude 0.82 · Codex 0.74** 로 올렸다(64pt 타일 기준 각각 52.48pt · 47.36pt — 참고
+    /// 구현본 `claude.svg`/`codex.svg` 의 `scale(0.52480)`/`scale(0.47360)` 과 같은 수다).
+    ///
+    /// 안티그래비티는 **캡처 그림이 타일 전체를 덮으므로**(여백이 그림 안에 이미 있다) 이 값을 쓰지 않는다 —
+    /// 그림을 못 읽어 벡터로 접을 때만 쓴다. 0.80 은 캡처의 잉크 폭(207/256 = 0.809)에 맞춘 값이다.
+    package static func markScale(for provider: AILimitProvider) -> CGFloat {
+        switch provider {
+        case .claude: return 0.82
+        case .codex: return 0.74
+        case .antigravity: return 0.80
+        }
+    }
 
     /// `rect` 안에 비율을 지켜 중앙 정렬로 그린 패스.
     ///
@@ -363,46 +396,140 @@ package enum AIProviderLogoPath {
     }
 }
 
+/// 안티그래비티 마크 **실물 캡처**(`Resources/ProviderMarks/antigravity.png`)를 읽는 자리.
+///
+/// ## 왜 `Bundle.module` 이 아닌가
+/// SwiftPM 이 만들어 주는 `Bundle.module` 접근자는 번들을 못 찾으면 **`fatalError` 로 즉사**한다. 이 번들은
+/// 맥 패키징 스크립트가 손으로 복사해야 하는 물건이라(위 머리말), 한 줄을 빠뜨린 배포본은 사용자가 리밋 카드를
+/// 여는 순간 앱이 죽는다. 그래서 같은 후보들을 **직접** 훑고 못 찾으면 `nil` 을 돌려준다 — 그림이 없으면
+/// 벡터 아치로 접힌다(모양은 맞고 그라데이션만 빠진다).
+///
+/// 후보 순서는 배포 형태를 따른다:
+///   1. `Bundle.main.resourceURL` — 맥 `.app/Contents/Resources`, 폰 앱 번들 루트, 위젯 확장 `.appex` 루트.
+///   2. `Bundle.main.bundleURL` — `swift run` 으로 띄운 알몸 실행파일(번들 개념이 없어 실행파일 옆).
+///   3. 이 모듈이 실린 번들(`Bundle(for:)`) 의 resource/bundle URL 과 그 **상위 폴더** — `swift test` 와
+///      테스트 호스트. 빌드 머신 절대경로를 **적어 두지 않는다**(배포본에서 남의 맥 경로를 뒤지는 짓이다).
+package enum AIProviderArtwork {
+    /// SwiftPM 이 `CheckCore` 리소스에 붙이는 번들 이름(`<패키지>_<타깃>.bundle`).
+    package static let bundleName = "check_CheckCore.bundle"
+    /// `.copy` 라 번들 루트가 아니라 이 폴더 안에 들어간다.
+    package static let folderName = "ProviderMarks"
+    /// 확장자 뺀 파일 이름.
+    package static let antigravityResourceName = "antigravity"
+
+    /// 리소스 번들. 못 찾으면 `nil`(죽지 않는다).
+    package static var bundle: Bundle? { cache.bundle(resolve: resolveBundle) }
+
+    /// 캡처 PNG 의 URL. 테스트가 "번들에 진짜 실렸는가"를 이걸로 묻는다.
+    package static var antigravityURL: URL? {
+        bundle?.url(forResource: antigravityResourceName, withExtension: "png", subdirectory: folderName)
+            ?? bundle?.url(forResource: antigravityResourceName, withExtension: "png")
+    }
+
+    /// 그릴 수 있는 그림. 한 번 읽어 캐시한다(위젯·팝오버가 body 마다 부른다).
+    package static var antigravityImage: Image? { cache.image(load: loadAntigravity) }
+
+    private static func resolveBundle() -> Bundle? {
+        var candidates: [URL] = []
+        if let url = Bundle.main.resourceURL { candidates.append(url) }
+        candidates.append(Bundle.main.bundleURL)
+        let own = Bundle(for: BundleFinder.self)
+        if let url = own.resourceURL { candidates.append(url) }
+        candidates.append(own.bundleURL)
+        candidates.append(own.bundleURL.deletingLastPathComponent())
+        for candidate in candidates {
+            let url = candidate.appendingPathComponent(bundleName)
+            if let found = Bundle(url: url) { return found }
+        }
+        return nil
+    }
+
+    private static func loadAntigravity() -> Image? {
+        guard let url = antigravityURL else { return nil }
+        #if canImport(AppKit)
+        guard let image = NSImage(contentsOf: url) else { return nil }
+        return Image(nsImage: image)
+        #elseif canImport(UIKit)
+        guard let image = UIImage(contentsOfFile: url.path) else { return nil }
+        return Image(uiImage: image)
+        #else
+        return nil
+        #endif
+    }
+
+    /// `Bundle(for:)` 의 닻. 이 클래스가 실린 이미지가 곧 `CheckCore` 가 실린 자리다.
+    private final class BundleFinder {}
+
+    private static let cache = ArtworkCache()
+
+    /// `Bundle`·`Image` 는 `static let` 로 두면 Swift 6 동시성 검사에 걸리므로 잠금으로 직렬화한다.
+    /// 둘 다 **없음(nil)도 캐시**한다 — 없는 파일을 매 프레임 다시 찾지 않는다.
+    ///
+    /// ⚠️ **잠금을 둘로 나눈다.** 그림을 읽는 길이 번들을 거치므로(`loadAntigravity` → `antigravityURL` → `bundle`),
+    /// 한 `NSLock` 을 둘이 나눠 쓰면 자기 자신을 다시 잠가 **교착**한다(NSLock 은 재귀가 아니다).
+    private final class ArtworkCache: @unchecked Sendable {
+        private let bundleLock = NSLock()
+        private let imageLock = NSLock()
+        private var resolvedBundle: Bundle??
+        private var loadedImage: Image??
+
+        func bundle(resolve: () -> Bundle?) -> Bundle? {
+            bundleLock.lock()
+            defer { bundleLock.unlock() }
+            if let cached = resolvedBundle { return cached }
+            let value = resolve()
+            resolvedBundle = .some(value)
+            return value
+        }
+
+        func image(load: () -> Image?) -> Image? {
+            imageLock.lock()
+            defer { imageLock.unlock() }
+            if let cached = loadedImage { return cached }
+            let value = load()
+            loadedImage = .some(value)
+            return value
+        }
+    }
+}
+
 /// 제공자 브랜드색. 출처: CodexBar 가 공식 자산에서 감사해 쓰는 값(scratchpad/AI-LIMITS-FACTS.md §8).
 ///
 /// 타일 구조는 "브랜드색 라운드 사각 + 흰 마크" 하나다. 라이트/다크 둘 다에서 보여야 하므로
 /// **배경을 테마색이 아니라 브랜드색으로 칠한다** — 그러면 마크의 대비(흰색 대 브랜드색)가 테마와 무관해진다.
 package enum AIProviderPalette {
-    /// Claude 공식 오렌지 `#D97757`.
+    /// Claude 공식 오렌지 `#D97757`. **문양만 키우고 타일 색은 그대로 둔다**(지시: "타일 색 그대로").
+    /// 참고 구현본 `fixedicons/claude.svg` 에는 `#DA6B47` 로 적혀 있는데 — Codex 쪽은 `#0D0D0D` 로 저장소와
+    /// 같으니 그 한 칸만 옮겨 적히며 흐트러진 값으로 본다. 바꾸려면 여기 한 줄이다.
     package static let claudeTile = Color(red: 0xD9 / 255, green: 0x77 / 255, blue: 0x57 / 255)
-    /// OpenAI 는 흑백이 공식이다 `#0D0D0D`.
+    /// OpenAI 는 흑백이 공식이다 `#0D0D0D`. **검정을 유지한다**(사용자 명시).
     package static let codexTile = Color(red: 0x0D / 255, green: 0x0D / 255, blue: 0x0D / 255)
-    /// 구글 3색 `#4285F4` → `#34A853` → `#FBBC04`.
-    package static let googleBlue = Color(red: 0x42 / 255, green: 0x85 / 255, blue: 0xF4 / 255)
-    package static let googleGreen = Color(red: 0x34 / 255, green: 0xA8 / 255, blue: 0x53 / 255)
-    package static let googleYellow = Color(red: 0xFB / 255, green: 0xBC / 255, blue: 0x04 / 255)
+    /// 안티그래비티 캡처의 바탕색 `#121315`. 구글 3색이 아니다 — 실물은 **검은 바탕 + 무지개 아치**다.
+    /// 그림이 타일을 덮으므로 보통은 안 보이지만, 그림을 못 읽어 벡터로 접을 때 이 색이 바탕이 된다.
+    package static let antigravityTile = Color(red: 0x12 / 255, green: 0x13 / 255, blue: 0x15 / 255)
 
-    /// 마크 색. 세 SVG 가 전부 흰 실루엣이므로 세 타일 모두 흰 마크다.
+    /// 마크 색. Claude·Codex 의 SVG 가 흰 실루엣이라 흰 마크다(안티그래비티는 그림이라 이 색을 안 쓴다 —
+    /// 벡터로 접을 때만 쓴다).
     package static let mark = Color.white
 
-    /// 타일 배경. 안티그래비티만 그라데이션이라 단색 `Color` 가 아니라 `AnyShapeStyle` 로 돌려준다 —
-    /// 호출부가 제공자별로 분기하면 한 군데만 그라데이션을 빼먹는 날이 온다.
+    /// 타일 배경.
+    ///
+    /// 셋 다 단색이지만 돌려주는 타입은 `AnyShapeStyle` 로 둔다 — 호출부가 `Color` 를 기대하면 다음에
+    /// 그라데이션을 가진 제공자가 들어올 때 호출부마다 분기가 생기고, 한 군데를 빼먹는 날이 온다.
     package static func tile(for provider: AILimitProvider) -> AnyShapeStyle {
         switch provider {
         case .claude: return AnyShapeStyle(claudeTile)
         case .codex: return AnyShapeStyle(codexTile)
-        case .antigravity:
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [googleBlue, googleGreen, googleYellow],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+        case .antigravity: return AnyShapeStyle(antigravityTile)
         }
     }
 
-    /// 어두운 타일(Codex 검정) 위에서는 흰 테두리가, 밝은 타일에서는 검은 테두리가 윤곽을 살린다.
-    /// 다크 모드 배경과 Codex 타일이 거의 같은 색이라 테두리가 없으면 타일 자체가 사라진다.
+    /// 어두운 타일(Codex 검정 · 안티그래비티 `#121315`) 위에서는 흰 테두리가, 밝은 타일에서는 검은 테두리가
+    /// 윤곽을 살린다. 다크 모드 배경과 어두운 타일이 거의 같은 색이라 테두리가 없으면 타일 자체가 사라진다.
     package static func tileBorder(for provider: AILimitProvider) -> Color {
         switch provider {
-        case .codex: return Color.white.opacity(0.22)
-        case .claude, .antigravity: return Color.black.opacity(0.12)
+        case .codex, .antigravity: return Color.white.opacity(0.22)
+        case .claude: return Color.black.opacity(0.12)
         }
     }
 }
@@ -420,16 +547,36 @@ package struct AIProviderTile: View {
         self.size = size
     }
 
-    package var body: some View {
+    private var tileShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+    }
+
+    /// 타일 안에 들어가는 것. 안티그래비티만 **캡처 그림**이고 나머지 둘은 벡터다.
+    ///
+    /// 그림은 타일을 **가득** 채운다 — 캡처가 이미 "바탕 + 아치"를 담은 한 장이라 여백을 또 주면 안쪽에
+    /// 작은 액자가 생긴다. 네모 캡처가 둥근 모서리를 넘지 않게 `tileShape` 로 자른다.
+    @ViewBuilder
+    private var markLayer: some View {
+        if provider == .antigravity, let artwork = AIProviderArtwork.antigravityImage {
+            artwork
+                .resizable()
+                .interpolation(.high)
+                .scaledToFill()
+                .clipShape(tileShape)
+        } else {
+            // 벡터: 설계 상자(100×100)가 타일의 `markScale` 배가 되도록 여백을 준다.
+            AIProviderMark(provider)
+                .fill(AIProviderPalette.mark)
+                .padding(size * (1 - AIProviderLogoPath.markScale(for: provider)) / 2)
+        }
+    }
+
+    package var body: some View {
+        tileShape
             .fill(AIProviderPalette.tile(for: provider))
+            .overlay(markLayer)
             .overlay(
-                AIProviderMark(provider)
-                    .fill(AIProviderPalette.mark)
-                    .padding(size * 0.2)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                tileShape
                     .strokeBorder(AIProviderPalette.tileBorder(for: provider), lineWidth: 0.5)
             )
             .frame(width: size, height: size)

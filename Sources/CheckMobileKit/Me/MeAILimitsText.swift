@@ -1,4 +1,5 @@
 import CheckCore
+import CheckMobileShared
 import Foundation
 
 /// AI 리밋 카드 문구(v0.3.45 — 플랫폼 무관, macOS `swift test` 가 값으로 검증한다).
@@ -20,10 +21,23 @@ extension MeText {
     /// 연동한 도구가 하나도 없다 — **설정 토글이 없는 기능**이라 "맥에서 로그인하면 보인다"가 유일한 다음 행동이다.
     package static let aiLimitsNoProviders = "맥 앱에서 AI 도구에 로그인하면 보여요"
 
+    /// 카드 제목의 보이스오버가 덧붙이는 말(화면에는 칩이 없다 — 줄마다의 숫자가 이미 다 보인다).
+    /// "가장 높은"이지 "평균"이 아니다 — 요약은 5시간 창의 **최악**을 모은다(`AILimitsStore.fiveHourSummary`).
+    package static let aiLimitsFiveHourPeak = "5시간 가장 높은 값"
+
     /// 창 라벨 + 값 한 줄(보이스오버). 예: "Claude 5시간 27%, 12분 전".
     package static func aiLimitAccessibility(provider: AILimitProvider, display: AILimitDisplay) -> String {
         let window = display.window?.displayName ?? ""
         return "\(provider.displayName) \(window) \(display.valueText), \(display.captionText)"
+    }
+
+    /// 그 창이 **아예 없는** 칸(보이스오버). 예: "5시간 없음".
+    ///
+    /// ★ 판정 불가(`—`)와 **다른 말이어야 한다**. 화면의 글자를 그대로 읽어 주는 것이고, 글자는 공유 규칙
+    /// (`AILimitColumnText.absentValueText`) 하나에서 온다 — 여기에 "모름"을 따로 적으면 보는 사람과
+    /// 듣는 사람이 다른 사실을 받는다.
+    package static func aiLimitAbsentAccessibility(window: AILimitWindow) -> String {
+        "\(window.displayName) \(AILimitColumnText.absentValueText)"
     }
 
     // MARK: 토큰 축(리밋과 나란히 — 섞지 않는다)

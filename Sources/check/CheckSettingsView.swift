@@ -184,6 +184,91 @@ struct CheckSettingsToggleRow: View {
     }
 }
 
+// MARK: - AI 리밋 표시 설정 (v0.3.47)
+
+/// 설정 → AI 리밋. 마스터 하나 + **연동된** 제공자마다 한 줄.
+///
+/// ## 마스터를 끄면 하위 줄은 **흐려진다 — 사라지지 않는다**
+/// 근거 셋:
+///  ① 사라지면 스위치 하나를 누르는 순간 절의 높이가 **네 줄씩** 줄어든다. 이 절이 붙은 설정 본문은 이미
+///     창보다 높아 스크롤하는 상태라(`body` 의 ViewThatFits 주석 — 실측 1014~1086pt 대 창 884pt),
+///     하위 줄이 통째로 없어지면 스크롤 길이와 그 아래 내용의 자리가 같이 튄다. 스위치를 누른 사람의
+///     화면이 그 자리에서 움직이는 셈이다.
+///  ② 사라지면 "Claude 만 꺼 두고 Codex 는 켜 뒀다"는 내 선택이 화면에서 지워진다. 마스터를 다시 켤 때
+///     무엇이 켜질지 **미리** 보여 주는 쪽이 정직하다(그래서 하위 줄은 `isProviderOn` 을 그린다 —
+///     마스터를 끈 순간 셋이 전부 꺼진 것처럼 보이는 `isEnabled` 가 아니다).
+///  ③ 흐려짐은 "지금은 못 바꾼다"를 말하고 사라짐은 "그런 설정이 없다"를 말한다. 하위 줄은 없어진 것이
+///     아니라 마스터에 가려진 것이다.
+///
+/// ## 제공자 이름은 `displayName` 이다("Claude Code" 가 아니다)
+/// 승인된 스케치는 `Claude Code` 로 적혀 있었지만, 팝오버 카드·툴팁·폰·위젯이 그 제공자를 부르는 이름은
+/// `AILimitProvider.displayName`(= `Claude`)이다. 설정과 카드가 같은 것을 다른 이름으로 부르면 사용자는
+/// 둘을 **다른 물건**으로 읽는다(`AILimits.swift` 의 displayName 주석과 같은 근거) — 그래서 어휘를 하나로 둔다.
+private struct AILimitVisibilitySettingsRows: View {
+    let store: WorkTimerStore
+
+    var body: some View {
+        CheckSettingsToggleRow(
+            title: "AI 사용량 리밋 보기",
+            detail: "끄면 사용량을 읽지도 올리지도 않아요. 아이폰·위젯에서도 사라져요.",
+            isOn: masterBinding
+        )
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(store.aiLimits.configurableProviders, id: \.self) { provider in
+                AILimitProviderToggleRow(
+                    title: provider.displayName,
+                    isOn: providerBinding(provider)
+                )
+            }
+            Text("연동 안 된 도구는 여기 안 보여요.")
+                .font(.caption2)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        // 들여쓰기가 "이 줄들은 위 스위치에 딸렸다"를 말하는 유일한 단서다(구분선을 두면 형제로 읽힌다).
+        .padding(.leading, 16)
+        .disabled(!store.aiLimits.visibility.masterEnabled)
+        .opacity(store.aiLimits.visibility.masterEnabled ? 1 : 0.4)
+    }
+
+    /// 두 바인딩 모두 **스토어 세터 한 쌍**으로만 간다(`WorkTimerStoreAILimits`). 여기서 `aiLimits` 를
+    /// 직접 만지면 "끈 순간 서버 행을 비운다"가 설정 화면을 거친 변경에만 빠지고, 그 누락은 조용하다.
+    private var masterBinding: Binding<Bool> {
+        Binding(
+            get: { store.aiLimits.visibility.masterEnabled },
+            set: { store.setAILimitsVisible($0) }
+        )
+    }
+
+    private func providerBinding(_ provider: AILimitProvider) -> Binding<Bool> {
+        Binding(
+            get: { store.aiLimits.visibility.isProviderOn(provider) },
+            set: { store.setAILimitProviderEnabled(provider, $0) }
+        )
+    }
+}
+
+/// 하위 줄 — **설명 없이 이름만**. 스위치 모양은 `CheckSettingsToggleRow` 와 같은 스타일을 쓴다(한 절 안에서
+/// 두 종류의 스위치가 되면 그 둘이 다른 종류의 설정처럼 읽힌다).
+///
+/// 설명을 안 붙이는 까닭: 제공자 이름이 곧 설명이고(무엇이 켜지는지는 마스터 줄의 설명이 이미 말했다),
+/// 셋에 두 줄씩 붙으면 그만큼 본문이 더 길어져 설정 창을 더 많이 스크롤하게 된다.
+private struct AILimitProviderToggleRow: View {
+    let title: String
+    @Binding var isOn: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(CheckTheme.primaryText)
+        }
+        .toggleStyle(CheckSettingsToggleStyle(reduceMotion: reduceMotion))
+    }
+}
+
 /// 별명 행. **토글이 아니다** — 주 1회 쿨타임과 중복 금지가 걸린 서버 검증 값이라 스위치로 만들 수 없다.
 ///
 /// 예전 팝오버 인라인 편집기(v0.2.32 에 삭제)와 달리 **스토어 편집 상태를 공유하지 않는다**:
@@ -1052,7 +1137,35 @@ struct CheckSettingsView: View {
                 // 이 창의 높이 계약(맨 아래 항목이 안 잘린다)이 사람 수에 묶인다.
                 CheckBlockedPeopleSettingsPage(store: store)
             } else {
-                settingsSections
+                // ★ 본문은 **들어가면 그대로, 넘치면 스크롤**한다(v0.3.47).
+                //
+                // ## 왜 필요해졌나 — 창이 꽉 찼다
+                // 이 창은 스크롤이 없었고, 그래서 창보다 높아진 콘텐츠는 **잘렸다**. 이 창의 역사가 그 사고의
+                // 기록이다(`CheckSettingsWindowController.defaultContentSize` 머리말: 470 → 538 → 648 → 703 →
+                // 771 → 884, 그리고 "**다음 행부터는 13" 맥북에어에 안 든다**").
+                // v0.3.47 의 'AI 리밋' 절이 그 '다음 행'이었다. 실측(폭 380, 2026-10-07):
+                //   연동 없는 맥 **866pt**(지금과 같다) · 제공자 하나 **1014** · 셋 **1086**. 창은 884 다.
+                // 창 상수를 올려서는 못 푼다 — 13" 맥북에어의 콘텐츠 상한이 ~903pt 라 1086 은 **화면에 안 든다**.
+                // 자리를 아껴 절을 줄이는 길도 없다: 절 뼈대 + 마스터 스위치만으로도 이미 936pt 다.
+                //
+                // ## 왜 `ScrollView` 를 **그냥 감싸지 않았나** (2026-10-07 실증)
+                // 감싸 봤더니 `ImageRenderer` 가 **ScrollView 안을 그리지 않는다**: 높이는 맞게 나오는데
+                // 픽셀이 비어, 설정 창을 그려서 재는 기존 검증 셋이 통째로 무음으로 깨졌다
+                // (`CheckMenuRenderTests` 의 토글 비트맵 차분 · `DisplayNameUITests` 의 PNG 다이제스트 ·
+                //  `V0340` 의 QR 흰 픽셀 수 — 실측 3건 빨강). 그 셋은 이 창의 유일한 그림 그물이라 포기할 수 없다.
+                //
+                // ## 그래서 `ViewThatFits` 다 — **콘텐츠가** 가르고, 테스트 여부가 가르지 않는다
+                // 들어가면 첫 번째(맨몸 본문)가 뽑혀 지금과 **똑같이** 그려지고(그래서 위 그물들이 살아 있다),
+                // 안 들어가면 두 번째(ScrollView)로 떨어져 **잘리는 대신 스크롤된다**.
+                // 잘림은 조용한 손실이다 — 사용자는 그 행이 있는 줄도 모른다. 스크롤은 보이는 어포던스다.
+                // ★ `isRunningTests` 류의 분기로 가르지 **않았다**: 그러면 테스트가 프로덕션과 다른 뷰를 재게 되고,
+                //   그건 이 저장소가 반복해 당한 '모양만 재는 테스트'의 가장 비싼 꼴이다.
+                // ★ [차단한 사람] 쪽은 감싸지 않는다 — 그 화면은 자기 목록을 스스로 스크롤한다(중첩 금지).
+                ViewThatFits(in: .vertical) {
+                    settingsSections
+                    ScrollView(.vertical) { settingsSections }
+                        .scrollBounceBehavior(.basedOnSize)
+                }
             }
         }
         .padding(14)
@@ -1166,6 +1279,18 @@ struct CheckSettingsView: View {
                         ),
                         onChosen: { _ in store.pushSelectedCharacter(announcesFailure: true) }
                     )
+                }
+            }
+            // AI 리밋 표시 설정(v0.3.47 — 사용자 요청: "원하는것만 표시하고, 아예 표시 안할 수도 있게").
+            //
+            // ★ **연동된 도구가 하나도 없으면 절(節) 자체가 없다** — 자동 감지 규약 그대로다(`AILimitStore` 머리말).
+            //   쓰지 않는 사람에게 끌 것도 없는 스위치를 보여 주지 않고, 덕분에 그 사람의 설정 창은 예전과
+            //   **한 픽셀도** 다르지 않다(위 ScrollView 주석의 실측표 — 866pt 그대로).
+            // ★ **맨 아래**다. 이 절은 연동 상태에 따라 생기고 사라지는 유일한 절이라, 가운데 두면 그 사람이
+            //   `Claude Code` 를 지우는 날 아래 두 절이 통째로 위로 올라온다 — 이미 자리를 익힌 행들이 움직인다.
+            if !store.aiLimits.configurableProviders.isEmpty {
+                section("AI 리밋") {
+                    AILimitVisibilitySettingsRows(store: store)
                 }
             }
             // ★ 진단 두 줄(초인종·근무 틱)이 **여기 있었다.** 없어진 게 아니라 제보로 **옮겼다**

@@ -1013,7 +1013,7 @@ struct AILimitsCoreScheduleTests {
     }
 
     private func store(_ defaults: UserDefaults, now: @escaping () -> Date) -> AILimitStore {
-        AILimitStore(defaults: defaults, clock: now, runner: { _ in AILimitReadOutcome() })
+        AILimitStore(defaults: defaults, clock: now, runner: { _, _ in AILimitReadOutcome() })
     }
 
     /// 재시작해도 **간격이 이어진다.** 없으면 앱을 다섯 번 켜는 것만으로 5분/5회 상한을 넘긴다.
@@ -1040,7 +1040,7 @@ struct AILimitsCoreScheduleTests {
         let defaults = isolatedDefaults()
         // `UserDefaults` 는 스레드 안전하지만 `Sendable` 이 아니다 — 러너는 `@Sendable` 이라 상자로 넘긴다.
         let box = AILimitDefaultsBox(defaults: defaults)
-        let subject = AILimitStore(defaults: defaults, clock: { aiNow }, runner: { _ in
+        let subject = AILimitStore(defaults: defaults, clock: { aiNow }, runner: { _, _ in
             // 러너 안에서 이미 디스크에 적혀 있어야 한다.
             #expect(box.defaults.object(forKey: AILimitStore.lastAttemptKey) as? Double == aiNow.timeIntervalSince1970,
                     "시도 스탬프가 러너 뒤에 적힌다 — 바퀴 도중에 죽으면 그 시도가 사라진다")
@@ -1053,7 +1053,7 @@ struct AILimitsCoreScheduleTests {
     /// 429 금지창도 재시작을 넘어 산다. 없으면 `retry-after` 안에서 다시 노크해 금지창을 늘린다.
     @Test func rateLimitBanSurvivesRestart() async {
         let defaults = isolatedDefaults()
-        let first = AILimitStore(defaults: defaults, clock: { aiNow }, runner: { _ in
+        let first = AILimitStore(defaults: defaults, clock: { aiNow }, runner: { _, _ in
             AILimitReadOutcome(results: [.claude: .failure(AILimitReadError(.rateLimited, retryAfter: 300))])
         })
         await first.refreshIfDue(now: aiNow)
@@ -1074,7 +1074,7 @@ struct AILimitsCoreScheduleTests {
         let box = AILimitScheduleOutcomeBox(
             outcome: AILimitReadOutcome(results: [.claude: .failure(AILimitReadError(.rateLimited, retryAfter: 300))])
         )
-        let subject = AILimitStore(defaults: defaults, clock: { aiNow }, runner: { _ in box.outcome })
+        let subject = AILimitStore(defaults: defaults, clock: { aiNow }, runner: { _, _ in box.outcome })
         await subject.refreshIfDue(now: aiNow)
         #expect(defaults.object(forKey: AILimitStore.silentUntilKey) != nil, "전제: 금지창이 적혔다")
 

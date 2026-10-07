@@ -86,8 +86,10 @@ package enum AingWidgetText {
     package static let limitsTitle = "AI 리밋"
     /// 아직 한 번도 못 받았다 — 앱을 열면 폰이 서버에서 받아 싣는다.
     package static let limitsNoData = noData
-    /// 받았는데 연동한 도구가 없다. **"앱을 열면"이 아니다** — 앱을 열어도 채워지지 않는다(맥이 자격증명을 읽는다).
-    package static let limitsNoProviders = "맥 앱에서 AI 도구에 로그인하면 보여요"
+    /// 받았는데 그릴 줄이 0건이다(연동이 없다 · 맥 설정에서 껐다 — 위젯은 둘을 가릴 수 없다).
+    /// **"앱을 열면"이 아니다** — 앱을 열어도 채워지지 않는다(맥이 자격증명을 읽는다).
+    /// 글자는 폰 카드와 **같은 상수**다(`AILimitSurfaceText` — 한 문장으로 고른 근거가 거기 있다).
+    package static let limitsNoProviders = AILimitSurfaceText.noVisibleProviders
     package static let limitsSignedOutHint = "로그인하면 AI 사용률이 떠요"
     /// 5시간 창 라벨(좁은 칸).
     package static let limitsFiveHour = "5시간"
@@ -468,9 +470,12 @@ package struct AingWidgetLimitRow: Equatable, Sendable, Identifiable {
 package enum AingWidgetLimitsState: Equatable, Sendable {
     /// 스냅샷에 리밋 칸이 아직 없다(옛 스냅샷 · 앱을 한 번도 안 열었다) → "앱을 열면 채워져요".
     case noData
-    /// 받았는데 연동한 도구가 하나도 없다 → "맥 앱에서 AI 도구에 로그인하면 보여요".
+    /// 받았는데 그릴 줄이 하나도 없다 → `AILimitSurfaceText.noVisibleProviders`.
     /// **noData 와 뜻이 다르다** — 앱을 열어도 채워지지 않는다. 두 안내를 섞으면 맥을 쓰지 않는 사용자가
     /// 앱을 몇 번이고 열게 된다.
+    ///
+    /// 여기 떨어지는 까닭은 **셋**이다(위젯은 셋을 가리지 못한다 — 패널에 그 단서가 없다):
+    /// 연동이 없다 · 맥 설정에서 **껐다**(v0.3.47 — 창 값이 전부 null 인 행이 올라온다) · 전부 유령이다(3일).
     case noProviders
     case limits(AingWidgetLimits)
 
@@ -517,8 +522,15 @@ package struct AingWidgetLimits: Equatable, Sendable {
                         observedAt: row.observedAt, source: .server
                     ))
                 }
-                guard !windows.isEmpty else { return nil }
                 let snapshot = AILimitProviderSnapshot(provider: provider, windows: windows)
+                // ★ **보이는 창이 0개인 제공자는 줄을 세우지 않는다** — 판정은 폰·맥과 **같은 술어**(`isLinked`)다.
+                //   v0.3.47 부터 이 길로 오는 행이 하나 더 있다: 사용자가 맥 설정에서 그 제공자를 끄면 맥이
+                //   창 값·리셋·플랜을 **전부 null 로 덮은 행**을 한 번 올린다(서버에 DELETE 권한이 없다 —
+                //   `SupabaseWorkServiceAILimits.aiLimitClearingRow`). 그 행은 퍼센트가 둘 다 없으므로 창이 0개가
+                //   되어 **즉시** 사라진다(3일 유령 게이트를 기다리지 않는다 — 설정을 끈 사람에게 사흘은 거짓이다).
+                //   ★ 주간만 오는 제공자(안티그래비티 실측)와 **섞지 마라**: 그쪽은 창이 1개라 여기를 지난다.
+                //   '5시간 창이 있나'로 재는 순간 그 제공자가 통째로 사라진다.
+                guard snapshot.isLinked else { return nil }
                 func display(_ window: AILimitWindow) -> AILimitDisplay? {
                     guard snapshot.window(window) != nil else { return nil }
                     let value = AILimitFreshnessRule.display(provider: snapshot, window: window, now: date)

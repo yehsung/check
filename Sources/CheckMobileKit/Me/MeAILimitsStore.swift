@@ -168,8 +168,19 @@ package final class AILimitsStore {
     /// 다를 수 있고, 섞으면 "어느 쪽 리셋 시각인지" 가 사라진다. 사용률 자체는 같은 계정이면 같은 장부다.
     ///
     /// 버리는 것: **모르는 제공자**(서버가 네 번째를 더하는 날 구버전 앱이 조용히 'claude' 로 접으면 남의
-    /// 사용률이 내 Claude 카드에 그려진다) · **창이 하나도 없는 행**(퍼센트가 둘 다 null — 올릴 말이 없던 행이다)
-    /// · **유령 행**(아래).
+    /// 사용률이 내 Claude 카드에 그려진다) · **보이는 창이 하나도 없는 행**(퍼센트가 둘 다 null) · **유령 행**(아래).
+    ///
+    /// ## 창이 0개인 행 둘 — 뜻은 달라도 화면에서는 같다 (v0.3.47)
+    /// ① 올릴 말이 없던 행(옛 맥이 남긴 흔적). ② **사용자가 맥 설정에서 그 제공자를 껐다** — 맥이 창 값·리셋·플랜을
+    /// 전부 null 로 덮은 행을 한 번 올린다(`SupabaseWorkServiceAILimits.aiLimitClearingRow`. 서버에 DELETE 권한이
+    /// 없어서 '지우기'가 '비우기'다). 둘 다 **그릴 숫자가 0개**이므로 목록에서 사라진다 — ②가 3일 유령 게이트를
+    /// 기다리지 않고 **다음 조회에서 바로** 사라지는 까닭이 이것이다(설정을 끄고 사흘을 기다리게 할 수는 없다).
+    ///
+    /// ★ 판정은 **'보이는 창이 0개인가'** 하나다(`AILimitProviderSnapshot.isLinked` — 맥·위젯과 같은 술어).
+    ///   '5시간 창이 있나'로 재면 **주간만 오는 제공자**(안티그래비티 실측)가 비워진 행과 함께 사라진다.
+    /// ★ 비워진 행은 `bundle.providers` 에는 **창 0개로 남는다**(`visibleProviders` 가 거른다) — 그 자리가
+    ///   "껐다"와 "연동이 없다"를 가릴 수 있는 유일한 단서인데, **그 단서로 문구를 가르지 않기로 했다**
+    ///   (근거 넷: `AILimitSurfaceText` 머리말 — 3일이면 그 단서도 사라져 문구가 혼자 바뀐다).
     ///
     /// ## 유령 행을 숨긴다 (2026-10-07 실증한 P2)
     /// 맥에서 어떤 제공자를 로그아웃하면 그 제공자는 업로드에서 **빠질 뿐**이다. 서버에는 DELETE 권한도 정리
@@ -211,22 +222,29 @@ package final class AILimitsStore {
 
     // MARK: - 화면이 그릴 값
 
-    /// 카드가 그릴 줄들(미연동 제공자는 이미 빠졌고 순서는 고정이다).
+    /// 카드가 그릴 줄들(미연동·설정에서 끈 제공자는 이미 빠졌고 순서는 고정이다).
+    ///
+    /// ★ 마지막에 `hasAnyWindow` 로 **한 번 더** 거른다. `visibleProviders` 와 겹쳐 보이지만 재는 자리가 다르다:
+    ///   거기서는 '창 데이터가 있나'를 재고, 여기서는 **코어 규칙을 지난 뒤에도 그릴 칸이 남았나**를 잰다.
+    ///   이 그물이 없으면 `없음 · 없음` 인 빈 줄이 설 수 있고, 그때 카드는 빈 상태 안내 대신 **제공자가 있다고**
+    ///   말한다(= 설정에서 전부 끈 사람이 아무 숫자도 없는 줄을 본다). 위젯은 이미 같은 자리에서 거른다
+    ///   (`AingWidgetLimits` + `AingAILimitsContent.filter(\.hasAnyWindow)`) — 두 화면의 판정을 맞춘다.
     package var displayRows: [AILimitDisplayRow] {
         guard let bundle else { return [] }
         let now = context.clock.now()
-        return bundle.visibleProviders.map { snapshot in
+        return bundle.visibleProviders.compactMap { snapshot in
             func display(_ window: AILimitWindow) -> AILimitDisplay? {
                 guard snapshot.window(window) != nil else { return nil }
                 let value = AILimitFreshnessRule.display(provider: snapshot, window: window, now: now)
                 return value.isVisible ? value : nil
             }
-            return AILimitDisplayRow(
+            let row = AILimitDisplayRow(
                 provider: snapshot.provider,
                 planLabel: snapshot.planLabel,
                 fiveHour: display(.fiveHour),
                 weekly: display(.weekly)
             )
+            return row.hasAnyWindow ? row : nil
         }
     }
 
@@ -240,15 +258,23 @@ package final class AILimitsStore {
         return AILimitFreshnessRule.combine(displays)
     }
 
-    /// 한 제공자라도 연동되어 있나(카드를 그릴지 판정 — 미연동은 숨긴다).
-    package var hasVisibleProviders: Bool { !(bundle?.visibleProviders.isEmpty ?? true) }
+    /// 그릴 줄이 하나라도 있나(미연동·설정에서 끈 제공자는 빠진 뒤다).
+    ///
+    /// ★ **`displayRows` 로 답한다** — `visibleProviders` 를 따로 세면 "줄은 0개인데 제공자는 있다"는 조합이
+    ///   생기고, 그 상태에서 카드를 이 깃발로 가리면 빈 상태 안내가 **그려지지 않는다**(지금 카드는
+    ///   `displayRows.isEmpty` 로 가린다 — 두 판정이 갈릴 자리를 아예 없앤다).
+    package var hasVisibleProviders: Bool { !displayRows.isEmpty }
 
     // MARK: - 위젯으로 넘기기
 
     /// 지금 탭에 넘길 위젯 모양. 한 번도 못 받았으면 nil(= 위젯은 "앱을 열면 채워져요").
     ///
-    /// 받았는데 제공자가 0이면 **빈 목록**을 넘긴다 — nil 과 뜻이 다르다("아직 모른다"와 "연동한 도구가 없다"를
+    /// 받았는데 제공자가 0이면 **빈 목록**을 넘긴다 — nil 과 뜻이 다르다("아직 모른다"와 "그릴 줄이 없다"를
     /// 위젯이 가려 각자 맞는 안내를 그린다).
+    ///
+    /// ★ 설정에서 끈 제공자(창 값이 전부 null 인 행)는 `visibleProviders` 가 이미 걸렀으므로 **패널에 실리지
+    ///   않는다** — 위젯은 그 줄을 받지 못해 다음 타임라인에서 사라진다. 비워진 행을 일부러 실어 "껐다"를
+    ///   위젯에 알리지 않는 까닭은 `AILimitSurfaceText` 머리말 ①(위젯 확장은 앱과 따로 갱신된다)이다.
     package func widgetPanel() -> WidgetSnapshot.AILimitPanel? {
         guard let bundle, state.hasLoaded else { return nil }
         let rows: [WidgetSnapshot.AILimitRow] = bundle.visibleProviders.compactMap { snapshot in

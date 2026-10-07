@@ -29,9 +29,81 @@ import Observation
 // 그래서 네트워크·429·만료에서는 영속된 값을 그대로 들고 있고, 나이 캡션만 낡는다. 숨기는 것은
 // "그 도구를 안 쓴다 / 우리가 볼 수 없다"(`AILimitReadFailure.hidesProvider`) 뿐이다.
 //
-// ## 자동 감지 — 설정 토글이 없다
+// ## 자동 감지 — 그리고 그 위에 얹은 사용자 설정(v0.3.47)
 // 자격증명이 하나도 없으면 `isAvailable == false` 이고 화면은 섹션을 **통째로 숨긴다**(2026-10-07 사용자 결정).
-// 그래서 "AI 리밋 보기" 스위치가 없다 — 쓰는 사람에게만 저절로 생기고, 안 쓰는 사람은 그 줄을 본 적이 없다.
+// 그래서 **연동 안 된 제공자는 설정에도 줄이 서지 않는다** — 쓰는 사람에게만 저절로 생긴다.
+// v0.3.47 이 그 위에 얹은 것은 "**보이는 것 중에서** 원하는 것만, 아예 안 볼 수도 있게" 하나다
+// (사용자 요청 2026-10-07). 자동 감지 규약은 그대로고, 설정은 그 앞단 게이트다 — 값·캡션·표시여부는
+// 여전히 `AILimitFreshnessRule` 한 곳에서 나온다.
+
+// MARK: - 표시 설정 (v0.3.47)
+//
+// ## 로컬 설정이다 — 서버 컬럼이 아니다
+// 자격증명은 맥에만 있어 **맥이 이 축의 유일한 주인**이고, 앱이 꺼진 동안 이 설정이 서버에 없어서
+// 잃는 사람이 없다(관례: '서버보다 클라 먼저'). 기존 `autoWorkStartEnabled` 와 같은 결이다.
+// ★ `profiles` 에 컬럼을 더하지 않았다 — 그 표는 표 단위 UPDATE 가 회수돼 있어 컬럼 grant 를 빼먹으면
+//   "토글은 켜지는데 서버 값이 안 바뀐다"가 된다. 살 이유가 없는 함정이다.
+//
+// ## 끄면 **읽지도 올리지도** 않는다 — 화면에서 감추는 게 아니다
+//  · 꺼진 제공자: 리더를 **부르지 않는다**(키체인·`auth.json`·`agy` 접근 0), 제공자 API 를 치지 않는다,
+//    서버에 올리지 않는다.
+//  · 전체 끄기: 리밋 축이 통째로 잠든다 — `isDue` 가 거짓이라 **갱신 타이머가 돌지 않는다**.
+// 왜 이렇게까지 하나: "표시 안 함"이라 해 놓고 뒤에서 계속 토큰을 읽고 네트워크를 쓰면 그건 거짓말이다.
+// 그리고 이 기능은 공개 처리방침이 "로그인 정보를 읽는다"고 적은 **유일한** 자리라, 끄면 정말 안 읽어야
+// 그 문장이 참이 된다.
+// ★ 그래서 걸러는 자리는 **러너 앞**이다. 리더 안쪽에서 걸러도 늦다 — 그때는 이미 키체인에 손을 댄 뒤다.
+//
+// ## 기본값은 전부 켬 — 그리고 **꺼진 쪽**을 저장한다
+// 저장하는 것이 '켠 목록'이면 열거값이 늘어난 날 구버전이 적어 둔 목록에 새 제공자가 없어서 그 제공자가
+// 조용히 꺼진다(기본값 역전 — 기존 사용자에게 변화가 없어야 한다는 요건이 깨진다). 꺼진 쪽을 적으면
+// 모르는 제공자는 **켜짐**이 기본이고, 그게 지금 동작과 같다.
+// 그리고 모르는 rawValue 도 **버리지 않고 들고 있는다**: 신버전에서 끈 제공자를 구버전이 저장하며 지워 버리면
+// 다시 올라갈 때 그 제공자가 아무 말 없이 켜진다(열거값 확장 함정의 쌍둥이).
+
+/// 어떤 제공자의 리밋을 **읽고 보여 줄지**. 마스터 하나 + 제공자별 하나.
+///
+/// 작은 값 타입인 까닭: 저장·복원·판정이 전부 순수 함수라 테스트가 화면 없이 되묻을 수 있다.
+/// 스토어는 이 값을 들고 있을 뿐이고, "누구를 읽는가"는 `enabledProviders` 한 곳에서 나온다.
+package struct AILimitVisibility: Equatable, Sendable {
+    /// 지금까지의 동작 = 전부 켬. **기본값이다**(기존 사용자에게 변화가 없어야 한다).
+    package static let allEnabled = AILimitVisibility()
+
+    /// 마스터. 끄면 제공자 스위치와 무관하게 아무것도 읽지 않는다.
+    package var masterEnabled: Bool
+    /// **꺼진** 제공자의 rawValue. 모르는 값도 그대로 보존한다(머리말).
+    package var disabledRaws: Set<String>
+
+    package init(masterEnabled: Bool = true, disabledRaws: Set<String> = []) {
+        self.masterEnabled = masterEnabled
+        self.disabledRaws = disabledRaws
+    }
+
+    /// 지금 이 제공자를 **읽어야 하는가**. 마스터와 제공자 스위치를 둘 다 본다.
+    package func isEnabled(_ provider: AILimitProvider) -> Bool {
+        masterEnabled && isProviderOn(provider)
+    }
+
+    /// 제공자 스위치 **하나만**. 마스터가 꺼진 동안에도 설정 화면은 "마스터를 켜면 무엇이 켜지는가"를
+    /// 보여 줘야 하므로, 하위 줄이 그리는 값은 이것이다(`isEnabled` 가 아니다 — 그걸 그리면 마스터를 끄는
+    /// 순간 하위 스위치 셋이 전부 꺼진 것처럼 보이고, 다시 켰을 때 내 선택이 사라진 것처럼 보인다).
+    package func isProviderOn(_ provider: AILimitProvider) -> Bool {
+        !disabledRaws.contains(provider.rawValue)
+    }
+
+    /// 이번 바퀴에 리더를 부를 제공자. **비어 있으면 바퀴 자체를 돌지 않는다.**
+    package var enabledProviders: Set<AILimitProvider> {
+        guard masterEnabled else { return [] }
+        return Set(AILimitProvider.allCases.filter { isProviderOn($0) })
+    }
+
+    package mutating func setProvider(_ provider: AILimitProvider, on: Bool) {
+        if on {
+            disabledRaws.remove(provider.rawValue)
+        } else {
+            disabledRaws.insert(provider.rawValue)
+        }
+    }
+}
 
 /// 리더 셋을 한 번 돌린 결과. 제공자마다 성공이거나 분류된 실패다.
 package struct AILimitReadOutcome: Sendable {
@@ -73,7 +145,11 @@ package struct AILimitReadOutcome: Sendable {
 @MainActor
 package final class AILimitStore {
     /// 리더 셋을 한 번 돌리는 일. 프로덕션은 `live()` 가 만들고, 테스트는 고정 결과를 돌려주는 클로저를 넣는다.
-    package typealias Runner = @Sendable (_ now: Date) async -> AILimitReadOutcome
+    ///
+    /// ★ `providers` 가 **계약의 절반**이다(v0.3.47): 러너는 이 집합 안의 리더만 부른다. 설정에서 꺼진
+    ///   제공자를 러너에게 알리고 **결과를 버리는** 구현은 틀렸다 — 그때는 이미 키체인·`auth.json`·`agy` 를
+    ///   건드린 뒤이고, "끄면 안 읽는다"는 약속이 거짓이 된다. 그래서 가르는 자리가 인자다.
+    package typealias Runner = @Sendable (_ now: Date, _ providers: Set<AILimitProvider>) async -> AILimitReadOutcome
 
     // MARK: 상수
 
@@ -90,6 +166,15 @@ package final class AILimitStore {
     /// 429 의 `retry-after` 를 못 읽었을 때의 침묵 길이(초). 실측 헤더 값과 같은 300.
     package nonisolated static let defaultBackoff: TimeInterval = 300
 
+    /// 마스터 스위치(Bool). **키가 없으면 켜짐**이다 — 기존 사용자에게 변화가 없어야 한다.
+    /// ★ 이름을 바꾸면 이미 끈 사람의 설정이 아무 말 없이 켜짐으로 돌아간다.
+    package nonisolated static let visibilityKey = "check.aiLimits.show"
+    /// **꺼진** 제공자의 rawValue 목록([String]). 없으면 빈 목록(= 전부 켬).
+    package nonisolated static let disabledProvidersKey = "check.aiLimits.disabledProviders"
+    /// 서버 행을 **비워야** 하는 제공자 목록([String]). 끈 순간 들어가고, 비우기 업로드가 성공하면 빠진다.
+    /// ★ 영속해야 한다 — 끄고 바로 앱이 죽으면 그 행이 서버에 영원히 남아 폰·위젯이 계속 보여 준다.
+    package nonisolated static let pendingClearKey = "check.aiLimits.pendingClear"
+
     // MARK: 상태
 
     /// 마지막으로 받은 묶음(실패해도 유지 — 머리말). nil = 한 번도 못 읽었다.
@@ -100,6 +185,10 @@ package final class AILimitStore {
     package private(set) var lastAttemptAt: Date?
     /// 이 시각 전에는 아무것도 하지 않는다(429 백오프). nil = 제한 없음.
     package private(set) var silentUntil: Date?
+    /// 표시 설정(v0.3.47). 기본은 전부 켬. 설정 화면이 이 값을 그리고, 갱신 경로가 이 값으로 가른다.
+    package private(set) var visibility: AILimitVisibility = .allEnabled
+    /// 서버 행을 비워야 하는 제공자(끈 순간 들어온다). 업로드 성공에만 빠진다 — `markCleared(_:)`.
+    package private(set) var pendingClear: Set<AILimitProvider> = []
     /// 러너가 불린 횟수(테스트 계측 — 간격·백오프·재진입 가드가 실제로 막는지).
     @ObservationIgnored package private(set) var runnerCallCount = 0
     @ObservationIgnored private var inFlight = false
@@ -134,6 +223,17 @@ package final class AILimitStore {
         if let until = Self.restoredDate(defaults, key: Self.silentUntilKey) {
             silentUntil = min(until, now.addingTimeInterval(Self.defaultBackoff))
         }
+        // 표시 설정(v0.3.47). **키가 없으면 전부 켬** — 기존 사용자에게 변화가 없어야 한다.
+        // 모르는 rawValue 는 `AILimitProvider(rawValue:)` 로 접지 않고 **문자열 그대로** 보존한다(머리말).
+        visibility = AILimitVisibility(
+            masterEnabled: defaults.object(forKey: Self.visibilityKey) as? Bool ?? true,
+            disabledRaws: Set(defaults.stringArray(forKey: Self.disabledProvidersKey) ?? [])
+        )
+        // 비우기 대기열은 **아는 제공자만** 복원한다 — 모르는 이름으로는 올릴 행을 만들 수 없고(서버 CHECK),
+        // 올릴 수 없는 항목을 대기열에 남기면 매 주기 재시도하는 영구 고착이 된다.
+        pendingClear = Set(
+            (defaults.stringArray(forKey: Self.pendingClearKey) ?? []).compactMap(AILimitProvider.init(rawValue:))
+        )
     }
 
     /// epoch 초로 적힌 시각을 읽는다. 값이 없거나 숫자가 아니면 nil(= 제한 없음).
@@ -160,36 +260,63 @@ package final class AILimitStore {
             .appendingPathComponent("check-ai-limits-inert").path
         let defaults = UserDefaults(suiteName: name) ?? .standard
         defaults.removePersistentDomain(forName: name)
-        return AILimitStore(defaults: defaults, runner: { _ in AILimitReadOutcome() })
+        return AILimitStore(defaults: defaults, runner: { _, _ in AILimitReadOutcome() })
     }
 
     // MARK: 표시 재료
 
-    /// 화면에 그릴 제공자 카드(정렬 · 미연동 제거).
+    /// 화면에 그릴 제공자 카드(정렬 · 미연동 제거 · **설정이 끈 제공자 제거**).
+    ///
+    /// 설정을 여기서 거는 까닭: 표시·조합값·업로드가 전부 이 한 목록을 거친다. 뷰마다 다시 걸러면
+    /// 한 군데를 잊은 날 "설정에서는 껐는데 메뉴바 한 줄에는 아직 섞여 있다"가 된다
+    /// (관례: '클라 게이트는 짝으로 있다' — 그래서 짝을 안 만들고 목이 하나다).
     package var visibleProviders: [AILimitProviderSnapshot] {
-        bundle?.visibleProviders ?? []
+        guard visibility.masterEnabled else { return [] }
+        return (bundle?.visibleProviders ?? []).filter { visibility.isProviderOn($0.provider) }
     }
 
-    /// 이 맥에 리밋 축을 보여 줄 근거가 있는가. **없으면 화면이 섹션을 통째로 숨긴다**(설정 토글 없음).
+    /// 이 맥에 리밋 축을 보여 줄 근거가 있는가. **없으면 화면이 섹션을 통째로 숨긴다**(높이 0).
     ///
     /// 근거는 둘이다: ① 읽은 창이 하나라도 있다, ② 숨기지 않는 실패가 하나라도 있다(만료·429·네트워크 —
     /// 그 사람은 그 도구를 쓰고 있고 우리가 지금만 못 읽는 것이다).
+    /// v0.3.47: 마스터를 끄면 **근거를 따지기 전에** 거짓이다(화면에서 섹션이 사라진다).
     package var isAvailable: Bool {
+        guard visibility.masterEnabled else { return false }
         if !visibleProviders.isEmpty { return true }
-        return failures.values.contains { !$0.hidesProvider }
+        // 꺼진 제공자의 실패는 세지 않는다 — 안 읽는 제공자의 만료 문구로 섹션을 살려 두면
+        // "다 껐는데 카드가 남아 있다"가 된다.
+        return failures.contains { visibility.isProviderOn($0.key) && !$0.value.hidesProvider }
     }
 
-    /// 목록에 세울 제공자 순서(읽은 것 + 숨기지 않는 실패). 실패만 있는 제공자도 카드를 세워 문구를 말한다.
-    package var listedProviders: [AILimitProvider] {
+    /// **설정 화면이** 줄을 세울 제공자(읽은 것 + 숨기지 않는 실패). 표시 설정을 **보지 않는다.**
+    ///
+    /// ★ 설정을 보면 안 되는 이유: 꺼서 안 보이는 제공자도 다시 켤 줄이 있어야 한다. 마스터를 끄면 아무것도
+    ///   읽지 않으므로, 이 목록이 설정에 기대어 좁아지는 구현은 **들어가면 못 나오는 방**을 만든다
+    ///   (끈 뒤로는 되켜는 스위치가 화면에 없다).
+    /// ★ 그래서 근거는 **영속된 묶음과 실패 표**다 — 둘 다 끈 동안에도 디스크에 남아 있어, 마스터를 끈 사람의
+    ///   설정 화면에도 같은 줄들이 그대로 선다.
+    package var configurableProviders: [AILimitProvider] {
         var seen = Set<AILimitProvider>()
         var out: [AILimitProvider] = []
-        for snapshot in visibleProviders where seen.insert(snapshot.provider).inserted {
+        for snapshot in bundle?.visibleProviders ?? [] where seen.insert(snapshot.provider).inserted {
             out.append(snapshot.provider)
         }
         for (provider, failure) in failures where !failure.hidesProvider && seen.insert(provider).inserted {
             out.append(provider)
         }
         return out.sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    /// 목록에 세울 제공자 순서(읽은 것 + 숨기지 않는 실패 − 설정이 끈 것). 실패만 있는 제공자도 카드를 세워 문구를 말한다.
+    package var listedProviders: [AILimitProvider] {
+        guard visibility.masterEnabled else { return [] }
+        return configurableProviders.filter { visibility.isProviderOn($0) }
+    }
+
+    /// 서버에 **값으로** 올라갈 묶음(설정이 켠 제공자만). 끈 제공자는 여기서 사라지고, 그 자리는
+    /// 비우는 행이 대신 올라간다(`pendingClear`).
+    package var enabledBundle: AILimitSnapshotBundle {
+        AILimitSnapshotBundle(providers: visibleProviders)
     }
 
     /// 한 줄 요약(메뉴바·팝오버)이 그릴 값. 모든 제공자의 모든 창을 합친다 — 가장 많이 쓴 쪽이 하한이고,
@@ -213,7 +340,13 @@ package final class AILimitStore {
     // MARK: 갱신
 
     /// 간격이 찼는가. 진행 중이거나 백오프 중이면 거짓.
+    ///
+    /// ★ **꺼진 축은 타이머가 돌지 않는다**(v0.3.47 설계 ②). 여기서 거짓이면 `refreshIfDue` 가 즉시 반환하고,
+    ///   시도 스탬프도 찍히지 않고 디스크도 안 건드린다 — 끈 사람의 맥에서는 이 축이 **아무 일도 안 한다.**
+    ///   가르는 값이 '마스터' 하나가 아니라 `enabledProviders.isEmpty` 인 까닭: 셋을 각각 끈 사람도
+    ///   읽을 리더가 없고, 그때 바퀴를 돌리면 빈 결과를 받아 와 `apply` 가 디스크를 쓴다.
     package func isDue(now: Date, force: Bool = false) -> Bool {
+        if visibility.enabledProviders.isEmpty { return false }
         if inFlight { return false }
         if let silentUntil, now < silentUntil { return false }
         guard let last = lastAttemptAt else { return true }
@@ -228,6 +361,9 @@ package final class AILimitStore {
     /// 간격이 찼을 때만 리더를 돈다. `force` 는 "사용자가 방금 팝오버·창을 열었다"일 때 쓴다(5분 하한 유지).
     package func refreshIfDue(now: Date, force: Bool = false) async {
         guard isDue(now: now, force: force) else { return }
+        // 켜진 제공자만 러너에게 넘긴다. 집합을 **여기서** 굳히는 까닭: 바퀴 도중에 사용자가 스위치를
+        // 만져도 이번 바퀴의 요청 집합은 변하지 않아야 한다(요청한 적 없는 제공자의 결과가 섞이지 않는다).
+        let providers = visibility.enabledProviders
         // 스탬프를 러너 **전에** 찍는다 — 실패도 간격을 지켜야 난사가 안 된다(CodexAccountUsageStore 와 같은 관용구).
         // 디스크에도 **지금** 내려간다: 바퀴 도중에 앱이 죽어도 이 시도가 장부에 남아야 다음 실행이 간격을 지킨다.
         lastAttemptAt = now
@@ -235,8 +371,68 @@ package final class AILimitStore {
         inFlight = true
         defer { inFlight = false }
         runnerCallCount += 1
-        let outcome = await runner(now)
+        let outcome = await runner(now, providers)
         apply(outcome, now: now)
+    }
+
+    // MARK: 표시 설정 (v0.3.47)
+
+    /// 마스터 스위치. 끄면 **읽기·업로드·타이머가 통째로 멈추고**, 이미 올라간 행들은 비우기 대기열에 들어간다.
+    package func setMasterEnabled(_ enabled: Bool) {
+        guard visibility.masterEnabled != enabled else { return }
+        var next = visibility
+        next.masterEnabled = enabled
+        apply(visibility: next)
+    }
+
+    /// 제공자 하나의 스위치. **마스터와 독립**이다(마스터가 꺼진 동안 바꿔 둘 수 있다).
+    package func setProviderEnabled(_ provider: AILimitProvider, _ enabled: Bool) {
+        guard visibility.isProviderOn(provider) != enabled else { return }
+        var next = visibility
+        next.setProvider(provider, on: enabled)
+        apply(visibility: next)
+    }
+
+    /// 설정을 갈아 끼우고 **비우기 대기열을 갱신한다.**
+    ///
+    /// 대기열에 넣는 것은 "바뀌기 **전에** 올라가던 제공자 − 바뀐 **뒤에** 올라갈 제공자" 뿐이다.
+    /// 그 차집합으로 재는 까닭이 셋 있다:
+    ///  ① 이미 꺼 둔(그래서 이미 비운) 제공자를 마스터 끄기가 다시 대기열에 넣지 않는다 — 넣으면 같은 빈 행을
+    ///     매번 다시 올린다("한 번이면 된다").
+    ///  ② 연동되지 않은 제공자는 애초에 올라간 적이 없으니 비울 것도 없다.
+    ///  ③ 마스터를 끄면 **연동된 모든 제공자**가 한꺼번에 차집합에 들어온다(설계 ③).
+    ///
+    /// 그리고 다시 **켠** 제공자는 대기열에서 **뺀다**: 값이 곧 다시 올라가므로 비우기는 뜻이 없고, 무엇보다
+    /// 같은 PK 의 값 행과 비우는 행이 한 본문에 섞이면 upsert 가 21000 으로 **본문 전체**를 거절한다.
+    private func apply(visibility next: AILimitVisibility) {
+        let before = uploadableProviders(visibility)
+        visibility = next
+        let after = uploadableProviders(next)
+        pendingClear.formUnion(before.subtracting(after))
+        pendingClear.subtract(after)
+        persistVisibility()
+    }
+
+    /// 지금 설정에서 서버에 **값이 올라가는** 제공자(= 끄면 비워야 하는 대상).
+    /// 연동 사실은 `configurableProviders` 가 아니라 **묶음**에서 본다 — 실패만 있는 제공자는 올린 적이 없다.
+    private func uploadableProviders(_ visibility: AILimitVisibility) -> Set<AILimitProvider> {
+        guard visibility.masterEnabled else { return [] }
+        let linked = (bundle?.visibleProviders ?? []).map(\.provider)
+        return Set(linked.filter { visibility.isProviderOn($0) })
+    }
+
+    /// 비우기 업로드가 **성공한** 제공자를 대기열에서 뺀다. 실패하면 부르지 않는다 — 그래야 다음 기회에 재시도된다.
+    package func markCleared(_ providers: [AILimitProvider]) {
+        let next = pendingClear.subtracting(providers)
+        guard next != pendingClear else { return }
+        pendingClear = next
+        persistVisibility()
+    }
+
+    private func persistVisibility() {
+        defaults.set(visibility.masterEnabled, forKey: Self.visibilityKey)
+        defaults.set(visibility.disabledRaws.sorted(), forKey: Self.disabledProvidersKey)
+        defaults.set(pendingClear.map(\.rawValue).sorted(), forKey: Self.pendingClearKey)
     }
 
     /// 결과를 상태에 반영한다(순수에 가까운 지점 — 테스트가 직접 부른다).
@@ -321,7 +517,8 @@ extension AILimitStore {
         appVersion: String,
         session: URLSession,
         processRunner: AILimitCommandRunner? = nil,
-        fetcher: AILimitHTTPFetcher? = nil
+        fetcher: AILimitHTTPFetcher? = nil,
+        locateAntigravity: (@Sendable () -> URL?)? = nil
     ) -> Runner {
         let process = processRunner ?? AILimitProcess.live()
         let fetch = fetcher ?? AILimitHTTP.fetcher(session: session)
@@ -334,17 +531,27 @@ extension AILimitStore {
         )
         let antigravity = AILimitAntigravityReader(
             runner: process,
-            locate: { AILimitAntigravityReader.liveLocate(home: home) }
+            // 주입 지점이 있는 까닭: 기본 탐색은 **이 맥의 PATH** 를 읽어 `agy` 가 깔려 있는지에 따라 결과가
+            // 갈린다. 그러면 "켠 제공자는 실제로 불린다"는 대조군이 기계마다 초록·회색으로 바뀌어,
+            // 게이트를 통째로 지워도 스위트가 조용히 통과하는 날이 온다(기준선이 같은 입력이면 영원히 초록).
+            locate: locateAntigravity ?? { AILimitAntigravityReader.liveLocate(home: home) }
         )
-        return { now in
-            async let claudeResult = claude.read(now: now)
-            async let codexResult = codex.read(now: now)
-            async let antigravityResult = antigravity.read(now: now)
-            return AILimitReadOutcome(results: [
-                .claude: await claudeResult,
-                .codex: await codexResult,
-                .antigravity: await antigravityResult
-            ])
+        return { now, providers in
+            // ★ **꺼진 제공자의 리더를 부르지 않는다.** 결과를 받아서 버리는 구현과 눈에 보이는 차이가
+            //   여기다: 부르지 않으면 `security`(키체인)·`auth.json`·`agy` 에 손이 닿지 않고 제공자 API 도
+            //   치지 않는다. 설정을 끈 사람에게 그게 전부다(머리말 '끄면 읽지도 올리지도 않는다').
+            //   빈 집합이면 자식 작업이 하나도 안 떠서 묻는 데 드는 비용도 0 이다.
+            typealias Reading = (AILimitProvider, Result<AILimitProviderSnapshot, AILimitReadError>)
+            return await withTaskGroup(of: Reading.self) { group in
+                // 셋이 서로를 기다리지 않아야 한다 — `agy` 는 5초짜리라 직렬로 묶으면 팝오버를 연 사람이
+                // 그만큼 더 기다린다(그래서 `async let` 셋을 작업 그룹으로 바꿔도 동시성은 그대로다).
+                if providers.contains(.claude) { group.addTask { (.claude, await claude.read(now: now)) } }
+                if providers.contains(.codex) { group.addTask { (.codex, await codex.read(now: now)) } }
+                if providers.contains(.antigravity) { group.addTask { (.antigravity, await antigravity.read(now: now)) } }
+                var results: [AILimitProvider: Result<AILimitProviderSnapshot, AILimitReadError>] = [:]
+                for await (provider, result) in group { results[provider] = result }
+                return AILimitReadOutcome(results: results)
+            }
         }
     }
 }

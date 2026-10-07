@@ -150,18 +150,64 @@ extension SupabaseWorkService {
         )
     }
 
+    /// 그 제공자의 행을 **비우는** 한 행(v0.3.47). 창 값·리셋 시각·플랜 라벨이 전부 null 이고 PK + `observed_at` 만 값이다.
+    ///
+    /// ## 왜 지우지 않고 덮는가
+    /// `authenticated` 에 DELETE 를 **일부러 주지 않았다**. 그래서 클라가 자기 행을 없애는 길은 "비워서 올리기"
+    /// 하나뿐이다. 폰·위젯은 **보이는 창이 하나도 없는 행을 숨기므로**(`AILimitSnapshotBundle.visibleProviders` 가
+    /// `isLinked` 로 거른다 — 심사 중인 폰 빌드도 이미 그렇다) 이 한 번의 업로드로 그 제공자가 세 화면에서 같이 사라진다.
+    /// ★ 3일 유령 게이트(`AILimitGhostRow`)에 기대지 않는다 — 설정을 끈 사람에게 사흘을 기다리게 할 수는 없다.
+    ///
+    /// ## 키 집합은 값 행과 **똑같다**
+    /// `AILimitUpsertRow.encode(to:)` 가 아홉 칸을 전부 적으므로(머리말 PGRST102) 비우는 행과 값 행을 한 본문에
+    /// 섞어도 400 이 나지 않는다. 그래서 요청을 둘로 나누지 않는다 — 나누면 비우기만 실패하는 조합이 생긴다.
+    ///
+    /// `observed_at` 은 NOT NULL 이라(안 보내면 23502 로 그 행이 조용히 거절된다) 비우는 행도 시각을 싣는다.
+    /// **옛 관측 시각이 아니라 지금**이다: 이 행이 말하는 사실은 "이 제공자는 더 올리지 않는다"이고 그 시각이 지금이다.
+    package func aiLimitClearingRow(
+        userID: String,
+        deviceID: String,
+        provider: AILimitProvider,
+        observedAt: Date
+    ) -> AILimitUpsertRow {
+        AILimitUpsertRow(
+            userId: userID,
+            deviceId: deviceID,
+            provider: provider.rawValue,
+            fiveHourPercent: nil,
+            fiveHourResetsAt: nil,
+            weeklyPercent: nil,
+            weeklyResetsAt: nil,
+            planLabel: nil,
+            observedAt: dateFormatter.string(from: observedAt)
+        )
+    }
+
     /// 내 리밋 행들을 올린다(제공자당 한 행). 빈 배열이면 **요청을 아예 보내지 않는다**.
+    ///
+    /// `clearedProviders` 는 사용자가 설정에서 **끈** 제공자다(v0.3.47) — 그 행은 값 대신 null 로 덮인다.
     ///
     /// 실패는 호출측이 삼키고 장부를 갱신하지 않아 다음 주기에 재시도한다(upsert 는 멱등이다).
     package func upsertAILimits(
         accessToken: String,
         userID: String,
         deviceID: String,
-        bundle: AILimitSnapshotBundle
+        bundle: AILimitSnapshotBundle,
+        clearedProviders: [AILimitProvider] = [],
+        clearedAt: Date = Date()
     ) async throws {
-        let rows = bundle.visibleProviders.compactMap {
+        let valueRows = bundle.visibleProviders.compactMap {
             aiLimitRow(userID: userID, deviceID: deviceID, snapshot: $0)
         }
+        // ★ **같은 PK 를 한 본문에 두 번 담지 않는다.** upsert 가 한 요청에서 같은 행을 두 번 건드리면
+        //   Postgres 가 21000("ON CONFLICT DO UPDATE command cannot affect row a second time")으로
+        //   **본문 전체**를 거절한다 — 값도 비우기도 못 올라가고, 그 거절은 조용하다. 중복 제공자도 접는다.
+        let taken = Set(valueRows.map(\.provider))
+        var seen = Set<AILimitProvider>()
+        let clearingRows = clearedProviders
+            .filter { !taken.contains($0.rawValue) && seen.insert($0).inserted }
+            .map { aiLimitClearingRow(userID: userID, deviceID: deviceID, provider: $0, observedAt: clearedAt) }
+        let rows = valueRows + clearingRows
         guard !rows.isEmpty else { return }
         try await sendNoBody(
             path: Self.aiLimitsPath,

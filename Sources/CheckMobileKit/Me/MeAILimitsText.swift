@@ -18,8 +18,10 @@ extension MeText {
     /// 한 번도 못 받았을 때(불러오는 중). 실패해도 들고 있던 값이 있으면 이 문구를 쓰지 않는다.
     package static let aiLimitsLoading = MeText.loading
     package static let aiLimitsFailed = "AI 리밋을 불러오지 못했어요"
-    /// 연동한 도구가 하나도 없다 — **설정 토글이 없는 기능**이라 "맥에서 로그인하면 보인다"가 유일한 다음 행동이다.
-    package static let aiLimitsNoProviders = "맥 앱에서 AI 도구에 로그인하면 보여요"
+    /// 그릴 줄이 하나도 없다 — 까닭이 **둘**이다(연동이 없다 · 맥 설정에서 껐다). 글자는 위젯과 **같은 상수**
+    /// 하나에서 온다(`AILimitSurfaceText` — 두 문을 함께 가리키는 한 문장을 고른 근거도 거기 있다).
+    /// ★ 여기에 "로그인하면 보여요" 를 다시 적지 마라: 설정에서 끈 사람은 이미 로그인해 있다.
+    package static let aiLimitsNoProviders = AILimitSurfaceText.noVisibleProviders
 
     /// 카드 제목의 보이스오버가 덧붙이는 말(화면에는 칩이 없다 — 줄마다의 숫자가 이미 다 보인다).
     /// "가장 높은"이지 "평균"이 아니다 — 요약은 5시간 창의 **최악**을 모은다(`AILimitsStore.fiveHourSummary`).

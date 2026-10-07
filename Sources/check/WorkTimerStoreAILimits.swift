@@ -18,6 +18,11 @@ import Foundation
 //     값이 같아도 **관측 시각이 한 칸(15분) 넘게 움직였거나**(폰·위젯의 신선도 축이 서버 `observed_at` 하나로
 //     서 있다 — `AILimitUploadLedger` 머리말). 실패하면 장부를 갱신하지 않아 다음 주기가 재시도한다.
 //
+// ## 사용자 설정(v0.3.47)이 이 모든 것보다 **앞**에 있다
+// 읽기 게이트는 스토어가 쥔다(`AILimitStore.isDue` · 러너의 `providers`). 여기서는 **올리는 쪽** 둘을 지킨다:
+//  · 끈 제공자는 값 행을 만들지 않는다(`aiLimits.enabledBundle` 이 이미 걸렀다).
+//  · 끈 **그 순간** 그 제공자의 행을 비우는 행 하나로 덮는다(`pendingClear`) — 폰·위젯에서도 같이 사라진다.
+//
 // ## 수집 설정(`tokenUsageCollect`)을 게이트로 쓰지 않는 이유
 // 그 설정은 **토큰 축의 순위판 공개 여부**다(남에게 내 숫자를 보일지). 리밋 축은 본인만 보기(RLS)이고
 // 순위판 RPC 가 이 표를 읽지 않으므로(마이그레이션 §5⑦·⑧) "남에게 안 보이게"와 아무 관계가 없다.
@@ -37,23 +42,67 @@ extension WorkTimerStore {
     }
 
     /// 변경 게이트 + 업로드. 실패는 조용히 — 장부를 성공 시에만 갱신해 다음 주기에 재시도된다.
+    ///
+    /// ## ★ 비우기는 "묶음이 비었으면 반환"보다 **앞**에 있다 (v0.3.47)
+    /// 올릴 값이 하나도 없는 바로 그 상태(마스터 끔 · 셋 다 끔)가 **비워야 하는 상태**다. 초안처럼
+    /// `guard !visibleProviders.isEmpty` 를 맨 위에 두면 전체 끄기가 서버에 영원히 닿지 못하고,
+    /// 폰·위젯은 맥이 끈 뒤에도 옛 숫자를 3일간(유령 게이트까지) 계속 보여 준다.
     func uploadAILimitsIfNeeded(now: Date = Date()) async {
         guard let session, hasDeviceIdentity else { return }
-        guard let bundle = aiLimits.bundle, !bundle.visibleProviders.isEmpty else { return }
+        // 비우기는 정렬해서 보낸다(제공자 순서) — 본문이 결정적이어야 테스트가 글자로 되묻을 수 있다.
+        let clearing = aiLimits.pendingClear.sorted { $0.sortOrder < $1.sortOrder }
+        // 설정이 **켠** 제공자만 담긴 묶음. 끈 제공자는 여기 없고, 대신 위 대기열에 있다.
+        let bundle = aiLimits.enabledBundle
+        let hasValues = !bundle.visibleProviders.isEmpty
         let fingerprint = AILimitUploadLedger.fingerprint(bundle)
-        guard fingerprint != lastUploadedAILimits else { return }
+        let valuesChanged = hasValues && fingerprint != lastUploadedAILimits
+        guard valuesChanged || !clearing.isEmpty else { return }
         do {
             try await service.upsertAILimits(
                 accessToken: session.accessToken,
                 userID: session.userID,
                 deviceID: deviceID,
-                bundle: bundle
+                bundle: bundle,
+                clearedProviders: clearing,
+                clearedAt: now
             )
-            lastUploadedAILimits = fingerprint
+            if valuesChanged { lastUploadedAILimits = fingerprint }
+            // 성공한 비우기만 대기열에서 뺀다. 실패하면 그대로 남아 다음 주기(30초 틱·팝오버 열기)가 다시 보낸다 —
+            // 영구히 안 지워지는 조합이 있으면 그 사람의 폰은 끈 제공자를 계속 보여 준다.
+            aiLimits.markCleared(clearing)
         } catch {
             // 조용히. 스키마가 없는 서버(앱이 db push 보다 먼저 나간 경우)도 여기로 떨어지고, 그때 해야 할 일은
             // 아무것도 안 하는 것이다 — 리밋은 정보성 표시이고 사용자를 막을 이유가 없다.
         }
+    }
+
+    // MARK: - 설정 스위치 (v0.3.47)
+    //
+    // 설정 화면의 스위치가 부르는 자리. 스토어(`AILimitStore`)가 값을 쥐고, 여기는 **그 순간 서버에 반영**하는 일만 한다.
+    // 집이 둘이 되지 않게 설정 화면은 반드시 이 두 함수만 부른다(소스 계약 테스트가 호출 지점 수를 되묻는다).
+
+    /// 마스터 스위치. 끄면 읽기·타이머가 멈추고 **연동된 모든 제공자**의 행이 그 순간 비워진다.
+    func setAILimitsVisible(_ enabled: Bool) {
+        aiLimits.setMasterEnabled(enabled)
+        noteAILimitsSettingChanged()
+    }
+
+    /// 제공자 하나의 스위치. 끄면 그 제공자만 읽기·업로드가 멈추고 행이 비워진다.
+    func setAILimitProviderEnabled(_ provider: AILimitProvider, _ enabled: Bool) {
+        aiLimits.setProviderEnabled(provider, enabled)
+        noteAILimitsSettingChanged()
+    }
+
+    /// 설정이 바뀐 뒤에 하는 일 둘.
+    ///
+    /// ① **장부를 버린다.** 장부가 재는 것은 "값이 바뀌었나"뿐이라, 끈 뒤 같은 값으로 다시 켠 사람의 지문이
+    ///    장부와 똑같을 수 있다(퍼센트·리셋·플랜이 그대로고 관측 칸도 15분 안이면 그렇다). 그러면 비우기만
+    ///    올라간 채 값이 다시 안 올라가, 맥에는 숫자가 보이는데 폰은 빈 채로 남는다. 설정 변경은 값과 무관한
+    ///    사건이므로 장부로 걸러서는 안 된다.
+    /// ② **그 순간 올린다.** 30초 틱을 기다리면 "껐는데 폰에 아직 있다"가 그 사이에 존재한다(설계 ③).
+    private func noteAILimitsSettingChanged() {
+        lastUploadedAILimits = nil
+        Task { [weak self] in await self?.uploadAILimitsIfNeeded() }
     }
 }
 

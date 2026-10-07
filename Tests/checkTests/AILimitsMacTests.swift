@@ -746,7 +746,7 @@ struct AILimitsMacStoreTests {
         outcome: @escaping @Sendable (Date) -> AILimitReadOutcome,
         now: @escaping () -> Date = { amNow }
     ) -> AILimitStore {
-        AILimitStore(defaults: defaults, clock: now, runner: { outcome($0) })
+        AILimitStore(defaults: defaults, clock: now, runner: { at, _ in outcome(at) })
     }
 
     nonisolated private static func claudeOutcome(used: Double = 27, weekly: Double = 60, observedAt: Date = amNow) -> AILimitReadOutcome {
@@ -843,7 +843,7 @@ struct AILimitsMacStoreTests {
         let defaults = amDefaults()
         let first = Self.claudeOutcome(used: 27, weekly: 60)
         let box = AMOutcomeBox(outcome: first)
-        let subject = AILimitStore(defaults: defaults, clock: { amNow }, runner: { _ in box.outcome })
+        let subject = AILimitStore(defaults: defaults, clock: { amNow }, runner: { _, _ in box.outcome })
         await subject.refreshIfDue(now: amNow)
         #expect(subject.visibleProviders.count == 1)
 
@@ -869,7 +869,7 @@ struct AILimitsMacStoreTests {
         await first.refreshIfDue(now: amNow)
         #expect(first.bundle != nil)
 
-        let reborn = AILimitStore(defaults: defaults, clock: { amNow }, runner: { _ in AILimitReadOutcome() })
+        let reborn = AILimitStore(defaults: defaults, clock: { amNow }, runner: { _, _ in AILimitReadOutcome() })
         #expect(reborn.bundle?.provider(.claude)?.window(.fiveHour)?.usedPercent == 42)
         #expect(reborn.bundle?.provider(.claude)?.window(.weekly)?.usedPercent == 71)
         #expect(reborn.isAvailable == true)
@@ -887,7 +887,7 @@ struct AILimitsMacStoreTests {
     @Test
     func freshReadReplacesTheOldValueEvenWhenLower() async {
         let box = AMOutcomeBox(outcome: Self.claudeOutcome(used: 90, weekly: 95))
-        let subject = AILimitStore(defaults: amDefaults(), clock: { amNow }, runner: { _ in box.outcome })
+        let subject = AILimitStore(defaults: amDefaults(), clock: { amNow }, runner: { _, _ in box.outcome })
         await subject.refreshIfDue(now: amNow)
         #expect(subject.bundle?.provider(.claude)?.window(.fiveHour)?.usedPercent == 90)
         box.outcome = Self.claudeOutcome(used: 3, weekly: 95, observedAt: amNow.addingTimeInterval(601))
@@ -1505,7 +1505,7 @@ struct AILimitsMacCardContentTests {
         let name = CheckTestScratch.uniqueSuitePath(function: function, line: line)
         let defaults = UserDefaults(suiteName: name) ?? .standard
         defaults.removePersistentDomain(forName: name)
-        let subject = AILimitStore(defaults: defaults, clock: { at }, runner: { _ in AILimitReadOutcome() })
+        let subject = AILimitStore(defaults: defaults, clock: { at }, runner: { _, _ in AILimitReadOutcome() })
         subject.apply(outcome, now: at)
         return subject
     }
@@ -1843,7 +1843,7 @@ struct AILimitsMacCardRenderTests {
         let name = CheckTestScratch.uniqueSuitePath(function: function, line: line + providers)
         let defaults = UserDefaults(suiteName: name) ?? .standard
         defaults.removePersistentDomain(forName: name)
-        let subject = AILimitStore(defaults: defaults, clock: { amNow }, runner: { _ in AILimitReadOutcome() })
+        let subject = AILimitStore(defaults: defaults, clock: { amNow }, runner: { _, _ in AILimitReadOutcome() })
         var results: [AILimitProvider: Result<AILimitProviderSnapshot, AILimitReadError>] = [
             .claude: .success(AILimitProviderSnapshot(provider: .claude, windows: [
                 AILimitWindowSnapshot(window: .fiveHour, usedPercent: 82,
@@ -1869,7 +1869,7 @@ struct AILimitsMacCardRenderTests {
         let name = CheckTestScratch.uniqueSuitePath(function: function, line: line)
         let defaults = UserDefaults(suiteName: name) ?? .standard
         defaults.removePersistentDomain(forName: name)
-        let subject = AILimitStore(defaults: defaults, clock: { amNow }, runner: { _ in AILimitReadOutcome() })
+        let subject = AILimitStore(defaults: defaults, clock: { amNow }, runner: { _, _ in AILimitReadOutcome() })
         subject.apply(AILimitReadOutcome(results: [
             .claude: .success(AILimitProviderSnapshot(provider: .claude, windows: [
                 AILimitWindowSnapshot(window: .fiveHour, usedPercent: 82,

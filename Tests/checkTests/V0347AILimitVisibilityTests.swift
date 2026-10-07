@@ -1,0 +1,933 @@
+import AppKit
+import os
+import Foundation
+import SwiftUI
+import Testing
+@testable import check
+@testable import CheckCore
+
+// MARK: - v0.3.47 설정에서 AI 리밋을 **원하는 것만** · 아예 안 볼 수도 있게
+//
+// 사용자 요청(2026-10-07): "설정에서 AI 한도 원하는것만 표시하고, 아예 표시 안할 수도 있게 각자 조정할 수 있게".
+//
+// ## 이 스위트가 지키는 것 — 전부 "초록인 채로 틀릴 수 있는" 자리다
+//  ① **기본값이 전부 켬**이고 끈 값은 다음 실행에도 남는다. 안 남으면 brew 업데이트 한 번에 설정이 풀린다.
+//     모르는 제공자 키가 저장돼 있어도 깨지지 않고, 그 키를 **지우지도 않는다**(열거값 확장 함정).
+//  ② **꺼진 제공자의 리더가 0번 불린다.** 결과만 비었는지 보는 테스트는 이 결함을 못 잡는다 —
+//     리더가 불리고 결과만 버려져도 그런 테스트는 초록이고, 그때는 이미 키체인·auth.json·agy 를 건드린 뒤다.
+//     그래서 ㉮ 스토어가 러너에게 **무엇을 요청했는지**와 ㉯ `liveRunner` 가 **실제로 띄운 명령·요청**을 둘 다 센다.
+//  ③ 마스터가 꺼져 있으면 **갱신 자체가 없다**(러너 0회 · 시도 스탬프 없음 · 디스크에 쓰기 없음).
+//  ④ 끈 제공자의 서버 행은 **그 순간 비워진다**(창 값 전부 null · 키 집합 동일 · 한 번만 · 실패하면 재시도).
+//  ⑤ 끄면 팝오버 카드에서 줄이 사라지고 전부 끄면 **섹션 자체가 사라진다**(높이 0).
+//  ⑥ 설정 화면이 **연동된 제공자만** 줄을 세우고, 세터 한 쌍으로만 간다(집이 둘이 되지 않는다).
+//
+// ## 제공자 API 를 **실제로 부르지 않는다**
+// Claude 는 5분에 5회가 상한이라 스위트가 그걸 넘기면 사용자 계정이 5분간 잠긴다(실측 2026-10-07).
+// 이 파일의 모든 리더 입구(`security` 프로세스 · HTTP · `agy` 탐색)는 주입된 가짜다.
+
+// MARK: - 고정 시각·도우미
+
+/// 고정 기준 시각(AILimitsMacTests 와 같은 값 — 두 파일이 같은 세계를 말한다).
+private let vvNow = Date(timeIntervalSince1970: 1_791_300_000)
+
+/// 격리 UserDefaults. 이름은 **반드시** `CheckTestScratch` 에서 받는다(절대 경로 · UUID 없음) —
+/// 평범한 도메인 이름은 `~/Library/Preferences` 에 plist 를 쌓고, 62만 개가 `cfprefsd` 를 죽인 전례가 있다.
+private func vvDefaults(_ function: String = #function, line: Int = #line) -> UserDefaults {
+    let name = CheckTestScratch.uniqueSuitePath(function: function, line: line)
+    let defaults = UserDefaults(suiteName: name) ?? .standard
+    defaults.removePersistentDomain(forName: name)
+    return defaults
+}
+
+/// 창 둘을 가진 제공자 스냅샷.
+private func vvSnapshot(
+    _ provider: AILimitProvider,
+    fiveHour: Double = 27,
+    weekly: Double = 60,
+    observedAt: Date = vvNow
+) -> AILimitProviderSnapshot {
+    AILimitProviderSnapshot(
+        provider: provider,
+        windows: [
+            AILimitWindowSnapshot(window: .fiveHour, usedPercent: fiveHour,
+                                  resetsAt: observedAt.addingTimeInterval(3_600),
+                                  observedAt: observedAt, source: .local),
+            AILimitWindowSnapshot(window: .weekly, usedPercent: weekly,
+                                  resetsAt: observedAt.addingTimeInterval(86_400),
+                                  observedAt: observedAt, source: .local)
+        ],
+        planLabel: "max"
+    )
+}
+
+/// 러너가 **무엇을 요청받았는지** 기록하는 가짜. 이 스위트의 ② 가 서는 자리다.
+///
+/// ★ 기록하는 것이 "불렸는가"가 아니라 "**누구를** 물었는가" 다. 전자만 세면 러너가 셋 다 읽고 결과에서
+///   꺼진 제공자를 지우는 구현도 초록이다 — 그 구현은 키체인을 이미 건드렸다.
+private final class VVRunnerSpy: @unchecked Sendable {
+    /// 바퀴마다 요청받은 제공자 집합(호출 순서대로).
+    private(set) var requested: [Set<AILimitProvider>] = []
+    /// 이 제공자들은 읽을 수 있다고 답한다.
+    var available: Set<AILimitProvider>
+
+    init(available: Set<AILimitProvider>) {
+        self.available = available
+    }
+
+    /// 어떤 제공자가 **한 번이라도** 요청됐는가.
+    func askedFor(_ provider: AILimitProvider) -> Bool {
+        requested.contains { $0.contains(provider) }
+    }
+
+    var callCount: Int { requested.count }
+
+    func runner() -> AILimitStore.Runner {
+        { [self] now, providers in
+            requested.append(providers)
+            // **요청받은 제공자만** 답한다. 러너가 요청 밖의 제공자까지 읽어 오는 세계를 흉내내지 않는다 —
+            // 그 세계가 바로 결함이고, 그 결함은 위 `requested` 가 잡는다.
+            var results: [AILimitProvider: Result<AILimitProviderSnapshot, AILimitReadError>] = [:]
+            for provider in providers {
+                results[provider] = available.contains(provider)
+                    ? .success(vvSnapshot(provider, observedAt: now))
+                    : .failure(AILimitReadError(.notInstalled))
+            }
+            return AILimitReadOutcome(results: results)
+        }
+    }
+}
+
+/// 리더가 **실제로 건드린 것**을 세는 기록기(프로세스 명령 · HTTP 요청).
+/// ②㉯ 가 서는 자리다 — 여기 숫자가 0 이어야 "안 읽었다"가 사실이다.
+private struct VVProbeState {
+    var commands: [String] = []
+    var hosts: [String] = []
+}
+
+private final class VVReaderProbe: Sendable {
+    /// 두 리더가 서로 다른 작업에서 동시에 적는다(러너가 셋을 나란히 돌린다) — 자물쇠로 직렬화한다.
+    /// `NSLock.lock()` 은 비동기 문맥에서 쓸 수 없어(컴파일러가 막는다) 이 저장소가 쓰는 것과 같은
+    /// `OSAllocatedUnfairLock` 범위 잠금을 쓴다(`CodexAccountUsageProbe.LocateCache` 와 같은 관용구).
+    private let state = OSAllocatedUnfairLock(initialState: VVProbeState())
+
+    var commands: [String] { state.withLock { $0.commands } }
+    var fetchedHosts: [String] { state.withLock { $0.hosts } }
+
+    var processRunner: AILimitCommandRunner {
+        { [self] command in
+            let name = command.executable.lastPathComponent
+            state.withLock { $0.commands.append(name) }
+            // 빈 stdout = 실패. 파싱까지 가지 않는다(이 스위트가 재는 것은 "불렸나" 하나다).
+            return AILimitCommandOutput(status: 1, stdout: Data())
+        }
+    }
+
+    var fetcher: AILimitHTTPFetcher {
+        { [self] request in
+            let host = request.url?.host ?? ""
+            state.withLock { $0.hosts.append(host) }
+            return AILimitHTTPResponse(status: 500, body: Data(), retryAfter: nil, transportFailed: false)
+        }
+    }
+
+    func ranCommand(_ name: String) -> Bool { commands.contains(name) }
+    func fetched(host: String) -> Bool { fetchedHosts.contains(host) }
+}
+
+// MARK: - ① 설정 모델: 기본 전부 켬 · 영속 · 모르는 키 보존
+
+@Suite("v0.3.47 — 표시 설정 모델")
+@MainActor
+struct V0347AILimitVisibilityModelTests {
+    /// 기본값은 **전부 켬**이고, 끈 값은 다음 실행에도 남는다.
+    ///
+    /// 없으면: 기본값을 꺼짐으로 바꿔도 초록이고, 그러면 업데이트하는 순간 **모든 사람의** 리밋이 사라진다
+    /// (요건은 "기존 사용자에게 변화가 없어야 한다").
+    @Test
+    func defaultsToEverythingOnAndSurvivesRelaunch() {
+        let defaults = vvDefaults()
+        let first = AILimitStore(defaults: defaults, clock: { vvNow }, runner: { _, _ in AILimitReadOutcome() })
+        #expect(first.visibility == .allEnabled)
+        #expect(first.visibility.masterEnabled)
+        #expect(first.visibility.enabledProviders == Set(AILimitProvider.allCases))
+        for provider in AILimitProvider.allCases {
+            #expect(first.visibility.isEnabled(provider), "\(provider) 가 기본으로 꺼져 있다")
+        }
+
+        first.setProviderEnabled(.codex, false)
+        #expect(first.visibility.isProviderOn(.codex) == false)
+        #expect(first.visibility.isProviderOn(.claude), "한 제공자를 끄자 다른 제공자도 꺼졌다")
+
+        let relaunched = AILimitStore(defaults: defaults, clock: { vvNow }, runner: { _, _ in AILimitReadOutcome() })
+        #expect(relaunched.visibility.isProviderOn(.codex) == false, "끈 값이 재실행에 되살아났다")
+        #expect(relaunched.visibility.masterEnabled)
+        #expect(relaunched.visibility.enabledProviders == [.claude, .antigravity])
+
+        relaunched.setMasterEnabled(false)
+        let again = AILimitStore(defaults: defaults, clock: { vvNow }, runner: { _, _ in AILimitReadOutcome() })
+        #expect(again.visibility.masterEnabled == false, "끈 마스터가 재실행에 되살아났다")
+        // ★ 마스터를 껐어도 제공자 스위치는 **그대로** 기억된다 — 다시 켤 때 내 선택이 돌아와야 한다.
+        #expect(again.visibility.isProviderOn(.codex) == false)
+        #expect(again.visibility.isProviderOn(.claude))
+
+        // 키 이름을 못 박는다. 바꾸면 이미 끈 사람의 설정이 아무 말 없이 켜짐으로 돌아간다.
+        #expect(AILimitStore.visibilityKey == "check.aiLimits.show")
+        #expect(AILimitStore.disabledProvidersKey == "check.aiLimits.disabledProviders")
+        #expect(AILimitStore.pendingClearKey == "check.aiLimits.pendingClear")
+    }
+
+    /// 모르는 제공자 키가 저장돼 있어도 **깨지지 않고, 지워지지도 않는다**.
+    ///
+    /// 왜 보존이 요건인가: 신버전에서 끈 네 번째 제공자를 구버전이 저장하며 지워 버리면, 다시 신버전으로
+    /// 올라갈 때 그 제공자가 **아무 말 없이 켜진다**(열거값 확장 함정의 쌍둥이).
+    /// 그리고 모르는 키가 아는 제공자의 판정을 흔들어서도 안 된다.
+    @Test
+    func unknownProviderKeysSurviveAndChangeNothing() {
+        let defaults = vvDefaults()
+        defaults.set(["codex", "gemini", "future-tool"], forKey: AILimitStore.disabledProvidersKey)
+
+        let store = AILimitStore(defaults: defaults, clock: { vvNow }, runner: { _, _ in AILimitReadOutcome() })
+        #expect(store.visibility.isProviderOn(.codex) == false)
+        #expect(store.visibility.isProviderOn(.claude), "모르는 키가 아는 제공자를 껐다")
+        #expect(store.visibility.enabledProviders == [.claude, .antigravity])
+
+        // 저장을 한 번 더 거쳐도 모르는 키가 **살아 있다**.
+        store.setProviderEnabled(.antigravity, false)
+        let saved = Set(defaults.stringArray(forKey: AILimitStore.disabledProvidersKey) ?? [])
+        #expect(saved.contains("gemini"), "모르는 제공자 키를 저장하면서 지웠다")
+        #expect(saved.contains("future-tool"))
+        #expect(saved == ["codex", "gemini", "future-tool", "antigravity"])
+
+        // 모르는 키만으로는 비우기 대기열에 아무것도 들어가지 않는다(올릴 행을 만들 수 없는 이름이다).
+        #expect(store.pendingClear == [])
+    }
+
+    /// 비우기 대기열도 **영속된다** — 끄고 바로 앱이 죽으면 그 행이 서버에 영원히 남는다.
+    @Test
+    func pendingClearSurvivesRelaunch() async {
+        let defaults = vvDefaults()
+        let spy = VVRunnerSpy(available: [.claude, .codex])
+        let store = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        await store.refreshIfDue(now: vvNow)
+        #expect(store.visibleProviders.count == 2)
+
+        store.setProviderEnabled(.codex, false)
+        #expect(store.pendingClear == [.codex])
+
+        let reborn = AILimitStore(defaults: defaults, clock: { vvNow }, runner: { _, _ in AILimitReadOutcome() })
+        #expect(reborn.pendingClear == [.codex], "비우기 대기열이 재실행에 사라졌다 — 그 행은 서버에 영원히 남는다")
+        reborn.markCleared([.codex])
+        #expect(reborn.pendingClear.isEmpty)
+
+        let third = AILimitStore(defaults: defaults, clock: { vvNow }, runner: { _, _ in AILimitReadOutcome() })
+        #expect(third.pendingClear.isEmpty, "비운 사실이 재실행에 되살아났다 — 같은 빈 행을 매번 다시 올린다")
+    }
+}
+
+// MARK: - ② 읽기 게이트: 꺼진 제공자의 리더는 0번 불린다
+
+@Suite("v0.3.47 — 읽기 게이트(꺼진 리더 0회)")
+@MainActor
+struct V0347AILimitReadGateTests {
+    /// ★ **꺼진 제공자를 러너에게 요청하지 않는다.**
+    ///
+    /// 결과가 비었는지만 보는 단언은 이 결함을 못 잡는다 — 리더가 불리고 결과만 버려져도 초록이다.
+    /// 그래서 가짜 러너가 "누구를 물었는지"를 기록하고, 꺼진 제공자가 그 기록에 **한 번도** 없어야 한다.
+    @Test
+    func disabledProviderIsNeverRequestedFromTheRunner() async {
+        let spy = VVRunnerSpy(available: Set(AILimitProvider.allCases))
+        let store = AILimitStore(defaults: vvDefaults(), clock: { vvNow }, runner: spy.runner())
+
+        // 대조군 먼저: 전부 켜면 셋 다 요청된다(기준선이 갈려야 아래 단언이 뜻을 갖는다).
+        await store.refreshIfDue(now: vvNow)
+        #expect(spy.requested == [Set(AILimitProvider.allCases)])
+
+        store.setProviderEnabled(.codex, false)
+        await store.refreshIfDue(now: vvNow.addingTimeInterval(601))
+        #expect(spy.callCount == 2)
+        #expect(spy.requested.last == [.claude, .antigravity])
+
+        store.setProviderEnabled(.antigravity, false)
+        await store.refreshIfDue(now: vvNow.addingTimeInterval(1_202))
+        #expect(spy.requested.last == [.claude])
+
+        // 끈 뒤 **단 한 번도** 다시 요청되지 않았는지 — 바퀴 전체를 통틀어 센다.
+        let codexAsks = spy.requested.filter { $0.contains(.codex) }.count
+        #expect(codexAsks == 1, "끈 뒤에도 Codex 를 \(codexAsks - 1)번 더 물었다 — 그만큼 auth.json 을 읽었다")
+        // 그리고 화면에서도 사라졌다(읽지 않으니 값이 낡지도 않는다 — 들고 있던 값은 남지만 안 보인다).
+        #expect(store.listedProviders == [.claude])
+        #expect(store.visibleProviders.map(\.provider) == [.claude])
+    }
+
+    /// ★ 마스터를 끄면 **갱신 타이머 자체가 돌지 않는다**: 러너 0회 · 시도 스탬프 없음 · 디스크에 쓰기 없음.
+    ///
+    /// `isDue` 가 거짓인 것으로 끝이 아니라 `refreshIfDue` 가 **아무 부작용도 남기지 않아야** 한다 —
+    /// 스탬프를 찍는 구현은 "끈 동안에도 10분마다 뭔가를 한다"는 뜻이고, 그건 약속과 다르다.
+    @Test
+    func masterOffStopsTheRefreshTimerEntirely() async {
+        let defaults = vvDefaults()
+        let spy = VVRunnerSpy(available: Set(AILimitProvider.allCases))
+        let store = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        store.setMasterEnabled(false)
+
+        #expect(store.isDue(now: vvNow) == false)
+        #expect(store.isDue(now: vvNow, force: true) == false, "강제 갱신이 마스터를 뚫었다")
+        await store.refreshIfDue(now: vvNow, force: true)
+        await store.refreshIfDue(now: vvNow.addingTimeInterval(86_400), force: true)
+        #expect(spy.callCount == 0, "마스터가 꺼진 채로 리더를 \(spy.callCount)번 돌렸다")
+        #expect(store.runnerCallCount == 0)
+        #expect(store.lastAttemptAt == nil, "끈 축이 시도 스탬프를 찍었다 — 아무 일도 안 해야 한다")
+        #expect(defaults.object(forKey: AILimitStore.lastAttemptKey) == nil, "끈 축이 디스크에 썼다")
+
+        // 대조군: 다시 켜면 같은 입력으로 바로 돈다(위 단언이 "애초에 못 도는 세계"에서 초록이 아니다).
+        store.setMasterEnabled(true)
+        #expect(store.isDue(now: vvNow))
+        await store.refreshIfDue(now: vvNow)
+        #expect(spy.callCount == 1)
+        #expect(store.visibleProviders.count == AILimitProvider.allCases.count)
+    }
+
+    /// 제공자를 **하나씩** 다 끈 것도 마스터를 끈 것과 같다 — 읽을 리더가 없는데 바퀴를 돌리면
+    /// 빈 결과를 받아 와 `apply` 가 디스크를 쓴다.
+    @Test
+    func turningEveryProviderOffAlsoStopsTheTimer() async {
+        let spy = VVRunnerSpy(available: Set(AILimitProvider.allCases))
+        let store = AILimitStore(defaults: vvDefaults(), clock: { vvNow }, runner: spy.runner())
+        for provider in AILimitProvider.allCases { store.setProviderEnabled(provider, false) }
+        #expect(store.visibility.masterEnabled, "전제: 마스터는 켜져 있다 — 가르는 것이 제공자 셋뿐이어야 한다")
+        #expect(store.visibility.enabledProviders.isEmpty)
+        #expect(store.isDue(now: vvNow, force: true) == false)
+        await store.refreshIfDue(now: vvNow, force: true)
+        #expect(spy.callCount == 0)
+        #expect(store.isAvailable == false)
+    }
+
+    /// ★★ **`liveRunner` 가 꺼진 제공자의 자격증명에 손을 대지 않는다** — 리더 입구에서 센다.
+    ///
+    /// 위 테스트들은 "스토어가 무엇을 요청했나"를 재고, 이 테스트는 그 요청이 **실제 프로세스·네트워크로
+    /// 번역되는 자리**를 잰다. 둘이 다 필요한 이유: 러너 안쪽에서 `providers` 를 무시하고 셋 다 읽으면
+    /// 위 테스트는 전부 초록인데 키체인은 열린다.
+    ///
+    /// 세는 입구 셋(제공자별로 다른 입구라 서로를 가린다):
+    ///   · Claude      → `/usr/bin/security`(키체인) + `api.anthropic.com`
+    ///   · Codex       → `chatgpt.com`
+    ///   · 안티그래비티 → `agy` 프로세스
+    @Test
+    func liveRunnerTouchesNothingForDisabledProviders() async throws {
+        let home = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("v0347-home-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        // `agy` 탐색은 **주입한다** — 기본 탐색은 이 맥의 PATH 를 읽어 기계마다 결과가 갈리고, 그러면
+        // "켠 제공자는 실제로 불린다"는 대조군이 어떤 기계에서는 공허해진다.
+        let fakeAgy = home.appendingPathComponent("agy")
+        FileManager.default.createFile(atPath: fakeAgy.path, contents: Data())
+
+        // ① 아무도 안 켰다(마스터 끔과 같은 상태) → 명령 0 · 요청 0.
+        let silent = VVReaderProbe()
+        let silentRunner = AILimitStore.liveRunner(
+            home: home, appVersion: "t", session: .shared,
+            processRunner: silent.processRunner, fetcher: silent.fetcher, locateAntigravity: { fakeAgy })
+        _ = await silentRunner(vvNow, [])
+        #expect(silent.commands.isEmpty, "빈 요청에 프로세스를 띄웠다: \(silent.commands)")
+        #expect(silent.fetchedHosts.isEmpty, "빈 요청에 네트워크를 썼다: \(silent.fetchedHosts)")
+
+        // ② Claude 만 켰다 → 키체인은 열리고, `agy` 와 chatgpt.com 에는 **손도 안 댄다**.
+        let claudeOnly = VVReaderProbe()
+        let claudeRunner = AILimitStore.liveRunner(
+            home: home, appVersion: "t", session: .shared,
+            processRunner: claudeOnly.processRunner, fetcher: claudeOnly.fetcher, locateAntigravity: { fakeAgy })
+        _ = await claudeRunner(vvNow, [.claude])
+        #expect(claudeOnly.ranCommand("security"), "전제: 켠 Claude 는 키체인을 읽는다(대조군이 비면 아래가 공허하다)")
+        #expect(!claudeOnly.ranCommand("agy"), "끈 안티그래비티의 `agy` 를 띄웠다")
+        #expect(!claudeOnly.fetched(host: "chatgpt.com"), "끈 Codex 의 사용량 엔드포인트를 쳤다")
+
+        // ③ 안티그래비티만 켰다 → `agy` 는 돌고, 키체인(`security`)과 네트워크는 **건드리지 않는다**.
+        let agyOnly = VVReaderProbe()
+        let agyRunner = AILimitStore.liveRunner(
+            home: home, appVersion: "t", session: .shared,
+            processRunner: agyOnly.processRunner, fetcher: agyOnly.fetcher, locateAntigravity: { fakeAgy })
+        _ = await agyRunner(vvNow, [.antigravity])
+        #expect(agyOnly.ranCommand("agy"), "전제: 켠 안티그래비티는 agy 를 띄운다")
+        #expect(!agyOnly.ranCommand("security"), "끈 Claude 의 키체인을 열었다 — 승인 대화상자가 뜰 수도 있다")
+        #expect(agyOnly.fetchedHosts.isEmpty, "안티그래비티만 켰는데 네트워크를 썼다: \(agyOnly.fetchedHosts)")
+    }
+}
+
+// MARK: - ③ 표시: 카드에서 줄이 사라지고, 전부 끄면 섹션이 사라진다
+
+@Suite("v0.3.47 — 팝오버 카드 표시")
+@MainActor
+struct V0347AILimitCardVisibilityTests {
+    private func seeded(_ providers: [AILimitProvider], defaults: UserDefaults) async -> AILimitStore {
+        let spy = VVRunnerSpy(available: Set(providers))
+        let store = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        for provider in AILimitProvider.allCases where !providers.contains(provider) {
+            // 안 쓰는 제공자는 '미설치' = 숨기는 실패다(연동 안 된 상태의 실제 모양).
+            spy.available.remove(provider)
+        }
+        await store.refreshIfDue(now: vvNow)
+        return store
+    }
+
+    /// 끈 제공자는 줄이 사라지고, **전부 끄면 섹션 자체가 사라진다**(높이 0).
+    ///
+    /// 높이 산식(`AILimitRowWidthBudget.cardHeight(providers:)`)은 이미 0·1·2·3 을 받으므로 개수만 맞으면 된다 —
+    /// 그래서 이 테스트는 **개수와 높이를 함께** 되묻는다(개수만 보면 카드가 빈 상자로 남아도 초록이다).
+    @Test
+    func turningProvidersOffShrinksTheCardAndFinallyRemovesIt() async {
+        let store = await seeded([.claude, .codex, .antigravity], defaults: vvDefaults())
+        #expect(store.listedProviders.count == 3)
+        let full = AILimitRowWidthBudget.cardHeight(providers: store.listedProviders.count)
+        #expect(full > 0)
+
+        store.setProviderEnabled(.codex, false)
+        #expect(store.listedProviders == [.claude, .antigravity])
+        let twoRows = AILimitRowWidthBudget.cardHeight(providers: store.listedProviders.count)
+        #expect(twoRows < full, "줄을 하나 껐는데 카드 높이가 그대로다")
+        #expect(store.isAvailable)
+
+        store.setMasterEnabled(false)
+        #expect(store.isAvailable == false, "마스터를 껐는데 섹션이 남아 있다")
+        #expect(store.listedProviders.isEmpty)
+        #expect(store.visibleProviders.isEmpty)
+        #expect(AILimitRowWidthBudget.cardHeight(providers: store.listedProviders.count) == 0)
+        #expect(AILimitRowWidthBudget.budgetHeight(providers: store.listedProviders.count) == 0,
+                "섹션이 사라졌는데 팝오버 예산이 VStack 간격을 먹는다")
+        // 조합값(메뉴바 한 줄)도 같이 비어야 한다 — 여기만 안 걸러면 "다 껐는데 한 줄 요약에는 남아 있다"가 된다.
+        #expect(store.summary(now: vvNow).percent == nil)
+        #expect(CheckAILimitsCard.combinedWindows(store: store, now: vvNow).isEmpty)
+
+        // 대조군: 다시 켜면 세 줄이 돌아온다(기준선이 달라야 위 단언들이 뜻을 갖는다).
+        store.setMasterEnabled(true)
+        #expect(store.listedProviders == [.claude, .antigravity], "마스터를 다시 켰을 때 내 제공자 선택이 사라졌다")
+        store.setProviderEnabled(.codex, true)
+        #expect(store.listedProviders.count == 3)
+    }
+
+    /// **꺼진 제공자의 실패 문구로 섹션을 살려 두지 않는다.** 만료·429 는 "숨기지 않는 실패"라
+    /// `isAvailable` 을 참으로 만드는데, 안 읽는 제공자의 그 문구가 남으면 "다 껐는데 카드가 있다"가 된다.
+    @Test
+    func disabledProviderFailuresDoNotKeepTheSectionAlive() async {
+        let store = AILimitStore(defaults: vvDefaults(), clock: { vvNow }, runner: { _, providers in
+            var results: [AILimitProvider: Result<AILimitProviderSnapshot, AILimitReadError>] = [:]
+            for provider in providers { results[provider] = .failure(AILimitReadError(.expired)) }
+            return AILimitReadOutcome(results: results)
+        })
+        await store.refreshIfDue(now: vvNow)
+        #expect(store.isAvailable, "전제: 만료만 있어도 섹션은 보인다")
+        #expect(store.listedProviders.count == AILimitProvider.allCases.count)
+
+        for provider in AILimitProvider.allCases { store.setProviderEnabled(provider, false) }
+        #expect(store.isAvailable == false, "꺼진 제공자의 만료 문구가 섹션을 살려 뒀다")
+        #expect(store.listedProviders.isEmpty)
+        // 하지만 설정 화면에는 **그대로 줄이 선다** — 안 그러면 되켤 스위치가 사라진다.
+        #expect(store.configurableProviders.count == AILimitProvider.allCases.count)
+    }
+
+    /// ★ 설정 화면의 목록은 **표시 설정을 보지 않는다** — 들어가면 못 나오는 방을 만들지 않는다.
+    ///
+    /// 없으면: `configurableProviders` 를 `listedProviders` 로 바꿔도 다른 테스트는 다 초록인데,
+    /// 마스터를 끈 사람의 설정 화면에서 절이 통째로 사라져 **다시 켤 방법이 없어진다**.
+    @Test
+    func settingsListIgnoresTheVisibilitySettingItself() async {
+        let store = await seeded([.claude, .codex], defaults: vvDefaults())
+        #expect(store.configurableProviders == [.claude, .codex])
+
+        store.setMasterEnabled(false)
+        #expect(store.configurableProviders == [.claude, .codex],
+                "마스터를 끄자 설정 목록이 비었다 — 그 사람은 리밋을 다시 켤 수 없다")
+        store.setProviderEnabled(.claude, false)
+        #expect(store.configurableProviders == [.claude, .codex],
+                "제공자를 끄자 그 줄이 설정에서 사라졌다 — 되켤 스위치가 없어진다")
+
+        // 그리고 그 줄들이 그리는 값은 `isProviderOn`(제공자 스위치 하나)이다 — 마스터를 끈 순간
+        // 셋이 전부 꺼진 것처럼 보이면 다시 켤 때 내 선택이 사라진 것처럼 보인다.
+        #expect(store.visibility.isProviderOn(.codex))
+        #expect(store.visibility.isEnabled(.codex) == false)
+    }
+}
+
+// MARK: - ④ 비우는 업로드
+
+@Suite("v0.3.47 — 비우는 업로드(끈 제공자의 행)")
+@MainActor
+struct V0347AILimitClearingUploadTests {
+    private func service(host: String) -> SupabaseWorkService {
+        SupabaseWorkService(
+            projectURL: URL(string: "http://\(host)")!,
+            anonKey: "anon-test-key",
+            session: URLSession(configuration: .stubbed)
+        )
+    }
+
+    private func store(host: String, defaults: UserDefaults, aiLimits: AILimitStore) -> WorkTimerStore {
+        let store = WorkTimerStore(
+            service: service(host: host),
+            environment: ["CHECK_SUPABASE_ANON_KEY": "anon-test-key"],
+            defaults: defaults,
+            workspaceNotifications: nil,
+            aiLimits: aiLimits
+        )
+        store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+        // 기기 신원은 **지어내지 않고** 있는 것을 쓴다(관례: '기기 신원을 지어내지 마라').
+        store.deviceID = "MAC-V0347"
+        return store
+    }
+
+    private func aiLimitBodies(host: String) -> [[[String: Any]]] {
+        URLProtocolStub.bodies(forHost: host).compactMap {
+            (try? JSONSerialization.jsonObject(with: Data($0.utf8))) as? [[String: Any]]
+        }
+    }
+
+    /// ★ 끈 **그 순간** 그 제공자의 행이 창 값 전부 null 로 한 번 올라간다 — 그리고 **다시는** 올라가지 않는다.
+    ///
+    /// 세 가지를 한 테스트에서 재는 까닭: 셋이 같은 한 번의 사건("켬 → 끔")에 달려 있고,
+    /// 따로 재면 "올라갔지만 키가 다르다" 같은 조합을 못 본다.
+    @Test
+    func disablingAProviderClearsItsRowOnceWithTheSameKeySet() async {
+        let host = "v0347-clear-once"
+        let defaults = vvDefaults()
+        let spy = VVRunnerSpy(available: [.claude, .codex])
+        let limits = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        let store = self.store(host: host, defaults: defaults, aiLimits: limits)
+        defer { store.session = nil }
+
+        await limits.refreshIfDue(now: vvNow)
+        await store.uploadAILimitsIfNeeded(now: vvNow)
+        #expect(aiLimitBodies(host: host).count == 1, "전제: 값 업로드가 한 번 나갔다")
+        #expect(aiLimitBodies(host: host)[0].count == 2)
+
+        // 끈다. 업로드는 설정 세터가 띄우는 Task 가 아니라 여기서 **동기적으로** 태워 결정적으로 본다.
+        limits.setProviderEnabled(.codex, false)
+        store.lastUploadedAILimits = nil
+        #expect(limits.pendingClear == [.codex])
+        await store.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(60))
+
+        let second = try! #require(aiLimitBodies(host: host).last)
+        #expect(aiLimitBodies(host: host).count == 2)
+        let codexRow = try! #require(second.first { $0["provider"] as? String == "codex" })
+        for key in ["five_hour_percent", "five_hour_resets_at", "weekly_percent", "weekly_resets_at", "plan_label"] {
+            #expect(codexRow[key] is NSNull, "비우는 행의 \(key) 가 null 이 아니다 — 폰이 그 제공자를 계속 보여 준다")
+        }
+        #expect(codexRow["observed_at"] as? String != nil, "observed_at 은 NOT NULL 이다(안 보내면 23502 로 조용히 거절된다)")
+        #expect(codexRow["user_id"] as? String == "me")
+        #expect(codexRow["device_id"] as? String == "MAC-V0347")
+        // ★ 키 집합이 값 행과 **똑같다** — 다르면 PostgREST 가 400 PGRST102 로 본문 전체를 거절하고,
+        //   그 거절은 조용해서 값도 비우기도 영원히 안 올라간다.
+        let expected = Set(AILimitUpsertRow.CodingKeys.allCases.map(\.rawValue))
+        for row in second { #expect(Set(row.keys) == expected) }
+        #expect(URLProtocolStub.hasMismatchedObjectKeys(URLProtocolStub.bodies(forHost: host).last!) == false)
+        // 켜 둔 제공자의 값 행은 **같은 본문에** 그대로 있다(비우기 때문에 값이 멈추지 않는다).
+        let claudeRow = try! #require(second.first { $0["provider"] as? String == "claude" })
+        #expect(claudeRow["five_hour_percent"] as? Double == 27)
+
+        // ★ 한 번이면 된다 — 다음 주기는 같은 빈 행을 다시 올리지 않는다.
+        #expect(limits.pendingClear.isEmpty, "비우기 성공이 대기열에서 빠지지 않았다")
+        await store.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(120))
+        #expect(aiLimitBodies(host: host).count == 2, "같은 빈 행을 매 주기 다시 올린다")
+    }
+
+    /// 마스터를 끄면 **연동된 모든 제공자**가 한 본문에서 비워진다. 올릴 값이 0 건인 바로 그 상태다 —
+    /// "묶음이 비었으면 반환"이 비우기보다 앞에 있으면 전체 끄기가 서버에 영원히 닿지 못한다.
+    @Test
+    func masterOffClearsEveryLinkedProvider() async {
+        let host = "v0347-clear-all"
+        let defaults = vvDefaults()
+        let spy = VVRunnerSpy(available: [.claude, .codex, .antigravity])
+        let limits = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        let store = self.store(host: host, defaults: defaults, aiLimits: limits)
+        defer { store.session = nil }
+
+        await limits.refreshIfDue(now: vvNow)
+        await store.uploadAILimitsIfNeeded(now: vvNow)
+        #expect(aiLimitBodies(host: host).count == 1)
+
+        limits.setMasterEnabled(false)
+        #expect(limits.pendingClear == Set(AILimitProvider.allCases))
+        #expect(limits.enabledBundle.visibleProviders.isEmpty, "전제: 올릴 값이 하나도 없는 상태다")
+        await store.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(60))
+
+        let body = try! #require(aiLimitBodies(host: host).last)
+        #expect(body.count == 3, "마스터를 껐는데 비운 행이 \(body.count)개다")
+        #expect(Set(body.compactMap { $0["provider"] as? String }) == ["claude", "codex", "antigravity"])
+        for row in body {
+            #expect(row["five_hour_percent"] is NSNull)
+            #expect(row["weekly_percent"] is NSNull)
+        }
+        #expect(limits.pendingClear.isEmpty)
+    }
+
+    /// 비우기 업로드가 **실패하면 다음 기회에 다시 시도한다** — 영구히 안 지워지는 조합이 있으면
+    /// 그 사람의 폰은 끈 제공자를 계속 보여 준다.
+    @Test
+    func failedClearingIsRetriedLater() async {
+        let defaults = vvDefaults()
+        let spy = VVRunnerSpy(available: [.claude])
+        let limits = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        // `schema-missing` 은 모든 /rest/v1 요청을 404 로 떨어뜨린다(앱이 db push 보다 먼저 나간 서버의 모양).
+        let failing = store(host: "schema-missing", defaults: defaults, aiLimits: limits)
+        defer { failing.session = nil }
+
+        await limits.refreshIfDue(now: vvNow)
+        limits.setProviderEnabled(.claude, false)
+        #expect(limits.pendingClear == [.claude])
+        await failing.uploadAILimitsIfNeeded(now: vvNow)
+        #expect(limits.pendingClear == [.claude], "업로드가 실패했는데 비운 것으로 쳤다 — 그 행은 영원히 안 지워진다")
+
+        // 서버가 돌아오면 같은 대기열이 그대로 올라간다.
+        let host = "v0347-clear-retry"
+        let healthy = store(host: host, defaults: defaults, aiLimits: limits)
+        defer { healthy.session = nil }
+        await healthy.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(60))
+        let body = try! #require(aiLimitBodies(host: host).last)
+        #expect(body.count == 1)
+        #expect(body[0]["provider"] as? String == "claude")
+        #expect(body[0]["weekly_percent"] is NSNull)
+        #expect(limits.pendingClear.isEmpty)
+    }
+
+    /// ★ **같은 PK 를 한 본문에 두 번 담지 않는다.** 값 행과 비우는 행이 같은 제공자면 Postgres 가
+    /// 21000("cannot affect row a second time")으로 **본문 전체**를 거절한다 — 값도 비우기도 못 올라간다.
+    ///
+    /// 두 겹으로 막는다: 설정이 다시 켜지는 순간 대기열에서 빠지고(아래 첫 단언), 혹시 섞여 들어와도
+    /// 서비스가 접는다(둘째 단언 — 서비스를 직접 불러 섞인 입력을 준다).
+    @Test
+    func aProviderIsNeverBothClearedAndUploadedInOneBody() async {
+        let defaults = vvDefaults()
+        let spy = VVRunnerSpy(available: [.claude, .codex])
+        let limits = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        await limits.refreshIfDue(now: vvNow)
+
+        limits.setProviderEnabled(.codex, false)
+        #expect(limits.pendingClear == [.codex])
+        limits.setProviderEnabled(.codex, true)
+        #expect(limits.pendingClear.isEmpty, "다시 켠 제공자가 비우기 대기열에 남았다 — 켜 둔 제공자의 행이 비워진다")
+
+        // 서비스 쪽 안전망: 값 행이 있는 제공자를 비우라고 해도 그 비우는 행은 **버려진다**.
+        let host = "v0347-no-double-pk"
+        let service = self.service(host: host)
+        try! await service.upsertAILimits(
+            accessToken: "t", userID: "me", deviceID: "MAC-V0347",
+            bundle: AILimitSnapshotBundle(providers: [vvSnapshot(.claude), vvSnapshot(.codex)]),
+            clearedProviders: [.codex, .codex, .antigravity],
+            clearedAt: vvNow
+        )
+        let body = try! #require(aiLimitBodies(host: host).last)
+        let providers = body.compactMap { $0["provider"] as? String }
+        #expect(providers.count == Set(providers).count, "같은 제공자가 한 본문에 두 번 들어갔다: \(providers)")
+        #expect(Set(providers) == ["claude", "codex", "antigravity"])
+        // 값이 있는 codex 는 **값 행**으로 남았다(비우는 행이 값을 덮지 않았다).
+        let codexRow = try! #require(body.first { $0["provider"] as? String == "codex" })
+        #expect(codexRow["five_hour_percent"] as? Double == 27, "비우는 행이 값 행을 밀어냈다")
+    }
+
+    /// 설정이 바뀌면 **장부를 버린다.** 장부는 "값이 바뀌었나"만 재므로, 끈 뒤 같은 값으로 다시 켠 사람의
+    /// 지문이 장부와 똑같을 수 있다(퍼센트·리셋·플랜 그대로 + 관측 칸도 같은 15분 안). 그러면 비우기만
+    /// 올라간 채 값이 다시 안 올라가, 맥에는 숫자가 있는데 폰은 빈 채로 남는다.
+    @Test
+    func togglingInvalidatesTheUploadLedger() async {
+        let host = "v0347-ledger-reset"
+        let defaults = vvDefaults()
+        let spy = VVRunnerSpy(available: [.claude])
+        let limits = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        let store = self.store(host: host, defaults: defaults, aiLimits: limits)
+        defer { store.session = nil }
+
+        await limits.refreshIfDue(now: vvNow)
+        await store.uploadAILimitsIfNeeded(now: vvNow)
+        let ledger = store.lastUploadedAILimits
+        #expect(ledger != nil)
+
+        // ① 끈다 — **진짜 세터**로. 세터가 띄우는 업로드까지 이 경로의 일부다(30초 틱을 기다리지 않는다).
+        store.setAILimitProviderEnabled(.claude, false)
+        #expect(store.lastUploadedAILimits == nil, "설정을 바꿨는데 장부가 남았다 — 같은 값이면 다시 안 올라간다")
+        await vvSettle(host: host, until: 2)
+        let cleared = try! #require(aiLimitBodies(host: host).last)
+        #expect(cleared.first { $0["provider"] as? String == "claude" }?["five_hour_percent"] is NSNull,
+                "끈 그 순간 비우는 행이 올라가지 않았다")
+
+        // ② 다시 켠다 — 값은 한 글자도 안 바뀌었다(러너를 다시 돌리지 않았다). 그래도 올라가야 한다.
+        store.setAILimitProviderEnabled(.claude, true)
+        #expect(limits.pendingClear.isEmpty)
+        #expect(AILimitUploadLedger.fingerprint(limits.enabledBundle) == ledger,
+                "전제: 지문이 그대로다 — 장부를 안 버리면 이 업로드가 걸러지고, 그게 이 테스트의 요점이다")
+        await vvSettle(host: host, until: 3)
+        let last = try! #require(aiLimitBodies(host: host).last)
+        let claudeRow = try! #require(last.first { $0["provider"] as? String == "claude" })
+        #expect(claudeRow["five_hour_percent"] as? Double == 27,
+                "되켠 제공자의 값이 서버에 다시 올라가지 않았다 — 맥에는 숫자가 있는데 폰은 빈 채로 남는다")
+        #expect(store.lastUploadedAILimits == ledger)
+    }
+
+    /// 세터가 띄운 업로드가 끝날 때까지 기다린다.
+    ///
+    /// `Task.yield()` 로는 모자란다(실측: 여덟 번 양보해도 0건) — 세터는 `Task` 로 띄우고 그 안에서
+    /// URLSession 왕복을 하므로 결과를 **폴링**한다(`inertStoreLeavesNoPlistInLibraryPreferences` 가
+    /// cfprefsd flush 를 기다리는 것과 같은 관용구). 못 오면 다음 단언이 그 사실을 말한다.
+    private func vvSettle(host: String, until count: Int) async {
+        for _ in 0..<100 where aiLimitBodies(host: host).count < count {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    /// 올릴 값도 없고 비울 것도 없으면 **요청을 아예 보내지 않는다**(끈 사람의 맥은 조용하다).
+    @Test
+    func nothingToSayMeansNoRequest() async {
+        let host = "v0347-silent"
+        let defaults = vvDefaults()
+        let limits = AILimitStore(defaults: defaults, clock: { vvNow }, runner: { _, _ in AILimitReadOutcome() })
+        limits.setMasterEnabled(false)
+        let store = self.store(host: host, defaults: defaults, aiLimits: limits)
+        defer { store.session = nil }
+        #expect(limits.pendingClear.isEmpty, "전제: 연동된 적이 없으니 비울 것도 없다")
+        await store.uploadAILimitsIfNeeded(now: vvNow)
+        #expect(URLProtocolStub.requests(forHost: host).isEmpty, "할 말이 없는데 요청을 보냈다")
+    }
+}
+
+// MARK: - ⑤ 설정 화면 배선
+
+@Suite("v0.3.47 — 설정 화면")
+@MainActor
+struct V0347AILimitSettingsViewTests {
+    /// 설정 창에 절이 있고, 스위치가 **스토어 세터 한 쌍**으로만 간다.
+    ///
+    /// 왜 글자로 재는가: 바인딩이 `store.aiLimits` 를 직접 만지면 "끈 순간 서버 행을 비운다"가 설정 화면을
+    /// 거친 변경에만 빠지고, 그 누락은 조용하다(화면은 멀쩡하고 폰만 안 바뀐다).
+    @Test
+    func settingsWindowOffersTheSwitchesAndRoutesThroughTheStore() throws {
+        let source = v0347Stripped(try CheckCoreSourceLayout.joinedSplitSource("CheckSettingsView.swift"))
+        let title = try #require(source.range(of: "title: \"AI 사용량 리밋 보기\""), "설정 창에 마스터 스위치가 없다")
+        let row = source[title.upperBound...].prefix(400)
+        #expect(row.contains("isOn: masterBinding"))
+        #expect(source.contains("section(\"AI 리밋\")"), "절 제목이 없다")
+        #expect(source.contains("get: { store.aiLimits.visibility.masterEnabled }"))
+        #expect(source.contains("set: { store.setAILimitsVisible($0) }"))
+        #expect(source.contains("get: { store.aiLimits.visibility.isProviderOn(provider) }"),
+                "하위 줄이 `isEnabled` 를 그린다 — 마스터를 끈 순간 내 제공자 선택이 사라진 것처럼 보인다")
+        #expect(source.contains("set: { store.setAILimitProviderEnabled(provider, $0) }"))
+
+        // 연동 안 된 제공자는 줄을 세우지 않는다(자동 감지 규약) — 그리고 절 자체가 그 목록에 달려 있다.
+        #expect(source.contains("store.aiLimits.configurableProviders"), "연동 목록이 아니라 다른 목록으로 줄을 세운다")
+        #expect(source.contains("if !store.aiLimits.configurableProviders.isEmpty"),
+                "연동된 도구가 없는 사람에게도 절이 보인다 — 끌 것이 없는 스위치다")
+
+        // 마스터 off 일 때 하위 줄은 **흐려진다**(사라지지 않는다 — 근거는 뷰 주석).
+        #expect(source.contains(".disabled(!store.aiLimits.visibility.masterEnabled)"))
+        #expect(source.contains(".opacity(store.aiLimits.visibility.masterEnabled ? 1 : 0.4)"))
+
+        // 세터를 부르는 곳은 설정 화면 하나뿐이다. 두 번째 집이 생기면 두 스위치가 서로 다른 값을 그린다.
+        for setter in ["setAILimitsVisible(", "setAILimitProviderEnabled("] {
+            let calls = try v0347CountInSources(setter) - (try v0347CountInSources("func \(setter)"))
+            #expect(calls == 1, "\(setter) 를 부르는 곳이 \(calls)군데다")
+        }
+    }
+
+    /// ★ **연동된 도구가 없는 사람의 설정 창은 한 픽셀도 안 달라진다.**
+    ///
+    /// 이 창은 스크롤이 없고 높이 계약이 폭 하한에서 잰 **한 값**으로 서 있다
+    /// (`CheckSettingsWindowController.defaultContentSize` · 여유 5pt 규약). 자동 감지로 절을 숨기는 덕분에
+    /// 리밋을 안 쓰는 사람에게는 그 계약이 그대로다 — 그 사실을 여기서 못 박는다(다른 스위트의 높이
+    /// 단언들이 이 전제 위에 서 있다).
+    @Test
+    func unlinkedMacKeepsTheSettingsWindowHeightUnchanged() throws {
+        let suite = CheckTestScratch.defaults("v0347-height")
+        let plain = try v0347SettingsHeight(aiLimits: nil, characterDefaults: suite)
+        #expect(plain + AvatarRemovalSettingsRow.maxExtraHeight
+                <= CheckSettingsWindowController.defaultContentSize.height,
+                "연동 없는 설정 \(plain)pt + 여유 13 이 창 \(CheckSettingsWindowController.defaultContentSize.height)pt 를 넘는다")
+        #expect(CheckSettingsWindowController.defaultContentSize.height
+                - (plain + AvatarRemovalSettingsRow.maxExtraHeight) == 5,
+                "창 여유가 5pt 가 아니다 — AI 리밋 절이 연동 없는 맥에도 그려졌다는 뜻이다")
+    }
+
+    /// 연동된 제공자가 있으면 절이 **실제로 그려진다**(그리고 제공자 수만큼 자란다).
+    ///
+    /// 위 테스트와 짝이다: 이 단언이 없으면 절을 통째로 지워도 위 테스트는 초록이다
+    /// (기준선이 같은 입력이면 그 테스트는 영원히 초록이다).
+    ///
+    /// ★ 그리고 여기서 **스크롤이 필요한 이유가 숫자로** 선다: 연동된 맥의 본문은 창(884pt)보다 높다.
+    ///   예전의 이 창은 넘치는 만큼을 **잘랐고**(스크롤이 없었다), 그 잘림은 조용하다 — 사용자는 그 행이
+    ///   있는 줄도 모른다. 창 상수를 올려서 풀 수도 없다: 13" 맥북에어의 콘텐츠 상한이 ~903pt 다.
+    @Test
+    func linkedMacNeedsAScrollingBody() async throws {
+        let suite = CheckTestScratch.defaults("v0347-height-linked")
+        let plain = try v0347SettingsHeight(aiLimits: nil, characterDefaults: suite)
+
+        let spy = VVRunnerSpy(available: [.claude])
+        let one = AILimitStore(defaults: vvDefaults(), clock: { vvNow }, runner: spy.runner())
+        await one.refreshIfDue(now: vvNow)
+        #expect(one.configurableProviders == [.claude])
+        let withOne = try v0347SettingsHeight(aiLimits: one, characterDefaults: suite)
+        #expect(withOne > plain, "연동이 있는데 절이 안 그려졌다(\(withOne)pt = \(plain)pt)")
+
+        let spyThree = VVRunnerSpy(available: Set(AILimitProvider.allCases))
+        let three = AILimitStore(defaults: vvDefaults(), clock: { vvNow }, runner: spyThree.runner())
+        await three.refreshIfDue(now: vvNow)
+        let withThree = try v0347SettingsHeight(aiLimits: three, characterDefaults: suite)
+        #expect(withThree > withOne, "제공자가 셋인데 줄이 하나일 때와 높이가 같다")
+
+        // 전제: 넘친다. 이 숫자가 창 안으로 들어오는 날이 오면 아래 ScrollView 요구는 과잉이 되므로
+        // 그때 이 단언이 먼저 빨개져 알려 준다(근거가 사라진 장치를 남겨 두지 않는다).
+        let window = CheckSettingsWindowController.defaultContentSize.height
+        #expect(withOne > window,
+                "연동 하나짜리 본문(\(withOne)pt)이 창(\(window)pt) 안에 든다 — 스크롤 근거를 다시 재라")
+
+        // 그래서 본문은 **들어가면 맨몸, 넘치면 ScrollView** 다(`ViewThatFits`). 지우면 그 넘치는 만큼이
+        // 조용히 잘린다 — 사용자는 그 행이 있는 줄도 모른다.
+        let source = v0347Stripped(try CheckCoreSourceLayout.joinedSplitSource("CheckSettingsView.swift"))
+        let fits = try #require(source.range(of: "ViewThatFits(in: .vertical)"),
+                                "설정 본문의 ViewThatFits 가 사라졌다 — 넘치는 \(Int(withThree - window))pt 가 잘린다")
+        let branches = source[fits.upperBound...].prefix(240)
+        // 첫 가지가 **맨몸 본문**이어야 한다. 순서가 뒤집히면 ScrollView 가 늘 뽑혀,
+        // `ImageRenderer` 가 그 안을 안 그리는 탓에 이 창의 그림 검증 셋이 통째로 무음으로 깨진다(실측 3건).
+        let plainBranch = try #require(branches.range(of: "settingsSections"))
+        let scrollBranch = try #require(branches.range(of: "ScrollView(.vertical)"),
+                                        "넘칠 때의 대안(ScrollView)이 없다 — ViewThatFits 가 고를 것이 하나뿐이다")
+        #expect(plainBranch.lowerBound < scrollBranch.lowerBound,
+                "ScrollView 가 첫 가지다 — 들어가는 사람에게도 스크롤이 붙고 렌더 검증이 빈 그림을 본다")
+        // 콘텐츠가 들어가는 창에서는 튕김조차 없어야 한다.
+        #expect(branches.contains(".scrollBounceBehavior(.basedOnSize)"))
+        // [차단한 사람] 쪽은 자기 목록을 스스로 스크롤한다 — 중첩 금지.
+        #expect(source.components(separatedBy: "ScrollView(.vertical)").count - 1 == 1,
+                "설정 뷰에 ScrollView 가 둘이다 — 중첩 스크롤은 휠이 어느 쪽을 움직일지 사용자가 못 고른다")
+
+        // ★ 그리고 **들어가는 경우의 그림이 변하지 않았다**: 제약 없이 그리면 맨몸 가지가 뽑혀 예전과 같은
+        //   높이가 나온다(위 `plain == 866` 과 아래 창 여유 5pt 규약이 그 사실이다). ScrollView 를 그냥 감쌌을 때
+        //   이 숫자는 맞는데 픽셀이 비었다 — 그래서 높이만으로는 부족하고, 잉크가 있는지도 본다.
+        let ink = try v0347SettingsInk(aiLimits: nil, characterDefaults: suite)
+        #expect(ink > 10_000, "맨몸 가지가 안 뽑혔다 — 설정 창이 \(ink) 픽셀만 칠하고 비었다")
+
+        // ★ **창 높이에서 어느 가지가 뽑혔는지는 그림으로 가를 수 없다**(2026-10-07 실증).
+        //   `ImageRenderer` 는 높이가 **확정**되면 ScrollView 안을 그린다 — 그러면 스크롤된 화면(맨 위부터)과
+        //   잘린 화면(맨 위부터)이 픽셀로 같다(실측: 잉크 1,342,217 대 1,315,139). 그래서 그 자리는 위의
+        //   소스 계약(가지 둘 · 순서)으로 지키고, 여기서는 **들어가는 경우**만 그림으로 지킨다.
+        //   ScrollView 를 `fixedSize` 아래에 두면(= 가지 순서를 뒤집으면) 바로 위 단언이 빈 그림을 보고 빨개진다.
+    }
+}
+
+// MARK: - 도우미
+
+private enum V0347Error: Error { case renderFailed }
+
+/// 설정 화면을 창 폭 하한에서 **가장 높은 상태**(단축키 안내 한 줄 켬)로 그려 높이를 잰다 —
+/// V0316·V0336·V0340 과 같은 규약이다.
+@MainActor
+private func v0347SettingsHeight(
+    aiLimits: AILimitStore?,
+    characterDefaults: UserDefaults,
+    function: String = #function,
+    line: Int = #line
+) throws -> CGFloat {
+    CGFloat(try v0347SettingsBitmap(
+        aiLimits: aiLimits, characterDefaults: characterDefaults,
+        function: function, line: line).pixelsHigh) / 2
+}
+
+@MainActor
+private func v0347SettingsBitmap(
+    aiLimits: AILimitStore?,
+    characterDefaults: UserDefaults,
+    function: String = #function,
+    line: Int = #line
+) throws -> NSBitmapImageRep {
+    let store = WorkTimerStore(
+        environment: ["CHECK_SUPABASE_ANON_KEY": "anon"],
+        defaults: CheckTestScratch.defaults("v0347-settings-L\(line)", function: function),
+        workspaceNotifications: nil,
+        aiLimits: aiLimits
+    )
+    store.myCenterLoaded = true
+    store.myCenter = CenterLabel.seoul
+    store.workShortcutStatus = .conflict
+    let renderer = ImageRenderer(
+        content: CheckSettingsView(store: store, launchAtLoginSeed: false, characterDefaults: characterDefaults)
+            .frame(width: CheckSettingsView.preferredWidth)
+            .fixedSize(horizontal: false, vertical: true)
+    )
+    renderer.scale = 2
+    guard let image = renderer.nsImage,
+          let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff) else { throw V0347Error.renderFailed }
+    return bitmap
+}
+
+/// 설정 화면을 그려 **배경색이 아닌 픽셀 수**를 센다(= 실제로 그려진 잉크).
+///
+/// 왜 높이만으로는 부족한가(2026-10-07 실증): 본문을 `ScrollView` 로 그냥 감쌌을 때 높이는 예전과
+/// 똑같이 866pt 로 나왔는데 **안이 비어 있었다** — `ImageRenderer` 가 ScrollView 내용을 그리지 않는다.
+/// 높이만 보는 단언은 그 상태를 통과시킨다.
+@MainActor
+private func v0347SettingsInk(
+    aiLimits: AILimitStore?,
+    characterDefaults: UserDefaults,
+    function: String = #function,
+    line: Int = #line
+) throws -> Int {
+    let bitmap = try v0347SettingsBitmap(
+        aiLimits: aiLimits, characterDefaults: characterDefaults, function: function, line: line)
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return 0 }
+    // 기준점은 왼쪽 위 한 픽셀(= 창 배경). 그 색과 다른 픽셀을 전부 센다 — 특정 색을 적어 두면
+    // 테마가 바뀌는 날 단언이 조용히 공허해진다.
+    let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+    let background = (data[0], data[1], data[2])
+    var ink = 0
+    for y in 0..<bitmap.pixelsHigh {
+        for x in 0..<bitmap.pixelsWide {
+            let offset = y * bpr + x * spp
+            if (data[offset], data[offset + 1], data[offset + 2]) != background { ink += 1 }
+        }
+    }
+    return ink
+}
+
+/// Sources/check(+CheckCore) 의 모든 .swift 에서 주석을 걷어낸 뒤 needle 이 나오는 횟수.
+private func v0347CountInSources(_ needle: String) throws -> Int {
+    let directory = CheckCoreSourceLayout.macDirectory
+    let names = try FileManager.default
+        .checkSourcesContentsOfDirectory(atPath: directory.path)
+        .filter { $0.hasSuffix(".swift") }
+    return try names.reduce(0) { total, name in
+        let code = v0347Stripped(try String(contentsOf: directory.appendingCheckSourcePath(name), encoding: .utf8))
+        return total + code.components(separatedBy: needle).count - 1
+    }
+}
+
+/// `//` 줄 주석과 `/* */` 블록 주석을 걷어낸 코드. 걷어내지 않으면 **설명문의 낱말이 단언에 걸린다** —
+/// 그러면 주석을 지워야만 초록이 되는 테스트가 된다(이 저장소가 겪은 그 함정).
+private func v0347Stripped(_ source: String) -> String {
+    var output = ""
+    var inBlock = false
+    for line in source.split(separator: "\n", omittingEmptySubsequences: false) {
+        var rest = Substring(line)
+        var kept = ""
+        while !rest.isEmpty {
+            if inBlock {
+                if let close = rest.range(of: "*/") {
+                    rest = rest[close.upperBound...]
+                    inBlock = false
+                } else {
+                    rest = rest[rest.endIndex...]
+                }
+                continue
+            }
+            let lineComment = rest.range(of: "//")
+            let blockOpen = rest.range(of: "/*")
+            if let lineComment, blockOpen == nil || lineComment.lowerBound < blockOpen!.lowerBound {
+                kept += rest[..<lineComment.lowerBound]
+                rest = rest[rest.endIndex...]
+            } else if let blockOpen {
+                kept += rest[..<blockOpen.lowerBound]
+                rest = rest[blockOpen.upperBound...]
+                inBlock = true
+            } else {
+                kept += rest
+                rest = rest[rest.endIndex...]
+            }
+        }
+        output += kept + "\n"
+    }
+    return output
+}

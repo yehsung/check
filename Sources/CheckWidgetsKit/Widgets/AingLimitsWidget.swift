@@ -125,7 +125,7 @@ struct AingAILimitsContent: View {
         if isSmall {
             small(limits, snapshot: snapshot)
         } else {
-            wide(limits, snapshot: snapshot)
+            wide(limits)
         }
     }
 
@@ -154,7 +154,8 @@ struct AingAILimitsContent: View {
                     .padding(.top, 8)
                 AingWidgetBigNumber(text: primary.display.valueText)
                 Spacer(minLength: 0)
-                AingWidgetBar(progress: barProgress(primary.display), isComplete: false, height: 6)
+                AingWidgetBar(progress: barProgress(primary.display), isComplete: false, height: 6,
+                              floorOnly: primary.display.floorOnly)
                     .padding(.bottom, 5)
                 AingWidgetCaption(text: smallCaption(row, primary: primary))
                     .padding(.bottom, -4)
@@ -171,10 +172,10 @@ struct AingAILimitsContent: View {
 
     // MARK: M · L — 세 줄(L 은 토큰 줄까지)
 
-    private func wide(_ limits: AingWidgetLimits, snapshot: WidgetSnapshot) -> some View {
+    private func wide(_ limits: AingWidgetLimits) -> some View {
         let rows = limits.shown(limit: isLarge ? AingWidgetLayout.limitRowsLarge : AingWidgetLayout.limitRowsMedium)
         return VStack(alignment: .leading, spacing: 0) {
-            header(snapshot: snapshot)
+            header(limits)
             VStack(alignment: .leading, spacing: isLarge ? 14 : 8) {
                 ForEach(rows) { row in
                     providerRow(row)
@@ -189,7 +190,15 @@ struct AingAILimitsContent: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func header(snapshot: WidgetSnapshot) -> some View {
+    /// 머리: 제목 + **리밋 관측 나이**.
+    ///
+    /// ★ 나이는 `snapshot.generatedAt` 이 아니다(v0.3.45 P2). 그 값은 **폰이 파일을 쓴 시각**이고
+    /// `NowStore.touchWidgetSnapshot` 이 리밋이 안 바뀌어도 60초마다 '지금'으로 옮긴다 — 맥이 몇 시간
+    /// 자고 있어도 머리는 '방금'이라고 적었다. 리밋 위젯이 지평 밖 칸을 깐 근거가 "헤더의 N분 전도 얼어
+    /// 낡음을 알릴 수단이 멈춘다" 였는데, **그 수단은 애초에 리밋의 나이를 말한 적이 없었다.**
+    /// 그래서 이 머리만 **가장 낡은 보이는 줄의 관측 시각**으로 센다(다른 세 위젯의 머리는 그대로다 —
+    /// 그들이 그리는 것은 '우리 서버가 센 사실'이라 스냅샷을 만든 시각이 맞는 기준이다).
+    private func header(_ limits: AingWidgetLimits) -> some View {
         let ink = AingWidgetInk(renderingMode)
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(AingWidgetText.limitsTitle)
@@ -198,12 +207,14 @@ struct AingAILimitsContent: View {
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 6)
-            Text(AingWidgetFormat.ago(from: snapshot.generatedAt, now: entry.date))
-                .monospacedDigit()
-                .aingFont(11, relativeTo: .caption2)
-                .foregroundStyle(ink.secondary)
-                .lineLimit(1)
-                .fixedSize()
+            if let age = limits.observationAgeText(now: entry.date) {
+                Text(age)
+                    .monospacedDigit()
+                    .aingFont(11, relativeTo: .caption2)
+                    .foregroundStyle(ink.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
         }
     }
 
@@ -216,7 +227,8 @@ struct AingAILimitsContent: View {
                 titleLine(row, showsCaption: false)
             }
             if let primary = row.primaryWindow {
-                AingWidgetBar(progress: barProgress(primary.display), isComplete: false, height: isLarge ? 6 : 5)
+                AingWidgetBar(progress: barProgress(primary.display), isComplete: false, height: isLarge ? 6 : 5,
+                              floorOnly: primary.display.floorOnly)
             }
             // 주간이 이미 대표로 섰으면(5시간 창이 없는 요금제) 같은 값을 두 번 그리지 않는다.
             if isLarge, let weekly = row.secondaryWeekly {
@@ -280,7 +292,7 @@ struct AingAILimitsContent: View {
                     .foregroundStyle(ink.secondary)
                     .fixedSize()
             }
-            AingWidgetBar(progress: barProgress(weekly), isComplete: false, height: 3)
+            AingWidgetBar(progress: barProgress(weekly), isComplete: false, height: 3, floorOnly: weekly.floorOnly)
         }
         .padding(.leading, AingWidgetLayout.limitTileSize + 7)
     }

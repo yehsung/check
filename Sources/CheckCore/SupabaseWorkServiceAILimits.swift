@@ -13,13 +13,28 @@ import Foundation
 // 않아 다음 주기가 같은 혼합 본문을 다시 보낸다 — 영구 고착이다.
 //
 // 이 축에서 그 혼합은 **반드시** 생긴다: Claude 는 두 창이 다 오지만 Codex 는 창이 null 일 수 있고
-// (크레딧 사용자) 플랜 라벨·계정 지문도 제공자마다 있고 없다. Swift 가 합성한 `Encodable` 은 nil 옵셔널의
+// (크레딧 사용자) 플랜 라벨도 제공자마다 있고 없다. Swift 가 합성한 `Encodable` 은 nil 옵셔널의
 // 키를 **생략하므로**(`encodeIfPresent`), 그냥 두면 제공자마다 다른 키 집합이 한 요청에 섞인다.
 //
-// 그래서 이 파일은 `AILimitUpsertRow` 의 `encode(to:)` 를 **손으로 쓴다**: 열 칸 전부를 `encode(_:forKey:)`
+// 그래서 이 파일은 `AILimitUpsertRow` 의 `encode(to:)` 를 **손으로 쓴다**: 아홉 칸 전부를 `encode(_:forKey:)`
 // 로 넣어 nil 을 **명시적 null 로** 내보낸다. 키 집합이 모든 행에서 같아지므로 묶음 나누기가 필요 없다
 // (일별 토큰 표는 "빠진 키는 갱신하지 않는다"가 요건이라 묶음을 나눠야 했지만, 이 표는 반대다 — 창이
 // 사라졌으면 서버도 null 이 되어야 한다. 그래서 명시적 null 이 **정답**이고 PGRST102 도 같이 사라진다).
+//
+// ## ★ 계정 지문(`account_fingerprint`)은 **본문에 싣지 않는다** (v0.3.45 P1)
+// 공개 처리방침(`docs/privacy.md` "AI 사용량 리밋을 읽는 방법")은 "**계정 식별자는 올리지 않는다**"를
+// 단정한다 — 그 문서는 공개 URL 로 가입 화면·App Store 에 걸린다. 초안은 그 약속과 어긋나게
+// 계정 식별자의 SHA-256 앞 16자를 실어 보냈다.
+//
+// 그 칸을 **지운** 근거는 "해시라서 괜찮다"가 아니라 **쓰임이 없다**는 것이다(전수 grep):
+// 만들고(`AILimitFingerprint.make`) 운반할 뿐, 서버에서 **소비·표시·비교하는 호출부가 0건**이다.
+// 폰은 일부러 안 받아 오고(`MeAILimitsService`), 서버 정책·RPC 도 그 칸을 읽지 않는다.
+// 선언된 목적("맥 두 대가 같은 계정을 보는지 판정")을 구현한 코드가 없으므로, 쓰임 없는 파생 식별자를
+// 계속 올릴 이유가 없다.
+//
+// ★ 지문 **생성 자체는 남는다**: 업로드 게이트(`AILimitUploadLedger.fingerprint`)가 "무엇이 바뀌었나"를
+//   재는 로컬 비교에 쓴다 — 그 문자열은 **이 맥을 벗어나지 않는다**. 여기서 끊는 것은 네트워크로 가는 쪽뿐이다.
+// ★ 서버 컬럼·마이그레이션은 **건드리지 않는다**(검증된 nullable 칸이다). 안 보내면 null 로 남는다.
 //
 // ## 하트비트에 새 칸을 싣지 않는다
 // `sendTokenScanHeartbeat` 의 본문은 다섯 칸뿐이고 이 파일은 그 함수를 만지지 않는다. 리밋 값을 거기 얹으면
@@ -39,7 +54,6 @@ package struct AILimitUpsertRow: Encodable, Equatable, Sendable {
     package let weeklyPercent: Double?
     package let weeklyResetsAt: String?
     package let planLabel: String?
-    package let accountFingerprint: String?
     package let observedAt: String
 
     /// 본문 키. **이 집합이 모든 행에서 같다는 것이 계약이다**(테스트가 되묻는다).
@@ -52,7 +66,6 @@ package struct AILimitUpsertRow: Encodable, Equatable, Sendable {
         case weeklyPercent = "weekly_percent"
         case weeklyResetsAt = "weekly_resets_at"
         case planLabel = "plan_label"
-        case accountFingerprint = "account_fingerprint"
         case observedAt = "observed_at"
     }
 
@@ -65,7 +78,6 @@ package struct AILimitUpsertRow: Encodable, Equatable, Sendable {
         weeklyPercent: Double?,
         weeklyResetsAt: String?,
         planLabel: String?,
-        accountFingerprint: String?,
         observedAt: String
     ) {
         self.userId = userId
@@ -76,7 +88,6 @@ package struct AILimitUpsertRow: Encodable, Equatable, Sendable {
         self.weeklyPercent = weeklyPercent
         self.weeklyResetsAt = weeklyResetsAt
         self.planLabel = planLabel
-        self.accountFingerprint = accountFingerprint
         self.observedAt = observedAt
     }
 
@@ -93,7 +104,6 @@ package struct AILimitUpsertRow: Encodable, Equatable, Sendable {
         try container.encode(weeklyPercent, forKey: .weeklyPercent)
         try container.encode(weeklyResetsAt, forKey: .weeklyResetsAt)
         try container.encode(planLabel, forKey: .planLabel)
-        try container.encode(accountFingerprint, forKey: .accountFingerprint)
         try container.encode(observedAt, forKey: .observedAt)
     }
 }
@@ -134,7 +144,8 @@ extension SupabaseWorkService {
             weeklyPercent: Self.aiLimitPercent(weekly?.usedPercent),
             weeklyResetsAt: weekly?.resetsAt.map { dateFormatter.string(from: $0) },
             planLabel: AILimitPlanLabelContract.normalized(snapshot.planLabel),
-            accountFingerprint: snapshot.accountFingerprint,
+            // ★ `snapshot.accountFingerprint` 는 **의도적으로 싣지 않는다**(머리말) — 그 값은 업로드 게이트의
+            //   로컬 비교에만 쓰이고 네트워크로 가지 않는다. 서버 컬럼은 nullable 이라 null 로 남는다.
             observedAt: dateFormatter.string(from: observed)
         )
     }

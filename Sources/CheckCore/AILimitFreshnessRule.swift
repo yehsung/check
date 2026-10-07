@@ -47,7 +47,7 @@ package enum AILimitFreshness: String, Equatable, Sendable {
     case fresh
     /// 30분 이내. 등호로 말해도 되는 범위(5시간 창에서 30분은 사용률이 크게 안 움직인다).
     case recent
-    /// 1일 이내. 숫자는 **하한**이다 — "이상" 을 붙인다.
+    /// 1일 이내. 숫자는 **하한**이다 — "이상" 을 붙인다(0% 만 예외: `0% 이상` 은 아무 말도 아니다).
     case stale
     /// 1일 초과. 역시 하한.
     case ancient
@@ -59,6 +59,9 @@ package enum AILimitFreshness: String, Equatable, Sendable {
     case unknown
 
     /// 이 등급의 숫자는 등호가 아니라 하한인가.
+    ///
+    /// ★ **등급의 성질**이다. 실제로 "이상"이 글자에 붙는지는 `AILimitFreshnessRule.value(...)` 가 정한다 —
+    /// 하한이 0 이면 안 붙인다(`0% 이상` 은 아무 말도 아니다). 그 판단을 뷰가 따로 하면 규칙이 둘이 된다.
     package var isFloorOnly: Bool {
         self == .stale || self == .ancient
     }
@@ -388,14 +391,30 @@ package enum AILimitFreshnessRule {
     ///   그리고 "0% 이상"은 아무 말도 아니므로 하한 깃발도 함께 내린다.
     /// · 그 밖에는 `clampedPercent` 로 접은 값과 그것을 반올림한 글자다 — 둘이 같은 함수에서 나오므로
     ///   NaN 이 들어오는 날에도 "바는 안 그려지는데 글자는 0%" 처럼 갈리지 않는다.
+    ///
+    /// ## ★ 0% 에는 "이상"을 붙이지 않는다 (v0.3.45 P2)
+    /// `0% 이상` 은 **아무 말도 아니다**(모든 값이 0 이상이다). 그런데 하한 깃발을 내리는 자리가 리셋 주장
+    /// 하나뿐이어서, **0% 가 낡아서 하한이 된 경우**는 그 글자가 그대로 세 화면에 나갔다. Codex 5시간 창은
+    /// 실측에서 0% 가 흔하고(함정 ①: 그 행은 리셋도 주장하지 않는다) 맥이 30분만 자도 `.stale` 이 되므로,
+    /// 이 글자는 드문 조합이 아니라 **평상시 화면**이었다.
+    ///
+    /// 고치는 자리는 여기 **한 곳**이다: 하한 깃발을 "반올림한 수가 0 보다 클 때만" 세우고, 숫자·글자·깃발을
+    /// 그 하나의 판단에서 함께 내보낸다. 깃발을 뷰에서 따로 접으면 그 순간 규칙이 둘이 되고, 바는 하한 색인데
+    /// 글자는 등호인 조합이 다시 생긴다(그게 죽인 P0 의 모양이다).
+    ///
+    /// 잃는 것: "0% 를 오래전에 봤다"가 숫자 글자에서는 안 보인다. 괜찮다 — 그 사실은 **캡션**(`3시간 전`)과
+    /// 등급(`.stale`)이 나르고, 그쪽이 사람에게 뜻이 있는 말이다. `.reset`(초기화됨)과 혼동되지도 않는다.
     package static func value(percent: Double, floorOnly: Bool, isResetClaim: Bool) -> AILimitValue {
         if isResetClaim { return AILimitValue(percent: 0, text: "0%", floorOnly: false) }
         let clamped = clampedPercent(percent)
         let whole = wholePercent(clamped)
+        // `wholePercent` 는 0 보다 큰 값을 절대 `0` 으로 적지 않는다(0.4 → 1). 그래서 `whole == 0` 은
+        // "정확히 0" 뿐이고, 0.4% 의 하한은 `1% 이상` 으로 그대로 살아 있다.
+        let isFloor = floorOnly && whole > 0
         return AILimitValue(
             percent: clamped,
-            text: floorOnly ? "\(whole)% 이상" : "\(whole)%",
-            floorOnly: floorOnly
+            text: isFloor ? "\(whole)% 이상" : "\(whole)%",
+            floorOnly: isFloor
         )
     }
 

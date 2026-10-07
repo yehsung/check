@@ -163,13 +163,14 @@ struct CheckAILimitsRow: View {
     var body: some View {
         if store.isAvailable {
             let now = clock()
-            row(store.summary(now: now), now: now)
+            // 창들을 **한 번** 묶어 값과 툴팁이 같은 집합을 말하게 한다(둘을 따로 세면 글자와 설명이 갈린다).
+            row(store.summary(now: now), windows: Self.combinedWindows(store: store, now: now))
         } else {
             EmptyView()
         }
     }
 
-    private func row(_ summary: AILimitDisplay, now: Date) -> some View {
+    private func row(_ summary: AILimitDisplay, windows: [AILimitDisplay]) -> some View {
         Button(action: onOpenWindow) {
             HStack(spacing: AILimitRowWidthBudget.spacing) {
                 Image(systemName: "gauge.with.needle")
@@ -182,7 +183,7 @@ struct CheckAILimitsRow: View {
                     .lineLimit(1)
                 Spacer(minLength: AILimitRowWidthBudget.spacerMinWidth)
                 // 숫자는 규칙이 이미 조립해 둔 문구다 — 여기서 다시 반올림하지 않는다.
-                Text(Self.valueText(store: store, now: now))
+                Text(Self.valueText(windows: windows))
                     .font(.caption.weight(.bold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .monospacedDigit()
@@ -201,7 +202,7 @@ struct CheckAILimitsRow: View {
         .buttonStyle(.plain)
         // 툴팁은 **캡션 값만** 말한다(나이). 로컬/서버/포크/축 같은 진단 어휘를 사용자에게 쓰지 않는다
         // (2026-09-22 결정 · `AILimitSource` 주석과 같은 규약).
-        .checkTooltip(tooltip(summary))
+        .checkTooltip(Self.tooltip(windows: windows, caption: summary.captionText))
     }
 
     /// 한 줄에 적는 두 숫자 = "5시간 · 주간". `summary` 는 둘을 이미 합친 값이라 창별로 다시 묶는다.
@@ -209,17 +210,54 @@ struct CheckAILimitsRow: View {
     /// 왜 둘인가: 제공자가 셋이어도 숫자는 **둘**이다(창 종류별 최악). 제공자마다 두 개씩 적으면
     /// 여섯 숫자가 되어 이 폭에 절대 안 들어가고, 무엇보다 한 줄 요약이 답할 질문은
     /// "지금 당장 막히나(5시간) · 이번 주가 위험한가(주간)" 둘뿐이다. 나머지는 창이 말한다.
+    ///
+    /// ## ★ 안 보이는 창은 **칸째로 뺀다** (v0.3.45 P2)
+    /// 초안은 두 칸을 무조건 세워, 5시간 창이 **없는** 계정에서 `— · 42%` 를 그렸다. `—` 는 규칙이
+    /// "판정 불가(= 못 읽었다)"로 못 박은 글자다(`AILimitFreshnessRule.unknownValueText`) — "이 계정엔 그 창이
+    /// 없다"를 "읽기 실패"로 말한 것이고, 사용자는 고장으로 읽는다. 창 카드·폰·위젯은 전부 `isVisible` 이
+    /// 거짓인 창을 떨구는데(각각 `AILimitCardModel.make` · `AILimitDisplayRow.visibleWindows` ·
+    /// `AingWidgetLimits.init`) 이 한 줄만 안 따라왔다.
+    ///
+    /// 전제가 좁다는 점에 주의: 조합값은 **연동된 제공자 중 하나라도** 그 창을 가지면 보인다. 그래서 이 갈래는
+    /// 모든 제공자에 5시간 창이 없을 때만 나온다 — 드물지만 실재한다(주간만 오는 요금제 하나만 연동한 사람).
+    ///
+    /// 칸이 하나만 남으면 **창 라벨을 값과 한 묶음으로** 적는다(`주간 42%`). 두 칸일 때는 자리가 곧 라벨인데,
+    /// 하나만 남으면 그 단서가 사라져 주간 42% 가 5시간으로 읽힌다(맥 카드가 머리 숫자에 창 라벨을 붙이고
+    /// 위젯이 `primaryWindow` 로 라벨을 값과 함께 내보내는 것과 같은 근거).
     static func valueText(store: AILimitStore, now: Date) -> String {
-        let fiveHour = AILimitFreshnessRule.combine(windowDisplays(store: store, window: .fiveHour, now: now))
-        let weekly = AILimitFreshnessRule.combine(windowDisplays(store: store, window: .weekly, now: now))
-        return "\(fiveHour.valueText) · \(weekly.valueText)"
+        valueText(windows: combinedWindows(store: store, now: now))
+    }
+
+    /// 창 종류별 조합값(5시간 → 주간 순서). **안 보이는 창은 여기서 빠진다.**
+    static func combinedWindows(store: AILimitStore, now: Date) -> [AILimitDisplay] {
+        AILimitWindow.allCases
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .map { AILimitFreshnessRule.combine(windowDisplays(store: store, window: $0, now: now)) }
+            .filter(\.isVisible)
+    }
+
+    /// 보이는 조합값들 → 한 줄 글자(순수 — 테스트가 직접 부른다). 하나만 남으면 창 라벨을 앞에 붙인다.
+    ///
+    /// 하나도 없으면 `—` **하나**다. 이 갈래는 창이 아예 안 읽힌 경우(만료·429 뿐인 제공자 — 그래도 행은
+    /// 선다: `store.isAvailable`)이고, 그때 '판정 불가'는 **맞는 말**이다. 위의 `— · 42%` 와 다른 점은
+    /// 여기서는 읽지 못한 것이 **전부**라는 것이다 — 없는 칸을 가짜로 세워 `—` 를 두 번 적지는 않는다.
+    static func valueText(windows: [AILimitDisplay]) -> String {
+        guard !windows.isEmpty else { return AILimitFreshnessRule.unknownValueText }
+        if windows.count == 1, let only = windows.first {
+            guard let label = only.window?.displayName else { return only.valueText }
+            return "\(label) \(only.valueText)"
+        }
+        return windows.map(\.valueText).joined(separator: " · ")
     }
 
     static func windowDisplays(store: AILimitStore, window: AILimitWindow, now: Date) -> [AILimitDisplay] {
         store.visibleProviders.map { AILimitFreshnessRule.display(provider: $0, window: window, now: now) }
     }
 
-    private func tooltip(_ summary: AILimitDisplay) -> String {
-        "5시간 · 주간 사용률 — \(summary.captionText)"
+    /// 툴팁은 **그 줄이 실제로 적은 창들**을 말한다 — 없는 창을 이름만 읽어 주면 "그 숫자는 어디 있나"가 된다.
+    static func tooltip(windows: [AILimitDisplay], caption: String) -> String {
+        let names = windows.compactMap { $0.window?.displayName }
+        guard !names.isEmpty else { return "AI 사용률 — \(caption)" }
+        return "\(names.joined(separator: " · ")) 사용률 — \(caption)"
     }
 }

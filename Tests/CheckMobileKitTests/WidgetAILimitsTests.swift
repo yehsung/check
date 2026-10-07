@@ -367,5 +367,158 @@ struct WidgetAILimitsTests {
         #expect(bundle.contains("AingAILimitsWidget()"), "위젯 번들에 리밋 위젯이 없다 — 갤러리에 나타나지 않는다")
     }
 
+    // MARK: - 유령 행 · 머리 나이 · 하한 바 (v0.3.45 P2 — 세 화면이 다른 말을 하던 자리)
+
+    /// ★ 위젯도 **자기 칸 시각으로** 유령 게이트를 지난다.
+    ///
+    /// 폰은 서버 응답을 받는 순간 이 문턱을 적용한다(`AILimitsStore.bundle`). 그런데 패널은 **앱이 열릴 때만**
+    /// 다시 써지고 위젯은 그 파일을 몇 시간·며칠 뒤 칸 시각으로 그린다(리밋 위젯은 지평 밖 칸까지 깐다).
+    /// 그래서 "쓸 때는 안 유령이었지만 그릴 때는 유령"인 창이 열렸고, 그 창에서 위젯은 맥에서 로그아웃한
+    /// 제공자를 `0% · 초기화됨` 으로 그렸다 — 쓰지도 않는 도구가 "한도를 하나도 안 썼다"로 보인다.
+    /// 문턱의 **양쪽**을 잰다(한쪽만 재면 `>=` 를 `>` 로 바꿔도, 문턱을 10배로 늘려도 초록이다).
+    @Test("유령 행: 위젯이 칸 시각으로 다시 잰다(양쪽 경계) · 문턱은 폰과 **같은 상수 하나**")
+    func widgetHidesGhostRowsAtEntryTime() throws {
+        let cutoff = AILimitGhostRow.maxObservationAge
+        // ★ 두 모듈이 한 상수를 쓴다(위젯은 폰 모듈을 링크하지 않는다 — 두 벌로 적으면 언젠가 갈린다).
+        #expect(cutoff == AILimitsStore.ghostRowAge, "폰과 위젯이 다른 문턱을 쓴다 — 한쪽만 숨긴다")
+        #expect(cutoff > 86_400, "문턱이 하루보다 짧다 — 주말에 맥을 끈 사람의 하한까지 사라진다")
+
+        func panel(observedAgo age: TimeInterval) -> WidgetSnapshot.AILimitPanel {
+            .init(providers: [.init(provider: "claude", fiveHourPercent: 27,
+                                    fiveHourResetsAt: Self.now.addingTimeInterval(-age + 600),
+                                    observedAt: Self.now.addingTimeInterval(-age))])
+        }
+        func shown(_ panel: WidgetSnapshot.AILimitPanel, at date: Date) -> [AILimitProvider] {
+            guard case .limits(let limits) = AingWidgetLimitsState(snapshot: Self.snapshot(panel), at: date) else { return [] }
+            return limits.rows.map(\.provider)
+        }
+        // 문턱 **직전**(1초 모자란다)은 남고, 문턱 **정확히**는 숨는다.
+        #expect(shown(panel(observedAgo: cutoff - 1), at: Self.now) == [.claude],
+                "아직 문턱에 닿지 않은 줄을 숨겼다 — 맥을 며칠 끈 사람의 하한까지 사라진다")
+        #expect(shown(panel(observedAgo: cutoff), at: Self.now).isEmpty,
+                "문턱에 닿은 유령 줄이 남았다 — `0% · 초기화됨` 으로 굳는다")
+        #expect(shown(panel(observedAgo: cutoff * 10), at: Self.now).isEmpty)
+
+        // ★ 재검증자가 잰 노출 창: **같은 파일**이 쓸 때는 2.5일(안 유령)인데 칸 시각이 하루 더 흐르면 3.5일이다.
+        let written = panel(observedAgo: 2.5 * 86_400)
+        #expect(shown(written, at: Self.now) == [.claude], "전제: 파일을 쓸 때는 유령이 아니었다")
+        let later = Self.now.addingTimeInterval(86_400)
+        #expect(shown(written, at: later).isEmpty, "위젯이 나이 검사를 안 해 지평 밖 칸에서 유령 줄을 그린다")
+        // 숫자를 지어내지 않고 **안내**로 떨어진다.
+        #expect(AingWidgetLimitsState(snapshot: Self.snapshot(written), at: later) == .noProviders)
+
+        // 산 줄과 유령이 섞이면 **산 줄만** 남는다(목록이 통째로 비지 않는다).
+        let mixed = WidgetSnapshot.AILimitPanel(providers: [
+            .init(provider: "claude", fiveHourPercent: 27, fiveHourResetsAt: Self.now.addingTimeInterval(9_000),
+                  observedAt: Self.now.addingTimeInterval(-300)),
+            .init(provider: "codex", fiveHourPercent: 56, observedAt: Self.now.addingTimeInterval(-cutoff - 60)),
+        ])
+        #expect(shown(mixed, at: Self.now) == [.claude])
+        // 미래 관측(기기 시계가 어긋난 맥)은 여기서 **버리지 않는다** — 그 판정은 코어 규칙이 한다(`unknown`).
+        #expect(shown(panel(observedAgo: -7_200), at: Self.now) == [.claude])
+    }
+
+    /// ★ 머리의 나이 글자는 **리밋 관측 나이**다 — 폰이 파일을 쓴 시각이 아니다.
+    ///
+    /// `snapshot.generatedAt` 은 `NowStore.touchWidgetSnapshot` 이 **값이 안 바뀌어도** 60초마다 '지금'으로
+    /// 옮긴다. 그래서 맥이 세 시간 자고 있어도 머리는 `방금` 이라고 적었다. 리밋 위젯이 지평 밖 칸을 깐 근거가
+    /// "헤더의 N분 전도 얼어 낡음을 알릴 수단이 멈춘다" 였는데 **그 수단은 애초에 리밋의 나이를 말한 적이 없었다.**
+    @Test("머리 나이: 가장 낡은 보이는 줄의 **관측** 나이다(generatedAt 이 '방금'이어도 '3시간 전')")
+    func headerAgeSpeaksOfTheObservationNotTheFileWrite() throws {
+        let panel = WidgetSnapshot.AILimitPanel(providers: [
+            .init(provider: "claude", fiveHourPercent: 27, fiveHourResetsAt: Self.now.addingTimeInterval(3_600),
+                  observedAt: Self.now.addingTimeInterval(-10_800)),
+            .init(provider: "codex", fiveHourPercent: 56, fiveHourResetsAt: Self.now.addingTimeInterval(1_800),
+                  observedAt: Self.now.addingTimeInterval(-600)),
+        ])
+        var snapshot = Self.snapshot(panel)
+        snapshot.generatedAt = Self.now     // 쓰기 창구가 방금 '지금'으로 옮겼다
+        #expect(AingWidgetFormat.ago(from: snapshot.generatedAt, now: Self.now) == "방금", "전제: 파일 시각은 방금이다")
+        guard case .limits(let limits) = AingWidgetLimitsState(snapshot: snapshot, at: Self.now) else {
+            throw TestFailure.notLimits
+        }
+        #expect(limits.observationAgeText(now: Self.now) == "3시간 전",
+                "머리가 리밋의 나이를 말하지 않는다: \(limits.observationAgeText(now: Self.now) ?? "없음")")
+        // **가장 낡은** 기여자가 말한다 — 켜져 있는 맥 하나(10분 전)가 다른 줄의 낡음을 가리지 않는다.
+        #expect(limits.oldestObservedAt == Self.now.addingTimeInterval(-10_800))
+        // 칸 시각이 흐르면 같이 늙는다(재적재가 끊긴 날에도 낡음이 드러난다).
+        #expect(limits.observationAgeText(now: Self.now.addingTimeInterval(3_600)) == "4시간 전")
+        // 관측 시각을 모르는 줄만 있으면 글자를 **안 적는다**(파일 시각으로 대신하지 않는다).
+        #expect(AingWidgetLimits(panel: .init(providers: []), at: Self.now).observationAgeText(now: Self.now) == nil)
+
+        // 머리 글자의 경계는 코어 규칙의 나이 문구와 **같다**(화면마다 '방금'이 갈리지 않게).
+        for age in [0, 59, 60, 61, 3_599, 3_600, 86_399, 86_400, 200_000] as [TimeInterval] {
+            let then = Self.now.addingTimeInterval(-age)
+            #expect(AingWidgetFormat.ago(from: then, now: Self.now) == FeedbackText.ageText(then, now: Self.now),
+                    "\(age)초에서 위젯 머리와 코어 규칙의 나이 문구가 갈린다")
+        }
+
+        // 소스 계약: 리밋 위젯 머리는 파일 시각을 **안 읽고**, 다른 세 위젯의 머리는 그대로다.
+        let code = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift")
+        #expect(code.contains("limits.observationAgeText(now: entry.date)"), "리밋 머리가 관측 나이를 안 쓴다")
+        #expect(!code.contains("ago(from: snapshot.generatedAt"), "리밋 머리가 파일 시각으로 돌아갔다")
+        let others = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingWidgets.swift")
+        #expect(others.contains("AingWidgetFormat.ago(from: snapshot.generatedAt"), "다른 세 위젯의 머리를 건드렸다")
+        #expect(!others.contains("observationAgeText"), "리밋 머리 규칙이 다른 세 위젯에 번졌다")
+    }
+
+    /// ★ 하한("27% 이상")인 값은 폰·위젯 바에서도 채움이 **흐려야** 한다.
+    ///
+    /// 맥 `AILimitBar` 만 그렇게 그렸다(주석이 이유를 적었다 — 같은 길이의 바가 등호와 하한에서 똑같이 보이면
+    /// 글자의 "이상"을 읽지 못한 사람에게 바가 거짓말을 한다). 폰 `ProgressBar` 와 위젯 `AingWidgetBar` 에는
+    /// 그 입력이 **아예 없어서**, 값이 세 화면 다 `27% 이상` 인데 바는 맥만 흐렸다.
+    ///
+    /// ★ 수단은 **색이 아니라 불투명도**다 — 틴트·투명 모드는 색을 통째로 버리고 알파만 남긴다.
+    @Test("하한 바: 폰·위젯도 채움을 흐리게 그린다(색이 아니라 불투명도 · 모든 리밋 막대가 깃발을 받는다)")
+    func floorOnlyDimsTheFillOnPhoneAndWidget() throws {
+        #expect(AILimitFloorFill.opacity(floorOnly: true) == AILimitFloorFill.floorOpacity)
+        #expect(AILimitFloorFill.opacity(floorOnly: false) == 1)
+        #expect(AILimitFloorFill.floorOpacity > 0 && AILimitFloorFill.floorOpacity < 1,
+                "하한 불투명도가 \(AILimitFloorFill.floorOpacity) 다 — 1 이면 신호가 없고 0 이면 바가 사라진다")
+
+        // 깃발이 실제로 서는 데이터(한 시간 전 관측 = 30분 창을 넘겼다) · 기준선은 방금 받은 값이다.
+        func row(observedAgo age: TimeInterval) throws -> AingWidgetLimitRow {
+            let panel = WidgetSnapshot.AILimitPanel(providers: [
+                .init(provider: "claude", fiveHourPercent: 27, fiveHourResetsAt: Self.now.addingTimeInterval(3_600),
+                      weeklyPercent: 60, weeklyResetsAt: Self.now.addingTimeInterval(450_000),
+                      observedAt: Self.now.addingTimeInterval(-age)),
+            ])
+            guard case .limits(let limits) = AingWidgetLimitsState(snapshot: Self.snapshot(panel), at: Self.now) else {
+                throw TestFailure.notLimits
+            }
+            return try #require(limits.rows.first)
+        }
+        let stale = try row(observedAgo: 3_600)
+        #expect(stale.fiveHour?.valueText == "27% 이상" && stale.fiveHour?.floorOnly == true)
+        #expect(stale.weekly?.floorOnly == true, "얇은 주간 줄만 등호로 남았다")
+        let fresh = try row(observedAgo: 30)
+        #expect(fresh.fiveHour?.floorOnly == false, "기준선이 같은 입력이면 이 테스트는 영원히 초록이다")
+
+        // 바가 그 깃발을 **받는다**. 뷰는 `#if os(iOS)` 라 맥 스위트가 한 픽셀도 그리지 못하므로 소스로 잰다.
+        let bar = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingWidgetParts.swift")
+        #expect(bar.contains("var floorOnly: Bool = false"), "위젯 막대에 하한 입력이 없다")
+        #expect(bar.contains("AILimitFloorFill.opacity(floorOnly: floorOnly)"),
+                "위젯 막대가 하한을 불투명도로 말하지 않는다(색으로 말하면 틴트에서 사라진다)")
+        let widget = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift")
+        let widgetBars = widget.components(separatedBy: "AingWidgetBar(").count - 1
+        #expect(widgetBars == 3, "리밋 위젯의 막대가 \(widgetBars)개다 — 아래 대조가 헐거워졌다")
+        #expect(widget.components(separatedBy: "floorOnly:").count - 1 == widgetBars,
+                "리밋 막대 가운데 하한을 안 받는 것이 있다 — 그 칸의 바는 등호처럼 진하다")
+        let card = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeAILimitsCard.swift")
+        let phoneBars = card.components(separatedBy: "ProgressBar(").count - 1
+        #expect(phoneBars == 2, "폰 카드의 막대가 \(phoneBars)개다")
+        #expect(card.components(separatedBy: "floorOnly:").count - 1 == phoneBars, "폰 막대가 하한을 안 받는다")
+        let progress = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/InsetGroup.swift")
+        #expect(progress.contains("AILimitFloorFill.opacity(floorOnly: floorOnly)"),
+                "폰 ProgressBar 가 하한을 흐림으로 말하지 않는다")
+
+        // ★ 맥 바는 **같은 상수를 쓸 수 없다**: 맥 앱 타깃은 `CheckMobileShared` 를 링크하지 않고(Package.swift)
+        //   셋이 공통으로 보는 모듈은 `CheckCore` 뿐이다. 그래서 숫자가 갈리지 않는지를 소스로 되묻는다 —
+        //   한쪽만 고치는 날 여기서 빨개진다(세 화면이 같은 뜻을 다른 세기로 그리지 않게).
+        let mac = try IntegrationContractTests.code("Sources/check/CheckAILimitsRow.swift")
+        #expect(mac.contains("floorOnly ? \(AILimitFloorFill.floorOpacity) : 1"),
+                "맥 바의 하한 불투명도가 폰·위젯(\(AILimitFloorFill.floorOpacity))과 갈렸다")
+    }
+
     enum TestFailure: Error { case notLimits }
 }

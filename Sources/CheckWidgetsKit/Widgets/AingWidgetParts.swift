@@ -284,10 +284,18 @@ private struct AingCutout: Shape {
 // MARK: - 막대 · 점 · 체크 · 칩
 
 /// 이번 주 막대(링 대신 — 틴트에서 트랙과 진행이 한 색이 되어 62%가 꽉 찬 원으로 보였다).
+///
+/// `floorOnly` = 이 숫자가 **등호가 아니라 하한**인가(AI 리밋의 `27% 이상`). 참이면 채움을 흐리게 그린다 —
+/// 같은 길이의 바가 등호와 하한에서 똑같이 보이면 글자의 "이상"을 읽지 못한 사람에게 바가 거짓말을 한다
+/// (맥 `AILimitBar` 가 같은 이유로 같은 값을 쓴다).
+///
+/// ★ **색이 아니라 불투명도**다: 틴트·투명 모드는 색을 통째로 버리고 알파만 남긴다(이 파일 머리말).
+/// 하한을 다른 색으로 말하면 그 모드에서 신호가 사라진다.
 struct AingWidgetBar: View {
     let progress: Double
     let isComplete: Bool
     var height: CGFloat = 5
+    var floorOnly: Bool = false
     @Environment(\.widgetRenderingMode) private var renderingMode
 
     var body: some View {
@@ -298,6 +306,7 @@ struct AingWidgetBar: View {
                 Capsule().fill(ink.track)
                 Capsule()
                     .fill(ink.accented ? Color.white : (isComplete ? AingWidgetColors.workingDot : AingWidgetColors.accent))
+                    .opacity(AILimitFloorFill.opacity(floorOnly: floorOnly))
                     .frame(width: clamped > 0 ? max(height, proxy.size.width * clamped) : 0)
                     .widgetAccentable()
             }

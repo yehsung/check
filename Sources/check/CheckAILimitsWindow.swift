@@ -118,6 +118,14 @@ struct AILimitCardModel: Equatable, Identifiable {
     let notice: String?
     /// 플랜 라벨("plus"/"max"). 없으면 안 그린다.
     let planLabel: String?
+    /// 머리 캡션에 **덧붙일** 리셋 시각(`오후 6:59 리셋`). 없으면 nil.
+    ///
+    /// `make` 가 `now` 를 알 때 만든다. 저장하는 까닭 둘:
+    ///  · **이미 지난 리셋은 안 적는다.** 유예(120초) 안쪽에서 리셋이 막 지난 동안 값은 아직 90% 가 맞는데
+    ///    (`AILimitFreshnessRule` 함정 ②) 캡션이 `오후 2:04 리셋` 이라고 **지난 시각**을 미래처럼 말했다
+    ///    (2026-10-07 실측: 지금이 2:05). 그 판정에는 `now` 가 필요하다.
+    ///  · 리셋을 **이미 주장한** 창(0% · 초기화됨)에서는 규칙의 문구가 그 사실을 말하므로 덧붙이지 않는다.
+    let headResetText: String?
 
     var id: AILimitProvider { provider }
 
@@ -130,17 +138,25 @@ struct AILimitCardModel: Equatable, Identifiable {
     /// 큰 숫자가 **어느 창인가**("5시간" · "주간"). 모르면 nil.
     var headWindowLabel: String? { head?.window?.displayName }
 
-    /// 머리 줄의 캡션. 리셋 시각을 알면 `오후 6:59 리셋`, 모르면 규칙이 준 나이 문구다.
+    /// 머리 줄의 캡션 = **관측 나이**(`3시간 전` · `초기화됨 · 확인 못 함` · `알 수 없음`).
     ///
-    /// 왜 둘을 겹치지 않는가: 이 한 줄에 "3시간 전 · 오후 6:59 리셋"을 다 적으면 글 열이 숫자를 밀고
-    /// (실측 84 + 63 = 147pt > 글 열 예산) 무엇보다 사용자가 두 시각을 헷갈린다. 리셋 시각이 있으면
-    /// 그게 더 쓸모 있는 사실이고, 신선도는 숫자의 "이상" 과 바의 투명도가 이미 말한다.
+    /// ## ★ 나이를 리셋 시각으로 **갈아 치우지 않는다** (v0.3.45 P2)
+    /// 초안은 리셋 주장이 아니면 **항상** `오후 3:05 리셋` 만 적었다. 그래서 맥 카드는 이 숫자가 얼마나
+    /// 묵었는지를 **아예 말하지 않았다** — 폰은 같은 자리에 `3시간 전` 을 적는다. 숫자의 "이상"과 바의
+    /// 투명도가 하한임을 알리지만 그것은 "30분을 넘었다"까지이고, 3시간인지 3일인지는 말하지 못한다
+    /// (`AILimitFreshnessRule` 머리말 ⓑ — 묵은 값을 지금 값으로 읽는 것이 **비싼 쪽**의 거짓이다).
+    ///
+    /// 리셋 시각은 버리지 않고 **덧붙인다**(`headCaptionDetailed`). 다만 글 열 예산이 좁아
+    /// (실측 "3시간 전 · 오후 6:59 리셋" 107.19pt > 나이만 35.27pt) 뷰가 `ViewThatFits` 로 좁은 창에서는
+    /// 리셋 쪽을 **뺀다** — 말줄임보다 조각 빼기가 이 저장소 규칙이고, 창은 리사이즈되므로 넓히면 둘 다 선다.
     var headCaption: String {
-        guard let head else { return Self.unknownCaption }
-        if let resetsAt = head.resetsAt, !head.freshness.isResetClaim {
-            return "\(AILimitResetTimeText.text(resetsAt)) 리셋"
-        }
-        return head.captionText
+        head?.captionText ?? Self.unknownCaption
+    }
+
+    /// 나이 + 리셋 시각(`3시간 전 · 오후 6:59 리셋`). 리셋을 모르거나 이미 지났으면 나이만.
+    var headCaptionDetailed: String {
+        guard let headResetText else { return headCaption }
+        return "\(headCaption) · \(headResetText)"
     }
 
     /// '판정 불가' 캡션은 **규칙에서 가져온다**. 여기에 "알 수 없음"을 다시 적으면 문구가 두 벌이 되고,
@@ -166,8 +182,17 @@ struct AILimitCardModel: Equatable, Identifiable {
             provider: provider,
             windows: windows,
             notice: store.noticeText(provider: provider),
-            planLabel: store.bundle?.provider(provider)?.planLabel
+            planLabel: store.bundle?.provider(provider)?.planLabel,
+            headResetText: resetText(head: windows.first, now: now)
         )
+    }
+
+    /// 머리 캡션에 덧붙일 리셋 시각. **지난 시각은 nil** 이고, 리셋을 이미 주장한 창도 nil 이다.
+    static func resetText(head: AILimitDisplay?, now: Date) -> String? {
+        guard let head, !head.freshness.isResetClaim, let resetsAt = head.resetsAt else { return nil }
+        // 유예 안쪽에서 리셋이 막 지난 동안(값은 아직 하한이 맞다) **지난 시각을 미래처럼 적지 않는다.**
+        guard resetsAt > now else { return nil }
+        return "\(AILimitResetTimeText.text(resetsAt)) 리셋"
     }
 }
 
@@ -218,7 +243,16 @@ struct AILimitProviderCard: View {
         )
     }
 
+    /// 머리 줄. 캡션은 **나이 + 리셋 시각**이 먼저고, 글 열이 좁으면 리셋 쪽을 뺀다(말줄임 대신 조각 빼기 —
+    /// 나이는 어느 쪽에서도 **남는다**: 이 숫자가 얼마나 묵었는지는 지울 수 없는 사실이다).
     private var header: some View {
+        ViewThatFits(in: .horizontal) {
+            headerRow(caption: model.headCaptionDetailed, canShrink: false)
+            headerRow(caption: model.headCaption, canShrink: true)
+        }
+    }
+
+    private func headerRow(caption: String, canShrink: Bool) -> some View {
         HStack(spacing: 10) {
             AIProviderTile(provider: provider, size: AILimitWindowLayout.tileSide)
             VStack(alignment: .leading, spacing: 2) {
@@ -239,11 +273,14 @@ struct AILimitProviderCard: View {
                             .lineLimit(1)
                     }
                 }
-                Text(model.headCaption)
+                // ★ 첫 갈래는 줄이지 않는다(`fixedSize`) — 줄일 수 있으면 `ViewThatFits` 가 언제나 첫 갈래를
+                //   고르고 리셋을 뺄 일이 없어져, 글 열이 숫자를 밀어낸다.
+                Text(caption)
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(canShrink ? 0.8 : 1)
+                    .fixedSize(horizontal: !canShrink, vertical: false)
             }
             Spacer(minLength: 8)
             // ★ 큰 숫자 **옆에 창 라벨**이 붙는다. 대표 창은 카드마다 다를 수 있어서(5시간 창이 없는 요금제가

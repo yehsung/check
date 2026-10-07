@@ -51,6 +51,29 @@ package struct AILimitDisplayRow: Identifiable, Equatable, Sendable {
     package var visibleWindows: [AILimitDisplay] {
         [fiveHour, weekly].compactMap { $0 }.filter(\.isVisible)
     }
+
+    /// 줄이 세울 **대표 창과 그 라벨**. 보이는 창을 5시간 → 주간 순서로 담고 **첫 줄이 대표**다 —
+    /// 맥 카드(`AILimitCardModel.head`)·위젯(`AingWidgetLimitRow.primaryWindow`)과 **같은 규칙**이다.
+    ///
+    /// ## 왜 폰에도 있어야 했나 (2026-10-07 실증한 P2)
+    /// 폰 카드는 `row.fiveHour == nil` 이면 머리 줄의 **값과 캡션을 둘 다 건너뛰었다**. 5시간 창이 아예 없는
+    /// 계정(주간만 오는 요금제 · 안티그래비티 실측)에서 맥은 `42% / 주간`, 위젯도 `42% / 주간` 을 세우는데
+    /// **폰만 머리 숫자가 없었다** — 같은 데이터로 세 화면이 다른 말을 했다. 그 분기는 뷰(`#if os(iOS)`) 안에
+    /// 있어서 맥 스위트가 한 줄도 재지 못했다. 그래서 선택 규칙을 **뷰 밖**(이 타입)으로 끌어낸다.
+    ///
+    /// ★ 라벨을 값과 **한 묶음으로** 내보내는 까닭: 대표 창이 줄마다 다를 수 있으므로(제공자별 창 구성이
+    /// 다르다) 라벨이 없으면 이 줄의 주간 42% 가 옆 줄의 5시간 27% 와 같은 창으로 읽힌다.
+    package var primaryWindow: (display: AILimitDisplay, label: String)? {
+        guard let display = visibleWindows.first, let window = display.window else { return nil }
+        return (display, window.displayName)
+    }
+
+    /// 대표 창 아래에 **따로** 그릴 주간 줄. 주간이 이미 대표로 섰으면 nil — 같은 값을 두 번 그리지 않는다
+    /// (위젯 `secondaryWeekly` 와 같은 규칙).
+    package var secondaryWeekly: AILimitDisplay? {
+        guard let weekly, weekly.isVisible else { return nil }
+        return primaryWindow?.display.window == .weekly ? nil : weekly
+    }
 }
 
 @MainActor
@@ -67,11 +90,10 @@ package final class AILimitsStore {
 
     /// 이보다 오래된 `observed_at` 행은 **유령**으로 보고 목록에서 숨긴다(3일).
     ///
-    /// 값의 근거: 맥이 켜져 있으면 10분마다 올라오므로 산 제공자는 몇 분을 안 넘는다. 3일은 그 사이에 들어갈
-    /// 수 있는 가장 긴 정상 공백(주말 내내 맥을 끈 사람)보다 **짧지 않게**, 그러나 "쓰지 않게 된 도구"를
-    /// 영원히 들고 있지 않을 만큼은 **짧게** 잡은 값이다. 어느 쪽으로 틀려도 손해가 비대칭이 아니라서
-    /// (숨겨도 맥을 켜면 10분 안에 돌아오고, 남겨도 나이 캡션이 "3일 전"으로 말한다) 한 상수로 둔다.
-    package nonisolated static let ghostRowAge: TimeInterval = 3 * 86_400
+    /// ★ 숫자는 여기 없다 — `AILimitGhostRow.maxObservationAge`(CheckMobileShared) **한 곳**에 있다.
+    /// 위젯 확장은 이 모듈을 링크하지 않으므로(Package.swift) 두 벌로 적으면 폰은 숨기고 위젯은 그리는
+    /// 날이 온다. 이 별칭은 호출부·테스트의 읽기 편의일 뿐이다.
+    package nonisolated static let ghostRowAge: TimeInterval = AILimitGhostRow.maxObservationAge
 
     @ObservationIgnored private var serial = 0
     @ObservationIgnored private var inflight: Task<Void, Never>?
@@ -164,9 +186,10 @@ package final class AILimitsStore {
         var newest: [AILimitProvider: AILimitFetchedRow] = [:]
         for row in rows {
             guard let provider = AILimitProvider(rawValue: row.provider) else { continue }
-            // 유령 행 숨기기. **미래 시각은 여기서 버리지 않는다** — 기기 시계가 어긋난 경우이고, 그 판정은
+            // 유령 행 숨기기. 문턱·판정은 위젯과 **같은 함수**다(`AILimitGhostRow`) — 위젯도 자기 칸 시각으로
+            // 다시 잰다. **미래 시각은 여기서 버리지 않는다** — 기기 시계가 어긋난 경우이고, 그 판정은
             // 코어 규칙이 이미 한다(유예를 넘는 미래 관측은 `unknown`). 여기서 재는 것은 '너무 오래됐나' 하나다.
-            if now.timeIntervalSince(row.observedAt) >= ghostRowAge { continue }
+            if AILimitGhostRow.isGhost(observedAt: row.observedAt, now: now) { continue }
             if let held = newest[provider], held.observedAt >= row.observedAt { continue }
             newest[provider] = row
         }

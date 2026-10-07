@@ -76,6 +76,11 @@ private func aiExpectValueMatchesPercent(_ display: AILimitDisplay, _ label: Str
     let whole = AILimitFreshnessRule.wholePercent(percent)
     #expect(display.valueText == (display.floorOnly ? "\(whole)% 이상" : "\(whole)%"),
             "\(label): percent \(percent)(→ \(whole)%) 인데 글자가 '\(display.valueText)' 다 — 바와 숫자가 다른 사실을 말한다")
+    // ★ `0% 이상` 은 **아무 말도 아니다**(모든 값이 0 이상이다). 어느 경로로도 그 글자가 나오지 않는다 —
+    //   하한 깃발까지 함께 내려가야 바가 하한 색인데 글자는 등호인 조합도 안 생긴다(v0.3.45 P2).
+    #expect(display.valueText != "0% 이상", "\(label): 아무 말도 아닌 글자가 화면에 나간다")
+    #expect(!(whole == 0 && display.floorOnly),
+            "\(label): 숫자가 0% 인데 하한 깃발이 서 있다 — 글자는 '0%' 인데 바가 하한 색으로 흐려진다")
     if display.freshness.isResetClaim {
         // 리셋을 확신하면 숫자도 0 이어야 한다. "0% 이상"은 아무 말도 아니므로 하한 깃발도 내려간다.
         #expect(percent == 0, "\(label): 리셋을 주장하면서 숫자가 \(percent) 다")
@@ -231,8 +236,8 @@ struct AILimitsCoreTests {
     /// Codex 실측(2026-10-07): used 0% 일 때 `reset_at` 이 **요청마다 미끄러지는 "지금+5시간" 투영**이었다.
     /// 창 경계가 아니다. 숫자는 어차피 0 이라 안 바뀌지만, 이걸 리셋으로 읽으면 캡션이 **없던 사건을 단정한다**.
     ///
-    /// 그래서 기대값은 "초기화됨"이 **아니다**. 마지막으로 본 0% 를 하한으로 두고 나이만 말한다
-    /// (`0% 이상`은 동어반복처럼 보이지만 참이고, 정보는 캡션이 나른다 — 거짓 자신감보다 싸다).
+    /// 그래서 기대값은 "초기화됨"이 **아니다**. 마지막으로 본 0% 를 하한으로 두고 나이만 말한다 —
+    /// 정보는 **캡션**이 나른다(거짓 자신감보다 싸다). 글자는 `0%` 다: `0% 이상` 은 아무 말도 아니다(P2).
     @Test func zeroPercentRowNeverClaimsReset() {
         let snapshot = aiSnapshot(used: 0, observedAgo: 3 * aiHour, resetsAt: aiNow.addingTimeInterval(-aiHour))
         let display = AILimitFreshnessRule.display(snapshot, now: aiNow)
@@ -240,6 +245,9 @@ struct AILimitsCoreTests {
         #expect(display.captionText == "3시간 전")
         #expect(display.captionText != "초기화됨")
         #expect(display.percent == 0)
+        #expect(display.valueText == "0%", "낡은 0% 의 글자가 '\(display.valueText)' 다")
+        #expect(display.floorOnly == false, "0% 에 하한 깃발이 섰다 — 바가 하한 색인데 글자는 등호다")
+        aiExpectValueMatchesPercent(display, "낡은 0% (함정 ①)")
     }
 
     // MARK: ④ 함정 ③ — 리셋 뒤 나이는 `now - resetsAt` 하나로만 잰다
@@ -687,14 +695,18 @@ struct AILimitsCoreTests {
     @Test func combineNeverBorrowsAResetEventForANonClaimingRow() {
         let zeroStale = aiPlainDisplay(used: 0, observedAgo: 3 * aiHour)
         let claimed = aiResetClaimDisplay(window: .weekly, used: 60, observedAgo: 2 * aiDay, resetAgo: aiDay)
-        #expect(zeroStale.freshness == .stale && zeroStale.valueText == "0% 이상")
+        // 글자는 둘 다 `0%` 다(`0% 이상` 은 아무 말도 아니다 — P2). 그래서 "하한 0%" 와 "확신한 0%" 를
+        // 가르는 신호는 **캡션과 등급**이다: `3시간 전`/`.stale` 인가 `초기화됨`/`.reset` 인가.
+        #expect(zeroStale.freshness == .stale && zeroStale.valueText == "0%")
         #expect(claimed.freshness == .resetUnverified)
 
         let combined = AILimitFreshnessRule.combine([zeroStale, claimed])
         #expect(combined.captionText == "3시간 전")
         #expect(combined.captionText != "초기화됨", "리셋을 주장하지 않는 행에 없던 사건을 붙였다")
-        #expect(combined.valueText == "0% 이상", "하한 0% 가 '확신한 0%' 로 바뀌었다")
-        #expect(combined.floorOnly)
+        #expect(combined.valueText == "0%")
+        #expect(combined.percent == 0)
+        #expect(combined.freshness == .stale, "하한 0% 가 '확신한 0%'(.reset) 로 바뀌었다 — 그 차이는 캡션·등급이 나른다")
+        #expect(combined.floorOnly == false, "0% 에 하한 깃발이 섰다 — 글자는 '0%' 인데 바가 흐려진다")
         aiExpectValueMatchesPercent(combined, "0% 하한 + 남의 리셋")
     }
 
@@ -726,13 +738,15 @@ struct AILimitsCoreTests {
         #expect(claimed.floorOnly == false, "'0% 이상'은 아무 말도 아니다")
 
         // 하한·등호·클램프 세 갈래 모두 글자의 수가 `percent` 를 반올림한 수와 같다.
+        // ★ 0 에서는 하한 깃발이 **안 선다**(`0% 이상` 은 아무 말도 아니다 — 아래 전용 테스트가 그 자리를 잰다).
         for percent in [0, 0.4, 27, 90, 99.6, 101, -5] as [Double] {
             for floorOnly in [false, true] {
                 let value = AILimitFreshnessRule.value(percent: percent, floorOnly: floorOnly, isResetClaim: false)
                 let whole = AILimitFreshnessRule.wholePercent(value.percent)
-                #expect(value.text == (floorOnly ? "\(whole)% 이상" : "\(whole)%"),
+                let expectedFloor = floorOnly && whole > 0
+                #expect(value.text == (expectedFloor ? "\(whole)% 이상" : "\(whole)%"),
                         "percent \(percent) → 숫자 \(value.percent) · 글자 '\(value.text)' 가 어긋났다")
-                #expect(value.floorOnly == floorOnly)
+                #expect(value.floorOnly == expectedFloor)
                 #expect(value.percent >= 0 && value.percent <= 100)
             }
         }
@@ -742,6 +756,69 @@ struct AILimitsCoreTests {
         #expect(AILimitFreshnessRule.clampedPercent(.nan) == 0)
         #expect(AILimitFreshnessRule.clampedPercent(.infinity) == 0)
         #expect(AILimitFreshnessRule.clampedPercent(42) == 42)
+    }
+
+    /// ★★ **`0% 이상` 은 어느 경로로도 안 나온다.** (v0.3.45 P2)
+    ///
+    /// ## 왜 이게 결함이었나
+    /// 하한 깃발을 내리는 자리가 **리셋 주장 하나**뿐이어서, 0% 가 **낡아서** 하한이 된 경우는 그 글자가
+    /// 그대로 나갔다 — `value(0, floorOnly: true, isResetClaim: false) → "0% 이상"`. 모든 값이 0 이상이므로
+    /// 그 글자는 아무 말도 아니다. 그리고 드문 조합도 아니었다: Codex 5시간 창은 실측에서 0% 가 흔하고
+    /// (함정 ①: 그 행은 리셋도 주장하지 않는다) 맥이 **30분만** 자도 `.stale` 이 된다 → 맥 팝오버·폰 카드·위젯
+    /// 세 화면에 평상시로 보였다.
+    ///
+    /// ## 어디를 재는가
+    /// 입구(`value`) · 창 하나(`display`) · 조합(`combine`) **세 경로 전부**다. 한 곳만 재면 다른 호출부가
+    /// 0 이 아닌 하한을 들고 들어오는 변형이 살아남는다(그게 P0 가 생긴 모양이다).
+    /// 그리고 **0.4% 의 하한은 그대로 살아 있어야 한다**(`1% 이상`) — "0 이면 깃발을 내린다"를
+    /// "하한이면 언제나 깃발을 내린다"로 넓히는 변형은 그 단언에서 죽는다.
+    @Test func zeroPercentNeverGetsTheFloorSuffix() {
+        // ① 입구. 0 과 음수(클램프되어 0) 양쪽에서.
+        for percent in [0, -5, Double.nan] as [Double] {
+            let value = AILimitFreshnessRule.value(percent: percent, floorOnly: true, isResetClaim: false)
+            #expect(value.text == "0%", "percent \(percent) 의 글자가 '\(value.text)' 다 — 아무 말도 아닌 글자다")
+            #expect(value.floorOnly == false, "percent \(percent) 에 하한 깃발이 섰다")
+            #expect(value.percent == 0)
+        }
+        // ★ 기준선이 갈려야 이 테스트가 뜻을 갖는다: **0 이 아닌** 하한은 "이상"을 그대로 받는다.
+        let tiny = AILimitFreshnessRule.value(percent: 0.4, floorOnly: true, isResetClaim: false)
+        #expect(tiny.text == "1% 이상" && tiny.floorOnly, "0 이 아닌 하한까지 깃발을 내렸다 — 정보를 버렸다")
+        let plain = AILimitFreshnessRule.value(percent: 0, floorOnly: false, isResetClaim: false)
+        #expect(plain.text == "0%" && plain.floorOnly == false)
+
+        // ② 창 하나. 리셋 시각을 모르는 0% 행(= Codex 5시간 창의 실측 모양)이 낡아 가는 두 지점.
+        for ago in [31 * 60, Int(aiDay) + 1] {
+            let display = AILimitFreshnessRule.display(aiSnapshot(used: 0, observedAgo: TimeInterval(ago)), now: aiNow)
+            #expect(display.freshness.isFloorOnly, "전제: \(ago)초 전이면 등급은 하한이다")
+            #expect(display.valueText == "0%", "\(ago)초 전 0% 의 글자가 '\(display.valueText)' 다")
+            #expect(display.floorOnly == false)
+            #expect(display.percent == 0)
+            // 낡았다는 사실은 사라지지 않는다 — **캡션**이 나른다(그게 사람에게 뜻이 있는 말이다).
+            #expect(display.captionText != "방금" && display.captionText != "초기화됨")
+            aiExpectValueMatchesPercent(display, "창 하나 · \(ago)초 전 0%")
+        }
+
+        // ③ 조합. 0% 하한만 모인 경우 — 메뉴바 한 줄·위젯 small 이 그리는 그 값이다.
+        let combined = AILimitFreshnessRule.combine([
+            aiPlainDisplay(used: 0, observedAgo: 3 * aiHour),
+            aiPlainDisplay(window: .weekly, used: 0, observedAgo: 2 * aiDay)
+        ])
+        #expect(combined.valueText == "0%", "조합값의 글자가 '\(combined.valueText)' 다")
+        #expect(combined.floorOnly == false)
+        #expect(combined.percent == 0)
+        #expect(combined.captionText == "2일 전", "조합 캡션은 가장 낡은 기여자 것이다")
+        aiExpectValueMatchesPercent(combined, "0% 하한 둘")
+
+        // ④ 제공자 카드 경로도 같은 입구를 쓴다(뷰가 자기 글자를 만들면 여기서 안 걸린다 — 그래서 값으로 잰다).
+        let card = AILimitFreshnessRule.displays(
+            provider: AILimitProviderSnapshot(provider: .codex, windows: [
+                aiSnapshot(window: .fiveHour, used: 0, observedAgo: 3 * aiHour),
+                aiSnapshot(window: .weekly, used: 12, observedAgo: 3 * aiHour)
+            ]),
+            now: aiNow
+        )
+        #expect(card.map(\.valueText) == ["0%", "12% 이상"], "카드 줄의 글자가 \(card.map(\.valueText)) 다")
+        #expect(card.map(\.floorOnly) == [false, true])
     }
 
     /// ★ **일반 불변식**: 낱개든 짝이든 셋이든, `percent` 와 `valueText` 가 어긋나는 조합이 하나도 없다.

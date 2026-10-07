@@ -424,11 +424,20 @@ package struct AingWidgetLimitRow: Equatable, Sendable, Identifiable {
     /// 5시간 창(크게). 그 창이 없으면 nil — 지어내 0% 로 그리지 않는다.
     package let fiveHour: AILimitDisplay?
     package let weekly: AILimitDisplay?
+    /// 맥이 이 제공자에게서 값을 받은 시각. **머리의 나이 글자가 이 값으로 선다**(v0.3.45 P2).
+    ///
+    /// 왜 들고 다니는가: 머리는 예전에 `snapshot.generatedAt`(= 폰이 파일을 쓴 시각)으로 나이를 적었다.
+    /// 그 값은 리밋이 안 바뀌어도 `NowStore.touchWidgetSnapshot` 이 60초마다 '지금'으로 옮기므로,
+    /// 맥이 몇 시간 자고 있어도 머리는 **'방금'**이라고 적었다 — 낡음을 알릴 수단이 리밋의 나이를 말한 적이
+    /// 없었던 것이다. `AILimitDisplay` 에는 관측 시각이 없고(나이는 리셋 축과 섞인 `claimAge` 뿐이다)
+    /// 그 축을 머리 글자로 쓰면 "리셋 경계가 오래전"이 "관측이 오래됨"으로 읽힌다. 그래서 원본 시각을 싣는다.
+    package let observedAt: Date?
 
-    package init(provider: AILimitProvider, fiveHour: AILimitDisplay?, weekly: AILimitDisplay?) {
+    package init(provider: AILimitProvider, fiveHour: AILimitDisplay?, weekly: AILimitDisplay?, observedAt: Date? = nil) {
         self.provider = provider
         self.fiveHour = fiveHour
         self.weekly = weekly
+        self.observedAt = observedAt
     }
 
     /// 급한 순서를 정하는 하한(5시간 창). 판정 불가·창 없음은 **−1** — 모르는 줄이 "0% 라 여유롭다"로 밀려 내려가지도,
@@ -491,6 +500,12 @@ package struct AingWidgetLimits: Equatable, Sendable {
             //   남의 사용률이 내 Claude 줄에 그려진다(열거값 확장 함정).
             .compactMap { row -> AingWidgetLimitRow? in
                 guard let provider = AILimitProvider(rawValue: row.provider) else { return nil }
+                // ★ 유령 행 게이트를 **칸 시각으로 다시** 지난다(v0.3.45 P2). 폰은 서버 응답을 받는 순간
+                //   이 문턱을 적용하지만, 패널은 **앱이 열릴 때만** 다시 써지고 위젯은 그 파일을 몇 시간·며칠
+                //   뒤의 칸에서 그린다(리밋 위젯은 지평 밖 칸까지 깐다). 그래서 "쓸 때는 안 유령이었지만
+                //   그릴 때는 유령"인 창이 열렸고, 그 창에서 위젯은 로그아웃한 제공자를 `0% · 초기화됨` 으로
+                //   그렸다. 문턱은 폰과 **같은 상수 하나**다(`AILimitGhostRow` — 모듈이 달라 두 벌로 적으면 갈린다).
+                guard !AILimitGhostRow.isGhost(observedAt: row.observedAt, now: date) else { return nil }
                 var windows: [AILimitWindowSnapshot] = []
                 if let percent = row.fiveHourPercent {
                     windows.append(AILimitWindowSnapshot(
@@ -511,11 +526,29 @@ package struct AingWidgetLimits: Equatable, Sendable {
                     let value = AILimitFreshnessRule.display(provider: snapshot, window: window, now: date)
                     return value.isVisible ? value : nil
                 }
-                return AingWidgetLimitRow(provider: provider, fiveHour: display(.fiveHour), weekly: display(.weekly))
+                return AingWidgetLimitRow(
+                    provider: provider, fiveHour: display(.fiveHour), weekly: display(.weekly),
+                    observedAt: row.observedAt
+                )
             }
             .sorted { $0.provider.sortOrder < $1.provider.sortOrder }
         todayTokens = panel.todayTokens
         recentTokens = panel.recentTokens
+    }
+
+    /// 보이는 줄 중 **가장 낡은** 관측 시각. 머리의 나이 글자가 이 값으로 선다.
+    ///
+    /// 왜 가장 낡은 쪽인가: 머리는 "이 칸에 적힌 숫자들을 얼마나 믿을 수 있나" 하나를 말한다. 가장 최신을
+    /// 고르면 켜져 있는 맥 하나가 3일 묵은 다른 줄의 낡음을 가린다 — 조합값의 신뢰도는 **가장 낡은 기여자**가
+    /// 정한다는 코어 규칙(`AILimitFreshnessRule.combine`)과 같은 방향이다.
+    package var oldestObservedAt: Date? {
+        rows.compactMap(\.observedAt).min()
+    }
+
+    /// 머리에 적을 나이 글자("3시간 전"). 관측 시각을 모르면 nil(= 글자를 적지 않는다 — 폰이 파일을 쓴 시각을
+    /// 리밋의 나이처럼 적지 않는다).
+    package func observationAgeText(now: Date) -> String? {
+        oldestObservedAt.map { AingWidgetFormat.ago(from: $0, now: now) }
     }
 
     /// S 가 세울 하나: 5시간 사용률이 가장 높은 줄(= 먼저 닿는 벽). 동률이면 **고정 순서**가 가른다 —

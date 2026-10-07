@@ -1011,30 +1011,29 @@ struct AILimitsMacUploadTests {
     /// PostgREST 는 배열 본문의 키 집합이 행마다 다르면 스키마를 보기도 전에 400 PGRST102 로 **본문 전체**를
     /// 거절하고, 400 은 조용히 삼켜져 그 사람의 행이 **영원히 한 줄도** 안 올라간다(v0.2.41 실제 사고).
     ///
-    /// 픽스처는 그 혼합이 실제로 생기는 모양이다: Claude 는 두 창 + 플랜, Codex 는 5시간만 + 지문,
-    /// 안티그래비티는 주간만 + 플랜·지문 없음. 합성 `Encodable` 이면 세 행의 키가 전부 다르다.
+    /// 픽스처는 그 혼합이 실제로 생기는 모양이다: Claude 는 두 창 + 플랜, Codex 는 5시간만 + 플랜 없음,
+    /// 안티그래비티는 주간만. 합성 `Encodable` 이면 세 행의 키가 전부 다르다.
     @Test
     func everyUploadRowHasTheSameKeySet() throws {
         let rows = [
             AILimitUpsertRow(userId: "u", deviceId: "d", provider: "claude",
                              fiveHourPercent: 27, fiveHourResetsAt: "2026-10-06T19:00:00Z",
                              weeklyPercent: 60, weeklyResetsAt: "2026-10-12T03:00:00Z",
-                             planLabel: "max", accountFingerprint: nil, observedAt: "2026-10-07T00:00:00Z"),
+                             planLabel: "max", observedAt: "2026-10-07T00:00:00Z"),
             AILimitUpsertRow(userId: "u", deviceId: "d", provider: "codex",
                              fiveHourPercent: 0, fiveHourResetsAt: nil,
                              weeklyPercent: nil, weeklyResetsAt: nil,
-                             planLabel: nil, accountFingerprint: "0123456789abcdef",
-                             observedAt: "2026-10-07T00:00:00Z"),
+                             planLabel: nil, observedAt: "2026-10-07T00:00:00Z"),
             AILimitUpsertRow(userId: "u", deviceId: "d", provider: "antigravity",
                              fiveHourPercent: nil, fiveHourResetsAt: nil,
                              weeklyPercent: 75, weeklyResetsAt: nil,
-                             planLabel: nil, accountFingerprint: nil, observedAt: "2026-10-07T00:00:00Z")
+                             planLabel: nil, observedAt: "2026-10-07T00:00:00Z")
         ]
         let data = try JSONEncoder().encode(rows)
         let decoded = try #require(try JSONSerialization.jsonObject(with: data) as? [[String: Any]])
         #expect(decoded.count == 3)
         let expected = Set(AILimitUpsertRow.CodingKeys.allCases.map(\.rawValue))
-        #expect(expected.count == 10, "컬럼이 \(expected.count) 개다 — 더하거나 뺐으면 이 숫자도 함께 봐라")
+        #expect(expected.count == 9, "컬럼이 \(expected.count) 개다 — 더하거나 뺐으면 이 숫자도 함께 봐라")
         for (index, row) in decoded.enumerated() {
             #expect(Set(row.keys) == expected,
                     "\(index)번 행의 키가 \(Set(row.keys).symmetricDifference(expected)) 만큼 다르다 — PGRST102 로 본문 전체가 거절된다")
@@ -1043,9 +1042,15 @@ struct AILimitsMacUploadTests {
         //   JSONSerialization 은 null 을 NSNull 로 준다).
         #expect(decoded[1]["weekly_percent"] is NSNull, "nil 이 생략됐다 — 합성 Encodable 로 돌아갔다")
         #expect(decoded[2]["five_hour_percent"] is NSNull)
-        #expect(decoded[0]["account_fingerprint"] is NSNull)
+        #expect(decoded[0]["plan_label"] as? String == "max", "플랜 라벨은 **올린다**(폰 카드가 그린다)")
+        #expect(decoded[1]["plan_label"] is NSNull)
         // `updated_at` 은 **서버가 쥔다**(터치 트리거). 보내면 버려지지만 키 집합을 흔들 자리를 만들지 않는다.
         #expect(!expected.contains("updated_at"))
+        // ★ 계정 지문 칸은 **아예 없다**(v0.3.45 P1 — 공개 처리방침의 "계정 식별자는 올리지 않는다").
+        //   null 로 보내는 것과도 다르다: 키가 있으면 다음 사람이 "이미 올리는 칸"으로 읽고 값을 채운다.
+        #expect(!expected.contains("account_fingerprint"),
+                "업로드 본문에 계정 지문 칸이 돌아왔다 — 공개 처리방침과 어긋난다")
+        #expect(decoded.allSatisfy { !$0.keys.contains { $0.contains("fingerprint") } })
     }
 
     /// 퍼센트는 0…100 으로 클램프하고 NaN·무한은 **버린다**(null).
@@ -1075,15 +1080,151 @@ struct AILimitsMacUploadTests {
         #expect(AILimitPlanLabelContract.normalized(nil) == nil)
     }
 
-    /// 계정 지문은 **해시만** — `@` 가 든 값은 서버 CHECK 가 거부한다(이메일을 그 칸에 넣는 사고).
+    /// 계정 지문은 **되돌릴 수 없는 해시**다 — 모양이 아니라 **결과**를 잰다.
+    ///
+    /// ## 왜 모양으로는 부족한가 (2026-10-07 뮤테이션 실증)
+    /// 초안의 단언은 ①`@` 없음 ②길이 16 ③전부 16진수 셋뿐이었다. 그 셋은 `SHA256.hash` 를
+    /// **'원문을 hex 로 적기'** 로 바꿔도 전부 통과한다 — 그런데 그 구현은 계정 식별자 **앞 8바이트를 평문으로**
+    /// 내놓는다: `someone@example.com` → `736f6d656f6e6540` → 되돌리면 `"someone@"` 이다.
+    /// 모양을 재고 결과를 안 잰 테스트의 교과서적인 모양이다(이 저장소가 반복해 겪은 그 구멍).
+    ///
+    /// 그래서 아래 단언 셋이 **결과**를 못 박는다:
+    ///  · 알려진 입력의 SHA-256 앞 16자와 **글자 그대로 같다**(위 변형은 여기서 즉사한다).
+    ///  · 지문의 hex 를 바이트로 되돌려도 원문의 앞머리가 **안 나온다**.
+    ///  · 앞머리가 같고 꼬리만 다른 두 식별자는 **다른 지문**이다(앞 8바이트만 보는 구현은 여기서도 죽는다).
     @Test
     func accountFingerprintIsNeverRawIdentity() throws {
-        let fingerprint = try #require(AILimitFingerprint.make("someone@example.com"))
+        let identity = "someone@example.com"
+        let fingerprint = try #require(AILimitFingerprint.make(identity))
+
+        // ★ 결과 동치. `printf 'someone@example.com' | shasum -a 256` 의 앞 16자다(2026-10-07 실측).
+        #expect(fingerprint == "72497f475e4f76d0",
+                "지문이 SHA-256 앞 16자가 아니다(\(fingerprint)) — 해시 말고 다른 변환을 쓰면 원문이 새어 나간다")
+
+        // 원문을 hex 로 적는 변형이 내놓을 값. **지문과 같으면 평문 유출이다.**
+        let rawHex = identity.utf8.prefix(AILimitFingerprint.hexLength / 2)
+            .map { String(format: "%02x", $0) }.joined()
+        #expect(rawHex == "736f6d656f6e6540", "전제: 이 변형이 내놓는 값(= 평문 'someone@')")
+        #expect(fingerprint != rawHex, "지문이 원문의 hex 다 — 앞 8바이트가 평문으로 올라간다")
+
+        // 되돌릴 수 없다: hex 를 바이트로 풀어 UTF-8 로 읽어도 원문의 앞머리가 나오지 않는다.
+        let bytes = stride(from: 0, to: fingerprint.count, by: 2).compactMap { offset -> UInt8? in
+            let start = fingerprint.index(fingerprint.startIndex, offsetBy: offset)
+            return UInt8(fingerprint[start..<fingerprint.index(start, offsetBy: 2)], radix: 16)
+        }
+        #expect(bytes.count == AILimitFingerprint.hexLength / 2)
+        let roundTrip = String(decoding: bytes, as: UTF8.self)
+        #expect(!identity.hasPrefix(roundTrip), "지문을 되돌리니 원문의 앞머리가 나왔다: \(roundTrip)")
+
+        // 앞머리가 같고 꼬리만 다른 두 식별자 → 다른 지문(앞 8바이트만 보는 구현은 여기서 같아진다).
+        #expect(AILimitFingerprint.make(identity) != AILimitFingerprint.make("someone@example.org"))
+        // 같은 입력은 같은 지문이다(게이트가 "안 바뀌었다"를 판정할 수 있는 근거).
+        #expect(AILimitFingerprint.make(identity) == fingerprint)
+
+        // 모양도 그대로 잰다(서버 CHECK 가 `@` 가 든 값을 23514 로 거부한다 — 그 규약의 클라 쪽 짝).
         #expect(!fingerprint.contains("@"), "이메일이 지문 칸에 그대로 들어갔다")
         #expect(fingerprint.count == AILimitFingerprint.hexLength)
         #expect(fingerprint.allSatisfy { $0.isHexDigit })
         #expect(AILimitFingerprint.make("") == nil)
         #expect(AILimitFingerprint.make("   ") == nil)
+    }
+
+    /// ★★ 계정 지문은 **본문에 실리지 않는다** — 그러나 업로드 게이트에서는 계속 쓴다(v0.3.45 P1).
+    ///
+    /// 공개 처리방침은 "계정 식별자는 올리지 않는다"를 단정한다. 초안은 그 약속과 어긋나게 SHA-256 앞 16자를
+    /// 실어 보냈고, 서버에서 그 값을 **소비·표시·비교하는 호출부는 0건**이었다(폰은 일부러 안 받아 온다).
+    /// 그래서 네트워크로 가는 쪽만 끊는다 — 게이트(로컬 비교)는 그대로 둬야 "같은 값을 다시 안 올린다"가 산다.
+    @Test
+    func uploadBodyNeverCarriesTheAccountFingerprintButTheGateStillDoes() async throws {
+        let fingerprint = try #require(AILimitFingerprint.make("someone@example.test"))
+        let codex = snapshot(.codex, fiveHour: 41, weekly: nil, plan: "plus", fingerprint: fingerprint)
+        let service = SupabaseWorkService()   // 네트워크를 쓰지 않는다 — 행만 만든다
+        let made = await service.aiLimitRow(userID: "u", deviceID: "d", snapshot: codex)
+        let row = try #require(made, "전제: 창이 있으니 행이 만들어진다")
+        let json = try #require(String(data: try JSONEncoder().encode([row]), encoding: .utf8))
+
+        #expect(!json.contains(fingerprint), "업로드 본문에 계정 지문이 실렸다: \(json)")
+        #expect(!json.lowercased().contains("fingerprint"), "지문 칸이 돌아왔다: \(json)")
+        // 전제가 갈려야 이 단언이 뜻을 갖는다: 같은 본문에 플랜 라벨은 **그대로** 실린다(폰 카드가 그린다).
+        #expect(json.contains("\"plan_label\":\"plus\""), "플랜 라벨이 빠졌다 — 폰 카드가 빈칸이 된다: \(json)")
+
+        // ★ 게이트 지문에는 **그대로 남아 있다**(그 문자열은 이 맥을 벗어나지 않는다). 지문 생성을 지우는
+        //   변형은 여기서 걸린다 — 계정이 바뀌어도 "안 바뀌었다"로 읽혀 업로드가 멈춘다.
+        let bundle = AILimitSnapshotBundle(providers: [codex])
+        let other = AILimitSnapshotBundle(providers: [
+            snapshot(.codex, fiveHour: 41, weekly: nil, plan: "plus",
+                     fingerprint: AILimitFingerprint.make("other@example.test"))
+        ])
+        #expect(AILimitUploadLedger.fingerprint(bundle).contains(fingerprint),
+                "게이트가 계정 지문을 더 이상 안 본다 — 계정이 바뀐 주기를 '안 바뀌었다'로 읽는다")
+        #expect(AILimitUploadLedger.fingerprint(bundle) != AILimitUploadLedger.fingerprint(other))
+    }
+
+    /// ★★ **올리는 칸과 두 공개 문서가 같은 말을 한다.** (v0.3.45 P1)
+    ///
+    /// ## 왜 이 테스트가 있는가
+    /// `docs/privacy.md` 는 공개 URL 로 가입 화면·App Store 에 걸리고, 거기서 "올라가는 것은 … **뿐**입니다"로
+    /// **단정**한다. 그런데 초안은 두 칸(`plan_label`·`account_fingerprint`)을 더 실어 보내면서 그 문장을
+    /// 고치지 않았다. 내부 문서 `docs/ai-limits.md` §5 는 한 술 더 떠 플랜 이름을 **'안 올라간다'** 칸에 적어
+    /// 코드와 정반대를 말했다 — 그 문서가 "올리는 항목이 바뀌면 코드보다 먼저 고친다"를 스스로 규약으로
+    /// 적어 둔 당사자인데 **그물이 없었다.** 문서는 아무도 되묻지 않으면 조용히 거짓이 된다.
+    ///
+    /// ## 어떻게 재는가
+    /// 칸 목록은 `AILimitUpsertRow.CodingKeys` **전수**에서 온다(설명이 아니라 실제로 인코딩되는 집합이다).
+    /// 칸을 더하거나 빼면 아래 대조표와 **두 문서를 같이 고치지 않는 한** 빨개진다.
+    ///
+    /// ★ §5 표는 **왼쪽·오른쪽 칸을 갈라서** 읽는다. 한 줄을 통째로 `contains` 하면 '안 올라간다' 쪽에 적힌
+    ///   글자가 '올라간다'를 만족시켜 — 바로 이 결함이 — 그대로 산다.
+    @Test
+    func uploadedColumnsMatchTheTwoPublicDocuments() throws {
+        let root = try amRepositoryRoot()
+        let privacy = try String(contentsOf: root.appendingPathComponent("docs/privacy.md"), encoding: .utf8)
+        let internalDoc = try String(contentsOf: root.appendingPathComponent("docs/ai-limits.md"), encoding: .utf8)
+
+        // 공개 약속의 **그 한 줄**만 본다 — 문서 어딘가에 글자가 있다는 것으로는 '약속했다'가 아니다.
+        let promise = try #require(
+            privacy.split(separator: "\n", omittingEmptySubsequences: false)
+                .first { $0.contains("**어디로 가는가**") }.map(String.init),
+            "처리방침에서 '어디로 가는가' 줄이 사라졌다 — 공개 약속의 정본이다"
+        )
+        let (uploaded, withheld) = try amUploadSectionColumns(internalDoc)
+
+        // 칸 → 두 문서에서 되물을 글자. **CodingKeys 전수**와 아래 `routing` 의 합집합이어야 한다.
+        let documented: [AILimitUpsertRow.CodingKeys: (promise: String, table: String)] = [
+            .provider: ("제공자 이름", "제공자 구분"),
+            .fiveHourPercent: ("사용률 퍼센트", "사용률 퍼센트"),
+            .weeklyPercent: ("창 종류(5시간/주간)", "창 종류(5시간 / 주간)"),
+            .fiveHourResetsAt: ("리셋 시각", "리셋 시각"),
+            .weeklyResetsAt: ("리셋 시각", "리셋 시각"),
+            .planLabel: ("요금제 이름", "플랜 라벨"),
+            .observedAt: ("읽은 시각", "관측(읽은) 시각")
+        ]
+        // 우리 쪽 **라우팅 키**다(제공자에서 읽은 값이 아니다). `user_id` 는 RLS 의 주인이고 `device_id` 는
+        // 어느 맥이 올렸는지다 — 처리방침은 그 둘을 '기기 식별자'·'본인만'으로 따로 적는다.
+        let routing: Set<AILimitUpsertRow.CodingKeys> = [.userId, .deviceId]
+        #expect(Set(AILimitUpsertRow.CodingKeys.allCases) == Set(documented.keys).union(routing),
+                "업로드 칸이 바뀌었는데 이 대조표가 그대로다 — 칸을 더하거나 뺐으면 두 문서를 먼저 고쳐라")
+
+        for (key, text) in documented {
+            #expect(promise.contains(text.promise),
+                    "'\(key.rawValue)' 를 올리는데 공개 처리방침의 열거에 없다(찾은 글자: \(text.promise))")
+            #expect(uploaded.contains(text.table),
+                    "'\(key.rawValue)' 를 올리는데 ai-limits.md §5 '올라간다' 칸에 없다(찾은 글자: \(text.table))")
+            #expect(!withheld.contains(text.table),
+                    "'\(key.rawValue)' 가 §5 '안 올라간다' 칸에 적혀 있다 — 코드와 정반대다")
+        }
+        // 라우팅 키도 **본문에 실린다**. "…뿐입니다"로 끝나는 문장이라 그 사실을 같은 줄에 적어 둬야 한다.
+        #expect(promise.contains("기기 식별자"),
+                "행에 device_id 가 실리는데 공개 열거가 그 말을 안 한다 — '뿐입니다'가 거짓이 된다")
+        #expect(!withheld.contains("플랜"),
+                "§5 '안 올라간다' 칸이 플랜 라벨을 말한다 — 코드는 올린다(폰 '나' 탭 카드가 그 이름을 그린다)")
+
+        // ★ 계정 지문: **칸이 없고**, 두 문서가 그렇게 적는다.
+        #expect(!AILimitUpsertRow.CodingKeys.allCases.contains { $0.rawValue.contains("fingerprint") },
+                "업로드 본문에 계정 지문 칸이 돌아왔다 — 처리방침은 '계정 식별자는 올리지 않는다'고 단정한다")
+        #expect(promise.contains("계정 식별자는 올리지 않"), "공개 약속의 그 문장이 사라졌다")
+        #expect(withheld.contains("계정 지문"), "§5 가 계정 지문을 '안 올라간다' 칸에 적지 않았다")
+        #expect(!uploaded.contains("지문"), "§5 '올라간다' 칸이 지문을 말한다 — 코드는 안 올린다")
     }
 
     /// 충돌키는 PK 그대로다(기기별 행 — 맥 두 대가 서로를 덮지 않는다).
@@ -1207,7 +1348,9 @@ struct AILimitsMacWidthTests {
         #expect(AILimitRowWidthBudget.fits(valueWidth: AILimitRowWidthBudget.worstValueWidth),
                 "최악 문구 \(AILimitRowWidthBudget.worstValueWidth)pt 가 예산 \(budget)pt 를 넘는다")
         // 규칙이 낼 수 있는 네 모양 전부를 실제로 재서 넣는다(상수 하나만 재면 다른 모양이 몰래 넘칠 수 있다).
-        for text in ["27% · 60%", "0% · 0%", "— · —", "100% · 100%", "100% 이상 · 100% 이상", "99% 이상 · 99% 이상"] {
+        // v0.3.45: 칸이 하나만 남으면 **창 라벨이 값과 함께** 선다(`주간 42%`) — 그 모양도 예산 안이어야 한다.
+        for text in ["27% · 60%", "0% · 0%", "— · —", "100% · 100%", "100% 이상 · 100% 이상", "99% 이상 · 99% 이상",
+                     "5시간 100% 이상", "주간 100% 이상", "주간 42%", "—"] {
             let measured = width(text, bold: true, mono: true)
             #expect(AILimitRowWidthBudget.fits(valueWidth: measured),
                     "\"\(text)\" 가 \(measured)pt 로 예산 \(budget)pt 를 넘는다")
@@ -1243,6 +1386,13 @@ struct AILimitsMacWidthTests {
         let needed = tile + 10 + max(caption, name) + 8 + label + 10 + big
         #expect(needed <= AILimitWindowLayout.cardInnerWidth,
                 "카드 한 줄에 \(needed)pt 가 필요한데 안쪽 폭이 \(AILimitWindowLayout.cardInnerWidth)pt 다")
+        // ★ v0.3.45: 머리 캡션은 **나이**를 말하고(`headCaption`) 리셋 시각은 넓은 창에서만 덧붙는다
+        //   (`headCaptionDetailed` + `ViewThatFits`). 예산은 나이 쪽으로 잡혔다는 사실을 숫자로 못 박는다 —
+        //   두 조각 캡션이 예산 안이면 그 갈래는 장식이고, 규칙이 둘이 된 셈이다.
+        let detailed = width("3시간 전 · 오후 6:59 리셋")
+        #expect(tile + 10 + detailed + 8 + label + 10 + big > AILimitWindowLayout.cardInnerWidth,
+                "두 조각 캡션(\(detailed)pt)이 기본 폭에 들어간다 — 조각을 빼는 갈래가 필요 없다는 뜻이다")
+        #expect(width("3시간 전") < max(caption, name), "나이 글자가 예산의 최악보다 넓다 — 예산을 다시 잡아야 한다")
         let derivedWidth: CGFloat = AILimitWindowLayout.cardInnerWidth
             + AILimitWindowLayout.cardPadding * 2 + AILimitWindowLayout.contentPadding * 2
         #expect(AILimitWindowLayout.contentWidth == derivedWidth)
@@ -1522,4 +1672,175 @@ struct AILimitsMacWindowContentTests {
         #expect(AILimitBar.tint(for: .nan) == CheckTheme.accent, "NaN 이 색 단계를 흔든다")
         #expect(AILimitBar.tint(for: nil) == CheckTheme.secondaryText)
     }
+
+    /// ★ 머리 캡션이 **관측 나이**를 말한다(v0.3.45 P2).
+    ///
+    /// 초안은 리셋 주장이 아니면 **항상** `오후 3:05 리셋` 만 적어, 맥 카드는 이 숫자가 얼마나 묵었는지를
+    /// 아예 말하지 않았다 — 폰은 같은 자리에 `3시간 전` 을 적는다(같은 데이터, 다른 말). 숫자의 "이상"과
+    /// 바의 투명도는 "30분을 넘었다"까지만 알리고 3시간인지 3일인지는 말하지 못한다.
+    ///
+    /// 덤으로: 리셋이 **유예(120초) 안쪽에서 이미 지난** 동안 값은 아직 90% 가 맞는데 캡션은 `오후 2:04 리셋`
+    /// 이라고 **지난 시각을 미래처럼** 말했다(재검증자 실측 — 지금이 2:05).
+    @Test
+    func theHeadCaptionAlwaysSpeaksOfTheObservationAge() throws {
+        // ① 리셋 시각이 남아 있어도 **나이를 지우지 않는다**.
+        let aged = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
+            provider: .claude,
+            windows: [AILimitWindowSnapshot(window: .fiveHour, usedPercent: 27,
+                                            resetsAt: amNow.addingTimeInterval(3_600),
+                                            observedAt: amNow.addingTimeInterval(-10_800), source: .local)]
+        ))])
+        let card = try #require(AILimitCardModel.all(store: store(aged, at: amNow), now: amNow).first)
+        #expect(card.headValueText == "27% 이상", "전제: 그 숫자는 하한이다")
+        #expect(card.headCaption == "3시간 전", "맥 카드가 관측 나이를 말하지 않는다: \(card.headCaption)")
+        #expect(card.headCaption == card.head?.captionText, "캡션 문구를 규칙 밖에서 따로 만들었다")
+        // 리셋 시각은 버리지 않고 **덧붙는다**(넓은 창에서 둘 다 선다).
+        let resetText = try #require(card.headResetText, "리셋 시각을 통째로 버렸다")
+        #expect(resetText == "\(AILimitResetTimeText.text(amNow.addingTimeInterval(3_600))) 리셋")
+        #expect(card.headCaptionDetailed == "3시간 전 · \(resetText)")
+
+        // ② ★ **이미 지난** 리셋 시각을 미래처럼 적지 않는다(유예 안쪽 — 값은 아직 90% 가 맞다).
+        let justPassed = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
+            provider: .claude,
+            windows: [AILimitWindowSnapshot(window: .fiveHour, usedPercent: 90,
+                                            resetsAt: amNow.addingTimeInterval(-60),
+                                            observedAt: amNow.addingTimeInterval(-1_800), source: .local)]
+        ))])
+        let grace = try #require(AILimitCardModel.all(store: store(justPassed, at: amNow), now: amNow).first)
+        #expect(grace.headValueText == "90%", "전제: 유예 안쪽이라 값은 아직 90% 다")
+        #expect(grace.headResetText == nil, "지난 리셋 시각을 캡션에 적었다 — 미래로 읽힌다")
+        #expect(grace.headCaption == "30분 전" && grace.headCaptionDetailed == grace.headCaption)
+
+        // ③ 리셋을 **이미 주장한** 창은 규칙의 문구만 말한다(리셋 시각을 덧붙이면 같은 사실을 두 번 적는다).
+        let claimed = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
+            provider: .claude,
+            windows: [AILimitWindowSnapshot(window: .fiveHour, usedPercent: 88,
+                                            resetsAt: amNow.addingTimeInterval(-300),
+                                            observedAt: amNow.addingTimeInterval(-1_800), source: .local)]
+        ))])
+        let reset = try #require(AILimitCardModel.all(store: store(claimed, at: amNow), now: amNow).first)
+        #expect(reset.headValueText == "0%" && reset.headCaption == "초기화됨")
+        #expect(reset.headResetText == nil && reset.headCaptionDetailed == reset.headCaption)
+
+        // ④ 뷰가 두 갈래를 **실제로** 갖는다(좁은 창에서 리셋을 빼고 나이를 남긴다 — 말줄임 대신 조각 빼기).
+        let code = V0317ShopTests.stripped(try V0317ShopTests.source("CheckAILimitsWindow.swift"))
+        #expect(code.contains("headerRow(caption: model.headCaptionDetailed"), "두 조각 갈래가 없다")
+        #expect(code.contains("headerRow(caption: model.headCaption"), "나이만 적는 갈래가 없다")
+        #expect(code.components(separatedBy: "ViewThatFits(in: .horizontal)").count >= 2, "조각을 빼는 갈래가 없다")
+    }
+
+    /// ★ 팝오버 한 줄이 **안 보이는 창을 떨군다**(v0.3.45 P2).
+    ///
+    /// 초안은 두 칸을 무조건 세워, 5시간 창이 **없는** 계정에서 `— · 42%` 를 그렸다. `—` 는 규칙이
+    /// "판정 불가(= 못 읽었다)"로 못 박은 글자라, "이 계정엔 그 창이 없다"를 **읽기 실패**로 말한 셈이다
+    /// (창 카드·폰·위젯은 전부 `isVisible` 이 거짓인 창을 떨군다 — 이 한 줄만 안 따라왔다).
+    @Test
+    func thePopoverSummaryDropsWindowsThatDoNotExist() async {
+        // ① 모든 제공자에 5시간 창이 없다(주간만 오는 계정 하나만 연동) → `—` 가 아니라 `주간 42%`.
+        let weeklyOnly = AILimitReadOutcome(results: [.antigravity: .success(AILimitProviderSnapshot(
+            provider: .antigravity,
+            windows: [AILimitWindowSnapshot(window: .weekly, usedPercent: 42,
+                                            resetsAt: amNow.addingTimeInterval(86_400),
+                                            observedAt: amNow, source: .local)]
+        ))])
+        let one = store(weeklyOnly, at: amNow)
+        let oneText = CheckAILimitsRow.valueText(store: one, now: amNow)
+        #expect(!oneText.contains(AILimitFreshnessRule.unknownValueText),
+                "없는 창을 '읽기 실패'로 말한다: \(oneText)")
+        #expect(oneText == "\(AILimitWindow.weekly.displayName) 42%",
+                "칸이 하나만 남았는데 창 라벨이 없다(5시간으로 읽힌다): \(oneText)")
+        #expect(CheckAILimitsRow.combinedWindows(store: one, now: amNow).map(\.window) == [.weekly])
+        // 툴팁도 **그 줄이 적은 창**만 읽는다(없는 창을 이름만 읽어 주면 "그 숫자는 어디 있나"가 된다).
+        let tooltip = CheckAILimitsRow.tooltip(
+            windows: CheckAILimitsRow.combinedWindows(store: one, now: amNow),
+            caption: one.summary(now: amNow).captionText
+        )
+        #expect(tooltip.contains(AILimitWindow.weekly.displayName))
+        #expect(!tooltip.contains(AILimitWindow.fiveHour.displayName), "없는 창을 툴팁이 읽어 준다: \(tooltip)")
+
+        // ② 기준선: 두 창이 다 있으면 자리가 라벨이므로 숫자 둘만 적는다(라벨이 늘 붙으면 폭이 넘친다).
+        let both = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
+            provider: .claude,
+            windows: [
+                AILimitWindowSnapshot(window: .fiveHour, usedPercent: 27, resetsAt: nil, observedAt: amNow, source: .local),
+                AILimitWindowSnapshot(window: .weekly, usedPercent: 60, resetsAt: nil, observedAt: amNow, source: .local)
+            ]
+        ))])
+        #expect(CheckAILimitsRow.valueText(store: store(both, at: amNow), now: amNow) == "27% · 60%")
+
+        // ③ 창이 **아무것도** 안 읽힌 제공자(만료)는 그래도 행이 서고 `—` **하나**를 적는다 —
+        //    그때 '판정 불가'는 맞는 말이다(없는 칸을 가짜로 세워 `—` 를 두 번 적지는 않는다).
+        let expired = store(AILimitReadOutcome(results: [.claude: .failure(AILimitReadError(.expired))]), at: amNow)
+        #expect(expired.isAvailable, "전제: 만료만 아는 제공자도 행은 선다")
+        #expect(CheckAILimitsRow.combinedWindows(store: expired, now: amNow).isEmpty)
+        #expect(CheckAILimitsRow.valueText(store: expired, now: amNow) == AILimitFreshnessRule.unknownValueText)
+
+        // ④ 창은 **있는데** 판정이 불가한 경우(맥 시계가 세 시간 빠르다)는 두 칸이 그대로 `— · —` 다 —
+        //    그 두 글자는 "못 읽었다"가 맞는 말이고, 폭 예산도 그 모양을 센다.
+        let skewed = AILimitReadOutcome(results: [.claude: .success(AILimitProviderSnapshot(
+            provider: .claude,
+            windows: [
+                AILimitWindowSnapshot(window: .fiveHour, usedPercent: 27, resetsAt: nil,
+                                      observedAt: amNow.addingTimeInterval(10_800), source: .local),
+                AILimitWindowSnapshot(window: .weekly, usedPercent: 60, resetsAt: nil,
+                                      observedAt: amNow.addingTimeInterval(10_800), source: .local)
+            ]
+        ))])
+        #expect(CheckAILimitsRow.valueText(store: store(skewed, at: amNow), now: amNow) == "— · —")
+
+        // ⑤ 순수 조립 함수 자체의 경계(스토어 없이도 되묻는다).
+        #expect(CheckAILimitsRow.valueText(windows: []) == AILimitFreshnessRule.unknownValueText)
+    }
+}
+
+
+// MARK: - 문서 대조 헬퍼 (업로드 칸 ↔ 두 공개 문서)
+
+private struct AMDocError: Error, CustomStringConvertible {
+    let message: String
+    init(_ message: String) { self.message = message }
+    var description: String { message }
+}
+
+/// `docs/` 가 있는 저장소 뿌리. 워크트리·본 저장소 어느 쪽에서 돌려도 찾는다(`docs/` 는 추적되는 폴더다 —
+/// `supabase/` 와 달리 워크트리에도 있다).
+private func amRepositoryRoot() throws -> URL {
+    var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    var visited: [String] = []
+    while directory.path != "/" {
+        if FileManager.default.fileExists(atPath: directory.appendingPathComponent("docs/privacy.md").path) {
+            return directory
+        }
+        visited.append(directory.path)
+        directory = directory.deletingLastPathComponent()
+    }
+    throw AMDocError("docs/privacy.md 를 못 찾았다. 훑은 조상: \(visited.joined(separator: ", "))")
+}
+
+/// `docs/ai-limits.md` §5 표를 **두 칸으로 갈라서** 돌려준다(올라간다 / 안 올라간다).
+///
+/// ★ 칸을 갈라야 하는 이유: 한 줄에 두 열이 같이 있어서 통째로 `contains` 하면 '안 올라간다' 쪽 글자가
+///   '올라간다' 단언을 만족시킨다 — 이 테스트가 잡으려는 결함이 바로 그 모양이었다.
+/// 머리행·구분행은 버린다. 표가 사라지거나 절 제목이 바뀌면 **던진다**(조용히 빈 문자열을 돌려주면
+/// 모든 `!contains` 단언이 공짜로 초록이 된다).
+private func amUploadSectionColumns(_ doc: String) throws -> (uploaded: String, withheld: String) {
+    let lines = doc.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    guard let start = lines.firstIndex(where: { $0.hasPrefix("## 5. 서버에 올라가는 것과 안 올라가는 것") }) else {
+        throw AMDocError("ai-limits.md 에서 §5 절을 못 찾았다 — 올리는 항목의 내부 정본이다")
+    }
+    var uploaded: [String] = []
+    var withheld: [String] = []
+    for line in lines[start...].drop(while: { !$0.hasPrefix("|") }).prefix(while: { $0.hasPrefix("|") }) {
+        let cells = line.split(separator: "|", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        guard cells.count >= 4 else { continue }          // ["", 왼쪽, 오른쪽, ""]
+        let (left, right) = (cells[1], cells[2])
+        if left.hasPrefix("---") || left == "올라간다" { continue }   // 구분행·머리행
+        uploaded.append(left)
+        withheld.append(right)
+    }
+    guard uploaded.count >= 5, withheld.count == uploaded.count else {
+        throw AMDocError("§5 표의 행이 \(uploaded.count) 개다 — 표가 깨졌거나 모양이 바뀌었다")
+    }
+    return (uploaded.joined(separator: "\n"), withheld.joined(separator: "\n"))
 }

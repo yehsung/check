@@ -1,4 +1,5 @@
 #if os(iOS)
+import CheckMobileShared
 import SwiftUI
 
 // 목록은 카드마다 한 장이 아니라 **인셋 그룹 한 장 안의 행**(시안 B). 구분선은 0.5pt · 글자 시작점부터(아이콘·아바타 뒤).
@@ -180,17 +181,23 @@ package struct SectionHeaderBar<Trailing: View>: View {
 }
 
 /// 진행 막대(높이 6 · 얇게 4 · 트랙 `fill`). `.accent` 진행(미달) · `.gauge` '우리 팀' 게이지(그라디언트) · `.done` 달성(초록) · `.ai` AI 토큰.
+///
+/// `floorOnly` = 이 숫자가 **등호가 아니라 하한**인가(AI 리밋의 `27% 이상`). 참이면 채움을 흐리게 그린다 —
+/// 같은 길이의 바가 등호와 하한에서 똑같이 보이면 글자의 "이상"을 읽지 못한 사람에게 바가 거짓말을 한다.
+/// 맥 `AILimitBar` · 위젯 `AingWidgetBar` 와 **같은 값**을 쓴다(`AILimitFloorFill`).
 package struct ProgressBar: View {
     package enum Style: String, CaseIterable, Sendable { case accent, gauge, done, ai }
 
     private let fraction: Double
     private let style: Style
     private let thin: Bool
+    private let floorOnly: Bool
 
-    package init(_ fraction: Double, style: Style = .accent, thin: Bool = false) {
+    package init(_ fraction: Double, style: Style = .accent, thin: Bool = false, floorOnly: Bool = false) {
         self.fraction = ProgressBarRule.clamped(fraction)
         self.style = style
         self.thin = thin
+        self.floorOnly = floorOnly
     }
 
     package var body: some View {
@@ -201,6 +208,7 @@ package struct ProgressBar: View {
                 if fraction > 0 {
                     Capsule()
                         .fill(fillStyle)
+                        .opacity(AILimitFloorFill.opacity(floorOnly: floorOnly))
                         .frame(width: max(height, proxy.size.width * fraction))
                 }
             }

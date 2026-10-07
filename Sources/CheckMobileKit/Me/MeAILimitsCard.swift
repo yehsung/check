@@ -142,16 +142,21 @@ private struct MeAILimitRow: View {
     let row: AILimitDisplayRow
     @Environment(\.dynamicTypeSize) private var typeSize
 
+    /// ★ 머리 줄은 **대표 창**을 세운다 — `fiveHour` 를 무조건 머리로 쓰지 않는다(v0.3.45 P2).
+    ///
+    /// 5시간 창이 아예 없는 계정(주간만 오는 요금제 · 안티그래비티 실측)에서 초안은 `headLine(nil)` 을 불러
+    /// 값·캡션을 **둘 다 건너뛰었다**. 같은 데이터로 맥은 `42% · 주간`, 위젯도 `42% · 주간` 을 세웠다 —
+    /// 세 화면이 다른 말을 했다. 고르는 규칙은 뷰가 아니라 `AILimitDisplayRow.primaryWindow` 에 있다
+    /// (이 뷰는 `#if os(iOS)` 라 맥 스위트가 한 줄도 재지 못한다 — 규칙이 뷰 안에 있으면 그물이 없다).
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let fiveHour = row.fiveHour {
-                headLine(fiveHour)
-                ProgressBar(fraction(fiveHour), style: .ai)
+            if let primary = row.primaryWindow {
+                headLine(primary)
+                ProgressBar(fraction(primary.display), style: .ai, floorOnly: primary.display.floorOnly)
                     .accessibilityHidden(true)
-            } else {
-                headLine(nil)
             }
-            if let weekly = row.weekly {
+            // 주간이 이미 대표로 섰으면 같은 값을 두 번 그리지 않는다.
+            if let weekly = row.secondaryWeekly {
                 weeklyLine(weekly)
             }
         }
@@ -159,16 +164,16 @@ private struct MeAILimitRow: View {
         .accessibilityLabel(Text(label))
     }
 
-    /// 머리 줄: 타일 + 이름(+ 플랜) + 캡션 … 값. 큰 글자에서는 캡션을 값 아래로 내리지 않고 **캡션을 뺀다**
+    /// 머리 줄: 타일 + 이름(+ 플랜) + 캡션 … [창 라벨] 값. 큰 글자에서는 캡션을 값 아래로 내리지 않고 **캡션을 뺀다**
     /// (캡션은 값의 신뢰도이고, 값과 이름이 먼저다 — 말줄임보다 조각 빼기가 이 저장소 규칙이다).
-    private func headLine(_ display: AILimitDisplay?) -> some View {
+    private func headLine(_ primary: (display: AILimitDisplay, label: String)) -> some View {
         ViewThatFits(in: .horizontal) {
-            headRow(display, showsCaption: true)
-            headRow(display, showsCaption: false)
+            headRow(primary, showsCaption: true)
+            headRow(primary, showsCaption: false)
         }
     }
 
-    private func headRow(_ display: AILimitDisplay?, showsCaption: Bool) -> some View {
+    private func headRow(_ primary: (display: AILimitDisplay, label: String), showsCaption: Bool) -> some View {
         HStack(alignment: .center, spacing: MobileTheme.space2) {
             AIProviderTile(provider: row.provider, size: tileSize)
             Text(nameText)
@@ -176,8 +181,8 @@ private struct MeAILimitRow: View {
                 .foregroundStyle(MobileTheme.label)
                 .lineLimit(1)
                 .fixedSize(horizontal: showsCaption, vertical: false)
-            if showsCaption, let display {
-                Text(display.captionText)
+            if showsCaption {
+                Text(primary.display.captionText)
                     .font(.caption)
                     .monospacedDigit()
                     .foregroundStyle(MobileTheme.label3Text)
@@ -185,14 +190,19 @@ private struct MeAILimitRow: View {
                     .fixedSize()
             }
             Spacer(minLength: MobileTheme.space1)
-            if let display {
-                Text(display.valueText)
-                    .font(MobileTheme.number(.subheadline, weight: .bold))
-                    .monospacedDigit()
-                    .foregroundStyle(MobileTheme.label)
-                    .lineLimit(1)
-                    .fixedSize()
-            }
+            // ★ 창 라벨은 **빼지 않는다**. 대표 창이 줄마다 다를 수 있어서(5시간 창이 없는 요금제가 있다)
+            //   라벨 없이 숫자만 세우면 이 줄의 주간 42% 가 위 줄의 5시간 27% 와 같은 창으로 읽힌다.
+            Text(primary.label)
+                .font(.caption)
+                .foregroundStyle(MobileTheme.label2)
+                .lineLimit(1)
+                .fixedSize()
+            Text(primary.display.valueText)
+                .font(MobileTheme.number(.subheadline, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(MobileTheme.label)
+                .lineLimit(1)
+                .fixedSize()
         }
     }
 
@@ -210,7 +220,7 @@ private struct MeAILimitRow: View {
                     .foregroundStyle(MobileTheme.label2)
                     .fixedSize()
             }
-            ProgressBar(fraction(display), style: .ai, thin: true)
+            ProgressBar(fraction(display), style: .ai, thin: true, floorOnly: display.floorOnly)
                 .accessibilityHidden(true)
         }
         .padding(.leading, typeSize.isAccessibilitySize ? 0 : tileSize + MobileTheme.space2)

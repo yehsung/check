@@ -263,6 +263,65 @@ struct MeAILimitsTests {
         #expect(both.widget.label == AILimitWindow.fiveHour.displayName)
     }
 
+    /// ★ **폰 머리 줄도 대표 창을 세운다**(v0.3.45 P2 — 세 화면이 다른 말을 하던 자리).
+    ///
+    /// 폰 카드는 `row.fiveHour == nil` 이면 `headLine(nil)` 을 불러 **값과 캡션을 둘 다 건너뛰었다**.
+    /// 같은 데이터로 맥(`AILimitCardModel.head`)은 `42% · 주간`, 위젯(`primaryWindow`)도 `42% · 주간` 을
+    /// 세우는데 **폰만 머리 숫자가 없었다**(재검증자 실측: `mac 42%/주간 · widget 42%/주간 · phone 숫자 없음`).
+    ///
+    /// ★ 그 분기는 뷰 안(`#if os(iOS)`)에 있어서 맥 스위트가 한 줄도 재지 못했다. 그래서 고르기를 **뷰 밖**
+    /// (`AILimitDisplayRow.primaryWindow`)으로 끌어내고, 여기서 ① 규칙 자체와 ② 뷰가 그 규칙에 물렸는지를 함께 잰다.
+    @Test("폰 머리 줄: 대표 창을 세운다(주간만 오는 계정도) · 라벨이 값과 한 묶음 · 대표를 두 번 안 그린다")
+    func phoneHeadLineStandsUpTheRepresentativeWindow() throws {
+        let base = MobileClock.demoInstant
+        func row(fiveHour: Double?) throws -> AILimitDisplayRow {
+            let rows = [AILimitFetchedRow(provider: "antigravity", fiveHourPercent: fiveHour,
+                                          fiveHourResetsAt: fiveHour == nil ? nil : base.addingTimeInterval(9_000),
+                                          weeklyPercent: 42, weeklyResetsAt: base.addingTimeInterval(86_400),
+                                          planLabel: nil, observedAt: base)]
+            let snapshot = try #require(AILimitsStore.bundle(from: rows, now: base).provider(.antigravity))
+            func display(_ window: AILimitWindow) -> AILimitDisplay? {
+                guard snapshot.window(window) != nil else { return nil }
+                let value = AILimitFreshnessRule.display(provider: snapshot, window: window, now: base)
+                return value.isVisible ? value : nil
+            }
+            return AILimitDisplayRow(provider: .antigravity, planLabel: nil,
+                                     fiveHour: display(.fiveHour), weekly: display(.weekly))
+        }
+
+        // ① 주간만 오는 계정: 머리에 **주간 42%** 가 선다(값도 라벨도 있다).
+        let weeklyOnly = try row(fiveHour: nil)
+        let primary = try #require(weeklyOnly.primaryWindow, "5시간 창이 없으면 머리 줄이 통째로 사라진다")
+        #expect(primary.display.window == .weekly)
+        #expect(primary.display.valueText == "42%")
+        #expect(primary.label == AILimitWindow.weekly.displayName,
+                "주간 값에 '\(primary.label)' 라벨이 붙었다 — 위 줄의 5시간과 같은 창으로 읽힌다")
+        #expect(weeklyOnly.secondaryWeekly == nil, "대표로 이미 선 주간을 아래에 한 번 더 그린다")
+        // 위젯이 같은 데이터로 **같은 창·같은 라벨**을 세운다(두 화면이 한 규칙이다).
+        let widget = try #require(AingWidgetLimitRow(provider: .antigravity, fiveHour: weeklyOnly.fiveHour,
+                                                     weekly: weeklyOnly.weekly).primaryWindow)
+        #expect(widget.display == primary.display && widget.label == primary.label)
+
+        // ② 기준선: 두 창이 다 있으면 머리는 **5시간**이고 주간은 아래 얇은 줄로 내려간다(고정이 아니다).
+        let both = try row(fiveHour: 27)
+        let bothPrimary = try #require(both.primaryWindow)
+        #expect(bothPrimary.display.window == .fiveHour && bothPrimary.display.valueText == "27%")
+        #expect(bothPrimary.label == AILimitWindow.fiveHour.displayName)
+        #expect(both.secondaryWeekly?.valueText == "42%", "두 창이 다 있으면 주간이 따로 한 줄 더 선다")
+
+        // ③ 창이 하나도 안 보이면 머리 줄을 만들지 않는다(0% 로 지어내지 않는다).
+        let none = AILimitDisplayRow(provider: .claude, planLabel: nil, fiveHour: nil, weekly: nil)
+        #expect(none.primaryWindow == nil && none.secondaryWeekly == nil)
+
+        // ★ 뷰가 그 규칙에 **물렸는가**(소스 계약 — 이 뷰는 `#if os(iOS)` 라 값으로는 잴 수 없다).
+        let card = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeAILimitsCard.swift")
+        #expect(card.contains("row.primaryWindow"), "카드가 대표 창 규칙을 쓰지 않는다")
+        #expect(card.contains("row.secondaryWeekly"), "주간 줄이 대표 여부를 보지 않는다 — 같은 값을 두 번 그린다")
+        #expect(!card.contains("row.fiveHour"), "카드가 5시간 창을 무조건 머리로 쓴다(주간만 오는 계정에서 숫자가 사라진다)")
+        #expect(!card.contains("headLine(nil)"), "값·캡션을 둘 다 건너뛰는 갈래가 남았다")
+        #expect(card.contains("primary.label"), "머리 줄에 창 라벨이 없다")
+    }
+
     @Test("토큰 축: 오늘 칸은 잔디의 마지막 날 · 수집을 끄면 둘 다 nil(0 으로 지어내지 않는다)")
     func tokenTotals() async throws {
         let harness = await RankMeHarness(label: "me-ailimits-tokens") { Self.responder($0) }

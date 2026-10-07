@@ -41,38 +41,88 @@ extension WorkTimerStore {
         await uploadAILimitsIfNeeded(now: now)
     }
 
-    /// 변경 게이트 + 업로드. 실패는 조용히 — 장부를 성공 시에만 갱신해 다음 주기에 재시도된다.
+    /// 업로드 진입점. **직렬화만** 한다 — 본문을 만드는 일은 `sendAILimitsUpload` 가 한다.
+    ///
+    /// ## ★★ 비행 중이면 새로 쏘지 않고 **트레일링 한 번**으로 합친다 (v0.3.47 P1 — 2026-10-08 실증)
+    /// 설정 세터는 토글마다 Task 를 띄우는데, `WorkTimerStore` 가 MainActor 라도
+    /// `await service.upsertAILimits` 에서 액터가 풀려 **두 업로드가 동시에 난다.** 스위치 둘을 연달아 끄는
+    /// 평범한 사용에서 실측된 모습은 이것이다:
+    ///   · 본문 A = `claude=값, antigravity=값, codex=null`(첫 토글 시점의 진실)
+    ///   · 본문 B = `claude=값, codex=null, antigravity=null`(둘째 토글 시점의 진실)
+    /// 같은 PK(`user_id,device_id,provider`)가 한쪽에는 값 행으로, 다른 쪽에는 비우는 행으로 들어가고
+    /// **두 요청의 도착 순서는 아무도 보장하지 않는다.** 값 본문이 나중에 닿으면 끈 제공자가 되살아나고,
+    /// 그때 `markCleared` 둘이 이미 대기열을 비워 **다시는 안 비운다** — 그 사람의 폰은 끈 제공자를 계속 본다.
+    ///
+    /// 그래서 한 번에 하나만 난다(`uploadPeakConcurrency == 1` 이 계약이고 테스트가 그걸 잰다). 줄 세우는
+    /// 것이 아니라 **합치는** 까닭: 뒤엣것이 재는 것은 "지금 상태를 올려라"이고, 그 사이 토글이 열 번
+    /// 울렸어도 마지막 상태 한 번이면 같은 뜻이다(요청만 아홉 번 는다).
+    ///
+    /// ★ `defer` 로 핸들을 비우지 **않는다**: 트레일링을 소비하는 동안에도 핸들이 non-nil 이어야 그 사이에
+    ///   들어온 요청이 또 쏘지 않는다. 루프로 소비하고 **그 뒤에** 비운다(`requestDrain` 과 같은 관용구).
+    func uploadAILimitsIfNeeded(now: Date = Date()) async {
+        guard aiLimits.uploadInFlight == nil else {
+            aiLimits.uploadPendingTrailing = true
+            return
+        }
+        let limits = aiLimits
+        let task = Task { @MainActor [weak self] in
+            repeat {
+                // 루프 **안에서 먼저** 내린다. 뒤에 내리면 이번 업로드가 도는 동안 도착한 신호를 지운다.
+                limits.uploadPendingTrailing = false
+                guard let self else { break }
+                await sendAILimitsUpload(now: now)
+            } while limits.uploadPendingTrailing
+            limits.uploadInFlight = nil
+        }
+        aiLimits.uploadInFlight = task
+        await task.value
+    }
+
+    /// 변경 게이트 + 업로드 한 번. 실패는 조용히 — 장부를 성공 시에만 갱신해 다음 주기에 재시도된다.
+    ///
+    /// **부르는 자리는 위 진입점 하나다**(직렬화를 건너뛰면 P1 이 그대로 돌아온다).
     ///
     /// ## ★ 비우기는 "묶음이 비었으면 반환"보다 **앞**에 있다 (v0.3.47)
     /// 올릴 값이 하나도 없는 바로 그 상태(마스터 끔 · 셋 다 끔)가 **비워야 하는 상태**다. 초안처럼
     /// `guard !visibleProviders.isEmpty` 를 맨 위에 두면 전체 끄기가 서버에 영원히 닿지 못하고,
     /// 폰·위젯은 맥이 끈 뒤에도 옛 숫자를 3일간(유령 게이트까지) 계속 보여 준다.
-    func uploadAILimitsIfNeeded(now: Date = Date()) async {
+    private func sendAILimitsUpload(now: Date) async {
         guard let session, hasDeviceIdentity else { return }
-        // 비우기는 정렬해서 보낸다(제공자 순서) — 본문이 결정적이어야 테스트가 글자로 되묻을 수 있다.
-        let clearing = aiLimits.pendingClear.sorted { $0.sortOrder < $1.sortOrder }
+        // 비우기는 **집어서** 보낸다. await 뒤에 비우는 것은 이 집음이지 '그때의 대기열'이 아니다 —
+        // 떠난 사이에 다시 끈 제공자를 비웠다고 표시하면 그 끄기는 영원히 서버에 닿지 않는다
+        // (`AILimitClearClaim` 머리말).
+        let claim = aiLimits.claimPendingClear()
         // 설정이 **켠** 제공자만 담긴 묶음. 끈 제공자는 여기 없고, 대신 위 대기열에 있다.
         let bundle = aiLimits.enabledBundle
         let hasValues = !bundle.visibleProviders.isEmpty
         let fingerprint = AILimitUploadLedger.fingerprint(bundle)
         let valuesChanged = hasValues && fingerprint != lastUploadedAILimits
-        guard valuesChanged || !clearing.isEmpty else { return }
+        guard valuesChanged || !claim.isEmpty else { return }
+        // ★ **비우기만** 남은 재시도는 백오프를 지난다(v0.3.47 P2). 항구적 실패(스키마 없는 서버)에서
+        //   30초마다 영원히 POST 하던 자리다 — 그 사람은 마스터를 끈 사람이고, 약속은 "네트워크 0"이었다.
+        //   값이 바뀐 소식은 이 게이트를 지나지 않는다(비우기가 거기 얹혀 간다).
+        if !valuesChanged, !aiLimits.clearRetryAllowed(now: now) { return }
+        aiLimits.noteUploadStarted()
+        defer { aiLimits.noteUploadFinished() }
         do {
             try await service.upsertAILimits(
                 accessToken: session.accessToken,
                 userID: session.userID,
                 deviceID: deviceID,
                 bundle: bundle,
-                clearedProviders: clearing,
+                clearedProviders: claim.providers,
                 clearedAt: now
             )
             if valuesChanged { lastUploadedAILimits = fingerprint }
             // 성공한 비우기만 대기열에서 뺀다. 실패하면 그대로 남아 다음 주기(30초 틱·팝오버 열기)가 다시 보낸다 —
             // 영구히 안 지워지는 조합이 있으면 그 사람의 폰은 끈 제공자를 계속 보여 준다.
-            aiLimits.markCleared(clearing)
+            aiLimits.markCleared(claim)
+            if !claim.isEmpty { aiLimits.noteClearSucceeded() }
         } catch {
-            // 조용히. 스키마가 없는 서버(앱이 db push 보다 먼저 나간 경우)도 여기로 떨어지고, 그때 해야 할 일은
-            // 아무것도 안 하는 것이다 — 리밋은 정보성 표시이고 사용자를 막을 이유가 없다.
+            // 조용히. 스키마가 없는 서버(앱이 db push 보다 먼저 나간 경우)도 여기로 떨어지고, 사용자를 막을
+            // 이유는 없다(리밋은 정보성 표시다). 다만 **간격은 벌린다** — 포기는 하지 않는다(대기열이 사라지면
+            // 그 행은 영영 안 지워진다). 느려지되 멈추지 않는다: 60초 → 두 배씩 → 상한 1시간.
+            if !claim.isEmpty { aiLimits.noteClearFailed(now: now) }
         }
     }
 

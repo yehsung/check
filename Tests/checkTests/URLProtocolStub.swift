@@ -173,7 +173,9 @@ final class URLProtocolStub: URLProtocol {
         if request.url?.host == "email-not-confirmed" && request.url?.path == "/auth/v1/token" {
             return 400
         }
-        if request.url?.host == "schema-missing" && request.url?.path.hasPrefix("/rest/v1/") == true {
+        // 접두어 매칭이다(`v0241-daily-fails` 와 같은 규약): 요청 **수를 세는** 테스트는 자기만의 호스트가
+        // 필요하다 — 공용 이름 하나를 쓰면 병렬로 도는 다른 스위트의 POST 가 그 집계에 섞인다.
+        if request.url?.host?.hasPrefix("schema-missing") == true, request.url?.path.hasPrefix("/rest/v1/") == true {
             return 404
         }
         // v0.3.37 옛 서버 재현: `p_week_offset` 을 **아직 모르는** team_weekly_leaderboard.
@@ -277,7 +279,9 @@ final class URLProtocolStub: URLProtocol {
         if request.url?.host == "email-not-confirmed" && request.url?.path == "/auth/v1/token" {
             return Data(#"{"msg":"Email not confirmed","code":400}"#.utf8)
         }
-        if request.url?.host == "schema-missing" && request.url?.path.hasPrefix("/rest/v1/") == true {
+        // 상태 코드 쪽과 **같은 접두어 규약**이다 — 둘이 갈리면 `schema-missing-…` 호스트가 404 를 받으면서
+        // 본문만 다른 모양이 되고, 그 어긋남은 다음 사람이 디버깅으로만 알게 된다.
+        if request.url?.host?.hasPrefix("schema-missing") == true, request.url?.path.hasPrefix("/rest/v1/") == true {
             return Data(#"{"code":"PGRST205","message":"Could not find the table 'public.work_statuses' in the schema cache"}"#.utf8)
         }
         if isLegacyLeagueMiss(request, body: body) {

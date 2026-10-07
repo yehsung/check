@@ -216,7 +216,8 @@ struct V0347AILimitVisibilityModelTests {
 
         let reborn = AILimitStore(defaults: defaults, clock: { vvNow }, runner: { _, _ in AILimitReadOutcome() })
         #expect(reborn.pendingClear == [.codex], "비우기 대기열이 재실행에 사라졌다 — 그 행은 서버에 영원히 남는다")
-        reborn.markCleared([.codex])
+        // 재실행에서도 **집어서** 비운다(세대는 복원 순서로 다시 매겨진다 — `AILimitClearClaim` 머리말).
+        reborn.markCleared(reborn.claimPendingClear())
         #expect(reborn.pendingClear.isEmpty)
 
         let third = AILimitStore(defaults: defaults, clock: { vvNow }, runner: { _, _ in AILimitReadOutcome() })
@@ -312,6 +313,16 @@ struct V0347AILimitReadGateTests {
     ///   · Claude      → `/usr/bin/security`(키체인) + `api.anthropic.com`
     ///   · Codex       → `chatgpt.com`
     ///   · 안티그래비티 → `agy` 프로세스
+    ///
+    /// ## ★★ Codex 대조군은 `auth.json` 이 **실재해야** 선다 (2026-10-08 실증한 P2)
+    /// 초안은 **빈 임시 홈**에서 돌면서 `#expect(!claudeOnly.fetched(host: "chatgpt.com"))` 를 단언했다.
+    /// `.codex/auth.json` 이 없으면 러너가 Codex 를 **읽어도** `notInstalled` 로 끝나 네트워크가 0 이라,
+    /// '꺼진 Codex 를 읽는' 퇴행이 들어와도 그 단언은 **영원히 초록**이다(관례: 기준선이 같은 입력이면
+    /// 그 테스트는 영원히 초록). 그래서 자격증명을 실제로 두고, 켜면 요청이 있고 끄면 없다를 **양쪽에서** 잰다.
+    ///
+    /// ★ `codexHome` 도 **주입한다**: 기본 해결은 이 맥의 셸 캐시(`CODEX_HOME` — Orca 가 바꿔 놓는 그 값)를
+    ///   읽으므로, 주입이 없으면 기계에 따라 임시 홈이 무시되고 대조군이 다시 공허해진다(그리고 그때는
+    ///   **진짜** auth.json 을 읽는다).
     @Test
     func liveRunnerTouchesNothingForDisabledProviders() async throws {
         let home = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
@@ -322,35 +333,84 @@ struct V0347AILimitReadGateTests {
         // "켠 제공자는 실제로 불린다"는 대조군이 어떤 기계에서는 공허해진다.
         let fakeAgy = home.appendingPathComponent("agy")
         FileManager.default.createFile(atPath: fakeAgy.path, contents: Data())
+        // Codex 자격증명을 **실제로** 둔다. JWT 가 아니므로 `exp` 클레임이 없고(= 만료를 모른다),
+        // 그래서 리더는 바로 사용량 엔드포인트로 간다 — 그게 이 대조군이 재려는 바로 그 손길이다.
+        let codexHome = home.appendingPathComponent(".codex", isDirectory: true)
+        try FileManager.default.createDirectory(at: codexHome, withIntermediateDirectories: true)
+        try Data(#"{"tokens":{"access_token":"v0347-codex-token","account_id":"acct-v0347"}}"#.utf8)
+            .write(to: codexHome.appendingPathComponent("auth.json"))
 
-        // ① 아무도 안 켰다(마스터 끔과 같은 상태) → 명령 0 · 요청 0.
+        func runner(_ probe: VVReaderProbe) -> AILimitStore.Runner {
+            AILimitStore.liveRunner(
+                home: home, appVersion: "t", session: .shared,
+                processRunner: probe.processRunner, fetcher: probe.fetcher,
+                locateAntigravity: { fakeAgy }, codexHome: codexHome)
+        }
+
+        // ① 아무도 안 켰다(마스터 끔과 같은 상태) → 명령 0 · 요청 0. **auth.json 이 있어도** 그렇다.
         let silent = VVReaderProbe()
-        let silentRunner = AILimitStore.liveRunner(
-            home: home, appVersion: "t", session: .shared,
-            processRunner: silent.processRunner, fetcher: silent.fetcher, locateAntigravity: { fakeAgy })
-        _ = await silentRunner(vvNow, [])
+        _ = await runner(silent)(vvNow, [])
         #expect(silent.commands.isEmpty, "빈 요청에 프로세스를 띄웠다: \(silent.commands)")
         #expect(silent.fetchedHosts.isEmpty, "빈 요청에 네트워크를 썼다: \(silent.fetchedHosts)")
 
         // ② Claude 만 켰다 → 키체인은 열리고, `agy` 와 chatgpt.com 에는 **손도 안 댄다**.
         let claudeOnly = VVReaderProbe()
-        let claudeRunner = AILimitStore.liveRunner(
-            home: home, appVersion: "t", session: .shared,
-            processRunner: claudeOnly.processRunner, fetcher: claudeOnly.fetcher, locateAntigravity: { fakeAgy })
-        _ = await claudeRunner(vvNow, [.claude])
+        _ = await runner(claudeOnly)(vvNow, [.claude])
         #expect(claudeOnly.ranCommand("security"), "전제: 켠 Claude 는 키체인을 읽는다(대조군이 비면 아래가 공허하다)")
         #expect(!claudeOnly.ranCommand("agy"), "끈 안티그래비티의 `agy` 를 띄웠다")
         #expect(!claudeOnly.fetched(host: "chatgpt.com"), "끈 Codex 의 사용량 엔드포인트를 쳤다")
 
         // ③ 안티그래비티만 켰다 → `agy` 는 돌고, 키체인(`security`)과 네트워크는 **건드리지 않는다**.
         let agyOnly = VVReaderProbe()
-        let agyRunner = AILimitStore.liveRunner(
-            home: home, appVersion: "t", session: .shared,
-            processRunner: agyOnly.processRunner, fetcher: agyOnly.fetcher, locateAntigravity: { fakeAgy })
-        _ = await agyRunner(vvNow, [.antigravity])
+        _ = await runner(agyOnly)(vvNow, [.antigravity])
         #expect(agyOnly.ranCommand("agy"), "전제: 켠 안티그래비티는 agy 를 띄운다")
         #expect(!agyOnly.ranCommand("security"), "끈 Claude 의 키체인을 열었다 — 승인 대화상자가 뜰 수도 있다")
         #expect(agyOnly.fetchedHosts.isEmpty, "안티그래비티만 켰는데 네트워크를 썼다: \(agyOnly.fetchedHosts)")
+
+        // ④ ★ Codex 만 켰다 → **켜면 chatgpt.com 을 친다**. ②의 "안 쳤다"가 이 한 줄 때문에 뜻을 갖는다.
+        let codexOnly = VVReaderProbe()
+        _ = await runner(codexOnly)(vvNow, [.codex])
+        #expect(codexOnly.fetched(host: "chatgpt.com"),
+                "전제: 켠 Codex 는 auth.json 을 읽고 사용량 엔드포인트를 친다 — 이 줄이 빨간 날 ②는 공허하다")
+        #expect(codexOnly.commands.isEmpty, "Codex 만 켰는데 프로세스를 띄웠다: \(codexOnly.commands)")
+        #expect(!codexOnly.fetched(host: "api.anthropic.com"), "끈 Claude 의 사용량 엔드포인트를 쳤다")
+    }
+
+    /// ★ 게이트는 **사용자가 끌 수 있는 집합**으로 잰다 (2026-10-08 실증한 P2).
+    ///
+    /// 연동 안 된 제공자는 설정에 줄이 없고(섹션은 연동된 것만 세운다) 기본이 '켬'이라, **연동된 유일한
+    /// 제공자를 끈 사람도** `enabledProviders` 가 안 비어 바퀴가 계속 돌았다 — 그때 `~/.codex/auth.json` 을
+    /// 읽고 `agy`(5초짜리)를 띄운다. 그 사람 화면에는 끌 수 있는 줄이 그 하나뿐이라 멈출 길이 마스터밖에 없었다.
+    @Test
+    func turningOffTheOnlyLinkedProviderStopsTheWheel() async {
+        let spy = VVRunnerSpy(available: [.claude])   // Claude 만 연동됐다
+        let store = AILimitStore(defaults: vvDefaults(), clock: { vvNow }, runner: spy.runner())
+        await store.refreshIfDue(now: vvNow)
+        #expect(store.configurableProviders == [.claude], "전제: 설정에 줄이 서는 제공자는 Claude 하나다")
+        #expect(spy.callCount == 1)
+
+        store.setProviderEnabled(.claude, false)
+        // 끌 수 있는 줄(Claude)은 다 껐다. 남은 둘은 **화면에 줄이 없는** 제공자다.
+        #expect(store.visibility.enabledProviders == [.codex, .antigravity], "전제: 그 둘은 여전히 '켜짐'으로 센다")
+        #expect(store.isDue(now: vvNow.addingTimeInterval(601)) == false,
+                "줄이 없는 제공자가 바퀴를 살려 뒀다 — 10분마다 auth.json 을 읽고 agy 를 띄운다")
+        #expect(store.isDue(now: vvNow.addingTimeInterval(601), force: true) == false, "강제 갱신이 그 게이트를 뚫었다")
+        await store.refreshIfDue(now: vvNow.addingTimeInterval(601), force: true)
+        #expect(spy.callCount == 1, "끈 뒤에 리더를 \(spy.callCount - 1)번 더 돌렸다")
+
+        // 대조군 ①: 다시 켜면 같은 입력으로 바로 돈다(위 단언이 "애초에 못 도는 세계"에서 초록이 아니다).
+        store.setProviderEnabled(.claude, true)
+        #expect(store.isDue(now: vvNow.addingTimeInterval(601)))
+        await store.refreshIfDue(now: vvNow.addingTimeInterval(601))
+        #expect(spy.callCount == 2)
+
+        // 대조군 ②: **줄이 하나도 없는 동안은 거꾸로 돈다** — 그때 닫으면 내일 Claude Code 를 깐 사람에게
+        // 이 축이 영영 켜지지 않는다(실패 표도 디스크에 남아 재실행이 구해 주지 못한다).
+        let blankSpy = VVRunnerSpy(available: [])
+        let blank = AILimitStore(defaults: vvDefaults(), clock: { vvNow }, runner: blankSpy.runner())
+        await blank.refreshIfDue(now: vvNow)
+        #expect(blank.configurableProviders.isEmpty, "전제: 연동 0 — 설정에 줄이 하나도 없다")
+        #expect(blank.isDue(now: vvNow.addingTimeInterval(601)), "연동을 발견할 길이 막혔다")
     }
 }
 
@@ -479,6 +539,33 @@ struct V0347AILimitClearingUploadTests {
         URLProtocolStub.bodies(forHost: host).compactMap {
             (try? JSONSerialization.jsonObject(with: Data($0.utf8))) as? [[String: Any]]
         }
+    }
+
+    /// 본문들을 **나간 순서대로** 접어 서버에 남는 행을 만든다(PK 당 마지막 승 — upsert 의 뜻이 그것이다).
+    ///
+    /// ★ 이 접기가 정당한 까닭은 업로드가 **겹치지 않기** 때문이다(`uploadPeakConcurrency == 1`). 겹치면
+    ///   나간 순서와 닿은 순서가 달라져 서버의 마지막 말이 사용자의 마지막 뜻과 어긋난다 — 그게 P1 이었다.
+    private func aiLimitFinalRows(host: String) -> [String: [String: Any]] {
+        var out: [String: [String: Any]] = [:]
+        for body in aiLimitBodies(host: host) {
+            for row in body {
+                guard let provider = row["provider"] as? String else { continue }
+                out[provider] = row
+            }
+        }
+        return out
+    }
+
+    /// 세터가 띄운 Task 가 MainActor 에서 한 걸음 더 가게 둔다(가드에 막혀 트레일링을 세우는 자리까지).
+    private func vvHandOff() async {
+        for _ in 0..<8 { await Task.yield() }
+    }
+
+    /// 조건이 참이 될 때까지 **양보만** 한다(잠들지 않는다). 벽시계에 기대면 병렬 스위트의 MainActor 혼잡에서
+    /// "비행 중"이라는 창(응답 지연 0.15초)을 놓쳐 테스트가 제 발에 걸린다 — 세터의 Task 도, 업로드가
+    /// 본문을 굳히고 첫 `await` 로 떠나는 자리도 전부 MainActor 위라 양보만으로 충분하다.
+    private func vvYieldUntil(_ condition: () -> Bool, limit: Int = 200) async {
+        for _ in 0..<limit where !condition() { await Task.yield() }
     }
 
     /// ★ 끈 **그 순간** 그 제공자의 행이 창 값 전부 null 로 한 번 올라간다 — 그리고 **다시는** 올라가지 않는다.
@@ -659,6 +746,206 @@ struct V0347AILimitClearingUploadTests {
         #expect(claudeRow["five_hour_percent"] as? Double == 27,
                 "되켠 제공자의 값이 서버에 다시 올라가지 않았다 — 맥에는 숫자가 있는데 폰은 빈 채로 남는다")
         #expect(store.lastUploadedAILimits == ledger)
+    }
+
+    /// ★★ 업로드는 **한 번에 하나만** 난다 (2026-10-08 실증한 P1).
+    ///
+    /// 설정 세터는 토글마다 Task 를 띄우고, `WorkTimerStore` 가 MainActor 라도 `await service.upsertAILimits`
+    /// 에서 액터가 풀려 가드가 없으면 **두 업로드가 동시에** 난다. 실측된 모습(스위치 둘을 연달아 끄는
+    /// 평범한 사용):
+    ///   `in-flight after A = 1  after B = 2` · 본문 A `antigravity=값` · 본문 B `antigravity=null`
+    /// 같은 PK 가 두 본문에 **다른 뜻으로** 들어가고 도착 순서는 아무도 보장하지 않는다 — 값 본문이 나중에
+    /// 닿으면 끈 제공자가 되살아나고, 그 사이 `markCleared` 둘이 대기열을 비워 **다시는 안 비운다.**
+    ///
+    /// 재는 것은 본문의 글자가 아니라 **겹침**이다: 직렬화해도 두 본문의 내용은 그대로일 수 있고(A 는 토글
+    /// 전에 이미 굳었다), 달라지는 것은 그 둘의 **순서가 보장된다**는 사실뿐이다. 그래서 호스트 접두어
+    /// `delayed-` 로 "비행 중"이라는 창을 실제로 열고, 그 창 안에서 두 번째 토글을 누른다.
+    @Test
+    func concurrentSettingTogglesNeverOverlapInFlight() async {
+        let host = "delayed-v0347-serialize"
+        let defaults = vvDefaults()
+        let spy = VVRunnerSpy(available: [.claude, .codex, .antigravity])
+        let limits = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        let store = self.store(host: host, defaults: defaults, aiLimits: limits)
+        defer { store.session = nil }
+
+        await limits.refreshIfDue(now: vvNow)
+        await store.uploadAILimitsIfNeeded(now: vvNow)
+        #expect(aiLimitBodies(host: host).count == 1, "전제: 씨앗 값 업로드가 한 번 나갔다")
+        #expect(limits.uploadInFlight == nil, "전제: 씨앗 업로드는 끝났다(핸들이 비워진다)")
+
+        // ① 첫 토글 — **진짜 세터**로(Task 를 띄우는 그 경로가 결함의 자리다).
+        store.setAILimitProviderEnabled(.codex, false)
+        await vvYieldUntil { limits.uploadRoundTripCount == 2 }
+        #expect(limits.uploadRoundTripCount == 2, "전제: 첫 토글의 업로드가 본문을 굳히고 왕복에 들어갔다")
+        #expect(limits.uploadInFlight != nil, "전제: 첫 업로드가 아직 비행 중이다 — 아니면 아래 단언이 공허하다")
+
+        // ② 비행 중에 둘째 토글. 여기가 실측된 레이스다.
+        store.setAILimitProviderEnabled(.antigravity, false)
+        await vvHandOff()
+        #expect(limits.uploadPendingTrailing,
+                "전제: 둘째 업로드가 비행 중인 첫 업로드와 만나 합쳐졌다 — 거짓이면 이 테스트는 레이스를 재현하지 못했다")
+
+        await limits.uploadInFlight?.value
+        #expect(limits.uploadPeakConcurrency == 1,
+                "업로드가 동시에 \(limits.uploadPeakConcurrency)개 떴다 — 두 본문의 도착 순서는 아무도 보장하지 않는다")
+        #expect(limits.uploadPendingTrailing == false, "트레일링이 소비되지 않았다")
+        #expect(limits.uploadInFlight == nil, "핸들이 남았다 — 다음 업로드가 영원히 자기 가드에 막힌다")
+
+        // 토글 둘이 본문 **둘**로 끝난다(씨앗 + 첫 업로드 + 합쳐진 트레일링). 합치지 않으면 여기가 늘어난다.
+        #expect(aiLimitBodies(host: host).count == 3,
+                "본문이 \(aiLimitBodies(host: host).count)개다 — 합치기가 요청을 하나로 접지 않았다")
+
+        // 서버에 남는 것은 사용자의 **마지막 뜻**과 같다: 켠 것은 값, 끈 둘은 비워진 행.
+        let final = aiLimitFinalRows(host: host)
+        #expect(final["claude"]?["five_hour_percent"] as? Double == 27, "켜 둔 제공자의 값이 사라졌다")
+        #expect(final["codex"]?["five_hour_percent"] is NSNull, "끈 codex 가 값 행으로 남았다")
+        #expect(final["antigravity"]?["five_hour_percent"] is NSNull,
+                "끈 antigravity 가 값 행으로 남았다 — 되살아났다")
+        #expect(limits.pendingClear.isEmpty, "비우기가 대기열에 남았다")
+    }
+
+    /// ★ `markCleared` 는 **자기가 실제로 보낸 것만** 비운다 (P1 둘째 절반).
+    ///
+    /// 업로드는 `await` 를 건너므로 돌아왔을 때의 대기열은 떠날 때의 대기열이 아니다. 그 사이 사용자가
+    /// 다시 켜고 **또 끈** 제공자의 끄기는 아직 아무도 보낸 적이 없다 — 그걸 비웠다고 표시하면 대기열이
+    /// 비어 다음 주기도 재시도하지 않고, 그 제공자는 서버에서 영원히 안 비워진다.
+    @Test
+    func markClearedRetiresOnlyTheClearItActuallySent() async {
+        let defaults = vvDefaults()
+        let spy = VVRunnerSpy(available: [.claude, .codex])
+        let limits = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        await limits.refreshIfDue(now: vvNow)
+
+        limits.setProviderEnabled(.codex, false)
+        let claim = limits.claimPendingClear()
+        #expect(claim.providers == [.codex], "전제: 보낸 것은 codex 하나다")
+
+        // 보내는 사이에 사용자가 **다시 켜고 또 껐다**.
+        limits.setProviderEnabled(.codex, true)
+        limits.setProviderEnabled(.codex, false)
+        limits.markCleared(claim)
+        #expect(limits.pendingClear == [.codex],
+                "보낸 적 없는 끄기를 비웠다고 표시했다 — 그 제공자는 서버에서 영원히 안 비워진다")
+
+        // 대조군: 그 사이 아무 일도 없었으면 **비운다**(가드가 '아무것도 안 비운다'로 굳지 않았다).
+        limits.markCleared(limits.claimPendingClear())
+        #expect(limits.pendingClear.isEmpty, "같은 세대를 비우지 못했다 — 같은 빈 행을 매 주기 다시 올린다")
+    }
+
+    /// 비행 중에 되켰다 **다시 끈** 제공자도 서버에 닿는다 — 트레일링 업로드가 그 끄기를 가져간다.
+    ///
+    /// ★ 이 테스트가 무는 것은 **합치기(트레일링)** 다. `markCleared` 의 세대 규칙은 위 단위 테스트가 문다:
+    ///   여기서는 첫 본문이 codex 를 이미 비운 상태라 세대를 무시해도 서버의 **마지막 말**은 같아지고,
+    ///   그래서 이 e2e 하나만으로는 그 규칙을 지킬 수 없다(기준선이 갈리지 않는다).
+    @Test
+    func reTogglingDuringAnUploadStillReachesTheServer() async {
+        let host = "delayed-v0347-regen"
+        let defaults = vvDefaults()
+        let spy = VVRunnerSpy(available: [.claude, .codex])
+        let limits = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        let store = self.store(host: host, defaults: defaults, aiLimits: limits)
+        defer { store.session = nil }
+
+        await limits.refreshIfDue(now: vvNow)
+        await store.uploadAILimitsIfNeeded(now: vvNow)
+        #expect(aiLimitBodies(host: host).count == 1)
+
+        store.setAILimitProviderEnabled(.codex, false)
+        await vvYieldUntil { limits.uploadRoundTripCount == 2 }
+        #expect(limits.uploadInFlight != nil, "전제: 첫 업로드가 비행 중이다")
+        // 비행 중에 되켜고 또 끈다 — 둘째 끄기는 첫 본문에 실리지 못했다.
+        store.setAILimitProviderEnabled(.codex, true)
+        store.setAILimitProviderEnabled(.codex, false)
+        await vvHandOff()
+        await limits.uploadInFlight?.value
+
+        let last = try! #require(aiLimitBodies(host: host).last)
+        let codexRow = try! #require(last.first { $0["provider"] as? String == "codex" },
+                                     "비행 중에 다시 끈 제공자가 마지막 본문에 없다 — 그 끄기는 흔적도 없이 사라졌다")
+        #expect(codexRow["five_hour_percent"] is NSNull)
+        #expect(aiLimitFinalRows(host: host)["codex"]?["weekly_percent"] is NSNull)
+        #expect(limits.pendingClear.isEmpty, "비우기가 대기열에 남았다")
+    }
+
+    /// ★★ 비우기가 **항구적으로** 실패하면 간격을 벌린다 — 30초마다 영원히 POST 하지 않는다 (P2).
+    ///
+    /// 그 상태의 사용자는 **마스터를 끈 사람**이고, 커밋·주석이 그에게 단정한 것은 "리밋 축이 통째로
+    /// 잠든다 … 네트워크 0"이었다. 실패 조건은 주석이 스스로 예상한 경우다(스키마가 없는 서버 — 앱이
+    /// `db push` 보다 먼저 나간 경우). 실측: 가드가 없으면 10틱에 POST 10건이고 대기열은 그대로다.
+    ///
+    /// **포기는 하지 않는다**: 대기열이 사라지면 그 행은 영영 안 지워져 폰·위젯이 끈 제공자를 계속 보여 준다.
+    /// 느려지되 멈추지 않는다 — 그래서 하루 뒤에는 다시 노크한다.
+    @Test
+    func permanentlyFailingClearSlowsDownButNeverGivesUp() async {
+        // `schema-missing` 접두어는 모든 `/rest/v1/*` 를 404 로 떨어뜨린다. 접두어로 **내 호스트**를 쓰는
+        // 까닭은 요청 수를 세기 때문이다 — 공용 이름을 쓰면 병렬로 도는 다른 스위트의 POST 가 섞인다.
+        let host = "schema-missing-v0347-backoff"
+        let defaults = vvDefaults()
+        let spy = VVRunnerSpy(available: Set(AILimitProvider.allCases))
+        let limits = AILimitStore(defaults: defaults, clock: { vvNow }, runner: spy.runner())
+        let store = self.store(host: host, defaults: defaults, aiLimits: limits)
+        defer { store.session = nil }
+
+        await limits.refreshIfDue(now: vvNow)
+        limits.setMasterEnabled(false)
+        #expect(limits.pendingClear == Set(AILimitProvider.allCases), "전제: 비울 행이 셋이다")
+        #expect(limits.enabledBundle.visibleProviders.isEmpty, "전제: 올릴 값은 하나도 없다(마스터 끔)")
+
+        // 30초 틱 열 번(= 5분). 가드가 없으면 열 번 다 POST 한다.
+        for tick in 0..<10 {
+            await store.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(Double(tick) * 30))
+        }
+        let posts = URLProtocolStub.requests(forHost: host).count
+        #expect(posts == 3, "열 틱(5분)에 POST 가 \(posts)건이다 — 60초→두 배씩이면 0·60·180초에 세 번이다")
+        #expect(limits.pendingClear == Set(AILimitProvider.allCases), "실패했는데 대기열을 비웠다")
+        #expect(limits.clearFailureStreak == 3)
+
+        // ★ 영구 포기는 없다. 하루 뒤에는 다시 노크한다.
+        await store.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(86_400))
+        #expect(URLProtocolStub.requests(forHost: host).count == posts + 1,
+                "하루가 지나도 다시 시도하지 않았다 — 그 행은 영영 안 지워진다")
+
+        // 대조군: 서버가 돌아오면 **한 번에** 비워지고 그 뒤로는 조용하다(기능 자체는 옳다).
+        let healthyHost = "v0347-backoff-recovered"
+        let healthy = self.store(host: healthyHost, defaults: defaults, aiLimits: limits)
+        defer { healthy.session = nil }
+        await healthy.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(90_000))
+        #expect(limits.pendingClear.isEmpty, "서버가 돌아왔는데 비우기가 안 올라갔다")
+        #expect(limits.clearFailureStreak == 0, "성공이 백오프를 풀지 않았다")
+        for tick in 0..<11 {
+            await healthy.uploadAILimitsIfNeeded(now: vvNow.addingTimeInterval(90_030 + Double(tick) * 30))
+        }
+        #expect(URLProtocolStub.requests(forHost: healthyHost).count == 1,
+                "비우기 성공 뒤에도 POST 가 이어졌다")
+    }
+
+    /// 백오프 산식 하나하나: 60초에서 두 배씩 · 상한 1시간 · 성공하면 즉시 풀린다.
+    @Test
+    func clearBackoffDoublesAndCapsAndResetsOnSuccess() {
+        let limits = AILimitStore(defaults: vvDefaults(), clock: { vvNow }, runner: { _, _ in AILimitReadOutcome() })
+        #expect(limits.clearRetryAllowed(now: vvNow), "실패가 하나도 없는데 막았다")
+
+        limits.noteClearFailed(now: vvNow)
+        #expect(limits.clearRetryAllowed(now: vvNow.addingTimeInterval(59)) == false, "실패에 간격이 없다")
+        #expect(limits.clearRetryAllowed(now: vvNow.addingTimeInterval(60)))
+
+        limits.noteClearFailed(now: vvNow.addingTimeInterval(60))
+        #expect(limits.clearRetryAllowed(now: vvNow.addingTimeInterval(179)) == false, "둘째 실패에 간격이 안 벌어졌다")
+        #expect(limits.clearRetryAllowed(now: vvNow.addingTimeInterval(180)))
+
+        // 상한. 서른 번 더 실패해도 한 시간을 넘지 않는다 — 상한이 없으면 60초 × 2^31 이고, 그건 영구 포기다.
+        for _ in 0..<30 { limits.noteClearFailed(now: vvNow) }
+        #expect(limits.clearFailureStreak == 32)
+        #expect(limits.clearRetryAllowed(now: vvNow.addingTimeInterval(3_599)) == false)
+        #expect(limits.clearRetryAllowed(now: vvNow.addingTimeInterval(3_600)),
+                "간격이 상한을 넘었다 — 그만큼은 영구 포기와 구별되지 않는다")
+
+        limits.noteClearSucceeded()
+        #expect(limits.clearFailureStreak == 0)
+        #expect(limits.clearRetryAllowed(now: vvNow), "성공이 백오프를 풀지 않았다 — 다음 실패가 한 시간부터 시작한다")
+        #expect(AILimitStore.clearRetryBaseBackoff == 60)
+        #expect(AILimitStore.clearRetryMaxBackoff == 3_600)
     }
 
     /// 세터가 띄운 업로드가 끝날 때까지 기다린다.

@@ -105,6 +105,25 @@ package struct AILimitVisibility: Equatable, Sendable {
     }
 }
 
+/// 비우기 대기열을 **한 번 집은 것**(v0.3.47 P1).
+///
+/// 업로드는 `await` 를 건너므로, 돌아왔을 때 "내가 보낸 것"을 알 길이 이것뿐이다. 세대까지 함께 들고 오는
+/// 까닭은 `AILimitStore.pendingClearGenerations` 머리말에 있다 — 떠난 사이에 **다시 끈** 제공자를
+/// 비웠다고 표시하면 그 끄기는 영원히 서버에 닿지 않는다.
+package struct AILimitClearClaim: Equatable, Sendable {
+    /// 이번 본문에 실을 제공자(제공자 순서로 정렬).
+    package let providers: [AILimitProvider]
+    /// 제공자별 세대. 돌아왔을 때 대기열의 세대가 **이것과 같을 때만** 비운 것으로 친다.
+    package let generations: [AILimitProvider: Int]
+
+    package init(providers: [AILimitProvider], generations: [AILimitProvider: Int]) {
+        self.providers = providers
+        self.generations = generations
+    }
+
+    package var isEmpty: Bool { providers.isEmpty }
+}
+
 /// 리더 셋을 한 번 돌린 결과. 제공자마다 성공이거나 분류된 실패다.
 package struct AILimitReadOutcome: Sendable {
     package var results: [AILimitProvider: Result<AILimitProviderSnapshot, AILimitReadError>]
@@ -187,11 +206,64 @@ package final class AILimitStore {
     package private(set) var silentUntil: Date?
     /// 표시 설정(v0.3.47). 기본은 전부 켬. 설정 화면이 이 값을 그리고, 갱신 경로가 이 값으로 가른다.
     package private(set) var visibility: AILimitVisibility = .allEnabled
-    /// 서버 행을 비워야 하는 제공자(끈 순간 들어온다). 업로드 성공에만 빠진다 — `markCleared(_:)`.
-    package private(set) var pendingClear: Set<AILimitProvider> = []
+    /// 서버 행을 비워야 하는 제공자 → **그 끄기의 세대**. 업로드 성공에만 빠진다 — `markCleared(_:)`.
+    ///
+    /// ## 왜 집합이 아니라 세대 표인가 (v0.3.47 P1)
+    /// 업로드는 `await` 를 건너므로, 돌아왔을 때의 대기열은 떠날 때의 대기열이 아니다. 같은 제공자가 그 사이
+    /// **다시 켜지고 또 꺼졌으면** 그건 아직 아무도 보낸 적 없는 **새 사건**이다. 집합만 들고 있으면 둘을
+    /// 구별할 수 없어서, 돌아온 업로드가 "내가 보낸 것"이라며 그 새 사건을 지운다 — 그러면 그 제공자는
+    /// 서버에서 영원히 안 비워진다(대기열이 비어 다음 주기도 재시도할 근거가 없다).
+    private var pendingClearGenerations: [AILimitProvider: Int] = [:]
+    /// 대기열에 들어온 끄기의 순번. 같은 제공자가 다시 꺼지면 **더 큰** 값을 받는다.
+    private var clearSequence = 0
     /// 러너가 불린 횟수(테스트 계측 — 간격·백오프·재진입 가드가 실제로 막는지).
     @ObservationIgnored package private(set) var runnerCallCount = 0
     @ObservationIgnored private var inFlight = false
+
+    /// 서버 행을 비워야 하는 제공자(끈 순간 들어온다). 세대는 감춘다 — 밖에서 재는 것은 "누가 남았나"뿐이다.
+    package var pendingClear: Set<AILimitProvider> { Set(pendingClearGenerations.keys) }
+
+    // MARK: 업로드 직렬화 (v0.3.47 P1)
+    //
+    // 업로드의 HTTP 는 `WorkTimerStore` 가 하지만 **순서는 이 스토어가 쥔다.** 간격(10분)·429 금지창과 같은
+    // 종류의 상태이고, 업로드를 띄우는 설정 세터가 바로 이 스토어의 세터 뒤에 붙어 있다.
+    // 관용구는 `WorkTimerStore.requestDrain`(찔림 회수)과 같다 — 비행 중이면 새로 쏘지 않고 **트레일링
+    // 한 번**으로 접는다. 몇 번 울려도 한 번이고, 그래서 같은 PK 가 두 본문에 동시에 뜨는 일이 없다.
+
+    /// 비행 중인 업로드. non-nil 인 동안 들어온 요청은 트레일링으로 합쳐진다. 테스트는 이 Task 를 기다린다.
+    @ObservationIgnored package var uploadInFlight: Task<Void, Never>?
+    /// 비행 중에 들어온 요청이 있다 → 끝난 뒤 **한 번** 더 돈다.
+    @ObservationIgnored package var uploadPendingTrailing = false
+    /// 동시에 떠 있던 업로드 왕복의 **최대 수**(테스트 계측 — `runnerCallCount` 와 같은 규약).
+    /// ★ 1 이 아니면 두 본문의 도착 순서를 아무도 보장하지 않는다: 값 본문이 비우는 본문보다 늦게 닿으면
+    ///   끈 제공자가 되살아나고, 그 사이 `markCleared` 가 대기열을 비워 **다시는 안 비운다.**
+    @ObservationIgnored package private(set) var uploadPeakConcurrency = 0
+    /// **시작된** 업로드 왕복의 수(테스트 계측). 비행 창을 기다리는 테스트가 "이번 왕복이 떠났다"를 이걸로 안다 —
+    /// 최대치(`uploadPeakConcurrency`)는 한 번 1 이 되면 그대로라 "방금 떠났다"를 말해 주지 못한다.
+    @ObservationIgnored package private(set) var uploadRoundTripCount = 0
+    @ObservationIgnored private var uploadsInFlightNow = 0
+
+    // MARK: 비우기 재시도 백오프 (v0.3.47 P2)
+    //
+    // ## 고치는 자리: 비우기가 **항구적으로** 실패하면 30초마다 영원히 POST 했다
+    // 비우기는 성공할 때까지 대기열에 남아야 한다(그래야 끈 제공자가 폰·위젯에서 사라진다). 그런데 그 실패가
+    // 항구적이면 — 스키마가 없는 서버, 즉 앱이 `db push` 보다 먼저 나간 경우(머리말이 스스로 예상한 경우다) —
+    // 30초 틱마다 같은 404 를 영원히 받는다. 그 상태의 사용자는 **마스터를 끈 사람**이고, 그에게 약속한 것은
+    // "리밋 축이 통째로 잠든다 … 네트워크 0"이었다.
+    //
+    // ## 포기는 하지 않는다 — **느려지되 멈추지 않는다**
+    // 대기열을 버리면 그 행은 영영 안 지워진다. 그래서 간격만 벌린다: 60초에서 시작해 실패마다 두 배,
+    // 상한 1시간. 성공하면 즉시 풀린다(다음 실패는 다시 60초부터다).
+    // 영속하지 않는 까닭: 다시 켠 앱이 한 번 더 노크하는 것은 요청 하나이고, 429 처럼 **남의 상한**을
+    // 건드리는 일도 아니다(여기는 우리 서버다). 영속해야 하는 쪽은 대기열 자체이고 그건 이미 디스크에 있다.
+
+    /// 비우기 재시도의 첫 간격(초).
+    package nonisolated static let clearRetryBaseBackoff: TimeInterval = 60
+    /// 비우기 재시도 간격의 상한(초). 1시간 — 이 위로 벌려도 네트워크는 더 안 줄고 복구만 늦는다.
+    package nonisolated static let clearRetryMaxBackoff: TimeInterval = 3_600
+
+    @ObservationIgnored private var clearFailureCount = 0
+    @ObservationIgnored private var clearRetryNotBefore: Date?
 
     private let defaults: UserDefaults
     private let clock: () -> Date
@@ -231,9 +303,13 @@ package final class AILimitStore {
         )
         // 비우기 대기열은 **아는 제공자만** 복원한다 — 모르는 이름으로는 올릴 행을 만들 수 없고(서버 CHECK),
         // 올릴 수 없는 항목을 대기열에 남기면 매 주기 재시도하는 영구 고착이 된다.
-        pendingClear = Set(
-            (defaults.stringArray(forKey: Self.pendingClearKey) ?? []).compactMap(AILimitProvider.init(rawValue:))
-        )
+        // 세대는 디스크에 없다(적는 것은 '무엇을' 뿐이고 순번은 한 프로세스 안에서만 뜻이 있다) — 복원 순서대로
+        // 다시 매긴다. 이 프로세스의 첫 업로드가 보낸 뒤 그대로 비울 수 있고, 그 사이 다시 끈 제공자는 더 큰
+        // 세대를 받아 살아남는다.
+        for provider in (defaults.stringArray(forKey: Self.pendingClearKey) ?? [])
+            .compactMap(AILimitProvider.init(rawValue:)) {
+            enqueueClear(provider)
+        }
     }
 
     /// epoch 초로 적힌 시각을 읽는다. 값이 없거나 숫자가 아니면 nil(= 제한 없음).
@@ -345,8 +421,28 @@ package final class AILimitStore {
     ///   시도 스탬프도 찍히지 않고 디스크도 안 건드린다 — 끈 사람의 맥에서는 이 축이 **아무 일도 안 한다.**
     ///   가르는 값이 '마스터' 하나가 아니라 `enabledProviders.isEmpty` 인 까닭: 셋을 각각 끈 사람도
     ///   읽을 리더가 없고, 그때 바퀴를 돌리면 빈 결과를 받아 와 `apply` 가 디스크를 쓴다.
+    ///
+    /// ★★ 게이트는 **사용자가 끌 수 있는 집합**으로 잰다(v0.3.47 P2 — 2026-10-08 실증).
+    ///   `enabledProviders` 는 '꺼진 쪽을 저장한다' 규약 때문에 **연동 안 된 제공자까지 켜진 것으로 센다.**
+    ///   그 제공자는 설정 화면에 줄이 **없어서**(섹션은 연동된 것만 세운다 — `configurableProviders`)
+    ///   사용자가 끌 수도 없다. 그걸로 바퀴를 살려 두면 Claude 하나만 연동한 사람이 그 하나를 끈 뒤에도
+    ///   10분마다 `~/.codex/auth.json` 을 읽고 `agy`(5초짜리)를 띄운다 — 화면에 남은 스위치가 마스터뿐이라
+    ///   "끄면 읽지도 않는다"가 그 사람에게는 거짓이 된다.
+    ///   그래서 줄이 선 제공자 중 켜진 것이 하나도 없으면 **바퀴를 돌리지 않는다.**
+    ///
+    /// ★ 줄이 **하나도 없는** 동안은(아직 한 번도 못 읽었다 · 연동 0) 거꾸로 **돈다**: 그때 닫으면
+    ///   내일 Claude Code 를 깐 사람에게 이 축이 영영 켜지지 않는다(실패 표도 디스크에 남아 재실행이
+    ///   구해 주지 못한다). 그 사람에게는 끌 줄도 없으니 지킬 약속도 아직 없다.
+    ///
+    /// ★ 그래서 **남는 것 하나**(알고 남긴다): 줄이 선 **다른** 제공자 때문에 바퀴가 도는 동안에는,
+    ///   줄이 없는 제공자도 그 바퀴에서 같이 물어본다(`refreshIfDue` 가 넘기는 집합은 여전히
+    ///   `enabledProviders` 다). 그게 연동을 발견하는 유일한 길이다 — 숨기는 실패는 디스크에 남으므로
+    ///   요청 집합에서 빼 버리면 나중에 로그인한 사람에게 그 줄이 영영 안 생긴다. 끌 줄이 **있는**
+    ///   제공자에 대한 약속("끄면 안 읽는다")은 그대로다.
     package func isDue(now: Date, force: Bool = false) -> Bool {
         if visibility.enabledProviders.isEmpty { return false }
+        let stoppable = Set(configurableProviders)
+        if !stoppable.isEmpty, visibility.enabledProviders.isDisjoint(with: stoppable) { return false }
         if inFlight { return false }
         if let silentUntil, now < silentUntil { return false }
         guard let last = lastAttemptAt else { return true }
@@ -408,9 +504,18 @@ package final class AILimitStore {
         let before = uploadableProviders(visibility)
         visibility = next
         let after = uploadableProviders(next)
-        pendingClear.formUnion(before.subtracting(after))
-        pendingClear.subtract(after)
+        // 새로 끈 제공자는 **새 세대**로 들어온다(정렬 — 세대 번호가 결정적이어야 테스트가 되묻을 수 있다).
+        for provider in before.subtracting(after).sorted(by: { $0.sortOrder < $1.sortOrder }) {
+            enqueueClear(provider)
+        }
+        for provider in after { pendingClearGenerations.removeValue(forKey: provider) }
         persistVisibility()
+    }
+
+    /// 대기열에 넣는다. 같은 제공자가 다시 꺼지면 **새 세대**다 — 그게 "아직 아무도 안 보낸 끄기"라는 표시다.
+    private func enqueueClear(_ provider: AILimitProvider) {
+        clearSequence += 1
+        pendingClearGenerations[provider] = clearSequence
     }
 
     /// 지금 설정에서 서버에 **값이 올라가는** 제공자(= 끄면 비워야 하는 대상).
@@ -421,13 +526,64 @@ package final class AILimitStore {
         return Set(linked.filter { visibility.isProviderOn($0) })
     }
 
+    /// 지금 보낼 비우기 묶음을 **집는다**. 업로드가 `await` **전에** 부르고, 돌아와서 그 집음으로 비운다.
+    package func claimPendingClear() -> AILimitClearClaim {
+        AILimitClearClaim(
+            // 정렬해서 집는다(제공자 순서) — 본문이 결정적이어야 테스트가 글자로 되묻을 수 있다.
+            providers: pendingClearGenerations.keys.sorted { $0.sortOrder < $1.sortOrder },
+            generations: pendingClearGenerations
+        )
+    }
+
     /// 비우기 업로드가 **성공한** 제공자를 대기열에서 뺀다. 실패하면 부르지 않는다 — 그래야 다음 기회에 재시도된다.
-    package func markCleared(_ providers: [AILimitProvider]) {
-        let next = pendingClear.subtracting(providers)
-        guard next != pendingClear else { return }
-        pendingClear = next
+    ///
+    /// ★ 인자가 '지금 대기열'이 아니라 **집음**인 까닭(v0.3.47 P1): 비우는 것은 **자기가 실제로 보낸 것**뿐이어야
+    ///   한다. 보낸 뒤에 사용자가 다시 켜고 또 끈 제공자는 세대가 커져 여기서 **살아남고**, 다음 업로드
+    ///   (트레일링·30초 틱)가 그 끄기를 새로 보낸다. 무조건 비우면 그 끄기는 아무 흔적도 없이 사라진다.
+    package func markCleared(_ claim: AILimitClearClaim) {
+        var next = pendingClearGenerations
+        for (provider, sent) in claim.generations where next[provider] == sent {
+            next.removeValue(forKey: provider)
+        }
+        guard next != pendingClearGenerations else { return }
+        pendingClearGenerations = next
         persistVisibility()
     }
+
+    /// 업로드 왕복이 시작됐다(겹침 계측). 부르는 자리는 `WorkTimerStore.uploadAILimitsIfNeeded` 하나다.
+    package func noteUploadStarted() {
+        uploadsInFlightNow += 1
+        uploadRoundTripCount += 1
+        uploadPeakConcurrency = max(uploadPeakConcurrency, uploadsInFlightNow)
+    }
+
+    /// 업로드 왕복이 끝났다(성공이든 실패든).
+    package func noteUploadFinished() {
+        uploadsInFlightNow = max(0, uploadsInFlightNow - 1)
+    }
+
+    /// 지금 **비우기만** 다시 보내도 되는가. 값이 바뀐 업로드는 이 게이트를 지나지 않는다 — 새 소식은 늘
+    /// 나가고 비우기가 거기 얹혀 간다. 막는 것은 "같은 실패를 30초마다 영원히" 하나다.
+    package func clearRetryAllowed(now: Date) -> Bool {
+        guard let clearRetryNotBefore else { return true }
+        return now >= clearRetryNotBefore
+    }
+
+    /// 비우기 업로드가 실패했다 → 다음 시도를 뒤로 미룬다(두 배씩, 상한까지). **대기열은 그대로 둔다.**
+    package func noteClearFailed(now: Date) {
+        clearFailureCount += 1
+        let doubled = Self.clearRetryBaseBackoff * pow(2, Double(clearFailureCount - 1))
+        clearRetryNotBefore = now.addingTimeInterval(min(Self.clearRetryMaxBackoff, doubled))
+    }
+
+    /// 비우기 업로드가 성공했다 → 백오프를 통째로 푼다.
+    package func noteClearSucceeded() {
+        clearFailureCount = 0
+        clearRetryNotBefore = nil
+    }
+
+    /// 연속 실패 수(테스트 계측 — 성공이 백오프를 실제로 푸는지).
+    package var clearFailureStreak: Int { clearFailureCount }
 
     private func persistVisibility() {
         defaults.set(visibility.masterEnabled, forKey: Self.visibilityKey)
@@ -518,14 +674,20 @@ extension AILimitStore {
         session: URLSession,
         processRunner: AILimitCommandRunner? = nil,
         fetcher: AILimitHTTPFetcher? = nil,
-        locateAntigravity: (@Sendable () -> URL?)? = nil
+        locateAntigravity: (@Sendable () -> URL?)? = nil,
+        codexHome: URL? = nil
     ) -> Runner {
         let process = processRunner ?? AILimitProcess.live()
         let fetch = fetcher ?? AILimitHTTP.fetcher(session: session)
         let claude = AILimitClaudeReader(runner: process, fetch: fetch, appVersion: appVersion)
         let codex = AILimitCodexReader(
             fetch: fetch,
-            codexHome: CodexAccountUsageProbe.cachedCodexHome()
+            // 주입 지점이 있는 까닭은 `locateAntigravity` 와 같다: 기본 해결은 **이 맥의 셸 캐시**
+            // (`CODEX_HOME` — Orca 가 바꿔 놓는 그 값)를 읽으므로, 주입이 없으면 "켠 Codex 는 실제로
+            // chatgpt.com 을 친다"는 대조군이 기계마다 초록·회색으로 갈린다. 그러면 '꺼진 Codex 를 읽는'
+            // 퇴행이 들어와도 스위트가 조용히 통과한다(기준선이 같은 입력이면 영원히 초록).
+            codexHome: codexHome
+                ?? CodexAccountUsageProbe.cachedCodexHome()
                 ?? home.appendingPathComponent(".codex", isDirectory: true),
             appVersion: appVersion
         )
